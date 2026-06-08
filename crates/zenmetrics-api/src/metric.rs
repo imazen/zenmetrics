@@ -369,12 +369,13 @@ impl MetricParams {
 /// destructure — the [`Self::compute_srgb_u8`] / [`Self::compute_pixels`]
 /// methods forward to the right variant.
 #[non_exhaustive]
-// `Metric::Cpu` wraps the crate-internal `cpu_dispatch::CpuMetricState`,
+// `MetricInner::Cpu` wraps the crate-internal `cpu_dispatch::CpuMetricState`,
 // exposed only through this `#[non_exhaustive]` variant (external code can
 // neither construct nor destructure it) — an intentional opaque, not a
 // leaked public type, so the private-interface lint is expected here.
 #[allow(private_interfaces)]
-pub enum Metric {
+#[doc(hidden)]
+pub enum MetricInner {
     /// [`cvvdp_gpu::CvvdpOpaque`] variant.
     #[cfg(feature = "cvvdp")]
     Cvvdp(cvvdp_gpu::CvvdpOpaque),
@@ -413,7 +414,191 @@ pub enum Metric {
     Cpu(Box<crate::cpu_dispatch::CpuMetricState>, Option<Vec<u8>>),
 }
 
+/// Default [`Metric::display_peak`] — the SDR reference white (cd/m²). SDR
+/// scoring never consults it (the native sRGB8 path is taken); it only matters
+/// if an HDR slice is fed to a metric that wasn't configured for an HDR display,
+/// where it bounds the pu-rescale / display-relative mapping. Set an explicit
+/// peak for HDR content via [`Metric::with_display_peak`] or [`crate::hdr::HdrScorer`].
+pub const SDR_REFERENCE_NITS: f32 = 203.0;
+
+/// A constructed metric scorer plus the HDR **display peak** (cd/m²) it feeds
+/// HDR inputs at. Wraps the enum-dispatched [`MetricInner`]; every non-HDR
+/// method (`compute_srgb_u8`, `dims`, `set_reference`, …) forwards to it through
+/// `Deref`/`DerefMut`, so existing call sites are unchanged.
+///
+/// [`compute_pixels`](Self::compute_pixels) /
+/// [`compute_pixels_multi`](Self::compute_pixels_multi) are **descriptor-driven**:
+/// an `RGB8_SRGB` slice scores on the native SDR path (bit-identical to
+/// [`MetricInner::compute_srgb_u8`], so validated SDR scores are preserved); any
+/// HDR descriptor (PQ / HLG / linear) is fed through the validated per-metric
+/// recipe ([`crate::hdr::hdr_feeding`]) at [`display_peak`](Self::display_peak) —
+/// pu-rescale u8 for the SSIM-family, display-relative linear planes for
+/// cvvdp/butteraugli — so one call scores SDR and HDR alike on every metric,
+/// with no silent SDR collapse.
+///
+/// The peak defaults to [`SDR_REFERENCE_NITS`]; the HDR constructors
+/// ([`crate::hdr::HdrScorer`]) set it (and, for cvvdp/butteraugli, the matching
+/// display model) together. Set it directly with
+/// [`with_display_peak`](Self::with_display_peak).
+pub struct Metric {
+    inner: MetricInner,
+    display_peak: f32,
+}
+
+impl core::ops::Deref for Metric {
+    type Target = MetricInner;
+    #[inline]
+    fn deref(&self) -> &MetricInner {
+        &self.inner
+    }
+}
+impl core::ops::DerefMut for Metric {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut MetricInner {
+        &mut self.inner
+    }
+}
+
 impl Metric {
+    /// Construct a scorer (same dispatch and args as before). The display peak
+    /// defaults to [`SDR_REFERENCE_NITS`]; for HDR use [`crate::hdr::HdrScorer`]
+    /// or [`with_display_peak`](Self::with_display_peak).
+    pub fn new(
+        kind: MetricKind,
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: MetricParams,
+    ) -> Result<Self> {
+        MetricInner::new(kind, backend, width, height, params).map(Self::with_sdr_peak)
+    }
+
+    /// Construct with an explicit [`MemoryMode`]; display peak as in
+    /// [`new`](Self::new).
+    pub fn new_with_memory_mode(
+        kind: MetricKind,
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: MetricParams,
+        mode: MemoryMode,
+    ) -> Result<Self> {
+        MetricInner::new_with_memory_mode(kind, backend, width, height, params, mode)
+            .map(Self::with_sdr_peak)
+    }
+
+    /// Wrap an inner scorer at the SDR reference peak.
+    #[inline]
+    fn with_sdr_peak(inner: MetricInner) -> Self {
+        Self {
+            inner,
+            display_peak: SDR_REFERENCE_NITS,
+        }
+    }
+
+    /// Wrap an inner scorer at an explicit display peak (crate-internal — the
+    /// HDR constructors use this to keep the peak and the display model in sync).
+    #[inline]
+    pub(crate) fn from_inner_with_peak(inner: MetricInner, peak_nits: f32) -> Self {
+        Self {
+            inner,
+            display_peak: peak_nits,
+        }
+    }
+
+    /// Set the HDR **display peak** (cd/m²) used to feed HDR slices in
+    /// [`compute_pixels`](Self::compute_pixels). For cvvdp/butteraugli this must
+    /// match the peak the metric's display model was built with — the
+    /// [`crate::hdr::HdrScorer`] constructors keep the two in sync.
+    #[must_use]
+    pub fn with_display_peak(mut self, peak_nits: f32) -> Self {
+        self.display_peak = peak_nits;
+        self
+    }
+
+    /// The display peak (cd/m²) this scorer feeds HDR inputs at.
+    pub fn display_peak(&self) -> f32 {
+        self.display_peak
+    }
+
+    /// Release this metric's pooled GPU resources back to the device (consumes
+    /// `self`). Forwards to [`MetricInner::release`] — needed as an inherent
+    /// method because by-value `self` can't move through `Deref`.
+    pub fn release(self, backend: Backend) {
+        self.inner.release(backend)
+    }
+
+    /// Mutable access to the inner enum, for crate-internal and orchestrator
+    /// variant-specific paths (e.g. butteraugli warm-up). Prefer the forwarded
+    /// methods; reach for this only to pattern-match a specific variant.
+    #[doc(hidden)]
+    pub fn inner_mut(&mut self) -> &mut MetricInner {
+        &mut self.inner
+    }
+}
+
+#[cfg(feature = "pixels")]
+impl Metric {
+    /// **Descriptor-driven** scoring → lossless [`Scores`]. The pixel descriptor
+    /// decides the path, so SDR and HDR are one call on any metric:
+    ///
+    /// - `RGB8_SRGB` slice → native SDR path ([`MetricInner::compute_srgb_u8_multi`]
+    ///   on the converted bytes — bit-identical to the SDR score).
+    /// - any HDR descriptor (PQ / HLG / linear) → the validated per-metric
+    ///   feeding ([`crate::hdr::hdr_feeding`]) at [`display_peak`](Self::display_peak):
+    ///   SSIM-family → pu-rescale u8; cvvdp/butteraugli → display-relative linear
+    ///   planes. No silent SDR collapse.
+    pub fn compute_pixels_multi(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Scores> {
+        let (w, h) = self.inner.dims();
+        if r.width() != w || r.rows() != h {
+            return Err(Error::DimensionMismatch {
+                expected: (w, h),
+                got: (r.width(), r.rows()),
+            });
+        }
+        if d.width() != w || d.rows() != h {
+            return Err(Error::DimensionMismatch {
+                expected: (w, h),
+                got: (d.width(), d.rows()),
+            });
+        }
+        let both_srgb8 = r.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB
+            && d.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB;
+        if both_srgb8 {
+            let rb = crate::hdr::slice_to_srgb8(&r, w, h)?;
+            let db = crate::hdr::slice_to_srgb8(&d, w, h)?;
+            return self.inner.compute_srgb_u8_multi(&rb, &db);
+        }
+        let peak = self.display_peak;
+        match crate::hdr::hdr_feeding(self.inner.kind()) {
+            crate::hdr::HdrFeeding::LinearPlanes => {
+                let rr = crate::hdr::slice_to_display_relative_linear_interleaved(&r, peak)?;
+                let dd = crate::hdr::slice_to_display_relative_linear_interleaved(&d, peak)?;
+                self.inner.compute_from_linear_interleaved_multi(&rr, &dd)
+            }
+            crate::hdr::HdrFeeding::SdrU8(transfer) => {
+                let rb = crate::hdr::slice_to_pu_rescaled_u8(&r, transfer, peak)?;
+                let db = crate::hdr::slice_to_pu_rescaled_u8(&d, transfer, peak)?;
+                self.inner.compute_srgb_u8_multi(&rb, &db)
+            }
+        }
+    }
+
+    /// Single-score [`compute_pixels_multi`](Self::compute_pixels_multi). The SDR
+    /// path delegates to the inner native single-score `compute_pixels`, so a
+    /// validated SDR score is byte-for-byte preserved; HDR returns the primary
+    /// of the multi-score.
+    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
+        let both_srgb8 = r.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB
+            && d.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB;
+        if both_srgb8 {
+            return self.inner.compute_pixels(r, d);
+        }
+        self.compute_pixels_multi(r, d).map(|s| s.primary_score())
+    }
+}
+
+impl MetricInner {
     /// Construct a scorer for `width × height` images on the given
     /// `backend` and per-metric `params`.
     ///
@@ -453,7 +638,7 @@ impl Metric {
         ))]
         if backend.resolve() == Backend::Cpu {
             return crate::cpu_dispatch::CpuMetricState::new(kind, width, height, &params)
-                .map(|s| Metric::Cpu(Box::new(s), None));
+                .map(|s| MetricInner::Cpu(Box::new(s), None));
         }
         match kind {
             #[cfg(feature = "cvvdp")]
@@ -464,7 +649,7 @@ impl Metric {
                 };
                 let b = cvvdp_backend(backend)?;
                 cvvdp_gpu::CvvdpOpaque::new(b, width, height, p)
-                    .map(Metric::Cvvdp)
+                    .map(MetricInner::Cvvdp)
                     .map_err(|e| Error::Metric {
                         kind: "cvvdp",
                         message: e.to_string(),
@@ -478,7 +663,7 @@ impl Metric {
                 };
                 let b = butter_backend(backend)?;
                 butteraugli_gpu::ButteraugliOpaque::new(b, width, height, p)
-                    .map(Metric::Butter)
+                    .map(MetricInner::Butter)
                     .map_err(|e| Error::Metric {
                         kind: "butter",
                         message: e.to_string(),
@@ -492,7 +677,7 @@ impl Metric {
                 };
                 let b = ssim2_backend(backend)?;
                 ssim2_gpu::Ssim2Opaque::new(b, width, height, p)
-                    .map(Metric::Ssim2)
+                    .map(MetricInner::Ssim2)
                     .map_err(|e| Error::Metric {
                         kind: "ssim2",
                         message: e.to_string(),
@@ -506,7 +691,7 @@ impl Metric {
                 };
                 let b = dssim_backend(backend)?;
                 dssim_gpu::DssimOpaque::new(b, width, height, p)
-                    .map(Metric::Dssim)
+                    .map(MetricInner::Dssim)
                     .map_err(|e| Error::Metric {
                         kind: "dssim",
                         message: e.to_string(),
@@ -520,7 +705,7 @@ impl Metric {
                 };
                 let b = iwssim_backend(backend)?;
                 iwssim_gpu::IwssimOpaque::new(b, width, height, p)
-                    .map(Metric::Iwssim)
+                    .map(MetricInner::Iwssim)
                     .map_err(|e| Error::Metric {
                         kind: "iwssim",
                         message: e.to_string(),
@@ -534,7 +719,7 @@ impl Metric {
                 };
                 let b = zensim_backend(backend)?;
                 zensim_gpu::ZensimOpaque::new(b, width, height, p)
-                    .map(Metric::Zensim)
+                    .map(MetricInner::Zensim)
                     .map_err(|e| Error::Metric {
                         kind: "zensim",
                         message: e.to_string(),
@@ -591,7 +776,7 @@ impl Metric {
         ))]
         if backend.resolve() == Backend::Cpu {
             return crate::cpu_dispatch::CpuMetricState::new(kind, width, height, &params)
-                .map(|s| Metric::Cpu(Box::new(s), None));
+                .map(|s| MetricInner::Cpu(Box::new(s), None));
         }
         match kind {
             #[cfg(feature = "cvvdp")]
@@ -602,7 +787,7 @@ impl Metric {
                 };
                 let b = cvvdp_backend(backend)?;
                 cvvdp_gpu::CvvdpOpaque::new_with_memory_mode(b, width, height, p, mode.into())
-                    .map(Metric::Cvvdp)
+                    .map(MetricInner::Cvvdp)
                     .map_err(|e| Error::Metric {
                         kind: "cvvdp",
                         message: e.to_string(),
@@ -622,7 +807,7 @@ impl Metric {
                     p,
                     mode.into(),
                 )
-                .map(Metric::Butter)
+                .map(MetricInner::Butter)
                 .map_err(|e| Error::Metric {
                     kind: "butter",
                     message: e.to_string(),
@@ -636,7 +821,7 @@ impl Metric {
                 };
                 let b = ssim2_backend(backend)?;
                 ssim2_gpu::Ssim2Opaque::new_with_memory_mode(b, width, height, p, mode.into())
-                    .map(Metric::Ssim2)
+                    .map(MetricInner::Ssim2)
                     .map_err(|e| Error::Metric {
                         kind: "ssim2",
                         message: e.to_string(),
@@ -650,7 +835,7 @@ impl Metric {
                 };
                 let b = dssim_backend(backend)?;
                 dssim_gpu::DssimOpaque::new_with_memory_mode(b, width, height, p, mode.into())
-                    .map(Metric::Dssim)
+                    .map(MetricInner::Dssim)
                     .map_err(|e| Error::Metric {
                         kind: "dssim",
                         message: e.to_string(),
@@ -664,7 +849,7 @@ impl Metric {
                 };
                 let b = iwssim_backend(backend)?;
                 iwssim_gpu::IwssimOpaque::new_with_memory_mode(b, width, height, p, mode.into())
-                    .map(Metric::Iwssim)
+                    .map(MetricInner::Iwssim)
                     .map_err(|e| Error::Metric {
                         kind: "iwssim",
                         message: e.to_string(),
@@ -678,7 +863,7 @@ impl Metric {
                 };
                 let b = zensim_backend(backend)?;
                 zensim_gpu::ZensimOpaque::new_with_memory_mode(b, width, height, p, mode.into())
-                    .map(Metric::Zensim)
+                    .map(MetricInner::Zensim)
                     .map_err(|e| Error::Metric {
                         kind: "zensim",
                         message: e.to_string(),
@@ -700,19 +885,19 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(s, _) => s.kind(),
+            MetricInner::Cpu(s, _) => s.kind(),
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(_) => MetricKind::Cvvdp,
+            MetricInner::Cvvdp(_) => MetricKind::Cvvdp,
             #[cfg(feature = "butter")]
-            Metric::Butter(_) => MetricKind::Butter,
+            MetricInner::Butter(_) => MetricKind::Butter,
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(_) => MetricKind::Ssim2,
+            MetricInner::Ssim2(_) => MetricKind::Ssim2,
             #[cfg(feature = "dssim")]
-            Metric::Dssim(_) => MetricKind::Dssim,
+            MetricInner::Dssim(_) => MetricKind::Dssim,
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(_) => MetricKind::Iwssim,
+            MetricInner::Iwssim(_) => MetricKind::Iwssim,
             #[cfg(feature = "zensim")]
-            Metric::Zensim(_) => MetricKind::Zensim,
+            MetricInner::Zensim(_) => MetricKind::Zensim,
         }
     }
 
@@ -727,19 +912,19 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(s, _) => s.dims(),
+            MetricInner::Cpu(s, _) => s.dims(),
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m.dims(),
+            MetricInner::Cvvdp(m) => m.dims(),
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m.dims(),
+            MetricInner::Butter(m) => m.dims(),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(m) => m.dims(),
+            MetricInner::Ssim2(m) => m.dims(),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(m) => m.dims(),
+            MetricInner::Dssim(m) => m.dims(),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(m) => m.dims(),
+            MetricInner::Iwssim(m) => m.dims(),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(m) => m.dims(),
+            MetricInner::Zensim(m) => m.dims(),
         }
     }
 
@@ -755,9 +940,9 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(s, _) => s.compute_srgb_u8(r, d),
+            MetricInner::Cpu(s, _) => s.compute_srgb_u8(r, d),
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => {
+            MetricInner::Cvvdp(m) => {
                 m.compute_srgb_u8(r, d)
                     .map(convert_score)
                     .map_err(|e| Error::Metric {
@@ -766,7 +951,7 @@ impl Metric {
                     })
             }
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m
+            MetricInner::Butter(m) => m
                 .compute_srgb_u8(r, d)
                 .map(convert_score_butter)
                 .map_err(|e| Error::Metric {
@@ -774,7 +959,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(m) => m
+            MetricInner::Ssim2(m) => m
                 .compute_srgb_u8(r, d)
                 .map(convert_score_ssim2)
                 .map_err(|e| Error::Metric {
@@ -782,7 +967,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(m) => m
+            MetricInner::Dssim(m) => m
                 .compute_srgb_u8(r, d)
                 .map(convert_score_dssim)
                 .map_err(|e| Error::Metric {
@@ -790,7 +975,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(m) => m
+            MetricInner::Iwssim(m) => m
                 .compute_srgb_u8(r, d)
                 .map(convert_score_iwssim)
                 .map_err(|e| Error::Metric {
@@ -798,7 +983,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(m) => m
+            MetricInner::Zensim(m) => m
                 .compute_srgb_u8(r, d)
                 .map(convert_score_zensim)
                 .map_err(|e| Error::Metric {
@@ -831,11 +1016,11 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(s, _) => s.compute_srgb_u8(r, d).map(Scores::single),
+            MetricInner::Cpu(s, _) => s.compute_srgb_u8(r, d).map(Scores::single),
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(_) => self.compute_srgb_u8(r, d).map(Scores::single),
+            MetricInner::Cvvdp(_) => self.compute_srgb_u8(r, d).map(Scores::single),
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m
+            MetricInner::Butter(m) => m
                 .compute_srgb_u8_with_pnorm3(r, d)
                 .map(|(s, pnorm3)| Scores {
                     metric_name: "butter",
@@ -857,13 +1042,13 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(_) => self.compute_srgb_u8(r, d).map(Scores::single),
+            MetricInner::Ssim2(_) => self.compute_srgb_u8(r, d).map(Scores::single),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(_) => self.compute_srgb_u8(r, d).map(Scores::single),
+            MetricInner::Dssim(_) => self.compute_srgb_u8(r, d).map(Scores::single),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(_) => self.compute_srgb_u8(r, d).map(Scores::single),
+            MetricInner::Iwssim(_) => self.compute_srgb_u8(r, d).map(Scores::single),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(m) => m
+            MetricInner::Zensim(m) => m
                 .compute_srgb_u8_with_features(r, d)
                 .map(|(s, features)| Scores {
                     metric_name: "zensim",
@@ -927,14 +1112,14 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(..) => Err(Error::Metric {
+            MetricInner::Cpu(..) => Err(Error::Metric {
                 kind: "cpu",
                 message: "CPU backend has no linear-planes HDR path; feed via \
                           compute_srgb_u8(to_sdr_u8(..)) per hdr_feeding()"
                     .to_string(),
             }),
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m
+            MetricInner::Cvvdp(m) => m
                 .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, None)
                 .map(convert_score)
                 .map_err(|e| Error::Metric {
@@ -942,7 +1127,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m
+            MetricInner::Butter(m) => m
                 .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
                 .map(|(s, _pnorm3)| convert_score_butter(s))
                 .map_err(|e| Error::Metric {
@@ -950,13 +1135,13 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(_) => Err(no_linear_planes_path("ssim2")),
+            MetricInner::Ssim2(_) => Err(no_linear_planes_path("ssim2")),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(_) => Err(no_linear_planes_path("dssim")),
+            MetricInner::Dssim(_) => Err(no_linear_planes_path("dssim")),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(_) => Err(no_linear_planes_path("iwssim")),
+            MetricInner::Iwssim(_) => Err(no_linear_planes_path("iwssim")),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(m) => m
+            MetricInner::Zensim(m) => m
                 .score_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
                 .map(|v| Score {
                     value: v as f64,
@@ -1000,14 +1185,14 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(..) => Err(Error::Metric {
+            MetricInner::Cpu(..) => Err(Error::Metric {
                 kind: "cpu",
                 message: "CPU backend has no linear-planes HDR path; feed via \
                           compute_srgb_u8(to_sdr_u8(..)) per hdr_feeding()"
                     .to_string(),
             }),
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m
+            MetricInner::Cvvdp(m) => m
                 .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, None)
                 .map(convert_score)
                 .map(Scores::single)
@@ -1016,7 +1201,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m
+            MetricInner::Butter(m) => m
                 .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
                 .map(|(s, pnorm3)| Scores {
                     metric_name: "butter",
@@ -1038,13 +1223,13 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(_) => Err(no_linear_planes_path("ssim2")),
+            MetricInner::Ssim2(_) => Err(no_linear_planes_path("ssim2")),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(_) => Err(no_linear_planes_path("dssim")),
+            MetricInner::Dssim(_) => Err(no_linear_planes_path("dssim")),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(_) => Err(no_linear_planes_path("iwssim")),
+            MetricInner::Iwssim(_) => Err(no_linear_planes_path("iwssim")),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(m) => m
+            MetricInner::Zensim(m) => m
                 .score_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
                 .map(|v| {
                     Scores::single(Score {
@@ -1082,7 +1267,7 @@ impl Metric {
             feature = "cpu-zensim",
             feature = "cpu-iwssim"
         ))]
-        if let Metric::Cpu(s, _) = self {
+        if let MetricInner::Cpu(s, _) = self {
             return s
                 .compute_from_linear_interleaved(ref_rgb, dis_rgb)
                 .map(|(s, _)| s);
@@ -1111,7 +1296,7 @@ impl Metric {
             feature = "cpu-zensim",
             feature = "cpu-iwssim"
         ))]
-        if let Metric::Cpu(s, _) = self {
+        if let MetricInner::Cpu(s, _) = self {
             let (score, pnorm3) = s.compute_from_linear_interleaved(ref_rgb, dis_rgb)?;
             return Ok(match pnorm3 {
                 // Only butter yields a pnorm_3 — same `[max, pnorm_3]` shape as
@@ -1160,7 +1345,7 @@ impl Metric {
         let dis_h = &pair.dist_handle;
         match self {
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m
+            MetricInner::Cvvdp(m) => m
                 .compute_handles(ref_h, dis_h)
                 .map(convert_score)
                 .map_err(|e| Error::Metric {
@@ -1168,7 +1353,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m
+            MetricInner::Butter(m) => m
                 .compute_handles(ref_h, dis_h)
                 .map(convert_score_butter)
                 .map_err(|e| Error::Metric {
@@ -1176,7 +1361,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(m) => m
+            MetricInner::Ssim2(m) => m
                 .compute_handles(ref_h, dis_h)
                 .map(convert_score_ssim2)
                 .map_err(|e| Error::Metric {
@@ -1184,7 +1369,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(m) => m
+            MetricInner::Dssim(m) => m
                 .compute_handles(ref_h, dis_h)
                 .map(convert_score_dssim)
                 .map_err(|e| Error::Metric {
@@ -1192,7 +1377,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(m) => m
+            MetricInner::Iwssim(m) => m
                 .compute_handles(ref_h, dis_h)
                 .map(convert_score_iwssim)
                 .map_err(|e| Error::Metric {
@@ -1200,7 +1385,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(_) => {
+            MetricInner::Zensim(_) => {
                 // zensim-gpu compute_handles is parked while the parallel
                 // rework lands — fall back to compute_srgb_u8 isn't
                 // available without the original bytes, so surface a
@@ -1222,7 +1407,7 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(..) => Err(Error::Metric {
+            MetricInner::Cpu(..) => Err(Error::Metric {
                 kind: "cpu",
                 message:
                     "compute_handles is a GPU upload-once path; Backend::Cpu has no device handles \
@@ -1264,14 +1449,14 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(..) => Err(Error::Metric {
+            MetricInner::Cpu(..) => Err(Error::Metric {
                 kind: "cpu",
                 message: "compute_features_srgb_u8 (feature export) is not implemented for \
                           Backend::Cpu"
                     .into(),
             }),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(m) => {
+            MetricInner::Zensim(m) => {
                 // One pipeline pass: compute the regime-appropriate
                 // feature vector, then derive the basic-block score
                 // from the same data (matches what `compute_srgb_u8`
@@ -1305,15 +1490,15 @@ impl Metric {
             // empty feature vector. Pattern lets one call-site collect
             // features-when-present without branching on `kind()`.
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
+            MetricInner::Cvvdp(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
             #[cfg(feature = "butter")]
-            Metric::Butter(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
+            MetricInner::Butter(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
+            MetricInner::Ssim2(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
+            MetricInner::Dssim(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
+            MetricInner::Iwssim(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
         }
     }
 
@@ -1347,7 +1532,7 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(s, _) => {
+            MetricInner::Cpu(s, _) => {
                 // Optimized-CPU path (task #159 phase 3): convert both
                 // PixelSlices to packed sRGB8 (strided-correct, one-line via
                 // zenpixels-convert) then score on the native crate. HDR is
@@ -1358,7 +1543,7 @@ impl Metric {
                 s.compute_srgb_u8(&ref_buf, &dis_buf)
             }
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => {
+            MetricInner::Cvvdp(m) => {
                 m.compute_pixels(r, d)
                     .map(convert_score)
                     .map_err(|e| Error::Metric {
@@ -1367,7 +1552,7 @@ impl Metric {
                     })
             }
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m
+            MetricInner::Butter(m) => m
                 .compute_pixels(r, d)
                 .map(convert_score_butter)
                 .map_err(|e| Error::Metric {
@@ -1375,7 +1560,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(m) => m
+            MetricInner::Ssim2(m) => m
                 .compute_pixels(r, d)
                 .map(convert_score_ssim2)
                 .map_err(|e| Error::Metric {
@@ -1383,7 +1568,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(m) => m
+            MetricInner::Dssim(m) => m
                 .compute_pixels(r, d)
                 .map(convert_score_dssim)
                 .map_err(|e| Error::Metric {
@@ -1391,7 +1576,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(m) => m
+            MetricInner::Iwssim(m) => m
                 .compute_pixels(r, d)
                 .map(convert_score_iwssim)
                 .map_err(|e| Error::Metric {
@@ -1399,7 +1584,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(m) => m
+            MetricInner::Zensim(m) => m
                 .compute_pixels(r, d)
                 .map(convert_score_zensim)
                 .map_err(|e| Error::Metric {
@@ -1446,7 +1631,7 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(s, cached_ref) => {
+            MetricInner::Cpu(s, cached_ref) => {
                 // Buffer-replay warm path (task #159 phase 4b): stash the
                 // reference sRGB bytes; compute_with_cached_reference replays
                 // the one-shot compute on them — score-identical to one-off.
@@ -1466,32 +1651,32 @@ impl Metric {
                 Ok(())
             }
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
+            MetricInner::Cvvdp(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
                 kind: "cvvdp",
                 message: e.to_string(),
             }),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
+            MetricInner::Zensim(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
                 kind: "zensim",
                 message: e.to_string(),
             }),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
+            MetricInner::Iwssim(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
                 kind: "iwssim",
                 message: e.to_string(),
             }),
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
+            MetricInner::Butter(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
                 kind: "butter",
                 message: e.to_string(),
             }),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
+            MetricInner::Ssim2(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
                 kind: "ssim2",
                 message: e.to_string(),
             }),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
+            MetricInner::Dssim(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
                 kind: "dssim",
                 message: e.to_string(),
             }),
@@ -1515,7 +1700,7 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(s, cached_ref) => {
+            MetricInner::Cpu(s, cached_ref) => {
                 let rref = cached_ref.as_deref().ok_or(Error::Metric {
                     kind: "cpu",
                     message: "compute_with_cached_reference: no reference set — call \
@@ -1527,7 +1712,7 @@ impl Metric {
                 s.compute_srgb_u8(rref, d)
             }
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m
+            MetricInner::Cvvdp(m) => m
                 .compute_with_reference_srgb_u8(d)
                 .map(convert_score)
                 .map_err(|e| Error::Metric {
@@ -1535,7 +1720,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(m) => m
+            MetricInner::Zensim(m) => m
                 .compute_with_reference_srgb_u8(d)
                 .map(convert_score_zensim)
                 .map_err(|e| Error::Metric {
@@ -1543,7 +1728,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(m) => m
+            MetricInner::Iwssim(m) => m
                 .compute_with_reference_srgb_u8(d)
                 .map(convert_score_iwssim)
                 .map_err(|e| Error::Metric {
@@ -1551,7 +1736,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m
+            MetricInner::Butter(m) => m
                 .compute_with_reference_srgb_u8(d)
                 .map(convert_score_butter)
                 .map_err(|e| Error::Metric {
@@ -1559,7 +1744,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(m) => m
+            MetricInner::Ssim2(m) => m
                 .compute_with_reference_srgb_u8(d)
                 .map(convert_score_ssim2)
                 .map_err(|e| Error::Metric {
@@ -1567,7 +1752,7 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(m) => m
+            MetricInner::Dssim(m) => m
                 .compute_with_reference_srgb_u8(d)
                 .map(convert_score_dssim)
                 .map_err(|e| Error::Metric {
@@ -1590,25 +1775,25 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(_, cached_ref) => {
+            MetricInner::Cpu(_, cached_ref) => {
                 *cached_ref = None;
             }
             // cvvdp's set_reference_srgb_u8 overwrites prior state — no
             // explicit clear API on opaque (see pipeline.rs:4234).
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(_) => {}
+            MetricInner::Cvvdp(_) => {}
             // zensim has clear_reference on the typed pipeline but no
             // opaque accessor yet — Phase 2C can add it if needed.
             #[cfg(feature = "zensim")]
-            Metric::Zensim(_) => {}
+            MetricInner::Zensim(_) => {}
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(m) => m.clear_reference(),
+            MetricInner::Iwssim(m) => m.clear_reference(),
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m.clear_reference(),
+            MetricInner::Butter(m) => m.clear_reference(),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(m) => m.clear_reference(),
+            MetricInner::Ssim2(m) => m.clear_reference(),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(m) => m.clear_reference(),
+            MetricInner::Dssim(m) => m.clear_reference(),
         }
     }
 
@@ -1630,15 +1815,15 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(_, cached_ref) => cached_ref.is_some(),
+            MetricInner::Cpu(_, cached_ref) => cached_ref.is_some(),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(m) => m.has_reference(),
+            MetricInner::Iwssim(m) => m.has_reference(),
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m.has_reference(),
+            MetricInner::Butter(m) => m.has_reference(),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(m) => m.has_reference(),
+            MetricInner::Ssim2(m) => m.has_reference(),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(m) => m.has_reference(),
+            MetricInner::Dssim(m) => m.has_reference(),
             // cvvdp gained `has_reference` in task #79 (Mode E).
             // The strip-mode cache survives intervening dispatches
             // because it lives in dedicated buffers; the Full-mode
@@ -1646,9 +1831,9 @@ impl Metric {
             // contract. Either way the accessor reflects the
             // currently-cached state.
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m.has_reference(),
+            MetricInner::Cvvdp(m) => m.has_reference(),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(_) => false,
+            MetricInner::Zensim(_) => false,
         }
     }
 

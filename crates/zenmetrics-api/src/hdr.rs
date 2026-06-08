@@ -366,7 +366,11 @@ impl HdrScorer {
         peak_nits: f32,
     ) -> crate::Result<Self> {
         let feeding = hdr_feeding(kind);
-        let metric = build_hdr_metric(kind, backend, width, height, peak_nits)?;
+        // Bake the peak into the metric's display model (cvvdp/butter) AND record
+        // it as the metric's `display_peak`, so `Metric::compute_pixels` feeds HDR
+        // at the same peak this scorer targets — the two stay in sync.
+        let metric = build_hdr_metric(kind, backend, width, height, peak_nits)?
+            .with_display_peak(peak_nits);
         Ok(Self {
             metric,
             kind,
@@ -458,32 +462,12 @@ impl HdrScorer {
         r: zenpixels::PixelSlice<'_>,
         d: zenpixels::PixelSlice<'_>,
     ) -> crate::Result<crate::Scores> {
-        let both_srgb8 = r.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB
-            && d.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB;
-        if both_srgb8 {
-            // SDR native path — feed the sRGB8 bytes the kernels already take.
-            let (w, h) = self.metric.dims();
-            let rb = slice_to_srgb8(&r, w, h)?;
-            let db = slice_to_srgb8(&d, w, h)?;
-            return self.metric.compute_srgb_u8_multi(&rb, &db);
-        }
-        match self.feeding {
-            HdrFeeding::LinearPlanes => {
-                // Interleaved, not planar: native CPU butter/cvvdp take it
-                // zero-copy (their crates want interleaved RGB<f32>); GPU metrics
-                // deinterleave to their planar kernels inside the interleaved
-                // entry — same work, one transport. Backend (Cpu vs native GPU)
-                // is decided by the metric instance, never CubeclCpu.
-                let rr = slice_to_display_relative_linear_interleaved(&r, self.peak_nits)?;
-                let dd = slice_to_display_relative_linear_interleaved(&d, self.peak_nits)?;
-                self.metric.compute_from_linear_interleaved_multi(&rr, &dd)
-            }
-            HdrFeeding::SdrU8(transfer) => {
-                let rb = slice_to_pu_rescaled_u8(&r, transfer, self.peak_nits)?;
-                let db = slice_to_pu_rescaled_u8(&d, transfer, self.peak_nits)?;
-                self.metric.compute_srgb_u8_multi(&rb, &db)
-            }
-        }
+        // Thin wrapper: the metric's `display_peak` was set to `self.peak_nits`
+        // at construction, so `Metric::compute_pixels_multi` applies the same
+        // descriptor-driven per-metric feeding this scorer used to inline (SDR
+        // native for `RGB8_SRGB`, pu-rescale / linear-planes for HDR). Single
+        // source of truth, so the two paths can't drift.
+        self.metric.compute_pixels_multi(r, d)
     }
 
     /// Single-score variant of [`Self::compute_pixels_multi`].
@@ -499,7 +483,7 @@ impl HdrScorer {
 
 /// Convert a slice to packed sRGB8 (validating dims) for the native SDR path.
 #[cfg(feature = "pixels")]
-fn slice_to_srgb8(s: &zenpixels::PixelSlice<'_>, w: u32, h: u32) -> crate::Result<Vec<u8>> {
+pub(crate) fn slice_to_srgb8(s: &zenpixels::PixelSlice<'_>, w: u32, h: u32) -> crate::Result<Vec<u8>> {
     if s.width() != w || s.rows() != h {
         return Err(crate::Error::Metric {
             kind: "pixels",
@@ -545,7 +529,7 @@ fn linear_to_nits_scale(transfer: zenpixels::TransferFunction, peak_nits: f32) -
 /// canonical linear transport: native CPU takes it as-is, GPU deinterleaves
 /// inside the interleaved entry.
 #[cfg(feature = "pixels")]
-fn slice_to_display_relative_linear_interleaved(
+pub(crate) fn slice_to_display_relative_linear_interleaved(
     s: &zenpixels::PixelSlice<'_>,
     peak_nits: f32,
 ) -> crate::Result<Vec<f32>> {
@@ -561,7 +545,7 @@ fn slice_to_display_relative_linear_interleaved(
 /// scale to absolute nits via [`linear_to_nits_scale`], then [`to_sdr_u8`].
 /// (Relative descriptors scale by `peak`; PQ by its fixed `10000`.)
 #[cfg(feature = "pixels")]
-fn slice_to_pu_rescaled_u8(
+pub(crate) fn slice_to_pu_rescaled_u8(
     s: &zenpixels::PixelSlice<'_>,
     transfer: HdrTransfer,
     peak_nits: f32,

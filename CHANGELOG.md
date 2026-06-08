@@ -185,6 +185,24 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **Descriptor-driven HDR folded into the base `Metric::compute_pixels` (display
+  peak on `Metric`).** The umbrella's own `Metric::compute_pixels` /
+  `compute_pixels_multi` (gated `pixels`, which now implies `hdr`) are
+  descriptor-driven for **all six metrics**, CPU and GPU: an `RGB8_SRGB` slice
+  takes the native SDR path (bit-identical to `compute_srgb_u8`), any HDR
+  descriptor (PQ / HLG / linear) is auto-fed via `hdr::hdr_feeding` at the
+  metric's display peak — pu-rescale u8 for the SSIM-family, display-relative
+  linear planes for cvvdp/butteraugli. No more silent HDR→sRGB8 collapse at the
+  base entry (the descriptor-driven path was previously only on the opt-in
+  `HdrScorer`). `Metric` is now a thin struct wrapping the renamed `MetricInner`
+  enum plus a `display_peak` (default `SDR_REFERENCE_NITS`), forwarding every
+  non-HDR method through `Deref`/`DerefMut`; new `with_display_peak` /
+  `display_peak`. `HdrScorer` is now a thin convenience — it sets the peak at
+  construction and delegates its `compute_pixels*` to `Metric`, so the two paths
+  can't drift. `pixels` now pulls `hdr` so default builds get auto-HDR. New
+  `tests/metric_base_hdr.rs` (CUDA: base-`Metric` SDR==native, HDR==`HdrScorer`
+  for ssim2/dssim/iwssim, score depends on the peak). Branch `feat/hdr-unify`.
+
 - **zensim-gpu / ssim2-gpu / dssim-gpu: typed `<Metric><R>` pipelines reflect-pad
   sub-min inputs too** (`5cb76bc3`, `0e6ab8a3`, `81fc3a47`). The same typed-pad
   pattern the cvvdp entry below describes, applied across the SSIM-family GPU

@@ -56,7 +56,8 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use zenmetrics_api::{
-    Backend as ApiBackend, Error as ApiError, MemoryMode, Metric, MetricKind, MetricParams, Score,
+    Backend as ApiBackend, Error as ApiError, MemoryMode, Metric, MetricInner, MetricKind,
+    MetricParams, Score,
 };
 
 use crate::chooser::{BackendChoice, ChooserError, RejectReason};
@@ -383,7 +384,7 @@ impl ExecMetric {
                 // so we don't lose the second column. Every other
                 // umbrella metric stays on the regular path.
                 #[cfg(feature = "bench")]
-                if let Metric::Butter(opaque) = m.as_mut() {
+                if let MetricInner::Butter(opaque) = m.as_mut().inner_mut() {
                     return match opaque.compute_srgb_u8_with_pnorm3(r, d) {
                         Ok((s, pnorm3)) => {
                             let score = Score {

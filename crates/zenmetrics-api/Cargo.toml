@@ -110,6 +110,11 @@ encoded = ["dep:image"]
 # zenpixels integration on the umbrella API. Forwards `pixels` to every
 # enabled metric crate so `Metric::compute_pixels` works.
 pixels = [
+    # Descriptor-driven scoring needs the HDR feeding (a PixelSlice descriptor
+    # may be HDR), so `Metric::compute_pixels` auto-handles HDR whenever it can
+    # take PixelSlices — no separate opt-in. The `hdr` module is pure math (no
+    # deps), so this is free.
+    "hdr",
     "dep:zenpixels",
     "dep:zenpixels-convert",
     "zenmetrics-gpu-core?/pixels",
