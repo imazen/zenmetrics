@@ -67,7 +67,8 @@ fn main() {
         let mut dm = Vec::new();
         // Warm up (JIT compile + allocations + first sync).
         for _ in 0..10 {
-            let _ = gpu.score_from_linear_planes_with_diffmap(&rr, &rg, &rb, &dr, &dg, &db, &mut dm);
+            let _ =
+                gpu.score_from_linear_planes_with_diffmap(&rr, &rg, &rb, &dr, &dg, &db, &mut dm);
         }
         let t = Instant::now();
         for _ in 0..iters {

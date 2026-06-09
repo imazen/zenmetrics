@@ -1142,8 +1142,10 @@ impl<R: Runtime> Zensim<R> {
         // Finals are now produced in f32 on-device (GPUs without f64, e.g. Metal,
         // can't carry f64 buffers). Widen to f64 here (lossless) so the host fold +
         // scoring math below stays in f64 exactly as before.
-        let finals_f64_storage: Vec<f64> =
-            f32::from_bytes(&f64_bytes).iter().map(|&x| x as f64).collect();
+        let finals_f64_storage: Vec<f64> = f32::from_bytes(&f64_bytes)
+            .iter()
+            .map(|&x| x as f64)
+            .collect();
         let finals_f64 = finals_f64_storage.as_slice();
         let finals_max = f32::from_bytes(&max_bytes);
 
@@ -1153,7 +1155,10 @@ impl<R: Runtime> Zensim<R> {
                 .client
                 .read_one(self.finals_ext_f64.clone())
                 .expect("read finals_ext_f64");
-            finals_ext_storage = f32::from_bytes(&ext_bytes).iter().map(|&x| x as f64).collect();
+            finals_ext_storage = f32::from_bytes(&ext_bytes)
+                .iter()
+                .map(|&x| x as f64)
+                .collect();
             finals_ext_storage.as_slice()
         } else {
             &[]
@@ -1329,8 +1334,10 @@ impl<R: Runtime> Zensim<R> {
                 .read_one(self.finals_max.clone())
                 .expect("read finals_max");
             // f32 on-device finals widened to f64 (lossless) for the host accumulate.
-            let finals_f64: Vec<f64> =
-                f32::from_bytes(&f64_bytes).iter().map(|&x| x as f64).collect();
+            let finals_f64: Vec<f64> = f32::from_bytes(&f64_bytes)
+                .iter()
+                .map(|&x| x as f64)
+                .collect();
             let finals_max = f32::from_bytes(&max_bytes);
             for i in 0..acc_f64.len() {
                 acc_f64[i] += finals_f64[i];
@@ -1345,8 +1352,10 @@ impl<R: Runtime> Zensim<R> {
                     .client
                     .read_one(self.finals_ext_f64.clone())
                     .expect("read finals_ext_f64");
-                let finals_ext: Vec<f64> =
-                    f32::from_bytes(&ext_bytes).iter().map(|&x| x as f64).collect();
+                let finals_ext: Vec<f64> = f32::from_bytes(&ext_bytes)
+                    .iter()
+                    .map(|&x| x as f64)
+                    .collect();
                 for i in 0..acc_ext_f64.len() {
                     acc_ext_f64[i] += finals_ext[i];
                 }
@@ -3027,16 +3036,20 @@ impl<R: Runtime> Zensim<R> {
             .read_one(self.finals_max.clone())
             .expect("read finals_max");
         // f32 on-device finals widened to f64 (lossless) for the host fold.
-        let finals_f64_storage: Vec<f64> =
-            f32::from_bytes(&f64_bytes).iter().map(|&x| x as f64).collect();
+        let finals_f64_storage: Vec<f64> = f32::from_bytes(&f64_bytes)
+            .iter()
+            .map(|&x| x as f64)
+            .collect();
         let finals_f64 = finals_f64_storage.as_slice();
         let finals_max = f32::from_bytes(&max_bytes);
         let ext_bytes = self
             .client
             .read_one(self.finals_ext_f64.clone())
             .expect("read finals_ext_f64");
-        let finals_ext_storage: Vec<f64> =
-            f32::from_bytes(&ext_bytes).iter().map(|&x| x as f64).collect();
+        let finals_ext_storage: Vec<f64> = f32::from_bytes(&ext_bytes)
+            .iter()
+            .map(|&x| x as f64)
+            .collect();
         let finals_ext_f64 = finals_ext_storage.as_slice();
 
         let mut scale_image_h: [u32; SCALES] = [0; SCALES];
