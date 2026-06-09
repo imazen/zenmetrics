@@ -1,0 +1,28 @@
+[package]
+name = "burn-ranknet-spike"
+version = "0.0.1"
+edition = "2024"
+description = "Spike: can `burn` train a RankNet-style perceptual/picker MLP with a custom pairwise+monotonic loss? Training-framework counterpart to burn-conv-spike. NOT a published crate."
+authors = ["Imazen <support@imazen.io>"]
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+publish = false
+
+# Standalone workspace so we don't pollute the parent resolution graph
+# (parent pins the zenforks-cubecl 0.10.x fork; this spike uses vanilla
+# burn 0.21 / cubecl 0.10 in isolation — see README for the fork question).
+[workspace]
+
+[dependencies]
+# ndarray + autodiff backend: pure-CPU, zero GPU-driver dependency, so the
+# spike compiles and runs anywhere. burn is generic over Backend, so the same
+# model swaps to the cubecl CUDA backend by changing one type alias.
+burn = { version = "0.21.0", default-features = false, features = ["std", "ndarray", "autodiff"] }
+
+[profile.release]
+opt-level = 3
+debug = false
+codegen-units = 1
+
+[[bin]]
+name = "burn-ranknet-spike"
+path = "src/main.rs"

@@ -38,9 +38,12 @@ members = [
 # Excluded: burn-conv-spike is a standalone perf-spike crate that
 # pins cubecl 0.10.0 stable (cubek-convolution doesn't accept
 # 0.10.0-pre.4). It has its own [workspace] root so it doesn't
-# pull workspace settings either.
+# pull workspace settings either. burn-ranknet-spike is the
+# training-framework counterpart (burn 0.21 autodiff + custom
+# RankNet loss); also standalone, also kept out of the parent graph.
 exclude = [
     "crates/burn-conv-spike",
+    "crates/burn-ranknet-spike",
 ]
 resolver = "2"
 
