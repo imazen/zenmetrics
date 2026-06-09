@@ -17,6 +17,24 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Changed
+
+- **Consolidated integration tests into a single per-crate `it` binary across the
+  9 metric crates** (cvvdp-gpu, zenmetrics-api, zensim-gpu, ssim2-gpu, iwssim-gpu,
+  butteraugli-gpu, zenmetrics-orchestrator, cvvdp, dssim-gpu). 162 former
+  `tests/<name>.rs` files — each compiling+linking as its own test binary — moved to
+  `tests/<crate>/tests/it/<name>.rs` as submodules of one `tests/it/main.rs` target.
+  Per-test `[[test]] required-features = [...]` gating moved verbatim onto `#[cfg(...)]`
+  on each `mod` line, so feature activation is byte-identical; the `[[test]]` blocks were
+  replaced by a single `[[test]] name = "it"`. Test files are unchanged except
+  cvvdp-gpu's shared `tests/common/` (now `tests/it/common/`, `mod common;` → `use
+  crate::common;`) and relative `include_str!`/`include_bytes!` paths gaining one `../`
+  for the deeper directory. Each separate test file linked the whole crate + dep graph;
+  collapsing them turns 162 link steps into 9. Select a former target with a module
+  filter, e.g. `cargo test -p zensim-gpu --test it strip_parity`; the `--test <name>`
+  selectors in `justfile`, `.github/workflows/ci.yml`, and operational docs were updated
+  to `--test it <name>`.
+
 ### Added
 
 - **Unified descriptor-driven `compute_pixels` — SDR and HDR are one call.**

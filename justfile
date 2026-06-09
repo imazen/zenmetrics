@@ -32,7 +32,7 @@ fmt-check:
 # Run the GPU-less CPU-backend test suite (mirrors CI).
 test-cpu:
     cargo test -p zenmetrics-api --no-default-features --features {{CPU_FEATURES}} \
-        --test backend_matrix --test cpu_dispatch
+        --test it -- backend_matrix cpu_dispatch
 
 # The full matrix including the CPU-vs-CUDA parity layer needs an NVIDIA
 # GPU; default features turn `cuda` on so the `#[cfg(feature = "cuda")]`
@@ -40,7 +40,7 @@ test-cpu:
 
 # Run the full backend matrix locally, including CPU-vs-CUDA parity (needs GPU).
 test-matrix-gpu:
-    cargo test -p zenmetrics-api --features cpu-metrics --test backend_matrix
+    cargo test -p zenmetrics-api --features cpu-metrics --test it backend_matrix
 
 # Quick default-feature check of the umbrella crate.
 check:

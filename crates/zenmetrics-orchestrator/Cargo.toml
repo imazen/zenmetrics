@@ -182,30 +182,6 @@ required-features = ["bench"]
 # test suite imports `MetricKind` from zenmetrics-api (the bench
 # feature pulls that crate in). The chooser module itself is gated
 # on `bench` for the same reason.
-[[test]]
-name = "chooser"
-path = "tests/chooser.rs"
-required-features = ["bench"]
-
-# Phase 4 executor integration tests. Requires `cuda` (which implies
-# `bench`) because the executor module is gated on both. The real-GPU
-# tests inside the file are individually `#[ignore]`d; the rest of the
-# suite exercises chooser + cache-persistence paths without touching
-# the device. **Build note (2026-05-27):** in a jj sibling workspace
-# (`zenmetrics--*`) cargo discovers TWO `butteraugli-gpu` packages via
-# jxl-encoder's hardcoded `../zenmetrics/crates/butteraugli-gpu` path,
-# producing a lockfile collision. Build/run these tests from the
-# primary `zenmetrics/` checkout instead — that's also how the Phase 3
-# `chooser` tests are run.
-[[test]]
-name = "executor"
-path = "tests/executor.rs"
-required-features = ["cuda"]
-
-# Phase 4 single-task executor example. Drives `Orchestrator::run_single`
-# end-to-end against a real CUDA device — useful for manual smoke tests
-# and the brief's "produce a sensible Score" acceptance gate. Same
-# sibling-workspace caveat as the `executor` test above.
 [[example]]
 name = "run_single"
 path = "examples/run_single.rs"
@@ -213,60 +189,6 @@ required-features = ["cuda"]
 
 # Phase 5 streaming integration tests. Same sibling-workspace caveat —
 # build from the primary `zenmetrics/` checkout.
-[[test]]
-name = "streaming"
-path = "tests/streaming.rs"
-required-features = ["cuda"]
-
-# Phase 5 cached-ref auto-detect tests. Sibling-workspace caveat applies.
-[[test]]
-name = "cached_ref"
-path = "tests/cached_ref.rs"
-required-features = ["cuda"]
-
-# Phase 6 CPU backend integration tests. Each per-metric test is gated
-# on its `cpu-<metric>` feature; `cuda` is required for the executor
-# module gate. Same sibling-workspace caveat as the other Phase 4-5
-# tests — build from the primary `zenmetrics/` checkout to avoid the
-# butteraugli-gpu lockfile collision documented above.
-[[test]]
-name = "cpu_backend"
-path = "tests/cpu_backend.rs"
-required-features = ["cuda"]
-
-# Phase 7.6 reordering tests — warm-instance churn + cached-ref hit
-# rate + streaming reorder window. Most tests inspect submit/flush
-# plumbing without driving compute (so they run without --ignored);
-# the GPU-only warm-churn + cached-ref + peak-VRAM tests are
-# individually marked `#[ignore]` because they require a real CUDA
-# device. Sibling-workspace caveat applies.
-[[test]]
-name = "reorder"
-path = "tests/reorder.rs"
-required-features = ["cuda"]
-
-# Phase 8a graceful no-GPU fallback integration tests. Covers the
-# ZENMETRICS_FORCE_NO_GPU=1 env-var fixture, bench-plan gating, the
-# chooser's NoGpuPresent rejection, and the executor's libcuda-missing
-# downgrade path. Same sibling-workspace caveat — build from the
-# primary `zenmetrics/` checkout.
-[[test]]
-name = "no_gpu_fallback"
-path = "tests/no_gpu_fallback.rs"
-required-features = ["cuda"]
-
-# Phase 9 GPU concurrency invariants — parity (N=1 vs N=4 bit-identical
-# scores) + throughput (N=4 >= 2.5x N=1 at 4096²) + adaptive lane count
-# introspection. Every test is `#[ignore]`d because they require real
-# CUDA + populated capability cache + (for the adaptive test) working
-# nvidia-smi. Sibling-workspace caveat applies.
-[[test]]
-name = "gpu_concurrency"
-path = "tests/gpu_concurrency.rs"
-required-features = ["cuda"]
-
-# Phase 5 batch example. Drives `Orchestrator::run_all` against a real
-# CUDA device. Sibling-workspace caveat applies.
 [[example]]
 name = "run_batch"
 path = "examples/run_batch.rs"
@@ -296,3 +218,7 @@ required-features = ["cuda"]
 name = "multiwarm_bench"
 path = "examples/multiwarm_bench.rs"
 required-features = ["cuda"]
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"

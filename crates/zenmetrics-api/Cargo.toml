@@ -186,77 +186,6 @@ zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
 # gated on `cuda,cubecl-types`.
 cubecl = { workspace = true }
 
-[[test]]
-name = "compute_handles"
-required-features = ["cuda", "cubecl-types"]
-
-# compute_srgb_u8_multi: butter max+pnorm_3 + zensim score+features through
-# the umbrella (the lossless multi-output path). GPU; NO GRACEFUL SKIPS.
-[[test]]
-name = "compute_multi"
-required-features = ["cuda", "butter", "zensim"]
-
-# cvvdp HDR display model threads through MetricParams::cvvdp_with_display.
-[[test]]
-name = "cvvdp_display"
-required-features = ["cuda", "cvvdp"]
-
-# HdrScorer: HDR-aware multi-score over the umbrella (auto per-metric feeding).
-[[test]]
-name = "hdr_scorer"
-required-features = ["cuda", "hdr", "butter", "ssim2", "zensim"]
-
-# MetricSession allocator cap/recycle — no GPU work (acquire builds no
-# client until .metric()), but gated cuda so cvvdp reports the backend
-# usable. Visible gate per the CI→justfile→test chain (NO GRACEFUL SKIPS).
-[[test]]
-name = "session_cap"
-required-features = ["cuda", "cvvdp"]
-
-# SessionMetric vs owned Metric score parity for cvvdp — needs a GPU.
-[[test]]
-name = "session_parity"
-required-features = ["cuda", "cvvdp"]
-
-# Per-session VRAM isolation (mirrors the #152 spike via the real API)
-# — needs a GPU; measures real per-stream memory_usage().
-[[test]]
-name = "session_vram_isolation"
-required-features = ["cuda", "cvvdp"]
-
-# Backend::Cpu (optimized native) dispatch — task #159 phase 2. No GPU; runs
-# the fast-ssim2 CPU path. Gated on cpu-ssim2 so the skip decision is visible
-# in the CI→justfile→test chain (NO graceful skips).
-[[test]]
-name = "cpu_dispatch"
-required-features = [
-    "cpu-ssim2",
-    "cpu-cvvdp",
-    "cpu-iwssim",
-    "cpu-zensim",
-    "cpu-dssim",
-    "cpu-butter",
-]
-
-# Brute-force backend × metric × size matrix (task #159 phase 5). CPU
-# breadth + Auto→Cpu always run (CI cpu-metrics job); the CPU-vs-CUDA
-# parity layer compiles in only when `cuda` is also on (real-GPU host).
-# Needs `cpu-metrics` (Backend::Cpu dispatch for all six) AND `all-metrics`
-# — the shared `MetricParams`/`Score` types are defined per the GPU metric
-# features, so every metric kind needs its `<metric>` feature present even
-# when scoring on Backend::Cpu. Run with a backend (cuda default locally;
-# `wgpu` in CI so the -gpu crates build without the CUDA SDK). Visible gate
-# per the CI→test chain (NO graceful skips).
-[[test]]
-name = "backend_matrix"
-required-features = ["cpu-metrics", "all-metrics"]
-
-# These two timing examples are `#![cfg(feature = "cubecl-types")]` at
-# the crate root, so without that feature the whole file (incl. `main`)
-# compiles out and `cargo {test,build} -p zenmetrics-api` (default
-# features, no cubecl-types) errored "main function not found". Declaring
-# required-features keeps them out of the default example set. (The other
-# examples are gated on `cuda`, which is default-on, so they build.)
 [[example]]
 name = "inprocess_warmth"
 required-features = ["cubecl-types"]
@@ -274,16 +203,7 @@ name = "mode_wall"
 required-features = ["cubecl-types", "cvvdp"]
 
 # Unified descriptor-driven entry: sRGB8 slice == native; HDR linear == nits path.
-[[test]]
-name = "unified_pixels"
-required-features = ["cuda", "hdr", "pixels", "butter", "ssim2"]
 
-# Native CPU butter HDR via faithful linear-light path (vs GPU). No cubeclcpu.
 [[test]]
-name = "cpu_butter_linear"
-required-features = ["cuda", "cpu-butter", "butter", "pixels"]
-
-# Native CPU cvvdp HDR via faithful linear-light path (vs GPU). No cubeclcpu.
-[[test]]
-name = "cpu_cvvdp_linear"
-required-features = ["cuda", "cpu-cvvdp", "cvvdp"]
+name = "it"
+path = "tests/it/main.rs"

@@ -201,7 +201,7 @@ curl -sL -o crates/cvvdp-gpu/data/display_models.json \
 curl -sL -o crates/cvvdp-gpu/data/color_spaces.json \
   https://raw.githubusercontent.com/gfxdisp/ColorVideoVDP/main/pycvvdp/vvdp_data/color_spaces.json
 cargo test -p cvvdp-gpu --features cubecl-types --lib presets::tests
-cargo test -p cvvdp-gpu --features cubecl-types --test eotf_primaries_invariants
+cargo test -p cvvdp-gpu --features cubecl-types --test it eotf_primaries_invariants
 ```
 
 If a new preset adds a `colorspace` value we haven't mapped (or a

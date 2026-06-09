@@ -500,7 +500,7 @@ jobs:
           cargo test -p zenmetrics-api \
             --no-default-features \
             --features all-metrics,cpu-metrics,wgpu,pixels,encoded \
-            --test backend_matrix --test cpu_dispatch
+            --test it -- backend_matrix cpu_dispatch
 
   # Linting + formatting.
   lint:

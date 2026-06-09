@@ -31,7 +31,7 @@ pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 # Phase 8g.1: the GPU↔CPU parity test was moved to `iwssim-gpu/tests/parity_cpu.rs`
 # to break the dependency cycle (iwssim-gpu now depends on iwssim). To run
 # CPU↔GPU parity, use:
-#   cargo test -p iwssim-gpu --features cuda --test parity_cpu -- --ignored
+#   cargo test -p iwssim-gpu --features cuda --test it parity_cpu -- --ignored
 
 [dependencies]
 # Safe SIMD dispatch via capability tokens. Used by:

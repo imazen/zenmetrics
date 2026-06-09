@@ -16,7 +16,7 @@ pool would hide still trips a test.
 **Run it:**
 
 ```bash
-cargo test -p cvvdp --features __simd_equiv_test --test simd_equivalence -- --nocapture
+cargo test -p cvvdp --features __simd_equiv_test --test it simd_equivalence -- --nocapture
 ```
 
 The `__simd_equiv_test` cargo feature enables a `#[doc(hidden)]`

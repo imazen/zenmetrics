@@ -166,36 +166,5 @@ name = "bench_strip_vs_whole"
 required-features = ["cubecl-types"]
 
 [[test]]
-name = "blur_mode_api"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "fir_path"
-required-features = ["cubecl-types", "fir"]
-
-[[test]]
-name = "parity_lock"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "ssim2_skipmap_audit"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "opaque"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "strip_parity"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "aliasing_invariants"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "reduction_determinism"
-required-features = ["cubecl-types"]
-
-# `[[test]] cudarse_parity` was deleted 2026-05-27 — see the
-# `cudarse-parity` feature comment above for the rationale.
+name = "it"
+path = "tests/it/main.rs"

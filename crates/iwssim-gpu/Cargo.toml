@@ -85,39 +85,5 @@ name = "heaptrack_strip_12mp"
 required-features = ["cubecl-types"]
 
 [[test]]
-name = "parity_lock"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "opaque"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "small_image_adaptive"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "strip_parity"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "cached_ref_strip"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "rgb_strip"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "rgb_strip_native"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "vram_probe"
-
-# Phase 8g.1: GPU↔CPU parity. Was iwssim/tests/parity_gpu.rs gated on
-# the `gpu-parity-test` feature; relocated here to break the iwssim ↔
-# iwssim-gpu dep cycle.
-[[test]]
-name = "parity_cpu"
-required-features = ["cuda"]
+name = "it"
+path = "tests/it/main.rs"

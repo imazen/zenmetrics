@@ -74,3 +74,7 @@ zenpixels-convert = { version = "0.2.11", default-features = false, features = [
 zenmetrics-corpus = { workspace = true }
 # Used to decode the corpus PNG + JPEGs.
 image = { workspace = true, features = ["png", "jpeg"] }
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"

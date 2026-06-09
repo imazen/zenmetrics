@@ -75,38 +75,6 @@ required-features = ["cubecl-types"]
 name = "diffmap_distribution"
 required-features = ["cubecl-types"]
 
-[[test]]
-name = "cpu_parity"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "parity_lock"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "opaque"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "opaque_regime"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "opaque_cached_ref"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "diffmap_invariants"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "cpu_gpu_feature_sweep"
-required-features = ["cubecl-types"]
-
-[[test]]
-name = "cpu_gpu_diffmap_parity"
-required-features = ["cubecl-types"]
-
 [[bench]]
 name = "cached_ref"
 harness = false
@@ -115,3 +83,7 @@ required-features = ["cubecl-types"]
 [[example]]
 name = "diffmap_gpu_vs_cpu"
 required-features = ["cubecl-types"]
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"

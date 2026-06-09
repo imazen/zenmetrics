@@ -273,27 +273,27 @@ been deeply audited in the 2026-05-22 pass:
 ```bash
 # ssim2 — both feature combos
 cargo test -p ssim2-gpu --release --no-default-features \
-  --features cuda,cubecl-types,pixels --test ssim2_skipmap_audit
+  --features cuda,cubecl-types,pixels --test it ssim2_skipmap_audit
 cargo test -p ssim2-gpu --release --no-default-features \
-  --features cuda,cubecl-types,pixels,fast-reduction --test ssim2_skipmap_audit
+  --features cuda,cubecl-types,pixels,fast-reduction --test it ssim2_skipmap_audit
 
 # iwssim — multi-strip parity
 cargo test -p iwssim-gpu --release --no-default-features \
-  --features cuda,cubecl-types --test strip_parity
+  --features cuda,cubecl-types --test it strip_parity
 cargo test -p iwssim-gpu --release --no-default-features \
-  --features cuda,cubecl-types,pixels --test opaque
+  --features cuda,cubecl-types,pixels --test it opaque
 
 # zensim cpu_parity
 cargo test -p zensim-gpu --release --no-default-features \
-  --features cuda,cubecl-types --test cpu_parity
+  --features cuda,cubecl-types --test it cpu_parity
 cargo test -p zensim-gpu --release --no-default-features \
-  --features cuda,cubecl-types --test extended_parity
+  --features cuda,cubecl-types --test it extended_parity
 
 # dssim parity_lock + strip_parity
 cargo test -p dssim-gpu --release --no-default-features \
-  --features cuda,cubecl-types --test parity_lock
+  --features cuda,cubecl-types --test it parity_lock
 cargo test -p dssim-gpu --release --no-default-features \
-  --features cuda,cubecl-types --test strip_parity
+  --features cuda,cubecl-types --test it strip_parity
 ```
 
 All commands run against CUDA on the local water-cooled 7950X +
