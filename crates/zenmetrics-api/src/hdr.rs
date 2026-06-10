@@ -293,6 +293,23 @@ pub fn to_sdr_u8(rgb_nits: &[f32], transfer: HdrTransfer, peak_nits: f32) -> Vec
         .collect()
 }
 
+/// Absolute-luminance interleaved RGB (cd/m²) → PU21(`BandingGlare`)-encoded
+/// BT.709-luma gray plane in 0..255 scale (`255 / PU21(peak_nits)`), kept as
+/// **f32** — the float PU(luma) feeding for [`HdrFeeding::PuLumaGrayF32`].
+/// Identical math to the `PuRescale` u8 shell on luminance, minus the
+/// round-to-u8 step that costs IW-SSIM ~0.18 SROCC on UPIQ HDR.
+pub fn nits_interleaved_to_pu_luma_gray(rgb_nits: &[f32], peak_nits: f32) -> Vec<f32> {
+    let pu_max = pu21_encode(peak_nits, Pu21Variant::BandingGlare).max(1.0);
+    let scale = 255.0 / pu_max;
+    rgb_nits
+        .chunks_exact(3)
+        .map(|c| {
+            let y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+            pu21_encode(y, Pu21Variant::BandingGlare) * scale
+        })
+        .collect()
+}
+
 /// How a metric should ingest HDR — the **single source of truth** for the
 /// per-metric feeding recipe, validated against HDR MOS on UPIQ + AIC-HDR2025
 /// (`benchmarks/hdr_feeding_validation_2026-06-03.md`).
@@ -310,6 +327,14 @@ pub enum HdrFeeding {
     /// **0.7040** (n=380) vs 0.65 for the `PuRescale` u8 shell; the
     /// fed-PU-as-input shell variant caps at ~0.61 (imazen/zenmetrics#25).
     IntegratedPuNits,
+    /// **Float PU(luma) gray** (iwssim): `PU21(bt709-luma(nits)) · 255 /
+    /// PU21(peak)` fed as f32 gray planes into the metric's gray-native
+    /// entry (`score_gray` / `compute_gray`) — same 0..255 scale as the u8
+    /// shell, **no quantization round-trip**. UPIQ HDR (n=380): SROCC
+    /// **0.8076** (and 0.8123 with `iw_flag` off) vs **0.628** through the
+    /// `PuRescale` u8 shell — the u8 round-trip alone cost ~0.18
+    /// (`benchmarks/pu_integrated_upiq_2026-06-09.md` addendum 2, #25).
+    PuLumaGrayF32,
 }
 
 /// The validated HDR feeding for each metric **on the given backend**.
@@ -351,7 +376,12 @@ pub fn hdr_feeding(metric: crate::MetricKind, backend: crate::Backend) -> HdrFee
         // native CPU path gets the u8 shell). The cubecl runtimes all run
         // the same kernels, so the integrated path follows the opaque.
         M::Ssim2 if backend.resolve() != crate::Backend::Cpu => HdrFeeding::IntegratedPuNits,
-        M::Ssim2 | M::Dssim | M::Iwssim | M::Zensim => HdrFeeding::SdrU8(HdrTransfer::PuRescale),
+        // iwssim, BOTH classes — the CPU pipeline (`score_gray`) and the GPU
+        // pipeline (`compute_gray`) are gray-f32-native, so float PU(luma)
+        // routes everywhere. The u8 shell measured 0.628 vs 0.808 float on
+        // UPIQ HDR (benchmarks addendum 2) — the quantization was the loss.
+        M::Iwssim => HdrFeeding::PuLumaGrayF32,
+        M::Ssim2 | M::Dssim | M::Zensim => HdrFeeding::SdrU8(HdrTransfer::PuRescale),
     }
 }
 
@@ -477,6 +507,13 @@ impl HdrScorer {
             HdrFeeding::IntegratedPuNits => self
                 .metric
                 .compute_pu_nits_interleaved_multi(ref_nits, dis_nits),
+            // Float PU(luma) gray (iwssim): PU-encode luminance host-side at
+            // full precision and hand the metric f32 gray planes directly.
+            HdrFeeding::PuLumaGrayF32 => {
+                let r = nits_interleaved_to_pu_luma_gray(ref_nits, self.peak_nits);
+                let d = nits_interleaved_to_pu_luma_gray(dis_nits, self.peak_nits);
+                self.metric.compute_pu_luma_gray_multi(&r, &d)
+            }
         }
     }
 
@@ -793,10 +830,43 @@ mod tests {
         for b in [B::Cuda, B::Wgpu, B::Hip, B::CubeclCpu, B::Cpu] {
             assert_eq!(hdr_feeding(M::Cvvdp, b), LinearPlanes);
             assert_eq!(hdr_feeding(M::Butter, b), LinearPlanes);
-            for m in [M::Dssim, M::Iwssim, M::Zensim] {
+            for m in [M::Dssim, M::Zensim] {
                 assert_eq!(hdr_feeding(m, b), SdrU8(HdrTransfer::PuRescale));
             }
+            // iwssim: float PU(luma) gray on EVERY class — both the CPU
+            // (`score_gray`) and GPU (`compute_gray`) pipelines are
+            // f32-gray-native, and the u8 shell measured 0.628 vs 0.808
+            // float on UPIQ HDR (benchmarks addendum 2).
+            assert_eq!(hdr_feeding(M::Iwssim, b), PuLumaGrayF32);
         }
+    }
+
+    #[test]
+    fn pu_luma_gray_matches_u8_shell_math_minus_quantization() {
+        // Gray pixels: the float plane must equal the u8 shell's value
+        // BEFORE rounding (same PU21 + same 255/PU(peak) rescale).
+        let nits = [
+            0.5f32, 0.5, 0.5, 100.0, 100.0, 100.0, 4000.0, 4000.0, 4000.0,
+        ];
+        let g = nits_interleaved_to_pu_luma_gray(&nits, HDR_PEAK_NITS);
+        assert_eq!(g.len(), 3);
+        let pu_max = pu21_encode(HDR_PEAK_NITS, Pu21Variant::BandingGlare).max(1.0);
+        for (i, &y) in [0.5f32, 100.0, 4000.0].iter().enumerate() {
+            let want = pu21_encode(y, Pu21Variant::BandingGlare) * 255.0 / pu_max;
+            assert!(
+                (g[i] - want).abs() < 1e-4,
+                "gray[{i}] = {} want {want}",
+                g[i]
+            );
+        }
+        // Strictly increasing in luminance; super-peak content is NOT
+        // clamped to 255 (float feed keeps highlight separation).
+        assert!(g[0] < g[1] && g[1] < g[2]);
+        assert!(
+            g[2] > 255.0,
+            "4000-nit at 1000-nit peak exceeds 255: {}",
+            g[2]
+        );
     }
 
     /// GPU-class ssim2 routes to the integrated PU21 path; the native-CPU

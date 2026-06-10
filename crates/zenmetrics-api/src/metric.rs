@@ -619,6 +619,15 @@ impl Metric {
                 let dn = crate::hdr::slice_to_absolute_nits_interleaved(&d, peak)?;
                 self.inner.compute_pu_nits_interleaved_multi(&rn, &dn)
             }
+            // Float PU(luma) gray (iwssim): absolute nits → PU21(bt709-luma)
+            // at full f32 precision, no u8 round-trip.
+            crate::hdr::HdrFeeding::PuLumaGrayF32 => {
+                let rn = crate::hdr::slice_to_absolute_nits_interleaved(&r, peak)?;
+                let dn = crate::hdr::slice_to_absolute_nits_interleaved(&d, peak)?;
+                let rg = crate::hdr::nits_interleaved_to_pu_luma_gray(&rn, peak);
+                let dg = crate::hdr::nits_interleaved_to_pu_luma_gray(&dn, peak);
+                self.inner.compute_pu_luma_gray_multi(&rg, &dg)
+            }
         }
     }
 
@@ -1421,6 +1430,59 @@ impl MetricInner {
             MetricInner::Iwssim(_) => Err(no_pu_nits_path("iwssim")),
             #[cfg(feature = "zensim")]
             MetricInner::Zensim(_) => Err(no_pu_nits_path("zensim")),
+        }
+    }
+
+    /// Float-PU(luma) gray feeding ([`crate::hdr::HdrFeeding::PuLumaGrayF32`]):
+    /// score a pair of PU21-encoded BT.709-luma gray planes (f32, 0..255
+    /// scale, `width × height` samples each). Supported by **iwssim** on both
+    /// the GPU opaque (`compute_gray_f32`) and the native-CPU dispatch
+    /// (`Iwssim::score_gray`) — every other variant returns [`Error::Metric`]
+    /// so a caller that ignored `hdr::hdr_feeding` fails loudly.
+    pub fn compute_pu_luma_gray_multi(
+        &mut self,
+        ref_gray: &[f32],
+        dis_gray: &[f32],
+    ) -> Result<Scores> {
+        fn no_pu_gray_path(kind: &'static str) -> Error {
+            Error::Metric {
+                kind,
+                message: format!(
+                    "metric '{kind}' has no float-PU(luma) gray path; feed it per                      hdr::hdr_feeding()"
+                ),
+            }
+        }
+        match self {
+            #[cfg(feature = "iwssim")]
+            MetricInner::Iwssim(m) => m
+                .compute_gray_f32(ref_gray, dis_gray)
+                .map(convert_score_iwssim)
+                .map(Scores::single)
+                .map_err(|e| Error::Metric {
+                    kind: "iwssim",
+                    message: e.to_string(),
+                }),
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
+            MetricInner::Cpu(state, _) => state
+                .compute_pu_luma_gray(ref_gray, dis_gray)
+                .map(Scores::single),
+            #[cfg(feature = "ssim2")]
+            MetricInner::Ssim2(_) => Err(no_pu_gray_path("ssim2")),
+            #[cfg(feature = "cvvdp")]
+            MetricInner::Cvvdp(_) => Err(no_pu_gray_path("cvvdp")),
+            #[cfg(feature = "butter")]
+            MetricInner::Butter(_) => Err(no_pu_gray_path("butter")),
+            #[cfg(feature = "dssim")]
+            MetricInner::Dssim(_) => Err(no_pu_gray_path("dssim")),
+            #[cfg(feature = "zensim")]
+            MetricInner::Zensim(_) => Err(no_pu_gray_path("zensim")),
         }
     }
 

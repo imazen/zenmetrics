@@ -338,6 +338,15 @@ GPU info: `nvidia-smi` driver 596.21 / CUDA capability runtime 13.2.
 
 ## Known Bugs
 
+- **zenmetrics-api consolidated `it` suite self-poisons when run as ONE
+  process** (observed 2026-06-10, pre-existing — A/B-identical 26-test failure
+  set on master 7158c443 with and without the PuLumaGrayF32 change):
+  `session_cap::allocator_cap_recycle_leak` caps the shared cubecl session
+  allocator and later GPU tests in the same process inherit the poisoned
+  client (panics at zenforks-cubecl-runtime client.rs:905). Same family as the
+  ssim2-gpu one-process OOM below; workaround: run per-module/per-test
+  processes. Lib + hdr unit tests and per-test runs are green.
+
 - **ssim2-gpu consolidated `it` suite OOMs the 12 GB RTX 5070 when run as
   ONE process** (observed 2026-06-10, pre-existing at 704b19dd — NOT from
   the PU21 commit de2ced69; identical 61-test failure set on both). The

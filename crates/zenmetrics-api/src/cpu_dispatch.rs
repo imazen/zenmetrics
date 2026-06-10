@@ -219,6 +219,51 @@ impl CpuMetricState {
 
     /// One-shot score of a packed sRGB `R, G, B, R, G, B, …` pair
     /// (`width × height × 3` bytes per side).
+    /// Float-PU(luma) gray feeding for iwssim: PU21-encoded BT.709-luma gray
+    /// planes (f32, 0..255 scale) straight into `Iwssim::score_gray` — the u8
+    /// quantization this skips costs ~0.18 SROCC on UPIQ HDR (#25). Every
+    /// other metric returns a loud error; feed it per `hdr::hdr_feeding()`.
+    pub(crate) fn compute_pu_luma_gray(
+        &mut self,
+        ref_gray: &[f32],
+        dis_gray: &[f32],
+    ) -> Result<Score> {
+        match self {
+            #[cfg(feature = "cpu-iwssim")]
+            CpuMetricState::Iwssim {
+                inner,
+                width,
+                height,
+            } => {
+                let expected = (*width as usize) * (*height as usize);
+                if ref_gray.len() != expected || dis_gray.len() != expected {
+                    return Err(Error::Metric {
+                        kind: "iwssim",
+                        message: format!(
+                            "gray plane length mismatch: expected {expected}, got {} / {}",
+                            ref_gray.len(),
+                            dis_gray.len()
+                        ),
+                    });
+                }
+                let result = inner.score_gray(ref_gray, dis_gray).map_err(|e| Error::Metric {
+                    kind: "iwssim",
+                    message: e.to_string(),
+                })?;
+                Ok(Score {
+                    value: result.score,
+                    metric_name: "iwssim",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+            }
+            _ => Err(Error::Metric {
+                kind: "cpu",
+                message: "no float-PU(luma) gray path for this metric on the CPU dispatch;                           feed it per hdr::hdr_feeding()"
+                    .into(),
+            }),
+        }
+    }
+
     pub(crate) fn compute_srgb_u8(&mut self, r: &[u8], d: &[u8]) -> Result<Score> {
         match self {
             #[cfg(feature = "cpu-ssim2")]

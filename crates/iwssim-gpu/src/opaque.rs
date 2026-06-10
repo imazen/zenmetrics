@@ -58,6 +58,9 @@ impl IwssimParams {
 
 trait IwssimInner: Send {
     fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score>;
+    /// Score one gray-f32 pair (`width × height` samples, 0..255 scale —
+    /// the same range the sRGB path's BT.601 conversion produces).
+    fn compute_gray_f32(&mut self, ref_gray: &[f32], dis_gray: &[f32]) -> Result<Score>;
     fn dims(&self) -> (u32, u32);
     #[cfg(feature = "cubecl-types")]
     fn compute_handles(
@@ -85,6 +88,19 @@ where
 {
     fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score> {
         let r = Iwssim::compute_rgb(self, ref_rgb, dis_rgb)?;
+        Ok(Score {
+            value: r.score,
+            metric_name: "iwssim",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn compute_gray_f32(&mut self, ref_gray: &[f32], dis_gray: &[f32]) -> Result<Score> {
+        let r = if Iwssim::is_strip_mode(self) {
+            Iwssim::compute_gray_stripped(self, ref_gray, dis_gray)?
+        } else {
+            Iwssim::compute_gray(self, ref_gray, dis_gray)?
+        };
         Ok(Score {
             value: r.score,
             metric_name: "iwssim",
@@ -330,6 +346,16 @@ impl IwssimOpaque {
     /// `width × height × 3`.
     pub fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score> {
         self.inner.compute_srgb_u8(ref_rgb, dis_rgb)
+    }
+
+    /// Score one gray-f32 pair (`width × height` samples each, 0..255
+    /// scale — the range the sRGB path's BT.601 conversion produces).
+    /// This is the ingress for **float PU(luma)** HDR feeding: PU21
+    /// quantized to u8 costs IW-SSIM ~0.18 SROCC on UPIQ HDR vs feeding
+    /// the same values as floats (`benchmarks/pu_integrated_upiq_2026-06-09.md`,
+    /// imazen/zenmetrics#25). Works in both whole-image and strip modes.
+    pub fn compute_gray_f32(&mut self, ref_gray: &[f32], dis_gray: &[f32]) -> Result<Score> {
+        self.inner.compute_gray_f32(ref_gray, dis_gray)
     }
 
     /// Score from [`PixelSlice`] inputs.

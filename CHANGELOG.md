@@ -35,6 +35,18 @@ Workspace conventions per the global rules:
   selectors in `justfile`, `.github/workflows/ci.yml`, and operational docs were updated
   to `--test it <name>`.
 
+### Added
+
+- **iwssim HDR routes float PU(luma) gray** (`HdrFeeding::PuLumaGrayF32`):
+  `PU21(bt709-luma(nits))·255/PU21(peak)` fed as f32 planes into the
+  gray-native iwssim entries (GPU `IwssimOpaque::compute_gray_f32` → typed
+  `compute_gray`/`compute_gray_stripped`; CPU dispatch → `Iwssim::score_gray`)
+  on EVERY backend class. UPIQ HDR n=380: SROCC 0.8076 (0.8123 with `iw_flag`
+  off) vs 0.628 through the prior `SdrU8(PuRescale)` shell — the u8
+  quantization round-trip alone cost ~0.18 and float PU-MS-SSIM now ties
+  HDR-VDP-2 (0.812) as the best non-learned HDR score in the set
+  (`benchmarks/pu_integrated_upiq_2026-06-09.md` addendum 2, #25).
+
 ### Fixed
 
 - **CI: cvvdp-gpu benches/examples broke `--all-targets` + rustfmt after the

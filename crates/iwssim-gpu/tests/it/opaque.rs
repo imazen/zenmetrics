@@ -164,3 +164,59 @@ fn compute_on_identical_returns_1() {
     );
     assert_eq!(score.metric_name, "iwssim");
 }
+
+/// Float-PU(luma) gray ingress (`compute_gray_f32`, the
+/// `HdrFeeding::PuLumaGrayF32` consumer): identical planes score 1.0, a
+/// distorted plane scores measurably below, and the result matches the
+/// typed `compute_gray` bit-for-bit (the opaque is a pure forwarder).
+#[test]
+fn opaque_gray_f32_identity_and_typed_parity() {
+    let w = 256_u32;
+    let h = 256_u32;
+    let n = (w * h) as usize;
+    // PU-ish gray ramp in 0..255 scale with structure on both axes.
+    let ref_gray: Vec<f32> = (0..n)
+        .map(|i| {
+            let (x, y) = ((i as u32) % w, (i as u32) / w);
+            ((x * 7 + y * 3) % 256) as f32 * 0.9 + 12.0
+        })
+        .collect();
+    let dis_gray: Vec<f32> = ref_gray
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| if i % 5 == 0 { (v + 14.0).min(255.0) } else { v })
+        .collect();
+
+    let mut opaque = IwssimOpaque::new(BACKEND_E, w, h, IwssimParams::DEFAULT).expect("opaque new");
+    let same = opaque
+        .compute_gray_f32(&ref_gray, &ref_gray)
+        .expect("identical pair");
+    assert!(
+        (same.value - 1.0).abs() < 1e-6,
+        "identical gray pair should be 1.0, got {}",
+        same.value
+    );
+    let diff = opaque
+        .compute_gray_f32(&ref_gray, &dis_gray)
+        .expect("distorted pair");
+    assert!(
+        diff.value < 0.999,
+        "distorted pair should score below identity, got {}",
+        diff.value
+    );
+
+    let client = BackendT::client(&Default::default());
+    let mut typed = Iwssim::<BackendT>::new(client, w, h).expect("typed new");
+    let typed_score = typed
+        .compute_gray(&ref_gray, &dis_gray)
+        .expect("typed compute_gray");
+    let rel = (diff.value - typed_score.score).abs() / typed_score.score.abs().max(1e-12);
+    eprintln!(
+        "opaque_gray_f32: opaque={} typed={} rel={rel:.3e}",
+        diff.value, typed_score.score
+    );
+    assert!(
+        rel < 1e-7,
+        "opaque forwarder diverged from typed: rel={rel:.3e}"
+    );
+}
