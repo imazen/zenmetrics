@@ -267,3 +267,25 @@ shift under PU-HDR) and its chroma channels add PU-domain noise (every strong
 HDR performer here is luminance-only), while MS-SSIM is untrained, luma-only,
 and robust. Retuning ssim2's weights on PU-HDR data is the obvious (data-
 blocked) lever — same blocker as zensim-PU's 0.694.
+
+### Addendum 7b: replication CLOSED for SSIM via the official protocol
+
+Ran gfxdisp/pu21's own `pu21_metric.m` recipe from pixels (their luminance
+coefficients; raw PU values; **MATLAB `'DynamicRange', 256`** — constants set
+for 256 on data reaching ~595; gaussian 11×11 σ1.5, population stats):
+
+| from-pixels, official protocol | SROCC | published CSV |
+|---|--:|--:|
+| PU21-SSIM (luma, L=256) | **0.7254** | 0.7395 |
+| PU21-PSNR (RGB, peak 256) | 0.4959 | 0.5485 |
+| PU21-PSNRY (luma) | 0.5240 | — |
+| PSNR clip@4000 / SSIM clip@4000 | 0.4958 / 0.7250 | (clip falsified) |
+
+The `DynamicRange=256` convention was the dominant miss (0.66 → 0.7254);
+SSIM now replicates within bootstrap noise (Δ0.014, CI ±0.03). PSNR retains a
+real residual with clip falsified — PSNR is implementation-trivial, so the
+residual is attributed to the released CSV's provenance (UPIQ 2020 scores
+predate PU21; PU08 encoding differs most at low luminance, which dominates
+PSNR on the dark narwaria scenes). Full closure would require UPIQ's 2020
+benchmark code; recorded as open/low-priority. Defensible comparisons remain
+the within-harness ones; cross-set rows are labeled "their CSV" in addendum 3.
