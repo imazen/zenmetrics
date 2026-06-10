@@ -35,8 +35,27 @@ Workspace conventions per the global rules:
   selectors in `justfile`, `.github/workflows/ci.yml`, and operational docs were updated
   to `--test it <name>`.
 
+### Fixed
+
+- **CI: cvvdp-gpu benches/examples broke `--all-targets` + rustfmt after the
+  `it` consolidation** — the 8 `#[path = "../tests/common/mod.rs"]` includes in
+  `benches/score.rs` + 7 examples pointed at the pre-consolidation location;
+  every master push since the consolidation failed Compile (ubuntu) and Lint.
+  Now `../tests/it/common/mod.rs` (9f6eac1a).
+
 ### Added
 
+- **GPU ssim2 HDR routes the integrated PU21 path** (`HdrFeeding::IntegratedPuNits`,
+  112a4517): `hdr_feeding(kind, backend)` sends GPU-class ssim2 absolute-luminance
+  interleaved f32 (cd/m²) into `Ssim2Opaque::compute_linear_nits` (PU21 inside the
+  pipeline, `XybFlavor::Pu21`) — UPIQ HDR SROCC 0.7040 vs 0.65 for the u8 PU shell
+  (`benchmarks/pu_integrated_upiq_2026-06-09.md`, imazen/zenmetrics#25). CPU ssim2 /
+  dssim / iwssim stay on the u8 shell (rationale in `hdr::hdr_feeding` docs); zensim
+  pending zensim PR #44.
+- **PU21 gfxdisp drift guards** (112a4517): `reference_parity_gfxdisp_goldens` in
+  zenmetrics-api `hdr.rs` (all 4 `Pu21Variant` rows) and ssim2-gpu `kernels/xyb.rs`
+  (host replica of the `#[cube]` encode, banding_glare row) — float64 goldens from
+  zensim `scripts/pu21_golden.py`, locking every PU21 copy to one source.
 - **Unified descriptor-driven `compute_pixels` — SDR and HDR are one call.**
   `HdrScorer::compute_pixels_multi` / `compute_pixels` (gated `hdr` + `pixels`) read the
   zenpixels `PixelDescriptor` and route per descriptor over one warm metric instance:

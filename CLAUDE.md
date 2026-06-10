@@ -329,6 +329,25 @@ GPU info: `nvidia-smi` driver 596.21 / CUDA capability runtime 13.2.
   destroying burn \$/hr until externally cleaned up — that's the
   cost-leak the 2026-05-18 EXP-LARGER-LARGE incident chased.
 
+## Known Bugs
+
+- **ssim2-gpu consolidated `it` suite OOMs the 12 GB RTX 5070 when run as
+  ONE process** (observed 2026-06-10, pre-existing at 704b19dd — NOT from
+  the PU21 commit de2ced69; identical 61-test failure set on both). The
+  42a107b1 test consolidation put all 98 GPU tests in one binary; cubecl's
+  CUDA memory pool grows across tests and never returns pages, so
+  `cargo test -p ssim2-gpu --features cuda,cubecl-types --release -- --test-threads=1`
+  hits `CUDA_ERROR_OUT_OF_MEMORY` (PTX load) partway through, the server
+  goes `ServerUnhealthy`, and every later kernel test cascade-fails. Onset
+  point varies with ambient GPU pressure (54 vs 61 failures across runs).
+  Every individual test passes in a fresh process (verified exhaustively,
+  101/101 at e0995ae7 via per-module + batch-of-3 runs). Workarounds:
+  filter to module groups (`--test it strip_parity::` etc.) in separate
+  invocations. Proper fix candidates: per-module process isolation in CI
+  invocations, a cubecl pool flush/shrink hook between tests, or capping
+  concurrent pipeline allocations in the heavy 4096² tests. CI's
+  macos-Metal job (8 GB unified) may hit the same wall.
+
 ## CHANGELOG.md
 
 Maintained in repo root.
