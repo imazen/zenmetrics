@@ -233,3 +233,37 @@ Source-paper takeaways recorded for this work:
    delta needed for alpha=0.05 alongside any method comparison.
 5. PU21-VSI and PU21-PIQE (no-reference) were their best performers — VSI
    (saliency-weighted) is a candidate addition to our metric set.
+
+## Addendum 7 (2026-06-10): PU-SSIM from-pixels replication attempt — NOT reproduced; provenance reframe
+
+We replicate UPIQ's *correlation pipeline* exactly (their released per-condition
+scores → our JOD join reproduces 0.8748/0.8117/0.7395/0.7185/0.5485 to 4
+decimals). We do NOT reproduce their PU_SSIM=0.7395 when computing from pixels:
+
+| our from-pixels attempt (skimage SSIM, gaussian 11×11 σ1.5) | SROCC |
+|---|--:|
+| float PU21(luma), L = full PU range | 0.6619 |
+| float PU21(luma)·255/PU(1000), L=255 | 0.6855 |
+| u8-quantized (earlier control) | 0.682 |
+| Wang-style 4× downsample variant | 0.6205 (falsified) |
+| +0.6 nit display black-lift variant | 0.6653 (falsified) |
+
+Float ≈ u8 here ⇒ quantization was NOT the single-scale-SSIM gap (it was
+decisive only for multi-scale: iwssim 0.628→0.808). Remaining explanation:
+**provenance** — UPIQ's objective scores (Mikhailiuk et al. 2020) PREDATE PU21
+(2021); their released `PU_SSIM` is the PU08 encoding under their MATLAB
+protocol. PU08 differs from PU21 most at low luminance (negative values below
+0.5 cd/m², different shape) — plausibly worth the ~0.05–0.08 on dark narwaria
+content. Full replication would require running gfxdisp's `pu21`/UPIQ
+benchmark wrappers on these pairs (open, low priority).
+
+**Consequence for the ssim2-vs-ssim question**: like-for-like inside ONE
+pipeline, SSIMULACRA2 IS better than single-scale SSIM on PU-HDR — integrated
+PU-ssim2 0.704 vs our-pixels PU21-SSIM 0.66–0.69. It only looked worse against
+the published 0.740 because that number is a different encoding + protocol.
+The real internal anomaly is MS-SSIM (0.812) > ssim2 (0.704): ssim2's TRAINED
+weights/error-norms are calibrated to cube-root-XYB SDR statistics (domain
+shift under PU-HDR) and its chroma channels add PU-domain noise (every strong
+HDR performer here is luminance-only), while MS-SSIM is untrained, luma-only,
+and robust. Retuning ssim2's weights on PU-HDR data is the obvious (data-
+blocked) lever — same blocker as zensim-PU's 0.694.
