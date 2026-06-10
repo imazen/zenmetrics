@@ -392,6 +392,11 @@ async fn run_chunk_inline_impl(
             sources_dir: group_sources,
             q_grid: q_grid_str,
             knob_grid_json,
+            // The parquet-driven backfill flow re-encodes concrete
+            // per-cell knob tuples; plan-driven cells are for fresh
+            // sweeps (CLI --plan or a jobspec that sets these).
+            plan: None,
+            plan_budget: None,
             metrics: metrics.clone(),
             gpu_runtime: GpuRuntime::Cuda,
             output_tsv: sweeps.join(format!("g{gid_str}.tsv")),

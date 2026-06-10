@@ -70,9 +70,102 @@ use crate::metrics::run_metric;
 // file once the cache was introduced.
 #[allow(unused_imports)]
 use crate::metrics::run_zensim_gpu_with_features;
+use crate::sweep::encode::EncodedCell;
 use crate::sweep::encode::{CodecKind, encode};
 use crate::sweep::feature_writer::FeatureParquetWriter;
 use crate::sweep::grid::{KnobGrid, KnobTuple};
+#[cfg(all(feature = "sweep", feature = "jpeg"))]
+use crate::sweep::plan::{BuiltPlan, PlannedCell, build_zenjpeg_plan};
+
+/// One unit of sweep work: row identity (`q` + canonical knob JSON)
+/// plus how to produce the encoded bytes.
+enum SweepUnit<'a> {
+    /// Classic `(q, knob-tuple)` cell — per-codec JSON knob dispatch.
+    Tuple(f64, KnobTuple),
+    /// zenjpeg plan-driven cell carrying a fully-resolved
+    /// `EncoderConfig` from `zenjpeg::encode::sweep`.
+    #[cfg(all(feature = "sweep", feature = "jpeg"))]
+    Planned(&'a PlannedCell),
+    /// Unconstructable; keeps the lifetime parameter in play when the
+    /// jpeg feature is off.
+    #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+    _Never(std::convert::Infallible, std::marker::PhantomData<&'a ()>),
+}
+
+impl SweepUnit<'_> {
+    fn q(&self) -> f64 {
+        match self {
+            Self::Tuple(q, _) => *q,
+            #[cfg(all(feature = "sweep", feature = "jpeg"))]
+            Self::Planned(cell) => cell.q,
+            #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+            Self::_Never(never, _) => match *never {},
+        }
+    }
+
+    fn knob_json(&self) -> String {
+        match self {
+            Self::Tuple(_, tuple) => tuple.to_canonical_json(),
+            #[cfg(all(feature = "sweep", feature = "jpeg"))]
+            Self::Planned(cell) => cell.knob_json.clone(),
+            #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+            Self::_Never(never, _) => match *never {},
+        }
+    }
+
+    fn encode_cell(
+        &self,
+        codec: CodecKind,
+        source: &Rgb8Image,
+    ) -> Result<EncodedCell, Box<dyn std::error::Error>> {
+        match self {
+            Self::Tuple(q, tuple) => encode(codec, source, *q, &tuple.0),
+            #[cfg(all(feature = "sweep", feature = "jpeg"))]
+            Self::Planned(cell) => {
+                let start = std::time::Instant::now();
+                let bytes = cell
+                    .config
+                    .encode_bytes(
+                        &source.pixels,
+                        source.width,
+                        source.height,
+                        zenjpeg::encoder::PixelLayout::Rgb8Srgb,
+                    )
+                    .map_err(|e| format!("zenjpeg plan-cell encode failed: {e}"))?;
+                Ok(EncodedCell {
+                    bytes,
+                    encode_ms: start.elapsed().as_secs_f64() * 1000.0,
+                })
+            }
+            #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+            Self::_Never(never, _) => match *never {},
+        }
+    }
+}
+
+/// The classic `q_grid x knob_grid` cross product as sweep units.
+fn tuple_units(cfg: &SweepConfig) -> Vec<SweepUnit<'static>> {
+    cfg.q_grid
+        .iter()
+        .flat_map(|&q| {
+            cfg.knob_grid
+                .iter_tuples()
+                .map(move |t| SweepUnit::Tuple(q, t))
+        })
+        .collect()
+}
+
+/// Selector for a plan-driven zenjpeg sweep (see
+/// [`SweepConfig::zenjpeg_plan`]).
+#[derive(Debug, Clone)]
+pub struct ZenjpegPlanSpec {
+    /// `"rd_core"` or `"modes_full"`.
+    pub name: String,
+    /// Optional cell budget — zenjpeg's reduction ladder sheds
+    /// lowest-priority axis values one at a time and reports every drop
+    /// in the plan manifest; nothing is sampled away silently.
+    pub budget: Option<usize>,
+}
 
 /// Runtime parameters for a sweep invocation.
 #[derive(Debug, Clone)]
@@ -81,6 +174,15 @@ pub struct SweepConfig {
     pub sources: Vec<PathBuf>,
     pub q_grid: Vec<f64>,
     pub knob_grid: KnobGrid,
+    /// Plan-driven zenjpeg cells: when set (requires
+    /// [`CodecKind::Zenjpeg`] and an empty `knob_grid`), cells come from
+    /// `zenjpeg::encode::sweep` — the codec's curated, provenance-stamped
+    /// axes (`rd_core` / `modes_full`) over `q_grid`, fingerprint-
+    /// deduplicated, validity-filtered, and ordered main-effects-first —
+    /// instead of the `knob_grid` Cartesian product. The plan's audit
+    /// manifest (alias merges, invalid strata, budget drops) is written
+    /// to `<output>.plan.json`. Requires `--features sweep,jpeg`.
+    pub zenjpeg_plan: Option<ZenjpegPlanSpec>,
     pub metrics: Vec<MetricKind>,
     pub gpu_runtime: GpuRuntime,
     pub output: PathBuf,
@@ -285,8 +387,8 @@ pub fn run_sweep(
         .from_path(&cfg.output)?;
     write_header(&mut wtr, &cfg.metrics)?;
 
-    let zensim_in_metrics = cfg.metrics.iter().any(|m| *m == MetricKind::Zensim);
-    let zensim_gpu_in_metrics = cfg.metrics.iter().any(|m| *m == MetricKind::ZensimGpu);
+    let zensim_in_metrics = cfg.metrics.contains(&MetricKind::Zensim);
+    let zensim_gpu_in_metrics = cfg.metrics.contains(&MetricKind::ZensimGpu);
     // Feature-vector width depends on which path is producing them.
     // CPU zensim's `compute_extended_features` returns 300 floats; GPU
     // honours `feature_regime`. When both are in the metric set we
@@ -324,7 +426,50 @@ pub fn run_sweep(
         None => None,
     };
 
-    let cells_total = (cfg.sources.len() * cfg.q_grid.len() * cfg.knob_grid.cell_count()) as u64;
+    // Plan-driven zenjpeg cells (zenjpeg::encode::sweep): validated and
+    // built ONCE per sweep — cells are image-independent — with the
+    // audit manifest written next to the TSV before any encode runs.
+    #[cfg(all(feature = "sweep", feature = "jpeg"))]
+    let built_plan: Option<BuiltPlan> = match &cfg.zenjpeg_plan {
+        Some(spec) => {
+            if cfg.codec != CodecKind::Zenjpeg {
+                return Err(format!(
+                    "plan {:?} is zenjpeg-only (got --codec {})",
+                    spec.name,
+                    cfg.codec.name()
+                )
+                .into());
+            }
+            if !cfg.knob_grid.axes.is_empty() {
+                return Err("--plan and --knob-grid are mutually exclusive".into());
+            }
+            let built = build_zenjpeg_plan(&spec.name, spec.budget, &cfg.q_grid)?;
+            let manifest_path = cfg.output.with_extension("plan.json");
+            std::fs::write(&manifest_path, &built.manifest_json)?;
+            eprintln!(
+                "[sweep] plan {}: {} cells/image (manifest: {})",
+                spec.name,
+                built.cells.len(),
+                manifest_path.display()
+            );
+            Some(built)
+        }
+        None => None,
+    };
+    #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+    if cfg.zenjpeg_plan.is_some() {
+        return Err("plan-driven sweeps require building with --features sweep,jpeg".into());
+    }
+
+    #[cfg(all(feature = "sweep", feature = "jpeg"))]
+    let cells_per_image: usize = built_plan
+        .as_ref()
+        .map(|p| p.cells.len())
+        .unwrap_or_else(|| cfg.q_grid.len() * cfg.knob_grid.cell_count());
+    #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+    let cells_per_image: usize = cfg.q_grid.len() * cfg.knob_grid.cell_count();
+
+    let cells_total = (cfg.sources.len() * cells_per_image) as u64;
     let stats = AtomicSweepStats::new(cells_total);
 
     // Wrap writers in Mutex so rayon tasks can flush rows under a lock.
@@ -393,6 +538,17 @@ pub fn run_sweep(
         .map(|s| matches!(s.trim(), "1" | "true" | "yes" | "on"))
         .unwrap_or(false);
 
+    #[cfg_attr(
+        not(any(
+            feature = "gpu-butteraugli",
+            feature = "gpu-ssim2",
+            feature = "gpu-dssim",
+            feature = "gpu-iwssim",
+            feature = "gpu-zensim",
+            feature = "gpu-cvvdp"
+        )),
+        allow(unused_variables)
+    )]
     for (src_idx, src_path) in cfg.sources.iter().enumerate() {
         #[cfg(any(
             feature = "gpu-butteraugli",
@@ -427,22 +583,25 @@ pub fn run_sweep(
                     "[sweep] skipping {} (decode failed: {e})",
                     src_path.display()
                 );
-                stats.add_failed_decode((cfg.q_grid.len() * cfg.knob_grid.cell_count()) as u64);
+                stats.add_failed_decode(cells_per_image as u64);
                 continue;
             }
         };
 
-        // Build a flat list of (q, knob_tuple) pairs for rayon to walk.
-        // Cell count is bounded (≤ a few thousand per image typically),
-        // so the Vec is cheap. The tuples are small (`Vec<KnobValue>`
-        // owned per tuple); we don't clone the source.
-        let cells: Vec<(f64, KnobTuple)> = cfg
-            .q_grid
-            .iter()
-            .flat_map(|&q| cfg.knob_grid.iter_tuples().map(move |t| (q, t)))
-            .collect();
+        // Build a flat list of sweep units for rayon to walk. Cell count
+        // is bounded (≤ a few thousand per image typically), so the Vec
+        // is cheap. Plan-driven cells borrow from `built_plan` (built
+        // once above); tuple cells own their small knob maps. We don't
+        // clone the source either way.
+        #[cfg(all(feature = "sweep", feature = "jpeg"))]
+        let units: Vec<SweepUnit<'_>> = match &built_plan {
+            Some(p) => p.cells.iter().map(SweepUnit::Planned).collect(),
+            None => tuple_units(cfg),
+        };
+        #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+        let units: Vec<SweepUnit<'_>> = tuple_units(cfg);
 
-        cells.par_iter().for_each(|(q, tuple)| {
+        units.par_iter().for_each(|unit| {
             // Wrap each cell in catch_unwind so a panic in encode/decode/
             // metric scoring doesn't abort sibling cells. Without this,
             // a single bad knob combo would tear down a chunk's worth of
@@ -452,8 +611,7 @@ pub fn run_sweep(
                     cfg,
                     src_path,
                     &source,
-                    *q,
-                    tuple,
+                    unit,
                     zensim_in_metrics,
                     zensim_gpu_in_metrics,
                     #[cfg(any(
@@ -478,9 +636,10 @@ pub fn run_sweep(
                     "<non-string panic payload>".to_string()
                 };
                 eprintln!(
-                    "[sweep] cell panicked: {} q={q} knobs={}: {msg}",
+                    "[sweep] cell panicked: {} q={} knobs={}: {msg}",
                     src_path.display(),
-                    tuple.to_canonical_json(),
+                    unit.q(),
+                    unit.knob_json(),
                 );
                 // Emit a row with blank score columns so the panic is
                 // visible in downstream tooling (rather than silently
@@ -488,8 +647,8 @@ pub fn run_sweep(
                 let mut row: Vec<String> = vec![
                     src_path.display().to_string(),
                     cfg.codec.name().to_string(),
-                    q.to_string(),
-                    tuple.to_canonical_json(),
+                    unit.q().to_string(),
+                    unit.knob_json(),
                     "".to_string(), // encoded_bytes
                     "".to_string(), // encode_ms
                     "".to_string(), // decode_ms
@@ -518,31 +677,23 @@ pub fn run_sweep(
                             eprintln!("[sweep] write_record failed");
                         }
                     }
-                    if let Some((image, codec, q_, knob_json, score, features)) = feature {
-                        if let Ok(mut fw_guard) = feature_writer.lock() {
-                            if let Some(fw) = fw_guard.as_mut() {
-                                if let Err(e) =
-                                    fw.push_row(&image, codec, q_, &knob_json, score, &features)
-                                {
-                                    eprintln!(
-                                        "[sweep] feature_writer push failed: {} q={q_}: {e}",
-                                        image,
-                                    );
-                                }
-                            }
-                        }
+                    if let Some((image, codec, q_, knob_json, score, features)) = feature
+                        && let Ok(mut fw_guard) = feature_writer.lock()
+                        && let Some(fw) = fw_guard.as_mut()
+                        && let Err(e) = fw.push_row(&image, codec, q_, &knob_json, score, &features)
+                    {
+                        eprintln!("[sweep] feature_writer push failed: {} q={q_}: {e}", image,);
                     }
-                    if let Some(pair) = pair_row {
-                        if let Ok(mut pw_guard) = pairs_writer.lock() {
-                            if let Some(pw) = pw_guard.as_mut() {
-                                if let Err(e) = pw.write_record(&pair) {
-                                    eprintln!(
-                                        "[sweep] pairs writer failed: {} q={q}: {e}",
-                                        pair[0],
-                                    );
-                                }
-                            }
-                        }
+                    if let Some(pair) = pair_row
+                        && let Ok(mut pw_guard) = pairs_writer.lock()
+                        && let Some(pw) = pw_guard.as_mut()
+                        && let Err(e) = pw.write_record(&pair)
+                    {
+                        eprintln!(
+                            "[sweep] pairs writer failed: {} q={}: {e}",
+                            pair[0],
+                            unit.q(),
+                        );
                     }
                     if score_failed {
                         stats.add_failed_score();
@@ -584,12 +735,18 @@ pub fn run_sweep(
     Ok(stats.snapshot())
 }
 
+/// Feature-sidecar row payload:
+/// `(image_path, codec, q, knob_json, zensim_score, features)`.
+type FeatureRow = (String, &'static str, f64, String, f32, Vec<f64>);
+
 /// Per-cell outcome — pure result type, written to disk by the caller.
+// One transient value per cell, matched immediately by the emit loop —
+// boxing the large Ok payload would buy nothing but an allocation.
+#[allow(clippy::large_enum_variant)]
 enum CellOutcome {
     Ok {
         row: Vec<String>,
-        /// `(image_path, codec, q, knob_json, zensim_score, features)`
-        feature: Option<(String, &'static str, f64, String, f32, Vec<f64>)>,
+        feature: Option<FeatureRow>,
         /// `[image_path, codec, q, knob_tuple_json, ref_path, dist_path]`
         /// — emitted when the sweep config requests a pairs TSV. The
         /// outer loop writes this row to the pairs writer.
@@ -615,8 +772,7 @@ fn compute_cell(
     cfg: &SweepConfig,
     src_path: &Path,
     source: &Rgb8Image,
-    q: f64,
-    tuple: &KnobTuple,
+    unit: &SweepUnit<'_>,
     zensim_in_metrics: bool,
     zensim_gpu_in_metrics: bool,
     #[cfg(any(
@@ -630,7 +786,8 @@ fn compute_cell(
     gpu_runtime_for_cache: GpuRuntime,
     #[cfg(feature = "orchestrator")] orch: Option<&SweepOrchestratorHandle>,
 ) -> CellOutcome {
-    let knob_json = tuple.to_canonical_json();
+    let q = unit.q();
+    let knob_json = unit.knob_json();
     let mut row: Vec<String> = vec![
         src_path.display().to_string(),
         cfg.codec.name().to_string(),
@@ -639,7 +796,7 @@ fn compute_cell(
     ];
 
     // Encode.
-    let cell = match encode(cfg.codec, source, q, &tuple.0) {
+    let cell = match unit.encode_cell(cfg.codec, source) {
         Ok(c) => c,
         Err(e) => {
             eprintln!(

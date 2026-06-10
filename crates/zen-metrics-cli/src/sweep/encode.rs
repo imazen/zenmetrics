@@ -46,8 +46,18 @@
 //! `"jpegli_progressive"` / `"mozjpeg_baseline"` / `"mozjpeg_progressive"` /
 //! `"mozjpeg_max_compression"` / `"hybrid_baseline"` /
 //! `"hybrid_progressive"` / `"hybrid_max_compression"`),
-//! `hybrid` (bool, trellis-feature — enables hybrid AQ+trellis with
-//! default `HybridConfig`).
+//! `trellis` (bool or object — `TrellisConfig` fields `lambda1` /
+//! `lambda2` / `dc` / `delta_dc_weight` / `speed` plus the AQ-coupling
+//! group `coupling_*`; replaces the removed `hybrid` knob, which now
+//! errors with a migration hint),
+//! `progressive_mode` also accepts `"smallest"` / `"smallest_search"`
+//! (zenjpeg's exact entropy-stage minimizers).
+//!
+//! **Plan-driven zenjpeg sweeps** (`--plan rd_core|modes_full`
+//! [`--plan-budget N`]) bypass the JSON knob grid entirely: cells come
+//! from `zenjpeg::encode::sweep` (curated provenance-stamped axes,
+//! fingerprint dedup, validity filtering, main-effects-first ordering,
+//! budget ladder). See `super::plan`.
 //!
 //! ## zenwebp 0.4.5 (`__expert` enabled)
 //! Public builders: `method`, `segments`, `sns_strength`, `filter_strength`,
@@ -155,6 +165,9 @@ const JPEG_KNOBS: &[&str] = &[
     "restart_mcu_rows",
     "chroma_quality",
     "optimization",
+    "trellis",
+    // Tombstone: recognized so encode_jpeg can emit the migration error
+    // pointing at "trellis" (HybridConfig was removed from zenjpeg).
     "hybrid",
 ];
 const WEBP_KNOBS: &[&str] = &[
@@ -336,6 +349,91 @@ fn encode_png(
 
 // ── zenjpeg ─────────────────────────────────────────────────────────────
 
+/// Parse the `"trellis"` knob: `true` → `TrellisConfig::default()`;
+/// an object overrides individual fields on top of the default
+/// (`lambda1`, `lambda2`, `dc`, `delta_dc_weight`, `speed`
+/// ("thorough" | "adaptive" | integer level 0..=10), and the AQ-coupling
+/// group `coupling_scale` / `coupling_exponent` / `coupling_threshold` /
+/// `coupling_max_adjustment` / `coupling_chroma_mul`). A nonzero
+/// `coupling_scale` is the old "hybrid" coupling; zenjpeg's curated
+/// sweep steps clamp it via `coupling_max_adjustment` (unclamped
+/// coupling is a validated quality-destruction mode on high-AQ content).
+#[cfg(all(feature = "sweep", feature = "jpeg"))]
+fn parse_trellis_knob(
+    v: &Value,
+) -> Result<zenjpeg::encode::trellis::TrellisConfig, Box<dyn Error>> {
+    use zenjpeg::encode::trellis::{AqCoupling, TrellisConfig, TrellisSpeedMode};
+    let mut t = TrellisConfig::default();
+    match v {
+        Value::Bool(true) => Ok(t),
+        Value::Bool(false) => {
+            t.enabled = false;
+            Ok(t)
+        }
+        Value::Object(o) => {
+            if let Some(x) = o.get("lambda1").and_then(Value::as_f64) {
+                t.lambda_log_scale1 = x as f32;
+            }
+            if let Some(x) = o.get("lambda2").and_then(Value::as_f64) {
+                t.lambda_log_scale2 = x as f32;
+            }
+            if let Some(b) = o.get("dc").and_then(Value::as_bool) {
+                t.dc_enabled = b;
+            }
+            if let Some(x) = o.get("delta_dc_weight").and_then(Value::as_f64) {
+                t.delta_dc_weight = x as f32;
+            }
+            match o.get("speed") {
+                None => {}
+                Some(Value::String(s)) => {
+                    t.speed_mode = match s.as_str() {
+                        "thorough" => TrellisSpeedMode::Thorough,
+                        "adaptive" => TrellisSpeedMode::Adaptive,
+                        other => {
+                            return Err(format!(
+                                "zenjpeg trellis.speed must be thorough|adaptive|0..=10; \
+                                 got {other:?}"
+                            )
+                            .into());
+                        }
+                    };
+                }
+                Some(Value::Number(n)) => {
+                    let level = n
+                        .as_u64()
+                        .ok_or("zenjpeg trellis.speed level must be an integer 0..=10")?;
+                    t.speed_mode = TrellisSpeedMode::Level(level.min(10) as u8);
+                }
+                Some(other) => {
+                    return Err(format!(
+                        "zenjpeg trellis.speed must be thorough|adaptive|0..=10; got {other}"
+                    )
+                    .into());
+                }
+            }
+            let mut coupling = AqCoupling::OFF;
+            if let Some(x) = o.get("coupling_scale").and_then(Value::as_f64) {
+                coupling.scale = x as f32;
+            }
+            if let Some(x) = o.get("coupling_exponent").and_then(Value::as_f64) {
+                coupling.exponent = x as f32;
+            }
+            if let Some(x) = o.get("coupling_threshold").and_then(Value::as_f64) {
+                coupling.threshold = x as f32;
+            }
+            if let Some(x) = o.get("coupling_max_adjustment").and_then(Value::as_f64) {
+                coupling.max_adjustment = x as f32;
+            }
+            if let Some(x) = o.get("coupling_chroma_mul").and_then(Value::as_f64) {
+                coupling.chroma_mul = x as f32;
+            }
+            t.aq_coupling = coupling;
+            Ok(t)
+        }
+        other => Err(format!("zenjpeg trellis must be a bool or an object; got {other}").into()),
+    }
+}
+
 #[cfg(all(feature = "sweep", feature = "jpeg"))]
 fn encode_jpeg(
     source: &Rgb8Image,
@@ -443,11 +541,13 @@ fn encode_jpeg(
                 ProgressiveScanMode::ProgressiveMozjpeg
             }
             "progressive_search" | "search" => ProgressiveScanMode::ProgressiveSearch,
+            "smallest" => ProgressiveScanMode::Smallest,
+            "smallest_search" => ProgressiveScanMode::SmallestSearch,
             other => {
                 return Err(format!(
                     "zenjpeg progressive_mode must be one of \
-                     baseline|progressive|progressive_mozjpeg|progressive_search; \
-                     got {other:?}"
+                     baseline|progressive|progressive_mozjpeg|progressive_search|\
+                     smallest|smallest_search; got {other:?}"
                 )
                 .into());
             }
@@ -552,15 +652,21 @@ fn encode_jpeg(
         params.optimization = Some(preset);
         any_internal = true;
     }
-    #[cfg(feature = "sweep")]
-    if let Some(b) = knobs.get("hybrid").and_then(Value::as_bool)
-        && b
-    {
-        // Trellis-feature: enable hybrid AQ+trellis with default config.
-        // Sweep just toggles it on; finer control lives behind direct
-        // `EncoderConfig::hybrid_config` calls if needed later.
-        params.hybrid = Some(zenjpeg::encode::trellis::HybridConfig::default());
+    // `"trellis"` replaces the removed `"hybrid"` knob: zenjpeg merged
+    // hybrid into `TrellisConfig` (AQ-coupled lambda lives in
+    // `aq_coupling`; `scale == 0` is the classic standalone trellis).
+    if let Some(v) = knobs.get("trellis") {
+        params.trellis = Some(parse_trellis_knob(v)?);
         any_internal = true;
+    }
+    if knobs.contains_key("hybrid") {
+        return Err("zenjpeg knob \"hybrid\" was removed along with zenjpeg's \
+             HybridConfig; use \"trellis\" (true, or an object with lambda1/\
+             lambda2/dc/delta_dc_weight/speed/coupling_scale/coupling_exponent/\
+             coupling_threshold/coupling_max_adjustment/coupling_chroma_mul — \
+             coupling_scale != 0 is the old hybrid coupling). Plan-driven \
+             sweeps (--plan) cover the curated trellis/coupling steps."
+            .into());
     }
 
     // ── XYB color mode ──────────────────────────────────────────────────
@@ -1074,4 +1180,70 @@ fn bytemuck_cast_rgb(bytes: &[u8]) -> &[rgb::Rgb<u8>] {
     // `#![forbid(unsafe_code)]` clean.
     use rgb::FromSlice;
     bytes.as_rgb()
+}
+
+#[cfg(all(test, feature = "sweep", feature = "jpeg"))]
+mod jpeg_knob_tests {
+    use super::*;
+
+    fn tiny_image() -> Rgb8Image {
+        // Deterministic noise: a solid color has no AC coefficients, so
+        // every trellis config would emit identical bytes and the
+        // distinctness assertion below would be vacuous.
+        let mut state = 0x9e37_79b9_u32;
+        let pixels = (0..64 * 64 * 3)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                (state >> 24) as u8
+            })
+            .collect();
+        Rgb8Image {
+            pixels,
+            width: 64,
+            height: 64,
+        }
+    }
+
+    #[test]
+    fn hybrid_knob_errors_with_migration_hint() {
+        let mut knobs = Map::new();
+        knobs.insert("hybrid".into(), Value::Bool(true));
+        let msg = match encode_jpeg(&tiny_image(), 75.0, &knobs) {
+            Err(e) => e.to_string(),
+            Ok(_) => panic!("hybrid knob must be rejected"),
+        };
+        assert!(msg.contains("removed"), "got {msg}");
+        assert!(msg.contains("trellis"), "got {msg}");
+    }
+
+    #[test]
+    fn trellis_knob_object_parses_and_encodes() {
+        let mut knobs = Map::new();
+        knobs.insert(
+            "trellis".into(),
+            serde_json::json!({
+                "lambda1": 13.5,
+                "dc": false,
+                "coupling_scale": -4.0,
+                "coupling_max_adjustment": 1.0,
+                "speed": "thorough"
+            }),
+        );
+        let cell = encode_jpeg(&tiny_image(), 75.0, &knobs).unwrap();
+        assert!(!cell.bytes.is_empty());
+        // Distinct from the default-trellis spelling (lambda differs).
+        let mut default_knobs = Map::new();
+        default_knobs.insert("trellis".into(), Value::Bool(true));
+        let default_cell = encode_jpeg(&tiny_image(), 75.0, &default_knobs).unwrap();
+        assert_ne!(cell.bytes, default_cell.bytes);
+    }
+
+    #[test]
+    fn trellis_speed_rejects_unknown_string() {
+        let mut knobs = Map::new();
+        knobs.insert("trellis".into(), serde_json::json!({"speed": "warp"}));
+        assert!(encode_jpeg(&tiny_image(), 75.0, &knobs).is_err());
+    }
 }

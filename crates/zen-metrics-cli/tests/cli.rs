@@ -651,12 +651,130 @@ fn sweep_zenwebp_emits_pareto_rows() {
     }
 }
 
+#[cfg(all(feature = "sweep", feature = "jpeg"))]
+#[test]
+fn sweep_zenjpeg_plan_mode_emits_cells_and_manifest() {
+    let dir = fixtures_dir();
+    let staged = tempfile::tempdir().expect("tmp");
+    std::fs::copy(dir.join("ref_64.png"), staged.path().join("ref.png")).unwrap();
+    let out = staged.path().join("pareto.tsv");
+
+    let result = cli()
+        .args([
+            "sweep",
+            "--codec",
+            "zenjpeg",
+            "--sources",
+            staged.path().to_str().unwrap(),
+            "--q-grid",
+            "50,85",
+            "--plan",
+            "rd_core",
+            "--metric",
+            "zensim",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+    assert!(
+        result.status.success(),
+        "plan sweep failed: stderr={}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+
+    // The audit manifest lands next to the TSV and carries the cell
+    // count — the TSV must have exactly that many rows (one image).
+    let manifest = std::fs::read_to_string(staged.path().join("pareto.plan.json"))
+        .expect("plan manifest written");
+    let mjson: serde_json::Value = serde_json::from_str(&manifest).expect("manifest json");
+    assert_eq!(mjson["plan"], "rd_core");
+    let cells = mjson["cells"].as_u64().expect("cells count") as usize;
+    assert!(cells > 0);
+
+    let body = std::fs::read_to_string(&out).expect("read tsv");
+    let lines: Vec<&str> = body.lines().collect();
+    assert_eq!(
+        lines.len(),
+        cells + 1,
+        "expected {} rows + header, got {}: {body}",
+        cells,
+        lines.len()
+    );
+    // Identity column carries the plan-cell id + resolved-state
+    // fingerprint. Rows land in rayon completion order (the QUEUE is
+    // main-effects-first, the TSV is not), so assert content, not
+    // position: the default stratum must be present (csv-quoted, so
+    // embedded quotes double), and every row carries the plan keys.
+    assert!(
+        body.contains("jp3_t0_small_420"),
+        "default stratum missing from TSV: {body}"
+    );
+    for row in &lines[1..] {
+        assert!(row.contains("rd_core"), "row missing plan id: {row}");
+        assert!(row.contains("fp"), "row missing fingerprint: {row}");
+    }
+    for row in &lines[1..] {
+        let score = row.split('\t').next_back().unwrap();
+        score
+            .parse::<f64>()
+            .unwrap_or_else(|e| panic!("bad zensim score {score:?} in row {row:?}: {e}"));
+    }
+}
+
+#[cfg(all(feature = "sweep", feature = "jpeg"))]
+#[test]
+fn sweep_zenjpeg_trellis_knob_and_smallest_mode() {
+    let dir = fixtures_dir();
+    let staged = tempfile::tempdir().expect("tmp");
+    std::fs::copy(dir.join("ref_64.png"), staged.path().join("ref.png")).unwrap();
+    let out = staged.path().join("pareto.tsv");
+
+    let result = cli()
+        .args([
+            "sweep",
+            "--codec",
+            "zenjpeg",
+            "--sources",
+            staged.path().to_str().unwrap(),
+            "--q-grid",
+            "75",
+            "--knob-grid",
+            r#"{"trellis": [true, {"lambda1": 13.5, "dc": false, "coupling_scale": -4.0, "coupling_max_adjustment": 1.0}], "progressive_mode": ["smallest"]}"#,
+            "--metric",
+            "zensim",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+    assert!(
+        result.status.success(),
+        "trellis-knob sweep failed: stderr={}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let body = std::fs::read_to_string(&out).expect("read tsv");
+    let lines: Vec<&str> = body.lines().collect();
+    // 1 header + 2 cells (1 q × 2 trellis values × 1 progressive_mode).
+    assert_eq!(lines.len(), 3, "got {} lines: {body}", lines.len());
+    for row in &lines[1..] {
+        let score = row.split('\t').next_back().unwrap();
+        assert!(
+            score.parse::<f64>().is_ok(),
+            "trellis/smallest cell failed to encode+score: {row:?}"
+        );
+    }
+}
+
 #[cfg(feature = "sweep")]
 #[test]
 fn sweep_writes_zensim_feature_parquet() {
     // Run a tiny zenwebp sweep with --feature-output and verify:
     // - the parquet file is produced
-    // - it has 305 columns (4 keys + zensim_score + 300 features)
+    // - it has 5 ID columns + one feat_* column per feature of the
+    //   default regime (the writer is sized from
+    //   `ZensimFeatureRegime::total_features()` for both the CPU and
+    //   GPU paths — see the sizing comment in sweep::run)
     // - the row count matches the TSV row count
     // - the file is non-trivially sized (has actual feature data)
     let dir = fixtures_dir();
@@ -689,10 +807,14 @@ fn sweep_writes_zensim_feature_parquet() {
         String::from_utf8_lossy(&result.stderr)
     );
 
+    // The CLI default regime ("with-iw") drives the sidecar width.
+    let feature_n = zen_metrics_cli::metrics::ZensimFeatureRegime::WithIw.total_features();
+    let expected_cols = 5 + feature_n;
+
     let pq_meta = std::fs::metadata(&out_pq).expect("parquet exists");
     // Parquet files have a 12-byte fixed footer minimum; a real file with
-    // 2 rows and 305 columns is going to be at least a couple of KB even
-    // after zstd. Sanity-check we didn't write an empty stub.
+    // 2 rows and a few hundred columns is going to be at least a couple
+    // of KB even after zstd. Sanity-check we didn't write an empty stub.
     assert!(
         pq_meta.len() > 1024,
         "feature parquet is suspiciously small: {} bytes",
@@ -712,24 +834,24 @@ fn sweep_writes_zensim_feature_parquet() {
     let meta = reader.metadata();
     assert_eq!(meta.num_row_groups(), 1, "expect single row group");
     let schema_descr = meta.file_metadata().schema_descr();
-    // 5 ID columns + 300 features = 305
+    // 5 ID columns + one column per regime feature.
     assert_eq!(
         schema_descr.num_columns(),
-        305,
-        "expected 305 columns, got {}",
+        expected_cols,
+        "expected {expected_cols} columns, got {}",
         schema_descr.num_columns()
     );
     let num_rows = meta.file_metadata().num_rows();
     assert_eq!(num_rows, 2, "expected 2 rows in parquet, got {num_rows}");
 
-    // First and last feature columns are named feat_0 / feat_299.
+    // First and last feature columns are named feat_0 / feat_<n-1>.
     let names: Vec<String> = (0..schema_descr.num_columns())
         .map(|i| schema_descr.column(i).name().to_string())
         .collect();
     assert_eq!(names[0], "image_path");
     assert_eq!(names[4], "zensim_score");
     assert_eq!(names[5], "feat_0");
-    assert_eq!(names[304], "feat_299");
+    assert_eq!(names[expected_cols - 1], format!("feat_{}", feature_n - 1));
 }
 
 #[cfg(feature = "sweep")]

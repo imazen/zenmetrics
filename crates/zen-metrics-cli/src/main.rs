@@ -296,9 +296,23 @@ struct SweepArgs {
     q_grid: String,
     /// JSON object `{axis: [values]}` describing the knob Cartesian
     /// product. See `crates/zen-metrics-cli/src/sweep/encode.rs` for
-    /// the per-codec axis names.
+    /// the per-codec axis names. Mutually exclusive with `--plan`.
     #[arg(long, default_value = "")]
     knob_grid: String,
+    /// Plan-driven zenjpeg sweep: take cells from zenjpeg's curated sweep
+    /// planner (`rd_core` = the RD-front axes; `modes_full` = every
+    /// user-disableable mode axis — pair with `--plan-budget`) instead of
+    /// `--knob-grid`. Cells are fingerprint-deduplicated, validity-
+    /// filtered, and emitted main-effects-first over `--q-grid`; the
+    /// audit manifest (alias merges, invalid strata, budget drops) is
+    /// written to `<output>.plan.json`. zenjpeg only.
+    #[arg(long, conflicts_with = "knob_grid")]
+    plan: Option<String>,
+    /// Cell budget for `--plan`. zenjpeg's reduction ladder sheds
+    /// lowest-priority axis values one at a time (every drop reported in
+    /// the manifest) — nothing is silently sampled away.
+    #[arg(long, requires = "plan")]
+    plan_budget: Option<usize>,
     /// One or more metrics to score each cell with. Pass once per
     /// metric. Defaults to `zensim` if omitted.
     #[arg(long = "metric", value_enum, action = ArgAction::Append)]
@@ -636,7 +650,7 @@ fn cmd_sweep(
     #[cfg(feature = "orchestrator")] use_orchestrator: bool,
     #[cfg(feature = "orchestrator")] orchestrator_opts: &orchestrator_glue::OrchestratorRuntimeOpts,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use crate::sweep::{SweepConfig, parse_knob_grid, parse_q_grid, run_sweep};
+    use crate::sweep::{SweepConfig, ZenjpegPlanSpec, parse_knob_grid, parse_q_grid, run_sweep};
 
     // Phase 7.5 sweep integration: when `--use-orchestrator` is set,
     // build an `Orchestrator` and hand a wrapped `Arc<Mutex<...>>`
@@ -699,6 +713,10 @@ fn cmd_sweep(
         sources,
         q_grid,
         knob_grid,
+        zenjpeg_plan: args.plan.as_ref().map(|name| ZenjpegPlanSpec {
+            name: name.clone(),
+            budget: args.plan_budget,
+        }),
         metrics,
         gpu_runtime: args.gpu_runtime,
         output: args.output,
@@ -1075,7 +1093,7 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         }
 
         let total = succeeded + failed;
-        if total % 100 == 0 && total > 0 {
+        if total > 0 && total.is_multiple_of(100) {
             eprintln!("[score-pairs] {total} pairs scored, {failed} failed",);
         }
     }
@@ -1117,10 +1135,10 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
 
     let batch = RecordBatch::try_new(schema.clone(), arrays)?;
 
-    if let Some(parent) = args.out_parquet.parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = args.out_parquet.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)?;
     }
 
     let file = File::create(&args.out_parquet)?;

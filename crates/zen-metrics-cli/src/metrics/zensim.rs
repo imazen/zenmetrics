@@ -10,7 +10,7 @@ pub(crate) fn score(
 ) -> Result<f64, Box<dyn std::error::Error>> {
     use zensim::{PixelFormat, StridedBytes, Zensim};
 
-    let z = Zensim::new(zensim::ZensimProfile::latest());
+    let z = Zensim::new(zensim::ZensimProfile::latest_preview());
     let w = reference.width as usize;
     let h = reference.height as usize;
     let stride = w * 3;
@@ -43,7 +43,7 @@ pub fn score_with_features(
 ) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
     use zensim::{PixelFormat, StridedBytes, Zensim};
 
-    let z = Zensim::new(zensim::ZensimProfile::latest());
+    let z = Zensim::new(zensim::ZensimProfile::latest_preview());
     let w = reference.width as usize;
     let h = reference.height as usize;
     let stride = w * 3;

@@ -9,9 +9,12 @@
 //!   exit 0  = success; non-zero = deterministic FAILED row.
 //!
 //! Source resolution (the source image named by `cell.image_path`):
-//!   - `s3://…` path                          -> fetched with s5cmd
-//!   - else if `$ZEN_CORPUS_PREFIX` is set     -> s3://$ZEN_BUCKET/$ZEN_CORPUS_PREFIX/<image_path>
-//!   - else if the local file exists           -> used directly
+//!
+//! - `s3://…` path -> fetched with s5cmd
+//! - else if `$ZEN_CORPUS_PREFIX` is set ->
+//!   s3://$ZEN_BUCKET/$ZEN_CORPUS_PREFIX/<image_path>
+//! - else if the local file exists -> used directly
+//!
 //! A `metric` job is self-contained: it re-encodes the cell (deterministic) and scores
 //! (reference=source, distorted=encode). CPU metrics only (ssim2/butteraugli/zensim) — GPU metrics
 //! need a GPU build/tier. This keeps the basement + CPU burst tiers fully useful.

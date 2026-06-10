@@ -31,8 +31,8 @@ use std::sync::OnceLock;
 use anyhow::{Context, Result};
 use zen_metrics_cli::metrics::{GpuRuntime, MetricKind, ZensimFeatureRegime};
 use zen_metrics_cli::sweep::{
-    CodecKind, KnobGrid, SweepConfig, SweepOrchestratorHandle, parse_knob_grid, parse_q_grid,
-    run_sweep,
+    CodecKind, KnobGrid, SweepConfig, SweepOrchestratorHandle, ZenjpegPlanSpec, parse_knob_grid,
+    parse_q_grid, run_sweep,
 };
 
 /// Process-wide orchestrator handle. Built lazily on the first
@@ -124,6 +124,14 @@ pub struct InlineGroupSpec {
     /// is converted by lifting each scalar value to a single-element
     /// list (`{"effort": 1, ...}` → `{"effort": [1], ...}`).
     pub knob_grid_json: String,
+    /// Plan-driven zenjpeg cells (`"rd_core"` / `"modes_full"`): when
+    /// set, cells come from `zenjpeg::encode::sweep` over `q_grid`
+    /// instead of `knob_grid_json` (which must then be empty). The
+    /// plan's audit manifest lands at `<output_tsv>.plan.json` next to
+    /// the group TSV.
+    pub plan: Option<String>,
+    /// Optional cell budget for `plan`.
+    pub plan_budget: Option<usize>,
     /// Metrics to score with. e.g. `[Cvvdp, Ssim2Gpu, ...]`.
     pub metrics: Vec<MetricKind>,
     /// GPU runtime selector. `Cuda` in production; `Auto` for local
@@ -194,6 +202,10 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
         sources,
         q_grid,
         knob_grid,
+        zenjpeg_plan: spec.plan.as_ref().map(|name| ZenjpegPlanSpec {
+            name: name.clone(),
+            budget: spec.plan_budget,
+        }),
         metrics: spec.metrics,
         gpu_runtime: spec.gpu_runtime,
         output: spec.output_tsv.clone(),

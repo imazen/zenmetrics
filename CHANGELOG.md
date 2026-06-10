@@ -19,6 +19,41 @@ Workspace conventions per the global rules:
 
 ### Added
 
+## zen-metrics-cli
+
+- Plan-driven zenjpeg sweeps: `zen-metrics sweep --codec zenjpeg --plan
+  rd_core|modes_full [--plan-budget N]` takes cells from
+  `zenjpeg::encode::sweep` (curated provenance-stamped axes,
+  resolved-state fingerprint dedup, validity filtering,
+  main-effects-first queue ordering, one-value-at-a-time budget ladder)
+  instead of the `--q-grid × --knob-grid` cross product. Row identity in
+  the TSV / feature-parquet `knob_tuple_json` column becomes
+  `{"cell":"<stratum-id>","fp":"<fingerprint>","plan":"<name>"}`; the
+  plan's audit manifest (alias merges, invalid strata, budget drops,
+  q-coarsenings) lands at `<output>.plan.json`. `InlineGroupSpec` (vastai
+  worker) gains `plan`/`plan_budget` passthrough for fleet jobspecs.
+- zenjpeg knob surface caught up with zenjpeg 0.8.4: new `trellis` knob
+  (bool or object: `lambda1`/`lambda2`/`dc`/`delta_dc_weight`/`speed` +
+  `coupling_*` group) replacing the removed `hybrid` knob (now a
+  tombstone with a migration error); `progressive_mode` accepts
+  `smallest`/`smallest_search` (the exact entropy-stage minimizers).
+
+### Fixed
+
+## zen-metrics-cli
+
+- Sweep `jpeg` feature builds against current sibling zenjpeg again
+  (`InternalParams::hybrid`/`HybridConfig` were removed upstream in the
+  trellis merge; the encode path now speaks `trellis`).
+- `sweep_writes_zensim_feature_parquet` expectation derives the sidecar
+  width from `ZensimFeatureRegime::total_features()` instead of the
+  stale hardcoded 305 (CPU zensim's profile now emits the IW block; the
+  writer has been regime-sized since the v26 schema — the test had not
+  caught up).
+- Lint debt cleared so `clippy --all-targets -D warnings` passes on the
+  `sweep,png,cpu-metrics` combo (deprecated `ZensimProfile::latest()`,
+  let-chain collapses, doc-list indentation, `FeatureRow` type alias).
+
 - **Versioned public-API surface snapshots** (`docs/public-api/<crate>.txt`) for the
   9 API-relevant library crates (zenmetrics-api, cvvdp, iwssim + the six `*-gpu`
   metric crates), regenerated on every `cargo test` by

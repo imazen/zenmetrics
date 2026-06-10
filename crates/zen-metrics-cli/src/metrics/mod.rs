@@ -827,6 +827,9 @@ pub fn run_zensim_gpu_with_features(
 #[cfg(feature = "sweep")]
 #[cfg(not(feature = "gpu-zensim"))]
 #[allow(unused_variables)]
+// Lib-consumer API surface (re-exported in sweep::run); dead from the
+// binary's call graph in no-GPU builds.
+#[allow(dead_code)]
 pub fn run_zensim_gpu_with_features(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
