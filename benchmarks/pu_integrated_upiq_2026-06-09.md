@@ -65,3 +65,31 @@ into the iwssim core (it consumes f32 gray internally) — expected recovery to
 ~0.68–0.70; the residual IW drag vs plain PU-SSIM is a metric property, not a
 feeding bug. Method + scripts: `/mnt/v/output/zenmetrics/upiq-pu/pu_encode_upiq.py`,
 `pu_encode_variants.py`.
+
+## Addendum 2 (2026-06-10): float PU(luma) feeding — iwssim jumps to 0.81
+
+`crates/iwssim/examples/upiq_pu_float.rs`: `PU21(bt709-luma(nits)) · 255/PU21(1000)`
+fed as **float** gray planes into `Iwssim::score_gray` (the canonical f32 entry the
+u8 path itself funnels into) — identical scale to the production shell, zero
+quantization. n=380, same UPIQ HDR harness:
+
+| variant | SROCC |
+|---|--:|
+| **PU-MS-SSIM float** (`iw_flag=false`) | **0.8123** |
+| **PU-IW-SSIM float** (`iw_flag=true`) | **0.8076** |
+| HDR-VDP-2 (UPIQ baseline) | 0.812 |
+| PU-SSIM (published, single-scale) | 0.740 |
+| ssim2 integrated PU (GPU) | 0.704 |
+| production u8 shell -> iwssim | 0.628 |
+
+The u8 round-trip cost iwssim ~0.18 SROCC (0.628 -> 0.808), far beyond the ~0.06
+the single-scale skimage control suggested — multi-scale structure amplifies the
+quantization damage. Float PU-MS-SSIM ties HDR-VDP-2 as our best non-learned HDR
+score; only learned PU-PieAPP (0.875) is above. Caveat: published PU-SSIM is
+single-scale SSIM; ours is multi-scale (a stronger base metric) — the comparison
+row to quote against UPIQ baselines is HDR-VDP-2. IW-vs-MS delta is -0.005 (IW
+weighting still mildly negative on PU-HDR statistics).
+
+Routing implication: `hdr_feeding(iwssim)` should feed float PU(luma) gray
+(`score_gray`), NOT `SdrU8(PuRescale)`. CPU seam exists today; GPU iwssim needs a
+gray-f32 ingress (analog of ssim2-gpu's `compute_linear_nits`).
