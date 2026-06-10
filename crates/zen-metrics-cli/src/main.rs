@@ -191,7 +191,9 @@ struct ScoreArgs {
     hdr: bool,
     /// HDR→u8 transfer for the SDR-metric path: `pu-rescale` (default — PU21
     /// rescaled to fit u8 with no highlight clamp; best vs HDR MOS — ssim2
-    /// 0.65 / dssim 0.66 SRCC), `pq` (close second, simplest), or `pu-clamp`
+    /// 0.65 / dssim 0.66 SRCC; applies only to the u8-shell metrics — iwssim
+    /// and GPU ssim2 use float/integrated feedings and ignore this), `pq`
+    /// (close second, simplest), or `pu-clamp`
     /// (legacy, degrades highlights — ssim2 0.55). cvvdp + butteraugli-gpu use
     /// their native linear-planes path and ignore this. See
     /// `benchmarks/hdr_feeding_validation_2026-06-03.md`.
@@ -239,7 +241,9 @@ struct BatchArgs {
     hdr: bool,
     /// HDR→u8 transfer for the SDR-metric path: `pu-rescale` (default — PU21
     /// rescaled to fit u8 with no highlight clamp; best vs HDR MOS — ssim2
-    /// 0.65 / dssim 0.66 SRCC), `pq` (close second, simplest), or `pu-clamp`
+    /// 0.65 / dssim 0.66 SRCC; applies only to the u8-shell metrics — iwssim
+    /// and GPU ssim2 use float/integrated feedings and ignore this), `pq`
+    /// (close second, simplest), or `pu-clamp`
     /// (legacy, degrades highlights — ssim2 0.55). cvvdp + butteraugli-gpu use
     /// their native linear-planes path and ignore this. See
     /// `benchmarks/hdr_feeding_validation_2026-06-03.md`.
@@ -1202,8 +1206,8 @@ fn cmd_score(
             .into());
         }
         // Umbrella HDR-aware path: HdrScorer applies the validated per-metric
-        // feeding automatically (cvvdp/butter → faithful linear planes with the
-        // HDR display peak; SSIM-family → pu-rescale u8) and returns lossless
+        // feeding automatically (cvvdp/butter → linear planes; GPU ssim2 →
+        // integrated PU21; iwssim → float PU(luma); rest → u8 shell) and returns lossless
         // Scores (butter keeps max + pnorm_3). Falls back below for metrics with
         // no umbrella GPU mapping (CPU metrics) or the hip runtime.
         if let Some(result) =

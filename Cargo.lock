@@ -7415,6 +7415,7 @@ dependencies = [
  "rayon",
  "rgb",
  "thiserror",
+ "zenpixels",
  "zenpredict",
 ]
 

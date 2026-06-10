@@ -2,10 +2,15 @@
 //!
 //! Decodes HDR sources — EXR (absolute-luminance), Ultra HDR JPEG, gain-map
 //! HEIC — to absolute-luminance RGB (cd/m²), then preps per metric:
-//!   - **SDR metrics** (ssim2/dssim/CPU-butteraugli): HDR→u8 via [`HdrTransfer`]
-//!     (default `pu-rescale` — PU21 rescaled to fit u8 with NO highlight clamp;
-//!     validated best vs HDR MOS on UPIQ, ssim2 0.55→0.65 SRCC). `pu-clamp` is
-//!     the legacy degraded path. See `benchmarks/hdr_feeding_validation_2026-06-03.md`.
+//!   - **Primary path**: [`score_via_hdr_scorer`] hands absolute nits to the
+//!     umbrella's `HdrScorer`, which applies the per-metric feeding from
+//!     `zenmetrics_api::hdr::hdr_feeding` — cvvdp/butter linear planes, GPU
+//!     ssim2 integrated PU21, iwssim float PU(luma) on every backend, the
+//!     remaining SSIM-family the u8 shell. `--hdr-transfer` only affects the
+//!     u8-shell metrics (it cannot override the integrated/float feedings).
+//!   - **Fallback** (kinds with no umbrella mapping / hip runtime): HDR→u8 via
+//!     [`HdrTransfer`] (default `pu-rescale`; `pu-clamp` is the legacy degraded
+//!     path). See `benchmarks/hdr_feeding_validation_2026-06-03.md`.
 //!   - **cvvdp** (GPU): the **faithful** path — split into display-relative
 //!     `[0,1]` f32 planes (`to_cvvdp_linear_planes`) fed to cvvdp's native
 //!     `score_from_linear_planes` with an HDR `DisplayModel`. No u8 round-trip;
