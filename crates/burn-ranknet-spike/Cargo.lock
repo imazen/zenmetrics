@@ -518,6 +518,7 @@ name = "burn-ranknet-spike"
 version = "0.0.1"
 dependencies = [
  "burn",
+ "forust-ml",
 ]
 
 [[package]]
@@ -1968,6 +1969,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "forust-ml"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51128a6700cc6e8561877f999a69b48ec9536e8fd3c1db3e570d2805d69f92a5"
+dependencies = [
+ "log",
+ "rand 0.8.6",
+ "rayon",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

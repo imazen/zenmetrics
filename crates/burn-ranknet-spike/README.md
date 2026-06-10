@@ -46,16 +46,48 @@ is too error-prone). This spike confirms the training half of the
   cubecl 0.10 line zenmetrics already pins) by changing one type alias —
   giving GPU training that `zensim-train-gpu` declares but doesn't implement.
 
-## Open question this does NOT settle
+## Architecture decision (2026-06-09): separate binaries, NO shared cargo graph
 
-This crate uses the **`ndarray` backend**, which pulls **no cubecl at all**, and
-lives in its own `[workspace]` to dodge the parent graph. So it proves the
-*ergonomics* decisively but does **not** yet prove that burn's cubecl backend
-can **coexist in one cargo graph with the `zenforks-cubecl` fork** (a *renamed*
-package — `zenforks-cubecl-core` ≠ `cubecl-core` to cargo). That fork
-reconciliation is the remaining integration risk before burn-on-GPU lands in the
-real zenmetrics graph; see the ML-framework eval notes. Resolving it is the
-natural follow-up (options: upstream the fork deltas, `[patch]` burn's backends
-onto the fork, or bridge at the byte layer).
+Training runs as a **standalone binary** (burn + its own cubecl) that talks to
+the metric/codec side **only through data** — parquet feature/label sidecars in,
+ZNPR bakes out. zenmetrics' GPU metric crates keep the published `zenforks-cubecl`
+fork; the trainer never imports them. So burn and `zenforks-cubecl` **never share
+one cargo graph**, and the "two-cubecls" problem is **avoided by construction**,
+not a pending risk.
+
+Why the fork can't simply extend into burn (so nobody re-litigates this):
+`zenforks-cubecl` is a *renamed* package (`cubecl = { package = "zenforks-cubecl" }`
+in our manifests). burn's own backend crates depend on the real `cubecl-core`,
+and you can neither rewrite burn's source nor `[patch]`-rename it (`[patch]`
+re-sources, it cannot rename). The rename itself exists so our GPU crates can be
+**published** (`[patch]` is build-local and doesn't survive `cargo publish`).
+Publishing-with-fork and composing-with-burn want opposite mechanisms — so we
+keep them in **separate binaries** and hand off data, not tensors.
+
+The **only** scenario that forces them into one graph is **differentiable metrics**
+(burn autodiff backprop *through* an existing zenforks-cubecl kernel, for
+end-to-end encoder training). Not on the table today. If it ever is, the options
+are: (a) upstream the fork deltas to vanilla cubecl — check first whether
+burn-*training* even needs them (they're metric-kernel correctness, not training);
+(b) `[patch]` that one crate onto the git fork (original `cubecl-*` names), kept
+free of any `zenforks-cubecl` dep; (c) nuclear — fork burn's backend crates too.
+**Do NOT add `burn` to the zenmetrics workspace's (zenforks) graph expecting it
+to "just work" — it won't, and that's intentional, not a bug to fix.**
+
+## Binaries
+
+- `burn-ranknet-spike` (`src/main.rs`) — the ergonomics proof above.
+- `gbdt-teacher-compare` (`src/bin/teacher_compare.rs`) — GBDT (forust) teacher
+  vs the GD-MLP student, plus distillation, on interaction-heavy synthetic data.
+  Answers "is a tree-ensemble teacher worth distilling into the shippable MLP?"
+
+  **Result (synthetic, 2026-06-09):** held-out pair-ranking accuracy — direct MLP
+  **0.842**, GBDT teacher **0.861** (+0.019: trees capture the axis-aligned +
+  multiplicative interactions the small MLP misses), distilled MLP **0.847**
+  (recovers only ~24% of the gap). Honest read: the GBDT edge is real, but
+  distilling into the SAME 10->16->1 student only partly transfers it — student
+  *capacity*, not training signal, is the limiter here. To capture the teacher's
+  edge you'd widen the student, ship the GBDT directly, or accept the gap.
+  Real-picker numbers need real labeled sweep data; this is a methodology demo.
 
 *NOT a published crate. Spike only.*

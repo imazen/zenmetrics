@@ -239,6 +239,32 @@ than the next cvvdp-gpu kernel parity tick. If the pinned task has
 forward progress available (a missing inventory, an unwritten spec,
 an unbuilt Docker image) prefer it over yet another parity test.
 
+## burn: GPU-metric kernels ABANDONED ≠ training (separate binary, NOT a graph conflict)
+
+Two *different* questions about burn live in this repo; don't conflate them:
+
+1. **burn/cubek for GPU metric KERNELS** — ABANDONED (`burn-conv-spike`,
+   `crates/cvvdp-gpu/docs/BURN_PORT_PLAN.md` "Status: ABANDONED", 4.32× slower
+   than the hand-written separable stencil). The `cvvdp_burn_*` column namespace
+   stays reserved but unused. Keep hand-written `#[cube]` kernels.
+
+2. **burn for model TRAINING** — VIABLE and the chosen path. `burn-ranknet-spike`
+   trains a RankNet/picker MLP via autodiff (custom pairwise + monotonicity loss
+   → 0.998 pair-acc) — replacing `zensim-train-core`'s hand-rolled backprop.
+
+**Architecture (decided 2026-06-09):** run metric scoring as separate binaries
+that emit **parquet** sidecars; run training as a **separate standalone binary**
+(burn + its own cubecl) that consumes those parquets and bakes ZNPR. They hand
+off **data, not tensors** — so burn and the published **`zenforks-cubecl`** fork
+**never share one cargo graph.** That coexistence problem is sidestepped by
+construction. Do **NOT** add `burn` to this workspace's (zenforks-cubecl) member
+graph: the rename `cubecl = { package = "zenforks-cubecl" }` can't reach burn's
+own `cubecl-core` dep, `[patch]` can re-source but not rename, and the rename
+exists precisely so our GPU crates can be *published* (patch is build-local). The
+only thing that would force one graph is **differentiable metrics** (autodiff
+*through* a zenforks kernel) — not on the table; revisit per
+`crates/burn-ranknet-spike/README.md` if it ever is.
+
 ## Local CUDA toolkit (for building/running GPU metrics)
 
 The water-cooled 7950X workstation has CUDA 13.2.1 SDK installed at the
