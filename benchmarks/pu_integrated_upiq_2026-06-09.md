@@ -159,3 +159,33 @@ Findings:
 3. butteraugli is peak-insensitive (+0.012) and weak on HDR overall (0.63-0.64)
    — its psychovisual model is SDR-referred; intensity_target scales the range
    but not the model. For HDR work prefer cvvdp / float PU-MS-SSIM.
+
+## Addendum 5 (2026-06-10): cvvdp display-peak sweep + butteraugli bug-hunt control
+
+**cvvdp-gpu display-peak sweep** (same 380 HDR pairs, content max 12 528 nits;
+UPIQ's narwaria/korshunov subjective data was collected on SIM2 displays
+~4000–6000 nits):
+
+| display peak | SROCC | PLCC | KROCC | PWRC | Z-RMSE |
+|--:|--:|--:|--:|--:|--:|
+| 1000 (HDR_PEAK_NITS default) | 0.7580 | 0.7614 | 0.5884 | 0.9338 | 0.6483 |
+| 4000 | 0.8153 | 0.8231 | 0.6367 | 0.9595 | 0.5679 |
+| 6000 (≈ experiment display) | 0.8245 | 0.8292 | 0.6454 | 0.9620 | 0.5589 |
+| **10000 (PQ max, no clip)** | **0.8309** | **0.8340** | **0.6519** | **0.9634** | **0.5518** |
+
+Monotone PAST the physical display: "match the experiment's display" recovers
+most of the loss (0.758→0.825) but unclamped is better still — the
+LinearPlanes clamp always destroys signal the metric could use. Guidance: for
+metric-correlation use, set the cvvdp display peak to content-max / PQ-max
+(no clipping); reserve display-matched peaks for display-referred QA
+questions.
+
+**butteraugli implementation control** (is 0.63 on HDR a bug?): re-ran today's
+butteraugli-gpu over TID2013 (n=3000, local corpus, MOS truth):
+`butter_max 0.6683 / pnorm3 0.6622` vs our committed 2026-05-01 baseline
+`0.6696` — Δ0.001, exact reproduction. The SDR→HDR drop is only ~0.03–0.04,
+consistent with an SDR-referred psychovisual model out of domain, NOT an
+implementation defect. (No published butteraugli-on-UPIQ exists to compare
+against; the self-consistency control is the instrument.) Verdict: our
+butteraugli is healthy; it is simply not an HDR metric — route HDR to
+cvvdp(no-clip) / float PU-MS-SSIM.
