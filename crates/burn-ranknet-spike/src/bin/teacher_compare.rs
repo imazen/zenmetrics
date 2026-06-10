@@ -137,6 +137,9 @@ fn pairs_by(score: &[f32], range: std::ops::Range<usize>, n_pairs: usize, seed: 
 /// naming `B::Device` is ambiguous since the autodiff backend satisfies two traits.
 fn train_ranknet(feats: &[f32], hi: &[i64], lo: &[i64]) -> Mlp<B> {
     let device = Default::default();
+    // NOTE: burn weight-init is unseeded here, so the student numbers wobble ~±0.003
+    // run-to-run. The teacher edge is small vs that variance — use multi-seed
+    // averaging (workspace 5-seed-CI protocol) for a real recovered-% on real data.
     let x = Tensor::<B, 2>::from_data(TensorData::new(feats.to_vec(), [N, D_IN]), &device);
     let hi_idx = Tensor::<B, 1, Int>::from_data(TensorData::new(hi.to_vec(), [hi.len()]), &device);
     let lo_idx = Tensor::<B, 1, Int>::from_data(TensorData::new(lo.to_vec(), [lo.len()]), &device);
@@ -210,6 +213,16 @@ fn main() {
         .set_max_depth(5)
         .set_seed(1);
     teacher.fit_unweighted(&m_train, &y_train_f64, None).expect("forust fit");
+    // Measure the serialized teacher. forust serializes to JSON only (no binary
+    // format) — this is the "how big is the GBDT model file" answer.
+    teacher.save_booster("/tmp/gbdt_teacher_model.json").expect("save booster");
+    let model_json_bytes = teacher.json_dump().expect("json dump").len();
+    println!(
+        "GBDT teacher model file: 100 trees x depth 5 -> JSON {} bytes ({:.1} KB), at /tmp/gbdt_teacher_model.json",
+        model_json_bytes,
+        model_json_bytes as f64 / 1024.0
+    );
+    println!();
     let teacher_all: Vec<f32> = teacher.predict(&m_all, true).iter().map(|&v| v as f32).collect();
 
     // --- held-out test pairs, ordered by CLEAN ground truth ---

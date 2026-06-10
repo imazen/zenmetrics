@@ -81,13 +81,24 @@ to "just work" — it won't, and that's intentional, not a bug to fix.**
   vs the GD-MLP student, plus distillation, on interaction-heavy synthetic data.
   Answers "is a tree-ensemble teacher worth distilling into the shippable MLP?"
 
-  **Result (synthetic, 2026-06-09):** held-out pair-ranking accuracy — direct MLP
-  **0.842**, GBDT teacher **0.861** (+0.019: trees capture the axis-aligned +
-  multiplicative interactions the small MLP misses), distilled MLP **0.847**
-  (recovers only ~24% of the gap). Honest read: the GBDT edge is real, but
-  distilling into the SAME 10->16->1 student only partly transfers it — student
-  *capacity*, not training signal, is the limiter here. To capture the teacher's
-  edge you'd widen the student, ship the GBDT directly, or accept the gap.
-  Real-picker numbers need real labeled sweep data; this is a methodology demo.
+  **Result (synthetic, 2026-06-09):** held-out pair-ranking accuracy — GBDT
+  teacher **0.861** (deterministic); direct GD-MLP **~0.838–0.846**, distilled
+  GD-MLP **~0.847–0.863**. The student MLP is *unseeded*, so its numbers wobble
+  ~±0.003 run-to-run. Robust, repeatable facts: the GBDT consistently beats the
+  same-size direct MLP by **+0.015–0.023**, and distillation moves the student
+  toward the teacher — but the *amount* recovered (24–110% across runs) is
+  noise-dominated, because the teacher edge is small vs MLP init variance. For a
+  real recovered-%, average over seeds (the workspace 5-seed-CI protocol).
+
+  **I/O shape:** scalar output, **abstract feature input — no `zq`/target-quality
+  column** (a methodology gap vs the real picker, where you'd add `zq` as an input
+  column; trivial for a GBDT).
+
+  **GBDT model file: 975 KB raw JSON / 109 KB gzipped** (forust serializes to JSON
+  only), vs **~27 KB** for a zensim ZNPR MLP bake — ~36× / ~4× bigger. That size
+  gap is the shippability case for distilling the teacher into the MLP rather than
+  shipping 100 trees into a codec/wasm hot path. Honest read: the GBDT edge is
+  real, but a tiny 10->16->1 student is capacity-limited; real-picker numbers need
+  real labeled sweep data. This is a methodology demo.
 
 *NOT a published crate. Spike only.*
