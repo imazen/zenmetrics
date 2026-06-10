@@ -47,24 +47,6 @@ impl NitsImage {
     }
 }
 
-// ── PU21 (banding_glare) — canonical coeffs, see zenmetrics_api::hdr ──────────
-#[inline]
-fn pu21_encode(y: f32) -> f32 {
-    const P: [f32; 7] = [
-        0.353_487_9,
-        0.373_465_86,
-        8.277_049e-5,
-        0.906_256_26,
-        0.091_503_03,
-        0.909_951_7,
-        596.314_8,
-    ];
-    let y = y.clamp(0.005, 10000.0);
-    let yp = y.powf(P[3]);
-    let inner = (P[0] + P[1] * yp) / (1.0 + P[2] * yp);
-    (P[6] * (inner.powf(P[4]) - P[5])).max(0.0)
-}
-
 #[inline]
 fn srgb_oetf(lin: f32) -> f32 {
     if lin <= 0.003_130_8 {
@@ -72,23 +54,6 @@ fn srgb_oetf(lin: f32) -> f32 {
     } else {
         1.055 * lin.powf(1.0 / 2.4) - 0.055
     }
-}
-
-/// PQ (SMPTE ST.2084) inverse-EOTF: absolute luminance (cd/m²) → coded `[0,1]`.
-/// PQ is designed so the full 0..10000 cd/m² HDR range fits `[0,1]` — so a u8
-/// quantization of PQ has NO highlight-clamp (unlike PU21, whose range
-/// overshoots 256). This is the validated way to feed HDR to an SDR metric's
-/// 8-bit path (AIC-HDR2025 fed SSIMULACRA2 the PQ signal → SROCC ≈ 0.91).
-#[inline]
-fn pq_oetf(nits: f32) -> f32 {
-    const M1: f32 = 0.159_301_76;
-    const M2: f32 = 78.84375;
-    const C1: f32 = 0.835_937_5;
-    const C2: f32 = 18.851_562;
-    const C3: f32 = 18.6875;
-    let y = (nits / 10000.0).clamp(0.0, 1.0);
-    let yp = y.powf(M1);
-    ((C1 + C2 * yp) / (1.0 + C3 * yp)).powf(M2)
 }
 
 // ── Decode → absolute-luminance nits ─────────────────────────────────────────
@@ -214,9 +179,6 @@ fn pixelbuffer_to_nits(hdr: &ultrahdr_core::PixelBuffer) -> NitsImage {
 /// see `benchmarks/hdr_feeding_validation_*`.)
 #[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum HdrTransfer {
-    /// PU21 (banding_glare) **clamped** to u8 — collapses everything above
-    /// ~100 cd/m² to 255 (PU21 ranges to ~600). DEGRADES highlights; legacy.
-    PuClamp,
     /// PQ (SMPTE ST.2084) → u8. The full 0..10000 cd/m² range fits `[0,1]` by
     /// design, so there is **no highlight clamp**. Validated (AIC-HDR2025).
     Pq,
@@ -228,26 +190,17 @@ pub enum HdrTransfer {
 /// Encode absolute-luminance RGB to sRGB8 for the SDR-metric kernels via the
 /// chosen [`HdrTransfer`].
 pub fn to_sdr_rgb8(img: &NitsImage, transfer: HdrTransfer) -> Rgb8Image {
-    let pu_max = pu21_encode(HDR_DISPLAY_PEAK_NITS).max(1.0);
-    let enc = |y: f32| -> u8 {
-        let v = match transfer {
-            HdrTransfer::PuClamp => pu21_encode(y),
-            HdrTransfer::Pq => pq_oetf(y) * 255.0,
-            HdrTransfer::PuRescale => pu21_encode(y) * (255.0 / pu_max),
-        };
-        v.round().clamp(0.0, 255.0) as u8
-    };
+    // Delegate to the canonical encoder in zenmetrics-api (single PU21 copy).
+    let pixels = zenmetrics_api::hdr::to_sdr_u8(
+        &img.rgb,
+        to_umbrella_transfer(transfer),
+        HDR_DISPLAY_PEAK_NITS,
+    );
     Rgb8Image {
-        pixels: img.rgb.iter().map(|&y| enc(y)).collect(),
+        pixels,
         width: img.width,
         height: img.height,
     }
-}
-
-/// Back-compat: PU21-clamp prep (the legacy degraded path). Prefer
-/// [`to_sdr_rgb8`] with an explicit [`HdrTransfer`].
-pub fn to_pu_rgb8(img: &NitsImage) -> Rgb8Image {
-    to_sdr_rgb8(img, HdrTransfer::PuClamp)
 }
 
 /// Normalize by the display peak → sRGB-encode → sRGB8, for cvvdp (which scales
@@ -342,7 +295,6 @@ fn to_umbrella_kind(m: crate::metrics::MetricKind) -> Option<zenmetrics_api::Met
 
 fn to_umbrella_transfer(t: HdrTransfer) -> zenmetrics_api::hdr::HdrTransfer {
     match t {
-        HdrTransfer::PuClamp => zenmetrics_api::hdr::HdrTransfer::PuClamp,
         HdrTransfer::Pq => zenmetrics_api::hdr::HdrTransfer::Pq,
         HdrTransfer::PuRescale => zenmetrics_api::hdr::HdrTransfer::PuRescale,
     }
@@ -442,7 +394,7 @@ mod tests {
 
     #[test]
     fn pu21_100_nits_near_256() {
-        assert!((pu21_encode(100.0) - 256.0).abs() < 1.5);
+        assert!((zenmetrics_api::hdr::pu21_encode(100.0) - 256.0).abs() < 1.5);
     }
 
     #[test]
@@ -462,8 +414,6 @@ mod tests {
             height: 1,
         };
         // PU-clamp: both pin at 255 (collapsed).
-        assert_eq!(to_sdr_rgb8(&lo, HdrTransfer::PuClamp).pixels[0], 255);
-        assert_eq!(to_sdr_rgb8(&hi, HdrTransfer::PuClamp).pixels[0], 255);
         // PQ + PU-rescale: 600 < 4000 stays distinct (no collapse).
         for t in [HdrTransfer::Pq, HdrTransfer::PuRescale] {
             let l = to_sdr_rgb8(&lo, t).pixels[0];
@@ -481,10 +431,12 @@ mod tests {
             width: 2,
             height: 1,
         };
-        let pu = to_pu_rgb8(&img);
+        let pu = to_sdr_rgb8(&img, HdrTransfer::PuRescale);
         assert_eq!(pu.pixels.len(), 6);
-        assert_eq!(pu.pixels[0], 255); // 600 cd/m² highlight clamps at the u8 ceiling
-        assert!(pu.pixels[3] < 200); // 5 cd/m² shadow is well below it
+        // PuRescale keeps the 600-nit highlight BELOW the u8 ceiling (no
+        // collapse) while staying far above the 5-nit shadow.
+        assert!(pu.pixels[0] > 200 && pu.pixels[0] < 255);
+        assert!(pu.pixels[3] < pu.pixels[0] - 50);
         let (cv, peak) = to_cvvdp_rgb8(&img);
         assert_eq!(cv.pixels.len(), 6);
         assert!((peak - 600.0).abs() < 1.0); // luma-weighted max drives the peak

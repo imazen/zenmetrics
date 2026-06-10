@@ -138,109 +138,39 @@ pub const PU21_L_MIN: f32 = 0.005;
 /// Maximum luminance PU21 is defined over (cd/m²).
 pub const PU21_L_MAX: f32 = 10000.0;
 
-/// PU21 parameter sets. `BandingGlare` is the recommended default.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum Pu21Variant {
-    /// Minimizes visible banding; no glare model.
-    Banding,
-    /// Banding + display glare. **Recommended default** (gfxdisp/pu21 default).
-    #[default]
-    BandingGlare,
-    /// Peak-sensitivity tuned; no glare model.
-    Peaks,
-    /// Peaks + display glare.
-    PeaksGlare,
-}
-
-impl Pu21Variant {
-    /// The 7 fitted parameters `[p1..p7]` (gfxdisp/pu21, updated 2020-02-06).
-    // Published exact coefficients — the underscore grouping is verbatim
-    // transcription from gfxdisp/pu21, so the cosmetic grouping lint doesn't apply.
-    #[allow(clippy::inconsistent_digit_grouping)]
-    #[inline]
-    const fn params(self) -> [f32; 7] {
-        match self {
-            Self::Banding => [
-                1.070_275_3,
-                0.408_827_4,
-                0.153_224_3,
-                0.252_032_6,
-                1.063_512_9,
-                1.141_150_5,
-                521.452_75,
-            ],
-            Self::BandingGlare => [
-                0.353_487_9,
-                0.373_465_86,
-                8.277_049e-5,
-                0.906_256_26,
-                0.091_503_03,
-                0.909_951_7,
-                596.314_8,
-            ],
-            Self::Peaks => [
-                1.043_882_8,
-                0.645_949_55,
-                0.319_458_42,
-                0.374_025_25,
-                1.114_783_4,
-                1.095_360_4,
-                384.921_76,
-            ],
-            Self::PeaksGlare => [
-                816.885_03,
-                1479.464_0,
-                0.001_253_215_6,
-                0.932_963_7,
-                0.067_466_44,
-                1.573_435_4,
-                419.600_64,
-            ],
-        }
-    }
-}
+/// The 7 fitted `banding_glare` PU21 parameters `[p1..p7]` (gfxdisp/pu21,
+/// 2020-02-06) — the published-recommended and paper-measured-best set, and
+/// the only one any zen scoring path uses.
+const PU21_P: [f32; 7] = [
+    0.353_487_9,
+    0.373_465_86,
+    8.277_049e-5,
+    0.906_256_26,
+    0.091_503_03,
+    0.909_951_7,
+    596.314_8,
+];
 
 /// Encode absolute luminance `y` (cd/m², clamped to `[PU21_L_MIN, PU21_L_MAX]`)
-/// to the PU21 perceptually-uniform value. `100 cd/m² → ~256`.
+/// to the PU21 (`banding_glare`) perceptually-uniform value. `100 cd/m² → ~256`.
 #[inline]
-pub fn pu21_encode(y: f32, variant: Pu21Variant) -> f32 {
-    let p = variant.params();
+pub fn pu21_encode(y: f32) -> f32 {
     let y = y.clamp(PU21_L_MIN, PU21_L_MAX);
-    let yp = y.powf(p[3]);
-    let inner = (p[0] + p[1] * yp) / (1.0 + p[2] * yp);
-    (p[6] * (inner.powf(p[4]) - p[5])).max(0.0)
+    let yp = y.powf(PU21_P[3]);
+    let inner = (PU21_P[0] + PU21_P[1] * yp) / (1.0 + PU21_P[2] * yp);
+    (PU21_P[6] * (inner.powf(PU21_P[4]) - PU21_P[5])).max(0.0)
 }
 
 /// Inverse of [`pu21_encode`].
 #[inline]
-pub fn pu21_decode(v: f32, variant: Pu21Variant) -> f32 {
-    let p = variant.params();
-    let v_p = (v / p[6] + p[5]).max(0.0).powf(1.0 / p[4]);
-    let num = (v_p - p[0]).max(0.0);
-    let den = p[1] - p[2] * v_p;
-    (num / den).powf(1.0 / p[3])
+pub fn pu21_decode(v: f32) -> f32 {
+    let v_p = (v / PU21_P[6] + PU21_P[5]).max(0.0).powf(1.0 / PU21_P[4]);
+    let num = (v_p - PU21_P[0]).max(0.0);
+    let den = PU21_P[1] - PU21_P[2] * v_p;
+    (num / den).powf(1.0 / PU21_P[3])
 }
 
 // ─── Planar encode: absolute-luminance RGB → PU-encoded ──────────────────────
-
-/// PU-encode each channel of an interleaved **absolute-luminance** (cd/m²) RGB
-/// `f32` buffer. Output is PU21 `f32` (range ~`[0, 600]`; 100 cd/m² → ~256) —
-/// the **faithful** HDR form for an `f32`-capable metric.
-pub fn pu_encode_rgb_planar(rgb_nits: &[f32], variant: Pu21Variant) -> Vec<f32> {
-    rgb_nits.iter().map(|&y| pu21_encode(y, variant)).collect()
-}
-
-/// **Legacy / degraded** — PU-encode then **clamp** to u8, collapsing the
-/// >~100 cd/m² highlight range. Kept for back-compat + the clamp regression
-/// test; **prefer [`to_sdr_u8`] with [`HdrTransfer::PuRescale`]**, which is the
-/// validated best feeding (UPIQ: 0.55 clamp → 0.65 rescale). See
-/// `benchmarks/hdr_feeding_validation_2026-06-03.md`.
-pub fn pu_encode_rgb_to_srgb8(rgb_nits: &[f32], variant: Pu21Variant) -> Vec<u8> {
-    rgb_nits
-        .iter()
-        .map(|&y| pu21_encode(y, variant).round().clamp(0.0, 255.0) as u8)
-        .collect()
-}
 
 // ─── PQ inverse-EOTF (encode) + the validated HDR→u8 feedings ─────────────────
 
@@ -265,10 +195,6 @@ pub fn pq_inverse_eotf(nits: f32) -> f32 {
 /// u8 quantization. Validated on UPIQ (`benchmarks/hdr_feeding_validation_2026-06-03.md`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum HdrTransfer {
-    /// PU21 (`BandingGlare`) **clamped** to u8 — collapses everything above
-    /// ~100 cd/m² to 255 (PU21 ranges to ~600). DEGRADES highlights; the
-    /// pre-validation legacy path (worst: ssim2 0.55 SRCC).
-    PuClamp,
     /// PQ (ST.2084) → u8: the full HDR range fits `[0,1]` by design — no clamp.
     /// Close second (ssim2 0.62).
     Pq,
@@ -288,16 +214,13 @@ pub const HDR_PEAK_NITS: f32 = 1000.0;
 /// metric kernels via the chosen [`HdrTransfer`]. `peak_nits` is the display
 /// peak used by `PuRescale` (`HDR_PEAK_NITS` is the standard choice).
 pub fn to_sdr_u8(rgb_nits: &[f32], transfer: HdrTransfer, peak_nits: f32) -> Vec<u8> {
-    let pu_max = pu21_encode(peak_nits, Pu21Variant::BandingGlare).max(1.0);
+    let pu_max = pu21_encode(peak_nits).max(1.0);
     rgb_nits
         .iter()
         .map(|&y| {
             let v = match transfer {
-                HdrTransfer::PuClamp => pu21_encode(y, Pu21Variant::BandingGlare),
                 HdrTransfer::Pq => pq_inverse_eotf(y) * 255.0,
-                HdrTransfer::PuRescale => {
-                    pu21_encode(y, Pu21Variant::BandingGlare) * (255.0 / pu_max)
-                }
+                HdrTransfer::PuRescale => pu21_encode(y) * (255.0 / pu_max),
             };
             v.round().clamp(0.0, 255.0) as u8
         })
@@ -310,13 +233,13 @@ pub fn to_sdr_u8(rgb_nits: &[f32], transfer: HdrTransfer, peak_nits: f32) -> Vec
 /// Identical math to the `PuRescale` u8 shell on luminance, minus the
 /// round-to-u8 step that costs IW-SSIM ~0.18 SROCC on UPIQ HDR.
 pub fn nits_interleaved_to_pu_luma_gray(rgb_nits: &[f32], peak_nits: f32) -> Vec<f32> {
-    let pu_max = pu21_encode(peak_nits, Pu21Variant::BandingGlare).max(1.0);
+    let pu_max = pu21_encode(peak_nits).max(1.0);
     let scale = 255.0 / pu_max;
     rgb_nits
         .chunks_exact(3)
         .map(|c| {
             let y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-            pu21_encode(y, Pu21Variant::BandingGlare) * scale
+            pu21_encode(y) * scale
         })
         .collect()
 }
@@ -326,6 +249,11 @@ pub fn nits_interleaved_to_pu_luma_gray(rgb_nits: &[f32], peak_nits: f32) -> Vec
 /// (`benchmarks/hdr_feeding_validation_2026-06-03.md`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HdrFeeding {
+    /// No HDR path **by design**: dssim's internal transform lives in the
+    /// external `dssim-core` crate (no seam for integrated PU), and the u8
+    /// shell measured ~0.6 SROCC on UPIQ HDR — omitted rather than shipped
+    /// degraded. Scoring attempts error loudly.
+    Unsupported,
     /// SSIM-family — no absolute-luminance model; encode to u8 via the transfer.
     SdrU8(HdrTransfer),
     /// Luminance-aware (own opsin / CSF on absolute light) — native
@@ -392,7 +320,8 @@ pub fn hdr_feeding(metric: crate::MetricKind, backend: crate::Backend) -> HdrFee
         // routes everywhere. The u8 shell measured 0.628 vs 0.808 float on
         // UPIQ HDR (benchmarks addendum 2) — the quantization was the loss.
         M::Iwssim => HdrFeeding::PuLumaGrayF32,
-        M::Ssim2 | M::Dssim | M::Zensim => HdrFeeding::SdrU8(HdrTransfer::PuRescale),
+        M::Dssim => HdrFeeding::Unsupported,
+        M::Ssim2 | M::Zensim => HdrFeeding::SdrU8(HdrTransfer::PuRescale),
     }
 }
 
@@ -488,6 +417,13 @@ impl HdrScorer {
         dis_nits: &[f32],
     ) -> crate::Result<crate::Scores> {
         match self.feeding {
+            HdrFeeding::Unsupported => Err(crate::Error::Metric {
+                kind: "dssim",
+                message: "no HDR path by design (external dssim-core transform; \
+                          u8 shell measured ~0.6 on UPIQ) — score SDR or pick \
+                          another metric"
+                    .into(),
+            }),
             HdrFeeding::SdrU8(transfer) => {
                 let r = to_sdr_u8(ref_nits, transfer, self.peak_nits);
                 let d = to_sdr_u8(dis_nits, transfer, self.peak_nits);
@@ -772,36 +708,24 @@ mod tests {
 
     #[test]
     fn pu21_100_nits_near_256_and_default() {
-        assert_eq!(Pu21Variant::default(), Pu21Variant::BandingGlare);
-        let v = pu21_encode(100.0, Pu21Variant::BandingGlare);
+        let v = pu21_encode(100.0);
         assert!((v - 256.0).abs() < 1.5, "encode(100)={v}");
     }
 
     #[test]
     fn pu21_monotone_and_round_trip() {
-        let mut prev = pu21_encode(PU21_L_MIN, Pu21Variant::BandingGlare);
+        let mut prev = pu21_encode(PU21_L_MIN);
         for i in 1..=200 {
             let y = PU21_L_MIN * (PU21_L_MAX / PU21_L_MIN).powf(i as f32 / 200.0);
-            let v = pu21_encode(y, Pu21Variant::BandingGlare);
+            let v = pu21_encode(y);
             assert!(v >= prev, "not monotone at {y}");
             // round-trip ~1% (f32 through two power chains)
             if (0.01..=5000.0).contains(&y) {
-                let y2 = pu21_decode(v, Pu21Variant::BandingGlare);
+                let y2 = pu21_decode(v);
                 assert!((y2 - y).abs() <= 0.02 * y.max(1e-6), "rt {y}→{v}→{y2}");
             }
             prev = v;
         }
-    }
-
-    #[test]
-    fn planar_encode_shapes() {
-        // SDR-range nits stay within u8; an HDR highlight clamps.
-        let nits = [43.7, 100.0, 200.0, 600.0];
-        let f = pu_encode_rgb_planar(&nits, Pu21Variant::BandingGlare);
-        assert_eq!(f.len(), 4);
-        assert!(f[1] > 250.0 && f[1] < 262.0); // 100 nit ≈ 256
-        let u = pu_encode_rgb_to_srgb8(&nits, Pu21Variant::BandingGlare);
-        assert_eq!(u, [f[0].round() as u8, 255, 255, 255]); // highlights clamp
     }
 
     #[test]
@@ -814,13 +738,11 @@ mod tests {
     }
 
     #[test]
-    fn to_sdr_u8_clamp_collapses_highlights_others_dont() {
+    fn to_sdr_u8_transfers_keep_highlights_distinct() {
         // Two distinct highlights, 600 vs 4000 cd/m². pu-clamp pins BOTH at 255
         // (the bug); pq + pu-rescale keep them distinct and below the ceiling.
         let lo = [600.0, 600.0, 600.0];
         let hi = [4000.0, 4000.0, 4000.0];
-        assert_eq!(to_sdr_u8(&lo, HdrTransfer::PuClamp, HDR_PEAK_NITS)[0], 255);
-        assert_eq!(to_sdr_u8(&hi, HdrTransfer::PuClamp, HDR_PEAK_NITS)[0], 255);
         for t in [HdrTransfer::Pq, HdrTransfer::PuRescale] {
             let l = to_sdr_u8(&lo, t, HDR_PEAK_NITS)[0];
             let h = to_sdr_u8(&hi, t, HDR_PEAK_NITS)[0];
@@ -841,9 +763,9 @@ mod tests {
         for b in [B::Cuda, B::Wgpu, B::Hip, B::CubeclCpu, B::Cpu] {
             assert_eq!(hdr_feeding(M::Cvvdp, b), LinearPlanes);
             assert_eq!(hdr_feeding(M::Butter, b), LinearPlanes);
-            for m in [M::Dssim, M::Zensim] {
-                assert_eq!(hdr_feeding(m, b), SdrU8(HdrTransfer::PuRescale));
-            }
+            assert_eq!(hdr_feeding(M::Zensim, b), SdrU8(HdrTransfer::PuRescale));
+            // dssim is omitted from HDR by design.
+            assert_eq!(hdr_feeding(M::Dssim, b), Unsupported);
             // iwssim: float PU(luma) gray on EVERY class — both the CPU
             // (`score_gray`) and GPU (`compute_gray`) pipelines are
             // f32-gray-native, and the u8 shell measured 0.628 vs 0.808
@@ -861,9 +783,9 @@ mod tests {
         ];
         let g = nits_interleaved_to_pu_luma_gray(&nits, HDR_PEAK_NITS);
         assert_eq!(g.len(), 3);
-        let pu_max = pu21_encode(HDR_PEAK_NITS, Pu21Variant::BandingGlare).max(1.0);
+        let pu_max = pu21_encode(HDR_PEAK_NITS).max(1.0);
         for (i, &y) in [0.5f32, 100.0, 4000.0].iter().enumerate() {
-            let want = pu21_encode(y, Pu21Variant::BandingGlare) * 255.0 / pu_max;
+            let want = pu21_encode(y) * 255.0 / pu_max;
             assert!(
                 (g[i] - want).abs() < 1e-4,
                 "gray[{i}] = {} want {want}",
@@ -898,54 +820,6 @@ mod tests {
             hdr_feeding(M::Ssim2, B::Cpu),
             HdrFeeding::SdrU8(HdrTransfer::PuRescale)
         );
-    }
-
-    /// Drift guard: [`pu21_encode`]'s four parameter sets must keep matching
-    /// the gfxdisp/pu21 reference. Goldens are float64 values computed by the
-    /// pinned reference (generator: zensim `scripts/pu21_golden.py`);
-    /// tolerance `0.1 + 5e-3 · |want|` absorbs the f32 power-chain error.
-    /// The same goldens are pinned in zensim's `pu21.rs` and (banding_glare
-    /// row) in ssim2-gpu's `kernels/xyb.rs`, so all PU21 copies across the
-    /// workspace drift-lock to one float64 source.
-    #[test]
-    fn reference_parity_gfxdisp_goldens() {
-        let y = [0.01f32, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0];
-        let rows: [(Pu21Variant, [f64; 7]); 4] = [
-            (
-                Pu21Variant::Banding,
-                [
-                    6.3053, 36.0057, 84.4045, 158.5061, 261.7517, 388.1423, 520.4673,
-                ],
-            ),
-            (
-                Pu21Variant::BandingGlare,
-                [
-                    0.3722, 5.7171, 36.5439, 123.6475, 256.3839, 420.0969, 595.3939,
-                ],
-            ),
-            (
-                Pu21Variant::Peaks,
-                [
-                    5.0060, 32.6568, 85.5420, 167.5246, 260.7250, 335.6947, 380.9853,
-                ],
-            ),
-            (
-                Pu21Variant::PeaksGlare,
-                [
-                    0.5133, 8.0104, 47.0090, 136.2603, 252.2985, 359.6225, 407.5066,
-                ],
-            ),
-        ];
-        for (variant, want_row) in rows {
-            for (&yi, &wi) in y.iter().zip(want_row.iter()) {
-                let got = pu21_encode(yi, variant) as f64;
-                let tol = 0.1 + 5e-3 * wi;
-                assert!(
-                    (got - wi).abs() <= tol,
-                    "{variant:?} PU21({yi}) = {got}, want {wi} ± {tol}"
-                );
-            }
-        }
     }
 
     /// The descriptor→nits scale convention behind the unified `compute_pixels`

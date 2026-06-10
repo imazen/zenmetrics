@@ -604,6 +604,10 @@ impl Metric {
             }
         };
         match crate::hdr::hdr_feeding(self.inner.kind(), backend_class) {
+            crate::hdr::HdrFeeding::Unsupported => Err(Error::Metric {
+                kind: "dssim",
+                message: "no HDR path by design — see hdr::hdr_feeding docs".into(),
+            }),
             crate::hdr::HdrFeeding::LinearPlanes => {
                 let rr = crate::hdr::slice_to_display_relative_linear_interleaved(&r, peak)?;
                 let dd = crate::hdr::slice_to_display_relative_linear_interleaved(&d, peak)?;

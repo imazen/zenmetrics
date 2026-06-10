@@ -193,7 +193,7 @@ struct ScoreArgs {
     /// rescaled to fit u8 with no highlight clamp; best vs HDR MOS — ssim2
     /// 0.65 / dssim 0.66 SRCC; applies only to the u8-shell metrics — iwssim
     /// and GPU ssim2 use float/integrated feedings and ignore this), `pq`
-    /// (close second, simplest), or `pu-clamp`
+    /// (close second, simplest); `pu-clamp` was removed (legacy degraded path)
     /// (legacy, degrades highlights — ssim2 0.55). cvvdp + butteraugli-gpu use
     /// their native linear-planes path and ignore this. See
     /// `benchmarks/hdr_feeding_validation_2026-06-03.md`.
@@ -243,7 +243,7 @@ struct BatchArgs {
     /// rescaled to fit u8 with no highlight clamp; best vs HDR MOS — ssim2
     /// 0.65 / dssim 0.66 SRCC; applies only to the u8-shell metrics — iwssim
     /// and GPU ssim2 use float/integrated feedings and ignore this), `pq`
-    /// (close second, simplest), or `pu-clamp`
+    /// (close second, simplest); `pu-clamp` was removed (legacy degraded path)
     /// (legacy, degrades highlights — ssim2 0.55). cvvdp + butteraugli-gpu use
     /// their native linear-planes path and ignore this. See
     /// `benchmarks/hdr_feeding_validation_2026-06-03.md`.

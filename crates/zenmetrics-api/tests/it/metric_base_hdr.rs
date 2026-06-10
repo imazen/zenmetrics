@@ -189,7 +189,7 @@ fn base_metric_hdr_score_depends_on_display_peak() {
 /// nails dssim + iwssim. iwssim's pyramid needs ≥176 px, so this runs at 256².
 #[cfg(all(feature = "dssim", feature = "iwssim"))]
 #[test]
-fn base_metric_hdr_dssim_and_iwssim() {
+fn base_metric_hdr_dssim_refused_iwssim_parity() {
     let (w, h) = (256_u32, 256_u32);
     let ref_u8 = gradient_u8(w, h, 1);
     let dis_u8 = gradient_u8(w, h, 23);
@@ -198,7 +198,29 @@ fn base_metric_hdr_dssim_and_iwssim() {
     let ref_bytes = f32_bytes(&ref_lin);
     let dis_bytes = f32_bytes(&dis_lin);
 
-    for kind in [MetricKind::Dssim, MetricKind::Iwssim] {
+    // dssim is omitted from HDR by design (HdrFeeding::Unsupported) — both
+    // entry points must refuse loudly rather than silently degrade.
+    {
+        let mut m = Metric::new(
+            MetricKind::Dssim,
+            Backend::Cuda,
+            w,
+            h,
+            MetricParams::default_for(MetricKind::Dssim),
+        )
+        .expect("dssim new")
+        .with_display_peak(HDR_PEAK_NITS);
+        let err = m
+            .compute_pixels_multi(lin_slice(&ref_bytes, w, h), lin_slice(&dis_bytes, w, h))
+            .expect_err("dssim HDR must be refused");
+        let msg = format!("{err:?}").to_lowercase();
+        assert!(
+            msg.contains("hdr"),
+            "unexpected dssim refusal shape: {err:?}"
+        );
+    }
+
+    for kind in [MetricKind::Iwssim] {
         let mut m = Metric::new(kind, Backend::Cuda, w, h, MetricParams::default_for(kind))
             .unwrap_or_else(|e| panic!("{kind:?} new: {e:?}"))
             .with_display_peak(HDR_PEAK_NITS);
