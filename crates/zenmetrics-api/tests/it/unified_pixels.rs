@@ -135,9 +135,11 @@ fn hdr_linear_slice_matches_nits_path() {
 }
 
 /// SSIM-family path: an sRGB8 slice → native `compute_srgb_u8` (SDR preserved);
-/// an HDR linear slice → the pu-rescale u8 feeding == `compute_multi(nits)`.
+/// an HDR linear slice → the integrated-PU21 nits feeding == `compute_multi(nits)`
+/// (GPU ssim2 routes `HdrFeeding::IntegratedPuNits`; both entries hand the same
+/// absolute nits to `Ssim2Opaque::compute_linear_nits`).
 #[test]
-fn ssim2_srgb8_native_and_hdr_pu_rescale() {
+fn ssim2_srgb8_native_and_hdr_integrated_pu() {
     let (w, h) = (64_u32, 64_u32);
     let ref_u8 = gradient_u8(w, h, 0);
     let dis_u8 = gradient_u8(w, h, 9);
@@ -172,7 +174,7 @@ fn ssim2_srgb8_native_and_hdr_pu_rescale() {
         "ssim2 sRGB8 slice {unified_sdr} != native {native_sdr} (rel {rel})"
     );
 
-    // HDR: linear slice (display-relative) == nits path (both pu-rescale).
+    // HDR: linear slice (display-relative) == nits path (both integrated PU21).
     let ref_lin: Vec<f32> = ref_u8.iter().map(|&c| srgb_eotf(c)).collect();
     let dis_lin: Vec<f32> = dis_u8.iter().map(|&c| srgb_eotf(c)).collect();
     let ref_nits: Vec<f32> = ref_lin.iter().map(|&v| v * HDR_PEAK_NITS).collect();

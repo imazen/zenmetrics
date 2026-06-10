@@ -303,19 +303,48 @@ pub enum HdrFeeding {
     /// Luminance-aware (own opsin / CSF on absolute light) — native
     /// display-relative `[0,1]` linear planes, no u8 round-trip.
     LinearPlanes,
+    /// **Integrated PU21** (GPU ssim2): the metric ingests **absolute-luminance
+    /// interleaved f32 (cd/m²)** and applies PU21 *inside* its pipeline at the
+    /// perceptual-encoding layer (`ssim2_gpu::XybFlavor::Pu21`), replacing the
+    /// cube-root — no u8 round-trip, no input-side PU shell. UPIQ SRCC
+    /// **0.7040** (n=380) vs 0.65 for the `PuRescale` u8 shell; the
+    /// fed-PU-as-input shell variant caps at ~0.61 (imazen/zenmetrics#25).
+    IntegratedPuNits,
 }
 
-/// The validated HDR feeding for each metric. Auditable in one place:
+/// The validated HDR feeding for each metric **on the given backend**.
+/// Auditable in one place:
 /// - **cvvdp** (display model + CSF) → linear planes — UPIQ SRCC **0.758** (our best).
 /// - **butteraugli** (opsin + intensity_target) → linear planes — 0.628, beats its u8 path.
-/// - **ssim2 / dssim / iwssim** (SSIM-family) → `PuRescale` u8 — 0.65 / 0.66 (the
-///   clamp was the worst at 0.55).
-/// - **zensim** (XYB SSIM-family) → `PuRescale` u8 — its linear path exists but
-///   is **not yet HDR-MOS-validated**; defaults to its SSIM-family sibling recipe.
-pub fn hdr_feeding(metric: crate::MetricKind) -> HdrFeeding {
+/// - **ssim2 on a GPU-class backend** → [`HdrFeeding::IntegratedPuNits`] —
+///   PU21 replaces the cube-root inside the GPU pipeline; UPIQ SRCC **0.7040**
+///   vs 0.65 for the u8 shell (imazen/zenmetrics#25).
+/// - **ssim2 on [`Backend::Cpu`](crate::Backend::Cpu)** → `PuRescale` u8 —
+///   fast-ssim2 0.8.1 on crates.io predates the `hdr-pu` feature (it exists
+///   only on fast-ssim2 git main, 35f198af; CPU SROCC 0.7044 measured there).
+///   Route the CPU path to its integrated PU entry once a fast-ssim2 release
+///   carries `hdr-pu`.
+/// - **dssim** → `PuRescale` u8 — 0.66. dssim-core is external and applies its
+///   own internal sRGB→LAB transform on whatever bytes it gets; there is no
+///   seam to substitute PU21 internally, so the u8 PU shell is the **known
+///   cap** for this metric (not a TODO that can be fixed from this crate).
+/// - **iwssim** → `PuRescale` u8 — and that is **correct**, not a gap:
+///   IW-SSIM has no internal perceptual nonlinearity (it pools SSIM with
+///   information-content weights on the raw input), so PU-encoding the input
+///   IS the proper PU-IW-SSIM adaptation from the HDR-video-quality
+///   literature. There is nothing "integrated" to route to.
+/// - **zensim** (XYB SSIM-family) → `PuRescale` u8 — its PU front-end is
+///   pending zensim PR #44 (`feat/hdr-pu-frontend`); revisit this routing
+///   when that merges and a validated SROCC lands.
+pub fn hdr_feeding(metric: crate::MetricKind, backend: crate::Backend) -> HdrFeeding {
     use crate::MetricKind as M;
     match metric {
         M::Cvvdp | M::Butter => HdrFeeding::LinearPlanes,
+        // GPU-class ssim2 (every backend except the native-CPU dispatch —
+        // `Auto` resolves first, so a GPU-less box that resolves to the
+        // native CPU path gets the u8 shell). The cubecl runtimes all run
+        // the same kernels, so the integrated path follows the opaque.
+        M::Ssim2 if backend.resolve() != crate::Backend::Cpu => HdrFeeding::IntegratedPuNits,
         M::Ssim2 | M::Dssim | M::Iwssim | M::Zensim => HdrFeeding::SdrU8(HdrTransfer::PuRescale),
     }
 }
@@ -365,7 +394,7 @@ impl HdrScorer {
         height: u32,
         peak_nits: f32,
     ) -> crate::Result<Self> {
-        let feeding = hdr_feeding(kind);
+        let feeding = hdr_feeding(kind, backend);
         // Bake the peak into the metric's display model (cvvdp/butter) AND record
         // it as the metric's `display_peak`, so `Metric::compute_pixels` feeds HDR
         // at the same peak this scorer targets — the two stay in sync.
@@ -391,8 +420,11 @@ impl HdrScorer {
 
     /// Override the SDR-family feeding transfer (default [`HdrTransfer::PuRescale`]
     /// from [`hdr_feeding`]) — e.g. to expose the legacy `PuClamp` or `Pq` for
-    /// comparison. No effect on cvvdp/butteraugli, whose linear path ignores
-    /// the transfer.
+    /// comparison. No effect on cvvdp/butteraugli (linear path) **or on GPU
+    /// ssim2** ([`HdrFeeding::IntegratedPuNits`] applies PU21 inside the
+    /// pipeline — there is no u8 transfer shell to override). To score the
+    /// legacy u8 shell on GPU ssim2, feed [`to_sdr_u8`] output through
+    /// [`crate::Metric::compute_srgb_u8`] directly.
     pub fn with_transfer(mut self, transfer: HdrTransfer) -> Self {
         if let HdrFeeding::SdrU8(_) = self.feeding {
             self.feeding = HdrFeeding::SdrU8(transfer);
@@ -432,6 +464,13 @@ impl HdrScorer {
                     .collect();
                 self.metric.compute_from_linear_interleaved_multi(&r, &d)
             }
+            // Integrated PU21 (GPU ssim2): the input is already the absolute
+            // nits this entry takes — straight through, unclipped (the PU21
+            // encode clamps to its [0.005, 10000] operating range in-kernel,
+            // matching the UPIQ-validated example feeding).
+            HdrFeeding::IntegratedPuNits => self
+                .metric
+                .compute_pu_nits_interleaved_multi(ref_nits, dis_nits),
         }
     }
 
@@ -543,6 +582,25 @@ pub(crate) fn slice_to_display_relative_linear_interleaved(
     })?;
     let rel = peak_nits.recip() * linear_to_nits_scale(s.descriptor().transfer(), peak_nits);
     Ok(lin.iter().map(|&v| (v * rel).clamp(0.0, 1.0)).collect())
+}
+
+/// Convert a slice to **interleaved absolute-luminance** linear RGB (cd/m²)
+/// for the [`HdrFeeding::IntegratedPuNits`] path: decode to linear via
+/// zenpixels-convert, scale to nits via [`linear_to_nits_scale`] — and stop.
+/// No `÷peak`, no `[0,1]` clamp: the PU21 encode clamps to its
+/// `[0.005, 10000]` cd/m² operating range in-kernel, and the UPIQ-validated
+/// feeding (imazen/zenmetrics#25) was raw unclipped nits.
+#[cfg(feature = "pixels")]
+pub(crate) fn slice_to_absolute_nits_interleaved(
+    s: &zenpixels::PixelSlice<'_>,
+    peak_nits: f32,
+) -> crate::Result<Vec<f32>> {
+    let lin = zenmetrics_gpu_core::convert_to_linear_f32(s).map_err(|e| crate::Error::Metric {
+        kind: "pixels",
+        message: format!("linear conversion failed: {e:?}"),
+    })?;
+    let scale = linear_to_nits_scale(s.descriptor().transfer(), peak_nits);
+    Ok(lin.iter().map(|&v| v * scale).collect())
 }
 
 /// Convert a slice to the SSIM-family pu-rescale u8 feeding: decode to linear,
@@ -721,12 +779,85 @@ mod tests {
 
     #[test]
     fn hdr_feeding_table_matches_validation() {
+        use crate::Backend as B;
         use crate::MetricKind as M;
         use HdrFeeding::*;
-        assert_eq!(hdr_feeding(M::Cvvdp), LinearPlanes);
-        assert_eq!(hdr_feeding(M::Butter), LinearPlanes);
-        for m in [M::Ssim2, M::Dssim, M::Iwssim, M::Zensim] {
-            assert_eq!(hdr_feeding(m), SdrU8(HdrTransfer::PuRescale));
+        // Backend-independent rows: every concrete backend yields the same
+        // feeding for the luminance-aware pair and the u8-shell family.
+        for b in [B::Cuda, B::Wgpu, B::Hip, B::CubeclCpu, B::Cpu] {
+            assert_eq!(hdr_feeding(M::Cvvdp, b), LinearPlanes);
+            assert_eq!(hdr_feeding(M::Butter, b), LinearPlanes);
+            for m in [M::Dssim, M::Iwssim, M::Zensim] {
+                assert_eq!(hdr_feeding(m, b), SdrU8(HdrTransfer::PuRescale));
+            }
+        }
+    }
+
+    /// GPU-class ssim2 routes to the integrated PU21 path; the native-CPU
+    /// dispatch stays on the u8 PU shell until a fast-ssim2 release ships
+    /// the `hdr-pu` feature (it's git-main-only as of 0.8.1).
+    #[test]
+    fn hdr_feeding_ssim2_gpu_routes_integrated_pu() {
+        use crate::Backend as B;
+        use crate::MetricKind as M;
+        for b in [B::Cuda, B::Wgpu, B::Hip, B::CubeclCpu] {
+            assert_eq!(
+                hdr_feeding(M::Ssim2, b),
+                HdrFeeding::IntegratedPuNits,
+                "{b:?}"
+            );
+        }
+        assert_eq!(
+            hdr_feeding(M::Ssim2, B::Cpu),
+            HdrFeeding::SdrU8(HdrTransfer::PuRescale)
+        );
+    }
+
+    /// Drift guard: [`pu21_encode`]'s four parameter sets must keep matching
+    /// the gfxdisp/pu21 reference. Goldens are float64 values computed by the
+    /// pinned reference (generator: zensim `scripts/pu21_golden.py`);
+    /// tolerance `0.1 + 5e-3 · |want|` absorbs the f32 power-chain error.
+    /// The same goldens are pinned in zensim's `pu21.rs` and (banding_glare
+    /// row) in ssim2-gpu's `kernels/xyb.rs`, so all PU21 copies across the
+    /// workspace drift-lock to one float64 source.
+    #[test]
+    fn reference_parity_gfxdisp_goldens() {
+        let y = [0.01f32, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0];
+        let rows: [(Pu21Variant, [f64; 7]); 4] = [
+            (
+                Pu21Variant::Banding,
+                [
+                    6.3053, 36.0057, 84.4045, 158.5061, 261.7517, 388.1423, 520.4673,
+                ],
+            ),
+            (
+                Pu21Variant::BandingGlare,
+                [
+                    0.3722, 5.7171, 36.5439, 123.6475, 256.3839, 420.0969, 595.3939,
+                ],
+            ),
+            (
+                Pu21Variant::Peaks,
+                [
+                    5.0060, 32.6568, 85.5420, 167.5246, 260.7250, 335.6947, 380.9853,
+                ],
+            ),
+            (
+                Pu21Variant::PeaksGlare,
+                [
+                    0.5133, 8.0104, 47.0090, 136.2603, 252.2985, 359.6225, 407.5066,
+                ],
+            ),
+        ];
+        for (variant, want_row) in rows {
+            for (&yi, &wi) in y.iter().zip(want_row.iter()) {
+                let got = pu21_encode(yi, variant) as f64;
+                let tol = 0.1 + 5e-3 * wi;
+                assert!(
+                    (got - wi).abs() <= tol,
+                    "{variant:?} PU21({yi}) = {got}, want {wi} ± {tol}"
+                );
+            }
         }
     }
 

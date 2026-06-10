@@ -56,7 +56,7 @@ fn butter_hdr_scorer_linear_max_and_pnorm3() {
 }
 
 #[test]
-fn ssim2_hdr_scorer_pu_rescale() {
+fn ssim2_hdr_scorer_integrated_pu() {
     let (w, h) = (256u32, 256u32);
     let (r, d) = hdr_pair(w, h);
     let mut s = HdrScorer::new(MetricKind::Ssim2, Backend::Cuda, w, h, HDR_PEAK_NITS)

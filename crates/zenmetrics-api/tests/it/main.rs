@@ -14,16 +14,34 @@ mod cached_ref_parity;
 mod compute_handles;
 #[cfg(all(feature = "butter", feature = "cuda", feature = "zensim"))]
 mod compute_multi;
-#[cfg(all(feature = "butter", feature = "cpu-butter", feature = "cuda", feature = "pixels"))]
+#[cfg(all(
+    feature = "butter",
+    feature = "cpu-butter",
+    feature = "cuda",
+    feature = "pixels"
+))]
 mod cpu_butter_linear;
 #[cfg(all(feature = "cpu-cvvdp", feature = "cuda", feature = "cvvdp"))]
 mod cpu_cvvdp_linear;
-#[cfg(all(feature = "cpu-butter", feature = "cpu-cvvdp", feature = "cpu-dssim", feature = "cpu-iwssim", feature = "cpu-ssim2", feature = "cpu-zensim"))]
+#[cfg(all(
+    feature = "cpu-butter",
+    feature = "cpu-cvvdp",
+    feature = "cpu-dssim",
+    feature = "cpu-iwssim",
+    feature = "cpu-ssim2",
+    feature = "cpu-zensim"
+))]
 mod cpu_dispatch;
 #[cfg(all(feature = "cuda", feature = "cvvdp"))]
 mod cvvdp_display;
 mod dispatch;
-#[cfg(all(feature = "butter", feature = "cuda", feature = "hdr", feature = "ssim2", feature = "zensim"))]
+#[cfg(all(
+    feature = "butter",
+    feature = "cuda",
+    feature = "hdr",
+    feature = "ssim2",
+    feature = "zensim"
+))]
 mod hdr_scorer;
 mod metric_base_hdr;
 mod pixels_smoke;
@@ -37,5 +55,11 @@ mod session_parity;
 mod session_reclaim_non_cvvdp;
 #[cfg(all(feature = "cuda", feature = "cvvdp"))]
 mod session_vram_isolation;
-#[cfg(all(feature = "butter", feature = "cuda", feature = "hdr", feature = "pixels", feature = "ssim2"))]
+#[cfg(all(
+    feature = "butter",
+    feature = "cuda",
+    feature = "hdr",
+    feature = "pixels",
+    feature = "ssim2"
+))]
 mod unified_pixels;

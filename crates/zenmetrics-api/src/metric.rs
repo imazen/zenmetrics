@@ -570,7 +570,40 @@ impl Metric {
             return self.inner.compute_srgb_u8_multi(&rb, &db);
         }
         let peak = self.display_peak;
-        match crate::hdr::hdr_feeding(self.inner.kind()) {
+        // Feeding routes on (metric, backend-class). The concrete GPU flavor
+        // never changes the recipe, so any GPU-class `Backend` stands in for
+        // the non-`Cpu` case; only the native-CPU dispatch differs (its
+        // ssim2 is fast-ssim2, which has no integrated-PU entry until a
+        // release ships `hdr-pu` — see `hdr::hdr_feeding` docs).
+        let backend_class = {
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
+            {
+                if matches!(self.inner, MetricInner::Cpu(..)) {
+                    Backend::Cpu
+                } else {
+                    Backend::Cuda
+                }
+            }
+            #[cfg(not(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            )))]
+            {
+                Backend::Cuda
+            }
+        };
+        match crate::hdr::hdr_feeding(self.inner.kind(), backend_class) {
             crate::hdr::HdrFeeding::LinearPlanes => {
                 let rr = crate::hdr::slice_to_display_relative_linear_interleaved(&r, peak)?;
                 let dd = crate::hdr::slice_to_display_relative_linear_interleaved(&d, peak)?;
@@ -580,6 +613,11 @@ impl Metric {
                 let rb = crate::hdr::slice_to_pu_rescaled_u8(&r, transfer, peak)?;
                 let db = crate::hdr::slice_to_pu_rescaled_u8(&d, transfer, peak)?;
                 self.inner.compute_srgb_u8_multi(&rb, &db)
+            }
+            crate::hdr::HdrFeeding::IntegratedPuNits => {
+                let rn = crate::hdr::slice_to_absolute_nits_interleaved(&r, peak)?;
+                let dn = crate::hdr::slice_to_absolute_nits_interleaved(&d, peak)?;
+                self.inner.compute_pu_nits_interleaved_multi(&rn, &dn)
             }
         }
     }
@@ -1327,6 +1365,63 @@ impl MetricInner {
         let (rr, rg, rb) = deinterleave_rgb(ref_rgb, "reference")?;
         let (dr, dg, db) = deinterleave_rgb(dis_rgb, "distorted")?;
         self.compute_from_linear_planes_multi(&rr, &rg, &rb, &dr, &dg, &db)
+    }
+
+    /// **Integrated PU21 HDR entry** (`hdr::HdrFeeding::IntegratedPuNits`):
+    /// score a pair of **absolute-luminance** interleaved linear-RGB f32
+    /// buffers (cd/m², `[R,G,B, …]`, each length `width·height·3`), with the
+    /// PU21 perceptual encode applied **inside** the metric pipeline.
+    ///
+    /// Implemented today by the GPU ssim2 opaque only
+    /// (`ssim2_gpu::Ssim2Opaque::compute_linear_nits`, which swaps the
+    /// cube-root XYB stage for PU21 — UPIQ SRCC 0.7040, imazen/zenmetrics#25).
+    /// Every other variant returns [`Error::Metric`] so a caller that ignored
+    /// `hdr::hdr_feeding` fails loudly instead of silently mis-scoring; feed
+    /// those metrics per their own `hdr_feeding` recipe.
+    pub fn compute_pu_nits_interleaved_multi(
+        &mut self,
+        ref_nits: &[f32],
+        dis_nits: &[f32],
+    ) -> Result<Scores> {
+        fn no_pu_nits_path(kind: &'static str) -> Error {
+            Error::Metric {
+                kind,
+                message: format!(
+                    "metric '{kind}' has no integrated-PU21 nits path; feed it per \
+                     hdr::hdr_feeding() (SdrU8 shell or LinearPlanes)"
+                ),
+            }
+        }
+        match self {
+            #[cfg(feature = "ssim2")]
+            MetricInner::Ssim2(m) => m
+                .compute_linear_nits(ref_nits, dis_nits)
+                .map(convert_score_ssim2)
+                .map(Scores::single)
+                .map_err(|e| Error::Metric {
+                    kind: "ssim2",
+                    message: e.to_string(),
+                }),
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
+            MetricInner::Cpu(..) => Err(no_pu_nits_path("cpu")),
+            #[cfg(feature = "cvvdp")]
+            MetricInner::Cvvdp(_) => Err(no_pu_nits_path("cvvdp")),
+            #[cfg(feature = "butter")]
+            MetricInner::Butter(_) => Err(no_pu_nits_path("butter")),
+            #[cfg(feature = "dssim")]
+            MetricInner::Dssim(_) => Err(no_pu_nits_path("dssim")),
+            #[cfg(feature = "iwssim")]
+            MetricInner::Iwssim(_) => Err(no_pu_nits_path("iwssim")),
+            #[cfg(feature = "zensim")]
+            MetricInner::Zensim(_) => Err(no_pu_nits_path("zensim")),
+        }
     }
 
     /// Score against pre-uploaded packed-u32 device handles —

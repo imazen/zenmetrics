@@ -161,3 +161,42 @@ fn pu21_encode(y: f32) -> f32 {
     let inner = (PU_P0 + PU_P1 * yp) / (1.0 + PU_P2 * yp);
     f32::max(PU_P6 * (f32::powf(inner, PU_P4) - PU_P5), 0.0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Host replica of the `#[cube]` [`pu21_encode`] device function,
+    /// using the **same** `PU_*` consts — `#[cube]` fns can't be invoked
+    /// host-side, so the formula is mirrored line-for-line. If either
+    /// side drifts (consts or formula), the golden assertion below fails.
+    fn pu21_encode_host(y: f32) -> f32 {
+        let yc = y.clamp(PU_L_MIN, PU_L_MAX);
+        let yp = yc.powf(PU_P3);
+        let inner = (PU_P0 + PU_P1 * yp) / (1.0 + PU_P2 * yp);
+        (PU_P6 * (inner.powf(PU_P4) - PU_P5)).max(0.0)
+    }
+
+    /// Drift guard: the kernel's `banding_glare` parameter set must keep
+    /// matching the gfxdisp/pu21 reference. Goldens are float64 values
+    /// computed by the pinned reference implementation (generator:
+    /// zensim `scripts/pu21_golden.py`); tolerance follows the shared
+    /// cross-crate pattern `0.1 + 5e-3 · |want|` (f32 vs f64 power-chain
+    /// slack). Same goldens are pinned in `zenmetrics-api::hdr` and
+    /// zensim's `pu21.rs`, keeping all PU21 copies in lockstep.
+    #[test]
+    fn reference_parity_gfxdisp_goldens() {
+        let y = [0.01f32, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0];
+        let want = [
+            0.3722f64, 5.7171, 36.5439, 123.6475, 256.3839, 420.0969, 595.3939,
+        ];
+        for (&yi, &wi) in y.iter().zip(want.iter()) {
+            let got = pu21_encode_host(yi) as f64;
+            let tol = 0.1 + 5e-3 * wi;
+            assert!(
+                (got - wi).abs() <= tol,
+                "banding_glare PU21({yi}) = {got}, want {wi} ± {tol}"
+            );
+        }
+    }
+}

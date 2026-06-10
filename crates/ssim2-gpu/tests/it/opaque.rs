@@ -106,3 +106,66 @@ fn opaque_pixels_handles_stride() {
         rel
     );
 }
+
+/// Synthetic absolute-luminance HDR field (cd/m²): smooth gradients
+/// spanning ~0.1–1000 nits with per-channel phase offsets, so every
+/// pyramid scale sees structure across the PU21 operating range.
+fn make_hdr_nits(w: u32, h: u32, seed: u32) -> Vec<f32> {
+    let mut out = Vec::with_capacity((w * h * 3) as usize);
+    for y in 0..h {
+        for x in 0..w {
+            let fx = (x + seed) as f32 / w as f32;
+            let fy = (y + seed * 3) as f32 / h as f32;
+            // log-spaced luminance ramp: 0.1 → 1000 cd/m²
+            let l = 0.1f32 * 10f32.powf(4.0 * (0.5 * (fx + fy)).clamp(0.0, 1.0));
+            out.extend_from_slice(&[l, l * 0.8 + 1.0, l * 0.6 + 2.0]);
+        }
+    }
+    out
+}
+
+/// Opaque PU21-integrated HDR entry: identical 64×64 pair scores ~100,
+/// a distorted pair scores finite and lower — proof the routed
+/// `Ssim2Opaque::compute_linear_nits` path works end-to-end on-device.
+#[test]
+fn opaque_compute_linear_nits_identical_scores_100() {
+    let (w, h) = (64_u32, 64_u32);
+    let a = make_hdr_nits(w, h, 0);
+
+    let mut opaque = Ssim2Opaque::new(BACKEND_E, w, h, Ssim2Params::DEFAULT).expect("opaque new");
+    let same = opaque
+        .compute_linear_nits(&a, &a)
+        .expect("identical compute_linear_nits");
+    assert!(
+        same.value >= 99.0 && same.value <= 100.05,
+        "identical HDR pair: score={}, expected [99, 100.05]",
+        same.value
+    );
+    assert_eq!(same.metric_name, "ssim2");
+
+    // Luminance-shifted distorted copy: finite score, clearly below identical.
+    let b: Vec<f32> = a.iter().map(|&v| v * 1.35 + 0.5).collect();
+    let diff = opaque
+        .compute_linear_nits(&a, &b)
+        .expect("distorted compute_linear_nits");
+    assert!(
+        diff.value.is_finite() && diff.value < same.value,
+        "distorted HDR pair: score={} (identical={})",
+        diff.value,
+        same.value
+    );
+}
+
+/// Sub-8px opaque instances reflect-pad u8 inputs, but the f32 PU21
+/// ingress has no pad path — the opaque must reject, not corrupt.
+#[test]
+fn opaque_compute_linear_nits_rejects_sub_min() {
+    let (w, h) = (4_u32, 4_u32);
+    let a = make_hdr_nits(w, h, 0);
+    let mut opaque = Ssim2Opaque::new(BACKEND_E, w, h, Ssim2Params::DEFAULT).expect("opaque new");
+    let err = opaque.compute_linear_nits(&a, &a);
+    assert!(
+        err.is_err(),
+        "sub-8px compute_linear_nits must error, got {err:?}"
+    );
+}

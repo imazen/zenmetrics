@@ -42,6 +42,9 @@ impl Ssim2Params {
 trait Ssim2Inner: Send {
     fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8], mode: Ssim2Mode)
     -> Result<Score>;
+    /// PU21-native HDR entry — see [`Ssim2::compute_linear_nits`].
+    fn compute_linear_nits(&mut self, ref_rgb_nits: &[f32], dist_rgb_nits: &[f32])
+    -> Result<Score>;
     fn dims(&self) -> (u32, u32);
     #[cfg(feature = "cubecl-types")]
     fn compute_handles(
@@ -76,6 +79,19 @@ where
         mode: Ssim2Mode,
     ) -> Result<Score> {
         let r = Ssim2::compute_with_mode(self, mode, ref_rgb, dis_rgb)?;
+        Ok(Score {
+            value: r.score,
+            metric_name: "ssim2",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn compute_linear_nits(
+        &mut self,
+        ref_rgb_nits: &[f32],
+        dist_rgb_nits: &[f32],
+    ) -> Result<Score> {
+        let r = Ssim2::compute_linear_nits(self, ref_rgb_nits, dist_rgb_nits)?;
         Ok(Score {
             value: r.score,
             metric_name: "ssim2",
@@ -313,6 +329,29 @@ impl Ssim2Opaque {
         let rp = self.pad_rgb(&ref_buf)?;
         let dp = self.pad_rgb(&dis_buf)?;
         self.inner.compute_srgb_u8(&rp, &dp, self.params.mode)
+    }
+
+    /// **Experimental HDR entry** — score a pair of **absolute-luminance**
+    /// linear-RGB images (cd/m², interleaved `[R,G,B,…]`, length
+    /// `width × height × 3`) with PU21 substituted for the cube-root at the
+    /// perceptual-encoding layer ([`crate::XybFlavor::Pu21`]). Opaque
+    /// counterpart of [`Ssim2::compute_linear_nits`]; same prototype limits
+    /// (whole-image mode only, no batch / cached-reference, and no sub-8px
+    /// reflect-pad — the f32 ingress has no pad path yet, so sub-8px
+    /// instances return [`crate::Error::ModeUnsupported`]). Validated on
+    /// UPIQ HDR (SROCC 0.7040, n=380) — see imazen/zenmetrics#25.
+    pub fn compute_linear_nits(
+        &mut self,
+        ref_rgb_nits: &[f32],
+        dist_rgb_nits: &[f32],
+    ) -> Result<Score> {
+        if self.is_padded() {
+            return Err(crate::Error::ModeUnsupported(
+                "compute_linear_nits does not support sub-minimum reflect-pad; \
+                 supply images at least 8px on each axis",
+            ));
+        }
+        self.inner.compute_linear_nits(ref_rgb_nits, dist_rgb_nits)
     }
 
     /// Score against pre-uploaded packed-u32 device handles —
