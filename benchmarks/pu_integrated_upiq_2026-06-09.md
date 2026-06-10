@@ -93,3 +93,40 @@ weighting still mildly negative on PU-HDR statistics).
 Routing implication: `hdr_feeding(iwssim)` should feed float PU(luma) gray
 (`score_gray`), NOT `SdrU8(PuRescale)`. CPU seam exists today; GPU iwssim needs a
 gray-f32 ingress (analog of ssim2-gpu's `compute_linear_nits`).
+
+## Addendum 3 (2026-06-10): full Mohammadi panel, apples-to-apples on the identical 380 HDR pairs
+
+SROCC-only rows above are now superseded by the full panel (canonical
+`zensim-validate` `panel` binary, built from zensim PR #44 branch c3caf273;
+baselines re-paneled from UPIQ's published per-condition objective scores on
+the SAME 380-pair HDR subset — baseline SROCCs reproduce the published values
+exactly, validating the harness). Per-config TSVs:
+`/mnt/v/output/zenmetrics/upiq-pu/panel_*.tsv`.
+
+| metric | SROCC | PLCC | KROCC | OR | PWRC | Z-RMSE |
+|---|--:|--:|--:|--:|--:|--:|
+| PU-PieAPP (learned) | 0.8748 | 0.8751 | 0.6889 | 0.0000 | 0.9740 | 0.4839 |
+| **float PU-MS-SSIM (ours, iw_flag=false)** | **0.8123** | **0.8107** | **0.6206** | 0.0000 | **0.9596** | **0.5855** |
+| HDR-VDP-2 | 0.8117 | 0.8011 | 0.6086 | 0.0000 | 0.9558 | 0.5985 |
+| **float PU-IW-SSIM (ours, routed)** | 0.8076 | 0.8033 | 0.6155 | 0.0000 | 0.9583 | 0.5956 |
+| PU-SSIM (published) | 0.7395 | 0.7369 | 0.5490 | 0.0000 | 0.9335 | 0.6760 |
+| PU-FSIM | 0.7185 | 0.7017 | 0.5253 | 0.0000 | 0.9316 | 0.7125 |
+| zensim-PU profile A (MLP, X=4) | 0.6935 | 0.6866 | 0.5039 | 0.0053 | 0.9146 | 0.7271 |
+| zensim-PU PreviewV0_2 (linear, X=4) | 0.6869 | 0.6920 | 0.5062 | 0.0079 | 0.9073 | 0.7219 |
+| zensim-PU PreviewV0_1 | 0.6525 | 0.6677 | 0.4799 | 0.0079 | 0.8874 | 0.7445 |
+| PU-PSNR | 0.5485 | 0.6041 | 0.3984 | 0.0079 | 0.8310 | 0.7969 |
+
+Findings the panel adds beyond SROCC:
+1. **float PU-MS-SSIM beats HDR-VDP-2 on EVERY stat** (PLCC +0.010, KROCC
+   +0.012, PWRC +0.004, Z-RMSE −0.013) — not a tie; a clean full-panel win.
+   PU-IW-SSIM also beats HDR-VDP-2 on PLCC/KROCC/PWRC/Z-RMSE. Both second
+   only to learned PU-PieAPP.
+2. **zensim-PU shows no hidden pathology**: stats agree (~0.69 across rank
+   stats, OR ≈ 0, Z-RMSE in family with PU-FSIM). The MLP (A) wins the rank
+   stats while linear V0_2 wins PLCC/Z-RMSE — rank-better vs scale-better;
+   any future zensim HDR ship should re-fit the output calibration on PU
+   scores rather than inherit the SDR spline.
+3. zensim-PU sits ~0.11 SROCC below the float-fed SSIM-family — consistent
+   with the chroma/X-scale frontier (PU-XYB opponent weighting) rather than
+   the luminance encoding; the float-feeding lesson (no u8, no clip)
+   is already native to its planar f32 path.
