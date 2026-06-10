@@ -186,6 +186,8 @@ zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
 # shared client. Only used by `tests/compute_handles.rs`, which is
 # gated on `cuda,cubecl-types`.
 cubecl = { workspace = true }
+# tests/public_api_doc.rs parses `cargo metadata` to enumerate features.
+serde_json = { workspace = true }
 
 [[example]]
 name = "upiq_hdr_score"
