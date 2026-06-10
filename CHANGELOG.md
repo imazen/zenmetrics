@@ -17,6 +17,16 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Added
+
+- **Versioned public-API surface snapshots** (`docs/public-api/<crate>.txt`) for the
+  9 API-relevant library crates (zenmetrics-api, cvvdp, iwssim + the six `*-gpu`
+  metric crates), regenerated on every `cargo test` by
+  `crates/zenmetrics-api/tests/public_api_doc.rs` (`ZEN_API_DOC` = regen/check/off),
+  verified in CI's lint job, with `just api-doc` / `just api-doc-check` recipes
+  (`just fmt` also regenerates). API changes now always show up as a reviewable
+  diff next to the code change that caused them. (7ee8f0f6)
+
 ### Changed
 
 - **Consolidated integration tests into a single per-crate `it` binary across the

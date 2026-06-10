@@ -1091,7 +1091,7 @@ dependencies = [
  "bytemuck",
  "cvvdp",
  "dssim-core",
- "fast-ssim2 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fast-ssim2 0.8.1",
  "imgref",
  "iwssim",
  "rgb",
@@ -1761,6 +1761,8 @@ dependencies = [
 [[package]]
 name = "fast-ssim2"
 version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2026f6bc3f443406cd10945b80b9e0dc9e90526d858b80dd2cf0f0099f1c71f1"
 dependencies = [
  "archmage",
  "imgref",
@@ -1773,9 +1775,7 @@ dependencies = [
 
 [[package]]
 name = "fast-ssim2"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2026f6bc3f443406cd10945b80b9e0dc9e90526d858b80dd2cf0f0099f1c71f1"
+version = "0.8.2"
 dependencies = [
  "archmage",
  "imgref",
@@ -6725,7 +6725,7 @@ dependencies = [
  "csv",
  "dssim-core",
  "enough",
- "fast-ssim2 0.8.1",
+ "fast-ssim2 0.8.2",
  "heic",
  "image",
  "imgref",
@@ -7147,6 +7147,7 @@ dependencies = [
  "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
  "zencodec",
  "zenpixels",
+ "zenpixels-convert",
  "zenyuv 0.1.3",
 ]
 
@@ -7220,7 +7221,7 @@ dependencies = [
  "cvvdp-gpu",
  "dssim-core",
  "dssim-gpu",
- "fast-ssim2 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fast-ssim2 0.8.1",
  "image",
  "imgref",
  "iwssim",
@@ -7259,7 +7260,7 @@ dependencies = [
  "cvvdp-gpu",
  "dirs",
  "dssim-core",
- "fast-ssim2 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fast-ssim2 0.8.1",
  "imgref",
  "iwssim",
  "log",
@@ -7415,7 +7416,6 @@ dependencies = [
  "rayon",
  "rgb",
  "thiserror",
- "zenpixels",
  "zenpredict",
 ]
 
