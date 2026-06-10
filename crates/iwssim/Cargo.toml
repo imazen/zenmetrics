@@ -2,6 +2,7 @@
 name = "iwssim"
 version = "0.1.0"
 description = "Pure-Rust CPU port of IW-SSIM (Wang & Li 2011), with magetypes SIMD"
+readme = "README.md"
 edition.workspace = true
 authors.workspace = true
 homepage.workspace = true

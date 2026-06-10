@@ -98,9 +98,15 @@ fn apply_distortion(ref_rgb: &[u8], w: u32, h: u32, distort: &str) -> Vec<u8> {
 }
 
 fn load_goldens() -> GoldenFile {
+    load_goldens_named("python_iwssim_2026-05-27.json")
+}
+
+/// Load a goldens manifest by filename — shared by the IW (`iw_flag=true`)
+/// and plain-MS-SSIM (`iw_flag=false`) parity tests.
+fn load_goldens_named(name: &str) -> GoldenFile {
     let path: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("goldens")
-        .join("python_iwssim_2026-05-27.json");
+        .join(name);
     let s =
         std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let file: GoldenFile =
@@ -176,7 +182,32 @@ const TOL_DISTORTED: f64 = 5e-3;
 
 #[test]
 fn parity_python_goldens() {
-    let goldens = load_goldens();
+    run_parity(load_goldens(), IwssimParams::default());
+}
+
+/// Plain-MS-SSIM mode (`iw_flag=false`) against goldens captured from the
+/// SAME Python reference with `IW_SSIM(iw_flag=False)` — with information
+/// weighting off, the reference pools each scale's contrast-structure map by
+/// plain mean under the standard Wang-2003 exponents, i.e. canonical MS-SSIM.
+/// Locking this mode to the reference is what lets the crate advertise a
+/// true MS-SSIM implementation (see README).
+#[test]
+fn parity_python_msssim_goldens() {
+    let goldens = load_goldens_named("python_msssim_2026-06-10.json");
+    assert!(
+        !goldens.pairs.is_empty(),
+        "msssim goldens manifest is empty"
+    );
+    run_parity(
+        goldens,
+        IwssimParams {
+            iw_flag: false,
+            ..IwssimParams::default()
+        },
+    );
+}
+
+fn run_parity(goldens: GoldenFile, params: IwssimParams) {
     let mut failures: Vec<String> = Vec::new();
     let mut max_diff: f64 = 0.0;
     let mut max_diff_name = String::new();
@@ -187,7 +218,7 @@ fn parity_python_goldens() {
         let ref_rgb = make_rgb_from_seed(p.width, p.height, seed);
         let dist_rgb = apply_distortion(&ref_rgb, p.width, p.height, &p.distortion);
 
-        let mut scorer = Iwssim::with_params(p.width, p.height, IwssimParams::default())
+        let mut scorer = Iwssim::with_params(p.width, p.height, params)
             .unwrap_or_else(|e| panic!("Iwssim::new {}x{}: {e}", p.width, p.height));
         let result = scorer
             .score(&ref_rgb, &dist_rgb)
