@@ -21,7 +21,7 @@ sections are terse and point at the runnable artifacts; §4 (ablation) is the me
 | **Training** (`zentrain` Python + `zensim-train-core` hand-rolled Rust) | **burn is the opening.** Unifies the split stack, gives autodiff (unblocks FiLM/MoE), and rides the SAME cubecl 0.10 zenmetrics already pins. Proven: `burn-ranknet-spike` trains a RankNet MLP w/ custom pairwise+monotonic loss → 0.998 pair-acc. |
 | **GPU metrics** (hand `#[cube]` kernels) | **KEEP hand kernels.** `burn-conv-spike` measured burn GEMM conv2d 4.32× slower on 1-ch separable. burn only relevant here for differentiable metrics (someday). |
 
-**Classical ML:** linfa 0.8.1 (pure-Rust) for k-means stratified sampling (shipped: `cluster_features`) and a credible picker RF/GBDT A/B. No GBDT in linfa → **forust-ml 0.5.0** (pure-Rust XGBoost-algo) for trees.
+**Classical ML:** linfa 0.8.1 (pure-Rust) for k-means stratified sampling (shipped: `cluster_features`) and a credible picker RF/GBDT A/B. No GBDT in linfa → **forust-ml 0.6.0-rc.1** (pure-Rust XGBoost-algo) for the production trees; the spikes use **gbdt 0.1.3** (stable) — both pure-Rust, no C deps.
 
 ## 2. burn training: viable, SEPARATE binary, NOT in the zenforks graph
 
@@ -42,14 +42,14 @@ So **distill** the teacher into the shippable student rather than choose.
 Measured on interaction-heavy synthetic data (`gbdt-teacher-compare`, held-out pair-rank):
 - direct MLP **~0.838–0.846**, GBDT teacher **0.861**, distilled MLP **~0.847–0.863**.
 - Teacher edge **+0.015–0.023** (trees catch axis-aligned + multiplicative interactions the small MLP misses). Recovered-% noisy (student unseeded; edge small vs init variance → use 5-seed averaging).
-- **Model size (measured):** GBDT = **975 KB raw JSON / 109 KB gzipped** (forust JSON-only) vs **~27 KB** zensim ZNPR MLP bake → ~36×/~4× bigger. **This is the shippability case for distilling teacher→MLP**, not shipping 100 trees into a codec/wasm hot path.
+- **Model size (measured — but JSON-vs-bake, read with care):** forust serializes to **975 KB raw JSON / 109 KB gzipped** vs **~27 KB** for a zensim ZNPR MLP bake. That 36× is *forust's verbose JSON*, **not** the ship size — a GBDT baked as compact tree-node arrays (the way ZNPR bakes the MLP) is ~100–300 KB *raw* (estimated from node count), much closer. So the case for distilling teacher→MLP rests on the MLP's smoothness/monotonicity + no_std/wasm fit, **not** on a 36× that an honest compact bake mostly closes.
 - I/O caveat: the demo is scalar-out / abstract-features-in — **no `zq` column**. Real picker conditions on target quality (add `zq` as an input col; trivial for GBDT).
 
 ---
 
 ## 4. Picker feature/knob ABLATION design
 
-**Inputs = zenanalyze features (~102 active, IDs 0–121; +90 dense-percentile on a branch). Outputs = encoder knobs (per codec: chroma_scale, lambda/trellis, q/distance, effort, XYB, AQ, deringing, progressive, dequant_bias, …).** Goal: scope the picker — which features to extract, which knobs to predict — *before* heavy training, to cut model size, feature-extraction cost, and overfitting/OOD risk.
+**Inputs = zenanalyze features (~102 active, IDs 0–121; +90 dense-percentile on a branch) PLUS the requested quality `zq` (the *dominant* input — see §4.1; measured ~0.21 of the ~0.28 above-random argmin signal). Outputs = encoder knobs (chroma_scale, lambda/trellis, effort, XYB, AQ, deringing, progressive, dequant_bias, …). NOTE: `q`/`distance` is NOT a predicted output — it is the quality *target* (the `zq` input), resolved within the within-cell-optimal to hit the requested quality; predicting it would be q-leakage.** Goal: scope the picker — which features to extract, which knobs to predict — *before* heavy training, to cut model size, feature-extraction cost, and overfitting/OOD risk.
 
 ### 4.1 It's a conditional matrix, not two rankings
 Feature relevance is **conditional on which knob and which quality regime.** Features that predict `chroma_scale` (chroma complexity, Cb/Cr sharpness, skin-tone) are nearly disjoint from those for `lambda` (DCT energy, noise floor, texture) or `effort` (size/time budget). The real object is a **features × knobs × zq-band (× mode)** importance tensor. A global feature ranking will delete features that were the *only* signal for some knob. **`zq` (target quality) must be an input** — at high zq almost nothing about content moves the knob; at low q (q5–q40, where structural decisions live) content dominates.
@@ -60,6 +60,8 @@ Feature relevance is **conditional on which knob and which quality regime.** Fea
 - **Per surviving knob.** Payoff is concrete: Tier 1/2/3 cost ~1/2/3 ms per 4MP — if Tier-3 DCT features (compressibility, AQ map, noise floor, quant survival) move no surviving knob, drop a whole tier *and* shrink the model.
 
 ### 4.3 Output side — the underexploited, higher-value half
+**Coverage caveat (load-bearing):** the existing sweep covers only **6 of ~16 zenjpeg knobs** (12 cells = `{color, sub, trellis_on, sa}` + the `chroma_scale`/`lambda` scalars). The other ~9 (`progressive`, scan-strategy, `optimize_scans`, quant-table source, Huffman opt, 16-bit tables, restart, `deringing`, `auto_optimize`, dequant-bias) are **pinned at defaults and were never encoded** — so output ablation **cannot** run on the existing parquet or `picker_tree_ab`; it needs a NEW knob-varying encode sweep (OAT off the default, oracle byte-Δ at matched quality). That sweep, not the trained model, is the cost.
+
 Few systematically ask **"which knobs are worth predicting?"** A knob earns a head only if **both**:
 1. **Real RD spread** — sweep it, measure best-vs-worst metric delta. If optimal vs a fixed default differs <~0.5 zq / sub-JND butteraugli across the corpus → **pin the default, delete the head.**
 2. **Content-dependent optimum** — if the best setting is the same image-to-image, a constant beats a picker. Only predict knobs whose argmax *moves with content*.
@@ -73,7 +75,7 @@ Survivors become `const`s in source → CLAUDE.md sweep discipline binds:
 - **Judge by RD, not training loss.** Gate = "does dropping this feature/knob cost real bytes/quality on held-out content?" (BD-rate / zq-at-fixed-bytes via actual encode→metric round-trip), never the GBDT's training loss.
 
 ### 4.5 GBDT is the right INSTRUMENT (even if you ship an MLP)
-Train **one GBDT per knob**, read importances → populate the features×knob matrix without the MLP seed-CI loop. The GBDT is a feature-selection oracle here, not just a teacher. `picker_tree_ab.rs` (live in zenanalyze) is positioned to emit exactly this: per-knob importance ranking + per-knob RD spread = the ablation.
+Train a GBDT, read importances → the input-side ablation without the MLP seed-CI loop. The GBDT is a feature-selection oracle here, not just a teacher. **`picker_tree_ab.rs` now does the INPUT half** (zenanalyze commit `6017af9`): per-feature AND ρ≥0.9 correlation-grouped permutation importance on the held-out GBDT pick (measured: `zq_norm` dominates; content ≈ 3 clusters; 93 feats → 50 groups). The OUTPUT half (per-knob RD spread) is **NOT** in this tool — it needs a fresh knob-varying encode sweep (see coverage note in §4.3), because the existing substrate is only the 12-cell / 6-knob slice.
 
 ### 4.6 Where it misleads — caveats
 - **Interactions:** features that only matter jointly (sign-XOR-like — exactly what beat the MLP in §3) are underrated by single-feature permutation importance. Group/LOGO + retrain is gold standard but expensive.
