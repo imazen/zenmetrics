@@ -130,3 +130,32 @@ Findings the panel adds beyond SROCC:
    with the chroma/X-scale frontier (PU-XYB opponent weighting) rather than
    the luminance encoding; the float-feeding lesson (no u8, no clip)
    is already native to its planar f32 path.
+
+## Addendum 4 (2026-06-10): our cvvdp-gpu + butteraugli rows — display-peak sensitivity
+
+Scored through the production `HdrScorer` route (new example
+`crates/zenmetrics-api/examples/upiq_hdr_score.rs`; LinearPlanes + display
+model, CUDA, same 380 pairs; butter negated for panel orientation):
+
+| metric (ours) | peak | SROCC | PLCC | KROCC | OR | PWRC | Z-RMSE |
+|---|--|--:|--:|--:|--:|--:|--:|
+| **cvvdp-gpu** | **10000** | **0.8309** | **0.8340** | **0.6519** | 0.0000 | **0.9634** | **0.5518** |
+| cvvdp-gpu | 1000 (HDR_PEAK_NITS default) | 0.7580 | 0.7614 | 0.5884 | 0.0105 | 0.9338 | 0.6483 |
+| butteraugli pnorm3 | 10000 | 0.6404 | 0.6974 | 0.5040 | 0.0184 | 0.8640 | 0.7167 |
+| butteraugli pnorm3 | 1000 | 0.6281 | 0.6882 | 0.4884 | 0.0184 | 0.8608 | 0.7255 |
+| butteraugli max | 1000 | 0.6303 | 0.6679 | 0.4753 | 0.0184 | 0.8698 | 0.7443 |
+
+Findings:
+1. **cvvdp-gpu @ display-peak 10000 is our best metric on UPIQ HDR** — beats
+   HDR-VDP-2 (0.8117) and float PU-MS-SSIM (0.8123) on every panel stat;
+   second only to learned PU-PieAPP (0.8748).
+2. **The default 1000-nit display peak costs cvvdp 0.073 SROCC** on this
+   content (max 12 528 nits): `LinearPlanes` clamps at the display peak by
+   design ("a real peak-nit display can't show more"), but UPIQ's subjective
+   data was collected on a ~6000-nit SIM2 display — when correlating against
+   subjective data, the display model must match the *experiment's* display,
+   not the default. The knob exists (`HdrScorer::new` peak_nits); pick it
+   from content/metadata or the dataset's display spec.
+3. butteraugli is peak-insensitive (+0.012) and weak on HDR overall (0.63-0.64)
+   — its psychovisual model is SDR-referred; intensity_target scales the range
+   but not the model. For HDR work prefer cvvdp / float PU-MS-SSIM.
