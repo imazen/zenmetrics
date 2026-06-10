@@ -189,3 +189,47 @@ implementation defect. (No published butteraugli-on-UPIQ exists to compare
 against; the self-consistency control is the instrument.) Verdict: our
 butteraugli is healthy; it is simply not an HDR metric — route HDR to
 cvvdp(no-clip) / float PU-MS-SSIM.
+
+## Addendum 6 (2026-06-10): paired-significance correction + source-paper alignment
+
+Read Mantiuk & Azimi 2021 (PU21, PCS) and Hanji et al. 2022 (SIGGRAPH "caveats
+of quality assessment") + supplement. Their core discipline — small metric
+deltas cannot rank methods; even a careful protocol could not order its top-8
+metrics at 95% confidence — applied to OUR table via paired bootstrap
+(B=2000, same 380 pairs):
+
+| comparison | ΔSROCC | 95% CI | verdict |
+|---|--:|--|--|
+| float PU-MS-SSIM − HDR-VDP-2 | +0.0005 | [−0.030, +0.029] | **TIE** (retracts addendum-3's "beats on every stat") |
+| float PU-IW-SSIM − HDR-VDP-2 | −0.004 | [−0.034, +0.022] | tie |
+| cvvdp@10k − HDR-VDP-2 | +0.019 | [−0.017, +0.052] | suggestive, NOT proven (P=0.87) |
+| cvvdp@10k − float PU-MS-SSIM | +0.019 | [−0.006, +0.045] | not proven (P=0.93) |
+| **cvvdp@10k − cvvdp@6000** | **+0.0065** | **[+0.0015, +0.0128]** | **SIGNIFICANT** — no-clip > display-matched survives rigor |
+
+CORRECTED conclusions: the top cluster {cvvdp@10k, float PU-MS-SSIM, float
+PU-IW-SSIM, HDR-VDP-2} is statistically indistinguishable at n=380; ordering
+within it is noise. What IS established (large effects, far beyond CI width):
+float feeding >> u8 shell (+0.18); every top-cluster member >> PU-SSIM 0.740;
+unclamped display peak > clamped for cvvdp (paired same-metric test).
+
+Source-paper takeaways recorded for this work:
+1. PU21 paper validates our exact choices on the same UPIQ HDR pairs:
+   banding_glare is their measured-best variant; PU values are >= 0 by design
+   (MS-SSIM-safe); derivation is luminance-based (per-channel RGB is a
+   pragmatic extension — consistent with our PU-of-luma > per-channel
+   measurement); their UPIQ protocol feeds absolute units, no tone mapping.
+2. Caveats paper: their 1000-nit clamp was experiment-display-matched (PQ1000
+   monitor) — consistent with our display-matching finding, and our
+   unclamped-wins result reflects UPIQ's brighter SIM2 display.
+3. Caveats: SDR metrics on LINEAR HDR values are significantly worse than any
+   PU/mu-law adaptation (never feed linear to SDR metrics); tone-map-then-
+   metric also degrades several metrics; PU21 vs mu-law: no significant
+   difference in their task (PU21 kept for perceptual basis).
+4. For future reconstruction-style HDR eval (ultrahdr gain-map work):
+   global tone/color error dominates FR metrics — apply their CRF/polynomial
+   correction (3rd-degree poly on PQ-luma + u'v' chroma, Tikhonov toward
+   identity) before scoring, or rankings reflect CRF inversion error, not
+   artifact quality. Minimum-measurable-increment idea: report the metric
+   delta needed for alpha=0.05 alongside any method comparison.
+5. PU21-VSI and PU21-PIQE (no-reference) were their best performers — VSI
+   (saliency-weighted) is a candidate addition to our metric set.
