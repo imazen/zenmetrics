@@ -202,8 +202,27 @@ impl Scale {
 /// Per-instance allocations + per-call orchestration of the full
 /// SSIMULACRA2 pipeline. Construct once for a given resolution; reuse
 /// across many image pairs of that resolution.
+/// Which perceptual encoding the per-scale XYB conversion applies.
+///
+/// `CubeRoot` is the standard SSIMULACRA2 pipeline (sRGB-u8 input).
+/// `Pu21` is the **experimental** HDR path: input is absolute-luminance
+/// linear RGB (cd/m², via [`Ssim2::compute_linear_nits`]) and PU21
+/// (banding_glare) replaces the cube-root at the perceptual-encoding
+/// layer. Input-layer PU (the `SdrU8(PuRescale)` shell) double-encodes
+/// and caps HDR correlation — see imazen/zenmetrics#25.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum XybFlavor {
+    /// Standard SSIMULACRA2 cube-root opsin (SDR).
+    #[default]
+    CubeRoot,
+    /// PU21-substituted opsin for absolute-luminance HDR input.
+    Pu21,
+}
+
 pub struct Ssim2<R: Runtime> {
     client: ComputeClient<R>,
+    /// Perceptual encoding used by `run_xyb` — see [`XybFlavor`].
+    xyb_flavor: XybFlavor,
     /// `n_pixels` at scale 0 (padded extent).
     n: usize,
     /// Sub-minimum reflect-pad plan: holds both the caller's logical
@@ -388,6 +407,7 @@ impl<R: Runtime> Ssim2<R> {
 
         Ok(Self {
             client,
+            xyb_flavor: XybFlavor::default(),
             n,
             pad,
             src_u8_a,
@@ -497,6 +517,7 @@ impl<R: Runtime> Ssim2<R> {
 
         Ok(Self {
             client,
+            xyb_flavor: XybFlavor::default(),
             n,
             // ≥MIN here (sub-min routed to `new`): no-op plan whose
             // logical = the image dims, so `dimensions()` still reports them.
@@ -739,6 +760,103 @@ impl<R: Runtime> Ssim2<R> {
         Ok(GpuSsim2Result {
             score: self.read_and_aggregate(),
         })
+    }
+
+    /// **Experimental HDR entry**: score a pair of **absolute-luminance**
+    /// linear RGB images (cd/m², interleaved `[R,G,B,…]`, length
+    /// `width × height × 3`) with PU21 substituted for the cube-root at
+    /// the perceptual-encoding layer ([`XybFlavor::Pu21`]).
+    ///
+    /// Skips the sRGB-u8 decode entirely — the planes are deinterleaved
+    /// on the host and uploaded straight into the scale-0 linear slots;
+    /// the downscale pyramid then operates on linear light (correct for
+    /// HDR) and each scale's XYB conversion applies PU21.
+    ///
+    /// Prototype limits: whole-image mode only (no strip, no batch, no
+    /// cached-reference) and no sub-8px reflect-pad on the f32 path.
+    /// See imazen/zenmetrics#25 for the measured motivation.
+    pub fn compute_linear_nits(
+        &mut self,
+        ref_rgb_nits: &[f32],
+        dist_rgb_nits: &[f32],
+    ) -> Result<GpuSsim2Result> {
+        if self.strip.is_some() {
+            return Err(Error::ModeUnsupported(
+                "compute_linear_nits is whole-image only; strip-mode instances are unsupported",
+            ));
+        }
+        let expected = self.pad.logical_len(3);
+        if ref_rgb_nits.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_rgb_nits.len(),
+            });
+        }
+        if dist_rgb_nits.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dist_rgb_nits.len(),
+            });
+        }
+        if expected != self.n * 3 {
+            return Err(Error::ModeUnsupported(
+                "compute_linear_nits does not support sub-minimum reflect-pad; \
+                 supply images at least 8px on each axis",
+            ));
+        }
+
+        let prev_flavor = self.xyb_flavor;
+        self.xyb_flavor = XybFlavor::Pu21;
+        reduction::launch_zero_fill_f32(&self.client, self.partials.clone(), PARTIALS_LEN);
+
+        self.upload_linear_planes(true, ref_rgb_nits);
+        self.upload_linear_planes(false, dist_rgb_nits);
+
+        let mode = Ssim2Mode::default();
+        let last_active = (0..self.scales.len())
+            .rev()
+            .find(|&s| !skip_scale(mode, s))
+            .unwrap_or(0);
+        self.build_linear_pyramid_until(true, last_active);
+        self.build_linear_pyramid_until(false, last_active);
+
+        for s in 0..self.scales.len() {
+            if skip_scale(mode, s) {
+                continue;
+            }
+            self.process_scale(s, mode);
+        }
+        self.run_finalizer();
+        let score = self.read_and_aggregate();
+        self.xyb_flavor = prev_flavor;
+
+        Ok(GpuSsim2Result { score })
+    }
+
+    /// Host-deinterleave `[R,G,B,…]` f32 into the scale-0 linear planar
+    /// slots, replacing the sRGB-u8 → linear kernel step for callers
+    /// that already hold linear data (the [`Self::compute_linear_nits`]
+    /// ingress).
+    fn upload_linear_planes(&mut self, is_a: bool, rgb: &[f32]) {
+        let n = self.n;
+        let mut r = vec![0.0f32; n];
+        let mut g = vec![0.0f32; n];
+        let mut b = vec![0.0f32; n];
+        for (i, px) in rgb.chunks_exact(3).enumerate() {
+            r[i] = px[0];
+            g[i] = px[1];
+            b[i] = px[2];
+        }
+        let handles = [
+            self.client.create_from_slice(f32::as_bytes(&r)),
+            self.client.create_from_slice(f32::as_bytes(&g)),
+            self.client.create_from_slice(f32::as_bytes(&b)),
+        ];
+        if is_a {
+            self.scales[0].ref_lin = handles;
+        } else {
+            self.scales[0].dis_lin = handles;
+        }
     }
 
     /// Score one image pair under the chosen [`Ssim2Mode`]. Identical
@@ -2017,18 +2135,33 @@ impl<R: Runtime> Ssim2<R> {
         } else {
             (&s.dis_lin, &s.dis_xyb)
         };
-        unsafe {
-            xyb::linear_to_xyb_planar_kernel::launch_unchecked::<R>(
-                &self.client,
-                Self::cube_count_1d(s.n),
-                Self::cube_dim_1d(),
-                ArrayArg::from_raw_parts(lin[0].clone(), s.n),
-                ArrayArg::from_raw_parts(lin[1].clone(), s.n),
-                ArrayArg::from_raw_parts(lin[2].clone(), s.n),
-                ArrayArg::from_raw_parts(xyb_buf[0].clone(), s.n),
-                ArrayArg::from_raw_parts(xyb_buf[1].clone(), s.n),
-                ArrayArg::from_raw_parts(xyb_buf[2].clone(), s.n),
-            );
+        match self.xyb_flavor {
+            XybFlavor::CubeRoot => unsafe {
+                xyb::linear_to_xyb_planar_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(s.n),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(lin[0].clone(), s.n),
+                    ArrayArg::from_raw_parts(lin[1].clone(), s.n),
+                    ArrayArg::from_raw_parts(lin[2].clone(), s.n),
+                    ArrayArg::from_raw_parts(xyb_buf[0].clone(), s.n),
+                    ArrayArg::from_raw_parts(xyb_buf[1].clone(), s.n),
+                    ArrayArg::from_raw_parts(xyb_buf[2].clone(), s.n),
+                );
+            },
+            XybFlavor::Pu21 => unsafe {
+                xyb::linear_nits_to_pu_xyb_planar_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(s.n),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(lin[0].clone(), s.n),
+                    ArrayArg::from_raw_parts(lin[1].clone(), s.n),
+                    ArrayArg::from_raw_parts(lin[2].clone(), s.n),
+                    ArrayArg::from_raw_parts(xyb_buf[0].clone(), s.n),
+                    ArrayArg::from_raw_parts(xyb_buf[1].clone(), s.n),
+                    ArrayArg::from_raw_parts(xyb_buf[2].clone(), s.n),
+                );
+            },
         }
     }
 

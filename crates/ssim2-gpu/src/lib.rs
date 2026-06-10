@@ -125,7 +125,7 @@ pub use skipmap::Ssim2Mode;
 
 // Typed-generic API (gated behind `cubecl-types`).
 #[cfg(feature = "cubecl-types")]
-pub use pipeline::Ssim2;
+pub use pipeline::{Ssim2, XybFlavor};
 #[cfg(feature = "cubecl-types")]
 pub use pipeline_batch::Ssim2Batch;
 

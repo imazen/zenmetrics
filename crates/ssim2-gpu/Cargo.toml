@@ -112,7 +112,7 @@ yuvxyb = "0.5.0"
 bytemuck = { workspace = true }
 imgref = { workspace = true }
 rgb = { workspace = true }
-image = { workspace = true, features = ["png", "jpeg"] }
+image = { workspace = true, features = ["png", "jpeg", "exr"] }
 zenmetrics-corpus = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
 
@@ -168,3 +168,7 @@ required-features = ["cubecl-types"]
 [[test]]
 name = "it"
 path = "tests/it/main.rs"
+
+[[example]]
+name = "upiq_pu_score_cuda"
+required-features = ["cuda", "cubecl-types"]

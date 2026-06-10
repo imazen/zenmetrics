@@ -87,3 +87,77 @@ fn opsin_absorbance(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
     let bb = K_M20 * r + K_M21 * g + K_M22 * b + K_B0;
     (rg, gr, bb)
 }
+
+// ───────────────────────── PU21 HDR variant ─────────────────────────
+//
+// PU21 (Mantiuk & Azimi, PCS 2021) `banding_glare` parameters — the
+// published gfxdisp/pu21 set, byte-identical to `zensim::pu21` /
+// `zenmetrics-api::hdr` / fast-ssim2's `pu_xyb` (all pinned to the same
+// independent float64 goldens). Input is **absolute-luminance** linear
+// RGB (cd/m²); PU21 replaces the cube-root at the perceptual-encoding
+// layer. Feeding PU-encoded values as *input* to the cube-root pipeline
+// instead caps HDR correlation (UPIQ SROCC 0.59–0.61 vs 0.70 for this
+// integrated form) — see imazen/zenmetrics#25.
+const PU_P0: f32 = 0.353_487_9;
+const PU_P1: f32 = 0.373_465_86;
+const PU_P2: f32 = 8.277_049e-5;
+const PU_P3: f32 = 0.906_256_26;
+const PU_P4: f32 = 0.091_503_03;
+const PU_P5: f32 = 0.909_951_7;
+const PU_P6: f32 = 596.314_8;
+const PU_L_MIN: f32 = 0.005;
+const PU_L_MAX: f32 = 10000.0;
+/// PU21(100 cd/m²) — 100-nit reference white normalizes to ~1.0, the
+/// range the cube-root XYB white point occupies.
+const PU_WHITE: f32 = 256.3;
+/// Opponent X amplification in PU space (cube-root path uses 14).
+const PU_X_SCALE: f32 = 4.0;
+
+/// Per-pixel absolute-luminance linear RGB (cd/m²) → positive PU-XYB.
+///
+/// Same buffer contract as [`linear_to_xyb_planar_kernel`]; the
+/// positive offsets are folded in (no separate make-positive step).
+#[cube(launch_unchecked)]
+pub fn linear_nits_to_pu_xyb_planar_kernel(
+    src_r: &Array<f32>,
+    src_g: &Array<f32>,
+    src_b: &Array<f32>,
+    dst_x: &mut Array<f32>,
+    dst_y: &mut Array<f32>,
+    dst_bb: &mut Array<f32>,
+) {
+    let idx = ABSOLUTE_POS;
+    let n = dst_x.len();
+    if idx >= n {
+        terminate!();
+    }
+    let (x, y, b) = px_linear_nits_to_positive_pu_xyb(src_r[idx], src_g[idx], src_b[idx]);
+    dst_x[idx] = x;
+    dst_y[idx] = y;
+    dst_bb[idx] = b;
+}
+
+#[cube]
+fn px_linear_nits_to_positive_pu_xyb(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
+    let (rg, gr, b3) = opsin_absorbance(r, g, b);
+    let c0 = pu21_encode(f32::max(rg, 0.0)) / PU_WHITE;
+    let c1 = pu21_encode(f32::max(gr, 0.0)) / PU_WHITE;
+    let c2 = pu21_encode(f32::max(b3, 0.0)) / PU_WHITE;
+    let x = 0.5 * (c0 - c1);
+    let y = 0.5 * (c0 + c1);
+    let xp = PU_X_SCALE * x + 0.42;
+    let yp = y + 0.01;
+    let bp = c2 - y + 0.55;
+    (xp, yp, bp)
+}
+
+/// PU21 encode on-device: absolute luminance (cd/m², clamped to the
+/// `[0.005, 10000]` operating range) → perceptually-uniform value.
+/// `V = max(p7·(((p1 + p2·Y^p4)/(1 + p3·Y^p4))^p5 − p6), 0)`.
+#[cube]
+fn pu21_encode(y: f32) -> f32 {
+    let yc = f32::clamp(y, PU_L_MIN, PU_L_MAX);
+    let yp = f32::powf(yc, PU_P3);
+    let inner = (PU_P0 + PU_P1 * yp) / (1.0 + PU_P2 * yp);
+    f32::max(PU_P6 * (f32::powf(inner, PU_P4) - PU_P5), 0.0)
+}
