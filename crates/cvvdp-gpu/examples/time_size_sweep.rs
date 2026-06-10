@@ -30,7 +30,7 @@ use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
 
-#[path = "../tests/common/mod.rs"]
+#[path = "../tests/it/common/mod.rs"]
 mod common;
 
 use common::Backend;

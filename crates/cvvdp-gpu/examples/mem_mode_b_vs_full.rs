@@ -133,7 +133,7 @@ fn estimate_gpu_memory_bytes_pre_chunk1(width: u32, height: u32) -> Option<usize
     )
 }
 
-#[path = "../tests/common/mod.rs"]
+#[path = "../tests/it/common/mod.rs"]
 mod common;
 
 use common::Backend;

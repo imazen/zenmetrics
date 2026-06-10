@@ -22,7 +22,7 @@ use std::path::Path;
 
 use cubecl::Runtime;
 
-#[path = "../tests/common/mod.rs"]
+#[path = "../tests/it/common/mod.rs"]
 mod common;
 
 use common::Backend;

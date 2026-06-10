@@ -30,7 +30,7 @@ use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry, DisplayModel};
 
-#[path = "../tests/common/mod.rs"]
+#[path = "../tests/it/common/mod.rs"]
 mod common;
 
 use common::{Backend, synth_pair_ref};

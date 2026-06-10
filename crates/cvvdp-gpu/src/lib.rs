@@ -368,7 +368,7 @@ pub const CVVDP_COLUMN_NAME: &str = match option_env!("CVVDP_IMPL_TAG") {
 /// - `docs/CHROMA_DRIFT_INVESTIGATION.md` (tick-200-era bug-hunt log)
 /// - `docs/BURN_PORT_PLAN.md` (abandoned tick 324)
 ///
-/// Separately, `tests/common/mod.rs` has `GOLDEN_VERSION = "v1"`,
+/// Separately, `tests/it/common/mod.rs` has `GOLDEN_VERSION = "v1"`,
 /// which is the **R2 bucket prefix** version (a different version
 /// space from this const). Goldens under `/v1/` were captured
 /// against pycvvdp v0.5.4. Both bumps are needed when the goldens
