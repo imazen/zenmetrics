@@ -328,11 +328,17 @@ pub enum HdrFeeding {
 ///   own internal sRGB→LAB transform on whatever bytes it gets; there is no
 ///   seam to substitute PU21 internally, so the u8 PU shell is the **known
 ///   cap** for this metric (not a TODO that can be fixed from this crate).
-/// - **iwssim** → `PuRescale` u8 — and that is **correct**, not a gap:
-///   IW-SSIM has no internal perceptual nonlinearity (it pools SSIM with
-///   information-content weights on the raw input), so PU-encoding the input
-///   IS the proper PU-IW-SSIM adaptation from the HDR-video-quality
-///   literature. There is nothing "integrated" to route to.
+/// - **iwssim** → `PuRescale` u8 — the structurally right layer (IW-SSIM has
+///   no internal perceptual nonlinearity; PU-encoding the input is the
+///   PU-IW-SSIM construction), but **measured deficient** on UPIQ HDR
+///   (2026-06-09, n=380): this shell scores SROCC 0.628 vs published PU-SSIM
+///   0.740. Decomposition: ~0.06 is the u8 shell itself (plain SSIM on the
+///   identical PU-u8 grays = 0.682 — quantization + 255/PU(peak) rescale vs
+///   float PU values), ~0.02 per-channel PU vs PU-of-luma (luma variant
+///   0.648), ~0.03 IW weighting on PU-HDR statistics; highlight clip is nil
+///   (peak 10000 → 0.631). Open fix: feed PU(luma) as **float** planes into
+///   the iwssim core (it consumes f32 gray internally), skipping the u8
+///   round-trip. See `benchmarks/pu_integrated_upiq_2026-06-09.md`.
 /// - **zensim** (XYB SSIM-family) → `PuRescale` u8 — its PU front-end is
 ///   pending zensim PR #44 (`feat/hdr-pu-frontend`); revisit this routing
 ///   when that merges and a validated SROCC lands.

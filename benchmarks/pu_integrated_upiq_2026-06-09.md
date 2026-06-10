@@ -37,3 +37,31 @@ Routed into production by zenmetrics commit `112a4517`
 (`HdrFeeding::IntegratedPuNits`: GPU-class ssim2 only; CPU ssim2 /
 dssim / iwssim stay on the u8 PU shell — see `hdr::hdr_feeding` docs
 for the per-metric rationale).
+
+## Addendum 2026-06-09 (late): PU-IW-SSIM measured — u8 shell is itself lossy
+
+Same harness (UPIQ HDR subset, n=380, JOD truth; artifacts regenerated under
+`/mnt/v/output/zenmetrics/upiq-pu/` after a /tmp wipe). `iwssim-gpu` (CUDA,
+BT.601 gray on code values — no linearization, so NOT the ssim2 double-transform
+bug), scored over PuRescale-u8 PNGs identical to the production shell.
+
+| variant | SROCC |
+|---|--:|
+| published PU-SSIM (UPIQ baseline, float PU) | 0.740 |
+| plain SSIM (skimage) on our gray PU-u8 PNGs | 0.682 |
+| PU(bt709-luma) gray u8 → iwssim-gpu | 0.648 |
+| per-channel PU u8, peak=10000 (no clip) → iwssim-gpu | 0.631 |
+| **production shell** (per-channel PU u8, peak=1000) → iwssim-gpu | **0.628** |
+
+Decomposition of the 0.74→0.628 gap: **~0.06 = the u8 shell itself**
+(quantization + 255/PU(peak) rescale vs float PU values — proven by the plain-SSIM
+control landing at 0.682, not 0.74); **~0.02 = per-channel PU vs PU-of-luminance**;
+**~0.03 = IW information-weighting on PU-HDR statistics**; highlight clip ≈ 0.
+
+Implications: (1) the earlier "iwssim shell is correct, not a gap" claim is
+REVISED — the layer is structurally right but the u8 round-trip costs real
+correlation even for bare metrics; (2) open fix: feed PU(luma) as float planes
+into the iwssim core (it consumes f32 gray internally) — expected recovery to
+~0.68–0.70; the residual IW drag vs plain PU-SSIM is a metric property, not a
+feeding bug. Method + scripts: `/mnt/v/output/zenmetrics/upiq-pu/pu_encode_upiq.py`,
+`pu_encode_variants.py`.
