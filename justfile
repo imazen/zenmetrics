@@ -17,9 +17,19 @@ default:
 # members (verified to exclude every sibling path-dep); we expand it to a
 # `-p NAME` list so only in-repo crates are touched.
 
-# Format in-repo workspace packages only (sibling-safe).
+# Format in-repo workspace packages only (sibling-safe) + regenerate the
+# public-API surface snapshots (docs/public-api/).
 fmt:
     cargo fmt $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name | "-p " + .')
+    cargo test -p zenmetrics-api --test public_api_doc
+
+# Regenerate the public-API surface snapshots only
+api-doc:
+    cargo test -p zenmetrics-api --test public_api_doc
+
+# Verify the committed snapshots are current (what CI runs)
+api-doc-check:
+    ZEN_API_DOC=check cargo test -p zenmetrics-api --test public_api_doc
 
 # Formatting check over the same in-repo package set (sibling-safe).
 fmt-check:
