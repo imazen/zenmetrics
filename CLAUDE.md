@@ -265,6 +265,13 @@ only thing that would force one graph is **differentiable metrics** (autodiff
 *through* a zenforks kernel) — not on the table; revisit per
 `crates/burn-ranknet-spike/README.md` if it ever is.
 
+**Full ML-strategy write-up:** [`docs/ML_FRAMEWORK_AND_PICKER_ABLATION_2026-06-09.md`](docs/ML_FRAMEWORK_AND_PICKER_ABLATION_2026-06-09.md)
+— the candle/burn/linfa 3-layer verdict, the GBDT teacher/GD-MLP-student framing +
+measured model sizes (GBDT 975 KB / 109 KB gz vs ~27 KB ZNPR MLP), and the **picker
+feature/knob ablation design** (conditional features×knobs×zq matrix; ablate inputs
+by redundancy cluster, ablate outputs by RD-spread + content-dependence; GBDT as the
+feature-selection instrument). Read it before scoping any picker.
+
 ## Local CUDA toolkit (for building/running GPU metrics)
 
 The water-cooled 7950X workstation has CUDA 13.2.1 SDK installed at the
