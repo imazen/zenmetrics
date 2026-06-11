@@ -121,6 +121,7 @@ impl CodecKind {
 }
 
 /// Encoded output bundle.
+#[derive(Debug)]
 pub struct EncodedCell {
     pub bytes: Vec<u8>,
     pub encode_ms: f64,

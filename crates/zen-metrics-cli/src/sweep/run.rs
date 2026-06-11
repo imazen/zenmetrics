@@ -119,7 +119,39 @@ impl SweepUnit<'_> {
         source: &Rgb8Image,
     ) -> Result<EncodedCell, Box<dyn std::error::Error>> {
         match self {
-            Self::Tuple(q, tuple) => encode(codec, source, *q, &tuple.0),
+            Self::Tuple(q, tuple) => {
+                // Plan-identity tuples: a knob tuple of the shape
+                // `{"cell": <stratum-id>, "fp": <hex>, "plan": <name>}`
+                // (what `--plan` sweeps, `--emit-cells` declare manifests,
+                // and plan-mode fleet input parquets carry) is
+                // self-describing — reconstruct the codec config from the
+                // cell id and verify the resolved-state fingerprint, the
+                // same executor contract `jobexec` honors
+                // (docs/RUNNING_JOBS.md §4b). This is what lets the vastai
+                // chunk worker run plan cells from a chunk's
+                // `knob_tuple_json` without any plan spec or schema change:
+                // the lifted single-point grid round-trips to the identical
+                // canonical identity JSON. Everything else stays on the
+                // per-codec knob vocabulary.
+                #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
+                {
+                    let knobs = &tuple.0;
+                    let plan_identity = (knobs.contains_key("plan"))
+                        .then(|| {
+                            let cell = knobs.get("cell").and_then(serde_json::Value::as_str)?;
+                            let fp = knobs.get("fp").and_then(serde_json::Value::as_str)?;
+                            Some((cell, fp))
+                        })
+                        .flatten();
+                    if let Some((cell_id, fp_hex)) = plan_identity {
+                        let cfg = crate::sweep::plan::resolve_verified(
+                            codec, cell_id, *q as f32, fp_hex,
+                        )?;
+                        return Ok(cfg.encode_bytes(source)?);
+                    }
+                }
+                encode(codec, source, *q, &tuple.0)
+            }
             #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
             Self::Planned(cell) => Ok(cell.config.encode_bytes(source)?),
             #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
@@ -1257,5 +1289,94 @@ impl AtomicSweepStats {
             cells_failed_decode: self.cells_failed_decode.load(Ordering::Relaxed) as usize,
             cells_failed_score: self.cells_failed_score.load(Ordering::Relaxed) as usize,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Tiny deterministic gradient source (not flat — encoders do real
+    /// work) for plan-identity routing tests.
+    #[cfg(all(feature = "sweep", feature = "webp"))]
+    fn tiny_gradient() -> Rgb8Image {
+        let (w, h) = (24u32, 16u32);
+        let mut pixels = Vec::with_capacity((w * h * 3) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                pixels.extend_from_slice(&[
+                    (x * 10) as u8,
+                    (y * 13) as u8,
+                    ((x + y) * 7) as u8,
+                ]);
+            }
+        }
+        Rgb8Image {
+            pixels,
+            width: w,
+            height: h,
+        }
+    }
+
+    /// The vastai chunk worker executes plan cells as single-point knob
+    /// grids (`knob_tuple_to_grid_json` lift), so a plan-identity tuple
+    /// must (a) re-canonicalize to the exact identity string the planner
+    /// emitted (the TSV/parquet join key) and (b) produce byte-identical
+    /// output to the `SweepUnit::Planned` path. Lossless cells ride the
+    /// q=0 sentinel through the same route.
+    #[cfg(all(feature = "sweep", feature = "webp"))]
+    #[test]
+    fn plan_identity_tuple_matches_planned_cell_bytes() {
+        use crate::sweep::plan::build_plan;
+        let img = tiny_gradient();
+        let plan = build_plan(CodecKind::Zenwebp, "rd_core", None, &[50.0]).unwrap();
+        let mut checked = 0usize;
+        for cell in &plan.cells {
+            let planned = SweepUnit::Planned(cell)
+                .encode_cell(CodecKind::Zenwebp, &img)
+                .unwrap();
+            let v: serde_json::Value = serde_json::from_str(&cell.knob_json).unwrap();
+            let tuple = KnobTuple(v.as_object().unwrap().clone());
+            assert_eq!(
+                tuple.to_canonical_json(),
+                cell.knob_json,
+                "lifted tuple must round-trip to the planner's identity"
+            );
+            let via_tuple = SweepUnit::Tuple(cell.q, tuple)
+                .encode_cell(CodecKind::Zenwebp, &img)
+                .unwrap();
+            assert_eq!(
+                planned.bytes, via_tuple.bytes,
+                "tuple-path bytes diverge for {}",
+                cell.knob_json
+            );
+            checked += 1;
+        }
+        assert!(checked >= 3, "rd_core must cover lossy + lossless cells");
+    }
+
+    /// A tampered fingerprint in a plan-identity tuple is a loud
+    /// deterministic failure, not a silently wrong encode — the same
+    /// tripwire `jobexec` and `resolve_verified` enforce.
+    #[cfg(all(feature = "sweep", feature = "webp"))]
+    #[test]
+    fn plan_identity_tuple_rejects_tampered_fp() {
+        use crate::sweep::plan::build_plan;
+        let img = tiny_gradient();
+        let plan = build_plan(CodecKind::Zenwebp, "rd_core", None, &[50.0]).unwrap();
+        let cell = &plan.cells[0];
+        let v: serde_json::Value = serde_json::from_str(&cell.knob_json).unwrap();
+        let mut m = v.as_object().unwrap().clone();
+        m.insert(
+            "fp".into(),
+            serde_json::Value::String("0000000000000000".into()),
+        );
+        let err = SweepUnit::Tuple(cell.q, KnobTuple(m))
+            .encode_cell(CodecKind::Zenwebp, &img)
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("fingerprint mismatch"),
+            "got {err}"
+        );
     }
 }
