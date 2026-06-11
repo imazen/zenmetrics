@@ -1,0 +1,56 @@
+# zenmetrics-api public API — additions from non-default features
+# features: all-metrics,butter,cpu,cpu-butter,cpu-cvvdp,cpu-dssim,cpu-iwssim,cpu-metrics,cpu-ssim2,cpu-zensim,cubecl-types,cuda,cvvdp,dssim,encoded,hdr,hip,iwssim,pixels,ssim2,wgpu,zensim
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                 1
+#   pub types (struct/enum/trait/alias)         3
+#   inherent methods                           10
+#   struct fields                               9
+#   trait roster entries (type × trait)         2
+#   auto-trait exceptions                       2
+#
+# per-module pub lines:
+#   (root)                            5
+#   context                          18
+
+## items (22 lines)
+
+pub mod context
+pub context::MetricContext::client: cubecl_runtime::client::ComputeClient<R>
+pub context::MetricContext::height: u32
+pub context::MetricContext::width: u32
+pub fn context::MetricContext<R>::client(&self) -> &cubecl_runtime::client::ComputeClient<R>
+pub fn context::MetricContext<R>::dims(&self) -> (u32, u32)
+pub fn context::MetricContext<R>::generation(&self) -> u64
+pub fn context::MetricContext<R>::new(cubecl_runtime::client::ComputeClient<R>, u32, u32) -> Self
+pub fn context::MetricContext<R>::upload_pair(&mut self, &[u8], &[u8]) -> Result<context::PairHandles>
+pub struct context::PairHandles
+pub context::PairHandles::dist_handle: cubecl_runtime::server::handle::Handle
+pub context::PairHandles::generation: u64
+pub context::PairHandles::ref_handle: cubecl_runtime::server::handle::Handle
+pub struct MetricContext<R: cubecl_runtime::runtime::Runtime> [also: context]
+pub MetricContext::client: cubecl_runtime::client::ComputeClient<R>
+pub MetricContext::height: u32
+pub MetricContext::width: u32
+pub fn context::MetricContext<R>::client(&self) -> &cubecl_runtime::client::ComputeClient<R>
+pub fn context::MetricContext<R>::dims(&self) -> (u32, u32)
+pub fn context::MetricContext<R>::generation(&self) -> u64
+pub fn context::MetricContext<R>::new(cubecl_runtime::client::ComputeClient<R>, u32, u32) -> Self
+pub fn context::MetricContext<R>::upload_pair(&mut self, &[u8], &[u8]) -> Result<context::PairHandles>
+
+## trait impls (1 types)
+
+context::PairHandles: Clone, Debug
+
+## auto traits
+
+0 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+context::MetricContext<R>: !RefUnwindSafe !UnwindSafe
+context::PairHandles: !RefUnwindSafe !UnwindSafe

@@ -1,0 +1,81 @@
+# zenmetrics-api public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub types (struct/enum/trait/alias)         2
+#   free functions                              2
+#   inherent methods                           33
+#   enum variants                               7
+#   trait roster entries (type × trait)        11
+#
+# per-module pub lines:
+#   (root)                           42
+#   hdr                               2
+
+## items (44 lines)
+
+#[non_exhaustive] pub enum MetricInner
+pub fn Backend::assert_fields_are_eq(&self)
+pub fn CachedRefStripPolicy::assert_fields_are_eq(&self)
+pub fn MemoryMode::assert_fields_are_eq(&self)
+pub fn Metric::deref(&self) -> &MetricInner
+pub fn Metric::deref_mut(&mut self) -> &mut MetricInner
+pub fn Metric::inner_mut(&mut self) -> &mut MetricInner
+pub fn MetricInner::clear_reference(&mut self)
+pub fn MetricInner::compute_features_srgb_u8(&mut self, &[u8], &[u8]) -> Result<(Score, alloc::vec::Vec<f64>)>
+pub fn MetricInner::compute_from_linear_interleaved(&mut self, &[f32], &[f32]) -> Result<Score>
+pub fn MetricInner::compute_from_linear_interleaved_multi(&mut self, &[f32], &[f32]) -> Result<Scores>
+pub fn MetricInner::compute_from_linear_planes(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32]) -> Result<Score>
+pub fn MetricInner::compute_from_linear_planes_multi(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32]) -> Result<Scores>
+pub fn MetricInner::compute_handles(&mut self, &context::PairHandles) -> Result<Score>
+pub fn MetricInner::compute_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<Score>
+pub fn MetricInner::compute_pu_luma_gray_multi(&mut self, &[f32], &[f32]) -> Result<Scores>
+pub fn MetricInner::compute_pu_nits_interleaved_multi(&mut self, &[f32], &[f32]) -> Result<Scores>
+pub fn MetricInner::compute_srgb_u8(&mut self, &[u8], &[u8]) -> Result<Score>
+pub fn MetricInner::compute_srgb_u8_multi(&mut self, &[u8], &[u8]) -> Result<Scores>
+pub fn MetricInner::compute_with_reference_srgb_u8(&mut self, &[u8]) -> Result<Score>
+pub fn MetricInner::dims(&self) -> (u32, u32)
+pub fn MetricInner::has_reference(&self) -> bool
+pub fn MetricInner::kind(&self) -> MetricKind
+pub fn MetricInner::new(MetricKind, Backend, u32, u32, MetricParams) -> Result<Self>
+pub fn MetricInner::new_with_memory_mode(MetricKind, Backend, u32, u32, MetricParams, MemoryMode) -> Result<Self>
+pub fn MetricInner::release(self, Backend)
+pub fn MetricInner::set_reference_srgb_u8(&mut self, &[u8]) -> Result<()>
+pub fn MetricKind::assert_fields_are_eq(&self)
+pub fn MetricSession::__stream_value(&self) -> u64
+pub fn OwnedSessionMetric::__stream_value(&self) -> u64
+pub fn Priority::assert_fields_are_eq(&self)
+pub fn Reuse::assert_fields_are_eq(&self)
+pub fn __stream_reserved_bytes(Backend, u64) -> core::option::Option<u64>
+pub fn __stream_value_for_slot(u32) -> u64
+pub fn hdr::HdrFeeding::assert_fields_are_eq(&self)
+pub fn hdr::HdrTransfer::assert_fields_are_eq(&self)
+pub type Metric::Target = MetricInner
+pub MetricInner::Butter(butteraugli_gpu::opaque::ButteraugliOpaque)
+pub MetricInner::Cpu(alloc::boxed::Box<crate::cpu_dispatch::CpuMetricState>, core::option::Option<alloc::vec::Vec<u8>>)
+pub MetricInner::Cvvdp(cvvdp_gpu::opaque::CvvdpOpaque)
+pub MetricInner::Dssim(dssim_gpu::opaque::DssimOpaque)
+pub MetricInner::Iwssim(iwssim_gpu::opaque::IwssimOpaque)
+pub MetricInner::Ssim2(ssim2_gpu::opaque::Ssim2Opaque)
+pub MetricInner::Zensim(zensim_gpu::opaque::ZensimOpaque)
+
+## trait impls (11 types)
+
+Backend: TrivialClone
+CachedRefStripPolicy: TrivialClone
+MemoryMode: TrivialClone
+MetricKind: TrivialClone
+NamedScore: TrivialClone
+Priority: TrivialClone
+Reuse: TrivialClone
+Score: TrivialClone
+hdr::DisplayModel: TrivialClone
+hdr::HdrFeeding: TrivialClone
+hdr::HdrTransfer: TrivialClone

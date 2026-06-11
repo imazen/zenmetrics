@@ -7028,7 +7028,6 @@ dependencies = [
  "iwssim",
  "iwssim-gpu",
  "rgb",
- "serde_json",
  "ssim2-gpu",
  "thiserror",
  "zenforks-cubecl",

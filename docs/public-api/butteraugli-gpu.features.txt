@@ -1,0 +1,21 @@
+# butteraugli-gpu public API — additions from non-default features
+# features: cpu,cubecl-types,cuda,fast-reduction,hip,internals,pixels,staging-async-probe,wgpu
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   inherent methods                            3
+#
+# per-module pub lines:
+#   (root)                            3
+
+## items (3 lines)
+
+pub fn ButteraugliOpaque::compute_from_linear_interleaved(&mut self, &[f32], &[f32]) -> Result<(zenmetrics_gpu_core::Score, f64)>
+pub fn ButteraugliOpaque::compute_from_linear_planes(&mut self, &[f32], &[f32], &[f32], &[f32], &[f32], &[f32]) -> Result<(zenmetrics_gpu_core::Score, f64)>
+pub fn ButteraugliOpaque::compute_pixels_display(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>, f32) -> Result<(zenmetrics_gpu_core::Score, f64)>

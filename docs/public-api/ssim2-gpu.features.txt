@@ -1,0 +1,44 @@
+# ssim2-gpu public API — additions from non-default features
+# features: cpu,cubecl-types,cuda,cudarse-parity,fast-reduction,fir,hip,pixels,wgpu
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub types (struct/enum/trait/alias)         1
+#   pub consts/statics                          2
+#   inherent methods                            6
+#   struct fields                               1
+#   enum variants                               2
+#   trait roster entries (type × trait)         7
+#   auto-trait-complete types                   1
+#
+# per-module pub lines:
+#   (root)                           12
+
+## items (12 lines)
+
+pub enum Ssim2Blur
+pub Ssim2Blur::Fir
+pub Ssim2Blur::Iir
+pub fn Ssim2<R>::blur(&self) -> Ssim2Blur
+pub fn Ssim2<R>::set_blur(&mut self, Ssim2Blur)
+pub fn Ssim2<R>::with_blur(self, Ssim2Blur) -> Self
+pub fn Ssim2Batch<R>::blur(&self) -> Ssim2Blur
+pub fn Ssim2Batch<R>::set_blur(&mut self, Ssim2Blur)
+pub fn Ssim2Batch<R>::with_blur(self, Ssim2Blur) -> Self
+pub Ssim2Params::blur: Ssim2Blur
+pub const SSIM2_FIR_COLUMN_NAME: &str
+pub const fn column_name_for_blur(Ssim2Blur) -> &'static str
+
+## trait impls (1 types)
+
+Ssim2Blur: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
+
+## auto traits
+
+1 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe

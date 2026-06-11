@@ -1,0 +1,58 @@
+# cvvdp public API — doc(hidden) items and excluded-feature surface
+# excluded features: __simd_equiv_test
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                 1
+#   pub consts/statics                          2
+#   free functions                             11
+#   inherent methods                            5
+#   trait roster entries (type × trait)        11
+#
+# per-module pub lines:
+#   (root)                            4
+#   __simd_equiv_test_api            13
+#   kernels                           1
+#   params                            1
+
+## items (19 lines)
+
+pub const __simd_equiv_test_api::GAUSS5: [f32; 5]
+pub const __simd_equiv_test_api::PU_BLUR_KERNEL_1D: [f32; 13]
+pub fn Cvvdp::reset_strip_dispatch_counter(&self)
+pub fn Cvvdp::strip_dispatch_counter(&self) -> u32
+pub fn Error::assert_fields_are_eq(&self)
+pub fn __simd_equiv_test_api::expand_horizontal_pass(&[f32], usize, usize, usize, &mut [f32], &mut alloc::vec::Vec<f32>)
+pub fn __simd_equiv_test_api::expand_vertical_pass(&[f32], usize, usize, usize, &mut [f32])
+pub fn __simd_equiv_test_api::gaussian_blur_sigma3_simd(&[f32], usize, usize, &mut alloc::vec::Vec<f32>, &mut alloc::vec::Vec<f32>)
+pub fn __simd_equiv_test_api::pu_blur_horizontal_pass(&[f32], usize, usize, &mut [f32])
+pub fn __simd_equiv_test_api::pu_blur_vertical_pass(&[f32], usize, usize, &mut [f32])
+pub fn __simd_equiv_test_api::reduce_horizontal_pass(&[f32], usize, usize, usize, &mut [f32])
+pub fn __simd_equiv_test_api::reduce_vertical_pass(&[f32], usize, usize, usize, &mut [f32])
+pub fn __simd_equiv_test_api::safe_pow_with_offset_into(&[f32], &mut [f32], f32, f32, f32)
+pub fn __simd_equiv_test_api::vexp_into(&[f32], &mut [f32])
+pub fn __simd_equiv_test_api::vlog_into(&[f32], &mut [f32])
+pub fn __simd_equiv_test_api::vpow_into(&[f32], &mut [f32], f32)
+pub fn kernels::csf::CsfChannel::assert_fields_are_eq(&self)
+pub fn params::PerfMode::assert_fields_are_eq(&self)
+pub mod __simd_equiv_test_api
+
+## trait impls (11 types)
+
+kernels::csf::CsfChannel: TrivialClone
+params::CsfParams: TrivialClone
+params::CvvdpParams: TrivialClone
+params::DisplayGeometry: TrivialClone
+params::DisplayModel: TrivialClone
+params::Eotf: TrivialClone
+params::JodParams: TrivialClone
+params::MaskingParams: TrivialClone
+params::PerfMode: TrivialClone
+params::PoolingParams: TrivialClone
+params::Primaries: TrivialClone

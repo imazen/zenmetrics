@@ -9,10 +9,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CI: true
-  # Public-API snapshot regen (crates/zenmetrics-api/tests/public_api_doc.rs)
-  # needs nightly rustdoc + cargo-public-api; skip it everywhere except the
-  # lint job's dedicated check step below.
-  ZEN_API_DOC: off
 
 defaults:
   run:
@@ -664,12 +660,3 @@ jobs:
           -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments
           -A clippy::doc_lazy_continuation -A clippy::if_same_then_else
           -A clippy::doc_overindented_list_items
-      - uses: dtolnay/rust-toolchain@nightly # rustdoc JSON for cargo-public-api
-      - uses: dtolnay/rust-toolchain@stable # restore stable as default
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-public-api
-      - name: Public-API snapshots are current
-        run: cargo test -p zenmetrics-api --test public_api_doc
-        env:
-          ZEN_API_DOC: check

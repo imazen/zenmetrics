@@ -1,0 +1,81 @@
+# iwssim-gpu public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                 2
+#   pub types (struct/enum/trait/alias)         2
+#   pub consts/statics                          2
+#   free functions                              1
+#   inherent methods                           31
+#   re-exports                                  2
+#   trait roster entries (type × trait)         6
+#   auto-trait exceptions                       1
+#
+# per-module pub lines:
+#   (root)                            4
+#   memory_mode                       2
+#   pipeline                         31
+#   session                           3
+
+## items (39 lines)
+
+pub const pipeline::STRIP_DEFAULT_BODY: u32
+pub const pipeline::STRIP_DEFAULT_HALO: u32
+pub fn IwssimStrategy::assert_fields_are_eq(&self)
+pub fn memory_mode::MemoryMode::assert_fields_are_eq(&self)
+pub fn memory_mode::ResolvedMode::assert_fields_are_eq(&self)
+pub fn pipeline::Iwssim<R>::clear_reference(&mut self)
+pub fn pipeline::Iwssim<R>::clear_reference_stripped(&mut self)
+pub fn pipeline::Iwssim<R>::compute_gray(&mut self, &[f32], &[f32]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_gray_stripped(&mut self, &[f32], &[f32]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_handles(&mut self, &cubecl_runtime::server::handle::Handle, &cubecl_runtime::server::handle::Handle) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_rgb(&mut self, &[u8], &[u8]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_rgb_stripped(&mut self, &[u8], &[u8]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_rgb_with_reference_stripped(&mut self, &[u8]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_rgb_with_reference_stripped_native(&mut self, &[u8]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_with_reference(&mut self, &[f32]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::compute_with_reference_stripped(&mut self, &[f32]) -> Result<GpuIwssimResult>
+pub fn pipeline::Iwssim<R>::dimensions(&self) -> (u32, u32)
+pub fn pipeline::Iwssim<R>::has_cached_reference_stripped(&self) -> bool
+pub fn pipeline::Iwssim<R>::has_reference(&self) -> bool
+pub fn pipeline::Iwssim<R>::is_padded(&self) -> bool
+pub fn pipeline::Iwssim<R>::is_strip_mode(&self) -> bool
+pub fn pipeline::Iwssim<R>::n_scales(&self) -> usize
+pub fn pipeline::Iwssim<R>::new(cubecl_runtime::client::ComputeClient<R>, u32, u32) -> Result<Self>
+pub fn pipeline::Iwssim<R>::new_strip(cubecl_runtime::client::ComputeClient<R>, u32, u32, u32) -> Result<Self>
+pub fn pipeline::Iwssim<R>::new_strip_with_halo(cubecl_runtime::client::ComputeClient<R>, u32, u32, u32, u32) -> Result<Self>
+pub fn pipeline::Iwssim<R>::new_with_memory_mode(cubecl_runtime::client::ComputeClient<R>, u32, u32, memory_mode::MemoryMode) -> Result<Self>
+pub fn pipeline::Iwssim<R>::pack_srgb_into_packed_u32_handle(&self, &[u8]) -> Result<cubecl_runtime::server::handle::Handle>
+pub fn pipeline::Iwssim<R>::padded_dimensions(&self) -> (u32, u32)
+pub fn pipeline::Iwssim<R>::set_reference(&mut self, &[f32]) -> Result<()>
+pub fn pipeline::Iwssim<R>::set_reference_stripped(&mut self, &[f32]) -> Result<()>
+pub fn pipeline::Iwssim<R>::set_rgb_reference_stripped(&mut self, &[u8]) -> Result<()>
+pub fn pipeline::Iwssim<R>::strategy(&self) -> IwssimStrategy
+pub fn pipeline::Iwssim<R>::with_config(cubecl_runtime::client::ComputeClient<R>, u32, u32, IwssimConfig) -> Result<Self>
+pub fn session::new_opaque_on_stream(zenmetrics_gpu_core::Backend, u64, u32, u32, IwssimParams, memory_mode::MemoryMode) -> Result<IwssimOpaque>
+pub mod pipeline
+pub mod session
+pub struct Iwssim<R: cubecl_runtime::runtime::Runtime> [also: pipeline]
+pub use session::cleanup_stream
+pub use session::stream_reserved_bytes
+
+## trait impls (6 types)
+
+GpuIwssimResult: TrivialClone
+IwssimConfig: TrivialClone
+IwssimParams: TrivialClone
+IwssimStrategy: TrivialClone
+memory_mode::MemoryMode: TrivialClone
+memory_mode::ResolvedMode: TrivialClone
+
+## auto traits
+
+0 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+pipeline::Iwssim<R>: !RefUnwindSafe !UnwindSafe

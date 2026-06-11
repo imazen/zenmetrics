@@ -1,0 +1,414 @@
+# ssim2-gpu public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                28
+#   pub types (struct/enum/trait/alias)        38
+#   pub consts/statics                         13
+#   free functions                             45
+#   inherent methods                          157
+#   enum variants                              19
+#   re-exports                                  2
+#   trait roster entries (type × trait)       140
+#   auto-trait exceptions                      38
+#
+# per-module pub lines:
+#   (root)                           24
+#   kernels                         273
+#   memory_mode                       2
+#   session                           3
+
+## items (295 lines)
+
+pub const kernels::blur::BLOCK_WIDTH: u32
+pub const kernels::blur::FIR_BLOCK_WIDTH: u32
+pub const kernels::blur::FIR_RADIUS: u32
+pub const kernels::blur::FIR_TAPS: u32
+pub const kernels::blur::RADIUS: usize
+pub const kernels::blur::RADIUS_U32: u32
+pub const kernels::reduction::BLOCK_SIZE: u32
+pub const kernels::reduction::NUM_BLOCKS: u32
+pub const kernels::reduction::PARTIALS_PER_REDUCTION: usize
+pub const kernels::reduction::THREADS_PER_REDUCTION: usize
+pub const kernels::transpose::TILE_DIM: u32
+pub const kernels::transpose::TPB_X: u32
+pub const kernels::transpose::TPB_Y: u32
+pub fn Ssim2Blur::assert_fields_are_eq(&self)
+pub fn Ssim2Mode::assert_fields_are_eq(&self)
+pub fn XybFlavor::assert_fields_are_eq(&self)
+pub fn kernels::blur::blur_h_fir5_batched_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32, u32)
+pub fn kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::blur::blur_h_fir5_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32)
+pub fn kernels::blur::blur_h_fir5_kernel::BlurHFir5Kernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::blur::blur_h_fir5_kernel::BlurHFir5Kernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::blur::blur_h_fir5_kernel::BlurHFir5Kernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::blur::blur_h_fir5_kernel::BlurHFir5Kernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::blur::blur_h_fir5_kernel::BlurHFir5KernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::blur::blur_h_fir5_kernel::BlurHFir5KernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::blur::blur_h_fir5_kernel::BlurHFir5KernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::blur::blur_h_fir5_kernel::BlurHFir5KernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::blur::blur_h_pass_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32)
+pub fn kernels::blur::blur_h_pass_kernel::BlurHPassKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::blur::blur_h_pass_kernel::BlurHPassKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::blur::blur_h_pass_kernel::BlurHPassKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::blur::blur_h_pass_kernel::BlurHPassKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::blur::blur_h_pass_kernel::BlurHPassKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::blur::blur_h_pass_kernel::BlurHPassKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::blur::blur_h_pass_kernel::BlurHPassKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::blur::blur_h_pass_kernel::BlurHPassKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::blur::blur_pass_batched_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32, u32)
+pub fn kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::blur::blur_pass_batched_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType [also: kernels::blur::blur_h_fir5_batched_kernel, kernels::transpose::transpose_batched_kernel]
+pub fn kernels::blur::blur_pass_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32)
+pub fn kernels::blur::blur_pass_kernel::BlurPassKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::blur::blur_pass_kernel::BlurPassKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::blur::blur_pass_kernel::BlurPassKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::blur::blur_pass_kernel::BlurPassKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::blur::blur_pass_kernel::BlurPassKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::blur::blur_pass_kernel::BlurPassKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::blur::blur_pass_kernel::BlurPassKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::blur::blur_pass_kernel::BlurPassKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::blur::blur_pass_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType [also: kernels::blur::blur_h_fir5_kernel, kernels::blur::blur_h_pass_kernel, kernels::transpose::transpose_kernel]
+pub fn kernels::downscale::downscale_2x_3ch_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32, u32, u32)
+pub fn kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::downscale::downscale_2x_3ch_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::downscale::downscale_2x_plane_batched_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32, u32, u32, u32, u32)
+pub fn kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::downscale::downscale_2x_plane_batched_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::downscale::downscale_2x_plane_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32, u32, u32)
+pub fn kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::downscale::downscale_2x_plane_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::error_maps::error_maps_broadcast_batched_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32)
+pub fn kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::error_maps::error_maps_broadcast_batched_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::error_maps::error_maps_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>)
+pub fn kernels::error_maps::error_maps_kernel::ErrorMapsKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::error_maps::error_maps_kernel::ErrorMapsKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::error_maps::error_maps_kernel::ErrorMapsKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::error_maps::error_maps_kernel::ErrorMapsKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::error_maps::error_maps_kernel::ErrorMapsKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::error_maps::error_maps_kernel::ErrorMapsKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::error_maps::error_maps_kernel::ErrorMapsKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::error_maps::error_maps_kernel::ErrorMapsKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::error_maps::error_maps_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::error_maps::error_maps_strip_from_full_ref_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32, u32)
+pub fn kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::error_maps::error_maps_strip_from_full_ref_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::error_maps::pointwise_mul_broadcast_batched_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32)
+pub fn kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::error_maps::pointwise_mul_offset_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32)
+pub fn kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::error_maps::pointwise_mul_offset_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType [also: kernels::error_maps::pointwise_mul_broadcast_batched_kernel]
+pub fn kernels::error_maps::zero_tail_kernel(&mut cubecl_core::frontend::container::array::base::Array<f32>, u32)
+pub fn kernels::error_maps::zero_tail_kernel::ZeroTailKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::error_maps::zero_tail_kernel::ZeroTailKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::error_maps::zero_tail_kernel::ZeroTailKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::error_maps::zero_tail_kernel::ZeroTailKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::error_maps::zero_tail_kernel::ZeroTailKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::error_maps::zero_tail_kernel::ZeroTailKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::error_maps::zero_tail_kernel::ZeroTailKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::error_maps::zero_tail_kernel::ZeroTailKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::error_maps::zero_tail_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <u32 as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::reduction::launch_finalize<R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<R>, cubecl_runtime::server::handle::Handle, usize, cubecl_runtime::server::handle::Handle, usize, u32)
+pub fn kernels::reduction::launch_finalize_batched<R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<R>, cubecl_runtime::server::handle::Handle, usize, cubecl_runtime::server::handle::Handle, usize, u32, u32)
+pub fn kernels::reduction::launch_sum_p4<R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<R>, cubecl_runtime::server::handle::Handle, usize, cubecl_runtime::server::handle::Handle, usize, u32)
+pub fn kernels::reduction::launch_sum_p4_batched<R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<R>, cubecl_runtime::server::handle::Handle, u32, u32, cubecl_runtime::server::handle::Handle, usize, u32, u32)
+pub fn kernels::reduction::launch_sum_p4_rows<R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<R>, cubecl_runtime::server::handle::Handle, usize, cubecl_runtime::server::handle::Handle, usize, u32, u32, u32, u32)
+pub fn kernels::reduction::launch_zero_fill_f32<R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<R>, cubecl_runtime::server::handle::Handle, usize)
+pub fn kernels::srgb::srgb_u8_to_linear_planar_kernel(&cubecl_core::frontend::container::array::base::Array<u32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>)
+pub fn kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<u32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::srgb::srgb_u8_to_linear_planar_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<u32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType
+pub fn kernels::transpose::transpose_batched_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32, u32)
+pub fn kernels::transpose::transpose_batched_kernel::TransposeBatchedKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::transpose::transpose_batched_kernel::TransposeBatchedKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::transpose::transpose_batched_kernel::TransposeBatchedKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::transpose::transpose_batched_kernel::TransposeBatchedKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::transpose::transpose_batched_kernel::TransposeBatchedKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::transpose::transpose_batched_kernel::TransposeBatchedKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::transpose::transpose_batched_kernel::TransposeBatchedKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::transpose::transpose_batched_kernel::TransposeBatchedKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::transpose::transpose_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, u32, u32)
+pub fn kernels::transpose::transpose_kernel::TransposeKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::transpose::transpose_kernel::TransposeKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::transpose::transpose_kernel::TransposeKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::transpose::transpose_kernel::TransposeKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <u32 as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::transpose::transpose_kernel::TransposeKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::transpose::transpose_kernel::TransposeKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::transpose::transpose_kernel::TransposeKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::transpose::transpose_kernel::TransposeKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::xyb::linear_nits_to_pu_xyb_planar_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>)
+pub fn kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::xyb::linear_to_xyb_planar_kernel(&cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>, &mut cubecl_core::frontend::container::array::base::Array<f32>)
+pub fn kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernel<__R>::address_type(&self) -> cubecl_ir::type::StorageType
+pub fn kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernel<__R>::define(&self) -> cubecl_runtime::kernel::KernelDefinition
+pub fn kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernel<__R>::id(&self) -> cubecl_runtime::id::KernelId
+pub fn kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernel<__R>::new(cubecl_core::codegen::integrator::KernelSettings, cubecl_runtime::client::ComputeClient<__R>, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::LaunchArg>::CompilationArg) -> Self
+pub fn kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernelInfo<__R>::clone(&self) -> Self
+pub fn kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernelInfo<__R>::eq(&self, &Self) -> bool
+pub fn kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernelInfo<__R>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernelInfo<__R>::hash<H: core::hash::Hasher>(&self, &mut H)
+pub fn kernels::xyb::linear_to_xyb_planar_kernel::expand(&mut cubecl_ir::scope::Scope, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType, <cubecl_core::frontend::container::array::base::Array<f32> as cubecl_core::frontend::element::base::CubeType>::ExpandType) -> <() as cubecl_core::frontend::element::base::CubeType>::ExpandType [also: kernels::xyb::linear_nits_to_pu_xyb_planar_kernel]
+pub fn memory_mode::MemoryMode::assert_fields_are_eq(&self)
+pub fn memory_mode::ResolvedMode::assert_fields_are_eq(&self)
+pub fn session::new_opaque_on_stream(zenmetrics_gpu_core::Backend, u64, u32, u32, Ssim2Params, memory_mode::MemoryMode) -> Result<Ssim2Opaque>
+pub mod kernels
+pub mod kernels::blur
+pub mod kernels::blur::blur_h_fir5_batched_kernel
+pub mod kernels::blur::blur_h_fir5_kernel
+pub mod kernels::blur::blur_h_pass_kernel
+pub mod kernels::blur::blur_pass_batched_kernel
+pub mod kernels::blur::blur_pass_kernel
+pub mod kernels::downscale
+pub mod kernels::downscale::downscale_2x_3ch_kernel
+pub mod kernels::downscale::downscale_2x_plane_batched_kernel
+pub mod kernels::downscale::downscale_2x_plane_kernel
+pub mod kernels::error_maps
+pub mod kernels::error_maps::error_maps_broadcast_batched_kernel
+pub mod kernels::error_maps::error_maps_kernel
+pub mod kernels::error_maps::error_maps_strip_from_full_ref_kernel
+pub mod kernels::error_maps::pointwise_mul_broadcast_batched_kernel
+pub mod kernels::error_maps::pointwise_mul_offset_kernel
+pub mod kernels::error_maps::zero_tail_kernel
+pub mod kernels::reduction
+pub mod kernels::srgb
+pub mod kernels::srgb::srgb_u8_to_linear_planar_kernel
+pub mod kernels::transpose
+pub mod kernels::transpose::transpose_batched_kernel
+pub mod kernels::transpose::transpose_kernel
+pub mod kernels::xyb
+pub mod kernels::xyb::linear_nits_to_pu_xyb_planar_kernel
+pub mod kernels::xyb::linear_to_xyb_planar_kernel
+pub mod session
+pub struct kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::blur::blur_h_fir5_kernel::BlurHFir5Kernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::blur::blur_h_fir5_kernel::BlurHFir5KernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::blur::blur_h_pass_kernel::BlurHPassKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::blur::blur_h_pass_kernel::BlurHPassKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::blur::blur_pass_kernel::BlurPassKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::blur::blur_pass_kernel::BlurPassKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::error_maps_kernel::ErrorMapsKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::error_maps_kernel::ErrorMapsKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::zero_tail_kernel::ZeroTailKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::error_maps::zero_tail_kernel::ZeroTailKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::transpose::transpose_batched_kernel::TransposeBatchedKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::transpose::transpose_batched_kernel::TransposeBatchedKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::transpose::transpose_kernel::TransposeKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::transpose::transpose_kernel::TransposeKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernel<__R: cubecl_runtime::runtime::Runtime>
+pub struct kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernelInfo<__R: cubecl_runtime::runtime::Runtime>
+pub unsafe fn kernels::blur::blur_h_fir5_batched_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::blur::blur_h_fir5_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::blur::blur_h_pass_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::blur::blur_pass_batched_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::blur::blur_pass_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::downscale::downscale_2x_3ch_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::downscale::downscale_2x_plane_batched_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::downscale::downscale_2x_plane_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::error_maps::error_maps_broadcast_batched_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::error_maps::error_maps_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>)
+pub unsafe fn kernels::error_maps::error_maps_strip_from_full_ref_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::error_maps::pointwise_mul_broadcast_batched_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::error_maps::pointwise_mul_offset_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::error_maps::zero_tail_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::srgb::srgb_u8_to_linear_planar_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<u32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>)
+pub unsafe fn kernels::transpose::transpose_batched_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::transpose::transpose_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<u32, __R>, cubecl_core::RuntimeArg<u32, __R>)
+pub unsafe fn kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>)
+pub unsafe fn kernels::xyb::linear_to_xyb_planar_kernel::launch_unchecked<'kernel, __R: cubecl_runtime::runtime::Runtime>(&cubecl_runtime::client::ComputeClient<__R>, cubecl_runtime::server::base::CubeCount, cubecl_runtime::server::base::CubeDim, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>, cubecl_core::RuntimeArg<cubecl_core::frontend::container::array::base::Array<f32>, __R>)
+pub use session::cleanup_stream
+pub use session::stream_reserved_bytes
+
+## trait impls (45 types)
+
+GpuSsim2Result: TrivialClone
+Ssim2Blur: TrivialClone
+Ssim2Mode: TrivialClone
+Ssim2Params: TrivialClone
+XybFlavor: TrivialClone
+kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::blur::blur_h_fir5_kernel::BlurHFir5Kernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::blur::blur_h_fir5_kernel::BlurHFir5KernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::blur::blur_h_pass_kernel::BlurHPassKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::blur::blur_h_pass_kernel::BlurHPassKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::blur::blur_pass_kernel::BlurPassKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::blur::blur_pass_kernel::BlurPassKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::error_maps::error_maps_kernel::ErrorMapsKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::error_maps::error_maps_kernel::ErrorMapsKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::error_maps::zero_tail_kernel::ZeroTailKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::error_maps::zero_tail_kernel::ZeroTailKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::transpose::transpose_batched_kernel::TransposeBatchedKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::transpose::transpose_batched_kernel::TransposeBatchedKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::transpose::transpose_kernel::TransposeKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::transpose::transpose_kernel::TransposeKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernel<__R>: cubecl_runtime::kernel::CubeKernel, cubecl_runtime::kernel::KernelMetadata
+kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernelInfo<__R>: Clone, Debug, Eq, Hash, PartialEq
+memory_mode::MemoryMode: TrivialClone
+memory_mode::ResolvedMode: TrivialClone
+
+## auto traits
+
+0 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::blur::blur_h_fir5_batched_kernel::BlurHFir5BatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::blur::blur_h_fir5_kernel::BlurHFir5Kernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::blur::blur_h_fir5_kernel::BlurHFir5KernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::blur::blur_h_pass_kernel::BlurHPassKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::blur::blur_h_pass_kernel::BlurHPassKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::blur::blur_pass_batched_kernel::BlurPassBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::blur::blur_pass_kernel::BlurPassKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::blur::blur_pass_kernel::BlurPassKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_3ch_kernel::Downscale2x3chKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_plane_batched_kernel::Downscale2xPlaneBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::downscale::downscale_2x_plane_kernel::Downscale2xPlaneKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::error_maps_broadcast_batched_kernel::ErrorMapsBroadcastBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::error_maps_kernel::ErrorMapsKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::error_maps_kernel::ErrorMapsKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::error_maps_strip_from_full_ref_kernel::ErrorMapsStripFromFullRefKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::pointwise_mul_broadcast_batched_kernel::PointwiseMulBroadcastBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::pointwise_mul_offset_kernel::PointwiseMulOffsetKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::zero_tail_kernel::ZeroTailKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::error_maps::zero_tail_kernel::ZeroTailKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::srgb::srgb_u8_to_linear_planar_kernel::SrgbU8ToLinearPlanarKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::transpose::transpose_batched_kernel::TransposeBatchedKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::transpose::transpose_batched_kernel::TransposeBatchedKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::transpose::transpose_kernel::TransposeKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::transpose::transpose_kernel::TransposeKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::xyb::linear_nits_to_pu_xyb_planar_kernel::LinearNitsToPuXybPlanarKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernel<__R>: !RefUnwindSafe !Unpin !UnwindSafe
+kernels::xyb::linear_to_xyb_planar_kernel::LinearToXybPlanarKernelInfo<__R>: !RefUnwindSafe !Unpin !UnwindSafe

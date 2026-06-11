@@ -18,18 +18,20 @@ default:
 # `-p NAME` list so only in-repo crates are touched.
 
 # Format in-repo workspace packages only (sibling-safe) + regenerate the
-# public-API surface snapshots (docs/public-api/).
+# public-API surface snapshots (docs/public-api/). The snapshot runner lives
+# in the workspace-excluded apidoc/ package, so it is never built or run by
+# plain `cargo test` or any CI job.
 fmt:
     cargo fmt $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name | "-p " + .')
-    cargo test -p zenmetrics-api --test public_api_doc
+    cargo test --manifest-path apidoc/Cargo.toml
 
 # Regenerate the public-API surface snapshots only
 api-doc:
-    cargo test -p zenmetrics-api --test public_api_doc
+    cargo test --manifest-path apidoc/Cargo.toml
 
-# Verify the committed snapshots are current (what CI runs)
+# Verify the committed snapshots are current
 api-doc-check:
-    ZEN_API_DOC=check cargo test -p zenmetrics-api --test public_api_doc
+    ZEN_API_DOC=check cargo test --manifest-path apidoc/Cargo.toml
 
 # Formatting check over the same in-repo package set (sibling-safe).
 fmt-check:

@@ -1,0 +1,37 @@
+# dssim-gpu public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                 1
+#   free functions                              1
+#   inherent methods                            2
+#   re-exports                                  2
+#   trait roster entries (type × trait)         4
+#
+# per-module pub lines:
+#   (root)                            1
+#   memory_mode                       2
+#   session                           3
+
+## items (6 lines)
+
+pub fn memory_mode::MemoryMode::assert_fields_are_eq(&self)
+pub fn memory_mode::ResolvedMode::assert_fields_are_eq(&self)
+pub fn session::new_opaque_on_stream(zenmetrics_gpu_core::Backend, u64, u32, u32, DssimParams, memory_mode::MemoryMode) -> Result<DssimOpaque>
+pub mod session
+pub use session::cleanup_stream
+pub use session::stream_reserved_bytes
+
+## trait impls (4 types)
+
+DssimParams: TrivialClone
+GpuDssimResult: TrivialClone
+memory_mode::MemoryMode: TrivialClone
+memory_mode::ResolvedMode: TrivialClone
