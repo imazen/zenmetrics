@@ -132,6 +132,8 @@ sweep = [
     "zenwebp?/__expert",
     "zenavif?/__expert",
     "zenjxl?/__expert",
+    # zenjxl::sweep is gated on encode + __expert.
+    "zenjxl?/encode",
     # zenjxl gates JxlEncoderConfig behind the `zencodec` feature, which
     # turns the wrapper struct on. Pull it through here so the sweep
     # driver sees the public encoder type at all.

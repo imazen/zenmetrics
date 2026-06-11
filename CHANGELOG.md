@@ -21,6 +21,21 @@ Workspace conventions per the global rules:
 
 ## zen-metrics-cli
 
+- zenjxl is the third codec on the plan-cell bridge:
+  `PlannedConfig::Zenjxl` (a `SweepVariant`; threads pinned per playbook
+  pattern 9), `build_zenjxl_plan` (rd_core/modes_full over
+  generic-quality grids; lossless cells ride the documented q=0
+  sentinel), and the `resolve_verified` arm (lossy ids reconstructed
+  base+`_q<q>` since the variant carries resolved distance; fingerprint
+  verified via zenjxl's `variant_from_cell_id`). Chunk mode,
+  `--dry-run --emit-cells`, and jobexec inherit it through the
+  codec-generic dispatch; the sweep feature now activates
+  `zenjxl?/encode` for the gated sweep module.
+
+
+
+## zen-metrics-cli
+
 - **zenavif plan-driven sweeps** (checklist step 8 of the variant-generation
   playbook — zenavif is the second plan-wired codec after zenjpeg).
   `--codec zenavif --plan rd_core|modes_full|modes_full_alpha` works in both

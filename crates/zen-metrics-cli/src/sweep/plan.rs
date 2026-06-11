@@ -42,6 +42,10 @@ pub enum PlannedConfig {
     /// zenavif cell (quality applied; `threads` pinned by the planner).
     #[cfg(feature = "avif")]
     Zenavif(Box<zenavif::EncoderConfig>),
+    /// zenjxl cell (a `SweepVariant`: lossy carries resolved distance;
+    /// lossless cells ride the q=0 sentinel in the identity tuple).
+    #[cfg(feature = "jxl")]
+    Zenjxl(Box<zenjxl::sweep::SweepVariant>),
 }
 
 impl PlannedConfig {
@@ -68,6 +72,31 @@ impl PlannedConfig {
                 zenavif::encode_rgb8(img, cfg, almost_enough::StopToken::new(enough::Unstoppable))
                     .map_err(|e| format!("zenavif plan-cell encode failed: {e}"))?
                     .avif_file
+            }
+            #[cfg(feature = "jxl")]
+            Self::Zenjxl(variant) => {
+                // Threads pinned in every cell (playbook pattern 9 —
+                // ambient-machine defaults poison content addressing).
+                match variant.build() {
+                    zenjxl::sweep::BuiltConfig::Lossy(c) => c
+                        .with_threads(1)
+                        .encode(
+                            &source.pixels,
+                            source.width,
+                            source.height,
+                            zenjxl::PixelLayout::Rgb8,
+                        )
+                        .map_err(|e| format!("zenjxl plan-cell encode failed: {e:?}"))?,
+                    zenjxl::sweep::BuiltConfig::Lossless(c) => c
+                        .with_threads(1)
+                        .encode(
+                            &source.pixels,
+                            source.width,
+                            source.height,
+                            zenjxl::PixelLayout::Rgb8,
+                        )
+                        .map_err(|e| format!("zenjxl plan-cell encode failed: {e:?}"))?,
+                }
             }
         };
         Ok(EncodedCell {
@@ -100,9 +129,12 @@ pub fn build_plan(
         CodecKind::Zenjpeg => build_zenjpeg_plan(name, budget, q_grid),
         #[cfg(feature = "avif")]
         CodecKind::Zenavif => build_zenavif_plan(name, budget, q_grid),
+        #[cfg(feature = "jxl")]
+        CodecKind::Zenjxl => build_zenjxl_plan(name, budget, q_grid),
         other => Err(format!(
             "plan-driven sweeps are not wired for codec {:?} in this build \
-             (zenjpeg needs --features jpeg, zenavif needs --features avif)",
+             (zenjpeg needs --features jpeg, zenavif --features avif, \
+             zenjxl --features jxl)",
             other.name()
         )
         .into()),
@@ -270,6 +302,87 @@ pub fn build_zenavif_plan(
     })
 }
 
+/// Build zenjxl plan cells. Lossy cells multiply by the (generic
+/// quality) grid; lossless cells emit one cell each and ride the q=0
+/// sentinel in the identity tuple (`CellId.q` is i64 and a lossless id
+/// carries no quality token — the parser ignores q for `mod-` ids).
+#[cfg(feature = "jxl")]
+pub fn build_zenjxl_plan(
+    name: &str,
+    budget: Option<usize>,
+    q_grid: &[f64],
+) -> Result<BuiltPlan, Box<dyn Error>> {
+    use zenjxl::sweep::{QualityGrid, SweepAxes, SweepBuilder};
+    let axes = match name {
+        "rd_core" => SweepAxes::rd_core(),
+        "modes_full" => SweepAxes::modes_full(),
+        other => {
+            return Err(
+                format!("unknown zenjxl plan {other:?}; expected rd_core or modes_full").into(),
+            );
+        }
+    };
+    let grid = QualityGrid::ExplicitQuality(q_grid.iter().map(|&q| q as f32).collect());
+    let mut builder = SweepBuilder::new(axes, grid);
+    if let Some(n) = budget {
+        builder = builder.with_budget(n);
+    }
+    let plan = builder.plan();
+
+    let manifest = json!({
+        "plan": name,
+        "budget": budget,
+        "q_grid": q_grid,
+        "cells": plan.cells.len(),
+        "duplicates_merged": plan.duplicates_merged,
+        "invalid_skipped": plan.invalid_skipped,
+        "q_coarsenings": plan.q_coarsenings,
+        "over_budget": plan.over_budget,
+        "dropped_axes": plan
+            .dropped
+            .iter()
+            .map(|d| json!({"axis": d.axis, "kept": d.kept, "dropped": d.dropped}))
+            .collect::<Vec<_>>(),
+        "aliases": plan
+            .cells
+            .iter()
+            .filter(|c| !c.aliases.is_empty())
+            .map(|c| json!({"cell": c.id, "merged": c.aliases}))
+            .collect::<Vec<_>>(),
+    });
+
+    let cells = plan
+        .cells
+        .into_iter()
+        .map(|c| {
+            // Lossy ids end `_q<q>`; lossless ids have no quality token
+            // (labels cannot contain '_', so the rfind is unambiguous).
+            let base =
+                c.id.rfind("_q")
+                    .map(|at| &c.id[..at])
+                    .unwrap_or(c.id.as_str());
+            let mut m = Map::new();
+            m.insert("cell".into(), Value::String(base.to_string()));
+            m.insert(
+                "fp".into(),
+                Value::String(format!("{:016x}", c.fingerprint)),
+            );
+            m.insert("plan".into(), Value::String(name.to_string()));
+            PlannedCell {
+                q: c.quality.map(f64::from).unwrap_or(0.0),
+                knob_json: Value::Object(m).to_string(),
+                config: PlannedConfig::Zenjxl(Box::new(c.variant)),
+            }
+        })
+        .collect();
+
+    Ok(BuiltPlan {
+        cells,
+        manifest_json: serde_json::to_string_pretty(&manifest)
+            .expect("plan manifest serialization cannot fail"),
+    })
+}
+
 /// Resolve a plan-cell identity to its codec config, verifying the
 /// carried resolved-state fingerprint.
 ///
@@ -309,6 +422,23 @@ pub fn resolve_verified(
                 return Err(mismatch(&actual));
             }
             Ok(PlannedConfig::Zenavif(Box::new(cfg)))
+        }
+        #[cfg(feature = "jxl")]
+        CodecKind::Zenjxl => {
+            // Lossy variants carry their resolved distance, so the
+            // parser consumes the full id including the quality token;
+            // lossless ids have none (q is the i64 sentinel 0).
+            let full_id = if cell_id.starts_with("vd-") {
+                format!("{cell_id}_q{q}")
+            } else {
+                cell_id.to_string()
+            };
+            let variant = zenjxl::sweep::variant_from_cell_id(&full_id)?;
+            let actual = format!("{:016x}", zenjxl::sweep::fingerprint(&variant));
+            if actual != fp_hex {
+                return Err(mismatch(&actual));
+            }
+            Ok(PlannedConfig::Zenjxl(Box::new(variant)))
         }
         other => Err(format!(
             "plan-cell identity on codec {:?} which is not plan-wired in this build",
@@ -359,6 +489,8 @@ mod tests {
             ),
             #[cfg(feature = "avif")]
             PlannedConfig::Zenavif(_) => panic!("zenjpeg identity resolved to zenavif"),
+            #[cfg(feature = "jxl")]
+            PlannedConfig::Zenjxl(_) => panic!("zenjpeg identity resolved to zenjxl"),
         }
         let err = resolve_verified(CodecKind::Zenjpeg, id, cell.q as f32, "0000000000000000")
             .unwrap_err();
@@ -366,6 +498,45 @@ mod tests {
     }
 
     #[cfg(feature = "jpeg")]
+    #[cfg(feature = "jxl")]
+    #[test]
+    fn zenjxl_plan_builds_and_cells_resolve_verified() {
+        let plan = build_plan(CodecKind::Zenjxl, "rd_core", None, &[50.0, 85.0]).unwrap();
+        assert!(!plan.cells.is_empty());
+        let mut checked_lossy = false;
+        let mut checked_lossless = false;
+        for cell in &plan.cells {
+            let v: serde_json::Value = serde_json::from_str(&cell.knob_json).unwrap();
+            let id = v["cell"].as_str().unwrap();
+            let fp = v["fp"].as_str().unwrap();
+            let resolved = resolve_verified(CodecKind::Zenjxl, id, cell.q as f32, fp)
+                .unwrap_or_else(|e| panic!("{id}: {e}"));
+            match resolved {
+                PlannedConfig::Zenjxl(variant) => match *variant {
+                    zenjxl::sweep::SweepVariant::Lossy(_) => checked_lossy = true,
+                    zenjxl::sweep::SweepVariant::Lossless(_) => {
+                        assert_eq!(cell.q, 0.0, "lossless cells ride the q=0 sentinel");
+                        checked_lossless = true;
+                    }
+                },
+                #[allow(unreachable_patterns)]
+                _ => panic!("zenjxl identity resolved to another codec"),
+            }
+        }
+        assert!(checked_lossy && checked_lossless, "both modes must appear");
+        // Tampered fp = loud failure.
+        let first: serde_json::Value = serde_json::from_str(&plan.cells[0].knob_json).unwrap();
+        assert!(
+            resolve_verified(
+                CodecKind::Zenjxl,
+                first["cell"].as_str().unwrap(),
+                plan.cells[0].q as f32,
+                "0000000000000000"
+            )
+            .is_err()
+        );
+    }
+
     #[test]
     fn unknown_plan_is_an_error() {
         assert!(build_zenjpeg_plan("nope", None, &[50.0]).is_err());
@@ -410,6 +581,8 @@ mod tests {
             }
             #[cfg(feature = "jpeg")]
             PlannedConfig::Zenjpeg(_) => panic!("zenavif identity resolved to zenjpeg"),
+            #[cfg(feature = "jxl")]
+            PlannedConfig::Zenjxl(_) => panic!("zenavif identity resolved to zenjxl"),
         }
         let err = resolve_verified(CodecKind::Zenavif, id, first.q as f32, "0000000000000000")
             .unwrap_err();
