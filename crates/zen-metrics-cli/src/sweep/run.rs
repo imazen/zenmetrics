@@ -1306,11 +1306,7 @@ mod tests {
         let mut pixels = Vec::with_capacity((w * h * 3) as usize);
         for y in 0..h {
             for x in 0..w {
-                pixels.extend_from_slice(&[
-                    (x * 10) as u8,
-                    (y * 13) as u8,
-                    ((x + y) * 7) as u8,
-                ]);
+                pixels.extend_from_slice(&[(x * 10) as u8, (y * 13) as u8, ((x + y) * 7) as u8]);
             }
         }
         Rgb8Image {
