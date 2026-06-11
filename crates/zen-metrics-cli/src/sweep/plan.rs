@@ -8,9 +8,11 @@
 //! The codecs own that machinery (`SweepAxes` / `SweepBuilder` /
 //! resolved-state fingerprints / main-effects-first queue ordering /
 //! budget ladder with no silent caps), so `--plan <name>` asks the
-//! codec for its cells instead of spelling them here. Wired codecs:
-//! zenjpeg (`rd_core` / `modes_full`) and zenavif (`rd_core` /
-//! `modes_full` / `modes_full_alpha`), each behind its cargo feature.
+//! codec for its cells instead of spelling them here. Wired codecs
+//! (each behind its cargo feature): zenjpeg + zenjxl + zenwebp
+//! (`rd_core` / `modes_full`), zenavif (those + `modes_full_alpha`),
+//! and zenpng (all-lossless; every cell on the q=0 sentinel).
+//! Cross-codec contract + scalar-axis inventory: `docs/PLAN_SWEEPS.md`.
 //!
 //! Each planned cell carries a fully-built codec config
 //! ([`PlannedConfig`]); the row identity that lands in the TSV /

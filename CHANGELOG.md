@@ -21,6 +21,23 @@ Workspace conventions per the global rules:
 
 ## zen-metrics-cli
 
+- Plan-identity tuples execute on every path: the sweep runner's tuple
+  path detects `{"cell","fp","plan"}` knob tuples and routes them
+  through `resolve_verified` (byte-identical to the Planned path,
+  tested) — plan cells now ride the vastai chunk fleet as ordinary
+  input-parquet rows with zero worker/schema changes.
+  `generate_sweep_input.py --cells-jsonl` converts an `--emit-cells`
+  declare manifest into plan-mode input parquet + chunks.jsonl
+  (32344443).
+- Cross-codec plan contract + per-codec axis inventory with scalar
+  axes tagged (`zenpicker-train --scalar-axes` feed) + scalar-gap
+  backlog: `docs/PLAN_SWEEPS.md`; RUNNING_JOBS §4b generalized to all
+  five codecs.
+- Plan-mode smoke evidence for all five codecs committed at
+  `benchmarks/planspec_smoke_*_2026-06-11.*` (97ef9876); executor
+  contract exercised on real identities (jobexec encode + metric jobs,
+  tampered-fp rejection).
+
 - zenpng is the fifth codec on the plan-cell bridge — the full zen
   codec family is now plan-driven: `PlannedConfig::Zenpng`,
   `build_zenpng_plan` (all-lossless: q-grid recorded as ignored, every
@@ -97,6 +114,15 @@ Workspace conventions per the global rules:
   `smallest`/`smallest_search` (the exact entropy-stage minimizers).
 
 ### Fixed
+
+## Workspace
+
+- Default feature combo builds again: `[patch.crates-io]` now carries
+  `zenjxl-decoder` to the 0.3.10 sibling (zenjxl main consumes the
+  unreleased orientation API; cargo patches don't propagate across
+  workspaces) + CI clones the decoder at all five sibling-clone sites.
+  Drop both when 0.3.10 publishes and zenjxl bumps to `^0.3.10`
+  (023d2c3c).
 
 ## zen-metrics-cli
 

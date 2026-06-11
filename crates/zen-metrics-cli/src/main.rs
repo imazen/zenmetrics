@@ -299,16 +299,18 @@ struct SweepArgs {
     /// the per-codec axis names. Mutually exclusive with `--plan`.
     #[arg(long, default_value = "")]
     knob_grid: String,
-    /// Plan-driven zenjpeg sweep: take cells from zenjpeg's curated sweep
+    /// Plan-driven sweep: take cells from the codec's curated sweep
     /// planner (`rd_core` = the RD-front axes; `modes_full` = every
-    /// user-disableable mode axis — pair with `--plan-budget`) instead of
+    /// user-disableable mode axis — pair with `--plan-budget`; zenavif
+    /// also `modes_full_alpha` for RGBA corpora) instead of
     /// `--knob-grid`. Cells are fingerprint-deduplicated, validity-
     /// filtered, and emitted main-effects-first over `--q-grid`; the
     /// audit manifest (alias merges, invalid strata, budget drops) is
-    /// written to `<output>.plan.json`. Wired codecs: zenjpeg, zenavif.
+    /// written to `<output>.plan.json`. Wired codecs: zenjpeg, zenavif,
+    /// zenjxl, zenwebp, zenpng (contract: docs/PLAN_SWEEPS.md).
     #[arg(long, conflicts_with = "knob_grid")]
     plan: Option<String>,
-    /// Cell budget for `--plan`. zenjpeg's reduction ladder sheds
+    /// Cell budget for `--plan`. The codec's reduction ladder sheds
     /// lowest-priority axis values one at a time (every drop reported in
     /// the manifest) — nothing is silently sampled away.
     #[arg(long, requires = "plan")]

@@ -44,6 +44,20 @@ proper layer order. See the git log of those deleted files for
 incremental change history (cuda_dlsym_stub evolution, jxl-encoder
 bumps, cudarc binding pin chase, vastai-fleet worker rollouts).
 
+## Plan-driven sweeps (all five codecs)
+
+Instead of spelling `--knob-grid` Cartesian products by hand, ask the
+codec's own sweep planner for its curated, fingerprint-deduplicated
+cells: `zen-metrics sweep --plan rd_core|modes_full` (zenavif also
+`modes_full_alpha`). The cross-codec contract — per-cell
+`{"cell","fp","plan"}` identity, q=0 lossless sentinel, audit
+manifests, per-codec axis inventory with scalar axes tagged, and the
+fleet path — lives in **`docs/PLAN_SWEEPS.md`**. For fleet chunks,
+`generate_sweep_input.py --cells-jsonl` converts an `--emit-cells`
+declare manifest into the v26 input parquet + chunks.jsonl; the worker
+needs no changes (the sweep runner executes plan-identity rows through
+the same fingerprint-verified route as `jobexec`).
+
 ## The proven end-to-end pipeline (2026-05-19)
 
 This is the path that landed 2933 omni sidecars + 2933 zensim

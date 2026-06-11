@@ -172,13 +172,12 @@ fn tuple_units(cfg: &SweepConfig) -> Vec<SweepUnit<'static>> {
         .collect()
 }
 
-/// Selector for a plan-driven zenjpeg sweep (see
-/// [`SweepConfig::plan`]).
+/// Selector for a plan-driven sweep (see [`SweepConfig::plan`]).
 #[derive(Debug, Clone)]
 pub struct PlanSpec {
-    /// `"rd_core"` or `"modes_full"`.
+    /// `"rd_core"` or `"modes_full"` (zenavif also `"modes_full_alpha"`).
     pub name: String,
-    /// Optional cell budget — zenjpeg's reduction ladder sheds
+    /// Optional cell budget — the codec's reduction ladder sheds
     /// lowest-priority axis values one at a time and reports every drop
     /// in the plan manifest; nothing is sampled away silently.
     pub budget: Option<usize>,
@@ -191,14 +190,17 @@ pub struct SweepConfig {
     pub sources: Vec<PathBuf>,
     pub q_grid: Vec<f64>,
     pub knob_grid: KnobGrid,
-    /// Plan-driven zenjpeg cells: when set (requires
-    /// [`CodecKind::Zenjpeg`] and an empty `knob_grid`), cells come from
-    /// `zenjpeg::encode::sweep` — the codec's curated, provenance-stamped
-    /// axes (`rd_core` / `modes_full`) over `q_grid`, fingerprint-
+    /// Plan-driven cells: when set (requires an empty `knob_grid`),
+    /// cells come from the codec's own sweep planner — curated,
+    /// provenance-stamped axes (`rd_core` / `modes_full` /
+    /// zenavif `modes_full_alpha`) over `q_grid`, fingerprint-
     /// deduplicated, validity-filtered, and ordered main-effects-first —
     /// instead of the `knob_grid` Cartesian product. The plan's audit
     /// manifest (alias merges, invalid strata, budget drops) is written
-    /// to `<output>.plan.json`. Requires `--features sweep,jpeg`.
+    /// to `<output>.plan.json`. Wired: zenjpeg/zenavif/zenjxl/zenwebp/
+    /// zenpng, each behind its cargo feature (`--features sweep` pulls
+    /// jpeg+webp+avif; add `jxl`/`png` explicitly). Contract:
+    /// `docs/PLAN_SWEEPS.md`.
     pub plan: Option<PlanSpec>,
     pub metrics: Vec<MetricKind>,
     pub gpu_runtime: GpuRuntime,

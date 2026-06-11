@@ -114,12 +114,16 @@ target/release/zen-jobctl declare --spec /tmp/spec.json --out /tmp/manifest.json
 - `q5–q60` matter as much as `q60–q100` for web-focused codecs — sweep the low-q range with equal
   density (repo rule).
 
-### 4b. Plan-driven sweeps (zenjpeg): declare from the codec's planner
+### 4b. Plan-driven sweeps: declare from the codec's planner
 
-zenjpeg owns its sweep space (`zenjpeg::encode::sweep`: curated provenance-stamped axes,
-resolved-state fingerprint dedup, validity filtering, main-effects-first ordering, budget ladder).
-There are TWO ways to execute a plan; choosing the wrong one re-creates the "100k AVIF encodes
-never finish" problem:
+All five zen codecs own their sweep spaces (zenjpeg `zenjpeg::encode::sweep`, zenavif
+`zenavif::sweep`, zenjxl `zenjxl::sweep`, zenwebp `zenwebp::sweep`, zenpng `zenpng::sweep` —
+curated provenance-stamped axes, resolved-state fingerprint dedup, validity filtering,
+main-effects-first ordering, budget ladder; zenpng is all-lossless and rides the q=0 sentinel).
+Cross-codec contract + per-codec axis/scalar inventory: **`docs/PLAN_SWEEPS.md`**. There are
+TWO ways to execute a plan (plus the vast.ai chunk-fleet path, which carries the same per-cell
+identity in plan-mode input parquets — PLAN_SWEEPS.md §3); choosing the wrong one re-creates
+the "100k AVIF encodes never finish" problem:
 
 | | chunk mode | job-system mode |
 |---|---|---|
@@ -141,12 +145,14 @@ zen-metrics sweep --codec zenjpeg --sources corpus/ --q-grid 5,10,...,95 \
 # Then declare: zen_jobctl::parse_emit_cells + declare_encodes -> DesiredJob[] -> gap -> manifest.
 ```
 
-**The executor contract for a plan cell** (`zen-metrics jobexec`, knobs JSON containing `"plan"`):
+**The executor contract for a plan cell** (`zen-metrics jobexec` AND the sweep runner's
+plan-identity tuple path, knobs JSON containing `"plan"`):
 
 1. Parse `{cell, fp, plan}` from the cell's `knob_tuple_json`.
-2. `zenjpeg::encode::sweep::config_from_cell_id(cell, q)` — the stratum id is **self-describing**
-   (lossless grammar, documented at that function); no plan spec, budget, or q-grid is needed to
-   re-execute a stored job years later.
+2. Reconstruct the config from the **self-describing** stratum id (per codec:
+   `config_from_cell_id` for zenjpeg/zenavif, `variant_from_cell_id` for
+   zenjxl/zenwebp/zenpng — lossless grammar, documented at each function); no plan spec,
+   budget, or q-grid is needed to re-execute a stored job years later.
 3. Verify `fingerprint(&config) == fp` (`sweep::plan::resolve_verified`). Mismatch = deterministic
    FAILED row — the id-grammar drift tripwire; never a silently wrong encode.
 4. Encode; stdout = the encoded bytes (content-addressed to `blobs/<sha256>` by the worker).

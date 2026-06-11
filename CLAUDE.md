@@ -310,10 +310,16 @@ in chunk mode and had to be retrofitted):
    Built precisely because big sweeps (100k-cell AVIF) never finish in one pass. Entry:
    `--plan … --dry-run --emit-cells` → `zen_jobctl::declare_encodes`.
 
-Plan-driven zenjpeg cells flow through both with ONE identity
-(`{"cell","fp","plan"}` in `knob_tuple_json` / `Encode.knobs`); the stratum id is
-self-describing (`zenjpeg config_from_cell_id`) and the fp is verified at execute time.
-See `docs/RUNNING_JOBS.md` §4b.
+Plan-driven cells (ALL FIVE codecs: zenjpeg/zenavif/zenjxl/zenwebp/zenpng, verified
+end-to-end 2026-06-11) flow through both with ONE identity (`{"cell","fp","plan"}` in
+`knob_tuple_json` / `Encode.knobs`); the stratum id is self-describing
+(`config_from_cell_id` / `variant_from_cell_id` per codec) and the fp is verified at
+execute time. The vastai chunk fleet consumes plan cells as identity rows in plan-mode
+input parquets (`generate_sweep_input.py --cells-jsonl`; the sweep runner's tuple path
+routes them through `resolve_verified` — byte-identical to the Planned path, tested).
+Contract + per-codec scalar-axis inventory: `docs/PLAN_SWEEPS.md`; job-system flow:
+`docs/RUNNING_JOBS.md` §4b. Local-build note: the default feature combo needs the
+`zenjxl-decoder` workspace patch until 0.3.10 publishes (Cargo.toml patch comment).
 
 ## Sweep build cheat sheet
 
