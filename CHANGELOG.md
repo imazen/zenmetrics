@@ -21,6 +21,11 @@ Workspace conventions per the global rules:
 
 ## zen-metrics-cli
 
+- zenwebp is the fourth codec on the plan-cell bridge:
+  `PlannedConfig::Zenwebp`, `build_zenwebp_plan` (rd_core/modes_full;
+  lossless VP8L cells on the q=0 sentinel), and the `resolve_verified`
+  arm via zenwebp's `variant_from_cell_id`. All execution paths inherit
+  it through the codec-generic dispatch.
 - zenjxl is the third codec on the plan-cell bridge:
   `PlannedConfig::Zenjxl` (a `SweepVariant`; threads pinned per playbook
   pattern 9), `build_zenjxl_plan` (rd_core/modes_full over

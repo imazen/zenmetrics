@@ -46,6 +46,9 @@ pub enum PlannedConfig {
     /// lossless cells ride the q=0 sentinel in the identity tuple).
     #[cfg(feature = "jxl")]
     Zenjxl(Box<zenjxl::sweep::SweepVariant>),
+    /// zenwebp cell (lossless cells ride the q=0 sentinel).
+    #[cfg(feature = "webp")]
+    Zenwebp(Box<zenwebp::sweep::SweepVariant>),
 }
 
 impl PlannedConfig {
@@ -98,6 +101,19 @@ impl PlannedConfig {
                         .map_err(|e| format!("zenjxl plan-cell encode failed: {e:?}"))?,
                 }
             }
+            #[cfg(feature = "webp")]
+            Self::Zenwebp(variant) => {
+                let cfg = variant.build();
+                zenwebp::EncodeRequest::new(
+                    &cfg,
+                    &source.pixels,
+                    zenwebp::PixelLayout::Rgb8,
+                    source.width,
+                    source.height,
+                )
+                .encode()
+                .map_err(|e| format!("zenwebp plan-cell encode failed: {e:?}"))?
+            }
         };
         Ok(EncodedCell {
             bytes,
@@ -131,6 +147,8 @@ pub fn build_plan(
         CodecKind::Zenavif => build_zenavif_plan(name, budget, q_grid),
         #[cfg(feature = "jxl")]
         CodecKind::Zenjxl => build_zenjxl_plan(name, budget, q_grid),
+        #[cfg(feature = "webp")]
+        CodecKind::Zenwebp => build_zenwebp_plan(name, budget, q_grid),
         other => Err(format!(
             "plan-driven sweeps are not wired for codec {:?} in this build \
              (zenjpeg needs --features jpeg, zenavif --features avif, \
@@ -383,6 +401,84 @@ pub fn build_zenjxl_plan(
     })
 }
 
+/// Build zenwebp plan cells. Lossy cells multiply by the grid;
+/// lossless (VP8L) cells emit one cell each on the q=0 sentinel
+/// (`vp8l-` ids carry no quality token; the parser ignores q there).
+#[cfg(feature = "webp")]
+pub fn build_zenwebp_plan(
+    name: &str,
+    budget: Option<usize>,
+    q_grid: &[f64],
+) -> Result<BuiltPlan, Box<dyn Error>> {
+    use zenwebp::sweep::{QualityGrid, SweepAxes, SweepBuilder};
+    let axes = match name {
+        "rd_core" => SweepAxes::rd_core(),
+        "modes_full" => SweepAxes::modes_full(),
+        other => {
+            return Err(
+                format!("unknown zenwebp plan {other:?}; expected rd_core or modes_full").into(),
+            );
+        }
+    };
+    let grid = QualityGrid::Explicit(q_grid.iter().map(|&q| q as f32).collect());
+    let mut builder = SweepBuilder::new(axes, grid);
+    if let Some(n) = budget {
+        builder = builder.with_budget(n);
+    }
+    let plan = builder.plan();
+
+    let manifest = json!({
+        "plan": name,
+        "budget": budget,
+        "q_grid": q_grid,
+        "cells": plan.cells.len(),
+        "duplicates_merged": plan.duplicates_merged,
+        "invalid_skipped": plan.invalid_skipped,
+        "q_coarsenings": plan.q_coarsenings,
+        "over_budget": plan.over_budget,
+        "dropped_axes": plan
+            .dropped
+            .iter()
+            .map(|d| json!({"axis": d.axis, "kept": d.kept, "dropped": d.dropped}))
+            .collect::<Vec<_>>(),
+        "aliases": plan
+            .cells
+            .iter()
+            .filter(|c| !c.aliases.is_empty())
+            .map(|c| json!({"cell": c.id, "merged": c.aliases}))
+            .collect::<Vec<_>>(),
+    });
+
+    let cells = plan
+        .cells
+        .into_iter()
+        .map(|c| {
+            let base =
+                c.id.rfind("_q")
+                    .map(|at| &c.id[..at])
+                    .unwrap_or(c.id.as_str());
+            let mut m = Map::new();
+            m.insert("cell".into(), Value::String(base.to_string()));
+            m.insert(
+                "fp".into(),
+                Value::String(format!("{:016x}", c.fingerprint)),
+            );
+            m.insert("plan".into(), Value::String(name.to_string()));
+            PlannedCell {
+                q: c.quality.map(f64::from).unwrap_or(0.0),
+                knob_json: Value::Object(m).to_string(),
+                config: PlannedConfig::Zenwebp(Box::new(c.variant)),
+            }
+        })
+        .collect();
+
+    Ok(BuiltPlan {
+        cells,
+        manifest_json: serde_json::to_string_pretty(&manifest)
+            .expect("plan manifest serialization cannot fail"),
+    })
+}
+
 /// Resolve a plan-cell identity to its codec config, verifying the
 /// carried resolved-state fingerprint.
 ///
@@ -440,6 +536,20 @@ pub fn resolve_verified(
             }
             Ok(PlannedConfig::Zenjxl(Box::new(variant)))
         }
+        #[cfg(feature = "webp")]
+        CodecKind::Zenwebp => {
+            let full_id = if cell_id.starts_with("vp8-") {
+                format!("{cell_id}_q{q}")
+            } else {
+                cell_id.to_string()
+            };
+            let variant = zenwebp::sweep::variant_from_cell_id(&full_id)?;
+            let actual = format!("{:016x}", zenwebp::sweep::fingerprint(&variant));
+            if actual != fp_hex {
+                return Err(mismatch(&actual));
+            }
+            Ok(PlannedConfig::Zenwebp(Box::new(variant)))
+        }
         other => Err(format!(
             "plan-cell identity on codec {:?} which is not plan-wired in this build",
             other.name()
@@ -491,6 +601,8 @@ mod tests {
             PlannedConfig::Zenavif(_) => panic!("zenjpeg identity resolved to zenavif"),
             #[cfg(feature = "jxl")]
             PlannedConfig::Zenjxl(_) => panic!("zenjpeg identity resolved to zenjxl"),
+            #[cfg(feature = "webp")]
+            PlannedConfig::Zenwebp(_) => panic!("zenjpeg identity resolved to zenwebp"),
         }
         let err = resolve_verified(CodecKind::Zenjpeg, id, cell.q as f32, "0000000000000000")
             .unwrap_err();
@@ -498,6 +610,44 @@ mod tests {
     }
 
     #[cfg(feature = "jpeg")]
+    #[cfg(feature = "webp")]
+    #[test]
+    fn zenwebp_plan_builds_and_cells_resolve_verified() {
+        let plan = build_plan(CodecKind::Zenwebp, "rd_core", None, &[50.0, 85.0]).unwrap();
+        assert!(!plan.cells.is_empty());
+        let mut lossy = false;
+        let mut lossless = false;
+        for cell in &plan.cells {
+            let v: serde_json::Value = serde_json::from_str(&cell.knob_json).unwrap();
+            let id = v["cell"].as_str().unwrap();
+            let fp = v["fp"].as_str().unwrap();
+            let resolved = resolve_verified(CodecKind::Zenwebp, id, cell.q as f32, fp)
+                .unwrap_or_else(|e| panic!("{id}: {e}"));
+            match resolved {
+                PlannedConfig::Zenwebp(variant) => match *variant {
+                    zenwebp::sweep::SweepVariant::Lossy(_) => lossy = true,
+                    zenwebp::sweep::SweepVariant::Lossless(_) => {
+                        assert_eq!(cell.q, 0.0, "lossless cells ride the q=0 sentinel");
+                        lossless = true;
+                    }
+                },
+                #[allow(unreachable_patterns)]
+                _ => panic!("zenwebp identity resolved to another codec"),
+            }
+        }
+        assert!(lossy && lossless, "both modes must appear");
+        let first: serde_json::Value = serde_json::from_str(&plan.cells[0].knob_json).unwrap();
+        assert!(
+            resolve_verified(
+                CodecKind::Zenwebp,
+                first["cell"].as_str().unwrap(),
+                plan.cells[0].q as f32,
+                "0000000000000000"
+            )
+            .is_err()
+        );
+    }
+
     #[cfg(feature = "jxl")]
     #[test]
     fn zenjxl_plan_builds_and_cells_resolve_verified() {
@@ -583,6 +733,8 @@ mod tests {
             PlannedConfig::Zenjpeg(_) => panic!("zenavif identity resolved to zenjpeg"),
             #[cfg(feature = "jxl")]
             PlannedConfig::Zenjxl(_) => panic!("zenavif identity resolved to zenjxl"),
+            #[cfg(feature = "webp")]
+            PlannedConfig::Zenwebp(_) => panic!("zenavif identity resolved to zenwebp"),
         }
         let err = resolve_verified(CodecKind::Zenavif, id, first.q as f32, "0000000000000000")
             .unwrap_err();
