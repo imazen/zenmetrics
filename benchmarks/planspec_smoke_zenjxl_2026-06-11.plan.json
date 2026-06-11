@@ -1,0 +1,15 @@
+{
+  "plan": "rd_core",
+  "budget": null,
+  "q_grid": [
+    35.0,
+    75.0
+  ],
+  "cells": 15,
+  "duplicates_merged": 0,
+  "invalid_skipped": [],
+  "q_coarsenings": 0,
+  "over_budget": false,
+  "dropped_axes": [],
+  "aliases": []
+}

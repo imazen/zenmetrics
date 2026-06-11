@@ -1,0 +1,52 @@
+{
+  "plan": "rd_core",
+  "budget": null,
+  "q_grid": [
+    35.0,
+    75.0
+  ],
+  "cells": 42,
+  "duplicates_merged": 6,
+  "invalid_skipped": [],
+  "q_coarsenings": 0,
+  "over_budget": false,
+  "dropped_axes": [],
+  "aliases": [
+    {
+      "cell": "gls_t0_small_420_q35",
+      "merged": [
+        "gls_t0_small_420_q75"
+      ]
+    },
+    {
+      "cell": "gls_tr14.75+dc_small_420_q35",
+      "merged": [
+        "gls_tr14.75+dc_small_420_q75"
+      ]
+    },
+    {
+      "cell": "gls_t0_small_444_q35",
+      "merged": [
+        "gls_t0_small_444_q75"
+      ]
+    },
+    {
+      "cell": "gls_tr14.5_small_420_q35",
+      "merged": [
+        "gls_tr14.5_small_420_q75"
+      ]
+    },
+    {
+      "cell": "gls_tr14.75+dc_small_444_q35",
+      "merged": [
+        "gls_tr14.75+dc_small_444_q75"
+      ]
+    },
+    {
+      "cell": "gls_tr14.5_small_444_q35",
+      "merged": [
+        "gls_tr14.5_small_444_q75"
+      ]
+    }
+  ]
+}

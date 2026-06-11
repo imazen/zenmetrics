@@ -1,0 +1,16 @@
+{
+  "plan": "modes_full",
+  "budget": null,
+  "q_grid": "ignored (lossless; all cells on the q=0 sentinel)",
+  "q_grid_passed": [
+    35.0,
+    75.0
+  ],
+  "cells": 9,
+  "duplicates_merged": 0,
+  "invalid_skipped": [],
+  "q_coarsenings": 0,
+  "over_budget": false,
+  "dropped_axes": [],
+  "aliases": []
+}

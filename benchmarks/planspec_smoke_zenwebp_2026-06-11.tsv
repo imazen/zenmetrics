@@ -1,0 +1,16 @@
+image_path	codec	q	knob_tuple_json	encoded_bytes	encode_ms	encoded_filename	decode_ms	score_ssim2
+/tmp/planspec-smoke-src/cid22_258947.png	zenwebp	35	"{""cell"":""vp8-m4_def"",""fp"":""c65b02c01dffd274"",""plan"":""rd_core""}"	16274	16.591		2.095	54.821623
+/tmp/planspec-smoke-src/cid22_258947.png	zenwebp	75	"{""cell"":""vp8-m4_def"",""fp"":""6cebc68299579ec2"",""plan"":""rd_core""}"	26836	18.465		2.457	71.591025
+/tmp/planspec-smoke-src/cid22_258947.png	zenwebp	35	"{""cell"":""vp8-m6_def"",""fp"":""72bb1f12be3a07e2"",""plan"":""rd_core""}"	15690	30.920		2.216	55.115859
+/tmp/planspec-smoke-src/cid22_258947.png	zenwebp	75	"{""cell"":""vp8-m6_def"",""fp"":""c89e9582817a5d54"",""plan"":""rd_core""}"	26040	39.235		2.563	72.261990
+/tmp/planspec-smoke-src/cid22_258947.png	zenwebp	0	"{""cell"":""vp8l-m4"",""fp"":""604622b611e8715f"",""plan"":""rd_core""}"	341842	102.546		3.401	100.000000
+/tmp/planspec-smoke-src/ref_256.png	zenwebp	75	"{""cell"":""vp8-m4_def"",""fp"":""6cebc68299579ec2"",""plan"":""rd_core""}"	952	2.879		0.448	78.183862
+/tmp/planspec-smoke-src/ref_256.png	zenwebp	35	"{""cell"":""vp8-m4_def"",""fp"":""c65b02c01dffd274"",""plan"":""rd_core""}"	686	2.607		0.846	71.269017
+/tmp/planspec-smoke-src/ref_256.png	zenwebp	35	"{""cell"":""vp8-m6_def"",""fp"":""72bb1f12be3a07e2"",""plan"":""rd_core""}"	692	3.385		0.704	73.589010
+/tmp/planspec-smoke-src/ref_256.png	zenwebp	75	"{""cell"":""vp8-m6_def"",""fp"":""c89e9582817a5d54"",""plan"":""rd_core""}"	960	4.359		0.352	78.988658
+/tmp/planspec-smoke-src/ref_256.png	zenwebp	0	"{""cell"":""vp8l-m4"",""fp"":""604622b611e8715f"",""plan"":""rd_core""}"	462	22.886		0.769	100.000000
+/tmp/planspec-smoke-src/ref_64.png	zenwebp	35	"{""cell"":""vp8-m4_def"",""fp"":""c65b02c01dffd274"",""plan"":""rd_core""}"	182	0.278		0.269	85.000929
+/tmp/planspec-smoke-src/ref_64.png	zenwebp	75	"{""cell"":""vp8-m4_def"",""fp"":""6cebc68299579ec2"",""plan"":""rd_core""}"	242	0.279		0.245	86.319188
+/tmp/planspec-smoke-src/ref_64.png	zenwebp	35	"{""cell"":""vp8-m6_def"",""fp"":""72bb1f12be3a07e2"",""plan"":""rd_core""}"	182	0.349		0.270	85.000929
+/tmp/planspec-smoke-src/ref_64.png	zenwebp	75	"{""cell"":""vp8-m6_def"",""fp"":""c89e9582817a5d54"",""plan"":""rd_core""}"	238	0.438		0.353	88.581356
+/tmp/planspec-smoke-src/ref_64.png	zenwebp	0	"{""cell"":""vp8l-m4"",""fp"":""604622b611e8715f"",""plan"":""rd_core""}"	76	1.380		0.206	100.000000

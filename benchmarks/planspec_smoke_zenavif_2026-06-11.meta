@@ -1,0 +1,9 @@
+# planspec smoke validation — zenavif
+date: 2026-06-11
+git_commit_parent: 023d2c3c2ba2 (zenmetrics master at run time; sweep binary built from this tree)
+hostname: lilith
+binary: target/release/zen-metrics (--features sweep => default codecs + sweep; zenjxl-decoder 0.3.10 path-patched)
+command: zen-metrics sweep --codec zenavif --sources /tmp/planspec-smoke-src --q-grid 35,75 --plan rd_core --metric ssim2 --output benchmarks/planspec_smoke_zenavif_2026-06-11.tsv --jobs 8
+sources: ref_64.png + ref_256.png (zen-metrics-cli tests/fixtures, synthetic) + cid22_258947.png (CID22-512 training photo)
+purpose: plumbing smoke (plan cells enumerate, encode, score, identity JSON faithful) — NOT calibration data; synthetic fixtures + n=1 photo are not source-informing
+verified: all cells emitted 0 fail; knob_tuple_json={"cell","fp","plan"}; lossless cells ride q=0 sentinel; zenjpeg manifest reports 6 fingerprint alias merges; jobexec resolve_verified roundtrip + tamper-fp rejection exercised on real identities from these TSVs
