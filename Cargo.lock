@@ -6971,6 +6971,7 @@ dependencies = [
  "zencodec",
  "zenjxl-decoder",
  "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]

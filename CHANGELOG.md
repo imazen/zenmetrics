@@ -21,6 +21,11 @@ Workspace conventions per the global rules:
 
 ## zen-metrics-cli
 
+- zenpng is the fifth codec on the plan-cell bridge — the full zen
+  codec family is now plan-driven: `PlannedConfig::Zenpng`,
+  `build_zenpng_plan` (all-lossless: q-grid recorded as ignored, every
+  cell on the q=0 sentinel, no budget ladder needed at 9 cells), and the
+  `resolve_verified` arm via zenpng's `variant_from_cell_id`.
 - zenwebp is the fourth codec on the plan-cell bridge:
   `PlannedConfig::Zenwebp`, `build_zenwebp_plan` (rd_core/modes_full;
   lossless VP8L cells on the q=0 sentinel), and the `resolve_verified`

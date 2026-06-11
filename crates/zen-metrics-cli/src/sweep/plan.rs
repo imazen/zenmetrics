@@ -49,6 +49,9 @@ pub enum PlannedConfig {
     /// zenwebp cell (lossless cells ride the q=0 sentinel).
     #[cfg(feature = "webp")]
     Zenwebp(Box<zenwebp::sweep::SweepVariant>),
+    /// zenpng cell (all lossless; every cell rides the q=0 sentinel).
+    #[cfg(feature = "png")]
+    Zenpng(Box<zenpng::sweep::SweepVariant>),
 }
 
 impl PlannedConfig {
@@ -114,6 +117,17 @@ impl PlannedConfig {
                 .encode()
                 .map_err(|e| format!("zenwebp plan-cell encode failed: {e:?}"))?
             }
+            #[cfg(feature = "png")]
+            Self::Zenpng(variant) => {
+                // parallel is pinned off inside build() (pattern 9).
+                let cfg = variant.build();
+                let pixels: &[rgb::Rgb<u8>] =
+                    crate::sweep::encode::bytemuck_cast_rgb(&source.pixels);
+                let img =
+                    imgref::ImgRef::new(pixels, source.width as usize, source.height as usize);
+                zenpng::encode_rgb8(img, None, &cfg, &enough::Unstoppable, &enough::Unstoppable)
+                    .map_err(|e| format!("zenpng plan-cell encode failed: {e:?}"))?
+            }
         };
         Ok(EncodedCell {
             bytes,
@@ -149,6 +163,8 @@ pub fn build_plan(
         CodecKind::Zenjxl => build_zenjxl_plan(name, budget, q_grid),
         #[cfg(feature = "webp")]
         CodecKind::Zenwebp => build_zenwebp_plan(name, budget, q_grid),
+        #[cfg(feature = "png")]
+        CodecKind::Zenpng => build_zenpng_plan(name, budget, q_grid),
         other => Err(format!(
             "plan-driven sweeps are not wired for codec {:?} in this build \
              (zenjpeg needs --features jpeg, zenavif --features avif, \
@@ -479,6 +495,75 @@ pub fn build_zenwebp_plan(
     })
 }
 
+/// Build zenpng plan cells. PNG is all-lossless: no quality grid (the
+/// passed grid is recorded as ignored in the manifest), every cell on
+/// the q=0 sentinel, and the whole modes_full is 9 cells (no budget
+/// ladder exists; a budget below the cell count is reported, never
+/// silently honored by sampling).
+#[cfg(feature = "png")]
+pub fn build_zenpng_plan(
+    name: &str,
+    budget: Option<usize>,
+    q_grid: &[f64],
+) -> Result<BuiltPlan, Box<dyn Error>> {
+    use zenpng::sweep::{SweepAxes, plan};
+    let axes = match name {
+        "rd_core" => SweepAxes::rd_core(),
+        "modes_full" => SweepAxes::modes_full(),
+        other => {
+            return Err(
+                format!("unknown zenpng plan {other:?}; expected rd_core or modes_full").into(),
+            );
+        }
+    };
+    let p = plan(&axes);
+    let over_budget = budget.is_some_and(|b| p.cells.len() > b);
+
+    let manifest = json!({
+        "plan": name,
+        "budget": budget,
+        "q_grid": "ignored (lossless; all cells on the q=0 sentinel)",
+        "q_grid_passed": q_grid,
+        "cells": p.cells.len(),
+        "duplicates_merged": p.duplicates_merged,
+        "invalid_skipped": [],
+        "q_coarsenings": 0,
+        "over_budget": over_budget,
+        "dropped_axes": [],
+        "aliases": p
+            .cells
+            .iter()
+            .filter(|c| !c.aliases.is_empty())
+            .map(|c| json!({"cell": c.id, "merged": c.aliases}))
+            .collect::<Vec<_>>(),
+    });
+
+    let cells = p
+        .cells
+        .into_iter()
+        .map(|c| {
+            let mut m = Map::new();
+            m.insert("cell".into(), Value::String(c.id));
+            m.insert(
+                "fp".into(),
+                Value::String(format!("{:016x}", c.fingerprint)),
+            );
+            m.insert("plan".into(), Value::String(name.to_string()));
+            PlannedCell {
+                q: 0.0,
+                knob_json: Value::Object(m).to_string(),
+                config: PlannedConfig::Zenpng(Box::new(c.variant)),
+            }
+        })
+        .collect();
+
+    Ok(BuiltPlan {
+        cells,
+        manifest_json: serde_json::to_string_pretty(&manifest)
+            .expect("plan manifest serialization cannot fail"),
+    })
+}
+
 /// Resolve a plan-cell identity to its codec config, verifying the
 /// carried resolved-state fingerprint.
 ///
@@ -550,6 +635,15 @@ pub fn resolve_verified(
             }
             Ok(PlannedConfig::Zenwebp(Box::new(variant)))
         }
+        #[cfg(feature = "png")]
+        CodecKind::Zenpng => {
+            let variant = zenpng::sweep::variant_from_cell_id(cell_id)?;
+            let actual = format!("{:016x}", zenpng::sweep::fingerprint(&variant));
+            if actual != fp_hex {
+                return Err(mismatch(&actual));
+            }
+            Ok(PlannedConfig::Zenpng(Box::new(variant)))
+        }
         other => Err(format!(
             "plan-cell identity on codec {:?} which is not plan-wired in this build",
             other.name()
@@ -603,6 +697,8 @@ mod tests {
             PlannedConfig::Zenjxl(_) => panic!("zenjpeg identity resolved to zenjxl"),
             #[cfg(feature = "webp")]
             PlannedConfig::Zenwebp(_) => panic!("zenjpeg identity resolved to zenwebp"),
+            #[cfg(feature = "png")]
+            PlannedConfig::Zenpng(_) => panic!("zenjpeg identity resolved to zenpng"),
         }
         let err = resolve_verified(CodecKind::Zenjpeg, id, cell.q as f32, "0000000000000000")
             .unwrap_err();
@@ -610,6 +706,36 @@ mod tests {
     }
 
     #[cfg(feature = "jpeg")]
+    #[cfg(feature = "png")]
+    #[test]
+    fn zenpng_plan_builds_and_cells_resolve_verified() {
+        let plan = build_plan(CodecKind::Zenpng, "modes_full", None, &[50.0]).unwrap();
+        assert!(plan.cells.len() >= 8);
+        for cell in &plan.cells {
+            assert_eq!(cell.q, 0.0, "all PNG cells ride the q=0 sentinel");
+            let v: serde_json::Value = serde_json::from_str(&cell.knob_json).unwrap();
+            let id = v["cell"].as_str().unwrap();
+            let fp = v["fp"].as_str().unwrap();
+            let resolved = resolve_verified(CodecKind::Zenpng, id, 0.0, fp)
+                .unwrap_or_else(|e| panic!("{id}: {e}"));
+            match resolved {
+                PlannedConfig::Zenpng(_) => {}
+                #[allow(unreachable_patterns)]
+                _ => panic!("zenpng identity resolved to another codec"),
+            }
+        }
+        let first: serde_json::Value = serde_json::from_str(&plan.cells[0].knob_json).unwrap();
+        assert!(
+            resolve_verified(
+                CodecKind::Zenpng,
+                first["cell"].as_str().unwrap(),
+                0.0,
+                "0000000000000000"
+            )
+            .is_err()
+        );
+    }
+
     #[cfg(feature = "webp")]
     #[test]
     fn zenwebp_plan_builds_and_cells_resolve_verified() {
@@ -735,6 +861,8 @@ mod tests {
             PlannedConfig::Zenjxl(_) => panic!("zenavif identity resolved to zenjxl"),
             #[cfg(feature = "webp")]
             PlannedConfig::Zenwebp(_) => panic!("zenavif identity resolved to zenwebp"),
+            #[cfg(feature = "png")]
+            PlannedConfig::Zenpng(_) => panic!("zenavif identity resolved to zenpng"),
         }
         let err = resolve_verified(CodecKind::Zenavif, id, first.q as f32, "0000000000000000")
             .unwrap_err();
