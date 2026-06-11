@@ -75,8 +75,9 @@ fn query_nvidia_smi_memory_free() -> Option<usize> {
     }
     let s = String::from_utf8_lossy(&out.stdout);
     let mb: u64 = s.lines().next()?.trim().parse().ok()?;
-    let bytes = (mb as usize).saturating_mul(1024 * 1024);
-    Some(bytes.saturating_sub(bytes / 10))
+    let bytes: u64 = mb.saturating_mul(1024 * 1024);
+    let bytes_headroom: u64 = bytes.saturating_sub(bytes / 10);
+    Some(usize::try_from(bytes_headroom).unwrap_or(usize::MAX))
 }
 
 /// Effective VRAM cap in bytes (task #51 cap policy):
@@ -90,7 +91,9 @@ pub fn vram_cap_bytes() -> usize {
     if let Some(probed) = live_vram_probe_bytes() {
         return probed;
     }
-    8 * 1024 * 1024 * 1024
+    // 8 GiB as u64 to avoid usize overflow on 32-bit targets; saturate
+    // to usize::MAX (which the resolver treats as "too big") on such hosts.
+    usize::try_from(8u64 << 30).unwrap_or(usize::MAX)
 }
 
 /// Reclaim pooled-but-unreferenced device memory back to the driver
