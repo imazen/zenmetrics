@@ -241,10 +241,16 @@ pub fn try_init_thread_pool(jobs: usize) -> Result<(), Box<dyn Error>> {
     // because the harness is run as a one-shot binary — nobody else has
     // initialised the global pool.
     //
-    // 32 MB worker stacks are mandatory, not a tuning choice: zenavif's
-    // engine (zenrav1e) recurses deeply in partition RDO and overflows
-    // rayon's default 2 MB workers (observed SIGABRT at 256², speed 2).
-    // The cost is reserved address space, not resident memory.
+    // 32 MB worker stacks are mandatory, not a tuning choice. Each
+    // zenavif encode→decode→score task peaks at ~0.5 MB of stack —
+    // dominated by rav1d-safe's rav1d_open frame (a 275 KB
+    // Rav1dTaskContext slot; imazen/rav1d-safe#15), not the encoder
+    // (zenrav1e needs ≤128 KB even at speed 2/q10/noise). The 2 MB
+    // default dies probabilistically anyway because rayon work-stealing
+    // stacks whole task contexts on one worker at nested join points
+    // (zensim's internal rayon). 32 MB ≈ 60 stacked contexts of
+    // headroom; the cost is reserved address space, not resident
+    // memory.
     let mut builder = rayon::ThreadPoolBuilder::new().stack_size(32 * 1024 * 1024);
     if jobs > 0 {
         builder = builder.num_threads(jobs);

@@ -33,8 +33,11 @@ Workspace conventions per the global rules:
   `resolve_verified(codec, …)`); `ZenjpegPlanSpec` renamed `PlanSpec` and
   `SweepConfig.zenjpeg_plan` → `.plan` (internal API). zenavif rides its
   `__expert` feature (already in the `sweep` feature graph). The global rayon
-  pool now uses 32 MB worker stacks unconditionally — zenavif's engine
-  (zenrav1e) overflows the 2 MB default in partition RDO.
+  pool now uses 32 MB worker stacks unconditionally — per-task stacks
+  peak at ~0.5 MB (dominated by rav1d-safe's `rav1d_open` frame,
+  imazen/rav1d-safe#15; the encoder itself needs ≤128 KB) and rayon
+  work-stealing stacks whole task contexts on one worker, which
+  overflows the 2 MB default probabilistically under load.
 
 - Job-system bridge for plan-driven sweeps (the content-addressed
   completion path for sweeps that never finish in one pass): `zen-metrics
