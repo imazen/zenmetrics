@@ -313,6 +313,20 @@ struct SweepArgs {
     /// the manifest) — nothing is silently sampled away.
     #[arg(long, requires = "plan")]
     plan_budget: Option<usize>,
+    /// Build the plan, write `<output>.plan.json`, print its stats, and
+    /// exit WITHOUT encoding. Alone it answers "how many cells/image
+    /// will this cost?" for launchers; pair with `--emit-cells` to
+    /// produce the job-system declare manifest. Requires `--plan`.
+    #[arg(long, requires = "plan")]
+    dry_run: bool,
+    /// Write one JSON line per (source image × plan cell) in
+    /// `zen-jobctl declare-encodes` item format: `{image_path, codec,
+    /// q, knob_tuple_json, source_sha}` with `source_sha` =
+    /// sha256(source bytes), the encode job's content-addressed input.
+    /// q must be integer-valued (`CellId.q` is i64) — fractional grids
+    /// are rejected, never truncated. Requires `--dry-run`.
+    #[arg(long, requires = "dry_run")]
+    emit_cells: Option<PathBuf>,
     /// One or more metrics to score each cell with. Pass once per
     /// metric. Defaults to `zensim` if omitted.
     #[arg(long = "metric", value_enum, action = ArgAction::Append)]
@@ -701,6 +715,65 @@ fn cmd_sweep(
     sources.sort();
     if sources.is_empty() {
         return Err(format!("no source files found in {}", args.sources.display()).into());
+    }
+
+    // Plan dry-run: build the plan, persist the audit manifest, emit the
+    // job-system declare manifest if asked, and exit before any encode.
+    // This is how launchers ask "how many cells?" and how the
+    // content-addressed completion loop (declare → gap → reconcile)
+    // gets its per-cell DesiredJob items.
+    if args.dry_run {
+        #[cfg(all(feature = "sweep", feature = "jpeg"))]
+        {
+            let plan_name = args
+                .plan
+                .as_deref()
+                .expect("clap: --dry-run requires --plan");
+            let built =
+                crate::sweep::plan::build_zenjpeg_plan(plan_name, args.plan_budget, &q_grid)?;
+            let manifest_path = args.output.with_extension("plan.json");
+            std::fs::write(&manifest_path, &built.manifest_json)?;
+            println!(
+                "[sweep] plan {plan_name}: {} cells/image x {} sources (manifest: {})",
+                built.cells.len(),
+                sources.len(),
+                manifest_path.display()
+            );
+            if let Some(cells_path) = &args.emit_cells {
+                if let Some(bad) = q_grid.iter().find(|q| q.fract() != 0.0) {
+                    return Err(format!(
+                        "--emit-cells requires integer q values (CellId.q is i64); got {bad}"
+                    )
+                    .into());
+                }
+                use sha2::{Digest, Sha256};
+                use std::io::Write as _;
+                let mut out = std::io::BufWriter::new(std::fs::File::create(cells_path)?);
+                let mut emitted = 0usize;
+                for src in &sources {
+                    let sha = format!("{:x}", Sha256::digest(std::fs::read(src)?));
+                    for cell in &built.cells {
+                        let item = serde_json::json!({
+                            "image_path": src.display().to_string(),
+                            "codec": "zenjpeg",
+                            "q": cell.q as i64,
+                            "knob_tuple_json": cell.knob_json,
+                            "source_sha": sha,
+                        });
+                        writeln!(out, "{item}")?;
+                        emitted += 1;
+                    }
+                }
+                out.flush()?;
+                println!(
+                    "[sweep] emitted {emitted} declare items to {}",
+                    cells_path.display()
+                );
+            }
+            return Ok(());
+        }
+        #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+        return Err("--dry-run plan mode requires --features sweep,jpeg".into());
     }
 
     // Default: 0 → use rayon's auto-detected num_cpus. Allow override

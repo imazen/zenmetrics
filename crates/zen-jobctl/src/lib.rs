@@ -39,6 +39,60 @@ pub struct DeclareSpec {
     pub metrics: Vec<String>,
 }
 
+/// One encode to declare: the cell identity plus the content hash of the SOURCE image (the
+/// encode job's input blob). This is the line format `zen-metrics sweep --plan … --dry-run
+/// --emit-cells <path>` writes (JSON-lines, one item per line); the two sides are coupled by field
+/// name only, mirroring the jobexec stdin contract's deliberate decoupling.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EncodeDeclareItem {
+    pub image_path: String,
+    pub codec: String,
+    pub q: i64,
+    pub knob_tuple_json: String,
+    /// sha256 hex of the source image bytes (`blobs/<sha>`).
+    pub source_sha: String,
+}
+
+/// Expand encode declarations into desired encode jobs. Plan-cell identity
+/// (`{"cell":…,"fp":…,"plan":…}`) rides into `JobKind::Encode.knobs`, so the JobId is
+/// content-addressed over the cell — re-declaring the same plan is a structural no-op and [`gap`]
+/// returns exactly the unfinished cells. The executor side resolves the id back to a config and
+/// verifies the fingerprint (`zen-metrics jobexec`), so a stored item is runnable years later with
+/// no plan spec in hand.
+pub fn declare_encodes(items: &[EncodeDeclareItem]) -> Result<Vec<DesiredJob>, String> {
+    let mut out = Vec::with_capacity(items.len());
+    for it in items {
+        let sha = Sha256Hex::parse(it.source_sha.clone())
+            .map_err(|e| format!("item {}: {e}", it.image_path))?;
+        out.push(DesiredJob {
+            kind: JobKind::Encode {
+                codec: it.codec.clone(),
+                q: it.q,
+                knobs: it.knob_tuple_json.clone(),
+            },
+            inputs: vec![sha],
+            cell: CellId {
+                image_path: it.image_path.clone(),
+                codec: it.codec.clone(),
+                q: it.q,
+                knob_tuple_json: it.knob_tuple_json.clone(),
+            },
+        });
+    }
+    Ok(out)
+}
+
+/// Parse a `--emit-cells` manifest (JSON-lines of [`EncodeDeclareItem`]).
+pub fn parse_emit_cells(text: &str) -> Result<Vec<EncodeDeclareItem>, String> {
+    text.lines()
+        .filter(|l| !l.trim().is_empty())
+        .enumerate()
+        .map(|(i, l)| {
+            serde_json::from_str(l).map_err(|e| format!("emit-cells line {}: {e}", i + 1))
+        })
+        .collect()
+}
+
 /// Expand a declaration into desired metric jobs (one per item × metric). Goal A.
 pub fn declare(spec: &DeclareSpec) -> Result<Vec<DesiredJob>, String> {
     let mut out = Vec::with_capacity(spec.items.len() * spec.metrics.len());
@@ -125,6 +179,51 @@ pub fn gap(desired: &[DesiredJob], view: &LedgerView, policy: RetryPolicy) -> Ve
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn declare_encodes_is_idempotent_and_carries_plan_identity() {
+        use super::*;
+        let sha = "a".repeat(64);
+        let items = vec![EncodeDeclareItem {
+            image_path: "corpus/x.png".into(),
+            codec: "zenjpeg".into(),
+            q: 85,
+            knob_tuple_json:
+                r#"{"cell":"jp3_t0_small_420","fp":"0123456789abcdef","plan":"rd_core"}"#.into(),
+            source_sha: sha.clone(),
+        }];
+        let a = declare_encodes(&items).unwrap();
+        let b = declare_encodes(&items).unwrap();
+        assert_eq!(a.len(), 1);
+        // Same declaration twice -> same content-addressed JobId (gap is a no-op).
+        assert_eq!(a[0].job_id(), b[0].job_id());
+        match &a[0].kind {
+            zen_job_core::JobKind::Encode { codec, q, knobs } => {
+                assert_eq!(codec, "zenjpeg");
+                assert_eq!(*q, 85);
+                assert!(knobs.contains("rd_core"));
+            }
+            other => panic!("expected Encode kind, got {other:?}"),
+        }
+        // Bad sha rejected.
+        let mut bad = items.clone();
+        bad[0].source_sha = "nope".into();
+        assert!(declare_encodes(&bad).is_err());
+    }
+
+    #[test]
+    fn emit_cells_manifest_parses() {
+        use super::*;
+        let line = format!(
+            r#"{{"image_path":"a.png","codec":"zenjpeg","q":50,"knob_tuple_json":"{{}}","source_sha":"{}"}}"#,
+            "b".repeat(64)
+        );
+        let text = format!("{line}\n\n{line}\n");
+        let items = parse_emit_cells(&text).unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].q, 50);
+        assert!(parse_emit_cells("not json").is_err());
+    }
+
     use super::*;
     use zen_job_core::{LedgerRow, sha256};
 

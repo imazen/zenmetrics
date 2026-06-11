@@ -121,6 +121,65 @@ fn resolve_source(
     Ok(dst)
 }
 
+/// Encode the job's cell — used by BOTH job kinds (`metric` re-encodes
+/// deterministically before scoring).
+///
+/// Plan-driven zenjpeg cells carry `{"cell": <stratum-id>, "fp": <hex>,
+/// "plan": <name>}` in `knob_tuple_json` (what `--plan` sweeps and
+/// `--emit-cells` declare manifests write). Those are self-describing:
+/// the config is reconstructed from the stratum id and verified against
+/// the carried resolved-state fingerprint
+/// (`sweep::plan::resolve_verified`), so id-grammar drift between the
+/// declaring and executing builds is a loud deterministic failure —
+/// never a silently wrong encode. Everything else goes through the
+/// per-codec knob vocabulary as before.
+fn encode_cell_for_job(
+    codec: CodecKind,
+    reference: &Rgb8Image,
+    q: f64,
+    knob_json: &str,
+    knobs: &Map<String, Value>,
+) -> Result<crate::sweep::encode::EncodedCell, Box<dyn Error>> {
+    let plan_identity = (knobs.contains_key("plan"))
+        .then(|| {
+            let cell = knobs.get("cell").and_then(Value::as_str)?;
+            let fp = knobs.get("fp").and_then(Value::as_str)?;
+            Some((cell, fp))
+        })
+        .flatten();
+    if let Some((cell_id, fp_hex)) = plan_identity {
+        if codec != CodecKind::Zenjpeg {
+            return Err(
+                format!("plan-cell identity on non-zenjpeg codec {:?}", codec.name()).into(),
+            );
+        }
+        let _ = knob_json;
+        #[cfg(all(feature = "sweep", feature = "jpeg"))]
+        {
+            let cfg = crate::sweep::plan::resolve_verified(cell_id, q as f32, fp_hex)?;
+            let start = std::time::Instant::now();
+            let bytes = cfg
+                .encode_bytes(
+                    &reference.pixels,
+                    reference.width,
+                    reference.height,
+                    zenjpeg::encoder::PixelLayout::Rgb8Srgb,
+                )
+                .map_err(|e| format!("zenjpeg plan-cell encode failed: {e}"))?;
+            return Ok(crate::sweep::encode::EncodedCell {
+                bytes,
+                encode_ms: start.elapsed().as_secs_f64() * 1000.0,
+            });
+        }
+        #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+        return Err(format!(
+            "plan cell {cell_id:?} (fp {fp_hex}) needs a build with --features sweep,jpeg"
+        )
+        .into());
+    }
+    encode(codec, reference, q, knobs)
+}
+
 pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
     let mut buf = String::new();
     std::io::stdin().read_to_string(&mut buf)?;
@@ -146,7 +205,7 @@ pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
     let reference = decode_image_to_rgb8(&src_path)?;
 
     let codec = codec_from_name(codec_name)?;
-    let encoded = encode(codec, &reference, q, &knobs)?;
+    let encoded = encode_cell_for_job(codec, &reference, q, knob_json, &knobs)?;
 
     let mut out = std::io::stdout().lock();
     match kind {

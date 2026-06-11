@@ -122,6 +122,27 @@ pub fn build_zenjpeg_plan(
     })
 }
 
+/// Resolve a plan-cell identity to its `EncoderConfig`, verifying the
+/// carried resolved-state fingerprint.
+///
+/// This is the executor-side half of the durable-identity contract: a
+/// ledger job stores only `{"cell": <stratum-id>, "fp": <hex>, "plan":
+/// …}`, and the id grammar (`zenjpeg::encode::sweep::config_from_cell_id`)
+/// is self-describing — but builds drift, so the fingerprint is recomputed
+/// from the resolved config and any mismatch is a loud deterministic
+/// failure instead of a silently wrong encode.
+pub fn resolve_verified(cell_id: &str, q: f32, fp_hex: &str) -> Result<EncoderConfig, String> {
+    let cfg = zenjpeg::encode::sweep::config_from_cell_id(cell_id, q)?;
+    let actual = format!("{:016x}", zenjpeg::encode::sweep::fingerprint(&cfg));
+    if actual != fp_hex {
+        return Err(format!(
+            "plan-cell fingerprint mismatch for {cell_id:?} q{q}: declared {fp_hex}, \
+             resolved {actual} — id-grammar drift between the declaring and executing builds?"
+        ));
+    }
+    Ok(cfg)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,6 +166,22 @@ mod tests {
             assert!(seen.insert((c.knob_json.clone(), c.q.to_bits())));
         }
         assert!(plan.manifest_json.contains("\"plan\": \"rd_core\""));
+    }
+
+    #[test]
+    fn resolve_verified_roundtrips_and_rejects_tampered_fp() {
+        let plan = build_zenjpeg_plan("rd_core", None, &[85.0]).unwrap();
+        let cell = &plan.cells[0];
+        let v: serde_json::Value = serde_json::from_str(&cell.knob_json).unwrap();
+        let id = v["cell"].as_str().unwrap();
+        let fp = v["fp"].as_str().unwrap();
+        let cfg = resolve_verified(id, cell.q as f32, fp).unwrap();
+        assert_eq!(
+            format!("{:016x}", zenjpeg::encode::sweep::fingerprint(&cfg)),
+            fp
+        );
+        let err = resolve_verified(id, cell.q as f32, "0000000000000000").unwrap_err();
+        assert!(err.contains("fingerprint mismatch"), "got {err}");
     }
 
     #[test]

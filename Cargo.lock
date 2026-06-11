@@ -6534,6 +6534,7 @@ dependencies = [
  "rgb",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "ultrahdr-core 0.5.0",
  "ultrahdr-rs",

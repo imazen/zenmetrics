@@ -114,6 +114,49 @@ target/release/zen-jobctl declare --spec /tmp/spec.json --out /tmp/manifest.json
 - `q5–q60` matter as much as `q60–q100` for web-focused codecs — sweep the low-q range with equal
   density (repo rule).
 
+### 4b. Plan-driven sweeps (zenjpeg): declare from the codec's planner
+
+zenjpeg owns its sweep space (`zenjpeg::encode::sweep`: curated provenance-stamped axes,
+resolved-state fingerprint dedup, validity filtering, main-effects-first ordering, budget ladder).
+There are TWO ways to execute a plan; choosing the wrong one re-creates the "100k AVIF encodes
+never finish" problem:
+
+| | chunk mode | job-system mode |
+|---|---|---|
+| entry | `zen-metrics sweep --codec zenjpeg --plan rd_core\|modes_full` | `--plan … --dry-run --emit-cells cells.jsonl` → `zen_jobctl::declare_encodes` |
+| unit of retry | (image × whole plan) | one cell (content-addressed `JobId`) |
+| completion | chunk bookkeeping; a dead box redoes its chunk | declare → gap → run → re-reconcile; converges across any number of partial passes |
+| right for | GPU-metric fleet runs that finish in one pass | big/expensive sweeps (AVIF-class) that will not |
+
+Both carry the SAME per-cell identity — `{"cell":"<stratum-id>","fp":"<fingerprint>","plan":"<name>"}`
+in the TSV/parquet `knob_tuple_json` column and in `JobKind::Encode.knobs` (hashed into the `JobId`).
+
+```bash
+# Emit the declare manifest (no encodes run; q must be integer-valued — CellId.q is i64):
+zen-metrics sweep --codec zenjpeg --sources corpus/ --q-grid 5,10,...,95 \
+  --plan modes_full --plan-budget 1824 --dry-run \
+  --emit-cells /tmp/cells.jsonl --output /tmp/plan.tsv
+# -> /tmp/plan.plan.json   (audit manifest: alias merges, invalid strata, budget drops)
+# -> /tmp/cells.jsonl      (one EncodeDeclareItem per source × cell)
+# Then declare: zen_jobctl::parse_emit_cells + declare_encodes -> DesiredJob[] -> gap -> manifest.
+```
+
+**The executor contract for a plan cell** (`zen-metrics jobexec`, knobs JSON containing `"plan"`):
+
+1. Parse `{cell, fp, plan}` from the cell's `knob_tuple_json`.
+2. `zenjpeg::encode::sweep::config_from_cell_id(cell, q)` — the stratum id is **self-describing**
+   (lossless grammar, documented at that function); no plan spec, budget, or q-grid is needed to
+   re-execute a stored job years later.
+3. Verify `fingerprint(&config) == fp` (`sweep::plan::resolve_verified`). Mismatch = deterministic
+   FAILED row — the id-grammar drift tripwire; never a silently wrong encode.
+4. Encode; stdout = the encoded bytes (content-addressed to `blobs/<sha256>` by the worker).
+   `metric` jobs on plan cells work the same way (they re-encode via the same path, then score).
+
+The grammar is additive-only (see `config_from_cell_id` docs in zenjpeg); its roundtrip test
+enforces that every id the planner emits parses back fingerprint-exact. The two documented
+non-self-describing cases (`custom` table bytes, content-hashed boundary-RD knobs) are rejected at
+declare time, not discovered at execute time.
+
 ---
 
 ## 5. Bring up the fleet

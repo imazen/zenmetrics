@@ -296,6 +296,25 @@ PATH explicitly only when shelling out to nvcc directly.
 
 GPU info: `nvidia-smi` driver 596.21 / CUDA capability runtime 13.2.
 
+## Sweep scheduling models — read BEFORE touching sweep features (CRITICAL)
+
+This repo has TWO ways to execute sweep work; new sweep capabilities must land in BOTH
+or explicitly document why not (2026-06-11: the --plan integration initially landed only
+in chunk mode and had to be retrofitted):
+
+1. **Chunk mode** — `zen-metrics sweep` (sweep/run.rs) + the vastai worker
+   (`InlineGroupSpec`). Unit of retry = (image × grid-or-plan). For one-pass GPU-metric
+   fleet runs.
+2. **Job system** — zen-job-core ledger + `zen-metrics jobexec` (the ZEN_EXEC executor).
+   Per-cell content-addressed `DesiredJob`s; completion = declare → gap → re-reconcile.
+   Built precisely because big sweeps (100k-cell AVIF) never finish in one pass. Entry:
+   `--plan … --dry-run --emit-cells` → `zen_jobctl::declare_encodes`.
+
+Plan-driven zenjpeg cells flow through both with ONE identity
+(`{"cell","fp","plan"}` in `knob_tuple_json` / `Encode.knobs`); the stratum id is
+self-describing (`zenjpeg config_from_cell_id`) and the fp is verified at execute time.
+See `docs/RUNNING_JOBS.md` §4b.
+
 ## Sweep build cheat sheet
 
 - **Default CPU+GPU build (development)**:

@@ -21,6 +21,21 @@ Workspace conventions per the global rules:
 
 ## zen-metrics-cli
 
+- Job-system bridge for plan-driven sweeps (the content-addressed
+  completion path for sweeps that never finish in one pass): `zen-metrics
+  sweep --plan … --dry-run [--emit-cells cells.jsonl]` builds the plan,
+  writes the audit manifest, and emits per-(source × cell)
+  `EncodeDeclareItem` JSON-lines without encoding;
+  `zen_jobctl::{EncodeDeclareItem, declare_encodes, parse_emit_cells}`
+  expand them into content-addressed encode `DesiredJob`s (idempotent —
+  re-declaring a plan gaps to exactly the unfinished cells); `zen-metrics
+  jobexec` executes plan cells from the stratum id alone via zenjpeg's
+  `config_from_cell_id`, verifying the carried resolved-state fingerprint
+  (`sweep::plan::resolve_verified`) so id-grammar drift is a loud
+  deterministic failure. End-to-end test: dry-run → declare item →
+  jobexec stdin → JPEG bytes on stdout; tampered fp → hard failure.
+  Docs: RUNNING_JOBS.md §4b (chunk mode vs job system decision table) +
+  CLAUDE.md guard requiring new sweep features to land in both models.
 - Plan-driven zenjpeg sweeps: `zen-metrics sweep --codec zenjpeg --plan
   rd_core|modes_full [--plan-budget N]` takes cells from
   `zenjpeg::encode::sweep` (curated provenance-stamped axes,

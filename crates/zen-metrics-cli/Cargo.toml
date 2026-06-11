@@ -198,6 +198,9 @@ assemble = [
 ]
 
 [dependencies]
+# Content-addressing for --emit-cells declare manifests (same version as
+# zen-job-core so the workspace carries one copy).
+sha2 = "0.10.9"
 clap = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 # `preserve_order` keeps the JSON `compare` output in the order we insert
