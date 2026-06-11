@@ -256,6 +256,17 @@ zenavif      = { path = "../zenavif" }
 # former ../zenjxl--main worktree was removed by worktree cleanup;
 # ../zenjxl is the source of truth.
 zenjxl       = { path = "../zenjxl" }
+# zenjxl-decoder: zenjxl main (8cba12ea, orientation work) consumes the
+# decoder's mode-aware orientation API (`JxlBasicInfo::{coded_size,
+# intrinsic_orientation}` + load-bearing `adjust_orientation`), which is
+# on the decoder's main but NOT in the published 0.3.9. zenjxl's own
+# workspace carries the same patch; cargo patches don't propagate across
+# workspaces, so without this line the zenmetrics workspace resolves
+# crates.io 0.3.9 and zenjxl fails to compile (E0609 intrinsic_orientation,
+# 2026-06-11). Drop when zenjxl-decoder 0.3.10 publishes AND zenjxl bumps
+# its `jxl` dep to ^0.3.10 (a 0.3.10 release was CI-gated in flight on
+# 2026-06-11 — see the sibling's .workongoing/CHANGELOG).
+zenjxl-decoder = { path = "../zenjxl-decoder/zenjxl-decoder" }
 jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
 # butteraugli: the local sibling at ~/work/butteraugli/butteraugli is
 # version 0.9.2 but carries `compare_linear_planar_into` (the recycled-

@@ -165,10 +165,15 @@ pub fn build_plan(
         CodecKind::Zenwebp => build_zenwebp_plan(name, budget, q_grid),
         #[cfg(feature = "png")]
         CodecKind::Zenpng => build_zenpng_plan(name, budget, q_grid),
+        // Unreachable only when ALL five codec features are on (the
+        // full build covers every CodecKind variant above); reachable —
+        // and required — in partial builds like `sweep,png` without jxl.
+        #[allow(unreachable_patterns)]
         other => Err(format!(
             "plan-driven sweeps are not wired for codec {:?} in this build \
              (zenjpeg needs --features jpeg, zenavif --features avif, \
-             zenjxl --features jxl)",
+             zenjxl --features jxl, zenwebp --features webp, \
+             zenpng --features png)",
             other.name()
         )
         .into()),
@@ -644,6 +649,9 @@ pub fn resolve_verified(
             }
             Ok(PlannedConfig::Zenpng(Box::new(variant)))
         }
+        // Unreachable only in the all-five-codec build; reachable —
+        // and required — in partial builds (see build_plan's arm).
+        #[allow(unreachable_patterns)]
         other => Err(format!(
             "plan-cell identity on codec {:?} which is not plan-wired in this build",
             other.name()

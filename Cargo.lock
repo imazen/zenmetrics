@@ -6976,9 +6976,7 @@ dependencies = [
 
 [[package]]
 name = "zenjxl-decoder"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45553172d13760854ca0d37df5d8fa79c5606f927e54fe7794f10c11b1b6dd81"
+version = "0.3.10"
 dependencies = [
  "aligned-vec",
  "array-init",
@@ -6997,9 +6995,7 @@ dependencies = [
 
 [[package]]
 name = "zenjxl-decoder-macros"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "890fff555c8f53765022767ac54ced9f5a3f39deaa2445ceedcf5f1dc5b91e68"
+version = "0.3.9"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -7009,9 +7005,7 @@ dependencies = [
 
 [[package]]
 name = "zenjxl-decoder-simd"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "657526dd9f2acf819b9ad4a43d82eda460a151e1c4ea6aa2a0040ce19cdce61f"
+version = "0.3.9"
 dependencies = [
  "archmage",
  "paste",
