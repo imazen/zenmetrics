@@ -74,21 +74,21 @@ use crate::sweep::encode::EncodedCell;
 use crate::sweep::encode::{CodecKind, encode};
 use crate::sweep::feature_writer::FeatureParquetWriter;
 use crate::sweep::grid::{KnobGrid, KnobTuple};
-#[cfg(all(feature = "sweep", feature = "jpeg"))]
-use crate::sweep::plan::{BuiltPlan, PlannedCell, build_zenjpeg_plan};
+#[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
+use crate::sweep::plan::{BuiltPlan, PlannedCell, build_plan};
 
 /// One unit of sweep work: row identity (`q` + canonical knob JSON)
 /// plus how to produce the encoded bytes.
 enum SweepUnit<'a> {
     /// Classic `(q, knob-tuple)` cell — per-codec JSON knob dispatch.
     Tuple(f64, KnobTuple),
-    /// zenjpeg plan-driven cell carrying a fully-resolved
-    /// `EncoderConfig` from `zenjpeg::encode::sweep`.
-    #[cfg(all(feature = "sweep", feature = "jpeg"))]
+    /// Plan-driven cell carrying a fully-resolved per-codec config
+    /// from the codec's own sweep planner (`sweep::plan`).
+    #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
     Planned(&'a PlannedCell),
     /// Unconstructable; keeps the lifetime parameter in play when the
     /// jpeg feature is off.
-    #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+    #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
     _Never(std::convert::Infallible, std::marker::PhantomData<&'a ()>),
 }
 
@@ -96,9 +96,9 @@ impl SweepUnit<'_> {
     fn q(&self) -> f64 {
         match self {
             Self::Tuple(q, _) => *q,
-            #[cfg(all(feature = "sweep", feature = "jpeg"))]
+            #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
             Self::Planned(cell) => cell.q,
-            #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+            #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
             Self::_Never(never, _) => match *never {},
         }
     }
@@ -106,9 +106,9 @@ impl SweepUnit<'_> {
     fn knob_json(&self) -> String {
         match self {
             Self::Tuple(_, tuple) => tuple.to_canonical_json(),
-            #[cfg(all(feature = "sweep", feature = "jpeg"))]
+            #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
             Self::Planned(cell) => cell.knob_json.clone(),
-            #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+            #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
             Self::_Never(never, _) => match *never {},
         }
     }
@@ -120,24 +120,9 @@ impl SweepUnit<'_> {
     ) -> Result<EncodedCell, Box<dyn std::error::Error>> {
         match self {
             Self::Tuple(q, tuple) => encode(codec, source, *q, &tuple.0),
-            #[cfg(all(feature = "sweep", feature = "jpeg"))]
-            Self::Planned(cell) => {
-                let start = std::time::Instant::now();
-                let bytes = cell
-                    .config
-                    .encode_bytes(
-                        &source.pixels,
-                        source.width,
-                        source.height,
-                        zenjpeg::encoder::PixelLayout::Rgb8Srgb,
-                    )
-                    .map_err(|e| format!("zenjpeg plan-cell encode failed: {e}"))?;
-                Ok(EncodedCell {
-                    bytes,
-                    encode_ms: start.elapsed().as_secs_f64() * 1000.0,
-                })
-            }
-            #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+            #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
+            Self::Planned(cell) => Ok(cell.config.encode_bytes(source)?),
+            #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
             Self::_Never(never, _) => match *never {},
         }
     }
@@ -156,9 +141,9 @@ fn tuple_units(cfg: &SweepConfig) -> Vec<SweepUnit<'static>> {
 }
 
 /// Selector for a plan-driven zenjpeg sweep (see
-/// [`SweepConfig::zenjpeg_plan`]).
+/// [`SweepConfig::plan`]).
 #[derive(Debug, Clone)]
-pub struct ZenjpegPlanSpec {
+pub struct PlanSpec {
     /// `"rd_core"` or `"modes_full"`.
     pub name: String,
     /// Optional cell budget — zenjpeg's reduction ladder sheds
@@ -182,7 +167,7 @@ pub struct SweepConfig {
     /// instead of the `knob_grid` Cartesian product. The plan's audit
     /// manifest (alias merges, invalid strata, budget drops) is written
     /// to `<output>.plan.json`. Requires `--features sweep,jpeg`.
-    pub zenjpeg_plan: Option<ZenjpegPlanSpec>,
+    pub plan: Option<PlanSpec>,
     pub metrics: Vec<MetricKind>,
     pub gpu_runtime: GpuRuntime,
     pub output: PathBuf,
@@ -252,15 +237,19 @@ pub struct SweepConfig {
 /// — the first call wins. Returns `Ok` regardless because subsequent
 /// initialisations from the same process are a no-op for rayon.
 pub fn try_init_thread_pool(jobs: usize) -> Result<(), Box<dyn Error>> {
-    if jobs == 0 {
-        return Ok(()); // let rayon pick `num_cpus`
-    }
     // `build_global` errors if already-initialised; we silently swallow
     // because the harness is run as a one-shot binary — nobody else has
     // initialised the global pool.
-    let _ = rayon::ThreadPoolBuilder::new()
-        .num_threads(jobs)
-        .build_global();
+    //
+    // 32 MB worker stacks are mandatory, not a tuning choice: zenavif's
+    // engine (zenrav1e) recurses deeply in partition RDO and overflows
+    // rayon's default 2 MB workers (observed SIGABRT at 256², speed 2).
+    // The cost is reserved address space, not resident memory.
+    let mut builder = rayon::ThreadPoolBuilder::new().stack_size(32 * 1024 * 1024);
+    if jobs > 0 {
+        builder = builder.num_threads(jobs);
+    }
+    let _ = builder.build_global();
     Ok(())
 }
 
@@ -429,21 +418,15 @@ pub fn run_sweep(
     // Plan-driven zenjpeg cells (zenjpeg::encode::sweep): validated and
     // built ONCE per sweep — cells are image-independent — with the
     // audit manifest written next to the TSV before any encode runs.
-    #[cfg(all(feature = "sweep", feature = "jpeg"))]
-    let built_plan: Option<BuiltPlan> = match &cfg.zenjpeg_plan {
+    #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
+    let built_plan: Option<BuiltPlan> = match &cfg.plan {
         Some(spec) => {
-            if cfg.codec != CodecKind::Zenjpeg {
-                return Err(format!(
-                    "plan {:?} is zenjpeg-only (got --codec {})",
-                    spec.name,
-                    cfg.codec.name()
-                )
-                .into());
-            }
             if !cfg.knob_grid.axes.is_empty() {
                 return Err("--plan and --knob-grid are mutually exclusive".into());
             }
-            let built = build_zenjpeg_plan(&spec.name, spec.budget, &cfg.q_grid)?;
+            // Codec dispatch (and feature availability) live in
+            // sweep::plan::build_plan — unsupported codecs error there.
+            let built = build_plan(cfg.codec, &spec.name, spec.budget, &cfg.q_grid)?;
             let manifest_path = cfg.output.with_extension("plan.json");
             std::fs::write(&manifest_path, &built.manifest_json)?;
             eprintln!(
@@ -456,17 +439,20 @@ pub fn run_sweep(
         }
         None => None,
     };
-    #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
-    if cfg.zenjpeg_plan.is_some() {
-        return Err("plan-driven sweeps require building with --features sweep,jpeg".into());
+    #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
+    if cfg.plan.is_some() {
+        return Err(
+            "plan-driven sweeps require building with --features sweep and the codec feature (jpeg/avif)"
+                .into(),
+        );
     }
 
-    #[cfg(all(feature = "sweep", feature = "jpeg"))]
+    #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
     let cells_per_image: usize = built_plan
         .as_ref()
         .map(|p| p.cells.len())
         .unwrap_or_else(|| cfg.q_grid.len() * cfg.knob_grid.cell_count());
-    #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+    #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
     let cells_per_image: usize = cfg.q_grid.len() * cfg.knob_grid.cell_count();
 
     let cells_total = (cfg.sources.len() * cells_per_image) as u64;
@@ -593,12 +579,12 @@ pub fn run_sweep(
         // is cheap. Plan-driven cells borrow from `built_plan` (built
         // once above); tuple cells own their small knob maps. We don't
         // clone the source either way.
-        #[cfg(all(feature = "sweep", feature = "jpeg"))]
+        #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
         let units: Vec<SweepUnit<'_>> = match &built_plan {
             Some(p) => p.cells.iter().map(SweepUnit::Planned).collect(),
             None => tuple_units(cfg),
         };
-        #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+        #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
         let units: Vec<SweepUnit<'_>> = tuple_units(cfg);
 
         units.par_iter().for_each(|unit| {

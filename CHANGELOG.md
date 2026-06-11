@@ -21,6 +21,21 @@ Workspace conventions per the global rules:
 
 ## zen-metrics-cli
 
+- **zenavif plan-driven sweeps** (checklist step 8 of the variant-generation
+  playbook — zenavif is the second plan-wired codec after zenjpeg).
+  `--codec zenavif --plan rd_core|modes_full|modes_full_alpha` works in both
+  execution models: chunk mode expands via `zenavif::sweep::SweepAxes::by_name`
+  + `SweepBuilder`, and the job system declares/executes self-describing
+  `{"cell","fp","plan"}` identities via `zenavif::sweep::config_from_cell_id`
+  with fingerprint verification (tampered fp = loud deterministic failure,
+  e2e-tested with the declare→jobexec→AVIF-bytes roundtrip). Plumbing:
+  `sweep::plan` is now codec-dispatching (`PlannedConfig` enum, `build_plan`,
+  `resolve_verified(codec, …)`); `ZenjpegPlanSpec` renamed `PlanSpec` and
+  `SweepConfig.zenjpeg_plan` → `.plan` (internal API). zenavif rides its
+  `__expert` feature (already in the `sweep` feature graph). The global rayon
+  pool now uses 32 MB worker stacks unconditionally — zenavif's engine
+  (zenrav1e) overflows the 2 MB default in partition RDO.
+
 - Job-system bridge for plan-driven sweeps (the content-addressed
   completion path for sweeps that never finish in one pass): `zen-metrics
   sweep --plan … --dry-run [--emit-cells cells.jsonl]` builds the plan,

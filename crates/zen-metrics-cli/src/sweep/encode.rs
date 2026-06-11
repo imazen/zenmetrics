@@ -1171,7 +1171,7 @@ fn encode_jxl(
 // ── helpers ─────────────────────────────────────────────────────────────
 
 #[cfg(all(feature = "sweep", feature = "avif"))]
-fn bytemuck_cast_rgb(bytes: &[u8]) -> &[rgb::Rgb<u8>] {
+pub(crate) fn bytemuck_cast_rgb(bytes: &[u8]) -> &[rgb::Rgb<u8>] {
     // `rgb::Rgb<u8>` is `repr(C)` over three `u8` fields with no padding,
     // so a flat RGB byte buffer with length divisible by 3 maps 1:1 onto
     // a slice of `Rgb<u8>`. We use the rgb crate's own

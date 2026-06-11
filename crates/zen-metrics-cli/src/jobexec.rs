@@ -124,7 +124,7 @@ fn resolve_source(
 /// Encode the job's cell — used by BOTH job kinds (`metric` re-encodes
 /// deterministically before scoring).
 ///
-/// Plan-driven zenjpeg cells carry `{"cell": <stratum-id>, "fp": <hex>,
+/// Plan-driven cells carry `{"cell": <stratum-id>, "fp": <hex>,
 /// "plan": <name>}` in `knob_tuple_json` (what `--plan` sweeps and
 /// `--emit-cells` declare manifests write). Those are self-describing:
 /// the config is reconstructed from the stratum id and verified against
@@ -148,32 +148,19 @@ fn encode_cell_for_job(
         })
         .flatten();
     if let Some((cell_id, fp_hex)) = plan_identity {
-        if codec != CodecKind::Zenjpeg {
-            return Err(
-                format!("plan-cell identity on non-zenjpeg codec {:?}", codec.name()).into(),
-            );
-        }
         let _ = knob_json;
-        #[cfg(all(feature = "sweep", feature = "jpeg"))]
+        #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
         {
-            let cfg = crate::sweep::plan::resolve_verified(cell_id, q as f32, fp_hex)?;
-            let start = std::time::Instant::now();
-            let bytes = cfg
-                .encode_bytes(
-                    &reference.pixels,
-                    reference.width,
-                    reference.height,
-                    zenjpeg::encoder::PixelLayout::Rgb8Srgb,
-                )
-                .map_err(|e| format!("zenjpeg plan-cell encode failed: {e}"))?;
-            return Ok(crate::sweep::encode::EncodedCell {
-                bytes,
-                encode_ms: start.elapsed().as_secs_f64() * 1000.0,
-            });
+            // Codec dispatch + fingerprint verification live in
+            // sweep::plan::resolve_verified; unsupported codecs error
+            // there with the feature that would enable them.
+            let cfg = crate::sweep::plan::resolve_verified(codec, cell_id, q as f32, fp_hex)?;
+            return Ok(cfg.encode_bytes(reference)?);
         }
-        #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+        #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
         return Err(format!(
-            "plan cell {cell_id:?} (fp {fp_hex}) needs a build with --features sweep,jpeg"
+            "plan cell {cell_id:?} (fp {fp_hex}) needs a build with --features sweep \
+             and the codec feature (jpeg/avif)"
         )
         .into());
     }

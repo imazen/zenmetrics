@@ -305,7 +305,7 @@ struct SweepArgs {
     /// `--knob-grid`. Cells are fingerprint-deduplicated, validity-
     /// filtered, and emitted main-effects-first over `--q-grid`; the
     /// audit manifest (alias merges, invalid strata, budget drops) is
-    /// written to `<output>.plan.json`. zenjpeg only.
+    /// written to `<output>.plan.json`. Wired codecs: zenjpeg, zenavif.
     #[arg(long, conflicts_with = "knob_grid")]
     plan: Option<String>,
     /// Cell budget for `--plan`. zenjpeg's reduction ladder sheds
@@ -664,7 +664,7 @@ fn cmd_sweep(
     #[cfg(feature = "orchestrator")] use_orchestrator: bool,
     #[cfg(feature = "orchestrator")] orchestrator_opts: &orchestrator_glue::OrchestratorRuntimeOpts,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use crate::sweep::{SweepConfig, ZenjpegPlanSpec, parse_knob_grid, parse_q_grid, run_sweep};
+    use crate::sweep::{PlanSpec, SweepConfig, parse_knob_grid, parse_q_grid, run_sweep};
 
     // Phase 7.5 sweep integration: when `--use-orchestrator` is set,
     // build an `Orchestrator` and hand a wrapped `Arc<Mutex<...>>`
@@ -723,14 +723,14 @@ fn cmd_sweep(
     // content-addressed completion loop (declare → gap → reconcile)
     // gets its per-cell DesiredJob items.
     if args.dry_run {
-        #[cfg(all(feature = "sweep", feature = "jpeg"))]
+        #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
         {
             let plan_name = args
                 .plan
                 .as_deref()
                 .expect("clap: --dry-run requires --plan");
             let built =
-                crate::sweep::plan::build_zenjpeg_plan(plan_name, args.plan_budget, &q_grid)?;
+                crate::sweep::plan::build_plan(args.codec, plan_name, args.plan_budget, &q_grid)?;
             let manifest_path = args.output.with_extension("plan.json");
             std::fs::write(&manifest_path, &built.manifest_json)?;
             println!(
@@ -755,7 +755,7 @@ fn cmd_sweep(
                     for cell in &built.cells {
                         let item = serde_json::json!({
                             "image_path": src.display().to_string(),
-                            "codec": "zenjpeg",
+                            "codec": args.codec.name(),
                             "q": cell.q as i64,
                             "knob_tuple_json": cell.knob_json,
                             "source_sha": sha,
@@ -772,8 +772,11 @@ fn cmd_sweep(
             }
             return Ok(());
         }
-        #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
-        return Err("--dry-run plan mode requires --features sweep,jpeg".into());
+        #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
+        return Err(
+            "--dry-run plan mode requires --features sweep and the codec feature (jpeg/avif)"
+                .into(),
+        );
     }
 
     // Default: 0 → use rayon's auto-detected num_cpus. Allow override
@@ -786,7 +789,7 @@ fn cmd_sweep(
         sources,
         q_grid,
         knob_grid,
-        zenjpeg_plan: args.plan.as_ref().map(|name| ZenjpegPlanSpec {
+        plan: args.plan.as_ref().map(|name| PlanSpec {
             name: name.clone(),
             budget: args.plan_budget,
         }),

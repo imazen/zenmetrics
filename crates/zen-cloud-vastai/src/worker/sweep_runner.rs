@@ -31,7 +31,7 @@ use std::sync::OnceLock;
 use anyhow::{Context, Result};
 use zen_metrics_cli::metrics::{GpuRuntime, MetricKind, ZensimFeatureRegime};
 use zen_metrics_cli::sweep::{
-    CodecKind, KnobGrid, SweepConfig, SweepOrchestratorHandle, ZenjpegPlanSpec, parse_knob_grid,
+    CodecKind, KnobGrid, PlanSpec, SweepConfig, SweepOrchestratorHandle, parse_knob_grid,
     parse_q_grid, run_sweep,
 };
 
@@ -202,7 +202,7 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
         sources,
         q_grid,
         knob_grid,
-        zenjpeg_plan: spec.plan.as_ref().map(|name| ZenjpegPlanSpec {
+        plan: spec.plan.as_ref().map(|name| PlanSpec {
             name: name.clone(),
             budget: spec.plan_budget,
         }),

@@ -897,6 +897,135 @@ fn plan_dry_run_emits_declare_manifest_and_jobexec_runs_it() {
     );
 }
 
+#[cfg(all(feature = "sweep", feature = "avif"))]
+#[test]
+fn zenavif_plan_dry_run_jobexec_roundtrip_and_fp_tripwire() {
+    use std::io::Write as _;
+
+    let dir = fixtures_dir();
+    let staged = tempfile::tempdir().expect("tmp");
+    std::fs::copy(dir.join("ref_64.png"), staged.path().join("ref.png")).unwrap();
+    let out = staged.path().join("pareto.tsv");
+    let cells = staged.path().join("cells.jsonl");
+
+    // 1. Dry run with --codec zenavif: manifest + declare items, NO encodes.
+    let result = cli()
+        .args([
+            "sweep",
+            "--codec",
+            "zenavif",
+            "--sources",
+            staged.path().to_str().unwrap(),
+            "--q-grid",
+            "60",
+            "--plan",
+            "rd_core",
+            "--dry-run",
+            "--emit-cells",
+            cells.to_str().unwrap(),
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+    assert!(
+        result.status.success(),
+        "dry run failed: stderr={}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(!out.exists(), "--dry-run must not encode");
+
+    let body = std::fs::read_to_string(&cells).expect("declare manifest written");
+    let items: Vec<serde_json::Value> = body
+        .lines()
+        .map(|l| serde_json::from_str(l).expect("item json"))
+        .collect();
+    assert!(!items.is_empty());
+    let it = &items[0];
+    assert_eq!(it["codec"].as_str().unwrap(), "zenavif");
+    assert!(it["q"].is_i64(), "q must be integral for CellId");
+    // The all-defaults stratum leads (main-effects-first ordering).
+    assert!(
+        it["knob_tuple_json"]
+            .as_str()
+            .unwrap()
+            .contains("\"cell\":\"s4\""),
+        "got {}",
+        it["knob_tuple_json"]
+    );
+
+    // 2. Round-trip through jobexec: stratum id + fingerprint alone must
+    //    reproduce an AVIF encode (self-describing ledger contract).
+    let job = serde_json::json!({
+        "kind": {"kind": "encode", "codec": it["codec"], "q": it["q"],
+                 "knobs": it["knob_tuple_json"]},
+        "inputs": [it["source_sha"]],
+        "cell": {
+            "image_path": it["image_path"],
+            "codec": it["codec"],
+            "q": it["q"],
+            "knob_tuple_json": it["knob_tuple_json"],
+        },
+    });
+    let mut child = cli()
+        .args(["jobexec"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn jobexec");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(serde_json::to_string(&job).unwrap().as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().expect("jobexec");
+    assert!(
+        out.status.success(),
+        "jobexec failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        out.stdout.len() > 12 && &out.stdout[4..12] == b"ftypavif",
+        "stdout must be an AVIF file ({} bytes)",
+        out.stdout.len()
+    );
+
+    // 3. Tampered fingerprint = loud deterministic failure.
+    let knob = it["knob_tuple_json"].as_str().unwrap();
+    let fp = knob
+        .split("\"fp\":\"")
+        .nth(1)
+        .unwrap()
+        .split('\"')
+        .next()
+        .unwrap();
+    let knob_tampered = knob.replacen(fp, "0000000000000000", 1);
+    let mut tampered = job.clone();
+    tampered["cell"]["knob_tuple_json"] = serde_json::json!(knob_tampered);
+    let mut child = cli()
+        .args(["jobexec"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn jobexec");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(serde_json::to_string(&tampered).unwrap().as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().expect("jobexec");
+    assert!(!out.status.success(), "tampered fp must fail");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("fingerprint mismatch"),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 #[cfg(feature = "sweep")]
 #[test]
 fn sweep_writes_zensim_feature_parquet() {
