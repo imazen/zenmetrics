@@ -17,6 +17,21 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+## Workspace
+
+### Changed
+
+- Public-API snapshots migrated to the shared `zenutils-apidoc` 0.1.0
+  runner package (format v3: three disjoint files per crate — supported
+  surface / feature additions / hidden+excluded). The 163-line local
+  generator at `crates/zenmetrics-api/tests/public_api_doc.rs` became the
+  workspace-excluded `apidoc/` package, so plain `cargo test` and every CI
+  job stop compiling rustdoc tooling: the workflow-level `ZEN_API_DOC: off`
+  env, the lint job's nightly+stable toolchain pair, the `cargo-public-api`
+  install, and the snapshot-check step are all gone from ci.yml, along with
+  zenmetrics-api's test-only `serde_json` dev-dep. Regenerate via
+  `just api-doc`; verify via `just api-doc-check` (ae917f79).
+
 ### Added
 
 ## zen-metrics-cli
