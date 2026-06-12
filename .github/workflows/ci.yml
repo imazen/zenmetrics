@@ -85,14 +85,9 @@ jobs:
           git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
-          # zenjxl-decoder: the workspace [patch.crates-io] points at
-          # ../zenjxl-decoder/zenjxl-decoder (zenjxl main needs the
-          # unreleased 0.3.10 orientation API; see Cargo.toml patch
-          # comment). Cargo loads every patch manifest during metadata
-          # resolution, so the clone is required even where the jxl
-          # feature is off. Pinned to the 0.3.10 release commit.
-          git clone --quiet https://github.com/imazen/zenjxl-decoder.git ../zenjxl-decoder
-          git -C ../zenjxl-decoder checkout c6eca6420558f354f846c3f788ae2fece75e0d68
+          # zenjxl-decoder is no longer a sibling-path patch: the workspace
+          # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
+          # comment), so cargo fetches it itself — no clone needed here.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
           # butteraugli's local layout is a Cargo workspace at
@@ -231,14 +226,9 @@ jobs:
           git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
-          # zenjxl-decoder: the workspace [patch.crates-io] points at
-          # ../zenjxl-decoder/zenjxl-decoder (zenjxl main needs the
-          # unreleased 0.3.10 orientation API; see Cargo.toml patch
-          # comment). Cargo loads every patch manifest during metadata
-          # resolution, so the clone is required even where the jxl
-          # feature is off. Pinned to the 0.3.10 release commit.
-          git clone --quiet https://github.com/imazen/zenjxl-decoder.git ../zenjxl-decoder
-          git -C ../zenjxl-decoder checkout c6eca6420558f354f846c3f788ae2fece75e0d68
+          # zenjxl-decoder is no longer a sibling-path patch: the workspace
+          # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
+          # comment), so cargo fetches it itself — no clone needed here.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
           # butteraugli's local layout is a Cargo workspace at
@@ -382,14 +372,9 @@ jobs:
           git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
-          # zenjxl-decoder: the workspace [patch.crates-io] points at
-          # ../zenjxl-decoder/zenjxl-decoder (zenjxl main needs the
-          # unreleased 0.3.10 orientation API; see Cargo.toml patch
-          # comment). Cargo loads every patch manifest during metadata
-          # resolution, so the clone is required even where the jxl
-          # feature is off. Pinned to the 0.3.10 release commit.
-          git clone --quiet https://github.com/imazen/zenjxl-decoder.git ../zenjxl-decoder
-          git -C ../zenjxl-decoder checkout c6eca6420558f354f846c3f788ae2fece75e0d68
+          # zenjxl-decoder is no longer a sibling-path patch: the workspace
+          # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
+          # comment), so cargo fetches it itself — no clone needed here.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
           # butteraugli's local layout is a Cargo workspace at
@@ -488,14 +473,9 @@ jobs:
           git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
-          # zenjxl-decoder: the workspace [patch.crates-io] points at
-          # ../zenjxl-decoder/zenjxl-decoder (zenjxl main needs the
-          # unreleased 0.3.10 orientation API; see Cargo.toml patch
-          # comment). Cargo loads every patch manifest during metadata
-          # resolution, so the clone is required even where the jxl
-          # feature is off. Pinned to the 0.3.10 release commit.
-          git clone --quiet https://github.com/imazen/zenjxl-decoder.git ../zenjxl-decoder
-          git -C ../zenjxl-decoder checkout c6eca6420558f354f846c3f788ae2fece75e0d68
+          # zenjxl-decoder is no longer a sibling-path patch: the workspace
+          # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
+          # comment), so cargo fetches it itself — no clone needed here.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
           # butteraugli's local layout is a Cargo workspace at
@@ -591,14 +571,9 @@ jobs:
           git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
-          # zenjxl-decoder: the workspace [patch.crates-io] points at
-          # ../zenjxl-decoder/zenjxl-decoder (zenjxl main needs the
-          # unreleased 0.3.10 orientation API; see Cargo.toml patch
-          # comment). Cargo loads every patch manifest during metadata
-          # resolution, so the clone is required even where the jxl
-          # feature is off. Pinned to the 0.3.10 release commit.
-          git clone --quiet https://github.com/imazen/zenjxl-decoder.git ../zenjxl-decoder
-          git -C ../zenjxl-decoder checkout c6eca6420558f354f846c3f788ae2fece75e0d68
+          # zenjxl-decoder is no longer a sibling-path patch: the workspace
+          # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
+          # comment), so cargo fetches it itself — no clone needed here.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
           # butteraugli's local layout is a Cargo workspace at

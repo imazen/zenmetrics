@@ -318,8 +318,10 @@ execute time. The vastai chunk fleet consumes plan cells as identity rows in pla
 input parquets (`generate_sweep_input.py --cells-jsonl`; the sweep runner's tuple path
 routes them through `resolve_verified` — byte-identical to the Planned path, tested).
 Contract + per-codec scalar-axis inventory: `docs/PLAN_SWEEPS.md`; job-system flow:
-`docs/RUNNING_JOBS.md` §4b. Local-build note: the default feature combo needs the
-`zenjxl-decoder` workspace patch until 0.3.10 publishes (Cargo.toml patch comment).
+`docs/RUNNING_JOBS.md` §4b. Local-build note: the `zenjxl-decoder` workspace patch is
+now a pinned git rev (0bd33d21, decoder main with `reject_progressive`) — zenjxl main
+b04ca75 consumes that unreleased API; drop the patch when zenjxl-decoder 0.3.11
+publishes AND zenjxl bumps its `jxl` dep (Cargo.toml patch comment).
 
 ## Sweep build cheat sheet
 

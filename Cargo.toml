@@ -260,17 +260,19 @@ zenavif      = { path = "../zenavif" }
 # former ../zenjxl--main worktree was removed by worktree cleanup;
 # ../zenjxl is the source of truth.
 zenjxl       = { path = "../zenjxl" }
-# zenjxl-decoder: zenjxl main (8cba12ea, orientation work) consumes the
-# decoder's mode-aware orientation API (`JxlBasicInfo::{coded_size,
-# intrinsic_orientation}` + load-bearing `adjust_orientation`), which is
-# on the decoder's main but NOT in the published 0.3.9. zenjxl's own
-# workspace carries the same patch; cargo patches don't propagate across
-# workspaces, so without this line the zenmetrics workspace resolves
-# crates.io 0.3.9 and zenjxl fails to compile (E0609 intrinsic_orientation,
-# 2026-06-11). Drop when zenjxl-decoder 0.3.10 publishes AND zenjxl bumps
-# its `jxl` dep to ^0.3.10 (a 0.3.10 release was CI-gated in flight on
-# 2026-06-11 — see the sibling's .workongoing/CHANGELOG).
-zenjxl-decoder = { path = "../zenjxl-decoder/zenjxl-decoder" }
+# zenjxl-decoder: 0.3.10 published 2026-06-11 (the orientation API that
+# previously forced a path patch), but zenjxl main moved again the next
+# day — b04ca75 (2026-06-12) gates allow_progressive during decode via
+# `JxlDecoderOptions::reject_progressive`, which is on the decoder's main
+# (966f9c5) but NOT in the published 0.3.10. zenjxl's own workspace
+# carries the same patch; cargo patches don't propagate across
+# workspaces, so without this entry the zenmetrics workspace resolves
+# crates.io 0.3.10 and zenjxl fails to compile (E0609 reject_progressive).
+# Pinned as a git rev (not a sibling path) so CI doesn't need to clone the
+# decoder repo and local builds don't depend on sibling checkout state.
+# Drop when zenjxl-decoder 0.3.11 publishes AND zenjxl bumps its `jxl`
+# dep to ^0.3.11.
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "0bd33d21c6b3565dd983d72561010f62235e932e" }
 jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
 # butteraugli: the local sibling at ~/work/butteraugli/butteraugli is
 # version 0.9.2 but carries `compare_linear_planar_into` (the recycled-

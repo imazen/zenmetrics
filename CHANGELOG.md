@@ -21,6 +21,13 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- `zenjxl-decoder` workspace patch: sibling path → pinned git rev
+  (0bd33d21). 0.3.10 published 2026-06-11 (resolving the original
+  orientation-API reason), but zenjxl main b04ca75 (2026-06-12) consumes
+  `JxlDecoderOptions::reject_progressive`, which is on decoder main only —
+  the patch survives with a new reason. CI stops cloning the decoder repo
+  (5 jobs simplified); drop the patch when 0.3.11 publishes and zenjxl
+  bumps its `jxl` dep.
 - Public-API snapshots migrated to the shared `zenutils-apidoc` 0.1.0
   runner package (format v3: three disjoint files per crate — supported
   surface / feature additions / hidden+excluded). The 163-line local
