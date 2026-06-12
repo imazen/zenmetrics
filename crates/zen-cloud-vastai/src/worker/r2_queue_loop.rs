@@ -148,7 +148,11 @@ pub async fn run_r2_queue_loop(
         // Take the alphabetic-first one. Race: another worker may pick
         // the same. Sidecar idempotency reconciles dupes downstream.
         let key = &queue_files[0];
-        let uri = format!("s3://{}/{}", cfg.bucket, qualify_queue_key(&cfg.prefix, key));
+        let uri = format!(
+            "s3://{}/{}",
+            cfg.bucket,
+            qualify_queue_key(&cfg.prefix, key)
+        );
         info!(uri = %uri, "picking up queue entry");
 
         let body = match r2.cat(&uri).await {
