@@ -148,7 +148,7 @@ pub async fn run_r2_queue_loop(
         // Take the alphabetic-first one. Race: another worker may pick
         // the same. Sidecar idempotency reconciles dupes downstream.
         let key = &queue_files[0];
-        let uri = format!("s3://{}/{}", cfg.bucket, key);
+        let uri = format!("s3://{}/{}", cfg.bucket, qualify_queue_key(&cfg.prefix, key));
         info!(uri = %uri, "picking up queue entry");
 
         let body = match r2.cat(&uri).await {
@@ -192,6 +192,26 @@ pub async fn run_r2_queue_loop(
     Ok(processed)
 }
 
+/// Re-qualify an `ls_keys` result with the queue prefix.
+///
+/// `R2Client::ls_keys` shells out to `s5cmd ls <prefix>`, which prints
+/// keys RELATIVE to the listed prefix (`scaleup-000.json`, not
+/// `runs/<sweep>/queue/scaleup-000.json`). Joining the bare key onto
+/// the bucket root produced a URI for an object that doesn't exist —
+/// `cat` returned empty on every poll and the worker spun forever
+/// without claiming anything (the second half of iter-4's bug #3,
+/// masked until the session-token fix let LIST succeed at all; caught
+/// live on the 2026-06-12 arm-zen worker-loop validation). Re-qualify
+/// with the prefix unless the key already carries it (defensive:
+/// s5cmd wildcard forms print full keys).
+fn qualify_queue_key(prefix: &str, key: &str) -> String {
+    if key.starts_with(prefix) {
+        key.to_owned()
+    } else {
+        format!("{prefix}{key}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,5 +221,23 @@ mod tests {
         let cfg = R2QueueLoopConfig::default();
         assert!(cfg.poll_secs > 0);
         assert!(cfg.idle_exit_secs >= 60);
+    }
+
+    #[test]
+    fn qualify_queue_key_prefixes_relative_s5cmd_ls_output() {
+        // `s5cmd ls s3://bucket/runs/x/queue/` prints bare names.
+        assert_eq!(
+            qualify_queue_key("runs/x/queue/", "scaleup-000.json"),
+            "runs/x/queue/scaleup-000.json"
+        );
+    }
+
+    #[test]
+    fn qualify_queue_key_keeps_already_qualified_keys() {
+        // s5cmd wildcard listings print full keys — don't double-join.
+        assert_eq!(
+            qualify_queue_key("runs/x/queue/", "runs/x/queue/scaleup-000.json"),
+            "runs/x/queue/scaleup-000.json"
+        );
     }
 }
