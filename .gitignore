@@ -31,3 +31,4 @@ scripts/cvvdp_goldens/out/
 /vastai-fleet
 /zen-metrics
 .v4_extract/
+/zen-sweep-worker-arm64

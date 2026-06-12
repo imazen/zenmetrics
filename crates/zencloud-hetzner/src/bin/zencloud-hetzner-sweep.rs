@@ -30,8 +30,10 @@ use zenfleet_orchestrator::{
 const DEFAULT_BUCKET: &str = "zen-tuning-ephemeral";
 const DEFAULT_SOURCE_DIR_R2: &str =
     "s3://zen-tuning-ephemeral/salad-smoke-2026-05-28-24cell/sources";
+// NOTE: the fixture lives under input/smoke.parquet — the bare
+// inputs.parquet default 404'd at preflight on 2026-05-28 iter 3.
 const DEFAULT_INPUT_PARQUET_R2: &str =
-    "s3://zen-tuning-ephemeral/salad-smoke-2026-05-28-24cell/inputs.parquet";
+    "s3://zen-tuning-ephemeral/salad-smoke-2026-05-28-24cell/input/smoke.parquet";
 const DEFAULT_IMAGE_BASENAME: &str = "graph.png";
 // Default to the Hetzner ARM64 image (CPU-only, R2-polling). The
 // Salad image cannot run on Hetzner workers — it bakes the Salad
@@ -39,7 +41,10 @@ const DEFAULT_IMAGE_BASENAME: &str = "graph.png";
 // on CAX ARM hardware. The v1 mutable tag tracks the latest pushed
 // image; pin via `--image ghcr.io/imazen/zen-metrics-sweep-hetzner:v1-<sha>`
 // when reproducibility matters.
-const DEFAULT_IMAGE: &str = "ghcr.io/imazen/zen-metrics-sweep-hetzner:v1";
+// v2 (2026-06-12): rebuilt with the iter-5 AWS_SESSION_TOKEN /
+// ~/.aws/credentials provisioning fix in zen-sweep-worker — the v1
+// image predates it and every scoped-cred LIST 403s silently.
+const DEFAULT_IMAGE: &str = "ghcr.io/imazen/zen-metrics-sweep-hetzner:v2";
 const DEFAULT_SERVER_TYPE: &str = "cax21";
 const DEFAULT_LOCATION: &str = "fsn1";
 /// Hetzner per-project server quota is generous (10+); pick a safe
@@ -108,6 +113,13 @@ struct Args {
     dry_run: bool,
     #[arg(long, default_value_t = 12)]
     cells_per_chunk: u32,
+    /// Comma-list of metric names workers score each cell with
+    /// (zen-metrics `--metric` values). The Hetzner image is CPU-only
+    /// ARM64, so the default is the CPU ssim2 — `ssim2-gpu` (the old
+    /// hardcoded value) can never score on a CAX box and produced
+    /// blank score columns.
+    #[arg(long, default_value = "ssim2")]
+    metrics: String,
     #[arg(long, default_value_t = 1.0)]
     replicas_overshoot: f64,
     #[arg(long, default_value_t = 360)]
@@ -404,7 +416,8 @@ async fn main() -> Result<()> {
         // replica + the queue-push paths.
         let parent = load_r2_parent_creds_or_env()
             .context("load R2 parent cred (for cloud-init preview)")?;
-        let preview_env = preview_env_block(&sweep_id, &parent.account_id, &args.bucket);
+        let preview_env =
+            preview_env_block(&sweep_id, &parent.account_id, &args.bucket, &args.metrics);
         let user_data_preview = zencloud_hetzner::cloud_init::build_user_data(
             &zencloud_hetzner::cloud_init::WorkerBootstrap {
                 image: args.image.clone(),
@@ -535,7 +548,7 @@ async fn main() -> Result<()> {
     );
     env_h.insert("WORKER_BACKEND".into(), "hetzner".into());
     env_h.insert("RUST_LOG".into(), "info,zencloud_hetzner=info".into());
-    env_h.insert("METRICS".into(), "ssim2-gpu".into());
+    env_h.insert("METRICS".into(), args.metrics.clone());
     inject_r2_cred_into_env(&mut env_h, &scoped);
     let env: BTreeMap<String, String> = env_h.into_iter().collect();
 
@@ -687,10 +700,11 @@ fn preview_env_block(
     _sweep_id: &str,
     _r2_account_id: &str,
     _bucket: &str,
+    metrics: &str,
 ) -> std::collections::BTreeMap<String, String> {
     // Only "extra" envs the user might inject — the cloud-init builder
     // already places BUCKET / CHUNKS_R2 / R2_ACCOUNT_ID explicitly.
     let mut m = std::collections::BTreeMap::new();
-    m.insert("METRICS".into(), "ssim2-gpu".into());
+    m.insert("METRICS".into(), metrics.to_string());
     m
 }

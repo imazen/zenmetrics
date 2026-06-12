@@ -45,6 +45,12 @@ Workspace conventions per the global rules:
 
 - Sweep TSV panic rows were one column short (missing the
   `encoded_filename` blank) — ragged rows broke strict TSV readers.
+- `zencloud-hetzner-sweep`: `METRICS` is now a `--metrics` flag
+  (default `ssim2`) — the hardcoded `ssim2-gpu` could never score on
+  the CPU-only CAX image; `DEFAULT_IMAGE` → `zen-metrics-sweep-hetzner:v2`
+  (v1 predates the iter-5 scoped-cred fix and 403s every queue LIST);
+  `DEFAULT_INPUT_PARQUET_R2` → the real `input/smoke.parquet` path
+  (bare `inputs.parquet` 404'd at preflight since 2026-05-28).
 
 ### Changed
 

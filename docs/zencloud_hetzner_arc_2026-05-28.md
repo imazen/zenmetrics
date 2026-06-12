@@ -168,3 +168,45 @@ Well under the $1 cap. ghcr.io push: $0 (free public registry).
 | `crates/zencloud-hetzner/src/cloud_init.rs` | default docker_image swapped to `:v1` (test stub) |
 
 Master commit: `e9aa4426`.
+
+## Iter 6 (2026-06-12) — v2 image ships the iter-5 cred fix; ARM capacity drought blocks the relaunch
+
+Context: the v1 image predates the iter-5 worker fix (write
+`~/.aws/credentials` from env before building the R2 client —
+`zen-sweep-worker/src/main.rs` "THE iter-5 bug fix" comment), so v1
+workers 403 on every scoped-cred LIST and the queue is never claimed
+(iter-4's diagnosed bug #3).
+
+Shipped this iter:
+
+- **Image v2**: `ghcr.io/imazen/zen-metrics-sweep-hetzner:v2` +
+  `:v2-ee6f2f0d`, digest `sha256:80498676406937ba530db60a4bc4f2de1d08b0c56ca41a235d5602a2b1b44d2d`.
+  Cross-compiled worker (aarch64-unknown-linux-gnu, --features hetzner,
+  95 s warm) from master ee6f2f0d — includes the iter-5 cred fix AND
+  the HDR sweep plumbing (the worker's inline-sweep tree now builds
+  zen-metrics-cli with `hdr`). In-build qemu smoke passed
+  (worker --version + --backend hetzner --help).
+- **Launcher `--metrics` flag** (default `ssim2`): the previous
+  hardcoded `METRICS=ssim2-gpu` could never score on a CPU-only CAX
+  box — every cell would have emitted blank score columns.
+- **Launcher defaults fixed**: `DEFAULT_IMAGE` → `:v2`;
+  `DEFAULT_INPUT_PARQUET_R2` → `…/input/smoke.parquet` (the bare
+  `inputs.parquet` default 404'd at preflight, iter-3 note).
+- **Fresh fixture** (the May one was cleaned from the ephemeral
+  bucket): `s3://zen-tuning-ephemeral/hetzner-smoke-2026-06-12/`
+  — `input/smoke.parquet` (12 zenjpeg cells, q 20–90, knobs `{}`) +
+  `sources/graph.png` (512×384 photo content).
+
+Launch attempt (`--replicas 1 --server-type cax11 --location fsn1`):
+**HTTP 412 resource_unavailable ("error during placement")** at
+provision. API survey at 2026-06-12T10:52Z: `GET /v1/datacenters`
+shows cax11/21/31/41 **supported** in nbg1-dc3 / hel1-dc2 / fsn1-dc14
+but **available: [] in every datacenter** — a Hetzner-wide ARM
+capacity drought, not a code or quota issue. No server was created
+(verified: project servers = the 2 persistent dev boxes only).
+
+Note for future iters: provision/teardown is the part this arc has
+validated repeatedly (4×, May 28-29); the never-validated piece is the
+worker loop (chunk claim → omni). That piece does not require fleet
+provisioning — it can be validated by running the v2 image as a
+container on an existing ARM box with launcher-minted scoped creds.
