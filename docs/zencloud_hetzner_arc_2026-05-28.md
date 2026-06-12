@@ -210,3 +210,62 @@ validated repeatedly (4×, May 28-29); the never-validated piece is the
 worker loop (chunk claim → omni). That piece does not require fleet
 provisioning — it can be validated by running the v2 image as a
 container on an existing ARM box with launcher-minted scoped creds.
+
+## Iter 7 (2026-06-12, W3r resume) — queue-claim fix lands; placement ladder ships; drought persists across ALL 6 rungs
+
+Landed this iter (master `646f446e` + `b6dd19d4` + `6e11756c`):
+
+- **Worker queue-claim bug fixed** (`646f446e`): `R2Client::ls_keys`
+  (s5cmd ls) prints keys RELATIVE to the listed prefix; the loop
+  joined the bare key onto the bucket root, so `cat` fetched a
+  nonexistent object and the worker polled forever without claiming
+  (second half of iter-4 bug #3 — masked until the iter-5 session-token
+  fix let LIST succeed at all; caught live on the arm-zen worker-loop
+  validation). `qualify_queue_key` re-qualifies + unit tests.
+- **Placement-fallback ladder** (`6e11756c`):
+  `--fallback-placements cax11:hel1,cax21:nbg1,…` on the launcher;
+  `HetznerProviderConfig::with_placement_fallbacks`. On HTTP 412
+  `resource_unavailable`, provision advances to the next
+  `(server_type, location)` rung (sticky across replicas). Non-412
+  errors still fail fast.
+- **Anonymous-pull image path**: `zen-metrics-sweep-hetzner` is a
+  PRIVATE ghcr package (worker pull would have needed creds in
+  cloud-init user_data — over-scoped, rejected). Re-tagged the same
+  digest into the already-PUBLIC fleet package:
+  `ghcr.io/imazen/zen-metrics-sweep:hetzner-v2` (+
+  `:hetzner-v2-ee6f2f0d`), digest `80498676…` unchanged; anonymous
+  manifest fetch verified HTTP 200. Matches zen-metrics-sweep public
+  practice; imazen/zenmetrics source is public so nothing new is
+  disclosed.
+
+Launch attempt 2 (13:57:23Z, `--replicas 1`, primary `cax11:nbg1`,
+ladder `cax11:hel1 → cax11:fsn1 → cax21:nbg1 → cax21:hel1 →
+cax21:fsn1`, image `zen-metrics-sweep:hetzner-v2`, fresh 12-cell
+fixture): **all 6 rungs HTTP 412 resource_unavailable** — the ladder
+walked every placement and exited with "ladder rung 6 of 6"
+(`/tmp/zm-hetzner-launch2.log`). API survey at 13:52:53Z confirms:
+cax11/21/31/41 supported in nbg1-dc3/hel1-dc2/fsn1-dc14, `available:
+NONE` in all six datacenters (ash/hil/sin don't support ARM at all).
+Drought unchanged from iter-6's 10:52Z survey (3+ hours). **No server
+created** — project-wide `GET /servers` at 13:58:15Z shows only the 2
+persistent dev boxes (`zen-arm-dev`, `zen-arm-big`). No orphans.
+
+**Retry-later**: everything is staged for a one-command relaunch when
+ARM capacity returns —
+
+```
+./target/debug/zencloud-hetzner-sweep \
+  --image ghcr.io/imazen/zen-metrics-sweep:hetzner-v2 \
+  --server-type cax11 --location nbg1 \
+  --fallback-placements cax11:hel1,cax11:fsn1,cax21:nbg1,cax21:hel1,cax21:fsn1 \
+  --replicas 1 \
+  --input-parquet-r2 s3://zen-tuning-ephemeral/hetzner-smoke-2026-06-12/input/smoke.parquet \
+  --source-dir-r2 s3://zen-tuning-ephemeral/hetzner-smoke-2026-06-12/sources
+```
+
+Capacity probe (no spend): `GET /v1/datacenters` → ARM ids
+45/93/94/95 in any `server_types.available`. Gate on first chunk:
+`s5cmd ls s3://zen-tuning-ephemeral/runs/<sweep>/omni/*` before
+letting the run continue; measure s/cell vs the Salad 3.9 s/cell GPU
+baseline; the orchestrator tears down automatically and teardown MUST
+be re-verified project-wide via `GET /servers`.
