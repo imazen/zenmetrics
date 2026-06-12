@@ -177,9 +177,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Fail-fast safety net (belt-and-suspenders now that Intel is dropped): a
     # future GPU-init regression on macos-latest dies at 40 min instead of
-    # riding the default 360-min ceiling. 40 min covers a cold release build
+    # riding the default 360-min ceiling. 40 min covers a cold gpu-citest build
     # plus the parity tests (fast when the GPU works).
     timeout-minutes: 40
+    env:
+      # Serialize test execution on Metal. After the tests/it consolidation
+      # (162→9 binaries, 42a107b1) ssim2-gpu's it binary runs 97 tests in one
+      # process; with libtest's default parallelism the concurrent Metal
+      # context/buffer churn wedges the macos-latest runner — observed since
+      # 2026-06-10 as either an indefinite hang in `ssim2-gpu parity` (job
+      # rides the timeout) or a host-level shutdown (exit 143 ~3 min into the
+      # suite; run 27312175768). Compilation is NOT the cost: gpu-citest
+      # builds ssim2-gpu in <2 min. One test at a time keeps exactly the same
+      # assertions and converts a wedge into a readable pass/fail.
+      RUST_TEST_THREADS: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -291,10 +302,10 @@ jobs:
         #
         # ZENMETRICS_GPU_TIMING=1 + `--nocapture`: surface the gpu-core
         # `time_phase` breakdown (`ssim2.compute_with_mode`) so the macos-Metal
-        # *runtime* cost is visible in the log. NB the bulk of this job's wall
-        # time is per-crate release *compilation* (cargo's "Finished in Xm"
-        # lines, ~4–10 min each), not test execution — this flag diagnoses the
-        # runtime remainder on the slowest-at-runtime crate (ssim2).
+        # *runtime* cost is visible in the log. Measured 2026-06-12 (run
+        # 27312175768): gpu-citest compiles this crate in <2 min — wall time
+        # here is test execution, which is why the job-level
+        # RUST_TEST_THREADS=1 serialization matters on this step.
         env:
           ZENMETRICS_GPU_TIMING: "1"
         run: cargo test -p ssim2-gpu --no-default-features --features wgpu --profile gpu-citest --tests -- --nocapture
