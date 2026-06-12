@@ -68,6 +68,12 @@ pub struct HetznerProviderConfig {
     /// the launcher to SSH in and pull diagnostic logs when a worker
     /// reaches Hetzner-reported `running` but never claims a chunk.
     pub ssh_authorized_pubkey: Option<String>,
+    /// Ordered `(server_type, location)` fallbacks tried when the
+    /// primary placement returns HTTP 412 `resource_unavailable`
+    /// (capacity drought — e.g. the 2026-06-12 Hetzner-wide CAX/ARM
+    /// drought where `available` was empty in every datacenter).
+    /// Empty = no fallback, fail on the first 412 (prior behavior).
+    pub placement_fallbacks: Vec<(String, String)>,
 }
 
 impl HetznerProviderConfig {
@@ -92,6 +98,7 @@ impl HetznerProviderConfig {
             registry_server: None,
             r2,
             ssh_authorized_pubkey: None,
+            placement_fallbacks: Vec::new(),
         }
     }
 
@@ -116,6 +123,12 @@ impl HetznerProviderConfig {
     /// Set the diagnostic SSH public key (injected into cloud-init).
     pub fn with_ssh_authorized_pubkey(mut self, pubkey: impl Into<String>) -> Self {
         self.ssh_authorized_pubkey = Some(pubkey.into());
+        self
+    }
+
+    /// Set the `(server_type, location)` placement-fallback ladder.
+    pub fn with_placement_fallbacks(mut self, fallbacks: Vec<(String, String)>) -> Self {
+        self.placement_fallbacks = fallbacks;
         self
     }
 
@@ -248,32 +261,66 @@ impl ProviderHandle for HetznerProviderHandle {
         labels.insert("group".to_string(), self.cfg.group_name.clone());
         labels.insert("sweep_id".to_string(), sweep_id.clone());
 
+        // Placement ladder: primary `(server_type, location)` first,
+        // then any configured fallbacks. The index is STICKY across
+        // replicas — capacity exhaustion (HTTP 412 resource_unavailable)
+        // is a property of the (type, location) pair, so a placement
+        // that 412'd once is never retried within this provision call.
+        let placements: Vec<(String, String)> =
+            std::iter::once((self.cfg.server_type.clone(), self.cfg.location.clone()))
+                .chain(self.cfg.placement_fallbacks.iter().cloned())
+                .collect();
+        let mut placement_idx = 0usize;
+
         for i in 0..spec.replicas {
             let name = format!("{}-{:03}", self.cfg.group_name, i);
-            tracing::info!(
-                server_type = %self.cfg.server_type,
-                location = %self.cfg.location,
-                name = %name,
-                "creating Hetzner server"
-            );
-            let srv = self
-                .api
-                .create_server(
-                    &name,
-                    &self.cfg.server_type,
-                    &self.cfg.image,
-                    &self.cfg.location,
-                    &user_data,
-                    &self.cfg.ssh_keys,
-                    &labels,
-                )
-                .await
-                .with_context(|| {
-                    format!(
-                        "create Hetzner server {} ({} in {})",
-                        name, self.cfg.server_type, self.cfg.location
+            let srv = loop {
+                let (server_type, location) = &placements[placement_idx];
+                tracing::info!(
+                    server_type = %server_type,
+                    location = %location,
+                    name = %name,
+                    ladder_rung = placement_idx,
+                    "creating Hetzner server"
+                );
+                match self
+                    .api
+                    .create_server(
+                        &name,
+                        server_type,
+                        &self.cfg.image,
+                        location,
+                        &user_data,
+                        &self.cfg.ssh_keys,
+                        &labels,
                     )
-                })?;
+                    .await
+                {
+                    Ok(srv) => break srv,
+                    Err(e)
+                        if is_placement_unavailable(&e) && placement_idx + 1 < placements.len() =>
+                    {
+                        tracing::warn!(
+                            server_type = %server_type,
+                            location = %location,
+                            error = %format!("{e:#}"),
+                            "placement unavailable (HTTP 412); advancing ladder"
+                        );
+                        placement_idx += 1;
+                    }
+                    Err(e) => {
+                        let (st, loc) = &placements[placement_idx];
+                        return Err(e).with_context(|| {
+                            format!(
+                                "create Hetzner server {name} ({st} in {loc}; \
+                                 ladder rung {} of {})",
+                                placement_idx + 1,
+                                placements.len()
+                            )
+                        });
+                    }
+                }
+            };
             tracing::info!(
                 server_id = %srv.id,
                 ipv4 = %srv.ipv4().unwrap_or_default(),
@@ -417,10 +464,54 @@ impl ProviderHandle for HetznerProviderHandle {
     }
 }
 
+/// Whether an error from [`HetznerApi::create_server`] is the HTTP 412
+/// `resource_unavailable` placement failure ("error during placement" —
+/// no capacity for that server_type in that location). Matched on the
+/// error-body code Hetzner returns, which `create_server` embeds in its
+/// bail string; only this error advances the placement ladder — auth,
+/// quota, and validation errors must keep failing fast.
+fn is_placement_unavailable(err: &anyhow::Error) -> bool {
+    format!("{err:#}").contains("resource_unavailable")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn placement_unavailable_matches_hetzner_412_body() {
+        // Shape produced by HetznerApi::create_server on the real
+        // 2026-06-12 capacity-drought failure (iter-6 launch log).
+        let e = anyhow::anyhow!(
+            "POST /servers (g-000): HTTP 412 Precondition Failed: \
+             {{\"error\":{{\"code\":\"resource_unavailable\",\
+             \"message\":\"error during placement\",\"details\":{{}}}}}}"
+        );
+        assert!(is_placement_unavailable(&e));
+    }
+
+    #[test]
+    fn placement_unavailable_ignores_other_errors() {
+        for msg in [
+            "POST /servers (g-000): HTTP 401 Unauthorized: {\"error\":{\"code\":\"unauthorized\"}}",
+            "POST /servers (g-000): HTTP 422: {\"error\":{\"code\":\"resource_limit_exceeded\"}}",
+            "POST /servers: connection reset by peer",
+        ] {
+            let e = anyhow::anyhow!("{msg}");
+            assert!(!is_placement_unavailable(&e), "false positive on: {msg}");
+        }
+    }
+
+    #[test]
+    fn placement_unavailable_sees_through_context_chain() {
+        let inner = anyhow::anyhow!(
+            "POST /servers (g-001): HTTP 412 Precondition Failed: \
+             {{\"error\":{{\"code\":\"resource_unavailable\"}}}}"
+        );
+        let wrapped = inner.context("create Hetzner server g-001 (cax11 in fsn1)");
+        assert!(is_placement_unavailable(&wrapped));
+    }
 
     fn mock_spec() -> ProvisionSpec {
         let mut env = BTreeMap::new();

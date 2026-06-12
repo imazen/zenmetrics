@@ -82,6 +82,14 @@ struct Args {
     /// Hetzner location (`fsn1`, `nbg1`, `hel1`, `ash`, `hil`, `sin`).
     #[arg(long, default_value = DEFAULT_LOCATION)]
     location: String,
+    /// Placement-fallback ladder, tried in order when the primary
+    /// `--server-type`/`--location` pair returns HTTP 412
+    /// `resource_unavailable` (capacity drought). Comma-separated
+    /// `server_type:location` entries, e.g.
+    /// `cax11:hel1,cax21:nbg1,cax21:hel1`. The ladder index is sticky
+    /// across replicas within one launch.
+    #[arg(long, value_delimiter = ',')]
+    fallback_placements: Vec<String>,
     /// Per-replica $/hr estimate (USD). Used for the spend summary.
     #[arg(long, default_value_t = DEFAULT_PRICE_PER_HOUR_USD)]
     price_per_hour: f64,
@@ -390,6 +398,23 @@ async fn main() -> Result<()> {
         "[launcher] sweep_id={sweep_id} group={group_name} bucket={} server_type={} location={}",
         args.bucket, args.server_type, args.location
     );
+    // Parse (and validate) the placement-fallback ladder up front so a
+    // typo fails before any R2/Hetzner call — dry-run included.
+    let fallback_placements: Vec<(String, String)> = args
+        .fallback_placements
+        .iter()
+        .map(|s| parse_placement(s))
+        .collect::<Result<_>>()?;
+    if !fallback_placements.is_empty() {
+        eprintln!(
+            "[launcher] placement ladder (on HTTP 412): {}",
+            fallback_placements
+                .iter()
+                .map(|(t, l)| format!("{t}:{l}"))
+                .collect::<Vec<_>>()
+                .join(" -> ")
+        );
+    }
 
     let token = load_token_from_file_or_env().context(
         "load Hetzner token (set $HETZNER_API_TOKEN or write ~/.config/hetzner/credentials)",
@@ -459,6 +484,10 @@ async fn main() -> Result<()> {
             "replicas_provisioned": replicas_provisioned,
             "server_type": args.server_type,
             "location": args.location,
+            "fallback_placements": fallback_placements
+                .iter()
+                .map(|(t, l)| format!("{t}:{l}"))
+                .collect::<Vec<_>>(),
             "synthesized_post_body": synth_post,
             "queue_paths_first_3": queue_paths,
             "cells_per_chunk": args.cells_per_chunk,
@@ -559,7 +588,8 @@ async fn main() -> Result<()> {
         parent.account_id.clone(),
         r2.clone(),
     )
-    .with_location(args.location.clone());
+    .with_location(args.location.clone())
+    .with_placement_fallbacks(fallback_placements.clone());
     if let (Some(u), Some(p)) = (
         args.registry_username.as_ref(),
         args.registry_password.as_ref(),
@@ -707,4 +737,41 @@ fn preview_env_block(
     let mut m = std::collections::BTreeMap::new();
     m.insert("METRICS".into(), metrics.to_string());
     m
+}
+
+/// Parse one `--fallback-placements` entry — `server_type:location`,
+/// e.g. `cax11:hel1` — into a `(server_type, location)` pair.
+fn parse_placement(entry: &str) -> Result<(String, String)> {
+    let (st, loc) = entry.trim().split_once(':').with_context(|| {
+        format!("placement `{entry}` is not `server_type:location` (e.g. `cax11:hel1`)")
+    })?;
+    let (st, loc) = (st.trim(), loc.trim());
+    if st.is_empty() || loc.is_empty() {
+        bail!("placement `{entry}` has an empty server_type or location");
+    }
+    Ok((st.to_string(), loc.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_placement_accepts_type_colon_location() {
+        assert_eq!(
+            parse_placement("cax11:hel1").unwrap(),
+            ("cax11".to_string(), "hel1".to_string())
+        );
+        assert_eq!(
+            parse_placement(" cax21:nbg1 ").unwrap(),
+            ("cax21".to_string(), "nbg1".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_placement_rejects_malformed_entries() {
+        for bad in ["cax11", "cax11:", ":hel1", ""] {
+            assert!(parse_placement(bad).is_err(), "accepted: {bad:?}");
+        }
+    }
 }
