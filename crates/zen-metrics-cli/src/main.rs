@@ -389,6 +389,18 @@ struct SweepArgs {
     /// GPU metrics still serialize through one CubeCL stream regardless.
     #[arg(long, default_value = "0")]
     jobs: usize,
+    /// HDR sweep: sources are 16-bit PQ PNGs (cICP transfer 16, the
+    /// imazen-26-png-v2 `.hdr.png` corpus contract) decoded to absolute
+    /// nits; cells encode through an HDR-capable codec path (zenjxl
+    /// today), decode back to nits, and score via the validated
+    /// per-metric HDR feedings (`zenmetrics_api::hdr::hdr_feeding`).
+    /// SDR-only codecs / plan mode / u8 sidecar options error at
+    /// startup. The output TSV gains a trailing `hdr_mode` column
+    /// (`pq1000`). GPU metrics need an explicit `--gpu-runtime cuda`
+    /// or `wgpu`. See `sweep::hdr` module docs + docs/PLAN_SWEEPS.md.
+    #[cfg(feature = "hdr")]
+    #[arg(long)]
+    hdr: bool,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -786,6 +798,18 @@ fn cmd_sweep(
     // debugging.
     let jobs = if args.jobs == 0 { 0 } else { args.jobs };
     crate::sweep::try_init_thread_pool(jobs)?;
+    #[cfg(feature = "hdr")]
+    let hdr = args.hdr;
+    #[cfg(not(feature = "hdr"))]
+    let hdr = false;
+    #[cfg(all(feature = "hdr", feature = "orchestrator"))]
+    if hdr && use_orchestrator {
+        return Err(
+            "--hdr does not route through the orchestrator (HDR scoring \
+                    uses the HdrScorer cache); drop --use-orchestrator"
+                .into(),
+        );
+    }
     let cfg = SweepConfig {
         codec: args.codec,
         sources,
@@ -804,6 +828,7 @@ fn cmd_sweep(
         encoded_out_dir: args.encoded_out_dir,
         pairs_tsv: args.pairs_tsv,
         jobs,
+        hdr,
     };
     let stats = run_sweep(
         &cfg,

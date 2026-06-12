@@ -159,6 +159,14 @@ pub struct InlineGroupSpec {
     pub encoded_out_dir: Option<PathBuf>,
     /// Rayon thread budget passed via `--jobs`. 0 = auto-detect.
     pub jobs: usize,
+    /// HDR sweep mode (v27 schema addition, 2026-06-12): sources are
+    /// 16-bit PQ PNGs decoded to absolute nits, cells run the HDR
+    /// codec round-trip (zenjxl today) and score via the validated
+    /// per-metric HDR feedings. `SweepConfig.hdr` validates the whole
+    /// combination at startup and errors loudly when unsupported — a
+    /// chunk can never silently degrade to SDR semantics. Default
+    /// `false` keeps every existing chunk byte-identical.
+    pub hdr: bool,
 }
 
 /// Run one group's worth of sweep work in-process. The first call
@@ -221,6 +229,7 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
         encoded_out_dir: spec.encoded_out_dir,
         pairs_tsv: None,
         jobs: spec.jobs,
+        hdr: spec.hdr,
     };
 
     // run_sweep returns a SweepStats struct with cell counts; we

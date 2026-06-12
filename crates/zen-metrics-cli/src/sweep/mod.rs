@@ -29,6 +29,12 @@
 pub mod encode;
 pub mod feature_writer;
 pub mod grid;
+/// HDR sweep mode (`--hdr`): PQ-PNG refs -> nits, HDR-capable codec
+/// round-trip, validated per-metric HDR feedings. See the module docs
+/// for which codecs are wired (zenjxl today) and why SDR-only codecs
+/// are refused rather than approximated.
+#[cfg(feature = "hdr")]
+pub mod hdr;
 #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
 pub mod plan;
 pub mod run;

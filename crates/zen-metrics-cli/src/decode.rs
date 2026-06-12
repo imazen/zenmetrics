@@ -112,6 +112,29 @@ fn decode_png(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     // layout regardless of source.
     let cancel = enough_unstoppable();
     let output = decode(data, &PngDecodeConfig::default(), &*cancel)?;
+    // HDR tripwire: a PNG whose cICP says PQ (16) or HLG (18) carries
+    // absolute-luminance HDR code values. The RGB8 funnel below would
+    // silently quantise 16-bit PQ to "8-bit sRGB" — scores computed on
+    // that are garbage with no error anywhere (the imazen/zenmetrics#25
+    // failure class). Error loudly instead; HDR-aware callers route
+    // through `hdr::decode_to_nits` (`--hdr` on score / score-pairs /
+    // sweep).
+    if let Some(cicp) = &output.info.cicp
+        && matches!(cicp.transfer_characteristics, 16 | 18)
+    {
+        return Err(format!(
+            "PNG signals an HDR transfer via cICP (transfer={}, {}): refusing \
+             to crush it through the 8-bit SDR decode path — score it with \
+             --hdr instead",
+            cicp.transfer_characteristics,
+            if cicp.transfer_characteristics == 16 {
+                "PQ"
+            } else {
+                "HLG"
+            },
+        )
+        .into());
+    }
     pixel_buffer_to_rgb8(&output.pixels)
 }
 

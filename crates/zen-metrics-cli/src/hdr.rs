@@ -58,8 +58,8 @@ fn srgb_oetf(lin: f32) -> f32 {
 
 // ── Decode → absolute-luminance nits ─────────────────────────────────────────
 
-/// Decode an HDR source (EXR / Ultra HDR JPEG / gain-map HEIC) to
-/// absolute-luminance interleaved RGB f32 (cd/m²).
+/// Decode an HDR source (EXR / Ultra HDR JPEG / gain-map HEIC / 16-bit PQ
+/// PNG with cICP) to absolute-luminance interleaved RGB f32 (cd/m²).
 pub fn decode_to_nits(path: &Path) -> Result<NitsImage, Err> {
     let ext = path
         .extension()
@@ -70,8 +70,140 @@ pub fn decode_to_nits(path: &Path) -> Result<NitsImage, Err> {
         "exr" => decode_exr(path),
         "heic" | "heif" => decode_heic(path),
         "jpg" | "jpeg" => decode_ultrahdr_jpeg(path),
+        "png" => decode_pq_png(path),
         other => Err(format!("unsupported HDR input extension: .{other}").into()),
     }
+}
+
+/// Decode a PQ-PNG (PNG 3.0 cICP, transfer 16) to absolute nits.
+///
+/// Corpus contract (imazen-26-png-v2 `.hdr.png`): 16-bit samples are PQ
+/// code values produced as `pq_oetf(linear · 203 / 10000)` with linear
+/// `1.0` = SDR white — i.e. the PQ encoding of absolute light at the
+/// BT.2408 203 cd/m² SDR-white anchor. The PQ EOTF alone therefore
+/// recovers absolute cd/m² (SDR white lands at 203). Primaries (1 or 12)
+/// pass through: metrics score ref and dist in the same primaries.
+///
+/// HLG (transfer 18) is rejected loudly — faithful HLG display light
+/// needs the peak-dependent OOTF, which no zen scoring path implements.
+/// Everything else (no cICP / SDR transfer) is rejected too: silently
+/// treating SDR code values as PQ would produce garbage nits.
+#[cfg(feature = "png")]
+fn decode_pq_png(path: &Path) -> Result<NitsImage, Err> {
+    let data = std::fs::read(path)?;
+    let (rgb16, width, height, _cicp) = png_to_rgb16_pq(&data)?;
+    Ok(rgb16_pq_to_nits(&rgb16, width, height))
+}
+
+#[cfg(not(feature = "png"))]
+fn decode_pq_png(_path: &Path) -> Result<NitsImage, Err> {
+    Err("PQ-PNG HDR decode requires the `png` build feature (zenpng)".into())
+}
+
+/// Decode PNG bytes and normalise to tight interleaved **RGB u16 PQ code
+/// values**, validating the cICP HDR contract (transfer must be 16 = PQ).
+/// Returns `(rgb16, width, height, cicp)` — the u16s are the raw PQ code
+/// values (alpha dropped, gray broadcast, 8-bit scaled by 257), so the
+/// buffer is both nits-convertible ([`rgb16_pq_to_nits`]) and directly
+/// re-encodable as HDR input for codecs that take 16-bit + CICP.
+#[cfg(feature = "png")]
+pub(crate) fn png_to_rgb16_pq(data: &[u8]) -> Result<(Vec<u16>, u32, u32, zenpixels::Cicp), Err> {
+    use zenpng::{PngDecodeConfig, decode};
+    let cancel: Box<dyn enough::Stop + Send + Sync> = Box::new(enough::Unstoppable);
+    let output = decode(data, &PngDecodeConfig::default(), &*cancel)?;
+    let cicp = output.info.cicp.ok_or(
+        "PNG carries no cICP chunk — not an HDR PQ PNG. \
+         Score it through the SDR path instead (drop --hdr)",
+    )?;
+    match cicp.transfer_characteristics {
+        16 => {}
+        18 => {
+            return Err("PNG cICP transfer is HLG (18): faithful HLG display \
+                        light needs the peak-dependent OOTF, which is not \
+                        implemented — only PQ (16) PNGs are supported"
+                .into());
+        }
+        t => {
+            return Err(format!(
+                "PNG cICP transfer {t} is not an HDR transfer (PQ=16) — \
+                 score it through the SDR path instead (drop --hdr)"
+            )
+            .into());
+        }
+    }
+    let (rgb16, width, height) = slice_to_rgb16(&output.pixels.as_slice())?;
+    Ok((rgb16, width, height, cicp))
+}
+
+/// Normalise any u8/u16 slice layout to tight interleaved RGB u16 **code
+/// values** (no transfer math): alpha dropped, gray broadcast, u8 scaled
+/// by 257 (0..255 → 0..65535). Strided input handled per row.
+#[cfg(feature = "png")]
+fn slice_to_rgb16(s: &zenpixels::PixelSlice<'_>) -> Result<(Vec<u16>, u32, u32), Err> {
+    use zenpixels::{ChannelLayout, ChannelType};
+    let (w, h) = (s.width() as usize, s.rows() as usize);
+    let desc = s.descriptor();
+    let channels: usize = match desc.layout() {
+        ChannelLayout::Rgb => 3,
+        ChannelLayout::Rgba => 4,
+        ChannelLayout::Gray => 1,
+        ChannelLayout::GrayAlpha => 2,
+        other => return Err(format!("HDR PNG: unsupported channel layout {other:?}").into()),
+    };
+    let color_channels = if channels >= 3 { 3 } else { 1 };
+    let bytes = s.as_strided_bytes();
+    let stride = s.stride();
+    let mut rgb16 = Vec::with_capacity(w * h * 3);
+    let push_px = |rgb16: &mut Vec<u16>, px: &[u16]| {
+        if color_channels == 1 {
+            rgb16.extend_from_slice(&[px[0], px[0], px[0]]);
+        } else {
+            rgb16.extend_from_slice(&px[..3]);
+        }
+    };
+    match desc.channel_type() {
+        ChannelType::U16 => {
+            let row_bytes = w * channels * 2;
+            for y in 0..h {
+                let row = &bytes[y * stride..y * stride + row_bytes];
+                let mut px = [0u16; 4];
+                for (x, sample) in row.chunks_exact(2).enumerate() {
+                    px[x % channels] = u16::from_ne_bytes([sample[0], sample[1]]);
+                    if x % channels == channels - 1 {
+                        push_px(&mut rgb16, &px);
+                    }
+                }
+            }
+        }
+        ChannelType::U8 => {
+            let row_bytes = w * channels;
+            for y in 0..h {
+                let row = &bytes[y * stride..y * stride + row_bytes];
+                let mut px = [0u16; 4];
+                for (x, &sample) in row.iter().enumerate() {
+                    px[x % channels] = u16::from(sample) * 257;
+                    if x % channels == channels - 1 {
+                        push_px(&mut rgb16, &px);
+                    }
+                }
+            }
+        }
+        other => {
+            return Err(format!("HDR PNG: unsupported channel type {other:?}").into());
+        }
+    }
+    Ok((rgb16, w as u32, h as u32))
+}
+
+/// Tight interleaved RGB u16 PQ code values → absolute-luminance nits via
+/// the SMPTE ST 2084 EOTF (`pq_eotf(v / 65535)`, output in cd/m²).
+#[cfg(feature = "png")]
+pub(crate) fn rgb16_pq_to_nits(rgb16: &[u16], width: u32, height: u32) -> NitsImage {
+    let rgb = rgb16
+        .iter()
+        .map(|&v| zenmetrics_api::hdr::pq_eotf(f32::from(v) / 65535.0))
+        .collect();
+    NitsImage { rgb, width, height }
 }
 
 fn decode_exr(path: &Path) -> Result<NitsImage, Err> {
@@ -261,7 +393,9 @@ pub fn to_cvvdp_linear_planes(img: &NitsImage) -> (Vec<f32>, Vec<f32>, Vec<f32>)
 /// corresponding GPU backend feature is enabled. `None` means the metric has no
 /// umbrella HDR path (CPU metrics, or the `gpu-*` feature is off) — the caller
 /// falls back to the u8 path.
-fn to_umbrella_kind(m: crate::metrics::MetricKind) -> Option<zenmetrics_api::MetricKind> {
+pub(crate) fn to_umbrella_kind(
+    m: crate::metrics::MetricKind,
+) -> Option<zenmetrics_api::MetricKind> {
     use crate::metrics::MetricKind as C;
     use zenmetrics_api::MetricKind as U;
     #[allow(unreachable_patterns)]

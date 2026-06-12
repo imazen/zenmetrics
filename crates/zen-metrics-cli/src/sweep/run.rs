@@ -265,6 +265,19 @@ pub struct SweepConfig {
     /// defers to rayon's default (one per logical core). `1` runs cells
     /// serially, useful for debugging.
     pub jobs: usize,
+    /// HDR sweep mode: references are 16-bit PQ PNGs (cICP transfer 16)
+    /// decoded to absolute nits, cells encode through an HDR-capable
+    /// codec path (zenjxl today — see `sweep::hdr`), decode back to
+    /// nits, and score via the validated per-metric HDR feedings
+    /// (`zenmetrics_api::hdr::hdr_feeding`). The output TSV gains a
+    /// trailing `hdr_mode` column (`pq1000`). SDR-only codecs, plan
+    /// mode, and the u8 sidecar options are rejected at startup —
+    /// never silently degraded (imazen/zenmetrics#25 class).
+    ///
+    /// The field exists regardless of the `hdr` cargo feature so
+    /// fleet plumbing (`zen-cloud-vastai`) can carry it; running with
+    /// `hdr = true` in a build without the feature errors loudly.
+    pub hdr: bool,
 }
 
 /// Initialise the global rayon thread pool. Safe to call multiple times
@@ -411,10 +424,25 @@ pub fn run_sweep(
     // pool is already initialised; first call wins.
     try_init_thread_pool(cfg.jobs)?;
 
+    // HDR mode: validate the whole configuration before any file is
+    // created — unsupported codec/metric/option combinations must fail
+    // the sweep loudly at startup, never degrade per-cell.
+    if cfg.hdr {
+        #[cfg(feature = "hdr")]
+        crate::sweep::hdr::validate_hdr_sweep(cfg)?;
+        #[cfg(not(feature = "hdr"))]
+        return Err(
+            "SweepConfig.hdr is set but this binary was built without the `hdr` \
+             feature — rebuild with --features hdr (plus png + jxl for the \
+             PQ-PNG corpus and the zenjxl HDR codec path)"
+                .into(),
+        );
+    }
+
     let mut wtr = csv::WriterBuilder::new()
         .delimiter(b'\t')
         .from_path(&cfg.output)?;
-    write_header(&mut wtr, &cfg.metrics)?;
+    write_header(&mut wtr, &cfg.metrics, cfg.hdr)?;
 
     let zensim_in_metrics = cfg.metrics.contains(&MetricKind::Zensim);
     let zensim_gpu_in_metrics = cfg.metrics.contains(&MetricKind::ZensimGpu);
@@ -576,6 +604,14 @@ pub fn run_sweep(
         allow(unused_variables)
     )]
     for (src_idx, src_path) in cfg.sources.iter().enumerate() {
+        // HDR mode: an entirely separate per-source path — PQ-PNG ref →
+        // nits, HDR codec round-trip, HdrScorer feedings. Validated at
+        // startup; shares the TSV writer + stats with the SDR loop.
+        #[cfg(feature = "hdr")]
+        if cfg.hdr {
+            run_hdr_source(cfg, src_path, cells_per_image as u64, &stats, &wtr);
+            continue;
+        }
         #[cfg(any(
             feature = "gpu-butteraugli",
             feature = "gpu-ssim2",
@@ -677,6 +713,7 @@ pub fn run_sweep(
                     unit.knob_json(),
                     "".to_string(), // encoded_bytes
                     "".to_string(), // encode_ms
+                    "".to_string(), // encoded_filename
                     "".to_string(), // decode_ms
                 ];
                 for m in &cfg.metrics {
@@ -1211,9 +1248,249 @@ fn decode_encoded_bytes(bytes: &[u8], codec: CodecKind) -> Result<Rgb8Image, Box
     decode_image_to_rgb8(tmp.path())
 }
 
+/// HDR mode: run every cell of one source image. Mirrors the SDR loop's
+/// shape (serial outer source, rayon inner cells, rows through the shared
+/// `Mutex<csv::Writer>`), with the HDR pipeline at every stage: PQ-PNG →
+/// nits reference, `sweep::hdr::encode_hdr`, nits decode-back,
+/// `sweep::hdr::score_hdr_cached`. Every row carries the trailing
+/// `hdr_mode` column (`pq1000`).
+#[cfg(feature = "hdr")]
+fn run_hdr_source(
+    cfg: &SweepConfig,
+    src_path: &Path,
+    cells_per_image: u64,
+    stats: &AtomicSweepStats,
+    wtr: &Mutex<csv::Writer<std::fs::File>>,
+) {
+    let source = match crate::sweep::hdr::decode_hdr_ref(src_path) {
+        Ok(img) => img,
+        Err(e) => {
+            eprintln!(
+                "[sweep] skipping {} (HDR decode failed: {e})",
+                src_path.display()
+            );
+            stats.add_failed_decode(cells_per_image);
+            return;
+        }
+    };
+    let units = tuple_units(cfg);
+    units.par_iter().for_each(|unit| {
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            compute_cell_hdr(cfg, src_path, &source, unit)
+        }))
+        .unwrap_or_else(|panic_payload| {
+            let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "<non-string panic payload>".to_string()
+            };
+            eprintln!(
+                "[sweep] hdr cell panicked: {} q={} knobs={}: {msg}",
+                src_path.display(),
+                unit.q(),
+                unit.knob_json(),
+            );
+            let mut row: Vec<String> = vec![
+                src_path.display().to_string(),
+                cfg.codec.name().to_string(),
+                unit.q().to_string(),
+                unit.knob_json(),
+                "".to_string(), // encoded_bytes
+                "".to_string(), // encode_ms
+                "".to_string(), // encoded_filename
+                "".to_string(), // decode_ms
+            ];
+            for m in &cfg.metrics {
+                for _ in m.column_names() {
+                    row.push("".to_string());
+                }
+            }
+            row.push(crate::sweep::hdr::HDR_MODE_PQ1000.to_string());
+            CellOutcome::DecodeFailed { row }
+        });
+        match outcome {
+            CellOutcome::Ok {
+                row, score_failed, ..
+            } => {
+                if let Ok(mut w) = wtr.lock() {
+                    if w.write_record(&row).is_ok() {
+                        stats.add_emitted();
+                    } else {
+                        eprintln!("[sweep] write_record failed");
+                    }
+                }
+                if score_failed {
+                    stats.add_failed_score();
+                }
+            }
+            CellOutcome::EncodeFailed { row } => {
+                if let Ok(mut w) = wtr.lock() {
+                    let _ = w.write_record(&row);
+                }
+                stats.add_failed_encode();
+            }
+            CellOutcome::DecodeFailed { row } => {
+                if let Ok(mut w) = wtr.lock() {
+                    let _ = w.write_record(&row);
+                }
+                stats.add_failed_decode(1);
+            }
+        }
+    });
+}
+
+/// HDR per-cell compute: encode the 16-bit PQ reference through the HDR
+/// codec path, decode the variant back to nits, score with the validated
+/// HDR feedings. Row shape matches the SDR `compute_cell` exactly, plus
+/// the trailing `hdr_mode` column.
+#[cfg(feature = "hdr")]
+fn compute_cell_hdr(
+    cfg: &SweepConfig,
+    src_path: &Path,
+    source: &crate::sweep::hdr::HdrRef,
+    unit: &SweepUnit<'_>,
+) -> CellOutcome {
+    use crate::sweep::hdr::{
+        HDR_MODE_PQ1000, decode_encoded_to_nits, encode_hdr, score_hdr_cached,
+    };
+
+    let q = unit.q();
+    let knob_json = unit.knob_json();
+    let mut row: Vec<String> = vec![
+        src_path.display().to_string(),
+        cfg.codec.name().to_string(),
+        q.to_string(),
+        knob_json.clone(),
+    ];
+    let blank_scores_and_mode = |row: &mut Vec<String>| {
+        for m in &cfg.metrics {
+            for _ in m.column_names() {
+                row.push("".to_string());
+            }
+        }
+        row.push(HDR_MODE_PQ1000.to_string());
+    };
+
+    // Encode. Plan-identity tuples ({"cell","fp","plan"}) have no HDR
+    // resolve path yet — encode_hdr rejects their unknown keys loudly.
+    let knobs = match unit {
+        SweepUnit::Tuple(_, tuple) => &tuple.0,
+        #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
+        SweepUnit::Planned(_) => {
+            // validate_hdr_sweep rejects plan mode before any cell runs.
+            eprintln!(
+                "[sweep] hdr: planned cell reached compute_cell_hdr — \
+                 validation should have rejected this sweep"
+            );
+            row.push("".to_string()); // encoded_bytes
+            row.push("".to_string()); // encode_ms
+            row.push("".to_string()); // encoded_filename
+            row.push("".to_string()); // decode_ms
+            blank_scores_and_mode(&mut row);
+            return CellOutcome::EncodeFailed { row };
+        }
+        #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
+        SweepUnit::_Never(never, _) => match *never {},
+    };
+    let cell = match encode_hdr(cfg.codec, source, q, knobs) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!(
+                "[sweep] hdr encode failed: {} q={q} knobs={knob_json}: {e}",
+                src_path.display()
+            );
+            row.push("".to_string()); // encoded_bytes
+            row.push("".to_string()); // encode_ms
+            row.push("".to_string()); // encoded_filename
+            row.push("".to_string()); // decode_ms
+            blank_scores_and_mode(&mut row);
+            return CellOutcome::EncodeFailed { row };
+        }
+    };
+
+    row.push(cell.bytes.len().to_string());
+    row.push(format!("{:.3}", cell.encode_ms));
+    let encoded_filename = match &cfg.encoded_out_dir {
+        Some(dir) => save_encoded_variant(dir, src_path, cfg.codec, q, &knob_json, &cell.bytes)
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "[sweep] hdr save encoded variant failed: {} q={q}: {e}",
+                    src_path.display(),
+                );
+                String::new()
+            }),
+        None => String::new(),
+    };
+    row.push(encoded_filename);
+
+    // Decode back to absolute nits — errors when the variant lost its
+    // HDR signaling (that would not be an HDR cell).
+    let decode_start = Instant::now();
+    let decoded = match decode_encoded_to_nits(&cell.bytes, cfg.codec) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!(
+                "[sweep] hdr decode-back failed: {} q={q} knobs={knob_json}: {e}",
+                src_path.display()
+            );
+            row.push("".to_string()); // decode_ms
+            blank_scores_and_mode(&mut row);
+            return CellOutcome::DecodeFailed { row };
+        }
+    };
+    let decode_ms = decode_start.elapsed().as_secs_f64() * 1000.0;
+    row.push(format!("{decode_ms:.3}"));
+
+    if decoded.width != source.width || decoded.height != source.height {
+        eprintln!(
+            "[sweep] hdr dimension mismatch: {} q={q} src={}x{} decoded={}x{}",
+            src_path.display(),
+            source.width,
+            source.height,
+            decoded.width,
+            decoded.height,
+        );
+        blank_scores_and_mode(&mut row);
+        return CellOutcome::DecodeFailed { row };
+    }
+
+    let mut any_score_failed = false;
+    for &metric in &cfg.metrics {
+        match score_hdr_cached(metric, &source.nits, &decoded, cfg.gpu_runtime) {
+            Ok(cols) => {
+                for (_name, value) in cols {
+                    row.push(format!("{value:.6}"));
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "[sweep] hdr {} failed: {} q={q} knobs={knob_json}: {e}",
+                    metric.name(),
+                    src_path.display()
+                );
+                for _ in metric.column_names() {
+                    row.push("".to_string());
+                }
+                any_score_failed = true;
+            }
+        }
+    }
+    row.push(HDR_MODE_PQ1000.to_string());
+
+    CellOutcome::Ok {
+        row,
+        feature: None,
+        pair_row: None,
+        score_failed: any_score_failed,
+    }
+}
+
 fn write_header(
     wtr: &mut csv::Writer<std::fs::File>,
     metrics: &[MetricKind],
+    hdr: bool,
 ) -> Result<(), Box<dyn Error>> {
     let mut headers: Vec<String> = vec![
         "image_path".to_string(),
@@ -1234,6 +1511,12 @@ fn write_header(
         for col in m.column_names() {
             headers.push(format!("score_{col}"));
         }
+    }
+    // HDR sweeps stamp every row with the HDR mode so downstream
+    // parquet/training joins can never confuse nits-scored rows with
+    // SDR rows. SDR sweeps stay byte-identical (no column added).
+    if hdr {
+        headers.push("hdr_mode".to_string());
     }
     wtr.write_record(&headers)?;
     Ok(())

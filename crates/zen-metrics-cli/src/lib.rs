@@ -62,6 +62,13 @@ pub mod compare;
 #[allow(dead_code)]
 pub mod decode;
 
+/// HDR decode + per-metric feeding front-end (PQ-PNG / EXR / gain-map
+/// sources → absolute nits). The sweep's `--hdr` mode (`sweep::hdr`)
+/// builds on this, so the lib compiles it when the `hdr` feature is on.
+#[cfg(feature = "hdr")]
+#[allow(dead_code)]
+pub mod hdr;
+
 /// Orchestrator integration (Phase 7). Bridges the CLI's
 /// [`metrics::MetricKind`] enum and the
 /// [`zenmetrics_orchestrator::Orchestrator`] surface. Library callers

@@ -86,6 +86,14 @@ struct ChunkRecord {
     run_id: Option<String>,
     out_sidecar_omni: Option<String>,
     out_encoded_prefix: Option<String>,
+    /// HDR sweep mode (v27 schema addition, 2026-06-12; absent = false,
+    /// so every v26 chunks.jsonl deserialises unchanged). When set, the
+    /// chunk's groups run the HDR pipeline — PQ-PNG refs to nits, the
+    /// HDR codec round-trip (zenjxl today), HdrScorer feedings — and
+    /// every TSV/omni row carries the `hdr_mode` column. Builds without
+    /// zen-metrics-cli's `hdr` feature fail such chunks loudly.
+    #[serde(default)]
+    hdr: bool,
 }
 
 /// Top-level entry point. The caller (chunk.rs::process_chunk) has
@@ -410,6 +418,7 @@ async fn run_chunk_inline_impl(
             feature_regime,
             encoded_out_dir: Some(encoded.clone()),
             jobs: parse_jobs_env_or_default(),
+            hdr: rec.hdr,
         };
 
         let span_chunk_id = rec.chunk_id.clone();

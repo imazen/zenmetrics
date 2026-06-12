@@ -238,3 +238,56 @@ ids additive-only.
 - Feature gating: `--plan` paths need `--features sweep` (which pulls
   jpeg/webp/avif) + `jxl`/`png` for those codecs. The default (no
   `sweep`) build has no plan machinery.
+
+## 7. HDR sweeps (`--hdr`, added 2026-06-12)
+
+The gate for all HDR training-data collection. SDR sweeps flow
+`decode_image_to_rgb8 → codec encode (RGB8) → decode-back (RGB8) → u8
+metric kernels`; a 16-bit PQ reference pushed through that silently
+quantises absolute-luminance code values to "8-bit sRGB" — scores look
+plausible and mean nothing (the imazen/zenmetrics#25 failure class).
+`--hdr` replaces every stage (`sweep::hdr` module):
+
+- **References**: 16-bit PQ PNGs (PNG 3.0 cICP, transfer 16) per the
+  imazen-26-png-v2 corpus contract — samples are PQ code values of
+  absolute light with SDR white = 203 cd/m² (BT.2408), so the PQ EOTF
+  alone recovers cd/m². Primaries (1 / 12) pass through. HLG and
+  cICP-less PNGs are rejected loudly. The SDR decode path equally
+  refuses PQ/HLG-signaled PNGs (`decode.rs` tripwire) instead of
+  crushing them.
+- **Codec round-trip**: only codecs with a true HDR path run.
+  **zenjxl** is wired: 16-bit PQ samples enter the zencodec adapter as
+  `Rgb16` with `Metadata::cicp` driving the codestream color encoding
+  (PQ + BT.2100/P3); decode-back requires the decoded descriptor to
+  come back PQ-tagged and errors otherwise. **SDR-only today (refused,
+  never approximated): zenjpeg, zenwebp, zenpng, zenavif.** zenavif
+  10-bit PQ and zenpng 16-bit cICP re-encode are the natural next
+  candidates; either needs an honest decode-back-to-nits path before
+  it may join.
+- **Scoring**: `zenmetrics_api::hdr::hdr_feeding` per metric — cvvdp /
+  butteraugli linear planes, GPU ssim2 integrated PU21, iwssim float
+  PU(luma) gray, SSIM-family PU-rescale u8; dssim is Unsupported by
+  design. Scorers live in a process-static cache mirroring
+  `MetricCache`'s cubecl-pool discipline. GPU metrics need an explicit
+  `--gpu-runtime cuda|wgpu`.
+- **Output schema**: the TSV (and therefore the fleet omni parquet,
+  whose schema is inferred from it) gains a trailing `hdr_mode` column,
+  value `pq1000` (PQ-decoded absolute nits, 1000 cd/m² reference peak).
+  SDR sweeps stay byte-identical — no column is added.
+- **Not wired in HDR mode (validated at startup, loud errors)**:
+  `--plan` (PlannedCell encodes via the RGB8-typed path),
+  `--feature-output` (u8 feature extractors), `--distorted-out-dir` /
+  `--pairs-tsv` (8-bit PNG writers), `--use-orchestrator`. zenjxl
+  expert knobs are also rejected — HDR cells accept
+  `{lossless, distance, noise, effort}` only, and unknown knobs error
+  rather than being silently dropped.
+
+### v26 → v27 chunk schema note
+
+`ChunkRecord` (chunks.jsonl) and `InlineGroupSpec` gain an `hdr: bool`
+(serde-default `false`) — strictly additive; every v26 chunks.jsonl
+deserialises unchanged. An HDR chunk on a worker image whose
+zen-metrics-cli lacks the `hdr` feature fails loudly at `run_sweep`
+validation (it can never silently score SDR). The production vastai
+worker (`zen-cloud-vastai`) builds with `hdr` enabled as of this
+change.

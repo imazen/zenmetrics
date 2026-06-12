@@ -63,7 +63,9 @@ pub(crate) mod cache;
 pub mod cvvdp_gpu;
 
 /// Metric identifier exposed on the CLI.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+// `Hash` keys the HDR sweep's process-static scorer cache
+// (`sweep::hdr::HDR_SCORERS`) by CLI metric kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum)]
 pub enum MetricKind {
     /// SSIMULACRA2 — CPU implementation via the `ssimulacra2` crate.
     #[value(name = "ssim2")]

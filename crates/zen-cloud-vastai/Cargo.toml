@@ -61,6 +61,10 @@ chrono = { version = "0.4", default-features = false, features = ["clock"], opti
 zen-metrics-cli = { path = "../zen-metrics-cli", optional = true, default-features = false, features = [
     "sweep",
     "png", "jpeg", "webp", "avif", "jxl",
+    # HDR sweep mode (v27 chunks: `"hdr": true`): PQ-PNG decode +
+    # HdrScorer feedings. Without this, an HDR chunk fails loudly at
+    # run_sweep validation instead of silently scoring SDR.
+    "hdr",
     "cpu-metrics",
     # All GPU metrics, gated to CUDA. cpu-metrics + gpu-cuda alone
     # don't enable any individual metric — each has its own flag.

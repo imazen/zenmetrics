@@ -19,6 +19,33 @@ Workspace conventions per the global rules:
 
 ## Workspace
 
+### Added
+
+- **HDR sweep mode** (`zen-metrics sweep --hdr`) — the gate for HDR
+  training-data collection. 16-bit PQ-PNG references (cICP transfer 16,
+  imazen-26-png-v2 contract: PQ EOTF → absolute cd/m², SDR white 203)
+  decode to nits; cells run an honest HDR codec round-trip (zenjxl:
+  16-bit + CICP through the zencodec adapter; decode-back must come
+  back PQ-tagged); scoring routes through the validated per-metric HDR
+  feedings (`hdr_feeding`) via a process-static `HdrScorer` cache.
+  SDR-only codecs (zenjpeg/zenwebp/zenpng/zenavif), plan mode, and the
+  u8 sidecar options are rejected at startup — never silently
+  approximated (#25 class). Output TSV/omni rows gain a trailing
+  `hdr_mode` column (`pq1000`); SDR sweeps stay byte-identical.
+  `score`/`score-pairs --hdr` also gain PQ-PNG input via
+  `decode_to_nits`, and the SDR PNG decode path now refuses
+  PQ/HLG-signaled PNGs instead of silently crushing 16-bit to 8.
+  Contract: `docs/PLAN_SWEEPS.md` §7.
+- Fleet plumbing for HDR chunks (v26→v27, schema-additive):
+  `ChunkRecord.hdr` + `InlineGroupSpec.hdr` (serde-default false) →
+  `SweepConfig.hdr`; the vastai worker now builds zen-metrics-cli with
+  the `hdr` feature so HDR chunks execute rather than erroring.
+
+### Fixed
+
+- Sweep TSV panic rows were one column short (missing the
+  `encoded_filename` blank) — ragged rows broke strict TSV readers.
+
 ### Changed
 
 - `zenjxl-decoder` workspace patch: sibling path → pinned git rev

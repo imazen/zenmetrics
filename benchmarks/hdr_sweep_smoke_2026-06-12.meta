@@ -1,0 +1,30 @@
+# HDR sweep local smoke — 2026-06-12
+# Phase B evidence: the --hdr sweep path produces real HDR-fed scores
+# (PQ-PNG refs → nits → zenjxl 16-bit+CICP round-trip → hdr_feeding).
+#
+# code:     zenmetrics master, Phase B HDR-sweep commit (parent a1187583);
+#           workspace zenmetrics--hdrfleet, jj change syrtsxvw
+# hostname: lilith (7950X + RTX 5070 12GB, CUDA)
+# refs:     /mnt/v/output/imazen-26-png-v2/1000-lilith-photos-general/
+#             1064_..._3000x4000.hdr.png (zfold7, cICP primaries 1)
+#             1069_..._2870x3827.hdr.png (ip13pro, cICP primaries 12)
+#           SDR control used the paired .sdr.png renditions.
+# command (HDR):
+#   zen-metrics sweep --codec zenjxl --hdr --sources <hdr-dir> \
+#     --q-grid 35,60,85 --knob-grid '{"effort":[3]}' \
+#     --metric cvvdp --metric iwssim-gpu --metric ssim2-gpu \
+#     --gpu-runtime cuda --jobs 2 --output hdr_sweep.tsv
+# command (SDR control): same minus --hdr, sources = .sdr.png dir
+# build:    --features sweep,hdr,png,jxl,gpu,gpu-cuda,gpu-cvvdp,gpu-iwssim,gpu-ssim2 (release)
+#
+# Findings:
+# - 6/6 HDR cells emitted; 0 encode/decode/score failures. ~27 s wall
+#   for 6 cells of 11-12 MP refs incl. GPU init (~4.5 s/cell).
+# - Scores are q-monotonic per ref on all three metrics.
+# - HDR scores differ from the SDR control at every cell (e.g. ref 1069
+#   q35 ssim2: 49.89 HDR vs 72.98 SDR) — the HDR path is not silently
+#   scoring SDR. Structurally it cannot: ref decode requires cICP PQ,
+#   decode-back requires the decoded variant to carry PQ signaling
+#   (info.cicp transfer 16), else the cell errors.
+# - hdr_mode=pq1000 stamped on every HDR row; SDR control TSV schema
+#   unchanged (no hdr_mode column).
