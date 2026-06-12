@@ -320,8 +320,12 @@ routes them through `resolve_verified` — byte-identical to the Planned path, t
 Contract + per-codec scalar-axis inventory: `docs/PLAN_SWEEPS.md`; job-system flow:
 `docs/RUNNING_JOBS.md` §4b. Local-build note: the `zenjxl-decoder` workspace patch is
 now a pinned git rev (0bd33d21, decoder main with `reject_progressive`) — zenjxl main
-b04ca75 consumes that unreleased API; drop the patch when zenjxl-decoder 0.3.11
-publishes AND zenjxl bumps its `jxl` dep (Cargo.toml patch comment).
+(b04ca75 onward; sibling checkout + CI pin now at 4c0d672f, the 2026-06-12 scalar-axes
+landing) consumes that unreleased API; drop the patch when zenjxl-decoder 0.3.11
+publishes AND zenjxl bumps its `jxl` dep (Cargo.toml patch comment). The 2026-06-12
+scalar-axis landings (zenjpeg fff81900 / zenavif e9de3022 / zenjxl 4c0d672f / zenwebp
+700aa4a8) extend the id grammars + fingerprints — declare/execute builds must pair at
+those revs or newer (PLAN_SWEEPS.md §6 "Codec-rev pairing").
 
 ## Sweep build cheat sheet
 
