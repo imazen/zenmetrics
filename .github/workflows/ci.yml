@@ -89,7 +89,7 @@ jobs:
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
+          git -C ../zensim checkout 062bb3cedfbb6e723235044fb0818efaaa493d93
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -230,7 +230,7 @@ jobs:
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
+          git -C ../zensim checkout 062bb3cedfbb6e723235044fb0818efaaa493d93
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -376,7 +376,7 @@ jobs:
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
+          git -C ../zensim checkout 062bb3cedfbb6e723235044fb0818efaaa493d93
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -477,7 +477,7 @@ jobs:
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
+          git -C ../zensim checkout 062bb3cedfbb6e723235044fb0818efaaa493d93
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -575,7 +575,7 @@ jobs:
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
+          git -C ../zensim checkout 062bb3cedfbb6e723235044fb0818efaaa493d93
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
