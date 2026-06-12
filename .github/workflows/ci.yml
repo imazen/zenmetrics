@@ -50,7 +50,7 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
+          git -C ../zenjpeg checkout 94fb6ec6ee3baf9f52982f41cbc56dd0792bb34c
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
@@ -75,16 +75,16 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
+          git -C ../zenpng checkout 2e82aa94077983d9c193aa80a3aac7c3a16972d4
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
+          git -C ../zenwebp checkout 700aa4a84d04d25ab1cf89c33ea1e4bc52f4be20
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
+          git -C ../zenavif checkout e9de3022d7e9294e5dae19b595876d441c9bc135
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
+          git -C ../zenjxl checkout 4c0d672f6d7db01d7bd57d6452e3ba6946d6e7df
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
@@ -191,7 +191,7 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
+          git -C ../zenjpeg checkout 94fb6ec6ee3baf9f52982f41cbc56dd0792bb34c
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
@@ -216,16 +216,16 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
+          git -C ../zenpng checkout 2e82aa94077983d9c193aa80a3aac7c3a16972d4
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
+          git -C ../zenwebp checkout 700aa4a84d04d25ab1cf89c33ea1e4bc52f4be20
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
+          git -C ../zenavif checkout e9de3022d7e9294e5dae19b595876d441c9bc135
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
+          git -C ../zenjxl checkout 4c0d672f6d7db01d7bd57d6452e3ba6946d6e7df
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
@@ -337,7 +337,7 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
+          git -C ../zenjpeg checkout 94fb6ec6ee3baf9f52982f41cbc56dd0792bb34c
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
@@ -362,16 +362,16 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
+          git -C ../zenpng checkout 2e82aa94077983d9c193aa80a3aac7c3a16972d4
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
+          git -C ../zenwebp checkout 700aa4a84d04d25ab1cf89c33ea1e4bc52f4be20
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
+          git -C ../zenavif checkout e9de3022d7e9294e5dae19b595876d441c9bc135
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
+          git -C ../zenjxl checkout 4c0d672f6d7db01d7bd57d6452e3ba6946d6e7df
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
@@ -438,7 +438,7 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
+          git -C ../zenjpeg checkout 94fb6ec6ee3baf9f52982f41cbc56dd0792bb34c
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
@@ -463,16 +463,16 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
+          git -C ../zenpng checkout 2e82aa94077983d9c193aa80a3aac7c3a16972d4
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
+          git -C ../zenwebp checkout 700aa4a84d04d25ab1cf89c33ea1e4bc52f4be20
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
+          git -C ../zenavif checkout e9de3022d7e9294e5dae19b595876d441c9bc135
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
+          git -C ../zenjxl checkout 4c0d672f6d7db01d7bd57d6452e3ba6946d6e7df
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
@@ -536,7 +536,7 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
+          git -C ../zenjpeg checkout 94fb6ec6ee3baf9f52982f41cbc56dd0792bb34c
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
@@ -561,16 +561,16 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
+          git -C ../zenpng checkout 2e82aa94077983d9c193aa80a3aac7c3a16972d4
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
+          git -C ../zenwebp checkout 700aa4a84d04d25ab1cf89c33ea1e4bc52f4be20
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
+          git -C ../zenavif checkout e9de3022d7e9294e5dae19b595876d441c9bc135
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
+          git -C ../zenjxl checkout 4c0d672f6d7db01d7bd57d6452e3ba6946d6e7df
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.

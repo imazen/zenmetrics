@@ -123,8 +123,8 @@ in each codec's sweep module docs; this is the cross-codec index.
 | quality | SCALAR (rate axis) | 1–100, grid |
 | trellis λ₁ (`lambda_log_scale1`) | **SCALAR** | 12.0–17.0; steps 13.5, 14.0, 14.5, 14.75, 15.5, 16.0 |
 | trellis λ₂ (`lambda_log_scale2`) | **SCALAR** | 14.0–18.0; steps 16.0, 16.5, 17.0 at λ₁=14.75 |
-| aq_coupling.scale | **SCALAR** | −8..+8 (clamped ±1.0 MANDATORY); steps −8, −4, +4 |
-| aq_coupling.exponent | **SCALAR** | 0.5–2.0; probe 2.0 |
+| aq_coupling.scale | **SCALAR** | −8..+8 (clamped ±1.0 MANDATORY); steps −8, −4, −2, +2, +4, +8 (6-pt symmetric, zenjpeg fff81900) |
+| aq_coupling.exponent | **SCALAR** | 0.5–2.0; probes 0.5, 2.0 (1.0 default unspelled — would alias) |
 | delta_dc_weight | **SCALAR** | 0.0–5.0; probe 1.0 (response-surface only — quality collapses q≤70) |
 | chroma_distance_scales [Cb,Cr] | **SCALAR ×2** | each 0.1–5.0; pairs [0.5,0.5],[2,2],[1,2],[2,1] (Cb/Cr independently live) |
 | moz chroma_quality Δ | **SCALAR (delta)** | −30..0 vs grid q; steps −10, −20 |
@@ -137,8 +137,8 @@ in each codec's sweep module docs; this is the cross-codec index.
 | axis | kind | bound / steps |
 |---|---|---|
 | quality | SCALAR (rate axis) | 1–100 grid; **resolved `quantizer` is the trained-on mediator** (`SweepCell::feature_row` emits it; also `alpha_quantizer`) |
-| vaq strength | **SCALAR** | 0.0–4.0; axis Some(0.5) + probe 2.0 (1.0 is a structural no-op — byte-identical to off) |
-| seg_boost | **SCALAR** | 0.5–4.0; probes 1.5, 2.5 |
+| vaq strength | **SCALAR** | 0.0–4.0; axis Some(0.5) + probes 0.25, 2.0, 3.0 (1.0 is a structural no-op — byte-identical to off; 0.0 excluded pending semantics) |
+| seg_boost | **SCALAR** | 0.5–4.0; probes 0.75, 1.5, 2.5, 4.0. **Still-envelope equivalence (proven by encode, e9de3022)**: `seg_boost(x)` ≡ `vaq_strength(x)` byte-identically on still encodes, so the two ladders interleave into one alias-free joint 8-point effective ladder {0.25, 0.5, 0.75, 1.5, 2.0, 2.5, 3.0, 4.0} |
 | alpha_quality Δ | **SCALAR (delta)** | ±25 vs grid q, clamp 1–100 (alpha corpora only, `modes_full_alpha`) |
 | speed | ordinal | 1–10; axes {4, 6, 2} + 8 |
 | partition_range | ordinal pair | probes (4,16), (16,64) |
@@ -154,7 +154,9 @@ one numeric column per knob, resolved state preferred (append-only).
 |---|---|---|
 | distance | SCALAR (rate axis) | resolved from generic q via `resolve_distance_for_quality` (plateau q≤20 dedupes); `ExplicitDistance` grid for native-distance sweeps |
 | `k_info_loss_mul_base` | **SCALAR** | probe 1.3 (default ~1.0) |
-| `entropy_mul_table` | **SCALAR ×12** (preset-spelled) | per-DCT-class multipliers; curated probe = `experimental()` preset only |
+| `k_ac_quant` | **SCALAR** | > 0; steps 0.575, 0.65, 0.88, 1.0 around the 0.765 default (0.65 = the jxl-encoder#25 flip value, sanctioned as a learned-dispatch axis; 4c0d672f) |
+| `fine_grained_step` | **SCALAR** (u8) | 1–8; live steps 1, 3. **Multiples of 4 are structurally dead** — the only consumer (non-aligned 32×32-class pass) skips `(cy\|cx) % 4 == 0` positions, so step 4/8 ≡ `non_aligned_eval=false` (4c0d672f) |
+| `entropy_mul_table` | **SCALAR ×12** (preset-spelled) | per-DCT-class multipliers; 3 curated presets: `experimental()`, `screenshot_suppressed()`, `high_d_photo_smooth_suppressed()` (4c0d672f) |
 | effort | ordinal | 1–10; axes {7,5,9} + {3,10} |
 | faster_decoding | ordinal | 0–4; lossy probes 4; lossless 2 |
 | strategy / encoder_mode / progressive | categorical | Zenjxl/Libjxl/LeanFaster; Reference/Experimental; Single/2 progressive modes |
@@ -169,8 +171,9 @@ one numeric column per knob, resolved state preferred (append-only).
 | axis | kind | bound / steps |
 |---|---|---|
 | quality | SCALAR (rate axis) | 1–100 grid (lossy; fingerprint-hashed) |
-| sns_strength | **SCALAR** (u8) | 0–100; steps None (encoder-derived), 0, 100 |
-| filter_strength | **SCALAR** (u8) | 0–100; steps None, 0 |
+| sns_strength | **SCALAR** (u8) | 0–100; steps None, 0, 25, 80, 100 → effective ladder {0, 25, 50, 80, 100} (25=Drawing / 80=Photo preset constants; 700aa4a8) |
+| filter_strength | **SCALAR** (u8) | 0–100; steps None, 0, 10, 30, 100 → effective {0, 10, 30, 60, 100} (10=Drawing, 30=Photo; 700aa4a8) |
+| filter_sharpness | **SCALAR** (u8) | 0–7; steps None, 3, 6, 7 → effective {0, 3, 6, 7} — NEW axis (`-shp<v>` id token; 3=Photo, 6=Drawing, 7=clamp bound; 700aa4a8) |
 | partition_limit | **SCALAR** (u8) | 0–100; probe `plim50` |
 | method | ordinal | 0–6; axes {4, 6} + 2 |
 | segments | ordinal | 1–4; probe Some(1) |
@@ -193,31 +196,52 @@ it).
 
 Scalar knobs that exist (fingerprinted / reachable) but are NOT on any
 curated plan axis today — i.e. what a dozen-knob dense sweep or a
-`--scalar-axes` training run cannot get from `--plan` yet:
+`--scalar-axes` training run cannot get from `--plan` yet.
 
-- **zenjpeg**: jpegli AQ strength is bool-only on the axes (no
-  continuous strength); `chroma_quality` ABSOLUTE form deliberately
-  unswept (delta form covers the idiom); trellis `speed` tiers unswept.
-- **zenavif**: `vaq_strength` has 2 curated points (0.5, 2.0) — no
-  dense ladder; `seg_boost` 2 points (1.5, 2.5); `alpha_quality` delta
-  only ±25; no direct `quantizer` axis (mediated via quality — the
-  resolved value is in `feature_row`, but plans can't pin qp directly).
-- **zenjxl**: `k_ac_quant` (f32) fingerprinted but on no curated axis;
-  `fine_grained_step` (u8) likewise; `entropy_mul_table` has a single
-  preset probe — no per-class scalar steps; `lossy_search_seeds` is
-  structurally dead in `__expert` builds (needs `butteraugli-loop`);
-  lossless `lz77`/`palette`/`patches` + `tree_sample_fraction` blocked
-  upstream (jxl-encoder#69) and `chroma_subsampling`/alpha axes are out
-  of scope per imazen/zenjxl#8.
-- **zenwebp**: `sns_strength` curated at endpoints {0,100} only — no
-  mid steps; `filter_strength` {None,0} only; `filter_sharpness` (0–7)
-  not an axis; near-lossless preprocessing not in the lossless axes.
+**Closed 2026-06-12** (all four codecs landed scalar-ladder densification
+on their mains — zenjpeg `fff81900`, zenavif `e9de3022`, zenjxl
+`4c0d672f`, zenwebp `700aa4a8`; §4 reflects the shipped ladders):
+zenavif vaq/seg dense ladders (joint 8-point, alias-free, still-envelope
+equivalence proven), zenjxl `k_ac_quant` + `fine_grained_step` +
+2 extra `entropy_mul_table` presets, zenwebp sns/filter mid-ladders +
+the new `filter_sharpness` axis, zenjpeg aq_coupling scale/exponent
+densification.
+
+Still open:
+
+- **zenjpeg**: `chroma_quality` ABSOLUTE form deliberately unswept
+  (delta form covers the idiom); trellis `speed` tiers unswept.
+- **zenavif**: `alpha_quality` delta only ±25.
+- **zenjxl**: `entropy_mul_table` has no per-class scalar steps (3
+  named presets only); `lossy_search_seeds` is structurally dead in
+  `__expert` builds (needs `butteraugli-loop`); lossless
+  `lz77`/`palette`/`patches` + `tree_sample_fraction` blocked upstream
+  (jxl-encoder#69) and `chroma_subsampling`/alpha axes are out of
+  scope per imazen/zenjxl#8.
+- **zenwebp**: near-lossless preprocessing not in the lossless axes.
 - **zenpng**: none (by design; see above).
 
-When adding any of these, follow the playbook: validate liveness with
-the codec's `sweep_validate` harness first (inert steps are forbidden),
-document bounds + step provenance in the module-docs table, and keep
-ids additive-only.
+### Blocked on encoder knob (not reachable from the sweep layer)
+
+These are NOT sweep-harness gaps — the encoder exposes no setter, so a
+curated axis cannot exist until the codec (or its vendored encoder)
+grows the knob. Verified against encoder source on 2026-06-12:
+
+- **zenavif direct `quantizer` (qp) axis**: neither zenavif's
+  `EncoderConfig` nor zenravif exposes a quantizer setter
+  (`quality_to_quantizer` is internal). The resolved `quantizer` /
+  `alpha_quantizer` ARE already the picker-training mediators via
+  `feature_row` — plans just can't pin qp directly. (e9de3022 doc)
+- **zenjpeg scalar AQ strength**: `aq_enabled` is the only direct AQ
+  knob; the AQ-field shape has no config-exposed strength scalar
+  (`quant/aq/mod.rs` bakes `mul = K_AC_QUANT × dampen`,
+  `add = (1−dampen) × base_level`). The aq_coupling scale/exponent
+  ladders (§4) are the swept proxy. (fff81900 doc)
+
+When adding any remaining axis, follow the playbook: validate liveness
+with the codec's `sweep_validate` harness first (inert steps are
+forbidden), document bounds + step provenance in the module-docs table,
+and keep ids additive-only.
 
 ## 6. Manifest + tripwire semantics (operational notes)
 
@@ -231,6 +255,19 @@ ids additive-only.
   causes: id-grammar drift between declaring and executing builds, a
   codec dep bump that changed resolved defaults, or a tampered/corrupt
   row. Re-declare from the current build rather than patching fps.
+- **Codec-rev pairing (updated 2026-06-12):** the 2026-06-12 scalar-axis
+  landings extend each codec's id grammar (e.g. zenwebp's new `-shp<v>`
+  token) and enter the fingerprints, so declaring and executing builds
+  MUST both sit at (or past) the new codec revs or the tripwire above
+  fires on every new-axis cell. Both pin surfaces were moved
+  accordingly: (a) CI sibling clones now pin zenjpeg `94fb6ec6` /
+  zenavif `e9de3022` / zenjxl `4c0d672f` / zenwebp `700aa4a8` / zenpng
+  `2e82aa94` (their mains as of 2026-06-12); (b) fleet images have no
+  rev pins of their own — they `COPY` a binary built from the local
+  sibling checkouts, which were advanced to the same revs. Rebuild the
+  sweep image before declaring plans that use the new axes; mixing a
+  pre-axis worker binary with a post-axis plan fails closed (FAILED
+  rows, no silent mis-encodes).
 - Plan cells pin machine-dependent knobs (threads=1, parallel=false)
   per playbook pattern 9 — content addressing stays byte-stable across
   boxes.
