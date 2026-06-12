@@ -228,6 +228,9 @@ impl CpuMetricState {
         ref_gray: &[f32],
         dis_gray: &[f32],
     ) -> Result<Score> {
+        // Quiet unused-arg lints in single-`cpu-*` feature configurations
+        // (same convention as `CpuMetricState::new`).
+        let _ = (ref_gray, dis_gray);
         match self {
             #[cfg(feature = "cpu-iwssim")]
             CpuMetricState::Iwssim {
@@ -259,6 +262,60 @@ impl CpuMetricState {
             _ => Err(Error::Metric {
                 kind: "cpu",
                 message: "no float-PU(luma) gray path for this metric on the CPU dispatch;                           feed it per hdr::hdr_feeding()"
+                    .into(),
+            }),
+        }
+    }
+
+    /// Integrated-PU HDR feeding for zensim: **absolute-luminance interleaved
+    /// linear-RGB f32** (cd/m², `[R,G,B, …]`) straight into
+    /// `Zensim::compute_pu_linear` — the PU21 (banding_glare) front-end
+    /// replaces the SDR cube-root *inside* the metric (zensim PR #44,
+    /// squashed as 3f0334de), so there is no u8 round-trip and no
+    /// input-side PU shell (the shell capped at ~0.61 UPIQ, #25). Every
+    /// other metric returns a loud error; feed it per `hdr::hdr_feeding()`.
+    pub(crate) fn compute_pu_nits_interleaved(
+        &mut self,
+        ref_nits: &[f32],
+        dis_nits: &[f32],
+    ) -> Result<Score> {
+        // Quiet unused-arg lints in single-`cpu-*` feature configurations
+        // (same convention as `CpuMetricState::new`).
+        let _ = (ref_nits, dis_nits);
+        match self {
+            #[cfg(feature = "cpu-zensim")]
+            CpuMetricState::Zensim {
+                inner,
+                width,
+                height,
+            } => {
+                let (w, h) = (*width as usize, *height as usize);
+                let expected = w * h * 3;
+                if ref_nits.len() != expected || dis_nits.len() != expected {
+                    return Err(Error::Metric {
+                        kind: "zensim",
+                        message: format!(
+                            "nits buffer length mismatch: expected {expected}, got {} / {}",
+                            ref_nits.len(),
+                            dis_nits.len()
+                        ),
+                    });
+                }
+                let result = inner
+                    .compute_pu_linear(ref_nits, dis_nits, w, h, 3 * w, 3 * w)
+                    .map_err(|e| Error::Metric {
+                        kind: "zensim",
+                        message: format!("zensim compute_pu_linear: {e:?}"),
+                    })?;
+                Ok(Score {
+                    value: result.score(),
+                    metric_name: "zensim",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+            }
+            _ => Err(Error::Metric {
+                kind: "cpu",
+                message: "no integrated-PU nits path for this metric on the CPU dispatch;                           feed it per hdr::hdr_feeding()"
                     .into(),
             }),
         }
@@ -314,6 +371,9 @@ impl CpuMetricState {
         r: &[f32],
         d: &[f32],
     ) -> Result<(Score, Option<f64>)> {
+        // Quiet unused-arg lints in single-`cpu-*` feature configurations
+        // (same convention as `CpuMetricState::new`).
+        let _ = (r, d);
         match self {
             #[cfg(feature = "cpu-butter")]
             CpuMetricState::Butter {

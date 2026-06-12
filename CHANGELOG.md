@@ -21,6 +21,30 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **CPU-zensim integrated-PU HDR routing** — `hdr_feeding(Zensim,
+  Backend::Cpu)` now routes `HdrFeeding::IntegratedPuNits` through the
+  new `cpu_dispatch::compute_pu_nits_interleaved` →
+  `zensim::Zensim::compute_pu_linear` (zensim PR #44, squash 3f0334de):
+  absolute-nits f32 in, PU21 banding_glare in place of the SDR
+  cube-root, no u8 round-trip (the fed-PU shell capped at ~0.61 UPIQ,
+  #25). GPU zensim keeps the u8 PU shell until the opaque grows a PU
+  kernel. Routing + exact direct-call parity + identity-100 tests in
+  `tests/it/cpu_zensim_pu.rs`.
+- `zencloud-hetzner` placement-fallback ladder: `--fallback-placements
+  cax11:hel1,cax21:nbg1,…` retries `POST /servers` HTTP 412
+  `resource_unavailable` across ordered `(server_type, location)`
+  rungs (sticky index; non-412 errors still fail fast). Live-walked
+  6/6 rungs against the 2026-06-12 Hetzner-wide ARM capacity drought.
+  (6e11756c, evidence d07dc0e0)
+
+### Fixed
+
+- Hetzner R2-queue worker never claimed chunks: `R2Client::ls_keys`
+  (s5cmd) returns prefix-RELATIVE keys, and the queue loop joined them
+  onto the bucket root — `cat` of a nonexistent URI on every poll.
+  `qualify_queue_key` re-qualifies (second half of iter-4 bug #3).
+  (646f446e)
+
 - **HDR sweep mode** (`zen-metrics sweep --hdr`) — the gate for HDR
   training-data collection. 16-bit PQ-PNG references (cICP transfer 16,
   imazen-26-png-v2 contract: PQ EOTF → absolute cd/m², SDR white 203)

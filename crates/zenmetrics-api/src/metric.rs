@@ -1385,17 +1385,30 @@ impl MetricInner {
     /// buffers (cd/m², `[R,G,B, …]`, each length `width·height·3`), with the
     /// PU21 perceptual encode applied **inside** the metric pipeline.
     ///
-    /// Implemented today by the GPU ssim2 opaque only
+    /// Implemented by the GPU ssim2 opaque
     /// (`ssim2_gpu::Ssim2Opaque::compute_linear_nits`, which swaps the
-    /// cube-root XYB stage for PU21 — UPIQ SRCC 0.7040, imazen/zenmetrics#25).
-    /// Every other variant returns [`Error::Metric`] so a caller that ignored
-    /// `hdr::hdr_feeding` fails loudly instead of silently mis-scoring; feed
-    /// those metrics per their own `hdr_feeding` recipe.
+    /// cube-root XYB stage for PU21 — UPIQ SRCC 0.7040, imazen/zenmetrics#25)
+    /// and by **zensim on the native-CPU dispatch**
+    /// (`zensim::Zensim::compute_pu_linear`, the PU21 banding_glare
+    /// front-end from zensim PR #44 replacing the SDR cube-root — no u8
+    /// round-trip). Every other variant returns [`Error::Metric`] so a
+    /// caller that ignored `hdr::hdr_feeding` fails loudly instead of
+    /// silently mis-scoring; feed those metrics per their own
+    /// `hdr_feeding` recipe.
     pub fn compute_pu_nits_interleaved_multi(
         &mut self,
         ref_nits: &[f32],
         dis_nits: &[f32],
     ) -> Result<Scores> {
+        // Only the GPU-opaque arms below reference this; gate it to match so
+        // cpu-only feature configurations don't warn it dead.
+        #[cfg(any(
+            feature = "cvvdp",
+            feature = "butter",
+            feature = "dssim",
+            feature = "iwssim",
+            feature = "zensim"
+        ))]
         fn no_pu_nits_path(kind: &'static str) -> Error {
             Error::Metric {
                 kind,
@@ -1423,7 +1436,9 @@ impl MetricInner {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            MetricInner::Cpu(..) => Err(no_pu_nits_path("cpu")),
+            MetricInner::Cpu(state, _) => state
+                .compute_pu_nits_interleaved(ref_nits, dis_nits)
+                .map(Scores::single),
             #[cfg(feature = "cvvdp")]
             MetricInner::Cvvdp(_) => Err(no_pu_nits_path("cvvdp")),
             #[cfg(feature = "butter")]
@@ -1448,6 +1463,15 @@ impl MetricInner {
         ref_gray: &[f32],
         dis_gray: &[f32],
     ) -> Result<Scores> {
+        // Only the GPU-opaque arms below reference this; gate it to match so
+        // cpu-only feature configurations don't warn it dead.
+        #[cfg(any(
+            feature = "ssim2",
+            feature = "cvvdp",
+            feature = "butter",
+            feature = "dssim",
+            feature = "zensim"
+        ))]
         fn no_pu_gray_path(kind: &'static str) -> Error {
             Error::Metric {
                 kind,
