@@ -19,6 +19,17 @@ Workspace conventions per the global rules:
 
 ## Workspace
 
+### Security
+
+- Dependabot alert sweep: `cargo update` on the root and
+  `crates/burn-conv-spike` lockfiles (tar 0.4.45 → 0.4.46, GHSA alerts
+  #2/#3) and zen-jobdash web bumped to vite 8.0.16 +
+  @vitejs/plugin-react 6 (rolldown-based — removes esbuild entirely,
+  clearing the high-severity esbuild alert #4; build verified). Alert
+  #1 (thrift 0.17.0 via parquet 58.3) has NO patched thrift release —
+  unfixable by update; revisit when arrow/parquet drop or replace the
+  thrift dependency.
+
 ### Added
 
 - **CPU-ssim2 integrated-PU HDR routing** — `hdr_feeding(Ssim2,
