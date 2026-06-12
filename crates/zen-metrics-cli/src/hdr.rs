@@ -4,10 +4,11 @@
 //! HEIC — to absolute-luminance RGB (cd/m²), then preps per metric:
 //!   - **Primary path**: [`score_via_hdr_scorer`] hands absolute nits to the
 //!     umbrella's `HdrScorer`, which applies the per-metric feeding from
-//!     `zenmetrics_api::hdr::hdr_feeding` — cvvdp/butter linear planes, GPU
-//!     ssim2 integrated PU21, iwssim float PU(luma) on every backend, the
-//!     remaining SSIM-family the u8 shell. `--hdr-transfer` only affects the
-//!     u8-shell metrics (it cannot override the integrated/float feedings).
+//!     `zenmetrics_api::hdr::hdr_feeding` — cvvdp/butter linear planes, ssim2
+//!     integrated PU21 on every backend, CPU zensim integrated PU, iwssim
+//!     float PU(luma) on every backend, the remaining SSIM-family the u8
+//!     shell. `--hdr-transfer` only affects the u8-shell metrics (it cannot
+//!     override the integrated/float feedings).
 //!   - **Fallback** (kinds with no umbrella mapping / hip runtime): HDR→u8 via
 //!     [`HdrTransfer`] (default `pu-rescale`; `pu-clamp` is the legacy degraded
 //!     path). See `benchmarks/hdr_feeding_validation_2026-06-03.md`.

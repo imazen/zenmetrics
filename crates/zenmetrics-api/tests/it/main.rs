@@ -32,6 +32,8 @@ mod cpu_cvvdp_linear;
     feature = "cpu-zensim"
 ))]
 mod cpu_dispatch;
+#[cfg(all(feature = "cpu-ssim2", feature = "hdr", feature = "ssim2"))]
+mod cpu_ssim2_pu;
 #[cfg(all(feature = "cpu-zensim", feature = "hdr", feature = "zensim"))]
 mod cpu_zensim_pu;
 #[cfg(all(feature = "cuda", feature = "cvvdp"))]

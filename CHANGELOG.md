@@ -21,6 +21,22 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **CPU-ssim2 integrated-PU HDR routing** — `hdr_feeding(Ssim2,
+  Backend::Cpu)` now routes `HdrFeeding::IntegratedPuNits` through
+  `cpu_dispatch::compute_pu_nits_interleaved` →
+  `fast_ssim2::compute_ssimulacra2_pu_nits` (`hdr-pu` feature): PU21
+  banding_glare in place of the cube-root opsin nonlinearity,
+  absolute-nits f32 in, no u8 round-trip (the u8 PU shell was the
+  ~0.61-UPIQ-class front-end, #25; the integrated CPU path measured
+  SROCC 0.7044 on fast-ssim2 35f198af). ssim2 now routes integrated PU
+  on EVERY backend; the only u8-shell row left is GPU zensim (no PU
+  kernel in the opaque yet) and dssim stays HDR-Unsupported by design.
+  fast-ssim2 is consumed via a workspace `[patch.crates-io]` sibling
+  pin (CI clones imazen/fast-ssim2 at main 8c9b16d2 — crates.io 0.8.1
+  predates `hdr-pu`; swap back to the registry at the next fast-ssim2
+  publish). Routing + exact direct-call parity + identity-100 tests in
+  `tests/it/cpu_ssim2_pu.rs`; CI's cpu-metrics job now runs the
+  `cpu_ssim2_pu` + `cpu_zensim_pu` modules.
 - **CPU-zensim integrated-PU HDR routing** — `hdr_feeding(Zensim,
   Backend::Cpu)` now routes `HdrFeeding::IntegratedPuNits` through the
   new `cpu_dispatch::compute_pu_nits_interleaved` →

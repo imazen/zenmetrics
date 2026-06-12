@@ -1387,14 +1387,18 @@ impl MetricInner {
     ///
     /// Implemented by the GPU ssim2 opaque
     /// (`ssim2_gpu::Ssim2Opaque::compute_linear_nits`, which swaps the
-    /// cube-root XYB stage for PU21 — UPIQ SRCC 0.7040, imazen/zenmetrics#25)
-    /// and by **zensim on the native-CPU dispatch**
-    /// (`zensim::Zensim::compute_pu_linear`, the PU21 banding_glare
-    /// front-end from zensim PR #44 replacing the SDR cube-root — no u8
-    /// round-trip). Every other variant returns [`Error::Metric`] so a
-    /// caller that ignored `hdr::hdr_feeding` fails loudly instead of
-    /// silently mis-scoring; feed those metrics per their own
-    /// `hdr_feeding` recipe.
+    /// cube-root XYB stage for PU21 — UPIQ SRCC 0.7040, imazen/zenmetrics#25),
+    /// by **ssim2 on the native-CPU dispatch**
+    /// (`fast_ssim2::compute_ssimulacra2_pu_nits`, the same
+    /// PU21-for-cube-root swap in the CPU pipeline — UPIQ SRCC 0.7044 at
+    /// fast-ssim2 git 35f198af; `hdr-pu` feature, workspace `[patch]` pin
+    /// until a fast-ssim2 release ships it), and by **zensim on the
+    /// native-CPU dispatch** (`zensim::Zensim::compute_pu_linear`, the PU21
+    /// banding_glare front-end from zensim PR #44 replacing the SDR
+    /// cube-root — no u8 round-trip). Every other variant returns
+    /// [`Error::Metric`] so a caller that ignored `hdr::hdr_feeding` fails
+    /// loudly instead of silently mis-scoring; feed those metrics per their
+    /// own `hdr_feeding` recipe.
     pub fn compute_pu_nits_interleaved_multi(
         &mut self,
         ref_nits: &[f32],

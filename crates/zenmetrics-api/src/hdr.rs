@@ -16,20 +16,22 @@
 //! **Per-metric feeding** ([`hdr_feeding`] is the single source of truth):
 //! - cvvdp / butteraugli → display-relative **linear planes** (own
 //!   absolute-luminance models; no u8).
-//! - GPU ssim2 → **integrated PU21** ([`HdrFeeding::IntegratedPuNits`]; PU
-//!   replaces the cube-root inside the pipeline — UPIQ 0.704 vs ~0.61 for any
-//!   input-side shell).
+//! - ssim2 (every backend) → **integrated PU21**
+//!   ([`HdrFeeding::IntegratedPuNits`]; PU replaces the cube-root inside the
+//!   pipeline — UPIQ 0.704 vs ~0.61 for any input-side shell. GPU class:
+//!   `ssim2_gpu::XybFlavor::Pu21`; native CPU:
+//!   `fast_ssim2::compute_ssimulacra2_pu_nits`, `hdr-pu` feature).
 //! - CPU zensim → **integrated PU21** too ([`HdrFeeding::IntegratedPuNits`]
 //!   via `zensim::Zensim::compute_pu_linear`, zensim PR #44 — absolute-nits
 //!   f32 in, PU21 banding_glare in place of the cube-root, no u8 round-trip).
 //! - iwssim (every backend) → **float PU(luma) gray**
 //!   ([`HdrFeeding::PuLumaGrayF32`]; UPIQ 0.808 vs 0.628 through u8 — the
 //!   quantization round-trip was the loss).
-//! - remaining SSIM-family (CPU ssim2 pending a fast-ssim2 release; dssim,
-//!   externally capped; GPU zensim pending a PU kernel in the opaque) → the
-//!   **u8 shell**: [`to_sdr_u8`] with [`HdrTransfer::PuRescale`] (best *u8
-//!   transfer* per `benchmarks/hdr_feeding_validation_2026-06-03.md`; the old
-//!   PU-clamp collapses highlights and is kept only for back-compat).
+//! - remaining SSIM-family (dssim, externally capped; GPU zensim pending a
+//!   PU kernel in the opaque) → the **u8 shell**: [`to_sdr_u8`] with
+//!   [`HdrTransfer::PuRescale`] (best *u8 transfer* per
+//!   `benchmarks/hdr_feeding_validation_2026-06-03.md`; the old PU-clamp
+//!   collapses highlights and is kept only for back-compat).
 //! Measurements: `benchmarks/pu_integrated_upiq_2026-06-09.md` + #25.
 
 // ─── Transfer functions: code value → light ──────────────────────────────────
@@ -262,11 +264,15 @@ pub enum HdrFeeding {
     /// Luminance-aware (own opsin / CSF on absolute light) — native
     /// display-relative `[0,1]` linear planes, no u8 round-trip.
     LinearPlanes,
-    /// **Integrated PU21** (GPU ssim2): the metric ingests **absolute-luminance
-    /// interleaved f32 (cd/m²)** and applies PU21 *inside* its pipeline at the
-    /// perceptual-encoding layer (`ssim2_gpu::XybFlavor::Pu21`), replacing the
-    /// cube-root — no u8 round-trip, no input-side PU shell. UPIQ SRCC
-    /// **0.7040** (n=380) vs ~0.61 (UPIQ) / 0.65 (2026-06-03 eval) for the `PuRescale` u8 shell; the
+    /// **Integrated PU21** (ssim2 on every backend + CPU zensim): the metric
+    /// ingests **absolute-luminance interleaved f32 (cd/m²)** and applies
+    /// PU21 *inside* its pipeline at the perceptual-encoding layer, replacing
+    /// the cube-root — no u8 round-trip, no input-side PU shell. ssim2:
+    /// `ssim2_gpu::XybFlavor::Pu21` on the GPU class /
+    /// `fast_ssim2::compute_ssimulacra2_pu_nits` (`hdr-pu`) on the native-CPU
+    /// dispatch; zensim CPU: `zensim::Zensim::compute_pu_linear`. UPIQ SRCC
+    /// **0.7040** GPU / **0.7044** CPU (n=380, fast-ssim2 35f198af) vs ~0.61
+    /// (UPIQ) / 0.65 (2026-06-03 eval) for the `PuRescale` u8 shell; the
     /// fed-PU-as-input shell variant caps at ~0.61 (imazen/zenmetrics#25).
     IntegratedPuNits,
     /// **Float PU(luma) gray** (iwssim): `PU21(bt709-luma(nits)) · 255 /
@@ -283,14 +289,15 @@ pub enum HdrFeeding {
 /// Auditable in one place:
 /// - **cvvdp** (display model + CSF) → linear planes — UPIQ SRCC **0.758** (our best).
 /// - **butteraugli** (opsin + intensity_target) → linear planes — 0.628, beats its u8 path.
-/// - **ssim2 on a GPU-class backend** → [`HdrFeeding::IntegratedPuNits`] —
-///   PU21 replaces the cube-root inside the GPU pipeline; UPIQ SRCC **0.7040**
-///   vs ~0.61 (UPIQ) for the u8 shell (imazen/zenmetrics#25).
-/// - **ssim2 on [`Backend::Cpu`](crate::Backend::Cpu)** → `PuRescale` u8 —
-///   fast-ssim2 0.8.1 on crates.io predates the `hdr-pu` feature (it exists
-///   only on fast-ssim2 git main, 35f198af; CPU SROCC 0.7044 measured there).
-///   Route the CPU path to its integrated PU entry once a fast-ssim2 release
-///   carries `hdr-pu`.
+/// - **ssim2 (every backend)** → [`HdrFeeding::IntegratedPuNits`] — PU21
+///   replaces the cube-root inside the pipeline. GPU class:
+///   `ssim2_gpu::XybFlavor::Pu21`, UPIQ SRCC **0.7040** (n=380). Native CPU:
+///   `fast_ssim2::compute_ssimulacra2_pu_nits` (`hdr-pu` feature), UPIQ SRCC
+///   **0.7044** measured on fast-ssim2 git `35f198af`; consumed through the
+///   workspace `[patch.crates-io]` pin to fast-ssim2 main (crates.io 0.8.1
+///   predates `hdr-pu` — swap the api/orchestrator deps back to the registry
+///   at the next fast-ssim2 publish). Both beat the u8 shell's ~0.61
+///   (imazen/zenmetrics#25).
 /// - **dssim** → `PuRescale` u8 — 0.66. dssim-core is external and applies its
 ///   own internal sRGB→LAB transform on whatever bytes it gets; there is no
 ///   seam to substitute PU21 internally, so the u8 PU shell is the **known
@@ -322,14 +329,16 @@ pub fn hdr_feeding(metric: crate::MetricKind, backend: crate::Backend) -> HdrFee
     use crate::MetricKind as M;
     match metric {
         M::Cvvdp | M::Butter => HdrFeeding::LinearPlanes,
-        // GPU-class ssim2 (every backend except the native-CPU dispatch —
-        // `Auto` resolves first, so a GPU-less box that resolves to the
-        // native CPU path gets the u8 shell). The cubecl runtimes all run
-        // the same kernels, so the integrated path follows the opaque.
-        M::Ssim2 if backend.resolve() != crate::Backend::Cpu => HdrFeeding::IntegratedPuNits,
-        // CPU zensim — the inverse of ssim2: the integrated PU front-end
-        // lives in the CPU crate (zensim::compute_pu_linear, PR #44); the
-        // GPU opaque has no PU kernel yet and keeps the u8 shell below.
+        // ssim2 — integrated PU21 on EVERY backend: the GPU-class opaques
+        // swap the cube-root XYB stage in-kernel (the cubecl runtimes all
+        // run the same kernels, so the integrated path follows the opaque),
+        // and the native-CPU dispatch routes
+        // `fast_ssim2::compute_ssimulacra2_pu_nits` (`hdr-pu`, workspace
+        // [patch] pin until a fast-ssim2 release ships the feature).
+        M::Ssim2 => HdrFeeding::IntegratedPuNits,
+        // CPU zensim — the integrated PU front-end lives in the CPU crate
+        // (zensim::compute_pu_linear, PR #44); the GPU opaque has no PU
+        // kernel yet and keeps the u8 shell below.
         M::Zensim if backend.resolve() == crate::Backend::Cpu => HdrFeeding::IntegratedPuNits,
         // iwssim, BOTH classes — the CPU pipeline (`score_gray`) and the GPU
         // pipeline (`compute_gray`) are gray-f32-native, so float PU(luma)
@@ -337,7 +346,9 @@ pub fn hdr_feeding(metric: crate::MetricKind, backend: crate::Backend) -> HdrFee
         // UPIQ HDR (benchmarks addendum 2) — the quantization was the loss.
         M::Iwssim => HdrFeeding::PuLumaGrayF32,
         M::Dssim => HdrFeeding::Unsupported,
-        M::Ssim2 | M::Zensim => HdrFeeding::SdrU8(HdrTransfer::PuRescale),
+        // GPU zensim — the last u8-shell row; flip when the opaque grows a
+        // PU kernel.
+        M::Zensim => HdrFeeding::SdrU8(HdrTransfer::PuRescale),
     }
 }
 
@@ -412,12 +423,15 @@ impl HdrScorer {
     }
 
     /// Override the SDR-family feeding transfer (default [`HdrTransfer::PuRescale`]
-    /// from [`hdr_feeding`]) — e.g. to expose the legacy `PuClamp` or `Pq` for
-    /// comparison. No effect on cvvdp/butteraugli (linear path) **or on GPU
-    /// ssim2** ([`HdrFeeding::IntegratedPuNits`] applies PU21 inside the
-    /// pipeline — there is no u8 transfer shell to override). To score the
-    /// legacy u8 shell on GPU ssim2, feed [`to_sdr_u8`] output through
-    /// [`crate::Metric::compute_srgb_u8`] directly.
+    /// from [`hdr_feeding`]) — e.g. to expose [`HdrTransfer::Pq`] for
+    /// comparison. Only metrics whose feeding is [`HdrFeeding::SdrU8`] are
+    /// affected (today: GPU zensim, the last u8-shell row) — no effect on
+    /// cvvdp/butteraugli (linear path) or on any integrated/float feeding
+    /// (ssim2 every backend, CPU zensim, iwssim: the PU encode happens inside
+    /// the pipeline or at full f32 — there is no u8 transfer shell to
+    /// override). To score the legacy u8 shell on such a metric, feed
+    /// [`to_sdr_u8`] output through [`crate::Metric::compute_srgb_u8`]
+    /// directly.
     pub fn with_transfer(mut self, transfer: HdrTransfer) -> Self {
         if let HdrFeeding::SdrU8(_) = self.feeding {
             self.feeding = HdrFeeding::SdrU8(transfer);
@@ -836,24 +850,22 @@ mod tests {
         );
     }
 
-    /// GPU-class ssim2 routes to the integrated PU21 path; the native-CPU
-    /// dispatch stays on the u8 PU shell until a fast-ssim2 release ships
-    /// the `hdr-pu` feature (it's git-main-only as of 0.8.1).
+    /// ssim2 routes the integrated PU21 path on EVERY backend: the GPU-class
+    /// opaques swap the cube-root XYB stage in-kernel, and the native-CPU
+    /// dispatch routes `fast_ssim2::compute_ssimulacra2_pu_nits` (`hdr-pu`,
+    /// consumed via the workspace `[patch.crates-io]` pin until a fast-ssim2
+    /// release ships the feature). No u8 shell remains for ssim2.
     #[test]
-    fn hdr_feeding_ssim2_gpu_routes_integrated_pu() {
+    fn hdr_feeding_ssim2_routes_integrated_pu_every_backend() {
         use crate::Backend as B;
         use crate::MetricKind as M;
-        for b in [B::Cuda, B::Wgpu, B::Hip, B::CubeclCpu] {
+        for b in [B::Cuda, B::Wgpu, B::Hip, B::CubeclCpu, B::Cpu] {
             assert_eq!(
                 hdr_feeding(M::Ssim2, b),
                 HdrFeeding::IntegratedPuNits,
                 "{b:?}"
             );
         }
-        assert_eq!(
-            hdr_feeding(M::Ssim2, B::Cpu),
-            HdrFeeding::SdrU8(HdrTransfer::PuRescale)
-        );
     }
 
     /// The descriptor→nits scale convention behind the unified `compute_pixels`

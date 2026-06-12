@@ -155,7 +155,14 @@ zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = fals
 # Optimized native-CPU metric crates backing `Backend::Cpu` (task #159
 # phase 2). Pulled only by the `cpu-*` features above; pins match the ones
 # zenmetrics-orchestrator's cpu_adapter uses (workspace consistency).
-fast-ssim2  = { version = "0.8.1", optional = true, features = ["imgref"] }
+#
+# fast-ssim2 `hdr-pu` gates the integrated-PU21 HDR entry
+# (`compute_ssimulacra2_pu_nits`) the CPU dispatch routes for
+# `hdr_feeding(Ssim2, Backend::Cpu)`. The feature is git-main-only —
+# crates.io 0.8.1 predates it — so the 0.8.2 requirement resolves through
+# the workspace `[patch.crates-io]` sibling pin (root Cargo.toml); move
+# back to the registry once a fast-ssim2 release ships `hdr-pu`.
+fast-ssim2  = { version = "0.8.2", optional = true, features = ["imgref", "hdr-pu"] }
 cvvdp       = { workspace = true, optional = true }
 dssim-core  = { workspace = true, optional = true }
 butteraugli = { workspace = true, optional = true }

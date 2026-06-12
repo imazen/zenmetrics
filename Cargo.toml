@@ -289,6 +289,20 @@ butteraugli  = { path = "../../butteraugli/butteraugli" }
 # dssim-core: local sibling ~/work/dssim/dssim-core (3.5.0, semver-compatible with the 3.4 request) so
 # the dssim score uses local source, not the crates.io artifact ("scores must use local").
 dssim-core   = { path = "../../dssim/dssim-core" }
+# fast-ssim2: the CPU integrated-PU21 HDR entry
+# (`fast_ssim2::compute_ssimulacra2_pu_nits`, behind the `hdr-pu` feature) is
+# git-main-only — crates.io 0.8.1 predates it. zenmetrics-api's cpu-ssim2
+# routes `hdr_feeding(Ssim2, Backend::Cpu)` through that entry (the u8
+# PU-shell front-end capped at ~0.61 UPIQ-class vs 0.7044 integrated, #25),
+# so the workspace pins the sibling package dir — the SAME path
+# zen-metrics-cli's direct dep already uses (../../../fast-ssim2/fast-ssim2
+# from its crate dir), keeping one fast-ssim2 in the graph. CI clones
+# imazen/fast-ssim2 at a pinned rev (see .github/workflows/ci.yml).
+# Equivalent git ref (use when the sibling checkout is gone):
+#   { git = "https://github.com/imazen/fast-ssim2", rev = "8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec" }
+# Drop this patch when a fast-ssim2 release ships `hdr-pu` (0.8.2+) and the
+# api/orchestrator deps move back to the registry version.
+fast-ssim2   = { path = "../fast-ssim2/fast-ssim2" }
 # Phase 8f (2026-05-27): cubecl-* deps moved from [patch.crates-io] git
 # pins to [workspace.dependencies] package aliases at the top of this
 # file. The zenforks-cubecl-* crates.io publication makes the workspace-

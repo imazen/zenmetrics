@@ -27,16 +27,29 @@ Provenance:
   zenmetrics commit `de2ced69` (CUDA, RTX 5070), pipelines cached per
   image dimension, whole-image mode.
 - CPU prototype: fast-ssim2 git main `35f198af`, feature `hdr-pu`
-  (NOT in the crates.io 0.8.1 release — the CPU umbrella path stays on
-  the `PuRescale` u8 shell until a release ships the feature).
+  (NOT in the crates.io 0.8.1 release. Update 2026-06-12: the CPU
+  umbrella path now consumes this entry through the workspace
+  `[patch.crates-io]` pin instead of waiting on a release — see the
+  routing note below; swap to the registry dep when one ships).
 - Truth: UPIQ JOD scores (HDR subset), pairs TSV as in issue #25.
 - SROCC deltas of ±0.001 across runs are expected (f32 reduction
   nondeterminism does not reorder ranks materially at n = 380).
 
 Routed into production by zenmetrics commit `112a4517`
-(`HdrFeeding::IntegratedPuNits`: GPU-class ssim2 only; CPU ssim2 /
-dssim / iwssim stay on the u8 PU shell — see `hdr::hdr_feeding` docs
-for the per-metric rationale).
+(`HdrFeeding::IntegratedPuNits`: GPU-class ssim2 only at the time; CPU
+ssim2 / dssim / iwssim stayed on the u8 PU shell — see `hdr::hdr_feeding`
+docs for the per-metric rationale).
+
+Routing update 2026-06-12: **CPU ssim2 now routes `IntegratedPuNits`
+too**, calling `fast_ssim2::compute_ssimulacra2_pu_nits` via a workspace
+`[patch.crates-io]` pin of fast-ssim2 main `8c9b16d2` (which contains
+`35f198af`; the PU scoring path is unchanged between the two revs — the
+delta is docs/CI/api-snapshot work plus sub-8px reflect-padding in
+*other* entry points — so the 0.7044 above is expected to hold for the
+pinned rev; re-validation pending the zensim#38 harness). Since
+`112a4517`, iwssim also moved to float PU(luma) gray (addendum 2 below)
+and dssim's HDR path became `Unsupported` by design — the only u8-shell
+row left is GPU zensim (no PU kernel in the opaque yet).
 
 ## Addendum 2026-06-09 (late): PU-IW-SSIM measured — u8 shell is itself lossy
 

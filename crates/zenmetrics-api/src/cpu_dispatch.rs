@@ -93,7 +93,7 @@ impl CpuMetricState {
                 // struct the umbrella wraps in `MetricParams::Cvvdp` — no
                 // translation needed (see cpu_adapter::construct_cvvdp).
                 let p = match params {
-                    MetricParams::Cvvdp(p) => p.clone(),
+                    MetricParams::Cvvdp(p) => *p,
                     _ => {
                         return Err(Error::Metric {
                             kind: "cvvdp",
@@ -267,13 +267,16 @@ impl CpuMetricState {
         }
     }
 
-    /// Integrated-PU HDR feeding for zensim: **absolute-luminance interleaved
-    /// linear-RGB f32** (cd/m², `[R,G,B, …]`) straight into
-    /// `Zensim::compute_pu_linear` — the PU21 (banding_glare) front-end
-    /// replaces the SDR cube-root *inside* the metric (zensim PR #44,
-    /// squashed as 3f0334de), so there is no u8 round-trip and no
-    /// input-side PU shell (the shell capped at ~0.61 UPIQ, #25). Every
-    /// other metric returns a loud error; feed it per `hdr::hdr_feeding()`.
+    /// Integrated-PU HDR feeding for ssim2 + zensim: **absolute-luminance
+    /// interleaved linear-RGB f32** (cd/m², `[R,G,B, …]`) straight into the
+    /// metric's PU21 entry — `fast_ssim2::compute_ssimulacra2_pu_nits`
+    /// (`hdr-pu` feature, git-pinned via the workspace `[patch.crates-io]`
+    /// until a fast-ssim2 release ships it) / `Zensim::compute_pu_linear`
+    /// (zensim PR #44, squashed as 3f0334de). The PU21 (banding_glare)
+    /// front-end replaces the SDR cube-root *inside* each metric, so there
+    /// is no u8 round-trip and no input-side PU shell (the shell capped at
+    /// ~0.61 UPIQ, #25). Every other metric returns a loud error; feed it
+    /// per `hdr::hdr_feeding()`.
     pub(crate) fn compute_pu_nits_interleaved(
         &mut self,
         ref_nits: &[f32],
@@ -283,6 +286,46 @@ impl CpuMetricState {
         // (same convention as `CpuMetricState::new`).
         let _ = (ref_nits, dis_nits);
         match self {
+            #[cfg(feature = "cpu-ssim2")]
+            CpuMetricState::Ssim2 { width, height } => {
+                let (w, h) = (*width as usize, *height as usize);
+                let expected = w * h * 3;
+                if ref_nits.len() != expected || dis_nits.len() != expected {
+                    return Err(Error::Metric {
+                        kind: "ssim2",
+                        message: format!(
+                            "nits buffer length mismatch: expected {expected}, got {} / {}",
+                            ref_nits.len(),
+                            dis_nits.len()
+                        ),
+                    });
+                }
+                // `[f32; 3]` is `bytemuck::Pod`, so the interleaved buffer
+                // reinterprets per-pixel without a copy; `LinearRgbImage`
+                // takes owned data, so one `to_vec` per side is the cost.
+                let to_img = |nits: &[f32]| {
+                    fast_ssim2::LinearRgbImage::try_new(
+                        bytemuck::cast_slice(nits).to_vec(),
+                        w,
+                        h,
+                    )
+                    .map_err(|e| Error::Metric {
+                        kind: "ssim2",
+                        message: format!("fast-ssim2 LinearRgbImage: {e}"),
+                    })
+                };
+                let v =
+                    fast_ssim2::compute_ssimulacra2_pu_nits(to_img(ref_nits)?, to_img(dis_nits)?)
+                        .map_err(|e| Error::Metric {
+                            kind: "ssim2",
+                            message: format!("fast-ssim2 compute_ssimulacra2_pu_nits: {e}"),
+                        })?;
+                Ok(Score {
+                    value: v,
+                    metric_name: "ssim2",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+            }
             #[cfg(feature = "cpu-zensim")]
             CpuMetricState::Zensim {
                 inner,

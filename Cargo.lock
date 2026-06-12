@@ -1066,7 +1066,7 @@ dependencies = [
  "bytemuck",
  "cvvdp",
  "dssim-core",
- "fast-ssim2 0.8.1",
+ "fast-ssim2 0.8.2",
  "imgref",
  "iwssim",
  "rgb",
@@ -1730,21 +1730,6 @@ dependencies = [
  "num-traits",
  "thiserror",
  "yuvxyb 0.4.2",
- "yuvxyb-math",
-]
-
-[[package]]
-name = "fast-ssim2"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2026f6bc3f443406cd10945b80b9e0dc9e90526d858b80dd2cf0f0099f1c71f1"
-dependencies = [
- "archmage",
- "imgref",
- "magetypes",
- "num-traits",
- "thiserror",
- "yuvxyb 0.5.0",
  "yuvxyb-math",
 ]
 
@@ -7025,7 +7010,7 @@ dependencies = [
  "cvvdp-gpu",
  "dssim-core",
  "dssim-gpu",
- "fast-ssim2 0.8.1",
+ "fast-ssim2 0.8.2",
  "image",
  "imgref",
  "iwssim",
@@ -7064,7 +7049,7 @@ dependencies = [
  "cvvdp-gpu",
  "dirs",
  "dssim-core",
- "fast-ssim2 0.8.1",
+ "fast-ssim2 0.8.2",
  "imgref",
  "iwssim",
  "log",
