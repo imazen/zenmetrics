@@ -214,6 +214,14 @@ trait ZensimInner: Send {
         dist_g: &[f32],
         dist_b: &[f32],
     ) -> Result<f32>;
+    /// GPU PU-XYB (HDR) feature vector from absolute-luminance linear
+    /// planes — the regime-appropriate length (228 / 300 / 372), exactly
+    /// like the SDR `compute_features_vec`.
+    fn compute_features_pu_linear_nits(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        dist_planes: [&[f32]; 3],
+    ) -> Vec<f64>;
     #[allow(clippy::too_many_arguments)]
     fn score_from_linear_planes_with_diffmap(
         &mut self,
@@ -310,6 +318,14 @@ where
         dist_b: &[f32],
     ) -> Result<f32> {
         Zensim::score_from_linear_planes(self, ref_r, ref_g, ref_b, dist_r, dist_g, dist_b)
+    }
+
+    fn compute_features_pu_linear_nits(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        dist_planes: [&[f32]; 3],
+    ) -> Vec<f64> {
+        Zensim::compute_features_pu_linear_nits(self, ref_planes, dist_planes)
     }
 
     fn score_from_linear_planes_with_diffmap(
@@ -1082,6 +1098,35 @@ impl ZensimOpaque {
         let db = self.pad_plane(dist_b)?;
         self.inner
             .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
+    }
+
+    /// GPU PU-XYB (HDR) feature vector from absolute-luminance linear-RGB
+    /// planes (cd/m²) — the HDR analog of [`Self::compute_features_vec_pixels`].
+    ///
+    /// PU21 perceptual encoding runs on-device (matching CPU
+    /// `zensim::Zensim::compute_pu_linear`'s feature space), so HDR
+    /// content is scored at the perceptual layer instead of being clipped
+    /// to 8-bit sRGB. Returns the regime-appropriate length — 228 (Basic)
+    /// / 300 (Extended) / 372 (WithIw) — exactly like
+    /// [`Self::compute_features_vec_pixels`]. The canonical V0_3+ scoring
+    /// path (`ZensimParams::with_profile` → WithIw) yields the full 372.
+    ///
+    /// PQ/HLG code values must be mapped to nits by a display model
+    /// upstream, exactly as for the CPU entry.
+    pub fn compute_features_pu_linear_nits(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        dist_planes: [&[f32]; 3],
+    ) -> Result<Vec<f64>> {
+        let rr = self.pad_plane(ref_planes[0])?;
+        let rg = self.pad_plane(ref_planes[1])?;
+        let rb = self.pad_plane(ref_planes[2])?;
+        let dr = self.pad_plane(dist_planes[0])?;
+        let dg = self.pad_plane(dist_planes[1])?;
+        let db = self.pad_plane(dist_planes[2])?;
+        Ok(self
+            .inner
+            .compute_features_pu_linear_nits([&rr, &rg, &rb], [&dr, &dg, &db]))
     }
 
     /// Non-planar (interleaved) variant of [`Self::score_from_linear_planes`]:

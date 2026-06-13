@@ -716,6 +716,24 @@ The GPU harnesses require a CUDA-capable host; the CPU wall runs anywhere.
 Outputs land in a timestamped scratch dir and are diffed against the
 committed TSVs. See the script header for per-harness flags.
 
+## GPU CI / Metal
+
+GPU metric kernels are validated on **CUDA** (locally, RTX 5070) and
+**Vulkan** (`cubecl-wgpu`, the `gpu-citest` job on Linux) — these are the
+backends the kernels ship against, and both run the full parity suites.
+
+The **macOS-Metal CI job is currently disabled** (`if: false` in
+`ci.yml`, 2026-06-13). On the 8 GB-unified `macos-latest` runner the
+large-image (12 MP / 4000×3000) parity tests wedge the GPU — the
+whole-image butteraugli score silently OOMs to 0 and the ssim2 device
+hangs until the job timeout — even with serialized test execution. This
+is a runner-capacity / large-image-GPU-memory limit, **not** a kernel
+correctness problem (CUDA + Vulkan parity is green). Metal coverage will
+return once the large-image path is capped or fixed for the 8 GB runner;
+work is tracked in the zenmetrics#24 Metal stream. Until then, **Metal is
+not a supported/verified backend in CI** — treat Metal results as
+unvalidated.
+
 ## Documentation
 
 - [`docs/CUBECL_PORTING_GUIDE.md`](docs/CUBECL_PORTING_GUIDE.md) — patterns

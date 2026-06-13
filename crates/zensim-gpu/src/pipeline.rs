@@ -3005,27 +3005,148 @@ impl<R: Runtime> Zensim<R> {
         }
     }
 
-    /// Run the WithIw feature pipeline assuming both `ref_xyb` and
-    /// `dis_xyb` pyramids are already built (by
-    /// [`Self::run_xyb_pyramid_linear`]). Writes the per-scale persist
-    /// planes (mu1/mu2/ssq/s12) AND reduces the 372-feature vector.
-    /// Requires the WithIw regime (persist planes allocated).
-    ///
-    /// Returns the packed 372-feature vector. Mirrors the body of
-    /// [`Self::compute_with_reference_vec`] from the post-pyramid
-    /// point onward.
-    fn compute_withiw_features_from_built_xyb(&mut self) -> Vec<f64> {
-        debug_assert!(self.regime.needs_extended_kernel());
-        let n_scales = self.scales.len();
+    /// HDR sibling of [`Self::run_xyb_pyramid_linear`]: upload three
+    /// tight `width × height` **absolute-luminance** linear-RGB f32
+    /// planes (cd/m²) into the scale-0 XYB planes via
+    /// [`color::linear_nits_to_positive_pu_xyb_kernel`] (PU21 perceptual
+    /// encoding), then build the 2× box downscale pyramid. Bit-for-bit
+    /// mirrors CPU zensim's `linear_to_pu_xyb_planar_into` path (the
+    /// PU-XYB encoding that backs `Zensim::compute_pu_linear`). No
+    /// `absorbance_bias_neg` — the PU path has no cube-root bias term.
+    fn run_xyb_pyramid_linear_nits(&mut self, is_ref: bool, r: &[f32], g: &[f32], b: &[f32]) {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        let n = w * h;
+        let r_h = self.client.create_from_slice_pinned(f32::as_bytes(&r[..n]));
+        let g_h = self.client.create_from_slice_pinned(f32::as_bytes(&g[..n]));
+        let b_h = self.client.create_from_slice_pinned(f32::as_bytes(&b[..n]));
 
-        for s in 0..n_scales {
-            self.launch_blur_and_features_persist(s);
+        let s0 = &self.scales[0];
+        let xyb = if is_ref { &s0.ref_xyb } else { &s0.dis_xyb };
+        let mirror_arg = match s0.mirror_offsets.as_ref() {
+            Some(mo) => (mo.clone(), s0.pad_count as usize),
+            None => (self.srgb_lut.clone(), 1),
+        };
+        let this_padded_pixels = (s0.padded_w as usize) * h;
+        unsafe {
+            color::linear_nits_to_positive_pu_xyb_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::cube_count_1d(this_padded_pixels),
+                Self::cube_dim_1d(),
+                ArrayArg::from_raw_parts(r_h, n),
+                ArrayArg::from_raw_parts(g_h, n),
+                ArrayArg::from_raw_parts(b_h, n),
+                ArrayArg::from_raw_parts(mirror_arg.0, mirror_arg.1),
+                ArrayArg::from_raw_parts(xyb[0].clone(), s0.n_padded),
+                ArrayArg::from_raw_parts(xyb[1].clone(), s0.n_padded),
+                ArrayArg::from_raw_parts(xyb[2].clone(), s0.n_padded),
+                self.width,
+                self.height,
+                s0.padded_w,
+            );
         }
-        for s in 0..n_scales {
-            self.launch_masked_iw(s);
+        // Build the rest of the pyramid via 2× planar downscale —
+        // identical to the tail of `run_xyb_pyramid_linear`.
+        for s in 1..self.scales.len() {
+            let prev = &self.scales[s - 1];
+            let curr = &self.scales[s];
+            let prev_xyb = if is_ref { &prev.ref_xyb } else { &prev.dis_xyb };
+            let curr_xyb = if is_ref { &curr.ref_xyb } else { &curr.dis_xyb };
+            let curr_active = (curr.padded_w as usize) * (curr.h as usize);
+            unsafe {
+                downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(curr_active),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(prev_xyb[0].clone(), prev.n_padded),
+                    ArrayArg::from_raw_parts(prev_xyb[1].clone(), prev.n_padded),
+                    ArrayArg::from_raw_parts(prev_xyb[2].clone(), prev.n_padded),
+                    ArrayArg::from_raw_parts(curr_xyb[0].clone(), curr.n_padded),
+                    ArrayArg::from_raw_parts(curr_xyb[1].clone(), curr.n_padded),
+                    ArrayArg::from_raw_parts(curr_xyb[2].clone(), curr.n_padded),
+                    prev.padded_w,
+                    prev.h,
+                    curr.padded_w,
+                    curr.h,
+                );
+            }
         }
+    }
+
+    /// GPU PU-XYB feature extraction from absolute-luminance linear-RGB
+    /// planes (the HDR analog of the SDR GPU feature path). Builds both
+    /// PU-XYB pyramids on-device via
+    /// [`Self::run_xyb_pyramid_linear_nits`] and reduces the
+    /// regime-appropriate feature vector (228 Basic / 300 Extended / 372
+    /// WithIw) — same shape as the SDR [`Self::compute_with_reference_vec`].
+    /// The canonical V0_3+ path (`with_profile` → WithIw) gets the full
+    /// 372 block.
+    ///
+    /// Planes are tight `width × height` f32 (row stride = width), in
+    /// cd/m² absolute luminance — PQ/HLG code values must be mapped to
+    /// nits by a display model upstream, exactly as for CPU
+    /// `Zensim::compute_pu_linear`.
+    pub fn compute_features_pu_linear_nits(
+        &mut self,
+        ref_planes: [&[f32]; 3],
+        dist_planes: [&[f32]; 3],
+    ) -> Vec<f64> {
+        let rp = self.prep_planes(ref_planes[0], ref_planes[1], ref_planes[2]);
+        let dp = self.prep_planes(dist_planes[0], dist_planes[1], dist_planes[2]);
+        let (rr, rg, rb): (&[f32], &[f32], &[f32]) = match &rp {
+            Ok(p) => (&p[0], &p[1], &p[2]),
+            Err(_) => (ref_planes[0], ref_planes[1], ref_planes[2]),
+        };
+        let (dr, dg, db): (&[f32], &[f32], &[f32]) = match &dp {
+            Ok(p) => (&p[0], &p[1], &p[2]),
+            Err(_) => (dist_planes[0], dist_planes[1], dist_planes[2]),
+        };
+        self.run_xyb_pyramid_linear_nits(true, rr, rg, rb);
+        self.has_reference = true;
+        self.run_xyb_pyramid_linear_nits(false, dr, dg, db);
+        self.compute_features_from_built_xyb()
+    }
+
+    /// Debug/test hook: build the scale-0 PU-XYB plane on-device from
+    /// linear-nits planes (no pyramid tail, no features) and read back
+    /// the padded scale-0 `ref_xyb`/`dis_xyb` channel. Backs the
+    /// CPU↔GPU PU-XYB parity test.
+    #[doc(hidden)]
+    pub fn debug_build_pu_xyb_scale0(&mut self, is_ref: bool, r: &[f32], g: &[f32], b: &[f32]) {
+        self.run_xyb_pyramid_linear_nits(is_ref, r, g, b);
+    }
+
+    /// Reduce the regime-appropriate feature vector assuming both
+    /// `ref_xyb` and `dis_xyb` pyramids are already built (by
+    /// [`Self::run_xyb_pyramid_linear`] or
+    /// [`Self::run_xyb_pyramid_linear_nits`]). Returns 228 (Basic) /
+    /// 300 (Extended) / 372 (WithIw) features. Mirrors the post-pyramid
+    /// body of [`Self::compute_with_reference_vec`], including its
+    /// `needs_ext` branches, so it works in every regime — the canonical
+    /// V0_3+ path (`with_profile` → WithIw) gets the full 372 block.
+    fn compute_features_from_built_xyb(&mut self) -> Vec<f64> {
+        let n_scales = self.scales.len();
+        let needs_ext = self.regime.needs_extended_kernel();
+
+        // Phase 1: persist-writing kernel on Extended/WithIw, plain on Basic.
+        for s in 0..n_scales {
+            if needs_ext {
+                self.launch_blur_and_features_persist(s);
+            } else {
+                self.launch_blur_and_features(s);
+            }
+        }
+        // Phase 1b: masked + IW pooling pass needs the persist planes.
+        if needs_ext {
+            for s in 0..n_scales {
+                self.launch_masked_iw(s);
+            }
+        }
+        // Phase 2: reduction (+ ext reduction only when needed).
         self.launch_reduction();
-        self.launch_reduction_ext();
+        if needs_ext {
+            self.launch_reduction_ext();
+        }
 
         let f64_bytes = self
             .client
@@ -3042,15 +3163,21 @@ impl<R: Runtime> Zensim<R> {
             .collect();
         let finals_f64 = finals_f64_storage.as_slice();
         let finals_max = f32::from_bytes(&max_bytes);
-        let ext_bytes = self
-            .client
-            .read_one(self.finals_ext_f64.clone())
-            .expect("read finals_ext_f64");
-        let finals_ext_storage: Vec<f64> = f32::from_bytes(&ext_bytes)
-            .iter()
-            .map(|&x| x as f64)
-            .collect();
-        let finals_ext_f64 = finals_ext_storage.as_slice();
+        // The ext finals only exist on Extended/WithIw — empty on Basic.
+        let finals_ext_storage: Vec<f64>;
+        let finals_ext_f64: &[f64] = if needs_ext {
+            let ext_bytes = self
+                .client
+                .read_one(self.finals_ext_f64.clone())
+                .expect("read finals_ext_f64");
+            finals_ext_storage = f32::from_bytes(&ext_bytes)
+                .iter()
+                .map(|&x| x as f64)
+                .collect();
+            finals_ext_storage.as_slice()
+        } else {
+            &[]
+        };
 
         let mut scale_image_h: [u32; SCALES] = [0; SCALES];
         let mut hs = self.height;
@@ -3068,7 +3195,7 @@ impl<R: Runtime> Zensim<R> {
 
     /// Run the GPU diffmap kernel chain on the per-scale persist planes
     /// currently resident in `persist_planes_ref` (written by the last
-    /// [`Self::compute_withiw_features_from_built_xyb`] call). Produces
+    /// [`Self::compute_features_from_built_xyb`] call). Produces
     /// the multi-scale weighted-SSIM diffmap on-device, trims pad
     /// columns, and reads it back into `diffmap_out` (length
     /// `width × height`).
@@ -3350,7 +3477,7 @@ impl<R: Runtime> Zensim<R> {
         scratch
             .inner
             .run_xyb_pyramid_linear(false, dist_planes[0], dist_planes[1], dist_planes[2]);
-        let _features = scratch.inner.compute_withiw_features_from_built_xyb();
+        let _features = scratch.inner.compute_features_from_built_xyb();
 
         {
             let inner = scratch.inner.as_ref();
