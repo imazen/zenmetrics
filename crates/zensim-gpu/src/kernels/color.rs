@@ -295,3 +295,123 @@ pub fn linear_to_positive_xyb_kernel(
     y_out[idx] = y_pos;
     b_out[idx] = b_pos;
 }
+
+// ───────────────────────── PU21 HDR variant ─────────────────────────
+//
+// PU21 (Mantiuk & Azimi, PCS 2021) `banding_glare` parameters — the
+// published gfxdisp/pu21 set, identical to CPU `zensim::pu21::P` and the
+// sibling `ssim2-gpu::kernels::xyb`. Input is **absolute-luminance**
+// linear RGB (cd/m²); PU21 replaces the cube root at the
+// perceptual-encoding layer so the SDR-tuned XYB feature kernels operate
+// on HDR content. Feeding PU-encoded values as *input* to the cube-root
+// pipeline instead caps HDR correlation (UPIQ SROCC ~0.61 vs ~0.70 for
+// this integrated form) — see imazen/zenmetrics#25.
+pub const PU_P0: f32 = 0.353_487_9;
+pub const PU_P1: f32 = 0.373_465_86;
+pub const PU_P2: f32 = 8.277_049e-5;
+pub const PU_P3: f32 = 0.906_256_26;
+pub const PU_P4: f32 = 0.091_503_03;
+pub const PU_P5: f32 = 0.909_951_7;
+pub const PU_P6: f32 = 596.314_8;
+pub const PU_L_MIN: f32 = 0.005;
+pub const PU_L_MAX: f32 = 10000.0;
+/// PU21(100 cd/m²) ≈ 256.3 — normalizes a 100-nit reference white to
+/// ~1.0, the range the cube-root XYB white point sits in, so the
+/// downstream opponent biases + feature kernels stay in calibration.
+/// Matches CPU `zensim::color::PU_WHITE`.
+pub const PU_WHITE: f32 = 256.3;
+/// Opponent X amplification in PU space (the cube-root path uses 14×).
+/// Matches CPU `zensim::color::PU_X_SCALE`.
+pub const PU_X_SCALE: f32 = 4.0;
+
+/// In-kernel PU21 `banding_glare` encode: absolute luminance (cd/m²,
+/// clamped to `[0.005, 10000]`) → perceptually-uniform value.
+/// `V = max(p7·(((p1 + p2·Y^p4)/(1 + p3·Y^p4))^p5 − p6), 0)`. Mirrors
+/// CPU `zensim::pu21::pu21_encode` (the `powf` transcendental differs
+/// from CPU libm by the same order as the cbrt path's f32 divergence;
+/// the parity test bounds it).
+#[cube]
+fn pu21_encode_runtime(y: f32) -> f32 {
+    let yc = f32::clamp(y, PU_L_MIN, PU_L_MAX);
+    let yp = f32::powf(yc, PU_P3);
+    let inner = (PU_P0 + PU_P1 * yp) / (1.0 + PU_P2 * yp);
+    f32::max(PU_P6 * (f32::powf(inner, PU_P4) - PU_P5), 0.0)
+}
+
+/// Absolute-luminance linear RGB (3 planar f32 cd/m² buffers) → 3 planar
+/// positive **PU-XYB** f32 buffers, with SIMD-padding columns
+/// mirror-filled in the same launch.
+///
+/// The HDR sibling of [`linear_to_positive_xyb_kernel`]: identical opsin
+/// matrix + FMA fusion + mirror-pad handling, but each opsin-mixed
+/// channel goes through PU21 (normalized by [`PU_WHITE`]) instead of the
+/// cube root, and the opponent X uses [`PU_X_SCALE`] (4×) rather than
+/// 14×. The cube-root-domain absorbance centering (`-cbrt(K_B0)`) is
+/// dropped — in PU space `K_B0` clamps below `PU_L_MIN` so its
+/// contribution is ~0. Bit-for-bit mirrors CPU
+/// `zensim::color::pu_xyb_pixel` modulo the `powf` transcendental.
+///
+/// Inputs match [`linear_to_positive_xyb_kernel`] except there is no
+/// `absorbance_bias_neg` scalar (the PU path has no bias term).
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn linear_nits_to_positive_pu_xyb_kernel(
+    r_in: &Array<f32>,
+    g_in: &Array<f32>,
+    b_in: &Array<f32>,
+    mirror_offsets: &Array<u32>,
+    x_out: &mut Array<f32>,
+    y_out: &mut Array<f32>,
+    b_out: &mut Array<f32>,
+    width: u32,
+    height: u32,
+    padded_w: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (padded_w * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let pw = padded_w as usize;
+    let w = width as usize;
+    let y = idx / pw;
+    let x = idx - y * pw;
+
+    let src_x = if x < (width as usize) {
+        x
+    } else {
+        mirror_offsets[x - w] as usize
+    };
+    let src_idx = y * w + src_x;
+    let r = r_in[src_idx];
+    let g = g_in[src_idx];
+    let b = b_in[src_idx];
+
+    // Opsin mix — identical matrix + FMA fusion as the cube-root kernels.
+    let inner0 = fma(K_M02, b, K_B0);
+    let m0g = fma(K_M01, g, inner0);
+    let mixed0 = f32::max(fma(K_M00, r, m0g), 0.0);
+    let inner1 = fma(K_M12, b, K_B0);
+    let m1g = fma(K_M11, g, inner1);
+    let mixed1 = f32::max(fma(K_M10, r, m1g), 0.0);
+    let inner2 = fma(K_M22, b, K_B0);
+    let m2g = fma(K_M21, g, inner2);
+    let mixed2 = f32::max(fma(K_M20, r, m2g), 0.0);
+
+    // PU21 encode + normalize to the cube-root white point.
+    let c0 = pu21_encode_runtime(mixed0) / PU_WHITE;
+    let c1 = pu21_encode_runtime(mixed1) / PU_WHITE;
+    let c2 = pu21_encode_runtime(mixed2) / PU_WHITE;
+
+    let x_val = 0.5 * (c0 - c1);
+    let y_val = 0.5 * (c0 + c1);
+
+    // CPU's positive shift: x.mul_add(PU_X_SCALE, 0.42), y + 0.01, (c2 - y) + 0.55.
+    let x_pos = fma(x_val, PU_X_SCALE, 0.42);
+    let y_pos = y_val + 0.01;
+    let b_pos = (c2 - y_val) + 0.55;
+
+    x_out[idx] = x_pos;
+    y_out[idx] = y_pos;
+    b_out[idx] = b_pos;
+}

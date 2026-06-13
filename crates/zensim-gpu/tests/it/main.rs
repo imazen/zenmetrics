@@ -26,6 +26,8 @@ mod opaque_default_weights_v03;
 mod opaque_regime;
 #[cfg(feature = "cubecl-types")]
 mod parity_lock;
+#[cfg(feature = "cubecl-types")]
+mod pu_xyb_parity;
 mod strip_parity;
 mod sub64_reflect_pad;
 mod typed_sub_min_pad;
