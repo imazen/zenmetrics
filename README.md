@@ -42,15 +42,15 @@ expose a CPU backend (the IW-SSIM CPU port landed in 2026-05; see the
 |---|---|
 | [`zenmetrics-api`](crates/zenmetrics-api/) | Umbrella: one `MetricKind` enum + one `Metric` type dispatching to all six per-crate opaque scorers |
 | [`zenmetrics-orchestrator`](crates/zenmetrics-orchestrator/) | Capability-aware backend chooser + persistent benchmark cache + OOM fallback ladder + warm worker pool |
-| [`zen-metrics-cli`](crates/zen-metrics-cli/) | `zen-metrics` CLI front-end (score / batch / compare / sweep) |
+| [`zenmetrics-cli`](crates/zenmetrics-cli/) | `zenmetrics` CLI front-end (score / batch / compare / sweep) |
 | [`zenmetrics-corpus`](crates/zenmetrics-corpus/) | Shared test-image corpus (test infra) |
 | [`iwssim-filter-codegen`](crates/iwssim-filter-codegen/) | Build-time generator for the IW-SSIM separable blur filters |
 | [`cvvdp-conformance`](crates/cvvdp-conformance/) | pycvvdp conformance fixtures + parity harness for the cvvdp crates |
 
 The workspace also contains the vast.ai / Hetzner / RunPod / Salad
-sweep-fleet crates (`zen-cloud-*`, `zencloud-hetzner`,
-`zenfleet-orchestrator`, `zen-job-*`, `zen-ledger`, `zen-jobdash`,
-`zen-sweep-worker`, `zenstats`) that drive the backfill pipeline; they
+sweep-fleet crates (`zen-cloud-*`, `zenfleet-hetzner`,
+`zenfleet-orchestrator`, `zen-job-*`, `zenfleet-ledger`, `zenfleet-dash`,
+`zenfleet-sweep`, `zenstats`) that drive the backfill pipeline; they
 are infrastructure, not part of the metric API.
 
 ## Recommended entry point: `zenmetrics-orchestrator`
@@ -88,9 +88,9 @@ cached-ref semantics, CPU backend selection, capability cache lifecycle,
 and the full configuration surface. Migration code samples in
 [`crates/zenmetrics-orchestrator/docs/MIGRATION_FROM_API.md`](crates/zenmetrics-orchestrator/docs/MIGRATION_FROM_API.md).
 
-The `zen-metrics` CLI routes scoring through the orchestrator by
+The `zenmetrics` CLI routes scoring through the orchestrator by
 default (since Phase 7.7.1, 2026-05-27). The legacy direct-dispatch
-path remains available via `zen-metrics --use-legacy-scheduler …` (or
+path remains available via `zenmetrics --use-legacy-scheduler …` (or
 `ZENMETRICS_USE_LEGACY_SCHEDULER=1`) — useful when an archived parquet
 sidecar needs bit-identical regeneration, or when comparing the two
 paths for parity. The orchestrator path itself was validated as

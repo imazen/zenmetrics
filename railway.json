@@ -2,10 +2,10 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "crates/zen-jobdash/Dockerfile"
+    "dockerfilePath": "crates/zenfleet-dash/Dockerfile"
   },
   "deploy": {
-    "startCommand": "zen-jobdash",
+    "startCommand": "zenfleet-dash",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

@@ -238,7 +238,7 @@ Repro path:
    the cvvdp `cells_failed_oom` list above (specifically the
    `(gpu_full, 65536)` and `(gpu_strip_pair, 65536)` entries).
 2. Parity sweep invokes
-   `zen-metrics score --metric cvvdp --reference REF --distorted DIST
+   `zenmetrics score --metric cvvdp --reference REF --distorted DIST
    --gpu-runtime cuda` *without* `--use-orchestrator` or
    `--orchestrator-cache`.
 3. Post Phase 7.7.1 (`150675077`), `--use-orchestrator` is the **default**;
@@ -403,7 +403,7 @@ rm -f /home/lilith/.cache/zenmetrics/capability_*.toml
 # Then re-run the parity sweep — the orchestrator will warm() a fresh
 # bench and the 54/54 PASS-EXACT baseline should be restored.
 python3 scripts/orchestrator_parity_sweep.py \
-    --binary target/release/zen-metrics \
+    --binary target/release/zenmetrics \
     --out-csv  benchmarks/orchestrator_parity_phase110_clean.csv \
     --out-md   benchmarks/orchestrator_parity_phase110_clean.md
 ```

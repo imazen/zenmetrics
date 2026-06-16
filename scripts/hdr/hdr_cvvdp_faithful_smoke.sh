@@ -2,7 +2,7 @@
 # Faithful HDR-metric smoke (chunk 4) — the native linear-planes paths that
 # bypass the u8 PU clamp, for cvvdp (4a) AND butteraugli-gpu (4b). Needs a
 # gpu-cvvdp + gpu-butteraugli build + a CUDA GPU:
-#   cargo build --release -p zen-metrics-cli --no-default-features \
+#   cargo build --release -p zenmetrics-cli --no-default-features \
 #     --features "png,jpeg,cpu-metrics,gpu-cvvdp,gpu-butteraugli,gpu-cuda,hdr"
 #   cargo build --release -p zenhdr-corpus --example make_distorted
 #   cargo build --release -p zenhdr-corpus --example synth_highlight_pair
@@ -13,7 +13,7 @@
 # to (ssim2 stays 100, u8 butteraugli stays 0).
 set -uo pipefail
 
-BIN=${BIN:-./target/release/zen-metrics}
+BIN=${BIN:-./target/release/zenmetrics}
 MK_DISTORTED=${MK_DISTORTED:-./target/release/examples/make_distorted}
 SYNTH=${SYNTH:-./target/release/examples/synth_highlight_pair}
 GPU=${GPU_RUNTIME:-cuda}

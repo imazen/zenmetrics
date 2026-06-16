@@ -96,7 +96,7 @@ unsupported symbol.
 
 ## What's pushed but blocked
 
-- `ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-libcuda` (913MB).
+- `ghcr.io/imazen/zenmetrics-sweep:0.6.4-cvvdp-libcuda` (913MB).
   The image's libcuda is correct; the binary inside it isn't.
   Superseded by the next rebuild.
 

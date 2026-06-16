@@ -30,7 +30,7 @@ crates and in the launcher (which runs on the operator's workstation).
 The worker is a generic "claim job → fetch inputs → compute → upload
 artifacts → heartbeat" loop parameterized over traits.
 
-This is the failure the current `vastai-fleet` (4957 LOC, tested Rust,
+This is the failure the current `zenfleet-vastai` (4957 LOC, tested Rust,
 the live workhorse) and `coefficient`'s multi-provider stack solve
 imperfectly: vast.ai assumptions (`/proc/1/environ` credential read,
 R2-only storage, vast-specific onstart) are entangled with the generic
@@ -41,22 +41,22 @@ the code half.
 ### 1.2 Crate layering
 
 ```
-zen-sweep-worker  (the binary baked into the docker image)
+zenfleet-sweep  (the binary baked into the docker image)
    │   generic; selects backend at runtime via config/feature
    │
    uses traits from:
-zen-cloud-core    (pure traits + types; NO gpu / cloud / parquet deps)
+zenfleet-cloud    (pure traits + types; NO gpu / cloud / parquet deps)
    │   JobQueue · BlobStorage · Heartbeat · CredentialSource · WorkerHost
    │   generic job-loop runner: claim → fetch → compute → upload → refresh
    │
    ▼   provider impls (each its own crate, each implements the core traits):
-zen-cloud-vastai  · vast.ai API + /proc/1/environ + Cloudflare R2   (pull / BYO-queue)
-zen-cloud-salad   · SaladCloud API + IMDS + managed Job Queue + R2/S3 (push / managed-queue)
-zen-cloud-runpod  · RunPod API + Serverless-queue OR Pods + R2/S3   (push OR pull)
+zenfleet-vastai  · vast.ai API + /proc/1/environ + Cloudflare R2   (pull / BYO-queue)
+zenfleet-salad   · SaladCloud API + IMDS + managed Job Queue + R2/S3 (push / managed-queue)
+zenfleet-runpod  · RunPod API + Serverless-queue OR Pods + R2/S3   (push OR pull)
 zen-cloud-akash   · Akash SDL deploy + bid/lease + R2/S3             (pull / BYO-queue)
 zen-cloud-gcp     · GCP Batch + GCS                (from coefficient/gcp.rs)
 zen-cloud-do      · DigitalOcean + Spaces          (from coefficient/digitalocean.rs)
-zen-cloud-local   · localhost + filesystem + sqlite queue (dev / Tower NAS)
+zenfleet-local   · localhost + filesystem + sqlite queue (dev / Tower NAS)
 zen-cloud-k8s     · k8s Job + S3-compatible        (future)
 
 zen-fleet-launch  (the controller binary, runs on the operator workstation)
@@ -67,7 +67,7 @@ zen-fleet-launch  (the controller binary, runs on the operator workstation)
 
 ### 1.3 Worker vs launcher — the load-bearing separation
 
-| | Worker (`zen-sweep-worker`) | Launcher (`zen-fleet-launch`) |
+| | Worker (`zenfleet-sweep`) | Launcher (`zen-fleet-launch`) |
 |---|---|---|
 | Runs on | the compute node (GPU box) | the operator workstation |
 | Knows the cloud? | **NO** — generic over traits | YES — provisions per provider |
@@ -84,10 +84,10 @@ the hot path. The **worker** being generic is what buys the value.
 
 1. **One docker image** runs on vast.ai, GCP, DO, k8s, laptop — no
    per-provider rebuilds.
-2. **Local dev / CI** — run the worker against `zen-cloud-local`
+2. **Local dev / CI** — run the worker against `zenfleet-local`
    (filesystem `BlobStorage` + sqlite `JobQueue`). Same binary, no
    cloud, no spend. Catches bugs before burning vast.ai dollars.
-3. **Tower NAS overnight runs** — `zen-cloud-local` pulls jobs from a
+3. **Tower NAS overnight runs** — `zenfleet-local` pulls jobs from a
    queue on Tower; same worker, no new code path.
 4. **Multi-cloud sweep** — the launcher splits one sweep across vast.ai
    (cheap commodity GPUs) + GCP Batch (preemptible high-end) + the local
@@ -95,7 +95,7 @@ the hot path. The **worker** being generic is what buys the value.
 5. **coefficient's GCP/DO code stops rotting** — it becomes
    `zen-cloud-gcp` / `zen-cloud-do`, actively maintained alongside vastai.
 
-### 1.5 Core trait surface (`zen-cloud-core`)
+### 1.5 Core trait surface (`zenfleet-cloud`)
 
 ```rust
 /// Pull-or-push job source. vast.ai is pull (atomic R2 ETag claim);
@@ -159,46 +159,46 @@ train, IQA panel batch) — everything around it is shared.
 3. **Credential injection** — `CredentialSource::resolve() ->
    HashMap`. Each impl knows its provider's convention. RESOLVED.
 4. **Compile-time vs runtime backend selection** — RESOLVED: **cargo
-   features + trait objects**, NOT dlopen. `zen-sweep-worker
+   features + trait objects**, NOT dlopen. `zenfleet-sweep
    --features vastai,gcp,local`; runtime `--backend <name>` picks among
    the compiled-in set. dlopen is overkill at our scale.
 5. **Crate home** — RESOLVED: **zenmetrics workspace**, same reasoning
    as zenstats. `zen-cloud-*` are self-contained members with ZERO
    `zenmetrics-root` deps, so any consumer (coefficient, jxl-encoder,
    zensim picker training) depends on the sub-crate without dragging GPU
-   infrastructure. coefficient → depends on `zen-cloud-core` +
-   `zen-cloud-vastai` + adds `zen-cloud-gcp`/`-do` on top.
+   infrastructure. coefficient → depends on `zenfleet-cloud` +
+   `zenfleet-vastai` + adds `zen-cloud-gcp`/`-do` on top.
 
 ### 1.7 Migration phases
 
 **Phase A — carve, no behaviour change (DISPATCHED on approval).**
-- `vastai-fleet` → renamed `zen-cloud-vastai` (impl of the core traits).
-- New `zen-cloud-core` crate: the traits + types + generic `run_worker`
-  loop, extracted from `vastai-fleet`'s current public API.
-- New `zen-sweep-worker` binary: depends on `zen-cloud-core` +
-  `zen-cloud-vastai` (default features). Same outputs as today's worker.
+- `zenfleet-vastai` → renamed `zenfleet-vastai` (impl of the core traits).
+- New `zenfleet-cloud` crate: the traits + types + generic `run_worker`
+  loop, extracted from `zenfleet-vastai`'s current public API.
+- New `zenfleet-sweep` binary: depends on `zenfleet-cloud` +
+  `zenfleet-vastai` (default features). Same outputs as today's worker.
 - Existing docker images build with `--features vastai` (default) and
   produce byte-identical sweep results. The 13-test JSON parser + tokio
-  worker tests in vastai-fleet MUST stay green throughout.
+  worker tests in zenfleet-vastai MUST stay green throughout.
 - Acceptance gate: a 1-box smoke sweep on vast.ai produces the same
-  artifacts as a pre-carve baseline; all vastai-fleet tests pass; the
+  artifacts as a pre-carve baseline; all zenfleet-vastai tests pass; the
   docker image builds and the worker entrypoint's tool-verification
-  (`command -v zen-sweep-worker; …`) passes.
+  (`command -v zenfleet-sweep; …`) passes.
 
-**Phase B — validate the abstraction with `zen-cloud-local`.**
-- Add `zen-cloud-local` (filesystem `BlobStorage` + sqlite `JobQueue` +
-  dotenv `CredentialSource`). Run `zen-sweep-worker --backend local`
+**Phase B — validate the abstraction with `zenfleet-local`.**
+- Add `zenfleet-local` (filesystem `BlobStorage` + sqlite `JobQueue` +
+  dotenv `CredentialSource`). Run `zenfleet-sweep --backend local`
   against a local job queue end-to-end. If the trait shapes are wrong,
   fix them HERE — cheaply, before more providers. Add a local-backend
   integration test to CI (no cloud spend).
 
-**Phase C — SaladCloud provider `zen-cloud-salad` (USER PRIORITY — the
+**Phase C — SaladCloud provider `zenfleet-salad` (USER PRIORITY — the
 vast.ai alternative; full design in § 1.9).**
-- New `zen-cloud-salad` crate implementing the core traits for
+- New `zenfleet-salad` crate implementing the core traits for
   SaladCloud. This is the user's primary second provider, prioritised
   AHEAD of the coefficient gcp/do extraction (which is legacy cleanup).
 - Worker side: bake the multi-arch Go `salad-cloud-job-queue-worker`
-  sidecar into the image; `zen-cloud-salad`'s `JobQueue` impl speaks the
+  sidecar into the image; `zenfleet-salad`'s `JobQueue` impl speaks the
   sidecar's local gRPC contract (blocking receive in `next_chunk()`),
   `CredentialSource`/`WorkerHost` read the Salad IMDS, `BlobStorage`
   reuses the R2/S3 impl shared with vast.
@@ -217,7 +217,7 @@ vast.ai alternative; full design in § 1.9).**
 
 **Phase E — adopt everywhere, delete the forks.**
 - `jxl-encoder/zenjxl-tuning-sweep`, per-codec picker-training sweeps,
-  and V_X bake sweeps all switch to `zen-sweep-worker` + a per-sweep
+  and V_X bake sweeps all switch to `zenfleet-sweep` + a per-sweep
   `compute` closure instead of forking the bash.
 - Delete the 11 deprecated `onstart_v2/v3` bash forks across repos.
 - Any shell that remains is boot-time-only hydrate/verify (`zen-fleet.sh`),
@@ -230,7 +230,7 @@ Batch node vs a k8s pod is structurally different and stays per-provider
 in `zen-fleet-launch`. Accepted: the launcher is the operator's
 workstation tool, not the hot path. The worker being generic is the win.
 
-### 1.9 SaladCloud provider (`zen-cloud-salad`) — full design
+### 1.9 SaladCloud provider (`zenfleet-salad`) — full design
 
 Added 2026-05-26 on user request ("add salad.com as a vast.ai
 alternative"). SaladCloud runs containers on distributed consumer GPUs
@@ -256,23 +256,23 @@ divergence `JobQueue::next_chunk()` was designed to hide:
 | worker identity | `/proc/1/environ` | Salad IMDS |
 | credential source | vast env injection | IMDS + container-group env |
 
-**Worker-side integration (`zen-cloud-salad`, Phase 1 = pragmatic):**
+**Worker-side integration (`zenfleet-salad`, Phase 1 = pragmatic):**
 1. Bake the Go `salad-cloud-job-queue-worker` sidecar into the
-   `zen-sweep-worker` docker image (tiny multi-arch Go binary; per the
+   `zenfleet-sweep` docker image (tiny multi-arch Go binary; per the
    BAKE-EVERYTHING rule, no boot-time fetch). It is the queue→app bridge.
 2. `JobQueue` impl: `next_chunk()` blocks reading the next job off the
    sidecar's local gRPC stream; `ack_chunk()` returns the result to the
    sidecar, which returns it to the managed queue. (The sidecar speaks
    protobuf/gRPC — its `.proto` is in the upstream repo; we generate a
    thin Rust gRPC client with `tonic`, OR run the sidecar as the gRPC
-   *server* and zen-sweep-worker as the client per the sample's pattern.)
+   *server* and zenfleet-sweep as the client per the sample's pattern.)
 3. `CredentialSource` + `WorkerHost`: read the Salad IMDS (instance
    metadata service auto-discovered on a Salad node — `SALAD_MACHINE_ID`,
    container-group id, GPU info) plus any env vars set in the container
    group definition.
 4. `BlobStorage`: reuse the shared R2/S3 impl (factor it out of
-   `zen-cloud-vastai` into a `zen-cloud-s3` helper both depend on, OR
-   keep an S3 impl in `zen-cloud-core` behind a feature — decide during
+   `zenfleet-vastai` into a `zenfleet-s3` helper both depend on, OR
+   keep an S3 impl in `zenfleet-cloud` behind a feature — decide during
    Phase C; do not duplicate the R2 client).
 5. `Heartbeat`: Salad manages instance liveness natively and the sidecar
    handles per-job acks, so the Salad `Heartbeat` impl is largely a
@@ -302,10 +302,10 @@ faster and reuses Salad's supported, tested bridge.
 
 **Local-testing caveat:** the Salad sidecar "only runs on a SaladCloud
 node" (IMDS dependency) — so the Salad path canNOT be exercised by
-`zen-cloud-local` the way other backends can. Phase C's smoke test must
+`zenfleet-local` the way other backends can. Phase C's smoke test must
 run on a real 1-replica Salad container group. Salad has stated a
 local-test tool is planned; until then, the `compute` closure itself is
-backend-agnostic and IS covered by the `zen-cloud-local` integration
+backend-agnostic and IS covered by the `zenfleet-local` integration
 test (Phase B), so only the thin Salad `JobQueue`/`CredentialSource`
 glue is Salad-node-only.
 
@@ -321,20 +321,20 @@ Both slot into the same `zen-cloud-*` provider pattern — **no
 architecture change**, just two more crates + launcher provisioning.
 They validate the trait layer a second and third time after Salad.
 
-**`zen-cloud-runpod` (Phase F — closest to Salad/vast, lowest effort).**
+**`zenfleet-runpod` (Phase F — closest to Salad/vast, lowest effort).**
 RunPod offers two modes; the trait layer covers both:
 - **Serverless (push):** RunPod's queue invokes a handler per job. The
   `JobQueue::next_chunk()` impl blocks on the handler invocation and
   `ack_chunk()` returns the result — same shape as Salad's HTTP receiver.
   Best fit for the sweep workload (autoscale-to-zero, pay-per-job).
 - **Pods (pull):** rent a persistent GPU pod; the worker claims chunks
-  from R2 exactly like vast.ai. Reuses `zen-cloud-vastai`'s claim logic
-  + `zen-cloud-s3` storage verbatim.
+  from R2 exactly like vast.ai. Reuses `zenfleet-vastai`'s claim logic
+  + `zenfleet-s3` storage verbatim.
 - Launcher: RunPod has a **GraphQL API** (pod create/terminate, GPU type
   selection, serverless endpoint deploy). Hand-roll `reqwest` + a GraphQL
   query string (no official Rust SDK). Auth: API key header.
 - Storage: BYO R2/S3 (RunPod has network volumes but S3 is the portable
-  choice — reuse `zen-cloud-s3`).
+  choice — reuse `zenfleet-s3`).
 - Identity/creds: RunPod injects env vars into the container; no special
   IMDS. `CredentialSource` reads env; `WorkerHost` reads
   `RUNPOD_POD_ID` / `RUNPOD_*`.
@@ -360,7 +360,7 @@ side is identical to vast/runpod-pods (BYO S3 + R2-pull queue); the
   path).
 - Worker: zero Akash-specific code — it's a generic S3+pull worker. So
   `zen-cloud-akash` may be launcher-only (no worker crate), with the
-  deployed image being the same generic `zen-sweep-worker` the local /
+  deployed image being the same generic `zenfleet-sweep` the local /
   vast pull-path uses.
 - Storage/identity: BYO R2/S3; env-var creds (Akash injects via the SDL
   `env`). No IMDS.
@@ -370,7 +370,7 @@ Salad/vast effort — high value, low marginal cost, do it right after
 Salad ships. Akash (Phase G) has the same trivial worker but the most
 divergent launcher (on-chain bid/lease), so it lands last and wraps the
 Akash CLI rather than reimplementing the chain flow. Both depend only on
-the Phase A trait layer (done) + the shared `zen-cloud-s3` (done in
+the Phase A trait layer (done) + the shared `zenfleet-s3` (done in
 Phase C) — neither needs Phase B/D/E.
 
 ---
@@ -450,7 +450,7 @@ zenmetrics (GPU scoring) owns picker training.
 
 **Proposal: new `zenpicker-train` binary in the zenanalyze workspace**
 (where zenpicker lives). Inputs:
-- input parquet path (from `zen-metrics-cli assemble` output);
+- input parquet path (from `zenmetrics-cli assemble` output);
 - codec family (`Jpeg|Webp|Jxl|Avif|Png|Gif`, or `meta` for cross-codec);
 - target metric column (zenstats nomenclature — the same names panel
   uses);
@@ -469,7 +469,7 @@ It:
 
 **Data-flow it formalizes:**
 ```
-sweep (zen-sweep-worker) → unified parquet (zen-metrics-cli assemble)
+sweep (zenfleet-sweep) → unified parquet (zenmetrics-cli assemble)
   → zenpicker-train (per-codec) → per-codec bakes + manifests
   → zenpicker-train (meta)      → MetaPicker bake + manifest
   → zenstats panel gate         → ship/no-ship verdict
@@ -508,20 +508,20 @@ thin, frequently-touched index, not a deep doc.
 | Crate / binary | Home | Rationale |
 |---|---|---|
 | `zenstats` | zenmetrics workspace | landed 36d71ca3; self-contained member |
-| `zen-cloud-core` | zenmetrics workspace | self-contained, zero gpu deps |
-| `zen-cloud-vastai` | zenmetrics workspace | renamed from vastai-fleet |
-| `zen-cloud-salad` | zenmetrics workspace | SaladCloud (managed queue + IMDS), user-priority alt |
-| `zen-cloud-local` | zenmetrics workspace | dev/Tower backend |
-| `zen-cloud-runpod` | zenmetrics workspace | RunPod serverless-queue OR pods; user-requested alt |
+| `zenfleet-cloud` | zenmetrics workspace | self-contained, zero gpu deps |
+| `zenfleet-vastai` | zenmetrics workspace | renamed from zenfleet-vastai |
+| `zenfleet-salad` | zenmetrics workspace | SaladCloud (managed queue + IMDS), user-priority alt |
+| `zenfleet-local` | zenmetrics workspace | dev/Tower backend |
+| `zenfleet-runpod` | zenmetrics workspace | RunPod serverless-queue OR pods; user-requested alt |
 | `zen-cloud-akash` | zenmetrics workspace (launcher-only likely) | Akash SDL/bid/lease; worker is generic S3+pull |
 | `zen-cloud-gcp` / `-do` | zenmetrics workspace | from coefficient |
-| `zen-sweep-worker` | zenmetrics workspace | the deployed binary |
+| `zenfleet-sweep` | zenmetrics workspace | the deployed binary |
 | `zen-fleet-launch` | zenmetrics workspace | operator controller |
 | `zenpicker-train` | zenanalyze workspace | next to zenpicker |
 | `ARCHITECTURE.md` | new `imazen/zen-workspace` | workspace-wide map |
 
 coefficient depends on `zen-cloud-{core,vastai,salad,gcp,do}`;
-jxl-encoder + zensim picker training depend on `zen-sweep-worker`. No
+jxl-encoder + zensim picker training depend on `zenfleet-sweep`. No
 dependency cycle: the `zen-cloud-*` crates have zero `zenmetrics-root`
 deps.
 
@@ -531,12 +531,12 @@ deps.
 
 | Phase | Repo | Independent? | Status |
 |---|---|---|---|
-| §1 Phase A — cloud carve | zenmetrics | foundational | **IN FLIGHT** (zen-cloud-core landed de66b1b0) |
+| §1 Phase A — cloud carve | zenmetrics | foundational | **IN FLIGHT** (zenfleet-cloud landed de66b1b0) |
 | §1 Phase B — local backend | zenmetrics | after A | queued |
-| §1 Phase C — **SaladCloud** `zen-cloud-salad` | zenmetrics | after A (user priority) | queued |
+| §1 Phase C — **SaladCloud** `zenfleet-salad` | zenmetrics | after A (user priority) | queued |
 | §1 Phase D — gcp/do extract | zenmetrics + coefficient | after B | queued |
 | §1 Phase E — adopt + delete forks | all | after C/D | queued |
-| §1 Phase F — **RunPod** `zen-cloud-runpod` | zenmetrics | after A (user-requested alt) | queued |
+| §1 Phase F — **RunPod** `zenfleet-runpod` | zenmetrics | after A (user-requested alt) | queued |
 | §1 Phase G — **Akash** `zen-cloud-akash` | zenmetrics + launcher | after A (launcher-divergent, do last) | queued |
 | §2 stats finish + publish | zensim + coefficient | independent | queued |
 | §3 TOML-driven trainer | zensim | independent of cloud | queued |

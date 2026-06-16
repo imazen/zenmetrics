@@ -1,5 +1,5 @@
 # Hetzner cost/result — jpeg-encode throughput (256x256 q80, all cores, 5s)
-# 2026-05-30, fsn1. Workload: zen-jobworker bench_encode (image-crate JPEG). MEASURED, not extrapolated.
+# 2026-05-30, fsn1. Workload: zenfleet-worker bench_encode (image-crate JPEG). MEASURED, not extrapolated.
 # cax31/cax41 (8/16-core ARM): UNAVAILABLE (Hetzner Ampere out of stock fsn1/nbg1/hel1).
 
 type          arch            cores   EUR/hr    enc/s  enc/s/core  enc/s per EUR/hr  Mencodes/EUR

@@ -38,7 +38,7 @@ R2() { s5cmd --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" 
 ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 log() { printf '[%s] [omni-onstart] %s\n' "$(ts)" "$*" >&2; }
 
-for tool in zen-metrics s5cmd jq python3; do
+for tool in zenmetrics s5cmd jq python3; do
     command -v "$tool" >/dev/null || { log "FAIL: $tool missing"; exit 2; }
 done
 

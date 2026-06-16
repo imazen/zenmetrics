@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # Local-first sweep driver. Iterates the same JSONL chunks the vastai
-# worker would pull and runs each through the locally-built zen-metrics
+# worker would pull and runs each through the locally-built zenmetrics
 # binary. Pushes Pareto TSVs to R2 as it goes so a partial run is still
 # durable.
 #
 # Why a local-first option exists: vast.ai SSH provisioning has been
 # unreliable in this run (instances stuck in `loading` for several
 # minutes; ssh keys not propagating cleanly to the proxy). Local
-# encoding with zen-metrics on a strong box (Ryzen 7950X here) is
+# encoding with zenmetrics on a strong box (Ryzen 7950X here) is
 # 2-3x faster than the cheap RTX 3060 boxes in the available offers
 # anyway, since the 4 selected metrics are all CPU-bound.
 
 set -euo pipefail
 
-BIN="${BIN:-$HOME/work/turbo-metrics/target/release/zen-metrics}"
+BIN="${BIN:-$HOME/work/turbo-metrics/target/release/zenmetrics}"
 CHUNK_FILE="${CHUNK_FILE:-/tmp/chunks.jsonl}"
 SWEEP_RUN_ID="${SWEEP_RUN_ID:-sweep-2026-05-03}"
 SOURCES_ROOT="${SOURCES_ROOT:-$HOME/work/zentrain-corpus/mlp-tune-fast}"

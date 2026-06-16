@@ -1,0 +1,339 @@
+[package]
+name = "zenmetrics-cli"
+version = "0.6.0"
+description = "Unified CLI for decoding zen image formats and scoring perceptual quality metrics on CPU and GPU"
+authors = ["Lilith River <support@imazen.io>"]
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "zenmetrics"
+path = "src/main.rs"
+
+# Library target: re-exports `sweep::*` + `metrics::*` so the fleet
+# worker (and any future in-process scorer) can call run_sweep without
+# spawning a subprocess. The bin and lib share src/ — main.rs is the
+# CLI entry point, lib.rs re-exports the module tree for library use.
+#
+# Why bother:
+#   - The bash worker calls `zenmetrics sweep` ~30 times per chunk
+#     (one per knob_tuple). Each subprocess re-initialises cubecl
+#     (~3-5s). On a typical chunk that's 90-150s of pure overhead.
+#   - Linking the same code as a library into zenfleet-vastai's
+#     worker subcommand means one cubecl init *per worker process*
+#     (not per group, not per chunk). 30× fewer inits.
+[lib]
+name = "zenmetrics_cli"
+path = "src/lib.rs"
+
+[features]
+# Defaults are CPU-only with the zen decoders available on crates.io that
+# build cleanly against the latest archmage / magetypes. JPEG is omitted
+# from the default set because zenjpeg 0.8.3 does not yet build against
+# magetypes 0.9.x — see the `jpeg` feature note below.
+default = ["png", "jpeg", "webp", "avif", "jxl", "cpu-metrics"]
+
+# Decoder feature flags
+png = ["dep:zenpng"]
+# Enables the `zenjpeg` decoder + sweep encoder. We pin to a path dep on
+# the in-workspace zenjpeg 0.8.4 (sibling repo), which restores
+# magetypes >= 0.9 compatibility and adds the `__expert` knob bundle.
+jpeg = ["dep:zenjpeg", "zenjpeg/zencodec"]
+webp = ["dep:zenwebp"]
+avif = ["dep:zenavif"]
+# jxl pulls the direct `jxl-encoder` dep too: the sweep encode path configures
+# expert LossyConfig knobs the zenjxl wrapper doesn't expose. Kept here (not in
+# `sweep`) so a non-jxl sweep (`--features sweep,jpeg`) need not compile
+# jxl-encoder / zenjxl at all — important while zenjxl is mid zencodec migration.
+jxl = ["dep:zenjxl", "dep:jxl-encoder"]
+
+# HDR scoring: decode HDR sources (EXR / Ultra HDR JPEG / gain-map HEIC) to
+# absolute-luminance, then prep per metric — PU21 for the SDR metrics,
+# normalized-nits + a peak display model for cvvdp. Pulls the HDR decoders
+# (ultrahdr-rs / heic) + an EXR reader (image). Off by default.
+hdr = ["dep:ultrahdr-rs", "dep:ultrahdr-core", "dep:heic", "dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", "zenmetrics-api/cpu-metrics"]
+
+# CPU metric feature flags
+cpu-metrics = [
+    "dep:butteraugli",
+    "dep:zensim",
+    "dep:fast-ssim2",
+    "dep:dssim-core",
+    "dep:rgb",
+    "dep:imgref",
+]
+
+# GPU bundle: pulls every GPU metric implementation via the umbrella.
+gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp", "gpu-iwssim", "gpu-zensim"]
+# Per-metric feature flags forward to the corresponding `zenmetrics-api`
+# per-metric feature, which in turn pulls in the underlying per-crate
+# dep. The CLI now talks to the umbrella's opaque API (`Metric::new`,
+# `Metric::compute_srgb_u8`) for the common single-shot path and never
+# touches `cubecl::Runtime` directly in steady-state operation.
+#
+# Two paths still reach into the per-crate typed cubecl-types surface
+# via the umbrella's `zenmetrics_api::{butter,cvvdp}` re-exports:
+#   - butteraugli's two-column emit (`butteraugli_max_gpu` +
+#     `butteraugli_pnorm3_gpu`) needs `ButteraugliResult.pnorm_3`, which
+#     the opaque `Score` does not surface.
+#   - `CvvdpBatchScorer` caches a `Cvvdp::<R>` instance across pairs of
+#     matching dims to avoid the ~200 MB / NVRTC compile per-pair cost
+#     that produces fleet OOMs at 100-pair chunks.
+# Both go through `zenmetrics-api/cubecl-types` to keep a single
+# umbrella dep line; the CLI does not depend on `cubecl`, `cvvdp-gpu`,
+# or `butteraugli-gpu` directly.
+gpu-butteraugli = ["dep:zenmetrics-api", "zenmetrics-api/butter", "zenmetrics-api/cubecl-types", "dep:cubecl", "dep:butteraugli-gpu"]
+gpu-ssim2 = ["dep:zenmetrics-api", "zenmetrics-api/ssim2"]
+gpu-dssim = ["dep:zenmetrics-api", "zenmetrics-api/dssim"]
+gpu-cvvdp = ["dep:zenmetrics-api", "zenmetrics-api/cvvdp", "zenmetrics-api/cubecl-types", "dep:cubecl"]
+gpu-iwssim = ["dep:zenmetrics-api", "zenmetrics-api/iwssim"]
+# `cpu-metrics` is pulled so the dispatcher can route min_dim<64 images (which
+# can't form the GPU 4-scale pyramid) to the CPU zensim — see the ZensimGpu arm
+# in metrics/cache.rs. Cheap: it only adds the CPU zensim scorer to the build.
+gpu-zensim = ["dep:zenmetrics-api", "zenmetrics-api/zensim", "cpu-metrics"]
+# Pick CubeCL backends. Forward through the umbrella so every enabled
+# per-crate gets the right backend feature.
+gpu-cuda = ["zenmetrics-api?/cuda", "cubecl?/cuda"]
+gpu-wgpu = ["zenmetrics-api?/wgpu", "cubecl?/wgpu"]
+gpu-hip = ["zenmetrics-api?/hip", "cubecl?/hip"]
+gpu-cpu = ["zenmetrics-api?/cpu", "cubecl?/cpu"]
+
+# `sweep` enables the codec-driving subcommand that encodes a source image
+# across a (q, knob_tuple) Cartesian grid and scores each variant via the
+# normal metric backends. Codecs stay "dumb" — the sweep driver pokes their
+# `__expert` / public encode APIs directly without any in-codec picker glue.
+#
+# Codec coverage at zenmetrics-cli 0.3.0:
+# - zenwebp 0.4.5, zenavif 0.1.7, zenjxl 0.2.1 each ship `__expert` and we
+#   opt in here for the full knob bundle.
+# - zenjpeg 0.8.4 (path dep on the sibling repo) ships `__expert`, so the
+#   sweep driver pulls it in alongside the other codecs.
+sweep = [
+    # jpeg/webp/avif are pulled for convenience (a bare `--features sweep`
+    # builds them). `jxl` is intentionally NOT force-pulled: enable it
+    # explicitly (`--features sweep,jxl`) when you need it. This lets a
+    # jpeg/webp/avif sweep build while zenjxl is mid zencodec migration.
+    # The `zenjxl?/__expert` / `zenjxl?/zencodec` activations below stay
+    # conditional and only fire when `jxl` is separately enabled.
+    "jpeg",
+    "webp",
+    "avif",
+    "zenjpeg?/__expert",
+    "zenjpeg?/trellis",
+    # `__test-utils` re-exposes the otherwise-`pub(crate)` `zenjpeg::encode`
+    # module so the sweep harness can reach `QuantTableSource` and
+    # `HybridConfig` (these are field types of the public `InternalParams`
+    # bundle but aren't re-exported through `zenjpeg::encoder::*`).
+    "zenjpeg?/__test-utils",
+    "zenwebp?/__expert",
+    "zenavif?/__expert",
+    "zenjxl?/__expert",
+    # zenjxl::sweep is gated on encode + __expert.
+    "zenjxl?/encode",
+    # zenjxl gates JxlEncoderConfig behind the `zencodec` feature, which
+    # turns the wrapper struct on. Pull it through here so the sweep
+    # driver sees the public encoder type at all.
+    "zenjxl?/zencodec",
+    # The runner round-trips encoded bytes through a tempfile so the
+    # path-based decoder can sniff format identically to production.
+    "dep:tempfile",
+    # Encoders need rgb / imgref / zencodec / almost_enough at runtime.
+    "dep:rgb",
+    "dep:imgref",
+    "dep:zencodec",
+    "dep:almost-enough",
+    # `jxl-encoder` moved to the `jxl` feature (it's only needed by the JXL
+    # encode path) so a non-jxl sweep doesn't compile it.
+    # `--feature-output <path.parquet>` writes a per-cell sidecar of zensim's
+    # 300-feature extended vector. Pulled into the sweep feature so the dep
+    # cost is opt-in: a build without `--features sweep` doesn't ship the
+    # Apache Arrow/Parquet stack.
+    "dep:parquet",
+    "dep:arrow-array",
+    "dep:arrow-schema",
+    # The corpus assembler shares the arrow/parquet stack, so `sweep`
+    # implies `assemble` for the common build. `assemble` can also be
+    # enabled on its own (without the codec-heavy sweep deps) for a lean
+    # CI job that only builds the join layer — see the `assemble` feature.
+    "assemble",
+]
+
+# `orchestrator` wires the `zenmetrics-orchestrator` crate into the CLI as
+# the recommended scoring backend. When enabled (and a runtime opt-in via
+# `--use-orchestrator` or `ZENMETRICS_USE_ORCHESTRATOR=1`), every metric
+# task routes through `Orchestrator::run_all` / `run_single` so the OOM
+# fallback ladder, persistent capability cache, and cached-ref auto-detect
+# all kick in. The legacy direct-dispatch code paths remain compiled and
+# selectable as the default — adding orchestrator is additive, not a
+# replacement.
+#
+# Default: NOT in the bundled `sweep` feature. Production sweep workers
+# turn it on explicitly via
+# `--features sweep,orchestrator,orchestrator-cuda,orchestrator-cpu-all`
+# so the image build is opt-in. CI checks both shapes (without and with
+# orchestrator) to keep the legacy path healthy.
+orchestrator = ["dep:zenmetrics-orchestrator", "dep:zenmetrics-api"]
+orchestrator-cuda = ["zenmetrics-orchestrator?/cuda", "zenmetrics-api?/cuda", "orchestrator"]
+orchestrator-cpu-all = ["zenmetrics-orchestrator?/cpu-all", "orchestrator"]
+orchestrator-cpu-cvvdp = ["zenmetrics-orchestrator?/cpu-cvvdp", "orchestrator"]
+orchestrator-cpu-ssim2 = ["zenmetrics-orchestrator?/cpu-ssim2", "orchestrator"]
+orchestrator-cpu-dssim = ["zenmetrics-orchestrator?/cpu-dssim", "orchestrator"]
+orchestrator-cpu-butter = ["zenmetrics-orchestrator?/cpu-butter", "orchestrator"]
+orchestrator-cpu-zensim = ["zenmetrics-orchestrator?/cpu-zensim", "orchestrator"]
+
+# `assemble` enables the `zenmetrics assemble` subcommand: the typed,
+# full-key corpus join that replaces the Python corpus-assembly builders
+# (`build_per_codec_training.py` + the canonical-corpus join layer) and
+# makes the 2026-05-25 parquet corruption structurally impossible. It needs
+# ONLY the arrow/parquet stack — no codecs, no GPU — so it is a separate,
+# light feature that does NOT pull in the codec/encoder deps the `sweep`
+# feature requires. This lets the assembler build + test in isolation even
+# when a sibling codec dep is temporarily broken.
+assemble = [
+    "dep:parquet",
+    "dep:arrow-array",
+    "dep:arrow-schema",
+]
+
+[dependencies]
+# Content-addressing for --emit-cells declare manifests (same version as
+# zenfleet-core so the workspace carries one copy).
+sha2 = "0.10.9"
+clap = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+# `preserve_order` keeps the JSON `compare` output in the order we insert
+# keys (reference → variant → scores), matching the documented schema.
+serde_json = { workspace = true, features = ["preserve_order"] }
+csv = { workspace = true }
+# Inner-loop parallelism in the sweep runner. CPU metrics already use
+# rayon internally for SIMD; we add per-cell rayon at the outer level so
+# one zenmetrics process saturates all cores natively, replacing the
+# `xargs -P` shell-level fan-out used in earlier sweeps.
+rayon = "1"
+
+# zen image decoders — all path deps to sibling worktrees so we
+# always link the in-flight local versions. User confirmed
+# 2026-05-19: "verify no cratesio codecs are used."
+#
+# zenavif: the ../../../zenavif--main worktree was removed by worktree
+# cleanup; ../../../zenavif is the source of truth — it's at zenavif
+# main (31a9b54), which keeps `pub mod expert` + the `__expert` feature
+# (the speed6 branch that lacked both is no longer the ../zenavif checkout).
+zenpng       = { path = "../../../zenpng",                                     optional = true }
+zenjpeg      = { path = "../../../zenjpeg/zenjpeg",        default-features = false, optional = true, features = ["decoder"] }
+zenwebp      = { path = "../../../zenwebp",                                    optional = true }
+zenavif      = { path = "../../../zenavif",                                    optional = true }
+zenjxl       = { path = "../../../zenjxl",                                     optional = true }
+# HDR decoders (gated by the `hdr` feature): Ultra HDR JPEG + gain-map HEIC →
+# absolute-luminance; image provides the EXR reader.
+ultrahdr-rs  = { path = "../../../ultrahdr/ultrahdr-rs",                       optional = true }
+ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core",                    optional = true }
+heic         = { path = "../../../heic",          optional = true, features = ["backend-rust"] }
+image        = { version = "0.25",                optional = true, default-features = false, features = ["exr"] }
+bytemuck     = { workspace = true,                optional = true }
+
+# Direct jxl-encoder dep with the loop features that the zenjxl wrapper does
+# not surface. Local path (matches the workspace [patch.crates-io] entry)
+# so workspace consumers always see the same version + improvements.
+jxl-encoder  = { path = "../../../jxl-encoder/jxl-encoder",         optional = true, default-features = false, features = [
+    "std",
+    "parallel",
+    "butteraugli-loop",
+    "ssim2-loop",
+    "zensim-loop",
+    "rate-control",
+    "__expert",
+    "convenience",
+] }
+
+# Pulled in by the `sweep` feature. zencodec exposes the EncodeJob /
+# Encoder traits that drive zenjxl encoding; almost_enough is the
+# cooperative-cancellation crate zenavif's encoder takes by value.
+zencodec = { version = "0.1.20", optional = true }
+almost-enough = { version = "0.4.3", optional = true }
+
+# zenpixels exposes the PixelBuffer / PixelSlice types returned by zen
+# decoders. We pin to a version compatible with the decoders above.
+zenpixels = "0.2.11"
+# zenpixels-convert handles every supported source pixel layout (u8/u16/f32,
+# Gray/RGB/RGBA, premul/straight, sRGB/linear) → RGB8 sRGB through a single
+# RowConverter. This is the canonical path; the CLI used to ship bespoke
+# u16/f32 → u8 helpers that have all been deleted in favour of delegation.
+zenpixels-convert = "0.2.11"
+# enough provides the cooperative cancellation token zenpng's decode wants.
+enough = "0.4.4"
+
+# CPU metrics
+butteraugli = { version = "0.9.2", optional = true }
+# 0.3.0 adds principled per-channel H-blur activity for masked/IW features
+# (feat/principled-activity branch). 0.2.8 added `Zensim::compute_extended_features()`.
+zensim = { version = "0.3.0", optional = true }
+# ssim2 metric uses Imazen's local fast-ssim2 (our SIMD SSIMULACRA2), NOT the third-party crates.io
+# `ssimulacra2` ("scores use local, crates versions banned"). Local sibling, not the published 0.8.1.
+fast-ssim2 = { path = "../../../fast-ssim2/fast-ssim2", optional = true, features = ["imgref"] }
+dssim-core = { workspace = true, optional = true }
+rgb = { version = "0.8", optional = true }
+imgref = { version = "1", optional = true }
+
+# GPU metric backends are routed through the `zenmetrics-api` umbrella
+# crate. The umbrella's opaque API is cubecl-version-agnostic, so this
+# CLI no longer depends on the individual `*-gpu` crates and the common
+# scoring paths (ssim2, dssim, iwssim, zensim, single-call cvvdp) never
+# name a cubecl type.
+#
+# Two paths still reach the per-crate typed cubecl-types surface via
+# the umbrella's `zenmetrics_api::{butter,cvvdp}` re-exports:
+#   - butteraugli's two-column emit (`butteraugli_max_gpu` +
+#     `butteraugli_pnorm3_gpu`) needs `ButteraugliResult.pnorm_3`,
+#     which the opaque `Score` does not surface.
+#   - `CvvdpBatchScorer` caches a `Cvvdp::<R>` instance across pairs of
+#     matching dims to avoid the ~200 MB / NVRTC compile per-pair cost
+#     that produces fleet OOMs at 100-pair chunks.
+# These two paths still need to name `R: cubecl::Runtime` for the
+# generic, so an optional `cubecl` dep is pulled in by `gpu-butteraugli`
+# / `gpu-cvvdp`. Keeping it optional means a CLI build with neither of
+# those two metrics enabled (e.g. ssim2-only worker) still avoids the
+# cubecl dependency entirely.
+zenmetrics-api = { workspace = true, optional = true, default-features = false }
+cubecl = { workspace = true, optional = true }
+
+# Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the
+# linear-planes API: set_reference_from_linear_planes /
+# compute_with_reference_from_linear_planes) for the faithful HDR butteraugli
+# path. cargo feature-unifies this with zenmetrics-api's butteraugli-gpu, so
+# the re-exported `zenmetrics_api::butter::Butteraugli` gains the internals
+# methods. Pulled by gpu-butteraugli — additive, no effect on the u8 path.
+butteraugli-gpu = { workspace = true, optional = true, features = ["internals"] }
+
+# tempfile is used by the `sweep` runner to round-trip encoded bytes
+# through the path-based decoder. It is also used in the test suite,
+# which is why it's kept as a runtime dep gated on the `sweep` feature
+# rather than dev-only.
+tempfile = { version = "3", optional = true }
+
+# Orchestrator integration (Phase 7). Optional — pulled only when the
+# `orchestrator` feature (or one of its variants) is enabled. The
+# orchestrator's own feature gating (cuda / cpu-cvvdp / cpu-all / …)
+# pulls through via the `orchestrator-*` aliases above.
+zenmetrics-orchestrator = { workspace = true, optional = true, default-features = false }
+
+# Parquet output sidecar for the `sweep` subcommand. Stores zensim's
+# 300-feature extended vector per encoded cell so future selector / MLP
+# retraining can reuse the per-cell features without re-running the full
+# Cartesian sweep (which is the dominant compute cost).
+# All three only flow in when `--features sweep` is enabled.
+parquet = { version = "58.2.0", default-features = false, features = ["arrow", "zstd", "snap"], optional = true }
+arrow-array = { version = "58.2.0", optional = true }
+arrow-schema = { version = "58.2.0", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+serde_json = { workspace = true }
+# Used by the `sweep_writes_zensim_feature_parquet` integration test to read
+# back the parquet file the CLI produced. Aligned with the `parquet` version
+# used by the sweep feature.
+parquet = { version = "58.2.0", default-features = false, features = ["arrow", "zstd", "snap"] }

@@ -1,10 +1,10 @@
 # Dockerfile.sweep.v27 — orchestrator-aware sweep image.
 #
 # Builds on v26's layer plan (collapsed single-file image, CUDA NVRTC +
-# cudart 12-6 + pyarrow + cuda_dlsym_stub + zen-sweep-worker + vastai-fleet).
+# cudart 12-6 + pyarrow + cuda_dlsym_stub + zenfleet-sweep + zenfleet-vastai).
 # v27 deltas:
 #
-#   1. zen-metrics binary built with the new `orchestrator` feature set
+#   1. zenmetrics binary built with the new `orchestrator` feature set
 #      (`orchestrator,orchestrator-cuda,orchestrator-cpu-all`) so the
 #      `--use-orchestrator` flag is functional. Adds ~30 MB to the
 #      binary for the cvvdp-cpu + ssimulacra2 + dssim-core + butteraugli
@@ -15,7 +15,7 @@
 #        b. Optionally fetches a fleet-shared `capability_<hash>.toml`
 #           from R2 so the worker skips the local warm() bench
 #           (saves ~30 s per box on cold boots).
-#        c. Drives `zen-metrics sweep --use-orchestrator ...` on the
+#        c. Drives `zenmetrics sweep --use-orchestrator ...` on the
 #           claimed chunk.
 #      Operator overrides via `--entrypoint /usr/local/bin/onstart_orchestrator.sh`.
 #   3. ENV var `ZENMETRICS_CACHE_DIR=/root/.cache/zenmetrics` so a host
@@ -25,29 +25,29 @@
 #      duration of the run).
 #
 # v27 keeps every v26 entrypoint as a fallback target. The default
-# ENTRYPOINT is unchanged (zen-sweep-worker via run_with_error_trap).
+# ENTRYPOINT is unchanged (zenfleet-sweep via run_with_error_trap).
 # Operators that want the orchestrator path explicitly pass
 # `--entrypoint /usr/local/bin/onstart_orchestrator.sh`.
 #
 # Build (from zenmetrics repo root):
 #
-#   CUDARC_CUDA_VERSION=12000 cargo build --release -p zen-metrics-cli \
+#   CUDARC_CUDA_VERSION=12000 cargo build --release -p zenmetrics-cli \
 #       --no-default-features \
 #       --features 'sweep,png,gpu,gpu-cuda,gpu-cpu,orchestrator,orchestrator-cuda,orchestrator-cpu-all'
-#   cp target/release/zen-metrics ./zen-metrics
+#   cp target/release/zenmetrics ./zenmetrics
 #
-#   cargo build --release -p zen-sweep-worker --features vastai
-#   cp target/release/zen-sweep-worker ./zen-sweep-worker
+#   cargo build --release -p zenfleet-sweep --features vastai
+#   cp target/release/zenfleet-sweep ./zenfleet-sweep
 #
-#   cargo build --release -p zen-cloud-vastai --features inline-sweep
-#   cp target/release/vastai-fleet ./vastai-fleet
+#   cargo build --release -p zenfleet-vastai --features inline-sweep
+#   cp target/release/zenfleet-vastai ./zenfleet-vastai
 #
 #   docker build -f Dockerfile.sweep.v27 \
-#       --build-arg ZEN_METRICS_BINARY=./zen-metrics \
-#       --build-arg ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker \
-#       --build-arg VASTAI_FLEET_BINARY=./vastai-fleet \
-#       -t ghcr.io/imazen/zen-metrics-sweep:v27-$(git rev-parse --short HEAD) \
-#       -t ghcr.io/imazen/zen-metrics-sweep:v27 \
+#       --build-arg ZEN_METRICS_BINARY=./zenmetrics \
+#       --build-arg ZEN_SWEEP_WORKER_BINARY=./zenfleet-sweep \
+#       --build-arg VASTAI_FLEET_BINARY=./zenfleet-vastai \
+#       -t ghcr.io/imazen/zenmetrics-sweep:v27-$(git rev-parse --short HEAD) \
+#       -t ghcr.io/imazen/zenmetrics-sweep:v27 \
 #       .
 #
 # Layer plan (cheap-changes-rarely → expensive-changes-often, identical
@@ -60,8 +60,8 @@
 #   L5 CUDA dev headers                   ~30 MB
 #   L6 helpers (s5cmd + jq)               ~18 MB
 #   L7 cuda_dlsym_stub.so                 ~15 KB
-#   L8 zen-metrics binary (orchestrator)  ~310 MB  (+30 MB vs v26)
-#   L9 zen-sweep-worker + vastai-fleet    ~10 MB
+#   L8 zenmetrics binary (orchestrator)  ~310 MB  (+30 MB vs v26)
+#   L9 zenfleet-sweep + zenfleet-vastai    ~10 MB
 #   L10 onstart + worker scripts          ~50 KB
 #   L11 ENV + LABELs + ENTRYPOINT         0 B
 #
@@ -74,7 +74,7 @@
 FROM ubuntu:24.04
 
 LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
-LABEL org.opencontainers.image.description="zen-metrics sweep worker (v27: orchestrator-aware; zen-metrics built with orchestrator,cpu-all; new onstart_orchestrator.sh entrypoint)"
+LABEL org.opencontainers.image.description="zenmetrics sweep worker (v27: orchestrator-aware; zenmetrics built with orchestrator,cpu-all; new onstart_orchestrator.sh entrypoint)"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -149,53 +149,53 @@ RUN python3 -c "import pyarrow.parquet as pq; print('pyarrow OK')" \
     && test -f /usr/local/lib/cuda_dlsym_stub.so \
     && echo "v27 base-layer smoke passed"
 
-# ── L8: zen-metrics binary (orchestrator features) ──────────────────────
+# ── L8: zenmetrics binary (orchestrator features) ──────────────────────
 #
 # Built with `--features orchestrator,orchestrator-cuda,orchestrator-cpu-all`
 # so the per-cell OOM fallback ladder reaches every supported CPU
 # reference (cvvdp-cpu, ssimulacra2, dssim-core, butteraugli, zensim;
 # iwssim has no clean CPU reference and surfaces an honest error per
 # `crates/zenmetrics-orchestrator/docs/CPU_BACKENDS.md`).
-ARG ZEN_METRICS_BINARY=./zen-metrics
-COPY --chmod=0755 ${ZEN_METRICS_BINARY} /usr/local/bin/zen-metrics
+ARG ZEN_METRICS_BINARY=./zenmetrics
+COPY --chmod=0755 ${ZEN_METRICS_BINARY} /usr/local/bin/zenmetrics
 
 # Sanity gate: binary runs + the new orchestrator flags are exposed.
-RUN /usr/local/bin/zen-metrics --version \
-    && /usr/local/bin/zen-metrics --help 2>&1 | grep -q -- '--use-orchestrator' \
-    && /usr/local/bin/zen-metrics --help 2>&1 | grep -q -- '--orchestrator-cache' \
-    && /usr/local/bin/zen-metrics --help 2>&1 | grep -q -- '--bench-on-start' \
-    && /usr/local/bin/zen-metrics --help 2>&1 | grep -q -- '--cpu-features' \
-    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q zensim \
-    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q cvvdp \
-    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q iwssim \
-    && /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q pairs-tsv \
-    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjpeg \
-    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenwebp \
-    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenavif \
-    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjxl \
+RUN /usr/local/bin/zenmetrics --version \
+    && /usr/local/bin/zenmetrics --help 2>&1 | grep -q -- '--use-orchestrator' \
+    && /usr/local/bin/zenmetrics --help 2>&1 | grep -q -- '--orchestrator-cache' \
+    && /usr/local/bin/zenmetrics --help 2>&1 | grep -q -- '--bench-on-start' \
+    && /usr/local/bin/zenmetrics --help 2>&1 | grep -q -- '--cpu-features' \
+    && /usr/local/bin/zenmetrics list-metrics 2>&1 | grep -q zensim \
+    && /usr/local/bin/zenmetrics list-metrics 2>&1 | grep -q cvvdp \
+    && /usr/local/bin/zenmetrics list-metrics 2>&1 | grep -q iwssim \
+    && /usr/local/bin/zenmetrics score-pairs --help 2>&1 | grep -q pairs-tsv \
+    && /usr/local/bin/zenmetrics sweep --help 2>&1 | grep -q zenjpeg \
+    && /usr/local/bin/zenmetrics sweep --help 2>&1 | grep -q zenwebp \
+    && /usr/local/bin/zenmetrics sweep --help 2>&1 | grep -q zenavif \
+    && /usr/local/bin/zenmetrics sweep --help 2>&1 | grep -q zenjxl \
     && for sym in cuCtxGetDevice_v2 cuEventElapsedTime_v2 cuCoredumpDeregisterStartCallback cuCoredumpDeregisterCompleteCallback ; do \
-        if strings /usr/local/bin/zen-metrics 2>/dev/null | grep -q "^${sym}$"; then \
+        if strings /usr/local/bin/zenmetrics 2>/dev/null | grep -q "^${sym}$"; then \
             echo "v27: ${sym} still referenced -- rebuild with CUDARC_CUDA_VERSION=12000" >&2 ; \
             exit 1 ; \
         fi ; \
     done \
-    && echo "v27 zen-metrics smoke + orchestrator-flag check passed"
+    && echo "v27 zenmetrics smoke + orchestrator-flag check passed"
 
 # Pre-create the cache dir so a host volume can mount cleanly.
 RUN mkdir -p /root/.cache/zenmetrics
 
-# ── L9: deployed worker (zen-sweep-worker) + operator CLI (vastai-fleet) ─
-ARG ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker
-ARG VASTAI_FLEET_BINARY=./vastai-fleet
-COPY --chmod=0755 ${ZEN_SWEEP_WORKER_BINARY} /usr/local/bin/zen-sweep-worker
-COPY --chmod=0755 ${VASTAI_FLEET_BINARY} /usr/local/bin/vastai-fleet
+# ── L9: deployed worker (zenfleet-sweep) + operator CLI (zenfleet-vastai) ─
+ARG ZEN_SWEEP_WORKER_BINARY=./zenfleet-sweep
+ARG VASTAI_FLEET_BINARY=./zenfleet-vastai
+COPY --chmod=0755 ${ZEN_SWEEP_WORKER_BINARY} /usr/local/bin/zenfleet-sweep
+COPY --chmod=0755 ${VASTAI_FLEET_BINARY} /usr/local/bin/zenfleet-vastai
 
-RUN /usr/local/bin/zen-sweep-worker --version \
-    && /usr/local/bin/zen-sweep-worker --help 2>&1 | grep -q -- '--backend' \
-    && /usr/local/bin/vastai-fleet --version \
-    && /usr/local/bin/vastai-fleet --help 2>&1 | grep -q self-destroy \
-    && /usr/local/bin/vastai-fleet self-destroy --help 2>&1 | grep -q -- '--error-log' \
-    && echo "v27 zen-sweep-worker + vastai-fleet smoke passed"
+RUN /usr/local/bin/zenfleet-sweep --version \
+    && /usr/local/bin/zenfleet-sweep --help 2>&1 | grep -q -- '--backend' \
+    && /usr/local/bin/zenfleet-vastai --version \
+    && /usr/local/bin/zenfleet-vastai --help 2>&1 | grep -q self-destroy \
+    && /usr/local/bin/zenfleet-vastai self-destroy --help 2>&1 | grep -q -- '--error-log' \
+    && echo "v27 zenfleet-sweep + zenfleet-vastai smoke passed"
 
 # ── L10: onstart + worker scripts (v26 set + new orchestrator entry) ────
 COPY --chmod=0755 scripts/sweep/run_with_error_trap.sh           /usr/local/bin/run_with_error_trap.sh
@@ -207,7 +207,7 @@ COPY --chmod=0755 scripts/sweep/onstart_cvvdp_backfill_imazen.sh  /usr/local/bin
 COPY --chmod=0755 scripts/sweep/onstart_cvvdp_backfill.sh         /usr/local/bin/onstart_cvvdp.sh
 COPY --chmod=0755 scripts/sweep/onstart_iwssim_backfill_v14.sh    /usr/local/bin/onstart_iwssim.sh
 COPY --chmod=0755 scripts/sweep/onstart_iwssim_backfill.sh        /usr/local/bin/onstart_iwssim_v3.sh
-COPY --chmod=0755 scripts/sweep/onstart_v3.sh                     /usr/local/bin/zen-metrics-worker
+COPY --chmod=0755 scripts/sweep/onstart_v3.sh                     /usr/local/bin/zenmetrics-worker
 COPY --chmod=0755 scripts/sweep/omni_backfill_chunk_worker.sh     /usr/local/bin/omni_chunk_worker.sh
 COPY --chmod=0755 scripts/sweep/cvvdp_backfill_chunk_worker.sh    /usr/local/bin/cvvdp_chunk_worker.sh
 COPY --chmod=0755 scripts/sweep/metric_backfill_chunk_worker.sh   /usr/local/bin/metric_chunk_worker.sh

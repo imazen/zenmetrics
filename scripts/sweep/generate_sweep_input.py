@@ -5,12 +5,12 @@ Generalizes the per-codec copies (`generate_v26_avif_extended.py`,
 `generate_jobspecs_v06.py`, ...) into ONE tool so we stop forking a new
 script per sweep. It enumerates a (codec x q x knob-tuple) cell list into
 the v26 input-parquet format the inline-sweep worker consumes
-(`zen-cloud-vastai/src/worker/inline.rs::ChunkRecord` ->
+(`zenfleet-vastai/src/worker/inline.rs::ChunkRecord` ->
 `sweep_runner::run_group_inline` -> `run_sweep`; same path the Hetzner
 `Dockerfile.sweep.hetzner.v1` links), plus the matching `chunks.jsonl`.
 
 Knob axes use the SAME `{axis:[values]}` Cartesian-product JSON that
-`zen-metrics sweep --knob-grid` (grid.rs::KnobGrid) takes. Pass
+`zenmetrics sweep --knob-grid` (grid.rs::KnobGrid) takes. Pass
 `--knob-grid` more than once to UNION several grids — e.g. a YCbCr
 all-flags grid and a (separately pruned) XYB grid whose axis sets differ
 and so cannot live in a single Cartesian product.
@@ -18,7 +18,7 @@ and so cannot live in a single Cartesian product.
 PLAN MODE (`--cells-jsonl`): instead of spelling a knob grid here,
 consume the declare manifest a codec's own sweep planner emitted via
 
-  zen-metrics sweep --codec C --plan rd_core|modes_full[|modes_full_alpha]
+  zenmetrics sweep --codec C --plan rd_core|modes_full[|modes_full_alpha]
       [--plan-budget N] --sources <dir> --q-grid ... \\
       --dry-run --emit-cells cells.jsonl --output /tmp/plan.tsv
 
@@ -51,7 +51,7 @@ Example (the zenjpeg XYB recovery sweep — YCbCr all-flags U pruned-16 XYB):
 
 Example (plan mode — fleet chunks from zenavif's modes_full planner):
 
-  zen-metrics sweep --codec zenavif --sources /data/corpus \\
+  zenmetrics sweep --codec zenavif --sources /data/corpus \\
     --q-grid 5,15,25,35,45,55,65,75,85,95 --plan modes_full \\
     --plan-budget 1824 --dry-run --emit-cells /tmp/cells.jsonl \\
     --output /tmp/plan.tsv
@@ -149,7 +149,7 @@ def main() -> int:
                     help="JSON {axis:[values]} Cartesian grid; repeat to UNION several grids "
                          "(classic mode only)")
     ap.add_argument("--cells-jsonl",
-                    help="PLAN MODE: declare manifest from `zen-metrics sweep --plan ... --dry-run "
+                    help="PLAN MODE: declare manifest from `zenmetrics sweep --plan ... --dry-run "
                          "--emit-cells`; rows carry the {cell,fp,plan} identity verbatim. Mutually "
                          "exclusive with --sources-list/--q-grid/--knob-grid")
     ap.add_argument("--cells-per-chunk", type=int, default=300, help="Approx cells per chunk")

@@ -6,7 +6,7 @@
 # and historical references in CHANGELOG.md / docs/. Slated for
 # deletion per task #69 (P5d).
 #
-# Dispatch the zen-metrics sweep to a vast.ai instance.
+# Dispatch the zenmetrics sweep to a vast.ai instance.
 #
 # Assumes:
 #   * `vastai` CLI is configured.
@@ -59,7 +59,7 @@ cat > "$ENV_FILE" <<EOF
 export R2_ENDPOINT='$R2_ENDPOINT'
 export R2_ACCESS_KEY_ID='$R2_ACCESS_KEY_ID'
 export R2_SECRET_ACCESS_KEY='$R2_SECRET_ACCESS_KEY'
-export SWEEP_REF='${SWEEP_REF:-zen-metrics-v0.3.0}'
+export SWEEP_REF='${SWEEP_REF:-zenmetrics-v0.3.0}'
 export SWEEP_RUN_ID='${SWEEP_RUN_ID:-sweep-2026-05-03}'
 export WORKER_ID='vastai-${INSTANCE_ID}'
 EOF

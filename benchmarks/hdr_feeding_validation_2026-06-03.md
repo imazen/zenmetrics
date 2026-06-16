@@ -4,7 +4,7 @@
 **Data:** UPIQ (Mikhailiuk et al. 2021) — **380 HDR compression pairs** (narwaria + korshunov,
 JPEG / JPEG-XT), images in absolute cd/m², per-pair subjective **JOD**.
 `/mnt/v/datasets/upiq_extracted/` + `upiq_subjective_scores.csv`.
-**Harness:** `zen-metrics batch --hdr --hdr-transfer {pu-clamp|pq|pu-rescale}` over
+**Harness:** `zenmetrics batch --hdr --hdr-transfer {pu-clamp|pq|pu-rescale}` over
 `/tmp/upiq_hdr_pairs.tsv`; correlation `scripts/hdr/upiq_corr.py`.
 
 ## Why this exists

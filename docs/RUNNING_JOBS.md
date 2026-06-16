@@ -10,7 +10,7 @@ production-proven versus what you supply (the **executor** for real encode/score
 
 ```
   you ──declare──▶  manifest (DesiredJob[])  ──▶  R2 lease-queue  ◀── workers claim & execute
-   (zen-jobctl)         ▲                          (one bucket)         (local / basement / burst)
+   (zenfleet-ctl)         ▲                          (one bucket)         (local / basement / burst)
                         │                               │                       │
                    coverage ◀── Parquet ledger ◀────────┴── content-addressed ──┘
                    (catalog)     (the truth)                blobs/<sha256>
@@ -27,7 +27,7 @@ production-proven versus what you supply (the **executor** for real encode/score
   logic. Workers are **pull-based**: outbound HTTPS to R2 only, so a NAT'd basement box is a
   first-class tier with no inbound ports.
 
-### Job kinds (`zen_job_core::JobKind`)
+### Job kinds (`zenfleet_core::JobKind`)
 `Encode {codec,q,knobs}` · `Metric {metric}` · `Feature {regime}` · `Diffmap {metric}` ·
 `Resample {kernel,w,h}` · `Bake {view}`. Each has a `profile()` giving its **resource class**
 (`CpuLight/CpuHeavy/CpuArm/Gpu/HighRam` — for capability routing) and **GC regenerability**
@@ -40,7 +40,7 @@ production-proven versus what you supply (the **executor** for real encode/score
 The orchestration (declare → queue → claim → content-address → ledger → coverage → fleet → GC) is
 **production-proven**. The thing that does the *actual* encode/score is a separate program you point
 the worker at with `ZEN_EXEC`. The worker speaks one tiny contract per job
-(`crates/zen-jobworker/src/lib.rs::exec_command`):
+(`crates/zenfleet-worker/src/lib.rs::exec_command`):
 
 | direction | payload |
 |-----------|---------|
@@ -60,17 +60,17 @@ the job JSON back as the "output"). It proves the whole pipeline end-to-end — 
 content-address, ledger, coverage, multi-provider concurrency — **without doing real work**. Every
 live proof in this repo (including the 3-provider run) used it.
 
-**The real executor now ships: `zen-metrics jobexec`.** It honors the contract: reads the `DesiredJob`
+**The real executor now ships: `zenmetrics jobexec`.** It honors the contract: reads the `DesiredJob`
 on stdin, resolves the source (local / `s3://` / `$ZEN_CORPUS_PREFIX` via s5cmd), and for an `encode`
 job emits the encoded bytes, for a `metric` job re-encodes the cell + scores it (`run_metric`) and
 emits a JSON score row. Codecs: zenpng/zenjpeg/zenwebp/zenavif/zenjxl. Metrics: CPU ssim2/butteraugli/
 zensim today (GPU metrics return a clear "needs a GPU build" error — they want a GPU build + tier).
 Proven end-to-end through the real worker (encode + score → content-addressed blob, blob sha == output_sha).
 
-**It is baked into a ready image: `ghcr.io/imazen/zen-jobworker-exec:latest`** (the worker base +
-`zen-metrics` + the `zen-jobexec` shim; `ZEN_EXEC` defaults to the real executor). Set
-`ZEN_WORKER_IMAGE=ghcr.io/imazen/zen-jobworker-exec:latest` on any tier to run real jobs. ⚠️ The image
-is currently **private** — make it public once (GitHub → imazen packages → `zen-jobworker-exec` →
+**It is baked into a ready image: `ghcr.io/imazen/zenfleet-worker-exec:latest`** (the worker base +
+`zenmetrics` + the `zenfleet-exec` shim; `ZEN_EXEC` defaults to the real executor). Set
+`ZEN_WORKER_IMAGE=ghcr.io/imazen/zenfleet-worker-exec:latest` on any tier to run real jobs. ⚠️ The image
+is currently **private** — make it public once (GitHub → imazen packages → `zenfleet-worker-exec` →
 Package settings → Change visibility → Public, same one-click step as the base image) so fleet boxes
 pull credential-less. Rebuild it with `scripts/jobsys/build_executor_image.sh` after changing the
 executor. `scripts/jobsys/example_executor.py` remains as a template if you'd rather write your own.
@@ -79,11 +79,11 @@ executor. `scripts/jobsys/example_executor.py` remains as a template if you'd ra
 
 ## 3. Prerequisites (one-time)
 
-- **Built CLIs on the workstation:** `cargo build --release -p zen-jobworker -p zen-jobctl`
-  (gives `target/release/zen-jobctl`, `zen-jobworker`, `zen-jobgc`).
+- **Built CLIs on the workstation:** `cargo build --release -p zenfleet-worker -p zenfleet-ctl`
+  (gives `target/release/zenfleet-ctl`, `zenfleet-worker`, `zenfleet-gc`).
 - **R2 root credentials** at `~/.config/cloudflare/r2-credentials` (used only on the workstation to
   mint scoped creds + upload the manifest — never shipped to a worker box).
-- **The public worker image** `ghcr.io/imazen/zen-jobworker:latest` (multi-arch amd64+arm64, built by
+- **The public worker image** `ghcr.io/imazen/zenfleet-worker:latest` (multi-arch amd64+arm64, built by
   `.github/workflows/jobworker-image.yml`). Pulls credential-less.
 - For burst tiers: `hcloud` (Hetzner), `vastai`, or the Salad key at `~/.config/salad/credentials`.
 - `aws` CLI v2 + `s5cmd` on the workstation (for manifest upload + ledger reads).
@@ -93,7 +93,7 @@ executor. `scripts/jobsys/example_executor.py` remains as a template if you'd ra
 ## 4. Declare the work
 
 A spec is items × metrics. Each item is one (source image, codec, quality, knobs) cell plus the
-`encode_sha` (content id of the encoded variant). `zen-jobctl declare` expands it into a manifest.
+`encode_sha` (content id of the encoded variant). `zenfleet-ctl declare` expands it into a manifest.
 
 ```bash
 cat > /tmp/spec.json <<'JSON'
@@ -106,7 +106,7 @@ cat > /tmp/spec.json <<'JSON'
   "metrics": ["cvvdp"] }
 JSON
 
-target/release/zen-jobctl declare --spec /tmp/spec.json --out /tmp/manifest.json
+target/release/zenfleet-ctl declare --spec /tmp/spec.json --out /tmp/manifest.json
 ```
 
 - Declaring is **idempotent** — re-declaring already-done work expands to the same `JobId`s, which the
@@ -127,7 +127,7 @@ the "100k AVIF encodes never finish" problem:
 
 | | chunk mode | job-system mode |
 |---|---|---|
-| entry | `zen-metrics sweep --codec zenjpeg --plan rd_core\|modes_full` | `--plan … --dry-run --emit-cells cells.jsonl` → `zen_jobctl::declare_encodes` |
+| entry | `zenmetrics sweep --codec zenjpeg --plan rd_core\|modes_full` | `--plan … --dry-run --emit-cells cells.jsonl` → `zenfleet_ctl::declare_encodes` |
 | unit of retry | (image × whole plan) | one cell (content-addressed `JobId`) |
 | completion | chunk bookkeeping; a dead box redoes its chunk | declare → gap → run → re-reconcile; converges across any number of partial passes |
 | right for | GPU-metric fleet runs that finish in one pass | big/expensive sweeps (AVIF-class) that will not |
@@ -137,15 +137,15 @@ in the TSV/parquet `knob_tuple_json` column and in `JobKind::Encode.knobs` (hash
 
 ```bash
 # Emit the declare manifest (no encodes run; q must be integer-valued — CellId.q is i64):
-zen-metrics sweep --codec zenjpeg --sources corpus/ --q-grid 5,10,...,95 \
+zenmetrics sweep --codec zenjpeg --sources corpus/ --q-grid 5,10,...,95 \
   --plan modes_full --plan-budget 1824 --dry-run \
   --emit-cells /tmp/cells.jsonl --output /tmp/plan.tsv
 # -> /tmp/plan.plan.json   (audit manifest: alias merges, invalid strata, budget drops)
 # -> /tmp/cells.jsonl      (one EncodeDeclareItem per source × cell)
-# Then declare: zen_jobctl::parse_emit_cells + declare_encodes -> DesiredJob[] -> gap -> manifest.
+# Then declare: zenfleet_ctl::parse_emit_cells + declare_encodes -> DesiredJob[] -> gap -> manifest.
 ```
 
-**The executor contract for a plan cell** (`zen-metrics jobexec` AND the sweep runner's
+**The executor contract for a plan cell** (`zenmetrics jobexec` AND the sweep runner's
 plan-identity tuple path, knobs JSON containing `"plan"`):
 
 1. Parse `{cell, fp, plan}` from the cell's `knob_tuple_json`.
@@ -204,7 +204,7 @@ fields.
 
 **Step 2 — on the Unraid box**, either paste the `docker run` at a terminal, or in the Unraid GUI:
 **Docker → Add Container** →
-- **Repository:** `ghcr.io/imazen/zen-jobworker:latest`
+- **Repository:** `ghcr.io/imazen/zenfleet-worker:latest`
 - **Network:** `bridge` (no published ports)
 - **Restart policy:** `No` — the worker drains its share of the run, then exits cleanly. (It is
   *run-scoped*: it works one run's manifest and exits. To run another job, start it again with the new
@@ -222,7 +222,7 @@ set `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` from it (drop `AWS_SESSION_TOKEN
 root key.
 
 **Real executor on Unraid:** the stock public image only carries the synthetic `/bin/cat` path. For
-real encode/score work, bake your executor into a worker image (FROM `ghcr.io/imazen/zen-jobworker`,
+real encode/score work, bake your executor into a worker image (FROM `ghcr.io/imazen/zenfleet-worker`,
 `COPY` your executor in), push it, and point `ZEN_WORKER_IMAGE` / the container's repository at it with
 `ZEN_EXEC=/path/to/executor`.
 
@@ -231,11 +231,11 @@ real encode/score work, bake your executor into a worker image (FROM `ghcr.io/im
 ## 7. Monitor
 
 - **Dashboard (no SSH):** the Railway control plane at
-  `https://zen-jobdash-production.up.railway.app` (Basic-Auth). Live fleet per worker, progress per
+  `https://zenfleet-dash-production.up.railway.app` (Basic-Auth). Live fleet per worker, progress per
   kind, cost, failure drill-down, result peek, GC dry-run, pause/drain/resume, Kill.
 - **CLI:** `bash scripts/jobsys/watch_fleet.sh <RUN>` — claims taken + ledger DONE rows grouped by
   provider (proves which tiers are concurrently working the queue).
-- **Coverage:** `target/release/zen-jobctl catalog --manifest /tmp/manifest.json --ledger <ledger.parquet>`
+- **Coverage:** `target/release/zenfleet-ctl catalog --manifest /tmp/manifest.json --ledger <ledger.parquet>`
   — done/poison/gap per codec×metric.
 
 ---
@@ -245,7 +245,7 @@ real encode/score work, bake your executor into a worker image (FROM `ghcr.io/im
 - **Scores / outputs** are the **content-addressed blobs** at `s3://$BUCKET/$RUN/blobs/<sha256>` and
   the **ledger** Parquet rows (`s3://$BUCKET/$RUN/ledger/*.parquet`) carrying `(job_id, provider,
   status, output_sha, …)`. Read the ledger with pyarrow, or peek a blob in the dashboard.
-- **Coverage in one query** (`zen-jobctl catalog`) tells you exactly which cells are done; `gap` emits
+- **Coverage in one query** (`zenfleet-ctl catalog`) tells you exactly which cells are done; `gap` emits
   the not-yet-done subset so you only ever enqueue the remainder (idempotent by construction).
 
 ---
@@ -257,7 +257,7 @@ bash scripts/jobsys/teardown_fleet.sh <RUN>   # deletes every paid box for this 
 ```
 - Or use the dashboard **Kill** (same label selector) / **Stop-spend** (hard budget cap auto-tears-down
   paid tiers, free keeps draining).
-- **GC** with `zen-jobgc` (dry-run by default; `--execute` to delete). Reachability GC refuses to delete
+- **GC** with `zenfleet-gc` (dry-run by default; `--execute` to delete). Reachability GC refuses to delete
   referenced blobs and refuses to auto-delete unreferenced *irreplaceable* blobs (it surfaces them);
   cheap-regenerable blobs are an LRU-capped cache. Always preview the dry-run first.
 
@@ -273,7 +273,7 @@ of tiny R2 objects. It is the honest "it works" demo; swap `ZEN_EXEC` for a real
 work.
 
 ```bash
-cargo build --release -p zen-jobworker -p zen-jobctl
+cargo build --release -p zenfleet-worker -p zenfleet-ctl
 bash scripts/jobsys/demo_e2e_r2.sh          # declare→gap 4→0, converge, coverage, blobs+ledger+lease
 bash scripts/jobsys/launch_fleet.sh 120 1 0 0 1   # 3 real providers concurrent (paid: Hetzner+Salad)
 bash scripts/jobsys/unraid_worker.sh <RUN>        # add the basement tier to that run
@@ -288,13 +288,13 @@ bash scripts/jobsys/teardown_fleet.sh <RUN>       # tear it all down
 1. **Corpus in R2** — upload your source images under the bucket; set `ZEN_CORPUS_PREFIX` so
    `jobexec` resolves each `cell.image_path` to `s3://$ZEN_BUCKET/$ZEN_CORPUS_PREFIX/<image_path>`
    (or use `s3://…`/local paths). `jobexec` fetches them with s5cmd.
-2. **Executor + image — already built.** `zen-metrics jobexec` does real encode+score (§2), baked into
-   `ghcr.io/imazen/zen-jobworker-exec:latest`. Just **make that ghcr package public** (one-click, §2)
+2. **Executor + image — already built.** `zenmetrics jobexec` does real encode+score (§2), baked into
+   `ghcr.io/imazen/zenfleet-worker-exec:latest`. Just **make that ghcr package public** (one-click, §2)
    so fleet boxes pull it. (Only write your own via `example_executor.py` + `build_executor_image.sh`
    if you need a codec/metric `jobexec` doesn't cover.)
 3. **Declare** the real spec (§4) — `items` of `(image_path, codec, q, knob_tuple_json, encode_sha)` ×
    `metrics` — and check coverage (`catalog`); enqueue only the gap.
-4. **Launch** with the real image: `ZEN_WORKER_IMAGE=ghcr.io/imazen/zen-jobworker-exec:latest` +
+4. **Launch** with the real image: `ZEN_WORKER_IMAGE=ghcr.io/imazen/zenfleet-worker-exec:latest` +
    `ZEN_CORPUS_PREFIX=<your corpus prefix>` on `launch_fleet.sh` (§5) and `unraid_worker.sh` for the
    basement tier (§6). `ZEN_EXEC` defaults to the real executor in that image.
 5. **Monitor** (§7), **collect** scores/encodes from the ledger/blobs (§8), **tear down + GC** (§9).

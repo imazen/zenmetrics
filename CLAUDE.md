@@ -64,7 +64,7 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
       `/mnt/v/zen/zensim-training/2026-05-07/unified/` has 7 parquets,
       351 cols each, identity `(image_path, codec, q, knob_tuple_json)`,
       no cvvdp columns yet. 2.37M rows total.
-- [x] cvvdp metric registered in `zen-metrics-cli` (it dispatches
+- [x] cvvdp metric registered in `zenmetrics-cli` (it dispatches
       via `cvvdp_gpu::score` behind the `gpu-cvvdp` feature)
 - [x] Versioned column name implemented (`cvvdp_gpu::CVVDP_COLUMN_NAME`,
       default `cvvdp_imazen_v<VER>`, `CVVDP_IMPL_TAG` env override).
@@ -76,20 +76,20 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
       `scripts/sweep/Dockerfile.pycvvdp` (pytorch 2.5.1 + CUDA 12.4
       + pycvvdp 0.5.4). End-to-end verified locally on a synth pair
       (JOD 10.0 / 9.63 for identical vs chroma-shifted 64×64 inputs).
-- [x] zen-metrics-cli `score-pairs` subcommand consumes the pairs
+- [x] zenmetrics-cli `score-pairs` subcommand consumes the pairs
       TSV and writes parquet sidecars directly with the metric's
       versioned column name (cvvdp → `cvvdp_imazen_v<VER>`). The
-      `Dockerfile.sweep.v26` image bakes `zen-metrics`, so the
+      `Dockerfile.sweep.v26` image bakes `zenmetrics`, so the
       cvvdp-gpu scorer ships in that image with no new Dockerfile.
       Verified n=4 against pycvvdp on the same pairs: implementations
       agree within 0.03 JOD (q50–90, 64×64 noise images).
 - [x] Encoder driver that re-encodes from
       `(image_path, codec, q, knob_tuple_json)` and emits the pairs
       TSV that the pycvvdp worker consumes:
-      `zen-metrics-cli sweep --distorted-out-dir <DIR> --pairs-tsv <TSV>`
+      `zenmetrics-cli sweep --distorted-out-dir <DIR> --pairs-tsv <TSV>`
       (PNG fastest-effort dist images; deterministic filenames hashed
       on `(src_path, knob_json)`). End-to-end smoke-tested on a 2-image
-      × 2-q grid: zen-metrics sweep → pycvvdp_worker score-pairs →
+      × 2-q grid: zenmetrics sweep → pycvvdp_worker score-pairs →
       4-row parquet sidecar with `cvvdp_pycvvdp_v054` column.
 - [x] Per-chunk dual-implementation runner:
       `scripts/sweep/dual_impl_chunk.sh`. Drives one sweep + both
@@ -101,7 +101,7 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
       sidecars back. Extends the existing v15 launcher rather than
       rebuilding from scratch. Chunk generator + worker + onstart +
       launcher all shipped (commits d2eb0f7c, 87deac34, 32a3b64a,
-      c572c192). Push of corrected `zen-metrics-sweep:0.6.4-cvvdp-*`
+      c572c192). Push of corrected `zenmetrics-sweep:0.6.4-cvvdp-*`
       image still gated on a real-GPU smoke run (see 2026-05-15
       retry note below — local WSL2 can't satisfy the GATE).
 - [/] Verification pass — local n=18 measured 2026-05-15 retry
@@ -123,9 +123,9 @@ Built two images locally (canonical master HEAD aba984c context):
   - `pycvvdp-worker --help` works
   - End-to-end score-pairs CPU run on n=3 pairs: identical pair → JOD 10.000,
     cross pairs → 1.86 / 1.70. Image is functional.
-- `ghcr.io/imazen/zen-metrics-sweep:0.6.4-aba984c` — sha256:30c2572f6891… (230 MB)
-  - `zen-metrics --version` → `zen-metrics-cli 0.6.0`
-  - `zen-metrics sweep ...` on n=6 sources × q={30,90}: 12/12 cells, no failures
+- `ghcr.io/imazen/zenmetrics-sweep:0.6.4-aba984c` — sha256:30c2572f6891… (230 MB)
+  - `zenmetrics --version` → `zenmetrics-cli 0.6.0`
+  - `zenmetrics sweep ...` on n=6 sources × q={30,90}: 12/12 cells, no failures
   - `sweep --help` contains zenjpeg (Dockerfile RUN check passed at build)
 
 **NOT PUSHED.** The `scripts/sweep/dual_impl_chunk_docker.sh` integration smoke
@@ -151,7 +151,7 @@ works end-to-end; production vast.ai workers do not hit this.
 
 Picked up the unblock path 1 from the previous note: built v13 from the
 `feat/cvvdp-gpu-scaffold` tree directly. New tag is
-`ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-76854e8` (the `-cvvdp-`
+`ghcr.io/imazen/zenmetrics-sweep:0.6.4-cvvdp-76854e8` (the `-cvvdp-`
 infix flags branch-origin to future readers).
 
 Build-context approach: (b) materialised at
@@ -207,9 +207,9 @@ Wrapper fixes shipped this tick (commit `f7e321b6`):
   plus inline `score-pairs --help` / `list-metrics` sanity checks
   in the same RUN.
 - `scripts/sweep/dual_impl_chunk_docker.sh`:
-  - `--entrypoint /usr/local/bin/zen-metrics` for the zen-metrics
+  - `--entrypoint /usr/local/bin/zenmetrics` for the zenmetrics
     image (prior wrapper assumed CMD — production entrypoint is
-    `zen-metrics-worker`, which then expected R2 env vars).
+    `zenmetrics-worker`, which then expected R2 env vars).
   - `ZEN_GPU_RUNTIME` env var forwarded as `--gpu-runtime` to
     `score-pairs` for runtime override (defaults to letting the
     binary auto-detect).
@@ -291,7 +291,7 @@ To compile a `cargo` invocation that needs nvcc, prepend:
 
 But note: **cubecl-cuda dynamically loads CUDA at runtime** via dlopen,
 so building `--features sweep,gpu,gpu-cuda` succeeds even with nvcc off
-PATH. The runtime fallback is sufficient for `zen-metrics` builds. Set
+PATH. The runtime fallback is sufficient for `zenmetrics` builds. Set
 PATH explicitly only when shelling out to nvcc directly.
 
 GPU info: `nvidia-smi` driver 596.21 / CUDA capability runtime 13.2.
@@ -302,13 +302,13 @@ This repo has TWO ways to execute sweep work; new sweep capabilities must land i
 or explicitly document why not (2026-06-11: the --plan integration initially landed only
 in chunk mode and had to be retrofitted):
 
-1. **Chunk mode** — `zen-metrics sweep` (sweep/run.rs) + the vastai worker
+1. **Chunk mode** — `zenmetrics sweep` (sweep/run.rs) + the vastai worker
    (`InlineGroupSpec`). Unit of retry = (image × grid-or-plan). For one-pass GPU-metric
    fleet runs.
-2. **Job system** — zen-job-core ledger + `zen-metrics jobexec` (the ZEN_EXEC executor).
+2. **Job system** — zenfleet-core ledger + `zenmetrics jobexec` (the ZEN_EXEC executor).
    Per-cell content-addressed `DesiredJob`s; completion = declare → gap → re-reconcile.
    Built precisely because big sweeps (100k-cell AVIF) never finish in one pass. Entry:
-   `--plan … --dry-run --emit-cells` → `zen_jobctl::declare_encodes`.
+   `--plan … --dry-run --emit-cells` → `zenfleet_ctl::declare_encodes`.
 
 Plan-driven cells (ALL FIVE codecs: zenjpeg/zenavif/zenjxl/zenwebp/zenpng, verified
 end-to-end 2026-06-11) flow through both with ONE identity (`{"cell","fp","plan"}` in
@@ -330,18 +330,18 @@ those revs or newer (PLAN_SWEEPS.md §6 "Codec-rev pairing").
 ## Sweep build cheat sheet
 
 - **Default CPU+GPU build (development)**:
-  `cargo build --release -p zen-metrics-cli`
+  `cargo build --release -p zenmetrics-cli`
   → includes both `cpu-metrics` (default) and `sweep` codecs. ~2 min cold,
   seconds incremental.
 
 - **Forced GPU-only sweep build (production worker)**:
-  `cargo build --release -p zen-metrics-cli --no-default-features --features sweep,png,gpu,gpu-cuda`
+  `cargo build --release -p zenmetrics-cli --no-default-features --features sweep,png,gpu,gpu-cuda`
   → drops cpu-metrics so CPU butteraugli/zensim/ssim2 are *unavailable*;
   any chunk specifying a CPU metric will fail loudly. Use this for vast.ai
   workers so they can't silently fall back to slow CPU scoring. ~4 min cold.
 
 - **WGPU variant (broader GPU compatibility, no CUDA SDK required)**:
-  `cargo build --release -p zen-metrics-cli --no-default-features --features sweep,png,gpu,gpu-wgpu`
+  `cargo build --release -p zenmetrics-cli --no-default-features --features sweep,png,gpu,gpu-wgpu`
   → uses Vulkan/Metal/DX12 via wgpu. Use when targeting AMD/Intel GPUs
   on vast.ai. CUDA NVIDIA GPUs work but CUDA backend is faster.
 
@@ -352,11 +352,11 @@ those revs or newer (PLAN_SWEEPS.md §6 "Codec-rev pairing").
   expect a single metric backend. The forced-GPU build above prevents
   accidental fall-back.
 - **Pre-uploaded binary lives at**
-  `s3://coefficient/binaries/zen-metrics-<version>-linux-x86_64`
+  `s3://coefficient/binaries/zenmetrics-<version>-linux-x86_64`
   (R2 endpoint: `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`). Workers
   fetch via `SWEEP_BIN_OVERRIDE` env var.
 - **Onstart script**: `scripts/sweep/onstart_v3.sh`. Fans out N parallel
-  zen-metrics processes per box (one per CPU core) sharing the GPU for
+  zenmetrics processes per box (one per CPU core) sharing the GPU for
   scoring; each claims its own chunk from `chunks.jsonl` on R2.
 - **Every onstart MUST self-destroy on failure** — upload tail log to
   R2 + issue `vastai destroy instance ${CONTAINER_ID}`. See

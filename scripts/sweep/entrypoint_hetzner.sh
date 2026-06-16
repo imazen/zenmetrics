@@ -6,12 +6,12 @@
 # script the launcher's `provision()` synthesizes runs:
 #
 #   docker run -d --env-file=/etc/zen/worker.env <image> \
-#     /usr/local/bin/zen-sweep-worker worker --backend hetzner \
+#     /usr/local/bin/zenfleet-sweep worker --backend hetzner \
 #         --run-id=<sweep_id> \
 #         --chunks-r2=s3://<bucket>/runs/<sweep_id>/chunks.jsonl
 #
 # So in the default Hetzner deploy path this entrypoint is NOT invoked —
-# `zen-sweep-worker` is the container's entrypoint, and the env-file
+# `zenfleet-sweep` is the container's entrypoint, and the env-file
 # carries every env var the worker reads.
 #
 # This script exists for the OPTIONAL case where the operator overrides
@@ -54,8 +54,8 @@ mkdir -p ~/.aws
 } > ~/.aws/credentials
 
 log "run_id=${SWEEP_RUN_ID} bucket=${BUCKET} queue=${CHUNKS_QUEUE_PREFIX}"
-log "launching zen-sweep-worker --backend hetzner"
+log "launching zenfleet-sweep --backend hetzner"
 
-exec /usr/local/bin/zen-sweep-worker worker --backend hetzner \
+exec /usr/local/bin/zenfleet-sweep worker --backend hetzner \
     --run-id "${SWEEP_RUN_ID}" \
     --chunks-r2 "${CHUNKS_R2}"

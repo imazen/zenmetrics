@@ -1,6 +1,6 @@
 name: Job-worker fleet image
 
-# Builds the ready-to-run zen-jobworker fleet image (goal H) as a MULTI-ARCH manifest (amd64 + arm64).
+# Builds the ready-to-run zenfleet-worker fleet image (goal H) as a MULTI-ARCH manifest (amd64 + arm64).
 # The Dockerfile builds the binary inside from the trimmed Cargo.deploy.toml (no sibling/CUDA deps),
 # then bakes aws-cli v2 + s5cmd + a keep-alive entrypoint. A fleet box pulls this and claims work with
 # zero boot-time installs.
@@ -9,23 +9,23 @@ name: Job-worker fleet image
 # free on this public repo) and pushes by digest; a merge job stitches the two digests into one
 # manifest. Native beats QEMU here: emulated arm64 compilation of arrow/parquet (zstd-sys, lz4, cmake)
 # would run for tens of minutes. arm64 support is what lets the named Oracle ARM (free) + Hetzner cax
-# ARM tiers join the fleet — `docker run ghcr.io/imazen/zen-jobworker` now resolves per-host arch.
+# ARM tiers join the fleet — `docker run ghcr.io/imazen/zenfleet-worker` now resolves per-host arch.
 #
-# Tags: ghcr.io/imazen/zen-jobworker:<sha> (every push) + :latest (master).
+# Tags: ghcr.io/imazen/zenfleet-worker:<sha> (every push) + :latest (master).
 
 on:
   push:
     branches: [master, main]
     paths:
-      - "crates/zen-job-core/**"
-      - "crates/zen-ledger/**"
-      - "crates/zen-jobworker/**"
+      - "crates/zenfleet-core/**"
+      - "crates/zenfleet-ledger/**"
+      - "crates/zenfleet-worker/**"
       - "Cargo.deploy.toml"
       - ".github/workflows/jobworker-image.yml"
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: ghcr.io/imazen/zen-jobworker
+  IMAGE_NAME: ghcr.io/imazen/zenfleet-worker
   REGISTRY: ghcr.io
 
 # Superseded runs only waste runner queue — particularly the macOS
@@ -66,7 +66,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: crates/zen-jobworker/Dockerfile
+          file: crates/zenfleet-worker/Dockerfile
           platforms: ${{ matrix.platform }}
           # Push an untagged, by-digest image per arch; the merge job assembles the tagged manifest.
           outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
@@ -133,8 +133,8 @@ jobs:
       - name: Verify amd64 binaries run
         run: |
           SHA="${{ steps.tags.outputs.sha }}"
-          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/zen-jobworker "${IMAGE_NAME}:${SHA}" --help | grep -q control-r2-key
-          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/zen-jobgc     "${IMAGE_NAME}:${SHA}" --help | grep -q blob-index
+          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/zenfleet-worker "${IMAGE_NAME}:${SHA}" --help | grep -q control-r2-key
+          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/zenfleet-gc     "${IMAGE_NAME}:${SHA}" --help | grep -q blob-index
           docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/aws           "${IMAGE_NAME}:${SHA}" --version
           docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/s5cmd         "${IMAGE_NAME}:${SHA}" version
           echo "amd64 image OK: ${IMAGE_NAME}:${SHA}"

@@ -1,6 +1,6 @@
 # Dockerfile.pycvvdp — pycvvdp v0.5.4 scoring worker for vast.ai
 #
-# Companion to `Dockerfile.sweep` (which bakes the zen-metrics binary).
+# Companion to `Dockerfile.sweep` (which bakes the zenmetrics binary).
 # This image is the canonical pycvvdp reference scorer — used to
 # produce the `cvvdp_pycvvdp_v054` column in parquet sidecars per
 # `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md`.

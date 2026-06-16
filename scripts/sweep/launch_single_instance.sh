@@ -23,7 +23,7 @@
 #       --metric cvvdp \
 #       --run-id cvvdp-v15rc-2026-05-18 \
 #       --chunks s3://coefficient/jobs/cvvdp-v15rc-2026-05-18/chunks.jsonl \
-#       --docker ghcr.io/imazen/zen-metrics-sweep:v15 \
+#       --docker ghcr.io/imazen/zenmetrics-sweep:v15 \
 #       --onstart scripts/sweep/onstart_cvvdp_backfill_imazen.sh \
 #       --max-dph 0.10
 
@@ -33,7 +33,7 @@ set -euo pipefail
 METRIC=""
 RUN_ID=""
 CHUNKS=""
-ZEN_METRICS_IMAGE="ghcr.io/imazen/zen-metrics-sweep:v15"
+ZEN_METRICS_IMAGE="ghcr.io/imazen/zenmetrics-sweep:v15"
 ONSTART_PATH=""
 MAX_DPH="0.10"
 MIN_CORES="${MIN_CORES:-4}"
@@ -122,7 +122,7 @@ fi
 # ── pick the cheapest viable offer ──────────────────────────────────
 # Driver filter rationale (2026-05-18, v19 image):
 #
-#   The v19 zen-metrics binary was built with CUDARC_CUDA_VERSION=12090,
+#   The v19 zenmetrics binary was built with CUDARC_CUDA_VERSION=12090,
 #   which forces cudarc 0.19.4 to compile against the CUDA 12.9 binding
 #   surface. None of the CUDA 13-only symbols
 #   (cuCtxGetDevice_v2, cuCoredump{Register,Deregister}{Start,Complete}Callback)
@@ -247,7 +247,7 @@ echo
 echo "[launch_single] launched instance $ID (offer $OFFER_ID, label $LABEL)"
 echo
 echo "Monitor commands:"
-echo "  fleet status:        vastai-fleet status --label-prefix '$RUN_ID'"
+echo "  fleet status:        zenfleet-vastai status --label-prefix '$RUN_ID'"
 echo "  ssh in:              vastai ssh-url $ID  # copy that URL into ssh"
 echo "  gpu util:            vastai execute $ID 'nvidia-smi dmon -c 30 -s u'"
 echo "  follow logs:         vastai logs $ID --tail"

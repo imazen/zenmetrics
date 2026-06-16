@@ -1,7 +1,7 @@
 # Faithful HDR metrics — linear-planes paths (chunk 4: cvvdp + butteraugli)
 
 **Date:** 2026-06-03 · **host:** lilith (RTX 5070, CUDA/WSL) · **branch:** `feat/hdr-metrics`
-**Binary:** `cargo build --release -p zen-metrics-cli --no-default-features --features "png,jpeg,cpu-metrics,gpu-cvvdp,gpu-butteraugli,gpu-cuda,hdr"`
+**Binary:** `cargo build --release -p zenmetrics-cli --no-default-features --features "png,jpeg,cpu-metrics,gpu-cvvdp,gpu-butteraugli,gpu-cuda,hdr"`
 
 ## The bottleneck this removes
 

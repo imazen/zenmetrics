@@ -13,14 +13,14 @@
 #   REMOVED  salad-http-job-queue-worker sidecar (Hetzner has no managed
 #            queue; the worker LISTs R2 prefix directly per
 #            r2_queue_loop.rs).
-#   REMOVED  zen-metrics binary as a separate baked artifact (the
-#            inline-sweep tree is linked into zen-sweep-worker; we
+#   REMOVED  zenmetrics binary as a separate baked artifact (the
+#            inline-sweep tree is linked into zenfleet-sweep; we
 #            could bake it for ad-hoc shells but on Hetzner the
 #            cloud-init only invokes the worker).
 #
-# KEPT  ubuntu:24.04, s5cmd + jq, zen-sweep-worker (--features hetzner),
+# KEPT  ubuntu:24.04, s5cmd + jq, zenfleet-sweep (--features hetzner),
 #       entrypoint_hetzner.sh (optional — cloud-init invokes the worker
-#       binary directly per zencloud-hetzner's `build_user_data`).
+#       binary directly per zenfleet-hetzner's `build_user_data`).
 #
 # Architecture: **linux/arm64**. CAX21 is Ampere Altra ARM64; an x86_64
 # image cannot run on it (no qemu). The image is therefore built either:
@@ -37,7 +37,7 @@
 #   │ L2: stable apt deps (ca-certs, curl)   ~15 MB   per quarter   │
 #   │ L3: s5cmd 2.2.2 (linux-arm64)          ~10 MB   per quarter   │
 #   │ L4: jq 1.7.1 (linux-arm64)             ~2 MB    per quarter   │
-#   │ L5: zen-sweep-worker (hetzner+cpu)     ~150 MB  per code push │
+#   │ L5: zenfleet-sweep (hetzner+cpu)     ~150 MB  per code push │
 #   │ L6: cubecl.toml + warmup fixtures      ~50 KB   per script    │
 #   │ L7: entrypoint + LABELs + ENTRYPOINT   ~5 KB    ~never        │
 #   └──────────────────────────────────────────────────────────────┘
@@ -47,29 +47,29 @@
 #   # 1. Build the ARM64 worker binary FIRST (host-cross or native).
 #   #    Cross-compile path (host: x86_64 with `cross`):
 #   cross build --release --target aarch64-unknown-linux-gnu \
-#       -p zen-sweep-worker --features hetzner --no-default-features
-#   cp target/aarch64-unknown-linux-gnu/release/zen-sweep-worker ./zen-sweep-worker-arm64
+#       -p zenfleet-sweep --features hetzner --no-default-features
+#   cp target/aarch64-unknown-linux-gnu/release/zenfleet-sweep ./zenfleet-sweep-arm64
 #
 #   #    Native-on-CAX21 fallback (host: CAX21 ARM64):
-#   cargo build --release -p zen-sweep-worker --features hetzner --no-default-features
-#   cp target/release/zen-sweep-worker ./zen-sweep-worker-arm64
+#   cargo build --release -p zenfleet-sweep --features hetzner --no-default-features
+#   cp target/release/zenfleet-sweep ./zenfleet-sweep-arm64
 #
 #   # 2. Build + push the image (linux/arm64 platform forced).
 #   docker buildx build --platform linux/arm64 \
 #       -f scripts/sweep/Dockerfile.sweep.hetzner.v1 \
-#       --build-arg ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker-arm64 \
-#       -t ghcr.io/imazen/zen-metrics-sweep-hetzner:v1-$(git rev-parse --short HEAD) \
-#       -t ghcr.io/imazen/zen-metrics-sweep-hetzner:v1 \
+#       --build-arg ZEN_SWEEP_WORKER_BINARY=./zenfleet-sweep-arm64 \
+#       -t ghcr.io/imazen/zenmetrics-sweep-hetzner:v1-$(git rev-parse --short HEAD) \
+#       -t ghcr.io/imazen/zenmetrics-sweep-hetzner:v1 \
 #       --push \
 #       .
 #
-# Run: the Hetzner cloud-init script (see crates/zencloud-hetzner/src/
+# Run: the Hetzner cloud-init script (see crates/zenfleet-hetzner/src/
 # cloud_init.rs) `docker run`s this image with the env-file the launcher
 # wrote. The cloud-init's container command line is:
 #
 #   docker run -d --env-file=/etc/zen/worker.env \
-#     ghcr.io/imazen/zen-metrics-sweep-hetzner:v1 \
-#     /usr/local/bin/zen-sweep-worker worker --backend hetzner \
+#     ghcr.io/imazen/zenmetrics-sweep-hetzner:v1 \
+#     /usr/local/bin/zenfleet-sweep worker --backend hetzner \
 #         --run-id <sweep_id> \
 #         --chunks-r2 s3://<bucket>/runs/<sweep_id>/chunks.jsonl
 #
@@ -79,7 +79,7 @@
 FROM --platform=linux/arm64 ubuntu:24.04
 
 LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
-LABEL org.opencontainers.image.description="zen-metrics Hetzner Cloud sweep worker (hetzner.v1: CPU-only ARM64, R2-queue polling, no managed sidecar). BYO R2."
+LABEL org.opencontainers.image.description="zenmetrics Hetzner Cloud sweep worker (hetzner.v1: CPU-only ARM64, R2-queue polling, no managed sidecar). BYO R2."
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later OR LicenseRef-Imazen-Commercial"
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -115,7 +115,7 @@ RUN curl -fsSL "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux
 # WORKDIR is the per-sweep work area.
 ENV PATH=/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin \
     RUST_BACKTRACE=1 \
-    RUST_LOG=info,zen_cloud_vastai=info,zencloud_hetzner=info
+    RUST_LOG=info,zenfleet_vastai=info,zenfleet_hetzner=info
 
 WORKDIR /workspace/hetzner-sweep
 
@@ -125,27 +125,27 @@ RUN s5cmd version \
     && jq --version \
     && echo "hetzner.v1 base-layer smoke passed"
 
-# ── L5: zen-sweep-worker (--features hetzner, ARM64) ────────────────────
+# ── L5: zenfleet-sweep (--features hetzner, ARM64) ────────────────────
 #
 # The cloud-agnostic deployed worker, built for the HETZNER backend:
 # inline encode+score compute (shared with vast.ai's tree) + the R2-queue
 # polling loop (r2_queue_loop.rs). Invoked as
-# `zen-sweep-worker worker --backend hetzner`. The binary MUST be an
+# `zenfleet-sweep worker --backend hetzner`. The binary MUST be an
 # ARM64 (aarch64-unknown-linux-gnu) artifact — see this file's header
 # build instructions.
-ARG ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker-arm64
-COPY --chmod=0755 ${ZEN_SWEEP_WORKER_BINARY} /usr/local/bin/zen-sweep-worker
+ARG ZEN_SWEEP_WORKER_BINARY=./zenfleet-sweep-arm64
+COPY --chmod=0755 ${ZEN_SWEEP_WORKER_BINARY} /usr/local/bin/zenfleet-sweep
 
 # Sanity gate: the worker subcommand + the --backend selector accept
 # `hetzner`. The fact that this binary RUNS at all on linux/arm64
 # qemu (during this buildx step) is the arch check — if it were x86_64
 # the kernel would refuse exec via ENOEXEC. (We previously called
 # `file` here but it's not in the minimal ubuntu:24.04 base.)
-RUN /usr/local/bin/zen-sweep-worker --version \
-    && /usr/local/bin/zen-sweep-worker --help 2>&1 | grep -q -- '--backend' \
-    && /usr/local/bin/zen-sweep-worker worker --backend hetzner --help 2>&1 | grep -q -- '--run-id' \
-    && /usr/local/bin/zen-sweep-worker worker --backend hetzner --help 2>&1 | grep -q -- '--chunks-r2' \
-    && echo "hetzner.v1 zen-sweep-worker (hetzner) smoke passed"
+RUN /usr/local/bin/zenfleet-sweep --version \
+    && /usr/local/bin/zenfleet-sweep --help 2>&1 | grep -q -- '--backend' \
+    && /usr/local/bin/zenfleet-sweep worker --backend hetzner --help 2>&1 | grep -q -- '--run-id' \
+    && /usr/local/bin/zenfleet-sweep worker --backend hetzner --help 2>&1 | grep -q -- '--chunks-r2' \
+    && echo "hetzner.v1 zenfleet-sweep (hetzner) smoke passed"
 
 # ── L6: optional entrypoint shim ────────────────────────────────────────
 # The Hetzner cloud-init invokes the worker binary directly; this
@@ -157,12 +157,12 @@ RUN test -x /usr/local/bin/entrypoint_hetzner.sh \
     && echo "hetzner.v1 entrypoint script baked"
 
 # ── L7: ENTRYPOINT ──────────────────────────────────────────────────────
-# The Hetzner cloud-init (see crates/zencloud-hetzner/src/cloud_init.rs)
+# The Hetzner cloud-init (see crates/zenfleet-hetzner/src/cloud_init.rs)
 # invokes the worker via `docker run ... <image>
-# /usr/local/bin/zen-sweep-worker worker --backend hetzner ...`. Docker's
+# /usr/local/bin/zenfleet-sweep worker --backend hetzner ...`. Docker's
 # default behavior is to *concatenate* a CMD override onto an ENTRYPOINT
-# array — so if we set `ENTRYPOINT ["/usr/local/bin/zen-sweep-worker"]`,
-# docker would invoke the binary with `/usr/local/bin/zen-sweep-worker`
+# array — so if we set `ENTRYPOINT ["/usr/local/bin/zenfleet-sweep"]`,
+# docker would invoke the binary with `/usr/local/bin/zenfleet-sweep`
 # as its first argument (treated as an unknown subcommand → exit nonzero
 # silently). The Hetzner sweep validated this footgun the hard way
 # 2026-05-28: 5/5 workers booted but 0 chunks claimed.
@@ -172,4 +172,4 @@ RUN test -x /usr/local/bin/entrypoint_hetzner.sh \
 # runs that directly. Ad-hoc shell access: `docker run --entrypoint
 # /bin/bash <image>` still works (no ENTRYPOINT to override).
 # Run via cloud-init: docker uses CMD directly.
-CMD ["/usr/local/bin/zen-sweep-worker"]
+CMD ["/usr/local/bin/zenfleet-sweep"]

@@ -1,0 +1,34 @@
+[package]
+name = "zenfleet-worker"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Job worker: claims the reconciler's gap, runs a handler, content-addresses outputs to a blob store, and emits ledger rows. Bridges zenfleet-core/zenfleet-ledger to real executors."
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "zenfleet-worker"
+path = "src/bin/worker.rs"
+
+[[bin]]
+name = "zenfleet-exec"
+path = "src/bin/jobexec.rs"
+
+[[bin]]
+name = "zenfleet-gc"
+path = "src/bin/jobgc.rs"
+
+[dependencies]
+zenfleet-core = { version = "0.0.1", path = "../zenfleet-core" }
+zenfleet-ledger = { version = "0.0.1", path = "../zenfleet-ledger" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+image = { workspace = true }
+# Spot-preemption (SIGTERM) handling so a reclaimed box releases its in-flight claim for fast
+# requeue instead of waiting out the claim TTL (goal F).
+signal-hook = "0.4.4"

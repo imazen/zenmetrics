@@ -9,7 +9,7 @@ money fast.
 ## Architecture (post 2026-05-19)
 
 The sweep infra is now a **unified Rust worker** living in
-`crates/vastai-fleet`. One binary, two operational modes:
+`crates/zenfleet-vastai`. One binary, two operational modes:
 
 | Mode | Purpose | When to use |
 |---|---|---|
@@ -42,13 +42,13 @@ collapsed into single-file `Dockerfile.sweep.v26`. All earlier
 vNN Dockerfiles were deleted; their deltas are inlined in v26 in
 proper layer order. See the git log of those deleted files for
 incremental change history (cuda_dlsym_stub evolution, jxl-encoder
-bumps, cudarc binding pin chase, vastai-fleet worker rollouts).
+bumps, cudarc binding pin chase, zenfleet-vastai worker rollouts).
 
 ## Plan-driven sweeps (all five codecs)
 
 Instead of spelling `--knob-grid` Cartesian products by hand, ask the
 codec's own sweep planner for its curated, fingerprint-deduplicated
-cells: `zen-metrics sweep --plan rd_core|modes_full` (zenavif also
+cells: `zenmetrics sweep --plan rd_core|modes_full` (zenavif also
 `modes_full_alpha`). The cross-codec contract — per-cell
 `{"cell","fp","plan"}` identity, q=0 lossless sentinel, audit
 manifests, per-codec axis inventory with scalar axes tagged, and the
@@ -68,7 +68,7 @@ feature parquets across two runs (`cvvdp-v15rc-2026-05-18` and
    --filter-codec v15rc_zenjpeg` (or per codec). Upload to
    `s3://coefficient/jobs/<run-id>/chunks.jsonl`.
 2. **Single-instance smoke (omni mode)** — `launch_single_instance.sh
-   --docker ghcr.io/imazen/zen-metrics-sweep:v26 --onstart
+   --docker ghcr.io/imazen/zenmetrics-sweep:v26 --onstart
    onstart_unified.sh`. Verify the first sidecar lands at
    `s3://zentrain/<run-id>/omni/<chunk>.parquet`. Schema check
    should show all 6 metric columns + `encoded_filename` non-empty.
@@ -76,7 +76,7 @@ feature parquets across two runs (`cvvdp-v15rc-2026-05-18` and
    --docker :v26 --onstart onstart_unified.sh`. PC=2 default; AIMD
    tunes between 1-4 based on `nvidia-smi` util.
 4. **Watch omni sidecars** populate. ~50 chunks/hr/box with v23.
-   `vastai-fleet watch --target-sidecars <N>` auto-destroys at end.
+   `zenfleet-vastai watch --target-sidecars <N>` auto-destroys at end.
 5. **Single-instance smoke (feature-backfill mode)** —
    `launch_single_instance.sh --docker :v26 --onstart
    onstart_feature_backfill.sh`. Verifies the feature parquet
@@ -85,7 +85,7 @@ feature parquets across two runs (`cvvdp-v15rc-2026-05-18` and
    image. Per-chunk runtime is dominated by encoded-variant
    download from R2 + CPU zensim compute (~5 sec/chunk on a
    modern CPU).
-7. **Auto-destroy + verify** — `vastai-fleet watch` + a sidecar
+7. **Auto-destroy + verify** — `zenfleet-vastai watch` + a sidecar
    count check.
 
 ## Known constraint: chunks with `encoded_filename: null`
@@ -174,7 +174,7 @@ SKIP_CLAIMS=1 ./scripts/sweep/launch_single_instance.sh \
     --metric cvvdp \
     --run-id <YYYY-MM-DD-NICK> \
     --chunks s3://coefficient/jobs/<YYYY-MM-DD-NICK>/chunks.jsonl \
-    --docker ghcr.io/imazen/zen-metrics-sweep:v17 \
+    --docker ghcr.io/imazen/zenmetrics-sweep:v17 \
     --onstart scripts/sweep/onstart_omni_backfill.sh \
     --max-dph 0.10 --min-gpu-ram-mb 8000
 
@@ -187,18 +187,18 @@ watch -n 60 's5cmd --profile r2 --endpoint-url $R2_ENDPOINT ls s3://zentrain/<RU
     --metric cvvdp \
     --run-id <YYYY-MM-DD-NICK> \
     --chunks s3://coefficient/jobs/<YYYY-MM-DD-NICK>/chunks.jsonl \
-    --docker ghcr.io/imazen/zen-metrics-sweep:v17 \
+    --docker ghcr.io/imazen/zenmetrics-sweep:v17 \
     --onstart scripts/sweep/onstart_omni_backfill.sh \
     --n-boxes 10 --max-dph 0.10
 
 # 7. Auto-destroy when target sidecar count is reached
-vastai-fleet watch \
+zenfleet-vastai watch \
     --label-prefix <YYYY-MM-DD-NICK> \
     --target-sidecars <N_CHUNKS_MINUS_GRACE> \
     --r2-prefix s3://zentrain/<YYYY-MM-DD-NICK>/
 
 # 8. Always verify the fleet is gone
-vastai-fleet status --label-prefix <YYYY-MM-DD-NICK>
+zenfleet-vastai status --label-prefix <YYYY-MM-DD-NICK>
 # Should print "instances: 0".
 ```
 
@@ -206,11 +206,11 @@ vastai-fleet status --label-prefix <YYYY-MM-DD-NICK>
 
 ## File map — what does what
 
-### Images (Dockerfiles → published tags on `ghcr.io/imazen/zen-metrics-sweep:*`)
+### Images (Dockerfiles → published tags on `ghcr.io/imazen/zenmetrics-sweep:*`)
 
 | File | Tag | Status | Notes |
 |---|---|---|---|
-| `Dockerfile.sweep.v26` | **`v26` (recommended)** | ✅ shipping | Single-file collapsed image (replaces the v14→v25 chain). FROM ubuntu:24.04 directly. Bakes apt deps + CUDA NVRTC+dev 12-6 + pyarrow + s5cmd + jq + cuda_dlsym_stub.so + zen-metrics (CUDARC_CUDA_VERSION=12000) + vastai-fleet (inline-sweep) + all onstart/worker scripts. Supports omni, feature-backfill, source-features modes. |
+| `Dockerfile.sweep.v26` | **`v26` (recommended)** | ✅ shipping | Single-file collapsed image (replaces the v14→v25 chain). FROM ubuntu:24.04 directly. Bakes apt deps + CUDA NVRTC+dev 12-6 + pyarrow + s5cmd + jq + cuda_dlsym_stub.so + zenmetrics (CUDARC_CUDA_VERSION=12000) + zenfleet-vastai (inline-sweep) + all onstart/worker scripts. Supports omni, feature-backfill, source-features modes. |
 | `scripts/sweep/Dockerfile.pycvvdp` | `pycvvdp` | active (rare) | Only used by the dual-impl cvvdp parity flow. Separate from the main sweep image because pycvvdp pulls in ~3 GB of pytorch. |
 
 **Historical (deleted 2026-05-21):** the v14→v25 chain (Dockerfile.sweep
@@ -221,13 +221,13 @@ deltas as small layers, but bad for new contributors trying to
 understand what the image is. v26 inlines every delta in proper layer
 order. See `git log -- Dockerfile.sweep.v*` for the incremental
 history (cuda_dlsym_stub evolution, jxl-encoder bumps, cudarc binding
-pin chase, vastai-fleet worker rollouts).
+pin chase, zenfleet-vastai worker rollouts).
 
 ### Onstart scripts (entrypoint for each container)
 
 | File | Used by | Status |
 |---|---|---|
-| `onstart_unified.sh` | **omni mode via the Rust `vastai-fleet worker` binary** | ✅ recommended (v26) |
+| `onstart_unified.sh` | **omni mode via the Rust `zenfleet-vastai worker` binary** | ✅ recommended (v26) |
 | `onstart_feature_backfill.sh` | **feature-backfill mode via the Rust worker (sets WORKER_MODE=feature-backfill)** | ✅ recommended (v26) |
 | `onstart_omni_backfill.sh` | Legacy bash dispatcher for the omni pipeline | active (fallback) |
 | `onstart_cvvdp_backfill_imazen.sh` | cvvdp single-impl backfill | active |
@@ -238,10 +238,10 @@ pin chase, vastai-fleet worker rollouts).
 
 ### Chunk workers (process one chunk = 100-200 rows)
 
-The Rust worker (`crates/vastai-fleet/src/worker/`) replaces these
+The Rust worker (`crates/zenfleet-vastai/src/worker/`) replaces these
 bash scripts when the container runs `onstart_unified.sh` or
 `onstart_feature_backfill.sh`. The bash workers stay in the image
-as safety-net fallbacks (`vastai-fleet worker` falls through to
+as safety-net fallbacks (`zenfleet-vastai worker` falls through to
 the bash `omni_backfill_chunk_worker.sh` if the inline path
 fails — defence in depth).
 
@@ -258,7 +258,7 @@ fails — defence in depth).
 |---|---|---|
 | `launch_single_instance.sh` | 1 box smoke test, iterating on a fix | ✅ current |
 | `launch_backfill.sh` | N-box fleet fanout (requires n ≥ 3) | ✅ current |
-| `deploy_fast.sh` | legacy fast-deploy, pre-vastai-fleet | deprecated |
+| `deploy_fast.sh` | legacy fast-deploy, pre-zenfleet-vastai | deprecated |
 | `dispatch.sh` | legacy cron-driven dispatcher | deprecated |
 | `vastai_zen_metrics_sweep.sh` | legacy v3-era launcher | deprecated |
 
@@ -278,7 +278,7 @@ fails — defence in depth).
 | `cuda_dlsym_stub.c` | LD_PRELOAD shim. Fixes cudarc 0.19.4 vs CUDA 13.x driver symbol mismatch. Baked into v17 image. |
 | `fleet_util_snapshot.sh` | Per-box GPU/CPU/RAM/uptime dump. Auto-detects fleet boxes by label prefix. Use to verify util after launch. |
 | `sweep_janitor.py` | Sidecar consolidation + dedup |
-| `fleet_status.sh` | One-shot dashboard wrapping `vastai-fleet status` |
+| `fleet_status.sh` | One-shot dashboard wrapping `zenfleet-vastai status` |
 | `finalize.sh` | Post-sweep R2-sidecar consolidation into per-codec parquets |
 | `vast_cost_watch.sh` | Continuous burn-rate monitor; alerts if total cost exceeds threshold |
 
@@ -311,7 +311,7 @@ for i in d if isinstance(d,list) else d.get('instances',[]):
     print(f\"  id={i.get('id')} label={i.get('label','?')[:40]:40s} status={i.get('actual_status')} dph=\${i.get('dph_total',0):.4f}\")"
 
 # Destroy them all (DANGEROUS — type the run-id label prefix explicitly)
-vastai-fleet destroy --label-prefix <YOUR-RUN-ID>
+zenfleet-vastai destroy --label-prefix <YOUR-RUN-ID>
 
 # Or one by one
 yes y | vastai destroy instance <ID>
@@ -344,7 +344,7 @@ calculated from earlier-today instance work — those land at day boundary.
   sidecars at the rate you expected.
 - Don't put credentials in shell history. The launcher reads them from
   `~/.config/cloudflare/r2-credentials` + `gh auth token`.
-- Don't `git push` `vastai-fleet` or `zen-metrics` binaries; they're in
+- Don't `git push` `zenfleet-vastai` or `zenmetrics` binaries; they're in
   `.gitignore` (each ~3-280 MB).
 - Don't trust the vast.ai web UI's "destroyed" status as final — some
   destroys take 30-60 seconds to register. Re-check.

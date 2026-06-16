@@ -180,7 +180,7 @@ fn compute_dkl_jod_does_not_pollute_caches() {
     // Tick 486: same pin as `score_does_not_pollute_caches` but for
     // the f32-returning `compute_dkl_jod` one-shot. The two paths
     // share most internals but `compute_dkl_jod` is the one that
-    // batch consumers (e.g. zen-metrics CLI) reach for; if a
+    // batch consumers (e.g. zenmetrics CLI) reach for; if a
     // refactor accidentally added cache-priming there, batch callers
     // that subsequently primed via the documented `warm_reference`
     // path could silently get stale state.

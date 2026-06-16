@@ -1,0 +1,17 @@
+[package]
+name = "zenfleet-core"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Content-addressed job taxonomy, identity, status, and blob addressing — Phase-0 keystone for the zen job system."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+sha2 = "0.10.9"
+hex = "0.4.3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

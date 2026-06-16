@@ -4,7 +4,7 @@
 ## Scope
 Snapshot: `docs/public-api/iwssim.txt` — 99 items (default == all-features).
 
-Known consumers checked: `zen-metrics-cli` (primary driver), `zenmetrics-api`, `zenmetrics-orchestrator`, in-repo tests.
+Known consumers checked: `zenmetrics-cli` (primary driver), `zenmetrics-api`, `zenmetrics-orchestrator`, in-repo tests.
 
 ---
 
@@ -41,7 +41,7 @@ Known consumers checked: `zen-metrics-cli` (primary driver), `zenmetrics-api`, `
 ## Items confirmed KEEP (representative)
 
 - `Iwssim`, `IwssimParams`, `IwssimScore`, `Error` — primary API, heavily used.
-- `IwssimParams::allow_small()` constructor — used by `zen-metrics-cli`.
+- `IwssimParams::allow_small()` constructor — used by `zenmetrics-cli`.
 - `IwssimParams::iw_flag` — used in parity tests to toggle IW off; algorithmic toggle that users do need.
 - `STRIP_BODY_DEFAULT` — used in `benchmarks/cpu_profile` and `iwssim/tests/strip_parity.rs`.
 - `rgb_u8_to_gray_bt601_vec` — used by `iwssim-gpu/src/pipeline.rs`.

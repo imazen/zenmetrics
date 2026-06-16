@@ -7,7 +7,7 @@
 #      in WORKDIR; the cubecl-cuda context reads that config and
 #      writes compiled PTX to <root>/cuda/<ver>/<sha>/sm_<arch>/<driver>/
 #      ptx.json.log on the first kernel-launch).
-#   2. Run `zen-metrics score-pairs --metric <each-default-GPU-metric>`
+#   2. Run `zenmetrics score-pairs --metric <each-default-GPU-metric>`
 #      once on the baked 64×64 (and 256×256 for iwssim) fixtures. The
 #      first run for each metric triggers NVRTC compile of every
 #      kernel the metric uses; cubecl persists the resulting PTX to
@@ -47,8 +47,8 @@ GPU_RUNTIME="${WARMUP_GPU_RUNTIME:-cuda}"
 
 mkdir -p "${CACHE_DIR}"
 
-if ! command -v zen-metrics >/dev/null 2>&1; then
-    log "FATAL: zen-metrics not on PATH"
+if ! command -v zenmetrics >/dev/null 2>&1; then
+    log "FATAL: zenmetrics not on PATH"
     exit 0  # fail-soft per docstring
 fi
 
@@ -105,7 +105,7 @@ for metric in "${metrics[@]}"; do
     # `score-pairs` accepts multi-column metrics (butteraugli emits
     # max+pnorm3, future metrics may emit more) — one parquet column
     # per metric column. Same subcommand for every warmup metric.
-    if zen-metrics score-pairs \
+    if zenmetrics score-pairs \
             --metric "${metric}" \
             --gpu-runtime "${GPU_RUNTIME}" \
             --pairs-tsv "${pairs}" \

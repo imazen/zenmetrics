@@ -38,8 +38,8 @@ AND vast.ai backfill cvvdp metrics**.
 ### R2 paths (account `${R2_ACCOUNT_ID}` from `~/.config/cloudflare/r2-credentials`)
 
 - **Working binary** (latest production):
-  `s3://coefficient/binaries/zen-metrics-0.6.4-cvvdp-cuda12.6-v4-batched-linux-x86_64-gpu`
-  - Built from local CUDA 12.6 toolchain via `cargo build -p zen-metrics-cli --features sweep,gpu,gpu-cuda,gpu-cpu`
+  `s3://coefficient/binaries/zenmetrics-0.6.4-cvvdp-cuda12.6-v4-batched-linux-x86_64-gpu`
+  - Built from local CUDA 12.6 toolchain via `cargo build -p zenmetrics-cli --features sweep,gpu,gpu-cuda,gpu-cpu`
   - Contains CvvdpBatchScorer (OOM fix, tick 384)
   - Verified: `strings | grep -i cuCoredumpDeregisterComplete` returns empty
   - 132 MB stripped
@@ -135,7 +135,7 @@ ebe21f8 test(cvvdp-gpu): pin Cvvdp::score determinism across repeated calls on s
    ```bash
    cd ~/work/zen/zenmetrics--cvvdp-new
    SWEEP_RUN_ID=cvvdp-backfill-imazen-2026-05-15 N_BOXES=10 MAX_DPH=0.30 MIN_RAM_GB=16 \
-     SWEEP_BIN_OVERRIDE=s3://coefficient/binaries/zen-metrics-0.6.4-cvvdp-cuda12.6-v4-batched-linux-x86_64-gpu \
+     SWEEP_BIN_OVERRIDE=s3://coefficient/binaries/zenmetrics-0.6.4-cvvdp-cuda12.6-v4-batched-linux-x86_64-gpu \
      bash scripts/sweep/cvvdp_backfill/launch_imazen.sh
    ```
    (new launcher defaults PARALLEL=0 = auto-detect)

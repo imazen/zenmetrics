@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Dense q + size sweep for zenjpeg picker training data — LOCAL dry-run.
 #
-# Drives `zen-metrics sweep` (encode + score + persist) across a dense q
+# Drives `zenmetrics sweep` (encode + score + persist) across a dense q
 # grid and a small zenjpeg knob grid, once per source-size variant, then
 # scores each (ref, encoded) pair with ssim2-gpu (the correct-monotone
 # reach-ladder target — the shipped zensim metric has a known correctness
@@ -17,12 +17,12 @@
 # Usage:
 #   picker_dense_sweep_dryrun.sh <out_root> <zen_metrics_bin>
 #
-# Requires: zen-metrics built with `--features sweep,gpu,gpu-cuda` and a
+# Requires: zenmetrics built with `--features sweep,gpu,gpu-cuda` and a
 # local CUDA GPU. NO fleet, NO cloud spend.
 set -euo pipefail
 
 OUT_ROOT="${1:-/mnt/v/zen/picker-dense-dryrun-2026-05-27}"
-ZM="${2:-$HOME/work/zen/zenmetrics/target/release/zen-metrics}"
+ZM="${2:-$HOME/work/zen/zenmetrics/target/release/zenmetrics}"
 
 # Dense q grid: step 5 in 5..69, step 2 in 70..100 (29 levels). Matches the
 # picker's ZQ_TARGETS density (CLAUDE.md "Dense sampling for trained models").

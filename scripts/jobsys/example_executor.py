@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Reference job executor for the zen job system (the ZEN_EXEC contract).
 
-The worker (`zen-jobworker`) runs ONE executor process per claimed job and speaks a dead-simple
-contract (see crates/zen-jobworker/src/lib.rs::exec_command):
+The worker (`zenfleet-worker`) runs ONE executor process per claimed job and speaks a dead-simple
+contract (see crates/zenfleet-worker/src/lib.rs::exec_command):
 
     stdin   <- the DesiredJob as JSON (one object, then EOF)
     stdout  -> the job's OUTPUT BYTES (these get content-addressed to blobs/<sha256> in R2)
@@ -39,7 +39,7 @@ def main() -> int:
         # REAL metric job: you have (reference, distorted). Resolve them, score, emit the score bytes.
         #   ref_sha, dist_sha = job["inputs"][0], job["inputs"][1]   # or your own input convention
         #   fetch each blob from R2 (s5cmd cp s3://$ZEN_BUCKET/$ZEN_RUN/blobs/<sha> ...), then e.g.:
-        #   score = subprocess.run(["zen-metrics","score","--metric",job["kind"]["metric"],ref,dist],
+        #   score = subprocess.run(["zenmetrics","score","--metric",job["kind"]["metric"],ref,dist],
         #                          capture_output=True, check=True).stdout
         #   out.write(score); return 0
         # PLACEHOLDER (proves the contract end-to-end without a real metric):

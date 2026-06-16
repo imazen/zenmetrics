@@ -6,14 +6,14 @@
 # and historical references in CHANGELOG.md / docs/. Slated for
 # deletion per task #69 (P5d).
 #
-# Worker bootstrap for the zen-metrics sweep on vast.ai.
+# Worker bootstrap for the zenmetrics sweep on vast.ai.
 #
 # Designed to run inside a fresh GPU instance (Ubuntu 22.04 / 24.04 with
 # CUDA-capable GPU). The script:
 #   1. Installs system + rust toolchain dependencies (idempotent — if a
 #      step is already done it is skipped).
 #   2. Clones imazen/turbo-metrics at the requested ref.
-#   3. Builds zen-metrics with `--features sweep,gpu,gpu-wgpu`.
+#   3. Builds zenmetrics with `--features sweep,gpu,gpu-wgpu`.
 #   4. Pulls source images from R2 into a local cache.
 #   5. Iterates a jobspec list (one chunk per (codec, image-subset)),
 #      runs the sweep, pushes Pareto TSV chunks back to R2.
@@ -21,7 +21,7 @@
 #      worker is alive.
 #
 # Configuration via environment variables:
-#   SWEEP_REF              Git ref to check out (default: zen-metrics-v0.3.0).
+#   SWEEP_REF              Git ref to check out (default: zenmetrics-v0.3.0).
 #   R2_ENDPOINT            CloudFlare R2 endpoint URL.
 #   R2_ACCESS_KEY_ID
 #   R2_SECRET_ACCESS_KEY   (above three are required)
@@ -43,7 +43,7 @@
 
 set -euo pipefail
 
-SWEEP_REF="${SWEEP_REF:-zen-metrics-v0.3.0}"
+SWEEP_REF="${SWEEP_REF:-zenmetrics-v0.3.0}"
 SWEEP_RUN_ID="${SWEEP_RUN_ID:-sweep-2026-05-03}"
 WORKER_ID="${WORKER_ID:-$(hostname)}"
 WORKDIR="${WORKDIR:-/workspace/sweep}"
@@ -73,11 +73,11 @@ if [[ ! -d turbo-metrics ]]; then
 fi
 
 # ── Step 3: build ─────────────────────────────────────────────────────
-BIN="$WORKDIR/turbo-metrics/target/release/zen-metrics"
+BIN="$WORKDIR/turbo-metrics/target/release/zenmetrics"
 if [[ ! -x "$BIN" ]]; then
-    log "building zen-metrics with sweep + gpu-wgpu"
+    log "building zenmetrics with sweep + gpu-wgpu"
     cd turbo-metrics
-    cargo build --release -p zen-metrics-cli \
+    cargo build --release -p zenmetrics-cli \
         --features "sweep,gpu,gpu-wgpu" 2>&1 | tail -30
     cd "$WORKDIR"
 fi

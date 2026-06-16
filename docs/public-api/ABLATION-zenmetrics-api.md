@@ -6,13 +6,13 @@ Snapshot: `docs/public-api/zenmetrics-api.txt` — 464 items (default), 514 item
 
 This is the umbrella crate. All 9 metric crates are optional deps; the pub surface is additive per feature.
 
-Known consumers: `zen-metrics-cli` (primary driver — uses nearly the entire surface), `zenmetrics-orchestrator` (session/batch API), `jxl-encoder` (uses via `zenmetrics-api::iwssim::IwssimParams::allow_small` path documented in tests).
+Known consumers: `zenmetrics-cli` (primary driver — uses nearly the entire surface), `zenmetrics-orchestrator` (session/batch API), `jxl-encoder` (uses via `zenmetrics-api::iwssim::IwssimParams::allow_small` path documented in tests).
 
 ---
 
 ## Analysis notes
 
-The `hdr` module (HDR surface: `HdrFeeding`, `HdrTransfer`, `HdrScorer`, `DisplayModel`, `pu21_encode`, `pq_eotf`, `srgb_eotf`, etc.) is the June 2026 PU program API. Per mission instructions: **KEEP wholesale** — recent deliberate design. The free functions (`pu21_encode`, `pu21_decode`, `pq_eotf`, `pq_inverse_eotf`, `srgb_eotf`, `hlg_inverse_oetf`, `hlg_system_gamma`, `nits_interleaved_to_pu_luma_gray`, `hdr_feeding`) are used by `zen-metrics-cli/src/hdr.rs` (confirmed `pu21_encode` call at line 397). KEEP.
+The `hdr` module (HDR surface: `HdrFeeding`, `HdrTransfer`, `HdrScorer`, `DisplayModel`, `pu21_encode`, `pq_eotf`, `srgb_eotf`, etc.) is the June 2026 PU program API. Per mission instructions: **KEEP wholesale** — recent deliberate design. The free functions (`pu21_encode`, `pu21_decode`, `pq_eotf`, `pq_inverse_eotf`, `srgb_eotf`, `hlg_inverse_oetf`, `hlg_system_gamma`, `nits_interleaved_to_pu_luma_gray`, `hdr_feeding`) are used by `zenmetrics-cli/src/hdr.rs` (confirmed `pu21_encode` call at line 397). KEEP.
 
 The `context` module (`MetricContext<R>`, `PairHandles`) is a `cubecl-types`-gated low-level typed upload-once API used by `zenmetrics-api/tests/it/compute_handles.rs` and `zenmetrics-api/src/metric.rs:1510` (`pair.ref_handle`, `pair.dist_handle`). The pub fields (`client`, `width`, `height` on `MetricContext`; `ref_handle`, `dist_handle`, `generation` on `PairHandles`) serve the batch-scoring pattern. KEEP.
 

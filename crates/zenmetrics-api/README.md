@@ -178,7 +178,7 @@ RTX 5070 + cubecl 0.10).
 
 ## What this crate is NOT
 
-- **Not a benchmark harness.** Use `zen-metrics-cli sweep` or the
+- **Not a benchmark harness.** Use `zenmetrics-cli sweep` or the
   `zenbench` integration in each metric crate for that.
 - **Not a CPU-only metrics shim.** Every variant requires one of the
   GPU backends to be enabled at compile time. The `cpu` feature

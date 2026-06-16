@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
-        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
+        # zenmetrics-cli's Cargo.toml has `zenjpeg = { path =
         # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
         # it's optional, cargo validates the path during workspace
         # manifest load. zenjpeg itself has `zenpredict = { path =
@@ -54,7 +54,7 @@ jobs:
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
-          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
+          # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
           git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
@@ -100,7 +100,7 @@ jobs:
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
           git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
-          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`
+          # fast-ssim2 (zenmetrics-cli path dep `../../../fast-ssim2/fast-ssim2`
           # AND root [patch.crates-io] source for zenmetrics-api/-orchestrator —
           # the `hdr-pu` integrated-PU21 entry the CPU ssim2 HDR routing calls is
           # git-main-only, crates.io 0.8.1 predates it) and dssim (root
@@ -113,7 +113,7 @@ jobs:
           git -C ../fast-ssim2 checkout 8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
-          # zen-metrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
+          # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
           # and `../../../heic`). OFF in every CI build below, but cargo
           # validates optional path-dep paths during workspace manifest load,
           # so they must exist. ultrahdr-core has an optional `zentone`
@@ -156,7 +156,7 @@ jobs:
           cargo build -p cvvdp --no-default-features --features "alloc parallel" --release
           cargo test  -p cvvdp --release
       - name: Build CLI (CPU metrics only — no GPU runtime needed at compile time)
-        run: cargo build -p zen-metrics-cli --no-default-features --features cpu-metrics --release
+        run: cargo build -p zenmetrics-cli --no-default-features --features cpu-metrics --release
 
   # Runtime parity tests on macOS via Metal (the only CI-available GPU
   # runtime). Disable `fast-reduction` everywhere — Metal silently
@@ -198,7 +198,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
-        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
+        # zenmetrics-cli's Cargo.toml has `zenjpeg = { path =
         # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
         # it's optional, cargo validates the path during workspace
         # manifest load. zenjpeg itself has `zenpredict = { path =
@@ -210,7 +210,7 @@ jobs:
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
-          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
+          # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
           git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
@@ -256,7 +256,7 @@ jobs:
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
           git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
-          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`
+          # fast-ssim2 (zenmetrics-cli path dep `../../../fast-ssim2/fast-ssim2`
           # AND root [patch.crates-io] source for zenmetrics-api/-orchestrator —
           # the `hdr-pu` integrated-PU21 entry the CPU ssim2 HDR routing calls is
           # git-main-only, crates.io 0.8.1 predates it) and dssim (root
@@ -269,7 +269,7 @@ jobs:
           git -C ../fast-ssim2 checkout 8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
-          # zen-metrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
+          # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
           # and `../../../heic`). OFF in every CI build below, but cargo
           # validates optional path-dep paths during workspace manifest load,
           # so they must exist. ultrahdr-core has an optional `zentone`
@@ -348,7 +348,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
-        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
+        # zenmetrics-cli's Cargo.toml has `zenjpeg = { path =
         # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
         # it's optional, cargo validates the path during workspace
         # manifest load. zenjpeg itself has `zenpredict = { path =
@@ -360,7 +360,7 @@ jobs:
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
-          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
+          # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
           git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
@@ -406,7 +406,7 @@ jobs:
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
           git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
-          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`
+          # fast-ssim2 (zenmetrics-cli path dep `../../../fast-ssim2/fast-ssim2`
           # AND root [patch.crates-io] source for zenmetrics-api/-orchestrator —
           # the `hdr-pu` integrated-PU21 entry the CPU ssim2 HDR routing calls is
           # git-main-only, crates.io 0.8.1 predates it) and dssim (root
@@ -419,7 +419,7 @@ jobs:
           git -C ../fast-ssim2 checkout 8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
-          # zen-metrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
+          # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
           # and `../../../heic`). OFF in every CI build below, but cargo
           # validates optional path-dep paths during workspace manifest load,
           # so they must exist. ultrahdr-core has an optional `zentone`
@@ -453,7 +453,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
-        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
+        # zenmetrics-cli's Cargo.toml has `zenjpeg = { path =
         # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
         # it's optional, cargo validates the path during workspace
         # manifest load. zenjpeg itself has `zenpredict = { path =
@@ -465,7 +465,7 @@ jobs:
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
-          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
+          # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
           git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
@@ -511,7 +511,7 @@ jobs:
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
           git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
-          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`
+          # fast-ssim2 (zenmetrics-cli path dep `../../../fast-ssim2/fast-ssim2`
           # AND root [patch.crates-io] source for zenmetrics-api/-orchestrator —
           # the `hdr-pu` integrated-PU21 entry the CPU ssim2 HDR routing calls is
           # git-main-only, crates.io 0.8.1 predates it) and dssim (root
@@ -524,7 +524,7 @@ jobs:
           git -C ../fast-ssim2 checkout 8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
-          # zen-metrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
+          # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
           # and `../../../heic`). OFF in every CI build below, but cargo
           # validates optional path-dep paths during workspace manifest load,
           # so they must exist. ultrahdr-core has an optional `zentone`
@@ -555,7 +555,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
-        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
+        # zenmetrics-cli's Cargo.toml has `zenjpeg = { path =
         # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
         # it's optional, cargo validates the path during workspace
         # manifest load. zenjpeg itself has `zenpredict = { path =
@@ -567,7 +567,7 @@ jobs:
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
-          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
+          # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
           git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
@@ -613,7 +613,7 @@ jobs:
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
           git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
-          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`
+          # fast-ssim2 (zenmetrics-cli path dep `../../../fast-ssim2/fast-ssim2`
           # AND root [patch.crates-io] source for zenmetrics-api/-orchestrator —
           # the `hdr-pu` integrated-PU21 entry the CPU ssim2 HDR routing calls is
           # git-main-only, crates.io 0.8.1 predates it) and dssim (root
@@ -626,7 +626,7 @@ jobs:
           git -C ../fast-ssim2 checkout 8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
-          # zen-metrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
+          # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
           # and `../../../heic`). OFF in every CI build below, but cargo
           # validates optional path-dep paths during workspace manifest load,
           # so they must exist. ultrahdr-core has an optional `zentone`

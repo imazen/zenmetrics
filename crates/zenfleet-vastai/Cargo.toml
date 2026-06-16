@@ -1,0 +1,150 @@
+[package]
+name = "zenfleet-vastai"
+version = "0.0.1"
+description = "vast.ai provider for the zenfleet-cloud worker trait layer: vast.ai API + /proc/1/environ credentials + Cloudflare R2 storage + R2-token-race atomic chunk claim, plus the fleet status / destroy / watch / self-destroy operator CLI."
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[lib]
+name = "zenfleet_vastai"
+path = "src/lib.rs"
+
+# The fleet status / destroy / watch / self-destroy operator CLI stays
+# the `zenfleet-vastai` binary so existing launcher scripts + the error-trap
+# self-destroy invocation keep working unchanged. The cloud-agnostic
+# DEPLOYED worker is the separate `zenfleet-sweep` binary.
+[[bin]]
+name = "zenfleet-vastai"
+path = "src/main.rs"
+
+[dependencies]
+# The cloud-agnostic trait layer this crate provides an impl of. Tiny,
+# zero gpu/cloud-SDK deps — always linked (the trait impls in `cloud`
+# need the types regardless of the worker feature).
+zenfleet-cloud = { workspace = true }
+# The shared S3-compatible client + BlobStorage impl, factored out of
+# this crate so SaladCloud and other providers reuse the proven R2
+# logic (spec §1.9 item 4). This crate re-exports `S3Client` /
+# `S3BlobStorage` under their historical `R2Client` / `R2BlobStorage`
+# names so every internal call site + test compiles unchanged. Optional
+# + pulled in by the `worker` feature, where the R2 client lives.
+zenfleet-s3 = { workspace = true, optional = true }
+# Need the `env` feature on top of the workspace flag set so worker-mode
+# CLI args can fall back to env vars like `$SWEEP_RUN_ID`.
+clap = { workspace = true, features = ["env"] }
+# serde_json::Value gives us tolerant parsing — when one instance row is
+# malformed we can skip it with a warning instead of aborting (the bug
+# this crate exists to fix).
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+# anyhow keeps the binary small and the error model simple. This is a CLI
+# helper, not a library.
+anyhow = "1.0.102"
+
+# Worker-mode deps. Gated under the `worker` feature so the lightweight
+# fleet-management subcommands (self-destroy, watch, status) keep their
+# small binary footprint when built without --features worker.
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "fs", "process", "io-util", "signal", "sync", "time"], optional = true }
+tracing = { version = "0.1", default-features = false, features = ["std"], optional = true }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"], optional = true }
+sha2 = { version = "0.10", default-features = false, optional = true }
+hex = { version = "0.4", default-features = false, features = ["std"], optional = true }
+chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }
+
+# zenmetrics-cli library facade. Optional + feature-gated so non-
+# worker builds skip the heavy GPU-deps tree.
+zenmetrics-cli = { path = "../zenmetrics-cli", optional = true, default-features = false, features = [
+    "sweep",
+    "png", "jpeg", "webp", "avif", "jxl",
+    # HDR sweep mode (v27 chunks: `"hdr": true`): PQ-PNG decode +
+    # HdrScorer feedings. Without this, an HDR chunk fails loudly at
+    # run_sweep validation instead of silently scoring SDR.
+    "hdr",
+    "cpu-metrics",
+    # All GPU metrics, gated to CUDA. cpu-metrics + gpu-cuda alone
+    # don't enable any individual metric — each has its own flag.
+    "gpu-cuda",
+    "gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp",
+    "gpu-iwssim", "gpu-zensim",
+    # Phase A audit (2026-05-28): the inline-sweep path was calling
+    # `run_sweep(&cfg)` without an orchestrator handle, so every
+    # cell flowed through the legacy MetricCache — bypassing the
+    # OOM ladder, capability cache, and cached-ref auto-detect the
+    # orchestrator provides. Adding `orchestrator,orchestrator-cuda`
+    # lights up `SweepOrchestratorHandle` and the `Option<&handle>`
+    # parameter on `run_sweep`; sweep_runner.rs builds a process-wide
+    # orchestrator once and threads it through every group.
+    "orchestrator", "orchestrator-cuda",
+] }
+# Arrow + Parquet for chunk-input + sidecar IO in phase B. arrow-rs's
+# parquet crate is already pulled by zenmetrics-cli's --feature-output
+# code path, so we re-use that build cache. Optional so non-inline-sweep
+# builds skip the dep.
+arrow = { version = "58", default-features = false, features = ["csv"], optional = true }
+arrow-schema = { version = "58", default-features = false, optional = true }
+arrow-array = { version = "58", default-features = false, optional = true }
+# `snap` is required to READ Snappy-compressed input parquets — Snappy is
+# the parquet writer default, so a worker that can only read zstd silently
+# fails on any input written with default compression (caught on a Salad
+# smoke run: "Disabled feature at compile time: snap"). `zstd` is what the
+# fleet writes its own sidecars with.
+parquet = { version = "58", default-features = false, features = ["arrow", "zstd", "snap"], optional = true }
+# Image decoding for zenanalyze feature computation on sources.
+# Gated so only the source-features feature pulls it.
+image = { workspace = true, optional = true }
+# zenanalyze for source-image features (102 active features as of 0.1.x).
+# We pin to 0.1.x per the API stability contract in zenanalyze/CLAUDE.md.
+# crates.io has 0.1.0; the in-workspace sibling at ~/work/zen/zenanalyze
+# has newer features but we pull from crates.io for reproducibility
+# of the docker image build.
+# zenanalyze: local path dep gets us the full 62-feature surface
+# (crates.io 0.1.0 ships only ~19). Local HEAD = 278ca1a as of
+# 2026-05-19. Feature IDs are stable across the repo's history,
+# so feat_<id> columns join cleanly across runs even if the local
+# crate version bumps the count later.
+zenanalyze = { path = "../../../zenanalyze", optional = true }
+
+[features]
+# Default = full unified GPU worker with source-image features.
+# Plain `cargo build -p zenfleet-vastai` produces the production binary.
+# Lightweight build (self-destroy + watch + status only, no GPU, no
+# zenanalyze): `cargo build -p zenfleet-vastai --no-default-features`.
+default = ["worker", "inline-sweep", "source-features"]
+worker = ["dep:tokio", "dep:tracing", "dep:tracing-subscriber", "dep:sha2", "dep:hex", "dep:chrono", "dep:zenfleet-s3"]
+# Phase B: link zenmetrics-cli's library to call run_sweep in-process
+# instead of subprocessing to `zenmetrics sweep`. Saves ~3-5s of
+# cubecl init per (codec, knob_tuple) group — ~90-150s/chunk.
+# Defaults match the production image (`zenmetrics-sweep:v21`) so the
+# Rust worker reaches the same set of codecs + metrics the bash worker
+# does today.
+inline-sweep = [
+    "worker",
+    "dep:zenmetrics-cli",
+    "dep:arrow",
+    "dep:arrow-schema",
+    "dep:arrow-array",
+    "dep:parquet",
+]
+# Phase B+: compute zenanalyze source-image features inside the
+# worker. Stored in a separate sidecar keyed by image basename.
+# User confirmed (2026-05-19) features are needed for ORIGINAL
+# sources only; distorted variants are out of scope.
+source-features = [
+    "worker",
+    "dep:image",
+    "dep:zenanalyze",
+]
+# Full unified worker: everything enabled.
+unified = ["inline-sweep", "source-features"]
+
+[dev-dependencies]
+serde_json = { workspace = true }
+# For provision_aws_credentials_file unit tests — each one needs a
+# private HOME so the test doesn't clobber the developer's real
+# ~/.aws/credentials.
+tempfile = "3.27.0"

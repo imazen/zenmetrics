@@ -6329,223 +6329,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zen-cloud-core"
-version = "0.0.1"
-dependencies = [
- "reqwest 0.13.4",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "zen-cloud-local"
-version = "0.0.1"
-dependencies = [
- "serde",
- "serde_json",
- "tempfile",
- "tracing",
- "zen-cloud-core",
-]
-
-[[package]]
-name = "zen-cloud-runpod"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "reqwest 0.13.4",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "zen-cloud-core",
- "zen-cloud-s3",
- "zen-cloud-vastai",
-]
-
-[[package]]
-name = "zen-cloud-s3"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "tokio",
- "tracing",
- "zen-cloud-core",
-]
-
-[[package]]
-name = "zen-cloud-salad"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "bytes",
- "clap",
- "hmac",
- "http-body-util",
- "hyper",
- "hyper-util",
- "reqwest 0.13.4",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "tracing",
- "zen-cloud-core",
- "zen-cloud-s3",
- "zenfleet-orchestrator",
-]
-
-[[package]]
-name = "zen-cloud-vastai"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "arrow",
- "arrow-array",
- "arrow-schema",
- "chrono",
- "clap",
- "hex",
- "image",
- "parquet",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "zen-cloud-core",
- "zen-cloud-s3",
- "zen-metrics-cli",
- "zenanalyze 0.2.0",
-]
-
-[[package]]
-name = "zen-job-core"
-version = "0.0.1"
-dependencies = [
- "hex",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
-]
-
-[[package]]
-name = "zen-jobctl"
-version = "0.0.1"
-dependencies = [
- "clap",
- "serde",
- "serde_json",
- "zen-job-core",
- "zen-ledger",
-]
-
-[[package]]
-name = "zen-jobdash"
-version = "0.0.1"
-dependencies = [
- "axum",
- "reqwest 0.13.4",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tower-http",
- "zen-job-core",
- "zen-ledger",
-]
-
-[[package]]
-name = "zen-jobworker"
-version = "0.0.1"
-dependencies = [
- "clap",
- "image",
- "serde",
- "serde_json",
- "signal-hook",
- "thiserror",
- "zen-job-core",
- "zen-ledger",
-]
-
-[[package]]
-name = "zen-ledger"
-version = "0.0.1"
-dependencies = [
- "arrow-array",
- "arrow-schema",
- "parquet",
- "serde",
- "serde_json",
- "thiserror",
- "zen-job-core",
-]
-
-[[package]]
-name = "zen-metrics-cli"
-version = "0.6.0"
-dependencies = [
- "almost-enough",
- "arrow-array",
- "arrow-schema",
- "butteraugli",
- "butteraugli-gpu",
- "bytemuck",
- "clap",
- "csv",
- "dssim-core",
- "enough",
- "fast-ssim2 0.8.2",
- "heic",
- "image",
- "imgref",
- "jxl-encoder",
- "parquet",
- "rayon",
- "rgb",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "ultrahdr-core 0.5.0",
- "ultrahdr-rs",
- "zenavif",
- "zencodec",
- "zenforks-cubecl",
- "zenjpeg",
- "zenjxl",
- "zenmetrics-api",
- "zenmetrics-orchestrator",
- "zenpixels",
- "zenpixels-convert",
- "zenpng",
- "zensim",
- "zenwebp",
-]
-
-[[package]]
-name = "zen-sweep-worker"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "clap",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "zen-cloud-core",
- "zen-cloud-local",
- "zen-cloud-runpod",
- "zen-cloud-salad",
- "zen-cloud-vastai",
-]
-
-[[package]]
 name = "zenanalyze"
 version = "0.2.0"
 dependencies = [
@@ -6634,21 +6417,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zencloud-hetzner"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "clap",
- "reqwest 0.13.4",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "zen-cloud-salad",
- "zenfleet-orchestrator",
-]
-
-[[package]]
 name = "zencodec"
 version = "0.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6672,6 +6440,93 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenfleet-cloud"
+version = "0.0.1"
+dependencies = [
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "zenfleet-core"
+version = "0.0.1"
+dependencies = [
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+]
+
+[[package]]
+name = "zenfleet-ctl"
+version = "0.0.1"
+dependencies = [
+ "clap",
+ "serde",
+ "serde_json",
+ "zenfleet-core",
+ "zenfleet-ledger",
+]
+
+[[package]]
+name = "zenfleet-dash"
+version = "0.0.1"
+dependencies = [
+ "axum",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tower-http",
+ "zenfleet-core",
+ "zenfleet-ledger",
+]
+
+[[package]]
+name = "zenfleet-hetzner"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zenfleet-orchestrator",
+ "zenfleet-salad",
+]
+
+[[package]]
+name = "zenfleet-ledger"
+version = "0.0.1"
+dependencies = [
+ "arrow-array",
+ "arrow-schema",
+ "parquet",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "zenfleet-core",
+]
+
+[[package]]
+name = "zenfleet-local"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "zenfleet-cloud",
+]
+
+[[package]]
 name = "zenfleet-orchestrator"
 version = "0.0.1"
 dependencies = [
@@ -6680,6 +6535,109 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "zenfleet-runpod"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zenfleet-cloud",
+ "zenfleet-s3",
+ "zenfleet-vastai",
+]
+
+[[package]]
+name = "zenfleet-s3"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "tokio",
+ "tracing",
+ "zenfleet-cloud",
+]
+
+[[package]]
+name = "zenfleet-salad"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "clap",
+ "hmac",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tracing",
+ "zenfleet-cloud",
+ "zenfleet-orchestrator",
+ "zenfleet-s3",
+]
+
+[[package]]
+name = "zenfleet-sweep"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zenfleet-cloud",
+ "zenfleet-local",
+ "zenfleet-runpod",
+ "zenfleet-salad",
+ "zenfleet-vastai",
+]
+
+[[package]]
+name = "zenfleet-vastai"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "arrow",
+ "arrow-array",
+ "arrow-schema",
+ "chrono",
+ "clap",
+ "hex",
+ "image",
+ "parquet",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zenanalyze 0.2.0",
+ "zenfleet-cloud",
+ "zenfleet-s3",
+ "zenmetrics-cli",
+]
+
+[[package]]
+name = "zenfleet-worker"
+version = "0.0.1"
+dependencies = [
+ "clap",
+ "image",
+ "serde",
+ "serde_json",
+ "signal-hook",
+ "thiserror",
+ "zenfleet-core",
+ "zenfleet-ledger",
 ]
 
 [[package]]
@@ -7010,6 +6968,48 @@ dependencies = [
  "zenpixels-convert",
  "zensim",
  "zensim-gpu",
+]
+
+[[package]]
+name = "zenmetrics-cli"
+version = "0.6.0"
+dependencies = [
+ "almost-enough",
+ "arrow-array",
+ "arrow-schema",
+ "butteraugli",
+ "butteraugli-gpu",
+ "bytemuck",
+ "clap",
+ "csv",
+ "dssim-core",
+ "enough",
+ "fast-ssim2 0.8.2",
+ "heic",
+ "image",
+ "imgref",
+ "jxl-encoder",
+ "parquet",
+ "rayon",
+ "rgb",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "ultrahdr-core 0.5.0",
+ "ultrahdr-rs",
+ "zenavif",
+ "zencodec",
+ "zenforks-cubecl",
+ "zenjpeg",
+ "zenjxl",
+ "zenmetrics-api",
+ "zenmetrics-orchestrator",
+ "zenpixels",
+ "zenpixels-convert",
+ "zenpng",
+ "zensim",
+ "zenwebp",
 ]
 
 [[package]]

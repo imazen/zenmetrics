@@ -13,7 +13,7 @@
 //! ```
 //!
 //! These re-exports are the canonical import paths in production
-//! callers (zen-metrics-cli, downstream CvvdpBatchScorer). A
+//! callers (zenmetrics-cli, downstream CvvdpBatchScorer). A
 //! refactor that drops one — or moves it under a feature gate —
 //! would break callers silently if no test referenced the crate-root
 //! path. This file pins each re-export via a compile-time use site.
@@ -76,7 +76,7 @@ fn recommend_parallel_reexport_matches_pipeline_fn() {
 fn cvvdp_type_reexport_resolves() {
     // Tick 501: `Cvvdp<R>` is the main scoring type. A refactor that
     // moves it into a private module or behind a feature gate would
-    // break every downstream caller (zen-metrics-cli's
+    // break every downstream caller (zenmetrics-cli's
     // CvvdpBatchScorer references `cvvdp_gpu::Cvvdp` directly).
     // The compile-time use above is the load-bearing pin; this test
     // documents that intent with a runtime touchpoint using the

@@ -11,25 +11,25 @@
 # required).
 #
 # Architecture:
-#   BOOT_IMAGE = ghcr.io/imazen/zen-metrics-sweep:<tag>
-#               (has zen-metrics binary + s5cmd + jq baked in)
+#   BOOT_IMAGE = ghcr.io/imazen/zenmetrics-sweep:<tag>
+#               (has zenmetrics binary + s5cmd + jq baked in)
 #   --onstart-cmd = bootstrap that pulls
 #               onstart_cvvdp_backfill_imazen.sh from R2 and execs it
 #
 # The chunk_worker.sh runs in --skip-pycvvdp mode (no PYCVVDP_IMAGE)
-# and uses the host zen-metrics binary (no --zen-metrics-image).
+# and uses the host zenmetrics binary (no --zenmetrics-image).
 # Output is only the cvvdp_imazen_* sidecars; the cvvdp_pycvvdp_v054
 # column is absent (finalize.sh tolerates parity=null).
 #
 # Env vars:
 #   SWEEP_RUN_ID            (default: cvvdp-backfill-imazen-<YYYY-MM-DD>)
-#   ZEN_METRICS_IMAGE       (default: ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-cuda124)
+#   ZEN_METRICS_IMAGE       (default: ghcr.io/imazen/zenmetrics-sweep:0.6.4-cvvdp-cuda124)
 #                           — also used as BOOT_IMAGE
 #   N_BOXES                 (default: 6)
 #   MAX_DPH                 (default: 0.30)
 #   MIN_CORES               (default: 8)
 #   MIN_RAM_GB              (default: 8 — no pytorch load, much lighter)
-#   MIN_DISK_GB             (default: 20 — only zen-metrics-sweep ~600 MB)
+#   MIN_DISK_GB             (default: 20 — only zenmetrics-sweep ~600 MB)
 #   PARALLEL                (default: 2)
 #   GPU_RUNTIME             (default: auto)
 #   DRY_RUN                 (default: 0)
@@ -39,7 +39,7 @@ set -euo pipefail
 source ~/.config/cloudflare/r2-credentials
 
 SWEEP_RUN_ID="${SWEEP_RUN_ID:-cvvdp-backfill-imazen-$(date -u +%Y-%m-%d)}"
-ZEN_METRICS_IMAGE="${ZEN_METRICS_IMAGE:-ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-cuda124}"
+ZEN_METRICS_IMAGE="${ZEN_METRICS_IMAGE:-ghcr.io/imazen/zenmetrics-sweep:0.6.4-cvvdp-cuda124}"
 BOOT_IMAGE="$ZEN_METRICS_IMAGE"
 
 N_BOXES="${N_BOXES:-6}"
@@ -129,7 +129,7 @@ s5cmd \
 # has them already), download onstart from R2, exec it.
 ONSTART_BOOTSTRAP=$(cat <<'BOOT'
 set -e
-# zen-metrics-sweep image has s5cmd + jq + curl already.
+# zenmetrics-sweep image has s5cmd + jq + curl already.
 export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
 export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 mkdir -p ~/.aws
@@ -167,7 +167,7 @@ for offer_id in $OFFER_IDS; do
     ENV_STR+=" -e SCRIPTS_R2_PREFIX=${SCRIPTS_R2_PREFIX}"
     # SWEEP_BIN_OVERRIDE: v15-style pattern. Onstart fetches this
     # URL (s3://… or https://…) at boot and replaces
-    # /usr/local/bin/zen-metrics with it. Use when the docker
+    # /usr/local/bin/zenmetrics with it. Use when the docker
     # image's baked-in binary has the wrong cudarc feature set
     # (cuCoredumpDeregisterCompleteCallback gated on cuda-13020).
     [[ -n "${SWEEP_BIN_OVERRIDE:-}" ]] && \

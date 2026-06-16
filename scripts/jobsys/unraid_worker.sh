@@ -19,8 +19,8 @@
 set -euo pipefail
 RUN="${1:?usage: unraid_worker.sh <RUN> [TTL_DAYS] [CAPABILITY]}"
 TTL_DAYS="${2:-7}"; CAP="${3:-}"
-IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zen-jobworker:latest}"   # multi-arch (amd64+arm64)
-# For REAL jobs: ZEN_WORKER_IMAGE=ghcr.io/imazen/zen-jobworker-exec:latest (bakes zen-metrics jobexec;
+IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zenfleet-worker:latest}"   # multi-arch (amd64+arm64)
+# For REAL jobs: ZEN_WORKER_IMAGE=ghcr.io/imazen/zenfleet-worker-exec:latest (bakes zenmetrics jobexec;
 # its ZEN_EXEC default is the real executor) + ZEN_CORPUS_PREFIX=<R2 prefix of your source images>.
 BUCKET="${ZEN_FLEET_BUCKET:-zen-tuning-ephemeral}"
 EXEC="${ZEN_EXEC:-/bin/cat}"   # /bin/cat = synthetic; the exec image defaults this to the real executor.

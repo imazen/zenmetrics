@@ -31,9 +31,9 @@ load-bearing bugs in the operational pipeline:
 
 | File / crate | Role | Commit |
 |---|---|---|
-| `crates/zen-metrics-cli/src/main.rs` | `score-pairs --fail-on-bogus` gate (10 unit tests) | `242d4b4a` |
+| `crates/zenmetrics-cli/src/main.rs` | `score-pairs --fail-on-bogus` gate (10 unit tests) | `242d4b4a` |
 | `scripts/sweep/metric_backfill_chunk_worker.sh` | Unified single-metric worker | `5b98e50c` |
-| `crates/vastai-fleet/` | Rust binary: `status` / `destroy` / `watch` (22 tests) | `3a849a69` |
+| `crates/zenfleet-vastai/` | Rust binary: `status` / `destroy` / `watch` (22 tests) | `3a849a69` |
 | `scripts/sweep/launch_backfill.sh` | Unified launcher | `50982c33` |
 | `scripts/sweep/fleet_status.sh` | One-shot dashboard | `5de4c676` |
 
@@ -42,7 +42,7 @@ load-bearing bugs in the operational pipeline:
 ```
 +--------------------------+    +--------------------------+
 | chunks.jsonl on R2       |    | docker image with        |
-| (per generator)          |    | zen-metrics-cli baked in |
+| (per generator)          |    | zenmetrics-cli baked in |
 +-----------+--------------+    +-------------+------------+
             \                                /
              \                              /
@@ -50,13 +50,13 @@ load-bearing bugs in the operational pipeline:
         +-----------------------------------+
         | launch_backfill.sh --metric ...   |    operator
         |  -> vastai create instance ...    | <----------+
-        |  -> prints vastai-fleet watch cmd |            |
+        |  -> prints zenfleet-vastai watch cmd |            |
         +------+--------------------+-------+            |
                |                    |                    |
                v                    v                    |
        +---------------+    +----------------+           |
        | N vast.ai     |    | (background)   |           |
-       | workers, each |    | vastai-fleet   |           |
+       | workers, each |    | zenfleet-vastai   |           |
        | running       |    | watch          |           |
        | metric_       |    |                |           |
        | backfill_     |    | polls every    |           |
@@ -95,9 +95,9 @@ For new backfills, replace the per-metric scripts as follows:
 | `scripts/sweep/iwssim_backfill/launch.sh` | `scripts/sweep/launch_backfill.sh --metric iwssim ...` |
 | `scripts/sweep/cvvdp_backfill/launch_imazen.sh` | `scripts/sweep/launch_backfill.sh --metric cvvdp ...` |
 | `scripts/sweep/cvvdp_backfill/launch.sh` (dual-impl) | **unchanged** (dual-impl flow, not in v2 scope) |
-| `/tmp/cvvdp-resume/run_destroy_*.sh` | `vastai-fleet destroy --label-prefix <run-id>` |
-| Auto-destroy heredoc | `vastai-fleet watch --label-prefix <run-id> --target-sidecars N --r2-prefix s3://...` |
-| Manual "how many workers?" check | `vastai-fleet status --label-prefix <run-id>` or `fleet_status.sh <run-id>` |
+| `/tmp/cvvdp-resume/run_destroy_*.sh` | `zenfleet-vastai destroy --label-prefix <run-id>` |
+| Auto-destroy heredoc | `zenfleet-vastai watch --label-prefix <run-id> --target-sidecars N --r2-prefix s3://...` |
+| Manual "how many workers?" check | `zenfleet-vastai status --label-prefix <run-id>` or `fleet_status.sh <run-id>` |
 
 ## `--fail-on-bogus` checks
 
@@ -111,7 +111,7 @@ written** and re-reads the in-memory score vector. Exit codes:
   instead of the sidecar; the orchestrator treats the chunk as
   poisoned.
 
-The checks (`fn bogus_check` in `crates/zen-metrics-cli/src/main.rs`):
+The checks (`fn bogus_check` in `crates/zenmetrics-cli/src/main.rs`):
 
 1. `n_nan == 0` — score-pairs writes NaN on per-pair decode/score
    failures, but a chunk shouldn't have any silent NaN rows. If it
@@ -144,7 +144,7 @@ Metrics without a known range (future additions) return `None` from
   - `bogus_check_rejects_mean_out_of_range` — mean -0.5 for iwssim trips.
   - `bogus_check_handles_few_rows` — 3-row chunks aren't false-positives.
   - `bogus_check_rejects_empty_column` — 0-row column rejected.
-- **`vastai-fleet` parse + cli tests** (22/22 passing):
+- **`zenfleet-vastai` parse + cli tests** (22/22 passing):
   - Empty stdout `""` returns no instances cleanly (the exact 2026-05-18
     destroyer-crash input).
   - Deprecation banner glued onto JSON body — preamble-strip works.
@@ -154,7 +154,7 @@ Metrics without a known range (future additions) return `None` from
   - v0 bare-array vs v1 envelope shape — both accepted.
   - `destroy --dry-run` against a 5-row fixture — confirms 5 destroy
     ops without calling real vastai.
-- **`vastai-fleet status` real-CLI smoke**: ran against current vast.ai
+- **`zenfleet-vastai status` real-CLI smoke**: ran against current vast.ai
   state (0 instances) — reports cleanly, no crash. The exact input
   that crashed the bash destroyer.
 
@@ -165,24 +165,24 @@ Metrics without a known range (future additions) return `None` from
 python3 scripts/sweep/generate_<metric>_backfill_chunks.py --run-id <run-id> ... > /tmp/chunks.jsonl
 s5cmd cp /tmp/chunks.jsonl s3://coefficient/jobs/<run-id>/chunks.jsonl
 
-# 2. Build + install vastai-fleet once.
-cargo build --release -p vastai-fleet
-cp target/release/vastai-fleet ~/.local/bin/
+# 2. Build + install zenfleet-vastai once.
+cargo build --release -p zenfleet-vastai
+cp target/release/zenfleet-vastai ~/.local/bin/
 
 # 3. Launch fleet.
 scripts/sweep/launch_backfill.sh \
     --metric <metric> \
     --run-id <run-id> \
     --chunks s3://coefficient/jobs/<run-id>/chunks.jsonl \
-    --docker ghcr.io/imazen/zen-metrics-sweep:<tag> \
+    --docker ghcr.io/imazen/zenmetrics-sweep:<tag> \
     --max-dph 0.30 --n-boxes 30 \
-    --watch &      # or omit --watch and run vastai-fleet watch separately
+    --watch &      # or omit --watch and run zenfleet-vastai watch separately
 
 # 4. Monitor (any time).
 scripts/sweep/fleet_status.sh <run-id>
 
 # 5. If something's wrong, destroy.
-vastai-fleet destroy --label-prefix <run-id>
+zenfleet-vastai destroy --label-prefix <run-id>
 ```
 
 ## Constraints / not-yet-covered
@@ -191,7 +191,7 @@ vastai-fleet destroy --label-prefix <run-id>
   with parity logging) is **not** folded into the unified worker. That
   shape — two scorers, two sidecars, an extra parity TSV — has its
   own concerns; the unified worker stays single-metric.
-- `vastai-fleet` is intentionally small (~600 LOC across `main.rs` +
+- `zenfleet-vastai` is intentionally small (~600 LOC across `main.rs` +
   `parse.rs`). It is not a vast.ai SDK; it shells out to `vastai` for
   every action. The defensive parser is the load-bearing part.
 - The `--fail-on-bogus` gate is a distribution-level check on per-chunk
@@ -205,7 +205,7 @@ vastai-fleet destroy --label-prefix <run-id>
 
 - Port the dual-impl cvvdp flow into a `--dual-impl` mode on the
   unified worker once we're confident enough in the single-impl path.
-- Add a `vastai-fleet rotate` subcommand for replacing a fraction of
+- Add a `zenfleet-vastai rotate` subcommand for replacing a fraction of
   the fleet without destroying all — useful for slow-rolling new
   docker images.
 - Persist `--fail-on-bogus` failure stats to the run's R2 prefix as a

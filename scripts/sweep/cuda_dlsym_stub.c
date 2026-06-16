@@ -26,7 +26,7 @@
  * the no-op stub. cudarc 0.19.4 dlsyms ~3000 driver symbols at init
  * time and panics if any are missing — but in practice most missing
  * symbols are for features (coredump teardown, SM partitioning,
- * multicast memory, future-CUDA aliases) that zen-metrics never
+ * multicast memory, future-CUDA aliases) that zenmetrics never
  * invokes at runtime. Returning a no-op stub keeps the binding alive;
  * if the no-op is ever actually called the function returns silently
  * (which the CUDA C ABI treats as "feature unavailable, success").
@@ -42,7 +42,7 @@
  * of CUDA's coredump-callback teardown API — only invoked during
  * process shutdown if the application has registered a callback
  * (cuCoredumpRegisterStartCallback / cuCoredumpRegisterCompleteCallback).
- * zen-metrics never does. No-op stubs are therefore safe: cudarc's
+ * zenmetrics never does. No-op stubs are therefore safe: cudarc's
  * static lookup succeeds, the dispatcher stays alive, and the
  * function pointers are never actually called at runtime.
  *

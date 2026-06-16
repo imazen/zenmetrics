@@ -48,7 +48,7 @@ convention as `score_zensim` / `score_butteraugli_*` etc.
 | column                          | producer                                | binary                  |
 |---------------------------------|-----------------------------------------|-------------------------|
 | `cvvdp_pycvvdp_v054`            | upstream pycvvdp v0.5.4 (CUDA PyTorch)  | `pycvvdp` from R2 image |
-| `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>` | this crate (`cvvdp-gpu`) host scalar / GPU path | `zen-metrics` binary |
+| `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>` | this crate (`cvvdp-gpu`) host scalar / GPU path | `zenmetrics` binary |
 | `cvvdp_burn_v<MAJOR>_<MINOR>_<PATCH>`   | (abandoned tick 324; the Burn port was investigated and ruled out — see the "Status: ABANDONED" banner in `BURN_PORT_PLAN.md`. The tag stays reserved in case a future re-attempt wants to reuse it.) | n/a |
 
 The `cvvdp-gpu` crate's column comes from
@@ -59,7 +59,7 @@ when iterating without bumping the crate version:
 
 ```
 CVVDP_IMPL_TAG=cvvdp_imazen_v0_0_1_b2b7f13 \
-  cargo build --release -p zen-metrics-cli --features png,gpu,gpu-cvvdp,gpu-cuda
+  cargo build --release -p zenmetrics-cli --features png,gpu,gpu-cvvdp,gpu-cuda
 ```
 
 ### Type contract
@@ -118,10 +118,10 @@ parquets' manifest convention:
       "machine": "<vast.ai instance id>"
     },
     "cvvdp_imazen_v0_0_1": {
-      "binary": "zen-metrics 0.6.0",
+      "binary": "zenmetrics 0.6.0",
       "git_commit": "<zenmetrics HEAD>",
       "cvvdp_gpu_version": "0.0.1",
-      "docker_image": "imazen/zen-metrics:0.6.0-cvvdp-cuda121",
+      "docker_image": "imazen/zenmetrics:0.6.0-cvvdp-cuda121",
       "machine": "<vast.ai instance id>"
     }
   },

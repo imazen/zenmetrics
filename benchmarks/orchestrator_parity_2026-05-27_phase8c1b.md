@@ -1,6 +1,6 @@
 # Orchestrator vs legacy parity sweep — 2026-05-27
 
-Binary: `/home/lilith/work/zen/zenmetrics--phase8c1-b/target/release/zen-metrics`  
+Binary: `/home/lilith/work/zen/zenmetrics--phase8c1-b/target/release/zenmetrics`  
 Total cells: 54  
 PASS: 45  FAIL (value): 9  FAIL (column-name): 0  
 

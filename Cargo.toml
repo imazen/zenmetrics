@@ -10,20 +10,20 @@ members = [
     "crates/iwssim-filter-codegen",
     "crates/iwssim-gpu",
     "crates/ssim2-gpu",
-    "crates/zen-cloud-core",
-    "crates/zen-cloud-local",
-    "crates/zen-cloud-runpod",
-    "crates/zen-cloud-s3",
-    "crates/zen-cloud-salad",
-    "crates/zen-cloud-vastai",
-    "crates/zencloud-hetzner",
-    "crates/zen-job-core",
-    "crates/zen-ledger",
-    "crates/zen-jobdash",
-    "crates/zen-jobworker",
-    "crates/zen-jobctl",
-    "crates/zen-sweep-worker",
-    "crates/zen-metrics-cli",
+    "crates/zenfleet-cloud",
+    "crates/zenfleet-local",
+    "crates/zenfleet-runpod",
+    "crates/zenfleet-s3",
+    "crates/zenfleet-salad",
+    "crates/zenfleet-vastai",
+    "crates/zenfleet-hetzner",
+    "crates/zenfleet-core",
+    "crates/zenfleet-ledger",
+    "crates/zenfleet-dash",
+    "crates/zenfleet-worker",
+    "crates/zenfleet-ctl",
+    "crates/zenfleet-sweep",
+    "crates/zenmetrics-cli",
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",
     "crates/zenmetrics-gpu-core",
@@ -72,13 +72,13 @@ zensim-gpu = { version = "0.0.1", path = "crates/zensim-gpu", default-features =
 zenmetrics-api = { version = "0.0.1", path = "crates/zenmetrics-api", default-features = false }
 zenmetrics-corpus = { version = "0.1.0", path = "crates/zenmetrics-corpus", default-features = false }
 zenmetrics-orchestrator = { version = "0.0.1", path = "crates/zenmetrics-orchestrator", default-features = false }
-zen-cloud-core = { version = "0.0.1", path = "crates/zen-cloud-core", default-features = false }
-zen-cloud-local = { version = "0.0.1", path = "crates/zen-cloud-local", default-features = false }
-zen-cloud-runpod = { version = "0.0.1", path = "crates/zen-cloud-runpod", default-features = false }
-zen-cloud-s3 = { version = "0.0.1", path = "crates/zen-cloud-s3", default-features = false }
-zen-cloud-salad = { version = "0.0.1", path = "crates/zen-cloud-salad", default-features = false }
-zen-cloud-vastai = { version = "0.0.1", path = "crates/zen-cloud-vastai", default-features = false }
-zencloud-hetzner = { version = "0.0.1", path = "crates/zencloud-hetzner", default-features = false }
+zenfleet-cloud = { version = "0.0.1", path = "crates/zenfleet-cloud", default-features = false }
+zenfleet-local = { version = "0.0.1", path = "crates/zenfleet-local", default-features = false }
+zenfleet-runpod = { version = "0.0.1", path = "crates/zenfleet-runpod", default-features = false }
+zenfleet-s3 = { version = "0.0.1", path = "crates/zenfleet-s3", default-features = false }
+zenfleet-salad = { version = "0.0.1", path = "crates/zenfleet-salad", default-features = false }
+zenfleet-vastai = { version = "0.0.1", path = "crates/zenfleet-vastai", default-features = false }
+zenfleet-hetzner = { version = "0.0.1", path = "crates/zenfleet-hetzner", default-features = false }
 zenfleet-orchestrator = { version = "0.0.1", path = "crates/zenfleet-orchestrator" }
 
 # CubeCL — single source of truth for the GPU backend version.
@@ -167,7 +167,7 @@ codegen-units = 16
 # `--profile release-debug` if you really need it).
 #
 # Usage:
-#   cargo build --profile release-fat -p zen-metrics-cli
+#   cargo build --profile release-fat -p zenmetrics-cli
 #   cargo build --profile release-fat --workspace
 [profile.release-fat]
 inherits = "release"
@@ -246,7 +246,7 @@ zensim = { path = "../zensim/zensim" }
 #   ~/work/zen/jxl-encoder (post 6b8eefc1 + local improvements)
 #
 # zenjpeg already uses an explicit `path = ../../../zenjpeg/zenjpeg`
-# in zen-metrics-cli/Cargo.toml so it's not patched here.
+# in zenmetrics-cli/Cargo.toml so it's not patched here.
 zenpng       = { path = "../zenpng" }
 zenwebp      = { path = "../zenwebp" }
 # zenavif: the former ../zenavif--main worktree (zenavif main) was
@@ -295,7 +295,7 @@ dssim-core   = { path = "../../dssim/dssim-core" }
 # routes `hdr_feeding(Ssim2, Backend::Cpu)` through that entry (the u8
 # PU-shell front-end capped at ~0.61 UPIQ-class vs 0.7044 integrated, #25),
 # so the workspace pins the sibling package dir — the SAME path
-# zen-metrics-cli's direct dep already uses (../../../fast-ssim2/fast-ssim2
+# zenmetrics-cli's direct dep already uses (../../../fast-ssim2/fast-ssim2
 # from its crate dir), keeping one fast-ssim2 in the graph. CI clones
 # imazen/fast-ssim2 at a pinned rev (see .github/workflows/ci.yml).
 # Equivalent git ref (use when the sibling checkout is gone):

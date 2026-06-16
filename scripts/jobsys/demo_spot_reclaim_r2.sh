@@ -7,12 +7,12 @@
 # claim exists → `kill -TERM` the worker → confirm the claim was RELEASED (deleted) → confirm the job
 # is back in the gap (requeued) → run a normal worker that completes it.
 #
-# Requires: R2_* env, aws, s5cmd, built zen-jobworker + zen-jobctl.
+# Requires: R2_* env, aws, s5cmd, built zenfleet-worker + zenfleet-ctl.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WK="$ROOT/target/debug/zen-jobworker"
-JC="$ROOT/target/debug/zen-jobctl"
+WK="$ROOT/target/debug/zenfleet-worker"
+JC="$ROOT/target/debug/zenfleet-ctl"
 SCORER="$ROOT/scripts/jobsys/slow_scorer.sh"
 chmod +x "$SCORER"
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"

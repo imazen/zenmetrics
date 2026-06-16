@@ -3,7 +3,7 @@
 #
 # Per SALAD.md § "Deploy image" + the upstream salad-cloud-job-queue-worker
 # `with-shell-script` mandelbrot sample: launch BOTH the baked-in sidecar
-# (`salad-http-job-queue-worker`) and the app (`zen-sweep-worker worker
+# (`salad-http-job-queue-worker`) and the app (`zenfleet-sweep worker
 # --backend salad`) concurrently, then `wait -n` so the container exits
 # when either dies.
 #
@@ -11,7 +11,7 @@
 #   Salad managed queue
 #     → salad-http-job-queue-worker (gRPC client to the queue)
 #       → POST http://localhost:<SALAD_JOB_PORT><job.path>  (job input)
-#         → zen-sweep-worker's local HTTP receiver (SaladJobQueue)
+#         → zenfleet-sweep's local HTTP receiver (SaladJobQueue)
 #       ← HTTP response body  (job output, returned to the queue)
 #
 # BAKE-EVERYTHING (zensim CLAUDE.md): this script runs the JOB, never an
@@ -73,7 +73,7 @@ fi
 # nonzero so the operator rebuilds (BAKE-EVERYTHING). nvidia-container-
 # toolkit mounts libcuda.so.1; libnvrtc.so.12 is baked (L4).
 missing=0
-for tool in zen-sweep-worker salad-http-job-queue-worker s5cmd; do
+for tool in zenfleet-sweep salad-http-job-queue-worker s5cmd; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         log "FATAL: baked tool '$tool' not found on PATH — image is broken, rebuild it"
         missing=1
@@ -102,7 +102,7 @@ fi
 
 # CHUNKS_R2 explicit-or-derived from SWEEP_RUN_ID.
 export CHUNKS_R2="${CHUNKS_R2:-s3://coefficient/jobs/${SWEEP_RUN_ID}/chunks.jsonl}"
-export RUST_LOG="${RUST_LOG:-info,zen_cloud_salad=info}"
+export RUST_LOG="${RUST_LOG:-info,zenfleet_salad=info}"
 
 # s5cmd credentials file (the worker shells to s5cmd for R2 ops, matching
 # the vast.ai path).
@@ -131,7 +131,7 @@ log "worker=${WORKER_ID:-${SALAD_MACHINE_ID:-$(hostname)}} run=${SWEEP_RUN_ID} c
 # POSTing jobs, so the first real job doesn't pay the ~10-90s NVRTC compile
 # burst. The warmup script:
 #   1. Logs the GPU arch (nvidia-smi --query-gpu name,compute_cap).
-#   2. Runs `zen-metrics score-pairs --metric <X>` for each default
+#   2. Runs `zenmetrics score-pairs --metric <X>` for each default
 #      GPU metric on 64x64 (256x256 for iwssim-gpu) fixtures.
 #   3. cubecl-cuda persists compiled PTX to /var/cache/cubecl (configured
 #      via the baked cubecl.toml in WORKDIR).
@@ -201,7 +201,7 @@ export ZEN_BOOT_INFO_FILE="${BOOT_INFO_FILE}"
 export ZEN_BOOT_GPU_CLASS="${gpu_name:-unknown}"
 export ZEN_BOOT_WARMUP_SECONDS="${warmup_elapsed}"
 
-log "launching salad-http-job-queue-worker sidecar + zen-sweep-worker (--backend salad)"
+log "launching salad-http-job-queue-worker sidecar + zenfleet-sweep (--backend salad)"
 
 # ── Launch both concurrently (upstream with-shell-script pattern) ───────
 # The sidecar is the gRPC client to Salad's queue; the worker serves the
@@ -215,7 +215,7 @@ SIDECAR_PID=$!
 # chunks_r2 come from SWEEP_RUN_ID / CHUNKS_R2 (clap env=). The chunk
 # payloads arrive via the sidecar POST, not chunks.jsonl, but the worker
 # still needs a valid run-id + R2 scope for artifact upload.
-zen-sweep-worker worker --backend salad \
+zenfleet-sweep worker --backend salad \
     --run-id "${SWEEP_RUN_ID}" \
     --chunks-r2 "${CHUNKS_R2}" &
 WORKER_PID=$!

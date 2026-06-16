@@ -6,16 +6,16 @@ N=10 replicas (the org quota ceiling). Measures: container-group boot
 time, per-worker boot cost, first sidecar latency, all-N sidecar
 latency, throughput, total spend, teardown success.
 
-Launcher: `zen-salad-sweep` (new this session) at
-`crates/zen-cloud-salad/src/bin/zen-salad-sweep.rs`, gated behind the
+Launcher: `zenfleet-salad-sweep` (new this session) at
+`crates/zenfleet-salad/src/bin/zenfleet-salad-sweep.rs`, gated behind the
 `launcher` cargo feature. Build with:
 
 ```sh
 cd zenmetrics
-cargo build --release -p zen-cloud-salad --features launcher --bin zen-salad-sweep
+cargo build --release -p zenfleet-salad --features launcher --bin zenfleet-salad-sweep
 ```
 
-Image under test: `ghcr.io/imazen/zen-metrics-sweep-salad:v4-kernel-cache`
+Image under test: `ghcr.io/imazen/zenmetrics-sweep-salad:v4-kernel-cache`
 (SHA-suffixed mirror `v4-kernel-cache-5890a58f-multicol`,
 digest `sha256:b837f08471de4b1eb3adbeb08e4ac3d5a8720fbe36d990b7087fd381729e5cf1`).
 
@@ -40,7 +40,7 @@ into the container-group env (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`
 
 Launcher invocation:
 ```sh
-zen-salad-sweep --replicas 10 --chunks 30 \
+zenfleet-salad-sweep --replicas 10 --chunks 30 \
     --max-wall-secs 900 --poll-secs 15 \
     --gpu-class "RTX 3060 (12 GB)" --price-per-hour 0.20
 ```
@@ -82,7 +82,7 @@ pipeline. Three candidates ruled out:
    7 at the time of the failures.
 2. **Bad chunks.jsonl payload** — chunks downloaded clean and validate
    as `ChunkRecord` per the schema in
-   `zen-cloud-vastai/src/worker/inline.rs:48`.
+   `zenfleet-vastai/src/worker/inline.rs:48`.
 3. **R2 cred broken** — workers DID get the scoped cred (env injection
    verified) and 7/10 reached `ready=True` state.
 
@@ -90,7 +90,7 @@ Remaining candidate: **wrong `queue_connection.path`**. The 2026-05-27
 working v3 smoke
 (`gpu-metrics-smoke-v3`, `succeeded` job `aedf32f2`) used `path='/'`.
 This launcher had defaulted to `path='/job'`. Although the worker's
-`handle` function (in `zen-cloud-salad/src/queue.rs`) responds to all
+`handle` function (in `zenfleet-salad/src/queue.rs`) responds to all
 paths, the sidecar's routing may strip or transform `/job` in a way the
 worker doesn't recognise. The 3 instances that never resolved out of
 `allocating_count` also suggest something path/connection-related.
@@ -102,7 +102,7 @@ verify the path fix without burning the spend budget. Launcher
 invocation:
 
 ```sh
-zen-salad-sweep --replicas 3 --chunks 6 \
+zenfleet-salad-sweep --replicas 3 --chunks 6 \
     --max-wall-secs 480 --poll-secs 12 \
     --gpu-class "RTX 3060 (12 GB)" --price-per-hour 0.20
 ```
@@ -184,7 +184,7 @@ not exercise the worker-side path because the replicas never reached
 
 ## What this session DID prove
 
-1. **The `zen-salad-sweep` launcher works end-to-end on the operator
+1. **The `zenfleet-salad-sweep` launcher works end-to-end on the operator
    side.** GPU class resolution, scoped R2 cred minting, chunks.jsonl
    upload, queue creation, container group POST, job push, R2 polling,
    and mandatory teardown all execute cleanly. Both Run 1 and Run 2
@@ -227,7 +227,7 @@ with N=1 to cheaply re-validate the worker path before any scale-up.
 
 Launcher invocation:
 ```sh
-zen-salad-sweep --replicas 1 --chunks 3 \
+zenfleet-salad-sweep --replicas 1 --chunks 3 \
     --max-wall-secs 600 --poll-secs 12 \
     --gpu-class "RTX 3060 (12 GB)" --price-per-hour 0.20
 ```
@@ -282,7 +282,7 @@ abundant on Salad's network.
 
 Launcher invocation:
 ```sh
-zen-salad-sweep --replicas 1 --chunks 3 \
+zenfleet-salad-sweep --replicas 1 --chunks 3 \
     --max-wall-secs 420 --poll-secs 10 \
     --gpu-class "RTX 4090 (24 GB)" --price-per-hour 0.40
 ```
@@ -329,7 +329,7 @@ appears genuinely scarce right now. The next sensible attempts:
    POST so the scheduler has fallbacks (the API field is plural —
    `resources.gpu_classes: [id1, id2, ...]` — and the launcher
    currently only fills one). This is a 5-line change in
-   `crates/zen-cloud-salad/src/bin/zen-salad-sweep.rs` near the
+   `crates/zenfleet-salad/src/bin/zenfleet-salad-sweep.rs` near the
    `create_container_group` call.
 3. Request a quota / priority bump from Salad support if the
    allocation stall persists across calendar days at every GPU class.
@@ -376,8 +376,8 @@ group that had already stopped. The fix is in this commit.
 
 ## Files
 
-- Launcher source: `crates/zen-cloud-salad/src/bin/zen-salad-sweep.rs`
-- Cargo manifest: `crates/zen-cloud-salad/Cargo.toml` (added `launcher` feature)
+- Launcher source: `crates/zenfleet-salad/src/bin/zenfleet-salad-sweep.rs`
+- Cargo manifest: `crates/zenfleet-salad/Cargo.toml` (added `launcher` feature)
 - Run logs: `/tmp/salad_scaleup_2026-05-28.log`, `/tmp/salad_pathfix_2026-05-28.log`,
   `/tmp/salad_retest_2026-05-28.log` (combined Run 3 + Run 4)
 - R2 inputs: `s3://zen-tuning-ephemeral/salad-smoke-2026-05-27/`
@@ -389,7 +389,7 @@ group that had already stopped. The fix is in this commit.
 
 ## Run 5 (2026-05-28, post-orchestrator-wire-through + multi-class) — pool still starved
 
-**Image under test**: `ghcr.io/imazen/zen-metrics-sweep-salad:v5-orchestrator`
+**Image under test**: `ghcr.io/imazen/zenmetrics-sweep-salad:v5-orchestrator`
 (sha-mirror `v5-orchestrator-6187c5c6`,
 `sha256:5b753ae29393dd0d7ac40fd41e2136f35310cac491b80a0588df1f7820fe69e2`).
 Two code deltas vs v4:
@@ -401,10 +401,10 @@ Two code deltas vs v4:
   but `process_chunk_inline → run_group_inline → run_sweep` did not.
   Wired through in commit `6187c5c6`. The orchestrator features
   (`orchestrator,orchestrator-cuda`) were added to
-  `zen-cloud-vastai`'s zen-metrics-cli dep so `SweepOrchestratorHandle`
+  `zenfleet-vastai`'s zenmetrics-cli dep so `SweepOrchestratorHandle`
   is in the build.
 - Phase B: `--gpu-classes` (plural, comma-separated) flag added to
-  `zen-salad-sweep`. Resolves each name to an id and emits a
+  `zenfleet-salad-sweep`. Resolves each name to an id and emits a
   multi-element `resources.gpu_classes` Vec. `--gpu-class`
   (singular) stays for back-compat. New `--dry-run` flag prints the
   synthesised request body without hitting Salad / R2.
@@ -456,7 +456,7 @@ under the $2 cap for this session.
   `--features runpod-sweep` and the Cargo.toml mirrors the salad
   layout). RunPod's pool is independent of Salad's so the same
   starvation pattern wouldn't apply — and the orchestrator
-  wire-through is in `zen-cloud-vastai`, which `runpod-sweep`
+  wire-through is in `zenfleet-vastai`, which `runpod-sweep`
   also pulls.
 
 ## Runs 6 + 6b (2026-05-28, post-price-filter — broad-pool from catalog)
@@ -493,9 +493,9 @@ Dry-run verified (`--dry-run`) that `resources.gpu_classes` carries
 
 Launcher invocation:
 ```sh
-zen-salad-sweep --replicas 1 --chunks 1 \
+zenfleet-salad-sweep --replicas 1 --chunks 1 \
     --max-wall-secs 420 --poll-secs 10 \
-    --image ghcr.io/imazen/zen-metrics-sweep-salad:v5-orchestrator \
+    --image ghcr.io/imazen/zenmetrics-sweep-salad:v5-orchestrator \
     --price-per-hour 0.10   # default
 # (no --gpu-class, no --gpu-classes — auto-enumerated)
 ```
@@ -661,35 +661,35 @@ set -a; source ~/.config/cloudflare/r2-credentials; set +a
 export SALAD_API_KEY=$(grep -v '^#' ~/.config/salad/credentials | head -1 | sed 's/SALAD_API_KEY=//')
 
 cd zenmetrics
-cargo build --release -p zen-cloud-salad --features launcher --bin zen-salad-sweep
+cargo build --release -p zenfleet-salad --features launcher --bin zenfleet-salad-sweep
 
 # Default (auto-enumerated broad pool, price ≤ $0.10/hr at 'high'):
-./target/release/zen-salad-sweep \
+./target/release/zenfleet-salad-sweep \
     --replicas 1 --chunks 1 \
     --max-wall-secs 420 --poll-secs 10 \
-    --image ghcr.io/imazen/zen-metrics-sweep-salad:v5-orchestrator
+    --image ghcr.io/imazen/zenmetrics-sweep-salad:v5-orchestrator
 # Dry-run (no spend, prints request body):
-./target/release/zen-salad-sweep --dry-run \
+./target/release/zenfleet-salad-sweep --dry-run \
     --replicas 1 --chunks 1
 # Manual narrow selection (overrides auto-enumerate):
-./target/release/zen-salad-sweep \
+./target/release/zenfleet-salad-sweep \
     --replicas 10 --chunks 30 \
     --gpu-classes "RTX 3060 (12 GB),RTX 3090 (24 GB)" \
-    --image ghcr.io/imazen/zen-metrics-sweep-salad:v5-orchestrator
+    --image ghcr.io/imazen/zenmetrics-sweep-salad:v5-orchestrator
 ```
 
 ## Run 7 — N=10 final scale-up (SUCCESS, kernel cache validated)
 
 **Sweep id**: `scaleup-n10-20260528T101508`
 **Group**: `scaleup-scaleup-n10-20260528t101508`
-**Image**: `ghcr.io/imazen/zen-metrics-sweep-salad:v5-orchestrator`
+**Image**: `ghcr.io/imazen/zenmetrics-sweep-salad:v5-orchestrator`
 **Launcher commit**: `882492a` (master) — scoped-cred-prefix + error-sidecar-URI fix
 **Invocation**:
 
 ```sh
-./target/release/zen-salad-sweep \
+./target/release/zenfleet-salad-sweep \
     --sweep-id scaleup-n10-20260528T101508 \
-    --image ghcr.io/imazen/zen-metrics-sweep-salad:v5-orchestrator \
+    --image ghcr.io/imazen/zenmetrics-sweep-salad:v5-orchestrator \
     --replicas 10 --chunks 40 \
     --max-price-per-hour 0.10 --price-priority high \
     --max-wall-secs 900 --poll-secs 10 --price-per-hour 0.10
@@ -769,7 +769,7 @@ return 404; re-verified this run), boot-cost is inferred from
   omni sidecar (`scaleup-002.parquet`) at t=168.4 s (R2 LastModified).
 - Inside-container overhead for the first cold-everything cell:
   **168.4 - 89 = 79.4 s**. This includes:
-  - container start (zen-sweep-worker boot + tokio init)
+  - container start (zenfleet-sweep boot + tokio init)
   - first chunks.jsonl + smoke.parquet + graph.png download from R2
   - **first ssim2-gpu invocation** (cubecl JIT compile + PTX write to
     `/var/cache/cubecl/`, ~1.7 MB)
@@ -876,7 +876,7 @@ The pipeline end-to-end works at scale on Salad:
 ## Run 8 — :v6-visibility iter1 (2026-05-28)
 
 **Sweep id**: `scaleup-20260528T112234`  
-**Image**: `ghcr.io/imazen/zen-metrics-sweep-salad:v6-visibility`
+**Image**: `ghcr.io/imazen/zenmetrics-sweep-salad:v6-visibility`
 (digest `sha256:c81f8d03a791…`)  
 **Replicas**: 5  •  **Chunks**: 15  •  **Pool**: 19 GPU classes
 ≤ $0.10/hr.
@@ -887,7 +887,7 @@ Per the iteration-1 brief: get fleet visibility plumbed so we stop
 flying blind on (a) which Salad replica got which GPU class and
 (b) per-replica boot timing.
 
-**Worker side** (`crates/zen-cloud-vastai/src/worker/`):
+**Worker side** (`crates/zenfleet-vastai/src/worker/`):
 - `entrypoint_salad.sh` now writes `/var/run/zen-boot.txt` with
   `machine_id / gpu_class / gpu_uuid / driver / vram_mib /
   warmup_seconds / boot_unix_ts` (key:value).
@@ -901,10 +901,10 @@ flying blind on (a) which Salad replica got which GPU class and
   `worker_warmup_seconds`. Default null for non-Salad runs (back-
   compat).
 
-**Launcher side** (`crates/zen-cloud-salad/`):
+**Launcher side** (`crates/zenfleet-salad/`):
 - `launch.rs::list_container_group_instances()` calls
   `GET .../containers/<group>/instances`.
-- `bin/zen-salad-sweep.rs` polls `/instances` every 15 s and writes
+- `bin/zenfleet-salad-sweep.rs` polls `/instances` every 15 s and writes
   `runs/<sweep>/instances/<unix_ts>.json` with the full container-
   group state + raw instance list.
 - After poll loop exits, `build_and_upload_fleet_summary` reads
@@ -957,7 +957,7 @@ sidecar.
 
 The `:v6-visibility` image ships with the boot-upload hook in
 the vast.ai backend's `run_worker_async` only. The Salad backend
-in `zen-sweep-worker/src/main.rs::salad::run` uses its own
+in `zenfleet-sweep/src/main.rs::salad::run` uses its own
 `run_worker` loop — it does NOT call `cmd_worker`, so the
 boot-upload never fires on Salad replicas in this image.
 
@@ -971,7 +971,7 @@ the per-chunk path, which is shared with vast.ai), but
 
 The fix landed in commit `b00526b9` immediately after the
 validation run: `fire_boot_upload` is exposed publicly on
-`zen_cloud_vastai::worker`, and `salad::run` calls it before the
+`zenfleet_vastai::worker`, and `salad::run` calls it before the
 `run_worker` loop starts. Will ship as `:v6-visibility-b` on
 the next image build.
 

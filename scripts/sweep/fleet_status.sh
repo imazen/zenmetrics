@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # fleet_status.sh — one-shot status dashboard for a metric backfill
-# fleet. Combines `vastai-fleet status`, R2 sidecar count, sidecar
+# fleet. Combines `zenfleet-vastai status`, R2 sidecar count, sidecar
 # validity sampling, and an ETA in a single command.
 #
 # Usage:
@@ -10,7 +10,7 @@
 # Example:
 #   fleet_status.sh ssim2-backfill-2026-05-18
 #
-# Required tools on PATH: vastai-fleet, s5cmd, python3 with pyarrow.
+# Required tools on PATH: zenfleet-vastai, s5cmd, python3 with pyarrow.
 # Required env vars (R2 credentials): R2_ACCOUNT_ID  R2_ACCESS_KEY_ID
 #                                     R2_SECRET_ACCESS_KEY
 #
@@ -39,11 +39,11 @@ R2() { s5cmd --endpoint-url "$R2_ENDPOINT" --profile r2 "$@"; }
 echo "=== fleet_status: $RUN_ID ==="
 echo
 
-echo "--- fleet (via vastai-fleet) ---"
-if command -v vastai-fleet >/dev/null; then
-    vastai-fleet status --label-prefix "$RUN_ID" 2>&1 || true
+echo "--- fleet (via zenfleet-vastai) ---"
+if command -v zenfleet-vastai >/dev/null; then
+    zenfleet-vastai status --label-prefix "$RUN_ID" 2>&1 || true
 else
-    echo "WARN: vastai-fleet not on PATH; falling back to vastai show instances-v1"
+    echo "WARN: zenfleet-vastai not on PATH; falling back to vastai show instances-v1"
     vastai show instances-v1 --raw -a 2>/dev/null | python3 -c "
 import json, sys
 d = json.loads(sys.stdin.read() or '{\"instances\":[]}')
@@ -136,7 +136,7 @@ fi
 echo
 
 echo "--- summary ---"
-echo "  fleet:    see 'vastai-fleet status' above"
+echo "  fleet:    see 'zenfleet-vastai status' above"
 echo "  sidecars: $SIDECAR_COUNT / ${N_CHUNKS:-?}"
 echo "  failures: $FAIL_COUNT"
 if (( FAIL_COUNT > 0 )); then

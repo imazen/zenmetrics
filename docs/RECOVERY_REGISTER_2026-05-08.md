@@ -7,8 +7,8 @@ Compiled from a read-only sweep of zenmetrics branches with last-commit ≥ 2026
 | branch | commit | date | item | what it adds | verdict | files |
 |---|---|---|---|---|---|---|
 | (HEAD detached) | `d1560b8` | 2026-05-07 | per-fleet janitor | reaps idle workers (<100 cells/min OR <5% CPU after 8-min grace); destroys fleet when TSVs reach target | **kept (live in v15)** | `scripts/sweep/sweep_janitor.py` |
-| master | `edb98eb` | 2026-05-06 | Dockerfile.sweep v13 | bundles `zen-metrics` binary for vast.ai (GHCR `imazen/zen-metrics-sweep:0.6.3`) | kept | `Dockerfile.sweep`, `Dockerfile.sweep.v13` |
-| feat/butteraugli-multi-column | `4da7b8e` | 2026-05-04 | expert JXL knob decouple + butteraugli multi-column emit | separates effort macro into fine-grained expert overrides; emits `score_butteraugli_max` and `score_butteraugli_pnorm3` columns | kept — required for zentrain multi-target loss | `crates/zen-metrics-cli/src/sweep/` |
+| master | `edb98eb` | 2026-05-06 | Dockerfile.sweep v13 | bundles `zenmetrics` binary for vast.ai (GHCR `imazen/zenmetrics-sweep:0.6.3`) | kept | `Dockerfile.sweep`, `Dockerfile.sweep.v13` |
+| feat/butteraugli-multi-column | `4da7b8e` | 2026-05-04 | expert JXL knob decouple + butteraugli multi-column emit | separates effort macro into fine-grained expert overrides; emits `score_butteraugli_max` and `score_butteraugli_pnorm3` columns | kept — required for zentrain multi-target loss | `crates/zenmetrics-cli/src/sweep/` |
 | feat/sweep-v12-balanced | (recent) | 2026-05-06 | balanced cross-codec v12 sweep design | per-codec cell budgets aligned for fair training | partial — informs v16 | sweep config |
 | feat/dockerfile-sweep | (recent) | 2026-05-06 | Dockerfile.sweep refresh | aligns with 0.6.8 binary; includes runtime deps for libwebp/libaom/libjxl | kept | `Dockerfile.sweep` |
 | feat/migrate-sweep-scripts | (recent) | 2026-05-05 | move sweep scripts under `scripts/sweep/` | reorg; no behavior change | kept | `scripts/sweep/v15/`, `scripts/sweep/sweep_diag.py` |
@@ -35,7 +35,7 @@ Open design questions for v16:
 2. Codec grid: zenjpeg-420-{e0,e1,e2,e4} + zenwebp + zenavif + zenjxl + zenpng. ~150 q-points each = 750 q-points × ~3000 sources × 5 codecs = ~11M cells. Likely too large.
 3. Subsampling: 20-50 centroid sources per content class × 6 sizes × 5 codecs × 21 q-points = ~25k cells/codec, ~125k total. Feasible.
 
-Single-box smoke needs to confirm: (a) `zen-metrics --version` works inside the docker image; (b) GPU is accessible (`nvidia-smi` returns); (c) one cell completes with all metric columns populated.
+Single-box smoke needs to confirm: (a) `zenmetrics --version` works inside the docker image; (b) GPU is accessible (`nvidia-smi` returns); (c) one cell completes with all metric columns populated.
 
 ## Cherry-picks for main (Phase 2)
 

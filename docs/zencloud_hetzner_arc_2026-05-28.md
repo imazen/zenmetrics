@@ -16,10 +16,10 @@ sibling of `Dockerfile.sweep.salad.v1`. Drops:
 - cuda_dlsym_stub.so (LD_PRELOAD shim only needed on heterogeneous GPU
   fleets)
 - salad-http-job-queue-worker sidecar (Hetzner has no managed queue)
-- zen-metrics binary as a separate baked artifact (inline-sweep tree
-  is linked into zen-sweep-worker; cloud-init invokes only the worker)
+- zenmetrics binary as a separate baked artifact (inline-sweep tree
+  is linked into zenfleet-sweep; cloud-init invokes only the worker)
 
-Keeps: ubuntu:24.04 ARM64, s5cmd + jq (ARM builds), zen-sweep-worker
+Keeps: ubuntu:24.04 ARM64, s5cmd + jq (ARM builds), zenfleet-sweep
 binary cross-compiled with `cargo build --target aarch64-unknown-linux-gnu
 --features hetzner --no-default-features`.
 
@@ -45,8 +45,8 @@ The orchestrator fix (`crates/zenmetrics-orchestrator/src/cpu.rs` +
 
 | Field | Value |
 |---|---|
-| Tag | `ghcr.io/imazen/zen-metrics-sweep-hetzner:v1` |
-| Tag (sha) | `ghcr.io/imazen/zen-metrics-sweep-hetzner:v1-068880c1` |
+| Tag | `ghcr.io/imazen/zenmetrics-sweep-hetzner:v1` |
+| Tag (sha) | `ghcr.io/imazen/zenmetrics-sweep-hetzner:v1-068880c1` |
 | Platform | `linux/arm64` |
 | Index digest | `sha256:3c81627a2946a8548730ea84a3d052e410c21e189257f775702d1c64705e575d` |
 | arm64 manifest | `sha256:2bc9efc0ba8f0df094e165dcf83964d7a2827a4112a802ab46bcffaec3c46482` |
@@ -63,8 +63,8 @@ completes)
 Launch:
 
 ```
-zencloud-hetzner-sweep \
-    --image ghcr.io/imazen/zen-metrics-sweep-hetzner:v1 \
+zenfleet-hetzner-sweep \
+    --image ghcr.io/imazen/zenmetrics-sweep-hetzner:v1 \
     --replicas 5 \
     --server-type cax11 --location fsn1 \
     --chunks 2 --cells-per-chunk 12 \
@@ -100,20 +100,20 @@ successfully.
 ### Bug found + fixed
 
 The Dockerfile.sweep.hetzner.v1 first ship used
-`ENTRYPOINT ["/usr/local/bin/zen-sweep-worker"]`. Docker's behavior
+`ENTRYPOINT ["/usr/local/bin/zenfleet-sweep"]`. Docker's behavior
 for ENTRYPOINT-array + a docker-run CMD override is to CONCATENATE
 the CMD onto the ENTRYPOINT. The Hetzner cloud-init (see
-`crates/zencloud-hetzner/src/cloud_init.rs`) does:
+`crates/zenfleet-hetzner/src/cloud_init.rs`) does:
 
 ```
-docker run -d ... <image> /usr/local/bin/zen-sweep-worker worker \
+docker run -d ... <image> /usr/local/bin/zenfleet-sweep worker \
     --backend hetzner --run-id <sweep_id> --chunks-r2 <r2-uri>
 ```
 
 That made the container actually invoke:
 
 ```
-/usr/local/bin/zen-sweep-worker /usr/local/bin/zen-sweep-worker \
+/usr/local/bin/zenfleet-sweep /usr/local/bin/zenfleet-sweep \
     worker --backend hetzner --run-id ... --chunks-r2 ...
 ```
 
@@ -165,7 +165,7 @@ Well under the $1 cap. ghcr.io push: $0 (free public registry).
 | `scripts/sweep/Dockerfile.sweep.hetzner.v1` | NEW — ARM64 CPU-only deploy image |
 | `crates/zenmetrics-orchestrator/src/cpu.rs` | cfg-gate raw-cpuid behind `target_arch = "x86_64"`; aarch64 returns empty brand/features |
 | `crates/zenmetrics-orchestrator/Cargo.toml` | move `raw-cpuid` to `[target.'cfg(target_arch="x86_64")'.dependencies]` |
-| `crates/zencloud-hetzner/src/cloud_init.rs` | default docker_image swapped to `:v1` (test stub) |
+| `crates/zenfleet-hetzner/src/cloud_init.rs` | default docker_image swapped to `:v1` (test stub) |
 
 Master commit: `e9aa4426`.
 
@@ -173,18 +173,18 @@ Master commit: `e9aa4426`.
 
 Context: the v1 image predates the iter-5 worker fix (write
 `~/.aws/credentials` from env before building the R2 client —
-`zen-sweep-worker/src/main.rs` "THE iter-5 bug fix" comment), so v1
+`zenfleet-sweep/src/main.rs` "THE iter-5 bug fix" comment), so v1
 workers 403 on every scoped-cred LIST and the queue is never claimed
 (iter-4's diagnosed bug #3).
 
 Shipped this iter:
 
-- **Image v2**: `ghcr.io/imazen/zen-metrics-sweep-hetzner:v2` +
+- **Image v2**: `ghcr.io/imazen/zenmetrics-sweep-hetzner:v2` +
   `:v2-ee6f2f0d`, digest `sha256:80498676406937ba530db60a4bc4f2de1d08b0c56ca41a235d5602a2b1b44d2d`.
   Cross-compiled worker (aarch64-unknown-linux-gnu, --features hetzner,
   95 s warm) from master ee6f2f0d — includes the iter-5 cred fix AND
   the HDR sweep plumbing (the worker's inline-sweep tree now builds
-  zen-metrics-cli with `hdr`). In-build qemu smoke passed
+  zenmetrics-cli with `hdr`). In-build qemu smoke passed
   (worker --version + --backend hetzner --help).
 - **Launcher `--metrics` flag** (default `ssim2`): the previous
   hardcoded `METRICS=ssim2-gpu` could never score on a CPU-only CAX
@@ -228,19 +228,19 @@ Landed this iter (master `646f446e` + `b6dd19d4` + `6e11756c`):
   `resource_unavailable`, provision advances to the next
   `(server_type, location)` rung (sticky across replicas). Non-412
   errors still fail fast.
-- **Anonymous-pull image path**: `zen-metrics-sweep-hetzner` is a
+- **Anonymous-pull image path**: `zenmetrics-sweep-hetzner` is a
   PRIVATE ghcr package (worker pull would have needed creds in
   cloud-init user_data — over-scoped, rejected). Re-tagged the same
   digest into the already-PUBLIC fleet package:
-  `ghcr.io/imazen/zen-metrics-sweep:hetzner-v2` (+
+  `ghcr.io/imazen/zenmetrics-sweep:hetzner-v2` (+
   `:hetzner-v2-ee6f2f0d`), digest `80498676…` unchanged; anonymous
-  manifest fetch verified HTTP 200. Matches zen-metrics-sweep public
+  manifest fetch verified HTTP 200. Matches zenmetrics-sweep public
   practice; imazen/zenmetrics source is public so nothing new is
   disclosed.
 
 Launch attempt 2 (13:57:23Z, `--replicas 1`, primary `cax11:nbg1`,
 ladder `cax11:hel1 → cax11:fsn1 → cax21:nbg1 → cax21:hel1 →
-cax21:fsn1`, image `zen-metrics-sweep:hetzner-v2`, fresh 12-cell
+cax21:fsn1`, image `zenmetrics-sweep:hetzner-v2`, fresh 12-cell
 fixture): **all 6 rungs HTTP 412 resource_unavailable** — the ladder
 walked every placement and exited with "ladder rung 6 of 6"
 (`/tmp/zm-hetzner-launch2.log`). API survey at 13:52:53Z confirms:
@@ -254,8 +254,8 @@ persistent dev boxes (`zen-arm-dev`, `zen-arm-big`). No orphans.
 ARM capacity returns —
 
 ```
-./target/debug/zencloud-hetzner-sweep \
-  --image ghcr.io/imazen/zen-metrics-sweep:hetzner-v2 \
+./target/debug/zenfleet-hetzner-sweep \
+  --image ghcr.io/imazen/zenmetrics-sweep:hetzner-v2 \
   --server-type cax11 --location nbg1 \
   --fallback-placements cax11:hel1,cax11:fsn1,cax21:nbg1,cax21:hel1,cax21:fsn1 \
   --replicas 1 \

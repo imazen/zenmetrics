@@ -3,12 +3,12 @@
 # A RunControl object in R2 ({"paused":bool,"drain":bool}) gates whether a worker pulls new work;
 # the ledger is never touched, so resuming continues exactly where it left off.
 #
-# Requires: R2_* env, aws, s5cmd, built zen-jobworker + zen-jobctl.
+# Requires: R2_* env, aws, s5cmd, built zenfleet-worker + zenfleet-ctl.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WK="$ROOT/target/debug/zen-jobworker"
-JC="$ROOT/target/debug/zen-jobctl"
+WK="$ROOT/target/debug/zenfleet-worker"
+JC="$ROOT/target/debug/zenfleet-ctl"
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 BUCKET="$R2_BUCKET"
 export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"

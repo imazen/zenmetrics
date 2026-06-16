@@ -22,13 +22,13 @@ scripts/cvvdp_goldens/out/
 
 # Repo-root staging for Dockerfile.sweep.vNN precompiled-binary builds.
 # The CI workflow downloads the artifact to this path; local builds
-# `cp target/release/zen-metrics ./zen-metrics-vNN`. Never commit it.
-/zen-metrics
-/zen-metrics-v*
-/zen-sweep-worker
-# Anchor to root: the docker-build artifact at /vastai-fleet, NOT
-# the source directory crates/vastai-fleet/.
-/vastai-fleet
-/zen-metrics
+# `cp target/release/zenmetrics ./zenmetrics-vNN`. Never commit it.
+/zenmetrics
+/zenmetrics-v*
+/zenfleet-sweep
+# Anchor to root: the docker-build artifact at /zenfleet-vastai, NOT
+# the source directory crates/zenfleet-vastai/.
+/zenfleet-vastai
+/zenmetrics
 .v4_extract/
-/zen-sweep-worker-arm64
+/zenfleet-sweep-arm64

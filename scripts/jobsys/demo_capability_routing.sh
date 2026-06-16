@@ -5,10 +5,10 @@
 #   GPU worker  (--capability gpu)                  → only Metric jobs   (class Gpu)
 #   CPU worker  (--capability cpu_light cpu_heavy)  → only Encode jobs   (CpuLight/CpuHeavy)
 #
-# Requires: built zen-jobworker (debug or release), python3.
+# Requires: built zenfleet-worker (debug or release), python3.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WK="$ROOT/target/debug/zen-jobworker"; [ -x "$WK" ] || WK="$ROOT/target/release/zen-jobworker"
+WK="$ROOT/target/debug/zenfleet-worker"; [ -x "$WK" ] || WK="$ROOT/target/release/zenfleet-worker"
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 
 python3 - > "$W/mixed.json" <<'PY'

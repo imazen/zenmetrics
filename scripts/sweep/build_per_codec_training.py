@@ -2,12 +2,12 @@
 """Build per-codec training parquets via 3-way join of:
 
   ┌──────────────────────────────────────────────────────────────────────┐
-  │ DEPRECATED — use the Rust `zen-metrics assemble` subcommand instead.   │
+  │ DEPRECATED — use the Rust `zenmetrics assemble` subcommand instead.   │
   │                                                                        │
-  │   cargo build --release -p zen-metrics-cli --features assemble         │
-  │   zen-metrics assemble --runs <run> --cache-dir <dir> --out-dir <dir>  │
+  │   cargo build --release -p zenmetrics-cli --features assemble         │
+  │   zenmetrics assemble --runs <run> --cache-dir <dir> --out-dir <dir>  │
   │                                                                        │
-  │ The Rust port (crates/zen-metrics-cli/src/assemble/) reproduces this   │
+  │ The Rust port (crates/zenmetrics-cli/src/assemble/) reproduces this   │
   │ exact 3-way join but with a TYPED full-key (`PairKey`) that makes the  │
   │ 2026-05-25 parquet corruption (ssim2_gpu ref-misjoin + iwssim mock /   │
   │ human-copy leak) structurally impossible — see                         │

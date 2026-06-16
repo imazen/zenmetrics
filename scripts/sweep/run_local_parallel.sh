@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Parallel local sweep driver. Forks N worker processes that each pull
-# a chunk off a shared work queue, run zen-metrics sweep on it, and
+# a chunk off a shared work queue, run zenmetrics sweep on it, and
 # upload the result to R2. Designed for the 7950X workstation where
 # the GPU box was slower + flakier than running locally.
 #
-# Each zen-metrics process is single-threaded inside (the metrics use
+# Each zenmetrics process is single-threaded inside (the metrics use
 # rayon internally but for typical 1-2MP CID22 images the parallel
 # region is too small to saturate cores). Running 8 chunks in parallel
 # scales nearly linearly until DRAM bandwidth saturates.
 
 set -euo pipefail
 
-BIN="${BIN:-$HOME/work/turbo-metrics/target/release/zen-metrics}"
+BIN="${BIN:-$HOME/work/turbo-metrics/target/release/zenmetrics}"
 CHUNK_FILE="${CHUNK_FILE:-/tmp/chunks.jsonl}"
 SWEEP_RUN_ID="${SWEEP_RUN_ID:-sweep-2026-05-03}"
 SOURCES_ROOT="${SOURCES_ROOT:-$HOME/work/zentrain-corpus/mlp-tune-fast}"

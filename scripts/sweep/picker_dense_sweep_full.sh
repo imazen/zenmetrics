@@ -23,7 +23,7 @@
 # are not regenerated) and per-row for the parquet build (sha-dedup +
 # already-scored skip). Re-launch the same command to continue.
 #
-# NO fleet, NO cloud spend. Requires zen-metrics built with
+# NO fleet, NO cloud spend. Requires zenmetrics built with
 # `--features sweep,gpu,gpu-cuda` + a local CUDA GPU.
 #
 # Usage:
@@ -31,7 +31,7 @@
 set -euo pipefail
 
 OUT_ROOT="${1:-/mnt/v/zen/picker-dense-full-2026-05-27}"
-ZM="${2:-$HOME/work/zen/zenmetrics/target/release/zen-metrics}"
+ZM="${2:-$HOME/work/zen/zenmetrics/target/release/zenmetrics}"
 ZA="${3:-$HOME/work/zen/zenanalyze}"
 AGENT_ID="${AGENT_ID:-claude-picker-dense-full}"
 

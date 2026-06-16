@@ -4,7 +4,7 @@
 ## Scope
 Snapshot: `docs/public-api/zensim-gpu.txt` — 234 items (default == all-features).
 
-Known consumers: `zenmetrics-api` (opaque path, `reclaim_pooled_vram`), `zen-metrics-cli` (`ZensimFeatureRegime`, `ZensimParams`), `zensim-gpu/tests/it/*`.
+Known consumers: `zenmetrics-api` (opaque path, `reclaim_pooled_vram`), `zenmetrics-cli` (`ZensimFeatureRegime`, `ZensimParams`), `zensim-gpu/tests/it/*`.
 
 ---
 
@@ -36,7 +36,7 @@ Used by `zensim-gpu/tests/it/memory_mode.rs` for budget calculation verification
 ## Items confirmed KEEP (representative)
 
 - `ZensimOpaque`, `ZensimParams`, `Error`, `Result` — primary API.
-- `ZensimFeatureRegime` enum + `needs_extended_kernel()` — consumed by `zen-metrics-cli` (`ZensimFeatureRegime::WithIw.total_features()`).
+- `ZensimFeatureRegime` enum + `needs_extended_kernel()` — consumed by `zenmetrics-cli` (`ZensimFeatureRegime::WithIw.total_features()`).
 - `Zensim<R>` typed API — used in `zensim-gpu/tests/it/cpu_gpu_feature_sweep.rs`.
 - `TOTAL_FEATURES`, `TOTAL_FEATURES_EXTENDED`, `TOTAL_FEATURES_WITH_IW` — consumed by cli tests.
 - `memory_mode::reclaim_pooled_vram` — called by `zenmetrics-api`.

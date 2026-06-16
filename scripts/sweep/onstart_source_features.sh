@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# onstart_source_features.sh — execs `zen-sweep-worker worker --backend vastai --mode source-features`.
+# onstart_source_features.sh — execs `zenfleet-sweep worker --backend vastai --mode source-features`.
 # Computes zenanalyze 62-feature vectors for each unique source PNG
 # referenced by a chunk's image_basenames, writes parquet to
 # s3://zentrain/<run>/source_features/<chunk>.parquet.
@@ -27,7 +27,7 @@ CHUNKS_R2="${CHUNKS_R2:-s3://coefficient/jobs/${SWEEP_RUN_ID}/chunks.jsonl}"
 echo "[onstart-source-features] worker=${WORKER_ID:-$(hostname)} run=${SWEEP_RUN_ID}" >&2
 export RUST_LOG="${RUST_LOG:-info}"
 export WORKER_MODE=source-features
-exec /usr/local/bin/zen-sweep-worker worker --backend vastai \
+exec /usr/local/bin/zenfleet-sweep worker --backend vastai \
     --run-id "${SWEEP_RUN_ID}" \
     --chunks-r2 "${CHUNKS_R2}" \
     --mode source-features

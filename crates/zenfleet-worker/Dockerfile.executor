@@ -1,0 +1,13 @@
+# Real-executor fleet image: the baked worker base + a prebuilt zenmetrics (with the `jobexec`
+# subcommand) + the zenfleet-exec shim, so a fleet box runs REAL encode/score jobs instead of the
+# synthetic /bin/cat. Per the bake-everything rule the zenmetrics binary is precompiled on a box that
+# has the codec sibling crates (the workstation) and COPYed in — it is NOT built here (zenmetrics's
+# sibling path-deps aren't present in a clean Docker context). Build via
+# scripts/jobsys/build_executor_image.sh, which stages `zenmetrics` + `zenfleet-exec` next to this file
+# as a small build context. Base + binary share glibc (binary needs <=2.35, bookworm ships 2.36).
+ARG BASE=ghcr.io/imazen/zenfleet-worker:latest
+FROM ${BASE}
+COPY --chmod=0755 zenmetrics  /usr/local/bin/zenmetrics
+COPY --chmod=0755 zenfleet-exec  /usr/local/bin/zenfleet-exec
+# Default ZEN_EXEC to the real executor; fleet-entrypoint.sh still honors an overriding ZEN_EXEC env.
+ENV ZEN_EXEC=/usr/local/bin/zenfleet-exec

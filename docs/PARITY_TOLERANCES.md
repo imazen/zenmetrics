@@ -196,7 +196,7 @@ analytic predictions. Considered well-calibrated.
 | strip_parity.rs:STRIP_REL_TOL | 5e-5 | reduction-order | left at 5e-5; the strip path's IIR boundary has additional drift not captured by the f64 cov fix (no analog in ssim2's reduction stack). |
 | strip_parity.rs (other asserts) | abs < 0.05 / 0.5 | f32-noise | jitter sanity ceilings |
 
-### crates/zen-metrics-cli/tests/
+### crates/zenmetrics-cli/tests/
 
 | File | Tolerance | Cat | Notes |
 |---|---|---|---|

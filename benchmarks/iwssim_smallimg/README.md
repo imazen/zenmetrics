@@ -26,7 +26,7 @@ small inputs natively at any dim).
 
 - **Corpus**: 49 CID22 validation-set originals (512×512).
 - **Native dims**: {64, 96, 128, 176} via Lanczos downsample.
-- **Quality steps**: q ∈ {5, 20, 50, 80, 95} via `zen-metrics
+- **Quality steps**: q ∈ {5, 20, 50, 80, 95} via `zenmetrics
   sweep --codec zenjpeg`.
 - **Total pairs**: 49 × 4 × 5 = 980.
 - **GPU**: RTX 5070 (CUDA 12.6, cubecl ce de2f985 fork).

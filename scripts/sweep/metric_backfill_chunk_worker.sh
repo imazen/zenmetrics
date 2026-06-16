@@ -20,8 +20,8 @@
 #   3. Syncs the chunk's image_basenames from R2's source_dir_r2.
 #   4. Reads rows[row_range[0]:row_range[1]] from the parquet, groups by
 #      (codec, q, knob_tuple_json), and re-encodes the dist images via
-#      `zen-metrics sweep` once per group.
-#   5. Runs `zen-metrics score-pairs --metric <METRIC> --fail-on-bogus`
+#      `zenmetrics sweep` once per group.
+#   5. Runs `zenmetrics score-pairs --metric <METRIC> --fail-on-bogus`
 #      to produce the per-metric sidecar.
 #   6. If score-pairs exited rc=2 (bogus): uploads a structured failure
 #      log to s3://zentrain/<run>/failures/<chunk>.log instead of the
@@ -51,7 +51,7 @@
 #   echo '<one chunk JSON line>' | \
 #       metric_backfill_chunk_worker.sh \
 #           --metric iwssim \
-#           --zen-metrics-image ghcr.io/imazen/zen-metrics-sweep:0.6.4-iwssim-fixed-6227c1a
+#           --zenmetrics-image ghcr.io/imazen/zenmetrics-sweep:0.6.4-iwssim-fixed-6227c1a
 #
 # OR (host binary, no docker):
 #
@@ -93,7 +93,7 @@ while [[ $# -gt 0 ]]; do
         --metric) METRIC="$2"; shift 2;;
         --chunk-json) CHUNK_JSON="$2"; shift 2;;
         --work-dir) WORK_DIR="$2"; shift 2;;
-        --zen-metrics-image) ZEN_METRICS_IMAGE="$2"; shift 2;;
+        --zenmetrics-image) ZEN_METRICS_IMAGE="$2"; shift 2;;
         --gpu-runtime) GPU_RUNTIME="$2"; shift 2;;
         --out-sidecar-field) OUT_SIDECAR_FIELD="$2"; shift 2;;
         --sweep-metric-for-encode) SWEEP_METRIC_FOR_ENCODE="$2"; shift 2;;
@@ -257,7 +257,7 @@ while IFS='|' read -r gid codec q kj; do
     done
 
     # Encode-only sweep — pick a cheap metric (ssim2 default) just to
-    # satisfy `zen-metrics sweep`'s metric arg. The actual scoring
+    # satisfy `zenmetrics sweep`'s metric arg. The actual scoring
     # happens in step 5 below via score-pairs. Override with
     # --sweep-metric-for-encode if some future metric needs special
     # encode params at the sweep stage.
@@ -280,14 +280,14 @@ while IFS='|' read -r gid codec q kj; do
     set +e
     if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
         docker run --rm $DOCKER_GPUS \
-            --entrypoint /usr/local/bin/zen-metrics \
+            --entrypoint /usr/local/bin/zenmetrics \
             -v "$WORK_DIR":"$WORK_DIR":rw \
             -w "$GROUP_DIR" \
             "$ZEN_METRICS_IMAGE" \
             "${SWEEP_ARGS[@]}" > "$GROUP_DIR/sweep.stderr.log" 2>&1
         sweep_rc=$?
     else
-        zen-metrics "${SWEEP_ARGS[@]}" > "$GROUP_DIR/sweep.stderr.log" 2>&1
+        zenmetrics "${SWEEP_ARGS[@]}" > "$GROUP_DIR/sweep.stderr.log" 2>&1
         sweep_rc=$?
     fi
     set -e
@@ -332,14 +332,14 @@ fi
 set +e
 if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
     docker run --rm $DOCKER_GPUS \
-        --entrypoint /usr/local/bin/zen-metrics \
+        --entrypoint /usr/local/bin/zenmetrics \
         -v "$WORK_DIR":"$WORK_DIR":rw \
         -w "$WORK_DIR" \
         "$ZEN_METRICS_IMAGE" \
         "${SCORE_ARGS[@]}" 2>&1 | tee "$WORK_DIR/score.log" | sed "s/^/  [${METRIC}] /" >&2
     score_rc=${PIPESTATUS[0]}
 else
-    zen-metrics "${SCORE_ARGS[@]}" 2>&1 | tee "$WORK_DIR/score.log" | sed "s/^/  [${METRIC}] /" >&2
+    zenmetrics "${SCORE_ARGS[@]}" 2>&1 | tee "$WORK_DIR/score.log" | sed "s/^/  [${METRIC}] /" >&2
     score_rc=${PIPESTATUS[0]}
 fi
 set -e

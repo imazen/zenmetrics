@@ -1,0 +1,29 @@
+[package]
+name = "zenfleet-dash"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Railway-deployable dashboard + control API for the zen job system. Reads the Parquet ledger / blob index / heartbeats; never runs workers."
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "zenfleet_dash"
+path = "src/lib.rs"
+
+[[bin]]
+name = "zenfleet-dash"
+path = "src/bin/server.rs"
+
+[dependencies]
+zenfleet-core = { version = "0.0.1", path = "../zenfleet-core" }
+zenfleet-ledger = { version = "0.0.1", path = "../zenfleet-ledger" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+axum = "0.8.9"
+tower-http = { version = "0.6.11", default-features = false, features = ["fs"] }
+tokio = { version = "1.52.3", default-features = false, features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json"] }

@@ -166,7 +166,7 @@ embedded / no-cubecl targets.
 - **GPU crate**: `crates/butteraugli-gpu/`.
 - **Dep direction**: independent. `butteraugli-gpu`'s `[dependencies]`
   has NO direct dep on `butteraugli`; it's only in `[dev-dependencies]`
-  for the parity tests. The CPU side is consumed by `zen-metrics-cli` /
+  for the parity tests. The CPU side is consumed by `zenmetrics-cli` /
   `zenmetrics-orchestrator` via the upstream crate.
 - **Shared types**: each crate has its own `ButteraugliParams` /
   `Score`. Upstream `butteraugli` returns `f64` from
@@ -372,7 +372,7 @@ this — see Recommendations.
 | Priority | Crate(s) | Issue | Recommended action | Risk | Phase |
 |---|---|---|---|---|---|
 | REQUIRED | `cvvdp` + `cvvdp-gpu` | CPU crate depends on GPU crate (inverse direction); CPU pulls cubecl transitively to access pure constants + the scalar reference algorithm | Move shared constants + `host_scalar` + the scalar fns out of `cvvdp-gpu::{params, host_scalar, kernels::*}` into `cvvdp` (new modules `cvvdp::params`, `cvvdp::host_scalar`, `cvvdp::kernels::*`); flip Cargo.toml so `cvvdp-gpu` depends on `cvvdp` | LOW — internal refactor; both crates have `publish = false`; existing CPU code already consumes these items via `pub use cvvdp_gpu::*` so re-pointing imports is mechanical; parity sweep gates the result | **B.1** |
-| HIGH | `cvvdp-gpu`, `zenmetrics-api`, `zen-metrics-cli` | `pub use cvvdp_gpu::CvvdpParams` (and similar re-exports) become stale after the flip — callers should reach for `cvvdp::CvvdpParams` | After B.1, add `pub use cvvdp::{CvvdpParams, DisplayModel, ...}` from `cvvdp-gpu` so existing code (umbrella, CLI) keeps building unchanged; the umbrella's `zenmetrics_api::cvvdp` alias continues to surface the right types | LOW — `pub use` is the canonical compat shim | **B.1** (same commit set) |
+| HIGH | `cvvdp-gpu`, `zenmetrics-api`, `zenmetrics-cli` | `pub use cvvdp_gpu::CvvdpParams` (and similar re-exports) become stale after the flip — callers should reach for `cvvdp::CvvdpParams` | After B.1, add `pub use cvvdp::{CvvdpParams, DisplayModel, ...}` from `cvvdp-gpu` so existing code (umbrella, CLI) keeps building unchanged; the umbrella's `zenmetrics_api::cvvdp` alias continues to surface the right types | LOW — `pub use` is the canonical compat shim | **B.1** (same commit set) |
 | MEDIUM | `cvvdp-gpu` | `host_scalar::predict_jod_still_3ch` is the canonical *scalar* reference (no GPU dependency) living in the GPU crate — misleading and prevents users who only want the reference from avoiding the cubecl dep | Move `host_scalar` to `cvvdp::host_scalar` as part of B.1 | LOW — sibling module move; tests follow | **B.1** |
 | MEDIUM | `cvvdp-gpu::presets` | Display-preset registry (JSON-loaded named displays) is pure data + JSON parse; no GPU dep | Move `presets` to `cvvdp::presets` as part of B.1 | LOW | **B.1** |
 | LOW | All `-gpu` opaque crates | cached-ref naming split (`set_reference_*` vs `warm_reference_*`) | Add deprecated alias `set_reference_srgb_u8` → `warm_reference_srgb` on `CvvdpOpaque`; umbrella already normalizes | LOW but API churn | **DEFER** — umbrella already normalizes; direct consumers are few |
@@ -546,7 +546,7 @@ for 8c.1.
   *GPU* crate, which now re-exports everything from the CPU crate. To
   reduce confusion, we could add an additional `pub use cvvdp as cvvdp_cpu;`
   but that's optional.
-- `crates/zen-metrics-cli/src/metrics/cvvdp_gpu.rs`: continues to
+- `crates/zenmetrics-cli/src/metrics/cvvdp_gpu.rs`: continues to
   `use zenmetrics_api::cvvdp;` — the indirection through the umbrella
   insulates it.
 
@@ -568,9 +568,9 @@ still see the same symbol path because the GPU crate re-exports
 from the CPU crate.
 
 **Parity gate**: `scripts/orchestrator_parity_sweep.py` runs 54 cells
-(6 metrics × 3 sizes × 3 qs) against `target/release/zen-metrics` and
+(6 metrics × 3 sizes × 3 qs) against `target/release/zenmetrics` and
 requires every cell to land within the per-metric tolerance. After
-B.1: re-build `zen-metrics`, re-run the sweep, confirm 54/54
+B.1: re-build `zenmetrics`, re-run the sweep, confirm 54/54
 PASS-EXACT. Any divergence is the signal that the move broke
 something — honest-stop.
 
@@ -590,7 +590,7 @@ If you're resuming work on Phase 8c.1 after a context reset:
 4. A.5's "NOT in Phase B" subsection is the rationale for what's
    intentionally skipped.
 5. The parity gate is `python3 scripts/orchestrator_parity_sweep.py`
-   on a fresh `cargo build --release -p zen-metrics-cli --features
+   on a fresh `cargo build --release -p zenmetrics-cli --features
    sweep,png,gpu,gpu-cuda,orchestrator,orchestrator-all` (or
    whatever feature set the script needs — read its top docstring
    before running).

@@ -1,6 +1,6 @@
 # Salad sweep image: kernel-cache warmup + multi-column score-pairs (2026-05-28)
 
-Tag: **`ghcr.io/imazen/zen-metrics-sweep-salad:v4-kernel-cache`**
+Tag: **`ghcr.io/imazen/zenmetrics-sweep-salad:v4-kernel-cache`**
 (SHA-suffixed mirror: `v4-kernel-cache-5890a58f-multicol`)
 Image digest: `sha256:b837f08471de4b1eb3adbeb08e4ac3d5a8720fbe36d990b7087fd381729e5cf1`
 Image size: **997 MB** (same as `:v3`; new layers contribute <2 MB net)
@@ -99,7 +99,7 @@ and enables the cache.
 
 ### 3. `scripts/sweep/warmup_kernels.sh`
 
-Invokes `zen-metrics score-pairs --metric <X>` once per default GPU
+Invokes `zenmetrics score-pairs --metric <X>` once per default GPU
 metric on the appropriate-size fixture. Reports per-metric wall time
 + total wall + cache-dir size. Fail-soft: a warmup error does NOT
 abort the boot; the worker still launches and a genuine GPU break
@@ -127,11 +127,11 @@ cd "${WORKDIR:-/workspace/salad-sweep}"     # so cubecl finds cubecl.toml
 warmup_kernels.sh || log "warmup script returned non-zero (continuing per fail-soft policy)"
 log "warmup phase: ${warmup_elapsed}s total wall"
 salad-http-job-queue-worker &
-zen-sweep-worker worker --backend salad ... &
+zenfleet-sweep worker --backend salad ... &
 wait -n
 ```
 
-## `zen-metrics score-pairs` multi-column fix
+## `zenmetrics score-pairs` multi-column fix
 
 User feedback during this work: "fix whatever limits metrics to a
 single score, they often produce multiple named values."
@@ -143,7 +143,7 @@ case was rejected with:
 
 > `score-pairs supports single-column metrics only; butteraugli-gpu emits 2 columns (...). Use `batch` for now.`
 
-Fixed in `crates/zen-metrics-cli/src/main.rs`:
+Fixed in `crates/zenmetrics-cli/src/main.rs`:
 
 - `cmd_score_pairs` now enumerates `MetricKind::column_names()` and
   writes one parquet Float64 column per metric column alongside the
@@ -156,7 +156,7 @@ Fixed in `crates/zen-metrics-cli/src/main.rs`:
 
 Verified:
 ```
-$ zen-metrics score-pairs --metric butteraugli-gpu ... --out-parquet x.parquet
+$ zenmetrics score-pairs --metric butteraugli-gpu ... --out-parquet x.parquet
 [score-pairs] wrote 1 rows (0 NaN-failures) to x.parquet with score column(s) ["butteraugli_max_gpu", "butteraugli_pnorm3_gpu"]
 
 $ python -c 'import pyarrow.parquet as pq; t = pq.read_table("x.parquet"); print(t.column_names)'
@@ -211,15 +211,15 @@ total** (verified via `GET /organizations/imazen/quotas`:
 to be reduced to N=10 unless a quota bump is requested via Salad
 support. The remaining work is:
 
-1. A launcher tool. `crates/zen-cloud-salad/src/launch.rs` has the
+1. A launcher tool. `crates/zenfleet-salad/src/launch.rs` has the
    API client (`SaladApi`) and scoped-cred minting (`create_
    container_group_with_scoped_cred`). What's missing is a CLI
    binary or example that calls the launcher end-to-end:
    `resolve_gpu_class → mint_sweep_r2_cred → create_queue →
    create_container_group → push_jobs → poll group / R2 sidecars
    → stop_container_group`.
-   - Suggested location: `crates/zen-cloud-salad/examples/
-     run_scaleup.rs` or a new `crates/zen-cloud-salad/src/bin/
+   - Suggested location: `crates/zenfleet-salad/examples/
+     run_scaleup.rs` or a new `crates/zenfleet-salad/src/bin/
      salad-launcher.rs`.
 2. A throwaway chunks generator. ~40–80 small `ChunkRecord` JSON
    lines, each pointing at maybe 1–2 image basenames in a public
@@ -253,35 +253,35 @@ metric 3060 figure.
   default GPU metric on baked fixtures.
 - `scripts/sweep/entrypoint_salad.sh` — calls warmup before
   sidecar+worker launch.
-- `crates/zen-metrics-cli/src/main.rs` — `cmd_score_pairs` accepts
+- `crates/zenmetrics-cli/src/main.rs` — `cmd_score_pairs` accepts
   multi-column metrics; `score_one_pair` returns `Vec<f64>`.
-- `crates/zen-metrics-cli/tests/fixtures/{ref,dist_noisy}_256.png` —
+- `crates/zenmetrics-cli/tests/fixtures/{ref,dist_noisy}_256.png` —
   256×256 fixtures for iwssim-gpu's 176-px minimum.
 
 ## How to reproduce locally
 
 ```bash
-# 1. Build zen-metrics + zen-sweep-worker:
+# 1. Build zenmetrics + zenfleet-sweep:
 cd zenmetrics
-CUDARC_CUDA_VERSION=12000 cargo build --release -p zen-metrics-cli \
+CUDARC_CUDA_VERSION=12000 cargo build --release -p zenmetrics-cli \
     --no-default-features --features 'sweep,png,gpu,gpu-cuda,gpu-cpu'
-CUDARC_CUDA_VERSION=12000 cargo build --release -p zen-sweep-worker \
+CUDARC_CUDA_VERSION=12000 cargo build --release -p zenfleet-sweep \
     --features salad-sweep
 
 # 2. Stage binaries for docker COPY:
-cp target/release/zen-metrics ./zen-metrics
-cp target/release/zen-sweep-worker ./zen-sweep-worker
+cp target/release/zenmetrics ./zenmetrics
+cp target/release/zenfleet-sweep ./zenfleet-sweep
 
 # 3. Build + push the image:
 docker build -f Dockerfile.sweep.salad.v1 \
-    -t ghcr.io/imazen/zen-metrics-sweep-salad:v4-kernel-cache .
-docker push ghcr.io/imazen/zen-metrics-sweep-salad:v4-kernel-cache
+    -t ghcr.io/imazen/zenmetrics-sweep-salad:v4-kernel-cache .
+docker push ghcr.io/imazen/zenmetrics-sweep-salad:v4-kernel-cache
 
 # 4. Local warmup smoke (no Salad needed):
 mkdir -p /tmp/wcwd && cp scripts/sweep/cubecl.toml /tmp/wcwd/
 cd /tmp/wcwd
 PATH=$(pwd)/../zenmetrics/target/release:$PATH \
-WARMUP_DIR=crates/zen-metrics-cli/tests/fixtures \
+WARMUP_DIR=crates/zenmetrics-cli/tests/fixtures \
 CUBECL_CACHE_DIR=/var/cache/cubecl \
 bash scripts/sweep/warmup_kernels.sh
 ```

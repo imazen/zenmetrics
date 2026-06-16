@@ -89,7 +89,7 @@ SPEARMAN_PASS = 0.85
 RANK_FLIP_PASS = 0.10  # max disagreement rate vs ssim2
 
 # Binary path.
-ZEN_METRICS = HARNESS_DIR / "zen-metrics"
+ZEN_METRICS = HARNESS_DIR / "zenmetrics"
 
 
 def log(msg: str) -> None:
@@ -126,7 +126,7 @@ def downsample_lanczos(src: Path, dst: Path, target_dim: int) -> tuple[int, int]
 
 
 def encode_jpeg_via_zenmetrics(ref: Path, q: int, out: Path) -> None:
-    """Use zen-metrics 'sweep' to re-encode one image at one q.
+    """Use zenmetrics 'sweep' to re-encode one image at one q.
 
     Why not just PIL: zenjpeg's encoding path is what production uses,
     and using `PIL.Image.save(format='JPEG')` would test a different
@@ -237,7 +237,7 @@ def score_pairs(
     metric: str,
     extra_args: list[str] = None,
 ) -> Path | None:
-    """Run `zen-metrics score-pairs --metric <metric>` over the pairs.
+    """Run `zenmetrics score-pairs --metric <metric>` over the pairs.
 
     Each entry in `pairs` is `(ref_path, dist_path, ident_str)` where
     ident_str is a short tag we use later to recover the (image,
@@ -376,7 +376,7 @@ def main() -> None:
                 else:
                     im = Image.open(ref_out); new_w, new_h = im.size
                 for q in Q_STEPS:
-                    # dist_path is the decoded distorted PNG (from zen-metrics sweep).
+                    # dist_path is the decoded distorted PNG (from zenmetrics sweep).
                     dist_stem = dist_dir / f"{src.stem}__{d}__q{q}"
                     existing = list(dist_dir.glob(f"{src.stem}__{d}__q{q}.*"))
                     dist_out = existing[0] if existing else None

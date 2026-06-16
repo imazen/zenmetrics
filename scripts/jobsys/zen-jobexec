@@ -1,7 +1,0 @@
-#!/bin/sh
-# ZEN_EXEC shim for the real executor. The worker (`zen-jobworker::exec_command`) spawns a SINGLE
-# program (no args) and pipes the DesiredJob to its stdin, so a "binary + subcommand" like
-# `zen-metrics jobexec` can't be named directly in ZEN_EXEC. This shim bridges that: it forwards
-# stdin/stdout untouched to `zen-metrics jobexec`. Bake it into the real-executor image and set
-# ZEN_EXEC=/usr/local/bin/zen-jobexec.  `zen-metrics` must be on PATH (it is in the baked image).
-exec zen-metrics jobexec "$@"

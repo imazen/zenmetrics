@@ -22,7 +22,7 @@ held two classes of stale entries:
 This script:
 
   - Creates a fresh test cache dir.
-  - Runs `zen-metrics --use-orchestrator score --bench-on-start=yes`
+  - Runs `zenmetrics --use-orchestrator score --bench-on-start=yes`
     once on a 256² pair so the cache is fully primed for cvvdp.
   - Pre-poisons the cache file in place with the exact fossilized
     pattern from the investigation.
@@ -159,8 +159,8 @@ def poison_cache(cache_path: Path) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary",
-                        default="target/release/zen-metrics",
-                        help="Path to zen-metrics release binary")
+                        default="target/release/zenmetrics",
+                        help="Path to zenmetrics release binary")
     parser.add_argument("--work-dir", default=None,
                         help="Working directory (default: mkdtemp)")
     args = parser.parse_args()

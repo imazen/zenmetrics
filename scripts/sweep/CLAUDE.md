@@ -1,11 +1,11 @@
 # zenmetrics sweep operations
 
-Captures operational lessons for running zen-metrics sweeps on vast.ai
+Captures operational lessons for running zenmetrics sweeps on vast.ai
 fleets. See parent README.md for codebase orientation.
 
 **History note (2026-05-06):** these scripts originated in
 `turbo-metrics/scripts/sweep/`. They migrated here when the
-`zen-metrics-cli` and `*-gpu` crates were extracted from
+`zenmetrics-cli` and `*-gpu` crates were extracted from
 turbo-metrics into the standalone zenmetrics workspace
 (see zenmetrics commit `4a729b6`). The turbo-metrics fork retains
 only the CUDA-specific crates and upstream-tracking pieces. All
@@ -13,13 +13,13 @@ new sweep work happens in this repo.
 
 ## Key files (current — 2026-05-19)
 
-The **unified Rust worker** in `crates/vastai-fleet` is the
+The **unified Rust worker** in `crates/zenfleet-vastai` is the
 production entrypoint. Sweep operations are:
 
-- `onstart_unified.sh` — execs `zen-sweep-worker worker --backend
+- `onstart_unified.sh` — execs `zenfleet-sweep worker --backend
   vastai --mode omni` (the default mode). Replaces the bash
   `onstart_omni_backfill.sh` chain. Used with `Dockerfile.sweep.v26`.
-- `onstart_feature_backfill.sh` — execs `zen-sweep-worker worker
+- `onstart_feature_backfill.sh` — execs `zenfleet-sweep worker
   --backend vastai --mode feature-backfill`. Reads existing omni sidecars + cached
   encoded variants from R2, writes zensim 300-feature parquets
   without re-encoding. Used with `Dockerfile.sweep.v26`.
@@ -55,7 +55,7 @@ captured log to R2 under
 and (b) issues a `vastai destroy instance ${CONTAINER_ID}` (or the
 equivalent REST DELETE) so the box stops billing the moment its
 work fails. Without this, a worker that exits in 6-80 s leaves the
-vast.ai instance running at \$/hr until an external `vastai-fleet
+vast.ai instance running at \$/hr until an external `zenfleet-vastai
 destroy` cleans it up — which is exactly the failure mode the
 2026-05-18 EXP-LARGER-LARGE cascade hit four times.
 
@@ -65,7 +65,7 @@ Two equivalent ways to satisfy the contract:
    `ENTRYPOINT` already chains through
    `/usr/local/bin/run_with_error_trap.sh`, which installs the EXIT
    trap, captures stderr, and shells out to the baked
-   `/usr/local/bin/vastai-fleet self-destroy` on rc≠0. New onstarts
+   `/usr/local/bin/zenfleet-vastai self-destroy` on rc≠0. New onstarts
    running in v26 inherit this automatically — no changes needed in
    the script itself.
 
@@ -91,12 +91,12 @@ the onstart with rc=0 and the trap does nothing.
 2. `--onstart-cmd` runs `onstart_v3.sh` which:
    - Imports env from `/proc/1/environ` (filters R2_*, SWEEP_*, WORKER_*, STATS_*).
    - Downloads static `s5cmd` + `jq` to `/usr/local/bin`.
-   - Either downloads a `zen-metrics-vX.Y.Z.tar.gz` release tarball OR
+   - Either downloads a `zenmetrics-vX.Y.Z.tar.gz` release tarball OR
      pulls a binary blob via `SWEEP_BIN_OVERRIDE` (s3://path).
    - Writes a heartbeat to `s3://coefficient/heartbeats/<sweep>/<worker>.json`.
    - Reads `chunks.jsonl` from `s3://coefficient/jobs/<sweep>/`.
    - Loops: claim a chunk (atomic via `mc cp` of a `.claim` file),
-     download source images, run `zen-metrics --batch`, upload TSV +
+     download source images, run `zenmetrics --batch`, upload TSV +
      features parquet.
 
 ## CRITICAL: cgroup-aware parallelism (2026-05-04 fix)

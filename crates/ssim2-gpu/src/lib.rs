@@ -205,7 +205,7 @@ mod blur_mode {
 
 /// Stable column-name identifier for the IIR (default) blur path.
 ///
-/// Used by sweep tooling (`zen-metrics-cli` and downstream pipelines)
+/// Used by sweep tooling (`zenmetrics-cli` and downstream pipelines)
 /// to land ssim2 scores in parquet sidecars without colliding with
 /// other ssim2 variants — when the `fir` feature is enabled the FIR
 /// opt-in path uses [`SSIM2_FIR_COLUMN_NAME`] to keep its (distinct)

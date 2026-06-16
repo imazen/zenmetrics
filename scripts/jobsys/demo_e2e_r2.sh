@@ -13,12 +13,12 @@
 # deleted at the end (pass KEEP=1 to retain).
 #
 # Requires: R2_* env (R2_ACCOUNT_ID/R2_BUCKET/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY), aws (v1.44+
-# supports put-object --if-none-match), s5cmd, and built zen-jobworker + zen-jobctl.
+# supports put-object --if-none-match), s5cmd, and built zenfleet-worker + zenfleet-ctl.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WK="$ROOT/target/debug/zen-jobworker"
-JC="$ROOT/target/debug/zen-jobctl"
+WK="$ROOT/target/debug/zenfleet-worker"
+JC="$ROOT/target/debug/zenfleet-ctl"
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 BUCKET="$R2_BUCKET"
 export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"

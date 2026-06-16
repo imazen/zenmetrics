@@ -290,7 +290,7 @@ pub const PYRAMID_MIN_DIM: u32 = 4;
 
 /// Stable column-name identifier for this implementation snapshot.
 ///
-/// Used by sweep tooling (`zen-metrics-cli` and downstream
+/// Used by sweep tooling (`zenmetrics-cli` and downstream
 /// pipelines) to land cvvdp scores in parquet sidecars without
 /// colliding with other cvvdp variants such as the canonical
 /// pycvvdp reference (`cvvdp_pycvvdp_v054`) or a future alternative

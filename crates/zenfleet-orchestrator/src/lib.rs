@@ -1,7 +1,7 @@
 //! # zenfleet-orchestrator
 //!
 //! Provider-generic fleet orchestration logic, hoisted out of the
-//! Salad-specific launcher in `zen-cloud-salad/src/bin/zen-salad-sweep.rs`.
+//! Salad-specific launcher in `zenfleet-salad/src/bin/zenfleet-salad-sweep.rs`.
 //!
 //! This crate owns the **launcher-side** decisions that DO NOT depend on
 //! which compute provider (Salad / Vast / RunPod / local) is hosting the
@@ -12,7 +12,7 @@
 //!   idempotency (sidecar HEAD pre-check) ensures a re-dispatched chunk
 //!   that is actually in-flight on a slow worker never double-writes —
 //!   the second worker exits early. See `inline.rs::process_chunk_inline`
-//!   in `zen-cloud-vastai` for the worker side.
+//!   in `zenfleet-vastai` for the worker side.
 //!
 //! * **Replicas overshoot** — when the user requests N replicas and the
 //!   provider has a quota, provision `min(quota, ceil(N × overshoot))`
@@ -38,7 +38,7 @@
 //!   `asks`, etc.).
 //! * Read or write R2 directly — the calling launcher does that and
 //!   passes us the resulting state.
-//! * Run the worker side. Worker code lives in `zen-cloud-vastai/src/worker/`.
+//! * Run the worker side. Worker code lives in `zenfleet-vastai/src/worker/`.
 //!
 //! The Salad bin retains responsibility for provisioning, credential
 //! minting, R2 polling, and teardown; it calls into this crate for the

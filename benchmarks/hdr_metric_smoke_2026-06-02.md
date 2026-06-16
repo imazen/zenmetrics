@@ -1,12 +1,12 @@
-# HDR-metric smoke + sanity — zen-metrics `score --hdr` (chunk 2)
+# HDR-metric smoke + sanity — zenmetrics `score --hdr` (chunk 2)
 
 **Date:** 2026-06-02 · **host:** lilith · **rustc:** 1.96.0 · **branch:** `feat/hdr-metrics`
 **Harness:** `scripts/hdr/hdr_metric_smoke.sh` (self-checking, 16 assertions, all PASS)
-**Binary:** `cargo build --release -p zen-metrics-cli --features hdr` (CPU metrics, no GPU)
+**Binary:** `cargo build --release -p zenmetrics-cli --features hdr` (CPU metrics, no GPU)
 
 ## What was wired (chunk 2)
 
-`zen-metrics score --hdr` now decodes HDR sources to absolute luminance (cd/m²)
+`zenmetrics score --hdr` now decodes HDR sources to absolute luminance (cd/m²)
 and preps per metric before the existing CPU kernels:
 
 - **SDR metrics** (ssim2 / dssim / butteraugli / zensim): PU21-encode (banding_glare,
@@ -14,7 +14,7 @@ and preps per metric before the existing CPU kernels:
   u8 contract; faithful f32 input is a later chunk).
 - **cvvdp** (GPU-only in the CLI score path): peak-normalize → sRGB-encode → sRGB8.
 
-New surface: `crates/zen-metrics-cli/src/hdr.rs` (decode + prep), the `hdr` build
+New surface: `crates/zenmetrics-cli/src/hdr.rs` (decode + prep), the `hdr` build
 feature, and `ScoreArgs::--hdr`. Decode mirrors `zenhdr-corpus`; PU21/transfer
 mirror `zensim::{pu21,transfer}` / `zenmetrics_api::hdr`.
 
@@ -60,7 +60,7 @@ its own EXR confirms the CLI's HEIC path reproduces them **bit-for-bit**:
 
 ### Fleet worker: `batch --hdr` (chunk 3)
 
-`zen-metrics batch --hdr` is the fleet-scale primitive — a chunk TSV of
+`zenmetrics batch --hdr` is the fleet-scale primitive — a chunk TSV of
 `(ref_path, dist_path, …)` rows, each decoded via the same HDR path and scored,
 columns appended. A launcher hands each fleet box a chunk + `--hdr`; mixed input
 types are fine in one chunk. The u8 PU path reuses the orchestrator's existing

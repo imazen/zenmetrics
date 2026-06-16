@@ -278,7 +278,7 @@ The case against porting `iw_pool` algorithms into iwssim-gpu:
 The only thing that resembles fusion already exists: the parquet
 sidecar layer. `iwssim-gpu::IWSSIM_COLUMN_NAME = "iwssim_imazen_v<ver>"`
 (lib.rs:174-184) and zensim-gpu's `WithIw`-regime feature columns
-both land in the same parquet via `zen-metrics-cli score-pairs`.
+both land in the same parquet via `zenmetrics-cli score-pairs`.
 Consumers join on `(image_path, codec, q, knob_tuple_json)` to get
 both columns. No code-level fusion needed.
 
@@ -303,7 +303,7 @@ infrastructure / quality-of-life, not IW math):
    `cvvdp_gpu::CVVDP_COLUMN_NAME` env-override pattern is already
    ported (`iwssim-gpu/src/lib.rs:174-184`). Verify the production
    `score-pairs` path uses it — quick grep on
-   `crates/zen-metrics-cli/`.
+   `crates/zenmetrics-cli/`.
 3. **Strip-mode VRAM budgeting**. zensim-gpu has the same
    `MemoryMode::{Full, Strip, Auto, Tile}` enum. iwssim-gpu's
    `STRIP_PROCESSING.md` notes the cached-reference fast path
@@ -383,7 +383,7 @@ Skeleton only.
 4. Merge parity tests: CPU-parity gate + Python-piq gate in one CI.
 5. Pick a release cadence — fusion forces co-release of every
    IW-SSIM numerics change and every zensim feature-pipeline change.
-6. Update `zen-metrics-cli` `score-pairs --metric iwssim` to dispatch
+6. Update `zenmetrics-cli` `score-pairs --metric iwssim` to dispatch
    to the fused crate; deprecate standalone iwssim-gpu over one release.
 
 Effort: 2-4 weeks including sidecar schema migration + downstream

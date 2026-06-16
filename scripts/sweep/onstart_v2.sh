@@ -6,7 +6,7 @@
 # and historical references in CHANGELOG.md / docs/. Slated for
 # deletion per task #69 (P5d).
 #
-# v2 onstart for vast.ai zen-metrics sweep workers.
+# v2 onstart for vast.ai zenmetrics sweep workers.
 #
 # Improvements over vastai_zen_metrics_sweep.sh:
 #   1. Pulls the pre-built x86_64 binary from a tagged GitHub release
@@ -22,7 +22,7 @@
 # Required environment:
 #   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
 #   SWEEP_RUN_ID                e.g. sweep-v04-2026-05-04
-#   SWEEP_BIN_VERSION           e.g. zen-metrics-v0.3.0  (defaults below)
+#   SWEEP_BIN_VERSION           e.g. zenmetrics-v0.3.0  (defaults below)
 # Optional:
 #   WORKER_ID                   default: hostname
 #   WORKER_PARALLEL             default: max(2, nproc/4)
@@ -38,7 +38,7 @@
 
 set -euo pipefail
 
-SWEEP_BIN_VERSION="${SWEEP_BIN_VERSION:-zen-metrics-v0.3.0}"
+SWEEP_BIN_VERSION="${SWEEP_BIN_VERSION:-zenmetrics-v0.3.0}"
 SWEEP_RUN_ID="${SWEEP_RUN_ID:-sweep-2026-05-04}"
 WORKER_ID="${WORKER_ID:-$(hostname)-$$}"
 WORKDIR="${WORKDIR:-/workspace/sweep}"
@@ -90,19 +90,19 @@ export AWS_DEFAULT_REGION=auto
 S3() { aws --endpoint-url "$R2_ENDPOINT" "$@"; }
 
 # ── Step 2: pre-built binary ────────────────────────────────────────
-BIN="$WORKDIR/zen-metrics"
+BIN="$WORKDIR/zenmetrics"
 if [[ ! -x "$BIN" ]]; then
     arch=$(uname -m)
     case "$arch" in
-        x86_64)  pkg="zen-metrics-${SWEEP_BIN_VERSION#zen-metrics-v}-linux-x86_64.tar.gz" ;;
-        aarch64) pkg="zen-metrics-${SWEEP_BIN_VERSION#zen-metrics-v}-linux-aarch64.tar.gz" ;;
+        x86_64)  pkg="zenmetrics-${SWEEP_BIN_VERSION#zenmetrics-v}-linux-x86_64.tar.gz" ;;
+        aarch64) pkg="zenmetrics-${SWEEP_BIN_VERSION#zenmetrics-v}-linux-aarch64.tar.gz" ;;
         *) log "FATAL: unsupported arch $arch"; final_state failed ;;
     esac
     URL="${SWEEP_BIN_OVERRIDE:-https://github.com/imazen/turbo-metrics/releases/download/${SWEEP_BIN_VERSION}/${pkg}}"
     log "downloading $URL"
     curl -fsSL "$URL" -o /tmp/zm.tgz
     tar xzf /tmp/zm.tgz -C "$WORKDIR" --strip-components=1 \
-        "$(tar tzf /tmp/zm.tgz | grep -E '/zen-metrics$' | head -1)"
+        "$(tar tzf /tmp/zm.tgz | grep -E '/zenmetrics$' | head -1)"
     chmod +x "$BIN"
 fi
 "$BIN" --version

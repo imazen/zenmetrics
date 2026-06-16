@@ -112,7 +112,7 @@ bindings into pages that get deallocated/relocated.
 
 ### 1.4 Why the 2026-05-22 `memory_cleanup` attempt panicked
 
-Documented at `crates/zen-metrics-cli/src/metrics/cache.rs:225-235` and
+Documented at `crates/zenmetrics-cli/src/metrics/cache.rs:225-235` and
 `:526-537`: an earlier orchestrator-cache version called
 `cubecl_runtime_memory_cleanup()` and it panicked at
 `cubecl-cuda/src/compute/stream.rs:101` ("Memory page 0 doesn't exist").
@@ -306,7 +306,7 @@ OOM'd pool stays full.
 There is no "worker went idle" hook in `gpu_worker_main` — the loop
 blocks on `rx.recv()` (pool.rs:761). At chunk-end the pool is dropped
 (its lane senders drop → workers exit). The legacy CLI path
-(`zen-metrics-cli/src/metrics/cache.rs`) has `cleanup_all`
+(`zenmetrics-cli/src/metrics/cache.rs`) has `cleanup_all`
 (:238-246) called between source images when
 `SWEEP_CLEANUP_BETWEEN_SOURCES=1`, but it deliberately does **not** call
 `memory_cleanup` (the 2026-05-22 note). So even the legacy cleanup leaves

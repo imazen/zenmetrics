@@ -29,9 +29,9 @@ the imazen workspace:
 2. **`zenmetrics/scripts/sweep/`** — 51 files spanning `onstart_*.sh` ×8
    variants, per-metric `*_chunk_worker.sh` ×4, generic `launch_backfill.sh`
    (382 LOC) and a Python `sweep_janitor.py` (178 LOC), plus the
-   `crates/vastai-fleet/` Rust binary (4.8 KLOC across 15 modules), plus a
+   `crates/zenfleet-vastai/` Rust binary (4.8 KLOC across 15 modules), plus a
    collapsed canonical `Dockerfile.sweep.v26` (300 LOC). Already partially
-   unified by the `vastai-fleet` binary's `worker` subcommand (omni and
+   unified by the `zenfleet-vastai` binary's `worker` subcommand (omni and
    feature-backfill modes).
 3. **`coefficient/`** — its own pattern: `src/bin/vastai_worker.rs` (470 LOC),
    `src/bin/vastai_dispatch.rs` (312 LOC), `src/bin/cloud_worker.rs`
@@ -81,7 +81,7 @@ The current redundancy costs are:
 - **Coefficient migration debt:** 6.5 KLOC of cloud orchestration in
   `src/cloud/`, `src/bin/vastai_*`, `src/bin/cloud_worker.rs`, plus a
   competing `Dockerfile` + `Dockerfile.gpu` chain. None of this shares
-  code with the zenmetrics `vastai-fleet` despite solving the same
+  code with the zenmetrics `zenfleet-vastai` despite solving the same
   problem.
 - **Drift risk:** 3 stacks means 3 versions of the tag-then-manage rule
   enforcement, 3 image-rebuild flows, 3 onstart contracts. The 2026-05-22
@@ -94,7 +94,7 @@ The current redundancy costs are:
 | Repo / area | Sweep infra LOC | Worker LOC | Janitor | Launcher | Docker | Active sweeps 2026 | Dep direction |
 |---|---|---|---|---|---|---|---|
 | `jxl-encoder/scripts/zenjxl-tuning-sweep/` | 1,608 (per-sweep trio + worker.sh + onstart + Dockerfile.v2) | 2,716 (`zenjxl-tuning-runner` crate, 8 modules) | per-sweep bash, 214 LOC each | per-sweep bash, ~220 LOC each | `Dockerfile.zenjxl-tuning-sweep.v2` 141 LOC | W44-215..W44-229, W44-PHASE4-S1, W44-PHASE4-S2 (6+ sweeps in 2 weeks) | worker → `jxl-encoder` lib via path dep |
-| `zenmetrics/scripts/sweep/` | 51 files: 8× onstart, 4× chunk-worker shells, generic `launch_backfill.sh`, `sweep_janitor.py`, `destroy_all.sh`, per-metric `*_backfill/` dirs | 4,781 (`vastai-fleet` binary, 15 modules, with `worker` subcommand handling omni / feature-backfill / source-features modes) | `sweep_janitor.py` 178 LOC + `fleet_status.sh` | `launch_backfill.sh` 382 LOC + `launch_single_instance.sh` | `Dockerfile.sweep.v26` 300 LOC (collapsed single-file, layer-aware) | omni / feature-backfill / source-features (currently running cvvdp-fork Phase 8 + zensim-fork sweeps) | `vastai-fleet` → `zen-metrics-cli` (sibling crate), `zen-metrics-cli` → all codec crates |
+| `zenmetrics/scripts/sweep/` | 51 files: 8× onstart, 4× chunk-worker shells, generic `launch_backfill.sh`, `sweep_janitor.py`, `destroy_all.sh`, per-metric `*_backfill/` dirs | 4,781 (`zenfleet-vastai` binary, 15 modules, with `worker` subcommand handling omni / feature-backfill / source-features modes) | `sweep_janitor.py` 178 LOC + `fleet_status.sh` | `launch_backfill.sh` 382 LOC + `launch_single_instance.sh` | `Dockerfile.sweep.v26` 300 LOC (collapsed single-file, layer-aware) | omni / feature-backfill / source-features (currently running cvvdp-fork Phase 8 + zensim-fork sweeps) | `zenfleet-vastai` → `zenmetrics-cli` (sibling crate), `zenmetrics-cli` → all codec crates |
 | `coefficient/src/bin/` + `coefficient/src/cloud/` | ~6,500 (`vastai_worker.rs`, `vastai_dispatch.rs`, `cloud_worker.rs`, `do_worker.rs`, `cloud/{batch,vastai,do_droplet,jobspec,mock_batch,quota,config}.rs`) | `cloud_worker.rs` 879 + `worker/mod.rs` 1,706 | implicit via `BatchApi` trait (`cloud/batch.rs`) | `vastai_dispatch.rs` 312 LOC + `vastai_create_workergroup.sh` 114 LOC | `Dockerfile` + `Dockerfile.gpu` (separate chain) | JobSpec-backed (`RescoreTsv`, `SweepCodec`, `TrainPicker`); not currently in active use vs zenmetrics fleet | `coefficient_*` bins → `coefficient` lib (self-contained) |
 | `zenavif/scripts/` | 70 (`cron_lhs_sweep.sh`, single-host cron only) | 0 dedicated; uses `examples/predictor_sweep.rs` direct | 0 | cron | `Dockerfile.references` (NOT a sweep image) | nightly LHS sweep (rav1e tuples) | self-contained example, no fleet |
 | `zenjpeg/scripts/` | 0 fleet | 0 | 0 | 0 | 0 | none in 2026 | N/A |
@@ -153,7 +153,7 @@ The variable surface across sweeps is narrower than the boilerplate suggests:
   (postcard-serialized in the `params_blob` column). Other codecs need
   their own opaque blob.
 - **Which metric set is relevant.** All current sweeps use the same
-  butteraugli + ssim2 + cvvdp + zensim set via `zen-metrics-cli`. Future
+  butteraugli + ssim2 + cvvdp + zensim set via `zenmetrics-cli`. Future
   iwssim / DSSIM / PSNR sweeps fit the same interface.
 - **What corpus access pattern.** Most sweeps fetch a single source image
   per cell from `s3://zen-corpus/<image>.png`. Picker-training sweeps
@@ -169,7 +169,7 @@ naturally into a single Rust crate with cargo features per codec.
 
 ### Where today's stacks already converged
 
-The `vastai-fleet` Rust binary in zenmetrics is the closest thing to a
+The `zenfleet-vastai` Rust binary in zenmetrics is the closest thing to a
 unified worker today. It has:
 
 - `Status` subcommand (one-shot report by label prefix)
@@ -197,7 +197,7 @@ These are the gaps this RFC proposes to close.
 ### §3.1 Crate placement: `zenmetrics/crates/vast-worker/`
 
 **Recommended home: a new `vast-worker` crate inside the existing
-`zenmetrics` workspace, alongside `vastai-fleet`.** Justification, weighing
+`zenmetrics` workspace, alongside `zenfleet-vastai`.** Justification, weighing
 the three candidate placements:
 
 - **(a) New repo `imazen/zen-vast-worker`** — clean dependency story
@@ -206,12 +206,12 @@ the three candidate placements:
   codec change doesn't touch sweep infra; CI complexity multiplies
   (worker has to track N codecs' versions); discovery cost for future
   contributors who'll look for vast.ai infra in zenmetrics first.
-- **(b) `zenmetrics/crates/vast-worker/` alongside `vastai-fleet`** —
-  the worker depends on `vastai-fleet` directly (already a Rust binary;
-  share lifecycle subcommands), depends on `zen-metrics-cli` directly
+- **(b) `zenmetrics/crates/vast-worker/` alongside `zenfleet-vastai`** —
+  the worker depends on `zenfleet-vastai` directly (already a Rust binary;
+  share lifecycle subcommands), depends on `zenmetrics-cli` directly
   (already lives in this workspace; share scoring backend), and adds
   codec crates as path-or-git deps gated behind cargo features. The
-  v26 Dockerfile already bakes both `vastai-fleet` and `zen-metrics`
+  v26 Dockerfile already bakes both `zenfleet-vastai` and `zenmetrics`
   binaries; adding `vast-worker` is one more `COPY --chmod=0755` line.
   Operator muscle memory ("the sweep stack lives in zenmetrics") is
   preserved.
@@ -219,7 +219,7 @@ the three candidate placements:
   highest-LOC cloud orchestration stack today, but it's also the most
   divergent (DigitalOcean Droplet path, JobSpec mechanism, BatchApi
   trait). Placing the worker here would require coefficient to absorb
-  the vastai-fleet binary too, which is a much bigger refactor.
+  the zenfleet-vastai binary too, which is a much bigger refactor.
 
 Option (b) is the lowest-friction. The cross-repo dep direction works:
 zenmetrics already imports every codec it scores (it's a metric library
@@ -232,15 +232,15 @@ Concretely:
 ```
 zenmetrics/
   crates/
-    vastai-fleet/       — lifecycle (launch / janitor / status /
+    zenfleet-vastai/       — lifecycle (launch / janitor / status /
                           destroy / watch / self-destroy)
     vast-worker/        — NEW: per-cell encode + score, dispatched
                           via cargo features per codec
-    zen-metrics-cli/    — score backend (already exists)
+    zenmetrics-cli/    — score backend (already exists)
     zenmetrics-api/     — shared types (already exists)
     zenmetrics-corpus/  — corpus access (already exists)
   Cargo.toml            — workspace member registration
-  Dockerfile.sweep.v26  — already bakes vastai-fleet + zen-metrics
+  Dockerfile.sweep.v26  — already bakes zenfleet-vastai + zenmetrics
                           binaries; v27 will also bake vast-worker
 ```
 
@@ -400,23 +400,23 @@ implementation gives:
 - Single-place implementation of the CLAUDE.md §4 artifact-persistence
   mandate (verified at sweep launch, not discovered after $30 burn).
 
-### §3.6 Integration with `vastai-fleet`
+### §3.6 Integration with `zenfleet-vastai`
 
-The `vast-worker` CLI wraps `vastai-fleet` for the lifecycle subcommands
-(`launch`, `janitor`, `watch`, `destroy-all`). `vastai-fleet` already
+The `vast-worker` CLI wraps `zenfleet-vastai` for the lifecycle subcommands
+(`launch`, `janitor`, `watch`, `destroy-all`). `zenfleet-vastai` already
 handles label-scoped destroy and watch; the new code is in `launch`
 (today: bash) and `janitor` (today: bash + python). These move into
-`vastai-fleet` subcommands so `vast-worker` shells to one well-tested
+`zenfleet-vastai` subcommands so `vast-worker` shells to one well-tested
 binary instead of three loosely-coupled scripts.
 
-The worker-side chunk loop stays in `vastai-fleet worker` (already
-exists) — `vast-worker` calls `vastai-fleet worker --codec <X>` inside
+The worker-side chunk loop stays in `zenfleet-vastai worker` (already
+exists) — `vast-worker` calls `zenfleet-vastai worker --codec <X>` inside
 the docker container's `ENTRYPOINT`. The `--codec` flag dispatches to
 the right `SweepTarget` impl at runtime.
 
 This means **`vast-worker` is mostly a build-system + per-sweep
 config-loader + lifecycle wrapper**, NOT a re-implementation of the
-worker loop. The worker loop stays in `vastai-fleet`. The codec-specific
+worker loop. The worker loop stays in `zenfleet-vastai`. The codec-specific
 encode dispatch moves into a new `SweepTarget` trait that's implemented
 inside each codec crate (or inside `vast-worker` as a thin adapter).
 
@@ -427,11 +427,11 @@ inside each codec crate (or inside `vast-worker` as a thin adapter).
 Each phase below has concrete acceptance criteria + an effort estimate.
 No phase ships without the prior phase being green.
 
-### Phase M1: Generalize `vastai-fleet` with `launch` + `janitor` subcommands
+### Phase M1: Generalize `zenfleet-vastai` with `launch` + `janitor` subcommands
 
 **Scope:** Port `zenmetrics/scripts/sweep/launch_backfill.sh` (382 LOC bash)
 and `zenmetrics/scripts/sweep/sweep_janitor.py` (178 LOC python) into new
-`vastai-fleet launch` and `vastai-fleet janitor` subcommands. Bake in the
+`zenfleet-vastai launch` and `zenfleet-vastai janitor` subcommands. Bake in the
 2026-05-22 tag-then-manage rule (require `--label` prefix). Bake in the
 W44-229j idle-detection fix.
 
@@ -440,10 +440,10 @@ W44-229j idle-detection fix.
 work is porting the create-instance loop in `launch_backfill.sh`.
 
 **Acceptance:**
-- `vastai-fleet launch --sweep <id> --boxes N --image <ghcr-tag>` is
+- `zenfleet-vastai launch --sweep <id> --boxes N --image <ghcr-tag>` is
   byte-identical (in resulting vast.ai state) to the bash version on
   a smoke test (1 box, 1 chunk).
-- `vastai-fleet janitor --sweep <id> --once` matches `sweep_janitor.py`
+- `zenfleet-vastai janitor --sweep <id> --once` matches `sweep_janitor.py`
   reaping decisions on a recorded TSV input (10 worker stats files,
   golden destruction set).
 - Rejects launch invocations with missing `--label` prefix (today: bash
@@ -536,7 +536,7 @@ depends on whether Coefficient wants to:
   (1 week). Requires `vast-worker` to expose subcommand-callable Rust API
   (today this RFC assumes CLI invocation; M5a needs a library mode).
 - **(M5b) Migrate Coefficient to JobSpec-via-vast-worker AND port DO
-  Droplet path into `vastai-fleet`** — unifies vastai + DO under one
+  Droplet path into `zenfleet-vastai`** — unifies vastai + DO under one
   fleet binary. Effort: L (2-3 weeks). Bigger refactor but eliminates
   the parallel `do_droplet.rs` (586 LOC) + `do_worker.rs` (589 LOC)
   + `cloud_worker.rs` (879 LOC) stacks.
@@ -582,7 +582,7 @@ These six decisions need user input before implementation starts.
 ### Q1. Crate placement: confirm `zenmetrics/crates/vast-worker/`?
 
 This RFC recommends (b) — `zenmetrics/crates/vast-worker/` alongside
-`vastai-fleet`. Alternative: (a) new repo `imazen/zen-vast-worker`.
+`zenfleet-vastai`. Alternative: (a) new repo `imazen/zen-vast-worker`.
 
 **Need user signal on:** is the discovery cost of "sweep infra lives
 in zenmetrics" preferable to the dependency-cycle cost of "every codec
@@ -636,7 +636,7 @@ the CLAUDE.md "BAKE EVERYTHING" rule for vast.ai) vs daily-batch.
 Per §4 Phase M5:
 - (M5a) Replace Coefficient's vastai path with vast-worker, keep DO
   Droplet path. ~1 week.
-- (M5b) Migrate everything to vast-worker, port DO into vastai-fleet.
+- (M5b) Migrate everything to vast-worker, port DO into zenfleet-vastai.
   ~2-3 weeks.
 - (M5c) Leave Coefficient unchanged; vast-worker is codec sweeps only.
   0.5 day doc note.
@@ -671,11 +671,11 @@ on a fresh sweep) vs default-on.
   per-metric chunk-worker shells, `launch_backfill.sh` (canonical
   launcher today), `sweep_janitor.py` (canonical janitor today),
   `destroy_all.sh`.
-- `zenmetrics/crates/vastai-fleet/` — Rust binary with Status / Destroy
+- `zenmetrics/crates/zenfleet-vastai/` — Rust binary with Status / Destroy
   / Watch / SelfDestroy / Worker subcommands. The skeleton this RFC
   extends.
 - `zenmetrics/Dockerfile.sweep.v26` — collapsed single-file canonical
-  sweep image; layer-aware; bakes `zen-metrics` + `vastai-fleet`
+  sweep image; layer-aware; bakes `zenmetrics` + `zenfleet-vastai`
   binaries.
 - `zenmetrics/scripts/sweep/README.md` — operator guide for the current
   zenmetrics sweep stack; the unified vast-worker docs will subsume it.
@@ -739,7 +739,7 @@ on a fresh sweep) vs default-on.
 - `zenmetrics/scripts/sweep/dispatch.sh` (78 LOC)
 - `zenmetrics/scripts/sweep/destroy_all.sh` (22 LOC)
 - `zenmetrics/Dockerfile.sweep.v26` (300 LOC)
-- `zenmetrics/crates/vastai-fleet/src/` (4,781 LOC across 15 modules)
+- `zenmetrics/crates/zenfleet-vastai/src/` (4,781 LOC across 15 modules)
 - `coefficient/src/bin/vastai_worker.rs` (470 LOC)
 - `coefficient/src/bin/vastai_dispatch.rs` (312 LOC)
 - `coefficient/src/bin/cloud_worker.rs` (879 LOC)

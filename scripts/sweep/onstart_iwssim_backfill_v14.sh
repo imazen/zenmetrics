@@ -5,7 +5,7 @@
 #
 # Key difference from v3 (`onstart_iwssim_backfill.sh`): the docker
 # image already bakes python3 + python3-pyarrow + cuda-nvrtc-12-6 +
-# cuda-cudart-12-6 + s5cmd + jq + zen-metrics. This script does NO
+# cuda-cudart-12-6 + s5cmd + jq + zenmetrics. This script does NO
 # apt installs and NO pip installs — it only fetches the per-sweep
 # scripts (chunks.jsonl + chunk worker) and runs the chunk loop.
 #
@@ -46,13 +46,13 @@ fi
 # EXIT trap: on any non-zero exit, upload the last 200 lines of the
 # captured log to R2 and self-destroy the vast.ai instance via REST
 # DELETE. Without this, failed workers idle at $/hr until an external
-# `vastai-fleet destroy` cleans them up. The trap is installed BEFORE
+# `zenfleet-vastai destroy` cleans them up. The trap is installed BEFORE
 # any other work so even early-exit failures (missing env, image-broken
 # sanity check, R2-download fail) are captured + destroyed.
 #
 # Replicates the contract of scripts/sweep/run_with_error_trap.sh, but
 # inline so this script works on v14 image (which does not bake
-# vastai-fleet + run_with_error_trap.sh; v15 does, and v15 callers
+# zenfleet-vastai + run_with_error_trap.sh; v15 does, and v15 callers
 # should prefer the wrapper). curl IS baked into v14 (cuda-keyring
 # needs it at build time).
 # ─────────────────────────────────────────────────────────────────────
@@ -118,8 +118,8 @@ on_exit() {
             "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
     fi
 
-    # Self-destroy via vast.ai REST DELETE. Matches the call vastai-fleet
-    # self-destroy makes (crates/vastai-fleet/src/main.rs:533).
+    # Self-destroy via vast.ai REST DELETE. Matches the call zenfleet-vastai
+    # self-destroy makes (crates/zenfleet-vastai/src/main.rs:533).
     if [[ -z "${CONTAINER_ID:-}" || -z "${CONTAINER_API_KEY:-}" ]]; then
         printf '[%s] [on_exit] ERROR: CONTAINER_ID or CONTAINER_API_KEY unset — cannot self-destroy. Box will keep running.\n' \
             "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
@@ -188,9 +188,9 @@ fi
 # Tools sanity check: every binary must already exist in the image.
 # If any are missing the image is broken — fail loud, don't try to
 # install at runtime (that's what we're escaping).
-log "checking baked tools: zen-metrics s5cmd jq python3 pyarrow libnvrtc12"
+log "checking baked tools: zenmetrics s5cmd jq python3 pyarrow libnvrtc12"
 MISSING=()
-for tool in zen-metrics s5cmd jq python3; do
+for tool in zenmetrics s5cmd jq python3; do
     command -v "$tool" >/dev/null || MISSING+=("$tool")
 done
 python3 -c "import pyarrow" 2>/dev/null || MISSING+=("python3-pyarrow")
@@ -205,7 +205,7 @@ if (( ${#MISSING[@]} > 0 )); then
     exit 10
 fi
 log "baked tools OK"
-log "zen-metrics version: $(zen-metrics --version 2>&1 | head -1)"
+log "zenmetrics version: $(zenmetrics --version 2>&1 | head -1)"
 
 # R2 credentials wired to s5cmd.
 mkdir -p ~/.aws

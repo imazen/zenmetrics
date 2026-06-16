@@ -19,11 +19,11 @@
 #   3. Syncs the chunk's image_basenames from R2's source_dir_r2.
 #   4. Reads rows[row_range[0]:row_range[1]] from the parquet, groups by
 #      (codec, q, knob_tuple_json), and re-encodes the dist images via
-#      `zen-metrics sweep` once per group.
-#   5. Runs `zen-metrics score-pairs --metric cvvdp` to produce the
+#      `zenmetrics sweep` once per group.
+#   5. Runs `zenmetrics score-pairs --metric cvvdp` to produce the
 #      cvvdp_imazen sidecar, then `pycvvdp-worker score-pairs` for the
 #      cvvdp_pycvvdp_v054 sidecar. Both wrap the host-installed
-#      binaries by default; pass --zen-metrics-image / --pycvvdp-image
+#      binaries by default; pass --zenmetrics-image / --pycvvdp-image
 #      to run them inside docker (matches dual_impl_chunk_docker.sh).
 #   6. Uploads both sidecars to out_sidecar_imazen / out_sidecar_pycvvdp
 #      from the chunk manifest.
@@ -33,7 +33,7 @@
 #   - jq    (chunk JSON parsing)
 #   - python3 with pyarrow (parquet slicing)
 #   - docker (if running scorers in containers)
-#   OR host-installed zen-metrics + pycvvdp venv (if running directly)
+#   OR host-installed zenmetrics + pycvvdp venv (if running directly)
 #
 # Required env vars (R2 credentials, same as onstart_v3.sh):
 #   R2_ACCOUNT_ID  R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY
@@ -42,7 +42,7 @@
 #
 #   echo '<one chunk JSON line>' | \
 #       cvvdp_backfill_chunk_worker.sh \
-#           --zen-metrics-image ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-76854e8 \
+#           --zenmetrics-image ghcr.io/imazen/zenmetrics-sweep:0.6.4-cvvdp-76854e8 \
 #           --pycvvdp-image ghcr.io/imazen/pycvvdp-scorer:0.5.4
 #
 # Image-tag note: the 0.6.4-cvvdp-<short> tag was bumped after the
@@ -84,7 +84,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --chunk-json) CHUNK_JSON="$2"; shift 2;;
         --work-dir) WORK_DIR="$2"; shift 2;;
-        --zen-metrics-image) ZEN_METRICS_IMAGE="$2"; shift 2;;
+        --zenmetrics-image) ZEN_METRICS_IMAGE="$2"; shift 2;;
         --pycvvdp-image) PYCVVDP_IMAGE="$2"; shift 2;;
         --gpu-runtime) GPU_RUNTIME="$2"; shift 2;;
         --keep-work) KEEP_WORK=1; shift;;
@@ -187,7 +187,7 @@ table = pq.read_table(
 rows = table.to_pylist()[row_start:row_end]
 
 # Group rows by (codec, q, knob_tuple_json) — each group becomes one
-# `zen-metrics sweep` invocation. We don't grid-expand q here because
+# `zenmetrics sweep` invocation. We don't grid-expand q here because
 # the parquet's identity tuples are explicit, not Cartesian.
 groups = defaultdict(list)
 for r in rows:
@@ -220,7 +220,7 @@ while IFS='|' read -r gid codec q kj; do
     GROUP_DIST="$GROUP_DIR/dist"
     mkdir -p "$GROUP_SRC" "$GROUP_DIST"
     # Symlink the basenames this group references into a per-group
-    # sources dir. zen-metrics sweep walks the dir, scoring every file.
+    # sources dir. zenmetrics sweep walks the dir, scoring every file.
     awk -F'\t' -v g="$gid" 'NR>1 && $1==g {print $5}' "$WORK_DIR/_groups.tsv" | sort -u | while read -r b; do
         ln -sf "$WORK_DIR/sources/$b" "$GROUP_SRC/$b" 2>/dev/null || true
     done
@@ -238,7 +238,7 @@ while IFS='|' read -r gid codec q kj; do
     )
     if [[ "$kj" != "{}" && -n "$kj" ]]; then
         # knob_tuple_json is a single tuple like `{"effort":1,"subsampling":"422"}`.
-        # zen-metrics sweep --knob-grid expects `{axis: [values]}` cartesian
+        # zenmetrics sweep --knob-grid expects `{axis: [values]}` cartesian
         # form. Wrap each value in a single-element list.
         KNOB_GRID=$(echo "$kj" | jq -c 'with_entries(.value |= [.])')
         SWEEP_ARGS+=(--knob-grid "$KNOB_GRID")
@@ -247,26 +247,26 @@ while IFS='|' read -r gid codec q kj; do
     # Run sweep with explicit exit-code capture. Set -e + the sed
     # pipe was masking sweep failures — the prefixed stderr lines
     # went to the log file fine, but a non-zero exit from the
-    # docker/zen-metrics run side of the pipe killed the script
+    # docker/zenmetrics run side of the pipe killed the script
     # before the sed could finish writing. Wrap in 'set +e' around
     # the call so we keep both the sweep stderr AND the exit code.
     set +e
     if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
         # --entrypoint override: the production image's ENTRYPOINT is
-        # /usr/local/bin/zen-metrics-worker (the chunk-claim worker
+        # /usr/local/bin/zenmetrics-worker (the chunk-claim worker
         # that consumes R2 env vars). For per-group sweeps we drive
-        # the underlying `zen-metrics` binary directly. Matches the
+        # the underlying `zenmetrics` binary directly. Matches the
         # pattern in dual_impl_chunk_docker.sh added at tick 340 after
         # the agent's smoke retry surfaced this trap.
         docker run --rm $DOCKER_GPUS \
-            --entrypoint /usr/local/bin/zen-metrics \
+            --entrypoint /usr/local/bin/zenmetrics \
             -v "$WORK_DIR":"$WORK_DIR":rw \
             -w "$GROUP_DIR" \
             "$ZEN_METRICS_IMAGE" \
             "${SWEEP_ARGS[@]}" > "$GROUP_DIR/sweep.stderr.log" 2>&1
         sweep_rc=$?
     else
-        zen-metrics "${SWEEP_ARGS[@]}" > "$GROUP_DIR/sweep.stderr.log" 2>&1
+        zenmetrics "${SWEEP_ARGS[@]}" > "$GROUP_DIR/sweep.stderr.log" 2>&1
         sweep_rc=$?
     fi
     set -e
@@ -298,7 +298,7 @@ if [[ "$SKIP_IMAZEN" != "1" ]]; then
     echo "[chunk-worker $CHUNK_ID] step 5a/6: score-pairs cvvdp (imazen)" >&2
     if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
         docker run --rm $DOCKER_GPUS \
-            --entrypoint /usr/local/bin/zen-metrics \
+            --entrypoint /usr/local/bin/zenmetrics \
             -v "$WORK_DIR":"$WORK_DIR":rw \
             -w "$WORK_DIR" \
             "$ZEN_METRICS_IMAGE" \
@@ -308,7 +308,7 @@ if [[ "$SKIP_IMAZEN" != "1" ]]; then
                 --out-parquet "$SIDECAR_IMAZEN" \
                 --gpu-runtime "$GPU_RUNTIME" 2>&1 | sed 's/^/  [imazen] /' >&2
     else
-        zen-metrics score-pairs \
+        zenmetrics score-pairs \
             --metric cvvdp \
             --pairs-tsv "$WORK_DIR/pairs.tsv" \
             --out-parquet "$SIDECAR_IMAZEN" \

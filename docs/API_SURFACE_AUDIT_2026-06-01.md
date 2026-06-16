@@ -20,16 +20,16 @@ Block storage, not committed (per-crate dumps are 4–2525 lines each).
 | zensim-gpu | 980 | internal | zenmetrics-api |
 | dssim-gpu | 750 | internal | zenmetrics-api |
 | cvvdp | 586 | internal | cvvdp-conformance, cvvdp-gpu, cpu-profile |
-| zenmetrics-api | 328 | internal | zen-metrics-cli, zenmetrics-orchestrator |
+| zenmetrics-api | 328 | internal | zenmetrics-cli, zenmetrics-orchestrator |
 | zenstats | 284 | **publishable** | (none in-workspace — external consumer) |
 | iwssim | 99 | internal | iwssim-gpu, cpu-profile |
-| zen-job-core | 1460 | **publishable** | zen-jobctl/dash/worker, zen-ledger |
-| zen-jobdash | 866 | **publishable** | (none — LEAF) |
-| zenfleet-orchestrator | 457 | internal | zen-cloud-salad, zencloud-hetzner |
-| zen-cloud-salad | 481 | internal | zencloud-hetzner |
-| zencloud-hetzner | 376 | internal | (none — LEAF) |
-| zen-cloud-core | 329 | internal | 6 cloud crates |
-| zenmetrics-orchestrator | 299 | internal | zen-metrics-cli |
+| zenfleet-core | 1460 | **publishable** | zenfleet-ctl/dash/worker, zenfleet-ledger |
+| zenfleet-dash | 866 | **publishable** | (none — LEAF) |
+| zenfleet-orchestrator | 457 | internal | zenfleet-salad, zenfleet-hetzner |
+| zenfleet-salad | 481 | internal | zenfleet-hetzner |
+| zenfleet-hetzner | 376 | internal | (none — LEAF) |
+| zenfleet-cloud | 329 | internal | 6 cloud crates |
+| zenmetrics-orchestrator | 299 | internal | zenmetrics-cli |
 | (others) | <250 | mixed | — |
 
 The 6 metric `-gpu` crates total ~8,500 pub items; their sole product consumer
@@ -48,10 +48,10 @@ can reach them). Force-warn `unreachable_pub` flags exactly these:
   mode_b_strip_h_at_level}, `scratch.rs` {new_strip, new, ensure_band_ws,
   ensure_strip_band_ws}, `pyramid.rs` {WeberPyramid}, `diffmap.rs` {new}
 - **zenmetrics-orchestrator (9):** `bench.rs:310`, `lib.rs` ×8 (struct fields)
-- **zen-metrics-cli (4):** `metrics/{butteraugli,dssim,ssim2,zensim}.rs` top-level item
+- **zenmetrics-cli (4):** `metrics/{butteraugli,dssim,ssim2,zensim}.rs` top-level item
 - **iwssim (2):** `eig.rs` {lambdas, c_u_inv_slice} (eig is a private `mod`)
 
-zenstats, zen-job-core, and all 6 -gpu crates: **0** unreachable_pub — their
+zenstats, zenfleet-core, and all 6 -gpu crates: **0** unreachable_pub — their
 surface is all *reachable* items (the -gpu over-exposure is Tier 1, not this).
 
 ## Tier 1 — reachable-but-path-unused `pub mod` → `pub(crate) mod` (keep re-exports)
@@ -91,9 +91,9 @@ Mechanism options for butteraugli/ssim2 kernels:
 
 ## Publishable-crate caveat
 
-zenstats (0.1.0, external consumer), zen-job-core (1460 items), zen-jobdash,
-zen-ledger, zen-jobctl are `publish`-able. zenstats is already minimal
-(`unreachable_pub` = 0). zen-job-core's 1460-item surface is the largest
+zenstats (0.1.0, external consumer), zenfleet-core (1460 items), zenfleet-dash,
+zenfleet-ledger, zenfleet-ctl are `publish`-able. zenstats is already minimal
+(`unreachable_pub` = 0). zenfleet-core's 1460-item surface is the largest
 *publishable* over-exposure and worth a dedicated pass (separate from the
 metric-crate work).
 
@@ -139,7 +139,7 @@ supported surface.
 | `zensim_gpu::kernels` | cross-crate | `cvvdp-gpu/src/kernels/color.rs` shares the scalar color reference |
 | `zensim_gpu::STRIP_ALIGN` | own test (re-export) | `zensim-gpu/tests/memory_mode.rs` asserts `h_body` is a multiple of it (added `#[doc(hidden)] pub use pipeline::STRIP_ALIGN` so `pipeline` could go `pub(crate)`) |
 | `iwssim_gpu::pipeline` | cross-crate | `zenmetrics-api/tests/dispatch.rs` (umbrella dispatch test) + iwssim-gpu's own `native_rgb_perf_probe` example |
-| `butteraugli_gpu::pipeline` | cross-crate | `zen-metrics-cli/src/orchestrator_runner.rs` |
+| `butteraugli_gpu::pipeline` | cross-crate | `zenmetrics-cli/src/orchestrator_runner.rs` |
 | `butteraugli_gpu::kernels` | own GPU parity examples | `examples/{blur,colors}_parity.rs` — execute kernels via a GPU runtime (built under `--all-targets`); not convertible to CI unit tests without a GPU-availability gate |
 | `ssim2_gpu::kernels` | own GPU parity examples | `examples/{blur,blur_h_pass,srgb,xyb}_parity.rs` — same GPU-runtime reason |
 
@@ -162,7 +162,7 @@ butteraugli/ssim2 `kernels` were left `#[doc(hidden)] pub` rather than
 *execute* GPU kernels and have never run under wgpu/Metal in CI, so
 converting them to CI unit tests would introduce never-validated parity
 tolerances (a real flaky-red-CI risk). `#[doc(hidden)]` removes them from
-the documented API with zero risk. zen-job-core (1460-item publishable
+the documented API with zero risk. zenfleet-core (1460-item publishable
 surface) is a separate future pass.
 
 ## Justification of the remaining public API

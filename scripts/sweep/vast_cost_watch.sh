@@ -96,7 +96,7 @@ except Exception:
         if [[ "$AUTO_DESTROY" == "1" ]]; then
             log "AUTO-DESTROY: triggering destroy on ${IDS}"
             if [[ -n "$LABEL_PREFIX" ]]; then
-                vastai-fleet destroy --label-prefix "$LABEL_PREFIX" 2>&1 | head -5
+                zenfleet-vastai destroy --label-prefix "$LABEL_PREFIX" 2>&1 | head -5
             else
                 echo "$IDS" | tr ',' '\n' | while read -r id; do
                     [[ -n "$id" ]] && (yes y | vastai destroy instance "$id" 2>&1 | head -1)
@@ -113,7 +113,7 @@ except Exception:
         if [[ "$AUTO_DESTROY" == "1" ]]; then
             log "AUTO-DESTROY: low credit safeguard"
             if [[ -n "$LABEL_PREFIX" ]]; then
-                vastai-fleet destroy --label-prefix "$LABEL_PREFIX" 2>&1 | head -5
+                zenfleet-vastai destroy --label-prefix "$LABEL_PREFIX" 2>&1 | head -5
             fi
             exit 3
         fi

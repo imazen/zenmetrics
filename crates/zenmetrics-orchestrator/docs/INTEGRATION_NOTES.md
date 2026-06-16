@@ -11,7 +11,7 @@ for the commits that closed each gap.
 
 ## What landed in Phase 7
 
-- **`zen-metrics-cli` integration**: opt-in via `--use-orchestrator` /
+- **`zenmetrics-cli` integration**: opt-in via `--use-orchestrator` /
   `ZENMETRICS_USE_ORCHESTRATOR=1`. Single-shot `score` routes through
   `Orchestrator::run_single`; `batch` / `compare` / `sweep` warm the
   capability cache + print the active machine profile to stderr.
@@ -24,7 +24,7 @@ for the commits that closed each gap.
 - **`crates/zenmetrics-orchestrator/README.md`** + migration guide +
   top-level README section + CHANGELOG entry positioning the
   orchestrator as the recommended entry point.
-- **Integration tests** in `crates/zen-metrics-cli/tests/cli.rs`
+- **Integration tests** in `crates/zenmetrics-cli/tests/cli.rs`
   (9 new tests) covering every new global CLI flag.
 
 ## What's deliberately additive (not a replacement)
@@ -167,7 +167,7 @@ swap by chunk.
 | --- | --- |
 | `cargo build --release --features cuda,cpu-all` workspace clean | NOT verifiable in sibling worktree; CI on primary will validate |
 | `cargo test` green | Test code added; CI on primary will validate |
-| `zen-metrics-cli sweep --help` shows new flags | Verified via Dockerfile sanity gate inside the build |
+| `zenmetrics-cli sweep --help` shows new flags | Verified via Dockerfile sanity gate inside the build |
 | Synthetic sweep cell succeeds | Test added (`sweep_with_orchestrator_warmup_emits_tsv`) |
 | Synthetic compare succeeds | Test exercises the path |
 | Sweep image builds clean | Dockerfile written + `bash -n` clean on onstart |
@@ -394,8 +394,8 @@ hard constraint that any FAIL blocks the flip.
 - Quickstart + API reference: `crates/zenmetrics-orchestrator/README.md`
 - Migration code samples: `crates/zenmetrics-orchestrator/docs/MIGRATION_FROM_API.md`
 - CPU backend mapping: `crates/zenmetrics-orchestrator/docs/CPU_BACKENDS.md`
-- CLI integration code: `crates/zen-metrics-cli/src/orchestrator_glue.rs`
-  + `crates/zen-metrics-cli/src/orchestrator_runner.rs`
+- CLI integration code: `crates/zenmetrics-cli/src/orchestrator_glue.rs`
+  + `crates/zenmetrics-cli/src/orchestrator_runner.rs`
 - Sweep image: `Dockerfile.sweep.v27` + `scripts/sweep/onstart_orchestrator.sh`
 - Parity sweep harness + data: `scripts/orchestrator_parity_sweep.py`,
   `benchmarks/orchestrator_parity_2026-05-27.{csv,md}`

@@ -8,10 +8,10 @@
 #   - newest cheap blob: KEPT (fits the cap)
 #   - unreferenced irreplaceable: REFUSED — surfaced, never auto-deleted
 #
-# Also exposes the `zen-jobgc` CLI for real use against a Parquet blob index + ledger (dry-run default).
+# Also exposes the `zenfleet-gc` CLI for real use against a Parquet blob index + ledger (dry-run default).
 # Requires: R2_* env, s5cmd, cargo.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 export AWS_REGION=auto AWS_DEFAULT_REGION=auto
-cargo run -q -p zen-jobworker --example gc_live
+cargo run -q -p zenfleet-worker --example gc_live

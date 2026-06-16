@@ -76,7 +76,7 @@ synthetic 64×64 noisy-gradient case.
   implemented yet because `dssim-cuda` itself doesn't expose a
   batched API; would be a workspace-level addition rather than a
   port.
-- `zen-metrics-cli` integration. The CLI is currently being reworked
-  by a concurrent agent (`feat(zen-metrics-cli)!: drop -cpu suffix,
+- `zenmetrics-cli` integration. The CLI is currently being reworked
+  by a concurrent agent (`feat(zenmetrics-cli)!: drop -cpu suffix,
   remove dssim, bump to 0.2.0`); re-adding `dssim-gpu` to the
   metric registry is a follow-up commit once that lands.

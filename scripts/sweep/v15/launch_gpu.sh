@@ -2,7 +2,7 @@
 set -euo pipefail
 source ~/.config/cloudflare/r2-credentials
 SWEEP_RUN_ID="sweep-v15-2026-05-06"
-IMAGE="ghcr.io/imazen/zen-metrics-sweep:0.6.3"
+IMAGE="ghcr.io/imazen/zenmetrics-sweep:0.6.3"
 N_BOXES="${N_BOXES:-30}"
 MAX_DPH="${MAX_DPH:-0.20}"
 MIN_CORES="${MIN_CORES:-8}"
@@ -46,11 +46,11 @@ for offer_id in $OFFER_IDS; do
     i=$((i+1))
     WORKER_ID="${SWEEP_RUN_ID}-w${i}"
     LABEL="zen-v15-${i}"
-    ENV_STR="-e SWEEP_BIN_OVERRIDE=s3://coefficient/binaries/zen-metrics-0.6.7-linux-x86_64-gpu -e R2_ACCOUNT_ID=$R2_ACCOUNT_ID -e R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID -e R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY -e SWEEP_RUN_ID=$SWEEP_RUN_ID -e WORKER_ID=$WORKER_ID -e SWEEP_GPU_RUNTIME=cuda"
+    ENV_STR="-e SWEEP_BIN_OVERRIDE=s3://coefficient/binaries/zenmetrics-0.6.7-linux-x86_64-gpu -e R2_ACCOUNT_ID=$R2_ACCOUNT_ID -e R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID -e R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY -e SWEEP_RUN_ID=$SWEEP_RUN_ID -e WORKER_ID=$WORKER_ID -e SWEEP_GPU_RUNTIME=cuda"
     LOGIN_STR="-u ${GHCR_USER} -p ${GHCR_TOKEN} ghcr.io"
     OUT=$(vastai create instance "$offer_id" \
         --image "$IMAGE" --login "$LOGIN_STR" \
-        --onstart-cmd "/usr/local/bin/zen-metrics-worker" \
+        --onstart-cmd "/usr/local/bin/zenmetrics-worker" \
         --disk "$MIN_DISK_GB" --label "$LABEL" --env "$ENV_STR" \
         --raw 2>&1) || { echo "  $i fail: $(echo "$OUT" | head -c 200)"; continue; }
     ID=$(echo "$OUT" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('new_contract', d.get('id','')))" 2>/dev/null || echo "")

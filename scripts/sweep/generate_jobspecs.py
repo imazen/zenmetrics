@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the JSONL chunk list for the zen-metrics sweep.
+"""Generate the JSONL chunk list for the zenmetrics sweep.
 
 Each chunk is one (codec, image-subset) job. The worker picks them up
 sequentially and emits one Pareto TSV per chunk. We split images into

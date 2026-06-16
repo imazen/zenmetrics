@@ -1,0 +1,21 @@
+[package]
+name = "zenfleet-ctl"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Enqueue + discovery CLI: declare desired jobs (goal A) and query coverage/gap from the ledger (goal I). Operates on the local ledger; no accounts."
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "zenfleet-ctl"
+path = "src/bin/jobctl.rs"
+
+[dependencies]
+zenfleet-core = { version = "0.0.1", path = "../zenfleet-core" }
+zenfleet-ledger = { version = "0.0.1", path = "../zenfleet-ledger" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }

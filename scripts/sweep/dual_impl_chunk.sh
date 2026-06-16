@@ -10,7 +10,7 @@
 # repo-root CLAUDE.md.
 #
 # Required tools on PATH:
-#   - zen-metrics (cargo install or pre-built binary; built with
+#   - zenmetrics (cargo install or pre-built binary; built with
 #     --features sweep,gpu-cvvdp,gpu-cuda for the cvvdp-gpu path)
 #   - python3 in a venv with pycvvdp + pyarrow + numpy + pillow
 #     (see scripts/cvvdp_goldens/requirements.txt)
@@ -105,10 +105,10 @@ SWEEP_ARGS=(
 # scoring happens in the score-pairs stage below.
 SWEEP_ARGS+=(--metric ssim2)
 [[ -n "$KNOB_GRID" ]] && SWEEP_ARGS+=(--knob-grid "$KNOB_GRID")
-zen-metrics "${SWEEP_ARGS[@]}" 2>&1 | sed 's/^/  [sweep] /'
+zenmetrics "${SWEEP_ARGS[@]}" 2>&1 | sed 's/^/  [sweep] /'
 
 # Locate the cvvdp_imazen column tag from a dry score-pairs call.
-# zen-metrics doesn't expose the column name directly via the CLI, so
+# zenmetrics doesn't expose the column name directly via the CLI, so
 # we hard-code the default form (`cvvdp_imazen_v0_0_1`) and let the
 # parquet header confirm. If the column name diverges from the
 # default, override SIDECAR_IMAZEN_NAME via env.
@@ -118,7 +118,7 @@ SIDECAR_PYCVVDP="$OUT_DIR/cvvdp_pycvvdp_v054.parquet"
 
 if [[ "$SKIP_IMAZEN" != "1" ]]; then
     echo "[dual-impl] step 2/4: score-pairs cvvdp (imazen, GPU)" >&2
-    zen-metrics score-pairs \
+    zenmetrics score-pairs \
         --metric cvvdp \
         --pairs-tsv "$PAIRS_TSV" \
         --out-parquet "$SIDECAR_IMAZEN" \

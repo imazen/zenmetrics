@@ -233,7 +233,7 @@ Each downgrade updates the capability cache so the orchestrator learns: "on this
 
 3. **Cached-ref: auto-detect by default with explicit override.** Orchestrator hashes ref bytes (`xxhash3_64`, ~3 GB/s on modern CPUs — fast enough for 4096² at <10ms) and promotes consecutive tasks within the same `(metric, w, h, ref_hash)` to `set_reference` + `compute_with_cached_reference`. Callers who want zero overhead can pre-upload via `TaskData::PreUploaded(TaskRefHandle)`. Both paths coexist.
 
-4. **Crate location: new `crates/zenmetrics-orchestrator/`** sibling to `zenmetrics-api`. Opt-in dependency for callers who want orchestration. `zen-metrics-cli` adopts it for the `sweep` subcommand.
+4. **Crate location: new `crates/zenmetrics-orchestrator/`** sibling to `zenmetrics-api`. Opt-in dependency for callers who want orchestration. `zenmetrics-cli` adopts it for the `sweep` subcommand.
 
 5. **Multi-GPU: single GPU only** (use cubecl's default device). Multi-GPU work-stealing is out of scope for initial release. Capability cache stores the GPU's identity so a multi-GPU machine using device 1 instead of 0 cleanly invalidates / re-benches.
 
@@ -283,7 +283,7 @@ Each phase is a separate task with its own JOD-/parity-/perf-test gate, each pus
 - Other CPU references as separate follow-ups
 
 **Phase 7 — Integration + docs** (~1 day):
-- Wire into `zen-metrics-cli sweep`
+- Wire into `zenmetrics-cli sweep`
 - README + example programs
 - Migration guide for existing callers
 

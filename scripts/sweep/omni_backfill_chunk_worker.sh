@@ -4,7 +4,7 @@
 # variants backfill chunk worker.
 #
 # Differs from metric_backfill_chunk_worker.sh:
-#   - Runs ALL metrics in one `zen-metrics sweep` pass (no separate
+#   - Runs ALL metrics in one `zenmetrics sweep` pass (no separate
 #     score-pairs step). The sweep TSV directly carries the score
 #     columns.
 #   - Saves encoded codec bytes (.jpg / .webp / .avif / .jxl / .png)
@@ -133,7 +133,7 @@ jq -r --arg src "$SOURCE_DIR_R2" '.image_basenames[] | "cp \($src)/\(.) \(.)"' <
 echo "$LOG step 3/5: slice + group by (codec, knob_tuple_json)" >&2
 # Group by (codec, knob_tuple_json) — same encoder config, multiple q
 # values + multiple source images per group. The previous (codec, q,
-# knob_tuple_json) grouping spawned one zen-metrics-sweep invocation
+# knob_tuple_json) grouping spawned one zenmetrics-sweep invocation
 # per (q, knob), eating ~3-5s of cubecl-cuda init per call. For a
 # 200-row chunk with mostly-unique (q, knob) tuples that was ~200
 # inits × 4s ≈ 13 min of overhead per chunk before any real work.
@@ -210,12 +210,12 @@ while IFS=$'\t' read -r gid codec kj q_grid n_q n_bn; do
     # group g123 must not poison groups g0..g122's already-written
     # sweep.tsv files. Track success/fail counts; final parquet
     # conversion reads only the surviving group TSVs.
-    if /usr/local/bin/zen-metrics "${SWEEP_ARGS[@]}" 2>&1 \
+    if /usr/local/bin/zenmetrics "${SWEEP_ARGS[@]}" 2>&1 \
             | sed "s/^/  [g$gid] /" >&2; then
         GROUPS_OK=$((GROUPS_OK + 1))
     else
         GROUPS_FAIL=$((GROUPS_FAIL + 1))
-        # Salvage: if zen-metrics wrote ANY rows before dying, keep
+        # Salvage: if zenmetrics wrote ANY rows before dying, keep
         # the file. Otherwise drop the stub to avoid header-only
         # files cluttering the merge.
         if [[ -f "$SWEEP_DIR/g${gid}.tsv" ]] && \

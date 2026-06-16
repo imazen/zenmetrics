@@ -34,7 +34,7 @@ q_coarsenings, over_budget }`. Cells are emitted main-effects-first
 (deviations 0, then 1, then combos); every reduction is reported, never
 silent.
 
-`zen-metrics-cli`'s bridge (`crates/zen-metrics-cli/src/sweep/plan.rs`):
+`zenmetrics-cli`'s bridge (`crates/zenmetrics-cli/src/sweep/plan.rs`):
 
 - `build_plan(codec, name, budget, q_grid) -> BuiltPlan` — the single
   dispatch point. Writes the audit manifest to `<output>.plan.json`.
@@ -76,7 +76,7 @@ column and in `JobKind::Encode.knobs`:
 
 ## 3. Three execution paths, one identity
 
-1. **Local / chunk-mode CLI** — `zen-metrics sweep --codec C --plan
+1. **Local / chunk-mode CLI** — `zenmetrics sweep --codec C --plan
    NAME [--plan-budget N] --q-grid … --sources DIR --output OUT.tsv`.
    Mutually exclusive with `--knob-grid`. Builds the plan once per
    sweep, writes `OUT.plan.json`, walks cells × images via rayon.
@@ -85,15 +85,15 @@ column and in `JobKind::Encode.knobs`:
 2. **Job system** — `… --plan NAME --dry-run --emit-cells cells.jsonl`
    emits one declare item per (source × cell): `{image_path, codec,
    q:i64, knob_tuple_json, source_sha}` (q must be integer-valued).
-   `zen_jobctl declare_encodes` → content-addressed `DesiredJob`s →
-   `zen-metrics jobexec` executes each via `resolve_verified` (encode
+   `zenfleet_ctl declare_encodes` → content-addressed `DesiredJob`s →
+   `zenmetrics jobexec` executes each via `resolve_verified` (encode
    jobs emit bytes; metric jobs re-encode + score). See
    `docs/RUNNING_JOBS.md` §4b.
 3. **Vast.ai chunk fleet** — plan-mode input parquets carry the
    identity JSON per row (v26 schema `image_path/codec/q:int64/
    knob_tuple_json`, NO schema change). Generate with:
    ```bash
-   zen-metrics sweep --codec C --plan NAME [--plan-budget N] \
+   zenmetrics sweep --codec C --plan NAME [--plan-budget N] \
      --sources DIR --q-grid … --dry-run --emit-cells cells.jsonl \
      --output /tmp/plan.tsv
    python3 scripts/sweep/generate_sweep_input.py --codec C \
@@ -189,7 +189,7 @@ one numeric column per knob, resolved state preferred (append-only).
 No metric-class scalars by design: `near_lossless_bits` (0–4) changes
 pixels and is deliberately excluded from the curated trial-class axes
 (sweep it in metric-scored runs via the classic knob vocabulary, where
-`zen-metrics sweep --knob-grid '{"near_lossless_bits":[1,2]}'` reaches
+`zenmetrics sweep --knob-grid '{"near_lossless_bits":[1,2]}'` reaches
 it).
 
 ## 5. Scalar-axis gaps (dense-sweep program backlog)
@@ -324,7 +324,7 @@ plausible and mean nothing (the imazen/zenmetrics#25 failure class).
 `ChunkRecord` (chunks.jsonl) and `InlineGroupSpec` gain an `hdr: bool`
 (serde-default `false`) — strictly additive; every v26 chunks.jsonl
 deserialises unchanged. An HDR chunk on a worker image whose
-zen-metrics-cli lacks the `hdr` feature fails loudly at `run_sweep`
+zenmetrics-cli lacks the `hdr` feature fails loudly at `run_sweep`
 validation (it can never silently score SDR). The production vastai
-worker (`zen-cloud-vastai`) builds with `hdr` enabled as of this
+worker (`zenfleet-vastai`) builds with `hdr` enabled as of this
 change.

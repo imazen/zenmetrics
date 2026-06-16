@@ -21,7 +21,7 @@
 #   - rc=0:   exit cleanly. No upload, no destroy. (Watch loop on the
 #             controller handles end-of-work destroy at fleet level.)
 #   - rc!=0:  upload <tee-log> to s3://zentrain/<run>/errors/<id>.log,
-#             then call `vastai-fleet self-destroy`.
+#             then call `zenfleet-vastai self-destroy`.
 #   - SIGTERM during shutdown: same as rc!=0 if the script has done
 #             ANY work (avoid destroying an idle box that vast.ai is
 #             rebooting for a maintenance reason).
@@ -93,7 +93,7 @@ if [[ "${ALLOW_CPU_FALLBACK:-0}" != "1" ]]; then
         nvidia-smi 2>&1 | sed 's/^/  /' | head -10 >&2
         exit 4
     fi
-    # Pin the gpu runtime to cuda so zen-metrics' auto-fallback chain
+    # Pin the gpu runtime to cuda so zenmetrics' auto-fallback chain
     # ([Cuda, Wgpu, Hip, Cpu]) can't silently land on CPU when cuda
     # init throws. Downstream scripts read $GPU_RUNTIME.
     if [[ -z "${GPU_RUNTIME:-}" || "$GPU_RUNTIME" == "auto" ]]; then
@@ -146,10 +146,10 @@ self_destroy_on_error() {
         echo "# === end context ==="
     } >> "$STDERR_LOG"
 
-    /usr/local/bin/vastai-fleet self-destroy \
+    /usr/local/bin/zenfleet-vastai self-destroy \
         --error-log "$STDERR_LOG" \
         --r2-prefix "$r2_prefix" 2>&1 || {
-        log "WARN: vastai-fleet self-destroy failed (continuing — box may stay alive)"
+        log "WARN: zenfleet-vastai self-destroy failed (continuing — box may stay alive)"
     }
 }
 

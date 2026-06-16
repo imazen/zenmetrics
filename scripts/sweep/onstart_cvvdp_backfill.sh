@@ -16,7 +16,7 @@
 #   R2_ACCESS_KEY_ID
 #   R2_SECRET_ACCESS_KEY
 #   SWEEP_RUN_ID                 e.g. cvvdp-backfill-2026-05-15
-#   ZEN_METRICS_IMAGE            ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-76854e8
+#   ZEN_METRICS_IMAGE            ghcr.io/imazen/zenmetrics-sweep:0.6.4-cvvdp-76854e8
 #   PYCVVDP_IMAGE                ghcr.io/imazen/pycvvdp-scorer:0.5.4
 # (use the 0.6.4-cvvdp-<short> tag — earlier 0.6.4-aba984c images
 #  lacked gpu-cvvdp features and the cvvdp metric was disabled at
@@ -223,7 +223,7 @@ process_chunk() {
     "$WORKDIR/chunk_worker.sh" \
         --chunk-json "$line" \
         --work-dir "$WORKDIR/work-${chunk_id}" \
-        --zen-metrics-image "$ZEN_METRICS_IMAGE" \
+        --zenmetrics-image "$ZEN_METRICS_IMAGE" \
         --pycvvdp-image "$PYCVVDP_IMAGE" \
         > "$LOG" 2>&1
 

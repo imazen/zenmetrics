@@ -14,21 +14,21 @@ Runs the full declare → reconcile → execute → coverage loop against an **i
 `/bin/cat`, so it needs no encoder/GPU and costs a handful of tiny R2 objects.
 
 ```bash
-# needs R2_* env, aws (v1.44+), s5cmd, and built zen-jobworker + zen-jobctl
-cargo build -p zen-jobworker -p zen-jobctl
+# needs R2_* env, aws (v1.44+), s5cmd, and built zenfleet-worker + zenfleet-ctl
+cargo build -p zenfleet-worker -p zenfleet-ctl
 bash scripts/jobsys/demo_e2e_r2.sh        # KEEP=1 to retain the R2 prefix
 ```
 
 ### What it proves (verified run 2026-05-30, prefix `jobsys-demo-20260530-025731`)
 
-- **A — declare + idempotent enqueue.** `zen-jobctl declare` expanded a 2-item × 2-metric spec into
+- **A — declare + idempotent enqueue.** `zenfleet-ctl declare` expanded a 2-item × 2-metric spec into
   4 `DesiredJob`s. `gap` before any work = **4**; `gap` after pass 1 = **0** — re-declaring done work
   is a structural no-op (content-addressed `JobId`).
 - **E — convergence + restartable + lease.** Worker pass 1 converged the gap (`done=4`). A 2nd pass
   folding in the R2 ledger did **0** (`skipped` all) — fully restartable, ledger is truth. The R2
   conditional-write lease admits exactly one claim per job (a second `put-object --if-none-match '*'`
   on a held claim returns `PreconditionFailed`).
-- **I — coverage from the ledger.** `zen-jobctl catalog` reported 4 done / 0 gap per codec×metric,
+- **I — coverage from the ledger.** `zenfleet-ctl catalog` reported 4 done / 0 gap per codec×metric,
   derived purely from the R2 Parquet ledger (same source the dashboard reads).
 - **Foundations.** Pass 1 wrote 4 **content-addressed** blobs (`<prefix>/blobs/<sha256>`), a columnar
   **Parquet** ledger (`pass1.parquet`, 4.8 KB), and claim objects — all in R2.
@@ -48,7 +48,7 @@ bash scripts/jobsys/demo_spot_reclaim_r2.sh        # KEEP=1 to retain the R2 pre
 
 - A worker claims the job (1 claim object in R2) and begins executing.
 - `kill -TERM` → the signal-hook thread releases the claim and exits 130
-  (`zen-jobworker: spot preemption — released claim <id> for fast requeue`).
+  (`zenfleet-worker: spot preemption — released claim <id> for fast requeue`).
 - Claims in R2 drop to **0**; `gap` still shows the job (**requeued, not lost**); a fresh worker then
   completes it. Best-effort: if the release misses, TTL stale-reclaim (goal E) still requeues it, so
   correctness never depends on the signal landing.
@@ -100,13 +100,13 @@ converged (gap=0) while the slow primary was still running.
 Runs the self-asserting `gc_live` example: a reachability GC over a synthetic blob set proving
 referenced blobs are kept, the cheap-regenerable LRU tail is evicted (with a tombstone) under a byte
 cap, the newest cheap blob is kept, and an unreferenced **irreplaceable** blob is refused (surfaced,
-never deleted). The `zen-jobgc` CLI runs the same over a real Parquet blob index + ledger (dry-run by
+never deleted). The `zenfleet-gc` CLI runs the same over a real Parquet blob index + ledger (dry-run by
 default; `--execute` to delete; `verify_mirror` gates any non-regenerable delete).
 
 ```bash
 bash scripts/jobsys/demo_gc_r2.sh
 # real use:
-zen-jobgc --blob-index s3://b/.../blob_index.parquet --ledger s3://b/.../ledger.parquet \
+zenfleet-gc --blob-index s3://b/.../blob_index.parquet --ledger s3://b/.../ledger.parquet \
   --blobs-r2 s3://b/blobs --tombstones-r2 s3://b/jobsys/tombstones \
   --r2-endpoint "$EP" --cheap-cap-bytes 1000000   # add --execute to delete
 ```
@@ -114,7 +114,7 @@ zen-jobgc --blob-index s3://b/.../blob_index.parquet --ledger s3://b/.../ledger.
 ## `launch_fleet.sh` / `watch_fleet.sh` / `teardown_fleet.sh` — goal H (heterogeneous fleet)
 
 Bring up ≥3 interchangeable tiers on ONE R2 lease-queue, all running the same **baked**
-`ghcr.io/imazen/zen-jobworker` image (binary + aws-cli + s5cmd + keep-alive entrypoint — zero boot-time
+`ghcr.io/imazen/zenfleet-worker` image (binary + aws-cli + s5cmd + keep-alive entrypoint — zero boot-time
 installs, per the bake-everything rule; image built by `.github/workflows/jobworker-image.yml`). The
 image is a **multi-arch manifest (amd64 + arm64)**, so `docker run` resolves the right slice per host —
 that's what lets the named **Oracle ARM (free)** tier and a Hetzner **cax ARM** box join. Scoped temp R2
@@ -138,12 +138,12 @@ not the previously-used `--user-data-from-string`.)
 
 ## `demo_capability_routing.sh` — goal H (capability-routed)
 
-`zen-jobworker --capability <class>…` (or `ZEN_CAPABILITY` env) makes a worker pull only jobs whose
+`zenfleet-worker --capability <class>…` (or `ZEN_CAPABILITY` env) makes a worker pull only jobs whose
 kind's `ResourceClass` it serves. The demo runs a mixed queue (metric=Gpu, jpeg=CpuLight, avif=CpuHeavy)
 past a GPU-capability worker and a CPU-capability worker — verified: GPU did the 6 metrics, CPU did the
 9 encodes, off one queue, no overlap. Local, free, no boxes.
 
 The dashboard side of these guarantees (coverage/catalog, progress + speculative count, cost, kill,
 stop-spend, pause/drain/resume, result peek + thumbnails + ad-hoc query, GC dry-run preview) is live at
-the Railway deployment; see `crates/zen-jobdash`. Notifications go to ntfy (`ZEN_NOTIFY_WEBHOOK` +
+the Railway deployment; see `crates/zenfleet-dash`. Notifications go to ntfy (`ZEN_NOTIFY_WEBHOOK` +
 `ZEN_NOTIFY_TOKEN`); `demo_notify_local.sh` proves the mechanism without an external channel.

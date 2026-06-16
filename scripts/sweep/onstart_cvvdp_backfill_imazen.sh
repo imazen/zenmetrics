@@ -7,13 +7,13 @@
 # Docker (no privileged mode for iptables/nftables), so the
 # dual-image flow in onstart_cvvdp_backfill.sh fails at dockerd
 # init. This variant trades the cvvdp_pycvvdp_v054 column for a
-# working single-image flow: boot the zen-metrics-sweep image
-# directly, run zen-metrics from it, skip pycvvdp entirely. The
+# working single-image flow: boot the zenmetrics-sweep image
+# directly, run zenmetrics from it, skip pycvvdp entirely. The
 # finalize.sh path tolerates missing pycvvdp sidecars (parity=null).
 #
 # Expected boot image:
-#   ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-<short>
-# which has zen-metrics + s5cmd + jq at /usr/local/bin/, no python.
+#   ghcr.io/imazen/zenmetrics-sweep:0.6.4-cvvdp-<short>
+# which has zenmetrics + s5cmd + jq at /usr/local/bin/, no python.
 #
 # Required env vars (passed via vast.ai --env):
 #   R2_ACCOUNT_ID
@@ -156,8 +156,8 @@ aws_secret_access_key = ${R2_SECRET_ACCESS_KEY}
 EOF
 
 # ── Step 1: install python3 + pyarrow (chunk_worker.sh slices parquets) ──
-log "checking tools: zen-metrics s5cmd jq python3"
-for tool in zen-metrics s5cmd jq; do
+log "checking tools: zenmetrics s5cmd jq python3"
+for tool in zenmetrics s5cmd jq; do
     if ! command -v "$tool" >/dev/null; then
         log "FAIL: $tool not on PATH; wrong boot image?"
         exit 2
@@ -165,23 +165,23 @@ for tool in zen-metrics s5cmd jq; do
 done
 
 # ── Step 1a: optional binary override (v15 pattern) ────────────────────
-# When the docker-image-baked zen-metrics has the wrong cudarc feature
+# When the docker-image-baked zenmetrics has the wrong cudarc feature
 # set (cuda-13020 dlsym DlSym panic), the operator can replace it by
 # setting SWEEP_BIN_OVERRIDE to an R2 (s3://…) or HTTPS URL of a
-# locally-built binary. We swap /usr/local/bin/zen-metrics with it.
+# locally-built binary. We swap /usr/local/bin/zenmetrics with it.
 if [[ -n "${SWEEP_BIN_OVERRIDE:-}" ]]; then
-    log "fetching zen-metrics override from $SWEEP_BIN_OVERRIDE"
+    log "fetching zenmetrics override from $SWEEP_BIN_OVERRIDE"
     if [[ "$SWEEP_BIN_OVERRIDE" == s3://* ]]; then
-        R2 cp "$SWEEP_BIN_OVERRIDE" /tmp/zen-metrics.override \
+        R2 cp "$SWEEP_BIN_OVERRIDE" /tmp/zenmetrics.override \
             || { log "FAIL fetch SWEEP_BIN_OVERRIDE"; exit 5; }
     else
-        curl -fsSL "$SWEEP_BIN_OVERRIDE" -o /tmp/zen-metrics.override \
+        curl -fsSL "$SWEEP_BIN_OVERRIDE" -o /tmp/zenmetrics.override \
             || { log "FAIL fetch SWEEP_BIN_OVERRIDE"; exit 5; }
     fi
-    cp /tmp/zen-metrics.override /usr/local/bin/zen-metrics
-    chmod +x /usr/local/bin/zen-metrics
-    rm /tmp/zen-metrics.override
-    log "zen-metrics override installed; version: $(/usr/local/bin/zen-metrics --version 2>&1 | head -1)"
+    cp /tmp/zenmetrics.override /usr/local/bin/zenmetrics
+    chmod +x /usr/local/bin/zenmetrics
+    rm /tmp/zenmetrics.override
+    log "zenmetrics override installed; version: $(/usr/local/bin/zenmetrics --version 2>&1 | head -1)"
 fi
 if ! command -v python3 >/dev/null || ! command -v pip3 >/dev/null; then
     log "installing python3 + python3-pip via apt (boot image missing one or both)"
@@ -242,7 +242,7 @@ if ! ldconfig -p | grep -q libnvrtc.so.12; then
     # apt installs to /usr/local/cuda-12.6/lib64/. Register with
     # the dynamic linker so libnvrtc.so.12 resolves via the system
     # search path (LD_LIBRARY_PATH alone won't propagate through
-    # zen-metrics subprocesses if shell vars don't survive).
+    # zenmetrics subprocesses if shell vars don't survive).
     echo "/usr/local/cuda-12.6/lib64" > /etc/ld.so.conf.d/cuda-12.6.conf
     ldconfig
     # Symlink /usr/local/cuda → cuda-12.6 so cubecl-cuda's
@@ -327,8 +327,8 @@ process_chunk() {
     local start_t; start_t=$(date +%s)
     local LOG="/tmp/chunk-${chunk_id}.log"
 
-    # Run chunk_worker.sh in host-binary mode (no --zen-metrics-image
-    # since we're already inside the zen-metrics-sweep container) and
+    # Run chunk_worker.sh in host-binary mode (no --zenmetrics-image
+    # since we're already inside the zenmetrics-sweep container) and
     # with --skip-pycvvdp.
     R2_ACCOUNT_ID="$R2_ACCOUNT_ID" \
     R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \

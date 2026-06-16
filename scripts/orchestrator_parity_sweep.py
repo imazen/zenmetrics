@@ -148,7 +148,7 @@ def run_score(binary: Path, metric: str, ref: Path, dist: Path,
               use_orchestrator: bool, cache_dir: Path,
               bench_on_start: str = "no",
               env_extra: Optional[dict[str, str]] = None) -> ScoreResult:
-    """Invoke `zen-metrics score` in either legacy or orchestrator mode.
+    """Invoke `zenmetrics score` in either legacy or orchestrator mode.
 
     Returns the JSON-parsed output of `--output json`. Both paths emit
     the same `scores.<col>` JSON shape per the Phase 7.5 contract.
@@ -227,8 +227,8 @@ def parity_verdict(metric: str, legacy: float, orch: float) -> tuple[str, float]
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary",
-                        default="target/release/zen-metrics",
-                        help="Path to zen-metrics binary")
+                        default="target/release/zenmetrics",
+                        help="Path to zenmetrics binary")
     parser.add_argument("--out-csv",
                         default="benchmarks/orchestrator_parity_2026-05-27.csv")
     parser.add_argument("--out-md",

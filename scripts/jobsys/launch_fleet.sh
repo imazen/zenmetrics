@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Launch a heterogeneous ≥3-tier fleet (goal H) on ONE R2 conditional-write-lease queue, all running
-# the SAME baked zen-jobworker image (ghcr.io/imazen/zen-jobworker). Provider-agnostic: adding/removing
+# the SAME baked zenfleet-worker image (ghcr.io/imazen/zenfleet-worker). Provider-agnostic: adding/removing
 # a tier never touches job logic — only this launcher differs per provider.
 #
 #   THIS SPENDS MONEY (Hetzner + vast boxes). It is the billable step; run it deliberately.
@@ -8,7 +8,7 @@
 #
 # Prerequisites (one-time):
 #   - The image is built + pushed by CI (.github/workflows/jobworker-image.yml) and the ghcr package
-#     is PUBLIC (Settings → Packages → zen-jobworker → change visibility), so boxes pull without creds.
+#     is PUBLIC (Settings → Packages → zenfleet-worker → change visibility), so boxes pull without creds.
 #   - Env: R2 creds at ~/.config/cloudflare/r2-credentials; HCLOUD token at ~/.config/hetzner/credentials;
 #     vastai CLI authed; ssh key zen-arm-dev-20260528 on the Hetzner project.
 #
@@ -19,9 +19,9 @@
 #   one R2 queue. e.g. `… 60 1 0 0 1` = local + Hetzner-x86 + Salad = 3 distinct providers.
 set -euo pipefail
 # Default image runs the SYNTHETIC executor (/bin/cat) — for the demos/proofs. For REAL jobs set
-# ZEN_WORKER_IMAGE=ghcr.io/imazen/zen-jobworker-exec:latest (bakes zen-metrics jobexec; its image-level
+# ZEN_WORKER_IMAGE=ghcr.io/imazen/zenfleet-worker-exec:latest (bakes zenmetrics jobexec; its image-level
 # ZEN_EXEC default is the real executor) and ZEN_CORPUS_PREFIX=<R2 prefix of your source images>.
-IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zen-jobworker:latest}"
+IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zenfleet-worker:latest}"
 EXEC="${ZEN_EXEC:-/bin/cat}"           # override for real work (or rely on the exec image's ZEN_EXEC default)
 CORPUS="${ZEN_CORPUS_PREFIX:-}"        # R2 prefix under the bucket where source images live (real jobs)
 N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"; N_SALAD="${5:-0}"
@@ -48,7 +48,7 @@ n=int(sys.argv[1])
 print(json.dumps({"items":[{"image_path":"fleet/img-%05d.png"%i,"codec":"zenjpeg","q":80,
   "encode_sha":hashlib.sha256(("fleet-%d"%i).encode()).hexdigest()} for i in range(n)],"metrics":["cvvdp"]}))
 PY
-"$ROOT/target/release/zen-jobctl" declare --spec /tmp/fleet_spec.json --out /tmp/fleet_manifest.json
+"$ROOT/target/release/zenfleet-ctl" declare --spec /tmp/fleet_spec.json --out /tmp/fleet_manifest.json
 AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
   s5cmd --endpoint-url "$EP" cp /tmp/fleet_manifest.json "s3://$BUCKET/$RUN/manifest.json" >/dev/null
 MANIFEST="s3://$BUCKET/$RUN/manifest.json"
@@ -136,7 +136,7 @@ print(json.dumps({"AWS_ACCESS_KEY_ID":os.environ["AK"],"AWS_SECRET_ACCESS_KEY":o
 "ZEN_PROVIDER":"salad","ZEN_SPEC_THRESHOLD_SECS":"20","ZEN_CONTROL_KEY":os.environ["CTLKEY"],
 "ZEN_CORPUS_PREFIX":os.environ.get("CORPUS",""),"ZEN_IDLE_PASSES":"8","ZEN_WORKER":"salad-1"}))')"
   EX="$ROOT/target/release/examples/fleet_create"
-  [ -x "$EX" ] || { cargo build --release -p zen-cloud-salad --example fleet_create >/dev/null 2>&1 || true; }
+  [ -x "$EX" ] || { cargo build --release -p zenfleet-salad --example fleet_create >/dev/null 2>&1 || true; }
   [ -x "$EX" ] || EX="$ROOT/target/debug/examples/fleet_create"
   if [ -x "$EX" ]; then
     SALAD_API_KEY="$(grep -E '^salad_' ~/.config/salad/credentials 2>/dev/null | head -1 | tr -d ' \r\n')" \
@@ -144,7 +144,7 @@ print(json.dumps({"AWS_ACCESS_KEY_ID":os.environ["AK"],"AWS_SECRET_ACCESS_KEY":o
     SALAD_IMAGE="$IMAGE" SALAD_REPLICAS="$N_SALAD" SALAD_ENV_JSON="$SALAD_ENV_JSON" \
       "$EX" 2>&1 | head -3
   else
-    echo "salad SKIPPED: build examples/fleet_create first (cargo build -p zen-cloud-salad --example fleet_create)"
+    echo "salad SKIPPED: build examples/fleet_create first (cargo build -p zenfleet-salad --example fleet_create)"
   fi
 fi
 

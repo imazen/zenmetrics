@@ -4,7 +4,7 @@
 # iwssim-backfill fleet.
 #
 # Adapted from onstart_cvvdp_backfill_imazen.sh — single-image flow,
-# zen-metrics-sweep:0.6.4-iwssim-<sha> is the boot image. Per-chunk
+# zenmetrics-sweep:0.6.4-iwssim-<sha> is the boot image. Per-chunk
 # work is delegated to iwssim_backfill_chunk_worker.sh (uploaded to
 # the same S3 prefix as chunks.jsonl).
 #
@@ -118,8 +118,8 @@ aws_access_key_id = ${R2_ACCESS_KEY_ID}
 aws_secret_access_key = ${R2_SECRET_ACCESS_KEY}
 EOF
 
-log "checking tools: zen-metrics s5cmd jq"
-for tool in zen-metrics s5cmd jq; do
+log "checking tools: zenmetrics s5cmd jq"
+for tool in zenmetrics s5cmd jq; do
     if ! command -v "$tool" >/dev/null; then
         log "FAIL: $tool not on PATH; wrong boot image?"
         exit 2
@@ -127,18 +127,18 @@ for tool in zen-metrics s5cmd jq; do
 done
 
 if [[ -n "${SWEEP_BIN_OVERRIDE:-}" ]]; then
-    log "fetching zen-metrics override from $SWEEP_BIN_OVERRIDE"
+    log "fetching zenmetrics override from $SWEEP_BIN_OVERRIDE"
     if [[ "$SWEEP_BIN_OVERRIDE" == s3://* ]]; then
-        R2 cp "$SWEEP_BIN_OVERRIDE" /tmp/zen-metrics.override \
+        R2 cp "$SWEEP_BIN_OVERRIDE" /tmp/zenmetrics.override \
             || { log "FAIL fetch SWEEP_BIN_OVERRIDE"; exit 5; }
     else
-        curl -fsSL "$SWEEP_BIN_OVERRIDE" -o /tmp/zen-metrics.override \
+        curl -fsSL "$SWEEP_BIN_OVERRIDE" -o /tmp/zenmetrics.override \
             || { log "FAIL fetch SWEEP_BIN_OVERRIDE"; exit 5; }
     fi
-    cp /tmp/zen-metrics.override /usr/local/bin/zen-metrics
-    chmod +x /usr/local/bin/zen-metrics
-    rm /tmp/zen-metrics.override
-    log "zen-metrics override installed; version: $(/usr/local/bin/zen-metrics --version 2>&1 | head -1)"
+    cp /tmp/zenmetrics.override /usr/local/bin/zenmetrics
+    chmod +x /usr/local/bin/zenmetrics
+    rm /tmp/zenmetrics.override
+    log "zenmetrics override installed; version: $(/usr/local/bin/zenmetrics --version 2>&1 | head -1)"
 fi
 if ! command -v python3 >/dev/null || ! command -v pip3 >/dev/null; then
     log "installing python3 + python3-pip via apt"

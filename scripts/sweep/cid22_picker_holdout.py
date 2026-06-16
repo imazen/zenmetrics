@@ -11,7 +11,7 @@ Pipeline:
      infrastructure can consume to encode + measure.
 
 This stops short of running the encodes — that's the next step,
-calling out to `zen-metrics sweep` or a vast.ai chunk. But because
+calling out to `zenmetrics sweep` or a vast.ai chunk. But because
 the encoding is small (49 images × 6 targets × 4 codecs = 1176
 encodes), this can run locally on the host's GPU in 30-60 min.
 

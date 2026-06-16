@@ -5,11 +5,11 @@
 # only thing the production channel adds is the destination (set ZEN_NOTIFY_WEBHOOK to your
 # Slack/Discord/ntfy URL).
 #
-# Requires: built zen-jobdash, python3.
+# Requires: built zenfleet-dash, python3.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DASH="$ROOT/target/debug/zen-jobdash"
+DASH="$ROOT/target/debug/zenfleet-dash"
 W="$(mktemp -d)"
 RECV_PORT=3091
 DASH_PORT=3092
@@ -40,7 +40,7 @@ JSON
 echo "### notify demo — webhook → local receiver on :$RECV_PORT"
 echo "    fixture: spent \$0.35, cap \$0.10 (budget-crossed condition)"
 ZEN_WORKERS_JSON="$W/workers.json" ZEN_BUDGET_CAP_USD=0.10 ZEN_REFRESH_SECS=2 \
-  ZEN_NOTIFY_WEBHOOK="http://127.0.0.1:$RECV_PORT" ZEN_PUBLIC_URL="https://zen-jobdash-production.up.railway.app" \
+  ZEN_NOTIFY_WEBHOOK="http://127.0.0.1:$RECV_PORT" ZEN_PUBLIC_URL="https://zenfleet-dash-production.up.railway.app" \
   PORT=$DASH_PORT "$DASH" > "$W/dash.log" 2>&1 & DASH_PID=$!
 
 # Wait for one refresh cycle to detect + fire.

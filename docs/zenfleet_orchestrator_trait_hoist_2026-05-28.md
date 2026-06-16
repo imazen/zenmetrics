@@ -37,7 +37,7 @@ retry-bounded teardown.
 
 ## The Salad bin
 
-`crates/zen-cloud-salad/src/bin/zen-salad-sweep.rs`:
+`crates/zenfleet-salad/src/bin/zenfleet-salad-sweep.rs`:
 **357 LOC** (down from 2096). What remains:
 
 - 35-flag clap `Args` struct (110 LOC — back-compat with iter 1's CLI).
@@ -45,18 +45,18 @@ retry-bounded teardown.
 - `main()` (~200 LOC) — wire `R2OperatorImpl`, `SaladProviderHandle`,
   `FleetSweep` together; emit summary.
 
-Everything else moved into reusable `zen-cloud-salad` lib modules
+Everything else moved into reusable `zenfleet-salad` lib modules
 (all behind `feature = "launcher"`):
 
 | Module                                  | What it owns                                                          |
 | --------------------------------------- | --------------------------------------------------------------------- |
-| `zen_cloud_salad::r2_ops`               | Operator-side R2 SigV4 (HEAD / PUT / GET / LIST); `R2OperatorImpl`    |
-| `zen_cloud_salad::provider`             | `SaladProviderHandle` + `SaladProviderConfig`                         |
-| `zen_cloud_salad::launcher_support`     | GPU class resolve, prior-fleet class filter, chunk synth, R2 cred load |
+| `zenfleet_salad::r2_ops`               | Operator-side R2 SigV4 (HEAD / PUT / GET / LIST); `R2OperatorImpl`    |
+| `zenfleet_salad::provider`             | `SaladProviderHandle` + `SaladProviderConfig`                         |
+| `zenfleet_salad::launcher_support`     | GPU class resolve, prior-fleet class filter, chunk synth, R2 cred load |
 
 ## Why this matters for follow-ups
 
-`zencloud-hetzner` (next iter) implements `ProviderHandle` and
+`zenfleet-hetzner` (next iter) implements `ProviderHandle` and
 reuses `FleetSweep::run` verbatim. Same path for any future
 RunPod / Vast.ai / GCP-Batch launcher. The poll-loop algorithms
 (TTL + speculative + class filter + replica overshoot) are now
@@ -66,17 +66,17 @@ single-source-of-truth in `zenfleet-orchestrator`.
 
 ```sh
 # Build (lib + bin, launcher feature)
-cargo build --release -p zenfleet-orchestrator -p zen-cloud-salad \
-    --features zen-cloud-salad/launcher
+cargo build --release -p zenfleet-orchestrator -p zenfleet-salad \
+    --features zenfleet-salad/launcher
 
 # Unit tests
 cargo test -p zenfleet-orchestrator          # 8 algorithm tests pass
-cargo test -p zen-cloud-salad --features launcher --lib   # 24 salad lib tests pass
+cargo test -p zenfleet-salad --features launcher --lib   # 24 salad lib tests pass
 
 # Dry-run: synthesises the container-group request body WITHOUT any
 # provisioning / R2 mint / queue create.
-./target/release/zen-salad-sweep --dry-run --replicas 10 --max-price-per-hour 0.10
-./target/release/zen-salad-sweep --dry-run --replicas 5 --max-price-per-hour 0.05 \
+./target/release/zenfleet-salad-sweep --dry-run --replicas 10 --max-price-per-hour 0.10
+./target/release/zenfleet-salad-sweep --dry-run --replicas 5 --max-price-per-hour 0.05 \
     --no-speculative --chunk-ttl-secs 240 --cells-per-chunk 8
 ```
 
@@ -111,12 +111,12 @@ the right `SweepConfig` / `SpeculativeConfig` / `ProvisionSpec` /
 | `crates/zenfleet-orchestrator/src/lib.rs`           | re-export driver + provider     |
 | `crates/zenfleet-orchestrator/src/provider.rs`      | NEW (264 LOC) — traits + types  |
 | `crates/zenfleet-orchestrator/src/driver.rs`        | NEW (630 LOC) — FleetSweep      |
-| `crates/zen-cloud-salad/src/lib.rs`                 | re-export new modules           |
-| `crates/zen-cloud-salad/src/launch.rs`              | `#[derive(Clone)]` for RegistryAuth |
-| `crates/zen-cloud-salad/src/provider.rs`            | NEW (245 LOC) — SaladProviderHandle |
-| `crates/zen-cloud-salad/src/r2_ops.rs`              | NEW (398 LOC) — operator-side R2 + SigV4 |
-| `crates/zen-cloud-salad/src/launcher_support.rs`    | NEW (333 LOC) — class resolve / class filter / chunk synth / cred load |
-| `crates/zen-cloud-salad/src/bin/zen-salad-sweep.rs` | REWRITE (357 LOC, was 2096)     |
+| `crates/zenfleet-salad/src/lib.rs`                 | re-export new modules           |
+| `crates/zenfleet-salad/src/launch.rs`              | `#[derive(Clone)]` for RegistryAuth |
+| `crates/zenfleet-salad/src/provider.rs`            | NEW (245 LOC) — SaladProviderHandle |
+| `crates/zenfleet-salad/src/r2_ops.rs`              | NEW (398 LOC) — operator-side R2 + SigV4 |
+| `crates/zenfleet-salad/src/launcher_support.rs`    | NEW (333 LOC) — class resolve / class filter / chunk synth / cred load |
+| `crates/zenfleet-salad/src/bin/zenfleet-salad-sweep.rs` | REWRITE (357 LOC, was 2096)     |
 
 ## Open items
 

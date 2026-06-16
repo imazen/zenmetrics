@@ -30,7 +30,7 @@ encoded variants** (the v22+ worker added both):
   scores source; features-incomplete for trainer ingestion as-is.
 
 The pipeline that delivered the two-run success path lives in
-`zenmetrics/crates/vastai-fleet` (Rust) and
+`zenmetrics/crates/zenfleet-vastai` (Rust) and
 `zenmetrics/scripts/sweep/` (launchers + onstarts). The
 end-to-end recipe is in `scripts/sweep/README.md` under
 **"The proven end-to-end pipeline (2026-05-19)"**.
@@ -131,7 +131,7 @@ against these CSVs, **do NOT mix with features re-extracted from a
 newer zensim** — feature column indices are not stable across
 zensim versions.
 
-The zen-metrics omni backfills (described below) ran with
+The zenmetrics omni backfills (described below) ran with
 `zensim-gpu` (which emits only `score_zensim_gpu`, no extended
 features). To get a fresh 372-feature vector for the cvvdp-v15rc
 or omni-multi-codec corpora, a separate extraction pass is needed
@@ -159,7 +159,7 @@ run if the existing 372-feature corpora aren't sufficient.
 | Sources prefix | `s3://zentrain/sweep-v15rc-2026-05-07/sources/` |
 | Codec | `zenjpeg` only |
 | Metrics | `zensim-gpu`, `ssim2-gpu`, `butteraugli-max-gpu`, `butteraugli-pnorm3-gpu`, `cvvdp-imazen-v0.0.1`, `dssim-gpu`, `iwssim-gpu` + zensim 300-feat vector |
-| Worker image | `ghcr.io/imazen/zen-metrics-sweep:v22` initial → `v23` for reencode → `v24` for feature backfill |
+| Worker image | `ghcr.io/imazen/zenmetrics-sweep:v22` initial → `v23` for reencode → `v24` for feature backfill |
 | Approx burn | ~$3-4 across all three passes (initial omni + 346-chunk reencode + feature-backfill) |
 
 **Note:** the initial v22 omni run left 346 of the 2568 chunks
@@ -182,7 +182,7 @@ duplicates.
 | Input parquets | `s3://zentrain/unified-2026-05-07/unified_v12_zen{webp,avif,jxl}.parquet` + `unified_v13_zenjpeg.parquet` |
 | Sources prefix | `s3://zentrain/sweep-v15-2026-05-06/sources/` (different from v15rc!) |
 | Metrics | Same 6 GPU metrics as the v15rc run |
-| Worker image | `ghcr.io/imazen/zen-metrics-sweep:v22` (most) + `v23` (final stranded chunks) |
+| Worker image | `ghcr.io/imazen/zenmetrics-sweep:v22` (most) + `v23` (final stranded chunks) |
 | Approx burn | ~$1.50 (8-12 box fleet @ $0.06/hr × ~2 hr) |
 | Per-codec cells | zenwebp 1,000 (200 imgs × 5 q) · zenavif 4,000 · zenjxl 51,200 · zenjpeg 61,600. Total 117,800 cells, all 4 codecs share the same 200 `gen-*` synthetic-image corpus (mandatory for cross-codec equivalence pairing). |
 
@@ -220,7 +220,7 @@ vector. Bake training that wants standardized per-pair features
 
 ## Codec commit hashes pinned during each backfill
 
-The unified Rust worker at `zenmetrics/crates/vastai-fleet` links
+The unified Rust worker at `zenmetrics/crates/zenfleet-vastai` links
 codec crates as **path deps to local sibling worktrees**. These
 checkouts are sometimes on experimental branches; the table below
 records the SHA each backfill actually saw at link time.
@@ -336,15 +336,15 @@ t = dataset.to_table(columns=["image_path", "codec", "q", "knob_tuple_json",
 
 ## Where the unified Rust worker source lives
 
-- Worker binary: `zenmetrics/crates/vastai-fleet/` (cargo crate)
-- CLI: `vastai-fleet worker --run-id <id> --chunks-r2 <uri>`
-- Docker image: `ghcr.io/imazen/zen-metrics-sweep:v23` (post 2026-05-19)
+- Worker binary: `zenmetrics/crates/zenfleet-vastai/` (cargo crate)
+- CLI: `zenfleet-vastai worker --run-id <id> --chunks-r2 <uri>`
+- Docker image: `ghcr.io/imazen/zenmetrics-sweep:v23` (post 2026-05-19)
 - Dockerfile: `zenmetrics/Dockerfile.sweep.v23`
 - Launchers: `zenmetrics/scripts/sweep/launch_{single_instance,backfill}.sh`
 - Onstart: `zenmetrics/scripts/sweep/onstart_unified.sh`
 - Util monitor: `zenmetrics/scripts/sweep/fleet_util_snapshot.sh`
 
-The worker links `zen-metrics-cli` as a library so `run_sweep`
+The worker links `zenmetrics-cli` as a library so `run_sweep`
 runs in-process (one cubecl init per worker process, not per
 group). This is what gave the 2.7x throughput vs the bash
 predecessor — see commit `24313a0` and `4e760b6` for the Phase A
@@ -362,7 +362,7 @@ When you start a new backfill, append a new section here with:
 4. Worker image tag
 5. Approx burn
 
-Codec HEAD snippet (run from any zen-metrics binary's build host):
+Codec HEAD snippet (run from any zenmetrics binary's build host):
 
 ```bash
 for c in zenpng zenwebp zenjpeg zenavif--main zenjxl--main jxl-encoder; do

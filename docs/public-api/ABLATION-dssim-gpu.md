@@ -4,7 +4,7 @@
 ## Scope
 Snapshot: `docs/public-api/dssim-gpu.txt` — 220 items (default == all-features).
 
-Known consumers: `zenmetrics-api` (`reclaim_pooled_vram`), `zen-metrics-cli`, `dssim-gpu/tests/it/*`.
+Known consumers: `zenmetrics-api` (`reclaim_pooled_vram`), `zenmetrics-cli`, `dssim-gpu/tests/it/*`.
 
 ---
 

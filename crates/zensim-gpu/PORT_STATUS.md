@@ -305,7 +305,7 @@ Optimisations applied since the initial port:
 - **Tighten `cached_reference_matches_direct` to 1e-5** once the
   fma-ordering match is in place. Currently `< 1e-3`.
 
-`zen-metrics-cli` integration is **done** — zensim-gpu is wired
+`zenmetrics-cli` integration is **done** — zensim-gpu is wired
 alongside `dssim-gpu`, `ssim2-gpu`, `butteraugli-gpu` in
-`crates/zen-metrics-cli/src/metrics/mod.rs` (see the
+`crates/zenmetrics-cli/src/metrics/mod.rs` (see the
 `#[value(name = "zensim-gpu")]` variant on the Metric enum).

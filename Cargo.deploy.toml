@@ -1,16 +1,16 @@
 # Minimal workspace for building the deployable job-system crates (Railway dashboard + fleet worker)
-# in isolation. The full workspace can't build standalone: zen-metrics-cli path-deps the jxl-encoder
+# in isolation. The full workspace can't build standalone: zenmetrics-cli path-deps the jxl-encoder
 # sibling repo (outside this repo), absent from a deploy/cross/remote build context. These crates
 # reach outside the repo for nothing. Builders cp this over Cargo.toml before `cargo build -p <crate>`:
-#   - Railway: cargo build -p zen-jobdash   (the dashboard)
-#   - fleet boxes (arm-zen/Oracle/etc.): cargo build -p zen-jobworker  (worker + jobexec bins)
+#   - Railway: cargo build -p zenfleet-dash   (the dashboard)
+#   - fleet boxes (arm-zen/Oracle/etc.): cargo build -p zenfleet-worker  (worker + jobexec bins)
 [workspace]
 members = [
-    "crates/zen-job-core",
-    "crates/zen-ledger",
-    "crates/zen-jobdash",
-    "crates/zen-jobworker",
-    "crates/zen-jobctl",
+    "crates/zenfleet-core",
+    "crates/zenfleet-ledger",
+    "crates/zenfleet-dash",
+    "crates/zenfleet-worker",
+    "crates/zenfleet-ctl",
 ]
 resolver = "2"
 

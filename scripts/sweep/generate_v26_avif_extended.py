@@ -9,7 +9,7 @@ butter_p3 is sensitive to. We sweep 5 knob tuples × 10 q × 1332
 sources = 66,600 cells.
 
 Output schema per the unified-worker pipeline (see
-crates/vastai-fleet/src/worker/inline.rs::ChunkRecord):
+crates/zenfleet-vastai/src/worker/inline.rs::ChunkRecord):
 
   v26_zenavif_input.parquet:
     image_path:string  codec:string  q:int64  knob_tuple_json:string

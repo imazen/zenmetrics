@@ -5,7 +5,7 @@
 Snapshot: `docs/public-api/butteraugli-gpu.txt` — 207 items (default), 210 items (all-features).
 The 3 extra items in all-features are `Butteraugli<R>` + its `compute_handles` + a trait impl, gated behind `cubecl-types`.
 
-Known consumers: `zenmetrics-api` (`reclaim_pooled_vram`), `zen-metrics-cli`, `benchmarks/butteraugli-gpu-*` examples (use `ButteraugliBatch`, `pack_srgb_into_packed_u32_handle`, `reduce_diffmap_to_score`).
+Known consumers: `zenmetrics-api` (`reclaim_pooled_vram`), `zenmetrics-cli`, `benchmarks/butteraugli-gpu-*` examples (use `ButteraugliBatch`, `pack_srgb_into_packed_u32_handle`, `reduce_diffmap_to_score`).
 
 ---
 

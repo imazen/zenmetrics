@@ -2508,7 +2508,7 @@ fn score_is_deterministic_across_repeated_calls() {
     // leakage between calls (a stale scratch buffer not reset,
     // an accumulator that grows across calls, etc.) would
     // silently break the cached-instance optimization that
-    // zen-metrics-cli's CvvdpBatchScorer relies on for the
+    // zenmetrics-cli's CvvdpBatchScorer relies on for the
     // vast.ai backfill pipeline.
     //
     // Three checks:
@@ -2557,7 +2557,7 @@ fn score_with_reference_is_deterministic_across_repeated_calls() {
     // between repeated cached-path calls (e.g., a per-call scratch
     // buffer accidentally tied to mutable state on the cached ref
     // bytes) would silently break batch-scoring throughput in
-    // zen-metrics-cli's CvvdpBatchScorer without surfacing the bug
+    // zenmetrics-cli's CvvdpBatchScorer without surfacing the bug
     // through the existing matches pin.
     //
     // Checks:

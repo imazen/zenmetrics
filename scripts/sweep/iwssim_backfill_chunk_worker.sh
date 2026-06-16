@@ -14,8 +14,8 @@
 #   3. Syncs the chunk's image_basenames from R2's source_dir_r2.
 #   4. Reads rows[row_range[0]:row_range[1]] from the parquet, groups by
 #      (codec, q, knob_tuple_json), and re-encodes the dist images via
-#      `zen-metrics sweep` once per group.
-#   5. Runs `zen-metrics score-pairs --metric iwssim` to produce the
+#      `zenmetrics sweep` once per group.
+#   5. Runs `zenmetrics score-pairs --metric iwssim` to produce the
 #      iwssim sidecar.
 #   6. Uploads sidecar to out_sidecar_iwssim from the chunk manifest.
 #
@@ -32,7 +32,7 @@
 #
 #   echo '<one chunk JSON line>' | \
 #       iwssim_backfill_chunk_worker.sh \
-#           --zen-metrics-image ghcr.io/imazen/zen-metrics-sweep:0.6.4-iwssim-<sha>
+#           --zenmetrics-image ghcr.io/imazen/zenmetrics-sweep:0.6.4-iwssim-<sha>
 #
 # OR:
 #
@@ -61,7 +61,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --chunk-json) CHUNK_JSON="$2"; shift 2;;
         --work-dir) WORK_DIR="$2"; shift 2;;
-        --zen-metrics-image) ZEN_METRICS_IMAGE="$2"; shift 2;;
+        --zenmetrics-image) ZEN_METRICS_IMAGE="$2"; shift 2;;
         --gpu-runtime) GPU_RUNTIME="$2"; shift 2;;
         --keep-work) KEEP_WORK=1; shift;;
         --skip-upload) SKIP_UPLOAD=1; shift;;
@@ -199,14 +199,14 @@ while IFS='|' read -r gid codec q kj; do
     set +e
     if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
         docker run --rm $DOCKER_GPUS \
-            --entrypoint /usr/local/bin/zen-metrics \
+            --entrypoint /usr/local/bin/zenmetrics \
             -v "$WORK_DIR":"$WORK_DIR":rw \
             -w "$GROUP_DIR" \
             "$ZEN_METRICS_IMAGE" \
             "${SWEEP_ARGS[@]}" > "$GROUP_DIR/sweep.stderr.log" 2>&1
         sweep_rc=$?
     else
-        zen-metrics "${SWEEP_ARGS[@]}" > "$GROUP_DIR/sweep.stderr.log" 2>&1
+        zenmetrics "${SWEEP_ARGS[@]}" > "$GROUP_DIR/sweep.stderr.log" 2>&1
         sweep_rc=$?
     fi
     set -e
@@ -241,7 +241,7 @@ if [[ "${IWSSIM_ALLOW_SMALL:-1}" == "1" ]]; then
 fi
 if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
     docker run --rm $DOCKER_GPUS \
-        --entrypoint /usr/local/bin/zen-metrics \
+        --entrypoint /usr/local/bin/zenmetrics \
         -v "$WORK_DIR":"$WORK_DIR":rw \
         -w "$WORK_DIR" \
         "$ZEN_METRICS_IMAGE" \
@@ -252,7 +252,7 @@ if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
             --gpu-runtime "$GPU_RUNTIME" \
             "${IWSSIM_EXTRA_ARGS[@]}" 2>&1 | sed 's/^/  [iwssim] /' >&2
 else
-    zen-metrics score-pairs \
+    zenmetrics score-pairs \
         --metric iwssim \
         --pairs-tsv "$WORK_DIR/pairs.tsv" \
         --out-parquet "$SIDECAR_IWSSIM" \

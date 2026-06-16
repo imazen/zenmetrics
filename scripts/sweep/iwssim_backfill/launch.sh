@@ -11,7 +11,7 @@
 #
 # Env vars:
 #   SWEEP_RUN_ID            (default: iwssim-backfill-2026-05-17)
-#   ZEN_METRICS_IMAGE       (default: ghcr.io/imazen/zen-metrics-sweep:0.6.4-iwssim-d9c0388)
+#   ZEN_METRICS_IMAGE       (default: ghcr.io/imazen/zenmetrics-sweep:0.6.4-iwssim-d9c0388)
 #                           — also used as BOOT_IMAGE
 #   N_BOXES                 (default: 30)
 #   MAX_DPH                 (default: 0.30)
@@ -27,7 +27,7 @@ set -euo pipefail
 source ~/.config/cloudflare/r2-credentials
 
 SWEEP_RUN_ID="${SWEEP_RUN_ID:-iwssim-backfill-2026-05-17}"
-ZEN_METRICS_IMAGE="${ZEN_METRICS_IMAGE:-ghcr.io/imazen/zen-metrics-sweep:0.6.4-iwssim-d9c0388}"
+ZEN_METRICS_IMAGE="${ZEN_METRICS_IMAGE:-ghcr.io/imazen/zenmetrics-sweep:0.6.4-iwssim-d9c0388}"
 BOOT_IMAGE="$ZEN_METRICS_IMAGE"
 
 N_BOXES="${N_BOXES:-30}"

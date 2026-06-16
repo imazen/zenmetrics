@@ -1,0 +1,32 @@
+[package]
+name = "zenfleet-s3"
+description = "Shared S3-compatible BlobStorage helper for the zenfleet-cloud worker trait layer. One s5cmd-backed client + BlobStorage impl that serves every S3-compatible object store (Cloudflare R2, AWS S3, DigitalOcean Spaces, MinIO). Factored out of zenfleet-vastai so SaladCloud and other providers reuse the proven R2 logic instead of duplicating it."
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+keywords = ["s3", "r2", "blob-storage", "cloud", "worker"]
+categories = ["filesystem", "api-bindings"]
+publish = false
+
+[lib]
+name = "zenfleet_s3"
+path = "src/lib.rs"
+
+[dependencies]
+# The cloud-agnostic trait layer this crate implements `BlobStorage` for.
+zenfleet-cloud = { workspace = true }
+# anyhow keeps the client error model simple — it is the same model the
+# vast.ai worker's R2 client used before the extraction (no behaviour
+# change), and the BlobStorage impl maps it into CloudError at the trait
+# boundary.
+anyhow = "1.0.102"
+# The client shells out to `s5cmd` via tokio's async Command, exactly as
+# the pre-extraction vast.ai R2 client did. The sync BlobStorage trait
+# methods drive each async op to completion on a private current-thread
+# runtime.
+tokio = { version = "1.52.3", default-features = false, features = ["rt", "process", "io-util", "time"] }
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }

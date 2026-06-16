@@ -7,14 +7,14 @@
 # environments.
 #
 # Companion to scripts/sweep/dual_impl_chunk.sh, which runs the same
-# pipeline against host-installed `zen-metrics` + a python venv. Use
+# pipeline against host-installed `zenmetrics` + a python venv. Use
 # the host version when iterating on the binaries; use this docker
 # wrapper for "I just want to score some pairs" repro or for the
 # eventual production fan-out.
 #
 # Required images (built and pushed by the agent that lands the
 # tags into CLAUDE.md's PINNED TASK progress markers):
-#   ghcr.io/imazen/zen-metrics-sweep:<tag>    — cvvdp-gpu + sweep
+#   ghcr.io/imazen/zenmetrics-sweep:<tag>    — cvvdp-gpu + sweep
 #   ghcr.io/imazen/pycvvdp-scorer:0.5.4       — pycvvdp v0.5.4 reference
 #
 # Required tools on PATH:
@@ -26,7 +26,7 @@
 #   Q_GRID              — comma-separated qualities (e.g. "50,90")
 #   KNOB_GRID           — JSON object knob grid, or "" for none
 #   OUT_DIR             — output directory (sidecars + pairs land here)
-#   ZEN_METRICS_IMAGE   — full ghcr.io/imazen/zen-metrics-sweep:<tag>
+#   ZEN_METRICS_IMAGE   — full ghcr.io/imazen/zenmetrics-sweep:<tag>
 #                         (or pull-policy-compatible registry path)
 #   PYCVVDP_IMAGE       — full ghcr.io/imazen/pycvvdp-scorer:0.5.4
 #                         (default: ghcr.io/imazen/pycvvdp-scorer:0.5.4)
@@ -55,7 +55,7 @@ PYCVVDP_IMAGE="${PYCVVDP_IMAGE:-ghcr.io/imazen/pycvvdp-scorer:0.5.4}"
 SKIP_IMAZEN="${SKIP_IMAZEN:-0}"
 SKIP_PYCVVDP="${SKIP_PYCVVDP:-0}"
 DOCKER_GPUS="${DOCKER_GPUS:---gpus all}"
-# CubeCL runtime override forwarded to `zen-metrics score-pairs`. Default
+# CubeCL runtime override forwarded to `zenmetrics score-pairs`. Default
 # leaves the binary on its own auto-detect path (cuda → wgpu → hip → cpu).
 # Set to `cpu` for local-CPU smoke runs (e.g. WSL2 where --gpus all fails)
 # or `cuda` to force CUDA on a known-good GPU host.
@@ -75,7 +75,7 @@ while [[ $# -gt 0 ]]; do
         --q-grid) Q_GRID="$2"; shift 2;;
         --knob-grid) KNOB_GRID="$2"; shift 2;;
         --out-dir) OUT_DIR="$2"; shift 2;;
-        --zen-metrics-image) ZEN_METRICS_IMAGE="$2"; shift 2;;
+        --zenmetrics-image) ZEN_METRICS_IMAGE="$2"; shift 2;;
         --pycvvdp-image) PYCVVDP_IMAGE="$2"; shift 2;;
         --skip-imazen) SKIP_IMAZEN=1; shift;;
         --skip-pycvvdp) SKIP_PYCVVDP=1; shift;;
@@ -87,7 +87,7 @@ done
 : "${SOURCES_DIR:?SOURCES_DIR is required}"
 : "${Q_GRID:?Q_GRID is required}"
 : "${OUT_DIR:?OUT_DIR is required}"
-: "${ZEN_METRICS_IMAGE:?ZEN_METRICS_IMAGE is required (use --zen-metrics-image or env)}"
+: "${ZEN_METRICS_IMAGE:?ZEN_METRICS_IMAGE is required (use --zenmetrics-image or env)}"
 
 # Resolve absolute paths up-front so docker volume mounts don't surprise.
 SOURCES_ABS="$(cd -- "$SOURCES_DIR" && pwd)"
@@ -105,7 +105,7 @@ CTR_PAIRS_TSV="$CTR_OUT/pairs.tsv"
 CTR_DIST_DIR="$CTR_OUT/dist"
 
 # Same default name discipline as the host-binary variant. Override
-# SIDECAR_IMAZEN_NAME if the in-image zen-metrics has a different
+# SIDECAR_IMAZEN_NAME if the in-image zenmetrics has a different
 # CVVDP_IMPL_TAG baked in (e.g. CI-tagged images bake the git short
 # hash).
 SIDECAR_IMAZEN_NAME="${SIDECAR_IMAZEN_NAME:-cvvdp_imazen_v0_0_1}"
@@ -114,11 +114,11 @@ SIDECAR_PYCVVDP_HOST="$OUT_ABS/cvvdp_pycvvdp_v054.parquet"
 
 run_zen_metrics() {
     # Override ENTRYPOINT — the production image's default entrypoint is
-    # the chunk-claim worker (`zen-metrics-worker`), which expects R2 env
+    # the chunk-claim worker (`zenmetrics-worker`), which expects R2 env
     # vars and consumes chunk specs. For per-pair scoring we drive the
-    # underlying `zen-metrics` binary directly.
+    # underlying `zenmetrics` binary directly.
     docker run --rm $DOCKER_GPUS \
-        --entrypoint /usr/local/bin/zen-metrics \
+        --entrypoint /usr/local/bin/zenmetrics \
         -v "$SOURCES_ABS":"$CTR_SOURCES":ro \
         -v "$OUT_ABS":"$CTR_OUT":rw \
         -w "$CTR_OUT" \

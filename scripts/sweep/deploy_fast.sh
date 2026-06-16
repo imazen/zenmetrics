@@ -50,11 +50,11 @@ set +a
 
 # Sanity-check that the image is reachable. Fail fast rather than launch
 # 8 boxes that all fail to pull.
-IMAGE="ghcr.io/imazen/zen-metrics-sweep:${IMAGE_TAG}"
+IMAGE="ghcr.io/imazen/zenmetrics-sweep:${IMAGE_TAG}"
 GHCR_AUTH=""
 if [[ -n "${GHCR_TOKEN:-}" ]]; then
     # Authenticated check (use this when the package is private).
-    if ! curl -fsSL "https://ghcr.io/v2/imazen/zen-metrics-sweep/manifests/${IMAGE_TAG}" \
+    if ! curl -fsSL "https://ghcr.io/v2/imazen/zenmetrics-sweep/manifests/${IMAGE_TAG}" \
         -u "${GHCR_USER:-imazen}:${GHCR_TOKEN}" \
         -o /dev/null 2>/dev/null
     then
@@ -64,11 +64,11 @@ if [[ -n "${GHCR_TOKEN:-}" ]]; then
     fi
 else
     # Anonymous check — works only when the GHCR package is public.
-    if ! curl -fsSL "https://ghcr.io/v2/imazen/zen-metrics-sweep/manifests/${IMAGE_TAG}" \
+    if ! curl -fsSL "https://ghcr.io/v2/imazen/zenmetrics-sweep/manifests/${IMAGE_TAG}" \
         -o /dev/null 2>/dev/null
     then
         echo "WARNING: $IMAGE is private (or unreachable). Set GHCR_TOKEN to a PAT with read:packages, OR make the package public via:" >&2
-        echo "  https://github.com/orgs/imazen/packages/container/zen-metrics-sweep/settings (Change visibility -> Public)" >&2
+        echo "  https://github.com/orgs/imazen/packages/container/zenmetrics-sweep/settings (Change visibility -> Public)" >&2
     fi
 fi
 

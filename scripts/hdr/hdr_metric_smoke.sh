@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HDR-metric smoke + sanity test for `zen-metrics score --hdr`.
+# HDR-metric smoke + sanity test for `zenmetrics score --hdr`.
 #
 # Exercises the three HDR decode paths (EXR, gain-map HEIC, Google-format
 # UltraHDR JPEG) through every CPU metric (ssim2/dssim/butteraugli/zensim),
@@ -12,7 +12,7 @@
 # Local-corpus harness, not CI: needs the HDR corpus on /mnt/v. Build first
 # (`hdr` needs a metric backend so the umbrella has variants to dispatch — the
 # bare `--features hdr` build does not compile on its own):
-#   cargo build --release -p zen-metrics-cli \
+#   cargo build --release -p zenmetrics-cli \
 #     --features "png,jpeg,cpu-metrics,gpu-cvvdp,gpu-butteraugli,gpu-cuda,hdr"
 #   cargo build --release -p zenhdr-corpus --example make_distorted
 #
@@ -20,7 +20,7 @@
 # EXR_X, EXR_A, EXR_B). Exits nonzero on the first failed assertion.
 set -uo pipefail
 
-BIN=${BIN:-./target/release/zen-metrics}
+BIN=${BIN:-./target/release/zenmetrics}
 MK_DISTORTED=${MK_DISTORTED:-./target/release/examples/make_distorted}
 UHDR_JPEG=${UHDR_JPEG:-/home/lilith/work/zen/ultrahdr/test_ultrahdr.jpg}
 HEIC_SM=${HEIC_SM:-/mnt/v/heic/FE0C1B41-813F-425A-BDA8-EDA6F5860FB3.HEIC}

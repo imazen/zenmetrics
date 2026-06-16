@@ -13,7 +13,7 @@
 # instead of the v15 sweep onstart. Key differences:
 #
 #   - --image points at an `ubuntu:24.04` shell that docker-pulls the
-#     two real images (zen-metrics-sweep + pycvvdp-scorer) at boot. We
+#     two real images (zenmetrics-sweep + pycvvdp-scorer) at boot. We
 #     don't ship a pre-built worker image because (a) the two scoring
 #     images are 250 MB + 6.5 GB, baking them in would defeat
 #     vast.ai's pull cache, and (b) the chunk-worker shell stitches
@@ -34,7 +34,7 @@
 #
 # Environment overrides:
 #   SWEEP_RUN_ID            (default: cvvdp-backfill-<YYYY-MM-DD>)
-#   ZEN_METRICS_IMAGE       (default: ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-76854e8)
+#   ZEN_METRICS_IMAGE       (default: ghcr.io/imazen/zenmetrics-sweep:0.6.4-cvvdp-76854e8)
 #   PYCVVDP_IMAGE           (default: ghcr.io/imazen/pycvvdp-scorer:0.5.4)
 #   N_BOXES                 (default: 6 — moderate fleet for the smoke pass)
 #   MAX_DPH                 (default: 0.30 — pycvvdp wants more compute than v15)
@@ -48,11 +48,11 @@ set -euo pipefail
 source ~/.config/cloudflare/r2-credentials
 
 SWEEP_RUN_ID="${SWEEP_RUN_ID:-cvvdp-backfill-$(date -u +%Y-%m-%d)}"
-ZEN_METRICS_IMAGE="${ZEN_METRICS_IMAGE:-ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-76854e8}"
+ZEN_METRICS_IMAGE="${ZEN_METRICS_IMAGE:-ghcr.io/imazen/zenmetrics-sweep:0.6.4-cvvdp-76854e8}"
 PYCVVDP_IMAGE="${PYCVVDP_IMAGE:-ghcr.io/imazen/pycvvdp-scorer:0.5.4}"
 
 # Boot image: a thin ubuntu:24.04 — the real scoring images get pulled
-# inside onstart_cvvdp_backfill.sh. Don't reuse zen-metrics-sweep as
+# inside onstart_cvvdp_backfill.sh. Don't reuse zenmetrics-sweep as
 # the boot image: it would conflict with the dind-style docker pull
 # of itself inside the container.
 BOOT_IMAGE="${BOOT_IMAGE:-ubuntu:24.04}"

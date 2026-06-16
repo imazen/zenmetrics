@@ -481,15 +481,15 @@ The expected verification (when the patch lands on the fork):
 
 ```bash
 # Build zenmetrics with the patched cubecl fork
-cargo build --release -p zen-metrics-cli --no-default-features --features sweep,gpu,gpu-cuda
+cargo build --release -p zenmetrics-cli --no-default-features --features sweep,gpu,gpu-cuda
 
 # First run: cold cache. Score a single pair.
 rm -rf target/cubecl/  # clear any stale cache from before the patch
-time target/release/zen-metrics score --metric ssim2 ref.png dist.png
+time target/release/zenmetrics score --metric ssim2 ref.png dist.png
 #   Expected: ~10-30 s wall (compile cost dominates first run)
 
 # Second run: warm cache, same kernel.
-time target/release/zen-metrics score --metric ssim2 ref.png dist.png
+time target/release/zenmetrics score --metric ssim2 ref.png dist.png
 #   Expected: ~500 ms wall (cache hit, no NVRTC)
 ```
 
@@ -506,7 +506,7 @@ cd <cubecl-fork-clone>
 git checkout feat/persistent-cache-rev1
 cd <zenmetrics>
 cargo build --release ...
-target/release/zen-metrics score ...
+target/release/zenmetrics score ...
 
 # Check the cache file path:
 find target/cubecl -name "ptx.json.log" -mtime -1
@@ -517,7 +517,7 @@ cd <cubecl-fork-clone>
 git checkout feat/persistent-cache-rev2  # different commit on the same branch
 cd <zenmetrics>
 cargo build --release ...
-target/release/zen-metrics score ...
+target/release/zenmetrics score ...
 
 # Now there should be TWO cache files:
 find target/cubecl -name "ptx.json.log" -mtime -1

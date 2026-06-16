@@ -1,9 +1,9 @@
 # Keep the Railway upload to source only. The workspace's heavy data lives in scripts/ (6.6G,
-# mostly gitignored) and target/.jj. zen-jobdash builds from crates/ + the workspace manifests.
+# mostly gitignored) and target/.jj. zenfleet-dash builds from crates/ + the workspace manifests.
 /target
 /.jj
 /.git
 /scripts
 # Frontend build artifacts — the Docker node stage rebuilds them from package-lock.json.
-crates/zen-jobdash/web/node_modules
-crates/zen-jobdash/web/dist
+crates/zenfleet-dash/web/node_modules
+crates/zenfleet-dash/web/dist

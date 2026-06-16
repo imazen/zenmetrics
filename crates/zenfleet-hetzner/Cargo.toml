@@ -1,0 +1,46 @@
+[package]
+name = "zenfleet-hetzner"
+description = "Hetzner Cloud provider for the zenfleet-orchestrator ProviderHandle trait: a thin REST client + cloud-init-driven worker bootstrap that polls R2 for chunks (no managed queue) and runs the same backend-agnostic encode+score compute the vast.ai / Salad backends run."
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+keywords = ["hetzner", "cloud", "fleet", "job-queue"]
+categories = ["concurrency", "api-bindings"]
+publish = false
+
+[lib]
+name = "zenfleet_hetzner"
+path = "src/lib.rs"
+
+[[bin]]
+name = "zenfleet-hetzner-sweep"
+path = "src/bin/zenfleet-hetzner-sweep.rs"
+
+[[bin]]
+name = "hetzner-lifecycle-smoke"
+path = "src/bin/hetzner-lifecycle-smoke.rs"
+
+[dependencies]
+# Provider-generic fleet orchestration logic — what we implement against.
+zenfleet-orchestrator = { workspace = true }
+# Reuse the R2 SigV4 operator + scoped-cred minter from the Salad crate.
+# Hetzner has no managed object store; workers BYO R2/S3 just like Salad.
+zenfleet-salad = { workspace = true, features = ["launcher"] }
+# anyhow + clap for the launcher binary error model + CLI.
+anyhow = "1.0.102"
+clap = { workspace = true, features = ["env"] }
+# Async runtime.
+tokio = { version = "1.52.3", default-features = false, features = ["rt", "rt-multi-thread", "time", "sync", "macros", "process"] }
+# Hetzner REST client. reqwest with rustls so no system OpenSSL.
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+# Tracing for diagnostics (matches Salad).
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+tokio = { version = "1.52.3", default-features = false, features = ["rt", "rt-multi-thread", "macros", "time"] }

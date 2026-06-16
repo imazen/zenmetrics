@@ -2,9 +2,9 @@
 #
 # Sibling of Dockerfile.sweep.v26 (the vast.ai image). Reuses v26's L1-L8
 # VERBATIM (same ubuntu base → apt → pyarrow → CUDA runtime+dev → s5cmd+jq
-# → cuda_dlsym_stub → zen-metrics binary), then diverges at L9+:
+# → cuda_dlsym_stub → zenmetrics binary), then diverges at L9+:
 #
-#   L9  : zen-sweep-worker built --features salad-sweep (NOT vastai).
+#   L9  : zenfleet-sweep built --features salad-sweep (NOT vastai).
 #   L9b : salad-http-job-queue-worker v0.7.0 Go sidecar (baked from the
 #         upstream GitHub release tarball — NOT boot-fetched).
 #   L10 : entrypoint_salad.sh (launches BOTH the sidecar + the worker).
@@ -19,9 +19,9 @@
 # Salad's managed queue → the `salad-http-job-queue-worker` sidecar
 # (gRPC client to Salad's queue) → forwards each job as
 # `POST http://localhost:<job.port><job.path>` to the worker's local
-# HTTP receiver (`zen_cloud_salad::queue::SaladJobQueue`). The HTTP
+# HTTP receiver (`zenfleet_salad::queue::SaladJobQueue`). The HTTP
 # response body is read back as the job output. So the image runs the
-# sidecar + `zen-sweep-worker worker --backend salad` side-by-side; the
+# sidecar + `zenfleet-sweep worker --backend salad` side-by-side; the
 # worker binds the port the sidecar POSTs to (SALAD_JOB_PORT, default
 # :80 per the upstream mandelbrot with-shell-script sample).
 #
@@ -35,8 +35,8 @@
 #   │ L5: CUDA dev headers (cudart-dev-12-6) ~30 MB   per CUDA bump │
 #   │ L6: helpers (s5cmd 2.2.2 + jq 1.7.1)   ~18 MB   per quarter   │
 #   │ L7: cuda_dlsym_stub.so (compiled here) ~15 KB   rare          │
-#   │ L8: zen-metrics binary                 ~280 MB  per code push │
-#   │ L9: zen-sweep-worker (salad-sweep)      ~10 MB   per code push │
+#   │ L8: zenmetrics binary                 ~280 MB  per code push │
+#   │ L9: zenfleet-sweep (salad-sweep)      ~10 MB   per code push │
 #   │ L9b: salad-http-job-queue-worker sidecar ~25 MB pinned        │
 #   │ L10: entrypoint_salad.sh                ~5 KB   per script    │
 #   │ L11: ENV + LABELs + ENTRYPOINT         0 B      ~never        │
@@ -44,33 +44,33 @@
 #
 # Build (context: zenmetrics dir):
 #
-#   # 1. zen-metrics binary — IDENTICAL to v26's build (same CUDA pin).
-#   CUDARC_CUDA_VERSION=12000 cargo build --release -p zen-metrics-cli \
+#   # 1. zenmetrics binary — IDENTICAL to v26's build (same CUDA pin).
+#   CUDARC_CUDA_VERSION=12000 cargo build --release -p zenmetrics-cli \
 #       --no-default-features --features 'sweep,png,gpu,gpu-cuda,gpu-cpu'
-#   cp target/release/zen-metrics ./zen-metrics
+#   cp target/release/zenmetrics ./zenmetrics
 #
-#   # 2. zen-sweep-worker --features salad-sweep (the Salad glue + the
+#   # 2. zenfleet-sweep --features salad-sweep (the Salad glue + the
 #   #    shared inline encode+score compute; same GPU tree as vastai).
-#   cargo build --release -p zen-sweep-worker --features salad-sweep
-#   cp target/release/zen-sweep-worker ./zen-sweep-worker
+#   cargo build --release -p zenfleet-sweep --features salad-sweep
+#   cp target/release/zenfleet-sweep ./zenfleet-sweep
 #
 #   # 3. Build the image:
 #   docker build -f Dockerfile.sweep.salad.v1 \
-#       --build-arg ZEN_METRICS_BINARY=./zen-metrics \
-#       --build-arg ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker \
-#       -t ghcr.io/imazen/zen-metrics-sweep-salad:v1-$(git rev-parse --short HEAD) \
-#       -t ghcr.io/imazen/zen-metrics-sweep-salad:v1 \
+#       --build-arg ZEN_METRICS_BINARY=./zenmetrics \
+#       --build-arg ZEN_SWEEP_WORKER_BINARY=./zenfleet-sweep \
+#       -t ghcr.io/imazen/zenmetrics-sweep-salad:v1-$(git rev-parse --short HEAD) \
+#       -t ghcr.io/imazen/zenmetrics-sweep-salad:v1 \
 #       .
 #
 # Run: the Salad container group points at this image. The ENTRYPOINT
-# launches the sidecar + `zen-sweep-worker worker --backend salad`.
+# launches the sidecar + `zenfleet-sweep worker --backend salad`.
 # Set SALAD_JOB_PORT in the container group env to the group's
 # `queue_connection.port` (the worker binds it; the sidecar POSTs to it).
 
 FROM ubuntu:24.04
 
 LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
-LABEL org.opencontainers.image.description="zen-metrics SaladCloud sweep worker (salad.v1: v26 base layers + zen-sweep-worker --features salad-sweep + baked salad-http-job-queue-worker v0.7.0 sidecar + dual-launch entrypoint). HTTP job receiver fed by the sidecar; BYO R2/S3."
+LABEL org.opencontainers.image.description="zenmetrics SaladCloud sweep worker (salad.v1: v26 base layers + zenfleet-sweep --features salad-sweep + baked salad-http-job-queue-worker v0.7.0 sidecar + dual-launch entrypoint). HTTP job receiver fed by the sidecar; BYO R2/S3."
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -162,54 +162,54 @@ RUN python3 -c "import pyarrow.parquet as pq; print('pyarrow OK')" \
     && test -f /usr/local/lib/cuda_dlsym_stub.so \
     && echo "salad.v1 base-layer smoke passed"
 
-# ── L8: zen-metrics binary ──────────────────────────────────────────────
+# ── L8: zenmetrics binary ──────────────────────────────────────────────
 # IDENTICAL to v26 (same artifact, same CUDARC_CUDA_VERSION=12000 build).
 # The Salad worker's inline encode+score compute calls the same
-# zen-metrics-cli lib path the vast.ai worker does.
-ARG ZEN_METRICS_BINARY=./zen-metrics
-COPY --chmod=0755 ${ZEN_METRICS_BINARY} /usr/local/bin/zen-metrics
+# zenmetrics-cli lib path the vast.ai worker does.
+ARG ZEN_METRICS_BINARY=./zenmetrics
+COPY --chmod=0755 ${ZEN_METRICS_BINARY} /usr/local/bin/zenmetrics
 
 # Sanity gate (mirrors v26): binary runs + every metric/CLI surface is
 # wired + the cudarc-12000 bind pin held (no _v2 panic symbols slipped
 # back in).
-RUN /usr/local/bin/zen-metrics --version \
-    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q zensim \
-    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q cvvdp \
-    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q iwssim \
-    && /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q pairs-tsv \
-    && /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q allow-small-images \
-    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjpeg \
-    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenwebp \
-    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenavif \
-    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjxl \
+RUN /usr/local/bin/zenmetrics --version \
+    && /usr/local/bin/zenmetrics list-metrics 2>&1 | grep -q zensim \
+    && /usr/local/bin/zenmetrics list-metrics 2>&1 | grep -q cvvdp \
+    && /usr/local/bin/zenmetrics list-metrics 2>&1 | grep -q iwssim \
+    && /usr/local/bin/zenmetrics score-pairs --help 2>&1 | grep -q pairs-tsv \
+    && /usr/local/bin/zenmetrics score-pairs --help 2>&1 | grep -q allow-small-images \
+    && /usr/local/bin/zenmetrics sweep --help 2>&1 | grep -q zenjpeg \
+    && /usr/local/bin/zenmetrics sweep --help 2>&1 | grep -q zenwebp \
+    && /usr/local/bin/zenmetrics sweep --help 2>&1 | grep -q zenavif \
+    && /usr/local/bin/zenmetrics sweep --help 2>&1 | grep -q zenjxl \
     && for sym in cuCtxGetDevice_v2 cuEventElapsedTime_v2 cuCoredumpDeregisterStartCallback cuCoredumpDeregisterCompleteCallback ; do \
-        if strings /usr/local/bin/zen-metrics 2>/dev/null | grep -q "^${sym}$"; then \
+        if strings /usr/local/bin/zenmetrics 2>/dev/null | grep -q "^${sym}$"; then \
             echo "salad.v1: ${sym} still referenced -- rebuild with CUDARC_CUDA_VERSION=12000" >&2 ; \
             exit 1 ; \
         fi ; \
     done \
-    && echo "salad.v1 zen-metrics smoke + cudarc-bind check passed"
+    && echo "salad.v1 zenmetrics smoke + cudarc-bind check passed"
 
-# ── L9: deployed worker (zen-sweep-worker, --features salad-sweep) ───────
+# ── L9: deployed worker (zenfleet-sweep, --features salad-sweep) ───────
 #
 # The cloud-agnostic deployed worker, built for the SALAD backend
 # (`--features salad-sweep`): the Salad JobQueue/CredentialSource/
 # WorkerHost/BlobStorage/Heartbeat glue + the shared inline encode+score
 # compute (same GPU tree as vastai's inline-sweep). Invoked as
-# `zen-sweep-worker worker --backend salad`. The worker binds a local
+# `zenfleet-sweep worker --backend salad`. The worker binds a local
 # HTTP receiver (SaladJobQueue) on SALAD_JOB_PORT (default :80) that the
 # sidecar POSTs each queue job to.
-ARG ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker
-COPY --chmod=0755 ${ZEN_SWEEP_WORKER_BINARY} /usr/local/bin/zen-sweep-worker
+ARG ZEN_SWEEP_WORKER_BINARY=./zenfleet-sweep
+COPY --chmod=0755 ${ZEN_SWEEP_WORKER_BINARY} /usr/local/bin/zenfleet-sweep
 
 # Sanity gate: the worker exposes the worker subcommand + the --backend
 # selector, and `--backend salad` is an accepted value (the salad-sweep
 # build compiled the Salad dispatch arm in).
-RUN /usr/local/bin/zen-sweep-worker --version \
-    && /usr/local/bin/zen-sweep-worker --help 2>&1 | grep -q -- '--backend' \
-    && /usr/local/bin/zen-sweep-worker worker --backend salad --help 2>&1 | grep -q -- '--run-id' \
-    && /usr/local/bin/zen-sweep-worker worker --backend salad --help 2>&1 | grep -q -- '--chunks-r2' \
-    && echo "salad.v1 zen-sweep-worker (salad-sweep) smoke passed"
+RUN /usr/local/bin/zenfleet-sweep --version \
+    && /usr/local/bin/zenfleet-sweep --help 2>&1 | grep -q -- '--backend' \
+    && /usr/local/bin/zenfleet-sweep worker --backend salad --help 2>&1 | grep -q -- '--run-id' \
+    && /usr/local/bin/zenfleet-sweep worker --backend salad --help 2>&1 | grep -q -- '--chunks-r2' \
+    && echo "salad.v1 zenfleet-sweep (salad-sweep) smoke passed"
 
 # ── L9b: salad-http-job-queue-worker sidecar (Go, v0.7.0, x86_64) ────────
 #
@@ -254,10 +254,10 @@ RUN test -s /workspace/salad-sweep/cubecl.toml \
 # Warmup fixtures: small (64x64) for the default 5 GPU metrics, large
 # (256x256) for iwssim-gpu's >=176px requirement. Baked under
 # /opt/zen/warmup; the warmup script reads from there.
-COPY crates/zen-metrics-cli/tests/fixtures/ref_64.png         /opt/zen/warmup/ref_64.png
-COPY crates/zen-metrics-cli/tests/fixtures/dist_noisy_64.png  /opt/zen/warmup/dist_noisy_64.png
-COPY crates/zen-metrics-cli/tests/fixtures/ref_256.png        /opt/zen/warmup/ref_256.png
-COPY crates/zen-metrics-cli/tests/fixtures/dist_noisy_256.png /opt/zen/warmup/dist_noisy_256.png
+COPY crates/zenmetrics-cli/tests/fixtures/ref_64.png         /opt/zen/warmup/ref_64.png
+COPY crates/zenmetrics-cli/tests/fixtures/dist_noisy_64.png  /opt/zen/warmup/dist_noisy_64.png
+COPY crates/zenmetrics-cli/tests/fixtures/ref_256.png        /opt/zen/warmup/ref_256.png
+COPY crates/zenmetrics-cli/tests/fixtures/dist_noisy_256.png /opt/zen/warmup/dist_noisy_256.png
 RUN test -s /opt/zen/warmup/ref_64.png \
     && test -s /opt/zen/warmup/dist_noisy_64.png \
     && test -s /opt/zen/warmup/ref_256.png \
@@ -272,7 +272,7 @@ RUN test -x /usr/local/bin/warmup_kernels.sh && echo "salad.v1 warmup script bak
 # Hydrates env, verifies the baked tools exist (fail-loud-exit-nonzero if
 # missing — a broken image must NOT paper over it with a runtime install),
 # then runs the kernel-cache warmup pass (idempotent; ~5–30s cold, <1s
-# warm), and FINALLY launches BOTH the sidecar and `zen-sweep-worker worker
+# warm), and FINALLY launches BOTH the sidecar and `zenfleet-sweep worker
 # --backend salad` concurrently (the upstream with-shell-script pattern).
 # NO apt/pip/curl at boot.
 COPY --chmod=0755 scripts/sweep/entrypoint_salad.sh /usr/local/bin/entrypoint_salad.sh
@@ -280,5 +280,5 @@ COPY --chmod=0755 scripts/sweep/entrypoint_salad.sh /usr/local/bin/entrypoint_sa
 # ── L11: ENTRYPOINT ─────────────────────────────────────────────────────
 # Salad runs the container with no override; the entrypoint launches the
 # sidecar + the HTTP-serving worker. Operators can `--entrypoint
-# /usr/local/bin/zen-metrics` for an ad-hoc CLI shell.
+# /usr/local/bin/zenmetrics` for an ad-hoc CLI shell.
 ENTRYPOINT ["/usr/local/bin/entrypoint_salad.sh"]

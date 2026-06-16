@@ -11,16 +11,16 @@
 #      into $ZENMETRICS_CACHE_DIR. When absent, the orchestrator's
 #      `warm()` runs the local bench at startup (~30 s) — same
 #      behaviour as a fresh box.
-#   3. Drive `zen-metrics sweep --use-orchestrator ...` on the claimed
+#   3. Drive `zenmetrics sweep --use-orchestrator ...` on the claimed
 #      chunk. Identical chunk-claim contract as `onstart_v3.sh`.
 #   4. On rc≠0 the EXIT trap (installed via run_with_error_trap.sh)
-#      uploads the tail log to R2 + invokes `vastai-fleet self-destroy`
+#      uploads the tail log to R2 + invokes `zenfleet-vastai self-destroy`
 #      so a broken worker doesn't burn billable hours.
 #
 # Operator override pattern:
 #
 #   vastai create instance ... \
-#       --image ghcr.io/imazen/zen-metrics-sweep:v27 \
+#       --image ghcr.io/imazen/zenmetrics-sweep:v27 \
 #       --entrypoint /usr/local/bin/run_with_error_trap.sh \
 #       --args "/usr/local/bin/onstart_orchestrator.sh"
 #
@@ -70,7 +70,7 @@ fi
 # 2. Verify baked tools are present (per CLAUDE.md "Remote/Fleet Images"
 # — image is broken if any of these are missing; fail loud).
 log "verifying baked tools"
-for cmd in zen-metrics s5cmd jq python3; do
+for cmd in zenmetrics s5cmd jq python3; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         log "FATAL: required baked binary '$cmd' not on PATH; image is broken"
         exit 99
@@ -99,14 +99,14 @@ fi
 
 # 4. Drive the sweep. The chunk-claim contract is the SAME as
 # onstart_v3.sh — workers pick up chunks.jsonl, atomic-claim a chunk,
-# run zen-metrics sweep, upload results. We only swap the per-cell
+# run zenmetrics sweep, upload results. We only swap the per-cell
 # scoring driver from "legacy direct dispatch" to the orchestrator.
 #
 # Real onstart wrappers (onstart_unified.sh, onstart_v3.sh, etc.) live
 # in this directory and already implement the full chunk-claim ←→
 # results-upload loop. We delegate to onstart_unified.sh and just
 # forward the orchestrator flags through the env so the
-# zen-metrics-cli library calls inside zen-sweep-worker pick them up.
+# zenmetrics-cli library calls inside zenfleet-sweep pick them up.
 log "configuring orchestrator env for downstream worker"
 # Phase 7.7.1 (2026-05-27): the orchestrator is now the CLI default;
 # `ZENMETRICS_USE_ORCHESTRATOR=1` is no longer required (and is a
@@ -125,8 +125,8 @@ log "  orchestrator: default (set ZENMETRICS_USE_LEGACY_SCHEDULER=1 to opt out)"
 # `--use-legacy-scheduler` (the new opt-OUT flag) so this works on
 # Phase 7.7.1+ binaries; older binaries that predate the flip still
 # expose `--use-orchestrator` and we accept either.
-if ! zen-metrics --help 2>&1 | grep -q -E -- '--use-(orchestrator|legacy-scheduler)'; then
-    log "FATAL: zen-metrics binary does not expose orchestrator flags"
+if ! zenmetrics --help 2>&1 | grep -q -E -- '--use-(orchestrator|legacy-scheduler)'; then
+    log "FATAL: zenmetrics binary does not expose orchestrator flags"
     log "       (image was built without orchestrator feature; rebuild)"
     exit 98
 fi
@@ -136,7 +136,7 @@ fi
 # list-metrics call exercises the orchestrator's startup path
 # (capability detection + cache load) without burning chunk time.
 log "orchestrator preflight (list-metrics, capability cache will be written/loaded)"
-zen-metrics \
+zenmetrics \
     --orchestrator-cache "$ZENMETRICS_CACHE_DIR" \
     --bench-on-start "$ZENMETRICS_BENCH_ON_START" \
     --cpu-features "$ZENMETRICS_CPU_FEATURES" \
@@ -145,7 +145,7 @@ zen-metrics \
 }
 
 # Delegate to the existing unified-worker entrypoint. Its chunk-claim
-# loop calls `zen-metrics sweep` for every chunk; with the Phase
+# loop calls `zenmetrics sweep` for every chunk; with the Phase
 # 7.7.1 default flip, every invocation routes through the
 # orchestrator without needing an env-var opt-in.
 log "delegating to /usr/local/bin/onstart_unified.sh"

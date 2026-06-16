@@ -30,7 +30,7 @@ the corrected default. Spend on this attempt: $0.09 (well under cap).
 
 ## Why no chunks completed (root cause)
 
-The fleet_summary recorded `image: "ghcr.io/imazen/zen-metrics-sweep-salad:v6-visibility-b"`.
+The fleet_summary recorded `image: "ghcr.io/imazen/zenmetrics-sweep-salad:v6-visibility-b"`.
 That's the Salad x86_64 image — it bakes the Salad managed-queue
 sidecar (not the Hetzner R2-polling loop) and ships a binary for
 amd64, not arm64. Running it on CAX11 produced one of two failure
@@ -50,30 +50,30 @@ result). After 818 s of empty queue, the launcher hit its
 deadline and tore down cleanly.
 
 The launcher source's `DEFAULT_IMAGE` constant at
-`crates/zencloud-hetzner/src/bin/zencloud-hetzner-sweep.rs:36` was
+`crates/zenfleet-hetzner/src/bin/zenfleet-hetzner-sweep.rs:36` was
 the Salad image string — a copy-paste leftover from the Salad
 launcher this binary was forked from. `cloud_init.rs` already had
-the correct Hetzner default (`zen-metrics-sweep-hetzner:v1`), but
+the correct Hetzner default (`zenmetrics-sweep-hetzner:v1`), but
 the launcher binary's `--image` default takes precedence: it
 passes the wrong image into `ProvisionSpec`, which is what
 cloud-init's `docker run` receives.
 
 **Fix landed this commit:** `DEFAULT_IMAGE` →
-`"ghcr.io/imazen/zen-metrics-sweep-hetzner:v1"`. The launcher
+`"ghcr.io/imazen/zenmetrics-sweep-hetzner:v1"`. The launcher
 binary rebuilt in 7 s.
 
 ## Image rebuild (Phase 1 of this pass) — successful
 
 | Field | Value |
 |---|---|
-| Tag | `ghcr.io/imazen/zen-metrics-sweep-hetzner:v1` |
-| Tag (sha) | `ghcr.io/imazen/zen-metrics-sweep-hetzner:v1-74c18dd0` |
+| Tag | `ghcr.io/imazen/zenmetrics-sweep-hetzner:v1` |
+| Tag (sha) | `ghcr.io/imazen/zenmetrics-sweep-hetzner:v1-74c18dd0` |
 | Index digest | `sha256:f8a3667f34242a7077e4bee82239c3bc81f7a47f364cb06f2b11e4b724041233` |
 | arm64 manifest | `sha256:129486b4b265b6eecb4d5698628f6c860d5ebd338108826fec7d097a8e39bad8` |
 | Build/push wall time | ~80 s (cross-build cached from morning; only L7 changed) |
 
 Sanity check via `--entrypoint /bin/sh` override confirmed the
-new `CMD ["/usr/local/bin/zen-sweep-worker"]` flow renders the
+new `CMD ["/usr/local/bin/zenfleet-sweep"]` flow renders the
 worker `--help` text cleanly (no `argv[1]` leak from a prior
 ENTRYPOINT array). The CMD fix from `74c18dd0` is functional in
 the published `:v1` image; the failure was elsewhere.
@@ -112,7 +112,7 @@ the 24-cell × 5-worker × ~5-15 s/cell math.
 
 ## Files touched
 
-- `crates/zencloud-hetzner/src/bin/zencloud-hetzner-sweep.rs` —
+- `crates/zenfleet-hetzner/src/bin/zenfleet-hetzner-sweep.rs` —
   `DEFAULT_IMAGE` swap (Salad → Hetzner ARM64 image).
 - `docs/hetzner_e2e_validated_2026-05-28.md` (this doc).
 
@@ -131,7 +131,7 @@ the fleet image confirmed correct (no Salad image in synthesized
 POST body) — verified at dry-run time per
 `/tmp/hetzner_dryrun_2026-05-28.log` and at runtime by inspecting
 the cloud-init `user_data` that the launcher synthesized
-(`docker pull 'ghcr.io/imazen/zen-metrics-sweep-hetzner:v1'`).
+(`docker pull 'ghcr.io/imazen/zenmetrics-sweep-hetzner:v1'`).
 
 A pre-flight gotcha: the launcher's default
 `--input-parquet-r2 s3://zen-tuning-ephemeral/salad-smoke-2026-05-28-24cell/inputs.parquet`
@@ -180,7 +180,7 @@ GPU baseline still pending.
 ### Image confirmation (proves DEFAULT_IMAGE fix landed)
 
 Synthesized `user_data` from the dry-run dump shows
-`docker pull 'ghcr.io/imazen/zen-metrics-sweep-hetzner:v1'` —
+`docker pull 'ghcr.io/imazen/zenmetrics-sweep-hetzner:v1'` —
 confirming the Salad image string is no longer being shipped.
 The DEFAULT_IMAGE fix (`7800dd61`) is functional in the rebuilt
 launcher binary.
@@ -328,7 +328,7 @@ lines). Headlines:
 - **Worker log** shows exactly ONE line then silence:
 
   > 2026-05-29T00:14:17.044964Z  INFO
-  >   zen_cloud_vastai::worker::r2_queue_loop: r2-queue loop
+  >   zenfleet_vastai::worker::r2_queue_loop: r2-queue loop
   >   starting bucket=zen-tuning-ephemeral
   >   prefix=runs/hetzner-20260529T001318/queue/ poll_secs=10
   >   idle_exit_secs=300 max_chunks=0
@@ -342,7 +342,7 @@ The third bug is **the worker's r2-queue loop runs but never
 LISTs / claims chunks** — at watchdog fire (t=280s, ~4 min after
 worker start) zero further log lines beyond the startup banner.
 `max_chunks=0` means uncapped chunk processing. The most likely
-cause given the env contents: `zen_cloud_vastai::worker::r2_queue_loop`
+cause given the env contents: `zenfleet_vastai::worker::r2_queue_loop`
 is the vastai worker reused for hetzner mode; it MAY not honor
 `AWS_SESSION_TOKEN`, in which case scoped R2 creds (which require
 the session token per Cloudflare R2 temp-cred docs in CLAUDE.md)

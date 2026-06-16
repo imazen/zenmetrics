@@ -139,7 +139,7 @@ pub trait ProviderHandle: Send {
 /// Operator-side blob storage interface — the driver lists / reads /
 /// writes objects in the bucket where workers drop their sidecars.
 ///
-/// This is intentionally NOT [`zen_cloud_core::traits::BlobStorage`]:
+/// This is intentionally NOT [`zenfleet_cloud::traits::BlobStorage`]:
 /// that one is sync + worker-side. This one is async + operator-side
 /// and only exposes the four call shapes the driver needs.
 pub trait R2Operator: Send + Sync {

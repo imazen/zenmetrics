@@ -394,7 +394,7 @@ impl ExecMetric {
                             };
                             let mut extras = BTreeMap::new();
                             // Match the legacy cache.rs column name —
-                            // see `crates/zen-metrics-cli/src/metrics/cache.rs`
+                            // see `crates/zenmetrics-cli/src/metrics/cache.rs`
                             // which emits `butteraugli_pnorm3_gpu`
                             // alongside `butteraugli_max_gpu`.
                             extras.insert("butteraugli_pnorm3_gpu".to_string(), pnorm3);

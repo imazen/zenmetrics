@@ -132,7 +132,7 @@ fn error_debug_format_includes_variant_name() {
 fn error_boxed_dyn_propagation_compiles_and_runs() {
     // Sanity test for the `?`-bubble path: `cvvdp_gpu::Error`
     // converts into `Box<dyn std::error::Error>` automatically.
-    // This is the exact path callers like `zen-metrics-cli` use
+    // This is the exact path callers like `zenmetrics-cli` use
     // when they propagate the error through their own
     // `Result<_, Box<dyn Error>>` return types.
     fn produces_boxed() -> Result<(), Box<dyn std::error::Error>> {

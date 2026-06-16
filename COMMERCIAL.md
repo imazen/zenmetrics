@@ -9,7 +9,7 @@ This repository is dual-licensed:
   closed-source products. Two separate tracks apply, depending on the
   crate:
 
-  ## `butteraugli-gpu`, `ssim2-gpu`, `zensim-gpu`, `zen-metrics-cli`, `zenmetrics-corpus`
+  ## `butteraugli-gpu`, `ssim2-gpu`, `zensim-gpu`, `zenmetrics-cli`, `zenmetrics-corpus`
 
   Standard Imazen commercial license — covers the GPU implementations
   Imazen authored from scratch for this repository, the test corpus,

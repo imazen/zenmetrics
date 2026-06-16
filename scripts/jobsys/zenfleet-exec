@@ -1,0 +1,7 @@
+#!/bin/sh
+# ZEN_EXEC shim for the real executor. The worker (`zenfleet-worker::exec_command`) spawns a SINGLE
+# program (no args) and pipes the DesiredJob to its stdin, so a "binary + subcommand" like
+# `zenmetrics jobexec` can't be named directly in ZEN_EXEC. This shim bridges that: it forwards
+# stdin/stdout untouched to `zenmetrics jobexec`. Bake it into the real-executor image and set
+# ZEN_EXEC=/usr/local/bin/zenfleet-exec.  `zenmetrics` must be on PATH (it is in the baked image).
+exec zenmetrics jobexec "$@"

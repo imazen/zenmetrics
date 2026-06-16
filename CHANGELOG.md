@@ -3,7 +3,7 @@
 Workspace conventions per the global rules:
 
 - One `[Unreleased]` section accumulates changes for the next release.
-- Per-crate headings (`## cvvdp-gpu`, `## zen-metrics-cli`, …) sit under
+- Per-crate headings (`## cvvdp-gpu`, `## zenmetrics-cli`, …) sit under
   each version section since this repo ships multiple crates.
 - `### QUEUED BREAKING CHANGES` accumulates breaks that need to land
   together — only cleared when the corresponding major (or minor for
@@ -19,11 +19,33 @@ Workspace conventions per the global rules:
 
 ## Workspace
 
+### Changed
+
+- **Crate rename — fleet/job-system crates are now `zenfleet-*`; the
+  metrics CLI binary is `zenmetrics` (no dash after `zen`).** Renamed
+  `zen-jobctl`→`zenfleet-ctl`, `zen-jobworker`→`zenfleet-worker`,
+  `zen-jobdash`→`zenfleet-dash`, `zen-job-core`→`zenfleet-core`,
+  `zen-ledger`→`zenfleet-ledger`, `zen-sweep-worker`→`zenfleet-sweep`,
+  `zen-cloud-core`→`zenfleet-cloud`,
+  `zen-cloud-{local,runpod,s3,salad,vastai}`→`zenfleet-{local,runpod,s3,salad,vastai}`,
+  `zencloud-hetzner`→`zenfleet-hetzner`, and `zen-metrics-cli`→`zenmetrics-cli`
+  (bin `zen-metrics`→`zenmetrics`, `zencloud-hetzner-sweep`→`zenfleet-hetzner-sweep`,
+  `zen-salad-sweep`→`zenfleet-salad-sweep`, worker bins `zen-jobexec`→`zenfleet-exec`
+  + `zen-jobgc`→`zenfleet-gc`, shim `scripts/jobsys/zen-jobexec`→`zenfleet-exec`).
+  All cross-deps, Rust `use` paths, bin source files, scripts, Dockerfiles,
+  CI, and docs updated; dated `benchmarks/*.meta` provenance left verbatim
+  (it records the historical `zen-metrics` invocations). All renamed crates
+  + `zenmetrics-cli --features sweep` build clean. Internal crates (mostly
+  `publish=false`) — no crates.io impact. Live infra identifiers (R2 buckets
+  `zen-tuning-ephemeral`/`zen-corpus`, Hetzner servers/SSH key `zen-arm-*`)
+  intentionally left as-is — renaming them needs a coordinated infra
+  migration, not a code change.
+
 ### Security
 
 - Dependabot alert sweep: `cargo update` on the root and
   `crates/burn-conv-spike` lockfiles (tar 0.4.45 → 0.4.46, GHSA alerts
-  #2/#3) and zen-jobdash web bumped to vite 8.0.16 +
+  #2/#3) and zenfleet-dash web bumped to vite 8.0.16 +
   @vitejs/plugin-react 6 (rolldown-based — removes esbuild entirely,
   clearing the high-severity esbuild alert #4; build verified). Alert
   #1 (thrift 0.17.0 via parquet 58.3) has NO patched thrift release —
@@ -57,7 +79,7 @@ Workspace conventions per the global rules:
   #25). GPU zensim keeps the u8 PU shell until the opaque grows a PU
   kernel. Routing + exact direct-call parity + identity-100 tests in
   `tests/it/cpu_zensim_pu.rs`.
-- `zencloud-hetzner` placement-fallback ladder: `--fallback-placements
+- `zenfleet-hetzner` placement-fallback ladder: `--fallback-placements
   cax11:hel1,cax21:nbg1,…` retries `POST /servers` HTTP 412
   `resource_unavailable` across ordered `(server_type, location)`
   rungs (sticky index; non-412 errors still fail fast). Live-walked
@@ -72,7 +94,7 @@ Workspace conventions per the global rules:
   `qualify_queue_key` re-qualifies (second half of iter-4 bug #3).
   (646f446e)
 
-- **HDR sweep mode** (`zen-metrics sweep --hdr`) — the gate for HDR
+- **HDR sweep mode** (`zenmetrics sweep --hdr`) — the gate for HDR
   training-data collection. 16-bit PQ-PNG references (cICP transfer 16,
   imazen-26-png-v2 contract: PQ EOTF → absolute cd/m², SDR white 203)
   decode to nits; cells run an honest HDR codec round-trip (zenjxl:
@@ -89,16 +111,16 @@ Workspace conventions per the global rules:
   Contract: `docs/PLAN_SWEEPS.md` §7.
 - Fleet plumbing for HDR chunks (v26→v27, schema-additive):
   `ChunkRecord.hdr` + `InlineGroupSpec.hdr` (serde-default false) →
-  `SweepConfig.hdr`; the vastai worker now builds zen-metrics-cli with
+  `SweepConfig.hdr`; the vastai worker now builds zenmetrics-cli with
   the `hdr` feature so HDR chunks execute rather than erroring.
 
 ### Fixed
 
 - Sweep TSV panic rows were one column short (missing the
   `encoded_filename` blank) — ragged rows broke strict TSV readers.
-- `zencloud-hetzner-sweep`: `METRICS` is now a `--metrics` flag
+- `zenfleet-hetzner-sweep`: `METRICS` is now a `--metrics` flag
   (default `ssim2`) — the hardcoded `ssim2-gpu` could never score on
-  the CPU-only CAX image; `DEFAULT_IMAGE` → `zen-metrics-sweep-hetzner:v2`
+  the CPU-only CAX image; `DEFAULT_IMAGE` → `zenmetrics-sweep-hetzner:v2`
   (v1 predates the iter-5 scoped-cred fix and 403s every queue LIST);
   `DEFAULT_INPUT_PARQUET_R2` → the real `input/smoke.parquet` path
   (bare `inputs.parquet` 404'd at preflight since 2026-05-28).
@@ -125,7 +147,7 @@ Workspace conventions per the global rules:
 
 ### Added
 
-## zen-metrics-cli
+## zenmetrics-cli
 
 - Plan-identity tuples execute on every path: the sweep runner's tuple
   path detects `{"cell","fp","plan"}` knob tuples and routes them
@@ -167,7 +189,7 @@ Workspace conventions per the global rules:
 
 
 
-## zen-metrics-cli
+## zenmetrics-cli
 
 - **zenavif plan-driven sweeps** (checklist step 8 of the variant-generation
   playbook — zenavif is the second plan-wired codec after zenjpeg).
@@ -188,13 +210,13 @@ Workspace conventions per the global rules:
   overflows the 2 MB default probabilistically under load.
 
 - Job-system bridge for plan-driven sweeps (the content-addressed
-  completion path for sweeps that never finish in one pass): `zen-metrics
+  completion path for sweeps that never finish in one pass): `zenmetrics
   sweep --plan … --dry-run [--emit-cells cells.jsonl]` builds the plan,
   writes the audit manifest, and emits per-(source × cell)
   `EncodeDeclareItem` JSON-lines without encoding;
-  `zen_jobctl::{EncodeDeclareItem, declare_encodes, parse_emit_cells}`
+  `zenfleet_ctl::{EncodeDeclareItem, declare_encodes, parse_emit_cells}`
   expand them into content-addressed encode `DesiredJob`s (idempotent —
-  re-declaring a plan gaps to exactly the unfinished cells); `zen-metrics
+  re-declaring a plan gaps to exactly the unfinished cells); `zenmetrics
   jobexec` executes plan cells from the stratum id alone via zenjpeg's
   `config_from_cell_id`, verifying the carried resolved-state fingerprint
   (`sweep::plan::resolve_verified`) so id-grammar drift is a loud
@@ -202,7 +224,7 @@ Workspace conventions per the global rules:
   jobexec stdin → JPEG bytes on stdout; tampered fp → hard failure.
   Docs: RUNNING_JOBS.md §4b (chunk mode vs job system decision table) +
   CLAUDE.md guard requiring new sweep features to land in both models.
-- Plan-driven zenjpeg sweeps: `zen-metrics sweep --codec zenjpeg --plan
+- Plan-driven zenjpeg sweeps: `zenmetrics sweep --codec zenjpeg --plan
   rd_core|modes_full [--plan-budget N]` takes cells from
   `zenjpeg::encode::sweep` (curated provenance-stamped axes,
   resolved-state fingerprint dedup, validity filtering,
@@ -230,7 +252,7 @@ Workspace conventions per the global rules:
   Drop both when 0.3.10 publishes and zenjxl bumps to `^0.3.10`
   (023d2c3c).
 
-## zen-metrics-cli
+## zenmetrics-cli
 
 - Sweep `jpeg` feature builds against current sibling zenjpeg again
   (`InternalParams::hybrid`/`HybridConfig` were removed upstream in the
@@ -372,7 +394,7 @@ Workspace conventions per the global rules:
   surface). Verified: `cargo check --all-targets` across all 6 + core + umbrella = 0
   errors; clippy lib+bins (CI scope) = 0; dssim-gpu opaque tests pass on CUDA
   (`opaque_srgb_u8_matches_typed`, `opaque_pixels_handles_stride`); umbrella consumers
-  (zen-metrics-cli, zenmetrics-orchestrator) compile clean (`45edc7f1`, `c8e84adb`).
+  (zenmetrics-cli, zenmetrics-orchestrator) compile clean (`45edc7f1`, `c8e84adb`).
   The umbrella's six near-identical `*_backend()` adapter fns then collapsed onto one
   `gpu_backend()` (six one-line delegators kept so their 40+ call sites stay put);
   `zenmetrics-gpu-core` is an **optional** umbrella dep pulled only by GPU metric
@@ -607,17 +629,17 @@ Workspace conventions per the global rules:
   with full teardown vs single-warm's in-place `set_reference` reuse). Shipped opt-in until a
   capacity/thrash guard routes oversized working sets back to single-warm.
 
-- **Job system: real-executor fleet image `ghcr.io/imazen/zen-jobworker-exec` + corpus plumbing**
-  (2026-05-30). `crates/zen-jobworker/Dockerfile.executor` + `scripts/jobsys/build_executor_image.sh`
-  bake the worker base + a prebuilt `zen-metrics` (with `jobexec`) + the `zen-jobexec` shim, with
-  image-level `ENV ZEN_EXEC=/usr/local/bin/zen-jobexec` so a fleet box runs REAL encode/score jobs.
+- **Job system: real-executor fleet image `ghcr.io/imazen/zenfleet-worker-exec` + corpus plumbing**
+  (2026-05-30). `crates/zenfleet-worker/Dockerfile.executor` + `scripts/jobsys/build_executor_image.sh`
+  bake the worker base + a prebuilt `zenmetrics` (with `jobexec`) + the `zenfleet-exec` shim, with
+  image-level `ENV ZEN_EXEC=/usr/local/bin/zenfleet-exec` so a fleet box runs REAL encode/score jobs.
   Built + pushed (amd64; binary needs glibc ≤2.35, bookworm ships 2.36; runs in-image — verified real
   zenjpeg encode + ssim2 score through the container). `launch_fleet.sh` + `unraid_worker.sh` now pass
   `ZEN_CORPUS_PREFIX` (so `jobexec` resolves `cell.image_path` from R2) and an overridable `ZEN_EXEC`;
-  set `ZEN_WORKER_IMAGE=…/zen-jobworker-exec:latest` + `ZEN_CORPUS_PREFIX=<prefix>` for real jobs.
-  `docs/RUNNING_JOBS.md` updated. NOTE: the ghcr `zen-jobworker-exec` package is **private** — make it
+  set `ZEN_WORKER_IMAGE=…/zenfleet-worker-exec:latest` + `ZEN_CORPUS_PREFIX=<prefix>` for real jobs.
+  `docs/RUNNING_JOBS.md` updated. NOTE: the ghcr `zenfleet-worker-exec` package is **private** — make it
   public (one-click, like the base image) for credential-less fleet pulls. arm64 image pending an
-  arm64 `zen-metrics` build.
+  arm64 `zenmetrics` build.
 - **zenmetrics-api: `MetricSession` — opt-in isolated GPU context with ironclad VRAM-on-drop
   (issue #17, foundation)** (2026-05-30, `0053c0cc` + tests `f7b396f4`). New **opaque** public types
   `MetricSession` + `SessionMetric<'ctx>` + `MAX_SESSIONS_PER_BACKEND` + `Error::TooManyContexts`,
@@ -663,15 +685,15 @@ Workspace conventions per the global rules:
   plain parity (cvvdp + ssim2 + warm-ref) within each metric's `Atomic<f32>` reduction-noise band;
   per-entry VRAM isolation (two owned metrics, drop one → its pool `bytes_reserved` 0 while the other
   stays resident, then 0); `into_metric` cap/recycle/leak. No existing public API changed.
-- **Job system: real executor `zen-metrics jobexec` (encode + score) + CPU `sweep` build fix**
-  (2026-05-30). New `zen-metrics jobexec` subcommand is the `ZEN_EXEC` reference executor: reads a
+- **Job system: real executor `zenmetrics jobexec` (encode + score) + CPU `sweep` build fix**
+  (2026-05-30). New `zenmetrics jobexec` subcommand is the `ZEN_EXEC` reference executor: reads a
   `DesiredJob` JSON on stdin, resolves the source (local / `s3://` / `$ZEN_CORPUS_PREFIX` via s5cmd),
   and for an `encode` job emits the encoded bytes, for a `metric` job re-encodes the cell + scores it
   with `run_metric` and emits a JSON score row — honoring the stdin-JSON → stdout-bytes contract.
   Reuses `sweep::encode` + the unified `run_metric` (CPU metrics ssim2/butteraugli/zensim; GPU metrics
   return a clear "needs a GPU build" error). Proven end-to-end through the actual worker:
   declare → claim → jobexec (real zenjpeg/zenwebp encode + ssim2 score) → content-addressed blob +
-  ledger row, blob sha256 == output_sha. `scripts/jobsys/zen-jobexec` is the single-program shim for
+  ledger row, blob sha256 == output_sha. `scripts/jobsys/zenfleet-exec` is the single-program shim for
   `ZEN_EXEC`. Also fixes a pre-existing break: `cmd_score_pairs` referenced the `gpu-cvvdp`-gated
   `cvvdp_gpu` module unconditionally, so a CPU-only `sweep` build didn't compile; the cvvdp blocks are
   now gated (`#[cfg(feature = "gpu-cvvdp")]`) with a CPU-build early error, leaving the GPU build
@@ -684,7 +706,7 @@ Workspace conventions per the global rules:
   (pull-based, no inbound ports, never the root key). New `scripts/jobsys/example_executor.py`
   documents + smoke-tests the `ZEN_EXEC` contract (stdin DesiredJob JSON → stdout output bytes →
   exit 0). Honest scope: orchestration is proven with the synthetic `/bin/cat` executor; a real
-  encode/score executor is a defined contract you bake in (the `zen-metrics jobexec` reference impl is
+  encode/score executor is a defined contract you bake in (the `zenmetrics jobexec` reference impl is
   not yet built).
 - **cvvdp-gpu: wgpu/Metal per-stream VRAM isolation spike (task #153 / issue #17)** (2026-05-30).
   Throwaway gated example `crates/cvvdp-gpu/examples/wgpu_isolation_spike.rs` (`required-features =
@@ -720,7 +742,7 @@ Workspace conventions per the global rules:
   `restart_policy:never` so it drains its share and exits). `teardown_fleet.sh` DELETEs the group.
   `… 60 1 0 0 1` = local + Hetzner-x86 + Salad = 3 distinct providers on one queue. Salad API key live,
   verified against `organizations/imazen/gpu-classes` (HTTP 200). Added
-  `crates/zen-cloud-salad/examples/fleet_create.rs` — the reqwest create path. **WAF gotcha, root-caused
+  `crates/zenfleet-salad/examples/fleet_create.rs` — the reqwest create path. **WAF gotcha, root-caused
   + fixed:** Salad's API is behind Cloudflare, whose managed ruleset 403s ("Attention Required!") any
   request body containing a `/bin/…` command path (command-injection rule). Bisected: body with
   `ZEN_EXEC=/bin/cat` → 403, identical body without → 201 (client/IP-agnostic across urllib/curl/
@@ -728,11 +750,11 @@ Workspace conventions per the global rules:
   the container, so it's behavior-identical and passes the WAF.
 - **Job system: multi-arch (amd64 + arm64) fleet-worker image (goal H "Oracle ARM (free)" + ARM
   capability)** (2026-05-30). The worker image was x86-only, so the named free Oracle ARM tier and a
-  Hetzner cax ARM box literally could not run it. `crates/zen-jobworker/Dockerfile` now selects the
+  Hetzner cax ARM box literally could not run it. `crates/zenfleet-worker/Dockerfile` now selects the
   s5cmd + aws-cli downloads by buildx `TARGETARCH` (the bases + Rust build stage were already
   arch-native), and `jobworker-image.yml` builds each arch on its own native runner (`ubuntu-latest`
   amd64, `ubuntu-24.04-arm` arm64 — free on this public repo, no QEMU), pushes by digest, and merges
-  one manifest asserting both `linux/amd64` + `linux/arm64`. `docker run ghcr.io/imazen/zen-jobworker`
+  one manifest asserting both `linux/amd64` + `linux/arm64`. `docker run ghcr.io/imazen/zenfleet-worker`
   now resolves per-host arch, unblocking the ARM half of the heterogeneous fleet.
   `scripts/jobsys/launch_fleet.sh` gains a 4th arg `HETZNER_ARM_BOXES` that brings up Ampere `cax`
   (arm64) boxes as a distinct capability tier — `launch_fleet.sh 200 1 0 1` = local(x86) +
@@ -741,18 +763,18 @@ Workspace conventions per the global rules:
   (nonexistent) `--user-data-from-string`, which would have failed every Hetzner box created via the
   launcher.
 - **Job system: capability routing (goal H "capability-routed GPU/CPU/ARM")** (2026-05-30).
-  `zen_job_core::worker_serves` + `ResourceClass::parse`; `zen-jobworker --capability <class>…`
+  `zenfleet_core::worker_serves` + `ResourceClass::parse`; `zenfleet-worker --capability <class>…`
   (also `ZEN_CAPABILITY` env in the fleet entrypoint) makes a worker pull only jobs whose
   `JobKind::profile().class` it serves — empty = general worker. Live demo
   `scripts/jobsys/demo_capability_routing.sh`: on a mixed 15-job queue a GPU-capability worker did
   exactly the 6 metric (Gpu) jobs and a CPU-capability worker exactly the 9 encode (CpuLight/CpuHeavy)
   jobs — routed by hardware off one queue, no overlap.
 - **Job system: baked fleet-worker image + launcher (goal H)** (2026-05-30).
-  `crates/zen-jobworker/Dockerfile` bakes `zen-jobworker` + `zen-jobgc` + aws-cli v2 + s5cmd + a
+  `crates/zenfleet-worker/Dockerfile` bakes `zenfleet-worker` + `zenfleet-gc` + aws-cli v2 + s5cmd + a
   keep-alive entrypoint (`fleet-entrypoint.sh`) so a fleet box claims work with **zero boot-time
   installs** — designing out the two bugs a 2026-05-30 ad-hoc test hit (python-unzip dropping the aws
   exec bit; a container with no keep-alive). CI `jobworker-image.yml` builds + pushes
-  `ghcr.io/imazen/zen-jobworker:{<sha>,latest}`. `scripts/jobsys/{launch,watch,teardown}_fleet.sh`
+  `ghcr.io/imazen/zenfleet-worker:{<sha>,latest}`. `scripts/jobsys/{launch,watch,teardown}_fleet.sh`
   bring up ≥3 interchangeable tiers (local + Hetzner + vast) on one R2 lease-queue with scoped temp
   creds, tearing down by `group=<run>` label. (That ad-hoc test already had Hetzner do 60 real jobs on
   the queue + the dashboard's Kill delete the live box; the image makes a clean 3-tier launch reliable.)
@@ -767,9 +789,9 @@ Workspace conventions per the global rules:
   stream) and answers "do we need a new context type?" — yes. **No public API changed; implementation
   awaits user approval of the proposed shape.** Committed spike output
   `crates/cvvdp-gpu/benchmarks/vram_isolation_spike_2026-05-30.txt`.
-- **Job system: safe GC execution (goal G) + ntfy notifications (goal D)** (2026-05-30). `zen_job_core`
+- **Job system: safe GC execution (goal G) + ntfy notifications (goal D)** (2026-05-30). `zenfleet_core`
   adds `lru_cap_evict` (bounded cheap-regenerable cache, evict LRU tail over a byte cap) + a `Tombstone`
-  record. `zen-jobworker::gc_execute` + the new `zen-jobgc` CLI run a reachability GC: referenced blobs
+  record. `zenfleet-worker::gc_execute` + the new `zenfleet-gc` CLI run a reachability GC: referenced blobs
   kept, unreferenced cheap evicted LRU-capped with a tombstone written first, unreferenced
   **irreplaceable refused** (surfaced, never auto-deleted), `verify_mirror` gating any non-regenerable
   delete; dry-run by default. Live `scripts/jobsys/demo_gc_r2.sh` / `examples/gc_live.rs` verifies all
@@ -779,39 +801,39 @@ Workspace conventions per the global rules:
   with `--spec-threshold-secs` co-runs a *live straggler* (primary claim older than the threshold but
   younger than the TTL) by taking a separate `claims/spec/<job_id>` claim — bounding the long tail; the
   ledger's latest-wins on `job_id` makes the loser a harmless duplicate. `/api/speculative`
-  (`zen_ledger::list_keys_uri` over `ZEN_CLAIMS_R2/spec/`) surfaces the active count in the dashboard.
+  (`zenfleet_ledger::list_keys_uri` over `ZEN_CLAIMS_R2/spec/`) surfaces the active count in the dashboard.
   Live demo `scripts/jobsys/demo_speculative_r2.sh` (slow primary + fast speculator → tail bounded,
   job converged).
-- **zen-jobdash: thumbnails/diffmaps + ad-hoc query (goal B)** (2026-05-29). `/api/blob/{sha}` serves a
+- **zenfleet-dash: thumbnails/diffmaps + ad-hoc query (goal B)** (2026-05-29). `/api/blob/{sha}` serves a
   result blob with a sniffed image content-type (JPEG/PNG/GIF/WebP/AVIF) + immutable cache, so encode
   and diffmap outputs render inline in the Results tab (thumbnail + full-size dialog). `/api/query`
   (`query_view`) is a structured filter over the Parquet ledger (kind/codec/status/image substrings,
   newest-first, capped) with a Query pane. Completes B's "peek results in-browser" except a SQL engine.
-- **zen-jobdash: in-browser result peek (goal B)** (2026-05-29). `/api/results` lists recent Done rows
+- **zenfleet-dash: in-browser result peek (goal B)** (2026-05-29). `/api/results` lists recent Done rows
   carrying an output blob; `/api/peek/{sha}` fetches that content-addressed blob from R2
   (`ZEN_BLOBS_R2`) and returns its bytes as truncated text + size (hex-only sha guard against path
   traversal). New dashboard Results tab with a per-row "peek" dialog. Verified live — peeked a known
   R2 blob by hash (`cvvdp_jod=9.42`, 14 bytes).
 - **Job system: idle-box reaping (goal F) + notification mechanism proven (goal D)** (2026-05-29).
-  `zen_jobdash::idle_boxes` flags running fleet boxes with no matching worker heartbeat (billing,
+  `zenfleet_dash::idle_boxes` flags running fleet boxes with no matching worker heartbeat (billing,
   doing no work); `ControlIntent::ReapIdle` + a dashboard "Reap idle (N)" button tear them down via
   the Hetzner client, and `/api/fleet` now reports the idle set. The notification path (detect →
   format → POST with deep link) is demonstrated live against a local receiver by
   `scripts/jobsys/demo_notify_local.sh` (budget-crossed fired with the deep-link payload) — the only
   thing a production channel adds is the destination URL (`ZEN_NOTIFY_WEBHOOK`).
-- **Job system: pause / resume / drain (goal C)** (2026-05-29). New `zen_job_core::RunControl`
-  (`{paused,drain}`); `zen-jobworker --control-r2-key` reads it and pulls no new work when
+- **Job system: pause / resume / drain (goal C)** (2026-05-29). New `zenfleet_core::RunControl`
+  (`{paused,drain}`); `zenfleet-worker --control-r2-key` reads it and pulls no new work when
   paused/draining (fail-open — absent = running), never touching the ledger so resume continues
   exactly where it left off. The dashboard's Pause/Drain/Resume now write this object to R2
-  (`ZEN_CONTROL_R2`, via new `zen_ledger::write_bytes_uri`) instead of only recording intent. Live
+  (`ZEN_CONTROL_R2`, via new `zenfleet_ledger::write_bytes_uri`) instead of only recording intent. Live
   demo `scripts/jobsys/demo_pause_drain_r2.sh` (paused/draining → done=0, resume → done=1).
-- **zen-jobworker: spot-preemption claim release (goal F)** (2026-05-29). On SIGTERM/SIGINT a worker
+- **zenfleet-worker: spot-preemption claim release (goal F)** (2026-05-29). On SIGTERM/SIGINT a worker
   with R2 claims now releases its in-flight claim (`release_claim_r2`) on a dedicated signal-hook
   thread and exits 130, so a reclaimed spot box requeues its job immediately instead of waiting out
   the claim TTL. Best-effort — TTL stale-reclaim (goal E) remains the correctness fallback. Live demo
   `scripts/jobsys/demo_spot_reclaim_r2.sh`; plus `scripts/jobsys/demo_e2e_r2.sh` demonstrating goals
   A/E/I + foundations end-to-end against an isolated R2 prefix.
-- **zen-jobdash: shadcn control-plane SPA + auth + fleet actuation** (2026-05-29).
+- **zenfleet-dash: shadcn control-plane SPA + auth + fleet actuation** (2026-05-29).
   Replaced the inline-HTML dashboard with a React + Vite + Tailwind v4 + shadcn/ui
   SPA (built in a Docker node stage, served by axum). Adds HTTP Basic Auth gated on
   `ZEN_DASH_PASSWORD` (`79e4743f`); a minimal inlined Hetzner client that **actuates**
@@ -1902,7 +1924,7 @@ Workspace conventions per the global rules:
   `cvvdp-gpu` — extracting them into a shared base would expand scope
   beyond a rename. Tracked in `crates/zenmetrics-api/docs/PHASE8_PLAN.md`.
 
-- **`zen-metrics-cli` Phase 7.7.1 — the orchestrator is now the default.**
+- **`zenmetrics-cli` Phase 7.7.1 — the orchestrator is now the default.**
   All scoring subcommands (`score` / `batch` / `compare` / `sweep`)
   route through `zenmetrics-orchestrator` by default. Opt OUT via
   `--use-legacy-scheduler` (or `ZENMETRICS_USE_LEGACY_SCHEDULER=1`)
@@ -2017,7 +2039,7 @@ Workspace conventions per the global rules:
 
 
 
-- `zen-cloud-vastai` sweep worker no longer silently falls back to the
+- `zenfleet-vastai` sweep worker no longer silently falls back to the
   deprecated bash subprocess when the inline Rust pipeline fails. With
   `inline-sweep` (the default + production build) a failed `omni` chunk
   now fails honestly and surfaces the real error, matching the
@@ -2041,7 +2063,7 @@ Workspace conventions per the global rules:
   commit if needed. Unblocks `zenmetrics-orchestrator` Phase 7+ CI
   gates (`07d749d6`).
 
-- Sweep worker + `zen-metrics-cli` could not read Snappy-compressed input
+- Sweep worker + `zenmetrics-cli` could not read Snappy-compressed input
   parquets — the `parquet` dep was built with only `["arrow", "zstd"]`, so
   reading any parquet written with the default (Snappy) compression failed
   with `Parquet error: Disabled feature at compile time: snap`. Added the
@@ -2162,7 +2184,7 @@ Workspace conventions per the global rules:
     `pnorm_3` after producing it. Additive — the existing
     `compute_srgb_u8` keeps working unchanged (`957afc5a`).
 
-  - **`cmd_sweep` orchestrator-driven loop** (`zen-metrics-cli`):
+  - **`cmd_sweep` orchestrator-driven loop** (`zenmetrics-cli`):
     when `--use-orchestrator` is set, the per-cell metric scoring
     routes through `Orchestrator::run_single` instead of
     `MetricCache::lock_global`. The two paths are mutually
@@ -2191,7 +2213,7 @@ Workspace conventions per the global rules:
   pair at a time (sweeps, batch, picker training, RD curves). The
   scope of Phase 7 is integration, not new orchestrator surface:
 
-  - `zen-metrics-cli` (the `zen-metrics` binary): new `orchestrator`
+  - `zenmetrics-cli` (the `zenmetrics` binary): new `orchestrator`
     feature pulls `zenmetrics-orchestrator` as an optional dep, with
     `orchestrator-cuda` + per-metric `orchestrator-cpu-*` variants
     forwarding the orchestrator's own feature gates. New global CLI
@@ -2215,7 +2237,7 @@ Workspace conventions per the global rules:
 
   - `scripts/sweep/onstart_orchestrator.sh` — bake-everything-clean
     onstart that hydrates env from `/proc/1/environ`, verifies every
-    baked tool (zen-metrics, s5cmd, jq, python3 + pyarrow, libnvrtc),
+    baked tool (zenmetrics, s5cmd, jq, python3 + pyarrow, libnvrtc),
     optionally fetches a fleet-shared `capability_<hash>.toml` from
     R2, exports `ZENMETRICS_USE_ORCHESTRATOR=1` +
     `ZENMETRICS_CACHE_DIR`, and delegates to onstart_unified.sh for
@@ -2330,7 +2352,7 @@ Workspace conventions per the global rules:
   dropped `Clone` and `Sync` (still `Send`) because the pool owns
   `mpsc::Receiver` + `JoinHandle`s.
 
-- `zen-cloud-vastai` worker — durable best-effort R2 error sidecar on
+- `zenfleet-vastai` worker — durable best-effort R2 error sidecar on
   chunk failure. When `process_chunk_inline` returns an error, the worker
   uploads the full anyhow error chain + chunk_id, run_id, hostname, and
   input/source URIs to `s3://<out-bucket>/<run_id>/errors/<chunk_id>.txt`
@@ -2437,14 +2459,14 @@ Workspace conventions per the global rules:
   surfacing 128 GB would lie about what the orchestrator can
   allocate.
 
-- `zen-cloud-core::r2creds` — shared, provider-agnostic Cloudflare R2
+- `zenfleet-cloud::r2creds` — shared, provider-agnostic Cloudflare R2
   scoped-credential minter. `mint_scoped_r2_cred(...)` hits the verified
   account-level `temp-access-credentials` endpoint; `Permission` enum
   (`ObjectReadWrite`/`ObjectReadOnly`/`AdminReadWrite`/`AdminReadOnly`)
   serializes to the exact CF wire strings; `ScopedR2Cred` carries the
   session token consumers MUST inject as `AWS_SESSION_TOKEN`. Reused by
   the salad/runpod/vastai launchers (3c233dc).
-- `zen-cloud-salad` launcher — per-sweep scoped R2 cred mint+inject:
+- `zenfleet-salad` launcher — per-sweep scoped R2 cred mint+inject:
   `R2ParentCreds::from_env`, `ScopedCredSpec` (bucket + prefixes + TTL,
   6h default, object-read-write), `SaladApi::mint_sweep_r2_cred`, and
   `SaladApi::create_container_group_with_scoped_cred` (opt-in minting;
@@ -2522,17 +2544,17 @@ clamp math and same `* 0.25` box-average — verified by parity tests
 1024², 2048², 4096²). Phase 0 / easy-fix from
 `docs/SSIM2_FIX_ASSESSMENT.md`.
 
-### zen-cloud-runpod — feat: RunPod Pods (pull) provider + `--backend runpod` (Phase F, 2026-05-27)
+### zenfleet-runpod — feat: RunPod Pods (pull) provider + `--backend runpod` (Phase F, 2026-05-27)
 
-(`82178f44`) New `zen-cloud-runpod` crate implementing the five
-`zen-cloud-core` traits for RunPod's **Pods (pull)** path (spec §1.10).
+(`82178f44`) New `zenfleet-runpod` crate implementing the five
+`zenfleet-cloud` traits for RunPod's **Pods (pull)** path (spec §1.10).
 RunPod pods are structurally identical to vast.ai — a rented GPU pod
 boots a generic container, credentials + sweep wiring arrive as pod env
 vars, and the worker PULLs chunks from R2 with the shared atomic
 token-race claim. So the `JobQueue` (`RunpodChunkQueue`) reuses vast.ai's
-proven claim algorithm verbatim (`zen_cloud_vastai::worker::claim::try_claim`
+proven claim algorithm verbatim (`zenfleet_vastai::worker::claim::try_claim`
 + `R2Client`) rather than copy-pasting a third claim impl; `BlobStorage`
-re-exports the shared `zen-cloud-s3` impl (no second S3 client);
+re-exports the shared `zenfleet-s3` impl (no second S3 client);
 `CredentialSource`/`WorkerHost` read the plain pod env + `RUNPOD_POD_ID`
 (no IMDS, no pid-1 trick); `Heartbeat` defaults to a no-op (RunPod tracks
 pod liveness natively) with an `R2Heartbeat` for cross-fleet monitoring
@@ -2540,7 +2562,7 @@ parity. The `launch` module hand-rolls the **current RunPod v1 REST API**
 (`https://rest.runpod.io/v1`, `Authorization: Bearer`, verified against
 the live OpenAPI 2026-05-27: `POST /pods`, `GET`/`DELETE /pods/{podId}`,
 `POST /pods/{podId}/stop`) — RunPod has migrated GraphQL→REST and REST is
-the go-forward path. Wires `--backend runpod` into `zen-sweep-worker`
+the go-forward path. Wires `--backend runpod` into `zenfleet-sweep`
 (cargo features `runpod` glue / `runpod-sweep` full, mirroring
 `salad`/`vastai`); the encode+score `compute` closure is the
 backend-agnostic vast.ai one. 26 tests (23 unit + 3 off-node JobQueue
@@ -2555,16 +2577,16 @@ operator's gate. `#![forbid(unsafe_code)]`.
 `Dockerfile.sweep.v26`) + `scripts/sweep/entrypoint_salad.sh` + the
 `.github/workflows/sweep-image-salad.yml` publish pipeline. The image
 reuses v26's L1-L8 base (ubuntu → apt → pyarrow → CUDA 12-6 runtime+dev →
-s5cmd+jq → cuda_dlsym_stub → zen-metrics) verbatim, then bakes
-`zen-sweep-worker` built `--features salad-sweep` (L9) and the pinned
+s5cmd+jq → cuda_dlsym_stub → zenmetrics) verbatim, then bakes
+`zenfleet-sweep` built `--features salad-sweep` (L9) and the pinned
 `salad-http-job-queue-worker` v0.7.0 x86_64 Go sidecar (L9b). The
-entrypoint launches the sidecar + `zen-sweep-worker worker --backend
+entrypoint launches the sidecar + `zenfleet-sweep worker --backend
 salad` concurrently (upstream `with-shell-script` pattern): the sidecar
 forwards each queue job as `POST http://localhost:$SALAD_JOB_PORT<path>`
 to the worker's local HTTP receiver. BAKE-EVERYTHING honoured — sidecar +
 binaries baked at build time, entrypoint fail-loud-exits if any baked
 tool is missing, nothing apt/pip/curl-installed at boot. CI publishes
-`ghcr.io/imazen/zen-metrics-sweep-salad:v1` (+ `:v1-<sha>`) with a
+`ghcr.io/imazen/zenmetrics-sweep-salad:v1` (+ `:v1-<sha>`) with a
 registry buildcache. Real 1-replica Salad smoke sweep (needs a Salad
 node + IMDS + BYO R2 creds) remains the operator's gate.
 
@@ -2810,62 +2832,62 @@ score-path fix that flips the gate default-ON.
 
 ### zen-cloud — cloud-agnostic worker carve, Phase A (no behaviour change) (2026-05-26)
 
-Carves the `vastai-fleet` crate into a cloud-agnostic trait layer + a
+Carves the `zenfleet-vastai` crate into a cloud-agnostic trait layer + a
 vast.ai backend + a generic deployed-worker binary, per the zen-cloud
 spec §1.7 Phase A. No behaviour change — the production worker stays on
 the proven async path; all 25 unit + 7 CLI tests stay green.
 
-- New crate **`zen-cloud-core`** (`de66b1b0`): pure trait surface
+- New crate **`zenfleet-cloud`** (`de66b1b0`): pure trait surface
   (`JobQueue` / `BlobStorage` / `Heartbeat` / `CredentialSource` /
   `WorkerHost`), value types (`Chunk` / `ChunkId` / `ChunkOutcome` /
   `ArtifactKey` / `BlobMeta` / `WorkerId` / `WorkerStatus` /
   `WorkerSummary` / `CloudError`), and a generic `run_worker` job loop.
   Zero gpu / cloud-SDK / parquet deps.
-- **`vastai-fleet` crate renamed to `zen-cloud-vastai`** (`ccb4250f`),
+- **`zenfleet-vastai` crate renamed to `zenfleet-vastai`** (`ccb4250f`),
   now lib+bin: the proven worker/parse modules move unchanged; a new
   `cloud` module implements the core traits for vast.ai (R2 storage via
   the existing s5cmd client + `ls_keys`/`rm`, `/proc/1/environ`
   credentials, nvidia-smi host, R2 heartbeat, R2-token-race chunk
-  queue). The operator CLI keeps the `vastai-fleet` binary name +
+  queue). The operator CLI keeps the `zenfleet-vastai` binary name +
   `self-destroy`/`status`/`destroy`/`watch`.
-- New binary **`zen-sweep-worker`** (`1d6eef0e`): the cloud-agnostic
+- New binary **`zenfleet-sweep`** (`1d6eef0e`): the cloud-agnostic
   deployed compute binary. `--backend vastai` (cargo-feature-gated)
-  dispatches `worker` to the same `cmd_worker` path as `vastai-fleet
+  dispatches `worker` to the same `cmd_worker` path as `zenfleet-vastai
   worker` — byte-identical sweep output.
 - Workspace-wide rename fixups: `Dockerfile.sweep.v26` +
   `.github/workflows/sweep-image.yml` build/copy/smoke both binaries
-  and run the deployed worker via `zen-sweep-worker`;
+  and run the deployed worker via `zenfleet-sweep`;
   `onstart_unified.sh` / `onstart_feature_backfill.sh` /
-  `onstart_source_features.sh` invoke `zen-sweep-worker worker
-  --backend vastai`; stale `vastai-fleet`/`crates/vastai-fleet` doc-path
-  references across `zen-metrics-cli` + `iwssim-gpu` + scripts updated.
+  `onstart_source_features.sh` invoke `zenfleet-sweep worker
+  --backend vastai`; stale `zenfleet-vastai`/`crates/zenfleet-vastai` doc-path
+  references across `zenmetrics-cli` + `iwssim-gpu` + scripts updated.
 
 ### zen-cloud — SaladCloud provider + shared S3 helper, Phase C (2026-05-26)
 
 Adds SaladCloud as a vast.ai alternative (spec §1.9) and factors the R2
-client out of `zen-cloud-vastai` into a shared helper. vast.ai's 25 unit
+client out of `zenfleet-vastai` into a shared helper. vast.ai's 25 unit
 + 7 CLI tests stay green; the new crates add 3 + 22 tests.
 
-- New crate **`zen-cloud-s3`** (`3832ab33`): the shared
+- New crate **`zenfleet-s3`** (`3832ab33`): the shared
   S3-compatible `BlobStorage` helper. The s5cmd-backed client
   (`S3Client`, ex-`R2Client`) + the `BlobStorage` impl (`S3BlobStorage`,
   ex-`R2BlobStorage`) relocate behaviour-identical out of
-  `zen-cloud-vastai`; the only change is a field-based constructor so any
-  provider can build one. `zen-cloud-vastai` now depends on it and
+  `zenfleet-vastai`; the only change is a field-based constructor so any
+  provider can build one. `zenfleet-vastai` now depends on it and
   re-exports `R2Client` / `R2BlobStorage` under their historical names —
   every internal call site + test compiles unchanged. R2 IS
   S3-compatible, so one impl serves vast.ai + SaladCloud + DO + AWS.
-- New crate **`zen-cloud-salad`** (`2f2336e2`): the SaladCloud provider.
+- New crate **`zenfleet-salad`** (`2f2336e2`): the SaladCloud provider.
   `JobQueue` is a local HTTP receiver fed by the baked-in
   `salad-http-job-queue-worker` sidecar (the app side is HTTP, not gRPC —
   the gRPC contract is internal to the sidecar; see `SALAD.md`);
   `CredentialSource`/`WorkerHost` read the container-group env
   (`SALAD_MACHINE_ID` / `SALAD_CONTAINER_GROUP_ID` + BYO R2/S3) + a
-  minimal IMDS client; `BlobStorage` reuses `zen-cloud-s3`; `Heartbeat`
+  minimal IMDS client; `BlobStorage` reuses `zenfleet-s3`; `Heartbeat`
   is a log-only no-op. A `launch` module hand-rolls the public-API
   provisioning (resolve GPU class, create queue, create container group
   with `queue_connection`, push job chunks) with `reqwest` + `serde`.
-- **`zen-sweep-worker --backend salad`** (`ab9ada72`): the salad arm
+- **`zenfleet-sweep --backend salad`** (`ab9ada72`): the salad arm
   drives the generic `run_worker` loop with the Salad traits + the SAME
   inline encode+score compute vast.ai runs
   (`process_chunk_inline`, now re-exported). Feature split: `salad` =
@@ -3272,15 +3294,15 @@ shim's legacy linear formula); the finite + metric_name + per-feature
 parity coverage in `extended_parity.rs` remains the authoritative
 correctness signal (commit 597e1810).
 
-### zen-metrics-cli — feat: `assemble` subcommand — typed full-key corpus join — 2026-05-26
+### zenmetrics-cli — feat: `assemble` subcommand — typed full-key corpus join — 2026-05-26
 
-New `zen-metrics assemble` subcommand that replaces the Python
+New `zenmetrics assemble` subcommand that replaces the Python
 corpus-assembly join layer (`scripts/sweep/build_per_codec_training.py`
 plus the `zensim/scripts/canonical_corpus` builders and the ~35 ad-hoc
 `pd.merge` scripts) with a TYPED full-key join that makes the 2026-05-25
 parquet corruption structurally impossible.
 
-- **`crates/zen-metrics-cli/src/assemble/`** — new module behind a lean
+- **`crates/zenmetrics-cli/src/assemble/`** — new module behind a lean
   `assemble` cargo feature (arrow/parquet only; no codecs, no GPU; `sweep`
   enables it too). Ports the four guarantees from
   `zensim/scripts/canonical_corpus/join_safety.py`:
@@ -3375,7 +3397,7 @@ sweep cache to use them transparently.
   the existing `compute_with_reference_srgb_u8` Vec output with
   the profile-mode `score_from_profile_vec` conversion to return a
   uniform `Score`. (`d4e1572`)
-- **`zen-metrics-cli`** — `MetricCache::compute_umbrella` now keys
+- **`zenmetrics-cli`** — `MetricCache::compute_umbrella` now keys
   on the source `(pointer, len)` fingerprint. On a cache miss it
   calls `set_reference_srgb_u8` then `compute_with_cached_reference_srgb_u8`;
   on `Error::StripModeUnsupported` from set_reference it marks the
@@ -4258,14 +4280,14 @@ every delta in proper layer order:
 3. CUDA NVRTC + cudart + cudart-dev 12-6 (+ ldconfig + symlink)
 4. s5cmd 2.2.2 + jq 1.7.1
 5. cuda_dlsym_stub.so compiled from `scripts/sweep/cuda_dlsym_stub.c`
-6. zen-metrics binary (CUDARC_CUDA_VERSION=12000 build)
-7. vastai-fleet binary (inline-sweep features)
+6. zenmetrics binary (CUDARC_CUDA_VERSION=12000 build)
+7. zenfleet-vastai binary (inline-sweep features)
 8. onstart + worker scripts
 9. ENTRYPOINT = run_with_error_trap → onstart_unified.sh
 
 Same runtime contract as v25. CI workflow (`sweep-image.yml`) updated
-to build v26 (was v14) and to also build the `vastai-fleet` binary
-alongside `zen-metrics`. Tag scheme: `ghcr.io/imazen/zen-metrics-sweep:v26`
+to build v26 (was v14) and to also build the `zenfleet-vastai` binary
+alongside `zenmetrics`. Tag scheme: `ghcr.io/imazen/zenmetrics-sweep:v26`
 + `:v26-<short-sha>`.
 
 Deleted files (commit pending): `Dockerfile.sweep`,
@@ -4284,7 +4306,7 @@ runtime+dev + pyarrow + stub).
 
 ### sweep infra v21 — 2026-05-19 (`infra(sweep): drop cudarc to CUDA-12.0 binding to evict cuEventElapsedTime_v2`)
 
-Layers a CUDA-12.0-bound zen-metrics binary on top of v20's universal
+Layers a CUDA-12.0-bound zenmetrics binary on top of v20's universal
 cu* dlsym fallback (commit `c7af4dae`). The two fixes are complementary:
 
 - v20's universal stub catches *runtime* misses on any cu* symbol cudarc
@@ -4321,12 +4343,12 @@ minimum driver release is compiled in.
   `cuGraph*KernelNode_v2` family and `cuGetProcAddress_v2`); all
   ship in libcuda.so.1 525.85.05+.
 - **`Dockerfile.sweep.v21`** (commit pending). Inherits from `v20`
-  base, overlays a fresh `zen-metrics` binary built with
+  base, overlays a fresh `zenmetrics` binary built with
   `CUDARC_CUDA_VERSION=12000`. Build sanity expanded vs v19 — checks
   for cuCtxGetDevice_v2 + cuEventElapsedTime_v2 +
   cuCoredumpDeregister{Start,Complete}Callback in the binary's
   string table; any positive match fails the build.
-  Image: `ghcr.io/imazen/zen-metrics-sweep:v21-c7af4da` / `:v21`
+  Image: `ghcr.io/imazen/zenmetrics-sweep:v21-c7af4da` / `:v21`
   (sha256:d3af6316c12ec637bb94485a619cb8c118e0b569ea45b39bebe9f20fa4e668c2).
   Earlier `:v20-cuda12000-6e3b0d9` retag of the same binary (built
   before c7af4dae landed) preserved for archival reference but
@@ -4378,7 +4400,7 @@ for a universal `cu*` cu-prefix fallback: any cu* symbol the real driver
 doesn't export gets a no-op stub returning CUDA_SUCCESS (0). Also adds
 a _v2-suffix retry path that first tries `cu*_v2`, then falls back to
 the unsuffixed `cu*`, before resorting to the universal no-op stub.
-Image: `ghcr.io/imazen/zen-metrics-sweep:v20` (sha256:8e92d1ec6e23…).
+Image: `ghcr.io/imazen/zenmetrics-sweep:v20` (sha256:8e92d1ec6e23…).
 
 ### sweep infra v19 — 2026-05-18 (`infra(sweep): bump cudarc past _v2 gate + restore driver_version filter`)
 
@@ -4406,7 +4428,7 @@ Three concurrent fixes:
   pool. This obsoletes the LD_PRELOAD stub for the panics it was
   bandaging; the stub stays in the image as defense-in-depth.
 - **`Dockerfile.sweep.v19`** (commit pending). Inherits from `v18`
-  base, overlays the new binary at `/usr/local/bin/zen-metrics`,
+  base, overlays the new binary at `/usr/local/bin/zenmetrics`,
   and adds a load-bearing `strings` assertion: the post-COPY RUN
   fails the build if `cuCtxGetDevice_v2` or
   `cuCoredumpDeregisterCompleteCallback` is still present in the
@@ -4429,7 +4451,7 @@ Three concurrent fixes:
 - `scripts/sweep/deploy_fast.sh` left untouched (header marks it
   DEPRECATED; scheduled for deletion).
 - **Image push**:
-  `ghcr.io/imazen/zen-metrics-sweep:v19-<short_hash>` and `:v19`
+  `ghcr.io/imazen/zenmetrics-sweep:v19-<short_hash>` and `:v19`
   (sha256 pending build). Layers L0-L7 inherited from v18 (~700 MB
   cached); only L8 binary layer is new (~280 MB on the wire).
 - **Smoke verdict**: pending. Will run one box with mixed-codec
@@ -4465,17 +4487,17 @@ Three concurrent fixes:
   optional fields follow upstream as the API evolves. Drop once
   zenjxl 0.2.2 ships with the same fix.
 - **New `Dockerfile.sweep.v18`** (commit pending). Inherits from
-  `ghcr.io/imazen/zen-metrics-sweep:v17`, overlays:
+  `ghcr.io/imazen/zenmetrics-sweep:v17`, overlays:
   - the widened `cuda_dlsym_stub.so` (rebuilt from the patched C
     source with a 4-symbol verification step in the same RUN), and
-  - a fresh `/usr/local/bin/zen-metrics` baked from the jxl-encoder
+  - a fresh `/usr/local/bin/zenmetrics` baked from the jxl-encoder
     6b8eefc1 build (multi-codec smoke verifies `zenjpeg / zenwebp /
     zenavif / zenjxl` all appear in `sweep --help`).
   Built + pushed to GHCR as
-  `ghcr.io/imazen/zen-metrics-sweep:v18-f4d28e9` and `:v18`
+  `ghcr.io/imazen/zenmetrics-sweep:v18-f4d28e9` and `:v18`
   (sha256:e7043763e8934ae5).
 - **Binary on R2**:
-  `s3://coefficient/binaries/zen-metrics-0.6.0-multicodec-f4d28e9-linux-x86_64-gpu`
+  `s3://coefficient/binaries/zenmetrics-0.6.0-multicodec-f4d28e9-linux-x86_64-gpu`
   (97 MB, fastest-link feature set
   `sweep,png,gpu,gpu-cuda`).
 - **Smoke verdict: partial pass / new failure mode discovered.**
@@ -4530,7 +4552,7 @@ Three concurrent fixes:
 Operational fixes after the iwssim / cvvdp / ssim2 backfill sessions
 exposed three load-bearing bugs:
 
-- **`zen-metrics-cli` — `score-pairs --fail-on-bogus`** (commit
+- **`zenmetrics-cli` — `score-pairs --fail-on-bogus`** (commit
   `242d4b4a`). New per-metric distribution sanity check gate that
   inspects the score column after parquet write and exits rc=2
   (distinct from rc=1) when n_NaN > 0, ≥ 50% of rows are exactly at
@@ -4549,11 +4571,11 @@ exposed three load-bearing bugs:
   to `s3://zentrain/<run>/failures/<chunk>.log` on rc=2 instead of
   treating the sidecar as authoritative training data. Per-metric
   files marked DEPRECATED but retained for in-flight runners.
-- **`crates/vastai-fleet/`** (commit `3a849a69`). Rust binary
+- **`crates/zenfleet-vastai/`** (commit `3a849a69`). Rust binary
   replacing the bash + python heredoc destroyers under
   `/tmp/cvvdp-resume/run_destroy_*.sh`. Three subcommands —
   `status` / `destroy` / `watch` — all driven by a defensive
-  parser (`crates/vastai-fleet/src/parse.rs`) that tolerates every
+  parser (`crates/zenfleet-vastai/src/parse.rs`) that tolerates every
   failure mode the bash destroyer hit: empty stdout, deprecation
   banner glued onto JSON, individual malformed rows, dph as string
   vs float, v0 vs v1 envelope shape. 22 tests (15 parse + 7 cli)
@@ -4564,7 +4586,7 @@ exposed three load-bearing bugs:
   --max-dph / --n-boxes / ...` flags replacing the per-metric
   `launch.sh` / `launch_imazen.sh` files. Auto-derives the
   destroy-target as `(n_chunks - 10 grace)` from the chunks file
-  and prints (or runs, with `--watch`) the `vastai-fleet watch`
+  and prints (or runs, with `--watch`) the `zenfleet-vastai watch`
   invocation. Per-metric launchers marked DEPRECATED.
 - **`scripts/sweep/fleet_status.sh`** (commit `5de4c676`).
   One-shot dashboard combining fleet status, R2 sidecar count vs
@@ -4574,7 +4596,7 @@ exposed three load-bearing bugs:
   the bogus-data failure mode — even without `--fail-on-bogus` on
   the worker, this surfaces broken sidecars on a sample.
 
-### iwssim-gpu / zen-metrics-cli — 2026-05-17 adaptive small-image support
+### iwssim-gpu / zenmetrics-cli — 2026-05-17 adaptive small-image support
 
 - `4e01232c` — adaptive IW-SSIM via reflect-pad to `MIN_NATIVE_DIM`
   (176). New `pub const MIN_NATIVE_DIM`, `pub struct IwssimConfig {
@@ -4595,7 +4617,7 @@ exposed three load-bearing bugs:
   `RUN_GPU_ADAPTIVE=1`). Stock 1024×1024 drift between flag-on and
   flag-off measured at 3.4e-8 (GPU non-determinism floor); the
   pre-existing parity-lock tests still pass.
-- `4e01232c` — `zen-metrics-cli score-pairs`: new
+- `4e01232c` — `zenmetrics-cli score-pairs`: new
   `--allow-small-images` flag wires through a process-wide
   `AtomicBool` to `resolve_default_params`, which swaps
   `IwssimParams::DEFAULT` for `IwssimParams::allow_small(true)` at
@@ -4638,7 +4660,7 @@ runs on push.
   `compute_srgb_u8` within 1e-3 rel. Saves ~17 ms × (N-1) metrics
   per pair in batch mode. zensim deferred to a follow-up.
 - `75913cec` — Merge `feat/cli-umbrella-flip` (Phase 4 CLI):
-  zen-metrics-cli drops direct per-crate `gpu-*` feature deps,
+  zenmetrics-cli drops direct per-crate `gpu-*` feature deps,
   routes through `zenmetrics-api` umbrella. iwssim and zensim
   now supported through the CLI (were absent before). 29/29 CLI
   tests pass. Two typed-path escape hatches stay (cvvdp batch
@@ -4649,7 +4671,7 @@ runs on push.
 
 ### Known issues (not blocking merge)
 
-- `crates/zen-metrics-cli/src/main.rs`: the iwssim batch-caching
+- `crates/zenmetrics-cli/src/main.rs`: the iwssim batch-caching
   scorer was removed during merge conflict resolution because its
   source file depended on infra cli-flip had deleted. iwssim
   through `score-pairs` now re-allocates per-pair instead of
@@ -4679,7 +4701,7 @@ runs on push.
   crate to add a `compute_handles(handle_r, handle_d) -> Score` entry
   point that consumes pre-uploaded device buffers (today every
   metric's typed `compute` re-uploads internally).
-- Flip `zen-metrics-cli` over to depend on `zenmetrics-api` instead of
+- Flip `zenmetrics-cli` over to depend on `zenmetrics-api` instead of
   the four individual gpu-* crate deps.
 - `build.rs` cubecl version cross-check via `cargo metadata` instead
   of the current advisory `cargo:warning=`.
@@ -6251,7 +6273,7 @@ bumping). Static-assert count is now 223 across 13 test files.
   5): (1) `cvvdp_type_reexport_resolves` — `Cvvdp<R>` is the main
   scoring type; without this pin, a future refactor that moves it
   behind a feature gate or into a private module would break every
-  downstream caller (zen-metrics-cli's `CvvdpBatchScorer` references
+  downstream caller (zenmetrics-cli's `CvvdpBatchScorer` references
   `cvvdp_gpu::Cvvdp` directly); (2)
   `lib_constants_reexport_match_their_originals` — pins `N_CHANNELS`
   (3), `MAX_LEVELS` (9), `PYRAMID_MIN_DIM` (4), and
@@ -6506,9 +6528,9 @@ arc are:
   - **README §Documentation pointer** to the cvvdp-backfill
     operator runbook. Tick 359, 43cd69a3.
   - **`chunk_worker.sh` ENTRYPOINT override** —
-    `docker run image zen-metrics ...` was hitting the production
-    image's `zen-metrics-worker` ENTRYPOINT. `--entrypoint
-    /usr/local/bin/zen-metrics` bypasses. Tick 360, b28e1f0b.
+    `docker run image zenmetrics ...` was hitting the production
+    image's `zenmetrics-worker` ENTRYPOINT. `--entrypoint
+    /usr/local/bin/zenmetrics` bypasses. Tick 360, b28e1f0b.
   - **`finalize.sh` non-destructive ~/.aws/credentials write** —
     used to overwrite the local developer box's `[default]`
     profile. Now idempotent-append. Tick 362, 9455eee8.
@@ -6518,7 +6540,7 @@ arc are:
   - **`onstart_cvvdp_backfill_imazen.sh` + `launch_imazen.sh`** —
     single-image fleet path (no docker-in-docker). vast.ai SSH
     instances don't allow privileged dockerd; this variant boots
-    the zen-metrics-sweep image directly and skips pycvvdp
+    the zenmetrics-sweep image directly and skips pycvvdp
     entirely. Ticks 364-365, 8f81895a.
   - **`chunk_worker.sh` R2() wrapper** — bare `s5cmd` fell through
     to AWS `[default]` profile. Now all calls go through a
@@ -6557,7 +6579,7 @@ shipped across six commits + an operator runbook:
 - `scripts/sweep/cvvdp_backfill_chunk_worker.sh` — per-chunk
   worker. Downloads input_parquet from R2, syncs basenames,
   slices parquet, groups rows by (codec,q,knob_tuple),
-  re-encodes via `zen-metrics sweep --pairs-tsv`, scores in
+  re-encodes via `zenmetrics sweep --pairs-tsv`, scores in
   both impls (`score-pairs` + `pycvvdp_worker.py`), uploads
   sidecars. Host-binary OR docker-image execution modes
   (`87deac34`, tick 337).
@@ -7170,7 +7192,7 @@ shipped across six commits + an operator runbook:
 
 - **`tests/pipeline_score.rs::score_is_deterministic_*`** — two
   contract tests pinning the critical "no state leakage between
-  calls on the same `Cvvdp` instance" property that zen-metrics-
+  calls on the same `Cvvdp` instance" property that zenmetrics-
   cli's `CvvdpBatchScorer` relies on for the vast.ai backfill
   pipeline. (1) `score(ref, dist)` called twice → bit-identical
   output via `.to_bits()`; (2) `score(ref, dist_a)` →
@@ -9080,7 +9102,7 @@ original Fixed/Added/Changed sections.
   names (e.g. `cvvdp_pycvvdp_v054`, `cvvdp_imazen_v0_0_1`). Survives
   context compaction; every `/loop` tick re-reads it.
 
-#### zen-metrics-cli
+#### zenmetrics-cli
 
 - New `score-pairs` subcommand (feature-gated on `sweep`):
   consumes the pairs TSV that `sweep --pairs-tsv` produces and
@@ -9093,7 +9115,7 @@ original Fixed/Added/Changed sections.
   Initial n=4 sentinel: cvvdp-gpu vs pycvvdp parity within 0.03 JOD
   on q50/q90 zenjpeg-encoded 64×64 noise images.
 
-#### zen-metrics-cli (sweep)
+#### zenmetrics-cli (sweep)
 
 - `sweep` subcommand learns two new flags that pair off for
   external-scorer workflows (e.g. pycvvdp):
@@ -9114,7 +9136,7 @@ original Fixed/Added/Changed sections.
 #### scripts/sweep
 
 - `dual_impl_chunk.sh` — per-chunk dual-implementation runner.
-  Drives one sweep + both cvvdp scorers (zen-metrics-cli score-pairs
+  Drives one sweep + both cvvdp scorers (zenmetrics-cli score-pairs
   for cvvdp-gpu + pycvvdp_worker.py for canonical pycvvdp) and
   joins the two sidecars into a parity TSV. Local smoke test: 4
   cells joinable, mean |diff| 0.0245 JOD, max 0.0300 JOD on the
@@ -9138,7 +9160,7 @@ original Fixed/Added/Changed sections.
   multiple cvvdp variants land side-by-side in parquet sidecars
   without colliding.
 
-#### zen-metrics-cli
+#### zenmetrics-cli
 
 - `MetricKind::Cvvdp::column_names()` now returns
   `cvvdp_gpu::CVVDP_COLUMN_NAME` when the `gpu-cvvdp` feature is
@@ -9985,7 +10007,7 @@ canonical comparison.
 - Empty `kernels::reduce` module (planned scope landed in
   `kernels::pool` instead).
 
-#### zen-metrics-cli
+#### zenmetrics-cli
 
 - New `cvvdp` metric (`--metric cvvdp`). GPU bundle (`--features
   gpu`) now includes `gpu-cvvdp`. Sweep TSVs pick up the

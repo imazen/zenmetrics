@@ -4,7 +4,7 @@
 //! below the 4-scale pyramid floor (`MIN_PAD_DIM = 64`) up to that floor
 //! before running the GPU pipeline — byte-for-byte the same reflect-101
 //! rule the CPU `zensim::metric` funnel uses. This file pins three
-//! properties of that path, exercising it DIRECTLY (the `zen-metrics`
+//! properties of that path, exercising it DIRECTLY (the `zenmetrics`
 //! CLI routes sub-64px to CPU for exact parity, which would otherwise
 //! hide the native GPU sub-64 path):
 //!

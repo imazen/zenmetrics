@@ -1,6 +1,6 @@
 //! Score one (reference, distorted) RGB image pair under two named
 //! display presets and print both JODs + the delta. Used for the
-//! phone-vs-desktop RD probe (sidesteps the zen-metrics CLI).
+//! phone-vs-desktop RD probe (sidesteps the zenmetrics CLI).
 //!
 //! Run:
 //!     cargo run --release -p cvvdp-gpu \

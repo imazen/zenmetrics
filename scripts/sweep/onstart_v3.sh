@@ -23,10 +23,10 @@
 # Optional:
 #   WORKER_ID            default: hostname-pid
 #   WORKER_PARALLEL      default: max(2, nproc/4)
-#   SWEEP_BIN_VERSION    default: zen-metrics-v0.3.0
+#   SWEEP_BIN_VERSION    default: zenmetrics-v0.3.0
 #   SWEEP_GPU_RUNTIME    default: cpu  (no vulkan installed)
 #   STATS_INTERVAL_SEC   default: 60
-#   SWEEP_BIN_OVERRIDE   optional URL or s3:// to a zen-metrics tarball
+#   SWEEP_BIN_OVERRIDE   optional URL or s3:// to a zenmetrics tarball
 #                        (skips the GitHub release fetch; use for unreleased builds)
 
 set -euo pipefail
@@ -42,7 +42,7 @@ if [[ -r /proc/1/environ ]]; then
     done < /proc/1/environ
 fi
 
-SWEEP_BIN_VERSION="${SWEEP_BIN_VERSION:-zen-metrics-v0.3.0}"
+SWEEP_BIN_VERSION="${SWEEP_BIN_VERSION:-zenmetrics-v0.3.0}"
 SWEEP_RUN_ID="${SWEEP_RUN_ID:-sweep-v04-2026-05-04}"
 WORKER_ID="${WORKER_ID:-$(hostname)-$$}"
 WORKDIR="${WORKDIR:-/workspace/sweep}"
@@ -161,20 +161,20 @@ heartbeat() {
         2>/dev/null || true
 }
 
-# ── Step 2: pre-built zen-metrics binary ───────────────────────────
-# Prefer image-baked binary at /usr/local/bin/zen-metrics. Fall back to
+# ── Step 2: pre-built zenmetrics binary ───────────────────────────
+# Prefer image-baked binary at /usr/local/bin/zenmetrics. Fall back to
 # WORKDIR or GitHub release tarball only if the image lacks one.
-if [[ -x /usr/local/bin/zen-metrics ]]; then
-    BIN="/usr/local/bin/zen-metrics"
+if [[ -x /usr/local/bin/zenmetrics ]]; then
+    BIN="/usr/local/bin/zenmetrics"
     log "using image-baked binary: $BIN"
 else
-    BIN="$WORKDIR/zen-metrics"
+    BIN="$WORKDIR/zenmetrics"
 fi
 if [[ ! -x "$BIN" ]]; then
     arch=$(uname -m)
     case "$arch" in
-        x86_64)  pkg="zen-metrics-${SWEEP_BIN_VERSION#zen-metrics-v}-linux-x86_64.tar.gz" ;;
-        aarch64) pkg="zen-metrics-${SWEEP_BIN_VERSION#zen-metrics-v}-linux-aarch64.tar.gz" ;;
+        x86_64)  pkg="zenmetrics-${SWEEP_BIN_VERSION#zenmetrics-v}-linux-x86_64.tar.gz" ;;
+        aarch64) pkg="zenmetrics-${SWEEP_BIN_VERSION#zenmetrics-v}-linux-aarch64.tar.gz" ;;
         *) log "FATAL: unsupported arch $arch"; final_state failed ;;
     esac
     URL="${SWEEP_BIN_OVERRIDE:-https://github.com/imazen/turbo-metrics/releases/download/${SWEEP_BIN_VERSION}/${pkg}}"
@@ -187,7 +187,7 @@ if [[ ! -x "$BIN" ]]; then
         log "downloading $URL"
         curl -fsSL "$URL" -o /tmp/zm.tgz
         tar xzf /tmp/zm.tgz -C "$WORKDIR" --strip-components=1 \
-            "$(tar tzf /tmp/zm.tgz | grep -E '/zen-metrics$' | head -1)"
+            "$(tar tzf /tmp/zm.tgz | grep -E '/zenmetrics$' | head -1)"
         chmod +x "$BIN"
     else
         log "downloading raw binary $URL"
@@ -326,11 +326,11 @@ process_chunk() {
     local FEATURES_KEY="${OUT_KEY%.tsv}.features.parquet"
     local PARTIAL_KEY="s3://coefficient/partials/${SWEEP_RUN_ID}/${codec}/${chunk_id}.partial.tsv"
 
-    # Mid-chunk flush sidecar: every 60s while zen-metrics is encoding, copy
+    # Mid-chunk flush sidecar: every 60s while zenmetrics is encoding, copy
     # the in-progress TSV to a partial key. On normal completion we delete
     # the partial after the final upload lands; on crash/kill the partial
     # is what survives. Only the TSV is flushed — parquet is written by
-    # zen-metrics atomically at end-of-run, no streaming hook available.
+    # zenmetrics atomically at end-of-run, no streaming hook available.
     local FLUSH_INTERVAL=60
     local start_t; start_t=$(date +%s)
     (
@@ -371,7 +371,7 @@ process_chunk() {
     else
         kill "$FLUSH_PID" 2>/dev/null; wait "$FLUSH_PID" 2>/dev/null || true
         echo "[fail] $chunk_id (see /tmp/sweep-${chunk_id}.log)"
-        # Best-effort one last partial flush — captures whatever zen-metrics
+        # Best-effort one last partial flush — captures whatever zenmetrics
         # wrote before exiting, even if the FLUSH_INTERVAL hadn't fired yet.
         if [[ -f "$OUT_TSV" && $(wc -l < "$OUT_TSV") -gt 1 ]]; then
             R2 cp "$OUT_TSV" "$PARTIAL_KEY" 2>/dev/null || true

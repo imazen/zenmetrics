@@ -9,7 +9,7 @@
 //! `cargo test`, before the misbehavior propagates to a fleet run.
 //!
 //! The build-time `CVVDP_IMPL_TAG` env override is exercised
-//! end-to-end by `zen-metrics-cli`'s build pipeline (see the
+//! end-to-end by `zenmetrics-cli`'s build pipeline (see the
 //! `CVVDP_IMPL_TAG=...` invocation in `CVVDP_SIDECAR_SCHEMA.md`);
 //! these tests cover the default (un-overridden) path only.
 
@@ -90,12 +90,12 @@ fn default_column_name_encodes_crate_version() {
     // form derives from `CARGO_PKG_VERSION`:
     //     cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>
     // Skip the assertion if the build overrode `CVVDP_IMPL_TAG` —
-    // that path is exercised by the `zen-metrics-cli` release build
+    // that path is exercised by the `zenmetrics-cli` release build
     // (see `docs/CVVDP_SIDECAR_SCHEMA.md`).
     if option_env!("CVVDP_IMPL_TAG").is_some() {
         eprintln!(
             "skipping default-form assertion; CVVDP_IMPL_TAG was set at compile time \
-             (override path is exercised by the zen-metrics release build)"
+             (override path is exercised by the zenmetrics release build)"
         );
         return;
     }

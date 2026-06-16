@@ -55,7 +55,7 @@ Assumptions:
   `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
 - Docker images pushed to ghcr.io (see "Docker images" below).
   Default tags baked into `launch.sh`:
-  - `ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-<short>`
+  - `ghcr.io/imazen/zenmetrics-sweep:0.6.4-cvvdp-<short>`
   - `ghcr.io/imazen/pycvvdp-scorer:0.5.4`
 
 ### 1. Generate the chunk manifest
@@ -201,7 +201,7 @@ The fleet uses two images. Build + smoke + push lives in the
 build-agent runbook (see `~/work/zen/zenmetrics--cvvdp-new/CLAUDE.md`
 PINNED TASK status). The expected tags:
 
-- `ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-<short>` — built from
+- `ghcr.io/imazen/zenmetrics-sweep:0.6.4-cvvdp-<short>` — built from
   `feat/cvvdp-gpu-scaffold` (NOT canonical master, which lacks
   `score-pairs` + `sweep --pairs-tsv`). Use the `Dockerfile.sweep.v13`
   in the scaffold worktree; build context is the parent dir of
@@ -240,16 +240,16 @@ The launcher sets it automatically from `gh auth token`; verify
 `gh auth status` shows `write:packages` scope.
 
 **All sidecar rows have `cvvdp_imazen` = 10.0** — the
-`zen-metrics-sweep` image's ENTRYPOINT is
-`/usr/local/bin/zen-metrics-worker` (the chunk-claim worker, NOT
-the underlying `zen-metrics` binary). Any `docker run image
-zen-metrics ...` invocation is implicitly
-`docker run --entrypoint <default> image zen-metrics ...` and
-ends up running `zen-metrics-worker zen-metrics ...` — the
+`zenmetrics-sweep` image's ENTRYPOINT is
+`/usr/local/bin/zenmetrics-worker` (the chunk-claim worker, NOT
+the underlying `zenmetrics` binary). Any `docker run image
+zenmetrics ...` invocation is implicitly
+`docker run --entrypoint <default> image zenmetrics ...` and
+ends up running `zenmetrics-worker zenmetrics ...` — the
 chunk-claim worker, with extra args it doesn't understand.
 Both `cvvdp_backfill_chunk_worker.sh` (tick 360) and
 `dual_impl_chunk_docker.sh` (tick 340) pass
-`--entrypoint /usr/local/bin/zen-metrics` to bypass; if you
+`--entrypoint /usr/local/bin/zenmetrics` to bypass; if you
 write a new script that runs the image, add the same flag.
 Tick 358's `--min-imazen-stdev` check in `assert_parity.py`
 catches the all-10.0 pattern in the gate but you'll want to

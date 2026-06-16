@@ -6,7 +6,7 @@
 #
 # Drives the same per-instance create loop as the originals but folds
 # all the parameter knobs behind one flag interface, and calls into
-# vastai-fleet for the destroy half of the workflow (no more bash+python
+# zenfleet-vastai for the destroy half of the workflow (no more bash+python
 # heredoc destroyers).
 #
 # Required tools on PATH:
@@ -14,9 +14,9 @@
 #   - s5cmd
 #   - gh (for ghcr.io token)
 #   - python3 (only for parsing `vastai create instance --raw` output)
-#   - vastai-fleet (operator CLI built from crates/zen-cloud-vastai —
-#     `cargo build --release -p zen-cloud-vastai && cp
-#     target/release/vastai-fleet ~/.local/bin/`)
+#   - zenfleet-vastai (operator CLI built from crates/zenfleet-vastai —
+#     `cargo build --release -p zenfleet-vastai && cp
+#     target/release/zenfleet-vastai ~/.local/bin/`)
 #
 # Required env vars (sourced from ~/.config/cloudflare/r2-credentials):
 #   R2_ACCOUNT_ID  R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY
@@ -28,7 +28,7 @@
 #       --run-id iwssim-backfill-2026-05-17 \
 #       --chunks s3://coefficient/jobs/iwssim-backfill-2026-05-17/chunks.jsonl \
 #       --max-dph 0.30 --n-boxes 30 --min-ram 8 --min-disk 20 \
-#       --docker ghcr.io/imazen/zen-metrics-sweep:0.6.4-iwssim-fixed-6227c1a \
+#       --docker ghcr.io/imazen/zenmetrics-sweep:0.6.4-iwssim-fixed-6227c1a \
 #       --onstart scripts/sweep/onstart_iwssim_backfill.sh
 #
 # Once the fleet is up the launcher prints the watch invocation that
@@ -77,7 +77,7 @@ while [[ $# -gt 0 ]]; do
         --metric) METRIC="$2"; shift 2;;
         --run-id) RUN_ID="$2"; shift 2;;
         --chunks) CHUNKS="$2"; shift 2;;
-        --docker|--zen-metrics-image) ZEN_METRICS_IMAGE="$2"; shift 2;;
+        --docker|--zenmetrics-image) ZEN_METRICS_IMAGE="$2"; shift 2;;
         --onstart) ONSTART_PATH="$2"; shift 2;;
         --n-boxes) N_BOXES="$2"; shift 2;;
         --max-dph) MAX_DPH="$2"; shift 2;;
@@ -176,7 +176,7 @@ fi
 
 # Driver filter rationale (2026-05-18, v19 image):
 #
-#   The v19 zen-metrics binary was built with CUDARC_CUDA_VERSION=12090,
+#   The v19 zenmetrics binary was built with CUDARC_CUDA_VERSION=12090,
 #   which forces cudarc 0.19.4 to compile against the CUDA 12.9 binding
 #   surface. None of the CUDA 13-only symbols
 #   (cuCtxGetDevice_v2, cuCoredump{Register,Deregister}{Start,Complete}Callback)
@@ -361,7 +361,7 @@ echo
 # Suggest (or run) the watch command.
 SIDECAR_R2_PREFIX="s3://zentrain/${RUN_ID}/"
 WATCH_CMD=(
-    vastai-fleet watch
+    zenfleet-vastai watch
     --label-prefix "$RUN_ID"
     --target-sidecars "$TARGET_SIDECARS"
     --r2-prefix "$SIDECAR_R2_PREFIX"
@@ -369,7 +369,7 @@ WATCH_CMD=(
 )
 
 if [[ "$WATCH_INLINE" == "1" ]]; then
-    echo "[launch_backfill] entering vastai-fleet watch (inline) — Ctrl+C to detach"
+    echo "[launch_backfill] entering zenfleet-vastai watch (inline) — Ctrl+C to detach"
     exec "${WATCH_CMD[@]}"
 else
     echo "[launch_backfill] to auto-destroy when complete:"

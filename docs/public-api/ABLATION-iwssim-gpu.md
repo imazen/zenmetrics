@@ -5,7 +5,7 @@
 Snapshot: `docs/public-api/iwssim-gpu.txt` — 232 items (default == all-features).
 `iwssim-gpu` is the reference crate for the shared `memory_mode` pattern — other GPU crates doc-comment "see `iwssim_gpu::memory_mode::live_vram_probe_bytes`" as the canonical description. This crate's memory_mode surface is the most complete and most consumed.
 
-Known consumers: `zenmetrics-api` (`reclaim_pooled_vram`), `zen-metrics-cli` (`IWSSIM_COLUMN_NAME`, `IwssimParams`), `iwssim-gpu/tests/it/vram_probe.rs` (live VRAM tests using `live_vram_probe_bytes`, `vram_cap_bytes`).
+Known consumers: `zenmetrics-api` (`reclaim_pooled_vram`), `zenmetrics-cli` (`IWSSIM_COLUMN_NAME`, `IwssimParams`), `iwssim-gpu/tests/it/vram_probe.rs` (live VRAM tests using `live_vram_probe_bytes`, `vram_cap_bytes`).
 
 ---
 

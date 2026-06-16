@@ -5,7 +5,7 @@
 Snapshot: `docs/public-api/ssim2-gpu.txt` — 282 items (default), 314 items (all-features).
 The 32 extra items in all-features are from the `cubecl-types` feature: `Ssim2<R>` typed API + `Ssim2Batch<R>` batch API + `compute_handles*`.
 
-Known consumers: `zenmetrics-api` (opaque path, `reclaim_pooled_vram`), `zen-metrics-cli` (SSIM2_FIR_COLUMN_NAME, SSIM2_IIR_COLUMN_NAME, `column_name_for_blur`), `benchmarks/ssim2-gpu-*`, in-repo tests.
+Known consumers: `zenmetrics-api` (opaque path, `reclaim_pooled_vram`), `zenmetrics-cli` (SSIM2_FIR_COLUMN_NAME, SSIM2_IIR_COLUMN_NAME, `column_name_for_blur`), `benchmarks/ssim2-gpu-*`, in-repo tests.
 
 ---
 

@@ -35,7 +35,7 @@
 pub mod kernels;
 pub mod memory_mode;
 pub(crate) mod opaque;
-// `pipeline` is reached by-path cross-crate (zen-metrics-cli's
+// `pipeline` is reached by-path cross-crate (zenmetrics-cli's
 // orchestrator_runner) — `#[doc(hidden)]`, like `session`.
 #[doc(hidden)]
 pub mod pipeline;
