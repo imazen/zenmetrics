@@ -71,7 +71,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|p| !p.is_empty())
         .is_none()
     {
-        eprintln!("zenfleet-dash: WARNING: ZEN_DASH_PASSWORD unset — dashboard is UNAUTHENTICATED.");
+        eprintln!(
+            "zenfleet-dash: WARNING: ZEN_DASH_PASSWORD unset — dashboard is UNAUTHENTICATED."
+        );
     }
     if fleet_token().is_none() {
         eprintln!(
@@ -359,10 +361,11 @@ async fn api_speculative() -> Json<serde_json::Value> {
     };
     let uri = format!("{}/spec/", base.trim_end_matches('/'));
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
-    let jobs =
-        tokio::task::spawn_blocking(move || zenfleet_ledger::list_keys_uri(&uri, endpoint.as_deref()))
-            .await
-            .unwrap_or_default();
+    let jobs = tokio::task::spawn_blocking(move || {
+        zenfleet_ledger::list_keys_uri(&uri, endpoint.as_deref())
+    })
+    .await
+    .unwrap_or_default();
     Json(serde_json::json!({ "active": jobs.len(), "jobs": jobs }))
 }
 
@@ -431,8 +434,10 @@ async fn api_blob(axum::extract::Path(sha): axum::extract::Path<String>) -> Resp
     };
     let uri = format!("{}/{}", base.trim_end_matches('/'), sha);
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
-    match tokio::task::spawn_blocking(move || zenfleet_ledger::read_bytes_uri(&uri, endpoint.as_deref()))
-        .await
+    match tokio::task::spawn_blocking(move || {
+        zenfleet_ledger::read_bytes_uri(&uri, endpoint.as_deref())
+    })
+    .await
     {
         Ok(Ok(bytes)) => {
             let ct = sniff_content_type(&bytes);
@@ -466,8 +471,10 @@ async fn api_peek(
     };
     let uri = format!("{}/{}", base.trim_end_matches('/'), sha);
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
-    match tokio::task::spawn_blocking(move || zenfleet_ledger::read_bytes_uri(&uri, endpoint.as_deref()))
-        .await
+    match tokio::task::spawn_blocking(move || {
+        zenfleet_ledger::read_bytes_uri(&uri, endpoint.as_deref())
+    })
+    .await
     {
         Ok(Ok(bytes)) => {
             let size = bytes.len();

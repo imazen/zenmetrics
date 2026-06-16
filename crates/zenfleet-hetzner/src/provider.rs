@@ -22,10 +22,10 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use serde_json::Value as JsonValue;
-use zenfleet_salad::r2_ops::R2OperatorImpl;
 use zenfleet_orchestrator::{
     GroupId, GroupStatus, InstanceStatus, ProviderHandle, ProvisionSpec, QueueJob, R2Operator,
 };
+use zenfleet_salad::r2_ops::R2OperatorImpl;
 
 use crate::api::{HetznerApi, HetznerLocation};
 use crate::cloud_init::{WorkerBootstrap, build_user_data};

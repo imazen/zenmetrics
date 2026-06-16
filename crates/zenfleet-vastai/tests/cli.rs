@@ -18,7 +18,7 @@ fn fixtures_dir() -> PathBuf {
 }
 
 fn cli() -> Command {
-    let bin = env!("CARGO_BIN_EXE_vastai-fleet");
+    let bin = env!("CARGO_BIN_EXE_zenfleet-vastai");
     Command::new(bin)
 }
 

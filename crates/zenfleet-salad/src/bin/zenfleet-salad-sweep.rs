@@ -22,6 +22,9 @@ use anyhow::{Context, Result, bail};
 use clap::Parser;
 use serde::Serialize;
 use serde_json::{Value as JsonValue, json};
+use zenfleet_orchestrator::{
+    FleetSweep, QueueJob, R2Operator, SpeculativeConfig, SweepConfig, compute_provisioned_replicas,
+};
 use zenfleet_salad::launch::{RegistryAuth, SaladApi, ScopedCredSpec, inject_r2_cred_into_env};
 use zenfleet_salad::launcher_support::{
     ChunkLayout, apply_class_filter, generate_chunks, load_r2_parent_creds_or_env,
@@ -29,9 +32,6 @@ use zenfleet_salad::launcher_support::{
 };
 use zenfleet_salad::provider::{SaladProviderConfig, SaladProviderHandle};
 use zenfleet_salad::r2_ops::{R2OperatorImpl, short_ts};
-use zenfleet_orchestrator::{
-    FleetSweep, QueueJob, R2Operator, SpeculativeConfig, SweepConfig, compute_provisioned_replicas,
-};
 
 const DEFAULT_BUCKET: &str = "zen-tuning-ephemeral";
 const DEFAULT_SOURCE_DIR_R2: &str = "s3://zen-tuning-ephemeral/salad-smoke-2026-05-27/sources";
