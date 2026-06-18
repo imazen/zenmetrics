@@ -268,11 +268,18 @@ zenjxl       = { path = "../zenjxl" }
 # carries the same patch; cargo patches don't propagate across
 # workspaces, so without this entry the zenmetrics workspace resolves
 # crates.io 0.3.10 and zenjxl fails to compile (E0609 reject_progressive).
-# Pinned as a git rev (not a sibling path) so CI doesn't need to clone the
-# decoder repo and local builds don't depend on sibling checkout state.
-# Drop when zenjxl-decoder 0.3.11 publishes AND zenjxl bumps its `jxl`
-# dep to ^0.3.11.
-zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "0bd33d21c6b3565dd983d72561010f62235e932e" }
+# 2026-06-18: zenjxl main (3ad46e1) advanced again — #14 (c560121) + #15
+# (5d33e76) migrated the decoder boundary to whereat `At<Error>` (decode
+# returns are `At`-wrapped; zenjxl calls `.map_error()` / `.map_err_at()`).
+# The old git-rev pin 0bd33d21 predates the migration, so zenjxl failed to
+# compile (E0599 map_err_at/map_error). 2026-06-19: re-pinned from the
+# sibling-path-patch hold to a PUSHED decoder rev that carries the At<Error>
+# migration — 0599dcf is zenjxl-decoder origin/main (#29 changelog tip), so
+# cargo fetches it itself and CI needs no sibling clone (matches the comment
+# at the clone step in .github/workflows/ci.yml). Drop this patch when
+# zenjxl-decoder 0.3.11 publishes with the At<Error> API AND zenjxl bumps its
+# `jxl` dep to that release.
+zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "0599dcf3728c3982f3cf2cad22beb053037da356" }
 jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
 # butteraugli: the local sibling at ~/work/butteraugli/butteraugli is
 # version 0.9.2 but carries `compare_linear_planar_into` (the recycled-

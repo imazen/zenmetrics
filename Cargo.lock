@@ -5152,6 +5152,7 @@ dependencies = [
  "linear-srgb",
  "magetypes",
  "thiserror",
+ "whereat",
  "wide 1.5.0",
  "zencodec",
  "zenpixels",
@@ -5186,6 +5187,7 @@ dependencies = [
  "rgb",
  "thiserror",
  "ultrahdr-core 0.5.0",
+ "whereat",
  "wide 1.5.0",
  "zencodec",
  "zenjpeg",
@@ -6418,9 +6420,9 @@ dependencies = [
 
 [[package]]
 name = "zencodec"
-version = "0.1.22"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7caa71c10074d2ab050aa1e0e9aa519822c4e5f282a8e4cdfe970b96fb3d5da"
+checksum = "e36d0db6e1d9bcaec3a25739a05ba55790419988cae0d5e5f8863e220e612a1d"
 dependencies = [
  "almost-enough",
  "enough",
@@ -6906,7 +6908,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder"
 version = "0.3.10"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=0bd33d21c6b3565dd983d72561010f62235e932e#0bd33d21c6b3565dd983d72561010f62235e932e"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=0599dcf3728c3982f3cf2cad22beb053037da356#0599dcf3728c3982f3cf2cad22beb053037da356"
 dependencies = [
  "aligned-vec",
  "array-init",
@@ -6919,6 +6921,7 @@ dependencies = [
  "paste",
  "smallvec",
  "thiserror",
+ "whereat",
  "zenjxl-decoder-macros",
  "zenjxl-decoder-simd",
 ]
@@ -6926,7 +6929,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-macros"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=0bd33d21c6b3565dd983d72561010f62235e932e#0bd33d21c6b3565dd983d72561010f62235e932e"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=0599dcf3728c3982f3cf2cad22beb053037da356#0599dcf3728c3982f3cf2cad22beb053037da356"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -6937,7 +6940,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-simd"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=0bd33d21c6b3565dd983d72561010f62235e932e#0bd33d21c6b3565dd983d72561010f62235e932e"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=0599dcf3728c3982f3cf2cad22beb053037da356#0599dcf3728c3982f3cf2cad22beb053037da356"
 dependencies = [
  "archmage",
  "paste",
@@ -7055,9 +7058,9 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.13"
+version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7337f9cebf33aabd9bf27b8bd87f883a18d276b64a36b139c53eb077e1089b7f"
+checksum = "515b2d87c361de4a3c1e4131a1de03d9cceab59cf599ac48235d46e60ef1768d"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -7067,9 +7070,9 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.2.13"
+version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab45d752d4211a62c95c3e8bf3a6959ccab1fa8c3ae47ea4ee6584d93614332f"
+checksum = "c49c5c25ca3577cef11f12f594a9966297d949c1a801f3a79ca9f5df74a09fa2"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -7167,15 +7170,14 @@ dependencies = [
 
 [[package]]
 name = "zenravif"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51edf23ff0690e4a7c3c7df67ee2143709f9bf33ecb8785cfffa33bba95ac314"
+version = "0.2.0"
 dependencies = [
  "almost-enough",
  "imgref",
  "loop9",
  "quick-error",
  "rgb",
+ "whereat",
  "zenavif-serialize",
  "zenrav1e",
 ]
