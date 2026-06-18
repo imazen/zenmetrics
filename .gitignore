@@ -32,3 +32,12 @@ scripts/cvvdp_goldens/out/
 /zenmetrics
 .v4_extract/
 /zenfleet-sweep-arm64
+
+# Pre-rename docker-build staging artifacts (old bin names): vastai-fleet
+# (now zenfleet-vastai), zen-metrics (now zenmetrics), zen-sweep-worker
+# (now zenfleet-sweep). ~495 MB of stray ELF binaries got staged at root
+# during the crate rename; untracked + ignored 2026-06-18 so `git add -A`
+# can't re-add them.
+/vastai-fleet
+/zen-metrics
+/zen-sweep-worker

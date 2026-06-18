@@ -498,8 +498,25 @@ fn main() -> ExitCode {
     // every invocation. This keeps stdout / stderr clean for the
     // default case.
     #[cfg(feature = "orchestrator")]
-    let use_legacy_scheduler =
-        cli.use_legacy_scheduler || orchestrator_glue::use_legacy_scheduler_from_env();
+    let use_legacy_scheduler = {
+        let explicit_legacy =
+            cli.use_legacy_scheduler || orchestrator_glue::use_legacy_scheduler_from_env();
+        // The orchestrator benchmarks + scores via in-process cubecl-cuda clients,
+        // which PANIC on a box with no usable GPU (CUDA_ERROR_NO_DEVICE). When no GPU
+        // is present, fall back to the legacy CPU scheduler (panic-free) so the worker
+        // still encodes + runs CPU metrics — GPU metrics are simply unavailable. GPU
+        // boxes keep the orchestrator (the highest-level API). `detect_gpu()` is a safe
+        // nvidia-smi probe (never panics; has its own `detect_gpu_never_panics` test).
+        if !explicit_legacy && !zenmetrics_orchestrator::detect_gpu().present {
+            eprintln!(
+                "[zenmetrics] no GPU detected (nvidia-smi) — using the legacy CPU \
+                 scheduler; GPU metrics are unavailable on this box."
+            );
+            true
+        } else {
+            explicit_legacy
+        }
+    };
     #[cfg(feature = "orchestrator")]
     let explicit_orchestrator_opt_in =
         cli.use_orchestrator || orchestrator_glue::use_orchestrator_from_env();

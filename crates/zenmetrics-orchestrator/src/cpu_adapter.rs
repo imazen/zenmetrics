@@ -500,11 +500,12 @@ impl CpuAdapter {
     /// (256 rows for ssim2/butter/zensim; iwssim/cvvdp keep their own
     /// per-crate defaults).
     #[allow(dead_code)] // only called via the strip-aware executor path
+    #[allow(unused_variables)] // strip_height is unused only when no cpu-* backend feature is enabled
     pub fn compute_strip(
         &mut self,
         ref_bytes: &[u8],
         dist_bytes: &[u8],
-        _strip_height: u32,
+        strip_height: u32,
     ) -> Result<Score, CpuAdapterError> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if ref_bytes.len() != expected {
@@ -637,10 +638,11 @@ impl CpuAdapter {
     /// - **cvvdp**: API stub — delegates to `score_with_warm_ref()`.
     /// - **dssim**: not yet wired (no upstream strip API).
     #[allow(dead_code)]
+    #[allow(unused_variables)] // strip_height is unused only when no cpu-* backend feature is enabled
     pub fn compute_with_cached_reference_strip(
         &mut self,
         dist_bytes: &[u8],
-        _strip_height: u32,
+        strip_height: u32,
     ) -> Result<Score, CpuAdapterError> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if dist_bytes.len() != expected {
