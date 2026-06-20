@@ -27,6 +27,7 @@ pub mod job;
 pub mod lease;
 pub mod ledger;
 pub mod reconcile;
+pub mod schedule;
 pub mod status;
 
 pub use catalog::{CatalogEntry, SemanticId};

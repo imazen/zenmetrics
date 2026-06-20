@@ -41,6 +41,24 @@ impl ResourceClass {
             _ => None,
         }
     }
+
+    /// Derive the routing class from an encode's *estimated peak memory*
+    /// (`zencodec::estimate::ResourceEstimate::peak_memory_bytes`). This refines
+    /// the static per-codec class (`encode_cost`) with the real per-encode
+    /// footprint — a 64×64 AVIF is `CpuLight`, a 100 MP 10-bit AVIF or a
+    /// JXL-modular-e9 is `HighRam`. Thresholds are deliberately coarse: they
+    /// pick a *queue* (capability routing); the per-box [`crate::schedule`]
+    /// admission control does the fine packing.
+    pub fn from_peak_mem(peak_mem_bytes: u64) -> ResourceClass {
+        const MB: u64 = 1 << 20;
+        if peak_mem_bytes >= 4096 * MB {
+            ResourceClass::HighRam // ≥ 4 GB → big-RAM boxes
+        } else if peak_mem_bytes >= 512 * MB {
+            ResourceClass::CpuHeavy // ≥ 512 MB
+        } else {
+            ResourceClass::CpuLight // < 512 MB
+        }
+    }
 }
 
 /// Capability routing (goal H "capability-routed (GPU/CPU/ARM)"): a worker advertising the resource
@@ -232,6 +250,15 @@ mod tests {
             subs.len(),
             "every class must route to a distinct subject"
         );
+    }
+
+    #[test]
+    fn class_from_peak_mem_buckets() {
+        use ResourceClass::*;
+        const MB: u64 = 1 << 20;
+        assert_eq!(ResourceClass::from_peak_mem(80 * MB), CpuLight); // small JPEG
+        assert_eq!(ResourceClass::from_peak_mem(600 * MB), CpuHeavy); // mid AVIF
+        assert_eq!(ResourceClass::from_peak_mem(8192 * MB), HighRam); // JXL-modular-e9
     }
 
     #[test]
