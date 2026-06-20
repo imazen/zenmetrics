@@ -80,16 +80,13 @@ impl BoxBudget {
     /// (or hundreds if cores allow), heavy multi-threaded encodes pack to a
     /// handful.
     pub fn max_concurrent(&self, mem_each: u64, threads_each: u32) -> u32 {
-        let by_mem = if mem_each == 0 {
-            u32::MAX
-        } else {
-            (self.ram_budget_bytes / mem_each).min(u32::MAX as u64) as u32
-        };
-        let by_thr = if threads_each == 0 {
-            u32::MAX
-        } else {
-            self.cores / threads_each
-        };
+        // checked_div → None on a zero divisor (a zero footprint doesn't bind
+        // that axis, so it admits unboundedly): map None to u32::MAX.
+        let by_mem = self
+            .ram_budget_bytes
+            .checked_div(mem_each)
+            .map_or(u32::MAX, |v| v.min(u32::MAX as u64) as u32);
+        let by_thr = self.cores.checked_div(threads_each).unwrap_or(u32::MAX);
         by_mem.min(by_thr).max(1)
     }
 
@@ -164,7 +161,7 @@ mod tests {
         assert!(b.can_admit(&idle, 64 * GB, 16));
         // but not alongside anything.
         let mut run = InFlight::default();
-        run.add(1 * MB, 1);
+        run.add(MB, 1);
         assert!(!b.can_admit(&run, 64 * GB, 16));
     }
 

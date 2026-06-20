@@ -328,6 +328,9 @@ fn read_claim(endpoint: &str, bucket: &str, key: &str) -> Option<(String, u64)> 
 /// Claim a job, **stealing a stale claim** if the prior owner is presumed dead (claim age ≥ `ttl_secs`).
 /// Steal is itself a CAS (`If-Match` on the claim's ETag), so two reclaimers can't both win. Returns
 /// true iff this worker now owns the claim. This is the dead-worker reclaim (goal E).
+// All eight are irreducible CAS inputs (endpoint/bucket/prefix/id/now/ttl/spec-threshold/owner);
+// same rationale as the `#[allow]` on `execute_gap_claimed` below.
+#[allow(clippy::too_many_arguments)]
 pub fn claim_or_steal_r2(
     endpoint: &str,
     bucket: &str,
