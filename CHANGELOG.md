@@ -17,6 +17,50 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+## zenfleet-core
+
+### Added
+
+- **Resource-aware scheduling primitives** (`schedule::BoxBudget`): packs
+  concurrent encode jobs under a box's RAM **and** core budget at once
+  (`can_admit` / `max_concurrent`), replacing a fixed N-per-core fan-out —
+  the lever for "some encodes need 8 GB, some 80 MB; some are serial, some
+  self-thread to dozens of cores". `ResourceClass::from_peak_mem` routes by
+  estimated peak memory (≥ 4 GB → HighRam, ≥ 512 MB → CpuHeavy) (2728779a).
+- **`BoxBudget::recommend_concurrency`** — one safe fixed fan-out for a whole
+  (heterogeneous) manifest, sized to its heaviest job so any selection of that
+  many is admissible (the onstart/launcher lever) (917edd48).
+- **`DesiredJob` resource hint** — `ResourceHint { peak_mem_bytes, threads }`
+  + optional `DesiredJob.hint` (`#[serde(default)]`) carries a per-encode
+  estimate (from each codec's `estimate_encode_resources`) from declare to
+  worker. Advisory and **not** part of the content-addressed `JobId` — so
+  attaching/refining/dropping it never changes identity or dedup (9992473b).
+
+## zenfleet-ctl
+
+### Added
+
+- **Resource-hint carry path** — `EncodeDeclareItem.hint` (`#[serde(default)]`)
+  + `declare_encodes` propagates it onto the `DesiredJob`, so a hint computed by
+  the codec-linked emitter rides the emit-cells JSONL through declare. Legacy /
+  hint-less lines parse as `None` (02718781).
+
+## zenmetrics-cli
+
+### Added
+
+- **`scripts/jobsys/fleet_top.py`** — real-time fleet-health monitor over the
+  R2 ledger + claims: progress/ETA, worker liveness (active/stalled/idle),
+  stalled claims past TTL, poison + at-risk cells (`--poison-out` exports a
+  deactivation list), recent failures (2728779a).
+
+> The codec-linked half — `PlannedConfig::estimate_resources` (each codec's
+> own `heuristics`/`estimate_encode_resources` model surfaced per planned cell)
+> and `sweep --emit-cells` populating the hint from it — is implemented and
+> verified locally but **held** off `master` pending the in-flight `zencodec`
+> 0.1.24 migration (CI clones codecs at frozen pre-migration pins). It lands
+> with that migration.
+
 ## zensim-gpu
 
 ### Added
