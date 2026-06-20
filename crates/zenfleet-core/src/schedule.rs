@@ -50,7 +50,10 @@ impl InFlight {
 
 impl BoxBudget {
     pub fn new(ram_budget_bytes: u64, cores: u32) -> Self {
-        Self { ram_budget_bytes, cores }
+        Self {
+            ram_budget_bytes,
+            cores,
+        }
     }
 
     /// Can a candidate encode — its estimated `(cand_mem, cand_threads)` — start

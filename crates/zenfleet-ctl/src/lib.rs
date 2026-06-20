@@ -77,6 +77,11 @@ pub fn declare_encodes(items: &[EncodeDeclareItem]) -> Result<Vec<DesiredJob>, S
                 q: it.q,
                 knob_tuple_json: it.knob_tuple_json.clone(),
             },
+            // Encode jobs: the resource hint is attached by the codec-linked
+            // declarer (`zenmetrics jobexec`/declare via
+            // `PlannedConfig::estimate_resources`), which knows the source dims.
+            // zenfleet-ctl stays codec-free, so it declares without one.
+            hint: None,
         });
     }
     Ok(out)
@@ -109,6 +114,9 @@ pub fn declare(spec: &DeclareSpec) -> Result<Vec<DesiredJob>, String> {
                     q: it.q,
                     knob_tuple_json: it.knob_tuple_json.clone(),
                 },
+                // Metric jobs are GPU-routed; the per-encode RAM/thread hint is
+                // an encoder concept, so metric declares carry none.
+                hint: None,
             });
         }
     }

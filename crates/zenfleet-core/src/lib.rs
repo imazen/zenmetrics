@@ -38,6 +38,6 @@ pub use gc::{BlobIndexEntry, GcPlan, GcVerdict, Tombstone, gc_plan, lru_cap_evic
 pub use ids::{CellId, JobId};
 pub use job::{GroupBy, JobKind, JobProfile, Regenerability, ResourceClass, worker_serves};
 pub use lease::{Lease, recommended_ttl_secs};
-pub use ledger::{DesiredJob, LedgerRow, LedgerView};
+pub use ledger::{DesiredJob, LedgerRow, LedgerView, ResourceHint};
 pub use reconcile::{ReconcilePlan, RetryPolicy, reconcile};
 pub use status::{ErrorClass, JobStatus};

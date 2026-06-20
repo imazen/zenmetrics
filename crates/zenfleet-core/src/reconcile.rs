@@ -95,6 +95,7 @@ mod tests {
                 q: 80,
                 knob_tuple_json: "{}".into(),
             },
+            hint: None,
         }
     }
 

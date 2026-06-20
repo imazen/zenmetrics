@@ -36,6 +36,7 @@ fn desired_set() -> Vec<DesiredJob> {
             },
             inputs: vec![sha256(format!("encode-{i}").as_bytes())],
             cell: cell(i),
+            hint: None,
         })
         .collect()
 }
