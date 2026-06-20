@@ -92,6 +92,31 @@ impl BoxBudget {
         };
         by_mem.min(by_thr).max(1)
     }
+
+    /// The safe fixed concurrency for a whole (possibly heterogeneous) manifest:
+    /// the most jobs that can run at once assuming the *heaviest* job's
+    /// footprint, so any selection of that many is admissible. This is the
+    /// onstart/launcher lever — size worker fan-out (or a chunk) to the batch's
+    /// resource envelope instead of a blind N-per-core, the difference between a
+    /// 64×64-JPEG batch saturating all cores and a 4K-JXL-modular batch packing
+    /// to a handful without OOM. Jobs carrying no [`crate::ledger::ResourceHint`]
+    /// use `fallback`. Equivalent to [`max_concurrent`](Self::max_concurrent) at
+    /// the per-axis maxima; always ≥ 1.
+    ///
+    /// A worker that admits dynamically should prefer [`can_admit`](Self::can_admit)
+    /// per candidate (it packs tighter); this is for callers that need one fixed
+    /// number up front.
+    pub fn recommend_concurrency(
+        &self,
+        hints: &[Option<crate::ledger::ResourceHint>],
+        fallback: crate::ledger::ResourceHint,
+    ) -> u32 {
+        let (max_mem, max_threads) = hints.iter().fold((0u64, 1u32), |(m, t), h| {
+            let h = h.unwrap_or(fallback);
+            (m.max(h.peak_mem_bytes), t.max(h.threads))
+        });
+        self.max_concurrent(max_mem, max_threads)
+    }
 }
 
 #[cfg(test)]
@@ -141,5 +166,35 @@ mod tests {
         let mut run = InFlight::default();
         run.add(1 * MB, 1);
         assert!(!b.can_admit(&run, 64 * GB, 16));
+    }
+
+    #[test]
+    fn recommend_concurrency_is_bound_by_the_heaviest_job() {
+        use crate::ledger::ResourceHint;
+        let b = BoxBudget::new(24 * GB, 16);
+        let light = ResourceHint {
+            peak_mem_bytes: 80 * MB,
+            threads: 1,
+        };
+        // A manifest of mostly-light jobs with one 8 GB / 4-thread JXL: the heavy
+        // one binds → 24/8 = 3 (mem-bound), NOT the 16 the light jobs alone allow.
+        let mixed = vec![
+            Some(light),
+            Some(ResourceHint {
+                peak_mem_bytes: 8 * GB,
+                threads: 4,
+            }),
+            Some(ResourceHint {
+                peak_mem_bytes: 120 * MB,
+                threads: 1,
+            }),
+            None, // no hint → fallback (light)
+        ];
+        assert_eq!(b.recommend_concurrency(&mixed, light), 3);
+        // An all-light batch is core-bound at 16 (24 GB / 80 MB ≈ 307 by memory).
+        let all_light = vec![Some(light); 100];
+        assert_eq!(b.recommend_concurrency(&all_light, light), 16);
+        // Empty manifest: nothing binds → default to cores.
+        assert_eq!(b.recommend_concurrency(&[], light), 16);
     }
 }
