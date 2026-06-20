@@ -20,24 +20,49 @@ feature (promotion to stable surfaces is a separate, user-approved step
 
 | codec | planner module | plan names | modes | budget ladder |
 |---|---|---|---|---|
-| zenjpeg | `zenjpeg::encode::sweep` | `rd_core`, `modes_full` | lossy | yes |
-| zenavif | `zenavif::sweep` | `rd_core`, `modes_full`, `modes_full_alpha` | lossy (+alpha probes) | yes |
-| zenjxl | `zenjxl::sweep` | `rd_core`, `modes_full` | lossy (VarDCT) + lossless (modular) | yes |
-| zenwebp | `zenwebp::sweep` | `rd_core`, `modes_full` | lossy (VP8) + lossless (VP8L) | yes |
-| zenpng | `zenpng::sweep` | `rd_core`, `modes_full` | all-lossless | no (9 cells max; over-budget reported, never sampled) |
+| zenjpeg | `zenjpeg::encode::sweep` | `rd_core`, `modes_full`, `scalar_dense` | lossy | yes |
+| zenavif | `zenavif::sweep` | `rd_core`, `modes_full`, `modes_full_alpha`, `scalar_dense` | lossy (+alpha probes) | yes |
+| zenjxl | `zenjxl::sweep` | `rd_core`, `modes_full`, `scalar_dense` | lossy (VarDCT) + lossless (modular) | yes |
+| zenwebp | `zenwebp::sweep` | `rd_core`, `modes_full`, `scalar_dense` | lossy (VP8) + lossless (VP8L) | yes |
+| zenpng | `zenpng::sweep` | `rd_core`, `modes_full`, `scalar_dense` | all-lossless | no (9 cells max; over-budget reported, never sampled) |
+| zengif | `zengif::sweep` | `rd_core`, `modes_full`, `scalar_dense` | lossy (quantizer-driven) | no (over-budget reported, never sampled) |
+| zentiff | `zentiff::sweep` | `rd_core`, `modes_full`, `scalar_dense` | all-lossless | no (≤16 cells; over-budget reported, never sampled) |
 
 Common planner shape: `SweepAxes` (most-important-first axis vectors) ×
 `QualityGrid` (`Step5` 21-point floor / `TrainingDense` 31-point /
-`Explicit`; zenjxl also `ExplicitDistance`) → `SweepBuilder::plan()` →
-`SweepPlan { cells, dropped, invalid_skipped, duplicates_merged,
-q_coarsenings, over_budget }`. Cells are emitted main-effects-first
-(deviations 0, then 1, then combos); every reduction is reported, never
-silent.
+`Explicit`; zenjxl also `ExplicitDistance`) → `SweepBuilder::plan()` (the
+`__expert` codecs) / a free `plan_constrained(axes[, grid],
+compute_limit, max_deviations)` (the public-API codecs png/gif/tiff) →
+`SweepPlan { cells, …, compute_tier_skipped }`. Cells are emitted
+main-effects-first (deviations 0, then 1, then combos); every reduction
+is reported, never silent.
+
+`scalar_dense` is the third plan mode on every codec: the dense per-knob
+ladders a trained **scalar head** fits (continuous knobs laddered finer
+than `modes_full`; the codec's compute axis kept dense). Pair it with
+`--max-deviations 1` (the isolated main-effects regime — auto-defaulted
+when `--plan scalar_dense` and `--max-deviations` is absent) so the head
+sees clean per-axis response curves instead of cartesian interactions.
+
+Two cross-codec constraint knobs (both default off → unconstrained):
+
+- **`compute_limit: Option<u8>`** (`--compute-limit`) drops cells whose
+  `compute_tier()` exceeds the cap, recording every dropped id in the
+  manifest's `compute_tier_skipped` — the no-silent-caps report for a
+  CPU-bound fleet or a "fast configs only" picker. `compute_tier()` is
+  an ordinal cost proxy each codec exposes (jpeg: mode-cost ladder;
+  webp/jxl: method/effort; png: effort; gif: quantizer backend band;
+  tiff: compression-method ladder).
+- **`max_deviations: Option<u8>`** (`--max-deviations`) keeps only cells
+  within N axis deviations of the default stratum (`1` = isolated
+  main-effects, `0` = the default stratum alone).
 
 `zenmetrics-cli`'s bridge (`crates/zenmetrics-cli/src/sweep/plan.rs`):
 
-- `build_plan(codec, name, budget, q_grid) -> BuiltPlan` — the single
-  dispatch point. Writes the audit manifest to `<output>.plan.json`.
+- `build_plan(codec, name, budget, q_grid, compute_limit,
+  max_deviations) -> BuiltPlan` — the single dispatch point. Writes the
+  audit manifest to `<output>.plan.json` (which now also records
+  `compute_limit` / `max_deviations` / `compute_tier_skipped`).
 - `PlannedCell { q, knob_json, config: PlannedConfig }` — one encode
   cell; `PlannedConfig` is the per-codec fully-built config enum.
 - `resolve_verified(codec, cell_id, q, fp_hex) -> PlannedConfig` — the
@@ -45,6 +70,12 @@ silent.
   cell id** (`config_from_cell_id` / `variant_from_cell_id`), recomputes
   the resolved-state fingerprint, and fails loudly on mismatch (the
   id-grammar-drift tripwire; never a silently wrong encode).
+
+gif/tiff are **plan-only** in the bridge — they have no `--knob-grid`
+JSON vocabulary, so a `--knob-grid` sweep on them errors with a
+"use --plan" hint. Their encoded variants decode back through
+`decode.rs` (gif via `decode_gif`'s first composed frame; tiff via the
+PixelBuffer funnel) so the encode→decode→score round-trip closes.
 
 ## 2. The durable per-cell identity
 
@@ -64,6 +95,9 @@ column and in `JobKind::Encode.knobs`:
     `mod-e<eff>_<label>[-flags…]` (lossless)
   - zenwebp: `vp8-m<m>_<label>[-flags…]` (lossy) / `vp8l-m<m>[-ql<q>]`
   - zenpng: `png-<preset>` / `png-e<effort>`
+  - zengif: `gif-<backend>[-d<dither>]` (lossy — quality lives in the
+    `_q<q>` token; re-attached at resolve time)
+  - zentiff: `tiff-<method>[-hpred][-big]` (lossless — q=0 sentinel)
 - `fp` is FNV-64 over **resolved** state (pattern 4: resolution is the
   identity, not the spelling — `png-e13` ≡ `png-balanced`, planner-level
   aliases are merged and reported in the manifest). For lossy cells the
@@ -77,11 +111,12 @@ column and in `JobKind::Encode.knobs`:
 ## 3. Three execution paths, one identity
 
 1. **Local / chunk-mode CLI** — `zenmetrics sweep --codec C --plan
-   NAME [--plan-budget N] --q-grid … --sources DIR --output OUT.tsv`.
-   Mutually exclusive with `--knob-grid`. Builds the plan once per
-   sweep, writes `OUT.plan.json`, walks cells × images via rayon.
-   Requires `--features sweep` + the codec feature (`sweep` force-pulls
-   jpeg/webp/avif; add `jxl`/`png` explicitly).
+   NAME [--plan-budget N] [--compute-limit N] [--max-deviations N]
+   --q-grid … --sources DIR --output OUT.tsv`. Mutually exclusive with
+   `--knob-grid`. Builds the plan once per sweep, writes `OUT.plan.json`,
+   walks cells × images via rayon. Requires `--features sweep` + the
+   codec feature (`sweep` force-pulls jpeg/webp/avif; add
+   `jxl`/`png`/`gif`/`tiff` explicitly).
 2. **Job system** — `… --plan NAME --dry-run --emit-cells cells.jsonl`
    emits one declare item per (source × cell): `{image_path, codec,
    q:i64, knob_tuple_json, source_sha}` (q must be integer-valued).

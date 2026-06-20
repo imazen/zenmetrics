@@ -106,6 +106,10 @@ pub enum CodecKind {
     Zenavif,
     /// `zenjxl` JPEG XL encoder via jxl-encoder.
     Zenjxl,
+    /// `zengif` quantizer-driven GIF encoder (plan-only sweeps).
+    Zengif,
+    /// `zentiff` lossless TIFF encoder (plan-only sweeps).
+    Zentiff,
 }
 
 impl CodecKind {
@@ -116,6 +120,8 @@ impl CodecKind {
             CodecKind::Zenwebp => "zenwebp",
             CodecKind::Zenavif => "zenavif",
             CodecKind::Zenjxl => "zenjxl",
+            CodecKind::Zengif => "zengif",
+            CodecKind::Zentiff => "zentiff",
         }
     }
 }
@@ -207,6 +213,13 @@ const JXL_KNOBS: &[&str] = &[
     "progressive",
 ];
 
+// zengif / zentiff are wired for plan-driven sweeps only (`--plan`),
+// where cells come from the codec's own planner; they have no JSON
+// `--knob-grid` vocabulary, so their recognized-knob set is empty and
+// the JSON `encode()` dispatch routes them to a plan-only error.
+const GIF_KNOBS: &[&str] = &[];
+const TIFF_KNOBS: &[&str] = &[];
+
 impl CodecKind {
     /// The set of knob names this codec recognizes.
     fn recognized_knobs(self) -> &'static [&'static str] {
@@ -216,6 +229,8 @@ impl CodecKind {
             CodecKind::Zenwebp => WEBP_KNOBS,
             CodecKind::Zenavif => AVIF_KNOBS,
             CodecKind::Zenjxl => JXL_KNOBS,
+            CodecKind::Zengif => GIF_KNOBS,
+            CodecKind::Zentiff => TIFF_KNOBS,
         }
     }
 }
@@ -259,6 +274,15 @@ pub fn encode(
         CodecKind::Zenwebp => encode_webp(source, q, knobs),
         CodecKind::Zenavif => encode_avif(source, q, knobs),
         CodecKind::Zenjxl => encode_jxl(source, q, knobs),
+        // gif/tiff are plan-only: their cells come from the codec's own
+        // sweep planner (`--plan`), never from a `--knob-grid` product.
+        CodecKind::Zengif | CodecKind::Zentiff => Err(format!(
+            "{} sweeps are plan-only: use --plan rd_core|modes_full|scalar_dense \
+             (no --knob-grid vocabulary is defined for {})",
+            codec.name(),
+            codec.name()
+        )
+        .into()),
     }
 }
 

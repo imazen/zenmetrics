@@ -6851,6 +6851,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "zengif"
+version = "0.7.3"
+dependencies = [
+ "bytemuck",
+ "enough",
+ "garb",
+ "gif",
+ "linear-srgb",
+ "rgb",
+ "thiserror",
+ "whereat",
+ "zenpixels",
+ "zenquant",
+]
+
+[[package]]
 name = "zenhdr-corpus"
 version = "0.0.0"
 dependencies = [
@@ -7004,6 +7020,7 @@ dependencies = [
  "zenavif",
  "zencodec",
  "zenforks-cubecl",
+ "zengif",
  "zenjpeg",
  "zenjxl",
  "zenmetrics-api",
@@ -7012,6 +7029,7 @@ dependencies = [
  "zenpixels-convert",
  "zenpng",
  "zensim",
+ "zentiff",
  "zenwebp",
 ]
 
@@ -7216,6 +7234,18 @@ name = "zenstats"
 version = "0.1.0"
 dependencies = [
  "rayon",
+]
+
+[[package]]
+name = "zentiff"
+version = "0.1.2"
+dependencies = [
+ "bytemuck",
+ "enough",
+ "thiserror",
+ "tiff",
+ "whereat",
+ "zenpixels",
 ]
 
 [[package]]

@@ -405,6 +405,8 @@ async fn run_chunk_inline_impl(
             // sweeps (CLI --plan or a jobspec that sets these).
             plan: None,
             plan_budget: None,
+            plan_compute_limit: None,
+            plan_max_deviations: None,
             metrics: metrics.clone(),
             gpu_runtime: GpuRuntime::Cuda,
             output_tsv: sweeps.join(format!("g{gid_str}.tsv")),

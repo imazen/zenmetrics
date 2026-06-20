@@ -21,6 +21,13 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **`zenjxl-decoder` workspace patch re-pinned from a sibling-path hold
+  to a pushed git rev** (`0599dcf3`, zenjxl-decoder origin/main, which
+  carries the whereat `At<Error>` decoder-boundary migration zenjxl main
+  needs). The path-patch was CI-unsafe (required a sibling clone); the
+  git rev is fetched by cargo, so CI needs no decoder clone (the clone
+  step already omits it). Drop when zenjxl-decoder 0.3.11 publishes the
+  `At<Error>` API and zenjxl bumps its `jxl` dep (8ed17c7e).
 - **Crate rename — fleet/job-system crates are now `zenfleet-*`; the
   metrics CLI binary is `zenmetrics` (no dash after `zen`).** Renamed
   `zen-jobctl`→`zenfleet-ctl`, `zen-jobworker`→`zenfleet-worker`,
@@ -149,6 +156,31 @@ Workspace conventions per the global rules:
 
 ## zenmetrics-cli
 
+- `--plan scalar_dense` is a third plan mode across every wired codec
+  (the dense per-knob ladders a trained scalar head fits), plus two
+  cross-codec constraint knobs: `--compute-limit <N>` (drop cells whose
+  `compute_tier()` exceeds N, reported in the manifest's
+  `compute_tier_skipped`, never silently sampled) and `--max-deviations
+  <N>` (keep only cells within N axis deviations of the default
+  stratum). `--plan scalar_dense` defaults `--max-deviations` to 1 (the
+  isolated main-effects regime scalar heads train on); an explicit flag
+  overrides. `__expert` codecs apply these via
+  `SweepBuilder::with_compute_limit`/`with_max_deviations`; png/gif/tiff
+  via their free `plan_constrained`. Defaults (no flag) keep existing
+  invocations byte-identical. Threaded through `PlanSpec` and the vastai
+  `InlineGroupSpec` so both chunk mode and the job system carry them
+  (76cab180).
+- zengif + zentiff are the sixth and seventh codecs on the plan-cell
+  bridge (plan-only — no `--knob-grid` vocabulary): `CodecKind::Zengif`/
+  `Zentiff`, `PlannedConfig` arms + `encode_bytes` dispatch (gif encodes
+  an RGB8→opaque-RGBA `FrameInput` with a u16-dim guard; tiff encodes a
+  `PixelSlice` RGB8), `build_zengif_plan` (quantizer-driven, q in the
+  `gif-<backend>[-d<dither>]_q<q>` id) + `build_zentiff_plan`
+  (all-lossless, q=0 sentinel), and the `resolve_verified` arms. GIF/TIFF
+  decode is wired into `decode.rs` (magic-byte + extension sniff +
+  dispatch) so the encode→decode→score round-trip closes. Gated behind
+  the new `gif`/`tiff` CLI features (zengif `zenquant` backend; zentiff
+  `lzw`+`deflate`) (76cab180).
 - Plan-identity tuples execute on every path: the sweep runner's tuple
   path detects `{"cell","fp","plan"}` knob tuples and routes them
   through `resolve_verified` (byte-identical to the Planned path,

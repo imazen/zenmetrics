@@ -175,12 +175,22 @@ fn tuple_units(cfg: &SweepConfig) -> Vec<SweepUnit<'static>> {
 /// Selector for a plan-driven sweep (see [`SweepConfig::plan`]).
 #[derive(Debug, Clone)]
 pub struct PlanSpec {
-    /// `"rd_core"` or `"modes_full"` (zenavif also `"modes_full_alpha"`).
+    /// `"rd_core"`, `"modes_full"`, or `"scalar_dense"` (zenavif also
+    /// `"modes_full_alpha"`).
     pub name: String,
     /// Optional cell budget — the codec's reduction ladder sheds
     /// lowest-priority axis values one at a time and reports every drop
     /// in the plan manifest; nothing is sampled away silently.
     pub budget: Option<usize>,
+    /// Optional compute-tier cap (`--compute-limit`): cells whose
+    /// `compute_tier()` exceeds it are dropped and reported in the
+    /// manifest's `compute_tier_skipped`, never silently sampled.
+    pub compute_limit: Option<u8>,
+    /// Optional deviation scope (`--max-deviations`): keep only cells
+    /// within N axis deviations of the default stratum (`1` = isolated
+    /// main-effects — the regime the `scalar_dense` heads train on; `0` =
+    /// the default stratum alone). `None` keeps the full crossed space.
+    pub max_deviations: Option<u8>,
 }
 
 /// Runtime parameters for a sweep invocation.
@@ -494,7 +504,14 @@ pub fn run_sweep(
             }
             // Codec dispatch (and feature availability) live in
             // sweep::plan::build_plan — unsupported codecs error there.
-            let built = build_plan(cfg.codec, &spec.name, spec.budget, &cfg.q_grid)?;
+            let built = build_plan(
+                cfg.codec,
+                &spec.name,
+                spec.budget,
+                &cfg.q_grid,
+                spec.compute_limit,
+                spec.max_deviations,
+            )?;
             let manifest_path = cfg.output.with_extension("plan.json");
             std::fs::write(&manifest_path, &built.manifest_json)?;
             eprintln!(
@@ -1219,6 +1236,8 @@ fn save_encoded_variant(
         CodecKind::Zenwebp => "webp",
         CodecKind::Zenavif => "avif",
         CodecKind::Zenjxl => "jxl",
+        CodecKind::Zengif => "gif",
+        CodecKind::Zentiff => "tiff",
     };
     let codec_name = codec.name();
     let filename = format!("{stem}_{src_hash}_{codec_name}_q{q}_{knob_hash}.{ext}");
@@ -1239,6 +1258,8 @@ fn decode_encoded_bytes(bytes: &[u8], codec: CodecKind) -> Result<Rgb8Image, Box
         CodecKind::Zenwebp => ".webp",
         CodecKind::Zenavif => ".avif",
         CodecKind::Zenjxl => ".jxl",
+        CodecKind::Zengif => ".gif",
+        CodecKind::Zentiff => ".tiff",
     };
     let tmp = tempfile::Builder::new()
         .prefix("zenmetrics-sweep-")
@@ -1610,7 +1631,7 @@ mod tests {
     fn plan_identity_tuple_matches_planned_cell_bytes() {
         use crate::sweep::plan::build_plan;
         let img = tiny_gradient();
-        let plan = build_plan(CodecKind::Zenwebp, "rd_core", None, &[50.0]).unwrap();
+        let plan = build_plan(CodecKind::Zenwebp, "rd_core", None, &[50.0], None, None).unwrap();
         let mut checked = 0usize;
         for cell in &plan.cells {
             let planned = SweepUnit::Planned(cell)
@@ -1644,7 +1665,7 @@ mod tests {
     fn plan_identity_tuple_rejects_tampered_fp() {
         use crate::sweep::plan::build_plan;
         let img = tiny_gradient();
-        let plan = build_plan(CodecKind::Zenwebp, "rd_core", None, &[50.0]).unwrap();
+        let plan = build_plan(CodecKind::Zenwebp, "rd_core", None, &[50.0], None, None).unwrap();
         let cell = &plan.cells[0];
         let v: serde_json::Value = serde_json::from_str(&cell.knob_json).unwrap();
         let mut m = v.as_object().unwrap().clone();

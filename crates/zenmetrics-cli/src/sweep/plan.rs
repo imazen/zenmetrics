@@ -54,6 +54,13 @@ pub enum PlannedConfig {
     /// zenpng cell (all lossless; every cell rides the q=0 sentinel).
     #[cfg(feature = "png")]
     Zenpng(Box<zenpng::sweep::SweepVariant>),
+    /// zengif cell (quantizer-driven; the variant carries the resolved
+    /// quality + dithering + backend).
+    #[cfg(feature = "gif")]
+    Zengif(Box<zengif::sweep::SweepVariant>),
+    /// zentiff cell (all lossless; every cell rides the q=0 sentinel).
+    #[cfg(feature = "tiff")]
+    Zentiff(Box<zentiff::sweep::SweepVariant>),
 }
 
 impl PlannedConfig {
@@ -130,6 +137,56 @@ impl PlannedConfig {
                 zenpng::encode_rgb8(img, None, &cfg, &enough::Unstoppable, &enough::Unstoppable)
                     .map_err(|e| format!("zenpng plan-cell encode failed: {e:?}"))?
             }
+            #[cfg(feature = "gif")]
+            Self::Zengif(variant) => {
+                // GIF dims are u16; a sweep source above 65535 in either
+                // axis can't be a single GIF frame.
+                if source.width > u32::from(u16::MAX) || source.height > u32::from(u16::MAX) {
+                    return Err(format!(
+                        "zengif plan-cell: source {}x{} exceeds GIF's 65535x65535 frame limit",
+                        source.width, source.height
+                    ));
+                }
+                let cfg = variant.build();
+                // RGB8 → opaque RGBA frame (GIF sweep sources are opaque
+                // stills; the still-image variant pins use_transparency off).
+                let pixels: Vec<zengif::Rgba> = source
+                    .pixels
+                    .chunks_exact(3)
+                    .map(|p| zengif::Rgba {
+                        r: p[0],
+                        g: p[1],
+                        b: p[2],
+                        a: 255,
+                    })
+                    .collect();
+                // FrameInput::new pins palette = None (the encoder
+                // quantizes per the variant's backend, which is the point).
+                let frame =
+                    zengif::FrameInput::new(source.width as u16, source.height as u16, 0, pixels);
+                let limits = zengif::Limits::none();
+                zengif::EncodeRequest::new(&cfg, source.width as u16, source.height as u16)
+                    .limits(&limits)
+                    .stop(&enough::Unstoppable)
+                    .encode(vec![frame])
+                    .map_err(|e| format!("zengif plan-cell encode failed: {e:?}"))?
+            }
+            #[cfg(feature = "tiff")]
+            Self::Zentiff(variant) => {
+                use zenpixels::{PixelDescriptor, PixelSlice};
+                let cfg = variant.build();
+                let stride = (source.width as usize) * 3;
+                let slice = PixelSlice::new(
+                    &source.pixels,
+                    source.width,
+                    source.height,
+                    stride,
+                    PixelDescriptor::RGB8_SRGB,
+                )
+                .map_err(|e| format!("zentiff plan-cell: pixel slice construction failed: {e}"))?;
+                zentiff::encode(&slice, &cfg, &enough::Unstoppable)
+                    .map_err(|e| format!("zentiff plan-cell encode failed: {e:?}"))?
+            }
         };
         Ok(EncodedCell {
             bytes,
@@ -150,24 +207,50 @@ pub struct PlannedCell {
 
 /// Build plan cells for `codec`'s named plan over the sweep's quality
 /// grid — the single codec-dispatch point for `--plan`.
+///
+/// `compute_limit` / `max_deviations` are the cross-codec constraint
+/// knobs (`--compute-limit` / `--max-deviations`): `compute_limit`
+/// drops cells whose `compute_tier()` exceeds the cap (reported, never
+/// silently sampled); `max_deviations` keeps only cells within N axis
+/// deviations of the default stratum (`1` = isolated main-effects — the
+/// regime the `scalar_dense` heads want; `0` = the default stratum
+/// alone). `None`/`None` reproduces the unconstrained curated space, so
+/// existing `--plan rd_core|modes_full` invocations are unchanged. The
+/// `__expert` codecs (jpeg/avif/jxl/webp) apply these via
+/// `SweepBuilder::with_compute_limit` / `with_max_deviations`; the
+/// public-API codecs (png/gif/tiff) via their free `plan_constrained`.
 pub fn build_plan(
     codec: CodecKind,
     name: &str,
     budget: Option<usize>,
     q_grid: &[f64],
+    compute_limit: Option<u8>,
+    max_deviations: Option<u8>,
 ) -> Result<BuiltPlan, Box<dyn Error>> {
     match codec {
         #[cfg(feature = "jpeg")]
-        CodecKind::Zenjpeg => build_zenjpeg_plan(name, budget, q_grid),
+        CodecKind::Zenjpeg => {
+            build_zenjpeg_plan(name, budget, q_grid, compute_limit, max_deviations)
+        }
         #[cfg(feature = "avif")]
-        CodecKind::Zenavif => build_zenavif_plan(name, budget, q_grid),
+        CodecKind::Zenavif => {
+            build_zenavif_plan(name, budget, q_grid, compute_limit, max_deviations)
+        }
         #[cfg(feature = "jxl")]
-        CodecKind::Zenjxl => build_zenjxl_plan(name, budget, q_grid),
+        CodecKind::Zenjxl => build_zenjxl_plan(name, budget, q_grid, compute_limit, max_deviations),
         #[cfg(feature = "webp")]
-        CodecKind::Zenwebp => build_zenwebp_plan(name, budget, q_grid),
+        CodecKind::Zenwebp => {
+            build_zenwebp_plan(name, budget, q_grid, compute_limit, max_deviations)
+        }
         #[cfg(feature = "png")]
-        CodecKind::Zenpng => build_zenpng_plan(name, budget, q_grid),
-        // Unreachable only when ALL five codec features are on (the
+        CodecKind::Zenpng => build_zenpng_plan(name, budget, q_grid, compute_limit, max_deviations),
+        #[cfg(feature = "gif")]
+        CodecKind::Zengif => build_zengif_plan(name, budget, q_grid, compute_limit, max_deviations),
+        #[cfg(feature = "tiff")]
+        CodecKind::Zentiff => {
+            build_zentiff_plan(name, budget, q_grid, compute_limit, max_deviations)
+        }
+        // Unreachable only when ALL seven codec features are on (the
         // full build covers every CodecKind variant above); reachable —
         // and required — in partial builds like `sweep,png` without jxl.
         #[allow(unreachable_patterns)]
@@ -175,7 +258,8 @@ pub fn build_plan(
             "plan-driven sweeps are not wired for codec {:?} in this build \
              (zenjpeg needs --features jpeg, zenavif --features avif, \
              zenjxl --features jxl, zenwebp --features webp, \
-             zenpng --features png)",
+             zenpng --features png, zengif --features gif, \
+             zentiff --features tiff)",
             other.name()
         )
         .into()),
@@ -198,15 +282,19 @@ pub fn build_zenjpeg_plan(
     name: &str,
     budget: Option<usize>,
     q_grid: &[f64],
+    compute_limit: Option<u8>,
+    max_deviations: Option<u8>,
 ) -> Result<BuiltPlan, Box<dyn Error>> {
     use zenjpeg::encode::sweep::{QualityGrid, SweepAxes, SweepBuilder};
     let axes = match name {
         "rd_core" => SweepAxes::rd_core(),
         "modes_full" => SweepAxes::modes_full(),
+        "scalar_dense" => SweepAxes::scalar_dense(),
         other => {
-            return Err(
-                format!("unknown zenjpeg plan {other:?}; expected rd_core or modes_full").into(),
-            );
+            return Err(format!(
+                "unknown zenjpeg plan {other:?}; expected rd_core, modes_full, or scalar_dense"
+            )
+            .into());
         }
     };
     let grid = QualityGrid::Explicit(q_grid.iter().map(|&q| q as f32).collect());
@@ -214,15 +302,24 @@ pub fn build_zenjpeg_plan(
     if let Some(n) = budget {
         builder = builder.with_budget(n);
     }
+    if let Some(n) = compute_limit {
+        builder = builder.with_compute_limit(n);
+    }
+    if let Some(n) = max_deviations {
+        builder = builder.with_max_deviations(n);
+    }
     let plan = builder.plan();
 
     let manifest = json!({
         "plan": name,
         "budget": budget,
+        "compute_limit": compute_limit,
+        "max_deviations": max_deviations,
         "q_grid": q_grid,
         "cells": plan.cells.len(),
         "duplicates_merged": plan.duplicates_merged,
         "invalid_skipped": plan.invalid_skipped,
+        "compute_tier_skipped": plan.compute_tier_skipped,
         "q_coarsenings": plan.q_coarsenings,
         "over_budget": plan.over_budget,
         "dropped_axes": plan
@@ -279,25 +376,38 @@ pub fn build_zenavif_plan(
     name: &str,
     budget: Option<usize>,
     q_grid: &[f64],
+    compute_limit: Option<u8>,
+    max_deviations: Option<u8>,
 ) -> Result<BuiltPlan, Box<dyn Error>> {
     use zenavif::sweep::{QualityGrid, SweepAxes, SweepBuilder};
     let axes = SweepAxes::by_name(name).ok_or_else(|| {
-        format!("unknown zenavif plan {name:?}; expected rd_core, modes_full, or modes_full_alpha")
+        format!(
+            "unknown zenavif plan {name:?}; expected rd_core, modes_full, modes_full_alpha, or scalar_dense"
+        )
     })?;
     let grid = QualityGrid::Explicit(q_grid.iter().map(|&q| q as f32).collect());
     let mut builder = SweepBuilder::new(axes, grid);
     if let Some(n) = budget {
         builder = builder.with_budget(n);
     }
+    if let Some(n) = compute_limit {
+        builder = builder.with_compute_limit(n);
+    }
+    if let Some(n) = max_deviations {
+        builder = builder.with_max_deviations(n);
+    }
     let plan = builder.plan();
 
     let manifest = json!({
         "plan": name,
         "budget": budget,
+        "compute_limit": compute_limit,
+        "max_deviations": max_deviations,
         "q_grid": q_grid,
         "cells": plan.cells.len(),
         "duplicates_merged": plan.duplicates_merged,
         "invalid_skipped": plan.invalid_skipped,
+        "compute_tier_skipped": plan.compute_tier_skipped,
         "q_coarsenings": plan.q_coarsenings,
         "over_budget": plan.over_budget,
         "dropped_axes": plan
@@ -352,15 +462,19 @@ pub fn build_zenjxl_plan(
     name: &str,
     budget: Option<usize>,
     q_grid: &[f64],
+    compute_limit: Option<u8>,
+    max_deviations: Option<u8>,
 ) -> Result<BuiltPlan, Box<dyn Error>> {
     use zenjxl::sweep::{QualityGrid, SweepAxes, SweepBuilder};
     let axes = match name {
         "rd_core" => SweepAxes::rd_core(),
         "modes_full" => SweepAxes::modes_full(),
+        "scalar_dense" => SweepAxes::scalar_dense(),
         other => {
-            return Err(
-                format!("unknown zenjxl plan {other:?}; expected rd_core or modes_full").into(),
-            );
+            return Err(format!(
+                "unknown zenjxl plan {other:?}; expected rd_core, modes_full, or scalar_dense"
+            )
+            .into());
         }
     };
     let grid = QualityGrid::ExplicitQuality(q_grid.iter().map(|&q| q as f32).collect());
@@ -368,15 +482,24 @@ pub fn build_zenjxl_plan(
     if let Some(n) = budget {
         builder = builder.with_budget(n);
     }
+    if let Some(n) = compute_limit {
+        builder = builder.with_compute_limit(n);
+    }
+    if let Some(n) = max_deviations {
+        builder = builder.with_max_deviations(n);
+    }
     let plan = builder.plan();
 
     let manifest = json!({
         "plan": name,
         "budget": budget,
+        "compute_limit": compute_limit,
+        "max_deviations": max_deviations,
         "q_grid": q_grid,
         "cells": plan.cells.len(),
         "duplicates_merged": plan.duplicates_merged,
         "invalid_skipped": plan.invalid_skipped,
+        "compute_tier_skipped": plan.compute_tier_skipped,
         "q_coarsenings": plan.q_coarsenings,
         "over_budget": plan.over_budget,
         "dropped_axes": plan
@@ -432,15 +555,19 @@ pub fn build_zenwebp_plan(
     name: &str,
     budget: Option<usize>,
     q_grid: &[f64],
+    compute_limit: Option<u8>,
+    max_deviations: Option<u8>,
 ) -> Result<BuiltPlan, Box<dyn Error>> {
     use zenwebp::sweep::{QualityGrid, SweepAxes, SweepBuilder};
     let axes = match name {
         "rd_core" => SweepAxes::rd_core(),
         "modes_full" => SweepAxes::modes_full(),
+        "scalar_dense" => SweepAxes::scalar_dense(),
         other => {
-            return Err(
-                format!("unknown zenwebp plan {other:?}; expected rd_core or modes_full").into(),
-            );
+            return Err(format!(
+                "unknown zenwebp plan {other:?}; expected rd_core, modes_full, or scalar_dense"
+            )
+            .into());
         }
     };
     let grid = QualityGrid::Explicit(q_grid.iter().map(|&q| q as f32).collect());
@@ -448,15 +575,24 @@ pub fn build_zenwebp_plan(
     if let Some(n) = budget {
         builder = builder.with_budget(n);
     }
+    if let Some(n) = compute_limit {
+        builder = builder.with_compute_limit(n);
+    }
+    if let Some(n) = max_deviations {
+        builder = builder.with_max_deviations(n);
+    }
     let plan = builder.plan();
 
     let manifest = json!({
         "plan": name,
         "budget": budget,
+        "compute_limit": compute_limit,
+        "max_deviations": max_deviations,
         "q_grid": q_grid,
         "cells": plan.cells.len(),
         "duplicates_merged": plan.duplicates_merged,
         "invalid_skipped": plan.invalid_skipped,
+        "compute_tier_skipped": plan.compute_tier_skipped,
         "q_coarsenings": plan.q_coarsenings,
         "over_budget": plan.over_budget,
         "dropped_axes": plan
@@ -512,28 +648,38 @@ pub fn build_zenpng_plan(
     name: &str,
     budget: Option<usize>,
     q_grid: &[f64],
+    compute_limit: Option<u8>,
+    max_deviations: Option<u8>,
 ) -> Result<BuiltPlan, Box<dyn Error>> {
-    use zenpng::sweep::{SweepAxes, plan};
+    use zenpng::sweep::{SweepAxes, plan_constrained};
     let axes = match name {
         "rd_core" => SweepAxes::rd_core(),
         "modes_full" => SweepAxes::modes_full(),
+        "scalar_dense" => SweepAxes::scalar_dense(),
         other => {
-            return Err(
-                format!("unknown zenpng plan {other:?}; expected rd_core or modes_full").into(),
-            );
+            return Err(format!(
+                "unknown zenpng plan {other:?}; expected rd_core, modes_full, or scalar_dense"
+            )
+            .into());
         }
     };
-    let p = plan(&axes);
+    // PNG is lossless: no quality grid (the passed grid is recorded as
+    // ignored). The free `plan_constrained` applies the compute/deviation
+    // constraints in-codec and reports every compute-tier drop.
+    let p = plan_constrained(&axes, compute_limit, max_deviations);
     let over_budget = budget.is_some_and(|b| p.cells.len() > b);
 
     let manifest = json!({
         "plan": name,
         "budget": budget,
+        "compute_limit": compute_limit,
+        "max_deviations": max_deviations,
         "q_grid": "ignored (lossless; all cells on the q=0 sentinel)",
         "q_grid_passed": q_grid,
         "cells": p.cells.len(),
         "duplicates_merged": p.duplicates_merged,
         "invalid_skipped": [],
+        "compute_tier_skipped": p.compute_tier_skipped,
         "q_coarsenings": 0,
         "over_budget": over_budget,
         "dropped_axes": [],
@@ -560,6 +706,171 @@ pub fn build_zenpng_plan(
                 q: 0.0,
                 knob_json: Value::Object(m).to_string(),
                 config: PlannedConfig::Zenpng(Box::new(c.variant)),
+            }
+        })
+        .collect();
+
+    Ok(BuiltPlan {
+        cells,
+        manifest_json: serde_json::to_string_pretty(&manifest)
+            .expect("plan manifest serialization cannot fail"),
+    })
+}
+
+/// Build zengif plan cells. GIF stills are quantizer-driven (quality,
+/// dithering, and the quantizer backend all change pixels), so cells
+/// multiply by the quality grid and carry their resolved quality (the
+/// `gif-<backend>[-d<dither>]_q<q>` id grammar). There is no budget
+/// ladder; a budget below the cell count is reported, never sampled.
+#[cfg(feature = "gif")]
+pub fn build_zengif_plan(
+    name: &str,
+    budget: Option<usize>,
+    q_grid: &[f64],
+    compute_limit: Option<u8>,
+    max_deviations: Option<u8>,
+) -> Result<BuiltPlan, Box<dyn Error>> {
+    use zengif::sweep::{QualityGrid, SweepAxes, plan_constrained};
+    let axes = match name {
+        "rd_core" => SweepAxes::rd_core(),
+        "modes_full" => SweepAxes::modes_full(),
+        "scalar_dense" => SweepAxes::scalar_dense(),
+        other => {
+            return Err(format!(
+                "unknown zengif plan {other:?}; expected rd_core, modes_full, or scalar_dense"
+            )
+            .into());
+        }
+    };
+    // q must be integer-valued for the `gif-..._q<q>` id grammar (CellId
+    // quality is u8); fractional grids are rejected, never truncated.
+    let mut q_u8: Vec<u8> = Vec::with_capacity(q_grid.len());
+    for &q in q_grid {
+        if q.fract() != 0.0 || !(0.0..=100.0).contains(&q) {
+            return Err(format!(
+                "zengif plan q values must be integers in 0..=100 (GIF quality is u8); got {q}"
+            )
+            .into());
+        }
+        q_u8.push(q as u8);
+    }
+    let grid = QualityGrid::Explicit(q_u8);
+    let p = plan_constrained(&axes, &grid, compute_limit, max_deviations);
+    let over_budget = budget.is_some_and(|b| p.cells.len() > b);
+
+    let manifest = json!({
+        "plan": name,
+        "budget": budget,
+        "compute_limit": compute_limit,
+        "max_deviations": max_deviations,
+        "q_grid": q_grid,
+        "cells": p.cells.len(),
+        "duplicates_merged": p.duplicates_merged,
+        "invalid_skipped": [],
+        "compute_tier_skipped": p.compute_tier_skipped,
+        "q_coarsenings": 0,
+        "over_budget": over_budget,
+        "dropped_axes": [],
+        "aliases": p
+            .cells
+            .iter()
+            .filter(|c| !c.aliases.is_empty())
+            .map(|c| json!({"cell": c.id, "merged": c.aliases}))
+            .collect::<Vec<_>>(),
+    });
+
+    let cells = p
+        .cells
+        .into_iter()
+        .map(|c| {
+            // Ids end `_q<q>`; q lives in its own TSV column (labels
+            // cannot contain '_', so the rfind is unambiguous).
+            let base =
+                c.id.rfind("_q")
+                    .map(|at| &c.id[..at])
+                    .unwrap_or(c.id.as_str());
+            let mut m = Map::new();
+            m.insert("cell".into(), Value::String(base.to_string()));
+            m.insert(
+                "fp".into(),
+                Value::String(format!("{:016x}", c.fingerprint)),
+            );
+            m.insert("plan".into(), Value::String(name.to_string()));
+            PlannedCell {
+                q: f64::from(c.variant.quality),
+                knob_json: Value::Object(m).to_string(),
+                config: PlannedConfig::Zengif(Box::new(c.variant)),
+            }
+        })
+        .collect();
+
+    Ok(BuiltPlan {
+        cells,
+        manifest_json: serde_json::to_string_pretty(&manifest)
+            .expect("plan manifest serialization cannot fail"),
+    })
+}
+
+/// Build zentiff plan cells. TIFF is all-lossless: no quality grid (the
+/// passed grid is recorded as ignored), every cell on the q=0 sentinel.
+/// The curated space is ≤ 16 cells (no budget ladder; a budget below the
+/// cell count is reported, never sampled). TIFF cells carry no aliases —
+/// the curated space is deduplicated by construction.
+#[cfg(feature = "tiff")]
+pub fn build_zentiff_plan(
+    name: &str,
+    budget: Option<usize>,
+    q_grid: &[f64],
+    compute_limit: Option<u8>,
+    max_deviations: Option<u8>,
+) -> Result<BuiltPlan, Box<dyn Error>> {
+    use zentiff::sweep::{SweepAxes, plan_constrained};
+    let axes = match name {
+        "rd_core" => SweepAxes::rd_core(),
+        "modes_full" => SweepAxes::modes_full(),
+        "scalar_dense" => SweepAxes::scalar_dense(),
+        other => {
+            return Err(format!(
+                "unknown zentiff plan {other:?}; expected rd_core, modes_full, or scalar_dense"
+            )
+            .into());
+        }
+    };
+    let p = plan_constrained(&axes, compute_limit, max_deviations);
+    let over_budget = budget.is_some_and(|b| p.cells.len() > b);
+
+    let manifest = json!({
+        "plan": name,
+        "budget": budget,
+        "compute_limit": compute_limit,
+        "max_deviations": max_deviations,
+        "q_grid": "ignored (lossless; all cells on the q=0 sentinel)",
+        "q_grid_passed": q_grid,
+        "cells": p.cells.len(),
+        "duplicates_merged": 0,
+        "invalid_skipped": [],
+        "compute_tier_skipped": p.compute_tier_skipped,
+        "q_coarsenings": 0,
+        "over_budget": over_budget,
+        "dropped_axes": [],
+        "aliases": [],
+    });
+
+    let cells = p
+        .cells
+        .into_iter()
+        .map(|c| {
+            let mut m = Map::new();
+            m.insert("cell".into(), Value::String(c.id));
+            m.insert(
+                "fp".into(),
+                Value::String(format!("{:016x}", c.fingerprint)),
+            );
+            m.insert("plan".into(), Value::String(name.to_string()));
+            PlannedCell {
+                q: 0.0,
+                knob_json: Value::Object(m).to_string(),
+                config: PlannedConfig::Zentiff(Box::new(c.variant)),
             }
         })
         .collect();
@@ -651,7 +962,30 @@ pub fn resolve_verified(
             }
             Ok(PlannedConfig::Zenpng(Box::new(variant)))
         }
-        // Unreachable only in the all-five-codec build; reachable —
+        #[cfg(feature = "gif")]
+        CodecKind::Zengif => {
+            // GIF cells carry their quality in the id grammar
+            // (`gif-..._q<q>`); the stored stratum id drops the `_q<q>`
+            // token (it lives in the TSV `q` column), so re-attach it.
+            let q_int = q as i64;
+            let full_id = format!("{cell_id}_q{q_int}");
+            let variant = zengif::sweep::variant_from_cell_id(&full_id)?;
+            let actual = format!("{:016x}", zengif::sweep::fingerprint(&variant));
+            if actual != fp_hex {
+                return Err(mismatch(&actual));
+            }
+            Ok(PlannedConfig::Zengif(Box::new(variant)))
+        }
+        #[cfg(feature = "tiff")]
+        CodecKind::Zentiff => {
+            let variant = zentiff::sweep::variant_from_cell_id(cell_id)?;
+            let actual = format!("{:016x}", zentiff::sweep::fingerprint(&variant));
+            if actual != fp_hex {
+                return Err(mismatch(&actual));
+            }
+            Ok(PlannedConfig::Zentiff(Box::new(variant)))
+        }
+        // Unreachable only in the all-seven-codec build; reachable —
         // and required — in partial builds (see build_plan's arm).
         #[allow(unreachable_patterns)]
         other => Err(format!(
@@ -668,7 +1002,7 @@ mod tests {
     #[cfg(feature = "jpeg")]
     #[test]
     fn rd_core_plan_builds_cells_with_stable_identity() {
-        let plan = build_zenjpeg_plan("rd_core", None, &[50.0, 85.0]).unwrap();
+        let plan = build_zenjpeg_plan("rd_core", None, &[50.0, 85.0], None, None).unwrap();
         assert!(!plan.cells.is_empty());
         // First cell is the production-default stratum (main-effects-first).
         let first = &plan.cells[0];
@@ -690,7 +1024,7 @@ mod tests {
     #[cfg(feature = "jpeg")]
     #[test]
     fn resolve_verified_roundtrips_and_rejects_tampered_fp() {
-        let plan = build_zenjpeg_plan("rd_core", None, &[85.0]).unwrap();
+        let plan = build_zenjpeg_plan("rd_core", None, &[85.0], None, None).unwrap();
         let cell = &plan.cells[0];
         let v: serde_json::Value = serde_json::from_str(&cell.knob_json).unwrap();
         let id = v["cell"].as_str().unwrap();
@@ -709,6 +1043,10 @@ mod tests {
             PlannedConfig::Zenwebp(_) => panic!("zenjpeg identity resolved to zenwebp"),
             #[cfg(feature = "png")]
             PlannedConfig::Zenpng(_) => panic!("zenjpeg identity resolved to zenpng"),
+            #[cfg(feature = "gif")]
+            PlannedConfig::Zengif(_) => panic!("zenjpeg identity resolved to zengif"),
+            #[cfg(feature = "tiff")]
+            PlannedConfig::Zentiff(_) => panic!("zenjpeg identity resolved to zentiff"),
         }
         let err = resolve_verified(CodecKind::Zenjpeg, id, cell.q as f32, "0000000000000000")
             .unwrap_err();
@@ -719,7 +1057,7 @@ mod tests {
     #[cfg(feature = "png")]
     #[test]
     fn zenpng_plan_builds_and_cells_resolve_verified() {
-        let plan = build_plan(CodecKind::Zenpng, "modes_full", None, &[50.0]).unwrap();
+        let plan = build_plan(CodecKind::Zenpng, "modes_full", None, &[50.0], None, None).unwrap();
         assert!(plan.cells.len() >= 8);
         for cell in &plan.cells {
             assert_eq!(cell.q, 0.0, "all PNG cells ride the q=0 sentinel");
@@ -749,7 +1087,15 @@ mod tests {
     #[cfg(feature = "webp")]
     #[test]
     fn zenwebp_plan_builds_and_cells_resolve_verified() {
-        let plan = build_plan(CodecKind::Zenwebp, "rd_core", None, &[50.0, 85.0]).unwrap();
+        let plan = build_plan(
+            CodecKind::Zenwebp,
+            "rd_core",
+            None,
+            &[50.0, 85.0],
+            None,
+            None,
+        )
+        .unwrap();
         assert!(!plan.cells.is_empty());
         let mut lossy = false;
         let mut lossless = false;
@@ -787,7 +1133,15 @@ mod tests {
     #[cfg(feature = "jxl")]
     #[test]
     fn zenjxl_plan_builds_and_cells_resolve_verified() {
-        let plan = build_plan(CodecKind::Zenjxl, "rd_core", None, &[50.0, 85.0]).unwrap();
+        let plan = build_plan(
+            CodecKind::Zenjxl,
+            "rd_core",
+            None,
+            &[50.0, 85.0],
+            None,
+            None,
+        )
+        .unwrap();
         assert!(!plan.cells.is_empty());
         let mut checked_lossy = false;
         let mut checked_lossless = false;
@@ -825,13 +1179,13 @@ mod tests {
 
     #[test]
     fn unknown_plan_is_an_error() {
-        assert!(build_zenjpeg_plan("nope", None, &[50.0]).is_err());
+        assert!(build_zenjpeg_plan("nope", None, &[50.0], None, None).is_err());
     }
 
     #[cfg(feature = "jpeg")]
     #[test]
     fn budget_is_honored_and_reported() {
-        let plan = build_zenjpeg_plan("modes_full", Some(500), &[30.0, 70.0]).unwrap();
+        let plan = build_zenjpeg_plan("modes_full", Some(500), &[30.0, 70.0], None, None).unwrap();
         assert!(plan.cells.len() <= 500);
         assert!(plan.manifest_json.contains("dropped_axes"));
     }
@@ -839,7 +1193,15 @@ mod tests {
     #[cfg(feature = "avif")]
     #[test]
     fn zenavif_plan_builds_and_resolves_with_fp_verification() {
-        let plan = build_plan(CodecKind::Zenavif, "rd_core", None, &[50.0, 85.0]).unwrap();
+        let plan = build_plan(
+            CodecKind::Zenavif,
+            "rd_core",
+            None,
+            &[50.0, 85.0],
+            None,
+            None,
+        )
+        .unwrap();
         assert!(!plan.cells.is_empty());
         let first = &plan.cells[0];
         assert_eq!(first.q, 50.0);
@@ -873,13 +1235,180 @@ mod tests {
             PlannedConfig::Zenwebp(_) => panic!("zenavif identity resolved to zenwebp"),
             #[cfg(feature = "png")]
             PlannedConfig::Zenpng(_) => panic!("zenavif identity resolved to zenpng"),
+            #[cfg(feature = "gif")]
+            PlannedConfig::Zengif(_) => panic!("zenavif identity resolved to zengif"),
+            #[cfg(feature = "tiff")]
+            PlannedConfig::Zentiff(_) => panic!("zenavif identity resolved to zentiff"),
         }
         let err = resolve_verified(CodecKind::Zenavif, id, first.q as f32, "0000000000000000")
             .unwrap_err();
         assert!(err.contains("fingerprint mismatch"), "got {err}");
 
         // The alpha preset resolves too (the RGBA-corpora plan).
-        assert!(build_plan(CodecKind::Zenavif, "modes_full_alpha", Some(200), &[60.0]).is_ok());
-        assert!(build_plan(CodecKind::Zenavif, "nope", None, &[50.0]).is_err());
+        assert!(
+            build_plan(
+                CodecKind::Zenavif,
+                "modes_full_alpha",
+                Some(200),
+                &[60.0],
+                None,
+                None
+            )
+            .is_ok()
+        );
+        assert!(build_plan(CodecKind::Zenavif, "nope", None, &[50.0], None, None).is_err());
+    }
+
+    #[cfg(feature = "jpeg")]
+    #[test]
+    fn scalar_dense_plan_builds_and_constraints_apply() {
+        // scalar_dense is a recognized plan and produces cells.
+        let full = build_plan(
+            CodecKind::Zenjpeg,
+            "scalar_dense",
+            None,
+            &[50.0, 85.0],
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(!full.cells.is_empty());
+        assert!(full.manifest_json.contains("\"plan\": \"scalar_dense\""));
+
+        // max_deviations = 1 keeps the isolated main-effects regime: strictly
+        // fewer cells than the unconstrained scalar_dense space (which crosses
+        // axes), and the manifest records the constraint.
+        let mains = build_plan(
+            CodecKind::Zenjpeg,
+            "scalar_dense",
+            None,
+            &[50.0],
+            None,
+            Some(1),
+        )
+        .unwrap();
+        assert!(!mains.cells.is_empty());
+        assert!(mains.manifest_json.contains("\"max_deviations\": 1"));
+
+        // compute_limit drops the expensive tier; cells resolve fingerprint-
+        // exact through the executor-side path regardless.
+        let limited = build_plan(
+            CodecKind::Zenjpeg,
+            "scalar_dense",
+            None,
+            &[85.0],
+            Some(0),
+            None,
+        )
+        .unwrap();
+        assert!(limited.manifest_json.contains("compute_tier_skipped"));
+        for cell in &limited.cells {
+            let v: serde_json::Value = serde_json::from_str(&cell.knob_json).unwrap();
+            let id = v["cell"].as_str().unwrap();
+            let fp = v["fp"].as_str().unwrap();
+            resolve_verified(CodecKind::Zenjpeg, id, cell.q as f32, fp)
+                .unwrap_or_else(|e| panic!("{id}: {e}"));
+        }
+    }
+
+    #[cfg(feature = "gif")]
+    #[test]
+    fn zengif_plan_builds_and_cells_resolve_verified() {
+        let plan = build_plan(
+            CodecKind::Zengif,
+            "modes_full",
+            None,
+            &[50.0, 85.0],
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(!plan.cells.is_empty());
+        assert!(plan.manifest_json.contains("\"plan\": \"modes_full\""));
+        for cell in &plan.cells {
+            // GIF cells carry their quality (lossy-style id grammar).
+            assert!(cell.q == 50.0 || cell.q == 85.0, "unexpected q {}", cell.q);
+            let v: serde_json::Value = serde_json::from_str(&cell.knob_json).unwrap();
+            let id = v["cell"].as_str().unwrap();
+            let fp = v["fp"].as_str().unwrap();
+            let resolved = resolve_verified(CodecKind::Zengif, id, cell.q as f32, fp)
+                .unwrap_or_else(|e| panic!("{id}: {e}"));
+            match resolved {
+                PlannedConfig::Zengif(_) => {}
+                #[allow(unreachable_patterns)]
+                _ => panic!("zengif identity resolved to another codec"),
+            }
+        }
+        // Tampered fp = loud failure.
+        let first: serde_json::Value = serde_json::from_str(&plan.cells[0].knob_json).unwrap();
+        assert!(
+            resolve_verified(
+                CodecKind::Zengif,
+                first["cell"].as_str().unwrap(),
+                plan.cells[0].q as f32,
+                "0000000000000000"
+            )
+            .is_err()
+        );
+        // scalar_dense is a recognized plan; fractional q is rejected (u8 grid).
+        assert!(
+            build_plan(
+                CodecKind::Zengif,
+                "scalar_dense",
+                None,
+                &[60.0],
+                None,
+                Some(1)
+            )
+            .is_ok()
+        );
+        assert!(build_plan(CodecKind::Zengif, "modes_full", None, &[50.5], None, None).is_err());
+        assert!(build_plan(CodecKind::Zengif, "nope", None, &[50.0], None, None).is_err());
+    }
+
+    #[cfg(feature = "tiff")]
+    #[test]
+    fn zentiff_plan_builds_and_cells_resolve_verified() {
+        // TIFF is lossless: every cell on the q=0 sentinel.
+        let plan = build_plan(CodecKind::Zentiff, "modes_full", None, &[50.0], None, None).unwrap();
+        assert!(!plan.cells.is_empty());
+        assert!(plan.manifest_json.contains("\"plan\": \"modes_full\""));
+        for cell in &plan.cells {
+            assert_eq!(cell.q, 0.0, "all TIFF cells ride the q=0 sentinel");
+            let v: serde_json::Value = serde_json::from_str(&cell.knob_json).unwrap();
+            let id = v["cell"].as_str().unwrap();
+            let fp = v["fp"].as_str().unwrap();
+            let resolved = resolve_verified(CodecKind::Zentiff, id, 0.0, fp)
+                .unwrap_or_else(|e| panic!("{id}: {e}"));
+            match resolved {
+                PlannedConfig::Zentiff(_) => {}
+                #[allow(unreachable_patterns)]
+                _ => panic!("zentiff identity resolved to another codec"),
+            }
+        }
+        // Tampered fp = loud failure.
+        let first: serde_json::Value = serde_json::from_str(&plan.cells[0].knob_json).unwrap();
+        assert!(
+            resolve_verified(
+                CodecKind::Zentiff,
+                first["cell"].as_str().unwrap(),
+                0.0,
+                "0000000000000000"
+            )
+            .is_err()
+        );
+        // compute_limit=0 keeps only the cheapest (Uncompressed) method.
+        let cheap = build_plan(
+            CodecKind::Zentiff,
+            "scalar_dense",
+            None,
+            &[0.0],
+            Some(0),
+            None,
+        )
+        .unwrap();
+        assert!(!cheap.cells.is_empty());
+        assert!(cheap.manifest_json.contains("compute_tier_skipped"));
+        assert!(build_plan(CodecKind::Zentiff, "nope", None, &[0.0], None, None).is_err());
     }
 }

@@ -132,6 +132,12 @@ pub struct InlineGroupSpec {
     pub plan: Option<String>,
     /// Optional cell budget for `plan`.
     pub plan_budget: Option<usize>,
+    /// Optional compute-tier cap for `plan` (`--compute-limit`): drops
+    /// cells over the cap (reported in the manifest, never sampled).
+    pub plan_compute_limit: Option<u8>,
+    /// Optional deviation scope for `plan` (`--max-deviations`): keeps
+    /// only cells within N axis deviations of the default stratum.
+    pub plan_max_deviations: Option<u8>,
     /// Metrics to score with. e.g. `[Cvvdp, Ssim2Gpu, ...]`.
     pub metrics: Vec<MetricKind>,
     /// GPU runtime selector. `Cuda` in production; `Auto` for local
@@ -213,6 +219,8 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
         plan: spec.plan.as_ref().map(|name| PlanSpec {
             name: name.clone(),
             budget: spec.plan_budget,
+            compute_limit: spec.plan_compute_limit,
+            max_deviations: spec.plan_max_deviations,
         }),
         metrics: spec.metrics,
         gpu_runtime: spec.gpu_runtime,

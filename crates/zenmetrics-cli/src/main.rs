@@ -302,12 +302,15 @@ struct SweepArgs {
     /// Plan-driven sweep: take cells from the codec's curated sweep
     /// planner (`rd_core` = the RD-front axes; `modes_full` = every
     /// user-disableable mode axis — pair with `--plan-budget`; zenavif
-    /// also `modes_full_alpha` for RGBA corpora) instead of
-    /// `--knob-grid`. Cells are fingerprint-deduplicated, validity-
-    /// filtered, and emitted main-effects-first over `--q-grid`; the
-    /// audit manifest (alias merges, invalid strata, budget drops) is
+    /// also `modes_full_alpha` for RGBA corpora; `scalar_dense` = the
+    /// dense per-knob ladders a trained scalar head fits, pair with
+    /// `--max-deviations 1`) instead of `--knob-grid`. Cells are
+    /// fingerprint-deduplicated, validity-filtered, and emitted
+    /// main-effects-first over `--q-grid`; the audit manifest (alias
+    /// merges, invalid strata, budget drops, compute-tier drops) is
     /// written to `<output>.plan.json`. Wired codecs: zenjpeg, zenavif,
-    /// zenjxl, zenwebp, zenpng (contract: docs/PLAN_SWEEPS.md).
+    /// zenjxl, zenwebp, zenpng, zengif, zentiff (contract:
+    /// docs/PLAN_SWEEPS.md).
     #[arg(long, conflicts_with = "knob_grid")]
     plan: Option<String>,
     /// Cell budget for `--plan`. The codec's reduction ladder sheds
@@ -315,6 +318,24 @@ struct SweepArgs {
     /// the manifest) — nothing is silently sampled away.
     #[arg(long, requires = "plan")]
     plan_budget: Option<usize>,
+    /// Compute-tier cap for `--plan`: drop cells whose `compute_tier()`
+    /// exceeds N (every drop recorded in the manifest's
+    /// `compute_tier_skipped`, never silently sampled). The
+    /// compute-resource constraint a CPU-bound fleet or a "fast configs
+    /// only" picker asks for. Default (unset) keeps every tier.
+    #[arg(long, requires = "plan")]
+    compute_limit: Option<u8>,
+    /// Deviation scope for `--plan`: keep only cells within N axis
+    /// deviations of the default stratum. `1` = isolated main-effects
+    /// (the all-defaults cell plus every single-axis probe — the regime
+    /// a trained scalar head fits); `0` = the default stratum alone.
+    /// Default (unset) keeps the full crossed space, EXCEPT `--plan
+    /// scalar_dense` defaults this to `1` (scalar heads want isolated
+    /// main-effects; the dense per-knob curves come from the axis
+    /// ladders, not from cartesian interactions). Pass `--max-deviations`
+    /// explicitly to override that default.
+    #[arg(long, requires = "plan")]
+    max_deviations: Option<u8>,
     /// Build the plan, write `<output>.plan.json`, print its stats, and
     /// exit WITHOUT encoding. Alone it answers "how many cells/image
     /// will this cost?" for launchers; pair with `--emit-cells` to
@@ -724,6 +745,18 @@ fn cmd_sweep(
 
     let q_grid = parse_q_grid(&args.q_grid)?;
     let knob_grid = parse_knob_grid(&args.knob_grid)?;
+
+    // `--plan scalar_dense` defaults `--max-deviations` to 1 (the isolated
+    // main-effects regime the scalar heads train on); an explicit flag
+    // overrides. Every other plan keeps the user's value (None = full
+    // crossed space). Resolved once here so the dry-run and the runner
+    // see the same effective value.
+    let effective_max_deviations: Option<u8> =
+        if args.plan.as_deref() == Some("scalar_dense") && args.max_deviations.is_none() {
+            Some(1)
+        } else {
+            args.max_deviations
+        };
     let mut metrics = args.metrics;
     if metrics.is_empty() {
         // Default metric set keeps the binary useful when invoked without
@@ -760,8 +793,14 @@ fn cmd_sweep(
                 .plan
                 .as_deref()
                 .expect("clap: --dry-run requires --plan");
-            let built =
-                crate::sweep::plan::build_plan(args.codec, plan_name, args.plan_budget, &q_grid)?;
+            let built = crate::sweep::plan::build_plan(
+                args.codec,
+                plan_name,
+                args.plan_budget,
+                &q_grid,
+                args.compute_limit,
+                effective_max_deviations,
+            )?;
             let manifest_path = args.output.with_extension("plan.json");
             std::fs::write(&manifest_path, &built.manifest_json)?;
             println!(
@@ -835,6 +874,8 @@ fn cmd_sweep(
         plan: args.plan.as_ref().map(|name| PlanSpec {
             name: name.clone(),
             budget: args.plan_budget,
+            compute_limit: args.compute_limit,
+            max_deviations: effective_max_deviations,
         }),
         metrics,
         gpu_runtime: args.gpu_runtime,

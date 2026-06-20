@@ -50,6 +50,10 @@ avif = ["dep:zenavif"]
 # `sweep`) so a non-jxl sweep (`--features sweep,jpeg`) need not compile
 # jxl-encoder / zenjxl at all — important while zenjxl is mid zencodec migration.
 jxl = ["dep:zenjxl", "dep:jxl-encoder"]
+# gif/tiff are plan-only sweep codecs (no `--knob-grid` vocabulary). Each
+# pulls only its own codec crate so a sweep that doesn't target it stays lean.
+gif = ["dep:zengif"]
+tiff = ["dep:zentiff"]
 
 # HDR scoring: decode HDR sources (EXR / Ultra HDR JPEG / gain-map HEIC) to
 # absolute-luminance, then prep per metric — PU21 for the SDR metrics,
@@ -228,6 +232,14 @@ zenjpeg      = { path = "../../../zenjpeg/zenjpeg",        default-features = fa
 zenwebp      = { path = "../../../zenwebp",                                    optional = true }
 zenavif      = { path = "../../../zenavif",                                    optional = true }
 zenjxl       = { path = "../../../zenjxl",                                     optional = true }
+# zengif/zentiff: plan-driven sweep codecs (encode + sweep planner). zengif's
+# `zenquant` backend is the build default (matches its `compiled_backends()`
+# default-first stratum, the perceptual quantizer picker-training wants);
+# zentiff's `lzw`+`deflate` are its default methods. Both pulled in only by
+# the `gif` / `tiff` CLI features below — a non-gif/tiff sweep never compiles
+# them.
+zengif       = { path = "../../../zengif",                default-features = false, optional = true, features = ["std", "zenquant"] }
+zentiff      = { path = "../../../zenextras/zentiff",     default-features = false, optional = true, features = ["std", "lzw", "deflate"] }
 # HDR decoders (gated by the `hdr` feature): Ultra HDR JPEG + gain-map HEIC →
 # absolute-luminance; image provides the EXR reader.
 ultrahdr-rs  = { path = "../../../ultrahdr/ultrahdr-rs",                       optional = true }

@@ -41,6 +41,8 @@ pub enum ImageFormat {
     Webp,
     Avif,
     Jxl,
+    Gif,
+    Tiff,
 }
 
 fn sniff_format(data: &[u8], path: &Path) -> Option<ImageFormat> {
@@ -70,6 +72,17 @@ fn sniff_format(data: &[u8], path: &Path) -> Option<ImageFormat> {
     {
         return Some(ImageFormat::Jxl);
     }
+    // GIF: "GIF87a" / "GIF89a".
+    if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+        return Some(ImageFormat::Gif);
+    }
+    // TIFF: little-endian "II*\0" or big-endian "MM\0*" (classic + BigTIFF
+    // both start with these byte-order marks; the version word differs).
+    if data.len() >= 4
+        && (data[0..4] == [0x49, 0x49, 0x2A, 0x00] || data[0..4] == [0x4D, 0x4D, 0x00, 0x2A])
+    {
+        return Some(ImageFormat::Tiff);
+    }
 
     // Fall back to extension.
     match path
@@ -83,6 +96,8 @@ fn sniff_format(data: &[u8], path: &Path) -> Option<ImageFormat> {
             "webp" => Some(ImageFormat::Webp),
             "avif" | "avis" | "heic" | "heif" => Some(ImageFormat::Avif),
             "jxl" => Some(ImageFormat::Jxl),
+            "gif" => Some(ImageFormat::Gif),
+            "tif" | "tiff" => Some(ImageFormat::Tiff),
             _ => None,
         },
         None => None,
@@ -100,6 +115,8 @@ fn decode_bytes_to_rgb8(
         ImageFormat::Webp => decode_webp(data),
         ImageFormat::Avif => decode_avif(data),
         ImageFormat::Jxl => decode_jxl(data),
+        ImageFormat::Gif => decode_gif(data),
+        ImageFormat::Tiff => decode_tiff(data),
     }
 }
 
@@ -201,6 +218,55 @@ fn decode_jxl(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     Err("JPEG XL decoding is disabled (compile with `--features jxl`)".into())
 }
 
+#[cfg(feature = "gif")]
+fn decode_gif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    // GIF stills carry one frame; the sweep encodes single-frame stills, so
+    // we score the first composed frame. `decode_gif` returns RGBA (disposal
+    // + transparency already applied); drop alpha for the SDR RGB8 metric.
+    let (_meta, frames, _stats) =
+        zengif::decode_gif(data, zengif::Limits::none(), &enough::Unstoppable)
+            .map_err(|e| format!("zengif: {e}"))?;
+    let frame = frames
+        .into_iter()
+        .next()
+        .ok_or("zengif: decoded GIF has no frames")?;
+    let mut pixels = Vec::with_capacity(frame.pixels.len() * 3);
+    for px in &frame.pixels {
+        pixels.push(px.r);
+        pixels.push(px.g);
+        pixels.push(px.b);
+    }
+    Ok(Rgb8Image {
+        pixels,
+        width: u32::from(frame.width),
+        height: u32::from(frame.height),
+    })
+}
+
+#[cfg(not(feature = "gif"))]
+fn decode_gif(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    Err("GIF decoding is disabled (compile with `--features gif`)".into())
+}
+
+#[cfg(feature = "tiff")]
+fn decode_tiff(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    // zentiff::decode returns a PixelBuffer in the TIFF's native layout
+    // (Gray/RGB/RGBA × u8/u16/f32); funnel through the unified RGB8
+    // normaliser like the other PixelBuffer-returning decoders.
+    let output = zentiff::decode(
+        data,
+        &zentiff::TiffDecodeConfig::default(),
+        &enough::Unstoppable,
+    )
+    .map_err(|e| format!("zentiff: {e}"))?;
+    pixel_buffer_to_rgb8(&output.pixels)
+}
+
+#[cfg(not(feature = "tiff"))]
+fn decode_tiff(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    Err("TIFF decoding is disabled (compile with `--features tiff`)".into())
+}
+
 // ── PixelBuffer → RGB8 normalisation ─────────────────────────────────────
 //
 // Several zen decoders return a `zenpixels::PixelBuffer` whose underlying
@@ -217,14 +283,26 @@ fn decode_jxl(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
 // (more naively) what the converter already does; those have been removed
 // to keep all pixel-format logic in the canonical crate.
 
-#[cfg(any(feature = "png", feature = "jpeg", feature = "avif", feature = "jxl"))]
+#[cfg(any(
+    feature = "png",
+    feature = "jpeg",
+    feature = "avif",
+    feature = "jxl",
+    feature = "tiff"
+))]
 fn pixel_buffer_to_rgb8(
     buf: &zenpixels::PixelBuffer,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     pixel_slice_to_rgb8(&buf.as_slice())
 }
 
-#[cfg(any(feature = "png", feature = "jpeg", feature = "avif", feature = "jxl"))]
+#[cfg(any(
+    feature = "png",
+    feature = "jpeg",
+    feature = "avif",
+    feature = "jxl",
+    feature = "tiff"
+))]
 fn pixel_slice_to_rgb8(
     pixels: &zenpixels::PixelSlice<'_>,
 ) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
