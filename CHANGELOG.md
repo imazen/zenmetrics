@@ -17,6 +17,34 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+## zensim-gpu
+
+### Added
+
+- HDR PU21 GPU path: `linear_nits_to_positive_pu_xyb_kernel` (perceptual
+  PU21 encoding of absolute-luminance linear-RGB on-device, replacing the
+  SDR cube root) + `ZensimOpaque::compute_features_pu_linear_nits` /
+  `Zensim::<R>::compute_features_pu_linear_nits` (regime-appropriate
+  feature vector — 228/300/372 — from linear-nits planes, exactly like
+  the SDR `compute_features_vec`; the canonical `with_profile` path is
+  WithIw → 372). Closes the gap that left zensim-gpu SDR-only while CPU
+  zensim
+  (`compute_pu_linear`, PR imazen/zensim#44) and the sibling ssim2-gpu
+  already had perceptual-layer PU21 — see imazen/zenmetrics#25. CPU↔GPU
+  PU-XYB parity verified to 1.4e-6 (CUDA) / 1.9e-6 (Vulkan) against the
+  CPU scalar reference in `tests/it/pu_xyb_parity.rs`. (#29)
+
+## Workspace
+
+### Changed
+
+- CI: the macOS-Metal job (`metal-tests`) is disabled (`if: false`). The
+  8 GB `macos-latest` GPU wedges on the 12 MP parity tests (butteraugli
+  whole-image OOMs to 0; ssim2 hangs to the job timeout) — a
+  runner-capacity / large-image limit, not a kernel-correctness one
+  (CUDA + Vulkan parity is green). Tracked in the zenmetrics#24 Metal
+  stream; see README "GPU CI / Metal". (#29)
+
 ## Workspace
 
 ### Changed
