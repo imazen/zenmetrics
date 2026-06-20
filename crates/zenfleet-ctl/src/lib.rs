@@ -13,7 +13,8 @@
 use serde::{Deserialize, Serialize};
 
 use zenfleet_core::{
-    CellId, DesiredJob, JobKind, JobStatus, LedgerView, RetryPolicy, Sha256Hex, reconcile,
+    CellId, DesiredJob, JobKind, JobStatus, LedgerView, ResourceHint, RetryPolicy, Sha256Hex,
+    reconcile,
 };
 
 fn empty_knobs() -> String {
@@ -51,6 +52,13 @@ pub struct EncodeDeclareItem {
     pub knob_tuple_json: String,
     /// sha256 hex of the source image bytes (`blobs/<sha>`).
     pub source_sha: String,
+    /// Optional scheduling hint (peak mem + useful threads) computed by the
+    /// codec-linked emitter (`zenmetrics sweep --emit-cells` via
+    /// `PlannedConfig::estimate_resources`). `#[serde(default)]` so manifests
+    /// written before this field — or by a codec build without the estimate —
+    /// parse as `None`. Propagated verbatim onto the [`DesiredJob`].
+    #[serde(default)]
+    pub hint: Option<ResourceHint>,
 }
 
 /// Expand encode declarations into desired encode jobs. Plan-cell identity
@@ -77,11 +85,11 @@ pub fn declare_encodes(items: &[EncodeDeclareItem]) -> Result<Vec<DesiredJob>, S
                 q: it.q,
                 knob_tuple_json: it.knob_tuple_json.clone(),
             },
-            // Encode jobs: the resource hint is attached by the codec-linked
-            // declarer (`zenmetrics jobexec`/declare via
-            // `PlannedConfig::estimate_resources`), which knows the source dims.
-            // zenfleet-ctl stays codec-free, so it declares without one.
-            hint: None,
+            // Resource hint rides through from the emit-cells item (computed by
+            // the codec-linked emitter via PlannedConfig::estimate_resources);
+            // zenfleet-ctl stays codec-free and just propagates it. `None` when
+            // the emitter couldn't estimate.
+            hint: it.hint,
         });
     }
     Ok(out)
@@ -198,6 +206,7 @@ mod tests {
             knob_tuple_json:
                 r#"{"cell":"jp3_t0_small_420","fp":"0123456789abcdef","plan":"rd_core"}"#.into(),
             source_sha: sha.clone(),
+            hint: None,
         }];
         let a = declare_encodes(&items).unwrap();
         let b = declare_encodes(&items).unwrap();
@@ -216,6 +225,40 @@ mod tests {
         let mut bad = items.clone();
         bad[0].source_sha = "nope".into();
         assert!(declare_encodes(&bad).is_err());
+    }
+
+    #[test]
+    fn declare_encodes_propagates_resource_hint_and_survives_jsonl_roundtrip() {
+        use super::*;
+        let hint = ResourceHint {
+            peak_mem_bytes: 8 << 30,
+            threads: 4,
+        };
+        let item = EncodeDeclareItem {
+            image_path: "corpus/x.png".into(),
+            codec: "zenjxl".into(),
+            q: 90,
+            knob_tuple_json: r#"{"cell":"c","fp":"f","plan":"rd_core"}"#.into(),
+            source_sha: "a".repeat(64),
+            hint: Some(hint),
+        };
+        // Emit-cells writes JSON lines; parse_emit_cells reads them back. The
+        // hint must survive that round-trip and land on the DesiredJob.
+        let line = serde_json::to_string(&item).unwrap();
+        let parsed = parse_emit_cells(&line).unwrap();
+        let jobs = declare_encodes(&parsed).unwrap();
+        assert_eq!(jobs[0].hint, Some(hint));
+        // A legacy emit-cells line (no `hint` key) declares with hint = None.
+        let legacy = serde_json::json!({
+            "image_path": "x",
+            "codec": "zenjpeg",
+            "q": 80,
+            "knob_tuple_json": "{}",
+            "source_sha": "b".repeat(64),
+        })
+        .to_string();
+        let jobs = declare_encodes(&parse_emit_cells(&legacy).unwrap()).unwrap();
+        assert_eq!(jobs[0].hint, None);
     }
 
     #[test]
