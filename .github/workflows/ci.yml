@@ -89,6 +89,8 @@ jobs:
           git -C ../zengif checkout 7c62dbdd47575df07fde2c43461a591d907cf6f1
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
           git -C ../zenextras checkout 03fe51ab812b02187ebdf683a5436098d6b1467b
+          git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
+          git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
@@ -249,6 +251,8 @@ jobs:
           git -C ../zengif checkout 7c62dbdd47575df07fde2c43461a591d907cf6f1
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
           git -C ../zenextras checkout 03fe51ab812b02187ebdf683a5436098d6b1467b
+          git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
+          git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
@@ -403,6 +407,8 @@ jobs:
           git -C ../zengif checkout 7c62dbdd47575df07fde2c43461a591d907cf6f1
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
           git -C ../zenextras checkout 03fe51ab812b02187ebdf683a5436098d6b1467b
+          git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
+          git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
@@ -512,6 +518,8 @@ jobs:
           git -C ../zengif checkout 7c62dbdd47575df07fde2c43461a591d907cf6f1
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
           git -C ../zenextras checkout 03fe51ab812b02187ebdf683a5436098d6b1467b
+          git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
+          git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
@@ -618,6 +626,8 @@ jobs:
           git -C ../zengif checkout 7c62dbdd47575df07fde2c43461a591d907cf6f1
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
           git -C ../zenextras checkout 03fe51ab812b02187ebdf683a5436098d6b1467b
+          git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
+          git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
