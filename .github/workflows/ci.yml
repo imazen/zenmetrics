@@ -50,7 +50,7 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 9fbbff7e2c505d9f83c145c03f767ee597a68ba3
+          git -C ../zenjpeg checkout f1bf0b9a43d73a97a4e02bbc3ab379d41c888727
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
@@ -66,7 +66,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28fcae061c77911f115c5e7ac2d5c889789d0247
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28ee00eb9771b3a25f7e37bd14c08e59158010ef
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -75,20 +75,20 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 7a6ee94a64c04b2cd1c9fd91d446198cfa2ddb02
+          git -C ../zenpng checkout 7bce0e3e053bafd369fc6cab00ec7b0de1d57fcb
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 9820529c137d57f8e43de82c5a0295c971b45d1c
+          git -C ../zenwebp checkout aa1665ec54d22179ba61029720c01afb54a82565
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 89907d00db0f2da7b56a06c9813d71ca4f1395f9
+          git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 27215cc4a935c987895781c7b8017cc521dc6913
+          git -C ../zenjxl checkout 6fed817415812b6e38aa1ef817d1a38d072e847b
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
-          git -C ../zengif checkout 7c62dbdd47575df07fde2c43461a591d907cf6f1
+          git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
-          git -C ../zenextras checkout 03fe51ab812b02187ebdf683a5436098d6b1467b
+          git -C ../zenextras checkout e2d067c59c34e70cfad7d0c16593336c3a247821
           git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
           git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
@@ -223,7 +223,7 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 9fbbff7e2c505d9f83c145c03f767ee597a68ba3
+          git -C ../zenjpeg checkout f1bf0b9a43d73a97a4e02bbc3ab379d41c888727
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
@@ -239,7 +239,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28fcae061c77911f115c5e7ac2d5c889789d0247
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28ee00eb9771b3a25f7e37bd14c08e59158010ef
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -248,20 +248,20 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 7a6ee94a64c04b2cd1c9fd91d446198cfa2ddb02
+          git -C ../zenpng checkout 7bce0e3e053bafd369fc6cab00ec7b0de1d57fcb
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 9820529c137d57f8e43de82c5a0295c971b45d1c
+          git -C ../zenwebp checkout aa1665ec54d22179ba61029720c01afb54a82565
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 89907d00db0f2da7b56a06c9813d71ca4f1395f9
+          git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 27215cc4a935c987895781c7b8017cc521dc6913
+          git -C ../zenjxl checkout 6fed817415812b6e38aa1ef817d1a38d072e847b
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
-          git -C ../zengif checkout 7c62dbdd47575df07fde2c43461a591d907cf6f1
+          git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
-          git -C ../zenextras checkout 03fe51ab812b02187ebdf683a5436098d6b1467b
+          git -C ../zenextras checkout e2d067c59c34e70cfad7d0c16593336c3a247821
           git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
           git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
@@ -379,7 +379,7 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 9fbbff7e2c505d9f83c145c03f767ee597a68ba3
+          git -C ../zenjpeg checkout f1bf0b9a43d73a97a4e02bbc3ab379d41c888727
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
@@ -395,7 +395,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28fcae061c77911f115c5e7ac2d5c889789d0247
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28ee00eb9771b3a25f7e37bd14c08e59158010ef
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -404,20 +404,20 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 7a6ee94a64c04b2cd1c9fd91d446198cfa2ddb02
+          git -C ../zenpng checkout 7bce0e3e053bafd369fc6cab00ec7b0de1d57fcb
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 9820529c137d57f8e43de82c5a0295c971b45d1c
+          git -C ../zenwebp checkout aa1665ec54d22179ba61029720c01afb54a82565
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 89907d00db0f2da7b56a06c9813d71ca4f1395f9
+          git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 27215cc4a935c987895781c7b8017cc521dc6913
+          git -C ../zenjxl checkout 6fed817415812b6e38aa1ef817d1a38d072e847b
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
-          git -C ../zengif checkout 7c62dbdd47575df07fde2c43461a591d907cf6f1
+          git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
-          git -C ../zenextras checkout 03fe51ab812b02187ebdf683a5436098d6b1467b
+          git -C ../zenextras checkout e2d067c59c34e70cfad7d0c16593336c3a247821
           git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
           git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
@@ -490,7 +490,7 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 9fbbff7e2c505d9f83c145c03f767ee597a68ba3
+          git -C ../zenjpeg checkout f1bf0b9a43d73a97a4e02bbc3ab379d41c888727
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
@@ -506,7 +506,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28fcae061c77911f115c5e7ac2d5c889789d0247
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28ee00eb9771b3a25f7e37bd14c08e59158010ef
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -515,20 +515,20 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 7a6ee94a64c04b2cd1c9fd91d446198cfa2ddb02
+          git -C ../zenpng checkout 7bce0e3e053bafd369fc6cab00ec7b0de1d57fcb
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 9820529c137d57f8e43de82c5a0295c971b45d1c
+          git -C ../zenwebp checkout aa1665ec54d22179ba61029720c01afb54a82565
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 89907d00db0f2da7b56a06c9813d71ca4f1395f9
+          git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 27215cc4a935c987895781c7b8017cc521dc6913
+          git -C ../zenjxl checkout 6fed817415812b6e38aa1ef817d1a38d072e847b
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
-          git -C ../zengif checkout 7c62dbdd47575df07fde2c43461a591d907cf6f1
+          git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
-          git -C ../zenextras checkout 03fe51ab812b02187ebdf683a5436098d6b1467b
+          git -C ../zenextras checkout e2d067c59c34e70cfad7d0c16593336c3a247821
           git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
           git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
@@ -598,7 +598,7 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 9fbbff7e2c505d9f83c145c03f767ee597a68ba3
+          git -C ../zenjpeg checkout f1bf0b9a43d73a97a4e02bbc3ab379d41c888727
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
@@ -614,7 +614,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28fcae061c77911f115c5e7ac2d5c889789d0247
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28ee00eb9771b3a25f7e37bd14c08e59158010ef
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -623,20 +623,20 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 7a6ee94a64c04b2cd1c9fd91d446198cfa2ddb02
+          git -C ../zenpng checkout 7bce0e3e053bafd369fc6cab00ec7b0de1d57fcb
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 9820529c137d57f8e43de82c5a0295c971b45d1c
+          git -C ../zenwebp checkout aa1665ec54d22179ba61029720c01afb54a82565
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 89907d00db0f2da7b56a06c9813d71ca4f1395f9
+          git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 27215cc4a935c987895781c7b8017cc521dc6913
+          git -C ../zenjxl checkout 6fed817415812b6e38aa1ef817d1a38d072e847b
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
-          git -C ../zengif checkout 7c62dbdd47575df07fde2c43461a591d907cf6f1
+          git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
-          git -C ../zenextras checkout 03fe51ab812b02187ebdf683a5436098d6b1467b
+          git -C ../zenextras checkout e2d067c59c34e70cfad7d0c16593336c3a247821
           git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
           git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
           # zenjxl-decoder is no longer a sibling-path patch: the workspace

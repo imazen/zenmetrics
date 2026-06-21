@@ -268,7 +268,7 @@ jxl-encoder  = { path = "../../../jxl-encoder/jxl-encoder",         optional = t
 # Pulled in by the `sweep` feature. zencodec exposes the EncodeJob /
 # Encoder traits that drive zenjxl encoding; almost_enough is the
 # cooperative-cancellation crate zenavif's encoder takes by value.
-zencodec = { version = "0.1.20", optional = true }
+zencodec = { version = "0.1.24", optional = true }
 almost-enough = { version = "0.4.3", optional = true }
 
 # zenpixels exposes the PixelBuffer / PixelSlice types returned by zen

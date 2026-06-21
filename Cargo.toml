@@ -281,13 +281,6 @@ zenjxl       = { path = "../zenjxl" }
 # `jxl` dep to that release.
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "0599dcf3728c3982f3cf2cad22beb053037da356" }
 jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
-# zencodec: the local ../zenjpeg sibling (0.8.7) now requires
-# `zencodec ^0.1.24`, but crates.io only has up to 0.1.23 — the 0.1.24
-# bump is on the ../zencodec sibling's main and not yet published. Without
-# this patch the workspace resolver fails for EVERY member (zenjpeg pulls
-# zencodec ^0.1.24 transitively via zenmetrics-cli). Points at the same
-# 0.1.24 sibling already on disk. Drop this when zencodec 0.1.24 publishes.
-zencodec     = { path = "../zencodec" }
 # butteraugli: the local sibling at ~/work/butteraugli/butteraugli is
 # version 0.9.2 but carries `compare_linear_planar_into` (the recycled-
 # buffer planar-compare production path) which the PUBLISHED crates.io

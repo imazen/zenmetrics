@@ -43,7 +43,7 @@ impl ResourceClass {
     }
 
     /// Derive the routing class from an encode's *estimated peak memory*
-    /// (`zencodec::estimate::ResourceEstimate::peak_memory_bytes`). This refines
+    /// (`zencodec::estimate::ResourceEstimate::peak_memory_bytes_est`). This refines
     /// the static per-codec class (`encode_cost`) with the real per-encode
     /// footprint — a 64×64 AVIF is `CpuLight`, a 100 MP 10-bit AVIF or a
     /// JXL-modular-e9 is `HighRam`. Thresholds are deliberately coarse: they

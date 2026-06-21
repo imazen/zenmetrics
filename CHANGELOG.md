@@ -88,16 +88,16 @@ Workspace conventions per the global rules:
   `estimate_score_time_ms` (reached through the `zenmetrics-api` re-exports,
   gated per `gpu-<metric>` feature); encode-side footprint comes from explicit
   `--encode-peak-ram-mb` / `--encode-threads` / `--encode-ms` flags (a
-  codec-free path, so the planner works without the codec build that the
-  in-flight `zencodec` 0.1.24 migration currently blocks). `--json` for machine
-  output. Defaults to the tiny/small/medium/large size buckets.
+  codec-free path, so the planner works without compiling a codec). `--json`
+  for machine output. Defaults to the tiny/small/medium/large size buckets.
 
-> The codec-linked half — `PlannedConfig::estimate_resources` (each codec's
-> own `heuristics`/`estimate_encode_resources` model surfaced per planned cell)
-> and `sweep --emit-cells` populating the hint from it — is implemented and
-> verified locally but **held** off `master` pending the in-flight `zencodec`
-> 0.1.24 migration (CI clones codecs at frozen pre-migration pins). It lands
-> with that migration.
+> The codec-linked half — wiring each codec's own
+> `heuristics`/`estimate_encode_resources` model into the fleet-plan encode
+> side (replacing the explicit `--encode-*` flags) — is a follow-up. The
+> `zencodec` 0.1.24 migration (which CI previously pinned codecs *before*) is
+> now complete, so the dependency that blocked it is cleared; the wiring itself
+> is left for a separate change (it needs a `--codec` arg + per-codec
+> feature-gated `EncoderConfig` dispatch).
 
 ## zensim-gpu
 
@@ -120,6 +120,20 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **deps: migrate to published `zencodec` 0.1.24 estimate API; drop the path
+  patch; bump CI codec clone pins to the migrated revs.** Removed the
+  temporary `zencodec = { path = "../zencodec" }` `[patch.crates-io]` entry —
+  0.1.24 is now on crates.io, so the workspace resolves the published crate
+  (registry source, leaner graph: drops the path sibling's `wasm-*`/`wit-*`
+  dev deps). The refined `estimate::ResourceEstimate` accessors
+  (`peak_memory_bytes` → `peak_memory_bytes_est`, now `Option`) are tracked in
+  the fleet doc comments; zenmetrics has no live estimate-reader call-sites yet
+  (the fleet-plan encode side still takes `--encode-*` flags). `.github/
+  workflows/ci.yml` codec clone pins bumped to each sibling's migrated
+  origin/main rev (zenjpeg `f1bf0b9a`, zenpng `7bce0e3e`, zenwebp `aa1665ec`,
+  zenavif `3636a3e4`, zenjxl `6fed8174`, zengif `908a54f4`, zenextras
+  `e2d067c5`, jxl-encoder `28ee00eb`) so CI builds the migrated codecs against
+  published 0.1.24.
 - CI: the macOS-Metal job (`metal-tests`) is disabled (`if: false`). The
   8 GB `macos-latest` GPU wedges on the 12 MP parity tests (butteraugli
   whole-image OOMs to 0; ssim2 hangs to the job timeout) — a
