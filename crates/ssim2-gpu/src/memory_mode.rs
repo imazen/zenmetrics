@@ -315,3 +315,108 @@ pub fn estimate_strip_gpu_memory_bytes(width: u32, h_body: u32) -> Option<usize>
     total = total.saturating_add(n0 * 4 * 2);
     Some(total)
 }
+
+// ---------------------------------------------------------------------------
+// Score-time estimate (calibrated — single-size anchor)
+// ---------------------------------------------------------------------------
+
+/// Fixed per-call overhead (ms) of an SSIMULACRA2 GPU score, isolated from
+/// the per-pixel work via the batch-amortization curve (see below).
+///
+/// Provenance: `crates/ssim2-gpu/benchmarks/bench_batch_2026-05-02.md`,
+/// CUDA RTX 5070 + CUDA 13.2 on the 7950X host. A single 256×256 pair
+/// (65 536 px) scores at **4.10 ms** sequentially (batch=1, `seq /img`),
+/// while the batched throughput floors at **~1.68 ms/img** at N=16 (work
+/// fully overlapped, per-pixel cost only). Reading the floor as the
+/// per-pixel term and the difference as the fixed launch/upload/readback
+/// overhead: `fixed = 4.10 − 1.68 = 2.42 ms`, `slope = 1.68 ms / 65 536 px
+/// = 25.6 ns/px`.
+///
+/// **CALIBRATED FROM A SINGLE IMAGE SIZE (256×256)** — unlike cvvdp/zensim
+/// this is not size-swept, so the per-pixel slope is anchored at one point
+/// and assumed constant. SSIMULACRA2's 6-scale pyramid does sub-linear
+/// per-pixel work at larger sizes, so this likely *over*-estimates at
+/// medium/large (conservative for capacity planning). A multi-size sweep
+/// would tighten the slope; flagged for a future GPU-box run.
+const SSIM2_FIXED_MS: f64 = 2.42;
+/// Per-pixel slope (ns/px) — see [`SSIM2_FIXED_MS`] for derivation.
+const SSIM2_NS_PER_PX: f64 = 25.6;
+
+/// Estimated single-GPU score wall time (ms) for a `width × height`
+/// SSIMULACRA2 pair. Pure size-math — no GPU, no allocation; safe on a
+/// GPU-less host. `time_ms = SSIM2_FIXED_MS + SSIM2_NS_PER_PX · pixels /
+/// 1e6` (a fixed-overhead + per-pixel model; see [`SSIM2_FIXED_MS`] for the
+/// single-size calibration and its caveats). Returns `0.0` for a degenerate
+/// image.
+#[must_use]
+pub fn estimate_score_time_ms(width: u32, height: u32) -> f32 {
+    let pixels = (width as u64).saturating_mul(height as u64) as f64;
+    if pixels == 0.0 {
+        return 0.0;
+    }
+    (SSIM2_FIXED_MS + SSIM2_NS_PER_PX * pixels / 1.0e6) as f32
+}
+
+/// A metric's predicted per-pair resource use: GPU working-set bytes + score
+/// wall time. The fleet planner sums `time_ms` across a cell's metrics and
+/// takes the `max` of `vram_bytes` (GPU scoring serializes on the device).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScoreResourceEstimate {
+    /// Peak GPU working-set in bytes for this metric at this size.
+    pub vram_bytes: usize,
+    /// Estimated single-GPU score wall time in milliseconds.
+    pub time_ms: f32,
+}
+
+/// Bundle the VRAM estimate ([`estimate_gpu_memory_bytes`]) and score-time
+/// estimate ([`estimate_score_time_ms`]) into one [`ScoreResourceEstimate`].
+/// Pure math; no GPU required.
+#[must_use]
+pub fn estimate_score_resources(width: u32, height: u32) -> ScoreResourceEstimate {
+    ScoreResourceEstimate {
+        vram_bytes: estimate_gpu_memory_bytes(width, height),
+        time_ms: estimate_score_time_ms(width, height),
+    }
+}
+
+#[cfg(test)]
+mod score_time_tests {
+    use super::*;
+
+    #[test]
+    fn time_is_positive_and_scales_with_pixels() {
+        assert!(estimate_score_time_ms(64, 64) > 0.0);
+        assert!(estimate_score_time_ms(512, 512) > estimate_score_time_ms(256, 256));
+        assert!(estimate_score_time_ms(4096, 4096) > estimate_score_time_ms(1024, 1024));
+        assert_eq!(estimate_score_time_ms(0, 0), 0.0);
+    }
+
+    #[test]
+    fn matches_calibration_anchor_256() {
+        // The 256×256 anchor: fixed + slope·px = 2.42 + 25.6e-9·65536·1e3
+        // = 2.42 + 1.678 ≈ 4.10 ms (the measured seq /img at batch=1).
+        let got = estimate_score_time_ms(256, 256) as f64;
+        assert!((got - 4.10).abs() < 0.05, "256x256 = {got} ms vs 4.10");
+    }
+
+    #[test]
+    fn fixed_overhead_dominates_at_tiny() {
+        // At 64×64 (4096 px) the per-pixel term is ~0.1 ms — small next to
+        // the 2.42 ms fixed cost. Assert time is just above fixed and the
+        // per-pixel contribution is < 10% of the total.
+        let got = estimate_score_time_ms(64, 64) as f64;
+        let per_pixel_term = got - SSIM2_FIXED_MS;
+        assert!(got > SSIM2_FIXED_MS, "64x64 = {got} ms must exceed fixed");
+        assert!(
+            per_pixel_term < 0.2 && per_pixel_term / got < 0.10,
+            "64x64 per-pixel term {per_pixel_term} ms (total {got}) should be tiny vs fixed"
+        );
+    }
+
+    #[test]
+    fn resources_bundle_matches_parts() {
+        let r = estimate_score_resources(1024, 1024);
+        assert_eq!(r.time_ms, estimate_score_time_ms(1024, 1024));
+        assert_eq!(r.vram_bytes, estimate_gpu_memory_bytes(1024, 1024));
+    }
+}

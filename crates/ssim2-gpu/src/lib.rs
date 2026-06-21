@@ -114,7 +114,8 @@ pub mod session;
 pub(crate) mod skipmap;
 
 pub use memory_mode::{
-    MemoryMode, ResolvedMode, STRIP_H_BODY_DEFAULT, STRIP_HALO_ROWS, estimate_gpu_memory_bytes,
+    MemoryMode, ResolvedMode, STRIP_H_BODY_DEFAULT, STRIP_HALO_ROWS, ScoreResourceEstimate,
+    estimate_gpu_memory_bytes, estimate_score_resources, estimate_score_time_ms,
     estimate_strip_gpu_memory_bytes, vram_cap_bytes,
 };
 // Uniform opaque API (Phase 2). See `opaque.rs`.

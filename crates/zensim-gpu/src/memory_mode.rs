@@ -365,3 +365,159 @@ pub fn estimate_strip_gpu_memory_bytes_with_regime(
 ) -> Option<usize> {
     estimate_strip_gpu_memory_bytes_for(width, h_body, regime)
 }
+
+// ---------------------------------------------------------------------------
+// Score-time estimate (calibrated)
+// ---------------------------------------------------------------------------
+
+/// zensim per-pixel scalar-feature score cost (ns/px), anchored at four
+/// measured sizes. Monotone-decreasing: per-call dispatch overhead amortizes
+/// as the image grows. This is the **default scalar GPU feature-extraction**
+/// path (`compute_features_vec`, no diffmap, Basic-regime kernels).
+///
+/// Provenance: `crates/zensim-gpu/benchmarks/zensim_diffmap_overhead_2026-05-27.tsv`,
+/// `score_only_ms` column (the no-diffmap baseline), `gradient_identity`
+/// fixture, CUDA RTX 5070 on the 7950X host, parent commit `f9c567a2`. The
+/// four `(pixels, ns_per_px)` anchors:
+///
+/// | dims        | pixels    | score_only_ms | ns/px  |
+/// | ----        | ----      | ----          | ----   |
+/// |  256 ×  256 |    65 536 | 1.002         | 15.29  |
+/// |  512 ×  512 |   262 144 | 1.610         |  6.14  |
+/// | 1024 × 1024 | 1 048 576 | 3.122         |  2.98  |
+/// | 2048 × 2048 | 4 194 304 | 10.293        |  2.45  |
+///
+/// The Extended / WithIw masked-IW regimes do more per-pixel work; this
+/// estimate (Basic/default) is a lower bound for those. The diffmap path
+/// (`score_with_diffmap`) is much heavier (Phase-1 CPU fallback, 3-23×) and
+/// is **not** modeled here — the planner scores the scalar path.
+const ZENSIM_NS_PER_PX_ANCHORS: &[(f64, f64)] = &[
+    (65_536.0, 15.29),
+    (262_144.0, 6.14),
+    (1_048_576.0, 2.98),
+    (4_194_304.0, 2.45),
+];
+
+/// Interpolate a per-pixel cost (ns/px) from a `(pixels, ns_per_px)` anchor
+/// table, **piecewise-linear in `log2(pixels)`**. Outside the anchored range
+/// the endpoint value is held flat (no slope extrapolation past measured
+/// data). `anchors` must be sorted ascending by pixel count and non-empty.
+#[must_use]
+fn interp_ns_per_px_log(anchors: &[(f64, f64)], pixels: f64) -> f64 {
+    debug_assert!(!anchors.is_empty());
+    let lx = pixels.max(1.0).log2();
+    let first = anchors[0];
+    let last = anchors[anchors.len() - 1];
+    if lx <= first.0.log2() {
+        return first.1;
+    }
+    if lx >= last.0.log2() {
+        return last.1;
+    }
+    for w in anchors.windows(2) {
+        let (p0, v0) = w[0];
+        let (p1, v1) = w[1];
+        let (l0, l1) = (p0.log2(), p1.log2());
+        if lx >= l0 && lx <= l1 {
+            let t = if (l1 - l0).abs() < f64::EPSILON {
+                0.0
+            } else {
+                (lx - l0) / (l1 - l0)
+            };
+            return v0 + t * (v1 - v0);
+        }
+    }
+    last.1
+}
+
+/// Estimated single-GPU score wall time (ms) for a `width × height` zensim
+/// scalar-feature score. Pure size-math — no GPU, no allocation; safe on a
+/// GPU-less host (fleet planning, CI). `time_ms = ns_per_px(pixels) · pixels
+/// / 1e6`, interpolated from [`ZENSIM_NS_PER_PX_ANCHORS`] (default scalar
+/// path, Basic regime). Returns `0.0` for a degenerate image.
+#[must_use]
+pub fn estimate_score_time_ms(width: u32, height: u32) -> f32 {
+    let pixels = (width as u64).saturating_mul(height as u64) as f64;
+    if pixels == 0.0 {
+        return 0.0;
+    }
+    let ns_per_px = interp_ns_per_px_log(ZENSIM_NS_PER_PX_ANCHORS, pixels);
+    ((ns_per_px * pixels) / 1.0e6) as f32
+}
+
+/// A metric's predicted per-pair resource use: GPU working-set bytes + score
+/// wall time. The fleet planner sums `time_ms` across a cell's metrics and
+/// takes the `max` of `vram_bytes` (GPU scoring serializes on the device).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScoreResourceEstimate {
+    /// Peak GPU working-set in bytes for this metric at this size.
+    pub vram_bytes: usize,
+    /// Estimated single-GPU score wall time in milliseconds.
+    pub time_ms: f32,
+}
+
+/// Bundle the VRAM estimate ([`estimate_gpu_memory_bytes`]) and score-time
+/// estimate ([`estimate_score_time_ms`]) into one [`ScoreResourceEstimate`]
+/// for the given feature regime. Pure math; no GPU required.
+#[must_use]
+pub fn estimate_score_resources(
+    width: u32,
+    height: u32,
+    regime: ZensimFeatureRegime,
+) -> ScoreResourceEstimate {
+    ScoreResourceEstimate {
+        vram_bytes: estimate_gpu_memory_bytes(width, height, regime),
+        time_ms: estimate_score_time_ms(width, height),
+    }
+}
+
+#[cfg(test)]
+mod score_time_tests {
+    use super::*;
+
+    fn ns_per_px(width: u32, height: u32) -> f64 {
+        let px = (width as u64 * height as u64) as f64;
+        (estimate_score_time_ms(width, height) as f64) * 1.0e6 / px
+    }
+
+    #[test]
+    fn time_is_positive_and_scales_with_pixels() {
+        assert!(estimate_score_time_ms(256, 256) > 0.0);
+        assert!(estimate_score_time_ms(512, 512) > estimate_score_time_ms(256, 256));
+        assert!(estimate_score_time_ms(1024, 1024) > estimate_score_time_ms(512, 512));
+        assert!(estimate_score_time_ms(2048, 2048) > estimate_score_time_ms(1024, 1024));
+        assert_eq!(estimate_score_time_ms(0, 0), 0.0);
+    }
+
+    #[test]
+    fn matches_calibration_anchor_points() {
+        for &(w, h, expect) in &[
+            (256u32, 256u32, 15.29f64),
+            (512, 512, 6.14),
+            (1024, 1024, 2.98),
+            (2048, 2048, 2.45),
+        ] {
+            let got = ns_per_px(w, h);
+            let rel = (got - expect).abs() / expect;
+            assert!(rel < 0.01, "{w}x{h}: ns/px {got} vs anchor {expect}");
+        }
+    }
+
+    #[test]
+    fn per_pixel_cost_is_monotone_decreasing() {
+        // Fixed-overhead amortization: bigger images cost less per pixel.
+        assert!(ns_per_px(512, 512) < ns_per_px(256, 256));
+        assert!(ns_per_px(1024, 1024) < ns_per_px(512, 512));
+        assert!(ns_per_px(2048, 2048) < ns_per_px(1024, 1024));
+    }
+
+    #[test]
+    fn resources_bundle_matches_parts() {
+        let r = estimate_score_resources(1024, 1024, ZensimFeatureRegime::Basic);
+        assert_eq!(r.time_ms, estimate_score_time_ms(1024, 1024));
+        assert_eq!(
+            r.vram_bytes,
+            estimate_gpu_memory_bytes(1024, 1024, ZensimFeatureRegime::Basic)
+        );
+    }
+}

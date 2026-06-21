@@ -284,3 +284,83 @@ pub fn estimate_strip_gpu_memory_bytes(width: u32, h_body: u32) -> Option<usize>
     total = total.saturating_add(n.saturating_mul(CONTEXT_PER_PIXEL_BYTES));
     Some(total)
 }
+
+// ---------------------------------------------------------------------------
+// Score-time estimate (PLACEHOLDER — not calibrated)
+// ---------------------------------------------------------------------------
+
+/// Conservative placeholder per-pixel score cost (ns/px).
+///
+// NOT CALIBRATED — placeholder pending a GPU-box size-sweep.
+//
+/// dssim-gpu has **no committed timing benchmark**, so this is a
+/// deliberately conservative flat rate (not a measured value). 100 ns/px
+/// sits at the high end of the measured multiscale-metric costs
+/// (cvvdp medium 28 ns/px, small 91 ns/px), so it errs toward
+/// *over*-provisioning — safe for capacity planning, never under-sizes a
+/// box. Replace with an anchored piecewise curve once a `time_size_sweep`
+/// bench lands for this crate.
+const DSSIM_NS_PER_PX_PLACEHOLDER: f64 = 100.0;
+/// Conservative fixed per-call overhead (ms). NOT CALIBRATED — see
+/// [`DSSIM_NS_PER_PX_PLACEHOLDER`].
+const DSSIM_FIXED_MS_PLACEHOLDER: f64 = 3.0;
+
+/// Estimated single-GPU score wall time (ms) for a `width × height` dssim
+/// pair. **PLACEHOLDER, NOT CALIBRATED** — a conservative `fixed +
+/// per-pixel` upper-leaning estimate (see [`DSSIM_NS_PER_PX_PLACEHOLDER`]);
+/// intended only so the fleet planner has a non-zero dssim cost until a real
+/// size-sweep is run. Pure size-math, no GPU. Returns `0.0` for a degenerate
+/// image.
+#[must_use]
+pub fn estimate_score_time_ms(width: u32, height: u32) -> f32 {
+    let pixels = (width as u64).saturating_mul(height as u64) as f64;
+    if pixels == 0.0 {
+        return 0.0;
+    }
+    (DSSIM_FIXED_MS_PLACEHOLDER + DSSIM_NS_PER_PX_PLACEHOLDER * pixels / 1.0e6) as f32
+}
+
+/// A metric's predicted per-pair resource use: GPU working-set bytes + score
+/// wall time. The fleet planner sums `time_ms` across a cell's metrics and
+/// takes the `max` of `vram_bytes` (GPU scoring serializes on the device).
+///
+/// **Note**: dssim's `time_ms` is a non-calibrated placeholder — see
+/// [`estimate_score_time_ms`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScoreResourceEstimate {
+    /// Peak GPU working-set in bytes for this metric at this size.
+    pub vram_bytes: usize,
+    /// Estimated single-GPU score wall time in milliseconds (PLACEHOLDER).
+    pub time_ms: f32,
+}
+
+/// Bundle the VRAM estimate ([`estimate_gpu_memory_bytes`]) and the
+/// placeholder score-time estimate ([`estimate_score_time_ms`]). Pure math;
+/// no GPU required.
+#[must_use]
+pub fn estimate_score_resources(width: u32, height: u32) -> ScoreResourceEstimate {
+    ScoreResourceEstimate {
+        vram_bytes: estimate_gpu_memory_bytes(width, height),
+        time_ms: estimate_score_time_ms(width, height),
+    }
+}
+
+#[cfg(test)]
+mod score_time_tests {
+    use super::*;
+
+    #[test]
+    fn placeholder_time_is_positive_and_scales_with_pixels() {
+        assert!(estimate_score_time_ms(64, 64) > 0.0);
+        assert!(estimate_score_time_ms(512, 512) > estimate_score_time_ms(256, 256));
+        assert!(estimate_score_time_ms(4096, 4096) > estimate_score_time_ms(1024, 1024));
+        assert_eq!(estimate_score_time_ms(0, 0), 0.0);
+    }
+
+    #[test]
+    fn placeholder_resources_bundle_matches_parts() {
+        let r = estimate_score_resources(1024, 1024);
+        assert_eq!(r.time_ms, estimate_score_time_ms(1024, 1024));
+        assert_eq!(r.vram_bytes, estimate_gpu_memory_bytes(1024, 1024));
+    }
+}

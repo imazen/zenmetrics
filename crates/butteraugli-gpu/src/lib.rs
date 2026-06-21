@@ -52,7 +52,8 @@ pub(crate) mod strip;
 // Uniform opaque API (Phase 2 of API uniformity refactor). See
 // `opaque.rs` and the matching shim in `dssim-gpu`.
 pub use memory_mode::{
-    MemoryMode, ResolvedMode, estimate_gpu_memory_bytes, estimate_strip_gpu_memory_bytes,
+    MemoryMode, ResolvedMode, ScoreResourceEstimate, estimate_gpu_memory_bytes,
+    estimate_score_resources, estimate_score_time_ms, estimate_strip_gpu_memory_bytes,
     vram_cap_bytes,
 };
 pub use opaque::{Backend, ButteraugliOpaque, Score};
