@@ -207,6 +207,9 @@ assemble = [
 # Content-addressing for --emit-cells declare manifests (same version as
 # zenfleet-core so the workspace carries one copy).
 sha2 = "0.10.9"
+# The fleet-plan aggregator (CellCost / InstanceRecommendation /
+# recommend_instance). Zero heavy deps — pulls nothing GPU/codec.
+zenfleet-core = { version = "0.0.1", path = "../zenfleet-core" }
 clap = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 # `preserve_order` keeps the JSON `compare` output in the order we insert

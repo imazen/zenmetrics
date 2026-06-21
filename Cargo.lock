@@ -7017,6 +7017,7 @@ dependencies = [
  "ultrahdr-rs",
  "zenavif",
  "zencodec",
+ "zenfleet-core",
  "zenforks-cubecl",
  "zengif",
  "zenjpeg",

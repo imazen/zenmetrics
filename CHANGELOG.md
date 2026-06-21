@@ -35,6 +35,33 @@ Workspace conventions per the global rules:
   estimate (from each codec's `estimate_encode_resources`) from declare to
   worker. Advisory and **not** part of the content-addressed `JobId` — so
   attaching/refining/dropping it never changes identity or dedup (9992473b).
+- **Fleet-plan aggregator** (`provision::recommend_instance`): the *inverse* of
+  `schedule` — turns a sweep manifest (`CellCost` per encode+score work item)
+  into an `InstanceRecommendation` (host RAM, cores, GPU VRAM, per-box encode
+  concurrency, box count for a target wall-clock). Adds the **GPU/VRAM
+  dimension** `schedule` lacks: VRAM = `max(score_vram)` (GPU scoring
+  serialized on one device), host RAM = `concurrency × max(encode_ram) ×
+  1.25`, `box_count = ceil((total_encode_ms/concurrency + total_score_ms) /
+  target)` per the "N CPU encoders share one GPU" onstart model. Generic — no
+  codec/metric dep (68829ae4).
+
+## Metrics (GPU)
+
+### Added
+
+- **Score-time estimators** on every GPU metric crate:
+  `estimate_score_time_ms(w, h)` + `estimate_score_resources(w, h)` +
+  `ScoreResourceEstimate { vram_bytes, time_ms }`, alongside the existing VRAM
+  estimator in the always-compiled `memory_mode` module. Pure size-math (no
+  GPU, no alloc) — callable on a GPU-less host for fleet planning / CI.
+  **Calibrated** for cvvdp (U-shaped ns/px, anchored at
+  `time_size_sweep_tick164_2026-05-14.md`: 64²=526.81, 256²=90.81, 1MP=28.48,
+  12MP=38.83 ns/px) (a6fc826e), zensim (monotone, from
+  `zensim_diffmap_overhead_2026-05-27.tsv` score_only_ms) and ssim2
+  (single-256² anchor + batch-amortization decomposition, from
+  `bench_batch_2026-05-02.md`); **conservative placeholders** (clearly labeled
+  NOT CALIBRATED, 100 ns/px) for butteraugli / dssim / iwssim pending a
+  GPU-box sweep (3a7aa5ac).
 
 ## zenfleet-ctl
 
@@ -53,6 +80,17 @@ Workspace conventions per the global rules:
   R2 ledger + claims: progress/ETA, worker liveness (active/stalled/idle),
   stalled claims past TTL, poison + at-risk cells (`--poison-out` exports a
   deactivation list), recent failures (2728779a).
+- **`fleet-plan` subcommand** — turns a sweep description (`--sizes` ×
+  `--variants-per-size` × `--metrics` GPU metrics) into an
+  `InstanceRecommendation` (host RAM, cores, GPU VRAM, per-box encode
+  concurrency, box count) via `zenfleet_core::recommend_instance`. Score-side
+  cost comes from each GPU metric's `estimate_gpu_memory_bytes` +
+  `estimate_score_time_ms` (reached through the `zenmetrics-api` re-exports,
+  gated per `gpu-<metric>` feature); encode-side footprint comes from explicit
+  `--encode-peak-ram-mb` / `--encode-threads` / `--encode-ms` flags (a
+  codec-free path, so the planner works without the codec build that the
+  in-flight `zencodec` 0.1.24 migration currently blocks). `--json` for machine
+  output. Defaults to the tiny/small/medium/large size buckets.
 
 > The codec-linked half — `PlannedConfig::estimate_resources` (each codec's
 > own `heuristics`/`estimate_encode_resources` model surfaced per planned cell)

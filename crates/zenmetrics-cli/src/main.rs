@@ -23,6 +23,7 @@
 mod assemble;
 mod compare;
 mod decode;
+mod fleet_plan;
 #[cfg(feature = "hdr")]
 mod hdr;
 mod metrics;
@@ -159,6 +160,14 @@ enum Command {
     /// the pre-encoded corpus (downsample-rescore must not fluctuate).
     #[cfg(feature = "cpu-metrics")]
     SizeInvariance(size_invariance::SizeInvarianceArgs),
+    /// Plan a sweep's fleet: from a list of source sizes × variants × GPU
+    /// metrics (+ an encode footprint), recommend an instance spec (host RAM,
+    /// cores, GPU VRAM) and box count to finish within a target wall-clock.
+    /// Builds each cell's cost from the metric VRAM/time estimators and the
+    /// encode `ResourceEstimate`, then aggregates via
+    /// `zenfleet_core::recommend_instance`. GPU metric estimators require the
+    /// matching `--features gpu-<metric>` at build time.
+    FleetPlan(fleet_plan::FleetPlanArgs),
     /// Print available metrics and which require a GPU.
     ListMetrics,
     /// Print supported input formats.
@@ -685,6 +694,13 @@ fn main() -> ExitCode {
         },
         #[cfg(feature = "assemble")]
         Command::Assemble(args) => match crate::assemble::run_assemble(&args) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Command::FleetPlan(args) => match fleet_plan::run(args) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");
