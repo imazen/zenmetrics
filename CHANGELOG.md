@@ -91,13 +91,25 @@ Workspace conventions per the global rules:
   codec-free path, so the planner works without compiling a codec). `--json`
   for machine output. Defaults to the tiny/small/medium/large size buckets.
 
-> The codec-linked half — wiring each codec's own
-> `heuristics`/`estimate_encode_resources` model into the fleet-plan encode
-> side (replacing the explicit `--encode-*` flags) — is a follow-up. The
-> `zencodec` 0.1.24 migration (which CI previously pinned codecs *before*) is
-> now complete, so the dependency that blocked it is cleared; the wiring itself
-> is left for a separate change (it needs a `--codec` arg + per-codec
-> feature-gated `EncoderConfig` dispatch).
+### Changed
+
+- **`fleet-plan` derives the encode cost from each codec's
+  `estimate_encode_resources` via a new `--codec <name>`** (jpeg / webp / avif
+  / png / gif / tiff / jxl — `zen`-prefixed forms also accepted). Per `--sizes`
+  it builds a representative default `EncoderConfig` (the codec's public
+  trait-config type, one config per codec — not via a `SweepVariant`) and reads
+  the returned `ResourceEstimate` (already `at_cores`-scaled by the codec):
+  `peak_memory_bytes_max` (→ peak RAM), `threading().effective_threads(cores)`
+  (→ threads), `wall_ms` (→ encode ms). Six codecs return a calibrated
+  `heuristics` estimate; zentiff returns a structural (uncalibrated) one. The
+  `--encode-peak-ram-mb` / `--encode-threads` / `--encode-ms` flags are now
+  **per-field overrides** (a set flag wins over the codec estimate); with
+  neither `--codec` nor any flag, the command errors clearly. `--codec`
+  requires the `sweep` feature plus the matching per-codec feature (so the
+  codec's `zencodec`-gated wrapper compiles — `sweep` now activates
+  `zenwebp/zencodec` + `zenavif/zencodec`, and the `gif`/`tiff` features
+  activate theirs). Uses a single representative config per codec; per-variant
+  accuracy via an actual `--plan` is a future refinement. (f8f6560)
 
 ## zensim-gpu
 

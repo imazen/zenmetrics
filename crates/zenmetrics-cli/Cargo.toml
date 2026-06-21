@@ -52,8 +52,12 @@ avif = ["dep:zenavif"]
 jxl = ["dep:zenjxl", "dep:jxl-encoder"]
 # gif/tiff are plan-only sweep codecs (no `--knob-grid` vocabulary). Each
 # pulls only its own codec crate so a sweep that doesn't target it stays lean.
-gif = ["dep:zengif"]
-tiff = ["dep:zentiff"]
+# `zencodec` turns on each codec's `GifEncoderConfig` / `TiffEncoderCodecConfig`
+# wrapper — the type that implements `estimate_encode_resources`, which the
+# `fleet-plan --codec` path constructs at a representative default to size the
+# encode side.
+gif = ["dep:zengif", "zengif/zencodec"]
+tiff = ["dep:zentiff", "zentiff/zencodec"]
 
 # HDR scoring: decode HDR sources (EXR / Ultra HDR JPEG / gain-map HEIC) to
 # absolute-luminance, then prep per metric — PU21 for the SDR metrics,
@@ -135,6 +139,13 @@ sweep = [
     "zenjpeg?/__test-utils",
     "zenwebp?/__expert",
     "zenavif?/__expert",
+    # `zencodec` turns on each codec's `WebpEncoderConfig` / `AvifEncoderConfig`
+    # wrapper — the type implementing `estimate_encode_resources` that the
+    # `fleet-plan --codec` path constructs at a representative default. (jpeg's
+    # is already on via the `jpeg` feature's `zenjpeg/zencodec`; jxl's via the
+    # `zenjxl?/zencodec` line below; png's zencodec dep is non-optional.)
+    "zenwebp?/zencodec",
+    "zenavif?/zencodec",
     "zenjxl?/__expert",
     # zenjxl::sweep is gated on encode + __expert.
     "zenjxl?/encode",
