@@ -332,3 +332,176 @@ pub fn estimate_gpu_memory_bytes_for_mode(width: u32, height: u32, mode: MemoryM
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Score-time estimate (calibrated)
+// ---------------------------------------------------------------------------
+
+/// CVVDP JOD per-pixel cost (ns/px) anchored at the four size buckets of
+/// the committed size-sweep. The curve is **non-monotone (U-shaped)**:
+/// per-call dispatch + cubecl-init overhead dominates at tiny/small sizes,
+/// and DRAM bandwidth saturation lifts it again at large sizes; the minimum
+/// sits near 1 MP.
+///
+/// Provenance: `crates/cvvdp-gpu/benchmarks/time_size_sweep_tick164_2026-05-14.md`
+/// (commit `8a6de7be` on `feat/cvvdp-gpu-scaffold`, RTX-class CUDA on the
+/// 7950X host, 5-iter median, `compute_dkl_jod` full pipeline). The four
+/// `(pixels, ns_per_px)` anchors are the `jod` column of that table:
+///
+/// | bucket | dims        | pixels     | jod ns/px |
+/// | ----   | ----        | ----       | ----      |
+/// | tiny   |   64 ×   64 |      4 096 |    526.81 |
+/// | small  |  256 ×  256 |     65 536 |     90.81 |
+/// | medium | 1024 × 1024 |  1 048 576 |     28.48 |
+/// | large  | 4000 × 3000 | 12 000 000 |     38.83 |
+const CVVDP_NS_PER_PX_ANCHORS: &[(f64, f64)] = &[
+    (4_096.0, 526.81),
+    (65_536.0, 90.81),
+    (1_048_576.0, 28.48),
+    (12_000_000.0, 38.83),
+];
+
+/// Interpolate a per-pixel cost (ns/px) from a `(pixels, ns_per_px)` anchor
+/// table, **piecewise-linear in `log2(pixels)`** (the natural axis for a
+/// fixed-overhead-amortizing curve spanning 4 K → 12 M pixels). Outside the
+/// anchored range the endpoint value is held flat — we never extrapolate the
+/// slope past measured data. `anchors` must be sorted ascending by pixel
+/// count and non-empty.
+#[must_use]
+pub(crate) fn interp_ns_per_px_log(anchors: &[(f64, f64)], pixels: f64) -> f64 {
+    debug_assert!(!anchors.is_empty());
+    let px = pixels.max(1.0);
+    let lx = px.log2();
+    let first = anchors[0];
+    let last = anchors[anchors.len() - 1];
+    if lx <= first.0.log2() {
+        return first.1;
+    }
+    if lx >= last.0.log2() {
+        return last.1;
+    }
+    for w in anchors.windows(2) {
+        let (p0, v0) = w[0];
+        let (p1, v1) = w[1];
+        let (l0, l1) = (p0.log2(), p1.log2());
+        if lx >= l0 && lx <= l1 {
+            let t = if (l1 - l0).abs() < f64::EPSILON {
+                0.0
+            } else {
+                (lx - l0) / (l1 - l0)
+            };
+            return v0 + t * (v1 - v0);
+        }
+    }
+    last.1
+}
+
+/// Estimated single-GPU score wall time (ms) for a `width × height` CVVDP JOD
+/// pair. Pure size-math — no GPU, no allocation; safe to call on a GPU-less
+/// host (fleet planning, CI). `time_ms = ns_per_px(pixels) · pixels / 1e6`,
+/// with `ns_per_px` interpolated from [`CVVDP_NS_PER_PX_ANCHORS`].
+///
+/// This is the Full-mode steady-state estimate (the measured pipeline is
+/// `compute_dkl_jod`). Strip modes trade VRAM for some extra per-strip
+/// launch overhead; this estimate does not model that delta and is treated
+/// as a lower bound for strip scoring.
+///
+/// Returns `0.0` for a degenerate (zero-area) image.
+#[must_use]
+pub fn estimate_score_time_ms(width: u32, height: u32) -> f32 {
+    let pixels = (width as u64).saturating_mul(height as u64) as f64;
+    if pixels == 0.0 {
+        return 0.0;
+    }
+    let ns_per_px = interp_ns_per_px_log(CVVDP_NS_PER_PX_ANCHORS, pixels);
+    ((ns_per_px * pixels) / 1.0e6) as f32
+}
+
+/// A metric's predicted per-pair resource use: GPU working-set bytes + score
+/// wall time. The fleet planner sums `time_ms` across a cell's metrics and
+/// takes the `max` of `vram_bytes` (GPU scoring is serialized on the device).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScoreResourceEstimate {
+    /// Peak GPU working-set in bytes for this metric at this size (Full mode).
+    pub vram_bytes: usize,
+    /// Estimated single-GPU score wall time in milliseconds.
+    pub time_ms: f32,
+}
+
+/// Bundle the VRAM estimate ([`estimate_gpu_memory_bytes_usize`]) and the
+/// score-time estimate ([`estimate_score_time_ms`]) into one
+/// [`ScoreResourceEstimate`] — the clean per-metric call for the fleet
+/// planner. Pure math; no GPU required.
+#[must_use]
+pub fn estimate_score_resources(width: u32, height: u32) -> ScoreResourceEstimate {
+    ScoreResourceEstimate {
+        vram_bytes: estimate_gpu_memory_bytes_usize(width, height),
+        time_ms: estimate_score_time_ms(width, height),
+    }
+}
+
+#[cfg(test)]
+mod score_time_tests {
+    use super::*;
+
+    /// ns/px = time_ms × 1e6 / pixels — recover the per-pixel cost so we can
+    /// compare against the calibration anchors directly.
+    fn ns_per_px(width: u32, height: u32) -> f64 {
+        let px = (width as u64 * height as u64) as f64;
+        (estimate_score_time_ms(width, height) as f64) * 1.0e6 / px
+    }
+
+    #[test]
+    fn time_is_positive_and_scales_with_pixels() {
+        assert!(estimate_score_time_ms(64, 64) > 0.0);
+        // More pixels → more total time (despite the U-shaped per-pixel cost,
+        // total wall is monotone in pixels across these buckets).
+        assert!(estimate_score_time_ms(256, 256) > estimate_score_time_ms(64, 64));
+        assert!(estimate_score_time_ms(1024, 1024) > estimate_score_time_ms(256, 256));
+        assert!(estimate_score_time_ms(4000, 3000) > estimate_score_time_ms(1024, 1024));
+        // Degenerate image → zero.
+        assert_eq!(estimate_score_time_ms(0, 0), 0.0);
+        assert_eq!(estimate_score_time_ms(100, 0), 0.0);
+    }
+
+    #[test]
+    fn matches_calibration_anchor_points() {
+        // At each measured bucket the recovered ns/px must equal the anchor
+        // (interpolation is exact at the knots). 1% tolerance for the
+        // f64→f32 round-trip through time_ms.
+        for &(w, h, expect) in &[
+            (64u32, 64u32, 526.81f64),
+            (256, 256, 90.81),
+            (1024, 1024, 28.48),
+            (4000, 3000, 38.83),
+        ] {
+            let got = ns_per_px(w, h);
+            let rel = (got - expect).abs() / expect;
+            assert!(rel < 0.01, "{w}x{h}: ns/px {got} vs anchor {expect}");
+        }
+    }
+
+    #[test]
+    fn u_shape_minimum_is_near_medium() {
+        // The per-pixel cost dips to its minimum near 1 MP then rises again —
+        // medium must be cheaper per pixel than both small and large.
+        assert!(ns_per_px(1024, 1024) < ns_per_px(256, 256));
+        assert!(ns_per_px(1024, 1024) < ns_per_px(4000, 3000));
+    }
+
+    #[test]
+    fn flat_extrapolation_beyond_anchor_endpoints() {
+        // Below the tiny anchor (4096 px): held at the tiny ns/px.
+        assert!((ns_per_px(32, 32) - 526.81).abs() / 526.81 < 0.01);
+        // Above the large anchor (12 MP): held at the large ns/px.
+        assert!((ns_per_px(8000, 6000) - 38.83).abs() / 38.83 < 0.01);
+    }
+
+    #[test]
+    fn resources_bundle_matches_parts() {
+        let r = estimate_score_resources(1024, 1024);
+        assert_eq!(r.time_ms, estimate_score_time_ms(1024, 1024));
+        assert_eq!(r.vram_bytes, estimate_gpu_memory_bytes_usize(1024, 1024));
+        assert!(r.vram_bytes > 0);
+    }
+}

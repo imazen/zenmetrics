@@ -227,7 +227,10 @@ pub mod presets;
 pub mod session;
 
 // Unified MemoryMode surface — see `memory_mode.rs`.
-pub use memory_mode::{MemoryMode, ResolvedMode, estimate_gpu_memory_bytes_usize, vram_cap_bytes};
+pub use memory_mode::{
+    MemoryMode, ResolvedMode, ScoreResourceEstimate, estimate_gpu_memory_bytes_usize,
+    estimate_score_resources, estimate_score_time_ms, vram_cap_bytes,
+};
 
 // CvvdpParams stays unconditionally public — it's part of the opaque
 // API surface and contains no cubecl types.
