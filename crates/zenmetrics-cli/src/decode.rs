@@ -195,7 +195,15 @@ fn decode_webp(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
 
 #[cfg(feature = "avif")]
 fn decode_avif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
-    let pixels = zenavif::decode(data).map_err(|e| format!("zenavif: {e}"))?;
+    // Single-threaded decode (threads(1)): rav1d-safe's default multi-threaded
+    // frame decode (n_threads=0=auto) races on the frame buffer under the sweep's
+    // rayon parallelism — DisjointMut overlap panic / deadlock (imazen/rav1d-safe#15).
+    // One thread per decode removes the internal race; cross-decode parallelism is
+    // safe because each decode owns its decoder/frame. ~no throughput loss in the
+    // sweep (the rayon walk already parallelizes across cells).
+    let cfg = zenavif::DecoderConfig::new().threads(1);
+    let pixels = zenavif::decode_with(data, &cfg, &enough::Unstoppable)
+        .map_err(|e| format!("zenavif: {e}"))?;
     pixel_buffer_to_rgb8(&pixels)
 }
 
