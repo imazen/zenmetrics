@@ -17,6 +17,24 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+## zenmetrics-cli
+
+### Fixed
+
+- **Sweep deadlock running CPU metrics with `--encoded-out-dir`** (and latent
+  for any large CPU-metric sweep): CPU metrics (zensim/ssim2/butteraugli/dssim)
+  parallelize internally with rayon, but the per-cell dispatch ran them through
+  `MetricCache::lock_global` — holding the global GPU-cache mutex across the
+  metric's nested rayon join, from inside the outer rayon `par_iter` over cells.
+  The lock holder waited (rayon `SpinLatch`) for worker threads that were all
+  parked on that same mutex → total deadlock (28 workers in `futex_do_wait` at
+  cache.rs:265; holder in `zensim::streaming::convert_source_to_xyb_into`).
+  `--encoded-out-dir` perturbed per-cell timing enough to trigger it every run.
+  CPU metrics now take the uncached `run_metric` path with **no** global lock
+  (the documented "CPU metrics are NOT routed through this cache" contract),
+  which also lets them parallelize across cells instead of serializing
+  (8c373d54).
+
 ## zenfleet-core
 
 ### Added
