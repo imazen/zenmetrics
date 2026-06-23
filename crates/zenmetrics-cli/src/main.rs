@@ -27,6 +27,21 @@ mod fleet_plan;
 #[cfg(feature = "hdr")]
 mod hdr;
 mod metrics;
+
+/// A decoded `(reference, distorted)` RGB8 pair, or the decode error. Used by
+/// `score-pairs` to thread an already-decoded HDR u8 feeding through the
+/// per-pair scoring branches in place of a fresh `decode_image_to_rgb8`.
+#[cfg(feature = "sweep")]
+type DecodedRgb8Pair = Result<(decode::Rgb8Image, decode::Rgb8Image), Box<dyn std::error::Error>>;
+
+/// Per-side decode result for a `(reference, distorted)` pair — one `Result`
+/// each, matching the `(decode(ref), decode(dist))` shape the `score-pairs`
+/// loop destructures. Lets a per-side failure surface individually.
+#[cfg(feature = "sweep")]
+type DecodedRgb8Sides = (
+    Result<decode::Rgb8Image, Box<dyn std::error::Error>>,
+    Result<decode::Rgb8Image, Box<dyn std::error::Error>>,
+);
 mod output;
 #[cfg(feature = "cpu-metrics")]
 mod size_invariance;
@@ -523,6 +538,29 @@ struct ScorePairsArgs {
     /// sidecar.
     #[arg(long, default_value_t = false)]
     fail_on_bogus: bool,
+    /// Treat each row's ref/dist as HDR sources (16-bit PQ PNG / EXR /
+    /// Ultra HDR JPEG / gain-map HEIC). Each pair decodes to absolute
+    /// luminance (cd/m²), then PU21-encodes for the SDR metrics (cvvdp +
+    /// butteraugli-gpu get their native linear-planes path with peak +
+    /// linear EOTF) — the SPLIT-fleet / datagen HDR ingest, matching
+    /// `batch --hdr` and `sweep --hdr`. The zensim feature sidecar
+    /// (`--feature-output`) is extracted from the PU21 u8 feeding (the
+    /// GPU-zensim HDR shell). Requires the `hdr` build feature. See
+    /// zensim `docs/HDR_PLAN.md`.
+    #[cfg(feature = "hdr")]
+    #[arg(long)]
+    hdr: bool,
+    /// HDR→u8 transfer for the SDR-metric path: `pu-rescale` (default — PU21
+    /// rescaled to fit u8 with no highlight clamp; best vs HDR MOS — ssim2
+    /// 0.65 / dssim 0.66 SRCC; applies only to the u8-shell metrics — iwssim
+    /// and GPU ssim2 use float/integrated feedings and ignore this), `pq`
+    /// (close second, simplest); `pu-clamp` was removed (legacy degraded path)
+    /// (legacy, degrades highlights — ssim2 0.55). cvvdp + butteraugli-gpu use
+    /// their native linear-planes path and ignore this. See
+    /// `benchmarks/hdr_feeding_validation_2026-06-03.md`.
+    #[cfg(feature = "hdr")]
+    #[arg(long, value_enum, default_value = "pu-rescale")]
+    hdr_transfer: crate::hdr::HdrTransfer,
 }
 
 fn main() -> ExitCode {
@@ -1182,9 +1220,27 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
     #[cfg(feature = "gpu-cvvdp")]
     if args.metric == crate::metrics::MetricKind::Cvvdp {
-        let target = match args.display_model.as_deref() {
-            Some(name) => crate::metrics::cvvdp_gpu::DisplayTarget::by_name(name)?,
-            None => crate::metrics::cvvdp_gpu::DisplayTarget::default(),
+        // --hdr swaps in the HDR display target (peak + linear EOTF) so the
+        // faithful linear-planes path in the loop reconstructs absolute nits.
+        // Mirrors `batch --hdr`'s cvvdp construction.
+        #[cfg(feature = "hdr")]
+        let hdr_target = args.hdr;
+        #[cfg(not(feature = "hdr"))]
+        let hdr_target = false;
+        let target = if hdr_target {
+            #[cfg(feature = "hdr")]
+            {
+                crate::metrics::cvvdp_gpu::DisplayTarget::hdr(hdr::HDR_DISPLAY_PEAK_NITS)
+            }
+            #[cfg(not(feature = "hdr"))]
+            {
+                unreachable!()
+            }
+        } else {
+            match args.display_model.as_deref() {
+                Some(name) => crate::metrics::cvvdp_gpu::DisplayTarget::by_name(name)?,
+                None => crate::metrics::cvvdp_gpu::DisplayTarget::default(),
+            }
         };
         cvvdp_scorer = Some(
             crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(args.gpu_runtime, target)
@@ -1266,6 +1322,115 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             .map(String::from)
             .unwrap_or_else(|| "{}".to_string());
 
+        // HDR rows decode to absolute luminance (cd/m²) once, then prep per
+        // metric — exactly like `batch --hdr` / `sweep --hdr`. cvvdp and
+        // butteraugli-gpu take their FAITHFUL native linear-planes path
+        // (display-relative planes, no u8 clamp, peak-aware) and short-circuit
+        // into `faithful_hdr_result` below. Every other metric — and the
+        // zensim feature path — consumes the PU21 u8 feeding (`to_sdr_rgb8`,
+        // the GPU-zensim HDR shell) computed once and threaded through the
+        // existing decode sites in place of `decode_image_to_rgb8`. When the
+        // `hdr` feature is off, `hdr_mode` is `false` and nothing here runs.
+        #[cfg(feature = "hdr")]
+        let hdr_mode = args.hdr;
+        #[cfg(not(feature = "hdr"))]
+        let _hdr_mode = false;
+
+        // Faithful HDR cvvdp / butteraugli-gpu: decode → display-relative
+        // linear planes → native scorer. Produces a per-pair score Vec when it
+        // fires; otherwise `None` and the loop falls through to the u8 paths.
+        // Only mutated on the `hdr` path; immutable `None` otherwise.
+        #[cfg(feature = "hdr")]
+        let mut faithful_hdr_result: Option<Result<Vec<f64>, Box<dyn std::error::Error>>> = None;
+        #[cfg(not(feature = "hdr"))]
+        let faithful_hdr_result: Option<Result<Vec<f64>, Box<dyn std::error::Error>>> = None;
+        #[cfg(feature = "hdr")]
+        if hdr_mode {
+            // cvvdp faithful linear-planes (paired with DisplayTarget::hdr).
+            #[cfg(feature = "gpu-cvvdp")]
+            if args.metric == crate::metrics::MetricKind::Cvvdp
+                && let Some(scorer) = cvvdp_scorer.as_mut()
+            {
+                faithful_hdr_result = Some((|| {
+                    let r = hdr::decode_to_nits(&ref_path)?;
+                    let d = hdr::decode_to_nits(&dist_path)?;
+                    if r.width != d.width || r.height != d.height {
+                        return Err(format!(
+                            "dimension mismatch: {} ({}x{}) vs {} ({}x{})",
+                            ref_path.display(),
+                            r.width,
+                            r.height,
+                            dist_path.display(),
+                            d.width,
+                            d.height
+                        )
+                        .into());
+                    }
+                    let (rr, rg, rb) = hdr::to_cvvdp_linear_planes(&r);
+                    let (dr, dg, db) = hdr::to_cvvdp_linear_planes(&d);
+                    scorer
+                        .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, r.width, r.height)
+                        .map(|v| vec![v])
+                })());
+            }
+            // butteraugli-gpu faithful linear-planes (intensity_target = peak).
+            #[cfg(feature = "gpu-butteraugli")]
+            if faithful_hdr_result.is_none()
+                && args.metric == crate::metrics::MetricKind::ButteraugliGpu
+            {
+                faithful_hdr_result = Some((|| {
+                    let r = hdr::decode_to_nits(&ref_path)?;
+                    let d = hdr::decode_to_nits(&dist_path)?;
+                    if r.width != d.width || r.height != d.height {
+                        return Err(format!(
+                            "dimension mismatch: {} ({}x{}) vs {} ({}x{})",
+                            ref_path.display(),
+                            r.width,
+                            r.height,
+                            dist_path.display(),
+                            d.width,
+                            d.height
+                        )
+                        .into());
+                    }
+                    match hdr::score_via_hdr_scorer(
+                        args.metric,
+                        &r,
+                        &d,
+                        args.hdr_transfer,
+                        args.gpu_runtime,
+                    ) {
+                        Some(rows) => rows.map(|cols| cols.into_iter().map(|(_, v)| v).collect()),
+                        // Backend not covered by the HDR scorer (e.g. hip) —
+                        // fall through to the u8 path by leaving result None.
+                        None => Err("hdr scorer returned no rows for butteraugli-gpu".into()),
+                    }
+                })());
+            }
+        }
+
+        // HDR u8 feeding for the non-faithful path (zensim features + every
+        // other metric): decode to nits once and PU21/cvvdp-u8 encode per the
+        // metric, mirroring `batch --hdr`'s `(reference, distorted)` block.
+        // Decoded lazily only when an HDR u8 path is actually taken.
+        #[cfg(feature = "hdr")]
+        let hdr_u8_pair: Option<DecodedRgb8Pair> = if hdr_mode && faithful_hdr_result.is_none() {
+            Some((|| {
+                let r = hdr::decode_to_nits(&ref_path)?;
+                let d = hdr::decode_to_nits(&dist_path)?;
+                if args.metric == crate::metrics::MetricKind::Cvvdp {
+                    Ok((hdr::to_cvvdp_rgb8(&r).0, hdr::to_cvvdp_rgb8(&d).0))
+                } else {
+                    Ok((
+                        hdr::to_sdr_rgb8(&r, args.hdr_transfer),
+                        hdr::to_sdr_rgb8(&d, args.hdr_transfer),
+                    ))
+                }
+            })())
+        } else {
+            None
+        };
+
         // Feature-emit fast path: when a zensim feature sidecar is
         // requested, decode the pair once, compute (score, features) in a
         // single call, and remember the features so a row gets pushed
@@ -1279,11 +1444,44 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         // scoring branches.
         let want_features = feature_writer.is_some() && metric_is_zensim;
         let mut features_for_pair: Option<Vec<f64>> = None;
-        let pair_result: Result<Vec<f64>, Box<dyn std::error::Error>> = if want_features {
-            match (
-                decode::decode_image_to_rgb8(&ref_path),
-                decode::decode_image_to_rgb8(&dist_path),
-            ) {
+        let pair_result: Result<Vec<f64>, Box<dyn std::error::Error>> = if let Some(faithful) =
+            faithful_hdr_result
+        {
+            // cvvdp / butteraugli-gpu faithful HDR path already produced the
+            // score(s); skip all u8 decode/score branches for this pair.
+            faithful
+        } else if want_features {
+            // Decode the pair to the zensim feeding: PU21 u8 in HDR mode (the
+            // GPU-zensim HDR shell, `to_sdr_rgb8`), plain sRGB8 otherwise. The
+            // HDR u8 pair was decoded once above; reuse it here.
+            let decoded_pair: DecodedRgb8Sides = {
+                #[cfg(feature = "hdr")]
+                {
+                    if hdr_mode {
+                        match hdr_u8_pair {
+                            Some(Ok((r, d))) => (Ok(r), Ok(d)),
+                            Some(Err(e)) => (Err(e), Err("hdr decode failed".into())),
+                            None => (
+                                decode::decode_image_to_rgb8(&ref_path),
+                                decode::decode_image_to_rgb8(&dist_path),
+                            ),
+                        }
+                    } else {
+                        (
+                            decode::decode_image_to_rgb8(&ref_path),
+                            decode::decode_image_to_rgb8(&dist_path),
+                        )
+                    }
+                }
+                #[cfg(not(feature = "hdr"))]
+                {
+                    (
+                        decode::decode_image_to_rgb8(&ref_path),
+                        decode::decode_image_to_rgb8(&dist_path),
+                    )
+                }
+            };
+            match decoded_pair {
                 (Ok(r), Ok(d)) => {
                     let res: Result<(f64, Vec<f64>), Box<dyn std::error::Error>> = if args.metric
                         == crate::metrics::MetricKind::ZensimGpu
@@ -1316,24 +1514,64 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             // Returns Vec<f64> aligned with `metric_cols`. Cvvdp's cached
             // scorer path emits a single column; everything else routes
             // through `score_one_pair` → `run_metric`, which can emit
-            // multiple columns (e.g. butteraugli's max + pnorm3).
+            // multiple columns (e.g. butteraugli's max + pnorm3). In HDR
+            // mode the u8 feeding (cvvdp-norm or PU21) was decoded once
+            // above; feed those images directly to the scorer / `run_metric`.
+            #[cfg(feature = "hdr")]
+            let hdr_images: Option<DecodedRgb8Pair> = if hdr_mode { hdr_u8_pair } else { None };
             #[cfg(feature = "gpu-cvvdp")]
             {
                 if let Some(scorer) = cvvdp_scorer.as_mut() {
-                    match (
+                    #[cfg(feature = "hdr")]
+                    let decoded = match hdr_images {
+                        Some(res) => res,
+                        None => match (
+                            decode::decode_image_to_rgb8(&ref_path),
+                            decode::decode_image_to_rgb8(&dist_path),
+                        ) {
+                            (Ok(r), Ok(d)) => Ok((r, d)),
+                            (Err(e), _) | (_, Err(e)) => Err(e),
+                        },
+                    };
+                    #[cfg(not(feature = "hdr"))]
+                    let decoded: DecodedRgb8Pair = match (
                         decode::decode_image_to_rgb8(&ref_path),
                         decode::decode_image_to_rgb8(&dist_path),
                     ) {
-                        (Ok(r), Ok(d)) => scorer.score(&r, &d).map(|v| vec![v]),
+                        (Ok(r), Ok(d)) => Ok((r, d)),
                         (Err(e), _) | (_, Err(e)) => Err(e),
+                    };
+                    match decoded {
+                        Ok((r, d)) => scorer.score(&r, &d).map(|v| vec![v]),
+                        Err(e) => Err(e),
                     }
                 } else {
-                    score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
+                    #[cfg(feature = "hdr")]
+                    let hdr_pair = hdr_images;
+                    #[cfg(not(feature = "hdr"))]
+                    let hdr_pair = None;
+                    score_one_pair_maybe_hdr(
+                        args.metric,
+                        &ref_path,
+                        &dist_path,
+                        args.gpu_runtime,
+                        hdr_pair,
+                    )
                 }
             }
             #[cfg(not(feature = "gpu-cvvdp"))]
             {
-                score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
+                #[cfg(feature = "hdr")]
+                let hdr_pair = hdr_images;
+                #[cfg(not(feature = "hdr"))]
+                let hdr_pair = None;
+                score_one_pair_maybe_hdr(
+                    args.metric,
+                    &ref_path,
+                    &dist_path,
+                    args.gpu_runtime,
+                    hdr_pair,
+                )
             }
         };
         let per_pair: Vec<f64> = match pair_result {
@@ -1506,6 +1744,49 @@ fn score_one_pair(
         return Err("metric returned zero scores".into());
     }
     Ok(scores.into_iter().map(|(_, v)| v).collect())
+}
+
+/// `score-pairs` generic scoring with optional pre-decoded HDR feeding.
+///
+/// When `hdr_pair` is `Some`, the pair has already been decoded to the
+/// metric-appropriate u8 feeding (PU21 for SDR-shell metrics, cvvdp-norm for
+/// cvvdp) by the caller's HDR block — score those images directly via
+/// `run_metric` (the same multi-column path `score_one_pair` uses) and never
+/// re-decode the on-disk HDR PNG as if it were sRGB. When `None`, this is the
+/// plain SDR path: delegate to [`score_one_pair`], which decodes from disk.
+/// `hdr_pair` is always `None` in a build without the `hdr` feature.
+#[cfg(feature = "sweep")]
+fn score_one_pair_maybe_hdr(
+    metric: MetricKind,
+    ref_path: &Path,
+    dist_path: &Path,
+    gpu_runtime: GpuRuntime,
+    hdr_pair: Option<DecodedRgb8Pair>,
+) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
+    use crate::metrics::run_metric;
+    match hdr_pair {
+        Some(Ok((reference, distorted))) => {
+            if reference.width != distorted.width || reference.height != distorted.height {
+                return Err(format!(
+                    "dimension mismatch: {} ({}x{}) vs {} ({}x{})",
+                    ref_path.display(),
+                    reference.width,
+                    reference.height,
+                    dist_path.display(),
+                    distorted.width,
+                    distorted.height,
+                )
+                .into());
+            }
+            let scores = run_metric(metric, &reference, &distorted, gpu_runtime)?;
+            if scores.is_empty() {
+                return Err("metric returned zero scores".into());
+            }
+            Ok(scores.into_iter().map(|(_, v)| v).collect())
+        }
+        Some(Err(e)) => Err(e),
+        None => score_one_pair(metric, ref_path, dist_path, gpu_runtime),
+    }
 }
 
 fn cmd_score(
