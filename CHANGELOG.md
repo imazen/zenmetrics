@@ -35,7 +35,7 @@ Workspace conventions per the global rules:
   (see `## zenmetrics-cli` below). New regression gate
   `tests/it/cached_ref_slot_rebuild.rs` pins the contract — build+score 1024²
   Full, drop, reclaim, build 1448² Full, assert both GPU scoring paths match
-  CPU to ≤0.10 JOD (without the reclaim it fails by ~9 JOD) (PENDING_HASH).
+  CPU to ≤0.10 JOD (without the reclaim it fails by ~9 JOD) (fd55300d).
 
 ## zenmetrics-cli
 
@@ -52,7 +52,7 @@ Workspace conventions per the global rules:
   (it built params via `resolve_default_params`, the matched 372/372 default).
   Fix: the cached zensim-gpu score path now passes `None` regime so
   `build_params` uses the metric's natural (matched) `WithIw`/372 default
-  (PENDING_HASH).
+  (fd55300d).
 - **Score corruption after a same-process pipeline rebuild for a different
   image size** (the `zensim-gpu` stale-page bug above):
   `MetricCache::get_or_build_umbrella` now calls
@@ -62,7 +62,7 @@ Workspace conventions per the global rules:
   existed (warm runtime), so it never hits the fresh-runtime `memory_cleanup`
   panic noted in the 2026-05-22 comment. Applies to every GPU metric's
   rebuild, not just zensim (also trims peak VRAM at dim/regime transitions)
-  (PENDING_HASH).
+  (fd55300d).
 
 - **Sweep deadlock running CPU metrics with `--encoded-out-dir`** (and latent
   for any large CPU-metric sweep): CPU metrics (zensim/ssim2/butteraugli/dssim)
