@@ -87,6 +87,7 @@ CODEC=$CODEC
 PLAN=$PLAN
 QG=$QG
 BUDGET=$BUDGET
+${THREADS:+RAYON_NUM_THREADS=$THREADS}
 ENV
 cat > /root/r/worker.sh <<'WORK'
 set -e
