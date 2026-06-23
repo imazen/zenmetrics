@@ -15,7 +15,12 @@
 set -u
 SRC=/mnt/v/output/picker-pipeline-2026-06-22
 OUT=/home/lilith/picker-pp
-CORPUS=${CORPUS:-corpus}          # jxl/webp originals: corpus(154)/corpus64(64). Bigger = less seed noise.
+# Decoupled per-codec corpora. jxl effort 5-9 encode is slow, so default both to
+# 64 imgs (~1.5-2h total) — modes_full's cell richness, not corpus size, is what
+# fixes the coarse rd_core overhead. Raise JXL_CORPUS=corpus (154) for a longer
+# lower-noise run.
+WEBP_CORPUS=${WEBP_CORPUS:-corpus64}
+JXL_CORPUS=${JXL_CORPUS:-corpus64}
 QG=${QG:-"5,15,30,50,70,85,95"}   # 7 web-weighted q's (low-q dense per CLAUDE.md)
 export LD_LIBRARY_PATH=/usr/lib/wsl/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}
 BIN=/home/lilith/work/zen/zenmetrics/target/release/zenmetrics
@@ -27,10 +32,10 @@ combo() { local c=$1 corp=$2 plan=$3 budget=$4 out=$5
   echo "=== $(date -u +%H:%M:%S) $c $plan rc=$? rows=$(wc -l < "$OUT/sweeps/$out" 2>/dev/null) ==="
 }
 # webp: modes_full covers both
-combo zenwebp "${CORPUS}64" modes_full 300 zenwebp.both.tsv
+combo zenwebp "$WEBP_CORPUS" modes_full 300 zenwebp.both.tsv
 # jxl: modes_full (categorical) + scalar_dense (effort), then merge
-combo zenjxl  "$CORPUS"     modes_full   200 zenjxl.modes.tsv
-combo zenjxl  "$CORPUS"     scalar_dense 120 zenjxl.scalar.tsv
+combo zenjxl  "$JXL_CORPUS"  modes_full   200 zenjxl.modes.tsv
+combo zenjxl  "$JXL_CORPUS"  scalar_dense 120 zenjxl.scalar.tsv
 # merge jxl omnis (same header) -> zenjxl.both.tsv
 { head -1 "$OUT/sweeps/zenjxl.modes.tsv"; tail -n +2 -q "$OUT/sweeps/zenjxl.modes.tsv" "$OUT/sweeps/zenjxl.scalar.tsv"; } > "$OUT/sweeps/zenjxl.both.tsv"
 echo "merged jxl: $(wc -l < "$OUT/sweeps/zenjxl.both.tsv") rows"
