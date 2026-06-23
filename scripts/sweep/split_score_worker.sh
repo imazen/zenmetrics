@@ -30,6 +30,10 @@ METRICS="${ZEN_METRICS:-butteraugli-gpu cvvdp ssim2-gpu zensim-gpu dssim-gpu}"; 
 export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto
 [ -n "${R2_SESSION_TOKEN:-}" ] && export AWS_SESSION_TOKEN="$R2_SESSION_TOKEN"
 s5(){ s5cmd --endpoint-url "$EP" "$@"; }
+# tee everything + upload the worker log to R2 on exit (vast's log relay is
+# unreliable; this gives a debuggable record at sidecars/worker.log regardless).
+LOG=/tmp/split_worker.log; exec > >(tee -a "$LOG") 2>&1
+trap 's5 cp "$LOG" "s3://$BUCKET/$PRE/sidecars/worker.log" 2>/dev/null || true' EXIT
 mkdir -p /data/variants /data/ref
 echo "[split] worker=$(hostname) pull s3://$BUCKET/$PRE/ metrics='$METRICS'" >&2
 # variants may be loose files or per-box tarballs (hetzner_cpu_sweep persists tarballs)

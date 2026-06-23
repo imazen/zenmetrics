@@ -367,6 +367,29 @@ those revs or newer (PLAN_SWEEPS.md §6 "Codec-rev pairing").
   destroying burn \$/hr until externally cleaned up — that's the
   cost-leak the 2026-05-18 EXP-LARGER-LARGE incident chased.
 
+## Heterogeneous SPLIT — encode-once (CPU) / score-many (GPU)
+
+For multi-GPU-metric passes (butteraugli + cvvdp + ssim2-gpu + zensim-gpu),
+encode once on cheap CPU and persist the variants, then score every GPU metric
+over those persisted variants — never re-encode per metric.
+
+- **CPU half**: `scripts/sweep/hetzner_cpu_sweep.sh` — sweeps with
+  `--encoded-out-dir`, tars variants to R2 (the master record: 372 zensim
+  features / diffmaps / future metrics re-derivable with no re-encode), and
+  emits `pairs.tsv` (`image_path codec q knob_tuple_json ref_path dist_path`,
+  in-container `/data/` paths).
+- **GPU half**: `scripts/sweep/split_score_worker.sh` in
+  `ghcr.io/imazen/zenmetrics-sweep:v29-split` (FROM the v29 GPU binary). Pulls
+  variants+ref+pairs.tsv, runs `zenmetrics score-pairs --metric <m>` per GPU
+  metric → one parquet sidecar each. Self-uploads its log to
+  `sidecars/worker.log` and self-destroys on success.
+- **vast quirk**: vast runs `--onstart-cmd`, NOT the image ENTRYPOINT — launch
+  via `--onstart-cmd "bash /usr/local/bin/split_score_worker.sh > /var/log/split.log 2>&1"`.
+  Pick a fast-net (`inet_down>300`) CUDA-matched (`cuda_max_good>=12.6`) offer;
+  cheapest offers are slow-pull duds. Snap-docker here can't read `/tmp` — build
+  SPLIT images from a `$HOME` context.
+- Doc: `benchmarks/picker_fleet_2026-06-23.md`; memory `heterogeneous-fleet-split.md`.
+
 ## Known Bugs
 
 - **zenmetrics-api consolidated `it` suite self-poisons when run as ONE
