@@ -433,6 +433,18 @@ over those persisted variants — never re-encode per metric.
   (~2–6 MB/cell accumulation in the encode path, only visible at fleet scale) and
   needs a LARGER heaptrack to pinpoint (deferred — focused task on a free box;
   the small trace doesn't OOM so it can't show the accumulation site).
+  **ROOT CAUSE (larger heaptrack 2026-06-23 — 30 rend × budget 30 = 900 cells →
+  32.33 GB peak, REPRODUCED): `butteraugli::image::BufferPool` accumulation,
+  driven by `jxl-encoder`'s VarDCT perceptual quant refinement.** Top consumer
+  6.35 GB over 81k `BufferPool::take` calls; trace
+  `VarDctEncoder::encode_inner → butteraugli_refine_quant_field →
+  CpuButteraugliBackend::set_reference → Image3F::from_pool_dirty →
+  butteraugli::image::BufferPool::take`. The butteraugli BufferPool grows
+  unbounded across encodes (buffers taken, never returned/capped) — jxl-specific
+  (only jxl VarDCT uses this perceptual backend), encode-path, config-independent.
+  **Both butteraugli + jxl-encoder are SIBLING crates — zenmetrics can't fix it.**
+  Fix lives there: cap/clear the pool, or drop+recreate (or bound-reuse) the
+  perceptual backend per encode. → file issue; jxl fleet blocked until fixed.
 
 - **zenmetrics-api consolidated `it` suite self-poisons when run as ONE
   process** (observed 2026-06-10, pre-existing — A/B-identical 26-test failure
