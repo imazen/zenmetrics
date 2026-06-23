@@ -392,6 +392,22 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **jxl `modes_full` fleet sweep OOMs cpx51 (32 GB) at ~31 GB RSS** (measured
+  2026-06-23; both fleet-jxl3 boxes: zenmetrics `anon-rss` 31.3–31.5 GB →
+  OOM-killed *early*, right after `[sweep] plan modes_full: 141 cells/image`,
+  before producing output). **NOT thread-bound:** box 0 with
+  `RAYON_NUM_THREADS=8` OOM'd identically (31.5 GB) to box 1 at 16 threads — the
+  THREADS/RAYON lever does not reduce it, so the footprint is a fixed/startup
+  allocation in the jxl `modes_full` path (likely the upfront load/plan of the
+  chunk's renditions × the 141-cell expansion, or a per-image over-alloc).
+  jpeg/webp `modes_full` did NOT OOM. BLOCKS the jxl fleet picker. Diagnosis
+  TODO (needs a free box — do NOT concurrent-heavy with rsqrt): heaptrack the
+  jxl `modes_full` sweep, vary chunk size (IMAGES) + `--plan-budget` + threads
+  to locate the 31 GB alloc. Fix hypotheses: smaller per-box chunks (IMAGES cap)
+  if chunk-load-bound; lower `--plan-budget` if cell-bound; or free-as-you-go in
+  the sweep if it accumulates. `rd_core` is lighter but gives coarse jxl data
+  (32.5% overhead per the smoothness doc).
+
 - **zenmetrics-api consolidated `it` suite self-poisons when run as ONE
   process** (observed 2026-06-10, pre-existing — A/B-identical 26-test failure
   set on master 7158c443 with and without the PuLumaGrayF32 change):
