@@ -421,6 +421,18 @@ over those persisted variants — never re-encode per metric.
   it's the jxl encode (jxl-encoder / zenjxl), not the decode-for-metric. heaptrack
   to pinpoint the alloc + owning crate: if jxl-encoder/zenjxl (sibling repos) →
   STOP + tell user; if the zenmetrics sweep retains per-cell `Vec<u8>`/state → fix here.
+  **HEAPTRACK (2026-06-23, 5 renditions × budget 10 = 50 cells): NOT a true leak**
+  (3 MB leaked at exit; peak heap 208 MB, run completed — did NOT reproduce the
+  fleet OOM at this scale). Dominant retained consumer = `zenjxl::sweep::cross` /
+  `build_cells` (113 MB — the modes_full Cartesian product materialized into a
+  `Vec<SweepCell>`, with `cv = v.clone()` per cell at sweep.rs:1449; `plan()`'s
+  q-coarsening loop rebuilds the whole Vec each iteration until `cells.len() <=
+  budget`). That cross is a real over-allocation (sibling crate — stream/prune it
+  instead of materializing the full product), but a *fixed* plan overhead, so
+  likely NOT the sole fleet-OOM driver. The 31 GB driver scales with image count
+  (~2–6 MB/cell accumulation in the encode path, only visible at fleet scale) and
+  needs a LARGER heaptrack to pinpoint (deferred — focused task on a free box;
+  the small trace doesn't OOM so it can't show the accumulation site).
 
 - **zenmetrics-api consolidated `it` suite self-poisons when run as ONE
   process** (observed 2026-06-10, pre-existing — A/B-identical 26-test failure
