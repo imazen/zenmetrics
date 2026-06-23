@@ -17,12 +17,56 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+## zensim-gpu
+
+### Fixed
+
+- **Stale cubecl pool page read corrupted the score after an in-process
+  pipeline rebuild for a *different* image size** — surfaced as a ~7-9 JOD
+  divergence vs CPU `zensim` on `zenmetrics sweep --metric zensim-gpu` at
+  1448×1448, but ONLY when a differently-sized pipeline (e.g. 1024²) had been
+  scored and dropped earlier in the same process. The same image scored
+  correctly in isolation and via the standalone `score` subcommand. Root
+  cause: dropping a pipeline returns its buffers to cubecl's pool; the next
+  pipeline's `client.empty()` allocations were handed those freed pages still
+  holding the previous pipeline's data, and read before being overwritten
+  (Full mode; Strip mode dodged it via a different allocation footprint). The
+  fix reclaims the dropped pipeline's pooled VRAM before building the new one
+  (see `## zenmetrics-cli` below). New regression gate
+  `tests/it/cached_ref_slot_rebuild.rs` pins the contract — build+score 1024²
+  Full, drop, reclaim, build 1448² Full, assert both GPU scoring paths match
+  CPU to ≤0.10 JOD (without the reclaim it fails by ~9 JOD) (PENDING_HASH).
+
 ## zenmetrics-cli
 
 ### Fixed
 
+- **`sweep`/`score-pairs` zensim-gpu emitted `non-finite score NaN` on every
+  ≥64px cell** — the cached-score path (`MetricCache`) forced
+  `ZensimFeatureRegime::Basic` (228 features) onto the metric while keeping the
+  default profile (`ZensimProfile::A`, a 372-input MLP), so the forward pass
+  failed with `ModelForwardFailed` and `score_from_profile_vec` mapped it to
+  `NaN`. The "the scalar score is regime-independent" premise the override
+  rested on is true only for the legacy linear V0_1/V0_2 weights, not the MLP
+  profiles shipped since V0_3. The one-shot `score` subcommand was unaffected
+  (it built params via `resolve_default_params`, the matched 372/372 default).
+  Fix: the cached zensim-gpu score path now passes `None` regime so
+  `build_params` uses the metric's natural (matched) `WithIw`/372 default
+  (PENDING_HASH).
+- **Score corruption after a same-process pipeline rebuild for a different
+  image size** (the `zensim-gpu` stale-page bug above):
+  `MetricCache::get_or_build_umbrella` now calls
+  `zenmetrics_api::reclaim_pooled_vram` for the dropped slot's backend before
+  constructing the replacement, returning freed pages to the driver so the new
+  pipeline allocates clean memory. Guarded to fire only when a slot actually
+  existed (warm runtime), so it never hits the fresh-runtime `memory_cleanup`
+  panic noted in the 2026-05-22 comment. Applies to every GPU metric's
+  rebuild, not just zensim (also trims peak VRAM at dim/regime transitions)
+  (PENDING_HASH).
+
 - **Sweep deadlock running CPU metrics with `--encoded-out-dir`** (and latent
   for any large CPU-metric sweep): CPU metrics (zensim/ssim2/butteraugli/dssim)
+  parallelize internally with rayon, but the per-cell dispatch ran them through
   parallelize internally with rayon, but the per-cell dispatch ran them through
   `MetricCache::lock_global` — holding the global GPU-cache mutex across the
   metric's nested rayon join, from inside the outer rayon `par_iter` over cells.

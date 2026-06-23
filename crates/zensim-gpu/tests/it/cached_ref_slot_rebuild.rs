@@ -14,20 +14,21 @@
 //! overwritten — a stale-page read.
 //!
 //! The fix (`zenmetrics-cli` `MetricCache::get_or_build_umbrella`)
-//! reclaims the dropped pipeline's pooled VRAM before building the new
-//! one, so the new allocation gets clean memory. This test reproduces
-//! the hazard at the crate layer: build + score a 1024² Full pipeline,
-//! DROP it, then build a 1448² Full pipeline and check both GPU scoring
-//! paths against the CPU `zensim` ground truth. Forcing `MemoryMode::Full`
-//! makes the test deterministic regardless of the host's live free-VRAM
-//! (the Auto resolver would otherwise pick Strip on a busy GPU and dodge
-//! the Full-path hazard).
+//! reclaims the dropped pipeline's pooled VRAM (`reclaim_pooled_vram`)
+//! before building the new one, so the new allocation gets clean memory.
 //!
-//! NOTE: this test exercises the *crate-level* hazard. The CLI fix in
-//! `MetricCache` is what protects the `sweep` / `score-pairs` workers;
-//! this gate proves the underlying pipeline produces a correct score
-//! once clean pages are guaranteed (and documents the failure mode so a
-//! future cubecl bump that changes pool reuse can't silently regress it).
+//! This test pins the **contract that the cache fix relies on**: after a
+//! foreign-size pipeline is dropped AND its pool is reclaimed, a fresh
+//! Full-mode pipeline scores correctly (matches CPU `zensim` ground
+//! truth). It reproduces the exact motion — build + score a 1024² Full
+//! pipeline, drop it, reclaim, build a 1448² Full pipeline — and gates
+//! both GPU scoring paths. Forcing `MemoryMode::Full` makes the test
+//! deterministic regardless of the host's live free-VRAM (the Auto
+//! resolver would otherwise pick Strip on a busy GPU and dodge the
+//! Full-path hazard). Without the `reclaim_pooled_vram` call this test
+//! fails by ~9 JOD — that is the bug it guards against; a future cubecl
+//! bump that changes pool-reuse semantics (or a regression that drops
+//! the reclaim) re-trips it.
 
 use zensim::{RgbSlice, Zensim as ZensimCpu, ZensimProfile};
 use zensim_gpu::{Backend, MemoryMode, ZensimOpaque, ZensimParams};
@@ -96,7 +97,10 @@ fn full(w: u32, h: u32) -> ZensimOpaque {
 }
 
 fn gpu_oneshot(w: u32, h: u32, r: &[u8], d: &[u8]) -> f64 {
-    full(w, h).compute_srgb_u8(r, d).expect("one-shot score").value
+    full(w, h)
+        .compute_srgb_u8(r, d)
+        .expect("one-shot score")
+        .value
 }
 
 fn gpu_cached(w: u32, h: u32, r: &[u8], d: &[u8]) -> f64 {
@@ -120,6 +124,12 @@ fn gpu_score_correct_after_foreign_size_rebuild() {
         let _ = gpu_cached(w, h, &r, &d); // value unused; side effect = pool churn
     }
 
+    // 1b. Reclaim the dropped pipeline's pooled VRAM — the contract the
+    //     CLI `MetricCache` upholds on every slot rebuild. Returns the
+    //     freed pages to the driver so the next allocation is clean.
+    //     Removing this line re-introduces the ~9 JOD stale-page bug.
+    zensim_gpu::memory_mode::reclaim_pooled_vram(backend());
+
     // 2. Now 1448² Full (padded width 1456 → 8 mirror-pad columns, the
     //    geometry that tripped the original bug). Both GPU scoring paths
     //    must match the CPU ground truth.
@@ -131,7 +141,9 @@ fn gpu_score_correct_after_foreign_size_rebuild() {
     let cpu = cpu_score(w, h, &r, &d);
     let g_one = gpu_oneshot(w, h, &r, &d);
     let g_cached = gpu_cached(w, h, &r, &d);
-    eprintln!("1448 after 1024-rebuild: cpu={cpu:.4} gpu_oneshot={g_one:.4} gpu_cached={g_cached:.4}");
+    eprintln!(
+        "1448 after 1024-rebuild: cpu={cpu:.4} gpu_oneshot={g_one:.4} gpu_cached={g_cached:.4}"
+    );
 
     for (label, g) in [("one-shot", g_one), ("cached-ref", g_cached)] {
         assert!(g.is_finite(), "{label} GPU score must be finite, got {g}");
