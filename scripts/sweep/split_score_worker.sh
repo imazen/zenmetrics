@@ -37,9 +37,12 @@ trap 's5 cp "$LOG" "s3://$BUCKET/$PRE/sidecars/worker.log" 2>/dev/null || true' 
 mkdir -p /data/variants /data/ref
 echo "[split] worker=$(hostname) pull s3://$BUCKET/$PRE/ metrics='$METRICS'" >&2
 # variants may be loose files or per-box tarballs (hetzner_cpu_sweep persists tarballs)
+# variants: single per-codec tar ($PRE/variants.tar) or loose ($PRE/variants/*)
+s5 cp "s3://$BUCKET/$PRE/variants.tar" /data/ 2>/dev/null || true
 s5 cp "s3://$BUCKET/$PRE/variants/*" /data/variants/ 2>/dev/null || true
-for t in /data/variants/*.tar; do [ -f "$t" ] && tar -xf "$t" -C /data/variants/ && rm -f "$t"; done
-s5 cp "s3://$BUCKET/$PRE/ref/*" /data/ref/ 2>/dev/null || true
+for t in /data/variants.tar /data/variants/*.tar; do [ -f "$t" ] && tar -xf "$t" -C /data/variants/ && rm -f "$t"; done
+# ref images: shared across codecs via ZEN_REF_PREFIX (default $PRE/ref)
+s5 cp "s3://$BUCKET/${ZEN_REF_PREFIX:-$PRE/ref}/*" /data/ref/ 2>/dev/null || true
 s5 cp "s3://$BUCKET/$PRE/pairs.tsv" /data/pairs.tsv
 echo "[split] $(wc -l < /data/pairs.tsv) pair rows; $(ls /data/variants | wc -l) variants; $(ls /data/ref | wc -l) refs" >&2
 rc=0
