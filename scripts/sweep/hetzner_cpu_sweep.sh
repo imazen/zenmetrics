@@ -82,6 +82,7 @@ SRC_PREFIX=$SRC_PREFIX
 CHUNK_KEY=$RUN_PREFIX/chunks/chunk-$idx.txt
 OUT_KEY=$RUN_PREFIX/omni/box-$idx.omni.tsv
 DONE_KEY=$RUN_PREFIX/done/box-$idx.done
+ENC_KEY=$RUN_PREFIX/variants/box-$idx.tar
 CODEC=$CODEC
 PLAN=$PLAN
 QG=$QG
@@ -94,9 +95,14 @@ s5cmd --endpoint-url=\$EP cp "s3://\$BUCKET/\$CHUNK_KEY" /data/chunk.txt
 while read -r f; do [ -n "\$f" ] && s5cmd --endpoint-url=\$EP cp "s3://\$BUCKET/\$SRC_PREFIX/\$f" "/data/\$f"; done < /data/chunk.txt
 rm -f /data/chunk.txt
 PB=""; [ "\$PLAN" != "rd_core" ] && PB="--plan-budget \$BUDGET"
+mkdir -p /enc
 zenmetrics sweep --codec "\$CODEC" --sources /data --q-grid "\$QG" --plan "\$PLAN" \$PB \
-  --metric ssim2 --metric zensim --output /omni.tsv
+  --metric ssim2 --metric zensim --encoded-out-dir /enc --output /omni.tsv
 s5cmd --endpoint-url=\$EP cp /omni.tsv "s3://\$BUCKET/\$OUT_KEY"
+# persist encoded variants (the master record): 372 zensim features re-extractable
+# on GPU (zensim-gpu fixed), plus diffmaps / any future metric, with NO re-encode.
+# Variants are already-compressed codec bytes -> tar without recompression.
+tar -cf /enc.tar -C /enc . && s5cmd --endpoint-url=\$EP cp /enc.tar "s3://\$BUCKET/\$ENC_KEY"
 printf 'rows=%s\n' "\$(wc -l < /omni.tsv)" > /done.txt
 s5cmd --endpoint-url=\$EP cp /done.txt "s3://\$BUCKET/\$DONE_KEY"
 WORK
