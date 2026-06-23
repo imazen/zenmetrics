@@ -72,8 +72,132 @@ pub fn decode_to_nits(path: &Path) -> Result<NitsImage, Err> {
         "heic" | "heif" => decode_heic(path),
         "jpg" | "jpeg" => decode_ultrahdr_jpeg(path),
         "png" => decode_pq_png(path),
+        "jxl" => decode_pq_jxl(path),
         other => Err(format!("unsupported HDR input extension: .{other}").into()),
     }
+}
+
+/// Decode a JPEG XL HDR variant (16-bit PQ + CICP) to absolute nits. This is
+/// the decode-back path the HDR datagen split needs: `score-pairs --hdr` takes
+/// the encoded `.jxl` directly as the distorted image (the SDR split feeds the
+/// encoded file as `dist_path`; the HDR split does the same, but the variant is
+/// JXL and carries PQ signaling). Mirrors the sweep's
+/// `sweep::hdr::decode_jxl_to_nits` exactly: decode → require PQ cICP (or a PQ
+/// descriptor transfer) → PQ EOTF to cd/m². A variant that lost its HDR color
+/// encoding is refused, never approximated.
+#[cfg(feature = "jxl")]
+fn decode_pq_jxl(path: &Path) -> Result<NitsImage, Err> {
+    let data = std::fs::read(path)?;
+    let output = zenjxl::decode(&data, None, &[]).map_err(|e| format!("zenjxl: {e}"))?;
+    let cicp_is_pq = matches!(output.info.cicp, Some((_, 16, _, _)));
+    let desc_is_pq =
+        output.pixels.as_slice().descriptor().transfer() == zenpixels::TransferFunction::Pq;
+    if !cicp_is_pq && !desc_is_pq {
+        return Err(format!(
+            "HDR JXL decode: variant carries no PQ signaling (info.cicp={:?}, \
+             descriptor transfer={:?}) — the codec did not round-trip the HDR \
+             color encoding, so this is not an HDR variant (refusing to guess a \
+             nits scale). Score it through the SDR path instead (drop --hdr).",
+            output.info.cicp,
+            output.pixels.as_slice().descriptor().transfer(),
+        )
+        .into());
+    }
+    pq_slice_to_nits(&output.pixels.as_slice())
+}
+
+#[cfg(not(feature = "jxl"))]
+fn decode_pq_jxl(_path: &Path) -> Result<NitsImage, Err> {
+    Err("JPEG XL HDR decode requires the `jxl` build feature".into())
+}
+
+/// Strided **PQ-coded** `PixelSlice` (validated by the caller via the
+/// codestream CICP / descriptor) → absolute nits via the PQ EOTF. u8 / u16
+/// samples normalise to `[0,1]` code values first; f32 samples ARE the code
+/// values (the JXL decoder's f32 output is PQ-coded, not linear, when the
+/// codestream carries CICP PQ). Alpha drops, gray broadcasts. Mirrors
+/// `sweep::hdr::pq_slice_to_nits` so the inline-sweep and score-pairs HDR
+/// decode-back paths agree bit-for-bit.
+#[cfg(feature = "jxl")]
+fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
+    use zenmetrics_api::hdr::pq_eotf;
+    use zenpixels::{ChannelLayout, ChannelType};
+
+    let desc = s.descriptor();
+    let (w, h) = (s.width() as usize, s.rows() as usize);
+    let channels: usize = match desc.layout() {
+        ChannelLayout::Rgb => 3,
+        ChannelLayout::Rgba => 4,
+        ChannelLayout::Gray => 1,
+        ChannelLayout::GrayAlpha => 2,
+        other => {
+            return Err(format!("HDR JXL decode: unsupported channel layout {other:?}").into());
+        }
+    };
+    let color_channels = if channels >= 3 { 3 } else { 1 };
+    let bytes = s.as_strided_bytes();
+    let stride = s.stride();
+    let mut rgb = Vec::with_capacity(w * h * 3);
+    let push_px = |rgb: &mut Vec<f32>, px: &[f32]| {
+        if color_channels == 1 {
+            let v = pq_eotf(px[0]);
+            rgb.extend_from_slice(&[v, v, v]);
+        } else {
+            rgb.extend_from_slice(&[pq_eotf(px[0]), pq_eotf(px[1]), pq_eotf(px[2])]);
+        }
+    };
+    match desc.channel_type() {
+        ChannelType::U16 => {
+            let row_bytes = w * channels * 2;
+            for y in 0..h {
+                let row = &bytes[y * stride..y * stride + row_bytes];
+                let mut px = [0f32; 4];
+                for (x, sample) in row.chunks_exact(2).enumerate() {
+                    px[x % channels] =
+                        f32::from(u16::from_ne_bytes([sample[0], sample[1]])) / 65535.0;
+                    if x % channels == channels - 1 {
+                        push_px(&mut rgb, &px);
+                    }
+                }
+            }
+        }
+        ChannelType::U8 => {
+            let row_bytes = w * channels;
+            for y in 0..h {
+                let row = &bytes[y * stride..y * stride + row_bytes];
+                let mut px = [0f32; 4];
+                for (x, &sample) in row.iter().enumerate() {
+                    px[x % channels] = f32::from(sample) / 255.0;
+                    if x % channels == channels - 1 {
+                        push_px(&mut rgb, &px);
+                    }
+                }
+            }
+        }
+        ChannelType::F32 => {
+            let row_bytes = w * channels * 4;
+            for y in 0..h {
+                let row = &bytes[y * stride..y * stride + row_bytes];
+                let mut px = [0f32; 4];
+                for (x, sample) in row.chunks_exact(4).enumerate() {
+                    px[x % channels] =
+                        f32::from_ne_bytes([sample[0], sample[1], sample[2], sample[3]])
+                            .clamp(0.0, 1.0);
+                    if x % channels == channels - 1 {
+                        push_px(&mut rgb, &px);
+                    }
+                }
+            }
+        }
+        other => {
+            return Err(format!("HDR JXL decode: unsupported channel type {other:?}").into());
+        }
+    }
+    Ok(NitsImage {
+        rgb,
+        width: w as u32,
+        height: h as u32,
+    })
 }
 
 /// Decode a PQ-PNG (PNG 3.0 cICP, transfer 16) to absolute nits.
