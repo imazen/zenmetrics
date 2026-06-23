@@ -407,6 +407,20 @@ over those persisted variants — never re-encode per metric.
   if chunk-load-bound; lower `--plan-budget` if cell-bound; or free-as-you-go in
   the sweep if it accumulates. `rd_core` is lighter but gives coarse jxl data
   (32.5% overhead per the smoothness doc).
+  **REFINED (measured 2026-06-23) — it's a PER-CELL LEAK (~60 MB/cell), NOT
+  config-bound.** A reduced run (100 renditions, `--plan-budget 50` = 46
+  cells/img, `RAYON_NUM_THREADS=4`, 30 G cap) still OOM'd at **29.94 GB in 55 s
+  after only 504 cells scored** — so chunk size / budget / thread count do NOT
+  fix it. jpeg/webp `modes_full` don't leak (webp did 306k cells fine), so it's
+  **jxl-specific** (the jxl encode or the zenjxl-decoder decode-for-metric path
+  retaining per-cell memory). Fix is a CODE change, not a config workaround:
+  heaptrack the sweep to find the growing per-cell alloc, then free it.
+  **NARROWED (2026-06-23): the leak is in the jxl ENCODE path, not the metrics.**
+  Encode-only (no `--metric`, `--encoded-out-dir` only) leaks IDENTICALLY —
+  29.94 GB after 506 encodes (57 s) vs 29.94 GB after 504 cells with metrics. So
+  it's the jxl encode (jxl-encoder / zenjxl), not the decode-for-metric. heaptrack
+  to pinpoint the alloc + owning crate: if jxl-encoder/zenjxl (sibling repos) →
+  STOP + tell user; if the zenmetrics sweep retains per-cell `Vec<u8>`/state → fix here.
 
 - **zenmetrics-api consolidated `it` suite self-poisons when run as ONE
   process** (observed 2026-06-10, pre-existing — A/B-identical 26-test failure
