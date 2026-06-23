@@ -17,7 +17,10 @@ curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: appl
 read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/dg_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
 [ -n "${AK:-}" ] || { echo "cred mint failed"; cat /tmp/dg_cred.json; exit 1; }
 
-OFFER=$(vastai search offers "reliability>0.98 num_gpus=1 gpu_ram>=12 rentable=true inet_down>300 disk_space>50 cuda_vers>=12.0" --order dph_total --raw 2>/dev/null | python3 -c 'import json,sys
+# cuda_max_good>=12.6 (NOT cuda_vers): the v29 image's cubecl-cuda kernels need a
+# driver supporting CUDA 12.6+. cuda_vers>=12.0 let in a 12.4 box where every GPU
+# metric failed dispatch (RTX 3060 / driver 550 / cuda_max_good 12.4, 2026-06-23).
+OFFER=$(vastai search offers "reliability>0.98 num_gpus=1 gpu_ram>=12 rentable=true inet_down>300 disk_space>50 cuda_max_good>=12.6" --order dph_total --raw 2>/dev/null | python3 -c 'import json,sys
 o=json.load(sys.stdin); o=o if isinstance(o,list) else o.get("offers",[])
 print(o[0]["id"] if o else "")')
 [ -n "${OFFER:-}" ] || { echo "no >=12GB offer found"; exit 1; }
