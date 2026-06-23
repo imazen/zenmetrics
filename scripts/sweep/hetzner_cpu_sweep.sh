@@ -106,7 +106,8 @@ docker run --rm --env-file /root/r/env -v /root/r/worker.sh:/worker.sh \
 EOF
   local typ loc ok=0 err
   # ccx (dedicated AMD) first — not phased out like cpx41; then cpx shared fallbacks.
-  for typ in ${TYPES:-$STYPE ccx33 ccx23 cpx51 cpx31}; do
+  # biggest-first: when slot-limited, max cores/box. ccx (dedicated) > cpx (shared) for CPU sweep.
+  for typ in ${TYPES:-$STYPE ccx63 ccx53 ccx43 cpx51 ccx33 cpx31}; do
     for loc in ${LOCATIONS:-fsn1 nbg1 hel1 ash hil}; do
       err=$(hcloud server create --name "$name" --type "$typ" --image docker-ce --location "$loc" \
         --ssh-key "$SSH_KEY" --label group="$RUN" --user-data-from-file "$ci" 2>&1) \
