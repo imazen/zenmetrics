@@ -17,6 +17,24 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+## Workspace
+
+### Added
+
+- **JPEG cross-metric mapping table** (`benchmarks/metric_mapping_2026-06-23.tsv`
+  + `.md`) relating five perceptual scales for baseline libjpeg-turbo JPEG:
+  SSIMULACRA2, butteraugli (3-norm + max), libjpeg-turbo Q, cvvdp (JOD), and
+  zensim Profile-A. 1700 measured cells (85 real images — CID22-512 photo /
+  gb82-sc+imazen-26 screen / sci-figures line-art — × Q 5..100 step 5),
+  encoded with real `cjpeg` 2.1.2 and scored in one `zenmetrics compare` pass
+  per source (ssim2 via fast-ssim2 0.8.2, butter via butteraugli 0.9.2, cvvdp
+  via cvvdp-gpu 0.0.1 CUDA, zensim 0.3.0 ProfileA). Includes a forward Q→metric
+  grid (all + per content class), an ssim2-anchored operating-point grid across
+  all five scales, per-class content-dependence (butteraugli at fixed ssim2
+  spans up to 2× across photo/line-art/screen), and an oracle-d2 ssim2↔butter
+  cross-check (mozjpeg-rs, 54k encodings) confirming the metric-to-metric maps
+  are encoder-independent.
+
 ## zensim-gpu
 
 ### Fixed

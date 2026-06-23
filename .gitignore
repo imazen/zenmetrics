@@ -41,3 +41,9 @@ scripts/cvvdp_goldens/out/
 /vastai-fleet
 /zen-metrics
 /zen-sweep-worker
+
+# Cross-metric-mapping sweep scratch dir (2026-06-23): encoded JPEGs,
+# per-image temp TSVs, decoded PNGs, corpus lists, driver script. The
+# distilled deliverables (metric_mapping_2026-06-23.tsv + .md) live
+# directly under benchmarks/ and ARE tracked; this raw working dir is not.
+benchmarks/metric_mapping_work/
