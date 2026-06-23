@@ -41,6 +41,17 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **`score-pairs --feature-output <pq> [--zensim-features-regime with-iw]`** —
+  the heterogeneous-SPLIT GPU scorer can now emit the per-cell zensim feature
+  parquet sidecar (372-D WithIw by default) alongside the metric scores, so a
+  single GPU pass over the persisted variants produces both the score and the
+  picker-training features without a separate `sweep` re-encode. Reuses the
+  sweep's `FeatureParquetWriter` / `MetricCache::compute_zensim_features`, so
+  the sidecar schema is byte-identical to `sweep --feature-output`
+  (`image_path / codec / q / knob_tuple_json / zensim_score / feat_0..feat_371`)
+  and joins 1:1 against sweep-produced feature parquets. Both CPU `zensim` and
+  GPU `zensim-gpu` metrics are supported (GPU honours the regime); non-zensim
+  metrics warn and skip. Verified on the local RTX 5070 (4f03e86d).
 - **Heterogeneous picker/metric fleet** (`scripts/sweep/`): `hetzner_cpu_sweep.sh`
   encodes + dual-metric-scores (CPU ssim2+zensim) on cheap Hetzner CPU boxes and
   persists the encoded variants to R2 (the master record → 372 zensim features

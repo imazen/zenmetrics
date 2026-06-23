@@ -222,6 +222,18 @@ codegen-units = 1
 # re-collects with the post-W44 RD curves rather than reusing
 # the pre-W44 cached sidecars.
 [patch.crates-io]
+# zenpixels / zenpixels-convert: the `ultrahdr-core` sibling (0.6.0, pulled
+# by the `zenhdr-corpus` member and zenmetrics-cli's optional `hdr` dep)
+# requires `zenpixels-convert ^0.2.15`, which is not yet on crates.io (max
+# published is 0.2.14). Optional path-deps are version-resolved even when the
+# feature is off, so without this pin the WHOLE workspace fails to resolve
+# (`failed to select a version for zenpixels-convert = ^0.2.15`) regardless
+# of build flags. Pin both crates to the PUSHED zenpixels origin/main rev
+# (e890b671, version 0.2.15) — CI-safe (cargo fetches the rev itself, no
+# sibling clone needed), matching the zenjxl-decoder git-rev pattern below.
+# Drop these when zenpixels-convert 0.2.15 publishes to crates.io.
+zenpixels         = { git = "https://github.com/imazen/zenpixels", rev = "e890b67148ca6e1768594b43f5a6415d160ef81f" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "e890b67148ca6e1768594b43f5a6415d160ef81f" }
 # Local sibling of the canonical zensim repo. The feat/principled-activity
 # branch landed on main weeks ago — the previous path-pin to
 # ../zensim--principled-activity was carrying a stale checkout that

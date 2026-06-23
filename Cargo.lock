@@ -724,6 +724,7 @@ name = "butteraugli"
 version = "0.9.4"
 dependencies = [
  "archmage",
+ "enough",
  "imgref",
  "magetypes",
  "rayon",
@@ -5134,24 +5135,6 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 [[package]]
 name = "ultrahdr-core"
 version = "0.5.0"
-dependencies = [
- "archmage",
- "bytemuck",
- "enough",
- "half",
- "linear-srgb",
- "magetypes",
- "thiserror",
- "whereat",
- "wide 1.5.0",
- "zencodec",
- "zenpixels",
- "zentone",
-]
-
-[[package]]
-name = "ultrahdr-core"
-version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d65bd22a90785bb7360076b599ffbc201aef2c5817d2e5f37f37357829d476e"
 dependencies = [
@@ -5166,8 +5149,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ultrahdr-core"
+version = "0.6.0"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "enough",
+ "half",
+ "linear-srgb",
+ "magetypes",
+ "thiserror",
+ "whereat",
+ "wide 1.5.0",
+ "zencodec",
+ "zenpixels",
+ "zenpixels-convert",
+ "zentone",
+]
+
+[[package]]
 name = "ultrahdr-rs"
-version = "0.3.5"
+version = "0.4.0"
 dependencies = [
  "bytemuck",
  "enough",
@@ -5176,7 +5178,7 @@ dependencies = [
  "moxcms",
  "rgb",
  "thiserror",
- "ultrahdr-core 0.5.0",
+ "ultrahdr-core 0.6.0",
  "whereat",
  "wide 1.5.0",
  "zencodec",
@@ -6230,7 +6232,7 @@ dependencies = [
  "rgb",
  "safe_unaligned_simd",
  "thiserror",
- "ultrahdr-core 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ultrahdr-core 0.5.0",
  "whereat",
  "yuv",
  "zenavif-parse",
@@ -6281,9 +6283,9 @@ dependencies = [
 
 [[package]]
 name = "zencodec"
-version = "0.1.24"
+version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd9d72361377c72e1b62ffcb76b065f82365dbe5684877189e68f1f2d48cb860"
+checksum = "8f9328427935f563e3cc12aaab76ad4afe946d1a60611a74047184682afc20ed"
 dependencies = [
  "almost-enough",
  "enough",
@@ -6736,7 +6738,7 @@ dependencies = [
  "enough",
  "heic",
  "image",
- "ultrahdr-core 0.5.0",
+ "ultrahdr-core 0.6.0",
  "ultrahdr-rs",
 ]
 
@@ -6757,7 +6759,7 @@ dependencies = [
  "safe_unaligned_simd",
  "thiserror",
  "tinyvec",
- "ultrahdr-core 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ultrahdr-core 0.5.0",
  "whereat",
  "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
  "zencodec",
@@ -6877,7 +6879,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
- "ultrahdr-core 0.5.0",
+ "ultrahdr-core 0.6.0",
  "ultrahdr-rs",
  "zenavif",
  "zencodec",
@@ -6939,9 +6941,8 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "515b2d87c361de4a3c1e4131a1de03d9cceab59cf599ac48235d46e60ef1768d"
+version = "0.2.15"
+source = "git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f#e890b67148ca6e1768594b43f5a6415d160ef81f"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -6951,13 +6952,13 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c49c5c25ca3577cef11f12f594a9966297d949c1a801f3a79ca9f5df74a09fa2"
+version = "0.2.15"
+source = "git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f#e890b67148ca6e1768594b43f5a6415d160ef81f"
 dependencies = [
  "archmage",
  "bytemuck",
  "garb",
+ "libm",
  "linear-srgb",
  "lz4_flex 0.13.1",
  "magetypes",

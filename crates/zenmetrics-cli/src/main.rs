@@ -469,6 +469,23 @@ struct ScorePairsArgs {
     /// parquet by the identity tuple.
     #[arg(long)]
     out_parquet: PathBuf,
+    /// Optional zensim feature-vector parquet sidecar. When set and
+    /// `--metric` is a zensim variant (`zensim` or `zensim-gpu`), every
+    /// scored pair also persists its feature vector to this parquet file
+    /// alongside the `--out-parquet` scores. The schema is **byte-for-byte
+    /// identical** to the `sweep --feature-output` sidecar
+    /// (`image_path / codec / q / knob_tuple_json / zensim_score /
+    /// feat_0..feat_<N-1>`) so SPLIT-fleet feature sidecars join cleanly
+    /// against sweep-produced ones. Width follows
+    /// `--zensim-features-regime` (default `with-iw` = 372). Ignored for
+    /// non-zensim metrics (a warning is emitted).
+    #[arg(long)]
+    feature_output: Option<PathBuf>,
+    /// Zensim feature regime for the GPU path: `basic` (228), `extended`
+    /// (300), or `with-iw` (372). Default = `with-iw` for the v26+
+    /// picker-training schema. Ignored when `--feature-output` is unset.
+    #[arg(long, value_enum, default_value = "with-iw")]
+    zensim_features_regime: crate::metrics::ZensimFeatureRegime,
     /// CubeCL runtime selection for GPU metrics.
     #[arg(long, value_enum, default_value = "auto")]
     gpu_runtime: GpuRuntime,
@@ -1185,6 +1202,44 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     // batch mode but correct. TODO: port the caching scorer to use
     // zenmetrics_api::iwssim re-export when batch perf matters.
 
+    // Optional zensim feature-vector sidecar. Mirrors `sweep
+    // --feature-output`: only zensim variants produce features, the
+    // regime sizes the sidecar (default WithIw = 372), and the parquet
+    // schema is byte-identical to the sweep's so SPLIT-fleet sidecars
+    // join against sweep-produced ones. For a non-zensim metric we warn
+    // and leave the writer unset (no rows written).
+    use crate::sweep::feature_writer::FeatureParquetWriter;
+    let metric_is_zensim = matches!(
+        args.metric,
+        crate::metrics::MetricKind::Zensim | crate::metrics::MetricKind::ZensimGpu
+    );
+    let mut feature_writer: Option<FeatureParquetWriter> = match &args.feature_output {
+        Some(_) if !metric_is_zensim => {
+            eprintln!(
+                "[score-pairs] warning: --feature-output is only produced for zensim/zensim-gpu; \
+                 metric {} has no feature vector — sidecar will not be written",
+                args.metric.name()
+            );
+            None
+        }
+        Some(path) => {
+            let n = args.zensim_features_regime.total_features();
+            Some(FeatureParquetWriter::create_with_n(path, n)?)
+        }
+        None => None,
+    };
+    // Cache the GPU zensim umbrella across pairs (one persist-plane set
+    // per (dims, regime) instead of per pair) — same rationale as the
+    // sweep's `MetricCache`. Only constructed when the GPU feature path
+    // is actually exercised.
+    #[cfg(feature = "gpu-zensim")]
+    let mut zensim_feature_cache: Option<crate::metrics::cache::MetricCache> =
+        if feature_writer.is_some() && args.metric == crate::metrics::MetricKind::ZensimGpu {
+            Some(crate::metrics::cache::MetricCache::new(args.gpu_runtime))
+        } else {
+            None
+        };
+
     for record in rdr.records() {
         let record = record?;
         let ref_path = PathBuf::from(record.get(ref_idx).ok_or("missing ref_path")?);
@@ -1211,26 +1266,76 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             .map(String::from)
             .unwrap_or_else(|| "{}".to_string());
 
-        // Returns Vec<f64> aligned with `metric_cols`. Cvvdp's cached
-        // scorer path emits a single column; everything else routes
-        // through `score_one_pair` → `run_metric`, which can emit
-        // multiple columns (e.g. butteraugli's max + pnorm3).
-        #[cfg(feature = "gpu-cvvdp")]
-        let pair_result: Result<Vec<f64>, Box<dyn std::error::Error>> =
-            if let Some(scorer) = cvvdp_scorer.as_mut() {
-                match (
-                    decode::decode_image_to_rgb8(&ref_path),
-                    decode::decode_image_to_rgb8(&dist_path),
-                ) {
-                    (Ok(r), Ok(d)) => scorer.score(&r, &d).map(|v| vec![v]),
-                    (Err(e), _) | (_, Err(e)) => Err(e),
+        // Feature-emit fast path: when a zensim feature sidecar is
+        // requested, decode the pair once, compute (score, features) in a
+        // single call, and remember the features so a row gets pushed
+        // after the identity tuple is finalized. The score column is
+        // then populated from the same call — never a second decode /
+        // second zensim run. Mirrors the sweep's
+        // `compute_zensim_features` (GPU) / `run_zensim_with_features`
+        // (CPU) split. When this path is active (zensim metric +
+        // `--feature-output`) it is AUTHORITATIVE: on failure the score
+        // column gets the metric's NaN, never a retry through the generic
+        // scoring branches.
+        let want_features = feature_writer.is_some() && metric_is_zensim;
+        let mut features_for_pair: Option<Vec<f64>> = None;
+        let pair_result: Result<Vec<f64>, Box<dyn std::error::Error>> = if want_features {
+            match (
+                decode::decode_image_to_rgb8(&ref_path),
+                decode::decode_image_to_rgb8(&dist_path),
+            ) {
+                (Ok(r), Ok(d)) => {
+                    let res: Result<(f64, Vec<f64>), Box<dyn std::error::Error>> = if args.metric
+                        == crate::metrics::MetricKind::ZensimGpu
+                    {
+                        #[cfg(feature = "gpu-zensim")]
+                        {
+                            zensim_feature_cache
+                                .as_mut()
+                                .expect("gpu-zensim cache built when metric is ZensimGpu")
+                                .compute_zensim_features(&r, &d, args.zensim_features_regime)
+                        }
+                        #[cfg(not(feature = "gpu-zensim"))]
+                        {
+                            Err("zensim-gpu requires a GPU build (build with --features gpu,gpu-zensim)".into())
+                        }
+                    } else {
+                        crate::metrics::run_zensim_with_features(&r, &d)
+                    };
+                    match res {
+                        Ok((score, features)) => {
+                            features_for_pair = Some(features);
+                            Ok(vec![score])
+                        }
+                        Err(e) => Err(e),
+                    }
                 }
-            } else {
+                (Err(e), _) | (_, Err(e)) => Err(e),
+            }
+        } else {
+            // Returns Vec<f64> aligned with `metric_cols`. Cvvdp's cached
+            // scorer path emits a single column; everything else routes
+            // through `score_one_pair` → `run_metric`, which can emit
+            // multiple columns (e.g. butteraugli's max + pnorm3).
+            #[cfg(feature = "gpu-cvvdp")]
+            {
+                if let Some(scorer) = cvvdp_scorer.as_mut() {
+                    match (
+                        decode::decode_image_to_rgb8(&ref_path),
+                        decode::decode_image_to_rgb8(&dist_path),
+                    ) {
+                        (Ok(r), Ok(d)) => scorer.score(&r, &d).map(|v| vec![v]),
+                        (Err(e), _) | (_, Err(e)) => Err(e),
+                    }
+                } else {
+                    score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
+                }
+            }
+            #[cfg(not(feature = "gpu-cvvdp"))]
+            {
                 score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
-            };
-        #[cfg(not(feature = "gpu-cvvdp"))]
-        let pair_result: Result<Vec<f64>, Box<dyn std::error::Error>> =
-            score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime);
+            }
+        };
         let per_pair: Vec<f64> = match pair_result {
             Ok(v) if v.len() == metric_cols.len() => {
                 succeeded += 1;
@@ -1260,6 +1365,15 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
                 vec![f64::NAN; metric_cols.len()]
             }
         };
+
+        // Append the feature row (only when extraction succeeded this
+        // pair). The identity tuple, score, and feature vector all come
+        // from the same `(ref, dist)` so the sidecar joins 1:1 to the
+        // score parquet on `(image_path, codec, q, knob_tuple_json)`.
+        if let (Some(writer), Some(features)) = (feature_writer.as_mut(), &features_for_pair) {
+            let zensim_score = per_pair.first().copied().unwrap_or(f64::NAN) as f32;
+            writer.push_row(&image_path, &codec, q as f64, &knob, zensim_score, features)?;
+        }
 
         image_paths.push(image_path);
         codecs.push(codec);
@@ -1332,6 +1446,20 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         args.out_parquet.display(),
         metric_cols,
     );
+
+    // Flush + close the feature sidecar (if any) BEFORE the fail-on-bogus
+    // early-return so a bogus score distribution still leaves a complete,
+    // joinable feature parquet on disk.
+    if let Some(writer) = feature_writer.take() {
+        let n = args.zensim_features_regime.total_features();
+        writer.finish()?;
+        if let Some(path) = &args.feature_output {
+            eprintln!(
+                "[score-pairs] wrote zensim feature sidecar ({n} feat_* cols) to {}",
+                path.display()
+            );
+        }
+    }
 
     if args.fail_on_bogus {
         let passed = bogus_check(args.metric, &scores_snapshot, &args.out_parquet);

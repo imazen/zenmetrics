@@ -19,6 +19,27 @@ fn cli() -> Command {
     Command::new(bin)
 }
 
+/// Probe `nvidia-smi` for ground truth so GPU tests branch on real
+/// hardware instead of silently skipping. Mirrors the
+/// `host_has_nvidia_gpu` probe in `zenmetrics-api`'s `backend_resolve`
+/// integration test — the repo's established idiom for "is a CUDA GPU
+/// actually present?" (NO graceful runtime skip; the caller asserts a
+/// valid outcome on both arms).
+#[cfg(feature = "sweep")]
+#[allow(dead_code)]
+fn host_has_nvidia_gpu() -> bool {
+    let Ok(out) = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=gpu_name", "--format=csv,noheader"])
+        .output()
+    else {
+        return false;
+    };
+    out.status.success()
+        && String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .any(|l| !l.trim().is_empty())
+}
+
 #[test]
 fn list_metrics_runs() {
     let out = cli().args(["list-metrics"]).output().expect("run cli");
@@ -1112,6 +1133,215 @@ fn sweep_writes_zensim_feature_parquet() {
     assert_eq!(names[4], "zensim_score");
     assert_eq!(names[5], "feat_0");
     assert_eq!(names[expected_cols - 1], format!("feat_{}", feature_n - 1));
+}
+
+/// Build a 2-row pairs.tsv from the 64×64 fixtures (ref + two distorted
+/// variants) and the deterministic identity tuple `score-pairs` passes
+/// through. Returns `(pairs_tsv_path, out_parquet_path,
+/// feature_parquet_path)` staged under `staged`.
+#[cfg(feature = "sweep")]
+fn stage_score_pairs_inputs(
+    staged: &std::path::Path,
+) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+    use std::io::Write;
+    let dir = fixtures_dir();
+    let ref_png = dir.join("ref_64.png");
+    let dist_a = dir.join("dist_noisy_64.png");
+    let dist_b = dir.join("dist_identical_64.png");
+
+    let pairs_tsv = staged.join("pairs.tsv");
+    let mut f = std::fs::File::create(&pairs_tsv).expect("create pairs.tsv");
+    // Header matches the SPLIT-fleet pairs.tsv contract emitted by
+    // `sweep --pairs-tsv` (image_path/codec/q/knob_tuple_json + ref/dist).
+    writeln!(
+        f,
+        "image_path\tcodec\tq\tknob_tuple_json\tref_path\tdist_path"
+    )
+    .unwrap();
+    writeln!(
+        f,
+        "{ref}\tzenwebp\t50\t{{}}\t{ref}\t{dist}",
+        ref = ref_png.display(),
+        dist = dist_a.display()
+    )
+    .unwrap();
+    writeln!(
+        f,
+        "{ref}\tzenwebp\t90\t{{}}\t{ref}\t{dist}",
+        ref = ref_png.display(),
+        dist = dist_b.display()
+    )
+    .unwrap();
+    drop(f);
+
+    (
+        pairs_tsv,
+        staged.join("scores.parquet"),
+        staged.join("features.parquet"),
+    )
+}
+
+/// Read a parquet's column names + row count via the parquet crate (the
+/// same API `score-pairs` writes with — no pyarrow in the test suite).
+#[cfg(feature = "sweep")]
+fn read_parquet_schema(path: &std::path::Path) -> (Vec<String>, i64) {
+    use parquet::file::reader::FileReader;
+    let file = std::fs::File::open(path).expect("open parquet");
+    let reader = parquet::file::reader::SerializedFileReader::new(file).expect("parquet reader");
+    let meta = reader.metadata();
+    let schema_descr = meta.file_metadata().schema_descr();
+    let names: Vec<String> = (0..schema_descr.num_columns())
+        .map(|i| schema_descr.column(i).name().to_string())
+        .collect();
+    (names, meta.file_metadata().num_rows())
+}
+
+/// `score-pairs --feature-output` with the CPU zensim metric must emit a
+/// feature parquet whose schema is byte-identical to `sweep
+/// --feature-output` (the SPLIT-fleet join contract): the four identity
+/// columns, then `zensim_score`, then `feat_0..feat_<N-1>` where N is the
+/// WithIw regime's 372. This is the no-GPU backbone test — it always runs
+/// and validates the full feature-output wiring end to end.
+#[cfg(feature = "sweep")]
+#[cfg(feature = "cpu-metrics")]
+#[test]
+fn score_pairs_writes_zensim_feature_parquet_cpu() {
+    let staged = tempfile::tempdir().expect("tmp");
+    let (pairs_tsv, out_pq, feat_pq) = stage_score_pairs_inputs(staged.path());
+
+    let result = cli()
+        .args([
+            "score-pairs",
+            "--metric",
+            "zensim",
+            "--pairs-tsv",
+            pairs_tsv.to_str().unwrap(),
+            "--out-parquet",
+            out_pq.to_str().unwrap(),
+            "--feature-output",
+            feat_pq.to_str().unwrap(),
+            "--zensim-features-regime",
+            "with-iw",
+        ])
+        .output()
+        .expect("run cli");
+    assert!(
+        result.status.success(),
+        "score-pairs failed: stderr={}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+
+    let feature_n = zenmetrics_cli::metrics::ZensimFeatureRegime::WithIw.total_features();
+    assert_eq!(feature_n, 372, "with-iw regime must be 372 features");
+    // 4 identity columns + zensim_score + one column per regime feature.
+    let expected_cols = 5 + feature_n;
+
+    let (names, num_rows) = read_parquet_schema(&feat_pq);
+    assert_eq!(
+        names.len(),
+        expected_cols,
+        "expected {expected_cols} columns, got {} ({:?}..)",
+        names.len(),
+        &names[..names.len().min(6)]
+    );
+    assert_eq!(num_rows, 2, "expected 2 feature rows, got {num_rows}");
+
+    // Schema matches the sweep's FeatureParquetWriter exactly.
+    assert_eq!(names[0], "image_path");
+    assert_eq!(names[1], "codec");
+    assert_eq!(names[2], "q");
+    assert_eq!(names[3], "knob_tuple_json");
+    assert_eq!(names[4], "zensim_score");
+    assert_eq!(names[5], "feat_0");
+    assert_eq!(names[expected_cols - 1], format!("feat_{}", feature_n - 1));
+
+    // The score parquet still carries its 2 rows + the metric score column.
+    let (score_names, score_rows) = read_parquet_schema(&out_pq);
+    assert_eq!(score_rows, 2, "score parquet should have 2 rows");
+    assert!(
+        score_names.iter().any(|n| n == "zensim"),
+        "score parquet should carry the `zensim` column, got {score_names:?}"
+    );
+}
+
+/// `score-pairs --metric zensim-gpu --feature-output` over the SPLIT
+/// scorer's pairs.tsv. When a CUDA GPU is present (the production SPLIT
+/// fleet + this dev box) the GPU path must emit the same 372-wide,
+/// 2-row, sweep-identical schema. When no GPU is present, the run still
+/// succeeds (per-pair GPU failures are non-fatal without
+/// `--fail-on-bogus`) and the feature parquet, when written, keeps the
+/// correct 372-column schema — the binary never falls back to a
+/// different width. Branch on `nvidia-smi` ground truth (no graceful
+/// skip): both arms assert a valid, documented outcome.
+#[cfg(feature = "sweep")]
+#[cfg(feature = "gpu-zensim")]
+#[test]
+fn score_pairs_writes_zensim_gpu_feature_parquet() {
+    let staged = tempfile::tempdir().expect("tmp");
+    let (pairs_tsv, out_pq, feat_pq) = stage_score_pairs_inputs(staged.path());
+
+    let result = cli()
+        .args([
+            "score-pairs",
+            "--metric",
+            "zensim-gpu",
+            "--pairs-tsv",
+            pairs_tsv.to_str().unwrap(),
+            "--out-parquet",
+            out_pq.to_str().unwrap(),
+            "--feature-output",
+            feat_pq.to_str().unwrap(),
+            "--zensim-features-regime",
+            "with-iw",
+            "--gpu-runtime",
+            "cuda",
+        ])
+        .output()
+        .expect("run cli");
+    // Without --fail-on-bogus the process exits 0 even if every pair's
+    // GPU call fails (the score column gets NaN); a hard failure here
+    // means an arg-parse / writer-setup bug, not a missing GPU.
+    assert!(
+        result.status.success(),
+        "score-pairs zensim-gpu failed: stderr={}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+
+    let feature_n = zenmetrics_cli::metrics::ZensimFeatureRegime::WithIw.total_features();
+    let expected_cols = 5 + feature_n;
+    let (names, num_rows) = read_parquet_schema(&feat_pq);
+
+    // The sidecar width is set from the regime, NOT from how many pairs
+    // scored — so it is 372 + 5 on both arms.
+    assert_eq!(
+        names.len(),
+        expected_cols,
+        "feature sidecar must be {expected_cols} columns wide regardless of GPU presence, got {}",
+        names.len()
+    );
+    assert_eq!(names[0], "image_path");
+    assert_eq!(names[4], "zensim_score");
+    assert_eq!(names[5], "feat_0");
+    assert_eq!(names[expected_cols - 1], format!("feat_{}", feature_n - 1));
+
+    if host_has_nvidia_gpu() {
+        // GPU present: the WithIw feature path actually ran, so both
+        // pairs produced a feature row.
+        assert_eq!(
+            num_rows,
+            2,
+            "CUDA GPU present → expected 2 zensim-gpu feature rows, got {num_rows}; stderr={}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    } else {
+        // No GPU: rows may be 0 (every GPU call failed) or 2 (a wgpu/cpu
+        // fallback happened to satisfy it). Either is a valid outcome;
+        // the schema width assertion above is the contract that matters.
+        assert!(
+            num_rows == 0 || num_rows == 2,
+            "no-GPU run produced an unexpected row count {num_rows}"
+        );
+    }
 }
 
 #[cfg(feature = "sweep")]
