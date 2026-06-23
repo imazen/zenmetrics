@@ -1057,11 +1057,28 @@ fn compute_cell(
             {
                 run_metric(metric, source, &decoded, cfg.gpu_runtime)
             }
+        } else if !metric.requires_gpu() {
+            // CPU metrics (zensim / ssim2 / butteraugli / dssim)
+            // parallelize internally with rayon. Running one while
+            // holding the global `MetricCache` mutex — from inside the
+            // outer rayon `par_iter` over cells — DEADLOCKS: the lock
+            // holder descends into the metric's nested rayon join and
+            // waits for worker threads, but every other worker is
+            // already parked on the same mutex at `lock_global`, so
+            // none can steal the nested tasks. (Confirmed via thread
+            // backtrace: holder in `zensim::streaming::
+            // convert_source_to_xyb_into` -> rayon SpinLatch wait,
+            // 28 workers in `futex_do_wait` at cache.rs:265.) It
+            // surfaces reliably once `--encoded-out-dir` perturbs
+            // per-cell timing, but is latent for any large CPU-metric
+            // sweep. CPU metrics have no cubecl device-pool pressure,
+            // so the cache buys nothing — take the uncached path with
+            // NO global lock. This is the documented contract:
+            // "CPU metrics are NOT routed through this cache."
+            run_metric(metric, source, &decoded, cfg.gpu_runtime)
         } else {
-            // All other GPU metrics route through the cache; CPU
-            // metrics (and unknown / disabled GPU metrics) fall
-            // through to the uncached `run_metric` path inside
-            // `run_metric_cached`.
+            // GPU metrics route through the cache so warm cubecl
+            // instances are reused across cells (device-pool pressure).
             #[cfg(any(
                 feature = "gpu-butteraugli",
                 feature = "gpu-ssim2",
