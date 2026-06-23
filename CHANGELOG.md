@@ -51,7 +51,7 @@ Workspace conventions per the global rules:
   (`image_path / codec / q / knob_tuple_json / zensim_score / feat_0..feat_371`)
   and joins 1:1 against sweep-produced feature parquets. Both CPU `zensim` and
   GPU `zensim-gpu` metrics are supported (GPU honours the regime); non-zensim
-  metrics warn and skip. Verified on the local RTX 5070 (4f03e86d).
+  metrics warn and skip. Verified on the local RTX 5070 (b62f1fe1).
 - **Heterogeneous picker/metric fleet** (`scripts/sweep/`): `hetzner_cpu_sweep.sh`
   encodes + dual-metric-scores (CPU ssim2+zensim) on cheap Hetzner CPU boxes and
   persists the encoded variants to R2 (the master record → 372 zensim features
