@@ -347,15 +347,31 @@ impl MetricCache {
                         zenmetrics_api::MetricKind::Zensim,
                         reference,
                         distorted,
-                        // Score-only path — the runner will request features
-                        // separately via `compute_zensim_features` when it
-                        // wants the regime-appropriate vector. Use Basic
-                        // here for the cheapest persist planes that still
-                        // produce the correct umbrella score (zensim's
-                        // basic-block score is regime-independent — the
-                        // extended / iw features feed picker training, not
-                        // the scalar score).
-                        Some(ZensimFeatureRegime::Basic),
+                        // Score-only path. `None` => `build_params` builds the
+                        // metric's DEFAULT params (`ZensimParams::default_weights()`):
+                        // profile = `ZensimProfile::latest()` (= `A`, the v47-strict
+                        // QAT bake) with its NATURAL regime, `WithIw` (372 features).
+                        //
+                        // This regime MUST match the profile's MLP input width.
+                        // The shipped default bake is a 372-input MLP, so a
+                        // narrower regime (Basic=228 / Extended=300) makes the
+                        // forward pass fail with `ModelForwardFailed`, which
+                        // `score_from_profile_vec` maps to `NaN` — every ≥64px
+                        // cell then fails with "non-finite score NaN". An earlier
+                        // version forced `Some(Basic)` here on the (false) premise
+                        // that "the scalar score is regime-independent"; that is
+                        // only true for the legacy linear V0_1/V0_2 weights path,
+                        // not for the MLP profiles that have shipped since V0_3.
+                        // The one-shot `score` subcommand never hit this because it
+                        // builds params via `resolve_default_params` (= the matched
+                        // 372/372 default) rather than overriding the regime.
+                        //
+                        // The wider regime's persist planes (~600 MB at 12 MP) are
+                        // the cost of a correct score; the feature-emit path
+                        // (`compute_zensim_features`) builds its own slot keyed on
+                        // its requested regime, so this does not double-allocate
+                        // when both score and features are produced for a sweep.
+                        None,
                     )
                     .map(|v| vec![("zensim_gpu", v)])
                 }
@@ -525,24 +541,47 @@ impl MetricCache {
             // Drop the prior slot before allocating the new one so
             // peak GPU memory stays at one instance's worth rather
             // than two during the transition. Dropping releases the
-            // persist-plane Handles back to cubecl's pool, where the
-            // pages are then reused by the next allocation — exactly
-            // what pools are for. No explicit `memory_cleanup` hint
-            // is required (and calling one here actively panics: see
-            // 2026-05-22 finding below).
+            // persist-plane Handles back to cubecl's pool.
+            //
+            // Capture the dropped slot's backend (if any) so we can
+            // reclaim its pool BEFORE the new pipeline allocates. See
+            // the correctness note below — leaving freed pages in the
+            // pool for blind reuse miscomputes the next score.
+            let prev_backend = self.umbrella.get(&kind).map(|s| s.backend);
             self.umbrella.remove(&kind);
-            // Historical note (2026-05-22): an earlier version called
-            // `cubecl_runtime_memory_cleanup()` here, on the theory
-            // that the cubecl pool would otherwise retain dropped
-            // persist planes across dim transitions. In practice the
-            // call panics at cubecl-cuda/src/compute/stream.rs:101 on
-            // a freshly-initialized runtime — `get_cursor` returns
-            // None because `memory_cleanup` invalidates pool pages
-            // that other Bindings still reference. The fix is to
-            // omit the hint entirely: dropping the prior `Metric`
-            // releases its handles, and cubecl's allocator reuses
-            // freed pages from its own internal book-keeping without
-            // any external prodding.
+
+            // CORRECTNESS (2026-06-22): reclaim the dropped pipeline's
+            // pooled VRAM before building the new one. Without this, a
+            // freed page from the previous-size pipeline can be handed
+            // back to the new pipeline's `client.empty()` allocation
+            // still holding the previous pipeline's data, and read
+            // before the new pipeline overwrites it — a stale-page read
+            // that silently corrupts the score. It reproduced as a
+            // ~7-9 JOD divergence on `zenmetrics sweep --metric
+            // zensim-gpu` at 1448×1448 ONLY when a differently-sized
+            // pipeline (e.g. 1024²) had been scored and dropped first
+            // (regression test:
+            // `zensim-gpu/tests/it/cached_ref_slot_rebuild.rs`). The
+            // same image scored correctly in isolation and via the
+            // standalone `score` subcommand; only the in-process
+            // rebuild path was affected. `reclaim_pooled_vram` returns
+            // the freed pages to the driver so the next allocation gets
+            // clean (zeroed) memory, which cures the divergence (probe
+            // measured 9.10 → 0.04 JOD).
+            //
+            // This supersedes the 2026-05-22 "omit the hint entirely"
+            // note: that finding was that `memory_cleanup` panics on a
+            // FRESHLY-INITIALIZED runtime (`get_cursor` → None at
+            // cubecl-cuda stream.rs). We only reclaim when a slot
+            // actually existed (`prev_backend.is_some()`), i.e. the
+            // runtime is warm and has live pool pages — never on a
+            // fresh client. `reclaim_pooled_vram` (memory_cleanup +
+            // sync) is the supported way to release dropped-instance
+            // pages and is safe in this warm-rebuild position.
+            if let Some(b) = prev_backend {
+                zenmetrics_api::reclaim_pooled_vram(b);
+            }
+
             let (metric, backend) =
                 construct_umbrella(kind, width, height, regime, self.gpu_runtime)?;
             self.umbrella.insert(

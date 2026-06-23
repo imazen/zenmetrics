@@ -34,3 +34,30 @@ _WANTED = [
 def keep_features(features_path):
     with open(features_path) as f: have = set(next(csv.reader(f, delimiter="\t")))
     return [c for c in _WANTED if c in have]
+
+# Heavy-tailed, strictly-positive features that span orders of magnitude
+# (measured on imazen26_train_features_2026-06-22: pixel_count tail 9352x,
+# laplacian_variance 365x, luma_kurtosis 367x, the chroma horiz/vert/peak
+# sharpness family 80-180x, etc.). Fed raw to the trainer's StandardScaler
+# their outliers dominate and the bulk collapses — log1p (0 params, applied
+# BEFORE StandardScaler and baked into the model JSON so inference matches)
+# compresses the tail to a smooth, near-Gaussian input. Bounded-[0,1] and
+# low/left-skew features (skew < ~1.5) are left raw — StandardScaler handles
+# them and a log would only distort. winsor/clip_then_log1p are avoided here
+# because they need corpus-specific [p1,p99] params (FEATURE_TRANSFORM_PARAMS);
+# log1p is parameter-free and corpus-stable.
+_LOG1P_FEATURES = [
+    "feat_pixel_count", "feat_variance", "feat_laplacian_variance",
+    "feat_laplacian_variance_p50", "feat_laplacian_variance_p75",
+    "feat_high_freq_energy_ratio", "feat_dct_compressibility_y",
+    "feat_dct_compressibility_uv", "feat_cb_horiz_sharpness",
+    "feat_cb_vert_sharpness", "feat_cb_peak_sharpness", "feat_cr_horiz_sharpness",
+    "feat_cr_vert_sharpness", "feat_cr_peak_sharpness", "feat_luma_kurtosis",
+]
+def feature_transforms(features_path):
+    """log1p map restricted to KEEP_FEATURES actually present in this TSV.
+    Set PICKER_NO_TRANSFORMS=1 to disable (for A/B ablation)."""
+    if os.environ.get("PICKER_NO_TRANSFORMS"):
+        return {}
+    keep = set(keep_features(features_path))
+    return {f: "log1p" for f in _LOG1P_FEATURES if f in keep}
