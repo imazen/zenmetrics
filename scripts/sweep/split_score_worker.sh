@@ -48,8 +48,15 @@ echo "[split] $(wc -l < /data/pairs.tsv) pair rows; $(ls /data/variants | wc -l)
 rc=0
 for m in $METRICS; do
   echo "[split] score-pairs --metric $m" >&2
-  if zenmetrics score-pairs --metric "$m" --pairs-tsv /data/pairs.tsv --out-parquet "/data/sc_$m.parquet"; then
+  # zensim metrics also emit the 372-feature (with-iw) zensim sidecar
+  feat=()
+  case "$m" in zensim-gpu|zensim) feat=(--feature-output "/data/feat_$m.parquet" --zensim-features-regime with-iw);; esac
+  if zenmetrics score-pairs --metric "$m" --pairs-tsv /data/pairs.tsv --out-parquet "/data/sc_$m.parquet" "${feat[@]}"; then
     s5 cp "/data/sc_$m.parquet" "s3://$BUCKET/$PRE/sidecars/$m.parquet"
+    if [ "${#feat[@]}" -gt 0 ] && [ -f "/data/feat_$m.parquet" ]; then
+      s5 cp "/data/feat_$m.parquet" "s3://$BUCKET/$PRE/sidecars/zensim_features.parquet"
+      echo "[split] $m feature sidecar uploaded ($(wc -l < /data/feat_$m.parquet 2>/dev/null) rows)" >&2
+    fi
   else rc=1; echo "[split] $m FAILED" >&2; fi
 done
 printf 'rc=%s metrics=%s\n' "$rc" "$METRICS" > /data/DONE

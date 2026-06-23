@@ -3,5 +3,10 @@
 # score-pairs worker as entrypoint. Encode-once on Hetzner CPU, score-many GPU
 # metrics here on vast.ai over the persisted variants.
 FROM ghcr.io/imazen/zenmetrics-sweep:v29-2026-06-23
+# Override the v29 binary with the current build carrying `score-pairs
+# --feature-output` (372-feature zensim sidecar). Drop this COPY once a v30
+# image bakes it. Binary is built `--features ...,gpu,gpu-cuda` so it dlopens
+# the v29 image's CUDA runtime at score time.
+COPY --chmod=0755 target/release/zenmetrics /usr/local/bin/zenmetrics
 COPY --chmod=0755 scripts/sweep/split_score_worker.sh /usr/local/bin/split_score_worker.sh
 ENTRYPOINT ["/usr/local/bin/run_with_error_trap.sh", "/usr/local/bin/split_score_worker.sh"]
