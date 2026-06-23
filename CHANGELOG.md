@@ -39,6 +39,21 @@ Workspace conventions per the global rules:
 
 ## zenmetrics-cli
 
+### Added
+
+- **Heterogeneous picker/metric fleet** (`scripts/sweep/`): `hetzner_cpu_sweep.sh`
+  encodes + dual-metric-scores (CPU ssim2+zensim) on cheap Hetzner CPU boxes and
+  persists the encoded variants to R2 (the master record → 372 zensim features
+  re-extractable on GPU, no re-encode); `split_score_worker.sh` + the
+  `zenmetrics-sweep:v29-split` image are the vast.ai GPU half — `score-pairs` over
+  the persisted variants for butteraugli-gpu / cvvdp / ssim2-gpu / zensim-gpu /
+  dssim-gpu (encode-once, score-many). Public GPU image
+  `zenmetrics-sweep:v29-2026-06-23` carries all 6 GPU metrics + the zensim-gpu fix.
+  Verified end-to-end (local RTX 5070 + vast.ai): real scores, 0 failed. Notes:
+  vast runs `--onstart-cmd` (ignores the image ENTRYPOINT); Hetzner caps at 5
+  servers; cpx41 phased out → cpx51 (16c) ceiling; CPU zensim emits 300 features,
+  372 needs the GPU WithIw regime.
+
 ### Fixed
 
 - **`sweep`/`score-pairs` zensim-gpu emitted `non-finite score NaN` on every

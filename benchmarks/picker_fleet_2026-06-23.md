@@ -39,11 +39,29 @@ Held-out mean bytes-overhead; lower = better. Fleet-scale data cuts the overhead
 ~2–3 pp — consistent with the measured ±2–3 pp seed-noise floor at 154 imgs
 (`picker_smoothness_2026-06-22.md`): more data, less noise, better picks.
 
+## Heterogeneous SPLIT — GPU metrics on vast.ai (proven)
+
+Encode once on cheap Hetzner CPU, score many GPU metrics on vast.ai over the
+**persisted variants** (no re-encode). `zenmetrics score-pairs` reads a pairs TSV
+(`image_path codec q knob_tuple_json ref_path dist_path`), decodes each variant,
+scores it → parquet sidecar.
+
+- **All 6 GPU metrics verified** (local RTX 5070, then vast.ai), real scores, 0
+  failed on 210 jpeg variants: butteraugli-gpu (`butteraugli_max_gpu` 1.9–7.7,
+  +`_pnorm3`), **cvvdp** (`cvvdp_imazen_v0_0_1`, 8.85–9.95 JOD), ssim2-gpu
+  (45–83), **zensim-gpu** (25–77 — the Bug#1/#2 fixes), dssim-gpu, iwssim-gpu.
+- **Images (public):** `zenmetrics-sweep:v29-2026-06-23` (GPU binary, all 6
+  metrics + CUDA 12.6); `zenmetrics-sweep:v29-split` (FROM v29 + `split_score_worker.sh`).
+- **vast quirk:** vast runs `--onstart-cmd`, **not** the image ENTRYPOINT (it does
+  its own ssh init) — launch the worker via `--onstart-cmd bash
+  /usr/local/bin/split_score_worker.sh`, not by relying on the entrypoint.
+- CPU zensim emits **300** features; the **372** (Profile-A) needs the GPU WithIw
+  regime — so persist variants and re-extract 372 on GPU.
+
 ## Open / queued
 
 - **Quality under/overshoot %** — the eval reports bytes-overhead + argmin-acc +
-  scalar-RMSE but NOT whether the picked config hits the target zq. Adding it to
-  `train_hybrid` (deferred while zenanalyze is mid-redesign).
-- webp / jxl / avif fleet runs (sequential, 2 slots) + a jpeg persist pass for
-  variants.
-- (Optional) GPU pass to materialize the 372 zensim features as a parquet.
+  scalar-RMSE but NOT whether the picked config hits the target zq. Add to
+  `train_hybrid` (deferred while zenanalyze is mid-redesign by another session).
+- webp / jxl / avif fleet runs (sequential, 2 slots) + a jpeg persist pass; then
+  the vast SPLIT GPU-metric pass over all persisted variants.

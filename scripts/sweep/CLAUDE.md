@@ -31,6 +31,19 @@ production entrypoint. Sweep operations are:
   `SKIP_CLAIMS`, `METRICS`, `CHUNKS_R2` env vars to the worker.
 - `fleet_util_snapshot.sh` — per-box util dashboard.
 - `vast_cost_watch.sh` — continuous burn-rate monitor.
+- `hetzner_cpu_sweep.sh` — **heterogeneous SPLIT, Hetzner-CPU half** (2026-06-23):
+  each cheap box fetches its chunk + runs `zenmetrics sweep` (CPU ssim2+zensim) +
+  `--encoded-out-dir` → tars the variants to R2 (the master record). Scoped 3h
+  creds; `--image docker-ce`; biggest-first type×location fallback. Hard limits:
+  Hetzner account caps at **5 servers**; **cpx41 phased out** → cpx51 (16c) is the
+  per-box ceiling (ccx53/63 capacity-out).
+- `split_score_worker.sh` — **SPLIT vast.ai-GPU half**: entrypoint of the thin
+  `ghcr.io/imazen/zenmetrics-sweep:v29-split` image (FROM `:v29-2026-06-23`, all 6
+  GPU metrics). Pulls persisted variants + `pairs.tsv`, runs `zenmetrics score-pairs`
+  per GPU metric (butter/cvvdp/ssim2-gpu/zensim-gpu/dssim) → sidecars. **Launch via
+  `--onstart-cmd bash /usr/local/bin/split_score_worker.sh`** — vast ignores the
+  image ENTRYPOINT and runs its own ssh init + the onstart-cmd. (see memory
+  `heterogeneous-fleet-split`)
 
 Legacy bash workers (`omni_backfill_chunk_worker.sh`,
 `metric_backfill_chunk_worker.sh`, etc.) and onstarts

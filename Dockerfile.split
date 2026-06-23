@@ -1,0 +1,7 @@
+# Thin heterogeneous-SPLIT GPU scorer: FROM the v29 sweep image (zenmetrics GPU
+# binary + CUDA runtime + s5cmd + run_with_error_trap + zenfleet-vastai) with the
+# score-pairs worker as entrypoint. Encode-once on Hetzner CPU, score-many GPU
+# metrics here on vast.ai over the persisted variants.
+FROM ghcr.io/imazen/zenmetrics-sweep:v29-2026-06-23
+COPY --chmod=0755 scripts/sweep/split_score_worker.sh /usr/local/bin/split_score_worker.sh
+ENTRYPOINT ["/usr/local/bin/run_with_error_trap.sh", "/usr/local/bin/split_score_worker.sh"]
