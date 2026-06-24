@@ -9,7 +9,8 @@ set -uo pipefail
 RUN="${1:?run id}"; CODEC="${2:-zenavif}"; N="${3:-8}"
 SCALE="${ZEN_SCALE:-0}"   # ZEN_SCALE=1: add boxes to a LIVE run — skip the pause/240s-sleep/resume stall
 DGP="${ZEN_DATAGEN_PREFIX:-picker-sweep-2026-06-22/datagen-2026-06-23}"
-IMAGE="${ZEN_GPU_IMAGE:-ghcr.io/imazen/zenfleet-worker-exec-gpu:latest}"
+. "$(dirname "$0")/fleet.env"   # canonical image source of truth (no hard-coded ghcr names — see guard)
+IMAGE="${ZEN_GPU_IMAGE:-$ZEN_FLEET_IMAGE}"
 BUCKET=codec-corpus; RUNP="jobs/$RUN"
 LOG=/tmp/scorefile_launch.log; : > "$LOG"; log(){ echo "[$(date -u +%H:%M:%S)] $*" | tee -a "$LOG"; }
 set -a; . ~/.config/cloudflare/r2-credentials; set +a

@@ -22,6 +22,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Machine-enforced "ONE ghcr package per artifact, variants are TAGS" rule — FAILS if any scripts/*.sh
+  # hard-codes a non-canonical ghcr.io/imazen image name. This is the rule that doc-alone failed to hold
+  # (5 worker renames + 4 sweep renames); see scripts/jobsys/fleet.env for the single source of truth.
+  canonical-images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/jobsys/check_canonical_images.sh
+
   # Workspace-wide compile check across the platforms CLAUDE.md mandates:
   # linux-x86_64, windows-11-arm, macos-15-intel, macos-26-intel.
   # We compile with the WGPU backend (no system CUDA needed) so this works
