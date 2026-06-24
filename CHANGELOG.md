@@ -21,6 +21,24 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **ghcr package-name guard** — `ghcr-packages.json` (root) is now the single
+  source of truth for `ghcr.io/imazen/<name>` container packages: one package
+  per artifact, variants are TAGS. `scripts/ci/check_ghcr_packages.py`
+  (`just ghcr-check`, CI `.github/workflows/ghcr-guard.yml`) fails if any active
+  infra file references a non-canonical name; `scripts/ci/audit_ghcr_org.py`
+  (`just ghcr-audit`) diffs the live org packages (11 today → 4 canonical) and
+  emits a migrate/delete recipe. Grandfathers the existing splinters (warn, not
+  fail) so the live fleet keeps working; `--strict` is the post-migration gate.
+  Policy + migration playbook: `docs/GHCR_PACKAGES.md` (362e381).
+- **`zen-base` foundation image** — `docker/base/Dockerfile` (multi-stage
+  `common`→`nocuda`/`cuda`) + `.github/workflows/base-image.yml` build one
+  `ghcr.io/imazen/zen-base` package as three tags: `:x86` (amd64),
+  `:arm` (arm64), `:x86-cuda` (amd64 + CUDA 12.6 runtime + `cuda_dlsym_stub`).
+  Bakes all stable train/run deps (aws-cli v2 + s5cmd + python3/pyarrow/numpy +
+  jq + C toolchain); no pytorch, no Rust toolchain. Leaf images
+  (zenmetrics-sweep/zenfleet-worker/zen-train) are meant to `FROM` it so heavy
+  apt/CUDA layers pull once per node (a006ea9).
+
 - **JPEG cross-metric mapping table** (`benchmarks/metric_mapping_2026-06-23.tsv`
   + `.md`) relating five perceptual scales for baseline libjpeg-turbo JPEG:
   SSIMULACRA2, butteraugli (3-norm + max), libjpeg-turbo Q, cvvdp (JOD), and
