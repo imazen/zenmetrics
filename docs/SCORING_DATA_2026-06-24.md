@@ -27,16 +27,24 @@ The ScoreFile write-back additionally carries `encode_sha` = `sha256(variant byt
 
 ## 2. Status matrix
 
-| codec | cells scored | 6 metrics | 372 feat | primary location | complete? |
-|---|---|---|---|---|---|
-| jpeg | 16,830 | ✅ | ✅ | R2 `…/zenjpeg/sidecars/` | ✅ **DONE** |
-| png  | 4,446  | ✅ | ✅ | R2 `…/zenpng/sidecars/`  | ✅ **DONE** |
-| avif | 29,889 / 38,472 | ✅ | ✅ | `/mnt/v` unified + R2 blobs | ⚠️ **78%** (gap paused) |
-| webp | 128,699 / 306,162 | ✅ | ✅ | `/mnt/v` unified + R2 blobs | ⚠️ **42%** (paused) |
-| hdr/zenjxl | 7,980 | **cvvdp only (1/6)** | ❌ | R2 `…-hdr/zenjxl/sidecars/` | ⚠️ **1/6 metrics** |
+Source corpus = **1,482 renditions** (`train_renditions_2026-06-14`). There are TWO independent gaps —
+**encode coverage** (how many source images were encoded at all) and **scoring coverage** (how many of the
+encoded variants were metric-scored):
 
-**Fully-scored cells (all 6 metrics + 372 features): 179,864** = jpeg 16,830 + png 4,446 + avif 29,889 +
-webp 128,699. Plus hdr/zenjxl 7,980 cells with cvvdp only. This is the materialized output of today's spend.
+| codec | images / 1482 | cells scored | cells/img | 6 metrics | 372 feat | status |
+|---|---|---|---|---|---|---|
+| jpeg | **117 (8%)**  | 16,830 / 16,830  | 144 | ✅ | ✅ | scored-complete, but **ENCODE covers only 8% of the corpus** |
+| png  | 1,482 (100%)  | 4,446 / 4,446    | 3   | ✅ | ✅ | complete (png grid ≈ 3 cells/image) |
+| avif | **229 (15%)** | 29,889 / 38,472  | 168 | ✅ | ✅ | **encode 15% of images**; 78% of those scored |
+| webp | 1,398 (94%)   | 128,699 / 306,162| 219 | ✅ | ✅ | encode 94%; 42% of those scored |
+| hdr/zenjxl | subset | 7,980          | — | cvvdp only (1/6) | ❌ | 1/6 metrics |
+
+**Fully-scored cells today (6 metrics + 372 feat): 179,864.** BUT because of the encode gap, jpeg & avif are
+a small slice of the corpus, NOT corpus-complete:
+- **Encode gap (CPU side):** jpeg encoded only **117/1482** images, avif only **229/1482**. To build a complete
+  cross-codec corpus they must be RE-ENCODED on the remaining ~1,365 / ~1,253 images (CPU `score`/encode job —
+  cheaper than GPU scoring). webp (1,398) / png (1,482) image coverage is near-full.
+- **Scoring gap (GPU side):** of what IS encoded, webp 42% / avif 78% / jpeg+png 100% scored.
 
 Two scoring methods produced this:
 - **SPLIT** (jpeg/png/hdr-cvvdp): CPU encode-once + GPU `score-pairs` per metric → **per-metric**
