@@ -153,3 +153,37 @@ Canonical training parquets mirrored to `/mnt/tower/output/zensim-training/2026-
   (commit recorded in `git log` for this doc).
 - **cvvdp column** `cvvdp_imazen_v0_0_1` is the imazen cvvdp-gpu output (NOT pycvvdp v0.5.4 — that
   variant uses column `cvvdp_pycvvdp_v054`; none present in this corpus yet).
+
+## COMPLETE CPU corpus (2026-06-24-cpu) — full coverage, no GPU
+
+A second, **CPU-only** scoring pass that closes the coverage gaps the GPU set had (jpeg 8% / avif 15% image
+coverage, no large sizes). Run entirely on **Hetzner CPU** — no GPU, no vast credit (the vast account was at
+−$0.25 the whole time), held **<$1/hr**. The unlock: `ssim2` + `zensim` are the two metrics with CPU
+implementations, so the encode + score + features all run on cheap CPU boxes.
+
+**Metrics:** `score_ssim2` + `score_zensim` + the 372-dim `with-iw` zensim feature vector (`feat_0..feat_371`).
+The 4 GPU-only metrics (cvvdp / iwssim / dssim / butteraugli) are NOT in this pass — deferred to a GPU run
+when vast credit returns.
+
+**Coverage:** full 1,482-image corpus + a 4.2–16MP big-image tier (57 imgs/codec). **477,288 cells.**
+
+| codec | cells | plan | coverage |
+|---|---|---|---|
+| jpeg | 206,928 | rd_core (~136/img) | full 1482 + 57 big |
+| avif | 244,440 | rd_core (~168/img) | full + 57 big |
+| webp | 21,555 | rd_core (~14/img) | full + big — **SPARSE**; original was modes_full (~219/img), denser re-run is a pending user decision |
+| png | 4,365 | rd_core (3/img) | lossless, full + big |
+| **total** | **477,288** | | |
+
+**Layout:** `/mnt/v/zen/zensim-training/2026-06-24-cpu/unified/<codec>/{omni.tsv,features.parquet}` + Tower
+mirror `/mnt/tower/output/zensim-training/2026-06-24-cpu/<codec>/`. Encoded variants persisted on R2 under
+`picker-sweep-2026-06-22/runs/dgcpu-*/variants/`. `_MANIFEST.json` in the unified dir.
+
+**Deferred:** ~27 renditions >16MP (monster sizes up to 102MP — outside the MLP range, too slow here) + the
+4 GPU-only metrics.
+
+**Lessons:** the consolidator had a per-run `box-N` filename collision that silently dropped ~80k jpeg cells —
+caught by verification, fixed (per-run subdirs). webp ran rd_core (sparse) vs its original modes_full.
+avif-big oversubscribed ccx53 cores (nested rayon, loadavg ~32); png-big's metric on 11–16MP images is
+single-core-slow. Tooling: `scripts/sweep/hetzner_cpu_sweep.sh` (+`--feature-output`, MINPX/MAXPX window),
+`scripts/jobsys/consolidate_cpu_sweep.py`.
