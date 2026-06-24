@@ -1,0 +1,105 @@
+name: zen-base foundation image
+
+# Builds the shared bake-everything base image (ghcr.io/imazen/zen-base) as
+# THREE single-platform tags from one multi-stage Dockerfile (docker/base/Dockerfile):
+#
+#   :x86       target nocuda, linux/amd64   (CPU)
+#   :arm       target nocuda, linux/arm64   (Hetzner CAX / Oracle ARM)
+#   :x86-cuda  target cuda,   linux/amd64   (CUDA 12.6 runtime + dlsym stub)
+#
+# One ghcr package, variants are TAGS (docs/GHCR_PACKAGES.md). Each arch builds
+# NATIVELY on its own runner — emulated arm64 apt/pip would crawl. Leaf images
+# (zenmetrics-sweep, zenfleet-worker, zen-train) FROM these so the heavy
+# apt/CUDA layers are pulled once per node.
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - "docker/base/**"
+      - "scripts/sweep/cuda_dlsym_stub.c"
+      - ".github/workflows/base-image.yml"
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ghcr.io/imazen/zen-base
+  REGISTRY: ghcr.io
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.tag }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tag: x86
+            target: nocuda
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - tag: arm
+            target: nocuda
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - tag: x86-cuda
+            target: cuda
+            platform: linux/amd64
+            runner: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Short SHA
+        id: sha
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Build + push ${{ matrix.tag }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/base/Dockerfile
+          target: ${{ matrix.target }}
+          platforms: ${{ matrix.platform }}
+          push: true
+          # Floating tag + an immutable per-commit pin.
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ matrix.tag }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.tag }}-${{ steps.sha.outputs.sha }}
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.tag }}
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.tag }},mode=max
+          provenance: false
+      - name: Smoke the pushed image (deps present + runnable)
+        run: |
+          set -euo pipefail
+          IMG="${IMAGE_NAME}:${{ matrix.tag }}"
+          docker pull --platform ${{ matrix.platform }} "$IMG"
+          docker run --rm --platform ${{ matrix.platform }} --entrypoint bash "$IMG" -c '
+            set -e
+            s5cmd version
+            jq --version
+            aws --version
+            python3 -c "import pyarrow.parquet, numpy; print(\"pyarrow+numpy OK\")"
+          '
+      - name: CUDA libs present (cuda tag only; no GPU on the runner)
+        if: matrix.target == 'cuda'
+        run: |
+          set -euo pipefail
+          IMG="${IMAGE_NAME}:${{ matrix.tag }}"
+          docker run --rm --platform ${{ matrix.platform }} --entrypoint bash "$IMG" -c '
+            set -e
+            ldconfig -p | grep -q libnvrtc.so.12
+            test -f /usr/local/cuda/lib64/libcudart.so.12
+            test -f /usr/local/lib/cuda_dlsym_stub.so
+            echo "CUDA 12.6 runtime + dlsym stub present"
+          '

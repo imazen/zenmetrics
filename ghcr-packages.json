@@ -3,6 +3,18 @@
   "registry": "ghcr.io/imazen",
   "packages": [
     {
+      "name": "zen-base",
+      "purpose": "Shared 'bake-everything' FOUNDATION image that every Rust leaf image (zenmetrics-sweep, zenfleet-worker, zen-train) FROMs. Carries all stable deps to TRAIN or RUN — OS, R2 tooling (aws-cli v2 + s5cmd), python3 + pyarrow/numpy, jq, build tools, and (cuda variant) the CUDA 12.6 runtime + cuda_dlsym_stub. Leaf images add ONLY their precompiled binary + entrypoint, so the heavy apt/CUDA layers are pulled once per node and the leaf images are tiny. Carries NO pytorch (that bloat stays in pycvvdp-scorer) and NO Rust toolchain (binaries are built in CI and COPY'd into leaves).",
+      "builds_from": "docker/base/Dockerfile (multi-stage: common -> nocuda / cuda), built by .github/workflows/base-image.yml on native runners.",
+      "tag_convention": [
+        "x86               — amd64, no CUDA (CPU encode/score, training-data prep, anything GPU-less)",
+        "x86-cuda          — amd64 + CUDA 12.6 runtime + cuda_dlsym_stub (GPU metrics, cubecl-cuda training)",
+        "arm               — arm64, no CUDA (Hetzner CAX / Oracle ARM tiers)",
+        "x86-cuda-12-6     — CUDA-version-pinned variant when a non-default toolkit is baked",
+        "<tag>-<short-sha> — exact-commit immutable pin of any of the above"
+      ]
+    },
+    {
       "name": "zenmetrics-sweep",
       "purpose": "GPU/CPU codec-sweep + metric-score worker (the 'omni' image baking the zenmetrics CLI + all 5 codecs + GPU/CPU metrics). The image fleet boxes pull to encode and score.",
       "builds_from": "Dockerfile.sweep.v27 (amd64) / scripts/sweep/Dockerfile.sweep.hetzner.v1 (arm64) — precompiled binary COPY'd in.",
