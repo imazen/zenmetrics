@@ -13,15 +13,22 @@ env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
 def s5(*a): subprocess.run(["s5cmd", "--endpoint-url", ep, *a], env=env, check=False,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 os.makedirs(OUT, exist_ok=True)
+import shutil
 work = "/mnt/v/zen/cpu-consolidate-%s" % codec
-od, fd = work + "/omni", work + "/feat"
-os.makedirs(od, exist_ok=True); os.makedirs(fd, exist_ok=True)
+if os.path.isdir(work):
+    shutil.rmtree(work)  # box-N filenames COLLIDE across runs -> download each run into its own subdir
+os.makedirs(work)
+omnis = []; feats = []
 for RUN in RUNS:
     PFX = "picker-sweep-2026-06-22/runs/%s" % RUN
+    od, fd = work + "/" + RUN + "/omni", work + "/" + RUN + "/feat"
+    os.makedirs(od); os.makedirs(fd)
     s5("cp", "s3://codec-corpus/%s/omni/*" % PFX, od + "/")
     s5("cp", "s3://codec-corpus/%s/features/*" % PFX, fd + "/")
+    omnis += sorted(glob.glob(od + "/*.tsv"))
+    feats += sorted(glob.glob(fd + "/*.parquet"))
 # concat omni (keep one header)
-omnis = sorted(glob.glob(od + "/*.tsv"))
+omnis = sorted(omnis)
 with open(OUT + "/omni.tsv", "w") as out:
     for i, f in enumerate(omnis):
         with open(f) as fh:
@@ -30,8 +37,8 @@ with open(OUT + "/omni.tsv", "w") as out:
                     continue
                 out.write(line)
 rows = max(0, sum(1 for _ in open(OUT + "/omni.tsv")) - 1)
-# concat feature parquets
-feats = sorted(glob.glob(fd + "/*.parquet"))
+# concat feature parquets (feats accumulated across all runs above)
+feats = sorted(feats)
 ft = pa.concat_tables([pq.read_table(f) for f in feats]) if feats else None
 if ft is not None:
     pq.write_table(ft, OUT + "/features.parquet", compression="zstd")
