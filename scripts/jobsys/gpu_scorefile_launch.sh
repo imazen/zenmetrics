@@ -34,6 +34,16 @@ export PATH="/usr/local/sbin:/usr/sbin:/sbin:$PATH"
 env | grep -E "^(AWS_|ZEN_)" >> /etc/environment
 ldconfig 2>/dev/null
 nvidia-smi --query-gpu=name --format=csv,noheader 2>&1 | head -1
+# Background GPU/CPU utilization heartbeat -> R2, so the operator can SEE whether the GPU is actually
+# saturated or paid-for-idle (CPU-bound on decode / R2 range-fetch). Streams every 60s, re-uploaded each
+# tick so it tails live: jobs/<run>/util/<worker>.csv = ts,gpu%,memutil%,memMB,powerW,load1,load5,load15
+( echo "ts,gpu_util,mem_util,mem_used_mb,power_w,load1,load5,load15" > /var/log/util.csv
+  while true; do
+    g=$(nvidia-smi --query-gpu=utilization.gpu,utilization.memory,memory.used,power.draw --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d " ")
+    echo "$(date -u +%H:%M:%S),$g,$(cut -d" " -f1-3 /proc/loadavg | tr " " ",")" >> /var/log/util.csv
+    s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp /var/log/util.csv "s3://$ZEN_BUCKET/$ZEN_RUN/util/$ZEN_WORKER.csv" >/dev/null 2>&1
+    sleep 60
+  done ) &
 bash /usr/local/bin/fleet-entrypoint.sh 2>&1 | tee /var/log/zenfleet.log
 s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp /var/log/zenfleet.log "s3://$ZEN_BUCKET/$ZEN_RUN/worker-$ZEN_WORKER.log" 2>&1 | tail -1'
 OFFERS=$(vastai search offers "reliability>0.98 num_gpus=1 gpu_ram>=12 rentable=true inet_down>300 disk_space>40 cuda_max_good>=12.6" --order dph_total --raw 2>/dev/null)

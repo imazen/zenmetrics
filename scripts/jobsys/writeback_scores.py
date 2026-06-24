@@ -12,7 +12,8 @@
 #   usage: writeback_scores.py <codec_dir> <ext> <run_id>
 import json, csv, os, sys, tarfile, subprocess, hashlib, glob
 import pyarrow as pa, pyarrow.parquet as pq
-codec, ext, RUN = sys.argv[1], sys.argv[2], sys.argv[3]
+codec, ext = sys.argv[1], sys.argv[2]
+RUNS = sys.argv[3].split(",")  # comma-sep: merge blobs from multiple runs (e.g. main + gap-fill)
 DGP = os.environ.get("ZEN_DATAGEN_PREFIX", "picker-sweep-2026-06-22/datagen-2026-06-23")
 OUTDIR = os.environ.get("ZEN_WRITEBACK_DIR", "/mnt/v/zen/zensim-training/2026-06-24/unified/%s" % codec)
 METRICS = ["butteraugli-gpu", "cvvdp", "dssim-gpu", "iwssim-gpu", "ssim2-gpu", "zensim-gpu"]
@@ -28,8 +29,9 @@ work = "/mnt/v/zen/writeback-%s" % codec; os.makedirs(work, exist_ok=True); os.m
 
 # 1) download all blobs
 bdir = "%s/blobs" % work; os.makedirs(bdir, exist_ok=True)
-print("downloading blobs...", flush=True)
-s5("cp", "s3://codec-corpus/jobs/%s/blobs/*" % RUN, bdir + "/")
+for RUN in RUNS:
+    print("downloading blobs from %s..." % RUN, flush=True)
+    s5("cp", "s3://codec-corpus/jobs/%s/blobs/*" % RUN, bdir + "/")
 blobs = glob.glob(bdir + "/*")
 print("  %d blobs" % len(blobs), flush=True)
 
