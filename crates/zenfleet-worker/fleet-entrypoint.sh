@@ -23,12 +23,22 @@ WORKER="${ZEN_WORKER:-$(hostname)}"
 EXEC="${ZEN_EXEC:-/bin/cat}"
 export AWS_REGION="${AWS_REGION:-auto}" AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}"
 
-for tool in aws s5cmd zenfleet-worker; do
+for tool in aws s5cmd zenfleet-worker gunzip; do
   command -v "$tool" >/dev/null || { echo "FATAL: baked tool '$tool' missing — image is broken, rebuild"; exit 3; }
 done
 
-s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$ZEN_MANIFEST_URI" /tmp/manifest.json \
-  || { echo "FATAL: cannot fetch manifest $ZEN_MANIFEST_URI"; exit 4; }
+# The manifest can be large (92MB+ for big sweeps) and some fleet boxes choke on large R2 downloads
+# even though small ops are fine (observed 2026-06-24: a 92MB cp hung at 0 bytes while ls/control.json
+# took <0.4s). Prefer a gzipped manifest (~30x smaller — 92MB -> 3MB) at <uri>.gz when present, else
+# fall back to the plain object. Backward-compatible: runs without a .gz still work via the fallback.
+MGZ="${ZEN_MANIFEST_URI%.gz}.gz"
+if s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$MGZ" /tmp/manifest.json.gz 2>/dev/null; then
+  gunzip -f /tmp/manifest.json.gz || { echo "FATAL: gunzip $MGZ failed"; exit 4; }
+elif s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "${ZEN_MANIFEST_URI%.gz}" /tmp/manifest.json 2>/dev/null; then
+  :
+else
+  echo "FATAL: cannot fetch manifest ($MGZ or plain ${ZEN_MANIFEST_URI%.gz})"; exit 4
+fi
 echo "fleet-entrypoint: $WORKER ($PROVIDER) claiming from s3://$ZEN_BUCKET/$ZEN_RUN/"
 
 idle=0 i=0
