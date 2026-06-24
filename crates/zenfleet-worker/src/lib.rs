@@ -469,7 +469,19 @@ where
     B: BlobStore,
     C: Fn(&JobId) -> bool,
 {
-    let plan = reconcile(desired, view, policy);
+    let mut plan = reconcile(desired, view, policy);
+    // Shuffle the gap per worker so concurrent workers don't all iterate from job 0 in the same order
+    // and collide on (wasting an aws claim-attempt skipping) the same already-claimed prefix — without
+    // this, a late-joining box burns ~1s/job skipping thousands of jobs the early boxes already claimed
+    // before it reaches free work (observed 2026-06-24: 24 boxes idle at GPU 0% behind the prefix). A
+    // deterministic hash(job_id, worker) order spreads each worker across the gap so it hits free jobs
+    // immediately. Deterministic (no RNG) so a re-run of the same worker is reproducible.
+    plan.enqueue.sort_by_cached_key(|id| {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        std::hash::Hash::hash(id, &mut h);
+        std::hash::Hash::hash(ctx.worker, &mut h);
+        std::hash::Hasher::finish(&h)
+    });
     let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
     let mut out = ExecOutcome {
         rows: Vec::new(),
