@@ -23,8 +23,11 @@ def r2cat(key): return subprocess.run(["s5cmd", "--endpoint-url", ep, "cat", "s3
 csv.field_size_limit(1 << 24)
 work = "/mnt/v/zen/scorefile-%s" % codec; os.makedirs(work, exist_ok=True)
 tar_local = "%s/variants.tar" % work
-print("downloading variants.tar...", flush=True)
-r2("cp", "s3://codec-corpus/%s/%s/variants.tar" % (DGP, codec), tar_local)
+if os.path.exists(tar_local) and os.path.getsize(tar_local) > 1000:
+    print("using cached variants.tar (%d bytes)" % os.path.getsize(tar_local), flush=True)
+else:
+    print("downloading variants.tar...", flush=True)
+    r2("cp", "s3://codec-corpus/%s/%s/variants.tar" % (DGP, codec), tar_local)
 print("reading tar members (offset + size + sha256 from bytes)...", flush=True)
 name2info = {}  # basename -> (offset_data, size, sha256-of-bytes)
 with tarfile.open(tar_local, "r") as tf:
@@ -42,15 +45,29 @@ print("uploaded variant_index.tsv (%d shas)" % len(name2info), flush=True)
 # Group by source file via pairs.tsv (ref_path, dist_path) — the canonical (ref, variant) map. The
 # omni's encoded_filename is unreliable across codecs (webp's is truncated, missing _q<Q>_<hash>.<ext>);
 # the pairs.tsv dist_path is the actual persisted variant filename (matches the tar member basename).
+# Optional gap-fill: skip variants whose content sha is already scored (ZEN_SKIP_SHAS_FILE = a newline
+# list of scored shas). Lets a re-run cover ONLY the cells a prior (e.g. omni-undercounted) manifest
+# missed, without re-scoring the rest — "don't duplicate work".
+SKIP = set()
+skf = os.environ.get("ZEN_SKIP_SHAS_FILE")
+if skf and os.path.exists(skf):
+    SKIP = {l.strip() for l in open(skf) if l.strip()}
+    print("skip-shas: %d already-scored shas loaded (gap-fill mode)" % len(SKIP), flush=True)
 files = {}
+skipped = 0
 for r in csv.DictReader(r2cat("%s/%s/pairs.tsv" % (DGP, codec)).splitlines(), delimiter="\t"):
     dp = r.get("dist_path")
     name = os.path.basename(dp) if dp else None
     info = name2info.get(name) if name else None
     if not info:
         continue
+    if info[2] in SKIP:
+        skipped += 1
+        continue
     bn = os.path.basename(r["image_path"])
     files.setdefault(bn, {"codec": r["codec"], "shas": []})["shas"].append(info[2])
+if SKIP:
+    print("skip-shas: skipped %d already-scored cells" % skipped, flush=True)
 # Chunk each file's variants so resumability + the OOM blast radius are FINER than per-file: a file
 # could have thousands of variants, and a per-file job that OOMs/dies partway would lose all of them.
 # Each chunk is an independent DesiredJob (own content-addressed job_id) so the job system retries/
