@@ -27,6 +27,14 @@ CTX="$ROOT/target/.exec-ctx-gpu"; rm -rf "$CTX"; mkdir -p "$CTX"; trap 'rm -rf "
 cp "$ROOT/scripts/jobsys/Dockerfile.executor.gpu" "$CTX/Dockerfile"
 cp "$ROOT/crates/zenfleet-worker/fleet-entrypoint.sh" "$CTX/fleet-entrypoint.sh"
 cp "$ROOT/scripts/jobsys/zenfleet-exec" "$CTX/zenfleet-exec"
+# Freshly-built binaries baked over the GPU_BASE: the persistent `--serve` executor lives in BOTH
+# zenmetrics (the warm loop) and zenfleet-worker (the warm-child handler). Build them first with
+# `cargo build --release -p zenmetrics-cli --no-default-features --features sweep,png,jpeg,webp,avif,jxl,gpu,gpu-cuda`
+# and `-p zenfleet-worker`.
+[ -x "$ROOT/target/release/zenmetrics" ] || { echo "FATAL: target/release/zenmetrics missing — build it first"; exit 1; }
+[ -x "$ROOT/target/release/zenfleet-worker" ] || { echo "FATAL: target/release/zenfleet-worker missing — build it first"; exit 1; }
+cp "$ROOT/target/release/zenmetrics" "$CTX/zenmetrics"
+cp "$ROOT/target/release/zenfleet-worker" "$CTX/zenfleet-worker"
 
 echo "building $IMAGE"
 echo "  WORKER_BASE = $WORKER_BASE   (source of zenfleet-worker/-gc + aws-cli + entrypoint)"
@@ -37,9 +45,9 @@ docker build \
   -t "$IMAGE" "$CTX"
 
 echo "=== smoke ==="
-# 1) the GPU zenmetrics + its jobexec are reachable
-docker run --rm --entrypoint /usr/local/bin/zenmetrics "$IMAGE" jobexec --help >/dev/null \
-  && echo "OK: zenmetrics jobexec present"
+# 1) the GPU zenmetrics + its jobexec --serve (persistent warm executor) are baked in
+docker run --rm --entrypoint /usr/local/bin/zenmetrics "$IMAGE" jobexec --help 2>&1 \
+  | grep -q -- '--serve' && echo "OK: zenmetrics jobexec --serve present (persistent executor)"
 # 2) GPU metrics are compiled in (list-metrics shows requires_gpu=yes rows -> GPU build)
 docker run --rm --entrypoint /usr/local/bin/zenmetrics "$IMAGE" list-metrics 2>&1 \
   | grep -qE 'cvvdp .*GPU .*yes' && echo "OK: GPU metrics (cvvdp) compiled in"

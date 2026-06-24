@@ -38,8 +38,12 @@ FROM ${WORKER_BASE} AS worker
 # LD_PRELOAD automatically.
 FROM ${GPU_BASE}
 
-# Fleet-worker binaries (built against glibc 2.36; forward-compatible on 2.39).
-COPY --from=worker /usr/local/bin/zenfleet-worker /usr/local/bin/zenfleet-worker
+# Freshly-built GPU zenmetrics (adds `jobexec --serve` warm executor + the s5cmd-stdout fix),
+# overriding the GPU_BASE's baked copy. Built on the same workstation as that copy → same glibc.
+COPY --chmod=0755 zenmetrics /usr/local/bin/zenmetrics
+# Fleet-worker: the freshly-built binary carrying the persistent-executor handler (the warm
+# `--serve` child + ZEN_PERSISTENT_EXEC dispatch). zenfleet-gc is unchanged → from the worker base.
+COPY --chmod=0755 zenfleet-worker /usr/local/bin/zenfleet-worker
 COPY --from=worker /usr/local/bin/zenfleet-gc     /usr/local/bin/zenfleet-gc
 
 # aws-cli v2 — copy the whole self-contained dist tree + the /usr/local/bin/aws symlink target.

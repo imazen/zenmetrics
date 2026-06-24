@@ -43,7 +43,9 @@ launched=0
 for k in $(seq 1 "$N"); do
   OFFER=$(echo "$OFFERS" | python3 -c "import json,sys;o=json.load(sys.stdin);print(o[$((k-1))]['id'] if len(o)>$((k-1)) else '')")
   [ -z "$OFFER" ] && { echo "no offer for box $k"; continue; }
-  ENVB="-e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK -e AWS_SESSION_TOKEN=$ST -e AWS_REGION=auto -e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUNP -e ZEN_MANIFEST_URI=$MANIFEST -e ZEN_PROVIDER=vast-gpu -e ZEN_CORPUS_PREFIX=$CORPUS_PREFIX -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_IDLE_PASSES=10 -e ZEN_WORKER=vast-gpu-$k"
+  # ZEN_PERSISTENT_EXEC=1 → the worker keeps ONE warm `jobexec --serve` child across the pass's jobs
+  # (CUDA init + kernel compile paid once, not per job) — ~20s/job cold-spawn → ~0.3-1.5s/job warm.
+  ENVB="-e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK -e AWS_SESSION_TOKEN=$ST -e AWS_REGION=auto -e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUNP -e ZEN_MANIFEST_URI=$MANIFEST -e ZEN_PROVIDER=vast-gpu -e ZEN_CORPUS_PREFIX=$CORPUS_PREFIX -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_IDLE_PASSES=10 -e ZEN_PERSISTENT_EXEC=1 -e ZEN_WORKER=vast-gpu-$k"
   vastai create instance "$OFFER" --image "$IMAGE" --label "group=$RUN" --disk 30 --env "$ENVB" --onstart-cmd "$ONSTART" 2>&1 | grep -iE 'new_contract|success' | head -1 && launched=$((launched+1))
 done
 echo "launched $launched/$N boxes on run $RUN; waiting 240s for boot+pull then RESUME"
