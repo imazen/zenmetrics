@@ -57,3 +57,19 @@ test-matrix-gpu:
 # Quick default-feature check of the umbrella crate.
 check:
     cargo check -p zenmetrics-api
+
+# ghcr package-name guard: fail if any active-infra file references a
+# ghcr.io/imazen/<name> that isn't a canonical package in ghcr-packages.json.
+# One package per artifact; variants are TAGS. See docs/GHCR_PACKAGES.md.
+ghcr-check:
+    python3 scripts/ci/check_ghcr_packages.py
+
+# Strict: also fail on grandfathered splinters still referenced in infra.
+# Flip CI to this once ghcr-packages.json's `deprecated` map is empty.
+ghcr-check-strict:
+    python3 scripts/ci/check_ghcr_packages.py --strict
+
+# Audit the LIVE ghcr.io/imazen packages against the manifest (needs `gh`
+# authed with read:packages). Prints orphans + a commented migrate/delete recipe.
+ghcr-audit:
+    python3 scripts/ci/audit_ghcr_org.py

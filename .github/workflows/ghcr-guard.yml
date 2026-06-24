@@ -1,0 +1,57 @@
+name: GHCR package-name guard
+
+# Stops the ghcr.io/imazen image-name splintering (zen-metrics-sweep ->
+# zenmetrics-sweep; zen-jobworker -> zenfleet-worker -> zenfleet-worker-exec ->
+# ... — many packages for one artifact). The `guard` job fails the build if any
+# active-infra file references a ghcr.io/imazen/<name> that is not a canonical
+# package in ghcr-packages.json. Variants must be TAGS, not new package names.
+# To add a genuinely new artifact, add its name to ghcr-packages.json in the
+# same PR (the reviewed chokepoint). Policy: docs/GHCR_PACKAGES.md.
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+  schedule:
+    # Weekly drift check so the org audit surfaces orphan packages even with no pushes.
+    - cron: "17 8 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Canonical package names only
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Guard against new ghcr package names
+        run: python3 scripts/ci/check_ghcr_packages.py
+
+  audit:
+    name: Audit live ghcr packages (informational)
+    # Only on manual dispatch / weekly schedule — needs org package read and is
+    # reporting, not gating, so it never blocks a PR.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Diff live ghcr.io/imazen packages vs manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Soft: a missing org-package scope should not fail the run (exit 2 = skip).
+        run: python3 scripts/ci/audit_ghcr_org.py || true

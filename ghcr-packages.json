@@ -1,0 +1,63 @@
+{
+  "_README": "SOURCE OF TRUTH for ghcr.io/imazen container package NAMES used by the zen fleet/sweep infra. The rule: ONE ghcr package per artifact; variants are TAGS, never new package names. A new package name MAY ONLY be created by adding it to `packages[]` here in the same reviewed change — CI (`just ghcr-check`) fails if any active infra file references a `ghcr.io/imazen/<name>` that is not listed here. See docs/GHCR_PACKAGES.md for the policy, tag conventions, and the migration playbook for the `deprecated` names below.",
+  "registry": "ghcr.io/imazen",
+  "packages": [
+    {
+      "name": "zenmetrics-sweep",
+      "purpose": "GPU/CPU codec-sweep + metric-score worker (the 'omni' image baking the zenmetrics CLI + all 5 codecs + GPU/CPU metrics). The image fleet boxes pull to encode and score.",
+      "builds_from": "Dockerfile.sweep.v27 (amd64) / scripts/sweep/Dockerfile.sweep.hetzner.v1 (arm64) — precompiled binary COPY'd in.",
+      "tag_convention": [
+        "latest            — master HEAD, amd64",
+        "v<NN>             — image generation (v26, v27, ...); bump for a layering/base change, NOT a code push",
+        "v<NN>-<date>      — pinned immutable build of generation NN",
+        "hetzner | salad   — provider-specific variant (arch/entrypoint), e.g. :hetzner is the arm64 CAX build",
+        "split             — the encode-once/score-many SPLIT worker variant",
+        "<short-sha>       — exact-commit pin"
+      ]
+    },
+    {
+      "name": "zenfleet-worker",
+      "purpose": "Job-system fleet worker: pull-based, claims content-addressed jobs from the R2 lease-queue, runs the ZEN_EXEC executor, writes blobs + ledger rows. Multi-arch (amd64+arm64).",
+      "builds_from": ".github/workflows/jobworker-image.yml -> crates/zenfleet-worker/Dockerfile.",
+      "tag_convention": [
+        "latest            — master HEAD multi-arch manifest",
+        "<short-sha>       — every push",
+        "buildcache-amd64 | buildcache-arm64 — buildkit registry cache (not a runnable image)",
+        "exec              — worker base + zenmetrics jobexec real executor (CPU)",
+        "exec-gpu          — exec variant on a CUDA base for GPU metric scoring"
+      ]
+    },
+    {
+      "name": "pycvvdp-scorer",
+      "purpose": "pycvvdp (PyTorch) CVVDP reference scorer. Kept a SEPARATE package on purpose: it carries ~3 GB of torch, so it must not bloat the cold-start of the sweep image.",
+      "builds_from": "scripts/sweep/Dockerfile.pycvvdp (pytorch + CUDA + pycvvdp 0.5.4).",
+      "tag_convention": [
+        "latest            — current scorer",
+        "<pycvvdp-version> — e.g. 0.5.4, pinning the upstream pycvvdp release"
+      ]
+    },
+    {
+      "name": "zen-train",
+      "purpose": "Standalone burn trainer: consumes parquet metric/feature sidecars and bakes ZNPR picker/metric models. Its own cubecl graph; never shares a cargo graph with the GPU-metric crates (see CLAUDE.md 'burn').",
+      "builds_from": "the burn-ranknet trainer (separate binary).",
+      "tag_convention": [
+        "latest            — current trainer",
+        "<short-sha>       — exact-commit pin"
+      ]
+    }
+  ],
+  "deprecated": {
+    "_README": "Splinter package names that ALREADY EXIST and are GRANDFATHERED: `just ghcr-check` WARNS (does not fail) when these appear in active infra so the live fleet keeps working, and tolerates them in historical docs. `just ghcr-check --strict` FAILS on any of them in infra — flip to strict once migration is done. Each maps to the canonical `name[:tag]` it should become. Migration playbook: docs/GHCR_PACKAGES.md. The end-state is this map EMPTY.",
+    "zen-metrics-sweep": "zenmetrics-sweep",
+    "zen-sweep": "zenmetrics-sweep",
+    "zenmetrics-sweep-hetzner": "zenmetrics-sweep:hetzner",
+    "zenmetrics-sweep-salad": "zenmetrics-sweep:salad",
+    "zen-metrics-sweep-hetzner": "zenmetrics-sweep:hetzner",
+    "zen-metrics-sweep-salad": "zenmetrics-sweep:salad",
+    "zen-vast-worker": "zenmetrics-sweep",
+    "zenfleet-worker-exec": "zenfleet-worker:exec",
+    "zenfleet-worker-exec-gpu": "zenfleet-worker:exec-gpu",
+    "zen-jobworker": "zenfleet-worker",
+    "zen-jobworker-exec": "zenfleet-worker:exec"
+  }
+}

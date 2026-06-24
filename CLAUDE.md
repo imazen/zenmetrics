@@ -2,6 +2,19 @@
 
 See global ~/.claude/CLAUDE.md for general instructions.
 
+## ghcr package names — ONE per artifact (enforced)
+
+Before referencing or pushing any `ghcr.io/imazen/<name>` image: the canonical
+package set is **`zenmetrics-sweep`, `zenfleet-worker`, `pycvvdp-scorer`,
+`zen-train`** — and that's it. Variants (GPU build, provider flavor, generation,
+commit pin) are **TAGS** (`:exec-gpu`, `:hetzner`, `:v27`, `:<sha>`), never new
+package names. The source of truth is [`ghcr-packages.json`](ghcr-packages.json);
+`just ghcr-check` (CI: `.github/workflows/ghcr-guard.yml`) fails if any infra file
+uses a non-canonical name. To add a real new artifact, add it to the manifest in
+the same change. Policy + the migration playbook for the existing splinters:
+[`docs/GHCR_PACKAGES.md`](docs/GHCR_PACKAGES.md). `just ghcr-audit` diffs the live
+org packages against the manifest.
+
 ## Data provenance — READ BEFORE TRAINING
 
 **[`~/work/zen/DATA_PROVENANCE.md`](../DATA_PROVENANCE.md)** is the
