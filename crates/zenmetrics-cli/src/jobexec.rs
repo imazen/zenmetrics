@@ -118,12 +118,21 @@ fn resolve_source(
         std::process::id(),
         image_path.rsplit('/').next().unwrap_or("src")
     ));
+    // Warm-process source cache: in --serve mode one process scores many cells/metrics of the SAME
+    // source image (the manifest is image-major), and after the executor is kept warm the per-job R2
+    // download is the dominant cost. So reuse an already-fetched image instead of re-downloading. `dst`
+    // exists ONLY after a verified-complete download (we fetch to a sibling `.part` and rename on
+    // success), so a cache hit is always a whole file — never a truncated/partial one.
+    if dst.exists() {
+        return Ok(dst);
+    }
+    let part = std::path::PathBuf::from(format!("{}.part", dst.display()));
     let st = Command::new("s5cmd")
         .arg("--endpoint-url")
         .arg(&endpoint)
         .arg("cp")
         .arg(&uri)
-        .arg(&dst)
+        .arg(&part)
         // s5cmd prints a "cp …" line to stdout. In --serve mode stdout is the length-framed response
         // channel, so that line would corrupt a frame and deadlock the worker; in single-shot mode it
         // prefixes the content-addressed blob with noise. Silence stdout — real errors stay on s5cmd's
@@ -132,8 +141,10 @@ fn resolve_source(
         .status()
         .map_err(|e| format!("spawn s5cmd: {e}"))?;
     if !st.success() {
+        let _ = std::fs::remove_file(&part);
         return Err(format!("s5cmd cp {uri} failed").into());
     }
+    std::fs::rename(&part, &dst).map_err(|e| format!("rename {part:?} -> {dst:?}: {e}"))?;
     Ok(dst)
 }
 

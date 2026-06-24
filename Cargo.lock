@@ -744,7 +744,7 @@ dependencies = [
  "zenforks-cubecl",
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
- "zenpixels 0.2.15",
+ "zenpixels",
 ]
 
 [[package]]
@@ -1301,8 +1301,8 @@ dependencies = [
  "rayon",
  "serde_json",
  "zenmetrics-corpus",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -1331,8 +1331,8 @@ dependencies = [
  "zenforks-cubecl",
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -1536,7 +1536,7 @@ dependencies = [
  "zenforks-cubecl",
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
- "zenpixels 0.2.15",
+ "zenpixels",
 ]
 
 [[package]]
@@ -2575,8 +2575,8 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -2593,7 +2593,7 @@ dependencies = [
  "iwssim-filter-codegen",
  "zenforks-cubecl",
  "zenmetrics-gpu-core",
- "zenpixels 0.2.15",
+ "zenpixels",
 ]
 
 [[package]]
@@ -4569,7 +4569,7 @@ dependencies = [
  "zenforks-cubecl",
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
- "zenpixels 0.2.15",
+ "zenpixels",
 ]
 
 [[package]]
@@ -5145,7 +5145,7 @@ dependencies = [
  "thiserror",
  "wide 1.5.0",
  "zencodec",
- "zenpixels 0.2.15",
+ "zenpixels",
 ]
 
 [[package]]
@@ -5162,8 +5162,8 @@ dependencies = [
  "whereat",
  "wide 1.5.0",
  "zencodec",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
  "zentone",
 ]
 
@@ -6199,8 +6199,8 @@ dependencies = [
  "garb",
  "linear-srgb",
  "magetypes",
- "zenpixels 0.2.16",
- "zenpixels-convert 0.2.15",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -6212,8 +6212,8 @@ dependencies = [
  "garb",
  "linear-srgb",
  "magetypes",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -6237,8 +6237,8 @@ dependencies = [
  "yuv",
  "zenavif-parse",
  "zencodec",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
  "zenravif",
 ]
 
@@ -6290,7 +6290,7 @@ dependencies = [
  "almost-enough",
  "enough",
  "whereat",
- "zenpixels 0.2.15",
+ "zenpixels",
 ]
 
 [[package]]
@@ -6726,7 +6726,7 @@ dependencies = [
  "thiserror",
  "whereat",
  "zencodec",
- "zenpixels 0.2.15",
+ "zenpixels",
  "zenquant",
 ]
 
@@ -6763,8 +6763,8 @@ dependencies = [
  "whereat",
  "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
  "zencodec",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
  "zenyuv 0.1.3",
 ]
 
@@ -6781,8 +6781,8 @@ dependencies = [
  "whereat",
  "zencodec",
  "zenjxl-decoder",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -6847,8 +6847,8 @@ dependencies = [
  "thiserror",
  "zenforks-cubecl",
  "zenmetrics-gpu-core",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
  "zensim",
  "zensim-gpu",
 ]
@@ -6890,8 +6890,8 @@ dependencies = [
  "zenjxl",
  "zenmetrics-api",
  "zenmetrics-orchestrator",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
  "zenpng",
  "zensim",
  "zentiff",
@@ -6907,8 +6907,8 @@ name = "zenmetrics-gpu-core"
 version = "0.0.1"
 dependencies = [
  "zenforks-cubecl",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -6951,32 +6951,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zenpixels"
-version = "0.2.16"
-dependencies = [
- "bytemuck",
- "imgref",
- "rgb",
- "whereat",
-]
-
-[[package]]
-name = "zenpixels-convert"
-version = "0.2.15"
-dependencies = [
- "archmage",
- "bytemuck",
- "garb",
- "libm",
- "linear-srgb",
- "magetypes",
- "once_cell",
- "paste",
- "whereat",
- "zenpixels 0.2.16",
-]
-
-[[package]]
 name = "zenpixels-convert"
 version = "0.2.15"
 source = "git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f#e890b67148ca6e1768594b43f5a6415d160ef81f"
@@ -6992,7 +6966,7 @@ dependencies = [
  "paste",
  "rgb",
  "whereat",
- "zenpixels 0.2.15",
+ "zenpixels",
 ]
 
 [[package]]
@@ -7013,8 +6987,8 @@ dependencies = [
  "whereat",
  "zencodec",
  "zenflate",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
  "zenquant",
 ]
 
@@ -7115,7 +7089,7 @@ dependencies = [
  "zenforks-cubecl",
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
- "zenpixels 0.2.15",
+ "zenpixels",
  "zensim",
 ]
 
@@ -7136,8 +7110,8 @@ dependencies = [
  "tiff",
  "whereat",
  "zencodec",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -7170,8 +7144,8 @@ dependencies = [
  "thiserror",
  "whereat",
  "zencodec",
- "zenpixels 0.2.15",
- "zenpixels-convert 0.2.15 (git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f)",
+ "zenpixels",
+ "zenpixels-convert",
  "zenyuv 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
