@@ -26,7 +26,9 @@ RUN_PREFIX="picker-sweep-2026-06-22/runs/$RUN"
 CODEC="${CODEC:-zenjpeg}"; PLAN="${PLAN:-rd_core}"
 QG="${QG:-5,15,30,50,70,85,95}"; N_BOXES="${N_BOXES:-1}"; IMAGES="${IMAGES:-0}"
 STYPE="${STYPE:-cpx41}"; BUDGET="${BUDGET:-600}"
-IMAGE="ghcr.io/imazen/zenfleet-worker-exec:2026-06-22"
+# Canonical image via the single source of truth (scripts/jobsys/fleet.env) — no hard-coded ghcr name.
+. "$(dirname "$0")/../jobsys/fleet.env"
+IMAGE="${IMAGE:-$ZEN_FLEET_IMAGE_CPU}"
 SSH_KEY="${SSH_KEY:-zen-arm-dev-20260528}"
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
@@ -47,12 +49,14 @@ echo "minted scoped creds (3h)"
 r2 ls "s3://$SRC_BUCKET/$SRC_PREFIX/" | awk '{print $NF}' | grep '\.png$' > /tmp/hz_all.txt
 # keep renditions <= MAXPX (default 4.2 MP) by parsing scaleWxH from the name —
 # matches the local picker's 4 MP cap; the corpus has up to 100 MP monsters.
-MAXPX="${MAXPX:-4200000}" python3 -c '
+MAXPX="${MAXPX:-4200000}" MINPX="${MINPX:-0}" python3 -c '
 import re,os,sys
-cap=int(os.environ["MAXPX"])
+cap=int(os.environ["MAXPX"]); lo=int(os.environ["MINPX"])
 for l in open("/tmp/hz_all.txt"):
     m=re.search(r"scale(\d+)x(\d+)",l)
-    if m and int(m.group(1))*int(m.group(2))<=cap: sys.stdout.write(l)
+    if m:
+        px=int(m.group(1))*int(m.group(2))
+        if lo < px <= cap: sys.stdout.write(l)  # MINPX..MAXPX window -> big-image tier sets MINPX=4200000
 ' > /tmp/hz_ok.txt
 [ "$IMAGES" -gt 0 ] 2>/dev/null && head -n "$IMAGES" /tmp/hz_ok.txt > /tmp/hz_sel.txt || cp /tmp/hz_ok.txt /tmp/hz_sel.txt
 total=$(wc -l < /tmp/hz_sel.txt); per=$(( (total + N_BOXES - 1) / N_BOXES ))
@@ -83,6 +87,7 @@ CHUNK_KEY=$RUN_PREFIX/chunks/chunk-$idx.txt
 OUT_KEY=$RUN_PREFIX/omni/box-$idx.omni.tsv
 DONE_KEY=$RUN_PREFIX/done/box-$idx.done
 ENC_KEY=$RUN_PREFIX/variants/box-$idx.tar
+FEAT_KEY=$RUN_PREFIX/features/box-$idx.feat.parquet
 CODEC=$CODEC
 PLAN=$PLAN
 QG=$QG
@@ -98,8 +103,9 @@ rm -f /data/chunk.txt
 PB=""; [ "\$PLAN" != "rd_core" ] && PB="--plan-budget \$BUDGET"
 mkdir -p /enc
 zenmetrics sweep --codec "\$CODEC" --sources /data --q-grid "\$QG" --plan "\$PLAN" \$PB \
-  --metric ssim2 --metric zensim --encoded-out-dir /enc --output /omni.tsv
+  --metric ssim2 --metric zensim --encoded-out-dir /enc --feature-output /feat.parquet --output /omni.tsv
 s5cmd --endpoint-url=\$EP cp /omni.tsv "s3://\$BUCKET/\$OUT_KEY"
+s5cmd --endpoint-url=\$EP cp /feat.parquet "s3://\$BUCKET/\$FEAT_KEY"
 # persist encoded variants (the master record): 372 zensim features re-extractable
 # on GPU (zensim-gpu fixed), plus diffmaps / any future metric, with NO re-encode.
 # Variants are already-compressed codec bytes -> tar without recompression.
