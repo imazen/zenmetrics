@@ -13,9 +13,9 @@
 //! whole loop end-to-end with a temp dir.
 
 use std::collections::{HashMap, HashSet};
-use std::io::{self, Write as _};
+use std::io::{self, BufReader, Read as _, Write as _};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -577,6 +577,127 @@ pub fn exec_command(program: &str, job: &DesiredJob) -> Result<Vec<u8>, HandlerE
     }
 }
 
+/// A long-lived `program --serve` child for the persistent executor. One per worker PROCESS; since the
+/// fleet runs one (long) pass per process, this child stays warm across all of a pass's jobs, so CUDA
+/// init + GPU kernel compilation are paid ONCE rather than per job.
+struct PersistentExec {
+    child: Child,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+}
+
+static PERSISTENT: Mutex<Option<PersistentExec>> = Mutex::new(None);
+
+fn persistent_io_lost(e: io::Error) -> HandlerError {
+    HandlerError::new(ErrorClass::WorkerLost, format!("persistent exec io: {e}"))
+}
+
+fn spawn_serve(program: &str) -> Result<PersistentExec, HandlerError> {
+    let mut child = Command::new(program)
+        .arg("--serve")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        // stderr inherited → the child's logs land in the worker's stderr (the fleet box log).
+        .spawn()
+        .map_err(|e| {
+            HandlerError::new(
+                ErrorClass::WorkerLost,
+                format!("spawn {program} --serve: {e}"),
+            )
+        })?;
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| HandlerError::new(ErrorClass::WorkerLost, "no child stdin"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| HandlerError::new(ErrorClass::WorkerLost, "no child stdout"))?;
+    Ok(PersistentExec {
+        child,
+        stdin,
+        stdout: BufReader::new(stdout),
+    })
+}
+
+impl PersistentExec {
+    /// Send one length-framed job and read its length-framed response. `Ok` = output bytes (status 0);
+    /// `Err(EncoderPanic)` = the child framed a per-job error/panic but is still alive; `Err(WorkerLost)`
+    /// = an I/O error (the child is presumed dead → the caller drops it so the next job respawns one).
+    fn run_job(&mut self, job_json: &[u8]) -> Result<Vec<u8>, HandlerError> {
+        let len = u32::try_from(job_json.len())
+            .map_err(|_| HandlerError::new(ErrorClass::Unknown, "job json too large"))?;
+        self.stdin
+            .write_all(&len.to_le_bytes())
+            .map_err(persistent_io_lost)?;
+        self.stdin.write_all(job_json).map_err(persistent_io_lost)?;
+        self.stdin.flush().map_err(persistent_io_lost)?;
+
+        let mut status = [0u8; 1];
+        self.stdout
+            .read_exact(&mut status)
+            .map_err(persistent_io_lost)?;
+        let mut lenb = [0u8; 4];
+        self.stdout
+            .read_exact(&mut lenb)
+            .map_err(persistent_io_lost)?;
+        let plen = u32::from_le_bytes(lenb) as usize;
+        let mut payload = vec![0u8; plen];
+        self.stdout
+            .read_exact(&mut payload)
+            .map_err(persistent_io_lost)?;
+        if status[0] == 0 {
+            Ok(payload)
+        } else {
+            // The child framed an error/panic for THIS job and stayed alive → deterministic failure.
+            Err(HandlerError::new(
+                ErrorClass::EncoderPanic,
+                String::from_utf8_lossy(&payload).into_owned(),
+            ))
+        }
+    }
+}
+
+/// Persistent variant of [`exec_command`]: keep ONE warm `program --serve` child for this worker
+/// process and stream length-framed jobs to it, so CUDA init + kernel compilation are paid once rather
+/// than per job (the fix for ~20s/job cold-process overhead on GPU metric fleets). On child death the
+/// global handle is dropped and the next call respawns; a per-job error/panic (child still alive) is a
+/// deterministic failure that does NOT kill the warm child.
+pub fn exec_command_persistent(program: &str, job: &DesiredJob) -> Result<Vec<u8>, HandlerError> {
+    let job_json = serde_json::to_vec(job)
+        .map_err(|e| HandlerError::new(ErrorClass::Unknown, format!("serialize job: {e}")))?;
+    let mut guard = PERSISTENT.lock().unwrap_or_else(|p| p.into_inner());
+    if guard.is_none() {
+        *guard = Some(spawn_serve(program)?);
+    }
+    let res = guard.as_mut().expect("just set above").run_job(&job_json);
+    if let Err(e) = &res
+        && matches!(e.class, ErrorClass::WorkerLost)
+    {
+        // Child presumed dead → drop it so the next job respawns a fresh warm child.
+        if let Some(mut pe) = guard.take() {
+            let _ = pe.child.kill();
+            let _ = pe.child.wait();
+        }
+    }
+    res
+}
+
+/// Choose the executor handler: the warm persistent child (one `--serve` process reused across jobs)
+/// when `persistent`, else the original one-process-per-job [`exec_command`]. Persistence is opt-in
+/// (via `ZEN_PERSISTENT_EXEC`) so non-GPU/basement tiers keep the simple one-shot path.
+fn dispatch_exec(
+    persistent: bool,
+    program: &str,
+    job: &DesiredJob,
+) -> Result<Vec<u8>, HandlerError> {
+    if persistent {
+        exec_command_persistent(program, job)
+    } else {
+        exec_command(program, job)
+    }
+}
+
 /// Configuration for one worker pass (the runnable `zenfleet-worker` binary parses CLI args into this).
 #[derive(Debug, Clone)]
 pub struct WorkerConfig {
@@ -788,6 +909,11 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
     };
     // Pick the blob store: R2 if configured, else local FS. execute_gap is generic over the store,
     // so each arm monomorphizes against the concrete type.
+    // Persistent warm executor (one `--serve` child reused across this pass's jobs) when enabled —
+    // amortizes GPU init + kernel compilation; opt-in so non-GPU/basement tiers keep one-shot exec.
+    let persistent = std::env::var("ZEN_PERSISTENT_EXEC")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
     let out = match &cfg.r2 {
         Some(t) => {
             let store = R2BlobStore::new(t.endpoint.clone(), t.bucket.clone(), t.prefix.clone());
@@ -804,7 +930,7 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                         &desired,
                         &view,
                         policy,
-                        |job| exec_command(&cfg.exec, job),
+                        |job| dispatch_exec(persistent, &cfg.exec, job),
                         &store,
                         |id| {
                             let won = claim_or_steal_r2(
@@ -829,7 +955,7 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                     &desired,
                     &view,
                     policy,
-                    |job| exec_command(&cfg.exec, job),
+                    |job| dispatch_exec(persistent, &cfg.exec, job),
                     &store,
                     ctx,
                 ),
@@ -842,7 +968,7 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                 &desired,
                 &view,
                 policy,
-                |job| exec_command(&cfg.exec, job),
+                |job| dispatch_exec(persistent, &cfg.exec, job),
                 &store,
                 ctx,
             )

@@ -26,7 +26,8 @@ use serde_json::{Map, Value};
 use std::error::Error;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Parser, Debug)]
 pub struct JobexecArgs {
@@ -34,6 +35,16 @@ pub struct JobexecArgs {
     /// `cell.image_path` is appended to it. Omit if image_path is already an `s3://…` or local path.
     #[arg(long)]
     pub corpus_prefix: Option<String>,
+
+    /// Persistent "warm" mode for the GPU job system. Instead of one job on stdin → exit, loop
+    /// reading length-framed requests (`[u32 LE len][DesiredJob JSON]`) and writing length-framed
+    /// responses (`[u8 status][u32 LE len][payload]`; status 0=ok/output-bytes, 1=job error, 2=panic
+    /// with payload=message). The GPU client + compiled kernels stay warm across jobs (cubecl caches
+    /// them per process), so CUDA init + kernel compilation are paid ONCE per box, not per job — the
+    /// fix for the ~20s/job cold-spawn overhead. The worker's persistent handler drives this; clean
+    /// EOF on stdin ends the loop (exit 0).
+    #[arg(long)]
+    pub serve: bool,
 }
 
 fn codec_from_name(name: &str) -> Result<CodecKind, Box<dyn Error>> {
@@ -113,6 +124,11 @@ fn resolve_source(
         .arg("cp")
         .arg(&uri)
         .arg(&dst)
+        // s5cmd prints a "cp …" line to stdout. In --serve mode stdout is the length-framed response
+        // channel, so that line would corrupt a frame and deadlock the worker; in single-shot mode it
+        // prefixes the content-addressed blob with noise. Silence stdout — real errors stay on s5cmd's
+        // stderr (inherited → the worker log).
+        .stdout(Stdio::null())
         .status()
         .map_err(|e| format!("spawn s5cmd: {e}"))?;
     if !st.success() {
@@ -167,11 +183,14 @@ fn encode_cell_for_job(
     encode(codec, reference, q, knobs)
 }
 
-pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
-    let mut buf = String::new();
-    std::io::stdin().read_to_string(&mut buf)?;
-    let job: Value = serde_json::from_str(&buf).map_err(|e| format!("parse DesiredJob: {e}"))?;
+/// Monotonic per-job sequence so the warm serve loop (which reuses one pid) never collides on the
+/// distorted temp file.
+static DIST_SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// Do one job end-to-end: resolve+decode the source, encode the cell, and (for a metric job) score
+/// it. Returns the output BYTES — encode: the encoded image; metric: the one-line JSON score row.
+/// Shared by single-shot `run` and the warm `run_serve` loop, so both paths are byte-identical.
+fn run_one_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<dyn Error>> {
     let kind = job["kind"]["kind"]
         .as_str()
         .ok_or("job.kind.kind missing")?;
@@ -185,33 +204,30 @@ pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
     let knobs: Map<String, Value> =
         serde_json::from_str(knob_json).map_err(|e| format!("parse knob_tuple_json: {e}"))?;
 
-    let corpus_prefix = args
-        .corpus_prefix
-        .or_else(|| std::env::var("ZEN_CORPUS_PREFIX").ok());
-    let src_path = resolve_source(image_path, corpus_prefix.as_deref())?;
+    let src_path = resolve_source(image_path, corpus_prefix)?;
     let reference = decode_image_to_rgb8(&src_path)?;
 
     let codec = codec_from_name(codec_name)?;
     let encoded = encode_cell_for_job(codec, &reference, q, knob_json, &knobs)?;
 
-    let mut out = std::io::stdout().lock();
     match kind {
-        "encode" => {
-            // The encoded bytes ARE the output → content-addressed to blobs/<sha256> (goal G).
-            out.write_all(&encoded.bytes)?;
-        }
+        // The encoded bytes ARE the output → content-addressed to blobs/<sha256> (goal G).
+        "encode" => Ok(encoded.bytes),
         "metric" => {
             let metric = job["kind"]["metric"]
                 .as_str()
                 .ok_or("metric job missing kind.metric")?;
+            let seq = DIST_SEQ.fetch_add(1, Ordering::Relaxed);
             let dist_path = std::env::temp_dir().join(format!(
-                "jobexec_dist_{}.{}",
+                "jobexec_dist_{}_{}.{}",
                 std::process::id(),
+                seq,
                 ext_for(codec_name)
             ));
             std::fs::write(&dist_path, &encoded.bytes)?;
             let distorted = decode_image_to_rgb8(&dist_path)?;
             let pairs = score(metric, &reference, &distorted)?;
+            let _ = std::fs::remove_file(&dist_path);
             let mut scores = Map::new();
             for (name, value) in &pairs {
                 scores.insert((*name).to_string(), serde_json::json!(value));
@@ -228,11 +244,94 @@ pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
                 "encoded_bytes": encoded.bytes.len(),
                 "encode_ms": encoded.encode_ms,
             });
-            out.write_all(serde_json::to_string(&row)?.as_bytes())?;
-            let _ = std::fs::remove_file(&dist_path);
+            Ok(serde_json::to_string(&row)?.into_bytes())
         }
-        other => return Err(format!("jobexec: unhandled job kind {other:?}").into()),
+        other => Err(format!("jobexec: unhandled job kind {other:?}").into()),
     }
+}
+
+/// Read exactly `buf.len()` bytes. `Ok(false)` = clean EOF *before any byte* of the frame (the loop's
+/// normal termination); EOF mid-frame is a hard error.
+fn read_frame_exact<R: Read>(r: &mut R, buf: &mut [u8]) -> std::io::Result<bool> {
+    let mut filled = 0;
+    while filled < buf.len() {
+        match r.read(&mut buf[filled..]) {
+            Ok(0) => {
+                return if filled == 0 {
+                    Ok(false)
+                } else {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "truncated frame",
+                    ))
+                };
+            }
+            Ok(n) => filled += n,
+            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(true)
+}
+
+/// Warm executor loop: keep the process — and cubecl's per-process cached GPU client + compiled
+/// kernels — alive across many jobs, so CUDA init and kernel compilation are paid ONCE, not per job.
+/// Protocol: request `[u32 LE len][DesiredJob JSON]` → response `[u8 status][u32 LE len][payload]`,
+/// status 0=ok (payload=output bytes), 1=job error, 2=panic (payload=message). A per-job panic is
+/// caught and returned as a frame, NOT a process exit, so one bad cell never kills the warm worker.
+/// Clean EOF on the request stream ends the loop (exit 0).
+fn run_serve(corpus_prefix: Option<&str>) -> Result<(), Box<dyn Error>> {
+    let stdin = std::io::stdin();
+    let mut r = stdin.lock();
+    let stdout = std::io::stdout();
+    let mut w = stdout.lock();
+    let mut lenb = [0u8; 4];
+    loop {
+        if !read_frame_exact(&mut r, &mut lenb)? {
+            break; // clean EOF — the worker closed stdin
+        }
+        let len = u32::from_le_bytes(lenb) as usize;
+        let mut jbuf = vec![0u8; len];
+        read_frame_exact(&mut r, &mut jbuf)?;
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let job: Value = serde_json::from_slice(&jbuf)
+                .map_err(|e| -> Box<dyn Error> { format!("parse DesiredJob: {e}").into() })?;
+            run_one_job(&job, corpus_prefix)
+        }));
+        let (status, payload): (u8, Vec<u8>) = match outcome {
+            Ok(Ok(bytes)) => (0, bytes),
+            Ok(Err(e)) => (1, e.to_string().into_bytes()),
+            Err(p) => {
+                let msg = p
+                    .downcast_ref::<&str>()
+                    .map(|s| (*s).to_string())
+                    .or_else(|| p.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "panic".to_string());
+                (2, format!("jobexec panic: {msg}").into_bytes())
+            }
+        };
+        w.write_all(&[status])?;
+        w.write_all(&(payload.len() as u32).to_le_bytes())?;
+        w.write_all(&payload)?;
+        w.flush()?;
+    }
+    Ok(())
+}
+
+pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
+    let corpus_prefix = args
+        .corpus_prefix
+        .or_else(|| std::env::var("ZEN_CORPUS_PREFIX").ok());
+    if args.serve {
+        return run_serve(corpus_prefix.as_deref());
+    }
+    // Single-shot: one DesiredJob on stdin → output bytes on stdout (the original ZEN_EXEC contract).
+    let mut buf = String::new();
+    std::io::stdin().read_to_string(&mut buf)?;
+    let job: Value = serde_json::from_str(&buf).map_err(|e| format!("parse DesiredJob: {e}"))?;
+    let bytes = run_one_job(&job, corpus_prefix.as_deref())?;
+    let mut out = std::io::stdout().lock();
+    out.write_all(&bytes)?;
     out.flush()?;
     Ok(())
 }

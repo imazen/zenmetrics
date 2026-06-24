@@ -1,0 +1,59 @@
+# GPU real-executor fleet image for the zen job system.
+#
+# WHY THIS EXISTS: the stock executor image (crates/zenfleet-worker/Dockerfile.executor) is
+# FROM the NON-CUDA worker base (ghcr.io/imazen/zenfleet-worker), so its baked `zenmetrics`
+# can encode + score CPU metrics but every GPU metric returns the "needs a GPU build" error.
+# This image flips the layering: start FROM the CUDA sweep image (which already ships a GPU
+# `zenmetrics` with `jobexec`, the CUDA runtime libs, the cuda_dlsym_stub LD_PRELOAD, and
+# s5cmd), then COPY in ONLY the fleet-worker pieces the sweep image lacks:
+#   - zenfleet-worker  (the claim/lease/ledger loop the entrypoint runs)
+#   - zenfleet-gc      (kept for parity with the base; harmless)
+#   - aws CLI v2        (zenfleet-worker's R2 conditional-write lease uses `aws s3api
+#                        put-object --if-none-match '*'` — s5cmd alone is NOT enough)
+#   - fleet-entrypoint.sh  (the keep-alive claim loop = the worker base ENTRYPOINT)
+#   - zenfleet-exec        (the ZEN_EXEC shim: forwards stdin/stdout to `zenmetrics jobexec`)
+#
+# The result runs REAL GPU-metric jobs (ssim2-gpu / butteraugli-gpu / dssim-gpu / zensim-gpu /
+# iwssim-gpu / cvvdp) through the job system, identical orchestration to the CPU exec image.
+#
+# Build it with scripts/jobsys/build_executor_image_gpu.sh (snap-docker here can't read /tmp,
+# so that script stages a build context under target/). amd64 only (matches the v29 binary +
+# the workstation arch; GPU vast offers are amd64).
+#
+# glibc note: the worker base is debian:bookworm (glibc 2.36); v29 is Ubuntu 24.04 (glibc
+# 2.39). The 2.36-linked zenfleet-worker / aws-cli run fine on 2.39 (forward-compatible). The
+# build script smoke-tests `aws --version` + `zenfleet-worker --help` in the final image so a
+# glibc/loader mismatch fails the build loudly rather than at fleet runtime.
+
+ARG WORKER_BASE=ghcr.io/imazen/zenfleet-worker:latest
+ARG GPU_BASE=ghcr.io/imazen/zenmetrics-sweep:v29-2026-06-23
+
+# Stage 1: the non-CUDA worker base, used purely as a source of the fleet-worker binaries +
+# the bundled aws-cli v2 tree. Nothing from its rootfs leaks into the final image except the
+# explicit COPYs below.
+FROM ${WORKER_BASE} AS worker
+
+# Stage 2: the CUDA sweep image (CUDA runtime + GPU zenmetrics + jobexec + s5cmd + the
+# cuda_dlsym_stub LD_PRELOAD it sets in ENV). Inherits its PATH / LD_LIBRARY_PATH / CUDA_PATH /
+# LD_PRELOAD automatically.
+FROM ${GPU_BASE}
+
+# Fleet-worker binaries (built against glibc 2.36; forward-compatible on 2.39).
+COPY --from=worker /usr/local/bin/zenfleet-worker /usr/local/bin/zenfleet-worker
+COPY --from=worker /usr/local/bin/zenfleet-gc     /usr/local/bin/zenfleet-gc
+
+# aws-cli v2 — copy the whole self-contained dist tree + the /usr/local/bin/aws symlink target.
+# zenfleet-worker's conditional-write lease (try_claim_r2 in crates/zenfleet-worker/src/lib.rs)
+# shells out to `aws s3api put-object --if-none-match '*'`; s5cmd has no equivalent.
+COPY --from=worker /usr/local/aws-cli /usr/local/aws-cli
+RUN ln -sf /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
+
+# The keep-alive claim loop (the worker base ENTRYPOINT) + the ZEN_EXEC shim.
+COPY --chmod=0755 fleet-entrypoint.sh /usr/local/bin/fleet-entrypoint.sh
+COPY --chmod=0755 zenfleet-exec       /usr/local/bin/zenfleet-exec
+
+# Default ZEN_EXEC to the GPU executor shim; fleet-entrypoint.sh still honors an overriding
+# ZEN_EXEC env if a launcher sets one.
+ENV ZEN_EXEC=/usr/local/bin/zenfleet-exec
+
+ENTRYPOINT ["/usr/local/bin/fleet-entrypoint.sh"]
