@@ -48,3 +48,18 @@ make the knobs re-diverge above it — but a confirming run at 2–8MP is cheap 
 4. **avif needs a denser rd-full first**: the analyzed sweep had only qm×speed. A small dense avif sweep
    (add tune/tiles/sharpness/etc. axes) on ~30 clustered representative images would extend the ablation
    before the big run — cheap (tokens-scale), and it's the right next step for avif specifically.
+
+## avif full-axis ablation (rendition corpus, ssim2) — 2026-06-24
+
+A dense avif `modes_full` sweep (50 rendition images, **32 cells**: speed s2/s4 × chroma def/420 × bit-depth
+±bd10 × qm ±noqm) found **0 of 32 cells never on the Pareto front** — NO ablatable cells on this
+corpus/metric. The top front cell is **`s2-noqm` (qm OFF)**.
+
+**This CONTRADICTS the earlier avif v12 finding (qm=False "dead")** — that was on the gif-static corpus with
+zensim; here on the renditions with ssim2, qm-off is *best*. **Conclusion: the per-axis ablations are
+CORPUS + METRIC + PLAN dependent and do NOT robustly generalize.**
+
+Implication for **task A (wiring rd_core)**: do **NOT** wire the avif qm ablation — it's corpus-specific and
+wrong for the rendition corpus. Before wiring ANY ablation, re-validate it on the target corpus+metric. The
+jpeg `effort=2` ablation (0 RD loss on v15r) is the most robust candidate but still warrants a
+rendition-corpus check first. Net: ablation is a per-(corpus,metric,plan) decision, not a universal codec default.
