@@ -47,15 +47,19 @@ nvidia-smi --query-gpu=name --format=csv,noheader 2>&1 | head -1
 bash /usr/local/bin/fleet-entrypoint.sh 2>&1 | tee /var/log/zenfleet.log
 s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp /var/log/zenfleet.log "s3://$ZEN_BUCKET/$ZEN_RUN/worker-$ZEN_WORKER.log" 2>&1 | tail -1'
 OFFERS=$(vastai search offers "reliability>0.98 num_gpus=1 gpu_ram>=12 rentable=true inet_down>300 disk_space>40 cuda_max_good>=12.6" --order dph_total --raw 2>/dev/null)
-launched=0
-for k in $(seq 1 "$N"); do
-  OFFER=$(echo "$OFFERS" | python3 -c "import json,sys;o=json.load(sys.stdin);o=o if isinstance(o,list) else o.get('offers',[]);print(o[$((k-1))]['id'] if len(o)>$((k-1)) else '')")
-  [ -z "$OFFER" ] && { log "offer pool exhausted at $((k-1))"; break; }
-  ENVB="-e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK -e AWS_SESSION_TOKEN=$ST -e AWS_REGION=auto -e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUNP -e ZEN_MANIFEST_URI=$MANIFEST -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_CORPUS_PREFIX=$DGP/ref -e ZEN_VARIANTS_TAR_URI=$TAR -e ZEN_VARIANT_INDEX_URI=$IDX -e ZEN_PERSISTENT_EXEC=1 -e ZEN_PROVIDER=vast-gpu -e ZEN_IDLE_PASSES=10 -e ZEN_WORKER=sf-$k"
+launched=0; idx=0
+NOFF=$(echo "$OFFERS" | python3 -c "import json,sys;o=json.load(sys.stdin);o=o if isinstance(o,list) else o.get('offers',[]);print(len(o))")
+# Iterate offers until N successes — the cheapest offers are often duds (already-rented / flaky), so
+# trying exactly N and giving up on each failure (the old loop) frequently launched 0. Keep going.
+while [ "$launched" -lt "$N" ] && [ "$idx" -lt "$NOFF" ]; do
+  OFFER=$(echo "$OFFERS" | python3 -c "import json,sys;o=json.load(sys.stdin);o=o if isinstance(o,list) else o.get('offers',[]);print(o[$idx]['id'])")
+  idx=$((idx + 1)); wk=$((launched + 1))
+  ENVB="-e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK -e AWS_SESSION_TOKEN=$ST -e AWS_REGION=auto -e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUNP -e ZEN_MANIFEST_URI=$MANIFEST -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_CORPUS_PREFIX=$DGP/ref -e ZEN_VARIANTS_TAR_URI=$TAR -e ZEN_VARIANT_INDEX_URI=$IDX -e ZEN_PERSISTENT_EXEC=1 -e ZEN_PROVIDER=vast-gpu -e ZEN_IDLE_PASSES=10 -e ZEN_WORKER=sf-$wk"
   if timeout 40 vastai create instance "$OFFER" --image "$IMAGE" --label "group=$RUN" --disk 40 --env "$ENVB" --onstart-cmd "$ONSTART" 2>&1 | grep -iqE 'new_contract|success'; then
-    launched=$((launched + 1)); log "launched box $launched/$N (offer $OFFER)"
-  else log "create failed offer $OFFER"; fi
+    launched=$((launched + 1)); log "launched box $launched/$N (offer $OFFER, try $idx)"
+  else log "create failed offer $OFFER (try $idx)"; fi
 done
+[ "$launched" -lt "$N" ] && log "WARN: launched only $launched/$N (offer pool exhausted after $idx tries)"
 if [ "$SCALE" = "0" ]; then
   log "launched $launched; waiting 240s for boot+pull then RESUME"
   sleep 240
