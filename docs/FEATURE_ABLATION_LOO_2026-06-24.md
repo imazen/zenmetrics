@@ -68,3 +68,34 @@ corpus+metric+plan, see `RD_ABLATION_2026-06-24.md`.)
 4. Output-space ablation also nets zero for jpeg — all 24 configs are genuinely rd-optimal for some
    content (0.6–18.4% each). The DATA_STARVED bake warning is a grouping artifact, not rd-relevance;
    always verify "starved" against the real rd-win distribution before dropping a config.
+
+## Interpretable optimizer (parallel to the black-box MLP)
+
+User asked (2026-06-24) for a "human-comprehensible optimizer as a parallel to the MLP option" — poly fits
+/ decision trees / weight matrices (we have the polyfit fork).
+
+**The interpretable model already exists in the pipeline: the GBDT teacher.** train_hybrid trains a per-cell
+HistGradientBoosting teacher and the MLP student distills it. For jpeg the teacher's argmin overhead is
+**6.38%** — within +0.5pp of the MLP student's 5.87%. A gradient-boosted tree ensemble is interpretable in
+the standard sense (feature importances, partial-dependence shapes, monotonic-constraint options) where the
+MLP is opaque. The MLP exists ONLY to compress the teacher into a ~30 KB ZNPR for fast per-image inference;
+when interpretability matters more than model size, ship the teacher.
+
+**Don't reimplement the scoring standalone.** A from-scratch decision-tree / per-cell-GBDT reproduction
+(`scripts/analysis/interpretable_picker.py`) mismatched train_hybrid's reach + quality-target labeling and
+reported 26–37% (≈4× worse) across every variant (classification, per-cell regression, reachable-filtered,
+shallow→deep). The picker's overhead is exquisitely sensitive to the exact within-cell-optimal + reachable-
+argmin definition — use train_hybrid's teacher; don't rebuild the eval.
+
+**The decision drivers ARE human-comprehensible** (consistent across LOO importances AND tree importances):
+target quality, image size (`min_dim` / `pixel_count`), chroma sharpness (`cb_vert_sharpness` /
+`cb_horiz_sharpness`), detail (`laplacian_variance`), colour diversity (`distinct_color_bins`). In words:
+"for a target quality, pick the trellis-strength × chroma-subsampling config from the image's size, how
+sharp its chroma is, and how much fine detail it carries." A readable story even though the exact surface
+is an ensemble.
+
+**For a literal readable FORMULA** (the polyfit fork's strength): fit per-feature 1-D shapes (polyfit
+rational/poly) to the teacher's partial-dependence curves → a GAM-style additive surrogate
+`score_c = b_c + Σ_f shape_{c,f}(x_f)`, argmin over c. Trades a little accuracy for per-feature readable
+contributions. The per-cell GBDT teacher is the practical interpretable model available today; the
+polyfit-GAM surrogate is the next step if a closed-form is wanted.
