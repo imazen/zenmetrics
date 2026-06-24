@@ -7,6 +7,7 @@
 #   usage: gpu_scorefile_launch.sh <run_id> <codec_dir> <N_boxes>
 set -uo pipefail
 RUN="${1:?run id}"; CODEC="${2:-zenavif}"; N="${3:-8}"
+SCALE="${ZEN_SCALE:-0}"   # ZEN_SCALE=1: add boxes to a LIVE run — skip the pause/240s-sleep/resume stall
 DGP="${ZEN_DATAGEN_PREFIX:-picker-sweep-2026-06-22/datagen-2026-06-23}"
 IMAGE="${ZEN_GPU_IMAGE:-ghcr.io/imazen/zenfleet-worker-exec-gpu:latest}"
 BUCKET=codec-corpus; RUNP="jobs/$RUN"
@@ -22,8 +23,12 @@ read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/sf_cred.json
 MANIFEST="s3://$BUCKET/$RUNP/manifest.json"; CTLKEY="$RUNP/control.json"
 TAR="s3://$BUCKET/$DGP/$CODEC/variants.tar"; IDX="s3://$BUCKET/$RUNP/variant_index.tsv"
 NJOBS=$(r2 cat "$MANIFEST" 2>/dev/null | python3 -c "import json,sys;print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
-printf '{"paused":true}' > /tmp/sf_ctl.json; r2 cp /tmp/sf_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
-log "run=$RUN codec=$CODEC jobs=$NJOBS image=$IMAGE; control paused; launching $N boxes"
+if [ "$SCALE" = "0" ]; then
+  printf '{"paused":true}' > /tmp/sf_ctl.json; r2 cp /tmp/sf_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
+  log "run=$RUN codec=$CODEC jobs=$NJOBS image=$IMAGE; control paused; launching $N boxes"
+else
+  log "run=$RUN codec=$CODEC jobs=$NJOBS image=$IMAGE; SCALE mode (run already live, no pause); launching $N more boxes"
+fi
 ONSTART='set +e
 export PATH="/usr/local/sbin:/usr/sbin:/sbin:$PATH"
 env | grep -E "^(AWS_|ZEN_)" >> /etc/environment
@@ -41,7 +46,11 @@ for k in $(seq 1 "$N"); do
     launched=$((launched + 1)); log "launched box $launched/$N (offer $OFFER)"
   else log "create failed offer $OFFER"; fi
 done
-log "launched $launched; waiting 240s for boot+pull then RESUME"
-sleep 240
-printf '{"paused":false}' > /tmp/sf_ctl.json; r2 cp /tmp/sf_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
-log "### RESUMED run=$RUN (blobs: s3://$BUCKET/$RUNP/blobs/ — JSONL score+feature rows)"
+if [ "$SCALE" = "0" ]; then
+  log "launched $launched; waiting 240s for boot+pull then RESUME"
+  sleep 240
+  printf '{"paused":false}' > /tmp/sf_ctl.json; r2 cp /tmp/sf_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
+  log "### RESUMED run=$RUN (blobs: s3://$BUCKET/$RUNP/blobs/ — JSONL score+feature rows)"
+else
+  log "### SCALED +$launched boxes onto live run=$RUN (they join as they boot; no pause/stall)"
+fi
