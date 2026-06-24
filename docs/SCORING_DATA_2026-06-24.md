@@ -158,12 +158,15 @@ Canonical training parquets mirrored to `/mnt/tower/output/zensim-training/2026-
 
 A second, **CPU-only** scoring pass that closes the coverage gaps the GPU set had (jpeg 8% / avif 15% image
 coverage, no large sizes). Run entirely on **Hetzner CPU** — no GPU, no vast credit (the vast account was at
-−$0.25 the whole time), held **<$1/hr**. The unlock: `ssim2` + `zensim` are the two metrics with CPU
-implementations, so the encode + score + features all run on cheap CPU boxes.
+−$0.25 the whole time), held **<$1/hr**. The unlock: `ssim2` + `zensim` are the two
+*fastest* CPU metrics, so the encode + score + features all run on cheap CPU boxes. (CORRECTION:
+ALL 6 metrics have native CPU impls — zenmetrics auto-picks GPU→CPU at runtime — but cvvdp/butteraugli
+are far slower on CPU, which is why this fast/cheap pass used only ssim2 + zensim.)
 
 **Metrics:** `score_ssim2` + `score_zensim` + the 372-dim `with-iw` zensim feature vector (`feat_0..feat_371`).
-The 4 GPU-only metrics (cvvdp / iwssim / dssim / butteraugli) are NOT in this pass — deferred to a GPU run
-when vast credit returns.
+The other 4 metrics (cvvdp / iwssim / dssim / butteraugli) are NOT in this pass. They are **NOT GPU-only** —
+all have native CPU impls; cvvdp (pytorch) + butteraugli are simply slow on CPU, so they were deferred for
+speed/cost, not capability. cvvdp is the best HDR target — run it for the HDR variants.
 
 **Coverage:** full 1,482-image corpus + a 4.2–16MP big-image tier (57 imgs/codec). **477,288 cells.**
 
@@ -180,7 +183,7 @@ mirror `/mnt/tower/output/zensim-training/2026-06-24-cpu/<codec>/`. Encoded vari
 `picker-sweep-2026-06-22/runs/dgcpu-*/variants/`. `_MANIFEST.json` in the unified dir.
 
 **Deferred:** ~27 renditions >16MP (monster sizes up to 102MP — outside the MLP range, too slow here) + the
-4 GPU-only metrics.
+other 4 metrics (CPU-capable, deferred for CPU speed — see the Metrics note above; not a GPU-only limitation).
 
 **Lessons:** the consolidator had a per-run `box-N` filename collision that silently dropped ~80k jpeg cells —
 caught by verification, fixed (per-run subdirs). webp ran rd_core (sparse) vs its original modes_full.
