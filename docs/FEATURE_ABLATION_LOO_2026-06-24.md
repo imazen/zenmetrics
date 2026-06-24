@@ -44,19 +44,27 @@ which is itself ~±0.3pp — cf. baseline 5.82/5.87/6.18 across seeds/versions).
 objective. The full-97 bake (5.87%, no overfit violation) ships unchanged. A 40–55-feature variant is
 statistically equivalent and available if inference-time feature-extraction cost ever dominates.
 
-## The real lever is OUTPUT-side, not input-side
+## Output-side ablation: ALSO a negative for jpeg (all 24 configs are used)
 
-The jpeg picker has 24 output configs; the bake flagged **16 of 24 as DATA_STARVED** (cells 8–23, the
-high-trellis `jp3/moz/pw4` × {420,444} variants — each the rd-optimal for <3 images). Those configs are
-almost never the answer. Dropping them from the search space (output ablation) shrinks the problem far more
-than trimming inputs — the effective jpeg search space is ~8 configs (mostly the `gls` family), not 24.
-This is the user's "ablate outputs by RD-spread + content-dependence" axis, and it's the higher-value next
-step. (RD-knob ablation caveat still applies: validate per corpus+metric+plan — see
-`RD_ABLATION_2026-06-24.md`.)
+The bake flagged cells 8–23 as DATA_STARVED ("1 member config < threshold 3"). That is a bake-internal
+axis-grouping artifact, **NOT rd-relevance** — a first reading of it as "16 configs rarely optimal" was
+wrong. Measuring the actual rd-win distribution directly (min-bytes config per image×quality band, 82,966
+groups) shows **all 24 configs are rd-optimal 0.6%–18.4% of the time**; the least-used (`gls_t0_444`) still
+wins 521 groups (0.6%), and NONE win <0.5%. So there are **no ablatable output configs** for jpeg either —
+every config is the answer for some real content. The mozjpeg trellis family dominates (`moz_tr14.5_444`
+18.4%), but the gls/jp3/pw4 variants each cover a genuine slice.
+
+Net: the jpeg picker is well-conditioned in BOTH dimensions — robust to input feature count AND uses its
+full output config set. No ablation lever improves it; the full-97 × 24-config picker (5.87%) is optimal.
+(The user's "ablate outputs by RD-spread + content-dependence" axis was the right question; the measured
+answer for THIS corpus/metric is "nothing to drop." RD-knob ablation caveat still applies — validate per
+corpus+metric+plan, see `RD_ABLATION_2026-06-24.md`.)
 
 ## Takeaways
 
 1. Ablate by LOO-retrain, never Spearman. Spearman mislabels the most-useful feature as redundant.
 2. Single-feature LOO ranks features but does NOT predict batch effects — always retrain-verify the reduced set.
 3. A model can be robust to feature count (jpeg: 28→97 all ~5.9%) — then ablation buys model size, not accuracy.
-4. Output-space ablation (drop data-starved configs) is the bigger lever for jpeg.
+4. Output-space ablation also nets zero for jpeg — all 24 configs are genuinely rd-optimal for some
+   content (0.6–18.4% each). The DATA_STARVED bake warning is a grouping artifact, not rd-relevance;
+   always verify "starved" against the real rd-win distribution before dropping a config.
