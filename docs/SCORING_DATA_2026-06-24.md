@@ -46,6 +46,25 @@ a small slice of the corpus, NOT corpus-complete:
   cheaper than GPU scoring). webp (1,398) / png (1,482) image coverage is near-full.
 - **Scoring gap (GPU side):** of what IS encoded, webp 42% / avif 78% / jpeg+png 100% scored.
 
+### Size coverage (CRITICAL for MLP training — log-spaced size density)
+
+The 1,482 source corpus spans **32px → 11,648px** and DOES contain the large-size expansion (175 images
+≥512px; **88 images >2048px**). But the scored data is thumbnail-skewed AND the big images are excluded
+from the primary scored codec:
+
+| max-dim bucket | full corpus | webp encoded | jpeg | avif |
+|---|---|---|---|---|
+| ≤128 | 1,260 (85%) | 1,260 | 98 | 197 |
+| 129–512 | 47 | 47 | 2 | 2 |
+| 513–2048 | 87 | 87 | 6 | 9 |
+| **>2048 (big)** | **88** | **4** | 11 | 21 |
+
+**webp is missing 84 of the 88 >2048px images — and webp's 84 un-encoded images ARE exactly those 84 big
+ones** (likely excluded as too slow to encode). So the large-size expansion lives in the corpus but is
+concentrated in the barely-scored jpeg/avif subsets; the most-scored codec (webp, 128k cells) is ~90%
+≤128px. **The MLP large-size need is NOT met by what is currently scored** — to serve it, the >2048px
+images must be encoded + scored across codecs (webp especially), not left in the jpeg/avif tails.
+
 Two scoring methods produced this:
 - **SPLIT** (jpeg/png/hdr-cvvdp): CPU encode-once + GPU `score-pairs` per metric → **per-metric**
   parquet in the codec's `sidecars/` on R2.
