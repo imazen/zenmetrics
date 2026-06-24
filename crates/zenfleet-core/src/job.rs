@@ -111,6 +111,14 @@ pub enum JobKind {
     Metric {
         metric: String,
     },
+    /// Score ALL `metrics` for one source file in a single pass: decode the reference once, then for
+    /// each input variant (a content sha the executor resolves to bytes) decode it once and score
+    /// every metric against the shared reference. Makes the `SourceSha` grouping concrete — collapsing
+    /// the per-(cell,metric) fan-out so a 24 MP source's decode and each variant's decode happen ONCE,
+    /// never re-encoded or re-decoded per metric. `inputs` are the variant content shas.
+    ScoreFile {
+        metrics: Vec<String>,
+    },
     Feature {
         regime: String,
     },
@@ -144,6 +152,13 @@ impl JobKind {
                 // Decode the reference once, score many variants → group a source's encodes together.
                 group_by: GroupBy::SourceSha,
                 // Re-scoring is cheap *given the encode already exists*.
+                output_regenerability: Regenerability::CheapRegenerable,
+            },
+            // Whole-file scoring: the SourceSha grouping made concrete — one GPU job decodes the ref
+            // once and scores every metric for every variant (no per-(cell,metric) re-encode/re-decode).
+            JobKind::ScoreFile { .. } => JobProfile {
+                class: ResourceClass::Gpu,
+                group_by: GroupBy::SourceSha,
                 output_regenerability: Regenerability::CheapRegenerable,
             },
             JobKind::Feature { .. } => JobProfile {

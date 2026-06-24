@@ -198,6 +198,197 @@ fn encode_cell_for_job(
 /// distorted temp file.
 static DIST_SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// Variant index: `sha -> (byte offset, size)` into `variants.tar`. Loaded once per process (the warm
+/// `--serve` loop reuses it). TSV `sha\toffset\tsize` at `$ZEN_VARIANT_INDEX_URI`, built by the
+/// manifest builder from the tar's member headers — so the executor fetches a pre-encoded variant by
+/// a single byte-range GET, never re-encoding and never downloading the whole 4 GB tar.
+static VARIANT_INDEX: std::sync::OnceLock<std::collections::HashMap<String, (u64, u64)>> =
+    std::sync::OnceLock::new();
+
+fn variant_index() -> Result<&'static std::collections::HashMap<String, (u64, u64)>, Box<dyn Error>> {
+    if let Some(i) = VARIANT_INDEX.get() {
+        return Ok(i);
+    }
+    let uri = std::env::var("ZEN_VARIANT_INDEX_URI").map_err(|_| "ZEN_VARIANT_INDEX_URI unset")?;
+    let endpoint = std::env::var("ZEN_R2_ENDPOINT").map_err(|_| "ZEN_R2_ENDPOINT unset")?;
+    let dst = std::env::temp_dir().join("zen_variant_index.tsv");
+    let st = Command::new("s5cmd")
+        .arg("--endpoint-url")
+        .arg(&endpoint)
+        .arg("cp")
+        .arg(&uri)
+        .arg(&dst)
+        .stdout(Stdio::null())
+        .status()
+        .map_err(|e| format!("spawn s5cmd (index): {e}"))?;
+    if !st.success() {
+        return Err(format!("fetch variant index {uri} failed").into());
+    }
+    let mut m = std::collections::HashMap::new();
+    for line in std::fs::read_to_string(&dst)?.lines() {
+        let mut it = line.split('\t');
+        if let (Some(s), Some(o), Some(z)) = (it.next(), it.next(), it.next())
+            && let (Ok(o), Ok(z)) = (o.parse::<u64>(), z.parse::<u64>())
+        {
+            m.insert(s.to_string(), (o, z));
+        }
+    }
+    Ok(VARIANT_INDEX.get_or_init(|| m))
+}
+
+/// Byte-range-fetch one pre-encoded variant out of `variants.tar` (`$ZEN_VARIANTS_TAR_URI`) using the
+/// index — no per-variant R2 object, no whole-tar download, no re-encode. Returns a temp path.
+fn fetch_variant(sha: &str, ext: &str) -> Result<PathBuf, Box<dyn Error>> {
+    let &(off, sz) = variant_index()?
+        .get(sha)
+        .ok_or_else(|| format!("sha {sha} not in variant index"))?;
+    let tar_uri = std::env::var("ZEN_VARIANTS_TAR_URI").map_err(|_| "ZEN_VARIANTS_TAR_URI unset")?;
+    let endpoint = std::env::var("ZEN_R2_ENDPOINT").map_err(|_| "ZEN_R2_ENDPOINT unset")?;
+    let bucket = std::env::var("ZEN_BUCKET").map_err(|_| "ZEN_BUCKET unset")?;
+    let key = tar_uri
+        .strip_prefix(&format!("s3://{bucket}/"))
+        .unwrap_or(&tar_uri)
+        .to_string();
+    let seq = DIST_SEQ.fetch_add(1, Ordering::Relaxed);
+    let dst = std::env::temp_dir().join(format!("jobexec_var_{}_{}.{}", std::process::id(), seq, ext));
+    let end = off + sz - 1;
+    let st = Command::new("aws")
+        .arg("s3api")
+        .arg("get-object")
+        .arg("--endpoint-url")
+        .arg(&endpoint)
+        .arg("--bucket")
+        .arg(&bucket)
+        .arg("--key")
+        .arg(&key)
+        .arg("--range")
+        .arg(format!("bytes={off}-{end}"))
+        .arg(&dst)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|e| format!("spawn aws (range-get): {e}"))?;
+    if !st.success() {
+        return Err(format!("range-get variant {sha} from {tar_uri} failed").into());
+    }
+    Ok(dst)
+}
+
+/// Whole-file scoring (`JobKind::ScoreFile`): the efficient path. Decode the reference ONCE, then for
+/// each input variant sha byte-range-fetch the pre-encoded bytes out of `variants.tar`, decode it
+/// ONCE, and score EVERY metric against the shared reference via the same `run_metric` core
+/// `score-pairs` uses — so a 24 MP source's decode and each variant's decode happen once, never
+/// re-encoded or re-decoded per metric. Emits one JSONL row per (variant, metric); the write-back
+/// rejoins q/knobs by `encode_sha`.
+fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<dyn Error>> {
+    let cell = &job["cell"];
+    let image_path = cell["image_path"]
+        .as_str()
+        .ok_or("score_file: cell.image_path missing")?;
+    let codec_name = cell["codec"].as_str().ok_or("score_file: cell.codec missing")?;
+    let ext = ext_for(codec_name);
+    let metrics: Vec<&str> = job["kind"]["metrics"]
+        .as_array()
+        .ok_or("score_file: kind.metrics missing")?
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    let shas: Vec<&str> = job["inputs"]
+        .as_array()
+        .ok_or("score_file: inputs missing")?
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+
+    // Decode the reference ONCE for all variants × metrics.
+    let src_path = resolve_source(image_path, corpus_prefix)?;
+    let reference = decode_image_to_rgb8(&src_path)?;
+
+    let mut rows: Vec<String> = Vec::with_capacity(shas.len() * metrics.len().max(1));
+    let mk_row = |sha: &str, extra: Value| -> Result<String, Box<dyn Error>> {
+        let mut o = Map::new();
+        o.insert("kind".into(), serde_json::json!("metric"));
+        o.insert("image_path".into(), serde_json::json!(image_path));
+        o.insert("codec".into(), serde_json::json!(codec_name));
+        o.insert("encode_sha".into(), serde_json::json!(sha));
+        if let Value::Object(m) = extra {
+            o.extend(m);
+        }
+        Ok(serde_json::to_string(&Value::Object(o))?)
+    };
+    for sha in &shas {
+        // Fetch + decode the variant ONCE; score every metric on it.
+        let var_path = match fetch_variant(sha, ext) {
+            Ok(p) => p,
+            Err(e) => {
+                rows.push(mk_row(sha, serde_json::json!({ "error": format!("fetch: {e}") }))?);
+                continue;
+            }
+        };
+        let distorted = match decode_image_to_rgb8(&var_path) {
+            Ok(d) => d,
+            Err(e) => {
+                let _ = std::fs::remove_file(&var_path);
+                rows.push(mk_row(sha, serde_json::json!({ "error": format!("decode: {e}") }))?);
+                continue;
+            }
+        };
+        let _ = std::fs::remove_file(&var_path);
+        for metric in &metrics {
+            // zensim-gpu additionally yields the 372-feature vector from the SAME decode — the exact
+            // score-pairs --feature-output path (run_zensim_gpu_with_features). Emit a feature row too.
+            #[cfg(feature = "gpu-zensim")]
+            if *metric == "zensim-gpu" || *metric == "zensim" {
+                match crate::metrics::run_zensim_gpu_with_features(
+                    &reference,
+                    &distorted,
+                    crate::metrics::GpuRuntime::Auto,
+                    crate::metrics::ZensimFeatureRegime::WithIw,
+                ) {
+                    Ok((sc, feats)) => {
+                        rows.push(mk_row(
+                            sha,
+                            serde_json::json!({ "metric": metric, "score": sc, "scores": { "zensim_score": sc } }),
+                        )?);
+                        let mut fo = Map::new();
+                        fo.insert("kind".into(), serde_json::json!("feature"));
+                        fo.insert("image_path".into(), serde_json::json!(image_path));
+                        fo.insert("codec".into(), serde_json::json!(codec_name));
+                        fo.insert("encode_sha".into(), serde_json::json!(sha));
+                        fo.insert("regime".into(), serde_json::json!("with-iw"));
+                        fo.insert("zensim_score".into(), serde_json::json!(sc));
+                        fo.insert("features".into(), serde_json::json!(feats));
+                        rows.push(serde_json::to_string(&Value::Object(fo))?);
+                    }
+                    Err(e) => rows.push(mk_row(sha, serde_json::json!({ "metric": metric, "error": e.to_string() }))?),
+                }
+                continue;
+            }
+            match score(metric, &reference, &distorted) {
+                Ok(pairs) => {
+                    let mut scores = Map::new();
+                    for (n, v) in &pairs {
+                        scores.insert((*n).to_string(), serde_json::json!(v));
+                    }
+                    rows.push(mk_row(
+                        sha,
+                        serde_json::json!({
+                            "metric": metric,
+                            "score": pairs.first().map(|(_, v)| *v),
+                            "scores": scores,
+                        }),
+                    )?);
+                }
+                Err(e) => rows.push(mk_row(
+                    sha,
+                    serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                )?),
+            }
+        }
+    }
+    Ok(rows.join("\n").into_bytes())
+}
+
 /// Do one job end-to-end: resolve+decode the source, encode the cell, and (for a metric job) score
 /// it. Returns the output BYTES — encode: the encoded image; metric: the one-line JSON score row.
 /// Shared by single-shot `run` and the warm `run_serve` loop, so both paths are byte-identical.
@@ -205,6 +396,12 @@ fn run_one_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<
     let kind = job["kind"]["kind"]
         .as_str()
         .ok_or("job.kind.kind missing")?;
+    // Whole-file scoring (JobKind::ScoreFile): a different shape — many variants, no single q/knobs,
+    // NO re-encode. Decode the reference once, then fetch + score each pre-encoded variant. The
+    // efficient path that replaces per-(cell,metric) re-encoding. Handled separately and returns early.
+    if kind == "score_file" {
+        return run_score_file(job, corpus_prefix);
+    }
     let cell = &job["cell"];
     let image_path = cell["image_path"]
         .as_str()
