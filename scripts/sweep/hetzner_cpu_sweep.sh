@@ -65,7 +65,26 @@ for l in open("/tmp/hz_all.txt"):
         px=int(m.group(1))*int(m.group(2))
         if lo < px <= cap: sys.stdout.write(l)  # MINPX..MAXPX window -> big-image tier sets MINPX=4200000
 ' > /tmp/hz_ok.txt
-[ "$IMAGES" -gt 0 ] 2>/dev/null && head -n "$IMAGES" /tmp/hz_ok.txt > /tmp/hz_sel.txt || cp /tmp/hz_ok.txt /tmp/hz_sel.txt
+# Selection: STRATIFY=1 → ~IMAGES/4 per size bucket (tiny/small/medium/large) so the picker
+# gets size-invariance (plain head -IMAGES is name-sorted → small-skewed → medium/large DATA_STARVED).
+if [ "${STRATIFY:-0}" = "1" ] && [ "$IMAGES" -gt 0 ] 2>/dev/null; then
+  IMAGES="$IMAGES" python3 -c '
+import re,os,sys
+n=int(os.environ["IMAGES"]); per=max(1,n//4)
+buckets={"tiny":[],"small":[],"medium":[],"large":[]}
+for l in open("/tmp/hz_ok.txt"):
+    m=re.search(r"scale(\d+)x(\d+)",l)
+    if not m: continue
+    px=int(m.group(1))*int(m.group(2))
+    b="tiny" if px<=4096 else "small" if px<=65536 else "medium" if px<=1050000 else "large"
+    buckets[b].append(l)
+out=[]
+for b in ("tiny","small","medium","large"): out += buckets[b][:per]
+sys.stderr.write("stratified picks: "+", ".join(f"{b}={min(len(buckets[b]),per)}" for b in buckets)+"\n")
+sys.stdout.writelines(out)
+' > /tmp/hz_sel.txt
+elif [ "$IMAGES" -gt 0 ] 2>/dev/null; then head -n "$IMAGES" /tmp/hz_ok.txt > /tmp/hz_sel.txt
+else cp /tmp/hz_ok.txt /tmp/hz_sel.txt; fi
 total=$(wc -l < /tmp/hz_sel.txt); per=$(( (total + N_BOXES - 1) / N_BOXES ))
 echo "selected $total renditions; $per per box"
 split -d -l "$per" /tmp/hz_sel.txt /tmp/hz_chunk_
