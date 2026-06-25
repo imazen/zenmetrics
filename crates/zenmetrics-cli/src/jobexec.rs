@@ -12,8 +12,14 @@
 //!
 //! - `s3://…` path -> fetched with s5cmd
 //! - else if `$ZEN_CORPUS_PREFIX` is set ->
-//!   s3://$ZEN_BUCKET/$ZEN_CORPUS_PREFIX/<image_path>
+//!   s3://$ZEN_CORPUS_BUCKET/$ZEN_CORPUS_PREFIX/<image_path> (falls back to $ZEN_BUCKET)
 //! - else if the local file exists -> used directly
+//!
+//! The corpus is READ-ONLY and lives in its own bucket (`$ZEN_CORPUS_BUCKET`, e.g. codec-corpus),
+//! separate from the run-write bucket (`$ZEN_BUCKET`, e.g. coefficient) the worker fills with
+//! blobs/ledger/claims. When set, `$ZEN_CORPUS_AWS_*` supplies a read-only credential for the corpus
+//! fetch so the run-write cred is never used to read the corpus (R2 temp creds are single-bucket, so
+//! reading one bucket while writing another genuinely needs two creds).
 //!
 //! A `metric` job is self-contained: it re-encodes the cell (deterministic) and scores
 //! (reference=source, distorted=encode). CPU metrics only (ssim2/butteraugli/zensim) — GPU metrics
@@ -31,8 +37,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Parser, Debug)]
 pub struct JobexecArgs {
-    /// R2 prefix under $ZEN_BUCKET where source images live (overrides $ZEN_CORPUS_PREFIX). The job's
-    /// `cell.image_path` is appended to it. Omit if image_path is already an `s3://…` or local path.
+    /// R2 prefix under $ZEN_CORPUS_BUCKET (or $ZEN_BUCKET) where source images live (overrides
+    /// $ZEN_CORPUS_PREFIX). The job's `cell.image_path` is appended to it. Omit if image_path is
+    /// already an `s3://…` or local path.
     #[arg(long)]
     pub corpus_prefix: Option<String>,
 
@@ -91,6 +98,29 @@ fn score(
     run_metric(metric_kind(metric)?, reference, distorted, GpuRuntime::Auto)
 }
 
+/// Point an s5cmd `Command` at the read-only corpus credential (`ZEN_CORPUS_AWS_*`) when one is set,
+/// so corpus reads don't reuse the run-write cred. No-op when `ZEN_CORPUS_AWS_ACCESS_KEY_ID` is unset —
+/// the command then inherits the ambient `AWS_*` (single-cred / single-bucket setups). When the corpus
+/// cred is permanent (no session token), the ambient `AWS_SESSION_TOKEN` is removed so the run cred's
+/// session can't leak onto the corpus access key.
+fn apply_corpus_creds(cmd: &mut Command) {
+    let Ok(ak) = std::env::var("ZEN_CORPUS_AWS_ACCESS_KEY_ID") else {
+        return;
+    };
+    cmd.env("AWS_ACCESS_KEY_ID", ak);
+    if let Ok(sk) = std::env::var("ZEN_CORPUS_AWS_SECRET_ACCESS_KEY") {
+        cmd.env("AWS_SECRET_ACCESS_KEY", sk);
+    }
+    match std::env::var("ZEN_CORPUS_AWS_SESSION_TOKEN") {
+        Ok(st) => {
+            cmd.env("AWS_SESSION_TOKEN", st);
+        }
+        Err(_) => {
+            cmd.env_remove("AWS_SESSION_TOKEN");
+        }
+    }
+}
+
 /// Resolve `cell.image_path` to a readable local file, fetching from R2 if needed.
 fn resolve_source(
     image_path: &str,
@@ -105,7 +135,12 @@ fn resolve_source(
     let uri = if image_path.starts_with("s3://") {
         image_path.to_string()
     } else {
-        let bucket = std::env::var("ZEN_BUCKET").map_err(|_| "ZEN_BUCKET unset")?;
+        // The corpus (read-only source images) lives in its own bucket, distinct from the
+        // run-write bucket the worker fills with blobs/ledger/claims. Read it from
+        // ZEN_CORPUS_BUCKET when set, falling back to ZEN_BUCKET for single-bucket setups.
+        let bucket = std::env::var("ZEN_CORPUS_BUCKET")
+            .or_else(|_| std::env::var("ZEN_BUCKET"))
+            .map_err(|_| "ZEN_CORPUS_BUCKET/ZEN_BUCKET unset")?;
         match corpus_prefix {
             Some(p) if !p.is_empty() => {
                 format!("s3://{bucket}/{}/{image_path}", p.trim_end_matches('/'))
@@ -127,8 +162,8 @@ fn resolve_source(
         return Ok(dst);
     }
     let part = std::path::PathBuf::from(format!("{}.part", dst.display()));
-    let st = Command::new("s5cmd")
-        .arg("--endpoint-url")
+    let mut cmd = Command::new("s5cmd");
+    cmd.arg("--endpoint-url")
         .arg(&endpoint)
         .arg("cp")
         .arg(&uri)
@@ -137,9 +172,12 @@ fn resolve_source(
         // channel, so that line would corrupt a frame and deadlock the worker; in single-shot mode it
         // prefixes the content-addressed blob with noise. Silence stdout — real errors stay on s5cmd's
         // stderr (inherited → the worker log).
-        .stdout(Stdio::null())
-        .status()
-        .map_err(|e| format!("spawn s5cmd: {e}"))?;
+        .stdout(Stdio::null());
+    // Use the read-only corpus credential (ZEN_CORPUS_AWS_*) for the corpus fetch when provided, so a
+    // worker reads codec-corpus read-only while writing the run to a different bucket with the ambient
+    // AWS_* run cred. No-op (inherits ambient AWS_*) when unset — single-cred / single-bucket setups.
+    apply_corpus_creds(&mut cmd);
+    let st = cmd.status().map_err(|e| format!("spawn s5cmd: {e}"))?;
     if !st.success() {
         let _ = std::fs::remove_file(&part);
         return Err(format!("s5cmd cp {uri} failed").into());

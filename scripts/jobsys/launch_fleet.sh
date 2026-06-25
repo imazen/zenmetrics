@@ -23,10 +23,11 @@ set -euo pipefail
 # ZEN_EXEC default is the real executor) and ZEN_CORPUS_PREFIX=<R2 prefix of your source images>.
 IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zenfleet-worker:latest}"
 EXEC="${ZEN_EXEC:-/bin/cat}"           # override for real work (or rely on the exec image's ZEN_EXEC default)
-CORPUS="${ZEN_CORPUS_PREFIX:-}"        # R2 prefix under the bucket where source images live (real jobs)
+CORPUS="${ZEN_CORPUS_PREFIX:-}"        # R2 prefix under the CORPUS bucket where source images live (real jobs)
+CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-codec-corpus}"  # corpus READ-ONLY bucket (source images)
 N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"; N_SALAD="${5:-0}"
 SALAD_ORG="${SALAD_ORGANIZATION:-imazen}"; SALAD_PROJECT="${SALAD_PROJECT:-zenmetrics}"
-BUCKET="${ZEN_FLEET_BUCKET:-zen-tuning-ephemeral}"
+BUCKET="${ZEN_FLEET_BUCKET:-coefficient}"   # run-WRITE bucket: manifest / claims / ledger / blobs
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
@@ -39,7 +40,21 @@ body=$(python3 -c "import json,os;print(json.dumps({'bucket':'$BUCKET','parentAc
 curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$body" \
   "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/fleet_cred.json
 read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/fleet_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
-echo "minted scoped creds (3h)"
+echo "minted scoped run creds (3h, rw $BUCKET/$RUN)"
+
+# 1b. Corpus READ-ONLY cred — a SECOND single-bucket cred for the corpus when it differs from the run
+# bucket (R2 temp creds are single-bucket). jobexec reads codec-corpus with this via ZEN_CORPUS_AWS_*;
+# the run cred above (rw, scoped to $RUN/) never touches the read-only corpus.
+CAK=""; CSK=""; CST=""; CORPUS_CRED_ENV=""
+if [ "$CORPUS_BUCKET" != "$BUCKET" ]; then
+  cbody=$(CB="$CORPUS_BUCKET" CP="$CORPUS" python3 -c "import json,os;p=os.environ.get('CP','').strip('/');print(json.dumps({'bucket':os.environ['CB'],'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-only','ttlSeconds':10800,**({'prefixes':[p+'/']} if p else {})}))")
+  curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$cbody" \
+    "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/fleet_corpus_cred.json
+  read -r CAK CSK CST < <(python3 -c 'import json;r=json.load(open("/tmp/fleet_corpus_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
+  [ -n "${CAK:-}" ] || { echo "FAILED to mint scoped corpus creds:"; cat /tmp/fleet_corpus_cred.json; exit 1; }
+  CORPUS_CRED_ENV="-e ZEN_CORPUS_AWS_ACCESS_KEY_ID=$CAK -e ZEN_CORPUS_AWS_SECRET_ACCESS_KEY=$CSK -e ZEN_CORPUS_AWS_SESSION_TOKEN=$CST"
+  echo "minted scoped corpus read-only cred (ro $CORPUS_BUCKET/${CORPUS:-<all>})"
+fi
 
 # 2. manifest → R2 (root creds for the upload)
 python3 - "$N_JOBS" > /tmp/fleet_spec.json <<'PY'
@@ -82,7 +97,7 @@ json.dump(j, open("/tmp/fleet_manifest_"+w+".json","w"))'
 envblock() { cat <<EOF
 -e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK -e AWS_SESSION_TOKEN=$ST -e AWS_REGION=auto
 -e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUN -e ZEN_MANIFEST_URI=${2:-$MANIFEST}
--e ZEN_PROVIDER=$1 -e ZEN_EXEC=$EXEC -e ZEN_CORPUS_PREFIX=$CORPUS -e ZEN_SPEC_THRESHOLD_SECS=20 -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_IDLE_PASSES=8
+-e ZEN_PROVIDER=$1 -e ZEN_EXEC=$EXEC -e ZEN_CORPUS_BUCKET=$CORPUS_BUCKET -e ZEN_CORPUS_PREFIX=$CORPUS $CORPUS_CRED_ENV -e ZEN_SPEC_THRESHOLD_SECS=20 -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_IDLE_PASSES=8
 EOF
 }
 
@@ -128,13 +143,19 @@ done
 #       reqwest client (examples/fleet_create.rs), whose TLS signature passes where urllib/curl 403.
 if [ "$N_SALAD" -gt 0 ]; then
   SALAD_MANIFEST="$(shuf_manifest salad-1)"   # per-worker shuffled claim order (see shuf_manifest)
-  SALAD_ENV_JSON="$(AK="$AK" SK="$SK" ST="$ST" EP="$EP" BUCKET="$BUCKET" RUN="$RUN" MANIFEST="$SALAD_MANIFEST" CTLKEY="$CTLKEY" CORPUS="$CORPUS" python3 -c '
+  SALAD_ENV_JSON="$(AK="$AK" SK="$SK" ST="$ST" EP="$EP" BUCKET="$BUCKET" RUN="$RUN" MANIFEST="$SALAD_MANIFEST" CTLKEY="$CTLKEY" CORPUS="$CORPUS" CB="$CORPUS_BUCKET" CAK="${CAK:-}" CSK="${CSK:-}" CST="${CST:-}" python3 -c '
 import json,os
-print(json.dumps({"AWS_ACCESS_KEY_ID":os.environ["AK"],"AWS_SECRET_ACCESS_KEY":os.environ["SK"],
+e={"AWS_ACCESS_KEY_ID":os.environ["AK"],"AWS_SECRET_ACCESS_KEY":os.environ["SK"],
 "AWS_SESSION_TOKEN":os.environ["ST"],"AWS_REGION":"auto","ZEN_R2_ENDPOINT":os.environ["EP"],
 "ZEN_BUCKET":os.environ["BUCKET"],"ZEN_RUN":os.environ["RUN"],"ZEN_MANIFEST_URI":os.environ["MANIFEST"],
 "ZEN_PROVIDER":"salad","ZEN_SPEC_THRESHOLD_SECS":"20","ZEN_CONTROL_KEY":os.environ["CTLKEY"],
-"ZEN_CORPUS_PREFIX":os.environ.get("CORPUS",""),"ZEN_IDLE_PASSES":"8","ZEN_WORKER":"salad-1"}))')"
+"ZEN_CORPUS_BUCKET":os.environ["CB"],"ZEN_CORPUS_PREFIX":os.environ.get("CORPUS",""),
+"ZEN_IDLE_PASSES":"8","ZEN_WORKER":"salad-1"}
+if os.environ.get("CAK"):
+    e["ZEN_CORPUS_AWS_ACCESS_KEY_ID"]=os.environ["CAK"]
+    e["ZEN_CORPUS_AWS_SECRET_ACCESS_KEY"]=os.environ["CSK"]
+    e["ZEN_CORPUS_AWS_SESSION_TOKEN"]=os.environ["CST"]
+print(json.dumps(e))')"
   EX="$ROOT/target/release/examples/fleet_create"
   [ -x "$EX" ] || { cargo build --release -p zenfleet-salad --example fleet_create >/dev/null 2>&1 || true; }
   [ -x "$EX" ] || EX="$ROOT/target/debug/examples/fleet_create"

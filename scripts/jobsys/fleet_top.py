@@ -327,7 +327,7 @@ def snapshot(run, args, run_start_holder):
 def main():
     ap = argparse.ArgumentParser(description="real-time zen fleet health monitor")
     ap.add_argument("run", help="RUN id (R2 prefix under the bucket)")
-    ap.add_argument("--bucket", default=os.environ.get("ZEN_FLEET_BUCKET", "zen-tuning-ephemeral"))
+    ap.add_argument("--bucket", default=os.environ.get("ZEN_FLEET_BUCKET", "coefficient"))
     ap.add_argument("--interval", type=float, default=5.0, help="refresh seconds")
     ap.add_argument("--once", action="store_true", help="single snapshot, then exit")
     ap.add_argument("--stall", type=int, default=180, help="worker quiet secs → STALLED")

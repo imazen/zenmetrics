@@ -3,7 +3,7 @@
 # concurrently working the one queue).  Usage: bash scripts/jobsys/watch_fleet.sh <RUN>
 set -uo pipefail
 RUN="${1:?usage: watch_fleet.sh <RUN>}"
-B="${ZEN_FLEET_BUCKET:-zen-tuning-ephemeral}"
+B="${ZEN_FLEET_BUCKET:-coefficient}"
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto
