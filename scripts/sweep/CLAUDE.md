@@ -18,11 +18,11 @@ production entrypoint. Sweep operations are:
 
 - `onstart_unified.sh` — execs `zenfleet-sweep worker --backend
   vastai --mode omni` (the default mode). Replaces the bash
-  `onstart_omni_backfill.sh` chain. Used with `Dockerfile.sweep.v26`.
+  `onstart_omni_backfill.sh` chain. Used with `Dockerfile.sweep.v27`.
 - `onstart_feature_backfill.sh` — execs `zenfleet-sweep worker
   --backend vastai --mode feature-backfill`. Reads existing omni sidecars + cached
   encoded variants from R2, writes zensim 300-feature parquets
-  without re-encoding. Used with `Dockerfile.sweep.v26`.
+  without re-encoding. Used with `Dockerfile.sweep.v27`.
 - `generate_cvvdp_backfill_chunks.py` — chunk generator (slices
   the unified-V_X parquet into 200-row chunks, emits
   `chunks.jsonl` for upload to `s3://coefficient/jobs/<run>/`).
@@ -30,7 +30,7 @@ production entrypoint. Sweep operations are:
   smoke-test, `--n-boxes N` to fan out. Passes `PARALLEL_CHUNKS`,
   `SKIP_CLAIMS`, `METRICS`, `CHUNKS_R2` env vars through to the worker.
   (`launch_single_instance.sh` was deleted 2026-06-25 — `--n-boxes 1` is
-  the smoke now; the v26 image's `run_with_error_trap.sh` does the
+  the smoke now; the v27 image's `run_with_error_trap.sh` does the
   panic-log-upload + self-destroy it used to do by hand.)
 - `scripts/jobsys/fleet watch <run>` — the ONE monitor: per-box GPU/CPU
   util + $-burn + idle / failed-to-start flags (replaced the deleted
@@ -60,7 +60,7 @@ separate dual-impl bash flow.
 
 The v14→v25 chain was collapsed into single-file
 `Dockerfile.sweep.v26` on 2026-05-21; all earlier vNN Dockerfiles
-were deleted. See `README.md` for the v26 image's layer plan and
+were deleted. See `README.md` for the v27 image's layer plan and
 the proven end-to-end pipeline that landed 2933 omni sidecars +
 2933 zensim feature parquets across two production runs on
 2026-05-19 (those runs used v24, which v26 supersedes with the
@@ -81,12 +81,12 @@ destroy` cleans it up — which is exactly the failure mode the
 
 Two equivalent ways to satisfy the contract:
 
-1. **Image-level wrapper (preferred for v26):** the v26 image's
+1. **Image-level wrapper (preferred for v27):** the v27 image's
    `ENTRYPOINT` already chains through
    `/usr/local/bin/run_with_error_trap.sh`, which installs the EXIT
    trap, captures stderr, and shells out to the baked
    `/usr/local/bin/zenfleet-vastai self-destroy` on rc≠0. New onstarts
-   running in v26 inherit this automatically — no changes needed in
+   running in v27 inherit this automatically — no changes needed in
    the script itself.
 
 2. **Inline trap (required for anything that runs
@@ -108,7 +108,7 @@ propagates its own exit code; the respawn loop aborts on any non-zero rc.)
 
 ## Worker mechanics
 
-1. vast.ai pulls the baked v26 image (everything is baked — no apt /
+1. vast.ai pulls the baked v27 image (everything is baked — no apt /
    pip / binary download at boot; see global CLAUDE.md "BAKE EVERYTHING").
 2. `--onstart-cmd` runs `onstart_unified.sh`, which execs
    `zenfleet-sweep worker --backend vastai --mode omni`. That one Rust

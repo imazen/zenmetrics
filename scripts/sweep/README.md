@@ -33,10 +33,11 @@ details.
 
 | Tag | What it ships | Pin for |
 |---|---|---|
-| `v26` | Single-file collapsed image: Inline-sweep Rust worker (omni / feature-backfill / source-features modes) + 6 GPU metrics CUDA-12.0-bound + all-local codec deps + cuda_dlsym_stub LD_PRELOAD | All new sweep work |
+| `v27` | **Canonical** (per `ghcr-packages.json`). v26's single-file collapsed image — inline-sweep Rust worker (omni / feature-backfill / source-features) + 6 GPU metrics CUDA-12.0-bound + all-local codec deps + cuda_dlsym_stub LD_PRELOAD — **plus the `orchestrator` feature + `onstart_orchestrator.sh`** (the `--use-orchestrator` OOM-fallback ladder). | All new sweep work |
+| `v26` | Prior generation (omni, no orchestrator). Superseded by v27; kept only as the layer base v27 + `Dockerfile.sweep.salad.v1` were cut from. | — |
 
 Always pin the tag — `:latest` doesn't exist. Build from
-`Dockerfile.sweep.v26` (single source of truth — no chain).
+`Dockerfile.sweep.v27` (the canonical amd64 image; `Dockerfile.sweep.hetzner.v1` for arm64).
 
 **History (2026-05-21):** the v14→v25 incremental chain was
 collapsed into single-file `Dockerfile.sweep.v26`. All earlier
@@ -69,17 +70,17 @@ feature parquets across two runs (`cvvdp-v15rc-2026-05-18` and
    --filter-codec v15rc_zenjpeg` (or per codec). Upload to
    `s3://coefficient/jobs/<run-id>/chunks.jsonl`.
 2. **Single-box smoke (omni mode)** — `launch_backfill.sh --n-boxes 1
-   --docker ghcr.io/imazen/zenmetrics-sweep:v26 --onstart
+   --docker ghcr.io/imazen/zenmetrics-sweep:v27 --onstart
    onstart_unified.sh`. Verify the first sidecar lands at
    `s3://zentrain/<run-id>/omni/<chunk>.parquet`. Schema check
    should show all 6 metric columns + `encoded_filename` non-empty.
 3. **Fleet fanout (omni)** — `launch_backfill.sh --n-boxes 6
-   --docker :v26 --onstart onstart_unified.sh`. PC=2 default; AIMD
+   --docker :v27 --onstart onstart_unified.sh`. PC=2 default; AIMD
    tunes between 1-4 based on `nvidia-smi` util.
 4. **Watch omni sidecars** populate. ~50 chunks/hr/box with v23.
    `zenfleet-vastai watch --target-sidecars <N>` auto-destroys at end.
 5. **Single-box smoke (feature-backfill mode)** —
-   `launch_backfill.sh --n-boxes 1 --docker :v26 --onstart
+   `launch_backfill.sh --n-boxes 1 --docker :v27 --onstart
    onstart_feature_backfill.sh`. Verifies the feature parquet
    lands at `s3://zentrain/<run-id>/zensim_features/<chunk>.parquet`.
 6. **Fleet fanout (feature-backfill)** — same launcher with v24
@@ -105,7 +106,7 @@ missing=$(comm -23 <(echo "$omni" | sort) <(echo "$feat" | sort))
 
 # 2. Build a chunks.jsonl with just those, upload to a fresh run prefix
 # 3. Launch omni-mode fleet against that file:
-launch_backfill.sh --docker :v26 --onstart onstart_unified.sh \
+launch_backfill.sh --docker :v27 --onstart onstart_unified.sh \
     --run-id v15rc-reencode-<DATE> --chunks <fresh-prefix>/chunks.jsonl
 # This overwrites the omni sidecars + uploads encoded variants to
 # the original run's encoded/ prefix (because each chunk record's
@@ -144,7 +145,7 @@ Before you touch anything:
 5. **Always smoke-test ONE box before fanning out.** Run
    `launch_backfill.sh --n-boxes 1` (with `SKIP_CLAIMS=1`) on the same
    `--onstart` + `--docker` combo first; the single-box smoke catches every
-   common bug before you fan out to 30 boxes. The v26 image's
+   common bug before you fan out to 30 boxes. The v27 image's
    `run_with_error_trap.sh` wrapper uploads the failure log + self-destroys.
 
 ---
@@ -165,7 +166,7 @@ python3 scripts/sweep/generate_cvvdp_backfill_chunks.py \
     --output-r2-prefix s3://zentrain/<YYYY-MM-DD-NICK> \
     --chunk-size 200 \
     --out /tmp/<NICK>/chunks.jsonl
-# 3. Upload chunks to R2 (the omni scorer is BAKED into the v26 image and
+# 3. Upload chunks to R2 (the omni scorer is BAKED into the v27 image and
 #    runs in-process in the Rust worker — no chunk-worker upload needed)
 s5cmd --profile r2 --endpoint-url $R2_ENDPOINT cp \
     /tmp/<NICK>/chunks.jsonl s3://coefficient/jobs/<YYYY-MM-DD-NICK>/chunks.jsonl
@@ -175,7 +176,7 @@ SKIP_CLAIMS=1 ./scripts/sweep/launch_backfill.sh \
     --metric cvvdp \
     --run-id <YYYY-MM-DD-NICK> \
     --chunks s3://coefficient/jobs/<YYYY-MM-DD-NICK>/chunks.jsonl \
-    --docker ghcr.io/imazen/zenmetrics-sweep:v26 \
+    --docker ghcr.io/imazen/zenmetrics-sweep:v27 \
     --onstart scripts/sweep/onstart_unified.sh \
     --n-boxes 1 --max-dph 0.10 --min-gpu-ram 8
 
@@ -188,7 +189,7 @@ watch -n 60 's5cmd --profile r2 --endpoint-url $R2_ENDPOINT ls s3://zentrain/<RU
     --metric cvvdp \
     --run-id <YYYY-MM-DD-NICK> \
     --chunks s3://coefficient/jobs/<YYYY-MM-DD-NICK>/chunks.jsonl \
-    --docker ghcr.io/imazen/zenmetrics-sweep:v26 \
+    --docker ghcr.io/imazen/zenmetrics-sweep:v27 \
     --onstart scripts/sweep/onstart_unified.sh \
     --n-boxes 10 --max-dph 0.10
 
@@ -211,7 +212,9 @@ zenfleet-vastai status --label-prefix <YYYY-MM-DD-NICK>
 
 | File | Tag | Status | Notes |
 |---|---|---|---|
-| `Dockerfile.sweep.v26` | **`v26` (recommended)** | ✅ shipping | Single-file collapsed image (replaces the v14→v25 chain). FROM ubuntu:24.04 directly. Bakes apt deps + CUDA NVRTC+dev 12-6 + pyarrow + s5cmd + jq + cuda_dlsym_stub.so + zenmetrics (CUDARC_CUDA_VERSION=12000) + zenfleet-vastai (inline-sweep) + all onstart/worker scripts. Supports omni, feature-backfill, source-features modes. |
+| `Dockerfile.sweep.v27` | **`v27` (canonical)** | ✅ shipping | Self-contained (`FROM ubuntu:24.04`). v26's layer plan (apt deps + CUDA NVRTC+dev 12-6 + pyarrow + s5cmd + jq + cuda_dlsym_stub.so + zenmetrics + zenfleet-vastai inline-sweep + all onstart/worker scripts; omni / feature-backfill / source-features modes) **+ the `orchestrator` feature + `onstart_orchestrator.sh`**. Per `ghcr-packages.json` this is the canonical amd64 build. |
+| `Dockerfile.sweep.v26` | `v26` | prior gen | Superseded by v27 (omni, no orchestrator). Kept as the documented layer base; not what you build. |
+| `scripts/sweep/Dockerfile.sweep.hetzner.v1` | `hetzner` | ✅ shipping | The canonical **arm64** build (Hetzner CAX). |
 | `scripts/sweep/Dockerfile.pycvvdp` | `pycvvdp` | active (rare) | Only used by the dual-impl cvvdp parity flow. Separate from the main sweep image because pycvvdp pulls in ~3 GB of pytorch. |
 
 **Historical (deleted 2026-05-21):** the v14→v25 chain (Dockerfile.sweep
@@ -292,7 +295,7 @@ Smoke-test = `launch_backfill.sh --n-boxes 1`.
 | Bandwidth charges crush the budget | Each box re-downloads source images redundantly | Use a sharded chunk file (one source per shard) OR launch with `WORKER_INDEX`/`WORKER_COUNT` so each box owns a slice. (Sharding pending — see task #72.) |
 | GHCR pull fails with 401 unauthorized | Image is private + the `--login` flag's GHCR token is stale | Make image public OR refresh `gh auth token` and re-launch. |
 | feature-backfill worker panics `as_string::<i32>()` / `"string array"` | omni sidecar's `encoded_filename` column inferred as Null type (no encoded variants ever saved for this chunk). | The Rust worker now skips these gracefully (`fix(feature-backfill)` 2026-05-19). To populate features for those chunks, **re-encode them** — see "Known constraint" section above. |
-| feature-backfill SIGSEGV on older Xeon CPUs | Initially blamed on archmage SIMD dispatch; actually traced to the panic above leaking through tokio's task abort. Fixed 2026-05-19. | Use v26 image. |
+| feature-backfill SIGSEGV on older Xeon CPUs | Initially blamed on archmage SIMD dispatch; actually traced to the panic above leaking through tokio's task abort. Fixed 2026-05-19. | Use v27 image. |
 
 ---
 
