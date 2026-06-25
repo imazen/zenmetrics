@@ -110,6 +110,13 @@ AWS_ACCESS_KEY_ID=$AK
 AWS_SECRET_ACCESS_KEY=$SK
 AWS_SESSION_TOKEN=$ST
 AWS_REGION=auto
+# Partial OOM mitigation (MEASURED): the monolithic sweep's RSS grows with
+# cells-per-process × image-size (allocator high-water, all metrics, not zensim/
+# features/rayon-specific). mmap_threshold recovers ~28% by mmap'ing big allocs
+# (returned to OS on free). Does NOT fully bound it — large imgs × many cells
+# still need the job system (one cell/fresh process). See benchmarks/jxl_lossy_p0.
+GLIBC_TUNABLES=glibc.malloc.mmap_threshold=131072
+MALLOC_TRIM_THRESHOLD_=131072
 EP=$EP
 BUCKET=$RUN_BUCKET
 SRC_BUCKET=$SRC_BUCKET
