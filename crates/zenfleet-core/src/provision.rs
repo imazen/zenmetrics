@@ -8,9 +8,9 @@
 //! [`InstanceRecommendation`].
 //!
 //! It adds the **GPU/VRAM dimension** that `schedule` (host RAM + cores only)
-//! does not model. The execution model it sizes for is the one
-//! `scripts/sweep/onstart_v3.sh` actually runs: **N CPU encoders sharing one
-//! GPU** — many encodes run concurrently across the box's cores, while metric
+//! does not model. The execution model it sizes for is the one the unified
+//! worker (`scripts/sweep/onstart_unified.sh`) actually runs: **N CPU encoders
+//! sharing one GPU** — many encodes run concurrently across the box's cores, while metric
 //! scoring is **serialized on the single GPU device**. That asymmetry drives
 //! every rule below.
 //!

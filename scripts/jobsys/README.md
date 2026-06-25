@@ -111,7 +111,7 @@ zenfleet-gc --blob-index s3://b/.../blob_index.parquet --ledger s3://b/.../ledge
   --r2-endpoint "$EP" --cheap-cap-bytes 1000000   # add --execute to delete
 ```
 
-## `launch_fleet.sh` / `watch_fleet.sh` / `teardown_fleet.sh` — goal H (heterogeneous fleet)
+## `launch_fleet.sh` / `fleet watch` / `teardown_fleet.sh` — goal H (heterogeneous fleet)
 
 Bring up ≥3 interchangeable tiers on ONE R2 lease-queue, all running the same **baked**
 `ghcr.io/imazen/zenfleet-worker` image (binary + aws-cli + s5cmd + keep-alive entrypoint — zero boot-time
@@ -124,7 +124,7 @@ creds per run; teardown by `group=<run>` label (or the dashboard Kill controls).
 # one-time: ensure CI pushed the image and the ghcr package is public
 # args: N_JOBS  HETZNER_X86_BOXES  VAST_BOXES  HETZNER_ARM_BOXES                       (SPENDS MONEY)
 bash scripts/jobsys/launch_fleet.sh 200 1 0 1  # local(x86) + 1 Hetzner cpx(x86) + 1 Hetzner cax(arm64)
-bash scripts/jobsys/watch_fleet.sh  <RUN>      # ledger DONE rows by provider — proves concurrent tiers
+bash scripts/jobsys/fleet watch     <RUN>      # boxes + util + $-burn + ledger DONE rows by provider
 bash scripts/jobsys/teardown_fleet.sh <RUN>    # delete every box for this run
 ```
 

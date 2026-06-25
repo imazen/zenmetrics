@@ -70,9 +70,8 @@
 # Run: ENTRYPOINT runs `zenfleet-sweep worker --backend vastai` (the
 # cloud-agnostic deployed worker; same compute path as the legacy
 # `zenfleet-vastai worker`).
-# Callers override with `--entrypoint /usr/local/bin/onstart_iwssim.sh`
-# (legacy iwssim flow), `/usr/local/bin/onstart_cvvdp_imazen.sh`
-# (cvvdp backfill), or `/usr/local/bin/zenmetrics` (ad-hoc CLI).
+# Callers override with `--entrypoint /usr/local/bin/onstart_feature_backfill.sh`
+# (feature backfill) or `/usr/local/bin/zenmetrics` (ad-hoc CLI).
 
 FROM ubuntu:24.04
 
@@ -303,9 +302,6 @@ COPY --chmod=0755 scripts/sweep/metric_backfill_chunk_worker.sh   /usr/local/bin
 # error trap so failures self-destroy the vast.ai instance instead of
 # billing-while-broken. Callers override:
 #
-#   --entrypoint /usr/local/bin/onstart_iwssim.sh        (iwssim flow)
-#   --entrypoint /usr/local/bin/onstart_cvvdp_imazen.sh  (cvvdp backfill)
-#   --entrypoint /usr/local/bin/onstart_feature_backfill.sh
-#   --entrypoint /usr/local/bin/onstart_source_features.sh
-#   --entrypoint /usr/local/bin/zenmetrics              (ad-hoc CLI)
+#   --entrypoint /usr/local/bin/onstart_feature_backfill.sh  (feature backfill)
+#   --entrypoint /usr/local/bin/zenmetrics                   (ad-hoc CLI)
 ENTRYPOINT ["/usr/local/bin/run_with_error_trap.sh", "/usr/local/bin/onstart_unified.sh"]

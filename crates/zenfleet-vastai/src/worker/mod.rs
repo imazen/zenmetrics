@@ -1,5 +1,6 @@
-//! Worker mode — replaces the bash `onstart_omni_backfill.sh` dispatch
-//! loop with a Rust-native async one.
+//! Worker mode — replaced the bash `onstart_omni_backfill.sh` dispatch
+//! loop with a Rust-native async one (that bash script was deleted
+//! 2026-06-25; this is the dispatch loop now).
 //!
 //! ## What it does
 //!
@@ -34,12 +35,15 @@
 //!
 //! ## Scope of phase A
 //!
-//! Phase A keeps the inner chunk-processor as a subprocess call to the
-//! existing `omni_backfill_chunk_worker.sh` bash script. The Rust
-//! worker is just the *outer* dispatcher. Phase B will move the chunk
+//! Phase A kept the inner chunk-processor as a subprocess call to a
+//! `omni_backfill_chunk_worker.sh` bash script (that script was deleted
+//! 2026-06-25; the subprocess path now only compiles under
+//! `#[cfg(not(feature = "inline-sweep"))]` and is no longer the prod path).
+//! The Rust worker is the *outer* dispatcher. Phase B moved the chunk
 //! processor in-process by calling `zenmetrics_cli::sweep::run_sweep`
-//! directly, eliminating the 30× cubecl init per chunk (the biggest
-//! remaining latency on a warm box).
+//! directly (the `inline-sweep` feature, which production builds with),
+//! eliminating the 30× cubecl init per chunk (the biggest remaining
+//! latency on a warm box).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -231,8 +235,8 @@ pub fn cmd_worker(args: WorkerArgs) -> Result<()> {
 
     // Defensive: write ~/.aws/credentials from env so s5cmd's `--profile`
     // lookup succeeds even on backends whose onstart didn't write the
-    // file. vast.ai's `onstart_v3.sh` writes static creds via bash
-    // already; this is a no-op when the env vars are absent and
+    // file. The unified onstart (`onstart_unified.sh`) writes static creds
+    // via bash already; this is a no-op when the env vars are absent and
     // overwrites identically when present.
     if let Err(e) = provision_aws_credentials_file(&args.s5cmd_profile) {
         warn!(error = %e, "provision_aws_credentials_file failed; s5cmd may 403");

@@ -8,10 +8,11 @@
 #   - ssim2_backfill_chunk_worker.sh (lives on feat/ex3-ssim2-target-backfill)
 #   - the single-metric subset of cvvdp_backfill_chunk_worker.sh
 #
-# This worker handles ONE metric per invocation (--metric). For the
-# dual-implementation cvvdp flow (cvvdp-gpu + pycvvdp side-by-side) keep
-# using cvvdp_backfill_chunk_worker.sh — that flow is a different shape
-# (two scorers, two sidecars, parity log) and is not folded in here.
+# This worker handles ONE metric per invocation (--metric). The
+# dual-implementation cvvdp flow (cvvdp-gpu + pycvvdp side-by-side via
+# cvvdp_backfill_chunk_worker.sh) was removed 2026-06-25 — cvvdp now scores
+# through the unified worker, and cvvdp-gpu<->pycvvdp parity is validated in
+# the cvvdp-gpu crate (goldens + CHROMA_DRIFT_INVESTIGATION.md), not the fleet.
 #
 # The worker:
 #   1. Reads one chunk-manifest line (JSON object) via --chunk-json or
@@ -43,7 +44,7 @@
 #   - python3 with pyarrow (parquet slicing)
 #   - docker (if running scorer in a container)
 #
-# Required env vars (R2 credentials, same as onstart_v3.sh):
+# Required env vars (R2 credentials, same as onstart_unified.sh):
 #   R2_ACCOUNT_ID  R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY
 #
 # Usage:

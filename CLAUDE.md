@@ -477,21 +477,24 @@ over those persisted variants — never re-encode per metric.
   constructed fresh in `butteraugli_refine_quant_field` and dropped on return —
   it does NOT persist across encode calls. The per-encode pool fix already landed
   in jxl-encoder `26a8d9cd` (#93) + a `MemoryBudget` guard.
-  **Real fleet-OOM cause: image-level concurrency × per-image transient PEAK**, not
-  accumulation. Peak scales ~6–7 GB/MP and the dominant peak consumer is the **jxl
-  modular/lossless tree-learning** (`TreeSamples::reserve` ← `encode_lossless`,
-  ~3.7 GB, in the `mod-e1_*` cells), not butteraugli (~1.2 GB). The old
-  "NOT thread-bound" datum fits: RAYON threads don't change per-image peak, but
-  images-in-flight does (the fleet ran N images at once; `--jobs 1` is fine).
-  **Mitigation is config, not a code bug: bound IMAGE-level concurrency per box** —
-  workers-per-box ≤ box_RAM ÷ per-image-peak (≈ 1 concurrent jxl encode per
-  ~30 GB for ≤4.2 MP renditions); size-tier large renditions to high-RAM boxes.
-  The job system's per-cell process serializes within a worker, so cap workers/box
-  for jxl by RAM. Do NOT switch to `rd_core` to dodge this — `rd_core` is the
-  crippled pre-ablated set (RD_ABLATION_2026-06-24.md); use `modes_full` +
-  concurrency bounding. The modular-lossless transient peak is a real (large but
-  NON-leaking) over-allocation in jxl-encoder (sibling) — trimmable later, not a
-  blocker.
+  **A single jxl encode is SMALL (measured 2026-06-25, 3.15 MP, isolated via
+  `jobexec`):** lossy VarDCT **0.20 GB**, lossless modular **1.50 GB**
+  (thread-independent — same at 1 and 28 threads). `modes_full` is **96% modular
+  cells** (315 of 327; the lossless-modular knob space dominates).
+  **The OOM is the MONOLITHIC `zenmetrics sweep` accumulating across cells within
+  ONE process** — `modes_full` on a single 3.15 MP image ramps RSS to ~13–24 GB
+  across its 315 modular cells with NO per-cell release (allocator high-water, not
+  a true leak), × parallel images on the box → the 31 GB OOM. The old
+  "NOT thread-bound" datum fits: per-cell memory is fixed (1.5 GB); cells-in-one-
+  process is the driver, not threads. **The job system bounds it by construction:
+  one encode per FRESH process = ≤1.5 GB, freed on exit** — so `modes_full` runs
+  fine via the job system, per-box concurrency ≈ box_RAM ÷ 1.5 GB (a 32 GB box ≈
+  ~18 concurrent modular encodes). Do NOT use `rd_core` to dodge this — it's the
+  crippled pre-ablated set (RD_ABLATION_2026-06-24.md); use `modes_full` via the
+  **job system** (not the monolithic sweep). If the monolithic sweep must be used
+  for jxl, bound image concurrency AND add a per-cell free / `malloc_trim` (the
+  cross-cell within-process growth is a sweep-mode artifact, not a single-encode
+  cost). Measurements: `/tmp/repro_jxl_VERDICT.md`, single-encode `/usr/bin/time -v`.
 
 - **zenmetrics-api consolidated `it` suite self-poisons when run as ONE
   process** (observed 2026-06-10, pre-existing — A/B-identical 26-test failure

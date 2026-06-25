@@ -130,8 +130,9 @@ enum Cmd {
         #[arg(long, default_value = "s5cmd")]
         s5cmd_bin: String,
     },
-    /// Run as a sweep worker on a vast.ai box. Replaces the bash
-    /// `onstart_omni_backfill.sh` dispatch loop. See the
+    /// Run as a sweep worker on a vast.ai box. Replaced the bash
+    /// `onstart_omni_backfill.sh` dispatch loop (that script was deleted
+    /// 2026-06-25; this Rust worker is the dispatch loop now). See the
     /// `worker::WorkerArgs` doc for env vars + CLI flags.
     ///
     /// Built into the `zenfleet-vastai` binary so the v22+ docker image

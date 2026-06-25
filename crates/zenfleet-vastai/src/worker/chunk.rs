@@ -1,9 +1,12 @@
 //! Per-chunk processor.
 //!
-//! ## Phase A: subprocess to bash worker
+//! ## Phase A: subprocess to bash worker (legacy, removed script)
 //!
-//! For now this just calls `omni_backfill_chunk_worker.sh --chunk-json <line>`
-//! and propagates the exit status. The bash script already handles:
+//! Under `#[cfg(not(feature = "inline-sweep"))]` this calls a
+//! `omni_backfill_chunk_worker.sh --chunk-json <line>` and propagates the
+//! exit status. That bash script was deleted 2026-06-25 and this path is no
+//! longer the production path (see Phase B below); it remains only as the
+//! non-`inline-sweep` fallback shape. The bash script handled:
 //!
 //! 1. Downloading the input parquet + source PNGs.
 //! 2. Grouping cells by `(codec, knob_tuple_json)`.
@@ -11,9 +14,9 @@
 //! 4. Combining per-group TSVs into one parquet sidecar.
 //! 5. Uploading the sidecar to R2.
 //!
-//! Keeping it as a subprocess for phase A means we get the Rust
+//! Keeping it as a subprocess for phase A meant we got the Rust
 //! dispatcher's reliability + adaptive concurrency without touching
-//! the chunk-level logic that's already producing correct output.
+//! the chunk-level logic that was already producing correct output.
 //!
 //! ## Phase B: in-process via `zenmetrics_cli::sweep::run_sweep`
 //!
@@ -211,11 +214,11 @@ pub async fn process_chunk(
     run_chunk_via_bash(args, &rec, line, started).await
 }
 
-/// Phase A bash-subprocess execute path: shells out to
+/// Phase A bash-subprocess execute path: shells out to a
 /// `omni_backfill_chunk_worker.sh --chunk-json <line>` and propagates the exit
-/// status. This is the SOLE execute path when the crate is built WITHOUT the
-/// `inline-sweep` feature; the inline Rust pipeline supersedes it in the
-/// default (and production) build.
+/// status. That bash script was deleted 2026-06-25; this is the SOLE execute
+/// path only when the crate is built WITHOUT the `inline-sweep` feature, and
+/// the inline Rust pipeline supersedes it in the default (and production) build.
 #[cfg(not(feature = "inline-sweep"))]
 async fn run_chunk_via_bash(
     args: &WorkerArgs,

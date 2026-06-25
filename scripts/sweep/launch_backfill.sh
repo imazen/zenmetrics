@@ -29,7 +29,7 @@
 #       --chunks s3://coefficient/jobs/iwssim-backfill-2026-05-17/chunks.jsonl \
 #       --max-dph 0.30 --n-boxes 30 --min-ram 8 --min-disk 20 \
 #       --docker ghcr.io/imazen/zenmetrics-sweep:0.6.4-iwssim-fixed-6227c1a \
-#       --onstart scripts/sweep/onstart_iwssim_backfill.sh
+#       --onstart scripts/sweep/onstart_unified.sh
 #
 # Once the fleet is up the launcher prints the watch invocation that
 # would auto-destroy at target — copy/paste to run as a detached
@@ -270,8 +270,9 @@ s5cmd --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
        /usr/local/bin/onstart.sh
 chmod +x /usr/local/bin/onstart.sh
 # Route through the trap wrapper when the image bakes it (v15+). This
-# gives the fleet self-destroy-on-crash semantics matching what
-# launch_single_instance.sh has: a panicked onstart uploads stderr to
+# gives the fleet self-destroy-on-crash semantics matching what the
+# single-box smoke test (launch_backfill.sh --n-boxes 1) has: a panicked
+# onstart uploads stderr to
 # s3://zentrain/<run>/errors/<instance>.log and DELETEs its own
 # vast.ai instance so a broken box doesn't keep burning $/hr.
 if [[ -x /usr/local/bin/run_with_error_trap.sh ]]; then
@@ -343,8 +344,8 @@ for offer_id in $OFFER_IDS; do
     ID=$(echo "$OUT" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('new_contract', d.get('id','')))" 2>/dev/null || echo "")
     [[ -z "$ID" ]] && { echo "  $i parse-fail: $(echo "$OUT" | head -c 200)"; continue; }
     # ssh-runtype instances are created in stopped state — explicit
-    # start is required for the onstart-cmd to fire. (Matches the fix
-    # in launch_single_instance.sh:185; without this every box in
+    # start is required for the onstart-cmd to fire. (Same fix the
+    # single-box smoke path (--n-boxes 1) applies; without this every box in
     # the fleet sits in actual_status=created indefinitely.)
     vastai start instance "$ID" >/dev/null 2>&1 || \
         echo "  $i WARN: start instance $ID failed (instance may still auto-start)"

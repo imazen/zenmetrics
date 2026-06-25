@@ -26,11 +26,15 @@ production entrypoint. Sweep operations are:
 - `generate_cvvdp_backfill_chunks.py` — chunk generator (slices
   the unified-V_X parquet into 200-row chunks, emits
   `chunks.jsonl` for upload to `s3://coefficient/jobs/<run>/`).
-- `launch_single_instance.sh` / `launch_backfill.sh` — single-box
-  smoke + N-box fleet fanout. Both pass through `PARALLEL_CHUNKS`,
-  `SKIP_CLAIMS`, `METRICS`, `CHUNKS_R2` env vars to the worker.
-- `fleet_util_snapshot.sh` — per-box util dashboard.
-- `vast_cost_watch.sh` — continuous burn-rate monitor.
+- `launch_backfill.sh` — vast.ai fleet launcher: `--n-boxes 1` to
+  smoke-test, `--n-boxes N` to fan out. Passes `PARALLEL_CHUNKS`,
+  `SKIP_CLAIMS`, `METRICS`, `CHUNKS_R2` env vars through to the worker.
+  (`launch_single_instance.sh` was deleted 2026-06-25 — `--n-boxes 1` is
+  the smoke now; the v26 image's `run_with_error_trap.sh` does the
+  panic-log-upload + self-destroy it used to do by hand.)
+- `scripts/jobsys/fleet watch <run>` — the ONE monitor: per-box GPU/CPU
+  util + $-burn + idle / failed-to-start flags (replaced the deleted
+  `fleet_util_snapshot.sh` + `vast_cost_watch.sh`).
 - `hetzner_cpu_sweep.sh` — **heterogeneous SPLIT, Hetzner-CPU half** (2026-06-23):
   each cheap box fetches its chunk + runs `zenmetrics sweep` (CPU ssim2+zensim) +
   `--encoded-out-dir` → tars the variants to R2 (the master record). Scoped 3h
@@ -45,11 +49,14 @@ production entrypoint. Sweep operations are:
   image ENTRYPOINT and runs its own ssh init + the onstart-cmd. (see memory
   `heterogeneous-fleet-split`)
 
-Legacy bash workers (`omni_backfill_chunk_worker.sh`,
-`metric_backfill_chunk_worker.sh`, etc.) and onstarts
-(`onstart_omni_backfill.sh`, `onstart_v3.sh`) remain in tree as
-the Rust worker's fallback path + for the dual-impl cvvdp parity
-flow (`onstart_cvvdp_backfill.sh`).
+The per-metric/legacy bash workers (`omni_backfill_chunk_worker.sh`,
+`cvvdp_backfill_chunk_worker.sh`, `iwssim_backfill_chunk_worker.sh`) and
+onstarts (`onstart_omni_backfill.sh`, `onstart_v3.sh`, `onstart_cvvdp_*`)
+were **deleted 2026-06-25** — production scoring is in-process in the Rust
+worker (`inline-sweep`). The one surviving bash worker is
+`metric_backfill_chunk_worker.sh` (single-metric, driven by
+`launch_backfill.sh`). cvvdp now scores through the unified worker, not a
+separate dual-impl bash flow.
 
 The v14→v25 chain was collapsed into single-file
 `Dockerfile.sweep.v26` on 2026-05-21; all earlier vNN Dockerfiles
@@ -94,23 +101,26 @@ Two equivalent ways to satisfy the contract:
 Whichever path you pick, **xargs return code MUST propagate to the
 script's exit**. The default `xargs ... < chunks` at end-of-script
 discards rc on its own line; capture into `xargs_rc=$?` and `exit
-"$xargs_rc"` if non-zero (mirror `onstart_cvvdp_backfill_imazen.sh:404-409`).
-Without this, a chunk loop that fails every chunk in 6 s still ends
-the onstart with rc=0 and the trap does nothing.
+"$xargs_rc"` if non-zero. Without this, a chunk loop that fails every
+chunk in 6 s still ends the onstart with rc=0 and the trap does nothing.
+(The unified `onstart_unified.sh` sidesteps this — the Rust worker
+propagates its own exit code; the respawn loop aborts on any non-zero rc.)
 
 ## Worker mechanics
 
-1. vast.ai pulls `ubuntu:24.04` (~10 s on warm host).
-2. `--onstart-cmd` runs `onstart_v3.sh` which:
-   - Imports env from `/proc/1/environ` (filters R2_*, SWEEP_*, WORKER_*, STATS_*).
-   - Downloads static `s5cmd` + `jq` to `/usr/local/bin`.
-   - Either downloads a `zenmetrics-vX.Y.Z.tar.gz` release tarball OR
-     pulls a binary blob via `SWEEP_BIN_OVERRIDE` (s3://path).
-   - Writes a heartbeat to `s3://coefficient/heartbeats/<sweep>/<worker>.json`.
-   - Reads `chunks.jsonl` from `s3://coefficient/jobs/<sweep>/`.
-   - Loops: claim a chunk (atomic via `mc cp` of a `.claim` file),
-     download source images, run `zenmetrics --batch`, upload TSV +
-     features parquet.
+1. vast.ai pulls the baked v26 image (everything is baked — no apt /
+   pip / binary download at boot; see global CLAUDE.md "BAKE EVERYTHING").
+2. `--onstart-cmd` runs `onstart_unified.sh`, which execs
+   `zenfleet-sweep worker --backend vastai --mode omni`. That one Rust
+   process:
+   - Hydrates env from `/proc/1/environ` (R2_*, SWEEP_*, WORKER_*, …).
+   - Reads `chunks.jsonl` from `s3://coefficient/jobs/<run>/`.
+   - Loops: atomic-claim a chunk (token race + sidecar idempotency),
+     encode + score all metrics **in-process** (one CubeCL init), write
+     the parquet sidecar — no per-chunk subprocess, no `zenmetrics --batch`.
+
+   (The legacy bash flow — `onstart_v3.sh` downloading s5cmd/jq + a release
+   tarball + looping `zenmetrics --batch` — was removed 2026-06-25.)
 
 ## CRITICAL: cgroup-aware parallelism (2026-05-04 fix)
 
@@ -118,8 +128,10 @@ the onstart with rc=0 and the trap does nothing.
 (often 56) — NOT the container's effective cgroup allocation (usually
 8–16). Setting `xargs -P $(nproc)` oversubscribes and thrashes.
 
-Fix lives in `onstart_v3.sh::cores_from_cgroup()` and `ram_gb_from_cgroup()`.
-Both cgroup v1 and v2 are handled. Final formula:
+The Rust worker reads the cgroup allocation (not `nproc`) in
+`crates/zenfleet-vastai/src/worker/adapt.rs`; both cgroup v1 and v2 are
+handled. (The original bash fix lived in `onstart_v3.sh::cores_from_cgroup()`
+/ `ram_gb_from_cgroup()`, now removed.) Final formula:
 
 ```
 PARALLEL = min(cgroup_cores, ram_gb * 2/3) - 2

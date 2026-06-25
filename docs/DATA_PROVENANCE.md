@@ -340,9 +340,9 @@ t = dataset.to_table(columns=["image_path", "codec", "q", "knob_tuple_json",
 - CLI: `zenfleet-vastai worker --run-id <id> --chunks-r2 <uri>`
 - Docker image: `ghcr.io/imazen/zenmetrics-sweep:v23` (post 2026-05-19)
 - Dockerfile: `zenmetrics/Dockerfile.sweep.v23`
-- Launchers: `zenmetrics/scripts/sweep/launch_{single_instance,backfill}.sh`
+- Launcher: `zenmetrics/scripts/sweep/launch_backfill.sh` (`--n-boxes 1` to smoke)
 - Onstart: `zenmetrics/scripts/sweep/onstart_unified.sh`
-- Util monitor: `zenmetrics/scripts/sweep/fleet_util_snapshot.sh`
+- Util monitor: `zenmetrics/scripts/jobsys/fleet watch <run>`
 
 The worker links `zenmetrics-cli` as a library so `run_sweep`
 runs in-process (one cubecl init per worker process, not per

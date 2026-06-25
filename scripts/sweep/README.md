@@ -18,8 +18,9 @@ The sweep infra is now a **unified Rust worker** living in
 
 The dispatch loop, claim mechanism, R2 IO, parquet IO, and CubeCL
 session all live in this one binary. The previous bash chain
-(`onstart_omni_backfill.sh` + `omni_backfill_chunk_worker.sh`) is
-kept as a fallback path but **production uses the Rust worker**.
+(`onstart_omni_backfill.sh` + `omni_backfill_chunk_worker.sh`) was
+**removed in the 2026-06-25 consolidation** — the Rust worker's
+in-process `inline-sweep` path is the only path now.
 
 **Why this matters:** Phase B's in-process pipeline ships one CubeCL
 init per worker process (was: one per group, ~30× per chunk).
@@ -67,7 +68,7 @@ feature parquets across two runs (`cvvdp-v15rc-2026-05-18` and
 1. **Generate chunks.jsonl** — `generate_cvvdp_backfill_chunks.py
    --filter-codec v15rc_zenjpeg` (or per codec). Upload to
    `s3://coefficient/jobs/<run-id>/chunks.jsonl`.
-2. **Single-instance smoke (omni mode)** — `launch_single_instance.sh
+2. **Single-box smoke (omni mode)** — `launch_backfill.sh --n-boxes 1
    --docker ghcr.io/imazen/zenmetrics-sweep:v26 --onstart
    onstart_unified.sh`. Verify the first sidecar lands at
    `s3://zentrain/<run-id>/omni/<chunk>.parquet`. Schema check
@@ -77,8 +78,8 @@ feature parquets across two runs (`cvvdp-v15rc-2026-05-18` and
    tunes between 1-4 based on `nvidia-smi` util.
 4. **Watch omni sidecars** populate. ~50 chunks/hr/box with v23.
    `zenfleet-vastai watch --target-sidecars <N>` auto-destroys at end.
-5. **Single-instance smoke (feature-backfill mode)** —
-   `launch_single_instance.sh --docker :v26 --onstart
+5. **Single-box smoke (feature-backfill mode)** —
+   `launch_backfill.sh --n-boxes 1 --docker :v26 --onstart
    onstart_feature_backfill.sh`. Verifies the feature parquet
    lands at `s3://zentrain/<run-id>/zensim_features/<chunk>.parquet`.
 6. **Fleet fanout (feature-backfill)** — same launcher with v24
@@ -138,11 +139,13 @@ Before you touch anything:
    bypass it.
 4. **Check `vastai show instances-v1` regularly.** Orphan instances are
    the #1 source of overruns. If a `vastai destroy` was interrupted
-   mid-prompt, the box keeps running. The `vast_cost_watch.sh` script
-   in this dir polls and alerts.
-5. **NEVER run `launch_backfill.sh` without first running `launch_single_instance.sh`** on the same `--onstart` + `--docker` combo. The
-   single-instance smoke catches every common bug before you fan out
-   to 30 boxes.
+   mid-prompt, the box keeps running. `scripts/jobsys/fleet watch <run>`
+   polls per-box burn + flags idle / over-budget boxes (and `--destroy`s them).
+5. **Always smoke-test ONE box before fanning out.** Run
+   `launch_backfill.sh --n-boxes 1` (with `SKIP_CLAIMS=1`) on the same
+   `--onstart` + `--docker` combo first; the single-box smoke catches every
+   common bug before you fan out to 30 boxes. The v26 image's
+   `run_with_error_trap.sh` wrapper uploads the failure log + self-destroys.
 
 ---
 
@@ -162,24 +165,22 @@ python3 scripts/sweep/generate_cvvdp_backfill_chunks.py \
     --output-r2-prefix s3://zentrain/<YYYY-MM-DD-NICK> \
     --chunk-size 200 \
     --out /tmp/<NICK>/chunks.jsonl
-# 3. Upload chunks + worker to R2
+# 3. Upload chunks to R2 (the omni scorer is BAKED into the v26 image and
+#    runs in-process in the Rust worker — no chunk-worker upload needed)
 s5cmd --profile r2 --endpoint-url $R2_ENDPOINT cp \
     /tmp/<NICK>/chunks.jsonl s3://coefficient/jobs/<YYYY-MM-DD-NICK>/chunks.jsonl
-s5cmd --profile r2 --endpoint-url $R2_ENDPOINT cp \
-    scripts/sweep/omni_backfill_chunk_worker.sh \
-    s3://coefficient/jobs/<YYYY-MM-DD-NICK>/omni_backfill_chunk_worker.sh
 
 # 4. SMOKE: ONE box, SKIP_CLAIMS=1, watch it produce 1 sidecar
-SKIP_CLAIMS=1 ./scripts/sweep/launch_single_instance.sh \
+SKIP_CLAIMS=1 ./scripts/sweep/launch_backfill.sh \
     --metric cvvdp \
     --run-id <YYYY-MM-DD-NICK> \
     --chunks s3://coefficient/jobs/<YYYY-MM-DD-NICK>/chunks.jsonl \
-    --docker ghcr.io/imazen/zenmetrics-sweep:v17 \
-    --onstart scripts/sweep/onstart_omni_backfill.sh \
-    --max-dph 0.10 --min-gpu-ram-mb 8000
+    --docker ghcr.io/imazen/zenmetrics-sweep:v26 \
+    --onstart scripts/sweep/onstart_unified.sh \
+    --n-boxes 1 --max-dph 0.10 --min-gpu-ram 8
 
-# 5. Watch it. Sidecar at s3://zentrain/<RUN-ID>/omni/<chunk>.parquet
-#    means the pipeline works.
+# 5. Watch it. Sidecar at s3://zentrain/<RUN-ID>/omni/<chunk>.parquet means
+#    the pipeline works. (Or: scripts/jobsys/fleet watch <RUN-ID>)
 watch -n 60 's5cmd --profile r2 --endpoint-url $R2_ENDPOINT ls s3://zentrain/<RUN-ID>/omni/ | wc -l'
 
 # 6. When the smoke produces sidecars at a healthy rate, FANOUT
@@ -187,8 +188,8 @@ watch -n 60 's5cmd --profile r2 --endpoint-url $R2_ENDPOINT ls s3://zentrain/<RU
     --metric cvvdp \
     --run-id <YYYY-MM-DD-NICK> \
     --chunks s3://coefficient/jobs/<YYYY-MM-DD-NICK>/chunks.jsonl \
-    --docker ghcr.io/imazen/zenmetrics-sweep:v17 \
-    --onstart scripts/sweep/onstart_omni_backfill.sh \
+    --docker ghcr.io/imazen/zenmetrics-sweep:v26 \
+    --onstart scripts/sweep/onstart_unified.sh \
     --n-boxes 10 --max-dph 0.10
 
 # 7. Auto-destroy when target sidecar count is reached
@@ -225,50 +226,47 @@ pin chase, zenfleet-vastai worker rollouts).
 
 ### Onstart scripts (entrypoint for each container)
 
+The per-metric/legacy onstarts (`onstart_v2/v3`, `onstart_omni_backfill`,
+`onstart_cvvdp_*`, `onstart_iwssim_*`, `onstart_source_features`) were
+**deleted 2026-06-25** — they were near-identical forks of one dispatch loop
+now owned by the Rust worker. The three that remain:
+
 | File | Used by | Status |
 |---|---|---|
-| `onstart_unified.sh` | **omni mode via the Rust `zenfleet-vastai worker` binary** | ✅ recommended (v26) |
-| `onstart_feature_backfill.sh` | **feature-backfill mode via the Rust worker (sets WORKER_MODE=feature-backfill)** | ✅ recommended (v26) |
-| `onstart_omni_backfill.sh` | Legacy bash dispatcher for the omni pipeline | active (fallback) |
-| `onstart_cvvdp_backfill_imazen.sh` | cvvdp single-impl backfill | active |
-| `onstart_cvvdp_backfill.sh` | cvvdp dual-impl (cvvdp-gpu + pycvvdp) | active (rare) |
-| `onstart_iwssim_backfill_v14.sh` | iwssim backfill (v14 image baseline) | active |
-| `onstart_iwssim_backfill.sh` | iwssim backfill (legacy v3 image) | deprecated |
-| `onstart_v2.sh`, `onstart_v3.sh` | pre-v14 legacy generic worker | deprecated |
+| `onstart_unified.sh` | **omni mode** — execs `zenfleet-sweep worker --backend vastai --mode omni` (claim loop + in-process scoring, all metrics, one process) | ✅ canonical |
+| `onstart_feature_backfill.sh` | **feature-backfill mode** — `--mode feature-backfill` (zensim 300-feature parquets from cached variants, no re-encode) | ✅ canonical |
+| `onstart_orchestrator.sh` | local/basement orchestrator variant (same chunk-claim contract) | ✅ canonical |
 
 ### Chunk workers (process one chunk = 100-200 rows)
 
-The Rust worker (`crates/zenfleet-vastai/src/worker/`) replaces these
-bash scripts when the container runs `onstart_unified.sh` or
-`onstart_feature_backfill.sh`. The bash workers stay in the image
-as safety-net fallbacks (`zenfleet-vastai worker` falls through to
-the bash `omni_backfill_chunk_worker.sh` if the inline path
-fails — defence in depth).
+Production scoring runs **in-process** in the Rust worker
+(`crates/zenfleet-vastai/src/worker/`, the `inline-sweep` feature that prod
+builds with) — one CubeCL init per process, no per-chunk subprocess. The
+per-metric bash workers (`omni_backfill_chunk_worker.sh`,
+`cvvdp_backfill_chunk_worker.sh`, `iwssim_backfill_chunk_worker.sh`) were
+**deleted 2026-06-25**. One bash worker remains:
 
 | File | Used by | Status |
 |---|---|---|
-| `omni_backfill_chunk_worker.sh` | Legacy bash worker (now: Rust fallback path only) | active (fallback) |
-| `metric_backfill_chunk_worker.sh` | single-metric backfills (iwssim/ssim2/cvvdp-imazen) | active |
-| `cvvdp_backfill_chunk_worker.sh` | cvvdp dual-impl onstart | active |
-| `iwssim_backfill_chunk_worker.sh` | legacy iwssim-only onstart | deprecated (superseded by metric_backfill) |
+| `metric_backfill_chunk_worker.sh` | single-metric backfills (`--metric iwssim/ssim2/cvvdp/…`), driven by `launch_backfill.sh` | ✅ canonical |
 
 ### Launchers
 
+The legacy launchers (`launch_single_instance.sh`, `deploy_fast.sh`,
+`dispatch.sh`, `vastai_zen_metrics_sweep.sh`) were **deleted 2026-06-25**.
+Smoke-test = `launch_backfill.sh --n-boxes 1`.
+
 | File | Use for | Status |
 |---|---|---|
-| `launch_single_instance.sh` | 1 box smoke test, iterating on a fix | ✅ current |
-| `launch_backfill.sh` | N-box fleet fanout (requires n ≥ 3) | ✅ current |
-| `deploy_fast.sh` | legacy fast-deploy, pre-zenfleet-vastai | deprecated |
-| `dispatch.sh` | legacy cron-driven dispatcher | deprecated |
-| `vastai_zen_metrics_sweep.sh` | legacy v3-era launcher | deprecated |
+| `launch_backfill.sh` | vast.ai backfill fleet — `--n-boxes 1` to smoke, `--n-boxes N` to fan out | ✅ canonical |
+| `scripts/jobsys/launch_fleet.sh` (or `fleet launch`) | heterogeneous job-system fleet (vast + Hetzner + Salad on one R2 queue) | ✅ canonical |
+| `scripts/jobsys/gpu_scorefile_launch.sh` | score PRE-PERSISTED variants (`variants.tar`, no re-encode) via the ScoreFile job kind | ✅ canonical |
 
 ### Chunk generators
 
 | File | Output |
 |---|---|
 | `generate_cvvdp_backfill_chunks.py` | chunks.jsonl from unified-V_X parquets (any metric — name predates the omni mode) |
-| `generate_jobspecs.py` | legacy jobspec format (pre-chunks.jsonl) |
-| `generate_jobspecs_v06.py` | legacy v06 sweep jobspec |
 
 ### Helpers
 
@@ -276,11 +274,9 @@ fails — defence in depth).
 |---|---|
 | `run_with_error_trap.sh` | EXIT-trap wrapper. nvidia-smi pre-flight + self-destroy on rc!=0 + stderr upload. **Every onstart should be invoked through this.** |
 | `cuda_dlsym_stub.c` | LD_PRELOAD shim. Fixes cudarc 0.19.4 vs CUDA 13.x driver symbol mismatch. Baked into v17 image. |
-| `fleet_util_snapshot.sh` | Per-box GPU/CPU/RAM/uptime dump. Auto-detects fleet boxes by label prefix. Use to verify util after launch. |
+| `scripts/jobsys/fleet` | **the ONE monitor** — `fleet watch <run>` shows boxes / $-burn / GPU+CPU util / idle / failed-to-start / progress (replaced `fleet_util_snapshot` + `fleet_status` + `vast_cost_watch`, all deleted 2026-06-25) |
 | `sweep_janitor.py` | Sidecar consolidation + dedup |
-| `fleet_status.sh` | One-shot dashboard wrapping `zenfleet-vastai status` |
 | `finalize.sh` | Post-sweep R2-sidecar consolidation into per-codec parquets |
-| `vast_cost_watch.sh` | Continuous burn-rate monitor; alerts if total cost exceeds threshold |
 
 ---
 
@@ -288,7 +284,7 @@ fails — defence in depth).
 
 | Symptom | Diagnosis | Fix |
 |---|---|---|
-| Instance stays in `cur_state=stopped` forever | vast.ai now requires explicit `vastai start instance <ID>` after create | Already fixed in `launch_single_instance.sh`. If you wrote your own launcher, add the start call. |
+| Instance stays in `cur_state=stopped` forever | vast.ai now requires explicit `vastai start instance <ID>` after create | Already handled in `launch_backfill.sh`. If you wrote your own launcher, add the start call. |
 | Onstart bash dies with `ldconfig: command not found` | Image PATH dropped /sbin | Use v15+ image (has `ENV PATH=/usr/local/sbin:/usr/sbin:...`). |
 | `xargs: invalid number "auto" for -P` | Onstart got PARALLEL=auto, expected numeric | Use v15+ onstart (treats auto as 0 = rayon auto-detect). |
 | Every cell panics with `cuCoredumpDeregisterCompleteCallback` undefined symbol | cudarc 0.19.4 vs CUDA 13.x driver | Use v17 image (has cuda_dlsym_stub.so LD_PRELOAD shim). |
@@ -338,8 +334,8 @@ calculated from earlier-today instance work — those land at day boundary.
 
 ## Don't
 
-- Don't launch from `launch_backfill.sh` without a single-instance smoke
-  first.
+- Don't launch a fleet (`launch_backfill.sh --n-boxes N`) without a
+  `--n-boxes 1` smoke first.
 - Don't fan out to N>5 boxes without watching the first one produce
   sidecars at the rate you expected.
 - Don't put credentials in shell history. The launcher reads them from

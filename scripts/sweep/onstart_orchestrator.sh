@@ -12,7 +12,7 @@
 #      `warm()` runs the local bench at startup (~30 s) — same
 #      behaviour as a fresh box.
 #   3. Drive `zenmetrics sweep --use-orchestrator ...` on the claimed
-#      chunk. Identical chunk-claim contract as `onstart_v3.sh`.
+#      chunk. Identical chunk-claim contract as `onstart_unified.sh`.
 #   4. On rc≠0 the EXIT trap (installed via run_with_error_trap.sh)
 #      uploads the tail log to R2 + invokes `zenfleet-vastai self-destroy`
 #      so a broken worker doesn't burn billable hours.
@@ -98,13 +98,13 @@ if [[ -n "${ZENMETRICS_CACHE_R2_KEY:-}" ]]; then
 fi
 
 # 4. Drive the sweep. The chunk-claim contract is the SAME as
-# onstart_v3.sh — workers pick up chunks.jsonl, atomic-claim a chunk,
+# onstart_unified.sh — workers pick up chunks.jsonl, atomic-claim a chunk,
 # run zenmetrics sweep, upload results. We only swap the per-cell
 # scoring driver from "legacy direct dispatch" to the orchestrator.
 #
-# Real onstart wrappers (onstart_unified.sh, onstart_v3.sh, etc.) live
-# in this directory and already implement the full chunk-claim ←→
-# results-upload loop. We delegate to onstart_unified.sh and just
+# The real onstart wrapper (onstart_unified.sh) lives in this directory
+# and already implements the full chunk-claim ←→ results-upload loop.
+# We delegate to onstart_unified.sh and just
 # forward the orchestrator flags through the env so the
 # zenmetrics-cli library calls inside zenfleet-sweep pick them up.
 log "configuring orchestrator env for downstream worker"

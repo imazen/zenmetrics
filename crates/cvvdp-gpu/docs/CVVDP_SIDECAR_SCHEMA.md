@@ -201,4 +201,4 @@ Sidecar production runs on vast.ai docker images per the repo-root
 `CLAUDE.md` "Sweep runner discipline" section. Each implementation
 ships its own image (pycvvdp + PyTorch is ~3 GB; the cvvdp-gpu
 image is ~50 MB), but both consume the same chunk-file format
-already used by `scripts/sweep/onstart_v3.sh`.
+already used by `scripts/sweep/onstart_unified.sh`.

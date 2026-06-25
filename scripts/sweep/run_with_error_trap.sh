@@ -9,7 +9,7 @@
 #
 # Or via Dockerfile ENTRYPOINT:
 #   ENTRYPOINT ["/usr/local/bin/run_with_error_trap.sh",
-#               "/usr/local/bin/onstart_cvvdp_picker_corpus.sh"]
+#               "/usr/local/bin/onstart_unified.sh"]
 #
 # Required env vars (passed through by vast.ai or set by onstart):
 #   CONTAINER_ID            — vast.ai-set; identifies the instance

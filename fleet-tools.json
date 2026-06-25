@@ -1,5 +1,5 @@
 {
-  "_README": "SOURCE OF TRUTH for fleet tooling — ONE correct way per concern, no forks. The guard (`just fleet-check`, CI .github/workflows/fleet-guard.yml, run with --strict) scans scripts/ for fleet tooling (launch_*, onstart_*, *_chunk_worker, fleet*, *_watch, *cost_watch) and FAILS if a script appears that is not `canonical` here. Add a SUBCOMMAND to `scripts/jobsys/fleet`, or a --mode to the unified Rust worker (onstart_unified → `zenfleet-sweep worker`) — never a new bash fork. The per-metric backfill bash chain (cvvdp/iwssim/omni onstarts + chunk-workers + subdir launchers) and the legacy onstart_v2/v3 were all DELETED 2026-06-25: the Rust unified worker (onstart_unified) already does every metric in one process, so they were dead duplicates. `deprecated` is now empty.",
+  "_README": "SOURCE OF TRUTH for fleet tooling — ONE correct way per concern, no forks. The guard (`just fleet-check`, CI .github/workflows/fleet-guard.yml, run with --strict) scans scripts/ for fleet tooling (launch_*, onstart_*, *_chunk_worker, fleet*, *_watch, *cost_watch) and FAILS if a MATCHING script is not `canonical` here. Add a SUBCOMMAND to `scripts/jobsys/fleet`, or a --mode to the unified Rust worker (onstart_unified → `zenfleet-sweep worker`) — never a new bash fork. DELETED 2026-06-25 (dead duplicates of the unified worker / `fleet` command): the per-metric backfill bash chain (cvvdp/iwssim/omni/ssim2 onstarts + chunk-workers + the cvvdp_backfill/ & iwssim_backfill/ subdir launchers), legacy onstart_v2/v3 + onstart_source_features + onstart_omni_backfill, the legacy launchers (launch_single_instance/deploy_fast/dispatch/vastai_zen_metrics_sweep), generate_jobspecs*.py, and the stale v15/v16 dirs. Smoke = `launch_backfill.sh --n-boxes 1` (the v26 image's run_with_error_trap.sh does the failure-log-upload + self-destroy launch_single_instance did by hand). `gpu_scorefile_launch.sh` is KEPT and canonical — it is the DISTINCT ScoreFile / no-re-encode launcher (scores pre-persisted variants.tar via the ledger; NOT a fork of launch_backfill). NOTE: the guard regex does not yet police `*_launch.sh` / `gpu_*`, so jobsys score launchers aren't auto-checked — keep them few and listed here. `deprecated` is empty.",
   "canonical": {
     "monitor": [
       "scripts/jobsys/fleet",
@@ -7,7 +7,8 @@
     ],
     "launch": [
       "scripts/jobsys/launch_fleet.sh",
-      "scripts/sweep/launch_backfill.sh"
+      "scripts/sweep/launch_backfill.sh",
+      "scripts/jobsys/gpu_scorefile_launch.sh"
     ],
     "teardown": [
       "scripts/jobsys/teardown_fleet.sh"

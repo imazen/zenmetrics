@@ -1,7 +1,7 @@
 //! End-to-end in-process chunk pipeline.
 //!
-//! Replaces the bash `omni_backfill_chunk_worker.sh` script with a
-//! single Rust function. One claim → one [`process_chunk_inline`]
+//! Replaces the bash `omni_backfill_chunk_worker.sh` script (since deleted)
+//! with a single Rust function. One claim → one [`process_chunk_inline`]
 //! call → one sidecar in R2. All steps run within the same process,
 //! sharing cubecl's device cache.
 //!
