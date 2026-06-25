@@ -40,6 +40,29 @@ the same change. Policy + the migration playbook for the existing splinters:
 [`docs/GHCR_PACKAGES.md`](docs/GHCR_PACKAGES.md). `just ghcr-audit` diffs the live
 org packages against the manifest.
 
+## Fleet monitoring — actively flag idle/wasted infrastructure (standing rule)
+
+Whenever a fleet is up (vast.ai / Hetzner / RunPod / Salad / basement), every box
+costs money per hour. **Actively watch for idle/underutilized infrastructure the
+whole time it runs — do not launch-and-forget, and report waste without being asked.**
+
+- **Canonical detector: `zenfleet-core::idle`** (`crates/zenfleet-core/src/idle.rs`).
+  A box past warmup is idle if: no heartbeat in 180s (frozen/dead) OR GPU ≤10% on a
+  GPU box OR ≤1 job/hr (from `jobs_done/uptime`). A paid idle box burns
+  `wasted_usd_per_hr`. **Every tool uses these same thresholds — do not invent new ones.**
+- **Tools that flag idle (run them on a cadence, not once):**
+  - `scripts/sweep/fleet_util_snapshot.sh` — per-box gpu/cpu util + a "⚠ N boxes IDLE
+    — burning $X/hr" banner with the destroy command.
+  - `scripts/jobsys/fleet_top.py` — live ACTIVE/IDLE/STALLED per box.
+  - `zenfleet-dash` — fires `FleetStalled` + per-box `Underutilized` notifications and
+    shows GPU util per worker.
+  - `scripts/sweep/vast_cost_watch.sh` — continuous burn/credit watch + auto-destroy.
+- **On an idle paid box: tear it down.** It is pure waste; destroy it (or let
+  stop-spend / autostop do it) and tell the user the $/hr being saved.
+- **Any NEW fleet tool/script you write MUST flag idle infrastructure** the same way
+  (low util / no throughput / stale heartbeat → loud ⚠ + wasted $/hr), mirroring the
+  `zenfleet-core::idle` thresholds.
+
 ## Data provenance — READ BEFORE TRAINING
 
 **[`~/work/zen/DATA_PROVENANCE.md`](../DATA_PROVENANCE.md)** is the
