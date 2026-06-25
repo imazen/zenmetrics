@@ -493,7 +493,11 @@ mod tests {
             let f = schema
                 .field_with_name(name)
                 .unwrap_or_else(|_| panic!("omni sidecar missing metadata column `{name}`"));
-            assert_eq!(f.data_type(), dtype, "metadata column `{name}` arrow TYPE drifted");
+            assert_eq!(
+                f.data_type(),
+                dtype,
+                "metadata column `{name}` arrow TYPE drifted"
+            );
             assert_eq!(
                 f.is_nullable(),
                 *nullable,
