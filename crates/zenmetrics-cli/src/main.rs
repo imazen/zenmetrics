@@ -1300,6 +1300,11 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             None
         };
 
+    // Reference cache: reused across consecutive same-ref pairs so the CPU
+    // metric path decodes (and zensim-precomputes) each reference once per
+    // source instead of once per variant. See `CachedRef`.
+    let mut ref_cache: Option<CachedRef> = None;
+
     for record in rdr.records() {
         let record = record?;
         let ref_path = PathBuf::from(record.get(ref_idx).ok_or("missing ref_path")?);
@@ -1560,6 +1565,7 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
                         &dist_path,
                         args.gpu_runtime,
                         hdr_pair,
+                        &mut ref_cache,
                     )
                 }
             }
@@ -1575,6 +1581,7 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
                     &dist_path,
                     args.gpu_runtime,
                     hdr_pair,
+                    &mut ref_cache,
                 )
             }
         };
@@ -1721,15 +1728,49 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     Ok(ScorePairsOutcome::Ok)
 }
 
+/// A decoded reference cached across consecutive `score-pairs` records that
+/// share a `ref_path`, so the metric-only phase doesn't re-decode (and, for CPU
+/// zensim, re-build the XYB pyramid for) the reference once per distorted
+/// variant. The SPLIT's pairs.tsv is grouped by source, so same-ref pairs are
+/// consecutive. GPU metrics already amortize via `MetricCache`'s cached-ref
+/// slot; this is the CPU-side equivalent.
+#[cfg(feature = "sweep")]
+struct CachedRef {
+    path: std::path::PathBuf,
+    decoded: decode::Rgb8Image,
+    #[cfg(feature = "cpu-metrics")]
+    zensim_pre: Option<crate::metrics::zensim::PrecomputedRef>,
+}
+
 #[cfg(feature = "sweep")]
 fn score_one_pair(
     metric: MetricKind,
     ref_path: &Path,
     dist_path: &Path,
     gpu_runtime: GpuRuntime,
+    ref_cache: &mut Option<CachedRef>,
 ) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
     use crate::metrics::run_metric;
-    let reference = decode::decode_image_to_rgb8(ref_path)?;
+    // Decode the reference — and, for CPU zensim, build its XYB pyramid — only
+    // when the reference changes. All variants of one source reuse it.
+    let hit = ref_cache.as_ref().is_some_and(|c| c.path == ref_path);
+    if !hit {
+        let decoded = decode::decode_image_to_rgb8(ref_path)?;
+        #[cfg(feature = "cpu-metrics")]
+        let zensim_pre = if metric == MetricKind::Zensim {
+            crate::metrics::zensim::precompute_ref(&decoded).ok()
+        } else {
+            None
+        };
+        *ref_cache = Some(CachedRef {
+            path: ref_path.to_path_buf(),
+            decoded,
+            #[cfg(feature = "cpu-metrics")]
+            zensim_pre,
+        });
+    }
+    let cached = ref_cache.as_ref().expect("ref_cache populated above");
+    let reference = &cached.decoded;
     let distorted = decode::decode_image_to_rgb8(dist_path)?;
     if reference.width != distorted.width || reference.height != distorted.height {
         return Err(format!(
@@ -1743,7 +1784,17 @@ fn score_one_pair(
         )
         .into());
     }
-    let scores = run_metric(metric, &reference, &distorted, gpu_runtime)?;
+    // CPU zensim reuses the precomputed reference pyramid — bit-identical to
+    // `run_metric`'s `zensim::score` (asserted by
+    // `metrics::zensim::precomputed_matches_score`), a pure cost reduction.
+    #[cfg(feature = "cpu-metrics")]
+    if metric == MetricKind::Zensim
+        && let Some(pre) = &cached.zensim_pre
+    {
+        let s = crate::metrics::zensim::score_with_precomputed(pre, &distorted)?;
+        return Ok(vec![s]);
+    }
+    let scores = run_metric(metric, reference, &distorted, gpu_runtime)?;
     if scores.is_empty() {
         return Err("metric returned zero scores".into());
     }
@@ -1766,6 +1817,7 @@ fn score_one_pair_maybe_hdr(
     dist_path: &Path,
     gpu_runtime: GpuRuntime,
     hdr_pair: Option<DecodedRgb8Pair>,
+    ref_cache: &mut Option<CachedRef>,
 ) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
     use crate::metrics::run_metric;
     match hdr_pair {
@@ -1789,7 +1841,7 @@ fn score_one_pair_maybe_hdr(
             Ok(scores.into_iter().map(|(_, v)| v).collect())
         }
         Some(Err(e)) => Err(e),
-        None => score_one_pair(metric, ref_path, dist_path, gpu_runtime),
+        None => score_one_pair(metric, ref_path, dist_path, gpu_runtime, ref_cache),
     }
 }
 
