@@ -93,7 +93,7 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
           git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 6fed817415812b6e38aa1ef817d1a38d072e847b
+          git -C ../zenjxl checkout 1517fd8ecd8b12b6fdcbcd8bee1cb36df18a4838
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
           git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
@@ -289,7 +289,7 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
           git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 6fed817415812b6e38aa1ef817d1a38d072e847b
+          git -C ../zenjxl checkout 1517fd8ecd8b12b6fdcbcd8bee1cb36df18a4838
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
           git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
@@ -445,7 +445,7 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
           git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 6fed817415812b6e38aa1ef817d1a38d072e847b
+          git -C ../zenjxl checkout 1517fd8ecd8b12b6fdcbcd8bee1cb36df18a4838
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
           git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
@@ -556,7 +556,7 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
           git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 6fed817415812b6e38aa1ef817d1a38d072e847b
+          git -C ../zenjxl checkout 1517fd8ecd8b12b6fdcbcd8bee1cb36df18a4838
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
           git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
@@ -664,7 +664,7 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
           git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 6fed817415812b6e38aa1ef817d1a38d072e847b
+          git -C ../zenjxl checkout 1517fd8ecd8b12b6fdcbcd8bee1cb36df18a4838
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
           git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras

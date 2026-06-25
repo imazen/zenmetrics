@@ -470,9 +470,13 @@ pub fn build_zenjxl_plan(
         "rd_core" => SweepAxes::rd_core(),
         "modes_full" => SweepAxes::modes_full(),
         "scalar_dense" => SweepAxes::scalar_dense(),
+        // P0 main-effects mode for the JXL lossy knob-space ablation
+        // program: full lossy knob set over e1..=e9, lossy-only. Pair with
+        // `--max-deviations 1` (defaulted in main.rs).
+        "lossy_dense" => SweepAxes::lossy_dense(),
         other => {
             return Err(format!(
-                "unknown zenjxl plan {other:?}; expected rd_core, modes_full, or scalar_dense"
+                "unknown zenjxl plan {other:?}; expected rd_core, modes_full, scalar_dense, or lossy_dense"
             )
             .into());
         }

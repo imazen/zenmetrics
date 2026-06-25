@@ -817,17 +817,21 @@ fn cmd_sweep(
     let q_grid = parse_q_grid(&args.q_grid)?;
     let knob_grid = parse_knob_grid(&args.knob_grid)?;
 
-    // `--plan scalar_dense` defaults `--max-deviations` to 1 (the isolated
-    // main-effects regime the scalar heads train on); an explicit flag
+    // `--plan scalar_dense` and `--plan lossy_dense` default
+    // `--max-deviations` to 1 (the isolated main-effects regime the scalar
+    // heads train on / the JXL lossy ablation P0 wants); an explicit flag
     // overrides. Every other plan keeps the user's value (None = full
     // crossed space). Resolved once here so the dry-run and the runner
     // see the same effective value.
-    let effective_max_deviations: Option<u8> =
-        if args.plan.as_deref() == Some("scalar_dense") && args.max_deviations.is_none() {
-            Some(1)
-        } else {
-            args.max_deviations
-        };
+    let effective_max_deviations: Option<u8> = if matches!(
+        args.plan.as_deref(),
+        Some("scalar_dense") | Some("lossy_dense")
+    ) && args.max_deviations.is_none()
+    {
+        Some(1)
+    } else {
+        args.max_deviations
+    };
     let mut metrics = args.metrics;
     if metrics.is_empty() {
         // Default metric set keeps the binary useful when invoked without
