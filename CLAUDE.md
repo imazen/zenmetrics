@@ -479,8 +479,15 @@ over those persisted variants — never re-encode per metric.
   in jxl-encoder `26a8d9cd` (#93) + a `MemoryBudget` guard.
   **A single jxl encode is SMALL (measured 2026-06-25, 3.15 MP, isolated via
   `jobexec`):** lossy VarDCT **0.20 GB**, lossless modular **1.50 GB**
-  (thread-independent — same at 1 and 28 threads). `modes_full` is **96% modular
-  cells** (315 of 327; the lossless-modular knob space dominates).
+  (thread-independent — same at 1 and 28 threads). NOTE on cell mix: raw
+  `modes_full` is ~99% LOSSY (77,760 lossy strata across 10 axes + 630 lossless;
+  156k cells/image unbudgeted) — it is the full Cartesian product, meant to be
+  paired with `--plan-budget`/`--max-deviations`. A `--plan-budget` collapses the
+  lossy cross hard: `--plan-budget 400` → 6 `_def` lossy modes + 315 modular (the
+  earlier "96% modular" figure was this budgeted artifact, NOT raw modes_full).
+  Neither raw nor budgeted modes_full is a good lossy-picker plan — see
+  PLAN_SWEEPS / the lossy_dense recommendation (cross the high-value perceptual
+  knobs: epf/gaborish/k_ac_quant/try_dct*/entropy_mul, ~360 strata × dense-q).
   **The OOM is the MONOLITHIC `zenmetrics sweep` accumulating across cells within
   ONE process** — `modes_full` on a single 3.15 MP image ramps RSS to ~13–24 GB
   across its 315 modular cells with NO per-cell release (allocator high-water, not
