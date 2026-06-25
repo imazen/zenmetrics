@@ -85,6 +85,7 @@ BUCKET=$SRC_BUCKET
 SRC_PREFIX=$SRC_PREFIX
 CHUNK_KEY=$RUN_PREFIX/chunks/chunk-$idx.txt
 OUT_KEY=$RUN_PREFIX/omni/box-$idx.omni.tsv
+MANIFEST_KEY=$RUN_PREFIX/manifests/box-$idx.plan.json
 DONE_KEY=$RUN_PREFIX/done/box-$idx.done
 ENC_KEY=$RUN_PREFIX/variants/box-$idx.tar
 FEAT_KEY=$RUN_PREFIX/features/box-$idx.feat.parquet
@@ -105,6 +106,8 @@ mkdir -p /enc
 zenmetrics sweep --codec "\$CODEC" --sources /data --q-grid "\$QG" --plan "\$PLAN" \$PB \
   --metric ssim2 --metric zensim --encoded-out-dir /enc --feature-output /feat.parquet --output /omni.tsv
 s5cmd --endpoint-url=\$EP cp /omni.tsv "s3://\$BUCKET/\$OUT_KEY"
+# codec-commit provenance (the plan manifest carries codec_commits) — lands WITH the blobs
+s5cmd --endpoint-url=\$EP cp /omni.plan.json "s3://\$BUCKET/\$MANIFEST_KEY" 2>/dev/null || true
 s5cmd --endpoint-url=\$EP cp /feat.parquet "s3://\$BUCKET/\$FEAT_KEY"
 # persist encoded variants (the master record): 372 zensim features re-extractable
 # on GPU (zensim-gpu fixed), plus diffmaps / any future metric, with NO re-encode.
