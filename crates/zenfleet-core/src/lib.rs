@@ -22,8 +22,8 @@ pub mod content;
 pub mod control;
 pub mod cost;
 pub mod gc;
-pub mod ids;
 pub mod idle;
+pub mod ids;
 pub mod job;
 pub mod lease;
 pub mod ledger;
@@ -37,8 +37,10 @@ pub use content::{BlobRef, ContentError, Sha256Hex, blob_key, sha256};
 pub use control::RunControl;
 pub use cost::{FleetCost, WorkerReport, aggregate, cost_per_1000_by_tier, over_budget};
 pub use gc::{BlobIndexEntry, GcPlan, GcVerdict, Tombstone, gc_plan, lru_cap_evict, verdict};
+pub use idle::{
+    IdleReason, IdleThresholds, IdleWarning, Severity, detect_idle, wasted_burn_usd_per_hr,
+};
 pub use ids::{CellId, JobId};
-pub use idle::{IdleReason, IdleThresholds, IdleWarning, Severity, detect_idle, wasted_burn_usd_per_hr};
 pub use job::{GroupBy, JobKind, JobProfile, Regenerability, ResourceClass, worker_serves};
 pub use lease::{Lease, recommended_ttl_secs};
 pub use ledger::{DesiredJob, LedgerRow, LedgerView, ResourceHint};

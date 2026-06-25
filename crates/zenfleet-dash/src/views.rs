@@ -365,8 +365,11 @@ pub fn workers_view(workers: &[WorkerReport]) -> Vec<WorkerStat> {
     // Flag idle/underutilized boxes with the canonical detector. `now=0` skips the staleness check
     // (that one needs real time and is fired as a notification by the server); util + throughput
     // signals still flag here so the per-worker table shows which boxes are wasting money.
-    let warnings =
-        zenfleet_core::idle::detect_idle(workers, 0, &zenfleet_core::idle::IdleThresholds::default());
+    let warnings = zenfleet_core::idle::detect_idle(
+        workers,
+        0,
+        &zenfleet_core::idle::IdleThresholds::default(),
+    );
     workers
         .iter()
         .map(|w| WorkerStat {

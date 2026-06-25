@@ -114,7 +114,11 @@ impl IdleWarning {
 /// `now_unix` is the current Unix time for the staleness check; pass 0 if unknown
 /// (staleness is then skipped, throughput + util still apply). Each worker yields
 /// at most one warning, in priority order: stale ▸ low-GPU ▸ starved.
-pub fn detect_idle(reports: &[WorkerReport], now_unix: u64, th: &IdleThresholds) -> Vec<IdleWarning> {
+pub fn detect_idle(
+    reports: &[WorkerReport],
+    now_unix: u64,
+    th: &IdleThresholds,
+) -> Vec<IdleWarning> {
     let mut out = Vec::new();
     for r in reports {
         // Warming up — don't cry wolf on a box that just booted.
@@ -155,7 +159,11 @@ pub fn detect_idle(reports: &[WorkerReport], now_unix: u64, th: &IdleThresholds)
             if util <= th.min_gpu_util_pct {
                 out.push(warn(
                     IdleReason::LowGpuUtil { pct: util },
-                    if paid { Severity::Critical } else { Severity::Warn },
+                    if paid {
+                        Severity::Critical
+                    } else {
+                        Severity::Warn
+                    },
                 ));
             }
             continue;
@@ -231,7 +239,15 @@ mod tests {
     #[test]
     fn stale_heartbeat_dominates_and_is_critical() {
         // Last seen 600s ago (> 180s default), now = 1_000_000.
-        let w = rep("box-7", ResourceClass::Gpu, 0.30, 3600, 0, Some(0), Some(1_000_000 - 600));
+        let w = rep(
+            "box-7",
+            ResourceClass::Gpu,
+            0.30,
+            3600,
+            0,
+            Some(0),
+            Some(1_000_000 - 600),
+        );
         let warns = detect_idle(&[w], 1_000_000, &IdleThresholds::default());
         assert_eq!(warns.len(), 1);
         assert!(matches!(warns[0].reason, IdleReason::StaleHeartbeat { .. }));
@@ -241,7 +257,15 @@ mod tests {
     #[test]
     fn busy_box_not_flagged() {
         // 60 jobs/hr, GPU at 85%, fresh heartbeat — healthy.
-        let w = rep("box-9", ResourceClass::Gpu, 0.40, 3600, 60, Some(85), Some(1_000_000 - 5));
+        let w = rep(
+            "box-9",
+            ResourceClass::Gpu,
+            0.40,
+            3600,
+            60,
+            Some(85),
+            Some(1_000_000 - 5),
+        );
         assert!(detect_idle(&[w], 1_000_000, &IdleThresholds::default()).is_empty());
     }
 
@@ -254,7 +278,15 @@ mod tests {
 
     #[test]
     fn free_tier_idle_is_warn_not_critical_and_wastes_nothing() {
-        let w = rep("oracle-arm", ResourceClass::CpuArm, 0.0, 3600, 0, Some(0), None);
+        let w = rep(
+            "oracle-arm",
+            ResourceClass::CpuArm,
+            0.0,
+            3600,
+            0,
+            Some(0),
+            None,
+        );
         let warns = detect_idle(&[w], 0, &IdleThresholds::default());
         // free GPU-less box: starved-throughput path, Warn, $0 wasted
         assert_eq!(warns.len(), 1);

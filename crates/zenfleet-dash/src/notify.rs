@@ -65,7 +65,9 @@ pub fn format_event(ev: &NotifyEvent, base_url: &str) -> NotifyPayload {
             "#cost",
         ),
         NotifyEvent::FleetStalled { stalled_workers } => (
-            format!("fleet stalled: {stalled_workers} idle/underutilized worker(s) - check #workers"),
+            format!(
+                "fleet stalled: {stalled_workers} idle/underutilized worker(s) - check #workers"
+            ),
             "#workers",
         ),
         NotifyEvent::Underutilized {

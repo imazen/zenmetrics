@@ -37,8 +37,7 @@ use zenfleet_dash::{
     CatalogRow, ControlIntent, CostView, DashData, FailureCell, FleetBox, KindProgress,
     NotifyPayload, QueryRow, ResultRow, RunSummary, TierStorage, WorkerStat, catalog_view,
     cost_view, detect, detect_idle_events, failures, fleet_label_key, fleet_token, format_event,
-    gc_dry_run,
-    idle_boxes, kill_fleet, kill_named, list_fleet, progress, query_view, results_view,
+    gc_dry_run, idle_boxes, kill_fleet, kill_named, list_fleet, progress, query_view, results_view,
     run_summary, selector_for, stop_spend, storage, workers_view,
 };
 
