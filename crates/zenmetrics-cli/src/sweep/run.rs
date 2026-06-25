@@ -77,6 +77,36 @@ use crate::sweep::grid::{KnobGrid, KnobTuple};
 #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
 use crate::sweep::plan::{BuiltPlan, PlannedCell, build_plan};
 
+/// Stamp the plan manifest with build-time codec commit SHAs (provenance: which codec versions produced
+/// these encoded blobs — the guardrail against working off stale/bad codec data). SHAs come from
+/// `build.rs` via `option_env!`; `"unknown"` when the build couldn't resolve a codec's git HEAD.
+#[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
+fn merge_codec_commits(manifest_json: &str) -> String {
+    let mut v: serde_json::Value =
+        serde_json::from_str(manifest_json).unwrap_or_else(|_| serde_json::json!({}));
+    if let Some(obj) = v.as_object_mut() {
+        obj.insert(
+            "codec_commits".to_string(),
+            serde_json::json!({
+                "jxl-encoder": option_env!("ZEN_CODEC_JXL_ENCODER_COMMIT").unwrap_or("unknown"),
+                "zenjxl": option_env!("ZEN_CODEC_ZENJXL_COMMIT").unwrap_or("unknown"),
+                "zenavif": option_env!("ZEN_CODEC_ZENAVIF_COMMIT").unwrap_or("unknown"),
+                "zenrav1e": option_env!("ZEN_CODEC_ZENRAV1E_COMMIT").unwrap_or("unknown"),
+                "zenjpeg": option_env!("ZEN_CODEC_ZENJPEG_COMMIT").unwrap_or("unknown"),
+                "zenwebp": option_env!("ZEN_CODEC_ZENWEBP_COMMIT").unwrap_or("unknown"),
+                "butteraugli": option_env!("ZEN_CODEC_BUTTERAUGLI_COMMIT").unwrap_or("unknown"),
+            }),
+        );
+        obj.insert(
+            "zenmetrics_commit".to_string(),
+            serde_json::Value::String(
+                option_env!("ZEN_METRICS_COMMIT").unwrap_or("unknown").to_string(),
+            ),
+        );
+    }
+    serde_json::to_string_pretty(&v).unwrap_or_else(|_| manifest_json.to_string())
+}
+
 /// One unit of sweep work: row identity (`q` + canonical knob JSON)
 /// plus how to produce the encoded bytes.
 enum SweepUnit<'a> {
@@ -513,7 +543,7 @@ pub fn run_sweep(
                 spec.max_deviations,
             )?;
             let manifest_path = cfg.output.with_extension("plan.json");
-            std::fs::write(&manifest_path, &built.manifest_json)?;
+            std::fs::write(&manifest_path, merge_codec_commits(&built.manifest_json))?;
             eprintln!(
                 "[sweep] plan {}: {} cells/image (manifest: {})",
                 spec.name,

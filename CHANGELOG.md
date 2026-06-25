@@ -21,6 +21,12 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Codec-commit provenance in sweep manifests** — `crates/zenmetrics-cli/build.rs` captures each
+  path-dep codec's git SHA at build time (env-override `ZEN_CODEC_<NAME>_COMMIT` for docker), and every
+  `<output>.plan.json` now carries a `codec_commits` map (jxl-encoder / zenjxl / zenavif / zenrav1e /
+  zenjpeg / zenwebp / butteraugli) + `zenmetrics_commit`, each with a `-dirty` suffix when the codec has
+  modified tracked code. The guardrail against working off stale/bad codec data (motivated by a stale
+  docker image baked before the jxl-encoder #93 memory fix).
 - **ghcr package-name guard** — `ghcr-packages.json` (root) is now the single
   source of truth for `ghcr.io/imazen/<name>` container packages: one package
   per artifact, variants are TAGS. `scripts/ci/check_ghcr_packages.py`
