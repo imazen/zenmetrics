@@ -135,6 +135,24 @@ else
 fi
 echo
 
+echo "--- idle / waste check ---"
+vastai show instances-v1 --raw -a 2>/dev/null | RUN_ID="$RUN_ID" SC="$SIDECAR_COUNT" python3 -c "
+import json, sys, os
+d = json.loads(sys.stdin.read() or '{\"instances\":[]}')
+insts = d.get('instances', d) if isinstance(d, dict) else d
+run = os.environ['RUN_ID']; sc = int(os.environ.get('SC', '0') or 0)
+matched = [i for i in insts if i and isinstance(i.get('label'), str) and run in i['label']]
+n = len(matched); burn = sum(float(i.get('dph_total') or 0) for i in matched)
+if n > 0 and sc == 0:
+    print(f'⚠  {n} box(es) up burning \${burn:.2f}/hr but 0 sidecars produced — IDLE/STALLED.')
+    print(f'   per-box util:  scripts/sweep/fleet_util_snapshot.sh --label {run}')
+elif n > 0:
+    print(f'✓  {n} box(es), \${burn:.2f}/hr, {sc} sidecars — run fleet_util_snapshot.sh to check per-box util')
+else:
+    print('(no instances matched this run)')
+" 2>/dev/null || echo "  (idle check skipped — vast query unavailable)"
+echo
+
 echo "--- summary ---"
 echo "  fleet:    see 'zenfleet-vastai status' above"
 echo "  sidecars: $SIDECAR_COUNT / ${N_CHUNKS:-?}"
