@@ -63,3 +63,22 @@ Implication for **task A (wiring rd_core)**: do **NOT** wire the avif qm ablatio
 wrong for the rendition corpus. Before wiring ANY ablation, re-validate it on the target corpus+metric. The
 jpeg `effort=2` ablation (0 RD loss on v15r) is the most robust candidate but still warrants a
 rendition-corpus check first. Net: ablation is a per-(corpus,metric,plan) decision, not a universal codec default.
+
+## avif modes_full = 3264 configs (the REAL full rav1e knob space) — 2026-06-25
+
+CORRECTION: the "avif modes_full … 32 cells" run above was NOT the full knob space. zenavif's `modes_full`
+is **3264 configs**, adding the expert rav1e knobs that both the 32-cell run AND rd_core's 24 configs omit:
+**cdef, rdotx (RDO transform), sgr (self-guided restoration), segcx, vaqs (variance AQ), partition sizes,
+lrf (loop restoration), trellis (trel), bup, cpred, superblock (sb), rgb**.
+
+Local ablation (8 representative renditions, q={40,70}, ~15k cells): the rd-optimal avif configs USE those
+expert knobs. Top winners: `s2-420-trel-cpred1`, `s2-420-trel-bup1`, `s2-420-trel-vaqs3`,
+`s2-noqm-420-bd10-bup1`, `s2-…-sb1.5/sb2.5`, `s2-…-rgb`. Very flat distribution (top config 1.6%; 140 of
+3264 ever win on just 8 images — too few for a stable subset).
+
+**Implication: the rd_core 24-config avif picker (9.34% overhead, `PICKERS_2026-06-24.md`) was CRIPPLED** —
+it could only choose among 24 configs that EXCLUDE the actually-rd-optimal trellis/vaqs/bup/cpred/superblock
+ones. This is the direct answer to "did you check all rav1e knobs, or is that what you ablated to": rd_core
+IS the pre-ablated set; the expert knobs were never in it. Fix (production phase): sweep `modes_full` on
+enough representative images for a STABLE rd-optimal subset (8 is too few), re-sweep the subset on all
+images, retrain — expected to beat 9.34%.
