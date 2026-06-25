@@ -100,7 +100,9 @@ fn merge_codec_commits(manifest_json: &str) -> String {
         obj.insert(
             "zenmetrics_commit".to_string(),
             serde_json::Value::String(
-                option_env!("ZEN_METRICS_COMMIT").unwrap_or("unknown").to_string(),
+                option_env!("ZEN_METRICS_COMMIT")
+                    .unwrap_or("unknown")
+                    .to_string(),
             ),
         );
     }

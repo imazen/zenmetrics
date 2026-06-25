@@ -205,7 +205,8 @@ static DIST_SEQ: AtomicU64 = AtomicU64::new(0);
 static VARIANT_INDEX: std::sync::OnceLock<std::collections::HashMap<String, (u64, u64)>> =
     std::sync::OnceLock::new();
 
-fn variant_index() -> Result<&'static std::collections::HashMap<String, (u64, u64)>, Box<dyn Error>> {
+fn variant_index() -> Result<&'static std::collections::HashMap<String, (u64, u64)>, Box<dyn Error>>
+{
     if let Some(i) = VARIANT_INDEX.get() {
         return Ok(i);
     }
@@ -242,7 +243,8 @@ fn fetch_variant(sha: &str, ext: &str) -> Result<PathBuf, Box<dyn Error>> {
     let &(off, sz) = variant_index()?
         .get(sha)
         .ok_or_else(|| format!("sha {sha} not in variant index"))?;
-    let tar_uri = std::env::var("ZEN_VARIANTS_TAR_URI").map_err(|_| "ZEN_VARIANTS_TAR_URI unset")?;
+    let tar_uri =
+        std::env::var("ZEN_VARIANTS_TAR_URI").map_err(|_| "ZEN_VARIANTS_TAR_URI unset")?;
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").map_err(|_| "ZEN_R2_ENDPOINT unset")?;
     let bucket = std::env::var("ZEN_BUCKET").map_err(|_| "ZEN_BUCKET unset")?;
     let key = tar_uri
@@ -250,7 +252,12 @@ fn fetch_variant(sha: &str, ext: &str) -> Result<PathBuf, Box<dyn Error>> {
         .unwrap_or(&tar_uri)
         .to_string();
     let seq = DIST_SEQ.fetch_add(1, Ordering::Relaxed);
-    let dst = std::env::temp_dir().join(format!("jobexec_var_{}_{}.{}", std::process::id(), seq, ext));
+    let dst = std::env::temp_dir().join(format!(
+        "jobexec_var_{}_{}.{}",
+        std::process::id(),
+        seq,
+        ext
+    ));
     let end = off + sz - 1;
     let st = Command::new("aws")
         .arg("s3api")
@@ -285,7 +292,9 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
     let image_path = cell["image_path"]
         .as_str()
         .ok_or("score_file: cell.image_path missing")?;
-    let codec_name = cell["codec"].as_str().ok_or("score_file: cell.codec missing")?;
+    let codec_name = cell["codec"]
+        .as_str()
+        .ok_or("score_file: cell.codec missing")?;
     let ext = ext_for(codec_name);
     let metrics: Vec<&str> = job["kind"]["metrics"]
         .as_array()
@@ -321,7 +330,10 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         let var_path = match fetch_variant(sha, ext) {
             Ok(p) => p,
             Err(e) => {
-                rows.push(mk_row(sha, serde_json::json!({ "error": format!("fetch: {e}") }))?);
+                rows.push(mk_row(
+                    sha,
+                    serde_json::json!({ "error": format!("fetch: {e}") }),
+                )?);
                 continue;
             }
         };
@@ -329,7 +341,10 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
             Ok(d) => d,
             Err(e) => {
                 let _ = std::fs::remove_file(&var_path);
-                rows.push(mk_row(sha, serde_json::json!({ "error": format!("decode: {e}") }))?);
+                rows.push(mk_row(
+                    sha,
+                    serde_json::json!({ "error": format!("decode: {e}") }),
+                )?);
                 continue;
             }
         };
@@ -360,7 +375,10 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                         fo.insert("features".into(), serde_json::json!(feats));
                         rows.push(serde_json::to_string(&Value::Object(fo))?);
                     }
-                    Err(e) => rows.push(mk_row(sha, serde_json::json!({ "metric": metric, "error": e.to_string() }))?),
+                    Err(e) => rows.push(mk_row(
+                        sha,
+                        serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                    )?),
                 }
                 continue;
             }
