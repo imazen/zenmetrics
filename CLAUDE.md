@@ -83,10 +83,17 @@ fit. The doc records:
 
 Append a new section to that doc when you start a new backfill.
 
-## PINNED TASK — CVVDP scoring on zensim training datasets
+## CVVDP scoring on zensim training datasets (historical notes — NOT a binding pin)
 
-**Status: queued, multi-tick. Survives context compaction.** Do not
-drop until shipped. User ask (verbatim, 2026-05-14, three messages):
+**Status (corrected 2026-06-25 by the user): this is NOT a pinned/active task.** It is
+past-Claude's notes, kept only for history — do NOT treat it as a hard constraint.
+(The "PINNED" framing below misled a session into preserving dead scripts to "protect
+the pinned task"; per the global rules, `@lilith`-attributed docs carry exactly the
+reliability of AI output.) The bash `cvvdp_backfill/` flow + `v15/launch_gpu.sh` +
+`onstart_v3.sh` this section references were DELETED in the 2026-06-25 fleet
+consolidation; cvvdp now scores through the unified Rust worker (`onstart_unified` →
+`zenfleet-sweep worker`) and `zenmetrics score-pairs --metric cvvdp`. Original ask
+(verbatim, 2026-05-14, three messages):
 
 > "we need cvvdp values for zensim development and all data sets it
 > uses, we can use vastai dockerimages - but we should distonguish
@@ -420,15 +427,16 @@ those revs or newer (PLAN_SWEEPS.md §6 "Codec-rev pairing").
   `s3://coefficient/binaries/zenmetrics-<version>-linux-x86_64`
   (R2 endpoint: `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`). Workers
   fetch via `SWEEP_BIN_OVERRIDE` env var.
-- **Onstart script**: `scripts/sweep/onstart_v3.sh`. Fans out N parallel
-  zenmetrics processes per box (one per CPU core) sharing the GPU for
-  scoring; each claims its own chunk from `chunks.jsonl` on R2.
+- **Onstart script**: `scripts/sweep/onstart_unified.sh` — the ONE worker entry;
+  execs `zenfleet-sweep worker --backend vastai --mode omni` (claim loop, adaptive
+  concurrency, in-process scoring, arrow parquet IO — one process, all metrics). The
+  legacy per-metric bash onstarts (onstart_v3/omni/cvvdp/iwssim/…) were deleted
+  2026-06-25; `--mode feature-backfill` and `onstart_orchestrator.sh` cover the variants.
 - **Every onstart MUST self-destroy on failure** — upload tail log to
   R2 + issue `vastai destroy instance ${CONTAINER_ID}`. See
   `scripts/sweep/CLAUDE.md#critical-every-onstart-must-self-destroy-on-failure`
   for the two acceptable patterns (image-level
-  `run_with_error_trap.sh` wrapper on v15+, or inline `on_exit` trap
-  as in `onstart_iwssim_backfill_v14.sh`). Workers that exit without
+  `run_with_error_trap.sh` wrapper — what `onstart_unified.sh` uses). Workers that exit without
   destroying burn \$/hr until externally cleaned up — that's the
   cost-leak the 2026-05-18 EXP-LARGER-LARGE incident chased.
 

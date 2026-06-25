@@ -201,17 +201,7 @@ RUN /usr/local/bin/zenfleet-sweep --version \
 COPY --chmod=0755 scripts/sweep/run_with_error_trap.sh           /usr/local/bin/run_with_error_trap.sh
 COPY --chmod=0755 scripts/sweep/onstart_unified.sh                /usr/local/bin/onstart_unified.sh
 COPY --chmod=0755 scripts/sweep/onstart_feature_backfill.sh       /usr/local/bin/onstart_feature_backfill.sh
-COPY --chmod=0755 scripts/sweep/onstart_source_features.sh        /usr/local/bin/onstart_source_features.sh
-COPY --chmod=0755 scripts/sweep/onstart_omni_backfill.sh          /usr/local/bin/onstart_omni_backfill.sh
-COPY --chmod=0755 scripts/sweep/onstart_cvvdp_backfill_imazen.sh  /usr/local/bin/onstart_cvvdp_imazen.sh
-COPY --chmod=0755 scripts/sweep/onstart_cvvdp_backfill.sh         /usr/local/bin/onstart_cvvdp.sh
-COPY --chmod=0755 scripts/sweep/onstart_iwssim_backfill_v14.sh    /usr/local/bin/onstart_iwssim.sh
-COPY --chmod=0755 scripts/sweep/onstart_iwssim_backfill.sh        /usr/local/bin/onstart_iwssim_v3.sh
-COPY --chmod=0755 scripts/sweep/onstart_v3.sh                     /usr/local/bin/zenmetrics-worker
-COPY --chmod=0755 scripts/sweep/omni_backfill_chunk_worker.sh     /usr/local/bin/omni_chunk_worker.sh
-COPY --chmod=0755 scripts/sweep/cvvdp_backfill_chunk_worker.sh    /usr/local/bin/cvvdp_chunk_worker.sh
 COPY --chmod=0755 scripts/sweep/metric_backfill_chunk_worker.sh   /usr/local/bin/metric_chunk_worker.sh
-COPY --chmod=0755 scripts/sweep/iwssim_backfill_chunk_worker.sh   /usr/local/bin/iwssim_chunk_worker.sh
 
 # v27 addition: orchestrator-aware onstart.
 COPY --chmod=0755 scripts/sweep/onstart_orchestrator.sh           /usr/local/bin/onstart_orchestrator.sh

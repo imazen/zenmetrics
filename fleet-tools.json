@@ -1,5 +1,5 @@
 {
-  "_README": "SOURCE OF TRUTH for fleet tooling — ONE correct way per concern. The guard (`just fleet-check`, CI .github/workflows/fleet-guard.yml) scans scripts/ for fleet tooling (launch_*, onstart_*, *_chunk_worker, fleet*, *_watch, *cost_watch) and FAILS if a script appears that is neither `canonical` nor `deprecated` here. Add a SUBCOMMAND to `scripts/jobsys/fleet`, not a new script. IMPORTANT: the `metric_backfill` flows below are LOAD-BEARING — cvvdp is the PINNED task (CLAUDE.md), onstart_v3.sh + v15/launch_gpu.sh are PINNED-referenced, and metric_backfill_chunk_worker is launch_backfill's worker. They are NOT dead duplicates. Only the small `deprecated` set is retirable, and only after the Rust unified worker (onstart_unified) is confirmed to replace it AND the sweep image is rebuilt.",
+  "_README": "SOURCE OF TRUTH for fleet tooling — ONE correct way per concern, no forks. The guard (`just fleet-check`, CI .github/workflows/fleet-guard.yml, run with --strict) scans scripts/ for fleet tooling (launch_*, onstart_*, *_chunk_worker, fleet*, *_watch, *cost_watch) and FAILS if a script appears that is not `canonical` here. Add a SUBCOMMAND to `scripts/jobsys/fleet`, or a --mode to the unified Rust worker (onstart_unified → `zenfleet-sweep worker`) — never a new bash fork. The per-metric backfill bash chain (cvvdp/iwssim/omni onstarts + chunk-workers + subdir launchers) and the legacy onstart_v2/v3 were all DELETED 2026-06-25: the Rust unified worker (onstart_unified) already does every metric in one process, so they were dead duplicates. `deprecated` is now empty.",
   "canonical": {
     "monitor": [
       "scripts/jobsys/fleet",
@@ -7,8 +7,7 @@
     ],
     "launch": [
       "scripts/jobsys/launch_fleet.sh",
-      "scripts/sweep/launch_backfill.sh",
-      "scripts/sweep/v15/launch_gpu.sh"
+      "scripts/sweep/launch_backfill.sh"
     ],
     "teardown": [
       "scripts/jobsys/teardown_fleet.sh"
@@ -16,28 +15,15 @@
     "worker_entry": [
       "scripts/sweep/onstart_unified.sh",
       "scripts/sweep/onstart_feature_backfill.sh",
-      "scripts/sweep/onstart_orchestrator.sh",
-      "scripts/sweep/onstart_v3.sh"
+      "scripts/sweep/onstart_orchestrator.sh"
+    ],
+    "chunk_worker": [
+      "scripts/sweep/metric_backfill_chunk_worker.sh"
     ],
     "split": [
       "scripts/sweep/hetzner_cpu_sweep.sh",
       "scripts/sweep/split_score_worker.sh"
-    ],
-    "metric_backfill": [
-      "scripts/sweep/metric_backfill_chunk_worker.sh",
-      "scripts/sweep/cvvdp_backfill_chunk_worker.sh",
-      "scripts/sweep/iwssim_backfill_chunk_worker.sh",
-      "scripts/sweep/onstart_cvvdp_backfill.sh",
-      "scripts/sweep/onstart_cvvdp_backfill_imazen.sh",
-      "scripts/sweep/onstart_iwssim_backfill.sh",
-      "scripts/sweep/cvvdp_backfill/launch_imazen.sh"
     ]
   },
-  "deprecated": {
-    "_README": "Legacy bash fallback worker, superseded by onstart_unified → `zenfleet-sweep worker`. These are image-baked entrypoints; retire ONLY after confirming the Rust unified worker fully replaced them AND rebuilding the sweep image (Dockerfile.sweep.v27 COPYs them). The guard WARNS (does not fail) until then; --strict fails on them.",
-    "scripts/sweep/onstart_omni_backfill.sh": "scripts/sweep/onstart_unified.sh",
-    "scripts/sweep/onstart_source_features.sh": "scripts/sweep/onstart_feature_backfill.sh",
-    "scripts/sweep/onstart_iwssim_backfill_v14.sh": "scripts/sweep/onstart_iwssim_backfill.sh",
-    "scripts/sweep/omni_backfill_chunk_worker.sh": "zenfleet-sweep worker --mode omni"
-  }
+  "deprecated": {}
 }
