@@ -39,7 +39,7 @@ separable, universal, or inert becomes code. A knob graduating from "swept" to "
 ## The iteration loop (time-efficient)
 
 1. **Design the grid** from current knowledge: *cross* the candidate-interacting axes; *single-
-   deviation-probe* the unmeasured ones (the 9 ASSERTED-only experts); all efforts **e1–e8**; dense
+   deviation-probe* the unmeasured ones (the 9 ASSERTED-only experts); all efforts **e1–e9**; dense
    distance (denser at low-q AND at d≥3 where the W44 RD wedges live); content strata.
 2. **Sweep fast on Hetzner** via the job system (zenfleet: per-cell, resumable declare→gap→reconcile).
    Lossy is **0.2 GB/cell**, so a cheap CPU fleet rips through it. **Persist everything** — variants +
@@ -57,18 +57,21 @@ separable, universal, or inert becomes code. A knob graduating from "swept" to "
 
 ## Phases (concrete first cycles)
 
-- **P0 — main effects (cheap, first).** Single-deviation probes of every candidate lossy knob × e1–e8 ×
+- **P0 — main effects (cheap, first).** Single-deviation probes of every candidate lossy knob × e1–e9 ×
   dense distance × content strata. Output: which knobs *ever* win, and whether their best value is
   content-dependent. Immediately codes the inert/universal ones. This is the bulk of the
   question-discovery.
 - **P1 — pairwise crosses** among P0 survivors: detect the interactions. Output: which crosses to keep
-  (everything else → code the main effects). e9 enters here as a pass.
+  (everything else → code the main effects).
 - **P2 — code the settled.** Push universal / rule-derivable knobs into jxl-encoder defaults or rules;
   shrink the sweep to the pickable shape. This is where the codec gets leaner.
 - **P3 — picker train + oracle gap.** Train lossy / lossless / cross pickers on the reduced shape; measure
   achieved-vs-oracle RD. The residual gap → the next axis → loop back to P0/P1 on it.
-- **e10–e12** only ever enter under `--features butteraugli-loop` — without it they are byte-identical to
-  e9 on the lossy path (they differ only in butteraugli_iters / seeds, both feature-gated).
+- **e1–e9 all sweep in the first pass** — each effort adds a real VarDCT gate (e9 = lz77 +
+  enhanced_clustering at the kTortoise ceiling), so excluding any of them risks wrongly burying a knob
+  that only pays off at that effort. **e10–e12** only ever enter under `--features butteraugli-loop` —
+  without it they are byte-identical to e9 on the lossy path (butteraugli_iters / seeds only, both
+  feature-gated).
 
 ## Discipline + efficiency constraints
 
@@ -110,7 +113,7 @@ separable, universal, or inert becomes code. A knob graduating from "swept" to "
 
 - Partition mechanism shipped: `scripts/sweep/partition_cells_by_mode.py` (lossy/lossless split).
 - **Next:** draft a `lossy_dense` `SweepAxes` in zenjxl — P0 single-deviation-probe sizing first
-  (cross distance × e1–e8 × strategy × gaborish × ans; probe the 9 unmeasured experts + the k_ac_quant
+  (cross distance × e1–e9 × strategy × gaborish × ans; probe the 9 unmeasured experts + the k_ac_quant
   ladder + entropy_mul presets one-deviation-at-a-time → ~3–5k cells/image), widen to crosses only where
   P0 shows promise.
 - **Gated on:** the concurrent "one Rust worker" refactor settling before the first fleet run (don't fire

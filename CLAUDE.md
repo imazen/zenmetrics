@@ -326,7 +326,8 @@ graduating swept→coded is a SUCCESS (shrinks codec + picker).
 
 Decision rule per knob/cross: inert or universal → CODE; feature-deterministic → CODE RULE;
 content-dependent + moves RD → PICKER axis; joint≠main-effects → keep the CROSS, else code the
-main effects. Sweep ALL efforts **e1–e8 first** (e9 = pass-2, real gates; e10–12 only under
+main effects. Sweep ALL efforts **e1–e9 first** (each adds a real gate — incl. e9's lz77 +
+enhanced_clustering — so we don't wrongly bury a knob that only pays off at e9; e10–12 only under
 `--features butteraugli-loop`). Honor the byte-inert skip-list + the content-gate pinning gotcha
 (see the doc). codec-corpus RO / zentrain RW. Carry CVVDP (cost-model never re-fit).
 
