@@ -628,4 +628,68 @@ mod tests {
             std::fs::remove_file(f).ok();
         }
     }
+
+    /// Assert the ON-DISK parquet schema (names, types, nullability, order)
+    /// exactly equals the canonical `want` schema. A value round-trip still
+    /// passes if a column is renamed / retyped / reordered / flips nullability
+    /// as long as write + read change together — but EXTERNAL consumers (pandas,
+    /// the burn trainer, cross-tool joins) bind to the on-disk column shape, so
+    /// that silent drift breaks them. This pins it.
+    fn assert_on_disk_schema(path: &Path, want: SchemaRef) {
+        let on_disk = ParquetRecordBatchReaderBuilder::try_new(File::open(path).unwrap())
+            .unwrap()
+            .schema()
+            .clone();
+        assert_eq!(
+            on_disk.fields().len(),
+            want.fields().len(),
+            "parquet column COUNT drifted from the canonical schema"
+        );
+        for (got, want) in on_disk.fields().iter().zip(want.fields().iter()) {
+            assert_eq!(
+                got.name(),
+                want.name(),
+                "parquet column name/order drifted (got `{}`, want `{}`)",
+                got.name(),
+                want.name()
+            );
+            assert_eq!(
+                got.data_type(),
+                want.data_type(),
+                "parquet column `{}` TYPE drifted",
+                want.name()
+            );
+            assert_eq!(
+                got.is_nullable(),
+                want.is_nullable(),
+                "parquet column `{}` NULLABILITY drifted",
+                want.name()
+            );
+        }
+    }
+
+    #[test]
+    fn ledger_parquet_schema_is_pinned() {
+        let p = tmp("ledger_schema");
+        write_ledger(&p, &[row("cvvdp", b"a", JobStatus::Done, 1, None)]).unwrap();
+        assert_on_disk_schema(&p, ledger_schema());
+        std::fs::remove_file(&p).ok();
+    }
+
+    #[test]
+    fn blob_index_parquet_schema_is_pinned() {
+        let p = tmp("blobidx_schema");
+        write_blob_index(
+            &p,
+            &[BlobIndexEntry {
+                sha: sha256(b"x"),
+                size: 1,
+                regenerability: Regenerability::CheapRegenerable,
+                last_ref_secs: 1,
+            }],
+        )
+        .unwrap();
+        assert_on_disk_schema(&p, blob_index_schema());
+        std::fs::remove_file(&p).ok();
+    }
 }

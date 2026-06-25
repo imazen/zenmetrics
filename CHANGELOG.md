@@ -21,6 +21,20 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **CI now RUNS the fleet-orchestration tests (was compiled-but-never-run), + fixed a silently-broken
+  e2e test, + pinned the ledger parquet schema.** The job system already had ~274 tests (reconcile/gap
+  convergence + retry/poison, lease/claim exactly-once, idle + startup-failure detection, ledger
+  latest-wins fold, GC keep/evict, the local-backend `declare→claim→execute→ledger→reconcile` e2e, and
+  per-provider parse/launch marshaling) and the mock seams to run them with zero cloud — but CI only
+  `--all-targets`-COMPILED them and never `cargo test`-RAN them. So `crates/zenfleet-ledger/tests/e2e_sim.rs`
+  had silently stopped compiling when `DesiredJob` gained a `hint` field, and shipped green. Fixed
+  e2e_sim to build via `DesiredJob::new()` (robust to field additions); added a fleet-test step to the
+  `compile` job that runs the 11 pure-logic fleet crates + `zenfleet-vastai` feature-light (no GPU tree)
+  — ~274 deterministic sub-15s tests, no secrets, placed before the cuda build so it fires regardless.
+- **Parquet management: on-disk schema-pinning tests for the ledger + blob-index parquets**
+  (`zenfleet-ledger`). Value round-trips passed through column rename/retype/reorder/nullability drift
+  that silently breaks external readers (pandas / the burn trainer / cross-tool joins); the on-disk
+  arrow schema is now asserted field-for-field against the canonical `ledger_schema()` / `blob_index_schema()`.
 - **Axed the dead Phase-A bash-subprocess fallback in the vastai worker** — removed
   `run_chunk_via_bash` + the `OMNI_WORKER_BIN`/`chunk_worker_bin` arg (it defaulted to the
   `omni_backfill_chunk_worker.sh` deleted 2026-06-25) + the `Stdio`/`Command`/`anyhow!` imports it

@@ -30,17 +30,19 @@ fn tmp(tag: &str) -> std::path::PathBuf {
 /// Desired: score 4 distinct encodes with cvvdp.
 fn desired_set() -> Vec<DesiredJob> {
     (0..4)
-        .map(|i| DesiredJob {
-            kind: JobKind::Metric {
-                metric: "cvvdp".into(),
-            },
-            inputs: vec![sha256(format!("encode-{i}").as_bytes())],
-            cell: CellId {
-                image_path: format!("img/{i}.png"),
-                codec: "zenjpeg".into(),
-                q: 80,
-                knob_tuple_json: "{}".into(),
-            },
+        .map(|i| {
+            DesiredJob::new(
+                JobKind::Metric {
+                    metric: "cvvdp".into(),
+                },
+                vec![sha256(format!("encode-{i}").as_bytes())],
+                CellId {
+                    image_path: format!("img/{i}.png"),
+                    codec: "zenjpeg".into(),
+                    q: 80,
+                    knob_tuple_json: "{}".into(),
+                },
+            )
         })
         .collect()
 }
@@ -262,18 +264,18 @@ fn dead_worker_lease_is_reclaimed_but_live_one_is_not() {
     );
 
     // The reclaimed job is just a normal gap on the next reconcile — convergence, not a special case.
-    let d = DesiredJob {
-        kind: JobKind::Metric {
+    let d = DesiredJob::new(
+        JobKind::Metric {
             metric: "ssim2".into(),
         },
-        inputs: vec![sha256(b"enc")],
-        cell: CellId {
+        vec![sha256(b"enc")],
+        CellId {
             image_path: "x".into(),
             codec: "zenjpeg".into(),
             q: 1,
             knob_tuple_json: "{}".into(),
         },
-    };
+    );
     let plan = reconcile(
         std::slice::from_ref(&d),
         &zenfleet_core::LedgerView::new(),

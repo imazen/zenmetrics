@@ -145,6 +145,29 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: zenmetrics-${{ matrix.os }}
+      - name: Run fleet-orchestration tests (pure-logic; no cloud, no GPU, no secrets)
+        # The orchestration heart: reconcile/gap convergence + retry/poison, the
+        # lease/claim exactly-once logic, idle + startup-failure detection, the
+        # ledger latest-wins fold, GC keep/evict, the local-backend e2e
+        # (declare->claim->execute->ledger->reconcile to convergence), and each
+        # provider's parse/launch marshaling. ~274 deterministic sub-15s tests that
+        # need no secrets. CI previously only *compiled* these (--all-targets) and
+        # never RAN them, so a broken test shipped green (e.g. tests/e2e_sim.rs
+        # stopped compiling when DesiredJob gained the `hint` field — fixed 2026-06-25
+        # by switching it to DesiredJob::new()). Run them here so that can't recur.
+        # Placed BEFORE the heavy cuda build so the gate fires regardless of its
+        # health. Ubuntu-only: the logic is platform-independent and the matrix
+        # above compiles it everywhere. (vastai runs feature-light to skip the GPU/
+        # codec tree; --no-default-features --features worker keeps its claim/parse/
+        # dispatch tests without cubecl.) TODO: extend the RUN to windows-11-arm +
+        # macos-15-intel per CLAUDE.md once verified green there.
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cargo test --no-fail-fast \
+            -p zenfleet-core -p zenfleet-ledger -p zenfleet-worker -p zenfleet-ctl \
+            -p zenfleet-cloud -p zenfleet-hetzner -p zenfleet-local -p zenfleet-dash \
+            -p zenfleet-orchestrator -p zenfleet-salad -p zenfleet-runpod
+          cargo test --no-fail-fast -p zenfleet-vastai --no-default-features --features worker
       - name: Build workspace (wgpu + cpu, build-only)
         # Disabled until 2026-05-26 because `[profile.release]` carried
         # `lto = "fat"` + `debug = "full"` + `codegen-units = 1`, which
