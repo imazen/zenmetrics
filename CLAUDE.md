@@ -50,26 +50,22 @@ whole time it runs — do not launch-and-forget, and report waste without being 
   A box past warmup is idle if: no heartbeat in 180s (frozen/dead) OR GPU ≤10% on a
   GPU box OR ≤1 job/hr (from `jobs_done/uptime`). A paid idle box burns
   `wasted_usd_per_hr`. **Every tool uses these same thresholds — do not invent new ones.**
-- **Tools that flag idle (run them on a cadence, not once):**
-  - `scripts/sweep/fleet_util_snapshot.sh` — per-box gpu/cpu util + a "⚠ N boxes IDLE
-    — burning $X/hr" banner with the destroy command.
-  - `scripts/jobsys/fleet_top.py` — live ACTIVE/IDLE/STALLED per box.
-  - `zenfleet-dash` — fires `FleetStalled` + per-box `Underutilized` notifications and
-    shows GPU util per worker.
-  - `scripts/sweep/vast_cost_watch.sh` — continuous burn/credit watch + auto-destroy.
-- **Startup failures — KNOW within ~2 min:** `scripts/jobsys/fleet_startup_watch.sh`
-  flags any box that was *launched* but never started working (image-pull hang, onstart
-  crash, the 6-80 s fast-crash). The steady-state idle detector's 120 s warmup grace
-  deliberately spares these, so this watchdog covers the launch window — boot record /
-  claim / util are the "started" signals; a box past the deadline (default 90 s) with
-  none = failed. `launch_fleet.sh` auto-spawns it in the background (log
-  `/tmp/<run>-startup.log`); run it manually after any other launch:
-  `fleet_startup_watch.sh --label <vast-label> --run <run> --expected <N> [--destroy]`.
-- **On an idle paid box: tear it down.** It is pure waste; destroy it (or let
-  stop-spend / autostop do it) and tell the user the $/hr being saved.
-- **Any NEW fleet tool/script you write MUST flag idle infrastructure** the same way
-  (low util / no throughput / stale heartbeat → loud ⚠ + wasted $/hr), mirroring the
-  `zenfleet-core::idle` thresholds.
+- **There is ONE monitoring command: `scripts/jobsys/fleet`.** It replaced the old
+  6-script sprawl (fleet_util_snapshot / fleet_status / watch_fleet / fleet_startup_watch /
+  vast_cost_watch — all deleted). `fleet watch <run>` shows EVERYTHING in one place —
+  boxes, $/hr burn, per-box GPU/CPU util, IDLE boxes, boxes that FAILED TO START within
+  ~2 min (image-pull hang / onstart crash / fast-crash), and ledger/sidecar progress —
+  and alerts (with `--destroy`, tears down) on idle / startup-failure / `--max-burn`.
+  `fleet status <run>` = one-shot; `fleet top` = live ledger top; `fleet launch` / `fleet
+  kill` wrap the launcher / teardown. `launch_fleet.sh` auto-spawns `fleet watch` in the bg.
+- **Do NOT add another monitoring/launch/onstart script.** The guard `just fleet-check`
+  (CI: `.github/workflows/fleet-guard.yml`) fails if a new `fleet_*` / `*_watch` /
+  `launch_*` / `onstart_*` script appears outside the canonical set in `fleet-tools.json`.
+  Add a subcommand to `fleet`, not a new script.
+- **Canonical idle detector: `zenfleet-core::idle`** (`crates/zenfleet-core/src/idle.rs`) —
+  past warmup: no heartbeat 180s, GPU ≤10%, or ≤1 job/hr. `fleet` mirrors these thresholds;
+  the dashboard (`zenfleet-dash`) fires `FleetStalled` / `Underutilized` + shows util per worker.
+- **On an idle / failed-to-start paid box: tear it down** and tell the user the $/hr saved.
 
 ## Data provenance — READ BEFORE TRAINING
 

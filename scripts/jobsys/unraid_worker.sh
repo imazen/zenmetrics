@@ -112,4 +112,4 @@ Unraid GUI ("Docker" tab -> "Add Container"):
   Variables:  add each -e KEY=VALUE above as a Container Variable
 ==============================================================================
 EOF
-echo "verify it's working from the workstation:  bash scripts/jobsys/watch_fleet.sh $RUN   (look for provider=basement rows)"
+echo "verify it's working from the workstation:  scripts/jobsys/fleet status $RUN   (boxes, util, idle, progress)"

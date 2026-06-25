@@ -73,3 +73,13 @@ ghcr-check-strict:
 # authed with read:packages). Prints orphans + a commented migrate/delete recipe.
 ghcr-audit:
     python3 scripts/ci/audit_ghcr_org.py
+
+# Fleet-tooling guard: fail if a new launch_*/onstart_*/fleet*/*_watch script
+# appears outside the canonical set in fleet-tools.json. ONE tool per concern —
+# add a subcommand to `scripts/jobsys/fleet`, not a new script.
+fleet-check:
+    python3 scripts/ci/check_fleet_tools.py
+
+# Strict: also fail on grandfathered forks (the post-Phase-E gate).
+fleet-check-strict:
+    python3 scripts/ci/check_fleet_tools.py --strict

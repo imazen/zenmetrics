@@ -1,0 +1,31 @@
+name: Fleet-tooling guard
+
+# Keeps fleet tooling to ONE correct way per concern. Fails if a new
+# launch_* / onstart_* / *_chunk_worker / fleet* / *_watch script appears outside
+# the canonical set in fleet-tools.json — add a subcommand to `scripts/jobsys/fleet`
+# instead of forking a new script. Policy: the "Fleet monitoring" section of CLAUDE.md.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: One fleet tool per concern
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Guard against fleet-tooling sprawl
+        run: python3 scripts/ci/check_fleet_tools.py

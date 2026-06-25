@@ -177,7 +177,7 @@ sleep "$WAIT"
 printf '{"paused":false}' > /tmp/fleet_ctl.json
 AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
   s5cmd --endpoint-url "$EP" cp /tmp/fleet_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
-echo "### RESUMED — RUN=$RUN — watch: scripts/jobsys/watch_fleet.sh $RUN ; teardown: scripts/jobsys/teardown_fleet.sh $RUN"
+echo "### RESUMED — RUN=$RUN — watch: scripts/jobsys/fleet watch $RUN ; teardown: scripts/jobsys/fleet kill $RUN"
 echo "$RUN" > /tmp/fleet_run.txt
 
 # 5. Startup watchdog (background): KNOW within ~2 min if any launched box never starts working
@@ -185,12 +185,11 @@ echo "$RUN" > /tmp/fleet_run.txt
 #    (boot/<worker>.txt vs expected count); vast boxes also get per-box util/status detail. It
 #    self-stops once every box is working. Disable with ZEN_NO_STARTUP_WATCH=1.
 if [ "${ZEN_NO_STARTUP_WATCH:-0}" != "1" ]; then
-  TOTAL_BOXES=$(( N_HZ + N_VAST + N_HZ_ARM + N_SALAD + 1 ))
-  SW="$(dirname "$0")/fleet_startup_watch.sh"
-  echo "### startup-watch (bg): alerts on any box not working within ~2min → /tmp/$RUN-startup.log"
+  FLEET="$(dirname "$0")/fleet"
+  echo "### fleet watch (bg): flags any box idle / not-started-within-2min → /tmp/$RUN-startup.log"
   ( AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
     R2_ACCOUNT_ID="$R2_ACCOUNT_ID" ZEN_FLEET_BUCKET="$BUCKET" \
-    bash "$SW" --label "$RUN" --run "$RUN" --expected "$TOTAL_BOXES" --max-wait 600 \
+    bash "$FLEET" watch "$RUN" --label "$RUN" --max-wait 600 \
       >"/tmp/$RUN-startup.log" 2>&1 & )
-  echo "    tail -f /tmp/$RUN-startup.log"
+  echo "    tail -f /tmp/$RUN-startup.log   (or:  scripts/jobsys/fleet status $RUN)"
 fi

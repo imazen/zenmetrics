@@ -213,7 +213,7 @@ fields.
   `ZEN_RUN`, `ZEN_MANIFEST_URI`, `ZEN_PROVIDER=basement`, `ZEN_WORKER=unraid`, `ZEN_EXEC`,
   `ZEN_CONTROL_KEY`, optional `ZEN_CAPABILITY`).
 
-**Step 3 — verify from the workstation:** `bash scripts/jobsys/watch_fleet.sh <RUN>` — you'll see
+**Step 3 — verify from the workstation:** `bash scripts/jobsys/fleet watch <RUN>` — you'll see
 `provider=basement` rows appear alongside the other tiers.
 
 **Persistent credential (optional):** to avoid re-minting weekly, create a long-lived R2 API token in
@@ -233,7 +233,7 @@ real encode/score work, bake your executor into a worker image (FROM `ghcr.io/im
 - **Dashboard (no SSH):** the Railway control plane at
   `https://zenfleet-dash-production.up.railway.app` (Basic-Auth). Live fleet per worker, progress per
   kind, cost, failure drill-down, result peek, GC dry-run, pause/drain/resume, Kill.
-- **CLI:** `bash scripts/jobsys/watch_fleet.sh <RUN>` — claims taken + ledger DONE rows grouped by
+- **CLI:** `bash scripts/jobsys/fleet watch <RUN>` — claims taken + ledger DONE rows grouped by
   provider (proves which tiers are concurrently working the queue).
 - **Coverage:** `target/release/zenfleet-ctl catalog --manifest /tmp/manifest.json --ledger <ledger.parquet>`
   — done/poison/gap per codec×metric.
@@ -277,7 +277,7 @@ cargo build --release -p zenfleet-worker -p zenfleet-ctl
 bash scripts/jobsys/demo_e2e_r2.sh          # declare→gap 4→0, converge, coverage, blobs+ledger+lease
 bash scripts/jobsys/launch_fleet.sh 120 1 0 0 1   # 3 real providers concurrent (paid: Hetzner+Salad)
 bash scripts/jobsys/unraid_worker.sh <RUN>        # add the basement tier to that run
-bash scripts/jobsys/watch_fleet.sh <RUN>          # watch DONE rows by provider
+bash scripts/jobsys/fleet watch <RUN>          # watch DONE rows by provider
 bash scripts/jobsys/teardown_fleet.sh <RUN>       # tear it all down
 ```
 

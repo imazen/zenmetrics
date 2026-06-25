@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+#
+# fleet — THE one command to run a zen fleet. Launch · monitor · tear down.
+#
+# Pit of success: there is no other monitoring script. `fleet watch <run>` shows
+# EVERYTHING in one place — boxes, $/hr burn, per-box GPU/CPU util, idle boxes,
+# boxes that failed to START within ~2 min, and ledger/sidecar progress — and
+# alerts (and with --destroy, tears down) on idle / startup-failure / over-budget.
+# It replaced fleet_status.sh, fleet_util_snapshot.sh, watch_fleet.sh,
+# fleet_startup_watch.sh and vast_cost_watch.sh, which no longer exist.
+#
+# Usage:
+#   fleet launch [N_JOBS] [HZ] [VAST] [HZ_ARM] [SALAD]   # → launch_fleet.sh (the one launcher)
+#   fleet status <run> [--label <vast-label>]            # one-shot: boxes·burn·util·idle·startup·progress
+#   fleet watch  <run> [--label <p>] [--poll 20] [--max-burn 1.0] [--destroy]
+#   fleet top    <run>                                   # live ledger top
+#   fleet kill   <run>                                   # tear it all down
+#
+# Idle/startup thresholds mirror zenfleet-core::idle (crates/zenfleet-core/src/idle.rs):
+# GPU/CPU ≤10% past warmup = idle; up past the startup deadline (90s) with no boot
+# record/claim/util = failed to start.
+set -uo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+
+GPU_IDLE="${GPU_IDLE_PCT:-10}"; CPU_IDLE="${CPU_IDLE_PCT:-10}"
+STARTUP_DEADLINE="${STARTUP_DEADLINE:-90}"; STALL_GRACE="${STALL_GRACE:-120}"
+BUCKET="${ZEN_FLEET_BUCKET:-zen-tuning-ephemeral}"
+
+usage() { sed -n '2,26p' "$0" >&2; exit "${1:-2}"; }
+need_run() { [[ -n "${1:-}" ]] || { echo "need <run>" >&2; usage; }; }
+
+r2_count() {  # s3-uri-prefix  regex → count of matching keys
+    [[ -z "${R2_ACCOUNT_ID:-}" ]] && { echo 0; return; }
+    s5cmd --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+        ls "$1" 2>/dev/null | grep -Ec "${2:-.}" || true
+}
+
+# ── the single consolidated report (shared by status + watch) ───────────────
+# args: RUN LABEL. Prints the box/util/idle/startup/burn/progress view and sets
+# REPORT_BURN / REPORT_FAILED_IDS / REPORT_IDLE_N / REPORT_FAILED_N globals.
+fleet_report() {
+    local run="$1" label="$2"
+    local vast="[]"; [[ -n "$label" ]] && vast="$(vastai show instances --raw 2>/dev/null || echo "[]")"
+    local boot claims sidecars
+    boot=$(r2_count "s3://${BUCKET}/${run}/boot/" "\.txt")
+    claims=$(r2_count "s3://coefficient/claims/${run}/" "\.claim")
+    sidecars=$(r2_count "s3://${BUCKET}/${run}/ledger/" "\.parquet")
+    [[ "$sidecars" == "0" ]] && sidecars=$(r2_count "s3://zentrain/${run}/" "\.parquet")
+
+    local out
+    out=$(printf '%s' "$vast" | LABEL="$label" GI="$GPU_IDLE" CI="$CPU_IDLE" \
+        DEADLINE="$STARTUP_DEADLINE" GRACE="$STALL_GRACE" python3 -c '
+import json, sys, os
+d = json.loads(sys.stdin.read() or "[]")
+insts = d if isinstance(d, list) else d.get("instances", [])
+label = os.environ["LABEL"]
+gi = float(os.environ["GI"]); ci = float(os.environ["CI"])
+deadline = int(os.environ["DEADLINE"]); grace = int(os.environ["GRACE"])
+m = [i for i in insts if i and label and label in (i.get("label") or "")]
+burn = 0.0; idle = []; failed = []
+print("  id         gpu           gpu%   cpu%   up_m   status")
+for i in m:
+    iid = i.get("id"); age = int(i.get("duration") or 0)
+    st = (i.get("actual_status") or i.get("cur_state") or "").lower()
+    gu = i.get("gpu_util", 0) or 0; cu = i.get("cpu_util", 0) or 0
+    dph = float(i.get("dph_total", 0) or 0); burn += dph
+    tag = "ok"
+    if gu == 0 and cu == 0 and age >= deadline:
+        tag = "FAILED-START (booted,0%)" if st in ("running", "active") else "FAILED-START (stuck " + (st or chr(63)) + ")"
+        failed.append((iid, dph))
+    elif age >= grace and gu <= gi and cu <= ci:
+        tag = "IDLE"; idle.append((iid, dph))
+    gpu = (i.get("gpu_name") or chr(63))[:13]
+    print(f"  {str(iid):<10} {gpu:<13} {gu:<6.0f} {cu:<6.0f} {age//60:<6} {tag}")
+waste = sum(x for _, x in idle) + sum(x for _, x in failed)
+print(f"SUMMARY boxes={len(m)} burn={burn:.2f} idle={len(idle)} failed_start={len(failed)} waste={waste:.2f}")
+print("FAILED_IDS " + " ".join(str(i) for i, _ in failed))
+' 2>/dev/null) || out="SUMMARY boxes=0 burn=0 idle=0 failed_start=0 waste=0
+FAILED_IDS "
+
+    printf '%s\n' "$out" | grep -vE '^(SUMMARY|FAILED_IDS) '
+    local boxes=0 burn=0 idle=0 failed_start=0 waste=0
+    eval "$(printf '%s\n' "$out" | sed -n 's/^SUMMARY //p')" 2>/dev/null || true
+    REPORT_BURN="$burn"; REPORT_IDLE_N="$idle"; REPORT_FAILED_N="$failed_start"; REPORT_WASTE="$waste"
+    REPORT_FAILED_IDS=$(printf '%s\n' "$out" | sed -n 's/^FAILED_IDS //p')
+    echo "  ── ${boxes} boxes · \$${burn}/hr burn · ${idle} idle · ${failed_start} failed-start · progress: boot ${boot} / claims ${claims} / sidecars ${sidecars}"
+    [[ "$failed_start" != "0" ]] && echo "  ⚠ ${failed_start} box(es) FAILED TO START — \$${waste}/hr wasted: ${REPORT_FAILED_IDS}"
+    [[ "$idle" != "0" ]] && echo "  ⚠ ${idle} box(es) IDLE — destroy them to stop the bleed."
+}
+
+parse_target() {  # sets RUN, LABEL, POLL, MAXBURN, MAXWAIT, DESTROY
+    RUN=""; LABEL=""; POLL="${POLL:-20}"; MAXBURN="${MAXBURN:-}"; MAXWAIT="${MAXWAIT:-0}"; DESTROY="${DESTROY:-0}"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --label) LABEL="$2"; shift 2;;
+            --poll) POLL="$2"; shift 2;;
+            --max-burn) MAXBURN="$2"; shift 2;;
+            --max-wait) MAXWAIT="$2"; shift 2;;
+            --destroy) DESTROY=1; shift;;
+            *) RUN="$1"; shift;;
+        esac
+    done
+    [[ -z "$LABEL" && -n "$RUN" ]] && LABEL="$RUN"  # default: vast label == run id
+}
+
+load_r2() { [[ -f ~/.config/cloudflare/r2-credentials ]] && { set -a; . ~/.config/cloudflare/r2-credentials; set +a; }; return 0; }
+
+cmd_status() {
+    parse_target "$@"; need_run "$RUN"; load_r2
+    echo "### fleet status: $RUN"
+    fleet_report "$RUN" "$LABEL"
+}
+
+cmd_watch() {
+    parse_target "$@"; need_run "$RUN"; load_r2
+    local start; start=$(date +%s)
+    echo "### fleet watch: $RUN  (poll=${POLL}s; startup-deadline=${STARTUP_DEADLINE}s; ^C to stop)"
+    while :; do
+        echo "[$(date -u +%H:%M:%SZ)]"
+        fleet_report "$RUN" "$LABEL"
+        if [[ -n "$MAXBURN" ]] && awk "BEGIN{exit !(${REPORT_BURN:-0} > $MAXBURN)}"; then
+            echo "  ⚠ burn \$${REPORT_BURN}/hr exceeds --max-burn \$${MAXBURN}."
+        fi
+        if [[ "$DESTROY" == "1" && -n "${REPORT_FAILED_IDS// }" ]]; then
+            echo "  → --destroy: tearing down failed-start boxes."
+            for i in $REPORT_FAILED_IDS; do echo y | vastai destroy instance "$i" >/dev/null 2>&1 && echo "    destroyed $i"; done
+        fi
+        if (( MAXWAIT > 0 )) && (( $(date +%s) - start >= MAXWAIT )); then
+            echo "  max-wait ${MAXWAIT}s reached; stopping watch."; break
+        fi
+        sleep "$POLL"
+    done
+}
+
+case "${1:-}" in
+    launch) shift; exec bash "$HERE/launch_fleet.sh" "$@";;
+    status) shift; cmd_status "$@";;
+    watch)  shift; cmd_watch "$@";;
+    top)    shift; exec python3 "$HERE/fleet_top.py" "$@";;
+    kill)   shift; exec bash "$HERE/teardown_fleet.sh" "$@";;
+    -h|--help|"") usage 0;;
+    *) echo "unknown subcommand: $1" >&2; usage;;
+esac

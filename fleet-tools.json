@@ -1,0 +1,46 @@
+{
+  "_README": "SOURCE OF TRUTH for fleet tooling — ONE correct way per concern. The guard (`just fleet-check`, CI .github/workflows/fleet-guard.yml) scans scripts/ for fleet tooling (launch_*, onstart_*, *_chunk_worker, fleet*, *_watch, *cost_watch) and FAILS if a script appears that is neither `canonical` nor `deprecated` here. Add a SUBCOMMAND to `scripts/jobsys/fleet`, not a new script. The `deprecated` forks are grandfathered (warn, not fail) until Phase E deletes them; --strict fails on them too.",
+  "canonical": {
+    "monitor": [
+      "scripts/jobsys/fleet",
+      "scripts/jobsys/fleet_top.py"
+    ],
+    "launch": [
+      "scripts/jobsys/launch_fleet.sh",
+      "scripts/sweep/launch_backfill.sh"
+    ],
+    "teardown": [
+      "scripts/jobsys/teardown_fleet.sh"
+    ],
+    "worker_entry": [
+      "scripts/sweep/onstart_unified.sh",
+      "scripts/sweep/onstart_feature_backfill.sh",
+      "scripts/sweep/onstart_orchestrator.sh"
+    ],
+    "split": [
+      "scripts/sweep/hetzner_cpu_sweep.sh",
+      "scripts/sweep/split_score_worker.sh"
+    ]
+  },
+  "deprecated": {
+    "_README": "Forks to delete in Phase E (needs an image rebuild + a campaign-quiet window). Grandfathered: the guard WARNS. Each maps to its canonical replacement.",
+    "scripts/sweep/onstart_v2.sh": "scripts/sweep/onstart_unified.sh",
+    "scripts/sweep/onstart_v3.sh": "scripts/sweep/onstart_unified.sh",
+    "scripts/sweep/onstart_omni_backfill.sh": "scripts/sweep/onstart_unified.sh",
+    "scripts/sweep/onstart_cvvdp_backfill.sh": "scripts/sweep/onstart_unified.sh",
+    "scripts/sweep/onstart_cvvdp_backfill_imazen.sh": "scripts/sweep/onstart_unified.sh",
+    "scripts/sweep/onstart_iwssim_backfill.sh": "scripts/sweep/onstart_unified.sh",
+    "scripts/sweep/onstart_iwssim_backfill_v14.sh": "scripts/sweep/onstart_unified.sh",
+    "scripts/sweep/onstart_source_features.sh": "scripts/sweep/onstart_unified.sh",
+    "scripts/sweep/cvvdp_backfill_chunk_worker.sh": "zenfleet-sweep worker --mode omni",
+    "scripts/sweep/iwssim_backfill_chunk_worker.sh": "zenfleet-sweep worker --mode omni",
+    "scripts/sweep/metric_backfill_chunk_worker.sh": "zenfleet-sweep worker --mode omni",
+    "scripts/sweep/omni_backfill_chunk_worker.sh": "zenfleet-sweep worker --mode omni",
+    "scripts/sweep/launch_single_instance.sh": "scripts/sweep/launch_backfill.sh (--n 1)",
+    "scripts/jobsys/gpu_scorefile_launch.sh": "scripts/jobsys/launch_fleet.sh",
+    "scripts/sweep/datagen_score_launch.sh": "scripts/sweep/launch_backfill.sh",
+    "scripts/jobsys/relaunch_cache.sh": "scripts/jobsys/launch_fleet.sh",
+    "scripts/sweep/cvvdp_backfill/launch_imazen.sh": "scripts/sweep/launch_backfill.sh",
+    "scripts/sweep/v15/launch_gpu.sh": "scripts/sweep/launch_backfill.sh"
+  }
+}
