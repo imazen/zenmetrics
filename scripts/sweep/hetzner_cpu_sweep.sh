@@ -93,6 +93,7 @@ CODEC=$CODEC
 PLAN=$PLAN
 QG=$QG
 BUDGET=$BUDGET
+SWEEP_JOBS=${SWEEP_JOBS:-4}
 ${THREADS:+RAYON_NUM_THREADS=$THREADS}
 ENV
 cat > /root/r/worker.sh <<'WORK'
@@ -104,6 +105,7 @@ rm -f /data/chunk.txt
 PB=""; [ "\$PLAN" != "rd_core" ] && PB="--plan-budget \$BUDGET"
 mkdir -p /enc
 zenmetrics sweep --codec "\$CODEC" --sources /data --q-grid "\$QG" --plan "\$PLAN" \$PB \
+  --jobs "\${SWEEP_JOBS:-4}" \
   --metric ssim2 --metric zensim --encoded-out-dir /enc --feature-output /feat.parquet --output /omni.tsv
 s5cmd --endpoint-url=\$EP cp /omni.tsv "s3://\$BUCKET/\$OUT_KEY"
 # codec-commit provenance (the plan manifest carries codec_commits) — lands WITH the blobs
