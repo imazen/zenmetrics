@@ -465,59 +465,33 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
-- **jxl `modes_full` fleet sweep OOMs cpx51 (32 GB) at ~31 GB RSS** (measured
-  2026-06-23; both fleet-jxl3 boxes: zenmetrics `anon-rss` 31.3–31.5 GB →
-  OOM-killed *early*, right after `[sweep] plan modes_full: 141 cells/image`,
-  before producing output). **NOT thread-bound:** box 0 with
-  `RAYON_NUM_THREADS=8` OOM'd identically (31.5 GB) to box 1 at 16 threads — the
-  THREADS/RAYON lever does not reduce it, so the footprint is a fixed/startup
-  allocation in the jxl `modes_full` path (likely the upfront load/plan of the
-  chunk's renditions × the 141-cell expansion, or a per-image over-alloc).
-  jpeg/webp `modes_full` did NOT OOM. BLOCKS the jxl fleet picker. Diagnosis
-  TODO (needs a free box — do NOT concurrent-heavy with rsqrt): heaptrack the
-  jxl `modes_full` sweep, vary chunk size (IMAGES) + `--plan-budget` + threads
-  to locate the 31 GB alloc. Fix hypotheses: smaller per-box chunks (IMAGES cap)
-  if chunk-load-bound; lower `--plan-budget` if cell-bound; or free-as-you-go in
-  the sweep if it accumulates. `rd_core` is lighter but gives coarse jxl data
-  (32.5% overhead per the smoothness doc).
-  **REFINED (measured 2026-06-23) — it's a PER-CELL LEAK (~60 MB/cell), NOT
-  config-bound.** A reduced run (100 renditions, `--plan-budget 50` = 46
-  cells/img, `RAYON_NUM_THREADS=4`, 30 G cap) still OOM'd at **29.94 GB in 55 s
-  after only 504 cells scored** — so chunk size / budget / thread count do NOT
-  fix it. jpeg/webp `modes_full` don't leak (webp did 306k cells fine), so it's
-  **jxl-specific** (the jxl encode or the zenjxl-decoder decode-for-metric path
-  retaining per-cell memory). Fix is a CODE change, not a config workaround:
-  heaptrack the sweep to find the growing per-cell alloc, then free it.
-  **NARROWED (2026-06-23): the leak is in the jxl ENCODE path, not the metrics.**
-  Encode-only (no `--metric`, `--encoded-out-dir` only) leaks IDENTICALLY —
-  29.94 GB after 506 encodes (57 s) vs 29.94 GB after 504 cells with metrics. So
-  it's the jxl encode (jxl-encoder / zenjxl), not the decode-for-metric. heaptrack
-  to pinpoint the alloc + owning crate: if jxl-encoder/zenjxl (sibling repos) →
-  STOP + tell user; if the zenmetrics sweep retains per-cell `Vec<u8>`/state → fix here.
-  **HEAPTRACK (2026-06-23, 5 renditions × budget 10 = 50 cells): NOT a true leak**
-  (3 MB leaked at exit; peak heap 208 MB, run completed — did NOT reproduce the
-  fleet OOM at this scale). Dominant retained consumer = `zenjxl::sweep::cross` /
-  `build_cells` (113 MB — the modes_full Cartesian product materialized into a
-  `Vec<SweepCell>`, with `cv = v.clone()` per cell at sweep.rs:1449; `plan()`'s
-  q-coarsening loop rebuilds the whole Vec each iteration until `cells.len() <=
-  budget`). That cross is a real over-allocation (sibling crate — stream/prune it
-  instead of materializing the full product), but a *fixed* plan overhead, so
-  likely NOT the sole fleet-OOM driver. The 31 GB driver scales with image count
-  (~2–6 MB/cell accumulation in the encode path, only visible at fleet scale) and
-  needs a LARGER heaptrack to pinpoint (deferred — focused task on a free box;
-  the small trace doesn't OOM so it can't show the accumulation site).
-  **ROOT CAUSE (larger heaptrack 2026-06-23 — 30 rend × budget 30 = 900 cells →
-  32.33 GB peak, REPRODUCED): `butteraugli::image::BufferPool` accumulation,
-  driven by `jxl-encoder`'s VarDCT perceptual quant refinement.** Top consumer
-  6.35 GB over 81k `BufferPool::take` calls; trace
-  `VarDctEncoder::encode_inner → butteraugli_refine_quant_field →
-  CpuButteraugliBackend::set_reference → Image3F::from_pool_dirty →
-  butteraugli::image::BufferPool::take`. The butteraugli BufferPool grows
-  unbounded across encodes (buffers taken, never returned/capped) — jxl-specific
-  (only jxl VarDCT uses this perceptual backend), encode-path, config-independent.
-  **Both butteraugli + jxl-encoder are SIBLING crates — zenmetrics can't fix it.**
-  Fix lives there: cap/clear the pool, or drop+recreate (or bound-reuse) the
-  perceptual backend per encode. → file issue; jxl fleet blocked until fixed.
+- **jxl `modes_full` memory — RESOLVED 2026-06-25; the "BufferPool leak" was a
+  MISDIAGNOSIS.** There is NO per-cell / within-process leak. Measured on current
+  HEAD (agent replication; `/tmp/repro_jxl_VERDICT.md`, `/tmp/repro_jxl_rss.tsv`):
+  serial jxl `modes_full` RSS is a **sawtooth that returns to baseline between
+  images** (per-image peaks ~11 GB @1.77 MP, ~22 GB @3.15 MP; valleys 1.5–2.7 GB),
+  `--jobs 1` runs to completion with NO OOM, and heaptrack leaked **3.62 MB over
+  55 cells** (a 60 MB/cell leak would be ~3.3 GB). jpeg stays flat <200 MB.
+  `butteraugli::image::BufferPool` is a plain struct capped at 8 buffers
+  (`image.rs:16,141`), owned inside a per-encode `ButteraugliReference`,
+  constructed fresh in `butteraugli_refine_quant_field` and dropped on return —
+  it does NOT persist across encode calls. The per-encode pool fix already landed
+  in jxl-encoder `26a8d9cd` (#93) + a `MemoryBudget` guard.
+  **Real fleet-OOM cause: image-level concurrency × per-image transient PEAK**, not
+  accumulation. Peak scales ~6–7 GB/MP and the dominant peak consumer is the **jxl
+  modular/lossless tree-learning** (`TreeSamples::reserve` ← `encode_lossless`,
+  ~3.7 GB, in the `mod-e1_*` cells), not butteraugli (~1.2 GB). The old
+  "NOT thread-bound" datum fits: RAYON threads don't change per-image peak, but
+  images-in-flight does (the fleet ran N images at once; `--jobs 1` is fine).
+  **Mitigation is config, not a code bug: bound IMAGE-level concurrency per box** —
+  workers-per-box ≤ box_RAM ÷ per-image-peak (≈ 1 concurrent jxl encode per
+  ~30 GB for ≤4.2 MP renditions); size-tier large renditions to high-RAM boxes.
+  The job system's per-cell process serializes within a worker, so cap workers/box
+  for jxl by RAM. Do NOT switch to `rd_core` to dodge this — `rd_core` is the
+  crippled pre-ablated set (RD_ABLATION_2026-06-24.md); use `modes_full` +
+  concurrency bounding. The modular-lossless transient peak is a real (large but
+  NON-leaking) over-allocation in jxl-encoder (sibling) — trimmable later, not a
+  blocker.
 
 - **zenmetrics-api consolidated `it` suite self-poisons when run as ONE
   process** (observed 2026-06-10, pre-existing — A/B-identical 26-test failure
