@@ -30,14 +30,16 @@ Workspace conventions per the global rules:
   emits a migrate/delete recipe. Grandfathers the existing splinters (warn, not
   fail) so the live fleet keeps working; `--strict` is the post-migration gate.
   Policy + migration playbook: `docs/GHCR_PACKAGES.md` (362e381).
-- **`zen-base` foundation image** — `docker/base/Dockerfile` (multi-stage
-  `common`→`nocuda`/`cuda`) + `.github/workflows/base-image.yml` build one
-  `ghcr.io/imazen/zen-base` package as three tags: `:x86` (amd64),
-  `:arm` (arm64), `:x86-cuda` (amd64 + CUDA 12.6 runtime + `cuda_dlsym_stub`).
-  Bakes all stable train/run deps (aws-cli v2 + s5cmd + python3/pyarrow/numpy +
-  jq + C toolchain); no pytorch, no Rust toolchain. Leaf images
-  (zenmetrics-sweep/zenfleet-worker/zen-train) are meant to `FROM` it so heavy
-  apt/CUDA layers pull once per node (a006ea9).
+- **Shared base image as `zenfleet-worker:base-*` tags** — `docker/base/Dockerfile`
+  (multi-stage `common`→`nocuda`/`cuda`) + `.github/workflows/base-image.yml` build
+  three `base-*` tags on the existing `ghcr.io/imazen/zenfleet-worker` package (NOT
+  a new package — variants are TAGS): `:base-x86` (amd64), `:base-arm` (arm64),
+  `:base-x86-cuda` (amd64 + CUDA 12.6 runtime + `cuda_dlsym_stub`). Bakes all stable
+  train/run deps (aws-cli v2 + s5cmd + python3/pyarrow/numpy + jq + C toolchain); no
+  pytorch, no Rust toolchain. Leaf images (zenmetrics-sweep/zen-train/the exec
+  variants) `FROM` these so heavy apt/CUDA layers pull once per node (a006ea9; folded
+  into zenfleet-worker per review — the first cut used a separate `zen-base` package,
+  which broke the no-dash-after-zen rule).
 
 - **JPEG cross-metric mapping table** (`benchmarks/metric_mapping_2026-06-23.tsv`
   + `.md`) relating five perceptual scales for baseline libjpeg-turbo JPEG:

@@ -1,17 +1,17 @@
-# zen-base — the shared bake-everything FOUNDATION image.
+# zenfleet-worker base-* tags — the shared bake-everything FOUNDATION.
 #
-# ONE ghcr package (ghcr.io/imazen/zen-base), three tags built from this one
-# multi-stage Dockerfile (per the "one package per artifact, variants are TAGS"
-# rule — see docs/GHCR_PACKAGES.md):
+# These are base-* TAGS on the existing ghcr.io/imazen/zenfleet-worker package
+# (NOT a separate package — variants are TAGS, see docs/GHCR_PACKAGES.md), built
+# from this one multi-stage Dockerfile:
 #
-#   :x86       = target `nocuda`, linux/amd64   (CPU; no CUDA)
-#   :arm       = target `nocuda`, linux/arm64   (Hetzner CAX / Oracle ARM)
-#   :x86-cuda  = target `cuda`,   linux/amd64   (CUDA 12.6 runtime + dlsym stub)
+#   :base-x86       = target `nocuda`, linux/amd64   (CPU; no CUDA)
+#   :base-arm       = target `nocuda`, linux/arm64   (Hetzner CAX / Oracle ARM)
+#   :base-x86-cuda  = target `cuda`,   linux/amd64   (CUDA 12.6 runtime + dlsym stub)
 #
-# Every leaf image (zenmetrics-sweep, zenfleet-worker, zen-train) does
-# `FROM ghcr.io/imazen/zen-base:<tag>` and adds ONLY its precompiled binary +
-# entrypoint, so the heavy apt/CUDA layers are pulled once per node and the
-# leaves are tiny. Per the bake-everything rule: NO apt/pip/cuda at boot, NO
+# Every leaf image (zenmetrics-sweep, zen-train, the exec variants) does
+# `FROM ghcr.io/imazen/zenfleet-worker:base-<tag>` and adds ONLY its precompiled
+# binary + entrypoint, so the heavy apt/CUDA layers are pulled once per node and
+# the leaves are tiny. Per the bake-everything rule: NO apt/pip/cuda at boot, NO
 # Rust toolchain here (binaries are built in CI and COPY'd into the leaves).
 #
 # Built by .github/workflows/base-image.yml on NATIVE runners (no QEMU).
@@ -26,7 +26,7 @@
 FROM ubuntu:24.04 AS common
 
 LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
-LABEL org.opencontainers.image.description="zen-base: shared bake-everything foundation for zen fleet/train images (R2 tooling + python/pyarrow + optional CUDA)"
+LABEL org.opencontainers.image.description="zenfleet-worker base-* tags: shared bake-everything foundation for zen fleet/train images (R2 tooling + python/pyarrow + optional CUDA)"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -82,7 +82,7 @@ RUN mkdir -p /root/.cache/zenmetrics
 # Stage `nocuda`: the :x86 (amd64) and :arm (arm64) base images. No CUDA.
 # ─────────────────────────────────────────────────────────────────────────────
 FROM common AS nocuda
-RUN echo "zen-base nocuda (${TARGETARCH:-?}) ready" \
+RUN echo "zenfleet-worker base nocuda (${TARGETARCH:-?}) ready" \
     && python3 -c "import pyarrow.parquet, numpy" && s5cmd version >/dev/null && jq --version >/dev/null
 # Base image: no ENTRYPOINT; leaf images set their own. bash for ad-hoc use.
 CMD ["bash"]
@@ -97,7 +97,7 @@ FROM common AS cuda
 ARG TARGETARCH
 ARG CUDA_PKG_VERSION=12-6
 ARG CUDA_DIR_VERSION=12.6
-RUN [ "$TARGETARCH" = "amd64" ] || { echo "zen-base:cuda is amd64-only (got $TARGETARCH)" >&2; exit 1; }
+RUN [ "$TARGETARCH" = "amd64" ] || { echo "zenfleet-worker base:cuda is amd64-only (got $TARGETARCH)" >&2; exit 1; }
 
 RUN export PATH="/usr/local/sbin:/usr/sbin:/sbin:${PATH}" \
     && curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb \
@@ -122,7 +122,7 @@ RUN gcc -shared -fPIC -O2 -o /usr/local/lib/cuda_dlsym_stub.so /tmp/cuda_dlsym_s
     && rm /tmp/cuda_dlsym_stub.c \
     && test -s /usr/local/lib/cuda_dlsym_stub.so \
     && nm -D --defined-only /usr/local/lib/cuda_dlsym_stub.so 2>/dev/null | grep -q ' T dlsym$' \
-    && echo "zen-base cuda_dlsym_stub baked"
+    && echo "zenfleet-worker base cuda_dlsym_stub baked"
 
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64 \
     CUDA_PATH=/usr/local/cuda \
@@ -131,5 +131,5 @@ ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidi
 RUN ldconfig -p | grep -q libnvrtc.so.12 \
     && test -f /usr/local/lib/cuda_dlsym_stub.so \
     && python3 -c "import pyarrow.parquet, numpy" \
-    && echo "zen-base cuda (amd64, CUDA ${CUDA_DIR_VERSION}) ready"
+    && echo "zenfleet-worker base cuda (amd64, CUDA ${CUDA_DIR_VERSION}) ready"
 CMD ["bash"]

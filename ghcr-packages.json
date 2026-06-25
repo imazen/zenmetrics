@@ -3,18 +3,6 @@
   "registry": "ghcr.io/imazen",
   "packages": [
     {
-      "name": "zen-base",
-      "purpose": "Shared 'bake-everything' FOUNDATION image that every Rust leaf image (zenmetrics-sweep, zenfleet-worker, zen-train) FROMs. Carries all stable deps to TRAIN or RUN — OS, R2 tooling (aws-cli v2 + s5cmd), python3 + pyarrow/numpy, jq, build tools, and (cuda variant) the CUDA 12.6 runtime + cuda_dlsym_stub. Leaf images add ONLY their precompiled binary + entrypoint, so the heavy apt/CUDA layers are pulled once per node and the leaf images are tiny. Carries NO pytorch (that bloat stays in pycvvdp-scorer) and NO Rust toolchain (binaries are built in CI and COPY'd into leaves).",
-      "builds_from": "docker/base/Dockerfile (multi-stage: common -> nocuda / cuda), built by .github/workflows/base-image.yml on native runners.",
-      "tag_convention": [
-        "x86               — amd64, no CUDA (CPU encode/score, training-data prep, anything GPU-less)",
-        "x86-cuda          — amd64 + CUDA 12.6 runtime + cuda_dlsym_stub (GPU metrics, cubecl-cuda training)",
-        "arm               — arm64, no CUDA (Hetzner CAX / Oracle ARM tiers)",
-        "x86-cuda-12-6     — CUDA-version-pinned variant when a non-default toolkit is baked",
-        "<tag>-<short-sha> — exact-commit immutable pin of any of the above"
-      ]
-    },
-    {
       "name": "zenmetrics-sweep",
       "purpose": "GPU/CPU codec-sweep + metric-score worker (the 'omni' image baking the zenmetrics CLI + all 5 codecs + GPU/CPU metrics). The image fleet boxes pull to encode and score.",
       "builds_from": "Dockerfile.sweep.v27 (amd64) / scripts/sweep/Dockerfile.sweep.hetzner.v1 (arm64) — precompiled binary COPY'd in.",
@@ -29,14 +17,18 @@
     },
     {
       "name": "zenfleet-worker",
-      "purpose": "Job-system fleet worker: pull-based, claims content-addressed jobs from the R2 lease-queue, runs the ZEN_EXEC executor, writes blobs + ledger rows. Multi-arch (amd64+arm64).",
-      "builds_from": ".github/workflows/jobworker-image.yml -> crates/zenfleet-worker/Dockerfile.",
+      "purpose": "Job-system fleet worker AND the shared bake-everything BASE (via base-* tags) that every Rust leaf image (zenmetrics-sweep, zen-train, the exec variants) FROMs. The runnable worker tags (latest/exec/exec-gpu) carry the worker binary; the base-* tags carry ONLY the stable deps every image needs to TRAIN or RUN — OS, R2 tooling (aws-cli v2 + s5cmd), python3 + pyarrow/numpy, jq, build tools, and (the cuda base) the CUDA 12.6 runtime + cuda_dlsym_stub. No pytorch (that stays in pycvvdp-scorer); no Rust toolchain (binaries are built in CI and COPY'd in). Folding the base in here (vs a separate package) keeps the org to ONE worker-family package.",
+      "builds_from": "runnable worker tags: .github/workflows/jobworker-image.yml -> crates/zenfleet-worker/Dockerfile. base-* tags: .github/workflows/base-image.yml -> docker/base/Dockerfile (multi-stage common -> nocuda/cuda), native runners.",
       "tag_convention": [
-        "latest            — master HEAD multi-arch manifest",
-        "<short-sha>       — every push",
-        "buildcache-amd64 | buildcache-arm64 — buildkit registry cache (not a runnable image)",
+        "latest            — master HEAD multi-arch manifest (worker binary)",
+        "<short-sha>       — every push (worker binary)",
         "exec              — worker base + zenmetrics jobexec real executor (CPU)",
-        "exec-gpu          — exec variant on a CUDA base for GPU metric scoring"
+        "exec-gpu          — exec variant on a CUDA base for GPU metric scoring",
+        "base-x86          — FROM-able base layer, amd64, no CUDA (CPU encode/score, training-data prep)",
+        "base-arm          — FROM-able base layer, arm64, no CUDA (Hetzner CAX / Oracle ARM tiers)",
+        "base-x86-cuda     — base + CUDA 12.6 runtime + cuda_dlsym_stub, amd64 (GPU metrics, cubecl-cuda training)",
+        "base-<variant>-<short-sha> — exact-commit immutable pin of a base tag",
+        "buildcache-* — buildkit registry cache (not a runnable image)"
       ]
     },
     {

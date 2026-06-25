@@ -7,8 +7,9 @@ See global ~/.claude/CLAUDE.md for general instructions.
 Before referencing or pushing any `ghcr.io/imazen/<name>` image: the canonical
 package set is **`zenmetrics-sweep`, `zenfleet-worker`, `pycvvdp-scorer`,
 `zen-train`** — and that's it. Variants (GPU build, provider flavor, generation,
-commit pin) are **TAGS** (`:exec-gpu`, `:hetzner`, `:v27`, `:<sha>`), never new
-package names. The source of truth is [`ghcr-packages.json`](ghcr-packages.json);
+commit pin, the shared base) are **TAGS** (`:exec-gpu`, `:hetzner`, `:v27`,
+`:base-x86-cuda`, `:<sha>`), never new package names. The bake-everything base is
+`zenfleet-worker:base-{x86,arm,x86-cuda}`, not a separate package. The source of truth is [`ghcr-packages.json`](ghcr-packages.json);
 `just ghcr-check` (CI: `.github/workflows/ghcr-guard.yml`) fails if any infra file
 uses a non-canonical name. To add a real new artifact, add it to the manifest in
 the same change. Policy + the migration playbook for the existing splinters:

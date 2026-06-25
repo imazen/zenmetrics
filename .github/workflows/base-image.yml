@@ -1,16 +1,17 @@
-name: zen-base foundation image
+name: zenfleet-worker base tags
 
-# Builds the shared bake-everything base image (ghcr.io/imazen/zen-base) as
-# THREE single-platform tags from one multi-stage Dockerfile (docker/base/Dockerfile):
+# Builds the shared bake-everything BASE as THREE base-* TAGS on the existing
+# ghcr.io/imazen/zenfleet-worker package (NOT a separate package — variants are
+# TAGS, docs/GHCR_PACKAGES.md), from one multi-stage Dockerfile (docker/base/Dockerfile):
 #
-#   :x86       target nocuda, linux/amd64   (CPU)
-#   :arm       target nocuda, linux/arm64   (Hetzner CAX / Oracle ARM)
-#   :x86-cuda  target cuda,   linux/amd64   (CUDA 12.6 runtime + dlsym stub)
+#   :base-x86       target nocuda, linux/amd64   (CPU)
+#   :base-arm       target nocuda, linux/arm64   (Hetzner CAX / Oracle ARM)
+#   :base-x86-cuda  target cuda,   linux/amd64   (CUDA 12.6 runtime + dlsym stub)
 #
-# One ghcr package, variants are TAGS (docs/GHCR_PACKAGES.md). Each arch builds
-# NATIVELY on its own runner — emulated arm64 apt/pip would crawl. Leaf images
-# (zenmetrics-sweep, zenfleet-worker, zen-train) FROM these so the heavy
-# apt/CUDA layers are pulled once per node.
+# These sit alongside the runnable worker tags (:latest, :exec, :exec-gpu, <sha>)
+# in the same package. Each arch builds NATIVELY on its own runner — emulated
+# arm64 apt/pip would crawl. Leaf images (zenmetrics-sweep, zen-train, the exec
+# variants) FROM these so the heavy apt/CUDA layers are pulled once per node.
 
 on:
   push:
@@ -22,7 +23,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: ghcr.io/imazen/zen-base
+  IMAGE_NAME: ghcr.io/imazen/zenfleet-worker
   REGISTRY: ghcr.io
 
 concurrency:
@@ -37,15 +38,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - tag: x86
+          - tag: base-x86
             target: nocuda
             platform: linux/amd64
             runner: ubuntu-latest
-          - tag: arm
+          - tag: base-arm
             target: nocuda
             platform: linux/arm64
             runner: ubuntu-24.04-arm
-          - tag: x86-cuda
+          - tag: base-x86-cuda
             target: cuda
             platform: linux/amd64
             runner: ubuntu-latest

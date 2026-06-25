@@ -35,34 +35,36 @@ comment, not a Dockerfile, not this doc.
 
 | Package | Role | Tags |
 |---|---|---|
-| `zen-base` | Shared bake-everything **foundation** every Rust leaf image FROMs | `x86`, `arm`, `x86-cuda` (+ `-<sha>` pins) |
 | `zenmetrics-sweep` | Codec-sweep + metric-score worker (the omni image) | `latest`, `vNN`, `hetzner`, `salad`, `split`, `<sha>` |
-| `zenfleet-worker` | Job-system fleet worker (claims R2 lease-queue) | `latest`, `exec`, `exec-gpu`, `<sha>` |
+| `zenfleet-worker` | Job-system fleet worker **+ the shared base** (`base-*` tags) every Rust leaf FROMs | `latest`, `exec`, `exec-gpu`, `base-x86`, `base-arm`, `base-x86-cuda`, `<sha>` |
 | `pycvvdp-scorer` | pycvvdp (PyTorch) CVVDP reference scorer — kept separate (3 GB torch) | `latest`, `<pycvvdp-version>` |
 | `zen-train` | Standalone burn trainer (parquet → ZNPR) | `latest`, `<sha>` |
 
-## Base images: `FROM zen-base`
+## Base images: `FROM zenfleet-worker:base-*`
 
-`zen-base` ([`docker/base/Dockerfile`](../docker/base/Dockerfile), built by
-[`.github/workflows/base-image.yml`](../.github/workflows/base-image.yml)) carries
+The shared base is **not a separate package** — it's `base-*` tags on
+`zenfleet-worker` (one worker-family package holding both the runnable worker tags
+and the base tags). Built by
+[`docker/base/Dockerfile`](../docker/base/Dockerfile) +
+[`.github/workflows/base-image.yml`](../.github/workflows/base-image.yml), it carries
 the stable, heavy deps every Rust image needs to **train or run** — Ubuntu 24.04,
 aws-cli v2 + s5cmd (R2), `python3` + `pyarrow` + `numpy`, `jq`, a C toolchain, and
 (the cuda tag only) the CUDA 12.6 runtime + `cuda_dlsym_stub`. Three tags from one
 multi-stage Dockerfile (the only correct way to express "with and without CUDA,
-plus ARM" — variants are TAGS, never `zen-base-cuda` / `zen-base-arm` packages):
+plus ARM" — variants are TAGS, never `*-cuda` / `*-arm` packages):
 
 | Tag | Stage / platform | Use |
 |---|---|---|
-| `zen-base:x86` | `nocuda`, linux/amd64 | CPU encode/score, training-data prep, anything GPU-less |
-| `zen-base:arm` | `nocuda`, linux/arm64 | Hetzner CAX / Oracle ARM tiers |
-| `zen-base:x86-cuda` | `cuda`, linux/amd64 | GPU metrics + cubecl-cuda training |
+| `zenfleet-worker:base-x86` | `nocuda`, linux/amd64 | CPU encode/score, training-data prep, anything GPU-less |
+| `zenfleet-worker:base-arm` | `nocuda`, linux/arm64 | Hetzner CAX / Oracle ARM tiers |
+| `zenfleet-worker:base-x86-cuda` | `cuda`, linux/amd64 | GPU metrics + cubecl-cuda training |
 
 It bakes **no** pytorch (that bloat stays in `pycvvdp-scorer`) and **no** Rust
 toolchain — leaf binaries are built in CI and `COPY`d in. A leaf image becomes
 tiny — just the binary + entrypoint on top of the shared, already-pulled base:
 
 ```dockerfile
-FROM ghcr.io/imazen/zen-base:x86-cuda
+FROM ghcr.io/imazen/zenfleet-worker:base-x86-cuda
 ARG ZEN_METRICS_BINARY=./zenmetrics      # built in CI with CUDARC_CUDA_VERSION=12000
 COPY --chmod=0755 ${ZEN_METRICS_BINARY} /usr/local/bin/zenmetrics
 COPY --chmod=0755 scripts/sweep/onstart_unified.sh /usr/local/bin/onstart_unified.sh
@@ -70,9 +72,10 @@ ENTRYPOINT ["/usr/local/bin/onstart_unified.sh"]
 ```
 
 Migrating the live leaf Dockerfiles (`Dockerfile.sweep.v27`,
-`crates/zenfleet-worker/Dockerfile`, …) onto `zen-base` is a deliberate follow-up
-— do it once `zen-base:*` is on ghcr and the fleet is quiet, one leaf at a time,
-so a running campaign's relaunches never pull a half-built base.
+`crates/zenfleet-worker/Dockerfile`, …) onto `zenfleet-worker:base-*` is a
+deliberate follow-up — do it once the `base-*` tags are on ghcr and the fleet is
+quiet, one leaf at a time, so a running campaign's relaunches never pull a
+half-built base.
 
 ## How it's enforced
 
