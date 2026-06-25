@@ -355,11 +355,10 @@ impl ProviderHandle for HetznerProviderHandle {
         // Group-state: "stopped" iff every server is stopping/off (or
         // the list is empty); "running" iff at least one is running;
         // else "pending".
-        let group_state = if servers.is_empty() {
-            "stopped".to_string()
-        } else if servers
-            .iter()
-            .all(|s| matches!(s.parsed_status().as_orchestrator_state(), "stopping"))
+        let group_state = if servers.is_empty()
+            || servers
+                .iter()
+                .all(|s| matches!(s.parsed_status().as_orchestrator_state(), "stopping"))
         {
             "stopped".to_string()
         } else if servers

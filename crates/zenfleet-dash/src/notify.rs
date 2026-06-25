@@ -272,7 +272,7 @@ mod tests {
             cpu_util_pct: None,
             last_report_unix_secs: None,
         };
-        let evs = detect_idle_events(&[idle.clone()], 0, &IdleThresholds::default());
+        let evs = detect_idle_events(std::slice::from_ref(&idle), 0, &IdleThresholds::default());
         assert!(
             evs.iter()
                 .any(|e| matches!(e, NotifyEvent::FleetStalled { stalled_workers: 1 })),

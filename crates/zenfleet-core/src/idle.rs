@@ -10,6 +10,7 @@
 //! It works on data that already exists in [`WorkerReport`]:
 //! - **throughput** from `jobs_done / uptime_secs` (no new plumbing needed), and
 //! - **staleness** from `last_report_unix_secs` ("last seen"),
+//!
 //! and is *enriched* by `gpu_util_pct` once the worker reports the util it
 //! already samples. Missing signals are skipped, never guessed.
 

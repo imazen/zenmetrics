@@ -120,8 +120,8 @@ pub struct WorkerArgs {
     #[arg(long, env = "PARALLEL_CHUNKS_MAX")]
     pub parallel_chunks_max: Option<usize>,
 
-    /// What kind of work to do per chunk. `omni` (default) re-encodes
-    /// + scores + writes the omni sidecar. `feature-backfill` reads
+    /// What kind of work to do per chunk. `omni` (default) re-encodes,
+    /// scores, and writes the omni sidecar. `feature-backfill` reads
     /// the existing omni sidecar from R2, downloads the already-saved
     /// encoded variants, computes zensim 300-feature vectors, writes
     /// a feature parquet to s3://zentrain/<run>/zensim_features/.

@@ -163,8 +163,8 @@ struct Args {
     #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     diagnostic_on_ttl: bool,
     /// Seconds after `provision` (post body POSTed) at which the
-    /// watchdog fires its first log-pull. Defaults to `chunk_ttl_secs
-    /// + 60` — i.e. ~60s after the first TTL re-dispatch could have
+    /// watchdog fires its first log-pull. Defaults to `chunk_ttl_secs +
+    /// 60` — i.e. ~60s after the first TTL re-dispatch could have
     /// fired. Override for faster smoke tests.
     #[arg(long)]
     diagnostic_after_secs: Option<u64>,
