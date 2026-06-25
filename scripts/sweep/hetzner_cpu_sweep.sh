@@ -27,6 +27,10 @@ RUN_PREFIX="jxl-lossy/runs/$RUN"
 CODEC="${CODEC:-zenjpeg}"; PLAN="${PLAN:-rd_core}"
 QG="${QG:-5,15,30,50,70,85,95}"; N_BOXES="${N_BOXES:-1}"; IMAGES="${IMAGES:-0}"
 STYPE="${STYPE:-cpx41}"; BUDGET="${BUDGET:-600}"
+# NO_FEATURES=1 drops --feature-output (the CPU zensim 372-feature extraction) — the per-image memory
+# hog on large frames. The picker uses zenanalyze CONTENT features (separate TSV), not these; variants
+# are still persisted (--encoded-out-dir) so zensim features stay re-derivable on GPU per the split.
+FEAT_OUT="/feat.parquet"; [ -n "${NO_FEATURES:-}" ] && FEAT_OUT=""
 # Canonical image via the single source of truth (scripts/jobsys/fleet.env) — no hard-coded ghcr name.
 . "$(dirname "$0")/../jobsys/fleet.env"
 IMAGE="${IMAGE:-$ZEN_FLEET_IMAGE_CPU}"
@@ -124,6 +128,7 @@ PLAN=$PLAN
 QG=$QG
 BUDGET=$BUDGET
 SWEEP_JOBS=${SWEEP_JOBS:-4}
+FEAT_OUT=$FEAT_OUT
 ${THREADS:+RAYON_NUM_THREADS=$THREADS}
 ENV
 cat > /root/r/worker.sh <<'WORK'
@@ -137,11 +142,11 @@ PB=""; [ "\$PLAN" != "rd_core" ] && PB="--plan-budget \$BUDGET"
 mkdir -p /enc
 zenmetrics sweep --codec "\$CODEC" --sources /data --q-grid "\$QG" --plan "\$PLAN" \$PB \
   --jobs "\${SWEEP_JOBS:-4}" \
-  --metric ssim2 --metric zensim --encoded-out-dir /enc --feature-output /feat.parquet --output /omni.tsv
+  --metric ssim2 --metric zensim --encoded-out-dir /enc \${FEAT_OUT:+--feature-output \$FEAT_OUT} --output /omni.tsv
 s5cmd --endpoint-url=\$EP cp /omni.tsv "s3://\$BUCKET/\$OUT_KEY"
 # codec-commit provenance (the plan manifest carries codec_commits) — lands WITH the blobs
 s5cmd --endpoint-url=\$EP cp /omni.plan.json "s3://\$BUCKET/\$MANIFEST_KEY" 2>/dev/null || true
-s5cmd --endpoint-url=\$EP cp /feat.parquet "s3://\$BUCKET/\$FEAT_KEY"
+[ -n "\$FEAT_OUT" ] && s5cmd --endpoint-url=\$EP cp "\$FEAT_OUT" "s3://\$BUCKET/\$FEAT_KEY"
 # persist encoded variants (the master record): 372 zensim features re-extractable
 # on GPU (zensim-gpu fixed), plus diffmaps / any future metric, with NO re-encode.
 # Variants are already-compressed codec bytes -> tar without recompression.
