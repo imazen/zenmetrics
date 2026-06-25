@@ -139,6 +139,7 @@ fn metric_label(kind: &JobKind) -> String {
         JobKind::Encode { .. } => "encode".into(),
         JobKind::Resample { .. } => "resample".into(),
         JobKind::Bake { .. } => "bake".into(),
+        JobKind::ScoreFile { metrics } => format!("scorefile:{}", metrics.join("+")),
     }
 }
 

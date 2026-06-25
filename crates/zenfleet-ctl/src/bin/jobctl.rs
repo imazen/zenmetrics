@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use zenfleet_core::{DesiredJob, LedgerView, RetryPolicy};
-use zenfleet_ctl::{DeclareSpec, coverage, declare, gap};
+use zenfleet_ctl::{DeclareSpec, coverage, declare, declare_encodes, gap, parse_emit_cells};
 
 #[derive(Parser)]
 #[command(
@@ -31,6 +31,14 @@ enum Cmd {
     Declare {
         #[arg(long)]
         spec: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Declare encode jobs from a plan's `--emit-cells` JSONL (the plan-cell path; goal A).
+    /// Each line is an EncodeDeclareItem (image_path/codec/q/knob_tuple_json{cell,fp,plan}/source_sha).
+    DeclareEncodes {
+        #[arg(long)]
+        cells: PathBuf,
         #[arg(long)]
         out: PathBuf,
     },
@@ -83,6 +91,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let jobs = declare(&s)?;
             std::fs::write(&out, serde_json::to_vec_pretty(&jobs)?)?;
             eprintln!("declared {} jobs -> {}", jobs.len(), out.display());
+        }
+        Cmd::DeclareEncodes { cells, out } => {
+            let items = parse_emit_cells(&std::fs::read_to_string(&cells)?)?;
+            let jobs = declare_encodes(&items)?;
+            std::fs::write(&out, serde_json::to_vec_pretty(&jobs)?)?;
+            eprintln!(
+                "declared {} encode jobs from {} cells -> {}",
+                jobs.len(),
+                items.len(),
+                out.display()
+            );
         }
         Cmd::Catalog {
             manifest,
