@@ -134,12 +134,37 @@ This incrementality is *the* reason the vehicle is the job system, not a monolit
   `InvalidConfig` today (jxl-encoder #47 chunk 4 unwired). Unblocking it is a jxl-encoder task and a
   prerequisite for the web picker to ever choose 420.
 
+## Decisions locked (2026-06-25, user)
+
+- **P0 sizing = LEAN main-effects (`--max-deviations 1`), NOT effort×knob cross.** Measured fork (per
+  image, ~30-pt dense grid): lean (max-dev 1) ≈ 0.9k cells; effort-free single-dev ≈ 4–6k; max-dev 2
+  (effort×knob + knob×knob) ≈ 10k. User chose lean for a cheap first signal — each knob probed at the
+  default effort, e1–e9 swept at default knobs. Accepted risk: a knob whose payoff is *only* at e9 is
+  not crossed with e9 here; widen to effort×knob (the effort-free `with_compute_axis_free` mechanism, or
+  max-dev 2) only if the oracle gap later points at an e9-only knob. **Do not re-ask this fork.**
+- **Solve at e7 AND per effort.** Because some knobs let a *low* effort mimic a higher one, the
+  oracle/picker analysis must be done per-effort (not just at e7) — pick the cheapest (effort, knobs)
+  that hits the quality target. The e1–e9 ladder + per-cell `encode_ms`/peak-RSS make this measurable.
+- **Track per-effort encode time + memory, persisted, to validate estimates.** Done — see below.
+- **Spend cap: $25** total on this program's fleet runs. Size the corpus/grid to fit; surface a cost
+  estimate before any launch; kill idle boxes.
+
 ## Current state / next action
 
-- Partition mechanism shipped: `scripts/sweep/partition_cells_by_mode.py` (lossy/lossless split).
-- **Next:** draft a `lossy_dense` `SweepAxes` in zenjxl — P0 single-deviation-probe sizing first
-  (cross distance × e1–e9 × strategy × gaborish × ans; probe the 9 unmeasured experts + the k_ac_quant
-  ladder + entropy_mul presets one-deviation-at-a-time → ~3–5k cells/image), widen to crosses only where
-  P0 shows promise.
-- **Gated on:** the concurrent "one Rust worker" refactor settling before the first fleet run (don't fire
-  a multi-hour sweep into a moving worker). Bucket design + per-cell memory both verified.
+- **Partition mechanism shipped**: `scripts/sweep/partition_cells_by_mode.py` (lossy/lossless split).
+- **`lossy_dense` SHIPPED** (lean P0): `LossyAxes::lossy_dense()` / `SweepAxes::lossy_dense()` in zenjxl
+  (`main@origin 1517fd8e`) = the full `modes_full` lossy knob set over the complete `e1..=e9` ladder,
+  **lossy-only**; wired as `--plan lossy_dense` in zenmetrics (`master@origin 78f63630`), `--max-deviations`
+  auto-defaults to 1. **Measured 962 cells/image** at a ~30-pt dense grid (`--dry-run`). 22/22 zenjxl
+  sweep tests green.
+- **Per-effort time+memory estimates VALIDATED** (`benchmarks/jxl_lossy_memval_2026-06-25.{tsv,md}`,
+  zenjxl `mem_probe_encode` @ `77fd5888`): estimates are conservative (0/108 cells above the model's
+  max → fleet sizing cannot OOM); memory effort-bands ~50 B/px (e≤4) → ~91 (e≥6); worst 122 MB @1 MP
+  (0.2 GB/cell premise holds with margin); per-effort time e1≈63 ms → e9≈1056 ms @1 MP.
+- **Worker gate satisfied**: the "one Rust worker" refactor landed (`50fdb5db`); no fleet currently running.
+- **Next:** (1) pick the P0 corpus — content strata (tiny/photo/screen/line-art/mixed), sized so
+  `962 cells × images` fits the **$25** cap and the persist-everything budget; codec-corpus RO, zentrain RW.
+  (2) Declare the lossy_dense cells through the **job system** (`--plan lossy_dense --dry-run --emit-cells`
+  → `zenfleet_ctl::declare_encodes`), one encode per fresh process (clean per-cell RSS). (3) First Hetzner
+  P0 fleet run, persist variants + all metric variants + diffmaps + features + `encode_ms`/peak-RSS to
+  zentrain. (4) Analyze per-axis/per-effort (Pareto win-rate, content-dependence, GBDT importance) → P1/P2.
