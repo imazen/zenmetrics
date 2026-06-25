@@ -134,6 +134,25 @@ This incrementality is *the* reason the vehicle is the job system, not a monolit
   `InvalidConfig` today (jxl-encoder #47 chunk 4 unwired). Unblocking it is a jxl-encoder task and a
   prerequisite for the web picker to ever choose 420.
 
+## Progress log (2026-06-25)
+
+- **Gap (1) Hetzner fleet sweep: CLOSED.** A real, ssh-monitored Hetzner fleet `lossy_dense` sweep
+  COMPLETED on cpx51 (`done: 6660/6660 cells, 0 fail`; omni+features+variants persisted to R2). The
+  blocker was a launcher bug — the chunk worker ran `zenmetrics sweep` with no `--jobs` cap → all-cores
+  on a 16GB box → the monolithic sweep's cross-cell memory OOM-killed it (diagnosed via ssh with the
+  `zen-arm-dev` key; that key — not `id_ed25519` — is the fleet key). **Fixed** (`726828a6`): bounded
+  `SWEEP_JOBS` (default 4) in `hetzner_cpu_sweep.sh`. Launch recipe: `SWEEP_JOBS=4 MAXPX=1050000
+  STYPE=cpx51 N_BOXES=… CODEC=zenjxl PLAN=lossy_dense IMAGE=…:exec`. **FLAG:** the launcher writes run
+  outputs to `codec-corpus` (SRC_BUCKET) — the codec-corpus-RO/zentrain-RW guardrail wants those in
+  `zentrain`; separate fix queued.
+- **Gap (3) trained picker: DONE.** `omni_to_pareto`→`train_hybrid --codec-config zenjxl_lossy_dense`
+  →model, held-out split.
+- **Gap (4) RD vs oracle: CONVERGING, not reached.** Student val overhead **39.2%→17.66%** (9→60 imgs);
+  ≤1% needs fleet-scale dense data (the `DATA_STARVED` gate quantifies it) + loop iteration.
+- **Gap (2) code settled knobs: gated** on fleet-scale confirmation (verdicts are N=12 directional).
+- **Next:** the fleet now works — scale it (≤5 Hetzner servers; 3 are pre-existing user dev boxes) for
+  the dense ML-discipline corpus → retrain → P1 crosses → P2 code → iterate to grid-stable.
+
 ## Decisions locked (2026-06-25, user)
 
 - **P0 sizing = LEAN main-effects (`--max-deviations 1`), NOT effort×knob cross.** Measured fork (per
