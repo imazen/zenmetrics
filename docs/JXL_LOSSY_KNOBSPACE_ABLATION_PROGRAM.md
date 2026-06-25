@@ -149,7 +149,15 @@ This incrementality is *the* reason the vehicle is the job system, not a monolit
   →model, held-out split.
 - **Gap (4) RD vs oracle: CONVERGING, not reached.** Student val overhead **39.2%→17.66%** (9→60 imgs);
   ≤1% needs fleet-scale dense data (the `DATA_STARVED` gate quantifies it) + loop iteration.
-- **Gap (2) code settled knobs: gated** on fleet-scale confirmation (verdicts are N=12 directional).
+- **Gap (2) sidecars analyzed: DONE for round 1.** The fleet omni (`box-0.omni.tsv`, 30 imgs) was
+  pulled + Pareto-analyzed; it CONFIRMS the local verdicts on an independent corpus — front drivers
+  (effort ladder, gaborish, `k_ac_quant` ~24%, fd4) consistent, and `prog1/prog2/e1/e2` NEVER on the
+  front in BOTH corpora.
+- **Gap (3) code settled knobs: STARTED.** First swept→coded graduation: `progressive` pinned to
+  `Single` in `lossy_dense` (zenjxl `cea954f8`, zenmetrics pin bumped) — never RD-competitive on 2
+  corpora + structurally a render feature. (e1/e2 stay swept — never-skip-efforts guardrail; they're
+  just never *chosen* by the picker.) Remaining inert-cluster knobs (dct/nonalign/fgs/etc.) appear
+  occasionally on the fleet front → keep until more confirmation.
 - **Next:** the fleet now works — scale it (≤5 Hetzner servers; 3 are pre-existing user dev boxes) for
   the dense ML-discipline corpus → retrain → P1 crosses → P2 code → iterate to grid-stable.
 
