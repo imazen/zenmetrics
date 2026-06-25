@@ -57,6 +57,14 @@ whole time it runs — do not launch-and-forget, and report waste without being 
   - `zenfleet-dash` — fires `FleetStalled` + per-box `Underutilized` notifications and
     shows GPU util per worker.
   - `scripts/sweep/vast_cost_watch.sh` — continuous burn/credit watch + auto-destroy.
+- **Startup failures — KNOW within ~2 min:** `scripts/jobsys/fleet_startup_watch.sh`
+  flags any box that was *launched* but never started working (image-pull hang, onstart
+  crash, the 6-80 s fast-crash). The steady-state idle detector's 120 s warmup grace
+  deliberately spares these, so this watchdog covers the launch window — boot record /
+  claim / util are the "started" signals; a box past the deadline (default 90 s) with
+  none = failed. `launch_fleet.sh` auto-spawns it in the background (log
+  `/tmp/<run>-startup.log`); run it manually after any other launch:
+  `fleet_startup_watch.sh --label <vast-label> --run <run> --expected <N> [--destroy]`.
 - **On an idle paid box: tear it down.** It is pure waste; destroy it (or let
   stop-spend / autostop do it) and tell the user the $/hr being saved.
 - **Any NEW fleet tool/script you write MUST flag idle infrastructure** the same way
