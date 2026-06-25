@@ -162,9 +162,24 @@ This incrementality is *the* reason the vehicle is the job system, not a monolit
   max → fleet sizing cannot OOM); memory effort-bands ~50 B/px (e≤4) → ~91 (e≥6); worst 122 MB @1 MP
   (0.2 GB/cell premise holds with margin); per-effort time e1≈63 ms → e9≈1056 ms @1 MP.
 - **Worker gate satisfied**: the "one Rust worker" refactor landed (`50fdb5db`); no fleet currently running.
-- **Next:** (1) pick the P0 corpus — content strata (tiny/photo/screen/line-art/mixed), sized so
-  `962 cells × images` fits the **$25** cap and the persist-everything budget; codec-corpus RO, zentrain RW.
-  (2) Declare the lossy_dense cells through the **job system** (`--plan lossy_dense --dry-run --emit-cells`
-  → `zenfleet_ctl::declare_encodes`), one encode per fresh process (clean per-cell RSS). (3) First Hetzner
-  P0 fleet run, persist variants + all metric variants + diffmaps + features + `encode_ms`/peak-RSS to
-  zentrain. (4) Analyze per-axis/per-effort (Pareto win-rate, content-dependence, GBDT importance) → P1/P2.
+- **Cost is NOT the constraint** (measured): a 250-image strata corpus → 240k cells → ~36 min on one
+  ccx63 → **~$0.36 encode** (+ similar CPU scoring + a small vast GPU-cvvdp spend) — ~50× under the
+  **$25** cap. The constraints are CI-green (✓ as of `68f70063`: lint + windows-arm + macOS green, ubuntu
+  imminent) and the executor-image rebuild.
+- **Next — fleet P0 runbook** (focused, live-monitored chunk; do NOT launch-and-forget):
+  0. **Rebuild the executor image** (the canonical `zenfleet-worker:exec` predates lossy_dense): the
+     image COPYs the precompiled `zenmetrics` binary, so
+     `cargo build --release -p zenmetrics-cli --features sweep,png,jpeg,webp,avif,jxl,cpu-metrics`
+     (lossy_dense rides in via the zenjxl path dep) → `scripts/jobsys/build_executor_image.sh` (build
+     ctx in `$HOME`, not `/tmp` — snap-docker on this WSL2 box can't read `/tmp`) → push. Smoke: `jobexec --help`.
+  1. **Corpus** — content strata (tiny/photo/screen/line-art/mixed), ≥50/class, size-stratified
+     (`scripts/picker/select_corpus.py`); provenance-index it (`scripts/provenance/index_corpus.py`).
+     codec-corpus RO, zentrain RW. Pool: imazen-26 renditions + screenshots (102) + collections (498).
+  2. **Declare** the lossy_dense cells through the **job system**
+     (`--plan lossy_dense --dry-run --emit-cells` → `zenfleet_ctl::declare_encodes`), one encode per fresh
+     process (clean per-cell RSS).
+  3. **First Hetzner P0 run** (`scripts/sweep/hetzner_cpu_sweep.sh` ccx-first), persist variants + all
+     metric variants + diffmaps + features + `encode_ms`/peak-RSS to zentrain. `fleet watch` live;
+     kill idle boxes; stay under $25.
+  4. **Analyze** per-axis/**per-effort** (Pareto win-rate, content-dependence, GBDT importance) → P1/P2.
+     Per the locked decision, the oracle/picker analysis is per-effort (cheapest effort+knobs hitting target).
