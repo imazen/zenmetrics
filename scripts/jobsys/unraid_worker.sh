@@ -5,7 +5,7 @@
 # Unraid "Add Container" field values to run a worker against a given run.
 #
 # TWO BUCKETS, TWO CREDS (this is the corrected design — codec-corpus is READ-ONLY):
-#   - RUN bucket   (ZEN_FLEET_BUCKET, default `coefficient`): the worker WRITES blobs / ledger / claims /
+#   - RUN bucket   (ZEN_FLEET_BUCKET, default `zentrain`): the worker WRITES blobs / ledger / claims /
 #     manifest here, under $RUN/. Scoped object-READ-WRITE cred limited to that prefix.
 #   - CORPUS bucket (ZEN_CORPUS_BUCKET, default `codec-corpus`): the executor READS source images here.
 #     A SEPARATE object-READ-ONLY cred (R2 temp creds are single-bucket, so two buckets need two creds).
@@ -20,7 +20,7 @@
 #   TTL_DAYS     scoped-cred lifetime, 1..7 (CF temp-cred max is 7d). Re-run this to refresh.
 #   CAPABILITY   optional: cpu_light,cpu_heavy,gpu,cpu_arm,high_ram (comma-sep) to restrict what it pulls
 # Env:
-#   ZEN_FLEET_BUCKET  run-write bucket (default coefficient)
+#   ZEN_FLEET_BUCKET  run-write bucket (default zentrain)
 #   ZEN_CORPUS_BUCKET corpus read-only bucket (default codec-corpus); set == run bucket for single-bucket
 #   ZEN_CORPUS_PREFIX R2 prefix under the corpus bucket where source images live (real jobs)
 #   ZEN_WORKER_IMAGE  worker image (default the canonical exec image)
@@ -36,7 +36,7 @@ TTL_DAYS="${2:-7}"; CAP="${3:-}"
 # Canonical worker image via the single source of truth — never a hard-coded ghcr name.
 . "$(dirname "$0")/fleet.env"
 IMAGE="${ZEN_WORKER_IMAGE:-$ZEN_FLEET_IMAGE_CPU}"   # exec image bakes `zenmetrics jobexec`
-RUN_BUCKET="${ZEN_FLEET_BUCKET:-coefficient}"        # run-WRITE: blobs / ledger / claims / manifest
+RUN_BUCKET="${ZEN_FLEET_BUCKET:-zentrain}"        # run-WRITE: blobs / ledger / claims / manifest
 CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-codec-corpus}"   # corpus READ-ONLY: source images
 EXEC="${ZEN_EXEC:-/bin/cat}"   # /bin/cat = synthetic; the exec image defaults this to the real executor.
 CORPUS="${ZEN_CORPUS_PREFIX:-}"   # R2 prefix under the CORPUS bucket where source images live (real jobs)

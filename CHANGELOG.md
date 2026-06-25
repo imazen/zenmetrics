@@ -118,14 +118,16 @@ Workspace conventions per the global rules:
   the corpus). `jobexec` now resolves the corpus from `ZEN_CORPUS_BUCKET` (falling
   back to `ZEN_BUCKET`) and fetches it with a separate read-only credential
   `ZEN_CORPUS_AWS_*` when set (`apply_corpus_creds`; R2 temp creds are
-  single-bucket, so codec-corpus-read + coefficient-write genuinely needs two
-  creds). Launchers (`unraid_worker.sh`, `launch_fleet.sh`) mint the two scoped
-  creds (RW `coefficient/<run>/`, RO `codec-corpus/<prefix>/`) and wire
-  `ZEN_CORPUS_BUCKET`/`ZEN_CORPUS_AWS_*` through every tier; fleet defaults moved
-  off the throwaway `zen-tuning-ephemeral` to `coefficient`. Verified: neither
-  minted cred can write codec-corpus (both `AccessDenied`). Rebuilt+pushed
-  `zenfleet-worker:exec`. The GPU exec image (`:exec-gpu`) needs the same rebuild
-  before its next GPU run (0de15e2b).
+  single-bucket, so corpus-read + run-write genuinely needs two creds). Launchers
+  (`unraid_worker.sh`, `launch_fleet.sh`) mint the two scoped creds (RW
+  `<run-bucket>/<run>/`, RO `codec-corpus/<prefix>/`) and wire
+  `ZEN_CORPUS_BUCKET`/`ZEN_CORPUS_AWS_*` through every tier. The run bucket is
+  **`zentrain`** (the training-pipeline bucket — all sweeps/backfills/features/
+  picker-training/datasets live there), NOT `coefficient` (legacy vast.ai
+  chunk-sweep ops) and NOT the throwaway `zen-tuning-ephemeral`; `ZEN_FLEET_BUCKET`
+  default is now `zentrain`. Verified: neither minted cred can write codec-corpus
+  (both `AccessDenied`). Rebuilt+pushed `zenfleet-worker:exec`. The GPU exec image
+  (`:exec-gpu`) needs the same rebuild before its next GPU run (0de15e2b, f3a139be).
 - **`sweep`/`score-pairs` zensim-gpu emitted `non-finite score NaN` on every
   ≥64px cell** — the cached-score path (`MetricCache`) forced
   `ZensimFeatureRegime::Basic` (228 features) onto the metric while keeping the

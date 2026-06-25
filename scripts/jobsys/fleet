@@ -24,7 +24,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 GPU_IDLE="${GPU_IDLE_PCT:-10}"; CPU_IDLE="${CPU_IDLE_PCT:-10}"
 STARTUP_DEADLINE="${STARTUP_DEADLINE:-90}"; STALL_GRACE="${STALL_GRACE:-120}"
-BUCKET="${ZEN_FLEET_BUCKET:-zen-tuning-ephemeral}"
+BUCKET="${ZEN_FLEET_BUCKET:-zentrain}"   # run-write bucket (training pipeline); corpus is codec-corpus (RO)
 
 usage() { sed -n '2,26p' "$0" >&2; exit "${1:-2}"; }
 need_run() { [[ -n "${1:-}" ]] || { echo "need <run>" >&2; usage; }; }
@@ -43,7 +43,9 @@ fleet_report() {
     local vast="[]"; [[ -n "$label" ]] && vast="$(vastai show instances --raw 2>/dev/null || echo "[]")"
     local boot claims sidecars
     boot=$(r2_count "s3://${BUCKET}/${run}/boot/" "\.txt")
-    claims=$(r2_count "s3://coefficient/claims/${run}/" "\.claim")
+    # zenfleet claims live at <bucket>/<run>/claims/; fall back to the legacy chunk-sweep path.
+    claims=$(r2_count "s3://${BUCKET}/${run}/claims/" "\.claim")
+    [[ "$claims" == "0" ]] && claims=$(r2_count "s3://coefficient/claims/${run}/" "\.claim")
     sidecars=$(r2_count "s3://${BUCKET}/${run}/ledger/" "\.parquet")
     [[ "$sidecars" == "0" ]] && sidecars=$(r2_count "s3://zentrain/${run}/" "\.parquet")
 

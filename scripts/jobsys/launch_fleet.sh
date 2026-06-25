@@ -27,7 +27,7 @@ CORPUS="${ZEN_CORPUS_PREFIX:-}"        # R2 prefix under the CORPUS bucket where
 CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-codec-corpus}"  # corpus READ-ONLY bucket (source images)
 N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"; N_SALAD="${5:-0}"
 SALAD_ORG="${SALAD_ORGANIZATION:-imazen}"; SALAD_PROJECT="${SALAD_PROJECT:-zenmetrics}"
-BUCKET="${ZEN_FLEET_BUCKET:-coefficient}"   # run-WRITE bucket: manifest / claims / ledger / blobs
+BUCKET="${ZEN_FLEET_BUCKET:-zentrain}"   # run-WRITE bucket: manifest / claims / ledger / blobs
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 set -a; . ~/.config/cloudflare/r2-credentials; set +a

@@ -14,12 +14,12 @@
 #   GHCR_USER/GHCR_TOKEN — if the image is still `internal` on ghcr (not yet flipped public),
 #                          pass a READ-ONLY ghcr token so vast can pull it via `--login`.
 #                          Omit once the package is public (then no creds touch the box).
-#   ZEN_FLEET_BUCKET (default coefficient)
+#   ZEN_FLEET_BUCKET (default zentrain)
 #   ZEN_BOOT_WAIT_SECS (default 240)  — GPU boxes pull a ~950 MB image; give them time.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="${ZEN_GPU_IMAGE:-ghcr.io/imazen/zenfleet-worker-exec-gpu:latest}"
-BUCKET="${ZEN_FLEET_BUCKET:-coefficient}"
+BUCKET="${ZEN_FLEET_BUCKET:-zentrain}"
 CORPUS_DIR="${ZEN_E2E_CORPUS_DIR:-/tmp/gpu-e2e-corpus}"
 SPEC="${ZEN_E2E_SPEC:-/tmp/gpu-e2e-spec.json}"
 WAIT="${ZEN_BOOT_WAIT_SECS:-240}"
