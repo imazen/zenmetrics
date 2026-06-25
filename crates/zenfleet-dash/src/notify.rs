@@ -5,6 +5,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use zenfleet_core::WorkerReport;
+use zenfleet_core::idle::{IdleReason, IdleThresholds, detect_idle};
+
 use crate::views::{CostView, KindProgress};
 
 /// A fire-worthy condition. Carries enough context for the message + a deep link.
@@ -22,6 +25,14 @@ pub enum NotifyEvent {
     },
     FleetStalled {
         stalled_workers: usize,
+    },
+    /// A specific box is idle/underutilized — the actionable per-worker detail behind `FleetStalled`.
+    /// `kind` is `stale` | `low_gpu_util` | `starved`; `wasted_usd_per_hr` is what a paid idle box burns.
+    Underutilized {
+        worker: String,
+        provider: String,
+        kind: String,
+        wasted_usd_per_hr: f64,
     },
     PoisonSpike {
         kind: String,
@@ -54,9 +65,25 @@ pub fn format_event(ev: &NotifyEvent, base_url: &str) -> NotifyPayload {
             "#cost",
         ),
         NotifyEvent::FleetStalled { stalled_workers } => (
-            format!("fleet stalled: {stalled_workers} worker(s) not progressing"),
-            "#progress",
+            format!("fleet stalled: {stalled_workers} idle/underutilized worker(s) - check #workers"),
+            "#workers",
         ),
+        NotifyEvent::Underutilized {
+            worker,
+            provider,
+            kind,
+            wasted_usd_per_hr,
+        } => {
+            let cost = if *wasted_usd_per_hr > 0.0 {
+                format!(" - ${wasted_usd_per_hr:.2}/hr wasted")
+            } else {
+                String::new()
+            };
+            (
+                format!("idle infra: {provider}/{worker} ({kind}){cost}"),
+                "#workers",
+            )
+        }
         NotifyEvent::PoisonSpike { kind, poison } => (
             format!("poison spike: {poison} poisoned in {kind}"),
             "#failures",
@@ -112,6 +139,39 @@ pub fn detect(
         events.push(NotifyEvent::RunComplete {
             done: total_done,
             poison: total_poison,
+        });
+    }
+    events
+}
+
+/// Idle/underutilized-fleet notifications: revives `FleetStalled` (the count) and adds a per-box
+/// `Underutilized` event, both from the one canonical detector in `zenfleet_core::idle`. Pass the
+/// current Unix time as `now_unix` (0 to skip the staleness check). The caller de-dupes against
+/// already-sent events, so a standing idle box fires once. This is what makes the dashboard
+/// *actively flag* a paid box that claimed two jobs then sat idle — previously invisible.
+pub fn detect_idle_events(
+    reports: &[WorkerReport],
+    now_unix: u64,
+    thresholds: &IdleThresholds,
+) -> Vec<NotifyEvent> {
+    let warnings = detect_idle(reports, now_unix, thresholds);
+    let mut events = Vec::new();
+    if !warnings.is_empty() {
+        events.push(NotifyEvent::FleetStalled {
+            stalled_workers: warnings.len(),
+        });
+    }
+    for w in &warnings {
+        let kind = match w.reason {
+            IdleReason::StaleHeartbeat { .. } => "stale",
+            IdleReason::LowGpuUtil { .. } => "low_gpu_util",
+            IdleReason::Starved { .. } => "starved",
+        };
+        events.push(NotifyEvent::Underutilized {
+            worker: w.worker.clone(),
+            provider: w.provider.clone(),
+            kind: kind.into(),
+            wasted_usd_per_hr: w.wasted_usd_per_hr,
         });
     }
     events
@@ -194,5 +254,39 @@ mod tests {
         );
         assert!(p.text.contains("metric:cvvdp"));
         assert_eq!(p.link, "https://dash.up.railway.app/#progress");
+    }
+
+    #[test]
+    fn idle_events_revive_fleet_stalled_and_flag_the_box() {
+        use zenfleet_core::ResourceClass;
+        let idle = WorkerReport {
+            worker: "vast-3".into(),
+            provider: "vast".into(),
+            class: ResourceClass::Gpu,
+            rate_usd_per_hr: 0.40,
+            uptime_secs: 3600,
+            jobs_done: 1,
+            gpu_util_pct: Some(2), // idle GPU
+            cpu_util_pct: None,
+            last_report_unix_secs: None,
+        };
+        let evs = detect_idle_events(&[idle.clone()], 0, &IdleThresholds::default());
+        assert!(
+            evs.iter()
+                .any(|e| matches!(e, NotifyEvent::FleetStalled { stalled_workers: 1 })),
+            "FleetStalled (previously never emitted) now fires"
+        );
+        assert!(evs.iter().any(|e| matches!(
+            e,
+            NotifyEvent::Underutilized { kind, wasted_usd_per_hr, .. }
+            if kind == "low_gpu_util" && (*wasted_usd_per_hr - 0.40).abs() < 1e-9
+        )));
+        // A busy GPU box (high util) yields nothing.
+        let busy = WorkerReport {
+            gpu_util_pct: Some(90),
+            jobs_done: 100,
+            ..idle
+        };
+        assert!(detect_idle_events(&[busy], 0, &IdleThresholds::default()).is_empty());
     }
 }

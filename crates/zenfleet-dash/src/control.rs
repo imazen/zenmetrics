@@ -149,6 +149,9 @@ mod tests {
                 rate_usd_per_hr: 0.4,
                 uptime_secs: 3600,
                 jobs_done: 10,
+                gpu_util_pct: None,
+                cpu_util_pct: None,
+                last_report_unix_secs: None,
             },
             WorkerReport {
                 worker: "oracle1".into(),
@@ -157,6 +160,9 @@ mod tests {
                 rate_usd_per_hr: 0.0,
                 uptime_secs: 3600,
                 jobs_done: 5,
+                gpu_util_pct: None,
+                cpu_util_pct: None,
+                last_report_unix_secs: None,
             },
         ];
         let over = stop_spend(&workers, 10.0, 5.0);

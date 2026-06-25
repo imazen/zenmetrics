@@ -243,6 +243,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rate_usd_per_hr: 0.0,
             uptime_secs: 3600,
             jobs_done: 2,
+            gpu_util_pct: None,
+            cpu_util_pct: Some(35),
+            last_report_unix_secs: None,
         },
         WorkerReport {
             worker: "vast-gpu-1".into(),
@@ -251,6 +254,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rate_usd_per_hr: 0.35,
             uptime_secs: 1800,
             jobs_done: 2,
+            gpu_util_pct: Some(4), // idle GPU — the demo's workers_view + notify will flag this box
+            cpu_util_pct: Some(22),
+            last_report_unix_secs: None,
         },
     ];
     let workers_json = dir.join("workers.json");

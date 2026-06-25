@@ -9,6 +9,12 @@ use serde::{Deserialize, Serialize};
 use crate::job::ResourceClass;
 
 /// A worker's self-reported cost + productivity (from its heartbeat).
+///
+/// The `gpu_util_pct` / `cpu_util_pct` / `last_report_unix_secs` fields are
+/// `#[serde(default)]` so heartbeats written by older workers (which omit them)
+/// still deserialize — they simply read back as `None`, and the idle detector
+/// (`crate::idle`) skips the checks it can't make. New workers SHOULD populate
+/// them so the fleet can be flagged for underutilization and staleness.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WorkerReport {
     pub worker: String,
@@ -18,11 +24,32 @@ pub struct WorkerReport {
     pub rate_usd_per_hr: f64,
     pub uptime_secs: u64,
     pub jobs_done: u64,
+    /// Mean GPU utilization % at last sample (the worker already samples this for AIMD; now it
+    /// reports it up). `None` = not a GPU box / not reported.
+    #[serde(default)]
+    pub gpu_util_pct: Option<u8>,
+    /// Mean CPU utilization %. `None` = not reported.
+    #[serde(default)]
+    pub cpu_util_pct: Option<u8>,
+    /// Unix seconds when this report was written — lets the dashboard tell a frozen worker from a
+    /// busy one ("last seen"). `None` = not stamped (staleness check skipped).
+    #[serde(default)]
+    pub last_report_unix_secs: Option<u64>,
 }
 
 impl WorkerReport {
     pub fn spent_usd(&self) -> f64 {
         self.rate_usd_per_hr * (self.uptime_secs as f64 / 3600.0)
+    }
+
+    /// Jobs completed per hour so far (0 if no uptime yet). The throughput signal the idle detector
+    /// uses to flag a paid box that's producing ~nothing — computable from existing data alone.
+    pub fn jobs_per_hr(&self) -> f64 {
+        if self.uptime_secs == 0 {
+            0.0
+        } else {
+            self.jobs_done as f64 / self.uptime_secs as f64 * 3600.0
+        }
     }
 }
 
@@ -99,6 +126,9 @@ mod tests {
             rate_usd_per_hr: rate,
             uptime_secs: uptime,
             jobs_done: jobs,
+            gpu_util_pct: None,
+            cpu_util_pct: None,
+            last_report_unix_secs: None,
         }
     }
 

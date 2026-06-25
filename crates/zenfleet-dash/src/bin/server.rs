@@ -20,7 +20,7 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::extract::{Request, State};
 use axum::http::{HeaderValue, StatusCode, header};
@@ -31,11 +31,13 @@ use axum::{Json, Router};
 use tokio::sync::RwLock;
 use tower_http::services::{ServeDir, ServeFile};
 
+use zenfleet_core::idle::IdleThresholds;
 use zenfleet_core::{JobStatus, Sha256Hex};
 use zenfleet_dash::{
     CatalogRow, ControlIntent, CostView, DashData, FailureCell, FleetBox, KindProgress,
     NotifyPayload, QueryRow, ResultRow, RunSummary, TierStorage, WorkerStat, catalog_view,
-    cost_view, detect, failures, fleet_label_key, fleet_token, format_event, gc_dry_run,
+    cost_view, detect, detect_idle_events, failures, fleet_label_key, fleet_token, format_event,
+    gc_dry_run,
     idle_boxes, kill_fleet, kill_named, list_fleet, progress, query_view, results_view,
     run_summary, selector_for, stop_spend, storage, workers_view,
 };
@@ -263,7 +265,18 @@ async fn refresh_loop(state: Arc<RwLock<DashData>>) {
                 if let Some(url) = webhook.as_deref() {
                     let prog = progress(&fresh.rows);
                     let cost = cost_view(&fresh.workers);
-                    for ev in detect(&prog, &cost, cap, poison_threshold) {
+                    let now_unix = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    let mut events = detect(&prog, &cost, cap, poison_threshold);
+                    // Actively flag idle/underutilized infrastructure (revives FleetStalled + per-box).
+                    events.extend(detect_idle_events(
+                        &fresh.workers,
+                        now_unix,
+                        &IdleThresholds::default(),
+                    ));
+                    for ev in events {
                         let sig = serde_json::to_string(&ev).unwrap_or_default();
                         if fired.insert(sig) {
                             let payload = format_event(&ev, &base_url);

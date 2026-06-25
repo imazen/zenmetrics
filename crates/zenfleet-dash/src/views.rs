@@ -15,6 +15,7 @@ pub fn kind_label(k: &JobKind) -> String {
     match k {
         JobKind::Encode { codec, .. } => format!("encode:{codec}"),
         JobKind::Metric { metric } => format!("metric:{metric}"),
+        JobKind::ScoreFile { metrics } => format!("scorefile:{}", metrics.join("+")),
         JobKind::Feature { regime } => format!("feature:{regime}"),
         JobKind::Diffmap { metric } => format!("diffmap:{metric}"),
         JobKind::Resample { kernel, .. } => format!("resample:{kernel}"),
@@ -354,9 +355,18 @@ pub struct WorkerStat {
     pub jobs_done: u64,
     pub jobs_per_min: f64,
     pub spent_usd: f64,
+    /// Last-reported GPU utilization %, if the worker reports it (`None` = not a GPU box / unknown).
+    pub gpu_util_pct: Option<u8>,
+    /// Idle/underutilized warning for this box, or `None` if healthy — the dashboard flags the row.
+    pub idle: Option<String>,
 }
 
 pub fn workers_view(workers: &[WorkerReport]) -> Vec<WorkerStat> {
+    // Flag idle/underutilized boxes with the canonical detector. `now=0` skips the staleness check
+    // (that one needs real time and is fired as a notification by the server); util + throughput
+    // signals still flag here so the per-worker table shows which boxes are wasting money.
+    let warnings =
+        zenfleet_core::idle::detect_idle(workers, 0, &zenfleet_core::idle::IdleThresholds::default());
     workers
         .iter()
         .map(|w| WorkerStat {
@@ -372,6 +382,11 @@ pub fn workers_view(workers: &[WorkerReport]) -> Vec<WorkerStat> {
                 0.0
             },
             spent_usd: w.spent_usd(),
+            gpu_util_pct: w.gpu_util_pct,
+            idle: warnings
+                .iter()
+                .find(|warn| warn.worker == w.worker)
+                .map(|warn| warn.reason.describe()),
         })
         .collect()
 }
@@ -512,6 +527,9 @@ mod tests {
             rate_usd_per_hr: 0.50,
             uptime_secs: 3600,
             jobs_done: 100,
+            gpu_util_pct: None,
+            cpu_util_pct: None,
+            last_report_unix_secs: None,
         }];
         let cv = cost_view(&workers);
         assert!((cv.total_spent_usd - 0.50).abs() < 1e-9);
@@ -555,6 +573,9 @@ mod tests {
             rate_usd_per_hr: 3.6, // = 0.001/sec
             uptime_secs: 60,
             jobs_done: 60, // 60/min
+            gpu_util_pct: None,
+            cpu_util_pct: None,
+            last_report_unix_secs: None,
         }];
         let s = run_summary(&rows, &workers);
         assert_eq!(s.remaining, 2);
@@ -706,6 +727,9 @@ mod tests {
             rate_usd_per_hr: 0.006,
             uptime_secs: 600, // 10 min
             jobs_done: 300,
+            gpu_util_pct: None,
+            cpu_util_pct: None,
+            last_report_unix_secs: None,
         }];
         let w = workers_view(&workers);
         assert_eq!(w[0].tier, "CpuArm");

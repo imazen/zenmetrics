@@ -25,7 +25,7 @@ pub use fleet::{
     FleetBox, KillResult, fleet_label_key, fleet_token, idle_boxes, kill_fleet, kill_named,
     list_fleet, selector_for,
 };
-pub use notify::{NotifyEvent, NotifyPayload, detect, format_event};
+pub use notify::{NotifyEvent, NotifyPayload, detect, detect_idle_events, format_event};
 pub use views::{
     CatalogRow, CostView, FailureCell, KindProgress, QueryRow, ResultRow, RunSummary, TierStorage,
     WorkerStat, catalog_view, cost_view, failures, kind_label, progress, query_view, results_view,
