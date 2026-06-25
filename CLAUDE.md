@@ -429,11 +429,15 @@ those revs or newer (PLAN_SWEEPS.md §6 "Codec-rev pairing").
   → includes both `cpu-metrics` (default) and `sweep` codecs. ~2 min cold,
   seconds incremental.
 
-- **Forced GPU-only sweep build (production worker)**:
+- **GPU sweep build (production worker)**:
   `cargo build --release -p zenmetrics-cli --no-default-features --features sweep,png,gpu,gpu-cuda`
-  → drops cpu-metrics so CPU butteraugli/zensim/ssim2 are *unavailable*;
-  any chunk specifying a CPU metric will fail loudly. Use this for vast.ai
-  workers so they can't silently fall back to slow CPU scoring. ~4 min cold.
+  → builds the GPU metric backends. **CORRECTION (audit 2026-06-25): this does NOT exclude
+  cpu-metrics and is NOT a forced-GPU-only build.** `gpu` enables `gpu-zensim`, which pulls
+  `cpu-metrics` transitively (`crates/zenmetrics-cli/Cargo.toml`: `gpu` → `gpu-zensim` →
+  `cpu-metrics`), so the CPU butteraugli/zensim/ssim2 paths ARE compiled in and a chunk CAN fall
+  back to CPU — the old "fail loudly / can't silently fall back" guarantee was false. To force-fail
+  on CPU metrics you must first break the `gpu-zensim → cpu-metrics` dep in Cargo.toml; not possible
+  via feature selection alone today. ~4 min cold.
 
 - **WGPU variant (broader GPU compatibility, no CUDA SDK required)**:
   `cargo build --release -p zenmetrics-cli --no-default-features --features sweep,png,gpu,gpu-wgpu`
