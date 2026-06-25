@@ -19,10 +19,11 @@
 #   N_BOXES      cpx boxes to launch                      IMAGES  cap renditions (0 = all 1482)
 #   STYPE        hcloud server type (default cpx41)       BUDGET  cell budget for modes_full/scalar_dense
 set -u
-SRC_BUCKET="${SRC_BUCKET:-codec-corpus}"
+SRC_BUCKET="${SRC_BUCKET:-codec-corpus}"          # READ-ONLY corpus (renditions live here)
 SRC_PREFIX="${SRC_PREFIX:-picker-sweep-2026-06-22/renditions}"
+RUN_BUCKET="${RUN_BUCKET:-zentrain}"               # run-WRITE bucket (chunks + outputs) — guardrail: codec-corpus is RO
 RUN="${RUN:-fleet-cpu-$(date +%s)}"
-RUN_PREFIX="picker-sweep-2026-06-22/runs/$RUN"
+RUN_PREFIX="jxl-lossy/runs/$RUN"
 CODEC="${CODEC:-zenjpeg}"; PLAN="${PLAN:-rd_core}"
 QG="${QG:-5,15,30,50,70,85,95}"; N_BOXES="${N_BOXES:-1}"; IMAGES="${IMAGES:-0}"
 STYPE="${STYPE:-cpx41}"; BUDGET="${BUDGET:-600}"
@@ -37,13 +38,19 @@ export HCLOUD_TOKEN="$(grep -E '^api_token=' ~/.config/hetzner/credentials | hea
 
 echo "### $RUN  codec=$CODEC plan=$PLAN boxes=$N_BOXES images=${IMAGES:-all} type=$STYPE"
 
-# 1. scoped temp creds (read renditions + write run outputs; one bucket/prefix)
-body=$(python3 -c "import json,os;print(json.dumps({'bucket':'$SRC_BUCKET','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':10800,'prefixes':['picker-sweep-2026-06-22/']}))")
+# 1. scoped temp creds — guardrail: codec-corpus is READ-ONLY, runs WRITE to zentrain. R2 temp creds
+#    are single-bucket, so mint two (mirrors launch_fleet.sh): RW on the run bucket + RO on the corpus.
+body=$(B="$RUN_BUCKET" python3 -c "import json,os;print(json.dumps({'bucket':os.environ['B'],'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':10800,'prefixes':['jxl-lossy/']}))")
 curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$body" \
   "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/hz_cred.json
 read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/hz_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
-[ -n "$AK" ] || { echo "cred mint failed"; cat /tmp/hz_cred.json; exit 1; }
-echo "minted scoped creds (3h)"
+[ -n "$AK" ] || { echo "run-cred mint failed"; cat /tmp/hz_cred.json; exit 1; }
+cbody=$(B="$SRC_BUCKET" P="$SRC_PREFIX" python3 -c "import json,os;print(json.dumps({'bucket':os.environ['B'],'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-only','ttlSeconds':10800,'prefixes':[os.environ['P']+'/']}))")
+curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$cbody" \
+  "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/hz_corpus_cred.json
+read -r CAK CSK CST < <(python3 -c 'import json;r=json.load(open("/tmp/hz_corpus_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
+[ -n "$CAK" ] || { echo "corpus-cred mint failed"; cat /tmp/hz_corpus_cred.json; exit 1; }
+echo "minted scoped creds (3h): RW $RUN_BUCKET/jxl-lossy + RO $SRC_BUCKET/$SRC_PREFIX"
 
 # 2. chunk lists from the R2 rendition listing (cap + size-skip the >4MP monsters by name)
 r2 ls "s3://$SRC_BUCKET/$SRC_PREFIX/" | awk '{print $NF}' | grep '\.png$' > /tmp/hz_all.txt
@@ -64,7 +71,7 @@ echo "selected $total renditions; $per per box"
 split -d -l "$per" /tmp/hz_sel.txt /tmp/hz_chunk_
 i=0
 for cf in /tmp/hz_chunk_*; do
-  r2 cp "$cf" "s3://$SRC_BUCKET/$RUN_PREFIX/chunks/chunk-$i.txt" >/dev/null
+  r2 cp "$cf" "s3://$RUN_BUCKET/$RUN_PREFIX/chunks/chunk-$i.txt" >/dev/null
   i=$((i+1))
 done
 echo "uploaded $i chunk lists"
@@ -81,8 +88,12 @@ AWS_SECRET_ACCESS_KEY=$SK
 AWS_SESSION_TOKEN=$ST
 AWS_REGION=auto
 EP=$EP
-BUCKET=$SRC_BUCKET
+BUCKET=$RUN_BUCKET
+SRC_BUCKET=$SRC_BUCKET
 SRC_PREFIX=$SRC_PREFIX
+CORPUS_AK=$CAK
+CORPUS_SK=$CSK
+CORPUS_ST=$CST
 CHUNK_KEY=$RUN_PREFIX/chunks/chunk-$idx.txt
 OUT_KEY=$RUN_PREFIX/omni/box-$idx.omni.tsv
 MANIFEST_KEY=$RUN_PREFIX/manifests/box-$idx.plan.json
@@ -100,7 +111,8 @@ cat > /root/r/worker.sh <<'WORK'
 set -e
 mkdir -p /data
 s5cmd --endpoint-url=\$EP cp "s3://\$BUCKET/\$CHUNK_KEY" /data/chunk.txt
-while read -r f; do [ -n "\$f" ] && s5cmd --endpoint-url=\$EP cp "s3://\$BUCKET/\$SRC_PREFIX/\$f" "/data/\$f"; done < /data/chunk.txt
+# renditions live in the READ-ONLY corpus bucket — read them with the RO corpus cred, NOT the run cred.
+while read -r f; do [ -n "\$f" ] && AWS_ACCESS_KEY_ID=\$CORPUS_AK AWS_SECRET_ACCESS_KEY=\$CORPUS_SK AWS_SESSION_TOKEN=\$CORPUS_ST s5cmd --endpoint-url=\$EP cp "s3://\$SRC_BUCKET/\$SRC_PREFIX/\$f" "/data/\$f"; done < /data/chunk.txt
 rm -f /data/chunk.txt
 PB=""; [ "\$PLAN" != "rd_core" ] && PB="--plan-budget \$BUDGET"
 mkdir -p /enc
@@ -120,7 +132,7 @@ s5cmd --endpoint-url=\$EP cp /done.txt "s3://\$BUCKET/\$DONE_KEY"
 WORK
 docker run --rm --env-file /root/r/env -v /root/r/worker.sh:/worker.sh \
   --entrypoint /bin/bash $IMAGE /worker.sh > /root/r/log 2>&1 || \
-  s5cmd --endpoint-url=$EP cp /root/r/log "s3://$SRC_BUCKET/$RUN_PREFIX/done/box-$idx.FAILED" 2>/dev/null || true
+  s5cmd --endpoint-url=$EP cp /root/r/log "s3://$RUN_BUCKET/$RUN_PREFIX/done/box-$idx.FAILED" 2>/dev/null || true
 EOF
   local typ loc ok=0 err
   # ccx (dedicated AMD) first — not phased out like cpx41; then cpx shared fallbacks.
@@ -137,6 +149,6 @@ EOF
 }
 for n in ${CHUNKS:-$(seq 0 $((N_BOXES-1)))}; do launch_box "$n" & done
 wait
-echo "### launched. poll: bash scripts/sweep/hetzner_cpu_sweep.sh ... then watch s3://$SRC_BUCKET/$RUN_PREFIX/done/"
-echo "RUN=$RUN  out=s3://$SRC_BUCKET/$RUN_PREFIX/omni/  done=s3://$SRC_BUCKET/$RUN_PREFIX/done/"
+echo "### launched. poll: bash scripts/sweep/hetzner_cpu_sweep.sh ... then watch s3://$RUN_BUCKET/$RUN_PREFIX/done/"
+echo "RUN=$RUN  out=s3://$RUN_BUCKET/$RUN_PREFIX/omni/  done=s3://$RUN_BUCKET/$RUN_PREFIX/done/"
 echo "teardown: hcloud server list -l group=$RUN -o noheader | awk '{print \$2}' | xargs -r hcloud server delete"
