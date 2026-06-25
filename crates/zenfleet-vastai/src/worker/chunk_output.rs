@@ -437,6 +437,72 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// Pin the EXACT on-disk arrow type + nullability of every column
+    /// [`append_metadata_columns`] adds. The value tests above check
+    /// presence + content; this catches a silent type/nullability drift
+    /// (`chunk_id`→nullable, a `worker_*_unix` Int64→UInt32, …) that breaks
+    /// external readers (pandas / the burn trainer's joins) even while values
+    /// still round-trip. The 6 `worker_*` columns are otherwise untested.
+    #[test]
+    fn omni_sidecar_metadata_schema_is_pinned() {
+        let dir = tempdir();
+        std::fs::write(
+            dir.join("g0.tsv"),
+            "image_path\tcodec\tq\tknob_tuple_json\tencoded_filename\tscore_x\n\
+             /a.png\tzenjpeg\t50\t{}\t\t9.5\n",
+        )
+        .unwrap();
+        let out = dir.join("sidecar.parquet");
+        let worker = WorkerColumns {
+            machine_id: "salad-abc".into(),
+            gpu_class: "rtx4090".into(),
+            chunk_claim_unix: Some(100),
+            chunk_start_unix: Some(101),
+            chunk_end_unix: Some(200),
+            warmup_seconds: Some(3.5),
+        };
+        concat_groups_to_parquet_with_worker(
+            &dir,
+            &out,
+            "chunk-1",
+            "run-1",
+            Some("s3://b/enc/"),
+            Some(&worker),
+        )
+        .unwrap();
+
+        let schema = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(
+            std::fs::File::open(&out).unwrap(),
+        )
+        .unwrap()
+        .schema()
+        .clone();
+
+        let want: [(&str, DataType, bool); 9] = [
+            ("chunk_id", DataType::Utf8, false),
+            ("run_id", DataType::Utf8, false),
+            ("encoded_r2_uri", DataType::Utf8, false),
+            ("worker_machine_id", DataType::Utf8, true),
+            ("worker_gpu_class", DataType::Utf8, true),
+            ("worker_chunk_claim_unix", DataType::Int64, true),
+            ("worker_chunk_start_unix", DataType::Int64, true),
+            ("worker_chunk_end_unix", DataType::Int64, true),
+            ("worker_warmup_seconds", DataType::Float64, true),
+        ];
+        for (name, dtype, nullable) in &want {
+            let f = schema
+                .field_with_name(name)
+                .unwrap_or_else(|_| panic!("omni sidecar missing metadata column `{name}`"));
+            assert_eq!(f.data_type(), dtype, "metadata column `{name}` arrow TYPE drifted");
+            assert_eq!(
+                f.is_nullable(),
+                *nullable,
+                "metadata column `{name}` NULLABILITY drifted"
+            );
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// Just to suppress unused-Write warnings.
     #[test]
     fn _io_imports_used() {

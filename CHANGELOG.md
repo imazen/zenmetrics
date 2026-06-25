@@ -21,6 +21,12 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Parquet management: pinned the omni sidecar's metadata schema** (`zenfleet-vastai`
+  `worker/chunk_output.rs`). The existing tests checked column presence + values; the new
+  `omni_sidecar_metadata_schema_is_pinned` asserts the exact on-disk arrow type + nullability of every
+  column `append_metadata_columns` writes — `chunk_id` / `run_id` / `encoded_r2_uri` (Utf8 non-null) + the
+  6 `worker_*` columns (Utf8 / Int64 / Float64 nullable, previously untested) — so a silent type or
+  nullability drift that breaks pandas / the burn trainer's joins is caught while values still round-trip.
 - **CI now RUNS the fleet-orchestration tests (was compiled-but-never-run), + fixed a silently-broken
   e2e test, + pinned the ledger parquet schema.** The job system already had ~274 tests (reconcile/gap
   convergence + retry/poison, lease/claim exactly-once, idle + startup-failure detection, ledger
