@@ -311,6 +311,28 @@ than the next cvvdp-gpu kernel parity tick. If the pinned task has
 forward progress available (a missing inventory, an unwritten spec,
 an unbuilt Docker image) prefer it over yet another parity test.
 
+## PINNED PROGRAM — JXL lossy knob-space ablation (iterate to the picker shape)
+
+**Status: active, multi-cycle. Survives compaction. Full plan:
+[`docs/JXL_LOSSY_KNOBSPACE_ABLATION_PROGRAM.md`](docs/JXL_LOSSY_KNOBSPACE_ABLATION_PROGRAM.md).**
+
+Goal: discover the **minimal knob shape** a JXL lossy picker should explore — which knobs +
+*crosses* carry **content-dependent** RD value worth picking — and push everything else into
+**code** (fixed default or feature-derived rule). Loop: design grid → fast Hetzner fleet sweep
+(job system, per-cell, persist-everything to zentrain) → analyze (Pareto win-rate /
+content-dependence / interaction, GBDT importance) → prune+pivot → **edit jxl crates to code the
+settled knobs** → repeat until the grid stabilizes and the picker's achieved RD ≈ oracle. A knob
+graduating swept→coded is a SUCCESS (shrinks codec + picker).
+
+Decision rule per knob/cross: inert or universal → CODE; feature-deterministic → CODE RULE;
+content-dependent + moves RD → PICKER axis; joint≠main-effects → keep the CROSS, else code the
+main effects. Sweep ALL efforts **e1–e8 first** (e9 = pass-2, real gates; e10–12 only under
+`--features butteraugli-loop`). Honor the byte-inert skip-list + the content-gate pinning gotcha
+(see the doc). codec-corpus RO / zentrain RW. Carry CVVDP (cost-model never re-fit).
+
+Every /loop tick: re-read the doc's "Current state / next action" and advance the next phase
+(P0 main-effects → P1 crosses → P2 code-the-settled → P3 picker+oracle-gap) rather than drifting.
+
 ## burn: GPU-metric kernels ABANDONED ≠ training (separate binary, NOT a graph conflict)
 
 Two *different* questions about burn live in this repo; don't conflate them:
