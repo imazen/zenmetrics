@@ -166,7 +166,18 @@ This incrementality is *the* reason the vehicle is the job system, not a monolit
   ccx63 → **~$0.36 encode** (+ similar CPU scoring + a small vast GPU-cvvdp spend) — ~50× under the
   **$25** cap. The constraints are CI-green (✓ as of `68f70063`: lint + windows-arm + macOS green, ubuntu
   imminent) and the executor-image rebuild.
-- **Next — fleet P0 runbook** (focused, live-monitored chunk; do NOT launch-and-forget):
+- **Local P0 run DONE (first directional signal)** — `lossy_dense` swept locally on 12 imgs (9 photo /
+  3 screen, ≤1 MP), ssim2, 5772 cells, 0 fail (`benchmarks/jxl_lossy_p0_2026-06-25.md` +
+  `.data.pointer.md`; data on /mnt/v + Tower). Q0 findings (PRELIMINARY): front-drivers = effort ladder,
+  `k_ac_quant` (~22%), `gaborish-off`, `strategy` (content-dependent — lean/libjxl cost ~−7.5 ssim2 on
+  screen vs ~−0.5 photo), `faster_decoding`. `progressive` never RD-competitive → CODE/drop candidate.
+  Inert-at-e7 cluster (entropy_mul presets / dct probes / nonalign / fgs / noise / ansfast / kinfo /
+  chroma) ≤1.4% front share → drop candidates, but lean-only (confirm at scale + under effort×knob).
+  Monolithic-sweep memory note: at 24-way it OOMs on large imgs — bound with sweep `--jobs 4` + drop
+  >1 MP locally (the job system bounds it per-process at fleet scale).
+- **Next — fleet P0 CONFIRMATION runbook** (focused, live-monitored chunk; do NOT launch-and-forget) —
+  scale the local signal: full strata corpus (≥50/class incl line-art + mixed + full size range),
+  multi-metric (butteraugli + cvvdp), to confirm/overturn the directional verdicts before any P2 coding:
   0. **Rebuild the executor image** (the canonical `zenfleet-worker:exec` predates lossy_dense): the
      image COPYs the precompiled `zenmetrics` binary, so
      `cargo build --release -p zenmetrics-cli --features sweep,png,jpeg,webp,avif,jxl,cpu-metrics`
