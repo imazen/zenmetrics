@@ -21,6 +21,19 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Fleet tooling stale-ref purge + dead-file ablation** — completed the 2026-06-25
+  consolidation: restored `scripts/jobsys/gpu_scorefile_launch.sh` (the distinct ScoreFile /
+  no-re-encode launcher, wrongly swept into "dup launchers" in bdf3b544); ablated 5 deprecated
+  scripts (`deploy_fast` / `dispatch` / `vastai_zen_metrics_sweep` / `generate_jobspecs` + `_v06`)
+  + 3 orphan dirs (`v15/`, `v16/`, the dead bash `cvvdp_backfill/` flow); and fixed every stale
+  reference to scripts deleted 2026-06-25 across the operational docs (`scripts/sweep/README.md`
+  + `scripts/sweep/CLAUDE.md`, `scripts/jobsys/README.md`, `docs/DATA_PROVENANCE.md`), the Rust
+  worker doc-comments, and `Dockerfile.sweep.v26` comments. Smoke-test is now
+  `launch_backfill.sh --n-boxes 1`; the omni scorer runs in-process (`inline-sweep`), no bash
+  chunk-worker. `fleet-tools.json` records the scorefile launcher as canonical; guard `--strict`
+  passes 9/9. Kept `run_local*.sh` + `picker_agreement.py` (live local-dev/analysis tools).
+  Landed in a447e87d — commingled with the concurrent jxl-memory commit via the shared jj working
+  copy; content verified on origin/master. Follows 50fdb5db / bdf3b544.
 - **Codec-commit provenance in sweep manifests** — `crates/zenmetrics-cli/build.rs` captures each
   path-dep codec's git SHA at build time (env-override `ZEN_CODEC_<NAME>_COMMIT` for docker), and every
   `<output>.plan.json` now carries a `codec_commits` map (jxl-encoder / zenjxl / zenavif / zenrav1e /
