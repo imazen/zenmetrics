@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Codec-agnostic sweep input-parquet + chunks.jsonl generator.
 
-Generalizes the per-codec copies (`generate_v26_avif_extended.py`,
-`generate_jobspecs_v06.py`, ...) into ONE tool so we stop forking a new
-script per sweep. It enumerates a (codec x q x knob-tuple) cell list into
+Generalizes the old per-codec generator forks into ONE tool so we stop
+forking a new script per sweep. It enumerates a (codec x q x knob-tuple) cell list into
 the v26 input-parquet format the inline-sweep worker consumes
 (`zenfleet-vastai/src/worker/inline.rs::ChunkRecord` ->
 `sweep_runner::run_group_inline` -> `run_sweep`; same path the Hetzner

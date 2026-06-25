@@ -21,6 +21,16 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Axed the dead Phase-A bash-subprocess fallback in the vastai worker** — removed
+  `run_chunk_via_bash` + the `OMNI_WORKER_BIN`/`chunk_worker_bin` arg (it defaulted to the
+  `omni_backfill_chunk_worker.sh` deleted 2026-06-25) + the `Stdio`/`Command`/`anyhow!` imports it
+  alone used (~120 lines, `crates/zenfleet-vastai/src/worker/{chunk,mod}.rs`). The in-process
+  `inline-sweep` pipeline is the only real chunk path; a build without it (the `vastai-min`
+  compile-check) now bails loudly instead of shelling to a missing script. Verified: `cargo check
+  -p zenfleet-vastai` (default) AND `--no-default-features --features worker` both compile, no new
+  warnings. Also deleted the deprecated dual-impl cvvdp bash flow (`dual_impl_chunk.sh`,
+  `dual_impl_chunk_docker.sh`) + the superseded `generate_v26_avif_extended.py` (folded into
+  `generate_sweep_input.py`). Follows 8dedcdda.
 - **Fleet tooling stale-ref purge + dead-file ablation** — completed the 2026-06-25
   consolidation: restored `scripts/jobsys/gpu_scorefile_launch.sh` (the distinct ScoreFile /
   no-re-encode launcher, wrongly swept into "dup launchers" in bdf3b544); ablated 5 deprecated

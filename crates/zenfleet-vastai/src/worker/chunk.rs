@@ -1,52 +1,24 @@
 //! Per-chunk processor.
 //!
-//! ## Phase A: subprocess to bash worker (legacy, removed script)
+//! Production scoring runs **in-process** via
+//! `zenmetrics_cli::sweep::run_sweep` — the `inline-sweep` feature, which is on
+//! in every real build. For each chunk we parse the JSON, download the input
+//! parquet + sources via [`super::r2::R2Client`], build a `SweepConfig`, call
+//! `run_sweep` sharing ONE persistent cubecl device across chunks, and stream
+//! rows into an Arrow `RecordBatch` written as parquet. One cubecl init per
+//! process (not per group) roughly halves per-chunk wall time vs the old
+//! per-group init.
 //!
-//! Under `#[cfg(not(feature = "inline-sweep"))]` this calls a
-//! `omni_backfill_chunk_worker.sh --chunk-json <line>` and propagates the
-//! exit status. That bash script was deleted 2026-06-25 and this path is no
-//! longer the production path (see Phase B below); it remains only as the
-//! non-`inline-sweep` fallback shape. The bash script handled:
-//!
-//! 1. Downloading the input parquet + source PNGs.
-//! 2. Grouping cells by `(codec, knob_tuple_json)`.
-//! 3. Running `zenmetrics sweep` per group.
-//! 4. Combining per-group TSVs into one parquet sidecar.
-//! 5. Uploading the sidecar to R2.
-//!
-//! Keeping it as a subprocess for phase A meant we got the Rust
-//! dispatcher's reliability + adaptive concurrency without touching
-//! the chunk-level logic that was already producing correct output.
-//!
-//! ## Phase B: in-process via `zenmetrics_cli::sweep::run_sweep`
-//!
-//! Phase B will:
-//!
-//! 1. Parse the chunk JSON in Rust (already what
-//!    [`parse_chunk_json`] below does for the claim step).
-//! 2. Download input parquet + sources via [`super::r2::R2Client`].
-//! 3. Build a `SweepConfig` and call `run_sweep` directly, sharing
-//!    a single persistent cubecl device across chunks.
-//! 4. Stream rows directly into an Arrow `RecordBatch` and write
-//!    parquet via `parquet::arrow::ArrowWriter`.
-//!
-//! Phase B's killer feature is *one cubecl init per process* instead
-//! of one per group. The 4-5 min/chunk wall time is dominated by
-//! cubecl init overhead × 30 groups; phase B should drop it ~2x.
+//! The earlier Phase-A design subprocessed to a bash
+//! `omni_backfill_chunk_worker.sh`; that script and the subprocess path were
+//! **removed 2026-06-25**. A build WITHOUT `inline-sweep` (e.g. the `vastai-min`
+//! compile-check) has no chunk processor and [`process_chunk`] fails loudly at
+//! runtime.
 
 use std::time::Instant;
-// The bash-subprocess execute path (and the `Stdio` / `Command` / `anyhow!`
-// items it alone uses) only compiles when `inline-sweep` is OFF — the inline
-// Rust pipeline is the sole execute path otherwise, so these would be unused.
-#[cfg(not(feature = "inline-sweep"))]
-use std::process::Stdio;
 
-#[cfg(not(feature = "inline-sweep"))]
-use anyhow::anyhow;
 use anyhow::{Context, Result};
 use serde::Deserialize;
-#[cfg(not(feature = "inline-sweep"))]
-use tokio::process::Command;
 use tracing::{info, warn};
 
 use super::WorkerArgs;
@@ -69,12 +41,11 @@ pub fn parse_chunk_json(line: &str) -> Result<ChunkRecord> {
     serde_json::from_str(line).context("parse chunk JSON")
 }
 
-/// Process one chunk: claim it, run the execute path, log. With
-/// `inline-sweep` (the default + production build) the execute path is the
-/// in-process Rust pipeline ([`super::inline::process_chunk_inline`]); a
+/// Process one chunk: claim it, run the execute path, log. The execute path is
+/// the in-process Rust pipeline ([`super::inline::process_chunk_inline`]); a
 /// failure there fails honestly (its durable error sidecar is already in R2).
-/// Without `inline-sweep` the execute path is the bash subprocess
-/// ([`run_chunk_via_bash`]). The caller in [`super`] logs + counts the
+/// (Without the `inline-sweep` feature there is no processor — the chunk bails
+/// loudly; see the module doc.) The caller in [`super`] logs + counts the
 /// returned error without killing the dispatcher; the next chunk proceeds.
 pub async fn process_chunk(
     args: &WorkerArgs,
@@ -208,63 +179,18 @@ pub async fn process_chunk(
         };
     }
 
-    // The bash subprocess is the execute path ONLY when `inline-sweep` is NOT
-    // compiled in — there it is the sole pipeline by design.
+    // Without `inline-sweep` there is no chunk processor: the bash subprocess
+    // fallback (`omni_backfill_chunk_worker.sh`) was removed 2026-06-25. Such a
+    // build (e.g. the `vastai-min` compile-check) must never actually run a
+    // chunk — fail loudly if it does, rather than silently no-op.
     #[cfg(not(feature = "inline-sweep"))]
-    run_chunk_via_bash(args, &rec, line, started).await
-}
-
-/// Phase A bash-subprocess execute path: shells out to a
-/// `omni_backfill_chunk_worker.sh --chunk-json <line>` and propagates the exit
-/// status. That bash script was deleted 2026-06-25; this is the SOLE execute
-/// path only when the crate is built WITHOUT the `inline-sweep` feature, and
-/// the inline Rust pipeline supersedes it in the default (and production) build.
-#[cfg(not(feature = "inline-sweep"))]
-async fn run_chunk_via_bash(
-    args: &WorkerArgs,
-    rec: &ChunkRecord,
-    line: &str,
-    started: Instant,
-) -> Result<()> {
-    let mut cmd = Command::new(&args.chunk_worker_bin);
-    cmd.arg("--chunk-json").arg(line);
-    // Pass through env vars the bash worker reads. We don't override
-    // anything the operator set in /proc/1/environ — child inherits.
-    cmd.kill_on_drop(true);
-    cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::piped());
-
-    let out = cmd
-        .output()
-        .await
-        .with_context(|| format!("spawn chunk worker for {}", rec.chunk_id))?;
-
-    let elapsed = started.elapsed();
-    if out.status.success() {
-        info!(
-            chunk_id = %rec.chunk_id,
-            elapsed_sec = elapsed.as_secs_f32(),
-            "done"
-        );
-        // Stream worker stdout to our stdout for parity with bash
-        // onstart's `sed "s/^/  /"` decoration.
-        if !out.stdout.is_empty() {
-            for line in String::from_utf8_lossy(&out.stdout).lines() {
-                println!("  [{}] {}", rec.chunk_id, line);
-            }
-        }
-        Ok(())
-    } else {
-        // Non-zero exit. Log full stderr so the operator can diagnose.
-        // We do NOT delete the claim — leaving it lets a peer notice
-        // the claim is stale (>600s) and retry.
-        for line in String::from_utf8_lossy(&out.stderr).lines() {
-            warn!(chunk_id = %rec.chunk_id, worker_stderr = line);
-        }
-        Err(anyhow!(
-            "chunk {} failed (exit {})",
-            rec.chunk_id,
-            out.status
-        ))
+    {
+        let _ = started;
+        anyhow::bail!(
+            "chunk {} cannot be processed: this worker was built WITHOUT the \
+             `inline-sweep` feature, and the bash chunk-worker fallback was \
+             removed 2026-06-25 — rebuild with `--features inline-sweep`",
+            rec.chunk_id
+        )
     }
 }

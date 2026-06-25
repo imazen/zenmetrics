@@ -33,17 +33,14 @@
 //!   chunk panics mid-encode; tokio's structured concurrency means
 //!   we drop tasks cleanly on shutdown.
 //!
-//! ## Scope of phase A
+//! ## Chunk processing
 //!
-//! Phase A kept the inner chunk-processor as a subprocess call to a
-//! `omni_backfill_chunk_worker.sh` bash script (that script was deleted
-//! 2026-06-25; the subprocess path now only compiles under
-//! `#[cfg(not(feature = "inline-sweep"))]` and is no longer the prod path).
-//! The Rust worker is the *outer* dispatcher. Phase B moved the chunk
-//! processor in-process by calling `zenmetrics_cli::sweep::run_sweep`
-//! directly (the `inline-sweep` feature, which production builds with),
-//! eliminating the 30× cubecl init per chunk (the biggest remaining
-//! latency on a warm box).
+//! The Rust worker is the *outer* dispatcher; the chunk processor runs
+//! in-process via `zenmetrics_cli::sweep::run_sweep` (the `inline-sweep`
+//! feature, on in every real build), eliminating the 30× cubecl init per chunk
+//! that the old per-group path paid. The original Phase-A design subprocessed
+//! to a bash `omni_backfill_chunk_worker.sh`; that script and the subprocess
+//! path were **removed 2026-06-25** (see [`crate::worker::chunk`]).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -149,16 +146,6 @@ pub struct WorkerArgs {
         value_parser = clap::builder::BoolishValueParser::new()
     )]
     pub skip_claims: bool,
-
-    /// Path to the bash chunk-processor script. Phase A subproc-call
-    /// preserves the battle-tested bash worker. Phase B will inline
-    /// the equivalent Rust via `zenmetrics_cli::sweep::run_sweep`.
-    #[arg(
-        long,
-        env = "OMNI_WORKER_BIN",
-        default_value = "/usr/local/bin/omni_backfill_chunk_worker.sh"
-    )]
-    pub chunk_worker_bin: PathBuf,
 
     /// Working directory for downloaded chunks + per-chunk scratch.
     /// Defaults to `/workspace/omni-backfill`. The chunk worker
