@@ -2,6 +2,30 @@
 
 See global ~/.claude/CLAUDE.md for general instructions.
 
+## Canonical branch is `master` — NEVER push `main` (enforced)
+
+This repo's one true branch is **`master`** (the GitHub default; the only branch
+CI triggers on; where all history lives). There is **no `main` branch** — and a
+GitHub ruleset (`no-main-branch`, id 18099751) **blocks creating `refs/heads/main`
+server-side**, so a stray push to `main` is rejected, not silently merged.
+
+Why this rule exists: the global `~/.claude/CLAUDE.md` examples say `main`
+(`jj new main@origin`, `jj bookmark set main`, `jj git push --bookmark main`). For
+THIS repo that creates a stray `main` that diverges from `master` and orphans work
+off the default branch. On 2026-06-25 `main` had accrued 7 commits that had to be
+rebased back onto `master` and the branch killed. **Substitute `master` for `main`
+in every jj/git command here:**
+
+```
+jj new master@origin -m "<task>"                       # start
+jj bookmark set master -r @ && jj git push --bookmark master   # push
+jj git fetch && jj rebase -d master@origin              # if push rejected
+```
+
+If `jj git push --bookmark main` is rejected by the ruleset, you followed the
+global `main` example by reflex — re-point to `master`. Do not "fix" it by
+disabling the ruleset.
+
 ## ghcr package names — ONE per artifact (enforced)
 
 Before referencing or pushing any `ghcr.io/imazen/<name>` image: the canonical

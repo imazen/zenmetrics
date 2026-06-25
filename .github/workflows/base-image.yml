@@ -15,7 +15,7 @@ name: zenfleet-worker base tags
 
 on:
   push:
-    branches: [master, main]
+    branches: [master]
     paths:
       - "docker/base/**"
       - "scripts/sweep/cuda_dlsym_stub.c"

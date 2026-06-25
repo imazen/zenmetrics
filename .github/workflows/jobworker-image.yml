@@ -15,7 +15,7 @@ name: Job-worker fleet image
 
 on:
   push:
-    branches: [master, main]
+    branches: [master]
     paths:
       - "crates/zenfleet-core/**"
       - "crates/zenfleet-ledger/**"

@@ -11,7 +11,7 @@ name: GHCR package-name guard
 on:
   pull_request:
   push:
-    branches: [master, main]
+    branches: [master]
   workflow_dispatch:
   schedule:
     # Weekly drift check so the org audit surfaces orphan packages even with no pushes.
