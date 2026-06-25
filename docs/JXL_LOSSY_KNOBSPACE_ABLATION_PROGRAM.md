@@ -55,6 +55,31 @@ separable, universal, or inert becomes code. A knob graduating from "swept" to "
    achieved RD ≈ oracle. The residual oracle gap is the signal — it points to the next axis to add, or
    tells us to stop.
 
+## Yes — it re-sweeps as the grid ablates/expands, and incrementally
+
+This program **does more sweeps in response to discoveries** — that's the whole loop, not a one-shot.
+Each cycle that changes the grid re-runs the fleet, but the job system's **declare→gap→reconcile**
+makes it a cheap *delta*, never a from-scratch re-run:
+
+- **EXPAND** (a discovery says "cross axis X with Y", or "add effort eN", or "the oracle gap wants knob
+  Z"): declare the *superset* manifest; the **gap = only the not-yet-done cells**, so the fleet encodes
+  ONLY the new combinations — every existing cell is already content-addressed in the ledger and is
+  skipped. Adding a dimension costs only the new dimension's cells.
+- **ABLATE** (a knob/cross is proven inert/universal → coded): drop it from the next declare. Its already
+  encoded variants + scores **stay persisted** for reuse/audit (persist-everything) — never re-encoded,
+  never deleted. The next picker just trains on the smaller surviving surface.
+- **Re-analysis is free** (no encode): a new metric, a new feature, a new Pareto cut re-reads the
+  persisted sidecars/variants. Only an *encode-changing* grid edit triggers fleet work.
+
+So the loop genuinely grows and shrinks the explored shape over time, and the **goal condition is
+unsatisfiable without it** — "grid stable (no new axis earns its place two rounds)" can only be
+*verified* by actively probing candidate expansions and watching them fail to win, and the oracle gap
+can only close by adding the axes that close it. Caveats: a *large* expansion (a whole new cross
+dimension) is a flagged fork — it surfaces for a go-ahead before spending the fleet, rather than
+auto-expanding; routine prune-and-code of a clearly-dead axis is autonomous. More cells = more fleet
+spend, bounded by the standing guardrails (kill idle boxes, `--plan-budget`, persist-no-re-encode).
+This incrementality is *the* reason the vehicle is the job system, not a monolithic sweep.
+
 ## Phases (concrete first cycles)
 
 - **P0 — main effects (cheap, first).** Single-deviation probes of every candidate lossy knob × e1–e9 ×
