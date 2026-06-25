@@ -489,7 +489,10 @@ pub fn run(args: FleetPlanArgs) -> Result<(), Box<dyn Error>> {
     let rec = zenfleet_core::recommend_instance(&cells, args.target_wall_clock, cores);
 
     // Describe where the encode footprint came from (codec estimate, override
-    // flags, or both) for the summary.
+    // flags, or both) for the summary. Only consumed by the `sweep`-gated
+    // `encode_source` below, so gate the binding too — otherwise it is an
+    // unused variable under `--no-default-features` (CI clippy is -D warnings).
+    #[cfg(feature = "sweep")]
     let overridden: Vec<&str> = [
         args.encode_peak_ram_mb.map(|_| "peak-ram"),
         args.encode_threads.map(|_| "threads"),
