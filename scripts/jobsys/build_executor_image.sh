@@ -11,7 +11,7 @@
 # Usage: [PUSH=1] [ZEN_METRICS_BIN=path] build_executor_image.sh [IMAGE]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-IMAGE="${1:-ghcr.io/imazen/zenfleet-worker-exec:latest}"
+IMAGE="${1:-ghcr.io/imazen/zenfleet-worker:exec}"
 BIN="${ZEN_METRICS_BIN:-$ROOT/target/release/zenmetrics}"
 [ -x "$BIN" ] || { echo "build zenmetrics first (see header); not found at $BIN"; exit 1; }
 

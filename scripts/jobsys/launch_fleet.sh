@@ -19,7 +19,7 @@
 #   one R2 queue. e.g. `… 60 1 0 0 1` = local + Hetzner-x86 + Salad = 3 distinct providers.
 set -euo pipefail
 # Default image runs the SYNTHETIC executor (/bin/cat) — for the demos/proofs. For REAL jobs set
-# ZEN_WORKER_IMAGE=ghcr.io/imazen/zenfleet-worker-exec:latest (bakes zenmetrics jobexec; its image-level
+# ZEN_WORKER_IMAGE=ghcr.io/imazen/zenfleet-worker:exec (bakes zenmetrics jobexec; its image-level
 # ZEN_EXEC default is the real executor) and ZEN_CORPUS_PREFIX=<R2 prefix of your source images>.
 IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zenfleet-worker:latest}"
 EXEC="${ZEN_EXEC:-/bin/cat}"           # override for real work (or rely on the exec image's ZEN_EXEC default)
