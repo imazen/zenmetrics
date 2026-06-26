@@ -8,7 +8,7 @@ train() { local codec=$1 tgt=$2 omni=$3 col=$4
   echo "===== $codec / predict-$tgt ====="
   python3 scripts/picker/omni_to_pareto.py --omni "$omni" --features-tsv "$F22" --metric-col "$col" \
     --out-pareto "$OUT/train/${codec}.${tgt}.pareto.parquet" --out-features "$OUT/train/${codec}.features.tsv" 2>&1 | grep -E 'pareto:'
-  CUDA_VISIBLE_DEVICES="" PICKER_TARGET="$tgt" PYTHONPATH="scripts/picker/configs:$ZA/zentrain/tools:$ZA/zentrain/examples" \
+  CUDA_VISIBLE_DEVICES="" PICKER_TARGET="$tgt" PYTHONPATH="scripts/picker:scripts/picker/configs:$ZA/zentrain/tools:$ZA/zentrain/examples" \
     python3 "$ZA/zentrain/tools/train_hybrid.py" --codec-config "${codec}_picker" --activation leakyrelu --hidden 192,192,192 2>&1 | grep -iE 'Student:|Wrote' | tail -2
   python3 "$ZA/tools/bake_picker.py" --model "$OUT/models/${codec}_predict_${tgt}_v0.1.json" --out "$OUT/models/${codec}_predict_${tgt}_v0.1.bin" --dtype f16 --bake-bin "$ZA/target/debug/zenpredict-bake" --allow-unsafe 2>&1 | grep -iE 'baked' | tail -1
 }

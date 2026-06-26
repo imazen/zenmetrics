@@ -10,6 +10,11 @@
 # Too slow locally (N retrains); run on a dedicated big box with high --npar, kill when done.
 #   usage: loo_ablation.sh <codec-config-module> <out-dir> [npar=8] [metric=ssim2] [seed=12345] [feat-subset-file]
 set -uo pipefail
+# train_hybrid needs the canonical split helper (origin_split) AND the codec
+# config modules on PYTHONPATH; the config import below needs configs too. Run
+# from the zenmetrics repo root. (origin_split enforces the even/odd-by-origin
+# split — see docs/CLEAN_PICKER_PROGRAM.md.)
+export PYTHONPATH="scripts/picker:scripts/picker/configs:${PYTHONPATH:-}"
 CONFIG="${1:?codec-config module name}"; OUTDIR="${2:?out dir}"
 NPAR="${3:-8}"; METRIC="${4:-ssim2}"; SEED="${5:-12345}"; SUBSET="${6:-}"
 TH="${TRAIN_HYBRID:-/home/lilith/work/zen/zenanalyze/zentrain/tools/train_hybrid.py}"

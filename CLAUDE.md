@@ -311,6 +311,28 @@ than the next cvvdp-gpu kernel parity tick. If the pinned task has
 forward progress available (a missing inventory, an unwritten spec,
 an unbuilt Docker image) prefer it over yet another parity test.
 
+## CANONICAL picker corpus + train/val/test split (read before ANY picker/sweep work)
+
+**Full guide: [`docs/CLEAN_PICKER_PROGRAM.md`](docs/CLEAN_PICKER_PROGRAM.md).** Blind/forgetful
+sessions: read it; do NOT invent a split or pick a corpus ad-hoc.
+
+- **Split rule (one source of truth: [`scripts/picker/origin_split.py`](scripts/picker/origin_split.py)):**
+  by ORIGIN image, last digit of the origin id — **{0,2,4,6,8}=train, {1,3,5}=validation, {7,9}=test**;
+  every sizing/crop/encode derivative inherits the origin's bucket (nothing leaks). Deterministic, no
+  seed. Train only ever sees even-origin content. Call `origin_split.split_of()` — never re-implement
+  parity or use a seeded/random shuffle (the old `train_hybrid` per-rendition 20% shuffle was WRONG:
+  per-rendition → scale leakage). `train_hybrid` now hard-errors if `origin_split` isn't on PYTHONPATH
+  (add `scripts/picker`) — refuses a leaky fallback — and reports held-out **test** (7/9) alongside val.
+- **Canonical corpus = imazen-26** (`/mnt/v/output/imazen-26-features/imazen26_manifest.tsv`, sha256-
+  provenanced, 2157 origins → 1082 train / 657 val / 418 test, balanced across all 12 content classes).
+  Segmented: `scripts/picker/segment_imazen26.py` → `imazen26_split_evenodd.tsv` + `imazen-26-split/{train,validate,test}/`.
+  **dense-r6 is SUPERSEDED for clean training** (built from `K500_even` reps → train-biased, only 64 val
+  + 48 test origins; `o_`=imazen-26, `v2_src`=imazen-26-png-v2).
+- **Deliverables: clean even/odd pickers for jxl lossy + lossless, zenjpeg, zenavif** — sweep on
+  segmented imazen-26 → train (origin split) → bake ZNPR → **commit the `.bin` into the codec crate**.
+  Status table lives in `docs/CLEAN_PICKER_PROGRAM.md`. Verified on dense-r6: clean split holds the
+  ≤1% top-3-verify (val 0.52% / TEST 0.42%, val→test +0.08pp — generalizes).
+
 ## PINNED PROGRAM — JXL lossy knob-space ablation (iterate to the picker shape)
 
 **Status: active, multi-cycle. Survives compaction. Full plan:
