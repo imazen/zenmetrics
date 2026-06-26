@@ -147,8 +147,13 @@ while read -r f; do [ -n "\$f" ] && AWS_ACCESS_KEY_ID=\$CORPUS_AK AWS_SECRET_ACC
 rm -f /data/chunk.txt
 PB=""; [ "\$PLAN" != "rd_core" ] && PB="--plan-budget \$BUDGET"
 mkdir -p /enc
+# --jobs defaults to the box's full vCPU count. SAFE on Hetzner: these are DEDICATED VMs, so
+# \$(nproc) IS the real allocation (unlike vast.ai shared-host containers where nproc reports the
+# host's 56 — see scripts/sweep/CLAUDE.md cgroup note). The hardcoded 4 left an 8-vCPU cpx41 at
+# load ~2.5 (smoke-measured 2026-06-26); full vCPUs ~doubles cells/s. Lower SWEEP_JOBS for
+# memory-heavy codecs (jxl modular / large frames) if RAM-bound.
 zenmetrics sweep --codec "\$CODEC" --sources /data --q-grid "\$QG" --plan "\$PLAN" \$PB \
-  --jobs "\${SWEEP_JOBS:-4}" \
+  --jobs "\${SWEEP_JOBS:-\$(nproc)}" \
   --metric ssim2 --metric zensim --encoded-out-dir /enc \${FEAT_OUT:+--feature-output \$FEAT_OUT} --output /omni.tsv
 s5cmd --endpoint-url=\$EP cp /omni.tsv "s3://\$BUCKET/\$OUT_KEY"
 # codec-commit provenance (the plan manifest carries codec_commits) — lands WITH the blobs
