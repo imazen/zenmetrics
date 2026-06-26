@@ -87,12 +87,13 @@ an unprovenanced corpus into training.
   (zenjxl 54646bcc) — clean split, but train-biased dense-r6 corpus; supersede with v0.2.
 
 **Clean re-sweep runbook (per codec; the remaining deliverable):**
-1. **Stem-map** imazen-26 → `o_<stem>.png` symlinks (⚠ MUST, or origin_split mis-splits on
-   the trailing dimension — see origin_split.py gotcha). Source the originals from the
-   manifest `original_path`; name them `o_<stem>.png`. Use a balanced REPRESENTATIVE set
-   (`imazen26_representatives_K500_2026-06-14.tsv` — NOT the `_even` one; it must span 0–9 so
-   val/test exist), per the dense-sampling discipline (k-means reps + dense ladder).
-2. **Renditions:** `gen_dense_corpus.py --src <o_stem-dir> --out <corpus>` → `o_<stem>.scaleWxH.png`.
+1. **Pick a balanced REPRESENTATIVE set** that spans last-digits 0–9 (so val/test exist):
+   `imazen26_representatives_K500_2026-06-14.tsv` — NOT the `_even` one — per the dense-sampling
+   discipline (k-means reps + dense ladder). NO stem-mapping needed: `origin_split` now extracts
+   the LEADING stem, so it splits raw descriptive imazen-26 names (`1003_general_…_4000x3000.sdr.png`
+   → 1003 → val) and crops (`…_c25_tl`) correctly — feed originals straight to gen_dense_corpus.
+2. **Renditions:** `gen_dense_corpus.py --src <originals-dir> --out <corpus>` (the manifest
+   `original_path`s of the representative set). Output renditions keep the leading stem → splittable.
 3. **Sweep** (fleet): `zenmetrics sweep --plan <plan> ...` per codec → omni TSV + variants→R2.
    Plans: jxl lossy = `lossy_dense`; jxl lossless = the modular plan; zenjpeg/zenavif = their
    scalar-axis plans (see docs/PLAN_SWEEPS.md). Hetzner CPU fleet (now cvvdp-capable) +/- vast.
