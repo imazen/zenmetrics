@@ -137,6 +137,48 @@ an unprovenanced corpus into training.
 **Status table:** jxl lossy = interim bin done (v0.2 imazen-26 pending) · jxl lossless / zenjpeg /
 zenavif = clean re-sweep PENDING. Commit constantly; `jj git fetch` often (cleanup merge may land).
 
+## LIVE PRODUCTION RUN 2026-06-26 (resume/collect steps for a blind session)
+
+Smart chunk fleet LAUNCHED (decode-once `zenmetrics sweep` per box, orchestrator
+cached-reference, `--encoded-out-dir` persists variants, `--jobs=nproc`). Runs (R2
+under `s3://zentrain/jxl-lossy/runs/<RUN>/`, omni at `…/omni/box-*.omni.tsv`):
+- `clean-jpeg-213753`  (zenjpeg scalar_dense, 3 boxes)
+- `clean-jxllossy-213753` (zenjxl lossy_dense, 6 boxes)
+- `clean-avif-214356`  (zenavif scalar_dense, 12 boxes)
+q-grid `5,15,30,50,70,85,95`; metrics `ssim2`+`zensim`; full clean corpus (4497 renditions).
+Monitor: `/tmp/chunk_fleet_monitor.sh` (bg) destroys each box on its `done/box-<idx>.done`
+marker + logs `/tmp/chunk_fleet_monitor.log`. **A blind session: check boxes via
+`hcloud server list | grep clean-`, destroy any idle leftover, then collect.**
+
+**Collect → train → bake → commit (per codec, once omni lands):**
+1. Merge box omnis: `s5cmd cp 's3://zentrain/jxl-lossy/runs/<RUN>/omni/box-*.omni.tsv' .`
+   then concat (one header). That IS the picker omni (image_path/codec/q/knob_tuple_json/
+   encoded_bytes/score_ssim2/score_zensim).
+2. `omni_to_pareto.py --omni <merged> --features-tsv
+   /mnt/v/output/clean-picker-corpus-2026-06-26/clean_features.tsv --metric-col score_zensim
+   --out-pareto … --out-features …` (variant_name join is exact: omni `/data/o_<stem>.scaleWxH.png`
+   → `o_<stem>.scaleWxH` == clean_features variant_name).
+3. `train_hybrid.py --codec-config <codec>_picker` (PYTHONPATH incl. scripts/picker) — origin
+   split auto (even=train / 1,3,5=val / 7,9=test), reports val + TEST top-3-verify.
+4. `bake_picker.py` → `.bin`; **commit the `.bin` into the codec crate** (`<codec>/benchmarks/`).
+
+**Remaining after the lossy 3:**
+- **jxl-lossless** — chunk-mode OOMs on modular (315 cells/image ramps to 13–24 GB in one
+  process). Run it on a big-RAM box (ccx/cpx with ≥32 GB) at low `SWEEP_JOBS`, OR via the job
+  system (fresh process per cell bounds memory). Plan: `modes_full --plan-budget 400` → ~315 modular cells/img.
+- **jxl-lossy v0.2** — its omni is landing from `clean-jxllossy-213753`; supersede the interim bin.
+
+**Efficiency follow-ups (the cell/chunk system, per user 2026-06-26):**
+- Chunk worker fetches its chunk SEQUENTIALLY (one `s5cmd cp` per file) → slow startup on big
+  chunks. Fix: batch via `s5cmd run` (parallel). Mitigation used now: more boxes = smaller chunks.
+- `hetzner_cpu_sweep.sh` doesn't clean `/tmp/hz_chunk_*` before `split` → stale chunk files
+  accumulate and get uploaded (harmless: boxes only claim `chunk-<their-idx>`, which are the real
+  full-coverage chunks; extras are unclaimed waste). Fix: `rm -f /tmp/hz_chunk_*` before split.
+- **Per-cell job system (the "cell system"): if kept (for lossless), GROUP jobs by source image**
+  so the source decodes ONCE per group instead of per cell (the re-decode waste that made the
+  jxl per-cell smoke ~0.3 enc/s vs chunk-mode's 72). Sort the manifest by `image_path` + cache the
+  decoded source across consecutive same-source jobs in the worker/executor.
+
 ## Fleet execution notes — VALIDATED 2026-06-26 (read before launching the scaled run)
 
 The full job-system path is **proven end-to-end** on Hetzner (real `zenmetrics jobexec`
