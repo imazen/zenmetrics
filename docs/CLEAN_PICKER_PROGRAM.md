@@ -73,3 +73,35 @@ Each: sweep the codec's knob grid over the segmented corpus → join content fea
 Any new corpus/rendition set MUST be indexed (rendition→origin→original sha256) per
 `scripts/provenance/index_corpus.py` so the split + dedup are auditable. Do not ship
 an unprovenanced corpus into training.
+
+## RUNBOOK + status (updated 2026-06-26)
+
+**Done (committed):**
+- Canonical split helper `scripts/picker/origin_split.py` + segmentation
+  `scripts/picker/segment_imazen26.py` (zenmetrics 9fca2a10).
+- `train_hybrid` wired to the 3-way origin split + held-out TEST report (zenanalyze
+  2989bffa). Validated on dense-r6: val top-3-verify 0.52% / **TEST 0.42%**
+  (val→test +0.08pp). Needs `scripts/picker` on PYTHONPATH (process_remaining.sh +
+  loo_ablation.sh fixed, 15e20c06).
+- **jxl lossy interim bin** `zenjxl/benchmarks/zenjxl_lossy_picker_v0.1_dense-r6-evenodd_2026-06-26.bin`
+  (zenjxl 54646bcc) — clean split, but train-biased dense-r6 corpus; supersede with v0.2.
+
+**Clean re-sweep runbook (per codec; the remaining deliverable):**
+1. **Stem-map** imazen-26 → `o_<stem>.png` symlinks (⚠ MUST, or origin_split mis-splits on
+   the trailing dimension — see origin_split.py gotcha). Source the originals from the
+   manifest `original_path`; name them `o_<stem>.png`. Use a balanced REPRESENTATIVE set
+   (`imazen26_representatives_K500_2026-06-14.tsv` — NOT the `_even` one; it must span 0–9 so
+   val/test exist), per the dense-sampling discipline (k-means reps + dense ladder).
+2. **Renditions:** `gen_dense_corpus.py --src <o_stem-dir> --out <corpus>` → `o_<stem>.scaleWxH.png`.
+3. **Sweep** (fleet): `zenmetrics sweep --plan <plan> ...` per codec → omni TSV + variants→R2.
+   Plans: jxl lossy = `lossy_dense`; jxl lossless = the modular plan; zenjpeg/zenavif = their
+   scalar-axis plans (see docs/PLAN_SWEEPS.md). Hetzner CPU fleet (now cvvdp-capable) +/- vast.
+4. **Pareto:** `omni_to_pareto.py --metric-col score_<m>` (per metric).
+5. **Train:** `PYTHONPATH=scripts/picker:scripts/picker/configs:<za>/zentrain/{tools,examples} \
+   PICKER_TARGET=<m> python3 train_hybrid.py --codec-config <cfg>` → reports val + TEST.
+6. **Bake:** `bake_picker.py` → `.bin`; **commit into `<codec>/benchmarks/`**. TODO before v1:
+   have train_hybrid emit `output_bounds` (per-output p01/p99 on val) so the bake's OOD-on-output
+   check isn't a no-op (current bins warn "no output_bounds").
+
+**Status table:** jxl lossy = interim bin done (v0.2 imazen-26 pending) · jxl lossless / zenjpeg /
+zenavif = clean re-sweep PENDING. Commit constantly; `jj git fetch` often (cleanup merge may land).

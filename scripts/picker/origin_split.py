@@ -23,6 +23,16 @@ shuffle) — reproducible across blind sessions with zero state.
 
 Import this everywhere (train_hybrid, omni_to_pareto, corpus segmentation) — do
 not re-implement the rule.
+
+⚠ GOTCHA — feed it PIPELINE rendition names, NOT raw descriptive originals.
+The id is the TRAILING numeric token of the origin stem. That is correct for the
+pipeline's rendition naming (`o_<stem>`, `v2_src<NNNN>`, bare manifest stem
+`1003`). It is WRONG for raw imazen-26 originals like
+`1003_general_oceanfront_..._4000x3000.sdr.png` — the trailing number there is the
+DIMENSION (3000 → digit 0 → "train") not the stem (1003 → "val"). So the clean
+re-sweep MUST stem-map imazen-26 → `o_<stem>.png` BEFORE rendition generation (the
+dense corpus already does this: `o_1004.scale…`). bare manifest stems (`1003`) are
+fine because the stem IS the only number.
 """
 import re
 
