@@ -106,3 +106,25 @@ an unprovenanced corpus into training.
 
 **Status table:** jxl lossy = interim bin done (v0.2 imazen-26 pending) · jxl lossless / zenjpeg /
 zenavif = clean re-sweep PENDING. Commit constantly; `jj git fetch` often (cleanup merge may land).
+
+## HDR + gain-map track (user-greenlit 2026-06-26, parallel to the SDR pickers)
+
+Goal: alongside SDR renditions, emit **SDR / HDR / gain-map triples** so an HDR /
+Ultra-HDR picker has clean inputs. Status: inputs identified + manifested; tool is
+the next bounded build.
+
+- **Inputs (manifested):** `/mnt/v/output/imazen-26-features/imazen26_hdr_gainmap_pairs.tsv`
+  (`origin split sdr_path hdr_path`) — **76 SDR+HDR pairs, 38 train / 20 val / 18 test**
+  under the even/odd split. SDR = 8-bit `.sdr.png`; HDR = **16-bit PQ** `.hdr.png`.
+- **Derive (NOT extract — the corpus is PQ-HDR-PNG, not Ultra HDR containers; originals
+  sampled are plain JPEG).** Use `ultrahdr-rs` (READ-ONLY dep — a concurrent agent has a
+  worktree there; never edit it): `Encoder.set_sdr_image(sdr).set_hdr_image(hdr).encode()`
+  → `Decoder::new(jpeg).decode_gainmap()` → write the `GainMap` as standalone
+  `o_<stem>.gainmap.png` (+ the `GainMapMetadata`: min/max log2, gamma, offsets, hdr capacity).
+  ⚠ FORMAT: `set_hdr_image` expects ultrahdr-rs's HDR `PixelBuffer` format — match the
+  16-bit PQ `.hdr.png` decode to it exactly (PQ EOTF → the expected linear/encoded layout),
+  or the derived map is garbage. Verify one pair's round-trip (decode_hdr ≈ input) before batch.
+- **Output:** `o_<stem>.sdr.png` / `.hdr.png` / `.gainmap.png` triples + a provenance index
+  (rendition→origin→split→metadata). Then they can sweep/score like the SDR set.
+- **HDR scoring is unblocked now:** cvvdp runs on CPU (C1/C1b), so the HDR picker is no longer
+  blocked on a GPU-only cvvdp build (was the `hdr-picker-blocked-encode-infra` blocker).
