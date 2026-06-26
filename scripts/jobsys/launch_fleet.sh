@@ -21,7 +21,13 @@ set -euo pipefail
 # ZEN_WORKER_IMAGE=ghcr.io/imazen/zenfleet-worker:exec (bakes zenmetrics jobexec; its image-level
 # ZEN_EXEC default is the real executor) and ZEN_CORPUS_PREFIX=<R2 prefix of your source images>.
 IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zenfleet-worker:latest}"
-EXEC="${ZEN_EXEC:-/bin/cat}"           # override for real work (or rely on the exec image's ZEN_EXEC default)
+# Executor: explicit ZEN_EXEC wins; else REAL work (ZEN_MANIFEST_FILE set) defaults to the baked
+# real-executor shim (`zenmetrics jobexec`), and only the synthetic demo falls back to /bin/cat.
+# (envblock passes -e ZEN_EXEC=$EXEC, which OVERRIDES the exec image's baked default — so without
+# this, a real-manifest launch silently ran /bin/cat and produced fake blobs. Smoke-caught 2026-06-26.)
+if [ -n "${ZEN_EXEC:-}" ]; then EXEC="$ZEN_EXEC"
+elif [ -n "${ZEN_MANIFEST_FILE:-}" ]; then EXEC="/usr/local/bin/zenfleet-exec"
+else EXEC="/bin/cat"; fi
 CORPUS="${ZEN_CORPUS_PREFIX:-}"        # R2 prefix under the CORPUS bucket where source images live (real jobs)
 CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-codec-corpus}"  # corpus READ-ONLY bucket (source images)
 N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"
@@ -55,13 +61,21 @@ if [ "$CORPUS_BUCKET" != "$BUCKET" ]; then
 fi
 
 # 2. manifest → R2 (root creds for the upload)
-python3 - "$N_JOBS" > /tmp/fleet_spec.json <<'PY'
+# REAL-WORK override: set ZEN_MANIFEST_FILE=<pre-declared DesiredJob manifest.json> to launch a real
+# sweep (e.g. `zenfleet-ctl declare-encodes` output). Without it, fall back to the synthetic demo spec
+# (N_JOBS zenjpeg/cvvdp jobs with fake encode_shas) that proves the fleet plumbing at zero encode cost.
+if [ -n "${ZEN_MANIFEST_FILE:-}" ]; then
+  cp "$ZEN_MANIFEST_FILE" /tmp/fleet_manifest.json
+  echo "using REAL manifest $ZEN_MANIFEST_FILE ($(python3 -c "import json;print(len(json.load(open('/tmp/fleet_manifest.json'))))") jobs)"
+else
+  python3 - "$N_JOBS" > /tmp/fleet_spec.json <<'PY'
 import json,sys,hashlib
 n=int(sys.argv[1])
 print(json.dumps({"items":[{"image_path":"fleet/img-%05d.png"%i,"codec":"zenjpeg","q":80,
   "encode_sha":hashlib.sha256(("fleet-%d"%i).encode()).hexdigest()} for i in range(n)],"metrics":["cvvdp"]}))
 PY
-"$ROOT/target/release/zenfleet-ctl" declare --spec /tmp/fleet_spec.json --out /tmp/fleet_manifest.json
+  "$ROOT/target/release/zenfleet-ctl" declare --spec /tmp/fleet_spec.json --out /tmp/fleet_manifest.json
+fi
 AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
   s5cmd --endpoint-url "$EP" cp /tmp/fleet_manifest.json "s3://$BUCKET/$RUN/manifest.json" >/dev/null
 MANIFEST="s3://$BUCKET/$RUN/manifest.json"
@@ -99,8 +113,14 @@ envblock() { cat <<EOF
 EOF
 }
 
-# 3a. local tier (this machine) — docker run the baked image
-docker run -d --label group=$RUN --name "$RUN-local" $(envblock local "$(shuf_manifest workstation)") -e ZEN_WORKER=workstation "$IMAGE" >/dev/null && echo "local worker started"
+# 3a. local tier (this machine) — docker run the baked image. N_JOBS=0 SKIPS it (fleet-only): the
+# local worker encodes on THIS workstation, which must stay responsive for a multi-hour real run
+# (resource discipline) — so pass 0 to keep work entirely on paid boxes.
+if [ "$N_JOBS" != "0" ]; then
+  docker run -d --label group=$RUN --name "$RUN-local" $(envblock local "$(shuf_manifest workstation)") -e ZEN_WORKER=workstation "$IMAGE" >/dev/null && echo "local worker started"
+else
+  echo "local tier skipped (N_JOBS=0 → fleet-only)"
+fi
 
 # 3b. Hetzner burst tier(s) — Docker-CE on Ubuntu; cloud-init docker-runs the baked (multi-arch) image.
 # hcloud takes user-data ONLY from a file (--user-data-from-file; there is no --user-data-from-string),
