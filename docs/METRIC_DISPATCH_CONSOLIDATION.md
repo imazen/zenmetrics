@@ -1,6 +1,16 @@
 # Metric dispatch consolidation — ONE way to score, sdr/hdr × cpu/gpu × all 6
 
-**Status: in progress (started 2026-06-26).** Goal (user directive): make the
+**Status: in progress (started 2026-06-26). DONE: C1, C1b, C2. NEXT: C3, C4, C5, C6.**
+- **C1** (3a7dda0d): cpu-metrics → cpu-cvvdp/cpu-iwssim; run_metric GPU→native-CPU failover
+  for cvvdp/iwssim; CI guards (`*_scores_on_native_cpu_in_cpu_build`). Verified cvvdp=9.598 CPU.
+- **C1b** (14e2eba9): score-pairs's own GPU-only guard fixed → falls through to run_metric's native
+  CPU. Verified CPU-sweep `score-pairs --metric cvvdp`=9.268. CPU fleet unblocked for cvvdp.
+- **C2**: cubecl-cpu is NEVER dispatched. `GpuRuntime::Cpu → Backend::Cpu` (native, was CubeclCpu);
+  cpu-metrics → `zenmetrics-api/cpu-metrics` (all six native, so the umbrella CPU failover works for
+  ssim2/dssim/butter/zensim too); `cpu_fallback_backend()` returns `Backend::Cpu` even in a no-cpu
+  build (fail loud, never silently run cubecl-cpu); CI guard `no_gpu_runtime_maps_to_cubecl_cpu`.
+
+Goal (user directive): make the
 "a metric looks GPU-only / its CPU path is unwired / there are several
 inconsistent ways to score" class of bug **structurally impossible** — one
 dispatch entry that every caller funnels through, automatic native GPU→CPU

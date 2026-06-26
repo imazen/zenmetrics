@@ -84,6 +84,11 @@ cpu-metrics = [
     # license-compatible.
     "cpu-cvvdp",
     "cpu-iwssim",
+    # All six native-CPU backends via the umbrella's Backend::Cpu (cpu_dispatch),
+    # so run_gpu_via_umbrella's CPU failover works for ssim2/dssim/butter/zensim
+    # too — and the auto ladder's CPU rung is the native SIMD path, NEVER
+    # cubecl-cpu (project rule: cubecl-cpu is never dispatched). C2.
+    "zenmetrics-api/cpu-metrics",
 ]
 
 # Native-CPU paths for the two in-tree metric ports, forwarded to the umbrella.

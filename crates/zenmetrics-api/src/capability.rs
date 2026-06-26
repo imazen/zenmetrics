@@ -127,7 +127,12 @@ fn cpu_fallback_backend() -> Backend {
         feature = "cpu-butter"
     )))]
     {
-        Backend::CubeclCpu
+        // PROJECT RULE: cubecl-cpu is NEVER auto-dispatched. With no optimized-CPU
+        // metric compiled there is no runnable native CPU backend — return the
+        // native `Backend::Cpu` so `Metric::new` fails LOUD ("cpu backend not
+        // enabled; build with cpu-<metric>") rather than silently running
+        // cubecl-cpu (which panics on `atomic<f32>` for cvvdp). Build cpu-metrics.
+        Backend::Cpu
     }
 }
 
@@ -209,8 +214,10 @@ mod tests {
         assert_eq!(cpu_fallback_backend(), Backend::Cpu);
     }
 
-    // Without any optimized-CPU metric, the GPU-less fallback stays
-    // cubecl-cpu so `Auto` still resolves to a runnable backend.
+    // Without any optimized-CPU metric, the GPU-less fallback is STILL the
+    // native `Backend::Cpu` (never cubecl-cpu) — `Metric::new` then fails loud
+    // because no cpu-<metric> is compiled, rather than silently running the
+    // forbidden cubecl-cpu path. (PROJECT RULE: cubecl-cpu is never dispatched.)
     #[cfg(not(any(
         feature = "cpu-ssim2",
         feature = "cpu-cvvdp",
@@ -220,7 +227,8 @@ mod tests {
         feature = "cpu-butter"
     )))]
     #[test]
-    fn cpu_fallback_is_cubecl_cpu_without_optimized_metric() {
-        assert_eq!(cpu_fallback_backend(), Backend::CubeclCpu);
+    fn cpu_fallback_is_never_cubecl_cpu() {
+        assert_eq!(cpu_fallback_backend(), Backend::Cpu);
+        assert_ne!(cpu_fallback_backend(), Backend::CubeclCpu);
     }
 }

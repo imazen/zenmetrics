@@ -251,7 +251,11 @@ pub enum GpuRuntime {
     Wgpu,
     /// AMD HIP / ROCm. Requires `gpu-hip`.
     Hip,
-    /// CPU-fallback runtime in CubeCL. Requires `gpu-cpu`.
+    /// Native SIMD CPU (`Backend::Cpu` → `zenmetrics-api::cpu_dispatch`, the
+    /// in-tree `cvvdp`/`iwssim` ports + `fast-ssim2`/`dssim`/`butteraugli`/
+    /// `zensim`). The canonical CPU path and the auto-ladder fallback. This is
+    /// NOT cubecl-cpu — `Backend::CubeclCpu` is never dispatched (panics on
+    /// `atomic<f32>`, slow). Needs `cpu-metrics` (default).
     Cpu,
 }
 
@@ -306,10 +310,13 @@ pub(crate) fn gpu_runtime_to_backend(rt: GpuRuntime) -> Result<zenmetrics_api::B
         GpuRuntime::Cuda => Ok(zenmetrics_api::Backend::Cuda),
         GpuRuntime::Wgpu => Ok(zenmetrics_api::Backend::Wgpu),
         GpuRuntime::Hip => Ok(zenmetrics_api::Backend::Hip),
-        // The umbrella's old `Backend::Cpu` (cubecl-cpu reference path)
-        // is now `Backend::CubeclCpu`; the CLI's `GpuRuntime::Cpu` keeps
-        // meaning "run the kernels on CPU via cubecl-cpu".
-        GpuRuntime::Cpu => Ok(zenmetrics_api::Backend::CubeclCpu),
+        // PROJECT RULE: cubecl-cpu (`Backend::CubeclCpu`) is NEVER dispatched
+        // (it panics on `atomic<f32>` for cvvdp and is slow for the rest).
+        // `GpuRuntime::Cpu` maps to the NATIVE SIMD CPU path (`Backend::Cpu`
+        // → `zenmetrics-api::cpu_dispatch`). So both the auto-ladder's final
+        // rung AND an explicit `--gpu-runtime cpu` score on the native ports,
+        // never cubecl-cpu. (C2; see docs/METRIC_DISPATCH_CONSOLIDATION.md.)
+        GpuRuntime::Cpu => Ok(zenmetrics_api::Backend::Cpu),
     }
 }
 
@@ -980,6 +987,41 @@ mod tests {
             out[0].1.is_finite(),
             "iwssim native-CPU score must be finite, got {}",
             out[0].1
+        );
+    }
+
+    /// PROJECT RULE (C2): cubecl-cpu (`Backend::CubeclCpu`) is NEVER dispatched.
+    /// No CLI `GpuRuntime` may map to it — `--gpu-runtime cpu` and the auto
+    /// ladder's CPU rung both resolve to the native `Backend::Cpu`. CI fails
+    /// here if anyone re-points the CPU runtime at cubecl-cpu.
+    #[cfg(any(
+        feature = "gpu-butteraugli",
+        feature = "gpu-ssim2",
+        feature = "gpu-dssim",
+        feature = "gpu-iwssim",
+        feature = "gpu-zensim",
+        feature = "gpu-cvvdp"
+    ))]
+    #[test]
+    fn no_gpu_runtime_maps_to_cubecl_cpu() {
+        for rt in [
+            GpuRuntime::Cuda,
+            GpuRuntime::Wgpu,
+            GpuRuntime::Hip,
+            GpuRuntime::Cpu,
+        ] {
+            if let Ok(b) = gpu_runtime_to_backend(rt) {
+                assert_ne!(
+                    b,
+                    zenmetrics_api::Backend::CubeclCpu,
+                    "{rt:?} must NOT map to cubecl-cpu (project rule: never dispatch it)"
+                );
+            }
+        }
+        assert_eq!(
+            gpu_runtime_to_backend(GpuRuntime::Cpu).unwrap(),
+            zenmetrics_api::Backend::Cpu,
+            "--gpu-runtime cpu must resolve to the native CPU path"
         );
     }
 
