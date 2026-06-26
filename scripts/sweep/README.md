@@ -339,8 +339,9 @@ calculated from earlier-today instance work — those land at day boundary.
 
 - Don't launch a fleet (`launch_backfill.sh --n-boxes N`) without a
   `--n-boxes 1` smoke first.
-- Don't fan out to N>5 boxes without watching the first one produce
-  sidecars at the rate you expected.
+- Don't fan out to many boxes without watching the first one produce
+  sidecars at the rate you expected (the principle is validate-then-scale, not a
+  hard count — the Hetzner account cap is 32 servers, corrected 2026-06-25).
 - Don't put credentials in shell history. The launcher reads them from
   `~/.config/cloudflare/r2-credentials` + `gh auth token`.
 - Don't `git push` `zenfleet-vastai` or `zenmetrics` binaries; they're in

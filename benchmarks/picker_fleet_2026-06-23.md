@@ -18,9 +18,9 @@ diffmaps, any future metric, with no re-encode).
 
 ## Constraints found (operational, honest)
 
-- **Hetzner account caps at 5 servers.** Freed the idle `zen-trellis-sweep` box
-  for a slot; otherwise slot-limited → sequential codec cycles. Raise the
-  Servers limit for wide parallelism.
+- **Hetzner account caps at 32 servers** (corrected 2026-06-25 by the user; this note
+  originally said 5, which wrongly forced sequential codec cycles). With 3 pre-existing
+  dev boxes that leaves ~29 for wide parallelism — fan out, don't serialize.
 - **cpx41 is phased out**; big dedicated boxes (ccx53 32c / ccx63 48c) are
   capacity-out → **cpx51 (16c) is the practical ceiling per box**. Biggest-first
   fallback lifts off the 8c straggler but can't conjure capacity.

@@ -148,8 +148,8 @@ Workspace conventions per the global rules:
   dssim-gpu (encode-once, score-many). Public GPU image
   `zenmetrics-sweep:v29-2026-06-23` carries all 6 GPU metrics + the zensim-gpu fix.
   Verified end-to-end (local RTX 5070 + vast.ai): real scores, 0 failed. Notes:
-  vast runs `--onstart-cmd` (ignores the image ENTRYPOINT); Hetzner caps at 5
-  servers; cpx41 phased out → cpx51 (16c) ceiling; CPU zensim emits 300 features,
+  vast runs `--onstart-cmd` (ignores the image ENTRYPOINT); Hetzner caps at 32
+  servers (corrected 2026-06-25; was wrongly recorded as 5); cpx51 (16c) per-box type; CPU zensim emits 300 features,
   372 needs the GPU WithIw regime.
 
 ### Fixed
