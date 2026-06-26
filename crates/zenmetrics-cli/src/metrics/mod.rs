@@ -39,12 +39,11 @@ use clap::ValueEnum;
 
 use crate::decode::Rgb8Image;
 
-#[cfg(feature = "cpu-metrics")]
-pub(crate) mod butteraugli;
-#[cfg(feature = "cpu-metrics")]
-mod dssim;
-#[cfg(feature = "cpu-metrics")]
-pub(crate) mod ssim2;
+// ssim2 / dssim / butteraugli one-shot CPU scoring now routes through the
+// single `zenmetrics-api::cpu_dispatch` umbrella path (`run_metric` +
+// `run_cpu_native_via_umbrella` / `run_cpu_butter_both_via_umbrella`); the
+// former per-metric CPU shim modules are gone. zensim keeps its module for
+// the warm-reference + 300-feature extended paths (not yet folded in).
 #[cfg(feature = "cpu-metrics")]
 pub(crate) mod zensim;
 
@@ -494,7 +493,7 @@ fn run_gpu_via_umbrella(
 /// features (pulled into the default `cpu-metrics` bundle). See
 /// docs/METRIC_DISPATCH_CONSOLIDATION.md.
 #[cfg(any(feature = "cpu-cvvdp", feature = "cpu-iwssim"))]
-fn run_cpu_native_via_umbrella(
+pub(crate) fn run_cpu_native_via_umbrella(
     umbrella_kind: zenmetrics_api::MetricKind,
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
@@ -523,6 +522,41 @@ fn run_cpu_native_via_umbrella(
         return Err(format!("{} (cpu): non-finite score {}", umbrella_kind.tag(), score.value).into());
     }
     Ok(score.value)
+}
+
+/// CPU butteraugli via the umbrella, returning BOTH the max-norm and the
+/// libjxl 3-norm (`pnorm_3`) from one `compute_srgb_u8_multi` call so the
+/// two-column TSV schema is preserved without a second pass. The single
+/// CPU butteraugli construct+translate lives in `zenmetrics-api::cpu_dispatch`.
+#[cfg(feature = "cpu-metrics")]
+pub(crate) fn run_cpu_butter_both_via_umbrella(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<(f64, f64), Box<dyn std::error::Error>> {
+    if reference.width != distorted.width || reference.height != distorted.height {
+        return Err(format!(
+            "butteraugli: reference ({}×{}) and distorted ({}×{}) differ in size",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let params = resolve_default_params(zenmetrics_api::MetricKind::Butter)?;
+    let mut m = zenmetrics_api::Metric::new(
+        zenmetrics_api::MetricKind::Butter,
+        zenmetrics_api::Backend::Cpu,
+        reference.width,
+        reference.height,
+        params,
+    )?;
+    let scores = m.compute_srgb_u8_multi(&reference.pixels, &distorted.pixels)?;
+    let max = scores.primary();
+    let pnorm3 = scores
+        .get("pnorm_3")
+        .ok_or("butteraugli (cpu): pnorm_3 scalar missing from umbrella output")?;
+    if !max.is_finite() || !pnorm3.is_finite() {
+        return Err(format!("butteraugli (cpu): non-finite (max={max}, pnorm3={pnorm3})").into());
+    }
+    Ok((max, pnorm3))
 }
 
 /// Run `kind` on a `(reference, distorted)` RGB8 pair. GPU metrics route
@@ -575,7 +609,10 @@ pub fn run_metric(
 ) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
     match kind {
         #[cfg(feature = "cpu-metrics")]
-        MetricKind::Ssim2 => Ok(vec![("ssim2", ssim2::score(reference, distorted)?)]),
+        MetricKind::Ssim2 => Ok(vec![(
+            "ssim2",
+            run_cpu_native_via_umbrella(zenmetrics_api::MetricKind::Ssim2, reference, distorted)?,
+        )]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::Ssim2 => Err(disabled_msg("ssim2", "cpu-metrics")),
 
@@ -594,7 +631,7 @@ pub fn run_metric(
 
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Butteraugli => {
-            let (max, pnorm3) = butteraugli::score_both(reference, distorted)?;
+            let (max, pnorm3) = run_cpu_butter_both_via_umbrella(reference, distorted)?;
             Ok(vec![
                 ("butteraugli_max", max),
                 ("butteraugli_pnorm3", pnorm3),
@@ -622,7 +659,10 @@ pub fn run_metric(
         MetricKind::ButteraugliGpu => Err(disabled_msg("butteraugli-gpu", "gpu-butteraugli")),
 
         #[cfg(feature = "cpu-metrics")]
-        MetricKind::Dssim => Ok(vec![("dssim", dssim::score(reference, distorted)?)]),
+        MetricKind::Dssim => Ok(vec![(
+            "dssim",
+            run_cpu_native_via_umbrella(zenmetrics_api::MetricKind::Dssim, reference, distorted)?,
+        )]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::Dssim => Err(disabled_msg("dssim", "cpu-metrics")),
 

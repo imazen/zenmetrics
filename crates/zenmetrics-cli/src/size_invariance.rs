@@ -128,13 +128,25 @@ fn area_resize_sq(img: &Rgb8Image, n: u32) -> Rgb8Image {
 type Scorer = fn(&Rgb8Image, &Rgb8Image) -> Result<f64, Box<dyn std::error::Error>>;
 
 fn metric_table() -> Vec<(&'static str, Scorer)> {
+    // All three route through the single native-CPU umbrella path
+    // (`zenmetrics-api::cpu_dispatch`), the same one `run_metric` uses —
+    // no separate per-metric CPU scoring shims.
     vec![
         ("zensim", crate::metrics::zensim::score as Scorer),
-        ("ssim2", crate::metrics::ssim2::score as Scorer),
+        (
+            "ssim2",
+            (|r: &Rgb8Image, d: &Rgb8Image| {
+                crate::metrics::run_cpu_native_via_umbrella(
+                    zenmetrics_api::MetricKind::Ssim2,
+                    r,
+                    d,
+                )
+            }) as Scorer,
+        ),
         (
             "butter_p3",
             (|r: &Rgb8Image, d: &Rgb8Image| {
-                crate::metrics::butteraugli::score_both(r, d).map(|(_, p3)| p3)
+                crate::metrics::run_cpu_butter_both_via_umbrella(r, d).map(|(_, p3)| p3)
             }) as Scorer,
         ),
     ]
