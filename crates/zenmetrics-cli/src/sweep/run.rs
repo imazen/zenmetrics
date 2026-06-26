@@ -375,10 +375,6 @@ fn score_via_orchestrator(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
 ) -> Result<Vec<(&'static str, f64)>, Box<dyn Error>> {
-    use crate::orchestrator_glue::OrchestratorMetricSpec;
-    use crate::orchestrator_runner::rekey_orchestrator_columns;
-    use zenmetrics_orchestrator::{Task, TaskData};
-
     if reference.width != distorted.width || reference.height != distorted.height {
         return Err(format!(
             "{}: reference ({}×{}) and distorted ({}×{}) differ in size",
@@ -391,40 +387,27 @@ fn score_via_orchestrator(
         .into());
     }
 
-    let spec = OrchestratorMetricSpec::from_cli(cli_metric);
-    let task = Task {
-        task_id: 1,
-        ref_data: TaskData::Srgb8(reference.pixels.clone()),
-        dist_data: TaskData::Srgb8(distorted.pixels.clone()),
-        width: reference.width,
-        height: reference.height,
-        metric: spec.kind,
-        params: None,
-        ref_hash: 0,
-    };
-    let result = {
+    // Delegate to the MAINTAINED orchestrator scoring entry. The executor's
+    // `Task` / `TaskData` / `run_single` API moved to
+    // `zenmetrics_orchestrator::executor::` behind the `orchestrator-cuda`
+    // feature; this function used to re-implement that call against the old
+    // crate-root API, which is what bit-rotted the `sweep,orchestrator` build.
+    // `orchestrator_score_one` already carries the cuda / non-cuda split (the
+    // non-cuda build returns a clear "requires orchestrator-cuda" error), so
+    // routing through it keeps every feature combination compiling.
+    let rows = {
         let mut g = orch.lock().expect("orchestrator handle poisoned");
-        g.run_single(task)
+        crate::orchestrator_runner::orchestrator_score_one(
+            &mut g,
+            cli_metric,
+            reference,
+            distorted,
+        )?
     };
-
-    match result.outcome {
-        Ok(_score) => {
-            let rekeyed = rekey_orchestrator_columns(cli_metric, &result.output_columns);
-            // Leak Strings to &'static str to match the
-            // legacy row-builder's column-name lifetime.
-            let leaked: Vec<(&'static str, f64)> = rekeyed
-                .into_iter()
-                .map(|(k, v)| (String::leak(k) as &'static str, v))
-                .collect();
-            Ok(leaked)
-        }
-        Err(e) => Err(format!(
-            "orchestrator: {} ({e}; backends_attempted={:?})",
-            cli_metric.name(),
-            result.backends_attempted
-        )
-        .into()),
-    }
+    Ok(rows
+        .into_iter()
+        .map(|r| (String::leak(r.column) as &'static str, r.value))
+        .collect())
 }
 
 /// Optional handle to an orchestrator-driven scoring backend. When
