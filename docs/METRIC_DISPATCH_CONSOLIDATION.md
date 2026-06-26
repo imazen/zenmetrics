@@ -57,18 +57,28 @@ Three concrete defects:
   AND the runtime inits) → **fall back to `Backend::Cpu` (native `cpu_dispatch`)** → else a loud
   "no backend compiled for <m>: enable `gpu-<m>` or `cpu-<m>`" error. `CubeclCpu` drops out of the
   default ladder (opt-in only; it's a dev/debug path, not a fallback).
-- **One cache**: fold `CvvdpBatchScorer` into `MetricCache` (it already caches umbrella `Metric`
-  slots + cached-ref); thread cvvdp display params through it. Delete `CvvdpBatchScorer`.
-- **Every caller** (`score`, `score-pairs`, `batch`, `sweep`, `compare`) funnels through the one
-  cache/switch. No `#[cfg(gpu-cvvdp)]` special-casing at call sites.
-- **CPU compiled by default**: CLI `cpu-metrics` forwards to `zenmetrics-api/cpu-metrics` (all six).
-- **sdr/hdr**: the one switch takes an `hdr` flag; hdr decodes to nits + feeds the same backends
-  (cvvdp/butter native linear planes; others PU21) — unify the `main.rs` hdr branch into it.
-- **Orchestrator**: it is a *capability detector + cache*, not a second scoring path. Remove the
-  cuda-gated `orchestrator_score_one` scoring + the bit-rotted `score_via_orchestrator`; route its
-  callers through the one switch. (Or delete the orchestrator scoring entirely if unused.)
-- **Backend enum**: `Backend::Cpu` (native) is the fallback everywhere; `cpu_fallback_backend()`
-  returns `Backend::Cpu`, not `CubeclCpu`.
+- **The ONE way IS the orchestrator's memory-aware scheduler — NOT a delete (corrected 2026-06-26
+  per user).** Scoring N variants × M GPU metrics naively (variant-major) holds M pipelines in VRAM
+  at once or reloads a pipeline per variant (thrash) + re-uploads the ref every time. The orchestrator's
+  `Orchestrator::run_all` (pool.rs:2333) ALREADY sorts tasks by `(metric, w, h, ref_hash, task_id)` →
+  **metric-major**: each (metric, dims) group dispatches together, pipeline built once, reference cached,
+  swept across all variants, then the next metric. That + the warm-pool + OOM-ladder is exactly the
+  intelligence we want as the single path. Mirrors the SPLIT fleet's `for m in METRICS: score-pairs -m`.
+- **The blocker is purely cuda-gating, not architecture.** The executor (run_all/run_single, executor.rs)
+  is `#![cfg(all(feature="bench", feature="cuda"))]` — so the metric-major scheduler only runs on CUDA;
+  CPU + non-cuda GPU fall to the "requires orchestrator-cuda" stub. But the executor uses the umbrella
+  `Metric` + a `CpuAdapter` (Backend::Cpu already wired, "CpuNotYetWired shim removed") with NO direct
+  cubecl-cuda calls. So **un-cuda-gate the executor** (`cfg(all(bench,cuda))` → `cfg(bench)`) → the
+  scheduler becomes backend-agnostic (CPU/wgpu/hip/cuda via the umbrella).
+- **Then funnel everything through it**: `score-pairs`/`sweep`/`batch` build the (variant×metric) task
+  list and hand it to `run_all`; `MetricCache`/`CvvdpBatchScorer` become (or are subsumed by) the
+  orchestrator's per-(metric,dims) warm slots — not separate ad-hoc caches. The orchestrator is the one
+  intelligent scoring path, CPU and GPU alike.
+- **CPU compiled by default**: CLI `cpu-metrics` forwards to `zenmetrics-api/cpu-metrics` (all six). ✅ C2.
+- **sdr/hdr**: the scheduler takes the hdr feeding per metric (cvvdp/butter native linear planes; others
+  PU21) — unify the `main.rs` hdr branch into the task build, not a parallel loop.
+- **Backend enum**: `Backend::Cpu` (native) is the fallback everywhere; `cpu_fallback_backend()` returns
+  `Backend::Cpu`, never `CubeclCpu`. ✅ C2. (cubecl-cpu is never dispatched.)
 
 ## Chunks (land each compiling + tested)
 
@@ -79,11 +89,19 @@ Three concrete defects:
   can't regress.
 - **C2 — collapse the ladder + `cpu_fallback_backend()=Backend::Cpu`**; drop `CubeclCpu` from the
   default ladder (opt-in flag only).
-- **C3 — fold `CvvdpBatchScorer` into `MetricCache`** (thread display params); delete the bypass;
-  route `score-pairs` through the cache.
-- **C4 — unify hdr** into the one switch.
-- **C5 — orchestrator**: strip the cuda-gated/ bit-rotted scoring path; keep detection/cache only.
-- **C6 — docs + semver**: README/CLAUDE.md reflect "one way"; `cargo semver-checks`.
+- **C5 (was "strip", CORRECTED to "un-gate + make canonical") — un-cuda-gate the orchestrator
+  executor** so its metric-major `run_all` scheduler (pool.rs:2333; pipeline-once-per-metric, cached
+  ref, swept across all variants, OOM ladder) runs on CPU + any GPU backend, not just CUDA. The executor
+  already uses the umbrella `Metric` + `CpuAdapter` with no direct cubecl-cuda → change
+  `#![cfg(all(bench,cuda))]` → `#![cfg(bench)]` and walk the compile fallout. This is the memory-aware
+  scoring intelligence we must KEEP (user, 2026-06-26: "lots of intelligence needed to keep mem use
+  manageable … sweep a metric at a time across all variants, so you don't hold in memory or thrash gpu").
+  C5a (done, d6bc8b94) already de-bit-rotted `score_via_orchestrator` by delegating to the maintained entry.
+- **C3 — funnel `score-pairs`/`sweep`/`batch` through the orchestrator's `run_all`** (the one
+  memory-aware path); fold `CvvdpBatchScorer` + `MetricCache` into the orchestrator's per-(metric,dims)
+  warm slots rather than keeping them as separate ad-hoc caches. (Depends on C5.)
+- **C4 — unify hdr** into the orchestrator task build (per-metric feeding), not a parallel loop.
+- **C6 — docs + semver**: README/CLAUDE.md reflect "one way = the orchestrator scheduler"; `cargo semver-checks`.
 
 ## Invariants / tests that make the bug impossible
 
