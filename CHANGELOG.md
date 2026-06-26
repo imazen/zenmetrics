@@ -106,6 +106,16 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **Dispatcher dedup (part 1): one-shot CPU ssim2/dssim/butteraugli route through the
+  single `zenmetrics-api::cpu_dispatch` umbrella** (`ca70d818`). Deleted the three parallel
+  one-shot CPU scoring shims (`zenmetrics-cli/src/metrics/{ssim2,dssim,butteraugli}.rs`) and
+  routed every caller (`run_metric`, `size_invariance`'s `Scorer` table) through the same
+  `Backend::Cpu` umbrella path cvvdp/iwssim already use — `run_cpu_native_via_umbrella` plus a
+  new `run_cpu_butter_both_via_umbrella` that preserves butteraugli's two-column
+  `max + pnorm_3` output via `compute_srgb_u8_multi`. Removes the bare ssim2 shim's allocating
+  `chunks_exact().collect()` build (umbrella path is bytemuck zero-copy). zensim stays on its
+  module pending the warm-ref/feature merge. Verified: cli compiles + lib tests 5/5;
+  `zenmetrics-api` cpu_dispatch lib tests 12/12.
 - **`iwssim-filter-codegen` flattened into committed constants** (`2813bef4`). The
   build-time codegen crate emitted three fixed mathematical constant arrays
   (pyrtools `binom5`, `fspecial('gaussian', 11, 1.5)` separable 1D, and the Wang &
