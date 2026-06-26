@@ -104,6 +104,32 @@ Workspace conventions per the global rules:
   cross-check (mozjpeg-rs, 54k encodings) confirming the metric-to-metric maps
   are encoder-independent.
 
+### Changed
+
+- **`iwssim-filter-codegen` flattened into committed constants** (`2813bef4`). The
+  build-time codegen crate emitted three fixed mathematical constant arrays
+  (pyrtools `binom5`, `fspecial('gaussian', 11, 1.5)` separable 1D, and the Wang &
+  Li 2011 MS-SSIM scale weights) into each consumer's `OUT_DIR/filters.rs`. These
+  never change, so the codegen was replaced with committed literals (the exact bytes
+  it produced) in `iwssim/src/filters.rs` + `iwssim-gpu/src/filters.rs`; both
+  `build.rs` scripts and the build-dependency were removed. A new constant-guard
+  test in `iwssim` mirrors the codegen crate's sum-invariant tests. Net: −1 workspace
+  member, −2 build scripts, no behavior change (iwssim 16/16 lib tests pass).
+
+### Removed
+
+- **Dropped two dead crates: `zenfleet-runpod` + `metal-diffmap-repro`** (`2813bef4`).
+  `zenfleet-runpod` (1179 LOC) had no `--backend runpod` invocation in any script or
+  CI — it was reachable only via `zenfleet-sweep`'s optional `runpod`/`runpod-sweep`
+  features (speculative "Phase F"); removed the crate plus its `zenfleet-sweep` wiring
+  (`Backend::Runpod` arm, `mod runpod`, the four runpod features, the optional dep).
+  The vastai/salad/local/hetzner backends are untouched (`zenfleet-sweep --features
+  vastai` still compiles). `metal-diffmap-repro` (429 LOC) reproduced bug #20 (Metal
+  `zensim-gpu` diffmap garbage), which is fixed (`4d62085f`) on a different root cause
+  (`f64` partials) than its never-posted draft report hypothesized — dead and
+  potentially misleading. Workspace down 34→31 members (3 removed incl. the codegen
+  flatten above).
+
 ## zensim-gpu
 
 ### Fixed
