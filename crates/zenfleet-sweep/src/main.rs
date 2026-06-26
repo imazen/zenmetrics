@@ -20,14 +20,6 @@
 //!   vast.ai runs (`zenfleet_vastai::worker::process_chunk_inline`),
 //!   available in the `salad-sweep` build; the GPU-free `salad` build
 //!   wires + typechecks the glue without the codec tree.
-//! - `runpod` (Phase F, spec §1.10): `--backend runpod` drives the
-//!   generic [`zenfleet_cloud::run_worker`] loop with the RunPod Pods
-//!   (pull) traits — an R2 `chunks.jsonl` `JobQueue` using the shared
-//!   atomic claim (identical to vast.ai), plain pod-env credentials +
-//!   `RUNPOD_POD_ID` host, shared S3 BlobStorage, R2/no-op heartbeat. The
-//!   encode+score `compute` closure is the SAME one vast.ai runs,
-//!   available in the `runpod-sweep` build; the GPU-free `runpod` build
-//!   wires + typechecks the glue without the codec tree.
 //!
 //! Backend selection is cargo features + trait objects, NOT dlopen
 //! (spec §1.6 decision 4).
@@ -44,9 +36,6 @@ enum Backend {
     Vastai,
     /// SaladCloud + managed queue (sidecar→HTTP) + IMDS + BYO R2/S3.
     Salad,
-    /// RunPod Pods (pull) + R2 chunks.jsonl atomic claim + pod-env
-    /// credentials + BYO R2/S3.
-    Runpod,
     /// Localhost (no cloud) + filesystem queue + filesystem storage +
     /// env/.env credentials. The no-spend dev / abstraction-validation
     /// backend (Phase B).
@@ -122,16 +111,6 @@ fn run_worker_backend(
         Backend::Salad => anyhow::bail!(
             "--backend salad selected but the salad backend is not compiled \
              in; rebuild with --features salad (glue) or --features salad-sweep \
-             (full encode+score)"
-        ),
-
-        #[cfg(feature = "_runpod-backend")]
-        Backend::Runpod => runpod::run(wargs),
-
-        #[cfg(not(feature = "_runpod-backend"))]
-        Backend::Runpod => anyhow::bail!(
-            "--backend runpod selected but the runpod backend is not compiled \
-             in; rebuild with --features runpod (glue) or --features runpod-sweep \
              (full encode+score)"
         ),
 
@@ -303,141 +282,6 @@ mod salad {
             .with_env_filter(
                 EnvFilter::try_from_default_env()
                     .unwrap_or_else(|_| EnvFilter::new("info,zenfleet_salad=info")),
-            )
-            .try_init();
-    }
-}
-
-/// RunPod (Pods/pull) backend: drive the generic `run_worker` loop with
-/// the RunPod traits + the shared inline encode+score compute.
-///
-/// RunPod Pods are structurally identical to vast.ai — a rented GPU pod
-/// boots the deploy image, credentials + sweep wiring arrive as pod env
-/// vars, and the worker PULLs chunks from R2 with the shared atomic
-/// claim. So this reuses the SAME `WorkerArgs` (run id, chunks manifest,
-/// skip-claims, s5cmd/R2 config) and the SAME inline compute vast.ai
-/// runs; only the trait glue differs.
-#[cfg(feature = "_runpod-backend")]
-mod runpod {
-    use anyhow::{Context, Result};
-    use zenfleet_cloud::{Chunk, ChunkOutcome, CloudError, CredentialSource, run_worker};
-    use zenfleet_runpod::{
-        NoopHeartbeat, RunpodChunkQueue, RunpodEnvCredentials, RunpodQueueConfig, RunpodWorkerHost,
-        blob_storage_from_credentials,
-    };
-    use zenfleet_vastai::worker::WorkerArgs;
-
-    /// Run the RunPod sweep worker.
-    ///
-    /// Wires the five RunPod traits and runs the backend-agnostic
-    /// [`run_worker`] loop. The pull `JobQueue` fetches the R2
-    /// `chunks.jsonl` manifest and races for each chunk's claim; the
-    /// `compute` closure runs the SAME inline encode+score the vast.ai
-    /// worker runs per chunk.
-    pub fn run(args: WorkerArgs) -> Result<()> {
-        init_tracing();
-
-        // Resolve BYO object-store credentials from the pod env, then
-        // build the shared S3 BlobStorage from them.
-        let creds = RunpodEnvCredentials
-            .resolve()
-            .context("resolve runpod pod-env credentials")?;
-        let storage = blob_storage_from_credentials(&creds)
-            .context("build runpod blob storage from credentials")?;
-
-        let host = RunpodWorkerHost::from_env();
-        // RunPod tracks pod liveness via its own dashboard/API, so the
-        // default worker uses the no-op heartbeat (no R2 writes). The R2
-        // heartbeat is available for cross-fleet monitoring parity if an
-        // operator wires a prefix; the worker args don't carry one.
-        let heartbeat = NoopHeartbeat;
-
-        // Build the R2 client the pull queue claims against, then fetch
-        // the chunks.jsonl manifest into the queue.
-        let r2 = zenfleet_vastai::worker::r2::new_from_args(&args)
-            .map_err(|e| anyhow::anyhow!("build runpod R2 client: {e}"))?;
-        let worker_id = host_worker_id(&host);
-        let mut cfg = RunpodQueueConfig::for_run(args.run_id.clone());
-        cfg.skip_claims = args.skip_claims;
-        let mut queue = RunpodChunkQueue::fetch(r2, worker_id, cfg, &args.chunks_r2)
-            .map_err(|e| anyhow::anyhow!("fetch runpod chunks manifest: {e}"))?;
-
-        tracing::info!(
-            run_id = %args.run_id,
-            "runpod sweep worker starting; pulling chunks from {}",
-            args.chunks_r2
-        );
-
-        let summary = run_worker(&mut queue, &storage, &heartbeat, &host, |chunk, _s, _h| {
-            compute_chunk(&args, chunk)
-        })
-        .map_err(|e| anyhow::anyhow!("runpod run_worker loop: {e}"))?;
-
-        tracing::info!(
-            dispatched = summary.dispatched,
-            done = summary.done,
-            skipped = summary.skipped,
-            failed = summary.failed,
-            "runpod sweep worker finished"
-        );
-        Ok(())
-    }
-
-    /// The worker id for claim tokens — the RunPod pod id (via the host).
-    fn host_worker_id(host: &RunpodWorkerHost) -> String {
-        use zenfleet_cloud::WorkerHost;
-        host.worker_id().as_str().to_string()
-    }
-
-    /// Per-chunk compute. `chunk.payload` is the raw `chunks.jsonl` line
-    /// the pull queue surfaced (the same shape vast.ai reads).
-    fn compute_chunk(args: &WorkerArgs, chunk: &Chunk) -> Result<ChunkOutcome, CloudError> {
-        #[cfg(feature = "_runpod-sweep")]
-        {
-            // Real encode+score path (the `runpod-sweep` build): reuse the
-            // exact inline compute the vast.ai worker runs per chunk.
-            run_inline_sweep(args, &chunk.payload)
-        }
-        #[cfg(not(feature = "_runpod-sweep"))]
-        {
-            let _ = (args, chunk);
-            // GPU-free `runpod` glue build: the loop, queue, host, creds,
-            // and storage are all live and exercised, but the encode+score
-            // tree was not compiled in. Surface a terminal failure so the
-            // operator rebuilds with `--features runpod-sweep` rather than
-            // silently dropping the chunk.
-            Err(CloudError::Compute(
-                "runpod glue build has no encode+score compute; \
-                 rebuild zenfleet-sweep with --features runpod-sweep"
-                    .into(),
-            ))
-        }
-    }
-
-    #[cfg(feature = "_runpod-sweep")]
-    fn run_inline_sweep(args: &WorkerArgs, payload: &str) -> Result<ChunkOutcome, CloudError> {
-        use zenfleet_vastai::worker::{process_chunk_inline, r2::new_from_args};
-
-        let r2 = new_from_args(args)
-            .map_err(|e| CloudError::Storage(format!("build R2 client: {e}")))?;
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| CloudError::Compute(format!("build compute runtime: {e}")))?;
-        match rt.block_on(process_chunk_inline(args, &r2, payload)) {
-            Ok(()) => Ok(ChunkOutcome::Done),
-            Err(e) => Ok(ChunkOutcome::Failed {
-                error: format!("{e:#}"),
-            }),
-        }
-    }
-
-    fn init_tracing() {
-        use tracing_subscriber::EnvFilter;
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter(
-                EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new("info,zenfleet_runpod=info")),
             )
             .try_init();
     }

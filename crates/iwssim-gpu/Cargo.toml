@@ -35,15 +35,6 @@ zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = fals
 iwssim = { workspace = true, default-features = false, features = ["std"] }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
-[build-dependencies]
-# Gaussian / binomial coefficient generation at build time. The shared
-# helper crate `iwssim-filter-codegen` owns the math so iwssim and
-# iwssim-gpu emit bit-identical filter taps by construction. (Each
-# crate still has its own `crate::filters` module — cube-macros
-# capture `crate`-relative paths at expansion time and re-emit them
-# on the device side.)
-iwssim-filter-codegen = { workspace = true }
-
 [dev-dependencies]
 bytemuck = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg", "bmp"] }

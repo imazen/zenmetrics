@@ -9,9 +9,8 @@
 //! compromised consumer node's blast radius is then limited to that one
 //! bucket's objects instead of the whole R2 account.
 //!
-//! This module is provider-agnostic on purpose — `zenfleet-salad`,
-//! `zenfleet-runpod`, and `zenfleet-vastai` all call
-//! [`mint_scoped_r2_cred`].
+//! This module is provider-agnostic on purpose — `zenfleet-salad` and
+//! `zenfleet-vastai` both call [`mint_scoped_r2_cred`].
 //!
 //! ## API spec + gotchas (VERIFIED)
 //!

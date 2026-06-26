@@ -2570,7 +2570,6 @@ version = "0.1.0"
 dependencies = [
  "archmage",
  "image",
- "iwssim-filter-codegen",
  "magetypes",
  "rayon",
  "serde",
@@ -2580,17 +2579,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "iwssim-filter-codegen"
-version = "0.0.1"
-
-[[package]]
 name = "iwssim-gpu"
 version = "0.0.1"
 dependencies = [
  "bytemuck",
  "image",
  "iwssim",
- "iwssim-filter-codegen",
  "zenforks-cubecl",
  "zenmetrics-gpu-core",
  "zenpixels",
@@ -3007,13 +3001,6 @@ name = "memchr"
 version = "2.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
-
-[[package]]
-name = "metal-diffmap-repro"
-version = "0.0.0"
-dependencies = [
- "zenforks-cubecl",
-]
 
 [[package]]
 name = "mime"
@@ -6403,21 +6390,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zenfleet-runpod"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "reqwest 0.13.4",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "zenfleet-cloud",
- "zenfleet-s3",
- "zenfleet-vastai",
-]
-
-[[package]]
 name = "zenfleet-s3"
 version = "0.0.1"
 dependencies = [
@@ -6460,7 +6432,6 @@ dependencies = [
  "tracing-subscriber",
  "zenfleet-cloud",
  "zenfleet-local",
- "zenfleet-runpod",
  "zenfleet-salad",
  "zenfleet-vastai",
 ]

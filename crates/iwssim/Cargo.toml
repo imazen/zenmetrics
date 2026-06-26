@@ -52,10 +52,3 @@ image = { workspace = true, features = ["png", "jpeg", "bmp", "exr"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
-
-[build-dependencies]
-# Gaussian / binomial coefficient generation at build time. The shared
-# helper crate `iwssim-filter-codegen` owns the math so iwssim and
-# iwssim-gpu emit bit-identical filter taps by construction.
-# (Diverging tap values would silently break parity.)
-iwssim-filter-codegen = { workspace = true }

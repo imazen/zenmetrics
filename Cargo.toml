@@ -7,12 +7,10 @@ members = [
     "crates/cvvdp-gpu",
     "crates/dssim-gpu",
     "crates/iwssim",
-    "crates/iwssim-filter-codegen",
     "crates/iwssim-gpu",
     "crates/ssim2-gpu",
     "crates/zenfleet-cloud",
     "crates/zenfleet-local",
-    "crates/zenfleet-runpod",
     "crates/zenfleet-s3",
     "crates/zenfleet-salad",
     "crates/zenfleet-vastai",
@@ -27,7 +25,6 @@ members = [
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",
     "crates/zenmetrics-gpu-core",
-    "crates/metal-diffmap-repro",
     "crates/zenfleet-orchestrator",
     "crates/zenmetrics-orchestrator",
     "crates/zensim-gpu",
@@ -65,7 +62,6 @@ cvvdp = { version = "0.1.0", path = "crates/cvvdp", default-features = false }
 cvvdp-gpu = { version = "0.0.1", path = "crates/cvvdp-gpu", default-features = false }
 dssim-gpu = { version = "0.0.1", path = "crates/dssim-gpu", default-features = false }
 iwssim = { version = "0.1.0", path = "crates/iwssim", default-features = false }
-iwssim-filter-codegen = { version = "0.0.1", path = "crates/iwssim-filter-codegen" }
 iwssim-gpu = { version = "0.0.1", path = "crates/iwssim-gpu", default-features = false }
 ssim2-gpu = { version = "0.0.1", path = "crates/ssim2-gpu", default-features = false }
 zensim-gpu = { version = "0.0.1", path = "crates/zensim-gpu", default-features = false }
@@ -74,7 +70,6 @@ zenmetrics-corpus = { version = "0.1.0", path = "crates/zenmetrics-corpus", defa
 zenmetrics-orchestrator = { version = "0.0.1", path = "crates/zenmetrics-orchestrator", default-features = false }
 zenfleet-cloud = { version = "0.0.1", path = "crates/zenfleet-cloud", default-features = false }
 zenfleet-local = { version = "0.0.1", path = "crates/zenfleet-local", default-features = false }
-zenfleet-runpod = { version = "0.0.1", path = "crates/zenfleet-runpod", default-features = false }
 zenfleet-s3 = { version = "0.0.1", path = "crates/zenfleet-s3", default-features = false }
 zenfleet-salad = { version = "0.0.1", path = "crates/zenfleet-salad", default-features = false }
 zenfleet-vastai = { version = "0.0.1", path = "crates/zenfleet-vastai", default-features = false }
