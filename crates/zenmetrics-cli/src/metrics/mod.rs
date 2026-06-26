@@ -354,7 +354,9 @@ fn allow_small_images() -> bool {
     feature = "gpu-dssim",
     feature = "gpu-iwssim",
     feature = "gpu-zensim",
-    feature = "gpu-cvvdp"
+    feature = "gpu-cvvdp",
+    feature = "cpu-cvvdp",
+    feature = "cpu-iwssim"
 ))]
 pub(crate) fn resolve_default_params(
     kind: zenmetrics_api::MetricKind,
@@ -475,6 +477,45 @@ fn run_gpu_via_umbrella(
         }
     )
     .into())
+}
+
+/// Score `umbrella_kind` on the NATIVE CPU backend (`Backend::Cpu` →
+/// `zenmetrics-api::cpu_dispatch`, the in-tree SIMD `cvvdp`/`iwssim` ports) —
+/// NOT the cubecl-on-CPU path (which panics on `atomic<f32>` for cvvdp). This
+/// is the failover target for cvvdp/iwssim when no GPU runtime succeeds, and
+/// the sole path in a CPU-only build. Wired by the `cpu-cvvdp` / `cpu-iwssim`
+/// features (pulled into the default `cpu-metrics` bundle). See
+/// docs/METRIC_DISPATCH_CONSOLIDATION.md.
+#[cfg(any(feature = "cpu-cvvdp", feature = "cpu-iwssim"))]
+fn run_cpu_native_via_umbrella(
+    umbrella_kind: zenmetrics_api::MetricKind,
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    if reference.width != distorted.width || reference.height != distorted.height {
+        return Err(format!(
+            "{}: reference ({}×{}) and distorted ({}×{}) differ in size",
+            umbrella_kind.tag(),
+            reference.width,
+            reference.height,
+            distorted.width,
+            distorted.height
+        )
+        .into());
+    }
+    let params = resolve_default_params(umbrella_kind)?;
+    let mut m = zenmetrics_api::Metric::new(
+        umbrella_kind,
+        zenmetrics_api::Backend::Cpu,
+        reference.width,
+        reference.height,
+        params,
+    )?;
+    let score = m.compute_srgb_u8(&reference.pixels, &distorted.pixels)?;
+    if !score.value.is_finite() {
+        return Err(format!("{} (cpu): non-finite score {}", umbrella_kind.tag(), score.value).into());
+    }
+    Ok(score.value)
 }
 
 /// Run `kind` on a `(reference, distorted)` RGB8 pair. GPU metrics route
@@ -635,9 +676,27 @@ pub fn run_metric(
         #[cfg(not(feature = "gpu-zensim"))]
         MetricKind::ZensimGpu => Err(disabled_msg("zensim-gpu", "gpu-zensim")),
 
-        #[cfg(feature = "gpu-cvvdp")]
+        // One switch: GPU first (if built), native-CPU failover (if built).
+        #[cfg(all(feature = "gpu-cvvdp", feature = "cpu-cvvdp"))]
         MetricKind::Cvvdp => Ok(vec![(
-            zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME,
+            CVVDP_COLUMNS[0],
+            match run_gpu_via_umbrella(
+                zenmetrics_api::MetricKind::Cvvdp,
+                reference,
+                distorted,
+                gpu_runtime,
+            ) {
+                Ok(v) => v,
+                Err(_) => run_cpu_native_via_umbrella(
+                    zenmetrics_api::MetricKind::Cvvdp,
+                    reference,
+                    distorted,
+                )?,
+            },
+        )]),
+        #[cfg(all(feature = "gpu-cvvdp", not(feature = "cpu-cvvdp")))]
+        MetricKind::Cvvdp => Ok(vec![(
+            CVVDP_COLUMNS[0],
             run_gpu_via_umbrella(
                 zenmetrics_api::MetricKind::Cvvdp,
                 reference,
@@ -645,12 +704,38 @@ pub fn run_metric(
                 gpu_runtime,
             )?,
         )]),
-        #[cfg(not(feature = "gpu-cvvdp"))]
-        MetricKind::Cvvdp => Err(disabled_msg("cvvdp", "gpu-cvvdp")),
+        #[cfg(all(not(feature = "gpu-cvvdp"), feature = "cpu-cvvdp"))]
+        MetricKind::Cvvdp => Ok(vec![(
+            CVVDP_COLUMNS[0],
+            run_cpu_native_via_umbrella(zenmetrics_api::MetricKind::Cvvdp, reference, distorted)?,
+        )]),
+        #[cfg(all(not(feature = "gpu-cvvdp"), not(feature = "cpu-cvvdp")))]
+        MetricKind::Cvvdp => Err(disabled_msg(
+            "cvvdp",
+            "gpu-cvvdp` (GPU) or `cpu-cvvdp` (native SIMD CPU)",
+        )),
 
-        #[cfg(feature = "gpu-iwssim")]
+        // One switch: GPU first (if built), native-CPU failover (if built).
+        #[cfg(all(feature = "gpu-iwssim", feature = "cpu-iwssim"))]
         MetricKind::Iwssim => Ok(vec![(
-            zenmetrics_api::iwssim::IWSSIM_COLUMN_NAME,
+            IWSSIM_COLUMNS[0],
+            match run_gpu_via_umbrella(
+                zenmetrics_api::MetricKind::Iwssim,
+                reference,
+                distorted,
+                gpu_runtime,
+            ) {
+                Ok(v) => v,
+                Err(_) => run_cpu_native_via_umbrella(
+                    zenmetrics_api::MetricKind::Iwssim,
+                    reference,
+                    distorted,
+                )?,
+            },
+        )]),
+        #[cfg(all(feature = "gpu-iwssim", not(feature = "cpu-iwssim")))]
+        MetricKind::Iwssim => Ok(vec![(
+            IWSSIM_COLUMNS[0],
             run_gpu_via_umbrella(
                 zenmetrics_api::MetricKind::Iwssim,
                 reference,
@@ -658,8 +743,16 @@ pub fn run_metric(
                 gpu_runtime,
             )?,
         )]),
-        #[cfg(not(feature = "gpu-iwssim"))]
-        MetricKind::Iwssim => Err(disabled_msg("iwssim", "gpu-iwssim")),
+        #[cfg(all(not(feature = "gpu-iwssim"), feature = "cpu-iwssim"))]
+        MetricKind::Iwssim => Ok(vec![(
+            IWSSIM_COLUMNS[0],
+            run_cpu_native_via_umbrella(zenmetrics_api::MetricKind::Iwssim, reference, distorted)?,
+        )]),
+        #[cfg(all(not(feature = "gpu-iwssim"), not(feature = "cpu-iwssim")))]
+        MetricKind::Iwssim => Err(disabled_msg(
+            "iwssim",
+            "gpu-iwssim` (GPU) or `cpu-iwssim` (native SIMD CPU)",
+        )),
     }
 }
 
@@ -844,6 +937,51 @@ pub fn run_zensim_gpu_with_features(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression guard for docs/METRIC_DISPATCH_CONSOLIDATION.md (C1): in ANY
+    /// build that compiles the native CPU port (the default — `cpu-metrics`
+    /// now forwards to `cpu-cvvdp`/`cpu-iwssim`), cvvdp + iwssim MUST produce a
+    /// finite score through `run_metric` on native CPU. This makes "metric X
+    /// looks GPU-only / its CPU path is unwired" structurally impossible: if
+    /// the wiring regresses, CI fails right here (not at a fleet box at $/hr).
+    #[allow(dead_code)]
+    fn synth_rgb8(w: u32, h: u32, fill: u8) -> Rgb8Image {
+        Rgb8Image {
+            pixels: vec![fill; (w as usize) * (h as usize) * 3],
+            width: w,
+            height: h,
+        }
+    }
+
+    #[cfg(feature = "cpu-cvvdp")]
+    #[test]
+    fn cvvdp_scores_on_native_cpu_in_cpu_build() {
+        let r = synth_rgb8(176, 176, 128);
+        let d = synth_rgb8(176, 176, 116);
+        let out = run_metric(MetricKind::Cvvdp, &r, &d, GpuRuntime::Auto)
+            .expect("cvvdp must score on native CPU when cpu-cvvdp is compiled (no GPU required)");
+        assert_eq!(out.len(), 1);
+        assert!(
+            out[0].1.is_finite(),
+            "cvvdp native-CPU score must be finite, got {}",
+            out[0].1
+        );
+    }
+
+    #[cfg(feature = "cpu-iwssim")]
+    #[test]
+    fn iwssim_scores_on_native_cpu_in_cpu_build() {
+        let r = synth_rgb8(176, 176, 128);
+        let d = synth_rgb8(176, 176, 116);
+        let out = run_metric(MetricKind::Iwssim, &r, &d, GpuRuntime::Auto)
+            .expect("iwssim must score on native CPU when cpu-iwssim is compiled (no GPU required)");
+        assert_eq!(out.len(), 1);
+        assert!(
+            out[0].1.is_finite(),
+            "iwssim native-CPU score must be finite, got {}",
+            out[0].1
+        );
+    }
 
     #[test]
     fn cvvdp_column_name_is_versioned_when_feature_on() {

@@ -73,7 +73,25 @@ cpu-metrics = [
     "dep:dssim-core",
     "dep:rgb",
     "dep:imgref",
+    # cvvdp + iwssim have no external CPU crate — their native SIMD CPU ports
+    # live in-tree (crates/cvvdp, crates/iwssim) behind the umbrella's
+    # `zenmetrics-api/cpu-*` features. Wiring them here means EVERY build that
+    # has `cpu-metrics` (the default) can score all six on CPU — so the
+    # GPU→native-CPU failover in `run_metric` always has a CPU path to land on.
+    # This is the fix for "cvvdp/iwssim appear GPU-only" (see
+    # docs/METRIC_DISPATCH_CONSOLIDATION.md). NOTE: pulls AGPL-3.0-or-later
+    # `cvvdp` into the default build; the CLI is already AGPL-dual so this is
+    # license-compatible.
+    "cpu-cvvdp",
+    "cpu-iwssim",
 ]
+
+# Native-CPU paths for the two in-tree metric ports, forwarded to the umbrella.
+# Standalone (no orchestrator dependency) — `zenmetrics-api/cpu-cvvdp` is just
+# `["dep:cvvdp","cvvdp/std"]`. Enabling these makes `Metric::new(kind,
+# Backend::Cpu, …)` build the native `cpu_dispatch` scorer for that metric.
+cpu-cvvdp = ["dep:zenmetrics-api", "zenmetrics-api/cpu-cvvdp"]
+cpu-iwssim = ["dep:zenmetrics-api", "zenmetrics-api/cpu-iwssim"]
 
 # GPU bundle: pulls every GPU metric implementation via the umbrella.
 gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp", "gpu-iwssim", "gpu-zensim"]
