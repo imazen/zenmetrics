@@ -115,6 +115,16 @@ Workspace conventions per the global rules:
   `build.rs` scripts and the build-dependency were removed. A new constant-guard
   test in `iwssim` mirrors the codegen crate's sum-invariant tests. Net: −1 workspace
   member, −2 build scripts, no behavior change (iwssim 16/16 lib tests pass).
+- **Folded `zenfleet-s3` into `zenfleet-vastai`; trimmed `zenfleet-hetzner` to its live
+  lib** (`6a975c1b`). `zenfleet-s3` (415 LOC) had vast.ai as its sole consumer once
+  salad/runpod were gone, so its `S3Client`/`S3BlobStorage` moved into `zenfleet-vastai`'s
+  `worker::s3_client` / `worker::s3_blob`, re-exported under the historical
+  `R2Client`/`R2BlobStorage` names (call sites + tests unchanged). `zenfleet-hetzner` was
+  trimmed to its live `api.rs` + `cloud_init.rs` lib: the dead `provider.rs`
+  (`ProviderHandle` impl) and both bins (`zenfleet-hetzner-sweep`, `hetzner-lifecycle-smoke`)
+  were deleted — the live `--backend hetzner` path reuses vastai's inline-sweep and never
+  used them — dropping its `zenfleet-orchestrator`, `zenfleet-salad`, `clap`, `tokio`,
+  `tracing` deps.
 
 ### Removed
 
@@ -129,6 +139,18 @@ Workspace conventions per the global rules:
   (`f64` partials) than its never-posted draft report hypothesized — dead and
   potentially misleading. Workspace down 34→31 members (3 removed incl. the codegen
   flatten above).
+- **Dropped two more dead fleet crates: `zenfleet-salad` + `zenfleet-orchestrator`**
+  (`6a975c1b`). SaladCloud never reached production (salad.com outages); `zenfleet-salad`
+  (3134 LOC) is deleted and its backend unwired from `zenfleet-sweep` (the `Backend::Salad`
+  arm, `mod salad`, the salad features + dep), plus the salad tier from
+  `scripts/jobsys/{launch_fleet,teardown_fleet}.sh` and the `entrypoint_salad.sh` +
+  `Dockerfile.sweep.salad.v1` deploy files. `zenfleet-orchestrator` (1455 LOC, the
+  provider-trait fleet scheduler) had zero consumers after that + the hetzner trim, and is
+  superseded by the `zenfleet-core` job system (lease/reconcile/idle/recommend_instance);
+  its only unique logic (~35 LOC of prior-stats GPU-class pruning) was intentionally not
+  ported. Also dropped the stale `-p zenfleet-{salad,orchestrator,runpod}` from the
+  `ci.yml` fleet test job (runpod was already gone, leaving that job red). Workspace
+  31→28 members.
 
 ## zensim-gpu
 
