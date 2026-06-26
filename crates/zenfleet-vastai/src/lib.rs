@@ -14,11 +14,10 @@
 //! 2. **Implementations of the [`zenfleet_cloud`] traits** ([`cloud`]
 //!    module) that wrap (1) behind the cloud-agnostic surface:
 //!    - [`cloud::R2BlobStorage`] — `BlobStorage` over the s5cmd-backed
-//!      [`worker::r2::R2Client`]. As of Phase C this is a re-export of
-//!      the shared [`zenfleet_s3::S3BlobStorage`] (R2 is
-//!      S3-compatible, so one impl serves vast.ai + SaladCloud + DO +
-//!      AWS — spec §1.9 item 4); the alias preserves the historical
-//!      name for every call site.
+//!      [`worker::r2::R2Client`]. This is a re-export of the
+//!      `worker::s3_blob::S3BlobStorage` impl (R2 is S3-compatible, so
+//!      one impl serves vast.ai + any BYO bucket); the alias preserves
+//!      the historical name for every call site.
 //!    - [`cloud::ProcEnvironCredentials`] — `CredentialSource` reading
 //!      vast.ai's `/proc/1/environ`.
 //!    - [`cloud::VastaiWorkerHost`] — `WorkerHost` over the existing

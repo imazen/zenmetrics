@@ -12,11 +12,10 @@
 #   - Env: R2 creds at ~/.config/cloudflare/r2-credentials; HCLOUD token at ~/.config/hetzner/credentials;
 #     vastai CLI authed; ssh key zen-arm-dev-20260528 on the Hetzner project.
 #
-# Usage: bash scripts/jobsys/launch_fleet.sh [N_JOBS] [HETZNER_X86] [VAST] [HETZNER_ARM] [SALAD]
+# Usage: bash scripts/jobsys/launch_fleet.sh [N_JOBS] [HETZNER_X86] [VAST] [HETZNER_ARM]
 #   Tiers are interchangeable + provider-agnostic; pass 0 for any you don't want. local + Hetzner cpx
-#   (x86 burst) + Hetzner cax (arm64 capability tier, needs the multi-arch image) + vast (burst) +
-#   Salad (distributed consumer-network burst, a distinct provider) — any ≥3 = a heterogeneous fleet on
-#   one R2 queue. e.g. `… 60 1 0 0 1` = local + Hetzner-x86 + Salad = 3 distinct providers.
+#   (x86 burst) + Hetzner cax (arm64 capability tier, needs the multi-arch image) + vast (burst) —
+#   any ≥2 = a heterogeneous fleet on one R2 queue. e.g. `… 60 1 1 0` = local + Hetzner-x86 + vast.
 set -euo pipefail
 # Default image runs the SYNTHETIC executor (/bin/cat) — for the demos/proofs. For REAL jobs set
 # ZEN_WORKER_IMAGE=ghcr.io/imazen/zenfleet-worker:exec (bakes zenmetrics jobexec; its image-level
@@ -25,15 +24,14 @@ IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zenfleet-worker:latest}"
 EXEC="${ZEN_EXEC:-/bin/cat}"           # override for real work (or rely on the exec image's ZEN_EXEC default)
 CORPUS="${ZEN_CORPUS_PREFIX:-}"        # R2 prefix under the CORPUS bucket where source images live (real jobs)
 CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-codec-corpus}"  # corpus READ-ONLY bucket (source images)
-N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"; N_SALAD="${5:-0}"
-SALAD_ORG="${SALAD_ORGANIZATION:-imazen}"; SALAD_PROJECT="${SALAD_PROJECT:-zenmetrics}"
+N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"
 BUCKET="${ZEN_FLEET_BUCKET:-zentrain}"   # run-WRITE bucket: manifest / claims / ledger / blobs
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 RUN="fleet-$(date -u +%Y%m%d-%H%M%S)"
-echo "### launching fleet on s3://$BUCKET/$RUN/  image=$IMAGE  jobs=$N_JOBS  hetzner-x86=$N_HZ hetzner-arm=$N_HZ_ARM vast=$N_VAST salad=$N_SALAD"
+echo "### launching fleet on s3://$BUCKET/$RUN/  image=$IMAGE  jobs=$N_JOBS  hetzner-x86=$N_HZ hetzner-arm=$N_HZ_ARM vast=$N_VAST"
 
 # 1. mint SCOPED temp creds (object-read-write to this run only; never the root key on remote boxes)
 body=$(python3 -c "import json,os;print(json.dumps({'bucket':'$BUCKET','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':10800,'prefixes':['$RUN/']}))")
@@ -129,45 +127,6 @@ for i in $(seq 1 "$N_VAST"); do
     --env "$(envblock vast-$i "$(shuf_manifest vast-$i)" | tr '\n' ' ') -e ZEN_WORKER=vast-$i" >/dev/null 2>&1 \
     && echo "vast-$i launched on offer $OFFER" || echo "vast-$i FAILED on $OFFER"
 done
-
-# 3d. Salad burst tier — a CPU-only container group on Salad's distributed consumer network (a distinct
-# provider from local/Hetzner/vast). The PUBLIC baked image needs no registry auth; the entrypoint
-# claims off the same R2 queue (we do NOT use Salad's managed queue). Group name = $RUN-salad (DNS-style).
-#
-# Salad's API is behind Cloudflare, which trips TWO ways on a naive create POST — both root-caused by
-# bisection 2026-05-30 and designed out here:
-#   (1) managed WAF 403 ("Attention Required!") on any body containing a "/bin/…" command path — so
-#       ZEN_EXEC is OMITTED below (entrypoint defaults it to /bin/cat inside the container; identical
-#       behavior, body no longer trips the rule); and
-#   (2) error-1010 browser-signature ban on urllib/curl clients — so the create goes through the crate's
-#       reqwest client (examples/fleet_create.rs), whose TLS signature passes where urllib/curl 403.
-if [ "$N_SALAD" -gt 0 ]; then
-  SALAD_MANIFEST="$(shuf_manifest salad-1)"   # per-worker shuffled claim order (see shuf_manifest)
-  SALAD_ENV_JSON="$(AK="$AK" SK="$SK" ST="$ST" EP="$EP" BUCKET="$BUCKET" RUN="$RUN" MANIFEST="$SALAD_MANIFEST" CTLKEY="$CTLKEY" CORPUS="$CORPUS" CB="$CORPUS_BUCKET" CAK="${CAK:-}" CSK="${CSK:-}" CST="${CST:-}" python3 -c '
-import json,os
-e={"AWS_ACCESS_KEY_ID":os.environ["AK"],"AWS_SECRET_ACCESS_KEY":os.environ["SK"],
-"AWS_SESSION_TOKEN":os.environ["ST"],"AWS_REGION":"auto","ZEN_R2_ENDPOINT":os.environ["EP"],
-"ZEN_BUCKET":os.environ["BUCKET"],"ZEN_RUN":os.environ["RUN"],"ZEN_MANIFEST_URI":os.environ["MANIFEST"],
-"ZEN_PROVIDER":"salad","ZEN_SPEC_THRESHOLD_SECS":"20","ZEN_CONTROL_KEY":os.environ["CTLKEY"],
-"ZEN_CORPUS_BUCKET":os.environ["CB"],"ZEN_CORPUS_PREFIX":os.environ.get("CORPUS",""),
-"ZEN_IDLE_PASSES":"8","ZEN_WORKER":"salad-1"}
-if os.environ.get("CAK"):
-    e["ZEN_CORPUS_AWS_ACCESS_KEY_ID"]=os.environ["CAK"]
-    e["ZEN_CORPUS_AWS_SECRET_ACCESS_KEY"]=os.environ["CSK"]
-    e["ZEN_CORPUS_AWS_SESSION_TOKEN"]=os.environ["CST"]
-print(json.dumps(e))')"
-  EX="$ROOT/target/release/examples/fleet_create"
-  [ -x "$EX" ] || { cargo build --release -p zenfleet-salad --example fleet_create >/dev/null 2>&1 || true; }
-  [ -x "$EX" ] || EX="$ROOT/target/debug/examples/fleet_create"
-  if [ -x "$EX" ]; then
-    SALAD_API_KEY="$(grep -E '^salad_' ~/.config/salad/credentials 2>/dev/null | head -1 | tr -d ' \r\n')" \
-    SALAD_ORG="$SALAD_ORG" SALAD_PROJECT="$SALAD_PROJECT" SALAD_GROUP_NAME="$RUN-salad" \
-    SALAD_IMAGE="$IMAGE" SALAD_REPLICAS="$N_SALAD" SALAD_ENV_JSON="$SALAD_ENV_JSON" \
-      "$EX" 2>&1 | head -3
-  else
-    echo "salad SKIPPED: build examples/fleet_create first (cargo build -p zenfleet-salad --example fleet_create)"
-  fi
-fi
 
 # 4. resume — let every tier race the queue at once. Wait for boxes to boot first (Hetzner ~60s,
 # vast ~2-3min); workers idle on the pause until now, then all start claiming together.

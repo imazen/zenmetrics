@@ -47,12 +47,12 @@ fn block_on<F: std::future::Future>(fut: F) -> Result<F::Output, CloudError> {
 
 /// `BlobStorage` over Cloudflare R2.
 ///
-/// The impl itself now lives in the shared `zenfleet-s3` crate (R2 is
-/// S3-compatible, so one impl serves vast.ai + SaladCloud + DO + AWS —
-/// spec §1.9 item 4). `R2BlobStorage` is a vast.ai-named alias for that
-/// shared [`zenfleet_s3::S3BlobStorage`], kept so every call site that
-/// referenced `R2BlobStorage` compiles unchanged.
-pub use zenfleet_s3::S3BlobStorage as R2BlobStorage;
+/// The impl itself lives in `worker::s3_blob` (folded in from the former
+/// `zenfleet-s3` crate, 2026-06-26; R2 is S3-compatible, so one impl
+/// serves vast.ai + any BYO bucket). `R2BlobStorage` is a vast.ai-named
+/// alias for that shared [`crate::worker::s3_blob::S3BlobStorage`], kept
+/// so every call site that referenced `R2BlobStorage` compiles unchanged.
+pub use crate::worker::s3_blob::S3BlobStorage as R2BlobStorage;
 
 /// Convenience constructor: build an [`R2BlobStorage`] from the same
 /// args the worker uses. The shared `S3BlobStorage` takes an

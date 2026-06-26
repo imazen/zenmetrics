@@ -15,7 +15,7 @@
 
 use zenfleet_cloud::{ArtifactKey, BlobMeta, BlobStorage, CloudError};
 
-use crate::client::S3Client;
+use super::s3_client::S3Client;
 
 /// Build a fresh single-thread tokio runtime for one blocking bridge.
 ///

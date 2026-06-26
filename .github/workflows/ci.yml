@@ -165,8 +165,7 @@ jobs:
         run: |
           cargo test --no-fail-fast \
             -p zenfleet-core -p zenfleet-ledger -p zenfleet-worker -p zenfleet-ctl \
-            -p zenfleet-cloud -p zenfleet-hetzner -p zenfleet-local -p zenfleet-dash \
-            -p zenfleet-orchestrator -p zenfleet-salad -p zenfleet-runpod
+            -p zenfleet-cloud -p zenfleet-hetzner -p zenfleet-local -p zenfleet-dash
           cargo test --no-fail-fast -p zenfleet-vastai --no-default-features --features worker
       - name: Build workspace (wgpu + cpu, build-only)
         # Disabled until 2026-05-26 because `[profile.release]` carried

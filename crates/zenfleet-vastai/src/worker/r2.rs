@@ -1,11 +1,10 @@
-//! vast.ai R2 client — now a thin re-export of the shared
-//! [`zenfleet_s3`] client.
+//! vast.ai R2 client — a thin re-export of the shared S3-compatible
+//! client in [`super::s3_client`].
 //!
-//! The s5cmd-backed object-store client + retry helper that used to live
-//! here were factored out into the standalone `zenfleet-s3` crate
-//! (spec §1.9 item 4) so SaladCloud and other providers reuse the proven
-//! R2 logic instead of duplicating it. R2 IS S3-compatible, so one
-//! client serves both.
+//! The s5cmd-backed object-store client + retry helper live in
+//! `worker::s3_client` (folded in from the former `zenfleet-s3` crate,
+//! 2026-06-26; R2 IS S3-compatible, so one client serves vast.ai + any
+//! BYO bucket).
 //!
 //! This module re-exports the shared client under the historical
 //! `R2Client` name so every internal call site
@@ -14,10 +13,10 @@
 //! compiles unchanged. Behaviour is byte-identical to the pre-extraction
 //! client.
 //!
-//! The one constructor difference: the shared [`zenfleet_s3::S3Client`]
-//! takes plain endpoint/profile fields, so the vast.ai
-//! `WorkerArgs`-aware constructor lives here as [`new_from_args`]. The
-//! two in-crate call sites (`worker::mod` + `cloud`) call it directly.
+//! The one constructor difference: the shared `S3Client` takes plain
+//! endpoint/profile fields, so the vast.ai `WorkerArgs`-aware
+//! constructor lives here as [`new_from_args`]. The two in-crate call
+//! sites (`worker::mod` + `cloud`) call it directly.
 
 use anyhow::{Context, Result};
 
@@ -25,10 +24,10 @@ use super::WorkerArgs;
 
 /// The shared S3-compatible client, re-exported under its historical
 /// vast.ai name. R2 is S3-compatible, so the same client drives it.
-pub use zenfleet_s3::S3Client as R2Client;
+pub use super::s3_client::S3Client as R2Client;
 
 /// The shared bounded-backoff retry helper, re-exported.
-pub use zenfleet_s3::with_retry;
+pub use super::s3_client::with_retry;
 
 /// Build an [`R2Client`] from vast.ai worker CLI args.
 ///

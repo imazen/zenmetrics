@@ -81,6 +81,14 @@ pub use inline::process_chunk_inline;
 #[cfg(feature = "source-features")]
 pub use source_features_only::backfill_source_features_for_chunk;
 pub mod r2;
+// The shared S3-compatible client + BlobStorage impl, folded in from the
+// former `zenfleet-s3` crate (2026-06-26). vast.ai is now their sole
+// consumer; r2.rs / cloud.rs re-export them under the historical
+// `R2Client` / `R2BlobStorage` names. `s3_blob` is `pub(crate)` because
+// `cloud.rs` (crate root) re-exports `S3BlobStorage` from it; `s3_client`
+// stays private (only its sibling `r2` reaches it via `super::`).
+pub(crate) mod s3_blob;
+mod s3_client;
 #[cfg(feature = "inline-sweep")]
 mod sweep_runner;
 mod util;

@@ -11,8 +11,6 @@ members = [
     "crates/ssim2-gpu",
     "crates/zenfleet-cloud",
     "crates/zenfleet-local",
-    "crates/zenfleet-s3",
-    "crates/zenfleet-salad",
     "crates/zenfleet-vastai",
     "crates/zenfleet-hetzner",
     "crates/zenfleet-core",
@@ -25,7 +23,6 @@ members = [
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",
     "crates/zenmetrics-gpu-core",
-    "crates/zenfleet-orchestrator",
     "crates/zenmetrics-orchestrator",
     "crates/zensim-gpu",
     "crates/zenstats",
@@ -70,11 +67,8 @@ zenmetrics-corpus = { version = "0.1.0", path = "crates/zenmetrics-corpus", defa
 zenmetrics-orchestrator = { version = "0.0.1", path = "crates/zenmetrics-orchestrator", default-features = false }
 zenfleet-cloud = { version = "0.0.1", path = "crates/zenfleet-cloud", default-features = false }
 zenfleet-local = { version = "0.0.1", path = "crates/zenfleet-local", default-features = false }
-zenfleet-s3 = { version = "0.0.1", path = "crates/zenfleet-s3", default-features = false }
-zenfleet-salad = { version = "0.0.1", path = "crates/zenfleet-salad", default-features = false }
 zenfleet-vastai = { version = "0.0.1", path = "crates/zenfleet-vastai", default-features = false }
 zenfleet-hetzner = { version = "0.0.1", path = "crates/zenfleet-hetzner", default-features = false }
-zenfleet-orchestrator = { version = "0.0.1", path = "crates/zenfleet-orchestrator" }
 
 # CubeCL — single source of truth for the GPU backend version.
 #

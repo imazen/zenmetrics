@@ -27,13 +27,6 @@ path = "src/main.rs"
 # zero gpu/cloud-SDK deps — always linked (the trait impls in `cloud`
 # need the types regardless of the worker feature).
 zenfleet-cloud = { workspace = true }
-# The shared S3-compatible client + BlobStorage impl, factored out of
-# this crate so SaladCloud and other providers reuse the proven R2
-# logic (spec §1.9 item 4). This crate re-exports `S3Client` /
-# `S3BlobStorage` under their historical `R2Client` / `R2BlobStorage`
-# names so every internal call site + test compiles unchanged. Optional
-# + pulled in by the `worker` feature, where the R2 client lives.
-zenfleet-s3 = { workspace = true, optional = true }
 # Need the `env` feature on top of the workspace flag set so worker-mode
 # CLI args can fall back to env vars like `$SWEEP_RUN_ID`.
 clap = { workspace = true, features = ["env"] }
@@ -115,7 +108,7 @@ zenanalyze = { path = "../../../zenanalyze", optional = true }
 # Lightweight build (self-destroy + watch + status only, no GPU, no
 # zenanalyze): `cargo build -p zenfleet-vastai --no-default-features`.
 default = ["worker", "inline-sweep", "source-features"]
-worker = ["dep:tokio", "dep:tracing", "dep:tracing-subscriber", "dep:sha2", "dep:hex", "dep:chrono", "dep:zenfleet-s3"]
+worker = ["dep:tokio", "dep:tracing", "dep:tracing-subscriber", "dep:sha2", "dep:hex", "dep:chrono"]
 # Phase B: link zenmetrics-cli's library to call run_sweep in-process
 # instead of subprocessing to `zenmetrics sweep`. Saves ~3-5s of
 # cubecl init per (codec, knob_tuple) group — ~90-150s/chunk.

@@ -131,7 +131,7 @@ impl S3Client {
 
     /// List object keys under `prefix` via `s5cmd ls`. Returns the full
     /// key column of each line (the last whitespace-separated field).
-    /// Used by the [`crate::blob::S3BlobStorage`] `BlobStorage::list`
+    /// Used by the [`super::s3_blob::S3BlobStorage`] `BlobStorage::list`
     /// impl.
     pub async fn ls_keys(&self, prefix: &str) -> Result<Vec<String>> {
         let out = self
@@ -156,7 +156,7 @@ impl S3Client {
     }
 
     /// Remove an object via `s5cmd rm`. Used by the
-    /// [`crate::blob::S3BlobStorage`] `BlobStorage::delete` impl.
+    /// [`super::s3_blob::S3BlobStorage`] `BlobStorage::delete` impl.
     pub async fn rm(&self, uri: &str) -> Result<()> {
         let out = self
             .cmd(&["rm", uri])

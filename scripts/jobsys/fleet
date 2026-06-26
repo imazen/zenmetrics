@@ -10,7 +10,7 @@
 # fleet_startup_watch.sh and vast_cost_watch.sh, which no longer exist.
 #
 # Usage:
-#   fleet launch [N_JOBS] [HZ] [VAST] [HZ_ARM] [SALAD]   # → launch_fleet.sh (the one launcher)
+#   fleet launch [N_JOBS] [HZ] [VAST] [HZ_ARM]           # → launch_fleet.sh (the one launcher)
 #   fleet status <run> [--label <vast-label>]            # one-shot: boxes·burn·util·idle·startup·progress
 #   fleet watch  <run> [--label <p>] [--poll 20] [--max-burn 1.0] [--destroy]
 #   fleet top    <run>                                   # live ledger top

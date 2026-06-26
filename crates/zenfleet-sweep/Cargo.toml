@@ -38,29 +38,6 @@ vastai-min = ["_vastai-backend", "zenfleet-vastai/worker"]
 # feature-set, so the code path is identical under either.
 _vastai-backend = ["dep:zenfleet-vastai"]
 
-# The SaladCloud backend GLUE (spec §1.9, Phase C). Pulls the salad
-# provider crate + vast.ai's GPU-free `worker` feature for the shared
-# `WorkerArgs` + R2 client. This is the build the acceptance gate
-# checks (`cargo build -p zenfleet-sweep --features salad`): it wires
-# the generic run_worker loop with the Salad JobQueue / WorkerHost /
-# CredentialSource / BlobStorage / Heartbeat, GPU-free. The encode+score
-# compute itself lives behind `salad-sweep` (it shares vast.ai's
-# inline-sweep tree, which is the production-image build).
-salad = ["_salad-backend", "_vastai-backend", "zenfleet-vastai/worker"]
-# Full Salad production build: salad glue + the shared inline-sweep
-# encode+score compute (same GPU tree as `vastai`). This is what the
-# Salad deploy image builds. Held separately from `salad` so the glue +
-# dispatch typecheck on checkouts where the heavy GPU sibling deps don't
-# compile.
-salad-sweep = ["salad", "_salad-sweep", "zenfleet-vastai/inline-sweep", "zenfleet-vastai/source-features"]
-# Internal marker: the Salad backend code (dispatch arm) is compiled in.
-_salad-backend = ["dep:zenfleet-salad", "dep:tracing", "dep:tracing-subscriber"]
-# Internal marker: the inline encode+score compute is available to the
-# salad backend (cargo does not expose a dependency's feature as a cfg
-# in the dependent, so the salad compute path gates on this local mirror
-# of `zenfleet-vastai/inline-sweep`).
-_salad-sweep = ["dep:tokio"]
-
 # The Local (no-cloud) backend GLUE (spec §1.7 Phase B). Localhost reads
 # chunks from a filesystem chunks.jsonl / queue dir and mirrors blobs
 # under a local base dir — no cloud, no spend. Pulls the local provider
@@ -96,15 +73,14 @@ _hetzner-backend = ["dep:tracing", "dep:tracing-subscriber", "dep:tokio"]
 [dependencies]
 zenfleet-cloud = { workspace = true }
 zenfleet-vastai = { workspace = true, optional = true, default-features = false }
-zenfleet-salad = { workspace = true, optional = true, default-features = false }
 zenfleet-local = { workspace = true, optional = true, default-features = false }
 clap = { workspace = true, features = ["env"] }
 anyhow = "1.0.102"
-# Tracing init for the salad backend's run_worker loop logs (the
+# Tracing init for the local/hetzner backends' run_worker loop logs (the
 # vast.ai backend brings its own subscriber inside cmd_worker).
 tracing = { version = "0.1.44", default-features = false, features = ["std"], optional = true }
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "env-filter"], optional = true }
 # Multi-thread runtime to drive the async inline encode+score compute
-# from the synchronous salad compute closure (only the `salad-sweep`
-# build calls it).
+# from the synchronous local/hetzner compute closures (the `local-sweep`
+# and `hetzner` builds call it).
 tokio = { version = "1.52.3", default-features = false, features = ["rt-multi-thread"], optional = true }
