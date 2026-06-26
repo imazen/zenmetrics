@@ -49,10 +49,40 @@ Each: sweep the codec's knob grid over the segmented corpus → join content fea
 
 | codec/task | sweep | picker trained | clean split | `.bin` committed |
 |---|---|---|---|---|
-| jxl lossy   | dense-r6 (train-biased, superseded); clean re-sweep PENDING | provisional `zenjxl_lossy_dense_*` (leaky split) | ❌ → fixing | ❌ |
-| jxl lossless | PENDING | ❌ | — | ❌ |
-| zenjpeg     | PENDING (older `zenjpeg.*` exists) | older only | ❌ | ❌ |
-| zenavif     | PENDING (older `zenavif.*` exists) | older only | ❌ | ❌ |
+| jxl lossy   | dense-r6 (interim, best-from-spent-data) | `zenjxl_lossy_picker_v0.1_dense-r6-evenodd` | ✓ even/odd | ✓ (zenjxl 54646bcc) |
+| jxl lossless | clean-corpus sweep PENDING (no held-out data exists) | ❌ | — | ❌ |
+| zenjpeg     | clean-corpus sweep PENDING (no held-out data exists) | older only | ❌ | ❌ |
+| zenavif     | clean-corpus sweep PENDING (no held-out data exists) | older only | ❌ | ❌ |
+
+### Coverage audit 2026-06-26 — held-out (odd origins) was NEVER swept (read before any re-sweep)
+
+A full audit of every existing jxl-lossy sweep (jxl-all / combined / p0 / dense-r6 /
+picker-pp) established the decisive fact: **every sweep ever run used even-only
+`K500_even` representatives, so the held-out (odd-origin) split was essentially never
+swept.** Union of ALL existing jxl-lossy rows = **666 train(even) origins, 112 odd
+(val 64 + test 48, all from dense-r6 alone)**. Same for the other codecs: zenjpeg 143
+even / **0 odd**, zenavif 41 even / **0 odd**, zenwebp 59 even / **0 odd**, jxl-lossless
+0 usable. So **"just filter existing rows into a held-out" is impossible** — there is
+nothing odd to filter. Training data (even) is abundant; held-out (odd) is the universal gap.
+
+- **jxl lossy is DONE via the interim picker.** Reassembling spent data can't beat it:
+  the richest single even source (jxl-all, 179 origins) is only ~202 *renditions* (≈1/origin,
+  thin), whereas the interim trained on dense-r6's 1523 train renditions + 112 odd held-out
+  and hit **val 0.52% / TEST 0.42%** (≤1% MET, val→test +0.08pp = generalizes). Don't re-sweep
+  jxl-lossy. (Optional v0.2 on the clean corpus for a beefier held-out — not required.)
+- **Reuse-even + sweep-odd is NOT cleanly mixable.** `gen_dense_corpus` (PIL Lanczos from
+  the largest rendition) ≠ the existing even data's pipeline (Rust Lanczos3 from originals);
+  config vocab also drifts (today's `lossy_dense` = 35 cells ⊂ jxl-all's 37, `prog1/prog2`
+  pruned). Mixing pipelines would shift train vs held-out. So the clean path for the 3 needy
+  codecs is **ONE self-consistent corpus end-to-end.**
+- **Clean corpus + features READY:** `/mnt/v/output/clean-picker-corpus-2026-06-26/`
+  (414 origins, 4497 renditions: train 2307 / val 1382 / test 808; consistent `o_<stem>`
+  naming) + `clean_features.tsv` (extracted `--sizes 0` from the rendition PNGs, so
+  features ↔ swept pixels are identical regardless of resize kernel) + `_features_manifest.tsv`.
+- **Sized fleet job (the genuinely-needed spend):** zenjpeg `scalar_dense` 627 cells/img,
+  zenavif `scalar_dense` 475, jxl-lossless `modes_full --plan-budget 400` → 315 modular/img.
+  × 4497 renditions ≈ **6.4M cells total**, ~$10–12 on a Hetzner cpx51 job-system fleet (~1.5 h).
+  jxl-lossy excluded (interim suffices).
 
 ## WORKFLOW (fleet → picker)
 
