@@ -36,6 +36,17 @@ The CPU side of each metric is supplied by an external reference crate
 expose a CPU backend (the IW-SSIM CPU port landed in 2026-05; see the
 [Modes × metrics support matrix](#modes--metrics-support-matrix)).
 
+**Feature gating (important):** the four external-crate CPU backends
+(ssim2 / dssim / butteraugli / zensim) ship in the default `cpu-metrics`
+bundle, but the two in-tree CPU ports — **`cvvdp` and `iwssim` — are NOT
+in `cpu-metrics`.** Enable them explicitly with
+`--features orchestrator,orchestrator-cpu-cvvdp` (resp.
+`orchestrator-cpu-iwssim`), which turn on `zenmetrics-api/cpu-cvvdp` so the
+orchestrator's GPU→CPU fallback ladder can dispatch to `cvvdp::Cvvdp`. A
+build with neither `gpu-cvvdp` nor `cpu-cvvdp` will report cvvdp as
+unavailable — that is a build-config message, not a "cvvdp is GPU-only"
+limitation.
+
 ### Supporting crates
 
 | Crate | Role |

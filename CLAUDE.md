@@ -444,12 +444,39 @@ those revs or newer (PLAN_SWEEPS.md §6 "Codec-rev pairing").
   → uses Vulkan/Metal/DX12 via wgpu. Use when targeting AMD/Intel GPUs
   on vast.ai. CUDA NVIDIA GPUs work but CUDA backend is faster.
 
+- **CPU metric coverage — `cpu-metrics` is 4 of 6, NOT all six (the trap that cost a session 2026-06-26):**
+  the default `cpu-metrics` bundle pulls CPU **butteraugli / zensim / ssim2 / dssim** only.
+  **cvvdp and iwssim have in-tree SIMD CPU crates (`crates/cvvdp`, `crates/iwssim`) but are NOT in
+  `cpu-metrics`** — reach them via `--features orchestrator,orchestrator-cpu-cvvdp` (resp.
+  `orchestrator-cpu-iwssim`), which turn on `zenmetrics-api/cpu-cvvdp` so `zenmetrics-api::cpu_dispatch`
+  (`Backend::Cpu`) holds a `cvvdp::Cvvdp`. So cvvdp/iwssim are **NOT "GPU-only"** — the README (lines
+  16–36) states all six expose a CPU backend and `zenmetrics-orchestrator` has a *tested* no-GPU fallback
+  ladder (`tests/no_gpu_fallback.rs`, `gpu.rs:32`) that selects `Backend::Cpu`. But that failover only
+  reaches cvvdp/iwssim **if the build enabled their `cpu-*` feature.** A build with neither `gpu-cvvdp`
+  nor `cpu-cvvdp` errors on `score-pairs --metric cvvdp` (`orchestrator_glue.rs:200`: "CPU variant of
+  'cvvdp' is not available in this build; rebuild with --features …") — that error is a **build-config**
+  message, not an architecture limit.
+- **`score-pairs` bypasses the umbrella/failover for cvvdp when built with `gpu-cvvdp`:** it constructs a
+  typed `cvvdp_gpu::CvvdpBatchScorer` (caches one `Cvvdp<R>` GPU instance across pairs to dodge the
+  ~200 MB/NVRTC per-pair compile that OOMs fleet chunks — `Cargo.toml:91-93`) and calls it directly
+  (`main.rs:2134`, `scored_via_cvvdp`), short-circuiting `run_metric()` — the umbrella `Metric::new` /
+  `compute_srgb_u8` path that the orchestrator's `Backend` selection + CPU failover live behind. So on a
+  `gpu-cvvdp` build cvvdp never consults the failover. To force CPU cvvdp: build WITHOUT `gpu-cvvdp`,
+  WITH `orchestrator,orchestrator-cpu-cvvdp`.
+- **Before claiming any metric is "GPU-only": `ls crates/` first.** `crates/cvvdp` + `crates/iwssim` are
+  SIMD CPU ports; never infer architecture from a feature-gated build error (memory:
+  `enumerate-repo-before-capability-claims`).
+
 ## Sweep runner discipline
 
 - **GPU metrics only on production workers.** Mixing CPU/GPU scores
   across a sweep produces inconsistent training data — pickers/trainers
-  expect a single metric backend. The forced-GPU build above prevents
-  accidental fall-back.
+  expect a single metric backend. NOTE (corrected 2026-06-26): the GPU
+  build does NOT force-fail to GPU (see the cheat-sheet correction above) —
+  a chunk CAN fall back to CPU for metrics whose `cpu-*` feature is compiled.
+  Keep a sweep on one backend by **selecting metrics whose backend you
+  control** and verifying the score column's impl tag, not by assuming the
+  build forbids CPU.
 - **Pre-uploaded binary lives at**
   `s3://coefficient/binaries/zenmetrics-<version>-linux-x86_64`
   (R2 endpoint: `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`). Workers
