@@ -1217,9 +1217,12 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             args.metric.name()
         );
     }
-    // The cvvdp batched scorer lives in the `gpu-cvvdp`-gated module. In a CPU build it doesn't exist,
-    // so cvvdp is rejected up front and the per-metric path below skips the cvvdp branch entirely —
-    // which is what lets a CPU `sweep` build (e.g. the jobexec worker image) compile.
+    // The cvvdp batched scorer lives in the `gpu-cvvdp`-gated module (per-pair
+    // GPU instance reuse). In a build WITHOUT gpu-cvvdp it doesn't exist; cvvdp
+    // then falls through to the loop's `run_metric` path, which (since C1) routes
+    // to the native SIMD CPU port via `Backend::Cpu` when `cpu-cvvdp` is built —
+    // so a CPU `sweep` build (the Hetzner / jobexec worker) scores cvvdp on CPU.
+    // Only when NEITHER backend is compiled do we reject cvvdp up front.
     #[cfg(feature = "gpu-cvvdp")]
     let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
     #[cfg(feature = "gpu-cvvdp")]
@@ -1251,9 +1254,13 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
                 .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
         );
     }
-    #[cfg(not(feature = "gpu-cvvdp"))]
+    #[cfg(all(not(feature = "gpu-cvvdp"), not(feature = "cpu-cvvdp")))]
     if args.metric == crate::metrics::MetricKind::Cvvdp {
-        return Err("cvvdp requires a GPU build (build with --features gpu,gpu-cvvdp)".into());
+        return Err(
+            "cvvdp needs a backend: rebuild with `--features gpu-cvvdp` (GPU) or \
+             `--features cpu-cvvdp` (native SIMD CPU)"
+                .into(),
+        );
     }
     // NOTE: IwssimBatchScorer used to be wired here for per-(W,H) JIT
     // caching, but the local CLI iwssim_gpu module depended on the
