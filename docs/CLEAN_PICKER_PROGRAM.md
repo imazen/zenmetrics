@@ -137,6 +137,33 @@ an unprovenanced corpus into training.
 **Status table:** jxl lossy = interim bin done (v0.2 imazen-26 pending) · jxl lossless / zenjpeg /
 zenavif = clean re-sweep PENDING. Commit constantly; `jj git fetch` often (cleanup merge may land).
 
+## Fleet execution notes — VALIDATED 2026-06-26 (read before launching the scaled run)
+
+The full job-system path is **proven end-to-end** on Hetzner (real `zenmetrics jobexec`
+executor → real JXL bitstreams `ff0a…` persisted as content-addressed blobs + Parquet
+ledger; `clean-picker-corpus-2026-06-26` is uploaded to `codec-corpus/clean-picker-corpus-2026-06-26/`).
+Two `launch_fleet.sh` bugs were found+fixed (commit fe0d0ec0):
+- `ZEN_MANIFEST_FILE=<declared manifest>` — launch a REAL sweep (was hardcoded synthetic spec).
+- real-manifest now defaults `ZEN_EXEC` to the baked `zenfleet-exec` shim (envblock's
+  `-e ZEN_EXEC` overrode the image default → a real launch silently ran `/bin/cat` = fake blobs).
+- `N_JOBS=0` skips the local tier (fleet-only; keep the shared workstation responsive).
+Declare path: `zenmetrics sweep --plan … --dry-run --emit-cells cells.jsonl` (rewrite
+`image_path` → basename so the worker resolves via `ZEN_CORPUS_PREFIX`) → `zenfleet-ctl
+declare-encodes --cells … --out manifest.json` → `ZEN_MANIFEST_FILE=manifest.json
+ZEN_WORKER_IMAGE=$ZEN_FLEET_IMAGE_CPU ZEN_CORPUS_BUCKET=codec-corpus
+ZEN_CORPUS_PREFIX=clean-picker-corpus-2026-06-26 launch_fleet.sh 0 <N_HZ> 0 0`.
+
+⚠ **EFFICIENCY (settled before scaling): per-cell ENCODE jobs re-decode the source PNG for
+EVERY cell** (jobexec `run_one_job` decodes per call), so a dense per-image grid (560
+jxl-lossy cells/image) decodes each source ~560×. Measured ~0.3–0.5 enc/s on a cpx22 — at
+8.9M cells that is many box-hours and over the $ budget. For a DENSE per-image sweep the
+efficient tool is **chunk mode** (`zenmetrics sweep` decodes each source ONCE, encodes all
+its cells in-process; `--encoded-out-dir` persists variants) — i.e. the Hetzner split tool
+`scripts/sweep/hetzner_cpu_sweep.sh`. The per-cell job system stays the right tool for
+sparse/heterogeneous/long-tail-resumable work and for jxl-LOSSLESS (modular memory needs a
+fresh process per cell). Decision for the scaled run: chunk mode for the lossy codecs +
+job system for jxl-lossless. (Box type: use cpx41/cpx51, not the cpx22 launcher default.)
+
 ## HDR + gain-map track (user-greenlit 2026-06-26, parallel to the SDR pickers)
 
 Goal: alongside SDR renditions, emit **SDR / HDR / gain-map triples** so an HDR /
