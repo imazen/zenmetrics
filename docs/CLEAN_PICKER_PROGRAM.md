@@ -174,6 +174,21 @@ Monitor: `/tmp/chunk_fleet_monitor.sh` (bg) destroys each box on its `done/box-<
 marker + logs `/tmp/chunk_fleet_monitor.log`. **A blind session: check boxes via
 `hcloud server list | grep clean-`, destroy any idle leftover, then collect.**
 
+**PIPELINE VALIDATED 2026-06-26 — zenjpeg clean picker SHIPPED.** Held-out TEST (7/9 origins):
+argmin 0.47% / top-2 0.235% / top-3 0.165%, val→test +0.01pp (generalizes). Committed to
+zenjpeg `main` 50c61658 (`benchmarks/zenjpeg_picker_v0.4_clean-imazen26-evenodd_2026-06-26.bin`).
+TWO gotchas hit + fixed (do these for avif/jxl too):
+1. `clean_features.tsv` (from `extract_features_for_picker` built `--features api`) has `name@hex8`
+   columns + an `image_path` key — but `omni_to_pareto` needs **`feat_<name>` cols + a `variant_name`
+   key**. Fix: post-process → `clean_features_vn.tsv` (add `variant_name` = basename w/o `.png`;
+   rename `<name>@<hex>` → `feat_<name>`). 50 of the picker `_WANTED` features survive.
+2. Each codec's `<codec>_picker.py::parse_config_name` was written for an OLD grammar and crashes on
+   the current `scalar_dense`/`lossy_dense` names (zenjpeg choked on `jp3_tr14.75cpl+1cl1_small_420`).
+   Fixed zenjpeg to extract the trellis float robustly (tolerate cpl/blur/bracket sub-knobs).
+   **avif/jxl configs likely need the same robustness fix** before their train_hybrid runs.
+Run timing: chunk fleet is ~2.7× slower than the optimistic estimate (half-util + sequential fetch —
+the deferred outer-loop fix), ~5h wall for avif; still correct + within budget.
+
 **Collect → train → bake → commit (per codec, once omni lands):**
 1. Merge box omnis: `s5cmd cp 's3://zentrain/jxl-lossy/runs/<RUN>/omni/box-*.omni.tsv' .`
    then concat (one header). That IS the picker omni (image_path/codec/q/knob_tuple_json/
