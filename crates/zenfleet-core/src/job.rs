@@ -208,6 +208,35 @@ fn metric_class(_metric: &str) -> ResourceClass {
     ResourceClass::Gpu
 }
 
+impl JobKind {
+    /// A **rough** per-cell *serial* wall-time estimate (seconds), used only to SIZE work-stealing
+    /// chunks (it fills [`crate::schedule::JobCost::cost_sec`], which feeds
+    /// [`crate::schedule::BoxBudget::pack_chunks`]). `zencodec`'s `ResourceEstimate` carries no time
+    /// field yet, so we proxy from two cheap signals:
+    ///   1. the kind's [`ResourceClass`] — the same cheap/expensive codec asymmetry [`encode_cost`]
+    ///      encodes (JPEG/PNG re-encode ≈ 1/100th of a metric; WebP/JXL/AVIF ≈ or ≫ a metric), and
+    ///   2. `peak_mem_bytes` (the job's [`crate::ledger::ResourceHint`] footprint) as an image-size
+    ///      proxy — a bigger working set ≈ a bigger image ≈ more encode/score time.
+    ///
+    /// **DELIBERATELY COARSE — these are NOT measured numbers.** Chunk sizing is self-correcting: a
+    /// 2× error only changes how often a box re-claims (claim cadence), never correctness or the
+    /// per-cell memory bound (that is [`crate::schedule::BoxBudget::can_admit`]). Refine the constants
+    /// from measured omni `encode_ms` telemetry when it lands.
+    pub fn estimate_cost_sec(&self, peak_mem_bytes: u64) -> f64 {
+        const GIB: f64 = (1u64 << 30) as f64;
+        // Floor: even a 64×64 cell pays process spawn + source fetch + IO — no cell is free.
+        const FLOOR_SEC: f64 = 1.0;
+        // Seconds per GiB of working set, by class (rough proxies, NOT measurements).
+        let per_gib = match self.profile().class {
+            ResourceClass::CpuLight => 3.0, // jpeg/png/resample — cheap re-encode
+            ResourceClass::CpuArm => 8.0,
+            ResourceClass::Gpu => 15.0, // metric/diffmap/scorefile — reference-local
+            ResourceClass::CpuHeavy | ResourceClass::HighRam => 40.0, // webp/jxl/avif/feature/bake
+        };
+        FLOOR_SEC + per_gib * (peak_mem_bytes as f64 / GIB)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,6 +274,41 @@ mod tests {
         .profile();
         assert_eq!(p.group_by, GroupBy::SourceSha);
         assert_eq!(p.class, ResourceClass::Gpu);
+    }
+
+    #[test]
+    fn cost_sec_floor_and_codec_ordering() {
+        const MB: u64 = 1 << 20;
+        let jpeg = JobKind::Encode {
+            codec: "zenjpeg".into(),
+            q: 80,
+            knobs: "{}".into(),
+        };
+        let avif = JobKind::Encode {
+            codec: "zenavif".into(),
+            q: 50,
+            knobs: "{}".into(),
+        };
+        // A ~zero-footprint cell costs ≈ the floor (no cell is free: spawn + fetch + IO).
+        assert!((jpeg.estimate_cost_sec(0) - 1.0).abs() < 1e-9);
+        // At the SAME footprint, the expensive codec (AVIF, CpuHeavy) is estimated dearer than the
+        // cheap one (JPEG, CpuLight) — the encode_cost asymmetry flows through.
+        assert!(
+            avif.estimate_cost_sec(256 * MB) > jpeg.estimate_cost_sec(256 * MB),
+            "AVIF should size dearer than JPEG at equal working set"
+        );
+    }
+
+    #[test]
+    fn cost_sec_is_monotonic_in_memory() {
+        const MB: u64 = 1 << 20;
+        let k = JobKind::Encode {
+            codec: "zenjxl".into(),
+            q: 50,
+            knobs: "{}".into(),
+        };
+        // Bigger working set (≈ bigger image) → larger time estimate.
+        assert!(k.estimate_cost_sec(64 * MB) < k.estimate_cost_sec(2048 * MB));
     }
 
     #[test]

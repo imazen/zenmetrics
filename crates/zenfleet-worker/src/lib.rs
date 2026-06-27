@@ -17,12 +17,12 @@ use std::io::{self, BufReader, Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
 use zenfleet_core::{
-    BlobIndexEntry, DesiredJob, ErrorClass, JobId, JobStatus, LedgerRow, LedgerView,
-    Regenerability, ResourceClass, RetryPolicy, RunControl, Sha256Hex, Tombstone, gc_plan,
-    lru_cap_evict, reconcile, sha256, worker_serves,
+    BlobIndexEntry, BoxBudget, DesiredJob, ErrorClass, InFlight, JobCost, JobId, JobStatus,
+    LedgerRow, LedgerView, Regenerability, ResourceClass, ResourceHint, RetryPolicy, RunControl,
+    Sha256Hex, Tombstone, gc_plan, lru_cap_evict, reconcile, sha256, worker_serves,
 };
 
 /// A classified execution failure — becomes a FAILED ledger row carrying this `error_class`, which
@@ -328,8 +328,6 @@ fn read_claim(endpoint: &str, bucket: &str, key: &str) -> Option<(String, u64)> 
 /// Claim a job, **stealing a stale claim** if the prior owner is presumed dead (claim age ≥ `ttl_secs`).
 /// Steal is itself a CAS (`If-Match` on the claim's ETag), so two reclaimers can't both win. Returns
 /// true iff this worker now owns the claim. This is the dead-worker reclaim (goal E).
-// All eight are irreducible CAS inputs (endpoint/bucket/prefix/id/now/ttl/spec-threshold/owner);
-// same rationale as the `#[allow]` on `execute_gap_claimed` below.
 #[allow(clippy::too_many_arguments)]
 pub fn claim_or_steal_r2(
     endpoint: &str,
@@ -341,7 +339,36 @@ pub fn claim_or_steal_r2(
     spec_threshold_secs: Option<u64>,
     owner: &str,
 ) -> bool {
-    let key = format!("{}/{}", prefix.trim_matches('/'), job_id.as_str());
+    claim_or_steal_r2_key(
+        endpoint,
+        bucket,
+        prefix,
+        job_id.as_str(),
+        now,
+        ttl_secs,
+        spec_threshold_secs,
+        owner,
+    )
+}
+
+/// The string-keyed core of [`claim_or_steal_r2`]: claim/steal an arbitrary `id` (the claim object is
+/// `{prefix}/{id}`), so the same exactly-once R2-lease mechanism covers both per-cell claims (id =
+/// `JobId`) and the chunked path's coarse per-chunk claims (id = [`chunk_id`], a `chunk-…` key that
+/// never collides with a bare-sha cell claim). Same CAS semantics as [`claim_or_steal_r2`].
+// All eight are irreducible CAS inputs (endpoint/bucket/prefix/id/now/ttl/spec-threshold/owner);
+// same rationale as the `#[allow]` on `execute_gap_claimed` below.
+#[allow(clippy::too_many_arguments)]
+pub fn claim_or_steal_r2_key(
+    endpoint: &str,
+    bucket: &str,
+    prefix: &str,
+    id: &str,
+    now: u64,
+    ttl_secs: u64,
+    spec_threshold_secs: Option<u64>,
+    owner: &str,
+) -> bool {
+    let key = format!("{}/{}", prefix.trim_matches('/'), id);
     let n = CLAIM_TMP_N.fetch_add(1, Ordering::Relaxed);
     let body = std::env::temp_dir().join(format!("zenclaim_bd_{}_{}", std::process::id(), n));
     if std::fs::write(&body, format!("{now} {owner}")).is_err() {
@@ -389,7 +416,7 @@ pub fn claim_or_steal_r2(
         //    latest-wins on job_id makes the loser a harmless duplicate.
         Some((_, prev_ts)) => match spec_threshold_secs {
             Some(spec) if now.saturating_sub(prev_ts) >= spec => {
-                let spec_key = format!("{}/spec/{}", prefix.trim_matches('/'), job_id.as_str());
+                let spec_key = format!("{}/spec/{}", prefix.trim_matches('/'), id);
                 aws_s3api(endpoint)
                     .arg("put-object")
                     .arg("--bucket")
@@ -550,6 +577,276 @@ where
     }
 
     out
+}
+
+/// Stable id for a chunk = `chunk-` + SHA-256 over its members' content-addressed job-ids (in chunk
+/// order). Deterministic across workers — every worker forms identical chunks from the same
+/// manifest-ordered gap — so the per-chunk R2 claim is **exclusive** (two workers never form
+/// overlapping chunks). The `chunk-` prefix namespaces it away from bare-sha per-cell claim keys.
+pub fn chunk_id(job_ids: &[JobId]) -> String {
+    let mut buf = String::new();
+    for id in job_ids {
+        buf.push_str(id.as_str());
+        buf.push('\n');
+    }
+    format!("chunk-{}", sha256(buf.as_bytes()).as_str())
+}
+
+/// The per-box knobs the chunked claim path runs under (see [`execute_gap_chunked`]).
+#[derive(Clone, Copy, Debug)]
+pub struct ChunkParams {
+    /// RAM + core admission envelope (≈ 0.75 × physical RAM, usable cores). Caps in-chunk concurrency.
+    pub budget: BoxBudget,
+    /// Target wall-time per chunk in seconds (the `ZEN_CHUNK_WALL_SEC` opt-in; the user's "~5 min").
+    pub chunk_wall_sec: f64,
+    /// Footprint assumed for a gap job carrying no [`ResourceHint`] (declare couldn't estimate it).
+    pub fallback_hint: ResourceHint,
+}
+
+/// Chunked, resource-bounded gap execution — the opt-in (`ZEN_CHUNK_WALL_SEC > 0`) counterpart to
+/// [`execute_gap_claimed`]. Two differences, nothing else:
+///
+///  - **Claim granularity is a chunk, not a cell.** The gap (from [`reconcile`]) is packed by
+///    [`BoxBudget::pack_chunks`] into units each estimated at ≈ `chunk_wall_sec` on this box, and
+///    `claim_chunk(chunk_id)` takes ONE R2 lease per chunk. This kills the per-cell claim round-trip
+///    that idled boxes behind the gap prefix (one `aws put-object` per sub-second cell). Chunk
+///    boundaries are deterministic (the gap is in manifest order — NOT per-worker shuffled — and
+///    packing is a pure function of it), so a chunk claim is exclusive; workers iterate chunk
+///    *indices* in a per-worker order so they don't all contend on chunk 0.
+///
+///  - **In-chunk concurrency is bounded by [`BoxBudget::can_admit`].** A won chunk's cells run
+///    concurrently as **fresh processes** (`handler` is the one-shot [`exec_command`], so the
+///    `modes_full` per-cell memory bound holds — see the crate Known Bugs) with Σpeak_mem ≤
+///    `budget.ram_budget_bytes` and Σthreads ≤ `budget.cores`. Set the RAM budget to ~75% of
+///    physical RAM and peak stays under it; cores are never oversubscribed (no cache thrash).
+///
+/// **Idempotence + crash recovery are identical to the per-cell path.** Chunks are formed FROM the
+/// reconciler's gap, so a cell already Done in `view` is never in a chunk — the existing per-cell
+/// done-check still gates every cell. `flush(chunk_id, rows)` is called the moment a chunk finishes
+/// (a durable per-chunk ledger sidecar), so a crash only loses the in-flight chunk: the next pass
+/// re-derives the gap from the persisted rows and a re-claimed chunk runs only the still-missing
+/// cells. Content-addressed blob puts make any re-run cell a no-op — no cell is lost or harmfully
+/// double-run.
+///
+/// Spot preemption: a chunk claim simply ages out (TTL stale-reclaim, goal E) and another box takes
+/// it — chunk 2 does not fast-release a chunk claim on SIGTERM (the per-cell path's nicety); that is
+/// a follow-up. Correctness is unaffected.
+#[allow(clippy::too_many_arguments)]
+pub fn execute_gap_chunked<H, B, CC, F>(
+    desired: &[DesiredJob],
+    view: &LedgerView,
+    policy: RetryPolicy,
+    handler: H,
+    store: &B,
+    claim_chunk: CC,
+    params: ChunkParams,
+    mut flush: F,
+    ctx: WorkerCtx<'_>,
+) -> ExecOutcome
+where
+    H: Fn(&DesiredJob) -> Result<Vec<u8>, HandlerError> + Sync,
+    B: BlobStore + Sync,
+    CC: Fn(&str) -> bool,
+    F: FnMut(&str, &[LedgerRow]),
+{
+    let plan = reconcile(desired, view, policy);
+    let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
+    // Gap DesiredJobs in deterministic manifest order (reconcile preserves `desired` order). NOT
+    // shuffled — identical across workers so chunk boundaries (and thus claims) are exclusive.
+    let gap: Vec<&DesiredJob> = plan
+        .enqueue
+        .iter()
+        .filter_map(|id| by_id.get(id).copied())
+        .collect();
+
+    // Size the chunks: per-cell (cost_sec, peak_mem, threads), with the safe fallback for cells that
+    // carried no declare-time hint.
+    let costs: Vec<JobCost> = gap
+        .iter()
+        .map(|d| {
+            let h = d.hint.unwrap_or(params.fallback_hint);
+            JobCost {
+                cost_sec: d.kind.estimate_cost_sec(h.peak_mem_bytes),
+                peak_mem_bytes: h.peak_mem_bytes,
+                threads: h.threads.max(1),
+            }
+        })
+        .collect();
+    let chunks = params.budget.pack_chunks(&costs, params.chunk_wall_sec);
+    let chunk_ids: Vec<String> = chunks
+        .iter()
+        .map(|members| {
+            let ids: Vec<JobId> = members.iter().map(|&m| gap[m].job_id()).collect();
+            chunk_id(&ids)
+        })
+        .collect();
+
+    // Per-worker iteration order over chunk indices (deterministic hash(chunk_id, worker)) so
+    // late-joining boxes don't all start at chunk 0 — same rationale as the gap shuffle in
+    // execute_gap_claimed, but over coarse chunks.
+    let mut order: Vec<usize> = (0..chunks.len()).collect();
+    order.sort_by_cached_key(|&ci| {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        std::hash::Hash::hash(&chunk_ids[ci], &mut h);
+        std::hash::Hash::hash(ctx.worker, &mut h);
+        std::hash::Hasher::finish(&h)
+    });
+
+    let mut out = ExecOutcome {
+        rows: Vec::new(),
+        done: 0,
+        failed: 0,
+        poisoned: 0,
+        skipped: 0,
+    };
+    let make = |d: &DesiredJob,
+                status: JobStatus,
+                output_sha: Option<Sha256Hex>,
+                error_class: Option<ErrorClass>|
+     -> LedgerRow {
+        LedgerRow {
+            job_id: d.job_id(),
+            kind: d.kind.clone(),
+            cell: d.cell.clone(),
+            output_sha,
+            status,
+            error_class,
+            attempts: view.get(&d.job_id()).map(|r| r.attempts + 1).unwrap_or(1),
+            ts: ctx.now,
+            worker: ctx.worker.to_string(),
+            provider: ctx.provider.to_string(),
+        }
+    };
+
+    for &ci in &order {
+        let members = &chunks[ci];
+        let cid = &chunk_ids[ci];
+        if !claim_chunk(cid) {
+            out.skipped += members.len(); // another worker owns this chunk
+            continue;
+        }
+        // Won the chunk — run its cells concurrently under the budget (fresh processes), then turn
+        // each (post-persist) result into a ledger row.
+        let results = run_chunk_concurrent(members, &gap, &params, &handler, store);
+        let mut chunk_rows: Vec<LedgerRow> = Vec::with_capacity(results.len());
+        for (gi, res) in results {
+            let d = gap[gi];
+            match res {
+                Ok(sha) => {
+                    chunk_rows.push(make(d, JobStatus::Done, Some(sha), None));
+                    out.done += 1;
+                }
+                Err(class) => {
+                    chunk_rows.push(make(d, JobStatus::Failed, None, Some(class)));
+                    out.failed += 1;
+                }
+            }
+        }
+        // Durable per-chunk write BEFORE the next claim: a crash now only re-does later chunks.
+        flush(cid, &chunk_rows);
+        out.rows.append(&mut chunk_rows);
+    }
+
+    // POISON rows the reconciler decided — identical to execute_gap_claimed; persisted in their own
+    // sidecar so the "doomed work stops, recorded" signal (goals B/F) survives a crash too.
+    let mut poison_rows: Vec<LedgerRow> = Vec::new();
+    for id in &plan.poison {
+        if let Some(d) = by_id.get(id) {
+            let prev_err = view.get(id).and_then(|r| r.error_class);
+            poison_rows.push(make(d, JobStatus::Poison, None, prev_err));
+            out.poisoned += 1;
+        }
+    }
+    if !poison_rows.is_empty() {
+        flush("poison", &poison_rows);
+        out.rows.append(&mut poison_rows);
+    }
+    out
+}
+
+/// Run a claimed chunk's cells concurrently as fresh processes, admitting under
+/// [`BoxBudget::can_admit`] so Σpeak_mem ≤ the RAM budget and Σthreads ≤ cores at all times. Returns
+/// each cell's outcome keyed by its index into `gap`: `Ok(sha)` once `handler` produced bytes AND
+/// `store.put` persisted them (→ a Done row), `Err(class)` otherwise (→ a Failed row). Persisting
+/// inside the worker thread overlaps a cell's upload with peers' encode/score.
+///
+/// Concurrency = a fixed pool of ≤ `min(chunk_len, cores)` scoped threads sharing a cursor +
+/// running-footprint [`InFlight`]; a thread admits the cell at the cursor when it fits, else waits on
+/// the condvar for a completion to free room. `can_admit` always admits when nothing is running, so a
+/// single over-budget cell still runs (alone) — no deadlock, and the cursor advances in order.
+fn run_chunk_concurrent<H, B>(
+    members: &[usize],
+    gap: &[&DesiredJob],
+    params: &ChunkParams,
+    handler: &H,
+    store: &B,
+) -> Vec<(usize, Result<Sha256Hex, ErrorClass>)>
+where
+    H: Fn(&DesiredJob) -> Result<Vec<u8>, HandlerError> + Sync,
+    B: BlobStore + Sync,
+{
+    struct Shared {
+        cursor: usize,
+        running: InFlight,
+        results: Vec<(usize, Result<Sha256Hex, ErrorClass>)>,
+    }
+    let shared = Mutex::new(Shared {
+        cursor: 0,
+        running: InFlight::default(),
+        results: Vec::with_capacity(members.len()),
+    });
+    let cv = Condvar::new();
+    let fallback = params.fallback_hint;
+    let budget = params.budget;
+
+    // Never more concurrent cells than cores (each uses ≥1 thread) or cells in the chunk; ≥1.
+    let n_threads = (budget.cores.max(1) as usize).min(members.len()).max(1);
+
+    std::thread::scope(|scope| {
+        for _ in 0..n_threads {
+            scope.spawn(|| {
+                loop {
+                    // Acquire the next admissible cell (admission-gated), or stop when none remain.
+                    let (gi, mem, thr) = {
+                        let mut g = shared.lock().unwrap_or_else(|p| p.into_inner());
+                        loop {
+                            if g.cursor >= members.len() {
+                                return; // every cell started — this thread is done
+                            }
+                            let gi = members[g.cursor];
+                            let h = gap[gi].hint.unwrap_or(fallback);
+                            let (mem, thr) = (h.peak_mem_bytes, h.threads.max(1));
+                            if budget.can_admit(&g.running, mem, thr) {
+                                g.running.add(mem, thr);
+                                g.cursor += 1;
+                                break (gi, mem, thr);
+                            }
+                            // running full → wait for an in-flight cell to finish and free room.
+                            g = cv.wait(g).unwrap_or_else(|p| p.into_inner());
+                        }
+                    };
+                    // Encode/score (fresh process) + persist — OUTSIDE the lock so peers run too.
+                    let res = handler(gap[gi]).and_then(|bytes| {
+                        store.put(&bytes).map_err(|e| {
+                            HandlerError::new(ErrorClass::UploadFail, format!("put: {e}"))
+                        })
+                    });
+                    let mapped = res.map_err(|he| he.class);
+                    {
+                        let mut g = shared.lock().unwrap_or_else(|p| p.into_inner());
+                        g.running.remove(mem, thr);
+                        g.results.push((gi, mapped));
+                    }
+                    cv.notify_all(); // a slot freed → wake a waiter to admit the next cell
+                }
+            });
+        }
+    });
+
+    shared
+        .into_inner()
+        .unwrap_or_else(|p| p.into_inner())
+        .results
 }
 
 /// Production handler: shell out to an executor `program`. The job descriptor is written as JSON to
@@ -738,6 +1035,12 @@ pub struct WorkerConfig {
     /// Resource classes this worker serves (goal H capability-routing). Empty = serve everything.
     /// A job is only claimed/run if its `JobKind::profile().class` is in this set.
     pub served: Vec<ResourceClass>,
+    /// **Opt-in ~5-minute chunked claiming** (from env `ZEN_CHUNK_WALL_SEC`; the binary parses it).
+    /// `0.0` (default/unset) = **disabled** → byte-identical to the per-cell claim path. When `> 0`,
+    /// `run()` packs the gap into chunks each ≈ this many seconds on this box and claims/executes a
+    /// chunk at a time under a `BoxBudget(0.75 × RAM, cores)` admission cap (see
+    /// [`execute_gap_chunked`]). Activate only after a real-box smoke run.
+    pub chunk_wall_sec: f64,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -864,6 +1167,156 @@ pub fn gc_execute(
     report
 }
 
+/// Parse `MemTotal:` (in kB) out of a `/proc/meminfo` body → bytes. `None` if the field is absent or
+/// unparseable (e.g. a non-Linux host). Split out so the parse is unit-testable without the file.
+fn parse_meminfo_total(meminfo: &str) -> Option<u64> {
+    for line in meminfo.lines() {
+        if let Some(rest) = line.strip_prefix("MemTotal:") {
+            let kb: u64 = rest.split_whitespace().next()?.parse().ok()?;
+            return Some(kb.saturating_mul(1024));
+        }
+    }
+    None
+}
+
+/// Total physical RAM in bytes from `/proc/meminfo`. `None` if unreadable.
+fn read_meminfo_total_bytes() -> Option<u64> {
+    parse_meminfo_total(&std::fs::read_to_string("/proc/meminfo").ok()?)
+}
+
+/// This box's admission budget for the chunked path: **RAM budget = 75 % of physical RAM** (leaves
+/// headroom for the OS, page cache, GPU readback, and the estimate's slop — see [`BoxBudget`]) and
+/// **cores = usable parallelism** (`available_parallelism` honors cgroup/cpuset affinity, which the
+/// fleet onstart pins; RAM is bounded separately by `can_admit`, so we do NOT also shrink cores by
+/// RAM the way a blind N-per-core launcher would). Conservative fallbacks (2 GiB / 1 core) if either
+/// probe fails — never panics.
+fn host_box_budget() -> BoxBudget {
+    let total_ram = read_meminfo_total_bytes().unwrap_or(2 << 30); // 2 GiB if /proc/meminfo unreadable
+    let ram_budget = (((total_ram as f64) * 0.75) as u64).max(1);
+    let cores = std::thread::available_parallelism()
+        .map(|n| n.get() as u32)
+        .unwrap_or(1)
+        .max(1);
+    BoxBudget::new(ram_budget, cores)
+}
+
+/// Derive a per-chunk ledger sidecar URI from the pass's `ledger_out` by inserting `chunk-<id8>`
+/// before the extension: `…/pass.parquet` → `…/pass.chunk-ab12cd34.parquet`. Per-chunk durable
+/// writes make a completed chunk's progress survive a crash; the next pass folds the sidecar into the
+/// view and reconcile skips the now-Done cells (crash recovery at chunk granularity). Pure string op,
+/// so it works for both local paths and `s3://…` URIs.
+fn chunk_ledger_uri(ledger_out: &str, chunk_id: &str) -> String {
+    let tag = chunk_id.strip_prefix("chunk-").unwrap_or(chunk_id);
+    let tag8: String = tag.chars().take(8).collect();
+    match ledger_out.rsplit_once('.') {
+        // only treat the trailing dot as an extension if it's in the filename, not a dir name
+        Some((stem, ext)) if !ext.contains('/') => format!("{stem}.chunk-{tag8}.{ext}"),
+        _ => format!("{ledger_out}.chunk-{tag8}.parquet"),
+    }
+}
+
+/// The opt-in chunked claim path (`cfg.chunk_wall_sec > 0`), split out of [`run`] so the per-cell
+/// path stays byte-identical. Packs the gap into ≈`chunk_wall_sec` work-stealing chunks and runs a
+/// chunk at a time under a `BoxBudget(0.75 × RAM, cores)` admission cap, executing each cell as a
+/// fresh process. Persists a durable per-chunk ledger sidecar via the `flush` callback, so unlike the
+/// per-cell path it does NOT write a single end-of-pass sidecar — the chunk sidecars ARE the output.
+fn run_chunked(
+    cfg: &WorkerConfig,
+    desired: &[DesiredJob],
+    view: &LedgerView,
+    policy: RetryPolicy,
+    ctx: WorkerCtx<'_>,
+    endpoint: Option<&str>,
+) -> Result<ExecOutcome, WorkerRunError> {
+    let params = ChunkParams {
+        budget: host_box_budget(),
+        chunk_wall_sec: cfg.chunk_wall_sec,
+        // No declare-time hint → assume a modest 512 MB / 1-thread footprint (admission stays safe).
+        fallback_hint: ResourceHint {
+            peak_mem_bytes: 512 << 20,
+            threads: 1,
+        },
+    };
+    eprintln!(
+        "zenfleet-worker: chunked mode ON (ZEN_CHUNK_WALL_SEC={:.0}s) — budget {:.1} GiB / {} cores",
+        params.chunk_wall_sec,
+        params.budget.ram_budget_bytes as f64 / (1u64 << 30) as f64,
+        params.budget.cores
+    );
+    // Fresh process per cell (NOT the persistent warm child) — keeps the modes_full per-cell memory
+    // bound and lets cells run truly concurrently under the budget.
+    let handler = |job: &DesiredJob| exec_command(&cfg.exec, job);
+    let ledger_out_uri = cfg.ledger_out.to_string_lossy().into_owned();
+    let mut flush = |chunk_id: &str, rows: &[LedgerRow]| {
+        if rows.is_empty() {
+            return;
+        }
+        let uri = chunk_ledger_uri(&ledger_out_uri, chunk_id);
+        if let Err(e) = zenfleet_ledger::write_ledger_uri(&uri, rows, endpoint) {
+            eprintln!("zenfleet-worker: chunk {chunk_id} ledger write to {uri} failed: {e}");
+        }
+    };
+    let out = match (&cfg.r2, &cfg.claims) {
+        (Some(t), Some(cc)) => {
+            let store = R2BlobStore::new(t.endpoint.clone(), t.bucket.clone(), t.prefix.clone());
+            execute_gap_chunked(
+                desired,
+                view,
+                policy,
+                handler,
+                &store,
+                |cid| {
+                    // One R2 lease per chunk (spec-execution off for chunks; TTL reclaim covers it).
+                    claim_or_steal_r2_key(
+                        &t.endpoint,
+                        &cc.bucket,
+                        &cc.prefix,
+                        cid,
+                        cfg.now,
+                        cc.ttl_secs,
+                        None,
+                        &cfg.worker,
+                    )
+                },
+                params,
+                &mut flush,
+                ctx,
+            )
+        }
+        (Some(t), None) => {
+            // R2 blobs but single-worker (no concurrent claiming) → win every chunk.
+            let store = R2BlobStore::new(t.endpoint.clone(), t.bucket.clone(), t.prefix.clone());
+            execute_gap_chunked(
+                desired,
+                view,
+                policy,
+                handler,
+                &store,
+                |_| true,
+                params,
+                &mut flush,
+                ctx,
+            )
+        }
+        (None, _) => {
+            let store = LocalBlobStore::new(cfg.blobs.clone())
+                .map_err(|e| WorkerRunError::Io(e.to_string()))?;
+            execute_gap_chunked(
+                desired,
+                view,
+                policy,
+                handler,
+                &store,
+                |_| true,
+                params,
+                &mut flush,
+                ctx,
+            )
+        }
+    };
+    Ok(out)
+}
+
 /// One worker pass: load the manifest + existing ledger → reconcile the gap → execute each job via
 /// `exec` → content-address outputs → write the resulting rows. Returns the outcome. Deterministic
 /// given `cfg.now` (the binary supplies the wall clock; the library stays clock-free + testable).
@@ -919,6 +1372,14 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
         provider: &cfg.provider,
         now: cfg.now,
     };
+
+    // OPT-IN CHUNKED CLAIM PATH (env ZEN_CHUNK_WALL_SEC > 0). Default 0.0 → skip entirely, so the
+    // per-cell path below is byte-identical to before. The chunked path persists a durable sidecar
+    // per chunk, so it returns here without the single end-of-pass ledger write at the bottom.
+    if cfg.chunk_wall_sec > 0.0 {
+        return run_chunked(cfg, &desired, &view, policy, ctx, endpoint);
+    }
+
     // Pick the blob store: R2 if configured, else local FS. execute_gap is generic over the store,
     // so each arm monomorphizes against the concrete type.
     // Persistent warm executor (one `--serve` child reused across this pass's jobs) when enabled —
@@ -1175,6 +1636,7 @@ mod tests {
             provider: "local".into(),
             now: 100,
             max_attempts: 3,
+            chunk_wall_sec: 0.0, // per-cell path (default-off)
         };
         let out = run(&cfg).unwrap();
         assert_eq!(out.done, 2);
@@ -1232,5 +1694,296 @@ mod tests {
             !claim_is_stale(5, 0, 10),
             "clock skew / before ttl elapsed: not stealable"
         );
+    }
+
+    // ──────────────────── chunked claim path (ZEN_CHUNK_WALL_SEC) ────────────────────
+
+    /// A distinct, cheap encode cell (4 MB / 1 thread → packs many per chunk). Distinct `inputs`
+    /// give each a distinct content-addressed `JobId`.
+    fn cheap_cell(i: u8) -> DesiredJob {
+        DesiredJob {
+            kind: JobKind::Encode {
+                codec: "zenjpeg".into(),
+                q: 80,
+                knobs: "{}".into(),
+            },
+            inputs: vec![sha256(&[i])],
+            cell: CellId {
+                image_path: format!("img{i}.png"),
+                codec: "zenjpeg".into(),
+                q: 80,
+                knob_tuple_json: "{}".into(),
+            },
+            hint: Some(ResourceHint {
+                peak_mem_bytes: 4 << 20,
+                threads: 1,
+            }),
+        }
+    }
+
+    fn test_params() -> ChunkParams {
+        ChunkParams {
+            budget: BoxBudget::new(24 << 30, 2), // 24 GiB, 2 cores
+            chunk_wall_sec: 2.0,
+            fallback_hint: ResourceHint {
+                peak_mem_bytes: 512 << 20,
+                threads: 1,
+            },
+        }
+    }
+
+    #[test]
+    fn chunk_id_is_stable_and_distinct() {
+        let a = sha256(b"a");
+        let b = sha256(b"b");
+        let mk = |s| {
+            JobId::of(
+                &JobKind::Metric {
+                    metric: "ssim2".into(),
+                },
+                std::slice::from_ref(s),
+            )
+        };
+        let (j1, j2) = (mk(&a), mk(&b));
+        // Deterministic in membership + order.
+        assert_eq!(
+            chunk_id(&[j1.clone(), j2.clone()]),
+            chunk_id(&[j1.clone(), j2.clone()])
+        );
+        // Different membership → different id; and namespaced away from bare-sha cell claims.
+        assert_ne!(
+            chunk_id(std::slice::from_ref(&j1)),
+            chunk_id(&[j1.clone(), j2])
+        );
+        assert!(chunk_id(std::slice::from_ref(&j1)).starts_with("chunk-"));
+    }
+
+    #[test]
+    fn parse_meminfo_total_reads_memtotal_kb() {
+        let s = "MemTotal:       65792840 kB\nMemFree:          123 kB\n";
+        assert_eq!(parse_meminfo_total(s), Some(65792840u64 * 1024));
+        assert_eq!(parse_meminfo_total("no memtotal here\n"), None);
+    }
+
+    #[test]
+    fn chunk_ledger_uri_inserts_tag_before_extension() {
+        assert_eq!(
+            chunk_ledger_uri("run/pass.parquet", "chunk-ab12cd34ef"),
+            "run/pass.chunk-ab12cd34.parquet"
+        );
+        assert_eq!(
+            chunk_ledger_uri("s3://b/run/pass.parquet", "chunk-deadbeef00"),
+            "s3://b/run/pass.chunk-deadbeef.parquet"
+        );
+        // a dot only in a directory name (not the filename) → append a sidecar name.
+        assert_eq!(
+            chunk_ledger_uri("s3://b/run.v2/pass", "chunk-feed0000"),
+            "s3://b/run.v2/pass.chunk-feed0000.parquet"
+        );
+    }
+
+    #[test]
+    fn host_box_budget_is_sane() {
+        // Reads /proc/meminfo + available_parallelism on this host; both must yield ≥1, never panic.
+        let b = host_box_budget();
+        assert!(b.cores >= 1);
+        assert!(b.ram_budget_bytes >= 1);
+    }
+
+    #[test]
+    fn chunked_path_packs_runs_and_is_idempotent() {
+        // 12 cheap cells, 2.0s chunks on a 2-core budget → packs several cells per chunk (FEWER
+        // claims than cells), runs every cell exactly once, and a second pass over the resulting
+        // ledger re-runs nothing — the chunked counterpart of converges_on_second_pass.
+        let store = LocalBlobStore::new(tmp()).unwrap();
+        let cells: Vec<DesiredJob> = (0..12u8).map(cheap_cell).collect();
+        let ran: Arc<Mutex<HashSet<JobId>>> = Arc::new(Mutex::new(HashSet::new()));
+        let mut chunk_rows_seen: Vec<usize> = Vec::new();
+
+        let out1 = {
+            let ran = ran.clone();
+            execute_gap_chunked(
+                &cells,
+                &LedgerView::new(),
+                RetryPolicy::default(),
+                move |job| {
+                    ran.lock().unwrap().insert(job.job_id());
+                    Ok(format!("enc:{}", job.job_id().as_str()).into_bytes())
+                },
+                &store,
+                |_| true, // single worker wins every chunk
+                test_params(),
+                |_cid, rows| chunk_rows_seen.push(rows.len()),
+                WorkerCtx {
+                    worker: "w1",
+                    provider: "local",
+                    now: 100,
+                },
+            )
+        };
+        assert_eq!(out1.done, 12, "every gap cell completes once");
+        assert_eq!(
+            ran.lock().unwrap().len(),
+            12,
+            "handler ran each cell exactly once"
+        );
+        assert_eq!(out1.rows.len(), 12);
+        // Chunking produced fewer claim units than cells, and the flushed rows cover the whole gap.
+        assert!(
+            chunk_rows_seen.len() < 12,
+            "chunking must produce fewer claim units than cells (got {} chunks)",
+            chunk_rows_seen.len()
+        );
+        assert_eq!(chunk_rows_seen.iter().sum::<usize>(), 12);
+        assert!(
+            chunk_rows_seen.iter().any(|&n| n >= 2),
+            "at least one chunk packed ≥2 cells"
+        );
+
+        // Pass 2 over the just-written ledger → gap empty → handler MUST NOT run (idempotent).
+        let view = LedgerView::from_rows(out1.rows);
+        let out2 = execute_gap_chunked(
+            &cells,
+            &view,
+            RetryPolicy::default(),
+            |_| panic!("handler must NOT run for an already-done cell"),
+            &store,
+            |_| true,
+            test_params(),
+            |_cid, _rows| panic!("nothing to flush on a converged pass"),
+            WorkerCtx {
+                worker: "w1",
+                provider: "local",
+                now: 200,
+            },
+        );
+        assert_eq!(out2.done, 0);
+        assert!(out2.rows.is_empty(), "converged — nothing left in the gap");
+    }
+
+    #[test]
+    fn chunked_re_claim_after_crash_skips_already_done_cells() {
+        // Simulate a crash mid-pass: only SOME cells' rows reached the ledger. A re-claimed chunk
+        // must run ONLY the still-missing cells (the per-cell done-check still gates inside a chunk),
+        // never re-running the persisted ones — "a re-claimed chunk skips already-completed cells".
+        let store = LocalBlobStore::new(tmp()).unwrap();
+        let cells: Vec<DesiredJob> = (0..8u8).map(cheap_cell).collect();
+
+        // Pre-seed the view with Done rows for the even-indexed cells (as if a prior pass persisted
+        // those chunk sidecars before crashing).
+        let done_rows: Vec<LedgerRow> = cells
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| i % 2 == 0)
+            .map(|(_, d)| LedgerRow {
+                job_id: d.job_id(),
+                kind: d.kind.clone(),
+                cell: d.cell.clone(),
+                output_sha: Some(sha256(b"prior")),
+                status: JobStatus::Done,
+                error_class: None,
+                attempts: 1,
+                ts: 50,
+                worker: "crashed".into(),
+                provider: "local".into(),
+            })
+            .collect();
+        let view = LedgerView::from_rows(done_rows);
+        let expected_missing: HashSet<JobId> = cells
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| i % 2 == 1)
+            .map(|(_, d)| d.job_id())
+            .collect();
+
+        let ran: Arc<Mutex<HashSet<JobId>>> = Arc::new(Mutex::new(HashSet::new()));
+        let out = {
+            let ran = ran.clone();
+            execute_gap_chunked(
+                &cells,
+                &view,
+                RetryPolicy::default(),
+                move |job| {
+                    ran.lock().unwrap().insert(job.job_id());
+                    Ok(b"enc".to_vec())
+                },
+                &store,
+                |_| true,
+                test_params(),
+                |_cid, _rows| {},
+                WorkerCtx {
+                    worker: "w1",
+                    provider: "local",
+                    now: 300,
+                },
+            )
+        };
+        assert_eq!(out.done, 4, "only the 4 still-missing cells run");
+        assert_eq!(
+            *ran.lock().unwrap(),
+            expected_missing,
+            "exactly the not-yet-Done cells run; the persisted ones are skipped"
+        );
+    }
+
+    #[test]
+    fn run_pass_chunked_is_end_to_end_and_converges() {
+        // Full run() chunked path with local blobs: pack → run cells as FRESH `cat` processes →
+        // write a DURABLE per-chunk ledger sidecar each. A second (also chunked) pass that folds
+        // those sidecars in re-runs nothing (exec="false" would Fail-row if any cell ran) — proves
+        // per-chunk persistence + crash-recovery skip end to end.
+        let dir = tmp();
+        std::fs::create_dir_all(&dir).unwrap();
+        let manifest = dir.join("jobs.json");
+        let cells: Vec<DesiredJob> = (0..6u8).map(cheap_cell).collect();
+        std::fs::write(&manifest, serde_json::to_vec(&cells).unwrap()).unwrap();
+        let cfg = WorkerConfig {
+            manifest,
+            ledger_in: vec![],
+            ledger_out: dir.join("p1.parquet"),
+            blobs: dir.join("blobs"),
+            r2: None,
+            claims: None,
+            control_key: None,
+            served: vec![],
+            exec: "cat".into(),
+            worker: "w1".into(),
+            provider: "local".into(),
+            now: 100,
+            max_attempts: 3,
+            chunk_wall_sec: 4.0, // CHUNKED ON
+        };
+        let out = run(&cfg).unwrap();
+        assert_eq!(out.done, 6, "all cells encoded via fresh `cat` processes");
+
+        // The chunked pass wrote per-chunk sidecars (NOT a single p1.parquet). Collect them.
+        let sidecars: Vec<PathBuf> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.starts_with("p1.chunk-") && n.ends_with(".parquet"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert!(
+            !sidecars.is_empty(),
+            "chunked path writes ≥1 durable per-chunk sidecar"
+        );
+
+        // Pass 2 folds the sidecars in → gap empty → exec must never run (would fail with `false`).
+        let cfg2 = WorkerConfig {
+            ledger_in: sidecars,
+            ledger_out: dir.join("p2.parquet"),
+            exec: "false".into(),
+            ..cfg.clone()
+        };
+        let out2 = run(&cfg2).unwrap();
+        assert_eq!(
+            out2.done, 0,
+            "all cells already Done via chunk sidecars → converged"
+        );
+        assert!(out2.rows.is_empty());
     }
 }
