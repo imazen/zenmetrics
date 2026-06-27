@@ -48,6 +48,22 @@ impl InFlight {
     }
 }
 
+/// A single job's cost for chunk packing: its estimated *serial* wall-time plus
+/// the resource footprint that determines how many such jobs a box runs at once.
+/// `cost_sec` is the time one job takes run alone (encode + score); the box then
+/// runs a chunk's jobs at the concurrency its mem+core envelope allows, so a
+/// chunk's wall-time ≈ `Σ cost_sec / concurrency`. The worker fills these from
+/// the codec estimate (`peak_mem`, `threads`) plus a per-cell time estimate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct JobCost {
+    /// Estimated wall-time of this job run alone, in seconds (encode + score).
+    pub cost_sec: f64,
+    /// Conservative peak memory, bytes (same source as [`InFlight`]/admission).
+    pub peak_mem_bytes: u64,
+    /// Useful threads at the box's core count (`1` for serial).
+    pub threads: u32,
+}
+
 impl BoxBudget {
     pub fn new(ram_budget_bytes: u64, cores: u32) -> Self {
         Self {
@@ -113,6 +129,55 @@ impl BoxBudget {
             (m.max(h.peak_mem_bytes), t.max(h.threads))
         });
         self.max_concurrent(max_mem, max_threads)
+    }
+
+    /// Group `jobs` (in order) into chunks each estimated to take ≈
+    /// `target_wall_sec` on *this* box, so a chunk is one work-stealing claim
+    /// unit instead of one-claim-per-cell (the per-cell R2-lease round-trip is
+    /// pure overhead for sub-second cells). The box runs a chunk's cells at the
+    /// concurrency its mem+core envelope allows — the heaviest cell in the chunk
+    /// binds, per [`max_concurrent`](Self::max_concurrent) — so the chunk's
+    /// wall-time ≈ `Σ cost_sec / concurrency`. Packing recomputes that estimate
+    /// as each cell is added and closes the chunk once it reaches the target.
+    ///
+    /// Properties: order-preserving, single greedy pass, every job appears in
+    /// exactly one chunk. A cell whose own serial cost already ≥ target becomes
+    /// its own chunk (never split a cell). `target_wall_sec` is clamped to ≥ 1.0.
+    /// Memory safety is unchanged from per-cell execution: chunking only batches
+    /// the *claim* — cells still execute under [`can_admit`](Self::can_admit), so
+    /// concurrent peak memory stays ≤ `ram_budget_bytes` (set that to ~75% of
+    /// physical RAM). Per the modes_full OOM note, cells run as fresh processes;
+    /// the chunk does not accumulate their memory.
+    pub fn pack_chunks(&self, jobs: &[JobCost], target_wall_sec: f64) -> Vec<Vec<usize>> {
+        let target = target_wall_sec.max(1.0);
+        let mut chunks: Vec<Vec<usize>> = Vec::new();
+        let mut cur: Vec<usize> = Vec::new();
+        let (mut sum_cost, mut max_mem, mut max_thr) = (0.0f64, 0u64, 1u32);
+        for (i, j) in jobs.iter().enumerate() {
+            sum_cost += j.cost_sec.max(0.0);
+            max_mem = max_mem.max(j.peak_mem_bytes);
+            max_thr = max_thr.max(j.threads.max(1));
+            cur.push(i);
+            // Effective concurrency can't exceed the cells actually in the chunk:
+            // a lone heavy cell runs alone (wall = its cost), not at the box's
+            // full fan-out — without this a single 400 s cell would mis-estimate
+            // to cost/cores and never close its own chunk.
+            let conc = self
+                .max_concurrent(max_mem, max_thr)
+                .min(cur.len() as u32)
+                .max(1);
+            let wall = sum_cost / conc as f64;
+            if wall >= target {
+                chunks.push(std::mem::take(&mut cur));
+                sum_cost = 0.0;
+                max_mem = 0;
+                max_thr = 1;
+            }
+        }
+        if !cur.is_empty() {
+            chunks.push(cur);
+        }
+        chunks
     }
 }
 
@@ -193,5 +258,95 @@ mod tests {
         assert_eq!(b.recommend_concurrency(&all_light, light), 16);
         // Empty manifest: nothing binds → default to cores.
         assert_eq!(b.recommend_concurrency(&[], light), 16);
+    }
+
+    #[test]
+    fn pack_light_cells_into_five_minute_chunks() {
+        // 3 s, 80 MB, single-thread cells on a 24 GB / 16-core box: core-bound at
+        // 16-way, so a 300 s chunk holds 300*16/3 = 1600 cells (vs 1600 separate
+        // R2-lease claims). 3200 cells → two chunks.
+        let b = BoxBudget::new(24 * GB, 16);
+        let jobs = vec![
+            JobCost {
+                cost_sec: 3.0,
+                peak_mem_bytes: 80 * MB,
+                threads: 1,
+            };
+            3200
+        ];
+        let chunks = b.pack_chunks(&jobs, 300.0);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].len(), 1600);
+        assert_eq!(chunks[1].len(), 1600);
+    }
+
+    #[test]
+    fn pack_heavy_cells_is_memory_bound() {
+        // 120 s, 8 GB, 4-thread cells on a 24 GB / 16-core box: mem-bound at 3-way
+        // → a 300 s chunk needs k with 120*k/3 ≥ 300, i.e. k = 8 (≈320 s). Far
+        // fewer cells per chunk than the light case — the chunk auto-sizes to the
+        // box's resource envelope, so a heavy chunk never OOMs.
+        let b = BoxBudget::new(24 * GB, 16);
+        let jobs = vec![
+            JobCost {
+                cost_sec: 120.0,
+                peak_mem_bytes: 8 * GB,
+                threads: 4,
+            };
+            16
+        ];
+        let chunks = b.pack_chunks(&jobs, 300.0);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].len(), 8);
+    }
+
+    #[test]
+    fn oversized_cell_gets_its_own_chunk() {
+        // A cell whose serial cost alone exceeds the target is never split: it
+        // runs alone (wall = its own cost), one cell per chunk.
+        let b = BoxBudget::new(24 * GB, 16);
+        let jobs = vec![
+            JobCost {
+                cost_sec: 400.0,
+                peak_mem_bytes: 80 * MB,
+                threads: 1,
+            };
+            3
+        ];
+        let chunks = b.pack_chunks(&jobs, 300.0);
+        assert_eq!(chunks.len(), 3);
+        assert!(chunks.iter().all(|c| c.len() == 1));
+    }
+
+    #[test]
+    fn pack_covers_every_job_in_order_once() {
+        // Mixed heavy/light: every job lands in exactly one chunk, order preserved.
+        let b = BoxBudget::new(24 * GB, 16);
+        let jobs: Vec<JobCost> = (0..1000)
+            .map(|i| {
+                if i % 7 == 0 {
+                    JobCost {
+                        cost_sec: 50.0,
+                        peak_mem_bytes: 2 * GB,
+                        threads: 2,
+                    }
+                } else {
+                    JobCost {
+                        cost_sec: 2.0,
+                        peak_mem_bytes: 100 * MB,
+                        threads: 1,
+                    }
+                }
+            })
+            .collect();
+        let chunks = b.pack_chunks(&jobs, 300.0);
+        let flat: Vec<usize> = chunks.iter().flatten().copied().collect();
+        assert_eq!(flat, (0..1000).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn pack_empty_is_empty() {
+        let b = BoxBudget::new(24 * GB, 16);
+        assert!(b.pack_chunks(&[], 300.0).is_empty());
     }
 }
