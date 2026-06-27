@@ -136,11 +136,16 @@ QG=$QG
 BUDGET=$BUDGET
 SWEEP_JOBS=${SWEEP_JOBS:-4}
 FEAT_OUT=$FEAT_OUT
+SWEEP_BIN_OVERRIDE=${SWEEP_BIN_OVERRIDE:-}
 ${THREADS:+RAYON_NUM_THREADS=$THREADS}
 ENV
 cat > /root/r/worker.sh <<'WORK'
 set -e
 mkdir -p /data
+# Corrected-binary override: fetch the locally-built zenmetrics (carries the
+# mandatory-axis budget fix so modes_full keeps XYB/RGB/sharp_yuv) from the run
+# bucket and replace the baked published-codec binary. Run-scoped cred reads it.
+[ -n "\$SWEEP_BIN_OVERRIDE" ] && { s5cmd --endpoint-url=\$EP cp "\$SWEEP_BIN_OVERRIDE" /usr/local/bin/zenmetrics && chmod +x /usr/local/bin/zenmetrics && echo "override binary: \$(zenmetrics --version)"; }
 s5cmd --endpoint-url=\$EP cp "s3://\$BUCKET/\$CHUNK_KEY" /data/chunk.txt
 # renditions live in the READ-ONLY corpus bucket — read them with the RO corpus cred, NOT the run cred.
 # Sequential per-file cp (proven heredoc-safe). NOTE: a parallel `s5cmd run` optimization fought the

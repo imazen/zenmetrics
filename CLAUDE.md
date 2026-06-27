@@ -2,6 +2,38 @@
 
 See global ~/.claude/CLAUDE.md for general instructions.
 
+## ACTIVE EXECUTION HANDOFF — mandatory-axis re-sweep (2026-06-27, $40 authorized)
+
+**Goal:** produce corrected per-codec pickers after the mandatory-axis disaster
+(5/6 pickers were crippled by silently budget-dropped first-class modes). Full
+record: [`docs/MANDATORY_SWEEP_AXES.md`](docs/MANDATORY_SWEEP_AXES.md) + memory
+`picker-mandatory-sweep-axis-disaster`.
+
+**DONE + verified on remotes:** coverage gate `scripts/picker/check_mandatory_coverage.py`
+(wired into `process_remaining.sh`) on master `78b0133e`; source-pins zenjpeg main
+`7afedf4c` (color_modes mandatory → XYB+4:2:2), zenavif `68cd644` (color_models→RGB),
+zenwebp `d5254f6` (sharp_yuv+methods) — each + a `budget_never_sheds_*` test.
+
+**RE-SWEEP (executing; up to $40; monitor + address waste):** the baked worker
+image builds zenmetrics from PUBLISHED codecs (old budget) → it would re-drop
+XYB/RGB. So the corrected binary MUST run on the workers. Chosen FAST path: full
+corrected `modes_full` via `scripts/sweep/hetzner_cpu_sweep.sh` + the local
+corrected binary delivered via `SWEEP_BIN_OVERRIDE` (a one clean superset dataset
+→ retrain directly, no delta-merge). Corrected binary: `target/release/zenmetrics`
+(--features sweep; jobexec+sweep+corrected codecs). Corpus renditions in R2
+`codec-corpus/picker-sweep-2026-06-22/renditions` (4497, sub-MP). Cost est ~$7.
+(Reuse/delta lists exist at `/tmp/delta_*.jsonl` if a delta pass is preferred, but
+delta adds declare/sha/job-system complexity — full is faster + simpler to retrain.)
+
+**SEQUENCE:** upload corrected binary to the run prefix → 1-box SMOKE (CODEC=zenjpeg
+PLAN=modes_full N_BOXES=1 IMAGES=20; VERIFY the omni has `xyb`/`422` cells = the
+corrected binary ran) → scale per codec within $40 with the monitor / `fleet watch
+--destroy` (auto-kills idle/failed) → `process_remaining.sh` retrain (gate MUST
+pass) → commit `.bin`s to codec crates. **Gotcha:** `launch_fleet.sh` mints 3h cred
+TTL (avif-214356 bug); `hetzner_cpu_sweep.sh` already 12h. **png** quantize axis (6
+cells {imagequant,zenquant}×{256,64,16}) is a cross-repo feature (zenpng
+SweepVariant.encode + zenmetrics plan.rs:130) — secondary, after the 4 codecs.
+
 ## Canonical branch is `master` — NEVER push `main` (enforced)
 
 This repo's one true branch is **`master`** (the GitHub default; the only branch
