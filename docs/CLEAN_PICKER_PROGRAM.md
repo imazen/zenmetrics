@@ -1,5 +1,44 @@
 # Clean picker program — train/val/test split, corpus, and the 4 codec pickers
 
+## PROGRAM STATUS 2026-06-26 (post parallel-audit — all 4 priorities greenlit, running simultaneously)
+
+User greenlit ALL of: fix plans + re-sweep complete · wire top-K + effort masking · zenpicker + PNG
+size model · per-codec loop system. Permissions: **branches+PRs for foundational zenpredict work**;
+a **`zencodec-helpers` crate** in the zencodec repo for loop/picker infra; **`modes_full` ("rdfull")
+on zenjpeg**; **cap PNG effort** (no pathologically-slow); **ablation runs for jxl-modular on a
+non-photo-sufficient corpus** (2nd corpus OK).
+
+**Parallel-audit findings (4 agents, 2026-06-26):**
+1. **Knob coverage:** `scalar_dense` PINS content categoricals (subsampling/aq/scan) — it's the scalar-head
+   plan, NOT the picker plan. jpeg + avif pickers trained on it are PARTIAL (no subsampling pick). Fix:
+   re-sweep jpeg/avif with **`modes_full`** (budgeted); modular picker must use `modes_full` (not effort-only
+   `scalar_dense`); **zenpng needs a `max_colors`×dither quantize axis** (effort-capped). jxl-lossy already
+   correct (`lossy_dense`).
+2. **Masking/top-X:** engine has `argmin_masked_top_k` but it's `advanced`-gated + UNUSED → the proven ≤1%
+   top-3-verify path is unreachable at runtime; effort masking is dead at every call site; no compute-tier
+   metadata. Fix in-flight: zenpredict PR (stable top-K + `cell_compute_tier` metadata).
+3. **zenpicker:** `MetaPicker` exists but instantiated NOWHERE; existing meta-bake is 5-family (fails the
+   6-family `validate_family_order`) + used the old banned split. Needs re-bake (6 families / drop GIF,
+   origin_split, qualified-name features) + a host call site (zencodecs/imageflow level).
+4. **lossy-vs-lossless = a FORMULA, not a picker:** pick lossless iff `target_q ≥ T(content)` (T₀≈84, →~70
+   for flat/low-edge); 88% w/ content class; compare PREDICTED BYTES (mistakes cost ~79% median). Caveat:
+   measured on 100 tiny photo imgs — needs the real modular sweep on the multi-size NON-PHOTO corpus to firm T.
+
+**In-flight parallel tracks (2026-06-26):**
+- zenpredict branch+PR: stable top-K + `cell_compute_tier` metadata (agent).
+- `zencodec-helpers` crate (zencodec repo): runtime top-K-verify picker helper + factored loop glue (agent).
+- 2nd NON-PHOTO corpus for jxl-modular/lossless + the lossy/lossless formula (agent).
+- Fleet: avif finishing (scalar_dense = partial); to RE-SWEEP jpeg+avif with `modes_full` (rdfull); complete
+  jxl-lossy chunk-2 (box died, lost 30tr/24val/15test origins) — it's on the correct `lossy_dense` plan.
+- Then: modular ablation on the non-photo corpus; PNG quantize-axis + size model; zenpicker re-bake + host;
+  per-codec loop system (built on zencodec-helpers).
+
+Per-codec deliverable status: **jpeg picker SHIPPED but PARTIAL** (scalar_dense, no subsampling) — supersede
+with a `modes_full` rdfull re-sweep. jxl-lossy: correct plan, completing. avif: re-sweep modes_full. jxl-lossless:
+modular ablation pending (non-photo corpus). png: needs quantize axis + size model.
+
+
+
 **Read this first for ANY picker work.** It encodes the split rule, the canonical
 corpus, and the per-codec deliverables so a blind/forgetful session does the right
 thing by default. Set 2026-06-26.
