@@ -11,6 +11,8 @@
 #
 # Usage:
 #   fleet launch [N_JOBS] [HZ] [VAST] [HZ_ARM]           # → launch_fleet.sh (the one launcher)
+#   fleet plan-chunks <ARGS…>                            # → zenmetrics plan-chunks: size a sweep into
+#                                                        #   MANY granular ≤5-min work-stealable chunks
 #   fleet status <run> [--label <vast-label>]            # one-shot: boxes·burn·util·idle·startup·progress
 #   fleet watch  <run> [--label <p>] [--poll 20] [--max-burn 1.0] [--destroy]
 #   fleet top    <run>                                   # live ledger top
@@ -26,8 +28,30 @@ GPU_IDLE="${GPU_IDLE_PCT:-10}"; CPU_IDLE="${CPU_IDLE_PCT:-10}"
 STARTUP_DEADLINE="${STARTUP_DEADLINE:-90}"; STALL_GRACE="${STALL_GRACE:-120}"
 BUCKET="${ZEN_FLEET_BUCKET:-zentrain}"   # run-write bucket (training pipeline); corpus is codec-corpus (RO)
 
-usage() { sed -n '2,26p' "$0" >&2; exit "${1:-2}"; }
+usage() { sed -n '2,28p' "$0" >&2; exit "${1:-2}"; }
 need_run() { [[ -n "${1:-}" ]] || { echo "need <run>" >&2; usage; }; }
+
+# Locate a built `zenmetrics` binary (release first, then debug) so `fleet
+# plan-chunks` can forward to the canonical Rust chunk-sizer without a new
+# script. Errors with a build hint when neither is present.
+find_zenmetrics() {
+    local root; root="$(cd "$HERE/../.." && pwd)"
+    for p in "$root/target/release/zenmetrics" "$root/target/debug/zenmetrics" "$(command -v zenmetrics 2>/dev/null)"; do
+        [[ -n "$p" && -x "$p" ]] && { printf '%s' "$p"; return 0; }
+    done
+    echo "fleet plan-chunks: no built zenmetrics binary found — build it first:" >&2
+    echo "  cargo build --release -p zenmetrics-cli --features sweep,png" >&2
+    return 1
+}
+
+# Size a sweep into MANY granular ≤5-min work-stealable chunks via the canonical
+# Rust sizer (`zenmetrics plan-chunks`), which estimates per-cell encode+score
+# cost from the codec/metric models and emits the chunks.jsonl the omni worker
+# loops over. All args pass through; see `zenmetrics plan-chunks --help`.
+cmd_plan_chunks() {
+    local bin; bin="$(find_zenmetrics)" || exit 1
+    exec "$bin" plan-chunks "$@"
+}
 
 r2_count() {  # s3-uri-prefix  regex → count of matching keys
     [[ -z "${R2_ACCOUNT_ID:-}" ]] && { echo 0; return; }
@@ -136,6 +160,7 @@ cmd_watch() {
 
 case "${1:-}" in
     launch) shift; exec bash "$HERE/launch_fleet.sh" "$@";;
+    plan-chunks) shift; cmd_plan_chunks "$@";;
     status) shift; cmd_status "$@";;
     watch)  shift; cmd_watch "$@";;
     top)    shift; exec python3 "$HERE/fleet_top.py" "$@";;

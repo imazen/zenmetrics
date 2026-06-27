@@ -21,6 +21,25 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Granular, work-stealing, resumable chunk sizing: `zenmetrics plan-chunks` (also `fleet
+  plan-chunks`)** (`zenmetrics-cli/src/plan_chunks.rs`, `fleet_plan.rs`, `scripts/jobsys/fleet`).
+  Replaces the flat `--cells-per-chunk` heuristic + the one-giant-static-chunk-per-box Hetzner split
+  (≈5 h/box; a dead box stranded its whole chunk) with **estimation-balanced** sizing: it reads the
+  SAME image-major input parquet the omni worker consumes, estimates each cell's encode+score wall time
+  + peak RAM from the SAME models `fleet-plan` uses (codec `estimate_encode_resources`; the per-metric
+  GPU estimators or a `--cpu-score-mp-ms` rate), and packs a contiguous run of images per chunk so the
+  chunk's `Σ(encode+score) ≤ --target-seconds` (default 300 = 5 min) AND its peak host RAM ≤
+  `--mem-budget-mb` (the jxl-modular OOM guard). Emits the canonical `chunks.jsonl` (image-major
+  contiguous `row_range`) the worker already loops over — MANY small chunks, not N=box-count. The
+  worker's pre-existing token-race claim (`zenfleet-vastai::worker::claim::try_claim`) then gives
+  work-stealing (a stale dead-box claim is re-stealable → sub-5-min chunk completes elsewhere; fast
+  boxes claim more), resumability (sidecar-exists → `AlreadyDone`, so a re-launch skips done chunks and
+  `gap` re-runs only the missing), decode-once (the inline pipeline shares each source's decode across
+  its q/knob cells), and corruption-impossible durability (build-local-then-single-atomic-PUT + the
+  idempotent skip). 9 sizer unit tests + a live-R2 smoke of the real claim
+  (`crates/zenfleet-vastai/tests/claim_workstealing_r2.rs`, `ZEN_R2_SMOKE=1`) proving exactly-once /
+  dead-box re-steal / resume-skip. Docs: `docs/PLAN_SWEEPS.md` §3a. No new fleet script (the `fleet`
+  subcommand keeps the `just fleet-check` guard green); no unsafe in the new production code.
 - **Parquet management: pinned the omni sidecar's metadata schema** (`zenfleet-vastai`
   `worker/chunk_output.rs`). The existing tests checked column presence + values; the new
   `omni_sidecar_metadata_schema_is_pinned` asserts the exact on-disk arrow type + nullability of every

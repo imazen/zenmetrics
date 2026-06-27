@@ -52,6 +52,9 @@ mod sweep;
 #[cfg(feature = "sweep")]
 mod jobexec;
 
+#[cfg(feature = "sweep")]
+mod plan_chunks;
+
 #[cfg(feature = "orchestrator")]
 mod orchestrator_glue;
 
@@ -162,6 +165,20 @@ enum Command {
     /// available with `--features sweep`. See `docs/RUNNING_JOBS.md`.
     #[cfg(feature = "sweep")]
     Jobexec(crate::jobexec::JobexecArgs),
+    /// Slice a sweep into MANY granular, work-stealable chunks — each sized so
+    /// its estimated encode+score wall time is ≤ a target (default 5 min) AND
+    /// its peak host RAM stays under a budget — and emit the canonical
+    /// `chunks.jsonl` the omni worker (`zenfleet-sweep worker --mode omni`)
+    /// loops over. Sizes each chunk from the SAME per-cell cost model
+    /// `fleet-plan` uses (codec `estimate_encode_resources` + the per-metric GPU
+    /// estimators / a CPU per-megapixel rate). Replaces the flat
+    /// `--cells-per-chunk` heuristic and the one-giant-chunk-per-box split with
+    /// estimation-balanced granularity: a dead box loses ≤5 min (its chunk is
+    /// re-stealable), fast boxes claim more, and a re-launch resumes (a chunk
+    /// whose omni sidecar exists is skipped). Only with `--features sweep`.
+    /// See `docs/RUNNING_JOBS.md` and `docs/PLAN_SWEEPS.md`.
+    #[cfg(feature = "sweep")]
+    PlanChunks(crate::plan_chunks::PlanChunksArgs),
     /// Assemble a training corpus by joining metric-score sidecars onto
     /// feature tables with a TYPED full-key join that makes the 2026-05-25
     /// parquet corruption (ref-only collapse + mock/human-copy leak)
@@ -741,6 +758,14 @@ fn main() -> ExitCode {
         },
         #[cfg(feature = "sweep")]
         Command::Jobexec(args) => match crate::jobexec::run(args) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        #[cfg(feature = "sweep")]
+        Command::PlanChunks(args) => match crate::plan_chunks::run(args) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");
