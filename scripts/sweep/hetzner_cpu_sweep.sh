@@ -44,12 +44,12 @@ echo "### $RUN  codec=$CODEC plan=$PLAN boxes=$N_BOXES images=${IMAGES:-all} typ
 
 # 1. scoped temp creds — guardrail: codec-corpus is READ-ONLY, runs WRITE to zentrain. R2 temp creds
 #    are single-bucket, so mint two (mirrors launch_fleet.sh): RW on the run bucket + RO on the corpus.
-body=$(B="$RUN_BUCKET" python3 -c "import json,os;print(json.dumps({'bucket':os.environ['B'],'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':10800,'prefixes':['jxl-lossy/']}))")
+body=$(B="$RUN_BUCKET" python3 -c "import json,os;print(json.dumps({'bucket':os.environ['B'],'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':43200,'prefixes':['jxl-lossy/']}))")
 curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$body" \
   "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/hz_cred.json
 read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/hz_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
 [ -n "$AK" ] || { echo "run-cred mint failed"; cat /tmp/hz_cred.json; exit 1; }
-cbody=$(B="$SRC_BUCKET" P="$SRC_PREFIX" python3 -c "import json,os;print(json.dumps({'bucket':os.environ['B'],'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-only','ttlSeconds':10800,'prefixes':[os.environ['P']+'/']}))")
+cbody=$(B="$SRC_BUCKET" P="$SRC_PREFIX" python3 -c "import json,os;print(json.dumps({'bucket':os.environ['B'],'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-only','ttlSeconds':43200,'prefixes':[os.environ['P']+'/']}))")
 curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$cbody" \
   "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/hz_corpus_cred.json
 read -r CAK CSK CST < <(python3 -c 'import json;r=json.load(open("/tmp/hz_corpus_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
