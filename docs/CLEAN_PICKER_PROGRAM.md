@@ -137,6 +137,30 @@ an unprovenanced corpus into training.
 **Status table:** jxl lossy = interim bin done (v0.2 imazen-26 pending) · jxl lossless / zenjpeg /
 zenavif = clean re-sweep PENDING. Commit constantly; `jj git fetch` often (cleanup merge may land).
 
+## Concurrency model — MEASURED 2026-06-26 (no thrash; the real lever is the outer loop)
+
+The sweep uses ONE global rayon pool sized to `--jobs` (cells `par_iter`'d; encoders' internal
+rayon shares it — so `--jobs` is the total-thread cap, no oversubscription). Measured cells/s vs
+`--jobs` on a 28-core box (4-img sample), and live cpx41 CPU% (`/proc/stat`):
+- **avif** `scalar_dense`: 4→5.2, 8→9.9, 12→12.9, 16→15.3, 24→17.9, 28→19.7 — ~0.5 core/cell
+  (rav1e has serial phases), scales with jobs toward cores. `--jobs=nproc` OK (slow cells fill cores).
+- **jxl** `lossy_dense`: plateaus ~100 cells/s from `--jobs≈8` (multi-threaded encode fills the pool;
+  more jobs don't help). `--jobs=nproc` optimal.
+- **jpeg** `scalar_dense`: fast cells → only ~50% box util on a many-image chunk (measured: live cpx41
+  jpeg box = 49% busy / 51% idle / **0% iowait**). NOT `--jobs` and NOT the orchestrator Mutex
+  (`--use-legacy-scheduler` measured identical: 387 vs 394 cells/s). It's the **serial outer source
+  loop** (run.rs:434 decodes each source serially, then parallel-encodes its cells) — for a fast codec
+  with many sources the per-source decode/setup between cell-bursts is ~half the wall time. A 4-image
+  local run at `--jobs=8` hit 394 cells/s = full 8-core saturation, confirming the gap scales with
+  source-count for fast codecs.
+
+**Verdict:** no thrash; `--jobs=nproc` is fine-to-optimal for the EXPENSIVE codecs (avif/jxl) that
+dominate cost. **Efficiency follow-up (deferred, not blocking — user chose "let it finish" 2026-06-26):**
+pipeline the serial source loop (decode-next overlapped with encode-current, or flat par_iter over
+(source×cell) with a decoded-source cache) → lifts fast-codec util to ~100%. Mainly helps jpeg-class
+sweeps; avif/jxl already well-utilized. The user's other ideas (real-time CPU-util adaptation,
+estimate_encode_resources-driven scheduling) are alternatives to this same outer-loop fix.
+
 ## LIVE PRODUCTION RUN 2026-06-26 (resume/collect steps for a blind session)
 
 Smart chunk fleet LAUNCHED (decode-once `zenmetrics sweep` per box, orchestrator
