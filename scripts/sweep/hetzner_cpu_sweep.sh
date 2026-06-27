@@ -145,7 +145,7 @@ s5cmd --endpoint-url=\$EP cp "s3://\$BUCKET/\$CHUNK_KEY" /data/chunk.txt
 # renditions live in the READ-ONLY corpus bucket — read with the RO corpus cred, NOT the run cred.
 # PARALLEL fetch via `s5cmd run` (a batch of cp commands, ~256-way) — the old one-cp-per-file `while`
 # loop was the slow-startup tax (1499 files serially ≈ minutes of idle before any encode). Smoke-fix 2026-06-26.
-awk -v pfx="s3://\$SRC_BUCKET/\$SRC_PREFIX/" '{if(\$0!="")print "cp "pfx\$0" /data/"\$0}' /data/chunk.txt > /data/fetch.txt
+while read -r f; do [ -n "\$f" ] && echo "cp \"s3://\$SRC_BUCKET/\$SRC_PREFIX/\$f\" \"/data/\$f\""; done < /data/chunk.txt > /data/fetch.txt
 AWS_ACCESS_KEY_ID=\$CORPUS_AK AWS_SECRET_ACCESS_KEY=\$CORPUS_SK AWS_SESSION_TOKEN=\$CORPUS_ST s5cmd --endpoint-url=\$EP run /data/fetch.txt
 rm -f /data/chunk.txt /data/fetch.txt
 PB=""; [ "\$PLAN" != "rd_core" ] && PB="--plan-budget \$BUDGET"
