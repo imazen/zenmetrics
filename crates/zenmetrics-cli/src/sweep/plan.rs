@@ -476,9 +476,13 @@ pub fn build_zenjxl_plan(
         // program: full lossy knob set over e1..=e9, lossy-only. Pair with
         // `--max-deviations 1` (defaulted in main.rs).
         "lossy_dense" => SweepAxes::lossy_dense(),
+        // Modular/lossless counterpart to lossy_dense: full lossless mode
+        // cross (e1..=e10 × predictors), modular-only — the jxl-modular picker's
+        // sweep (mandatory e1..=e10 + predictor probe, no lossy vd- cells).
+        "modular_dense" => SweepAxes::modular_dense(),
         other => {
             return Err(format!(
-                "unknown zenjxl plan {other:?}; expected rd_core, modes_full, scalar_dense, or lossy_dense"
+                "unknown zenjxl plan {other:?}; expected rd_core, modes_full, scalar_dense, lossy_dense, or modular_dense"
             )
             .into());
         }
