@@ -80,7 +80,7 @@ impl std::str::FromStr for Size {
 /// single codec vocabulary; this parser just gives `fleet-plan` the friendlier
 /// short aliases without disturbing the sweep subcommand's accepted values.
 #[cfg(feature = "sweep")]
-fn parse_codec(s: &str) -> Result<CodecKind, String> {
+pub(crate) fn parse_codec(s: &str) -> Result<CodecKind, String> {
     match s.to_ascii_lowercase().as_str() {
         "jpeg" | "zenjpeg" => Ok(CodecKind::Zenjpeg),
         "webp" | "zenwebp" => Ok(CodecKind::Zenwebp),
@@ -191,7 +191,10 @@ pub struct FleetPlanArgs {
 /// time_ms)`. Dispatches to the per-crate pure-math estimators through the
 /// `zenmetrics-api` re-exports; each arm is gated on the metric's
 /// `gpu-<metric>` feature and errors with a rebuild hint when absent.
-fn metric_score_estimate(
+///
+/// `pub(crate)` so the granular chunk-sizer ([`crate::plan_chunks`]) sizes
+/// each chunk from the SAME per-metric score-time model `fleet-plan` uses.
+pub(crate) fn metric_score_estimate(
     metric: MetricKind,
     width: u32,
     height: u32,
@@ -259,20 +262,24 @@ fn metric_score_estimate(
 
 /// The codec's encode estimate for one cell at one size: the per-field encode
 /// cost the planner needs, plus whether the codec actually modelled it.
+///
+/// `pub(crate)` so the granular chunk-sizer ([`crate::plan_chunks`]) reuses the
+/// SAME per-cell encode-cost model `fleet-plan` uses to keep each chunk ≤ a
+/// target wall time and under a memory budget.
 #[cfg(feature = "sweep")]
 #[derive(Clone, Copy, Debug)]
-struct CodecEncodeEstimate {
+pub(crate) struct CodecEncodeEstimate {
     /// Worst-case host RAM for one encode, bytes (max, falling back to est).
-    peak_ram_bytes: u64,
+    pub(crate) peak_ram_bytes: u64,
     /// CPU threads the encode uses at `cores_per_box`.
-    threads: u32,
+    pub(crate) threads: u32,
     /// Encode wall time per cell, ms (already `cores`-scaled by the codec).
-    ms: f32,
+    pub(crate) ms: f32,
     /// `true` when the codec returned a real (calibrated or structural)
     /// estimate; `false` when it fell through to `ResourceEstimate::unknown()`
     /// (every field `None`), which means the planner must use the flags /
     /// conservative defaults instead.
-    modelled: bool,
+    pub(crate) modelled: bool,
 }
 
 /// Build a representative default `EncoderConfig` for `codec` and ask it for
@@ -285,7 +292,7 @@ struct CodecEncodeEstimate {
 /// `SweepVariant`, so it sizes the codec's typical encode independent of any
 /// `--plan`.
 #[cfg(feature = "sweep")]
-fn codec_encode_estimate(
+pub(crate) fn codec_encode_estimate(
     codec: CodecKind,
     width: u32,
     height: u32,

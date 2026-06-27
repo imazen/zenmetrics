@@ -144,6 +144,66 @@ column and in `JobKind::Encode.knobs`:
    per-cell identity rows are the fleet-native form (retry unit stays
    one chunk; cells slice across chunks).
 
+### 3a. Granular, work-stealing, resumable chunk sizing (`plan-chunks`)
+
+`generate_sweep_input.py` sizes chunks by a flat `--cells-per-chunk`
+heuristic, and the early Hetzner split assigned ONE giant static chunk
+per box (≈5 h) — so a dead box stranded its whole multi-hour chunk and a
+fast box couldn't claim more. `zenmetrics plan-chunks` (the canonical
+Rust sizer; also `fleet plan-chunks`) replaces the heuristic with
+**estimation-balanced granularity**: it reads the SAME image-major input
+parquet the worker consumes, estimates each cell's encode+score wall time
++ peak RAM from the SAME models `fleet-plan` uses (codec
+`estimate_encode_resources` for encode wall_ms/peak_ram; the per-metric
+GPU estimators, or a `--cpu-score-mp-ms` rate, for score time), and packs
+a **contiguous run of images** into each chunk so the chunk's estimated
+`Σ(encode+score) ≤ --target-seconds` (default 300 = 5 min) AND its peak
+host RAM ≤ `--mem-budget-mb`. It emits the SAME canonical `chunks.jsonl`
+(one record per chunk; `row_range` stays image-major contiguous), just
+MANY small chunks instead of N=box-count.
+
+```bash
+zenmetrics sweep --codec C --plan NAME [--plan-budget N] \
+  --sources DIR --q-grid … --dry-run --emit-cells cells.jsonl \
+  --output /tmp/plan.tsv
+python3 scripts/sweep/generate_sweep_input.py --codec C \
+  --run-id RUN --cells-jsonl cells.jsonl \
+  --source-dir-r2 s3://…/sources --out-dir OUT       # writes the input parquet
+fleet plan-chunks --codec C --run-id RUN \
+  --input-parquet OUT/C_RUN_input.parquet \
+  --input-parquet-r2 s3://zentrain/RUN/input/C_RUN_input.parquet \
+  --source-dir-r2 s3://…/sources --out OUT/chunks.jsonl \
+  --metrics ssim2,zensim --target-seconds 300 --mem-budget-mb 20000
+# upload OUT/chunks.jsonl → s3://coefficient/jobs/RUN/chunks.jsonl; launch the
+# omni worker normally — it loops, claiming each granular chunk.
+```
+
+All five properties hold **simultaneously**, and four of them are the
+omni worker's *existing* guarantees (`plan-chunks` only adds the sizing):
+
+- **Granular ≤5-min** — the sizer's `Σ(encode+score) ≤ target` bound.
+- **Work-stealing** — the worker's token-race claim
+  (`zenfleet-vastai::worker::claim::try_claim`); a STALE claim (dead box,
+  past `stale_secs`) is re-stealable, so a sub-5-min chunk completes
+  elsewhere. Fast boxes claim more because each claim is one atomic op.
+- **Resumable** — completion = the per-chunk omni sidecar; `try_claim`
+  returns `AlreadyDone` once it exists, so a re-launch skips done chunks
+  and the `gap` reconcile re-runs only the missing ones. A dead box loses
+  ≤5 min.
+- **Decode-once** — the inline pipeline groups a chunk's rows by
+  `(codec, knob_tuple_json)`; each source is decoded exactly once and all
+  its q/knob cells reuse that decode (zero re-decode).
+- **Corruption-impossible** — the omni parquet is built completely on
+  local disk, then uploaded with ONE atomic S3/R2 PUT; an interrupted
+  upload leaves NOTHING (never a truncated sidecar), and the idempotent
+  skip means a re-run can't double-write.
+
+Live-R2 proof of the work-stealing + resumability claim (exactly-once,
+dead-box re-steal, resume-skip) against the real `try_claim`:
+`crates/zenfleet-vastai/tests/claim_workstealing_r2.rs` (gated on
+`ZEN_R2_SMOKE=1`). Sizer unit tests:
+`crates/zenmetrics-cli/src/plan_chunks.rs::tests`.
+
 ## 4. Per-codec axis inventory — scalar axes tagged
 
 **SCALAR** = continuous/quantized-numeric knob suitable for
