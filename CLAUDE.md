@@ -25,14 +25,20 @@ corrected binary delivered via `SWEEP_BIN_OVERRIDE` (a one clean superset datase
 (Reuse/delta lists exist at `/tmp/delta_*.jsonl` if a delta pass is preferred, but
 delta adds declare/sha/job-system complexity — full is faster + simpler to retrain.)
 
-**SEQUENCE:** upload corrected binary to the run prefix → 1-box SMOKE (CODEC=zenjpeg
-PLAN=modes_full N_BOXES=1 IMAGES=20; VERIFY the omni has `xyb`/`422` cells = the
-corrected binary ran) → scale per codec within $40 with the monitor / `fleet watch
---destroy` (auto-kills idle/failed) → `process_remaining.sh` retrain (gate MUST
-pass) → commit `.bin`s to codec crates. **Gotcha:** `launch_fleet.sh` mints 3h cred
-TTL (avif-214356 bug); `hetzner_cpu_sweep.sh` already 12h. **png** quantize axis (6
-cells {imagequant,zenquant}×{256,64,16}) is a cross-repo feature (zenpng
-SweepVariant.encode + zenmetrics plan.rs:130) — secondary, after the 4 codecs.
+**LIVE (2026-06-27 ~16:25Z):** SMOKE PASSED — corrected binary via SWEEP_BIN_OVERRIDE
+→ omni had XYB(2280)+422+420+444 (fix works end-to-end). **RUNNING:** full re-sweeps
+jpeg(5)+webp(4)+avif(8) = 17 cpx41 boxes (~$3.6, ETA ~3-4h). Runs in
+`/tmp/mandfix_runs.txt` (`<codec> <RUN> <nboxes>`); waste-monitor `/tmp/mandfix_monitor.sh`
+(pid in `/tmp/mandfix_monitor.log`) polls each run's `done/` via **aws-cli** (s5cmd hangs
+D-state on WSL2 — use aws for ALL local R2 ops here) + destroys each box on its DONE
+marker + day-age backstop. Output: `s3://zentrain/jxl-lossy/runs/<RUN>/{omni,variants,features}/`.
+**WHEN DONE:** download box omnis → merge per codec → `process_remaining.sh` (omni_to_pareto
+→ train_hybrid origin-split → bake; gate MUST pass) → commit `.bin` to each codec crate.
+This is a FULL re-sweep (clean superset incl 420/444 — chose simplicity over delta-reuse
+given the delay cost; one consistent dataset, no merge-with-old needed).
+**STILL PENDING:** jxl-modular re-sweep (scalar_dense full effort ladder) + **png** quantize
+axis (cross-repo: zenpng SweepVariant.encode + zenmetrics plan.rs:130; 6 cells
+{imagequant,zenquant}×{256,64,16}) — launch when quota frees (boxes auto-destroy on done).
 
 ## Canonical branch is `master` — NEVER push `main` (enforced)
 
