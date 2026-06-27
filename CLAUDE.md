@@ -50,6 +50,22 @@ override binary with ssim2 wired into the sweep path (test it scores ssim2 on CP
 axis (cross-repo: zenpng SweepVariant.encode + zenmetrics plan.rs:130; 6 cells
 {imagequant,zenquant}×{256,64,16}) — launch when quota frees (boxes auto-destroy on done).
 
+### CURRENT — authoritative (supersedes the LIVE block above; 2026-06-27 ~16:54Z)
+RESTARTED with the **both-metric** binary (`--features sweep,gpu-ssim2` — verified locally
+ssim2=96.89/zensim=97.05 AND on a live box: `plan modes_full 582 cells/image`, ZERO ssim2
+errors). The first binary scored zensim-only (ssim2 gap); fixed. SSIM2 IS NO LONGER PENDING —
+the re-sweep now produces BOTH metrics. New runs (in `/tmp/mandfix_runs.txt`): zenjpeg
+`mandfix-zenjpeg-1782578746` (5), zenwebp `mandfix-zenwebp-1782578817` (4), zenavif
+`mandfix-zenavif-1782578887` (8). **AUTONOMOUS:** `/tmp/mandfix_monitor.sh` (pid in
+`/tmp/mandfix_monitor.log`) destroys each box on its DONE marker + on ALL-DONE auto-runs
+`/tmp/mandfix_merge.sh` (download omnis → merge per codec → omni_to_pareto → **coverage gate**
+→ train_hybrid zensim_a origin-split → bake `*_mandfix.bin`; log `/tmp/mandfix_merge.log`).
+**ON RE-ENGAGE:** check `/tmp/mandfix_merge.log` — if pickers baked, REVIEW the TEST argmin/top-3
+numbers + coverage, then COMMIT each `$OUT/models/<codec>_predict_zensim_a_mandfix.bin` to its
+codec crate's benchmarks/. THEN: jxl-modular re-sweep (same launcher, CODEC=zenjxl
+PLAN=scalar_dense, fixed binary, fresh run) + png quantize axis (cross-repo, still unbuilt).
+Local-R2 rule: **use aws-cli, NOT s5cmd** (D-state hang). cpx41 ~$0.06/hr; ~17 boxes; well under $40.
+
 ## Canonical branch is `master` — NEVER push `main` (enforced)
 
 This repo's one true branch is **`master`** (the GitHub default; the only branch
