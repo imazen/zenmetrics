@@ -36,7 +36,17 @@ marker + day-age backstop. Output: `s3://zentrain/jxl-lossy/runs/<RUN>/{omni,var
 → train_hybrid origin-split → bake; gate MUST pass) → commit `.bin` to each codec crate.
 This is a FULL re-sweep (clean superset incl 420/444 — chose simplicity over delta-reuse
 given the delay cost; one consistent dataset, no merge-with-old needed).
-**STILL PENDING:** jxl-modular re-sweep (scalar_dense full effort ladder) + **png** quantize
+**SSIM2 GAP (caught via box-ssh monitoring 2026-06-27):** the `--features sweep` override
+binary scores **zensim (the picker target) fine but ssim2 fails per-cell** ("ssim2 not enabled
+in zenmetrics-api" — the sweep routes ssim2 through zenmetrics-api, which needs `zenmetrics-api/ssim2`,
+only pulled by `gpu-ssim2`; plain cpu-metrics gives `list-metrics` ssim2 via fast-ssim2 but NOT the
+sweep path). NOT fatal: the run persists encoded VARIANTS (`variants/box-N.tar`) + zensim + 372
+features → zensim_a pickers retrain from it; **ssim2 is backfillable from the variants (score-only,
+no re-encode** — heterogeneous-split). For the backfill + jxl-modular/png launches, rebuild the
+override binary with ssim2 wired into the sweep path (test it scores ssim2 on CPU locally first;
+`gpu`/`gpu-ssim2` build runs CPU-fallback on Hetzner but VERIFY before fleet use).
+
+**STILL PENDING:** ssim2 backfill (from variants) + jxl-modular re-sweep (scalar_dense full effort ladder) + **png** quantize
 axis (cross-repo: zenpng SweepVariant.encode + zenmetrics plan.rs:130; 6 cells
 {imagequant,zenquant}×{256,64,16}) — launch when quota frees (boxes auto-destroy on done).
 
