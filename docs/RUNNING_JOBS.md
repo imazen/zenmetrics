@@ -318,20 +318,32 @@ smoke on a freed box before flipping any default.
   chunks auto-size small and never OOM). Pure + 5 unit tests. `JobCost {cost_sec,
   peak_mem_bytes, threads}`.
 
-- **Chunk 2 — declare-side chunking + worker concurrency-under-budget (opt-in
-  first).** Add a per-cell `cost_sec` estimate (codec `ResourceEstimate` lacks a
-  time field — start with a pixels×per-codec-factor heuristic; refine from
-  measured omni `encode_ms`). In `zenfleet-ctl::declare_encodes`
-  (`crates/zenfleet-ctl/src/lib.rs:70-96`, currently 1 `DesiredJob`/cell) emit a
-  chunk manifest via `pack_chunks` (env-gated, default off, so existing
-  per-cell flow is untouched until smoke-tested). In the worker claim loop
-  (`crates/zenfleet-worker/src/lib.rs:513-542`) claim a chunk (one R2 lease for N
-  cells), then run its cells as **fresh processes** (keeps the modes_full
-  per-cell memory bound — see Known Bugs) under `BoxBudget::can_admit`, with the
-  budget computed in `run()` (`crates/zenfleet-worker/src/lib.rs:870-993`) as
-  `BoxBudget::new(0.75 * total_ram_bytes, usable_cores)`. `ResourceHint`
-  (`zenfleet-core/src/ledger.rs:44-54`) already rides through declare; default a
-  missing hint to a safe fallback (512 MB / 1 thread).
+- **Chunk 2 — worker concurrency-under-budget + ~5-min chunk-claim — DONE
+  (`zenfleet-worker` `e17962ef`, opt-in / default-OFF).** `ZEN_CHUNK_WALL_SEC > 0`
+  switches `run()` (early-return → `run_chunked`) to `execute_gap_chunked`: the
+  reconciler's gap is packed by `pack_chunks` into ~`ZEN_CHUNK_WALL_SEC`-second
+  units, **one R2 lease per chunk** (`claim_or_steal_r2_key`, the new string-keyed
+  core of `claim_or_steal_r2`; chunk-id = `chunk-`+sha256 of member job-ids, so the
+  claim is exclusive). A won chunk's cells run as **fresh processes** (one-shot
+  `exec_command` → keeps the modes_full per-cell memory bound — see Known Bugs)
+  under `BoxBudget::can_admit` (Σpeak_mem ≤ 0.75×`/proc/meminfo` MemTotal, Σthreads
+  ≤ `available_parallelism`) via `std::thread::scope` + a shared-cursor/`InFlight`
+  condvar admission loop (no tokio — that's chunk 3). Per-cell `cost_sec` =
+  `JobKind::estimate_cost_sec` (rough resource-class × peak-mem proxy, floor 1s;
+  refine from measured omni `encode_ms`); a missing `ResourceHint` falls back to
+  512 MB / 1 thread. **Default 0.0 ⇒ byte-identical per-cell path when unset.**
+  Idempotence/crash-recovery preserved: chunks are formed FROM the gap (the per-cell
+  done-check still gates every cell), and a **durable per-chunk ledger sidecar** is
+  written the moment a chunk finishes (`chunk_ledger_uri` inserts `chunk-<id8>`
+  before `.parquet`), so a crash re-runs only the still-missing cells; the next pass
+  folds the sidecars in and skips the now-Done cells.
+  **Deliberately worker-side ONLY** — `declare_encodes` is UNCHANGED (the ledger
+  stays per-cell content-addressed; chunking is purely a claim-level optimization,
+  NOT a declare-side manifest change). Tests: zenfleet-core +2 (`estimate_cost_sec`),
+  zenfleet-worker +6 (chunk-id stability, meminfo parse, sidecar-uri, host budget,
+  in-process pack+run+idempotence, re-claim-skips-done, run() end-to-end chunked
+  convergence over per-chunk sidecars). Follow-up: spot-fast-release of a chunk claim
+  on SIGTERM (TTL stale-reclaim covers preemption today).
 
 - **Chunk 3 — async IO.** Worker IO is all blocking `Command` (`aws s3api`/`s5cmd`):
   claim `crates/zenfleet-worker/src/lib.rs:181-199`, blob put/get `:128-150`,
