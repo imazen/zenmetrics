@@ -38,7 +38,7 @@ SSH_KEY="${SSH_KEY:-zen-arm-dev-20260528}"
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 export HCLOUD_TOKEN="$(grep -E '^api_token=' ~/.config/hetzner/credentials | head -1 | cut -d= -f2- | tr -d ' \r')"
- r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }
+ r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto aws s3 "$@" --endpoint-url "$EP"; }  # aws cli for LOCAL ops: s5cmd hangs in uninterruptible D-state I/O on this WSL2 box (box-side worker.sh still uses its own s5cmd, unaffected)
 
 echo "### $RUN  codec=$CODEC plan=$PLAN boxes=$N_BOXES images=${IMAGES:-all} type=$STYPE"
 
@@ -142,10 +142,9 @@ ENV
 cat > /root/r/worker.sh <<'WORK'
 set -e
 mkdir -p /data
-# Corrected-binary override: fetch the locally-built zenmetrics (carries the
-# mandatory-axis budget fix so modes_full keeps XYB/RGB/sharp_yuv) from the run
-# bucket and replace the baked published-codec binary. Run-scoped cred reads it.
-[ -n "\$SWEEP_BIN_OVERRIDE" ] && { s5cmd --endpoint-url=\$EP cp "\$SWEEP_BIN_OVERRIDE" /usr/local/bin/zenmetrics && chmod +x /usr/local/bin/zenmetrics && echo "override binary: \$(zenmetrics --version)"; }
+# Override binary (mandatory-axis budget fix → modes_full keeps XYB/RGB/sharp_yuv)
+# if provided — same heredoc-safe cp style as the chunk fetch below.
+[ -n "\$SWEEP_BIN_OVERRIDE" ] && s5cmd --endpoint-url=\$EP cp "\$SWEEP_BIN_OVERRIDE" /usr/local/bin/zenmetrics && chmod +x /usr/local/bin/zenmetrics
 s5cmd --endpoint-url=\$EP cp "s3://\$BUCKET/\$CHUNK_KEY" /data/chunk.txt
 # renditions live in the READ-ONLY corpus bucket — read them with the RO corpus cred, NOT the run cred.
 # Sequential per-file cp (proven heredoc-safe). NOTE: a parallel `s5cmd run` optimization fought the
@@ -188,7 +187,7 @@ EOF
         && { echo "$name launched ($typ/$loc)"; ok=1; break 2; } || true
     done
   done
-  [ "$ok" = 1 ] || { echo "$name FAILED all type/loc"; printf '%s\n' "$err" | grep -iE 'unavailable|unsupported|limit|invalid' | head -1; }
+  [ "$ok" = 1 ] || { echo "$name FAILED all type/loc"; printf 'LAST CREATE ERR: %s\n' "$err" | head -4; }
   rm -f "$ci"
 }
 for n in ${CHUNKS:-$(seq 0 $((N_BOXES-1)))}; do launch_box "$n" & done
