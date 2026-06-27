@@ -72,8 +72,19 @@ Expressed as config_name tokens that MUST each appear ≥1× in the swept pareto
 ## Enforcement points (belt + suspenders)
 
 1. **Source (each codec `SweepAxes`)** — mark color / subsampling / sub-30s-effort
-   axes non-collapsible; the budget ladder skips them. `modes_full` MUST contain
-   every mandatory value (zenpng: ADD the palette/quantize axis). *(queued, per-codec PRs)*
+   axes non-collapsible; the budget ladder skips them; `modes_full` MUST contain
+   every mandatory value.
+   - **zenjpeg** ✅ LANDED (main `7afedf4c`) — `color_modes` removed from
+     `collapse_one_axis` (XYB + 4:2:2 survive any budget) + regression test.
+   - **zenavif** ✅ LANDED (main `68cd644`) — `color_models` removed from the
+     ladder (RGB survives) + test. (subsampling was already never-collapsed.)
+   - **zenwebp** ✅ LANDED (main `d5254f6`) — `lossy.sharp_yuv` + `lossy.methods`
+     removed from the ladder + test.
+   - **zenpng** ⏳ — the palette/quantize axis must be ADDED (plan omission, not a
+     collapse); it is metric-class (changes pixels), so png joins the metric-scored
+     sweep. Bigger than a collapse-line fix; not yet done.
+   - **zenjxl** — lossy is clean; modular needs a re-sweep with `modes_full`/
+     `scalar_dense` (not a source change — it was swept `rd_core`).
 2. **Plan-time (zenmetrics `plan.rs`)** — after building, assert no mandatory
    value was dropped; surface in the manifest; ERROR (not silent) on a mandatory drop. *(queued)*
 3. **Picker-train-time (zenmetrics `scripts/picker/check_mandatory_coverage.py`)**
