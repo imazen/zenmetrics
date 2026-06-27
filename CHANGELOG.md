@@ -106,6 +106,18 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **Dispatcher dedup (part 2a): umbrella `Backend::Cpu` warm-ref is now TRUE precompute**
+  (`b98d8f66`). Folded the orchestrator `cpu_adapter`'s true cached-reference precompute down
+  into `zenmetrics-api::cpu_dispatch::CpuMetricState` (per-metric `cached_ref` +
+  `set_reference`/`compute_with_cached_reference`/`has_reference`/`clear_reference`/
+  `supports_cached_ref`), replacing the umbrella's prior buffer-replay warm path (stash bytes +
+  re-run cold). `metric.rs`'s `Backend::Cpu` warm arms now call these. Each metric builds its
+  reference XYB/pyramid/masks once (ssim2 `Ssimulacra2Reference`, butter `ButteraugliReference`,
+  zensim `PrecomputedReference`, dssim cached `DssimImage`, cvvdp/iwssim crate-internal warm).
+  USER-APPROVED tolerance: the ssim2 warm==cold test relaxed from bit-exact to ≤1e-3
+  (fast-ssim2 atomic-add band). Foundation for part 2b (route the orchestrator executor's CPU
+  leaf through the umbrella + delete `cpu_adapter.rs`); until 2b lands, the warm-ref logic is
+  duplicated by `cpu_adapter`. Verified: api lib 12/12; `it` cpu_dispatch 15/15.
 - **Dispatcher dedup (part 1): one-shot CPU ssim2/dssim/butteraugli route through the
   single `zenmetrics-api::cpu_dispatch` umbrella** (`ca70d818`). Deleted the three parallel
   one-shot CPU scoring shims (`zenmetrics-cli/src/metrics/{ssim2,dssim,butteraugli}.rs`) and
