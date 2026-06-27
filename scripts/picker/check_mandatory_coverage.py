@@ -37,7 +37,7 @@ MANDATORY = {
         ("subsampling 4:2:0", has(r"_420(?:[-_]|$)")),
         ("subsampling 4:4:4", has(r"_444(?:[-_]|$)")),
         ("subsampling 4:2:2", has(r"_422(?:[-_]|$)")),
-        ("XYB color path", has(r"xyb(?:Bq|Full)")),
+        ("XYB B-subsampled (xybBq) — REQUIRED", has(r"xybBq")),
     ],
     # zenavif grammar: sN[-noqm][-420][-bd*][-rgb][-vaq*][-trel][-probe].
     # 4:4:4 is the DEFAULT (no -420 token); 4:2:0 is the explicit -420 token.
