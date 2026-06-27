@@ -186,10 +186,12 @@ fn score_front_door_cpu() {
     );
 }
 
-/// `warm_reference` (task #159 phase 4b) on `Backend::Cpu`: one reference,
-/// many distorted. The buffer-replay warm path must be **score-identical** to
-/// the one-shot `score()` (no drift) and still discriminate between distinct
-/// distorted images.
+/// `warm_reference` on `Backend::Cpu`: one reference, many distorted. As of the
+/// cpu_adapter merge (2026-06-27) the warm path is a TRUE precompute
+/// (`fast_ssim2::Ssimulacra2Reference`), not buffer-replay — so it matches the
+/// one-shot `score()` within fast-ssim2's atomic-add tolerance (≤1e-3, the same
+/// band as the GPU ssim2 cached-ref parity) rather than bit-exactly, and still
+/// discriminates between distinct distorted images.
 #[cfg(feature = "pixels")]
 #[test]
 fn warm_reference_cpu_matches_one_shot() {
@@ -246,9 +248,22 @@ fn warm_reference_cpu_matches_one_shot() {
     )
     .expect("one-shot b");
 
-    // Buffer-replay warm == one-shot, exactly (no drift).
-    assert_eq!(wa.value, oa.value, "warm score A must equal one-shot A");
-    assert_eq!(wb.value, ob.value, "warm score B must equal one-shot B");
+    // True-precompute warm ≈ one-shot within fast-ssim2's atomic-add tolerance
+    // (was bit-exact under buffer-replay; relaxed when the warm path became a
+    // true `Ssimulacra2Reference` precompute in the cpu_adapter merge,
+    // 2026-06-27 — user-approved tolerance).
+    assert!(
+        (wa.value - oa.value).abs() <= 1e-3,
+        "warm score A must match one-shot A within 1e-3 ({} vs {})",
+        wa.value,
+        oa.value
+    );
+    assert!(
+        (wb.value - ob.value).abs() <= 1e-3,
+        "warm score B must match one-shot B within 1e-3 ({} vs {})",
+        wb.value,
+        ob.value
+    );
     // Reusing the reference still discriminates distinct distorted images.
     assert!(
         wa.value != wb.value,

@@ -1829,24 +1829,13 @@ impl MetricInner {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            MetricInner::Cpu(s, cached_ref) => {
-                // Buffer-replay warm path (task #159 phase 4b): stash the
-                // reference sRGB bytes; compute_with_cached_reference replays
-                // the one-shot compute on them — score-identical to one-off.
-                let (w, h) = s.dims();
-                let expected = (w as usize) * (h as usize) * 3;
-                if r.len() != expected {
-                    return Err(Error::Metric {
-                        kind: "cpu",
-                        message: format!(
-                            "set_reference: expected {expected} packed sRGB bytes ({w}×{h}×3), \
-                             got {}",
-                            r.len()
-                        ),
-                    });
-                }
-                *cached_ref = Some(r.to_vec());
-                Ok(())
+            MetricInner::Cpu(s, _) => {
+                // True precompute warm path (2026-06-27): build the reference
+                // XYB / pyramid / masks once via the native crate's warm API
+                // (`cpu_dispatch::set_reference`), folded down from the
+                // orchestrator's cpu_adapter — replaces the prior buffer-replay
+                // stash. Length is validated inside `set_reference`.
+                s.set_reference(r)
             }
             #[cfg(feature = "cvvdp")]
             MetricInner::Cvvdp(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
@@ -1898,16 +1887,12 @@ impl MetricInner {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            MetricInner::Cpu(s, cached_ref) => {
-                let rref = cached_ref.as_deref().ok_or(Error::Metric {
-                    kind: "cpu",
-                    message: "compute_with_cached_reference: no reference set — call \
-                              set_reference first"
-                        .into(),
-                })?;
-                // Replay the one-shot compute on the cached reference —
-                // score-identical to compute_srgb_u8(reference, distorted).
-                s.compute_srgb_u8(rref, d)
+            MetricInner::Cpu(s, _) => {
+                // True precompute warm path (2026-06-27): score against the
+                // reference installed by `set_reference`, reusing its
+                // precomputed XYB / pyramid
+                // (`cpu_dispatch::compute_with_cached_reference`).
+                s.compute_with_cached_reference(d)
             }
             #[cfg(feature = "cvvdp")]
             MetricInner::Cvvdp(m) => m
@@ -1973,9 +1958,7 @@ impl MetricInner {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            MetricInner::Cpu(_, cached_ref) => {
-                *cached_ref = None;
-            }
+            MetricInner::Cpu(s, _) => s.clear_reference(),
             // cvvdp's set_reference_srgb_u8 overwrites prior state — no
             // explicit clear API on opaque (see pipeline.rs:4234).
             #[cfg(feature = "cvvdp")]
@@ -2013,7 +1996,7 @@ impl MetricInner {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            MetricInner::Cpu(_, cached_ref) => cached_ref.is_some(),
+            MetricInner::Cpu(s, _) => s.has_reference(),
             #[cfg(feature = "iwssim")]
             MetricInner::Iwssim(m) => m.has_reference(),
             #[cfg(feature = "butter")]

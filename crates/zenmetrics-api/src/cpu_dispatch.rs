@@ -23,9 +23,14 @@ use crate::{Error, MetricKind, MetricParams, Result, Score};
 /// so [`CpuMetricState::dims`] is uniform.
 pub(crate) enum CpuMetricState {
     /// `fast-ssim2` (Imazen, SIMD) — sRGB→linear→XYB is internal; the
-    /// scorer is stateless so we only stash the dims.
+    /// scorer is stateless so we only stash the dims. `cached_ref` holds
+    /// the warm-path precompute (`Ssimulacra2Reference`) when set.
     #[cfg(feature = "cpu-ssim2")]
-    Ssim2 { width: u32, height: u32 },
+    Ssim2 {
+        width: u32,
+        height: u32,
+        cached_ref: Option<fast_ssim2::Ssimulacra2Reference>,
+    },
     /// in-tree `cvvdp` — stateful (internal scratch), so hold the instance.
     #[cfg(feature = "cpu-cvvdp")]
     Cvvdp {
@@ -41,28 +46,34 @@ pub(crate) enum CpuMetricState {
         height: u32,
     },
     /// `zensim` — stateful scorer built from a profile; dims live on the
-    /// per-call `RgbSlice`, so stash them here.
+    /// per-call `RgbSlice`, so stash them here. `cached_ref` holds the
+    /// warm-path `PrecomputedReference` when set.
     #[cfg(feature = "cpu-zensim")]
     Zensim {
         inner: Box<zensim::Zensim>,
         width: u32,
         height: u32,
+        cached_ref: Option<zensim::PrecomputedReference>,
     },
     /// `dssim-core` — holds the `Dssim` config object; images are built
-    /// per call. Lower is better (0 = identical).
+    /// per call. Lower is better (0 = identical). `cached_ref` holds the
+    /// warm-path multi-scale `DssimImage` when set.
     #[cfg(feature = "cpu-dssim")]
     Dssim {
         inner: Box<dssim_core::Dssim>,
         width: u32,
         height: u32,
+        cached_ref: Option<dssim_core::DssimImage<f32>>,
     },
     /// `butteraugli` — free-function scorer; hold the params. Lower is
-    /// better (0 = identical).
+    /// better (0 = identical). `cached_ref` holds the warm-path
+    /// `ButteraugliReference` (reference XYB + masks) when set.
     #[cfg(feature = "cpu-butter")]
     Butter {
         params: butteraugli::ButteraugliParams,
         width: u32,
         height: u32,
+        cached_ref: Option<butteraugli::ButteraugliReference>,
     },
     /// `kind`'s `cpu-*` feature is not built — optimized-CPU scoring for
     /// it is unavailable in this configuration.
@@ -86,7 +97,11 @@ impl CpuMetricState {
         let _ = (width, height, &params);
         match kind {
             #[cfg(feature = "cpu-ssim2")]
-            MetricKind::Ssim2 => Ok(CpuMetricState::Ssim2 { width, height }),
+            MetricKind::Ssim2 => Ok(CpuMetricState::Ssim2 {
+                width,
+                height,
+                cached_ref: None,
+            }),
             #[cfg(feature = "cpu-cvvdp")]
             MetricKind::Cvvdp => {
                 // cvvdp re-exports cvvdp-gpu's `CvvdpParams`, the same
@@ -136,6 +151,7 @@ impl CpuMetricState {
                     inner: Box::new(inner),
                     width,
                     height,
+                    cached_ref: None,
                 })
             }
             #[cfg(feature = "cpu-dssim")]
@@ -147,6 +163,7 @@ impl CpuMetricState {
                     inner: Box::new(dssim_core::Dssim::new()),
                     width,
                     height,
+                    cached_ref: None,
                 })
             }
             #[cfg(feature = "cpu-butter")]
@@ -168,6 +185,7 @@ impl CpuMetricState {
                     params: native,
                     width,
                     height,
+                    cached_ref: None,
                 })
             }
             // Load-bearing for partial-feature builds (a metric whose
@@ -202,7 +220,7 @@ impl CpuMetricState {
     pub(crate) fn dims(&self) -> (u32, u32) {
         match self {
             #[cfg(feature = "cpu-ssim2")]
-            CpuMetricState::Ssim2 { width, height } => (*width, *height),
+            CpuMetricState::Ssim2 { width, height, .. } => (*width, *height),
             #[cfg(feature = "cpu-cvvdp")]
             CpuMetricState::Cvvdp { width, height, .. } => (*width, *height),
             #[cfg(feature = "cpu-iwssim")]
@@ -287,7 +305,7 @@ impl CpuMetricState {
         let _ = (ref_nits, dis_nits);
         match self {
             #[cfg(feature = "cpu-ssim2")]
-            CpuMetricState::Ssim2 { width, height } => {
+            CpuMetricState::Ssim2 { width, height, .. } => {
                 let (w, h) = (*width as usize, *height as usize);
                 let expected = w * h * 3;
                 if ref_nits.len() != expected || dis_nits.len() != expected {
@@ -331,6 +349,7 @@ impl CpuMetricState {
                 inner,
                 width,
                 height,
+                ..
             } => {
                 let (w, h) = (*width as usize, *height as usize);
                 let expected = w * h * 3;
@@ -367,7 +386,7 @@ impl CpuMetricState {
     pub(crate) fn compute_srgb_u8(&mut self, r: &[u8], d: &[u8]) -> Result<Score> {
         match self {
             #[cfg(feature = "cpu-ssim2")]
-            CpuMetricState::Ssim2 { width, height } => compute_ssim2(*width, *height, r, d),
+            CpuMetricState::Ssim2 { width, height, .. } => compute_ssim2(*width, *height, r, d),
             #[cfg(feature = "cpu-cvvdp")]
             CpuMetricState::Cvvdp {
                 inner,
@@ -385,20 +404,307 @@ impl CpuMetricState {
                 inner,
                 width,
                 height,
+                ..
             } => compute_zensim(inner, *width, *height, r, d),
             #[cfg(feature = "cpu-dssim")]
             CpuMetricState::Dssim {
                 inner,
                 width,
                 height,
+                ..
             } => compute_dssim(inner, *width, *height, r, d),
             #[cfg(feature = "cpu-butter")]
             CpuMetricState::Butter {
                 params,
                 width,
                 height,
+                ..
             } => compute_butter(params, *width, *height, r, d),
             CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
+        }
+    }
+
+    // ---- warm / cached-reference path (folded in from the orchestrator's
+    // `cpu_adapter`, 2026-06-27) — true precompute reused across distorted
+    // candidates, replacing the umbrella's prior buffer-replay warm-ref. ----
+
+    /// Whether this metric has a true cached-reference fast path.
+    // Consumed by the orchestrator executor's umbrella CPU leaf in the
+    // cpu_adapter-merge step 2 (it replaces `CpuAdapter::supports_cached_ref`);
+    // the other warm methods are already wired through `Metric`'s warm arms.
+    #[allow(dead_code)]
+    pub(crate) fn supports_cached_ref(&self) -> bool {
+        match self {
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuMetricState::Cvvdp { .. } => true,
+            #[cfg(feature = "cpu-ssim2")]
+            CpuMetricState::Ssim2 { .. } => true,
+            #[cfg(feature = "cpu-dssim")]
+            CpuMetricState::Dssim { .. } => true,
+            #[cfg(feature = "cpu-butter")]
+            CpuMetricState::Butter { .. } => true,
+            #[cfg(feature = "cpu-zensim")]
+            CpuMetricState::Zensim { .. } => true,
+            #[cfg(feature = "cpu-iwssim")]
+            CpuMetricState::Iwssim { .. } => true,
+            CpuMetricState::FeatureDisabled(_) => false,
+        }
+    }
+
+    /// Install the reference for subsequent [`Self::compute_with_cached_reference`]
+    /// calls (true precompute: builds the reference XYB / pyramid / masks once).
+    pub(crate) fn set_reference(&mut self, r: &[u8]) -> Result<()> {
+        let (w, h) = self.dims();
+        let expected = (w as usize) * (h as usize) * 3;
+        if r.len() != expected {
+            return Err(Error::Metric {
+                kind: "cpu",
+                message: format!("cpu set_reference: expected {expected} sRGB bytes, got {}", r.len()),
+            });
+        }
+        match self {
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuMetricState::Cvvdp { inner, .. } => inner.warm_reference(r).map_err(|e| Error::Metric {
+                kind: "cvvdp",
+                message: format!("cvvdp warm_reference: {e}"),
+            }),
+            #[cfg(feature = "cpu-ssim2")]
+            CpuMetricState::Ssim2 {
+                width,
+                height,
+                cached_ref,
+            } => {
+                let img = ssim2_image_ref(r, *width as usize, *height as usize);
+                let pre = fast_ssim2::Ssimulacra2Reference::new(img).map_err(|e| Error::Metric {
+                    kind: "ssim2",
+                    message: format!("fast-ssim2 Ssimulacra2Reference::new: {e}"),
+                })?;
+                *cached_ref = Some(pre);
+                Ok(())
+            }
+            #[cfg(feature = "cpu-dssim")]
+            CpuMetricState::Dssim {
+                inner,
+                width,
+                height,
+                cached_ref,
+            } => {
+                let img = make_dssim_image(inner, r, *width as usize, *height as usize)?;
+                *cached_ref = Some(img);
+                Ok(())
+            }
+            #[cfg(feature = "cpu-butter")]
+            CpuMetricState::Butter {
+                params,
+                width,
+                height,
+                cached_ref,
+            } => {
+                let pre = butteraugli::ButteraugliReference::new(
+                    r,
+                    *width as usize,
+                    *height as usize,
+                    params.clone(),
+                )
+                .map_err(|e| Error::Metric {
+                    kind: "butter",
+                    message: format!("butteraugli ButteraugliReference::new: {e:?}"),
+                })?;
+                *cached_ref = Some(pre);
+                Ok(())
+            }
+            #[cfg(feature = "cpu-zensim")]
+            CpuMetricState::Zensim {
+                inner,
+                width,
+                height,
+                cached_ref,
+            } => {
+                let src: &[[u8; 3]] = bytemuck::cast_slice(r);
+                let ref_slice = zensim::RgbSlice::new(src, *width as usize, *height as usize);
+                let pre = inner.precompute_reference(&ref_slice).map_err(|e| Error::Metric {
+                    kind: "zensim",
+                    message: format!("zensim precompute_reference: {e:?}"),
+                })?;
+                *cached_ref = Some(pre);
+                Ok(())
+            }
+            #[cfg(feature = "cpu-iwssim")]
+            CpuMetricState::Iwssim { inner, .. } => inner.warm_reference(r).map_err(|e| Error::Metric {
+                kind: "iwssim",
+                message: format!("iwssim warm_reference: {e}"),
+            }),
+            CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
+        }
+    }
+
+    /// Score `dist` against the reference installed by [`Self::set_reference`].
+    pub(crate) fn compute_with_cached_reference(&mut self, d: &[u8]) -> Result<Score> {
+        let (w, h) = self.dims();
+        let expected = (w as usize) * (h as usize) * 3;
+        if d.len() != expected {
+            return Err(Error::Metric {
+                kind: "cpu",
+                message: format!(
+                    "cpu compute_with_cached_reference: expected {expected} sRGB bytes, got {}",
+                    d.len()
+                ),
+            });
+        }
+        match self {
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuMetricState::Cvvdp { inner, .. } => {
+                let v = inner.score_with_warm_ref(d).map_err(|e| Error::Metric {
+                    kind: "cvvdp",
+                    message: format!("cvvdp score_with_warm_ref: {e}"),
+                })?;
+                Ok(Score {
+                    value: v as f64,
+                    metric_name: "cvvdp",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+            }
+            #[cfg(feature = "cpu-ssim2")]
+            CpuMetricState::Ssim2 {
+                width,
+                height,
+                cached_ref,
+            } => {
+                let pre = cached_ref.as_ref().ok_or_else(|| Error::Metric {
+                    kind: "ssim2",
+                    message: "ssim2: no cached reference; call set_reference first".into(),
+                })?;
+                let dist_img = ssim2_image_ref(d, *width as usize, *height as usize);
+                let v = pre.compare(dist_img).map_err(|e| Error::Metric {
+                    kind: "ssim2",
+                    message: format!("fast-ssim2 compare: {e}"),
+                })?;
+                Ok(Score {
+                    value: v,
+                    metric_name: "ssim2",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+            }
+            #[cfg(feature = "cpu-dssim")]
+            CpuMetricState::Dssim {
+                inner,
+                width,
+                height,
+                cached_ref,
+            } => {
+                let cached = cached_ref.as_ref().ok_or_else(|| Error::Metric {
+                    kind: "dssim",
+                    message: "dssim: no cached reference; call set_reference first".into(),
+                })?;
+                let dist_img = make_dssim_image(inner, d, *width as usize, *height as usize)?;
+                let (score, _maps) = inner.compare(cached, dist_img);
+                Ok(Score {
+                    value: f64::from(score),
+                    metric_name: "dssim",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+            }
+            #[cfg(feature = "cpu-butter")]
+            CpuMetricState::Butter { cached_ref, .. } => {
+                let pre = cached_ref.as_ref().ok_or_else(|| Error::Metric {
+                    kind: "butter",
+                    message: "butter: no cached reference; call set_reference first".into(),
+                })?;
+                let result = pre.compare(d).map_err(|e| Error::Metric {
+                    kind: "butter",
+                    message: format!("butteraugli compare: {e:?}"),
+                })?;
+                Ok(Score {
+                    value: result.score,
+                    metric_name: "butter",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+            }
+            #[cfg(feature = "cpu-zensim")]
+            CpuMetricState::Zensim {
+                inner,
+                width,
+                height,
+                cached_ref,
+            } => {
+                let pre = cached_ref.as_ref().ok_or_else(|| Error::Metric {
+                    kind: "zensim",
+                    message: "zensim: no cached reference; call set_reference first".into(),
+                })?;
+                let dst: &[[u8; 3]] = bytemuck::cast_slice(d);
+                let dist_slice = zensim::RgbSlice::new(dst, *width as usize, *height as usize);
+                let result = inner.compute_with_ref(pre, &dist_slice).map_err(|e| Error::Metric {
+                    kind: "zensim",
+                    message: format!("zensim compute_with_ref: {e:?}"),
+                })?;
+                Ok(Score {
+                    value: result.score(),
+                    metric_name: "zensim",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+            }
+            #[cfg(feature = "cpu-iwssim")]
+            CpuMetricState::Iwssim { inner, .. } => {
+                if !inner.has_reference() {
+                    return Err(Error::Metric {
+                        kind: "iwssim",
+                        message: "iwssim: no cached reference; call set_reference first".into(),
+                    });
+                }
+                // Matches cpu_adapter: the warm cached-ref entry routes through
+                // the strip walker (ref-side pyramid amortized; ≤1e-4 vs full).
+                let result = inner
+                    .score_with_warm_ref_strip(d, iwssim::STRIP_BODY_DEFAULT)
+                    .map_err(|e| Error::Metric {
+                        kind: "iwssim",
+                        message: format!("iwssim score_with_warm_ref_strip: {e}"),
+                    })?;
+                Ok(Score {
+                    value: result.score,
+                    metric_name: "iwssim",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+            }
+            CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
+        }
+    }
+
+    /// Whether a reference is currently installed.
+    pub(crate) fn has_reference(&self) -> bool {
+        match self {
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuMetricState::Cvvdp { inner, .. } => inner.has_reference(),
+            #[cfg(feature = "cpu-iwssim")]
+            CpuMetricState::Iwssim { inner, .. } => inner.has_reference(),
+            #[cfg(feature = "cpu-ssim2")]
+            CpuMetricState::Ssim2 { cached_ref, .. } => cached_ref.is_some(),
+            #[cfg(feature = "cpu-dssim")]
+            CpuMetricState::Dssim { cached_ref, .. } => cached_ref.is_some(),
+            #[cfg(feature = "cpu-butter")]
+            CpuMetricState::Butter { cached_ref, .. } => cached_ref.is_some(),
+            #[cfg(feature = "cpu-zensim")]
+            CpuMetricState::Zensim { cached_ref, .. } => cached_ref.is_some(),
+            CpuMetricState::FeatureDisabled(_) => false,
+        }
+    }
+
+    /// Drop any installed reference. cvvdp/iwssim hold warm state internally
+    /// and expose no clear API; the next `set_reference` overwrites it, so
+    /// clear is a documented no-op for them (the four cache-field metrics
+    /// drop their `cached_ref`).
+    pub(crate) fn clear_reference(&mut self) {
+        match self {
+            #[cfg(feature = "cpu-ssim2")]
+            CpuMetricState::Ssim2 { cached_ref, .. } => *cached_ref = None,
+            #[cfg(feature = "cpu-dssim")]
+            CpuMetricState::Dssim { cached_ref, .. } => *cached_ref = None,
+            #[cfg(feature = "cpu-butter")]
+            CpuMetricState::Butter { cached_ref, .. } => *cached_ref = None,
+            #[cfg(feature = "cpu-zensim")]
+            CpuMetricState::Zensim { cached_ref, .. } => *cached_ref = None,
+            // cvvdp / iwssim: no crate clear API; next set_reference overwrites.
+            #[allow(unreachable_patterns)]
+            _ => {}
         }
     }
 
@@ -423,6 +729,7 @@ impl CpuMetricState {
                 params,
                 width,
                 height,
+                ..
             } => compute_butter_linear(params, *width, *height, r, d).map(|(s, p)| (s, Some(p))),
             #[cfg(feature = "cpu-cvvdp")]
             CpuMetricState::Cvvdp {
