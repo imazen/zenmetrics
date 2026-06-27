@@ -186,6 +186,17 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **PNG palette/quantize axis wired through the sweep.** The zenpng plan path
+  (`PlannedConfig::Zenpng`) now encodes via `SweepVariant::encode_png`, so the
+  8 mandatory quantize cells ({imagequant, zenquant} × {256,128,64,32}) in
+  `modes_full`/`scalar_dense` emit real indexed PNGs (cell ids `-iq<N>`/`-zq<N>`).
+  The knob path (`encode_png`) gains a `"quantize"` knob (`"iq256"`/`"zq64"`/…)
+  and `PNG_KNOBS` lists it. The `png` feature now enables `zenpng/quantize` +
+  `zenpng/imagequant`. `check_mandatory_coverage.py` requires BOTH backends
+  (`-iq\d` AND `-zq\d`). `modes_full` for zenpng is now 17 cells (9 truecolor +
+  8 palette). Verified: emit + real encode = 17/17 cells, encode-fail=0, all
+  fingerprints distinct; palette cells produce distinct (smaller) bytes on a
+  high-color image. Cross-repo with zenpng `a821f50b`.
 - **`score-pairs --feature-output <pq> [--zensim-features-regime with-iw]`** —
   the heterogeneous-SPLIT GPU scorer can now emit the per-cell zensim feature
   parquet sidecar (372-D WithIw by default) alongside the metric scores, so a

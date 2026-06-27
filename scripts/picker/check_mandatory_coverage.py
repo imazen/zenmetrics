@@ -52,9 +52,12 @@ MANDATORY = {
         ("lossless mode (vp8l)", has(r"vp8l")),
         ("sharp_yuv", has(r"-syuv(?:[-_]|$)")),
     ],
-    # zenpng: palette/quantize axis must EXIST (currently a plan omission).
+    # zenpng grammar: png-<preset>[-iq<N>|-zq<N>]. The mandatory quantize
+    # axis must sweep BOTH palette backends: imagequant (-iq<N>) AND
+    # zenquant (-zq<N>), across the color ladder {256,128,64,32}.
     "zenpng": [
-        ("palette/quantize axis", has(r"(?:pal|quant|colors|pltN)")),
+        ("palette imagequant", has(r"-iq\d")),
+        ("palette zenquant", has(r"-zq\d")),
     ],
     # zenjxl lossy: full effort ladder e1..e9 (the ablation program mandates it).
     "zenjxl_lossy": [(f"effort e{n}", has(rf"(?<![0-9a-z])e{n}(?![0-9])")) for n in range(1, 10)],

@@ -128,13 +128,15 @@ impl PlannedConfig {
             }
             #[cfg(feature = "png")]
             Self::Zenpng(variant) => {
-                // parallel is pinned off inside build() (pattern 9).
-                let cfg = variant.build();
+                // encode_png picks truecolor (quantize: None) or indexed
+                // (quantize: Some) per the variant; parallel is pinned off
+                // inside build() (pattern 9).
                 let pixels: &[rgb::Rgb<u8>] =
                     crate::sweep::encode::bytemuck_cast_rgb(&source.pixels);
                 let img =
                     imgref::ImgRef::new(pixels, source.width as usize, source.height as usize);
-                zenpng::encode_rgb8(img, None, &cfg, &enough::Unstoppable, &enough::Unstoppable)
+                variant
+                    .encode_png(img, &enough::Unstoppable, &enough::Unstoppable)
                     .map_err(|e| format!("zenpng plan-cell encode failed: {e:?}"))?
             }
             #[cfg(feature = "gif")]

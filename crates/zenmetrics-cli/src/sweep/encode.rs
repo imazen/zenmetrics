@@ -147,6 +147,7 @@ const PNG_KNOBS: &[&str] = &[
     "near_lossless_bits",
     "parallel",
     "max_threads",
+    "quantize",
 ];
 const JPEG_KNOBS: &[&str] = &[
     // public builders
@@ -355,12 +356,75 @@ fn encode_png(
     let pixels: &[rgb::Rgb<u8>] = bytemuck_cast_rgb(&source.pixels);
     let img = ImgRef::new(pixels, source.width as usize, source.height as usize);
 
+    // Optional palette/quantize knob: "iq{N}" = imagequant, "zq{N}" =
+    // zenquant, N = max colors (2..=256). Present → indexed (palette) PNG;
+    // absent → truecolor lossless. This is the one lossy PNG axis.
+    let quantize = match knobs.get("quantize") {
+        None => None,
+        Some(Value::String(s)) => Some(parse_png_quantize(s)?),
+        Some(_) => {
+            return Err("zenpng quantize must be a string like \"iq256\" or \"zq64\"".into());
+        }
+    };
+
     let start = Instant::now();
-    let bytes = zenpng::encode_rgb8(img, None, &cfg, &Unstoppable, &Unstoppable)
-        .map_err(|e| format!("zenpng encode failed: {e}"))?;
+    let bytes = match quantize {
+        None => zenpng::encode_rgb8(img, None, &cfg, &Unstoppable, &Unstoppable)
+            .map_err(|e| format!("zenpng encode failed: {e}"))?,
+        Some((backend, max_colors)) => {
+            use rgb::Rgba;
+            // Widen RGB → RGBA (opaque) for the indexed encoder.
+            let rgba: Vec<Rgba<u8>> = img
+                .pixels()
+                .map(|p| Rgba::new(p.r, p.g, p.b, 255u8))
+                .collect();
+            let rgba_img = ImgRef::new(&rgba, img.width(), img.height());
+            let quantizer: Box<dyn zenpng::Quantizer> = match backend {
+                PngQuantBackend::Imagequant => {
+                    Box::new(zenpng::ImagequantQuantizer::default().with_max_colors(max_colors))
+                }
+                PngQuantBackend::Zenquant => {
+                    Box::new(zenpng::ZenquantQuantizer::new().with_max_colors(max_colors))
+                }
+            };
+            zenpng::encode_indexed(rgba_img, &cfg, &*quantizer, None, &Unstoppable, &Unstoppable)
+                .map_err(|e| format!("zenpng indexed encode failed: {e}"))?
+        }
+    };
     let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
 
     Ok(EncodedCell { bytes, encode_ms })
+}
+
+/// Palette backend selected by the `quantize` knob.
+#[cfg(all(feature = "sweep", feature = "png"))]
+#[derive(Clone, Copy)]
+enum PngQuantBackend {
+    Imagequant,
+    Zenquant,
+}
+
+/// Parse a `quantize` knob value (`"iq{N}"` / `"zq{N}"`, N = 2..=256) into
+/// a (backend, max_colors) pair. Mirrors `zenpng::sweep`'s cell-id grammar.
+#[cfg(all(feature = "sweep", feature = "png"))]
+fn parse_png_quantize(s: &str) -> Result<(PngQuantBackend, u16), Box<dyn Error>> {
+    let (backend, n) = if let Some(n) = s.strip_prefix("iq") {
+        (PngQuantBackend::Imagequant, n)
+    } else if let Some(n) = s.strip_prefix("zq") {
+        (PngQuantBackend::Zenquant, n)
+    } else {
+        return Err(format!(
+            "zenpng quantize must start with `iq` (imagequant) or `zq` (zenquant); got {s:?}"
+        )
+        .into());
+    };
+    let max_colors: u16 = n
+        .parse()
+        .map_err(|e| format!("zenpng quantize color count in {s:?}: {e}"))?;
+    if !(2..=256).contains(&max_colors) {
+        return Err(format!("zenpng quantize colors {max_colors} out of range 2..=256").into());
+    }
+    Ok((backend, max_colors))
 }
 
 #[cfg(not(all(feature = "sweep", feature = "png")))]

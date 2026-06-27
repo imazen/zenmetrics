@@ -21,8 +21,11 @@ data missing a first-class mode. The three ways a mode goes missing:
    and jxl-modular's data are `rd_core`-only — the high-value axes (avif **RGB**,
    trellis, VAQ, 27 probes; jxl-modular efforts e1–e10, predictors) were never
    in the cross at all.
-3. **Plan omission.** zenpng's `SweepAxes` has **no palette/quantize axis** —
-   the single biggest PNG RD lever was never coded into the plan.
+3. **Plan omission (RESOLVED 2026-06-27).** zenpng's `SweepAxes` had **no
+   palette/quantize axis** — the single biggest PNG RD lever was never coded
+   into the plan. Now landed: `modes_full`/`scalar_dense` carry 8 mandatory
+   quantize cells ({imagequant, zenquant} × {256,128,64,32}) as a UNION with
+   the lossless compression cells. See "png quantize axis" below.
 
 ### Audit map (2026-06-27)
 
@@ -31,7 +34,7 @@ data missing a first-class mode. The three ways a mode goes missing:
 | jpeg | (1) tail-shed | XYB color, 422, trellis ladder | CRITICAL |
 | avif | (2) rd_core-only | RGB (25–40% RD), trellis, VAQ, speed8, 27 probes | CRITICAL |
 | webp | (1) tail-shed (budget=300) | sharp_yuv, filter_strength, sns_strength, filter_sharpness | CRITICAL |
-| png | (3) plan omission | palette/quantize (no png data swept at all) | CRITICAL |
+| png | (3) plan omission — RESOLVED 2026-06-27 | (was: palette/quantize never swept) — now both backends × {256,128,64,32} | OK |
 | jxl-lossy | — clean (full e1–e9, probes present) | — | OK |
 | jxl-modular | (2) rd_core-only (e5/7/9), deferred | e1–4/6/8/10, predictors, group-size, internal probes | HIGH |
 
@@ -65,8 +68,9 @@ Expressed as config_name tokens that MUST each appear ≥1× in the swept pareto
   sub-30s tiers.
 - **zenwebp**: a `vp8l` (lossless) AND `vp8` (lossy) config; a `-syuv`
   (sharp_yuv) config.
-- **zenpng**: a palette/quantize config (axis must be ADDED first — see below);
-  effort tiers ≤ the sub-30s cut.
+- **zenpng**: BOTH palette backends — an imagequant config (`-iq<N>`) AND a
+  zenquant config (`-zq<N>`); effort tiers ≤ the sub-30s cut. (Axis landed
+  2026-06-27 — see below.)
 - **zenjxl lossy**: full `e1..e9`. **modular**: `e1..e10` + predictor coverage.
 
 ## Enforcement points (belt + suspenders)
@@ -80,9 +84,14 @@ Expressed as config_name tokens that MUST each appear ≥1× in the swept pareto
      ladder (RGB survives) + test. (subsampling was already never-collapsed.)
    - **zenwebp** ✅ LANDED (main `d5254f6`) — `lossy.sharp_yuv` + `lossy.methods`
      removed from the ladder + test.
-   - **zenpng** ⏳ — the palette/quantize axis must be ADDED (plan omission, not a
-     collapse); it is metric-class (changes pixels), so png joins the metric-scored
-     sweep. Bigger than a collapse-line fix; not yet done.
+   - **zenpng** ✅ LANDED (2026-06-27) — the palette/quantize axis was ADDED to
+     `zenpng::sweep` (`SweepVariant.quantize: Option<QuantizeSpec>`,
+     `QuantBackend::{Imagequant,Zenquant}`). `modes_full`/`scalar_dense` emit 8
+     quantize cells ({256,128,64,32} × both backends) as a UNION with the
+     lossless compression cells; the cells are metric-class (changes pixels), so
+     png joins the metric-scored sweep. zenmetrics encodes them via
+     `SweepVariant::encode_png` (plan path) + a `quantize` knob (`encode_png`
+     knob path). Coverage gate updated to require both backends.
    - **zenjxl** — lossy is clean; modular needs a re-sweep with `modes_full`/
      `scalar_dense` (not a source change — it was swept `rd_core`).
 2. **Plan-time (zenmetrics `plan.rs`)** — after building, assert no mandatory
@@ -113,15 +122,22 @@ form (`knob_tuple_json` carries `{cell,fp,plan}`), not a job-ledger — so reuse
 | avif | 24 rd_core cfgs | modes_full adds RGB + trellis + vaq + 27 probes |
 | webp | 12 cfgs | sharp_yuv + fast method (+ filter/sns probes) |
 | jxl-modular | 9 cfgs (e5/7/9) | e1–4/6/8/10 + predictors |
-| png | 0 (new) | compression cells + **6 quantize cells** |
+| png | 0 (new) | compression cells + **8 quantize cells** |
 
-**png quantize axis (user spec: "6 cells across imagequant and zenquant"):**
-`{imagequant, zenquant} × {256, 64, 16}` max_colors = 6 metric-class cells, plus
-the lossless compression cells. Cross-repo feature: zenpng `SweepVariant` gains a
-quantize choice (its `build()` is compression-only today; quantize cells encode
-via `ZenquantQuantizer`/`ImagequantQuantizer` + `encode_indexed`, NOT `EncodeConfig`)
-AND zenmetrics `encode_png` must apply it (PNG_KNOBS gains the quantize knobs).
-Mark the quantize axis mandatory once added.
+**png quantize axis (LANDED 2026-06-27; user spec 2026-06-27 superseded the
+earlier "6 cells / {256,64,16}" sketch):** `{imagequant, zenquant} × {256, 128,
+64, 32}` max_colors = **8 metric-class cells**, as a UNION with the lossless
+compression cells (NOT a cross — the compression cells stay truecolor; each
+quantize spec is one cell at the default Balanced compression). `modes_full` is
+therefore 17 cells (9 truecolor + 8 palette). Cross-repo feature landed:
+- zenpng `SweepVariant` gained `quantize: Option<QuantizeSpec>` +
+  `SweepVariant::encode_png` (truecolor via `encode_rgb8`; palette via
+  `ZenquantQuantizer`/`ImagequantQuantizer` + `encode_indexed`, NOT
+  `EncodeConfig`). Cell ids: `png-<preset>-iq<N>` / `-zq<N>`.
+- zenmetrics applies it in the plan path (`PlannedConfig::Zenpng` →
+  `encode_png`) and the knob path (`encode_png`'s `quantize` knob; `PNG_KNOBS`
+  gained `"quantize"`).
+- `check_mandatory_coverage.py` requires BOTH `-iq\d` AND `-zq\d` config_names.
 
 **Before launching paid boxes:** bump the fleet image's codec pins to the fixed
 commits (zenjpeg 7afedf4c / zenavif 68cd644 / zenwebp d5254f6 + png once landed)

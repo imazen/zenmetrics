@@ -38,7 +38,9 @@ path = "src/lib.rs"
 default = ["png", "jpeg", "webp", "avif", "jxl", "cpu-metrics"]
 
 # Decoder feature flags
-png = ["dep:zenpng"]
+# zenpng/quantize (zenquant) + zenpng/imagequant supply the two palette
+# backends the sweep's quantize axis (`-zq{N}` / `-iq{N}` cells) needs.
+png = ["dep:zenpng", "zenpng/quantize", "zenpng/imagequant"]
 # Enables the `zenjpeg` decoder + sweep encoder. We pin to a path dep on
 # the in-workspace zenjpeg 0.8.4 (sibling repo), which restores
 # magetypes >= 0.9 compatibility and adds the `__expert` knob bundle.
