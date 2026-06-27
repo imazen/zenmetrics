@@ -10,15 +10,15 @@ fleet pareto read. modes_full cell-id: vp8|vp8l -m<method>_<tuning>[-syuv].
 Categorical format x tuning x syuv; scalar = method (0/2/4/6).
 """
 import re
-from pathlib import Path
-from picker_config_common import keep_features, feature_transforms, ZQ_TARGETS  # noqa: F401
+from picker_config_common import keep_features, feature_transforms, paths, ZQ_TARGETS  # noqa: F401
 
 CODEC = "zenwebp"
-_FLEET = Path("/mnt/v/output/zenmetrics/picker-fleet")
-PARETO = _FLEET / "train" / "webp_zensim.pareto.parquet"
-FEATURES = _FLEET / "train" / "webp_zensim.features.tsv"
-OUT_JSON = _FLEET / "models" / f"{CODEC}_predict_zensim_a_v0.1.json"
-OUT_LOG = _FLEET / "models" / f"{CODEC}_predict_zensim_a_v0.1.log"
+# PARETO/FEATURES/OUT resolve via paths(CODEC) keyed on PICKER_TARGET (like
+# zenjpeg/zenavif) so KEEP_FEATURES is computed from the SAME features file the
+# merge writes — not a stale _FLEET path that predates the all-origin corpus.
+# A caller may still override the data via train_hybrid --pareto/--features
+# (the merge does, belt-and-suspenders).
+PARETO, FEATURES, OUT_JSON, OUT_LOG = paths(CODEC)
 KEEP_FEATURES = keep_features(FEATURES)
 FEATURE_TRANSFORMS = feature_transforms(FEATURES)
 CATEGORICAL_AXES = ["format", "tuning", "syuv"]
