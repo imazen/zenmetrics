@@ -93,9 +93,36 @@ Expressed as config_name tokens that MUST each appear ≥1× in the swept pareto
    all three root causes regardless of where they originate. **(landed first — see
    that script.)**
 
-## Re-sweep needed (all crippled pickers)
+## Re-sweep plan — REUSE existing work, sweep only the delta (user: 2026-06-27)
 
-jpeg (+XYB/422), avif (+RGB/trellis/probes — the failed avifrd run produced
-nothing, re-run on the granular system), webp (+sharp_yuv/filters/sns), png
-(+palette, never swept), jxl-modular (full effort ladder + predictors). Run on
-the granular ≤5-min work-stealing job system (PR #31). jxl-lossy is clean.
+Don't re-sweep anything already validly swept. Existing data is **omni-TSV**
+form (`knob_tuple_json` carries `{cell,fp,plan}`), not a job-ledger — so reuse =
+**delta-sweep + merge**, per codec:
+
+1. Emit the CORRECTED `modes_full` cells (now carrying the mandatory modes):
+   `zenmetrics sweep --codec X --plan modes_full --plan-budget B' --dry-run --emit-cells corrected.jsonl`.
+2. Delta = corrected cells whose `cell` id ∉ the existing omni's swept cells.
+3. Sweep ONLY the delta (job system declare / chunk sweep of the delta list) on
+   the granular ≤5-min work-stealing system (PR #31).
+4. Merge delta-omni ⊎ existing-omni → complete omni → omni_to_pareto → retrain
+   (now passes `check_mandatory_coverage.py`).
+
+| codec | reuse (already swept) | delta to sweep |
+|---|---|---|
+| jpeg | 48 cfgs (8fam×3tr×{420,444}) | XYB (jpegli-fam×tr) + 4:2:2 (~30–48 new) |
+| avif | 24 rd_core cfgs | modes_full adds RGB + trellis + vaq + 27 probes |
+| webp | 12 cfgs | sharp_yuv + fast method (+ filter/sns probes) |
+| jxl-modular | 9 cfgs (e5/7/9) | e1–4/6/8/10 + predictors |
+| png | 0 (new) | compression cells + **6 quantize cells** |
+
+**png quantize axis (user spec: "6 cells across imagequant and zenquant"):**
+`{imagequant, zenquant} × {256, 64, 16}` max_colors = 6 metric-class cells, plus
+the lossless compression cells. Cross-repo feature: zenpng `SweepVariant` gains a
+quantize choice (its `build()` is compression-only today; quantize cells encode
+via `ZenquantQuantizer`/`ImagequantQuantizer` + `encode_indexed`, NOT `EncodeConfig`)
+AND zenmetrics `encode_png` must apply it (PNG_KNOBS gains the quantize knobs).
+Mark the quantize axis mandatory once added.
+
+**Before launching paid boxes:** bump the fleet image's codec pins to the fixed
+commits (zenjpeg 7afedf4c / zenavif 68cd644 / zenwebp d5254f6 + png once landed)
+and post a box/cost estimate. jxl-lossy is clean — no re-sweep.
