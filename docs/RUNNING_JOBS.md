@@ -304,3 +304,44 @@ bash scripts/jobsys/teardown_fleet.sh <RUN>       # tear it all down
    `ZEN_CORPUS_BUCKET=codec-corpus ZEN_CORPUS_PREFIX=<your corpus prefix>` on `launch_fleet.sh` (§5)
    and `unraid_worker.sh` for the basement tier (§6). `ZEN_EXEC` defaults to the real executor.
 5. **Monitor** (§7), **collect** scores/encodes from the ledger/blobs (§8), **tear down + GC** (§9).
+
+## Planned: ~5-min chunking + async IO + resource bounds (user 2026-06-27)
+
+Goal: combine cells into ~5-minute work-stealing claim units; make worker IO
+async; bound peak memory to ≤75% of machine RAM and parallelism to ≤cores (no
+oversubscription → no cache thrash). Land incrementally; each chunk CI-green;
+smoke on a freed box before flipping any default.
+
+- **Chunk 1 — DONE (`zenfleet-core` `00d1b39e`).** `schedule::BoxBudget::pack_chunks(&[JobCost], target_wall_sec)`
+  groups cells into claim units sized to the box's envelope: chunk wall ≈
+  `Σcost_sec / concurrency` (heaviest cell binds via `max_concurrent`, so heavy
+  chunks auto-size small and never OOM). Pure + 5 unit tests. `JobCost {cost_sec,
+  peak_mem_bytes, threads}`.
+
+- **Chunk 2 — declare-side chunking + worker concurrency-under-budget (opt-in
+  first).** Add a per-cell `cost_sec` estimate (codec `ResourceEstimate` lacks a
+  time field — start with a pixels×per-codec-factor heuristic; refine from
+  measured omni `encode_ms`). In `zenfleet-ctl::declare_encodes`
+  (`crates/zenfleet-ctl/src/lib.rs:70-96`, currently 1 `DesiredJob`/cell) emit a
+  chunk manifest via `pack_chunks` (env-gated, default off, so existing
+  per-cell flow is untouched until smoke-tested). In the worker claim loop
+  (`crates/zenfleet-worker/src/lib.rs:513-542`) claim a chunk (one R2 lease for N
+  cells), then run its cells as **fresh processes** (keeps the modes_full
+  per-cell memory bound — see Known Bugs) under `BoxBudget::can_admit`, with the
+  budget computed in `run()` (`crates/zenfleet-worker/src/lib.rs:870-993`) as
+  `BoxBudget::new(0.75 * total_ram_bytes, usable_cores)`. `ResourceHint`
+  (`zenfleet-core/src/ledger.rs:44-54`) already rides through declare; default a
+  missing hint to a safe fallback (512 MB / 1 thread).
+
+- **Chunk 3 — async IO.** Worker IO is all blocking `Command` (`aws s3api`/`s5cmd`):
+  claim `crates/zenfleet-worker/src/lib.rs:181-199`, blob put/get `:128-150`,
+  jobexec fetch `crates/zenmetrics-cli/src/.../jobexec.rs:124-187`, exec
+  `:560-590`. Wrap in a tokio runtime + `JoinSet`; overlap a chunk's source
+  fetches with the prior cell's encode/score/upload (prefetch the next cell while
+  the current scores). No tokio in the worker today — introduce it scoped to the
+  claim/exec loop.
+
+Map provenance: Explore agent trace 2026-06-27 (file:line above). `BoxBudget`
+admission logic (`can_admit`/`max_concurrent`/`recommend_concurrency`) already
+exists + is tested but is only called by `provision.rs` (fleet sizing), never the
+worker — chunk 2 wires it into execution.
