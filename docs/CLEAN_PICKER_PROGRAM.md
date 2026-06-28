@@ -178,6 +178,42 @@ BOTH code-heuristics (all APIs) AND MLPs (for the predictive features).
 5. **Bake:** `tools/bake_picker.py` → `.bin`; **commit the `.bin`**.
 6. Commit constantly; `jj git fetch` often (a repo cleanup merge may be landing).
 
+## Hetzner ML-TRAINING fleet — one box per codec, IN PARALLEL (`scripts/train/`)
+
+The workstation can't run concurrent heavy ML (documented lockup risk) and
+`picker_tree_ab` is **single-threaded + slow** (RF + 469-feature permutation
+importance ≈ 40–60 min for ONE split, even on a dedicated core). So the per-codec
+picker dual-model runs on dedicated Hetzner boxes, one per codec, in parallel.
+
+- **Image:** `ghcr.io/imazen/zen-train:hybrid-cpu` (a TAG on the canonical `zen-train`
+  package; built by `scripts/train/build_hybrid_image.sh` from `Dockerfile.hybrid-cpu`).
+  FROM `zenfleet-worker:base-x86`; bakes torch-CPU + scikit-learn + pandas at BUILD
+  time; COPYs the precompiled `picker_tree_ab` + `zenpredict-bake` (bins need
+  GLIBC≤2.34, base has 2.39 → OK) + the training code. NO apt/pip at boot; entrypoint
+  verifies baked tools and fails loud.
+- **Runner (entrypoint):** `scripts/train/dualmodel_runner.sh` — per-codec, in-container:
+  Stage A (GATING) `prep_combined.py` (canonical {train,validate,test}.parquet →
+  combined+splitmap) → `picker_tree_ab --split-map --eval-split val` (GBDT/RF/MLP A/B
+  on the origin split) → `cart_analysis.py` (CART depth-curve + tree→Rust codegen on
+  the SAME dump). Stage B (best-effort) `omni_to_pareto` → `check_mandatory_coverage`
+  → `train_hybrid --codec-config <family>_picker` → `bake_picker`. Each split's A/B +
+  CART upload INCREMENTALLY (robust to the wall-cap kill); all results →
+  `s3://zentrain/dualmodel-2026-06-28/<codec>/`. Knobs: `SKIP_TEST_SPLIT=1` (val only),
+  `SKIP_RF=1` (drop the auxiliary RF baseline — keeps the GBDT-vs-MLP headline),
+  `SKIP_TRAIN_HYBRID=1` (Stage A only, for codecs lacking an omni/config).
+- **Launcher:** `scripts/train/hetzner_ml_train.sh` — `CODEC=<codec> bash …`. Mints a
+  SCOPED short-TTL R2 cred (never the root key on a box), provisions a cpx51 (prefers
+  EU `fsn1/nbg1/hel1`, falls back to US `ash/hil` + `ccx*` if capacity-out — **EU
+  €0.1338/hr vs US €0.4479/hr, so force EU when capacity allows**), host cloud-init
+  SELF-DESTRUCTS via the Hetzner metadata-id + API token (HOST-side, never in the
+  container) on success AND failure, and backgrounds a progress monitor.
+- **Self-destruct is proven** (boot → s5cmd upload → metadata-id API-DELETE → box gone),
+  and a transient external watchdog (`max 90 min/box, €8 fleet cap`, name-prefix
+  `mltrain-`) is the defense-in-depth backstop for the whole fan-out.
+- **Stage B inputs** live at `s3://zentrain/dualmodel-2026-06-28/inputs/`
+  (`<family>.zensim.combined.tsv` omni + `combined_features_vn_tiled.tsv`). Present for
+  zenjpeg/zenavif/zenwebp; jxl/png are Stage-A-only until their omni/config exist.
+
 ## Provenance discipline
 
 Any new corpus/rendition set MUST be indexed (rendition→origin→original sha256) per
