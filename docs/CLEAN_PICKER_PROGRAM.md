@@ -123,6 +123,47 @@ nothing odd to filter. Training data (even) is abundant; held-out (odd) is the u
   × 4497 renditions ≈ **6.4M cells total**, ~$10–12 on a Hetzner cpx51 job-system fleet (~1.5 h).
   jxl-lossy excluded (interim suffices).
 
+## GATE CALIBRATION + RD-OVERHEAD FINDINGS (2026-06-28)
+
+**Tiny-feature blocker cleared (zenanalyze #49, `origin/main`).** `analyze_features`
+now mirror-tiles too-small inputs internally (`mirror_tile_packed`) and recovers the
+percentile features, so `DATA_STARVED` no longer fires from NaN tiny features — every
+caller gets content-aware features at any size with zero external handling. Interim
+`tile_fill_tiny_features.py` retired. (memory: `data-starved-tiny-feature-nan`.)
+
+**`LOW_ARGMIN` was the wrong gate — demoted 0.30 → 0.10** (train_hybrid `ebf15fa6`; now
+a degenerate-picker sanity floor, not the quality gate). `argmin_acc` (exact byte-min
+match) penalizes RD-equivalent NEAR-TIES: webp's K=1 RD overhead **3.37%** is LOWER than
+jpeg's **6.41%** — yet jpeg PASSED at 36% argmin and webp FAILED at 23.3%. argmin_acc
+anti-correlates with RD quality. Real quality gates: `max_mean_overhead_pct` (RD overhead
+— the deployed quantity) + per-zq/size p99 tails + `WORST_ROW`.
+
+**The real overhead problem is the TAIL, not the mean.** After demoting LOW_ARGMIN the
+clean bakes still refuse on: `WORST_ROW` (one image at 259% webp / 334% avif) + avif
+`PER_ZQ_TAIL` (zq=50 p99 80.4%). Mean is already fine (webp 3.5% / avif 6.8%).
+
+**The optimizer is NOT the limiter — features/cells/landscape are.** GBDT teacher
+(per-cell `HistGradientBoosting`) ≈ MLP student on overhead (webp 3.42% vs 3.48%; avif
+7.08% vs 6.84% — MLP wins there). So lowering overhead is NOT a better-model problem.
+Measured levers:
+- **top-K-verify deploy** → mean <1% by K=5 (webp 0.92%, avif 0.84%), but does NOT fix the
+  tail (worst rows are the ~7–24% where the oracle isn't in the top-K).
+- **"predict more knobs" is mostly already exploited** — `modes_full` sweeps 48–54
+  categorical cells + scalar heads (trellis λ, aq_coupling, quality); the 2026-06-09
+  ML_FRAMEWORK "6 of 16 knobs" gap is STALE. The lever is features / finer scalar ladders
+  (`scalar_dense`) / verify, not more knobs.
+- **Feature gap OR irreducible** — the GBDT-all-features floor (3.42%) is either a feature
+  gap or content-dependence beyond what we extract; resolve via permutation importance
+  (§4.5 input-ablation, `picker_tree_ab`) BEFORE adding features.
+
+**Dual-model (decision-tree code-heuristics + MLP) is viable** — GBDT teacher ≈ MLP
+student, so a tree picker is a peer, not a downgrade (and may help the tail: trees catch
+axis-aligned interactions a small MLP misses). Open work: tree → Rust code-heuristic /
+compact bake per codec API + the per-codec tree-vs-MLP choice. Instrument:
+`zenanalyze/zenpicker-train/src/bin/picker_tree_ab.rs` (extended 2026-06-28 with
+`--split-map`/`--eval-split` to honor the origin split). User directive 2026-06-28: ship
+BOTH code-heuristics (all APIs) AND MLPs (for the predictive features).
+
 ## WORKFLOW (fleet → picker)
 
 1. **Renditions:** `gen_dense_corpus.py` over the segmented imazen-26 (all 3 splits;
