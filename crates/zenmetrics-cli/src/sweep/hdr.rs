@@ -423,6 +423,16 @@ fn umbrella_kind_and_backend(
                     pick another metric"
             .into());
     }
+    // cvvdp is flagged `requires_gpu`, but it has a native CPU port. When its
+    // GPU backend (`gpu-cvvdp`) is NOT compiled but the CPU port (`cpu-cvvdp`)
+    // is, score it on `Backend::Cpu` — `HdrScorer::new` → `build_hdr_metric`
+    // routes Cpu to `Metric::new_cpu_hdr` (native `cvvdp` crate via
+    // `cpu_dispatch`, NEVER cubecl-cpu), exactly like butter/ssim2/zensim. This
+    // makes `--metric cvvdp` work in a no-local-GPU `cpu-metrics` HDR sweep.
+    #[cfg(all(not(feature = "gpu-cvvdp"), feature = "cpu-cvvdp"))]
+    if matches!(metric, MetricKind::Cvvdp) {
+        return Ok((kind, zenmetrics_api::Backend::Cpu));
+    }
     let backend = if metric.requires_gpu() {
         if matches!(runtime, GpuRuntime::Auto) {
             return Err(format!(

@@ -552,9 +552,15 @@ pub(crate) fn to_umbrella_kind(
         C::Butteraugli => Some(U::Butter),
         C::Dssim => Some(U::Dssim),
         C::Zensim => Some(U::Zensim),
-        // GPU metric variants → the umbrella GPU path (gated on the gpu-* feature).
-        #[cfg(feature = "gpu-cvvdp")]
+        // cvvdp routes to the umbrella whenever EITHER its GPU backend
+        // (`gpu-cvvdp`) OR its native CPU port (`cpu-cvvdp`) is compiled, so a
+        // no-GPU `cpu-metrics` build still scores cvvdp on CPU in HDR mode. The
+        // backend (Cuda/Wgpu vs Cpu) is chosen in the sweep's
+        // `umbrella_kind_and_backend`; the CPU path runs the native `cvvdp`
+        // crate via `cpu_dispatch` (NEVER cubecl-cpu).
+        #[cfg(any(feature = "gpu-cvvdp", feature = "cpu-cvvdp"))]
         C::Cvvdp => Some(U::Cvvdp),
+        // GPU metric variants → the umbrella GPU path (gated on the gpu-* feature).
         #[cfg(feature = "gpu-butteraugli")]
         C::ButteraugliGpu => Some(U::Butter),
         #[cfg(feature = "gpu-ssim2")]
