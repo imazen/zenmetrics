@@ -194,10 +194,39 @@ Workspace conventions per the global rules:
   Full, drop, reclaim, build 1448² Full, assert both GPU scoring paths match
   CPU to ≤0.10 JOD (without the reclaim it fails by ~9 JOD) (fd55300d).
 
+## zenmetrics-api
+
+### Added
+
+- **Native-CPU HDR scorer construction** (`63d6fca1`). `Metric::new_cpu_hdr` +
+  `CpuMetricState::new_hdr` build an HDR scorer straight from the `cpu-*` crates
+  with **no** `MetricParams` (whose variants are GPU-feature-gated) — so a
+  pure-CPU build (no GPU metric feature, no cubecl) can score HDR pairs.
+  Previously `HdrScorer::new` could only construct when the metric's GPU feature
+  was compiled, so a CPU-only build panicked "metric not enabled" even though the
+  native `cpu_dispatch` already implements every HDR feeding path
+  (`compute_from_linear_interleaved` / `compute_pu_nits_interleaved` /
+  `compute_pu_luma_gray`). The HDR display peak is baked into butteraugli
+  `intensity_target` + cvvdp display; `build_hdr_metric` routes `Backend::Cpu`
+  through the new constructor (never cubecl-cpu).
+
 ## zenmetrics-cli
 
 ### Added
 
+- **HDR is now default-on, and the CPU HDR path works without cubecl** (`63d6fca1`).
+  The `hdr` feature was off-by-default, so prebuilt/fleet binaries silently lacked
+  `--hdr` (HDR scoring had to run locally). `hdr` is now split into a default-on
+  **core** (`image` EXR reader + `zenmetrics-api/hdr` + `cpu-metrics`; the `--hdr`
+  flag, PQ-PNG/PQ-JXL/EXR reference decode, and the per-metric HDR feeding) and an
+  opt-in **`hdr-gainmap`** (the heavier `heic` + `ultrahdr-rs`/`ultrahdr-core`
+  gain-map source decoders, kept off the default/i686/arm/macos build). Core `hdr`
+  is in BOTH `default` and `sweep`, so a sweep/fleet binary can never silently lack
+  `--hdr` again. Gain-map sources (`.heic`/`.jpg`) now give a clear "rebuild with
+  `--features hdr-gainmap`" error instead of a missing decoder. Verified: a
+  CPU-only `sweep,png,jxl,hdr` build (no GPU) scores HDR butteraugli/ssim2/zensim
+  on the imazen-26 PQ-PNG corpus (q30→q90 monotonic RD); the default build carries
+  `score`/`batch --hdr`; the `hdr-gainmap` build compiles; fmt + clippy green.
 - **PNG palette/quantize axis wired through the sweep.** The zenpng plan path
   (`PlannedConfig::Zenpng`) now encodes via `SweepVariant::encode_png`, so the
   8 mandatory quantize cells ({imagequant, zenquant} × {256,128,64,32}) in
