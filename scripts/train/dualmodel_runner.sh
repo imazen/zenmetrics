@@ -108,6 +108,10 @@ python3 "$PICKERDIR/prep_combined.py" "$CODEC" --src "$CANON_DIR" --out "$WORK" 
   || { log "FATAL: prep_combined failed"; STAGE_A="prep-failed"; exit 4; }
 
 DUMP="$WORK/dump_$CODEC"; mkdir -p "$DUMP"
+# val FIRST (the gate) then test (bonus). Upload each split's A/B log + dump
+# IMMEDIATELY so a slow `test` split that hits the self-destruct backstop can't
+# cost us the already-finished val results. STAGE_A flips to ok the moment val
+# uploads, so the box is creditably done even if test is cut short.
 for split in val test; do
   log "picker_tree_ab --eval-split $split (this is the dual-model A/B; GBDT/RF/MLP)"
   picker_tree_ab \
@@ -117,18 +121,19 @@ for split in val test; do
       --dump-dir "$DUMP/$split" \
       --codec-tag "$CODEC" 2>&1 | tee "$WORK/ab_${CODEC}_${split}.log"
   rc=${PIPESTATUS[0]}
+  # upload this split's artifacts right away (incremental — robust to a later kill)
+  s5 cp "$WORK/ab_${CODEC}_${split}.log" "s3://$BUCKET/$OUT_PREFIX/picker_tree_ab/ab_${CODEC}_${split}.log" || true
+  if [ -d "$DUMP/$split" ]; then
+    tar -cf "$WORK/dump_${CODEC}_${split}.tar" -C "$DUMP" "$split" 2>/dev/null \
+      && s5 cp "$WORK/dump_${CODEC}_${split}.tar" "s3://$BUCKET/$OUT_PREFIX/picker_tree_ab/dump_${CODEC}_${split}.tar" || true
+  fi
   if [ "$rc" != 0 ]; then
     log "picker_tree_ab --eval-split $split exited rc=$rc"
     [ "$split" = "val" ] && { STAGE_A="ab-val-failed"; exit 4; }   # val is the gate
   fi
+  [ "$split" = "val" ] && { STAGE_A="ok"; log "Stage A gate MET (val A/B uploaded)"; }
 done
-# upload A/B logs + dump
-s5 cp "$WORK/ab_${CODEC}_val.log"  "s3://$BUCKET/$OUT_PREFIX/picker_tree_ab/ab_${CODEC}_val.log"  || true
-s5 cp "$WORK/ab_${CODEC}_test.log" "s3://$BUCKET/$OUT_PREFIX/picker_tree_ab/ab_${CODEC}_test.log" || true
-tar -cf "$WORK/dump_$CODEC.tar" -C "$WORK" "dump_$CODEC" 2>/dev/null \
-  && s5 cp "$WORK/dump_$CODEC.tar" "s3://$BUCKET/$OUT_PREFIX/picker_tree_ab/dump_$CODEC.tar" || true
-STAGE_A="ok"
-log "=== Stage A complete (A/B logs + dump uploaded) ==="
+log "=== Stage A complete (A/B logs + dumps uploaded incrementally) ==="
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Stage B — train_hybrid teacher/student + bake (best-effort; does not gate)
