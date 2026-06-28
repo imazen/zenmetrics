@@ -54,7 +54,9 @@ export HCLOUD_TOKEN
 [ -n "$HCLOUD_TOKEN" ] || { echo "FATAL: no hcloud api_token"; exit 1; }
 r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto aws s3 "$@" --endpoint-url "$EP"; }
 
-MON_LOG="/tmp/hetzner_mltrain_${RUN}_${CODEC}.log"
+# keyed on the unique box NAME (codec+metric) so the zensim and ssim2 boxes for
+# one codec don't clobber each other's monitor log.
+MON_LOG="/tmp/hetzner_mltrain_${NAME}.log"
 echo "### $RUN  codec=$CODEC type=$STYPE image=$IMAGE  monitor->$MON_LOG"
 
 # 1) scoped temp R2 cred — RW on zentrain, scoped to the two prefixes the box
@@ -130,9 +132,11 @@ EOF
 #    the ash/hil US fallback). Prefer the cheap shared cpx tiers; smaller type if
 #    cpx51 is capacity-out in every EU DC. NEVER fall to US.
 # picker_tree_ab peaks ~9 GB RSS (measured, zenjpeg 1.48M rows) so every fallback
-# type must have >=16 GB; cpx31/cpx21 (8 GB) would OOM mid-dump. cpx51=32 GB primary.
+# type must have >=16 GB; cpx31/cpx21 (8 GB) would OOM mid-dump. Prefer the cheap
+# shared cpx51 (~EUR0.1338/hr, 32 GB); when those are EU-capacity-out (common),
+# fall to ccx33 (8 vCPU/32 GB, ~EUR0.288/hr) before the pricier ccx43.
 launched=0; lasterr=""
-for typ in "$STYPE" cpx51 cpx41 ccx43; do
+for typ in "$STYPE" cpx51 cpx41 ccx33 ccx43; do
   for loc in fsn1 nbg1 hel1; do
     lasterr=$(hcloud server create --name "$NAME" --type "$typ" --image docker-ce --location "$loc" \
       --ssh-key "$SSH_KEY" --label group="$RUN" --label codec="$CODEC" \
