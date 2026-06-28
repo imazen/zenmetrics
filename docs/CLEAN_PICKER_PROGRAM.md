@@ -164,6 +164,57 @@ compact bake per codec API + the per-codec tree-vs-MLP choice. Instrument:
 `--split-map`/`--eval-split` to honor the origin split). User directive 2026-06-28: ship
 BOTH code-heuristics (all APIs) AND MLPs (for the predictive features).
 
+### K=1 SAFETY-BOUND KNOB VETOES — the single-encode tail fix (VALIDATED 2026-06-28)
+
+User directive 2026-06-28: **"we cannt encode more than once, fix it"** — top-K-verify is
+OFF the table; the K=1 single-pick picker must pass the gate honestly. Then: **"figure out
+some safety bounds … make sure it isn't tiny images driving that tail, safety sanity
+bounding knobs should help."**
+
+What the catastrophic `WORST_ROW` tail actually is (measured on avif, reproduced on webp):
+- **NOT tiny-driven** — of avif's 4 rows >200%, all are *medium*; of 119 rows >100%, only 1
+  is tiny (tiny is 29% of all rows). The #49 fix worked.
+- **NOT OOD** — the worst-row images are in-distribution on all 50 model features, so the
+  existing `KnownGoodFallback`/OOD-bounds rescue (zenpredict `bounds.rs`/`safety.rs`) does
+  NOT catch them.
+- **NO safe default cell exists** — the most-robust fixed cell still has a huge worst-case
+  (avif 377%, webp **2317%**), so a fixed-fallback can't bound it either. The picker reduces
+  worst-case from that floor down to ~330%, but a pure content K=1 picker can't reach <200%
+  on every row.
+- It's **content-dependent adjacent-cell toggle mis-sets** (chroma 420↔444 · bit-depth ·
+  quant-matrix) the features only weakly separate; the worst row MOVES with model init
+  (o_6825@zq88 ↔ o_9731@zq45) — a structural property, not one pathological image.
+
+**Fix — feature-gated per-knob-value vetoes (single-encode, no gate-gaming).** For each
+`CATEGORICAL_AXES` value, a feature-threshold rule masks that knob value when the feature
+fires (e.g. avif auto-derived `veto sub=420 when feat_log_padded_pixels_32 > 10.13` — don't
+chroma-subsample larger images). Greedy forward-selection on TRAIN (depth-1 stump per
+(axis,value) on per-row "value catastrophic" `vo>0.80`; keep vetoes that cut >200-count/max
+at ≤0.20pp mean cost). Measured avif:
+
+| split | raw max / >200 / mean | vetoed max / >200 / mean |
+|---|---|---|
+| VAL | 333.8% / 4 / 6.84% | **192% / 1 / 6.73%** |
+| TEST (held-out 7/9) | 220.6% / 1 / 6.61% | **182% / 0 / 6.58%** |
+
+Worst-case under 200% on the **held-out** split, >200% rows eliminated, **mean improves**
+(420 was systematically over-picked). Generalizes — not overfit.
+
+**Wiring (honest bake = gate AND deploy apply the same vetoes):**
+- `train_hybrid`: `derive_knob_vetoes()` (on train) + `build_veto_mask()` threaded into
+  `evaluate_argmin_per_row` (oracle = argmin over true reachable; pick = argmin over
+  `reach & mask & ~veto`, fallback to un-vetoed if empty) so the `WORST_ROW` gate reflects
+  the deployed picker. Rules shipped in the manifest + ZNPR.
+- ZNPR v3 metadata is extensible typed KV with reserved prefixes (unknown keys ignored) →
+  ship rules as a `zenpicker.knob_vetoes` entry, **no format-version break**, self-contained
+  in the `.bin`.
+- Deploy: zenpredict's argmin is caller-builds-`AllowedMask` → a veto helper denies the
+  vetoed cells in the mask before `argmin_masked`, composing with the codec's
+  quality/perf constraints.
+
+Status: avif validated; train_hybrid integration + zenpredict helper + re-bake all codecs +
+commit `.bin`s in progress. jpeg zensim already bakes clean (predictable cell space).
+
 ## WORKFLOW (fleet → picker)
 
 1. **Renditions:** `gen_dense_corpus.py` over the segmented imazen-26 (all 3 splits;
