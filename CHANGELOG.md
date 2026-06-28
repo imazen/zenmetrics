@@ -227,6 +227,16 @@ Workspace conventions per the global rules:
   CPU-only `sweep,png,jxl,hdr` build (no GPU) scores HDR butteraugli/ssim2/zensim
   on the imazen-26 PQ-PNG corpus (q30→q90 monotonic RD); the default build carries
   `score`/`batch --hdr`; the `hdr-gainmap` build compiles; fmt + clippy green.
+- **HDR sweep now scores `cvvdp` on the native CPU when `gpu-cvvdp` is off** (`9b2c4542`).
+  cvvdp is flagged `requires_gpu`, so the sweep's `umbrella_kind_and_backend` only
+  mapped it to the GPU umbrella — a no-GPU `--features sweep,png,jxl,hdr,cpu-metrics`
+  build errored "metric cvvdp has no umbrella HDR path", even though the native CPU
+  cvvdp port + full CPU HDR chain already exist. `to_umbrella_kind` now maps cvvdp
+  under `any(gpu-cvvdp, cpu-cvvdp)`, and the sweep routes cvvdp to `Backend::Cpu`
+  (→ `Metric::new_cpu_hdr`, native `cvvdp` crate via `cpu_dispatch`, never cubecl-cpu)
+  when `gpu-cvvdp` is off and `cpu-cvvdp` is on — same as butter/ssim2/zensim. Verified
+  no-GPU: `sweep --hdr --metric cvvdp` emits real `score_cvvdp` JOD (q30 9.06–9.42,
+  q90 9.93–9.96), matching the GPU cvvdp values on the same image.
 - **PNG palette/quantize axis wired through the sweep.** The zenpng plan path
   (`PlannedConfig::Zenpng`) now encodes via `SweepVariant::encode_png`, so the
   8 mandatory quantize cells ({imagequant, zenquant} × {256,128,64,32}) in
