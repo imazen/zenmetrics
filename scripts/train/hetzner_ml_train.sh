@@ -59,6 +59,15 @@ r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_AC
 MON_LOG="/tmp/hetzner_mltrain_${NAME}.log"
 echo "### $RUN  codec=$CODEC type=$STYPE image=$IMAGE  monitor->$MON_LOG"
 
+# Clear STALE terminal markers from a prior run in this OUT_PREFIX. Without this the
+# per-box monitor (which tears the box down on the FIRST _DONE/_FAILED it sees in the
+# prefix) instantly kills a fresh box on a leftover marker — observed 2026-06-28 when
+# zenpng_lossless/zenwebp_lossless (completed a prior run) had stale _DONE and the new
+# boxes were destroyed within ~2 min before doing any work. The runner re-uploads its
+# own deliverables; we only purge the markers so the monitor reacts to THIS run.
+r2 rm "s3://zentrain/$OUT_PREFIX/_DONE"   >/dev/null 2>&1 || true
+r2 rm "s3://zentrain/$OUT_PREFIX/_FAILED" >/dev/null 2>&1 || true
+
 # 1) scoped temp R2 cred — RW on zentrain, scoped to the two prefixes the box
 #    touches (canonical read + dualmodel-2026-06-28 read/write). Never the root key.
 body=$(python3 -c "import json,os;print(json.dumps({
