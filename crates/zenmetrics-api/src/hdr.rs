@@ -651,6 +651,22 @@ fn build_hdr_metric(
     height: u32,
     peak_nits: f32,
 ) -> crate::Result<crate::Metric> {
+    // Native-CPU HDR scoring: build straight from the `cpu-*` crates (no GPU
+    // `MetricParams`, so no `cvvdp`/`butter`/... GPU feature — and NEVER
+    // cubecl-cpu). The CPU dispatch implements every HDR feeding path, so this
+    // is a fully-wired score path, not a fallback. Intercept before the
+    // GPU-param construction below so a pure-CPU build can reach it.
+    #[cfg(any(
+        feature = "cpu-ssim2",
+        feature = "cpu-cvvdp",
+        feature = "cpu-dssim",
+        feature = "cpu-butter",
+        feature = "cpu-zensim",
+        feature = "cpu-iwssim"
+    ))]
+    if backend.resolve() == crate::Backend::Cpu {
+        return crate::Metric::new_cpu_hdr(kind, width, height, peak_nits);
+    }
     match kind {
         #[cfg(feature = "cvvdp")]
         crate::MetricKind::Cvvdp => {

@@ -487,6 +487,29 @@ impl Metric {
             .map(Self::with_sdr_peak)
     }
 
+    /// Construct a **native-CPU** HDR scorer (`Backend::Cpu` → `cpu_dispatch`,
+    /// the optimized native crates — NEVER cubecl-cpu) at an explicit HDR
+    /// display `peak_nits`, baked into the display-aware metrics (butteraugli
+    /// `intensity_target`, cvvdp display peak). Unlike [`new`](Self::new) this
+    /// needs **no GPU metric feature**: it builds from the `cpu-*` crates
+    /// alone, so a pure-CPU build (no cubecl compiled) can score HDR pairs.
+    /// Used by [`crate::hdr::HdrScorer`] when the requested backend resolves to
+    /// `Backend::Cpu`. The CPU dispatch implements every HDR feeding entry
+    /// (`compute_from_linear_interleaved` / `compute_pu_nits_interleaved` /
+    /// `compute_pu_luma_gray`), so scoring is fully wired, not a stub.
+    #[cfg(any(
+        feature = "cpu-ssim2",
+        feature = "cpu-cvvdp",
+        feature = "cpu-dssim",
+        feature = "cpu-butter",
+        feature = "cpu-zensim",
+        feature = "cpu-iwssim"
+    ))]
+    pub fn new_cpu_hdr(kind: MetricKind, width: u32, height: u32, peak_nits: f32) -> Result<Self> {
+        crate::cpu_dispatch::CpuMetricState::new_hdr(kind, width, height, peak_nits)
+            .map(|s| Self::from_inner_with_peak(MetricInner::Cpu(Box::new(s), None), peak_nits))
+    }
+
     /// Wrap an inner scorer at the SDR reference peak.
     #[inline]
     fn with_sdr_peak(inner: MetricInner) -> Self {

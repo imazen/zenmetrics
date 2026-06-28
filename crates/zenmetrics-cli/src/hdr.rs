@@ -28,8 +28,10 @@ use crate::decode::Rgb8Image;
 type Err = Box<dyn std::error::Error>;
 
 /// `ultrahdr-rs` LinearFloat output: 1.0 = SDR white = 203 cd/m² (BT.2408).
+/// Also the cvvdp-rgb8 peak floor in [`to_cvvdp_rgb8`] (core path).
 const SDR_WHITE_NITS: f32 = 203.0;
 /// HDR display headroom to reconstruct from gain-map sources (4× ≈ 812 nits).
+#[cfg(feature = "hdr-gainmap")]
 const DISPLAY_BOOST: f32 = 4.0;
 
 /// Absolute-luminance image: interleaved RGB f32 in cd/m².
@@ -69,8 +71,20 @@ pub fn decode_to_nits(path: &Path) -> Result<NitsImage, Err> {
         .to_ascii_lowercase();
     match ext.as_str() {
         "exr" => decode_exr(path),
+        // Gain-map sources (Ultra HDR JPEG / HEIC) need the opt-in
+        // `hdr-gainmap` feature — their decoders (ultrahdr-rs / heic) are not
+        // in the default build. Core HDR covers PQ-PNG / PQ-JXL / EXR.
+        #[cfg(feature = "hdr-gainmap")]
         "heic" | "heif" => decode_heic(path),
+        #[cfg(feature = "hdr-gainmap")]
         "jpg" | "jpeg" => decode_ultrahdr_jpeg(path),
+        #[cfg(not(feature = "hdr-gainmap"))]
+        "heic" | "heif" | "jpg" | "jpeg" => Err(format!(
+            "HDR gain-map source .{ext} needs the `hdr-gainmap` build feature \
+             (Ultra HDR JPEG / gain-map HEIC decoders); this build has core HDR \
+             only, which covers PQ-PNG / PQ-JXL / EXR references"
+        )
+        .into()),
         "png" => decode_pq_png(path),
         "jxl" => decode_pq_jxl(path),
         other => Err(format!("unsupported HDR input extension: .{other}").into()),
@@ -342,6 +356,7 @@ fn decode_exr(path: &Path) -> Result<NitsImage, Err> {
     })
 }
 
+#[cfg(feature = "hdr-gainmap")]
 fn decode_ultrahdr_jpeg(path: &Path) -> Result<NitsImage, Err> {
     let bytes = std::fs::read(path)?;
     let dec = ultrahdr_rs::Decoder::new(&bytes).map_err(|e| format!("{e:?}"))?;
@@ -354,6 +369,7 @@ fn decode_ultrahdr_jpeg(path: &Path) -> Result<NitsImage, Err> {
     Ok(pixelbuffer_to_nits(&hdr))
 }
 
+#[cfg(feature = "hdr-gainmap")]
 fn decode_heic(path: &Path) -> Result<NitsImage, Err> {
     use ultrahdr_core::gainmap::apply::apply_gainmap;
     use ultrahdr_core::{
@@ -405,6 +421,7 @@ fn decode_heic(path: &Path) -> Result<NitsImage, Err> {
 }
 
 /// ultrahdr PixelBuffer (RGBA f32, 1.0 = SDR white) → tight RGB in nits.
+#[cfg(feature = "hdr-gainmap")]
 fn pixelbuffer_to_nits(hdr: &ultrahdr_core::PixelBuffer) -> NitsImage {
     let w = hdr.width() as usize;
     let h = hdr.height() as usize;

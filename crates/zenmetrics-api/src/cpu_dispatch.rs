@@ -196,6 +196,108 @@ impl CpuMetricState {
         }
     }
 
+    /// Build the optimized-CPU scorer for **HDR** scoring at `width × height`,
+    /// baking the HDR display `peak_nits` into the display-aware metrics
+    /// (butteraugli `intensity_target`, cvvdp display `y_peak`). Unlike
+    /// [`Self::new`] this takes **no** [`MetricParams`] — so an HDR CPU scorer
+    /// builds from the native `cpu-*` crates alone, with **no GPU metric
+    /// feature** (and therefore no cubecl) compiled. The SSIM-family
+    /// (ssim2/zensim/iwssim/dssim) ignore the peak here: their HDR feeding
+    /// (integrated PU21 / float-PU luma) is applied at score time by the
+    /// `Metric::compute_*` HDR entries.
+    #[cfg(any(
+        feature = "cpu-ssim2",
+        feature = "cpu-cvvdp",
+        feature = "cpu-dssim",
+        feature = "cpu-butter",
+        feature = "cpu-zensim",
+        feature = "cpu-iwssim"
+    ))]
+    pub(crate) fn new_hdr(
+        kind: MetricKind,
+        width: u32,
+        height: u32,
+        peak_nits: f32,
+    ) -> Result<Self> {
+        // Keep unused-arg lints quiet in any single-`cpu-*` configuration.
+        let _ = (width, height, peak_nits);
+        match kind {
+            #[cfg(feature = "cpu-ssim2")]
+            MetricKind::Ssim2 => Ok(CpuMetricState::Ssim2 {
+                width,
+                height,
+                cached_ref: None,
+            }),
+            #[cfg(feature = "cpu-cvvdp")]
+            MetricKind::Cvvdp => {
+                // Display-aware: bake the HDR peak into the cvvdp display model
+                // (mirrors the GPU path's `MetricParams::cvvdp_with_display`).
+                // No `MetricParams`, so no `cvvdp` GPU feature needed — the
+                // native `cvvdp` crate owns the same `CvvdpParams`/`DisplayModel`.
+                let params = cvvdp::CvvdpParams {
+                    display: cvvdp::DisplayModel {
+                        y_peak: peak_nits,
+                        ..cvvdp::DisplayModel::STANDARD_HDR_LINEAR
+                    },
+                    ..cvvdp::CvvdpParams::default()
+                };
+                let inner =
+                    cvvdp::Cvvdp::new(width, height, params).map_err(|e| Error::Metric {
+                        kind: "cvvdp",
+                        message: format!("cvvdp::Cvvdp::new: {e}"),
+                    })?;
+                Ok(CpuMetricState::Cvvdp {
+                    inner: Box::new(inner),
+                    width,
+                    height,
+                })
+            }
+            #[cfg(feature = "cpu-iwssim")]
+            MetricKind::Iwssim => {
+                let inner = iwssim::Iwssim::new(width, height).map_err(|e| Error::Metric {
+                    kind: "iwssim",
+                    message: format!("iwssim::Iwssim::new: {e}"),
+                })?;
+                Ok(CpuMetricState::Iwssim {
+                    inner: Box::new(inner),
+                    width,
+                    height,
+                })
+            }
+            #[cfg(feature = "cpu-zensim")]
+            MetricKind::Zensim => {
+                let inner = zensim::Zensim::new(zensim::ZensimProfile::latest_preview());
+                Ok(CpuMetricState::Zensim {
+                    inner: Box::new(inner),
+                    width,
+                    height,
+                    cached_ref: None,
+                })
+            }
+            #[cfg(feature = "cpu-dssim")]
+            MetricKind::Dssim => Ok(CpuMetricState::Dssim {
+                inner: Box::new(dssim_core::Dssim::new()),
+                width,
+                height,
+                cached_ref: None,
+            }),
+            #[cfg(feature = "cpu-butter")]
+            MetricKind::Butter => {
+                // Display-aware: native butteraugli `intensity_target` = HDR peak
+                // (the GPU path sets the same via `with_intensity_target`).
+                let params = butteraugli::ButteraugliParams::new().with_intensity_target(peak_nits);
+                Ok(CpuMetricState::Butter {
+                    params,
+                    width,
+                    height,
+                    cached_ref: None,
+                })
+            }
+            #[allow(unreachable_patterns)]
+            other => Ok(CpuMetricState::FeatureDisabled(other)),
+        }
+    }
+
     /// The metric this state scores.
     pub(crate) fn kind(&self) -> MetricKind {
         match self {
@@ -459,15 +561,20 @@ impl CpuMetricState {
         if r.len() != expected {
             return Err(Error::Metric {
                 kind: "cpu",
-                message: format!("cpu set_reference: expected {expected} sRGB bytes, got {}", r.len()),
+                message: format!(
+                    "cpu set_reference: expected {expected} sRGB bytes, got {}",
+                    r.len()
+                ),
             });
         }
         match self {
             #[cfg(feature = "cpu-cvvdp")]
-            CpuMetricState::Cvvdp { inner, .. } => inner.warm_reference(r).map_err(|e| Error::Metric {
-                kind: "cvvdp",
-                message: format!("cvvdp warm_reference: {e}"),
-            }),
+            CpuMetricState::Cvvdp { inner, .. } => {
+                inner.warm_reference(r).map_err(|e| Error::Metric {
+                    kind: "cvvdp",
+                    message: format!("cvvdp warm_reference: {e}"),
+                })
+            }
             #[cfg(feature = "cpu-ssim2")]
             CpuMetricState::Ssim2 {
                 width,
@@ -475,10 +582,11 @@ impl CpuMetricState {
                 cached_ref,
             } => {
                 let img = ssim2_image_ref(r, *width as usize, *height as usize);
-                let pre = fast_ssim2::Ssimulacra2Reference::new(img).map_err(|e| Error::Metric {
-                    kind: "ssim2",
-                    message: format!("fast-ssim2 Ssimulacra2Reference::new: {e}"),
-                })?;
+                let pre =
+                    fast_ssim2::Ssimulacra2Reference::new(img).map_err(|e| Error::Metric {
+                        kind: "ssim2",
+                        message: format!("fast-ssim2 Ssimulacra2Reference::new: {e}"),
+                    })?;
                 *cached_ref = Some(pre);
                 Ok(())
             }
@@ -522,18 +630,22 @@ impl CpuMetricState {
             } => {
                 let src: &[[u8; 3]] = bytemuck::cast_slice(r);
                 let ref_slice = zensim::RgbSlice::new(src, *width as usize, *height as usize);
-                let pre = inner.precompute_reference(&ref_slice).map_err(|e| Error::Metric {
-                    kind: "zensim",
-                    message: format!("zensim precompute_reference: {e:?}"),
-                })?;
+                let pre = inner
+                    .precompute_reference(&ref_slice)
+                    .map_err(|e| Error::Metric {
+                        kind: "zensim",
+                        message: format!("zensim precompute_reference: {e:?}"),
+                    })?;
                 *cached_ref = Some(pre);
                 Ok(())
             }
             #[cfg(feature = "cpu-iwssim")]
-            CpuMetricState::Iwssim { inner, .. } => inner.warm_reference(r).map_err(|e| Error::Metric {
-                kind: "iwssim",
-                message: format!("iwssim warm_reference: {e}"),
-            }),
+            CpuMetricState::Iwssim { inner, .. } => {
+                inner.warm_reference(r).map_err(|e| Error::Metric {
+                    kind: "iwssim",
+                    message: format!("iwssim warm_reference: {e}"),
+                })
+            }
             CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
         }
     }
@@ -633,10 +745,13 @@ impl CpuMetricState {
                 })?;
                 let dst: &[[u8; 3]] = bytemuck::cast_slice(d);
                 let dist_slice = zensim::RgbSlice::new(dst, *width as usize, *height as usize);
-                let result = inner.compute_with_ref(pre, &dist_slice).map_err(|e| Error::Metric {
-                    kind: "zensim",
-                    message: format!("zensim compute_with_ref: {e:?}"),
-                })?;
+                let result =
+                    inner
+                        .compute_with_ref(pre, &dist_slice)
+                        .map_err(|e| Error::Metric {
+                            kind: "zensim",
+                            message: format!("zensim compute_with_ref: {e:?}"),
+                        })?;
                 Ok(Score {
                     value: result.score(),
                     metric_name: "zensim",

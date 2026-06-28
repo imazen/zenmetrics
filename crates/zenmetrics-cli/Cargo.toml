@@ -35,7 +35,7 @@ path = "src/lib.rs"
 # build cleanly against the latest archmage / magetypes. JPEG is omitted
 # from the default set because zenjpeg 0.8.3 does not yet build against
 # magetypes 0.9.x — see the `jpeg` feature note below.
-default = ["png", "jpeg", "webp", "avif", "jxl", "cpu-metrics"]
+default = ["png", "jpeg", "webp", "avif", "jxl", "cpu-metrics", "hdr"]
 
 # Decoder feature flags
 # zenpng/quantize (zenquant) + zenpng/imagequant supply the two palette
@@ -61,11 +61,22 @@ jxl = ["dep:zenjxl", "dep:jxl-encoder"]
 gif = ["dep:zengif", "zengif/zencodec"]
 tiff = ["dep:zentiff", "zentiff/zencodec"]
 
-# HDR scoring: decode HDR sources (EXR / Ultra HDR JPEG / gain-map HEIC) to
-# absolute-luminance, then prep per metric — PU21 for the SDR metrics,
-# normalized-nits + a peak display model for cvvdp. Pulls the HDR decoders
-# (ultrahdr-rs / heic) + an EXR reader (image). Off by default.
-hdr = ["dep:ultrahdr-rs", "dep:ultrahdr-core", "dep:heic", "dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", "zenmetrics-api/cpu-metrics"]
+# HDR scoring — CORE, default-on (`default` + `sweep` both pull it, so the
+# `--hdr` flag + PQ-PNG/PQ-JXL/EXR ref decode + the per-metric HDR feeding are
+# ALWAYS compiled — a binary can never silently lack `--hdr` again). Light: the
+# EXR reader (`image`, pure-Rust) + the HDR display/PU21 math (`zenmetrics-api/hdr`)
+# + the native-CPU metric backends (`zenmetrics-api/cpu-metrics`) for the native
+# CPU HDR scorer path (`Metric::new_cpu_hdr`, no cubecl). NOT the heavy gain-map
+# source decoders — those are `hdr-gainmap` (below), kept opt-in so a default
+# build stays portable (no `heic`/`ultrahdr` on i686 / windows-arm / macos).
+hdr = ["dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", "zenmetrics-api/cpu-metrics"]
+
+# HDR gain-map source decoders (opt-in): Ultra HDR JPEG (`ultrahdr-rs`) +
+# gain-map HEIC (`heic` + `ultrahdr-core`) → nits, for `score`/`batch --hdr` on
+# those source formats. Off by default because `heic`/`ultrahdr` are heavier
+# sibling path-deps not built on every CI target. PQ-PNG/PQ-JXL/EXR HDR (the
+# sweep + canonical-corpus path) need only core `hdr`.
+hdr-gainmap = ["hdr", "dep:ultrahdr-rs", "dep:ultrahdr-core", "dep:heic"]
 
 # CPU metric feature flags
 cpu-metrics = [
@@ -155,6 +166,11 @@ sweep = [
     "jpeg",
     "webp",
     "avif",
+    # Core HDR is pulled into every sweep build so the `--hdr` flag + HDR
+    # scoring path can never be missing from a sweep/fleet binary (the
+    # "image lacks --hdr" recurrence). It's light (no `heic`/`ultrahdr`); the
+    # HDR *codec* (zenjxl) is still a separate axis — `--features sweep,jxl,hdr`.
+    "hdr",
     "zenjpeg?/__expert",
     "zenjpeg?/trellis",
     # `__test-utils` re-exposes the otherwise-`pub(crate)` `zenjpeg::encode`
