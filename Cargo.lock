@@ -1738,6 +1738,7 @@ name = "fast-ssim2"
 version = "0.8.2"
 dependencies = [
  "archmage",
+ "enough",
  "imgref",
  "magetypes",
  "num-traits",

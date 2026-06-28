@@ -61,6 +61,8 @@ def main() -> None:
                     help="cap ladder steps per source (default: full ladder)")
     ap.add_argument("--min-px", type=int, default=64, help="skip targets below this longest-side")
     ap.add_argument("--seed", type=int, default=20260625)
+    ap.add_argument("--sizes", type=str, default="",
+                    help="comma-sep longest-side targets; overrides LADDER (e.g. to add a dense small-end below/between the default ladder)")
     args = ap.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -87,7 +89,8 @@ def main() -> None:
                 continue
             src_side = max(im.size)
             sha = hashlib.sha256(src_path.read_bytes()).hexdigest()
-            steps = [t for t in LADDER if args.min_px <= t <= src_side][: args.max_per_source]
+            ladder = [int(x) for x in args.sizes.split(",") if x.strip()] if args.sizes else LADDER
+            steps = [t for t in ladder if args.min_px <= t <= src_side][: args.max_per_source]
             for target in steps:
                 scale = target / src_side
                 w = max(1, round(im.width * scale))
