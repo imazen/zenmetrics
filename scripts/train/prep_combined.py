@@ -29,24 +29,41 @@ def main() -> None:
         "(default env CANON_DIR, else /mnt/v/output/canonical-picker-2026-06-27/<codec>)",
     )
     ap.add_argument("--out", default="/work", help="output dir")
+    ap.add_argument(
+        "--score-col",
+        default=os.environ.get("SCORE_COL", "score_zensim"),
+        help="metric column to use as the reach/oracle target (default score_zensim, "
+        "env SCORE_COL). When != score_zensim (e.g. score_ssim2), it is RENAMED to "
+        "score_zensim in the combined parquet so picker_tree_ab — which hardcodes the "
+        "score_zensim column name in zenpicker-train::pareto_dataset — computes "
+        "reach/oracle on that metric transparently (no zenanalyze-crate edit needed).",
+    )
     args = ap.parse_args()
 
     codec = args.codec
     src = args.src or f"/mnt/v/output/canonical-picker-2026-06-27/{codec}"
     out = args.out
+    score_col = args.score_col
     os.makedirs(out, exist_ok=True)
 
     # Discover columns from the validate file schema.
     sch = pq.ParquetFile(f"{src}/validate.parquet").schema_arrow
     allcols = list(sch.names)
+    if score_col not in allcols:
+        raise SystemExit(
+            f"FATAL: requested --score-col {score_col!r} not in {src}/validate.parquet "
+            f"(have score cols: {[c for c in allcols if c.startswith('score_')]})"
+        )
     feat = [c for c in allcols if c.startswith("feat_")]
     need_meta = [
         "image_path", "codec", "q", "knob_tuple_json",
-        "score_zensim", "encoded_bytes", "split",
+        score_col, "encoded_bytes", "split",
     ]
     need_meta = [c for c in need_meta if c in allcols]
     proj = feat + need_meta
-    print(f"{codec}: {len(feat)} feat cols + {len(need_meta)} meta cols = {len(proj)} projected", flush=True)
+    rename = score_col != "score_zensim"
+    print(f"{codec}: {len(feat)} feat cols + {len(need_meta)} meta cols = {len(proj)} projected "
+          f"(metric={score_col}{' -> renamed score_zensim' if rename else ''})", flush=True)
 
     combined = f"{out}/combined_{codec}.parquet"
     writer = None
@@ -56,6 +73,11 @@ def main() -> None:
         pf = pq.ParquetFile(f"{src}/{split_file}.parquet")
         for rg in range(pf.num_row_groups):
             tbl = pf.read_row_group(rg, columns=proj)
+            if rename:
+                # picker_tree_ab reads the literal column "score_zensim"; rename the
+                # chosen metric into that slot so reach/oracle are computed on it.
+                names = [("score_zensim" if n == score_col else n) for n in tbl.schema.names]
+                tbl = tbl.rename_columns(names)
             if writer is None:
                 writer = pq.ParquetWriter(combined, tbl.schema, compression="zstd")
             writer.write_table(tbl)

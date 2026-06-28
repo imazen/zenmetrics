@@ -24,18 +24,28 @@ set -u
 CODEC="${CODEC:?set CODEC=zenwebp_lossy (or another per-codec task)}"
 STYPE="${STYPE:-cpx51}"
 IMAGE="${IMAGE:-ghcr.io/imazen/zen-train:hybrid-cpu}"
-MAXMIN="${MAXMIN:-120}"
+MAXMIN="${MAXMIN:-90}"          # per-box self-destruct backstop (task: 90 min/box)
 RUN="${RUN:-mltrain-$(date +%s)}"
-# Hetzner server names must be valid hostnames (no underscores) — sanitize the codec.
-NAME="$RUN-$(echo "$CODEC" | tr '_' '-')"
+# Metric axis: zensim (default) or ssim2. PICKER_TARGET names the Stage B MLP output;
+# METRIC_COL = the omni column for the MLP; SCORE_COL = the canonical-parquet column
+# for the Stage A CART (prep_combined renames it to score_zensim so picker_tree_ab,
+# which hardcodes that column, computes reach/oracle on it).
+PICKER_TARGET="${PICKER_TARGET:-zensim_a}"
+METRIC_COL="${METRIC_COL:-score_zensim}"
+SCORE_COL="${SCORE_COL:-score_zensim}"
+# Default OUT_PREFIX namespaces ssim2 runs so they don't overwrite the zensim outputs.
+case "$PICKER_TARGET" in *ssim2*) _MTAG="__ssim2";; *) _MTAG="";; esac
+OUT_PREFIX="${OUT_PREFIX:-dualmodel-2026-06-28/${CODEC}${_MTAG}}"
+# Hetzner server names must be valid hostnames (no underscores) — sanitize codec+metric
+# so the zensim and ssim2 boxes for one codec don't collide on the same name.
+NAME="$RUN-$(echo "${CODEC}-${PICKER_TARGET}" | tr '_' '-')"
 SSH_KEY="${SSH_KEY:-zen-arm-dev-20260528}"
-OUT_PREFIX="dualmodel-2026-06-28/$CODEC"
 SKIP_TRAIN_HYBRID="${SKIP_TRAIN_HYBRID:-0}"
-# picker_tree_ab is single-threaded + slow; for a time-bounded fan-out set
-# SKIP_TEST_SPLIT=1 (val A/B only) and SKIP_RF=1 (drop the auxiliary RF baseline)
-# so the GBDT-vs-MLP A/B + CART + train_hybrid all finish inside MAXMIN.
-SKIP_TEST_SPLIT="${SKIP_TEST_SPLIT:-0}"
-SKIP_RF="${SKIP_RF:-0}"
+# picker_tree_ab is single-threaded; the runner caps it (--skip-mlp/--max-train/
+# --perm-val-cap/--skip-rf + timeout) so the GBDT dump + CART + train_hybrid all
+# finish well inside MAXMIN. SKIP_TEST_SPLIT=1 (val only) trims it further.
+SKIP_TEST_SPLIT="${SKIP_TEST_SPLIT:-1}"
+SKIP_RF="${SKIP_RF:-1}"
 
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
@@ -80,8 +90,9 @@ RUN_BUCKET=zentrain
 CANON_PREFIX=canonical/2026-06-27
 OUT_PREFIX=$OUT_PREFIX
 INPUTS_PREFIX=dualmodel-2026-06-28/inputs
-PICKER_TARGET=zensim_a
-METRIC_COL=score_zensim
+PICKER_TARGET=$PICKER_TARGET
+METRIC_COL=$METRIC_COL
+SCORE_COL=$SCORE_COL
 RUN_ID=$RUN
 SKIP_TRAIN_HYBRID=$SKIP_TRAIN_HYBRID
 SKIP_TEST_SPLIT=$SKIP_TEST_SPLIT
@@ -115,10 +126,14 @@ docker run --rm --env-file /root/cenv -v /root/ci.log:/ci.log --entrypoint /usr/
 destroy_self
 EOF
 
-# 3) provision — biggest dedicated first, then shared fallbacks; multi-location.
+# 3) provision — EU ONLY (fsn1/nbg1/hel1: cpx51 ~EUR0.1338/hr, ~3.3x cheaper than
+#    the ash/hil US fallback). Prefer the cheap shared cpx tiers; smaller type if
+#    cpx51 is capacity-out in every EU DC. NEVER fall to US.
+# picker_tree_ab peaks ~9 GB RSS (measured, zenjpeg 1.48M rows) so every fallback
+# type must have >=16 GB; cpx31/cpx21 (8 GB) would OOM mid-dump. cpx51=32 GB primary.
 launched=0; lasterr=""
-for typ in "$STYPE" ccx53 ccx43 cpx51 cpx41 ccx33; do
-  for loc in fsn1 nbg1 hel1 ash hil; do
+for typ in "$STYPE" cpx51 cpx41 ccx43; do
+  for loc in fsn1 nbg1 hel1; do
     lasterr=$(hcloud server create --name "$NAME" --type "$typ" --image docker-ce --location "$loc" \
       --ssh-key "$SSH_KEY" --label group="$RUN" --label codec="$CODEC" \
       --user-data-from-file "$CI" 2>&1) \
