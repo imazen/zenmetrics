@@ -49,8 +49,13 @@ mod consts {
 
     // SCALE_WEIGHTS — per-scale MS-SSIM combination weights (β in eq 47
     // of Wang & Li 2011) verbatim from `iwssim.m` / `IW_SSIM_PyTorch.py`.
-    pub(crate) const SCALE_WEIGHTS: [f32; 5] =
-        [4.48e-2_f32, 2.856e-1_f32, 3.001e-1_f32, 2.363e-1_f32, 1.333e-1_f32];
+    pub(crate) const SCALE_WEIGHTS: [f32; 5] = [
+        4.48e-2_f32,
+        2.856e-1_f32,
+        3.001e-1_f32,
+        2.363e-1_f32,
+        1.333e-1_f32,
+    ];
 }
 
 pub(crate) use consts::*;
@@ -64,7 +69,10 @@ mod tests {
     #[test]
     fn binom5_sums_to_sqrt2() {
         let s: f64 = BINOM5.iter().map(|&v| v as f64).sum();
-        assert!((s - 2.0_f64.sqrt()).abs() < 1e-6, "BINOM5 sum {s} != sqrt(2)");
+        assert!(
+            (s - 2.0_f64.sqrt()).abs() < 1e-6,
+            "BINOM5 sum {s} != sqrt(2)"
+        );
     }
 
     #[test]

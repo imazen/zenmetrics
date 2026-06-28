@@ -387,8 +387,15 @@ fn encode_png(
                     Box::new(zenpng::ZenquantQuantizer::new().with_max_colors(max_colors))
                 }
             };
-            zenpng::encode_indexed(rgba_img, &cfg, &*quantizer, None, &Unstoppable, &Unstoppable)
-                .map_err(|e| format!("zenpng indexed encode failed: {e}"))?
+            zenpng::encode_indexed(
+                rgba_img,
+                &cfg,
+                &*quantizer,
+                None,
+                &Unstoppable,
+                &Unstoppable,
+            )
+            .map_err(|e| format!("zenpng indexed encode failed: {e}"))?
         }
     };
     let encode_ms = start.elapsed().as_secs_f64() * 1000.0;

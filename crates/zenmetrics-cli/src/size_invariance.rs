@@ -136,11 +136,7 @@ fn metric_table() -> Vec<(&'static str, Scorer)> {
         (
             "ssim2",
             (|r: &Rgb8Image, d: &Rgb8Image| {
-                crate::metrics::run_cpu_native_via_umbrella(
-                    zenmetrics_api::MetricKind::Ssim2,
-                    r,
-                    d,
-                )
+                crate::metrics::run_cpu_native_via_umbrella(zenmetrics_api::MetricKind::Ssim2, r, d)
             }) as Scorer,
         ),
         (

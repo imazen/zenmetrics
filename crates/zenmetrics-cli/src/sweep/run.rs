@@ -398,10 +398,7 @@ fn score_via_orchestrator(
     let rows = {
         let mut g = orch.lock().expect("orchestrator handle poisoned");
         crate::orchestrator_runner::orchestrator_score_one(
-            &mut g,
-            cli_metric,
-            reference,
-            distorted,
+            &mut g, cli_metric, reference, distorted,
         )?
     };
     Ok(rows

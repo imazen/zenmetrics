@@ -519,7 +519,12 @@ pub(crate) fn run_cpu_native_via_umbrella(
     )?;
     let score = m.compute_srgb_u8(&reference.pixels, &distorted.pixels)?;
     if !score.value.is_finite() {
-        return Err(format!("{} (cpu): non-finite score {}", umbrella_kind.tag(), score.value).into());
+        return Err(format!(
+            "{} (cpu): non-finite score {}",
+            umbrella_kind.tag(),
+            score.value
+        )
+        .into());
     }
     Ok(score.value)
 }
@@ -1020,8 +1025,9 @@ mod tests {
     fn iwssim_scores_on_native_cpu_in_cpu_build() {
         let r = synth_rgb8(176, 176, 128);
         let d = synth_rgb8(176, 176, 116);
-        let out = run_metric(MetricKind::Iwssim, &r, &d, GpuRuntime::Auto)
-            .expect("iwssim must score on native CPU when cpu-iwssim is compiled (no GPU required)");
+        let out = run_metric(MetricKind::Iwssim, &r, &d, GpuRuntime::Auto).expect(
+            "iwssim must score on native CPU when cpu-iwssim is compiled (no GPU required)",
+        );
         assert_eq!(out.len(), 1);
         assert!(
             out[0].1.is_finite(),
