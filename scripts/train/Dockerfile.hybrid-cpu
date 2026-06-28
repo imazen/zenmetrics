@@ -47,6 +47,7 @@ RUN test -x /usr/local/bin/picker_tree_ab \
  && test -s /opt/picker/omni_to_pareto.py \
  && test -s /opt/picker/origin_split.py \
  && test -s /opt/picker/prep_combined.py \
+ && test -s /opt/picker/cart_analysis.py \
  && test -s /opt/picker/check_mandatory_coverage.py \
  && test -s /opt/picker/configs/picker_config_common.py \
  && test -s /opt/picker/configs/zenwebp_picker.py \

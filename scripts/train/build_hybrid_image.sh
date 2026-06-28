@@ -44,8 +44,9 @@ rsync -a --exclude='__pycache__' --exclude='.pytest_cache' "$ZA/zentrain/tools/"
 rsync -a --exclude='__pycache__' --exclude='.pytest_cache' "$ZA/zentrain/examples/" "$CTX/code/zentrain-examples/"
 rsync -a --exclude='__pycache__' --exclude='.pytest_cache' "$ZA/tools/"             "$CTX/code/za-tools/"
 rsync -a --exclude='__pycache__' --exclude='.pytest_cache' "$REPO_ZM/scripts/picker/" "$CTX/code/picker/"
-# prep_combined lives in scripts/train but the runner expects it under /opt/picker
+# prep_combined + cart_analysis live in scripts/train but the runner expects them under /opt/picker
 cp "$REPO_ZM/scripts/train/prep_combined.py" "$CTX/code/picker/prep_combined.py"
+cp "$REPO_ZM/scripts/train/cart_analysis.py" "$CTX/code/picker/cart_analysis.py"
 
 cp "$REPO_ZM/scripts/train/dualmodel_runner.sh" "$CTX/dualmodel_runner.sh"
 cp "$REPO_ZM/scripts/train/Dockerfile.hybrid-cpu" "$CTX/Dockerfile"

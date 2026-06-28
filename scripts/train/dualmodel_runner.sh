@@ -131,9 +131,25 @@ for split in val test; do
     log "picker_tree_ab --eval-split $split exited rc=$rc"
     [ "$split" = "val" ] && { STAGE_A="ab-val-failed"; exit 4; }   # val is the gate
   fi
-  [ "$split" = "val" ] && { STAGE_A="ok"; log "Stage A gate MET (val A/B uploaded)"; }
+  if [ "$split" = "val" ]; then
+    STAGE_A="ok"; log "Stage A gate MET (val A/B uploaded)"
+    # CART fit + tree->Rust code-heuristic codegen on the SAME dumped dataset
+    # (same cells/reach/oracle as the A/B -> overhead directly comparable). Runs
+    # right after val so a slow test split can't cost it.
+    if [ -s "$DUMP/val/${CODEC}_meta.json" ]; then
+      log "CART depth-curve + tree->Rust codegen (depth 6) on the val dump"
+      python3 "$PICKERDIR/cart_analysis.py" --dump-dir "$DUMP/val" --codec-tag "$CODEC" \
+        --eval-split val --codegen-depth 6 --codegen-out "$WORK/${CODEC}_cart_heuristic.rs" \
+        2>&1 | tee "$WORK/cart_${CODEC}.log" || log "cart_analysis exited nonzero (non-fatal)"
+      s5 cp "$WORK/cart_${CODEC}.log" "s3://$BUCKET/$OUT_PREFIX/picker_tree_ab/cart_${CODEC}.log" || true
+      [ -s "$WORK/${CODEC}_cart_heuristic.rs" ] && \
+        s5 cp "$WORK/${CODEC}_cart_heuristic.rs" "s3://$BUCKET/$OUT_PREFIX/picker_tree_ab/${CODEC}_cart_heuristic.rs" || true
+    else
+      log "no dump meta at $DUMP/val/${CODEC}_meta.json — skipping CART"
+    fi
+  fi
 done
-log "=== Stage A complete (A/B logs + dumps uploaded incrementally) ==="
+log "=== Stage A complete (A/B logs + dumps + CART uploaded incrementally) ==="
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Stage B — train_hybrid teacher/student + bake (best-effort; does not gate)
