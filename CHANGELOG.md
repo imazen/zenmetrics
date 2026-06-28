@@ -19,6 +19,19 @@ Workspace conventions per the global rules:
 
 ## Workspace
 
+### Changed
+
+- **Repo-root `README.md` overhauled + split into a badge-free `README.crates.md`.**
+  Added the CI + license badge row (every crate is `publish = false`, so no
+  crates.io / lib.rs / docs.rs badges) and a CLI Quick start (`score` / `compare`);
+  rebuilt the metric / supporting-crate tables (dropped the removed
+  `iwssim-filter-codegen`, added `zenmetrics-gpu-core` + `zenhdr-corpus`, corrected
+  `dssim-core` 3.4 → 3.5); replaced the stale fleet-crate list with a canonical
+  **zenfleet job system** section (`zenfleet-core` / `-ledger` / `-ctl` / `-worker`
+  / `-dash` / `-sweep` + providers, `zenmetrics jobexec`, `scripts/jobsys/fleet`);
+  wrapped the deep benchmark / API tables in `crates.io:skip`; and appended the
+  crosslink footer (`2688e5ef`).
+
 ### Added
 
 - **`hetzner_cpu_sweep.sh` HDR mode (`HDR=1`)** — runs a `zenjxl --hdr` CPU sweep over 16-bit
