@@ -213,7 +213,14 @@ run_stage_b(){
     return 2
   fi
   log "train_hybrid --codec-config ${CODEC_FAMILY}_picker (PICKER_TARGET=$PICKER_TARGET)"
-  CUDA_VISIBLE_DEVICES="" PICKER_TARGET="$PICKER_TARGET" OMP_NUM_THREADS="${OMP_NUM_THREADS:-$(nproc)}" \
+  # train_hybrid fits the per-cell HistGB teacher with joblib n_jobs=-1 (parallel
+  # OVER the cells). With OMP_NUM_THREADS=nproc each joblib worker ALSO spawns nproc
+  # OMP threads -> nproc^2 threads thrashing (measured load ~255 on a 16-core box,
+  # the picker-training-omp-oversubscription trap). Pin the nested math libs to 1
+  # thread and let loky parallelize across cells on all cores.
+  CUDA_VISIBLE_DEVICES="" PICKER_TARGET="$PICKER_TARGET" \
+    OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 \
+    LOKY_MAX_CPU_COUNT="$(nproc)" \
     python3 "$ZENTRAIN/train_hybrid.py" --codec-config "${CODEC_FAMILY}_picker" \
     --activation leakyrelu --hidden 192,192,192 2>&1 | tee "$WORK/train_hybrid.log"
   local trc=${PIPESTATUS[0]}
