@@ -42,10 +42,11 @@
     },
     {
       "name": "zen-train",
-      "purpose": "Standalone burn trainer: consumes parquet metric/feature sidecars and bakes ZNPR picker/metric models. Its own cubecl graph; never shares a cargo graph with the GPU-metric crates (see CLAUDE.md 'burn').",
-      "builds_from": "the burn-ranknet trainer (separate binary).",
+      "purpose": "Standalone trainer(s) that consume parquet metric/feature sidecars and bake ZNPR picker/metric models. The `latest`/burn tags are the burn-ranknet trainer (its own cubecl graph; never shares a cargo graph with the GPU-metric crates — see CLAUDE.md 'burn'). The `hybrid-cpu` tag is the per-codec dual-model picker trainer (picker_tree_ab A/B + train_hybrid teacher/student) for the Hetzner one-box-per-codec fleet (scripts/train/).",
+      "builds_from": "burn tags: the burn-ranknet trainer (separate binary). hybrid-cpu tag: scripts/train/Dockerfile.hybrid-cpu via scripts/train/build_hybrid_image.sh (FROM zenfleet-worker:base-x86; torch-CPU+sklearn+pandas baked; precompiled picker_tree_ab + zenpredict-bake COPY'd in).",
       "tag_convention": [
-        "latest            — current trainer",
+        "latest            — current burn trainer",
+        "hybrid-cpu        — per-codec dual-model picker trainer (CPU; torch+sklearn+pandas + the Rust bins)",
         "<short-sha>       — exact-commit pin"
       ]
     }

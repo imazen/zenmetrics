@@ -1,0 +1,56 @@
+# zen-train:hybrid-cpu — per-codec dual-model picker trainer (a TAG on the
+# canonical `zen-train` ghcr package, NOT a new package — see ghcr-packages.json).
+#
+# FROM the shared bake-everything base (R2 tooling + python/pyarrow/numpy). Adds,
+# at BUILD time only (NEVER apt/pip at boot — bake-everything rule):
+#   - torch (CPU) + scikit-learn + pandas       (train_hybrid teacher/student)
+#   - precompiled picker_tree_ab + zenpredict-bake  (COPY'd, not built here)
+#   - the training code (zentrain/tools, zenanalyze/tools/bake_picker, scripts/picker)
+#   - the runner entrypoint (dualmodel_runner.sh)
+#
+# Build context = a staging dir assembled by scripts/train/build_hybrid_image.sh
+# (snap-docker on this WSL2 box can't read /tmp -> $HOME context). Bins built on
+# glibc 2.35 need <=GLIBC_2.34; base is ubuntu:24.04 (glibc 2.39) -> compatible.
+FROM ghcr.io/imazen/zenfleet-worker:base-x86
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-train:hybrid-cpu — per-codec dual-model picker trainer (picker_tree_ab A/B + train_hybrid teacher/student). torch-CPU + sklearn + pandas baked; precompiled Rust bins COPY'd in; runs the JOB at boot."
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+# ── ML stack baked. Ubuntu 24.04 python is externally-managed (matches base). ──
+RUN pip3 install --quiet --break-system-packages --no-cache-dir \
+        torch --index-url https://download.pytorch.org/whl/cpu \
+ && pip3 install --quiet --break-system-packages --no-cache-dir \
+        scikit-learn pandas \
+ && python3 -c "import torch,sklearn,pandas,pyarrow,numpy; \
+        print('ML stack OK torch=%s sklearn=%s pandas=%s' % (torch.__version__, sklearn.__version__, pandas.__version__))"
+
+# ── precompiled Rust bins (--chmod avoids a 2nd overlay copy) ──────────────────
+COPY --chmod=0755 bins/picker_tree_ab  /usr/local/bin/picker_tree_ab
+COPY --chmod=0755 bins/zenpredict-bake /usr/local/bin/zenpredict-bake
+
+# ── training code (small, pure python) ────────────────────────────────────────
+COPY code/zentrain-tools/    /opt/zentrain/tools/
+COPY code/zentrain-examples/ /opt/zentrain/examples/
+COPY code/za-tools/          /opt/za/tools/
+COPY code/picker/            /opt/picker/
+COPY --chmod=0755 dualmodel_runner.sh /usr/local/bin/dualmodel_runner.sh
+
+ENV PYTHONPATH=/opt/picker:/opt/picker/configs:/opt/zentrain/tools:/opt/zentrain/examples \
+    PYTHONUNBUFFERED=1
+
+# ── fail the BUILD if a tool/code file is missing (catch a broken COPY early) ──
+RUN test -x /usr/local/bin/picker_tree_ab \
+ && test -x /usr/local/bin/zenpredict-bake \
+ && test -s /opt/zentrain/tools/train_hybrid.py \
+ && test -s /opt/za/tools/bake_picker.py \
+ && test -s /opt/picker/omni_to_pareto.py \
+ && test -s /opt/picker/origin_split.py \
+ && test -s /opt/picker/prep_combined.py \
+ && test -s /opt/picker/check_mandatory_coverage.py \
+ && test -s /opt/picker/configs/picker_config_common.py \
+ && test -s /opt/picker/configs/zenwebp_picker.py \
+ && picker_tree_ab --help >/dev/null 2>&1 \
+ && echo "zen-train:hybrid-cpu build checks passed"
+
+ENTRYPOINT ["/usr/local/bin/dualmodel_runner.sh"]
