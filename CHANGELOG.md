@@ -21,6 +21,14 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **`hetzner_cpu_sweep.sh` HDR mode (`HDR=1`)** — runs a `zenjxl --hdr` CPU sweep over 16-bit
+  PQ-PNG sources: scores cvvdp+butteraugli+ssim2+zensim on CPU with no gpu features (native
+  cvvdp via `9b2c4542`), drops `--plan`/`--feature-output` (rejected by `validate_hdr_sweep`),
+  sources pre-staged in the run bucket (no codec-corpus rendition listing / scaleWxH filter),
+  persists encoded variants via `--encoded-out-dir`. `METRICS` env now drives the metric flags
+  (SDR path byte-identical when `HDR` unset). Needs an hdr-featured binary via
+  `SWEEP_BIN_OVERRIDE` (the baked `zenfleet-worker:exec` image lacks the `hdr` feature).
+  First HDR run: 76 imazen-26 PQ-PNGs × 15 q on one cpx51 → `s3://zentrain/hdr/runs/<run>/`.
 - **Parquet management: pinned the omni sidecar's metadata schema** (`zenfleet-vastai`
   `worker/chunk_output.rs`). The existing tests checked column presence + values; the new
   `omni_sidecar_metadata_schema_is_pinned` asserts the exact on-disk arrow type + nullability of every

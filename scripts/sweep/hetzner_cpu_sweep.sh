@@ -24,7 +24,7 @@ SRC_PREFIX="${SRC_PREFIX:-picker-sweep-2026-06-22/renditions}"
 RUN_BUCKET="${RUN_BUCKET:-zentrain}"               # run-WRITE bucket (chunks + outputs) — guardrail: codec-corpus is RO
 RUN="${RUN:-fleet-cpu-$(date +%s)}"
 RUN_PREFIX="jxl-lossy/runs/$RUN"
-CODEC="${CODEC:-zenjpeg}"; PLAN="${PLAN:-rd_core}"
+__codec_user="${CODEC:-}"; CODEC="${CODEC:-zenjpeg}"; PLAN="${PLAN:-rd_core}"
 QG="${QG:-5,15,30,50,70,85,95}"; N_BOXES="${N_BOXES:-1}"; IMAGES="${IMAGES:-0}"
 STYPE="${STYPE:-cpx41}"; BUDGET="${BUDGET:-600}"
 # NO_FEATURES=1 drops --feature-output (the CPU zensim 372-feature extraction) — the per-image memory
@@ -35,6 +35,23 @@ FEAT_OUT="/feat.parquet"; [ -n "${NO_FEATURES:-}" ] && FEAT_OUT=""
 . "$(dirname "$0")/../jobsys/fleet.env"
 IMAGE="${IMAGE:-$ZEN_FLEET_IMAGE_CPU}"
 SSH_KEY="${SSH_KEY:-zen-arm-dev-20260528}"
+# Metrics to score (space-separated). Capture the user-provided value before defaulting.
+__metrics_user="${METRICS:-}"
+# ---- HDR mode (HDR=1): zenjxl --hdr sweep over 16-bit PQ-PNG sources ----
+# HDR rejects --plan / --feature-output / --distorted-out-dir (sweep/hdr.rs::validate_hdr_sweep) and
+# scores cvvdp+butteraugli+ssim2+zensim on CPU with NO gpu features (commit 9b2c4542). Sources are
+# PQ-PNGs pre-staged in the RUN-WRITE bucket (no codec-corpus rendition listing / scaleWxH size filter).
+# Needs an HDR-featured binary via SWEEP_BIN_OVERRIDE (the baked exec image lacks the `hdr` feature).
+if [ -n "${HDR:-}" ]; then
+  CODEC="${__codec_user:-zenjxl}"   # HDR default zenjxl, overriding the SDR zenjpeg default above
+  METRICS="${__metrics_user:-cvvdp butteraugli ssim2 zensim}"
+  RUN_PREFIX="hdr/runs/$RUN"
+  SRC_BUCKET="$RUN_BUCKET"
+  SRC_PREFIX="${HDR_SRC_PREFIX:-hdr/corpus/imazen-26-png-v2}"
+  NO_FEATURES=1; FEAT_OUT=""
+else
+  METRICS="${__metrics_user:-ssim2 zensim}"
+fi
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 export HCLOUD_TOKEN="$(grep -E '^api_token=' ~/.config/hetzner/credentials | head -1 | cut -d= -f2- | tr -d ' \r')"
@@ -44,7 +61,7 @@ echo "### $RUN  codec=$CODEC plan=$PLAN boxes=$N_BOXES images=${IMAGES:-all} typ
 
 # 1. scoped temp creds — guardrail: codec-corpus is READ-ONLY, runs WRITE to zentrain. R2 temp creds
 #    are single-bucket, so mint two (mirrors launch_fleet.sh): RW on the run bucket + RO on the corpus.
-body=$(B="$RUN_BUCKET" python3 -c "import json,os;print(json.dumps({'bucket':os.environ['B'],'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':43200,'prefixes':['jxl-lossy/']}))")
+body=$(B="$RUN_BUCKET" python3 -c "import json,os;print(json.dumps({'bucket':os.environ['B'],'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':43200,'prefixes':['jxl-lossy/','hdr/']}))")
 curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$body" \
   "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/hz_cred.json
 read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/hz_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
@@ -56,7 +73,11 @@ read -r CAK CSK CST < <(python3 -c 'import json;r=json.load(open("/tmp/hz_corpus
 [ -n "$CAK" ] || { echo "corpus-cred mint failed"; cat /tmp/hz_corpus_cred.json; exit 1; }
 echo "minted scoped creds (3h): RW $RUN_BUCKET/jxl-lossy + RO $SRC_BUCKET/$SRC_PREFIX"
 
-# 2. chunk lists from the R2 rendition listing (cap + size-skip the >4MP monsters by name)
+# 2. chunk lists. HDR: list pre-staged PQ-PNGs (no size filter). SDR: corpus rendition listing + scaleWxH cap.
+if [ -n "${HDR:-}" ]; then
+  r2 ls "s3://$SRC_BUCKET/$SRC_PREFIX/" | awk '{print $NF}' | grep '\.hdr\.png$' > /tmp/hz_sel.txt
+  echo "HDR: $(wc -l < /tmp/hz_sel.txt) PQ-PNG sources at s3://$SRC_BUCKET/$SRC_PREFIX/"
+else
 r2 ls "s3://$SRC_BUCKET/$SRC_PREFIX/" | awk '{print $NF}' | grep '\.png$' > /tmp/hz_all.txt
 # keep renditions <= MAXPX (default 4.2 MP) by parsing scaleWxH from the name —
 # matches the local picker's 4 MP cap; the corpus has up to 100 MP monsters.
@@ -89,6 +110,7 @@ sys.stdout.writelines(out)
 ' > /tmp/hz_sel.txt
 elif [ "$IMAGES" -gt 0 ] 2>/dev/null; then head -n "$IMAGES" /tmp/hz_ok.txt > /tmp/hz_sel.txt
 else cp /tmp/hz_ok.txt /tmp/hz_sel.txt; fi
+fi
 total=$(wc -l < /tmp/hz_sel.txt); per=$(( (total + N_BOXES - 1) / N_BOXES ))
 echo "selected $total renditions; $per per box"
 split -d -l "$per" /tmp/hz_sel.txt /tmp/hz_chunk_
@@ -131,6 +153,8 @@ DONE_KEY=$RUN_PREFIX/done/box-$idx.done
 ENC_KEY=$RUN_PREFIX/variants/box-$idx.tar
 FEAT_KEY=$RUN_PREFIX/features/box-$idx.feat.parquet
 CODEC=$CODEC
+HDR=${HDR:-}
+METRICS=$METRICS
 PLAN=$PLAN
 QG=$QG
 BUDGET=$BUDGET
@@ -152,16 +176,22 @@ s5cmd --endpoint-url=\$EP cp "s3://\$BUCKET/\$CHUNK_KEY" /data/chunk.txt
 # `<<EOF`); deferred to a worker.sh-as-committed-file refactor. Startup tax is bounded; correctness first.
 while read -r f; do [ -n "\$f" ] && AWS_ACCESS_KEY_ID=\$CORPUS_AK AWS_SECRET_ACCESS_KEY=\$CORPUS_SK AWS_SESSION_TOKEN=\$CORPUS_ST s5cmd --endpoint-url=\$EP cp "s3://\$SRC_BUCKET/\$SRC_PREFIX/\$f" "/data/\$f"; done < /data/chunk.txt
 rm -f /data/chunk.txt
-PB=""; [ "\$PLAN" != "rd_core" ] && PB="--plan-budget \$BUDGET"
 mkdir -p /enc
+# Metric flags from the METRICS env (space-separated) — SDR default ssim2+zensim, HDR the 4-metric CPU set.
+MFLAGS=""; for m in \$METRICS; do MFLAGS="\$MFLAGS --metric \$m"; done
 # --jobs defaults to the box's full vCPU count. SAFE on Hetzner: these are DEDICATED VMs, so
-# \$(nproc) IS the real allocation (unlike vast.ai shared-host containers where nproc reports the
-# host's 56 — see scripts/sweep/CLAUDE.md cgroup note). The hardcoded 4 left an 8-vCPU cpx41 at
-# load ~2.5 (smoke-measured 2026-06-26); full vCPUs ~doubles cells/s. Lower SWEEP_JOBS for
-# memory-heavy codecs (jxl modular / large frames) if RAM-bound.
-zenmetrics sweep --codec "\$CODEC" --sources /data --q-grid "\$QG" --plan "\$PLAN" \$PB \
-  --jobs "\${SWEEP_JOBS:-\$(nproc)}" \
-  --metric ssim2 --metric zensim --encoded-out-dir /enc \${FEAT_OUT:+--feature-output \$FEAT_OUT} --output /omni.tsv
+# \$(nproc) IS the real allocation. Lower SWEEP_JOBS for memory-heavy work (jxl modular /
+# large HDR frames) if RAM-bound — HDR cvvdp on multi-MP images is the memory driver.
+if [ -n "\$HDR" ]; then
+  # HDR: --hdr; NO --plan / --feature-output (validate_hdr_sweep rejects them). Persists variants via --encoded-out-dir.
+  zenmetrics sweep --hdr --codec "\$CODEC" --sources /data --q-grid "\$QG" \
+    --jobs "\${SWEEP_JOBS:-\$(nproc)}" \$MFLAGS --encoded-out-dir /enc --output /omni.tsv
+else
+  PB=""; [ "\$PLAN" != "rd_core" ] && PB="--plan-budget \$BUDGET"
+  zenmetrics sweep --codec "\$CODEC" --sources /data --q-grid "\$QG" --plan "\$PLAN" \$PB \
+    --jobs "\${SWEEP_JOBS:-\$(nproc)}" \
+    \$MFLAGS --encoded-out-dir /enc \${FEAT_OUT:+--feature-output \$FEAT_OUT} --output /omni.tsv
+fi
 s5cmd --endpoint-url=\$EP cp /omni.tsv "s3://\$BUCKET/\$OUT_KEY"
 # codec-commit provenance (the plan manifest carries codec_commits) — lands WITH the blobs
 s5cmd --endpoint-url=\$EP cp /omni.plan.json "s3://\$BUCKET/\$MANIFEST_KEY" 2>/dev/null || true
