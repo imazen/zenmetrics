@@ -19,6 +19,25 @@ Workspace conventions per the global rules:
 
 ## Workspace
 
+### Fixed
+
+- **Hetzner dual-model picker runner (`scripts/train/`) — Stage A no longer
+  gates Stage B, and is time-boxed so both deliverables finish inside the
+  90-min/box cap** (d8c7f3a8). Last fan-out lost 5/7 codecs because the full
+  `picker_tree_ab` A/B (hand-rolled MLP on full-train + RF + 469-feature
+  permutation on full-val) never finished and *gated* the `train_hybrid` MLP
+  bake. Now: `dualmodel_runner.sh` caps `picker_tree_ab` (`--skip-mlp --skip-rf
+  --max-train 8000 --perm-val-cap 2000`, wrapped in `timeout 25m`) so the GBDT +
+  dataset dump (the CART's input) land fast (measured 8.5 min / 9 GB on zenjpeg
+  1.48M-row); Stage A and Stage B are independent functions that never `exit`;
+  `_DONE` is written when EITHER the CART `.rs` or the train_hybrid `.bin`
+  uploads. ssim2 support: `prep_combined.py --score-col score_ssim2` renames the
+  metric into the `score_zensim` slot that `zenpicker-train::pareto_dataset`
+  hardcodes, so the CART computes reach/oracle on ssim2 with no zenanalyze edit;
+  `hetzner_ml_train.sh` makes `PICKER_TARGET`/`METRIC_COL`/`SCORE_COL`/`OUT_PREFIX`
+  env-overridable, forces EU-only regions (cpx51 fsn1/nbg1/hel1; never US),
+  defaults MAXMIN to 90, requires >=16 GB types, and namespaces ssim2 outputs.
+
 ### Changed
 
 - **Repo-root `README.md` overhauled + split into a badge-free `README.crates.md`.**
