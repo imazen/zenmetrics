@@ -59,6 +59,23 @@ pub struct EncodeDeclareItem {
     /// parse as `None`. Propagated verbatim onto the [`DesiredJob`].
     #[serde(default)]
     pub hint: Option<ResourceHint>,
+    /// Resolved-encode fingerprint (`zenjxl::sweep::encode_fingerprint`, 16-hex)
+    /// — the COMPUTE-dedup key: cells with equal `encode_fp` produce
+    /// byte-identical output (verified byte-safe; see
+    /// `zenmetrics-cli/examples/encode_fp_byte_safety.rs`). When present,
+    /// [`declare_encodes`] declares ONE encode job per `(codec, source_sha,
+    /// encode_fp)` group (compute once); the per-knobset identity rows are NOT
+    /// collapsed — they are preserved by the score-side fan-out, which MUST
+    /// carry `encode_fp → encode_sha` so every cell rejoins the shared blob
+    /// (the row-preservation requirement — `scripts/jobsys/build_score_spec.py`
+    /// skips cells whose encode is unindexed, so a deduped sweep without that
+    /// fan-out fix would DROP the non-representative rows). `#[serde(default)]`:
+    /// absent (the default) ⇒ NO dedup, one encode per knobset (the row-safe
+    /// baseline). The emitter populates it only once encode-dedup is activated
+    /// (after the fan-out carries `encode_fp` AND the end-to-end row-count test
+    /// confirms N rows out == N rows in).
+    #[serde(default)]
+    pub encode_fp: Option<String>,
 }
 
 /// Expand encode declarations into desired encode jobs. Plan-cell identity
@@ -68,10 +85,29 @@ pub struct EncodeDeclareItem {
 /// verifies the fingerprint (`zenmetrics jobexec`), so a stored item is runnable years later with
 /// no plan spec in hand.
 pub fn declare_encodes(items: &[EncodeDeclareItem]) -> Result<Vec<DesiredJob>, String> {
+    use std::collections::HashSet;
     let mut out = Vec::with_capacity(items.len());
+    // Encode-COMPUTE dedup: items carrying an `encode_fp` (the resolved-encode
+    // fingerprint — equal fp ⇒ byte-identical output) share ONE encode job per
+    // `(codec, source_sha, encode_fp)` group, so the byte-identical encode runs
+    // once instead of N times. Items WITHOUT an `encode_fp` (the default) are
+    // never deduped — one encode job each (the row-safe baseline). This
+    // collapses only the ENCODE COMPUTE, never the per-knobset rows: the omni
+    // keeps every input knobset, and the score-side fan-out
+    // (`build_score_spec.py` / `writeback_scores.py`) must rejoin every cell to
+    // the shared blob via `encode_fp → encode_sha` (the row-preservation
+    // requirement enforced by the end-to-end row-count test).
+    let mut seen_encode: HashSet<(String, String, String)> = HashSet::new();
     for it in items {
         let sha = Sha256Hex::parse(it.source_sha.clone())
             .map_err(|e| format!("item {}: {e}", it.image_path))?;
+        if let Some(fp) = &it.encode_fp {
+            // Subsequent members of an (codec, source, encode_fp) group reuse
+            // the first member's encode job (its content-addressed blob).
+            if !seen_encode.insert((it.codec.clone(), it.source_sha.clone(), fp.clone())) {
+                continue;
+            }
+        }
         out.push(DesiredJob {
             kind: JobKind::Encode {
                 codec: it.codec.clone(),
@@ -208,6 +244,7 @@ mod tests {
                 r#"{"cell":"jp3_t0_small_420","fp":"0123456789abcdef","plan":"rd_core"}"#.into(),
             source_sha: sha.clone(),
             hint: None,
+            encode_fp: None,
         }];
         let a = declare_encodes(&items).unwrap();
         let b = declare_encodes(&items).unwrap();
@@ -229,6 +266,75 @@ mod tests {
     }
 
     #[test]
+    fn encode_dedup_collapses_compute_but_preserves_every_row() {
+        use super::*;
+        use std::collections::HashMap;
+        let src = "a".repeat(64);
+        let mk = |knob: &str, fp: Option<&str>| EncodeDeclareItem {
+            image_path: "corpus/x.png".into(),
+            codec: "zenjxl".into(),
+            q: 50,
+            knob_tuple_json: knob.into(),
+            source_sha: src.clone(),
+            hint: None,
+            encode_fp: fp.map(str::to_string),
+        };
+        // 5 input knobsets: A,B,E share encode_fp "f1" (byte-identical);
+        // C is "f2"; D carries NO encode_fp (un-deduped baseline).
+        let items = vec![
+            mk(r#"{"cell":"A"}"#, Some("f1")),
+            mk(r#"{"cell":"B"}"#, Some("f1")),
+            mk(r#"{"cell":"C"}"#, Some("f2")),
+            mk(r#"{"cell":"D"}"#, None),
+            mk(r#"{"cell":"E"}"#, Some("f1")),
+        ];
+        let jobs = declare_encodes(&items).unwrap();
+        // COMPUTE dedup: f1 → 1 job, f2 → 1, D (no fp) → 1 = 3 encode jobs
+        // (B and E reuse A's job — 2 encodes saved).
+        assert_eq!(jobs.len(), 3, "encode jobs must dedup the f1 group to one");
+
+        // ROW PRESERVATION (the N→N gate at the declare/fan-out logic level):
+        // each declared encode job yields a content-addressed blob sha; build
+        // the (codec, source, encode_fp) → sha map the score-side fan-out must
+        // carry, then assert EVERY input knobset resolves to a sha (no cell is
+        // dropped — N rows out == N rows in).
+        let mut group_sha: HashMap<(String, String, String), String> = HashMap::new();
+        for (i, job) in jobs.iter().enumerate() {
+            if let JobKind::Encode { codec, q, knobs } = &job.kind {
+                // recover the representative item this job came from
+                if let Some(rep) = items
+                    .iter()
+                    .find(|it| it.knob_tuple_json == *knobs && it.codec == *codec && it.q == *q)
+                {
+                    if let Some(fp) = &rep.encode_fp {
+                        group_sha
+                            .insert((codec.clone(), rep.source_sha.clone(), fp.clone()), format!("blob{i}"));
+                    }
+                }
+            }
+        }
+        let mut rows_out = 0usize;
+        for it in &items {
+            let resolvable = match &it.encode_fp {
+                // deduped cell: must rejoin its group's shared blob
+                Some(fp) => {
+                    group_sha.contains_key(&(it.codec.clone(), it.source_sha.clone(), fp.clone()))
+                }
+                // no-fp cell: its own encode job → its own blob (always resolvable)
+                None => true,
+            };
+            if resolvable {
+                rows_out += 1;
+            }
+        }
+        assert_eq!(
+            rows_out,
+            items.len(),
+            "every input knobset must map to a blob sha — N rows out must equal N rows in"
+        );
+    }
+
+    #[test]
     fn declare_encodes_propagates_resource_hint_and_survives_jsonl_roundtrip() {
         use super::*;
         let hint = ResourceHint {
@@ -242,6 +348,7 @@ mod tests {
             knob_tuple_json: r#"{"cell":"c","fp":"f","plan":"rd_core"}"#.into(),
             source_sha: "a".repeat(64),
             hint: Some(hint),
+            encode_fp: None,
         };
         // Emit-cells writes JSON lines; parse_emit_cells reads them back. The
         // hint must survive that round-trip and land on the DesiredJob.
