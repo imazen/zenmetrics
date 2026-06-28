@@ -112,14 +112,21 @@ DUMP="$WORK/dump_$CODEC"; mkdir -p "$DUMP"
 # IMMEDIATELY so a slow `test` split that hits the self-destruct backstop can't
 # cost us the already-finished val results. STAGE_A flips to ok the moment val
 # uploads, so the box is creditably done even if test is cut short.
-for split in val test; do
-  log "picker_tree_ab --eval-split $split (this is the dual-model A/B; GBDT/RF/MLP)"
+# picker_tree_ab is single-threaded and slow (RF + 469-feature permutation importance
+# can run ~40-60 min). SKIP_TEST_SPLIT=1 runs only the val A/B (the gate + the
+# coordinator's --eval-split val spec); SKIP_RF=1 drops the auxiliary RF baseline so
+# the GBDT-vs-MLP A/B (the dual-model headline) + CART + train_hybrid finish inside
+# the box's wall cap. Defaults run the full val+test, GBDT/RF/MLP.
+SPLITS="val test"; [ "${SKIP_TEST_SPLIT:-0}" = "1" ] && SPLITS="val"
+RF_FLAG=""; [ "${SKIP_RF:-0}" = "1" ] && RF_FLAG="--skip-rf"
+for split in $SPLITS; do
+  log "picker_tree_ab --eval-split $split (dual-model A/B; GBDT/MLP$([ -z "$RF_FLAG" ] && echo /RF)) $RF_FLAG"
   picker_tree_ab \
       --input "$WORK/combined_$CODEC.parquet" \
       --split-map "$WORK/splitmap_$CODEC.parquet" \
       --eval-split "$split" \
       --dump-dir "$DUMP/$split" \
-      --codec-tag "$CODEC" 2>&1 | tee "$WORK/ab_${CODEC}_${split}.log"
+      --codec-tag "$CODEC" $RF_FLAG 2>&1 | tee "$WORK/ab_${CODEC}_${split}.log"
   rc=${PIPESTATUS[0]}
   # upload this split's artifacts right away (incremental — robust to a later kill)
   s5 cp "$WORK/ab_${CODEC}_${split}.log" "s3://$BUCKET/$OUT_PREFIX/picker_tree_ab/ab_${CODEC}_${split}.log" || true

@@ -31,6 +31,11 @@ NAME="$RUN-$(echo "$CODEC" | tr '_' '-')"
 SSH_KEY="${SSH_KEY:-zen-arm-dev-20260528}"
 OUT_PREFIX="dualmodel-2026-06-28/$CODEC"
 SKIP_TRAIN_HYBRID="${SKIP_TRAIN_HYBRID:-0}"
+# picker_tree_ab is single-threaded + slow; for a time-bounded fan-out set
+# SKIP_TEST_SPLIT=1 (val A/B only) and SKIP_RF=1 (drop the auxiliary RF baseline)
+# so the GBDT-vs-MLP A/B + CART + train_hybrid all finish inside MAXMIN.
+SKIP_TEST_SPLIT="${SKIP_TEST_SPLIT:-0}"
+SKIP_RF="${SKIP_RF:-0}"
 
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
@@ -79,6 +84,8 @@ PICKER_TARGET=zensim_a
 METRIC_COL=score_zensim
 RUN_ID=$RUN
 SKIP_TRAIN_HYBRID=$SKIP_TRAIN_HYBRID
+SKIP_TEST_SPLIT=$SKIP_TEST_SPLIT
+SKIP_RF=$SKIP_RF
 AWS_ACCESS_KEY_ID=$AK
 AWS_SECRET_ACCESS_KEY=$SK
 AWS_SESSION_TOKEN=$ST
