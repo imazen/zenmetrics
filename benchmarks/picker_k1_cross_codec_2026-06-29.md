@@ -114,3 +114,34 @@ fix. webp/avif → K=1 needs RD-objective (tail) + full-budget chroma (sub). App
 **both ssim2 and zq targets**. Next focused chunks, highest-leverage first:
 (1) p50 RD-distance objective + p90 variant; (2) VERIFY_K gate-at-K for jpeg;
 (3) budget-exposed re-extraction for webp/avif sub.
+
+## Update 2 — p50 reach-band TESTED: doesn't fix the tail (off-frontier finding)
+
+Implemented the p50 quality-tolerance reach band (`--reach-undershoot δ`,
+train_hybrid e89cc83d) and tested on jpeg (δ=3). **Result: it does NOT fix the
+tail** — K=1 mean 9.34%→**9.98%** (worse), gate still fails (per-zq p99 53%,
+per-size p99 56–63%, worst 236%).
+
+**Why (the key learning):** relaxing reach lowers the oracle (cheaper band
+reference) but the picker still mis-picks *within* the band, so overhead vs the
+cheaper oracle rises. More fundamentally, the multi-cell tail is **OFF-FRONTIER
+subsampling mis-picks** — the picker chooses the wrong 420/422/444 at the *same*
+quality (sub-accuracy 57%), which is more bytes at equal quality = off the RD
+curve. **No RD-distance / both-axis metric forgives an off-frontier point.** The
+p50 band (and a full RD-distance overhead) only help **on-frontier
+quality-overshoot** tails, which jpeg/webp/avif do not have.
+
+**Re-prioritized plan (sharpened):** the real multi-cell tail lever is
+**subsampling DISCRIMINATION** — exactly the chroma-features + higher-sampling
+direction flagged first:
+1. **Full-budget chroma re-extraction** (medium is budget-limited + worst sub at
+   53%) → sharper chroma → better 420/444 discrimination → on-frontier picks.
+   Needs a zenanalyze budget-exposing API (public extractor freezes the budget) +
+   rebuild + re-extract + retrain. **This is now THE priority for the tail.**
+2. **K-verify** (jpeg K=3, allowed): encode top-3 (covers sub mis-picks), keep
+   best — fixes the mean (2.92%) though not the worst-case tail alone.
+3. p50/p90 reach-band: kept as a default-off operating-point dial (byte-savings
+   via bounded quality drift + on-frontier cases); NOT the tail fix. A complete
+   p50 additionally needs an RD-distance-to-frontier overhead metric.
+
+For **both ssim2 and zq** targets. jxl unaffected (ships, K=1 0.78%).
