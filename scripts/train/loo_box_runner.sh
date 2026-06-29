@@ -37,6 +37,13 @@ METRIC_TAG="${METRIC_TAG:-ssim2}"
 SEED="${SEED:-12345}"                 # FIXED so the only diff between runs is the dropped feature
 HIDDEN="${HIDDEN:-192,192,192}"
 PER_RUN_TIMEOUT="${PER_RUN_TIMEOUT:-25m}"
+# Threading: the torch MLP student is the per-run bottleneck and reads OMP_NUM_THREADS.
+# Fleet boxes are DEDICATED (exempt from the shared-workstation oversubscription rule), so
+# give the MLP all cores (OMP=nproc) and run the teacher's per-cell HistGB fits SERIALLY
+# (LOKY=1) — each HistGB fit is itself OpenMP-parallel, so total threads never exceed nproc
+# (no oversubscription) while the MLP goes ~nproc× faster than the OMP=1 path.
+OMP_THREADS="${OMP_THREADS:-$(nproc)}"
+LOKY_WORKERS="${LOKY_WORKERS:-1}"
 
 WORK=/work; mkdir -p "$WORK"
 PP=/home/lilith/picker-pp; mkdir -p "$PP/train" "$PP/models"
@@ -193,8 +200,9 @@ for job in "${JOBS[@]}"; do
   # still print the overhead. Per-tag out-json/out-log are throwaway (deleted after).
   # OMP pinned to 1 + loky over all cores (the omp-oversubscription trap).
   PICKER_TARGET="$PICKER_TARGET" CUDA_VISIBLE_DEVICES="" \
-    OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 \
-    LOKY_MAX_CPU_COUNT="$(nproc)" \
+    OMP_NUM_THREADS="$OMP_THREADS" MKL_NUM_THREADS="$OMP_THREADS" \
+    OPENBLAS_NUM_THREADS="$OMP_THREADS" NUMEXPR_NUM_THREADS="$OMP_THREADS" \
+    LOKY_MAX_CPU_COUNT="$LOKY_WORKERS" \
     timeout "$PER_RUN_TIMEOUT" python3 "$ZENTRAIN/train_hybrid.py" \
       --codec-config "$CONFIG_MODULE" \
       --activation leakyrelu --hidden "$HIDDEN" --seed "$SEED" --allow-unsafe \

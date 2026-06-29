@@ -356,6 +356,16 @@ echo "    type=$ACTUAL_TYPE ~EUR ${PRICE}/hr/box  (fleet cap EUR $MAX_BURN_EUR /
 # ══════════════════════════════════════════════════════════════════════════════
 # STEP 5 — monitor: tail progress, €-watchdog, teardown backstop, collect
 # ══════════════════════════════════════════════════════════════════════════════
+# Teardown helper — SCOPED: list ONLY servers carrying this run's unique group label,
+# then delete them by explicit id (delete one-by-one). `hcloud server delete` has NO
+# label selector (-l is list-only), and a blanket/prefix delete could catch a pre-existing
+# box — so we resolve ids from the unique label and delete exactly those. Never touches
+# servers without group=$RUN (the persistent zen-arm-* / zen-fuzz-* boxes are safe).
+kill_group(){
+  local ids
+  ids=$(HCLOUD_TOKEN="$HCLOUD_TOKEN" hcloud server list -l group="$RUN" -o noheader 2>/dev/null | awk '{print $1}')
+  [ -n "$ids" ] && echo "$ids" | xargs -r -n1 -I{} env HCLOUD_TOKEN="$HCLOUD_TOKEN" hcloud server delete {} 2>/dev/null || true
+}
 COLLECT_DIR="$WORKDIR/collected_${CODEC}_${METRIC}"
 (
   start=$(date +%s)
@@ -371,18 +381,18 @@ COLLECT_DIR="$WORKDIR/collected_${CODEC}_${METRIC}"
     # all boxes reported a terminal marker, or all gone → finish
     if [ $((done_n + fail_n)) -ge "$N_BOXES" ] || { [ "$alive" = 0 ] && [ "$el" -ge 3 ]; }; then
       echo "[mon] terminal: done=$done_n failed=$fail_n alive=$alive — tearing down any stragglers"
-      HCLOUD_TOKEN="$HCLOUD_TOKEN" hcloud server delete -l group="$RUN" 2>/dev/null || true
+      kill_group
       break
     fi
     # €-watchdog
     if python3 -c "import sys; sys.exit(0 if $alive*$PRICE*$el/60 > $MAX_BURN_EUR else 1)" 2>/dev/null; then
       echo "[mon] €-CAP EUR$MAX_BURN_EUR exceeded (est EUR$burn) — KILLING fleet"
-      HCLOUD_TOKEN="$HCLOUD_TOKEN" hcloud server delete -l group="$RUN" 2>/dev/null || true
+      kill_group
       break
     fi
     if [ "$el" -ge "$MAXMIN" ]; then
       echo "[mon] MAXMIN ${MAXMIN}m — force-killing fleet"
-      HCLOUD_TOKEN="$HCLOUD_TOKEN" hcloud server delete -l group="$RUN" 2>/dev/null || true
+      kill_group
       break
     fi
     sleep 30
@@ -391,7 +401,7 @@ COLLECT_DIR="$WORKDIR/collected_${CODEC}_${METRIC}"
   sleep 8
   left=$(HCLOUD_TOKEN="$HCLOUD_TOKEN" hcloud server list -l group="$RUN" -o noheader 2>/dev/null | wc -l)
   echo "[mon] boxes remaining in group=$RUN: $left"
-  [ "$left" -gt 0 ] && { echo "[mon] FORCE delete remaining"; HCLOUD_TOKEN="$HCLOUD_TOKEN" hcloud server delete -l group="$RUN" 2>/dev/null || true; }
+  [ "$left" -gt 0 ] && { echo "[mon] FORCE delete remaining"; kill_group; }
   # collect results → ranked TSV
   echo "[mon] collecting results -> $COLLECT_DIR"
   rm -rf "$COLLECT_DIR"; mkdir -p "$COLLECT_DIR/results"
@@ -411,5 +421,5 @@ COLLECT_DIR="$WORKDIR/collected_${CODEC}_${METRIC}"
 ) > "$MON_LOG" 2>&1 &
 MONPID=$!
 echo "### monitor PID=$MONPID  ->  tail -f $MON_LOG"
-echo "### teardown (manual if needed): hcloud server delete -l group=$RUN"
+echo "### teardown (manual if needed): hcloud server list -l group=$RUN -o noheader | awk '{print \$1}' | xargs -r -n1 hcloud server delete"
 echo "$RUN" > "$WORKDIR/.last_run_group"
