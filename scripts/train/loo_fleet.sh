@@ -382,6 +382,11 @@ kill_group(){
   [ -n "$ids" ] && echo "$ids" | xargs -r -n1 -I{} env HCLOUD_TOKEN="$HCLOUD_TOKEN" hcloud server delete {} 2>/dev/null || true
 }
 COLLECT_DIR="$WORKDIR/collected_${CODEC}_${METRIC}"
+# In RELAUNCH mode the group is SHARED with the original fleet's still-running boxes, so this
+# monitor's group-teardown (kill_group) must NOT run — it would delete the in-flight boxes.
+# The relaunched box self-destructs via cloud-init on done; the original fleet monitor + the
+# external monitor own group teardown. So skip the monitor entirely when relaunching.
+if [ -z "${RELAUNCH_GROUP:-}" ]; then
 (
   start=$(date +%s)
   echo "[mon] group=$RUN boxes=$N_BOXES type=$ACTUAL_TYPE price=$PRICE/hr launched $(date -u +%FT%TZ)"
@@ -437,4 +442,7 @@ COLLECT_DIR="$WORKDIR/collected_${CODEC}_${METRIC}"
 MONPID=$!
 echo "### monitor PID=$MONPID  ->  tail -f $MON_LOG"
 echo "### teardown (manual if needed): hcloud server list -l group=$RUN -o noheader | awk '{print \$1}' | xargs -r -n1 hcloud server delete"
+else
+  echo "### RELAUNCH: relaunched box(es) [$LAUNCH_IDS] self-destruct on done; NO group-teardown monitor here (original fleet still running in group=$RUN)"
+fi
 echo "$RUN" > "$WORKDIR/.last_run_group"
