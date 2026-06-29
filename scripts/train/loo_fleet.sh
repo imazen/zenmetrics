@@ -143,6 +143,12 @@ print(f"canonical->pareto: {len(df)} rows, {len(cfg_index)} configs, {len(fcols)
 PY
 }
 
+if [ -n "${RELAUNCH_GROUP:-}" ]; then
+  # RELAUNCH: recover specific boxes (e.g. one that lost a create race to capacity) into an
+  # EXISTING group, reusing the pareto+batches already in R2 — NO prefix clear, no rebuild.
+  echo "### RELAUNCH mode: group=$RELAUNCH_GROUP boxes=[${RELAUNCH_BOXES:?set RELAUNCH_BOXES=comma,ids}] — reuse R2 pareto+batches (NO clear)"
+  LAUNCH_IDS="$(echo "$RELAUNCH_BOXES" | tr ',' ' ')"; N_BOXES="$(echo $LAUNCH_IDS | wc -w)"
+else
 build_pareto || { echo "FATAL: pareto build failed"; exit 1; }
 echo "    pareto: $(du -h "$PARQ_LOCAL" | cut -f1)  features: $(du -h "$FEAT_LOCAL" | cut -f1)"
 echo "### upload pareto + features to s3://zentrain/$RUN_PREFIX/inputs/"
@@ -249,6 +255,8 @@ for i in $(seq 0 $((N_BOXES-1))); do
   r2 cp "$BATCHDIR/box-$i.jsonl" "s3://zentrain/$RUN_PREFIX/batches/box-$i.jsonl" >/dev/null
 done
 echo "    uploaded $N_BOXES batch file(s)"
+LAUNCH_IDS="$(seq 0 $((N_BOXES-1)))"
+fi
 
 # ══════════════════════════════════════════════════════════════════════════════
 # STEP 4 — scoped R2 cred + per-box cloud-init (embedded runner + self-destruct)
@@ -273,7 +281,7 @@ RUNNER_B64="$(base64 -w0 "$REPO/scripts/train/loo_box_runner.sh")"
 # are committed master code, unmodified — not a logic change, just version alignment.
 CONFIGS_B64="$(tar czf - --exclude='__pycache__' --exclude='*.bak' --exclude='*.pre-expand-bak' \
   -C "$REPO/scripts/picker" configs | base64 -w0)"
-RUN="loo-$(echo "${CODEC}-${METRIC}-r${ROUND}" | tr '_' '-')-$(date +%s)"
+RUN="${RELAUNCH_GROUP:-loo-$(echo "${CODEC}-${METRIC}-r${ROUND}" | tr '_' '-')-$(date +%s)}"
 MON_LOG="/tmp/loo_fleet_${RUN}.log"
 
 launch_box(){
@@ -345,7 +353,7 @@ ACTUAL_TYPE="$STYPE"
 # serially wastes ~20 min. Background the creates (2s stagger to be gentle on the API)
 # and wait — all provision in parallel (~2 min total). ACTUAL_TYPE is set racily by each
 # (cosmetic: only the price display / burn estimate read it; all boxes are ~same type).
-for i in $(seq 0 $((N_BOXES-1))); do launch_box "$i" & sleep 2; done
+for i in $LAUNCH_IDS; do launch_box "$i" & sleep 2; done
 wait
 PRICE=$(hcloud server-type describe "$ACTUAL_TYPE" -o json 2>/dev/null | python3 - <<'PY' 2>/dev/null
 import json, sys
