@@ -265,6 +265,12 @@ read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/loo_cred.jso
 echo "    minted scoped RW cred (ttl ${MAXMIN}m+30m) -> zentrain/$RUN_PREFIX/"
 
 RUNNER_B64="$(base64 -w0 "$REPO/scripts/train/loo_box_runner.sh")"
+# Bind-mount CURRENT-master picker configs over the (possibly stale) baked /opt/picker/configs
+# so the box's KEEP_FEATURES matches what the launcher computed (the 2026-06-28 image predates
+# the 51->97 keep_features expansion → would silently no-op the extra-feature drops). Configs
+# are committed master code, unmodified — not a logic change, just version alignment.
+CONFIGS_B64="$(tar czf - --exclude='__pycache__' --exclude='*.bak' --exclude='*.pre-expand-bak' \
+  -C "$REPO/scripts/picker" configs | base64 -w0)"
 RUN="loo-$(echo "${CODEC}-${METRIC}-r${ROUND}" | tr '_' '-')-$(date +%s)"
 MON_LOG="/tmp/loo_fleet_${RUN}.log"
 
@@ -279,6 +285,7 @@ HCLOUD_TOKEN='$HCLOUD_TOKEN'          # HOST-only (self-destruct); NEVER passed 
 EP='$EP'; IMG='$IMAGE'; OUTP='$RUN_PREFIX'
 echo '$RUNNER_B64' | base64 -d > /root/loo_box_runner.sh
 chmod +x /root/loo_box_runner.sh
+mkdir -p /root/pc && echo '$CONFIGS_B64' | base64 -d | tar xzf - -C /root/pc   # current-master picker configs
 cat > /root/cenv <<ENV
 R2_ENDPOINT=$EP
 RUN_BUCKET=zentrain
@@ -309,6 +316,7 @@ destroy_self(){
 docker pull "\$IMG" || true
 docker run --rm --env-file /root/cenv \
   -v /root/loo_box_runner.sh:/usr/local/bin/loo_box_runner.sh \
+  -v /root/pc/configs:/opt/picker/configs \
   --entrypoint bash "\$IMG" /usr/local/bin/loo_box_runner.sh
 rc=\$?
 echo "container exited rc=\$rc"
@@ -332,9 +340,17 @@ EOF
 echo "### launching $N_BOXES EU box(es) [group=$RUN]"
 ACTUAL_TYPE="$STYPE"
 for i in $(seq 0 $((N_BOXES-1))); do launch_box "$i"; done
-PRICE=$(hcloud server-type describe "$ACTUAL_TYPE" -o json 2>/dev/null | python3 -c 'import json,sys
-try: print(f"{float(json.load(sys.stdin)["prices"][0]["price_hourly"]["gross"]):.4f}")
-except: print("0.14")' 2>/dev/null)
+PRICE=$(hcloud server-type describe "$ACTUAL_TYPE" -o json 2>/dev/null | python3 - <<'PY' 2>/dev/null
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print("%.4f" % float(d["prices"][0]["price_hourly"]["gross"]))
+except Exception:
+    print("")
+PY
+)
+# robust numeric fallback (EU shared/dedicated approx) so the €-watchdog math never breaks
+case "$PRICE" in ""|*[!0-9.]*) case "$ACTUAL_TYPE" in cpx51) PRICE=0.1338;; cpx41) PRICE=0.0809;; ccx33) PRICE=0.2880;; ccx43) PRICE=0.5760;; *) PRICE=0.20;; esac;; esac
 echo "    type=$ACTUAL_TYPE ~EUR ${PRICE}/hr/box  (fleet cap EUR $MAX_BURN_EUR / ${MAXMIN}m/box)"
 
 # ══════════════════════════════════════════════════════════════════════════════

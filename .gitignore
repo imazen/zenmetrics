@@ -47,3 +47,6 @@ scripts/cvvdp_goldens/out/
 # distilled deliverables (metric_mapping_2026-06-23.tsv + .md) live
 # directly under benchmarks/ and ARE tracked; this raw working dir is not.
 benchmarks/metric_mapping_work/
+
+# fleet-LOO local pareto/omni cache (large; never commit)
+scripts/train/loo_work/

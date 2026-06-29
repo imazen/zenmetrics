@@ -49,6 +49,7 @@ cp "$REPO_ZM/scripts/train/prep_combined.py" "$CTX/code/picker/prep_combined.py"
 cp "$REPO_ZM/scripts/train/cart_analysis.py" "$CTX/code/picker/cart_analysis.py"
 
 cp "$REPO_ZM/scripts/train/dualmodel_runner.sh" "$CTX/dualmodel_runner.sh"
+cp "$REPO_ZM/scripts/train/loo_box_runner.sh"   "$CTX/loo_box_runner.sh"   # fleet-LOO per-box runner
 cp "$REPO_ZM/scripts/train/Dockerfile.hybrid-cpu" "$CTX/Dockerfile"
 
 echo "### context contents:"; find "$CTX" -maxdepth 2 -type d | sed "s#$CTX#  ctx#"
