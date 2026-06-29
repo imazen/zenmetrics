@@ -339,9 +339,14 @@ EOF
   [ "$launched" = 1 ] || { echo "  FAIL launch $NAME: $(echo "$lasterr" | tail -1)"; return 1; }
 }
 
-echo "### launching $N_BOXES EU box(es) [group=$RUN]"
+echo "### launching $N_BOXES EU box(es) [group=$RUN]  (parallel creates)"
 ACTUAL_TYPE="$STYPE"
-for i in $(seq 0 $((N_BOXES-1))); do launch_box "$i"; done
+# `hcloud server create` BLOCKS ~1-2 min until the box provisions; launching 10 boxes
+# serially wastes ~20 min. Background the creates (2s stagger to be gentle on the API)
+# and wait — all provision in parallel (~2 min total). ACTUAL_TYPE is set racily by each
+# (cosmetic: only the price display / burn estimate read it; all boxes are ~same type).
+for i in $(seq 0 $((N_BOXES-1))); do launch_box "$i" & sleep 2; done
+wait
 PRICE=$(hcloud server-type describe "$ACTUAL_TYPE" -o json 2>/dev/null | python3 - <<'PY' 2>/dev/null
 import json, sys
 try:
