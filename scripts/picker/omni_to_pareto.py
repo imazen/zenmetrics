@@ -42,10 +42,39 @@ def size_class(px: int) -> str:
 
 def variant_of(image_path: str) -> str:
     base = os.path.basename(image_path)
-    for ext in (".png", ".PNG"):
+    # ".hdr.png" must precede ".png": HDR omni rows are "<stem>.hdr.png" and the
+    # HDR feature extractor keys on `trim_end_matches(".hdr.png")` = "<stem>", so
+    # stripping only ".png" would leave a ".hdr" suffix and break the feature join.
+    for ext in (".hdr.png", ".hdr.PNG", ".png", ".PNG"):
         if base.endswith(ext):
             return base[: -len(ext)]
     return base
+
+
+def _knob_val(x) -> str:
+    """Render a JSON knob value for a canonical config_name token."""
+    if isinstance(x, bool):  # JSON true/false -> 'true'/'false' (NOT Python 'True')
+        return "true" if x else "false"
+    return str(x)
+
+
+def config_name_of(knob_tuple_json: str) -> str:
+    """The picker's categorical config label for one sweep cell.
+
+    Plan cells carry {"cell","fp","plan"} -> use the opaque "cell" id. Knob-grid
+    cells (HDR sweeps use --knob-grid, not --plan: sweep/hdr.rs rejects --plan)
+    carry a raw sorted-key knob MAP with no "cell" key -> render it canonically as
+    "def" (the {} default-knob cell) or "k1=v1,k2=v2..." (keys sorted, so the same
+    cell is reproducible across runs). The "," separator is used because knob NAMES
+    contain "_" (error_diffusion, pixel_domain_loss, force_strategy, ...), so a "_"
+    separator would be ambiguous. The per-codec picker config's parse_config_name
+    decodes this form (cf. configs/zenjxl_hdr.py)."""
+    d = json.loads(knob_tuple_json)
+    if isinstance(d, dict) and "cell" in d:
+        return d["cell"]
+    if not d:
+        return "def"
+    return ",".join(f"{k}={_knob_val(d[k])}" for k in sorted(d))
 
 
 def main() -> None:
@@ -63,7 +92,7 @@ def main() -> None:
     if args.metric_col not in omni.columns:
         raise SystemExit(f"omni lacks metric col {args.metric_col!r}; have {list(omni.columns)}")
     omni["variant_name"] = omni["image_path"].map(variant_of)
-    omni["config_name"] = omni["knob_tuple_json"].map(lambda s: json.loads(s)["cell"])
+    omni["config_name"] = omni["knob_tuple_json"].map(config_name_of)
     omni["bytes"] = omni["encoded_bytes"].astype("int64")
     omni["zensim"] = omni[args.metric_col].astype("float64")
     if "encode_ms" not in omni.columns:
