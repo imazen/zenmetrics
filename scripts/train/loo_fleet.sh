@@ -34,7 +34,9 @@ SMOKE="${SMOKE:-0}"
 SEED="${SEED:-12345}"
 HIDDEN="${HIDDEN:-192,192,192}"
 PER_RUN_TIMEOUT="${PER_RUN_TIMEOUT:-25m}"
-STYPE="${STYPE:-cpx51}"                 # 16 vCPU / 32 GB shared, ~EUR0.1338/hr EU — cheapest 32GB
+STYPE="${STYPE:-ccx33}"                 # 8 vCPU / 32 GB dedicated, EUR0.266/hr EU — cheapest 32GB-adequate
+                                        # (cpx51 is EUR0.448/hr — MORE expensive; cpx41 is EUR0.227 but only 16GB).
+                                        # train_hybrid loads the full pareto (jpeg 3.8M rows ~3-4GB) + models; 32GB is safe.
 IMAGE="${IMAGE:-ghcr.io/imazen/zen-train:hybrid-cpu}"
 MAXMIN="${MAXMIN:-80}"                  # per-box self-destruct backstop (min)
 MAX_BURN_EUR="${MAX_BURN_EUR:-15}"      # fleet €-cap watchdog
@@ -325,7 +327,7 @@ docker run --rm --env-file /root/cenv -v /root/ci.log:/ci.log --entrypoint /usr/
 destroy_self
 EOF
   local launched=0 lasterr="" typ loc
-  for typ in "$STYPE" cpx51 cpx41 ccx33; do
+  for typ in "$STYPE" ccx33 cpx51 ccx43; do   # cheapest-adequate (32GB) first; cpx41(16GB) omitted (RAM risk)
     for loc in fsn1 nbg1 hel1; do
       lasterr=$(hcloud server create --name "$NAME" --type "$typ" --image docker-ce --location "$loc" \
         --ssh-key "$SSH_KEY" --label group="$RUN" --label codec="$CODEC" \
@@ -350,7 +352,7 @@ except Exception:
 PY
 )
 # robust numeric fallback (EU shared/dedicated approx) so the €-watchdog math never breaks
-case "$PRICE" in ""|*[!0-9.]*) case "$ACTUAL_TYPE" in cpx51) PRICE=0.1338;; cpx41) PRICE=0.0809;; ccx33) PRICE=0.2880;; ccx43) PRICE=0.5760;; *) PRICE=0.20;; esac;; esac
+case "$PRICE" in ""|*[!0-9.]*) case "$ACTUAL_TYPE" in cpx51) PRICE=0.4479;; cpx41) PRICE=0.2267;; ccx33) PRICE=0.2660;; ccx43) PRICE=0.5300;; *) PRICE=0.30;; esac;; esac
 echo "    type=$ACTUAL_TYPE ~EUR ${PRICE}/hr/box  (fleet cap EUR $MAX_BURN_EUR / ${MAXMIN}m/box)"
 
 # ══════════════════════════════════════════════════════════════════════════════
