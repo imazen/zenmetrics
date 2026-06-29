@@ -32,15 +32,8 @@ _WANTED = [
     "feat_luma_kurtosis","feat_gradient_fraction_smooth",
 ]
 def keep_features(features_path):
-    # Use the curated _WANTED first (stable order), then EVERY remaining feat_
-    # column available. The picker is feature/cell-limited (teacher≈student), so
-    # widening the input is the lever to hug the pareto tighter; the GBDT teacher
-    # is robust to redundancy and the val→test gap flags any MLP overfit.
-    with open(features_path) as f: header = next(csv.reader(f, delimiter="\t"))
-    have = set(header)
-    wanted = [c for c in _WANTED if c in have]
-    extra = [c for c in header if c.startswith("feat_") and c not in set(_WANTED)]
-    return wanted + extra
+    with open(features_path) as f: have = set(next(csv.reader(f, delimiter="\t")))
+    return [c for c in _WANTED if c in have]
 
 # Heavy-tailed, strictly-positive features that span orders of magnitude
 # (measured on imazen26_train_features_2026-06-22: pixel_count tail 9352x,
