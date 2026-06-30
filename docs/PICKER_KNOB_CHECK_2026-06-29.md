@@ -213,4 +213,25 @@ misroutes are mostly between RD-close families (free); the cost concentrates in 
 tail — clearable by a **meta multi-shot family-verify** (queued mode → encode the top-2
 families, keep the best), the family-level analogue of the within-codec knob-check. The
 same `EncodeMode` / `EncodeBudget` / `directed_search` apply at BOTH levels (family and
-knob). Next: lossless router + auto gate + the meta multi-shot + GBDT→MLP bake.
+knob). Next: the meta multi-shot + GBDT→MLP bake.
+
+**Lossless router** (`scripts/picker/train_lossless_router_gbdt.py`, GBDT, features+dims,
+NO target_zq — lossless has no quality dial; objective = fewest bytes). GOTCHA caught: the
+canonical `zenpng_lossless` dataset is only **53.8% truly lossless** — its `modes_full`
+sweep mixes in LOSSY palette-quantized png encodes (score_zensim 37–100). A naive
+`min(encoded_bytes)` per family compares png's lossy small files against jxl/webp's
+true-lossless ones and wrongly concludes "png wins 99%". FIX (mandatory for any lossless
+picker): filter `score_zensim>=99.999` before min-bytes. After the filter the ranking is
+the expected one — true-lossless oracle winner **jxl 87.7% / webp 12.3% / png 0%** (png
+never optimal; jxl/png median 0.711, webp/png 0.758). Router: **91.2% family-acc, 0.69%
+mean / 0% median RD overhead** (jxl-vs-webp misroutes are RD-close).
+
+**Auto-gate** (`scripts/picker/train_auto_gate_gbdt.py`, GBDT, features+dims+target_zq →
+lossy|lossless; label = best-lossy-bytes(zq) < best-true-lossless-bytes, or lossy can't
+reach the target). Sharp, intuitive crossover at **zq~96**: lossless-better is 0.7%→3%
+across zq 45–90, 13.7% at zq95, **36.4% at zq96** (the knee), 96.8% at zq97, 100% at zq98.
+Router-acc ≥99% everywhere except the 95–96 knee (94%/78% — the genuinely content-dependent
+band). Baked rule of thumb: target <~94 zensim → lossy; >~97 → lossless; 95–96 is the
+content-aware contested band where the gate earns its keep. ALL THREE routers shipped:
+`train_{lossy_router,lossless_router,auto_gate}_gbdt.py`. Next: GBDT→MLP (ZNPR) bake +
+wire into zenpicker's MetaPicker (viable() mask + the per-family est_ms cost model).
