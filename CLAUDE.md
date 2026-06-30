@@ -608,3 +608,26 @@ over those persisted variants — never re-encode per metric.
 ## CHANGELOG.md
 
 Maintained in repo root.
+
+## KADIS-700k zensim dataset (built 2026-06-30)
+
+700,000 distorted-image cells — 140k KADIS pristine references × 1 `dist_type_1` × 5 severity
+levels — each zensim-scored with its 372-D feature vector. **THIS crate ran the sweep** that
+produced it: chunk-mode on a vast.ai fleet, pure-CPU config `METRICS=zensim` +
+`ZENMETRICS_SWEEP_LEGACY=1` (disables the orchestrator cubecl warm-bench — the descriptor race
+at `cubecl-runtime memory_manage.rs:418` is why GPU-metric sweeps fail on small cards) +
+`ZENSIM_FEATURES_REGIME=with-iw` + `MAX_CHUNKS_PER_PROCESS=50`. ~91 cells/s/box, ~$0.7 total.
+Three upstream bugs noted in `~/work/kadis-distort/benchmarks/pipeline_full_700k_2026-06-30.md`:
+hardcoded `coefficient` claim bucket (`chunk.rs:63`); omni-skip gated on `!skip_claims`
+(`chunk.rs:30`); orchestrator/cubecl init even when all metrics are CPU (`sweep_runner.rs:76`).
+
+- **Canonical parquet:** `s3://zentrain/kadis-700k/canonical/kadis700k_canonical_2026-06-30.parquet`
+  (700k×380, ~906 MB zstd, 0 nulls; sha256 `b57e4b3f…`). Mirrors: `/mnt/v/datasets/kadis700k/canonical/`,
+  `/mnt/tower/output/kadis700k/`.
+- **Columns:** `source_id` (stable split key 0..139999 — split on this, never on row), `source_filename`,
+  `dist_type`, `dist_name`, `severity_level`, `dist_param` (signed for 7/18/25), `score_zensim`, `feat_0..feat_371`.
+- **Per-chunk sidecars this sweep wrote:** `s3://zentrain/kadis-700k/{omni,zensim_features,source_features}/` (350 each).
+- **Full README + schema:** `s3://zentrain/kadis-700k/README.md` (and `~/work/kadis-distort/docs/DATASET.md`).
+- **Credit:** reference images + distortion design © VQA Group, Universität Konstanz (Lin, Hosu,
+  Saupe) — KADID-10k / KADIS-700k, https://database.mmsp-kn.de/kadid-10k-database.html ("freely
+  available to the research community"). Cite KADID-10k (QoMEX 2019) + DeepFL-IQA (arXiv:2001.08113).
