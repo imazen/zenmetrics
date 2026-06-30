@@ -192,8 +192,18 @@ over 2307 common lossy variants (min `encoded_bytes` at the target zensim, 7-q R
 interpolated) shifts cleanly with quality: avif 42% @zq50 (aggressive) → webp/jxl/avif
 ~balanced @zq60–75 → jxl 53% @zq85 → avif 56% @zq90. **jpeg is ~0% RD-optimal** — its
 value is compatibility/speed (entered via the allowlist or a realtime profile, not RD).
-So the meta-model must be quality-conditioned (zq the dominant input) and trained
-quality-dense. The canonical grid is 7 q-levels (5/15/30/50/70/85/95) — spanning, and
-the per-family RD curves interpolate to dense target qualities; a denser re-sweep would
-sharpen the family crossings. **(a) shipped** (`viable` + `EncodeMode`); **(b)/(c)** —
-export `(features, target_zq) → best_family` + train — are the next, data-driven step.
+So the meta-model must be quality-conditioned and trained quality-dense. The canonical
+grid is 7 q-levels (5/15/30/50/70/85/95) — spanning, and the per-family RD curves
+interpolate to dense target qualities; a denser re-sweep would sharpen the family
+crossings. **(a) shipped** (`viable` + `EncodeMode`).
+
+**First lossy router (GBDT, the obvious shape) — works.** `scripts/picker/train_lossy_router_gbdt.py`,
+held-out (train.parquet → test.parquet, dense target_zq 45–90 step 3, inputs = 469
+zenanalyze features + w/h + target_zq): family-acc **75.6%** vs 36.1% always-jxl
+baseline (2×). Per-zq 80.9% / 74.3% / 72.3% (low→high). `target_zq` adds **+7.8pp**
+(75.6 vs 67.8 without it) — a real axis; content carries the rest (67.8% alone). Design
+(user 2026-06-29): **three routers** — lossy (quality-conditioned, this one), lossless
+(no quality, min bytes), auto-gate (lossy-vs-lossless given target); model inputs
+zenanalyze-all + dims + PixelDescriptor + target zq; constraints = budget(`viable`) +
+allowlist + descriptor-capability (alpha→no jpeg, HDR→jxl/avif — rules, not learned).
+Next: RD-overhead (not just acc) + lossless router + auto gate + GBDT→MLP bake.
