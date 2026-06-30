@@ -56,3 +56,27 @@ R2 / Tower mirror: TODO (mirror to `zentrain` + Tower before any cleanup).
   `b76201fb`+. **MLP shape** `(128,64)`; f32 ⇒ ~90 KB each.
 - **End-to-end verified**: `zenpicker/examples/route_demo.rs` loads the 3 `.bin`, routes a real
   variant: zq60→Webp, zq85→Jxl, zq97→Avif (lossy), Lossless→Jxl(lossless).
+
+## Error anatomy + the zq97 dead-zone (`scripts/picker/router_error_anatomy.py`)
+
+Lossy router on the held-out test set (shipped i8, both views of each misroute):
+- All cells: mean byte-overhead **4.09%** (median 0 — most picks ARE the oracle), but a heavy
+  tail (p99 64%). Misroutes: median **8.76% bytes** / **4.75 zq points** (iso-bytes quality
+  deficit), tail to 807% / 154 zq (the unreachable-target cells). Acc degrades with quality:
+  80% (zq45–70) → 73% (70–90) → 68% (90+).
+- Dominant confusions are the RD-close modern cluster **AVIF↔JXL↔WebP** (cheap, 5–13% bytes):
+  avif→jxl (n=654, 9.1%/8.7zq), jxl→avif (526, 12.8%/3.2zq), webp→avif (518, 12.5%/6.2zq).
+
+**The zq97 "dead zone" + why AVIF beats JXL there — ROOT CAUSE is a sweep gap, not the codec.**
+Swept lossy quality ceilings: avif median **96.4** (reaches ≥95 on 100%), jpeg 94 (20%), webp 90
+(0%), jxl 90 (0%). **`zenjxl_lossy` was swept only to q≤90 (max zensim 94.7, ZERO rows ≥zq95)**
+while jpeg/webp/avif went to q95 — so above ~zq94 jxl-lossy has NO data and the router can only
+pick AVIF. jxl-lossy (VarDCT) is genuinely near-lossless-capable; this is a **coverage artifact**.
+Also: only 13% of variants reach zq97 with ANY lossy; hitting zq97 costs 2.73× the zq90 bytes;
+the gate correctly sends ~97% of zq97 to lossless (best-lossy/best-lossless median 1.24). And the
+lossy router was trained on zq45–90, so zq97 is **extrapolation** for it. Demo `o_1016`: lossy
+ceilings jpeg 92.8 / webp 84.7 / jxl 87.8 / avif 96.3 — none reaches 97; the gate mis-said LOSSY
+and the lossy router (extrapolating) picked AVIF (highest ceiling) = best-effort toward an
+unreachable target. **FIX: re-sweep `zenjxl_lossy` to q95** (match the others) before trusting any
+AVIF-vs-JXL pick above ~zq90; route zq>~94 via the gate (lossless); don't query the lossy router
+above its zq90 training range. See [[jxl-lossy-swept-only-to-q90]].
