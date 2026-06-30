@@ -260,3 +260,22 @@ router corpus features with current zenanalyze (NaN-free tiny cells, no imputer 
 2026-06-27 feat_* predate the tiny-handling fix so they carry NaN), train the 3 MLPs on clean
 features, bake to ZNPR (cells=families via zentrain `train_hybrid`; gate is 2-class), ship the
 .bin set + wire a consumer. Memory: [[cross-codec-meta-router-3way]].
+
+**Clean re-extraction + contract fix DONE (2026-06-30).** Re-extracted all 4497 router-corpus
+renditions with current zenanalyze via `examples/extract_features_for_picker --sizes native
+--features api` → **101 qualified `name@hex8` source features, experimental-complete
+(xyb444_color_loss / xyb_bquarter_chroma_loss / chroma_subsample_dct_loss all present +
+populated), 0.0000% NaN** (current tiny-cell handling needs no imputer). Sidecar:
+`/mnt/v/output/router-features-2026-06-30/zenanalyze_features.parquet` (4497 × 101 + dims;
+keyed `variant_name`). **Caught a LEAK in the old routers:** the canonical 2026-06-27 parquets
+carry 97 named source feats + **372 positional `feat_N` that are zensim (ref,distorted) PAIR
+features** (verified: constant-per-variant for named, 330-distinct-per-330-rows for `feat_N`) —
+not available at routing time. The earlier GBDT routers trained on all 469, so they ingested
+encode-dependent inputs. Retrained the lossy router on the clean 101 source-only features:
+**76.2% family-acc (BEATS the old leaky 75.5%)**, 3.92% mean / 0% median RD overhead — so the
+zensim features were dead weight, and the fix is a strict win (valid, 4.6× smaller feature set).
+Dims (`width`/`height`) add only +0.4pp (76.2→75.8 without) → DROP them: router = 101 qualified
++ target, so `route()`'s `reuse_for(101 qual) + append(target)` works unchanged, no API/Offer
+change. Trainer: `scripts/picker/train_router_clean.py`. REMAINING: bake the 3 MLPs (101-feat
+classifier → ZNPR, negate logits + pad to 6 CodecFamily outputs; gate 2-out) via `zenpredict-bake`,
+verify, ship `.bin`.
