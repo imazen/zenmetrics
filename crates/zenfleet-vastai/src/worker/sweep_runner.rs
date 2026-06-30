@@ -163,6 +163,19 @@ pub struct InlineGroupSpec {
     /// is on `SweepConfig` regardless of when the binary was
     /// built.
     pub encoded_out_dir: Option<PathBuf>,
+    /// Optional directory to receive each cell's **distorted** PNG
+    /// (`Compression::Fastest` — the measured size/decode knee; see the
+    /// kadis-distort `format_persistence` benchmark). Set together with
+    /// `pairs_tsv` to persist distorted variants for content-addressed
+    /// rescore-from-R2 (no regeneration). `None` (default) = unchanged
+    /// generate-discard behaviour.
+    pub distorted_out_dir: Option<PathBuf>,
+    /// Optional pairs TSV mapping `(image_path, codec, q, knob_tuple_json,
+    /// ref_path, dist_path)`. Carries the SipHash-named distorted PNG
+    /// basename out to the canonical builder (the name uses
+    /// `DefaultHasher` and is not reconstructable downstream). Only emits
+    /// a non-empty `dist_path` when `distorted_out_dir` is also set.
+    pub pairs_tsv: Option<PathBuf>,
     /// Rayon thread budget passed via `--jobs`. 0 = auto-detect.
     pub jobs: usize,
     /// HDR sweep mode (v27 schema addition, 2026-06-12): sources are
@@ -242,15 +255,14 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
         output: spec.output_tsv.clone(),
         feature_output: spec.feature_output,
         feature_regime: spec.feature_regime,
-        // The bash worker added --distorted-out-dir for sidecar
-        // PNGs but the v21 binary lacked --encoded-out-dir. The
-        // Rust in-process call has direct access to both fields.
-        // We default distorted/pairs to None unless callers wire
-        // them through; encoded_out_dir comes from the spec so
-        // chunks that want encoded blobs can request them.
-        distorted_out_dir: None,
+        // distorted_out_dir + pairs_tsv are wired from the spec so the
+        // caller (inline worker) can persist each cell's distorted PNG
+        // for content-addressed rescore-from-R2. When the caller leaves
+        // them None (generate-discard sweeps) behaviour is unchanged.
+        // encoded_out_dir likewise comes from the spec.
+        distorted_out_dir: spec.distorted_out_dir,
         encoded_out_dir: spec.encoded_out_dir,
-        pairs_tsv: None,
+        pairs_tsv: spec.pairs_tsv,
         jobs: spec.jobs,
         hdr: spec.hdr,
     };
