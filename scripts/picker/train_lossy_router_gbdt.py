@@ -31,22 +31,31 @@ def load_split(split):
                              columns=["variant_name", "score_zensim", "encoded_bytes"]).dropna()
         for v, z, b in zip(df.variant_name.values, df.score_zensim.values, df.encoded_bytes.values):
             rd[v][fam].append((float(z), float(b)))
-    X, y = [], []
+    X, y, info = [], [], []
     for v in fv.index:
         base = feat_np[vidx[v]]
         for zq in np.arange(45, 91, 3.0):
             bb = {f: bytes_at(rd[v][f], zq) for f in rd[v]}
             bb = {f: b for f, b in bb.items() if b is not None}
             if len(bb) >= 2:
-                X.append(np.append(base, zq)); y.append(FAMIDX[min(bb, key=bb.get)])
-    return np.asarray(X), np.asarray(y)
+                X.append(np.append(base, zq)); y.append(FAMIDX[min(bb, key=bb.get)]); info.append(bb)
+    return np.asarray(X), np.asarray(y), info
 
-Xtr, ytr = load_split("train")
-Xte, yte = load_split("test")
+Xtr, ytr, _ = load_split("train")
+Xte, yte, infote = load_split("test")
 clf = HistGradientBoostingClassifier(max_iter=300, max_depth=8, learning_rate=0.08)
 clf.fit(Xtr, ytr)
 pred = clf.predict(Xte)
 print(f"rows train={len(Xtr)} test={len(Xte)} | LOSSY-ROUTER test family-acc = {(pred==yte).mean():.1%}")
+import statistics
+ohs = []; cant = 0
+for i, bb in enumerate(infote):
+    oracle = min(bb.values()); pf = NAMES[pred[i]]
+    if pf in bb: ohs.append(bb[pf] / oracle - 1.0)
+    else: cant += 1
+ohs.sort()
+print(f"  RD overhead vs oracle: mean={statistics.mean(ohs)*100:.2f}% median={ohs[len(ohs)//2]*100:.2f}% "
+      f"p90={ohs[int(len(ohs)*0.9)]*100:.2f}% | predicted-cant-reach={cant/len(infote):.1%}")
 # baseline: always the single most-common family
 mode = np.bincount(ytr).argmax()
 print(f"  baseline (always {NAMES[mode]}): {(yte==mode).mean():.1%}")

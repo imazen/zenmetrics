@@ -206,4 +206,11 @@ baseline (2×). Per-zq 80.9% / 74.3% / 72.3% (low→high). `target_zq` adds **+7
 (no quality, min bytes), auto-gate (lossy-vs-lossless given target); model inputs
 zenanalyze-all + dims + PixelDescriptor + target zq; constraints = budget(`viable`) +
 allowlist + descriptor-capability (alpha→no jpeg, HDR→jxl/avif — rules, not learned).
-Next: RD-overhead (not just acc) + lossless router + auto gate + GBDT→MLP bake.
+
+RD overhead vs oracle (the metric that matters — held-out): **median 0%** (nails the
+best family for the majority), **mean 3.91%**, p90 10.81%, can't-reach 1.3%. So
+misroutes are mostly between RD-close families (free); the cost concentrates in a p90
+tail — clearable by a **meta multi-shot family-verify** (queued mode → encode the top-2
+families, keep the best), the family-level analogue of the within-codec knob-check. The
+same `EncodeMode` / `EncodeBudget` / `directed_search` apply at BOTH levels (family and
+knob). Next: lossless router + auto gate + the meta multi-shot + GBDT→MLP bake.
