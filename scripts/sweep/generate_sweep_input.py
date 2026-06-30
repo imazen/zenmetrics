@@ -91,12 +91,18 @@ def expand_grid(grid: dict) -> list[dict]:
     return out
 
 
-def rows_from_cells_jsonl(path: Path, codec: str) -> tuple[list[str], list[tuple], int]:
-    """Plan mode: convert a `--emit-cells` declare manifest into input-parquet
-    rows. Returns (basenames, rows, cells_per_image). The knob_tuple_json
-    (the `{"cell","fp","plan"}` identity) passes through VERBATIM — it is the
-    durable join key and the executor's self-describing input; re-encoding it
-    here would risk identity drift."""
+def rows_from_cells_jsonl(path: Path, codec: str,
+                          require_plan_identity: bool = True) -> tuple[list[str], list[tuple], int]:
+    """Convert a JSONL cell list into input-parquet rows. Returns (basenames,
+    rows, cells_per_image). The knob_tuple_json passes through VERBATIM — it is
+    the durable join key and the executor's self-describing input; re-encoding it
+    here would risk identity drift.
+
+    With ``require_plan_identity`` (the default, plan mode), each cell's
+    knob_tuple_json must carry the `{"cell","fp","plan"}` plan identity. Raw mode
+    (``require_plan_identity=False``, e.g. the KADIS per-image distortion
+    assignment) accepts any knob_tuple_json — it still enforces uniform
+    cells/image so the chunk row-range math holds."""
     basenames: list[str] = []
     per_image: dict[str, int] = {}
     rows: list[tuple] = []
@@ -112,11 +118,12 @@ def rows_from_cells_jsonl(path: Path, codec: str) -> tuple[list[str], list[tuple
             if item["codec"] != codec:
                 raise ValueError(
                     f"{path}:{ln}: codec {item['codec']!r} != --codec {codec!r}")
-            ident = json.loads(item["knob_tuple_json"])
-            if not {"cell", "fp", "plan"} <= set(ident):
-                raise ValueError(
-                    f"{path}:{ln}: knob_tuple_json lacks the plan identity keys "
-                    f"cell/fp/plan: {item['knob_tuple_json']!r}")
+            if require_plan_identity:
+                ident = json.loads(item["knob_tuple_json"])
+                if not {"cell", "fp", "plan"} <= set(ident):
+                    raise ValueError(
+                        f"{path}:{ln}: knob_tuple_json lacks the plan identity keys "
+                        f"cell/fp/plan: {item['knob_tuple_json']!r}")
             b = Path(item["image_path"]).name
             if b not in per_image:
                 basenames.append(b)
@@ -151,19 +158,29 @@ def main() -> int:
                     help="PLAN MODE: declare manifest from `zenmetrics sweep --plan ... --dry-run "
                          "--emit-cells`; rows carry the {cell,fp,plan} identity verbatim. Mutually "
                          "exclusive with --sources-list/--q-grid/--knob-grid")
+    ap.add_argument("--cells-jsonl-raw",
+                    help="RAW CELL MODE: a JSONL of {image_path,codec,q,knob_tuple_json} with NO "
+                         "plan-identity requirement — for per-image cell lists the (codec x q x knob) "
+                         "Cartesian product can't express, e.g. the KADIS per-image distortion "
+                         "assignment (each image its own dist_type x 5 levels). Still requires uniform "
+                         "cells/image. Mutually exclusive with the classic and plan flags")
     ap.add_argument("--cells-per-chunk", type=int, default=300, help="Approx cells per chunk")
     ap.add_argument("--r2-jobs-prefix", default="s3://zentrain",
                     help="R2 prefix for the input parquet (default s3://zentrain)")
     args = ap.parse_args()
 
-    if args.cells_jsonl:
+    if args.cells_jsonl or args.cells_jsonl_raw:
+        if args.cells_jsonl and args.cells_jsonl_raw:
+            ap.error("--cells-jsonl and --cells-jsonl-raw are mutually exclusive")
         if args.sources_list or args.q_grid or args.knob_grids:
-            ap.error("--cells-jsonl (plan mode) is mutually exclusive with "
+            ap.error("--cells-jsonl/--cells-jsonl-raw is mutually exclusive with "
                      "--sources-list/--q-grid/--knob-grid")
+        cells_path = Path(args.cells_jsonl or args.cells_jsonl_raw)
+        mode = "PLAN MODE" if args.cells_jsonl else "RAW CELL MODE"
         basenames, rows, cells_per_image = rows_from_cells_jsonl(
-            Path(args.cells_jsonl), args.codec)
-        print(f"# codec={args.codec} | PLAN MODE | {len(basenames)} images x "
-              f"{cells_per_image} plan cells = {len(rows)} cells", file=sys.stderr)
+            cells_path, args.codec, require_plan_identity=bool(args.cells_jsonl))
+        print(f"# codec={args.codec} | {mode} | {len(basenames)} images x "
+              f"{cells_per_image} cells = {len(rows)} cells", file=sys.stderr)
     else:
         if not args.sources_list or not args.q_grid:
             ap.error("classic mode requires --sources-list and --q-grid "
