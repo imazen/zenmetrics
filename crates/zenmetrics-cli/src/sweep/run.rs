@@ -865,27 +865,10 @@ pub fn run_sweep(
                 let _ = cache.cleanup_all();
             }
         }
-        // Decode the source once per image so we don't re-PNG-decode for
-        // every cell. The bytes are freed when we move to the next image
-        // (drops at the end of this loop iteration). This is the entire
-        // RAM-discipline knob: one source resident at a time.
-        let source = match decode_image_to_rgb8(src_path) {
-            Ok(img) => img,
-            Err(e) => {
-                eprintln!(
-                    "[sweep] skipping {} (decode failed: {e})",
-                    src_path.display()
-                );
-                stats.add_failed_decode(cells_per_image as u64);
-                continue;
-            }
-        };
-
-        // Build a flat list of sweep units for rayon to walk. Cell count
-        // is bounded (≤ a few thousand per image typically), so the Vec
-        // is cheap. Plan-driven cells borrow from `built_plan` (built
-        // once above); tuple cells own their small knob maps. We don't
-        // clone the source either way.
+        // Build a flat list of sweep units for rayon to walk. Cell count is
+        // bounded (≤ a few thousand per image typically), so the Vec is cheap.
+        // Plan-driven cells borrow from `built_plan` (built once above); tuple
+        // cells own their small knob maps.
         #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
         let units: Vec<SweepUnit<'_>> = match &built_plan {
             Some(p) => p.cells.iter().map(SweepUnit::Planned).collect(),
@@ -894,28 +877,53 @@ pub fn run_sweep(
         #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
         let units: Vec<SweepUnit<'_>> = tuple_units(cfg);
 
-        // --distort-cmd: generate this image's distorted variants up front in
-        // ONE round-trip to the serve worker (the worker decodes the reference
-        // once and returns one variant per cell), then score them in parallel
-        // below. `None` => no override => the codec encode+decode path.
-        let distort_overrides: Option<Vec<Option<Rgb8Image>>> = match distort_worker.as_mut() {
-            Some(worker) => {
-                let cells: Vec<(f64, String)> =
-                    units.iter().map(|u| (u.q(), u.knob_json())).collect();
-                match worker.generate(&source, &cells) {
-                    Ok(variants) => Some(variants),
-                    Err(e) => {
-                        eprintln!(
-                            "[sweep] distort worker failed on {}: {e}",
-                            src_path.display()
-                        );
-                        stats.add_failed_decode(units.len() as u64);
+        // Acquire this image's decoded reference + distorted variants. With the
+        // generation pipeline (`--distort-jobs N>1`) a producer already decoded
+        // + generated this index ahead of us — take the ready result (the GPU
+        // never waited on single-threaded CPU generation). Otherwise decode +
+        // generate inline, image-major (RAM-discipline: one source resident at a
+        // time), exactly as before. `None` overrides => codec encode+decode path.
+        let (source, distort_overrides): (Rgb8Image, Option<Vec<Option<Rgb8Image>>>) =
+            if let Some(pf) = prefetch.as_ref() {
+                match pf.take(src_idx) {
+                    ProducedItem::Generated { source, overrides } => (source, Some(overrides)),
+                    ProducedItem::Failed => {
+                        stats.add_failed_decode(cells_per_image as u64);
                         continue;
                     }
                 }
-            }
-            None => None,
-        };
+            } else {
+                let source = match decode_image_to_rgb8(src_path) {
+                    Ok(img) => img,
+                    Err(e) => {
+                        eprintln!(
+                            "[sweep] skipping {} (decode failed: {e})",
+                            src_path.display()
+                        );
+                        stats.add_failed_decode(cells_per_image as u64);
+                        continue;
+                    }
+                };
+                let overrides = match distort_worker.as_mut() {
+                    Some(worker) => {
+                        let cells: Vec<(f64, String)> =
+                            units.iter().map(|u| (u.q(), u.knob_json())).collect();
+                        match worker.generate(&source, &cells) {
+                            Ok(variants) => Some(variants),
+                            Err(e) => {
+                                eprintln!(
+                                    "[sweep] distort worker failed on {}: {e}",
+                                    src_path.display()
+                                );
+                                stats.add_failed_decode(units.len() as u64);
+                                continue;
+                            }
+                        }
+                    }
+                    None => None,
+                };
+                (source, overrides)
+            };
 
         units.par_iter().enumerate().for_each(|(unit_idx, unit)| {
             // In --distort-cmd mode, a cell whose external generation failed
@@ -1061,6 +1069,12 @@ pub fn run_sweep(
                 }
             }
         });
+    }
+
+    // Join the generation-pipeline producers (every source has been claimed +
+    // deposited + consumed by now; this is a no-op in the serial path).
+    for h in producer_handles {
+        let _ = h.join();
     }
 
     // Drop locks and finalize.
