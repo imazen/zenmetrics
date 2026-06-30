@@ -90,17 +90,15 @@ parquet = { version = "58", default-features = false, features = ["arrow", "zstd
 # Image decoding for zenanalyze feature computation on sources.
 # Gated so only the source-features feature pulls it.
 image = { workspace = true, optional = true }
-# zenanalyze for source-image features (102 active features as of 0.1.x).
-# We pin to 0.1.x per the API stability contract in zenanalyze/CLAUDE.md.
-# crates.io has 0.1.0; the in-workspace sibling at ~/work/zen/zenanalyze
-# has newer features but we pull from crates.io for reproducibility
-# of the docker image build.
-# zenanalyze: local path dep gets us the full 62-feature surface
-# (crates.io 0.1.0 ships only ~19). Local HEAD = 278ca1a as of
-# 2026-05-19. Feature IDs are stable across the repo's history,
-# so feat_<id> columns join cleanly across runs even if the local
-# crate version bumps the count later.
-zenanalyze = { path = "../../../zenanalyze", optional = true }
+# zenanalyze for source-image features. REQUIRES the `experimental` feature:
+# the XYB chroma-loss pair (ids 138/139) + the IDCT-roundtrip chroma-subsampling
+# feature (id 140) live behind it and are load-bearing for the multi-cell
+# (webp/avif) pickers' 420-vs-444 discrimination. Omitting them silently shrinks
+# FeatureSet::SUPPORTED and cripples those pickers (the 2026-06-29 off-frontier
+# disaster). zenanalyze ships `experimental` ON by default now; we pin it
+# explicitly here so a future default change can't silently drop it. Local path
+# dep (0.2.x); feat_<id> columns join cleanly across runs.
+zenanalyze = { path = "../../../zenanalyze", optional = true, features = ["experimental"] }
 
 [features]
 # Default = full unified GPU worker with source-image features.
