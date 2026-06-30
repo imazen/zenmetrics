@@ -128,9 +128,7 @@ impl DistortWorker {
             })
             .collect();
         for (v, ok) in variants.iter().zip(&oks) {
-            if !*ok
-                && let Some(err) = v.get("error").and_then(serde_json::Value::as_str)
-            {
+            if !*ok && let Some(err) = v.get("error").and_then(serde_json::Value::as_str) {
                 eprintln!("[sweep] distort worker cell failed: {err}");
             }
         }

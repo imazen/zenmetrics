@@ -307,8 +307,10 @@ mod tests {
                     .find(|it| it.knob_tuple_json == *knobs && it.codec == *codec && it.q == *q)
                 {
                     if let Some(fp) = &rep.encode_fp {
-                        group_sha
-                            .insert((codec.clone(), rep.source_sha.clone(), fp.clone()), format!("blob{i}"));
+                        group_sha.insert(
+                            (codec.clone(), rep.source_sha.clone(), fp.clone()),
+                            format!("blob{i}"),
+                        );
                     }
                 }
             }
