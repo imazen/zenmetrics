@@ -73,12 +73,40 @@ The IDCT feature *failed as a global input but works as a targeted knob-rule inp
 - Integrate into `zenpredict::picker_safety::resolve_pre_argmin` as a post-argmin /
   top-K refinement stage (no encode, no metric).
 
-## 4. Next steps (active arc)
-1. Validate the per-knob decomposition beats the monolithic K=1 picker (achieved RD
-   vs oracle) for webp — build the rules (lossy/lossless graphics-rule, sharp_yuv
-   chroma-rule, filter rule-or-default) and measure.
-2. Same analysis for avif (it DOES have 420/422/444 — the IDCT feature applies there
-   as a subsampling knob-rule).
-3. Wire the knob-check into the runtime safety pipeline; keep metric-K-verify as an
-   explicit offline mode.
-4. Ship the clean recovery pickers (jxl intact; jpeg re-trained clean, IDCT dropped).
+## 4. Knob-check PROVEN (webp, held-out odd-origin TEST, target zensim 65)
+
+- **Separability ceiling:** decomposed oracle (pick each knob independently) = 0.86%
+  mean overhead vs joint oracle; 76% within 1%, **93% within 3%**. webp's lossy knobs
+  (method × filter × sharp_yuv) ARE separable.
+- **End-to-end (per-knob HistGB classifiers on content features, held-out):**
+  - method 93.7% acc (m6-dominant + lossy/lossless split — predictable)
+  - sharp_yuv 62.2% (the chroma rule; chroma_subsample_dct_loss is a top input)
+  - **filter 31.6%** (5-way, ~20% random floor — content-underdetermined)
+  - achieved **2.29% mean overhead — beats the monolithic K=1 picker (2.8%)**; median
+    0.97%, p90 5.65%.
+- **The filter is the residual bottleneck:** ~1.4% of the gap to the 0.86% ceiling is
+  filter mis-prediction, and it drives the p90 tail (so the cheap knob-check alone may
+  still graze the safety gate's tail thresholds). The 5 filters (def/mpass/parity/
+  plim50/smooth) are near-RD-equivalent + weakly content-correlated.
+
+**Verdict:** the cheap, no-encode knob-check WORKS (separable + beats monolithic K=1),
+and it localizes webp's hardness to one dimension (filter). method + sharp_yuv ship as
+cheap content rules.
+
+## 5. Next steps (decision + build)
+1. **Filter handling — the open decision:** (a) accept the cheap knob-check (2.29%,
+   real-time); (b) add a *targeted filter-only* verify (encode the 2-3 candidate
+   filters at the fixed method/sharp_yuv — far cheaper than full 39-cell K-verify, and
+   only this one dimension needs it) for the tail; (c) chase a filter-discriminating
+   feature (low odds — the GBDT with all features only hit 31.6%).
+2. Wire the knob-check into `zenpredict::picker_safety::resolve_pre_argmin` as a
+   post-argmin per-knob refinement; keep metric-K-verify as an explicit OFFLINE mode.
+3. Repeat for avif (it DOES have 420/422/444 — the IDCT feature applies there as a real
+   subsampling knob-rule, unlike webp).
+
+## DONE this cycle
+- Experimental disaster fixed + shipped (cc514652 / 68d9cc1f / ccc192c6).
+- Clean recovery pickers shipped to codec crates: **zenjpeg v0.2** (ssim2 64.2% / zq
+  64.9%, K=3) + **zenjxl v0.2** (ssim2 100% / zq 93.8%, K=1) on `origin/main`,
+  superseding pre-experimental v0.1. IDCT feature kept in zenanalyze (knob-rule), out
+  of the global pickers (net-negative there).
