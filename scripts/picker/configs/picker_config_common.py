@@ -38,6 +38,32 @@ def keep_features(features_path):
     # is robust to redundancy and the val→test gap flags any MLP overfit.
     with open(features_path) as f: header = next(csv.reader(f, delimiter="\t"))
     have = set(header)
+    import sys
+    # GUARD (2026-06-29): the XYB chroma-loss features are the DIRECT
+    # chroma-subsampling-cost signal. Extracting without them silently cripples
+    # multi-cell (webp/avif) picker discrimination — the off-frontier 420-vs-444
+    # disaster. zenanalyze now ships `experimental` ON by default; if these are
+    # still absent, the features TSV was built with an old/opted-out analyzer.
+    # DEMAND them — fail loudly unless an explicit, visible override is set.
+    _REQUIRED_EXPERIMENTAL = ["feat_xyb_bquarter_chroma_loss", "feat_xyb444_color_loss"]
+    _missing = [c for c in _REQUIRED_EXPERIMENTAL if c not in have]
+    if _missing:
+        print("\n" + "=" * 72
+            + f"\nFATAL: training features missing experimental chroma-loss columns: {_missing}"
+            + f"\n  features file: {features_path}"
+            + "\nThese are the direct chroma-subsampling-cost signal; training without them"
+            + "\nsilently cripples multi-cell (webp/avif) 420-vs-444 discrimination — the"
+            + "\noff-frontier picker disaster (2026-06-29). Re-extract with a zenanalyze built"
+            + "\nwith the `experimental` feature (now the default)."
+            + "\nOverride ONLY if this corpus legitimately lacks them: ZEN_ALLOW_MISSING_EXPERIMENTAL=1"
+            + "\n" + "=" * 72, file=sys.stderr)
+        if os.environ.get("ZEN_ALLOW_MISSING_EXPERIMENTAL") != "1":
+            raise SystemExit(3)
+    # A curated _WANTED feature silently absent is the same failure mode, smaller:
+    # a config asking for a feature it never gets. Surface it (don't fail).
+    _wanted_missing = [c for c in _WANTED if c not in have]
+    if _wanted_missing:
+        print(f"WARNING: _WANTED features absent from {features_path}: {_wanted_missing}", file=sys.stderr)
     wanted = [c for c in _WANTED if c in have]
     extra = [c for c in header if c.startswith("feat_") and c not in set(_WANTED)]
     return wanted + extra
