@@ -417,6 +417,16 @@ struct SweepArgs {
     /// `--distorted-out-dir` and only the score+feature sidecar is kept.
     #[arg(long)]
     distort_cmd: Option<String>,
+    /// Parallel generation workers for `--distort-cmd`. Each is an independent
+    /// serve subprocess (forced `KADIS_GEN_WORKERS=1`) decoding + generating one
+    /// image at a time; together they stream decoded+distorted images *ahead* of
+    /// GPU scoring through a bounded pipeline, so the GPU is never starved waiting
+    /// on single-threaded CPU generation. `1` (default) keeps the original serial
+    /// image-major path. Pair with `--jobs 1` to keep GPU scoring on one rayon
+    /// thread (the generation pipeline supplies the parallelism). No effect
+    /// without `--distort-cmd`.
+    #[arg(long, default_value = "1")]
+    distort_jobs: usize,
     /// Optional directory to receive the **encoded codec bytes** for
     /// every successfully encoded cell (the actual .jpg / .webp /
     /// .avif / .jxl / .png file the codec produced, not the decoded
@@ -962,6 +972,7 @@ fn cmd_sweep(
             max_deviations: effective_max_deviations,
         }),
         distort_cmd: args.distort_cmd,
+        distort_jobs: args.distort_jobs,
         metrics,
         gpu_runtime: args.gpu_runtime,
         output: args.output,

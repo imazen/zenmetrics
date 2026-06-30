@@ -39,12 +39,13 @@
 //! cells continue. Stat counters use `AtomicU64`, so multiple parallel
 //! failures don't lose increments to torn writes.
 
+use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::error::Error;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Instant;
 
 use rayon::prelude::*;
@@ -255,6 +256,11 @@ pub struct SweepConfig {
     /// generate-discard sweeps (omit `distorted_out_dir`): generate, score every
     /// metric in-process, keep only the sidecar.
     pub distort_cmd: Option<String>,
+    /// Parallel generation workers for `distort_cmd` (default 1 = serial,
+    /// image-major, unchanged). When > 1, M independent serve subprocesses
+    /// decode + generate images *ahead* of GPU scoring through a bounded
+    /// pipeline, so the GPU is never starved on single-threaded CPU generation.
+    pub distort_jobs: usize,
     pub metrics: Vec<MetricKind>,
     pub gpu_runtime: GpuRuntime,
     pub output: PathBuf,
@@ -418,6 +424,126 @@ fn score_via_orchestrator(
         .collect())
 }
 
+/// One generated image handed from a pipeline producer to the scoring consumer.
+enum ProducedItem {
+    Generated {
+        source: Rgb8Image,
+        overrides: Vec<Option<Rgb8Image>>,
+    },
+    Failed,
+}
+
+struct PrefetchInner {
+    ready: HashMap<usize, ProducedItem>,
+    next_produce: usize,
+    next_consume: usize,
+    n: usize,
+    window: usize,
+}
+
+/// Bounded, in-order prefetch buffer connecting the generation-pipeline
+/// producers (M serve workers decoding + distorting images) to the scoring
+/// consumer. Producers `claim()` the next source index (blocking when they get
+/// more than `window` ahead of the consumer — the RAM bound + backpressure),
+/// generate it, and `deposit()` the result; the consumer `take(i)` blocks until
+/// index `i` is ready. This streams decode + generation *far ahead* of GPU
+/// scoring, so the GPU is never starved on single-threaded CPU generation.
+struct Prefetch {
+    inner: Mutex<PrefetchInner>,
+    not_full: Condvar,
+    not_empty: Condvar,
+}
+
+impl Prefetch {
+    fn new(n: usize, window: usize) -> Self {
+        Self {
+            inner: Mutex::new(PrefetchInner {
+                ready: HashMap::new(),
+                next_produce: 0,
+                next_consume: 0,
+                n,
+                window: window.max(1),
+            }),
+            not_full: Condvar::new(),
+            not_empty: Condvar::new(),
+        }
+    }
+
+    /// Claim the next source index to generate, or `None` when all are claimed.
+    /// Blocks while more than `window` indices are outstanding ahead of the
+    /// consumer (backpressure → bounded resident memory).
+    fn claim(&self) -> Option<usize> {
+        let mut g = self.inner.lock().unwrap();
+        loop {
+            if g.next_produce >= g.n {
+                return None;
+            }
+            if g.next_produce < g.next_consume + g.window {
+                let i = g.next_produce;
+                g.next_produce += 1;
+                return Some(i);
+            }
+            g = self.not_full.wait(g).unwrap();
+        }
+    }
+
+    fn deposit(&self, i: usize, item: ProducedItem) {
+        let mut g = self.inner.lock().unwrap();
+        g.ready.insert(i, item);
+        drop(g);
+        self.not_empty.notify_all();
+    }
+
+    /// Take the result for source index `i` (in consumption order), blocking
+    /// until a producer has deposited it.
+    fn take(&self, i: usize) -> ProducedItem {
+        let mut g = self.inner.lock().unwrap();
+        loop {
+            if let Some(item) = g.ready.remove(&i) {
+                g.next_consume = i + 1;
+                drop(g);
+                self.not_full.notify_all();
+                return item;
+            }
+            g = self.not_empty.wait(g).unwrap();
+        }
+    }
+}
+
+/// A single generation-pipeline worker: pull source indices, decode + generate
+/// each image's distorted variants, deposit into the prefetch buffer. Runs in
+/// its own thread; the serve subprocess it drives does the CPU work serially
+/// (the N parallel producers, not a nested pool, supply the parallelism).
+fn distort_producer(
+    worker: &mut DistortWorker,
+    sources: &[PathBuf],
+    cells: &[(f64, String)],
+    prefetch: &Prefetch,
+) {
+    while let Some(i) = prefetch.claim() {
+        let item = match decode_image_to_rgb8(&sources[i]) {
+            Ok(source) => match worker.generate(&source, cells) {
+                Ok(overrides) => ProducedItem::Generated { source, overrides },
+                Err(e) => {
+                    eprintln!(
+                        "[sweep] distort worker failed on {}: {e}",
+                        sources[i].display()
+                    );
+                    ProducedItem::Failed
+                }
+            },
+            Err(e) => {
+                eprintln!(
+                    "[sweep] skipping {} (decode failed: {e})",
+                    sources[i].display()
+                );
+                ProducedItem::Failed
+            }
+        };
+        prefetch.deposit(i, item);
+    }
+}
+
 /// Optional handle to an orchestrator-driven scoring backend. When
 /// `Some`, the sweep per-cell loop dispatches every metric through
 /// the orchestrator instead of the legacy [`MetricCache`]. The two
@@ -573,14 +699,70 @@ pub fn run_sweep(
     let feature_writer = Mutex::new(feature_writer_inner);
     let pairs_writer = Mutex::new(pairs_writer_inner);
 
-    // Persistent distortion-generation worker (`--distort-cmd`). Spawned once
-    // and driven image-major (one round-trip per source); its interpreter +
-    // imports are paid once, not per cell. When unset, cells take the codec
-    // encode+decode-back path unchanged.
-    let mut distort_worker = match cfg.distort_cmd.as_deref() {
-        Some(cmd) => Some(DistortWorker::spawn(cmd)?),
-        None => None,
+    // Distortion-generation worker(s) (`--distort-cmd`). Default (`--distort-jobs
+    // 1`): a single worker driven image-major (one round-trip per source), its
+    // interpreter + imports paid once. With `--distort-jobs N>1`: N independent
+    // serve subprocesses decode + generate images *ahead* of GPU scoring through
+    // the bounded `Prefetch` pipeline below, so decode I/O is streamed ahead and
+    // the GPU is never starved on single-threaded CPU generation. Each pipeline
+    // worker is forced `KADIS_GEN_WORKERS=1` (serial) — the N processes ARE the
+    // parallelism, not a nested in-worker pool. HDR keeps the serial path.
+    let pipeline_active = cfg.distort_cmd.is_some() && cfg.distort_jobs > 1 && !cfg.hdr;
+    let mut distort_worker = if pipeline_active {
+        None
+    } else {
+        match cfg.distort_cmd.as_deref() {
+            Some(cmd) => Some(DistortWorker::spawn(cmd)?),
+            None => None,
+        }
     };
+    let prefetch: Option<Arc<Prefetch>> = if pipeline_active {
+        Some(Arc::new(Prefetch::new(
+            cfg.sources.len(),
+            cfg.distort_jobs.saturating_mul(2).max(2),
+        )))
+    } else {
+        None
+    };
+    let mut producer_handles: Vec<std::thread::JoinHandle<()>> = Vec::new();
+    if let Some(pf) = prefetch.as_ref() {
+        let cmd = cfg
+            .distort_cmd
+            .as_deref()
+            .expect("pipeline_active implies distort_cmd is Some");
+        // Cells are image-independent — build the (q, knob_json) template once
+        // and share it (Arc) across all producers.
+        #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
+        let cells_template: Vec<(f64, String)> = {
+            let u: Vec<SweepUnit<'_>> = match &built_plan {
+                Some(p) => p.cells.iter().map(SweepUnit::Planned).collect(),
+                None => tuple_units(cfg),
+            };
+            u.iter().map(|x| (x.q(), x.knob_json())).collect()
+        };
+        #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
+        let cells_template: Vec<(f64, String)> = tuple_units(cfg)
+            .iter()
+            .map(|x| (x.q(), x.knob_json()))
+            .collect();
+        let sources = Arc::new(cfg.sources.clone());
+        let cells = Arc::new(cells_template);
+        for _ in 0..cfg.distort_jobs {
+            let worker = DistortWorker::spawn(&format!("KADIS_GEN_WORKERS=1 {cmd}"))?;
+            let pf = Arc::clone(pf);
+            let sources = Arc::clone(&sources);
+            let cells = Arc::clone(&cells);
+            producer_handles.push(std::thread::spawn(move || {
+                let mut worker = worker;
+                distort_producer(&mut worker, &sources, &cells, &pf);
+            }));
+        }
+        eprintln!(
+            "[sweep] --distort-jobs {}: generation pipeline spawned ({} sources)",
+            cfg.distort_jobs,
+            cfg.sources.len()
+        );
+    }
 
     // GPU metric instance cache — **process-static**. The cache
     // outlives individual `run_sweep` calls so cached `Metric`
