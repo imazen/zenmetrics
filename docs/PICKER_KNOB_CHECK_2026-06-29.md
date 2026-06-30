@@ -233,5 +233,14 @@ across zq 45–90, 13.7% at zq95, **36.4% at zq96** (the knee), 96.8% at zq97, 1
 Router-acc ≥99% everywhere except the 95–96 knee (94%/78% — the genuinely content-dependent
 band). Baked rule of thumb: target <~94 zensim → lossy; >~97 → lossless; 95–96 is the
 content-aware contested band where the gate earns its keep. ALL THREE routers shipped:
-`train_{lossy_router,lossless_router,auto_gate}_gbdt.py`. Next: GBDT→MLP (ZNPR) bake +
-wire into zenpicker's MetaPicker (viable() mask + the per-family est_ms cost model).
+`train_{lossy_router,lossless_router,auto_gate}_gbdt.py`.
+
+**Model shapes** (lossy router, `train_lossy_router_shapes.py`): GBDT **75.5% / 3.90% mean
+RD overhead** beats every MLP shape — MLP(256,128,64) 73.9% / 4.65%, MLP(128,64) 73.1% /
+4.90%, GBDT→MLP distilled 73.1% / 4.55% (distillation does NOT recover the gap — it's MLP
+capacity, not labels; matches the within-codec K=1 finding). So GBDT is the better model;
+the bakeable ZNPR MLP gets within ~1.5pp acc / ~0.75pp RD overhead → viable to ship at
+~27KB. GBDT eats NaN tiny-cell features natively; the MLP path needs a median imputer (as
+the bake already does). Next: bake the MLP routers (ZNPR) + wire into zenpicker's MetaPicker
+(viable() mask + per-family est_ms cost model) — needs a MetaPicker public-API shape (3
+routers + descriptor-capability rules), so propose + get approval before adding the API.
