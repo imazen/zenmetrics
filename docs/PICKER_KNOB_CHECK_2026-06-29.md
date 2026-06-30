@@ -166,8 +166,11 @@ Route an encode to the best CODEC FAMILY (jpeg/webp/jxl/avif/png) given four inp
   meta-model is quality-conditioned (families win at different q: avif/jxl aggressive,
   jpeg/webp high-q).
 - **resource budget** — `EncodeBudget` + a per-family encode-cost estimate.
-- **mode** — `EncodeMode {Realtime, Queue}` (BUILT, zenpredict): realtime → prefer fast
-  codecs + OneShot; queue → all families + multi-shot/offline.
+- **mode** — `EncodeMode {RealtimeFastest, RealtimeBalanced, QueuedBalanced,
+  QueuedAggressive}` (BUILT, zenpredict): a latency × effort profile. `is_realtime()`
+  gates codec viability (real-time prefers fast codecs); `strategy()` → per-codec
+  `PickerStrategy` (realtime→OneShot, QueuedBalanced→Auto, QueuedAggressive→MultiShot);
+  the Fastest/Balanced/Aggressive tier also drives the codec's effort knob.
 
 Logic: `argmin(meta_model, features+zq)` over `allowlist ∩ viability(mode, budget,
 per_family_est_ms)` — the viability mask drops families too slow for the budget/mode
