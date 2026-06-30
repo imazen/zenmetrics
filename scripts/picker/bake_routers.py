@@ -8,10 +8,12 @@ LOSSLESS at runtime). Gate is 2-out (lossy=0, lossless=1; route reads out[1]<out
 Self-verifies each bake by replicating the ZNPR forward pass in numpy and asserting argmin
 (over the branch family set) == sklearn mlp.predict, BEFORE writing the JSON. Then shells to
 `zenpredict-bake` to produce the .bin."""
-import json, os, subprocess, collections, statistics
+import json, os, subprocess, collections, statistics, sys
 import numpy as np, pandas as pd
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from picker_data import load_rd as pdl_load_rd, oracle_rows  # canonical support-aware data layer
 
 SIDE = '/mnt/v/output/router-features-2026-06-30/zenanalyze_features.parquet'
 BASE = '/mnt/v/output/canonical-picker-2026-06-27'
@@ -57,15 +59,18 @@ def ll_min(split):
 
 
 def build_lossy(split):
-    rd = lossy_rd(split); X, y = [], []
-    for v in rd:
-        if v not in vidx:
-            continue
-        base = side_np[vidx[v]]
-        for zq in np.arange(45, 91, 3.0):
-            bb = {f: bytes_at(rd[v][f], zq) for f in rd[v]}; bb = {f: b for f, b in bb.items() if b is not None}
-            if len(bb) >= 2:
-                X.append(np.append(base, zq)); y.append(FAM_IDX[min(bb, key=bb.get)])
+    # UNBIASED oracle via the canonical support-aware data layer: only cells where ALL lossy
+    # families have MEASURED support (no extrapolation, no min-over-incomplete-support bias —
+    # that bias is what made AVIF over-win above zq90). See picker_data.py.
+    rd = pdl_load_rd(BASE, LOSSY, split, 'score_zensim')
+    rows, excl = oracle_rows(rd, LOSSY, list(np.arange(45, 91, 3.0)), require='all')
+    if split == 'train':
+        print(f'  [lossy] {len(rows)} support-complete cells; excluded {sum(excl.values())} '
+              f'incomplete-support (top missing: {dict(excl.most_common(3))})')
+    X, y = [], []
+    for r in rows:
+        if r['variant'] in vidx:
+            X.append(np.append(side_np[vidx[r['variant']]], r['target'])); y.append(FAM_IDX[r['oracle']])
     return np.array(X), np.array(y)
 
 
