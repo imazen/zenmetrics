@@ -228,6 +228,15 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
         distort_cmd: std::env::var("ZEN_DISTORT_CMD")
             .ok()
             .filter(|s| !s.is_empty()),
+        // Generation-ahead pipeline for the distort path: N serve workers decode +
+        // generate the next images ahead of the GPU scorer into a bounded buffer so
+        // generation never starves the GPU (byte-identical scores; seeded per
+        // (ref_hash, dist_type, level)). ZEN_DISTORT_JOBS=1 (default) = inline serial.
+        distort_jobs: std::env::var("ZEN_DISTORT_JOBS")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .filter(|&n| n >= 1)
+            .unwrap_or(1),
         metrics: spec.metrics,
         gpu_runtime: spec.gpu_runtime,
         output: spec.output_tsv.clone(),

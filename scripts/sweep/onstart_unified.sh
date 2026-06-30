@@ -71,6 +71,21 @@ cat > ~/.aws/credentials <<CREDS
 aws_access_key_id = ${R2_ACCESS_KEY_ID}
 aws_secret_access_key = ${R2_SECRET_ACCESS_KEY}
 CREDS
+# vast.ai account env-vars cap EACH value at 256 chars, but R2 scoped
+# session tokens are ~648. The launcher splits the token into
+# R2_SESSION_TOKEN_0..N (each <=256, all matched by the R2_* hydration
+# above) and we reassemble it here in order. Permanent (non-temp) creds
+# set neither the single var nor the parts, so this whole block is a
+# no-op for them.
+if [[ -z "${R2_SESSION_TOKEN:-}" ]]; then
+    _r2_st=""
+    for _i in 0 1 2 3 4 5 6 7; do
+        _v="R2_SESSION_TOKEN_${_i}"
+        [[ -n "${!_v:-}" ]] && _r2_st="${_r2_st}${!_v}"
+    done
+    [[ -n "${_r2_st}" ]] && export R2_SESSION_TOKEN="${_r2_st}"
+fi
+
 # Scoped R2 temp creds (minted via the temp-access-credentials API) carry a
 # session token; s5cmd's `[r2]` profile needs it written alongside the key/secret
 # or every R2 op 403s. Permanent creds leave R2_SESSION_TOKEN unset → no-op, so
