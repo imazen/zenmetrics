@@ -157,3 +157,29 @@ Inner loop (to build):
    already content-predictable); no separate baking needed.
 4. **avif**: has real 420/422/444 → the committed IDCT feature applies there as a
    subsampling knob-rule (unlike webp). Repeat the separability + per-knob analysis.
+
+## zenpicker codec router (design, 2026-06-29)
+
+Route an encode to the best CODEC FAMILY (jpeg/webp/jxl/avif/png) given four inputs:
+- **format allowlist** — `AllowedFamilies` (exists in zenpicker).
+- **target quality** — zq or ssim2, engineered into the features (`zq_norm`) so the
+  meta-model is quality-conditioned (families win at different q: avif/jxl aggressive,
+  jpeg/webp high-q).
+- **resource budget** — `EncodeBudget` + a per-family encode-cost estimate.
+- **mode** — `EncodeMode {Realtime, Queue}` (BUILT, zenpredict): realtime → prefer fast
+  codecs + OneShot; queue → all families + multi-shot/offline.
+
+Logic: `argmin(meta_model, features+zq)` over `allowlist ∩ viability(mode, budget,
+per_family_est_ms)` — the viability mask drops families too slow for the budget/mode
+(realtime masks avif/jxl when `max_ms` is tight). The chosen family then runs its
+per-codec picker + the multi-shot loop (`mode.strategy()`).
+
+Data EXISTS: the canonical per-codec parquets (`s3://zentrain/canonical/2026-06-27/`)
+carry per-family RD (zensim/ssim2 + bytes) + `encode_ms` + 372 features. Join across
+families → label = best family per (image, target-quality); `encode_ms` → the per-family
+cost model. So the meta-router is trainable (zq-conditioned, like the per-codec pickers).
+
+Build: (a) `viable_families(allowlist, mode, budget, per_family_est_ms)` mask + enhanced
+`MetaPicker::pick` (structural, pure/testable, no data); (b) join the canonical parquets
+→ meta-router training data; (c) train the zq-conditioned meta-model + bake (supersedes
+the current allowlist+features-only `MetaPicker`).
