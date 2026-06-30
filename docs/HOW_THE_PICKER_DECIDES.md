@@ -73,7 +73,8 @@ on the confound-corrected data:
 |---|---|---|
 | image-blind always-JXL | **30%** | 82% |
 | image-blind always-AVIF | 22% | 58% |
-| **image-aware linear projection** | **3.85%** | **14%** |
+| image-aware linear projection (per-family) | 3.85% | 14% |
+| **image-aware pairwise discriminants — SHIPPED** | **3.55%** | **12%** |
 | a full neural net (MLP) | ~4% | ~11% |
 | *(2–3 trial encodes — ruled out, multi-shot)* | *0%* | *0%* |
 
@@ -90,9 +91,11 @@ target quality):
 
 Read it as: **big images → AVIF; tiny images → WebP when quality is low, JXL when it's high; the
 middle is AVIF/JXL.** A fixed order can't express that, which is why it leaves 22–30% on the table.
-The linear projection captures it for ~4%, with weights you can read — every codec's bytes scale
-with size + target quality; the *differentiators* are `info_weight` (texture/entropy),
-`uniformity`, and `max_dim`. A 27 KB MLP buys nothing over the linear projection. One-shot
+The **shipped** router — 6 pairwise linear discriminants + round-robin — captures it at 3.55%, with
+readable per-pair boundaries; the size-dependence is isolated to the **jxl-vs-avif** pair (the other
+five are pure content), so dims aren't smeared across all weights. (The per-family linear projection
+was the first cut at 3.85%; the pairwise variant refines it and disentangles size.) A 27 KB MLP buys
+nothing over it. One-shot
 throughout (trial-encoding is off the table — "one shot is mandatory").
 
 ---
@@ -128,18 +131,25 @@ Everything in §4 is measured on this corrected data.
 - **Capability + budget + lossy/lossless** (§1–3) — pure rules, in `zenpicker` today.
 - **Fixed-prior order** (`zenpicker::family_rule`) — the no-features fallback / audit path;
   data-confirmed.
-- **Image-aware linear projection** (§4) — validated at 3.85%; **being baked as the lossy router**
-  (replacing the MLP with the interpretable linear projection on corrected data, via the existing
-  `zenpredict` bake path — `route()` already consumes a per-family-score router through
-  `RouteDecision::resolve`).
+- **Image-aware pairwise-discriminant lossy router — SHIPPED** (§4). zenanalyze `cef8b94c`: 6
+  pairwise linear discriminants + round-robin (`zenpicker::route::pairwise_round_robin`), one-shot
+  3.55%, replacing the MLP. A standard 1-layer identity ZNPR (102→6 raw margins) baked via the
+  existing `zenpredict` path — **no bake-format change**; the sigmoid + round-robin live in route.rs.
+  Baked **f32** (not i8 — i8 quant flips the near-boundary jxl:avif margin; the f32 `.bin` is 6.8 KB).
+  `route()` feeds the 6 margins through the round-robin into `RouteDecision::resolve`.
 
-Optional later (not required for the above): **quality-targeted sampling** — encode each codec to a
-common achieved-quality grid instead of a shared `q`, to extend clean comparison past ~zq88 (today
-near-lossless targets route to the lossless side, which is correct anyway). Not a blocker — the
-statistical correction above already gives a trustworthy order without it.
+A larger object is validated but **not** shipped: a per-codec **performance model** — (zenanalyze
+source features + quality setting + knobs) → bytes (R²=0.99) / quality (R²=0.98) / encode_ms
+(R²=0.98) — which could *subsume* the picker (family + knob pick + budget gate as argmin over
+predicted RD). The family picker shipped first; the performance model is the follow-on
+(`scripts/picker/perf_model_prototype.py`).
+
+Optional later: **quality-targeted sampling** — encode each codec to a common achieved-quality grid
+instead of a shared `q`, to extend clean comparison past ~zq88. Not a blocker — the statistical
+correction above already gives a trustworthy order without it.
 
 ---
 
-*Analysis: `scripts/picker/{avif_speed_correct,corrected_ranking,linear_projection_order,export_projection}.py`,
-`picker_data.py`, `check_quality_coverage.py`. Projection weights + provenance:
+*Analysis: `scripts/picker/{avif_speed_correct,corrected_ranking,linear_projection_order,pairwise_discriminants,export_projection,dims_confound,perf_model_prototype}.py`,
+`picker_data.py`, `check_quality_coverage.py`. Shipped router: zenanalyze `cef8b94c`. Projection weights + provenance:
 [`benchmarks/picker_projection_2026-06-30.pointer.md`](../benchmarks/picker_projection_2026-06-30.pointer.md).*
