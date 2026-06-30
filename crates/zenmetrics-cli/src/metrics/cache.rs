@@ -309,17 +309,12 @@ impl MetricCache {
                     None,
                 )
                 .map(|v| vec![("iwssim_gpu", v)]),
-            #[cfg(feature = "gpu-iwssim")]
-            MetricKind::Iwssim => self
-                .compute_umbrella(
-                    zenmetrics_api::MetricKind::Iwssim,
-                    reference,
-                    distorted,
-                    None,
-                )
-                .map(|v| vec![(zenmetrics_api::iwssim::IWSSIM_COLUMN_NAME, v)]),
+            // `cvvdp-gpu` = GPU cvvdp (the prior bare-`Cvvdp` cache arm).
+            // The unsuffixed `Cvvdp`/`Iwssim` are now the native-CPU ports
+            // and have no device-pool pressure — they fall through to the
+            // `_` arm below (uncached `run_metric` → `Backend::Cpu`).
             #[cfg(feature = "gpu-cvvdp")]
-            MetricKind::Cvvdp => self
+            MetricKind::CvvdpGpu => self
                 .compute_umbrella(
                     zenmetrics_api::MetricKind::Cvvdp,
                     reference,

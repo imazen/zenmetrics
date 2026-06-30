@@ -17,6 +17,49 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+## zenmetrics-cli
+
+### Changed
+
+- **`cvvdp` / `iwssim` metric registry now follows the unsuffixed=CPU /
+  `-gpu`=GPU convention — fixes a deceptive `list-metrics` backend label.**
+  Previously `--metric cvvdp` and `--metric iwssim` were labelled
+  `backend=GPU, requires_gpu=yes` even though both have in-tree native SIMD
+  CPU ports, and `iwssim` was a literal duplicate of `iwssim-gpu`. Now they
+  match the `ssim2`/`ssim2-gpu`, `dssim`/`dssim-gpu`, `zensim`/`zensim-gpu`
+  pattern (this change; final hash assigned at merge):
+  - `--metric cvvdp` → the native-CPU `cvvdp` port (`Backend::Cpu`,
+    `requires_gpu=no`); emits the distinct CPU column `cvvdp_cpu_imazen_v*`.
+  - `--metric cvvdp-gpu` → **new** GPU variant inheriting the prior `cvvdp`
+    behaviour (GPU dispatch, the `score-pairs` `CvvdpBatchScorer`
+    instance-reuse path, the versioned GPU column `cvvdp_imazen_v*`).
+  - `--metric iwssim` → the native-CPU `iwssim` port (`requires_gpu=no`);
+    emits `iwssim_cpu_imazen_v*`. `--metric iwssim-gpu` unchanged (GPU).
+  - **Behaviour change for GPU users:** the unsuffixed `cvvdp`/`iwssim`
+    default backend flips GPU→CPU. Scripts/sweeps that ran `--metric cvvdp`
+    or `--metric iwssim` expecting GPU must switch to `cvvdp-gpu` /
+    `iwssim-gpu`. In-repo GPU callers were repointed (`scripts/sweep/`
+    backfill workers + README, `scripts/hdr/hdr_cvvdp_faithful_smoke.sh`,
+    `scripts/phase8i_poisoned_cache_repro.py`,
+    `docs/sweep_infra_v2_methodology_2026-05-18.md`).
+  - The pure GPU-then-CPU failover the unsuffixed `cvvdp`/`iwssim` previously
+    did in `run_metric` is removed: `cvvdp` is CPU-only (errors clearly
+    without `cpu-cvvdp`), `cvvdp-gpu` is GPU-only (errors without
+    `gpu-cvvdp`); no silent mis-dispatch. The `sweep/hdr.rs` `requires_gpu()`
+    workaround for the cvvdp lie is removed now that the label is honest.
+
+## zenmetrics-api
+
+### Added
+
+- **`zenmetrics_api::cvvdp_cpu` / `iwssim_cpu` re-exports** (this change; final hash assigned at merge) —
+  expose the in-tree native-CPU `cvvdp` / `iwssim` crates (gated on
+  `cpu-cvvdp` / `cpu-iwssim`) so downstream code can reach their distinct
+  CPU column-name constants (`cvvdp_cpu_imazen_v*` / `iwssim_cpu_imazen_v*`)
+  without a direct crate dep — mirroring the existing `cvvdp`/`iwssim`
+  (GPU) re-exports. Leading-`::` paths disambiguate the extern CPU crate
+  from the GPU re-export alias.
+
 ## Workspace
 
 ### Fixed

@@ -39,9 +39,9 @@ assert() { # desc actual op bound
 }
 
 # GPU presence gate — loud, not silent (this is a manual harness).
-if ! "$BIN" score --metric cvvdp --hdr --gpu-runtime "$GPU" \
+if ! "$BIN" score --metric cvvdp-gpu --hdr --gpu-runtime "$GPU" \
      --reference "$UHDR_JPEG" --distorted "$UHDR_JPEG" >/dev/null 2>&1; then
-  echo "SKIPPED: cvvdp --hdr did not run — needs a gpu-cvvdp build + a working $GPU GPU."
+  echo "SKIPPED: cvvdp-gpu --hdr did not run — needs a gpu-cvvdp build + a working $GPU GPU."
   echo "         (build with --features gpu-cvvdp,gpu-cuda,hdr; see the header.)"
   exit 2
 fi

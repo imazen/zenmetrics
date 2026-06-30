@@ -238,9 +238,10 @@ Repro path:
    the cvvdp `cells_failed_oom` list above (specifically the
    `(gpu_full, 65536)` and `(gpu_strip_pair, 65536)` entries).
 2. Parity sweep invokes
-   `zenmetrics score --metric cvvdp --reference REF --distorted DIST
+   `zenmetrics score --metric cvvdp-gpu --reference REF --distorted DIST
    --gpu-runtime cuda` *without* `--use-orchestrator` or
-   `--orchestrator-cache`.
+   `--orchestrator-cache`. (Unsuffixed `--metric cvvdp` is the native-CPU
+   port; the GPU path this doc analyses is `cvvdp-gpu`.)
 3. Post Phase 7.7.1 (`150675077`), `--use-orchestrator` is the **default**;
    the legacy column thus goes through the orchestrator on the
    user-default cache.

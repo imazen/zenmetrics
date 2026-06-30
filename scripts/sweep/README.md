@@ -173,7 +173,7 @@ s5cmd --profile r2 --endpoint-url $R2_ENDPOINT cp \
 
 # 4. SMOKE: ONE box, SKIP_CLAIMS=1, watch it produce 1 sidecar
 SKIP_CLAIMS=1 ./scripts/sweep/launch_backfill.sh \
-    --metric cvvdp \
+    --metric cvvdp-gpu \
     --run-id <YYYY-MM-DD-NICK> \
     --chunks s3://coefficient/jobs/<YYYY-MM-DD-NICK>/chunks.jsonl \
     --docker ghcr.io/imazen/zenmetrics-sweep:v27 \
@@ -186,7 +186,7 @@ watch -n 60 's5cmd --profile r2 --endpoint-url $R2_ENDPOINT ls s3://zentrain/<RU
 
 # 6. When the smoke produces sidecars at a healthy rate, FANOUT
 ./scripts/sweep/launch_backfill.sh \
-    --metric cvvdp \
+    --metric cvvdp-gpu \
     --run-id <YYYY-MM-DD-NICK> \
     --chunks s3://coefficient/jobs/<YYYY-MM-DD-NICK>/chunks.jsonl \
     --docker ghcr.io/imazen/zenmetrics-sweep:v27 \
@@ -251,7 +251,7 @@ per-metric bash workers (`omni_backfill_chunk_worker.sh`,
 
 | File | Used by | Status |
 |---|---|---|
-| `metric_backfill_chunk_worker.sh` | single-metric backfills (`--metric iwssim/ssim2/cvvdp/…`), driven by `launch_backfill.sh` | ✅ canonical |
+| `metric_backfill_chunk_worker.sh` | single-metric backfills (GPU forms: `--metric iwssim-gpu/ssim2-gpu/cvvdp-gpu/…`; unsuffixed `cvvdp`/`iwssim` are the native-CPU ports), driven by `launch_backfill.sh` | ✅ canonical |
 
 ### Launchers
 

@@ -88,12 +88,12 @@ For new backfills, replace the per-metric scripts as follows:
 
 | Old script | New invocation |
 |---|---|
-| `scripts/sweep/iwssim_backfill_chunk_worker.sh` | `scripts/sweep/metric_backfill_chunk_worker.sh --metric iwssim` |
-| `scripts/sweep/ssim2_backfill_chunk_worker.sh` | `scripts/sweep/metric_backfill_chunk_worker.sh --metric ssim2` |
-| `scripts/sweep/cvvdp_backfill_chunk_worker.sh` (single-impl mode) | `scripts/sweep/metric_backfill_chunk_worker.sh --metric cvvdp` |
+| `scripts/sweep/iwssim_backfill_chunk_worker.sh` | `scripts/sweep/metric_backfill_chunk_worker.sh --metric iwssim-gpu` |
+| `scripts/sweep/ssim2_backfill_chunk_worker.sh` | `scripts/sweep/metric_backfill_chunk_worker.sh --metric ssim2-gpu` |
+| `scripts/sweep/cvvdp_backfill_chunk_worker.sh` (single-impl mode) | `scripts/sweep/metric_backfill_chunk_worker.sh --metric cvvdp-gpu` |
 | `scripts/sweep/cvvdp_backfill_chunk_worker.sh` (dual-impl with pycvvdp) | **unchanged** (two-scorer flow, not in v2 scope) |
-| `scripts/sweep/iwssim_backfill/launch.sh` | `scripts/sweep/launch_backfill.sh --metric iwssim ...` |
-| `scripts/sweep/cvvdp_backfill/launch_imazen.sh` | `scripts/sweep/launch_backfill.sh --metric cvvdp ...` |
+| `scripts/sweep/iwssim_backfill/launch.sh` | `scripts/sweep/launch_backfill.sh --metric iwssim-gpu ...` |
+| `scripts/sweep/cvvdp_backfill/launch_imazen.sh` | `scripts/sweep/launch_backfill.sh --metric cvvdp-gpu ...` |
 | `scripts/sweep/cvvdp_backfill/launch.sh` (dual-impl) | **unchanged** (dual-impl flow, not in v2 scope) |
 | `/tmp/cvvdp-resume/run_destroy_*.sh` | `zenfleet-vastai destroy --label-prefix <run-id>` |
 | Auto-destroy heredoc | `zenfleet-vastai watch --label-prefix <run-id> --target-sidecars N --r2-prefix s3://...` |

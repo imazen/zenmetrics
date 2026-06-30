@@ -383,7 +383,7 @@ Skeleton only.
 4. Merge parity tests: CPU-parity gate + Python-piq gate in one CI.
 5. Pick a release cadence — fusion forces co-release of every
    IW-SSIM numerics change and every zensim feature-pipeline change.
-6. Update `zenmetrics-cli` `score-pairs --metric iwssim` to dispatch
+6. Update `zenmetrics-cli` `score-pairs --metric iwssim-gpu` to dispatch
    to the fused crate; deprecate standalone iwssim-gpu over one release.
 
 Effort: 2-4 weeks including sidecar schema migration + downstream

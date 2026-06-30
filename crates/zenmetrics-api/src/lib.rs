@@ -121,6 +121,18 @@ pub use context::MetricContext;
 #[cfg(feature = "cvvdp")]
 pub use cvvdp_gpu as cvvdp;
 
+/// Re-export of the in-tree native-CPU [`cvvdp`](https://docs.rs/cvvdp)
+/// crate (when the `cpu-cvvdp` feature is enabled). Distinct from the
+/// GPU [`cvvdp`](crate::cvvdp) (= `cvvdp_gpu`) re-export above so callers
+/// can reach the CPU port's public constants (e.g. its distinct
+/// `CVVDP_COLUMN_NAME = cvvdp_cpu_imazen_v*`) without a direct crate dep.
+//
+// Leading `::` forces the EXTERN crate `cvvdp` (the in-tree CPU port),
+// never the local `pub use cvvdp_gpu as cvvdp` re-export above — both
+// names can be live in a build with `cvvdp` + `cpu-cvvdp` together.
+#[cfg(feature = "cpu-cvvdp")]
+pub use ::cvvdp as cvvdp_cpu;
+
 /// Re-export of the underlying [`butteraugli_gpu`] crate (when the
 /// `butter` feature is enabled).
 #[cfg(feature = "butter")]
@@ -140,6 +152,17 @@ pub use dssim_gpu as dssim;
 /// feature is enabled).
 #[cfg(feature = "iwssim")]
 pub use iwssim_gpu as iwssim;
+
+/// Re-export of the in-tree native-CPU [`iwssim`](https://docs.rs/iwssim)
+/// crate (when the `cpu-iwssim` feature is enabled). Distinct from the
+/// GPU [`iwssim`](crate::iwssim) (= `iwssim_gpu`) re-export above so
+/// callers can reach the CPU port's public constants (e.g. its distinct
+/// `IWSSIM_COLUMN_NAME = iwssim_cpu_imazen_v*`) without a direct crate dep.
+//
+// Leading `::` forces the EXTERN crate `iwssim` (the in-tree CPU port),
+// never the local `pub use iwssim_gpu as iwssim` re-export above.
+#[cfg(feature = "cpu-iwssim")]
+pub use ::iwssim as iwssim_cpu;
 
 /// Re-export of the underlying [`zensim_gpu`] crate (when the `zensim`
 /// feature is enabled).

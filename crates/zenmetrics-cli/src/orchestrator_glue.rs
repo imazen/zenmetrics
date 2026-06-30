@@ -77,9 +77,16 @@ impl OrchestratorMetricSpec {
                 kind: ApiMetricKind::Dssim,
                 prefer_cpu: false,
             },
-            CliMetricKind::IwssimGpu | CliMetricKind::Iwssim => Self {
+            // Unsuffixed `iwssim` = the native-CPU port (in-tree `iwssim`
+            // crate), matching the unsuffixed=CPU convention; `iwssim-gpu`
+            // is the GPU backend.
+            CliMetricKind::Iwssim => Self {
                 kind: ApiMetricKind::Iwssim,
-                prefer_cpu: false, // iwssim has no CPU reference
+                prefer_cpu: true,
+            },
+            CliMetricKind::IwssimGpu => Self {
+                kind: ApiMetricKind::Iwssim,
+                prefer_cpu: false,
             },
             CliMetricKind::Zensim => Self {
                 kind: ApiMetricKind::Zensim,
@@ -89,7 +96,12 @@ impl OrchestratorMetricSpec {
                 kind: ApiMetricKind::Zensim,
                 prefer_cpu: false,
             },
+            // Unsuffixed `cvvdp` = the native-CPU port; `cvvdp-gpu` is GPU.
             CliMetricKind::Cvvdp => Self {
+                kind: ApiMetricKind::Cvvdp,
+                prefer_cpu: true,
+            },
+            CliMetricKind::CvvdpGpu => Self {
                 kind: ApiMetricKind::Cvvdp,
                 prefer_cpu: false,
             },
@@ -244,15 +256,11 @@ pub fn validate_cpu_variant_built_in(
             "orchestrator-cpu-zensim",
             cfg!(feature = "orchestrator-cpu-zensim"),
         ),
-        ApiMetricKind::Iwssim => {
-            // Iwssim has no CPU reference at all — surface an honest
-            // error instead of pointing the user at a feature flag
-            // that wouldn't help.
-            return Err(OrchestratorBuildError::CpuVariantUnavailable {
-                metric: "iwssim",
-                required_feature: "<none — iwssim CPU is not available upstream>",
-            });
-        }
+        ApiMetricKind::Iwssim => (
+            "iwssim",
+            "orchestrator-cpu-iwssim",
+            cfg!(feature = "orchestrator-cpu-iwssim"),
+        ),
     };
     if enabled {
         Ok(())
@@ -310,8 +318,12 @@ mod tests {
         assert!(!OrchestratorMetricSpec::from_cli(CliMetricKind::Ssim2Gpu).prefer_cpu);
         assert!(OrchestratorMetricSpec::from_cli(CliMetricKind::Zensim).prefer_cpu);
         assert!(!OrchestratorMetricSpec::from_cli(CliMetricKind::ZensimGpu).prefer_cpu);
-        assert!(!OrchestratorMetricSpec::from_cli(CliMetricKind::Cvvdp).prefer_cpu);
-        assert!(!OrchestratorMetricSpec::from_cli(CliMetricKind::Iwssim).prefer_cpu);
+        // Unsuffixed cvvdp / iwssim are now the CPU variants (native ports),
+        // matching the ssim2/dssim/zensim convention; the `-gpu` siblings
+        // keep the default GPU-first chooser behaviour.
+        assert!(OrchestratorMetricSpec::from_cli(CliMetricKind::Cvvdp).prefer_cpu);
+        assert!(!OrchestratorMetricSpec::from_cli(CliMetricKind::CvvdpGpu).prefer_cpu);
+        assert!(OrchestratorMetricSpec::from_cli(CliMetricKind::Iwssim).prefer_cpu);
         assert!(!OrchestratorMetricSpec::from_cli(CliMetricKind::IwssimGpu).prefer_cpu);
     }
 

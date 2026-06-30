@@ -51,7 +51,7 @@
 #
 #   echo '<one chunk JSON line>' | \
 #       metric_backfill_chunk_worker.sh \
-#           --metric iwssim \
+#           --metric iwssim-gpu \
 #           --zenmetrics-image ghcr.io/imazen/zenmetrics-sweep:0.6.4-iwssim-fixed-6227c1a
 #
 # OR (host binary, no docker):

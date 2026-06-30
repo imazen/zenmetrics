@@ -1047,8 +1047,9 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::IwssimGpu | MetricKind::Iwssim => Some((-0.001, 1.001, 1.0)),
         // Zensim: [0, ~100]; 100 = identical (similarity).
         MetricKind::Zensim | MetricKind::ZensimGpu => Some((-1.0, 110.0, 100.0)),
-        // CVVDP: JOD scale, [0, 10]; 10 = imperceptible (identical).
-        MetricKind::Cvvdp => Some((-0.5, 10.5, 10.0)),
+        // CVVDP: JOD scale, [0, 10]; 10 = imperceptible (identical). Same
+        // range for the CPU (`cvvdp`) and GPU (`cvvdp-gpu`) backends.
+        MetricKind::Cvvdp | MetricKind::CvvdpGpu => Some((-0.5, 10.5, 10.0)),
     }
 }
 
@@ -1232,22 +1233,22 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     // path recreates it on every row → fleet OOMs at 100-pair chunks
     // even with PARALLEL=1 + 16 GB RAM. Use the batched scorer for cvvdp
     // so the instance survives across pairs of matching dims.
-    if args.display_model.is_some() && args.metric != crate::metrics::MetricKind::Cvvdp {
+    if args.display_model.is_some() && args.metric != crate::metrics::MetricKind::CvvdpGpu {
         eprintln!(
-            "[score-pairs] warning: --display-model only affects cvvdp; ignored for {}",
+            "[score-pairs] warning: --display-model only affects cvvdp-gpu; ignored for {}",
             args.metric.name()
         );
     }
     // The cvvdp batched scorer lives in the `gpu-cvvdp`-gated module (per-pair
-    // GPU instance reuse). In a build WITHOUT gpu-cvvdp it doesn't exist; cvvdp
-    // then falls through to the loop's `run_metric` path, which (since C1) routes
-    // to the native SIMD CPU port via `Backend::Cpu` when `cpu-cvvdp` is built —
-    // so a CPU `sweep` build (the Hetzner / jobexec worker) scores cvvdp on CPU.
-    // Only when NEITHER backend is compiled do we reject cvvdp up front.
+    // GPU instance reuse) and serves the GPU `cvvdp-gpu` metric. The unsuffixed
+    // `cvvdp` is the native-CPU port — it never uses this scorer; it falls
+    // through to the loop's `run_metric` path → `Backend::Cpu` (the in-tree
+    // `cvvdp` crate) when `cpu-cvvdp` is built. `cvvdp-gpu` with `gpu-cvvdp`
+    // off, or `cvvdp` with `cpu-cvvdp` off, errors clearly in `run_metric`.
     #[cfg(feature = "gpu-cvvdp")]
     let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
     #[cfg(feature = "gpu-cvvdp")]
-    if args.metric == crate::metrics::MetricKind::Cvvdp {
+    if args.metric == crate::metrics::MetricKind::CvvdpGpu {
         // --hdr swaps in the HDR display target (peak + linear EOTF) so the
         // faithful linear-planes path in the loop reconstructs absolute nits.
         // Mirrors `batch --hdr`'s cvvdp construction.
@@ -1278,8 +1279,8 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     #[cfg(all(not(feature = "gpu-cvvdp"), not(feature = "cpu-cvvdp")))]
     if args.metric == crate::metrics::MetricKind::Cvvdp {
         return Err(
-            "cvvdp needs a backend: rebuild with `--features gpu-cvvdp` (GPU) or \
-             `--features cpu-cvvdp` (native SIMD CPU)"
+            "cvvdp needs a backend: rebuild with `--features cpu-cvvdp` for the \
+             native-CPU `cvvdp`, or `--features gpu-cvvdp` and use `--metric cvvdp-gpu`"
                 .into(),
         );
     }
@@ -1383,9 +1384,9 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         let faithful_hdr_result: Option<Result<Vec<f64>, Box<dyn std::error::Error>>> = None;
         #[cfg(feature = "hdr")]
         if hdr_mode {
-            // cvvdp faithful linear-planes (paired with DisplayTarget::hdr).
+            // cvvdp-gpu faithful linear-planes (paired with DisplayTarget::hdr).
             #[cfg(feature = "gpu-cvvdp")]
-            if args.metric == crate::metrics::MetricKind::Cvvdp
+            if args.metric == crate::metrics::MetricKind::CvvdpGpu
                 && let Some(scorer) = cvvdp_scorer.as_mut()
             {
                 faithful_hdr_result = Some((|| {
@@ -1455,7 +1456,12 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             Some((|| {
                 let r = hdr::decode_to_nits(&ref_path)?;
                 let d = hdr::decode_to_nits(&dist_path)?;
-                if args.metric == crate::metrics::MetricKind::Cvvdp {
+                // cvvdp (CPU and GPU) take peak-normalized sRGB; the rest go
+                // through the chosen `--hdr-transfer`.
+                if matches!(
+                    args.metric,
+                    crate::metrics::MetricKind::Cvvdp | crate::metrics::MetricKind::CvvdpGpu
+                ) {
                     Ok((hdr::to_cvvdp_rgb8(&r).0, hdr::to_cvvdp_rgb8(&d).0))
                 } else {
                     Ok((
@@ -1905,9 +1911,12 @@ fn cmd_score(
             print_score(args.output, args.metric, &rows);
             return Ok(());
         }
-        // Fallback (CPU metrics / hip): u8 path. cvvdp without a GPU gets its
+        // Fallback (CPU metrics / hip): u8 path. cvvdp (CPU and GPU) gets its
         // peak-normalized sRGB; the rest go through the chosen `--hdr-transfer`.
-        let (rr, dd) = if args.metric == metrics::MetricKind::Cvvdp {
+        let (rr, dd) = if matches!(
+            args.metric,
+            metrics::MetricKind::Cvvdp | metrics::MetricKind::CvvdpGpu
+        ) {
             (hdr::to_cvvdp_rgb8(&r).0, hdr::to_cvvdp_rgb8(&d).0)
         } else {
             (
@@ -2004,23 +2013,24 @@ fn cmd_batch(
     // integration left for a follow-up because zen decoders and CPU metrics
     // mix Send + non-Send internals in ways that need per-metric review.
 
-    if args.display_model.is_some() && args.metric != crate::metrics::MetricKind::Cvvdp {
+    if args.display_model.is_some() && args.metric != crate::metrics::MetricKind::CvvdpGpu {
         eprintln!(
-            "[batch] warning: --display-model only affects cvvdp; ignored for {}",
+            "[batch] warning: --display-model only affects cvvdp-gpu; ignored for {}",
             args.metric.name()
         );
     }
 
-    // cvvdp routes through the batched, display-aware scorer so that
+    // cvvdp-gpu routes through the batched, display-aware scorer so that
     // (a) the expensive `Cvvdp::new` instance survives across pairs of
     // matching dims, and (b) the `--display-model` viewing conditions
     // (photometry + geometry/PPD) actually flow into scoring. The
     // generic `run_metric` umbrella path is fixed to STANDARD_4K and
-    // cannot honour --display-model, so it is bypassed for cvvdp.
+    // cannot honour --display-model, so it is bypassed for cvvdp-gpu. The
+    // unsuffixed `cvvdp` (native-CPU port) uses the umbrella CPU path.
     #[cfg(feature = "gpu-cvvdp")]
     let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
     #[cfg(feature = "gpu-cvvdp")]
-    if args.metric == crate::metrics::MetricKind::Cvvdp {
+    if args.metric == crate::metrics::MetricKind::CvvdpGpu {
         // --hdr swaps in the HDR display target (peak + linear EOTF) so the
         // faithful linear-planes path in the loop reconstructs absolute nits.
         #[cfg(feature = "hdr")]
@@ -2059,11 +2069,11 @@ fn cmd_batch(
         let hdr_mode = args.hdr;
         #[cfg(not(feature = "hdr"))]
         let hdr_mode = false;
-        // Faithful HDR cvvdp: decode to nits → display-relative planes →
+        // Faithful HDR cvvdp-gpu: decode to nits → display-relative planes →
         // cvvdp's native linear-planes scorer (no u8 clamp). Bypasses the
         // Rgb8Image path entirely for this row.
         #[cfg(all(feature = "hdr", feature = "gpu-cvvdp"))]
-        if hdr_mode && args.metric == crate::metrics::MetricKind::Cvvdp {
+        if hdr_mode && args.metric == crate::metrics::MetricKind::CvvdpGpu {
             if let Some(scorer) = cvvdp_scorer.as_mut() {
                 let r = hdr::decode_to_nits(&ref_path)?;
                 let d = hdr::decode_to_nits(&dist_path)?;
@@ -2128,7 +2138,12 @@ fn cmd_batch(
             {
                 let r = hdr::decode_to_nits(&ref_path)?;
                 let d = hdr::decode_to_nits(&dist_path)?;
-                if args.metric == crate::metrics::MetricKind::Cvvdp {
+                // cvvdp (CPU and GPU) take peak-normalized sRGB; the rest go
+                // through the chosen `--hdr-transfer`.
+                if matches!(
+                    args.metric,
+                    crate::metrics::MetricKind::Cvvdp | crate::metrics::MetricKind::CvvdpGpu
+                ) {
                     (hdr::to_cvvdp_rgb8(&r).0, hdr::to_cvvdp_rgb8(&d).0)
                 } else {
                     (

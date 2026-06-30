@@ -240,6 +240,7 @@ orchestrator-cpu-ssim2 = ["zenmetrics-orchestrator?/cpu-ssim2", "orchestrator"]
 orchestrator-cpu-dssim = ["zenmetrics-orchestrator?/cpu-dssim", "orchestrator"]
 orchestrator-cpu-butter = ["zenmetrics-orchestrator?/cpu-butter", "orchestrator"]
 orchestrator-cpu-zensim = ["zenmetrics-orchestrator?/cpu-zensim", "orchestrator"]
+orchestrator-cpu-iwssim = ["zenmetrics-orchestrator?/cpu-iwssim", "orchestrator"]
 
 # `assemble` enables the `zenmetrics assemble` subcommand: the typed,
 # full-key corpus join that replaces the Python corpus-assembly builders

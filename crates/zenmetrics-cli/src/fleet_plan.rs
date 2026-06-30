@@ -203,7 +203,7 @@ fn metric_score_estimate(
     let _ = (width, height);
     match metric {
         #[cfg(feature = "gpu-cvvdp")]
-        MetricKind::Cvvdp => {
+        MetricKind::CvvdpGpu => {
             let r = zenmetrics_api::cvvdp::estimate_score_resources(width, height);
             Ok((r.vram_bytes as u64, r.time_ms))
         }
@@ -237,13 +237,16 @@ fn metric_score_estimate(
             Ok((vram as u64, time))
         }
         // CPU-only metric kinds have no GPU working set / device-time model.
+        // The unsuffixed `cvvdp` / `iwssim` are the native-CPU ports, so they
+        // belong here alongside ssim2/butteraugli/dssim/zensim.
         MetricKind::Ssim2
         | MetricKind::Butteraugli
         | MetricKind::Dssim
         | MetricKind::Zensim
-        | MetricKind::Iwssim => Err(format!(
+        | MetricKind::Iwssim
+        | MetricKind::Cvvdp => Err(format!(
             "metric '{metric:?}' is a CPU metric — fleet-plan models GPU score \
-             cost; pass a -gpu metric (e.g. ssim2-gpu, cvvdp, zensim-gpu)"
+             cost; pass a -gpu metric (e.g. ssim2-gpu, cvvdp-gpu, zensim-gpu)"
         )
         .into()),
         // GPU metric requested but its feature wasn't compiled in.

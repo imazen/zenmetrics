@@ -24,7 +24,7 @@
 # Flag-style invocation:
 #
 #   launch_backfill.sh \
-#       --metric iwssim \
+#       --metric iwssim-gpu \
 #       --run-id iwssim-backfill-2026-05-17 \
 #       --chunks s3://coefficient/jobs/iwssim-backfill-2026-05-17/chunks.jsonl \
 #       --max-dph 0.30 --n-boxes 30 --min-ram 8 --min-disk 20 \

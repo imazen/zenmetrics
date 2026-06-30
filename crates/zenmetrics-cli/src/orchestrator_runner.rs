@@ -163,6 +163,7 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::ZensimGpu => "zensim_gpu",
         CliMetricKind::Iwssim => "iwssim",
         CliMetricKind::Cvvdp => "cvvdp",
+        CliMetricKind::CvvdpGpu => "cvvdp",
         CliMetricKind::Butteraugli => "butteraugli_max",
         CliMetricKind::ButteraugliGpu => "butteraugli_max_gpu",
     }
@@ -246,6 +247,7 @@ pub fn rekey_orchestrator_columns(
         // below) so future readers see the contract.
         CliMetricKind::Iwssim => Vec::new(),
         CliMetricKind::Cvvdp
+        | CliMetricKind::CvvdpGpu
         | CliMetricKind::Ssim2Gpu
         | CliMetricKind::DssimGpu
         | CliMetricKind::ZensimGpu
@@ -586,6 +588,7 @@ mod tests {
         assert!(!metric_orchestrator_eligible(CliMetricKind::ButteraugliGpu));
         // Every other metric: orchestrator-eligible.
         assert!(metric_orchestrator_eligible(CliMetricKind::Cvvdp));
+        assert!(metric_orchestrator_eligible(CliMetricKind::CvvdpGpu));
         assert!(metric_orchestrator_eligible(CliMetricKind::Ssim2));
         assert!(metric_orchestrator_eligible(CliMetricKind::Ssim2Gpu));
         assert!(metric_orchestrator_eligible(CliMetricKind::Dssim));

@@ -185,7 +185,8 @@ impl IwssimConfig {
 /// Why not just `iwssim`: a future port may differ on numerics by
 /// 1e-3 or so without being wrong; a different column name documents
 /// that drift instead of pretending two implementations agree. The
-/// CLI flag (`--metric iwssim`) stays stable for users.
+/// CLI flag (`--metric iwssim-gpu`) stays stable for users (the
+/// unsuffixed `--metric iwssim` selects the native-CPU port).
 pub const IWSSIM_COLUMN_NAME: &str = match option_env!("IWSSIM_IMPL_TAG") {
     Some(tag) => tag,
     None => concat!(

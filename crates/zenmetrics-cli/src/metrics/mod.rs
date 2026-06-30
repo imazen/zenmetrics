@@ -16,8 +16,11 @@
 //! `match kind { ... }` to translate its [`MetricKind`] into the
 //! umbrella's `MetricKind` + per-metric default `MetricParams`. There is
 //! no per-metric `gpu` module any more; one [`run_gpu_via_umbrella`]
-//! helper handles ssim2/dssim/iwssim/zensim/cvvdp single-shot and butter
-//! max-norm scoring.
+//! helper handles the GPU variants (ssim2-gpu / dssim-gpu / iwssim-gpu /
+//! zensim-gpu / cvvdp-gpu single-shot and butter max-norm scoring). The
+//! unsuffixed `cvvdp` / `iwssim` are the native SIMD CPU ports (the
+//! `ssim2`/`dssim`/`zensim` unsuffixed=CPU convention), scored through
+//! `run_cpu_native_via_umbrella` / `Backend::Cpu`.
 //!
 //! Two typed-path escape hatches stay for the cases the opaque API does
 //! not cover today:
@@ -107,16 +110,30 @@ pub enum MetricKind {
     /// (dispatched through the `zenmetrics-api` umbrella).
     #[value(name = "zensim-gpu")]
     ZensimGpu,
-    /// ColorVideoVDP (still-image, JOD scale 0–10, 10 = imperceptible) via
-    /// the `cvvdp-gpu` crate (dispatched through the umbrella by default;
-    /// `score-pairs` uses the typed `CvvdpBatchScorer` for instance
-    /// reuse across pairs).
+    /// ColorVideoVDP (still-image, JOD scale 0–10, 10 = imperceptible) —
+    /// CPU implementation via the in-tree `cvvdp` crate (native SIMD port,
+    /// dispatched through `zenmetrics_api::cpu_dispatch` / `Backend::Cpu`).
+    /// This is the unsuffixed default, matching the `ssim2`/`dssim`/`zensim`
+    /// convention (unsuffixed = CPU); use `cvvdp-gpu` for the GPU backend.
+    /// Emits the CPU column name (`cvvdp_cpu_imazen_v*`), distinct from the
+    /// GPU column so sidecars don't collide.
     #[value(name = "cvvdp")]
     Cvvdp,
-    /// IW-SSIM (Information-Content Weighted SSIM, Wang & Li 2011) via
-    /// the `iwssim-gpu` crate. Score in `[0, 1]` where 1 = identical.
-    /// Requires `min(W, H) >= 176` per the paper's 5-level pyramid + 11×11
-    /// valid-mode SSIM stats constraint; smaller images return an error.
+    /// ColorVideoVDP (still-image, JOD scale 0–10, 10 = imperceptible) —
+    /// GPU implementation via the `cvvdp-gpu` crate (dispatched through the
+    /// umbrella by default; `score-pairs` uses the typed `CvvdpBatchScorer`
+    /// for instance reuse across pairs). Emits the versioned GPU column
+    /// (`cvvdp_imazen_v*`).
+    #[value(name = "cvvdp-gpu")]
+    CvvdpGpu,
+    /// IW-SSIM (Information-Content Weighted SSIM, Wang & Li 2011) — CPU
+    /// implementation via the in-tree `iwssim` crate (native SIMD port,
+    /// dispatched through `zenmetrics_api::cpu_dispatch` / `Backend::Cpu`).
+    /// Unsuffixed = CPU (the `ssim2`/`dssim`/`zensim` convention); use
+    /// `iwssim-gpu` for the GPU backend. Score in `[0, 1]` where 1 =
+    /// identical. Requires `min(W, H) >= 176` per the paper's 5-level
+    /// pyramid + 11×11 valid-mode SSIM stats constraint; smaller images
+    /// return an error. Emits the CPU column name (`iwssim_cpu_imazen_v*`).
     #[value(name = "iwssim")]
     Iwssim,
 }
@@ -134,6 +151,7 @@ impl MetricKind {
             MetricKind::Zensim,
             MetricKind::ZensimGpu,
             MetricKind::Cvvdp,
+            MetricKind::CvvdpGpu,
             MetricKind::Iwssim,
         ]
     }
@@ -150,6 +168,7 @@ impl MetricKind {
             MetricKind::Zensim => "zensim",
             MetricKind::ZensimGpu => "zensim-gpu",
             MetricKind::Cvvdp => "cvvdp",
+            MetricKind::CvvdpGpu => "cvvdp-gpu",
             MetricKind::Iwssim => "iwssim",
         }
     }
@@ -161,8 +180,10 @@ impl MetricKind {
             | MetricKind::DssimGpu
             | MetricKind::IwssimGpu
             | MetricKind::ZensimGpu
-            | MetricKind::Cvvdp
-            | MetricKind::Iwssim => "GPU",
+            | MetricKind::CvvdpGpu => "GPU",
+            // Unsuffixed metrics (incl. cvvdp / iwssim, which have in-tree
+            // native SIMD CPU ports) are the CPU backend — matching the
+            // `ssim2`/`dssim`/`zensim` unsuffixed=CPU convention.
             _ => "CPU",
         }
     }
@@ -175,8 +196,7 @@ impl MetricKind {
                 | MetricKind::DssimGpu
                 | MetricKind::IwssimGpu
                 | MetricKind::ZensimGpu
-                | MetricKind::Cvvdp
-                | MetricKind::Iwssim
+                | MetricKind::CvvdpGpu
         )
     }
 
@@ -199,40 +219,55 @@ impl MetricKind {
             MetricKind::IwssimGpu => &["iwssim_gpu"],
             MetricKind::Zensim => &["zensim"],
             MetricKind::ZensimGpu => &["zensim_gpu"],
-            MetricKind::Cvvdp => CVVDP_COLUMNS,
-            MetricKind::Iwssim => IWSSIM_COLUMNS,
+            MetricKind::Cvvdp => CVVDP_CPU_COLUMNS,
+            MetricKind::CvvdpGpu => CVVDP_GPU_COLUMNS,
+            MetricKind::Iwssim => IWSSIM_CPU_COLUMNS,
         }
     }
 }
 
-// Versioned cvvdp column name. With the `gpu-cvvdp` feature enabled,
-// pulls the per-implementation tag from
-// [`zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME`] (defaults to
-// `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`; overridable at build time
-// via `CVVDP_IMPL_TAG`). Without the feature, falls back to a bare
-// `"cvvdp"` so callers that list metric names without invoking the
+// Versioned **GPU** cvvdp column name (used by `MetricKind::CvvdpGpu`).
+// With the `gpu-cvvdp` feature enabled, pulls the per-implementation tag
+// from [`zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME`] (the `cvvdp-gpu` crate;
+// defaults to `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`; overridable at build
+// time via `CVVDP_IMPL_TAG`). Without the feature, falls back to a bare
+// `"cvvdp_gpu"` so callers that list metric names without invoking the
 // backend still see a usable identifier.
 //
 // Why versioned: parquet sidecars store cvvdp scores from multiple
 // implementations side-by-side (e.g. `cvvdp_pycvvdp_v054` for the
-// pycvvdp reference, `cvvdp_imazen_v0_0_1` for this crate's host
-// scalar path). A bare `cvvdp` column would collide on join. See the
-// PINNED TASK section in the repo-root `CLAUDE.md`.
+// pycvvdp reference, `cvvdp_imazen_v0_0_1` for the GPU crate, and
+// `cvvdp_cpu_imazen_v*` for the in-tree CPU port). A bare `cvvdp`
+// column would collide on join. See the PINNED TASK section in the
+// repo-root `CLAUDE.md`.
 #[cfg(feature = "gpu-cvvdp")]
-const CVVDP_COLUMNS: &[&str] = &[zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME];
+const CVVDP_GPU_COLUMNS: &[&str] = &[zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME];
 #[cfg(not(feature = "gpu-cvvdp"))]
-const CVVDP_COLUMNS: &[&str] = &["cvvdp"];
+const CVVDP_GPU_COLUMNS: &[&str] = &["cvvdp_gpu"];
 
-// Versioned iwssim column name — mirrors the cvvdp pattern. With the
-// `gpu-iwssim` feature on, pulls from `::iwssim_gpu::IWSSIM_COLUMN_NAME`
-// (default `iwssim_imazen_v<MAJOR>_<MINOR>_<PATCH>`, overridable at
-// build time via `IWSSIM_IMPL_TAG`). Without the feature, falls back
-// to a bare `iwssim` so callers listing metric names without the
-// backend still see a usable identifier.
-#[cfg(feature = "gpu-iwssim")]
-const IWSSIM_COLUMNS: &[&str] = &[zenmetrics_api::iwssim::IWSSIM_COLUMN_NAME];
-#[cfg(not(feature = "gpu-iwssim"))]
-const IWSSIM_COLUMNS: &[&str] = &["iwssim"];
+// Versioned **CPU** cvvdp column name (used by `MetricKind::Cvvdp`, the
+// unsuffixed default). With the `cpu-cvvdp` feature enabled, pulls from
+// [`zenmetrics_api::cvvdp_cpu::CVVDP_COLUMN_NAME`] (the in-tree `cvvdp`
+// crate; defaults to `cvvdp_cpu_imazen_v<MAJOR>_<MINOR>_<PATCH>`,
+// overridable via `CVVDP_CPU_IMPL_TAG`) — a DISTINCT namespace from the
+// GPU column so CPU and GPU cvvdp scores never collide in a joined
+// sidecar. Without the feature, falls back to a bare `"cvvdp"`.
+#[cfg(feature = "cpu-cvvdp")]
+const CVVDP_CPU_COLUMNS: &[&str] = &[zenmetrics_api::cvvdp_cpu::CVVDP_COLUMN_NAME];
+#[cfg(not(feature = "cpu-cvvdp"))]
+const CVVDP_CPU_COLUMNS: &[&str] = &["cvvdp"];
+
+// Versioned **CPU** iwssim column name (used by `MetricKind::Iwssim`, the
+// unsuffixed default) — mirrors the cpu-cvvdp pattern. With the
+// `cpu-iwssim` feature on, pulls from
+// [`zenmetrics_api::iwssim_cpu::IWSSIM_COLUMN_NAME`] (the in-tree `iwssim`
+// crate; default `iwssim_cpu_imazen_v<MAJOR>_<MINOR>_<PATCH>`, overridable
+// via `IWSSIM_CPU_IMPL_TAG`) — distinct from the GPU column. Without the
+// feature, falls back to a bare `"iwssim"`.
+#[cfg(feature = "cpu-iwssim")]
+const IWSSIM_CPU_COLUMNS: &[&str] = &[zenmetrics_api::iwssim_cpu::IWSSIM_COLUMN_NAME];
+#[cfg(not(feature = "cpu-iwssim"))]
+const IWSSIM_CPU_COLUMNS: &[&str] = &["iwssim"];
 
 /// CubeCL runtime selector for GPU metrics.
 ///
@@ -728,83 +763,45 @@ pub fn run_metric(
         #[cfg(not(feature = "gpu-zensim"))]
         MetricKind::ZensimGpu => Err(disabled_msg("zensim-gpu", "gpu-zensim")),
 
-        // One switch: GPU first (if built), native-CPU failover (if built).
-        #[cfg(all(feature = "gpu-cvvdp", feature = "cpu-cvvdp"))]
+        // Unsuffixed cvvdp = the native SIMD CPU port (the
+        // `ssim2`/`dssim`/`zensim` unsuffixed=CPU convention). Pure CPU
+        // path — no GPU fallback; the GPU backend is `cvvdp-gpu`. Errors
+        // clearly when `cpu-cvvdp` isn't compiled.
+        #[cfg(feature = "cpu-cvvdp")]
         MetricKind::Cvvdp => Ok(vec![(
-            CVVDP_COLUMNS[0],
-            match run_gpu_via_umbrella(
-                zenmetrics_api::MetricKind::Cvvdp,
-                reference,
-                distorted,
-                gpu_runtime,
-            ) {
-                Ok(v) => v,
-                Err(_) => run_cpu_native_via_umbrella(
-                    zenmetrics_api::MetricKind::Cvvdp,
-                    reference,
-                    distorted,
-                )?,
-            },
-        )]),
-        #[cfg(all(feature = "gpu-cvvdp", not(feature = "cpu-cvvdp")))]
-        MetricKind::Cvvdp => Ok(vec![(
-            CVVDP_COLUMNS[0],
-            run_gpu_via_umbrella(
-                zenmetrics_api::MetricKind::Cvvdp,
-                reference,
-                distorted,
-                gpu_runtime,
-            )?,
-        )]),
-        #[cfg(all(not(feature = "gpu-cvvdp"), feature = "cpu-cvvdp"))]
-        MetricKind::Cvvdp => Ok(vec![(
-            CVVDP_COLUMNS[0],
+            CVVDP_CPU_COLUMNS[0],
             run_cpu_native_via_umbrella(zenmetrics_api::MetricKind::Cvvdp, reference, distorted)?,
         )]),
-        #[cfg(all(not(feature = "gpu-cvvdp"), not(feature = "cpu-cvvdp")))]
-        MetricKind::Cvvdp => Err(disabled_msg(
-            "cvvdp",
-            "gpu-cvvdp` (GPU) or `cpu-cvvdp` (native SIMD CPU)",
-        )),
+        #[cfg(not(feature = "cpu-cvvdp"))]
+        MetricKind::Cvvdp => Err(disabled_msg("cvvdp", "cpu-cvvdp` (native SIMD CPU)")),
 
-        // One switch: GPU first (if built), native-CPU failover (if built).
-        #[cfg(all(feature = "gpu-iwssim", feature = "cpu-iwssim"))]
-        MetricKind::Iwssim => Ok(vec![(
-            IWSSIM_COLUMNS[0],
-            match run_gpu_via_umbrella(
-                zenmetrics_api::MetricKind::Iwssim,
-                reference,
-                distorted,
-                gpu_runtime,
-            ) {
-                Ok(v) => v,
-                Err(_) => run_cpu_native_via_umbrella(
-                    zenmetrics_api::MetricKind::Iwssim,
-                    reference,
-                    distorted,
-                )?,
-            },
-        )]),
-        #[cfg(all(feature = "gpu-iwssim", not(feature = "cpu-iwssim")))]
-        MetricKind::Iwssim => Ok(vec![(
-            IWSSIM_COLUMNS[0],
+        // `cvvdp-gpu` = the GPU implementation (the prior `cvvdp`
+        // behaviour). Pure GPU path through the umbrella; the
+        // `score-pairs` typed `CvvdpBatchScorer` path also keys on this
+        // variant. Errors clearly when `gpu-cvvdp` isn't compiled.
+        #[cfg(feature = "gpu-cvvdp")]
+        MetricKind::CvvdpGpu => Ok(vec![(
+            CVVDP_GPU_COLUMNS[0],
             run_gpu_via_umbrella(
-                zenmetrics_api::MetricKind::Iwssim,
+                zenmetrics_api::MetricKind::Cvvdp,
                 reference,
                 distorted,
                 gpu_runtime,
             )?,
         )]),
-        #[cfg(all(not(feature = "gpu-iwssim"), feature = "cpu-iwssim"))]
+        #[cfg(not(feature = "gpu-cvvdp"))]
+        MetricKind::CvvdpGpu => Err(disabled_msg("cvvdp-gpu", "gpu-cvvdp")),
+
+        // Unsuffixed iwssim = the native SIMD CPU port. Pure CPU path —
+        // the GPU backend is `iwssim-gpu`. Errors when `cpu-iwssim`
+        // isn't compiled.
+        #[cfg(feature = "cpu-iwssim")]
         MetricKind::Iwssim => Ok(vec![(
-            IWSSIM_COLUMNS[0],
+            IWSSIM_CPU_COLUMNS[0],
             run_cpu_native_via_umbrella(zenmetrics_api::MetricKind::Iwssim, reference, distorted)?,
         )]),
-        #[cfg(all(not(feature = "gpu-iwssim"), not(feature = "cpu-iwssim")))]
-        MetricKind::Iwssim => Err(disabled_msg(
-            "iwssim",
-            "gpu-iwssim` (GPU) or `cpu-iwssim` (native SIMD CPU)",
-        )),
+        #[cfg(not(feature = "cpu-iwssim"))]
+        MetricKind::Iwssim => Err(disabled_msg("iwssim", "cpu-iwssim` (native SIMD CPU)")),
     }
 }
 
@@ -1072,13 +1069,13 @@ mod tests {
     }
 
     #[test]
-    fn cvvdp_column_name_is_versioned_when_feature_on() {
-        let cols = MetricKind::Cvvdp.column_names();
+    fn cvvdp_gpu_column_name_is_versioned_when_feature_on() {
+        // `cvvdp-gpu` carries the GPU implementation tag so multiple cvvdp
+        // variants (GPU / CPU / pycvvdp) don't collide in joined parquet
+        // sidecars. The user-facing CLI flag (`--metric cvvdp-gpu`) stays
+        // stable.
+        let cols = MetricKind::CvvdpGpu.column_names();
         assert_eq!(cols.len(), 1);
-        // With `gpu-cvvdp` enabled, the column carries an
-        // implementation tag so multiple cvvdp variants don't
-        // collide in joined parquet sidecars. The user-facing CLI
-        // flag (`--metric cvvdp`) remains stable.
         #[cfg(feature = "gpu-cvvdp")]
         {
             assert!(
@@ -1086,22 +1083,74 @@ mod tests {
                     || std::env::var("CVVDP_IMPL_TAG")
                         .map(|t| cols[0] == t)
                         .unwrap_or(false),
-                "expected cvvdp column to start with cvvdp_imazen_v or match \
+                "expected cvvdp-gpu column to start with cvvdp_imazen_v or match \
                  CVVDP_IMPL_TAG override, got {:?}",
                 cols[0]
             );
         }
         #[cfg(not(feature = "gpu-cvvdp"))]
         {
-            assert_eq!(cols[0], "cvvdp");
+            assert_eq!(cols[0], "cvvdp_gpu");
         }
     }
 
     #[test]
-    fn cvvdp_cli_flag_name_is_stable() {
-        // User-facing identifier stays "cvvdp" regardless of which
-        // implementation is wired in — only the parquet column
-        // changes.
+    fn cvvdp_cpu_column_name_is_distinct_from_gpu() {
+        // The unsuffixed `cvvdp` (CPU) emits a DISTINCT column namespace
+        // (`cvvdp_cpu_imazen_v*`) from the GPU variant so CPU and GPU
+        // cvvdp scores never collide on a sidecar join.
+        let cols = MetricKind::Cvvdp.column_names();
+        assert_eq!(cols.len(), 1);
+        #[cfg(feature = "cpu-cvvdp")]
+        {
+            assert!(
+                cols[0].starts_with("cvvdp_cpu_imazen_v")
+                    || std::env::var("CVVDP_CPU_IMPL_TAG")
+                        .map(|t| cols[0] == t)
+                        .unwrap_or(false),
+                "expected cvvdp (CPU) column to start with cvvdp_cpu_imazen_v or \
+                 match CVVDP_CPU_IMPL_TAG override, got {:?}",
+                cols[0]
+            );
+        }
+        #[cfg(not(feature = "cpu-cvvdp"))]
+        {
+            assert_eq!(cols[0], "cvvdp");
+        }
+        // In any build where BOTH backends are compiled, the columns must
+        // differ — that is the whole point of the CPU/GPU split.
+        #[cfg(all(feature = "cpu-cvvdp", feature = "gpu-cvvdp"))]
+        {
+            assert_ne!(
+                MetricKind::Cvvdp.column_names()[0],
+                MetricKind::CvvdpGpu.column_names()[0],
+                "cvvdp (CPU) and cvvdp-gpu must emit distinct columns"
+            );
+        }
+    }
+
+    #[test]
+    fn cvvdp_cli_flag_names_are_stable() {
+        // User-facing identifiers stay stable regardless of which
+        // implementation is wired in — only the parquet column changes.
         assert_eq!(MetricKind::Cvvdp.name(), "cvvdp");
+        assert_eq!(MetricKind::CvvdpGpu.name(), "cvvdp-gpu");
+    }
+
+    /// The unsuffixed cvvdp / iwssim follow the `ssim2`/`dssim`/`zensim`
+    /// convention: backend == CPU, requires_gpu == false. Their `-gpu`
+    /// siblings are GPU / requires_gpu. This is the deceptive-label fix —
+    /// the registry must report the honest backend.
+    #[test]
+    fn unsuffixed_cvvdp_iwssim_are_cpu_gpu_siblings_require_gpu() {
+        assert_eq!(MetricKind::Cvvdp.backend(), "CPU");
+        assert!(!MetricKind::Cvvdp.requires_gpu());
+        assert_eq!(MetricKind::CvvdpGpu.backend(), "GPU");
+        assert!(MetricKind::CvvdpGpu.requires_gpu());
+
+        assert_eq!(MetricKind::Iwssim.backend(), "CPU");
+        assert!(!MetricKind::Iwssim.requires_gpu());
+        assert_eq!(MetricKind::IwssimGpu.backend(), "GPU");
+        assert!(MetricKind::IwssimGpu.requires_gpu());
     }
 }

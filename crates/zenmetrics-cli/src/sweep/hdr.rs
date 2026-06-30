@@ -423,16 +423,14 @@ fn umbrella_kind_and_backend(
                     pick another metric"
             .into());
     }
-    // cvvdp is flagged `requires_gpu`, but it has a native CPU port. When its
-    // GPU backend (`gpu-cvvdp`) is NOT compiled but the CPU port (`cpu-cvvdp`)
-    // is, score it on `Backend::Cpu` — `HdrScorer::new` → `build_hdr_metric`
-    // routes Cpu to `Metric::new_cpu_hdr` (native `cvvdp` crate via
-    // `cpu_dispatch`, NEVER cubecl-cpu), exactly like butter/ssim2/zensim. This
-    // makes `--metric cvvdp` work in a no-local-GPU `cpu-metrics` HDR sweep.
-    #[cfg(all(not(feature = "gpu-cvvdp"), feature = "cpu-cvvdp"))]
-    if matches!(metric, MetricKind::Cvvdp) {
-        return Ok((kind, zenmetrics_api::Backend::Cpu));
-    }
+    // The unsuffixed `cvvdp` / `iwssim` are now the native-CPU ports
+    // (`requires_gpu() == false`), so they fall into the `else` (CPU) branch
+    // below automatically — `HdrScorer::new` → `build_hdr_metric` routes
+    // `Backend::Cpu` to `Metric::new_cpu_hdr` (native `cvvdp`/`iwssim` crate
+    // via `cpu_dispatch`, NEVER cubecl-cpu), exactly like butter/ssim2/zensim.
+    // The earlier `requires_gpu()`-lies workaround for cvvdp is gone now that
+    // the backend label is honest. `cvvdp-gpu` / `iwssim-gpu` take the GPU
+    // branch.
     let backend = if metric.requires_gpu() {
         if matches!(runtime, GpuRuntime::Auto) {
             return Err(format!(
@@ -585,6 +583,12 @@ mod tests {
             knob_grid: crate::sweep::parse_knob_grid("").expect("empty grid parses"),
             plan: None,
             distort_cmd: None,
+            // Pre-existing test breakage on master e6e58bfd: SweepConfig gained
+            // `distort_jobs` but this literal was never updated, so the
+            // zenmetrics-cli test target did not compile. 1 = pipeline inactive
+            // (matches `jobs: 1` / `distort_cmd: None` below). Unrelated to the
+            // cvvdp/iwssim metric-registry change; added only to unblock tests.
+            distort_jobs: 1,
             metrics: vec![],
             gpu_runtime: GpuRuntime::Auto,
             output: std::path::PathBuf::from("/tmp/x.tsv"),
