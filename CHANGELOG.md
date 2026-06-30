@@ -254,6 +254,23 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **`sweep --distort-cmd … --distort-jobs N` runs a generation-ahead pipeline so
+  the GPU never waits on single-threaded CPU distortion generation** (`eda4d768`).
+  In `--distort-cmd` mode each source is decoded and its distorted variants are
+  produced by an external serve worker before scoring. With `--distort-jobs N`
+  (N>1), N serve workers (each pinned `KADIS_GEN_WORKERS=1`) decode + generate
+  ahead of the consumer into a bounded, ordered `Prefetch` buffer (window `2·N`,
+  so RAM stays bounded and back-pressure throttles producers); the image-major
+  scoring loop then takes each ready `(source, overrides)` by index instead of
+  decoding + generating inline. Generation is deterministically seeded per
+  `(ref_hash, dist_type, level)`, so pipelining can never change a score —
+  verified byte-identical zensim-gpu scores vs the serial path (0 mismatches),
+  at 6.8× throughput vs serial / 1.95× vs an in-worker process pool (48 imgs,
+  KADIS distortion types 1+19, RTX 5070). `--distort-jobs 1` (default) keeps the
+  original inline image-major path. Completes the consumer side of the pipeline:
+  an earlier WIP snapshot carried the `Prefetch` structs + producer spawn but the
+  loop still decoded inline, which would have dead-locked the bounded buffer (and
+  double-generated) under `--distort-jobs>1`.
 - **HDR is now default-on, and the CPU HDR path works without cubecl** (`63d6fca1`).
   The `hdr` feature was off-by-default, so prebuilt/fleet binaries silently lacked
   `--hdr` (HDR scoring had to run locally). `hdr` is now split into a default-on
