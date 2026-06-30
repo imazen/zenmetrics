@@ -71,6 +71,14 @@ cat > ~/.aws/credentials <<CREDS
 aws_access_key_id = ${R2_ACCESS_KEY_ID}
 aws_secret_access_key = ${R2_SECRET_ACCESS_KEY}
 CREDS
+# Scoped R2 temp creds (minted via the temp-access-credentials API) carry a
+# session token; s5cmd's `[r2]` profile needs it written alongside the key/secret
+# or every R2 op 403s. Permanent creds leave R2_SESSION_TOKEN unset → no-op, so
+# this is safe for both. Lets the fleet run on per-run scoped creds instead of the
+# root key (CLAUDE.md: never inject the root R2 key into a remote box).
+if [[ -n "${R2_SESSION_TOKEN:-}" ]]; then
+    echo "aws_session_token = ${R2_SESSION_TOKEN}" >> ~/.aws/credentials
+fi
 
 # CHUNKS_R2 explicit-or-derived from SWEEP_RUN_ID. CHUNKS_PATH is
 # the legacy bash var name; honour it too.
