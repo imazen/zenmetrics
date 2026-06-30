@@ -1,8 +1,24 @@
 # Cross-codec router models — 2026-06-30
 
 The 3 baked ZNPR router models for `zenpicker::MetaPicker::route` (lossy / lossless / auto-gate),
-plus the feature sidecar they were trained from. Binaries live in block storage (>30 KB each);
-this pointer is git-tracked.
+plus the feature sidecar they were trained from.
+
+## SHIPPED: i8, in-crate, wired (the final state)
+
+The f32 bakes (below, ~90 KB each) were repacked to **i8 via `zenpredict repack --dtype i8`**
+(the built-in calibrated quant) → **~27 KB each (<30 KB)** with **MEASURED 0 accuracy cost** on
+the real `.bin` (ground-truth via `zenpicker/examples/score_router.rs`):
+
+| router | f32 acc | i8 acc | i8 bytes |
+|---|---|---|---|
+| lossy | 75.72% | **75.72%** (Δ 0) | 27101 |
+| lossless | 88.37% | **88.37%** (Δ 0) | 26965 |
+| gate | 98.06% | **98.07%** (Δ +0.01) | 26759 |
+
+The i8 `.bin` are **committed into `zenpicker/benchmarks/zenpicker_router_{lossy,lossless,gate}_v0.1.bin`**
+and loaded by **`zenpicker::MetaPicker::default_routers()`** (std; `include_bytes!` + 16-aligned
+`AlignedModel<N>` + `OnceLock`). Verified end-to-end: `route_demo` + the `default_routers_load_and_route`
+unit test. The f32 bakes below are the pre-quant originals (kept in block storage for provenance).
 
 ## Block storage
 
