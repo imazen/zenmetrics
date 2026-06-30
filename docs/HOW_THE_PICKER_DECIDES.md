@@ -4,120 +4,142 @@ zenpicker answers one question: **given an image, a quality target, and which fo
 allowed, which codec family should encode it?** This doc is the human-readable version of what
 we found — the actual decision tree, what each choice costs, and how we got here.
 
-The headline: **choosing the family is mostly easy.** Two codecs never win and get dropped, one
-codec is the default, a quality threshold splits lossy from lossless, and a small size/detail
-rule handles the rest. No neural network required.
+The headline: **family choice is a short, auditable RULE, not a model** — and it does the sane
+thing for *any* subset of formats (one allowed, several, or none). Shipped as
+`zenpicker::family_rule`.
 
 ---
 
-## 1. The lossy decision tree (the intuitive form)
-
-Picking among the lossy codecs reduces to a tree whose **first question is image size**, then
-detail and chroma — readable straight off:
+## 1. The rule (what ships)
 
 ```
-                         ┌─ shorter side ≤ ~130 px ?  (is it a SMALL image?)
-                         │
-          ┌──────────────┴───────────────┐
-       YES (small)                     NO (medium / large)
-          │                                │
-   chroma noise?                     how much detail/texture? (laplacian variance)
-   ├─ clean      → WebP              ├─ flat / smooth
-   └─ noisy      → JXL              │   ├─ very flat        → AVIF
-                                    │   └─ a little texture → JXL
-                                    └─ detailed/busy        → JXL
+family_rule(image, target, allowed, budget):
+  1. lossless?  — caller asked, OR target quality ≥ ~96 (near-perfect → store exact)
+  2. viable     — allowed
+                  ∩ can REPRESENT the image   (capability — format-spec facts)
+                  ∩ FITS the time budget       (drop codecs too slow for the latency)
+  3. return the highest-priority viable codec:
+        lossy    : JXL > AVIF > WebP > JPEG > GIF
+        lossless : JXL > WebP > PNG > GIF
+     → None only if nothing allowed can encode it (e.g. lossy asked, only PNG allowed)
 ```
 
-In words:
+Verify it by reading the two preference lists + the capability table — no fitted thresholds (bar
+the one quality crossover), no black box.
 
-- **Small images (shorter side ≲ 130 px)** — thumbnails, icons, tiny crops — go to **WebP** when
-  the color is clean, **JXL** when there's chroma noise. WebP earns its keep here; it was built
-  for exactly this size class.
-- **Larger images** split on **detail**:
-  - **Flat / smooth** content (gradients, screenshots, low-texture photos) → **AVIF**, whose
-    intra prediction shines on smooth regions — *unless* there's a bit of texture, then **JXL**.
-  - **Detailed / busy** content (most photographs) → **JXL**, the generalist that wins whenever
-    there's real high-frequency content.
-- **JPEG is never the answer** for bytes-at-quality, and **PNG never wins** lossless. They stay
-  in the toolbox only for compatibility (legacy decoders, no-alpha targets) — not because they
-  ever beat the others.
+**Capability — obviously correct, from the format specs:**
 
-That's the whole content-dependent part. Everything else is a constant or a threshold.
+| the image needs… | can | cannot |
+|---|---|---|
+| alpha / transparency | png, webp, jxl, avif, gif | **jpeg** |
+| HDR / > 8-bit | jxl, avif, png(16) | jpeg, webp, gif |
+| a lossy encode | jpeg, webp, jxl, avif, gif | png |
+| a lossless encode | png, webp, jxl, gif | jpeg, avif |
 
----
-
-## 2. The other two decisions (even simpler)
-
-- **Lossy or lossless?** A threshold on the quality target. Below ~zq94 → lossy; above ~zq97 →
-  lossless; the 95–96 band is the only genuinely contested sliver. (Near-perfect quality is
-  cheaper to reach by storing it exactly than by pushing a lossy encoder to its limit.)
-- **Which lossless codec?** **Always JXL.** It's the smallest on 88% of images; WebP edges it on
-  the other 12% (costing ~2% if you don't bother checking); PNG never wins.
+**The priority is a codec-reality PRIOR, deliberately not fit from our sweep.** JXL and AVIF are
+the modern high-efficiency codecs (JXL first; **AVIF second** — AV1 intra); WebP is the older but
+ubiquitous fallback; JPEG/PNG are compatibility floors; GIF is niche. We anchor on the prior
+because the sweep currently mis-ranks WebP *above* AVIF — an artifact, not reality: AVIF was
+encoded only to speed 4 (never the RD-optimal 0–2), the comparison is trapped in the low-quality
+zone where AVIF's lead is thinnest, and the corpus skews small. A reader knows AVIF > WebP for
+lossy, so the rule reflects that — until the data earns the right to refine it (§4).
 
 ---
 
-## 3. What each rung costs (so you can pick your complexity)
+## 2. Budget — the four modes
 
-Measured as **extra bytes vs. the perfect oracle**, one-shot (no trial encodes), on the
-unbiased, fairly-sampled data:
+Codecs differ wildly in encode time: JXL/AVIF are slow (AVIF especially at the slow speeds that
+give it good RD), WebP/JPEG/PNG are fast. The mode sets a latency ceiling and the rule drops any
+codec whose own per-image encode estimate exceeds it (`AllowedFamilies::viable`):
+
+- **RealtimeFastest** — tight budget → JXL/AVIF too slow → falls through to WebP/JPEG.
+- **RealtimeBalanced** — looser → JXL/AVIF may fit at mid effort.
+- **QueuedBalanced** — no latency gate → best-RD survivor (usually JXL).
+- **QueuedAggressive** — no gate, max effort → best-RD, with headroom for an offline verify.
+
+Same priority + the budget gate = "the best codec by priority that's fast enough." The codec
+supplies its own time estimate; the picker never guesses. And because a *fast* encode hurts RD
+(the same speed-4 effect that hobbled AVIF), slow codecs dropping out under a tight budget is the
+correct call, not a regret.
+
+---
+
+## 3. Lossy vs lossless
+
+One threshold on the quality target (`LOSSLESS_QUALITY ≈ 96`): below ~zq94 → lossy, above ~zq97 →
+lossless, a thin contested 95–96 band. Near-perfect quality is cheaper stored exactly than
+squeezed out of a lossy encoder. **JPEG never wins bytes-at-quality and PNG never wins lossless** —
+they're in the lists only for compatibility, last among the viable.
+
+---
+
+## 4. What content-adaptation would buy (deferred — §1 is what ships)
+
+The §1 rule is content-*blind* (always JXL first among the viable). A picker exists to tame the
+tail — the images where WebP/AVIF beat JXL one-shot. Measured as **extra bytes vs the perfect
+oracle**, one-shot, on the corrected data:
 
 | approach | extra bytes (avg) | worst 10% | size |
 |---|---|---|---|
-| just always use JXL | **18%** | 48% | a constant |
-| the 6-leaf tree above | 8.8% | 24% | a few `if`s |
+| always JXL (no picker) | **18%** | 48% | a constant |
+| a 6-leaf size/detail tree | 8.8% | 24% | a few `if`s |
 | an 8–16-leaf tree | 6–8% | 18–20% | a dozen `if`s |
 | 2 learned "codec-fit" scores + a 16-leaf tree | **4.6%** | 14% | ~1 KB |
 | the full neural net (MLP) | **4.0%** | 11% | 27 KB |
-| *(if you could afford 2–3 trial encodes)* | *0.04% = oracle* | *0%* | *— but multi-shot* |
+| *(2–3 trial encodes, keep smallest)* | *0.04% = oracle* | *0%* | *— multi-shot, ruled out* |
 
-Read it as: **always-JXL is fine on the typical image (its median miss is ~2%) but has an ugly
-tail** — sometimes WebP/AVIF beat it badly. The whole point of a picker is taming that tail. A
-six-question tree halves it; a dozen questions or a tiny learned model nearly closes it. The
-27 KB neural net buys only ~0.6% more than a ~1 KB model — real, but the difference between
-"good" and "tight," not "works" vs "broken."
-
-If trial encodes were allowed, encoding the top 2–3 and keeping the smallest **is** the oracle —
-but one-shot is a hard requirement, so the tree/model is what stands in for that.
+Read it as: **always-JXL is fine on the typical image (median miss ~2%) but has an ugly tail.** A
+few size/detail/chroma questions halve it; a tiny learned model nearly closes it; the 27 KB net
+buys only ~0.6% over a ~1 KB one. **All of these are deferred**, for two reasons: (1) they're fit
+on the same data that mis-ranks AVIF below WebP, so they'd bake that artifact in (an early tree
+literally routed small clean images to WebP — likely the AVIF-understated effect); (2) one-shot is
+mandatory, so the trial-encode oracle is off the table. Once the data is fixed (§6 + AVIF speed
+0–2), a content composite can *nudge* the §1 prior — never invert it.
 
 ---
 
-## 4. How we got to a clean answer (the findings trail)
+## 5. How we got to a trustworthy rule (the findings trail)
 
-The clean tree above only emerged after fixing three data problems that were quietly poisoning
-the picker — worth recording so they don't come back:
+The §1 rule only became trustworthy after fixing data problems that were quietly poisoning the
+picker — recorded so they don't come back:
 
 1. **Missing features (the "experimental" gap).** The chroma-loss + IDCT-roundtrip features were
-   compiled out by default, so training never saw them. Fixed: `experimental` is on by default in
-   zenanalyze; re-extracted **101 qualified source features, 0 NaN**. (One of those features —
-   `xyb_bquarter_chroma_loss` — shows up as a split in the bigger tree, so it earns its place.)
+   compiled out by default, so training never saw them. Fixed: `experimental` on by default;
+   re-extracted **101 qualified source features, 0 NaN**.
 2. **A feature leak.** The old training table mixed source-content features with **zensim
-   pair-features** (computed from a specific distorted encode) — information not available at
-   pick time. Removing them didn't hurt accuracy and made the picker honest.
-3. **A cross-codec sampling bias (the big one).** The sweep dials a generic quality `q` that each
-   codec maps to a *different* achieved quality, so above ~zq90 some codecs simply had no data —
-   and the oracle silently credited whoever did (AVIF). Corrected, the ranking **flips**: JXL is
-   the most-often-best lossy codec (45%), not AVIF (23%). The fix lives in the data layer
-   (`scripts/picker/picker_data.py`: compare codecs only where each has measured support) plus a
-   gate (`check_quality_coverage.py`) that refuses biased data. Full write-up:
+   pair-features** (computed from a specific distorted encode) — not available at pick time.
+   Removing them didn't hurt accuracy and made the picker honest.
+3. **Cross-codec sampling bias (the big one) — two faces.** The sweep dials a generic `q` that
+   each codec maps to a *different* achieved quality, so coverage is ragged. (a) Above ~zq90 AVIF
+   was *over*-credited (only it had data there) — fixed by the support-aware data layer
+   (`scripts/picker/picker_data.py`, compare only where each codec has measured support) + a gate
+   (`check_quality_coverage.py`); the corrected win-rate is **JXL 45% / WebP 31% / AVIF 23%**.
+   (b) AVIF is also *under-encoded* — swept only to **speed 4**, never the RD-optimal 0–2 — which,
+   with a small-skewed corpus, makes WebP look better than AVIF (it isn't). Both are why §1's order
+   is a codec-reality **prior**, not a data fit. Write-up:
    [`CROSS_CODEC_QUALITY_SAMPLING.md`](CROSS_CODEC_QUALITY_SAMPLING.md).
 
-Everything in §1–§3 is measured on the *corrected* data.
+Everything measured here is on the *corrected* data.
 
 ---
 
-## 5. What we'd ship, and what's left
+## 6. What ships, and what's left
 
-**Ship the tree (or the ~1 KB 2-score model) as the family rule** — rules + a quality threshold
-+ JXL-default + the small size/detail/chroma tree. It's auditable, one-shot, needs no ML runtime,
-and is within a couple percent of the neural net. Keep the MLP behind a flag for the rare case
-that last ~0.6% matters. (The 3 MLP routers are built, shipped, and de-biased today at
-`zenpicker::MetaPicker::default_routers()`; this is the proposal to demote them to optional.)
+**Ships now: the §1 `zenpicker::family_rule`** — capability + budget gate + codec-reality
+priority. One-shot, no ML runtime, robust to any format subset, verifiable by reading. (The 3 MLP
+routers exist + are de-biased at `zenpicker::MetaPicker::default_routers()`, kept behind the `api`
+surface for the ~0.6% of tail they shave when you trust them — but the rule is the default.)
 
-**What's still open:** the tree is only trustworthy up to ~zq88, because that's as high as the
-sweep measured *all* codecs (see §4.3). To pick reliably at near-lossless quality we need
-**quality-targeted sampling** — encode each codec to hit a common achieved-quality grid rather
-than a shared `q` — which is a new sweep mode (the one remaining build). Until then, route
-near-lossless targets through the lossless side, which is correct anyway.
+**Still open** — to let content-adaptation safely *refine* the prior (§4), the data must first be
+trustworthy:
+
+1. **Quality-targeted sampling** — encode each codec to hit a common achieved-quality grid instead
+   of a shared `q` (a new sweep mode), so all codecs are comparable past ~zq88 (today the support
+   runs out there; near-lossless targets route to the lossless side, which is correct anyway).
+2. **Re-sweep AVIF at speed 0–2** (not 4), so its curves reflect the codec, not the encoder knob.
+
+With both, a content composite can be fit to *nudge* (never invert) the §1 prior, with the gate
+(`check_quality_coverage.py`) in front of training to keep it honest.
 
 ---
 
