@@ -123,13 +123,37 @@ cheap content rules.
   golden re-blessed, discriminant boundary bumped (141 now first-unused). Worktree
   merged + cleaned up.
 
-## REMAINING (the integration arc, well-defined)
-1. **Bake the one-shot knob-check rules** — per-knob classifiers (method/sharp_yuv) on
-   the experimental-enriched features → a compact rule/model the codec evaluates with no
-   encode. (filter stays the weak dimension → multi-shot handles its tail.)
-2. **Picker emits ranked candidates** differing in the ambiguous knob (filter), feeding
-   `EncodeBudget::passes()`.
-3. **Codec multi-shot loop** (zenwebp first): encode `passes()` candidates at the fixed
-   method/sharp_yuv, keep the best by the codec metric. Wire via `resolve_pre_argmin`.
-4. **avif**: it has real 420/422/444, so the committed IDCT feature applies there as a
+## Multi-shot loop design (2026-06-29)
+
+Outer controls (built, `zenpredict::encode_strategy`): `PickerStrategy {OneShot,
+MultiShot, Auto}` (mode) + `EncodeBudget` (multi-axis ceiling: max_passes ∧
+max_trial_pixels ∧ max_ms). `resolve(strategy, n_candidates, image_pixels,
+est_ms_per_encode)` → trial count (codec supplies its own est_ms); `time_exhausted(
+elapsed_ms)` → runtime safety stop.
+
+Inner loop (to build):
+- **Picker emits candidates WITH predicted (zensim, bytes)** — not just a rank — so the
+  search can order/navigate them. They differ in the ambiguous knob (webp `filter`)
+  ± a quality `q` step.
+- **Directed search**, not a blind sweep: caller gives a target (target zq or byte
+  ceiling) + a preference (quality-priority vs bytes-priority). After each trial measure
+  achieved (zensim, bytes); overshoot the target → step toward a leaner candidate,
+  undershoot → step up; select the ambiguous knob among trials that landed near target.
+  Converges in fewer trials, bounded by `EncodeBudget`.
+- **Pairwise (streaming) evaluation for peak RAM**: a tournament that holds only the
+  reference (decoded) + the current trial (decoded) + a transient diffmap; the running
+  best is `(score, encoded_bytes)`, NOT a decoded image. Per trial: encode → decode →
+  zensim(ref, decoded) → score; beat best ⇒ keep encoded bytes + score, drop the decoded
+  trial + diffmap. Peak RAM = ref + 1 trial + 1 diffmap, **independent of K** (2 images
+  is the reference-metric floor).
+
+## REMAINING (the integration arc)
+1. **zenpredict**: extend `resolve_pre_argmin` to emit the ranked candidate list with
+   predicted (zensim, bytes) + a small directed-search-policy helper (next-candidate
+   from achieved-vs-target + preference). Pure/testable, no codec-path risk.
+2. **zenwebp multi-shot loop**: directed search + streaming pairwise zensim eval,
+   bounded by `EncodeBudget::resolve` / `time_exhausted`. First codec integration.
+3. **One-shot rules**: the picker's top-1 is the one-shot pick (method/sharp_yuv are
+   already content-predictable); no separate baking needed.
+4. **avif**: has real 420/422/444 → the committed IDCT feature applies there as a
    subsampling knob-rule (unlike webp). Repeat the separability + per-knob analysis.
