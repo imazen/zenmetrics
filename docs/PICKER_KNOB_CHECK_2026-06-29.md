@@ -244,3 +244,19 @@ the bakeable ZNPR MLP gets within ~1.5pp acc / ~0.75pp RD overhead → viable to
 the bake already does). Next: bake the MLP routers (ZNPR) + wire into zenpicker's MetaPicker
 (viable() mask + per-family est_ms cost model) — needs a MetaPicker public-API shape (3
 routers + descriptor-capability rules), so propose + get approval before adding the API.
+
+**API LANDED (2026-06-30, zenanalyze main).** User approved the single-`route()` shape +
+MLP/ZNPR, and directed "use zenanalyze-api types exclusively" — so the routing surface is
+built on the `Offer` contract, not raw `&[f32]`/zenpixels. Shipped in `zenpicker`:
+`QualityTarget {Zq|Ssim2|Lossless}`, `RouteDecision {family, lossless, ranked}` +
+`resolve()` (masked argmin, ranked for the queued meta multi-shot), `content_capability(&Offer)`
+(alpha→no jpeg, hdr/bit-depth→jxl/avif/png — rules), `AllowedFamilies::{intersect, LOSSY,
+LOSSLESS}`, and **`MetaPicker::route(offer, target, allowed, mode, latency, est_ms)`** — narrow
+(caller ∩ capability ∩ viable) → auto-gate (explicit Lossless bypasses; else the gate model) →
+branch family router → resolve. `with_router(gate, lossless)` builder; 26 tests incl. 6
+end-to-end with tiny baked gate/lossy/lossless models; clippy+fmt clean; no_std+alloc builds.
+Commits 1f9e6913 (core) + e025a0a3 (route). REMAINING — the real-model bake: re-extract the
+router corpus features with current zenanalyze (NaN-free tiny cells, no imputer — the canonical
+2026-06-27 feat_* predate the tiny-handling fix so they carry NaN), train the 3 MLPs on clean
+features, bake to ZNPR (cells=families via zentrain `train_hybrid`; gate is 2-class), ship the
+.bin set + wire a consumer. Memory: [[cross-codec-meta-router-3way]].
