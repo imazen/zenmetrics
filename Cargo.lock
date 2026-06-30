@@ -5149,7 +5149,6 @@ dependencies = [
  "magetypes",
  "thiserror",
  "whereat",
- "wide 1.5.0",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
@@ -5162,14 +5161,12 @@ version = "0.4.0"
 dependencies = [
  "bytemuck",
  "enough",
- "half",
  "imgref",
  "moxcms",
  "rgb",
  "thiserror",
  "ultrahdr-core 0.6.0",
  "whereat",
- "wide 1.5.0",
  "zencodec",
  "zenjpeg",
 ]

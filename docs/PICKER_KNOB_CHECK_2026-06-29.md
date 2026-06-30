@@ -186,3 +186,14 @@ Build: (a) `viable_families(allowlist, mode, budget, per_family_est_ms)` mask + 
 `MetaPicker::pick` (structural, pure/testable, no data); (b) join the canonical parquets
 → meta-router training data; (c) train the zq-conditioned meta-model + bake (supersedes
 the current allowlist+features-only `MetaPicker`).
+
+**Quality is the PRIMARY routing axis (user 2026-06-29) — VALIDATED.** Best-family share
+over 2307 common lossy variants (min `encoded_bytes` at the target zensim, 7-q RD curves
+interpolated) shifts cleanly with quality: avif 42% @zq50 (aggressive) → webp/jxl/avif
+~balanced @zq60–75 → jxl 53% @zq85 → avif 56% @zq90. **jpeg is ~0% RD-optimal** — its
+value is compatibility/speed (entered via the allowlist or a realtime profile, not RD).
+So the meta-model must be quality-conditioned (zq the dominant input) and trained
+quality-dense. The canonical grid is 7 q-levels (5/15/30/50/70/85/95) — spanning, and
+the per-family RD curves interpolate to dense target qualities; a denser re-sweep would
+sharpen the family crossings. **(a) shipped** (`viable` + `EncodeMode`); **(b)/(c)** —
+export `(features, target_zq) → best_family` + train — are the next, data-driven step.
