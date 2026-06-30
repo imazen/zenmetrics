@@ -94,11 +94,18 @@ and it localizes webp's hardness to one dimension (filter). method + sharp_yuv s
 cheap content rules.
 
 ## 5. Next steps (decision + build)
-1. **Filter handling — the open decision:** (a) accept the cheap knob-check (2.29%,
-   real-time); (b) add a *targeted filter-only* verify (encode the 2-3 candidate
-   filters at the fixed method/sharp_yuv — far cheaper than full 39-cell K-verify, and
-   only this one dimension needs it) for the tail; (c) chase a filter-discriminating
-   feature (low odds — the GBDT with all features only hit 31.6%).
+1. **Filter handling — RESOLVED: size/budget-adaptive (user, 2026-06-29).** webp encode
+   is expensive at large sizes, so the codec picks the mode from a resource/time budget
+   + a `PickerStrategy` enum:
+   - **one-shot** (large images / tight budget): the cheap no-encode knob-check — accept
+     the ~2.29% (better than the 2.8% monolithic; fully real-time).
+   - **multi-shot** (small images / budget allows): targeted *filter-only* verify —
+     encode the 2-3 candidate filters at the fixed predicted method+sharp_yuv, keep the
+     best. Only the one ambiguous dimension is verified (not the full 39-cell K-verify).
+   - **`Auto`**: gate on `pixel_count` vs the budget's affordable encode passes
+     (estimate webp encode cost ∝ pixels). Metric-K-verify is the explicit fully-offline
+     mode. Foundation built in `zenpredict` (`encode_strategy`): the budget→passes
+     decision; the picker emits ranked candidates; the codec runs the encode loop.
 2. Wire the knob-check into `zenpredict::picker_safety::resolve_pre_argmin` as a
    post-argmin per-knob refinement; keep metric-K-verify as an explicit OFFLINE mode.
 3. Repeat for avif (it DOES have 420/422/444 — the IDCT feature applies there as a real
@@ -110,3 +117,19 @@ cheap content rules.
   64.9%, K=3) + **zenjxl v0.2** (ssim2 100% / zq 93.8%, K=1) on `origin/main`,
   superseding pre-experimental v0.1. IDCT feature kept in zenanalyze (knob-rule), out
   of the global pickers (net-negative there).
+- `encode_strategy` foundation on zenanalyze/zenpredict `main` (18a99393): `PickerStrategy
+  {OneShot, MultiShot, Auto}` + `EncodeBudget` + `passes()`, 4 tests.
+- IDCT-roundtrip feature on zenanalyze `main` (6499cf26): id 140, experimental-gated,
+  golden re-blessed, discriminant boundary bumped (141 now first-unused). Worktree
+  merged + cleaned up.
+
+## REMAINING (the integration arc, well-defined)
+1. **Bake the one-shot knob-check rules** — per-knob classifiers (method/sharp_yuv) on
+   the experimental-enriched features → a compact rule/model the codec evaluates with no
+   encode. (filter stays the weak dimension → multi-shot handles its tail.)
+2. **Picker emits ranked candidates** differing in the ambiguous knob (filter), feeding
+   `EncodeBudget::passes()`.
+3. **Codec multi-shot loop** (zenwebp first): encode `passes()` candidates at the fixed
+   method/sharp_yuv, keep the best by the codec metric. Wire via `resolve_pre_argmin`.
+4. **avif**: it has real 420/422/444, so the committed IDCT feature applies there as a
+   subsampling knob-rule (unlike webp). Repeat the separability + per-knob analysis.
