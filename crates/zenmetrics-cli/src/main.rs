@@ -408,6 +408,15 @@ struct SweepArgs {
     /// `(ref, dist)` image pairs.
     #[arg(long)]
     distorted_out_dir: Option<PathBuf>,
+    /// Generate each cell's **distorted** image via this external serve
+    /// command (`sh -c <cmd>`, e.g. `python3 -m kadis_distort.serve`) instead
+    /// of a codec encode. The command is spawned once and driven image-major
+    /// over a length-framed protocol (reference + the image's cell knob-tuples
+    /// in, one distorted variant per cell out); `q` and `knob_tuple_json` carry
+    /// the distortion parameters. For generate-discard sweeps: omit
+    /// `--distorted-out-dir` and only the score+feature sidecar is kept.
+    #[arg(long)]
+    distort_cmd: Option<String>,
     /// Optional directory to receive the **encoded codec bytes** for
     /// every successfully encoded cell (the actual .jpg / .webp /
     /// .avif / .jxl / .png file the codec produced, not the decoded
@@ -952,6 +961,7 @@ fn cmd_sweep(
             compute_limit: args.compute_limit,
             max_deviations: effective_max_deviations,
         }),
+        distort_cmd: args.distort_cmd,
         metrics,
         gpu_runtime: args.gpu_runtime,
         output: args.output,

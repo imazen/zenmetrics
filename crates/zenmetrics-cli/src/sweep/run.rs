@@ -60,6 +60,7 @@ use crate::decode::{Rgb8Image, decode_image_to_rgb8};
 ))]
 use crate::metrics::cache::MetricCache;
 use crate::metrics::{GpuRuntime, MetricKind, ZensimFeatureRegime, run_zensim_with_features};
+use crate::sweep::distort::DistortWorker;
 // `run_metric` is the no-GPU-features fall-through AND the gpu-feature-off-
 // but-gpu-zensim-on branch inside `compute_cell`. The MetricCache also calls
 // it for CPU / disabled metrics. Mark unused to handle the all-GPU-on build
@@ -244,6 +245,16 @@ pub struct SweepConfig {
     /// jpeg+webp+avif; add `jxl`/`png` explicitly). Contract:
     /// `docs/PLAN_SWEEPS.md`.
     pub plan: Option<PlanSpec>,
+    /// When set, each cell's **distorted** image is produced by this external
+    /// serve command (`sh -c <cmd>`, e.g. `python3 -m kadis_distort.serve`)
+    /// instead of a codec encode+decode. The command is spawned once and driven
+    /// image-major over a length-framed protocol (see [`super::distort`]); the
+    /// reference + the image's cell knob-tuples go in, one distorted variant per
+    /// cell comes back. `q` and `knob_tuple_json` carry the distortion
+    /// parameters (the codec/quality columns become advisory). Intended for
+    /// generate-discard sweeps (omit `distorted_out_dir`): generate, score every
+    /// metric in-process, keep only the sidecar.
+    pub distort_cmd: Option<String>,
     pub metrics: Vec<MetricKind>,
     pub gpu_runtime: GpuRuntime,
     pub output: PathBuf,
@@ -562,6 +573,15 @@ pub fn run_sweep(
     let feature_writer = Mutex::new(feature_writer_inner);
     let pairs_writer = Mutex::new(pairs_writer_inner);
 
+    // Persistent distortion-generation worker (`--distort-cmd`). Spawned once
+    // and driven image-major (one round-trip per source); its interpreter +
+    // imports are paid once, not per cell. When unset, cells take the codec
+    // encode+decode-back path unchanged.
+    let mut distort_worker = match cfg.distort_cmd.as_deref() {
+        Some(cmd) => Some(DistortWorker::spawn(cmd)?),
+        None => None,
+    };
+
     // GPU metric instance cache — **process-static**. The cache
     // outlives individual `run_sweep` calls so cached `Metric`
     // instances are reused across all calls (groups within a chunk,
@@ -692,7 +712,60 @@ pub fn run_sweep(
         #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
         let units: Vec<SweepUnit<'_>> = tuple_units(cfg);
 
-        units.par_iter().for_each(|unit| {
+        // --distort-cmd: generate this image's distorted variants up front in
+        // ONE round-trip to the serve worker (the worker decodes the reference
+        // once and returns one variant per cell), then score them in parallel
+        // below. `None` => no override => the codec encode+decode path.
+        let distort_overrides: Option<Vec<Option<Rgb8Image>>> = match distort_worker.as_mut() {
+            Some(worker) => {
+                let cells: Vec<(f64, String)> =
+                    units.iter().map(|u| (u.q(), u.knob_json())).collect();
+                match worker.generate(&source, &cells) {
+                    Ok(variants) => Some(variants),
+                    Err(e) => {
+                        eprintln!(
+                            "[sweep] distort worker failed on {}: {e}",
+                            src_path.display()
+                        );
+                        stats.add_failed_decode(units.len() as u64);
+                        continue;
+                    }
+                }
+            }
+            None => None,
+        };
+
+        units.par_iter().enumerate().for_each(|(unit_idx, unit)| {
+            // In --distort-cmd mode, a cell whose external generation failed
+            // gets a blank-score row directly; it must NOT fall back to a
+            // codec encode (overriding generation is the whole point).
+            if let Some(ov) = distort_overrides.as_ref()
+                && ov[unit_idx].is_none()
+            {
+                let mut row: Vec<String> = vec![
+                    src_path.display().to_string(),
+                    cfg.codec.name().to_string(),
+                    unit.q().to_string(),
+                    unit.knob_json(),
+                    String::new(), // encoded_bytes
+                    String::new(), // encode_ms
+                    String::new(), // encoded_filename
+                    String::new(), // decode_ms
+                ];
+                for m in &cfg.metrics {
+                    for _ in m.column_names() {
+                        row.push(String::new());
+                    }
+                }
+                if let Ok(mut w) = wtr.lock() {
+                    let _ = w.write_record(&row);
+                }
+                stats.add_failed_decode(1);
+                return;
+            }
+            let distorted_override = distort_overrides
+                .as_ref()
+                .and_then(|ov| ov[unit_idx].as_ref());
             // Wrap each cell in catch_unwind so a panic in encode/decode/
             // metric scoring doesn't abort sibling cells. Without this,
             // a single bad knob combo would tear down a chunk's worth of
@@ -716,6 +789,7 @@ pub fn run_sweep(
                     gpu_runtime_for_cache,
                     #[cfg(feature = "orchestrator")]
                     orch,
+                    distorted_override,
                 )
             }))
             .unwrap_or_else(|panic_payload| {
@@ -877,6 +951,9 @@ fn compute_cell(
     ))]
     gpu_runtime_for_cache: GpuRuntime,
     #[cfg(feature = "orchestrator")] orch: Option<&SweepOrchestratorHandle>,
+    // When `Some`, the cell's distorted image comes from the external
+    // `--distort-cmd` worker instead of a codec encode+decode-back.
+    distorted_override: Option<&Rgb8Image>,
 ) -> CellOutcome {
     let q = unit.q();
     let knob_json = unit.knob_json();
@@ -887,69 +964,94 @@ fn compute_cell(
         knob_json.clone(),
     ];
 
-    // Encode.
-    let cell = match unit.encode_cell(cfg.codec, source) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!(
-                "[sweep] encode failed: {} q={q} knobs={knob_json}: {e}",
-                src_path.display()
-            );
-            row.push("".to_string()); // encoded_bytes
-            row.push("".to_string()); // encode_ms
-            row.push("".to_string()); // encoded_filename
-            row.push("".to_string()); // decode_ms
-            for m in &cfg.metrics {
-                for _ in m.column_names() {
-                    row.push("".to_string());
-                }
+    // Produce the cell's distorted image: either an external override
+    // (`--distort-cmd` — generated by a serve subprocess) or the codec
+    // encode + decode-back. The override path has no codec bytes, so its
+    // encode/decode columns are blank (the same column shape the
+    // encode-failed branch emits), keeping the output schema fixed.
+    let decoded = match distorted_override {
+        Some(d) => {
+            row.push(String::new()); // encoded_bytes
+            row.push(String::new()); // encode_ms
+            row.push(String::new()); // encoded_filename
+            row.push(String::new()); // decode_ms
+            // Rgb8Image doesn't derive Clone; build an owned copy so both match
+            // arms yield `Rgb8Image`.
+            Rgb8Image {
+                pixels: d.pixels.clone(),
+                width: d.width,
+                height: d.height,
             }
-            return CellOutcome::EncodeFailed { row };
+        }
+        None => {
+            // Encode.
+            let cell = match unit.encode_cell(cfg.codec, source) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!(
+                        "[sweep] encode failed: {} q={q} knobs={knob_json}: {e}",
+                        src_path.display()
+                    );
+                    row.push("".to_string()); // encoded_bytes
+                    row.push("".to_string()); // encode_ms
+                    row.push("".to_string()); // encoded_filename
+                    row.push("".to_string()); // decode_ms
+                    for m in &cfg.metrics {
+                        for _ in m.column_names() {
+                            row.push("".to_string());
+                        }
+                    }
+                    return CellOutcome::EncodeFailed { row };
+                }
+            };
+
+            row.push(cell.bytes.len().to_string());
+            row.push(format!("{:.3}", cell.encode_ms));
+
+            // Optionally persist the encoded codec bytes. The filename matches
+            // the same `<stem>_<src_hash>_<codec>_q<q>_<knob_hash>.<ext>` scheme
+            // as save_distorted_png so an external tool can pair them up by
+            // identity tuple alone. Failure to write demotes the encoded_filename
+            // column to empty — the score columns are still valid.
+            let encoded_filename = match &cfg.encoded_out_dir {
+                Some(dir) => {
+                    save_encoded_variant(dir, src_path, cfg.codec, q, &knob_json, &cell.bytes)
+                        .unwrap_or_else(|e| {
+                            eprintln!(
+                                "[sweep] save encoded variant failed: {} q={q}: {e}",
+                                src_path.display(),
+                            );
+                            String::new()
+                        })
+                }
+                None => String::new(),
+            };
+            row.push(encoded_filename);
+
+            // Decode-back through the path-based decoder for format-sniff parity
+            // with production. Tempfile lifetime ends when this function returns.
+            let decode_start = Instant::now();
+            let decoded = match decode_encoded_bytes(&cell.bytes, cfg.codec) {
+                Ok(d) => d,
+                Err(e) => {
+                    eprintln!(
+                        "[sweep] decode-back failed: {} q={q} knobs={knob_json}: {e}",
+                        src_path.display()
+                    );
+                    row.push("".to_string()); // decode_ms
+                    for m in &cfg.metrics {
+                        for _ in m.column_names() {
+                            row.push("".to_string());
+                        }
+                    }
+                    return CellOutcome::DecodeFailed { row };
+                }
+            };
+            let decode_ms = decode_start.elapsed().as_secs_f64() * 1000.0;
+            row.push(format!("{decode_ms:.3}"));
+            decoded
         }
     };
-
-    row.push(cell.bytes.len().to_string());
-    row.push(format!("{:.3}", cell.encode_ms));
-
-    // Optionally persist the encoded codec bytes. The filename matches
-    // the same `<stem>_<src_hash>_<codec>_q<q>_<knob_hash>.<ext>` scheme
-    // as save_distorted_png so an external tool can pair them up by
-    // identity tuple alone. Failure to write demotes the encoded_filename
-    // column to empty — the score columns are still valid.
-    let encoded_filename = match &cfg.encoded_out_dir {
-        Some(dir) => save_encoded_variant(dir, src_path, cfg.codec, q, &knob_json, &cell.bytes)
-            .unwrap_or_else(|e| {
-                eprintln!(
-                    "[sweep] save encoded variant failed: {} q={q}: {e}",
-                    src_path.display(),
-                );
-                String::new()
-            }),
-        None => String::new(),
-    };
-    row.push(encoded_filename);
-
-    // Decode-back through the path-based decoder for format-sniff parity
-    // with production. Tempfile lifetime ends when this function returns.
-    let decode_start = Instant::now();
-    let decoded = match decode_encoded_bytes(&cell.bytes, cfg.codec) {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!(
-                "[sweep] decode-back failed: {} q={q} knobs={knob_json}: {e}",
-                src_path.display()
-            );
-            row.push("".to_string()); // decode_ms
-            for m in &cfg.metrics {
-                for _ in m.column_names() {
-                    row.push("".to_string());
-                }
-            }
-            return CellOutcome::DecodeFailed { row };
-        }
-    };
-    let decode_ms = decode_start.elapsed().as_secs_f64() * 1000.0;
-    row.push(format!("{decode_ms:.3}"));
 
     // Dimension check — skip scoring on size mismatch (chroma upsampling
     // bug or wrong pixel-format conversion).

@@ -26,6 +26,10 @@
 //! filter step can drop or quarantine partial rows without having to re-run
 //! the sweep.
 
+/// Persistent distortion-generation worker (`--distort-cmd`): generate each
+/// cell's distorted image via an external serve subprocess instead of a codec
+/// encode. See module docs for the length-framed wire protocol.
+pub mod distort;
 pub mod encode;
 pub mod feature_writer;
 pub mod grid;

@@ -222,6 +222,12 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
             compute_limit: spec.plan_compute_limit,
             max_deviations: spec.plan_max_deviations,
         }),
+        // Distortion-generation override for the fleet: the box's onstart sets
+        // ZEN_DISTORT_CMD (e.g. `python3 -m kadis_distort.serve`) to generate
+        // distortions via a serve subprocess instead of codec-encoding.
+        distort_cmd: std::env::var("ZEN_DISTORT_CMD")
+            .ok()
+            .filter(|s| !s.is_empty()),
         metrics: spec.metrics,
         gpu_runtime: spec.gpu_runtime,
         output: spec.output_tsv.clone(),

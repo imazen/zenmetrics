@@ -584,6 +584,7 @@ mod tests {
             q_grid: vec![80.0],
             knob_grid: crate::sweep::parse_knob_grid("").expect("empty grid parses"),
             plan: None,
+            distort_cmd: None,
             metrics: vec![],
             gpu_runtime: GpuRuntime::Auto,
             output: std::path::PathBuf::from("/tmp/x.tsv"),
