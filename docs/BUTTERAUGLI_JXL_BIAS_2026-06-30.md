@@ -1,5 +1,20 @@
 # Butteraugli on JXL: does a 3rd metric side with ssim2 or zensim? (2026-06-30)
 
+> **⚠️ CORRECTION (2026-06-30, later same day — after the Cloudinary/Sneyers Pareto analysis + measuring
+> our own ssim2→bpp RD curve). The "butteraugli/ssim2 disfavor JXL" headline of this doc is measured *at
+> matched zensim*, which is a BROKEN CONTROL — it does NOT mean JXL is a worse codec.** On the RD/Pareto
+> axis that actually measures codec quality (target ssim2 → bytes; Cloudinary's axis), **our JXL WINS
+> DECISIVELY at high quality**: at ssim2 85–92 it spends **39–63% fewer bpp** than the best other codec
+> (5.36M canonical lossy rows; `scripts/picker/hq_pareto.py`, graph
+> `/mnt/v/output/picker-metric-investigation/hq_ssim2_pareto.png`), matching/exceeding libjxl's published
+> Pareto win. Zensim over-rewards JXL, so *matching on zensim* pins JXL to a higher-distortion operating
+> point — that is why the metrics below rank it 4/4, an artifact of the control variable, not codec
+> inferiority. **What genuinely survives:** (1) zensim rewards JXL *most* of the three metrics → this
+> shifts format-*selection* at a fixed quality-*number* target (the 33–48% flip is real); (2) JXL has
+> worse *worst-region* (butteraugli-max) fidelity at matched zensim — real localized VarDCT ringing, a
+> max-error trait, not aggregate quality. **Do NOT down-weight JXL in a picker on the "disfavored"
+> framing.** Same correction in `docs/METRIC_CODEC_BIAS_2026-06-30.md`.
+
 **Context.** The companion investigation (`METRIC_CODEC_BIAS_2026-06-30.md`) found that
 targeting **ssim2** vs **zensim** picks a different lossy format 33–48% of the time, dominated
 by **jxl→avif** flips: zensim FAVORS jxl (its XYB/perceptual home-court), ssim2 DISFAVORS jxl.

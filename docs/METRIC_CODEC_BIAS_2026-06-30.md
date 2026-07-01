@@ -1,5 +1,19 @@
 # Metric–codec bias: ssim2 vs zensim rank codecs differently (2026-06-30)
 
+> **⚠️ CORRECTION (2026-06-30, later same day — after the Cloudinary/Sneyers Pareto analysis + measuring
+> our own ssim2→bpp RD curve). "ssim2 disfavors JXL" below is measured *at matched zensim* = a BROKEN
+> CONTROL; it does NOT mean JXL is a worse codec.** On the RD/Pareto axis that measures codec quality
+> (target ssim2 → bytes; Cloudinary's axis), **our JXL WINS DECISIVELY at HQ**: ssim2 85–92, JXL spends
+> **39–63% fewer bpp** than the best other codec (5.36M canonical lossy rows; `scripts/picker/hq_pareto.py`,
+> graph `/mnt/v/output/picker-metric-investigation/hq_ssim2_pareto.png`), matching/exceeding libjxl's
+> published win. Zensim over-rewards JXL, so matching on zensim pins it to a higher-distortion operating
+> point → the "disfavored" ranking is a control-variable artifact, not inferiority. **What survives:**
+> (1) zensim rewards JXL *most* → shifts format-*selection* at a fixed quality-*number* target (the
+> 33–48% flip is real, and is what motivates a separate ssim2 router — see Implications); (2) JXL has
+> worse *worst-region* (butteraugli-max) fidelity at matched zensim (localized VarDCT ringing). **Do NOT
+> down-weight JXL in a picker on this framing.** Coverage caveat #2 below (jxl thin above ssim2~94) is
+> being fixed by a q85+ ssim2-step-1 re-sweep.
+
 **Finding.** Targeting **ssim2** vs **zensim** picks a *different lossy format* 33–48% of the time
 **even on clean coverage** (all 4 codecs reach the target on both metrics) — dominated by **jxl→avif**
 (and jxl→webp) flips. This is a real metric-character difference, not a coverage artifact.
