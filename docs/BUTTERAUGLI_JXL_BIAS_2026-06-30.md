@@ -14,6 +14,10 @@
 > worse *worst-region* (butteraugli-max) fidelity at matched zensim — real localized VarDCT ringing, a
 > max-error trait, not aggregate quality. **Do NOT down-weight JXL in a picker on the "disfavored"
 > framing.** Same correction in `docs/METRIC_CODEC_BIAS_2026-06-30.md`.
+>
+> **MARGIN CAVEAT (`benchmarks/avif_vs_libaom_2026-06-30.md`): the −39–63% is INFLATED** — our AVIF
+> (zenrav1e) is ~10–18% weaker than latest libaom-slow on photos at matched ssim2+speed (BD-rate +25%);
+> the true JXL-vs-strong-AVIF photo margin is ~15–25%, ≈ Cloudinary's −28%. JXL still wins HQ.
 
 **Context.** The companion investigation (`METRIC_CODEC_BIAS_2026-06-30.md`) found that
 targeting **ssim2** vs **zensim** picks a different lossy format 33–48% of the time, dominated

@@ -13,6 +13,13 @@
 > worse *worst-region* (butteraugli-max) fidelity at matched zensim (localized VarDCT ringing). **Do NOT
 > down-weight JXL in a picker on this framing.** Coverage caveat #2 below (jxl thin above ssim2~94) is
 > being fixed by a q85+ ssim2-step-1 re-sweep.
+>
+> **MARGIN CAVEAT (avif-vs-libaom measurement, `benchmarks/avif_vs_libaom_2026-06-30.md`): the −39–63%
+> is INFLATED.** Our AVIF (zenrav1e) is ~10–18% weaker than the latest libaom-slow on PHOTOS at matched
+> ssim2+speed (BD-rate +25%, 28/28 imgs), and AVIF-hostile synthetic content is over-represented at
+> ~1MP; the true JXL-vs-*strong*-AVIF photo margin is **~15–25%**, ≈ Cloudinary's −28%. JXL still wins
+> HQ — but "best-other" using our weak AVIF overstates it, and a picker trained on our-AVIF data
+> over-picks JXL vs a libaom-quality AVIF.
 
 **Finding.** Targeting **ssim2** vs **zensim** picks a *different lossy format* 33–48% of the time
 **even on clean coverage** (all 4 codecs reach the target on both metrics) — dominated by **jxl→avif**
