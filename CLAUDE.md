@@ -634,6 +634,20 @@ vast.ai fleet). Two canonical variants (same 700k cells, same `source_id` split 
   upstream bugs noted in `~/work/kadis-distort/benchmarks/pipeline_full_700k_2026-06-30.md`: hardcoded
   `coefficient` claim bucket (`chunk.rs:63`); omni-skip gated on `!skip_claims` (`chunk.rs:30`);
   orchestrator/cubecl init even when metrics don't need it (`sweep_runner.rs:76`).
+- **Update 2026-07-01 (score-many opt): the Legacy=1 need was RE-TESTED and does NOT reproduce on a
+  real card.** A real-Linux repro (vast RTX 3060, 12 GB, driver 570) ran the MODERN orchestrator GPU
+  path with NO Legacy under two concurrency forms — `zenmetrics sweep --jobs 8` (80/80 cells,
+  score-fail=0) AND 8 concurrent independent `score-pairs` processes (all 8 wrote 600/600, 0 NaN) —
+  with ZERO panics / `memory_manage` / `CUDA_ERROR` / `ServerUnhealthy`. The `memory_manage.rs:418`
+  race did NOT fire. **Fleet-default recommendation: modern orchestrator + `--bench-on-start no`**
+  (skips the warm-bench the bullet above blames, keeps the OOM ladder + capability cache) **+ a
+  per-box GPU self-test** (score one known pair at onstart, `exit 1` on failure so
+  `run_with_error_trap` self-destroys — this ALSO catches a runtime-image missing `cuda_runtime.h`,
+  which makes cubecl's NVRTC JIT fail to compile cvvdp/dssim/butteraugli; GPU fleet images MUST bake
+  CUDA dev headers or set the NVRTC include path). Keep `ZENMETRICS_SWEEP_LEGACY=1` as an ESCAPE HATCH
+  only; do NOT chase a deep cubecl fix without a reproducer. Caveat: one card/driver/workload tested.
+  Repro + the score-many warm-ref opt (TAR-SHARD + `Orchestrator::run_all` warm-ref, 1.60× measured):
+  `docs/SCOREMANY_OPT.md`.
 - **Shared keys (both):** `source_id` (stable split key 0..139999 — split on this, never on row),
   `source_filename`, `dist_type`, `dist_name`, `severity_level`, `dist_param` (signed for 7/18/25).
 - **Mirrors:** `/mnt/v/datasets/kadis700k/canonical/`, `/mnt/tower/output/kadis700k/canonical/`.

@@ -236,14 +236,29 @@ fn encode_cell_for_job(
 /// distorted temp file.
 static DIST_SEQ: AtomicU64 = AtomicU64::new(0);
 
-/// Variant index: `sha -> (byte offset, size)` into `variants.tar`. Loaded once per process (the warm
-/// `--serve` loop reuses it). TSV `sha\toffset\tsize` at `$ZEN_VARIANT_INDEX_URI`, built by the
-/// manifest builder from the tar's member headers — so the executor fetches a pre-encoded variant by
-/// a single byte-range GET, never re-encoding and never downloading the whole 4 GB tar.
-static VARIANT_INDEX: std::sync::OnceLock<std::collections::HashMap<String, (u64, u64)>> =
+/// One variant's location in `variants.tar`: byte `offset`, `size`, and the tar member basename
+/// (`name`, empty for legacy 3-column indices). `name` powers the TAR-SHARD path
+/// (`$ZEN_VARIANTS_LOCAL_DIR`): when a worker has already pulled + extracted the tar locally, it
+/// reads `<local_dir>/<name>` off disk instead of a per-variant byte-range GET.
+#[derive(Clone, Debug)]
+struct VariantLoc {
+    offset: u64,
+    size: u64,
+    name: String,
+}
+
+/// Variant index: `sha -> VariantLoc` into `variants.tar`. Loaded once per process (the warm
+/// `--serve` loop reuses it). TSV `sha\toffset\tsize[\tname]` at `$ZEN_VARIANT_INDEX_URI`, built by
+/// the manifest builder from the tar's member headers. Two fetch modes share this index:
+///   * byte-range GET from R2 (`$ZEN_VARIANTS_TAR_URI`) — no whole-tar download, one R2 request/variant;
+///   * TAR-SHARD local read (`$ZEN_VARIANTS_LOCAL_DIR`) — the worker pulled + extracted the tar ONCE
+///     and reads `<dir>/<name>` off disk, ZERO per-variant R2 requests (the I/O-bound fix).
+/// The optional 4th `name` column is what enables the local path; legacy 3-column indices still parse
+/// (name = "") and fall back to the byte-range GET.
+static VARIANT_INDEX: std::sync::OnceLock<std::collections::HashMap<String, VariantLoc>> =
     std::sync::OnceLock::new();
 
-fn variant_index() -> Result<&'static std::collections::HashMap<String, (u64, u64)>, Box<dyn Error>>
+fn variant_index() -> Result<&'static std::collections::HashMap<String, VariantLoc>, Box<dyn Error>>
 {
     if let Some(i) = VARIANT_INDEX.get() {
         return Ok(i);
@@ -263,24 +278,54 @@ fn variant_index() -> Result<&'static std::collections::HashMap<String, (u64, u6
     if !st.success() {
         return Err(format!("fetch variant index {uri} failed").into());
     }
-    let mut m = std::collections::HashMap::new();
-    for line in std::fs::read_to_string(&dst)?.lines() {
-        let mut it = line.split('\t');
-        if let (Some(s), Some(o), Some(z)) = (it.next(), it.next(), it.next())
-            && let (Ok(o), Ok(z)) = (o.parse::<u64>(), z.parse::<u64>())
-        {
-            m.insert(s.to_string(), (o, z));
-        }
-    }
-    Ok(VARIANT_INDEX.get_or_init(|| m))
+    Ok(VARIANT_INDEX.get_or_init(|| parse_variant_index(&std::fs::read_to_string(&dst).unwrap_or_default())))
 }
 
-/// Byte-range-fetch one pre-encoded variant out of `variants.tar` (`$ZEN_VARIANTS_TAR_URI`) using the
-/// index — no per-variant R2 object, no whole-tar download, no re-encode. Returns a temp path.
-fn fetch_variant(sha: &str, ext: &str) -> Result<PathBuf, Box<dyn Error>> {
-    let &(off, sz) = variant_index()?
+/// Parse a `sha\toffset\tsize[\tname]` variant-index TSV into `sha -> VariantLoc`. The 4th `name`
+/// column is optional (legacy 3-column indices parse with `name = ""`). Factored out so it is unit
+/// testable without R2.
+fn parse_variant_index(tsv: &str) -> std::collections::HashMap<String, VariantLoc> {
+    let mut m = std::collections::HashMap::new();
+    for line in tsv.lines() {
+        let mut it = line.split('\t');
+        if let (Some(s), Some(o), Some(z)) = (it.next(), it.next(), it.next())
+            && let (Ok(offset), Ok(size)) = (o.parse::<u64>(), z.parse::<u64>())
+        {
+            let name = it.next().unwrap_or("").to_string();
+            m.insert(s.to_string(), VariantLoc { offset, size, name });
+        }
+    }
+    m
+}
+
+/// Resolve one pre-encoded variant to a local path, WITHOUT re-encoding. Two modes, picked by env:
+///
+///   * **TAR-SHARD (`$ZEN_VARIANTS_LOCAL_DIR`)** — the worker already pulled + extracted the per-box
+///     tar ONCE, so the variant is a file at `<local_dir>/<name>`. Returns that path directly (no
+///     copy, no R2). This is the I/O-bound fix: a box that scores every variant in a tar issues ZERO
+///     per-variant R2 requests (one tar GET at onstart instead of N range-GETs). Needs the index's
+///     4th `name` column; falls through to the byte-range GET if the name is unknown or the local
+///     file is missing (e.g. a partial extract), so a stale local dir degrades gracefully rather than
+///     failing the cell.
+///   * **byte-range GET (`$ZEN_VARIANTS_TAR_URI`)** — fetch just this variant's bytes out of the
+///     remote tar via the index — no whole-tar download, one R2 request/variant. The pre-shard path.
+///
+/// Returns the local path plus whether the caller OWNS it (must delete after decode). TAR-SHARD reads
+/// are borrowed (do NOT delete — they belong to the shared extract dir); range-GETs are owned temps.
+fn fetch_variant(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>> {
+    let loc = variant_index()?
         .get(sha)
         .ok_or_else(|| format!("sha {sha} not in variant index"))?;
+    let (off, sz) = (loc.offset, loc.size);
+    // TAR-SHARD: prefer the locally-extracted member when the worker pre-pulled the tar.
+    if let Ok(dir) = std::env::var("ZEN_VARIANTS_LOCAL_DIR")
+        && !loc.name.is_empty()
+    {
+        let p = std::path::Path::new(&dir).join(&loc.name);
+        if p.is_file() {
+            return Ok((p, false)); // borrowed — shared extract dir, do not delete
+        }
+    }
     let tar_uri =
         std::env::var("ZEN_VARIANTS_TAR_URI").map_err(|_| "ZEN_VARIANTS_TAR_URI unset")?;
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").map_err(|_| "ZEN_R2_ENDPOINT unset")?;
@@ -316,7 +361,136 @@ fn fetch_variant(sha: &str, ext: &str) -> Result<PathBuf, Box<dyn Error>> {
     if !st.success() {
         return Err(format!("range-get variant {sha} from {tar_uri} failed").into());
     }
-    Ok(dst)
+    Ok((dst, true)) // owned temp — caller deletes after decode
+}
+
+/// PART 2 — warm-reference batch scoring for orchestrator-eligible metrics.
+///
+/// All variants in a ScoreFile job share ONE reference. The one-shot path (`run_metric` per
+/// (variant, metric)) re-uploads that reference to the GPU on EVERY call — nsys shows
+/// `cuMemcpyHtoDAsync` at 54% of CUDA API time and GPU sm util ~10% (upload-bound). This routes the
+/// orchestrator-eligible metrics (everything except butteraugli, which is
+/// `metric_orchestrator_eligible == false`) through `Orchestrator::run_all`, which groups tasks by
+/// `ref_hash` and warm-holds the reference precompute device-resident across the group — so the ref
+/// uploads ONCE per source and only the distorted side uploads per variant.
+///
+/// Returns the emitted JSONL rows for the eligible metrics. Butteraugli + zensim-with-features stay
+/// on the caller's inline decode-reuse loop (butter is orchestrator-ineligible; zensim needs its
+/// 372-feature sidecar which the umbrella score path doesn't emit). Decode is shared: the caller
+/// passes the already-decoded `(sha, Rgb8Image)` pairs so no variant is decoded twice.
+///
+/// Gated by `ZEN_SCOREFILE_WARMREF=1` at the call site; default OFF = byte-identical one-shot path.
+#[cfg(all(feature = "orchestrator", feature = "orchestrator-cuda"))]
+#[allow(clippy::type_complexity)]
+fn warmref_score_eligible(
+    image_path: &str,
+    codec_name: &str,
+    reference: &Rgb8Image,
+    decoded: &[(String, Rgb8Image)],
+    metrics: &[&str],
+) -> Result<Vec<String>, Box<dyn Error>> {
+    use crate::orchestrator_runner::{
+        build_orchestrator, metric_orchestrator_eligible, rekey_orchestrator_columns,
+    };
+    use zenmetrics_orchestrator::{Task, TaskData};
+
+    // Which requested metrics are orchestrator-eligible? (butteraugli/-gpu are not.) zensim variants
+    // are handled by the inline feature path, NOT here, so exclude them too.
+    let eligible: Vec<&str> = metrics
+        .iter()
+        .copied()
+        .filter(|m| {
+            *m != "zensim" && *m != "zensim-gpu" && {
+                match metric_kind(m).ok().and_then(cli_kind_from_metric_kind) {
+                    Some(k) => metric_orchestrator_eligible(k),
+                    None => false,
+                }
+            }
+        })
+        .collect();
+    if eligible.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let opts = crate::orchestrator_glue::OrchestratorRuntimeOpts::default();
+    let mut orch = build_orchestrator(&opts)?;
+
+    // Build the (variant × eligible-metric) task matrix. task_id encodes (variant_idx, metric_idx)
+    // so we can correlate the completion-ordered results back to the right row. All tasks carry the
+    // SAME reference bytes -> run_all groups them by ref_hash -> warm-ref hits.
+    let w = reference.width;
+    let h = reference.height;
+    let mut tasks: Vec<Task> = Vec::with_capacity(decoded.len() * eligible.len());
+    for (vi, (_sha, dist)) in decoded.iter().enumerate() {
+        // Skip variants whose dims differ from the reference — the umbrella requires equal dims and
+        // would error per-task anyway; emitting a clean error row keeps parity with the inline path.
+        for (mi, m) in eligible.iter().enumerate() {
+            let Some(cli_kind) = metric_kind(m).ok().and_then(cli_kind_from_metric_kind) else {
+                continue;
+            };
+            let _ = cli_kind; // kind resolved again below via spec; kept for the eligibility gate
+            tasks.push(Task {
+                task_id: (vi as u64) << 20 | (mi as u64),
+                ref_data: TaskData::Srgb8(reference.pixels.clone()),
+                dist_data: TaskData::Srgb8(dist.pixels.clone()),
+                width: w.max(dist.width),
+                height: h.max(dist.height),
+                metric: crate::orchestrator_glue::OrchestratorMetricSpec::from_cli(cli_kind).kind,
+                params: None,
+                ref_hash: 0,
+            });
+        }
+    }
+
+    // Accumulate results per (variant_idx) -> merged column map across its eligible metrics, so we
+    // emit ONE row per (variant, metric) matching the inline path's shape.
+    let mut rows: Vec<String> = Vec::with_capacity(tasks.len());
+    for res in orch.run_all(tasks) {
+        let vi = (res.task_id >> 20) as usize;
+        let mi = (res.task_id & 0xFFFFF) as usize;
+        let sha = &decoded[vi].0;
+        let m = eligible[mi];
+        let cli_kind = metric_kind(m).ok().and_then(cli_kind_from_metric_kind);
+        let mut o = Map::new();
+        o.insert("kind".into(), serde_json::json!("metric"));
+        o.insert("image_path".into(), serde_json::json!(image_path));
+        o.insert("codec".into(), serde_json::json!(codec_name));
+        o.insert("encode_sha".into(), serde_json::json!(sha));
+        o.insert("metric".into(), serde_json::json!(m));
+        match res.outcome {
+            Ok(score) => {
+                let mut scores = Map::new();
+                if res.output_columns.is_empty() {
+                    scores.insert(m.replace('-', "_"), serde_json::json!(score.value));
+                } else if let Some(k) = cli_kind {
+                    for (col, val) in rekey_orchestrator_columns(k, &res.output_columns) {
+                        scores.insert(col, serde_json::json!(val));
+                    }
+                } else {
+                    for (col, val) in &res.output_columns {
+                        scores.insert(col.clone(), serde_json::json!(*val));
+                    }
+                }
+                o.insert("score".into(), serde_json::json!(score.value));
+                o.insert("scores".into(), Value::Object(scores));
+            }
+            Err(e) => {
+                o.insert("error".into(), serde_json::json!(e.to_string()));
+            }
+        }
+        rows.push(serde_json::to_string(&Value::Object(o))?);
+    }
+    Ok(rows)
+}
+
+/// Map a `zenmetrics_api::MetricKind` (jobexec's metric enum) to the CLI's `CliMetricKind` used by
+/// the orchestrator eligibility + column-rekey helpers. Returns `None` for kinds the orchestrator
+/// runner doesn't model.
+#[cfg(all(feature = "orchestrator", feature = "orchestrator-cuda"))]
+fn cli_kind_from_metric_kind(k: MetricKind) -> Option<crate::metrics::MetricKind> {
+    // jobexec's `MetricKind` (re-exported from crate::metrics) IS the CLI metric kind, so this is
+    // identity — kept as a named seam in case the two enums ever diverge.
+    Some(k)
 }
 
 /// Whole-file scoring (`JobKind::ScoreFile`): the efficient path. Decode the reference ONCE, then for
@@ -325,6 +499,11 @@ fn fetch_variant(sha: &str, ext: &str) -> Result<PathBuf, Box<dyn Error>> {
 /// `score-pairs` uses — so a 24 MP source's decode and each variant's decode happen once, never
 /// re-encoded or re-decoded per metric. Emits one JSONL row per (variant, metric); the write-back
 /// rejoins q/knobs by `encode_sha`.
+///
+/// PART 2: with `ZEN_SCOREFILE_WARMREF=1` (and an orchestrator-cuda build), the orchestrator-eligible
+/// metrics are scored via one warm-reference `run_all` batch (ref uploaded once per source, not per
+/// variant — the fix for the 54% H2D / ~10% GPU util); butteraugli + zensim-with-features stay on the
+/// inline path. Default OFF = byte-identical one-shot behaviour.
 fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<dyn Error>> {
     let cell = &job["cell"];
     let image_path = cell["image_path"]
@@ -363,9 +542,108 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         }
         Ok(serde_json::to_string(&Value::Object(o))?)
     };
+
+    // PART 2 — warm-reference batch path (opt-in via ZEN_SCOREFILE_WARMREF=1, orchestrator-cuda build).
+    // Decode every variant ONCE up front, score the orchestrator-eligible metrics via a single
+    // `run_all` (ref uploaded once per source, not per variant), then score butteraugli +
+    // zensim-with-features inline over the SAME decoded buffers. Default OFF -> the byte-identical
+    // one-shot loop below.
+    #[cfg(all(feature = "orchestrator", feature = "orchestrator-cuda"))]
+    if std::env::var("ZEN_SCOREFILE_WARMREF").map(|v| v == "1").unwrap_or(false) {
+        // Decode all variants once (tar-shard local read via fetch_variant).
+        let mut decoded: Vec<(String, Rgb8Image)> = Vec::with_capacity(shas.len());
+        for sha in &shas {
+            match fetch_variant(sha, ext) {
+                Ok((p, owned)) => {
+                    let d = decode_image_to_rgb8(&p);
+                    if owned {
+                        let _ = std::fs::remove_file(&p);
+                    }
+                    match d {
+                        Ok(img) => decoded.push(((*sha).to_string(), img)),
+                        Err(e) => rows.push(mk_row(
+                            sha,
+                            serde_json::json!({ "error": format!("decode: {e}") }),
+                        )?),
+                    }
+                }
+                Err(e) => rows.push(mk_row(
+                    sha,
+                    serde_json::json!({ "error": format!("fetch: {e}") }),
+                )?),
+            }
+        }
+        // Eligible metrics -> one warm-ref batch.
+        rows.extend(warmref_score_eligible(
+            image_path, codec_name, &reference, &decoded, &metrics,
+        )?);
+        // Butteraugli (orchestrator-ineligible) + zensim (needs its feature sidecar) inline, reusing
+        // the decoded buffers so no variant is decoded twice.
+        for (sha, distorted) in &decoded {
+            for metric in &metrics {
+                #[cfg(feature = "gpu-zensim")]
+                if *metric == "zensim-gpu" || *metric == "zensim" {
+                    match crate::metrics::run_zensim_gpu_with_features(
+                        &reference,
+                        distorted,
+                        crate::metrics::GpuRuntime::Auto,
+                        crate::metrics::ZensimFeatureRegime::WithIw,
+                    ) {
+                        Ok((sc, feats)) => {
+                            rows.push(mk_row(
+                                sha,
+                                serde_json::json!({ "metric": metric, "score": sc, "scores": { "zensim_score": sc } }),
+                            )?);
+                            let mut fo = Map::new();
+                            fo.insert("kind".into(), serde_json::json!("feature"));
+                            fo.insert("image_path".into(), serde_json::json!(image_path));
+                            fo.insert("codec".into(), serde_json::json!(codec_name));
+                            fo.insert("encode_sha".into(), serde_json::json!(sha));
+                            fo.insert("regime".into(), serde_json::json!("with-iw"));
+                            fo.insert("zensim_score".into(), serde_json::json!(sc));
+                            fo.insert("features".into(), serde_json::json!(feats));
+                            rows.push(serde_json::to_string(&Value::Object(fo))?);
+                        }
+                        Err(e) => rows.push(mk_row(
+                            sha,
+                            serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                        )?),
+                    }
+                    continue;
+                }
+                // butteraugli / butteraugli-gpu (and any non-eligible, non-zensim metric): one-shot.
+                if *metric == "butteraugli" || *metric == "butteraugli-gpu" {
+                    match score(metric, &reference, distorted) {
+                        Ok(pairs) => {
+                            let mut scores = Map::new();
+                            for (n, v) in &pairs {
+                                scores.insert((*n).to_string(), serde_json::json!(v));
+                            }
+                            rows.push(mk_row(
+                                sha,
+                                serde_json::json!({
+                                    "metric": metric,
+                                    "score": pairs.first().map(|(_, v)| *v),
+                                    "scores": scores,
+                                }),
+                            )?);
+                        }
+                        Err(e) => rows.push(mk_row(
+                            sha,
+                            serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                        )?),
+                    }
+                }
+            }
+        }
+        return Ok(rows.join("\n").into_bytes());
+    }
+
     for sha in &shas {
-        // Fetch + decode the variant ONCE; score every metric on it.
-        let var_path = match fetch_variant(sha, ext) {
+        // Fetch + decode the variant ONCE; score every metric on it. `owned` is true for a byte-range
+        // temp (delete after decode) and false for a TAR-SHARD local read (borrowed from the shared
+        // extract dir — must NOT delete, other cells/metrics reference the same files).
+        let (var_path, owned) = match fetch_variant(sha, ext) {
             Ok(p) => p,
             Err(e) => {
                 rows.push(mk_row(
@@ -378,7 +656,9 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         let distorted = match decode_image_to_rgb8(&var_path) {
             Ok(d) => d,
             Err(e) => {
-                let _ = std::fs::remove_file(&var_path);
+                if owned {
+                    let _ = std::fs::remove_file(&var_path);
+                }
                 rows.push(mk_row(
                     sha,
                     serde_json::json!({ "error": format!("decode: {e}") }),
@@ -386,7 +666,9 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                 continue;
             }
         };
-        let _ = std::fs::remove_file(&var_path);
+        if owned {
+            let _ = std::fs::remove_file(&var_path);
+        }
         for metric in &metrics {
             // zensim-gpu additionally yields the 372-feature vector from the SAME decode — the exact
             // score-pairs --feature-output path (run_zensim_gpu_with_features). Emit a feature row too.
@@ -598,4 +880,46 @@ pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
     out.write_all(&bytes)?;
     out.flush()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_variant_index_4col_carries_name() {
+        // 4-column rows (sha, offset, size, name) power the TAR-SHARD local read.
+        let tsv = "aaaa\t0\t100\to_1.png.scale64x64_h_zenpng_q0_x.png\n\
+                   bbbb\t100\t250\to_2.png.scale128x96_h_zenpng_q0_y.png\n";
+        let m = parse_variant_index(tsv);
+        assert_eq!(m.len(), 2);
+        let a = m.get("aaaa").expect("aaaa present");
+        assert_eq!((a.offset, a.size), (0, 100));
+        assert_eq!(a.name, "o_1.png.scale64x64_h_zenpng_q0_x.png");
+        let b = m.get("bbbb").expect("bbbb present");
+        assert_eq!((b.offset, b.size), (100, 250));
+        assert_eq!(b.name, "o_2.png.scale128x96_h_zenpng_q0_y.png");
+    }
+
+    #[test]
+    fn parse_variant_index_3col_legacy_empty_name() {
+        // Legacy 3-column indices (no name) must still parse — name defaults empty, so the executor
+        // falls back to the byte-range GET path (no TAR-SHARD local read possible without a name).
+        let tsv = "cccc\t42\t7\n";
+        let m = parse_variant_index(tsv);
+        let c = m.get("cccc").expect("cccc present");
+        assert_eq!((c.offset, c.size), (42, 7));
+        assert_eq!(c.name, "");
+    }
+
+    #[test]
+    fn parse_variant_index_skips_malformed() {
+        let tsv = "good\t1\t2\tn.png\nbadline_no_tabs\nalso\tbad\nok\t3\t4\n";
+        let m = parse_variant_index(tsv);
+        assert!(m.contains_key("good"));
+        assert!(m.contains_key("ok"));
+        assert!(!m.contains_key("badline_no_tabs"));
+        assert!(!m.contains_key("also")); // "also\tbad" — size col unparseable
+        assert_eq!(m.len(), 2);
+    }
 }
