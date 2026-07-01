@@ -10,7 +10,8 @@
 //! 1. **Parse** the chunk JSON (extracts input_parquet_r2,
 //!    row_range, source_dir_r2, image_basenames, out_sidecar_omni,
 //!    out_encoded_prefix).
-//! 2. **Stage scratch** at `<workdir>/<chunk_id>/{sources,sweeps,encoded}`.
+//! 2. **Stage scratch** at `<workdir>/<chunk_id>/{sources,sweeps,encoded}`
+//!    (plus `{distorted,pairs}` when `ZEN_PERSIST_DISTORTED=1`).
 //! 3. **Download** the input parquet to scratch.
 //! 4. **Sync sources** — for each basename in image_basenames,
 //!    `s5cmd cp <source_dir_r2>/<basename> sources/<basename>`.
@@ -25,7 +26,9 @@
 //! 7. **Concat** the per-group TSVs into one parquet sidecar via
 //!    [`chunk_output::concat_groups_to_parquet`].
 //! 8. **Upload** the sidecar to `out_sidecar_omni`. Optionally
-//!    upload encoded variants under `out_encoded_prefix`.
+//!    upload encoded variants under `out_encoded_prefix`, and (when
+//!    `ZEN_PERSIST_DISTORTED=1`) the distorted PNGs + pairs sidecar
+//!    under `<run_id>/distorted/<chunk>/` and `<run_id>/pairs/<chunk>/`.
 //! 9. **Cleanup** scratch (unless KEEP_WORK=1).
 
 #![cfg(feature = "inline-sweep")]
@@ -249,6 +252,23 @@ async fn run_chunk_inline_impl(
             .with_context(|| format!("mkdir {}", dir.display()))?;
     }
 
+    // Distorted-PNG persistence (rescore-from-R2). When ZEN_PERSIST_DISTORTED=1,
+    // each cell's distorted variant is saved (PNG Fastest) and the per-group
+    // pairs TSV maps (image_path,q,knob) -> dist_path; both are uploaded so the
+    // canonical builder can attach a stable R2 URL and never regenerate.
+    let persist_distorted = std::env::var("ZEN_PERSIST_DISTORTED")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let distorted = scratch.join("distorted");
+    let pairs_dir = scratch.join("pairs");
+    if persist_distorted {
+        for dir in [&distorted, &pairs_dir] {
+            tokio::fs::create_dir_all(dir)
+                .await
+                .with_context(|| format!("mkdir {}", dir.display()))?;
+        }
+    }
+
     let out_sidecar = rec
         .out_sidecar_omni
         .clone()
@@ -257,6 +277,8 @@ async fn run_chunk_inline_impl(
         .out_encoded_prefix
         .clone()
         .unwrap_or_else(|| format!("s3://zentrain/{run_id}/encoded/{}/", rec.chunk_id));
+    let out_distorted_prefix = format!("s3://zentrain/{run_id}/distorted/{}/", rec.chunk_id);
+    let out_pairs_prefix = format!("s3://zentrain/{run_id}/pairs/{}/", rec.chunk_id);
 
     info!(chunk_id = %rec.chunk_id, "step 1/5: download input parquet");
     let input_parquet = scratch.join(&rec.input_parquet);
@@ -419,6 +441,16 @@ async fn run_chunk_inline_impl(
                 .map(|_| sweeps.join(format!("g{gid_str}.features.parquet"))),
             feature_regime,
             encoded_out_dir: Some(encoded.clone()),
+            distorted_out_dir: if persist_distorted {
+                Some(distorted.clone())
+            } else {
+                None
+            },
+            pairs_tsv: if persist_distorted {
+                Some(pairs_dir.join(format!("g{gid_str}.pairs.tsv")))
+            } else {
+                None
+            },
             jobs: parse_jobs_env_or_default(),
             hdr: rec.hdr,
         };
@@ -518,10 +550,30 @@ async fn run_chunk_inline_impl(
 
     // Encoded variants — only if any files actually got written.
     if encoded_dir_has_files(&encoded).await {
-        upload_encoded_variants(r2, &encoded, &out_encoded_prefix).await?;
+        upload_dir_glob(r2, &encoded, &out_encoded_prefix).await?;
         info!(chunk_id = %rec.chunk_id, "encoded variants uploaded");
     } else {
         info!(chunk_id = %rec.chunk_id, "no encoded variants to upload");
+    }
+
+    // Distorted PNGs + pairs sidecar (ZEN_PERSIST_DISTORTED=1). Content-addressed
+    // for rescore-from-R2: the canonical builder joins pairs on (image_path,q) and
+    // attaches `{out_distorted_prefix}<dist_path>` so no distortion is regenerated.
+    if persist_distorted {
+        if encoded_dir_has_files(&distorted).await {
+            upload_dir_glob(r2, &distorted, &out_distorted_prefix).await?;
+            upload_dir_glob(r2, &pairs_dir, &out_pairs_prefix).await?;
+            info!(
+                chunk_id = %rec.chunk_id,
+                distorted_prefix = %out_distorted_prefix,
+                "distorted PNGs + pairs sidecar uploaded"
+            );
+        } else {
+            warn!(
+                chunk_id = %rec.chunk_id,
+                "ZEN_PERSIST_DISTORTED set but no distorted PNGs were written"
+            );
+        }
     }
 
     // Cleanup unless KEEP_WORK=1 in env.
@@ -651,7 +703,10 @@ async fn encoded_dir_has_files(dir: &std::path::Path) -> bool {
     false
 }
 
-async fn upload_encoded_variants(
+/// Recursively copy `local_dir/*` to `r2_prefix` via s5cmd. Generic — used for
+/// encoded variants, distorted PNGs, and pairs sidecars. Non-fatal on failure
+/// (the omni sidecar is already uploaded by the time this runs).
+async fn upload_dir_glob(
     r2: &R2Client,
     local_dir: &std::path::Path,
     r2_prefix: &str,
@@ -670,13 +725,15 @@ async fn upload_encoded_variants(
         .kill_on_drop(true)
         .output()
         .await
-        .context("spawn s5cmd cp encoded")?;
+        .with_context(|| format!("spawn s5cmd cp {} -> {r2_prefix}", local_dir.display()))?;
     if !out.status.success() {
         // Non-fatal: log and continue. The sidecar is already up.
         warn!(
+            local_dir = %local_dir.display(),
+            r2_prefix = %r2_prefix,
             status = %out.status,
             stderr = %String::from_utf8_lossy(&out.stderr),
-            "encoded upload failed (non-fatal)"
+            "dir upload failed (non-fatal)"
         );
     }
     Ok(())
