@@ -58,7 +58,8 @@ pub struct ZensimParams {
     /// weights for converting the feature vector into a scalar score.
     /// Ignored when [`Self::profile`] is `Some`. Pass
     /// `zensim_gpu::WEIGHTS_PREVIEW_V0_2` for parity with CPU zensim's
-    /// `PreviewV0_2` profile.
+    /// legacy linear `100 − 18·d^0.7` scoring (the former `PreviewV0_2`
+    /// profile, still available via [`zensim::profile::WEIGHTS_PREVIEW_V0_2`]).
     ///
     /// Weights are 228 entries regardless of [`Self::regime`] — the
     /// scoring inner product runs over the basic block only.
@@ -131,21 +132,17 @@ impl ZensimParams {
     }
 
     /// Bundle a specific [`zensim::ZensimProfile`] for canonical scoring.
-    /// Same path as [`Self::default_weights`] but lets the caller pin
-    /// to a non-latest profile (e.g. `PreviewV0_2` for audit, or a
-    /// frozen recovery-trail variant).
+    /// Same path as [`Self::default_weights`] but lets the caller pin to
+    /// an explicit profile (e.g. a `Custom` linear/recovery-trail variant
+    /// for audit).
     ///
-    /// Defaults regime to the profile's natural input width:
-    /// [`ZensimFeatureRegime::Basic`] (228) for V0_2;
-    /// [`ZensimFeatureRegime::WithIw`] (372) for every V0_3+ MLP
-    /// ship. Override via [`Self::with_regime`] if the bake only
-    /// consumes a prefix.
+    /// Defaults regime to [`ZensimFeatureRegime::WithIw`] (372) — the
+    /// input width of the canonical `A` MLP ship and every 372-feature
+    /// bake. For a legacy 228-feature linear `Custom` profile, override
+    /// via [`Self::with_regime`] to [`ZensimFeatureRegime::Basic`] (or use
+    /// [`Self::with_canonical_v0_2`] / [`Self::with_weights`]).
     pub fn with_profile(mut self, profile: zensim::ZensimProfile) -> Self {
-        use zensim::ZensimProfile::*;
-        self.regime = match profile {
-            PreviewV0_2 => ZensimFeatureRegime::Basic,
-            _ => ZensimFeatureRegime::WithIw,
-        };
+        self.regime = ZensimFeatureRegime::WithIw;
         self.profile = Some(profile);
         self
     }

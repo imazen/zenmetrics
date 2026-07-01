@@ -44,7 +44,11 @@ zensim = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
-zensim = { workspace = true }
+# `custom-profiles` lets the parity-lock test reconstruct the removed
+# linear `PreviewV0_2` built-in as a `Custom` profile (bit-identical
+# params) — needed so the CPU reference score matches the GPU path's
+# 228-feature linear `score_from_features`.
+zensim = { workspace = true, features = ["custom-profiles"] }
 bytemuck = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg"] }
 zenmetrics-corpus = { workspace = true }

@@ -1,10 +1,14 @@
 //! Integration tests for `zensim-gpu` against the `zensim` CPU reference
-//! pinned to `WEIGHTS_PREVIEW_V0_2`. We use `PreviewV0_2` explicitly so
-//! the CPU score path matches the GPU score path's
-//! `score_from_features(features, &WEIGHTS_PREVIEW_V0_2)` regardless of
-//! what `ZensimProfile::latest()` returns in the linked zensim version
-//! (e.g. 0.2.8 returned V0_2; 0.3.x returns V0_3 with an MLP scorer
-//! whose score is on a different scale).
+//! pinned to the linear `WEIGHTS_PREVIEW_V0_2` scoring. The CPU side uses
+//! a reconstructed linear `Custom` profile (the former `PreviewV0_2`,
+//! removed as a built-in) so the CPU score path matches the GPU score
+//! path's `score_from_features(features, &WEIGHTS_PREVIEW_V0_2)`. Naming
+//! `ZensimProfile::A` (the MLP ship) would put the CPU score on a
+//! forward-pass scale and break parity — the GPU path here is hardwired
+//! to the 228-feature linear inner product.
+//!
+//! Gated on the `zensim/custom-profiles` feature (enabled on this crate's
+//! dev-dep) so the linear profile can be reconstructed.
 //!
 //! Backend selection mirrors `dssim-gpu` / `ssim2-gpu`:
 //! - `cuda` (default) preferred
@@ -18,6 +22,20 @@
 use cubecl::Runtime;
 use zensim::{RgbSlice, Zensim as ZensimCpu, ZensimProfile};
 use zensim_gpu::{Zensim, score_from_features};
+
+/// Reconstruct the former linear `PreviewV0_2` built-in as a `Custom`
+/// profile. `ProfileParams::builder()` defaults (the `WEIGHTS_PREVIEW_V0_2`
+/// vector, `100 − 18·d^0.7`, no MLP) are byte-for-byte the old
+/// `PROFILE_PREVIEW_V0_2`, so CPU scores match the removed built-in.
+fn cpu_linear_profile() -> ZensimProfile {
+    use std::sync::OnceLock;
+    use zensim::profile::ProfileParams;
+    static PARAMS: OnceLock<ProfileParams> = OnceLock::new();
+    ZensimProfile::Custom {
+        params: PARAMS.get_or_init(|| ProfileParams::builder().build()),
+        name: "zensim-preview-v0.2",
+    }
+}
 
 #[cfg(feature = "cuda")]
 type Backend = cubecl::cuda::CudaRuntime;
@@ -39,7 +57,7 @@ macro_rules! make_client {
 // ───────────────────────── helpers ─────────────────────────
 
 fn cpu_score(rgb_ref: &[u8], rgb_dis: &[u8], w: usize, h: usize) -> f64 {
-    let z = ZensimCpu::new(ZensimProfile::PreviewV0_2);
+    let z = ZensimCpu::new(cpu_linear_profile());
     let to_pix =
         |buf: &[u8]| -> Vec<[u8; 3]> { buf.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect() };
     let src = to_pix(rgb_ref);
