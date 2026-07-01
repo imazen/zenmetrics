@@ -609,25 +609,36 @@ over those persisted variants — never re-encode per metric.
 
 Maintained in repo root.
 
-## KADIS-700k zensim dataset (built 2026-06-30)
+## KADIS-700k dataset (zensim 2026-06-30; GPU-metrics 2026-07-01)
 
 700,000 distorted-image cells — 140k KADIS pristine references × 1 `dist_type_1` × 5 severity
-levels — each zensim-scored with its 372-D feature vector. **THIS crate ran the sweep** that
-produced it: chunk-mode on a vast.ai fleet, pure-CPU config `METRICS=zensim` +
-`ZENMETRICS_SWEEP_LEGACY=1` (disables the orchestrator cubecl warm-bench — the descriptor race
-at `cubecl-runtime memory_manage.rs:418` is why GPU-metric sweeps fail on small cards) +
-`ZENSIM_FEATURES_REGIME=with-iw` + `MAX_CHUNKS_PER_PROCESS=50`. ~91 cells/s/box, ~$0.7 total.
-Three upstream bugs noted in `~/work/kadis-distort/benchmarks/pipeline_full_700k_2026-06-30.md`:
-hardcoded `coefficient` claim bucket (`chunk.rs:63`); omni-skip gated on `!skip_claims`
-(`chunk.rs:30`); orchestrator/cubecl init even when all metrics are CPU (`sweep_runner.rs:76`).
+levels, each with a 372-D zensim feature vector. **THIS crate ran both sweeps** (chunk-mode on a
+vast.ai fleet). Two canonical variants (same 700k cells, same `source_id` split key):
 
-- **Canonical parquet:** `s3://zentrain/kadis-700k/canonical/kadis700k_canonical_2026-06-30.parquet`
-  (700k×380, ~906 MB zstd, 0 nulls; sha256 `b57e4b3f…`). Mirrors: `/mnt/v/datasets/kadis700k/canonical/`,
-  `/mnt/tower/output/kadis700k/`.
-- **Columns:** `source_id` (stable split key 0..139999 — split on this, never on row), `source_filename`,
-  `dist_type`, `dist_name`, `severity_level`, `dist_param` (signed for 7/18/25), `score_zensim`, `feat_0..feat_371`.
-- **Per-chunk sidecars this sweep wrote:** `s3://zentrain/kadis-700k/{omni,zensim_features,source_features}/` (350 each).
-- **Full README + schema:** `s3://zentrain/kadis-700k/README.md` (and `~/work/kadis-distort/docs/DATASET.md`).
+- **★ GPU-metrics canonical (2026-07-01) — current, richest.**
+  `s3://zentrain/kadis-700k-gpu/canonical/kadis700k_canonical_gpu_2026-07-01.parquet`
+  (700k×387, ~936 MB zstd, 0 nulls; sha256 `c9a6fd56…`). **7 perceptual scores** —
+  `score_{zensim,ssim2,butteraugli_max,butteraugli_pnorm3,iwssim,dssim}_gpu` + `score_cvvdp_cpu_imazen_v0_1_0`
+  — plus `distorted_url` (a persisted distorted PNG per cell → rescore-from-links, via
+  `ZEN_PERSIST_DISTORTED=1`), on top of the 372-D `feat_*` + shared keys. Config
+  `METRICS=zensim-gpu,ssim2-gpu,butteraugli-gpu,cvvdp,iwssim-gpu,dssim-gpu` + `ZENMETRICS_SWEEP_LEGACY=1`
+  + `with-iw`. Sidecars `s3://zentrain/kadis-700k-gpu/{omni,zensim_features,pairs}/` + `distorted/<chunk>/*.png`.
+- **zensim-only canonical (2026-06-30) — earlier variant.**
+  `s3://zentrain/kadis-700k/canonical/kadis700k_canonical_2026-06-30.parquet` (700k×380, ~906 MB
+  zstd, 0 nulls; sha256 `b57e4b3f…`). Pure-CPU config `METRICS=zensim` + `ZENMETRICS_SWEEP_LEGACY=1`
+  + `with-iw` + `MAX_CHUNKS_PER_PROCESS=50`. ~91 cells/s/box, ~$0.7 total. `score_zensim` +
+  `feat_0..feat_371`. Sidecars `s3://zentrain/kadis-700k/{omni,zensim_features,source_features}/` (350 each).
+- **Both runs used `ZENMETRICS_SWEEP_LEGACY=1`** to disable the orchestrator cubecl warm-bench —
+  the descriptor race at `cubecl-runtime memory_manage.rs:418` is why the full-orchestrator GPU path
+  races on fresh boxes (removing that need is tracked separately: `sweep_runner.rs:76`). Three
+  upstream bugs noted in `~/work/kadis-distort/benchmarks/pipeline_full_700k_2026-06-30.md`: hardcoded
+  `coefficient` claim bucket (`chunk.rs:63`); omni-skip gated on `!skip_claims` (`chunk.rs:30`);
+  orchestrator/cubecl init even when metrics don't need it (`sweep_runner.rs:76`).
+- **Shared keys (both):** `source_id` (stable split key 0..139999 — split on this, never on row),
+  `source_filename`, `dist_type`, `dist_name`, `severity_level`, `dist_param` (signed for 7/18/25).
+- **Mirrors:** `/mnt/v/datasets/kadis700k/canonical/`, `/mnt/tower/output/kadis700k/canonical/`.
+- **Full README + schema:** `s3://zentrain/kadis-700k-gpu/README.md` + `s3://zentrain/kadis-700k/README.md`
+  (and `~/work/kadis-distort/docs/DATASET.md`).
 - **Credit:** reference images + distortion design © VQA Group, Universität Konstanz (Lin, Hosu,
   Saupe) — KADID-10k / KADIS-700k, https://database.mmsp-kn.de/kadid-10k-database.html ("freely
   available to the research community"). Cite KADID-10k (QoMEX 2019) + DeepFL-IQA (arXiv:2001.08113).
