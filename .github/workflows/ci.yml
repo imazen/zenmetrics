@@ -92,6 +92,12 @@ jobs:
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
           git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
+          # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
+          # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
+          # fix) — without this clone, cargo can't resolve the whole
+          # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
+          git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
+          git -C ../zenrav1e checkout 2fac1af6
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
@@ -287,6 +293,12 @@ jobs:
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
           git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
+          # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
+          # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
+          # fix) — without this clone, cargo can't resolve the whole
+          # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
+          git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
+          git -C ../zenrav1e checkout 2fac1af6
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
@@ -443,6 +455,12 @@ jobs:
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
           git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
+          # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
+          # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
+          # fix) — without this clone, cargo can't resolve the whole
+          # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
+          git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
+          git -C ../zenrav1e checkout 2fac1af6
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
@@ -554,6 +572,12 @@ jobs:
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
           git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
+          # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
+          # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
+          # fix) — without this clone, cargo can't resolve the whole
+          # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
+          git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
+          git -C ../zenrav1e checkout 2fac1af6
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
@@ -662,6 +686,12 @@ jobs:
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
           git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
+          # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
+          # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
+          # fix) — without this clone, cargo can't resolve the whole
+          # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
+          git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
+          git -C ../zenrav1e checkout 2fac1af6
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
