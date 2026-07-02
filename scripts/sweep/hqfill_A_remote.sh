@@ -91,10 +91,17 @@ launch_box(){ local idx="$1"
   OFFERS=$(vastai search offers 'num_gpus=1 cuda_max_good>=12.6 gpu_ram>=8 cpu_ram>=32 disk_space>=40 rentable=true inet_down>300' -o 'dph+' --raw 2>/dev/null)
   OFFER=$(echo "$OFFERS" | python3 -c "import json,sys;o=json.load(sys.stdin);print(o[$idx]['id'] if len(o)>$idx else '')")
   [ -z "$OFFER" ] && { echo "no offer for box $idx"; return 1; }
+  # CRITICAL: s5cmd needs AWS_* in its env — vast injects our --env vars into /proc/1/environ,
+  # but the onstart shell doesn't auto-export them. Hydrate from /proc/1/environ, then export the
+  # scoped creds as AWS_* BEFORE the s5cmd fetch (the NoCredentialProviders bug that stalled the
+  # first scale boxes: onstart had ZEN_AK/R2_ACCESS_KEY_ID but not AWS_ACCESS_KEY_ID).
   local ONSTART="set +e
 export PATH=/usr/local/sbin:/usr/sbin:/sbin:\$PATH
+while IFS='=' read -r -d '' k v; do case \"\$k\" in R2_*|ZEN_*|AWS_*|CONTAINER_*) export \"\$k=\$v\";; esac; done < /proc/1/environ
+export AWS_ACCESS_KEY_ID=\"\$ZEN_AK\" AWS_SECRET_ACCESS_KEY=\"\$ZEN_SK\" AWS_SESSION_TOKEN=\"\$ZEN_ST\" AWS_REGION=auto
 env | grep -E '^(AWS_|ZEN_)' >> /etc/environment
-s5cmd --endpoint-url \$ZEN_R2_ENDPOINT cp s3://$RUN_BUCKET/$RUN_PREFIX/worker.sh /usr/local/bin/hqa_worker.sh
+for try in 1 2 3; do s5cmd --endpoint-url \$ZEN_R2_ENDPOINT cp s3://$RUN_BUCKET/$RUN_PREFIX/worker.sh /usr/local/bin/hqa_worker.sh && break; sleep 5; done
+chmod +x /usr/local/bin/hqa_worker.sh
 bash /usr/local/bin/hqa_worker.sh 2>&1 | tee /var/log/hqa.log"
   local ENVB="-e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$RUN_BUCKET -e ZEN_RUN_PREFIX=$RUN_PREFIX -e ZEN_CORPUS_PREFIX=$CORPUS_PREFIX -e ZEN_AK=$AK -e ZEN_SK=$SK -e ZEN_ST=$ST -e ZEN_DIST=$DIST -e ZEN_METRICS=\"$METRICS\" -e ZEN_BOX=$idx -e R2_ACCOUNT_ID=$R2_ACCOUNT_ID -e R2_ACCESS_KEY_ID=$AK -e R2_SECRET_ACCESS_KEY=$SK"
   vastai create instance "$OFFER" --image "$IMAGE" --label "group=$RUN" --disk 40 --env "$ENVB" --onstart-cmd "$ONSTART" 2>&1 | grep -iE 'new_contract|success' | head -1 && echo "box $idx launched (offer $OFFER)"
