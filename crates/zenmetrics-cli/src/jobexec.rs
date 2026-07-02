@@ -278,7 +278,8 @@ fn variant_index() -> Result<&'static std::collections::HashMap<String, VariantL
     if !st.success() {
         return Err(format!("fetch variant index {uri} failed").into());
     }
-    Ok(VARIANT_INDEX.get_or_init(|| parse_variant_index(&std::fs::read_to_string(&dst).unwrap_or_default())))
+    Ok(VARIANT_INDEX
+        .get_or_init(|| parse_variant_index(&std::fs::read_to_string(&dst).unwrap_or_default())))
 }
 
 /// Parse a `sha\toffset\tsize[\tname]` variant-index TSV into `sha -> VariantLoc`. The 4th `name`
@@ -549,7 +550,10 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
     // zensim-with-features inline over the SAME decoded buffers. Default OFF -> the byte-identical
     // one-shot loop below.
     #[cfg(all(feature = "orchestrator", feature = "orchestrator-cuda"))]
-    if std::env::var("ZEN_SCOREFILE_WARMREF").map(|v| v == "1").unwrap_or(false) {
+    if std::env::var("ZEN_SCOREFILE_WARMREF")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
         // Decode all variants once (tar-shard local read via fetch_variant).
         let mut decoded: Vec<(String, Rgb8Image)> = Vec::with_capacity(shas.len());
         for sha in &shas {
