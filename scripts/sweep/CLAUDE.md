@@ -39,9 +39,11 @@ production entrypoint. Sweep operations are:
   each cheap box fetches its chunk + runs `zenmetrics sweep` (CPU ssim2+zensim) +
   `--encoded-out-dir` → tars the variants to R2 (the master record). Scoped 3h
   creds; `--image docker-ce`; biggest-first type×location fallback. Hard limits:
-  Hetzner account caps at **32 servers** (corrected 2026-06-25 by the user; the prior
-  "5" was wrong — with 3 pre-existing dev boxes that leaves ~29 for sweeps); cpx51 (16c) is the
-  per-box ceiling (ccx53/63 capacity-out).
+  Hetzner account caps at **128 servers / 640 dedicated vCPUs / 4 TB volumes**
+  (raised 2026-07-02 by the user; was 32 servers). The 640-dedicated-vCPU cap is the
+  real ceiling for ccx (dedicated) fleets — e.g. ≤13× ccx43 (16c) or ≤40× ccx23 (4c);
+  cpx (shared) and cax (arm) count only against the 128-server cap. ccx53/63 may still
+  capacity-out at the provider even under the account cap.
 - `split_score_worker.sh` — **SPLIT vast.ai-GPU half**: entrypoint of the thin
   `ghcr.io/imazen/zenmetrics-sweep:v29-split` image (FROM `:v29-2026-06-23`, all 6
   GPU metrics). Pulls persisted variants + `pairs.tsv`, runs `zenmetrics score-pairs`

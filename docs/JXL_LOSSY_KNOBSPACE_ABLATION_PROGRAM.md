@@ -158,7 +158,7 @@ This incrementality is *the* reason the vehicle is the job system, not a monolit
   corpora + structurally a render feature. (e1/e2 stay swept — never-skip-efforts guardrail; they're
   just never *chosen* by the picker.) Remaining inert-cluster knobs (dct/nonalign/fgs/etc.) appear
   occasionally on the fleet front → keep until more confirmation.
-- **Next:** the fleet now works — scale it (≤32 Hetzner servers per the account cap; 3 are pre-existing user dev boxes → ~29 available) for
+- **Next:** the fleet now works — scale it (≤128 Hetzner servers / 640 dedicated vCPUs / 4 TB volumes per the account cap, raised 2026-07-02; minus a few pre-existing user dev boxes) for
   the dense ML-discipline corpus → retrain → P1 crosses → P2 code → iterate to grid-stable.
 
 ## Decisions locked (2026-06-25, user)
