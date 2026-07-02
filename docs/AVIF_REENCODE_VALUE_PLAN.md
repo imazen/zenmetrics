@@ -40,9 +40,11 @@ Corpus 12 imgs (4.14 Mpix, 64²–1024²), speeds {2,4,6}. `Mpix/€ = mpix_per_
 - **cx23 caveat (a finding):** 2 cores → low per-box throughput (1.12 Mpix/s @s6; s2 is ~55 min for
   the K=16 corpus). Fan WIDE (128-server cap → ~120 boxes), don't rely on per-box speed.
 - **arm (cax) is the cheapest per core (€0.005 < cx23's €0.0052) and likely edges cx23 on value**, but
-  wasn't measured (new-cax creates were capacity-out during the bench). Two persistent cax boxes
-  (`zen-arm-dev`, `zen-arm-big`) exist — measure avif on one (needs an arm64 cavif) to confirm before
-  committing arm as the winner.
+  wasn't measured (new-cax creates were capacity-out during the bench).
+  **DECISION (user, 2026-07-02): do NOT pursue arm — cx23 is the pick.** The ~4% per-core price edge
+  doesn't justify the arm64-image + arm64-cavif work vs cx23's already-decisive win (5.6× over
+  dedicated) and reliable EU x86 launchability. The persistent cax dev boxes (`zen-arm-dev`,
+  `zen-arm-big`) are NOT to be torn down or commandeered.
 
 ## 3. Availability reality (2026-07-02 — gates the plan more than raw value)
 - **arm (cax): capacity-out** across all EU sizes/locations — cheapest per core but UNOBTAINABLE now.
