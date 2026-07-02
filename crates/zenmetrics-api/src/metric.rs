@@ -1077,11 +1077,13 @@ impl MetricInner {
     /// as [`Scores`]. This is the lossless counterpart to
     /// [`Self::compute_srgb_u8`] (which keeps only the primary):
     ///
-    /// - **butter** → `scores = [max, pnorm_3]` (the libjxl 3-norm the
-    ///   single-value path drops), from one fused reduction kernel.
+    /// - **butter** (GPU or CPU) → `scores = [max, pnorm_3]` (the libjxl
+    ///   3-norm the single-value path drops); GPU from one fused reduction
+    ///   kernel, CPU via `CpuMetricState::compute_srgb_u8_multi`.
     /// - **zensim** → `scores = [zensim]` + `features` = the regime-length
     ///   feature vector (228 / 300 / 372), extracted in the same pass.
-    /// - **cvvdp / ssim2 / dssim / iwssim / CPU** → a single scalar.
+    /// - **cvvdp / ssim2 / dssim / iwssim (and CPU non-butter)** → a single
+    ///   scalar.
     ///
     /// Callers that need a metric's extra outputs can stay on the umbrella
     /// instead of constructing a parallel per-crate instance.
@@ -1095,7 +1097,30 @@ impl MetricInner {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            MetricInner::Cpu(s, _) => s.compute_srgb_u8(r, d).map(Scores::single),
+            MetricInner::Cpu(s, _) => {
+                let (score, pnorm3) = s.compute_srgb_u8_multi(r, d)?;
+                Ok(match pnorm3 {
+                    // Only butter yields a pnorm_3 — same `[max, pnorm_3]` shape
+                    // as the GPU butter arm below and the CPU fast-path in
+                    // `compute_from_linear_interleaved_multi`.
+                    Some(p) => Scores {
+                        metric_name: score.metric_name,
+                        metric_version: score.metric_version,
+                        scores: vec![
+                            NamedScore {
+                                name: "max",
+                                value: score.value,
+                            },
+                            NamedScore {
+                                name: "pnorm_3",
+                                value: p,
+                            },
+                        ],
+                        features: Vec::new(),
+                    },
+                    None => Scores::single(score),
+                })
+            }
             #[cfg(feature = "cvvdp")]
             MetricInner::Cvvdp(_) => self.compute_srgb_u8(r, d).map(Scores::single),
             #[cfg(feature = "butter")]

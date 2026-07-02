@@ -526,6 +526,60 @@ impl CpuMetricState {
         }
     }
 
+    /// Multi-output sibling of [`Self::compute_srgb_u8`]: scores one sRGB-u8
+    /// pair and returns `(Score, Option<f64>)` where the `Option<f64>` carries
+    /// butter's libjxl 3-norm (`pnorm_3`). Only butter yields a `pnorm_3`
+    /// (`Some(..)`); every other metric returns `None`. This mirrors the linear
+    /// path's [`Self::compute_from_linear_interleaved`] so the umbrella's
+    /// `compute_srgb_u8_multi` Cpu arm can emit the `[max, pnorm_3]` pair
+    /// exactly like the GPU butter and linear-multi arms.
+    pub(crate) fn compute_srgb_u8_multi(
+        &mut self,
+        r: &[u8],
+        d: &[u8],
+    ) -> Result<(Score, Option<f64>)> {
+        match self {
+            #[cfg(feature = "cpu-ssim2")]
+            CpuMetricState::Ssim2 { width, height, .. } => {
+                compute_ssim2(*width, *height, r, d).map(|s| (s, None))
+            }
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuMetricState::Cvvdp {
+                inner,
+                width,
+                height,
+            } => compute_cvvdp(inner, *width, *height, r, d).map(|s| (s, None)),
+            #[cfg(feature = "cpu-iwssim")]
+            CpuMetricState::Iwssim {
+                inner,
+                width,
+                height,
+            } => compute_iwssim(inner, *width, *height, r, d).map(|s| (s, None)),
+            #[cfg(feature = "cpu-zensim")]
+            CpuMetricState::Zensim {
+                inner,
+                width,
+                height,
+                ..
+            } => compute_zensim(inner, *width, *height, r, d).map(|s| (s, None)),
+            #[cfg(feature = "cpu-dssim")]
+            CpuMetricState::Dssim {
+                inner,
+                width,
+                height,
+                ..
+            } => compute_dssim(inner, *width, *height, r, d).map(|s| (s, None)),
+            #[cfg(feature = "cpu-butter")]
+            CpuMetricState::Butter {
+                params,
+                width,
+                height,
+                ..
+            } => compute_butter_multi(params, *width, *height, r, d).map(|(s, p)| (s, Some(p))),
+            CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
+        }
+    }
+
     // ---- warm / cached-reference path (folded in from the orchestrator's
     // `cpu_adapter`, 2026-06-27) — true precompute reused across distorted
     // candidates, replacing the umbrella's prior buffer-replay warm-ref. ----
@@ -1117,6 +1171,41 @@ fn compute_butter(
         metric_name: "butter",
         metric_version: env!("CARGO_PKG_VERSION"),
     })
+}
+
+/// Multi-output sibling of [`compute_butter`]: returns the max-norm [`Score`]
+/// **and** butter's libjxl 3-norm (`pnorm_3`) from the one sRGB
+/// [`butteraugli::butteraugli`] call (mirrors [`compute_butter_linear`]'s
+/// `(Score, f64)` on the linear path). The single-value sRGB path
+/// [`compute_butter`] drops `pnorm_3`; this keeps it for the umbrella's
+/// `compute_srgb_u8_multi` `[max, pnorm_3]` output.
+#[cfg(feature = "cpu-butter")]
+fn compute_butter_multi(
+    params: &butteraugli::ButteraugliParams,
+    width: u32,
+    height: u32,
+    r: &[u8],
+    d: &[u8],
+) -> Result<(Score, f64)> {
+    check_srgb_len("butter", width, height, r, d)?;
+    // Same in-place `RGB<u8>` reinterpret as `compute_butter` — no copy.
+    let ref_rgb: &[rgb::RGB<u8>] = bytemuck::cast_slice(r);
+    let dist_rgb: &[rgb::RGB<u8>] = bytemuck::cast_slice(d);
+    let ref_img = imgref::ImgRef::new(ref_rgb, width as usize, height as usize);
+    let dist_img = imgref::ImgRef::new(dist_rgb, width as usize, height as usize);
+    let result =
+        butteraugli::butteraugli(ref_img, dist_img, params).map_err(|e| Error::Metric {
+            kind: "butter",
+            message: format!("butteraugli: {e:?}"),
+        })?;
+    Ok((
+        Score {
+            value: result.score,
+            metric_name: "butter",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        },
+        result.pnorm_3,
+    ))
 }
 
 /// Validate that both sides are exactly `width × height × 3` interleaved f32.
