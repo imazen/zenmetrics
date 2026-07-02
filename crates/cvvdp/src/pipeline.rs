@@ -242,6 +242,13 @@ impl Cvvdp {
         self.check_srgb(ref_srgb)?;
         self.check_srgb(dist_srgb)?;
         self.warm_active = false;
+        // Byte-identical inputs are definitionally zero-difference —
+        // short-circuit before the pipeline so no floating-point path
+        // (however deep) can turn "no difference" into a non-finite
+        // score. See docs/NAN_ON_IDENTICAL_INPUT.md.
+        if ref_srgb == dist_srgb {
+            return Ok(10.0);
+        }
         // Convert both sides to DKL planar.
         let display = self.params.display;
         // SAFETY: split-borrow Scratch fields via separate &mut. Done
@@ -264,6 +271,14 @@ impl Cvvdp {
         self.check_srgb(ref_srgb)?;
         self.check_srgb(dist_srgb)?;
         self.warm_active = false;
+        // Byte-identical inputs are definitionally zero-difference —
+        // short-circuit before the pipeline. See "score" above and
+        // docs/NAN_ON_IDENTICAL_INPUT.md.
+        if ref_srgb == dist_srgb {
+            diffmap_out.clear();
+            diffmap_out.resize(self.width * self.height, 0.0);
+            return Ok(10.0);
+        }
         let display = self.params.display;
         let (ra, rrg, rvy, da, drg, dvy) = scratch_dkl_planes(&mut self.scratch);
         srgb_to_dkl_planar(ref_srgb, self.width, self.height, display, ra, rrg, rvy);

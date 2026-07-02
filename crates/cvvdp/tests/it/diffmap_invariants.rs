@@ -59,6 +59,44 @@ fn identical_inputs_yield_zero_diffmap() {
 }
 
 #[test]
+fn identical_solid_colors_yield_exact_max_jod_and_zero_diffmap() {
+    // Regression for the NaN-on-identical-images bug (fill4-6codec
+    // backfill 2026-07-02, mode A: "cvvdp returns NaN on zero-
+    // difference input pairs instead of the definitional max 10.0").
+    // Every prior identical-input test in this crate used a PRNG-grid
+    // or ramp pattern — never a solid/flat color, which is exactly
+    // the byte pattern a lossless-PNG / near-lossless-JXL round-trip
+    // of a flat region reproduces. `score` / `score_with_diffmap` now
+    // short-circuit on byte-identical input before the pipeline runs
+    // — see docs/NAN_ON_IDENTICAL_INPUT.md.
+    let w = 32;
+    let h = 32;
+    for &v in &[0u8, 1, 128, 254, 255] {
+        let img = vec![v; w * h * 3];
+        let mut cv = Cvvdp::new(w as u32, h as u32, CvvdpParams::default()).unwrap();
+        let mut diff = Vec::new();
+        let jod = cv
+            .score_with_diffmap(&img, &img, &mut diff)
+            .unwrap_or_else(|e| panic!("score_with_diffmap(solid {v}, solid {v}) failed: {e:?}"));
+        assert!(
+            jod.is_finite(),
+            "solid {v} vs itself must be finite, got {jod}"
+        );
+        assert!(
+            (jod - 10.0).abs() < 1e-6,
+            "solid {v} vs itself must be exactly 10.0 (identical inputs), got {jod}"
+        );
+        assert_eq!(diff.len(), w * h);
+        for &d in &diff {
+            assert_eq!(
+                d, 0.0,
+                "solid {v}: diffmap must be exactly zero for identical inputs"
+            );
+        }
+    }
+}
+
+#[test]
 fn diffmap_non_negative_and_finite() {
     let w = 128;
     let h = 96;

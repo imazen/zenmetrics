@@ -17,7 +17,45 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+## cvvdp
+
+### Fixed
+
+- **`Cvvdp::score` / `score_with_diffmap` no longer risk a non-finite JOD on
+  byte-identical inputs** — short-circuit to the definitional `10.0` (zero
+  diffmap) before any DKL/pyramid/CSF/masking work runs, instead of letting
+  a chain of `pow`/`log`/`div` decide. Closes a real production incidence:
+  0.36% NaN in the fill4-6codec GPU-metrics backfill (2026-07-02), 35% of
+  which were exactly byte-identical pairs. New regression test
+  `diffmap_invariants::identical_solid_colors_yield_exact_max_jod_and_zero_diffmap`
+  — every prior identical-input test in this crate used a ramp or PRNG-noise
+  pattern, never a solid/flat color (this change; see
+  `docs/NAN_ON_IDENTICAL_INPUT.md`).
+
+## cvvdp-gpu
+
+### Fixed
+
+- **`Cvvdp::compute_dkl_jod` / `score_with_diffmap` no longer risk a non-finite
+  JOD on byte-identical inputs** — same fast path as the `cvvdp` CPU crate
+  above; covers `score` and `score_with_reference`, which both funnel through
+  `compute_dkl_jod`. New regression test
+  `pipeline_score::cvvdp_score_identical_solid_colors_yield_exact_max_jod`.
+  Full investigation (extensive live reproduction attempts against the real
+  `zenmetrics score-pairs --metric cvvdp-gpu` binary at 3,000-real-image
+  scale, all clean; root-caused via the fill4-6codec backfill's flagged-rows
+  forensics instead) in `docs/NAN_ON_IDENTICAL_INPUT.md` (this change).
+
 ## zenmetrics-cli
+
+### Fixed
+
+- **`gif` feature referenced a `zengif/zencodec` cargo feature that no
+  longer exists** (zengif made `zencodec` a required, always-on dependency
+  upstream) — broke `cargo`'s workspace-wide resolution for every build,
+  not just `gif`-feature ones (optional path-deps are version/feature-
+  checked at resolve time regardless of which feature is active). Dropped
+  the stale feature reference (this change).
 
 ### Changed
 

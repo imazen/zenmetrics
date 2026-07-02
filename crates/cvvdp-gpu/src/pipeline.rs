@@ -7128,6 +7128,16 @@ impl<R: Runtime> Cvvdp<R> {
     pub fn compute_dkl_jod(&mut self, ref_srgb: &[u8], dist_srgb: &[u8], ppd: f32) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
 
+        // Byte-identical inputs are definitionally zero-difference —
+        // short-circuit before any GPU dispatch so no floating-point
+        // path (however deep) can turn "no difference" into a
+        // non-finite score. Covers `score` / `score_with_reference`,
+        // which both funnel through this function. See
+        // docs/NAN_ON_IDENTICAL_INPUT.md.
+        if ref_srgb == dist_srgb {
+            return Ok(10.0);
+        }
+
         // Run the full D-bands GPU dispatch (color → weber → CSF →
         // masking). `_dispatch_d_bands_into_scratch` leaves the
         // per-band D planes resident in `self.d_scratch[k].d[c]` for
@@ -8693,6 +8703,14 @@ impl<R: Runtime> Cvvdp<R> {
                 expected,
                 got: dist_srgb.len(),
             });
+        }
+        // Byte-identical inputs are definitionally zero-difference —
+        // short-circuit before any GPU dispatch. See `compute_dkl_jod`
+        // and docs/NAN_ON_IDENTICAL_INPUT.md.
+        if ref_srgb == dist_srgb {
+            diffmap_out.clear();
+            diffmap_out.resize((self.width as usize) * (self.height as usize), 0.0);
+            return Ok(10.0);
         }
         self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
         self._pool_and_finalize_jod_with_diffmap(diffmap_out)

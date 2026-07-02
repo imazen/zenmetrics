@@ -2743,6 +2743,39 @@ fn cvvdp_score_flat_vs_flat_yields_max_jod() {
 }
 
 #[test]
+fn cvvdp_score_identical_solid_colors_yield_exact_max_jod() {
+    // Regression for the NaN-on-identical-images bug (fill4-6codec
+    // backfill 2026-07-02, mode A: "cvvdp returns NaN on zero-
+    // difference input pairs instead of the definitional max 10.0").
+    // Every prior identical-input test (`upstream_parity_extended.rs`,
+    // `diffmap_invariants.rs`) used a ramp or PRNG-noise pattern —
+    // never a solid/flat color, which is exactly the byte pattern a
+    // lossless-PNG / near-lossless-JXL round-trip of a flat region
+    // reproduces. `Cvvdp::compute_dkl_jod` (and thus `score` /
+    // `score_with_reference`) now short-circuits on byte-identical
+    // input before any GPU dispatch — see docs/NAN_ON_IDENTICAL_INPUT.md.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    for &v in &[0u8, 1, 128, 254, 255] {
+        let img: Vec<u8> = vec![v; (w * h * 3) as usize];
+        let jod = cvvdp
+            .score(&img, &img)
+            .unwrap_or_else(|e| panic!("score(solid {v}, solid {v}) failed: {e:?}"));
+        assert!(
+            jod.is_finite(),
+            "solid {v} vs itself must be finite, got {jod}"
+        );
+        assert!(
+            (jod - 10.0).abs() < 1e-6,
+            "solid {v} vs itself must be exactly 10.0 (identical inputs), got {jod}"
+        );
+    }
+}
+
+#[test]
 fn cvvdp_score_textured_vs_flat_detects_detail_loss() {
     // Tick 545: GPU sibling of `textured_ref_vs_flat_dist_detects_detail_loss`
     // (host scalar, tick 543). Textured ref + flat dist (catastrophic

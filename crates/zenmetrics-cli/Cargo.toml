@@ -58,7 +58,7 @@ jxl = ["dep:zenjxl", "dep:jxl-encoder"]
 # wrapper — the type that implements `estimate_encode_resources`, which the
 # `fleet-plan --codec` path constructs at a representative default to size the
 # encode side.
-gif = ["dep:zengif", "zengif/zencodec"]
+gif = ["dep:zengif"]
 tiff = ["dep:zentiff", "zentiff/zencodec"]
 
 # HDR scoring — CORE, default-on (`default` + `sweep` both pull it, so the
