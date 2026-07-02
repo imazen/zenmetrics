@@ -1,26 +1,52 @@
 # AVIF Re-encode — Value-Optimized Plan (2026-07-02)
 
-**Status: PLAN ONLY. The encoder is not yet wired to encode (see §1). This is the
-ready-to-fire recipe for when it is.** Backed by a live Hetzner box-value benchmark
-(2026-07-02) + live server-type pricing/availability.
+**Status: PLAN, ready to fire — NO prerequisite blocker (§1 corrected 2026-07-02).**
+Backed by a live Hetzner box-value benchmark (2026-07-02) + live server-type
+pricing/availability.
 
-## 1. PREREQUISITE (hard blocker) — wire the FIXED zenrav1e into cavif
-The RD win we're re-encoding FOR (zenrav1e `4563cc5b`: partition-search fix —
-`PARTITION_HORZ/VERT` + `HORZ_4/VERT_4` + the ordinal-gate fix; measured **+0.1% BD-rate
-vs libaom, down from +2.1%**, per zenavif `docs/RD_GAP_VS_LIBAOM.md`) is a LOCAL `zenrav1e
-0.2.0` and is **NOT wired into any cavif build today**: `ravif/ravif/Cargo.toml` pins
-`zenrav1e = "0.1.4"` (crates.io) with **no `[patch]`**. A fresh `cargo build` of cavif
-produces the OLD (+2.1%) encoder. Before the re-run, do ONE of:
-- **(A) release:** publish `zenrav1e 0.2.0` → bump ravif's dep to `0.2.0` → rebuild. Clean; needs a release.
-- **(B) build-local:** bump ravif's `zenrav1e` req to `0.2.0` AND add `[patch.crates-io] zenrav1e =
-  { path = "../zenrav1e" }` (a plain patch alone FAILS — `0.2.0` doesn't satisfy `^0.1.4`, so the req must move too).
-- **VERIFY** before fleet launch: encode a test image; confirm the new partition types are
-  exercised (bitstream inspector) OR the BD-rate matches +0.1%, not +2.1%.
+## 1. CORRECTED 2026-07-02 — the fixed zenrav1e IS already wired in; there is no blocker
+**The production re-encode goes through `zenmetrics-cli`'s own sweep path
+(`zenavif` crate, path dep) — it never touches `cavif`/`ravif` directly, and the
+prior "wire it into cavif" framing below was simply the wrong crate to check.**
+`zenmetrics/Cargo.toml`'s own `[patch.crates-io]` already pins
+`zenrav1e = { path = "../zenrav1e" }`, which overrides crates.io for EVERY crate
+in the dependency graph that pulls it — including `ravif`'s (zenavif's dep)
+`zenrav1e = "0.1.4"` pin. **Verified empirically, not assumed:**
+- `Cargo.lock`: `zenrav1e` resolves to `0.2.0` with no `source = "registry+…"`
+  line (i.e. it's the local path dep, not crates.io).
+- `../zenrav1e` HEAD (`2fac1af6`) has the RD-fix commit `4563cc5b`
+  (partition-search: `PARTITION_HORZ/VERT` + `HORZ_4/VERT_4` + ordinal-gate)
+  as an ancestor — `git merge-base --is-ancestor 4563cc5b HEAD` confirmed.
+
+**So any normal `zenmetrics-cli` build (the sweep/fill/jobexec binary — the
+actual re-encode vehicle per §7) already gets the RD-fixed encoder. No release,
+no patch edit, no rebuild-with-different-flags needed. The re-run can fire
+immediately.**
+
+<details><summary>Superseded original §1 (WRONG — kept for the record, see verify-premises-before-cascading memory)</summary>
+
+Original claim: "the RD win... is NOT wired into any cavif build today: `ravif/ravif/Cargo.toml`
+pins `zenrav1e = "0.1.4"` (crates.io) with no `[patch]`. A fresh `cargo build` of cavif
+produces the OLD (+2.1%) encoder." This was true of a *standalone* `cavif` build in isolation,
+but wrong for the actual production path: it never checked whether the CONSUMING workspace
+(zenmetrics) patches `zenrav1e` at a higher level, which it does. Checking a dependency's own
+Cargo.toml pin without checking the top-level workspace's `[patch]` table is the mistake —
+Cargo patches apply transitively from the root workspace down, regardless of what a
+mid-graph crate's own manifest says.
+</details>
 
 ## 2. Box-type value — MEASURED (2026-07-02, size-normalized Mpix/€)
-**Method (learned the hard way): ship the PRE-COMPILED cavif binary** (glibc 2.35, run in an
-`ubuntu:22.04` container), do NOT build on-box — on-box builds failed twice (missing nasm; then a
-mktemp bug) before the binary approach yielded valid numbers. `-j 1` per encode × all cores parallel.
+**Method note:** this box-value comparison used the standalone `cavif` CLI as a throughput
+PROXY for AV1 encode cost (cheap to ship as one static binary for a quick cross-box bench) —
+it is NOT the production re-encode path (that's `zenmetrics-cli` → `zenavif`, per §1/§7).
+cavif and zenavif both ultimately drive rav1e-family encoding, so relative box value
+(cx23 vs ccx vs cpx) should transfer, but the ABSOLUTE Mpix/s numbers below are cavif's, not
+zenavif's — re-verify per-core throughput with the real `zenmetrics-cli` sweep binary before
+finalizing box count, since zenavif's mandatory-axis modes_full grid (§5) costs more per cell
+than cavif's default single-mode encode.
+**Ship the PRE-COMPILED cavif binary** (glibc 2.35, run in an `ubuntu:22.04` container), do NOT
+build on-box — on-box builds failed twice (missing nasm; then a mktemp bug) before the binary
+approach yielded valid numbers. `-j 1` per encode × all cores parallel.
 Corpus 12 imgs (4.14 Mpix, 64²–1024²), speeds {2,4,6}. `Mpix/€ = mpix_per_s × 3600 ÷ €/hr`.
 
 | box | kind | cores | €/hr | region | Mpix/s @s6 | **Mpix/€ @s6** | Mpix/€ @s4 | Mpix/s/core @s6 |
@@ -88,5 +114,6 @@ Corpus 12 imgs (4.14 Mpix, 64²–1024²), speeds {2,4,6}. `Mpix/€ = mpix_per_
 
 ## 7. Reuse (don't hand-roll)
 `scripts/sweep/hetzner_cpu_sweep.sh CODEC=zenavif PLAN=modes_full` (EU default, variants→R2 tars).
-Set `TYPES=cx23` (+ `STYPE`). Feeds the tar-shard scoring pipeline. The box worker ships a
-pre-compiled binary — do NOT build cavif on-box (§2 method note).
+Set `TYPES=cx23` (+ `STYPE`). Feeds the tar-shard scoring pipeline. This is the actual production
+path — it builds/ships the `zenmetrics-cli` binary (which links `zenavif`, already carrying the
+fixed `zenrav1e` per §1), NOT `cavif` — `cavif` was only used for the isolated §2 box-value bench.
