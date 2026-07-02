@@ -17,12 +17,12 @@ set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }
 # scoped creds: rw on the run prefix + read on the datagen prefix (ref renditions + variants.tar)
-body=$(python3 -c "import json,os;print(json.dumps({'bucket':'$BUCKET','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':28800,'prefixes':['$RUNP/','$DGP/']}))")
+body=$(python3 -c "import json,os;print(json.dumps({'bucket':'$BUCKET','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':28800,'prefixes':[p for p in ['$RUNP/','$DGP/','${ZEN_CORPUS_PREFIX_OVERRIDE:-}/','${ZEN_TAR_PREFIX_EXTRA:-}'] if len(p)>1]}))")
 curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$body" "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/sf_cred.json
 read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/sf_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
 [ -n "${AK:-}" ] || { log "cred mint failed"; cat /tmp/sf_cred.json | tee -a "$LOG"; exit 1; }
 MANIFEST="s3://$BUCKET/$RUNP/manifest.json"; CTLKEY="$RUNP/control.json"
-TAR="s3://$BUCKET/$DGP/$CODEC/variants.tar"; IDX="s3://$BUCKET/$RUNP/variant_index.tsv"
+TAR="${ZEN_TAR_OVERRIDE:-s3://$BUCKET/$DGP/$CODEC/variants.tar}"; IDX="s3://$BUCKET/$RUNP/variant_index.tsv"
 NJOBS=$(r2 cat "$MANIFEST" 2>/dev/null | python3 -c "import json,sys;print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
 if [ "$SCALE" = "0" ]; then
   printf '{"paused":true}' > /tmp/sf_ctl.json; r2 cp /tmp/sf_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
@@ -55,7 +55,7 @@ NOFF=$(echo "$OFFERS" | python3 -c "import json,sys;o=json.load(sys.stdin);o=o i
 while [ "$launched" -lt "$N" ] && [ "$idx" -lt "$NOFF" ]; do
   OFFER=$(echo "$OFFERS" | python3 -c "import json,sys;o=json.load(sys.stdin);o=o if isinstance(o,list) else o.get('offers',[]);print(o[$idx]['id'])")
   idx=$((idx + 1)); wk=$((launched + 1))
-  ENVB="-e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK -e AWS_SESSION_TOKEN=$ST -e AWS_REGION=auto -e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUNP -e ZEN_MANIFEST_URI=$MANIFEST -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_CORPUS_PREFIX=$DGP/ref -e ZEN_VARIANTS_TAR_URI=$TAR -e ZEN_VARIANT_INDEX_URI=$IDX -e ZEN_PERSISTENT_EXEC=1 -e ZEN_PROVIDER=vast-gpu -e ZEN_IDLE_PASSES=10 -e ZEN_WORKER=sf-$wk"
+  ENVB="-e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK -e AWS_SESSION_TOKEN=$ST -e AWS_REGION=auto -e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUNP -e ZEN_MANIFEST_URI=$MANIFEST -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_CORPUS_PREFIX=${ZEN_CORPUS_PREFIX_OVERRIDE:-$DGP/ref} -e ZEN_VARIANTS_TAR_URI=$TAR -e ZEN_VARIANT_INDEX_URI=$IDX -e ZEN_PERSISTENT_EXEC=1 -e ZEN_PROVIDER=vast-gpu -e ZEN_IDLE_PASSES=10 -e ZEN_WORKER=sf-$wk"
   if timeout 40 vastai create instance "$OFFER" --image "$IMAGE" --label "group=$RUN" --disk 40 --env "$ENVB" --onstart-cmd "$ONSTART" 2>&1 | grep -iqE 'new_contract|success'; then
     launched=$((launched + 1)); log "launched box $launched/$N (offer $OFFER, try $idx)"
   else log "create failed offer $OFFER (try $idx)"; fi
