@@ -772,8 +772,54 @@ fn run_one_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<
             ));
             std::fs::write(&dist_path, &encoded.bytes)?;
             let distorted = decode_image_to_rgb8(&dist_path)?;
-            let pairs = score(metric, &reference, &distorted)?;
             let _ = std::fs::remove_file(&dist_path);
+            // zensim(-gpu) yields the 372-feature vector from the SAME decode for free — emit a
+            // `feature` row ALONGSIDE the metric row so the 372-D vector is ALWAYS captured, exactly
+            // like `run_score_file`. Without this, a `declare metric jobs` flow silently drops the
+            // features (the gap that broke the jxl HQ re-do). Non-zensim metrics have no native
+            // feature vector, so they keep the scalar-only path below.
+            #[cfg(feature = "gpu-zensim")]
+            if metric == "zensim-gpu" || metric == "zensim" {
+                match crate::metrics::run_zensim_gpu_with_features(
+                    &reference,
+                    &distorted,
+                    crate::metrics::GpuRuntime::Auto,
+                    crate::metrics::ZensimFeatureRegime::WithIw,
+                ) {
+                    Ok((sc, feats)) => {
+                        let metric_row = serde_json::json!({
+                            "kind": "metric",
+                            "metric": metric,
+                            "image_path": image_path,
+                            "codec": codec_name,
+                            "q": cell["q"],
+                            "knob_tuple_json": knob_json,
+                            "score": sc,
+                            "scores": { "zensim_score": sc },
+                            "encoded_bytes": encoded.bytes.len(),
+                            "encode_ms": encoded.encode_ms,
+                        });
+                        let feat_row = serde_json::json!({
+                            "kind": "feature",
+                            "image_path": image_path,
+                            "codec": codec_name,
+                            "q": cell["q"],
+                            "knob_tuple_json": knob_json,
+                            "regime": "with-iw",
+                            "zensim_score": sc,
+                            "features": feats,
+                        });
+                        return Ok(format!(
+                            "{}\n{}",
+                            serde_json::to_string(&metric_row)?,
+                            serde_json::to_string(&feat_row)?
+                        )
+                        .into_bytes());
+                    }
+                    Err(e) => return Err(format!("zensim feature extraction: {e}").into()),
+                }
+            }
+            let pairs = score(metric, &reference, &distorted)?;
             let mut scores = Map::new();
             for (name, value) in &pairs {
                 scores.insert((*name).to_string(), serde_json::json!(value));
