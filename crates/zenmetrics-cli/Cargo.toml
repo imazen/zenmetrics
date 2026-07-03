@@ -59,7 +59,7 @@ jxl = ["dep:zenjxl", "dep:jxl-encoder"]
 # `fleet-plan --codec` path constructs at a representative default to size the
 # encode side.
 gif = ["dep:zengif"]
-tiff = ["dep:zentiff", "zentiff/zencodec"]
+tiff = ["dep:zentiff"]
 
 # HDR scoring — CORE, default-on (`default` + `sweep` both pull it, so the
 # `--hdr` flag + PQ-PNG/PQ-JXL/EXR ref decode + the per-metric HDR feeding are

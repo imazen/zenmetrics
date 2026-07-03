@@ -223,6 +223,18 @@ codegen-units = 1
 # Drop these when zenpixels-convert 0.2.15 publishes to crates.io.
 zenpixels         = { git = "https://github.com/imazen/zenpixels", rev = "e890b67148ca6e1768594b43f5a6415d160ef81f" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "e890b67148ca6e1768594b43f5a6415d160ef81f" }
+# zencodec: crates.io 0.1.25 predates the CategorizedError taxonomy
+# (zencodec#103) that zenjxl 0.3.0 and zengif both consume — zenjxl's own
+# error.rs references `zencodec::CodecError`, which 0.1.25 renamed to the
+# `CodecErrorExt` trait. zenjxl and zengif each carry this SAME patch in
+# their own (standalone-build-only) Cargo.toml, but path-dependency
+# `[patch]` sections are ignored once pulled into this workspace, so the
+# workspace root needs its own copy or it silently falls back to the
+# incompatible crates.io release (47 compile errors in zenjxl's error.rs,
+# discovered 2026-07-02 rebuilding zenmetrics-cli after a zenjxl sweep
+# change). Drop this once zencodec 0.1.26 publishes and zenjxl/zengif bump
+# their version requirements.
+zencodec = { git = "https://github.com/imazen/zencodec", rev = "fde07d075711ab1f9a02a935f61e1d3cc655c3a3" }
 # Local sibling of the canonical zensim repo. The feat/principled-activity
 # branch landed on main weeks ago — the previous path-pin to
 # ../zensim--principled-activity was carrying a stale checkout that
