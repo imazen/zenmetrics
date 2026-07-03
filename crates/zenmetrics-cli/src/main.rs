@@ -401,6 +401,7 @@ struct SweepArgs {
     /// nor `zensim-gpu` is in the metric set.
     #[arg(long, value_enum, default_value = "with-iw")]
     zensim_features_regime: crate::metrics::ZensimFeatureRegime,
+
     /// Optional directory to receive a PNG of every successfully
     /// decoded cell's distorted image. Filenames are deterministic
     /// per `(src_path, codec, q, knobs)`. Pairs with `--pairs-tsv`
@@ -520,6 +521,12 @@ struct ScorePairsArgs {
     /// picker-training schema. Ignored when `--feature-output` is unset.
     #[arg(long, value_enum, default_value = "with-iw")]
     zensim_features_regime: crate::metrics::ZensimFeatureRegime,
+    /// HDR feature regime: route `--feature-output` through the PU-linear
+    /// integrated path (`Zensim::compute_pu_linear_extended_features`,
+    /// absolute nits, no u8 shell — Profile B v3) instead of the PU21 u8
+    /// shell (the v1 regime, kept as default for reproducibility).
+    #[arg(long, default_value_t = false)]
+    hdr_features_pu_linear: bool,
     /// CubeCL runtime selection for GPU metrics.
     #[arg(long, value_enum, default_value = "auto")]
     gpu_runtime: GpuRuntime,
@@ -1493,6 +1500,37 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             // cvvdp / butteraugli-gpu faithful HDR path already produced the
             // score(s); skip all u8 decode/score branches for this pair.
             faithful
+        } else if want_features && hdr_mode && args.hdr_features_pu_linear {
+            // Profile B v3 regime: PU-linear integrated features — absolute
+            // nits into zensim's own PU-XYB pipeline (no u8 shell, no
+            // display-peak anchor; transfer-invariant). CPU path; the score
+            // is the validated integrated-PU zensim score.
+            #[cfg(all(feature = "hdr", feature = "cpu-metrics"))]
+            {
+                (|| -> Result<Vec<f64>, Box<dyn std::error::Error>> {
+                    let r = hdr::decode_to_nits(&ref_path)?;
+                    let d = hdr::decode_to_nits(&dist_path)?;
+                    if r.width != d.width || r.height != d.height {
+                        return Err(format!(
+                            "dimension mismatch: {}x{} vs {}x{}",
+                            r.width, r.height, d.width, d.height
+                        )
+                        .into());
+                    }
+                    let (score, features) = crate::metrics::zensim::score_with_features_pu_linear(
+                        &r.rgb,
+                        &d.rgb,
+                        r.width as usize,
+                        r.height as usize,
+                    )?;
+                    features_for_pair = Some(features);
+                    Ok(vec![score])
+                })()
+            }
+            #[cfg(not(all(feature = "hdr", feature = "cpu-metrics")))]
+            {
+                Err("--hdr-features-pu-linear needs hdr + cpu-metrics features".into())
+            }
         } else if want_features {
             // Decode the pair to the zensim feeding: PU21 u8 in HDR mode (the
             // GPU-zensim HDR shell, `to_sdr_rgb8`), plain sRGB8 otherwise. The
