@@ -74,6 +74,19 @@ for m in $METRICS; do
   echo "[hdr-score $(ts)] score-pairs --hdr --metric $m" | tee -a "$log"
   feat=()
   case "$m" in zensim-gpu|zensim) feat=(--feature-output "$sdir/zensim_features.parquet" --zensim-features-regime with-iw);; esac
+  # FIRST-PAIR GATE (2026-07-03): a feature-stripped binary "succeeds" while
+  # writing 100% NaN rows (the zensim-gpu incident). Score ONE pair first and
+  # refuse the run if it errors or yields NaN.
+  probe=$(mktemp -d); head -2 "$lpairs" > "$probe/one.tsv"
+  if ! "$B" score-pairs --metric "$m" --hdr --hdr-transfer "$HDR_TRANSFER" \
+      --pairs-tsv "$probe/one.tsv" --out-parquet "$probe/one.parquet" \
+      --gpu-runtime "$GPU_RUNTIME" >"$probe/log" 2>&1 \
+      || grep -qiE "failed:|requires a .* build" "$probe/log" \
+      || ! python3 -c "import pyarrow.parquet as pq,math,sys; t=pq.read_table('$probe/one.parquet'); c=[x for x in t.schema.names if x not in ('image_path','codec','q','knob_tuple_json')][0]; v=t[c][0].as_py(); sys.exit(0 if v is not None and not math.isnan(v) else 1)"; then
+    echo "[hdr-score $(ts)] $m FIRST-PAIR GATE FAILED — binary lacks this metric's HDR path; fix the build (see header). log:" | tee -a "$log"
+    tail -3 "$probe/log" | tee -a "$log"; rm -rf "$probe"; continue
+  fi
+  rm -rf "$probe"
   if ~/work/zen/scripts/run-heavy --mem "$MEM" --jobs "$JOBS" -- \
       "$B" score-pairs --metric "$m" --hdr --hdr-transfer "$HDR_TRANSFER" \
       --pairs-tsv "$lpairs" --out-parquet "$sdir/$m.parquet" \
