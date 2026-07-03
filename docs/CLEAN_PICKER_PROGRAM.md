@@ -89,7 +89,47 @@ Each: sweep the codec's knob grid over the segmented corpus → join content fea
 | codec/task | sweep | picker trained | clean split | `.bin` committed |
 |---|---|---|---|---|
 | jxl lossy   | dense-r6 (interim, best-from-spent-data) | `zenjxl_lossy_picker_v0.1_dense-r6-evenodd` | ✓ even/odd | ✓ (zenjxl 54646bcc) |
-| jxl lossless | clean-corpus sweep PENDING (no held-out data exists) | ❌ | — | ❌ |
+| jxl lossless | clean-corpus `modular_dense` DONE (120 configs incl. palette axis, 539,640 rows, `s3://zentrain/canonical/2026-07-03/zenjxl_lossless/`) | trained, NOT gate-clean (see below) | ✓ even/odd | ❌ (blocked on gate) |
+
+### jxl-modular palette axis — root cause fixed, K=1 gate still open (2026-07-03)
+
+Added `palette_colors` to `LosslessAxes::modular_dense` (60→120 configs) after finding
+the picker's worst K=1 outlier (`o_7053`, a fine grid + sparse colored dots, ~32
+colors) hit **320.9% overhead on every architecture/feature-set tried** — root cause:
+no swept cell had ever disabled palette detection, and palette-on is a measured **5.5x
+regression** on this content (16,723 B vs 3,011 B at effort 7). zenjxl commits
+`7b4e10d8` (axis) + `535aca1a` (fingerprint fix — the axis was initially silently
+deduped away because `fingerprint()`/`encode_fingerprint()` never hashed the new
+field, see zenjxl Known Bugs / commit message). Full delta re-swept on a 12-box
+Hetzner fleet (`jxl-modular-palette-2026-07-02`, ~$15, zero encode/decode failures)
+and merged into a new canonical (`s3://zentrain/canonical/2026-07-03/zenjxl_lossless/`,
+`_MANIFEST.json` has full provenance + sha256s); the 269,820 pre-existing rows are
+byte-identical to 2026-06-27 (verified, 0 mismatches).
+
+**Result — the targeted problem is fixed:** `o_7053`'s worst-case palette-driven
+regression dropped from the measured 5.5x to **1.0-1.26x** across all its size
+variants once palette-off became a reachable, learnable choice (checked directly
+against the merged Pareto data, not just the trained picker's behavior).
+
+**Result — the picker's OVERALL K=1 gate is still open, but the residual is NOT a
+palette problem:** retrained (`train_hybrid.py --hidden 256 --verify-k 1`) K=1 =
+mean 1.54% / p50 0.19% / p90 3.40% / p99 28.9% / **max 74.4%**; `LOW_ARGMIN` safety
+violation fires (val argmin_acc 9.9% < 10% floor — expected mechanically, since the
+palette axis doubles the config space with mostly-identical-bytes duplicates,
+diluting exact-argmin-match without hurting real RD quality; the doc's own note
+flags this is NOT the quality gate). Traced the new K=1 worst offenders via
+`--dump-overheads`: **`o_7021` (74.4%, ratio exactly 1.000 palette-on-vs-off — ties
+regardless of palette) and `o_7053` at 640x640 specifically (51.0%, also ratio
+1.000 at that one size)** — both are picks of the wrong effort/predictor, unrelated
+to palette. **Conclusion: the picker was never failing on ONE specific issue —
+palette was one real, now-fixed cause; a second, general effort/predictor-accuracy
+gap remains and needs its own investigation.** `.bin` NOT committed — the safety
+violation is real and the gate isn't clean yet.
+
+Artifacts: `docs/CLEAN_PICKER_PROGRAM.md` (this entry), `zenjxl_modular_picker_config.py`
+(zenanalyze, 120-config regex + `palette_off` categorical axis), training log
+`/tmp/jxl_modular_retrain2_2026-07-03.log`, per-row overhead dump
+`/tmp/jxl_modular_overheads_2026-07-03.csv`.
 | zenjpeg     | clean-corpus sweep PENDING (no held-out data exists) | older only | ❌ | ❌ |
 | zenavif     | clean-corpus sweep PENDING (no held-out data exists) | older only | ❌ | ❌ |
 
