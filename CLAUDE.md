@@ -541,6 +541,25 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **`sweep --metric ssim2` always fails with "not enabled in this build" even on a
+  build with `cpu-metrics` — CPU dispatch checks the wrong feature flag (found
+  2026-07-02/03).** `zenmetrics-cli`'s `cpu-metrics` feature forwards to
+  `zenmetrics-api/cpu-metrics`, which enables `cpu-ssim2` (the real CPU path).
+  But the sweep's own metric-scoring code is gated on `#[cfg(feature = "ssim2")]`
+  — `zenmetrics-api`'s PLAIN `ssim2` feature, which is `["dep:ssim2-gpu",
+  "dep:zenmetrics-gpu-core"]` (GPU-only, see `crates/zenmetrics-api/Cargo.toml`).
+  A CPU-only build (`cpu-metrics` without `gpu`/`gpu-ssim2`) can never satisfy
+  that cfg, so `zenmetrics sweep --metric ssim2` fails on every cell with
+  "metric 'ssim2' is not enabled in this build of zenmetrics-api (enable the
+  matching Cargo feature)" — reproduces locally, not Hetzner-specific.
+  `list-metrics` correctly reports ssim2 as CPU-available (it must check a
+  different flag), which makes the mismatch easy to miss until you actually try
+  to score. NOT YET FIXED — the site in `zenmetrics-cli` needs to check
+  `cpu-ssim2` (or the umbrella `Backend::Cpu` dispatch) instead of the bare
+  `ssim2` feature for its CPU path. Workaround used so far: `--metric zensim`
+  only, backfilling `score_ssim2` as a hardcoded 100.0 for lossless corpora
+  (a measured constant, not a guess — every lossless cell has identical pixels).
+
 - **jxl `modes_full` memory — RESOLVED 2026-06-25; the "BufferPool leak" was a
   MISDIAGNOSIS.** There is NO per-cell / within-process leak. Measured on current
   HEAD (agent replication; `/tmp/repro_jxl_VERDICT.md`, `/tmp/repro_jxl_rss.tsv`):
