@@ -302,3 +302,14 @@ predate PU21; PU08 encoding differs most at low luminance, which dominates
 PSNR on the dark narwaria scenes). Full closure would require UPIQ's 2020
 benchmark code; recorded as open/low-priority. Defensible comparisons remain
 the within-harness ones; cross-set rows are labeled "their CSV" in addendum 3.
+
+## Addendum 2026-07-03 — zensim BAKES over shell features (Profile B v1)
+
+Forwarding 372 shell-regime features (PU-rescale u8, `with-iw`) through
+trained zensim bakes on the same 380-pair UPIQ set (harness:
+zensim `scripts/hdr/upiq_panel.py`, dial-grid pred-dump):
+w5_hdrmix_s17 (B v1) |SROCC| 0.6546 · t1dro51_s31 (SDR bake) 0.6594 ·
+Profile A 0.6459. The ~0.05 shell penalty documented above for ssim2
+reproduces at the bake level — motivating the PU-linear FEATURE path
+(`--hdr-features-pu-linear`, Zensim::compute_pu_linear_extended_features)
+as the B v3 regime.
