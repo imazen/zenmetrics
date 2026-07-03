@@ -397,11 +397,18 @@ impl CpuMetricState {
     /// is no u8 round-trip and no input-side PU shell (the shell capped at
     /// ~0.61 UPIQ, #25). Every other metric returns a loud error; feed it
     /// per `hdr::hdr_feeding()`.
+    /// Returns `(Score, features)` -- `features` is empty for every metric
+    /// except zensim, whose `ZensimResult::features()` (the picker-training
+    /// feature vector) was previously discarded here (found 2026-07-03: this
+    /// silently dropped 228/300/372 features on every CPU-HDR zensim call,
+    /// contradicting `HdrScorer`'s own documented "zensim -> score + feature
+    /// vector" contract -- caught by a new `hdr_scorer_cpu.rs` test, which
+    /// GPU-only HDR test coverage had never exercised).
     pub(crate) fn compute_pu_nits_interleaved(
         &mut self,
         ref_nits: &[f32],
         dis_nits: &[f32],
-    ) -> Result<Score> {
+    ) -> Result<(Score, Vec<f64>)> {
         // Quiet unused-arg lints in single-`cpu-*` feature configurations
         // (same convention as `CpuMetricState::new`).
         let _ = (ref_nits, dis_nits);
@@ -440,11 +447,14 @@ impl CpuMetricState {
                             kind: "ssim2",
                             message: format!("fast-ssim2 compute_ssimulacra2_pu_nits: {e}"),
                         })?;
-                Ok(Score {
-                    value: v,
-                    metric_name: "ssim2",
-                    metric_version: env!("CARGO_PKG_VERSION"),
-                })
+                Ok((
+                    Score {
+                        value: v,
+                        metric_name: "ssim2",
+                        metric_version: env!("CARGO_PKG_VERSION"),
+                    },
+                    Vec::new(),
+                ))
             }
             #[cfg(feature = "cpu-zensim")]
             CpuMetricState::Zensim {
@@ -471,11 +481,14 @@ impl CpuMetricState {
                         kind: "zensim",
                         message: format!("zensim compute_pu_linear: {e:?}"),
                     })?;
-                Ok(Score {
-                    value: result.score(),
-                    metric_name: "zensim",
-                    metric_version: env!("CARGO_PKG_VERSION"),
-                })
+                Ok((
+                    Score {
+                        value: result.score(),
+                        metric_name: "zensim",
+                        metric_version: env!("CARGO_PKG_VERSION"),
+                    },
+                    result.features().to_vec(),
+                ))
             }
             _ => Err(Error::Metric {
                 kind: "cpu",

@@ -47,6 +47,13 @@ mod dispatch;
     feature = "zensim"
 ))]
 mod hdr_scorer;
+#[cfg(all(
+    feature = "cpu-butter",
+    feature = "cpu-ssim2",
+    feature = "cpu-zensim",
+    feature = "hdr"
+))]
+mod hdr_scorer_cpu;
 mod metric_base_hdr;
 mod pixels_smoke;
 mod score_pair;

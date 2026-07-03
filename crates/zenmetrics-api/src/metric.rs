@@ -282,18 +282,52 @@ pub enum MetricParams {
     /// [`butteraugli_gpu::ButteraugliParams`] passthrough.
     #[cfg(feature = "butter")]
     Butter(butteraugli_gpu::ButteraugliParams),
+    /// CPU-only placeholder for a build with `cpu-butter` but not the GPU
+    /// `butter` feature. `cpu_dispatch::CpuMetricState::new`'s Butter arm
+    /// only reads the GPU-typed payload behind its own `#[cfg(feature =
+    /// "butter")]` lift (mutually exclusive with this arm), so there is
+    /// nothing to carry here -- this exists purely so a CPU-only caller can
+    /// construct SOME `MetricParams::Butter` value at all (found 2026-07-03:
+    /// without it, `MetricParams::try_default_for` had no arm for
+    /// `MetricKind::Butter` on a cpu-butter-only build, so `sweep --metric
+    /// butteraugli` failed with "not enabled in this build" even though the
+    /// CPU path is fully compiled in).
+    #[cfg(all(feature = "cpu-butter", not(feature = "butter")))]
+    Butter(()),
     /// [`ssim2_gpu::Ssim2Params`] passthrough.
     #[cfg(feature = "ssim2")]
     Ssim2(ssim2_gpu::Ssim2Params),
+    /// CPU-only placeholder, see the `cpu-butter`/`Butter(())` doc above --
+    /// same issue, same fix, for `sweep --metric ssim2` on a cpu-ssim2-only
+    /// build. `cpu_dispatch::CpuMetricState::new`'s Ssim2 arm ignores
+    /// `params` entirely.
+    #[cfg(all(feature = "cpu-ssim2", not(feature = "ssim2")))]
+    Ssim2(()),
     /// [`dssim_gpu::DssimParams`] passthrough.
     #[cfg(feature = "dssim")]
     Dssim(dssim_gpu::DssimParams),
+    /// CPU-only placeholder, see the `cpu-butter`/`Butter(())` doc above --
+    /// same issue, same fix, for `sweep --metric dssim` on a cpu-dssim-only
+    /// build. `cpu_dispatch::CpuMetricState::new`'s Dssim arm ignores
+    /// `params` entirely (dssim-core has no configurable params).
+    #[cfg(all(feature = "cpu-dssim", not(feature = "dssim")))]
+    Dssim(()),
     /// [`iwssim_gpu::IwssimParams`] passthrough.
     #[cfg(feature = "iwssim")]
     Iwssim(iwssim_gpu::IwssimParams),
     /// [`zensim_gpu::ZensimParams`] passthrough.
     #[cfg(feature = "zensim")]
     Zensim(zensim_gpu::ZensimParams),
+    /// CPU-only placeholder, see the `cpu-butter`/`Butter(())` doc above --
+    /// same issue, same fix, for `Metric::new(MetricKind::Zensim,
+    /// Backend::Cpu, ...)` on a cpu-zensim-only build (the sweep CLI's
+    /// production path is unaffected -- it calls `zensim::score()` directly,
+    /// bypassing this umbrella entirely -- but zenmetrics-api's OWN
+    /// `cpu_dispatch` tests hit this construction path directly and caught
+    /// it). `cpu_dispatch::CpuMetricState::new`'s Zensim arm ignores
+    /// `params` entirely (constructs from `ZensimProfile::latest_preview()`).
+    #[cfg(all(feature = "cpu-zensim", not(feature = "zensim")))]
+    Zensim(()),
 }
 
 impl MetricParams {
@@ -341,14 +375,22 @@ impl MetricParams {
             MetricKind::Cvvdp => Ok(Self::Cvvdp(cvvdp_gpu::CvvdpParams::default())),
             #[cfg(feature = "butter")]
             MetricKind::Butter => Ok(Self::Butter(butteraugli_gpu::ButteraugliParams::default())),
+            #[cfg(all(feature = "cpu-butter", not(feature = "butter")))]
+            MetricKind::Butter => Ok(Self::Butter(())),
             #[cfg(feature = "ssim2")]
             MetricKind::Ssim2 => Ok(Self::Ssim2(ssim2_gpu::Ssim2Params::default())),
+            #[cfg(all(feature = "cpu-ssim2", not(feature = "ssim2")))]
+            MetricKind::Ssim2 => Ok(Self::Ssim2(())),
             #[cfg(feature = "dssim")]
             MetricKind::Dssim => Ok(Self::Dssim(dssim_gpu::DssimParams::DEFAULT)),
+            #[cfg(all(feature = "cpu-dssim", not(feature = "dssim")))]
+            MetricKind::Dssim => Ok(Self::Dssim(())),
             #[cfg(feature = "iwssim")]
             MetricKind::Iwssim => Ok(Self::Iwssim(iwssim_gpu::IwssimParams::DEFAULT)),
             #[cfg(feature = "zensim")]
             MetricKind::Zensim => Ok(Self::Zensim(zensim_gpu::ZensimParams::default_weights())),
+            #[cfg(all(feature = "cpu-zensim", not(feature = "zensim")))]
+            MetricKind::Zensim => Ok(Self::Zensim(())),
             #[allow(unreachable_patterns)]
             other => Err(Error::MetricNotEnabled { kind: other.tag() }),
         }
@@ -1490,7 +1532,11 @@ impl MetricInner {
             ))]
             MetricInner::Cpu(state, _) => state
                 .compute_pu_nits_interleaved(ref_nits, dis_nits)
-                .map(Scores::single),
+                .map(|(score, features)| {
+                    let mut s = Scores::single(score);
+                    s.features = features;
+                    s
+                }),
             #[cfg(feature = "cvvdp")]
             MetricInner::Cvvdp(_) => Err(no_pu_nits_path("cvvdp")),
             #[cfg(feature = "butter")]
