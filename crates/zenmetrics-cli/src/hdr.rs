@@ -230,8 +230,11 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
 #[cfg(feature = "png")]
 fn decode_pq_png(path: &Path) -> Result<NitsImage, Err> {
     let data = std::fs::read(path)?;
-    let (rgb16, width, height, _cicp) = png_to_rgb16_pq(&data)?;
-    Ok(rgb16_pq_to_nits(&rgb16, width, height))
+    let (rgb16, width, height, cicp) = png_to_rgb16_pq(&data)?;
+    Ok(match cicp.transfer_characteristics {
+        18 => rgb16_hlg_to_nits(&rgb16, width, height),
+        _ => rgb16_pq_to_nits(&rgb16, width, height),
+    })
 }
 
 #[cfg(not(feature = "png"))]
@@ -256,12 +259,7 @@ pub(crate) fn png_to_rgb16_pq(data: &[u8]) -> Result<(Vec<u16>, u32, u32, zenpix
     )?;
     match cicp.transfer_characteristics {
         16 => {}
-        18 => {
-            return Err("PNG cICP transfer is HLG (18): faithful HLG display \
-                        light needs the peak-dependent OOTF, which is not \
-                        implemented — only PQ (16) PNGs are supported"
-                .into());
-        }
+        18 => {} // HLG — decoded via the BT.2100 OOTF (rgb16_hlg_to_nits)
         t => {
             return Err(format!(
                 "PNG cICP transfer {t} is not an HDR transfer (PQ=16) — \
@@ -337,6 +335,34 @@ fn slice_to_rgb16(s: &zenpixels::PixelSlice<'_>) -> Result<(Vec<u16>, u32, u32),
 /// Tight interleaved RGB u16 PQ code values → absolute-luminance nits via
 /// the SMPTE ST 2084 EOTF (`pq_eotf(v / 65535)`, output in cd/m²).
 #[cfg(feature = "png")]
+
+/// Decode interleaved **RGB u16 HLG code values** to absolute display nits
+/// per BT.2100 (ARIB STD-B67): per-channel inverse OETF to scene-linear,
+/// then the peak-dependent OOTF `RGB_d = (peak − black) · Y_s^(γ−1) · RGB_s`
+/// with `Y_s = 0.2627 R + 0.6780 G + 0.0593 B` and
+/// γ = [`cvvdp::params::hlg_system_gamma`] (1.2 at a 1000 cd/m² peak; the
+/// in-repo reference used by cvvdp's own color kernel). Display: 1000 cd/m²
+/// peak, 0.005 black, 100 lux ambient — the same nominal HDR display the PQ
+/// path targets.
+#[allow(dead_code)] // wired behind the png/jxl features
+pub(crate) fn rgb16_hlg_to_nits(rgb16: &[u16], width: u32, height: u32) -> NitsImage {
+    use cvvdp::params::{hlg_inverse_oetf_scalar, hlg_system_gamma};
+    let (y_peak, y_black) = (1000.0f32, 0.005f32);
+    let gamma = hlg_system_gamma(y_peak, 100.0);
+    let mut rgb = Vec::with_capacity(rgb16.len());
+    for px in rgb16.chunks_exact(3) {
+        let r = hlg_inverse_oetf_scalar(f32::from(px[0]) / 65535.0);
+        let g = hlg_inverse_oetf_scalar(f32::from(px[1]) / 65535.0);
+        let b = hlg_inverse_oetf_scalar(f32::from(px[2]) / 65535.0);
+        let ys = (0.2627 * r + 0.6780 * g + 0.0593 * b).max(1e-9);
+        let scale = (y_peak - y_black) * ys.powf(gamma - 1.0);
+        rgb.push(r * scale + y_black);
+        rgb.push(g * scale + y_black);
+        rgb.push(b * scale + y_black);
+    }
+    NitsImage { rgb, width, height }
+}
+
 pub(crate) fn rgb16_pq_to_nits(rgb16: &[u16], width: u32, height: u32) -> NitsImage {
     let rgb = rgb16
         .iter()
@@ -755,5 +781,38 @@ mod tests {
             height: 1,
         };
         assert!((to_cvvdp_linear_planes(&bright).0[0] - 1.0).abs() < 1e-6);
+    }
+}
+
+#[cfg(all(test, feature = "png"))]
+mod hlg_decode_tests {
+    use super::*;
+
+    #[test]
+    fn hlg_to_nits_matches_bt2100_reference_points() {
+        // Reference values computed from the same BT.2100 formulas the
+        // conversion uses (inverse OETF + OOTF, γ=1.2 @ 1000 nit peak):
+        // code 0.5 (u16 32768) achromatic → scene 1/12 ≈ 0.08333,
+        // Y_s=0.08333, display = 999.995·0.08333^0.2·0.08333 + 0.005.
+        let half = (0.5f32 * 65535.0) as u16;
+        let img = rgb16_hlg_to_nits(&[half, half, half], 1, 1);
+        let ys = 1.0f32 / 12.0;
+        let expected = (1000.0 - 0.005) * ys.powf(0.2) * ys + 0.005;
+        assert!(
+            (img.rgb[0] - expected).abs() < 0.05,
+            "HLG mid-code: got {} want {expected}",
+            img.rgb[0]
+        );
+        // Peak white (code 1.0): scene 1.0 → display = peak.
+        let img = rgb16_hlg_to_nits(&[65535, 65535, 65535], 1, 1);
+        assert!(
+            (img.rgb[0] - 1000.0).abs() < 0.5,
+            "HLG peak: got {} want ~1000",
+            img.rgb[0]
+        );
+        // Monotone in code value.
+        let a = rgb16_hlg_to_nits(&[10000, 10000, 10000], 1, 1).rgb[0];
+        let b = rgb16_hlg_to_nits(&[40000, 40000, 40000], 1, 1).rgb[0];
+        assert!(a < b);
     }
 }
