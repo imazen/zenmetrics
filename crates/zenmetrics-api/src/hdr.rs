@@ -266,6 +266,12 @@ pub enum HdrFeeding {
     LinearPlanes,
     /// **Integrated PU21** (ssim2 on every backend + CPU zensim): the metric
     /// ingests **absolute-luminance interleaved f32 (cd/m²)** and applies
+    /// —— 2026-07-04: zensim's integrated path now ALSO serves the full
+    /// 372-feature extraction (`Zensim::compute_pu_linear_extended_features`,
+    /// exposed via `score-pairs --hdr-features-pu-linear`); the u8 shell's
+    /// ~0.05 penalty reproduced at bake level, so PU-linear is the Profile
+    /// B-HDR feature regime (zensim benchmarks/provenance_best_results_
+    /// 2026-07-04.md). ——
     /// PU21 *inside* its pipeline at the perceptual-encoding layer, replacing
     /// the cube-root — no u8 round-trip, no input-side PU shell. ssim2:
     /// `ssim2_gpu::XybFlavor::Pu21` on the GPU class /
