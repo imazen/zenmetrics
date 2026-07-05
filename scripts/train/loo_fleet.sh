@@ -274,6 +274,24 @@ read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/loo_cred.jso
 [ -n "${AK:-}" ] || { echo "FATAL: R2 cred mint failed"; cat /tmp/loo_cred.json; exit 1; }
 echo "    minted scoped RW cred (ttl ${MAXMIN}m+30m) -> zentrain/$RUN_PREFIX/"
 
+# Separate scoped temp R2 cred for the PRIVATE zenfleet-logs bucket — the
+# per-box host ci.log/ci.host.box-$i.log upload is the only thing that goes
+# here (owner directive 2026-07-05: host logs move off the public zentrain
+# bucket; batches/markers/results stay on zentrain). A separate mint is
+# required because R2 temp-access-credentials are scoped to exactly one
+# bucket — the zentrain-scoped cred above cannot write to a different bucket.
+logbody=$(python3 -c "import json,os;print(json.dumps({
+  'bucket':'zenfleet-logs',
+  'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],
+  'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],
+  'permission':'object-read-write','ttlSeconds':$TTL,
+  'prefixes':['$RUN_PREFIX/']}))")
+curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$logbody" \
+  "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/loo_log_cred.json
+read -r LOG_AK LOG_SK LOG_ST < <(python3 -c 'import json;r=json.load(open("/tmp/loo_log_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])' 2>/dev/null)
+[ -n "${LOG_AK:-}" ] || { echo "FATAL: R2 log-bucket cred mint failed"; cat /tmp/loo_log_cred.json; exit 1; }
+echo "    minted scoped RW cred (ttl ${MAXMIN}m+30m) -> zenfleet-logs/$RUN_PREFIX/"
+
 RUNNER_B64="$(base64 -w0 "$REPO/scripts/train/loo_box_runner.sh")"
 # Bind-mount CURRENT-master picker configs over the (possibly stale) baked /opt/picker/configs
 # so the box's KEEP_FEATURES matches what the launcher computed (the 2026-06-28 image predates
@@ -317,6 +335,12 @@ AWS_SECRET_ACCESS_KEY=$SK
 AWS_SESSION_TOKEN=$ST
 AWS_REGION=auto
 ENV
+cat > /root/logenv <<ENV
+AWS_ACCESS_KEY_ID=$LOG_AK
+AWS_SECRET_ACCESS_KEY=$LOG_SK
+AWS_SESSION_TOKEN=$LOG_ST
+AWS_REGION=auto
+ENV
 destroy_self(){
   set +x   # trace OFF for the whole function — the DELETE call below carries the
            # token in an Authorization header; xtrace would print it into ci.log.
@@ -337,8 +361,11 @@ docker run --rm --env-file /root/cenv \
   --entrypoint bash "\$IMG" /usr/local/bin/loo_box_runner.sh
 rc=\$?
 echo "container exited rc=\$rc"
-docker run --rm --env-file /root/cenv -v /root/ci.log:/ci.log --entrypoint /usr/local/bin/s5cmd \
-  "\$IMG" --endpoint-url="\$EP" cp /ci.log "s3://zentrain/\$OUTP/logs/ci.host.box-$i.log" || true
+# Host log goes to the PRIVATE zenfleet-logs bucket (owner directive
+# 2026-07-05) — uses the /root/logenv cred minted for that bucket, NOT
+# /root/cenv (zentrain).
+docker run --rm --env-file /root/logenv -v /root/ci.log:/ci.log --entrypoint /usr/local/bin/s5cmd \
+  "\$IMG" --endpoint-url="\$EP" cp /ci.log "s3://zenfleet-logs/\$OUTP/logs/ci.host.box-$i.log" || true
 destroy_self
 EOF
   local launched=0 lasterr="" typ loc

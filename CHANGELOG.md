@@ -129,7 +129,7 @@ Workspace conventions per the global rules:
   mirroring the existing `zenrav1e` clone fix (`27baa7ff`) (819b3b32).
 - **`cargo fmt` drift in `crates/zenmetrics-api/tests/hdr_sdr_consistency.rs`**
   (import sort, an `if`/`else` expansion, an `assert!` line-length wrap) that
-  was failing the `lint` CI job's format check (this change).
+  was failing the `lint` CI job's format check (a769a2fd).
 
 ### Security
 
@@ -140,10 +140,21 @@ Workspace conventions per the global rules:
   `destroy_self()` function's `Authorization: Bearer $HCLOUD_TOKEN` DELETE
   call — both sites printed the token in cleartext to the uploaded log.
   Bracketed the assignment in `set +x ... set -x` and disabled tracing for
-  the whole `destroy_self()` body. Token already rotated (this change).
+  the whole `destroy_self()` body. Token already rotated (780fdf17).
 
 ### Changed
 
+- **Host cloud-init logs move off the public `zentrain` bucket to the new
+  private `zenfleet-logs` bucket (owner directive).** `hetzner_ml_train.sh`'s
+  `ci.host.log` and `loo_fleet.sh`'s per-box `ci.host.box-$i.log` (under
+  `logs/`) now upload to `s3://zenfleet-logs/...` instead of
+  `s3://zentrain/...` — same relative path shape, bucket only. `zentrain`
+  stays public and unchanged for everything else (canonical parquet
+  inputs/results/features, batches, markers) — it's depended on by the
+  zensim docker corpus + cvvdp-gpu fixtures. Required minting a second
+  bucket-scoped R2 temp credential per launch (R2 temp-access-credentials
+  are scoped to exactly one bucket), written to a new `/root/logenv` and
+  used only for the log-upload `s5cmd` call (2fcf2854).
 - **Repo-root `README.md` overhauled + split into a badge-free `README.crates.md`.**
   Added the CI + license badge row (every crate is `publish = false`, so no
   crates.io / lib.rs / docs.rs badges) and a CLI Quick start (`score` / `compare`);
