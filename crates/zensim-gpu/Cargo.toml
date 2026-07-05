@@ -88,6 +88,10 @@ required-features = ["cubecl-types"]
 name = "diffmap_gpu_vs_cpu"
 required-features = ["cubecl-types"]
 
+[[example]]
+name = "odd_dim_repro"
+required-features = ["cubecl-types"]
+
 [[test]]
 name = "it"
 path = "tests/it/main.rs"

@@ -277,6 +277,20 @@ zenavif      = { path = "../zenavif" }
 # Equivalent git ref when the sibling checkout is gone:
 #   { git = "https://github.com/imazen/zenrav1e", rev = "<commit>" }
 zenrav1e     = { path = "../zenrav1e" }
+# zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
+# requirement to `zenavif-serialize = "0.2.0"` (needed for
+# `set_gain_map_alt_icc`) — the ravif Cargo.toml comment says as much:
+# "supplied by [patch.crates-io] until 0.2.0 publishes". Only 0.1.4 is
+# published, so a fresh resolve fails (`failed to select a version for
+# zenavif-serialize = ^0.2.0`), which breaks resolution for the ENTIRE
+# workspace (not just avif-touching members) because Cargo resolves
+# the full dependency graph up front. The local ../zenavif-serialize
+# checkout IS 0.2.0 — pin it here so the avif chain resolves (the
+# "unpublished dep -> patch it in, don't stall" rule). Dev-only: drop
+# this once zenavif-serialize 0.2.0 publishes to crates.io.
+# Equivalent git ref when the sibling checkout is gone:
+#   { git = "https://github.com/imazen/zenavif-serialize", rev = "<commit>" }
+zenavif-serialize = { path = "../zenavif-serialize" }
 # zenjxl: the canonical ../zenjxl checkout (now carries the
 # AnimationParams/AnimationFrame API for jxl-encoder 0.3.2). The
 # former ../zenjxl--main worktree was removed by worktree cleanup;

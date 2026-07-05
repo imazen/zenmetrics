@@ -690,7 +690,27 @@ impl<R: Runtime> Zensim<R> {
             plan.push((logical_w, padded_w, h));
             logical_w = logical_w.div_ceil(2);
             padded_w /= 2;
-            h = h.div_ceil(2);
+            // FLOOR, not ceil — matches CPU zensim's pyramid exactly.
+            // `zensim::blur::downscale_2x_inplace` computes
+            // `new_h = height / 2` (plain truncating division) at
+            // every pyramid level; CPU never allocates or processes an
+            // extra row for an odd height, it simply drops the last
+            // row (see `downscale_2x_into_inner`'s unclamped `sx+1`
+            // reads, which are only in-bounds because `new_h*2 <=
+            // height` under floor division). Using `div_ceil` here
+            // allocated + processed ONE EXTRA row whenever a
+            // pyramid-level height was odd, and `downscale_2x_3ch_kernel`
+            // synthesizes that extra row by re-reading (clamping to)
+            // the last real row — a duplicate-boundary-row corruption
+            // that compounds every subsequent scale (odd height ->
+            // odd half -> odd quarter -> ...). Measured impact on a
+            // 769x513 fixture (odd height): `hf_energy_gain` off by
+            // 3.7% at scale 1 growing to 30%+ by scale 3, multiple
+            // peak/masked/IW slots outside the crate's own claimed
+            // GPU/CPU parity budget. See
+            // `docs/ZENSIM_GPU_ODDDIM_CORRUPTION_2026-07-05.md` and
+            // `examples/odd_dim_repro.rs`.
+            h /= 2;
         }
         let mut partials_f64_total: usize = 0;
         let mut partials_max_total: usize = 0;
@@ -1174,7 +1194,9 @@ impl<R: Runtime> Zensim<R> {
         let mut hs = self.height;
         for s in 0..n_scales {
             scale_image_h[s] = hs;
-            hs = hs.div_ceil(2);
+            // FLOOR — must track `Scale::h`'s pyramid recurrence
+            // exactly (see the fix note in `new_with_regime_strip_budget`).
+            hs /= 2;
         }
 
         Ok(self.pack_feature_vector(
@@ -1380,7 +1402,9 @@ impl<R: Runtime> Zensim<R> {
         let mut hs = self.height;
         for s in 0..n_scales {
             scale_image_h[s] = hs;
-            hs = hs.div_ceil(2);
+            // FLOOR — must track `Scale::h`'s pyramid recurrence
+            // exactly (see the fix note in `new_with_regime_strip_budget`).
+            hs /= 2;
         }
         Ok(self.pack_feature_vector(&acc_f64, &acc_max, &acc_ext_f64, &scale_image_h[..n_scales]))
     }
@@ -1485,7 +1509,14 @@ impl<R: Runtime> Zensim<R> {
             // n_strips_ext recomputed to keep the CPU-shape strip
             // count in sync with the actual strip height.
             s.n_strips_ext = kernels::masked_iw_strip::cpu_strip_count(h);
-            h = h.div_ceil(2);
+            // FLOOR (this docstring's own "actual_strip_h / 2^s" already
+            // says so) — see the fix note in `new_with_regime_strip_budget`.
+            // Interior strips have `actual_strip_h` = `strip_alloc_h`,
+            // always a multiple of `STRIP_ALIGN` (8), so ceil and floor
+            // agreed there; the LAST (boundary) strip's `actual_strip_h`
+            // is `image_h`-derived and NOT generally 8-aligned, so it hit
+            // the same extra-duplicate-row bug as the full-image path.
+            h /= 2;
         }
     }
 
@@ -1516,7 +1547,10 @@ impl<R: Runtime> Zensim<R> {
             }
             plan_full.push((pw, h_at_s));
             pw /= 2;
-            h_at_s = h_at_s.div_ceil(2);
+            // FLOOR — matches Full mode's `new_with_regime_strip_budget`
+            // plan exactly (this fn's own docstring already promises
+            // that); see the fix note there.
+            h_at_s /= 2;
         }
 
         // Allocate per-scale XYB planes on first use (or after a
@@ -3183,7 +3217,9 @@ impl<R: Runtime> Zensim<R> {
         let mut hs = self.height;
         for sh in scale_image_h.iter_mut().take(n_scales) {
             *sh = hs;
-            hs = hs.div_ceil(2);
+            // FLOOR — must track `Scale::h`'s pyramid recurrence
+            // exactly (see the fix note in `new_with_regime_strip_budget`).
+            hs /= 2;
         }
         self.pack_feature_vector(
             finals_f64,

@@ -260,10 +260,15 @@ fn estimate_strip_gpu_memory_bytes_for(
 }
 
 /// Sum of `w_s × h_s` across the 4 pyramid scales (s=0..3) using
-/// `div_ceil` halving — matches the host-side scale walk in
-/// [`crate::pipeline::Zensim::new_with_regime`]. Returns 0 once a
-/// scale drops below the 8×8 floor (same termination criterion as
-/// the runtime).
+/// floor halving — matches the host-side scale walk in
+/// [`crate::pipeline::Zensim::new_with_regime`] (the `Scale::h`
+/// recurrence there is `h /= 2`, plain truncating division, matching
+/// CPU zensim's `downscale_2x_inplace`; this estimator used
+/// `div_ceil` until 2026-07-05, which both mismatched the actual
+/// per-scale allocation size and matched a since-fixed pyramid-height
+/// bug — see `docs/ZENSIM_GPU_ODDDIM_CORRUPTION_2026-07-05.md`).
+/// Returns 0 once a scale drops below the 8×8 floor (same
+/// termination criterion as the runtime).
 #[inline]
 fn pyramid_pixels(width: u32, height: u32) -> usize {
     let mut w = width;
@@ -274,8 +279,8 @@ fn pyramid_pixels(width: u32, height: u32) -> usize {
             break;
         }
         total = total.saturating_add((w as usize).saturating_mul(h as usize));
-        w = w.div_ceil(2);
-        h = h.div_ceil(2);
+        w /= 2;
+        h /= 2;
     }
     total
 }

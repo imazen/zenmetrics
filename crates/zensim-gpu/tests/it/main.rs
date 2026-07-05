@@ -20,6 +20,8 @@ mod diffmap_invariants;
 mod extended_parity;
 mod memory_mode;
 #[cfg(feature = "cubecl-types")]
+mod odd_dim_pyramid_parity;
+#[cfg(feature = "cubecl-types")]
 mod opaque;
 #[cfg(feature = "cubecl-types")]
 mod opaque_cached_ref;
