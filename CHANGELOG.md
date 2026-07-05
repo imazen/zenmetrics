@@ -118,6 +118,15 @@ Workspace conventions per the global rules:
   `hetzner_ml_train.sh` makes `PICKER_TARGET`/`METRIC_COL`/`SCORE_COL`/`OUT_PREFIX`
   env-overridable, forces EU-only regions (cpx51 fsn1/nbg1/hel1; never US),
   defaults MAXMIN to 90, requires >=16 GB types, and namespaces ssim2 outputs.
+- **CI has been red on every job/platform since the `zenavif-serialize` sibling
+  patch landed** (`Cargo.toml:293`) — `.github/workflows/ci.yml`'s sibling-clone
+  step never picked up the new `[patch.crates-io]` entry, so cargo couldn't
+  resolve the workspace at all (`failed to read .../zenavif-serialize/
+  Cargo.toml`), breaking Compile (all 6 OS legs), `cpu-metrics-tests`,
+  `doctests`, `lint`, and the disabled `metal-tests` job. Added the missing
+  `git clone` (pinned to `0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a`, matching the
+  local dev sibling checkout on `origin/main`) across all 5 job occurrences,
+  mirroring the existing `zenrav1e` clone fix (`27baa7ff`) (this change).
 
 ### Changed
 

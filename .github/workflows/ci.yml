@@ -98,6 +98,14 @@ jobs:
           # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
           git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
           git -C ../zenrav1e checkout 2fac1af6
+          # zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
+          # requirement to zenavif-serialize = "0.2.0", but only 0.1.4 is
+          # published, so [patch.crates-io] pins the local ../zenavif-serialize
+          # sibling (see Cargo.toml:293) — without this clone, cargo can't
+          # resolve the workspace on ANY platform ("failed to read
+          # .../zenavif-serialize/Cargo.toml").
+          git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
+          git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
@@ -299,6 +307,14 @@ jobs:
           # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
           git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
           git -C ../zenrav1e checkout 2fac1af6
+          # zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
+          # requirement to zenavif-serialize = "0.2.0", but only 0.1.4 is
+          # published, so [patch.crates-io] pins the local ../zenavif-serialize
+          # sibling (see Cargo.toml:293) — without this clone, cargo can't
+          # resolve the workspace on ANY platform ("failed to read
+          # .../zenavif-serialize/Cargo.toml").
+          git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
+          git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
@@ -461,6 +477,14 @@ jobs:
           # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
           git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
           git -C ../zenrav1e checkout 2fac1af6
+          # zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
+          # requirement to zenavif-serialize = "0.2.0", but only 0.1.4 is
+          # published, so [patch.crates-io] pins the local ../zenavif-serialize
+          # sibling (see Cargo.toml:293) — without this clone, cargo can't
+          # resolve the workspace on ANY platform ("failed to read
+          # .../zenavif-serialize/Cargo.toml").
+          git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
+          git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
@@ -578,6 +602,14 @@ jobs:
           # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
           git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
           git -C ../zenrav1e checkout 2fac1af6
+          # zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
+          # requirement to zenavif-serialize = "0.2.0", but only 0.1.4 is
+          # published, so [patch.crates-io] pins the local ../zenavif-serialize
+          # sibling (see Cargo.toml:293) — without this clone, cargo can't
+          # resolve the workspace on ANY platform ("failed to read
+          # .../zenavif-serialize/Cargo.toml").
+          git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
+          git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
@@ -692,6 +724,14 @@ jobs:
           # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
           git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
           git -C ../zenrav1e checkout 2fac1af6
+          # zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
+          # requirement to zenavif-serialize = "0.2.0", but only 0.1.4 is
+          # published, so [patch.crates-io] pins the local ../zenavif-serialize
+          # sibling (see Cargo.toml:293) — without this clone, cargo can't
+          # resolve the workspace on ANY platform ("failed to read
+          # .../zenavif-serialize/Cargo.toml").
+          git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
+          git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
           git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
