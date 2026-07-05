@@ -90,7 +90,11 @@ cat > "$CI" <<EOF
 #!/bin/bash
 exec > /root/ci.log 2>&1
 set -x
+set +x   # trace OFF across the secret assignment — xtrace would print the literal
+         # token into ci.log, which is uploaded to R2 below (security hole, fixed
+         # 2026-07-05; token already rotated).
 HCLOUD_TOKEN='$HCLOUD_TOKEN'   # HOST-only — for self-destruct; never passed to the container
+set -x
 EP='$EP'
 IMG='$IMAGE'
 OUTP='$OUT_PREFIX'
@@ -115,6 +119,8 @@ AWS_REGION=auto
 ENV
 
 destroy_self(){
+  set +x   # trace OFF for the whole function — the DELETE call below carries the
+           # token in an Authorization header; xtrace would print it into ci.log.
   local ID
   ID=\$(curl -s --max-time 10 http://169.254.169.254/hetzner/v1/metadata/instance-id || true)
   [ -n "\$ID" ] || ID=\$(curl -s --max-time 10 http://169.254.169.254/latest/meta-data/instance-id || true)
@@ -123,6 +129,7 @@ destroy_self(){
       "https://api.hetzner.cloud/v1/servers/\$ID" && break
     sleep 5
   done
+  set -x
 }
 # hard-timeout backstop — destroy no matter what after ${MAXMIN}m
 ( sleep $((MAXMIN*60)); echo "BACKSTOP timeout firing"; destroy_self ) &

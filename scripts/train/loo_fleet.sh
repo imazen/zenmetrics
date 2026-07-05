@@ -291,7 +291,11 @@ launch_box(){
 #!/bin/bash
 exec > /root/ci.log 2>&1
 set -x
+set +x   # trace OFF across the secret assignment — xtrace would print the literal
+         # token into ci.log, which is uploaded to R2 below (security hole, fixed
+         # 2026-07-05; token already rotated).
 HCLOUD_TOKEN='$HCLOUD_TOKEN'          # HOST-only (self-destruct); NEVER passed to container
+set -x
 EP='$EP'; IMG='$IMAGE'; OUTP='$RUN_PREFIX'
 echo '$RUNNER_B64' | base64 -d > /root/loo_box_runner.sh
 chmod +x /root/loo_box_runner.sh
@@ -314,6 +318,8 @@ AWS_SESSION_TOKEN=$ST
 AWS_REGION=auto
 ENV
 destroy_self(){
+  set +x   # trace OFF for the whole function — the DELETE call below carries the
+           # token in an Authorization header; xtrace would print it into ci.log.
   local ID
   ID=\$(curl -s --max-time 10 http://169.254.169.254/hetzner/v1/metadata/instance-id || true)
   for x in 1 2 3 4 5; do
@@ -321,6 +327,7 @@ destroy_self(){
       "https://api.hetzner.cloud/v1/servers/\$ID" && break
     sleep 5
   done
+  set -x
 }
 ( sleep $((MAXMIN*60)); echo "BACKSTOP timeout"; destroy_self ) &     # hard backstop
 docker pull "\$IMG" || true

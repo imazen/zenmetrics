@@ -131,6 +131,17 @@ Workspace conventions per the global rules:
   (import sort, an `if`/`else` expansion, an `assert!` line-length wrap) that
   was failing the `lint` CI job's format check (this change).
 
+### Security
+
+- **Hetzner cloud-init scripts (`scripts/train/hetzner_ml_train.sh`,
+  `scripts/train/loo_fleet.sh`) traced the literal `HCLOUD_TOKEN` value into
+  `/root/ci.log`, which both scripts then upload to R2.** `set -x` was enabled
+  immediately before the token's literal assignment and stayed on for the
+  `destroy_self()` function's `Authorization: Bearer $HCLOUD_TOKEN` DELETE
+  call — both sites printed the token in cleartext to the uploaded log.
+  Bracketed the assignment in `set +x ... set -x` and disabled tracing for
+  the whole `destroy_self()` body. Token already rotated (this change).
+
 ### Changed
 
 - **Repo-root `README.md` overhauled + split into a badge-free `README.crates.md`.**
