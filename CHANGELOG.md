@@ -126,7 +126,10 @@ Workspace conventions per the global rules:
   `doctests`, `lint`, and the disabled `metal-tests` job. Added the missing
   `git clone` (pinned to `0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a`, matching the
   local dev sibling checkout on `origin/main`) across all 5 job occurrences,
-  mirroring the existing `zenrav1e` clone fix (`27baa7ff`) (this change).
+  mirroring the existing `zenrav1e` clone fix (`27baa7ff`) (819b3b32).
+- **`cargo fmt` drift in `crates/zenmetrics-api/tests/hdr_sdr_consistency.rs`**
+  (import sort, an `if`/`else` expansion, an `assert!` line-length wrap) that
+  was failing the `lint` CI job's format check (this change).
 
 ### Changed
 

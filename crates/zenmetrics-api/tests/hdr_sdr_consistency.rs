@@ -12,14 +12,18 @@
 //! run with the env var set to produce it.
 #![cfg(all(feature = "hdr", feature = "cpu-zensim"))]
 
-use zenmetrics_api::hdr::{to_sdr_u8, DisplayModel, HdrTransfer};
+use zenmetrics_api::hdr::{DisplayModel, HdrTransfer, to_sdr_u8};
 
 const W: usize = 256;
 const H: usize = 256;
 const SDR_WHITE_PEAK: f32 = 10_000.0; // PuRescale display peak (module constant)
 
 fn srgb_eotf(v: f32) -> f32 {
-    if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    if v <= 0.04045 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
 }
 
 /// Deterministic photo-like content: multi-frequency pattern + ramp.
@@ -112,11 +116,7 @@ fn sdr_range_content_ranks_identically_through_both_paths() {
     // Loud invariant: both paths order the blur ladder identically.
     for w in [&sdr_scores, &hdr_scores] {
         for i in 1..w.len() {
-            assert!(
-                w[i] <= w[i - 1] + 1e-6,
-                "ladder rank inversion in {:?}",
-                w
-            );
+            assert!(w[i] <= w[i - 1] + 1e-6, "ladder rank inversion in {:?}", w);
         }
     }
 
