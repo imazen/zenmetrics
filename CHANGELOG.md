@@ -130,6 +130,13 @@ Workspace conventions per the global rules:
 - **`cargo fmt` drift in `crates/zenmetrics-api/tests/hdr_sdr_consistency.rs`**
   (import sort, an `if`/`else` expansion, an `assert!` line-length wrap) that
   was failing the `lint` CI job's format check (a769a2fd).
+- **CI Compile jobs (all 6 legs) were red because the pinned zensim sibling
+  clone (`062bb3cedfbb6e723235044fb0818efaaa493d93`) predates
+  `Zensim::compute_pu_linear_extended_features`**, which `zenmetrics-cli`'s
+  current source calls — cargo couldn't resolve the workspace. Repinned all 5
+  occurrences in `.github/workflows/ci.yml` to zensim `5afc4f64d98d6d42bb5101aa9c6d070bfa15e834`
+  (current `origin/main` tip, verified via `git grep` to contain the symbol;
+  introduced upstream at zensim `14d4140f`) (this change).
 
 ### Security
 
