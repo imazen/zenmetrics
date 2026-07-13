@@ -36,6 +36,22 @@
 # background process (or invoke with --watch to run inline).
 #
 # All flags also accept env-var forms (METRIC, RUN_ID, CHUNKS, ...).
+#
+# Env-only knobs (additive, 2026-07-13 HDR-pairs fleet):
+#   WORKER_PATH               chunk worker script to stage alongside onstart
+#                             (default scripts/sweep/metric_backfill_chunk_worker.sh)
+#   WORKER_R2_ACCESS_KEY_ID / WORKER_R2_SECRET_ACCESS_KEY / WORKER_R2_SESSION_TOKEN
+#                             SCOPED temp creds to inject into the boxes instead
+#                             of the sourced account creds (mint via the CF
+#                             temp-access-credentials API; the session token is
+#                             split into R2_SESSION_TOKEN_0..N to fit vast's
+#                             256-char env value cap). Without these the
+#                             launcher warns loudly and ships the sourced key.
+#   SHARD_N                   opt-in static modulo sharding: inject
+#                             -e SHARD_IDX=<k> -e SHARD_N=<n> per box, where k
+#                             counts SUCCESSFUL launches (failed creates don't
+#                             consume a shard). Orphaned shards (launch
+#                             shortfall) are reported at the end.
 
 set -euo pipefail
 # shellcheck disable=SC1091
@@ -166,8 +182,9 @@ R2 cp "$ONSTART_PATH" "$ONSTART_R2_KEY"
 # Also upload the unified worker so onstart can fetch it (if not baked
 # into the docker image). This is gated — only upload if the file
 # exists on disk (which it should: this is part of feat/sweep-infra-
-# unified).
-WORKER_PATH="scripts/sweep/metric_backfill_chunk_worker.sh"
+# unified). Override WORKER_PATH for onstarts with a different worker
+# (e.g. hdr_pairs_chunk_worker.sh for persisted-pairs HDR fleets).
+WORKER_PATH="${WORKER_PATH:-scripts/sweep/metric_backfill_chunk_worker.sh}"
 if [[ -f "$WORKER_PATH" ]]; then
     WORKER_R2_KEY="${SCRIPTS_R2_PREFIX}/$(basename "$WORKER_PATH")"
     echo "[launch_backfill] uploading $WORKER_PATH → $WORKER_R2_KEY"
@@ -258,6 +275,20 @@ cat > ~/.aws/credentials <<CREDS
 aws_access_key_id = $R2_ACCESS_KEY_ID
 aws_secret_access_key = $R2_SECRET_ACCESS_KEY
 CREDS
+# Scoped temp creds arrive with the session token split into
+# R2_SESSION_TOKEN_0..N (vast's ~256-char env value cap). Reassemble
+# BEFORE the first s5cmd call or the onstart fetch itself 403s.
+ST="${R2_SESSION_TOKEN:-}"
+if [ -z "$ST" ]; then
+    for idx in 0 1 2 3 4 5 6 7 8 9; do
+        eval part="\${R2_SESSION_TOKEN_${idx}:-}"
+        [ -n "$part" ] && ST="${ST}${part}"
+    done
+fi
+if [ -n "$ST" ]; then
+    export AWS_SESSION_TOKEN="$ST" R2_SESSION_TOKEN="$ST"
+    echo "aws_session_token = $ST" >> ~/.aws/credentials
+fi
 # Wait for s5cmd to be present (the v14 docker image bakes it; some
 # upstream images install it at runtime — sleep briefly if absent).
 for try in 1 2 3 4 5; do
@@ -291,15 +322,39 @@ INSTANCE_FILE="/tmp/${RUN_ID}/instances.txt"
 mkdir -p "$(dirname "$INSTANCE_FILE")"
 : > "$INSTANCE_FILE"
 
+# Worker-side creds: prefer SCOPED temp creds (WORKER_R2_*) over the
+# sourced account key. Session tokens exceed vast.ai's ~256-char env
+# value cap, so split into R2_SESSION_TOKEN_0..N chunks — both
+# onstart_unified.sh and onstart_hdr_pairs.sh reassemble them.
+CRED_ENV_STR=""
+if [[ -n "${WORKER_R2_ACCESS_KEY_ID:-}" ]]; then
+    CRED_ENV_STR="-e R2_ACCESS_KEY_ID=${WORKER_R2_ACCESS_KEY_ID}"
+    CRED_ENV_STR+=" -e R2_SECRET_ACCESS_KEY=${WORKER_R2_SECRET_ACCESS_KEY:?WORKER_R2_SECRET_ACCESS_KEY required with WORKER_R2_ACCESS_KEY_ID}"
+    if [[ -n "${WORKER_R2_SESSION_TOKEN:-}" ]]; then
+        _tok="$WORKER_R2_SESSION_TOKEN"; _i=0
+        while [[ -n "$_tok" ]]; do
+            CRED_ENV_STR+=" -e R2_SESSION_TOKEN_${_i}=${_tok:0:240}"
+            _tok="${_tok:240}"; _i=$((_i + 1))
+        done
+        echo "[launch_backfill] scoped worker creds: session token split into ${_i} parts"
+    fi
+else
+    CRED_ENV_STR="-e R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}"
+    CRED_ENV_STR+=" -e R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}"
+    echo "[launch_backfill] WARNING: shipping the sourced R2 key to the fleet." >&2
+    echo "  Mint scoped temp creds and pass WORKER_R2_ACCESS_KEY_ID/_SECRET/_SESSION_TOKEN" >&2
+    echo "  (see ~/work/claudehints/topics/r2-credentials.md)." >&2
+fi
+
 i=0
+launched=0
 for offer_id in $OFFER_IDS; do
     i=$((i + 1))
     WORKER_ID="${RUN_ID}-w$i"
     LABEL="$WORKER_ID"
 
     ENV_STR="-e R2_ACCOUNT_ID=${R2_ACCOUNT_ID}"
-    ENV_STR+=" -e R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}"
-    ENV_STR+=" -e R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}"
+    ENV_STR+=" ${CRED_ENV_STR}"
     ENV_STR+=" -e SWEEP_RUN_ID=${RUN_ID}"
     ENV_STR+=" -e WORKER_ID=${WORKER_ID}"
     ENV_STR+=" -e METRIC=${METRIC}"
@@ -329,6 +384,13 @@ for offer_id in $OFFER_IDS; do
         ENV_STR+=" -e METRICS=${METRICS}"
     [[ -n "${JOBS:-}" ]] && \
         ENV_STR+=" -e JOBS=${JOBS}"
+    # Explicit chunks URL so onstarts need not re-derive it by convention.
+    ENV_STR+=" -e CHUNKS_R2=${CHUNKS}"
+    # Opt-in static modulo sharding (SHARD_N env): shard index counts
+    # SUCCESSFUL launches so a failed create doesn't orphan its shard
+    # mid-sequence. Any launch shortfall is reported after the loop.
+    [[ -n "${SHARD_N:-}" ]] && \
+        ENV_STR+=" -e SHARD_IDX=${launched} -e SHARD_N=${SHARD_N}"
 
     LOGIN_STR="-u ${GHCR_USER} -p ${GHCR_TOKEN} ghcr.io"
 
@@ -351,12 +413,18 @@ for offer_id in $OFFER_IDS; do
         echo "  $i WARN: start instance $ID failed (instance may still auto-start)"
     echo "$ID $offer_id $WORKER_ID" >> "$INSTANCE_FILE"
     echo "  $i -> instance $ID ($WORKER_ID)"
+    launched=$((launched + 1))
 done
 
 NLAUNCHED=$(wc -l < "$INSTANCE_FILE")
 echo
 echo "[launch_backfill] launched $NLAUNCHED instances (target $N_BOXES)"
 echo "  manifest: $INSTANCE_FILE"
+if [[ -n "${SHARD_N:-}" && "$NLAUNCHED" -lt "$SHARD_N" ]]; then
+    echo "  WARNING: sharded launch shortfall — shards ${NLAUNCHED}..$((SHARD_N - 1)) are ORPHANED." >&2
+    echo "  Remedy: once the fleet drains, launch ONE sweeper box with SHARD_N=1 SHARD_IDX=0 —" >&2
+    echo "  per-chunk sidecar idempotency makes it skip everything already scored." >&2
+fi
 echo
 
 # Suggest (or run) the watch command.
