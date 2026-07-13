@@ -782,6 +782,7 @@ mod tests {
             // (matches `jobs: 1` / `distort_cmd: None` below). Unrelated to the
             // cvvdp/iwssim metric-registry change; added only to unblock tests.
             distort_jobs: 1,
+            distort_label: None,
             metrics: vec![],
             gpu_runtime: GpuRuntime::Auto,
             output: std::path::PathBuf::from("/tmp/x.tsv"),
