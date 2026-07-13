@@ -148,6 +148,27 @@ pub fn validate_hdr_sweep(cfg: &crate::sweep::SweepConfig) -> Result<(), Err> {
                 .into(),
         );
     }
+    if cfg.distort_cmd.is_some() {
+        // The HDR distortion arm (2026-07-13): variants are 16-bit PQ PNGs
+        // (protocol v2, u16 frames), persisted via --encoded-out-dir and
+        // decode-backed through the SAME bytes. It needs an explicit row
+        // label — falling back to the codec name would collide distortion
+        // rows with real codec-encode rows for the same (ref, q) in
+        // downstream joins (the corpus builder keys on basename+codec+q).
+        if cfg.distort_label.as_deref().unwrap_or("").is_empty() {
+            return Err(
+                "HDR sweep: --distort-cmd requires --distort-label <name> \
+                 (e.g. kadis-hdr) — the omni/pairs codec column for \
+                 distortion rows; a codec-name fallback would collide with \
+                 real codec rows in downstream joins"
+                    .into(),
+            );
+        }
+        #[cfg(not(feature = "png"))]
+        return Err("HDR sweep: --distort-cmd needs the `png` build feature \
+                    (zenpng) — distorted variants persist as 16-bit PQ PNGs"
+            .into());
+    }
     for &m in &cfg.metrics {
         // Resolve the umbrella mapping now so a metric with no HDR path
         // fails the whole sweep at startup instead of blanking every cell.
@@ -437,6 +458,50 @@ fn decode_avif_to_nits(bytes: &[u8]) -> Result<NitsImage, Err> {
 #[cfg(not(feature = "avif"))]
 fn decode_avif_to_nits(_bytes: &[u8]) -> Result<NitsImage, Err> {
     Err("HDR sweep: zenavif decode-back requires the `avif` build feature".into())
+}
+
+/// Encode 16-bit PQ code values as a PNG-3 carrying `cicp` — the persisted
+/// artifact shape for HDR **distortion** cells (`--distort-cmd`). The cell's
+/// decode-back goes through [`decode_png_to_nits`] on these SAME bytes, so
+/// what lands in the artifact store is exactly what got scored.
+#[cfg(all(feature = "sweep", feature = "png"))]
+pub(crate) fn encode_pq_png(
+    rgb16: &[u16],
+    width: u32,
+    height: u32,
+    cicp: zenpixels::Cicp,
+) -> Result<Vec<u8>, Err> {
+    use imgref::ImgRef;
+    use rgb::Rgb;
+    let px: &[Rgb<u16>] = bytemuck::cast_slice(rgb16);
+    let img = ImgRef::new(px, width as usize, height as usize);
+    let config = zenpng::EncodeConfig::default().with_cicp(Some(cicp));
+    zenpng::encode_rgb16(
+        img,
+        None,
+        &config,
+        &enough::Unstoppable,
+        &enough::Unstoppable,
+    )
+    .map_err(|e| format!("pq-png encode: {e}").into())
+}
+
+/// Decode a 16-bit PQ PNG variant back to absolute nits — the distortion
+/// cells' decode-back. Same contract as every other decode-back: the PNG
+/// must carry cICP (transfer 16 = PQ, or 18 = HLG which routes through the
+/// HLG OOTF), else the cell errors rather than guessing a nits scale.
+#[cfg(feature = "png")]
+pub(crate) fn decode_png_to_nits(bytes: &[u8]) -> Result<NitsImage, Err> {
+    let (rgb16, width, height, cicp) = crate::hdr::png_to_rgb16_pq(bytes)?;
+    Ok(match cicp.transfer_characteristics {
+        18 => crate::hdr::rgb16_hlg_to_nits(&rgb16, width, height),
+        _ => crate::hdr::rgb16_pq_to_nits(&rgb16, width, height),
+    })
+}
+
+#[cfg(not(feature = "png"))]
+pub(crate) fn decode_png_to_nits(_bytes: &[u8]) -> Result<NitsImage, Err> {
+    Err("HDR sweep: PQ-PNG decode-back requires the `png` build feature".into())
 }
 
 /// Strided **PQ-coded** `PixelSlice` (validated by the caller via the

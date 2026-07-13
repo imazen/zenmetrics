@@ -428,6 +428,13 @@ struct SweepArgs {
     /// without `--distort-cmd`.
     #[arg(long, default_value = "1")]
     distort_jobs: usize,
+    /// Row label (the omni/pairs `codec` column) for `--distort-cmd` cells,
+    /// e.g. `kadis-hdr`. REQUIRED with `--distort-cmd --hdr` (a codec-name
+    /// fallback would collide distortion rows with real codec rows for the
+    /// same (ref, q) in downstream joins); optional in SDR mode (rows keep
+    /// the codec name when unset, KADIS-700k-compatible).
+    #[arg(long)]
+    distort_label: Option<String>,
     /// Optional directory to receive the **encoded codec bytes** for
     /// every successfully encoded cell (the actual .jpg / .webp /
     /// .avif / .jxl / .png file the codec produced, not the decoded
@@ -840,7 +847,11 @@ fn cmd_sweep(
         None
     };
 
-    let q_grid = parse_q_grid(&args.q_grid)?;
+    // Distortion sweeps use q as an advisory cell key (kadis-hdr packs
+    // q = dist_type*10 + level, up to 255); codec sweeps keep the 0..=100
+    // quality bound.
+    let q_max = if args.distort_cmd.is_some() { 255.0 } else { 100.0 };
+    let q_grid = crate::sweep::parse_q_grid_with_max(&args.q_grid, q_max)?;
     let knob_grid = parse_knob_grid(&args.knob_grid)?;
 
     // `--plan scalar_dense` and `--plan lossy_dense` default
@@ -980,6 +991,7 @@ fn cmd_sweep(
         }),
         distort_cmd: args.distort_cmd,
         distort_jobs: args.distort_jobs,
+        distort_label: args.distort_label,
         metrics,
         gpu_runtime: args.gpu_runtime,
         output: args.output,

@@ -261,6 +261,13 @@ pub struct SweepConfig {
     /// decode + generate images *ahead* of GPU scoring through a bounded
     /// pipeline, so the GPU is never starved on single-threaded CPU generation.
     pub distort_jobs: usize,
+    /// Row label (the omni/pairs `codec` column) for `distort_cmd` cells —
+    /// e.g. `kadis-hdr`. REQUIRED with `--distort-cmd` in HDR mode: a
+    /// codec-name fallback would collide distortion rows with real
+    /// codec-encode rows for the same (ref, q) in downstream joins (the HDR
+    /// corpus builder keys on basename+codec+q). Optional in SDR mode for
+    /// KADIS-700k compatibility (rows keep the codec name when unset).
+    pub distort_label: Option<String>,
     pub metrics: Vec<MetricKind>,
     pub gpu_runtime: GpuRuntime,
     pub output: PathBuf,
@@ -840,7 +847,14 @@ pub fn run_sweep(
         // startup; shares the TSV writer + stats with the SDR loop.
         #[cfg(feature = "hdr")]
         if cfg.hdr {
-            run_hdr_source(cfg, src_path, cells_per_image as u64, &stats, &wtr);
+            run_hdr_source(
+                cfg,
+                src_path,
+                cells_per_image as u64,
+                &stats,
+                &wtr,
+                distort_worker.as_mut(),
+            );
             continue;
         }
         #[cfg(any(
@@ -1550,13 +1564,6 @@ fn save_encoded_variant(
     knob_json: &str,
     bytes: &[u8],
 ) -> Result<String, Box<dyn Error>> {
-    std::fs::create_dir_all(dir)?;
-    let stem = src_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("source");
-    let src_hash = hex_hash16(src_path.to_string_lossy().as_ref());
-    let knob_hash = hex_hash16(knob_json);
     let ext = match codec {
         CodecKind::Zenpng => "png",
         CodecKind::Zenjpeg => "jpg",
@@ -1566,8 +1573,29 @@ fn save_encoded_variant(
         CodecKind::Zengif => "gif",
         CodecKind::Zentiff => "tiff",
     };
-    let codec_name = codec.name();
-    let filename = format!("{stem}_{src_hash}_{codec_name}_q{q}_{knob_hash}.{ext}");
+    save_encoded_variant_named(dir, src_path, codec.name(), ext, q, knob_json, bytes)
+}
+
+/// Label/extension-explicit variant of [`save_encoded_variant`] — the HDR
+/// distortion arm persists 16-bit PQ PNGs under its `--distort-label`
+/// instead of a `CodecKind` name.
+fn save_encoded_variant_named(
+    dir: &Path,
+    src_path: &Path,
+    label: &str,
+    ext: &str,
+    q: f64,
+    knob_json: &str,
+    bytes: &[u8],
+) -> Result<String, Box<dyn Error>> {
+    std::fs::create_dir_all(dir)?;
+    let stem = src_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("source");
+    let src_hash = hex_hash16(src_path.to_string_lossy().as_ref());
+    let knob_hash = hex_hash16(knob_json);
+    let filename = format!("{stem}_{src_hash}_{label}_q{q}_{knob_hash}.{ext}");
     let out_path = dir.join(&filename);
     std::fs::write(&out_path, bytes)?;
     Ok(filename)
@@ -1609,6 +1637,7 @@ fn run_hdr_source(
     cells_per_image: u64,
     stats: &AtomicSweepStats,
     wtr: &Mutex<csv::Writer<std::fs::File>>,
+    distort_worker: Option<&mut DistortWorker>,
 ) {
     let source = match crate::sweep::hdr::decode_hdr_ref(src_path) {
         Ok(img) => img,
@@ -1622,9 +1651,53 @@ fn run_hdr_source(
         }
     };
     let units = tuple_units(cfg);
-    units.par_iter().for_each(|unit| {
+    // Distortion mode (protocol v2): one image-major u16 round-trip generates
+    // every cell's variant up front (the serve subprocess parallelizes
+    // internally); the rayon cell loop below then consumes per-cell overrides
+    // instead of codec-encoding. `ref_name` seeds the worker name-based so
+    // fleet cells are byte-identical to the local HDR grid driver's.
+    let distort_overrides: Option<Vec<Option<Vec<u16>>>> = match distort_worker {
+        Some(worker) => {
+            let cells: Vec<(f64, String)> =
+                units.iter().map(|u| (u.q(), u.knob_json())).collect();
+            let ref_name = src_path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("source");
+            match worker.generate_rgb16(
+                &source.rgb16,
+                source.width,
+                source.height,
+                ref_name,
+                &cells,
+            ) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    eprintln!(
+                        "[sweep] hdr distort worker failed on {}: {e}",
+                        src_path.display()
+                    );
+                    for _ in 0..cells_per_image {
+                        stats.add_failed_encode();
+                    }
+                    return;
+                }
+            }
+        }
+        None => None,
+    };
+    units.par_iter().enumerate().for_each(|(cell_idx, unit)| {
+        let distort_rgb16: Option<&[u16]> = distort_overrides
+            .as_ref()
+            .and_then(|ov| ov[cell_idx].as_deref());
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            compute_cell_hdr(cfg, src_path, &source, unit)
+            compute_cell_hdr(
+                cfg,
+                src_path,
+                &source,
+                unit,
+                distort_overrides.as_ref().map(|_| distort_rgb16),
+            )
         }))
         .unwrap_or_else(|panic_payload| {
             let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
@@ -1640,9 +1713,13 @@ fn run_hdr_source(
                 unit.q(),
                 unit.knob_json(),
             );
+            let panic_codec = match (&distort_overrides, &cfg.distort_label) {
+                (Some(_), Some(label)) => label.clone(),
+                _ => cfg.codec.name().to_string(),
+            };
             let mut row: Vec<String> = vec![
                 src_path.display().to_string(),
-                cfg.codec.name().to_string(),
+                panic_codec,
                 unit.q().to_string(),
                 unit.knob_json(),
                 "".to_string(), // encoded_bytes
@@ -1693,22 +1770,33 @@ fn run_hdr_source(
 /// codec path, decode the variant back to nits, score with the validated
 /// HDR feedings. Row shape matches the SDR `compute_cell` exactly, plus
 /// the trailing `hdr_mode` column.
+///
+/// `distort`: `None` = codec path. `Some(cell_variant)` = distortion mode
+/// (`--distort-cmd`): the "encode" is the worker's pre-generated u16 PQ
+/// variant persisted as a 16-bit PQ PNG (row codec column =
+/// `--distort-label`); `Some(None)` means the worker failed this cell.
 #[cfg(feature = "hdr")]
 fn compute_cell_hdr(
     cfg: &SweepConfig,
     src_path: &Path,
     source: &crate::sweep::hdr::HdrRef,
     unit: &SweepUnit<'_>,
+    distort: Option<Option<&[u16]>>,
 ) -> CellOutcome {
     use crate::sweep::hdr::{
-        HDR_MODE_PQ1000, decode_encoded_to_nits, encode_hdr, score_hdr_cached,
+        HDR_MODE_PQ1000, decode_encoded_to_nits, decode_png_to_nits, encode_hdr,
+        score_hdr_cached,
     };
 
     let q = unit.q();
     let knob_json = unit.knob_json();
+    let row_codec = match (&distort, &cfg.distort_label) {
+        (Some(_), Some(label)) => label.clone(),
+        _ => cfg.codec.name().to_string(),
+    };
     let mut row: Vec<String> = vec![
         src_path.display().to_string(),
-        cfg.codec.name().to_string(),
+        row_codec.clone(),
         q.to_string(),
         knob_json.clone(),
     ];
@@ -1742,7 +1830,28 @@ fn compute_cell_hdr(
         #[cfg(not(all(feature = "sweep", any(feature = "jpeg", feature = "avif"))))]
         SweepUnit::_Never(never, _) => match *never {},
     };
-    let cell = match encode_hdr(cfg.codec, source, q, knobs) {
+    let encode_result = match distort {
+        // Distortion mode: the worker's pre-generated u16 PQ variant becomes
+        // a 16-bit PQ PNG carrying the SOURCE cICP — the persisted artifact
+        // AND the decode-back input, so what lands in the store is exactly
+        // what gets scored.
+        Some(Some(variant)) => {
+            let start = Instant::now();
+            crate::sweep::hdr::encode_pq_png(
+                variant,
+                source.width,
+                source.height,
+                source.cicp,
+            )
+            .map(|bytes| EncodedCell {
+                bytes,
+                encode_ms: start.elapsed().as_secs_f64() * 1000.0,
+            })
+        }
+        Some(None) => Err("distort worker reported a generation failure for this cell".into()),
+        None => encode_hdr(cfg.codec, source, q, knobs),
+    };
+    let cell = match encode_result {
         Ok(c) => c,
         Err(e) => {
             eprintln!(
@@ -1761,14 +1870,22 @@ fn compute_cell_hdr(
     row.push(cell.bytes.len().to_string());
     row.push(format!("{:.3}", cell.encode_ms));
     let encoded_filename = match &cfg.encoded_out_dir {
-        Some(dir) => save_encoded_variant(dir, src_path, cfg.codec, q, &knob_json, &cell.bytes)
-            .unwrap_or_else(|e| {
+        Some(dir) => {
+            let saved = if distort.is_some() {
+                save_encoded_variant_named(
+                    dir, src_path, &row_codec, "png", q, &knob_json, &cell.bytes,
+                )
+            } else {
+                save_encoded_variant(dir, src_path, cfg.codec, q, &knob_json, &cell.bytes)
+            };
+            saved.unwrap_or_else(|e| {
                 eprintln!(
                     "[sweep] hdr save encoded variant failed: {} q={q}: {e}",
                     src_path.display(),
                 );
                 String::new()
-            }),
+            })
+        }
         None => String::new(),
     };
     row.push(encoded_filename);
@@ -1776,7 +1893,12 @@ fn compute_cell_hdr(
     // Decode back to absolute nits — errors when the variant lost its
     // HDR signaling (that would not be an HDR cell).
     let decode_start = Instant::now();
-    let decoded = match decode_encoded_to_nits(&cell.bytes, cfg.codec) {
+    let decoded_result = if distort.is_some() {
+        decode_png_to_nits(&cell.bytes)
+    } else {
+        decode_encoded_to_nits(&cell.bytes, cfg.codec)
+    };
+    let decoded = match decoded_result {
         Ok(d) => d,
         Err(e) => {
             eprintln!(

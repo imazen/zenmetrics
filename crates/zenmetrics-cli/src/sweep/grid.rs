@@ -108,6 +108,14 @@ impl KnobGrid {
 /// `u32`, which coarsened the near-lossless dial where 0.1-quality steps
 /// matter. Integer inputs (`5,10,15`) parse exactly as before (`5.0`, …).
 pub fn parse_q_grid(s: &str) -> Result<Vec<f64>, Box<dyn Error>> {
+    parse_q_grid_with_max(s, 100.0)
+}
+
+/// [`parse_q_grid`] with a caller-chosen upper bound. Distortion sweeps
+/// (`--distort-cmd`) use q as an advisory CELL KEY, not a codec quality —
+/// the kadis-hdr convention packs `q = dist_type*10 + level` (up to 255) —
+/// so those sweeps parse with a wider bound while codec sweeps keep 100.
+pub fn parse_q_grid_with_max(s: &str, max: f64) -> Result<Vec<f64>, Box<dyn Error>> {
     let mut out = Vec::new();
     for part in s.split(',') {
         let p = part.trim();
@@ -117,8 +125,10 @@ pub fn parse_q_grid(s: &str) -> Result<Vec<f64>, Box<dyn Error>> {
         let v: f64 = p
             .parse()
             .map_err(|e| format!("invalid q value {p:?}: {e}"))?;
-        if !v.is_finite() || !(0.0..=100.0).contains(&v) {
-            return Err(format!("--q-grid value {v} out of range (expected 0.0..=100.0)").into());
+        if !v.is_finite() || !(0.0..=max).contains(&v) {
+            return Err(
+                format!("--q-grid value {v} out of range (expected 0.0..={max})").into(),
+            );
         }
         out.push(v);
     }

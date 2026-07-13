@@ -45,7 +45,7 @@ pub mod run;
 
 pub use encode::CodecKind;
 #[allow(unused_imports)]
-pub use grid::{KnobGrid, KnobTuple, parse_knob_grid, parse_q_grid};
+pub use grid::{KnobGrid, KnobTuple, parse_knob_grid, parse_q_grid, parse_q_grid_with_max};
 pub use run::{PlanSpec, SweepConfig, run_sweep, try_init_thread_pool};
 
 /// Re-export of the orchestrator handle type used by the sweep
