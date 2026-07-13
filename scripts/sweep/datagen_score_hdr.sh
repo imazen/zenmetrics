@@ -21,7 +21,10 @@ set -uo pipefail
 B="${ZB:-target/release/zenmetrics}"
 R="${REND:-/mnt/v/output/imazen-26-hdr-grid-2026-06-14}"
 OUT="${OUT:-/mnt/v/output/zenmetrics/datagen-2026-06-23-hdr}"
-CODEC="zenjxl"
+# CODEC is overridable for non-encode HDR families (e.g. kadis-hdr synthetic
+# distortions, 2026-07-12) whose driver writes a ready pairs TSV — set
+# PAIRS=<path> to skip the omni->pairs build below and score that TSV as-is.
+CODEC="${CODEC:-zenjxl}"
 BUCKET="${BUCKET:-codec-corpus}"
 PREFIX="${PREFIX:-picker-sweep-2026-06-22/datagen-2026-06-23-hdr}"
 METRICS="${METRICS:-cvvdp ssim2-gpu dssim-gpu butteraugli-gpu zensim-gpu iwssim}"; METRICS="${METRICS//,/ }"
@@ -39,7 +42,8 @@ log="$OUT/log/$CODEC.score.log"
 ts(){ date -u +%H:%M:%S; }
 
 # ── build a LOCAL pairs.tsv from the omni: ref -> $R/<base>, dist -> $enc/<ef> ──
-lpairs="$OUT/pairs/$CODEC.local.pairs.tsv"; mkdir -p "$(dirname "$lpairs")"
+lpairs="${PAIRS:-$OUT/pairs/$CODEC.local.pairs.tsv}"; mkdir -p "$(dirname "$lpairs")"
+[ -n "${PAIRS:-}" ] && [ -s "$PAIRS" ] || \
 python3 - "$omni" "$R" "$enc" "$lpairs" <<'PY'
 import csv, os, sys
 omni, refdir, encdir, out = sys.argv[1:5]

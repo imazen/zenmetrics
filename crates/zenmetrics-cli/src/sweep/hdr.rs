@@ -14,9 +14,13 @@
 //!    re-encode, absolute nits (cd/m²) for scoring.
 //! 2. **Encode** ([`encode_hdr`]): only codecs with a *true* HDR path are
 //!    allowed. Today that is **zenjxl** (16-bit PQ input + CICP signaling
-//!    through the zencodec adapter → jxl-encoder's HDR input path). Every
-//!    other codec errors loudly at sweep start ([`validate_hdr_sweep`]) —
-//!    an SDR 8-bit round-trip is never silently substituted.
+//!    through the zencodec adapter → jxl-encoder's HDR input path) and
+//!    **zenavif** (16-bit PQ input → 10-bit identity-matrix AV1; the
+//!    zencodec adapter maps the source CICP onto the container `nclx` via
+//!    `apply_cicp_to_config → build_ravif_encoder`; added 2026-07-12).
+//!    Every other codec errors loudly at sweep start
+//!    ([`validate_hdr_sweep`]) — an SDR 8-bit round-trip is never
+//!    silently substituted.
 //! 3. **Decode-back** ([`decode_encoded_to_nits`]): the encoded variant is
 //!    decoded and must carry PQ signaling — the codestream CICP surfaced
 //!    on `info.cicp` (transfer 16), or a PQ-tagged descriptor; samples →
@@ -108,16 +112,16 @@ pub fn decode_hdr_ref(path: &Path) -> Result<HdrRef, Err> {
 /// never silently degrade to SDR semantics.
 pub fn validate_hdr_sweep(cfg: &crate::sweep::SweepConfig) -> Result<(), Err> {
     match cfg.codec {
-        CodecKind::Zenjxl => {}
+        CodecKind::Zenjxl | CodecKind::Zenavif => {}
         other => {
             return Err(format!(
                 "HDR sweep: codec {} has no HDR encode+decode path wired; \
                  supported today: zenjxl (16-bit PQ + CICP through the \
-                 zencodec adapter). Routing HDR refs through the SDR 8-bit \
-                 encode would fake the scores (imazen/zenmetrics#25 class), \
-                 so it is refused rather than approximated. zenavif 10-bit \
-                 PQ and 16-bit zenpng are candidates — see PLAN_SWEEPS.md \
-                 'HDR sweeps'",
+                 zencodec adapter) and zenavif (10-bit identity-matrix PQ, \
+                 CICP → container nclx). Routing HDR refs through the SDR \
+                 8-bit encode would fake the scores (imazen/zenmetrics#25 \
+                 class), so it is refused rather than approximated. 16-bit \
+                 zenpng is a candidate — see PLAN_SWEEPS.md 'HDR sweeps'",
                 other.name()
             )
             .into());
@@ -166,6 +170,7 @@ pub fn encode_hdr(
 ) -> Result<EncodedCell, Err> {
     match codec {
         CodecKind::Zenjxl => encode_jxl_hdr(source, q, knobs),
+        CodecKind::Zenavif => encode_avif_hdr(source, q, knobs),
         other => Err(format!(
             "HDR sweep: codec {} has no HDR encode path (validate_hdr_sweep \
              should have rejected this sweep)",
@@ -268,6 +273,97 @@ fn encode_jxl_hdr(
     Err("HDR sweep: zenjxl requires building with --features sweep,jxl".into())
 }
 
+/// Knobs the HDR AVIF path consumes. `speed` mirrors the SDR arm's knob
+/// (rav1e speed 1..=10); anything else errors loudly — a knob silently
+/// ignored in HDR mode but honored in SDR mode would poison cross-mode
+/// training joins.
+#[cfg(all(feature = "sweep", feature = "avif"))]
+const AVIF_HDR_KNOBS: &[&str] = &["lossless", "speed"];
+
+/// zenavif HDR encode: 16-bit PQ code values as a `RGB16` slice + the
+/// source cICP as `Metadata` — zenavif's zencodec adapter mirrors the
+/// CICP triple onto its `EncoderConfig` (`apply_cicp_to_config`), which
+/// `build_ravif_encoder` forwards to the container `nclx` (transfer 16 =
+/// PQ; primaries pass through). The 16-bit slice routes to
+/// `zenavif::encode_rgb16` → 10-bit **identity-matrix** (MC=0, GBR plane
+/// order) AV1 — no YUV conversion, no chroma subsampling, matching the
+/// PQ-PNG corpus's own MC=0 signaling.
+#[cfg(all(feature = "sweep", feature = "avif"))]
+fn encode_avif_hdr(source: &HdrRef, q: f64, knobs: &Map<String, Value>) -> Result<EncodedCell, Err> {
+    use std::time::Instant;
+    use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
+    use zenavif::AvifEncoderConfig;
+    use zenpixels::{PixelDescriptor, PixelSlice};
+
+    if let Some(unknown) = knobs.keys().find(|k| !AVIF_HDR_KNOBS.contains(&k.as_str())) {
+        return Err(format!(
+            "HDR sweep: zenavif knob '{unknown}' is not wired in HDR mode \
+             (supported: {AVIF_HDR_KNOBS:?}); refusing to silently ignore it"
+        )
+        .into());
+    }
+
+    let lossless = knobs
+        .get("lossless")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let mut cfg = if lossless {
+        AvifEncoderConfig::new().with_lossless(true)
+    } else {
+        AvifEncoderConfig::new().with_generic_quality(q as f32)
+    };
+    if let Some(s) = knobs.get("speed").and_then(Value::as_u64) {
+        // Adapter effort is inverted rav1e speed: effort = 10 − speed.
+        let speed = s.clamp(1, 10) as i32;
+        cfg = cfg.with_generic_effort(10 - speed);
+    }
+
+    // Native-endian u16 → bytes without bytemuck: PixelSlice wants &[u8].
+    let mut bytes = Vec::with_capacity(source.rgb16.len() * 2);
+    for &v in &source.rgb16 {
+        bytes.extend_from_slice(&v.to_ne_bytes());
+    }
+    let stride = (source.width as usize) * 3 * 2;
+    let slice = PixelSlice::new(
+        &bytes,
+        source.width,
+        source.height,
+        stride,
+        PixelDescriptor::RGB16_BT2100_PQ,
+    )
+    .map_err(|e| format!("zenavif hdr: pixel slice construction failed: {e}"))?;
+
+    let meta = zencodec::Metadata::none().with_cicp(source.cicp);
+
+    let start = Instant::now();
+    // PreserveExact: the metadata here is only the source CICP (the HDR
+    // color authority the adapter maps onto the container nclx) —
+    // nothing privacy-relevant to strip.
+    let encoder = cfg
+        .job()
+        .with_metadata_policy(meta, zencodec::MetadataPolicy::PreserveExact)
+        .encoder()
+        .map_err(|e| format!("zenavif hdr encoder construction failed: {e}"))?;
+    let output = encoder
+        .encode(slice)
+        .map_err(|e| format!("zenavif hdr encode failed: {e}"))?;
+    let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+    Ok(EncodedCell {
+        bytes: output.into_vec(),
+        encode_ms,
+    })
+}
+
+#[cfg(not(all(feature = "sweep", feature = "avif")))]
+fn encode_avif_hdr(
+    _source: &HdrRef,
+    _q: f64,
+    _knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Err> {
+    Err("HDR sweep: zenavif requires building with --features sweep,avif".into())
+}
+
 /// Decode an encoded HDR variant back to absolute nits. The decoded
 /// descriptor must be PQ-tagged (the decoder enriches it from the
 /// codestream CICP); anything else means the codec did not round-trip
@@ -275,6 +371,7 @@ fn encode_jxl_hdr(
 pub fn decode_encoded_to_nits(bytes: &[u8], codec: CodecKind) -> Result<NitsImage, Err> {
     match codec {
         CodecKind::Zenjxl => decode_jxl_to_nits(bytes),
+        CodecKind::Zenavif => decode_avif_to_nits(bytes),
         other => Err(format!(
             "HDR sweep: codec {} has no HDR decode-back path",
             other.name()
@@ -311,13 +408,44 @@ fn decode_jxl_to_nits(_bytes: &[u8]) -> Result<NitsImage, Err> {
     Err("HDR sweep: zenjxl decode-back requires the `jxl` build feature".into())
 }
 
+/// Decode an AVIF variant back to nits. 10-bit samples are LSB-replicated
+/// to u16 by the decoder (`scale_pixels_to_u16` — exact endpoint mapping,
+/// so `v/65535` recovers the PQ code value). The container `nclx` must
+/// say transfer 16 (PQ) — a variant that lost the signaling errors.
+#[cfg(feature = "avif")]
+fn decode_avif_to_nits(bytes: &[u8]) -> Result<NitsImage, Err> {
+    let config = zenavif::DecoderConfig::default();
+    // ManagedAvifDecoder = the safe (rav1d-safe) decoder, always available;
+    // `AvifDecoder` is the unsafe-asm-gated FFI sibling.
+    let mut dec = zenavif::ManagedAvifDecoder::new(bytes, &config)
+        .map_err(|e| format!("zenavif decode-back: {e}"))?;
+    let (buffer, info) = dec
+        .decode_full(&enough::Unstoppable)
+        .map_err(|e| format!("zenavif decode-back: {e}"))?;
+    let tc = info.transfer_characteristics.0;
+    if tc != 16 {
+        return Err(format!(
+            "HDR decode-back: AVIF variant carries transfer_characteristics \
+             {tc} (want 16 = PQ) — the codec did not round-trip the HDR \
+             color encoding (refusing to guess a nits scale)"
+        )
+        .into());
+    }
+    pq_slice_to_nits(&buffer.as_slice())
+}
+
+#[cfg(not(feature = "avif"))]
+fn decode_avif_to_nits(_bytes: &[u8]) -> Result<NitsImage, Err> {
+    Err("HDR sweep: zenavif decode-back requires the `avif` build feature".into())
+}
+
 /// Strided **PQ-coded** `PixelSlice` (validated by the caller via the
 /// codestream CICP / descriptor) → absolute nits via the PQ EOTF. u8 /
 /// u16 samples normalise to `[0,1]` code values first; f32 samples ARE
 /// the code values (the JXL decoder's f32 output is PQ-coded, not
 /// linear, when the codestream carries CICP PQ). Alpha drops, gray
 /// broadcasts.
-#[cfg(feature = "jxl")]
+#[cfg(any(feature = "jxl", feature = "avif"))]
 fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
     use zenmetrics_api::hdr::pq_eotf;
     use zenpixels::{ChannelLayout, ChannelType};

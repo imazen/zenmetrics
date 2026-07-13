@@ -291,6 +291,12 @@ zenrav1e     = { path = "../zenrav1e" }
 # Equivalent git ref when the sibling checkout is gone:
 #   { git = "https://github.com/imazen/zenavif-serialize", rev = "<commit>" }
 zenavif-serialize = { path = "../zenavif-serialize" }
+# zenavif-parse: the zenavif CategorizedError migration (2026-07, live in the
+# ../zenavif sibling) bumped its requirement to ^0.7.0; only 0.6.2 is
+# published. The local ../zenavif-parse checkout IS 0.7.0 — same
+# unpublished-dep pattern as zenavif-serialize above. Dev-only: drop once
+# zenavif-parse 0.7.0 publishes.
+zenavif-parse = { path = "../zenavif-parse" }
 # zenjxl: the canonical ../zenjxl checkout (now carries the
 # AnimationParams/AnimationFrame API for jxl-encoder 0.3.2). The
 # former ../zenjxl--main worktree was removed by worktree cleanup;

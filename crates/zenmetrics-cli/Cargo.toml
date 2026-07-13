@@ -69,7 +69,7 @@ tiff = ["dep:zentiff"]
 # CPU HDR scorer path (`Metric::new_cpu_hdr`, no cubecl). NOT the heavy gain-map
 # source decoders — those are `hdr-gainmap` (below), kept opt-in so a default
 # build stays portable (no `heic`/`ultrahdr` on i686 / windows-arm / macos).
-hdr = ["dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", "zenmetrics-api/cpu-metrics"]
+hdr = ["dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", "zenmetrics-api/cpu-metrics", "dep:cvvdp"]
 
 # HDR gain-map source decoders (opt-in): Ultra HDR JPEG (`ultrahdr-rs`) +
 # gain-map HEIC (`heic` + `ultrahdr-core`) → nits, for `score`/`batch --hdr` on
@@ -184,9 +184,9 @@ sweep = [
     # wrapper — the type implementing `estimate_encode_resources` that the
     # `fleet-plan --codec` path constructs at a representative default. (jpeg's
     # is already on via the `jpeg` feature's `zenjpeg/zencodec`; jxl's via the
-    # `zenjxl?/zencodec` line below; png's zencodec dep is non-optional.)
-    "zenwebp?/zencodec",
-    "zenavif?/zencodec",
+    # `zenjxl?/zencodec` line below; png's, zenwebp 0.5.0's, AND zenavif's
+    # zencodec deps are non-optional — both dropped their `zencodec` feature
+    # flags in the CategorizedError migration.)
     "zenjxl?/__expert",
     # zenjxl::sweep is gated on encode + __expert.
     "zenjxl?/encode",
@@ -367,6 +367,12 @@ imgref = { version = "1", optional = true }
 # those two metrics enabled (e.g. ssim2-only worker) still avoids the
 # cubecl dependency entirely.
 zenmetrics-api = { workspace = true, optional = true, default-features = false }
+# Direct dep for hdr.rs's HLG→nits path (`cvvdp::params::hlg_*` — BT.2100
+# inverse-OETF + system gamma; the in-repo reference implementation). The
+# `gpu-cvvdp` feature links cvvdp only THROUGH zenmetrics-api, which doesn't
+# resolve the CLI's own `use cvvdp::…` — the missing edge that made
+# hdr+png/jxl builds uncompilable (2026-07-12).
+cvvdp = { workspace = true, optional = true }
 cubecl = { workspace = true, optional = true }
 
 # Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the

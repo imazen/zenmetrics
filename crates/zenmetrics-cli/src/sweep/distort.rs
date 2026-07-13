@@ -92,15 +92,78 @@ impl DistortWorker {
             )
             .into());
         }
+        let header = serde_json::json!({"width": w, "height": h, "cells": cells_json(cells)});
+        let raws = self.generate_impl(&header, &source.pixels, per, cells.len())?;
+        Ok(raws
+            .into_iter()
+            .map(|r| {
+                r.map(|pixels| Rgb8Image {
+                    pixels,
+                    width: w,
+                    height: h,
+                })
+            })
+            .collect())
+    }
 
+    /// Protocol-v2 16-bit generation (2026-07-13, HDR): `rgb16` is tight
+    /// interleaved RGB u16 **PQ code values**; the worker distorts in the PQ
+    /// code-value domain (clamp, never mapmm) and each returned variant is the
+    /// same shape. `ref_name` seeds the worker's per-cell RNG name-based
+    /// (`kadis_distort.io.seed_for`) so fleet cells are byte-identical to the
+    /// local HDR grid driver's. Cell `knob_tuple_json` must carry `dist_type`
+    /// AND `level` (the HDR grid packs `q = dist_type*10 + level`, so q is not
+    /// the level).
+    pub fn generate_rgb16(
+        &mut self,
+        rgb16: &[u16],
+        width: u32,
+        height: u32,
+        ref_name: &str,
+        cells: &[(f64, String)],
+    ) -> Result<Vec<Option<Vec<u16>>>, Box<dyn Error>> {
+        let n = (width as usize) * (height as usize) * 3;
+        if rgb16.len() != n {
+            return Err(format!(
+                "distort worker: reference sample buffer {} != w*h*3 {n}",
+                rgb16.len()
+            )
+            .into());
+        }
+        let mut bytes = Vec::with_capacity(n * 2);
+        for &v in rgb16 {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+        let header = serde_json::json!({
+            "width": width, "height": height, "bit_depth": 16,
+            "ref_name": ref_name, "cells": cells_json(cells),
+        });
+        let raws = self.generate_impl(&header, &bytes, n * 2, cells.len())?;
+        Ok(raws
+            .into_iter()
+            .map(|r| {
+                r.map(|b| {
+                    b.chunks_exact(2)
+                        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                        .collect()
+                })
+            })
+            .collect())
+    }
+
+    /// Shared request/response core: send `header` + the raw reference frame,
+    /// parse per-cell statuses, and split the trailing raw frame into
+    /// `per`-byte variants (in cell order, failed cells contribute nothing).
+    fn generate_impl(
+        &mut self,
+        header: &serde_json::Value,
+        source_bytes: &[u8],
+        per: usize,
+        n_cells: usize,
+    ) -> Result<Vec<Option<Vec<u8>>>, Box<dyn Error>> {
         // --- request ---
-        let cell_json: Vec<serde_json::Value> = cells
-            .iter()
-            .map(|(q, knob)| serde_json::json!({"q": q, "knob_tuple_json": knob}))
-            .collect();
-        let header = serde_json::json!({"width": w, "height": h, "cells": cell_json});
-        write_frame(&mut self.stdin, &serde_json::to_vec(&header)?)?;
-        write_frame(&mut self.stdin, &source.pixels)?;
+        write_frame(&mut self.stdin, &serde_json::to_vec(header)?)?;
+        write_frame(&mut self.stdin, source_bytes)?;
         self.stdin.flush()?;
 
         // --- response header ---
@@ -111,11 +174,11 @@ impl DistortWorker {
             .get("variants")
             .and_then(|v| v.as_array())
             .ok_or("distort worker: response missing `variants` array")?;
-        if variants.len() != cells.len() {
+        if variants.len() != n_cells {
             return Err(format!(
                 "distort worker: returned {} variants for {} cells",
                 variants.len(),
-                cells.len()
+                n_cells
             )
             .into());
         }
@@ -138,21 +201,17 @@ impl DistortWorker {
         let n_ok = oks.iter().filter(|b| **b).count();
         if raw.len() != n_ok * per {
             return Err(format!(
-                "distort worker: raw frame {} != n_ok({n_ok}) * w*h*3({per}) = {}",
+                "distort worker: raw frame {} != n_ok({n_ok}) * per({per}) = {}",
                 raw.len(),
                 n_ok * per
             )
             .into());
         }
-        let mut out = Vec::with_capacity(cells.len());
+        let mut out = Vec::with_capacity(n_cells);
         let mut off = 0usize;
         for ok in &oks {
             if *ok {
-                out.push(Some(Rgb8Image {
-                    pixels: raw[off..off + per].to_vec(),
-                    width: w,
-                    height: h,
-                }));
+                out.push(Some(raw[off..off + per].to_vec()));
                 off += per;
             } else {
                 out.push(None);
@@ -160,6 +219,13 @@ impl DistortWorker {
         }
         Ok(out)
     }
+}
+
+fn cells_json(cells: &[(f64, String)]) -> Vec<serde_json::Value> {
+    cells
+        .iter()
+        .map(|(q, knob)| serde_json::json!({"q": q, "knob_tuple_json": knob}))
+        .collect()
 }
 
 impl Drop for DistortWorker {
@@ -225,6 +291,30 @@ while True:
             std::env::temp_dir().join(format!("kadis_identity_worker_{}.py", std::process::id()));
         std::fs::write(&path, script).unwrap();
         format!("python3 {}", path.display())
+    }
+
+    #[test]
+    fn identity_worker_roundtrips_u16_cells() {
+        // The identity worker echoes whatever reference bytes it received, so
+        // it exercises the v2 framing (bit_depth 16 header + u16 LE frames)
+        // without a kadis_distort dependency.
+        let mut worker = DistortWorker::spawn(&identity_worker_cmd()).expect("spawn worker");
+        let rgb16: Vec<u16> = (0u16..12).map(|v| v * 5000).collect(); // 2x2 RGB16
+        let cells = vec![
+            (102.0, "{\"dist_type\":10,\"level\":2}".to_string()),
+            (213.0, "{\"dist_type\":21,\"level\":3}".to_string()),
+        ];
+        let out = worker
+            .generate_rgb16(&rgb16, 2, 2, "ref_a.hdr.png", &cells)
+            .expect("generate_rgb16");
+        assert_eq!(out.len(), 2, "one variant per cell");
+        for variant in &out {
+            assert_eq!(
+                variant.as_ref().expect("identity worker returns ok"),
+                &rgb16,
+                "identity worker echoes the u16 reference"
+            );
+        }
     }
 
     #[test]

@@ -6230,9 +6230,7 @@ dependencies = [
 
 [[package]]
 name = "zenavif-parse"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35ea3a5640719078e3d91e5feab60dd5d7cff3c34bf5c666925044745c58569d"
+version = "0.7.0"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -6241,6 +6239,7 @@ dependencies = [
  "fallible_collections",
  "leb128",
  "log",
+ "whereat",
  "zencodec",
 ]
 
@@ -6633,7 +6632,7 @@ dependencies = [
 
 [[package]]
 name = "zengif"
-version = "0.7.3"
+version = "0.8.0"
 dependencies = [
  "bytemuck",
  "enough",
@@ -6662,7 +6661,7 @@ dependencies = [
 
 [[package]]
 name = "zenjpeg"
-version = "0.8.7"
+version = "0.9.0"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -6783,6 +6782,7 @@ dependencies = [
  "bytemuck",
  "clap",
  "csv",
+ "cvvdp",
  "dssim-core",
  "enough",
  "fast-ssim2 0.8.2",
@@ -7045,7 +7045,7 @@ dependencies = [
 
 [[package]]
 name = "zenwebp"
-version = "0.4.5"
+version = "0.5.0"
 dependencies = [
  "archmage",
  "bytemuck",

@@ -87,8 +87,44 @@ pub fn decode_to_nits(path: &Path) -> Result<NitsImage, Err> {
         .into()),
         "png" => decode_pq_png(path),
         "jxl" => decode_pq_jxl(path),
+        "avif" => decode_pq_avif(path),
         other => Err(format!("unsupported HDR input extension: .{other}").into()),
     }
+}
+
+/// Decode an AVIF HDR variant (10-bit identity-matrix PQ, `nclx` transfer 16)
+/// to absolute nits — the decode-back path for `score-pairs --hdr` over
+/// avif-hdr datagen variants. Mirrors the sweep's
+/// `sweep::hdr::decode_avif_to_nits` exactly: container transfer must be PQ,
+/// 10-bit samples are LSB-replicated to u16 by the decoder (exact endpoint
+/// mapping, so `v/65535` recovers the PQ code value), then PQ EOTF → cd/m².
+#[cfg(feature = "avif")]
+fn decode_pq_avif(path: &Path) -> Result<NitsImage, Err> {
+    let data = std::fs::read(path)?;
+    let config = zenavif::DecoderConfig::default();
+    // ManagedAvifDecoder = the safe (rav1d-safe) decoder, always available;
+    // `AvifDecoder` is the unsafe-asm-gated FFI sibling.
+    let mut dec = zenavif::ManagedAvifDecoder::new(&data, &config)
+        .map_err(|e| format!("zenavif: {e}"))?;
+    let (buffer, info) = dec
+        .decode_full(&enough::Unstoppable)
+        .map_err(|e| format!("zenavif: {e}"))?;
+    let tc = info.transfer_characteristics.0;
+    if tc != 16 {
+        return Err(format!(
+            "HDR AVIF decode: variant carries transfer_characteristics {tc} \
+             (want 16 = PQ) — the codec did not round-trip the HDR color \
+             encoding, so this is not an HDR variant (refusing to guess a \
+             nits scale). Score it through the SDR path instead (drop --hdr)."
+        )
+        .into());
+    }
+    pq_slice_to_nits(&buffer.as_slice())
+}
+
+#[cfg(not(feature = "avif"))]
+fn decode_pq_avif(_path: &Path) -> Result<NitsImage, Err> {
+    Err("AVIF HDR decode requires the `avif` build feature (zenavif)".into())
 }
 
 /// Decode a JPEG XL HDR variant (16-bit PQ + CICP) to absolute nits. This is
@@ -132,7 +168,7 @@ fn decode_pq_jxl(_path: &Path) -> Result<NitsImage, Err> {
 /// codestream carries CICP PQ). Alpha drops, gray broadcasts. Mirrors
 /// `sweep::hdr::pq_slice_to_nits` so the inline-sweep and score-pairs HDR
 /// decode-back paths agree bit-for-bit.
-#[cfg(feature = "jxl")]
+#[cfg(any(feature = "jxl", feature = "avif"))]
 fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
     use zenmetrics_api::hdr::pq_eotf;
     use zenpixels::{ChannelLayout, ChannelType};

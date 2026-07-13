@@ -45,7 +45,7 @@ R="${REND:-/mnt/v/output/imazen-26-hdr-grid-2026-06-14}"
 OUT="${OUT:-/mnt/v/output/zenmetrics/datagen-2026-06-23-hdr}"
 # Dense low-q grid (CLAUDE.md: q5-q60 same density as q60-q100, web focus).
 QG="${QG:-5,15,30,50,70,85,95}"
-CODEC="zenjxl"                                   # the only HDR-capable codec
+CODEC="${CODEC:-zenjxl}"   # HDR-capable: zenjxl, zenavif (10-bit PQ, 2026-07-12)
 BUCKET="${BUCKET:-codec-corpus}"
 PREFIX="${PREFIX:-picker-sweep-2026-06-22/datagen-2026-06-23-hdr}"
 # Inline metric the HDR sweep needs (cheap; the real scoring is score-pairs).
