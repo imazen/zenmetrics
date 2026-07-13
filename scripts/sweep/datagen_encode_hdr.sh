@@ -2,12 +2,15 @@
 # datagen_encode_hdr.sh — HDR encode-half of the encode -> GPU-metric -> parquet
 # data run, the HDR sibling of datagen_encode.sh.
 #
-# Only ONE codec is HDR-capable in this pipeline: zenjxl (16-bit PQ + CICP
-# round-trip, validated by zenmetrics sweep::hdr::validate_hdr_sweep). zenavif /
-# zenjpeg / zenwebp / zenpng have NO wired HDR encode+decode path and the sweep
-# refuses them in --hdr mode (it would fake the scores by crushing nits to 8-bit
-# SDR), so they are NOT encoded here. Do not "add HDR coverage" for them without
-# first wiring a true HDR path in sweep::hdr.
+# HDR-capable codecs in this pipeline (validated by
+# zenmetrics sweep::hdr::validate_hdr_sweep):
+#   * zenjxl  — 16-bit PQ + CICP round-trip (the original path)
+#   * zenavif — 10-bit PQ, identity-matrix MC=0/GBR AV1 + CICP→nclx
+#     (wired 2026-07-12; run with CODEC=zenavif)
+# zenjpeg / zenwebp / zenpng still have NO wired HDR encode+decode path and
+# the sweep refuses them in --hdr mode (it would fake the scores by crushing
+# nits to 8-bit SDR). Do not "add HDR coverage" for them without first wiring
+# a true HDR path in sweep::hdr.
 #
 # HDR-mode sweep differences vs the SDR datagen:
 #   * --hdr is set; the encode path takes the 16-bit PQ .hdr.png reference,
