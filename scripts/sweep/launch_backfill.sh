@@ -386,6 +386,14 @@ for offer_id in $OFFER_IDS; do
         ENV_STR+=" -e JOBS=${JOBS}"
     # Explicit chunks URL so onstarts need not re-derive it by convention.
     ENV_STR+=" -e CHUNKS_R2=${CHUNKS}"
+    # Opt-in: ship the vast API key so onstarts can self-destroy drained
+    # boxes (INJECT_VAST_API_KEY=1). Without it a completed box IDLES at
+    # full $/hr until an operator reaps it (2026-07-13 incident) — if not
+    # injecting, run `zenfleet-vastai watch` or a log-tail reaper.
+    if [[ "${INJECT_VAST_API_KEY:-0}" == "1" ]]; then
+        VAST_KEY_VAL="${VAST_API_KEY:-$(cat ~/.config/vastai/vast_api_key 2>/dev/null || true)}"
+        [[ -n "$VAST_KEY_VAL" ]] && ENV_STR+=" -e VAST_API_KEY=${VAST_KEY_VAL}"
+    fi
     # Opt-in static modulo sharding (SHARD_N env): shard index counts
     # SUCCESSFUL launches so a failed create doesn't orphan its shard
     # mid-sequence. Any launch shortfall is reported after the loop.

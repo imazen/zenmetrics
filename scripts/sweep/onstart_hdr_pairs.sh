@@ -71,8 +71,16 @@ done < /tmp/chunks.jsonl
 
 echo "[onstart-hdr-pairs] shard complete rc=$rc_total — self-destroying" >&2
 # Billing protection: destroy this instance when the shard is done.
-if [[ -n "${CONTAINER_ID:-${VAST_CONTAINERLABEL:-}}" ]]; then
+# REQUIRES VAST_API_KEY in the box env (launcher: INJECT_VAST_API_KEY=1).
+# Without it the DELETE silently no-ops and the box IDLES AT FULL COST —
+# observed 2026-07-13 (4 drained boxes sat "running" until manually reaped).
+# Fallback when not injecting the key: run `zenfleet-vastai watch` locally,
+# or a log-tail reaper that destroys boxes printing "shard complete".
+if [[ -z "${VAST_API_KEY:-}" ]]; then
+    echo "[onstart-hdr-pairs] WARNING: VAST_API_KEY not set — cannot self-destroy; operator must reap this box" >&2
+fi
+if [[ -n "${CONTAINER_ID:-${VAST_CONTAINERLABEL:-}}" && -n "${VAST_API_KEY:-}" ]]; then
     IID="${CONTAINER_ID:-${VAST_CONTAINERLABEL##C.}}"
-    curl -s -X DELETE "https://console.vast.ai/api/v0/instances/${IID}/?api_key=${VAST_API_KEY:-}" >/dev/null 2>&1 || true
+    curl -s -X DELETE "https://console.vast.ai/api/v0/instances/${IID}/?api_key=${VAST_API_KEY}" >/dev/null 2>&1 || true
 fi
 exit "$rc_total"
