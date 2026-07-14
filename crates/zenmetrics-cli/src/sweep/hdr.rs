@@ -156,13 +156,11 @@ pub fn validate_hdr_sweep(cfg: &crate::sweep::SweepConfig) -> Result<(), Err> {
         // rows with real codec-encode rows for the same (ref, q) in
         // downstream joins (the corpus builder keys on basename+codec+q).
         if cfg.distort_label.as_deref().unwrap_or("").is_empty() {
-            return Err(
-                "HDR sweep: --distort-cmd requires --distort-label <name> \
+            return Err("HDR sweep: --distort-cmd requires --distort-label <name> \
                  (e.g. kadis-hdr) — the omni/pairs codec column for \
                  distortion rows; a codec-name fallback would collide with \
                  real codec rows in downstream joins"
-                    .into(),
-            );
+                .into());
         }
         #[cfg(not(feature = "png"))]
         return Err("HDR sweep: --distort-cmd needs the `png` build feature \
@@ -310,10 +308,14 @@ const AVIF_HDR_KNOBS: &[&str] = &["lossless", "speed"];
 /// order) AV1 — no YUV conversion, no chroma subsampling, matching the
 /// PQ-PNG corpus's own MC=0 signaling.
 #[cfg(all(feature = "sweep", feature = "avif"))]
-fn encode_avif_hdr(source: &HdrRef, q: f64, knobs: &Map<String, Value>) -> Result<EncodedCell, Err> {
+fn encode_avif_hdr(
+    source: &HdrRef,
+    q: f64,
+    knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Err> {
     use std::time::Instant;
-    use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
     use zenavif::AvifEncoderConfig;
+    use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
     use zenpixels::{PixelDescriptor, PixelSlice};
 
     if let Some(unknown) = knobs.keys().find(|k| !AVIF_HDR_KNOBS.contains(&k.as_str())) {

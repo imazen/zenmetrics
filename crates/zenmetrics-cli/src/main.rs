@@ -49,7 +49,7 @@ mod size_invariance;
 #[cfg(feature = "sweep")]
 mod sweep;
 
-#[cfg(feature = "sweep")]
+#[cfg(feature = "jobexec")]
 mod jobexec;
 
 #[cfg(feature = "orchestrator")]
@@ -158,9 +158,11 @@ enum Command {
     ScorePairs(ScorePairsArgs),
     /// Execute ONE job from the zen job system: read a `DesiredJob` as JSON on stdin, do the
     /// encode/score for that cell, write the output bytes (encode) or a JSON score row (metric) to
-    /// stdout. This is the `ZEN_EXEC` reference executor — point `zenfleet-worker --exec` at it. Only
-    /// available with `--features sweep`. See `docs/RUNNING_JOBS.md`.
-    #[cfg(feature = "sweep")]
+    /// stdout. This is the `ZEN_EXEC` reference executor — point `zenfleet-worker --exec` at it.
+    /// Available with `--features jobexec` (score_file jobs — persisted variants, no re-encode;
+    /// `sweep` implies it and additionally enables the encode/metric job kinds). See
+    /// `docs/RUNNING_JOBS.md`.
+    #[cfg(feature = "jobexec")]
     Jobexec(crate::jobexec::JobexecArgs),
     /// Assemble a training corpus by joining metric-score sidecars onto
     /// feature tables with a TYPED full-key join that makes the 2026-05-25
@@ -772,7 +774,7 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        #[cfg(feature = "sweep")]
+        #[cfg(feature = "jobexec")]
         Command::Jobexec(args) => match crate::jobexec::run(args) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
@@ -850,7 +852,11 @@ fn cmd_sweep(
     // Distortion sweeps use q as an advisory cell key (kadis-hdr packs
     // q = dist_type*10 + level, up to 255); codec sweeps keep the 0..=100
     // quality bound.
-    let q_max = if args.distort_cmd.is_some() { 255.0 } else { 100.0 };
+    let q_max = if args.distort_cmd.is_some() {
+        255.0
+    } else {
+        100.0
+    };
     let q_grid = crate::sweep::parse_q_grid_with_max(&args.q_grid, q_max)?;
     let knob_grid = parse_knob_grid(&args.knob_grid)?;
 

@@ -126,9 +126,7 @@ pub fn parse_q_grid_with_max(s: &str, max: f64) -> Result<Vec<f64>, Box<dyn Erro
             .parse()
             .map_err(|e| format!("invalid q value {p:?}: {e}"))?;
         if !v.is_finite() || !(0.0..=max).contains(&v) {
-            return Err(
-                format!("--q-grid value {v} out of range (expected 0.0..={max})").into(),
-            );
+            return Err(format!("--q-grid value {v} out of range (expected 0.0..={max})").into());
         }
         out.push(v);
     }

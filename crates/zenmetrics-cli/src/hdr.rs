@@ -104,8 +104,8 @@ fn decode_pq_avif(path: &Path) -> Result<NitsImage, Err> {
     let config = zenavif::DecoderConfig::default();
     // ManagedAvifDecoder = the safe (rav1d-safe) decoder, always available;
     // `AvifDecoder` is the unsafe-asm-gated FFI sibling.
-    let mut dec = zenavif::ManagedAvifDecoder::new(&data, &config)
-        .map_err(|e| format!("zenavif: {e}"))?;
+    let mut dec =
+        zenavif::ManagedAvifDecoder::new(&data, &config).map_err(|e| format!("zenavif: {e}"))?;
     let (buffer, info) = dec
         .decode_full(&enough::Unstoppable)
         .map_err(|e| format!("zenavif: {e}"))?;

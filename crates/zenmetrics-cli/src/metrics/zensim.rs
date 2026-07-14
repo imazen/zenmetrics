@@ -85,9 +85,10 @@ pub(crate) fn score_with_precomputed(
 /// cost on top of [`score`] is the masking pass over the same multi-scale
 /// stats; the score-relevant work is shared.
 ///
-/// Only used by the `sweep` subcommand when the user passes
-/// `--feature-output <path.parquet>`.
-#[cfg(feature = "sweep")]
+/// Used by the `sweep` subcommand's `--feature-output <path.parquet>` and by
+/// the jobexec executor's zensim feature-row emission (not `sweep`-gated —
+/// the jobexec-only build needs it too; it has no sweep dependency).
+#[allow(dead_code)] // not every feature shape calls it
 pub fn score_with_features(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,

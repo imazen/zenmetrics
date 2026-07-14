@@ -819,8 +819,11 @@ fn disabled_msg(metric: &str, feature: &str) -> Box<dyn std::error::Error> {
 /// Score values match what [`run_metric`] would return for `MetricKind::Zensim`,
 /// so a sweep that scores zensim today and migrates to this entry point
 /// later sees no shift in the TSV `score_zensim` column.
-#[cfg(feature = "sweep")]
+///
+/// Not `sweep`-gated: the jobexec-only executor (`--features jobexec`) scores
+/// persisted variants through this entry too — it has no sweep dependency.
 #[allow(unused_variables)]
+#[allow(dead_code)] // some feature shapes (e.g. jobexec-only bin) don't call it
 pub fn run_zensim_with_features(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
@@ -884,10 +887,9 @@ impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
 ///
 /// The `gpu_runtime = Auto` case walks the compiled-in runtime list
 /// and returns the first that produces a finite score.
-#[cfg(feature = "sweep")]
 #[cfg(feature = "gpu-zensim")]
 #[allow(dead_code)] // superseded by `metrics::cache::MetricCache::compute_zensim_features`
-// for the sweep path; retained as a library entry point.
+// for the sweep path; retained as a library entry point (jobexec + lib consumers).
 pub fn run_zensim_gpu_with_features(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
@@ -968,7 +970,6 @@ pub fn run_zensim_gpu_with_features(
     .into())
 }
 
-#[cfg(feature = "sweep")]
 #[cfg(not(feature = "gpu-zensim"))]
 #[allow(unused_variables)]
 // Lib-consumer API surface (re-exported in sweep::run); dead from the

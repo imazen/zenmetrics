@@ -26,6 +26,10 @@
 //! need a GPU build/tier. This keeps the basement + CPU burst tiers fully useful.
 use crate::decode::{Rgb8Image, decode_image_to_rgb8};
 use crate::metrics::{GpuRuntime, MetricKind, run_metric};
+// The encode stack (re-encoding a cell for the `encode`/`metric` job kinds) needs the codec
+// deps the `sweep` feature pulls. A `jobexec`-only build serves `score_file` jobs (persisted
+// variants — fetch → decode → score, never re-encode) and errors loudly on the encode kinds.
+#[cfg(feature = "sweep")]
 use crate::sweep::encode::{CodecKind, encode};
 use clap::{Parser, ValueEnum};
 use serde_json::{Map, Value};
@@ -54,6 +58,7 @@ pub struct JobexecArgs {
     pub serve: bool,
 }
 
+#[cfg(feature = "sweep")]
 fn codec_from_name(name: &str) -> Result<CodecKind, Box<dyn Error>> {
     Ok(match name {
         "zenpng" => CodecKind::Zenpng,
@@ -198,6 +203,7 @@ fn resolve_source(
 /// declaring and executing builds is a loud deterministic failure —
 /// never a silently wrong encode. Everything else goes through the
 /// per-codec knob vocabulary as before.
+#[cfg(feature = "sweep")]
 fn encode_cell_for_job(
     codec: CodecKind,
     reference: &Rgb8Image,
@@ -744,6 +750,29 @@ fn run_one_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<
     if kind == "score_file" {
         return run_score_file(job, corpus_prefix);
     }
+    // The `encode` / `metric` job kinds re-encode the cell, which needs the codec stack the
+    // `sweep` feature pulls. A `jobexec`-only build (pure-scoring executor) rejects them loudly
+    // instead of silently mis-scoring.
+    #[cfg(not(feature = "sweep"))]
+    {
+        return Err(format!(
+            "job kind {kind:?} re-encodes the cell and needs a build with --features sweep \
+             (this jobexec-only build serves score_file jobs)"
+        )
+        .into());
+    }
+    #[cfg(feature = "sweep")]
+    run_encode_or_metric_job(kind, job, corpus_prefix)
+}
+
+/// The original `encode` / `metric` job path: resolve + decode the source, re-encode the cell
+/// deterministically, and (for `metric`) score it. Needs the codec stack → `sweep`-gated.
+#[cfg(feature = "sweep")]
+fn run_encode_or_metric_job(
+    kind: &str,
+    job: &Value,
+    corpus_prefix: Option<&str>,
+) -> Result<Vec<u8>, Box<dyn Error>> {
     let cell = &job["cell"];
     let image_path = cell["image_path"]
         .as_str()

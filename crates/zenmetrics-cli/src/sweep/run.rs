@@ -1658,8 +1658,7 @@ fn run_hdr_source(
     // fleet cells are byte-identical to the local HDR grid driver's.
     let distort_overrides: Option<Vec<Option<Vec<u16>>>> = match distort_worker {
         Some(worker) => {
-            let cells: Vec<(f64, String)> =
-                units.iter().map(|u| (u.q(), u.knob_json())).collect();
+            let cells: Vec<(f64, String)> = units.iter().map(|u| (u.q(), u.knob_json())).collect();
             let ref_name = src_path
                 .file_name()
                 .and_then(|s| s.to_str())
@@ -1784,8 +1783,7 @@ fn compute_cell_hdr(
     distort: Option<Option<&[u16]>>,
 ) -> CellOutcome {
     use crate::sweep::hdr::{
-        HDR_MODE_PQ1000, decode_encoded_to_nits, decode_png_to_nits, encode_hdr,
-        score_hdr_cached,
+        HDR_MODE_PQ1000, decode_encoded_to_nits, decode_png_to_nits, encode_hdr, score_hdr_cached,
     };
 
     let q = unit.q();
@@ -1837,16 +1835,12 @@ fn compute_cell_hdr(
         // what gets scored.
         Some(Some(variant)) => {
             let start = Instant::now();
-            crate::sweep::hdr::encode_pq_png(
-                variant,
-                source.width,
-                source.height,
-                source.cicp,
+            crate::sweep::hdr::encode_pq_png(variant, source.width, source.height, source.cicp).map(
+                |bytes| EncodedCell {
+                    bytes,
+                    encode_ms: start.elapsed().as_secs_f64() * 1000.0,
+                },
             )
-            .map(|bytes| EncodedCell {
-                bytes,
-                encode_ms: start.elapsed().as_secs_f64() * 1000.0,
-            })
         }
         Some(None) => Err("distort worker reported a generation failure for this cell".into()),
         None => encode_hdr(cfg.codec, source, q, knobs),
@@ -1873,7 +1867,13 @@ fn compute_cell_hdr(
         Some(dir) => {
             let saved = if distort.is_some() {
                 save_encoded_variant_named(
-                    dir, src_path, &row_codec, "png", q, &knob_json, &cell.bytes,
+                    dir,
+                    src_path,
+                    &row_codec,
+                    "png",
+                    q,
+                    &knob_json,
+                    &cell.bytes,
                 )
             } else {
                 save_encoded_variant(dir, src_path, cfg.codec, q, &knob_json, &cell.bytes)

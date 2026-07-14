@@ -146,6 +146,16 @@ gpu-wgpu = ["zenmetrics-api?/wgpu", "cubecl?/wgpu"]
 gpu-hip = ["zenmetrics-api?/hip", "cubecl?/hip"]
 gpu-cpu = ["zenmetrics-api?/cpu", "cubecl?/cpu"]
 
+# `jobexec` enables the `zenmetrics jobexec` subcommand — the ZEN_EXEC reference
+# executor for the zen job system — WITHOUT the codec-encode stack. A jobexec-only
+# build serves `score_file` jobs (persisted variants: fetch → decode → score, no
+# re-encode, SDR and `--features hdr` HDR); the `encode` / `metric` job kinds
+# additionally need `sweep` (they re-encode the cell) and error loudly without it.
+# Split out of `sweep` (which force-pulls the jpeg codec) so a pure-scoring
+# executor builds while a sibling codec crate is mid-refactor. `sweep` implies
+# `jobexec`, so every existing `--features sweep` build keeps the subcommand.
+jobexec = []
+
 # `sweep` enables the codec-driving subcommand that encodes a source image
 # across a (q, knob_tuple) Cartesian grid and scores each variant via the
 # normal metric backends. Codecs stay "dumb" — the sweep driver pokes their
@@ -166,6 +176,9 @@ sweep = [
     "jpeg",
     "webp",
     "avif",
+    # The job-system executor subcommand ships with every sweep build (its
+    # encode/metric job kinds need the sweep encode stack anyway).
+    "jobexec",
     # Core HDR is pulled into every sweep build so the `--hdr` flag + HDR
     # scoring path can never be missing from a sweep/fleet binary (the
     # "image lacks --hdr" recurrence). It's light (no `heic`/`ultrahdr`); the
