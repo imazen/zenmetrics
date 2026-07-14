@@ -15,7 +15,7 @@ pub fn kind_label(k: &JobKind) -> String {
     match k {
         JobKind::Encode { codec, .. } => format!("encode:{codec}"),
         JobKind::Metric { metric } => format!("metric:{metric}"),
-        JobKind::ScoreFile { metrics } => format!("scorefile:{}", metrics.join("+")),
+        JobKind::ScoreFile { metrics, .. } => format!("scorefile:{}", metrics.join("+")),
         JobKind::Feature { regime } => format!("feature:{regime}"),
         JobKind::Diffmap { metric } => format!("diffmap:{metric}"),
         JobKind::Resample { kernel, .. } => format!("resample:{kernel}"),

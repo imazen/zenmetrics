@@ -6,6 +6,13 @@
 
 use serde::{Deserialize, Serialize};
 
+/// `skip_serializing_if` helper: keeps a `false` flag OUT of the serialized JSON so
+/// content-addressed [`crate::JobId`]s of pre-existing jobs are byte-stable across
+/// additive schema evolution (see `JobKind::ScoreFile::hdr`).
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 /// Where a job runs — maps to a queue subject so workers pull only what their hardware serves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -118,6 +125,32 @@ pub enum JobKind {
     /// never re-encoded or re-decoded per metric. `inputs` are the variant content shas.
     ScoreFile {
         metrics: Vec<String>,
+        /// HDR persisted-pairs corpora (e.g. kadis-hdr): the executor decodes the
+        /// reference and every variant to **absolute-luminance nits** (PQ-PNG /
+        /// PQ-JXL / PQ-AVIF / EXR) and applies the per-metric HDR feeding that
+        /// `zenmetrics score-pairs --hdr` uses, instead of the SDR rgb8 decode.
+        ///
+        /// **Job-id compatibility**: `#[serde(default, skip_serializing_if)]` —
+        /// an SDR job (`hdr = false`) serializes byte-identically to the
+        /// pre-HDR schema, so every existing content-addressed [`crate::JobId`]
+        /// and ledger row stays valid. `hdr = true` is serialized and therefore
+        /// (correctly) yields a DIFFERENT job id: scoring the same bytes in HDR
+        /// mode is different work with different outputs.
+        ///
+        /// **Executor version gate**: an executor built before this field (or
+        /// without its `hdr` cargo feature) does not know the flag; old binaries
+        /// deserialize the manifest but would score SDR silently. HDR manifests
+        /// MUST pin an executor image ≥ the version that ships the HDR arm — see
+        /// `docs/RUNNING_JOBS.md` ("HDR ScoreFile").
+        #[serde(default, skip_serializing_if = "is_false")]
+        hdr: bool,
+        /// HDR→u8 transfer for the u8-shell metrics (serde snake_case of the
+        /// CLI's `--hdr-transfer`: `"pu-rescale"` or `"pq"`). `None` means the
+        /// executor's default, `pu-rescale` — the validated fleet setting.
+        /// Only meaningful when `hdr` is true; skipped from serialization when
+        /// `None` so SDR jobs' ids are untouched.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hdr_transfer: Option<String>,
     },
     Feature {
         regime: String,
@@ -388,5 +421,85 @@ mod tests {
         };
         let j = serde_json::to_string(&k).unwrap();
         assert_eq!(serde_json::from_str::<JobKind>(&j).unwrap(), k);
+    }
+
+    /// **GOLDEN — job-id compatibility gate for the ScoreFile HDR fields.**
+    ///
+    /// The JSON string and the JobId hex below were captured from the tree
+    /// BEFORE `hdr`/`hdr_transfer` existed (commit b24cc750). An SDR ScoreFile
+    /// job must keep serializing to EXACTLY these bytes — that is what keeps
+    /// every existing content-addressed job id, manifest, and Parquet ledger
+    /// valid. If this test fails, the change that broke it is an automatic
+    /// do-not-ship (re-keying the ledger is never on the table).
+    #[test]
+    fn scorefile_sdr_serialization_and_job_id_are_golden_stable() {
+        use crate::content::sha256;
+        use crate::ids::JobId;
+        let k = JobKind::ScoreFile {
+            metrics: vec!["cvvdp".into(), "ssim2-gpu".into()],
+            hdr: false,
+            hdr_transfer: None,
+        };
+        // Byte-identical serialization vs the pre-HDR schema.
+        assert_eq!(
+            serde_json::to_string(&k).unwrap(),
+            r#"{"kind":"score_file","metrics":["cvvdp","ssim2-gpu"]}"#,
+        );
+        // Content-addressed id unchanged (captured pre-change, same inputs).
+        let a = sha256(b"variantA");
+        let b = sha256(b"variantB");
+        assert_eq!(
+            JobId::of(&k, &[a, b]).as_str(),
+            "6e79bec22167df48f570235d5e3fa0814ba9189c02d0cf5d7b407f432270eacc",
+        );
+    }
+
+    /// Pre-HDR manifests (no `hdr` key) still deserialize — the fields default
+    /// to `false` / `None`, and the parsed value round-trips back to the
+    /// legacy byte shape.
+    #[test]
+    fn scorefile_legacy_json_deserializes_with_hdr_defaults() {
+        let legacy = r#"{"kind":"score_file","metrics":["zensim-gpu"]}"#;
+        let k: JobKind = serde_json::from_str(legacy).unwrap();
+        assert_eq!(
+            k,
+            JobKind::ScoreFile {
+                metrics: vec!["zensim-gpu".into()],
+                hdr: false,
+                hdr_transfer: None,
+            }
+        );
+        // Round-trips byte-identically (skip_serializing_if keeps SDR clean).
+        assert_eq!(serde_json::to_string(&k).unwrap(), legacy);
+    }
+
+    /// HDR is different work → different serialization → different job id.
+    /// (Scoring the same variant bytes through the HDR feeding produces
+    /// different outputs, so the ids MUST diverge — dedup across the two would
+    /// silently return SDR scores for an HDR declare.)
+    #[test]
+    fn scorefile_hdr_changes_job_id_and_roundtrips() {
+        use crate::content::sha256;
+        use crate::ids::JobId;
+        let mk = |hdr: bool, t: Option<&str>| JobKind::ScoreFile {
+            metrics: vec!["cvvdp".into()],
+            hdr,
+            hdr_transfer: t.map(str::to_string),
+        };
+        let inputs = [sha256(b"v")];
+        let sdr = JobId::of(&mk(false, None), &inputs);
+        let hdr = JobId::of(&mk(true, None), &inputs);
+        let hdr_pq = JobId::of(&mk(true, Some("pq")), &inputs);
+        assert_ne!(sdr, hdr, "hdr=true must be a distinct job");
+        assert_ne!(hdr, hdr_pq, "an explicit transfer is a distinct job");
+        // hdr=true serializes the flag; roundtrip preserves both fields.
+        let k = mk(true, Some("pu-rescale"));
+        let j = serde_json::to_string(&k).unwrap();
+        assert!(j.contains(r#""hdr":true"#), "{j}");
+        assert!(j.contains(r#""hdr_transfer":"pu-rescale""#), "{j}");
+        assert_eq!(serde_json::from_str::<JobKind>(&j).unwrap(), k);
+        // HDR ScoreFile keeps the same routing profile (GPU, SourceSha).
+        assert_eq!(k.profile().class, ResourceClass::Gpu);
+        assert_eq!(k.profile().group_by, GroupBy::SourceSha);
     }
 }
