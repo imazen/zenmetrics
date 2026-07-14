@@ -6,6 +6,15 @@
 //! flags parse, `--use-orchestrator` routes scoring through the
 //! orchestrator path, and the legacy path is unchanged when the flag is
 //! absent.
+//!
+//! The whole suite drives the binary over the PNG fixture corpus
+//! (`tests/fixtures/*.png`), so it requires the `png` decode feature — the
+//! gate below makes that requirement explicit in the feature chain instead of
+//! failing 13 tests at runtime in a no-png build shape (e.g. the interim
+//! `jobexec,hdr,cpu-metrics` executor build used while the codec siblings are
+//! mid-refactor). Every png-bearing shape (default, `sweep`, CI) still runs
+//! everything here.
+#![cfg(feature = "png")]
 
 use std::path::PathBuf;
 use std::process::Command;
