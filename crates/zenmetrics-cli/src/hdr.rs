@@ -736,6 +736,251 @@ fn score_via_hdr_scorer_inner(
     Ok(rows)
 }
 
+// ─── The `score-pairs --hdr` per-metric contract, shared with jobexec ─────────
+//
+// `cmd_score_pairs --hdr` (the kadis-hdr fleet path) feeds each metric like so:
+//
+//   | metric            | feeding                                                            |
+//   |-------------------|--------------------------------------------------------------------|
+//   | cvvdp-gpu         | FAITHFUL: `to_cvvdp_linear_planes` → `CvvdpBatchScorer` built with |
+//   |                   | `DisplayTarget::hdr(HDR_DISPLAY_PEAK_NITS)`                        |
+//   | butteraugli-gpu   | FAITHFUL: [`score_via_hdr_scorer`] (umbrella linear planes,        |
+//   |                   | intensity_target = peak)                                           |
+//   | cvvdp (CPU port)  | `to_cvvdp_rgb8` u8 pair (per-image peak-normalized sRGB)           |
+//   | zensim / -gpu     | `to_sdr_rgb8` PU21 u8 shell → feature-bearing zensim call          |
+//   | everything else   | `to_sdr_rgb8` u8 shell (PU21-rescale by default) → `run_metric`    |
+//   | dssim / dssim-gpu | REFUSED — no HDR path by design (external dssim-core transform).   |
+//   |                   | `score-pairs` would silently u8-shell it; the shared layer errors  |
+//   |                   | loudly instead, matching `sweep --hdr` + `HdrScorer` (the fleet    |
+//   |                   | never requests dssim in HDR mode).                                 |
+//
+// [`score_hdr_pair_per_score_pairs`] + [`score_hdr_zensim_with_features_per_score_pairs`]
+// are that table as code — ONE implementation for jobexec's `score_file` HDR arm today,
+// and the target for `cmd_score_pairs`' HDR blocks to delegate to once the `sweep`
+// feature builds again (blocked on the sibling-codec ErrorCategory reshape; the blocks
+// in main.rs are line-for-line the same primitive calls, so behaviour already matches).
+// `hdr_pair_parity.rs` (tests) locks the equivalence per metric.
+
+use std::cell::OnceCell;
+
+/// One HDR image (absolute nits) plus its lazily-derived, compute-once metric
+/// feedings. The reference side of a ScoreFile job lives across all variants ×
+/// metrics, so its PU21 u8 shell and cvvdp-u8 encodes are computed ONCE per
+/// job instead of once per (variant, metric) — byte-identical to recomputing
+/// per pair (both derivations are pure functions of one side's nits).
+pub struct HdrImageFeeds {
+    nits: NitsImage,
+    transfer: HdrTransfer,
+    sdr_u8: OnceCell<Rgb8Image>,
+    cvvdp_u8: OnceCell<Rgb8Image>,
+}
+
+impl HdrImageFeeds {
+    pub fn new(nits: NitsImage, transfer: HdrTransfer) -> Self {
+        Self {
+            nits,
+            transfer,
+            sdr_u8: OnceCell::new(),
+            cvvdp_u8: OnceCell::new(),
+        }
+    }
+
+    pub fn nits(&self) -> &NitsImage {
+        &self.nits
+    }
+
+    pub fn width(&self) -> u32 {
+        self.nits.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.nits.height
+    }
+
+    /// The PU21/PQ u8 shell (`to_sdr_rgb8`) — what `score-pairs --hdr` feeds
+    /// every u8-shell metric and the zensim feature path (the v1 PU21
+    /// u8-shell feature regime).
+    pub fn sdr_u8(&self) -> &Rgb8Image {
+        self.sdr_u8
+            .get_or_init(|| to_sdr_rgb8(&self.nits, self.transfer))
+    }
+
+    /// The cvvdp-u8 feeding (`to_cvvdp_rgb8`, per-image peak-normalized sRGB)
+    /// — what `score-pairs --hdr` feeds the native-CPU `cvvdp` port.
+    pub fn cvvdp_u8(&self) -> &Rgb8Image {
+        self.cvvdp_u8.get_or_init(|| to_cvvdp_rgb8(&self.nits).0)
+    }
+}
+
+/// Reusable per-metric scorer state for HDR pair scoring — mirrors what
+/// `cmd_score_pairs` keeps alive across its pair loop (the cvvdp-gpu batch
+/// scorer and the GPU-zensim umbrella cache), so a ScoreFile job pays the
+/// GPU-instance construction once per job, not once per variant.
+pub struct HdrPairScorers {
+    runtime: crate::metrics::GpuRuntime,
+    #[cfg(feature = "gpu-cvvdp")]
+    cvvdp_gpu: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer>,
+    #[cfg(feature = "gpu-zensim")]
+    zensim_cache: Option<crate::metrics::cache::MetricCache>,
+}
+
+impl HdrPairScorers {
+    pub fn new(runtime: crate::metrics::GpuRuntime) -> Self {
+        Self {
+            runtime,
+            #[cfg(feature = "gpu-cvvdp")]
+            cvvdp_gpu: None,
+            #[cfg(feature = "gpu-zensim")]
+            zensim_cache: None,
+        }
+    }
+}
+
+fn hdr_dims_check(r: &HdrImageFeeds, d: &HdrImageFeeds) -> Result<(), Err> {
+    if r.width() != d.width() || r.height() != d.height() {
+        return Err(format!(
+            "dimension mismatch: reference is {}x{}, distorted is {}x{}",
+            r.width(),
+            r.height(),
+            d.width(),
+            d.height()
+        )
+        .into());
+    }
+    Ok(())
+}
+
+/// Score one metric over an HDR pair with the exact `score-pairs --hdr`
+/// per-metric feeding (see the contract table above). Returns the same
+/// `(column, value)` rows `run_metric` yields, so callers emit unchanged row
+/// shapes. dssim is refused loudly (no HDR path by design).
+pub fn score_hdr_pair_per_score_pairs(
+    metric: crate::metrics::MetricKind,
+    reference: &HdrImageFeeds,
+    distorted: &HdrImageFeeds,
+    scorers: &mut HdrPairScorers,
+) -> Result<Vec<(&'static str, f64)>, Err> {
+    use crate::metrics::MetricKind as M;
+    hdr_dims_check(reference, distorted)?;
+    match metric {
+        // FAITHFUL cvvdp-gpu: display-relative linear planes into the batch
+        // scorer built with the HDR display target — `score-pairs --hdr`'s
+        // exact construction (`DisplayTarget::hdr(HDR_DISPLAY_PEAK_NITS)`).
+        #[cfg(feature = "gpu-cvvdp")]
+        M::CvvdpGpu => {
+            let scorer = match scorers.cvvdp_gpu.as_mut() {
+                Some(s) => s,
+                None => {
+                    let target =
+                        crate::metrics::cvvdp_gpu::DisplayTarget::hdr(HDR_DISPLAY_PEAK_NITS);
+                    scorers.cvvdp_gpu = Some(
+                        crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(
+                            scorers.runtime,
+                            target,
+                        )
+                        .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
+                    );
+                    scorers.cvvdp_gpu.as_mut().expect("just built")
+                }
+            };
+            let (rr, rg, rb) = to_cvvdp_linear_planes(reference.nits());
+            let (dr, dg, db) = to_cvvdp_linear_planes(distorted.nits());
+            let v = scorer.score_from_linear_planes(
+                &rr,
+                &rg,
+                &rb,
+                &dr,
+                &dg,
+                &db,
+                reference.width(),
+                reference.height(),
+            )?;
+            Ok(vec![(metric.column_names()[0], v)])
+        }
+        // FAITHFUL butteraugli-gpu: umbrella linear planes (intensity_target =
+        // peak) via the HdrScorer — `score-pairs --hdr`'s exact call. A `None`
+        // (no umbrella path for the resolved backend, e.g. hip) is an error,
+        // matching score-pairs (it never silently u8-shells butteraugli-gpu).
+        #[cfg(feature = "gpu-butteraugli")]
+        M::ButteraugliGpu => match score_via_hdr_scorer(
+            metric,
+            reference.nits(),
+            distorted.nits(),
+            reference.transfer,
+            scorers.runtime,
+        ) {
+            Some(rows) => rows,
+            None => Err("hdr scorer returned no rows for butteraugli-gpu".into()),
+        },
+        // dssim: no HDR path BY DESIGN (external dssim-core transform; the u8
+        // shell measured ~0.6 SROCC on UPIQ HDR — omitted rather than shipped
+        // degraded). Refuse loudly, matching `sweep --hdr` + `HdrScorer`.
+        M::Dssim => Err(
+            "dssim has no HDR path by design (external dssim-core transform; u8 shell \
+             measured ~0.6 on UPIQ) — score SDR or pick another metric"
+                .into(),
+        ),
+        #[cfg(feature = "gpu-dssim")]
+        M::DssimGpu => Err(
+            "dssim-gpu has no HDR path by design (see dssim) — score SDR or pick another metric"
+                .into(),
+        ),
+        // The native-CPU cvvdp port: per-image peak-normalized sRGB u8
+        // (`to_cvvdp_rgb8`) into the normal dispatch — score-pairs' hdr_u8_pair
+        // construction for the cvvdp kinds.
+        M::Cvvdp => crate::metrics::run_metric(
+            metric,
+            reference.cvvdp_u8(),
+            distorted.cvvdp_u8(),
+            scorers.runtime,
+        ),
+        // Everything else — ssim2(-gpu), iwssim(-gpu), CPU butteraugli, plain
+        // zensim(-gpu) scoring: the PU21/PQ u8 shell into the normal dispatch,
+        // exactly score-pairs' `to_sdr_rgb8` + `score_one_pair_maybe_hdr`.
+        _ => crate::metrics::run_metric(
+            metric,
+            reference.sdr_u8(),
+            distorted.sdr_u8(),
+            scorers.runtime,
+        ),
+    }
+}
+
+/// zensim with the feature vector over an HDR pair — the exact
+/// `score-pairs --hdr --feature-output` path: the PU21 u8 shell
+/// (`to_sdr_rgb8`, the **v1 u8-shell feature regime** — NOT
+/// `--hdr-features-pu-linear`) feeds the same feature-bearing zensim calls the
+/// SDR path uses. GPU: the umbrella `MetricCache::compute_zensim_features`
+/// (reused across variants). CPU: `run_zensim_with_features`.
+pub fn score_hdr_zensim_with_features_per_score_pairs(
+    metric: crate::metrics::MetricKind,
+    reference: &HdrImageFeeds,
+    distorted: &HdrImageFeeds,
+    scorers: &mut HdrPairScorers,
+    regime: crate::metrics::ZensimFeatureRegime,
+) -> Result<(f64, Vec<f64>), Err> {
+    use crate::metrics::MetricKind as M;
+    hdr_dims_check(reference, distorted)?;
+    match metric {
+        #[cfg(feature = "gpu-zensim")]
+        M::ZensimGpu => {
+            let cache = scorers
+                .zensim_cache
+                .get_or_insert_with(|| crate::metrics::cache::MetricCache::new(scorers.runtime));
+            cache.compute_zensim_features(reference.sdr_u8(), distorted.sdr_u8(), regime)
+        }
+        M::Zensim => {
+            let _ = regime; // CPU zensim's extended vector has a fixed width
+            crate::metrics::run_zensim_with_features(reference.sdr_u8(), distorted.sdr_u8())
+        }
+        other => Err(format!(
+            "zensim feature extraction requested for non-zensim metric {}",
+            other.name()
+        )
+        .into()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

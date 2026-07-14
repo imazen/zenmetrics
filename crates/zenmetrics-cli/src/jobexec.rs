@@ -342,6 +342,17 @@ fn fetch_variant(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>
         .unwrap_or(&tar_uri)
         .to_string();
     let seq = DIST_SEQ.fetch_add(1, Ordering::Relaxed);
+    // Prefer the tar member name's real extension for the temp file (falling
+    // back to the caller's codec-derived `ext`). SDR decode sniffs bytes so the
+    // name never mattered there, but the HDR decode (`hdr::decode_to_nits`)
+    // dispatches on the extension — and persisted-pairs corpora carry a
+    // distortion label (not a codec name) in `cell.codec`, which maps to the
+    // useless "bin". The 4-column index's member name is authoritative.
+    let ext = std::path::Path::new(&loc.name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .filter(|e| !e.is_empty())
+        .unwrap_or(ext);
     let dst = std::env::temp_dir().join(format!(
         "jobexec_var_{}_{}.{}",
         std::process::id(),
@@ -532,6 +543,35 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         .iter()
         .filter_map(Value::as_str)
         .collect();
+
+    // HDR persisted-pairs corpora (JobKind::ScoreFile { hdr: true, .. }): decode the
+    // reference and every variant to absolute nits and apply the per-metric HDR
+    // feeding `score-pairs --hdr` uses. Handled by a dedicated arm — the SDR path
+    // below stays byte-identical when the flag is absent/false.
+    if job["kind"]["hdr"].as_bool().unwrap_or(false) {
+        #[cfg(feature = "hdr")]
+        {
+            return run_score_file_hdr(
+                image_path,
+                codec_name,
+                ext,
+                &metrics,
+                &shas,
+                job["kind"]["hdr_transfer"].as_str(),
+                corpus_prefix,
+            );
+        }
+        #[cfg(not(feature = "hdr"))]
+        {
+            // Refuse loudly — an hdr build gap must never silently score a PQ/EXR
+            // corpus through the SDR rgb8 decode (garbage nits => garbage scores).
+            return Err(
+                "score_file job has hdr:true but this executor was built without \
+                 the `hdr` cargo feature — rebuild with --features hdr"
+                    .into(),
+            );
+        }
+    }
 
     // Decode the reference ONCE for all variants × metrics.
     let src_path = resolve_source(image_path, corpus_prefix)?;
@@ -735,6 +775,218 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         }
     }
     Ok(rows.join("\n").into_bytes())
+}
+
+/// HDR whole-file scoring (`JobKind::ScoreFile { hdr: true, .. }`) for persisted-pairs HDR
+/// corpora (e.g. kadis-hdr): decode the reference ONCE to absolute-luminance nits
+/// (`hdr::decode_to_nits` — PQ-PNG / PQ-JXL / PQ-AVIF / EXR), then per variant decode its
+/// nits once and score EVERY metric through the exact per-metric HDR feeding
+/// `score-pairs --hdr` applies (`hdr::score_hdr_pair_per_score_pairs` — see the contract
+/// table in `hdr.rs`). zensim additionally emits its feature row from the same PU21
+/// u8-shell feeding (the v1 u8-shell feature regime, matching the bash fleet's
+/// `zensim_features.parquet`). Every emitted row carries `"hdr": true` for provenance.
+///
+/// The reference's derived feedings (PU21 u8 shell, cvvdp-u8) are computed once per job
+/// and shared across variants × metrics; the cvvdp-gpu batch scorer and the GPU-zensim
+/// umbrella instance are likewise built once per job (`hdr::HdrPairScorers`).
+#[cfg(feature = "hdr")]
+#[allow(clippy::too_many_arguments)]
+fn run_score_file_hdr(
+    image_path: &str,
+    codec_name: &str,
+    ext: &'static str,
+    metrics: &[&str],
+    shas: &[&str],
+    hdr_transfer: Option<&str>,
+    corpus_prefix: Option<&str>,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    use crate::hdr::{HdrImageFeeds, HdrPairScorers, HdrTransfer, decode_to_nits};
+
+    // The job's transfer string (serde snake_case of the CLI `--hdr-transfer`).
+    // Absent = the executor default `pu-rescale`, the validated fleet setting.
+    let transfer = match hdr_transfer {
+        None => HdrTransfer::PuRescale,
+        Some("pu-rescale") => HdrTransfer::PuRescale,
+        Some("pq") => HdrTransfer::Pq,
+        Some(other) => {
+            return Err(format!(
+                "score_file: unknown hdr_transfer {other:?} (expected \"pu-rescale\" or \"pq\")"
+            )
+            .into());
+        }
+    };
+
+    // Decode the reference ONCE to nits for all variants × metrics.
+    let src_path = resolve_source(image_path, corpus_prefix)?;
+    let reference = HdrImageFeeds::new(
+        decode_to_nits(&src_path).map_err(|e| format!("hdr ref decode {image_path}: {e}"))?,
+        transfer,
+    );
+    let mut scorers = HdrPairScorers::new(GpuRuntime::Auto);
+
+    let mut rows: Vec<String> = Vec::with_capacity(shas.len() * metrics.len().max(1));
+    let mk_row = |sha: &str, extra: Value| -> Result<String, Box<dyn Error>> {
+        let mut o = Map::new();
+        o.insert("kind".into(), serde_json::json!("metric"));
+        o.insert("image_path".into(), serde_json::json!(image_path));
+        o.insert("codec".into(), serde_json::json!(codec_name));
+        o.insert("encode_sha".into(), serde_json::json!(sha));
+        o.insert("hdr".into(), serde_json::json!(true));
+        if let Value::Object(m) = extra {
+            o.extend(m);
+        }
+        Ok(serde_json::to_string(&Value::Object(o))?)
+    };
+
+    for sha in shas {
+        let (var_path, owned) = match fetch_variant(sha, ext) {
+            Ok(p) => p,
+            Err(e) => {
+                rows.push(mk_row(
+                    sha,
+                    serde_json::json!({ "error": format!("fetch: {e}") }),
+                )?);
+                continue;
+            }
+        };
+        let variant_rows = score_hdr_variant_all_metrics(
+            image_path,
+            codec_name,
+            &reference,
+            transfer,
+            &var_path,
+            sha,
+            metrics,
+            &mut scorers,
+        );
+        if owned {
+            let _ = std::fs::remove_file(&var_path);
+        }
+        rows.extend(variant_rows?);
+    }
+    Ok(rows.join("\n").into_bytes())
+}
+
+/// Score ONE already-fetched HDR variant file against the job's shared reference, for every
+/// requested metric — the per-variant body of [`run_score_file_hdr`], factored so it is unit
+/// testable without the R2/tar fetch layer. Decodes the variant to nits ONCE; per metric applies
+/// the `score-pairs --hdr` feeding via the shared `hdr` helpers; zensim additionally emits its
+/// feature row. Per-metric/per-variant failures become error ROWS (never a job abort), matching
+/// the SDR arm's convention.
+#[cfg(feature = "hdr")]
+#[allow(clippy::too_many_arguments)]
+fn score_hdr_variant_all_metrics(
+    image_path: &str,
+    codec_name: &str,
+    reference: &crate::hdr::HdrImageFeeds,
+    transfer: crate::hdr::HdrTransfer,
+    var_path: &std::path::Path,
+    sha: &str,
+    metrics: &[&str],
+    scorers: &mut crate::hdr::HdrPairScorers,
+) -> Result<Vec<String>, Box<dyn Error>> {
+    use crate::hdr::{
+        HdrImageFeeds, decode_to_nits, score_hdr_pair_per_score_pairs,
+        score_hdr_zensim_with_features_per_score_pairs,
+    };
+    let mut rows: Vec<String> = Vec::with_capacity(metrics.len());
+    let mk_row = |sha: &str, extra: Value| -> Result<String, Box<dyn Error>> {
+        let mut o = Map::new();
+        o.insert("kind".into(), serde_json::json!("metric"));
+        o.insert("image_path".into(), serde_json::json!(image_path));
+        o.insert("codec".into(), serde_json::json!(codec_name));
+        o.insert("encode_sha".into(), serde_json::json!(sha));
+        o.insert("hdr".into(), serde_json::json!(true));
+        if let Value::Object(m) = extra {
+            o.extend(m);
+        }
+        Ok(serde_json::to_string(&Value::Object(o))?)
+    };
+    // Decode the variant ONCE to nits; score every metric on it. A variant that
+    // lost its HDR signaling (no PQ cICP etc.) fails here loudly — never
+    // approximated through the SDR decode.
+    let distorted = match decode_to_nits(var_path) {
+        Ok(n) => HdrImageFeeds::new(n, transfer),
+        Err(e) => {
+            rows.push(mk_row(
+                sha,
+                serde_json::json!({ "error": format!("hdr decode: {e}") }),
+            )?);
+            return Ok(rows);
+        }
+    };
+    for metric in metrics {
+        // zensim(-gpu): score + the feature vector from the SAME u8-shell
+        // feeding — the exact score-pairs --hdr --feature-output path.
+        if *metric == "zensim-gpu" || *metric == "zensim" {
+            let outcome = metric_kind(metric).and_then(|kind| {
+                score_hdr_zensim_with_features_per_score_pairs(
+                    kind,
+                    reference,
+                    &distorted,
+                    scorers,
+                    crate::metrics::ZensimFeatureRegime::WithIw,
+                )
+            });
+            match outcome {
+                Ok((sc, feats)) => {
+                    rows.push(mk_row(
+                        sha,
+                        serde_json::json!({ "metric": metric, "score": sc, "scores": { "zensim_score": sc } }),
+                    )?);
+                    // Honest regime label from the emitted width (GPU with-iw =
+                    // 372; the CPU extended path has its own fixed width).
+                    let regime = match feats.len() {
+                        372 => "with-iw",
+                        300 => "extended",
+                        228 => "basic",
+                        _ => "unknown",
+                    };
+                    let mut fo = Map::new();
+                    fo.insert("kind".into(), serde_json::json!("feature"));
+                    fo.insert("image_path".into(), serde_json::json!(image_path));
+                    fo.insert("codec".into(), serde_json::json!(codec_name));
+                    fo.insert("encode_sha".into(), serde_json::json!(sha));
+                    fo.insert("hdr".into(), serde_json::json!(true));
+                    fo.insert("regime".into(), serde_json::json!(regime));
+                    fo.insert("zensim_score".into(), serde_json::json!(sc));
+                    fo.insert("features".into(), serde_json::json!(feats));
+                    rows.push(serde_json::to_string(&Value::Object(fo))?);
+                }
+                Err(e) => rows.push(mk_row(
+                    sha,
+                    serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                )?),
+            }
+            continue;
+        }
+        // Every other metric: the shared score-pairs --hdr per-metric feeding
+        // (faithful cvvdp-gpu/butter-gpu, cvvdp-u8, u8 shell; dssim refused
+        // loudly).
+        let outcome = metric_kind(metric)
+            .and_then(|kind| score_hdr_pair_per_score_pairs(kind, reference, &distorted, scorers));
+        match outcome {
+            Ok(pairs) => {
+                let mut scores = Map::new();
+                for (n, v) in &pairs {
+                    scores.insert((*n).to_string(), serde_json::json!(v));
+                }
+                rows.push(mk_row(
+                    sha,
+                    serde_json::json!({
+                        "metric": metric,
+                        "score": pairs.first().map(|(_, v)| *v),
+                        "scores": scores,
+                    }),
+                )?);
+            }
+            Err(e) => rows.push(mk_row(
+                sha,
+                serde_json::json!({ "metric": metric, "error": e.to_string() }),
+            )?),
+        }
+    }
+    Ok(rows)
 }
 
 /// Do one job end-to-end: resolve+decode the source, encode the cell, and (for a metric job) score
@@ -1000,5 +1252,197 @@ mod tests {
         assert!(!m.contains_key("badline_no_tabs"));
         assert!(!m.contains_key("also")); // "also\tbad" — size col unparseable
         assert_eq!(m.len(), 2);
+    }
+}
+
+/// Executor-level HDR ScoreFile tests: everything from "variant file on disk" to the emitted
+/// JSONL rows (the fetch layer above is exercised by the SDR tests + production). Module-level
+/// cfg so a new test can't forget the gates.
+#[cfg(all(test, feature = "hdr", feature = "cpu-metrics"))]
+mod hdr_tests {
+    use super::*;
+    use crate::hdr::{HdrImageFeeds, HdrPairScorers, HdrTransfer, NitsImage};
+
+    /// Deterministic synthetic HDR content spanning shadow→600 cd/m² highlights.
+    fn synth_nits(seed: u32, w: u32, h: u32) -> NitsImage {
+        let mut rgb = Vec::with_capacity((w * h * 3) as usize);
+        let mut s = seed.wrapping_add(1);
+        for y in 0..h {
+            for x in 0..w {
+                s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let ramp = (x as f32) / (w as f32 - 1.0);
+                let base = 2.0 + 598.0 * ramp * ramp;
+                let tex = ((s >> 16) & 0xff) as f32 / 255.0;
+                let vy = (y as f32) / (h as f32 - 1.0);
+                rgb.push(base * (0.85 + 0.15 * tex));
+                rgb.push(base * (0.80 + 0.20 * vy));
+                rgb.push(base * (0.75 + 0.25 * (1.0 - tex)));
+            }
+        }
+        NitsImage {
+            rgb,
+            width: w,
+            height: h,
+        }
+    }
+
+    /// Write a NitsImage as an EXR fixture (absolute nits in f32 — the corpus
+    /// EXR contract `hdr::decode_to_nits` reads back).
+    fn write_exr(nits: &NitsImage, path: &std::path::Path) {
+        let img = image::Rgb32FImage::from_raw(nits.width, nits.height, nits.rgb.clone())
+            .expect("raw buffer sized to dims");
+        image::DynamicImage::ImageRgb32F(img)
+            .save(path)
+            .expect("write exr fixture");
+    }
+
+    /// End-to-end over the factored per-variant scorer: EXR ref + EXR variant on
+    /// disk → JSONL rows for every metric, with the zensim feature row, the
+    /// dssim by-design refusal, and the `hdr:true` provenance marker.
+    #[test]
+    fn hdr_variant_rows_cover_metrics_features_and_dssim_refusal() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let r = synth_nits(11, 192, 192);
+        let mut d = synth_nits(11, 192, 192);
+        for (i, v) in d.rgb.iter_mut().enumerate() {
+            let band = if (i / 96).is_multiple_of(2) {
+                1.06
+            } else {
+                0.94
+            };
+            *v *= band;
+        }
+        let ref_path = dir.path().join("ref.exr");
+        let var_path = dir.path().join("dist.exr");
+        write_exr(&r, &ref_path);
+        write_exr(&d, &var_path);
+
+        let reference = HdrImageFeeds::new(
+            crate::hdr::decode_to_nits(&ref_path).expect("ref exr decodes"),
+            HdrTransfer::PuRescale,
+        );
+        let mut scorers = HdrPairScorers::new(GpuRuntime::Auto);
+        let metrics = ["ssim2", "cvvdp", "butteraugli", "iwssim", "zensim", "dssim"];
+        let rows = score_hdr_variant_all_metrics(
+            "refs/ref.exr",
+            "kadis-hdr",
+            &reference,
+            HdrTransfer::PuRescale,
+            &var_path,
+            "deadbeef",
+            &metrics,
+            &mut scorers,
+        )
+        .expect("variant scoring emits rows");
+
+        let parsed: Vec<Value> = rows
+            .iter()
+            .map(|r| serde_json::from_str(r).expect("row is JSON"))
+            .collect();
+        // One metric row per metric + one feature row for zensim.
+        assert_eq!(parsed.len(), metrics.len() + 1, "rows: {rows:#?}");
+        for p in &parsed {
+            assert_eq!(p["hdr"], Value::Bool(true), "hdr marker missing: {p}");
+            assert_eq!(p["encode_sha"], "deadbeef");
+            assert_eq!(p["image_path"], "refs/ref.exr");
+            assert_eq!(p["codec"], "kadis-hdr");
+        }
+        // Scored metrics carry finite scores.
+        for m in ["ssim2", "cvvdp", "butteraugli", "iwssim", "zensim"] {
+            let row = parsed
+                .iter()
+                .find(|p| p["kind"] == "metric" && p["metric"] == m)
+                .unwrap_or_else(|| panic!("no metric row for {m}: {rows:#?}"));
+            assert!(
+                row["score"].as_f64().is_some_and(f64::is_finite),
+                "{m}: {row}"
+            );
+            assert!(
+                row.get("error").is_none(),
+                "{m} unexpectedly errored: {row}"
+            );
+        }
+        // butteraugli emits both columns (max + pnorm3) like the SDR arm.
+        let butter = parsed
+            .iter()
+            .find(|p| p["metric"] == "butteraugli")
+            .expect("butteraugli row");
+        assert!(
+            butter["scores"].as_object().is_some_and(|s| s.len() >= 2),
+            "butteraugli should emit 2 columns: {butter}"
+        );
+        // dssim: refused loudly, by design — an error row, not a score.
+        let dssim = parsed
+            .iter()
+            .find(|p| p["metric"] == "dssim")
+            .expect("dssim row");
+        assert!(
+            dssim["error"]
+                .as_str()
+                .is_some_and(|e| e.contains("by design")),
+            "dssim must be refused: {dssim}"
+        );
+        // zensim: metric row AND feature row from the same u8-shell feeding.
+        let feat = parsed
+            .iter()
+            .find(|p| p["kind"] == "feature")
+            .expect("zensim feature row");
+        let feats = feat["features"].as_array().expect("features array");
+        assert!(!feats.is_empty());
+        assert!(feats.iter().all(|f| f.as_f64().is_some_and(f64::is_finite)));
+        let zensim_metric = parsed
+            .iter()
+            .find(|p| p["kind"] == "metric" && p["metric"] == "zensim")
+            .expect("zensim metric row");
+        assert_eq!(
+            feat["zensim_score"], zensim_metric["score"],
+            "feature row score must come from the same call"
+        );
+        // The regime label is honest about the emitted width.
+        let expected_regime = match feats.len() {
+            372 => "with-iw",
+            300 => "extended",
+            228 => "basic",
+            _ => "unknown",
+        };
+        assert_eq!(feat["regime"], expected_regime);
+    }
+
+    /// A variant that fails HDR decode (not an HDR file) produces an error ROW,
+    /// never a job abort — and the row says why.
+    #[test]
+    fn hdr_variant_decode_failure_is_an_error_row() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let ref_path = dir.path().join("ref.exr");
+        write_exr(&synth_nits(3, 64, 64), &ref_path);
+        // A ".bin" file is not an HDR source — decode_to_nits refuses on extension.
+        let bogus = dir.path().join("dist.bin");
+        std::fs::write(&bogus, b"not an image").unwrap();
+
+        let reference = HdrImageFeeds::new(
+            crate::hdr::decode_to_nits(&ref_path).unwrap(),
+            HdrTransfer::PuRescale,
+        );
+        let mut scorers = HdrPairScorers::new(GpuRuntime::Auto);
+        let rows = score_hdr_variant_all_metrics(
+            "refs/ref.exr",
+            "kadis-hdr",
+            &reference,
+            HdrTransfer::PuRescale,
+            &bogus,
+            "cafe",
+            &["ssim2"],
+            &mut scorers,
+        )
+        .expect("decode failure still yields rows");
+        assert_eq!(rows.len(), 1);
+        let p: Value = serde_json::from_str(&rows[0]).unwrap();
+        assert!(
+            p["error"]
+                .as_str()
+                .is_some_and(|e| e.contains("hdr decode")),
+            "{p}"
+        );
+        assert_eq!(p["hdr"], Value::Bool(true));
     }
 }
