@@ -57,6 +57,32 @@ Workspace conventions per the global rules:
   (from the 4-column variant index) instead of the codec-derived one — load-bearing
   for HDR (`decode_to_nits` dispatches on extension; persisted-pairs cells carry a
   distortion label, not a codec, in `cell.codec`). (4afbc607)
+- **butteraugli-gpu HDR with `GpuRuntime::Auto`** — the umbrella HdrScorer needs a
+  concrete cuda/wgpu backend; the shared layer now walks the standard runtime
+  ladder for `Auto` (caught by the new opt-in GPU parity test; live CUDA parity:
+  every GPU metric delta 0, cvvdp-gpu 4.8e-7 from atomic-f32 pooling order).
+  (923bf5cd)
+
+### Changed
+
+- **HDR ScoreFile decode-ahead** — the variant loop prefetches + decodes variant
+  i+1 (one bounded nits buffer) while scoring variant i; verified byte-identical
+  rows vs the serial loop on the EXR smoke job. (708b1c94)
+- `tests/cli.rs` (PNG-fixture CLI suite) is now gated on the `png` feature it
+  requires, so no-png executor shapes compile-skip it explicitly instead of
+  failing 13 tests at runtime. (5ed1b338)
+
+## scripts/jobsys
+
+### Added
+
+- **`build_scorefile_hdr_pairs.py`** — declare a persisted-pairs HDR corpus
+  (kadis-hdr layout: refs/ + dist/ + pairs.tsv on R2) as ScoreFile jobs:
+  variants.tar + 4-col index + `hdr:true` manifest + `dist_sha_map.tsv` (rejoins
+  rows to per-cell q/knob identity). Verified end-to-end against real R2 data on
+  a CUDA box (EXR smoke corpus: 12/12 rows finite, 372-feature sidecars; the
+  kadis-hdr PQ-PNG corpus additionally needs an executor built with `png`, which
+  waits on the codec-sibling reshape). (b0dff336)
 
 ## cvvdp
 
