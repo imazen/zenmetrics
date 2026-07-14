@@ -838,32 +838,55 @@ fn run_score_file_hdr(
         Ok(serde_json::to_string(&Value::Object(o))?)
     };
 
-    for sha in shas {
-        let (var_path, owned) = match fetch_variant(sha, ext) {
-            Ok(p) => p,
-            Err(e) => {
-                rows.push(mk_row(
-                    sha,
-                    serde_json::json!({ "error": format!("fetch: {e}") }),
-                )?);
-                continue;
+    // DECODE-AHEAD: a prefetch thread fetches + decodes variant i+1 while the
+    // main thread scores variant i, overlapping the per-variant R2 range-GET +
+    // nits decode (CPU/network) with the metric compute (GPU). Bounded to ONE
+    // decoded variant of readahead (sync_channel(1)) so peak memory adds at
+    // most one nits buffer. Row order and row content are identical to the
+    // serial loop: the channel preserves sha order and the scorer runs
+    // sequentially on the main thread.
+    std::thread::scope(|scope| -> Result<(), Box<dyn Error>> {
+        type Prefetched<'s> = (&'s str, Result<crate::hdr::NitsImage, String>);
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Prefetched<'_>>(1);
+        scope.spawn(move || {
+            for sha in shas {
+                let item = match fetch_variant(sha, ext) {
+                    Err(e) => Err(format!("fetch: {e}")),
+                    Ok((var_path, owned)) => {
+                        // Decode to nits here (the prefetch win); a variant that
+                        // lost its HDR signaling fails loudly — never approximated
+                        // through the SDR decode.
+                        let d = decode_to_nits(&var_path).map_err(|e| format!("hdr decode: {e}"));
+                        if owned {
+                            let _ = std::fs::remove_file(&var_path);
+                        }
+                        d
+                    }
+                };
+                if tx.send((sha, item)).is_err() {
+                    return; // receiver bailed (error path) — stop prefetching
+                }
             }
-        };
-        let variant_rows = score_hdr_variant_all_metrics(
-            image_path,
-            codec_name,
-            &reference,
-            transfer,
-            &var_path,
-            sha,
-            metrics,
-            &mut scorers,
-        );
-        if owned {
-            let _ = std::fs::remove_file(&var_path);
+        });
+        for (sha, prefetched) in rx {
+            match prefetched {
+                Err(msg) => rows.push(mk_row(sha, serde_json::json!({ "error": msg }))?),
+                Ok(nits) => {
+                    let distorted = HdrImageFeeds::new(nits, transfer);
+                    rows.extend(score_hdr_decoded_variant(
+                        image_path,
+                        codec_name,
+                        &reference,
+                        &distorted,
+                        sha,
+                        metrics,
+                        &mut scorers,
+                    )?);
+                }
+            }
         }
-        rows.extend(variant_rows?);
-    }
+        Ok(())
+    })?;
     Ok(rows.join("\n").into_bytes())
 }
 
@@ -875,6 +898,8 @@ fn run_score_file_hdr(
 /// the SDR arm's convention.
 #[cfg(feature = "hdr")]
 #[allow(clippy::too_many_arguments)]
+#[cfg_attr(not(test), allow(dead_code))] // the pipeline calls score_hdr_decoded_variant; kept as the
+// path-based unit-test entry + non-prefetch fallback composition (decode + delegate)
 fn score_hdr_variant_all_metrics(
     image_path: &str,
     codec_name: &str,
@@ -885,9 +910,46 @@ fn score_hdr_variant_all_metrics(
     metrics: &[&str],
     scorers: &mut crate::hdr::HdrPairScorers,
 ) -> Result<Vec<String>, Box<dyn Error>> {
+    use crate::hdr::{HdrImageFeeds, decode_to_nits};
+    // Decode the variant ONCE to nits; score every metric on it. A variant that
+    // lost its HDR signaling (no PQ cICP etc.) fails here loudly — never
+    // approximated through the SDR decode.
+    let distorted = match decode_to_nits(var_path) {
+        Ok(n) => HdrImageFeeds::new(n, transfer),
+        Err(e) => {
+            let mut o = Map::new();
+            o.insert("kind".into(), serde_json::json!("metric"));
+            o.insert("image_path".into(), serde_json::json!(image_path));
+            o.insert("codec".into(), serde_json::json!(codec_name));
+            o.insert("encode_sha".into(), serde_json::json!(sha));
+            o.insert("hdr".into(), serde_json::json!(true));
+            o.insert(
+                "error".into(),
+                serde_json::json!(format!("hdr decode: {e}")),
+            );
+            return Ok(vec![serde_json::to_string(&Value::Object(o))?]);
+        }
+    };
+    score_hdr_decoded_variant(
+        image_path, codec_name, reference, &distorted, sha, metrics, scorers,
+    )
+}
+
+/// Score one ALREADY-DECODED HDR variant against the job's shared reference for every requested
+/// metric — the scoring body shared by the decode-ahead pipeline in [`run_score_file_hdr`] and the
+/// path-based [`score_hdr_variant_all_metrics`]. Per-metric failures become error ROWS.
+#[cfg(feature = "hdr")]
+fn score_hdr_decoded_variant(
+    image_path: &str,
+    codec_name: &str,
+    reference: &crate::hdr::HdrImageFeeds,
+    distorted: &crate::hdr::HdrImageFeeds,
+    sha: &str,
+    metrics: &[&str],
+    scorers: &mut crate::hdr::HdrPairScorers,
+) -> Result<Vec<String>, Box<dyn Error>> {
     use crate::hdr::{
-        HdrImageFeeds, decode_to_nits, score_hdr_pair_per_score_pairs,
-        score_hdr_zensim_with_features_per_score_pairs,
+        score_hdr_pair_per_score_pairs, score_hdr_zensim_with_features_per_score_pairs,
     };
     let mut rows: Vec<String> = Vec::with_capacity(metrics.len());
     let mk_row = |sha: &str, extra: Value| -> Result<String, Box<dyn Error>> {
@@ -902,19 +964,6 @@ fn score_hdr_variant_all_metrics(
         }
         Ok(serde_json::to_string(&Value::Object(o))?)
     };
-    // Decode the variant ONCE to nits; score every metric on it. A variant that
-    // lost its HDR signaling (no PQ cICP etc.) fails here loudly — never
-    // approximated through the SDR decode.
-    let distorted = match decode_to_nits(var_path) {
-        Ok(n) => HdrImageFeeds::new(n, transfer),
-        Err(e) => {
-            rows.push(mk_row(
-                sha,
-                serde_json::json!({ "error": format!("hdr decode: {e}") }),
-            )?);
-            return Ok(rows);
-        }
-    };
     for metric in metrics {
         // zensim(-gpu): score + the feature vector from the SAME u8-shell
         // feeding — the exact score-pairs --hdr --feature-output path.
@@ -923,7 +972,7 @@ fn score_hdr_variant_all_metrics(
                 score_hdr_zensim_with_features_per_score_pairs(
                     kind,
                     reference,
-                    &distorted,
+                    distorted,
                     scorers,
                     crate::metrics::ZensimFeatureRegime::WithIw,
                 )
@@ -964,7 +1013,7 @@ fn score_hdr_variant_all_metrics(
         // (faithful cvvdp-gpu/butter-gpu, cvvdp-u8, u8 shell; dssim refused
         // loudly).
         let outcome = metric_kind(metric)
-            .and_then(|kind| score_hdr_pair_per_score_pairs(kind, reference, &distorted, scorers));
+            .and_then(|kind| score_hdr_pair_per_score_pairs(kind, reference, distorted, scorers));
         match outcome {
             Ok(pairs) => {
                 let mut scores = Map::new();

@@ -87,7 +87,11 @@ Rules and gotchas:
   `png` feature once zenpng settles; EXR works in every `hdr` build). `sweep` implies `jobexec`.
 - **Parity**: `tests/hdr_pair_parity.rs` + `jobexec::hdr_tests` lock the executor's values to the
   `score-pairs --hdr` feeding bit-exactly (CPU metrics; the GPU faithful paths reuse the same
-  score-pairs primitives verbatim).
+  score-pairs primitives verbatim; live GPU parity measured 2026-07-14 — deltas 0 everywhere,
+  cvvdp-gpu 4.8e-7 from atomic-f32 pooling order).
+- **Decode-ahead**: the HDR variant loop prefetches + decodes variant *i+1* on a thread while
+  scoring variant *i* (bounded to one nits buffer of readahead). Verified to emit byte-identical
+  rows to the serial loop.
 
 ---
 
