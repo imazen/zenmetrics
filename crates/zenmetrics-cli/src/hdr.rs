@@ -399,6 +399,7 @@ pub(crate) fn rgb16_hlg_to_nits(rgb16: &[u16], width: u32, height: u32) -> NitsI
     NitsImage { rgb, width, height }
 }
 
+#[allow(dead_code)] // wired behind the png feature (decode_pq_png), like rgb16_hlg_to_nits
 pub(crate) fn rgb16_pq_to_nits(rgb16: &[u16], width: u32, height: u32) -> NitsImage {
     let rgb = rgb16
         .iter()
@@ -898,20 +899,40 @@ pub fn score_hdr_pair_per_score_pairs(
             Ok(vec![(metric.column_names()[0], v)])
         }
         // FAITHFUL butteraugli-gpu: umbrella linear planes (intensity_target =
-        // peak) via the HdrScorer — `score-pairs --hdr`'s exact call. A `None`
-        // (no umbrella path for the resolved backend, e.g. hip) is an error,
+        // peak) via the HdrScorer — `score-pairs --hdr`'s exact call. The
+        // umbrella needs a CONCRETE cuda/wgpu backend ([`score_via_hdr_scorer`]
+        // returns `None` for `Auto`), so `Auto` walks the same runtime ladder
+        // `run_metric`'s GPU dispatch uses — first backend with an umbrella
+        // path wins (cuda on a CUDA box, identical to the fleet's explicit
+        // `--gpu-runtime cuda`). A ladder with no viable backend is an error,
         // matching score-pairs (it never silently u8-shells butteraugli-gpu).
         #[cfg(feature = "gpu-butteraugli")]
-        M::ButteraugliGpu => match score_via_hdr_scorer(
-            metric,
-            reference.nits(),
-            distorted.nits(),
-            reference.transfer,
-            scorers.runtime,
-        ) {
-            Some(rows) => rows,
-            None => Err("hdr scorer returned no rows for butteraugli-gpu".into()),
-        },
+        M::ButteraugliGpu => {
+            let candidates: &[crate::metrics::GpuRuntime] = match scorers.runtime {
+                crate::metrics::GpuRuntime::Auto => crate::metrics::auto_order(),
+                _ => std::slice::from_ref(&scorers.runtime),
+            };
+            let mut result: Result<Vec<(&'static str, f64)>, Err> = Err(format!(
+                "butteraugli-gpu: no runtime with an umbrella HDR path (tried {candidates:?})"
+            )
+            .into());
+            for rt in candidates {
+                match score_via_hdr_scorer(
+                    metric,
+                    reference.nits(),
+                    distorted.nits(),
+                    reference.transfer,
+                    *rt,
+                ) {
+                    Some(r) => {
+                        result = r;
+                        break;
+                    }
+                    None => continue, // no umbrella path for this backend (hip/cpu/uncompiled)
+                }
+            }
+            result
+        }
         // dssim: no HDR path BY DESIGN (external dssim-core transform; the u8
         // shell measured ~0.6 SROCC on UPIQ HDR — omitted rather than shipped
         // degraded). Refuse loudly, matching `sweep --hdr` + `HdrScorer`.

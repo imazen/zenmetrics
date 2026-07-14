@@ -224,3 +224,148 @@ fn transfer_choice_reaches_the_u8_shell() {
         "PQ and PU-rescale shells should differ: pu={pu} pq={pq}"
     );
 }
+
+/// GPU-side parity — the faithful paths (cvvdp-gpu linear planes, butteraugli-gpu
+/// umbrella HdrScorer) and the GPU u8 shells (ssim2-gpu, iwssim-gpu, zensim-gpu +
+/// 372 with-iw features) against the same score-pairs primitive composition.
+///
+/// `#[ignore]` because it needs a CUDA/wgpu GPU — the skip decision is the
+/// caller's (`cargo test -- --ignored` on a GPU box), never a silent runtime
+/// bail. Run + record results whenever the executor image is rebuilt.
+///
+/// Note on side (a) for zensim-gpu: score-pairs uses the pub(crate)
+/// `MetricCache::compute_zensim_features`, unreachable from an integration
+/// test; `run_zensim_gpu_with_features` makes the IDENTICAL umbrella call
+/// (`ZensimParams::default_weights().with_regime(..)` →
+/// `compute_features_srgb_u8`) minus the instance cache, which affects cost,
+/// not values.
+#[cfg(all(
+    feature = "gpu-cvvdp",
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim"
+))]
+mod gpu_parity {
+    use super::*;
+    use zenmetrics_cli::hdr::{score_via_hdr_scorer, to_cvvdp_linear_planes};
+    use zenmetrics_cli::metrics::{cvvdp_gpu, run_zensim_gpu_with_features};
+
+    /// |a-b| within `tol·max(1,|b|)`. GPU pooling (atomic-f32) is not
+    /// bit-order-deterministic across invocations, so the faithful cvvdp path
+    /// gets a tiny relative tolerance; everything else must match bit-exactly
+    /// (same kernel, same bytes, same reduction order).
+    fn close(a: f64, b: f64, tol: f64) -> bool {
+        (a - b).abs() <= tol * b.abs().max(1.0)
+    }
+
+    #[test]
+    #[ignore = "needs a CUDA/wgpu GPU — run manually: cargo test --release -- --ignored"]
+    fn gpu_shared_layer_matches_score_pairs_feeding() {
+        let r = synth_nits(11, W, H);
+        let d = distort(&r, 23);
+        let rf = HdrImageFeeds::new(synth_nits(11, W, H), TRANSFER);
+        let df = HdrImageFeeds::new(distort(&synth_nits(11, W, H), 23), TRANSFER);
+        let mut scorers = HdrPairScorers::new(GpuRuntime::Auto);
+
+        // cvvdp-gpu: faithful linear planes @ DisplayTarget::hdr(1000).
+        let want_cvvdp = {
+            let mut s = cvvdp_gpu::CvvdpBatchScorer::new_with_target(
+                GpuRuntime::Auto,
+                cvvdp_gpu::DisplayTarget::hdr(zenmetrics_cli::hdr::HDR_DISPLAY_PEAK_NITS),
+            )
+            .expect("cvvdp gpu scorer");
+            let (rr, rg, rb) = to_cvvdp_linear_planes(&r);
+            let (dr, dg, db) = to_cvvdp_linear_planes(&d);
+            s.score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, W, H)
+                .expect("cvvdp faithful")
+        };
+        let got_cvvdp =
+            score_hdr_pair_per_score_pairs(MetricKind::CvvdpGpu, &rf, &df, &mut scorers)
+                .expect("shared cvvdp-gpu")[0]
+                .1;
+        eprintln!(
+            "[gpu-parity] cvvdp-gpu: shared={got_cvvdp} score-pairs={want_cvvdp} delta={}",
+            (got_cvvdp - want_cvvdp).abs()
+        );
+        assert!(close(got_cvvdp, want_cvvdp, 1e-6), "cvvdp-gpu diverged");
+
+        // butteraugli-gpu: faithful umbrella HdrScorer (max + pnorm_3). Side
+        // (a) uses the fleet's explicit `--gpu-runtime cuda`; side (b) keeps
+        // Auto through the shared layer, which must resolve to the same
+        // backend via its runtime ladder (the divergence this test caught
+        // when the ladder was missing).
+        let want_butter = score_via_hdr_scorer(
+            MetricKind::ButteraugliGpu,
+            &r,
+            &d,
+            TRANSFER,
+            GpuRuntime::Cuda,
+        )
+        .expect("umbrella path exists")
+        .expect("butteraugli faithful");
+        let got_butter =
+            score_hdr_pair_per_score_pairs(MetricKind::ButteraugliGpu, &rf, &df, &mut scorers)
+                .expect("shared butteraugli-gpu");
+        for ((gc, gv), (wc, wv)) in got_butter.iter().zip(&want_butter) {
+            eprintln!(
+                "[gpu-parity] butteraugli-gpu/{gc}: shared={gv} score-pairs={wv} delta={}",
+                (gv - wv).abs()
+            );
+            assert_eq!(gc, wc);
+            assert!(
+                close(*gv, *wv, 1e-9),
+                "butteraugli-gpu {gc} diverged: {gv} vs {wv}"
+            );
+        }
+
+        // ssim2-gpu + iwssim-gpu: PU21 u8 shell -> run_metric, bit-exact.
+        for kind in [MetricKind::Ssim2Gpu, MetricKind::IwssimGpu] {
+            let want = score_pairs_side(kind, &r, &d);
+            let got = score_hdr_pair_per_score_pairs(kind, &rf, &df, &mut scorers)
+                .unwrap_or_else(|e| panic!("shared {kind:?}: {e}"));
+            for ((gc, gv), (wc, wv)) in got.iter().zip(&want) {
+                eprintln!(
+                    "[gpu-parity] {kind:?}/{gc}: shared={gv} score-pairs={wv} delta={}",
+                    (gv - wv).abs()
+                );
+                assert_eq!(gc, wc);
+                assert!(
+                    close(*gv, *wv, 1e-9),
+                    "{kind:?} {gc} diverged: {gv} vs {wv}"
+                );
+            }
+        }
+
+        // zensim-gpu: u8 shell + 372 with-iw features.
+        let (want_zs, want_zf) = run_zensim_gpu_with_features(
+            &to_sdr_rgb8(&r, TRANSFER),
+            &to_sdr_rgb8(&d, TRANSFER),
+            GpuRuntime::Auto,
+            ZensimFeatureRegime::WithIw,
+        )
+        .expect("zensim gpu features");
+        let (got_zs, got_zf) = score_hdr_zensim_with_features_per_score_pairs(
+            MetricKind::ZensimGpu,
+            &rf,
+            &df,
+            &mut scorers,
+            ZensimFeatureRegime::WithIw,
+        )
+        .expect("shared zensim-gpu features");
+        eprintln!(
+            "[gpu-parity] zensim-gpu: shared={got_zs} score-pairs={want_zs} delta={}",
+            (got_zs - want_zs).abs()
+        );
+        assert!(close(got_zs, want_zs, 1e-9), "zensim-gpu score diverged");
+        assert_eq!(got_zf.len(), 372, "with-iw must emit 372 features on GPU");
+        assert_eq!(want_zf.len(), 372);
+        let max_fd = got_zf
+            .iter()
+            .zip(&want_zf)
+            .map(|(g, w)| (g - w).abs())
+            .fold(0.0f64, f64::max);
+        eprintln!("[gpu-parity] zensim-gpu features: max abs delta = {max_fd}");
+        assert!(max_fd <= 1e-9, "zensim-gpu features diverged: max {max_fd}");
+    }
+}

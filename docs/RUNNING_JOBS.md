@@ -28,10 +28,58 @@ production-proven versus what you supply (the **executor** for real encode/score
   first-class tier with no inbound ports.
 
 ### Job kinds (`zenfleet_core::JobKind`)
-`Encode {codec,q,knobs}` · `Metric {metric}` · `Feature {regime}` · `Diffmap {metric}` ·
-`Resample {kernel,w,h}` · `Bake {view}`. Each has a `profile()` giving its **resource class**
-(`CpuLight/CpuHeavy/CpuArm/Gpu/HighRam` — for capability routing) and **GC regenerability**
-(expensive encodes are kept; cheap re-scores are an LRU cache).
+`Encode {codec,q,knobs}` · `Metric {metric}` · `ScoreFile {metrics, hdr, hdr_transfer}` ·
+`Feature {regime}` · `Diffmap {metric}` · `Resample {kernel,w,h}` · `Bake {view}`. Each has a
+`profile()` giving its **resource class** (`CpuLight/CpuHeavy/CpuArm/Gpu/HighRam` — for capability
+routing) and **GC regenerability** (expensive encodes are kept; cheap re-scores are an LRU cache).
+
+`ScoreFile` is the no-re-encode whole-file scorer: one job = one source file + N pre-encoded
+variant content-shas (`inputs`) + M metrics; the executor decodes the reference ONCE and scores
+every metric for every variant (the `SourceSha` grouping made concrete). Manifests are built by
+`scripts/jobsys/build_scorefile_manifest.py` / `build_scorefile_from_pairs.py`; write-back via
+`scripts/jobsys/writeback_scores.py`. For HDR corpora see "HDR ScoreFile" below.
+
+### HDR ScoreFile (persisted-pairs HDR corpora, e.g. kadis-hdr)
+
+`ScoreFile { hdr: true, hdr_transfer }` scores an HDR corpus through the job system instead of an
+ad-hoc `score-pairs --hdr` chunk fleet. The executor decodes the reference and every variant to
+**absolute-luminance nits** (PQ-PNG / PQ-JXL / PQ-AVIF / EXR via `hdr::decode_to_nits`) and applies
+the exact per-metric feeding `zenmetrics score-pairs --hdr` uses (the shared layer in
+`zenmetrics-cli/src/hdr.rs` — one implementation, both callers):
+
+| metric | HDR feeding |
+|---|---|
+| `cvvdp-gpu` | faithful linear planes, `DisplayTarget::hdr(1000)` |
+| `butteraugli-gpu` | faithful umbrella `HdrScorer` (intensity_target = peak) |
+| `cvvdp` (native CPU) | `to_cvvdp_rgb8` per-image-peak u8 |
+| `zensim` / `zensim-gpu` | PU21 u8 shell + the **v1 u8-shell** feature row (372 `with-iw` on GPU) |
+| `ssim2(-gpu)` / `iwssim(-gpu)` / CPU `butteraugli` | PU21/PQ u8 shell → `run_metric` |
+| `dssim(-gpu)` | REFUSED loudly — no HDR path by design (external dssim-core transform) |
+
+Rules and gotchas:
+
+- **Job identity**: `hdr`/`hdr_transfer` are `#[serde(default, skip_serializing_if)]` — SDR jobs
+  serialize byte-identically to the pre-HDR schema (existing ledgers/ids untouched), while
+  `hdr: true` correctly yields a DIFFERENT content-addressed id (different work).
+- **`hdr_transfer`** is optional; absent = `pu-rescale` (the validated fleet setting). `"pq"` is
+  the other accepted value.
+- **Executor version gate** ⚠️: an executor image from before this feature (or built without the
+  `hdr` cargo feature) doesn't know the flag. The new executor REFUSES `hdr: true` without its
+  `hdr` feature; an *old* binary would silently score SDR — pin the executor image ≥ the version
+  shipping the HDR arm before declaring HDR manifests.
+- **Variant extensions matter in HDR** (`decode_to_nits` dispatches on extension): use a 4-column
+  `variant_index.tsv` (sha, offset, size, **name**) so the executor can name range-GET temps with
+  the member's real extension; persisted-pairs cells carry a distortion label (not a codec) in
+  `cell.codec`.
+- **Output rows** carry `"hdr": true` for provenance; zensim emits its metric row AND a `feature`
+  row from the same u8-shell call, matching the SDR arm's shape (write-back unchanged).
+- **Build**: while the codec siblings are mid-refactor, the executor builds codec-free via the
+  lean `jobexec` feature: `cargo build --release -p zenmetrics-cli --no-default-features
+  --features jobexec,hdr,cpu-metrics,gpu,gpu-cuda,gpu-cpu` (PQ-PNG decode additionally needs the
+  `png` feature once zenpng settles; EXR works in every `hdr` build). `sweep` implies `jobexec`.
+- **Parity**: `tests/hdr_pair_parity.rs` + `jobexec::hdr_tests` lock the executor's values to the
+  `score-pairs --hdr` feeding bit-exactly (CPU metrics; the GPU faithful paths reuse the same
+  score-pairs primitives verbatim).
 
 ---
 

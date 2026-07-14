@@ -17,6 +17,47 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+## zenfleet-core
+
+### Added
+
+- **`JobKind::ScoreFile` gains `hdr: bool` + `hdr_transfer: Option<String>`** for
+  persisted-pairs HDR corpora (kadis-hdr). Both `#[serde(default,
+  skip_serializing_if)]`: an SDR job serializes byte-identically to the pre-HDR
+  schema, so every existing content-addressed `JobId` / manifest / Parquet ledger
+  stays valid (golden tests pin the exact pre-change JSON + id hash); `hdr: true`
+  correctly yields a different id — different work. (b38036ff)
+
+## zenmetrics-cli
+
+### Added
+
+- **HDR ScoreFile executor arm** — `jobexec` scores `ScoreFile { hdr: true }` jobs by
+  decoding reference + variants to absolute nits ONCE each and applying the exact
+  per-metric feeding `score-pairs --hdr` uses, via a new shared layer
+  (`hdr::{HdrImageFeeds, HdrPairScorers, score_hdr_pair_per_score_pairs,
+  score_hdr_zensim_with_features_per_score_pairs}`): faithful cvvdp-gpu /
+  butteraugli-gpu linear planes, cvvdp-u8 for the CPU port, PU21 u8 shell for the
+  SSIM family, zensim's v1 u8-shell 372 `with-iw` feature row, dssim refused loudly
+  (no HDR path by design). Parity with the score-pairs feeding is locked bit-exact by
+  `tests/hdr_pair_parity.rs` + `jobexec::hdr_tests`. Replaces the ad-hoc
+  `hdr_pairs_chunk_worker.sh` bash fleet for future HDR corpora — see
+  `docs/RUNNING_JOBS.md` "HDR ScoreFile" (incl. the executor-image version gate).
+  (4afbc607)
+- **`jobexec` cargo feature** — the executor subcommand now builds WITHOUT the codec
+  stack (`--no-default-features --features jobexec,hdr,cpu-metrics[,gpu,gpu-cuda]`):
+  score_file jobs never re-encode, so they no longer require the `sweep` feature
+  (which force-pulls zenjpeg — unbuildable while codec siblings are mid-refactor).
+  `sweep` implies `jobexec`; the encode/metric job kinds still need `sweep` and
+  error loudly without it. (836b0066)
+
+### Fixed
+
+- **jobexec range-GET variant temps now carry the tar member's real extension**
+  (from the 4-column variant index) instead of the codec-derived one — load-bearing
+  for HDR (`decode_to_nits` dispatches on extension; persisted-pairs cells carry a
+  distortion label, not a codec, in `cell.codec`). (4afbc607)
+
 ## cvvdp
 
 ### Fixed
