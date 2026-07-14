@@ -21,6 +21,8 @@
 //! `.abs()` value would silently break the MRR for distance-shaped
 //! bakes.
 
+use std::collections::HashMap;
+
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -1535,8 +1537,228 @@ impl SignumOrZero for f64 {
 }
 
 // ----------------------------------------------------------------------
+// Per-group (within-reference) rank agreement
+// ----------------------------------------------------------------------
+
+/// Within-group rank agreement, summarized across groups.
+///
+/// See [`per_group_srocc`] for why this is a first-class stat rather than a
+/// diagnostic.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PerGroupSrocc {
+    /// Groups that contributed a finite SROCC (after the `min_len` and
+    /// degeneracy filters).
+    pub n_groups: usize,
+    pub mean: f64,
+    pub median: f64,
+    /// Fraction of groups ranked BACKWARDS (SROCC < 0).
+    pub frac_negative: f64,
+    /// Fraction of groups ranked perfectly (SROCC >= 1).
+    pub frac_perfect: f64,
+}
+
+/// SROCC computed *within* each group, then summarized across groups.
+///
+/// **Why this is a first-class stat.** A pooled SROCC silently conflates two
+/// different questions: "does the metric order the items within ONE group
+/// correctly?" and "does it put different groups on a common scale?". Those
+/// come apart, badly and often:
+///
+/// - AIC-3 reads **0.79 pooled but 0.93 per-ref** — the documented confound.
+/// - A post-jxl-fix near-lossless image corpus reads **+0.204 pooled but
+///   +0.916 per-ref**, because its within-image quality ladder (~0.92 points)
+///   is dwarfed by the between-image spread (~6 points) at fixed distortion.
+///
+/// The failure mode this catches is the dangerous one: a model can post a
+/// healthy pooled SROCC while ranking most individual ladders **in reverse**.
+/// That is invisible to every pooled and per-band statistic. A 2026-07-15
+/// measurement found exactly that — pooled looked unremarkable, per-ref was
+/// -0.144 with 60% of references ranked backwards. Read `frac_negative`
+/// first; it is the stat with no pooled equivalent.
+///
+/// `groups` assigns each observation to a group (a reference image, a
+/// stimulus, a source id — any repeated key). Groups with fewer than
+/// `min_len` observations are skipped: a 2-element SROCC is +/-1 by
+/// construction and only adds noise at the extremes; `min_len = 3` is the
+/// usual choice.
+///
+/// Groups whose scores or targets are **constant** are dropped, not counted.
+/// This has to be an explicit check: [`spearman`] returns `0.0` (not NaN) when
+/// a denominator vanishes, so a degenerate group would otherwise be silently
+/// averaged in as "no agreement" and drag the mean toward zero — indicating a
+/// ranking failure where there was simply nothing to rank.
+///
+/// Returns `None` when no group survives the filters — an explicit "not
+/// measurable here" rather than a fabricated 0.0.
+pub fn per_group_srocc<G: Eq + core::hash::Hash + Copy>(
+    scores: &[f64],
+    targets: &[f64],
+    groups: &[G],
+    min_len: usize,
+) -> Option<PerGroupSrocc> {
+    fn has_spread(v: &[f64]) -> bool {
+        v.iter().any(|x| *x != v[0])
+    }
+    let n = scores.len().min(targets.len()).min(groups.len());
+    let mut by_group: HashMap<G, (Vec<f64>, Vec<f64>)> = HashMap::new();
+    for i in 0..n {
+        let e = by_group
+            .entry(groups[i])
+            .or_insert_with(|| (Vec::new(), Vec::new()));
+        e.0.push(scores[i]);
+        e.1.push(targets[i]);
+    }
+    let mut rs: Vec<f64> = by_group
+        .values()
+        .filter(|(s, t)| s.len() >= min_len.max(2) && has_spread(s) && has_spread(t))
+        .map(|(s, t)| spearman(s, t))
+        .filter(|v| v.is_finite())
+        .collect();
+    if rs.is_empty() {
+        return None;
+    }
+    rs.sort_by(|a, b| a.total_cmp(b));
+    let k = rs.len();
+    Some(PerGroupSrocc {
+        n_groups: k,
+        mean: rs.iter().sum::<f64>() / k as f64,
+        median: if k % 2 == 1 {
+            rs[k / 2]
+        } else {
+            (rs[k / 2 - 1] + rs[k / 2]) / 2.0
+        },
+        frac_negative: rs.iter().filter(|v| **v < 0.0).count() as f64 / k as f64,
+        frac_perfect: rs.iter().filter(|v| **v >= 1.0).count() as f64 / k as f64,
+    })
+}
+
+// ----------------------------------------------------------------------
 // Tests
 // ----------------------------------------------------------------------
+
+#[cfg(test)]
+mod per_group_tests {
+    use super::*;
+
+    /// The headline property: a model can be perfect pooled and perfect
+    /// per-group at once (no tension in the easy case).
+    #[test]
+    fn perfect_agreement_is_perfect_per_group() {
+        let groups = [0u32, 0, 0, 1, 1, 1];
+        let t = [1.0, 2.0, 3.0, 10.0, 20.0, 30.0];
+        let s = [1.0, 2.0, 3.0, 10.0, 20.0, 30.0];
+        let r = per_group_srocc(&s, &t, &groups, 3).unwrap();
+        assert_eq!(r.n_groups, 2);
+        assert!((r.mean - 1.0).abs() < 1e-12);
+        assert_eq!(r.frac_negative, 0.0);
+        assert_eq!(r.frac_perfect, 1.0);
+    }
+
+    /// THE case this stat exists for: EVERY group ranked backwards while the
+    /// pooled SROCC still reads ~0.93 — a number nobody would investigate.
+    /// Between-group scale supplies almost all the pooled rank agreement, so
+    /// the pooled stat is measuring "are the groups in the right order", a
+    /// question the model gets right, while the question it gets catastrophi-
+    /// cally wrong (within-group order) contributes almost nothing.
+    ///
+    /// Note the gap widens with group count: 2 groups pool to 0.54, 5 groups
+    /// to 0.93. So the more references a corpus has, the better pooled SROCC
+    /// hides a fully-inverted model.
+    #[test]
+    fn detects_backwards_ladders_that_pooled_srocc_hides() {
+        // 5 well-separated groups; within each, the model inverts completely.
+        let mut groups = Vec::new();
+        let mut t = Vec::new();
+        let mut s = Vec::new();
+        for g in 0..5u32 {
+            let base = 100.0 * g as f64;
+            groups.extend_from_slice(&[g, g, g]);
+            t.extend_from_slice(&[base + 1.0, base + 2.0, base + 3.0]);
+            s.extend_from_slice(&[base + 3.0, base + 2.0, base + 1.0]); // reversed
+        }
+        let pooled = spearman(&s, &t);
+        assert!(
+            pooled > 0.9,
+            "pooled must look healthy for the test to mean anything, got {pooled}"
+        );
+        let r = per_group_srocc(&s, &t, &groups, 3).unwrap();
+        assert_eq!(r.n_groups, 5);
+        assert!((r.mean + 1.0).abs() < 1e-12, "per-group should be -1");
+        assert_eq!(r.frac_negative, 1.0, "every ladder is backwards");
+        assert_eq!(r.frac_perfect, 0.0);
+    }
+
+    /// Groups below `min_len` are skipped, not counted as 0.
+    #[test]
+    fn short_groups_are_skipped() {
+        let groups = [0u32, 0, 0, 1, 1]; // group 1 has only 2 members
+        let t = [1.0, 2.0, 3.0, 1.0, 2.0];
+        let s = [1.0, 2.0, 3.0, 2.0, 1.0];
+        let r = per_group_srocc(&s, &t, &groups, 3).unwrap();
+        assert_eq!(r.n_groups, 1, "the 2-member group must not contribute");
+        assert!((r.mean - 1.0).abs() < 1e-12);
+    }
+
+    /// A degenerate group has no rank to agree with and must be DROPPED, not
+    /// counted as zero agreement.
+    ///
+    /// This pins a real bug (found by this test on 2026-07-15): `spearman`
+    /// returns **0.0**, not NaN, when a denominator vanishes, so filtering on
+    /// `is_finite()` does NOT drop degenerate groups — they get averaged in as
+    /// 0.0 and drag the mean toward "no agreement", reporting a ranking
+    /// failure where there was nothing to rank. Constant-ness must be checked
+    /// explicitly. Both directions matter: a constant TARGET (below) and a
+    /// constant SCORE (a saturated/clamped model — the more likely one in
+    /// practice).
+    #[test]
+    fn degenerate_groups_are_dropped_not_zeroed() {
+        // Guard the premise: spearman returns 0.0, not NaN, on a constant input.
+        let degenerate = spearman(&[1.0, 2.0, 3.0], &[5.0, 5.0, 5.0]);
+        assert_eq!(degenerate, 0.0, "premise: spearman zeroes, it does not NaN");
+        assert!(degenerate.is_finite(), "so is_finite() cannot filter it");
+
+        // Constant target in group 1.
+        let groups = [0u32, 0, 0, 1, 1, 1];
+        let t = [1.0, 2.0, 3.0, 5.0, 5.0, 5.0];
+        let s = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0];
+        let r = per_group_srocc(&s, &t, &groups, 3).unwrap();
+        assert_eq!(r.n_groups, 1, "constant-target group must be dropped");
+        assert!((r.mean - 1.0).abs() < 1e-12, "mean must not be dragged to 0.5");
+
+        // Constant score in group 1 (a clamped/saturated model).
+        let s2 = [1.0, 2.0, 3.0, 7.0, 7.0, 7.0];
+        let t2 = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0];
+        let r2 = per_group_srocc(&s2, &t2, &groups, 3).unwrap();
+        assert_eq!(r2.n_groups, 1, "constant-score group must be dropped");
+        assert!((r2.mean - 1.0).abs() < 1e-12);
+    }
+
+    /// No group survives -> None, never a fabricated 0.0.
+    #[test]
+    fn nothing_measurable_returns_none() {
+        let groups = [0u32, 1, 2];
+        let t = [1.0, 2.0, 3.0];
+        let s = [1.0, 2.0, 3.0];
+        assert!(per_group_srocc(&s, &t, &groups, 3).is_none());
+        assert!(per_group_srocc(&[], &[], &[0u32; 0], 3).is_none());
+    }
+
+    /// Median and mean are reported separately because they disagree when the
+    /// distribution is skewed — the 2026-07-15 measurement read mean -0.144
+    /// but median -0.429, and the median was the more honest summary.
+    #[test]
+    fn median_and_mean_both_reported() {
+        // 3 groups: +1, +1, -1 -> mean +1/3, median +1.
+        let groups = [0u32, 0, 0, 1, 1, 1, 2, 2, 2];
+        let t = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0];
+        let s = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 3.0, 2.0, 1.0];
+        let r = per_group_srocc(&s, &t, &groups, 3).unwrap();
+        assert_eq!(r.n_groups, 3);
+        assert!((r.mean - (1.0 / 3.0)).abs() < 1e-12);
+        assert!((r.median - 1.0).abs() < 1e-12);
+        assert!((r.frac_negative - 1.0 / 3.0).abs() < 1e-12);
+    }
+}
 
 #[cfg(test)]
 mod tests {
