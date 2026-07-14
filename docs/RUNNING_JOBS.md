@@ -56,6 +56,14 @@ the exact per-metric feeding `zenmetrics score-pairs --hdr` uses (the shared lay
 | `ssim2(-gpu)` / `iwssim(-gpu)` / CPU `butteraugli` | PU21/PQ u8 shell → `run_metric` |
 | `dssim(-gpu)` | REFUSED loudly — no HDR path by design (external dssim-core transform) |
 
+Declare a persisted-pairs HDR corpus with `scripts/jobsys/build_scorefile_hdr_pairs.py
+<corpus_prefix_s3> <run_id>` (refs/ + dist/ + pairs.tsv layout → `jobs/<run>/{variants.tar,
+variant_index.tsv, manifest.json[.gz], dist_sha_map.tsv}`; the sha map rejoins JSONL rows —
+keyed `encode_sha` — to the corpus pairs rows and their per-cell q/knob identity). Launch
+with `ZEN_CORPUS_PREFIX=<corpus prefix>` plus the usual `ZEN_VARIANTS_TAR_URI` /
+`ZEN_VARIANT_INDEX_URI`. Verified end-to-end 2026-07-14 (EXR smoke corpus, CUDA box):
+1 job × 2 variants × 5 metrics → 12 rows, all finite, 372-feature rows, zero errors.
+
 Rules and gotchas:
 
 - **Job identity**: `hdr`/`hdr_transfer` are `#[serde(default, skip_serializing_if)]` — SDR jobs
