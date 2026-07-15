@@ -1557,6 +1557,30 @@ pub struct PerGroupSrocc {
     pub frac_perfect: f64,
 }
 
+/// Which direction a metric points, for [`per_group_srocc`].
+///
+/// This exists because polarity is a property of the METRIC, not of any one
+/// group, and it must be decided before a per-group sign means anything.
+/// [`compute_panel`] hides polarity by reporting `srocc.abs()`; per-group stats
+/// cannot do that (see [`per_group_srocc`]), so the caller states it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Orientation {
+    /// Higher score = higher target. Human-MOS-shaped metrics.
+    HigherIsBetter,
+    /// Higher score = LOWER target. Distance-shaped metrics — including any
+    /// raw RankNet bake before its affine/spline flips it into score space.
+    LowerIsBetter,
+    /// Infer from the sign of the pooled correlation across all groups.
+    ///
+    /// The right default for evaluating a bake of unknown shape: it matches
+    /// what `compute_panel`'s `.abs()` already does pooled, so the per-group
+    /// numbers stay comparable with the panel printed beside them. A group
+    /// that disagrees with the pooled polarity still comes out negative, which
+    /// is the detection this stat is for.
+    #[default]
+    Auto,
+}
+
 /// SROCC computed *within* each group, then summarized across groups.
 ///
 /// **Why this is a first-class stat.** A pooled SROCC silently conflates two
@@ -1590,11 +1614,27 @@ pub struct PerGroupSrocc {
 ///
 /// Returns `None` when no group survives the filters — an explicit "not
 /// measurable here" rather than a fabricated 0.0.
+///
+/// `orientation` is REQUIRED and has no default, because getting it wrong
+/// inverts the headline stat. [`compute_panel`] reports `spearman(..).abs()`:
+/// a metric may legitimately be **distance-shaped** (higher score = worse
+/// quality), and the pooled panel absorbs that polarity silently. A signed
+/// per-group SROCC sitting next to that abs'd pooled number reads every
+/// correctly-ranked ladder of a distance-shaped metric as a total inversion —
+/// measured 2026-07-15: a bake whose ladders were all ranked *correctly*
+/// reported `mean -0.9596, frac_negative 1.00` beside a pooled `+0.8842`.
+/// That is the exact false alarm this function exists to make impossible.
+///
+/// Polarity is resolved ONCE over the pooled data and then applied to every
+/// group. Do not "fix" this by taking `.abs()` per group: that would map a
+/// genuinely inverted ladder (`-0.9`) to `+0.9` and destroy the only signal
+/// here that no pooled statistic carries.
 pub fn per_group_srocc<G: Eq + core::hash::Hash + Copy>(
     scores: &[f64],
     targets: &[f64],
     groups: &[G],
     min_len: usize,
+    orientation: Orientation,
 ) -> Option<PerGroupSrocc> {
     fn has_spread(v: &[f64]) -> bool {
         v.iter().any(|x| *x != v[0])
@@ -1608,10 +1648,26 @@ pub fn per_group_srocc<G: Eq + core::hash::Hash + Copy>(
         e.0.push(scores[i]);
         e.1.push(targets[i]);
     }
+    // Resolve polarity ONCE, over the pooled data, before any per-group sign is
+    // interpreted. See `Orientation` for why this cannot be per-group.
+    let sign = match orientation {
+        Orientation::HigherIsBetter => 1.0,
+        Orientation::LowerIsBetter => -1.0,
+        Orientation::Auto => {
+            let pooled = spearman(&scores[..n], &targets[..n]);
+            if !pooled.is_finite() || pooled == 0.0 {
+                1.0
+            } else if pooled < 0.0 {
+                -1.0
+            } else {
+                1.0
+            }
+        }
+    };
     let mut rs: Vec<f64> = by_group
         .values()
         .filter(|(s, t)| s.len() >= min_len.max(2) && has_spread(s) && has_spread(t))
-        .map(|(s, t)| spearman(s, t))
+        .map(|(s, t)| sign * spearman(s, t))
         .filter(|v| v.is_finite())
         .collect();
     if rs.is_empty() {
@@ -1640,6 +1696,70 @@ pub fn per_group_srocc<G: Eq + core::hash::Hash + Copy>(
 mod per_group_tests {
     use super::*;
 
+    /// THE REGRESSION. A distance-shaped metric (higher score = worse) that
+    /// ranks every ladder CORRECTLY must not be reported as inverted.
+    ///
+    /// Measured 2026-07-15: bake_verdict printed `per-ref -0.9596, 100%
+    /// backwards` next to a pooled `+0.8842` for a bake whose ladders were all
+    /// correct — because `compute_panel` reports `srocc.abs()` and this
+    /// function returned a signed value. Auto resolves polarity from the
+    /// pooled sign, so the two agree.
+    #[test]
+    fn distance_shaped_metric_is_not_reported_as_inverted() {
+        let groups = [0u32, 0, 0, 1, 1, 1];
+        let t = [1.0, 2.0, 3.0, 10.0, 20.0, 30.0];
+        // Perfect ranking, inverted sign — a raw RankNet bake before its spline.
+        let s: Vec<f64> = t.iter().map(|x| -x).collect();
+
+        let auto = per_group_srocc(&s, &t, &groups, 3, Orientation::Auto).unwrap();
+        assert!(auto.mean > 0.99, "Auto must see correct ladders: {}", auto.mean);
+        assert_eq!(auto.frac_negative, 0.0, "no ladder is backwards here");
+
+        let told = per_group_srocc(&s, &t, &groups, 3, Orientation::LowerIsBetter).unwrap();
+        assert!(told.mean > 0.99);
+
+        // And the pooled panel agrees, which is the whole point: the per-group
+        // column sits beside compute_panel's output and must not contradict it.
+        assert!((compute_panel(&s, &t).srocc - 1.0).abs() < 1e-9);
+
+        // Declaring the wrong orientation is the one way to still get it wrong,
+        // which is why the argument is required rather than defaulted.
+        let wrong = per_group_srocc(&s, &t, &groups, 3, Orientation::HigherIsBetter).unwrap();
+        assert!(wrong.mean < -0.99);
+    }
+
+    /// The detection must SURVIVE the polarity fix. A per-group `.abs()` would
+    /// have "fixed" the bug above while silently destroying this: a ladder that
+    /// disagrees with the metric's own polarity is the signal with no pooled
+    /// equivalent.
+    #[test]
+    fn genuinely_inverted_ladder_still_flagged_under_auto() {
+        // 4 groups agree with polarity, 1 is genuinely backwards.
+        let mut s = Vec::new();
+        let mut t = Vec::new();
+        let mut g = Vec::new();
+        for grp in 0..4u32 {
+            let base = (grp as f64) * 10.0;
+            for k in 0..3 {
+                t.push(base + k as f64);
+                s.push(base + k as f64); // correct, higher-is-better
+                g.push(grp);
+            }
+        }
+        for k in 0..3 {
+            t.push(100.0 + k as f64);
+            s.push(100.0 - k as f64); // BACKWARDS
+            g.push(4u32);
+        }
+        let r = per_group_srocc(&s, &t, &g, 3, Orientation::Auto).unwrap();
+        assert_eq!(r.n_groups, 5);
+        assert!(
+            (r.frac_negative - 0.2).abs() < 1e-9,
+            "the one inverted ladder must still be caught: frac_negative={}",
+            r.frac_negative
+        );
+    }
+
     /// The headline property: a model can be perfect pooled and perfect
     /// per-group at once (no tension in the easy case).
     #[test]
@@ -1647,7 +1767,7 @@ mod per_group_tests {
         let groups = [0u32, 0, 0, 1, 1, 1];
         let t = [1.0, 2.0, 3.0, 10.0, 20.0, 30.0];
         let s = [1.0, 2.0, 3.0, 10.0, 20.0, 30.0];
-        let r = per_group_srocc(&s, &t, &groups, 3).unwrap();
+        let r = per_group_srocc(&s, &t, &groups, 3, Orientation::HigherIsBetter).unwrap();
         assert_eq!(r.n_groups, 2);
         assert!((r.mean - 1.0).abs() < 1e-12);
         assert_eq!(r.frac_negative, 0.0);
@@ -1681,7 +1801,7 @@ mod per_group_tests {
             pooled > 0.9,
             "pooled must look healthy for the test to mean anything, got {pooled}"
         );
-        let r = per_group_srocc(&s, &t, &groups, 3).unwrap();
+        let r = per_group_srocc(&s, &t, &groups, 3, Orientation::HigherIsBetter).unwrap();
         assert_eq!(r.n_groups, 5);
         assert!((r.mean + 1.0).abs() < 1e-12, "per-group should be -1");
         assert_eq!(r.frac_negative, 1.0, "every ladder is backwards");
@@ -1694,7 +1814,7 @@ mod per_group_tests {
         let groups = [0u32, 0, 0, 1, 1]; // group 1 has only 2 members
         let t = [1.0, 2.0, 3.0, 1.0, 2.0];
         let s = [1.0, 2.0, 3.0, 2.0, 1.0];
-        let r = per_group_srocc(&s, &t, &groups, 3).unwrap();
+        let r = per_group_srocc(&s, &t, &groups, 3, Orientation::HigherIsBetter).unwrap();
         assert_eq!(r.n_groups, 1, "the 2-member group must not contribute");
         assert!((r.mean - 1.0).abs() < 1e-12);
     }
@@ -1721,14 +1841,14 @@ mod per_group_tests {
         let groups = [0u32, 0, 0, 1, 1, 1];
         let t = [1.0, 2.0, 3.0, 5.0, 5.0, 5.0];
         let s = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0];
-        let r = per_group_srocc(&s, &t, &groups, 3).unwrap();
+        let r = per_group_srocc(&s, &t, &groups, 3, Orientation::HigherIsBetter).unwrap();
         assert_eq!(r.n_groups, 1, "constant-target group must be dropped");
         assert!((r.mean - 1.0).abs() < 1e-12, "mean must not be dragged to 0.5");
 
         // Constant score in group 1 (a clamped/saturated model).
         let s2 = [1.0, 2.0, 3.0, 7.0, 7.0, 7.0];
         let t2 = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0];
-        let r2 = per_group_srocc(&s2, &t2, &groups, 3).unwrap();
+        let r2 = per_group_srocc(&s2, &t2, &groups, 3, Orientation::HigherIsBetter).unwrap();
         assert_eq!(r2.n_groups, 1, "constant-score group must be dropped");
         assert!((r2.mean - 1.0).abs() < 1e-12);
     }
@@ -1739,8 +1859,8 @@ mod per_group_tests {
         let groups = [0u32, 1, 2];
         let t = [1.0, 2.0, 3.0];
         let s = [1.0, 2.0, 3.0];
-        assert!(per_group_srocc(&s, &t, &groups, 3).is_none());
-        assert!(per_group_srocc(&[], &[], &[0u32; 0], 3).is_none());
+        assert!(per_group_srocc(&s, &t, &groups, 3, Orientation::HigherIsBetter).is_none());
+        assert!(per_group_srocc(&[], &[], &[0u32; 0], 3, Orientation::HigherIsBetter).is_none());
     }
 
     /// Median and mean are reported separately because they disagree when the
@@ -1752,7 +1872,7 @@ mod per_group_tests {
         let groups = [0u32, 0, 0, 1, 1, 1, 2, 2, 2];
         let t = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0];
         let s = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 3.0, 2.0, 1.0];
-        let r = per_group_srocc(&s, &t, &groups, 3).unwrap();
+        let r = per_group_srocc(&s, &t, &groups, 3, Orientation::HigherIsBetter).unwrap();
         assert_eq!(r.n_groups, 3);
         assert!((r.mean - (1.0 / 3.0)).abs() < 1e-12);
         assert!((r.median - 1.0).abs() < 1e-12);
