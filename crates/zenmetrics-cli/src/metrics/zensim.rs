@@ -347,6 +347,41 @@ mod tests {
         assert!(score.is_finite() && feats.iter().all(|v| v.is_finite()));
     }
 
+    /// Throughput cost of the v2 append regime vs v1 with-iw, on a realistic
+    /// image. v2 is an iteration-1 SCALAR extractor, so this quantifies the
+    /// per-cell fleet slowdown. Run: `cargo test -p zenmetrics-cli --lib --release
+    /// v2ab_throughput -- --ignored --nocapture`.
+    #[cfg(feature = "cpu-metrics")]
+    #[test]
+    #[ignore = "timing measurement, not a correctness gate"]
+    fn v2ab_throughput_vs_withiw() {
+        use crate::metrics::ZensimFeatureRegime as R;
+        use std::time::Instant;
+        let (w, h) = (1024, 1024);
+        let reference = synth(1, w, h);
+        let distorted = synth(101, w, h);
+        // warm up
+        let _ = score_with_features_regime(&reference, &distorted, R::WithIw).unwrap();
+        let _ = score_with_features_regime(&reference, &distorted, R::V2Ab).unwrap();
+        let n = 5;
+        let t0 = Instant::now();
+        for _ in 0..n {
+            let _ = score_with_features_regime(&reference, &distorted, R::WithIw).unwrap();
+        }
+        let iw = t0.elapsed().as_secs_f64() / n as f64;
+        let t1 = Instant::now();
+        for _ in 0..n {
+            let _ = score_with_features_regime(&reference, &distorted, R::V2Ab).unwrap();
+        }
+        let v2 = t1.elapsed().as_secs_f64() / n as f64;
+        eprintln!(
+            "ZENSIM {w}x{h}: with-iw(372) {:.1} ms/pair | v2-ab(720) {:.1} ms/pair | v2/v1 = {:.2}x",
+            iw * 1e3,
+            v2 * 1e3,
+            v2 / iw
+        );
+    }
+
     /// Same inputs → bit-identical output across runs (guards the v2 path against
     /// nondeterminism, e.g. from internal parallelism).
     #[cfg(feature = "cpu-metrics")]
