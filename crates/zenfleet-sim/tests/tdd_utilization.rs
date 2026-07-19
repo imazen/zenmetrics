@@ -104,3 +104,67 @@ fn a_dead_box_does_not_strand_its_work() {
         s.per_box_done
     );
 }
+
+/// CYCLE 5 — memory pressure must be maximized, not crashed. Heavy tasks
+/// (jxl-modular-class: 8 GB, 4 threads) on a 24 GB box are memory-bound: the
+/// scheduler must pack as many as fit (3 = 24 GB) and NEVER exceed the RAM
+/// budget, even though it prefetches. This is the OOM the codebase actually
+/// hit (`modes_full` on a 3 MP image ramping RSS past the box).
+#[test]
+fn memory_bound_work_packs_to_the_ram_limit_without_oom() {
+    let cap = BoxCap::new(16, 24 * GB, 0);
+    let tasks = vec![
+        Task {
+            fetch_secs: 2,
+            compute_secs: 10,
+            upload_secs: 1,
+            mem_bytes: 8 * GB,
+            threads: 4,
+            gpu: false,
+        };
+        30
+    ];
+
+    let s = schedule_max_util(&cap, &tasks);
+
+    assert_eq!(s.tasks_done, 30);
+    assert!(
+        s.peak_mem_bytes <= 24 * GB,
+        "MUST NOT OOM: peak resident {} GB > 24 GB budget",
+        s.peak_mem_bytes / GB
+    );
+    assert_eq!(
+        s.peak_mem_bytes,
+        24 * GB,
+        "and it must PACK to the limit (3 x 8 GB), not run one-at-a-time"
+    );
+}
+
+/// CYCLE 6 — a GPU box must keep BOTH its cores and its GPU lane busy at once
+/// (encode on CPU while scoring on GPU). Given balanced work, the scheduler
+/// saturates both resources simultaneously.
+#[test]
+fn a_gpu_box_saturates_cpu_and_gpu_simultaneously() {
+    let cap = BoxCap::new(8, 24 * GB, 1);
+    // 7 CPU tasks per GPU task keeps 7 cores + the lane both full.
+    let tasks: Vec<Task> = (0..160)
+        .map(|i| {
+            if i % 8 == 0 {
+                gpu_task(2, 3, 1, 200 * MB)
+            } else {
+                Task::light(2, 3, 1, 100 * MB)
+            }
+        })
+        .collect();
+
+    let s = schedule_max_util(&cap, &tasks);
+
+    assert_eq!(s.tasks_done, 160);
+    assert!(
+        s.cpu_util(8) >= 0.85 && s.gpu_util(1) >= 0.85,
+        "both units must stay busy: cpu {:.3}, gpu {:.3} (wall={}s)",
+        s.cpu_util(8),
+        s.gpu_util(1),
+        s.wall_secs
+    );
+}

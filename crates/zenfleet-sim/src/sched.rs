@@ -89,6 +89,9 @@ pub struct RunStats {
     /// Σ GPU-lane-seconds actually spent in compute.
     pub gpu_busy_secs: u64,
     pub tasks_done: usize,
+    /// The high-water mark of resident memory (all in-flight tasks). Must stay ≤
+    /// the box's RAM budget — the OOM guard.
+    pub peak_mem_bytes: u64,
 }
 
 impl RunStats {
@@ -128,6 +131,7 @@ pub fn run(cap: &BoxCap, tasks: &[Task], policy: Policy) -> RunStats {
     let mut queue: VecDeque<Task> = tasks.iter().copied().collect();
     let mut slots: Vec<Slot> = Vec::new();
     let (mut cpu_busy, mut gpu_busy, mut done) = (0u64, 0u64, 0usize);
+    let mut peak_mem = 0u64;
     let mut wall = 0u64;
     let cap_wall = 100_000_000u64; // safety valve against a scheduling bug
 
@@ -156,46 +160,8 @@ pub fn run(cap: &BoxCap, tasks: &[Task], policy: Policy) -> RunStats {
                 }
             }
             Policy::MaxUtil => {
-                // Admit ready tasks to compute while the envelope allows.
-                loop {
-                    let (mut running, mut gpu_used) = (InFlight::default(), 0u32);
-                    for s in &slots {
-                        if s.phase == Phase::Compute {
-                            running.add(s.task.mem_bytes, s.task.threads);
-                            if s.task.gpu {
-                                gpu_used += 1;
-                            }
-                        }
-                    }
-                    let pick = slots.iter().position(|s| {
-                        s.phase == Phase::Ready
-                            && cap.budget.can_admit(&running, s.task.mem_bytes, s.task.threads)
-                            && (!s.task.gpu || gpu_used < cap.gpu_lanes)
-                    });
-                    match pick {
-                        Some(i) => {
-                            slots[i].phase = Phase::Compute;
-                            slots[i].remaining = slots[i].task.compute_secs.max(1);
-                        }
-                        None => break,
-                    }
-                }
-                // Prefetch: keep `prefetch_target` tasks fetching/ready ahead.
-                while slots
-                    .iter()
-                    .filter(|s| s.phase == Phase::Fetch || s.phase == Phase::Ready)
-                    .count()
-                    < prefetch_target
-                {
-                    match queue.pop_front() {
-                        Some(t) => slots.push(Slot {
-                            task: t,
-                            phase: Phase::Fetch,
-                            remaining: t.fetch_secs,
-                        }),
-                        None => break,
-                    }
-                }
+                admit_compute(cap, &mut slots);
+                prefetch(cap, &mut queue, &mut slots, prefetch_target);
             }
         }
 
@@ -218,6 +184,7 @@ pub fn run(cap: &BoxCap, tasks: &[Task], policy: Policy) -> RunStats {
         }
         cpu_busy += cores_used.min(cap.cores()) as u64;
         gpu_busy += lanes_used.min(cap.gpu_lanes) as u64;
+        peak_mem = peak_mem.max(resident_mem(&slots));
 
         // Advance one second.
         for s in &mut slots {
@@ -257,6 +224,7 @@ pub fn run(cap: &BoxCap, tasks: &[Task], policy: Policy) -> RunStats {
         cpu_busy_secs: cpu_busy,
         gpu_busy_secs: gpu_busy,
         tasks_done: done,
+        peak_mem_bytes: peak_mem,
     }
 }
 
@@ -292,6 +260,9 @@ pub struct FleetRun {
     /// — the denominator for fleet utilization.
     pub core_seconds_alive: u64,
     pub per_box_done: Vec<usize>,
+    /// Worst single-box resident-memory high-water mark — must stay ≤ each box's
+    /// RAM budget (no OOM).
+    pub peak_mem_bytes: u64,
 }
 
 impl FleetRun {
@@ -335,21 +306,36 @@ fn admit_compute(cap: &BoxCap, slots: &mut [Slot]) {
     }
 }
 
-fn prefetch(source: &mut VecDeque<Task>, slots: &mut Vec<Slot>, target: usize) {
+/// Total memory held by every in-flight task (inputs are resident from fetch
+/// through upload). The box's RAM must hold all of it.
+fn resident_mem(slots: &[Slot]) -> u64 {
+    slots.iter().map(|s| s.task.mem_bytes).sum()
+}
+
+fn prefetch(cap: &BoxCap, source: &mut VecDeque<Task>, slots: &mut Vec<Slot>, target: usize) {
     while slots
         .iter()
         .filter(|s| s.phase == Phase::Fetch || s.phase == Phase::Ready)
         .count()
         < target
     {
-        match source.pop_front() {
-            Some(t) => slots.push(Slot {
-                task: t,
-                phase: Phase::Fetch,
-                remaining: t.fetch_secs,
-            }),
-            None => break,
+        let Some(next) = source.front() else { break };
+        // Memory-bounded prefetch: never pull a task whose inputs wouldn't fit
+        // in RAM alongside everything already resident. Always allow the first
+        // (an over-budget singleton runs alone rather than deadlocking). Without
+        // this, deep prefetch of heavy tasks (jxl-modular-class encodes) OOMs the
+        // box before compute even starts.
+        if !slots.is_empty()
+            && resident_mem(slots).saturating_add(next.mem_bytes) > cap.budget.ram_budget_bytes
+        {
+            break;
         }
+        let t = source.pop_front().expect("front() was Some");
+        slots.push(Slot {
+            task: t,
+            phase: Phase::Fetch,
+            remaining: t.fetch_secs,
+        });
     }
 }
 
@@ -427,6 +413,7 @@ pub fn run_fleet(
     }
 
     let (mut wall, mut cpu_busy, mut core_secs, mut done) = (0u64, 0u64, 0u64, 0usize);
+    let mut peak_mem = 0u64;
     let cap_wall = 100_000_000u64;
 
     loop {
@@ -454,8 +441,10 @@ pub fn run_fleet(
             admit_compute(&boxes[b], &mut slots[b]);
             let target = boxes[b].cores() as usize + 4;
             match policy {
-                FleetPolicy::WorkSteal => prefetch(&mut shared, &mut slots[b], target),
-                FleetPolicy::StaticSplit => prefetch(&mut per_box_q[b], &mut slots[b], target),
+                FleetPolicy::WorkSteal => prefetch(&boxes[b], &mut shared, &mut slots[b], target),
+                FleetPolicy::StaticSplit => {
+                    prefetch(&boxes[b], &mut per_box_q[b], &mut slots[b], target)
+                }
             }
         }
 
@@ -482,6 +471,7 @@ pub fn run_fleet(
                 }
             }
             cpu_busy += used.min(boxes[b].cores()) as u64;
+            peak_mem = peak_mem.max(resident_mem(&slots[b]));
         }
 
         // 5. Advance.
@@ -502,6 +492,7 @@ pub fn run_fleet(
         cpu_busy_secs: cpu_busy,
         core_seconds_alive: core_secs,
         per_box_done,
+        peak_mem_bytes: peak_mem,
     }
 }
 

@@ -48,6 +48,20 @@ can never boot, die mid-run, sit idle, or refuse to tear down. They emit the rea
 **`converge`** — the declare → reconcile → execute loop to convergence, over the
 fault store, with per-job outcome scripts (succeed / transient-fail / poison).
 
+**`sched`** — a discrete-event scheduler developed TDD to *always maximize CPU and
+GPU utilization while staying resilient*. `schedule_max_util` (one box) and
+`schedule_fleet` (a fleet, tolerating box deaths) are grown against contracts in
+`tests/tdd_utilization.rs`, driving the real `zenfleet_core::BoxBudget::can_admit`:
+
+| Cycle | Property |
+|---|---|
+| 1 | cores stay ≥90% busy despite per-task fetch/upload I/O (prefetch + admit-to-envelope) |
+| 2 | the GPU lane stays ≥90% busy despite H2D upload latency |
+| 3 | work-stealing + longest-processing-time-first keeps a fleet ≥85% utilized under imbalance (vs 39% for a static split) |
+| 4 | a box that dies mid-run has its in-flight work reclaimed and completed elsewhere — no task stranded |
+| 5 | memory-bound work packs to the RAM limit **without OOM** (memory-bounded prefetch — the `modes_full` OOM) |
+| 6 | a GPU box saturates its cores AND its GPU lane simultaneously |
+
 ## What the tests prove (`tests/`)
 
 - **`chaos_claim`** — the conditional claim is exactly-once under an
