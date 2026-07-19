@@ -53,6 +53,7 @@ pub mod converge;
 pub mod fault;
 pub mod fleet;
 pub mod rng;
+pub mod sched;
 pub mod store;
 
 pub use claim::{ClaimOutcome, claim_conditional, claim_token_race};
@@ -61,4 +62,5 @@ pub use converge::{ConvergeReport, ExecResult, JobSpec, run_to_convergence};
 pub use fault::FaultSpec;
 pub use fleet::{BoxFault, BoxState, ReapOutcome, SimBox, SimFleet, TeardownError};
 pub use rng::Rng;
+pub use sched::{BoxCap, Policy, RunStats, Task, run, schedule_max_util};
 pub use store::{FaultStore, OpCounts};
