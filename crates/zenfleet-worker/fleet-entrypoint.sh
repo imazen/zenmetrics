@@ -81,9 +81,16 @@ while [ "$idle" -lt "${ZEN_IDLE_PASSES:-5}" ]; do
     --r2-endpoint "$ZEN_R2_ENDPOINT" --exec "$EXEC" --worker "$WORKER" --provider "$PROVIDER" 2>&1)
   rc=$?
 
-  # Pass 1: surface the FULL worker output ONCE (the mode line + admission budget +
-  # any startup warnings) so the box's real config is in the logs — not tail -1'd away.
+  # Pass 1: surface the FULL worker output ONCE (startup warnings, run-control state,
+  # etc.) so the box's real first pass is in the logs — not tail -1'd away.
   [ "$i" -eq 1 ] && printf '%s\n' "$out" | sed 's/^/  worker| /'
+  # Surface the worker's mode/budget line the FIRST time it appears. Pass 1 is often
+  # PAUSED (run control) and never prints it — the mode line only shows on the first
+  # UNPAUSED pass — so don't gate this on pass number, or it's lost like it used to be.
+  if [ -z "${mode_shown:-}" ] && printf '%s\n' "$out" | grep -qaE 'resource-aware concurrent mode|serial per-cell'; then
+    prog "worker mode :: $(printf '%s\n' "$out" | grep -aE 'resource-aware concurrent mode|serial per-cell' | head -1)"
+    mode_shown=1
+  fi
 
   # FAILURE force-surface: a hang (timeout=124) or any non-zero exit is LOUD, with a tail.
   if [ "$rc" -eq 124 ]; then
