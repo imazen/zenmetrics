@@ -1,0 +1,25 @@
+[package]
+name = "zenfleet-sim"
+description = "Deterministic fault-injection simulator for the zenfleet job system: a breakable in-memory cloud substrate (BlobStorage with eventual consistency, 403s, partial uploads, latency) + box-lifecycle faults (start-fail, mid-job death, failed teardown, silent box) + invariant checkers, driving the REAL zenfleet-core reconcile/lease/idle logic. CI-runnable, no cloud, no network, no threads."
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+keywords = ["simulation", "fault-injection", "chaos", "fleet", "testing"]
+categories = ["development-tools::testing", "simulation"]
+publish = false
+
+[dependencies]
+# The REAL fleet logic under test — reconcile, Lease, idle detection, ledger
+# model, job identity. The sim drives these; it never re-implements them.
+zenfleet-core = { path = "../zenfleet-core" }
+# The cloud trait surface the fault substrate implements (BlobStorage etc.)
+# and the generic run_worker loop the scenarios drive.
+zenfleet-cloud = { path = "../zenfleet-cloud" }
+
+# No external deps on purpose: the whole point is a deterministic,
+# dependency-free simulator that runs anywhere CI runs. The RNG is a
+# 3-line xorshift; time is a virtual clock; there are no threads.

@@ -19,6 +19,7 @@ members = [
     "crates/zenfleet-worker",
     "crates/zenfleet-ctl",
     "crates/zenfleet-sweep",
+    "crates/zenfleet-sim",
     "crates/zenmetrics-cli",
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",
