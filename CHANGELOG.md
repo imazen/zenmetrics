@@ -63,6 +63,27 @@ Workspace conventions per the global rules:
 
 ## zenmetrics-cli
 
+### Changed
+
+- **GPU zensim kernel DISABLED; the fleet now extracts zensim on the CPU with the
+  v2 append-only regime (720 features).** zensim was rewritten with an additive v2
+  extractor (`feature_v2`, 348 bounded features); the GPU crate implements only v1,
+  so scoring production data on it while v2 is unproven would poison the training
+  set. Every zensim invocation now computes on the CPU `zensim` crate — the fleet's
+  `jobexec` SDR sites emit the new **`V2Ab` (720 = v1-372 `with-iw` ++ v2-348)**
+  regime (label `"v2-ab"`), and `--metric zensim-gpu` (via `run_metric`) scores on
+  CPU. The score column stays the canonical **`PreviewV0_2`** (pinned; bit-exact via
+  `zensim::score_with_features_regime`, tested in `metrics::zensim::tests`). New CPU
+  path `metrics::zensim::{score_with_features_regime, score_with_features_v2ab}` +
+  a reflect-pad-to-64 so the v1/v2 blocks agree on sub-64px cells;
+  `metrics::run_zensim_gpu_with_features` now delegates to it (name kept for API
+  stability, `gpu_runtime` ignored). Re-enable the GPU path by restoring those
+  function bodies once v2 is ported to the kernel and validated. NOTE: v2 is an
+  iteration-1 scalar extractor — measurably slower than v1's SIMD path, so per-cell
+  fleet throughput drops (expected). Follow-ups (NOT done): the monolithic `sweep`
+  path (`cache.rs` + `feature_writer.rs`'s hardcoded 372) still uses the GPU kernel
+  and only knows 372; the HDR jobexec path stays v1 `with-iw` (v2 is sRGB-only).
+
 ### Added
 
 - **HDR ScoreFile executor arm** — `jobexec` scores `ScoreFile { hdr: true }` jobs by

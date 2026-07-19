@@ -737,31 +737,15 @@ pub fn run_metric(
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::Zensim => Err(disabled_msg("zensim", "cpu-metrics")),
 
-        #[cfg(feature = "gpu-zensim")]
-        MetricKind::ZensimGpu => {
-            // Sub-64px images reflect(mirror)-pad to the 64px 4-scale-pyramid
-            // floor on both the GPU (`ZensimOpaque`) and CPU `zensim` paths,
-            // using the same reflect-101 rule — they agree to f32 drift. We
-            // route sub-64px to CPU anyway: bit-exact with the GPU there AND it
-            // skips a wasteful 64×64 GPU dispatch for a few pixels. gpu-zensim
-            // pulls cpu-metrics so `zensim::score` is available. Mirrors the
-            // cached path in cache.rs.
-            if reference.width.min(reference.height) < 64 {
-                Ok(vec![("zensim_gpu", zensim::score(reference, distorted)?)])
-            } else {
-                Ok(vec![(
-                    "zensim_gpu",
-                    run_gpu_via_umbrella(
-                        zenmetrics_api::MetricKind::Zensim,
-                        reference,
-                        distorted,
-                        gpu_runtime,
-                    )?,
-                )])
-            }
-        }
-        #[cfg(not(feature = "gpu-zensim"))]
-        MetricKind::ZensimGpu => Err(disabled_msg("zensim-gpu", "gpu-zensim")),
+        // GPU zensim kernel DISABLED pending v2 GPU-port validation (2026-07-19):
+        // `zensim-gpu` now scores on the CPU `zensim` crate — same column name
+        // for schema compatibility, but never dispatches the GPU pipeline. (This
+        // is the score-only path; the fleet's feature-emitting path routes
+        // through `run_zensim_gpu_with_features`, also CPU now.)
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::ZensimGpu => Ok(vec![("zensim_gpu", zensim::score(reference, distorted)?)]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::ZensimGpu => Err(disabled_msg("zensim-gpu", "cpu-metrics")),
 
         // Unsuffixed cvvdp = the native SIMD CPU port (the
         // `ssim2`/`dssim`/`zensim` unsuffixed=CPU convention). Pure CPU
@@ -854,16 +838,23 @@ pub enum ZensimFeatureRegime {
     /// 372 features — basic + peak + masked + IW. v26+ default for
     /// picker training; supersedes Extended.
     WithIw,
+    /// 720 features — the v2 "append-only" regime: v1 `WithIw` (372) ++ the
+    /// bounded v2 `feature_v2` block (348). CPU-only (the GPU kernel implements
+    /// only v1). The fleet default while GPU zensim is disabled pending v2
+    /// GPU-port validation (2026-07-19). Score stays the canonical PreviewV0_2.
+    #[value(name = "v2-ab")]
+    V2Ab,
 }
 
 impl ZensimFeatureRegime {
-    /// Feature-vector length (228 / 300 / 372).
+    /// Feature-vector length (228 / 300 / 372 / 720).
     #[allow(dead_code)]
     pub fn total_features(self) -> usize {
         match self {
             ZensimFeatureRegime::Basic => 228,
             ZensimFeatureRegime::Extended => 300,
             ZensimFeatureRegime::WithIw => 372,
+            ZensimFeatureRegime::V2Ab => 372 + 348,
         }
     }
 }
@@ -875,113 +866,41 @@ impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
             ZensimFeatureRegime::Basic => zenmetrics_api::zensim::ZensimFeatureRegime::Basic,
             ZensimFeatureRegime::Extended => zenmetrics_api::zensim::ZensimFeatureRegime::Extended,
             ZensimFeatureRegime::WithIw => zenmetrics_api::zensim::ZensimFeatureRegime::WithIw,
+            // V2Ab has no GPU-umbrella equivalent (the v2 348-feature block is
+            // CPU-only). This `From` feeds the GPU path, which is disabled; the
+            // CPU `run_zensim_*` path handles V2Ab directly and never converts.
+            ZensimFeatureRegime::V2Ab => zenmetrics_api::zensim::ZensimFeatureRegime::WithIw,
         }
     }
 }
 
-/// Run **GPU** zensim and return the score + the regime-appropriate
-/// feature vector (228 / 300 / 372). Mirrors
-/// [`run_zensim_with_features`] but goes through the GPU pipeline so
-/// the encoded sweep doesn't pay the CPU-zensim cost twice (once for
-/// the score column, once for the features).
-///
-/// The `gpu_runtime = Auto` case walks the compiled-in runtime list
-/// and returns the first that produces a finite score.
-#[cfg(feature = "gpu-zensim")]
-#[allow(dead_code)] // superseded by `metrics::cache::MetricCache::compute_zensim_features`
-// for the sweep path; retained as a library entry point (jobexec + lib consumers).
+/// Run zensim and return the score + the regime-appropriate feature vector
+/// (228 / 300 / 372 / 720). Name + signature kept for call-site / lib-API
+/// stability, but this now computes on the **CPU** `zensim` crate: the GPU
+/// zensim kernel is disabled pending v2 GPU-port validation (2026-07-19), and it
+/// only implements v1 regimes anyway. `gpu_runtime` is ignored. Delegates to
+/// [`crate::metrics::zensim::score_with_features_regime`] (which pins the
+/// `PreviewV0_2` score and, for `V2Ab`, appends the v2 348-feature block).
+#[cfg(feature = "cpu-metrics")]
+#[allow(dead_code)] // library entry point (jobexec + lib consumers); some bins don't call it
+pub fn run_zensim_gpu_with_features(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+    _gpu_runtime: GpuRuntime,
+    regime: ZensimFeatureRegime,
+) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
+    crate::metrics::zensim::score_with_features_regime(reference, distorted, regime)
+}
+
+#[cfg(not(feature = "cpu-metrics"))]
+#[allow(unused_variables, dead_code)]
 pub fn run_zensim_gpu_with_features(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
     gpu_runtime: GpuRuntime,
     regime: ZensimFeatureRegime,
 ) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
-    if reference.width != distorted.width || reference.height != distorted.height {
-        return Err(format!(
-            "zensim-gpu: reference ({}×{}) and distorted ({}×{}) differ in size",
-            reference.width, reference.height, distorted.width, distorted.height
-        )
-        .into());
-    }
-    let candidates: Vec<GpuRuntime> = match gpu_runtime {
-        GpuRuntime::Auto => auto_order().to_vec(),
-        other => vec![other],
-    };
-    let mut errors: Vec<String> = Vec::with_capacity(candidates.len());
-    for rt in candidates {
-        let backend = match gpu_runtime_to_backend(rt) {
-            Ok(b) => b,
-            Err(e) => {
-                errors.push(format!("{}: {e}", runtime_label(rt)));
-                continue;
-            }
-        };
-        // Construct ZensimParams with the requested regime + the
-        // canonical default weights (so the basic-block score matches
-        // `run_gpu_via_umbrella(MetricKind::Zensim, ...)` exactly).
-        let zp = zenmetrics_api::zensim::ZensimParams::default_weights().with_regime(regime.into());
-        let params = zenmetrics_api::MetricParams::Zensim(zp);
-        let metric = zenmetrics_api::Metric::new(
-            zenmetrics_api::MetricKind::Zensim,
-            backend,
-            reference.width,
-            reference.height,
-            params,
-        );
-        let mut m = match metric {
-            Ok(m) => m,
-            Err(e) => {
-                errors.push(format!("{}: {e}", runtime_label(rt)));
-                continue;
-            }
-        };
-        match m.compute_features_srgb_u8(&reference.pixels, &distorted.pixels) {
-            Ok((score, features)) => {
-                if !score.value.is_finite() {
-                    errors.push(format!(
-                        "{}: non-finite score {}",
-                        runtime_label(rt),
-                        score.value
-                    ));
-                    continue;
-                }
-                if features.len() != regime.total_features() {
-                    errors.push(format!(
-                        "{}: expected {} features, got {}",
-                        runtime_label(rt),
-                        regime.total_features(),
-                        features.len()
-                    ));
-                    continue;
-                }
-                return Ok((score.value, features));
-            }
-            Err(e) => errors.push(format!("{}: {e}", runtime_label(rt))),
-        }
-    }
-    Err(format!(
-        "zensim-gpu: no runtime succeeded; tried [{}]",
-        if errors.is_empty() {
-            "none".to_string()
-        } else {
-            errors.join("; ")
-        }
-    )
-    .into())
-}
-
-#[cfg(not(feature = "gpu-zensim"))]
-#[allow(unused_variables)]
-// Lib-consumer API surface (re-exported in sweep::run); dead from the
-// binary's call graph in no-GPU builds.
-#[allow(dead_code)]
-pub fn run_zensim_gpu_with_features(
-    reference: &Rgb8Image,
-    distorted: &Rgb8Image,
-    gpu_runtime: GpuRuntime,
-    regime: ZensimFeatureRegime,
-) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
-    Err(disabled_msg("zensim-gpu", "gpu-zensim"))
+    Err(disabled_msg("zensim", "cpu-metrics"))
 }
 
 #[cfg(test)]

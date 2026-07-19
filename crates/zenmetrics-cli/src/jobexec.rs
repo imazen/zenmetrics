@@ -637,7 +637,7 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                         &reference,
                         distorted,
                         crate::metrics::GpuRuntime::Auto,
-                        crate::metrics::ZensimFeatureRegime::WithIw,
+                        crate::metrics::ZensimFeatureRegime::V2Ab,
                     ) {
                         Ok((sc, feats)) => {
                             rows.push(mk_row(
@@ -649,7 +649,7 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                             fo.insert("image_path".into(), serde_json::json!(image_path));
                             fo.insert("codec".into(), serde_json::json!(codec_name));
                             fo.insert("encode_sha".into(), serde_json::json!(sha));
-                            fo.insert("regime".into(), serde_json::json!("with-iw"));
+                            fo.insert("regime".into(), serde_json::json!("v2-ab"));
                             fo.insert("zensim_score".into(), serde_json::json!(sc));
                             fo.insert("features".into(), serde_json::json!(feats));
                             rows.push(serde_json::to_string(&Value::Object(fo))?);
@@ -728,7 +728,7 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                     &reference,
                     &distorted,
                     crate::metrics::GpuRuntime::Auto,
-                    crate::metrics::ZensimFeatureRegime::WithIw,
+                    crate::metrics::ZensimFeatureRegime::V2Ab,
                 ) {
                     Ok((sc, feats)) => {
                         rows.push(mk_row(
@@ -740,7 +740,7 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                         fo.insert("image_path".into(), serde_json::json!(image_path));
                         fo.insert("codec".into(), serde_json::json!(codec_name));
                         fo.insert("encode_sha".into(), serde_json::json!(sha));
-                        fo.insert("regime".into(), serde_json::json!("with-iw"));
+                        fo.insert("regime".into(), serde_json::json!("v2-ab"));
                         fo.insert("zensim_score".into(), serde_json::json!(sc));
                         fo.insert("features".into(), serde_json::json!(feats));
                         rows.push(serde_json::to_string(&Value::Object(fo))?);
@@ -1118,7 +1118,7 @@ fn run_encode_or_metric_job(
                     &reference,
                     &distorted,
                     crate::metrics::GpuRuntime::Auto,
-                    crate::metrics::ZensimFeatureRegime::WithIw,
+                    crate::metrics::ZensimFeatureRegime::V2Ab,
                 ) {
                     Ok((sc, feats)) => {
                         let metric_row = serde_json::json!({
@@ -1139,7 +1139,7 @@ fn run_encode_or_metric_job(
                             "codec": codec_name,
                             "q": cell["q"],
                             "knob_tuple_json": knob_json,
-                            "regime": "with-iw",
+                            "regime": "v2-ab",
                             "zensim_score": sc,
                             "features": feats,
                         });

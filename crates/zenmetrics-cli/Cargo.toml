@@ -82,6 +82,15 @@ hdr-gainmap = ["hdr", "dep:ultrahdr-rs", "dep:ultrahdr-core", "dep:heic"]
 cpu-metrics = [
     "dep:butteraugli",
     "dep:zensim",
+    # zensim v2 CPU extraction: `training` exposes `compute_zensim_with_config`
+    # (the v1 372 "with-iw" block) and `feature-regime-v2` exposes
+    # `compute_v2_features` (the v2 348 block). Together they back the CPU-only
+    # `V2Ab` (720 = v1-372 ++ v2-348) regime that replaces the GPU zensim kernel
+    # while it's disabled pending v2 GPU-port validation (2026-07-19). `bytemuck`
+    # does the zero-copy &[u8] -> &[[u8;3]] cast those APIs require.
+    "zensim/training",
+    "zensim/feature-regime-v2",
+    "dep:bytemuck",
     "dep:fast-ssim2",
     "dep:dssim-core",
     "dep:rgb",
