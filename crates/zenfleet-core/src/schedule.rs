@@ -149,11 +149,49 @@ impl BoxBudget {
     /// physical RAM). Per the modes_full OOM note, cells run as fresh processes;
     /// the chunk does not accumulate their memory.
     pub fn pack_chunks(&self, jobs: &[JobCost], target_wall_sec: f64) -> Vec<Vec<usize>> {
+        let order: Vec<usize> = (0..jobs.len()).collect();
+        self.pack_in_order(jobs, &order, target_wall_sec)
+    }
+
+    /// Longest-processing-time-first packing: order the gap by descending per-cell
+    /// cost before packing, so the heaviest cells land in the earliest chunks and
+    /// the drain tail is cheap cells instead of one grinding giant. On an
+    /// imbalanced workload this is the difference between ~80% and ~97% fleet
+    /// utilization (validated by `zenfleet-sim`'s TDD scheduler, cycle 3 — a
+    /// contiguous split idles boxes on the heavy tail; LPT keeps them full). The
+    /// sort is stable on `(−cost, original index)`, so it stays deterministic —
+    /// every worker forms identical chunks and the per-chunk claim remains
+    /// exclusive. Returned indices are into the ORIGINAL `jobs` slice.
+    pub fn pack_chunks_lpt(&self, jobs: &[JobCost], target_wall_sec: f64) -> Vec<Vec<usize>> {
+        let mut order: Vec<usize> = (0..jobs.len()).collect();
+        order.sort_by(|&a, &b| {
+            jobs[b]
+                .cost_sec
+                .partial_cmp(&jobs[a].cost_sec)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.cmp(&b))
+        });
+        self.pack_in_order(jobs, &order, target_wall_sec)
+    }
+
+    /// Greedy packer over a given visitation `order` of `jobs` (indices into
+    /// `jobs`). Shared by [`pack_chunks`](Self::pack_chunks) (manifest order) and
+    /// [`pack_chunks_lpt`](Self::pack_chunks_lpt) (cost-descending). Closes a
+    /// chunk once its estimated wall-time (`Σcost / in-chunk concurrency`) reaches
+    /// `target`; a lone over-target cell becomes its own chunk. Emits the original
+    /// `jobs` indices in visitation order.
+    fn pack_in_order(
+        &self,
+        jobs: &[JobCost],
+        order: &[usize],
+        target_wall_sec: f64,
+    ) -> Vec<Vec<usize>> {
         let target = target_wall_sec.max(1.0);
         let mut chunks: Vec<Vec<usize>> = Vec::new();
         let mut cur: Vec<usize> = Vec::new();
         let (mut sum_cost, mut max_mem, mut max_thr) = (0.0f64, 0u64, 1u32);
-        for (i, j) in jobs.iter().enumerate() {
+        for &i in order {
+            let j = &jobs[i];
             sum_cost += j.cost_sec.max(0.0);
             max_mem = max_mem.max(j.peak_mem_bytes);
             max_thr = max_thr.max(j.threads.max(1));
@@ -348,5 +386,71 @@ mod tests {
     fn pack_empty_is_empty() {
         let b = BoxBudget::new(24 * GB, 16);
         assert!(b.pack_chunks(&[], 300.0).is_empty());
+        assert!(b.pack_chunks_lpt(&[], 300.0).is_empty());
+    }
+
+    #[test]
+    fn lpt_dispatches_the_heaviest_cells_first() {
+        // 60 light (3s) then 4 heavy (100s) on a 2-core box, 30 s target: the
+        // light cells fill several chunks before the heavy ones appear, so
+        // manifest order buries the heavy cells in the tail. LPT hoists them to
+        // the front so a fleet's boxes don't finish the light work and idle on a
+        // heavy tail.
+        let b = BoxBudget::new(24 * GB, 2);
+        let mut jobs = vec![
+            JobCost {
+                cost_sec: 3.0,
+                peak_mem_bytes: 100 * MB,
+                threads: 1,
+            };
+            60
+        ];
+        jobs.extend(std::iter::repeat_n(
+            JobCost {
+                cost_sec: 100.0,
+                peak_mem_bytes: 100 * MB,
+                threads: 1,
+            },
+            4,
+        ));
+        let heavy: std::collections::HashSet<usize> = (60..64).collect();
+
+        let manifest = b.pack_chunks(&jobs, 30.0);
+        let lpt = b.pack_chunks_lpt(&jobs, 30.0);
+
+        assert!(
+            lpt[0].iter().all(|i| heavy.contains(i)),
+            "LPT's first chunk is heavy work: {:?}",
+            lpt[0]
+        );
+        assert!(
+            !manifest[0].iter().any(|i| heavy.contains(i)),
+            "manifest order leaves the heavy cells for the tail: {:?}",
+            manifest[0]
+        );
+    }
+
+    #[test]
+    fn lpt_is_deterministic_and_covers_every_cell_once() {
+        let b = BoxBudget::new(24 * GB, 8);
+        let jobs: Vec<JobCost> = (0..500)
+            .map(|i| JobCost {
+                cost_sec: ((i * 7) % 53) as f64 + 1.0, // varied, deterministic
+                peak_mem_bytes: 100 * MB,
+                threads: 1,
+            })
+            .collect();
+
+        let a = b.pack_chunks_lpt(&jobs, 120.0);
+        let c = b.pack_chunks_lpt(&jobs, 120.0);
+        assert_eq!(a, c, "stable sort → identical chunks on every worker");
+
+        let mut all: Vec<usize> = a.iter().flatten().copied().collect();
+        all.sort_unstable();
+        assert_eq!(
+            all,
+            (0..500).collect::<Vec<_>>(),
+            "every original cell appears exactly once"
+        );
     }
 }

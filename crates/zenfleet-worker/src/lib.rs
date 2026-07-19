@@ -607,12 +607,14 @@ pub struct ChunkParams {
 /// [`execute_gap_claimed`]. Two differences, nothing else:
 ///
 ///  - **Claim granularity is a chunk, not a cell.** The gap (from [`reconcile`]) is packed by
-///    [`BoxBudget::pack_chunks`] into units each estimated at ≈ `chunk_wall_sec` on this box, and
+///    [`BoxBudget::pack_chunks_lpt`] into units each estimated at ≈ `chunk_wall_sec` on this box, and
 ///    `claim_chunk(chunk_id)` takes ONE R2 lease per chunk. This kills the per-cell claim round-trip
-///    that idled boxes behind the gap prefix (one `aws put-object` per sub-second cell). Chunk
-///    boundaries are deterministic (the gap is in manifest order — NOT per-worker shuffled — and
-///    packing is a pure function of it), so a chunk claim is exclusive; workers iterate chunk
-///    *indices* in a per-worker order so they don't all contend on chunk 0.
+///    that idled boxes behind the gap prefix (one `aws put-object` per sub-second cell). The packer is
+///    longest-processing-time-first, so the heaviest cells land in the earliest chunks and no box
+///    finishes the light work then idles on a heavy tail (validated in `zenfleet-sim`). Chunk
+///    boundaries are still deterministic (LPT sorts stably on `(−cost, index)` — a pure function of the
+///    manifest-order gap), so a chunk claim is exclusive; workers iterate chunk *indices* in a
+///    per-worker order so they don't all contend on chunk 0.
 ///
 ///  - **In-chunk concurrency is bounded by [`BoxBudget::can_admit`].** A won chunk's cells run
 ///    concurrently as **fresh processes** (`handler` is the one-shot [`exec_command`], so the
@@ -672,7 +674,7 @@ where
             }
         })
         .collect();
-    let chunks = params.budget.pack_chunks(&costs, params.chunk_wall_sec);
+    let chunks = params.budget.pack_chunks_lpt(&costs, params.chunk_wall_sec);
     let chunk_ids: Vec<String> = chunks
         .iter()
         .map(|members| {
