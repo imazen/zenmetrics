@@ -378,10 +378,14 @@ smoke on a freed box before flipping any default.
   chunks auto-size small and never OOM). Pure + 5 unit tests. `JobCost {cost_sec,
   peak_mem_bytes, threads}`.
 
-- **Chunk 2 — worker concurrency-under-budget + ~5-min chunk-claim — DONE
-  (`zenfleet-worker` `e17962ef`, opt-in / default-OFF).** `ZEN_CHUNK_WALL_SEC > 0`
-  switches `run()` (early-return → `run_chunked`) to `execute_gap_chunked`: the
-  reconciler's gap is packed by `pack_chunks` into ~`ZEN_CHUNK_WALL_SEC`-second
+- **Chunk 2 — worker concurrency-under-budget + ~5-min chunk-claim — DONE + now the
+  DEFAULT (`zenfleet-worker` `e17962ef`; LPT + default-ON).** `run()` early-returns
+  (→ `run_chunked` → `execute_gap_chunked`) whenever `chunk_wall_sec > 0`, which is
+  now the default: `ZEN_CHUNK_WALL_SEC` unset ⇒ 300s; set `ZEN_CHUNK_WALL_SEC=0` to
+  opt into the serial per-cell path. The reconciler's gap is packed by
+  `pack_chunks_lpt` (longest-processing-time-first — the heaviest cells land in the
+  earliest chunks so no box finishes the light work and idles on a heavy tail) into
+  ~`ZEN_CHUNK_WALL_SEC`-second
   units, **one R2 lease per chunk** (`claim_or_steal_r2_key`, the new string-keyed
   core of `claim_or_steal_r2`; chunk-id = `chunk-`+sha256 of member job-ids, so the
   claim is exclusive). A won chunk's cells run as **fresh processes** (one-shot
@@ -391,7 +395,8 @@ smoke on a freed box before flipping any default.
   condvar admission loop (no tokio — that's chunk 3). Per-cell `cost_sec` =
   `JobKind::estimate_cost_sec` (rough resource-class × peak-mem proxy, floor 1s;
   refine from measured omni `encode_ms`); a missing `ResourceHint` falls back to
-  512 MB / 1 thread. **Default 0.0 ⇒ byte-identical per-cell path when unset.**
+  512 MB / 1 thread. **Default 300s ⇒ the concurrent chunked path; `ZEN_CHUNK_WALL_SEC=0`
+  opts into the serial per-cell path.**
   Idempotence/crash-recovery preserved: chunks are formed FROM the gap (the per-cell
   done-check still gates every cell), and a **durable per-chunk ledger sidecar** is
   written the moment a chunk finishes (`chunk_ledger_uri` inserts `chunk-<id8>`

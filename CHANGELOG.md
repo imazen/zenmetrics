@@ -28,6 +28,24 @@ Workspace conventions per the global rules:
   stays valid (golden tests pin the exact pre-change JSON + id hash); `hdr: true`
   correctly yields a different id — different work. (b38036ff)
 
+- **`BoxBudget::pack_chunks_lpt` — longest-processing-time-first chunk packing.**
+  Orders the gap by descending per-cell cost before packing, so the heaviest cells
+  land in the earliest chunks and no box finishes the light work and idles on a
+  heavy tail (validated in `zenfleet-sim`: work-stealing under imbalance 80%→97%
+  util). Stable sort on `(−cost, index)` keeps chunk formation deterministic, so
+  per-chunk R2 claims stay exclusive. `execute_gap_chunked` now packs with it. (9cd25f63)
+
+### Changed
+
+- **The resource-aware concurrent chunked worker path is now the DEFAULT; serial
+  per-cell execution is opt-in.** `zenfleet-worker` previously ran the serial
+  per-cell path unless `ZEN_CHUNK_WALL_SEC` was set (opt-in/default-OFF). It now
+  defaults to the concurrent chunked path (LPT packing + `can_admit`-bounded
+  concurrency, ≈300s chunks) so a box saturates its cores/GPU within its RAM
+  envelope instead of executing one cell at a time; set `ZEN_CHUNK_WALL_SEC=0` to
+  opt into the legacy serial path (`resolve_chunk_wall_sec`). Behavior flip only —
+  no API change. Watch the first fleet run's per-box RAM/GPU util after this lands.
+
 ## zenmetrics-cli
 
 ### Added

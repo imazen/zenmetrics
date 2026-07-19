@@ -111,13 +111,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             None => return Err(format!("--capability '{cap}' is not a resource class (cpu_light/cpu_heavy/cpu_arm/gpu/high_ram)").into()),
         }
     }
-    // Opt-in ~5-min chunked claiming (default OFF). Parsed from env so it's one flip on a worker box
-    // with no new CLI flag; a non-positive / unparseable value disables it (per-cell path unchanged).
-    let chunk_wall_sec = std::env::var("ZEN_CHUNK_WALL_SEC")
-        .ok()
-        .and_then(|v| v.trim().parse::<f64>().ok())
-        .filter(|v| *v > 0.0)
-        .unwrap_or(0.0);
+    // The resource-aware concurrent chunked path is the DEFAULT (≈5-min LPT-packed,
+    // can_admit-bounded chunks). Serial per-cell execution is opt-in via an explicit
+    // ZEN_CHUNK_WALL_SEC=0; unset/garbage stays concurrent. See resolve_chunk_wall_sec.
+    let chunk_wall_sec = zenfleet_worker::resolve_chunk_wall_sec(
+        std::env::var("ZEN_CHUNK_WALL_SEC").ok().as_deref(),
+    );
     let cfg = WorkerConfig {
         manifest: c.manifest,
         ledger_in: c.ledger_in,

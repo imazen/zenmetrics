@@ -603,8 +603,9 @@ pub struct ChunkParams {
     pub fallback_hint: ResourceHint,
 }
 
-/// Chunked, resource-bounded gap execution — the opt-in (`ZEN_CHUNK_WALL_SEC > 0`) counterpart to
-/// [`execute_gap_claimed`]. Two differences, nothing else:
+/// Chunked, resource-bounded gap execution — the DEFAULT path (`ZEN_CHUNK_WALL_SEC > 0`, and it
+/// defaults to 300s), with [`execute_gap_claimed`] the serial `ZEN_CHUNK_WALL_SEC=0` opt-out. Two
+/// differences, nothing else:
 ///
 ///  - **Claim granularity is a chunk, not a cell.** The gap (from [`reconcile`]) is packed by
 ///    [`BoxBudget::pack_chunks_lpt`] into units each estimated at ≈ `chunk_wall_sec` on this box, and
@@ -1202,6 +1203,25 @@ fn host_box_budget() -> BoxBudget {
     BoxBudget::new(ram_budget, cores)
 }
 
+/// Per-chunk wall-time target (seconds) when the box is left to its default: the
+/// resource-aware concurrent chunked path packs ≈5-minute claim units.
+pub const DEFAULT_CHUNK_WALL_SEC: f64 = 300.0;
+
+/// Resolve the chunk wall-time target from the `ZEN_CHUNK_WALL_SEC` env value.
+///
+/// The concurrent, resource-aware chunked path is the **default** — unset or an
+/// unparseable value yields [`DEFAULT_CHUNK_WALL_SEC`]. Serial per-cell execution
+/// is **opt-in**: set `ZEN_CHUNK_WALL_SEC=0` (any explicit ≤0 value) to get it.
+/// A positive value sets a custom chunk target.
+pub fn resolve_chunk_wall_sec(env: Option<&str>) -> f64 {
+    match env.map(|v| v.trim().parse::<f64>()) {
+        // Unset or garbage → the concurrent default (never accidentally serial).
+        None | Some(Err(_)) => DEFAULT_CHUNK_WALL_SEC,
+        // Explicit value: 0 (or negative) opts into the serial per-cell path.
+        Some(Ok(n)) => n.max(0.0),
+    }
+}
+
 /// Derive a per-chunk ledger sidecar URI from the pass's `ledger_out` by inserting `chunk-<id8>`
 /// before the extension: `…/pass.parquet` → `…/pass.chunk-ab12cd34.parquet`. Per-chunk durable
 /// writes make a completed chunk's progress survive a crash; the next pass folds the sidecar into the
@@ -1217,8 +1237,8 @@ fn chunk_ledger_uri(ledger_out: &str, chunk_id: &str) -> String {
     }
 }
 
-/// The opt-in chunked claim path (`cfg.chunk_wall_sec > 0`), split out of [`run`] so the per-cell
-/// path stays byte-identical. Packs the gap into ≈`chunk_wall_sec` work-stealing chunks and runs a
+/// The DEFAULT chunked claim path (`cfg.chunk_wall_sec > 0`; 300s unless `ZEN_CHUNK_WALL_SEC=0` opts
+/// into serial), split out of [`run`]. Packs the gap into ≈`chunk_wall_sec` work-stealing chunks and runs a
 /// chunk at a time under a `BoxBudget(0.75 × RAM, cores)` admission cap, executing each cell as a
 /// fresh process. Persists a durable per-chunk ledger sidecar via the `flush` callback, so unlike the
 /// per-cell path it does NOT write a single end-of-pass sidecar — the chunk sidecars ARE the output.
@@ -1240,7 +1260,8 @@ fn run_chunked(
         },
     };
     eprintln!(
-        "zenfleet-worker: chunked mode ON (ZEN_CHUNK_WALL_SEC={:.0}s) — budget {:.1} GiB / {} cores",
+        "zenfleet-worker: resource-aware concurrent mode (LPT + can_admit, chunk target {:.0}s) \
+         — budget {:.1} GiB / {} cores. Set ZEN_CHUNK_WALL_SEC=0 for the serial per-cell path.",
         params.chunk_wall_sec,
         params.budget.ram_budget_bytes as f64 / (1u64 << 30) as f64,
         params.budget.cores
@@ -1375,9 +1396,12 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
         now: cfg.now,
     };
 
-    // OPT-IN CHUNKED CLAIM PATH (env ZEN_CHUNK_WALL_SEC > 0). Default 0.0 → skip entirely, so the
-    // per-cell path below is byte-identical to before. The chunked path persists a durable sidecar
-    // per chunk, so it returns here without the single end-of-pass ledger write at the bottom.
+    // DEFAULT: the resource-aware concurrent chunked path — LPT-packed ≈5-min chunks run with
+    // `can_admit`-bounded concurrency, so the box saturates its cores/GPU within its RAM envelope
+    // instead of executing one cell at a time. Serial per-cell execution is now OPT-IN via
+    // `ZEN_CHUNK_WALL_SEC=0` (`chunk_wall_sec == 0.0`) — kept only as an escape hatch for debugging or
+    // memory-pathological single-cell runs. The chunked path persists a durable sidecar per chunk, so
+    // it returns here without the single end-of-pass ledger write at the bottom.
     if cfg.chunk_wall_sec > 0.0 {
         return run_chunked(cfg, &desired, &view, policy, ctx, endpoint);
     }
@@ -1679,6 +1703,26 @@ mod tests {
         // leading/trailing slashes in the prefix don't double up
         let s2 = R2BlobStore::new("e".into(), "b".into(), "/blobs/".into());
         assert_eq!(s2.key(&sha), format!("s3://b/blobs/{sha}"));
+    }
+
+    #[test]
+    fn concurrent_chunked_path_is_the_default_serial_is_opt_in() {
+        // Unset or garbage → the resource-aware concurrent chunked path.
+        assert_eq!(resolve_chunk_wall_sec(None), DEFAULT_CHUNK_WALL_SEC);
+        assert_eq!(resolve_chunk_wall_sec(Some("  ")), DEFAULT_CHUNK_WALL_SEC);
+        assert_eq!(resolve_chunk_wall_sec(Some("not-a-number")), DEFAULT_CHUNK_WALL_SEC);
+        // A positive value sets a custom chunk target.
+        assert_eq!(resolve_chunk_wall_sec(Some("120")), 120.0);
+        // Explicit 0 (or negative) is the ONLY way to get the serial per-cell path.
+        assert_eq!(
+            resolve_chunk_wall_sec(Some("0")),
+            0.0,
+            "serial is opt-in via an explicit ZEN_CHUNK_WALL_SEC=0"
+        );
+        assert_eq!(resolve_chunk_wall_sec(Some("-5")), 0.0);
+        // The dispatch (run) selects chunked iff chunk_wall_sec > 0.0, so the
+        // default (300) is chunked and only an explicit 0 falls through to serial.
+        assert!(DEFAULT_CHUNK_WALL_SEC > 0.0);
     }
 
     #[test]
