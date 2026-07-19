@@ -62,5 +62,8 @@ pub use converge::{ConvergeReport, ExecResult, JobSpec, run_to_convergence};
 pub use fault::FaultSpec;
 pub use fleet::{BoxFault, BoxState, ReapOutcome, SimBox, SimFleet, TeardownError};
 pub use rng::Rng;
-pub use sched::{BoxCap, Policy, RunStats, Task, run, schedule_max_util};
+pub use sched::{
+    BoxCap, FleetPolicy, FleetRun, Policy, RunStats, Task, run, run_fleet, schedule_fleet,
+    schedule_max_util,
+};
 pub use store::{FaultStore, OpCounts};
