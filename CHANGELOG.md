@@ -46,6 +46,21 @@ Workspace conventions per the global rules:
   opt into the legacy serial path (`resolve_chunk_wall_sec`). Behavior flip only —
   no API change. Watch the first fleet run's per-box RAM/GPU util after this lands.
 
+- **Fleet tooling force-surfaces progress, heartbeats, and problems — no more
+  silent stalls/failures.** Distinctive, greppable log markers now standard across
+  the fleet path: `♥` heartbeat/liveness, `▸` progress, `❌ FLEET-ERROR` problems,
+  `⚠ FLEET-STALL` stalls. `fleet-entrypoint.sh` no longer `tail -1`'d the worker
+  output (which hid the mode line + panics + warnings from `docker logs`); it now
+  emits a heartbeat BEFORE each pass (a hung pass leaves a heartbeat with no
+  progress = a visible stall), wraps the worker in `timeout` (hang → loud rc=124),
+  checks the exit code (non-zero → `❌` + tail), force-surfaces any
+  panic/error/OOM/`failed=`/`poisoned=`/NaN line, prints a `▸ progress` summary
+  every pass, and fail-fasts (exit non-zero) after N consecutive worker-level
+  crashes instead of silently crash-looping. `launch_fleet.sh` +
+  `gpu_scorefile_launch.sh` heartbeat their boot-waits every 25–30s (were silent
+  `sleep 200`/`240`) so a box that never boots is visible live. The `fleet`
+  monitor already alerts on idle/startup-failure/over-budget.
+
 ## zenmetrics-cli
 
 ### Added

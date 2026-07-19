@@ -151,8 +151,16 @@ done
 # 4. resume — let every tier race the queue at once. Wait for boxes to boot first (Hetzner ~60s,
 # vast ~2-3min); workers idle on the pause until now, then all start claiming together.
 WAIT="${ZEN_BOOT_WAIT_SECS:-200}"
-echo "all tiers launched; waiting ${WAIT}s for boot, then RESUME (concurrent start)…"
-sleep "$WAIT"
+echo "all tiers launched; waiting up to ${WAIT}s for boot, then RESUME (concurrent start)…"
+# Never sleep silently for ${WAIT}s: heartbeat the boot-wait every 25s with the R2 boot-record count,
+# so a box that fails to boot / hangs pulling the image is visible in real time (❌/⚠ markers match the
+# worker entrypoint's). The startup watchdog below is the hard gate; this is the live signal.
+_bootcount(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" ls "s3://$BUCKET/$RUN/boot/" 2>/dev/null | wc -l | tr -d ' '; }
+_e=0
+while [ "$_e" -lt "$WAIT" ]; do
+  sleep 25; _e=$((_e + 25))
+  echo "♥ [hb $(date -u +%H:%M:%SZ)] boot-wait ${_e}/${WAIT}s — R2 boot-records=$(_bootcount) (watchdog below hard-flags any box that never starts working)"
+done
 printf '{"paused":false}' > /tmp/fleet_ctl.json
 AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
   s5cmd --endpoint-url "$EP" cp /tmp/fleet_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null

@@ -62,8 +62,9 @@ while [ "$launched" -lt "$N" ] && [ "$idx" -lt "$NOFF" ]; do
 done
 [ "$launched" -lt "$N" ] && log "WARN: launched only $launched/$N (offer pool exhausted after $idx tries)"
 if [ "$SCALE" = "0" ]; then
-  log "launched $launched; waiting 240s for boot+pull then RESUME"
-  sleep 240
+  log "launched $launched; waiting up to 240s for boot+pull, then RESUME"
+  # Heartbeat the boot-wait (never a silent 240s sleep) so a box stuck pulling the image is visible live.
+  _e=0; while [ "$_e" -lt 240 ]; do sleep 30; _e=$((_e + 30)); log "♥ boot-wait ${_e}/240s — R2 boot-records=$(r2 ls "s3://$BUCKET/$RUNP/boot/" 2>/dev/null | wc -l | tr -d ' ')"; done
   printf '{"paused":false}' > /tmp/sf_ctl.json; r2 cp /tmp/sf_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
   log "### RESUMED run=$RUN (blobs: s3://$BUCKET/$RUNP/blobs/ — JSONL score+feature rows)"
 else
