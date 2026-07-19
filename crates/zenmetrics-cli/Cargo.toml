@@ -44,7 +44,7 @@ png = ["dep:zenpng", "zenpng/quantize", "zenpng/imagequant"]
 # Enables the `zenjpeg` decoder + sweep encoder. We pin to a path dep on
 # the in-workspace zenjpeg 0.8.4 (sibling repo), which restores
 # magetypes >= 0.9 compatibility and adds the `__expert` knob bundle.
-jpeg = ["dep:zenjpeg", "zenjpeg/zencodec"]
+jpeg = ["dep:zenjpeg"]
 webp = ["dep:zenwebp"]
 avif = ["dep:zenavif"]
 # jxl pulls the direct `jxl-encoder` dep too: the sweep encode path configures
@@ -76,7 +76,11 @@ hdr = ["dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", 
 # those source formats. Off by default because `heic`/`ultrahdr` are heavier
 # sibling path-deps not built on every CI target. PQ-PNG/PQ-JXL/EXR HDR (the
 # sweep + canonical-corpus path) need only core `hdr`.
-hdr-gainmap = ["hdr", "dep:ultrahdr-rs", "dep:ultrahdr-core", "dep:heic"]
+# gain-map source decoders (ultrahdr-rs / heic) DISABLED locally: the sibling
+# ../ultrahdr requests zenjpeg's removed `decoder` feature (see workspace
+# exclude note), which breaks resolution against the local zenjpeg 0.9.0. Off by
+# default anyway; re-enable the deps below + this list once ../ultrahdr is fixed.
+hdr-gainmap = ["hdr"]
 
 # CPU metric feature flags
 cpu-metrics = [
@@ -185,7 +189,6 @@ sweep = [
     # HDR *codec* (zenjxl) is still a separate axis — `--features sweep,jxl,hdr`.
     "hdr",
     "zenjpeg?/__expert",
-    "zenjpeg?/trellis",
     # `__test-utils` re-exposes the otherwise-`pub(crate)` `zenjpeg::encode`
     # module so the sweep harness can reach `QuantTableSource` and
     # `HybridConfig` (these are field types of the public `InternalParams`
@@ -297,7 +300,7 @@ rayon = "1"
 # main (31a9b54), which keeps `pub mod expert` + the `__expert` feature
 # (the speed6 branch that lacked both is no longer the ../zenavif checkout).
 zenpng       = { path = "../../../zenpng",                                     optional = true }
-zenjpeg      = { path = "../../../zenjpeg/zenjpeg",        default-features = false, optional = true, features = ["decoder"] }
+zenjpeg      = { path = "../../../zenjpeg/zenjpeg",        default-features = false, optional = true }
 zenwebp      = { path = "../../../zenwebp",                                    optional = true }
 zenavif      = { path = "../../../zenavif",                                    optional = true }
 zenjxl       = { path = "../../../zenjxl",                                     optional = true }
@@ -311,9 +314,11 @@ zengif       = { path = "../../../zengif",                default-features = fal
 zentiff      = { path = "../../../zenextras/zentiff",     default-features = false, optional = true, features = ["std", "lzw", "deflate"] }
 # HDR decoders (gated by the `hdr` feature): Ultra HDR JPEG + gain-map HEIC →
 # absolute-luminance; image provides the EXR reader.
-ultrahdr-rs  = { path = "../../../ultrahdr/ultrahdr-rs",                       optional = true }
-ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core",                    optional = true }
-heic         = { path = "../../../heic",          optional = true, features = ["backend-rust"] }
+# DISABLED locally (hdr-gainmap): ../ultrahdr requests zenjpeg's removed
+# `decoder` feature, breaking workspace resolution against local zenjpeg 0.9.0.
+# ultrahdr-rs  = { path = "../../../ultrahdr/ultrahdr-rs",                       optional = true }
+# ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core",                    optional = true }
+# heic         = { path = "../../../heic",          optional = true, features = ["backend-rust"] }
 image        = { version = "0.25",                optional = true, default-features = false, features = ["exr"] }
 bytemuck     = { workspace = true,                optional = true }
 

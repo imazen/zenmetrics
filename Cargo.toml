@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "crates/butteraugli-gpu",
-    "crates/zenhdr-corpus",
     "crates/cvvdp",
     "crates/cvvdp-conformance",
     "crates/cvvdp-gpu",
@@ -43,6 +42,13 @@ exclude = [
     # `cargo test` and every CI job never compile its dependency tree or run
     # rustdoc. Regenerate via `just api-doc`.
     "apidoc",
+    # zenhdr-corpus pulls the sibling `../ultrahdr/ultrahdr-rs` NON-optionally,
+    # and that sibling's Cargo.toml still requests `zenjpeg`'s `decoder` feature,
+    # which the local zenjpeg 0.9.0 removed (67b0fbfc, "drop no-op features";
+    # decoding is unconditional now). It's an un-patchable path dep in another
+    # repo, so the whole workspace failed to resolve. Excluded so the rest builds
+    # locally. Re-add once ../ultrahdr drops the stale `features = ["decoder"]`.
+    "crates/zenhdr-corpus",
 ]
 resolver = "2"
 
