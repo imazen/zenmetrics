@@ -168,3 +168,24 @@ fn a_gpu_box_saturates_cpu_and_gpu_simultaneously() {
         s.wall_secs
     );
 }
+
+/// CYCLE 7 (capstone) — resilience AND utilization together: when a box dies
+/// mid-run, the survivors must not just finish the work, they must stay BUSY
+/// doing it (the reclaimed work keeps their cores full). Utilization is measured
+/// against the capacity that actually existed (dead box drops out), so a healthy
+/// recovery reads as high utilization.
+#[test]
+fn the_fleet_stays_utilized_through_a_box_death() {
+    let boxes = vec![BoxCap::new(8, 24 * GB, 0); 3];
+    let tasks = vec![Task::light(2, 3, 1, 100 * MB); 300];
+
+    let s = schedule_fleet(&boxes, &tasks, &[(1, 15)]); // box 1 dies at 15s
+
+    assert_eq!(s.tasks_done, 300, "all work completes despite the death");
+    assert!(
+        s.cpu_util() >= 0.80,
+        "survivors stay busy through recovery; fleet util {:.3} (per-box done={:?})",
+        s.cpu_util(),
+        s.per_box_done
+    );
+}
