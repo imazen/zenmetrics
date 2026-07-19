@@ -15,6 +15,7 @@
 #   fleet watch  <run> [--label <p>] [--poll 20] [--max-burn 1.0] [--destroy]
 #   fleet top    <run>                                   # live ledger top
 #   fleet kill   <run>                                   # tear it all down
+#   fleet smoke-image <IMAGE>                            # prove a rebuilt GPU executor on a real card (1 box, auto-destroy)
 #
 # Idle/startup thresholds mirror zenfleet-core::idle (crates/zenfleet-core/src/idle.rs):
 # GPU/CPU ≤10% past warmup = idle; up past the startup deadline (90s) with no boot
@@ -139,6 +140,7 @@ case "${1:-}" in
     status) shift; cmd_status "$@";;
     watch)  shift; cmd_watch "$@";;
     top)    shift; exec python3 "$HERE/fleet_top.py" "$@";;
+    smoke-image) shift; exec python3 "$HERE/fleet_smoke_image.py" "$@";;
     kill)   shift; exec bash "$HERE/teardown_fleet.sh" "$@";;
     -h|--help|"") usage 0;;
     *) echo "unknown subcommand: $1" >&2; usage;;

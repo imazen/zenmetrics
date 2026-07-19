@@ -5,6 +5,9 @@
       "scripts/jobsys/fleet",
       "scripts/jobsys/fleet_top.py"
     ],
+    "verify": [
+      "scripts/jobsys/fleet_smoke_image.py"
+    ],
     "launch": [
       "scripts/jobsys/launch_fleet.sh",
       "scripts/sweep/launch_backfill.sh",
@@ -16,10 +19,12 @@
     "worker_entry": [
       "scripts/sweep/onstart_unified.sh",
       "scripts/sweep/onstart_feature_backfill.sh",
-      "scripts/sweep/onstart_orchestrator.sh"
+      "scripts/sweep/onstart_orchestrator.sh",
+      "scripts/sweep/onstart_hdr_pairs.sh"
     ],
     "chunk_worker": [
-      "scripts/sweep/metric_backfill_chunk_worker.sh"
+      "scripts/sweep/metric_backfill_chunk_worker.sh",
+      "scripts/sweep/hdr_pairs_chunk_worker.sh"
     ],
     "split": [
       "scripts/sweep/hetzner_cpu_sweep.sh",

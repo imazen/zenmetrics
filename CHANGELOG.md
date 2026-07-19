@@ -128,10 +128,21 @@ Workspace conventions per the global rules:
   = 9.857 (a real JOD, not the 10.0 panic fall-through), `zensim-gpu` = 66.277
   (byte-matches CPU zensim). `fleet.env` `ZEN_FLEET_IMAGE` moved off the 2-week-old
   `exec-gpu-hqfillA` pin (old zensim) to `:exec-gpu-zensim-b79315cfbf4e`;
-  `ZEN_FLEET_IMAGE_CPU` already resolved to `:exec`. Reusable GPU-image smoke
-  harness at `~/tmp/gpu_smoke.py`. `build_executor_image_gpu.sh` default `IMAGE`
-  corrected from the legacy `zenfleet-worker-exec-gpu` package to canonical
-  `zenfleet-worker:exec-gpu` (ghcr-guard hygiene).
+  `ZEN_FLEET_IMAGE_CPU` already resolved to `:exec`. `build_executor_image_gpu.sh`
+  default `IMAGE` corrected from the legacy `zenfleet-worker-exec-gpu` package to
+  canonical `zenfleet-worker:exec-gpu` (ghcr-guard hygiene).
+
+- **`fleet smoke-image <IMAGE>` — prove a rebuilt GPU executor's CUDA kernels JIT
+  and run on a REAL card before repointing the fleet.** Local `docker run` can't
+  exercise the GPU (snap-docker/WSL2 can't `--gpus all`), so a rebuilt `:exec-gpu`
+  can pass local smoke yet still fail on the NVRTC / missing `cuda_runtime.h` JIT.
+  This launches one cheap vast.ai box, scores a tiny baked pair with every GPU
+  metric under `--use-legacy-scheduler` (no orchestrator CPU-fallback masking),
+  reads the verdict via `vastai logs`, and always self-destroys (never injects a
+  vast key into the box). `scripts/jobsys/fleet_smoke_image.py`, registered in
+  `fleet-tools.json` (`verify`). Also registers the previously-unregistered shipped
+  HDR-pairs scripts (`onstart_hdr_pairs.sh`, `hdr_pairs_chunk_worker.sh`) so
+  `just fleet-check` is green again.
 
 ## cvvdp
 
