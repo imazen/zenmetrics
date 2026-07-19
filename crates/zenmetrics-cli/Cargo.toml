@@ -76,11 +76,7 @@ hdr = ["dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", 
 # those source formats. Off by default because `heic`/`ultrahdr` are heavier
 # sibling path-deps not built on every CI target. PQ-PNG/PQ-JXL/EXR HDR (the
 # sweep + canonical-corpus path) need only core `hdr`.
-# gain-map source decoders (ultrahdr-rs / heic) DISABLED locally: the sibling
-# ../ultrahdr requests zenjpeg's removed `decoder` feature (see workspace
-# exclude note), which breaks resolution against the local zenjpeg 0.9.0. Off by
-# default anyway; re-enable the deps below + this list once ../ultrahdr is fixed.
-hdr-gainmap = ["hdr"]
+hdr-gainmap = ["hdr", "dep:ultrahdr-rs", "dep:ultrahdr-core", "dep:heic"]
 
 # CPU metric feature flags
 cpu-metrics = [
@@ -314,11 +310,9 @@ zengif       = { path = "../../../zengif",                default-features = fal
 zentiff      = { path = "../../../zenextras/zentiff",     default-features = false, optional = true, features = ["std", "lzw", "deflate"] }
 # HDR decoders (gated by the `hdr` feature): Ultra HDR JPEG + gain-map HEIC →
 # absolute-luminance; image provides the EXR reader.
-# DISABLED locally (hdr-gainmap): ../ultrahdr requests zenjpeg's removed
-# `decoder` feature, breaking workspace resolution against local zenjpeg 0.9.0.
-# ultrahdr-rs  = { path = "../../../ultrahdr/ultrahdr-rs",                       optional = true }
-# ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core",                    optional = true }
-# heic         = { path = "../../../heic",          optional = true, features = ["backend-rust"] }
+ultrahdr-rs  = { path = "../../../ultrahdr/ultrahdr-rs",                       optional = true }
+ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core",                    optional = true }
+heic         = { path = "../../../heic",          optional = true, features = ["backend-rust"] }
 image        = { version = "0.25",                optional = true, default-features = false, features = ["exr"] }
 bytemuck     = { workspace = true,                optional = true }
 
