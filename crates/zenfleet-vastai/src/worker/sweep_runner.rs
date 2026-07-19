@@ -250,6 +250,11 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
             .and_then(|s| s.parse::<usize>().ok())
             .filter(|&n| n >= 1)
             .unwrap_or(1),
+        // Distortion codec label for row provenance, paired with ZEN_DISTORT_CMD
+        // (mirrors the CLI's --distort-label). None when unset.
+        distort_label: std::env::var("ZEN_DISTORT_LABEL")
+            .ok()
+            .filter(|s| !s.is_empty()),
         metrics: spec.metrics,
         gpu_runtime: spec.gpu_runtime,
         output: spec.output_tsv.clone(),

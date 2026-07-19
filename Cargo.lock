@@ -3677,8 +3677,7 @@ checksum = "ca45419789ae5a7899559e9512e58ca889e41f04f1f2445e9f4b290ceccd1d08"
 [[package]]
 name = "rav1d-disjoint-mut"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d5f921332331631dd8716a93d81aef9ac21245da74af62bc14000a4fd7fdbfd"
+source = "git+https://github.com/imazen/rav1d-safe?rev=f6aed27e81baa5e74a8eba413562efb8813641fd#f6aed27e81baa5e74a8eba413562efb8813641fd"
 dependencies = [
  "aligned",
  "aligned-vec",
@@ -3688,8 +3687,7 @@ dependencies = [
 [[package]]
 name = "rav1d-safe"
 version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "717c3ef9a98101f3d2e33c4a8a4d1fd8b4fb0d39fa67a838e3308386ad9e7a1a"
+source = "git+https://github.com/imazen/rav1d-safe?rev=f6aed27e81baa5e74a8eba413562efb8813641fd#f6aed27e81baa5e74a8eba413562efb8813641fd"
 dependencies = [
  "aligned",
  "archmage",
@@ -3698,6 +3696,7 @@ dependencies = [
  "bitflags",
  "cc",
  "cfg-if",
+ "enough",
  "nasm-rs",
  "parking_lot",
  "paste",
@@ -3706,6 +3705,7 @@ dependencies = [
  "safe_unaligned_simd",
  "strum",
  "to_method",
+ "whereat",
  "zerocopy",
 ]
 
@@ -6490,6 +6490,7 @@ dependencies = [
  "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
  "zencodec",
  "zenpixels",
+ "zenpixels-convert",
  "zenyuv 0.1.3",
 ]
 

@@ -275,6 +275,13 @@ zenwebp      = { path = "../zenwebp" }
 # + the `__expert` feature (Cargo.toml:149, src/lib.rs:73). The speed6
 # branch that lacked both is no longer the ../zenavif checkout.
 zenavif      = { path = "../zenavif" }
+# rav1d-safe: zenavif's OWN [patch.crates-io] pins this to git rev f6aed27e (a
+# 0.5.x carrying the managed `Error::Cancelled` / `map_error` API that
+# zenavif/src/decoder_managed.rs uses), but a *dependency's* [patch] section is
+# ignored once the crate is pulled into this workspace — only the root's counts.
+# Without replicating it, rav1d-safe resolves to crates.io ^0.5.3, which lacks
+# those APIs → 11 compile errors in zenavif. Mirrors ../zenavif/Cargo.toml:301.
+rav1d-safe   = { git = "https://github.com/imazen/rav1d-safe", rev = "f6aed27e81baa5e74a8eba413562efb8813641fd" }
 # zenrav1e: ../zenavif -> ravif (zenravif 0.2.0, ../ravif/ravif) depends on
 # zenrav1e = "0.2.0" BY CRATES.IO VERSION, but only 0.1.4 is published, so a
 # fresh resolve fails (`failed to select a version for zenrav1e = ^0.2.0`).
