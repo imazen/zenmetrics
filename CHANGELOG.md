@@ -117,6 +117,22 @@ Workspace conventions per the global rules:
   kadis-hdr PQ-PNG corpus additionally needs an executor built with `png`, which
   waits on the codec-sibling reshape). (b0dff336)
 
+### Changed
+
+- **Executor images rebuilt with current zensim (`b79315cfbf4e`) + the
+  force-surface observability entrypoint, and the GPU fleet pointer repointed to
+  the proven build.** Pushed `zenfleet-worker:exec` (CPU) and `:exec-gpu`
+  (canonical) + the immutable pin `:exec-gpu-zensim-b79315cfbf4e`. The GPU image
+  was PROVEN on a real RTX 3060 before repointing — all six GPU metrics JIT-compiled
+  and ran clean under `--use-legacy-scheduler` (no CPU-fallback masking): `cvvdp-gpu`
+  = 9.857 (a real JOD, not the 10.0 panic fall-through), `zensim-gpu` = 66.277
+  (byte-matches CPU zensim). `fleet.env` `ZEN_FLEET_IMAGE` moved off the 2-week-old
+  `exec-gpu-hqfillA` pin (old zensim) to `:exec-gpu-zensim-b79315cfbf4e`;
+  `ZEN_FLEET_IMAGE_CPU` already resolved to `:exec`. Reusable GPU-image smoke
+  harness at `~/tmp/gpu_smoke.py`. `build_executor_image_gpu.sh` default `IMAGE`
+  corrected from the legacy `zenfleet-worker-exec-gpu` package to canonical
+  `zenfleet-worker:exec-gpu` (ghcr-guard hygiene).
+
 ## cvvdp
 
 ### Fixed

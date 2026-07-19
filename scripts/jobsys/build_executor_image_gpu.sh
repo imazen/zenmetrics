@@ -18,7 +18,7 @@
 # Usage: [PUSH=1] [WORKER_BASE=…] [GPU_BASE=…] build_executor_image_gpu.sh [IMAGE]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-IMAGE="${1:-ghcr.io/imazen/zenfleet-worker-exec-gpu:latest}"
+IMAGE="${1:-ghcr.io/imazen/zenfleet-worker:exec-gpu}"   # canonical package + :exec-gpu tag (ghcr-guard)
 WORKER_BASE="${WORKER_BASE:-ghcr.io/imazen/zenfleet-worker:latest}"
 GPU_BASE="${GPU_BASE:-ghcr.io/imazen/zenmetrics-sweep:v29-2026-06-23}"
 
