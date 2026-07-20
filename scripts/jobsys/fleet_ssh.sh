@@ -21,10 +21,12 @@ mapfile -t IPS < <(hcloud server list -o columns=name,ipv4 2>/dev/null | grep "$
 echo "# $PREFIX: ${#IPS[@]} boxes"
 run_one() {
   local ip="$1"
-  ssh-keygen -R "$ip" >/dev/null 2>&1
+  # Ephemeral fleet boxes recycle IPs constantly — a changed host key is EXPECTED, not an
+  # attack. Pin known-hosts to /dev/null so we never touch ~/.ssh/known_hosts or emit the
+  # scary REMOTE HOST IDENTIFICATION CHANGED banner across a mass-control run.
   local out
-  out=$(timeout "$TMO" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=8 -o BatchMode=yes \
-        -o LogLevel=ERROR -i "$KEY" root@"$ip" "$CMD" 2>&1 | tr '\n' '~')
+  out=$(timeout "$TMO" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -o ConnectTimeout=8 -o BatchMode=yes -o LogLevel=ERROR -i "$KEY" root@"$ip" "$CMD" 2>&1 | tr '\n' '~')
   printf '%s | %s\n' "$ip" "$out"
 }
 i=0
