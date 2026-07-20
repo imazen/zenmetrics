@@ -101,12 +101,17 @@ def launch(run):
     else:                 # byte-range: reconstruct the tar URI from the run name
         tag = run[3:run.index("-t")]; n = run[run.rindex("-t") + 2:]
         env["ZEN_TAR_OVERRIDE"] = "s3://zentrain/jxl-lossy/runs/%s/variants/box-%s.tar" % (SWEEP[tag], n)
-    subprocess.run(["bash", "scripts/jobsys/hetzner_scorefile_launch.sh", run, "1"],
-                   cwd=REPO, env=env, capture_output=True, text=True, timeout=180)
+    # Fire-and-forget: hcloud server create blocks ~40s, so launching 44 boxes sequentially would take
+    # ~30min. Detach each launcher so the whole fleet comes up in parallel (~1min ramp). Failures
+    # (capacity) just mean the run has no box next cycle and gets relaunched — self-correcting.
+    subprocess.Popen(["bash", "scripts/jobsys/hetzner_scorefile_launch.sh", run, "1"],
+                     cwd=REPO, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     stdin=subprocess.DEVNULL, start_new_session=True)
 
 def main():
     log("overnight START max_eur=%.2f types='%s' cycle=%ds deadline=%.1fh" % (MAX_EUR, TYPES, CYCLE, (DEADLINE - time.time()) / 3600))
     while time.time() < DEADLINE:
+      try:
         rs = runs()
         done = set(open(DONEF).read().split()) if os.path.exists(DONEF) else set()
         boxes = live()
@@ -132,7 +137,9 @@ def main():
             (len(rs), len(done), len(undone), len(boxes), launched, tot_done * 12, tot_all * 12, pct, eur))
         if len(rs) >= EXPECTED and len(done) >= len(rs) and not boxes:
             log("ALL RUNS COMPLETE (%d)" % len(rs)); break
-        time.sleep(CYCLE)
+      except Exception as e:
+        log("cycle error (continuing): %s" % str(e)[:140])
+      time.sleep(CYCLE)
     subprocess.run(["hcloud", "server", "delete", "hz-tar-index"], env=E, capture_output=True)
     log("overnight EXIT (index box torn down)")
 

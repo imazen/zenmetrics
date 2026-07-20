@@ -144,3 +144,13 @@ the fleet is self-bounding. Run: `CAP=56 HOURS=7 nohup python3 scripts/jobsys/ba
 
 **Validated 2026-07-20:** zenpng + zenavif byte-range blobs = `kind=feature`, `{720}` features,
 `regime=v2-ab`, no score. zenjpeg_lossy runs via the original direct-object path (`bf-zjl2`).
+
+## COST (2026-07-20) — use cx43, price-cap, NOT cpx42
+
+Hetzner hourly (gross, verified via `hcloud server-type describe`): **cpx42 EUR0.1314/hr** vs
+**cx43 EUR0.0296/hr for the SAME 8 vCPU / 16GB** (4.4× cheaper) — cx33 EUR0.016 (4 vCPU), cx23 EUR0.0104
+(2 vCPU). **Always launch cx43** (fall back cx33/cx23); never cpx42 unless cx-series is capacity-out.
+`backfill_overnight_manager.py` caps on projected fleet PRICE (`MAX_EUR`, default 1.6 EUR/hr scoring +
+~0.13 index box < $2/hr), NOT a box count — box prices vary 8×, so a count cap silently blew the budget
+(23 cpx42 = ~$3.3/hr when the user asked for $2). Run: `MAX_EUR=1.6 TYPES="cx43 cx33 cx23" HOURS=8
+nohup python3 scripts/jobsys/backfill_overnight_manager.py &`.
