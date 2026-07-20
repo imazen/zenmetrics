@@ -92,6 +92,8 @@ runcmd:
       -e RAYON_NUM_THREADS='${ZEN_RAYON_THREADS:-1}' -e OMP_NUM_THREADS='${ZEN_RAYON_THREADS:-1}' \
       ${ZEN_CHUNK_WALL_SEC:+-e ZEN_CHUNK_WALL_SEC='$ZEN_CHUNK_WALL_SEC'} \
       ${ZEN_CORE_OVERSUBSCRIBE:+-e ZEN_CORE_OVERSUBSCRIBE='$ZEN_CORE_OVERSUBSCRIBE'} \
+      ${ZEN_PASS_TIMEOUT:+-e ZEN_PASS_TIMEOUT='$ZEN_PASS_TIMEOUT'} \
+      ${ZEN_MAX_FAILS:+-e ZEN_MAX_FAILS='$ZEN_MAX_FAILS'} \
       -e ZEN_PERSISTENT_EXEC=1 -e ZEN_PROVIDER=hetzner-cpu -e ZEN_IDLE_PASSES='${ZEN_IDLE_PASSES:-10}' -e ZEN_WORKER='hz-$wk' \
       --entrypoint /usr/local/bin/fleet-entrypoint.sh '$IMAGE'
     echo "[drain] worker exited rc=\$? -> self-destroy (SELF_DESTRUCT=\$SELF_DESTRUCT)"

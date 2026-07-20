@@ -91,10 +91,14 @@ def fleet_eur(boxes):
     return sum(PRICE.get(t, 0.03) for _, t in boxes)
 
 def launch(run):
+    # byte-range decode (avif/jxl/png/webp) is CPU-bound, not I/O-bound like zenjpeg direct-object:
+    # oversubscribe=3 (22-wide on 8 cores) THRASHED -> a chunk exceeded the 1800s pass timeout -> the box
+    # self-destructed after 3 fails. Use oversubscribe=2 (fills fetch-latency gaps without severe thrash),
+    # small chunks (fast passes + resumability), and a generous pass timeout as a safety net.
     env = dict(E, ZEN_BUCKET="zentrain", ZEN_CORPUS_PREFIX_OVERRIDE="refs/clean-picker-corpus-2026-06-26",
-               ZEN_RAYON_THREADS="1", ZEN_CHUNK_WALL_SEC="60", ZEN_CORE_OVERSUBSCRIBE="3",
-               ZEN_IDLE_PASSES="10", RESUME="1", TYPES=TYPES, LOCATIONS="fsn1 nbg1 hel1",
-               HCLOUD_TOKEN=E["HCLOUD_TOKEN"])
+               ZEN_RAYON_THREADS="1", ZEN_CHUNK_WALL_SEC="20", ZEN_CORE_OVERSUBSCRIBE="2",
+               ZEN_PASS_TIMEOUT="5400", ZEN_IDLE_PASSES="10", RESUME="1", TYPES=TYPES,
+               LOCATIONS="fsn1 nbg1 hel1", HCLOUD_TOKEN=E["HCLOUD_TOKEN"])
     if run == "bf-zjl2":  # zenjpeg = direct-object (individual encodes exist), not byte-range
         env["ZEN_TAR_OVERRIDE"] = "s3://zentrain/x/none.tar"
         env["ZEN_ENCODES_PREFIX"] = "canonical/2026-06-27/zenjpeg_lossy/encodes"
