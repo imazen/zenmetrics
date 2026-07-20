@@ -37,9 +37,14 @@ LOG=/tmp/hz_scorefile_launch.log; log(){ echo "[$(date -u +%H:%M:%S)] $*" | tee 
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }
-# scoped RW creds: run prefix + datagen (tar) + corpus refs — 12h (CPU fills run long)
+# scoped RW creds: run prefix + datagen (tar) + corpus refs + ENCODES prefix (direct-object
+# mode reads variants there — omitting it 403s every fetch, producing all-error blobs) — 12h.
 TARPFX=$(python3 -c "import sys;u='$TAR';print('/'.join(u.split('/')[3:-1])+'/')")
-body=$(python3 -c "import json,os;print(json.dumps({'bucket':'$BUCKET','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':43200,'prefixes':['$RUNP/','$TARPFX','$CORPUS_PREFIX/']}))")
+# The encodes prefix a direct-object run reads; add its PARENT so one cred covers many codecs.
+ENCPFX="${ZEN_ENCODES_PREFIX:+${ZEN_ENCODES_PREFIX%/}/}"
+body=$(ZEN_ENCPFX="$ENCPFX" python3 -c "import json,os;pfx=['$RUNP/','$TARPFX','$CORPUS_PREFIX/'];e=os.environ.get('ZEN_ENCPFX','');
+[pfx.append(e) for _ in [0] if e];
+print(json.dumps({'bucket':'$BUCKET','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':43200,'prefixes':pfx}))")
 curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$body" "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/hzsf_cred.json
 read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/hzsf_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
 [ -n "${AK:-}" ] || { log "cred mint failed"; cat /tmp/hzsf_cred.json | tee -a "$LOG"; exit 1; }
