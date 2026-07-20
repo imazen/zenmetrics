@@ -30,12 +30,17 @@ index_one(){ # codec run tar_uri
 for row in "${CODECS[@]}"; do
   read -r codec tag sweep <<<"$row"
   mapfile -t tars < <(r2 ls "s3://zentrain/jxl-lossy/runs/$sweep/variants/" 2>/dev/null | awk '/\.tar/{print $NF}')
-  n=0
   for t in "${tars[@]}"; do
     tar="s3://zentrain/jxl-lossy/runs/$sweep/variants/$t"
-    run="bf-${tag}-t${n}"
+    # CRITICAL: name the run by the tar's BOX NUMBER, not the loop index. s5cmd ls returns tars in
+    # LEXICAL order (box-0,box-1,box-10,box-11,...,box-2,...), so a loop-index suffix put box-10's index
+    # under t2 while the consumer (backfill_overnight_manager tar_of) fetches box-2.tar for t2 — a silent
+    # tar/index mismatch that only bit codecs with >=10 tars (zjxll). t<boxnum> keeps both sides numeric.
+    boxnum=$(printf '%s' "$t" | grep -oE 'box-[0-9]+' | grep -oE '[0-9]+' | head -1)
+    [ -n "$boxnum" ] || { log "SKIP $t (no box number)"; continue; }
+    run="bf-${tag}-t${boxnum}"
     index_one "$codec" "$run" "$tar" &
-    running=$((running+1)); n=$((n+1))
+    running=$((running+1))
     if [ "$running" -ge "$PAR" ]; then wait -n 2>/dev/null || wait; running=$((running-1)); fi
   done
 done
