@@ -1173,10 +1173,23 @@ fn read_meminfo_total_bytes() -> Option<u64> {
 fn host_box_budget() -> BoxBudget {
     let total_ram = read_meminfo_total_bytes().unwrap_or(2 << 30); // 2 GiB if /proc/meminfo unreadable
     let ram_budget = (((total_ram as f64) * 0.75) as u64).max(1);
-    let cores = std::thread::available_parallelism()
+    let phys_cores = std::thread::available_parallelism()
         .map(|n| n.get() as u32)
         .unwrap_or(1)
         .max(1);
+    // I/O-bound cells (e.g. R2-fetch-dominated feature extraction: each cell fetches its variants and
+    // spends most of its wall time blocked on the network, not the CPU) leave cores idle — a box scoring
+    // at load ~2/8 is bottlenecked on fetch latency, not compute. `ZEN_CORE_OVERSUBSCRIBE` (a float ≥ 1,
+    // default 1.0 = no change) multiplies the admit budget's core term so more cells run concurrently and
+    // overlap their fetches. RAM is bounded SEPARATELY by `can_admit` (Σpeak_mem ≤ 0.75×RAM), so
+    // oversubscribing threads can never OOM the box — it only admits more concurrent I/O waits. Leave it
+    // at 1.0 for CPU-bound tiers (encode/GPU); raise to ~3 for fetch-dominated feature backfills.
+    let oversub = std::env::var("ZEN_CORE_OVERSUBSCRIBE")
+        .ok()
+        .and_then(|v| v.trim().parse::<f64>().ok())
+        .filter(|f| f.is_finite() && *f >= 1.0)
+        .unwrap_or(1.0);
+    let cores = (((phys_cores as f64) * oversub).round() as u32).max(1);
     BoxBudget::new(ram_budget, cores)
 }
 
