@@ -11,6 +11,7 @@ import pyarrow.dataset as ds, pyarrow.fs as fs
 
 REPO = "/home/lilith/work/zen/zenmetrics"
 CAP = int(os.environ.get("CAP", "56"))              # total hzsf-bf boxes (cpx42 ~= $0.033/hr -> ~$1.85/hr)
+EXPECTED = int(os.environ.get("EXPECTED_RUNS", "53"))  # don't declare "all complete" until ~all tars indexed
 CYCLE = int(os.environ.get("CYCLE", "420"))
 DEADLINE = time.time() + float(os.environ.get("HOURS", "7")) * 3600
 LOG = os.path.expanduser("~/tmp/hz720/overnight.log")
@@ -127,8 +128,11 @@ def main():
         pct = 100 * tot_done / tot_all if tot_all else 0
         log("runs=%d done=%d undone=%d live=%d launched=%d | variants %d/%d (%.1f%%) ~$%.2f/hr" %
             (len(rs), len(done), len(undone), nlive, launched, tot_done * 12, tot_all * 12, pct, nlive * 0.033))
-        if rs and len(done) >= len(rs) and nlive == 0:
-            log("ALL RUNS COMPLETE"); break
+        # Only declare victory once ~all tars are indexed (len(rs) >= EXPECTED) AND every declared run
+        # is complete AND no boxes remain — otherwise an early lull (first runs drain before later tars
+        # finish indexing) would exit + tear down the index box, abandoning the rest.
+        if len(rs) >= EXPECTED and len(done) >= len(rs) and nlive == 0:
+            log("ALL RUNS COMPLETE (%d runs)" % len(rs)); break
         time.sleep(CYCLE)
     # teardown index box
     subprocess.run(["hcloud", "server", "delete", "hz-tar-index"], env=E, capture_output=True)
