@@ -259,19 +259,38 @@ fn variant_index() -> Result<&'static std::collections::HashMap<String, VariantL
         return Ok(i);
     }
     let uri = std::env::var("ZEN_VARIANT_INDEX_URI").map_err(|_| "ZEN_VARIANT_INDEX_URI unset")?;
-    let endpoint = std::env::var("ZEN_R2_ENDPOINT").map_err(|_| "ZEN_R2_ENDPOINT unset")?;
-    let dst = std::env::temp_dir().join("zen_variant_index.tsv");
-    let st = Command::new("s5cmd")
-        .arg("--endpoint-url")
-        .arg(&endpoint)
-        .arg("cp")
-        .arg(&uri)
-        .arg(&dst)
-        .stdout(Stdio::null())
-        .status()
-        .map_err(|e| format!("spawn s5cmd (index): {e}"))?;
-    if !st.success() {
-        return Err(format!("fetch variant index {uri} failed").into());
+    // URI-keyed on-disk cache: the fleet runs a FRESH jobexec PROCESS per cell, all on ONE box, so a
+    // naive per-process download re-fetches the whole index N times (the 30 MB × 125k-cell re-download
+    // that made byte-range mode the dominant fleet cost — direct-object dodged it by skipping the index
+    // entirely; byte-range NEEDS the index, so cache it instead). Download ONCE per box; every later
+    // process reads the cached file. Keyed on the URI so a box that reuses a different index never reads
+    // a stale one, and published via atomic rename so a concurrent starter never reads a partial file.
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(&uri, &mut hasher);
+    let dst = std::env::temp_dir().join(format!(
+        "zen_variant_index_{:016x}.tsv",
+        std::hash::Hasher::finish(&hasher)
+    ));
+    if !dst.exists() {
+        let endpoint = std::env::var("ZEN_R2_ENDPOINT").map_err(|_| "ZEN_R2_ENDPOINT unset")?;
+        let tmp = dst.with_extension(format!("tsv.tmp.{}", std::process::id()));
+        let st = Command::new("s5cmd")
+            .arg("--endpoint-url")
+            .arg(&endpoint)
+            .arg("cp")
+            .arg(&uri)
+            .arg(&tmp)
+            .stdout(Stdio::null())
+            .status()
+            .map_err(|e| format!("spawn s5cmd (index): {e}"))?;
+        if !st.success() {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(format!("fetch variant index {uri} failed").into());
+        }
+        // Atomic publish: concurrent starters each write their own tmp then rename onto dst; a reader
+        // sees either the absent path or a complete file, never a half-written one. Identical content,
+        // so last-writer-wins is fine.
+        let _ = std::fs::rename(&tmp, &dst);
     }
     Ok(VARIANT_INDEX
         .get_or_init(|| parse_variant_index(&std::fs::read_to_string(&dst).unwrap_or_default())))

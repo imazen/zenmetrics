@@ -7,6 +7,9 @@ import json, os, sys, gzip, subprocess, pyarrow.parquet as pq
 pairs_arg, RUN, BUCKET = sys.argv[1], sys.argv[2], sys.argv[3]
 CHUNK = int(os.environ.get("ZEN_SCOREFILE_CHUNK", "12"))
 METRICS = [m for m in os.environ.get("ZEN_SCOREFILE_METRICS", "zensim-gpu").split(",") if m]
+# Cell codec label (metadata only — the join key is the variant filename in `inputs`, which already
+# carries the codec). Default zenjpeg for back-compat; set ZEN_CELL_CODEC per codec for correct sidecars.
+CELL_CODEC = os.environ.get("ZEN_CELL_CODEC", "zenjpeg")
 ep = "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
 env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
            AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
@@ -28,7 +31,7 @@ for bn, members in files.items():
     for i in range(0, len(members), CHUNK):
         manifest.append({"kind": {"kind": "score_file", "metrics": METRICS},
                          "inputs": members[i:i+CHUNK],
-                         "cell": {"image_path": bn, "codec": "zenjpeg", "q": -1, "knob_tuple_json": "scorefile"},
+                         "cell": {"image_path": bn, "codec": CELL_CODEC, "q": -1, "knob_tuple_json": "scorefile"},
                          "hint": None})
 work = "/home/lilith/tmp/hz720"; os.makedirs(work, exist_ok=True)
 mp = "%s/manifest_direct.json" % work
