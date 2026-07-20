@@ -272,21 +272,11 @@ fn variant_index() -> Result<&'static std::collections::HashMap<String, VariantL
         std::hash::Hasher::finish(&hasher)
     ));
     if !dst.exists() {
-        let endpoint = std::env::var("ZEN_R2_ENDPOINT").map_err(|_| "ZEN_R2_ENDPOINT unset")?;
         let tmp = dst.with_extension(format!("tsv.tmp.{}", std::process::id()));
-        let st = Command::new("s5cmd")
-            .arg("--endpoint-url")
-            .arg(&endpoint)
-            .arg("cp")
-            .arg(&uri)
-            .arg(&tmp)
-            .stdout(Stdio::null())
-            .status()
-            .map_err(|e| format!("spawn s5cmd (index): {e}"))?;
-        if !st.success() {
-            let _ = std::fs::remove_file(&tmp);
-            return Err(format!("fetch variant index {uri} failed").into());
-        }
+        // In-process GET (no `s5cmd` spawn); endpoint + creds come from the ambient env objstore reads.
+        let bytes = crate::objstore::get_uri(&uri)
+            .map_err(|e| format!("fetch variant index {uri}: {e}"))?;
+        std::fs::write(&tmp, &bytes).map_err(|e| format!("write index {tmp:?}: {e}"))?;
         // Atomic publish: concurrent starters each write their own tmp then rename onto dst; a reader
         // sees either the absent path or a complete file, never a half-written one. Identical content,
         // so last-writer-wins is fine.
@@ -459,26 +449,11 @@ fn fetch_variant(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>
         seq,
         ext
     ));
-    let end = off + sz - 1;
-    let st = Command::new("aws")
-        .arg("s3api")
-        .arg("get-object")
-        .arg("--endpoint-url")
-        .arg(&endpoint)
-        .arg("--bucket")
-        .arg(&bucket)
-        .arg("--key")
-        .arg(&key)
-        .arg("--range")
-        .arg(format!("bytes={off}-{end}"))
-        .arg(&dst)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map_err(|e| format!("spawn aws (range-get): {e}"))?;
-    if !st.success() {
-        return Err(format!("range-get variant {sha} from {tar_uri} failed").into());
-    }
+    // In-process byte-range GET (no `aws` spawn) over the pooled connection.
+    let _ = &endpoint; // objstore reads ZEN_R2_ENDPOINT itself
+    let bytes = crate::objstore::get_range(&bucket, &key, off, sz)
+        .map_err(|e| format!("range-get variant {sha} from {tar_uri}: {e}"))?;
+    std::fs::write(&dst, &bytes).map_err(|e| format!("write variant {dst:?}: {e}"))?;
     Ok((dst, true)) // owned temp — caller deletes after decode
 }
 

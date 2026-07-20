@@ -12,7 +12,9 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use object_store::{GetOptions, ObjectStore, aws::AmazonS3Builder, path::Path as OsPath};
+use object_store::{
+    GetOptions, ObjectStore, ObjectStoreExt, aws::AmazonS3Builder, path::Path as OsPath,
+};
 
 fn runtime() -> &'static tokio::runtime::Runtime {
     static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
@@ -80,4 +82,37 @@ pub fn get_uri(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
         .split_once('/')
         .ok_or_else(|| format!("s3 uri has no key: {uri}"))?;
     get_object(bucket, key)
+}
+
+/// GET a single byte range `[offset, offset+len)` of an object (one R2 request, pooled connection).
+/// Replaces the per-variant `aws s3api get-object --range` spawn on the byte-range tar path.
+pub fn get_range(bucket: &str, key: &str, offset: u64, len: u64) -> Result<Vec<u8>, Box<dyn Error>> {
+    let store = store_for(bucket)?;
+    let p = OsPath::from(key);
+    let range = offset..offset + len;
+    let bytes = runtime()
+        .block_on(async move { store.get_range(&p, range).await })
+        .map_err(|e| format!("objstore get_range {bucket}/{key} [{offset}+{len}]: {e}"))?;
+    Ok(bytes.to_vec())
+}
+
+/// GET MANY byte ranges of ONE object CONCURRENTLY — all in flight together over the pooled
+/// connection, not one-at-a-time. `ranges` is `(offset, len)` pairs; the returned `Vec` is in the
+/// same order. This is the concurrency win for a ScoreFile cell: its ~12 variants are all ranges of
+/// the same `variants.tar`, so one call overlaps every fetch instead of 12 serial round-trips.
+pub fn get_ranges(
+    bucket: &str,
+    key: &str,
+    ranges: &[(u64, u64)],
+) -> Result<Vec<Vec<u8>>, Box<dyn Error>> {
+    if ranges.is_empty() {
+        return Ok(Vec::new());
+    }
+    let store = store_for(bucket)?;
+    let p = OsPath::from(key);
+    let rs: Vec<std::ops::Range<u64>> = ranges.iter().map(|&(o, l)| o..o + l).collect();
+    let out = runtime()
+        .block_on(async move { store.get_ranges(&p, &rs).await })
+        .map_err(|e| format!("objstore get_ranges {bucket}/{key} ({} ranges): {e}", ranges.len()))?;
+    Ok(out.into_iter().map(|b| b.to_vec()).collect())
 }
