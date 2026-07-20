@@ -64,9 +64,12 @@ done
 # EXITS, which drops through to the cloud-init self-destruct. One box == one useful paid hour, no churn.
 pool_mode(){
   local END; END=$(( $(date +%s) + ${ZEN_MAX_MIN:-55} * 60 ))
-  s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$ZEN_POOL_RUNLIST" /tmp/runlist.tsv \
+  s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$ZEN_POOL_RUNLIST" /tmp/runlist.raw \
     || { ferr "cannot fetch pool runlist $ZEN_POOL_RUNLIST"; exit 4; }
-  hb "POOL mode: $(grep -c . /tmp/runlist.tsv) runs, budget ${ZEN_MAX_MIN:-55}min (worker=$WORKER)"
+  # Shuffle per box so a large fleet spreads across runs instead of all piling onto run #1 (which would
+  # serialize on that one run's claim-lease). Each box still covers every run over successive cycles.
+  shuf /tmp/runlist.raw -o /tmp/runlist.tsv 2>/dev/null || cp /tmp/runlist.raw /tmp/runlist.tsv
+  hb "POOL mode: $(grep -c . /tmp/runlist.tsv) runs (shuffled), budget ${ZEN_MAX_MIN:-55}min (worker=$WORKER)"
   local cyc=0
   while [ "$(date +%s)" -lt "$END" ]; do
     cyc=$((cyc + 1)); local did=0 seen=0

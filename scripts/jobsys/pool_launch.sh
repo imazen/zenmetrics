@@ -17,13 +17,16 @@ IMAGE="${ZEN_CPU_IMAGE:-ghcr.io/imazen/zenfleet-worker:exec}"
 BUCKET="zentrain"
 MAX_EUR="${MAX_EUR:-1.85}"                       # worst-case hourly price ceiling for the batch (~$2)
 ZEN_MAX_MIN="${ZEN_MAX_MIN:-55}"                 # box lifetime — one paid hour minus a safety margin
-TYPES="${TYPES:-cx43 cx33 cx23}"                 # EU SHARED only; NO cpx, NO US
+TYPES="${TYPES:-cx33 cx23}"                      # EU SHARED only; NO cpx, NO US. cx43/cx53 EXCLUDED: they
+                                                 # are capacity-crunched in EU (never launch) AND their 2x
+                                                 # price would force worst-case sizing to half the fleet.
 LOCATIONS="${LOCATIONS:-nbg1 fsn1 hel1}"         # EU only
-CX43=0.0296                                      # priciest type we allow -> worst-case sizing
+CXMAX=0.016                                      # priciest type we allow (cx33) -> safe worst-case sizing
 # Size the batch to the budget REMAINING after existing boxes (old draining hzsf + any live hzpool), so
-# TOTAL running spend stays <= MAX_EUR even during the transition. Worst-case priced at cx43.
+# TOTAL running spend stays <= MAX_EUR even during the transition. Worst-case priced at cx33 (the ceiling
+# now that cx43 is excluded); cx23 fallbacks are cheaper, so real spend only ever comes in UNDER budget.
 CUR_EUR=$(hcloud server list -o columns=name,type 2>/dev/null | awk '/hzsf-bf|hzpool/{p["cx23"]=0.0104;p["cx33"]=0.016;p["cx43"]=0.0296;e+=(p[$2]?p[$2]:0.05)} END{printf "%.3f", e+0}')
-N="${1:-$(python3 -c "print(max(0, min(60, int(($MAX_EUR - $CUR_EUR)/$CX43))))")}"  # fill remaining budget, <=MAX_EUR total
+N="${1:-$(python3 -c "print(max(0, min(120, int(($MAX_EUR - $CUR_EUR)/$CXMAX))))")}"  # fill remaining budget, <=MAX_EUR total
 SSH_KEY="${SSH_KEY:-zen-arm-dev-20260528}"
 HCLOUD_TOKEN="${HCLOUD_TOKEN:-$(grep -E '^api_token=' ~/.config/hetzner/credentials 2>/dev/null | head -1 | cut -d= -f2- | tr -d ' \r')}"
 [ -n "$HCLOUD_TOKEN" ] || { echo "FATAL: no hcloud token"; exit 1; }
@@ -34,9 +37,9 @@ EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }
 
 # ── SAFETY: refuse if starting this batch would exceed the cap even at the priciest allowed type.
-WORST=$(python3 -c "print(f'{$N*$CX43:.2f}')")
-python3 -c "exit(0 if $N*$CX43 <= $MAX_EUR + 1e-9 else 1)" \
-  || { log "REFUSED: $N boxes * ${CX43}EUR = ${WORST}EUR > cap ${MAX_EUR}EUR"; exit 2; }
+WORST=$(python3 -c "print(f'{$N*$CXMAX:.2f}')")
+python3 -c "exit(0 if $N*$CXMAX <= $MAX_EUR + 1e-9 else 1)" \
+  || { log "REFUSED: $N boxes * ${CXMAX}EUR = ${WORST}EUR > cap ${MAX_EUR}EUR"; exit 2; }
 
 # ── Runlist: every undone tar-run (byte-range) + zenjpeg (direct-object). run<TAB>src<TAB>mode.
 gen_runlist(){
