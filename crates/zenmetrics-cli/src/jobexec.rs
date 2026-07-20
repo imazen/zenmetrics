@@ -309,6 +309,26 @@ fn parse_variant_index(tsv: &str) -> std::collections::HashMap<String, VariantLo
 /// Returns the local path plus whether the caller OWNS it (must delete after decode). TAR-SHARD reads
 /// are borrowed (do NOT delete — they belong to the shared extract dir); range-GETs are owned temps.
 fn fetch_variant(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>> {
+    // FULL-URI input: the declare put the variant's whole `s3://bucket/key` as the job
+    // input — GET it in-process. Lets ONE run/fleet span many codecs (each variant is
+    // self-locating; no per-box ZEN_ENCODES_PREFIX). No tar, no index, no spawn.
+    if let Some(_rest) = sha.strip_prefix("s3://") {
+        let bytes = crate::objstore::get_uri(sha)?;
+        let seq = DIST_SEQ.fetch_add(1, Ordering::Relaxed);
+        let ext2 = std::path::Path::new(sha)
+            .extension()
+            .and_then(|e| e.to_str())
+            .filter(|e| !e.is_empty())
+            .unwrap_or(ext);
+        let dst = std::env::temp_dir().join(format!(
+            "jobexec_var_{}_{}.{}",
+            std::process::id(),
+            seq,
+            ext2
+        ));
+        std::fs::write(&dst, &bytes).map_err(|e| format!("write temp variant: {e}"))?;
+        return Ok((dst, true));
+    }
     // DIRECT-OBJECT (the clean path): when the declare emits the encode FILENAME as the
     // job input (no tar), the input IS the object key — GET `<ZEN_ENCODES_PREFIX>/<name>`
     // in-process. Skips `variant_index()` ENTIRELY, which every fresh jobexec process was

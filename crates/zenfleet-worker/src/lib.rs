@@ -621,8 +621,19 @@ where
     CC: Fn(&str) -> bool,
     F: FnMut(&str, &[LedgerRow]),
 {
+    let ct = std::time::Instant::now();
+    let ctimed = std::env::var("ZEN_TIME_PASS").ok().as_deref() == Some("1");
+    macro_rules! cmark {
+        ($p:expr) => {
+            if ctimed {
+                eprintln!("zenfleet-worker[time] {:<16} {:?} ({} jobs)", $p, ct.elapsed(), desired.len());
+            }
+        };
+    }
     let plan = reconcile(desired, view, policy);
+    cmark!("reconcile");
     let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
+    cmark!("by_id-hashmap");
     // Gap DesiredJobs in deterministic manifest order (reconcile preserves `desired` order). NOT
     // shuffled — identical across workers so chunk boundaries (and thus claims) are exclusive.
     let gap: Vec<&DesiredJob> = plan
@@ -644,7 +655,9 @@ where
             }
         })
         .collect();
+    cmark!("job-costs");
     let chunks = params.budget.pack_chunks_lpt(&costs, params.chunk_wall_sec);
+    cmark!("pack-chunks");
     let chunk_ids: Vec<String> = chunks
         .iter()
         .map(|members| {
@@ -652,6 +665,7 @@ where
             chunk_id(&ids)
         })
         .collect();
+    cmark!("chunk-ids");
 
     // Per-worker iteration order over chunk indices (deterministic hash(chunk_id, worker)) so
     // late-joining boxes don't all start at chunk 0 — same rationale as the gap shuffle in
@@ -1307,11 +1321,25 @@ fn run_chunked(
 /// `exec` → content-address outputs → write the resulting rows. Returns the outcome. Deterministic
 /// given `cfg.now` (the binary supplies the wall clock; the library stays clock-free + testable).
 pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
+    // Phase timing (ZEN_TIME_PASS=1) — isolates where a pass spends its time so a slow
+    // pass can be diagnosed LOCALLY (run this binary against the real R2 run + a nop
+    // exec) instead of SSH-guessing on a fleet box.
+    let timed = std::env::var("ZEN_TIME_PASS").ok().as_deref() == Some("1");
+    let t = std::time::Instant::now();
+    macro_rules! mark {
+        ($p:expr) => {
+            if timed {
+                eprintln!("zenfleet-worker[time] {:<16} {:?}", $p, t.elapsed());
+            }
+        };
+    }
     let bytes = std::fs::read(&cfg.manifest).map_err(|e| {
         WorkerRunError::Io(format!("read manifest {}: {e}", cfg.manifest.display()))
     })?;
+    mark!("read-manifest");
     let mut desired: Vec<DesiredJob> =
         serde_json::from_slice(&bytes).map_err(|e| WorkerRunError::Manifest(e.to_string()))?;
+    mark!("parse-manifest");
     // Capability routing (goal H): drop jobs this worker's hardware doesn't serve, so an ARM/CPU/GPU
     // box pulls only its class off the shared queue. Empty `served` = general worker (keep all).
     if !cfg.served.is_empty() {
@@ -1329,6 +1357,7 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
             view.apply(row);
         }
     }
+    mark!("read-ledger");
 
     // Run control (goal C): if the run is paused/draining, pull no new work this pass. Fail-open —
     // an absent control object reads as RUNNING. The ledger is untouched, so resuming continues

@@ -14,12 +14,15 @@ def r2cp(local, key): subprocess.run(["s5cmd","--endpoint-url",ep,"cp",local,"s3
 files = {}  # ref basename -> [dist_member,...]
 for pp in pairs_arg.split(","):
     have = set(pq.read_schema(pp).names)
-    mem = "dist_member" if "dist_member" in have else None
-    ipc = "image_path"
-    t = pq.read_table(pp, columns=[ipc, mem])
-    for ip, dm in zip(t[ipc].to_pylist(), t[mem].to_pylist()):
+    full = os.environ.get("ZEN_FULL_URI") == "1"
+    ipc = "ref_path" if full else "image_path"
+    memc = "dist_path" if full else "dist_member"
+    t = pq.read_table(pp, columns=[ipc, memc])
+    for ip, dm in zip(t[ipc].to_pylist(), t[memc].to_pylist()):
         if not ip or not dm: continue
-        files.setdefault(os.path.basename(ip), []).append(os.path.basename(dm))
+        key = ip if full else os.path.basename(ip)   # full s3 uri, or ref basename
+        val = dm if full else os.path.basename(dm)
+        files.setdefault(key, []).append(val)
 manifest = []
 for bn, members in files.items():
     for i in range(0, len(members), CHUNK):

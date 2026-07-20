@@ -8,6 +8,9 @@
     "verify": [
       "scripts/jobsys/fleet_smoke_image.py"
     ],
+    "control": [
+      "scripts/jobsys/fleet_ssh.sh"
+    ],
     "launch": [
       "scripts/jobsys/launch_fleet.sh",
       "scripts/sweep/launch_backfill.sh",
