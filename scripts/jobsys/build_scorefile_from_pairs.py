@@ -27,17 +27,32 @@ tar_base = os.path.basename(TAR_URI)
 work = "/mnt/v/zen/scorefile-frompairs-%s" % RUN
 os.makedirs(work, exist_ok=True)
 
-# 1. cells for THIS tar, from the pairs parquet(s), matched on dist_tar basename
+# 1. cells for THIS tar, from the pairs parquet(s), matched on dist_tar basename.
+# Two accepted schemas (auto-detected per parquet):
+#   (a) explicit  dist_tar / dist_member              (per-box generation tars)
+#   (b) canonical variant_tar_r2_url / variant_r2_url  (the zentrain canonical picker
+#       datasets) — dist_tar = basename(variant_tar_r2_url),
+#       dist_member = basename(variant_r2_url). Verified 2026-07-20: the tar carries
+#       hqdedup extras the parquet doesn't reference; they're skipped by `want` below.
 files = {}   # source basename -> {codec, members:[dist_member,...]}
 want = {}    # dist_member -> source basename
 for pp in pairs_arg.split(","):
-    t = pq.read_table(pp, columns=["image_path", "codec", "dist_tar", "dist_member"])
+    have = set(pq.read_schema(pp).names)
+    if {"dist_tar", "dist_member"} <= have:
+        cols, tar_c, mem_c = ["image_path", "codec", "dist_tar", "dist_member"], "dist_tar", "dist_member"
+    elif {"variant_tar_r2_url", "variant_r2_url"} <= have:
+        cols, tar_c, mem_c = ["image_path", "codec", "variant_tar_r2_url", "variant_r2_url"], "variant_tar_r2_url", "variant_r2_url"
+        print("schema: canonical (variant_tar_r2_url/variant_r2_url) -> dist_tar/dist_member", flush=True)
+    else:
+        print("FATAL: %s has neither dist_tar/dist_member nor variant_tar_r2_url/variant_r2_url" % pp, flush=True)
+        sys.exit(1)
+    t = pq.read_table(pp, columns=cols)
     for ip, codec, dt, dm in zip(t["image_path"].to_pylist(), t["codec"].to_pylist(),
-                                 t["dist_tar"].to_pylist(), t["dist_member"].to_pylist()):
-        if os.path.basename(dt) != tar_base:
+                                 t[tar_c].to_pylist(), t[mem_c].to_pylist()):
+        if not dt or not dm or os.path.basename(dt) != tar_base:
             continue
         bn = os.path.basename(ip)
-        want[dm] = bn
+        want[os.path.basename(dm)] = bn
         files.setdefault(bn, {"codec": codec, "shas": []})
 print("pairs: %d cells across %d source files reference %s" % (len(want), len(files), tar_base), flush=True)
 if not want:
