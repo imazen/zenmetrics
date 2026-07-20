@@ -20,7 +20,10 @@ TOTALS = os.path.expanduser("~/tmp/hz720/totals.json")
 DONEF = os.path.expanduser("~/tmp/hz720/done_runs.txt")
 TYPES = os.environ.get("TYPES", "cx43 cx33 cx23")     # cheap-first; launcher falls back down the list
 PRICE = {"cx23": 0.0104, "cx33": 0.0160, "cx43": 0.0296, "cx41": 0.0, "cpx42": 0.1314, "cpx52": 0.19}
-NEXT_EUR = PRICE.get(TYPES.split()[0], 0.03)          # price assumed for the next box launched
+BOXES_PER_RUN = int(os.environ.get("BOXES_PER_RUN", "2"))  # boxes per tar-run (they coordinate via ledger)
+# Projected cost per launch = BOXES_PER_RUN boxes at the CHEAPEST type we'll actually get (EU capacity
+# tonight yields cx23/cx33, not cx43), so the price cap doesn't under-launch and leave budget on the table.
+NEXT_EUR = BOXES_PER_RUN * min(PRICE.get(t, 0.03) for t in TYPES.split())
 SWEEP = {"zavif": "mandfix4-zenavif-1782593621", "zjxll": "jxl-lossy-vardct-1782609551",
          "zwebp": "mandfix2-zenwebp-1782584881", "zjxlm": "jxl-modular-1782596759",
          "zpng": "mandfix2-zenpng-1782584881"}
@@ -109,7 +112,7 @@ def launch(run):
     # Fire-and-forget: hcloud server create blocks ~40s, so launching 44 boxes sequentially would take
     # ~30min. Detach each launcher so the whole fleet comes up in parallel (~1min ramp). Failures
     # (capacity) just mean the run has no box next cycle and gets relaunched — self-correcting.
-    subprocess.Popen(["bash", "scripts/jobsys/hetzner_scorefile_launch.sh", run, "1"],
+    subprocess.Popen(["bash", "scripts/jobsys/hetzner_scorefile_launch.sh", run, str(BOXES_PER_RUN)],
                      cwd=REPO, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      stdin=subprocess.DEVNULL, start_new_session=True)
 
