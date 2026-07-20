@@ -79,6 +79,14 @@ cloud-init calls `destroy_self` (metadata instance-id → `DELETE`). A hard back
 
 ## "Optimal" notes
 
+- **Decode/extract reuse (verified 2026-07-20):** the ScoreFile path decodes the ref
+  ONCE per source and each variant ONCE (byte-range from R2, no re-encode). The v1
+  ref XYB pyramid is precomputed ONCE per chunk and reused across the chunk's variants
+  (`precompute_ref_ctx` + `extract_features_regime_with_ctx`, bit-identical; **~15%
+  off** a 12-variant chunk). **Remaining win:** the v2-348 block still rebuilds the ref
+  pyramid per variant (`zensim::compute_v2_features` has no precomputed-ref API), and
+  v1+v2 don't share a pyramid — that ~2/3 of extraction needs a **combined-720-with-ref
+  shared-pyramid API in the zensim crate** (proposed to the feature-v2 session; ~40%+).
 - zensim parallelizes internally and plateaus ~8 concurrent — a box with ≥8 vCPU
   (`cpx52`=16, `cx43`=8) saturates it; more, smaller boxes beat fewer huge ones on
   cost only up to the per-box plateau. A *pair* is the minimum; scale box count to
