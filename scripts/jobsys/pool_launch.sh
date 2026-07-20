@@ -85,6 +85,9 @@ runcmd:
     }
     # Hard backstop: kill no matter what a few min after the intended lifetime (hung pull / worker).
     ( sleep $(( (ZEN_MAX_MIN + 5) * 60 )); destroy_self ) &
+    # Robust pull: ghcr anon pulls are flaky under load (rate-limit / net variance) and a failed pull
+    # would make 'docker run' return -> premature self-destruct. Retry the pull before running.
+    for a in 1 2 3 4 5 6; do docker pull '$IMAGE' && break || { echo "[pull] attempt \$a failed; retry"; sleep 20; }; done
     # POOL worker in the FOREGROUND: works the pool for ~${ZEN_MAX_MIN}min then EXITS -> self-destruct.
     docker run --name zpool --restart no \
       -e AWS_ACCESS_KEY_ID='$AK' -e AWS_SECRET_ACCESS_KEY='$SK' -e AWS_SESSION_TOKEN='$ST' -e AWS_REGION=auto \

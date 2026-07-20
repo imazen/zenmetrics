@@ -54,7 +54,8 @@ done
 # even though small ops are fine (observed 2026-06-24: a 92MB cp hung at 0 bytes while ls/control.json
 # took <0.4s). Prefer a gzipped manifest (~30x smaller — 92MB -> 3MB) at <uri>.gz when present, else
 # fall back to the plain object. Backward-compatible: runs without a .gz still work via the fallback.
-MGZ="${ZEN_MANIFEST_URI%.gz}.gz"
+# (MGZ is computed AFTER the pool-mode branch below — it dereferences ZEN_MANIFEST_URI, which pool
+# mode doesn't set.)
 # ── POOL MODE — the hourly-efficient lifecycle ─────────────────────────────────────────────────────
 # When ZEN_POOL_RUNLIST is set, this box works the WHOLE undone-tar POOL rather than one run: it
 # round-robins every run in the runlist (TSV `run<TAB>tar_uri`), scoring one chunk of each per cycle
@@ -69,7 +70,7 @@ pool_mode(){
   local cyc=0
   while [ "$(date +%s)" -lt "$END" ]; do
     cyc=$((cyc + 1)); local did=0 seen=0
-    while IFS=$'\t' read -r run src mode _rest; do
+    while IFS=$'\t' read -r run src mode _rest <&3; do
       [ -z "$run" ] && continue
       [ "$(date +%s)" -ge "$END" ] && break
       seen=$((seen + 1))
@@ -96,8 +97,8 @@ pool_mode(){
       surface_problems "$out" || true
       local s; s=$(printf '%s\n' "$out" | grep -oE 'done=[0-9]+' | head -1 | cut -d= -f2)
       [ "${s:-0}" -gt 0 ] && did=1
-      [ $((seen % 15)) -eq 0 ] && prog "pool cyc=$cyc @$run done=${s:-0} ($(( (END - $(date +%s)) / 60 ))min left)"
-    done < /tmp/runlist.tsv
+      prog "pool cyc=$cyc @$run done=${s:-0} ($(( (END - $(date +%s)) / 60 ))min left)"
+    done 3< /tmp/runlist.tsv
     if [ "$did" -eq 0 ]; then hb "POOL: nothing left across all $seen runs — backfill drained, exiting"; break; fi
     sleep "${ZEN_PASS_SLEEP:-0.2}"
   done
@@ -105,6 +106,8 @@ pool_mode(){
 }
 if [ -n "${ZEN_POOL_RUNLIST:-}" ]; then pool_mode; exit 0; fi
 
+# Single-run mode below — safe to dereference ZEN_MANIFEST_URI now (pool mode has exited).
+MGZ="${ZEN_MANIFEST_URI%.gz}.gz"
 hb "fetching manifest ($MGZ, else plain) — this is the op that historically hung at 0 bytes on big sweeps"
 mfetch_err=$(s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$MGZ" /tmp/manifest.json.gz 2>&1)
 if [ $? -eq 0 ]; then
