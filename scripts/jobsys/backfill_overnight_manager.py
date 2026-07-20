@@ -7,6 +7,7 @@
 # MAX_EUR. Boxes self-destruct on drain, so the fleet is self-bounding; this only rolls coverage and
 # refills as boxes finish. Exits when every run (>= EXPECTED) is complete, then tears down the index box.
 import os, sys, json, gzip, time, subprocess, re
+from concurrent.futures import ThreadPoolExecutor
 import pyarrow.dataset as ds, pyarrow.fs as fs
 
 REPO = "/home/lilith/work/zen/zenmetrics"
@@ -116,14 +117,21 @@ def main():
         done = set(open(DONEF).read().split()) if os.path.exists(DONEF) else set()
         boxes = live()
         eur = fleet_eur(boxes)
+        pending = [r for r in rs if r not in done]     # already-complete runs need no ledger read
+        # Concurrent ledger reads — sequential doesn't scale as the avif ledgers grow (a cycle was
+        # taking >15min at 54 runs). ThreadPool keeps a cycle to ~the slowest single read.
+        with ThreadPoolExecutor(max_workers=12) as ex:
+            dj_map = dict(zip(pending, ex.map(done_jobs, pending)))
         tot_done = tot_all = 0; undone = []
-        for run in rs:
+        for run in done:                                # done runs count fully toward the progress bar
+            tj = total_jobs(run)
+            if tj: tot_done += tj; tot_all += tj
+        for run in pending:
             tj = total_jobs(run)
             if tj is None: continue
-            dj = done_jobs(run); tot_done += dj; tot_all += tj
+            dj = dj_map.get(run, 0); tot_done += dj; tot_all += tj
             if dj >= tj * 0.999:
-                if run not in done: open(DONEF, "a").write(run + "\n"); done.add(run)
-                continue
+                open(DONEF, "a").write(run + "\n"); done.add(run); continue
             if not any(("hzsf-%s-" % run) in b for b, _ in boxes):
                 undone.append((run, tj - dj))
         undone.sort(key=lambda x: -x[1])
