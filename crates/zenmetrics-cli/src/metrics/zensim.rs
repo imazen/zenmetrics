@@ -257,6 +257,92 @@ pub fn extract_features_regime(
     Ok(features)
 }
 
+/// Per-source (per-chunk) reference context: the reference reflect-padded to ≥64px
+/// ONCE, plus its v1 XYB pyramid precomputed ONCE. A ScoreFile job scores many
+/// variants of the SAME source; building this once and reusing it across the
+/// variants avoids rebuilding the v1 ref pyramid per variant (the ref is decoded
+/// once in `run_score_file`, but without this the ref FEATURE work was redone every
+/// variant). Bit-identical to the per-call path — see `v1_precomputed_ref_matches_percall`.
+///
+/// NOTE: only the **v1** ref pyramid is reused. `zensim::compute_v2_features` has no
+/// precomputed-ref API, so the v2-348 block still rebuilds the ref pyramid per
+/// variant — the full ref+shared-pyramid reuse needs a combined-720-with-ref API in
+/// the zensim crate (see `docs/ZENSIM720_BACKFILL.md` "optimal notes").
+#[cfg(feature = "cpu-metrics")]
+pub struct ZensimRefCtx {
+    padded: Vec<u8>, // reference reflect-padded to (w,h); w,h ≥ 64
+    w: usize,
+    h: usize,
+    v1_pre: zensim::PrecomputedReference, // v1 XYB pyramid, 4 scales
+}
+
+/// Build a [`ZensimRefCtx`] from a decoded reference — pad once, precompute the v1
+/// pyramid once. Reuse across all variants of this source via
+/// [`extract_features_regime_with_ctx`].
+#[cfg(feature = "cpu-metrics")]
+pub fn precompute_ref_ctx(reference: &Rgb8Image) -> Result<ZensimRefCtx, Box<dyn std::error::Error>> {
+    let padded = reflect_pad_to_min(reference, 64).into_owned();
+    let w = reference.width.max(64) as usize;
+    let h = reference.height.max(64) as usize;
+    let r3: &[[u8; 3]] = bytemuck::cast_slice(&padded);
+    // 4 scales = zensim's NUM_SCALES / the ZensimConfig default; covers every regime.
+    let v1_pre = zensim::precompute_reference_with_scales(r3, w, h, 4)
+        .map_err(|e| format!("zensim: precompute_reference_with_scales: {e:?}"))?;
+    Ok(ZensimRefCtx { padded, w, h, v1_pre })
+}
+
+/// Extract the regime-appropriate feature vector for `distorted` against a
+/// precomputed [`ZensimRefCtx`] — the v1 block reuses the ctx's pyramid
+/// (`compute_zensim_with_ref_and_config`); the v2 block reprocesses the ref (no
+/// precomputed-ref API). Bit-identical to [`extract_features_regime`].
+#[cfg(feature = "cpu-metrics")]
+pub fn extract_features_regime_with_ctx(
+    ctx: &ZensimRefCtx,
+    distorted: &Rgb8Image,
+    regime: crate::metrics::ZensimFeatureRegime,
+) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
+    use crate::metrics::ZensimFeatureRegime as R;
+    use zensim::{RgbSlice, ZensimConfig, compute_zensim_with_ref_and_config};
+
+    if distorted.width.max(64) as usize != ctx.w || distorted.height.max(64) as usize != ctx.h {
+        return Err(format!(
+            "zensim: distorted ({}×{}) does not match ref ctx ({}×{})",
+            distorted.width, distorted.height, ctx.w, ctx.h
+        )
+        .into());
+    }
+    let dp = reflect_pad_to_min(distorted, 64);
+    let dp: &[u8] = &dp;
+    let dst3: &[[u8; 3]] = bytemuck::cast_slice(dp);
+    let ref3: &[[u8; 3]] = bytemuck::cast_slice(&ctx.padded);
+
+    // v1 block: reuse the precomputed ref pyramid (bit-identical to per-call).
+    let (extended, iw) = match regime {
+        R::Basic => (false, false),
+        R::Extended => (true, false),
+        R::WithIw | R::V2Ab => (true, true),
+    };
+    let mut cfg = ZensimConfig::default();
+    cfg.extended_features = extended;
+    cfg.compute_iw_features = iw;
+    let v1 = compute_zensim_with_ref_and_config(&ctx.v1_pre, dst3, ctx.w, ctx.h, cfg)
+        .map_err(|e| format!("zensim: compute_zensim_with_ref_and_config: {e:?}"))?;
+    let mut features = v1.into_features();
+
+    // v2 block: no precomputed-ref API — reprocess the (already-padded) ref.
+    if regime == R::V2Ab {
+        let v2 = zensim::Zensim::new(zensim::ZensimProfile::PreviewV0_2)
+            .compute_v2_features(&RgbSlice::new(ref3, ctx.w, ctx.h), &RgbSlice::new(dst3, ctx.w, ctx.h))
+            .map_err(|e| format!("zensim: v2-348 compute_v2_features: {e:?}"))?;
+        features.extend_from_slice(v2.features());
+    }
+    let want = regime.total_features();
+    if features.len() != want {
+        return Err(format!("zensim: regime {regime:?} expected {want} features, got {}", features.len()).into());
+    }
+    Ok(features)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,6 +445,103 @@ mod tests {
             iw * 1e3,
             v2 * 1e3,
             v2 / iw
+        );
+    }
+
+    /// GATE for the ref-reuse optimization: does the PRECOMPUTED-ref v1 path
+    /// (`precompute_reference_with_scales` + `compute_zensim_with_ref_and_config`)
+    /// produce BIT-IDENTICAL 372 features to the per-call `compute_zensim_with_config`?
+    /// If yes, the ScoreFile chunk can precompute the ref ONCE and reuse it across
+    /// all its variants (the ref pyramid is built once, not per variant). If this
+    /// ever fails, the precompute path is NOT usable (precision rule).
+    #[cfg(feature = "cpu-metrics")]
+    #[test]
+    fn v1_precomputed_ref_matches_percall() {
+        use zensim::{
+            ZensimConfig, compute_zensim_with_config, compute_zensim_with_ref_and_config,
+            precompute_reference_with_scales,
+        };
+        let (w, h) = (96usize, 72usize);
+        let n_scales = 4; // zensim NUM_SCALES (pub(crate)); the ZensimConfig default
+        let reference = synth(1, w as u32, h as u32);
+        let r3: Vec<[u8; 3]> =
+            reference.pixels.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+        let mut cfg = ZensimConfig::default();
+        cfg.extended_features = true;
+        cfg.compute_iw_features = true;
+        let pre = precompute_reference_with_scales(&r3, w, h, n_scales).unwrap();
+        for d in 0..4u32 {
+            let dist = synth(200 + d, w as u32, h as u32);
+            let d3: Vec<[u8; 3]> =
+                dist.pixels.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+            let per_call = compute_zensim_with_config(&r3, &d3, w, h, cfg).unwrap().into_features();
+            let via_pre = compute_zensim_with_ref_and_config(&pre, &d3, w, h, cfg).unwrap().into_features();
+            assert_eq!(per_call.len(), 372);
+            assert_eq!(via_pre.len(), 372);
+            for (i, (a, b)) in per_call.iter().zip(via_pre.iter()).enumerate() {
+                assert_eq!(
+                    a.to_bits(), b.to_bits(),
+                    "v1 feat[{i}] differs precomputed-ref vs per-call (d={d}): {a} vs {b}"
+                );
+            }
+        }
+    }
+
+    /// The precomputed-ref-CTX path must produce BIT-IDENTICAL 720 features to the
+    /// per-call `extract_features_regime` — the ScoreFile chunk optimization must
+    /// not shift a single feature. Covers ≥64px (no pad) and sub-64px (padded).
+    #[cfg(feature = "cpu-metrics")]
+    #[test]
+    fn v2ab_ctx_matches_percall() {
+        use crate::metrics::ZensimFeatureRegime as R;
+        for (w, h) in [(96u32, 72u32), (40, 24)] {
+            let reference = synth(7, w, h);
+            let ctx = precompute_ref_ctx(&reference).unwrap();
+            for d in 0..3u32 {
+                let dist = synth(300 + d, w, h);
+                let per_call = extract_features_regime(&reference, &dist, R::V2Ab).unwrap();
+                let via_ctx = extract_features_regime_with_ctx(&ctx, &dist, R::V2Ab).unwrap();
+                assert_eq!(per_call.len(), 720);
+                assert_eq!(via_ctx.len(), 720);
+                for (i, (a, b)) in per_call.iter().zip(via_ctx.iter()).enumerate() {
+                    assert_eq!(
+                        a.to_bits(), b.to_bits(),
+                        "ctx feat[{i}] differs @ {w}x{h} d={d}: {a} vs {b}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Measures the ScoreFile ref-reuse win: 12 variants of ONE source (the chunk
+    /// shape), per-call vs precomputed-ref ctx. Run: `cargo test -p zenmetrics-cli
+    /// --lib --release v2ab_ctx_speedup -- --ignored --nocapture`.
+    #[cfg(feature = "cpu-metrics")]
+    #[test]
+    #[ignore = "timing measurement, not a correctness gate"]
+    fn v2ab_ctx_speedup_12var() {
+        use crate::metrics::ZensimFeatureRegime as R;
+        use std::time::Instant;
+        let (w, h) = (512u32, 512u32);
+        let reference = synth(1, w, h);
+        let dists: Vec<_> = (0..12).map(|d| synth(100 + d, w, h)).collect();
+        // per-call: reprocess ref every variant
+        let _ = extract_features_regime(&reference, &dists[0], R::V2Ab).unwrap();
+        let t0 = Instant::now();
+        for d in &dists {
+            let _ = extract_features_regime(&reference, d, R::V2Ab).unwrap();
+        }
+        let per_call = t0.elapsed().as_secs_f64();
+        // ctx: precompute ref once, reuse across the 12
+        let t1 = Instant::now();
+        let ctx = precompute_ref_ctx(&reference).unwrap();
+        for d in &dists {
+            let _ = extract_features_regime_with_ctx(&ctx, d, R::V2Ab).unwrap();
+        }
+        let via_ctx = t1.elapsed().as_secs_f64();
+        eprintln!(
+            "ZENSIM chunk {w}x{h} ×12: per-call {:.0} ms | ctx(ref-reuse) {:.0} ms | speedup {:.2}× ({:.0}% off)",
+            per_call * 1e3, via_ctx * 1e3, per_call / via_ctx, (1.0 - via_ctx / per_call) * 100.0
         );
     }
 

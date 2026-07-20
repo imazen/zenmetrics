@@ -577,6 +577,18 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
     let src_path = resolve_source(image_path, corpus_prefix)?;
     let reference = decode_image_to_rgb8(&src_path)?;
 
+    // Precompute the zensim v1 reference pyramid ONCE for this source — every variant
+    // in a ScoreFile chunk shares this reference, so the v1 block reuses the pyramid
+    // instead of rebuilding it per variant (bit-identical; see
+    // `metrics::zensim::v2ab_ctx_matches_percall`). Only built when a zensim metric is
+    // requested; a build failure falls back to the per-call path. `None` on non-cpu builds.
+    #[cfg(feature = "cpu-metrics")]
+    let ref_ctx = if metrics.iter().any(|m| *m == "zensim" || *m == "zensim-gpu") {
+        crate::metrics::zensim::precompute_ref_ctx(&reference).ok()
+    } else {
+        None
+    };
+
     let mut rows: Vec<String> = Vec::with_capacity(shas.len() * metrics.len().max(1));
     let mk_row = |sha: &str, extra: Value| -> Result<String, Box<dyn Error>> {
         let mut o = Map::new();
@@ -636,11 +648,11 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                     // FEATURES ONLY (no score): the CPU v2-ab 720-feature vector.
                     // Gated on `cpu-metrics` (NOT gpu-zensim) so a CPU-ONLY executor
                     // (`:exec`, no GPU) emits 720 — zensim is CPU, so the 720 backfill
-                    // runs on cheap CPU boxes with no GPU needed.
-                    match crate::metrics::run_zensim_features(
-                        &reference,
-                        distorted,
-                        crate::metrics::ZensimFeatureRegime::V2Ab,
+                    // runs on cheap CPU boxes with no GPU needed. Reuse the precomputed
+                    // ref pyramid across this source's variants (bit-identical).
+                    match ref_ctx.as_ref().map_or_else(
+                        || crate::metrics::run_zensim_features(&reference, distorted, crate::metrics::ZensimFeatureRegime::V2Ab),
+                        |c| crate::metrics::zensim::extract_features_regime_with_ctx(c, distorted, crate::metrics::ZensimFeatureRegime::V2Ab),
                     ) {
                         Ok(feats) => {
                             let mut fo = Map::new();
@@ -720,13 +732,13 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         for metric in &metrics {
             // zensim(-gpu) yields the 720-feature v2-ab vector from the SAME decode.
             // FEATURES ONLY (no score) — emit just the feature row. Gated on
-            // `cpu-metrics` (NOT gpu-zensim) so a CPU-only executor emits 720.
+            // `cpu-metrics` (NOT gpu-zensim) so a CPU-only executor emits 720. Reuse
+            // the precomputed ref pyramid across this source's variants (bit-identical).
             #[cfg(feature = "cpu-metrics")]
             if *metric == "zensim-gpu" || *metric == "zensim" {
-                match crate::metrics::run_zensim_features(
-                    &reference,
-                    &distorted,
-                    crate::metrics::ZensimFeatureRegime::V2Ab,
+                match ref_ctx.as_ref().map_or_else(
+                    || crate::metrics::run_zensim_features(&reference, &distorted, crate::metrics::ZensimFeatureRegime::V2Ab),
+                    |c| crate::metrics::zensim::extract_features_regime_with_ctx(c, &distorted, crate::metrics::ZensimFeatureRegime::V2Ab),
                 ) {
                     Ok(feats) => {
                         let mut fo = Map::new();
