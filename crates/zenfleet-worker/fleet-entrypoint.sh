@@ -101,7 +101,15 @@ pool_mode(){
       { [ "${s:-0}" -gt 0 ] || [ "$rc" -eq 124 ]; } && did=1
       prog "pool cyc=$cyc @$run done=${s:-0} ($(( (END - $(date +%s)) / 60 ))min left)"
     done 3< /tmp/runlist.tsv
-    if [ "$did" -eq 0 ]; then hb "POOL: nothing left across all $seen runs — backfill drained, exiting"; break; fi
+    if [ "$did" -eq 0 ]; then
+      hb "POOL: nothing left across all $seen runs — backfill drained, exiting"
+      # Completion beacon: this box did a FULL cycle and found EVERY run empty. pool_cron watches
+      # s3://.../jobs/_pool/drained/ (a cheap small-prefix list) to auto-stop, instead of reading every
+      # ledger. Filename carries the epoch so the cron can window it to "recent".
+      printf '%s drained cyc=%s\n' "$WORKER" "$cyc" > /tmp/drainmark 2>/dev/null || true
+      s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp /tmp/drainmark "s3://$ZEN_BUCKET/jobs/_pool/drained/${WORKER}-$(date +%s)" 2>/dev/null || true
+      break
+    fi
     sleep "${ZEN_PASS_SLEEP:-0.2}"
   done
   prog "POOL exit (budget reached or drained) -> container exits -> self-destruct"

@@ -9,12 +9,17 @@ LOG=~/tmp/hz720/pool_cron.log; mkdir -p ~/tmp/hz720
 log(){ echo "[$(date -u +%H:%M:%SZ)] $*" >> "$LOG"; }
 
 # 1. Complete? -> stop renewing (leave a marker so future ticks are instant no-ops).
+#    FAST gate: pool boxes that do a full cycle and find EVERY run empty drop a beacon in
+#    jobs/_pool/drained/<worker>-<epoch>. If >=3 boxes beaconed in the last ~70min the pool is drained.
+#    (pool_done_check.py reads every ledger and is too slow at fleet scale — it stays a manual tool only.)
 if [ -f ~/tmp/hz720/pool_done.marker ]; then log "done marker present — no launch"; exit 0; fi
-DONE=$(timeout 180 python3 scripts/jobsys/pool_done_check.py 2>/dev/null || echo "NOTDONE ?")
-log "done-check: $DONE"
-case "$DONE" in
-  DONE*) log "backfill COMPLETE — writing marker, not launching"; touch ~/tmp/hz720/pool_done.marker; exit 0 ;;
-esac
+set -a; . ~/.config/cloudflare/r2-credentials 2>/dev/null; set +a
+EP="https://${R2_ACCOUNT_ID:-x}.r2.cloudflarestorage.com"
+DRAINED=$(AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:-}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:-}" AWS_REGION=auto \
+  s5cmd --endpoint-url "$EP" ls "s3://zentrain/jobs/_pool/drained/" 2>/dev/null \
+  | awk -v now="$(date +%s)" '{n=split($NF,a,"-"); e=a[n]+0; if (e>0 && now-e < 4200) c++} END{print c+0}')
+log "drain-beacon: ${DRAINED:-0} boxes found the whole pool empty in the last 70min"
+if [ "${DRAINED:-0}" -ge 3 ]; then log "backfill DRAINED — writing done marker, not launching"; touch ~/tmp/hz720/pool_done.marker; exit 0; fi
 
 # 2. Don't stack: a prior batch should have self-destructed (55min < 60min tick). If many remain, skip.
 NUP=$(hcloud server list -o columns=name 2>/dev/null | grep -c hzpool || echo 0)
