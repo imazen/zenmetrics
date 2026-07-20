@@ -188,6 +188,7 @@ pub fn release_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &Job
 /// Install the spot-preemption handler (goal F): on SIGTERM/SIGINT, release the in-flight claim (if
 /// any) so the job requeues immediately, then exit. Runs on a dedicated signal-hook thread (safe to
 /// spawn `aws`). No-op if signal registration fails (falls back to TTL reclaim, goal E).
+#[cfg(unix)]
 fn spawn_spot_reclaim(
     inflight: Arc<Mutex<Option<JobId>>>,
     endpoint: &str,
@@ -220,6 +221,18 @@ fn spawn_spot_reclaim(
             std::process::exit(130);
         }
     });
+}
+
+/// Non-unix (Windows) build: no POSIX signals, so there is nothing to install. The worker relies on
+/// TTL-based claim reclaim (goal E) instead of fast spot-release. The idle-only Windows tier is stopped
+/// by Task Scheduler rather than signalled, so there is no in-flight claim to fast-release here anyway.
+#[cfg(not(unix))]
+fn spawn_spot_reclaim(
+    _inflight: Arc<Mutex<Option<JobId>>>,
+    _endpoint: &str,
+    _bucket: &str,
+    _prefix: &str,
+) {
 }
 
 static CLAIM_TMP_N: AtomicU64 = AtomicU64::new(0);
