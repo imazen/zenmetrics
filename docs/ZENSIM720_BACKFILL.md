@@ -107,3 +107,40 @@ boxes launched with the self-destruct cloud-init: both pulled `:exec`, one score
 teardown; the 3 persistent dev boxes untouched). Cost ≈ €0.001. This exercises the
 identical ScoreFile path (R2 ref fetch + tar byte-range + decode + 720 extract +
 lease/ledger + autoshutdown) the canonical run uses.
+
+## UPDATE 2026-07-20 — variants are in TARS, not encodes/ (byte-range path)
+
+**Discovery:** the canonical `pairs.*.parquet` `dist_path` points at `encodes/<file>`, but those
+individual objects **only exist for `zenjpeg_lossy`** (pre-extracted). The other **6 codecs' `encodes/`
+prefix is EMPTY (404)** — their bytes live in the sweep run's per-box tars
+`s3://zentrain/jxl-lossy/runs/<sweep>/variants/box-N.tar` (`dist_tar` column). ~188GB, ~53 tars, 4.26M
+variants. Sweeps: zenavif `mandfix4-zenavif-1782593621`(8), zenjxl_lossy `jxl-lossy-vardct-1782609551`(24),
+zenwebp lossy+lossless SHARE `mandfix2-zenwebp-1782584881`(9), zenjxl_lossless `jxl-modular-1782596759`(10),
+zenpng `mandfix2-zenpng-1782584881`(2).
+
+**Path chosen (byte-range / "seekable", per user):** do NOT re-upload 4.26M objects. Instead:
+
+1. **Index on a Hetzner box** — `scripts/jobsys/index_tars_driver.sh` (loops all codecs, ~3 concurrent)
+   calls `scripts/jobsys/index_tar_byterange.py <tar> <codec> <run> zentrain`: streams the tar ONCE
+   (`s5cmd cat | tarfile r|`), and from `m.offset_data`+`m.size` writes a 4-col index
+   `dist_member\toffset\tsize\tdist_member` + a ScoreFile manifest (ref derived from the filename:
+   `(.+?)_[0-9a-f]{16}_` → `+.png`) to `jobs/bf-<tag>-tN/`. One run per tar.
+2. **Score via the byte-range mode** — the existing launcher with `ZEN_TAR_OVERRIDE=<the tar>` and
+   **NO `ZEN_ENCODES_PREFIX`** (that would force direct-object). Refs shared across all codecs at
+   `zentrain/refs/clean-picker-corpus-2026-06-26/`. Oversubscribe `ZEN_CORE_OVERSUBSCRIBE=3`.
+3. **jobexec fix (required):** `variant_index()` now caches the index on disk keyed by URI (download
+   once/box, atomic rename) — without it byte-range re-downloads the index per cell (the 30MB×N
+   bottleneck direct-object dodged). Keep per-tar indexes ~5MB so the per-process parse stays cheap.
+
+**New knob:** `ZEN_CORE_OVERSUBSCRIBE` (float ≥1, default 1) multiplies the `can_admit` core budget for
+I/O-bound feature backfills; RAM stays bounded by `can_admit`. Measured ~29 var/s/box at 8-wide →
+~22-wide oversubscribed.
+
+**Overnight autonomy:** `scripts/jobsys/backfill_overnight_manager.py` (run on the dev box, nohup) —
+discovers declared `bf-z*-t*` runs, keeps ≤CAP hzsf-bf boxes (~$2/hr; CAP counts the draining zenjpeg
+fleet too), launches ONE oversubscribed byte-range box per undone run without a live box, self-terminates
+when all runs complete (or after HOURS), then tears down the index box. Boxes self-destruct on drain, so
+the fleet is self-bounding. Run: `CAP=56 HOURS=7 nohup python3 scripts/jobsys/backfill_overnight_manager.py &`.
+
+**Validated 2026-07-20:** zenpng + zenavif byte-range blobs = `kind=feature`, `{720}` features,
+`regime=v2-ab`, no score. zenjpeg_lossy runs via the original direct-object path (`bf-zjl2`).
