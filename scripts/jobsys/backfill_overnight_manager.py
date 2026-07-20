@@ -19,11 +19,15 @@ LOG = os.path.expanduser("~/tmp/hz720/overnight.log")
 TOTALS = os.path.expanduser("~/tmp/hz720/totals.json")
 DONEF = os.path.expanduser("~/tmp/hz720/done_runs.txt")
 TYPES = os.environ.get("TYPES", "cx43 cx33 cx23")     # cheap-first; launcher falls back down the list
-PRICE = {"cx23": 0.0104, "cx33": 0.0160, "cx43": 0.0296, "cx41": 0.0, "cpx42": 0.1314, "cpx52": 0.19}
+PRICE = {"cx23": 0.0104, "cx33": 0.0160, "cx43": 0.0296, "cx53": 0.0561,
+         "cpx31": 0.1178, "cpx41": 0.2267, "cpx42": 0.1314, "cpx51": 0.4479, "cpx52": 0.19}
 BOXES_PER_RUN = int(os.environ.get("BOXES_PER_RUN", "2"))  # boxes per tar-run (they coordinate via ledger)
-# Projected cost per launch = BOXES_PER_RUN boxes at the CHEAPEST type we'll actually get (EU capacity
-# tonight yields cx23/cx33, not cx43), so the price cap doesn't under-launch and leave budget on the table.
-NEXT_EUR = BOXES_PER_RUN * min(PRICE.get(t, 0.03) for t in TYPES.split())
+# Projected cost per launch = BOXES_PER_RUN boxes at the FIRST (preferred) type, which is the one the
+# launcher tries first and usually gets. Using the first type keeps the price cap honest when the fleet
+# is deliberately biased toward expensive-but-fast boxes (cpx51 US) — min-of-types would wildly
+# under-project and blow the budget. If the preferred type is capacity-out and it falls to a cheaper
+# one, we simply under-launch (stay under budget), which is safe.
+NEXT_EUR = BOXES_PER_RUN * PRICE.get(TYPES.split()[0], 0.05)
 SWEEP = {"zavif": "mandfix4-zenavif-1782593621", "zjxll": "jxl-lossy-vardct-1782609551",
          "zwebp": "mandfix2-zenwebp-1782584881", "zjxlm": "jxl-modular-1782596759",
          "zpng": "mandfix2-zenpng-1782584881"}
