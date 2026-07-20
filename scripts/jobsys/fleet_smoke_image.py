@@ -44,7 +44,10 @@ def _make_pair():
 
 
 REF_PNG_B64, DIST_PNG_B64 = _make_pair()
-METRICS = "cvvdp-gpu zensim-gpu ssim2-gpu butteraugli-gpu dssim-gpu iwssim-gpu"
+# NOTE: zensim-gpu is intentionally EXCLUDED — the GPU zensim kernel is disabled
+# (2026-07-19); `score --metric zensim-gpu` now PANICS by design (zensim is CPU
+# features-only). These 5 metrics are the real GPU kernels that must JIT on a card.
+METRICS = "cvvdp-gpu ssim2-gpu butteraugli-gpu dssim-gpu iwssim-gpu"
 IMG = sys.argv[1] if len(sys.argv) > 1 else "ghcr.io/imazen/zenfleet-worker:exec-gpu"
 
 

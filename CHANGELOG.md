@@ -65,24 +65,28 @@ Workspace conventions per the global rules:
 
 ### Changed
 
-- **GPU zensim kernel DISABLED; the fleet now extracts zensim on the CPU with the
-  v2 append-only regime (720 features).** zensim was rewritten with an additive v2
-  extractor (`feature_v2`, 348 bounded features); the GPU crate implements only v1,
-  so scoring production data on it while v2 is unproven would poison the training
-  set. Every zensim invocation now computes on the CPU `zensim` crate — the fleet's
-  `jobexec` SDR sites emit the new **`V2Ab` (720 = v1-372 `with-iw` ++ v2-348)**
-  regime (label `"v2-ab"`), and `--metric zensim-gpu` (via `run_metric`) scores on
-  CPU. The score column stays the canonical **`PreviewV0_2`** (pinned; bit-exact via
-  `zensim::score_with_features_regime`, tested in `metrics::zensim::tests`). New CPU
-  path `metrics::zensim::{score_with_features_regime, score_with_features_v2ab}` +
-  a reflect-pad-to-64 so the v1/v2 blocks agree on sub-64px cells;
-  `metrics::run_zensim_gpu_with_features` now delegates to it (name kept for API
-  stability, `gpu_runtime` ignored). Re-enable the GPU path by restoring those
-  function bodies once v2 is ported to the kernel and validated. NOTE: v2 is an
-  iteration-1 scalar extractor — measurably slower than v1's SIMD path, so per-cell
-  fleet throughput drops (expected). Follow-ups (NOT done): the monolithic `sweep`
-  path (`cache.rs` + `feature_writer.rs`'s hardcoded 372) still uses the GPU kernel
-  and only knows 372; the HDR jobexec path stays v1 `with-iw` (v2 is sRGB-only).
+- **GPU zensim kernel HARD-DISABLED (entrypoint panic); the fleet extracts zensim
+  on the CPU, FEATURES ONLY, with the v2 append-only regime (720).** zensim was
+  rewritten with an additive v2 extractor (`feature_v2`, 348 bounded features); the
+  GPU crate implements only v1, so scoring production data on it while v2 is unproven
+  would poison the training set. The fleet's `jobexec` sites now emit the new **`V2Ab`
+  (720 = v1-372 `with-iw` ++ v2-348)** regime (label `"v2-ab"`) as a FEATURES-ONLY
+  row — no score (a v2 score head is trained later; dropping the separate
+  `PreviewV0_2` score pass also removes one pyramid pass). CPU path
+  `metrics::zensim::{extract_features_regime, extract_features_v2ab}` returns
+  `Vec<f64>`; a reflect-pad-to-64 makes the v1/v2 blocks agree on sub-64px cells;
+  `metrics::run_zensim_features` delegates to it. sweep + score-pairs route to the
+  same CPU path (NaN score sentinel). The GPU zensim kernel is hard-disabled with an
+  **entrypoint panic**: `run_gpu_via_umbrella` + cache.rs `get_or_build_umbrella`
+  assert `!Zensim`, and `run_metric` ZensimGpu panics — the stale v1 kernel can never
+  silently run. Revert = restore those bodies + repoint the pre-panic image.
+  Throughput @1024²: v2-ab 78.6 ms/pair (features-only; was 96 with the score pass).
+  DOC FIX (zensim-sibling source audit): v2's extractor is ALREADY SIMD-fused
+  (magetypes; the zensim `metric.rs` "iteration-1 scalar" doc is STALE) — the ~1.5×
+  cost vs v1-372 is the extra 348-feature compute PLUS a redundant XYB pyramid (v1
+  and v2 build it independently); the real speedup is a combined 372+348
+  single-pyramid API in the zensim crate, not a further fuse. Follow-up (NOT done):
+  the HDR jobexec path stays v1 `with-iw` (v2 is sRGB-only).
 
 ### Added
 
