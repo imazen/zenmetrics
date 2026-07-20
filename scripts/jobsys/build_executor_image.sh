@@ -20,6 +20,9 @@ BIN="${ZEN_METRICS_BIN:-$ROOT/target/release/zenmetrics}"
 CTX="$ROOT/target/.exec-ctx"; rm -rf "$CTX"; mkdir -p "$CTX"; trap 'rm -rf "$CTX"' EXIT
 cp "$BIN" "$CTX/zenmetrics"
 cp "$ROOT/scripts/jobsys/zenfleet-exec" "$CTX/zenfleet-exec"
+# Overlay the CURRENT entrypoint — the :latest base bakes a stale one, so without this
+# copy an edited fleet-entrypoint.sh never reaches :exec (this bit us on the tar-prefetch).
+cp "$ROOT/crates/zenfleet-worker/fleet-entrypoint.sh" "$CTX/fleet-entrypoint.sh"
 cp "$ROOT/crates/zenfleet-worker/Dockerfile.executor" "$CTX/Dockerfile"
 echo "building $IMAGE (base = ghcr.io/imazen/zenfleet-worker:latest + zenmetrics $(du -h "$BIN" | cut -f1))"
 docker build -t "$IMAGE" "$CTX"
