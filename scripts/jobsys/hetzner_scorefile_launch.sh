@@ -12,7 +12,11 @@ set -uo pipefail
 RUN="${1:?run id}"; N="${2:-2}"
 . "$(dirname "$0")/fleet.env"
 IMAGE="${ZEN_CPU_IMAGE:-$ZEN_FLEET_IMAGE_CPU}"
-BUCKET=codec-corpus; RUNP="jobs/$RUN"
+# ZEN_BUCKET — the ONE bucket holding run + tar + refs (R2 temp creds are single-bucket,
+# so all three must share it). Default codec-corpus; set to `zentrain` for the canonical
+# corpora whose variant tars live in zentrain (declare with ZEN_JOBS_BUCKET=zentrain +
+# copy the refs into zentrain). A cross-bucket run 403s every variant fetch.
+BUCKET="${ZEN_BUCKET:-codec-corpus}"; RUNP="jobs/$RUN"
 TAR="${ZEN_TAR_OVERRIDE:?set ZEN_TAR_OVERRIDE}"
 CORPUS_PREFIX="${ZEN_CORPUS_PREFIX_OVERRIDE:?set ZEN_CORPUS_PREFIX_OVERRIDE}"
 SSH_KEY="${SSH_KEY:-zen-arm-dev-20260528}"

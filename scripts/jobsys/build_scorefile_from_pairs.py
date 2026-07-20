@@ -13,7 +13,12 @@ import json, os, sys, tarfile, subprocess, gzip, hashlib
 import pyarrow.parquet as pq
 
 pairs_arg, TAR_URI, RUN = sys.argv[1], sys.argv[2], sys.argv[3]
-METRICS = ["butteraugli-gpu", "cvvdp", "dssim-gpu", "iwssim-gpu", "ssim2-gpu", "zensim-gpu"]
+# ZEN_SCOREFILE_METRICS (comma-sep) overrides the default. For the zensim-720 CPU
+# backfill set it to "zensim-gpu" — a CPU (:exec) box emits the 720 feature vector and
+# would error on the GPU-only metrics. Default keeps the full 6-metric set.
+METRICS = [m.strip() for m in os.environ.get(
+    "ZEN_SCOREFILE_METRICS", "butteraugli-gpu,cvvdp,dssim-gpu,iwssim-gpu,ssim2-gpu,zensim-gpu"
+).split(",") if m.strip()]
 CHUNK = int(os.environ.get("ZEN_SCOREFILE_CHUNK", "12"))
 ep = "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
 env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
@@ -105,9 +110,13 @@ mpath = "%s/manifest.json" % work
 json.dump(manifest, open(mpath, "w"))
 with open(mpath, "rb") as fi, gzip.open(mpath + ".gz", "wb") as g:
     g.write(fi.read())
-r2cp(idx_path, "s3://codec-corpus/jobs/%s/variant_index.tsv" % RUN)
-r2cp(mpath, "s3://codec-corpus/jobs/%s/manifest.json" % RUN)
-r2cp(mpath + ".gz", "s3://codec-corpus/jobs/%s/manifest.json.gz" % RUN)
+# Output bucket (ZEN_JOBS_BUCKET) — default codec-corpus. Set to `zentrain` when the
+# variant tar lives in zentrain, so the run + tar are ONE bucket (R2 temp creds are
+# single-bucket; a cross-bucket run can't be scoped and every fetch 403s).
+JOBS_BUCKET = os.environ.get("ZEN_JOBS_BUCKET", "codec-corpus")
+r2cp(idx_path, "s3://%s/jobs/%s/variant_index.tsv" % (JOBS_BUCKET, RUN))
+r2cp(mpath, "s3://%s/jobs/%s/manifest.json" % (JOBS_BUCKET, RUN))
+r2cp(mpath + ".gz", "s3://%s/jobs/%s/manifest.json.gz" % (JOBS_BUCKET, RUN))
 tot = sum(len(i["shas"]) for i in files.values())
 print("uploaded run %s: %d chunk jobs, %d variants (chunk=%d) for %d files"
       % (RUN, len(manifest), tot, CHUNK, len(files)), flush=True)
