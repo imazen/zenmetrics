@@ -64,6 +64,23 @@ else
 fi
 hb "manifest ready ($(wc -c </tmp/manifest.json 2>/dev/null || echo '?') bytes); $WORKER ($PROVIDER) claiming from s3://$ZEN_BUCKET/$ZEN_RUN/"
 
+# ── ScoreFile fast path: pre-download the WHOLE variant tar ONCE (bulk, ~200MB/s)
+# and read members by seek (ZEN_VARIANTS_TAR_LOCAL). This kills the per-variant `aws
+# s3api get-object` spawn (aws-cli ~1.5s Python startup ×12 variants/chunk = the
+# dominant fleet cost — cores sat idle in process spawn, RAYON-independent). A box
+# scores thousands of variants from one tar, so one sequential download amortizes
+# instantly; R2 egress is free. ZEN_PREFETCH_TAR=0 opts out (per-variant byte-range).
+if [ -n "${ZEN_VARIANTS_TAR_URI:-}" ] && [ "${ZEN_PREFETCH_TAR:-1}" = 1 ]; then
+  mkdir -p /data
+  hb "pre-downloading variant tar ($ZEN_VARIANTS_TAR_URI) for local seek-reads…"
+  if timeout "${ZEN_TAR_DL_TIMEOUT:-1800}" s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$ZEN_VARIANTS_TAR_URI" /data/variants.tar; then
+    export ZEN_VARIANTS_TAR_LOCAL=/data/variants.tar
+    prog "variant tar local at /data/variants.tar ($(du -h /data/variants.tar 2>/dev/null | cut -f1)) — per-variant aws spawn eliminated"
+  else
+    ferr "variant tar pre-download failed — falling back to per-variant byte-range GET (SLOW: aws-cli spawn/variant)"
+  fi
+fi
+
 idle=0 i=0 fails=0
 while [ "$idle" -lt "${ZEN_IDLE_PASSES:-5}" ]; do
   i=$((i + 1))

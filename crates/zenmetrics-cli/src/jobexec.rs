@@ -333,6 +333,37 @@ fn fetch_variant(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>
             return Ok((p, false)); // borrowed — shared extract dir, do not delete
         }
     }
+    // LOCAL TAR: the worker pre-downloaded the whole tar ONCE; seek+read the member's
+    // byte range straight off local disk. This avoids spawning a fresh `aws` CLI per
+    // variant — the aws-cli's ~1.5s Python/boto3 startup, ×12 variants/chunk, was the
+    // dominant fleet cost (cores idle in process spawn, RAYON-independent). One local
+    // read is ~ms. Falls through to the network byte-range GET below when unset.
+    if let Ok(tar_local) = std::env::var("ZEN_VARIANTS_TAR_LOCAL")
+        && std::path::Path::new(&tar_local).is_file()
+    {
+        use std::io::{Seek, SeekFrom};
+        let mut f = std::fs::File::open(&tar_local)
+            .map_err(|e| format!("open local tar {tar_local}: {e}"))?;
+        f.seek(SeekFrom::Start(loc.offset))
+            .map_err(|e| format!("seek local tar to {}: {e}", loc.offset))?;
+        let mut buf = vec![0u8; loc.size as usize];
+        f.read_exact(&mut buf)
+            .map_err(|e| format!("read {} bytes from local tar: {e}", loc.size))?;
+        let seq = DIST_SEQ.fetch_add(1, Ordering::Relaxed);
+        let ext2 = std::path::Path::new(&loc.name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .filter(|e| !e.is_empty())
+            .unwrap_or(ext);
+        let dst = std::env::temp_dir().join(format!(
+            "jobexec_var_{}_{}.{}",
+            std::process::id(),
+            seq,
+            ext2
+        ));
+        std::fs::write(&dst, &buf).map_err(|e| format!("write temp variant: {e}"))?;
+        return Ok((dst, true)); // owned temp — caller deletes after decode
+    }
     let tar_uri =
         std::env::var("ZEN_VARIANTS_TAR_URI").map_err(|_| "ZEN_VARIANTS_TAR_URI unset")?;
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").map_err(|_| "ZEN_R2_ENDPOINT unset")?;

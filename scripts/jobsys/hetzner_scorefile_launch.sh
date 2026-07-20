@@ -83,6 +83,7 @@ runcmd:
       -e ZEN_R2_ENDPOINT='$EP' -e ZEN_BUCKET='$BUCKET' -e ZEN_RUN='$RUNP' \
       -e ZEN_MANIFEST_URI='$MANIFEST' -e ZEN_CONTROL_KEY='$CTLKEY' \
       -e ZEN_CORPUS_PREFIX='$CORPUS_PREFIX' -e ZEN_VARIANTS_TAR_URI='$TAR' -e ZEN_VARIANT_INDEX_URI='$IDX' \
+      -e RAYON_NUM_THREADS='${ZEN_RAYON_THREADS:-1}' -e OMP_NUM_THREADS='${ZEN_RAYON_THREADS:-1}' \
       -e ZEN_PERSISTENT_EXEC=1 -e ZEN_PROVIDER=hetzner-cpu -e ZEN_IDLE_PASSES='${ZEN_IDLE_PASSES:-10}' -e ZEN_WORKER='hz-$wk' \
       --entrypoint /usr/local/bin/fleet-entrypoint.sh '$IMAGE'
     echo "[drain] worker exited rc=\$? -> self-destroy (SELF_DESTRUCT=\$SELF_DESTRUCT)"
