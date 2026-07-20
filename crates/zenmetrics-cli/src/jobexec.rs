@@ -166,27 +166,16 @@ fn resolve_source(
     if dst.exists() {
         return Ok(dst);
     }
+    // In-process pooled GET (no `s5cmd` spawn). Fetch to a `.part` sibling and rename
+    // on success so a cache hit (`dst.exists()` above) is always a whole file. NOTE:
+    // uses the ambient AWS_* creds — correct for single-bucket runs (the canonical
+    // corpora put run+tar+refs in one bucket). A distinct read-only corpus credential
+    // (ZEN_CORPUS_AWS_*, the old two-bucket setup) is not yet threaded into objstore.
+    let _ = &endpoint; // objstore reads ZEN_R2_ENDPOINT itself
     let part = std::path::PathBuf::from(format!("{}.part", dst.display()));
-    let mut cmd = Command::new("s5cmd");
-    cmd.arg("--endpoint-url")
-        .arg(&endpoint)
-        .arg("cp")
-        .arg(&uri)
-        .arg(&part)
-        // s5cmd prints a "cp …" line to stdout. In --serve mode stdout is the length-framed response
-        // channel, so that line would corrupt a frame and deadlock the worker; in single-shot mode it
-        // prefixes the content-addressed blob with noise. Silence stdout — real errors stay on s5cmd's
-        // stderr (inherited → the worker log).
-        .stdout(Stdio::null());
-    // Use the read-only corpus credential (ZEN_CORPUS_AWS_*) for the corpus fetch when provided, so a
-    // worker reads codec-corpus read-only while writing the run to a different bucket with the ambient
-    // AWS_* run cred. No-op (inherits ambient AWS_*) when unset — single-cred / single-bucket setups.
-    apply_corpus_creds(&mut cmd);
-    let st = cmd.status().map_err(|e| format!("spawn s5cmd: {e}"))?;
-    if !st.success() {
-        let _ = std::fs::remove_file(&part);
-        return Err(format!("s5cmd cp {uri} failed").into());
-    }
+    let bytes =
+        crate::objstore::get_uri(&uri).map_err(|e| format!("objstore get source {uri}: {e}"))?;
+    std::fs::write(&part, &bytes).map_err(|e| format!("write {part:?}: {e}"))?;
     std::fs::rename(&part, &dst).map_err(|e| format!("rename {part:?} -> {dst:?}: {e}"))?;
     Ok(dst)
 }
@@ -333,22 +322,27 @@ fn fetch_variant(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>
             return Ok((p, false)); // borrowed — shared extract dir, do not delete
         }
     }
-    // LOCAL TAR: the worker pre-downloaded the whole tar ONCE; seek+read the member's
-    // byte range straight off local disk. This avoids spawning a fresh `aws` CLI per
-    // variant — the aws-cli's ~1.5s Python/boto3 startup, ×12 variants/chunk, was the
-    // dominant fleet cost (cores idle in process spawn, RAYON-independent). One local
-    // read is ~ms. Falls through to the network byte-range GET below when unset.
-    if let Ok(tar_local) = std::env::var("ZEN_VARIANTS_TAR_LOCAL")
-        && std::path::Path::new(&tar_local).is_file()
+    // DIRECT OBJECT (the clean path): the variants are individually addressable R2
+    // objects at `<ZEN_ENCODES_PREFIX>/<name>` — no tar, no byte-range index. Fetch
+    // in-process over the pooled `object_store` client (no per-variant `aws` CLI
+    // spawn; the aws-cli's ~1.5s Python startup ×12/chunk was the dominant fleet
+    // cost). One temp file for the path-based decode/HDR contract; write is ~ms.
+    if let Ok(prefix) = std::env::var("ZEN_ENCODES_PREFIX")
+        && !prefix.is_empty()
+        && !loc.name.is_empty()
     {
-        use std::io::{Seek, SeekFrom};
-        let mut f = std::fs::File::open(&tar_local)
-            .map_err(|e| format!("open local tar {tar_local}: {e}"))?;
-        f.seek(SeekFrom::Start(loc.offset))
-            .map_err(|e| format!("seek local tar to {}: {e}", loc.offset))?;
-        let mut buf = vec![0u8; loc.size as usize];
-        f.read_exact(&mut buf)
-            .map_err(|e| format!("read {} bytes from local tar: {e}", loc.size))?;
+        let bucket = std::env::var("ZEN_ENCODES_BUCKET")
+            .or_else(|_| std::env::var("ZEN_CORPUS_BUCKET"))
+            .or_else(|_| std::env::var("ZEN_BUCKET"))
+            .map_err(|_| "ZEN_ENCODES_BUCKET/ZEN_CORPUS_BUCKET/ZEN_BUCKET unset")?;
+        // The index name may carry a tar-style `./` prefix; the R2 object key is just
+        // the filename under the encodes prefix.
+        let member = std::path::Path::new(&loc.name)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&loc.name);
+        let key = format!("{}/{}", prefix.trim_end_matches('/'), member);
+        let bytes = crate::objstore::get_object(&bucket, &key)?;
         let seq = DIST_SEQ.fetch_add(1, Ordering::Relaxed);
         let ext2 = std::path::Path::new(&loc.name)
             .extension()
@@ -361,7 +355,7 @@ fn fetch_variant(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>
             seq,
             ext2
         ));
-        std::fs::write(&dst, &buf).map_err(|e| format!("write temp variant: {e}"))?;
+        std::fs::write(&dst, &bytes).map_err(|e| format!("write temp variant: {e}"))?;
         return Ok((dst, true)); // owned temp — caller deletes after decode
     }
     let tar_uri =

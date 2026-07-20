@@ -31,6 +31,18 @@ pub fn decode_image_to_rgb8(path: &Path) -> Result<Rgb8Image, Box<dyn std::error
     decode_bytes_to_rgb8(&data, format)
 }
 
+/// Decode RGB8 straight from in-memory bytes — no temp file. `name_hint` (the object
+/// key / filename, may be empty) supplies the extension fallback for format sniffing
+/// when the magic bytes are ambiguous. Used by the in-process jobexec fetch path.
+#[allow(dead_code)] // only the jobexec/sweep executor calls this
+pub fn decode_rgb8_from_bytes(
+    data: &[u8],
+    name_hint: &str,
+) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    let format = sniff_format(data, Path::new(name_hint));
+    decode_bytes_to_rgb8(data, format)
+}
+
 /// File-format identifier. Variants present here are independent of which
 /// crate features are enabled — the dispatch layer rejects formats whose
 /// decoder feature was not compiled in.

@@ -52,6 +52,9 @@ mod sweep;
 #[cfg(feature = "jobexec")]
 mod jobexec;
 
+#[cfg(feature = "jobexec")]
+mod objstore;
+
 #[cfg(feature = "orchestrator")]
 mod orchestrator_glue;
 

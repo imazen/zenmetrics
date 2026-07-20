@@ -163,7 +163,7 @@ gpu-cpu = ["zenmetrics-api?/cpu", "cubecl?/cpu"]
 # Split out of `sweep` (which force-pulls the jpeg codec) so a pure-scoring
 # executor builds while a sibling codec crate is mid-refactor. `sweep` implies
 # `jobexec`, so every existing `--features sweep` build keeps the subcommand.
-jobexec = []
+jobexec = ["dep:object_store", "dep:tokio", "dep:bytes"]
 
 # `sweep` enables the codec-driving subcommand that encodes a source image
 # across a (q, knob_tuple) Cartesian grid and scores each variant via the
@@ -324,6 +324,13 @@ ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core",                    o
 heic         = { path = "../../../heic",          optional = true, features = ["backend-rust"] }
 image        = { version = "0.25",                optional = true, default-features = false, features = ["exr"] }
 bytemuck     = { workspace = true,                optional = true }
+# In-process pooled S3/R2 client for the jobexec fetch path — replaces the
+# per-variant `aws`/`s5cmd` CLI spawn (aws-cli's ~1.5s Python startup was the
+# dominant fleet cost). object_store handles SigV4 + connection pooling; a small
+# current-thread tokio runtime drives it from the otherwise-sync jobexec.
+object_store = { version = "0.14.1", optional = true, default-features = false, features = ["aws"] }
+tokio        = { version = "1.52.3", optional = true, default-features = false, features = ["rt", "sync"] }
+bytes        = { version = "1", optional = true }
 
 # Direct jxl-encoder dep with the loop features that the zenjxl wrapper does
 # not surface. Local path (matches the workspace [patch.crates-io] entry)
