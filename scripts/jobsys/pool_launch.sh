@@ -20,7 +20,10 @@ ZEN_MAX_MIN="${ZEN_MAX_MIN:-55}"                 # box lifetime — one paid hou
 TYPES="${TYPES:-cx43 cx33 cx23}"                 # EU SHARED only; NO cpx, NO US
 LOCATIONS="${LOCATIONS:-nbg1 fsn1 hel1}"         # EU only
 CX43=0.0296                                      # priciest type we allow -> worst-case sizing
-N="${1:-$(python3 -c "import math;print(min(60, int($MAX_EUR/$CX43)))")}"  # <= MAX_EUR even if all cx43
+# Size the batch to the budget REMAINING after existing boxes (old draining hzsf + any live hzpool), so
+# TOTAL running spend stays <= MAX_EUR even during the transition. Worst-case priced at cx43.
+CUR_EUR=$(hcloud server list -o columns=name,type 2>/dev/null | awk '/hzsf-bf|hzpool/{p["cx23"]=0.0104;p["cx33"]=0.016;p["cx43"]=0.0296;e+=(p[$2]?p[$2]:0.05)} END{printf "%.3f", e+0}')
+N="${1:-$(python3 -c "print(max(0, min(60, int(($MAX_EUR - $CUR_EUR)/$CX43))))")}"  # fill remaining budget, <=MAX_EUR total
 SSH_KEY="${SSH_KEY:-zen-arm-dev-20260528}"
 HCLOUD_TOKEN="${HCLOUD_TOKEN:-$(grep -E '^api_token=' ~/.config/hetzner/credentials 2>/dev/null | head -1 | cut -d= -f2- | tr -d ' \r')}"
 [ -n "$HCLOUD_TOKEN" ] || { echo "FATAL: no hcloud token"; exit 1; }

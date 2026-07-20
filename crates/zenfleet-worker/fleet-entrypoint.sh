@@ -93,10 +93,12 @@ pool_mode(){
         --ledger-out "s3://$ZEN_BUCKET/jobs/$run/ledger/pool-$WORKER-$cyc.parquet" \
         --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "jobs/$run/blobs" \
         --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "jobs/$run/claims" \
-        --r2-endpoint "$ZEN_R2_ENDPOINT" --exec "$EXEC" --worker "$WORKER" --provider "$PROVIDER" 2>&1)
+        --r2-endpoint "$ZEN_R2_ENDPOINT" --exec "$EXEC" --worker "$WORKER" --provider "$PROVIDER" 2>&1); local rc=$?
       surface_problems "$out" || true
       local s; s=$(printf '%s\n' "$out" | grep -oE 'done=[0-9]+' | head -1 | cut -d= -f2)
-      [ "${s:-0}" -gt 0 ] && did=1
+      # "made progress" = scored (done>0) OR the pass timed out (rc=124: still had claimable work, just slow).
+      # Only a full cycle of genuinely EMPTY passes (done=0, clean exit) means the pool is drained.
+      { [ "${s:-0}" -gt 0 ] || [ "$rc" -eq 124 ]; } && did=1
       prog "pool cyc=$cyc @$run done=${s:-0} ($(( (END - $(date +%s)) / 60 ))min left)"
     done 3< /tmp/runlist.tsv
     if [ "$did" -eq 0 ]; then hb "POOL: nothing left across all $seen runs — backfill drained, exiting"; break; fi
