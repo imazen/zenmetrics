@@ -631,9 +631,12 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         // the decoded buffers so no variant is decoded twice.
         for (sha, distorted) in &decoded {
             for metric in &metrics {
-                #[cfg(feature = "gpu-zensim")]
+                #[cfg(feature = "cpu-metrics")]
                 if *metric == "zensim-gpu" || *metric == "zensim" {
                     // FEATURES ONLY (no score): the CPU v2-ab 720-feature vector.
+                    // Gated on `cpu-metrics` (NOT gpu-zensim) so a CPU-ONLY executor
+                    // (`:exec`, no GPU) emits 720 — zensim is CPU, so the 720 backfill
+                    // runs on cheap CPU boxes with no GPU needed.
                     match crate::metrics::run_zensim_features(
                         &reference,
                         distorted,
@@ -716,8 +719,9 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         }
         for metric in &metrics {
             // zensim(-gpu) yields the 720-feature v2-ab vector from the SAME decode.
-            // FEATURES ONLY (no score) — emit just the feature row.
-            #[cfg(feature = "gpu-zensim")]
+            // FEATURES ONLY (no score) — emit just the feature row. Gated on
+            // `cpu-metrics` (NOT gpu-zensim) so a CPU-only executor emits 720.
+            #[cfg(feature = "cpu-metrics")]
             if *metric == "zensim-gpu" || *metric == "zensim" {
                 match crate::metrics::run_zensim_features(
                     &reference,
@@ -1101,7 +1105,8 @@ fn run_encode_or_metric_job(
             // vector + the cheap encode RD metadata (bytes/ms are NOT a perceptual
             // score, so they stay). Without this row a `declare metric jobs` flow
             // silently drops the features (the gap that broke the jxl HQ re-do).
-            #[cfg(feature = "gpu-zensim")]
+            // Gated on `cpu-metrics` (NOT gpu-zensim) so a CPU-only executor emits 720.
+            #[cfg(feature = "cpu-metrics")]
             if metric == "zensim-gpu" || metric == "zensim" {
                 match crate::metrics::run_zensim_features(
                     &reference,
