@@ -36,7 +36,7 @@ use serde_json::{Map, Value};
 use std::error::Error;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Parser, Debug)]
