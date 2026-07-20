@@ -19,6 +19,8 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
+mod s3io;
+
 use zenfleet_core::{
     BlobIndexEntry, BoxBudget, DesiredJob, ErrorClass, InFlight, JobCost, JobId, JobStatus,
     LedgerRow, LedgerView, Regenerability, ResourceClass, ResourceHint, RetryPolicy, RunControl,
@@ -124,40 +126,29 @@ impl R2BlobStore {
     }
 }
 
+impl R2BlobStore {
+    fn obj_key(&self, sha: &Sha256Hex) -> String {
+        format!("{}/{}", self.target.prefix.trim_matches('/'), sha.as_str())
+    }
+}
+
 impl BlobStore for R2BlobStore {
     fn put(&self, bytes: &[u8]) -> io::Result<Sha256Hex> {
         let sha = sha256(bytes);
-        if self.exists(&sha) {
-            return Ok(sha); // content-addressed dedup — already in R2
-        }
-        let tmp =
-            std::env::temp_dir().join(format!("zenblob_{}_{}", std::process::id(), sha.as_str()));
-        std::fs::write(&tmp, bytes)?;
-        let status = self
-            .s5cmd()
-            .arg("cp")
-            .arg(&tmp)
-            .arg(self.key(&sha))
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .status();
-        let _ = std::fs::remove_file(&tmp);
-        match status {
-            Ok(s) if s.success() => Ok(sha),
-            Ok(s) => Err(io::Error::other(format!("s5cmd cp exited {:?}", s.code()))),
-            Err(e) => Err(e),
-        }
+        // In-process conditional PUT: one round-trip, no `s5cmd cp`/`ls` spawn, no temp
+        // file. `AlreadyExists` = content-addressed dedup hit (both are success).
+        crate::s3io::put_create(
+            &self.target.endpoint,
+            &self.target.bucket,
+            &self.obj_key(&sha),
+            bytes,
+        )
+        .map_err(io::Error::other)?;
+        Ok(sha)
     }
 
     fn exists(&self, sha: &Sha256Hex) -> bool {
-        self.s5cmd()
-            .arg("ls")
-            .arg(self.key(sha))
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
+        crate::s3io::head_exists(&self.target.endpoint, &self.target.bucket, &self.obj_key(sha))
     }
 }
 
@@ -180,22 +171,10 @@ pub struct ClaimCfg {
 /// exactly one create per key, so concurrent workers can't both win — no double execution.
 pub fn try_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &JobId) -> bool {
     let key = format!("{}/{}", prefix.trim_matches('/'), job_id.as_str());
-    Command::new("aws")
-        .arg("--endpoint-url")
-        .arg(endpoint)
-        .arg("s3api")
-        .arg("put-object")
-        .arg("--bucket")
-        .arg(bucket)
-        .arg("--key")
-        .arg(&key)
-        .arg("--if-none-match")
-        .arg("*")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    // In-process conditional PUT (If-None-Match:*). Won iff WE created it. Replaces the
+    // per-claim `aws s3api put-object` spawn (aws-cli's ~1.5s Python startup, at claim
+    // rate, was the box's top CPU cost). Any error → not won (safe: no double-execute).
+    crate::s3io::put_create(endpoint, bucket, &key, b"").unwrap_or(false)
 }
 
 /// Release (delete) a claim so the job requeues immediately — used on spot preemption (goal F:
@@ -203,17 +182,7 @@ pub fn try_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &JobId) 
 /// just falls back to the slower TTL-based stale-reclaim (goal E), so correctness never depends on it.
 pub fn release_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &JobId) -> bool {
     let key = format!("{}/{}", prefix.trim_matches('/'), job_id.as_str());
-    aws_s3api(endpoint)
-        .arg("delete-object")
-        .arg("--bucket")
-        .arg(bucket)
-        .arg("--key")
-        .arg(&key)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    crate::s3io::delete(endpoint, bucket, &key).is_ok() // in-proc DELETE (was `aws delete-object`)
 }
 
 /// Install the spot-preemption handler (goal F): on SIGTERM/SIGINT, release the in-flight claim (if
@@ -1060,20 +1029,14 @@ pub enum WorkerRunError {
 
 /// Delete an R2 object via `s5cmd rm`.
 fn s5cmd_rm(endpoint: &str, uri: &str) -> Result<(), String> {
-    let st = Command::new("s5cmd")
-        .arg("--endpoint-url")
-        .arg(endpoint)
-        .arg("rm")
-        .arg(uri)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map_err(|e| format!("s5cmd spawn: {e}"))?;
-    if st.success() {
-        Ok(())
-    } else {
-        Err(format!("s5cmd rm {uri} exit {:?}", st.code()))
-    }
+    // In-proc DELETE (was an `s5cmd rm` spawn). `uri` = s3://<bucket>/<key>.
+    let rest = uri
+        .strip_prefix("s3://")
+        .ok_or_else(|| format!("not an s3:// uri: {uri}"))?;
+    let (bucket, key) = rest
+        .split_once('/')
+        .ok_or_else(|| format!("s3 uri has no key: {uri}"))?;
+    crate::s3io::delete(endpoint, bucket, key)
 }
 
 /// Verify a Tower-mirror copy is present and byte-identical (goal G: "Tower-mirror-verify before any

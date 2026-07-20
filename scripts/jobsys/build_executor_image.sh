@@ -20,6 +20,10 @@ BIN="${ZEN_METRICS_BIN:-$ROOT/target/release/zenmetrics}"
 CTX="$ROOT/target/.exec-ctx"; rm -rf "$CTX"; mkdir -p "$CTX"; trap 'rm -rf "$CTX"' EXIT
 cp "$BIN" "$CTX/zenmetrics"
 cp "$ROOT/scripts/jobsys/zenfleet-exec" "$CTX/zenfleet-exec"
+# Overlay the CURRENT zenfleet-worker too (base :latest bakes a stale one). Built by
+# `cargo build --release -p zenfleet-worker`. Skipped if absent (keeps base's).
+WK="$ROOT/target/release/zenfleet-worker"
+[ -f "$WK" ] && cp "$WK" "$CTX/zenfleet-worker" || echo "note: no local zenfleet-worker — image keeps base's"
 # Overlay the CURRENT entrypoint — the :latest base bakes a stale one, so without this
 # copy an edited fleet-entrypoint.sh never reaches :exec (this bit us on the tar-prefetch).
 cp "$ROOT/crates/zenfleet-worker/fleet-entrypoint.sh" "$CTX/fleet-entrypoint.sh"

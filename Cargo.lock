@@ -6606,12 +6606,15 @@ dependencies = [
 name = "zenfleet-worker"
 version = "0.0.1"
 dependencies = [
+ "bytes",
  "clap",
  "image",
+ "object_store",
  "serde",
  "serde_json",
  "signal-hook",
  "thiserror",
+ "tokio",
  "zenfleet-core",
  "zenfleet-ledger",
 ]
