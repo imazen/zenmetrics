@@ -71,7 +71,7 @@ use crate::metrics::run_metric;
 // Re-exported for callers (lib consumers) — not directly called in this
 // file once the cache was introduced.
 #[allow(unused_imports)]
-use crate::metrics::run_zensim_gpu_with_features;
+use crate::metrics::run_zensim_features;
 use crate::sweep::encode::EncodedCell;
 use crate::sweep::encode::{CodecKind, encode};
 use crate::sweep::feature_writer::FeatureParquetWriter;
@@ -1368,11 +1368,13 @@ fn compute_cell(
             // after ~80 cells. See `metrics::cache` module docs.
             #[cfg(feature = "gpu-zensim")]
             {
-                let mut cache = MetricCache::lock_global(gpu_runtime_for_cache);
-                match cache.compute_zensim_features(source, &decoded, cfg.feature_regime) {
-                    Ok((score, features)) => {
-                        zensim_features = Some((score as f32, features));
-                        Ok(vec![("zensim_gpu", score)])
+                // GPU zensim kernel DISABLED (2026-07-19): extract features on the
+                // CPU. FEATURES ONLY — no score (NaN sentinel; zensim is
+                // features-only now, the perceptual score column is dropped).
+                match run_zensim_features(source, &decoded, cfg.feature_regime) {
+                    Ok(features) => {
+                        zensim_features = Some((f32::NAN, features));
+                        Ok(vec![("zensim_gpu", f64::NAN)])
                     }
                     Err(e) => Err(e),
                 }

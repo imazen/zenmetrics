@@ -1346,13 +1346,8 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     // per (dims, regime) instead of per pair) — same rationale as the
     // sweep's `MetricCache`. Only constructed when the GPU feature path
     // is actually exercised.
-    #[cfg(feature = "gpu-zensim")]
-    let mut zensim_feature_cache: Option<crate::metrics::cache::MetricCache> =
-        if feature_writer.is_some() && args.metric == crate::metrics::MetricKind::ZensimGpu {
-            Some(crate::metrics::cache::MetricCache::new(args.gpu_runtime))
-        } else {
-            None
-        };
+    // (GPU zensim feature cache removed 2026-07-19: zensim features extract on the
+    // CPU via `run_zensim_features` — no GPU MetricCache needed.)
 
     // Reference cache: reused across consecutive same-ref pairs so the CPU
     // metric path decodes (and zensim-precomputes) each reference once per
@@ -1587,10 +1582,10 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
                     {
                         #[cfg(feature = "gpu-zensim")]
                         {
-                            zensim_feature_cache
-                                .as_mut()
-                                .expect("gpu-zensim cache built when metric is ZensimGpu")
-                                .compute_zensim_features(&r, &d, args.zensim_features_regime)
+                            // GPU zensim kernel DISABLED (2026-07-19): CPU features
+                            // only, NaN score sentinel (zensim is features-only now).
+                            crate::metrics::run_zensim_features(&r, &d, args.zensim_features_regime)
+                                .map(|f| (f64::NAN, f))
                         }
                         #[cfg(not(feature = "gpu-zensim"))]
                         {

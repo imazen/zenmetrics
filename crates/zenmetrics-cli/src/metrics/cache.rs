@@ -525,6 +525,15 @@ impl MetricCache {
         height: u32,
         regime: Option<ZensimFeatureRegime>,
     ) -> Result<&mut UmbrellaSlot, Box<dyn Error>> {
+        // ENTRYPOINT PANIC — GPU zensim kernel DISABLED (2026-07-19). Both cache
+        // paths (the ZensimGpu score arm + compute_zensim_features) construct the
+        // GPU zensim metric HERE; zensim is CPU features-only now, so a GPU zensim
+        // slot must never be built. Fail LOUD rather than run the stale v1 kernel.
+        assert!(
+            !matches!(kind, zenmetrics_api::MetricKind::Zensim),
+            "GPU zensim is DISABLED (2026-07-19): cache tried to build a GPU zensim \
+             slot — zensim is CPU features-only (use run_zensim_features), no GPU"
+        );
         // Cache key matches on (kind, dims, regime). Different regime
         // for the same kind needs a different `Metric` because the
         // persist-plane footprint differs.

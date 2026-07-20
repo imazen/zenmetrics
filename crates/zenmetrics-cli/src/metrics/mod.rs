@@ -434,6 +434,15 @@ fn run_gpu_via_umbrella(
     distorted: &Rgb8Image,
     gpu_runtime: GpuRuntime,
 ) -> Result<f64, Box<dyn std::error::Error>> {
+    // ENTRYPOINT PANIC — GPU zensim kernel DISABLED (2026-07-19). No path should
+    // reach the GPU zensim pipeline: zensim is CPU features-only pending v2
+    // GPU-port validation. A Zensim dispatch here is a bug; fail LOUD rather than
+    // run the stale v1 kernel and poison the training set.
+    assert!(
+        !matches!(umbrella_kind, zenmetrics_api::MetricKind::Zensim),
+        "GPU zensim is DISABLED (2026-07-19): run_gpu_via_umbrella reached with \
+         MetricKind::Zensim — zensim is CPU features-only, no GPU dispatch"
+    );
     if reference.width != distorted.width || reference.height != distorted.height {
         return Err(format!(
             "{}: reference ({}×{}) and distorted ({}×{}) differ in size",
@@ -737,15 +746,14 @@ pub fn run_metric(
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::Zensim => Err(disabled_msg("zensim", "cpu-metrics")),
 
-        // GPU zensim kernel DISABLED pending v2 GPU-port validation (2026-07-19):
-        // `zensim-gpu` now scores on the CPU `zensim` crate — same column name
-        // for schema compatibility, but never dispatches the GPU pipeline. (This
-        // is the score-only path; the fleet's feature-emitting path routes
-        // through `run_zensim_gpu_with_features`, also CPU now.)
-        #[cfg(feature = "cpu-metrics")]
-        MetricKind::ZensimGpu => Ok(vec![("zensim_gpu", zensim::score(reference, distorted)?)]),
-        #[cfg(not(feature = "cpu-metrics"))]
-        MetricKind::ZensimGpu => Err(disabled_msg("zensim-gpu", "cpu-metrics")),
+        // GPU zensim kernel DISABLED (2026-07-19) + zensim is FEATURES-ONLY (no
+        // score): a `--metric zensim-gpu` SCORE request has no valid path, so fail
+        // LOUD rather than silently produce a v1 number. Extract features via
+        // `run_zensim_features` / the jobexec V2Ab path instead.
+        MetricKind::ZensimGpu => panic!(
+            "zensim-gpu is DISABLED: the GPU zensim kernel is off pending v2 \
+             GPU-port validation, and zensim is features-only (no score)"
+        ),
 
         // Unsuffixed cvvdp = the native SIMD CPU port (the
         // `ssim2`/`dssim`/`zensim` unsuffixed=CPU convention). Pure CPU
@@ -874,32 +882,28 @@ impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
     }
 }
 
-/// Run zensim and return the score + the regime-appropriate feature vector
-/// (228 / 300 / 372 / 720). Name + signature kept for call-site / lib-API
-/// stability, but this now computes on the **CPU** `zensim` crate: the GPU
-/// zensim kernel is disabled pending v2 GPU-port validation (2026-07-19), and it
-/// only implements v1 regimes anyway. `gpu_runtime` is ignored. Delegates to
-/// [`crate::metrics::zensim::score_with_features_regime`] (which pins the
-/// `PreviewV0_2` score and, for `V2Ab`, appends the v2 348-feature block).
+/// Extract the regime-appropriate zensim FEATURE vector (228 / 300 / 372 / 720)
+/// on the **CPU** `zensim` crate — FEATURES ONLY, no score. The GPU zensim kernel
+/// is disabled pending v2 GPU-port validation (2026-07-19) and the v2 backfill
+/// wants only features (a v2 score head is trained later). Delegates to
+/// [`crate::metrics::zensim::extract_features_regime`].
 #[cfg(feature = "cpu-metrics")]
 #[allow(dead_code)] // library entry point (jobexec + lib consumers); some bins don't call it
-pub fn run_zensim_gpu_with_features(
+pub fn run_zensim_features(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
-    _gpu_runtime: GpuRuntime,
     regime: ZensimFeatureRegime,
-) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
-    crate::metrics::zensim::score_with_features_regime(reference, distorted, regime)
+) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
+    crate::metrics::zensim::extract_features_regime(reference, distorted, regime)
 }
 
 #[cfg(not(feature = "cpu-metrics"))]
 #[allow(unused_variables, dead_code)]
-pub fn run_zensim_gpu_with_features(
+pub fn run_zensim_features(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
-    gpu_runtime: GpuRuntime,
     regime: ZensimFeatureRegime,
-) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
+) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
     Err(disabled_msg("zensim", "cpu-metrics"))
 }
 
