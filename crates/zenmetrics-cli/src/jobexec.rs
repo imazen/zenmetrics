@@ -309,6 +309,42 @@ fn parse_variant_index(tsv: &str) -> std::collections::HashMap<String, VariantLo
 /// Returns the local path plus whether the caller OWNS it (must delete after decode). TAR-SHARD reads
 /// are borrowed (do NOT delete — they belong to the shared extract dir); range-GETs are owned temps.
 fn fetch_variant(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>> {
+    // DIRECT-OBJECT (the clean path): when the declare emits the encode FILENAME as the
+    // job input (no tar), the input IS the object key — GET `<ZEN_ENCODES_PREFIX>/<name>`
+    // in-process. Skips `variant_index()` ENTIRELY, which every fresh jobexec process was
+    // re-downloading (the ~30 MB byte-range index, cores-many concurrent = the dominant
+    // fleet cost once the per-variant aws spawn was gone). No tar, no index, no spawn.
+    if let Ok(prefix) = std::env::var("ZEN_ENCODES_PREFIX")
+        && !prefix.is_empty()
+    {
+        let member = std::path::Path::new(sha)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(sha);
+        if member.contains('.') {
+            // Looks like a filename (has an extension) → treat as a direct object key.
+            let bucket = std::env::var("ZEN_ENCODES_BUCKET")
+                .or_else(|_| std::env::var("ZEN_CORPUS_BUCKET"))
+                .or_else(|_| std::env::var("ZEN_BUCKET"))
+                .map_err(|_| "ZEN_ENCODES_BUCKET/ZEN_CORPUS_BUCKET/ZEN_BUCKET unset")?;
+            let key = format!("{}/{}", prefix.trim_end_matches('/'), member);
+            let bytes = crate::objstore::get_object(&bucket, &key)?;
+            let seq = DIST_SEQ.fetch_add(1, Ordering::Relaxed);
+            let ext2 = std::path::Path::new(member)
+                .extension()
+                .and_then(|e| e.to_str())
+                .filter(|e| !e.is_empty())
+                .unwrap_or(ext);
+            let dst = std::env::temp_dir().join(format!(
+                "jobexec_var_{}_{}.{}",
+                std::process::id(),
+                seq,
+                ext2
+            ));
+            std::fs::write(&dst, &bytes).map_err(|e| format!("write temp variant: {e}"))?;
+            return Ok((dst, true));
+        }
+    }
     let loc = variant_index()?
         .get(sha)
         .ok_or_else(|| format!("sha {sha} not in variant index"))?;
