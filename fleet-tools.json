@@ -14,7 +14,9 @@
     "launch": [
       "scripts/jobsys/launch_fleet.sh",
       "scripts/sweep/launch_backfill.sh",
-      "scripts/jobsys/gpu_scorefile_launch.sh"
+      "scripts/jobsys/gpu_scorefile_launch.sh",
+      "scripts/jobsys/hetzner_scorefile_launch.sh",
+      "scripts/jobsys/pool_launch.sh"
     ],
     "teardown": [
       "scripts/jobsys/teardown_fleet.sh"

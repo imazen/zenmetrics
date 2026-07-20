@@ -17,7 +17,9 @@
 #   ZEN_CONTROL_KEY   — optional s3 key of a RunControl object for pause/drain (goal C)
 #   ZEN_IDLE_PASSES (5) / ZEN_PASS_SLEEP (0.2) — drain detection + pacing
 set -uo pipefail
-: "${ZEN_R2_ENDPOINT:?}" "${ZEN_BUCKET:?}" "${ZEN_RUN:?}" "${ZEN_MANIFEST_URI:?}"
+: "${ZEN_R2_ENDPOINT:?}" "${ZEN_BUCKET:?}"
+# ZEN_RUN/ZEN_MANIFEST_URI are required only for single-run mode; POOL mode (ZEN_POOL_RUNLIST) is self-describing.
+[ -n "${ZEN_POOL_RUNLIST:-}" ] || : "${ZEN_RUN:?}" "${ZEN_MANIFEST_URI:?}"
 PROVIDER="${ZEN_PROVIDER:-fleet}"
 WORKER="${ZEN_WORKER:-$(hostname)}"
 EXEC="${ZEN_EXEC:-/bin/cat}"
@@ -53,6 +55,56 @@ done
 # took <0.4s). Prefer a gzipped manifest (~30x smaller — 92MB -> 3MB) at <uri>.gz when present, else
 # fall back to the plain object. Backward-compatible: runs without a .gz still work via the fallback.
 MGZ="${ZEN_MANIFEST_URI%.gz}.gz"
+# ── POOL MODE — the hourly-efficient lifecycle ─────────────────────────────────────────────────────
+# When ZEN_POOL_RUNLIST is set, this box works the WHOLE undone-tar POOL rather than one run: it
+# round-robins every run in the runlist (TSV `run<TAB>tar_uri`), scoring one chunk of each per cycle
+# and coordinating with peers via the R2 claim/ledger — so it NEVER drains-then-idles on a single small
+# tar. It runs until ZEN_MAX_MIN minutes elapse (default 55 = one full paid hour, never a second) then
+# EXITS, which drops through to the cloud-init self-destruct. One box == one useful paid hour, no churn.
+pool_mode(){
+  local END; END=$(( $(date +%s) + ${ZEN_MAX_MIN:-55} * 60 ))
+  s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$ZEN_POOL_RUNLIST" /tmp/runlist.tsv \
+    || { ferr "cannot fetch pool runlist $ZEN_POOL_RUNLIST"; exit 4; }
+  hb "POOL mode: $(grep -c . /tmp/runlist.tsv) runs, budget ${ZEN_MAX_MIN:-55}min (worker=$WORKER)"
+  local cyc=0
+  while [ "$(date +%s)" -lt "$END" ]; do
+    cyc=$((cyc + 1)); local did=0 seen=0
+    while IFS=$'\t' read -r run src mode _rest; do
+      [ -z "$run" ] && continue
+      [ "$(date +%s)" -ge "$END" ] && break
+      seen=$((seen + 1))
+      local mf="/tmp/m_${run}.json"
+      if [ ! -s "$mf" ]; then
+        s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "s3://$ZEN_BUCKET/jobs/$run/manifest.json.gz" "$mf.gz" 2>/dev/null \
+          && gunzip -f "$mf.gz" 2>/dev/null
+      fi
+      [ -s "$mf" ] || { stall "pool: no manifest for $run"; continue; }
+      # Source the variants per mode: 'enc' = direct-object (individual encodes/, e.g. zenjpeg);
+      # anything else = byte-range from the tar via the per-run index.
+      local venv
+      if [ "${mode:-tar}" = "enc" ]; then
+        venv=(ZEN_ENCODES_PREFIX="$src" ZEN_ENCODES_BUCKET="$ZEN_BUCKET")
+      else
+        venv=(ZEN_VARIANTS_TAR_URI="$src" ZEN_VARIANT_INDEX_URI="s3://$ZEN_BUCKET/jobs/$run/variant_index.tsv")
+      fi
+      out=$(env "${venv[@]}" \
+        timeout "${ZEN_PASS_TIMEOUT:-1800}" zenfleet-worker --manifest "$mf" \
+        --ledger-out "s3://$ZEN_BUCKET/jobs/$run/ledger/pool-$WORKER-$cyc.parquet" \
+        --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "jobs/$run/blobs" \
+        --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "jobs/$run/claims" \
+        --r2-endpoint "$ZEN_R2_ENDPOINT" --exec "$EXEC" --worker "$WORKER" --provider "$PROVIDER" 2>&1)
+      surface_problems "$out" || true
+      local s; s=$(printf '%s\n' "$out" | grep -oE 'done=[0-9]+' | head -1 | cut -d= -f2)
+      [ "${s:-0}" -gt 0 ] && did=1
+      [ $((seen % 15)) -eq 0 ] && prog "pool cyc=$cyc @$run done=${s:-0} ($(( (END - $(date +%s)) / 60 ))min left)"
+    done < /tmp/runlist.tsv
+    if [ "$did" -eq 0 ]; then hb "POOL: nothing left across all $seen runs — backfill drained, exiting"; break; fi
+    sleep "${ZEN_PASS_SLEEP:-0.2}"
+  done
+  prog "POOL exit (budget reached or drained) -> container exits -> self-destruct"
+}
+if [ -n "${ZEN_POOL_RUNLIST:-}" ]; then pool_mode; exit 0; fi
+
 hb "fetching manifest ($MGZ, else plain) — this is the op that historically hung at 0 bytes on big sweeps"
 mfetch_err=$(s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$MGZ" /tmp/manifest.json.gz 2>&1)
 if [ $? -eq 0 ]; then
