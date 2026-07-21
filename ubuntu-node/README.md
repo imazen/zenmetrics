@@ -22,7 +22,8 @@ pre-pulls the worker image. Then one command from the dev box starts it working 
 
 ## Make the USB (CIDATA method — no ISO repacking)
 
-1. Download **Ubuntu Server 24.04.x LTS** ISO.
+1. Download **Ubuntu Server 26.04.x LTS** (Resolute Raccoon) ISO. (The `version: 1` autoinstall format
+   in `user-data` is unchanged from 24.04, so it works as-is.)
 2. Write the ISO to **USB #1** (the installer) with Rufus / balenaEtcher / `dd`.
 3. On a **second FAT32 volume labeled `CIDATA`** (a small USB #2, or a spare partition), copy this
    folder's `user-data` and `meta-data` to its root.
