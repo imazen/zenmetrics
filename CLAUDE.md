@@ -349,6 +349,21 @@ over those persisted variants — never re-encode per metric.
 
 ### Resolved
 
+- **POOL-mode sweep RE-SCORED already-done cells on RESUMED runs — the pool pass passed no
+  `--ledger-in` — FIXED 2026-07-21 (`1ce1fd7a`).** `fleet-entrypoint.sh` POOL mode passed only
+  `--ledger-out` + claims, so the worker's reconcile *view* was empty and its gap was *every cell
+  each pass*; dedup fell entirely to the 10-min claim lease. On a run whose earlier claims had
+  expired (e.g. a prior fleet's work being resumed) it re-scored done cells — a **measured 2.0–3.4×
+  waste** on the big runs (jpeg run: ~79k wasted re-score rows). Fix: the pass fetches a per-run
+  done-set snapshot (`jobs/<run>/ledger_snapshot.parquet`) and passes it as `--ledger-in` so the gap
+  = only-undone (guarded — a run with no snapshot runs the old way). Snapshots are compacted from the
+  worker's own ledger rows (schema matches `read_ledger`) by
+  `scripts/jobsys/{compact_ledgers.py,refresh_snapshots.sh}` on an **hourly cron on the cred-holding
+  box** (core-pinned to cores 24+ so it can't steal the co-located worker's cores). `pool_progress.py`
+  = fast distinct-done readout from snapshot footers. Validated 1:1 row growth on the zensim-720
+  backfill. **If you launch a pool sweep that RESUMES prior work, seed snapshots first** (run
+  `refresh_snapshots.sh` once) or it re-scores the existing progress.
+
 - **`sweep --metric ssim2` failed with "not enabled in this build" on
   `cpu-metrics` builds — CPU dispatch checked the wrong feature flag (found
   2026-07-02/03) — FIXED 2026-07-03 by `9f93e56b`** ("fix(metrics):
