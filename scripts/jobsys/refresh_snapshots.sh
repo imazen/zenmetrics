@@ -15,6 +15,12 @@ EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 BUCKET="${ZEN_BUCKET:-zentrain}"
 SNAP_DIR="$HOME/tmp/zen-snaps"; mkdir -p "$SNAP_DIR"
 LOG="$SNAP_DIR/refresh.log"
+# Pin to reserved cores (24+) so the pyarrow compaction can't steal the co-located pool worker's cores
+# 0-23 — that CPU contention dropped worker jx 24->~9 for ~10min each refresh. No-op on <=24-core boxes.
+NCPU=$(nproc 2>/dev/null || echo 0)
+if [ "$NCPU" -gt 24 ] && command -v taskset >/dev/null 2>&1; then
+  taskset -cp "24-$((NCPU-1))" $$ >/dev/null 2>&1 || true
+fi
 # single-flight: ledgers grow, so a refresh can eventually exceed the 30-min cron interval; never let
 # two overlap (they'd race on the same snapshot keys and double the R2 load).
 exec 9>"$SNAP_DIR/refresh.lock"
