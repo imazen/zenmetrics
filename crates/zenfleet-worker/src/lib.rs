@@ -874,15 +874,43 @@ pub fn exec_command(program: &str, job: &DesiredJob) -> Result<Vec<u8>, HandlerE
     if output.status.success() {
         Ok(output.stdout)
     } else {
-        let code = output.status.code().unwrap_or(-1);
+        // A signal-killed child (no exit code) is a lost worker / OOM under memory pressure — TRANSIENT,
+        // so the reconciler requeues it instead of poisoning it. Only a real non-zero EXIT code is a
+        // deterministic EncoderPanic. (Before: every failure was EncoderPanic, so an OOM-killed cell was
+        // poisoned and its 720 features lost forever — a latent trap raised by ZEN_CORE_OVERSUBSCRIBE>1.)
+        let class = classify_child_failure(&output.status);
+        let detail = match output.status.code() {
+            Some(code) => format!("{program} exited {code}"),
+            None => format!("{program} killed by signal"),
+        };
         Err(HandlerError::new(
-            ErrorClass::EncoderPanic,
-            format!(
-                "{program} exited {code}: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ),
+            class,
+            format!("{detail}: {}", String::from_utf8_lossy(&output.stderr)),
         ))
     }
+}
+
+/// Classify a failed child's exit into an [`ErrorClass`]. A **signal-killed** child (`code() == None`)
+/// is a lost worker or an OOM-kill under memory pressure → transient, so the reconciler retries it on a
+/// less-loaded box instead of poisoning it (permanent loss of that cell's features). A real non-zero
+/// **exit code** is a deterministic failure (bad bytes / encoder panic) → `EncoderPanic` → poison after
+/// the retry cap. `SIGKILL`(9) is the kernel OOM-killer's signal; other signals (SIGSEGV/SIGABRT/SIGBUS)
+/// are usually allocator/load-induced and still worth a retry — a genuinely deterministic crash just
+/// poisons after `max_attempts` anyway, so classifying it transient costs at most a few retries.
+fn classify_child_failure(status: &std::process::ExitStatus) -> ErrorClass {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(sig) = status.signal() {
+            return if sig == 9 {
+                ErrorClass::Oom
+            } else {
+                ErrorClass::WorkerLost
+            };
+        }
+    }
+    let _ = status; // referenced only on unix (the signal check above)
+    ErrorClass::EncoderPanic
 }
 
 /// A long-lived `program --serve` child for the persistent executor. One per worker PROCESS; since the
@@ -1502,6 +1530,23 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     use zenfleet_core::{CellId, JobKind};
+
+    #[test]
+    #[cfg(unix)]
+    fn signal_killed_cells_are_transient_not_poisoned() {
+        use std::os::unix::process::ExitStatusExt;
+        // SIGKILL(9) — kernel OOM-killer → Oom (transient → retried, NOT poisoned/lost)
+        let killed = std::process::ExitStatus::from_raw(9);
+        assert_eq!(classify_child_failure(&killed), ErrorClass::Oom);
+        assert!(classify_child_failure(&killed).is_transient());
+        // other signal (SIGSEGV=11) → WorkerLost (transient)
+        let segv = std::process::ExitStatus::from_raw(11);
+        assert_eq!(classify_child_failure(&segv), ErrorClass::WorkerLost);
+        // a real non-zero exit code (1) → EncoderPanic (deterministic → poison after the cap)
+        let exited = std::process::ExitStatus::from_raw(1 << 8);
+        assert_eq!(classify_child_failure(&exited), ErrorClass::EncoderPanic);
+        assert!(!classify_child_failure(&exited).is_transient());
+    }
 
     static N: AtomicU64 = AtomicU64::new(0);
     fn tmp() -> PathBuf {
