@@ -226,10 +226,16 @@ sed -i 's/^hosts:.*/hosts: files mdns4_minimal [NOTFOUND=return] dns/' /etc/nssw
 systemctl enable ssh docker avahi-daemon systemd-networkd systemd-resolved zen-worker
 systemctl enable chrony 2>/dev/null || true
 ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf || true
-# bootloader: UEFI removable path (boots on ANY UEFI firmware, no NVRAM entry) + legacy BIOS
-grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=zen-node --removable --recheck $DEVICE || \
-  grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=zen-node --removable --recheck
-grub-install --target=i386-pc --recheck $DEVICE
+# bootloader: Ubuntu's SIGNED grub reads its config from /EFI/ubuntu (its baked-in prefix), so we
+# MUST populate that dir or it drops to a grub> prompt on first boot. Install BOTH:
+#   1. EFI/ubuntu  — the path the signed grub actually reads (--no-nvram: safe inside chroot/WSL,
+#                    no efibootmgr). This is the fix for the "getting grub>" first-boot failure.
+#   2. EFI/BOOT    — the machine-independent removable fallback (boots on ANY UEFI firmware).
+# plus legacy i386-pc BIOS for CSM-only boards. All three resolve to /boot/grub/grub.cfg by fs-uuid.
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --no-nvram --recheck || true
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --recheck "$DEVICE" || \
+  grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --recheck
+grub-install --target=i386-pc --recheck "$DEVICE"
 update-initramfs -c -k all
 update-grub
 CHROOT

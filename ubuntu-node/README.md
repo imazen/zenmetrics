@@ -56,6 +56,19 @@ ssh zen@zen-node-1.local 'docker top zen720 | grep -c zenmetrics'   # ~= core co
 
 SSH is key-only (the dev-box key is baked in). Console password is `zencompute` for a physical login.
 
+**If you land at a `grub>` prompt** (only happens on drives built before the `EFI/ubuntu` fix): the drive
+is fine, GRUB just can't find its menu. Boot it by hand —
+```
+search -f -s /boot/grub/grub.cfg
+configfile /boot/grub/grub.cfg
+```
+— then make it permanent from the booted node:
+```
+sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --recheck
+sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --recheck
+sudo update-grub
+```
+
 ## Credentials
 
 - The drive is built with a **7-day** scoped R2 cred (bucket `zentrain`, object-read-write, only the
