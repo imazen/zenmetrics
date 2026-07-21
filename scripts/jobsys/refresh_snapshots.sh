@@ -15,6 +15,10 @@ EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 BUCKET="${ZEN_BUCKET:-zentrain}"
 SNAP_DIR="$HOME/tmp/zen-snaps"; mkdir -p "$SNAP_DIR"
 LOG="$SNAP_DIR/refresh.log"
+# single-flight: ledgers grow, so a refresh can eventually exceed the 30-min cron interval; never let
+# two overlap (they'd race on the same snapshot keys and double the R2 load).
+exec 9>"$SNAP_DIR/refresh.lock"
+flock -n 9 || { echo "$(date -u +%FT%TZ) refresh already running — skip" >>"$LOG"; exit 0; }
 r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }
 
 r2 cp "s3://$BUCKET/jobs/_pool/runlist.tsv" /tmp/runlist_refresh.tsv >/dev/null 2>&1 \
