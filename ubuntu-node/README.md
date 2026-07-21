@@ -1,56 +1,79 @@
-# zen compute node — bootable Ubuntu drive
+# zen compute node — the drive *is* the distro
 
-Turn a spare machine into a hands-off backfill worker: boot the USB once, and the machine installs
-Ubuntu, joins your Tailscale tailnet (so I can reach it from anywhere), authorizes my SSH key, and
-pre-pulls the worker image. Then one command from the dev box starts it working the R2 pool.
+Turn a whole drive into a persistent, boot-anywhere backfill worker. The drive itself holds a full
+Ubuntu 26.04 install with Docker + the worker + your SSH key + a baked R2 credential. Move it to any
+spare LAN box, boot it, and it starts claiming and scoring the R2 job pool — no installer step, no
+cloud-init, no Tailscale. It DHCPs on the LAN and announces itself over mDNS as `<hostname>.local`.
+
+This replaces the old autoinstall-USB flow (`user-data`/`meta-data`, removed): that *installed onto the
+target machine's internal disk*; this makes the removable drive the OS.
 
 ## What's here
 
-- `user-data` — the Ubuntu autoinstall seed (SSH key, Docker, Tailscale, worker image). **Edit two things first.**
-- `meta-data` — cloud-init instance id (bump per node).
-- `onboard_node.sh` — dev-box command that starts the worker on a booted node (fresh 12h R2 cred).
+- `build_node_drive.sh` — **dev-box, root.** Partitions a drive, debootstraps Ubuntu 26.04 onto it,
+  bakes in Docker + worker + SSH key + a 7-day R2 cred, installs a UEFI-*and*-BIOS bootloader that
+  comes up on any machine. The whole node is built here.
+- `mint_cred.sh` — mints a scoped **7-day** R2 temp cred (the R2 temp-cred maximum) and prints it as
+  env lines. Used by the build and by `onboard_node.sh`.
+- `onboard_node.sh` — dev-box helper to push a *fresh* 7-day cred to a running node and restart the
+  worker. Run weekly (cron line inside the script) to keep the cred live.
 
-## Before you write the USB — fill in 2 placeholders in `user-data`
+## Build it (on the dev box)
 
-1. **`TS_AUTHKEY_PLACEHOLDER`** → a Tailscale **pre-auth key**. Generate one at
-   https://login.tailscale.com/admin/settings/keys (Reusable, ~90-day expiry, tag `tag:zen` if you use
-   ACLs). This is what makes the node reachable from anywhere without touching your router.
-2. **`hostname: zen-node-1`** (and `meta-data`'s `zen-node-1`) → bump to `zen-node-2` for the second
-   machine so they don't collide in the tailnet.
+The build writes a physical block device, so the drive must be visible to WSL. From an elevated
+Windows PowerShell, attach it bare:
 
-(The console password is `zencompute`; SSH is key-only, so you only need it for a physical console.)
-
-## Make the USB (CIDATA method — no ISO repacking)
-
-1. Download **Ubuntu Server 26.04.x LTS** (Resolute Raccoon) ISO. (The `version: 1` autoinstall format
-   in `user-data` is unchanged from 24.04, so it works as-is.)
-2. Write the ISO to **USB #1** (the installer) with Rufus / balenaEtcher / `dd`.
-3. On a **second FAT32 volume labeled `CIDATA`** (a small USB #2, or a spare partition), copy this
-   folder's `user-data` and `meta-data` to its root.
-4. Boot the machine from USB #1. At the GRUB menu press `e`, append `autoinstall` to the `linux` line,
-   Ctrl-X to boot. The installer finds the `CIDATA` seed and installs **fully unattended** (it wipes the
-   target disk — dedicated node).
-
-> Prefer a single USB? `sudo bash make_seed_iso.sh` (add later) can bake the seed into a copy of the ISO
-> so there's one drive to `dd`. The two-volume method above needs no extra tooling.
-
-## After it boots
-
-The node installs, reboots, joins your tailnet, and pulls the image (~1–2 min after first boot). Then:
-
-```bash
-tailscale status | grep zen-node          # find its tailnet IP
-bash ubuntu-node/onboard_node.sh zen-node-1   # start the worker (or use the tailnet IP)
+```powershell
+wsl --mount --bare \\.\PHYSICALDRIVEn        # n = the drive's disk number (see: wmic diskdrive list brief)
 ```
 
-It immediately starts claiming + scoring the backfill remainder from the same R2 pool as the tower and
-the cloud fleet. Dedicated box, so it uses all cores. Re-run `onboard_node.sh` within 12 h to refresh the
-cred (temp creds cap at 12 h), or add a cron line like the tower's:
-`13 4,15 * * * bash .../onboard_node.sh zen-node-1`.
+It then shows up in WSL as `/dev/sdX` (check `lsblk`). Build:
+
+```bash
+sudo bash ubuntu-node/build_node_drive.sh --device /dev/sdX --host zen-node-1
+```
+
+It refuses a mounted/system disk and, unless `--yes`, makes you retype the drive's size to confirm the
+wipe. ~10–20 min (≈700 MB debootstrap + write). Bump `--host zen-node-2` for a second drive so mDNS
+names don't collide. Log lands in `~/tmp/build_node_<host>.log`.
+
+## Boot it
+
+Move the drive to the target box and boot from it:
+
+- **UEFI** (default on Skylake-era Xeon and anything since): pick the removable/USB entry in the boot
+  menu. We install GRUB to the firmware's removable path (`/EFI/BOOT/BOOTX64.EFI`), so it boots on *any*
+  UEFI box with no per-machine NVRAM entry.
+- **Legacy/CSM-only** old boards: also covered — a BIOS GRUB core is installed to the disk.
+
+First boot brings up networking (DHCP on any wired NIC), Docker pulls `zenfleet-worker:exec` (~1–2 min),
+and `zen-worker` starts. From the dev box:
+
+```bash
+ssh zen@zen-node-1.local 'systemctl status zen-worker --no-pager'
+ssh zen@zen-node-1.local 'docker top zen720 | grep -c zenmetrics'   # ~= core count once scoring
+```
+
+SSH is key-only (the dev-box key is baked in). Console password is `zencompute` for a physical login.
+
+## Credentials
+
+- The drive is built with a **7-day** scoped R2 cred (bucket `zentrain`, object-read-write, only the
+  `jobs/ jxl-lossy/runs/ canonical/2026-06-27/ refs/` prefixes) baked into `/etc/zen-node/worker.env`.
+  It carries a session token — that's why the worker env has `AWS_SESSION_TOKEN`.
+- **7 days is the hard cap** for R2 temp-access-credentials, so keep it live with a weekly push from the
+  dev box: `bash ubuntu-node/onboard_node.sh zen-node-1.local`, or the crontab line inside that script.
+- **Longer than 7 days?** Only a dashboard-created scoped R2 *API token* (R2 → Manage R2 API Tokens →
+  scope to `zentrain`, Object Read & Write, custom expiry) gives a static key+secret with no session
+  token and a 30-day+ life. Our management token can't create one programmatically (403), so that path
+  needs one manual token creation; drop its key/secret into `worker.env` (no `AWS_SESSION_TOKEN` line)
+  if you'd rather not run the weekly refresh.
 
 ## Notes
 
-- Creds are **never baked onto the drive** — `onboard_node.sh` mints a fresh scoped 12 h cred from the
-  dev box each time, so a lost/stolen USB exposes nothing but your SSH key + tailnet auth.
-- Once a node is in the tailnet I can reach it from anywhere; no port-forwarding or LAN specifics needed.
-- Verify work: `ssh zen@zen-node-1 'sudo docker top zen720 | grep -c zenmetrics'` (should be ~#cores).
+- Same R2 job pool as the tower and the cloud fleet; dedicated box, so it uses all cores (the worker's
+  resource-aware admission bounds concurrency).
+- GRUB and the kernel have a serial console (`ttyS0,115200`) enabled, so a dud boot on a headless box is
+  debuggable over serial.
+- Skylake-era Xeon is fully supported: bare-metal `linux-generic` kernel, `intel-microcode`, and the
+  worker's runtime SIMD dispatch (AVX2/AVX-512 detected at runtime — the binary is portable baseline).

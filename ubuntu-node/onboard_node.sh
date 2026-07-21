@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-# onboard_node.sh <tailnet-ip-or-host> — start the zensim-720 backfill worker on a booted zen-node.
+# onboard_node.sh <host> — push a FRESH 7-day R2 cred to a running zen-node and restart its worker.
 #
-# Run from the DEV box (holds the CF token). Mints a fresh 12h scoped R2 cred and starts the worker
-# container on the node over SSH. A dedicated node, so it uses ALL cores (the worker's resource-aware
-# admission bounds concurrency); --restart keeps it alive. Re-run within 12h to refresh the cred, or add
-# a cron line:  13 4,15 * * *  bash .../onboard_node.sh <node>   (mirrors the tower refresh cadence).
+# Run from the DEV box (holds the CF token). The node runs zen-worker as a systemd service reading
+# /etc/zen-node/worker.env; this replaces the three AWS_* lines in that file with a freshly-minted
+# 7-day scoped cred and restarts the service. The drive is built with an initial cred, so this is
+# only needed to top it up — weekly, given the 7-day cap. LAN only (no Tailscale); <host> is the
+# node's mDNS name (zen-node-1.local) or its LAN IP.
+#
+# Hands-off weekly refresh — add to the dev box's crontab:
+#   17 4 * * 1  bash /home/lilith/work/zen/zenmetrics/ubuntu-node/onboard_node.sh zen-node-1.local >> ~/tmp/zen-node-refresh.log 2>&1
 set -euo pipefail
-NODE="${1:?usage: onboard_node.sh <tailnet-ip-or-host>}"
-set -a; . "$HOME/.config/cloudflare/r2-credentials"; set +a
-EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NODE="${1:?usage: onboard_node.sh <host-or-ip>}"
 
-body=$(python3 -c "import json,os;print(json.dumps({'bucket':'zentrain','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':43200,'prefixes':['jobs/','jxl-lossy/runs/','canonical/2026-06-27/','refs/']}))")
-J=$(curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$body" \
-     "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials")
-read -r AK SK ST < <(printf '%s' "$J" | python3 -c 'import json,sys;r=json.load(sys.stdin)["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
-[ -n "${AK:-}" ] || { echo "cred mint failed: $J"; exit 1; }
-
+CREDS_B64="$(bash "$HERE/mint_cred.sh" | base64 -w0)"   # AWS_ACCESS_KEY_ID/_SECRET/_SESSION_TOKEN
 SSHN="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes zen@$NODE"
-$SSHN "sudo docker rm -f zen720 2>/dev/null; sudo docker run -d --name zen720 --restart unless-stopped \
-  -e AWS_ACCESS_KEY_ID='$AK' -e AWS_SECRET_ACCESS_KEY='$SK' -e AWS_SESSION_TOKEN='$ST' -e AWS_REGION=auto \
-  -e ZEN_R2_ENDPOINT='$EP' -e ZEN_BUCKET=zentrain \
-  -e ZEN_POOL_RUNLIST=s3://zentrain/jobs/_pool/runlist.tsv \
-  -e ZEN_CORPUS_PREFIX=refs/clean-picker-corpus-2026-06-26 \
-  -e ZEN_MAX_MIN=700 -e ZEN_CORE_OVERSUBSCRIBE=1 -e ZEN_PERSISTENT_EXEC=1 \
-  -e RAYON_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e ZEN_CHUNK_WALL_SEC=20 -e ZEN_PASS_TIMEOUT=5400 \
-  -e ZEN_PROVIDER=basement -e ZEN_WORKER='node-$NODE' \
-  --entrypoint /usr/local/bin/fleet-entrypoint.sh ghcr.io/imazen/zenfleet-worker:exec" >/dev/null
-echo "worker started on $NODE (12h cred). Verify: ssh zen@$NODE 'sudo docker top zen720 | grep -c zenmetrics'"
+
+$SSHN "set -e
+  F=/etc/zen-node/worker.env
+  sudo install -d -m755 /etc/zen-node
+  sudo sed -i '/^AWS_ACCESS_KEY_ID=/d;/^AWS_SECRET_ACCESS_KEY=/d;/^AWS_SESSION_TOKEN=/d' \$F 2>/dev/null || true
+  echo '$CREDS_B64' | base64 -d | sudo tee -a \$F >/dev/null
+  sudo chmod 600 \$F
+  sudo systemctl restart zen-worker
+  echo -n 'zen-worker is now: '; sudo systemctl is-active zen-worker"
+
+echo "pushed fresh 7-day cred to $NODE."
+echo "verify: ssh zen@$NODE 'docker top zen720 | grep -c zenmetrics'   (~= core count once scoring)"
