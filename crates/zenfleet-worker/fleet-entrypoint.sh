@@ -91,8 +91,17 @@ pool_mode(){
       else
         venv=(ZEN_VARIANTS_TAR_URI="$src" ZEN_VARIANT_INDEX_URI="s3://$ZEN_BUCKET/jobs/$run/variant_index.tsv")
       fi
+      # --ledger-in: feed the worker the done-set snapshot so its gap = only-undone, instead of
+      # re-scoring cells whose 10-min claim lease already expired (the ~2x tax on resumed runs —
+      # POOL mode otherwise passes no --ledger-in, so the reconcile view is empty and the gap is
+      # every cell each pass). Re-fetched per pass so a cron-refreshed snapshot stays current; guarded
+      # — a run with no snapshot yet just runs the old way (zero downside). Seed/refresh the snapshots
+      # with scripts/jobsys/refresh_snapshots.sh (on the cred-holding box, never baked onto a worker).
+      local snap="/tmp/snap_${run}.parquet"
+      s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "s3://$ZEN_BUCKET/jobs/$run/ledger_snapshot.parquet" "$snap" >/dev/null 2>&1 || rm -f "$snap"
+      local li=(); [ -s "$snap" ] && li=(--ledger-in "$snap")
       out=$(env "${venv[@]}" \
-        timeout "${ZEN_PASS_TIMEOUT:-1800}" zenfleet-worker --manifest "$mf" \
+        timeout "${ZEN_PASS_TIMEOUT:-1800}" zenfleet-worker --manifest "$mf" "${li[@]}" \
         --ledger-out "s3://$ZEN_BUCKET/jobs/$run/ledger/pool-$WORKER-$cyc.parquet" \
         --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "jobs/$run/blobs" \
         --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "jobs/$run/claims" \
