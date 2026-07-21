@@ -11,7 +11,7 @@ set -a; . "$HOME/.config/cloudflare/r2-credentials"; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 LOG="$HOME/tmp/hz720/tower_refresh.log"; mkdir -p "$HOME/tmp/hz720"
 
-body=$(python3 -c "import json,os;print(json.dumps({'bucket':'zentrain','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':43200,'prefixes':['jobs/','jxl-lossy/runs/','canonical/2026-06-27/','refs/']}))")
+body=$(python3 -c "import json,os;print(json.dumps({'bucket':'zentrain','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':604800,'prefixes':['jobs/','jxl-lossy/runs/','canonical/2026-06-27/','refs/']}))")
 J=$(curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$body" \
      "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials")
 read -r AK SK ST < <(printf '%s' "$J" | python3 -c 'import json,sys;r=json.load(sys.stdin)["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
@@ -28,4 +28,4 @@ $SSHT "docker rm -f zen720-basement 2>/dev/null; docker run -d --name zen720-bas
   -e RAYON_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e ZEN_CHUNK_WALL_SEC=20 -e ZEN_PASS_TIMEOUT=5400 \
   -e ZEN_PROVIDER=basement -e ZEN_WORKER=tower-unraid \
   --entrypoint /usr/local/bin/fleet-entrypoint.sh ghcr.io/imazen/zenfleet-worker:exec" >/dev/null
-echo "$(date -u +%FT%TZ) tower worker refreshed (12h cred)" >>"$LOG"
+echo "$(date -u +%FT%TZ) tower worker refreshed (7-day cred)" >>"$LOG"
