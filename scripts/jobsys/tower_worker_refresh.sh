@@ -30,7 +30,7 @@ $SSHT "docker rm -f zen720-basement 2>/dev/null; docker run -d --name zen720-bas
   -e ZEN_R2_ENDPOINT='$EP' -e ZEN_BUCKET=zentrain \
   -e ZEN_POOL_RUNLIST=s3://zentrain/jobs/_pool/runlist.tsv \
   -e ZEN_CORPUS_PREFIX=refs/clean-picker-corpus-2026-06-26 \
-  -e ZEN_MAX_MIN=700 -e ZEN_CORE_OVERSUBSCRIBE=1 -e ZEN_PERSISTENT_EXEC=1 \
+  -e ZEN_MAX_MIN=700 -e ZEN_CORE_OVERSUBSCRIBE=3 -e ZEN_PERSISTENT_EXEC=1 \
   -e RAYON_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e ZEN_CHUNK_WALL_SEC=20 -e ZEN_PASS_TIMEOUT=5400 \
   -e ZEN_PROVIDER=basement -e ZEN_WORKER=tower-unraid \
   -v /root/fleet-entrypoint.patched.sh:/usr/local/bin/fleet-entrypoint.sh:ro \
