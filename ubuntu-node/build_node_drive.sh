@@ -87,7 +87,7 @@ ESP_UUID="$(blkid -s UUID -o value "$ESP")"
 
 # ---- mount + debootstrap ----------------------------------------------------------------------
 T="$HOME/tmp/zennode-root"; mkdir -p "$T"
-mount "$ROOT" "$T"; mkdir -p "$T/boot/efi"; mount "$ESP" "$T/boot/efi"
+mount "$ROOT" "$T"     # ESP is mounted AFTER debootstrap (mmdebstrap wants an ~empty target)
 cleanup(){ set +e; for m in "$T/boot/efi" "$T/dev/pts" "$T/dev" "$T/proc" "$T/sys" "$T/run" "$T"; do umount -l "$m" 2>/dev/null; done; }
 trap cleanup EXIT
 
@@ -99,9 +99,11 @@ deb $SECMIRROR $SUITE-security main restricted universe multiverse
 EOF
 
 # Package set: bare-metal kernel + both bootloaders + docker + ssh + mDNS + Skylake microcode.
+# NB: no systemd-timesyncd — the 'important' variant already pulls chrony as the time-daemon
+# (they conflict via the virtual time-daemon package); chrony auto-enables itself on install.
 PKGS="linux-generic,grub-efi-amd64,grub-efi-amd64-signed,shim-signed,grub-pc-bin,\
 initramfs-tools,intel-microcode,amd64-microcode,systemd-sysv,udev,netplan.io,\
-systemd-resolved,systemd-timesyncd,openssh-server,docker.io,avahi-daemon,libnss-mdns,\
+systemd-resolved,openssh-server,docker.io,avahi-daemon,libnss-mdns,\
 sudo,ca-certificates,curl,jq,zstd,less,vim-tiny,htop,ethtool,pciutils,usbutils,cloud-guest-utils"
 
 echo "--- mmdebstrap $SUITE -> $T (this pulls ~700 MB) ---"
@@ -111,9 +113,11 @@ nice -n 19 ionice -c 3 mmdebstrap \
   --architectures=amd64 \
   --include="$PKGS" \
   --aptopt='Acquire::Retries "5"' \
+  --skip=check/empty \
   "$SUITE" "$T" "$SRC"
 
 # ---- configure inside chroot ------------------------------------------------------------------
+mkdir -p "$T/boot/efi"; mount "$ESP" "$T/boot/efi"
 mount -t proc  proc  "$T/proc"
 mount -t sysfs sys   "$T/sys"
 mount --bind /dev    "$T/dev"
@@ -219,7 +223,8 @@ mkdir -p /etc/ssh/sshd_config.d
 printf 'PasswordAuthentication no\nPermitRootLogin no\nKbdInteractiveAuthentication no\n' > /etc/ssh/sshd_config.d/10-zen.conf
 # mDNS: resolve *.local
 sed -i 's/^hosts:.*/hosts: files mdns4_minimal [NOTFOUND=return] dns/' /etc/nsswitch.conf || true
-systemctl enable ssh docker avahi-daemon systemd-networkd systemd-resolved systemd-timesyncd zen-worker
+systemctl enable ssh docker avahi-daemon systemd-networkd systemd-resolved zen-worker
+systemctl enable chrony 2>/dev/null || true
 ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf || true
 # bootloader: UEFI removable path (boots on ANY UEFI firmware, no NVRAM entry) + legacy BIOS
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=zen-node --removable --recheck $DEVICE || \
