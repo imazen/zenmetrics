@@ -1,5 +1,11 @@
 # zen compute node — the drive *is* the distro
 
+> **Provisioning many boxes over the network instead?** See [`pxe/`](pxe/) — remote
+> Ubuntu autoinstall onto each box's local disk from the Unraid tower (dnsmasq proxy-DHCP +
+> iPXE + serial-matched autoinstall), with four layers of "never wipe the wrong disk". This
+> single-drive flow below is for building one drive by hand.
+
+
 Turn a whole drive into a persistent, boot-anywhere backfill worker. The drive itself holds a full
 Ubuntu 26.04 install with Docker + the worker + your SSH key + a baked R2 credential. Move it to any
 spare LAN box, boot it, and it starts claiming and scoring the R2 job pool — no installer step, no

@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# fleet-pxe — control the network-install fleet from the dev box.
+#
+# The tower holds the PXE state. Because the dev box is NAT'd behind WSL (can't reach
+# the LAN) and NFS squashes our uid, this tool drives the tower over SSH: it reads/writes
+# the opt-in flags + per-box install configs there, and triggers Wake-on-LAN from the tower.
+#
+# SAFE workflow (never wipes the wrong disk — see README):
+#   1. fleet-pxe seen                                    # MACs that PXE-booted (default: local boot)
+#   2. fleet-pxe inventory <mac>                          # boot read-only; it reports disks, powers off
+#   3. fleet-pxe show <mac>                               # look at its disks; pick the OS disk SERIAL
+#   4. fleet-pxe register <mac> --serial <S> --host <h>   # mint 7d cred, render install config
+#   5. fleet-pxe install <mac>                            # opt-in + WoL; installs ONLY to serial S
+#   6. fleet-pxe cancel <mac>                             # remove flags (abort)
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOWER_SSH="${PXE_TOWER_SSH:-root@tower}"
+TPATH="${PXE_TPATH:-/mnt/user/coefficient/pxe}"      # tower-local path
+STATE="$TPATH/state"
+TOWER_IP="${PXE_TOWER_IP:-192.168.50.170}"
+BCAST="${PXE_BCAST:-192.168.50.255}"
+SSH_PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGI7zVd/Fd0aIgq9ykown4UKZIPc0cp/NTTG1hOtTnW7 lilith@lilith'
+PW_HASH='$6$cLBUatIqFEnZ/KIE$kgBEK0jI5zBK45QfrwbCfYHAPW3audVd2wyiX/QQFhNvXNAHqaxxf83B2zhdDybVMcNAjYQGVK7PiHDWinspw.'
+WORKER_IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zenfleet-worker:exec}"
+
+T(){ ssh -o BatchMode=yes -o StrictHostKeyChecking=no "$TOWER_SSH" "$@"; }
+norm(){ printf '%s' "$1" | tr 'A-Z' 'a-z' | tr ':.' '--'; }   # -> aa-bb-cc-dd-ee-ff
+die(){ echo "fleet-pxe: $*" >&2; exit 1; }
+
+wol(){ local mac; mac="$(printf '%s' "$1" | tr -d ':-.' | tr 'A-Z' 'a-z')"
+  T "python3 -c \"import socket;m=bytes.fromhex('$mac');p=b'\xff'*6+m*16;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1);s.sendto(p,('$BCAST',9))\"" \
+    && echo "WoL sent to $1 (via tower)"; }
+
+cmd="${1:-status}"; shift || true
+case "$cmd" in
+  status|seen)
+    echo "== seen (PXE-booted) =="; T "ls $STATE/seen 2>/dev/null" || true
+    echo "== flags =="; T "ls $STATE/flags 2>/dev/null" || true
+    echo "== registered =="; T "ls $STATE/registry 2>/dev/null | grep -v '\.env$'" || true
+    echo "== inventory reports =="; T "ls $STATE/inventory 2>/dev/null" || true;;
+  inventory)
+    m="$(norm "${1:?usage: inventory <mac>}")"
+    T "install -d $STATE/flags && : > $STATE/flags/$m.inventory"
+    echo "inventory flag set for $m; waking box (reports disks read-only, then powers off)"
+    wol "$1";;
+  show)
+    m="$(norm "${1:?usage: show <mac>}")"; T "cat $STATE/inventory/$m.txt 2>/dev/null" || die "no inventory yet for $m (run: inventory $1, wait for power-off)";;
+  register)
+    m="$(norm "${1:?usage: register <mac> --serial S --host H}")"; shift
+    SERIAL=""; HOST=""
+    while [ $# -gt 0 ]; do case "$1" in --serial) SERIAL="$2"; shift 2;; --host) HOST="$2"; shift 2;; *) die "bad arg $1";; esac; done
+    [ -n "$SERIAL" ] && [ -n "$HOST" ] || die "need --serial and --host"
+    CRED="$(bash "$HERE/../mint_cred.sh")"
+    R2EP="https://$(grep -m1 R2_ACCOUNT_ID "${R2_CREDENTIALS_FILE:-/home/lilith/.config/cloudflare/r2-credentials}" | cut -d= -f2 | tr -d '\r"').r2.cloudflarestorage.com"
+    RENDERED="$(SERIAL="$SERIAL" HOST="$HOST" MAC="$m" CRED="$CRED" R2EP="$R2EP" KEY="$SSH_PUBKEY" HASH="$PW_HASH" \
+                IMG="$WORKER_IMAGE" TOWER_IP="$TOWER_IP" python3 "$HERE/render_install.py")"
+    T "install -d $STATE/registry && cat > $STATE/registry/$m.install-user-data && printf 'HOST=%s\nSERIAL=%s\n' '$HOST' '$SERIAL' > $STATE/registry/$m.env" <<<"$RENDERED"
+    echo "registered $m -> host=$HOST serial=$SERIAL (install config rendered on tower, 7d cred baked)"
+    echo "next: fleet-pxe install $1";;
+  install)
+    m="$(norm "${1:?usage: install <mac>}")"
+    T "test -f $STATE/registry/$m.install-user-data" || die "$m not registered — run: register $1 --serial S --host H"
+    T ": > $STATE/flags/$m.install"
+    echo "install flag set for $m; waking box. Wipes ONLY the registered serial, installs, self-clears the flag."
+    wol "$1";;
+  cancel)
+    m="$(norm "${1:?usage: cancel <mac>}")"; T "rm -f $STATE/flags/$m.inventory $STATE/flags/$m.install"; echo "flags cleared for $m";;
+  wol) wol "${1:?usage: wol <mac>}";;
+  *) die "unknown command '$cmd' (status|seen|inventory|show|register|install|cancel|wol)";;
+esac

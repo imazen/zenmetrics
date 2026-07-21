@@ -1,0 +1,7 @@
+#!ipxe
+# Stage-2 chain: iPXE asks the control service what THIS box should do, keyed by its
+# own MAC. The service defaults to local-disk boot; it only returns an install script
+# when the box is explicitly opted in AND its target disk serial is registered.
+echo
+echo zen-pxe: ${net0/mac} asking control service...
+chain --replace http://192.168.50.170:3080/api/boot/${mac:hexhyp} || shell

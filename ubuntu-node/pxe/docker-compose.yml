@@ -1,0 +1,39 @@
+# zen-pxe network-install stack — runs on the Unraid tower.
+#   dnsmasq : proxy-DHCP + TFTP (host net, needs LAN broadcast)
+#   nginx   : static netboot assets on :3080 + reverse-proxy /api/ (native Range for the ISO)
+#   pxe-api : the python control service on :3081 (safe boot decisions, inventory, done)
+#
+# Deploy (on the tower):  docker compose -f /mnt/user/coefficient/pxe/docker-compose.yml up -d
+# Tear down:              docker compose -f ... down
+services:
+  dnsmasq:
+    image: strm/dnsmasq             # minimal image; runs dnsmasq -k against /etc/dnsmasq.conf
+    container_name: zen-pxe-dnsmasq
+    restart: unless-stopped
+    network_mode: host              # proxy-DHCP/TFTP need raw broadcast on the LAN
+    cap_add: [NET_ADMIN, NET_RAW]
+    command: ["-k", "--log-facility=-", "--conf-file=/etc/dnsmasq.conf"]
+    volumes:
+      - /mnt/user/coefficient/pxe/dnsmasq.conf:/etc/dnsmasq.conf:ro
+      - /mnt/user/coefficient/pxe/tftp:/tftp:ro
+
+  nginx:
+    image: nginx:stable
+    container_name: zen-pxe-nginx
+    restart: unless-stopped
+    network_mode: host              # bind :3080 on the tower's LAN IP
+    volumes:
+      - /mnt/user/coefficient/pxe/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /mnt/user/coefficient/pxe/http:/www:ro
+
+  pxe-api:
+    image: python:3.12-slim
+    container_name: zen-pxe-api
+    restart: unless-stopped
+    network_mode: host              # bind :3081 (localhost; nginx proxies to it)
+    environment:
+      PXE_DATA: /data
+      PXE_BASE: http://192.168.50.170:3080
+    volumes:
+      - /mnt/user/coefficient/pxe:/data
+    command: ["python3", "/data/server.py"]
