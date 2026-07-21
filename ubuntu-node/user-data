@@ -1,0 +1,39 @@
+#cloud-config
+# Ubuntu Server autoinstall seed — turns a spare machine into a zen compute node, hands-off.
+# On boot it installs Ubuntu, authorizes the dev-box SSH key, installs Docker + Tailscale (so the node
+# is reachable from anywhere by its tailnet IP), and pre-pulls the worker image. After it comes up it
+# appears in the tailnet as `zen-node-*`; the worker itself is started by onboard_node.sh (fresh scoped
+# R2 cred — never baked onto a physical drive). See README.md.
+#
+# BEFORE writing to USB, fill in the two PLACEHOLDERs below (TS_AUTHKEY, and bump the hostname per node).
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard: {layout: us}
+  identity:
+    hostname: zen-node-1                     # <-- bump to zen-node-2, etc. for the second machine
+    username: zen
+    # console password (SSH is key-only). Hash for "zencompute" — change with: openssl passwd -6
+    password: "$6$cLBUatIqFEnZ/KIE$kgBEK0jI5zBK45QfrwbCfYHAPW3audVd2wyiX/QQFhNvXNAHqaxxf83B2zhdDybVMcNAjYQGVK7PiHDWinspw."
+  ssh:
+    install-server: true
+    allow-pw: false
+    authorized-keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGI7zVd/Fd0aIgq9ykown4UKZIPc0cp/NTTG1hOtTnW7 lilith@lilith"
+  storage: {layout: {name: direct}}          # whole-disk, single partition — dedicated node
+  packages: [docker.io, curl, ca-certificates, jq]
+  user-data:                                 # cloud-init for the INSTALLED system's first boot
+    write_files:
+      - path: /etc/sudoers.d/90-zen-nopasswd
+        content: "zen ALL=(ALL) NOPASSWD:ALL\n"
+        permissions: "0440"
+    runcmd:
+      - [ systemctl, enable, --now, docker ]
+      - [ usermod, -aG, docker, zen ]
+      - "curl -fsSL https://tailscale.com/install.sh | sh"
+      # join the tailnet so the dev box can reach this node from anywhere. --ssh also enables tailscale SSH.
+      - "tailscale up --authkey=TS_AUTHKEY_PLACEHOLDER --hostname=$(hostname) --ssh || true"
+      - "docker pull ghcr.io/imazen/zenfleet-worker:exec || true"
+      - "touch /var/lib/zen-node-ready"
+  late-commands:
+    - "echo 'zen-node provisioned' > /target/etc/zen-node-release"
