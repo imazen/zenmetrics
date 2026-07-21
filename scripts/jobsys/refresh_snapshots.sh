@@ -36,5 +36,5 @@ compact_one(){
   else echo "COMPACT-FAIL $run"; fi
 }
 export -f compact_one; export EP R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY HOME HERE BUCKET
-printf '%s\n' "$runs" | xargs -P 6 -I{} bash -c 'compact_one "$@"' _ {} | tee -a "$LOG"
+printf '%s\n' "$runs" | xargs -P 3 -I{} bash -c 'compact_one "$@"' _ {} | tee -a "$LOG"
 echo "$(date -u +%FT%TZ) refresh DONE" | tee -a "$LOG"
