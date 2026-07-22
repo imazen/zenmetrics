@@ -78,8 +78,10 @@ autoinstall:
       - "{KEY}"
   packages: [docker.io, avahi-daemon, libnss-mdns, jq, curl, chrony]
   late-commands:
-    # install-once: clear our own flag NOW (installer has network) so a re-PXE can't re-wipe
-    - "curl -sS -X POST http://{TOWER}:3080/api/done/{MAC} || true"
+    # install-once (guard 1): clear our own flag NOW (installer has network) so a re-PXE can't
+    # re-wipe. Retry hard — a transient blip here must not leave the flag set. (Guard 2 is the
+    # server-side 'installed' marker, which refuses re-install even if this never lands.)
+    - "sh -c 'for i in 1 2 3 4 5 6 7 8; do curl -fsS -X POST http://{TOWER}:3080/api/done/{MAC} && break; sleep 3; done; true'"
   user-data:
     disable_root: true
     write_files:

@@ -38,7 +38,7 @@ KVER = os.environ.get("PXE_UBU", "ubuntu-26.04")
 PORT = int(os.environ.get("PXE_PORT", "3081"))   # nginx (3080) reverse-proxies /api/ here
 
 MAC_RE = re.compile(r"^[0-9a-f]{2}(-[0-9a-f]{2}){5}$")   # iPXE ${mac:hexhyp} form
-for d in ("flags", "registry", "inventory", "seen"):
+for d in ("flags", "registry", "inventory", "seen", "installed"):
     os.makedirs(os.path.join(STATE, d), exist_ok=True)
 
 
@@ -54,6 +54,7 @@ def _clear(kind, mac):
     try: os.remove(os.path.join(STATE, "flags", f"{mac}.{kind}"))
     except FileNotFoundError: pass
 def _registered(mac):    return os.path.exists(os.path.join(STATE, "registry", f"{mac}.install-user-data"))
+def _installed(mac):     return os.path.exists(os.path.join(STATE, "installed", mac))  # loop guard
 
 
 def _seen(mac):
@@ -106,15 +107,31 @@ def _grub_kernel(mac, kind, autoinstall):
             f"initrd (http,{HOSTPORT})/{KVER}/initrd\n"
             f"boot")
 
+def _grub_chain(*paths):
+    # `exit` doesn't reliably hand off to the local disk on all firmware, so chainload the
+    # OS bootloader directly, trying each path in order across all local disks.
+    out = []
+    for p in paths:
+        out.append(f"if search --no-floppy --file --set=root {p}\nthen chainloader {p}\nboot\nfi")
+    out.append("echo zen-grub: no matching local bootloader found")
+    return "\n".join(out) + "\n"
+
+_UBUNTU = ("/EFI/ubuntu/shimx64.efi", "/EFI/ubuntu/grubx64.efi", "/EFI/BOOT/BOOTX64.EFI")
+_WINDOWS = ("/EFI/Microsoft/Boot/bootmgfw.efi",)
+
 def grub_config(mac):
     _seen(mac)   # grub is now the direct entry point; keep 'seen' tracking here
     if _has("inventory", mac):
         return f"echo zen-grub: {mac} INVENTORY (read-only)\n{_grub_kernel(mac, 'inventory', False)}\n"
-    if _has("install", mac) and _registered(mac):
+    if _has("install", mac) and _registered(mac) and not _installed(mac):
+        # guard 2: even if the flag lingers, once the box has POSTed /api/done we refuse to
+        # re-install (no wipe loop). Re-arming via `fleet-pxe install` clears the marker.
         return f"echo zen-grub: {mac} INSTALL (serial-matched)\n{_grub_kernel(mac, 'install', True)}\n"
-    # default: boot the local disk. `exit` returns to the UEFI boot manager, which advances
-    # to the next boot entry (local disk), since PXE is ordered first / local second.
-    return "echo zen-grub: no task for this box -- booting local disk\nexit\n"
+    if _has("worker", mac):
+        # remotely-toggled worker mode: boot the installed Ubuntu zen node
+        return "echo zen-grub: WORKER mode -- booting Ubuntu zen node\n" + _grub_chain(*_UBUNTU, *_WINDOWS)
+    # default: boot Windows (user choice: Windows stays the default OS)
+    return "echo zen-grub: booting Windows (default)\n" + _grub_chain(*_WINDOWS, *_UBUNTU)
 
 
 # ---- seeds ---------------------------------------------------------------------
@@ -179,8 +196,10 @@ class H(http.server.BaseHTTPRequestHandler):
                 f.write(body)
             _clear("inventory", mac)
             return self._text("inventory saved\n")
-        else:  # done
+        else:  # done — installer finished: clear the flag AND drop a loop-guard marker
             _clear("install", mac)
+            with open(os.path.join(STATE, "installed", mac), "w") as f:
+                f.write(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + "\n")
             return self._text("install flag cleared\n")
 
     def do_GET(self):

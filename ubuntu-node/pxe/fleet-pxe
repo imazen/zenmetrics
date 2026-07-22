@@ -56,15 +56,23 @@ case "$cmd" in
                 IMG="$WORKER_IMAGE" TOWER_IP="$TOWER_IP" python3 "$HERE/render_install.py")"
     T "install -d $STATE/registry && cat > $STATE/registry/$m.install-user-data && printf 'HOST=%s\nSERIAL=%s\n' '$HOST' '$SERIAL' > $STATE/registry/$m.env" <<<"$RENDERED"
     echo "registered $m -> host=$HOST serial=$SERIAL (install config rendered on tower, 7d cred baked)"
-    echo "next: fleet-pxe install $1";;
+    echo "next: fleet-pxe install $m";;
   install)
     m="$(norm "${1:?usage: install <mac>}")"
     T "test -f $STATE/registry/$m.install-user-data" || die "$m not registered — run: register $1 --serial S --host H"
-    T ": > $STATE/flags/$m.install"
+    T "rm -f $STATE/installed/$m; : > $STATE/flags/$m.install"   # clear loop-guard for a fresh (re)install
     echo "install flag set for $m; waking box. Wipes ONLY the registered serial, installs, self-clears the flag."
     wol "$1";;
+  worker)   # boot the installed box into its Ubuntu zen node (worker mode) instead of Windows
+    m="$(norm "${1:?usage: worker <mac>}")"
+    T ": > $STATE/flags/$m.worker"
+    echo "worker flag set for $m; on next boot it runs the Ubuntu zen node. Waking it now."
+    wol "$1";;
+  stop)     # clear worker mode -> next boot returns to Windows (default)
+    m="$(norm "${1:?usage: stop <mac>}")"; T "rm -f $STATE/flags/$m.worker"
+    echo "worker flag cleared for $m; it boots Windows on next reboot (reboot it to switch back).";;
   cancel)
-    m="$(norm "${1:?usage: cancel <mac>}")"; T "rm -f $STATE/flags/$m.inventory $STATE/flags/$m.install"; echo "flags cleared for $m";;
+    m="$(norm "${1:?usage: cancel <mac>}")"; T "rm -f $STATE/flags/$m.inventory $STATE/flags/$m.install $STATE/flags/$m.worker"; echo "all flags cleared for $m";;
   wol) wol "${1:?usage: wol <mac>}";;
-  *) die "unknown command '$cmd' (status|seen|inventory|show|register|install|cancel|wol)";;
+  *) die "unknown command '$cmd' (status|seen|inventory|show|register|install|worker|stop|cancel|wol)";;
 esac
