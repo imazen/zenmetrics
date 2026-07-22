@@ -10,17 +10,25 @@ the network.
 
 ## How it boots
 
+**UEFI (the normal case) PXE-boots GRUB directly** — not iPXE. We tried iPXE first and hit two
+walls on real firmware: (1) many UEFI firmwares don't honor iPXE's EFI initrd handoff
+(`LoadFile2`), so the kernel boots with no initrd and panics; (2) GRUB chained *from* iPXE loses
+`${net_default_mac}`. PXE-booting GRUB directly fixes both — GRUB loads the initrd itself (works
+everywhere) and, being PXE-booted, knows its own MAC.
+
 ```
-box powers on ──PXE──▶ router DHCP gives IP
-                       tower dnsmasq (proxy-DHCP) says "load iPXE from me via TFTP"
-        ──iPXE──▶ boot.ipxe ──HTTP──▶ tower /api/boot/<its-MAC>
-                       the control service decides, keyed on that MAC:
-                         • inventory flag  → boot read-only, report disks, power off
-                         • install flag AND registered serial → install to THAT serial
-                         • otherwise (default) → boot the local disk
+box powers on ──UEFI PXE──▶ router DHCP gives IP
+                            tower dnsmasq (proxy-DHCP) says "load grubnet.efi via TFTP"
+        ──GRUB──▶ net_bootp ──HTTP──▶ tower /api/grub/<its-MAC>
+                            the control service decides, keyed on that MAC:
+                              • inventory flag  → boot read-only, report disks, power off
+                              • install flag AND registered serial → install to THAT serial
+                              • otherwise (default) → `exit` to the local disk
 ```
 
+Legacy BIOS boxes still go through iPXE (`undionly.kpxe` → `boot.ipxe` → `/api/boot/<mac>`).
 Proxy-DHCP **coexists** with the router's DHCP — it only adds PXE options, never hands out IPs.
+Verified end-to-end 2026-07-21 on a real UEFI box: PXE → GRUB → kernel+initrd → casper → inventory.
 
 ## The four safety layers — how we never wipe the wrong disk
 
@@ -82,10 +90,14 @@ Three host-networked containers on the tower: `zen-pxe-dnsmasq` (proxy-DHCP + TF
 | `deploy.sh` | push + (re)start on the tower (Unraid has no compose plugin) |
 | `docker-compose.yml` | reference topology (usable if you install the compose plugin) |
 
-## Known / needs a real box
+## Status (verified 2026-07-21 on a real UEFI box)
 
-The end-to-end path is verified on the tower (dnsmasq parses + listens, nginx serves with
-Range, the API returns local/inventory/install correctly, render produces valid serial-matched
-YAML). What can't be tested without a physical box PXE-booting: the firmware→iPXE→HTTP chain
-and subiquity honoring the seed. `dnsmasq.conf` has `log-dhcp` on, so the first real boot is
-fully traceable in `docker logs zen-pxe-dnsmasq`.
+PXE → GRUB → kernel+initrd → casper → cloud-init → **inventory report + power-off** all confirmed
+end-to-end on real hardware (box `04:7c:16:b3:18:51`). The install path (serial-matched autoinstall
++ worker payload) shares the identical GRUB/casper boot and is wired the same way. `dnsmasq.conf`
+keeps `log-dhcp` on, so any box's boot is fully traceable in `docker logs zen-pxe-dnsmasq` and
+`docker logs zen-pxe-nginx`.
+
+Build the binaries (not committed, >30 KB) with `./deploy.sh --ipxe --grub` (needs
+`grub-efi-amd64-bin grub-common` + `build-essential liblzma-dev` on the dev box). WoL uses the
+tower's `etherwake -i br0 <mac>`; enable Wake-on-LAN in each box's BIOS.

@@ -107,11 +107,14 @@ def _grub_kernel(mac, kind, autoinstall):
             f"boot")
 
 def grub_config(mac):
+    _seen(mac)   # grub is now the direct entry point; keep 'seen' tracking here
     if _has("inventory", mac):
         return f"echo zen-grub: {mac} INVENTORY (read-only)\n{_grub_kernel(mac, 'inventory', False)}\n"
     if _has("install", mac) and _registered(mac):
         return f"echo zen-grub: {mac} INSTALL (serial-matched)\n{_grub_kernel(mac, 'install', True)}\n"
-    return "echo zen-grub: no boot task for this box; rebooting in 3s\nsleep 3\nreboot\n"
+    # default: boot the local disk. `exit` returns to the UEFI boot manager, which advances
+    # to the next boot entry (local disk), since PXE is ordered first / local second.
+    return "echo zen-grub: no task for this box -- booting local disk\nexit\n"
 
 
 # ---- seeds ---------------------------------------------------------------------

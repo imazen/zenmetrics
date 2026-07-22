@@ -28,12 +28,30 @@ build_ipxe(){
   T "cd $P/tftp && for f in ipxe.efi snponly.efi undionly.kpxe; do printf '%s: ' \$f; file -b \$f | cut -c1-30; done"
 }
 
+# grubnet.efi is PXE-booted DIRECTLY for UEFI (no iPXE): GRUB loads the initrd itself
+# (works on firmware that won't honor iPXE's EFI initrd handoff) and, being PXE-booted,
+# knows its own ${net_default_mac} to fetch /api/grub/<mac>. Built with the chain config
+# embedded (tftp/grub-embedded.cfg). Not committed (>30 KB).
+build_grub(){
+  echo "== build grubnet.efi (embedded config) =="
+  command -v grub-mkstandalone >/dev/null || { echo "need grub-efi-amd64-bin grub-common"; exit 1; }
+  local W="$HOME/tmp/grubnet"; mkdir -p "$W"; cp "$HERE/tftp/grub-embedded.cfg" "$W/embedded.cfg"
+  grub-mkstandalone -O x86_64-efi -o "$W/grubnet.efi" \
+    --modules="efinet http linux normal echo net configfile tftp gzio part_gpt all_video font terminal boot sleep reboot" \
+    "boot/grub/grub.cfg=$W/embedded.cfg"
+  T "mkdir -p $P/tftp $P/http"
+  SCP "$W/grubnet.efi" "$TOWER_SSH:$P/tftp/"
+  SCP "$W/grubnet.efi" "$TOWER_SSH:$P/http/"
+  T "printf 'grubnet.efi: '; file -b $P/tftp/grubnet.efi | cut -c1-30"
+}
+
 echo "== sync configs + code to $TOWER_SSH:$P =="
 T "mkdir -p $P/http $P/tftp $P/state/flags $P/state/registry $P/state/inventory $P/state/seen"
 SCP "$HERE/server.py" "$HERE/dnsmasq.conf" "$HERE/nginx.conf" "$HERE/docker-compose.yml" "$TOWER_SSH:$P/"
 SCP "$HERE/http/boot.ipxe" "$TOWER_SSH:$P/http/boot.ipxe"
 
 [ "${1:-}" = "--ipxe" ] && build_ipxe
+[ "${1:-}" = "--grub" ] && build_grub
 
 if [ "${1:-}" = "--assets" ]; then
   echo "== (re)extract kernel/initrd from ISO =="

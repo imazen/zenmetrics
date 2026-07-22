@@ -27,9 +27,9 @@ T(){ ssh -o BatchMode=yes -o StrictHostKeyChecking=no "$TOWER_SSH" "$@"; }
 norm(){ printf '%s' "$1" | tr 'A-Z' 'a-z' | tr ':.' '--'; }   # -> aa-bb-cc-dd-ee-ff
 die(){ echo "fleet-pxe: $*" >&2; exit 1; }
 
-wol(){ local mac; mac="$(printf '%s' "$1" | tr -d ':.-' | tr 'A-Z' 'a-z')"
-  T "python3 -c \"import socket;m=bytes.fromhex('$mac');p=b'\xff'*6+m*16;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1);s.sendto(p,('$BCAST',9))\"" \
-    && echo "WoL sent to $1 (via tower)"; }
+wol(){  # the Unraid tower ships etherwake; br0 is its LAN bridge
+  T "/usr/sbin/etherwake -i br0 '$1' 2>/dev/null || etherwake -i br0 '$1'" \
+    && echo "WoL sent to $1 (via tower etherwake)" || echo "WoL failed (enable Wake-on-LAN in the box's BIOS); power it on manually"; }
 
 cmd="${1:-status}"; shift || true
 case "$cmd" in
