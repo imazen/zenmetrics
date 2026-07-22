@@ -95,9 +95,12 @@ autoinstall:
       - path: /etc/sudoers.d/90-zen-nopasswd
         permissions: "0440"
         content: "zen ALL=(ALL) NOPASSWD:ALL\\n"
+      - path: /etc/modprobe.d/blacklist-nouveau.conf
+        content: "blacklist nouveau\\noptions nouveau modeset=0\\n"
     runcmd:
       - [ usermod, -aG, docker, zen ]
       - [ systemctl, daemon-reload ]
       - [ systemctl, enable, --now, docker ]
       - [ systemctl, enable, --now, zen-worker ]
+      - [ update-initramfs, -u ]
 """)

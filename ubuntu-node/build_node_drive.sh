@@ -151,6 +151,11 @@ EOF
 # boot-anywhere initramfs (USB/NVMe/xhci + most storage drivers)
 echo 'MODULES=most' > "$T/etc/initramfs-tools/conf.d/zennode"
 
+# Blacklist nouveau: a CPU-only worker doesn't need the GPU, and if a box auto-pulls the proprietary
+# nvidia driver, nouveau loading alongside it soft-locks the kernel (observed on zen-node-2 — a Call
+# Trace with both modules loaded wedged the box ~1h in). Harmless when there's no discrete GPU.
+printf 'blacklist nouveau\noptions nouveau modeset=0\n' > "$T/etc/modprobe.d/blacklist-nouveau.conf"
+
 # grub: headless-friendly, no OS prober, serial + vga console for debugging a dud boot
 cat > "$T/etc/default/grub" <<EOF
 GRUB_DEFAULT=0
