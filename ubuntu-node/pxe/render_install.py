@@ -59,7 +59,7 @@ autoinstall:
   keyboard: {{layout: us}}
   storage:
     config:
-      - {{type: disk, id: disk0, match: {{serial: "{SERIAL}"}}, ptable: gpt, wipe: superblock-recursive, preserve: false, grub_device: false}}
+      - {{type: disk, id: disk0, match: {{serial: "*{SERIAL}*"}}, ptable: gpt, wipe: superblock-recursive, preserve: false, grub_device: false}}
       - {{type: partition, id: pbios, device: disk0, size: 1M, flag: bios_grub, preserve: false}}
       - {{type: partition, id: pefi,  device: disk0, size: 1G, flag: boot, grub_device: true, preserve: false}}
       - {{type: format,    id: fefi,  volume: pefi, fstype: fat32, preserve: false}}
