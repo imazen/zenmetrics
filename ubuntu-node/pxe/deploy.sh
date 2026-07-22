@@ -37,7 +37,7 @@ build_grub(){
   command -v grub-mkstandalone >/dev/null || { echo "need grub-efi-amd64-bin grub-common"; exit 1; }
   local W="$HOME/tmp/grubnet"; mkdir -p "$W"; cp "$HERE/tftp/grub-embedded.cfg" "$W/embedded.cfg"
   grub-mkstandalone -O x86_64-efi -o "$W/grubnet.efi" \
-    --modules="efinet http linux normal echo net configfile tftp gzio part_gpt all_video font terminal boot sleep reboot" \
+    --modules="efinet http linux normal echo net configfile tftp gzio part_gpt all_video font terminal boot sleep reboot chain fat search search_fs_file" \
     "boot/grub/grub.cfg=$W/embedded.cfg"
   T "mkdir -p $P/tftp $P/http"
   SCP "$W/grubnet.efi" "$TOWER_SSH:$P/tftp/"
