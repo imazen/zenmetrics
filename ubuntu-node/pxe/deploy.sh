@@ -4,6 +4,7 @@
 #
 #   bash deploy.sh              # sync configs + (re)start containers
 #   bash deploy.sh --assets     # also (re)extract kernel/initrd from the ISO on the tower
+#   bash deploy.sh --ipxe       # also (re)build iPXE from source w/ embedded chain, push binaries
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOWER_SSH="${PXE_TOWER_SSH:-root@tower}"
@@ -11,10 +12,28 @@ P="${PXE_TPATH:-/mnt/user/coefficient/pxe}"
 SCP(){ scp -o BatchMode=yes -o StrictHostKeyChecking=no "$@"; }
 T(){ ssh -o BatchMode=yes -o StrictHostKeyChecking=no "$TOWER_SSH" "$@"; }
 
+# iPXE binaries are NOT committed (>30 KB) and boot.ipxe.org 404s for .efi, so build them
+# from source with our chain script EMBEDDED (proxy-DHCP won't reliably hand iPXE an HTTP
+# chain URL; embedding makes iPXE run our logic the instant it loads). See tftp/chain.ipxe.
+build_ipxe(){
+  local W="$HOME/tmp/ipxe-build"
+  echo "== build iPXE (embedded chain) =="
+  command -v gcc >/dev/null || { echo "need build-essential liblzma-dev"; exit 1; }
+  rm -rf "$W"; mkdir -p "$W"; ( cd "$W" && git clone --depth 1 https://github.com/ipxe/ipxe.git >/dev/null 2>&1 )
+  cp "$HERE/tftp/chain.ipxe" "$W/ipxe/src/chain.ipxe"
+  ( cd "$W/ipxe/src" && nice -n19 make -j"$(nproc)" bin-x86_64-efi/ipxe.efi bin-x86_64-efi/snponly.efi bin/undionly.kpxe EMBED=chain.ipxe >/dev/null 2>&1 )
+  T "mkdir -p $P/tftp"
+  SCP "$W/ipxe/src/bin-x86_64-efi/ipxe.efi" "$W/ipxe/src/bin-x86_64-efi/snponly.efi" "$W/ipxe/src/bin/undionly.kpxe" "$TOWER_SSH:$P/tftp/"
+  SCP "$HERE/tftp/autoexec.ipxe" "$TOWER_SSH:$P/tftp/"
+  T "cd $P/tftp && for f in ipxe.efi snponly.efi undionly.kpxe; do printf '%s: ' \$f; file -b \$f | cut -c1-30; done"
+}
+
 echo "== sync configs + code to $TOWER_SSH:$P =="
 T "mkdir -p $P/http $P/tftp $P/state/flags $P/state/registry $P/state/inventory $P/state/seen"
 SCP "$HERE/server.py" "$HERE/dnsmasq.conf" "$HERE/nginx.conf" "$HERE/docker-compose.yml" "$TOWER_SSH:$P/"
 SCP "$HERE/http/boot.ipxe" "$TOWER_SSH:$P/http/boot.ipxe"
+
+[ "${1:-}" = "--ipxe" ] && build_ipxe
 
 if [ "${1:-}" = "--assets" ]; then
   echo "== (re)extract kernel/initrd from ISO =="

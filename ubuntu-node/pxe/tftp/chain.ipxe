@@ -1,0 +1,4 @@
+#!ipxe
+echo zen-pxe: iPXE up on ${net0/mac} -- getting IPv4 + chaining to control service
+dhcp || echo (dhcp warning, continuing)
+chain --replace http://192.168.50.170:3080/api/boot/${mac:hexhyp} || shell
