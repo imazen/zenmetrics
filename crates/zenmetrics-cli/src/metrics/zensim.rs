@@ -264,16 +264,18 @@ pub fn extract_features_regime(
 /// once in `run_score_file`, but without this the ref FEATURE work was redone every
 /// variant). Bit-identical to the per-call path — see `v1_precomputed_ref_matches_percall`.
 ///
-/// NOTE: only the **v1** ref pyramid is reused. `zensim::compute_v2_features` has no
-/// precomputed-ref API, so the v2-348 block still rebuilds the ref pyramid per
-/// variant — the full ref+shared-pyramid reuse needs a combined-720-with-ref API in
-/// the zensim crate (see `docs/ZENSIM720_BACKFILL.md` "optimal notes").
+/// BOTH the v1 XYB pyramid AND the v2-348 reference (+cached blur moments) are precomputed once
+/// and reused across the source's variants — v2 via zensim's `compute_v2_features_with_ref`
+/// (landed 2026-07). Previously the v2 block rebuilt the ref pyramid per variant (~40% of the
+/// per-cell cost on a many-variant ScoreFile job); reusing it is a pure cost reduction — features
+/// are bit-identical (zensim guarantees it — see `v2_precomputed_ref_matches_percall`).
 #[cfg(feature = "cpu-metrics")]
 pub struct ZensimRefCtx {
     padded: Vec<u8>, // reference reflect-padded to (w,h); w,h ≥ 64
     w: usize,
     h: usize,
     v1_pre: zensim::PrecomputedReference, // v1 XYB pyramid, 4 scales
+    v2_pre: zensim::feature_v2::V2PreparedReference, // v2-348 ref (+moments), reused per variant
 }
 
 /// Build a [`ZensimRefCtx`] from a decoded reference — pad once, precompute the v1
@@ -288,7 +290,13 @@ pub fn precompute_ref_ctx(reference: &Rgb8Image) -> Result<ZensimRefCtx, Box<dyn
     // 4 scales = zensim's NUM_SCALES / the ZensimConfig default; covers every regime.
     let v1_pre = zensim::precompute_reference_with_scales(r3, w, h, 4)
         .map_err(|e| format!("zensim: precompute_reference_with_scales: {e:?}"))?;
-    Ok(ZensimRefCtx { padded, w, h, v1_pre })
+    // v2-348 reference prepared ONCE (+cached blur moments so each variant skips the ref V-blur and
+    // activity chain). Reused via compute_v2_features_with_ref — bit-identical to the per-variant
+    // rebuild, ~40% cheaper on a many-variant ScoreFile job.
+    let v2_pre = zensim::Zensim::new(zensim::ZensimProfile::PreviewV0_2)
+        .prepare_v2_reference_with_moments(&zensim::RgbSlice::new(r3, w, h))
+        .map_err(|e| format!("zensim: prepare_v2_reference_with_moments: {e:?}"))?;
+    Ok(ZensimRefCtx { padded, w, h, v1_pre, v2_pre })
 }
 
 /// Extract the regime-appropriate feature vector for `distorted` against a
@@ -314,7 +322,6 @@ pub fn extract_features_regime_with_ctx(
     let dp = reflect_pad_to_min(distorted, 64);
     let dp: &[u8] = &dp;
     let dst3: &[[u8; 3]] = bytemuck::cast_slice(dp);
-    let ref3: &[[u8; 3]] = bytemuck::cast_slice(&ctx.padded);
 
     // v1 block: reuse the precomputed ref pyramid (bit-identical to per-call).
     let (extended, iw) = match regime {
@@ -329,11 +336,11 @@ pub fn extract_features_regime_with_ctx(
         .map_err(|e| format!("zensim: compute_zensim_with_ref_and_config: {e:?}"))?;
     let mut features = v1.into_features();
 
-    // v2 block: no precomputed-ref API — reprocess the (already-padded) ref.
+    // v2 block: reuse the precomputed v2 ref (bit-identical to the per-variant rebuild).
     if regime == R::V2Ab {
         let v2 = zensim::Zensim::new(zensim::ZensimProfile::PreviewV0_2)
-            .compute_v2_features(&RgbSlice::new(ref3, ctx.w, ctx.h), &RgbSlice::new(dst3, ctx.w, ctx.h))
-            .map_err(|e| format!("zensim: v2-348 compute_v2_features: {e:?}"))?;
+            .compute_v2_features_with_ref(&ctx.v2_pre, &RgbSlice::new(dst3, ctx.w, ctx.h))
+            .map_err(|e| format!("zensim: v2-348 compute_v2_features_with_ref: {e:?}"))?;
         features.extend_from_slice(v2.features());
     }
     let want = regime.total_features();
@@ -411,6 +418,37 @@ mod tests {
         let feats = extract_features_v2ab(&reference, &distorted).unwrap();
         assert_eq!(feats.len(), 720);
         assert!(feats.iter().all(|v| v.is_finite()));
+    }
+
+    /// GATE for the v2 ref-reuse optimization: the precomputed-ctx path (v1 via ctx.v1_pre, v2 via
+    /// ctx.v2_pre + `compute_v2_features_with_ref`) MUST be bit-identical to the per-call path
+    /// (`extract_features_regime`, which rebuilds both refs per call). This covers the whole 720 —
+    /// if the v2 ref reuse shifts ANY feature bit, the backfill data diverges from prior rows and
+    /// this fails. The picker's features are pixel-sacred.
+    #[cfg(feature = "cpu-metrics")]
+    #[test]
+    fn v2_precomputed_ref_matches_percall() {
+        use crate::metrics::ZensimFeatureRegime as R;
+        let (w, h) = (96u32, 72u32);
+        let reference = synth(1, w, h);
+        let ctx = precompute_ref_ctx(&reference).unwrap();
+        for d in 0..4u32 {
+            let distorted = synth(100 + d, w, h);
+            let percall = extract_features_regime(&reference, &distorted, R::V2Ab).unwrap();
+            let viactx = extract_features_regime_with_ctx(&ctx, &distorted, R::V2Ab).unwrap();
+            assert_eq!(percall.len(), 720);
+            assert_eq!(viactx.len(), 720);
+            for i in 0..720 {
+                assert_eq!(
+                    percall[i].to_bits(),
+                    viactx[i].to_bits(),
+                    "v2ab feature {i} must be bit-identical (per-call vs precomputed-ctx), d={d}: \
+                     percall={} viactx={}",
+                    percall[i],
+                    viactx[i]
+                );
+            }
+        }
     }
 
     /// Throughput cost of the v2 append regime vs v1 with-iw, on a realistic
