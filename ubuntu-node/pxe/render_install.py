@@ -92,7 +92,11 @@ autoinstall:
       - path: /etc/systemd/system/zen-worker.service
         content: |
 {indent(worker_unit, 10)}
+      - path: /etc/sudoers.d/90-zen-nopasswd
+        permissions: "0440"
+        content: "zen ALL=(ALL) NOPASSWD:ALL\\n"
     runcmd:
+      - [ usermod, -aG, docker, zen ]
       - [ systemctl, daemon-reload ]
       - [ systemctl, enable, --now, docker ]
       - [ systemctl, enable, --now, zen-worker ]
