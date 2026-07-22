@@ -43,8 +43,10 @@ for d in ("flags", "registry", "inventory", "seen"):
 
 
 def _mac(s):
-    s = s.lower()
+    s = s.lower().replace(":", "-")     # accept iPXE hexhyp (aa-bb-..) AND GRUB's colon form
     return s if MAC_RE.match(s) else None
+
+HOSTPORT = BASE.split("://", 1)[-1]     # e.g. 192.168.50.170:3080 (for GRUB's (http,host:port) device)
 
 
 def _has(kind, mac):     return os.path.exists(os.path.join(STATE, "flags", f"{mac}.{kind}"))
@@ -75,32 +77,41 @@ def _kernel_line(mac, kind, autoinstall):
             f"url={BASE}/{ISO} {ai}cloud-config-url=/dev/null "
             f"ds=nocloud-net;s={BASE}/api/seed/{mac}/{kind}/ ---")
 
-def ipxe_inventory(mac):
-    # NOTE: no 'autoinstall' keyword -> the installer never runs; our seed's runcmd
-    # dumps hardware and powers the box off. Read-only by construction.
+def ipxe_via_grub(mac, kind):
+    # Hand off to GRUB for the kernel-boot cases: many UEFI firmwares don't honor iPXE's
+    # EFI initrd (LoadFile2) handoff, so the kernel boots with no initrd and panics. GRUB
+    # loads the initrd into memory itself (classic boot_params method) which works on all
+    # firmware. GRUB re-asks /api/grub/<mac>, so the flag logic stays server-side.
     return f"""#!ipxe
-echo zen-pxe: {mac} -> INVENTORY (read-only, powers off; touches no disk)
-{_kernel_line(mac, 'inventory', autoinstall=False)}
-initrd {BASE}/{KVER}/initrd
-boot
-"""
-
-def ipxe_install(mac):
-    return f"""#!ipxe
-echo zen-pxe: {mac} -> INSTALL to registered disk serial (serial-matched)
-{_kernel_line(mac, 'install', autoinstall=True)}
-initrd {BASE}/{KVER}/initrd
-boot
+echo zen-pxe: {mac} -> {kind} via GRUB (firmware-safe initrd handoff)
+chain --replace {BASE}/grubnet.efi || shell
 """
 
 
 def boot_script(mac):
     _seen(mac)
     if _has("inventory", mac):
-        return ipxe_inventory(mac)
+        return ipxe_via_grub(mac, "INVENTORY")
     if _has("install", mac) and _registered(mac):
-        return ipxe_install(mac)
+        return ipxe_via_grub(mac, "INSTALL")
     return ipxe_localboot(mac)
+
+
+# ---- GRUB configs (the actual kernel/initrd boot; robust initrd handoff) --------
+def _grub_kernel(mac, kind, autoinstall):
+    ai = "autoinstall " if autoinstall else ""
+    # quote the ds= value so GRUB doesn't split on its ';' (GRUB strips the quotes for the kernel)
+    return (f"linux (http,{HOSTPORT})/{KVER}/vmlinuz ip=dhcp url={BASE}/{ISO} "
+            f'{ai}cloud-config-url=/dev/null "ds=nocloud-net;s={BASE}/api/seed/{mac}/{kind}/" ---\n'
+            f"initrd (http,{HOSTPORT})/{KVER}/initrd\n"
+            f"boot")
+
+def grub_config(mac):
+    if _has("inventory", mac):
+        return f"echo zen-grub: {mac} INVENTORY (read-only)\n{_grub_kernel(mac, 'inventory', False)}\n"
+    if _has("install", mac) and _registered(mac):
+        return f"echo zen-grub: {mac} INSTALL (serial-matched)\n{_grub_kernel(mac, 'install', True)}\n"
+    return "echo zen-grub: no boot task for this box; rebooting in 3s\nsleep 3\nreboot\n"
 
 
 # ---- seeds ---------------------------------------------------------------------
@@ -175,6 +186,10 @@ class H(http.server.BaseHTTPRequestHandler):
         if m:
             mac = _mac(m.group(1))
             return self._text(boot_script(mac) if mac else "#!ipxe\nexit\n")
+        m = re.match(r"^/api/grub/([0-9a-f:\-]+)$", path)   # GRUB asks in colon form
+        if m:
+            mac = _mac(m.group(1))
+            return self._text(grub_config(mac) if mac else "echo bad mac; sleep 3; reboot\n")
         m = re.match(r"^/api/seed/([0-9a-f-]+)/(inventory|install)/(user-data|meta-data)$", path)
         if m:
             mac = _mac(m.group(1))

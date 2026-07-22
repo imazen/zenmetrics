@@ -18,13 +18,10 @@ read -r AK SK ST < <(printf '%s' "$J" | python3 -c 'import json,sys;r=json.load(
 [ -n "${AK:-}" ] || { echo "$(date -u +%FT%TZ) mint FAILED: $J" >>"$LOG"; exit 1; }
 
 SSHT="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes root@tower"
-# Ship the patched entrypoint (POOL --ledger-in fix — skips re-scoring done cells) to the tower and
-# mount it, so this scheduled refresh doesn't revert the worker to the stock image's re-scoring behavior.
-# Drop this once the fix is baked into the :exec image. Harmless if the file is unchanged.
-ENTRYPOINT_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../crates/zenfleet-worker" && pwd)/fleet-entrypoint.sh"
-scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$ENTRYPOINT_SRC" root@tower:/root/fleet-entrypoint.patched.sh 2>/dev/null \
-  || echo "$(date -u +%FT%TZ) WARN: entrypoint scp failed (worker will use stock image)" >>"$LOG"
-$SSHT "docker rm -f zen720-basement 2>/dev/null; docker run -d --name zen720-basement --restart unless-stopped \
+# The :exec image bakes the current fleet-entrypoint.sh (--ledger-in fix) + zenmetrics (v2-ref ref
+# reuse) + zenfleet-worker (zstd ledger), so no entrypoint scp/mount is needed. --pull always picks up
+# a newly-pushed :exec on each refresh.
+$SSHT "docker rm -f zen720-basement 2>/dev/null; docker run -d --name zen720-basement --restart unless-stopped --pull always \
   --cpuset-cpus=0-23 --cpu-shares=256 --memory=40g \
   -e AWS_ACCESS_KEY_ID='$AK' -e AWS_SECRET_ACCESS_KEY='$SK' -e AWS_SESSION_TOKEN='$ST' -e AWS_REGION=auto \
   -e ZEN_R2_ENDPOINT='$EP' -e ZEN_BUCKET=zentrain \
@@ -33,6 +30,5 @@ $SSHT "docker rm -f zen720-basement 2>/dev/null; docker run -d --name zen720-bas
   -e ZEN_MAX_MIN=700 -e ZEN_CORE_OVERSUBSCRIBE=3 -e ZEN_PERSISTENT_EXEC=1 \
   -e RAYON_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e ZEN_CHUNK_WALL_SEC=20 -e ZEN_PASS_TIMEOUT=5400 \
   -e ZEN_PROVIDER=basement -e ZEN_WORKER=tower-unraid \
-  -v /root/fleet-entrypoint.patched.sh:/usr/local/bin/fleet-entrypoint.sh:ro \
   --entrypoint /usr/local/bin/fleet-entrypoint.sh ghcr.io/imazen/zenfleet-worker:exec" >/dev/null
 echo "$(date -u +%FT%TZ) tower worker refreshed (7-day cred)" >>"$LOG"
