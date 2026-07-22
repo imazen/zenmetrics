@@ -71,8 +71,19 @@ case "$cmd" in
   stop)     # clear worker mode -> next boot returns to Windows (default)
     m="$(norm "${1:?usage: stop <mac>}")"; T "rm -f $STATE/flags/$m.worker"
     echo "worker flag cleared for $m; it boots Windows on next reboot (reboot it to switch back).";;
+  to-ubuntu|to-windows)   # flip the flag AND trigger a reboot from whichever OS it's in
+    m="$(norm "${1:?usage: $cmd <mac> [ip]}")"; iparg="${2:-}"
+    if [ "$cmd" = to-ubuntu ]; then T ": > $STATE/flags/$m.worker"; echo "worker flag SET -> next boot = Ubuntu"
+    else T "rm -f $STATE/flags/$m.worker"; echo "worker flag CLEARED -> next boot = Windows"; fi
+    colon="$(printf '%s' "$1" | tr 'A-Z' 'a-z' | tr '.-' '::')"
+    ip="$iparg"; [ -n "$ip" ] || ip="$(T "ip neigh show 2>/dev/null | awk -v m='$colon' 'index(tolower(\$0),m){print \$1; exit}'")"
+    [ -n "$ip" ] || { echo "couldn't auto-resolve the box IP — rerun with it: $cmd $1 <ip>"; exit 0; }
+    S="ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=6"
+    if $S zen@"$ip" 'sudo systemctl reboot' 2>/dev/null; then echo "reboot triggered on $ip (from Ubuntu)"
+    elif $S zenswitch@"$ip" true 2>/dev/null; then echo "reboot triggered on $ip (from the Windows switch)"
+    else echo "couldn't reach $ip as zen or zenswitch — is the box up? (Windows side needs windows-worker/setup-reboot-switch.ps1)"; fi;;
   cancel)
     m="$(norm "${1:?usage: cancel <mac>}")"; T "rm -f $STATE/flags/$m.inventory $STATE/flags/$m.install $STATE/flags/$m.worker"; echo "all flags cleared for $m";;
   wol) wol "${1:?usage: wol <mac>}";;
-  *) die "unknown command '$cmd' (status|seen|inventory|show|register|install|worker|stop|cancel|wol)";;
+  *) die "unknown command '$cmd' (status|seen|inventory|show|register|install|worker|stop|to-ubuntu|to-windows|cancel|wol)";;
 esac
