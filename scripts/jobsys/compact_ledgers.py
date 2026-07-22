@@ -44,5 +44,8 @@ for i, j in enumerate(done.column("job_id").to_pylist()):
         seen.add(j); keep.append(i)
 snap = done.take(keep)
 out = os.path.join(snap_dir, "snap_%s.parquet" % run)
-pq.write_table(snap, out)
+# zstd, NOT pyarrow's default snappy: zenfleet-ledger's parquet reader is built with
+# features=["arrow","zstd"] (no "snap"), so the worker reads this snapshot as --ledger-in.
+# A snappy snapshot errors "Disabled feature at compile time: snap" on a correctly-built worker.
+pq.write_table(snap, out, compression="zstd")
 print("run=%s read_rows=%d distinct_done=%d wrote=%s (%.1fs)" % (run, rows, snap.num_rows, out, time.time() - t0))
