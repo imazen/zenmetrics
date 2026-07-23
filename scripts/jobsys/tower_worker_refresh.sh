@@ -18,11 +18,17 @@ read -r AK SK ST < <(printf '%s' "$J" | python3 -c 'import json,sys;r=json.load(
 [ -n "${AK:-}" ] || { echo "$(date -u +%FT%TZ) mint FAILED: $J" >>"$LOG"; exit 1; }
 
 SSHT="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes root@tower"
+# Scratch on the SSD, NOT the container writable layer. The worker writes fetched source/variant caches
+# to /tmp; unmounted, that lands in Unraid's 100G docker.img and filled it (took down PXE 2026-07-22).
+# Bind /tmp to the cache SSD (1.2T free) — pinned to /mnt/cache (not /mnt/user) so the mover can't push
+# hot scratch to the spinning array. Cleared on each recreate so it can't grow unbounded across cycles.
+SCRATCH=/mnt/cache/appdata/zen720-basement/tmp
 # The :exec image bakes the current fleet-entrypoint.sh (--ledger-in fix) + zenmetrics (v2-ref ref
 # reuse) + zenfleet-worker (zstd ledger), so no entrypoint scp/mount is needed. --pull always picks up
 # a newly-pushed :exec on each refresh.
-$SSHT "docker rm -f zen720-basement 2>/dev/null; docker run -d --name zen720-basement --restart unless-stopped --pull always \
+$SSHT "docker rm -f zen720-basement 2>/dev/null; rm -rf $SCRATCH; mkdir -p $SCRATCH; chmod 1777 $SCRATCH; docker run -d --name zen720-basement --restart unless-stopped --pull always \
   --cpuset-cpus=0-23 --cpu-shares=256 --memory=40g \
+  -v $SCRATCH:/tmp \
   -e AWS_ACCESS_KEY_ID='$AK' -e AWS_SECRET_ACCESS_KEY='$SK' -e AWS_SESSION_TOKEN='$ST' -e AWS_REGION=auto \
   -e ZEN_R2_ENDPOINT='$EP' -e ZEN_BUCKET=zentrain \
   -e ZEN_POOL_RUNLIST=s3://zentrain/jobs/_pool/runlist.tsv \
