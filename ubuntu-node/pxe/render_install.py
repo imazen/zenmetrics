@@ -64,7 +64,7 @@ autoinstall:
       - {{type: partition, id: pefi,  device: disk0, size: 1G, flag: boot, grub_device: true, preserve: false}}
       - {{type: format,    id: fefi,  volume: pefi, fstype: fat32, preserve: false}}
       - {{type: partition, id: proot, device: disk0, size: -1, preserve: false}}
-      - {{type: format,    id: froot, volume: proot, fstype: ext4, preserve: false}}
+      - {{type: format,    id: froot, volume: proot, fstype: xfs, preserve: false}}
       - {{type: mount,     id: mroot, device: froot, path: /}}
       - {{type: mount,     id: mefi,  device: fefi, path: /boot/efi}}
   identity:
