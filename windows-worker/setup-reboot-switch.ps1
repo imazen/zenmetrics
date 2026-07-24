@@ -18,29 +18,38 @@ $User   = 'zenswitch'
 $PubKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGI7zVd/Fd0aIgq9ykown4UKZIPc0cp/NTTG1hOtTnW7 lilith@lilith'
 
 Write-Host "== 1/5 OpenSSH Server =="
-# Install OpenSSH Server WITHOUT Windows Update. `Add-WindowsCapability -Online` reaches out to WU and
-# can hang for many minutes with NO progress output when WU is slow or policy-blocked — which stalled the
-# original step here at "1/5". Instead: if sshd isn't already present, fetch the standalone Win32-OpenSSH
-# package from the tower over the LAN ($TOWER/OpenSSH-Win64.zip) and register the service. The box already
-# reaches the tower to PXE-boot, so this never depends on WU or internet. Each step logs so it can't look
-# frozen. (Override the source with -SshZipUrl if the tower IP differs.)
+# PREFER the Windows optional-feature OpenSSH — Windows Update keeps it patched, which matters (an
+# unpatched sshd is a security liability). The catch: `Add-WindowsCapability -Online` can hang for many
+# minutes with NO output when WU is slow or policy-blocked (it stalled here once at "1/5"). So try WU
+# BOUNDED (~3 min, with a heartbeat so it can't look frozen); only if that doesn't finish do we fall back
+# to a hash-pinned standalone package from the tower so setup still completes. The standalone path is NOT
+# auto-updated, so the script warns loudly and tells you how to get back onto the WU-managed one.
 $SshZipUrl = if ($env:ZEN_SSH_ZIP_URL) { $env:ZEN_SSH_ZIP_URL } else { 'http://192.168.50.170:3080/OpenSSH-Win64.zip' }
+if (-not (Get-Service sshd -ErrorAction SilentlyContinue)) {
+  Write-Host "   installing via Windows Update (preferred — WU keeps it patched); up to 3 min..."
+  $job = Start-Job { Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue }
+  $deadline = (Get-Date).AddMinutes(3)
+  while ($job.State -eq 'Running' -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5; Write-Host "   ...still installing via WU" }
+  if ($job.State -ne 'Running') { Receive-Job $job -ErrorAction SilentlyContinue | Out-Null }
+  Stop-Job $job -ErrorAction SilentlyContinue; Remove-Job $job -Force -ErrorAction SilentlyContinue
+}
 if (Get-Service sshd -ErrorAction SilentlyContinue) {
-  Write-Host "   sshd already installed; skipping download"
+  Write-Host "   OpenSSH Server present (Windows-Update managed -> auto-patched)"
 } else {
+  Write-Warning "Windows Update install didn't finish -> falling back to a STANDALONE package."
+  Write-Warning "Standalone OpenSSH is NOT auto-updated. Once Windows Update works, re-run this script"
+  Write-Warning "(or add the 'OpenSSH Server' optional feature) to switch to a WU-patched sshd."
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
   $zip = "$env:TEMP\OpenSSH-Win64.zip"
   Write-Host "   downloading standalone OpenSSH from $SshZipUrl (~5MB)..."
   Invoke-WebRequest $SshZipUrl -OutFile $zip -UseBasicParsing
-  # Integrity: the zip is fetched over plain HTTP on the LAN, so we DON'T trust the transport — verify the
-  # bytes against a pinned SHA256 (Win32-OpenSSH 10.0.0.0p2-Preview OpenSSH-Win64.zip) before extracting +
-  # installing it as a service. A tampered or MITM'd package fails here and is never run. To bump the
-  # pinned OpenSSH version, update both the staged zip and this hash.
+  # Integrity: fetched over plain HTTP on the LAN, so DON'T trust the transport — verify the bytes against
+  # a pinned SHA256 (Win32-OpenSSH 10.0.0.0p2-Preview OpenSSH-Win64.zip) before extracting/installing it as
+  # a service. A tampered/MITM'd package fails here and is never run. Bump zip + hash together to update.
   $EXPECTED_SHA256 = '23F50F3458C4C5D0B12217C6A5DDFDE0137210A30FA870E98B29827F7B43ABA5'
   $got = (Get-FileHash $zip -Algorithm SHA256).Hash
   if ($got -ne $EXPECTED_SHA256) { throw "OpenSSH zip SHA256 mismatch (got $got, expected $EXPECTED_SHA256) -- refusing to install (possible tampering)" }
-  Write-Host "   sha256 verified"
-  Write-Host "   extracting..."
+  Write-Host "   sha256 verified; extracting..."
   $tmp = "$env:TEMP\zen-openssh"; if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
   Expand-Archive $zip $tmp -Force
   $src = (Get-ChildItem $tmp -Recurse -Filter sshd.exe | Select-Object -First 1).Directory.FullName

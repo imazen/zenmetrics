@@ -50,6 +50,18 @@ def indent(s, n):
     pad = " " * n
     return "\n".join(pad + l for l in s.rstrip("\n").split("\n"))
 
+# Automatic SECURITY updates (unattended-upgrades). Ubuntu's default 50unattended-upgrades already allows
+# the -security pocket; these turn on the periodic run and auto-reboot for kernel patches at 04:00 — a
+# reboot is safe on a worker (in-flight cells requeue via the ledger). SECURITY only, not release upgrades.
+apt_auto = (
+    'APT::Periodic::Update-Package-Lists "1";\n'
+    'APT::Periodic::Unattended-Upgrade "1";\n'
+    'APT::Periodic::Download-Upgradeable-Packages "1";\n'
+    'APT::Periodic::AutocleanInterval "7";\n'
+    'Unattended-Upgrade::Automatic-Reboot "true";\n'
+    'Unattended-Upgrade::Automatic-Reboot-Time "04:00";\n'
+)
+
 print(f"""#cloud-config
 # zen-pxe install for {HOST} ({MAC}) -> disk serial {SERIAL}
 autoinstall:
@@ -76,7 +88,7 @@ autoinstall:
     allow-pw: false
     authorized-keys:
       - "{KEY}"
-  packages: [docker.io, avahi-daemon, libnss-mdns, jq, curl, chrony]
+  packages: [docker.io, avahi-daemon, libnss-mdns, jq, curl, chrony, unattended-upgrades]
   late-commands:
     # install-once (guard 1): clear our own flag NOW (installer has network) so a re-PXE can't
     # re-wipe. Retry hard — a transient blip here must not leave the flag set. (Guard 2 is the
@@ -97,10 +109,14 @@ autoinstall:
         content: "zen ALL=(ALL) NOPASSWD:ALL\\n"
       - path: /etc/modprobe.d/blacklist-nouveau.conf
         content: "blacklist nouveau\\noptions nouveau modeset=0\\n"
+      - path: /etc/apt/apt.conf.d/52zen-auto-security
+        content: |
+{indent(apt_auto, 10)}
     runcmd:
       - [ usermod, -aG, docker, zen ]
       - [ systemctl, daemon-reload ]
       - [ systemctl, enable, --now, docker ]
       - [ systemctl, enable, --now, zen-worker ]
+      - [ systemctl, enable, --now, unattended-upgrades ]
       - [ update-initramfs, -u ]
 """)
