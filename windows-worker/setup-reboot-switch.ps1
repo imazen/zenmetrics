@@ -18,7 +18,30 @@ $User   = 'zenswitch'
 $PubKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGI7zVd/Fd0aIgq9ykown4UKZIPc0cp/NTTG1hOtTnW7 lilith@lilith'
 
 Write-Host "== 1/5 OpenSSH Server =="
-Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -ErrorAction SilentlyContinue | Out-Null
+# Install OpenSSH Server WITHOUT Windows Update. `Add-WindowsCapability -Online` reaches out to WU and
+# can hang for many minutes with NO progress output when WU is slow or policy-blocked — which stalled the
+# original step here at "1/5". Instead: if sshd isn't already present, fetch the standalone Win32-OpenSSH
+# package from the tower over the LAN ($TOWER/OpenSSH-Win64.zip) and register the service. The box already
+# reaches the tower to PXE-boot, so this never depends on WU or internet. Each step logs so it can't look
+# frozen. (Override the source with -SshZipUrl if the tower IP differs.)
+$SshZipUrl = if ($env:ZEN_SSH_ZIP_URL) { $env:ZEN_SSH_ZIP_URL } else { 'http://192.168.50.170:3080/OpenSSH-Win64.zip' }
+if (Get-Service sshd -ErrorAction SilentlyContinue) {
+  Write-Host "   sshd already installed; skipping download"
+} else {
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  $zip = "$env:TEMP\OpenSSH-Win64.zip"
+  Write-Host "   downloading standalone OpenSSH from $SshZipUrl (~5MB)..."
+  Invoke-WebRequest $SshZipUrl -OutFile $zip -UseBasicParsing
+  Write-Host "   extracting..."
+  $tmp = "$env:TEMP\zen-openssh"; if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
+  Expand-Archive $zip $tmp -Force
+  $src = (Get-ChildItem $tmp -Recurse -Filter sshd.exe | Select-Object -First 1).Directory.FullName
+  $dst = Join-Path $env:ProgramFiles 'OpenSSH'
+  if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
+  Move-Item $src $dst
+  Write-Host "   registering sshd service (install-sshd.ps1)..."
+  & powershell -ExecutionPolicy Bypass -File (Join-Path $dst 'install-sshd.ps1') | Out-Null
+}
 Set-Service sshd -StartupType Automatic
 Start-Service sshd
 # firewall rule (usually added by the capability; ensure it exists)

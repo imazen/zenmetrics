@@ -53,3 +53,5 @@ scripts/train/loo_work/
 mac-worker/worker.env
 mac-worker/*.log
 mac-worker/zen-exec.sh
+mac-worker/payload/
+mac-worker/s5cmd

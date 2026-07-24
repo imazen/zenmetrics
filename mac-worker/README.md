@@ -38,20 +38,29 @@ never commit it.
 
 ## Path A — native binaries + launchd (recommended)
 
-### 1. Build the two binaries (once)
+### 1. Build the two binaries (once) — `build_mac.sh`
 
-The crates build cleanly for both Mac arches (CI already tests `macos-latest` = Apple Silicon and
-`macos-15-intel` = Intel). Produce them the same way `../windows-worker` suggests — on a **GitHub
-macOS runner** or **on the Mac itself**:
+**Workspace prerequisite (same as the Windows/Linux workstation build).** The `zenmetrics` executor
+decodes every codec + runs the CPU metrics, so it depends on ~12 **sibling repos** via `path = "../…"`
+(`../zenpng`, `../zenwebp`, `../zenavif`, `../zenjxl`, `../jxl-encoder`, `../zensim`,
+`../../butteraugli`, `../fast-ssim2`, …) at the revs the zenmetrics workspace `Cargo.toml` pins. There
+is **no clean-checkout CI build** for it (the fleet images bake a *precompiled workstation* binary) —
+so build it on a Mac that has the **zen workspace cloned in the expected layout** (`~/work/zen/…`),
+exactly like `../windows-worker/build_win.bat` builds against the WSL workspace. The `zenfleet-worker`
+binary, by contrast, has only in-repo deps and builds from the zenmetrics checkout alone.
 
 ```bash
-# on the Mac (or a macOS CI runner), in a checkout of the zen workspace:
-cargo build --release -p zenmetrics-cli --no-default-features --features sweep,png   # -> zenmetrics
-cargo build --release -p zenfleet-worker                                             # -> zenfleet-worker
+# on a Mac WITH the zen workspace cloned, from the zenmetrics repo root:
+bash mac-worker/build_mac.sh            # builds both binaries + assembles mac-worker/payload/
 ```
 
-Apple Silicon yields `aarch64-apple-darwin`; Intel yields `x86_64-apple-darwin`. Build **on the arch
-you'll run** (or cross-compile with the matching `--target`).
+`build_mac.sh` runs the verified feature set (`sweep,png,jpeg,webp,avif,jxl,cpu-metrics`, mirroring
+`build_win.bat`), builds for the **host arch** (Apple Silicon → `aarch64-apple-darwin`, Intel →
+`x86_64-apple-darwin`), downloads the matching `s5cmd`, and drops a ready `payload/` folder. If the
+sibling repos aren't present it fails loud telling you which are missing — it never silently produces a
+half-worker.
+
+**Prefer zero build?** Skip to **Path B (colima)** below — it needs no workspace and works today.
 
 ### 2. Assemble the payload
 
@@ -98,33 +107,26 @@ idle=$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print int($NF/1000000000); exi
 
 ---
 
-## Path B — colima + the exec image (zero-build)
+## Path B — colima + the exec image (zero-build) — `dev_colima.sh`
 
-No binary build; reuses the exact image + `fleet-entrypoint.sh` the tower runs. `colima` is headless
-Docker (no Docker Desktop GUI/login dependency):
+No binary build, no sibling repos; reuses the exact image + `fleet-entrypoint.sh` the tower runs.
+`colima` is headless Docker (no Docker Desktop GUI/login dependency). **This is the fastest way to a
+running worker on a Mac for development** — one command:
 
 ```bash
 brew install colima docker
-colima start --cpu 4 --memory 8                     # a headless linux VM; size to taste
-# Apple Silicon: add `--arch x86_64` OR pass `--platform linux/amd64` to run below (emulated).
-
-docker run -d --name zen720-mac --restart unless-stopped \
-  --cpus 4 --memory 8g \
-  -e AWS_ACCESS_KEY_ID=... -e AWS_SECRET_ACCESS_KEY=... -e AWS_SESSION_TOKEN=... -e AWS_REGION=auto \
-  -e ZEN_R2_ENDPOINT="https://<acct>.r2.cloudflarestorage.com" -e ZEN_BUCKET=zentrain \
-  -e ZEN_POOL_RUNLIST=s3://zentrain/jobs/_pool/runlist.tsv \
-  -e ZEN_CORPUS_PREFIX=refs/clean-picker-corpus-2026-06-26 \
-  -e ZEN_PROVIDER=mac -e ZEN_WORKER=mac-$(hostname -s) \
-  -e RAYON_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e ZEN_CORE_OVERSUBSCRIBE=3 \
-  --entrypoint /usr/local/bin/fleet-entrypoint.sh ghcr.io/imazen/zenfleet-worker:exec
+cp worker.env.example worker.env      # fill in scoped creds (ubuntu-node/mint_cred.sh) + ZEN_R2_ENDPOINT
+bash dev_colima.sh                     # starts colima if needed, pulls :exec, runs the worker
+docker logs -f zen720-mac              # watch it claim + score
 ```
 
-This is the **same** env-shape the tower's `zen720-basement` uses (see
-`scripts/jobsys/tower_worker_refresh.sh`). To survive reboot without a login, run `colima` itself under
-a per-user LaunchAgent (`colima start` on load) or keep the Mac auto-logged-in. For a **native arm64**
-container instead of emulation, an arm64 `:exec` tag must be built first —
-`scripts/jobsys/build_executor_image.sh` is currently **amd64-only** (needs an arm64 `zenmetrics`
-binary built where the sibling crates live); until then Apple Silicon runs the amd64 image emulated.
+`dev_colima.sh` uses the **same** env-shape the tower's `zen720-basement` uses (see
+`scripts/jobsys/tower_worker_refresh.sh`) and passes `--platform linux/amd64` on Apple Silicon.
+To survive reboot without a login, run `colima` itself under a per-user LaunchAgent (`colima start` on
+load) or keep the Mac auto-logged-in. For a **native arm64** container instead of emulation, an arm64
+`:exec` tag must be built first — `scripts/jobsys/build_executor_image.sh` is currently **amd64-only**
+(needs an arm64 `zenmetrics` binary built where the sibling crates live); until then Apple Silicon runs
+the amd64 image emulated (works, slower — fine for CPU feature extraction).
 
 ---
 
