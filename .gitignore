@@ -50,3 +50,6 @@ benchmarks/metric_mapping_work/
 
 # fleet-LOO local pareto/omni cache (large; never commit)
 scripts/train/loo_work/
+mac-worker/worker.env
+mac-worker/*.log
+mac-worker/zen-exec.sh
