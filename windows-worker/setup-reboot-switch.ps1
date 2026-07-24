@@ -32,6 +32,14 @@ if (Get-Service sshd -ErrorAction SilentlyContinue) {
   $zip = "$env:TEMP\OpenSSH-Win64.zip"
   Write-Host "   downloading standalone OpenSSH from $SshZipUrl (~5MB)..."
   Invoke-WebRequest $SshZipUrl -OutFile $zip -UseBasicParsing
+  # Integrity: the zip is fetched over plain HTTP on the LAN, so we DON'T trust the transport — verify the
+  # bytes against a pinned SHA256 (Win32-OpenSSH 10.0.0.0p2-Preview OpenSSH-Win64.zip) before extracting +
+  # installing it as a service. A tampered or MITM'd package fails here and is never run. To bump the
+  # pinned OpenSSH version, update both the staged zip and this hash.
+  $EXPECTED_SHA256 = '23F50F3458C4C5D0B12217C6A5DDFDE0137210A30FA870E98B29827F7B43ABA5'
+  $got = (Get-FileHash $zip -Algorithm SHA256).Hash
+  if ($got -ne $EXPECTED_SHA256) { throw "OpenSSH zip SHA256 mismatch (got $got, expected $EXPECTED_SHA256) -- refusing to install (possible tampering)" }
+  Write-Host "   sha256 verified"
   Write-Host "   extracting..."
   $tmp = "$env:TEMP\zen-openssh"; if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
   Expand-Archive $zip $tmp -Force
