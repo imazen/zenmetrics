@@ -44,6 +44,7 @@ Installs, in stages (each `|| true`, so one bad formula never aborts the run):
 6. **Containers**: colima, docker, docker-buildx (for `cross` + the zenfleet exec image)
 7. **Rust** (rustup): stable + nightly, targets `{aarch64,x86_64}-apple-darwin` + `wasm32-{unknown-unknown,wasip1}` + `{aarch64,x86_64,i686}-unknown-linux-gnu`, components clippy/rustfmt/rust-analyzer/rust-src/llvm-tools/miri
 8. **Cargo tools** (via cargo-binstall, `--continue-on-failure`): nextest, watch, edit, outdated, audit, deny, semver-checks, expand, llvm-lines, show-asm (`cargo asm`), binutils, insta, hack, machete, flamegraph, sccache, just, bacon, zigbuild, cross, wasm-pack, wasm-tools
+8b. **imazen internal tools** (`cargo install --git`, not on crates.io): `cargo-read` (`cargo read <crate>`), `cargo-copter` (downstream rev-dep impact testing; invoke as `cargo-copter`), `cargo-superwork` (release pipeline)
 9. **Shell env** appended to `~/.zprofile` (brew + cargo on PATH; `PKG_CONFIG_PATH` for the codec libs; keg-only llvm/bison/flex)
 
 Provisioned on `lilith-mac` 2026-07-24 (150 brew formulae + Rust 1.97.1 + ~24 cargo tools, all verified).

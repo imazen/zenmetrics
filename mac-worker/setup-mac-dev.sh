@@ -69,6 +69,14 @@ cargo binstall -y --continue-on-failure \
   cargo-expand cargo-llvm-lines cargo-show-asm cargo-binutils cargo-insta cargo-hack cargo-machete \
   flamegraph sccache just bacon cargo-zigbuild cross wasm-pack wasm-tools cargo-wasi || true
 
+mark "STAGE 8b: imazen internal cargo tools (built from GitHub source; not on crates.io)"
+# cargo-read (`cargo read <crate>`), cargo-copter (rev-dep testing), cargo-superwork (release pipeline).
+export PATH="$HOME/.cargo/bin:$PATH"
+for t in cargo-read cargo-copter cargo-superwork; do
+  echo "-- installing $t"
+  cargo install --git "https://github.com/imazen/$t.git" 2>&1 || echo "FAILED: $t"
+done
+
 mark "STAGE 9: shell env for keg-only tools (llvm/bison/flex)"
 if ! grep -q 'zen dev env' ~/.zprofile 2>/dev/null; then
 cat >> ~/.zprofile <<'EOF'
@@ -94,4 +102,6 @@ echo "cmake:   $(cmake --version 2>&1 | head -1)"
 echo "ninja:   $(ninja --version 2>&1)"
 echo "nextest: $(cargo nextest --version 2>&1 | head -1)"
 echo "s5cmd:   $(s5cmd version 2>&1 | head -1)"
+echo "cargo-read:    $(cargo read --version 2>&1 | head -1)"
+echo "cargo-copter:  $(cargo copter --version 2>&1 | head -1)"
 echo "ALL STAGES COMPLETE"
