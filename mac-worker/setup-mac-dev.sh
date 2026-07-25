@@ -77,12 +77,17 @@ for t in cargo-read cargo-copter cargo-superwork; do
   cargo install --git "https://github.com/imazen/$t.git" 2>&1 || echo "FAILED: $t"
 done
 
+mark "STAGE 8c: AI / agent CLIs (Claude Code + herdr -> ~/.local/bin)"
+# Claude Code (native installer, auto-updates); herdr = tmux-like multiplexer for AI coding agents.
+curl -fsSL https://claude.ai/install.sh | bash || echo "FAILED: claude"
+curl -fsSL https://herdr.dev/install.sh | sh   || echo "FAILED: herdr"
+
 mark "STAGE 9: shell env for keg-only tools (llvm/bison/flex)"
 if ! grep -q 'zen dev env' ~/.zprofile 2>/dev/null; then
 cat >> ~/.zprofile <<'EOF'
 
 # --- zen dev env ---
-export PATH="/opt/homebrew/opt/llvm/bin:/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:$PATH"
+export PATH="$HOME/.local/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:$PATH"
 export LIBRARY_PATH="/opt/homebrew/lib:${LIBRARY_PATH:-}"
 export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 # opt-in build cache: uncomment to route all cargo builds through sccache
@@ -103,5 +108,7 @@ echo "ninja:   $(ninja --version 2>&1)"
 echo "nextest: $(cargo nextest --version 2>&1 | head -1)"
 echo "s5cmd:   $(s5cmd version 2>&1 | head -1)"
 echo "cargo-read:    $(cargo read --version 2>&1 | head -1)"
-echo "cargo-copter:  $(cargo copter --version 2>&1 | head -1)"
+echo "cargo-copter:  $(cargo-copter --version 2>&1 | head -1)"
+echo "claude:  $("$HOME/.local/bin/claude" --version 2>&1 | head -1)"
+echo "herdr:   $("$HOME/.local/bin/herdr" --version 2>&1 | head -1)"
 echo "ALL STAGES COMPLETE"
