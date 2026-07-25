@@ -68,7 +68,14 @@ if (-not (Get-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -ErrorAction Silentl
 }
 
 Write-Host "== 2/5 dedicated NON-admin user '$User' =="
-$rand = -join ((1..28) | ForEach-Object { [char]((65..90)+(97..122)+(48..57) | Get-Random) })
+# Guarantee complexity: >=1 upper, lower, digit, AND special. A local password policy may require a
+# special char, and with $ErrorActionPreference='Stop' a New-LocalUser complexity rejection halts the
+# WHOLE script — the exact failure that left the box half-done (OpenSSH installed, zenswitch missing).
+$U='ABCDEFGHIJKLMNOPQRSTUVWXYZ'; $Lo='abcdefghijklmnopqrstuvwxyz'; $Di='0123456789'; $Sp='!@#%^&*-_=+'
+$all  = $U + $Lo + $Di + $Sp
+$req  = @($U, $Lo, $Di, $Sp | ForEach-Object { $_[(Get-Random -Maximum $_.Length)] })
+$fill = 1..24 | ForEach-Object { $all[(Get-Random -Maximum $all.Length)] }
+$rand = (($req + $fill) | Get-Random -Count 28) -join ''
 $sec  = ConvertTo-SecureString $rand -AsPlainText -Force
 if (Get-LocalUser -Name $User -ErrorAction SilentlyContinue) {
   Set-LocalUser -Name $User -Password $sec
@@ -86,11 +93,14 @@ New-Item -ItemType Directory -Force -Path $ssh | Out-Null
 $forced = 'command="shutdown /r /t 0",no-pty,no-agent-forwarding,no-port-forwarding,no-user-rc,no-x11-forwarding'
 Set-Content -Path "$ssh\authorized_keys" -Value "$forced $PubKey" -Encoding ascii
 
-Write-Host "== 4/5 lock down authorized_keys ACL (sshd refuses loose perms) =="
-icacls "$ssh\authorized_keys" /inheritance:r | Out-Null
-icacls "$ssh\authorized_keys" /grant "${User}:R" "SYSTEM:F" "Administrators:F" | Out-Null
+Write-Host "== 4/5 lock down .ssh + authorized_keys ACL (sshd StrictModes refuses loose perms) =="
+# Lock BOTH the .ssh dir and the file — sshd's StrictModes rejects the key if either is writable by
+# other users. /inheritance:r drops inherited 'Users' access; then only the account + SYSTEM + admins.
+icacls "$ssh" /inheritance:r /grant "${User}:F" "SYSTEM:F" "Administrators:F" | Out-Null
+icacls "$ssh\authorized_keys" /inheritance:r /grant "${User}:R" "SYSTEM:F" "Administrators:F" | Out-Null
 
 Write-Host "== 5/5 default shell = cmd (so the forced command runs) =="
+if (-not (Test-Path "HKLM:\SOFTWARE\OpenSSH")) { New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force | Out-Null }
 New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell `
   -Value "$env:SystemRoot\System32\cmd.exe" -PropertyType String -Force | Out-Null
 Restart-Service sshd
