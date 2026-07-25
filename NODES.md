@@ -94,7 +94,9 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   → `sudo -n` works). **"Keeps going unreachable" was macOS idle-sleep — FIXED 2026-07-24**:
   `sudo pmset -a disablesleep 1 womp 1` → `SleepDisabled=1` (never sleeps) + wake-on-magic-packet. The
   worker runs idle-only under launchd (backs off if used in the last 10 min); have it hold `caffeinate`
-  while running as a further guard.
+  while running as a further guard. **Full Rust + C dev toolchain provisioned 2026-07-24** via
+  [`mac-worker/setup-mac-dev.sh`](mac-worker/setup-mac-dev.sh) (150 brew formulae — LLVM/gcc/cmake/ninja +
+  the codec libs — Rust stable+nightly with 7 cross targets, ~24 cargo tools; verified end-to-end).
 - **lianli (lilith-lianli)** — always Ubuntu 26.04, dedicated worker; no OS flip. Reachable as `ssh lilith@`
   (dev-box key authorized; `lilith` in the `sudo` group). **NOT yet enrolled as a worker as of 2026-07-24**
   — no Docker, no `zen-worker` unit, no `/etc/zen-node/` cred. Enroll it by adding NOPASSWD sudo (same

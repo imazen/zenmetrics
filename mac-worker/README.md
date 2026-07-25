@@ -20,6 +20,36 @@ The native path mirrors the Linux systemd `zen-worker` service and the Windows S
 
 ---
 
+## Full Rust + C dev toolchain — `setup-mac-dev.sh` (optional)
+
+To make a Mac a full **development** box (not just a worker) — build any zen crate, run C/FFI
+comparisons, cross-compile — run the self-contained provisioner. It needs **passwordless sudo**
+(`echo 'lilith ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/90-lilith-nopasswd; sudo chmod 440 …`)
+and is idempotent — safe to re-run.
+
+```bash
+# on the Mac (or over SSH), detached so it survives disconnects:
+scp mac-worker/setup-mac-dev.sh lilith@<mac>:~/ 
+ssh lilith@<mac> 'nohup bash ~/setup-mac-dev.sh > ~/zen-devsetup.log 2>&1 &'
+# ...then verify (run in a LOGIN shell so ~/.zprofile env is loaded):
+scp mac-worker/verify-mac-dev.sh lilith@<mac>:~/ && ssh lilith@<mac> 'zsh -l ~/verify-mac-dev.sh'
+```
+
+Installs, in stages (each `|| true`, so one bad formula never aborts the run):
+1. **Xcode CLT** headless (via `softwareupdate` — the GUI installer can't run over SSH)
+2. **Homebrew**
+3. **C/C++**: LLVM (clang/clang-format/clang-tidy/lldb/lld) + gcc, cmake, ninja, meson, autotools, pkg-config, ccache, nasm, yasm, zig
+4. **Codec/image libs** (FFI + comparison vs zen crates): jpeg-turbo, libpng, webp, libavif, aom, dav1d, libheif, jpeg-xl, openexr, openjph, lcms2, libtiff, giflib, openjpeg, highway, libde265, x265, zstd/brotli/lz4/xz
+5. **CLI + langs**: gh, ripgrep, fd, bat, eza, fzf, tmux, htop/btop, jq, git-delta, direnv, tokei, graphviz, hyperfine, node, uv, pipx, protobuf, capnp, awscli, s5cmd, wasmtime
+6. **Containers**: colima, docker, docker-buildx (for `cross` + the zenfleet exec image)
+7. **Rust** (rustup): stable + nightly, targets `{aarch64,x86_64}-apple-darwin` + `wasm32-{unknown-unknown,wasip1}` + `{aarch64,x86_64,i686}-unknown-linux-gnu`, components clippy/rustfmt/rust-analyzer/rust-src/llvm-tools/miri
+8. **Cargo tools** (via cargo-binstall, `--continue-on-failure`): nextest, watch, edit, outdated, audit, deny, semver-checks, expand, llvm-lines, show-asm (`cargo asm`), binutils, insta, hack, machete, flamegraph, sccache, just, bacon, zigbuild, cross, wasm-pack, wasm-tools
+9. **Shell env** appended to `~/.zprofile` (brew + cargo on PATH; `PKG_CONFIG_PATH` for the codec libs; keg-only llvm/bison/flex)
+
+Provisioned on `lilith-mac` 2026-07-24 (150 brew formulae + Rust 1.97.1 + ~24 cargo tools, all verified).
+
+---
+
 ## Credentials (both paths)
 
 Mint a **scoped, 7-day** R2 temp cred on the **dev box** (which holds the CF token — never put the
