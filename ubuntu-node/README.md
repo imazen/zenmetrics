@@ -23,6 +23,15 @@ target machine's internal disk*; this makes the removable drive the OS.
   env lines. Used by the build and by `onboard_node.sh`.
 - `onboard_node.sh` — dev-box helper to push a *fresh* 7-day cred to a running node and restart the
   worker. Run weekly (cron line inside the script) to keep the cred live.
+- `enroll_running_node.sh [--start] <host> [ssh-user]` — **dev-box.** Enroll an **already-running**
+  Ubuntu box as a CPU worker *in place* (no PXE, no disk wipe): installs Docker if missing, writes the
+  `zen-worker` unit + `/etc/zen-node/worker.env`, pre-pulls the `:exec` image. Default leaves the worker
+  **stopped/disabled** (so it can't restart-loop on an empty pool); `--start` mints a cred and activates
+  it. Use when a box already runs Ubuntu (e.g. `lilith-lianli`) instead of building a drive.
+- `setup-node-dev.sh` — **on the node.** Full Rust + C **development** environment (apt toolchain +
+  codec `-dev` libs + valgrind/gdb/heaptrack + Rust stable/nightly + ~24 cargo tools + our
+  cargo-read/copter/superwork + Claude Code + herdr). The Linux sibling of `mac-worker/setup-mac-dev.sh`;
+  optional, for turning a node into a dev box. Idempotent; needs passwordless sudo.
 
 ## Build it (on the dev box)
 

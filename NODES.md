@@ -76,7 +76,7 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
 | **jason** | `jason-desktop` | dual-boot kids' PC (Win + Ubuntu, PXE-first, no-sleep, WoL on) | `04:7c:16:b3:18:51` | 192.168.50.148 | Win: `ssh zenadmin@` (full) / `zenswitch@` (reboot); Ubuntu: `ssh zen@` |
 | **ian** | `ian-desktop` | dual-boot kids' PC (2 TB Win + 1 TB Ubuntu XFS; PXE-first, no-sleep, WoL on) | `04:7c:16:8a:b5:b7` | 192.168.50.193 | same as jason |
 | **mac** | `lilith-mac` | macOS worker — Mac mini M4 Pro (idle-only, launchd) | `1c:f6:4c:8b:29:a9` | 192.168.50.224 | `ssh lilith@` — key authorized + NOPASSWD sudo; `SleepDisabled=1` |
-| **lianli** | `lilith-lianli` | **always-Ubuntu** dedicated worker (Ubuntu 26.04; NOT yet enrolled) | `74:56:3c:b8:45:8d` | 192.168.50.27 | `ssh lilith@` — key authorized (sudo-group); NOPASSWD + worker install pending |
+| **lianli** | `lilith-lianli` | **always-Ubuntu** dedicated worker (Ubuntu 26.04; dev box + worker enrolled/stopped) | `74:56:3c:b8:45:8d` | 192.168.50.27 | `ssh lilith@` — key + NOPASSWD sudo; full dev toolchain; worker unit stopped (pool drained) |
 | **wsl** | (this dev box) | WSL2 — the fleet **operator** (holds CF token, mints creds, runs `fleet-pxe`, builds) | — | WSL NAT (reaches LAN) | local shell |
 | **tower** | (basement, Unraid) | PXE/dnsmasq/nginx server + R2 + the `zen720-basement` worker | (Unraid NIC) | 192.168.50.170 | `ssh root@tower` |
 
@@ -98,11 +98,14 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   [`mac-worker/setup-mac-dev.sh`](mac-worker/setup-mac-dev.sh) (150 brew formulae — LLVM/gcc/cmake/ninja +
   the codec libs — Rust stable+nightly with 7 cross targets, ~24 cargo tools; verified end-to-end).
 - **lianli (lilith-lianli)** — always Ubuntu 26.04, dedicated worker; no OS flip. Reachable as `ssh lilith@`
-  (dev-box key authorized; `lilith` in the `sudo` group). **NOT yet enrolled as a worker as of 2026-07-24**
-  — no Docker, no `zen-worker` unit, no `/etc/zen-node/` cred. Enroll it by adding NOPASSWD sudo (same
-  drop-in as the mac) then installing Docker + minting a scoped R2 cred + dropping the `zen-worker` unit
-  (the `ubuntu-node/` flow, but on an already-running box — no PXE/disk-wipe needed). A server, so it
-  doesn't idle-sleep.
+  (dev-box key authorized; passwordless sudo). **Provisioned 2026-07-25** two ways: (1) full Rust + C
+  **dev toolchain** via [`ubuntu-node/setup-node-dev.sh`](ubuntu-node/setup-node-dev.sh) — apt toolchain +
+  codec `-dev` libs + valgrind/gdb/heaptrack + Rust stable/nightly + ~24 cargo tools + our
+  cargo-read/copter/superwork + Claude Code + herdr; and (2) **worker-enrolled but STOPPED** via
+  [`ubuntu-node/enroll_running_node.sh`](ubuntu-node/enroll_running_node.sh) — Docker + `zen-worker` unit +
+  `:exec` image cached, left disabled so it can't restart-loop on the drained pool. **Activate the worker
+  when a sweep queues:** `bash ubuntu-node/enroll_running_node.sh --start 192.168.50.27` (mints a 7-day
+  cred + `systemctl enable --now`). A server, so it doesn't idle-sleep.
 - **wsl (dev box)** — the operator, not a worker: holds the Cloudflare token, mints scoped 7-day R2 creds,
   runs `fleet-pxe` + the reboot/OS-flip loop, builds the binaries. WSL2 NAT breaks inbound UDP (TFTP) but
   reaches the LAN fine over TCP/SSH.
