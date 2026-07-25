@@ -99,7 +99,10 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   runs `fleet-pxe` + the reboot/OS-flip loop, builds the binaries. WSL2 NAT breaks inbound UDP (TFTP) but
   reaches the LAN fine over TCP/SSH.
 - **tower** — PXE server (dnsmasq proxy-DHCP + nginx + the serial-matched autoinstall), R2 storage, and a
-  CPU worker. It also sends the WoL magic packets (`etherwake -i br0 <mac>`).
+  CPU worker. It also sends the WoL magic packets (`etherwake -i br0 <mac>`). **Work inside Docker ONLY on
+  the tower** — Unraid's host is stateless (RAM-booted), so run all compute/tooling in containers (the
+  `zen*` workers, the `zen-pxe-*` stack, or a throwaway `docker run --rm`), never install on the host;
+  read-only host commands are fine. (Global `~/.claude/CLAUDE.md` "Tower … compute node" rule 7.)
 
 ### Addressing — fixed IPs + DNS, NOT mDNS (recommendation)
 
