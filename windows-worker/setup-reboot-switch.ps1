@@ -81,7 +81,7 @@ if (Get-LocalUser -Name $User -ErrorAction SilentlyContinue) {
   Set-LocalUser -Name $User -Password $sec
 } else {
   New-LocalUser -Name $User -Password $sec -PasswordNeverExpires -AccountNeverExpires `
-    -Description 'zen fleet reboot-only switch (non-admin, forced-command SSH)' | Out-Null
+    -Description 'zen fleet reboot-only SSH switch' | Out-Null
 }
 # stays in 'Users' only -- NEVER Administrators. (Users have the 'Shut down the system' right by
 # default on Win10/11 workstations, which is all this needs.)
