@@ -62,13 +62,56 @@ boot a kid does lands in **Windows** — they are never blocked by our work. We 
    the node runs **automatic security updates** (`unattended-upgrades`, auto-reboot 04:00) since it's long-
    lived and unattended.
 
-**Roster** (keep current — MAC is the stable key; IPs float on DHCP):
-
-| Node | Wired MAC | Windows / Ubuntu disks | State |
-|---|---|---|---|
-| zen-node-2 | `04:7c:16:b3:18:51` | dual-boot | installed + registered; reboot-switch pending (`setup-reboot-switch.ps1` re-run) |
-| zen-node-3 | `04:7c:16:8a:b5:b7` | 2 TB Win + 1 TB Ubuntu (XFS) | installed + registered; reboot-switch pending |
-| _(fill remaining kids' PCs)_ | | | |
-
 Gotcha we learned the hard way: **Secure Boot must be OFF** on these boxes — the PXE chain (iPXE + grub +
 kernel) isn't Secure-Boot-signed, so with it on the box loops at grub without ever booting the kernel.
+
+## The household fleet — roster + how to reach each box
+
+**The MAC is the one stable identifier** (survives OS flips — same NIC MAC in Windows and Ubuntu — and
+sleep/DHCP churn). `fleet-pxe` already keys on it. IPs below are the current DHCP leases; **make them
+permanent via router DHCP reservations** (see "Addressing" below) — do NOT rely on `.local` mDNS.
+
+| Node | Host / mDNS | Type | Wired MAC | IP | Reach it as |
+|---|---|---|---|---|---|
+| **jason** | `jason-desktop` | dual-boot kids' PC (Win + Ubuntu, PXE-first, no-sleep, WoL on) | `04:7c:16:b3:18:51` | 192.168.50.148 | Win: `ssh zenadmin@` (full) / `zenswitch@` (reboot); Ubuntu: `ssh zen@` |
+| **ian** | `ian-desktop` | dual-boot kids' PC (2 TB Win + 1 TB Ubuntu XFS; PXE-first, no-sleep, WoL on) | `04:7c:16:8a:b5:b7` | 192.168.50.193 | same as jason |
+| **mac** | `lilith-mac` | macOS worker (idle-only, launchd) | `1c:f6:4c:8b:29:a9` | 192.168.50.224 | `ssh <macuser>@` — dev-box key NOT yet authorized (TODO) |
+| **lianli** | `lilith-lianli` | **always-Ubuntu** dedicated worker (no OS flip) | `74:56:3c:b8:45:8d` | 192.168.50.27 | `ssh zen@`/`lilith@` — dev-box key NOT yet confirmed (TODO) |
+| **wsl** | (this dev box) | WSL2 — the fleet **operator** (holds CF token, mints creds, runs `fleet-pxe`, builds) | — | WSL NAT (reaches LAN) | local shell |
+| **tower** | (basement, Unraid) | PXE/dnsmasq/nginx server + R2 + the `zen720-basement` worker | (Unraid NIC) | 192.168.50.170 | `ssh root@tower` |
+
+### Managing each type
+
+- **Dual-boot kids' PCs (jason, ian)** — see the section above. Kids own them, default Windows; operator
+  flips to Ubuntu with `fleet-pxe to-ubuntu <mac>` (idle only) and back with `to-windows`. Both are set:
+  **UEFI PXE-boot first** (so the tower's worker flag decides the OS — check with
+  `ssh zenadmin@<box> "bcdedit /enum firmware"`; fix with `bcdedit /set {fwbootmgr} displayorder {<pxe-guid>} /addfirst`),
+  **sleep+hibernate+FastStartup off** (`powercfg /change standby-timeout-ac 0 & powercfg /h off`), and
+  **WoL on** (`Set-NetAdapterPowerManagement -WakeOnMagicPacket Enabled`; wake with `etherwake -i br0 <mac>` on the tower).
+  Full remote admin via `ssh zenadmin@<box>`.
+- **mac (lilith-mac)** — always macOS; the worker runs idle-only under launchd (backs off if used in the
+  last 10 min). **"Keeps going unreachable" = macOS sleep**: disable it with
+  `sudo pmset -a sleep 0 disablesleep 1 womp 1` (never sleep + wake-on-magic-packet) and have the worker
+  hold `caffeinate` while running. First authorize the dev-box key in the mac account's `~/.ssh/authorized_keys`.
+- **lianli (lilith-lianli)** — always Ubuntu, dedicated; no OS flip, just runs `zen-worker`. A server, so it
+  doesn't idle-sleep. Manage via `ssh zen@lilith-lianli`.
+- **wsl (dev box)** — the operator, not a worker: holds the Cloudflare token, mints scoped 7-day R2 creds,
+  runs `fleet-pxe` + the reboot/OS-flip loop, builds the binaries. WSL2 NAT breaks inbound UDP (TFTP) but
+  reaches the LAN fine over TCP/SSH.
+- **tower** — PXE server (dnsmasq proxy-DHCP + nginx + the serial-matched autoinstall), R2 storage, and a
+  CPU worker. It also sends the WoL magic packets (`etherwake -i br0 <mac>`).
+
+### Addressing — fixed IPs + DNS, NOT mDNS (recommendation)
+
+`.local` mDNS is unreliable across this mixed fleet: Windows boxes announce inconsistently, the mac drops
+its announcement on sleep, and the dual-boot boxes change identity (Windows vs Ubuntu). We hit `.local`
+resolution failures repeatedly. So:
+
+1. **Set DHCP reservations on the router** (MAC → the current IP above) for all six boxes. Reservations are
+   keyed on the MAC, so a dual-boot box keeps the same IP in *both* OSes, and it survives sleep/reboots.
+   Keep the current leases as the reservations so nothing has to change.
+2. **Then add DNS** (optional but nice): the tower already runs dnsmasq — give it `host-record` / `address=`
+   entries (`<name> → reserved IP`) and point the dev box's resolver (or `/etc/hosts`) at them, so
+   `jason`/`ian`/`lilith-mac`/`lilith-lianli` resolve without mDNS.
+3. **Until reservations exist**, key tooling on the **MAC** and resolve to IP via the tower's ARP/mDNS as a
+   fallback (what `fleet-pxe to-ubuntu <mac>` already does).
