@@ -38,7 +38,8 @@ boot a kid does lands in **Windows** — they are never blocked by our work. We 
 | When | Do | What happens |
 |---|---|---|
 | Box idle/off (kids done, logged out) | `fleet-pxe to-ubuntu <mac>` | sets `worker` flag + reboots the box (from Windows via the `zenswitch` switch, from Ubuntu via `zen@`, or WoL if off) → PXE → **Ubuntu worker** |
-| Worker running | `ssh zen@<box>` | administer / check the worker (Ubuntu side) |
+| Worker running (Ubuntu) | `ssh zen@<box>` | administer / check the worker (Ubuntu side) |
+| Box in Windows, need admin | `ssh zenadmin@<box>` | full admin shell — install/update/fix the box without the console |
 | Kids returning / activity resumes | `fleet-pxe to-windows <mac>` | clears the flag + reboots → PXE → **Windows** (hand the box back) |
 | Box off | `fleet-pxe wol <mac>` | wake it (into whatever the flag currently selects) |
 
@@ -47,11 +48,16 @@ boot a kid does lands in **Windows** — they are never blocked by our work. We 
 1. **Firmware: network/PXE boot FIRST**, ahead of the Windows disk. This is the linchpin — it makes *every*
    reboot go through the tower so the `worker` flag decides the OS. If the box boots its local Windows disk
    first, it never consults the flag and stays stuck in Windows (the failure we hit repeatedly).
-2. **Windows: the reboot-switch** — run `windows-worker/setup-reboot-switch.ps1` **once, elevated**. It
-   installs a **reboot-only, non-admin** `zenswitch` SSH (forced command = `shutdown /r`, no shell), so
-   `to-ubuntu`/`to-windows` can reboot the box *from Windows*. A leaked key can only reboot; the tower (ours)
-   decides the OS. Idempotent — skips the OpenSSH install if it's already there. Prefers the Windows-Update-
-   managed OpenSSH (auto-patched) with a hash-pinned standalone fallback if WU is unavailable.
+2. **Windows: the SSH accounts** — run `windows-worker/setup-reboot-switch.ps1` **once, elevated**. It
+   creates two key-only SSH accounts (both authorized to the dev-box key):
+   - **`zenswitch`** — reboot-ONLY (non-admin, forced command `shutdown /r`, no shell). `to-ubuntu`/
+     `to-windows` use this to flip the box's OS *from Windows*; a leaked key can only reboot it.
+   - **`zenadmin`** — FULL ADMIN (Administrators group, real shell), so the operator can install/update/fix
+     the box remotely (`ssh zenadmin@<box>`) without the console. **Security:** this grants full control of
+     the box to whoever holds the key — intended, but a real exposure; `Remove-LocalUser zenadmin` revokes
+     it while `zenswitch` keeps working.
+   Idempotent — skips the OpenSSH install if already present; prefers the Windows-Update-managed OpenSSH
+   (auto-patched), hash-pinned standalone fallback if WU is unavailable. Validated on real Windows PS 5.1.
 3. **Ubuntu side + tower**: installed & registered via `ubuntu-node/pxe/` (serial-matched to our disk), and
    the node runs **automatic security updates** (`unattended-upgrades`, auto-reboot 04:00) since it's long-
    lived and unattended.
