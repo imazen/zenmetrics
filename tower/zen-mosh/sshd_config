@@ -1,0 +1,14 @@
+# zen-mosh gateway sshd — container-only, port 2223 (host sshd keeps 22)
+Port 2223
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+UsePAM no
+# Host root's authorized_keys, bind-mounted read-only from /root/.ssh
+AuthorizedKeysFile /rootkeys/authorized_keys
+StrictModes no
+AcceptEnv LANG LC_*
+SetEnv LANG=en_US.UTF-8
+X11Forwarding no
+PrintMotd no
+Subsystem sftp /usr/lib/openssh/sftp-server

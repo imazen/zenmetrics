@@ -115,6 +115,28 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   `zen*` workers, the `zen-pxe-*` stack, or a throwaway `docker run --rm`), never install on the host;
   read-only host commands are fine. (Global `~/.claude/CLAUDE.md` "Tower … compute node" rule 7.)
 
+### Remote terminals — mosh + tmux + herdr (rolled out 2026-07-26)
+
+Every interactive box takes roaming `mosh` sessions (UDP 60000-61000; no firewall in the way on any of
+them today — lianli ufw inactive, mac ALF disabled, tower LAN bridge open) with `tmux` for persistence,
+plus [herdr](https://herdr.dev) (`curl -fsSL https://herdr.dev/install.sh | sh` → `~/.local/bin`, no root)
+for agent workspaces:
+
+| Box | mosh-server | tmux | herdr | Connect |
+|---|---|---|---|---|
+| **lianli** | 1.4.0 (apt) | apt | `~/.local/bin` | `mosh lilith@192.168.50.27` |
+| **mac** | 1.4.0 (brew; non-interactive PATH via `~/.zshenv`) | brew | `~/.local/bin` | `mosh lilith@192.168.50.224` |
+| **tower** | `zen-mosh` gateway container — host untouched | in-container; auto-attach `main`, panes are HOST root shells | in-container | `mosh --ssh='ssh -p 2223' root@192.168.50.170` |
+| **jason** (Ubuntu side) | **PENDING** — box was in Windows with the kid at the console 2026-07-26; when idle: flip to Ubuntu, `sudo apt-get install -y mosh tmux` + the herdr one-liner as `zen` | pending | pending | `mosh zen@192.168.50.148` (after install) |
+| **wsl** (dev box) | installed, but WSL2 NAT blocks inbound UDP — mosh INTO wsl needs mirrored networking (`networkingMode=mirrored` in `.wslconfig`); outbound client works fine | ✓ | ✓ | n/a inbound |
+
+Tower gateway details: image `zen-mosh:v1` built from [`tower/zen-mosh/`](tower/zen-mosh/README.md)
+(array mirror `/mnt/user/coefficient/tools/zen-mosh/`); container runs `--network host --pid host
+--privileged -v /root/.ssh:/rootkeys:ro --restart unless-stopped`. One-off `ssh -p 2223 root@tower '<cmd>'`
+also executes on the HOST (nsenter); host sshd on 22 is untouched. Dual-boot gotcha: jason/ian present
+DIFFERENT host keys per OS on the same IP — a "REMOTE HOST IDENTIFICATION HAS CHANGED" on .148/.193 is
+almost always the OS flip, not an attack; `ssh-keygen -R <ip>` and reconnect.
+
 ### Addressing — fixed IPs + DNS, NOT mDNS (recommendation)
 
 `.local` mDNS is unreliable across this mixed fleet: Windows boxes announce inconsistently, the mac drops
