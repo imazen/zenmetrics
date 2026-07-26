@@ -17,6 +17,16 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+## Workspace
+
+### Added
+
+- **`tower/zen-mosh/` — tower terminal gateway** (mosh + tmux + herdr in a
+  Docker container, host root shells via nsenter; Unraid host untouched) and a
+  NODES.md "Remote terminals" section covering the 2026-07-26 mosh/tmux/herdr
+  rollout across lianli/mac/tower (jason pending — kid was at the console).
+  Connect: `mosh --ssh='ssh -p 2223' root@tower`. (85f8e613)
+
 ## zenfleet-core
 
 ### Added
