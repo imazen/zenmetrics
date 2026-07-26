@@ -24,8 +24,9 @@ Workspace conventions per the global rules:
 - **`tower/zen-mosh/` — tower terminal gateway** (mosh + tmux + herdr in a
   Docker container, host root shells via nsenter; Unraid host untouched) and a
   NODES.md "Remote terminals" section covering the 2026-07-26 mosh/tmux/herdr
-  rollout across lianli/mac/tower (jason pending — kid was at the console).
-  Connect: `mosh --ssh='ssh -p 2223' root@tower`. (85f8e613)
+  rollout across lianli/mac/tower/jason (jason completed same day on user
+  override, via the zenadmin-reboot fallback; left booted into Ubuntu).
+  Connect: `mosh --ssh='ssh -p 2223' root@tower`. (85f8e613, e739cac7)
 
 ## zenfleet-core
 
