@@ -127,7 +127,7 @@ for agent workspaces:
 | **lianli** | 1.4.0 (apt) | apt | `~/.local/bin` | `mosh lilith@192.168.50.27` |
 | **mac** | 1.4.0 (brew; non-interactive PATH via `~/.zshenv`) | brew | `~/.local/bin` | `mosh lilith@192.168.50.224` |
 | **tower** | `zen-mosh` gateway container — host untouched | in-container; auto-attach `main`, panes are HOST root shells | in-container | `mosh --ssh='ssh -p 2223' root@192.168.50.170` |
-| **jason** (Ubuntu side) | **PENDING** — box was in Windows with the kid at the console 2026-07-26; when idle: flip to Ubuntu, `sudo apt-get install -y mosh tmux` + the herdr one-liner as `zen` | pending | pending | `mosh zen@192.168.50.148` (after install) |
+| **jason** (Ubuntu side) | 1.4.0 (apt) | node base image | `~/.local/bin` | `mosh zen@192.168.50.148` (Ubuntu side only) |
 | **wsl** (dev box) | installed, but WSL2 NAT blocks inbound UDP — mosh INTO wsl needs mirrored networking (`networkingMode=mirrored` in `.wslconfig`); outbound client works fine | ✓ | ✓ | n/a inbound |
 
 Tower gateway details: image `zen-mosh:v1` built from [`tower/zen-mosh/`](tower/zen-mosh/README.md)
@@ -135,7 +135,12 @@ Tower gateway details: image `zen-mosh:v1` built from [`tower/zen-mosh/`](tower/
 --privileged -v /root/.ssh:/rootkeys:ro --restart unless-stopped`. One-off `ssh -p 2223 root@tower '<cmd>'`
 also executes on the HOST (nsenter); host sshd on 22 is untouched. Dual-boot gotcha: jason/ian present
 DIFFERENT host keys per OS on the same IP — a "REMOTE HOST IDENTIFICATION HAS CHANGED" on .148/.193 is
-almost always the OS flip, not an attack; `ssh-keygen -R <ip>` and reconnect.
+almost always the OS flip, not an attack; `ssh-keygen -R <ip>` and reconnect. Do the `-R` BEFORE any
+post-flip ssh poll — `accept-new` silently REJECTS a *changed* key, so a poll loop reads as "box never
+came up" while sshd is answering fine (cost ~10 min on jason 2026-07-26). Related: if `fleet-pxe
+to-ubuntu` prints "couldn't reach … as zen or zenswitch" while the box is in Windows (seen 2026-07-26:
+zenswitch ssh refused while zenadmin worked — unresolved), the worker flag IS already set; complete the
+flip with `ssh zenadmin@<box> 'shutdown /r /t 5'`.
 
 ### Addressing — fixed IPs + DNS, NOT mDNS (recommendation)
 
