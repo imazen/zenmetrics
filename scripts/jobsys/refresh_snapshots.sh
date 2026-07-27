@@ -27,9 +27,9 @@ exec 9>"$SNAP_DIR/refresh.lock"
 flock -n 9 || { echo "$(date -u +%FT%TZ) refresh already running — skip" >>"$LOG"; exit 0; }
 r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }
 
-r2 cp "s3://$BUCKET/jobs/_pool/runlist.tsv" /tmp/runlist_refresh.tsv >/dev/null 2>&1 \
+r2 cp "${ZEN_SNAP_RUNLIST:-s3://$BUCKET/jobs/_pool924/runlist.tsv}" /tmp/runlist_refresh.tsv >/dev/null 2>&1 \
   || { echo "$(date -u +%FT%TZ) cannot fetch runlist" | tee -a "$LOG"; exit 1; }
-runs=$(cut -f1 /tmp/runlist_refresh.tsv | grep -E '^bf-' | sort -u)
+runs=$(cut -f1 /tmp/runlist_refresh.tsv | grep -E '^bf' | sort -u)
 echo "$(date -u +%FT%TZ) refresh START: $(printf '%s\n' "$runs" | grep -c .) runs" | tee -a "$LOG"
 
 compact_one(){
