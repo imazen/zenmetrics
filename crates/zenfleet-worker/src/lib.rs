@@ -1205,6 +1205,27 @@ fn read_meminfo_total_bytes() -> Option<u64> {
     parse_meminfo_total(&std::fs::read_to_string("/proc/meminfo").ok()?)
 }
 
+/// Total physical RAM in bytes, cross-platform: `ZEN_RAM_BYTES` env override first,
+/// then `/proc/meminfo` (Linux), then `sysctl -n hw.memsize` (macOS — no procfs
+/// there; without this a darwin worker fell to the 2 GiB floor and its admission
+/// budget rejected every cell, cycling done=0 — found on lilith-mac 2026-07-27).
+fn total_ram_bytes() -> Option<u64> {
+    if let Ok(v) = std::env::var("ZEN_RAM_BYTES")
+        && let Ok(n) = v.trim().parse::<u64>()
+        && n > 0
+    {
+        return Some(n);
+    }
+    if let Some(n) = read_meminfo_total_bytes() {
+        return Some(n);
+    }
+    let out = std::process::Command::new("sysctl")
+        .args(["-n", "hw.memsize"])
+        .output()
+        .ok()?;
+    String::from_utf8(out.stdout).ok()?.trim().parse().ok()
+}
+
 /// This box's admission budget for the chunked path: **RAM budget = 75 % of physical RAM** (leaves
 /// headroom for the OS, page cache, GPU readback, and the estimate's slop — see [`BoxBudget`]) and
 /// **cores = usable parallelism** (`available_parallelism` honors cgroup/cpuset affinity, which the
@@ -1212,7 +1233,7 @@ fn read_meminfo_total_bytes() -> Option<u64> {
 /// RAM the way a blind N-per-core launcher would). Conservative fallbacks (2 GiB / 1 core) if either
 /// probe fails — never panics.
 fn host_box_budget() -> BoxBudget {
-    let total_ram = read_meminfo_total_bytes().unwrap_or(2 << 30); // 2 GiB if /proc/meminfo unreadable
+    let total_ram = total_ram_bytes().unwrap_or(2 << 30); // 2 GiB only if every probe fails
     let ram_budget = (((total_ram as f64) * 0.75) as u64).max(1);
     let phys_cores = std::thread::available_parallelism()
         .map(|n| n.get() as u32)
