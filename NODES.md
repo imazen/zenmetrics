@@ -89,6 +89,21 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   **sleep+hibernate+FastStartup off** (`powercfg /change standby-timeout-ac 0 & powercfg /h off`), and
   **WoL on** (`Set-NetAdapterPowerManagement -WakeOnMagicPacket Enabled`; wake with `etherwake -i br0 <mac>` on the tower).
   Full remote admin via `ssh zenadmin@<box>`.
+  **KNOWN REGRESSION (found 2026-07-27, ian): the no-sleep + WoL config does NOT hold.** ian went to
+  Windows sleep and was UNWAKEABLE remotely — no response to raw-ethernet `etherwake` (xN), UDP-broadcast
+  `wakeonlan`, or ARP: the NIC has no standby power in that sleep state (likely Modern Standby powering
+  the NIC down, or Realtek "Shutdown Wake-On-Lan"/wake-arm driver settings lost — e.g. via a Windows
+  update or driver reinstall). **Recovery: physical power button only.** Hardening to apply on next
+  wake (both kids' boxes — jason has the same exposure):
+  1. Re-assert no-sleep: `powercfg /change standby-timeout-ac 0`, `powercfg /h off`; verify `powercfg /a`
+     and check whether the box uses Modern Standby (S0ix) — if so, prefer disabling MS NIC power-down.
+  2. Arm the NIC: `powercfg /devicequery wake_armed` must list the ethernet adapter; if not,
+     `powercfg /deviceenablewake "<adapter>"` + `Set-NetAdapterPowerManagement -WakeOnMagicPacket Enabled`
+     + Realtek advanced properties: "Shutdown Wake-On-Lan"=Enabled, "Energy Efficient Ethernet"=Off.
+  3. VERIFY by round-trip: sleep the box, `etherwake` from tower, confirm it wakes. Config without the
+     round-trip test is what regressed silently this time.
+  4. Ubuntu side has the parallel gap (never armed): one-shot systemd unit `ethtool -s <nic> wol g`
+     at boot + before suspend, and BIOS ErP/deep-sleep OFF so the NIC keeps S5 standby power.
 - **mac (lilith-mac)** — always macOS (Mac mini M4 Pro `Mac16,11`, wired Ethernet en0, AC power). Reachable
   as `ssh lilith@` (dev-box key authorized) with **passwordless sudo** (`/etc/sudoers.d/90-lilith-nopasswd`
   → `sudo -n` works). **"Keeps going unreachable" was macOS idle-sleep — FIXED 2026-07-24**:
