@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# tower_worker_refresh.sh — keep the basement tower's zensim-720 backfill worker alive.
+# tower_worker_refresh.sh — keep the basement tower's zensim backfill worker alive.
+# 2026-07-27: repointed from the drained 720 wave (_pool/runlist.tsv, container
+# zen720-basement) to the 924 wave (_pool924/runlist.tsv, metric zensim-foldapp,
+# container zen924-basement, image tag exec-zensim924-*). Override with
+# ZEN_TOWER_IMAGE / ZEN_TOWER_RUNLIST if a new wave supersedes this one.
 #
 # R2 temp creds max out at 12h, and this worker runs for days, so a cron on the DEV box (which holds the
 # CF token — never put it on the tower) re-mints a 12h scoped cred and recreates the container. Twice a
@@ -26,15 +30,17 @@ SCRATCH=/mnt/cache/appdata/zen720-basement/tmp
 # The :exec image bakes the current fleet-entrypoint.sh (--ledger-in fix) + zenmetrics (v2-ref ref
 # reuse) + zenfleet-worker (zstd ledger), so no entrypoint scp/mount is needed. --pull always picks up
 # a newly-pushed :exec on each refresh.
-$SSHT "docker rm -f zen720-basement 2>/dev/null; rm -rf $SCRATCH; mkdir -p $SCRATCH; chmod 1777 $SCRATCH; docker run -d --name zen720-basement --restart unless-stopped --pull always \
+IMG="${ZEN_TOWER_IMAGE:-ghcr.io/imazen/zenfleet-worker:exec-zensim924-2095f80b}"
+RL="${ZEN_TOWER_RUNLIST:-s3://zentrain/jobs/_pool924/runlist.tsv}"
+$SSHT "docker rm -f zen924-basement zen720-basement 2>/dev/null; rm -rf $SCRATCH; mkdir -p $SCRATCH; chmod 1777 $SCRATCH; docker run -d --name zen924-basement --restart unless-stopped --pull always \
   --cpuset-cpus=0-23 --cpu-shares=256 --memory=40g \
   -v $SCRATCH:/tmp \
   -e AWS_ACCESS_KEY_ID='$AK' -e AWS_SECRET_ACCESS_KEY='$SK' -e AWS_SESSION_TOKEN='$ST' -e AWS_REGION=auto \
   -e ZEN_R2_ENDPOINT='$EP' -e ZEN_BUCKET=zentrain \
-  -e ZEN_POOL_RUNLIST=s3://zentrain/jobs/_pool/runlist.tsv \
+  -e ZEN_POOL_RUNLIST='$RL' \
   -e ZEN_CORPUS_PREFIX=refs/clean-picker-corpus-2026-06-26 \
   -e ZEN_MAX_MIN=700 -e ZEN_CORE_OVERSUBSCRIBE=3 -e ZEN_PERSISTENT_EXEC=1 \
   -e RAYON_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e ZEN_CHUNK_WALL_SEC=20 -e ZEN_PASS_TIMEOUT=5400 \
   -e ZEN_PROVIDER=basement -e ZEN_WORKER=tower-unraid \
-  --entrypoint /usr/local/bin/fleet-entrypoint.sh ghcr.io/imazen/zenfleet-worker:exec" >/dev/null
-echo "$(date -u +%FT%TZ) tower worker refreshed (7-day cred)" >>"$LOG"
+  --entrypoint /usr/local/bin/fleet-entrypoint.sh $IMG" >/dev/null
+echo "$(date -u +%FT%TZ) tower worker refreshed (7-day cred, $IMG, $RL)" >>"$LOG"
