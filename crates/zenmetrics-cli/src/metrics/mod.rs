@@ -852,6 +852,16 @@ pub enum ZensimFeatureRegime {
     /// GPU-port validation (2026-07-19). Score stays the canonical PreviewV0_2.
     #[value(name = "v2-ab")]
     V2Ab,
+    /// 924 features — the folded+append STREAMING regime (zensim C5,
+    /// 2026-07-26): folded-720 (v1-basic bands folded into the v2 walk,
+    /// f156..f371 emitted as 0) ++ the 204-slot append block. Computed by
+    /// `Zensim::compute_folded720_append_features_streaming` with
+    /// `ZensimProfile::codec_target()` + default toggles + RAW unpadded
+    /// slices — byte-identical to the `v2_ab_extract` foldapp driver.
+    /// REGIME PURITY: never column-mix these rows into V2Ab/ext-720/v1
+    /// parquets (padded-width divergence + zeroed pools).
+    #[value(name = "folded720append")]
+    Folded720Append,
 }
 
 impl ZensimFeatureRegime {
@@ -863,6 +873,7 @@ impl ZensimFeatureRegime {
             ZensimFeatureRegime::Extended => 300,
             ZensimFeatureRegime::WithIw => 372,
             ZensimFeatureRegime::V2Ab => 372 + 348,
+            ZensimFeatureRegime::Folded720Append => 720 + 204,
         }
     }
 }
@@ -878,6 +889,12 @@ impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
             // CPU-only). This `From` feeds the GPU path, which is disabled; the
             // CPU `run_zensim_*` path handles V2Ab directly and never converts.
             ZensimFeatureRegime::V2Ab => zenmetrics_api::zensim::ZensimFeatureRegime::WithIw,
+            // Folded720Append likewise has no GPU-umbrella equivalent (the folded
+            // streaming walk is CPU-only); the CPU path handles it directly and
+            // never converts.
+            ZensimFeatureRegime::Folded720Append => {
+                zenmetrics_api::zensim::ZensimFeatureRegime::WithIw
+            }
         }
     }
 }

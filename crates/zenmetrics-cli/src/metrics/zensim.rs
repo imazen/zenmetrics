@@ -210,6 +210,12 @@ pub fn extract_features_regime(
         )
         .into());
     }
+    // Folded+append 924: the streaming walk does its OWN sub-64 reflect-pad, so
+    // it must see the RAW image — this fn's external padding would diverge from
+    // the `v2_ab_extract` foldapp driver on tiny cells (regime purity).
+    if regime == R::Folded720Append {
+        return extract_features_folded924(reference, distorted);
+    }
     // Pad both identically to the 64px pyramid floor (no-op when already ≥64).
     let rp = reflect_pad_to_min(reference, 64);
     let dp = reflect_pad_to_min(distorted, 64);
@@ -230,6 +236,8 @@ pub fn extract_features_regime(
         R::Basic => (false, false),
         R::Extended => (true, false),
         R::WithIw | R::V2Ab => (true, true),
+        // Handled by the early return above (streaming-only, no v1 block).
+        R::Folded720Append => unreachable!("folded924 early-returns above"),
     };
     let mut cfg = ZensimConfig::default();
     cfg.extended_features = extended;
@@ -255,6 +263,56 @@ pub fn extract_features_regime(
         .into());
     }
     Ok(features)
+}
+
+/// Folded+append 924-feature extraction (regime `Folded720Append`) — the
+/// STREAMING-ONLY walk (zensim C5, 2026-07-26): O(width) rolling planes, no
+/// prepared reference (the cached-ref machinery was deleted in C5), per-thread
+/// `V2Scratch` reuse across calls. Every argument is pinned to the
+/// `v2_ab_extract` foldapp driver — `ZensimProfile::codec_target()`,
+/// `V2NewFeatureToggles::default()`, RAW unpadded slices (the walk does its own
+/// sub-64 reflect-pad) — so fleet vectors are byte-identical to driver vectors
+/// (W1 local legs run the driver; W2/W3 run this path).
+#[cfg(feature = "cpu-metrics")]
+fn extract_features_folded924(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
+    use std::cell::RefCell;
+    use zensim::feature_v2::{V2NewFeatureToggles, V2Scratch};
+    use zensim::{RgbSlice, Zensim, ZensimProfile};
+    thread_local! {
+        // The scratch's wide buffers grow to the widest image this thread has
+        // seen and are reused (the producer buffer pool lives here — a fresh
+        // scratch re-faults ~1.7k pages/pair).
+        static SCRATCH: RefCell<V2Scratch> = RefCell::new(V2Scratch::new());
+    }
+    let r3: &[[u8; 3]] = bytemuck::cast_slice(&reference.pixels);
+    let d3: &[[u8; 3]] = bytemuck::cast_slice(&distorted.pixels);
+    let src = RgbSlice::new(r3, reference.width as usize, reference.height as usize);
+    let dst = RgbSlice::new(d3, distorted.width as usize, distorted.height as usize);
+    let feats = SCRATCH
+        .with(|s| {
+            Zensim::new(ZensimProfile::codec_target())
+                .with_parallel(false)
+                .compute_folded720_append_features_streaming(
+                    &src,
+                    &dst,
+                    V2NewFeatureToggles::default(),
+                    &mut s.borrow_mut(),
+                )
+                .map(|r| r.features().to_vec())
+        })
+        .map_err(|e| format!("zensim: folded720append streaming: {e:?}"))?;
+    let want = crate::metrics::ZensimFeatureRegime::Folded720Append.total_features();
+    if feats.len() != want {
+        return Err(format!(
+            "zensim: folded720append expected {want} features, got {}",
+            feats.len()
+        )
+        .into());
+    }
+    Ok(feats)
 }
 
 /// Per-source (per-chunk) reference context: the reference reflect-padded to ≥64px
@@ -312,6 +370,14 @@ pub fn extract_features_regime_with_ctx(
     use crate::metrics::ZensimFeatureRegime as R;
     use zensim::{RgbSlice, ZensimConfig, compute_zensim_with_ref_and_config};
 
+    // No ctx path for the folded regime: C5 deleted the cached-reference
+    // machinery, and ctx.padded diverges from the streaming walk's own sub-64
+    // pad. Callers use extract_features_regime (per-pair, thread-local scratch).
+    if regime == R::Folded720Append {
+        return Err(
+            "zensim: Folded720Append has no ref-ctx path — call extract_features_regime".into(),
+        );
+    }
     if distorted.width.max(64) as usize != ctx.w || distorted.height.max(64) as usize != ctx.h {
         return Err(format!(
             "zensim: distorted ({}×{}) does not match ref ctx ({}×{})",
@@ -328,6 +394,8 @@ pub fn extract_features_regime_with_ctx(
         R::Basic => (false, false),
         R::Extended => (true, false),
         R::WithIw | R::V2Ab => (true, true),
+        // Rejected by the early return above (no ctx path for the folded regime).
+        R::Folded720Append => unreachable!("folded924 rejected above"),
     };
     let mut cfg = ZensimConfig::default();
     cfg.extended_features = extended;
@@ -369,6 +437,57 @@ mod tests {
             pixels,
             width: w,
             height: h,
+        }
+    }
+
+    /// The fleet 924 path must be byte-identical to a DIRECT zensim streaming
+    /// call with the `v2_ab_extract` foldapp driver's exact arguments
+    /// (codec_target profile, default toggles, RAW unpadded slices). Pins the
+    /// wiring — a profile/toggle/padding drift here silently forks the regime.
+    /// Includes a sub-64 case (48×40) so any reintroduction of external padding
+    /// fails loudly, and an odd-dims case (127×93, a gates-doc fixture shape).
+    #[test]
+    fn folded924_matches_driver_args() {
+        use zensim::feature_v2::{V2NewFeatureToggles, V2Scratch};
+        use zensim::{RgbSlice, Zensim, ZensimProfile};
+        for (w, h) in [(96u32, 80u32), (127, 93), (48, 40)] {
+            let reference = synth(11, w, h);
+            let distorted = synth(12, w, h);
+            let ours = extract_features_regime(
+                &reference,
+                &distorted,
+                crate::metrics::ZensimFeatureRegime::Folded720Append,
+            )
+            .unwrap();
+            let r3: &[[u8; 3]] = bytemuck::cast_slice(&reference.pixels);
+            let d3: &[[u8; 3]] = bytemuck::cast_slice(&distorted.pixels);
+            let mut scratch = V2Scratch::new();
+            let direct = Zensim::new(ZensimProfile::codec_target())
+                .with_parallel(false)
+                .compute_folded720_append_features_streaming(
+                    &RgbSlice::new(r3, w as usize, h as usize),
+                    &RgbSlice::new(d3, w as usize, h as usize),
+                    V2NewFeatureToggles::default(),
+                    &mut scratch,
+                )
+                .unwrap();
+            assert_eq!(ours.len(), 924, "{w}×{h}");
+            assert_eq!(direct.features().len(), 924, "{w}×{h}");
+            for (i, (a, b)) in ours.iter().zip(direct.features()).enumerate() {
+                assert_eq!(a.to_bits(), b.to_bits(), "slot {i} differs ({w}×{h})");
+            }
+            // Thread-local scratch reuse must not perturb results.
+            let again = extract_features_regime(
+                &reference,
+                &distorted,
+                crate::metrics::ZensimFeatureRegime::Folded720Append,
+            )
+            .unwrap();
+            assert_eq!(
+                ours.iter().map(|f| f.to_bits()).collect::<Vec<_>>(),
+                again.iter().map(|f| f.to_bits()).collect::<Vec<_>>(),
+                "scratch-reuse divergence ({w}×{h})"
+            );
         }
     }
 

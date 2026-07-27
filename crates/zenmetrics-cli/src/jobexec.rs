@@ -493,7 +493,7 @@ fn warmref_score_eligible(
         .iter()
         .copied()
         .filter(|m| {
-            *m != "zensim" && *m != "zensim-gpu" && {
+            *m != "zensim" && *m != "zensim-gpu" && *m != "zensim-foldapp" && {
                 match metric_kind(m).ok().and_then(cli_kind_from_metric_kind) {
                     Some(k) => metric_orchestrator_eligible(k),
                     None => false,
@@ -719,23 +719,41 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         for (sha, distorted) in &decoded {
             for metric in &metrics {
                 #[cfg(feature = "cpu-metrics")]
-                if *metric == "zensim-gpu" || *metric == "zensim" {
-                    // FEATURES ONLY (no score): the CPU v2-ab 720-feature vector.
-                    // Gated on `cpu-metrics` (NOT gpu-zensim) so a CPU-ONLY executor
-                    // (`:exec`, no GPU) emits 720 — zensim is CPU, so the 720 backfill
-                    // runs on cheap CPU boxes with no GPU needed. Reuse the precomputed
-                    // ref pyramid across this source's variants (bit-identical).
-                    match ref_ctx.as_ref().map_or_else(
-                        || crate::metrics::run_zensim_features(&reference, distorted, crate::metrics::ZensimFeatureRegime::V2Ab),
-                        |c| crate::metrics::zensim::extract_features_regime_with_ctx(c, distorted, crate::metrics::ZensimFeatureRegime::V2Ab),
-                    ) {
+                if *metric == "zensim-gpu" || *metric == "zensim" || *metric == "zensim-foldapp" {
+                    // FEATURES ONLY (no score): "zensim"/"zensim-gpu" = the v2-ab
+                    // 720 vector; "zensim-foldapp" = the folded+append STREAMING
+                    // 924 vector (zensim C5; the bf924 runs carry ONLY this metric
+                    // per the 2026-07-27 directive). Gated on `cpu-metrics` (NOT
+                    // gpu-zensim) so a CPU-ONLY executor (`:exec`, no GPU) emits
+                    // features — the backfills run on cheap CPU boxes. V2Ab reuses
+                    // the precomputed ref pyramid across this source's variants
+                    // (bit-identical); foldapp is streaming-only (no cached-ref
+                    // path since C5) and always runs per-pair.
+                    let foldapp = *metric == "zensim-foldapp";
+                    let regime = if foldapp {
+                        crate::metrics::ZensimFeatureRegime::Folded720Append
+                    } else {
+                        crate::metrics::ZensimFeatureRegime::V2Ab
+                    };
+                    let res = if foldapp {
+                        crate::metrics::run_zensim_features(&reference, distorted, regime)
+                    } else {
+                        ref_ctx.as_ref().map_or_else(
+                            || crate::metrics::run_zensim_features(&reference, distorted, regime),
+                            |c| crate::metrics::zensim::extract_features_regime_with_ctx(c, distorted, regime),
+                        )
+                    };
+                    match res {
                         Ok(feats) => {
                             let mut fo = Map::new();
                             fo.insert("kind".into(), serde_json::json!("feature"));
                             fo.insert("image_path".into(), serde_json::json!(image_path));
                             fo.insert("codec".into(), serde_json::json!(codec_name));
                             fo.insert("encode_sha".into(), serde_json::json!(sha));
-                            fo.insert("regime".into(), serde_json::json!("v2-ab"));
+                            fo.insert(
+                                "regime".into(),
+                                serde_json::json!(if foldapp { "folded720append" } else { "v2-ab" }),
+                            );
                             fo.insert("features".into(), serde_json::json!(feats));
                             rows.push(serde_json::to_string(&Value::Object(fo))?);
                         }
@@ -810,18 +828,35 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
             // `cpu-metrics` (NOT gpu-zensim) so a CPU-only executor emits 720. Reuse
             // the precomputed ref pyramid across this source's variants (bit-identical).
             #[cfg(feature = "cpu-metrics")]
-            if *metric == "zensim-gpu" || *metric == "zensim" {
-                match ref_ctx.as_ref().map_or_else(
-                    || crate::metrics::run_zensim_features(&reference, &distorted, crate::metrics::ZensimFeatureRegime::V2Ab),
-                    |c| crate::metrics::zensim::extract_features_regime_with_ctx(c, &distorted, crate::metrics::ZensimFeatureRegime::V2Ab),
-                ) {
+            if *metric == "zensim-gpu" || *metric == "zensim" || *metric == "zensim-foldapp" {
+                // "zensim-foldapp" = streaming folded+append 924 (per-pair, no
+                // cached-ref path since zensim C5); others = v2-ab 720 with the
+                // precomputed-ref reuse. See the ScoreFile arm above.
+                let foldapp = *metric == "zensim-foldapp";
+                let regime = if foldapp {
+                    crate::metrics::ZensimFeatureRegime::Folded720Append
+                } else {
+                    crate::metrics::ZensimFeatureRegime::V2Ab
+                };
+                let res = if foldapp {
+                    crate::metrics::run_zensim_features(&reference, &distorted, regime)
+                } else {
+                    ref_ctx.as_ref().map_or_else(
+                        || crate::metrics::run_zensim_features(&reference, &distorted, regime),
+                        |c| crate::metrics::zensim::extract_features_regime_with_ctx(c, &distorted, regime),
+                    )
+                };
+                match res {
                     Ok(feats) => {
                         let mut fo = Map::new();
                         fo.insert("kind".into(), serde_json::json!("feature"));
                         fo.insert("image_path".into(), serde_json::json!(image_path));
                         fo.insert("codec".into(), serde_json::json!(codec_name));
                         fo.insert("encode_sha".into(), serde_json::json!(sha));
-                        fo.insert("regime".into(), serde_json::json!("v2-ab"));
+                        fo.insert(
+                            "regime".into(),
+                            serde_json::json!(if foldapp { "folded720append" } else { "v2-ab" }),
+                        );
                         fo.insert("features".into(), serde_json::json!(feats));
                         rows.push(serde_json::to_string(&Value::Object(fo))?);
                     }
@@ -1194,12 +1229,14 @@ fn run_encode_or_metric_job(
             // silently drops the features (the gap that broke the jxl HQ re-do).
             // Gated on `cpu-metrics` (NOT gpu-zensim) so a CPU-only executor emits 720.
             #[cfg(feature = "cpu-metrics")]
-            if metric == "zensim-gpu" || metric == "zensim" {
-                match crate::metrics::run_zensim_features(
-                    &reference,
-                    &distorted,
-                    crate::metrics::ZensimFeatureRegime::V2Ab,
-                ) {
+            if metric == "zensim-gpu" || metric == "zensim" || metric == "zensim-foldapp" {
+                let foldapp = metric == "zensim-foldapp";
+                let regime = if foldapp {
+                    crate::metrics::ZensimFeatureRegime::Folded720Append
+                } else {
+                    crate::metrics::ZensimFeatureRegime::V2Ab
+                };
+                match crate::metrics::run_zensim_features(&reference, &distorted, regime) {
                     Ok(feats) => {
                         let feat_row = serde_json::json!({
                             "kind": "feature",
@@ -1207,7 +1244,7 @@ fn run_encode_or_metric_job(
                             "codec": codec_name,
                             "q": cell["q"],
                             "knob_tuple_json": knob_json,
-                            "regime": "v2-ab",
+                            "regime": if foldapp { "folded720append" } else { "v2-ab" },
                             "features": feats,
                             "encoded_bytes": encoded.bytes.len(),
                             "encode_ms": encoded.encode_ms,
