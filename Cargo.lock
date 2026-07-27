@@ -5329,7 +5329,7 @@ dependencies = [
 
 [[package]]
 name = "ultrahdr-rs"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bytemuck",
  "enough",
@@ -7059,8 +7059,9 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.15"
-source = "git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f#e890b67148ca6e1768594b43f5a6415d160ef81f"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5851fd39b312749a3c367a0cd3522bd95d43276cfa613e9c18df748447cef3a8"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -7070,8 +7071,9 @@ dependencies = [
 
 [[package]]
 name = "zenpixels-convert"
-version = "0.2.15"
-source = "git+https://github.com/imazen/zenpixels?rev=e890b67148ca6e1768594b43f5a6415d160ef81f#e890b67148ca6e1768594b43f5a6415d160ef81f"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf516a64a98f08fa2aa19e86f1389e49894f750441044d65369687cf88a1b8dd"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -7113,8 +7115,8 @@ dependencies = [
 
 [[package]]
 name = "zenpredict"
-version = "0.2.1"
-source = "git+https://github.com/imazen/zenanalyze?rev=9a9be8200f26f643b45338711426cacae820f3a1#9a9be8200f26f643b45338711426cacae820f3a1"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenanalyze?rev=14dbe93d6af294a9598f9d27387103b87eb1a4af#14dbe93d6af294a9598f9d27387103b87eb1a4af"
 dependencies = [
  "bytemuck",
  "libm",
