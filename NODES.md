@@ -78,7 +78,7 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
 | **mac** | `lilith-mac` | macOS worker — Mac mini M4 Pro (idle-only, launchd) | `1c:f6:4c:8b:29:a9` | 192.168.50.224 | `ssh lilith@` — key authorized + NOPASSWD sudo; `SleepDisabled=1` |
 | **lianli** | `lilith-lianli` | **always-Ubuntu** dedicated worker (Ubuntu 26.04; dev box + worker enrolled/stopped) | `74:56:3c:b8:45:8d` | 192.168.50.27 | `ssh lilith@` — key + NOPASSWD sudo; full dev toolchain; worker unit stopped (pool drained) |
 | **wsl** | (this dev box) | WSL2 — the fleet **operator** (holds CF token, mints creds, runs `fleet-pxe`, builds) | — | WSL NAT (reaches LAN) | local shell |
-| **zen-node-4** | `DESKTOP-VMLP4OC` (Win name; becomes `zen-node-4`) | single-disk box → always-Ubuntu worker (WD_BLACK SN850X 1TB, serial `25286M803378`; Windows wiped by the install) | `60:cf:84:76:20:d2` (wired eno1; also has wifi `c0:bf:be:8e:1e:28`) | 192.168.50.140 | after install: `ssh zen@` |
+| **ultra7-265k** | `ultra7-265k` (installed 2026-07-27; was `zen-node-4` during enrollment, Win name `DESKTOP-VMLP4OC`) | always-Ubuntu worker — Intel Core Ultra 7 265K 20C/20T, 32 GB, WD_BLACK SN850X 1TB serial `25286M803378` (single disk; Windows wiped by the serial-matched install), Ubuntu 26.04 | `60:cf:84:76:20:d2` (wired eno1; wifi `c0:bf:be:8e:1e:28`) | 192.168.50.140 | `ssh zen@` (worker enrolled, stopped) |
 | **tower** | (basement, Unraid) | PXE/dnsmasq/nginx server + R2 + the `zen924-basement` worker (was `zen720-basement` in the 720 wave) | (Unraid NIC) | 192.168.50.170 | `ssh root@tower` |
 
 ### Managing each type
@@ -122,7 +122,7 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   `:exec` image cached, left disabled so it can't restart-loop on the drained pool. **Activate the worker
   when a sweep queues:** `bash ubuntu-node/enroll_running_node.sh --start 192.168.50.27` (mints a 7-day
   cred + `systemctl enable --now`). A server, so it doesn't idle-sleep.
-- **zen-node-4 (60:cf:84:76:20:d2)** — enrolled 2026-07-27 (seen → inventory → register serial
+- **ultra7-265k (60:cf:84:76:20:d2)** — enrolled + installed 2026-07-27 (renamed from zen-node-4 to match its CPU per user; PXE registry updated) (seen → inventory → register serial
   `25286M803378` → serial-matched install). **KNOWN ISSUE: eno1 link-flaps.** Symptoms observed during
   enrollment: grub netboot phone-home succeeded on only ~1/3 of PXE launches (grubnet.efi always
   downloaded; the grub-stage DHCP/HTTP intermittently died), the autoinstall's first network call
