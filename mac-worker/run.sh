@@ -18,7 +18,11 @@ log(){ printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" | tee -a "$LOG"; }
 
 # --- config from worker.env (KEY=VALUE) ---
 [ -f "$HERE/worker.env" ] && set -a && . "$HERE/worker.env" && set +a
-export PATH="$HERE:$PATH"                       # find the bundled s5cmd / aws / binaries first
+# Bundled binaries first; then brew (arm64 + Intel) — launchd's PATH is /usr/bin:/bin:/usr/sbin:/sbin
+# and the claim CAS path (`claim_or_steal_r2_key`) SPAWNS the `aws` CLI, which lives in brew. Without
+# this, every claim spawn fails instantly and the worker skips all cells (found 2026-07-27:
+# lilith-mac cycled the whole bf924 pool at done=0 while login-shell runs worked).
+export PATH="$HERE:/opt/homebrew/bin:/usr/local/bin:$PATH"
 BUCKET="${ZEN_BUCKET:-zentrain}"
 EP="${ZEN_R2_ENDPOINT:?worker.env must set ZEN_R2_ENDPOINT}"
 RUNLIST="${ZEN_POOL_RUNLIST:?worker.env must set ZEN_POOL_RUNLIST}"
@@ -27,7 +31,7 @@ PROVIDER="${ZEN_PROVIDER:-mac}"
 export AWS_REGION="${AWS_REGION:-auto}" AWS_DEFAULT_REGION="${AWS_REGION:-auto}"
 
 # --- required tools baked in / installed; fail loud if missing (no boot-time installs) ---
-for t in zenfleet-worker zenmetrics s5cmd; do
+for t in zenfleet-worker zenmetrics s5cmd aws; do
   command -v "$t" >/dev/null 2>&1 || { log "FATAL: missing $t on PATH ($HERE)"; exit 3; }
 done
 TIMEOUT="gtimeout"; command -v gtimeout >/dev/null 2>&1 || { TIMEOUT=""; log "WARN: gtimeout absent (brew install coreutils) -- passes run without a wall-clock cap"; }
