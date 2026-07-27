@@ -13,6 +13,14 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+### Added
+- `zensim-foldapp` jobexec metric — folded+append streaming 924-feature regime (zensim C5 `0b3d16b0`), driver-parity-tested; bf924 declare tooling (`declare_bf924.py`, 54 runs / 490,173 cells) and the `_pool924` wave (d02279d5, 2095f80b)
+
+### Fixed
+- zenfleet-worker RAM detection on macOS: `sysctl hw.memsize` + `ZEN_RAM_BYTES` override — darwin fell to a 2 GiB floor and the admission budget rejected every cell (3d712328)
+- mac-worker run.sh: launchd PATH lacks brew's `aws`, which the claim CAS spawns — every claim failed and the worker skipped all cells; PATH prepend + fail-loud tool check
+- refresh_snapshots.sh covers `bf924-*` runs (run filter + default runlist `_pool924`); zenpixels git pin dropped for published 0.2.16 (6fb4c59f)
+
 ### QUEUED BREAKING CHANGES
 
 (none yet)
