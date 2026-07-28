@@ -104,6 +104,27 @@ mod pool;
 mod pyramid;
 mod scratch;
 mod simd_math;
+
+/// Dev-only per-kernel access for `benches/kernel_tiers.rs`.
+///
+/// NOT public API. The transcendental kernels are `pub(crate)` and are the
+/// hottest inner loops of the metric. The existing benches measure whole
+/// metric evaluations, which cannot reveal one kernel SLOWER than its own
+/// scalar fallback — three zenfilters NEON kernels were losing that way
+/// during the 2026-07-28 aarch64 sweep, and transcendentals are exactly where
+/// such a regression hides.
+#[doc(hidden)]
+pub mod __bench_math {
+    pub fn vexp_into(xs: &[f32], out: &mut [f32]) {
+        crate::simd_math::vexp_into(xs, out)
+    }
+    pub fn vlog_into(xs: &[f32], out: &mut [f32]) {
+        crate::simd_math::vlog_into(xs, out)
+    }
+    pub fn vpow_into(xs: &[f32], out: &mut [f32], p: f32) {
+        crate::simd_math::vpow_into(xs, out, p)
+    }
+}
 mod simd_pyramid;
 #[allow(dead_code)] // K_SPLIT helpers used by D1 tests + future per-strip pyramid kernels
 pub(crate) mod strip;
