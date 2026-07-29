@@ -16,6 +16,7 @@ Workspace conventions per the global rules:
 ### Added
 - bf924/W2/W3 close-out: kadis-924 rescore (699,999 + negrich 167,034, byte-equal targets), tbig_924_full (5,742,660 exact) + 21 views at match_rate 1.0000; pool_reconcile_report; zen-node-4 enrolled (SN850X serial-matched install)
 - `zensim-foldapp` jobexec metric — folded+append streaming 924-feature regime (zensim C5 `0b3d16b0`), driver-parity-tested; bf924 declare tooling (`declare_bf924.py`, 54 runs / 490,173 cells) and the `_pool924` wave (d02279d5, 2095f80b)
+- **PXE interactive console installer** — an unregistered box now offers a GRUB menu to pick its OS disk and confirm the wipe, so a new box can be provisioned at its own console without the dev box. Local boot stays the timeout-selected default, the confirm names the exact serial, and the tower re-validates that serial against the box's own inventory; managed boxes (jason/ian/i265) keep the instant chainload unless opted in with `fleet-pxe menu <mac>`. Console installs land credential-less (worker disabled + `NEEDS-CRED`) — finish with `enroll_running_node.sh --start <ip>`. Also fixes a `deploy.sh` race that could leave `zen-pxe-dnsmasq` down (all PXE dead) while reporting success (ce332e28)
 - **PXE node image bakes mosh/tmux + herdr/Claude Code/rustup** — new nodes get the fleet's terminal + agent toolkit at install time (retry-3x, never install-fatal), with `/etc/environment` PATH so non-interactive ssh finds them; i265 brought in line by hand and its install flag confirmed un-armed (75f4d1a6)
 
 ### Fixed
