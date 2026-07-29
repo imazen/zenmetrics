@@ -19,6 +19,8 @@ unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("avx512")
 
 [features]
 default = ["std"]
+# Dev-only: exposes internal SIMD kernels for per-tier benchmarking. Not API.
+_dev = ["archmage/testable_dispatch"]
 # Use the standard library — most users want this. Off → core + alloc only.
 std = []
 # Opt-in AVX-512 tier on archmage `incant!` sites. Without this flag the
@@ -47,8 +49,14 @@ zenpixels = { version = "0.2.11", default-features = false, features = ["std"], 
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
+zenbench = "0.1.8"
 # Used for golden capture (decode test fixtures + load JSON).
 image = { workspace = true, features = ["png", "jpeg", "bmp", "exr"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+
+[[bench]]
+name = "kernel_tiers"
+harness = false
+required-features = ["_dev"]

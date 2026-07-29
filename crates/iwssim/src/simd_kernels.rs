@@ -44,10 +44,27 @@ fn square_inplace_inner(token: Token, src: &[f32], dst: &mut [f32]) {
 }
 
 /// `dst[i] = src[i] * src[i]`.
-pub(crate) fn square_into(src: &[f32], dst: &mut [f32]) {
+///
+/// NOTE the missing `neon`: on aarch64 the vector tier is SLOWER here than the
+/// scalar one (measured 101.5 us vs 88.5 us over 1024x1024 f32, 0.87x, CI
+/// [-14.7%, -12.1%], reproduced across runs). NEON is baseline there, so the
+/// scalar arm is autovectorized anyway, and for a one-input elementwise square
+/// the `partition_slice` setup is not repaid.
+///
+/// The sibling `mul_into` does the same partitioning and measures 1.01x — the
+/// difference is memory traffic. Squaring reads ONE buffer and so has bandwidth
+/// headroom for the overhead to show; multiplying reads two and is closer to
+/// the bandwidth ceiling, which hides it. So this is not a general indictment
+/// of the f32x8 helpers, just of using them for the cheapest one-input op.
+///
+/// Verified output-neutral before removing the tier: neon and scalar produce
+/// BIT-IDENTICAL results over 65,536 values (a plain multiply, so there is no
+/// FMA-contraction difference to worry about). The other tiers keep their
+/// vector paths — x86's ratio is not measured on this host.
+pub fn square_into(src: &[f32], dst: &mut [f32]) {
     archmage::incant!(
         square_inplace_inner(src, dst),
-        [v4x, v4, v3, neon, wasm128, scalar]
+        [v4x, v4, v3, wasm128, scalar]
     );
 }
 
@@ -73,7 +90,7 @@ fn mul_inplace_inner(token: Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
 }
 
 /// `dst[i] = a[i] * b[i]`.
-pub(crate) fn mul_into(a: &[f32], b: &[f32], dst: &mut [f32]) {
+pub fn mul_into(a: &[f32], b: &[f32], dst: &mut [f32]) {
     archmage::incant!(
         mul_inplace_inner(a, b, dst),
         [v4x, v4, v3, neon, wasm128, scalar]
@@ -149,7 +166,7 @@ fn cs_combine_inner(
 /// applying the σ²-clamp-at-0 step. With `with_luminance`, also
 /// multiplies by `l = (2µ₁µ₂ + C₁) / (µ₁² + µ₂² + C₁)` in place
 /// (matching the coarsest scale's cs·l combination).
-pub(crate) fn cs_combine_into(
+pub fn cs_combine_into(
     mu1: &[f32],
     mu2: &[f32],
     s1sq_raw: &[f32],
@@ -203,7 +220,7 @@ fn weighted_sum_pair_inner(token: Token, cs: &[f32], iw: &[f32]) -> (f64, f64) {
 
 /// Σ cs·iw, Σ iw as `f64`. SIMD accumulator into `f32` lanes; final
 /// reduction widens to `f64` for parity with the scalar Python path.
-pub(crate) fn weighted_sum_pair(cs: &[f32], iw: &[f32]) -> (f64, f64) {
+pub fn weighted_sum_pair(cs: &[f32], iw: &[f32]) -> (f64, f64) {
     archmage::incant!(
         weighted_sum_pair_inner(cs, iw),
         [v4x, v4, v3, neon, wasm128, scalar]
@@ -269,7 +286,7 @@ fn ssim_gauss_h_inner(
 
 /// 11-tap horizontal Gaussian, valid mode. `dst` is `(h, dst_w)` with
 /// `dst_w = w - 10`.
-pub(crate) fn ssim_gauss_h_pass(src: &[f32], h: usize, w: usize, dst_w: usize, dst: &mut [f32]) {
+pub fn ssim_gauss_h_pass(src: &[f32], h: usize, w: usize, dst_w: usize, dst: &mut [f32]) {
     archmage::incant!(
         ssim_gauss_h_inner(src, h, w, dst_w, dst),
         [v4x, v4, v3, neon, wasm128, scalar]
@@ -335,7 +352,7 @@ fn ssim_gauss_v_inner(
 
 /// 11-tap vertical Gaussian, valid mode. `dst` is `(dst_h, w)` with
 /// `dst_h = h - 10`.
-pub(crate) fn ssim_gauss_v_pass(src: &[f32], h: usize, dst_h: usize, w: usize, dst: &mut [f32]) {
+pub fn ssim_gauss_v_pass(src: &[f32], h: usize, dst_h: usize, w: usize, dst: &mut [f32]) {
     archmage::incant!(
         ssim_gauss_v_inner(src, h, dst_h, w, dst),
         [v4x, v4, v3, neon, wasm128, scalar]

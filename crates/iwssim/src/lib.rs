@@ -72,6 +72,11 @@ mod filters;
 mod params;
 mod pipeline;
 mod pyramid;
+/// SIMD kernels. Public only under `_dev` so `benches/kernel_tiers.rs` can
+/// measure each against its scalar tier; NOT public API, not semver-covered.
+#[cfg(feature = "_dev")]
+pub mod simd_kernels;
+#[cfg(not(feature = "_dev"))]
 mod simd_kernels;
 mod ssim;
 mod strip;
