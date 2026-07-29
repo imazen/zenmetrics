@@ -16,6 +16,7 @@ Workspace conventions per the global rules:
 ### Added
 - bf924/W2/W3 close-out: kadis-924 rescore (699,999 + negrich 167,034, byte-equal targets), tbig_924_full (5,742,660 exact) + 21 views at match_rate 1.0000; pool_reconcile_report; zen-node-4 enrolled (SN850X serial-matched install)
 - `zensim-foldapp` jobexec metric — folded+append streaming 924-feature regime (zensim C5 `0b3d16b0`), driver-parity-tested; bf924 declare tooling (`declare_bf924.py`, 54 runs / 490,173 cells) and the `_pool924` wave (d02279d5, 2095f80b)
+- **PXE node image bakes mosh/tmux + herdr/Claude Code/rustup** — new nodes get the fleet's terminal + agent toolkit at install time (retry-3x, never install-fatal), with `/etc/environment` PATH so non-interactive ssh finds them; i265 brought in line by hand and its install flag confirmed un-armed (75f4d1a6)
 
 ### Fixed
 - zenfleet-worker RAM detection on macOS: `sysctl hw.memsize` + `ZEN_RAM_BYTES` override — darwin fell to a 2 GiB floor and the admission budget rejected every cell (3d712328)
