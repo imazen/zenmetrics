@@ -1,0 +1,64 @@
+# jason (zen-node-2) — Thermalright CPU cooler characterisation, 2026-07-29
+
+Why: a Thermalright cooler was fitted; the ask was to peg the CPU, watch temp + fan RPM,
+and decide what peak fan speed the curve should use.
+
+## Hardware / software
+- Box: jason / jason-desktop / zen-node-2, MSI MAG B660M MORTAR WIFI DDR4 (MS-7D42)
+- CPU: 13th Gen Intel Core i5-13400F (10C/16T), Tjmax 100 C
+- Cooler: Thermalright (newly fitted), CPU_FAN header = nct6687 fan1
+- OS: Ubuntu, kernel 7.0.0-28-generic (the box's Ubuntu worker disk)
+- Sensors: `coretemp` for package temp; **Nuvoton NCT6687D** Super I/O for fan RPM.
+  Mainline `nct6775` does NOT bind this chip. Two working options:
+    * `modprobe nct6683 force=true`  -> RPM readable, **pwm read-only**
+    * out-of-tree Fred78290/nct6687d -> RPM + **writable pwm** (needed to sweep the fan)
+  Neither was made persistent: the box's default OS is Windows and it was handed back.
+
+## Commands
+    ubuntu-node/thermal/thermal_test.sh     # IDLE=45 LOAD=420 COOL=120   -> jason_cooler_thermal_2026-07-29.tsv
+    ubuntu-node/thermal/fan_sweep.sh        # pwm 64..255, 9 s dwell      -> table below
+    ubuntu-node/thermal/thermal_pinned.sh   # PIN=64 LOAD=300             -> jason_cooler_thermal_pinned650rpm_2026-07-29.tsv
+Load = `stress-ng --cpu 0 --cpu-method matrixprod` (all 16 threads, AVX-heavy).
+Package watts from RAPL `energy_uj` deltas (root-only since the 2020 side-channel fix).
+
+## Results — MEASURED
+
+Full load, BIOS/auto fan curve (steady state, last 90 s of a 420 s run):
+| metric | value |
+|---|---|
+| package temp | 59.0 C avg, 60 C peak |
+| CPU fan | 1081 RPM avg, 1132 RPM peak |
+| package power | 67.5 W avg, 74.4 W peak |
+| all-thread clock | 3884 MHz |
+| throttle events | **0** |
+| idle reference | 37 C @ 353 RPM, 2 W |
+Thermal plateau reached by ~240 s (59 C); 58 C at 120 s, 56 C at 60 s.
+
+CPU fan PWM -> RPM (fan1, measured, ~linear at 8.5 RPM per PWM step):
+| pwm | % | RPM |
+|---|---|---|
+| 33 (BIOS idle) | 13 | 353 |
+| 64 | 25 | 641 |
+| 96 | 37 | 941 |
+| 128 | 50 | 1232 |
+| 160 | 62 | 1485 |
+| 192 | 75 | 1785 |
+| 224 | 87 | 1976 |
+| **255** | **100** | **2272 (max)** |
+
+Full load with the fan PINNED at 650 RPM (25% pwm), same 66.6 W load:
+| metric | value |
+|---|---|
+| package temp | 64.5 C avg, 65 C peak |
+| throttle events | **0** |
+=> Dropping 1081 -> 650 RPM costs only **+5.5 C**, still 35 C below Tjmax.
+
+## Conclusions
+1. **100 C is unreachable on this box** — not a cooler limitation. RAPL PL1 is already
+   unlimited (constraint_0 ~4096 W, i.e. not power-capped), yet the 13400F only draws
+   67-74 W at full all-core AVX load, and the cooler dissipates that at 59 C. Reaching
+   Tjmax would need roughly 2-3x this heat. Zero throttling in any run.
+2. **Peak fan speed:** hardware max is 2272 RPM, but nothing this system does needs it.
+   ~1100 RPM already holds 59 C and 650 RPM holds 65 C. Treat >1500 RPM as an
+   emergency-only backstop pinned to temps this box never reaches.
+3. There is room to go **quieter**, not louder — see the pinned run.

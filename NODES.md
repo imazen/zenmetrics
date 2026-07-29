@@ -144,6 +144,17 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   `:exec` image cached, left disabled so it can't restart-loop on the drained pool. **Activate the worker
   when a sweep queues:** `bash ubuntu-node/enroll_running_node.sh --start 192.168.50.27` (mints a 7-day
   cred + `systemctl enable --now`). A server, so it doesn't idle-sleep.
+- **jason — Thermalright cooler characterised 2026-07-29** (full data +
+  method: [`benchmarks/jason_cooler_thermal_2026-07-29.meta`](benchmarks/jason_cooler_thermal_2026-07-29.meta);
+  harness: [`ubuntu-node/thermal/`](ubuntu-node/thermal/)). Full all-core AVX load
+  (`stress-ng matrixprod`) steady state: **59 C package, 1081 RPM CPU fan, 67.5 W, 0 throttle
+  events** (idle 37 C / 353 RPM). Fan range measured 353 → **2272 RPM** at 100% pwm. With the
+  fan pinned to 650 RPM the same load only reaches **64.5 C** — so the box can run far quieter;
+  >1500 RPM is emergency-only headroom. **Tjmax (100 C) is unreachable here**: RAPL PL1 is
+  already unlimited yet the i5-13400F only draws 67–74 W, which this cooler shrugs off.
+  **Fan RPM needs a non-mainline driver** — the board's Nuvoton **NCT6687D** is not bound by
+  `nct6775`; use `modprobe nct6683 force=true` (RPM only, pwm read-only) or build
+  Fred78290/nct6687d for writable pwm. Neither was persisted (box handed back to Windows).
 - **i265 (60:cf:84:76:20:d2)** — enrolled + installed 2026-07-27 (renamed from zen-node-4 to match its CPU per user; PXE registry updated) (seen → inventory → register serial
   `25286M803378` → serial-matched install). **KNOWN ISSUE: eno1 link-flaps.** Symptoms observed during
   enrollment: grub netboot phone-home succeeded on only ~1/3 of PXE launches (grubnet.efi always
