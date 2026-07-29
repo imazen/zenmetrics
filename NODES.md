@@ -161,6 +161,18 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   table (**4.6 GHz** 1-2 cores / 4.5 3-4 / **4.1 GHz** 5+), which it HELD for the whole run.
   So boost throttling never engages on this box. Beware: `sensors` reports `high = +80 C`,
   which is a fan-control reference (Tjmax − 20), **not** a throttle point — `crit` = 100 C is.
+  **Cooler = Thermalright Phantom Spirit 120 Digital EVO**; its display software is **TRCC**,
+  latest **v2.1.6** (<https://www.thermalright.com/support/download/> → `TRCC 2.1.6-Setup.zip`).
+  Do NOT grab `TR-VISION HOME 2.0.5` — that is only for the V1 Frozen Vision / Frozen Guardian
+  series; TRCC is what covers "V2 + Digital (LED numeric display)", incl. Phantom Spirit 120
+  Digital. The display presents on Windows as HID `VID_0416&PID_8001` ("HID-compliant
+  vendor-defined device", Winbond/Nuvoton MCU) — so its internal USB header IS connected.
+  **The TRCC installer cannot be automated:** it is an 844 MB .NET WinForms GUI setup with no
+  silent switch (verified — launched headless it just waits on input and writes nothing), so
+  it needs a double-click at the console. It IS trustworthy: two independent downloads hash
+  identically (sha256 `a492a86eaa0aeb4ef8aa18de1f56b591f3130ef1c12e3bb83e5e0033677a134f`) and
+  it carries a valid, timestamped DigiCert EV signature — though the signer is the OEM
+  "SOMORE TECH CO., LTD." (TW), not a cert literally naming Thermalright.
 - **i265 (60:cf:84:76:20:d2)** — enrolled + installed 2026-07-27 (renamed from zen-node-4 to match its CPU per user; PXE registry updated) (seen → inventory → register serial
   `25286M803378` → serial-matched install). **KNOWN ISSUE: eno1 link-flaps.** Symptoms observed during
   enrollment: grub netboot phone-home succeeded on only ~1/3 of PXE launches (grubnet.efi always

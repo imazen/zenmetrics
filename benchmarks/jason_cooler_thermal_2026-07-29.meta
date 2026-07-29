@@ -6,7 +6,9 @@ and decide what peak fan speed the curve should use.
 ## Hardware / software
 - Box: jason / jason-desktop / zen-node-2, MSI MAG B660M MORTAR WIFI DDR4 (MS-7D42)
 - CPU: 13th Gen Intel Core i5-13400F (10C/16T), Tjmax 100 C
-- Cooler: Thermalright (newly fitted), CPU_FAN header = nct6687 fan1
+- Cooler: **Thermalright Phantom Spirit 120 Digital EVO** (dual-tower, 7 heatpipe, digital
+  top-cover display; fans rated 2150 RPM — we measured 2272 RPM at 100% pwm, i.e. slightly
+  above the rating, which is normal). CPU_FAN header = nct6687 fan1.
 - OS: Ubuntu, kernel 7.0.0-28-generic (the box's Ubuntu worker disk)
 - Sensors: `coretemp` for package temp; **Nuvoton NCT6687D** Super I/O for fan RPM.
   Mainline `nct6775` does NOT bind this chip. Two working options:
