@@ -15,6 +15,17 @@ Pick the guide by node type:
 | **Windows (idle desktops / kids' PCs)** | [`windows-worker/`](windows-worker/README.md) | native `.exe`s under a SYSTEM scheduled task; **idle-only**, survives logout/reboot. |
 | **macOS (Mac mini/Studio/desktop)** | [`mac-worker/`](mac-worker/README.md) | native `darwin` binaries under a launchd LaunchDaemon (survives logout), or colima + the `:exec` image. |
 
+**Baked into the PXE node image** ([`ubuntu-node/pxe/render_install.py`](ubuntu-node/pxe/render_install.py),
+2026-07-28): every newly-installed node comes up with **mosh + tmux** (apt, at install time),
+**herdr + Claude Code** (`~/.local/bin`) and **rustup/stable + build-essential** (`~/.cargo`), installed
+as the `zen` user by `runcmd`. Those three fetches retry 3× and always exit 0 — a network blip must never
+fail an install, since the box is a working worker without them and `ubuntu-node/setup-node-dev.sh` adds
+them plus the full cross-toolchain later. `/etc/environment` carries a PATH with both dirs so
+**non-interactive** ssh (`ssh zen@<node> herdr …`) finds them — bash skips `.profile`/`.bashrc` there.
+The renderer runs **locally on the dev box** at `fleet-pxe register` time (the rendered YAML is then
+stored on the tower), so a repo edit takes effect on the next *registration* — already-registered boxes
+keep their stored config until re-registered.
+
 Common to all: after the node is up, refresh its 7-day cred weekly (Linux: `ubuntu-node/onboard_node.sh`;
 Windows/Mac: re-mint into `worker.env` and restart the worker). Watch the fleet with
 `scripts/jobsys/fleet watch <run>` — it flags idle/failed/underutilized boxes (`zenfleet-core::idle`
@@ -131,6 +142,15 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   Hardening once Ubuntu is up: `ethtool --set-eee eno1 eee off` (persist via systemd oneshot),
   check/replace cable + switch port, verify with a reboot loop (3/3 PXE phone-homes). Until fixed,
   expect netboot retries to need a power-cycle or two.
+  **Install flag CONFIRMED un-armed 2026-07-28** (`POST /api/done/<mac>` is idempotent — re-running it
+  is the safe way to check): `flags/` has no entry, `installed/` does, and the grub API now serves the
+  no-flag default instead of an install. Note that default is *chainload Windows*, which this box no
+  longer has — harmless (firmware BootOrder is `0000,0001`, Ubuntu first, PXE second, so normal reboots
+  never consult it), but a manual PXE pick would dead-end rather than boot Ubuntu.
+  **Brought in line with the node image 2026-07-28**: mosh 1.4.0 + herdr 0.7.5 + Claude Code 2.1.220 +
+  rustup 1.29.0/cargo 1.97.1 + build-essential installed, and `/etc/environment` given the same PATH the
+  image now bakes. Verified: `mosh zen@192.168.50.140` completes a real roundtrip, and bare `herdr` /
+  `claude` / `cargo` resolve over non-interactive ssh. It predates the image change, hence the manual pass.
 - **wsl (dev box)** — the operator, not a worker: holds the Cloudflare token, mints scoped 7-day R2 creds,
   runs `fleet-pxe` + the reboot/OS-flip loop, builds the binaries. WSL2 NAT breaks inbound UDP (TFTP) but
   reaches the LAN fine over TCP/SSH.

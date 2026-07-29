@@ -88,7 +88,8 @@ autoinstall:
     allow-pw: false
     authorized-keys:
       - "{KEY}"
-  packages: [docker.io, avahi-daemon, libnss-mdns, jq, curl, chrony, unattended-upgrades]
+  packages: [docker.io, avahi-daemon, libnss-mdns, jq, curl, chrony, unattended-upgrades,
+             mosh, tmux, build-essential, pkg-config]
   late-commands:
     # install-once (guard 1): clear our own flag NOW (installer has network) so a re-PXE can't
     # re-wipe. Retry hard — a transient blip here must not leave the flag set. (Guard 2 is the
@@ -112,6 +113,11 @@ autoinstall:
       - path: /etc/apt/apt.conf.d/52zen-auto-security
         content: |
 {indent(apt_auto, 10)}
+      # PATH for NON-interactive ssh too (pam_env reads this on every login, unlike
+      # .profile/.bashrc which bash skips for `ssh node <cmd>`). Without it,
+      # `ssh zen@node herdr ...` can't find the ~/.local/bin tools below.
+      - path: /etc/environment
+        content: "PATH=\\"/home/zen/.local/bin:/home/zen/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin\\"\\n"
     runcmd:
       - [ usermod, -aG, docker, zen ]
       - [ systemctl, daemon-reload ]
@@ -119,4 +125,11 @@ autoinstall:
       - [ systemctl, enable, --now, zen-worker ]
       - [ systemctl, enable, --now, unattended-upgrades ]
       - [ update-initramfs, -u ]
+      # Operator tooling, installed as `zen` (they are per-user: ~/.local/bin, ~/.cargo).
+      # Retried 3x and ALWAYS exit 0 — a network blip must never fail the install; the box is a
+      # working worker without them, and setup-node-dev.sh can add them (plus the full toolchain)
+      # later. mosh/tmux come from `packages:` above (apt, at install time).
+      - [ su, -l, zen, -c, "for i in 1 2 3; do curl -fsSL https://herdr.dev/install.sh | sh && break; sleep 5; done; true" ]
+      - [ su, -l, zen, -c, "for i in 1 2 3; do curl -fsSL https://claude.ai/install.sh | bash && break; sleep 5; done; true" ]
+      - [ su, -l, zen, -c, "for i in 1 2 3; do curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile default --default-toolchain stable && break; sleep 5; done; true" ]
 """)
