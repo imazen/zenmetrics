@@ -30,3 +30,6 @@ pub mod fused;
 pub mod masked_iw;
 pub mod masked_iw_strip;
 pub mod reduce;
+
+/// v2 (924-regime) per-pixel primitives — see docs/F924_PORT_SPEC.md.
+pub mod v2;

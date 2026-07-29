@@ -116,6 +116,68 @@ fn main() {
     println!("  GPU [156..228) peak block: {peak_nz}/{} nonzero — discarded by", gpu.len() - 156);
     println!("  the folded layout, which emits 0.0 across [156..372).");
 
+    // ---- stage 1 check: is the v2 SSIM formula transcribed correctly? ----
+    //
+    // The GPU device fn cannot be called from host code, so this evaluates the
+    // SAME expression in f32 on the host and compares it against the CPU's f64
+    // `ssim_d_local` over a wide sweep of (mu1, mu2, s12, ssq). It proves the
+    // transcription and the constants, independently of any kernel wiring —
+    // so when the kernel lands, a mismatch means the plumbing, not the math.
+    fn v2_ssim_d_f32(mu1: f32, mu2: f32, s12: f32, ssq: f32) -> f32 {
+        const C1: f32 = 0.0001;
+        const C2: f32 = 0.0009;
+        let a = 2.0 * mu1 * mu2 + C1;
+        let b = mu1 * mu1 + mu2 * mu2 + C1;
+        let cov = s12 - mu1 * mu2;
+        let c = 2.0 * cov + C2;
+        let d = ssq - mu1 * mu1 - mu2 * mu2 + C2;
+        let out = 1.0 - (a * c) / (b * d);
+        if out > 0.0 { out } else { 0.0 }
+    }
+    fn v2_ssim_d_f64(mu1: f64, mu2: f64, s12: f64, ssq: f64) -> f64 {
+        const C1: f64 = 0.0001;
+        const C2: f64 = 0.0009;
+        let a = 2.0 * mu1 * mu2 + C1;
+        let b = mu1 * mu1 + mu2 * mu2 + C1;
+        let cov = s12 - mu1 * mu2;
+        let c = 2.0 * cov + C2;
+        let d = ssq - mu1 * mu1 - mu2 * mu2 + C2;
+        (1.0 - (a * c) / (b * d)).max(0.0)
+    }
+
+    let mut worst_d = 0.0f64;
+    let mut cases = 0usize;
+    let mut s = 0x2545_F491u64;
+    for _ in 0..200_000 {
+        let mut nx = || {
+            s ^= s << 13; s ^= s >> 7; s ^= s << 17;
+            (s >> 40) as f64 / 16_777_216.0
+        };
+        // PHYSICALLY VALID inputs. `ssq` is not free: the denominator
+        // `d = ssq - mu1^2 - mu2^2 + C2` is SSIM's contrast term, so `ssq` is
+        // the sum of the two RAW second moments and `d = sig1^2 + sig2^2 + C2`.
+        // Generating `ssq` independently makes `d` cross zero and the quotient
+        // explode — a first pass here reported max |diff| = 2.3e1, which was a
+        // bad generator, not a bad formula. Likewise `s12` is a covariance
+        // bounded by Cauchy-Schwarz, not an arbitrary offset.
+        let mu1 = nx() * 0.9;
+        let mu2 = mu1 + (nx() - 0.5) * 0.2;
+        let sig1 = nx() * 0.4;
+        let sig2 = nx() * 0.4;
+        let ssq = mu1 * mu1 + mu2 * mu2 + sig1 * sig1 + sig2 * sig2;
+        // |cov| <= sig1*sig2
+        let cov = (nx() * 2.0 - 1.0) * sig1 * sig2;
+        let s12 = mu1 * mu2 + cov;
+        let a = v2_ssim_d_f64(mu1, mu2, s12, ssq);
+        let b = v2_ssim_d_f32(mu1 as f32, mu2 as f32, s12 as f32, ssq as f32) as f64;
+        let dd = (a - b).abs();
+        if dd > worst_d { worst_d = dd; }
+        cases += 1;
+    }
+    println!("\nstage 1 — v2_ssim_d transcription (f32 host vs f64 CPU reference):");
+    println!("  {cases} random plane-realistic cases, max |diff| = {worst_d:.3e}");
+    println!("  (acceptance bar for the port is 1.38e-4, what the v1-basic block hits)");
+
     println!("\nPORT REMAINING:");
     println!("  [ 372.. 720) v2-348    — not implemented on GPU");
     println!("  [ 720.. 924) append-204 — not implemented on GPU");
