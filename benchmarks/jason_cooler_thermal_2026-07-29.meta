@@ -53,6 +53,31 @@ Full load with the fan PINNED at 650 RPM (25% pwm), same 66.6 W load:
 | throttle events | **0** |
 => Dropping 1081 -> 650 RPM costs only **+5.5 C**, still 35 C below Tjmax.
 
+## Where the boost/throttle limits actually are (read from the CPU's own MSRs, same day)
+
+    MSR 0x1A2 TEMPERATURE_TARGET = 0x0000000000641400
+    MSR 0x610 PKG_POWER_LIMIT    = 0x0042ffff00dfffff
+    MSR 0x1AD TURBO_RATIO_LIMIT  = 0x292929292d2d2e2e
+    MSR 0x19C IA32_THERM_STATUS  = 0x0000000088410000
+
+| gate | value | engaged in our runs? |
+|---|---|---|
+| Thermal throttle (Tjmax) | **100 C**, TCC activation offset **0** -> throttles at 100 C exactly | no — peak was 60 C (40 C margin) |
+| PL1 long-term | **4095.9 W**, enabled (MSI ships the max encodable value = effectively unlimited) | no — the 65 W spec limit is NOT enforced |
+| PL2 short-term | **4095.9 W**, enabled | no |
+| PL1 Tau window | 56 s | moot: PL1 == PL2, so there is no PL2->PL1 step-down |
+| Turbo ratio ceiling | 1-2 cores **4.6 GHz**, 3-4 **4.5 GHz**, 5+ **4.1 GHz** | this is the binding cap — and it was HELD |
+| THERM_STATUS | throttling bit 0, log bit 0, PROCHOT log 0; throttle counters 0 | never |
+
+Consistency check: 6 P-cores at 4.1 GHz (12 threads) + 4 E-cores at ~3.3 GHz = 3900 MHz
+expected all-thread average; **measured 3884 MHz**. So the chip sat at its maximum rated
+all-core boost for the entire 420 s run — the observed clock is the spec ceiling, not a
+thermal or power compromise.
+
+**Gotcha:** `sensors` shows `high = +80.0 C` for this package, which is NOT a throttle point.
+It is Tjmax minus the bits-15:8 fan-control reference offset (100 - 20). The throttle point is
+`crit` = 100 C. Do not tune a fan curve or an alert against the 80 C figure thinking it is a limit.
+
 ## Conclusions
 1. **100 C is unreachable on this box** — not a cooler limitation. RAPL PL1 is already
    unlimited (constraint_0 ~4096 W, i.e. not power-capped), yet the 13400F only draws

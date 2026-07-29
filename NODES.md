@@ -98,7 +98,7 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
 | **jason** | `jason-desktop` | dual-boot kids' PC (i5-13400F 10C/16T; Win + Ubuntu, PXE-first, no-sleep, WoL on) | `04:7c:16:b3:18:51` | 192.168.50.148 | Win: `ssh zenadmin@` (full) / `zenswitch@` (reboot); Ubuntu: `ssh zen@` |
 | **ian** | `ian-desktop` | dual-boot kids' PC (Ryzen 5 5600G 6C/12T; 2 TB Win + 1 TB Ubuntu XFS; PXE-first, no-sleep, WoL on) | `04:7c:16:8a:b5:b7` | 192.168.50.193 | same as jason |
 | **mac** | `lilith-mac` | macOS worker — Mac mini M4 Pro (idle-only, launchd) | `1c:f6:4c:8b:29:a9` | 192.168.50.224 | `ssh lilith@` — key authorized + NOPASSWD sudo; `SleepDisabled=1` |
-| **lianli** | `lilith-lianli` | **always-Ubuntu** dedicated worker (Ubuntu 26.04; dev box + worker enrolled/stopped) | `74:56:3c:b8:45:8d` | 192.168.50.27 | `ssh lilith@` — key + NOPASSWD sudo; full dev toolchain; worker unit stopped (pool drained) |
+| **lianli** | `lilith-lianli` | **always-Ubuntu** dedicated worker (**AMD Ryzen 9 7900X** 12C/24T, boost 5.74 GHz, 32 GB, Gigabyte B650M AORUS ELITE AX; Ubuntu 26.04; dev box + worker enrolled/stopped) | `74:56:3c:b8:45:8d` | 192.168.50.27 | `ssh lilith@` — key + NOPASSWD sudo; full dev toolchain; worker unit stopped (pool drained) |
 | **wsl** | (this dev box) | WSL2 — the fleet **operator** (holds CF token, mints creds, runs `fleet-pxe`, builds) | — | WSL NAT (reaches LAN) | local shell |
 | **i265** | `i265` (installed 2026-07-27; briefly `ultra7-265k`, was `zen-node-4` during enrollment, Win name `DESKTOP-VMLP4OC`) | always-Ubuntu worker — Intel Core Ultra 7 265K 20C/20T, 32 GB, WD_BLACK SN850X 1TB serial `25286M803378` (single disk; Windows wiped by the serial-matched install), Ubuntu 26.04 | `60:cf:84:76:20:d2` (wired eno1; wifi `c0:bf:be:8e:1e:28`) | 192.168.50.140 | `ssh zen@` (worker enrolled, stopped) |
 | **tower** | (basement, Unraid) | PXE/dnsmasq/nginx server + R2 + the `zen924-basement` worker (was `zen720-basement` in the 720 wave) | (Unraid NIC) | 192.168.50.170 | `ssh root@tower` |
@@ -155,6 +155,12 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   **Fan RPM needs a non-mainline driver** — the board's Nuvoton **NCT6687D** is not bound by
   `nct6775`; use `modprobe nct6683 force=true` (RPM only, pwm read-only) or build
   Fred78290/nct6687d for writable pwm. Neither was persisted (box handed back to Windows).
+  **Boost/throttle gates (from the CPU's MSRs):** thermal throttle at **100 C** (Tjmax 100,
+  TCC offset 0); **PL1 and PL2 are both ~4096 W** — MSI ships them unlimited, so the 65 W/148 W
+  spec limits are never enforced and the 56 s Tau is moot; the binding cap is the turbo ratio
+  table (**4.6 GHz** 1-2 cores / 4.5 3-4 / **4.1 GHz** 5+), which it HELD for the whole run.
+  So boost throttling never engages on this box. Beware: `sensors` reports `high = +80 C`,
+  which is a fan-control reference (Tjmax − 20), **not** a throttle point — `crit` = 100 C is.
 - **i265 (60:cf:84:76:20:d2)** — enrolled + installed 2026-07-27 (renamed from zen-node-4 to match its CPU per user; PXE registry updated) (seen → inventory → register serial
   `25286M803378` → serial-matched install). **KNOWN ISSUE: eno1 link-flaps.** Symptoms observed during
   enrollment: grub netboot phone-home succeeded on only ~1/3 of PXE launches (grubnet.efi always
