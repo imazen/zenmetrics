@@ -47,7 +47,10 @@ build_grub(){
 
 echo "== sync configs + code to $TOWER_SSH:$P =="
 T "mkdir -p $P/http $P/tftp $P/state/flags $P/state/registry $P/state/inventory $P/state/seen"
-SCP "$HERE/server.py" "$HERE/dnsmasq.conf" "$HERE/nginx.conf" "$HERE/docker-compose.yml" "$TOWER_SSH:$P/"
+# render_install.py + install-defaults.env go too: the interactive console menu renders an
+# install config ON the tower (server.py shells out to them) when someone picks a disk.
+SCP "$HERE/server.py" "$HERE/dnsmasq.conf" "$HERE/nginx.conf" "$HERE/docker-compose.yml" \
+    "$HERE/render_install.py" "$HERE/install-defaults.env" "$TOWER_SSH:$P/"
 SCP "$HERE/http/boot.ipxe" "$TOWER_SSH:$P/http/boot.ipxe"
 
 [ "${1:-}" = "--ipxe" ] && build_ipxe
@@ -66,8 +69,14 @@ if [ "${1:-}" = "--assets" ]; then
 fi
 
 echo "== (re)start containers =="
+# `docker rm -f` can return before the host-network endpoint is released, and the next
+# `docker run --network host` then dies with "endpoint with name X already exists in network
+# host" — which on 2026-07-29 left dnsmasq (proxy-DHCP, i.e. ALL PXE) down after a deploy.
+# Force-disconnect any stale endpoint and settle before re-creating.
 T "
 docker rm -f zen-pxe-dnsmasq zen-pxe-nginx zen-pxe-api 2>/dev/null || true
+for c in zen-pxe-dnsmasq zen-pxe-nginx zen-pxe-api; do docker network disconnect -f host \$c 2>/dev/null || true; done
+sleep 2
 docker run -d --name zen-pxe-dnsmasq --restart unless-stopped --network host --cap-add NET_ADMIN --cap-add NET_RAW \
   -v $P/dnsmasq.conf:/etc/dnsmasq.conf:ro -v $P/tftp:/tftp:ro \
   strm/dnsmasq -k --log-facility=- --conf-file=/etc/dnsmasq.conf
@@ -81,3 +90,6 @@ sleep 3
 T 'docker ps --filter name=zen-pxe --format "{{.Names}}: {{.Status}}"'
 echo "== smoke test =="
 T 'curl -s http://localhost:3080/api/boot/00-00-00-00-00-00 | tail -1; curl -sI http://localhost:3080/ubuntu-26.04/vmlinuz | head -1'
+# All three MUST be up: a deploy that leaves dnsmasq down silently kills PXE for every box.
+T 'n=$(docker ps --filter name=zen-pxe --format "{{.Names}}" | wc -l)
+   [ "$n" = 3 ] && echo "OK: 3/3 zen-pxe containers up" || { echo "FAIL: only $n/3 up:"; docker ps -a --filter name=zen-pxe --format "  {{.Names}}: {{.Status}}"; exit 1; }'

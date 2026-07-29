@@ -12,8 +12,17 @@ E = os.environ
 SERIAL, HOST, MAC = E["SERIAL"], E["HOST"], E["MAC"]
 R2EP, KEY, HASH, IMG, TOWER = E["R2EP"], E["KEY"], E["HASH"], E["IMG"], E["TOWER_IP"]
 
+# CRED empty => "no-cred install" (the tower's interactive menu path: only the dev box holds the
+# Cloudflare token, so a console-initiated install can't mint a 7-day R2 cred). The box still comes
+# up as a complete, ssh-able node with the full toolkit — it just can't claim jobs yet, so we leave
+# zen-worker INSTALLED BUT DISABLED (enabling it without creds would restart-loop forever) and drop
+# a NEEDS-CRED note. Finish it from the dev box with:
+#     bash ubuntu-node/enroll_running_node.sh --start <ip>
+CRED = E.get("CRED", "").strip()
+HAS_CRED = bool(CRED)
+
 # worker.env: the 3 AWS_* cred lines from mint_cred.sh + the fixed worker config.
-worker_env = E["CRED"].rstrip("\n") + "\n" + textwrap.dedent(f"""\
+worker_env = ((CRED.rstrip("\n") + "\n") if HAS_CRED else "") + textwrap.dedent(f"""\
     AWS_REGION=auto
     ZEN_R2_ENDPOINT={R2EP}
     ZEN_BUCKET=zentrain
@@ -49,6 +58,23 @@ worker_unit = textwrap.dedent(f"""\
 def indent(s, n):
     pad = " " * n
     return "\n".join(pad + l for l in s.rstrip("\n").split("\n"))
+
+# Enabling a credential-less worker would restart-loop, so it stays disabled until enrolled.
+worker_enable = "      - [ systemctl, enable, --now, zen-worker ]\n" if HAS_CRED else ""
+
+# NOTE: build this with indent(), NOT a dedent()ed literal — dedent strips the common leading
+# whitespace, which drops the block to column 0 and produces invalid YAML.
+_needs_cred_body = textwrap.dedent(f"""\
+    This node was installed from the tower's interactive PXE menu, which cannot mint an R2
+    credential (only the dev box holds the Cloudflare token). worker.env has NO AWS_* lines
+    and zen-worker is installed but DISABLED (enabling it uncredentialed would restart-loop).
+    Finish enrollment from the dev box:
+        bash ubuntu-node/enroll_running_node.sh --start <this box's ip>
+    host={HOST} mac={MAC} disk-serial={SERIAL}
+    """)
+needs_cred_file = "" if HAS_CRED else (
+    "      - path: /etc/zen-node/NEEDS-CRED\n"
+    "        content: |\n" + indent(_needs_cred_body, 10) + "\n")
 
 # Automatic SECURITY updates (unattended-upgrades). Ubuntu's default 50unattended-upgrades already allows
 # the -security pocket; these turn on the periodic run and auto-reboot for kernel patches at 04:00 — a
@@ -113,6 +139,7 @@ autoinstall:
       - path: /etc/apt/apt.conf.d/52zen-auto-security
         content: |
 {indent(apt_auto, 10)}
+{needs_cred_file}
       # PATH for NON-interactive ssh too (pam_env reads this on every login, unlike
       # .profile/.bashrc which bash skips for `ssh node <cmd>`). Without it,
       # `ssh zen@node herdr ...` can't find the ~/.local/bin tools below.
@@ -122,8 +149,7 @@ autoinstall:
       - [ usermod, -aG, docker, zen ]
       - [ systemctl, daemon-reload ]
       - [ systemctl, enable, --now, docker ]
-      - [ systemctl, enable, --now, zen-worker ]
-      - [ systemctl, enable, --now, unattended-upgrades ]
+{worker_enable}      - [ systemctl, enable, --now, unattended-upgrades ]
       - [ update-initramfs, -u ]
       # Operator tooling, installed as `zen` (they are per-user: ~/.local/bin, ~/.cargo).
       # Retried 3x and ALWAYS exit 0 — a network blip must never fail the install; the box is a

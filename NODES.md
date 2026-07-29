@@ -15,6 +15,17 @@ Pick the guide by node type:
 | **Windows (idle desktops / kids' PCs)** | [`windows-worker/`](windows-worker/README.md) | native `.exe`s under a SYSTEM scheduled task; **idle-only**, survives logout/reboot. |
 | **macOS (Mac mini/Studio/desktop)** | [`mac-worker/`](mac-worker/README.md) | native `darwin` binaries under a launchd LaunchDaemon (survives logout), or colima + the `:exec` image. |
 
+**Provisioning a NEW box from its own console** (2026-07-29): a box the tower has never
+registered or installed now gets an interactive GRUB menu — pick the OS disk, confirm the
+serial, install — with no dev box involved. Default is still local boot (the timeout picks
+it, so an unattended PXE boot never installs) and the tower re-validates the chosen serial
+against that box's inventory before arming. **Boxes we already manage keep the old instant
+chainload** — jason/ian PXE on every boot, so a menu there would delay each one and leave a
+wipe option on the kids' screens; opt one in with `fleet-pxe menu <mac>`. Console installs
+can't mint an R2 cred (dev-box-only token), so they land with `zen-worker` disabled and a
+`NEEDS-CRED` note — finish with `enroll_running_node.sh --start <ip>`. Details:
+[`ubuntu-node/pxe/README.md`](ubuntu-node/pxe/README.md#installing-from-the-boxs-own-console-no-dev-box-needed).
+
 **Baked into the PXE node image** ([`ubuntu-node/pxe/render_install.py`](ubuntu-node/pxe/render_install.py),
 2026-07-28): every newly-installed node comes up with **mosh + tmux** (apt, at install time),
 **herdr + Claude Code** (`~/.local/bin`) and **rustup/stable + build-essential** (`~/.cargo`), installed

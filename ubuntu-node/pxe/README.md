@@ -44,6 +44,51 @@ Verified end-to-end 2026-07-21 on a real UEFI box: PXE → GRUB → kernel+initr
    untouched. Three things must all be true to wipe: you flagged the MAC, you registered the
    serial, and that serial is present.
 
+Layer 1 has a second, equally opt-in door — the console menu below. It replaces "you set a
+flag from the dev box" with "a human at the box picked a specific disk and confirmed it";
+layers 2-4 apply to it unchanged.
+
+## Installing from the box's own console (no dev box needed)
+
+A box the tower has **never seen registered or installed** gets an interactive GRUB menu
+instead of the silent local-boot chainload, so you can provision it standing in front of it:
+
+```
+Boot from local disk  [DEFAULT]            <- selected automatically after 30s
+Install Ubuntu to /dev/nvme0n1  931.5G  WD_BLACK SN850X (nvme)
+  |- NO - go back (nothing is changed)     <- the submenu's default
+  |- YES - ERASE serial 25286M803378 - ALL DATA ON IT IS LOST
+Scan this hardware (read-only; reboots back to this menu)
+```
+
+- **Nothing installs unattended.** The default entry is local boot and the timeout picks it,
+  so a box that PXE-boots with nobody watching always falls through to its disk.
+- **Two deliberate picks**, and the confirm entry names the exact serial being erased.
+- **The tower re-checks the serial** against that MAC's own inventory before arming, so a
+  typo or hand-made `/api/choose/...` URL can't target a disk we've never seen. The
+  serial-matched autoinstall (layer 2) then makes wiping the wrong disk impossible.
+- **No disks listed?** Run the scan — it boots the read-only probe, reports the disks and
+  reboots straight back to the menu.
+
+**Boxes we already manage keep the old instant chainload.** jason/ian/i265 are PXE-first, so
+they ask the tower on *every* boot; a menu there would delay each boot and leave a wipe option
+on screen for whoever is sitting at the kids' PCs. Opt one in deliberately with
+`./fleet-pxe menu <mac>` (and `nomenu` to undo) — useful for re-installing an existing box
+from its console.
+
+**Console installs get no R2 credential.** Only the dev box holds the Cloudflare token, so
+this path renders the install with no `AWS_*` lines and leaves `zen-worker` installed but
+**disabled** (enabling it uncredentialed would restart-loop); the box drops an
+`/etc/zen-node/NEEDS-CRED` note. It is otherwise complete — ssh key, sudo, mosh/tmux,
+herdr/Claude Code/rustup. Finish it from the dev box:
+
+```bash
+bash ubuntu-node/enroll_running_node.sh --start <ip>    # mints the 7-day cred, starts the worker
+```
+
+The hostname is auto-assigned from the MAC (`60:cf:84:76:20:d2` → `zen-7620d2`); rename later
+with `hostnamectl set-hostname`.
+
 ## One-time per box (consumer boxes, no BMC)
 
 In BIOS: enable **network/PXE boot** and **Wake-on-LAN**. Set boot order to **PXE first,
@@ -81,9 +126,10 @@ Three host-networked containers on the tower: `zen-pxe-dnsmasq` (proxy-DHCP + TF
 
 | File | Role |
 |---|---|
-| `server.py` | control service — safe boot decisions, inventory intake, install-done callback |
-| `render_install.py` | renders a per-box autoinstall (serial-matched storage + docker/worker/ssh/cred) |
-| `fleet-pxe` | dev-box CLI: seen / inventory / show / register / install / cancel / wol (over SSH to tower) |
+| `server.py` | control service — safe boot decisions, the console menu, inventory intake, install-done callback |
+| `render_install.py` | renders a per-box autoinstall (serial-matched storage + docker/worker/ssh/cred; `CRED=""` ⇒ no-cred console install) |
+| `install-defaults.env` | ssh key / password hash / worker image / R2 endpoint — one source of truth for BOTH render paths (dev box + tower) |
+| `fleet-pxe` | dev-box CLI: seen / inventory / show / register / install / menu / nomenu / cancel / wol (over SSH to tower) |
 | `dnsmasq.conf` | proxy-DHCP + TFTP + iPXE chainload |
 | `nginx.conf` | static assets + `/api/` proxy |
 | `http/boot.ipxe` | stage-2 iPXE: re-asks `/api/boot/<mac>` |
