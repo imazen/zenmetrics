@@ -96,9 +96,9 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
 | Node | Host / mDNS | Type | Wired MAC | IP | Reach it as |
 |---|---|---|---|---|---|
 | **jason** | `jason-desktop` | dual-boot kids' PC (i5-13400F 10C/16T; Win + Ubuntu, PXE-first, no-sleep, WoL on) | `04:7c:16:b3:18:51` | 192.168.50.148 | Win: `ssh zenadmin@` (full) / `zenswitch@` (reboot); Ubuntu: `ssh zen@` |
-| **ian** | `ian-desktop` | dual-boot kids' PC (Ryzen 5 5600G 6C/12T; 2 TB Win + 1 TB Ubuntu XFS; PXE-first, no-sleep, WoL on) | `04:7c:16:8a:b5:b7` | 192.168.50.193 | same as jason |
+| **ian** | `ian-desktop` | dual-boot kids' PC (Ryzen 5 5600G 6C/12T, GTX 1660 Ti, 32 GB DDR4, MSI B550M PRO-VDH WIFI; 2 TB Win + 1 TB Ubuntu XFS; PXE-first, no-sleep, WoL on) | `04:7c:16:8a:b5:b7` | 192.168.50.193 | same as jason |
 | **mac** | `lilith-mac` | macOS worker — Mac mini M4 Pro (idle-only, launchd) | `1c:f6:4c:8b:29:a9` | 192.168.50.224 | `ssh lilith@` — key authorized + NOPASSWD sudo; `SleepDisabled=1` |
-| **lianli** | `lilith-lianli` | **always-Ubuntu** dedicated worker (**AMD Ryzen 9 7900X** 12C/24T, boost 5.74 GHz, 32 GB, Gigabyte B650M AORUS ELITE AX; Ubuntu 26.04; dev box + worker enrolled/stopped) | `74:56:3c:b8:45:8d` | 192.168.50.27 | `ssh lilith@` — key + NOPASSWD sudo; full dev toolchain; worker unit stopped (pool drained) |
+| **lianli** | `lilith-lianli` | **always-Ubuntu** dedicated worker (**AMD Ryzen 9 7900X** 12C/24T, boost 5.74 GHz, 32 GB DDR5-6000, RTX 2080 8 GB, 2 TB NVMe, Gigabyte B650M AORUS ELITE AX; Ubuntu 26.04; dev box + worker enrolled/stopped) | `74:56:3c:b8:45:8d` | 192.168.50.27 | `ssh lilith@` — key + NOPASSWD sudo; full dev toolchain; worker unit stopped (pool drained) |
 | **wsl** | (this dev box) | WSL2 — the fleet **operator** (holds CF token, mints creds, runs `fleet-pxe`, builds) | — | WSL NAT (reaches LAN) | local shell |
 | **i265** | `i265` (installed 2026-07-27; briefly `ultra7-265k`, was `zen-node-4` during enrollment, Win name `DESKTOP-VMLP4OC`) | always-Ubuntu worker — Intel Core Ultra 7 265K 20C/20T, 32 GB, WD_BLACK SN850X 1TB serial `25286M803378` (single disk; Windows wiped by the serial-matched install), Ubuntu 26.04 | `60:cf:84:76:20:d2` (wired eno1; wifi `c0:bf:be:8e:1e:28`) | 192.168.50.140 | `ssh zen@` (worker enrolled, stopped) |
 | **tower** | (basement, Unraid) | PXE/dnsmasq/nginx server + R2 + the `zen924-basement` worker (was `zen720-basement` in the 720 wave) | (Unraid NIC) | 192.168.50.170 | `ssh root@tower` |
@@ -144,6 +144,11 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   `:exec` image cached, left disabled so it can't restart-loop on the drained pool. **Activate the worker
   when a sweep queues:** `bash ubuntu-node/enroll_running_node.sh --start 192.168.50.27` (mints a 7-day
   cred + `systemctl enable --now`). A server, so it doesn't idle-sleep.
+  **Full hardware (verified live: dmidecode/lspci/nvidia-smi, 2026-07-31):** Gigabyte **B650M AORUS
+  ELITE AX** (AM5 µATX; BIOS AMI FA5f, 2024-07-23) · Ryzen 9 7900X 12C/24T boost ~5.74 GHz (+ Raphael
+  iGPU) · 32 GB DDR5-6000 CL36 (2× 16 GB G.Skill `F5-6000J3636F16G`) · NVIDIA GeForce RTX 2080 8 GB
+  (TU104) · 2 TB NVMe SK hynix Platinum P41 (`SHPP41-2000GM`, single disk) · onboard Realtek RTL8125
+  2.5 GbE + RTL8852CE Wi-Fi 6E · Ubuntu 26.04 LTS, kernel 7.0.0-28-generic.
 - **jason — Thermalright cooler characterised 2026-07-29** (full data +
   method: [`benchmarks/jason_cooler_thermal_2026-07-29.meta`](benchmarks/jason_cooler_thermal_2026-07-29.meta);
   harness: [`ubuntu-node/thermal/`](ubuntu-node/thermal/)). Full all-core AVX load
@@ -173,6 +178,14 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   identically (sha256 `a492a86eaa0aeb4ef8aa18de1f56b591f3130ef1c12e3bb83e5e0033677a134f`) and
   it carries a valid, timestamped DigiCert EV signature — though the signer is the OEM
   "SOMORE TECH CO., LTD." (TW), not a cert literally naming Thermalright.
+- **ian — hardware inventory (verified live: Win32 CIM over ssh, 2026-07-31):** MSI **B550M PRO-VDH
+  WIFI** (MS-7C95, AM4 µATX; BIOS AMI 2.E0, 2023-03-05) · Ryzen 5 5600G 6C/12T (+ Radeon iGPU) ·
+  32 GB DDR4 (2× 16 GB Corsair Vengeance LPX `CMK32GX4M2D3600C18`, rated DDR4-3600 CL18 but
+  **running at JEDEC 2133 MT/s — XMP/DOCP has never been enabled**; a free bandwidth win via a BIOS
+  toggle next time someone is at the console) · NVIDIA GeForce GTX 1660 Ti 6 GB · Samsung 970 PRO
+  1 TB (the Ubuntu disk) + Samsung 980 PRO with Heatsink 2 TB (the Windows disk) · onboard Realtek
+  GbE (wired = the fleet MAC) + MediaTek RZ616 Wi-Fi 6E (`bc:f4:d4:40:16:21`, associated at query
+  time) · Windows 11 Pro build 26200.
 - **i265 (60:cf:84:76:20:d2)** — enrolled + installed 2026-07-27 (renamed from zen-node-4 to match its CPU per user; PXE registry updated) (seen → inventory → register serial
   `25286M803378` → serial-matched install). **KNOWN ISSUE: eno1 link-flaps.** Symptoms observed during
   enrollment: grub netboot phone-home succeeded on only ~1/3 of PXE launches (grubnet.efi always
