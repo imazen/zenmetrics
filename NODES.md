@@ -95,9 +95,9 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
 
 | Node | Host / mDNS | Type | Wired MAC | IP | Reach it as |
 |---|---|---|---|---|---|
-| **jason** | `jason-desktop` | dual-boot kids' PC (i5-13400F 10C/16T; Win + Ubuntu, PXE-first, no-sleep, WoL on) | `04:7c:16:b3:18:51` | 192.168.50.148 | Win: `ssh zenadmin@` (full) / `zenswitch@` (reboot); Ubuntu: `ssh zen@` |
+| **jason** | `jason-desktop` | dual-boot kids' PC (i5-13400F 10C/16T, RTX 3070 8 GB, 32 GB DDR4, MSI MAG B660M MORTAR WIFI DDR4; 2 TB Win + 1 TB Ubuntu, PXE-first, no-sleep, WoL on) | `04:7c:16:b3:18:51` | 192.168.50.148 | Win: `ssh zenadmin@` (full) / `zenswitch@` (reboot); Ubuntu: `ssh zen@` |
 | **ian** | `ian-desktop` | dual-boot kids' PC (Ryzen 5 5600G 6C/12T, GTX 1660 Ti, 32 GB DDR4, MSI B550M PRO-VDH WIFI; 2 TB Win + 1 TB Ubuntu XFS; PXE-first, no-sleep, WoL on) | `04:7c:16:8a:b5:b7` | 192.168.50.193 | same as jason |
-| **mac** | `lilith-mac` | macOS worker — Mac mini M4 Pro (idle-only, launchd) | `1c:f6:4c:8b:29:a9` | 192.168.50.224 | `ssh lilith@` — key authorized + NOPASSWD sudo; `SleepDisabled=1` |
+| **mac** | `lilith-mac` | macOS worker — Mac mini M4 Pro (12C = 8P+4E, 24 GB; idle-only, launchd) | `1c:f6:4c:8b:29:a9` | 192.168.50.224 | `ssh lilith@` — key authorized + NOPASSWD sudo; `SleepDisabled=1` |
 | **lianli** | `lilith-lianli` | **always-Ubuntu** dedicated worker (**AMD Ryzen 9 7900X** 12C/24T, boost 5.74 GHz, 32 GB DDR5-6000, RTX 2080 8 GB, 2 TB NVMe, Gigabyte B650M AORUS ELITE AX; Ubuntu 26.04; dev box + worker enrolled/stopped) | `74:56:3c:b8:45:8d` | 192.168.50.27 | `ssh lilith@` — key + NOPASSWD sudo; full dev toolchain; worker unit stopped (pool drained) |
 | **wsl** | (this dev box) | WSL2 — the fleet **operator** (holds CF token, mints creds, runs `fleet-pxe`, builds) | — | WSL NAT (reaches LAN) | local shell |
 | **i265** | `i265` (installed 2026-07-27; briefly `ultra7-265k`, was `zen-node-4` during enrollment, Win name `DESKTOP-VMLP4OC`) | always-Ubuntu worker — Intel Core Ultra 7 265K 20C/20T, 32 GB, WD_BLACK SN850X 1TB serial `25286M803378` (single disk; Windows wiped by the serial-matched install), Ubuntu 26.04 | `60:cf:84:76:20:d2` (wired eno1; wifi `c0:bf:be:8e:1e:28`) | 192.168.50.140 | `ssh zen@` (worker enrolled, stopped) |
@@ -135,6 +135,8 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   while running as a further guard. **Full Rust + C dev toolchain provisioned 2026-07-24** via
   [`mac-worker/setup-mac-dev.sh`](mac-worker/setup-mac-dev.sh) (150 brew formulae — LLVM/gcc/cmake/ninja +
   the codec libs — Rust stable+nightly with 7 cross targets, ~24 cargo tools; verified end-to-end).
+  **Hardware (verified 2026-07-31):** Apple M4 Pro, 12-core (8P+4E), 24 GB unified memory, 512 GB
+  Apple SSD `AP0512Z`, macOS 26.5.2.
 - **lianli (lilith-lianli)** — always Ubuntu 26.04, dedicated worker; no OS flip. Reachable as `ssh lilith@`
   (dev-box key authorized; passwordless sudo). **Provisioned 2026-07-25** two ways: (1) full Rust + C
   **dev toolchain** via [`ubuntu-node/setup-node-dev.sh`](ubuntu-node/setup-node-dev.sh) — apt toolchain +
@@ -178,6 +180,11 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   identically (sha256 `a492a86eaa0aeb4ef8aa18de1f56b591f3130ef1c12e3bb83e5e0033677a134f`) and
   it carries a valid, timestamped DigiCert EV signature — though the signer is the OEM
   "SOMORE TECH CO., LTD." (TW), not a cert literally naming Thermalright.
+- **jason — hardware inventory (verified live from the Ubuntu side, 2026-07-31):** MSI **MAG B660M
+  MORTAR WIFI DDR4** (MS-7D42) · i5-13400F 10C/16T (6P+4E) · 32 GB DDR4 · **NVIDIA GeForce RTX 3070
+  8 GB** (GA104 — CUDA-capable, relevant if a GPU-metric worker is ever wanted on the household fleet)
+  · ADATA SX8200 Pro 2 TB NVMe (the Windows disk) + SK hynix PC601 1 TB NVMe (the Ubuntu disk) ·
+  was booted into Ubuntu 26.04 at query time.
 - **ian — hardware inventory (verified live: Win32 CIM over ssh, 2026-07-31):** MSI **B550M PRO-VDH
   WIFI** (MS-7C95, AM4 µATX; BIOS AMI 2.E0, 2023-03-05) · Ryzen 5 5600G 6C/12T (+ Radeon iGPU) ·
   32 GB DDR4 (2× 16 GB Corsair Vengeance LPX `CMK32GX4M2D3600C18`, rated DDR4-3600 CL18 but
@@ -204,14 +211,27 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   rustup 1.29.0/cargo 1.97.1 + build-essential installed, and `/etc/environment` given the same PATH the
   image now bakes. Verified: `mosh zen@192.168.50.140` completes a real roundtrip, and bare `herdr` /
   `claude` / `cargo` resolve over non-interactive ssh. It predates the image change, hence the manual pass.
+  **Hardware (verified 2026-07-31):** ASUS **TUF GAMING Z890-PLUS WIFI** (BIOS 2401) · Ultra 7 265K
+  20C/20T · **1× 32 GB** G.Skill DDR5-6000 `F5-6000J3636F32G` — **single-channel; a second stick would
+  roughly double memory bandwidth** · Arrow Lake iGPU only (no dGPU) · WD_BLACK SN850X 1 TB · Ubuntu
+  26.04, kernel 7.0.0-28.
 - **wsl (dev box)** — the operator, not a worker: holds the Cloudflare token, mints scoped 7-day R2 creds,
   runs `fleet-pxe` + the reboot/OS-flip loop, builds the binaries. WSL2 NAT breaks inbound UDP (TFTP) but
   reaches the LAN fine over TCP/SSH.
+  **Host hardware (verified via WSL interop 2026-07-31):** ASUS **ProArt X670E-CREATOR WIFI** (BIOS 2904,
+  2025-03-03) · Ryzen 9 7950X 16C/32T · 128 GB DDR5 (4× 32 GB G.Skill `F5-6000J3238G32G`, rated 6000 —
+  **running at 3600 MT/s**, the usual 4-DIMM AM5 fallback) · RTX 5070 12 GB + Raphael iGPU · NVMe:
+  Samsung 9100 PRO 4 TB + 9100 PRO 2 TB + 980 PRO 2 TB + SK hynix Platinum P41 2 TB (+ 256 GB Kingston
+  DataTraveler Max USB) · Windows 11 Pro 26200; the WSL2 VM sees 28 cores / 58 GiB.
 - **tower** — PXE server (dnsmasq proxy-DHCP + nginx + the serial-matched autoinstall), R2 storage, and a
   CPU worker. It also sends the WoL magic packets (`etherwake -i br0 <mac>`). **Work inside Docker ONLY on
   the tower** — Unraid's host is stateless (RAM-booted), so run all compute/tooling in containers (the
   `zen*` workers, the `zen-pxe-*` stack, or a throwaway `docker run --rm`), never install on the host;
   read-only host commands are fine. (Global `~/.claude/CLAUDE.md` "Tower … compute node" rule 7.)
+  **Hardware (verified 2026-07-31):** MSI **X399 GAMING PRO CARBON AC** (MS-7B09) · Threadripper 2950X
+  16C/32T · 64 GB · GeForce GT 730 (display only) · array 3× 18 TB WD Red Pro (`WD181KFGX`) + NVMe
+  pools Intel 660p 2 TB + Sabrent Rocket Q 2 TB (+ 58 GB DataTraveler USB boot) · Unraid 7.3.1,
+  kernel 6.18.33.
 
 ### Remote terminals — mosh + tmux + herdr (rolled out 2026-07-26)
 
