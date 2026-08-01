@@ -262,6 +262,26 @@ Workspace conventions per the global rules:
 
 ## zenmetrics-api
 
+### Fixed
+
+- **Explicit `Backend::Cuda`/`Wgpu` no longer silently produces bogus scores on a
+  broken GPU runtime (#37)** (db7c2f6f, 6d047530). On a driver-without-toolkit box
+  (lianli, RTX 2080, no `/usr/local/cuda`), the cubecl client constructed fine but
+  every kernel launch panicked at NVRTC-compile time inside cubecl's device-service
+  thread, where the panic is caught per-task and downgraded to `log::warn!` —
+  fire-and-forget launches silently no-op'd, readbacks returned the
+  zero-initialized `sums` accumulators, and ssim2's reference remap turned the
+  all-zero aggregate into exactly 100.0. Construction (`Metric::new*`, session
+  `metric()`) now runs a cached sentinel-kernel liveness probe
+  (`zenmetrics-gpu-core::validate_backend`: client init → upload → dispatch →
+  verified readback, caller-thread panics caught) and surfaces the new
+  `Error::BackendUnavailable` for an explicit backend that fails it — explicit
+  requests never fall back. `Backend::Auto` resolution gates its GPU arms on the
+  same cached probe, so Auto falls back down the ladder by design on a
+  present-but-broken GPU. Test seam `ZENMETRICS_FORCE_BACKEND_INIT_FAIL` +
+  regression suite `tests/backend_init_failure.rs`; `it::backend_resolve` gains a
+  driver-without-toolkit branch.
+
 ### Added
 
 - **`zenmetrics_api::cvvdp_cpu` / `iwssim_cpu` re-exports** (this change; final hash assigned at merge) —
