@@ -321,6 +321,21 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **master CI fully red since at least 97acd176 (2026-07-29) — pre-existing,
+  unrelated to code pushes** (verified 2026-08-01 across runs 30492728715 /
+  30497489195 / 30614138205 / 30680693237, all docs-only commits, identical
+  failure set). Two independent causes: (1) every Compile/tests job dies at
+  workspace resolution with `failed to load source for dependency
+  zenavif-parse — No such file or directory` — the workspace `[patch]` points
+  at the sibling path `~/work/zen/zenavif-parse`, but zenavif-parse moved into
+  the zenavif repo (`~/work/zen/zenavif/zenavif-parse`) and CI's
+  clone-sibling-repos step doesn't produce the old path; (2) the Lint job's
+  `cargo fmt --check` fails on committed-unformatted
+  `crates/cvvdp/benches/kernel_tiers.rs` + `crates/iwssim/benches/kernel_tiers.rs`.
+  Fix needs the CI sibling-clone step updated for the zenavif restructure (or
+  the patch table corrected) + a `style: cargo fmt` commit for the two bench
+  files. No push can go green until both land.
+
 - **zenmetrics-api `it::backend_resolve::resolve_auto_host_and_force_no_gpu`
   fails on DEFAULT-features runs — test const out of lockstep with the
   library** (confirmed 2026-07-31, pre-existing: identical failure at master
