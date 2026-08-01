@@ -219,3 +219,9 @@ required-features = ["cubecl-types", "cvvdp"]
 [[test]]
 name = "it"
 path = "tests/it/main.rs"
+
+# Backend liveness diagnostic (issue #37): prints how explicit-backend
+# construction and Auto resolution behave on this host's real GPU stack.
+[[example]]
+name = "backend_liveness"
+required-features = ["ssim2", "cuda"]
