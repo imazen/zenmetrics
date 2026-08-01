@@ -321,6 +321,28 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **zenmetrics-api `it::backend_resolve::resolve_auto_host_and_force_no_gpu`
+  fails on DEFAULT-features runs — test const out of lockstep with the
+  library** (confirmed 2026-07-31, pre-existing: identical failure at master
+  b5ec5a9c and after the #37 fix, and fails even serially). The test's
+  `EXPECTED_NO_GPU` const is `Backend::CubeclCpu` when no `cpu-*` feature is
+  compiled (tests/it/backend_resolve.rs), but `capability::cpu_fallback_backend`
+  was later changed to return native `Backend::Cpu` in BOTH cfg branches (the
+  "cubecl-cpu is NEVER auto-dispatched" PROJECT RULE), so the forced-no-GPU
+  assertion `resolved_forced == EXPECTED_NO_GPU` compares `Cpu != CubeclCpu`
+  and fails on any `cargo test -p zenmetrics-api --test it` with default
+  features. Green on `cpu-metrics`-enabled runs (both sides = `Cpu`), which is
+  presumably why CI never sees it. Fix = update the test's no-cpu-features
+  const to `Backend::Cpu` (a test-expectation change — get user confirmation).
+
+- **zenmetrics-api `it` suite: `session_cap::allocator_cap_recycle_leak` +
+  `session_owned_cap::owned_into_metric_respects_cap_and_recycles` fail under
+  PARALLEL one-process runs** (confirmed 2026-07-31 — identical failure pair at
+  master b5ec5a9c and after the #37 fix; both PASS with `--test-threads=1`).
+  Their global-ALLOCATOR slot-count assertions race sibling session tests'
+  live slots (observed counts drift run-to-run: 91/108 vs expected 128, 5/8 vs
+  expected 1). Same one-process family as the self-poisoning entry below.
+
 - **zenmetrics-api consolidated `it` suite self-poisons when run as ONE
   process** (observed 2026-06-10, pre-existing — A/B-identical 26-test failure
   set on master 7158c443 with and without the PuLumaGrayF32 change):
