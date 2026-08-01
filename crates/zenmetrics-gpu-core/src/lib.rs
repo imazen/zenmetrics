@@ -22,9 +22,10 @@
 //! existed) so the metric crates can construct/match them directly — the
 //! umbrella's `Backend`/`Score`/`MemoryMode` remain the stability surface.
 //!
-//! The one `unsafe` here is the confined `set_stream` call in the
-//! client-on-stream helpers (same as the per-crate `session.rs` modules); the
-//! umbrella stays `#![forbid(unsafe_code)]` by funnelling stream binding here.
+//! The confined `unsafe` here: the `set_stream` call in the client-on-stream
+//! helpers (same as the per-crate `session.rs` modules) and the sentinel-kernel
+//! launch inside [`validate_backend`]; the umbrella stays
+//! `#![forbid(unsafe_code)]` by funnelling both here.
 
 /// Selects the GPU/CPU backend an opaque metric shim dispatches to.
 ///
@@ -46,6 +47,13 @@ pub enum Backend {
     #[cfg(feature = "cpu")]
     Cpu,
 }
+
+/// Backend liveness validation (imazen/zenmetrics#37): proves a runtime can
+/// compile + dispatch a kernel before a metric trusts it. See the module docs.
+#[cfg(any(feature = "cuda", feature = "wgpu", feature = "cpu"))]
+mod validate;
+#[cfg(any(feature = "cuda", feature = "wgpu", feature = "cpu"))]
+pub use validate::validate_backend;
 
 /// Uniform metric score value returned by every opaque shim.
 ///
