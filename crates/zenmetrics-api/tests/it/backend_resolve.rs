@@ -60,6 +60,21 @@ fn host_has_nvidia_gpu() -> bool {
             .any(|l| !l.trim().is_empty())
 }
 
+/// Independent CUDA-*toolkit* presence cross-check, mirroring
+/// `cubecl_cuda::install::cuda_path` (`CUDA_PATH`, `/usr/local/cuda`,
+/// `/opt/cuda`, `/usr/bin/nvcc`). A box can have a driver (so
+/// `nvidia-smi` lists a GPU) but no toolkit — the imazen/zenmetrics#37
+/// trap where every kernel launch silently no-ops. `Auto` must NOT
+/// resolve to Cuda on such a box.
+fn host_has_cuda_toolkit() -> bool {
+    if std::env::var("CUDA_PATH").is_ok() {
+        return true;
+    }
+    ["/usr/local/cuda", "/opt/cuda", "/usr/bin/nvcc"]
+        .iter()
+        .any(|p| std::path::Path::new(p).exists())
+}
+
 /// `resolve_auto()` must always terminate on a concrete backend and
 /// never panic, on any host / feature set. Touches no environment, so it
 /// is safe to run concurrently with everything else.
@@ -79,10 +94,11 @@ fn resolve_auto_never_auto_never_panics() {
 /// Two env-sensitive checks, kept in ONE test fn so the process-global
 /// `ZENMETRICS_FORCE_NO_GPU` mutation can't race a sibling test:
 ///
-/// 1. **Host-presence (no override).** With the `cuda` feature built and
-///    a usable NVIDIA GPU present, `Auto` resolves to [`Backend::Cuda`];
-///    with no NVIDIA GPU it falls back to [`Backend::CubeclCpu`] (phase 1
-///    has no optimized `Cpu` variant yet). Both arms assert.
+/// 1. **Host-presence (no override).** With the `cuda` feature built, a
+///    NVIDIA GPU present, AND the CUDA toolkit installed (the liveness
+///    probe passes), `Auto` resolves to [`Backend::Cuda`]. With a driver
+///    but no toolkit (issue #37) it must NOT pick Cuda. With no NVIDIA
+///    GPU it falls back to the CPU ladder. Every arm asserts.
 /// 2. **Forced no-GPU.** `ZENMETRICS_FORCE_NO_GPU=1` must force `Auto`
 ///    away from any GPU backend to [`Backend::CubeclCpu`], regardless of
 ///    real hardware — the no-GPU CI fixture, matching the orchestrator's
@@ -118,12 +134,29 @@ fn resolve_auto_host_and_force_no_gpu() {
 
     // host-presence assertions: only assert the "→ Cuda" expectation
     // when the cuda backend is actually compiled in (default on this
-    // box); without it, a present GPU still can't be selected.
-    if has_gpu && cfg!(feature = "cuda") {
+    // box); without it, a present GPU still can't be selected. Since #37,
+    // presence alone is not enough: `Auto` additionally requires the
+    // cached liveness probe to pass, so the healthy-box expectation is
+    // gated on an independent toolkit cross-check, and a
+    // driver-without-toolkit host asserts the NEW invariant (never Cuda).
+    if has_gpu && cfg!(feature = "cuda") && host_has_cuda_toolkit() {
         assert_eq!(
             resolved,
             Backend::Cuda,
-            "CUDA GPU present + `cuda` feature → Auto must resolve to Cuda"
+            "CUDA GPU + toolkit present + `cuda` feature → Auto must resolve to Cuda"
+        );
+    } else if has_gpu && cfg!(feature = "cuda") {
+        // Driver present, toolkit absent (the lianli / issue #37 box):
+        // kernel launches silently no-op, so resolution must NOT pick
+        // Cuda — the liveness probe fails and Auto falls down the ladder.
+        assert_ne!(
+            resolved,
+            Backend::Cuda,
+            "CUDA driver without toolkit → Auto must NOT resolve to Cuda (issue #37)"
+        );
+        assert!(
+            resolved == EXPECTED_NO_GPU || resolved == Backend::Wgpu,
+            "broken-CUDA fallback must land on {EXPECTED_NO_GPU:?} (or Wgpu), got {resolved:?}"
         );
     } else {
         // No CUDA selection: the CPU fallback (`EXPECTED_NO_GPU`) — or `Wgpu`

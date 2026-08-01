@@ -106,13 +106,18 @@ impl Backend {
     /// unchanged. It **never** returns [`Backend::Auto`] and never
     /// panics.
     ///
-    /// The GPU presence check is intentionally lightweight (an
-    /// `nvidia-smi` query for CUDA), matching
-    /// `zenmetrics-orchestrator`'s detection and honoring the same
-    /// `ZENMETRICS_FORCE_NO_GPU=1` override so tests/CI can force the
-    /// no-GPU path. It detects that a device is *present*, not that the
-    /// full cubecl client initializes — construction still surfaces
-    /// [`Error::BackendNotEnabled`] for a backend whose feature is off.
+    /// Detection is two-stage: a lightweight presence probe (an
+    /// `nvidia-smi` query for CUDA, matching `zenmetrics-orchestrator`'s
+    /// detection and honoring the same `ZENMETRICS_FORCE_NO_GPU=1`
+    /// override so tests/CI can force the no-GPU path), then — only when
+    /// a device is present — a **cached liveness probe** that proves the
+    /// runtime can actually compile and dispatch a kernel
+    /// (imazen/zenmetrics#37: a driver-without-toolkit box lists a GPU
+    /// whose kernels silently no-op). A present-but-broken backend makes
+    /// `Auto` fall back down the ladder; an *explicit* request for it
+    /// surfaces [`Error::BackendUnavailable`] at construction instead.
+    /// Construction still surfaces [`Error::BackendNotEnabled`] for a
+    /// backend whose feature is off.
     pub fn resolve_auto() -> Backend {
         Backend::Auto.resolve()
     }
@@ -724,6 +729,11 @@ impl MetricInner {
     ///   disabled in this build.
     /// - [`Error::BackendNotEnabled`] if `backend`'s Cargo feature is
     ///   disabled in this build.
+    /// - [`Error::BackendUnavailable`] if an explicitly requested GPU
+    ///   backend is compiled in but not operational on this machine
+    ///   (runtime init failure, or kernel dispatch silently non-functional
+    ///   — the driver-without-toolkit trap of imazen/zenmetrics#37).
+    ///   Explicit backend requests never fall back.
     /// - [`Error::Metric`] if the underlying metric crate's
     ///   constructor fails (e.g. invalid image size).
     ///
@@ -756,6 +766,10 @@ impl MetricInner {
             return crate::cpu_dispatch::CpuMetricState::new(kind, width, height, &params)
                 .map(|s| MetricInner::Cpu(Box::new(s), None));
         }
+        // Explicit GPU backends must fail loudly when the runtime cannot
+        // actually run kernels on this machine (#37) — never hand back a
+        // scorer whose dispatches silently no-op.
+        verify_gpu_backend_operational(backend)?;
         match kind {
             #[cfg(feature = "cvvdp")]
             MetricKind::Cvvdp => {
@@ -894,6 +908,10 @@ impl MetricInner {
             return crate::cpu_dispatch::CpuMetricState::new(kind, width, height, &params)
                 .map(|s| MetricInner::Cpu(Box::new(s), None));
         }
+        // Explicit GPU backends must fail loudly when the runtime cannot
+        // actually run kernels on this machine (#37) — never hand back a
+        // scorer whose dispatches silently no-op.
+        verify_gpu_backend_operational(backend)?;
         match kind {
             #[cfg(feature = "cvvdp")]
             MetricKind::Cvvdp => {
@@ -2319,6 +2337,64 @@ pub(crate) fn gpu_backend(b: Backend) -> Result<zenmetrics_gpu_core::Backend> {
         // cuda/wgpu/cpu. Surface as BackendNotEnabled.
         _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
     }
+}
+
+/// Fail construction loudly when the (resolved) backend is a GPU runtime
+/// that cannot actually operate on this machine (imazen/zenmetrics#37).
+///
+/// An **explicit** `Backend::Cuda` / `Backend::Wgpu` request must never be
+/// silently degraded: on a box with an NVIDIA driver but no CUDA toolkit,
+/// the cubecl client constructs fine, every kernel launch then panics at
+/// NVRTC-compile time **inside cubecl's device-service thread** where the
+/// panic is caught and downgraded to a `log::warn!` — launches silently
+/// no-op, readbacks return the zero-initialized accumulators, and ssim2's
+/// reference score remap turns the all-zero aggregate into exactly `100.0`.
+/// The liveness probe ([`zenmetrics_gpu_core::validate_backend`], cached
+/// per process) runs a sentinel kernel round-trip so that failure mode
+/// surfaces here as [`Error::BackendUnavailable`] instead of a
+/// plausible-looking score.
+///
+/// `Backend::Auto` requests are covered upstream: [`Backend::resolve`]
+/// only picks a GPU backend whose probe passes (see
+/// [`crate::capability`]), so `Auto` falls back by design while explicit
+/// requests fail. [`Backend::CubeclCpu`] / [`Backend::Cpu`] skip the probe
+/// (in-process runtimes — nothing external to be missing); `Hip` is
+/// rejected as `BackendNotEnabled` by the mapping below before this
+/// matters.
+#[allow(unused_variables)]
+pub(crate) fn verify_gpu_backend_operational(requested: Backend) -> Result<()> {
+    // Both gates are load-bearing: a GPU metric feature makes
+    // `zenmetrics-gpu-core` present at all, and a GPU backend feature makes
+    // its `validate_backend` exist. Without either, `Backend::Cuda`/`Wgpu`
+    // already die at the construction match as `BackendNotEnabled`.
+    #[cfg(all(
+        any(
+            feature = "cvvdp",
+            feature = "butter",
+            feature = "ssim2",
+            feature = "dssim",
+            feature = "iwssim",
+            feature = "zensim"
+        ),
+        any(feature = "cuda", feature = "wgpu")
+    ))]
+    {
+        let resolved = requested.resolve();
+        if matches!(resolved, Backend::Cuda | Backend::Wgpu) {
+            // `gpu_backend` errors (feature off) are surfaced by the
+            // per-metric mapping at the construction match; only probe
+            // backends that are actually compiled in.
+            if let Ok(gpu) = gpu_backend(resolved) {
+                zenmetrics_gpu_core::validate_backend(gpu).map_err(|reason| {
+                    Error::BackendUnavailable {
+                        backend: resolved.tag(),
+                        reason,
+                    }
+                })?;
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(feature = "cvvdp")]

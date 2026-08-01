@@ -279,6 +279,10 @@ impl MetricSession {
     ///   disabled in this build.
     /// - [`Error::BackendNotEnabled`] if this session's backend isn't
     ///   supported by `kind`'s metric crate.
+    /// - [`Error::BackendUnavailable`] if this session's (explicit) GPU
+    ///   backend fails the runtime liveness probe (imazen/zenmetrics#37)
+    ///   — a broken runtime errs here rather than handing back a scorer
+    ///   whose kernel dispatches silently no-op.
     /// - [`Error::Metric`] if the underlying constructor fails.
     ///
     /// # Panics
@@ -723,6 +727,10 @@ fn build_session_scorer(
     params: MetricParams,
     mode: MemoryMode,
 ) -> Result<crate::metric::Metric> {
+    // Session metrics are constructions too: an explicit GPU backend whose
+    // runtime cannot actually run kernels must fail loudly here (#37), not
+    // hand back a stream-bound scorer whose dispatches silently no-op.
+    crate::metric::verify_gpu_backend_operational(backend)?;
     match kind {
         #[cfg(all(
             feature = "cvvdp",

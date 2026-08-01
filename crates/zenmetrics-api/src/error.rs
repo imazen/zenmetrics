@@ -33,6 +33,22 @@ pub enum Error {
         /// Short backend tag (`"cuda"`, `"wgpu"`, `"cpu"`).
         backend: &'static str,
     },
+    /// The requested backend **is compiled in** but its runtime failed the
+    /// liveness probe on this machine — it cannot initialize, or it
+    /// initializes yet cannot actually compile/dispatch kernels (the
+    /// CUDA-driver-without-toolkit trap of imazen/zenmetrics#37, where
+    /// cubecl swallows the device-thread compile panic and every kernel
+    /// silently no-ops, yielding degenerate scores like ssim2 = 100.0).
+    /// An **explicit** backend request never falls back — this error is
+    /// the contract that a broken runtime surfaces as a failure, not a
+    /// plausible-looking number. Use [`crate::Backend::Auto`] if you want
+    /// automatic fallback to a working backend.
+    BackendUnavailable {
+        /// Short backend tag (`"cuda"`, `"wgpu"`).
+        backend: &'static str,
+        /// Probe failure detail (panic message / readback mismatch).
+        reason: String,
+    },
     /// Dimensions of a pixel input don't match the scorer's configured
     /// `(width, height)`.
     DimensionMismatch {
@@ -64,6 +80,11 @@ impl fmt::Display for Error {
             Error::BackendNotEnabled { backend } => write!(
                 f,
                 "backend '{backend}' is not enabled in this build of zenmetrics-api (enable the matching Cargo feature)"
+            ),
+            Error::BackendUnavailable { backend, reason } => write!(
+                f,
+                "backend '{backend}' is compiled in but not operational on this machine \
+                 (explicit backend requests never fall back; use Backend::Auto for fallback): {reason}"
             ),
             Error::DimensionMismatch { expected, got } => write!(
                 f,

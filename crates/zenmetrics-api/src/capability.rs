@@ -7,17 +7,24 @@
 //! `nvcc` version extraction). It answers exactly one question per
 //! backend: *is a usable device present right now?*
 //!
-//! ## Why a subprocess probe (and not a cubecl client init)
+//! ## Two-stage detection: cheap presence probe, then cached liveness
 //!
-//! Phase 1 wants resolution to be cheap and side-effect-free — building a
-//! real cubecl CUDA/wgpu client allocates a device context and is far too
-//! heavy to run on every `Auto` resolution. So, mirroring
-//! `zenmetrics-orchestrator::gpu::detect_gpu`, the CUDA probe shells out to
-//! `nvidia-smi` once. That tells us a CUDA device is *present*; it does not
-//! prove the cubecl client will initialize. Construction still surfaces
+//! Building a real cubecl CUDA/wgpu client is far too heavy to run on
+//! every `Auto` resolution, so — mirroring
+//! `zenmetrics-orchestrator::gpu::detect_gpu` — the CUDA probe first
+//! shells out to `nvidia-smi` once. Presence alone is **not** proof the
+//! runtime works: a box with an NVIDIA driver but no CUDA toolkit lists a
+//! GPU while every kernel launch silently no-ops (imazen/zenmetrics#37).
+//! So when a device *is* present, resolution additionally requires the
+//! backend to pass [`zenmetrics_gpu_core::validate_backend`]'s sentinel
+//! kernel round-trip — a one-time, process-cached probe (the same cache
+//! construction consults, so no double cost). A present-but-broken GPU
+//! thus makes `Auto` fall back down the ladder **by design**, while an
+//! *explicit* `Backend::Cuda` request surfaces
+//! [`crate::Error::BackendUnavailable`] at construction instead of
+//! falling back. Construction still surfaces
 //! [`crate::Error::BackendNotEnabled`] when a backend's Cargo feature is
-//! off, and a device that's present-but-unusable will fail at the
-//! per-crate construction boundary, not here.
+//! off.
 //!
 //! ## `ZENMETRICS_FORCE_NO_GPU=1` override
 //!
@@ -86,14 +93,85 @@ pub(crate) fn hip_device_present() -> bool {
 /// (task #159 phase 2), else to `CubeclCpu` so `Auto` always lands on a
 /// runnable backend. Guaranteed to return a non-`Auto` variant; never panics.
 pub(crate) fn resolve_auto_backend() -> Backend {
-    if cuda_device_present() {
+    if cuda_device_present() && cuda_backend_operational() {
         Backend::Cuda
-    } else if wgpu_device_present() {
+    } else if wgpu_device_present() && wgpu_backend_operational() {
         Backend::Wgpu
     } else if hip_device_present() {
         Backend::Hip
     } else {
         cpu_fallback_backend()
+    }
+}
+
+/// `true` iff the CUDA runtime passes the (cached) liveness probe — client
+/// init + sentinel kernel dispatch + verified readback. This is what lets
+/// `Auto` fall back **by design** on a present-but-broken GPU
+/// (driver-without-toolkit, imazen/zenmetrics#37) while an explicit
+/// `Backend::Cuda` request fails construction. Only meaningful when the
+/// probe can exist (`cuda` + a GPU metric feature); otherwise `true` so
+/// resolution keeps its presence-only semantics and construction surfaces
+/// the feature error.
+fn cuda_backend_operational() -> bool {
+    #[cfg(all(
+        feature = "cuda",
+        any(
+            feature = "cvvdp",
+            feature = "butter",
+            feature = "ssim2",
+            feature = "dssim",
+            feature = "iwssim",
+            feature = "zensim"
+        )
+    ))]
+    {
+        zenmetrics_gpu_core::validate_backend(zenmetrics_gpu_core::Backend::Cuda).is_ok()
+    }
+    #[cfg(not(all(
+        feature = "cuda",
+        any(
+            feature = "cvvdp",
+            feature = "butter",
+            feature = "ssim2",
+            feature = "dssim",
+            feature = "iwssim",
+            feature = "zensim"
+        )
+    )))]
+    {
+        true
+    }
+}
+
+/// wgpu analogue of [`cuda_backend_operational`].
+fn wgpu_backend_operational() -> bool {
+    #[cfg(all(
+        feature = "wgpu",
+        any(
+            feature = "cvvdp",
+            feature = "butter",
+            feature = "ssim2",
+            feature = "dssim",
+            feature = "iwssim",
+            feature = "zensim"
+        )
+    ))]
+    {
+        zenmetrics_gpu_core::validate_backend(zenmetrics_gpu_core::Backend::Wgpu).is_ok()
+    }
+    #[cfg(not(all(
+        feature = "wgpu",
+        any(
+            feature = "cvvdp",
+            feature = "butter",
+            feature = "ssim2",
+            feature = "dssim",
+            feature = "iwssim",
+            feature = "zensim"
+        )
+    )))]
+    {
+        true
     }
 }
 
