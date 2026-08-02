@@ -68,7 +68,11 @@ Scan this hardware (read-only; reboots back to this menu)
   typo or hand-made `/api/choose/...` URL can't target a disk we've never seen. The
   serial-matched autoinstall (layer 2) then makes wiping the wrong disk impossible.
 - **No disks listed?** Run the scan — it boots the read-only probe, reports the disks and
-  reboots straight back to the menu.
+  reboots straight back to the menu. The probe sets a one-shot UEFI `BootNext` to the
+  firmware's network entry before rebooting, so the return trip goes through PXE even on a
+  box whose default boot order prefers a local disk (the ryzen5800xt 2026-08-02 trap:
+  scan → reboot → firmware booted the disk → menu never returned). Permanent boot order is
+  still yours to set — PXE-first remains the requirement for remotely-managed boxes.
 
 **Boxes we already manage keep the old instant chainload.** jason/ian/i265 are PXE-first, so
 they ask the tower on *every* boot; a menu there would delay each boot and leave a wipe option

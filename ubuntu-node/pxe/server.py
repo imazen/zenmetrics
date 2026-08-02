@@ -349,6 +349,16 @@ def seed_inventory_userdata(mac, after="poweroff"):
     return f"""#cloud-config
 runcmd:
   - [ sh, -c, "curl -sS -X POST --data-binary \\"$({probe})\\" {post} || true" ]
+  - |
+    # One-shot BootNext -> the firmware's network entry, so the probe's reboot/next power-on
+    # really does return through PXE (menu or armed install) even when the firmware's default
+    # order prefers a local disk. Without this, a box that isn't PXE-first silently boots its
+    # disk after a console scan and the promised "reboots back to this menu" never happens
+    # (hit on ryzen5800xt 2026-08-02). BootNext self-clears after one use; permanent boot
+    # order is untouched. Best-effort: no efibootmgr / no network entry -> plain reboot.
+    command -v efibootmgr >/dev/null 2>&1 || exit 0
+    N=$(efibootmgr | grep -iE 'PXE|IPv4|Network|Ethernet|NIC|HTTP Boot' | grep -oE '^Boot[0-9A-Fa-f]{{4}}' | head -1 | cut -c5-)
+    [ -n "$N" ] && efibootmgr -n "$N" || true
 power_state:
   mode: {after}
   timeout: 30
