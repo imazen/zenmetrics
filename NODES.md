@@ -96,7 +96,7 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
 | Node | Host / mDNS | Type | Wired MAC | IP | Reach it as |
 |---|---|---|---|---|---|
 | **jason** | `jason-desktop` | dual-boot kids' PC (i5-13400F 10C/16T, RTX 3070 8 GB, 32 GB DDR4, MSI MAG B660M MORTAR WIFI DDR4; 2 TB Win + 1 TB Ubuntu, PXE-first, no-sleep, WoL on) | `04:7c:16:b3:18:51` | 192.168.50.148 | Win: `ssh zenadmin@` (full) / `zenswitch@` (reboot); Ubuntu: `ssh zen@` |
-| **ian** | `ian-desktop` | dual-boot kids' PC (Ryzen 5 5600G 6C/12T, GTX 1660 Ti, 32 GB DDR4, MSI B550M PRO-VDH WIFI; 2 TB Win + 1 TB Ubuntu XFS; PXE-first, no-sleep, WoL on) | `04:7c:16:8a:b5:b7` | 192.168.50.193 | same as jason |
+| **ian** | `ian-desktop` | dual-boot kids' PC (Ryzen 5 5600G 6C/12T, GTX 1660 Ti, 32 GB DDR4-3600, MSI B550M PRO-VDH WIFI; 2 TB Win + 1 TB Ubuntu XFS; PXE-first, no-sleep, WoL on) | `04:7c:16:8a:b5:b7` | 192.168.50.193 | same as jason |
 | **mac** | `lilith-mac` | macOS worker — Mac mini M4 Pro (12C = 8P+4E, 24 GB; idle-only, launchd) | `1c:f6:4c:8b:29:a9` | 192.168.50.224 | `ssh lilith@` — key authorized + NOPASSWD sudo; `SleepDisabled=1` |
 | **lianli** | `lilith-lianli` | **always-Ubuntu** dedicated worker (**AMD Ryzen 9 7900X** 12C/24T, boost 5.74 GHz, 32 GB DDR5-6000, RTX 2080 8 GB, 2 TB NVMe, Gigabyte B650M AORUS ELITE AX; Ubuntu 26.04; dev box + worker enrolled/stopped) | `74:56:3c:b8:45:8d` | 192.168.50.27 | `ssh lilith@` — key + NOPASSWD sudo; full dev toolchain; worker unit stopped (pool drained) |
 | **wsl** | (this dev box) | WSL2 — the fleet **operator** (holds CF token, mints creds, runs `fleet-pxe`, builds) | — | WSL NAT (reaches LAN) | local shell |
@@ -187,9 +187,10 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   was booted into Ubuntu 26.04 at query time.
 - **ian — hardware inventory (verified live: Win32 CIM over ssh, 2026-07-31):** MSI **B550M PRO-VDH
   WIFI** (MS-7C95, AM4 µATX; BIOS AMI 2.E0, 2023-03-05) · Ryzen 5 5600G 6C/12T (+ Radeon iGPU) ·
-  32 GB DDR4 (2× 16 GB Corsair Vengeance LPX `CMK32GX4M2D3600C18`, rated DDR4-3600 CL18 but
-  **running at JEDEC 2133 MT/s — XMP/DOCP has never been enabled**; a free bandwidth win via a BIOS
-  toggle next time someone is at the console) · NVIDIA GeForce GTX 1660 Ti 6 GB · Samsung 970 PRO
+  32 GB DDR4 (2× 16 GB Corsair Vengeance LPX `CMK32GX4M2D3600C18`; **XMP enabled at the console
+  2026-08-02 → 3600 MT/s verified on both DIMMs** — membw measured 49.3 GB/s peak copy / 40.6
+  sustained @12t / triad 30–32 vs ~30 GB/s for this fleet's 2133-class configs; raw curve in
+  zensysbench `benchmarks/ian_membw_xmp3600_2026-08-02.*`) · NVIDIA GeForce GTX 1660 Ti 6 GB · Samsung 970 PRO
   1 TB (the Ubuntu disk) + Samsung 980 PRO with Heatsink 2 TB (the Windows disk) · onboard Realtek
   GbE (wired = the fleet MAC) + MediaTek RZ616 Wi-Fi 6E (`bc:f4:d4:40:16:21`, associated at query
   time) · Windows 11 Pro build 26200.
