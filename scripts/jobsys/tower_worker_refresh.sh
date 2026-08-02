@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # tower_worker_refresh.sh — keep the basement tower's zensim backfill worker alive.
-# 2026-07-27: repointed from the drained 720 wave (_pool/runlist.tsv, container
-# zen720-basement) to the 924 wave (_pool924/runlist.tsv, metric zensim-foldapp,
-# container zen924-basement, image tag exec-zensim924-*). Override with
-# ZEN_TOWER_IMAGE / ZEN_TOWER_RUNLIST if a new wave supersedes this one.
+# 2026-08-02: repointed from the drained 924 wave (_pool924/runlist.tsv, container
+# zen924-basement) to the 944 wave (_pool944/runlist.tsv, metric zensim-foldapp2,
+# container zen944-basement, image tag exec-zensim944-* — SOTA-944 P1 bigcodec).
+# Override with ZEN_TOWER_IMAGE / ZEN_TOWER_RUNLIST if a new wave supersedes this one.
 #
 # R2 temp creds max out at 12h, and this worker runs for days, so a cron on the DEV box (which holds the
 # CF token — never put it on the tower) re-mints a 12h scoped cred and recreates the container. Twice a
@@ -30,9 +30,9 @@ SCRATCH=/mnt/cache/appdata/zen720-basement/tmp
 # The :exec image bakes the current fleet-entrypoint.sh (--ledger-in fix) + zenmetrics (v2-ref ref
 # reuse) + zenfleet-worker (zstd ledger), so no entrypoint scp/mount is needed. --pull always picks up
 # a newly-pushed :exec on each refresh.
-IMG="${ZEN_TOWER_IMAGE:-ghcr.io/imazen/zenfleet-worker:exec-zensim924-2095f80b}"
-RL="${ZEN_TOWER_RUNLIST:-s3://zentrain/jobs/_pool924/runlist.tsv}"
-$SSHT "docker rm -f zen924-basement zen720-basement 2>/dev/null; rm -rf $SCRATCH; mkdir -p $SCRATCH; chmod 1777 $SCRATCH; docker run -d --name zen924-basement --restart unless-stopped --pull always \
+IMG="${ZEN_TOWER_IMAGE:-ghcr.io/imazen/zenfleet-worker:exec-zensim944-57b7b9ad}"
+RL="${ZEN_TOWER_RUNLIST:-s3://zentrain/jobs/_pool944/runlist.tsv}"
+$SSHT "docker rm -f zen944-basement zen924-basement zen720-basement 2>/dev/null; rm -rf $SCRATCH; mkdir -p $SCRATCH; chmod 1777 $SCRATCH; docker run -d --name zen944-basement --restart unless-stopped --pull always \
   --cpuset-cpus=0-23 --cpu-shares=256 --memory=40g \
   -v $SCRATCH:/tmp \
   -e AWS_ACCESS_KEY_ID='$AK' -e AWS_SECRET_ACCESS_KEY='$SK' -e AWS_SESSION_TOKEN='$ST' -e AWS_REGION=auto \

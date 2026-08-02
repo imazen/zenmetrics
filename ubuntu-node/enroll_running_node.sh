@@ -19,7 +19,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 START=0; [ "${1:-}" = "--start" ] && { START=1; shift; }
 NODE="${1:?usage: enroll_running_node.sh [--start] <host> [ssh-user]}"
 USER_AT="${2:-lilith}"
-IMG="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zenfleet-worker:exec-zensim924-2095f80b}"   # canonical CPU worker (public on ghcr); 2026-07-27 default = the 924-wave tag (zensim-foldapp binary)
+IMG="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zenfleet-worker:exec-zensim944-57b7b9ad}"   # canonical CPU worker (public on ghcr); 2026-08-02 default = the 944-wave tag (zensim-foldapp2 binary, SOTA-944 P1 bigcodec)
 
 # R2 endpoint from the CF creds (same resolution as mint_cred.sh); the account id is not secret.
 CREDS="${R2_CREDENTIALS_FILE:-$HOME/.config/cloudflare/r2-credentials}"
@@ -39,7 +39,7 @@ ENVBODY="$(cat <<EOF
 AWS_REGION=auto
 ZEN_R2_ENDPOINT=$R2EP
 ZEN_BUCKET=zentrain
-ZEN_POOL_RUNLIST=${ZEN_POOL_RUNLIST:-s3://zentrain/jobs/_pool924/runlist.tsv}
+ZEN_POOL_RUNLIST=${ZEN_POOL_RUNLIST:-s3://zentrain/jobs/_pool944/runlist.tsv}
 ZEN_CORPUS_PREFIX=refs/clean-picker-corpus-2026-06-26
 ZEN_MAX_MIN=700
 ZEN_CORE_OVERSUBSCRIBE=3
