@@ -99,6 +99,7 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
 | **ian** | `ian-desktop` | dual-boot kids' PC (Ryzen 5 5600G 6C/12T, GTX 1660 Ti, 32 GB DDR4-3600, MSI B550M PRO-VDH WIFI; 2 TB Win + 1 TB Ubuntu XFS; PXE-first, no-sleep, WoL on) | `04:7c:16:8a:b5:b7` | 192.168.50.193 | same as jason |
 | **mac** | `lilith-mac` | macOS worker — Mac mini M4 Pro (12C = 8P+4E, 24 GB; idle-only, launchd) | `1c:f6:4c:8b:29:a9` | 192.168.50.224 | `ssh lilith@` — key authorized + NOPASSWD sudo; `SleepDisabled=1` |
 | **lianli** | `lilith-lianli` | **always-Ubuntu** dedicated worker (**AMD Ryzen 9 7900X** 12C/24T, boost 5.74 GHz, 32 GB DDR5-6000, RTX 2080 8 GB, 2 TB NVMe, Gigabyte B650M AORUS ELITE AX; Ubuntu 26.04; dev box + worker enrolled/stopped) | `74:56:3c:b8:45:8d` | 192.168.50.27 | `ssh lilith@` — key + NOPASSWD sudo; full dev toolchain; worker unit stopped (pool drained) |
+| **ryzen5800xt** | `ryzen5800xt` | always-Ubuntu worker — **Ryzen 9 5900XT** 16C/32T (hostname predates the CPU-model discovery), 48 GB DDR4-2133, GTX 1050 2 GB, ASUS TUF B550-PLUS WIFI II; 950 PRO 512G NVMe (OS) + 860 465G SATA (`/scratch`); PXE-first, worker enrolled+running | `30:c5:99:ef:60:79` | 192.168.50.250 | `ssh zen@` (key + NOPASSWD sudo) |
 | **wsl** | (this dev box) | WSL2 — the fleet **operator** (holds CF token, mints creds, runs `fleet-pxe`, builds) | — | WSL NAT (reaches LAN) | local shell |
 | **i265** | `i265` (installed 2026-07-27; briefly `ultra7-265k`, was `zen-node-4` during enrollment, Win name `DESKTOP-VMLP4OC`) | always-Ubuntu worker — Intel Core Ultra 7 265K 20C/20T, 32 GB, WD_BLACK SN850X 1TB serial `25286M803378` (single disk; Windows wiped by the serial-matched install), Ubuntu 26.04 | `60:cf:84:76:20:d2` (wired eno1; wifi `c0:bf:be:8e:1e:28`) | 192.168.50.140 | `ssh zen@` (worker enrolled, stopped) |
 | **tower** | (basement, Unraid) | PXE/dnsmasq/nginx server + R2 + the `zen924-basement` worker (was `zen720-basement` in the 720 wave) | (Unraid NIC) | 192.168.50.170 | `ssh root@tower` |
@@ -151,6 +152,21 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   iGPU) · 32 GB DDR5-6000 CL36 (2× 16 GB G.Skill `F5-6000J3636F16G`) · NVIDIA GeForce RTX 2080 8 GB
   (TU104) · 2 TB NVMe SK hynix Platinum P41 (`SHPP41-2000GM`, single disk) · onboard Realtek RTL8125
   2.5 GbE + RTL8852CE Wi-Fi 6E · Ubuntu 26.04 LTS, kernel 7.0.0-28-generic.
+- **ryzen5800xt — installed 2026-08-02** (user's manual Ubuntu wiped via serial-matched PXE reinstall;
+  same-day netboot fixes: scan-probe BootNext return + gpu-setup.sh detection). **Hardware (all verified
+  live):** ASUS **TUF GAMING B550-PLUS WIFI II** (BIOS 3636, 2026-01) · **Ryzen 9 5900XT** 16C/32T —
+  yes, the hostname says 5800xt; the silicon is the 16-core · 48 GB DDR4-2133 (2×8 `F4-2133C15-8GRR` +
+  2×16 `F4-2133C15-16GVR`, **rated 2133 — no XMP headroom**; 40 GB memtester full pass 0 failures;
+  membw ~27 GB/s copy FLAT from one thread = fleet-worst per-core — a 3600 kit swap is the box's one
+  real upgrade) · GTX 1050 2 GB (**driver 580 pinned** — last Pascal branch, `-open` unsupported;
+  container toolkit wired; CUDA verified against CPU scores, ssim2 73.67 vs 73.76; 2 GB caps
+  large-image GPU work) · 950 PRO 512 GB NVMe OS (0% wear, benches at spec 2482/1455 MB/s) + 860
+  465 GB SATA → XFS **`/scratch`** (zen-owned, nofail; 543/515 MB/s; future reinstalls wipe both via
+  `fleet-pxe register --scratch-serial`) · 2.5GbE Realtek linked at 1G (switch port) · thermals: 55 °C
+  peak at ~3.75 GHz all-core (5-min soak, 0 throttle) · fivemin standing: 302 MP/s aggregate
+  zenjpeg-e1-mp1 (lianli 311, 7950X host 322; K16 = 260 @ 78% eff) · worker enrolled + RUNNING;
+  BootOrder PXE-first (0003,0000). Bench records: zensysbench
+  `benchmarks/ryzen5800xt_membw_ddr4-2133_2026-08-02.*` + `results/ryzen5800xt/`.
 - **jason — Thermalright cooler characterised 2026-07-29** (full data +
   method: [`benchmarks/jason_cooler_thermal_2026-07-29.meta`](benchmarks/jason_cooler_thermal_2026-07-29.meta);
   harness: [`ubuntu-node/thermal/`](ubuntu-node/thermal/)). Full all-core AVX load
