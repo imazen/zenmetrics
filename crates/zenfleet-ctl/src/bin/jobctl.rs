@@ -52,6 +52,13 @@ enum Cmd {
         #[arg(long = "r2-endpoint")]
         r2_endpoint: Option<String>,
     },
+    /// Print `idx<TAB>job_id<TAB>image_path` for every manifest cell, in
+    /// manifest order — the canonical way to join a manifest to ledger rows
+    /// (provenance/attribution tooling; e.g. the bf944 tier-matched declare).
+    Ids {
+        #[arg(long)]
+        manifest: PathBuf,
+    },
     /// Write the not-yet-done subset (the gap) of a manifest, given the ledger.
     Gap {
         #[arg(long)]
@@ -111,6 +118,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let jobs = read_manifest(&manifest)?;
             let view = load_view(&ledger, r2_endpoint.as_deref())?;
             println!("{}", serde_json::to_string_pretty(&coverage(&jobs, &view))?);
+        }
+        Cmd::Ids { manifest } => {
+            let jobs = read_manifest(&manifest)?;
+            let mut out = String::with_capacity(jobs.len() * 100);
+            for (i, j) in jobs.iter().enumerate() {
+                use std::fmt::Write as _;
+                writeln!(out, "{i}\t{}\t{}", j.job_id().as_str(), j.cell.image_path)?;
+            }
+            print!("{out}");
+            eprintln!("{} ids", jobs.len());
         }
         Cmd::Gap {
             manifest,

@@ -3,7 +3,7 @@
 from the LIVE ledgers vs the manifest's declared cells. The completion answer
 the drain beacons only approximate (G-W3-style gate: gap==0 on every run).
 
-  python3 pool_reconcile_report.py [runlist_uri]   # default jobs/_pool944/runlist.tsv
+  python3 pool_reconcile_report.py [runlist_uri]   # default jobs/_pool944v4/runlist.tsv
 """
 import gzip
 import io
@@ -28,7 +28,7 @@ S3 = fs.S3FileSystem(
     endpoint_override="https://%s.r2.cloudflarestorage.com" % E["R2_ACCOUNT_ID"],
     region="auto")
 BUCKET = E.get("ZEN_BUCKET", "zentrain")
-RUNLIST = sys.argv[1] if len(sys.argv) > 1 else "jobs/_pool944/runlist.tsv"
+RUNLIST = sys.argv[1] if len(sys.argv) > 1 else "jobs/_pool944v4/runlist.tsv"
 
 with S3.open_input_stream(f"{BUCKET}/{RUNLIST}") as f:
     runs = [ln.split("\t")[0] for ln in f.read().decode().splitlines() if ln.strip()]

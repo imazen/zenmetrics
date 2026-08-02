@@ -34,12 +34,19 @@ echo "enrolling $HOSTID ($USER_AT@$NODE) as CPU worker; image=$IMG; start=$START
 # worker.env — config only; the AWS_* cred is appended below iff --start (7-day cap; don't pre-mint a
 # cred that will expire while the worker sits stopped). POOL mode is self-describing, so this same
 # config works for whatever run lands in the pool.
+#
+# ⚠ 944 wave is SIMD-TIER-MATCHED (G-BF1 bitwise vs the tier-mixed 924 baseline):
+#   AVX2-only boxes (tower/jason/ian/i265)  -> default _pool944v4
+#   AVX-512 boxes  (lianli, wsl)            -> ZEN_POOL_RUNLIST=s3://zentrain/jobs/_pool944v4x/runlist.tsv
+#   Apple Silicon  (mac, native worker)     -> _pool944neon
+# Enrolling an AVX-512 box against the v4 pool (or vice versa) silently breaks the
+# bitwise gate for every cell it claims — set ZEN_POOL_RUNLIST per box tier.
 ENVBODY="$(cat <<EOF
 # zen fleet worker config (enroll_running_node.sh). AWS_* cred appended by --start / onboard_node.sh.
 AWS_REGION=auto
 ZEN_R2_ENDPOINT=$R2EP
 ZEN_BUCKET=zentrain
-ZEN_POOL_RUNLIST=${ZEN_POOL_RUNLIST:-s3://zentrain/jobs/_pool944/runlist.tsv}
+ZEN_POOL_RUNLIST=${ZEN_POOL_RUNLIST:-s3://zentrain/jobs/_pool944v4/runlist.tsv}
 ZEN_CORPUS_PREFIX=refs/clean-picker-corpus-2026-06-26
 ZEN_MAX_MIN=700
 ZEN_CORE_OVERSUBSCRIBE=3

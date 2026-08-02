@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # tower_worker_refresh.sh — keep the basement tower's zensim backfill worker alive.
 # 2026-08-02: repointed from the drained 924 wave (_pool924/runlist.tsv, container
-# zen924-basement) to the 944 wave (_pool944/runlist.tsv, metric zensim-foldapp2,
-# container zen944-basement, image tag exec-zensim944-* — SOTA-944 P1 bigcodec).
+# zen924-basement) to the 944 wave (metric zensim-foldapp2, container zen944-basement,
+# image tag exec-zensim944-* — SOTA-944 P1 bigcodec). The 944 wave is SIMD-TIER-MATCHED;
+# the tower (TR 2950X = AVX2-only) works the v4 pool (_pool944v4/runlist.tsv).
 # Override with ZEN_TOWER_IMAGE / ZEN_TOWER_RUNLIST if a new wave supersedes this one.
 #
 # R2 temp creds max out at 12h, and this worker runs for days, so a cron on the DEV box (which holds the
@@ -31,7 +32,7 @@ SCRATCH=/mnt/cache/appdata/zen720-basement/tmp
 # reuse) + zenfleet-worker (zstd ledger), so no entrypoint scp/mount is needed. --pull always picks up
 # a newly-pushed :exec on each refresh.
 IMG="${ZEN_TOWER_IMAGE:-ghcr.io/imazen/zenfleet-worker:exec-zensim944-57b7b9ad}"
-RL="${ZEN_TOWER_RUNLIST:-s3://zentrain/jobs/_pool944/runlist.tsv}"
+RL="${ZEN_TOWER_RUNLIST:-s3://zentrain/jobs/_pool944v4/runlist.tsv}"   # tower TR2950X = AVX2 tier
 $SSHT "docker rm -f zen944-basement zen924-basement zen720-basement 2>/dev/null; rm -rf $SCRATCH; mkdir -p $SCRATCH; chmod 1777 $SCRATCH; docker run -d --name zen944-basement --restart unless-stopped --pull always \
   --cpuset-cpus=0-23 --cpu-shares=256 --memory=40g \
   -v $SCRATCH:/tmp \

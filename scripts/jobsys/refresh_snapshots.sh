@@ -27,8 +27,19 @@ exec 9>"$SNAP_DIR/refresh.lock"
 flock -n 9 || { echo "$(date -u +%FT%TZ) refresh already running — skip" >>"$LOG"; exit 0; }
 r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }
 
-r2 cp "${ZEN_SNAP_RUNLIST:-s3://$BUCKET/jobs/_pool944/runlist.tsv}" /tmp/runlist_refresh.tsv >/dev/null 2>&1 \
-  || { echo "$(date -u +%FT%TZ) cannot fetch runlist" | tee -a "$LOG"; exit 1; }
+# The 944 wave is SIMD-tier-matched: three pools (v4 / v4x / neon), all covered.
+# ZEN_SNAP_RUNLIST may be a space-separated list of runlist URIs.
+: > /tmp/runlist_refresh.tsv
+snap_fail=1
+for rl in ${ZEN_SNAP_RUNLIST:-s3://$BUCKET/jobs/_pool944v4/runlist.tsv s3://$BUCKET/jobs/_pool944v4x/runlist.tsv s3://$BUCKET/jobs/_pool944neon/runlist.tsv}; do
+  if r2 cp "$rl" /tmp/runlist_one.tsv >/dev/null 2>&1; then
+    cat /tmp/runlist_one.tsv >> /tmp/runlist_refresh.tsv
+    snap_fail=0
+  else
+    echo "$(date -u +%FT%TZ) cannot fetch runlist $rl" | tee -a "$LOG"
+  fi
+done
+[ "$snap_fail" = 0 ] || { echo "$(date -u +%FT%TZ) no runlist fetchable" | tee -a "$LOG"; exit 1; }
 runs=$(cut -f1 /tmp/runlist_refresh.tsv | grep -E '^bf' | sort -u)
 echo "$(date -u +%FT%TZ) refresh START: $(printf '%s\n' "$runs" | grep -c .) runs" | tee -a "$LOG"
 
