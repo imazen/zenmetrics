@@ -47,16 +47,16 @@ case "$cmd" in
   show)
     m="$(norm "${1:?usage: show <mac>}")"; T "cat $STATE/inventory/$m.txt 2>/dev/null" || die "no inventory yet for $m (run: inventory $1, wait for power-off)";;
   register)
-    m="$(norm "${1:?usage: register <mac> --serial S --host H}")"; shift
-    SERIAL=""; HOST=""
-    while [ $# -gt 0 ]; do case "$1" in --serial) SERIAL="$2"; shift 2;; --host) HOST="$2"; shift 2;; *) die "bad arg $1";; esac; done
+    m="$(norm "${1:?usage: register <mac> --serial S --host H [--scratch-serial S2]}")"; shift
+    SERIAL=""; HOST=""; SCRATCH_SERIAL=""
+    while [ $# -gt 0 ]; do case "$1" in --serial) SERIAL="$2"; shift 2;; --host) HOST="$2"; shift 2;; --scratch-serial) SCRATCH_SERIAL="$2"; shift 2;; *) die "bad arg $1";; esac; done
     [ -n "$SERIAL" ] && [ -n "$HOST" ] || die "need --serial and --host"
     CRED="$(bash "$HERE/../mint_cred.sh")"
     R2EP="https://$(grep -m1 R2_ACCOUNT_ID "${R2_CREDENTIALS_FILE:-/home/lilith/.config/cloudflare/r2-credentials}" | cut -d= -f2 | tr -d '\r"').r2.cloudflarestorage.com"
     RENDERED="$(SERIAL="$SERIAL" HOST="$HOST" MAC="$m" CRED="$CRED" R2EP="$R2EP" KEY="$SSH_PUBKEY" HASH="$PW_HASH" \
-                IMG="$WORKER_IMAGE" TOWER_IP="$TOWER_IP" python3 "$HERE/render_install.py")"
-    T "install -d $STATE/registry && cat > $STATE/registry/$m.install-user-data && printf 'HOST=%s\nSERIAL=%s\n' '$HOST' '$SERIAL' > $STATE/registry/$m.env" <<<"$RENDERED"
-    echo "registered $m -> host=$HOST serial=$SERIAL (install config rendered on tower, 7d cred baked)"
+                IMG="$WORKER_IMAGE" TOWER_IP="$TOWER_IP" SCRATCH_SERIAL="$SCRATCH_SERIAL" python3 "$HERE/render_install.py")"
+    T "install -d $STATE/registry && cat > $STATE/registry/$m.install-user-data && printf 'HOST=%s\nSERIAL=%s\nSCRATCH=%s\n' '$HOST' '$SERIAL' '$SCRATCH_SERIAL' > $STATE/registry/$m.env" <<<"$RENDERED"
+    echo "registered $m -> host=$HOST serial=$SERIAL${SCRATCH_SERIAL:+ scratch=$SCRATCH_SERIAL (wiped -> XFS /scratch)} (install config rendered on tower, 7d cred baked)"
     echo "next: fleet-pxe install $m";;
   install)
     m="$(norm "${1:?usage: install <mac>}")"

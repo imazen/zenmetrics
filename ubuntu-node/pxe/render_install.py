@@ -21,6 +21,17 @@ R2EP, KEY, HASH, IMG, TOWER = E["R2EP"], E["KEY"], E["HASH"], E["IMG"], E["TOWER
 CRED = E.get("CRED", "").strip()
 HAS_CRED = bool(CRED)
 
+# Optional second disk, ALSO wiped, serial-matched: becomes an XFS /scratch (job scratch /
+# corpus cache; keeps the OS disk clean). Same guarantee as the OS disk: if the serial is
+# absent at install time curtin aborts rather than guessing. Empty => single-disk install.
+SCRATCH = E.get("SCRATCH_SERIAL", "").strip()
+scratch_disk = "" if not SCRATCH else (
+    f'      - {{type: disk, id: disk1, match: {{serial: "*{SCRATCH}*"}}, ptable: gpt, wipe: superblock-recursive, preserve: false, grub_device: false}}\n'
+    f"      - {{type: partition, id: pscr, device: disk1, size: -1, preserve: false}}\n"
+    f"      - {{type: format,    id: fscr, volume: pscr, fstype: xfs, preserve: false}}\n"
+    f"      - {{type: mount,     id: mscr, device: fscr, path: /scratch}}\n")
+scratch_own = "      - [ sh, -c, \"install -d -m 1775 /scratch && chown zen:zen /scratch || true\" ]\n" if SCRATCH else ""
+
 # worker.env: the 3 AWS_* cred lines from mint_cred.sh + the fixed worker config.
 worker_env = ((CRED.rstrip("\n") + "\n") if HAS_CRED else "") + textwrap.dedent(f"""\
     AWS_REGION=auto
@@ -105,6 +116,7 @@ autoinstall:
       - {{type: format,    id: froot, volume: proot, fstype: xfs, preserve: false}}
       - {{type: mount,     id: mroot, device: froot, path: /}}
       - {{type: mount,     id: mefi,  device: fefi, path: /boot/efi}}
+{scratch_disk.rstrip()}
   identity:
     hostname: {HOST}
     username: zen
@@ -146,7 +158,7 @@ autoinstall:
       - path: /etc/environment
         content: "PATH=\\"/home/zen/.local/bin:/home/zen/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin\\"\\n"
     runcmd:
-      - [ usermod, -aG, docker, zen ]
+{scratch_own}      - [ usermod, -aG, docker, zen ]
       - [ systemctl, daemon-reload ]
       - [ systemctl, enable, --now, docker ]
 {worker_enable}      - [ systemctl, enable, --now, unattended-upgrades ]
