@@ -54,7 +54,8 @@ fn store_for(bucket: &str) -> Result<Arc<dyn ObjectStore>, Box<dyn Error>> {
             b = b.with_token(tok);
         }
     }
-    let store: Arc<dyn ObjectStore> = Arc::new(b.build().map_err(|e| format!("objstore build: {e}"))?);
+    let store: Arc<dyn ObjectStore> =
+        Arc::new(b.build().map_err(|e| format!("objstore build: {e}"))?);
     let mut g = m.lock().unwrap_or_else(|p| p.into_inner());
     let s = g.entry(bucket.to_string()).or_insert(store).clone();
     Ok(s)
@@ -86,7 +87,12 @@ pub fn get_uri(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 
 /// GET a single byte range `[offset, offset+len)` of an object (one R2 request, pooled connection).
 /// Replaces the per-variant `aws s3api get-object --range` spawn on the byte-range tar path.
-pub fn get_range(bucket: &str, key: &str, offset: u64, len: u64) -> Result<Vec<u8>, Box<dyn Error>> {
+pub fn get_range(
+    bucket: &str,
+    key: &str,
+    offset: u64,
+    len: u64,
+) -> Result<Vec<u8>, Box<dyn Error>> {
     let store = store_for(bucket)?;
     let p = OsPath::from(key);
     let range = offset..offset + len;
@@ -113,6 +119,11 @@ pub fn get_ranges(
     let rs: Vec<std::ops::Range<u64>> = ranges.iter().map(|&(o, l)| o..o + l).collect();
     let out = runtime()
         .block_on(async move { store.get_ranges(&p, &rs).await })
-        .map_err(|e| format!("objstore get_ranges {bucket}/{key} ({} ranges): {e}", ranges.len()))?;
+        .map_err(|e| {
+            format!(
+                "objstore get_ranges {bucket}/{key} ({} ranges): {e}",
+                ranges.len()
+            )
+        })?;
     Ok(out.into_iter().map(|b| b.to_vec()).collect())
 }
