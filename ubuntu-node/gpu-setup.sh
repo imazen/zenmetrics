@@ -20,10 +20,18 @@ set -euo pipefail
 [ "$(id -u)" = 0 ] || exec sudo -E bash "$0" "$@"
 
 echo "== 0/5 preconditions =="
-if ! lspci -nn 2>/dev/null | grep -qiE 'NVIDIA.*(VGA|3D|Display)'; then
+# Two stacked gotchas here (both caught on ryzen5800xt, 2026-08-02):
+#   1. lspci prints the CLASS before the VENDOR ("VGA compatible controller: NVIDIA ..."), so
+#      the match must be class-then-vendor — the original 'NVIDIA.*(VGA|3D)' order could never
+#      match, making this script a silent no-op on every GPU box.
+#   2. With `set -o pipefail`, `lspci | grep -q` fails EXACTLY WHEN THE GPU IS FOUND: grep -q
+#      exits on first match, lspci dies on SIGPIPE (141), pipefail flags the pipeline. Capture
+#      the output instead so grep reads to EOF and no SIGPIPE can occur.
+GPU_LINES="$(lspci -nn 2>/dev/null | grep -iE '(VGA|3D|Display).*NVIDIA' || true)"
+if [ -z "$GPU_LINES" ]; then
   echo "no NVIDIA GPU found on this box — nothing to do."; exit 0
 fi
-lspci -nn | grep -iE 'NVIDIA.*(VGA|3D)' | head -1
+printf '%s\n' "$GPU_LINES" | head -1
 export DEBIAN_FRONTEND=noninteractive
 
 echo "== 1/5 NVIDIA container-toolkit apt repo (if not already present) =="
