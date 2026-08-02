@@ -862,6 +862,19 @@ pub enum ZensimFeatureRegime {
     /// parquets (padded-width divergence + zeroed pools).
     #[value(name = "folded720append")]
     Folded720Append,
+    /// 944 features — `Folded720Append` (924) ++ the 20-slot append2 block
+    /// ([`zensim` `idx_append2`]: BANDVIS gain/loss, luminance conditioner,
+    /// HDR-gated highlight bins — SDR rows carry the HL bins as exact 0).
+    /// Same streaming entry as `Folded720Append` with
+    /// `V2NewFeatureToggles { append2_block: true, ..default() }` — all other
+    /// toggles at their defaults, so the BANDVIS dst-activity plane stays OFF
+    /// per the SOTA-944 P1.5 adjudication (zensim
+    /// `docs/PLAN_SOTA944_CAMPAIGN_2026-08-01.md`; zensim ≥ `d0616362`).
+    /// Slots f0..f923 are BITWISE-IDENTICAL to the `Folded720Append` output
+    /// (append2 is additive-only — gated by `folded944_matches_driver_args`).
+    /// REGIME PURITY: never column-mix with 924/720/v1 parquets.
+    #[value(name = "folded720append2")]
+    Folded720Append2,
 }
 
 impl ZensimFeatureRegime {
@@ -874,6 +887,7 @@ impl ZensimFeatureRegime {
             ZensimFeatureRegime::WithIw => 372,
             ZensimFeatureRegime::V2Ab => 372 + 348,
             ZensimFeatureRegime::Folded720Append => 720 + 204,
+            ZensimFeatureRegime::Folded720Append2 => 720 + 204 + 20,
         }
     }
 }
@@ -889,10 +903,10 @@ impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
             // CPU-only). This `From` feeds the GPU path, which is disabled; the
             // CPU `run_zensim_*` path handles V2Ab directly and never converts.
             ZensimFeatureRegime::V2Ab => zenmetrics_api::zensim::ZensimFeatureRegime::WithIw,
-            // Folded720Append likewise has no GPU-umbrella equivalent (the folded
-            // streaming walk is CPU-only); the CPU path handles it directly and
-            // never converts.
-            ZensimFeatureRegime::Folded720Append => {
+            // Folded720Append(2) likewise have no GPU-umbrella equivalent (the
+            // folded streaming walk is CPU-only); the CPU path handles them
+            // directly and never converts.
+            ZensimFeatureRegime::Folded720Append | ZensimFeatureRegime::Folded720Append2 => {
                 zenmetrics_api::zensim::ZensimFeatureRegime::WithIw
             }
         }

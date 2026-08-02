@@ -180,7 +180,11 @@ pub fn extract_features_v2ab(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
 ) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
-    extract_features_regime(reference, distorted, crate::metrics::ZensimFeatureRegime::V2Ab)
+    extract_features_regime(
+        reference,
+        distorted,
+        crate::metrics::ZensimFeatureRegime::V2Ab,
+    )
 }
 
 /// CPU zensim FEATURE extraction (NO score) for the requested regime, replacing
@@ -210,11 +214,12 @@ pub fn extract_features_regime(
         )
         .into());
     }
-    // Folded+append 924: the streaming walk does its OWN sub-64 reflect-pad, so
-    // it must see the RAW image — this fn's external padding would diverge from
-    // the `v2_ab_extract` foldapp driver on tiny cells (regime purity).
-    if regime == R::Folded720Append {
-        return extract_features_folded924(reference, distorted);
+    // Folded+append 924/944: the streaming walk does its OWN sub-64 reflect-pad,
+    // so it must see the RAW image — this fn's external padding would diverge
+    // from the `v2_ab_extract` foldapp/foldapp2 driver on tiny cells (regime
+    // purity).
+    if regime == R::Folded720Append || regime == R::Folded720Append2 {
+        return extract_features_folded_streaming(reference, distorted, regime);
     }
     // Pad both identically to the 64px pyramid floor (no-op when already ≥64).
     let rp = reflect_pad_to_min(reference, 64);
@@ -237,7 +242,9 @@ pub fn extract_features_regime(
         R::Extended => (true, false),
         R::WithIw | R::V2Ab => (true, true),
         // Handled by the early return above (streaming-only, no v1 block).
-        R::Folded720Append => unreachable!("folded924 early-returns above"),
+        R::Folded720Append | R::Folded720Append2 => {
+            unreachable!("folded streaming early-returns above")
+        }
     };
     let mut cfg = ZensimConfig::default();
     cfg.extended_features = extended;
@@ -265,22 +272,32 @@ pub fn extract_features_regime(
     Ok(features)
 }
 
-/// Folded+append 924-feature extraction (regime `Folded720Append`) — the
-/// STREAMING-ONLY walk (zensim C5, 2026-07-26): O(width) rolling planes, no
-/// prepared reference (the cached-ref machinery was deleted in C5), per-thread
-/// `V2Scratch` reuse across calls. Every argument is pinned to the
-/// `v2_ab_extract` foldapp driver — `ZensimProfile::codec_target()`,
-/// `V2NewFeatureToggles::default()`, RAW unpadded slices (the walk does its own
-/// sub-64 reflect-pad) — so fleet vectors are byte-identical to driver vectors
-/// (W1 local legs run the driver; W2/W3 run this path).
+/// Folded+append streaming extraction (regimes `Folded720Append` = 924 and
+/// `Folded720Append2` = 944) — the STREAMING-ONLY walk (zensim C5,
+/// 2026-07-26): O(width) rolling planes, no prepared reference (the cached-ref
+/// machinery was deleted in C5), per-thread `V2Scratch` reuse across calls.
+/// Every argument is pinned to the `v2_ab_extract` foldapp/foldapp2 driver —
+/// `ZensimProfile::codec_target()`, default toggles (944 adds ONLY
+/// `append2_block: true`, so `append2_dst_activity` stays OFF per the
+/// SOTA-944 P1.5 adjudication), RAW unpadded slices (the walk does its own
+/// sub-64 reflect-pad) — so fleet vectors are byte-identical to driver
+/// vectors (W1 local legs run the driver; W2/W3/bf944 run this path).
+/// append2 is additive-only: the 944 vector's f0..f923 are bitwise-identical
+/// to the 924 vector (gated by `folded944_matches_driver_args`).
 #[cfg(feature = "cpu-metrics")]
-fn extract_features_folded924(
+fn extract_features_folded_streaming(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
+    regime: crate::metrics::ZensimFeatureRegime,
 ) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
     use std::cell::RefCell;
     use zensim::feature_v2::{V2NewFeatureToggles, V2Scratch};
     use zensim::{RgbSlice, Zensim, ZensimProfile};
+    let append2 = match regime {
+        crate::metrics::ZensimFeatureRegime::Folded720Append => false,
+        crate::metrics::ZensimFeatureRegime::Folded720Append2 => true,
+        other => return Err(format!("zensim: not a folded streaming regime: {other:?}").into()),
+    };
     thread_local! {
         // The scratch's wide buffers grow to the widest image this thread has
         // seen and are reused (the producer buffer pool lives here — a fresh
@@ -298,16 +315,19 @@ fn extract_features_folded924(
                 .compute_folded720_append_features_streaming(
                     &src,
                     &dst,
-                    V2NewFeatureToggles::default(),
+                    V2NewFeatureToggles {
+                        append2_block: append2,
+                        ..V2NewFeatureToggles::default()
+                    },
                     &mut s.borrow_mut(),
                 )
                 .map(|r| r.features().to_vec())
         })
         .map_err(|e| format!("zensim: folded720append streaming: {e:?}"))?;
-    let want = crate::metrics::ZensimFeatureRegime::Folded720Append.total_features();
+    let want = regime.total_features();
     if feats.len() != want {
         return Err(format!(
-            "zensim: folded720append expected {want} features, got {}",
+            "zensim: {regime:?} expected {want} features, got {}",
             feats.len()
         )
         .into());
@@ -340,7 +360,9 @@ pub struct ZensimRefCtx {
 /// pyramid once. Reuse across all variants of this source via
 /// [`extract_features_regime_with_ctx`].
 #[cfg(feature = "cpu-metrics")]
-pub fn precompute_ref_ctx(reference: &Rgb8Image) -> Result<ZensimRefCtx, Box<dyn std::error::Error>> {
+pub fn precompute_ref_ctx(
+    reference: &Rgb8Image,
+) -> Result<ZensimRefCtx, Box<dyn std::error::Error>> {
     let padded = reflect_pad_to_min(reference, 64).into_owned();
     let w = reference.width.max(64) as usize;
     let h = reference.height.max(64) as usize;
@@ -354,7 +376,13 @@ pub fn precompute_ref_ctx(reference: &Rgb8Image) -> Result<ZensimRefCtx, Box<dyn
     let v2_pre = zensim::Zensim::new(zensim::ZensimProfile::PreviewV0_2)
         .prepare_v2_reference_with_moments(&zensim::RgbSlice::new(r3, w, h))
         .map_err(|e| format!("zensim: prepare_v2_reference_with_moments: {e:?}"))?;
-    Ok(ZensimRefCtx { padded, w, h, v1_pre, v2_pre })
+    Ok(ZensimRefCtx {
+        padded,
+        w,
+        h,
+        v1_pre,
+        v2_pre,
+    })
 }
 
 /// Extract the regime-appropriate feature vector for `distorted` against a
@@ -370,12 +398,13 @@ pub fn extract_features_regime_with_ctx(
     use crate::metrics::ZensimFeatureRegime as R;
     use zensim::{RgbSlice, ZensimConfig, compute_zensim_with_ref_and_config};
 
-    // No ctx path for the folded regime: C5 deleted the cached-reference
+    // No ctx path for the folded regimes: C5 deleted the cached-reference
     // machinery, and ctx.padded diverges from the streaming walk's own sub-64
     // pad. Callers use extract_features_regime (per-pair, thread-local scratch).
-    if regime == R::Folded720Append {
+    if regime == R::Folded720Append || regime == R::Folded720Append2 {
         return Err(
-            "zensim: Folded720Append has no ref-ctx path — call extract_features_regime".into(),
+            "zensim: folded streaming regimes have no ref-ctx path — call extract_features_regime"
+                .into(),
         );
     }
     if distorted.width.max(64) as usize != ctx.w || distorted.height.max(64) as usize != ctx.h {
@@ -394,8 +423,10 @@ pub fn extract_features_regime_with_ctx(
         R::Basic => (false, false),
         R::Extended => (true, false),
         R::WithIw | R::V2Ab => (true, true),
-        // Rejected by the early return above (no ctx path for the folded regime).
-        R::Folded720Append => unreachable!("folded924 rejected above"),
+        // Rejected by the early return above (no ctx path for the folded regimes).
+        R::Folded720Append | R::Folded720Append2 => {
+            unreachable!("folded streaming rejected above")
+        }
     };
     let mut cfg = ZensimConfig::default();
     cfg.extended_features = extended;
@@ -413,7 +444,11 @@ pub fn extract_features_regime_with_ctx(
     }
     let want = regime.total_features();
     if features.len() != want {
-        return Err(format!("zensim: regime {regime:?} expected {want} features, got {}", features.len()).into());
+        return Err(format!(
+            "zensim: regime {regime:?} expected {want} features, got {}",
+            features.len()
+        )
+        .into());
     }
     Ok(features)
 }
@@ -491,6 +526,88 @@ mod tests {
         }
     }
 
+    /// The fleet 944 path (`Folded720Append2`, jobexec metric
+    /// "zensim-foldapp2") must be byte-identical to a DIRECT zensim streaming
+    /// call with the `v2_ab_extract` foldapp2 driver's exact arguments
+    /// (codec_target profile, `append2_block: true` + otherwise-default
+    /// toggles — `append2_dst_activity` OFF per the SOTA-944 P1.5
+    /// adjudication — RAW unpadded slices). Also pins the G-BF1 premise at
+    /// unit level: append2 is additive-only, so slots f0..f923 of the 944
+    /// vector must be BITWISE-IDENTICAL to the 924 extraction of the same
+    /// pair, and the append2 tail must be finite and bounded [0,1] (the SDR
+    /// HL bins' exact 0 lies inside that range). Covers sub-64 + odd dims
+    /// like the 924 test.
+    #[test]
+    fn folded944_matches_driver_args() {
+        use zensim::feature_v2::{V2NewFeatureToggles, V2Scratch};
+        use zensim::{RgbSlice, Zensim, ZensimProfile};
+        for (w, h) in [(96u32, 80u32), (127, 93), (48, 40)] {
+            let reference = synth(21, w, h);
+            let distorted = synth(22, w, h);
+            let ours = extract_features_regime(
+                &reference,
+                &distorted,
+                crate::metrics::ZensimFeatureRegime::Folded720Append2,
+            )
+            .unwrap();
+            let r3: &[[u8; 3]] = bytemuck::cast_slice(&reference.pixels);
+            let d3: &[[u8; 3]] = bytemuck::cast_slice(&distorted.pixels);
+            let mut scratch = V2Scratch::new();
+            let direct = Zensim::new(ZensimProfile::codec_target())
+                .with_parallel(false)
+                .compute_folded720_append_features_streaming(
+                    &RgbSlice::new(r3, w as usize, h as usize),
+                    &RgbSlice::new(d3, w as usize, h as usize),
+                    V2NewFeatureToggles {
+                        append2_block: true,
+                        ..V2NewFeatureToggles::default()
+                    },
+                    &mut scratch,
+                )
+                .unwrap();
+            assert_eq!(ours.len(), 944, "{w}×{h}");
+            assert_eq!(direct.features().len(), 944, "{w}×{h}");
+            for (i, (a, b)) in ours.iter().zip(direct.features()).enumerate() {
+                assert_eq!(a.to_bits(), b.to_bits(), "slot {i} differs ({w}×{h})");
+            }
+            // G-BF1 premise: f0..f923 bitwise-identical to the 924 regime.
+            let base924 = extract_features_regime(
+                &reference,
+                &distorted,
+                crate::metrics::ZensimFeatureRegime::Folded720Append,
+            )
+            .unwrap();
+            assert_eq!(base924.len(), 924, "{w}×{h}");
+            for (i, (a, b)) in ours[..924].iter().zip(base924.iter()).enumerate() {
+                assert_eq!(
+                    a.to_bits(),
+                    b.to_bits(),
+                    "f{i} of 944 diverges from the 924 regime ({w}×{h}) — append2 must be additive-only"
+                );
+            }
+            // append2 tail: finite, bounded [0,1].
+            for (i, v) in ours[924..].iter().enumerate() {
+                assert!(
+                    v.is_finite() && (0.0..=1.0).contains(v),
+                    "append2 slot f{} out of [0,1] or non-finite ({w}×{h}): {v}",
+                    924 + i
+                );
+            }
+            // Thread-local scratch reuse must not perturb results.
+            let again = extract_features_regime(
+                &reference,
+                &distorted,
+                crate::metrics::ZensimFeatureRegime::Folded720Append2,
+            )
+            .unwrap();
+            assert_eq!(
+                ours.iter().map(|f| f.to_bits()).collect::<Vec<_>>(),
+                again.iter().map(|f| f.to_bits()).collect::<Vec<_>>(),
+                "scratch-reuse divergence ({w}×{h})"
+            );
+        }
+    }
+
     /// The amortized precompute-ref path MUST be bit-identical to the plain
     /// `score()` path — a perceptual metric the picker trains on is pixel-sacred.
     /// Build the ref ONCE, score many distinct distorted images (the score-pairs
@@ -521,7 +638,10 @@ mod tests {
         let distorted = synth(101, 96, 72);
         let feats = extract_features_v2ab(&reference, &distorted).unwrap();
         assert_eq!(feats.len(), 720, "v2ab must emit v1-372 ++ v2-348 = 720");
-        assert!(feats.iter().all(|v| v.is_finite()), "all 720 features finite");
+        assert!(
+            feats.iter().all(|v| v.is_finite()),
+            "all 720 features finite"
+        );
         // both blocks populated (not all-zero)
         assert!(feats[..372].iter().any(|&v| v != 0.0), "v1 block populated");
         assert!(feats[372..].iter().any(|&v| v != 0.0), "v2 block populated");
@@ -621,23 +741,34 @@ mod tests {
         let (w, h) = (96usize, 72usize);
         let n_scales = 4; // zensim NUM_SCALES (pub(crate)); the ZensimConfig default
         let reference = synth(1, w as u32, h as u32);
-        let r3: Vec<[u8; 3]> =
-            reference.pixels.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+        let r3: Vec<[u8; 3]> = reference
+            .pixels
+            .chunks_exact(3)
+            .map(|c| [c[0], c[1], c[2]])
+            .collect();
         let mut cfg = ZensimConfig::default();
         cfg.extended_features = true;
         cfg.compute_iw_features = true;
         let pre = precompute_reference_with_scales(&r3, w, h, n_scales).unwrap();
         for d in 0..4u32 {
             let dist = synth(200 + d, w as u32, h as u32);
-            let d3: Vec<[u8; 3]> =
-                dist.pixels.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
-            let per_call = compute_zensim_with_config(&r3, &d3, w, h, cfg).unwrap().into_features();
-            let via_pre = compute_zensim_with_ref_and_config(&pre, &d3, w, h, cfg).unwrap().into_features();
+            let d3: Vec<[u8; 3]> = dist
+                .pixels
+                .chunks_exact(3)
+                .map(|c| [c[0], c[1], c[2]])
+                .collect();
+            let per_call = compute_zensim_with_config(&r3, &d3, w, h, cfg)
+                .unwrap()
+                .into_features();
+            let via_pre = compute_zensim_with_ref_and_config(&pre, &d3, w, h, cfg)
+                .unwrap()
+                .into_features();
             assert_eq!(per_call.len(), 372);
             assert_eq!(via_pre.len(), 372);
             for (i, (a, b)) in per_call.iter().zip(via_pre.iter()).enumerate() {
                 assert_eq!(
-                    a.to_bits(), b.to_bits(),
+                    a.to_bits(),
+                    b.to_bits(),
                     "v1 feat[{i}] differs precomputed-ref vs per-call (d={d}): {a} vs {b}"
                 );
             }
@@ -662,7 +793,8 @@ mod tests {
                 assert_eq!(via_ctx.len(), 720);
                 for (i, (a, b)) in per_call.iter().zip(via_ctx.iter()).enumerate() {
                     assert_eq!(
-                        a.to_bits(), b.to_bits(),
+                        a.to_bits(),
+                        b.to_bits(),
                         "ctx feat[{i}] differs @ {w}x{h} d={d}: {a} vs {b}"
                     );
                 }
@@ -698,7 +830,10 @@ mod tests {
         let via_ctx = t1.elapsed().as_secs_f64();
         eprintln!(
             "ZENSIM chunk {w}x{h} ×12: per-call {:.0} ms | ctx(ref-reuse) {:.0} ms | speedup {:.2}× ({:.0}% off)",
-            per_call * 1e3, via_ctx * 1e3, per_call / via_ctx, (1.0 - via_ctx / per_call) * 100.0
+            per_call * 1e3,
+            via_ctx * 1e3,
+            per_call / via_ctx,
+            (1.0 - via_ctx / per_call) * 100.0
         );
     }
 
@@ -713,7 +848,11 @@ mod tests {
         let b = extract_features_v2ab(&reference, &distorted).unwrap();
         assert_eq!(a.len(), b.len());
         for (i, (x, y)) in a.iter().zip(b.iter()).enumerate() {
-            assert_eq!(x.to_bits(), y.to_bits(), "v2ab feature[{i}] must be deterministic");
+            assert_eq!(
+                x.to_bits(),
+                y.to_bits(),
+                "v2ab feature[{i}] must be deterministic"
+            );
         }
     }
 }
