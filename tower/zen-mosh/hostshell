@@ -1,4 +1,0 @@
-#!/bin/sh
-# Enter the Unraid host's namespaces (mount/UTS/IPC/net; pidns is already
-# host via --pid=host) and hand over a root login shell on the HOST.
-exec nsenter -t 1 -m -u -i -n -- /bin/bash -l

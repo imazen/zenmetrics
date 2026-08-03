@@ -1,3 +1,0 @@
-#!ipxe
-dhcp || echo (dhcp warning, continuing)
-chain --replace http://192.168.50.170:3080/api/boot/${mac:hexhyp} || shell

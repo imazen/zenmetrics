@@ -17,7 +17,7 @@ Workspace conventions per the global rules:
 - `zensim-foldapp2` jobexec metric — folded+append2 streaming **944**-feature regime (SOTA-944 P1 bigcodec wave; zensim ≥ `d0616362`, `append2_block` ON / `append2_dst_activity` OFF per the P1.5 adjudication), driver-parity-tested incl. f0..f923 bitwise-identity vs the 924 regime; bf944 declare tooling (`declare_bf944.py` cloning the drained bf924 runs, hard-verifying the source metric) and the `_pool944` wave repoint (enroll/tower/snapshot/reconcile defaults, container `zen944-basement`, image tag `exec-zensim944-57b7b9ad`) (57b7b9ad)
 - bf924/W2/W3 close-out: kadis-924 rescore (699,999 + negrich 167,034, byte-equal targets), tbig_924_full (5,742,660 exact) + 21 views at match_rate 1.0000; pool_reconcile_report; zen-node-4 enrolled (SN850X serial-matched install)
 - `zensim-foldapp` jobexec metric — folded+append streaming 924-feature regime (zensim C5 `0b3d16b0`), driver-parity-tested; bf924 declare tooling (`declare_bf924.py`, 54 runs / 490,173 cells) and the `_pool924` wave (d02279d5, 2095f80b)
-- **PXE interactive console installer** — an unregistered box now offers a GRUB menu to pick its OS disk and confirm the wipe, so a new box can be provisioned at its own console without the dev box. Local boot stays the timeout-selected default, the confirm names the exact serial, and the tower re-validates that serial against the box's own inventory; managed boxes (jason/ian/i265) keep the instant chainload unless opted in with `fleet-pxe menu <mac>`. Console installs land credential-less (worker disabled + `NEEDS-CRED`) — finish with `enroll_running_node.sh --start <ip>`. Also fixes a `deploy.sh` race that could leave `zen-pxe-dnsmasq` down (all PXE dead) while reporting success (ce332e28)
+- **PXE interactive console installer** — an unregistered box now offers a GRUB menu to pick its OS disk and confirm the wipe, so a new box can be provisioned at its own console without the dev box. Local boot stays the timeout-selected default, the confirm names the exact serial, and the tower re-validates that serial against the box's own inventory; managed boxes (node-2/node-3/i265) keep the instant chainload unless opted in with `fleet-pxe menu <mac>`. Console installs land credential-less (worker disabled + `NEEDS-CRED`) — finish with `enroll_running_node.sh --start <ip>`. Also fixes a `deploy.sh` race that could leave `zen-pxe-dnsmasq` down (all PXE dead) while reporting success (ce332e28)
 - **PXE node image bakes mosh/tmux + herdr/Claude Code/rustup** — new nodes get the fleet's terminal + agent toolkit at install time (retry-3x, never install-fatal), with `/etc/environment` PATH so non-interactive ssh finds them; i265 brought in line by hand and its install flag confirmed un-armed (75f4d1a6)
 
 ### Fixed
@@ -36,7 +36,7 @@ Workspace conventions per the global rules:
 - **`tower/zen-mosh/` — tower terminal gateway** (mosh + tmux + herdr in a
   Docker container, host root shells via nsenter; Unraid host untouched) and a
   NODES.md "Remote terminals" section covering the 2026-07-26 mosh/tmux/herdr
-  rollout across lianli/mac/tower/jason (jason completed same day on user
+  rollout across lianli/mac/tower/node-2 (node-2 completed same day on user
   override, via the zenadmin-reboot fallback; left booted into Ubuntu).
   Connect: `mosh --ssh='ssh -p 2223' root@tower`. (85f8e613, e739cac7)
 

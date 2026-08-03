@@ -16,7 +16,7 @@ box, not inferred.
 
 | | |
 |---|---|
-| Box | `ryzen5800xt` (192.168.50.250), Ubuntu 26.04, Python 3.14, 64 GB RAM |
+| Box | `ryzen5800xt` (LAN IP in homefleet NODES.md), Ubuntu 26.04, Python 3.14, 64 GB RAM |
 | Device | `lsusb` → `Bus 001 Device 005: ID 87ad:70db ChiZhu Tech USBDISPLAY` |
 | TRCC | **9.9.5**, installed from the project's `.deb` (`trcc-linux-latest_all.deb`) |
 | Installed package | `/usr/lib/python3/dist-packages/trcc` ← **edit here to test hot-fixes** |
@@ -129,7 +129,7 @@ renderer before choosing.
 ## 6. Reproducing from scratch
 
 ```bash
-ssh zen@192.168.50.250
+ssh zen@ryzen5800xt   # IP in homefleet NODES.md
 sudo pkill -f "python3 /usr/local/bin/[t]rcc"     # bracket avoids self-match, see §8
 trcc device connect 87ad:70db                      # -> 1600×720, model_id 64
 trcc display color 87ad:70db "#ff0000"             # panel turns RED (works)

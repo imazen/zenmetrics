@@ -256,7 +256,7 @@ pull-based it needs **no inbound ports / port-forward / tunnel** — only outbou
 run (never puts the root key on the Unraid box):
 
 ```bash
-bash scripts/jobsys/unraid_worker.sh <RUN> 7 cpu_heavy,cpu_light
+bash ~/work/zen/homefleet/zenmetrics/scripts/jobsys/unraid_worker.sh <RUN> 7 cpu_heavy,cpu_light
 #                                      run  ttl_days  capability(optional)
 ```
 
@@ -338,7 +338,7 @@ work.
 cargo build --release -p zenfleet-worker -p zenfleet-ctl
 bash scripts/jobsys/demo_e2e_r2.sh          # declare→gap 4→0, converge, coverage, blobs+ledger+lease
 bash scripts/jobsys/launch_fleet.sh 120 1 0 0 1   # 3 real providers concurrent (paid: Hetzner+Salad)
-bash scripts/jobsys/unraid_worker.sh <RUN>        # add the basement tier to that run
+bash ~/work/zen/homefleet/zenmetrics/scripts/jobsys/unraid_worker.sh <RUN>        # add the basement tier to that run
 bash scripts/jobsys/fleet watch <RUN>          # watch DONE rows by provider
 bash scripts/jobsys/teardown_fleet.sh <RUN>       # tear it all down
 ```

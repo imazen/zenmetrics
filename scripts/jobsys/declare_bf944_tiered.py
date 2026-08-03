@@ -5,7 +5,7 @@
 #
 #   The bf924 baseline (tbig_924_full + the 21 views) is SIMD-TIER-MIXED row-wise —
 #   each row carries the accumulation order of whichever box extracted it (AVX-512
-#   Zen4 lianli/wsl vs AVX2-only tower/jason/i265/ian vs NEON mac; deltas ~1e-10 rel,
+#   Zen4 lianli/wsl vs AVX2-only tower/node-2/i265/node-3 vs NEON mac; deltas ~1e-10 rel,
 #   ~25% of slots). MEASURED: a tower re-extraction of tower-made rows is BITWISE
 #   IDENTICAL with the new binary, while an AVX-512 box re-extracting the same rows is
 #   not (tier_proof instrument, benchmarks doc). So G-BF1 (f0..f923 bitwise vs the 924
@@ -17,7 +17,7 @@
 # attribution.py from the kept rows of matched_ledger.parquet):
 #
 #   bf944v4x-<x>  -> jobs/_pool944v4x/runlist.tsv   (AVX-512: lianli, wsl)
-#   bf944v4-<x>   -> jobs/_pool944v4/runlist.tsv    (AVX2: tower, jason, ian, i265)
+#   bf944v4-<x>   -> jobs/_pool944v4/runlist.tsv    (AVX2: tower, node-2, node-3, i265)
 #   bf944neon-<x> -> jobs/_pool944neon/runlist.tsv  (Apple Silicon: mac, native build)
 #
 # Cell identity: the bf924 manifests are read directly and the metric rewritten

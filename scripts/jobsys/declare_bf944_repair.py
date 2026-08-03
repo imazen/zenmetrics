@@ -7,8 +7,8 @@
 # re-extraction to run on the SAME CPU VENDOR (x tier) as the bf924 extractor.
 # Most cells already have a class-matched blob from the wave's multi-worker
 # re-scoring; this declares ONLY the remainder (repair_cells.json census):
-#   bf944amd-<x>  -> jobs/_pool944amdv4/runlist.tsv   (tower, ian)
-#   bf944int-<x>  -> jobs/_pool944intelv4/runlist.tsv (i265, jason)
+#   bf944amd-<x>  -> jobs/_pool944amdv4/runlist.tsv   (tower, node-3)
+#   bf944int-<x>  -> jobs/_pool944intelv4/runlist.tsv (i265, node-2)
 # Cells are matched inside the bf924 manifests by the python replication of
 # JobId::of (sorted-keys serde encoding — proven exact vs zenfleet-ctl ids).
 import gzip, hashlib, io, json, os, subprocess, sys
