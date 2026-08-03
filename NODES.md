@@ -169,6 +169,15 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   zenjpeg-e1-mp1 (lianli 311, 7950X host 322; K16 = 260 @ 78% eff) · worker enrolled + RUNNING;
   BootOrder PXE-first (0003,0000). Bench records: zensysbench
   `benchmarks/ryzen5800xt_membw_ddr4-2133_2026-08-02.*` + `results/ryzen5800xt/`.
+  **Cooler LCD (Thermalright Levita Vision, USB `87ad:70db`) — PARTIALLY WORKING, source
+  fix pending:** TRCC Linux 9.9.5 installed; solid colours display on demand, but rendered
+  images/video do not (panel falls back to the Thermalright logo) and TRCC **OOM-killed
+  itself twice at ~62 GB RSS**. Prime suspect is a wrong device descriptor —
+  `registry.py` calls `87ad:70db` a 480×480 "GrandVision 360 AIO" while the wire handshake
+  reports the true **1600×720, model_id 64**. Full investigation, repro ladder, source
+  line numbers and the fix plan: [`docs/TRCC_LEVITA_VISION.md`](docs/TRCC_LEVITA_VISION.md).
+  Two traps worth knowing even if you never touch the panel: `play-video` only ARMS
+  playback (`display play` is the pump), and `pkill -f trcc` kills your own ssh command.
 - **jason — Thermalright cooler characterised 2026-07-29** (full data +
   method: [`benchmarks/jason_cooler_thermal_2026-07-29.meta`](benchmarks/jason_cooler_thermal_2026-07-29.meta);
   harness: [`ubuntu-node/thermal/`](ubuntu-node/thermal/)). Full all-core AVX load
