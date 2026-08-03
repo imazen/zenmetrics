@@ -158,9 +158,13 @@ permanent via router DHCP reservations** (see "Addressing" below) — do NOT rel
   yes, the hostname says 5800xt; the silicon is the 16-core · **32 GB DDR4-3600** (2×16 Neo Forza /
   Gold Key `NMGD416E82-4400G`, 4400-bin run at 3600, **upgraded 2026-08-03** — replaced 48 GB of mixed
   rated-2133; same-box A/B: membw 26.9→48.7 GB/s copy (+80%, single-thread no longer saturates the
-  controller), marker encode +5.5% @K32 (305→322 MP/s, ties the 7950X host) — the cache-friendly
-  marker understates gains on bandwidth-bound passes; bundles in zensysbench
-  `benchmarks/ryzen5800xt_{baseline_pre-upgrade,post-upgrade_ddr4-3600}_*/`) · GTX 1050 2 GB (**driver 580 pinned** — last Pascal branch, `-open` unsupported;
+  controller); on single-job codec work the speed upgrade is worth a **median +1.4%** across
+  16 replayed cells (av1-svt +7.9%, IQA +8.0%, jpeg-decode +4.5%; compute-bound png/webp
+  encode unmoved), and the second pair bought **+0.3% = nothing** beyond capacity, as
+  expected for a box that was never RAM-starved. **An earlier "+5.5% @K32" claim here was
+  RETRACTED** — single samples of a K-sweep later measured at ±16% spread. Three-way
+  verdict + retraction: zensysbench
+  `benchmarks/ryzen5800xt_ram_threeway_2026-08-03/VERDICT.md`) · GTX 1050 2 GB (**driver 580 pinned** — last Pascal branch, `-open` unsupported;
   container toolkit wired; CUDA verified against CPU scores, ssim2 73.67 vs 73.76; 2 GB caps
   large-image GPU work) · 950 PRO 512 GB NVMe OS (0% wear, benches at spec 2482/1455 MB/s) + 860
   465 GB SATA → XFS **`/scratch`** (zen-owned, nofail; 543/515 MB/s; future reinstalls wipe both via
