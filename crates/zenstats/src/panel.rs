@@ -26,6 +26,16 @@ use std::collections::HashMap;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+/// Row count below which the O(n²) pair sweeps ([`kendall_tau`],
+/// [`sa_st_curve`]) stay on the serial path.
+///
+/// Under it, rayon's task/reduction overhead exceeds the ~n²/2 pair
+/// comparisons it would spread. The threshold changes **timing only** —
+/// both paths produce bit-identical results (integer/`max` reductions),
+/// which is what lets it be tuned freely.
+#[cfg(feature = "parallel")]
+const PAR_MIN_N: usize = 512;
+
 // ----------------------------------------------------------------------
 // Core rank-based correlation primitives
 // ----------------------------------------------------------------------
@@ -93,32 +103,81 @@ pub fn pearson(a: &[f64], b: &[f64]) -> f64 {
     if den < 1e-12 { 0.0 } else { num / den }
 }
 
+/// Kendall's τ-b with an **approximate** tie test (`|Δ| < 1e-12`).
+///
+/// # Why this stays O(n²)
+///
+/// The obvious speedup is Knight's O(n log n) merge-sort formulation
+/// (what `scipy.stats.kendalltau` uses). **It cannot reproduce this
+/// function**, and the difference is not in the last bits.
+///
+/// Every sort-based algorithm groups tied values into equivalence
+/// classes, which requires the tie relation to be *transitive*. The
+/// epsilon test here is not: with `a = [0, 0.9e-12, 1.8e-12]`, elements
+/// 0~1 and 1~2 are ties but 0~2 is not. On `b = [1, 2, 3]` this function
+/// returns **0.5774** while any exact-equality/sort-based τ-b (including
+/// scipy) returns **1.0** — see `kendall_epsilon_ties_are_not_transitive`.
+///
+/// That case is invisible to the usual gate: exhaustive permutations of
+/// *distinct* values and *exactly*-tied fixtures both avoid chained
+/// near-ties, so a Knight's port would pass its tests and silently move
+/// KROCC on real data (float scores land within 1e-12 of each other
+/// routinely near a saturated metric ceiling).
+///
+/// So the loop is kept and parallelised instead — the counters are
+/// integers, whose addition is exact and associative, so summing
+/// per-thread partials reproduces the serial totals bit-for-bit.
+/// Changing the tie semantics to exact equality would make Knight's
+/// applicable, but that is a **metric definition change** and belongs to
+/// whoever owns the panel's definition, not to a performance pass.
 pub fn kendall_tau(a: &[f64], b: &[f64]) -> f64 {
     let n = a.len();
     if n < 2 {
         return 0.0;
     }
-    let mut concordant = 0i64;
-    let mut discordant = 0i64;
-    let mut ties_a = 0i64;
-    let mut ties_b = 0i64;
-    for i in 0..n {
+    // Per-`i` partial counts, then a plain sum. `i` owns the pair range
+    // `(i+1)..n`, so the partition is over disjoint pair sets and every
+    // pair is classified by the identical branch chain as before.
+    let fold_i = |i: usize| -> [i64; 4] {
+        let (ai, bi) = (a[i], b[i]);
+        let mut c = [0i64; 4]; // [concordant, discordant, ties_a, ties_b]
         for j in (i + 1)..n {
-            let da = a[i] - a[j];
-            let db = b[i] - b[j];
+            let da = ai - a[j];
+            let db = bi - b[j];
             if da.abs() < 1e-12 && db.abs() < 1e-12 {
                 continue;
             } else if da.abs() < 1e-12 {
-                ties_a += 1;
+                c[2] += 1;
             } else if db.abs() < 1e-12 {
-                ties_b += 1;
+                c[3] += 1;
             } else if (da * db) > 0.0 {
-                concordant += 1;
+                c[0] += 1;
             } else {
-                discordant += 1;
+                c[1] += 1;
             }
         }
-    }
+        c
+    };
+    let add = |mut x: [i64; 4], y: [i64; 4]| -> [i64; 4] {
+        for k in 0..4 {
+            x[k] += y[k];
+        }
+        x
+    };
+
+    // `PAR_MIN_N` keeps small panels (the common case in unit tests and
+    // per-band slices) on the serial path, where rayon's task overhead
+    // would dominate the n²/2 comparisons.
+    #[cfg(feature = "parallel")]
+    let totals = if n >= PAR_MIN_N {
+        (0..n).into_par_iter().map(fold_i).reduce(|| [0i64; 4], add)
+    } else {
+        (0..n).map(fold_i).fold([0i64; 4], add)
+    };
+    #[cfg(not(feature = "parallel"))]
+    let totals = (0..n).map(fold_i).fold([0i64; 4], add);
+
+    let [concordant, discordant, ties_a, ties_b] = totals;
     let total_a = (concordant + discordant + ties_a) as f64;
     let total_b = (concordant + discordant + ties_b) as f64;
     let den = (total_a * total_b).sqrt();
@@ -285,33 +344,63 @@ pub fn sa_st_curve(scores: &[f64], humans: &[f64], n_points: usize) -> Vec<(f64,
     // reproduces the per-threshold active/correct counts bit-for-bit.
     // Time is still O(n² · log n_points); memory drops to O(n_points).
 
+    // Both passes are parallelised over `i` under `feature = "parallel"`.
+    // `i` owns the pair range `(i+1)..n`, so the partition is over
+    // disjoint pair sets, and the two reductions are EXACT: `max` on
+    // f64 does not round, and the difference arrays hold integer counts
+    // whose addition is associative. The merged result is therefore
+    // bit-for-bit the serial result regardless of thread count or split
+    // — held by `sa_st_curve_matches_allpairs_reference_bit_for_bit`,
+    // whose row counts straddle `PAR_MIN_N`.
+
     // Pass 1: st_max = max subjective gap over direction-bearing pairs.
-    let mut st_max = 0.0_f64;
-    let mut any_pair = false;
-    for i in 0..n {
+    let max_gap_i = |i: usize| -> (f64, bool) {
         let (hi, si) = (humans[i], scores[i]);
+        let mut m = 0.0_f64;
+        let mut any = false;
         for j in (i + 1)..n {
             let dh = humans[j] - hi;
             let ds = scores[j] - si;
             if !dh.is_finite() || !ds.is_finite() || dh == 0.0 || ds == 0.0 {
                 continue;
             }
-            any_pair = true;
+            any = true;
             let g = dh.abs();
-            if g > st_max {
-                st_max = g;
+            if g > m {
+                m = g;
             }
         }
-    }
+        (m, any)
+    };
+    let merge_max = |x: (f64, bool), y: (f64, bool)| -> (f64, bool) {
+        (if y.0 > x.0 { y.0 } else { x.0 }, x.1 || y.1)
+    };
+    #[cfg(feature = "parallel")]
+    let (st_max, any_pair) = if n >= PAR_MIN_N {
+        (0..n)
+            .into_par_iter()
+            .map(max_gap_i)
+            .reduce(|| (0.0_f64, false), merge_max)
+    } else {
+        (0..n).map(max_gap_i).fold((0.0_f64, false), merge_max)
+    };
+    #[cfg(not(feature = "parallel"))]
+    let (st_max, any_pair) = (0..n).map(max_gap_i).fold((0.0_f64, false), merge_max);
+
     if !any_pair || st_max <= 0.0 {
         return Vec::new();
     }
 
     // Pass 2: range-update the difference arrays over the thresholds.
-    let mut active_diff = vec![0i64; n_points + 1];
-    let mut correct_diff = vec![0i64; n_points + 1];
-    for i in 0..n {
+    // Each `i` produces its own pair of difference arrays (n_points + 1
+    // i64s — tiny and independent of n), summed elementwise.
+    // Accumulate in place into a per-task pair of arrays rather than
+    // returning fresh Vecs per row: `map` would allocate 2·n of them
+    // (n_points+1 i64s each), which at n ≈ 11 k costs more than the
+    // arithmetic it parallelises.
+    let accumulate_i = |acc: &mut (Vec<i64>, Vec<i64>), i: usize| {
         let (hi, si) = (humans[i], scores[i]);
+        let (active_diff, correct_diff) = acc;
         for j in (i + 1)..n {
             let dh = humans[j] - hi;
             let ds = scores[j] - si;
@@ -329,7 +418,38 @@ pub fn sa_st_curve(scores: &[f64], humans: &[f64], n_points: usize) -> Vec<(f64,
                 }
             }
         }
-    }
+    };
+    let merge_diffs = |mut x: (Vec<i64>, Vec<i64>), y: (Vec<i64>, Vec<i64>)| {
+        for (dst, src) in x.0.iter_mut().zip(y.0.iter()) {
+            *dst += *src;
+        }
+        for (dst, src) in x.1.iter_mut().zip(y.1.iter()) {
+            *dst += *src;
+        }
+        x
+    };
+    let zero_diffs = || (vec![0i64; n_points + 1], vec![0i64; n_points + 1]);
+    let serial_diffs = || {
+        let mut acc = zero_diffs();
+        for i in 0..n {
+            accumulate_i(&mut acc, i);
+        }
+        acc
+    };
+    #[cfg(feature = "parallel")]
+    let (active_diff, correct_diff) = if n >= PAR_MIN_N {
+        (0..n)
+            .into_par_iter()
+            .fold(zero_diffs, |mut acc, i| {
+                accumulate_i(&mut acc, i);
+                acc
+            })
+            .reduce(zero_diffs, merge_diffs)
+    } else {
+        serial_diffs()
+    };
+    #[cfg(not(feature = "parallel"))]
+    let (active_diff, correct_diff) = serial_diffs();
 
     // Prefix-sum to per-threshold counts and rebuild the (ST, SA) curve
     // EXACTLY as the all-pairs sweep did (same ST expression, same
@@ -1989,6 +2109,110 @@ mod tests {
     }
 
     #[test]
+    fn kendall_parallel_matches_serial_bit_for_bit() {
+        // `kendall_tau`'s pair sweep is split across rayon by `i`. The
+        // counters are i64, so the reduction is exact — this holds it
+        // against the pre-parallel body (kept verbatim as the oracle)
+        // at row counts that straddle `PAR_MIN_N`.
+        fn reference(a: &[f64], b: &[f64]) -> f64 {
+            let n = a.len();
+            if n < 2 {
+                return 0.0;
+            }
+            let (mut c, mut d, mut ta, mut tb) = (0i64, 0i64, 0i64, 0i64);
+            for i in 0..n {
+                for j in (i + 1)..n {
+                    let da = a[i] - a[j];
+                    let db = b[i] - b[j];
+                    if da.abs() < 1e-12 && db.abs() < 1e-12 {
+                        continue;
+                    } else if da.abs() < 1e-12 {
+                        ta += 1;
+                    } else if db.abs() < 1e-12 {
+                        tb += 1;
+                    } else if (da * db) > 0.0 {
+                        c += 1;
+                    } else {
+                        d += 1;
+                    }
+                }
+            }
+            let total_a = (c + d + ta) as f64;
+            let total_b = (c + d + tb) as f64;
+            let den = (total_a * total_b).sqrt();
+            if den < 1e-12 {
+                0.0
+            } else {
+                ((c - d) as f64) / den
+            }
+        }
+        let mut s = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s
+        };
+        for &n in &[2usize, 7, 64, 511, 512, 513, 1500] {
+            let a: Vec<f64> = (0..n).map(|_| (next() % 10_000) as f64 / 13.0).collect();
+            let b: Vec<f64> = (0..n).map(|_| (next() % 10_000) as f64 / 17.0).collect();
+            assert_eq!(
+                reference(&a, &b).to_bits(),
+                kendall_tau(&a, &b).to_bits(),
+                "n={n} random"
+            );
+            // Tie-heavy: many exact ties in both columns, which is where
+            // the four-way branch chain actually gets exercised.
+            let ta: Vec<f64> = (0..n).map(|i| (i % 5) as f64).collect();
+            let tb: Vec<f64> = (0..n).map(|i| (i % 3) as f64).collect();
+            assert_eq!(
+                reference(&ta, &tb).to_bits(),
+                kendall_tau(&ta, &tb).to_bits(),
+                "n={n} ties"
+            );
+            // Perfectly anti-correlated — all-discordant, no ties.
+            let aa: Vec<f64> = (0..n).map(|i| i as f64).collect();
+            let ab: Vec<f64> = (0..n).map(|i| -(i as f64)).collect();
+            assert_eq!(
+                reference(&aa, &ab).to_bits(),
+                kendall_tau(&aa, &ab).to_bits(),
+                "n={n} anti"
+            );
+        }
+    }
+
+    #[test]
+    fn kendall_epsilon_ties_are_not_transitive() {
+        // WHY `kendall_tau` IS NOT PORTED TO KNIGHT'S O(n log n) FORM.
+        //
+        // The tie test is `|Δ| < 1e-12`, an approximate relation that is
+        // NOT transitive: below, a[0]~a[1] and a[1]~a[2] are ties but
+        // a[0]~a[2] is not. Knight's algorithm — and every other
+        // sort-based τ-b, including scipy's — must group ties into
+        // equivalence classes, so it cannot represent this input and
+        // returns the exact-equality answer (1.0) instead.
+        //
+        // This is a ~0.42 absolute difference in KROCC on a 3-element
+        // input, not a last-bit rounding difference. It is also
+        // invisible to the standard gate: exhaustive permutations of
+        // distinct values and exactly-tied fixtures both avoid chained
+        // near-ties. If this test ever fails, someone changed the tie
+        // semantics — which is a metric-definition change requiring
+        // sign-off, not a performance patch.
+        let a = [0.0, 0.9e-12, 1.8e-12];
+        let b = [1.0, 2.0, 3.0];
+        let tau = kendall_tau(&a, &b);
+        assert!(
+            (tau - 0.577_350_269_189_625_8).abs() < 1e-15,
+            "epsilon-tie tau changed: {tau} (exact-equality/sort-based tau-b would give 1.0)"
+        );
+        // Sanity: the SAME data with the near-ties widened past the
+        // epsilon is the all-concordant case, i.e. 1.0.
+        let a_wide = [0.0, 1.0, 2.0];
+        assert!((kendall_tau(&a_wide, &b) - 1.0).abs() < 1e-15);
+    }
+
+    #[test]
     fn sa_st_curve_matches_allpairs_reference_bit_for_bit() {
         // The memory-bounded difference-array `sa_st_curve` must
         // reproduce the previous all-pairs O(n²)-memory body EXACTLY
@@ -2067,7 +2291,12 @@ mod tests {
             s ^= s << 17;
             s
         };
-        for &n in &[2usize, 3, 5, 17, 64, 200, 777] {
+        // 511/512/513 straddle `PAR_MIN_N`, so this oracle covers the
+        // serial path, the parallel path, and the exact switchover row
+        // count. Keep them in step if `PAR_MIN_N` moves — otherwise the
+        // parallel reduction stops being compared against the all-pairs
+        // reference at all.
+        for &n in &[2usize, 3, 5, 17, 64, 200, 511, 512, 513, 777] {
             for &np in &[2usize, 8, 128] {
                 let humans: Vec<f64> = (0..n).map(|_| (next() % 1000) as f64 / 7.0).collect();
                 let scores: Vec<f64> = (0..n).map(|_| (next() % 1000) as f64 / 11.0).collect();

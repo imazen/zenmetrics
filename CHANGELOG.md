@@ -13,6 +13,16 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenstats
+
+### Changed
+- **`kendall_tau` + `sa_st_curve` pair sweeps parallelised — bit-identical, up to 1.27× on a single large corpus.** Both are O(n²) over index pairs and were the top remaining CPU cost in zensim's `bake_verdict` after its 2026-08-04 parallelisation pass (`sa_st_curve` alone was **18.3% of cycles**, `perf record`). Each `i` owns the disjoint pair range `(i+1)..n`, so the sweeps now split across rayon under the existing `parallel` feature (serial below `PAR_MIN_N` = 512 rows, where task overhead would dominate). The reductions are **exact, not approximately equal**: the counters are `i64` (addition is associative and cannot round) and `st_max` is an f64 `max` (also exact), so the merged result is bit-for-bit the serial result at any thread count. `sa_st_curve` pass 2 accumulates into a per-task pair of difference arrays rather than allocating per row. Measured through zensim `bake_verdict --regime 944` on a 7950X: single-corpus hfnlproxy (11 356 rows) 6.28 s → 4.95 s, kadid (10 125) 6.07 s → 5.04 s, 12-corpus 9.5 s → 8.4 s — with `verify_verdict_identity.sh` reporting **all 82 433 numeric fields identical**, and identical again run-to-run. Coverage: `sa_st_curve_matches_allpairs_reference_bit_for_bit` gained rows 511/512/513 so it straddles the switchover, and `kendall_parallel_matches_serial_bit_for_bit` holds `kendall_tau` against the pre-parallel body on random, tie-heavy and anti-correlated data.
+
+### Documented (no behaviour change)
+- **`kendall_tau` is deliberately NOT ported to Knight's O(n log n) algorithm**, and the reason is now a test rather than a comment. Its tie predicate is approximate (`|Δ| < 1e-12`), which is **not transitive** — `a = [0, 0.9e-12, 1.8e-12]` has 0~1 and 1~2 tied but 0~2 not — so no sort-based τ-b (Knight's, scipy's) can represent it: on `b = [1, 2, 3]` this function returns **0.5774** where scipy returns **1.0**. That is a 0.42 absolute KROCC difference, and it is invisible to the usual gate, since exhaustive permutations of distinct values and exactly-tied fixtures both avoid chained near-ties. `kendall_epsilon_ties_are_not_transitive` pins the behaviour so a future port has to confront it. Switching to exact-equality ties would make Knight's applicable but is a metric-definition change, not a performance patch.
+
+## zenmetrics
+
 ### Added
 - `zensim-foldapp2` jobexec metric — folded+append2 streaming **944**-feature regime (SOTA-944 P1 bigcodec wave; zensim ≥ `d0616362`, `append2_block` ON / `append2_dst_activity` OFF per the P1.5 adjudication), driver-parity-tested incl. f0..f923 bitwise-identity vs the 924 regime; bf944 declare tooling (`declare_bf944.py` cloning the drained bf924 runs, hard-verifying the source metric) and the `_pool944` wave repoint (enroll/tower/snapshot/reconcile defaults, container `zen944-basement`, image tag `exec-zensim944-57b7b9ad`) (57b7b9ad)
 - bf924/W2/W3 close-out: kadis-924 rescore (699,999 + negrich 167,034, byte-equal targets), tbig_924_full (5,742,660 exact) + 21 views at match_rate 1.0000; pool_reconcile_report; zen-node-4 enrolled (SN850X serial-matched install)
