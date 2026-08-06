@@ -6558,6 +6558,7 @@ name = "zenfleet-core"
 version = "0.0.1"
 dependencies = [
  "hex",
+ "libm",
  "serde",
  "serde_json",
  "sha2",

@@ -38,7 +38,9 @@ pub use content::{BlobRef, ContentError, Sha256Hex, blob_key, sha256};
 pub use control::RunControl;
 pub use cost::{FleetCost, WorkerReport, aggregate, cost_per_1000_by_tier, over_budget};
 pub use epoch::{
-    ClaimMode, EpochShardCfg, Roster, ShardDecision, epoch_index, hrw_owner, shard_decision,
+    ClaimMode, EpochShardCfg, Handicaps, Roster, ShardDecision, ShardMode, WorkerHandicap,
+    epoch_index, hrw_owner, hrw_owner_weighted, shard_decision, shard_decision_weighted,
+    shard_mode,
 };
 pub use gc::{BlobIndexEntry, GcPlan, GcVerdict, Tombstone, gc_plan, lru_cap_evict, verdict};
 pub use idle::{

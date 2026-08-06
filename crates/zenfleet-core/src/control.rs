@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::epoch::ClaimMode;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+// NOT `Copy`/`Eq` since `worker_weights` landed: the map isn't Copy and f64 weights aren't Eq.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct RunControl {
     #[serde(default)]
     pub paused: bool,
@@ -31,6 +32,14 @@ pub struct RunControl {
     /// Campaign override for [`crate::EpochShardCfg::heartbeat_interval_secs`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub heartbeat_interval_secs: Option<u64>,
+    /// Campaign-level worker speed handicaps (epoch-sharded claiming): worker key →
+    /// per-mode multipliers. When present this REPLACES the committed registry
+    /// (`fleet/handicaps.toml`) wholesale — highest precedence, converges the fleet on the
+    /// next pass, and is the recommended way to change weights on a LIVE campaign (an
+    /// image-embedded registry edit only lands at the next image roll, and mixed-image
+    /// fleets would shard-diverge until the roll completes).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worker_weights: Option<std::collections::BTreeMap<String, crate::epoch::WorkerHandicap>>,
 }
 
 impl RunControl {
@@ -41,6 +50,7 @@ impl RunControl {
         claim_mode: None,
         epoch_len_secs: None,
         heartbeat_interval_secs: None,
+        worker_weights: None,
     };
     /// Hard stop — claim nothing until resumed.
     pub const PAUSED: RunControl = RunControl {
@@ -49,6 +59,7 @@ impl RunControl {
         claim_mode: None,
         epoch_len_secs: None,
         heartbeat_interval_secs: None,
+        worker_weights: None,
     };
     /// Claim no new work; let in-flight jobs finish.
     pub const DRAINING: RunControl = RunControl {
@@ -57,6 +68,7 @@ impl RunControl {
         claim_mode: None,
         epoch_len_secs: None,
         heartbeat_interval_secs: None,
+        worker_weights: None,
     };
 
     /// A worker should claim no new jobs when paused or draining.

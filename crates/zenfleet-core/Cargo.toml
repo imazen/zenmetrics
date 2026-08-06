@@ -15,3 +15,8 @@ hex = "0.4.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+# Weighted rendezvous hashing needs ln(); the SYSTEM libm rounds differently across
+# vendors/platforms (x86 glibc vs aarch64 — the fleet runs both), which would let two
+# workers disagree on a near-tie owner. The pure-Rust libm crate is bit-identical
+# everywhere (IEEE basic ops only), so shard ownership stays cross-platform deterministic.
+libm = "0.2.16"

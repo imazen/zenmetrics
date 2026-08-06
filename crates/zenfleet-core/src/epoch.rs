@@ -31,7 +31,11 @@
 //! All functions here are pure (no clock, no I/O): the worker crate wires the heartbeat writes,
 //! roster listing, and lease calls around them, and `zenfleet-sim` drives them deterministically.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
+
+use crate::job::JobKind;
 
 /// How a run's workers avoid executing the same cell twice while the campaign is live.
 /// Campaign-level: **every worker on a run must use the same mode** — a lease-mode worker forms
@@ -290,6 +294,207 @@ pub fn steal_order(me: &str, cell_keys: &[&str]) -> Vec<usize> {
     idx
 }
 
+// ───────────────────── weighted rendezvous hashing (registered speed handicaps) ─────────────────────
+//
+// Boxes are not interchangeable: the avifgen encode ledger measured a ~2.5× per-thread and ~5×
+// per-box spread (attribution audit, `0f9fa073`). Uniform shards make the fast box idle in every
+// epoch's tail while the slow box straggles. Weighted HRW gives each worker a cell share
+// proportional to a REGISTERED (measured, committed — never auto-tuned) weight, via the canonical
+// logarithm method: owner = argmax over workers of `−w_i / ln(u_i)` where `u_i` maps the frozen
+// pair hash into (0,1). Properties: shares ∝ w_i; changing one worker's weight moves only the
+// share delta (every other pair score is untouched); w = 0 excludes a worker from a mode's
+// sharding entirely (role specialization). Weights are per (worker, workload mode) — and encode
+// weights are per ENCODER TYPE, because per-encode concurrency differs (process-parallel
+// single-threaded encoders scale with core count; internally-threaded encoders like svt compress
+// the many-core advantage; memory-bound encoders re-rank boxes again), so relative box throughput
+// is a function of (box, type) and cross-type extrapolation is wrong.
+//
+// Determinism note: `ln` comes from the pure-Rust `libm` crate, NOT the platform libm — vendor
+// libms round differently in the last ulp, and this fleet mixes x86 and aarch64. `libm::log` is
+// the same IEEE arithmetic everywhere, so every worker computes bit-identical scores. The
+// uniform case (every weight exactly 1.0, or no registry at all) never enters the float path:
+// it delegates verbatim to [`hrw_owner`], pinning absent-weights == old behavior bit-for-bit.
+
+/// The workload axis a cell's handicap weight is read from. Derived from the MANIFEST (every
+/// worker derives the same mode for the same cell — never from box-local env):
+/// - `Encode { codec }` — [`JobKind::Encode`], keyed per encoder type.
+/// - `GpuMetric` — metric/score/diffmap jobs whose metric names carry the `_gpu` suffix (the
+///   wave convention: sf-gpu manifests declare `butteraugli_max_gpu`, …). The card does the
+///   work, so CPU-derived weights would mis-shard.
+/// - `Metric` — every other (CPU-bound) job: plain/`_cpu` metric names, features, bakes, ….
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShardMode<'a> {
+    Encode { codec: &'a str },
+    Metric,
+    GpuMetric,
+}
+
+fn any_gpu_metric<'a, I: IntoIterator<Item = &'a str>>(names: I) -> bool {
+    names.into_iter().any(|m| m.ends_with("_gpu"))
+}
+
+/// Map a job to its handicap mode (see [`ShardMode`]).
+pub fn shard_mode(kind: &JobKind) -> ShardMode<'_> {
+    match kind {
+        JobKind::Encode { codec, .. } => ShardMode::Encode { codec },
+        JobKind::Metric { metric } => {
+            if any_gpu_metric([metric.as_str()]) {
+                ShardMode::GpuMetric
+            } else {
+                ShardMode::Metric
+            }
+        }
+        JobKind::ScoreFile { metrics, .. } => {
+            if any_gpu_metric(metrics.iter().map(String::as_str)) {
+                ShardMode::GpuMetric
+            } else {
+                ShardMode::Metric
+            }
+        }
+        JobKind::Diffmap { metric, .. } => {
+            if any_gpu_metric([metric.as_str()]) {
+                ShardMode::GpuMetric
+            } else {
+                ShardMode::Metric
+            }
+        }
+        _ => ShardMode::Metric,
+    }
+}
+
+/// One worker's registered handicap row. `1.0` = the reference throughput; `0.0` = excluded
+/// from that mode's sharding. Encode is keyed per encoder type with a `"default"` fallback
+/// (absent type AND absent default → 1.0).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct WorkerHandicap {
+    /// Per-encoder-type multipliers, e.g. `{ "zenavif": 0.72, "default": 1.0 }`.
+    #[serde(default)]
+    pub encode: BTreeMap<String, f64>,
+    /// CPU-metric multiplier (memory/vector-bound work — NOT the same ranking as encode).
+    #[serde(default = "one")]
+    pub metric: f64,
+    /// GPU-metric multiplier (the card, not the CPU).
+    #[serde(default = "one")]
+    pub gpu_metric: f64,
+}
+
+fn one() -> f64 {
+    1.0
+}
+
+impl WorkerHandicap {
+    /// The multiplier this row assigns to `mode`. Negative/NaN registry values are clamped to
+    /// 0.0 (excluded) — a nonsense weight must never un-determinize the argmax.
+    pub fn weight(&self, mode: &ShardMode<'_>) -> f64 {
+        let w = match mode {
+            ShardMode::Encode { codec } => self
+                .encode
+                .get(*codec)
+                .or_else(|| self.encode.get("default"))
+                .copied()
+                .unwrap_or(1.0),
+            ShardMode::Metric => self.metric,
+            ShardMode::GpuMetric => self.gpu_metric,
+        };
+        if w.is_finite() && w > 0.0 { w } else { 0.0 }
+    }
+}
+
+/// The registered handicap table: worker key → [`WorkerHandicap`]. Workers absent from the
+/// table weigh 1.0 in every mode. Precedence at the worker: campaign `RunControl.worker_weights`
+/// override > the committed registry (`fleet/handicaps.toml`, baked into the binary) > 1.0.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Handicaps(pub BTreeMap<String, WorkerHandicap>);
+
+impl Handicaps {
+    /// The weight of `worker` for `mode` (1.0 when the worker has no row).
+    pub fn weight(&self, worker: &str, mode: &ShardMode<'_>) -> f64 {
+        self.0.get(worker).map(|h| h.weight(mode)).unwrap_or(1.0)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+/// Map the frozen 64-bit pair hash into (0,1) via its top 52 bits: `((h >> 12) + 0.5) × 2⁻⁵²`.
+/// Every step is EXACT f64 arithmetic — `k + 0.5` is exactly representable for every
+/// `k < 2⁵²` (the 0.5-spacing binade starts at 2⁵¹, and 2⁵² − 0.5 still sits inside it), and
+/// the final scale is a power of two — so `u ∈ [2⁻⁵³, 1 − 2⁻⁵³]`, never 0 or 1, and `ln(u)` is
+/// always finite and negative. Two tempting alternatives are WRONG at the boundaries:
+/// `(h as f64 + 0.5) × 2⁻⁶⁴` rounds a whole band of top-end hashes to exactly 1.0 (`as f64`
+/// rounds-to-nearest above 2⁵³), and 53-bit `((h >> 11) + 0.5) × 2⁻⁵³` still hits 1.0 at the
+/// very top (`(2⁵³ − 1) + 0.5` ties-to-even UP to 2⁵³) — either way `ln(1) = 0` flips the score
+/// to −∞ and excludes precisely the workers the hash most preferred. Dropping the 12 low bits
+/// costs nothing (the hash is finalizer-mixed; a tie collapses ~2¹² hash values onto one u and
+/// breaks deterministically by worker id in the argmax).
+fn u01(h: u64) -> f64 {
+    const INV52: f64 = 1.0 / 4_503_599_627_370_496.0; // 2^-52
+    ((h >> 12) as f64 + 0.5) * INV52
+}
+
+/// The weighted rendezvous score of `(cell, worker)` under weight `w`: `−w / ln(u)` with
+/// `u = u01(hrw_score(cell, worker))`. Monotone in u, share ∝ w over the fleet. `w ≤ 0` (or
+/// non-finite) returns `None` — the worker is excluded for this cell's mode.
+pub fn hrw_score_weighted(cell_key: &str, worker: &str, w: f64) -> Option<f64> {
+    if !w.is_finite() || w <= 0.0 {
+        return None;
+    }
+    // libm::log, NOT f64::ln — cross-platform bit-determinism (see the section comment).
+    Some(-w / libm::log(u01(hrw_score(cell_key, worker))))
+}
+
+/// Weighted rendezvous owner: argmax over the roster of [`hrw_score_weighted`], ties broken by
+/// the lexicographically greatest worker id. When every roster member weighs exactly 1.0 this
+/// DELEGATES to the unweighted [`hrw_owner`] — bit-identical old behavior (the float path is
+/// never entered), which is what lets a weightless fleet upgrade without any cell moving.
+/// `None` when the roster is empty or every member is excluded (weight 0) for this cell.
+pub fn hrw_owner_weighted<'a>(
+    roster: &'a Roster,
+    weight_of: &dyn Fn(&str) -> f64,
+    cell_key: &str,
+) -> Option<&'a str> {
+    if roster.workers().iter().all(|w| weight_of(w) == 1.0) {
+        return hrw_owner(roster, cell_key);
+    }
+    roster
+        .workers()
+        .iter()
+        .filter_map(|w| hrw_score_weighted(cell_key, w, weight_of(w)).map(|s| (s, w.as_str())))
+        .max_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(b.1)))
+        .map(|(_, w)| w)
+}
+
+/// [`shard_decision`] with weighted ownership on both rosters. The previous epoch's ownership is
+/// evaluated with the CURRENT weights: weight edits are rare registered events (a commit or a
+/// RunControl write), and treating them like un-guarded roster churn bounds the cost to at most
+/// one in-flight chunk of duplicate work per moved cell, once per edit — ledger-deduped, same
+/// contract as the other seam windows. (Changing weights via RunControl converges the whole
+/// fleet on the next pass; prefer it over image-embedded registry edits for live campaigns.)
+pub fn shard_decision_weighted(
+    roster_now: &Roster,
+    roster_prev: Option<&Roster>,
+    me: &str,
+    cell_key: &str,
+    weight_of: &dyn Fn(&str) -> f64,
+) -> ShardDecision {
+    if hrw_owner_weighted(roster_now, weight_of, cell_key) != Some(me) {
+        return ShardDecision::Other;
+    }
+    match roster_prev {
+        Some(prev) if prev.same_members(roster_now) => ShardDecision::OwnedFast,
+        Some(prev) if !prev.is_empty() => {
+            if hrw_owner_weighted(prev, weight_of, cell_key) == Some(me) {
+                ShardDecision::OwnedFast
+            } else {
+                ShardDecision::OwnedGuarded
+            }
+        }
+        _ => ShardDecision::OwnedGuarded,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -538,6 +743,268 @@ mod tests {
         sorted.sort_unstable();
         assert_eq!(sorted, (0..64).collect::<Vec<_>>(), "a permutation");
         assert_ne!(a1, b, "different workers walk different orders");
+    }
+
+    // ── weighted rendezvous (registered speed handicaps) ────────────────────────────
+
+    fn wmap<'a>(pairs: &'a [(&'a str, f64)]) -> impl Fn(&str) -> f64 + 'a {
+        move |w: &str| {
+            pairs
+                .iter()
+                .find(|(n, _)| *n == w)
+                .map(|(_, v)| *v)
+                .unwrap_or(1.0)
+        }
+    }
+
+    fn owned_counts<'a>(
+        roster: &'a Roster,
+        weight_of: &dyn Fn(&str) -> f64,
+        cs: &[String],
+    ) -> HashMap<&'a str, usize> {
+        let mut count: HashMap<&str, usize> = HashMap::new();
+        for c in cs {
+            if let Some(o) = hrw_owner_weighted(roster, weight_of, c) {
+                *count.entry(o).or_default() += 1;
+            }
+        }
+        count
+    }
+
+    #[test]
+    fn weighted_absent_or_all_ones_is_bit_identical_to_unweighted() {
+        // The uniform case DELEGATES to hrw_owner — old ownership, bit-for-bit, for every cell.
+        let r = roster(1, &["w-a", "w-b", "w-c"]);
+        let ones = wmap(&[]);
+        let explicit_ones = wmap(&[("w-a", 1.0), ("w-b", 1.0), ("w-c", 1.0)]);
+        for c in cells(3000) {
+            let old = hrw_owner(&r, &c);
+            assert_eq!(hrw_owner_weighted(&r, &ones, &c), old);
+            assert_eq!(hrw_owner_weighted(&r, &explicit_ones, &c), old);
+        }
+    }
+
+    #[test]
+    fn weighted_scores_are_pinned_forever() {
+        // Same discipline as the unweighted pins: these bytes decide ownership fleet-wide.
+        // u01 mapping first (exact IEEE arithmetic — verified by an independent Python impl),
+        // then −w/ln(u) via the pure-Rust libm (NEVER the platform libm — vendor rounding
+        // would split the fleet's argmax).
+        assert_eq!(u01(0).to_bits(), 0x3ca0_0000_0000_0000); // 2⁻⁵³, never 0
+        assert_eq!(u01(u64::MAX).to_bits(), 0x3fef_ffff_ffff_ffff); // 1 − 2⁻⁵³, never 1
+        let s = hrw_score_weighted("cell-a", "worker-1", 1.0).unwrap();
+        assert_eq!(s.to_bits(), 0x4025_2f43_747a_28cb);
+        let s2 = hrw_score_weighted("cell-a", "worker-1", 2.0).unwrap();
+        assert_eq!(s2.to_bits(), 0x4035_2f43_747a_28cb); // exactly 2× (mul by a power of two)
+        assert_eq!(hrw_score_weighted("cell-a", "worker-1", 0.0), None);
+        assert_eq!(hrw_score_weighted("cell-a", "worker-1", f64::NAN), None);
+    }
+
+    #[test]
+    fn weighted_share_is_proportional() {
+        // w = 2.0 draws ~2× the cells of a w = 1.0 peer. Deterministic outcome, banded at
+        // ±8% relative of the expected share (n = 12000; binomial 3σ ≈ ±1.5%, band is slack).
+        let r = roster(1, &["w-a", "w-b", "w-c"]);
+        let w = wmap(&[("w-a", 2.0)]);
+        let cs = cells(12_000);
+        let count = owned_counts(&r, &w, &cs);
+        let expect_a = 12_000.0 * 2.0 / 4.0; // 6000
+        let expect_bc = 12_000.0 / 4.0; // 3000
+        assert!(
+            (count["w-a"] as f64 - expect_a).abs() < expect_a * 0.08,
+            "w-a owns {} (expected ≈{expect_a})",
+            count["w-a"]
+        );
+        for wk in ["w-b", "w-c"] {
+            assert!(
+                (count[wk] as f64 - expect_bc).abs() < expect_bc * 0.08,
+                "{wk} owns {} (expected ≈{expect_bc})",
+                count[wk]
+            );
+        }
+    }
+
+    #[test]
+    fn weight_change_moves_only_the_delta_share() {
+        // Raising one worker's weight may only PULL cells to that worker; every other pair
+        // score is untouched, so no cell may move between the unchanged workers.
+        let r = roster(1, &["w-a", "w-b", "w-c"]);
+        let before = wmap(&[("w-a", 1.0)]);
+        let after = wmap(&[("w-a", 1.2)]);
+        let cs = cells(12_000);
+        let mut moved = 0usize;
+        for c in &cs {
+            let o0 = hrw_owner_weighted(&r, &before, c).unwrap();
+            let o1 = hrw_owner_weighted(&r, &after, c).unwrap();
+            if o0 != o1 {
+                assert_eq!(o1, "w-a", "a raised weight may only pull cells to ITSELF");
+                moved += 1;
+            }
+        }
+        // Share goes 1/3 → 1.2/3.2 = 0.375: expected movement ≈ 4.17% of cells (500).
+        assert!(
+            (250..=750).contains(&moved),
+            "expected ≈500 of 12000 cells to move to w-a, got {moved}"
+        );
+    }
+
+    #[test]
+    fn zero_weight_excludes_a_worker_entirely() {
+        let r = roster(1, &["w-a", "w-b", "w-c"]);
+        let w = wmap(&[("w-b", 0.0)]);
+        let cs = cells(4000);
+        let count = owned_counts(&r, &w, &cs);
+        assert_eq!(count.get("w-b"), None, "weight 0 owns nothing");
+        assert_eq!(
+            count["w-a"] + count["w-c"],
+            4000,
+            "others absorb the whole set"
+        );
+        // Everyone excluded → no owner at all.
+        let none = wmap(&[("w-a", 0.0), ("w-b", 0.0), ("w-c", 0.0)]);
+        assert_eq!(hrw_owner_weighted(&r, &none, &cs[0]), None);
+    }
+
+    #[test]
+    fn weighted_owner_is_deterministic_across_computers() {
+        // Two workers computing the same epoch from the same roster + registry agree on every
+        // owner (input order and who asks are irrelevant).
+        let r1 = roster(5, &["node-2", "tower", "lianli"]);
+        let r2 = roster(5, &["lianli", "node-2", "tower"]);
+        let w = wmap(&[("lianli", 1.0), ("tower", 0.67), ("node-2", 0.55)]);
+        for c in cells(2000) {
+            let o = hrw_owner_weighted(&r1, &w, &c);
+            assert_eq!(o, hrw_owner_weighted(&r2, &w, &c));
+            assert!(o.is_some());
+        }
+    }
+
+    #[test]
+    fn mixed_codec_wave_shards_each_codec_by_its_own_weights() {
+        // One wave, two codecs; a box weighs 2.0 for codec A and 0.5 for codec B. Per-codec
+        // shares must be independently proportional WITHIN the same wave.
+        let r = roster(1, &["box-x", "box-y", "box-z"]);
+        let mut h = Handicaps::default();
+        h.0.insert(
+            "box-x".into(),
+            WorkerHandicap {
+                encode: [("codec-a".to_string(), 2.0), ("codec-b".to_string(), 0.5)]
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            },
+        );
+        let cs = cells(12_000);
+        let mode_a = ShardMode::Encode { codec: "codec-a" };
+        let mode_b = ShardMode::Encode { codec: "codec-b" };
+        let wa = |wk: &str| h.weight(wk, &mode_a);
+        let wb = |wk: &str| h.weight(wk, &mode_b);
+        let ca = owned_counts(&r, &wa, &cs);
+        let cb = owned_counts(&r, &wb, &cs);
+        let ea = 12_000.0 * 2.0 / 4.0; // codec A: x share 2/(2+1+1)
+        let eb = 12_000.0 * 0.5 / 2.5; // codec B: x share 0.5/(0.5+1+1)
+        assert!(
+            (ca["box-x"] as f64 - ea).abs() < ea * 0.08,
+            "codec-a: box-x owns {} (expected ≈{ea})",
+            ca["box-x"]
+        );
+        assert!(
+            (cb["box-x"] as f64 - eb).abs() < eb * 0.08,
+            "codec-b: box-x owns {} (expected ≈{eb})",
+            cb["box-x"]
+        );
+    }
+
+    #[test]
+    fn handicap_lookup_defaults_and_mode_mapping() {
+        let mut h = Handicaps::default();
+        h.0.insert(
+            "b1".into(),
+            WorkerHandicap {
+                encode: [("zenavif".to_string(), 0.72), ("default".to_string(), 0.9)]
+                    .into_iter()
+                    .collect(),
+                metric: 0.6,
+                gpu_metric: 0.0,
+            },
+        );
+        // Typed key > default key > 1.0; absent worker → 1.0 everywhere.
+        assert_eq!(
+            h.weight("b1", &ShardMode::Encode { codec: "zenavif" }),
+            0.72
+        );
+        assert_eq!(h.weight("b1", &ShardMode::Encode { codec: "zenjxl" }), 0.9);
+        assert_eq!(h.weight("b1", &ShardMode::Metric), 0.6);
+        assert_eq!(h.weight("b1", &ShardMode::GpuMetric), 0.0);
+        assert_eq!(
+            h.weight("ghost", &ShardMode::Encode { codec: "zenavif" }),
+            1.0
+        );
+        // Negative / NaN registry values clamp to excluded, never poison the argmax.
+        let bad = WorkerHandicap {
+            metric: -3.0,
+            ..Default::default()
+        };
+        assert_eq!(bad.weight(&ShardMode::Metric), 0.0);
+        // Mode mapping: encode by type; the _gpu metric-name suffix selects GpuMetric.
+        let enc = JobKind::Encode {
+            codec: "zenavif".into(),
+            q: 50,
+            knobs: "{}".into(),
+            hdr: false,
+        };
+        assert_eq!(shard_mode(&enc), ShardMode::Encode { codec: "zenavif" });
+        let gm = JobKind::Metric {
+            metric: "butteraugli_max_gpu".into(),
+        };
+        assert_eq!(shard_mode(&gm), ShardMode::GpuMetric);
+        let cm = JobKind::Metric {
+            metric: "butteraugli_max".into(),
+        };
+        assert_eq!(shard_mode(&cm), ShardMode::Metric);
+    }
+
+    #[test]
+    fn weighted_seam_guards_moved_cells_on_weight_or_roster_change() {
+        let now = roster(9, &["a", "b", "c"]);
+        let prev = roster(8, &["a", "b", "c", "d"]); // d died
+        let w = wmap(&[("a", 2.0), ("d", 1.5)]);
+        let mut guarded = 0;
+        for c in cells(2000) {
+            match shard_decision_weighted(&now, Some(&prev), "a", &c, &w) {
+                ShardDecision::OwnedFast => {
+                    assert_eq!(hrw_owner_weighted(&prev, &w, &c), Some("a"));
+                }
+                ShardDecision::OwnedGuarded => {
+                    assert_eq!(hrw_owner_weighted(&prev, &w, &c), Some("d"));
+                    guarded += 1;
+                }
+                ShardDecision::Other => {
+                    assert_ne!(hrw_owner_weighted(&now, &w, &c), Some("a"));
+                }
+            }
+        }
+        assert!(guarded > 0, "d's cells must guard on takeover");
+    }
+
+    #[test]
+    fn handicaps_serde_shape_matches_the_registry() {
+        // The RunControl override and the TOML registry share this serde shape.
+        let json = r#"{"lianli":{"encode":{"zenavif":1.0,"default":1.0},"metric":1.0,"gpu_metric":1.0},
+                       "tower":{"encode":{"zenavif":0.67},"gpu_metric":0.0}}"#;
+        let h: Handicaps = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            h.weight("tower", &ShardMode::Encode { codec: "zenavif" }),
+            0.67
+        );
+        assert_eq!(
+            h.weight("tower", &ShardMode::Encode { codec: "zenjxl" }),
+            1.0
+        ); // no default key → 1.0
+        assert_eq!(h.weight("tower", &ShardMode::Metric), 1.0); // absent field → serde default 1.0
+        assert_eq!(h.weight("tower", &ShardMode::GpuMetric), 0.0);
+        let rt: Handicaps = serde_json::from_str(&serde_json::to_string(&h).unwrap()).unwrap();
+        assert_eq!(rt, h);
     }
 
     #[test]
