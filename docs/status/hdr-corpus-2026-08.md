@@ -20,10 +20,23 @@ campaign's registered appendix S plus the corpus `_MANIFEST.json`.
 
 | | |
 |---|---|
-| **Phase** | grid pre-registered; B6 fixed; **building the zenfleet HDR extensions** |
-| **Blocking on** | B1 (no HDR encode job), B2 (artifact persistence + diffmap executor), B3/B4 (codec arms), B7 (image) |
+| **Phase** | **LANE RESTARTED 2026-08-06 ~20:00Z** (`claude-hdrcorpus2`) — prior lane landed B6 + appendix S (`cf594877`) then died before building; this lane owns B1-B4/B7 + the build |
+| **Blocking on** | B1 (no HDR encode job), B2 (diffmap executor), B3/B4 (codec arms), B7 (image) — all in flight this lane |
 | **Ledger fill** | n/a (not declared yet) |
-| **First-cell R2 persistence gate** | NOT YET RUN — hard gate before any fleet scale-up |
+| **First-cell R2 persistence gate (G-S1)** | NOT YET RUN — hard gate before any fleet scale-up |
+| **avifgen coordination** | their encode DRAINED 16:50Z (~565k cells); their **GPU ScoreFile run `avifgen-sf-gpu-20260806` declared 20:01Z** — node-2+lianli GPU queue is THEIRS for ~32 h. This lane's GPU score declares queue BEHIND it; encodes use the freed CPU fleet. Their CPU metric declare (`avifgen-sf-cpu-20260806`) is scripted but not yet visible on R2. |
+
+### Build plan (restart, measured against the avifgen reusables)
+
+Reuse verbatim: Encode→ScoreFile two-stage (persistence by construction), `pairs_from_encode_ledger.py` bridge, `declare_direct_objects.py` ZEN_FULL_URI=1, `writeback_scores.py` two-stage mode, executor-image build scripts (new TAGS), `ZEN_REQUIRE_GPU=1` score-env, G-Z2/G-Z3-shaped gates. jobexec's **ScoreFile `hdr:true` arm is already fully implemented** (incl. zensim feature-row emission from the PU21 feeding) — the scoring half needs images + declares only.
+
+Genuinely new (this lane):
+1. **B3+B4 (`sweep/hdr.rs`)**: an `HdrCodec` enum (Zenjxl / Zenavif / Zenav1Svt / JpegGainmap) confined to the HDR module — `CodecKind` untouched. svt arm = the budget harness shape (PQ RGB16 → BT.2020nc limited 10-bit 4:2:0 → `try_encode_frame_420_hbd`, still CQP) + zenavif-serialize mux (nclx: src primaries, transfer 16, matrix 9, limited; depth 10) → decode-back through the EXISTING `decode_avif_to_nits`. gainmap arm = the budget harness shape (PQ → linear f32 RGBA @203-nit white → `ultrahdr_rs::Encoder` HDR-only, gm q85 scale-4 defaults) + a bytes-based decode-back via the existing ultrahdr decode wiring. Deps: `zenav1-svt` @ `4c5c1324` (repo is PUBLIC — CI clones like other siblings), ultrahdr @ `73ab3d27` (already a path dep).
+2. **B1**: `JobKind::Encode` gains `hdr: bool` with the exact `ScoreFile.hdr` append-only serde pattern (old job ids byte-stable); `parse_emit_cells`/`declare_encodes` carry it; jobexec's encode arm routes `hdr:true` through `decode_hdr_ref` + `encode_hdr`.
+3. **B2**: Diffmap executor (survey of per-metric diffmap APIs first; declared over persisted encode shas like ScoreFile).
+4. **B7**: rebuild executor images at the pins with `hdr,png,hdr-gainmap,hdr-encode-svt` features — canonical package, new tags.
+
+Then: grid cells (S.4: 1,140 sources × 3 arms × 30 q), declare, **G-S1 first-cell gate**, fleet scale on CPU nodes, drain, bridge → score declares (GPU behind avifgen; cvvdp on CPU queue), writeback, `_MANIFEST.json` + orientation gate + triple mirror + provenance entries.
 
 ### Milestones
 
@@ -114,3 +127,4 @@ count, and total cell count.
 | 2026-08-05 ~05:1x | **B6 FIXED.** `ZENMETRICS_REQUIRE_GPU=1` drops the CPU rung from the `auto` ladder in the one function all six ladder sites share, so it reaches the hand-run path, the sweep cache and jobexec alike. Failure is loud and names the reason. A `runtime` column now records the rung that actually executed. The fleet entrypoint gained `ZEN_REQUIRE_GPU=1`, which exports the flag and **verifies a GPU at boot** so a mis-scheduled box fails in one line instead of failing cells one at a time. |
 | 2026-08-05 ~05:1x | Two adjacent defects found while verifying B6, both fixed. (1) The cvvdp **batch** scorer — the fleet's scoring path — skipped the liveness probe, so a GPU-less box **panicked** (exit 101) inside the CUDA driver instead of returning a catchable error; it now probes first, which is what makes the ladder and the gate behave the same there as on the single-shot path. (2) `score-pairs` exited **0 after scoring zero rows**, which on the fleet would mark a totally-failed cell Done; all-pairs-failed is now an error, with the empty parquet still written for diagnosis. |
 | 2026-08-05 ~05:1x | **Scope correction to my own earlier claim.** The silent CPU fallback is **metric-dependent**, not universal: `ssim2-gpu` genuinely falls back (verified — exit 0, `ssim2_gpu` column, `runtime=cpu`), while `cvvdp-gpu` on the batch path has no CPU arm compiled and simply fails. The blanket statement "the fleet silently produces CPU numbers" was too broad; the accurate one is "some GPU metrics do, and nothing recorded which". Both halves are now covered. |
+| 2026-08-06 ~20:00 | **Lane restart** (`claude-hdrcorpus2`). Prior lane died post-B6/appendix-S with nothing built. State re-read (appendix S + Z + avifgen status + budget harness). avifgen coordination facts recorded above; their run prefixes are not touched. Sources re-verified: 1,140 PQ PNGs present, sampled cICP = {1,16,0,1}. Dep pins: zenav1-svt `4c5c1324` (public repo, clean tree), ultrahdr `73ab3d27` (clean). Budget harness at `/mnt/v/output/zensim/hdrbudget-2026-08-05/harness/` supplies the proven svt+uhdr encode shapes (its `to_yuv420_bd10` ran every ladder size at p6). |
