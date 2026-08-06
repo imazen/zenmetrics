@@ -78,8 +78,15 @@ fn main() {
 
     // ---- GPU side: what does it actually produce today? ----
     use cubecl::prelude::*;
-    use cubecl::wgpu::WgpuRuntime;
-    type Backend = WgpuRuntime;
+    // Prefer CUDA when it is on, exactly like every other example in this
+    // crate. Importing `cubecl::wgpu` unconditionally made this the ONE example
+    // that could not build under `--features cuda,all-metrics` (cubecl re-exports
+    // `wgpu` only behind its own `wgpu` feature), which is the feature set the
+    // ubuntu `--all-targets` CI step uses.
+    #[cfg(feature = "cuda")]
+    use cubecl::cuda::CudaRuntime as Backend;
+    #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    use cubecl::wgpu::WgpuRuntime as Backend;
 
     let flat_ref: Vec<u8> = refe.iter().flatten().copied().collect();
     let flat_dst: Vec<u8> = dist.iter().flatten().copied().collect();

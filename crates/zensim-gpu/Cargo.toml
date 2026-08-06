@@ -92,6 +92,10 @@ required-features = ["cubecl-types"]
 name = "odd_dim_repro"
 required-features = ["cubecl-types"]
 
+[[example]]
+name = "f924_parity"
+required-features = ["cubecl-types"]
+
 [[test]]
 name = "it"
 path = "tests/it/main.rs"
