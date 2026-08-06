@@ -8,9 +8,24 @@ PXE server, per-OS worker setup) lives in the **private** repo
 Public docs and benchmarks refer to nodes only by neutral IDs:
 `node-2`, `node-3`, `tower`, `lianli`, `mac`, `ryzen5800xt`, `i265`.
 
-## Standing rule: `node-2` and `node-3` are permanent Ubuntu workers (2026-08-05)
+## Standing rule (REVISED 2026-08-06): `node-2` is a permanent Ubuntu worker; `node-3` defaults to Windows
+
+**User directive, 2026-08-06 (supersedes the 2026-08-05 "both permanently Ubuntu" rule below
+for `node-3` ONLY): `node-2` stays a permanent Ubuntu fleet worker; `node-3` returns to
+Windows as its default.** Executed 2026-08-06 ~21:30Z: `node-3` drained (worker unit stopped
++ disabled; in-flight chunks lease-expired and re-claimed by the rest of the fleet — the
+content-addressed ledger makes an interrupted box cost only its un-sidecar'd in-flight
+cells, which other workers redo), PXE worker flag CLEARED, rebooted, verified up in Windows.
+
+- Do NOT re-flip `node-3` to Ubuntu on the strength of the 2026-08-05 rule — that rule is
+  superseded for `node-3`. Borrowing `node-3` again is a user-approval action.
+- Everything below about `node-2` still stands: permanent Ubuntu worker, one of the two GPU
+  metric-scoring nodes (with `lianli`); if found in its other OS, repair it back to Ubuntu.
+
+## Superseded (for `node-3`) — standing rule of 2026-08-05: `node-2` and `node-3` are permanent Ubuntu workers
 
 **User directive, 2026-08-05: these two boxes stay flipped to Ubuntu, always.**
+*(2026-08-06: still in force for `node-2`; superseded for `node-3` — see above.)*
 
 `node-2` and `node-3` are dual-boot boxes that used to default to their other OS,
 with the fleet borrowing them opportunistically and handing them back afterwards.

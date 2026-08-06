@@ -81,3 +81,78 @@ the corpus `_MANIFEST.json`.
 | 2026-08-06 ~15:00 | **G-Z3 PASSED on node-2** (run in parallel with the encode drain, on a 400-pair smoke cut from the partial ledger via the new bridge): 34 ScoreFile jobs drained in ONE 17 s pass — 800/800 rows, 0 errors, 0 non-finite, `butteraugli_max_gpu`+`butteraugli_pnorm3_gpu` on all 400, 388 unique blob inputs (12 cells content-dedup'd — writeback fans shared-sha scores to all matching cells by design). 7.2 MP pair ≈ 2.9 s/metric on the 3070 ≈ the 5070-measured 0.40 s/MP — no household-card derating penalty at this size. **Refusal probe**: same job, GPU hidden, `ZENMETRICS_REQUIRE_GPU=1` → rc=101, 0 rows (cudarc load panic) — the CPU rung is structurally unreachable; a CPU number can never land under a GPU column. Gate note: the entrypoint's loud boot-check keys on `ZEN_REQUIRE_GPU` (which exports the metrics var) — both are now set in the score env. lianli GPU container runtime installed (`gpu-setup.sh`; driver was already present, no reboot needed). |
 | 2026-08-06 ~20:10 | **WAKE-UP AUDIT after a 4 h orphaned-waiter window (supervisor nudge; own miss, recorded honestly):** the exact-count drain waiter died silently at 15:55Z (the evidence-free bespoke-waiter class the latency discipline warns about) and the estimator's 16:50Z "DRAINED" was FALSE (ledger FILES × 400 ≫ cells). True state at 19:58Z: **encode 343,462/564,300 DONE (61%)**; the 5 CPU boxes + tower worked the whole time (2 h passes, chunk-durable), but **node-2 idled ~3 h** cycling the drained 34-job smoke queue because the full score declare was notification-gated. **Root cause of the tail slowdown found and FIXED in zenmetrics (`92432e37`): single-run workers never passed `--ledger-in`** — empty reconcile views made the gap ALL cells every pass, dedup fell to claim leases, and the ledger shows the measured tax: **1,237,361 rows for 343,465 distinct DONE (3.6×)**. Fix = the POOL-mode snapshot contract in single-run mode + `compact_ledgers.py` snapshot uploaded + both images rebuilt/pushed/rolled (node-3 pass 1 confirms `snap=24281335`). **GPU scoring started 20:01Z** on node-2 over the done 61% (27,989 ScoreFile jobs / 329,123 unique pairs). Endgame is now a session-independent daemon (`~/tmp/avifgen/endgame_daemon.sh`): snapshot refresh loop → exact-count drain detection (99.5 % floor honored) → final sf-gpu re-declare + sf-cpu declare → box flips (lianli→sf-gpu, CPU boxes+tower→sf-cpu) → score-phase snapshots → `SCORE_FINAL.done` sentinel. Revised ETAs: encode drain ~1–3 h; GPU queue remains the bound, ≈33 h from 20:00Z (node-2 solo until drain, then 2-way). |
 | 2026-08-06 ~20:54 | **(epochshard lane, FYI — no action needed, nothing about this campaign changes):** epoch-sharded claiming landed in zenfleet (`zenfleet-core::epoch` + worker `--claim-mode epoch-sharded` + sim gates) — the level BELOW your `92432e37` snapshot fix: it removes the claim contention itself (deterministic rendezvous-hash shards per wall-clock epoch; leases only at ownership seams). **avifgen finishes on the current fixed lease mechanism** — the mode is opt-in, default stays lease, and the worker images you just rolled are untouched (the new flags ride into the image at the next natural rebuild; no mid-campaign rebuild is needed or wanted). |
+
+## Per-box attribution (from the LEDGER — user-directed audit, 2026-08-06 ~21:30Z snapshot, encode run)
+
+Whole-campaign encode-ledger scan (1,518,977 rows; 508,239 distinct DONE at scan time).
+"effort" = all rows written (includes the pre-fix empty-view re-work era); "credit" =
+latest-wins distinct-DONE attribution. credit/effort < 1 quantifies the re-work tax per box.
+
+| worker | threads | rows (effort) | distinct-done credit | credit/effort | credit per thread·h (~6.5 h) |
+|---|---|---|---|---|---|
+| lianli | 24 | 318,522 | 135,246 | 0.42 | ~0.87 k |
+| i265 | 20 | 323,204 | 97,361 | 0.30 | ~0.75 k |
+| ryzen5800xt | 32 | 256,480 | 91,195 | 0.36 | ~0.44 k |
+| tower (capped 24) | 24 | 184,534 | 90,402 | 0.49 | ~0.58 k |
+| wsl-gate (operator) | ~28 | 310,800 | 65,516 | 0.21 | — (see note) |
+| node-3 | 12 | 119,712 | 26,292 | 0.22 | ~0.34 k |
+| node-2 | 16 | 5,725 | 2,227 | 0.39 | — (encoded ~10 min, then score queue / idle window) |
+
+Findings, honestly stated:
+- **Spread was real but uneven.** Five boxes + tower carried the run; per-thread credit spans
+  ~2.5× (lianli 0.87k → node-3 0.34k). node-3 (6C/12T, the weakest box) under-contributed
+  per-thread; ryzen5800xt's low per-thread number reflects SMT-heavy 32T on 16C. No box was
+  image-stale; all consumed the same pinned image.
+- **The re-work tax hit everyone** (credit/effort 0.21–0.49 before the `92432e37` fix; the
+  fleet-wide 3.6× row inflation is the same fact viewed from the other side).
+- **wsl-gate never self-stopped**: `ZEN_MAX_MIN` is enforced by POOL mode only — single-run
+  mode ignores it, so the "25-min gate" container worked ~5–6 h on the operator box
+  (unbudgeted heavy job; it exited on its own before 21:30Z). Recorded as an entrypoint
+  follow-up: honor ZEN_MAX_MIN in single-run mode too.
+- **node-2's near-zero share is the known miss** (idle on the drained smoke queue ~3 h),
+  already recorded in the wake-up audit above.
+- Ledger `ts` is pass-start-quantized (2 h passes → 2 h buckets), so per-hour throughput
+  comes from the operator progress log, not row timestamps.
+
+## Restart/resume invariants (user-directed verification, 2026-08-06)
+
+**VERIFIED live:** `node-3` was deliberately restarted mid-run at 21:28Z — its first pass
+fetched and consumed the done-set snapshot (`snap=33818862` in the pass-1 heartbeat) and
+claimed only undone work. The campaign is kill-and-resume-safe at any point:
+
+- **What survives a kill (all on R2):** content-addressed encode blobs (`blobs/<sha256>` —
+  re-encoding a done cell reproduces the identical sha, so even redundant work is
+  convergent); ledger chunk sidecars (written the moment each ~300 s chunk finishes);
+  `ledger_snapshot.parquet` (refreshed ~every 15 min by the endgame daemon); manifests;
+  claims (lease-expire on their own).
+- **Loss bound on any worker kill:** only the in-flight chunk cells not yet sidecar'd —
+  they lease-expire and are redone by any worker. Zero data loss; bounded re-work.
+- **Snapshot staleness bound:** a restarted worker's view misses at most the cells done
+  since the last snapshot upload (≤ ~15 min of fleet output); those are claim-gated in the
+  meantime, so the residual re-work window is minutes, not hours.
+- **What a fresh operator session re-arms:** the endgame daemon
+  (`~/tmp/avifgen/endgame_daemon.sh`, nohup; idempotent — sentinel files gate each phase) +
+  a monitor on the sentinels `~/tmp/avifgen/{ENCODE_FINAL,SCORE_FINAL}.done` and
+  `ENCODE_STALLED.flag`. Everything else (declares, creds recipe, bring-up scripts,
+  writeback) is committed: zenmetrics `scripts/jobsys/` + homefleet
+  `zenmetrics/scripts/jobsys/avifgen_*.sh`; env templates in `~/tmp/avifgen/worker.env.*`
+  (re-mintable from `~/.config/cloudflare/r2-credentials` in one curl).
+- **Gap closed this session:** before `92432e37`, a restarted single-run worker re-encoded
+  from an EMPTY view (only claim leases stood between it and full re-work) — that is the
+  gap the snapshot fix + daemon refresh loop closes; it is now verified behaviour, not a
+  "should".
+
+## Node change + epoch-sharding decision (2026-08-06 ~21:35Z)
+
+- **USER DIRECTIVE executed: `node-3` → Windows default; `node-2` stays an Ubuntu worker.**
+  Drained (unit stopped+disabled), PXE flag cleared, rebooted, **verified in Windows**
+  (`Microsoft Windows [Version 10.0.26200.8875]`). Standing-rule supersession recorded in
+  `NODES.md` (this commit) + homefleet. Rate impact: node-3 carried ~3% of post-fix encode
+  throughput — drain ETA moves minutes, not hours. sf-cpu wave capacity drops from 4+tower
+  to 3+tower boxes → wave estimate ~4–7 h (was ~3–6 h); not the campaign bound (GPU queue is).
+- **Epoch-sharded claiming (zenfleet `88559a45`): NOT adopted for this campaign — stated
+  call.** Adoption needs an image ≥`ad1dd3a0`; my images predate it and the sf-cpu wave does
+  NOT otherwise need a rebuild (the ledger-in fix is already rolled). Rebuilding now would
+  move the baked zensim/feature pin mid-campaign for a 4-worker wave whose claim contention
+  is negligible post-snapshot. First live use belongs to a wave that builds fresh images
+  anyway.
