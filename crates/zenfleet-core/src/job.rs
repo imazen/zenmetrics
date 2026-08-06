@@ -177,6 +177,14 @@ pub enum JobKind {
     },
     Diffmap {
         metric: String,
+        /// HDR diffmap (HDR-corpus B2): the executor decodes reference +
+        /// variant to absolute-luminance nits and computes the map at the
+        /// HDR display peak, instead of the SDR rgb8 decode. Same
+        /// append-only serde contract as [`JobKind::Encode::hdr`] /
+        /// [`JobKind::ScoreFile::hdr`]: SDR serialization is byte-stable,
+        /// `hdr = true` yields a different content-addressed id.
+        #[serde(default, skip_serializing_if = "is_false")]
+        hdr: bool,
     },
     Resample {
         kernel: String,
@@ -219,7 +227,7 @@ impl JobKind {
                 group_by: GroupBy::SourceSha,
                 output_regenerability: Regenerability::CheapRegenerable,
             },
-            JobKind::Diffmap { metric } => JobProfile {
+            JobKind::Diffmap { metric, .. } => JobProfile {
                 class: metric_class(metric),
                 group_by: GroupBy::SourceSha,
                 // A GPU pass to rebuild — keep unless under storage pressure.

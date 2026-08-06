@@ -17,7 +17,7 @@ pub fn kind_label(k: &JobKind) -> String {
         JobKind::Metric { metric } => format!("metric:{metric}"),
         JobKind::ScoreFile { metrics, .. } => format!("scorefile:{}", metrics.join("+")),
         JobKind::Feature { regime } => format!("feature:{regime}"),
-        JobKind::Diffmap { metric } => format!("diffmap:{metric}"),
+        JobKind::Diffmap { metric, .. } => format!("diffmap:{metric}"),
         JobKind::Resample { kernel, .. } => format!("resample:{kernel}"),
         JobKind::Bake { view } => format!("bake:{view}"),
     }

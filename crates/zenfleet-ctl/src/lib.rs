@@ -173,10 +173,43 @@ pub fn declare(spec: &DeclareSpec) -> Result<Vec<DesiredJob>, String> {
     Ok(out)
 }
 
+/// Expand a declaration into desired DIFFMAP jobs (one per item × metric) —
+/// the HDR-corpus B2 declare: per-pixel map persistence over the SAME
+/// (cell, encode_sha) items a [`declare`] scoring pass uses, so a diffmap
+/// wave is a re-declare of the score spec with the map-owning metric names
+/// (`butteraugli`, `cvvdp` — the executor rejects names with no in-tree
+/// per-pixel map). `hdr` rides onto [`JobKind::Diffmap::hdr`] for every
+/// job in the spec (a corpus is scored in one mode, never mixed).
+pub fn declare_diffmaps(spec: &DeclareSpec, hdr: bool) -> Result<Vec<DesiredJob>, String> {
+    let mut out = Vec::with_capacity(spec.items.len() * spec.metrics.len());
+    for it in &spec.items {
+        let sha = Sha256Hex::parse(it.encode_sha.clone())
+            .map_err(|e| format!("item {}: {e}", it.image_path))?;
+        for m in &spec.metrics {
+            out.push(DesiredJob {
+                kind: JobKind::Diffmap {
+                    metric: m.clone(),
+                    hdr,
+                },
+                inputs: vec![sha.clone()],
+                cell: CellId {
+                    image_path: it.image_path.clone(),
+                    codec: it.codec.clone(),
+                    q: it.q,
+                    knob_tuple_json: it.knob_tuple_json.clone(),
+                },
+                // Diffmap jobs are metric-class work; no encoder hint.
+                hint: None,
+            });
+        }
+    }
+    Ok(out)
+}
+
 fn metric_label(kind: &JobKind) -> String {
     match kind {
         JobKind::Metric { metric } => metric.clone(),
-        JobKind::Diffmap { metric } => format!("diffmap:{metric}"),
+        JobKind::Diffmap { metric, .. } => format!("diffmap:{metric}"),
         JobKind::Feature { regime } => format!("feature:{regime}"),
         JobKind::Encode { .. } => "encode".into(),
         JobKind::Resample { .. } => "resample".into(),
@@ -276,6 +309,42 @@ mod tests {
         let mut bad = items.clone();
         bad[0].source_sha = "nope".into();
         assert!(declare_encodes(&bad).is_err());
+    }
+
+    #[test]
+    fn declare_diffmaps_expands_per_metric_and_hdr_changes_ids() {
+        use super::*;
+        let sha = "b".repeat(64);
+        let spec = DeclareSpec {
+            items: vec![DeclareItem {
+                image_path: "hdr/x.hdr.png".into(),
+                codec: "zenav1-svt".into(),
+                q: 50,
+                knob_tuple_json: r#"{"preset":6}"#.into(),
+                encode_sha: sha,
+            }],
+            metrics: vec!["butteraugli".into(), "cvvdp".into()],
+        };
+        let hdr = declare_diffmaps(&spec, true).unwrap();
+        assert_eq!(hdr.len(), 2, "one Diffmap job per (item x metric)");
+        for j in &hdr {
+            match &j.kind {
+                zenfleet_core::JobKind::Diffmap { metric, hdr } => {
+                    assert!(["butteraugli", "cvvdp"].contains(&metric.as_str()));
+                    assert!(*hdr);
+                }
+                other => panic!("expected Diffmap kind, got {other:?}"),
+            }
+        }
+        // hdr:true vs hdr:false must never dedup against each other.
+        let sdr = declare_diffmaps(&spec, false).unwrap();
+        assert_ne!(hdr[0].job_id(), sdr[0].job_id());
+        // Idempotent (content-addressed): same spec twice -> same ids.
+        let again = declare_diffmaps(&spec, true).unwrap();
+        assert_eq!(hdr[0].job_id(), again[0].job_id());
+        // SDR Diffmap serialization carries no `hdr` key (append-only schema).
+        let json = serde_json::to_string(&sdr[0].kind).unwrap();
+        assert_eq!(json, r#"{"kind":"diffmap","metric":"butteraugli"}"#);
     }
 
     #[test]

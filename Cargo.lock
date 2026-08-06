@@ -6535,6 +6535,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenflate"
+version = "0.4.0"
+dependencies = [
+ "archmage",
+ "enough",
+]
+
+[[package]]
 name = "zenfleet-cloud"
 version = "0.0.1"
 dependencies = [
@@ -7064,6 +7072,7 @@ dependencies = [
  "zenavif",
  "zenavif-serialize",
  "zencodec",
+ "zenflate 0.4.0",
  "zenfleet-core",
  "zenforks-cubecl",
  "zengif",
@@ -7170,7 +7179,7 @@ dependencies = [
  "thiserror",
  "whereat",
  "zencodec",
- "zenflate",
+ "zenflate 0.3.6",
  "zenpixels",
  "zenpixels-convert",
  "zenquant",

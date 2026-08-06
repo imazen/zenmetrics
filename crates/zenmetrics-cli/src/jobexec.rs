@@ -75,8 +75,13 @@ fn ext_for(name: &str) -> &'static str {
         "zenpng" => "png",
         "zenjpeg" => "jpg",
         "zenwebp" => "webp",
-        "zenavif" => "avif",
+        // zenav1-svt emits a conformant AVIF container (HDR-corpus B3);
+        // the extension drives the variant temp file, whose suffix routes
+        // the decode-back (`decode_to_nits` / image decode by ext).
+        "zenavif" | "zenav1-svt" => "avif",
         "zenjxl" => "jxl",
+        // Ultra HDR JPEG (HDR-corpus B4): a normal JPEG container.
+        "jpeg-gainmap" => "jpg",
         _ => "bin",
     }
 }
@@ -1178,6 +1183,240 @@ fn score_hdr_decoded_variant(
     Ok(rows)
 }
 
+/// Serialize a per-pixel map as a gzip'd PFM blob — the Diffmap job's output format.
+///
+/// PFM (Portable FloatMap): `Pf\n{w} {h}\n-1.0\n` + rows of little-endian f32,
+/// **bottom row first** (the PFM spec's raster order; readers flip). Chosen over a
+/// bespoke format because it is self-describing (dims + endianness in the header),
+/// exact (no quantization decision to defend), and standard-tool-readable; gzip
+/// because diffmaps are smooth and compress well, via the in-house `zenflate`.
+#[cfg(feature = "hdr")]
+fn diffmap_to_pfm_gz(map: &[f32], width: u32, height: u32) -> Result<Vec<u8>, Box<dyn Error>> {
+    use zenflate::{CompressionLevel, Compressor, Unstoppable};
+    let (w, h) = (width as usize, height as usize);
+    if map.len() != w * h {
+        return Err(format!("diffmap len {} != {w}x{h}", map.len()).into());
+    }
+    let header = format!("Pf\n{w} {h}\n-1.0\n");
+    let mut pfm = Vec::with_capacity(header.len() + map.len() * 4);
+    pfm.extend_from_slice(header.as_bytes());
+    for row in (0..h).rev() {
+        for &v in &map[row * w..(row + 1) * w] {
+            pfm.extend_from_slice(&v.to_le_bytes());
+        }
+    }
+    let mut compressor = Compressor::new(CompressionLevel::balanced());
+    let mut out = vec![0u8; Compressor::gzip_compress_bound(pfm.len())];
+    let n = compressor
+        .gzip_compress(&pfm, &mut out, Unstoppable)
+        .map_err(|e| format!("gzip diffmap: {e:?}"))?;
+    out.truncate(n);
+    Ok(out)
+}
+
+/// The Diffmap executor (`JobKind::Diffmap { metric, hdr }` — HDR-corpus B2): decode
+/// the reference + the job's ONE persisted variant (`inputs[0]`), compute the named
+/// metric's per-pixel map with the SAME feeding the recorded scalar used, and return
+/// one gzip'd PFM blob. One-blob-per-job by construction — content identity comes
+/// from the job system (ledger row = cell + kind.metric + output_sha).
+///
+/// Metrics with an in-tree per-pixel map:
+/// - `butteraugli` — the CPU reference crate's diffmap (`with_compute_diffmap`).
+///   HDR feeding: interleaved linear f32 at `1.0 == intensity_target` with
+///   `intensity_target = HDR_DISPLAY_PEAK_NITS` (the `compute_butter_linear`
+///   convention); SDR: sRGB8 at the crate's default 80 cd/m² target.
+/// - `cvvdp` — the in-tree CPU port's diffmap (`score_from_linear_planes_with_diffmap`
+///   at the HDR display / `score_with_diffmap` at the SDR default), the same
+///   `DisplayModel` construction the scoring paths use.
+///
+/// `ssim2` has NO per-pixel map API in-tree — requesting it errors with the
+/// registered absent-not-failed wording rather than approximating one.
+#[cfg(feature = "hdr")]
+fn run_diffmap_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<dyn Error>> {
+    let cell = &job["cell"];
+    let image_path = cell["image_path"]
+        .as_str()
+        .ok_or("diffmap: cell.image_path missing")?;
+    let codec_name = cell["codec"]
+        .as_str()
+        .ok_or("diffmap: cell.codec missing")?;
+    let metric = job["kind"]["metric"]
+        .as_str()
+        .ok_or("diffmap: kind.metric missing")?;
+    let hdr = job["kind"]["hdr"].as_bool().unwrap_or(false);
+    let sha = job["inputs"]
+        .as_array()
+        .and_then(|a| a.first())
+        .and_then(Value::as_str)
+        .ok_or("diffmap: inputs[0] (the variant sha/URI) missing")?;
+
+    let src_path = resolve_source(image_path, corpus_prefix)?;
+    let (var_path, owned) = fetch_variant(sha, ext_for(codec_name))?;
+    let result = diffmap_pair_to_blob(metric, hdr, &src_path, &var_path);
+    if owned {
+        let _ = std::fs::remove_file(&var_path);
+    }
+    result
+}
+
+/// Path-based core of the Diffmap executor (split out so tests can feed
+/// local temp files without an object store): decode the (ref, variant)
+/// pair per `hdr`, compute `metric`'s per-pixel map, return the gzip'd PFM.
+#[cfg(feature = "hdr")]
+fn diffmap_pair_to_blob(
+    metric: &str,
+    hdr: bool,
+    src_path: &std::path::Path,
+    var_path: &std::path::Path,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    match metric {
+        "butteraugli" | "cvvdp" => {}
+        "ssim2" | "ssim2-gpu" => {
+            return Err(
+                "diffmap: ssim2 has no per-pixel map API in-tree — recorded \
+                 absent-not-failed for the HDR corpus (appendix S); do not approximate"
+                    .into(),
+            );
+        }
+        other => {
+            let canon = other.trim_end_matches("-gpu");
+            if matches!(canon, "butteraugli" | "cvvdp") {
+                return Err(format!(
+                    "diffmap: use the canonical metric name {canon:?} (the map owner is the \
+                     CPU reference implementation; {other:?} names a scoring backend)"
+                )
+                .into());
+            }
+            return Err(format!(
+                "diffmap: no per-pixel map for metric {other:?} (supported: butteraugli, cvvdp)"
+            )
+            .into());
+        }
+    }
+    let image_path = src_path.display();
+    let result: Result<Vec<u8>, Box<dyn Error>> = if hdr {
+        // HDR: reference + variant to absolute nits (the ScoreFile HDR decode),
+        // maps computed at the corpus display peak.
+        (|| {
+            let reference = crate::hdr::decode_to_nits(src_path)
+                .map_err(|e| format!("diffmap hdr ref decode {image_path}: {e}"))?;
+            let distorted = crate::hdr::decode_to_nits(var_path)
+                .map_err(|e| format!("diffmap hdr variant decode: {e}"))?;
+            if (reference.width, reference.height) != (distorted.width, distorted.height) {
+                return Err(format!(
+                    "diffmap: dims mismatch ref {}x{} vs variant {}x{}",
+                    reference.width, reference.height, distorted.width, distorted.height
+                )
+                .into());
+            }
+            let (w, h) = (reference.width, reference.height);
+            match metric {
+                #[cfg(feature = "cpu-metrics")]
+                "butteraugli" => {
+                    let peak = crate::hdr::HDR_DISPLAY_PEAK_NITS;
+                    let to_linear = |img: &crate::hdr::NitsImage| -> Vec<rgb::RGB<f32>> {
+                        img.rgb
+                            .chunks_exact(3)
+                            .map(|p| rgb::RGB {
+                                r: p[0] / peak,
+                                g: p[1] / peak,
+                                b: p[2] / peak,
+                            })
+                            .collect()
+                    };
+                    let r = to_linear(&reference);
+                    let d = to_linear(&distorted);
+                    let params = butteraugli::ButteraugliParams::new()
+                        .with_intensity_target(peak)
+                        .with_compute_diffmap(true);
+                    let res = butteraugli::butteraugli_linear(
+                        imgref::ImgRef::new(&r, w as usize, h as usize),
+                        imgref::ImgRef::new(&d, w as usize, h as usize),
+                        &params,
+                    )
+                    .map_err(|e| format!("butteraugli_linear: {e:?}"))?;
+                    let dm = res.diffmap.ok_or("butteraugli returned no diffmap")?;
+                    diffmap_to_pfm_gz(dm.buf(), w, h)
+                }
+                #[cfg(not(feature = "cpu-metrics"))]
+                "butteraugli" => Err("diffmap: butteraugli map needs --features cpu-metrics \
+                     (the CPU reference crate)"
+                    .into()),
+                "cvvdp" => {
+                    let peak = crate::hdr::HDR_DISPLAY_PEAK_NITS;
+                    let params = cvvdp::CvvdpParams {
+                        display: cvvdp::DisplayModel {
+                            y_peak: peak,
+                            ..cvvdp::DisplayModel::STANDARD_HDR_LINEAR
+                        },
+                        ..cvvdp::CvvdpParams::default()
+                    };
+                    let mut scorer = cvvdp::Cvvdp::new(w, h, params)
+                        .map_err(|e| format!("cvvdp::Cvvdp::new: {e}"))?;
+                    let (rr, rg, rb) = crate::hdr::to_cvvdp_linear_planes(&reference);
+                    let (dr, dg, db) = crate::hdr::to_cvvdp_linear_planes(&distorted);
+                    let mut dm = Vec::new();
+                    scorer
+                        .score_from_linear_planes_with_diffmap(
+                            &rr, &rg, &rb, &dr, &dg, &db, w as usize, &mut dm,
+                        )
+                        .map_err(|e| format!("cvvdp diffmap: {e}"))?;
+                    diffmap_to_pfm_gz(&dm, w, h)
+                }
+                _ => unreachable!("metric validated above"),
+            }
+        })()
+    } else {
+        // SDR: rgb8 pair, the metric crates' default display assumptions —
+        // matching the SDR scoring paths (butteraugli sRGB 80 cd/m² default,
+        // cvvdp default params). Registered for the avifgen appendix Z §Z.6.3
+        // follow-up declare.
+        (|| {
+            let reference = decode_image_to_rgb8(src_path)?;
+            let distorted = decode_image_to_rgb8(var_path)?;
+            if (reference.width, reference.height) != (distorted.width, distorted.height) {
+                return Err(format!(
+                    "diffmap: dims mismatch ref {}x{} vs variant {}x{}",
+                    reference.width, reference.height, distorted.width, distorted.height
+                )
+                .into());
+            }
+            let (w, h) = (reference.width, reference.height);
+            match metric {
+                #[cfg(feature = "cpu-metrics")]
+                "butteraugli" => {
+                    let params = butteraugli::ButteraugliParams::new().with_compute_diffmap(true);
+                    let r: &[rgb::RGB<u8>] = bytemuck::cast_slice(&reference.pixels);
+                    let d: &[rgb::RGB<u8>] = bytemuck::cast_slice(&distorted.pixels);
+                    let res = butteraugli::butteraugli(
+                        imgref::ImgRef::new(r, w as usize, h as usize),
+                        imgref::ImgRef::new(d, w as usize, h as usize),
+                        &params,
+                    )
+                    .map_err(|e| format!("butteraugli: {e:?}"))?;
+                    let dm = res.diffmap.ok_or("butteraugli returned no diffmap")?;
+                    diffmap_to_pfm_gz(dm.buf(), w, h)
+                }
+                #[cfg(not(feature = "cpu-metrics"))]
+                "butteraugli" => Err("diffmap: butteraugli map needs --features cpu-metrics \
+                     (the CPU reference crate)"
+                    .into()),
+                "cvvdp" => {
+                    let mut scorer = cvvdp::Cvvdp::new(w, h, cvvdp::CvvdpParams::default())
+                        .map_err(|e| format!("cvvdp::Cvvdp::new: {e}"))?;
+                    let mut dm = Vec::new();
+                    scorer
+                        .score_with_diffmap(&reference.pixels, &distorted.pixels, &mut dm)
+                        .map_err(|e| format!("cvvdp diffmap: {e}"))?;
+                    diffmap_to_pfm_gz(&dm, w, h)
+                }
+                _ => unreachable!("metric validated above"),
+            }
+        })()
+    };
+    result
+}
+
 /// Do one job end-to-end: resolve+decode the source, encode the cell, and (for a metric job) score
 /// it. Returns the output BYTES — encode: the encoded image; metric: the one-line JSON score row.
 /// Shared by single-shot `run` and the warm `run_serve` loop, so both paths are byte-identical.
@@ -1190,6 +1429,24 @@ fn run_one_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<
     // efficient path that replaces per-(cell,metric) re-encoding. Handled separately and returns early.
     if kind == "score_file" {
         return run_score_file(job, corpus_prefix);
+    }
+    // Per-pixel diffmap persistence (JobKind::Diffmap — HDR-corpus B2): decode the
+    // reference + ONE persisted variant, compute the named metric's per-pixel map with
+    // the SAME feeding the recorded scalar used, and return it as one gzip'd PFM blob
+    // (the job system content-addresses it; the ledger row carries cell + metric).
+    if kind == "diffmap" {
+        #[cfg(feature = "hdr")]
+        {
+            return run_diffmap_job(job, corpus_prefix);
+        }
+        #[cfg(not(feature = "hdr"))]
+        {
+            return Err(
+                "diffmap jobs need a build with --features hdr (nits decode + the in-tree \
+                 cvvdp crate); this executor was built without it"
+                    .into(),
+            );
+        }
     }
     // The `encode` / `metric` job kinds re-encode the cell, which needs the codec stack the
     // `sweep` feature pulls. A `jobexec`-only build (pure-scoring executor) rejects them loudly
@@ -1640,5 +1897,105 @@ mod hdr_tests {
             "{p}"
         );
         assert_eq!(p["hdr"], Value::Bool(true));
+    }
+
+    /// End-to-end Diffmap executor core (HDR-corpus B2): a PQ-PNG ref + a
+    /// zenav1-svt AVIF variant of it, both through `diffmap_pair_to_blob`,
+    /// for both supported metrics. Asserts the blob is a valid gzip'd PFM
+    /// of the right dims with finite values, that an identical pair maps
+    /// to ~zero, and that a genuinely distorted pair carries mass — the
+    /// pixels-are-sacred gate for the executor.
+    #[cfg(all(
+        feature = "hdr",
+        feature = "cpu-metrics",
+        feature = "hdr-svt",
+        feature = "avif",
+        feature = "png"
+    ))]
+    #[test]
+    fn diffmap_executor_maps_pq_pair_for_both_metrics() {
+        use serde_json::Map;
+
+        // Synthetic 64x48 PQ ramp (reuses the sweep::hdr test generator).
+        let src = crate::sweep::hdr::tests::synthetic_pq_ref(64, 48, 1500.0);
+        let dir = std::env::temp_dir().join(format!("diffmap_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let ref_png = crate::sweep::hdr::encode_pq_png(&src.rgb16, src.width, src.height, src.cicp)
+            .expect("pq png");
+        let src_path = dir.join("ref.png");
+        std::fs::write(&src_path, &ref_png).unwrap();
+
+        // Variant: a low-q zenav1-svt AVIF of the same source (real distortion).
+        let cell = crate::sweep::hdr::encode_hdr(
+            crate::sweep::hdr::HdrCodec::Zenav1Svt,
+            &src,
+            30.0,
+            &Map::new(),
+        )
+        .expect("svt encode");
+        let var_path = dir.join("var.avif");
+        std::fs::write(&var_path, &cell.bytes).unwrap();
+
+        let parse_pfm_gz = |blob: &[u8]| -> (u32, u32, Vec<f32>) {
+            use zenflate::{Decompressor, Unstoppable};
+            // Diffmaps are smooth; 16x the compressed size is plenty for 64x48.
+            let mut out = vec![0u8; blob.len() * 16 + (1 << 20)];
+            let r = Decompressor::new()
+                .gzip_decompress(blob, &mut out, Unstoppable)
+                .expect("gunzip");
+            let pfm = &out[..r.output_written];
+            // Header = three newline-terminated ASCII lines; the payload after
+            // them is raw f32, so parse bytewise (never utf8 over the payload).
+            let nl: Vec<usize> = pfm
+                .iter()
+                .enumerate()
+                .filter(|&(_, &b)| b == b'\n')
+                .map(|(i, _)| i)
+                .take(3)
+                .collect();
+            assert_eq!(nl.len(), 3, "PFM header has 3 lines");
+            let line = |a: usize, b: usize| std::str::from_utf8(&pfm[a..b]).unwrap();
+            assert_eq!(line(0, nl[0]), "Pf", "grayscale PFM magic");
+            let dims = line(nl[0] + 1, nl[1]);
+            let (w, h) = dims.split_once(' ').unwrap();
+            let (w, h): (u32, u32) = (w.parse().unwrap(), h.parse().unwrap());
+            let scale = line(nl[1] + 1, nl[2]);
+            assert!(scale.starts_with('-'), "little-endian scale, got {scale}");
+            let header_len = nl[2] + 1;
+            let vals: Vec<f32> = pfm[header_len..]
+                .chunks_exact(4)
+                .map(|b| f32::from_le_bytes(b.try_into().unwrap()))
+                .collect();
+            (w, h, vals)
+        };
+
+        for metric in ["butteraugli", "cvvdp"] {
+            // Distorted pair: right dims, finite, nonzero mass.
+            let blob = diffmap_pair_to_blob(metric, true, &src_path, &var_path)
+                .unwrap_or_else(|e| panic!("{metric} diffmap: {e}"));
+            let (w, h, vals) = parse_pfm_gz(&blob);
+            assert_eq!((w, h), (64, 48), "{metric} dims");
+            assert_eq!(vals.len(), 64 * 48, "{metric} value count");
+            assert!(vals.iter().all(|v| v.is_finite()), "{metric} finite");
+            let mass: f64 = vals.iter().map(|&v| v.abs() as f64).sum();
+            assert!(mass > 0.0, "{metric} distorted map must carry mass");
+
+            // Identical pair: the map must be ~zero everywhere.
+            let blob0 = diffmap_pair_to_blob(metric, true, &src_path, &src_path)
+                .unwrap_or_else(|e| panic!("{metric} identity diffmap: {e}"));
+            let (_, _, vals0) = parse_pfm_gz(&blob0);
+            let peak0 = vals0.iter().fold(0.0f32, |a, &v| a.max(v.abs()));
+            assert!(
+                peak0 < 1e-3,
+                "{metric} identical-pair map peak {peak0} (want ~0)"
+            );
+        }
+
+        // Unsupported metric: the registered absent-not-failed wording.
+        let err = diffmap_pair_to_blob("ssim2", true, &src_path, &var_path)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("absent-not-failed"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1187,7 +1187,7 @@ pub fn score_hdr_cached(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// Non-JXL codecs and plan/sidecar options are rejected up front.
@@ -1299,7 +1299,7 @@ mod tests {
     /// mild vertical color gradient, PQ-inverse-EOTF'd to 16-bit code values.
     /// Even, non-64-aligned dims exercise the svt partial-SB bd10 path.
     #[cfg(any(feature = "hdr-svt", feature = "hdr-gainmap"))]
-    fn synthetic_pq_ref(w: u32, h: u32, peak_nits: f64) -> HdrRef {
+    pub(crate) fn synthetic_pq_ref(w: u32, h: u32, peak_nits: f64) -> HdrRef {
         fn pq_oetf(nits: f64) -> f64 {
             const M1: f64 = 2610.0 / 16384.0;
             const M2: f64 = 2523.0 / 4096.0 * 128.0;

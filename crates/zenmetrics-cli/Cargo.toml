@@ -69,7 +69,8 @@ tiff = ["dep:zentiff"]
 # CPU HDR scorer path (`Metric::new_cpu_hdr`, no cubecl). NOT the heavy gain-map
 # source decoders — those are `hdr-gainmap` (below), kept opt-in so a default
 # build stays portable (no `heic`/`ultrahdr` on i686 / windows-arm / macos).
-hdr = ["dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", "zenmetrics-api/cpu-metrics", "dep:cvvdp"]
+# `zenflate` gzips the Diffmap executor's PFM blobs (HDR-corpus B2).
+hdr = ["dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", "zenmetrics-api/cpu-metrics", "dep:cvvdp", "dep:zenflate"]
 
 # HDR gain-map source decoders (opt-in): Ultra HDR JPEG (`ultrahdr-rs`) +
 # gain-map HEIC (`heic` + `ultrahdr-core`) → nits, for `score`/`batch --hdr` on
@@ -385,6 +386,8 @@ enough = "0.4.4"
 
 # CPU metrics
 butteraugli = { version = "0.9.2", optional = true }
+# Pure-Rust gzip for the Diffmap executor's PFM blob compression (B2).
+zenflate = { version = "0.4.0", path = "../../../zenflate", optional = true }
 # 0.3.0 adds principled per-channel H-blur activity for masked/IW features
 # (feat/principled-activity branch). 0.2.8 added `Zensim::compute_extended_features()`.
 zensim = { version = "0.3.0", optional = true }
