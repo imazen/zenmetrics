@@ -29,10 +29,19 @@ type Err = Box<dyn std::error::Error>;
 
 /// `ultrahdr-rs` LinearFloat output: 1.0 = SDR white = 203 cd/m² (BT.2408).
 /// Also the cvvdp-rgb8 peak floor in [`to_cvvdp_rgb8`] (core path).
-const SDR_WHITE_NITS: f32 = 203.0;
+pub(crate) const SDR_WHITE_NITS: f32 = 203.0;
 /// HDR display headroom to reconstruct from gain-map sources (4× ≈ 812 nits).
 #[cfg(feature = "hdr-gainmap")]
 const DISPLAY_BOOST: f32 = 4.0;
+/// Display boost that saturates every gain map: the PQ ceiling over SDR
+/// white (10000/203 ≈ 49.3). Reconstruction weight caps at the gain map's
+/// own max-content-boost, so passing this recovers the FULL stored HDR
+/// content — the decode-back setting for gain-map-encoded *variants*
+/// (`sweep/hdr.rs`), where clipping at a simulated display peak would be
+/// charged to the codec. Gain-map *sources* on the score path keep the
+/// 4× [`DISPLAY_BOOST`] behavior unchanged.
+#[cfg(feature = "hdr-gainmap")]
+pub(crate) const PQ_PEAK_BOOST: f32 = 10000.0 / SDR_WHITE_NITS;
 
 /// Absolute-luminance image: interleaved RGB f32 in cd/m².
 pub struct NitsImage {
@@ -422,12 +431,24 @@ fn decode_exr(path: &Path) -> Result<NitsImage, Err> {
 #[cfg(feature = "hdr-gainmap")]
 fn decode_ultrahdr_jpeg(path: &Path) -> Result<NitsImage, Err> {
     let bytes = std::fs::read(path)?;
-    let dec = ultrahdr_rs::Decoder::new(&bytes).map_err(|e| format!("{e:?}"))?;
+    ultrahdr_jpeg_bytes_to_nits(&bytes, DISPLAY_BOOST)
+}
+
+/// Bytes-based Ultra HDR JPEG → nits core, shared by the path-based
+/// source decode above (4× display boost, unchanged behavior) and the
+/// encoded-variant decode-back in `sweep/hdr.rs` (full-content
+/// [`PQ_PEAK_BOOST`]).
+#[cfg(feature = "hdr-gainmap")]
+pub(crate) fn ultrahdr_jpeg_bytes_to_nits(
+    bytes: &[u8],
+    display_boost: f32,
+) -> Result<NitsImage, Err> {
+    let dec = ultrahdr_rs::Decoder::new(bytes).map_err(|e| format!("{e:?}"))?;
     if !dec.is_ultrahdr() {
         return Err("JPEG has no gain map (SDR)".into());
     }
     let hdr = dec
-        .decode_hdr(DISPLAY_BOOST)
+        .decode_hdr(display_boost)
         .map_err(|e| format!("{e:?}"))?;
     Ok(pixelbuffer_to_nits(&hdr))
 }

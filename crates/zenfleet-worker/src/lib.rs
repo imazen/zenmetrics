@@ -1845,6 +1845,7 @@ mod tests {
                 codec: "zenjpeg".into(),
                 q: 80,
                 knobs: "{}".into(),
+                hdr: false,
             },
             inputs: vec![sha256(&[i])],
             cell: CellId {

@@ -468,6 +468,7 @@ mod tests {
                     codec: "zenjpeg".into(),
                     q: 80,
                     knobs: "{}".into(),
+                    hdr: false,
                 },
                 "zenjpeg",
                 JobStatus::Done,

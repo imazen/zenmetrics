@@ -76,7 +76,19 @@ hdr = ["dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", 
 # those source formats. Off by default because `heic`/`ultrahdr` are heavier
 # sibling path-deps not built on every CI target. PQ-PNG/PQ-JXL/EXR HDR (the
 # sweep + canonical-corpus path) need only core `hdr`.
+# Since 2026-08-06 this feature ALSO gates the JPEG-gainmap HDR ENCODE arm
+# (`sweep/hdr.rs::encode_gainmap_hdr`, `ultrahdr_rs::Encoder` HDR-only input) —
+# the HDR-corpus B4 blocker. Same deps, so no new feature name.
 hdr-gainmap = ["hdr", "dep:ultrahdr-rs", "dep:ultrahdr-core", "dep:heic"]
+
+# zenav1-svt HDR encode arm (opt-in): the byte-gated pure-Rust SVT-AV1 port as
+# a 10-bit PQ 4:2:0 still encoder (`sweep/hdr.rs::encode_svt_hdr`), muxed into
+# an AVIF container by `zenavif-serialize` — the HDR-corpus B3 blocker.
+# Decode-back reuses the `avif` feature's `decode_avif_to_nits` (the svt output
+# is a conformant AVIF), so fleet builds enable `hdr-svt` together with `avif`.
+# Off by default: `zenav1-svt` is a heavy sibling path-dep (git-only, not on
+# crates.io) not built on every CI target.
+hdr-svt = ["hdr", "sweep", "dep:zenav1-svt", "dep:zenavif-serialize"]
 
 # CPU metric feature flags
 cpu-metrics = [
@@ -322,6 +334,14 @@ zentiff      = { path = "../../../zenextras/zentiff",     default-features = fal
 ultrahdr-rs  = { path = "../../../ultrahdr/ultrahdr-rs",                       optional = true }
 ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core",                    optional = true }
 heic         = { path = "../../../heic",          optional = true, features = ["backend-rust"] }
+# zenav1-svt (lib name `svtav1`): the byte-gated pure-Rust SVT-AV1 port —
+# still-picture 10-bit 4:2:0 CQP for the HDR corpus's `zenav1-svt` arm
+# (`hdr-svt` feature). Git-only crate (not on crates.io); path dep like the
+# other codec siblings. CI clones the repo at a pinned rev.
+zenav1-svt   = { path = "../../../zenav1-svt/rust/svtav1",                     optional = true }
+# AVIF/MIAF muxer for the zenav1-svt arm's raw AV1 OBUs. Version resolves to
+# the workspace [patch.crates-io] entry (local ../zenavif-serialize sibling).
+zenavif-serialize = { version = "0.2.0",                                       optional = true }
 image        = { version = "0.25",                optional = true, default-features = false, features = ["exr"] }
 bytemuck     = { workspace = true,                optional = true }
 # In-process pooled S3/R2 client for the jobexec fetch path — replaces the

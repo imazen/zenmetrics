@@ -1785,7 +1785,8 @@ fn compute_cell_hdr(
     distort: Option<Option<&[u16]>>,
 ) -> CellOutcome {
     use crate::sweep::hdr::{
-        HDR_MODE_PQ1000, decode_encoded_to_nits, decode_png_to_nits, encode_hdr, score_hdr_cached,
+        HDR_MODE_PQ1000, HdrCodec, decode_encoded_to_nits, decode_png_to_nits, encode_hdr,
+        score_hdr_cached,
     };
 
     let q = unit.q();
@@ -1845,7 +1846,10 @@ fn compute_cell_hdr(
             )
         }
         Some(None) => Err("distort worker reported a generation failure for this cell".into()),
-        None => encode_hdr(cfg.codec, source, q, knobs),
+        // validate_hdr_sweep already admitted only CodecKind arms with an
+        // HdrCodec mapping, so this cannot fail in practice; the ? keeps a
+        // future mismatch loud instead of silent.
+        None => HdrCodec::from_codec_kind(cfg.codec).and_then(|c| encode_hdr(c, source, q, knobs)),
     };
     let cell = match encode_result {
         Ok(c) => c,
@@ -1898,7 +1902,7 @@ fn compute_cell_hdr(
     let decoded_result = if distort.is_some() {
         decode_png_to_nits(&cell.bytes)
     } else {
-        decode_encoded_to_nits(&cell.bytes, cfg.codec)
+        HdrCodec::from_codec_kind(cfg.codec).and_then(|c| decode_encoded_to_nits(&cell.bytes, c))
     };
     let decoded = match decoded_result {
         Ok(d) => d,

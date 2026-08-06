@@ -114,6 +114,26 @@ pub enum JobKind {
         codec: String,
         q: i64,
         knobs: String,
+        /// HDR encode (the HDR-corpus B1 extension, 2026-08-06): the executor
+        /// decodes the source as a 16-bit PQ reference (`decode_hdr_ref`) and
+        /// routes through the HDR codec arms (`sweep/hdr.rs::encode_hdr` —
+        /// zenjxl / zenavif / zenav1-svt / jpeg-gainmap) instead of the SDR
+        /// rgb8 decode+encode.
+        ///
+        /// **Job-id compatibility**: `#[serde(default, skip_serializing_if)]`
+        /// — an SDR job (`hdr = false`) serializes byte-identically to the
+        /// pre-HDR schema, so every existing content-addressed
+        /// [`crate::JobId`] and ledger row stays valid. `hdr = true` is
+        /// serialized and therefore (correctly) yields a DIFFERENT job id:
+        /// encoding the same source in HDR mode is different work with
+        /// different output bytes.
+        ///
+        /// **Executor version gate**: an executor built before this field
+        /// deserializes the manifest but would encode SDR silently — HDR
+        /// manifests MUST pin an executor image ≥ the version that ships the
+        /// HDR encode arm (same rule as [`JobKind::ScoreFile::hdr`]).
+        #[serde(default, skip_serializing_if = "is_false")]
+        hdr: bool,
     },
     Metric {
         metric: String,
@@ -280,12 +300,14 @@ mod tests {
             codec: "zenjpeg".into(),
             q: 80,
             knobs: "{}".into(),
+            hdr: false,
         }
         .profile();
         let avif = JobKind::Encode {
             codec: "zenavif".into(),
             q: 50,
             knobs: "{}".into(),
+            hdr: false,
         }
         .profile();
         // JPEG: cheap to regenerate, light CPU.
@@ -316,11 +338,13 @@ mod tests {
             codec: "zenjpeg".into(),
             q: 80,
             knobs: "{}".into(),
+            hdr: false,
         };
         let avif = JobKind::Encode {
             codec: "zenavif".into(),
             q: 50,
             knobs: "{}".into(),
+            hdr: false,
         };
         // A ~zero-footprint cell costs ≈ the floor (no cell is free: spawn + fetch + IO).
         assert!((jpeg.estimate_cost_sec(0) - 1.0).abs() < 1e-9);
@@ -339,6 +363,7 @@ mod tests {
             codec: "zenjxl".into(),
             q: 50,
             knobs: "{}".into(),
+            hdr: false,
         };
         // Bigger working set (≈ bigger image) → larger time estimate.
         assert!(k.estimate_cost_sec(64 * MB) < k.estimate_cost_sec(2048 * MB));
@@ -382,11 +407,13 @@ mod tests {
             codec: "zenjpeg".into(),
             q: 80,
             knobs: "{}".into(),
+            hdr: false,
         }; // CpuLight
         let avif = JobKind::Encode {
             codec: "zenavif".into(),
             q: 50,
             knobs: "{}".into(),
+            hdr: false,
         }; // CpuHeavy
         let gpu = [ResourceClass::Gpu];
         let cpu = [ResourceClass::CpuLight, ResourceClass::CpuHeavy];
@@ -418,9 +445,59 @@ mod tests {
             codec: "zenjxl".into(),
             q: 90,
             knobs: "{\"effort\":7}".into(),
+            hdr: false,
         };
         let j = serde_json::to_string(&k).unwrap();
         assert_eq!(serde_json::from_str::<JobKind>(&j).unwrap(), k);
+    }
+
+    /// **GOLDEN — job-id compatibility gate for the Encode HDR field.**
+    ///
+    /// The JSON below is what every pre-HDR Encode job serialized to. An SDR
+    /// encode (`hdr: false`) must keep serializing to EXACTLY these bytes —
+    /// that is what keeps every existing content-addressed encode job id
+    /// (including the in-flight avifgen-enc-20260806 ledger, 564k rows)
+    /// valid. Same contract as the ScoreFile golden below.
+    #[test]
+    fn encode_sdr_serialization_is_golden_stable_and_legacy_parses() {
+        let k = JobKind::Encode {
+            codec: "zenavif".into(),
+            q: 50,
+            knobs: "{\"cell\":\"s4\"}".into(),
+            hdr: false,
+        };
+        assert_eq!(
+            serde_json::to_string(&k).unwrap(),
+            r#"{"kind":"encode","codec":"zenavif","q":50,"knobs":"{\"cell\":\"s4\"}"}"#,
+        );
+        // Pre-HDR manifests (no `hdr` key) still deserialize to SDR and
+        // round-trip byte-identically.
+        let legacy = r#"{"kind":"encode","codec":"zenavif","q":50,"knobs":"{\"cell\":\"s4\"}"}"#;
+        let parsed: JobKind = serde_json::from_str(legacy).unwrap();
+        assert_eq!(parsed, k);
+        assert_eq!(serde_json::to_string(&parsed).unwrap(), legacy);
+    }
+
+    /// HDR encode is different work → different serialization → different
+    /// job id (an HDR cell must never dedup against the SDR encode of the
+    /// same source — the output bytes differ).
+    #[test]
+    fn encode_hdr_changes_job_id_and_roundtrips() {
+        use crate::content::sha256;
+        use crate::ids::JobId;
+        let mk = |hdr: bool| JobKind::Encode {
+            codec: "zenav1-svt".into(),
+            q: 50,
+            knobs: "{\"preset\":6}".into(),
+            hdr,
+        };
+        let inputs = [sha256(b"src")];
+        let sdr = JobId::of(&mk(false), &inputs);
+        let hdr = JobId::of(&mk(true), &inputs);
+        assert_ne!(sdr, hdr, "hdr:true must change the content-addressed id");
+        let j = serde_json::to_string(&mk(true)).unwrap();
+        assert!(j.contains("\"hdr\":true"), "hdr:true must serialize: {j}");
+        assert_eq!(serde_json::from_str::<JobKind>(&j).unwrap(), mk(true));
     }
 
     /// **GOLDEN — job-id compatibility gate for the ScoreFile HDR fields.**

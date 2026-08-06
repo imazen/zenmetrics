@@ -206,6 +206,7 @@ mod tests {
                 codec: "zenjxl".into(),
                 q: 90,
                 knobs: "{\"effort\":9}".into(),
+                hdr: false,
             },
             vec![sha256(b"src")],
             CellId {

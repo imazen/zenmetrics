@@ -52,6 +52,11 @@ pub struct EncodeDeclareItem {
     pub knob_tuple_json: String,
     /// sha256 hex of the source image bytes (`blobs/<sha>`).
     pub source_sha: String,
+    /// HDR encode cell (the HDR-corpus B1 extension): rides onto
+    /// [`JobKind::Encode::hdr`]. `#[serde(default)]` so every pre-HDR
+    /// emit-cells manifest parses unchanged (SDR).
+    #[serde(default)]
+    pub hdr: bool,
     /// Optional scheduling hint (peak mem + useful threads) computed by the
     /// codec-linked emitter (`zenmetrics sweep --emit-cells` via
     /// `PlannedConfig::estimate_resources`). `#[serde(default)]` so manifests
@@ -113,6 +118,7 @@ pub fn declare_encodes(items: &[EncodeDeclareItem]) -> Result<Vec<DesiredJob>, S
                 codec: it.codec.clone(),
                 q: it.q,
                 knobs: it.knob_tuple_json.clone(),
+                hdr: it.hdr,
             },
             inputs: vec![sha],
             cell: CellId {
@@ -243,6 +249,7 @@ mod tests {
             knob_tuple_json:
                 r#"{"cell":"jp3_t0_small_420","fp":"0123456789abcdef","plan":"rd_core"}"#.into(),
             source_sha: sha.clone(),
+            hdr: false,
             hint: None,
             encode_fp: None,
         }];
@@ -252,10 +259,16 @@ mod tests {
         // Same declaration twice -> same content-addressed JobId (gap is a no-op).
         assert_eq!(a[0].job_id(), b[0].job_id());
         match &a[0].kind {
-            zenfleet_core::JobKind::Encode { codec, q, knobs } => {
+            zenfleet_core::JobKind::Encode {
+                codec,
+                q,
+                knobs,
+                hdr,
+            } => {
                 assert_eq!(codec, "zenjpeg");
                 assert_eq!(*q, 85);
                 assert!(knobs.contains("rd_core"));
+                assert!(!hdr, "emit-cells without an hdr field must declare SDR");
             }
             other => panic!("expected Encode kind, got {other:?}"),
         }
@@ -276,6 +289,7 @@ mod tests {
             q: 50,
             knob_tuple_json: knob.into(),
             source_sha: src.clone(),
+            hdr: false,
             hint: None,
             encode_fp: fp.map(str::to_string),
         };
@@ -300,7 +314,10 @@ mod tests {
         // dropped — N rows out == N rows in).
         let mut group_sha: HashMap<(String, String, String), String> = HashMap::new();
         for (i, job) in jobs.iter().enumerate() {
-            if let JobKind::Encode { codec, q, knobs } = &job.kind {
+            if let JobKind::Encode {
+                codec, q, knobs, ..
+            } = &job.kind
+            {
                 // recover the representative item this job came from
                 if let Some(rep) = items
                     .iter()
@@ -349,6 +366,7 @@ mod tests {
             q: 90,
             knob_tuple_json: r#"{"cell":"c","fp":"f","plan":"rd_core"}"#.into(),
             source_sha: "a".repeat(64),
+            hdr: false,
             hint: Some(hint),
             encode_fp: None,
         };

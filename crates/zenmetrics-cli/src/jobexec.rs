@@ -1225,6 +1225,32 @@ fn run_encode_or_metric_job(
         serde_json::from_str(knob_json).map_err(|e| format!("parse knob_tuple_json: {e}"))?;
 
     let src_path = resolve_source(image_path, corpus_prefix)?;
+
+    // HDR encode jobs (`JobKind::Encode { hdr: true, .. }`, the HDR-corpus B1
+    // extension): decode the source as a 16-bit PQ reference and route through
+    // the HDR codec arms — NEVER the SDR rgb8 pipeline (that would quantise
+    // absolute-luminance code values to 8-bit sRGB, the imazen/zenmetrics#25
+    // failure class). Handled before the SDR decode so a PQ source is never
+    // touched by `decode_image_to_rgb8`. `metric`-kind HDR jobs are refused:
+    // HDR scoring goes through the two-stage Encode→ScoreFile shape
+    // (`run_score_file_hdr`), which is what persists the encoded bytes.
+    if job["kind"]["hdr"].as_bool().unwrap_or(false) {
+        if kind != "encode" {
+            return Err(format!(
+                "jobexec: hdr:true is only supported on `encode` jobs (got {kind:?}); \
+                 HDR scoring runs as ScoreFile jobs over persisted encode blobs"
+            )
+            .into());
+        }
+        let hdr_codec = crate::sweep::hdr::HdrCodec::from_name(codec_name)?;
+        let source = crate::sweep::hdr::decode_hdr_ref(&src_path)
+            .map_err(|e| format!("hdr ref decode {image_path}: {e}"))?;
+        let encoded = crate::sweep::hdr::encode_hdr(hdr_codec, &source, q, &knobs)?;
+        // The encoded bytes ARE the output → content-addressed to
+        // blobs/<sha256>, exactly like the SDR encode arm below.
+        return Ok(encoded.bytes);
+    }
+
     let reference = decode_image_to_rgb8(&src_path)?;
 
     let codec = codec_from_name(codec_name)?;

@@ -13,14 +13,20 @@
 //!    via [`crate::hdr::png_to_rgb16_pq`] — raw PQ code values + cICP for
 //!    re-encode, absolute nits (cd/m²) for scoring.
 //! 2. **Encode** ([`encode_hdr`]): only codecs with a *true* HDR path are
-//!    allowed. Today that is **zenjxl** (16-bit PQ input + CICP signaling
-//!    through the zencodec adapter → jxl-encoder's HDR input path) and
-//!    **zenavif** (16-bit PQ input → 10-bit identity-matrix AV1; the
-//!    zencodec adapter maps the source CICP onto the container `nclx` via
-//!    `apply_cicp_to_config → build_ravif_encoder`; added 2026-07-12).
-//!    Every other codec errors loudly at sweep start
-//!    ([`validate_hdr_sweep`]) — an SDR 8-bit round-trip is never
-//!    silently substituted.
+//!    allowed ([`HdrCodec`]). Today that is **zenjxl** (16-bit PQ input +
+//!    CICP signaling through the zencodec adapter → jxl-encoder's HDR
+//!    input path), **zenavif** (16-bit PQ input → 10-bit identity-matrix
+//!    AV1; the zencodec adapter maps the source CICP onto the container
+//!    `nclx` via `apply_cicp_to_config → build_ravif_encoder`; added
+//!    2026-07-12), **zenav1-svt** (10-bit BT.2020nc limited 4:2:0 still
+//!    CQP via the byte-gated SVT-AV1 port, AVIF-muxed by
+//!    zenavif-serialize; `hdr-svt` feature, added 2026-08-06) and
+//!    **jpeg-gainmap** (Ultra HDR via `ultrahdr-rs`, HDR-only input with
+//!    internal tonemap; `hdr-gainmap` feature, added 2026-08-06). The two
+//!    new arms are fleet-path-only (no [`CodecKind`] variant); the sweep
+//!    CLI still admits zenjxl/zenavif via [`validate_hdr_sweep`], and
+//!    every other codec errors loudly at sweep start — an SDR 8-bit
+//!    round-trip is never silently substituted.
 //! 3. **Decode-back** ([`decode_encoded_to_nits`]): the encoded variant is
 //!    decoded and must carry PQ signaling — the codestream CICP surfaced
 //!    on `info.cicp` (transfer 16), or a PQ-tagged descriptor; samples →
@@ -178,24 +184,87 @@ pub fn validate_hdr_sweep(cfg: &crate::sweep::SweepConfig) -> Result<(), Err> {
     Ok(())
 }
 
-/// Encode one HDR cell. Only codecs validated by [`validate_hdr_sweep`]
-/// arrive here; the match stays exhaustive so a future codec addition
-/// must consciously pick its HDR story.
+/// The codecs with a true HDR encode+decode-back story. Deliberately a
+/// SEPARATE enum from [`CodecKind`]: the HDR arms include codecs that have
+/// no SDR sweep path at all (`zenav1-svt`, `jpeg-gainmap`), and extending
+/// `CodecKind` would force every SDR match site to carry variants it can
+/// never encode. The fleet path (`jobexec` HDR encode jobs) parses these
+/// by name; the `sweep --hdr` CLI reaches the [`CodecKind`]-backed subset
+/// via [`HdrCodec::from_codec_kind`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HdrCodec {
+    /// zenjxl 16-bit PQ + CICP through the zencodec adapter.
+    Zenjxl,
+    /// zenavif 10-bit identity-matrix (MC=0 GBR 4:4:4) PQ via zenrav1e.
+    Zenavif,
+    /// zenav1-svt: the byte-gated pure-Rust SVT-AV1 port — 10-bit BT.2020nc
+    /// limited-range 4:2:0 still CQP, muxed into AVIF by zenavif-serialize.
+    Zenav1Svt,
+    /// JPEG + gain map (Ultra HDR) via `ultrahdr-rs`: PQ → linear 203-nit
+    /// white → internal tonemap → base JPEG + gain-map JPEG.
+    JpegGainmap,
+}
+
+impl HdrCodec {
+    /// Parse the cell-identity codec name (the `codec` column every join
+    /// keys on). Unknown names error loudly — a typo'd arm must never
+    /// silently encode as a different codec.
+    pub fn from_name(name: &str) -> Result<Self, Err> {
+        Ok(match name {
+            "zenjxl" => HdrCodec::Zenjxl,
+            "zenavif" => HdrCodec::Zenavif,
+            "zenav1-svt" => HdrCodec::Zenav1Svt,
+            "jpeg-gainmap" => HdrCodec::JpegGainmap,
+            other => {
+                return Err(format!(
+                    "unknown HDR codec {other:?} (supported: zenjxl, zenavif, \
+                     zenav1-svt, jpeg-gainmap)"
+                )
+                .into());
+            }
+        })
+    }
+
+    /// The cell-identity name (inverse of [`Self::from_name`]).
+    pub fn name(self) -> &'static str {
+        match self {
+            HdrCodec::Zenjxl => "zenjxl",
+            HdrCodec::Zenavif => "zenavif",
+            HdrCodec::Zenav1Svt => "zenav1-svt",
+            HdrCodec::JpegGainmap => "jpeg-gainmap",
+        }
+    }
+
+    /// Map the sweep CLI's [`CodecKind`] onto the HDR arm. Only the codecs
+    /// [`validate_hdr_sweep`] admits have a mapping; the svt/gainmap arms
+    /// are fleet-path-only (no `CodecKind` variant exists for them).
+    pub fn from_codec_kind(codec: CodecKind) -> Result<Self, Err> {
+        match codec {
+            CodecKind::Zenjxl => Ok(HdrCodec::Zenjxl),
+            CodecKind::Zenavif => Ok(HdrCodec::Zenavif),
+            other => Err(format!(
+                "HDR sweep: codec {} has no HDR encode path (validate_hdr_sweep \
+                 should have rejected this sweep)",
+                other.name()
+            )
+            .into()),
+        }
+    }
+}
+
+/// Encode one HDR cell. The match stays exhaustive so a future codec
+/// addition must consciously pick its HDR story.
 pub fn encode_hdr(
-    codec: CodecKind,
+    codec: HdrCodec,
     source: &HdrRef,
     q: f64,
     knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Err> {
     match codec {
-        CodecKind::Zenjxl => encode_jxl_hdr(source, q, knobs),
-        CodecKind::Zenavif => encode_avif_hdr(source, q, knobs),
-        other => Err(format!(
-            "HDR sweep: codec {} has no HDR encode path (validate_hdr_sweep \
-             should have rejected this sweep)",
-            other.name()
-        )
-        .into()),
+        HdrCodec::Zenjxl => encode_jxl_hdr(source, q, knobs),
+        HdrCodec::Zenavif => encode_avif_hdr(source, q, knobs),
+        HdrCodec::Zenav1Svt => encode_svt_hdr(source, q, knobs),
+        HdrCodec::JpegGainmap => encode_gainmap_hdr(source, q, knobs),
     }
 }
 
@@ -387,20 +456,373 @@ fn encode_avif_hdr(
     Err("HDR sweep: zenavif requires building with --features sweep,avif".into())
 }
 
+/// Knobs the zenav1-svt HDR path consumes. `preset` is the SVT preset
+/// (0..=13, default 6 = the budget doc's quality tier); `qp` overrides the
+/// q→QP mapping with an explicit CQP value. Anything else errors loudly.
+#[cfg(feature = "hdr-svt")]
+const SVT_HDR_KNOBS: &[&str] = &["preset", "qp"];
+
+/// Map the generic cell quality (0..=100) onto the SVT CLI-domain QP
+/// (1..=63, CQP). Linear and monotone (q0 → 63 worst, q100 → 1 best);
+/// QP 0 (AV1 coded-lossless) is outside the port's envelope, so the top
+/// end clamps to 1 rather than refusing q100 cells.
+#[cfg(feature = "hdr-svt")]
+fn svt_q_to_qp(q: f64) -> u8 {
+    let q = q.clamp(0.0, 100.0);
+    ((63.0 - q * 63.0 / 100.0).round() as i64).clamp(1, 63) as u8
+}
+
+/// PQ-coded RGB16 → BT.2020 NCL limited-range 10-bit YCbCr 4:2:0.
+/// Standard non-constant-luminance matrix applied to the PQ-encoded
+/// components (Kr=0.2627, Kb=0.0593), 2×2 chroma average in the C' domain,
+/// then 10-bit limited quantization (Y: 64+876·Y', C: 512+896·C').
+/// Ported verbatim from the 2026-08-05 HDR sweep-budget harness
+/// (`hdrbudget-2026-08-05/harness/hdrbench/common/src/lib.rs`), which ran
+/// this conversion at every ladder size — the shape an SVT-based AVIF HDR
+/// pipeline uses (SVT-AV1 v4.2.0 ships 4:2:0 only; identity-matrix RGB
+/// would need 4:4:4). The matrix choice is signaled (nclx MC=9), so the
+/// decode side inverts exactly what was applied regardless of primaries.
+#[cfg(feature = "hdr-svt")]
+fn to_yuv420_bd10(rgb16: &[u16], w: usize, h: usize) -> (Vec<u16>, Vec<u16>, Vec<u16>) {
+    const KR: f64 = 0.2627;
+    const KB: f64 = 0.0593;
+    const KG: f64 = 1.0 - KR - KB;
+    let n = w * h;
+    let mut ynorm = vec![0f64; n];
+    let mut y = vec![0u16; n];
+    for i in 0..n {
+        let r = rgb16[3 * i] as f64 / 65535.0;
+        let g = rgb16[3 * i + 1] as f64 / 65535.0;
+        let b = rgb16[3 * i + 2] as f64 / 65535.0;
+        let yv = KR * r + KG * g + KB * b;
+        ynorm[i] = yv;
+        y[i] = ((876.0 * yv + 64.0).round() as i64).clamp(0, 1023) as u16;
+    }
+    let (cw, chd) = (w.div_ceil(2), h.div_ceil(2));
+    let mut u = vec![0u16; cw * chd];
+    let mut v = vec![0u16; cw * chd];
+    for cy in 0..chd {
+        for cx in 0..cw {
+            let (mut sb, mut sr, mut cnt) = (0f64, 0f64, 0f64);
+            for dy in 0..2 {
+                for dx in 0..2 {
+                    let (py, px) = (cy * 2 + dy, cx * 2 + dx);
+                    if py >= h || px >= w {
+                        continue;
+                    }
+                    let i = py * w + px;
+                    let r = rgb16[3 * i] as f64 / 65535.0;
+                    let b = rgb16[3 * i + 2] as f64 / 65535.0;
+                    sb += (b - ynorm[i]) / 1.8814;
+                    sr += (r - ynorm[i]) / 1.4746;
+                    cnt += 1.0;
+                }
+            }
+            u[cy * cw + cx] = ((896.0 * (sb / cnt) + 512.0).round() as i64).clamp(0, 1023) as u16;
+            v[cy * cw + cx] = ((896.0 * (sr / cnt) + 512.0).round() as i64).clamp(0, 1023) as u16;
+        }
+    }
+    (y, u, v)
+}
+
+/// zenav1-svt HDR encode: PQ code values → BT.2020nc limited 10-bit 4:2:0
+/// → `EncodePipeline::try_encode_frame_420_hbd` (the byte-gated native
+/// 10-bit still path, CQP) → AVIF container via zenavif-serialize with
+/// nclx {source primaries, transfer 16 (PQ), matrix 9 (BT.2020 NCL),
+/// limited range}. The OBU-level sequence header carries the same CICP,
+/// so the signaling survives even if a reader ignores the container colr.
+/// Decode-back goes through the ordinary AVIF path
+/// ([`decode_avif_to_nits`]) — the output is a conformant AVIF.
+#[cfg(feature = "hdr-svt")]
+fn encode_svt_hdr(source: &HdrRef, q: f64, knobs: &Map<String, Value>) -> Result<EncodedCell, Err> {
+    use std::time::Instant;
+    use svtav1::encoder::pipeline::EncodePipeline;
+    use svtav1::encoder::rate_control::{RcConfig, RcMode};
+
+    if let Some(unknown) = knobs.keys().find(|k| !SVT_HDR_KNOBS.contains(&k.as_str())) {
+        return Err(format!(
+            "HDR sweep: zenav1-svt knob '{unknown}' is not wired in HDR mode \
+             (supported: {SVT_HDR_KNOBS:?}); refusing to silently ignore it"
+        )
+        .into());
+    }
+
+    let preset = knobs
+        .get("preset")
+        .and_then(Value::as_u64)
+        .unwrap_or(6)
+        .clamp(0, 13) as u8;
+    let qp = match knobs.get("qp").and_then(Value::as_u64) {
+        Some(v) => v.clamp(1, 63) as u8,
+        None => svt_q_to_qp(q),
+    };
+
+    let (w, h) = (source.width as usize, source.height as usize);
+    let start = Instant::now();
+    let (y, u, v) = to_yuv420_bd10(&source.rgb16, w, h);
+
+    let rc = RcConfig {
+        mode: RcMode::Cqp,
+        qp,
+        ..RcConfig::default()
+    };
+    let mut pipeline = EncodePipeline::new(w as u32, h as u32, preset, rc, 0, 1)
+        .with_bit_depth(10)
+        .with_tile_rows_log2(0)
+        .with_tile_cols_log2(0)
+        .with_sb_size(None)
+        .with_chroma_420(true);
+    // OBU-level CICP: primaries pass through from the source; matrix 9 is
+    // what to_yuv420_bd10 applied; limited range matches its quantization.
+    pipeline.color_description = svtav1::entropy::obu::ColorDescription {
+        color_primaries: source.cicp.color_primaries,
+        transfer_characteristics: 16,
+        matrix_coefficients: 9,
+        full_range: false,
+    };
+    let obu = pipeline
+        .try_encode_frame_420_hbd(&y, &u, &v, w)
+        .map_err(|e| format!("zenav1-svt hdr encode failed ({w}x{h} qp{qp} p{preset}): {e}"))?;
+
+    let primaries = match source.cicp.color_primaries {
+        1 => zenavif_serialize::constants::ColorPrimaries::Bt709,
+        9 => zenavif_serialize::constants::ColorPrimaries::Bt2020,
+        12 => zenavif_serialize::constants::ColorPrimaries::DisplayP3,
+        other => {
+            return Err(format!(
+                "zenav1-svt hdr: source cICP primaries {other} has no nclx mapping \
+                 (supported: 1=BT.709, 9=BT.2020, 12=Display P3)"
+            )
+            .into());
+        }
+    };
+    let mut aviffy = zenavif_serialize::Aviffy::new();
+    aviffy
+        .set_color_primaries(primaries)
+        .set_transfer_characteristics(
+            zenavif_serialize::constants::TransferCharacteristics::Smpte2084,
+        )
+        .set_matrix_coefficients(zenavif_serialize::constants::MatrixCoefficients::Bt2020Ncl)
+        .set_full_color_range(false);
+    let bytes = aviffy.to_vec(&obu, None, source.width, source.height, 10);
+    let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+    Ok(EncodedCell { bytes, encode_ms })
+}
+
+#[cfg(not(feature = "hdr-svt"))]
+fn encode_svt_hdr(
+    _source: &HdrRef,
+    _q: f64,
+    _knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Err> {
+    Err("HDR sweep: the zenav1-svt arm requires building with --features hdr-svt".into())
+}
+
+/// Knobs the JPEG-gainmap HDR path consumes. `gm_quality` is the gain-map
+/// JPEG quality (default 85 = the ultrahdr-rs crate default the budget
+/// harness swept with); `gm_scale` the gain-map downscale divisor (crate
+/// default 4). The cell `q` drives the BASE JPEG quality. Anything else
+/// errors loudly.
+#[cfg(feature = "hdr-gainmap")]
+const GAINMAP_HDR_KNOBS: &[&str] = &["gm_quality", "gm_scale"];
+
+/// The gain-map quantization range, linear domain: `[1.0, 10000/203]`.
+/// Mirrors the ultrahdr-rs HDR-only defaults (`gain_map_min` 1.0,
+/// `target_display_peak` 10000 nits) so the full PQ range is expressible;
+/// 8-bit granularity over log2(49.26) ≈ 5.62 stops is 0.022 stops/step.
+#[cfg(feature = "hdr-gainmap")]
+const GAINMAP_MAX_BOOST: f32 = 10000.0 / 203.0;
+
+/// JPEG + gain map (Ultra HDR) HDR encode: PQ code values → PQ EOTF →
+/// linear RGBA f32 at SDR-white 203 cd/m² = 1.0 (BT.2408, the crate's
+/// LinearFloat convention) → filmic tonemap (the crate's own
+/// `tonemap_image_to_srgb8`, the same derivation its HDR-only path uses)
+/// → `ultrahdr_core::compute_gainmap` → base JPEG at the cell q +
+/// gain-map JPEG, assembled by `ultrahdr_rs::Encoder`.
+///
+/// **Why this composes primitives instead of calling the crate's built-in
+/// HDR-only path (`set_hdr_image` + `encode()` alone), measured
+/// 2026-08-06:** that path quantizes gain-map bytes against the CONFIG
+/// boost range (`compute_and_encode_gain`: `config.min_boost.ln()` /
+/// `config.max_boost.ln()`) but stores metadata declaring the
+/// content-derived ACTUAL range (`compute_gainmap`:
+/// `log2(actual_min/max_boost)`), so every conformant reader — including
+/// the crate's own `decode_hdr` at full weight — dequantizes on the wrong
+/// grid and reconstructs under-boosted (a 2000-nit ramp came back at
+/// 732 nits; the byte math reproduces the measurement exactly). Until
+/// that is fixed upstream, this arm runs the SAME kernel and then
+/// **rewrites the per-channel metadata min/max to the quantization grid
+/// it was actually encoded on** (the config range — the libultrahdr
+/// convention), which makes the stored bytes and the declared mapping
+/// agree. The round-trip test below is the gate.
+#[cfg(feature = "hdr-gainmap")]
+fn encode_gainmap_hdr(
+    source: &HdrRef,
+    q: f64,
+    knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Err> {
+    use std::time::Instant;
+    use ultrahdr_core::color::tonemap::tonemap_image_to_srgb8;
+    use ultrahdr_core::gainmap::compute::{GainMapConfig, compute_gainmap};
+    use ultrahdr_rs::{ColorPrimaries, PixelFormat, TransferFunction, pixel_buffer_from_vec};
+
+    if let Some(unknown) = knobs
+        .keys()
+        .find(|k| !GAINMAP_HDR_KNOBS.contains(&k.as_str()))
+    {
+        return Err(format!(
+            "HDR sweep: jpeg-gainmap knob '{unknown}' is not wired in HDR mode \
+             (supported: {GAINMAP_HDR_KNOBS:?}); refusing to silently ignore it"
+        )
+        .into());
+    }
+
+    let base_q = (q.clamp(1.0, 100.0).round() as i64).clamp(1, 100) as u8;
+    let gm_q = knobs
+        .get("gm_quality")
+        .and_then(Value::as_u64)
+        .unwrap_or(85)
+        .clamp(1, 100) as u8;
+    let gm_scale = knobs
+        .get("gm_scale")
+        .and_then(Value::as_u64)
+        .unwrap_or(4)
+        .clamp(1, 8) as u8;
+
+    let primaries = match source.cicp.color_primaries {
+        1 => ColorPrimaries::Bt709,
+        9 => ColorPrimaries::Bt2020,
+        12 => ColorPrimaries::DisplayP3,
+        other => {
+            return Err(format!(
+                "jpeg-gainmap hdr: source cICP primaries {other} has no \
+                 ultrahdr mapping (supported: 1=BT.709, 9=BT.2020, 12=Display P3)"
+            )
+            .into());
+        }
+    };
+
+    let (w, h) = (source.width as usize, source.height as usize);
+    let start = Instant::now();
+    // PQ code values → linear RGBA f32 with 1.0 = SDR white (203 nits).
+    // Reuses the SAME nits the scoring path derived (`source.nits`) so the
+    // encoder sees exactly the image the metrics see, divided by 203.
+    let mut lin = vec![0u8; w * h * 16];
+    for i in 0..w * h {
+        let o = i * 16;
+        lin[o..o + 4]
+            .copy_from_slice(&(source.nits.rgb[3 * i] / crate::hdr::SDR_WHITE_NITS).to_le_bytes());
+        lin[o + 4..o + 8].copy_from_slice(
+            &(source.nits.rgb[3 * i + 1] / crate::hdr::SDR_WHITE_NITS).to_le_bytes(),
+        );
+        lin[o + 8..o + 12].copy_from_slice(
+            &(source.nits.rgb[3 * i + 2] / crate::hdr::SDR_WHITE_NITS).to_le_bytes(),
+        );
+        lin[o + 12..o + 16].copy_from_slice(&1.0f32.to_le_bytes());
+    }
+    let hdr_buf = pixel_buffer_from_vec(
+        lin,
+        source.width,
+        source.height,
+        PixelFormat::RgbaF32,
+        primaries,
+        TransferFunction::Linear,
+    )
+    .map_err(|e| format!("jpeg-gainmap hdr: pixel buffer: {e:?}"))?;
+
+    // SDR base: the crate's own tonemap derivation (filmic, BT.709 sRGB) —
+    // byte-identical to what its HDR-only path would build internally.
+    let sdr_pixels = tonemap_image_to_srgb8(&hdr_buf, ColorPrimaries::Bt709)
+        .map_err(|e| format!("jpeg-gainmap hdr: tonemap: {e:?}"))?;
+    let sdr_buf = pixel_buffer_from_vec(
+        sdr_pixels,
+        source.width,
+        source.height,
+        PixelFormat::Rgba8,
+        ColorPrimaries::Bt709,
+        TransferFunction::Srgb,
+    )
+    .map_err(|e| format!("jpeg-gainmap hdr: sdr buffer: {e:?}"))?;
+
+    // Gain map on the crate's own kernel, with the crate-default HDR-only
+    // config (single-channel luminance, gamma 1, 1/64 offsets).
+    let config = GainMapConfig {
+        scale_factor: gm_scale,
+        gamma: 1.0,
+        multi_channel: false,
+        min_boost: 1.0,
+        max_boost: GAINMAP_MAX_BOOST,
+        base_offset: 1.0 / 64.0,
+        alternate_offset: 1.0 / 64.0,
+        base_hdr_headroom: 1.0,
+        alternate_hdr_headroom: GAINMAP_MAX_BOOST,
+    };
+    let (gainmap, mut metadata) =
+        compute_gainmap(&hdr_buf, &sdr_buf, &config, ultrahdr_core::Unstoppable)
+            .map_err(|e| format!("jpeg-gainmap hdr: compute_gainmap: {e:?}"))?;
+    // THE METADATA CORRECTION (see the function doc): declare the range the
+    // bytes were actually quantized on. Headroom fields (weight policy) are
+    // left as computed.
+    for ch in metadata.channels.iter_mut() {
+        ch.min = (config.min_boost as f64).log2();
+        ch.max = (config.max_boost as f64).log2();
+    }
+
+    let mut enc = ultrahdr_rs::Encoder::new();
+    enc.set_hdr_image(hdr_buf)
+        .set_sdr_image(sdr_buf)
+        .set_existing_gainmap(gainmap, metadata)
+        .set_gainmap_scale(gm_scale)
+        .set_quality(base_q, gm_q);
+    let bytes = enc
+        .encode()
+        .map_err(|e| format!("jpeg-gainmap hdr encode failed ({w}x{h} q{base_q}): {e:?}"))?;
+    let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+    Ok(EncodedCell { bytes, encode_ms })
+}
+
+#[cfg(not(feature = "hdr-gainmap"))]
+fn encode_gainmap_hdr(
+    _source: &HdrRef,
+    _q: f64,
+    _knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Err> {
+    Err("HDR sweep: the jpeg-gainmap arm requires building with --features hdr-gainmap".into())
+}
+
 /// Decode an encoded HDR variant back to absolute nits. The decoded
 /// descriptor must be PQ-tagged (the decoder enriches it from the
 /// codestream CICP); anything else means the codec did not round-trip
 /// the HDR signaling and the cell errors rather than crushing.
-pub fn decode_encoded_to_nits(bytes: &[u8], codec: CodecKind) -> Result<NitsImage, Err> {
+pub fn decode_encoded_to_nits(bytes: &[u8], codec: HdrCodec) -> Result<NitsImage, Err> {
     match codec {
-        CodecKind::Zenjxl => decode_jxl_to_nits(bytes),
-        CodecKind::Zenavif => decode_avif_to_nits(bytes),
-        other => Err(format!(
-            "HDR sweep: codec {} has no HDR decode-back path",
-            other.name()
-        )
-        .into()),
+        HdrCodec::Zenjxl => decode_jxl_to_nits(bytes),
+        // The zenav1-svt arm emits a conformant AVIF (nclx PQ, 10-bit
+        // 4:2:0 BT.2020nc limited) — the ordinary AVIF decode-back path
+        // handles the matrix/range inversion and the PQ gate.
+        HdrCodec::Zenavif | HdrCodec::Zenav1Svt => decode_avif_to_nits(bytes),
+        HdrCodec::JpegGainmap => decode_gainmap_jpeg_to_nits(bytes),
     }
+}
+
+/// Decode an Ultra HDR JPEG variant back to nits: parse the gain map,
+/// reconstruct HDR at FULL content boost (display boost = the PQ ceiling
+/// 10000/203 — reconstruction weight saturates at the gain map's own
+/// max-content-boost, so this recovers everything the codec stored rather
+/// than simulating a limited display; the jxl/avif decode-backs impose no
+/// display clamp either), then scale the 203-nit-white linear output to
+/// absolute nits. A JPEG with no gain map errors — that means the encoder
+/// dropped the HDR half and the cell is not an HDR cell.
+#[cfg(feature = "hdr-gainmap")]
+fn decode_gainmap_jpeg_to_nits(bytes: &[u8]) -> Result<NitsImage, Err> {
+    crate::hdr::ultrahdr_jpeg_bytes_to_nits(bytes, crate::hdr::PQ_PEAK_BOOST)
+}
+
+#[cfg(not(feature = "hdr-gainmap"))]
+fn decode_gainmap_jpeg_to_nits(_bytes: &[u8]) -> Result<NitsImage, Err> {
+    Err("HDR sweep: jpeg-gainmap decode-back requires the `hdr-gainmap` build feature".into())
 }
 
 #[cfg(feature = "jxl")]
@@ -829,7 +1251,175 @@ mod tests {
         };
         let mut knobs = Map::new();
         knobs.insert("progressive".into(), Value::Bool(true));
-        let err = encode_hdr(CodecKind::Zenjxl, &src, 80.0, &knobs)
+        let err = encode_hdr(HdrCodec::Zenjxl, &src, 80.0, &knobs)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("not wired in HDR mode"), "{err}");
+    }
+
+    /// Codec-name mapping is exact and total over the four arms.
+    #[test]
+    fn hdr_codec_names_round_trip() {
+        for c in [
+            HdrCodec::Zenjxl,
+            HdrCodec::Zenavif,
+            HdrCodec::Zenav1Svt,
+            HdrCodec::JpegGainmap,
+        ] {
+            assert_eq!(HdrCodec::from_name(c.name()).unwrap(), c);
+        }
+        assert!(
+            HdrCodec::from_name("zenav1_svt").is_err(),
+            "underscore typo must not parse"
+        );
+        assert!(HdrCodec::from_name("zenjpeg").is_err());
+    }
+
+    #[cfg(feature = "hdr-svt")]
+    #[test]
+    fn svt_q_to_qp_is_monotone_and_never_lossless() {
+        assert_eq!(svt_q_to_qp(0.0), 63);
+        assert_eq!(
+            svt_q_to_qp(100.0),
+            1,
+            "q100 clamps to qp1 (qp0 = lossless is refused by the port)"
+        );
+        let mut prev = 64u8;
+        for q in 0..=100 {
+            let qp = svt_q_to_qp(q as f64);
+            assert!(
+                qp <= prev && (1..=63).contains(&qp),
+                "q{q} -> qp{qp} prev {prev}"
+            );
+            prev = qp;
+        }
+    }
+
+    /// Synthetic PQ source: a horizontal luminance ramp 0 → `peak_nits` with a
+    /// mild vertical color gradient, PQ-inverse-EOTF'd to 16-bit code values.
+    /// Even, non-64-aligned dims exercise the svt partial-SB bd10 path.
+    #[cfg(any(feature = "hdr-svt", feature = "hdr-gainmap"))]
+    fn synthetic_pq_ref(w: u32, h: u32, peak_nits: f64) -> HdrRef {
+        fn pq_oetf(nits: f64) -> f64 {
+            const M1: f64 = 2610.0 / 16384.0;
+            const M2: f64 = 2523.0 / 4096.0 * 128.0;
+            const C1: f64 = 3424.0 / 4096.0;
+            const C2: f64 = 2413.0 / 4096.0 * 32.0;
+            const C3: f64 = 2392.0 / 4096.0 * 32.0;
+            let y = (nits / 10000.0).clamp(0.0, 1.0);
+            let ym = y.powf(M1);
+            ((C1 + C2 * ym) / (1.0 + C3 * ym)).powf(M2)
+        }
+        let (wu, hu) = (w as usize, h as usize);
+        let mut rgb16 = vec![0u16; wu * hu * 3];
+        for y in 0..hu {
+            for x in 0..wu {
+                let ramp = x as f64 / (wu - 1) as f64;
+                let tint = 0.85 + 0.15 * (y as f64 / (hu - 1) as f64);
+                let n_g = peak_nits * ramp;
+                let (n_r, n_b) = (n_g * tint, n_g * (2.0 - tint) * 0.5);
+                let i = (y * wu + x) * 3;
+                rgb16[i] = (pq_oetf(n_r) * 65535.0).round() as u16;
+                rgb16[i + 1] = (pq_oetf(n_g) * 65535.0).round() as u16;
+                rgb16[i + 2] = (pq_oetf(n_b) * 65535.0).round() as u16;
+            }
+        }
+        let nits = crate::hdr::rgb16_pq_to_nits(&rgb16, w, h);
+        HdrRef {
+            rgb16,
+            width: w,
+            height: h,
+            cicp: zenpixels::Cicp::new(1, 16, 0, true),
+            nits,
+        }
+    }
+
+    /// Mean relative error of decoded vs source luma (BT.2020 Y in nits),
+    /// over pixels whose source luma is above a small floor (relative error
+    /// is meaningless at ~0 nits).
+    #[cfg(any(feature = "hdr-svt", feature = "hdr-gainmap"))]
+    fn mean_rel_luma_err(src: &NitsImage, dec: &NitsImage) -> f64 {
+        assert_eq!((src.width, src.height), (dec.width, dec.height));
+        let luma = |p: &[f32]| 0.2627 * p[0] as f64 + 0.6780 * p[1] as f64 + 0.0593 * p[2] as f64;
+        let (mut acc, mut n) = (0.0f64, 0u64);
+        for (s, d) in src.rgb.chunks_exact(3).zip(dec.rgb.chunks_exact(3)) {
+            let (ls, ld) = (luma(s), luma(d));
+            if ls > 5.0 {
+                acc += (ld - ls).abs() / ls;
+                n += 1;
+            }
+        }
+        acc / n as f64
+    }
+
+    /// The zenav1-svt arm end-to-end: PQ ref → 10-bit BT.2020nc 4:2:0 CQP
+    /// AVIF → the ORDINARY AVIF decode-back → nits. Gates: conformant
+    /// container, PQ signaling survives, luma faithful at high q, and the
+    /// rate responds to q. This is the pixels-are-sacred gate for the arm —
+    /// it proves mux + matrix/range signaling + decode inversion agree.
+    #[cfg(all(feature = "hdr-svt", feature = "avif"))]
+    #[test]
+    fn svt_arm_roundtrips_pq_avif_to_nits() {
+        let src = synthetic_pq_ref(64, 48, 2000.0);
+        let knobs = Map::new();
+        let hi = encode_hdr(HdrCodec::Zenav1Svt, &src, 85.0, &knobs).expect("svt q85 encode");
+        assert_eq!(&hi.bytes[4..8], b"ftyp", "must be an ISOBMFF container");
+        let dec = decode_encoded_to_nits(&hi.bytes, HdrCodec::Zenav1Svt).expect("decode-back");
+        assert_eq!((dec.width, dec.height), (64, 48));
+        let err = mean_rel_luma_err(&src.nits, &dec);
+        assert!(
+            err < 0.10,
+            "svt q85 mean relative luma error {err:.4} (expect < 10% on a smooth ramp)"
+        );
+        // Rate responds to quality (same source, much lower q).
+        let lo = encode_hdr(HdrCodec::Zenav1Svt, &src, 10.0, &knobs).expect("svt q10 encode");
+        assert!(
+            lo.bytes.len() <= hi.bytes.len(),
+            "q10 ({}) must not out-size q85 ({})",
+            lo.bytes.len(),
+            hi.bytes.len()
+        );
+        // Unknown knobs error instead of being silently dropped.
+        let mut bad = Map::new();
+        bad.insert("effort".into(), Value::from(7));
+        let err = encode_hdr(HdrCodec::Zenav1Svt, &src, 50.0, &bad)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("not wired in HDR mode"), "{err}");
+    }
+
+    /// The jpeg-gainmap arm end-to-end: PQ ref → Ultra HDR JPEG (internal
+    /// tonemap) → gain-map reconstruction → nits. The >812-nit assertion is
+    /// the anti-vacuity gate for [`crate::hdr::PQ_PEAK_BOOST`]: decoding the
+    /// variant at the gain-map-source 4× display boost would clip the 2000-nit
+    /// top of this ramp at ~812 and fail it.
+    #[cfg(feature = "hdr-gainmap")]
+    #[test]
+    fn gainmap_arm_roundtrips_and_preserves_above_812_nits() {
+        let src = synthetic_pq_ref(64, 48, 2000.0);
+        let knobs = Map::new();
+        let cell = encode_hdr(HdrCodec::JpegGainmap, &src, 90.0, &knobs).expect("uhdr q90 encode");
+        assert_eq!(&cell.bytes[..2], &[0xFF, 0xD8], "must be a JPEG");
+        let dec = decode_encoded_to_nits(&cell.bytes, HdrCodec::JpegGainmap).expect("decode-back");
+        assert_eq!((dec.width, dec.height), (64, 48));
+        let peak = dec
+            .rgb
+            .chunks_exact(3)
+            .map(|p| 0.2627 * p[0] + 0.6780 * p[1] + 0.0593 * p[2])
+            .fold(0.0f32, f32::max);
+        assert!(
+            peak > 900.0,
+            "decoded peak luma {peak:.1} nits — a 4x-display-boost decode would clip at ~812"
+        );
+        let err = mean_rel_luma_err(&src.nits, &dec);
+        assert!(
+            err < 0.25,
+            "uhdr q90 mean relative luma error {err:.4} (expect < 25% through tonemap+gainmap)"
+        );
+        // Unknown knobs error instead of being silently dropped.
+        let mut bad = Map::new();
+        bad.insert("distance".into(), Value::from(1.0));
+        let err = encode_hdr(HdrCodec::JpegGainmap, &src, 50.0, &bad)
             .unwrap_err()
             .to_string();
         assert!(err.contains("not wired in HDR mode"), "{err}");

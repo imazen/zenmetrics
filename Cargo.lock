@@ -6390,6 +6390,65 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenav1-svt"
+version = "0.1.0"
+dependencies = [
+ "zenav1-svt-dsp",
+ "zenav1-svt-encoder",
+ "zenav1-svt-entropy",
+ "zenav1-svt-tables",
+ "zenav1-svt-types",
+]
+
+[[package]]
+name = "zenav1-svt-dsp"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "magetypes",
+ "zenav1-svt-tables",
+ "zenav1-svt-types",
+]
+
+[[package]]
+name = "zenav1-svt-encoder"
+version = "0.1.0"
+dependencies = [
+ "almost-enough",
+ "enough",
+ "whereat",
+ "zenav1-svt-dsp",
+ "zenav1-svt-entropy",
+ "zenav1-svt-tables",
+ "zenav1-svt-types",
+]
+
+[[package]]
+name = "zenav1-svt-entropy"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "magetypes",
+ "zenav1-svt-tables",
+ "zenav1-svt-types",
+]
+
+[[package]]
+name = "zenav1-svt-tables"
+version = "0.1.0"
+dependencies = [
+ "zenav1-svt-types",
+]
+
+[[package]]
+name = "zenav1-svt-types"
+version = "0.1.0"
+dependencies = [
+ "enough",
+ "whereat",
+]
+
+[[package]]
 name = "zenavif"
 version = "0.1.7"
 dependencies = [
@@ -7001,7 +7060,9 @@ dependencies = [
  "tokio",
  "ultrahdr-core 0.6.0",
  "ultrahdr-rs",
+ "zenav1-svt",
  "zenavif",
+ "zenavif-serialize",
  "zencodec",
  "zenfleet-core",
  "zenforks-cubecl",
