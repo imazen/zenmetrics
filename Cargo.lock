@@ -7118,8 +7118,9 @@ dependencies = [
 [[package]]
 name = "zenpredict"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze?rev=a7d82249a189cffa1d72261c351e1dd7b383d790#a7d82249a189cffa1d72261c351e1dd7b383d790"
+source = "git+https://github.com/imazen/zenanalyze?rev=05de3cbc44b19d8769077d99710b0146c761d6df#05de3cbc44b19d8769077d99710b0146c761d6df"
 dependencies = [
+ "archmage",
  "bytemuck",
  "libm",
  "lz4_flex 0.11.6",
@@ -7432,10 +7433,6 @@ checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
  "zune-core",
 ]
-
-[[patch.unused]]
-name = "zenavif-parse"
-version = "0.7.0"
 
 [[patch.unused]]
 name = "zencodec"

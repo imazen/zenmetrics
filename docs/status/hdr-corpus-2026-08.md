@@ -48,7 +48,7 @@ campaign's registered appendix S plus the corpus `_MANIFEST.json`.
 | **B2** | artifact persistence unmet on the scoring path — a `Metric` job **unlinks** the encode after decoding it, and `JobKind::Diffmap` has no executor | two-stage `Encode`→`ScoreFile` fixes encoded bytes; diffmaps still need an executor |
 | **B3** | no `zenav1-svt` codec registered in zenmetrics (encoder itself is ready and byte-gated at 10-bit) | integration gap, not a codec gap |
 | **B4** | JPEG-gainmap is decode-only; no gain-map encoder in any sweep path | arm cannot be built until an encoder arm is added |
-| **B5** | AVIF arm is **user-halted** pending a zenavif settle-check; checked 2026-08-05 and zenavif is **not settled** (stale marker, uncommitted lockfile, conflicted HDR bookmark) | arm stays out; needs user confirmation, not a workaround |
+| **B5** | AVIF arm is **user-halted** pending a zenavif settle-check; checked 2026-08-05 and zenavif is **not settled** (stale marker, uncommitted lockfile, conflicted HDR bookmark) | arm stays out; needs user confirmation, not a workaround. **Coordination note 2026-08-06 (avif-datagen lane): the user directive of 2026-08-06 lifted the avif-datagen halt; the SDR AVIF campaign runs at pinned zenavif `66e3c417` (zensim appendix Z, `docs/status/avif-datagen-2026-08.md`). Whether the lift extends to THIS lane's HDR AVIF arm remains this lane's call — the pin + directive text are there to reuse.** |
 | **B6** | ~~the fleet cannot guarantee GPU scoring~~ — **RESOLVED 2026-08-05** | `ZENMETRICS_REQUIRE_GPU` drops the CPU rung; a `runtime` column records the rung that actually ran; the worker verifies a GPU at boot |
 | **B7** | executor image must carry the `hdr` (and `png`) features | image rebuild, canonical name + new tag |
 

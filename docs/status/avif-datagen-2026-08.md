@@ -1,0 +1,75 @@
+# SDR AVIF datagen on the household fleet — living status
+
+**Living doc.** Updated by the campaign's driver loop while the run is in flight. The
+terminal record is zensim campaign **appendix Z** (registered `ab22e07a`, 2026-08-06) plus
+the corpus `_MANIFEST.json`.
+
+- **Owner:** `claude-avifgen` lane.
+- **Started:** 2026-08-06.
+- **Mission:** the canonical fresh-pin SDR AVIF corpus — 1,455 renditions ×
+  planner-audited knob/q grid = **564,300 encode cells** at zenavif `66e3c417`, GPU
+  perceptual metrics + 944-regime features, content-addressed persistence.
+- **Mandate:** USER DIRECTIVE 2026-08-06 lifts the 2026-07-13 avif-datagen halt: *"you can
+  fleet up avif datagen, remember to use gpu machines for metrics and funnel encodes from
+  the whole fleet, since they can be slow - specialize the gpu machines. have an agent
+  handle it and edit zenmetrics repo as needed."*
+- **Orchestration:** the zenfleet job system only (workspace mandate).
+
+---
+
+## Current state
+
+| | |
+|---|---|
+| **Phase** | registered; building pinned executor images |
+| **Grid** | frozen in appendix Z (main 472,680 + probe 90,720 + huge 900; monsters >16MP excluded) |
+| **zenavif pin** | `66e3c417b43ff950323d402824aeb1ecbbc7f683` (path-dep sibling; source tree == commit tree) |
+| **Ledger fill** | n/a (not declared yet) |
+| **First-cell encode gate (G-Z2)** | NOT YET RUN — hard gate before any fleet scale-up |
+| **First-cell score gate (G-Z3)** | NOT YET RUN — hard gate before the second GPU box |
+
+### Milestones
+
+- [x] Recon: budget doc, job-system caps, June estate precedent, zenavif state
+- [x] Appendix Z pre-registered + pushed (`ab22e07a`) BEFORE launch
+- [x] Planner dry-runs audited (dropped-axis + alias-merge + invalid-strata reports read)
+- [ ] Executor images rebuilt at the pin (CPU `:exec-…` + GPU `:exec-gpu-…` tags) + pushed
+- [ ] Encode run declared; scoped creds minted
+- [ ] **G-Z2 first-cell encode gate PASSED** (blob on R2 + ledger sha match + decode-back)
+- [ ] Fleet scaled to all CPU nodes
+- [ ] Encode ledger 50%
+- [ ] Encode ledger ≥99.5% (G-Z4)
+- [ ] ScoreFile GPU run declared (ssim2-gpu + butteraugli-gpu); **G-Z3 gate on node-2**
+- [ ] lianli joins GPU queue; CPU queue (cvvdp + zensim-foldapp2 944, tier-matched) declared
+- [ ] Score ledgers ≥99.5%; write-back parquets built
+- [ ] `_MANIFEST.json` + orientation gate (G-Z5) + DATA_PROVENANCE/DATA_SPLITS entries + mirrors
+
+## Fleet roles (per the user directive)
+
+| Node | Role |
+|---|---|
+| `node-2` (RTX 3070 8 GB) | **GPU metric scoring** (ZENMETRICS_REQUIRE_GPU=1); encodes only until metric work is queued |
+| `lianli` (RTX 2080 8 GB) | **GPU metric scoring** (same gate); encodes only until metric work is queued |
+| `node-3`, `i265`, `ryzen5800xt` | encode + CPU metric queue (cvvdp, 944 features tier-matched) |
+| `tower` | encode, Docker-only, cpuset-capped, media-first, observe-before-load |
+| `wsl` | operator — declares, gates, harvests; does not measure |
+
+## Coordination with the hdr-corpus lane
+
+- Their **B1** (HDR encode flag) is not needed here (SDR path is the built-in default).
+- Their **B2** diffmap-executor build is NOT duplicated here: encodes are persisted
+  content-addressed, so diffmaps stay computable; a Diffmap follow-up declare is registered
+  in appendix Z §Z.6.3 and will run when the executor exists (theirs, or built here if
+  their lane stays idle — coordinated in this doc first).
+- Their **B5** (AVIF arm user-halted) is superseded for **SDR** by the 2026-08-06 directive
+  above; the HDR AVIF arm remains their call.
+- Their **B6** fix (`ZENMETRICS_REQUIRE_GPU`, `5f6f06f4`) is adopted as gate G-Z3.
+
+## Incidents / decisions log
+
+| When (UTC) | What |
+|---|---|
+| 2026-08-06 ~13:37 | Claimed `zensim` + `zenmetrics` (append-style markers, own jj workspaces). zenavif inspected READ-ONLY: stale 08-01 marker, `M Cargo.lock` only, conflicted `hdr-mdcv-st2086-fix` bookmark — reported in Z.0, untouched. |
+| 2026-08-06 ~13:50 | Corpus pixel estate measured from rendition names: 1,489 MP; the 57 >8MP renditions carry 78% of pixels; 27 >16MP monsters (to 101.8 MP) exceed the 8 GB-card VRAM budget (~348 MiB/MP ssim2-gpu) → excluded, recorded. |
+| 2026-08-06 ~14:00 | Planner dry-runs at the pin: main 12×30 (budget dropped bit-depth-10 from rd_core, kept speeds×qm×subsampling), probe 27×30 (51,360 aliases merged, 1,664 invalid skipped), huge 1×30. Totals frozen into appendix Z. |
+| 2026-08-06 ~14:05 | Appendix Z pushed (`ab22e07a`, merge-base-verified on zensim origin/main). |
