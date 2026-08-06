@@ -21,7 +21,7 @@ use std::sync::{Arc, Condvar, Mutex};
 
 mod s3io;
 
-use zenfleet_core::epoch::{self, ClaimMode, EpochShardCfg, Roster, ShardDecision};
+use zenfleet_core::epoch::{self, ClaimMode, EpochShardCfg, Handicaps, Roster, ShardDecision};
 use zenfleet_core::{
     BlobIndexEntry, BoxBudget, DesiredJob, ErrorClass, InFlight, JobCost, JobId, JobStatus,
     LedgerRow, LedgerView, Regenerability, ResourceClass, ResourceHint, RetryPolicy, RunControl,
@@ -579,6 +579,50 @@ struct EpochParts {
     others_enq: Vec<DesiredJob>,
 }
 
+/// The committed speed-handicap registry (`fleet/handicaps.toml`), baked into the binary so it
+/// travels with every image automatically. See the file's header for the measurement basis and
+/// the re-measure → edit → commit update procedure.
+const EMBEDDED_HANDICAPS_TOML: &str = include_str!("../../../fleet/handicaps.toml");
+
+#[derive(serde::Deserialize, Default)]
+struct HandicapRegistryFile {
+    #[serde(default)]
+    workers: std::collections::BTreeMap<String, zenfleet_core::epoch::WorkerHandicap>,
+}
+
+fn parse_handicaps_toml(text: &str) -> Result<Handicaps, String> {
+    toml::from_str::<HandicapRegistryFile>(text)
+        .map(|f| Handicaps(f.workers))
+        .map_err(|e| e.to_string())
+}
+
+/// The embedded registry, parsed once. Loud + all-1.0 on a parse error at runtime — a broken
+/// registry must never stop a fleet — but `handicap_registry_parses_and_is_sane` makes the same
+/// breakage fail CI first.
+fn embedded_handicaps() -> &'static Handicaps {
+    static H: std::sync::OnceLock<Handicaps> = std::sync::OnceLock::new();
+    H.get_or_init(|| match parse_handicaps_toml(EMBEDDED_HANDICAPS_TOML) {
+        Ok(h) => h,
+        Err(e) => {
+            eprintln!(
+                "zenfleet-worker: EMBEDDED fleet/handicaps.toml failed to parse ({e}) — \
+                 sharding with uniform weights (fix the registry; its unit test gates this)"
+            );
+            Handicaps::default()
+        }
+    })
+}
+
+/// Resolve the effective speed handicaps. Precedence (same convergence story as the claim
+/// mode): campaign `RunControl.worker_weights` — a WHOLESALE replacement, next-pass fleet-wide
+/// — else the committed registry baked into this binary, else uniform 1.0.
+pub fn resolve_handicaps(ctl: &RunControl) -> Handicaps {
+    match &ctl.worker_weights {
+        Some(m) => Handicaps(m.clone()),
+        None => embedded_handicaps().clone(),
+    }
+}
+
 fn partition_epoch(
     desired: &[DesiredJob],
     view: &LedgerView,
@@ -586,6 +630,7 @@ fn partition_epoch(
     roster: &Roster,
     prev: Option<&Roster>,
     me: &str,
+    handicaps: &Handicaps,
 ) -> EpochParts {
     let plan = reconcile(desired, view, policy);
     let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
@@ -602,11 +647,21 @@ fn partition_epoch(
         .chain(plan.poison.iter().map(|i| (i, true)));
     for (id, is_poison) in tagged {
         let Some(&d) = by_id.get(id) else { continue };
-        match epoch::shard_decision(roster, prev, me, id.as_str()) {
+        // Weighted ownership, keyed by this cell's workload mode (encode-by-type / cpu-metric /
+        // gpu-metric) — mixed-mode manifests shard each cell under its own weight column.
+        let mode = epoch::shard_mode(&d.kind);
+        let weight_of = |w: &str| handicaps.weight(w, &mode);
+        match epoch::shard_decision_weighted(roster, prev, me, id.as_str(), &weight_of) {
             ShardDecision::OwnedFast => p.fast.push(d.clone()),
             ShardDecision::OwnedGuarded if is_poison => p.guarded_poison.push(d.clone()),
             ShardDecision::OwnedGuarded => p.guarded_enq.push(d.clone()),
-            ShardDecision::Other if !is_poison => p.others_enq.push(d.clone()),
+            ShardDecision::Other if !is_poison => {
+                // Steal candidacy also requires a nonzero weight for the cell's mode: weight 0
+                // is the role-specialization exclusion, and it covers the tail-steal path too.
+                if handicaps.weight(me, &mode) > 0.0 {
+                    p.others_enq.push(d.clone());
+                }
+            }
             ShardDecision::Other => {}
         }
     }
@@ -641,6 +696,7 @@ fn run_epoch_sharded(
     es: &EpochShardCfg,
     board: &dyn EpochBoard,
     claim_ttl: u64,
+    handicaps: &Handicaps,
     now_fn: &dyn Fn() -> u64,
     sleep_fn: &dyn Fn(u64),
 ) -> Result<ExecOutcome, WorkerRunError> {
@@ -663,12 +719,21 @@ fn run_epoch_sharded(
         );
         return run_chunked(cfg, desired, view, policy, ctx, endpoint);
     }
-    let parts = partition_epoch(desired, view, policy, &roster, prev.as_ref(), &me);
+    let parts = partition_epoch(
+        desired,
+        view,
+        policy,
+        &roster,
+        prev.as_ref(),
+        &me,
+        handicaps,
+    );
     eprintln!(
         "zenfleet-worker: epoch-sharded epoch {e_now} (len {len}s, boundary in {}s): roster {} \
-         workers, shard fast={} guarded={} steal-pool={}",
+         workers ({} handicap rows), shard fast={} guarded={} steal-pool={}",
         epoch::secs_to_next_boundary(cfg.now, len),
         roster.len(),
+        handicaps.0.len(),
         parts.fast.len(),
         parts.guarded_enq.len() + parts.guarded_poison.len(),
         parts.others_enq.len()
@@ -1957,6 +2022,8 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                 .unwrap_or(0)
         };
         let sleep_fn = |s: u64| std::thread::sleep(std::time::Duration::from_secs(s));
+        // Registered speed handicaps: control-object override > committed registry > 1.0.
+        let handicaps = resolve_handicaps(&ctl);
         return run_epoch_sharded(
             cfg,
             &desired,
@@ -1967,6 +2034,7 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
             &es,
             board.as_ref(),
             ttl,
+            &handicaps,
             &now_fn,
             &sleep_fn,
         );
@@ -2682,6 +2750,26 @@ mod tests {
         now_fn: &dyn Fn() -> u64,
         sleep_fn: &dyn Fn(u64),
     ) -> ExecOutcome {
+        run_epoch_pass_weighted(
+            cfg,
+            desired,
+            view,
+            board,
+            &Handicaps::default(),
+            now_fn,
+            sleep_fn,
+        )
+    }
+
+    fn run_epoch_pass_weighted(
+        cfg: &WorkerConfig,
+        desired: &[DesiredJob],
+        view: &LedgerView,
+        board: &dyn EpochBoard,
+        handicaps: &Handicaps,
+        now_fn: &dyn Fn() -> u64,
+        sleep_fn: &dyn Fn(u64),
+    ) -> ExecOutcome {
         run_epoch_sharded(
             cfg,
             desired,
@@ -2696,6 +2784,7 @@ mod tests {
             cfg.epoch_shard.as_ref().unwrap(),
             board,
             600,
+            handicaps,
             now_fn,
             sleep_fn,
         )
@@ -2937,6 +3026,140 @@ mod tests {
         });
         cfg.claims = None;
         assert!(matches!(run(&cfg), Err(WorkerRunError::Config(_))));
+    }
+
+    #[test]
+    fn handicap_registry_parses_and_is_sane() {
+        // CI gate for the COMMITTED fleet/handicaps.toml: a registry that fails here would
+        // otherwise fail loud-but-soft (uniform weights) on every box at once.
+        let h = parse_handicaps_toml(EMBEDDED_HANDICAPS_TOML)
+            .expect("committed fleet/handicaps.toml must parse");
+        assert!(!h.is_empty(), "registry must carry the seeded rows");
+        for (worker, row) in &h.0 {
+            assert_eq!(
+                *worker,
+                worker_key(worker),
+                "keys must be sanitized worker ids"
+            );
+            for (ty, w) in &row.encode {
+                assert!(
+                    w.is_finite() && (0.0..=100.0).contains(w),
+                    "{worker}.encode.{ty} = {w} out of sane range"
+                );
+            }
+            assert!(
+                row.encode.contains_key("default"),
+                "{worker} needs an encode.default"
+            );
+            for (name, w) in [("metric", row.metric), ("gpu_metric", row.gpu_metric)] {
+                assert!(
+                    w.is_finite() && (0.0..=100.0).contains(&w),
+                    "{worker}.{name} = {w} out of sane range"
+                );
+            }
+        }
+        // The measured seed rows from the avifgen attribution audit (0f9fa073) are present.
+        let mode = zenfleet_core::ShardMode::Encode { codec: "zenavif" };
+        assert_eq!(h.weight("lianli", &mode), 1.0);
+        assert_eq!(h.weight("node-3", &mode), 0.19);
+        // Unmeasured types fall to default (no cross-type extrapolation).
+        let jxl = zenfleet_core::ShardMode::Encode { codec: "zenjxl" };
+        assert_eq!(h.weight("node-3", &jxl), 1.0);
+        // Role exclusions: no-GPU boxes are excluded from gpu_metric sharding.
+        assert_eq!(h.weight("tower", &zenfleet_core::ShardMode::GpuMetric), 0.0);
+        assert_eq!(
+            h.weight("node-2", &zenfleet_core::ShardMode::GpuMetric),
+            1.0
+        );
+    }
+
+    #[test]
+    fn resolve_handicaps_precedence_control_overrides_registry() {
+        // No control opinion → the committed registry (embedded) applies.
+        let from_registry = resolve_handicaps(&RunControl::RUNNING);
+        assert!(!from_registry.is_empty());
+        // A control override REPLACES the registry wholesale (absent workers → 1.0).
+        let mut ctl = RunControl::RUNNING;
+        let mut m = std::collections::BTreeMap::new();
+        m.insert(
+            "only-worker".to_string(),
+            zenfleet_core::WorkerHandicap {
+                metric: 0.5,
+                ..Default::default()
+            },
+        );
+        ctl.worker_weights = Some(m);
+        let h = resolve_handicaps(&ctl);
+        assert_eq!(
+            h.weight("only-worker", &zenfleet_core::ShardMode::Metric),
+            0.5
+        );
+        assert_eq!(
+            h.weight("lianli", &zenfleet_core::ShardMode::Metric),
+            1.0,
+            "override is wholesale — registry rows do not merge through"
+        );
+    }
+
+    #[test]
+    fn epoch_zero_weight_worker_owns_nothing_and_never_steals() {
+        // Role specialization end-to-end: w2's weight for this manifest's mode is 0, so it must
+        // execute nothing — no owned shard, no seam claims, and NO tail-steal (even with time
+        // left in the epoch) — while w1 covers the whole set.
+        let root = tmp();
+        std::fs::create_dir_all(root.join("blobs")).unwrap();
+        let board = LocalEpochBoard::new(root.join("blobs").join("_epoch")).unwrap();
+        for e in [8, 9] {
+            for w in ["w1", "w2"] {
+                assert!(board.heartbeat(e, w));
+            }
+        }
+        let cells = epoch_cells(); // JobKind::Metric{"ssim2"} → ShardMode::Metric
+        let mut h = Handicaps::default();
+        h.0.insert(
+            "w2".into(),
+            zenfleet_core::WorkerHandicap {
+                metric: 0.0,
+                ..Default::default()
+            },
+        );
+        let start = 600 * 10 + 5;
+        let (_clock, now_fn, sleep_fn) = fake_time(start);
+        let view = LedgerView::new();
+        let out2 = run_epoch_pass_weighted(
+            &epoch_worker_cfg(&root, "w2", start, true),
+            &cells,
+            &view,
+            &board,
+            &h,
+            &now_fn,
+            &sleep_fn,
+        );
+        assert_eq!(out2.done, 0, "excluded worker executes nothing");
+        assert_eq!(out2.rows.len(), 0);
+        let (_c1, now1, sleep1) = fake_time(start);
+        let out1 = run_epoch_pass_weighted(
+            &epoch_worker_cfg(&root, "w1", start, true),
+            &cells,
+            &view,
+            &board,
+            &h,
+            &now1,
+            &sleep1,
+        );
+        assert_eq!(
+            out1.done,
+            cells.len(),
+            "the weighted peer absorbs the whole set"
+        );
+        let claims_dir = root.join("blobs").join("_epoch").join("claims");
+        let n_claims = std::fs::read_dir(&claims_dir)
+            .map(|d| d.count())
+            .unwrap_or(0);
+        assert_eq!(
+            n_claims, 0,
+            "sole-owner fast path takes no leases; excluded worker none"
+        );
     }
 
     #[test]

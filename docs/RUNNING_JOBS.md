@@ -265,6 +265,24 @@ encode run measured 3.6× under lease claiming with empty views). POOL mode keep
 `zenfleet-sim/tests/epoch_shard.rs` (steady state = total work exactly == distinct cells, zero
 leases; boundary takeover of a killed worker; steal-vs-owner duplicate bounds).
 
+**Registered speed handicaps (weighted sharding).** Boxes are not interchangeable (the avifgen
+attribution audit measured a ~5× per-box encode spread), so shards are sized by **registered
+weights**: `fleet/handicaps.toml` — committed, measured, never auto-tuned — gives each worker
+per-mode multipliers (`encode` keyed **per encoder type** with a `default` fallback, because
+per-encode concurrency re-ranks boxes per type; `metric` for CPU-bound scoring; `gpu_metric`
+for the card). Ownership becomes weighted rendezvous hashing (`−w/ln(u)` over the frozen pair
+hash, pure-Rust `libm` so mixed x86/ARM fleets agree bit-for-bit): shares ∝ weight, a weight
+edit moves only the delta share, `0.0` excludes a box from a mode entirely (role
+specialization — it also blocks tail-steal for those cells), and a weightless/all-1.0 fleet
+keeps the exact unweighted ownership. The registry is baked into the worker binary; precedence
+is campaign `RunControl.worker_weights` (wholesale override, next-pass fleet-wide — use it for
+any live-campaign change) > committed registry > 1.0. To register a box's row: run
+`scripts/jobsys/handicap_typebench.sh` (times the registered per-type cell set through the
+ordinary worker pass — minutes per row), normalize against the column's 1.0 reference box, and
+commit with the run cited. Measured in `zenfleet-sim` (900 cells, 3 workers at 20/15/10
+cells/epoch): uniform shards straggle 14 epochs apart with 450 idle cell-slots; correct
+weights finish within 1 epoch, idle 45 (−90%), completion 30 → 21 epochs.
+
 ---
 
 ## 6. The Unraid basement tier  🏠

@@ -1,0 +1,98 @@
+# Registered worker speed handicaps for epoch-sharded claiming (weighted rendezvous hashing).
+#
+# REGISTERED means measured and committed — never auto-tuned. Each multiplier states its
+# measurement basis in a comment; 1.0 = the fleet-reference throughput for that mode, 0.0 =
+# excluded from that mode's sharding (role specialization). Workers absent from this file
+# weigh 1.0 in every mode. Worker keys are the sanitized worker ids (`worker_key`) the boxes
+# heartbeat under — NEUTRAL node ids only (household-fleet naming rules).
+#
+# WHY per-mode, and why encode is per ENCODER TYPE: a box's relative throughput is not one
+# number. Encode scales with cores×IPC — but per-encode concurrency differs (process-parallel
+# single-threaded encoders scale with core count; internally-threaded encoders like svt run
+# their own pool and compress the many-core advantage; memory-bound encoders re-rank boxes
+# again), so encode multipliers are keyed `{ <codec_type> = w, default = w }` and cross-type
+# extrapolation is deliberately NOT done: unmeasured types fall back to `default`. CPU metrics
+# (cvvdp/butteraugli/ssim2 on CPU) are memory/vector-bound — a different ranking again. GPU
+# metrics are the card, not the CPU.
+#
+# UPDATE PROCEDURE (per box, per encoder type):
+#   1. Run the type-bench matrix on the box: `scripts/jobsys/handicap_typebench.sh` — it times
+#      a fixed registered cell set per encoder type through the ORDINARY worker path (real
+#      container/admission/I/O), minutes per row, and prints cells/min per type.
+#   2. Normalize against the current 1.0 reference box for that type (or promote a new
+#      reference and rescale the column — only ratios matter to the sharding).
+#   3. Edit this file; cite the bench run id / ledger scan in the row comment; commit.
+#   4. Live campaigns converge via the RunControl `worker_weights` override (next pass); the
+#      committed file itself reaches boxes at their next image roll. For a mid-campaign weight
+#      change ALWAYS write the control override too — mixed-image fleets otherwise shard from
+#      different registries until the roll completes (bounded ledger-deduped duplicate work,
+#      but avoidable).
+#
+# Seed provenance (2026-08-06): the `encode.zenavif` column is MEASURED from the avifgen
+# encode-run ledger attribution audit (status doc `docs/status/avif-datagen-2026-08.md`,
+# commit 0f9fa073; whole-campaign scan, 1,518,977 rows / 508,239 distinct DONE at 21:30Z):
+# per-box distinct-done credit over the stated active window, normalized to lianli = 1.0
+# (20.8k cells/h). svt / jxl / gainmap encode types have NO per-box data yet (the HDR encode
+# wave ran operator-box-only) → they fall back to `default = 1.0` with the type-bench TODO;
+# per the user's directive, cross-type extrapolation is wrong, so we do not seed them from
+# the zenavif column. `metric` is seeded proportional to the measured zenavif encode credit
+# (no per-box CPU-metric measurement exists yet — TODO type-bench metric rows; the
+# memory-bound ranking may differ, notably for SMT-heavy boxes). `gpu_metric` bases are per
+# row. Ratios are what matter; absolute scale is arbitrary.
+
+[workers.lianli]
+metric = 1.0       # basis: proportional to measured zenavif encode credit (TODO cvvdp-rate bench)
+gpu_metric = 1.0   # basis: reference card; G-Z3 probe showed node-2's 3070 ≈ the 5070-measured
+                   # 0.40 s/MP·metric at 7.2 MP — re-derive both from the sf-gpu score ledger
+                   # once lianli joins the score queue (TODO ledger derivation)
+[workers.lianli.encode]
+zenavif = 1.00     # MEASURED: 135,246 distinct-done / ~6.5 h = 20.8k/h (fleet max; 24T) — 0f9fa073
+default = 1.00     # UNMEASURED for other encoder types — type-bench TODO (no cross-type extrapolation)
+
+[workers.i265]
+metric = 0.72      # basis: proportional to measured zenavif encode credit (TODO cvvdp-rate bench)
+gpu_metric = 0.0   # basis: no CUDA-capable worker runtime enrolled on this box (excluded)
+[workers.i265.encode]
+zenavif = 0.72     # MEASURED: 97,361 / ~6.5 h = 15.0k/h (20T) — 0f9fa073
+default = 1.00     # UNMEASURED — type-bench TODO
+
+[workers.ryzen5800xt]
+metric = 0.67      # basis: proportional to measured zenavif encode credit; SMT-heavy 32T-on-16C —
+                   # the memory-bound metric ranking likely differs, measure before relying on it
+gpu_metric = 0.0   # basis: no CUDA-capable worker runtime enrolled on this box (excluded)
+[workers.ryzen5800xt.encode]
+zenavif = 0.67     # MEASURED: 91,195 / ~6.5 h = 14.0k/h (32T on 16C) — 0f9fa073
+default = 1.00     # UNMEASURED — type-bench TODO
+
+[workers.tower]
+metric = 0.67      # basis: proportional to measured zenavif encode credit (TODO cvvdp-rate bench)
+gpu_metric = 0.0   # basis: no NVIDIA GPU (Threadripper 2950X, Unraid; Docker-only CPU worker)
+[workers.tower.encode]
+zenavif = 0.67     # MEASURED: 90,402 / ~6.5 h = 13.9k/h (capped cpuset 24T, cpu-shares 256) — 0f9fa073
+default = 1.00     # UNMEASURED — type-bench TODO
+
+[workers.node-2]
+metric = 0.64      # basis: proportional to the LOW-CONFIDENCE encode sample below (TODO bench)
+gpu_metric = 1.0   # basis: G-Z3 measured 2.9 s/metric at 7.2 MP on the 3070 ≈ the 5070-rate
+                   # (0.40 s/MP) — parity seed; re-derive from the sf-gpu ledger (scoring since
+                   # 2026-08-06 20:01Z) once a second GPU box accumulates rows (TODO)
+[workers.node-2.encode]
+zenavif = 0.64     # MEASURED but LOW CONFIDENCE: 2,227 distinct-done in ~10 min ≈ 13.4k/h (16T);
+                   # the box left the encode pool for the score queue — re-measure via type-bench
+default = 1.00     # UNMEASURED — type-bench TODO
+
+[workers.node-3]
+metric = 0.19      # basis: proportional to measured zenavif encode credit (TODO cvvdp-rate bench)
+gpu_metric = 0.0   # basis: not enrolled as a GPU scorer (box is Windows-default per 0f9fa073)
+[workers.node-3.encode]
+zenavif = 0.19     # MEASURED: 26,292 / ~6.5 h = 4.0k/h (6C/12T, weakest box) — 0f9fa073
+default = 1.00     # UNMEASURED — type-bench TODO
+
+[workers.wsl-gate]
+metric = 0.57      # basis: proportional to measured zenavif encode credit (TODO cvvdp-rate bench)
+gpu_metric = 0.0   # basis: operator dev box — never enroll its GPU in fleet scoring
+[workers.wsl-gate.encode]
+zenavif = 0.57     # MEASURED: 65,516 / ~5.5 h = 11.9k/h (~28T) — 0f9fa073. NOTE: this is the
+                   # OPERATOR box; its enrolment in that run was an unbudgeted incident (see the
+                   # status doc). Row kept so any future accidental enrolment shards sanely.
+default = 1.00     # UNMEASURED — type-bench TODO

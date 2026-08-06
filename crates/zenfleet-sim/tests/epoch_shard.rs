@@ -23,7 +23,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use zenfleet_core::epoch::{
-    self, EpochShardCfg, Roster, ShardDecision, epoch_index, hrw_owner, shard_decision, steal_order,
+    self, EpochShardCfg, Roster, ShardDecision, epoch_index, hrw_owner, shard_decision,
+    shard_decision_weighted, steal_order,
 };
 use zenfleet_sim::SimClock;
 
@@ -64,6 +65,8 @@ struct Fleet {
     /// worker → epoch it dies at (stops beating AND executing from that epoch on).
     deaths: BTreeMap<String, u64>,
     mode: Mode,
+    /// Registered handicap weights (empty = uniform 1.0 — the unweighted delegate path).
+    weights: BTreeMap<String, f64>,
 }
 
 /// One recorded execution: epoch, worker, cell, and whether it came via the steal path.
@@ -83,6 +86,11 @@ struct RunReport {
     /// Lease claims attempted per epoch (the claim-traffic meter).
     lease_attempts: BTreeMap<u64, usize>,
     epochs_run: u64,
+    /// Σ over (epoch, alive worker) of unused per-epoch budget while global work remained —
+    /// the tail-idle meter weighted sharding exists to shrink.
+    idle_budget: usize,
+    /// Last epoch in which each worker still had OWNED work (its shard-exhaustion point).
+    last_owned_epoch: BTreeMap<String, u64>,
 }
 
 impl RunReport {
@@ -177,18 +185,25 @@ fn run_fleet(f: &Fleet, max_epochs: u64) -> RunReport {
                         budget -= 1;
                     }
                 }
+                report.idle_budget += budget;
                 continue;
             }
             // Owned shard first (fast lease-free; guarded behind a lease at ownership seams).
+            // Weighted ownership through the REAL registered-handicap path (empty weights map
+            // = the uniform delegate, i.e. the pre-weights behavior bit-for-bit).
+            let weight_of = |wk: &str| f.weights.get(wk).copied().unwrap_or(1.0);
             let mut owned_fast = Vec::new();
             let mut owned_guarded = Vec::new();
             let mut others = Vec::new();
             for c in &remaining {
-                match shard_decision(&roster, prev.as_ref(), &w, c) {
+                match shard_decision_weighted(&roster, prev.as_ref(), &w, c, &weight_of) {
                     ShardDecision::OwnedFast => owned_fast.push(*c),
                     ShardDecision::OwnedGuarded => owned_guarded.push(*c),
                     ShardDecision::Other => others.push(*c),
                 }
+            }
+            if !(owned_fast.is_empty() && owned_guarded.is_empty()) {
+                report.last_owned_epoch.insert(w.clone(), e);
             }
             for c in owned_fast {
                 if budget == 0 {
@@ -222,6 +237,9 @@ fn run_fleet(f: &Fleet, max_epochs: u64) -> RunReport {
                     }
                 }
             }
+            // Unused budget while the campaign still had work = paid idle (the tail-idle
+            // meter; correct weights shrink it, tail-steal mops the residue).
+            report.idle_budget += budget;
         }
         clock.advance(cfg.epoch_len_secs);
     }
@@ -252,6 +270,7 @@ fn steady_state_total_work_equals_distinct_cells_with_zero_leases() {
         rates: three_workers(),
         deaths: BTreeMap::new(),
         mode: Mode::NoSteal,
+        weights: BTreeMap::new(),
     };
     let r = run_fleet(&f, 40);
     assert_eq!(r.distinct().len(), 300, "campaign must complete");
@@ -295,6 +314,7 @@ fn killed_workers_cells_are_taken_over_at_the_next_boundary() {
         rates: three_workers(),
         deaths: [("w-mid".to_string(), kill_at)].into_iter().collect(),
         mode: Mode::NoSteal,
+        weights: BTreeMap::new(),
     };
     let r = run_fleet(&f, 60);
     assert_eq!(
@@ -358,6 +378,7 @@ fn tail_steal_takes_over_within_the_death_epoch_and_bounds_duplicates() {
         rates: three_workers(),
         deaths: [("w-mid".to_string(), kill_at)].into_iter().collect(),
         mode,
+        weights: BTreeMap::new(),
     };
     let no_steal = run_fleet(&mk(Mode::NoSteal), 60);
     let steal = run_fleet(&mk(Mode::TailSteal), 60);
@@ -398,6 +419,87 @@ fn tail_steal_takes_over_within_the_death_epoch_and_bounds_duplicates() {
         per_epoch_steals.values().all(|&n| n <= 1),
         "leases must fence concurrent stealers"
     );
+}
+
+/// Gate 4 — REGISTERED WEIGHTS (the measured point of the feature): with handicaps matching
+/// the fleet's true throughput (weights ∝ rates 20/15/10), the heterogeneous workers exhaust
+/// their shards TOGETHER (stated band: within 2 epochs of each other — hash-variance on the
+/// shard sizes plus the weight-blind bootstrap epochs cost up to ~1 epoch each), the tail-idle
+/// meter shrinks vs uniform sharding, and completion is no later — with the anti-3.6×
+/// invariants (total == distinct, zero post-bootstrap leases) still holding on the weighted
+/// path. 900 cells so the uniform imbalance is unmistakable: equal shards of ≈300 exhaust in
+/// ≈15/20/30 epochs at rates 20/15/10 (spread ≈ 15 epochs of paid straggle) while correct
+/// weights size shards ≈400/300/200 that all exhaust in ≈20. Tail-steal remains the
+/// residual-error mop and is OFF here so the balance itself is what's measured.
+#[test]
+fn correct_weights_balance_shard_finish_and_shrink_tail_idle() {
+    let mk = |weights: &[(&str, f64)]| Fleet {
+        cells: cells(900),
+        rates: three_workers(),
+        deaths: BTreeMap::new(),
+        mode: Mode::NoSteal,
+        weights: weights.iter().map(|(w, v)| (w.to_string(), *v)).collect(),
+    };
+    let uniform = run_fleet(&mk(&[]), 80);
+    let weighted = run_fleet(&mk(&[("w-fast", 2.0), ("w-mid", 1.5), ("w-slow", 1.0)]), 80);
+    let spread = |r: &RunReport| {
+        let lo = r.last_owned_epoch.values().min().copied().unwrap_or(0);
+        let hi = r.last_owned_epoch.values().max().copied().unwrap_or(0);
+        hi - lo
+    };
+    eprintln!(
+        "balance: uniform  spread={} idle={} epochs={} | weighted spread={} idle={} epochs={} \
+         (last-owned uniform {:?} → weighted {:?})",
+        spread(&uniform),
+        uniform.idle_budget,
+        uniform.epochs_run,
+        spread(&weighted),
+        weighted.idle_budget,
+        weighted.epochs_run,
+        uniform.last_owned_epoch,
+        weighted.last_owned_epoch,
+    );
+    // Both complete; exactly-once holds on the weighted path too.
+    assert_eq!(uniform.distinct().len(), 900);
+    assert_eq!(weighted.distinct().len(), 900);
+    assert_eq!(
+        weighted.total(),
+        900,
+        "weighted sharding must stay exactly-once"
+    );
+    assert_eq!(weighted.duplicates(), Vec::<&str>::new());
+    // The balance gates.
+    assert!(
+        spread(&weighted) <= 2,
+        "correct weights must exhaust shards within 2 epochs of each other (got {})",
+        spread(&weighted)
+    );
+    assert!(
+        spread(&uniform) > spread(&weighted),
+        "uniform sharding must show the imbalance the weights remove ({} vs {})",
+        spread(&uniform),
+        spread(&weighted)
+    );
+    assert!(
+        weighted.idle_budget < uniform.idle_budget,
+        "correct weights must shrink tail idle ({} vs {})",
+        weighted.idle_budget,
+        uniform.idle_budget
+    );
+    assert!(
+        weighted.epochs_run <= uniform.epochs_run,
+        "correct weights must not finish later ({} vs {})",
+        weighted.epochs_run,
+        uniform.epochs_run
+    );
+    // Zero claim traffic once the roster is stable — unchanged by weighting.
+    let after_bootstrap: usize = weighted
+        .lease_attempts
+        .iter()
+        .filter(|(e, _)| **e >= 2)
+        .map(|(_, n)| n)
+        .sum();
+    assert_eq!(after_bootstrap, 0, "weighted fast path must take no leases");
 }
 
 /// The sim's worker-visible decision path agrees with the worker crate's: same roster, same

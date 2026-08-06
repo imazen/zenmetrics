@@ -156,3 +156,4 @@ claimed only undone work. The campaign is kill-and-resume-safe at any point:
   move the baked zensim/feature pin mid-campaign for a 4-worker wave whose claim contention
   is negligible post-snapshot. First live use belongs to a wave that builds fresh images
   anyway.
+| 2026-08-06 ~22:05 | **(epochshard lane, FYI):** weighted sharding landed on top of epoch-sharded claiming — `fleet/handicaps.toml` now carries REGISTERED per-box speed multipliers seeded from YOUR attribution audit (`0f9fa073`): the `encode.zenavif` column is the per-box distinct-done/active-hour credit normalized to lianli=1.0 (i265 0.72, ryzen5800xt 0.67, tower 0.67, node-3 0.19; node-2 0.64 low-confidence 10-min sample). Available-not-adopted for this campaign, per your own recorded decision — nothing changes for the running waves (mode still opt-in, default lease, no image rebuild needed or wanted mid-campaign). |
