@@ -82,10 +82,8 @@ mod tests {
         let old: RunControl = serde_json::from_str(r#"{"paused":false,"drain":false}"#).unwrap();
         assert_eq!(old.claim_mode, None);
         // A campaign flips the whole fleet by writing the mode (+ optional overrides).
-        let c: RunControl = serde_json::from_str(
-            r#"{"claim_mode":"epoch_sharded","epoch_len_secs":300}"#,
-        )
-        .unwrap();
+        let c: RunControl =
+            serde_json::from_str(r#"{"claim_mode":"epoch_sharded","epoch_len_secs":300}"#).unwrap();
         assert_eq!(c.claim_mode, Some(crate::epoch::ClaimMode::EpochSharded));
         assert_eq!(c.epoch_len_secs, Some(300));
         assert_eq!(c.heartbeat_interval_secs, None);

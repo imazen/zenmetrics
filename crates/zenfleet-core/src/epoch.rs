@@ -130,6 +130,13 @@ pub fn in_tail(now: u64, epoch_len_secs: u64) -> bool {
     (into as f64) >= TAIL_STEAL_FRACTION * (len as f64)
 }
 
+/// Seconds from `now` until this epoch's tail-steal window opens (0 once inside it).
+pub fn secs_to_tail(now: u64, epoch_len_secs: u64) -> u64 {
+    let len = epoch_len_secs.max(1);
+    let tail_at = (TAIL_STEAL_FRACTION * len as f64).ceil() as u64;
+    tail_at.saturating_sub(now % len)
+}
+
 // ───────────────────────────── stable hashing (HRW scores) ─────────────────────────────
 //
 // Rendezvous hashing only works if every worker computes the *same* scores, so the hash must be
@@ -195,7 +202,9 @@ impl Roster {
     }
 
     pub fn contains(&self, worker: &str) -> bool {
-        self.workers.binary_search_by(|w| w.as_str().cmp(worker)).is_ok()
+        self.workers
+            .binary_search_by(|w| w.as_str().cmp(worker))
+            .is_ok()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -292,7 +301,9 @@ mod tests {
 
     fn cells(n: usize) -> Vec<String> {
         // Shaped like real job ids (hex sha) so balance numbers are representative.
-        (0..n).map(|i| format!("{:064x}", (i as u128) * 0x9e37_79b9_7f4a_7c15)).collect()
+        (0..n)
+            .map(|i| format!("{:064x}", (i as u128) * 0x9e37_79b9_7f4a_7c15))
+            .collect()
     }
 
     // ── stable-hash pinning ──────────────────────────────────────────────────────────
@@ -356,6 +367,10 @@ mod tests {
         assert!(in_tail(450, 600)); // 0.75 × 600
         assert!(in_tail(599, 600));
         assert!(!in_tail(600, 600)); // next epoch starts fresh
+        assert_eq!(secs_to_tail(0, 600), 450);
+        assert_eq!(secs_to_tail(449, 600), 1);
+        assert_eq!(secs_to_tail(450, 600), 0);
+        assert_eq!(secs_to_tail(599, 600), 0);
     }
 
     // ── roster + owner determinism ───────────────────────────────────────────────────
@@ -488,7 +503,10 @@ mod tests {
             .into_iter()
             .find(|c| owns(&now, "a", c))
             .expect("a owns something");
-        assert_eq!(shard_decision(&now, None, "a", &mine), ShardDecision::OwnedGuarded);
+        assert_eq!(
+            shard_decision(&now, None, "a", &mine),
+            ShardDecision::OwnedGuarded
+        );
         let empty = roster(2, &[]);
         assert_eq!(
             shard_decision(&now, Some(&empty), "a", &mine),
@@ -525,11 +543,20 @@ mod tests {
     #[test]
     fn claim_mode_parses_and_serdes() {
         assert_eq!(ClaimMode::parse("lease"), Some(ClaimMode::Lease));
-        assert_eq!(ClaimMode::parse("epoch-sharded"), Some(ClaimMode::EpochSharded));
-        assert_eq!(ClaimMode::parse("EPOCH_SHARDED"), Some(ClaimMode::EpochSharded));
+        assert_eq!(
+            ClaimMode::parse("epoch-sharded"),
+            Some(ClaimMode::EpochSharded)
+        );
+        assert_eq!(
+            ClaimMode::parse("EPOCH_SHARDED"),
+            Some(ClaimMode::EpochSharded)
+        );
         assert_eq!(ClaimMode::parse("nope"), None);
         assert_eq!(ClaimMode::default(), ClaimMode::Lease);
-        assert_eq!(serde_json::to_string(&ClaimMode::EpochSharded).unwrap(), "\"epoch_sharded\"");
+        assert_eq!(
+            serde_json::to_string(&ClaimMode::EpochSharded).unwrap(),
+            "\"epoch_sharded\""
+        );
         let c: EpochShardCfg = serde_json::from_str("{}").unwrap();
         assert_eq!(c, EpochShardCfg::default());
         assert_eq!(c.epoch_len_secs, 600);

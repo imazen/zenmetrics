@@ -21,6 +21,7 @@ use std::sync::{Arc, Condvar, Mutex};
 
 mod s3io;
 
+use zenfleet_core::epoch::{self, ClaimMode, EpochShardCfg, Roster, ShardDecision};
 use zenfleet_core::{
     BlobIndexEntry, BoxBudget, DesiredJob, ErrorClass, InFlight, JobCost, JobId, JobStatus,
     LedgerRow, LedgerView, Regenerability, ResourceClass, ResourceHint, RetryPolicy, RunControl,
@@ -422,6 +423,405 @@ pub fn claim_or_steal_r2_key(
     };
     let _ = std::fs::remove_file(&body);
     won
+}
+
+// ─────────────────── epoch-sharded claiming (claim mode `epoch_sharded`) ───────────────────
+//
+// The lease path pays one R2 round-trip per claim ATTEMPT and N workers attempt most claims;
+// when the reconcile view is stale, dedup degrades to those leases alone (the avifgen campaign's
+// measured 3.6× re-work). Epoch sharding computes ownership instead of racing for it: wall-clock
+// epochs + rendezvous hashing over the alive roster (`zenfleet_core::epoch` — the pure math),
+// with leases kept only where ownership just moved (the boundary seam) and in the straggler-tail
+// steal. See `docs/RUNNING_JOBS.md` for adoption.
+
+/// The tiny shared-storage surface epoch-sharded claiming needs beyond blobs + ledger:
+/// heartbeat writes, roster listings, and the per-cell lease used at ownership seams.
+/// R2-backed in production; directory-backed for local runs and tests.
+pub trait EpochBoard {
+    /// Record "`worker` was alive in `epoch`" (idempotent overwrite). Best-effort: a failed
+    /// beat only risks dropping out of the NEXT epoch's roster, which self-heals.
+    fn heartbeat(&self, epoch: u64, worker: &str) -> bool;
+    /// Workers that heartbeated during `epoch`. Errors → empty (callers fail open to lease mode).
+    fn roster_members(&self, epoch: u64) -> Vec<String>;
+    /// Per-cell lease claim/steal — same TTL semantics as the lease claim path. True = this
+    /// worker may run the cell.
+    fn claim_cell(&self, id: &str, now: u64, ttl_secs: u64, owner: &str) -> bool;
+}
+
+/// R2-backed [`EpochBoard`]: heartbeats live at `{prefix}/hb/{epoch}/{worker}` in the claims
+/// bucket (the `hb/` segment can never collide with bare-sha cell claims or `chunk-…` keys), and
+/// the seam lease IS the ordinary claim object — epoch and lease workers see each other's leases.
+pub struct R2EpochBoard {
+    pub endpoint: String,
+    pub bucket: String,
+    pub prefix: String,
+}
+
+impl EpochBoard for R2EpochBoard {
+    fn heartbeat(&self, epoch: u64, worker: &str) -> bool {
+        let key = format!("{}/hb/{}/{}", self.prefix.trim_matches('/'), epoch, worker);
+        match crate::s3io::put(&self.endpoint, &self.bucket, &key, b"1") {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("zenfleet-worker: heartbeat {key} failed: {e}");
+                false
+            }
+        }
+    }
+
+    fn roster_members(&self, epoch: u64) -> Vec<String> {
+        let prefix = format!("{}/hb/{}", self.prefix.trim_matches('/'), epoch);
+        match crate::s3io::list_basenames(&self.endpoint, &self.bucket, &prefix) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!(
+                    "zenfleet-worker: roster list {prefix} failed ({e}) — empty roster, lease-mode this epoch"
+                );
+                Vec::new()
+            }
+        }
+    }
+
+    fn claim_cell(&self, id: &str, now: u64, ttl_secs: u64, owner: &str) -> bool {
+        claim_or_steal_r2_key(
+            &self.endpoint,
+            &self.bucket,
+            &self.prefix,
+            id,
+            now,
+            ttl_secs,
+            None,
+            owner,
+        )
+    }
+}
+
+/// Directory-backed [`EpochBoard`] for local runs and tests. The stale-claim steal here is
+/// read-then-overwrite (not CAS) — fine for processes on one box, NOT a distributed substitute
+/// for the R2 board.
+pub struct LocalEpochBoard {
+    root: PathBuf,
+}
+
+impl LocalEpochBoard {
+    pub fn new(root: impl Into<PathBuf>) -> io::Result<Self> {
+        let root = root.into();
+        std::fs::create_dir_all(&root)?;
+        Ok(Self { root })
+    }
+}
+
+impl EpochBoard for LocalEpochBoard {
+    fn heartbeat(&self, epoch: u64, worker: &str) -> bool {
+        let dir = self.root.join("hb").join(epoch.to_string());
+        std::fs::create_dir_all(&dir)
+            .and_then(|_| std::fs::write(dir.join(worker), b"1"))
+            .is_ok()
+    }
+
+    fn roster_members(&self, epoch: u64) -> Vec<String> {
+        match std::fs::read_dir(self.root.join("hb").join(epoch.to_string())) {
+            Ok(rd) => rd
+                .filter_map(|e| e.ok()?.file_name().into_string().ok())
+                .collect(),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    fn claim_cell(&self, id: &str, now: u64, ttl_secs: u64, owner: &str) -> bool {
+        let dir = self.root.join("claims");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join(id);
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut f) => f.write_all(format!("{now} {owner}").as_bytes()).is_ok(),
+            Err(_) => {
+                // Exists — steal only once stale (dead holder), same TTL rule as R2.
+                let ts = std::fs::read_to_string(&path)
+                    .ok()
+                    .and_then(|s| s.split_whitespace().next().map(str::to_string))
+                    .and_then(|t| t.parse::<u64>().ok());
+                match ts {
+                    Some(t) if claim_is_stale(now, t, ttl_secs) => {
+                        std::fs::write(&path, format!("{now} {owner}")).is_ok()
+                    }
+                    _ => false,
+                }
+            }
+        }
+    }
+}
+
+/// Sanitize a worker id into its roster/heartbeat key (also the HRW hash input). Every worker
+/// must apply the identical mapping or rosters and shards diverge — so it lives here, once.
+pub fn worker_key(worker: &str) -> String {
+    worker
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// This worker's slice of one epoch, split by [`ShardDecision`] (enqueue vs poison tracked so
+/// only real work spends leases; another owner's poison rows are left to that owner).
+struct EpochParts {
+    fast: Vec<DesiredJob>,
+    guarded_enq: Vec<DesiredJob>,
+    guarded_poison: Vec<DesiredJob>,
+    others_enq: Vec<DesiredJob>,
+}
+
+fn partition_epoch(
+    desired: &[DesiredJob],
+    view: &LedgerView,
+    policy: RetryPolicy,
+    roster: &Roster,
+    prev: Option<&Roster>,
+    me: &str,
+) -> EpochParts {
+    let plan = reconcile(desired, view, policy);
+    let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
+    let mut p = EpochParts {
+        fast: Vec::new(),
+        guarded_enq: Vec::new(),
+        guarded_poison: Vec::new(),
+        others_enq: Vec::new(),
+    };
+    let tagged = plan
+        .enqueue
+        .iter()
+        .map(|i| (i, false))
+        .chain(plan.poison.iter().map(|i| (i, true)));
+    for (id, is_poison) in tagged {
+        let Some(&d) = by_id.get(id) else { continue };
+        match epoch::shard_decision(roster, prev, me, id.as_str()) {
+            ShardDecision::OwnedFast => p.fast.push(d.clone()),
+            ShardDecision::OwnedGuarded if is_poison => p.guarded_poison.push(d.clone()),
+            ShardDecision::OwnedGuarded => p.guarded_enq.push(d.clone()),
+            ShardDecision::Other if !is_poison => p.others_enq.push(d.clone()),
+            ShardDecision::Other => {}
+        }
+    }
+    p
+}
+
+fn merge_outcome(a: &mut ExecOutcome, mut b: ExecOutcome) {
+    a.rows.append(&mut b.rows);
+    a.done += b.done;
+    a.failed += b.failed;
+    a.poisoned += b.poisoned;
+    a.skipped += b.skipped;
+}
+
+/// How many steal targets to lease per batch in the straggler tail (bounds the claim burst and
+/// keeps the between-batch epoch check responsive).
+const STEAL_BATCH: usize = 64;
+
+/// One epoch-sharded pass (see [`run`] for entry): heartbeat → roster → partition → execute the
+/// owned shard lease-free → lease-guard the seam cells → optionally steal the straggler tail.
+/// `now_fn`/`sleep_fn` are injected so tests drive virtual time; production passes the system
+/// clock. Falls back to the lease path for this pass when the roster doesn't include this worker
+/// yet (bootstrap epoch, fresh join, or a failed roster listing) — fail-open to productive work.
+#[allow(clippy::too_many_arguments)]
+fn run_epoch_sharded(
+    cfg: &WorkerConfig,
+    desired: &[DesiredJob],
+    view: &LedgerView,
+    policy: RetryPolicy,
+    ctx: WorkerCtx<'_>,
+    endpoint: Option<&str>,
+    es: &EpochShardCfg,
+    board: &dyn EpochBoard,
+    claim_ttl: u64,
+    now_fn: &dyn Fn() -> u64,
+    sleep_fn: &dyn Fn(u64),
+) -> Result<ExecOutcome, WorkerRunError> {
+    let len = es.epoch_len_secs.max(1);
+    let e_now = epoch::epoch_index(cfg.now, len);
+    let me = worker_key(&cfg.worker);
+    board.heartbeat(e_now, &me);
+    let roster = match e_now.checked_sub(1) {
+        Some(prev_e) => Roster::new(e_now, board.roster_members(prev_e)),
+        None => Roster::new(e_now, Vec::new()),
+    };
+    let prev = e_now
+        .checked_sub(2)
+        .map(|pp| Roster::new(e_now - 1, board.roster_members(pp)));
+    if roster.is_empty() || !roster.contains(&me) {
+        eprintln!(
+            "zenfleet-worker: epoch-sharded epoch {e_now}: not in the roster yet ({} members) — \
+             lease-mode this epoch (bootstrap/join; sharded from the next boundary)",
+            roster.len()
+        );
+        return run_chunked(cfg, desired, view, policy, ctx, endpoint);
+    }
+    let parts = partition_epoch(desired, view, policy, &roster, prev.as_ref(), &me);
+    eprintln!(
+        "zenfleet-worker: epoch-sharded epoch {e_now} (len {len}s, boundary in {}s): roster {} \
+         workers, shard fast={} guarded={} steal-pool={}",
+        epoch::secs_to_next_boundary(cfg.now, len),
+        roster.len(),
+        parts.fast.len(),
+        parts.guarded_enq.len() + parts.guarded_poison.len(),
+        parts.others_enq.len()
+    );
+    match &cfg.r2 {
+        Some(t) => {
+            let store = R2BlobStore::new(t.endpoint.clone(), t.bucket.clone(), t.prefix.clone());
+            Ok(epoch_exec(
+                cfg, view, policy, ctx, endpoint, es, board, claim_ttl, now_fn, sleep_fn, &store,
+                parts, e_now, &me,
+            ))
+        }
+        None => {
+            let store = LocalBlobStore::new(cfg.blobs.clone())
+                .map_err(|e| WorkerRunError::Io(e.to_string()))?;
+            Ok(epoch_exec(
+                cfg, view, policy, ctx, endpoint, es, board, claim_ttl, now_fn, sleep_fn, &store,
+                parts, e_now, &me,
+            ))
+        }
+    }
+}
+
+/// The store-generic body of [`run_epoch_sharded`]. Three phases, all through the ordinary
+/// chunked executor (LPT packing + `can_admit` bounds + durable per-chunk sidecars unchanged):
+///
+/// 1. **Fast shard** — cells owned now AND under the previous roster: NO lease. The chunk-claim
+///    callback instead refreshes the heartbeat and checks the epoch is still current, so a pass
+///    stops claiming new chunks at the boundary (in-flight cells finish; overrun ≤ one chunk).
+/// 2. **Seam cells** — ownership just moved here: per-cell lease first (fences a divergent
+///    roster view or a straggling prior owner's *next* epoch), then the same executor.
+/// 3. **Straggler tail** (`tail_steal`) — shard exhausted with epoch time left: wait (still
+///    heartbeating) for the tail window, then work OTHER workers' remaining cells in
+///    deterministic per-worker order, lease-guarded. The wait matters: returning `done=0`
+///    passes here would trip the entrypoint's drain-exit while peers still own live work.
+#[allow(clippy::too_many_arguments)]
+fn epoch_exec<B: BlobStore + Sync>(
+    cfg: &WorkerConfig,
+    view: &LedgerView,
+    policy: RetryPolicy,
+    ctx: WorkerCtx<'_>,
+    endpoint: Option<&str>,
+    es: &EpochShardCfg,
+    board: &dyn EpochBoard,
+    claim_ttl: u64,
+    now_fn: &dyn Fn() -> u64,
+    sleep_fn: &dyn Fn(u64),
+    store: &B,
+    parts: EpochParts,
+    e_now: u64,
+    me: &str,
+) -> ExecOutcome {
+    let len = es.epoch_len_secs.max(1);
+    let params = default_chunk_params(cfg.chunk_wall_sec);
+    let handler = |job: &DesiredJob| exec_command(&cfg.exec, job);
+    let ledger_out_uri = cfg.ledger_out.to_string_lossy().into_owned();
+    let mut flush = |chunk_id: &str, rows: &[LedgerRow]| {
+        flush_chunk_rows(&ledger_out_uri, endpoint, chunk_id, rows);
+    };
+    let last_beat = std::cell::Cell::new(cfg.now);
+    let heartbeat_maybe = || {
+        let t = now_fn();
+        if t.saturating_sub(last_beat.get()) >= es.heartbeat_interval_secs.max(1) {
+            board.heartbeat(epoch::epoch_index(t, len), me);
+            last_beat.set(t);
+        }
+    };
+    let epoch_open = || epoch::epoch_index(now_fn(), len) == e_now;
+    let gate = |_cid: &str| {
+        heartbeat_maybe();
+        epoch_open()
+    };
+    let EpochParts {
+        fast,
+        guarded_enq,
+        guarded_poison,
+        others_enq,
+    } = parts;
+
+    let mut out = ExecOutcome {
+        rows: Vec::new(),
+        done: 0,
+        failed: 0,
+        poisoned: 0,
+        skipped: 0,
+    };
+
+    // Phase 1 — the lease-free fast shard (zero claim traffic; this is the whole point).
+    if !fast.is_empty() {
+        let o = execute_gap_chunked(
+            &fast, view, policy, handler, store, gate, params, &mut flush, ctx,
+        );
+        merge_outcome(&mut out, o);
+    }
+
+    // Phase 2 — seam cells: lease each, run the won ones. Poison rows spend no lease.
+    if (!guarded_enq.is_empty() || !guarded_poison.is_empty()) && epoch_open() {
+        let mut won = guarded_poison;
+        for d in guarded_enq {
+            if board.claim_cell(d.job_id().as_str(), cfg.now, claim_ttl, me) {
+                won.push(d);
+            } else {
+                out.skipped += 1;
+            }
+        }
+        if !won.is_empty() {
+            let o = execute_gap_chunked(
+                &won, view, policy, handler, store, gate, params, &mut flush, ctx,
+            );
+            merge_outcome(&mut out, o);
+        }
+    }
+
+    // Phase 3 — straggler-tail steal (endgame): shard exhausted, others' cells remain.
+    if es.tail_steal && !others_enq.is_empty() && epoch_open() {
+        while epoch_open() && !epoch::in_tail(now_fn(), len) {
+            heartbeat_maybe();
+            let step = epoch::secs_to_tail(now_fn(), len)
+                .clamp(1, es.heartbeat_interval_secs.clamp(1, 30));
+            sleep_fn(step);
+        }
+        if epoch_open() {
+            let ids: Vec<JobId> = others_enq.iter().map(|d| d.job_id()).collect();
+            let keys: Vec<&str> = ids.iter().map(|i| i.as_str()).collect();
+            let order = epoch::steal_order(me, &keys);
+            eprintln!(
+                "zenfleet-worker: epoch-sharded epoch {e_now}: shard exhausted — tail-stealing \
+                 from {} remaining cells (lease-guarded)",
+                keys.len()
+            );
+            for batch in order.chunks(STEAL_BATCH) {
+                if !epoch_open() {
+                    break;
+                }
+                let mut won: Vec<DesiredJob> = Vec::new();
+                for &i in batch {
+                    if board.claim_cell(keys[i], cfg.now, claim_ttl, me) {
+                        won.push(others_enq[i].clone());
+                    } else {
+                        out.skipped += 1;
+                    }
+                }
+                if won.is_empty() {
+                    continue;
+                }
+                let o = execute_gap_chunked(
+                    &won, view, policy, handler, store, gate, params, &mut flush, ctx,
+                );
+                merge_outcome(&mut out, o);
+            }
+        }
+    }
+    out
 }
 
 /// Identity/time context for the rows a worker emits (who ran it, on what provider, when).
@@ -1074,6 +1474,34 @@ pub struct WorkerConfig {
     /// chunk at a time under a `BoxBudget(0.75 × RAM, cores)` admission cap (see
     /// [`execute_gap_chunked`]). Activate only after a real-box smoke run.
     pub chunk_wall_sec: f64,
+    /// Epoch-sharded claiming (`--claim-mode epoch-sharded`). `None` (the default) = lease
+    /// claiming, behavior identical to before this field existed. The run's control object can
+    /// override the mode fleet-wide (see [`RunControl::claim_mode`] and [`resolve_epoch_cfg`]).
+    pub epoch_shard: Option<EpochShardCfg>,
+}
+
+/// Resolve the effective epoch-shard config from the campaign control object + this worker's own
+/// config. The control object wins when it names a mode (that is how a whole fleet converges on
+/// one mode — mixed modes on one run re-introduce the duplicate-work tax); its `epoch_len_secs` /
+/// `heartbeat_interval_secs` override the worker's numbers when present. `None` = lease.
+pub fn resolve_epoch_cfg(
+    ctl: &RunControl,
+    worker_cfg: Option<EpochShardCfg>,
+) -> Option<EpochShardCfg> {
+    match ctl.claim_mode {
+        Some(ClaimMode::Lease) => None,
+        Some(ClaimMode::EpochSharded) => {
+            let mut es = worker_cfg.unwrap_or_default();
+            if let Some(l) = ctl.epoch_len_secs {
+                es.epoch_len_secs = l;
+            }
+            if let Some(h) = ctl.heartbeat_interval_secs {
+                es.heartbeat_interval_secs = h;
+            }
+            Some(es)
+        }
+        None => worker_cfg,
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -1084,6 +1512,8 @@ pub enum WorkerRunError {
     Manifest(String),
     #[error("ledger {0}")]
     Ledger(String),
+    #[error("config {0}")]
+    Config(String),
 }
 
 // ──────────────────────────── garbage collection (goal G) ────────────────────────────
@@ -1300,6 +1730,38 @@ fn chunk_ledger_uri(ledger_out: &str, chunk_id: &str) -> String {
 /// chunk at a time under a `BoxBudget(0.75 × RAM, cores)` admission cap, executing each cell as a
 /// fresh process. Persists a durable per-chunk ledger sidecar via the `flush` callback, so unlike the
 /// per-cell path it does NOT write a single end-of-pass sidecar — the chunk sidecars ARE the output.
+/// The chunk envelope both the lease path and the epoch-sharded path run under: this box's
+/// budget, the caller's chunk wall target, and the no-hint fallback footprint (a modest
+/// 512 MB / 1 thread, so admission stays safe).
+fn default_chunk_params(chunk_wall_sec: f64) -> ChunkParams {
+    ChunkParams {
+        budget: host_box_budget(),
+        chunk_wall_sec,
+        fallback_hint: ResourceHint {
+            peak_mem_bytes: 512 << 20,
+            threads: 1,
+        },
+    }
+}
+
+/// Durable per-chunk sidecar write (shared by the lease and epoch-sharded paths). Failure is
+/// loud but non-fatal: the rows also ride the pass outcome, and the next pass re-derives any
+/// truly lost work from the gap.
+fn flush_chunk_rows(
+    ledger_out_uri: &str,
+    endpoint: Option<&str>,
+    chunk_id: &str,
+    rows: &[LedgerRow],
+) {
+    if rows.is_empty() {
+        return;
+    }
+    let uri = chunk_ledger_uri(ledger_out_uri, chunk_id);
+    if let Err(e) = zenfleet_ledger::write_ledger_uri(&uri, rows, endpoint) {
+        eprintln!("zenfleet-worker: chunk {chunk_id} ledger write to {uri} failed: {e}");
+    }
+}
+
 fn run_chunked(
     cfg: &WorkerConfig,
     desired: &[DesiredJob],
@@ -1308,15 +1770,7 @@ fn run_chunked(
     ctx: WorkerCtx<'_>,
     endpoint: Option<&str>,
 ) -> Result<ExecOutcome, WorkerRunError> {
-    let params = ChunkParams {
-        budget: host_box_budget(),
-        chunk_wall_sec: cfg.chunk_wall_sec,
-        // No declare-time hint → assume a modest 512 MB / 1-thread footprint (admission stays safe).
-        fallback_hint: ResourceHint {
-            peak_mem_bytes: 512 << 20,
-            threads: 1,
-        },
-    };
+    let params = default_chunk_params(cfg.chunk_wall_sec);
     eprintln!(
         "zenfleet-worker: resource-aware concurrent mode (LPT + can_admit, chunk target {:.0}s) \
          — budget {:.1} GiB / {} cores. Set ZEN_CHUNK_WALL_SEC=0 for the serial per-cell path.",
@@ -1329,13 +1783,7 @@ fn run_chunked(
     let handler = |job: &DesiredJob| exec_command(&cfg.exec, job);
     let ledger_out_uri = cfg.ledger_out.to_string_lossy().into_owned();
     let mut flush = |chunk_id: &str, rows: &[LedgerRow]| {
-        if rows.is_empty() {
-            return;
-        }
-        let uri = chunk_ledger_uri(&ledger_out_uri, chunk_id);
-        if let Err(e) = zenfleet_ledger::write_ledger_uri(&uri, rows, endpoint) {
-            eprintln!("zenfleet-worker: chunk {chunk_id} ledger write to {uri} failed: {e}");
-        }
+        flush_chunk_rows(&ledger_out_uri, endpoint, chunk_id, rows);
     };
     let out = match (&cfg.r2, &cfg.claims) {
         (Some(t), Some(cc)) => {
@@ -1443,21 +1891,22 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
     // Run control (goal C): if the run is paused/draining, pull no new work this pass. Fail-open —
     // an absent control object reads as RUNNING. The ledger is untouched, so resuming continues
     // exactly where it left off ("without losing state").
-    if let (Some(t), Some(key)) = (&cfg.r2, &cfg.control_key) {
-        let ctl = fetch_control_r2(&t.endpoint, &t.bucket, key);
-        if ctl.claims_blocked() {
-            eprintln!(
-                "zenfleet-worker: run control = {} — pulling no new work this pass",
-                if ctl.paused { "PAUSED" } else { "DRAINING" }
-            );
-            return Ok(ExecOutcome {
-                rows: Vec::new(),
-                done: 0,
-                failed: 0,
-                poisoned: 0,
-                skipped: 0,
-            });
-        }
+    let ctl = match (&cfg.r2, &cfg.control_key) {
+        (Some(t), Some(key)) => fetch_control_r2(&t.endpoint, &t.bucket, key),
+        _ => RunControl::RUNNING,
+    };
+    if ctl.claims_blocked() {
+        eprintln!(
+            "zenfleet-worker: run control = {} — pulling no new work this pass",
+            if ctl.paused { "PAUSED" } else { "DRAINING" }
+        );
+        return Ok(ExecOutcome {
+            rows: Vec::new(),
+            done: 0,
+            failed: 0,
+            poisoned: 0,
+            skipped: 0,
+        });
     }
 
     let policy = RetryPolicy {
@@ -1468,6 +1917,60 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
         provider: &cfg.provider,
         now: cfg.now,
     };
+
+    // Epoch-sharded claiming (opt-in; the campaign control object may set/override the mode).
+    // Rides the chunked executor, so it requires the chunked path.
+    if let Some(es) = resolve_epoch_cfg(&ctl, cfg.epoch_shard) {
+        if cfg.chunk_wall_sec <= 0.0 {
+            return Err(WorkerRunError::Config(
+                "epoch-sharded claiming requires the chunked path (keep ZEN_CHUNK_WALL_SEC > 0)"
+                    .into(),
+            ));
+        }
+        let (board, ttl): (Box<dyn EpochBoard>, u64) = match (&cfg.r2, &cfg.claims) {
+            (Some(t), Some(cc)) => (
+                Box::new(R2EpochBoard {
+                    endpoint: t.endpoint.clone(),
+                    bucket: cc.bucket.clone(),
+                    prefix: cc.prefix.clone(),
+                }),
+                cc.ttl_secs,
+            ),
+            (Some(_), None) => {
+                return Err(WorkerRunError::Config(
+                    "epoch-sharded claiming on R2 requires --claims-r2-bucket (the heartbeat + seam-lease namespace)"
+                        .into(),
+                ));
+            }
+            (None, _) => (
+                Box::new(
+                    LocalEpochBoard::new(cfg.blobs.join("_epoch"))
+                        .map_err(|e| WorkerRunError::Io(e.to_string()))?,
+                ),
+                cfg.claims.as_ref().map(|c| c.ttl_secs).unwrap_or(600),
+            ),
+        };
+        let now_fn = || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0)
+        };
+        let sleep_fn = |s: u64| std::thread::sleep(std::time::Duration::from_secs(s));
+        return run_epoch_sharded(
+            cfg,
+            &desired,
+            &view,
+            policy,
+            ctx,
+            endpoint,
+            &es,
+            board.as_ref(),
+            ttl,
+            &now_fn,
+            &sleep_fn,
+        );
+    }
 
     // DEFAULT: the resource-aware concurrent chunked path — LPT-packed ≈5-min chunks run with
     // `can_admit`-bounded concurrency, so the box saturates its cores/GPU within its RAM envelope
@@ -1753,6 +2256,7 @@ mod tests {
             now: 100,
             max_attempts: 3,
             chunk_wall_sec: 0.0, // per-cell path (default-off)
+            epoch_shard: None,
         };
         let out = run(&cfg).unwrap();
         assert_eq!(out.done, 2);
@@ -2092,6 +2596,7 @@ mod tests {
             now: 100,
             max_attempts: 3,
             chunk_wall_sec: 4.0, // CHUNKED ON
+            epoch_shard: None,
         };
         let out = run(&cfg).unwrap();
         assert_eq!(out.done, 6, "all cells encoded via fresh `cat` processes");
@@ -2125,5 +2630,348 @@ mod tests {
             "all cells already Done via chunk sidecars → converged"
         );
         assert!(out2.rows.is_empty());
+    }
+
+    // ───────────────────── epoch-sharded claiming (claim mode `epoch_sharded`) ─────────────────────
+
+    use std::cell::Cell as StdCell;
+    use std::rc::Rc;
+
+    /// 24 distinct metric cells (distinct input shas → distinct JobIds).
+    fn epoch_cells() -> Vec<DesiredJob> {
+        (0u8..24).map(|i| desired("ssim2", &[i])).collect()
+    }
+
+    fn epoch_worker_cfg(root: &Path, worker: &str, now: u64, tail_steal: bool) -> WorkerConfig {
+        WorkerConfig {
+            manifest: root.join("unused-manifest.json"),
+            ledger_in: vec![],
+            ledger_out: root.join(format!("pass-{worker}.parquet")),
+            blobs: root.join("blobs"),
+            r2: None,
+            claims: None,
+            control_key: None,
+            exec: "cat".into(),
+            worker: worker.into(),
+            provider: "local".into(),
+            now,
+            max_attempts: 3,
+            served: vec![],
+            chunk_wall_sec: 2.0,
+            epoch_shard: Some(EpochShardCfg {
+                epoch_len_secs: 600,
+                heartbeat_interval_secs: 120,
+                tail_steal,
+            }),
+        }
+    }
+
+    /// Virtual clock: `now_fn` reads it, `sleep_fn` advances it (no real sleeping in tests).
+    fn fake_time(start: u64) -> (Rc<StdCell<u64>>, impl Fn() -> u64, impl Fn(u64)) {
+        let c = Rc::new(StdCell::new(start));
+        let n = c.clone();
+        let s = c.clone();
+        (c, move || n.get(), move |secs| s.set(s.get() + secs))
+    }
+
+    fn run_epoch_pass(
+        cfg: &WorkerConfig,
+        desired: &[DesiredJob],
+        view: &LedgerView,
+        board: &dyn EpochBoard,
+        now_fn: &dyn Fn() -> u64,
+        sleep_fn: &dyn Fn(u64),
+    ) -> ExecOutcome {
+        run_epoch_sharded(
+            cfg,
+            desired,
+            view,
+            RetryPolicy::default(),
+            WorkerCtx {
+                worker: &cfg.worker,
+                provider: &cfg.provider,
+                now: cfg.now,
+            },
+            None,
+            cfg.epoch_shard.as_ref().unwrap(),
+            board,
+            600,
+            now_fn,
+            sleep_fn,
+        )
+        .unwrap()
+    }
+
+    fn row_ids(out: &ExecOutcome) -> HashSet<String> {
+        out.rows
+            .iter()
+            .map(|r| r.job_id.as_str().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn epoch_two_workers_split_disjointly_and_take_no_leases() {
+        let root = tmp();
+        std::fs::create_dir_all(root.join("blobs")).unwrap();
+        let board = LocalEpochBoard::new(root.join("blobs").join("_epoch")).unwrap();
+        // Stable roster {w1,w2} for epoch 10 (beats in epoch 9) AND for epoch 9 (beats in 8).
+        for e in [8, 9] {
+            for w in ["w1", "w2"] {
+                assert!(board.heartbeat(e, w));
+            }
+        }
+        let cells = epoch_cells();
+        let now = 600 * 10 + 5;
+        let now_fn = move || now; // static clock — no boundary crossing
+        let sleep_fn = |_s: u64| {};
+        let view = LedgerView::new(); // both workers see the same (empty) snapshot
+        let out1 = run_epoch_pass(
+            &epoch_worker_cfg(&root, "w1", now, false),
+            &cells,
+            &view,
+            &board,
+            &now_fn,
+            &sleep_fn,
+        );
+        let out2 = run_epoch_pass(
+            &epoch_worker_cfg(&root, "w2", now, false),
+            &cells,
+            &view,
+            &board,
+            &now_fn,
+            &sleep_fn,
+        );
+        // Disjoint + exhaustive: every cell executed exactly once across the fleet.
+        assert_eq!(out1.done + out2.done, cells.len());
+        assert_eq!(out1.skipped + out2.skipped, 0);
+        let (ids1, ids2) = (row_ids(&out1), row_ids(&out2));
+        assert!(ids1.is_disjoint(&ids2), "shards must not overlap");
+        assert_eq!(ids1.len() + ids2.len(), cells.len());
+        // Each worker executed exactly the cells the pure core assigns it.
+        let roster = Roster::new(10, vec!["w1".into(), "w2".into()]);
+        for c in &cells {
+            let id = c.job_id();
+            let owner = epoch::hrw_owner(&roster, id.as_str()).unwrap();
+            let ran_by_w1 = ids1.contains(id.as_str());
+            assert_eq!(ran_by_w1, owner == "w1", "cell must run on its HRW owner");
+        }
+        // THE point of the mode: the stable-roster fast path acquired zero leases.
+        let claims_dir = root.join("blobs").join("_epoch").join("claims");
+        let n_claims = std::fs::read_dir(&claims_dir)
+            .map(|d| d.count())
+            .unwrap_or(0);
+        assert_eq!(n_claims, 0, "steady state must take no claim leases");
+    }
+
+    #[test]
+    fn epoch_churn_lease_guards_exactly_the_moved_cells() {
+        let root = tmp();
+        std::fs::create_dir_all(root.join("blobs")).unwrap();
+        let board = LocalEpochBoard::new(root.join("blobs").join("_epoch")).unwrap();
+        // w3 was alive in epoch 8 (so it's in epoch 9's roster) but died: no beat in epoch 9.
+        for w in ["w1", "w2", "w3"] {
+            assert!(board.heartbeat(8, w));
+        }
+        for w in ["w1", "w2"] {
+            assert!(board.heartbeat(9, w));
+        }
+        let cells = epoch_cells();
+        let now = 600 * 10 + 5;
+        let now_fn = move || now;
+        let sleep_fn = |_s: u64| {};
+        let view = LedgerView::new();
+        let out1 = run_epoch_pass(
+            &epoch_worker_cfg(&root, "w1", now, false),
+            &cells,
+            &view,
+            &board,
+            &now_fn,
+            &sleep_fn,
+        );
+        let out2 = run_epoch_pass(
+            &epoch_worker_cfg(&root, "w2", now, false),
+            &cells,
+            &view,
+            &board,
+            &now_fn,
+            &sleep_fn,
+        );
+        // Takeover is complete and still disjoint (w3's cells landed on exactly one survivor).
+        assert_eq!(out1.done + out2.done, cells.len());
+        assert!(row_ids(&out1).is_disjoint(&row_ids(&out2)));
+        // Leases were spent on exactly the cells that MOVED (previous owner = the dead w3).
+        let prev = Roster::new(9, vec!["w1".into(), "w2".into(), "w3".into()]);
+        let moved: HashSet<String> = cells
+            .iter()
+            .map(|c| c.job_id())
+            .filter(|id| epoch::hrw_owner(&prev, id.as_str()) == Some("w3"))
+            .map(|id| id.as_str().to_string())
+            .collect();
+        assert!(!moved.is_empty(), "w3 must have owned something");
+        let claims_dir = root.join("blobs").join("_epoch").join("claims");
+        let claimed: HashSet<String> = std::fs::read_dir(&claims_dir)
+            .unwrap()
+            .filter_map(|e| e.ok()?.file_name().into_string().ok())
+            .collect();
+        assert_eq!(claimed, moved, "leases cover the seam cells, nothing else");
+    }
+
+    #[test]
+    fn epoch_tail_steal_takes_over_a_dead_workers_cells_lease_guarded() {
+        let root = tmp();
+        std::fs::create_dir_all(root.join("blobs")).unwrap();
+        let board = LocalEpochBoard::new(root.join("blobs").join("_epoch")).unwrap();
+        // Stable roster {w1,w2} — but w2 is dead THIS epoch (roster won't reflect that until the
+        // next boundary). w1 exhausts its shard, waits for the tail window, then steals.
+        for e in [8, 9] {
+            for w in ["w1", "w2"] {
+                assert!(board.heartbeat(e, w));
+            }
+        }
+        let cells = epoch_cells();
+        let start = 600 * 10 + 5;
+        let (_clock, now_fn, sleep_fn) = fake_time(start);
+        let view = LedgerView::new();
+        let out = run_epoch_pass(
+            &epoch_worker_cfg(&root, "w1", start, true),
+            &cells,
+            &view,
+            &board,
+            &now_fn,
+            &sleep_fn,
+        );
+        // Everything got done in ONE pass — own shard lease-free, w2's via lease-guarded steal.
+        assert_eq!(out.done, cells.len());
+        assert_eq!(row_ids(&out).len(), cells.len(), "no duplicate rows");
+        let roster = Roster::new(10, vec!["w1".into(), "w2".into()]);
+        let w2_cells: HashSet<String> = cells
+            .iter()
+            .map(|c| c.job_id())
+            .filter(|id| epoch::hrw_owner(&roster, id.as_str()) == Some("w2"))
+            .map(|id| id.as_str().to_string())
+            .collect();
+        assert!(!w2_cells.is_empty(), "w2 must have owned something");
+        let claims_dir = root.join("blobs").join("_epoch").join("claims");
+        let claimed: HashSet<String> = std::fs::read_dir(&claims_dir)
+            .unwrap()
+            .filter_map(|e| e.ok()?.file_name().into_string().ok())
+            .collect();
+        assert_eq!(
+            claimed, w2_cells,
+            "steals are lease-guarded; own shard is not"
+        );
+        // The wait-to-tail kept heartbeating (so the worker stays in the NEXT roster).
+        assert!(board.roster_members(10).contains(&"w1".to_string()));
+    }
+
+    #[test]
+    fn epoch_bootstrap_falls_back_to_lease_mode_and_joins_next_epoch() {
+        let root = tmp();
+        std::fs::create_dir_all(root.join("blobs")).unwrap();
+        let board = LocalEpochBoard::new(root.join("blobs").join("_epoch")).unwrap();
+        // Nobody heartbeated yet — the roster is empty, so this pass runs the lease path.
+        let cells = epoch_cells();
+        let now = 600 * 10 + 5;
+        let now_fn = move || now;
+        let sleep_fn = |_s: u64| {};
+        let out = run_epoch_pass(
+            &epoch_worker_cfg(&root, "w1", now, true),
+            &cells,
+            &LedgerView::new(),
+            &board,
+            &now_fn,
+            &sleep_fn,
+        );
+        assert_eq!(out.done, cells.len(), "bootstrap epoch still does the work");
+        // The pass heartbeated first, so the NEXT epoch's roster includes this worker.
+        let next = Roster::new(11, board.roster_members(10));
+        assert!(next.contains("w1"));
+    }
+
+    #[test]
+    fn resolve_epoch_cfg_control_object_wins() {
+        let mine = Some(EpochShardCfg {
+            epoch_len_secs: 300,
+            heartbeat_interval_secs: 60,
+            tail_steal: false,
+        });
+        // No control opinion → the worker's own config decides.
+        assert_eq!(resolve_epoch_cfg(&RunControl::RUNNING, None), None);
+        assert_eq!(resolve_epoch_cfg(&RunControl::RUNNING, mine), mine);
+        // Control forces lease → epoch config is ignored.
+        let mut ctl = RunControl::RUNNING;
+        ctl.claim_mode = Some(ClaimMode::Lease);
+        assert_eq!(resolve_epoch_cfg(&ctl, mine), None);
+        // Control forces epoch-sharded → defaults when the worker had none, overrides applied.
+        ctl.claim_mode = Some(ClaimMode::EpochSharded);
+        assert_eq!(
+            resolve_epoch_cfg(&ctl, None),
+            Some(EpochShardCfg::default())
+        );
+        ctl.epoch_len_secs = Some(1200);
+        let got = resolve_epoch_cfg(&ctl, mine).unwrap();
+        assert_eq!(got.epoch_len_secs, 1200, "control override wins");
+        assert_eq!(
+            got.heartbeat_interval_secs, 60,
+            "worker value kept where control is silent"
+        );
+        assert!(!got.tail_steal, "tail_steal stays worker-controlled");
+    }
+
+    #[test]
+    fn epoch_mode_run_rejects_incoherent_configs() {
+        let root = tmp();
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("m.json"), "[]").unwrap();
+        let mut cfg = epoch_worker_cfg(&root, "w1", 6005, false);
+        cfg.manifest = root.join("m.json");
+        // Epoch mode on the serial per-cell path is refused (it rides the chunked executor).
+        cfg.chunk_wall_sec = 0.0;
+        assert!(matches!(run(&cfg), Err(WorkerRunError::Config(_))));
+        // Epoch mode on R2 without a claims namespace is refused (no heartbeat/lease home).
+        cfg.chunk_wall_sec = 2.0;
+        cfg.r2 = Some(R2Target {
+            endpoint: "http://127.0.0.1:1".into(),
+            bucket: "b".into(),
+            prefix: "blobs".into(),
+        });
+        cfg.claims = None;
+        assert!(matches!(run(&cfg), Err(WorkerRunError::Config(_))));
+    }
+
+    #[test]
+    fn local_epoch_board_heartbeat_roster_and_claim_semantics() {
+        let board = LocalEpochBoard::new(tmp()).unwrap();
+        assert!(board.roster_members(4).is_empty());
+        assert!(board.heartbeat(4, "wa"));
+        assert!(board.heartbeat(4, "wb"));
+        assert!(
+            board.heartbeat(4, "wa"),
+            "re-beat is an idempotent overwrite"
+        );
+        let mut got = board.roster_members(4);
+        got.sort();
+        assert_eq!(got, vec!["wa".to_string(), "wb".to_string()]);
+        assert!(
+            board.roster_members(5).is_empty(),
+            "epochs are separate buckets"
+        );
+        // Fresh claim wins once; a live claim is not stealable; a stale one is.
+        assert!(board.claim_cell("cellX", 1000, 600, "wa"));
+        assert!(
+            !board.claim_cell("cellX", 1100, 600, "wb"),
+            "live claim holds"
+        );
+        assert!(
+            board.claim_cell("cellX", 1600, 600, "wb"),
+            "stale claim steals"
+        );
+    }
+
+    #[test]
+    fn worker_key_sanitizes_consistently() {
+        assert_eq!(worker_key("node-2"), "node-2");
+        assert_eq!(worker_key("vast/12 34"), "vast_12_34");
+        assert_eq!(worker_key("a.b_c-9"), "a.b_c-9");
     }
 }

@@ -72,6 +72,22 @@ struct Cli {
     /// its kind's class is served (e.g. a gpu box pulls only metric/diffmap jobs).
     #[arg(long = "capability")]
     capability: Vec<String>,
+    /// Claim mode: `lease` (default — R2 lease per chunk/cell) or `epoch-sharded` (wall-clock
+    /// epochs + rendezvous-hash ownership; leases only at ownership seams — zero claim traffic in
+    /// steady state). ALL workers on a run must use the same mode; the run's control object
+    /// (--control-r2-key) can set/override it fleet-wide. Requires --claims-r2-bucket on R2.
+    #[arg(long = "claim-mode", default_value = "lease")]
+    claim_mode: String,
+    /// Epoch length for --claim-mode epoch-sharded (keep ≥ 2× the chunk wall target).
+    #[arg(long = "epoch-len-secs", default_value_t = 600)]
+    epoch_len_secs: u64,
+    /// Heartbeat refresh interval for --claim-mode epoch-sharded.
+    #[arg(long = "epoch-heartbeat-secs", default_value_t = 120)]
+    epoch_heartbeat_secs: u64,
+    /// Disable straggler-tail stealing in epoch-sharded mode (an exhausted worker then reports
+    /// idle passes and drains out instead of taking over peers' remaining cells).
+    #[arg(long = "no-tail-steal", default_value_t = false)]
+    no_tail_steal: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -117,6 +133,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let chunk_wall_sec = zenfleet_worker::resolve_chunk_wall_sec(
         std::env::var("ZEN_CHUNK_WALL_SEC").ok().as_deref(),
     );
+    let epoch_shard = match zenfleet_core::ClaimMode::parse(&c.claim_mode) {
+        Some(zenfleet_core::ClaimMode::Lease) => None,
+        Some(zenfleet_core::ClaimMode::EpochSharded) => Some(zenfleet_core::EpochShardCfg {
+            epoch_len_secs: c.epoch_len_secs,
+            heartbeat_interval_secs: c.epoch_heartbeat_secs,
+            tail_steal: !c.no_tail_steal,
+        }),
+        None => {
+            return Err(format!(
+                "--claim-mode '{}' is not a claim mode (lease / epoch-sharded)",
+                c.claim_mode
+            )
+            .into());
+        }
+    };
     let cfg = WorkerConfig {
         manifest: c.manifest,
         ledger_in: c.ledger_in,
@@ -132,6 +163,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_attempts: c.max_attempts,
         served,
         chunk_wall_sec,
+        epoch_shard,
     };
     let out = run(&cfg)?;
     eprintln!(

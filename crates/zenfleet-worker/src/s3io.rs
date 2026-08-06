@@ -57,12 +57,8 @@ fn store(endpoint: &str, bucket: &str) -> Result<Arc<AmazonS3>, String> {
 
 /// Upload (overwrite) an object.
 ///
-/// The unconditional counterpart to [`put_create`], kept so this module offers
-/// the whole object surface (`put` / `put_create` / `head_exists` / `delete`).
-/// Only `put_create` has a caller today — the claim/blob paths all want
-/// conditional writes — so allow the dead-code lint rather than drop a correct
-/// primitive that the next uploader would immediately re-add.
-#[allow(dead_code)]
+/// The unconditional counterpart to [`put_create`]. Epoch-sharded claiming uses it for
+/// heartbeat writes (idempotent per-epoch presence markers — overwrite is exactly right).
 pub fn put(endpoint: &str, bucket: &str, key: &str, bytes: &[u8]) -> Result<(), String> {
     let s = store(endpoint, bucket)?;
     let p = OsPath::from(key);
@@ -97,6 +93,21 @@ pub fn head_exists(endpoint: &str, bucket: &str, key: &str) -> bool {
     };
     let p = OsPath::from(key);
     runtime().block_on(async move { s.head(&p).await }).is_ok()
+}
+
+/// List the objects directly under `prefix/` (delimiter listing) and return their basenames.
+/// Epoch-sharded claiming reads an epoch's heartbeat roster with this — one call per pass.
+pub fn list_basenames(endpoint: &str, bucket: &str, prefix: &str) -> Result<Vec<String>, String> {
+    let s = store(endpoint, bucket)?;
+    let p = OsPath::from(prefix.trim_matches('/'));
+    let res = runtime()
+        .block_on(async move { s.list_with_delimiter(Some(&p)).await })
+        .map_err(|e| format!("s3io list {bucket}/{prefix}: {e}"))?;
+    Ok(res
+        .objects
+        .into_iter()
+        .filter_map(|m| m.location.filename().map(str::to_string))
+        .collect())
 }
 
 /// Delete an object (idempotent — NotFound is OK).
