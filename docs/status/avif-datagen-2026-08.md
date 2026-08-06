@@ -27,7 +27,7 @@ the corpus `_MANIFEST.json`.
 | **Images** | CPU `ghcr.io/imazen/zenfleet-worker:exec-avifgen-66e3c417`; GPU `…:exec-gpu-avifgen-66e3c417` (both built locally from the pinned checkouts, pushed) |
 | **Ledger fill** | see incidents log tail / `~/tmp/avifgen/progress.log` on the operator |
 | **First-cell encode gate (G-Z2)** | **PASSED 2026-08-06 ~14:45** (sha match + decode-back + byte-stable) |
-| **First-cell score gate (G-Z3)** | NOT YET RUN — hard gate before the second GPU box |
+| **First-cell score gate (G-Z3)** | **PASSED 2026-08-06 ~15:00** on node-2 (800/800 finite rows, both butteraugli variants, refusal probe rc=101) |
 
 ### Milestones
 
@@ -40,7 +40,7 @@ the corpus `_MANIFEST.json`.
 - [x] Fleet scaled: node-2, node-3, i265, ryzen5800xt, lianli (systemd units) + tower (Docker, cpuset 0-23, shares 256, mem 40g)
 - [ ] Encode ledger 50%
 - [ ] Encode ledger ≥99.5% (G-Z4)
-- [ ] ScoreFile GPU run declared (ssim2-gpu + butteraugli-gpu); **G-Z3 gate on node-2**
+- [x] ScoreFile GPU smoke declared + **G-Z3 gate PASSED on node-2** (full declare follows encode drain)
 - [ ] lianli joins GPU queue; CPU queue (cvvdp + zensim-foldapp2 944, tier-matched) declared
 - [ ] Score ledgers ≥99.5%; write-back parquets built
 - [ ] `_MANIFEST.json` + orientation gate (G-Z5) + DATA_PROVENANCE/DATA_SPLITS entries + mirrors
@@ -78,3 +78,4 @@ the corpus `_MANIFEST.json`.
 | 2026-08-06 ~14:30 | **G-Z2 incident (caught by the gate, before scale-up):** the two-bucket corpus credential (`ZEN_CORPUS_AWS_*`) is NOT threaded into the in-process objstore source GET — documented gap at `jobexec.rs:202` ("not yet threaded into objstore"). Every cell of the first 21-min gate window failed the corpus GET, **misclassified `encoder_panic`** (a second defect: source-fetch failures land in the encoder's error class), deterministic → poison. 359 all-FAILED sidecars (143,600 cells) verified by content + pre-restart timestamp, deleted; cells re-opened. Fix adopted: refs re-hosted at `s3://zentrain/refs/train-renditions-2026-06-14/` (single-bucket, the pattern every prior wave used); one scoped RW cred (run prefix + refs prefix). The objstore corpus-cred gap + the error-class mislabel are recorded here for the next zenfleet maintenance pass. |
 | 2026-08-06 ~14:45 | **G-Z2 PASSED**: blob sha256 == ledger `output_sha`; `ftypavif` valid, decode-back + ssim2 sane (79.9 @ q50 tiny); **byte-stable** — container fleet encode == bare local re-encode, byte-identical; ledger rows carry full cell identity + worker/provider provenance. Milestone ping 1 sent. |
 | 2026-08-06 ~14:50 | Fleet scaled: node-3/i265/ryzen5800xt/node-2/lianli via `homefleet zenmetrics/scripts/jobsys/avifgen_encode_bringup.sh` (unit + env + pinned image, all `active`); tower `zen-avifgen` container (cpuset 0-23, cpu-shares 256, mem 40g; array 95% full — nothing written to the array). ryzen was restart-looping a drained 720-era pool (done=0 cycles) — repurposed. GPU image `:exec-gpu-avifgen-66e3c417` built + pushed. `pairs_from_encode_ledger.py` added: the Encode→ScoreFile bridge (ledger → full-URI pairs parquet for `declare_direct_objects.py` ZEN_FULL_URI=1 + the writeback join table). Note for G-Z3: jobexec ScoreFile JSONL rows carry no `runtime` column — the gate therefore rests on `ZENMETRICS_REQUIRE_GPU=1` (CPU rung structurally removed) + an on-node hidden-GPU refusal probe, not on per-row provenance. lianli lacks the nvidia docker runtime (node-2 has it) — `gpu-setup.sh` queued before lianli joins the score queue. |
+| 2026-08-06 ~15:00 | **G-Z3 PASSED on node-2** (run in parallel with the encode drain, on a 400-pair smoke cut from the partial ledger via the new bridge): 34 ScoreFile jobs drained in ONE 17 s pass — 800/800 rows, 0 errors, 0 non-finite, `butteraugli_max_gpu`+`butteraugli_pnorm3_gpu` on all 400, 388 unique blob inputs (12 cells content-dedup'd — writeback fans shared-sha scores to all matching cells by design). 7.2 MP pair ≈ 2.9 s/metric on the 3070 ≈ the 5070-measured 0.40 s/MP — no household-card derating penalty at this size. **Refusal probe**: same job, GPU hidden, `ZENMETRICS_REQUIRE_GPU=1` → rc=101, 0 rows (cudarc load panic) — the CPU rung is structurally unreachable; a CPU number can never land under a GPU column. Gate note: the entrypoint's loud boot-check keys on `ZEN_REQUIRE_GPU` (which exports the metrics var) — both are now set in the score env. lianli GPU container runtime installed (`gpu-setup.sh`; driver was already present, no reboot needed). |
