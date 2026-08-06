@@ -275,7 +275,8 @@ const IWSSIM_CPU_COLUMNS: &[&str] = &["iwssim"];
 /// kept on the CLI side as its own enum so the `--gpu-runtime` flag
 /// surface stays stable and the existing `auto` discovery logic does
 /// not leak through to callers that only want a fixed backend.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+// `Hash` keys the cvvdp batch scorer's per-runtime liveness-probe cache.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum)]
 pub enum GpuRuntime {
     /// First runtime that initialises successfully.
     Auto,
@@ -301,13 +302,87 @@ pub enum GpuRuntime {
     feature = "gpu-zensim",
     feature = "gpu-cvvdp"
 ))]
+/// The `Auto` ladder, in preference order.
+///
+/// **The final `Cpu` rung is a silent-degradation hazard.** A GPU that is
+/// absent, busy, out of memory, or has a driver/toolkit mismatch makes every
+/// GPU rung fail, and `Auto` then computes the answer on the CPU and returns
+/// it under the *GPU* metric's column name with exit 0 and no log line. The
+/// resulting row is indistinguishable from a real GPU measurement after the
+/// fact. Measured 2026-08-05: with the GPU hidden, `--gpu-runtime cuda` exits
+/// 1 and refuses, while bare `Auto` exits 0 and emits `cvvdp_imazen_v0_0_1`
+/// from a CPU computation.
+///
+/// Set **`ZENMETRICS_REQUIRE_GPU=1`** to drop the CPU rung, so a GPU-less
+/// machine fails loudly instead of quietly producing CPU numbers. This is the
+/// one lever that covers all three entry points at once — the hand-run
+/// `score`/`score-pairs` path, the sweep cache, and `jobexec` (the fleet
+/// path) — because all of them resolve their ladder through this function.
+/// The fleet cannot pass `--gpu-runtime` at all, so the env var is the only
+/// way to make fleet scoring GPU-guaranteed.
 pub(crate) fn auto_order() -> &'static [GpuRuntime] {
-    &[
+    const WITH_CPU: &[GpuRuntime] = &[
         GpuRuntime::Cuda,
         GpuRuntime::Wgpu,
         GpuRuntime::Hip,
         GpuRuntime::Cpu,
-    ]
+    ];
+    const GPU_ONLY: &[GpuRuntime] = &[GpuRuntime::Cuda, GpuRuntime::Wgpu, GpuRuntime::Hip];
+    if require_gpu() { GPU_ONLY } else { WITH_CPU }
+}
+
+/// True when `ZENMETRICS_REQUIRE_GPU` is set to anything other than `0`,
+/// `false`, or the empty string. Read once per process and cached — the
+/// value must not change mid-run, or two rows in one parquet could have been
+/// produced under different guarantees.
+pub(crate) fn require_gpu() -> bool {
+    static REQUIRE_GPU: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *REQUIRE_GPU
+        .get_or_init(|| require_gpu_from_env_value(std::env::var("ZENMETRICS_REQUIRE_GPU").ok()))
+}
+
+/// Pure parse of the `ZENMETRICS_REQUIRE_GPU` value, split out from
+/// [`require_gpu`] so it is unit-testable — `require_gpu` caches in a
+/// `OnceLock`, so a test process can only ever observe one value of it.
+///
+/// Unset, empty, `0`, `false`, `no`, `off` (any case, surrounding
+/// whitespace ignored) mean "allow the CPU rung"; anything else means
+/// "require a GPU". Defaulting *unset* to false keeps existing behaviour
+/// byte-identical for every caller that has not opted in.
+pub(crate) fn require_gpu_from_env_value(v: Option<String>) -> bool {
+    match v {
+        Some(v) => {
+            let v = v.trim().to_ascii_lowercase();
+            !(v.is_empty() || v == "0" || v == "false" || v == "no" || v == "off")
+        }
+        None => false,
+    }
+}
+
+/// The runtime that actually executed the most recent GPU-umbrella metric on
+/// **this thread**, as a stable lowercase label (`cuda` / `wgpu` / `hip` /
+/// `cpu`), or `"unknown"` before any run.
+///
+/// This is the durable half of the fix. `ZENMETRICS_REQUIRE_GPU` protects
+/// *future runs*; a recorded runtime protects *future readers*, who would
+/// otherwise have to infer the backend from a column name that lies when
+/// `Auto` degraded. `MetricKind::backend()` cannot serve this purpose — it
+/// returns a static string from the enum variant, so it reports "GPU" for a
+/// run that fell through to the CPU rung.
+///
+/// Thread-local because `score-pairs` scores pairs in parallel; a process-wide
+/// cell would race and attribute one thread's runtime to another's row.
+pub(crate) fn last_runtime_label() -> &'static str {
+    LAST_RUNTIME.with(|c| c.get())
+}
+
+thread_local! {
+    static LAST_RUNTIME: std::cell::Cell<&'static str> = const { std::cell::Cell::new("unknown") };
+}
+
+/// Record the runtime that just produced a score on this thread.
+pub(crate) fn record_runtime(rt: GpuRuntime) {
+    LAST_RUNTIME.with(|c| c.set(runtime_label(rt)));
 }
 
 #[cfg(any(
@@ -512,13 +587,23 @@ fn run_gpu_via_umbrella(
                     ));
                     continue;
                 }
+                record_runtime(rt);
                 return Ok(score.value);
             }
             Err(e) => errors.push(format!("{}: {e}", runtime_label(rt))),
         }
     }
+    // Name the reason when the CPU rung was deliberately withheld, so the
+    // failure is self-explaining rather than looking like a broken build.
+    let gate_note = if require_gpu() && matches!(gpu_runtime, GpuRuntime::Auto) {
+        " (ZENMETRICS_REQUIRE_GPU is set, so the CPU fallback rung was \
+         withheld — this run refused to silently compute on the CPU and \
+         report it under a GPU column; unset it to allow CPU fallback)"
+    } else {
+        ""
+    };
     Err(format!(
-        "{}: no runtime succeeded; tried [{}]",
+        "{}: no runtime succeeded; tried [{}]{gate_note}",
         umbrella_kind.tag(),
         if errors.is_empty() {
             "none".to_string()
@@ -941,6 +1026,68 @@ pub fn run_zensim_features(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `ZENMETRICS_REQUIRE_GPU` value parsing. Unset MUST stay false so the
+    /// gate is strictly opt-in and no existing caller changes behaviour.
+    #[test]
+    fn require_gpu_env_value_parsing() {
+        // Off / unset — the CPU rung stays available.
+        assert!(!require_gpu_from_env_value(None));
+        for off in ["", "  ", "0", "false", "FALSE", "no", "off", " Off "] {
+            assert!(
+                !require_gpu_from_env_value(Some(off.to_string())),
+                "{off:?} should NOT require gpu"
+            );
+        }
+        // On — anything else is opt-in.
+        for on in ["1", "true", "TRUE", "yes", "on", "anything"] {
+            assert!(
+                require_gpu_from_env_value(Some(on.to_string())),
+                "{on:?} SHOULD require gpu"
+            );
+        }
+    }
+
+    /// The gate's whole point: with it set, the `Auto` ladder must not end in
+    /// a CPU rung, so a GPU-less host fails loudly instead of quietly
+    /// reporting CPU numbers under a GPU column name. Asserted structurally
+    /// on the two ladders so it holds without any hardware.
+    #[cfg(any(
+        feature = "gpu-butteraugli",
+        feature = "gpu-ssim2",
+        feature = "gpu-dssim",
+        feature = "gpu-iwssim",
+        feature = "gpu-zensim",
+        feature = "gpu-cvvdp"
+    ))]
+    #[test]
+    fn auto_order_drops_cpu_rung_only_when_gpu_required() {
+        // `auto_order()` reads the process-cached `require_gpu()`, which a
+        // test cannot flip twice, so assert on the two ladders the function
+        // selects between. Keep in lockstep with `auto_order`.
+        const WITH_CPU: &[GpuRuntime] = &[
+            GpuRuntime::Cuda,
+            GpuRuntime::Wgpu,
+            GpuRuntime::Hip,
+            GpuRuntime::Cpu,
+        ];
+        const GPU_ONLY: &[GpuRuntime] = &[GpuRuntime::Cuda, GpuRuntime::Wgpu, GpuRuntime::Hip];
+
+        assert!(
+            WITH_CPU.contains(&GpuRuntime::Cpu),
+            "permissive ladder must keep the CPU fallback"
+        );
+        assert!(
+            !GPU_ONLY.contains(&GpuRuntime::Cpu),
+            "required-GPU ladder must NOT contain a CPU rung — that rung is \
+             exactly the silent-degradation path this gate closes"
+        );
+        // GPU preference order is identical; the gate only truncates.
+        assert_eq!(&WITH_CPU[..GPU_ONLY.len()], GPU_ONLY);
+        // And the live function returns whichever matches the cached flag.
+        let live = auto_order();
+        assert_eq!(live, if require_gpu() { GPU_ONLY } else { WITH_CPU });
+    }
 
     /// Regression guard for docs/METRIC_DISPATCH_CONSOLIDATION.md (C1): in ANY
     /// build that compiles the native CPU port (the default — `cpu-metrics`

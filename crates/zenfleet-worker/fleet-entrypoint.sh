@@ -50,6 +50,26 @@ for tool in aws s5cmd zenfleet-worker gunzip timeout; do
   command -v "$tool" >/dev/null || { ferr "baked tool '$tool' missing — image is broken, rebuild"; exit 3; }
 done
 
+# ── GPU-SCORING GUARANTEE ─────────────────────────────────────────────────────────────────────────
+# Set ZEN_REQUIRE_GPU=1 on a box whose scores MUST come from a GPU. It exports
+# ZENMETRICS_REQUIRE_GPU=1 (inherited by every zenmetrics child), which drops the CPU rung from the
+# metric backend's `auto` ladder so a GPU-less or GPU-broken box FAILS instead of quietly computing
+# on the CPU and writing the result under a GPU column name — a row that is indistinguishable from a
+# real GPU measurement afterwards. The fleet executor cannot pass `--gpu-runtime`, so this env var is
+# the only way to make fleet scoring GPU-guaranteed.
+#
+# We also verify a GPU is actually visible HERE, at boot, rather than letting the box claim cells and
+# fail them one by one: a boot failure is one loud line, whereas per-cell failures burn lease time and
+# look like flaky data. Same spirit as the baked-tool check above — fail loud, fail early.
+if [ "${ZEN_REQUIRE_GPU:-0}" = "1" ]; then
+  export ZENMETRICS_REQUIRE_GPU=1
+  command -v nvidia-smi >/dev/null \
+    || { ferr "ZEN_REQUIRE_GPU=1 but nvidia-smi is missing — this box cannot honour a GPU-only scoring job"; exit 3; }
+  nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | grep -q . \
+    || { ferr "ZEN_REQUIRE_GPU=1 but no GPU is visible to nvidia-smi — refusing to score on CPU under GPU column names"; exit 3; }
+  prog "GPU-only scoring enforced (ZENMETRICS_REQUIRE_GPU=1); visible GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"
+fi
+
 # The manifest can be large (92MB+ for big sweeps) and some fleet boxes choke on large R2 downloads
 # even though small ops are fine (observed 2026-06-24: a 92MB cp hung at 0 bytes while ls/control.json
 # took <0.4s). Prefer a gzipped manifest (~30x smaller — 92MB -> 3MB) at <uri>.gz when present, else

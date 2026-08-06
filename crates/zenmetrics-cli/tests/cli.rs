@@ -1746,3 +1746,86 @@ fn use_orchestrator_emits_deprecation_warning() {
         "expected deprecation warning mentioning --use-orchestrator; got: {stderr}",
     );
 }
+
+// ---------------------------------------------------------------------------
+// ZENMETRICS_REQUIRE_GPU — the silent-CPU-fallback gate
+// ---------------------------------------------------------------------------
+
+/// Run the binary with every GPU runtime made unreachable.
+///
+/// `CUDA_VISIBLE_DEVICES=""` hides CUDA; the bogus Vulkan ICD paths keep a
+/// wgpu-enabled build (including a software rasteriser like lavapipe, which
+/// would otherwise "succeed" on the CPU and defeat the point) from coming up.
+#[cfg(feature = "gpu-cvvdp")]
+fn cli_without_gpu(require_gpu: bool) -> std::process::Output {
+    let fx = fixtures_dir();
+    let mut c = cli();
+    c.args([
+        "score",
+        "--metric",
+        "cvvdp-gpu",
+        "--reference",
+        fx.join("ref_64.png").to_str().unwrap(),
+        "--distorted",
+        fx.join("dist_noisy_64.png").to_str().unwrap(),
+    ])
+    .env("CUDA_VISIBLE_DEVICES", "")
+    .env("VK_ICD_FILENAMES", "/nonexistent/zenmetrics-test.json")
+    .env("VK_DRIVER_FILES", "/nonexistent/zenmetrics-test.json");
+    if require_gpu {
+        c.env("ZENMETRICS_REQUIRE_GPU", "1");
+    } else {
+        c.env_remove("ZENMETRICS_REQUIRE_GPU");
+    }
+    c.output().expect("run cli")
+}
+
+/// With no GPU reachable and the gate OFF, `Auto` falls through to the CPU
+/// rung and still prints a score under the **GPU** column name. That is the
+/// pre-existing (and dangerous) behaviour; pinned here so the gate's effect
+/// is a measured difference rather than an assumption, and so we notice if
+/// the default ever changes.
+#[cfg(feature = "gpu-cvvdp")]
+#[test]
+fn without_require_gpu_auto_silently_falls_back_to_cpu() {
+    let out = cli_without_gpu(false);
+    assert!(
+        out.status.success(),
+        "expected the permissive default to succeed via the CPU rung; \
+         stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("cvvdp"),
+        "expected a cvvdp score on stdout, got {stdout:?}"
+    );
+}
+
+/// With the gate ON and no GPU reachable, the run MUST fail loudly — nonzero
+/// exit, nothing on stdout, and an error naming the reason — instead of
+/// computing on the CPU and reporting it under a GPU column.
+#[cfg(feature = "gpu-cvvdp")]
+#[test]
+fn require_gpu_makes_missing_gpu_a_hard_error() {
+    let out = cli_without_gpu(true);
+    assert!(
+        !out.status.success(),
+        "ZENMETRICS_REQUIRE_GPU=1 with no GPU MUST fail; it exited 0 with \
+         stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("cvvdp_"),
+        "a refused run must not emit a score column; stdout={stdout:?}"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("ZENMETRICS_REQUIRE_GPU"),
+        "the failure must name the reason so it is not mistaken for a broken \
+         build; stderr={stderr:?}"
+    );
+}

@@ -214,13 +214,44 @@ impl CvvdpBatchScorer {
         };
         let mut last_error: Option<String> = None;
         for rt in candidates {
+            // LIVENESS PROBE FIRST. `try_new_with_runtime` calls
+            // `Runtime::client()`, which **panics** (rather than returning
+            // Err) when the backend is compiled in but no device is present —
+            // observed as a cubecl `DriverError(CUDA_ERROR_NO_DEVICE)` on a
+            // worker thread plus a `RecvError` on main, killing the process
+            // at exit 101 before any later rung is tried. Probing first turns
+            // that into an ordinary catchable error, which is what makes the
+            // ladder (and therefore `ZENMETRICS_REQUIRE_GPU`) behave the same
+            // here as on the single-shot `run_gpu_via_umbrella` path.
+            //
+            // The probe reuses the umbrella's already-hardened construction
+            // check (`verify_gpu_backend_operational`, which catches the
+            // backend's panic and maps it to `BackendUnavailable`) rather
+            // than duplicating device detection in the CLI.
+            if let Err(e) = probe_runtime_operational(rt) {
+                last_error = Some(format!("{}: {e}", runtime_label(rt)));
+                continue;
+            }
             match Self::try_new_with_runtime(rt, target) {
-                Ok(s) => return Ok(s),
+                Ok(s) => {
+                    // Record which rung actually built the scorer, so the
+                    // emitted row can carry its true provenance instead of
+                    // the metric's static "GPU" label.
+                    crate::metrics::record_runtime(rt);
+                    return Ok(s);
+                }
                 Err(e) => last_error = Some(format!("{}: {e}", runtime_label(rt))),
             }
         }
+        let gate_note = if crate::metrics::require_gpu() && matches!(runtime, GpuRuntime::Auto) {
+            " (ZENMETRICS_REQUIRE_GPU is set, so the CPU fallback rung was \
+             withheld — this run refused to silently score on the CPU and \
+             report it under a GPU column)"
+        } else {
+            ""
+        };
         Err(format!(
-            "CvvdpBatchScorer::new: no runtime succeeded; last error: {}",
+            "CvvdpBatchScorer::new: no runtime succeeded; last error: {}{gate_note}",
             last_error.unwrap_or_else(|| "none".into())
         )
         .into())
@@ -520,3 +551,62 @@ fn score_pair_cached_cpu<R: Runtime>(
 // `Metric::compute_srgb_u8` (see `mod.rs::run_gpu_via_umbrella`) —
 // only the batch-scoring instance cache remains, since it depends
 // on holding a typed `cvvdp::Cvvdp<R>` across pairs.
+
+
+/// One-time-per-runtime liveness probe, cached for the process.
+///
+/// Builds a 1×1 cvvdp metric through the umbrella purely to run its
+/// `verify_gpu_backend_operational` check, then throws it away. Cached
+/// because the probe dispatches a sentinel kernel and we do not want that
+/// per pair — `score-pairs` calls the scorer constructor once per dims
+/// bucket, but a cached probe keeps it O(1) per process regardless.
+fn probe_runtime_operational(rt: GpuRuntime) -> Result<(), String> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static PROBED: OnceLock<Mutex<HashMap<GpuRuntime, Result<(), String>>>> = OnceLock::new();
+    let cache = PROBED.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(g) = cache.lock()
+        && let Some(cached) = g.get(&rt)
+    {
+        return cached.clone();
+    }
+    // The CPU rung is in-process — there is no external device that can be
+    // missing, so there is nothing to probe. The umbrella's own
+    // `verify_gpu_backend_operational` skips `Backend::Cpu` for exactly this
+    // reason, and probing it here would be actively wrong: it would make the
+    // CPU fallback unreachable whenever the probe itself failed.
+    if matches!(rt, GpuRuntime::Cpu) {
+        return e_cache(cache, rt, Ok(()));
+    }
+    let backend = match crate::metrics::gpu_runtime_to_backend(rt) {
+        Ok(b) => b,
+        Err(e) => return e_cache(cache, rt, Err(e)),
+    };
+    // 16×16, not 1×1: cvvdp's pyramid requires min dim >= 8, so a 1×1 probe
+    // fails on geometry before it ever reaches the backend check and would
+    // report every runtime as dead.
+    let params = zenmetrics_api::MetricParams::Cvvdp(Default::default());
+    let outcome = match zenmetrics_api::Metric::new(
+        zenmetrics_api::MetricKind::Cvvdp,
+        backend,
+        16,
+        16,
+        params,
+    ) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    };
+    e_cache(cache, rt, outcome)
+}
+
+/// Store `outcome` in the probe cache and return it.
+fn e_cache(
+    cache: &std::sync::Mutex<std::collections::HashMap<GpuRuntime, Result<(), String>>>,
+    rt: GpuRuntime,
+    outcome: Result<(), String>,
+) -> Result<(), String> {
+    if let Ok(mut g) = cache.lock() {
+        g.insert(rt, outcome.clone());
+    }
+    outcome
+}

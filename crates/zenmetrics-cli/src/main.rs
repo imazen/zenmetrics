@@ -1252,6 +1252,12 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     let mut knobs: Vec<String> = Vec::new();
     // One vec per metric column; same order as `metric_cols`.
     let mut score_columns: Vec<Vec<f64>> = (0..metric_cols.len()).map(|_| Vec::new()).collect();
+    // Backend provenance per row. A GPU metric's column NAME does not prove
+    // the row was computed on a GPU: `--gpu-runtime auto` silently falls
+    // through to a CPU rung when no GPU initialises, and the resulting value
+    // still lands under the GPU column. Recording the runtime that actually
+    // ran makes that checkable after the fact instead of unfalsifiable.
+    let mut runtimes: Vec<String> = Vec::new();
 
     let mut failed = 0usize;
     let mut succeeded = 0usize;
@@ -1716,6 +1722,7 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         codecs.push(codec);
         qs.push(q);
         knobs.push(knob);
+        runtimes.push(crate::metrics::last_runtime_label().to_string());
         for (col_idx, value) in per_pair.into_iter().enumerate() {
             score_columns[col_idx].push(value);
         }
@@ -1737,6 +1744,10 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         Field::new("codec", DataType::Utf8, false),
         Field::new("q", DataType::Int64, false),
         Field::new("knob_tuple_json", DataType::Utf8, false),
+        // Backend that actually computed this row: cuda / wgpu / hip / cpu
+        // (or "unknown" for a CPU-native metric that never enters the GPU
+        // ladder). Additive column — readers that don't know it ignore it.
+        Field::new("runtime", DataType::Utf8, false),
     ];
     for col_name in &metric_cols {
         schema_fields.push(Field::new(*col_name, DataType::Float64, false));
@@ -1756,6 +1767,7 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         Arc::new(StringArray::from(codecs)),
         Arc::new(Int64Array::from(qs)),
         Arc::new(StringArray::from(knobs)),
+        Arc::new(StringArray::from(runtimes)),
     ];
     for col in score_columns {
         arrays.push(Arc::new(Float64Array::from(col)));
@@ -1783,6 +1795,31 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         args.out_parquet.display(),
         metric_cols,
     );
+
+    // TOTAL FAILURE IS AN ERROR, NOT A ZERO-ROW SUCCESS.
+    //
+    // Per-pair failures are individually tolerated (one unreadable image
+    // should not abandon a chunk), but "every pair failed" is never a
+    // successful run — and exiting 0 with an empty parquet is actively
+    // dangerous on the fleet, where the job system reads the exit code and
+    // would mark the cell Done. That turns a systemic failure (no GPU, a
+    // bad manifest, ZENMETRICS_REQUIRE_GPU refusing every pair) into a
+    // silently empty ledger entry that no one re-runs.
+    //
+    // The parquet is written first and deliberately left on disk, so the
+    // failure is diagnosable rather than leaving nothing behind.
+    if succeeded == 0 && failed > 0 {
+        return Err(format!(
+            "score-pairs: all {failed} pairs failed to score — refusing to \
+             report success with an empty result. The parquet at {} was still \
+             written (0 rows) for diagnosis. Check the per-pair errors above; \
+             if ZENMETRICS_REQUIRE_GPU is set, every pair failing usually \
+             means no GPU was usable and the CPU fallback was withheld by \
+             design.",
+            args.out_parquet.display(),
+        )
+        .into());
+    }
 
     // Flush + close the feature sidecar (if any) BEFORE the fail-on-bogus
     // early-return so a bogus score distribution still leaves a complete,

@@ -20,8 +20,8 @@ campaign's registered appendix S plus the corpus `_MANIFEST.json`.
 
 | | |
 |---|---|
-| **Phase** | grid pre-registered; **blocked on zenfleet HDR extensions** |
-| **Blocking on** | B1 (no HDR encode job), B2 (artifact persistence), B6 (fleet cannot guarantee GPU scoring) |
+| **Phase** | grid pre-registered; B6 fixed; **building the zenfleet HDR extensions** |
+| **Blocking on** | B1 (no HDR encode job), B2 (artifact persistence + diffmap executor), B3/B4 (codec arms), B7 (image) |
 | **Ledger fill** | n/a (not declared yet) |
 | **First-cell R2 persistence gate** | NOT YET RUN — hard gate before any fleet scale-up |
 
@@ -32,7 +32,8 @@ campaign's registered appendix S plus the corpus `_MANIFEST.json`.
 - [x] Fleet capability surveyed; blockers identified and registered
 - [x] cvvdp GPU-vs-CPU verified; budget doc corrected in place
 - [x] Appendix S grid pre-registered
-- [ ] zenfleet extended for HDR multi-codec encode + score (**B1/B2/B6**)
+- [x] **B6 fixed** — GPU scoring is now guaranteeable and self-describing
+- [ ] zenfleet extended for HDR multi-codec encode + score (**B1/B2/B3/B4/B7**)
 - [ ] Workers enrolled on all encode nodes
 - [ ] **First-cell artifact-persistence gate PASSED** (encoded bytes + diffmaps + all metric variants confirmed on R2)
 - [ ] Fleet scaled to full grid
@@ -48,7 +49,7 @@ campaign's registered appendix S plus the corpus `_MANIFEST.json`.
 | **B3** | no `zenav1-svt` codec registered in zenmetrics (encoder itself is ready and byte-gated at 10-bit) | integration gap, not a codec gap |
 | **B4** | JPEG-gainmap is decode-only; no gain-map encoder in any sweep path | arm cannot be built until an encoder arm is added |
 | **B5** | AVIF arm is **user-halted** pending a zenavif settle-check; checked 2026-08-05 and zenavif is **not settled** (stale marker, uncommitted lockfile, conflicted HDR bookmark) | arm stays out; needs user confirmation, not a workaround |
-| **B6** | **the fleet cannot guarantee GPU scoring** — jobexec hardcodes the `auto` GPU runtime at four sites with no override, and `auto`'s CPU rung records a CPU number under the GPU column name at exit 0 with no log | "scored on GPU" is unfalsifiable until fixed; blocking for the metric half |
+| **B6** | ~~the fleet cannot guarantee GPU scoring~~ — **RESOLVED 2026-08-05** | `ZENMETRICS_REQUIRE_GPU` drops the CPU rung; a `runtime` column records the rung that actually ran; the worker verifies a GPU at boot |
 | **B7** | executor image must carry the `hdr` (and `png`) features | image rebuild, canonical name + new tag |
 
 ---
@@ -110,3 +111,6 @@ count, and total cell count.
 | 2026-08-05 ~04:54 | **Memory ceiling answered:** ~222 MiB/MP (cvvdp-gpu) and ~348 MiB/MP (ssim2-gpu) ⇒ ~1.6 GB and ~2.5 GB at the 7.08 MP top tier. **Every ladder size fits the 8 GB fleet cards**; no size tier is excluded from GPU scoring. |
 | 2026-08-05 ~04:55 | **Silent-fallback defect confirmed (B6).** With the GPU hidden, explicit `--gpu-runtime cuda` exits 1 and refuses ("explicit backend requests never fall back"), but the **default** `auto` exits 0 and emits the **GPU column name** from a CPU computation. A code audit found jobexec hardcodes `auto` at four sites with no override, so the explicit-flag mitigation **does not reach the fleet path**. Budget doc annotated in place; raw probe data committed. |
 | 2026-08-05 ~04:58 | Appendix S pre-registered in the zensim campaign (grid, persistence contract, gates, and all seven blockers stated as measured facts). |
+| 2026-08-05 ~05:1x | **B6 FIXED.** `ZENMETRICS_REQUIRE_GPU=1` drops the CPU rung from the `auto` ladder in the one function all six ladder sites share, so it reaches the hand-run path, the sweep cache and jobexec alike. Failure is loud and names the reason. A `runtime` column now records the rung that actually executed. The fleet entrypoint gained `ZEN_REQUIRE_GPU=1`, which exports the flag and **verifies a GPU at boot** so a mis-scheduled box fails in one line instead of failing cells one at a time. |
+| 2026-08-05 ~05:1x | Two adjacent defects found while verifying B6, both fixed. (1) The cvvdp **batch** scorer — the fleet's scoring path — skipped the liveness probe, so a GPU-less box **panicked** (exit 101) inside the CUDA driver instead of returning a catchable error; it now probes first, which is what makes the ladder and the gate behave the same there as on the single-shot path. (2) `score-pairs` exited **0 after scoring zero rows**, which on the fleet would mark a totally-failed cell Done; all-pairs-failed is now an error, with the empty parquet still written for diagnosis. |
+| 2026-08-05 ~05:1x | **Scope correction to my own earlier claim.** The silent CPU fallback is **metric-dependent**, not universal: `ssim2-gpu` genuinely falls back (verified — exit 0, `ssim2_gpu` column, `runtime=cpu`), while `cvvdp-gpu` on the batch path has no CPU arm compiled and simply fails. The blanket statement "the fleet silently produces CPU numbers" was too broad; the accurate one is "some GPU metrics do, and nothing recorded which". Both halves are now covered. |
