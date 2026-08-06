@@ -2868,7 +2868,15 @@ impl<R: Runtime> Zensim<R> {
     // the only form that compiles against current zensim.
     fn ensure_diffmap_state(&mut self) {
         if self.diffmap_state.is_none() {
-            self.diffmap_state = Some(DiffmapState::new(ZensimProfile::A));
+            // `A` is deprecated upstream in favour of `B`, but switching would
+            // change what this pipeline COMPUTES, not just how it is spelled —
+            // B is a different (linear) bake and every diffmap/score this
+            // emits would move. That is a deliberate metric decision, not a
+            // lint fix, so keep `A` and silence the deprecation until the
+            // profile migration is made on purpose.
+            #[allow(deprecated)]
+            let profile = ZensimProfile::A;
+            self.diffmap_state = Some(DiffmapState::new(profile));
         }
     }
 
@@ -3360,6 +3368,10 @@ impl<R: Runtime> Zensim<R> {
         if self.gpu_diffmap_scratch.is_some() {
             return Ok(());
         }
+        // See `ensure_diffmap_state`: `A` is deprecated upstream but moving to
+        // `B` would change the computed scores, so the migration is a separate,
+        // deliberate decision.
+        #[allow(deprecated)]
         let profile = ZensimProfile::A;
         // Inner WithIw pipeline on the same client + dims. WithIw is
         // required so the persist planes (mu1/mu2/ssq/s12) the diffmap

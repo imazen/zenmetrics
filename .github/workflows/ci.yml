@@ -117,8 +117,21 @@ jobs:
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
+          # zensim pin. MUST be >= c28d29b8, which added the `feature-regime-v2`
+          # feature that `zenmetrics-cli` (cpu-metrics) and `zensim-gpu` both
+          # request — the previous pin 5afc4f64 predates it, so cargo refused the
+          # whole workspace with "package `zenmetrics-cli` depends on `zensim`
+          # with feature `feature-regime-v2` but `zensim` does not have that
+          # feature". MUST also be < 471ce401, which made `feature_v2.rs` call
+          # `crate::attribution::*` while `mod attribution` stays gated behind
+          # `custom-profiles`; that breaks `cargo build -p zenmetrics-cli
+          # --no-default-features --features cpu-metrics` (where feature
+          # unification cannot pull `custom-profiles` in) with E0433. a7caccd5 is
+          # the newest commit satisfying both bounds, verified by building this
+          # workspace against it. When bumping past 471ce401, first confirm
+          # zensim compiles with `feature-regime-v2` on and `custom-profiles` OFF.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 5afc4f64d98d6d42bb5101aa9c6d070bfa15e834
+          git -C ../zensim checkout a7caccd5fac22afb011a7286977e8cc014616a50
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -327,8 +340,21 @@ jobs:
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
+          # zensim pin. MUST be >= c28d29b8, which added the `feature-regime-v2`
+          # feature that `zenmetrics-cli` (cpu-metrics) and `zensim-gpu` both
+          # request — the previous pin 5afc4f64 predates it, so cargo refused the
+          # whole workspace with "package `zenmetrics-cli` depends on `zensim`
+          # with feature `feature-regime-v2` but `zensim` does not have that
+          # feature". MUST also be < 471ce401, which made `feature_v2.rs` call
+          # `crate::attribution::*` while `mod attribution` stays gated behind
+          # `custom-profiles`; that breaks `cargo build -p zenmetrics-cli
+          # --no-default-features --features cpu-metrics` (where feature
+          # unification cannot pull `custom-profiles` in) with E0433. a7caccd5 is
+          # the newest commit satisfying both bounds, verified by building this
+          # workspace against it. When bumping past 471ce401, first confirm
+          # zensim compiles with `feature-regime-v2` on and `custom-profiles` OFF.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 5afc4f64d98d6d42bb5101aa9c6d070bfa15e834
+          git -C ../zensim checkout a7caccd5fac22afb011a7286977e8cc014616a50
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -497,8 +523,21 @@ jobs:
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
+          # zensim pin. MUST be >= c28d29b8, which added the `feature-regime-v2`
+          # feature that `zenmetrics-cli` (cpu-metrics) and `zensim-gpu` both
+          # request — the previous pin 5afc4f64 predates it, so cargo refused the
+          # whole workspace with "package `zenmetrics-cli` depends on `zensim`
+          # with feature `feature-regime-v2` but `zensim` does not have that
+          # feature". MUST also be < 471ce401, which made `feature_v2.rs` call
+          # `crate::attribution::*` while `mod attribution` stays gated behind
+          # `custom-profiles`; that breaks `cargo build -p zenmetrics-cli
+          # --no-default-features --features cpu-metrics` (where feature
+          # unification cannot pull `custom-profiles` in) with E0433. a7caccd5 is
+          # the newest commit satisfying both bounds, verified by building this
+          # workspace against it. When bumping past 471ce401, first confirm
+          # zensim compiles with `feature-regime-v2` on and `custom-profiles` OFF.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 5afc4f64d98d6d42bb5101aa9c6d070bfa15e834
+          git -C ../zensim checkout a7caccd5fac22afb011a7286977e8cc014616a50
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -622,8 +661,21 @@ jobs:
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
+          # zensim pin. MUST be >= c28d29b8, which added the `feature-regime-v2`
+          # feature that `zenmetrics-cli` (cpu-metrics) and `zensim-gpu` both
+          # request — the previous pin 5afc4f64 predates it, so cargo refused the
+          # whole workspace with "package `zenmetrics-cli` depends on `zensim`
+          # with feature `feature-regime-v2` but `zensim` does not have that
+          # feature". MUST also be < 471ce401, which made `feature_v2.rs` call
+          # `crate::attribution::*` while `mod attribution` stays gated behind
+          # `custom-profiles`; that breaks `cargo build -p zenmetrics-cli
+          # --no-default-features --features cpu-metrics` (where feature
+          # unification cannot pull `custom-profiles` in) with E0433. a7caccd5 is
+          # the newest commit satisfying both bounds, verified by building this
+          # workspace against it. When bumping past 471ce401, first confirm
+          # zensim compiles with `feature-regime-v2` on and `custom-profiles` OFF.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 5afc4f64d98d6d42bb5101aa9c6d070bfa15e834
+          git -C ../zensim checkout a7caccd5fac22afb011a7286977e8cc014616a50
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -744,8 +796,21 @@ jobs:
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
+          # zensim pin. MUST be >= c28d29b8, which added the `feature-regime-v2`
+          # feature that `zenmetrics-cli` (cpu-metrics) and `zensim-gpu` both
+          # request — the previous pin 5afc4f64 predates it, so cargo refused the
+          # whole workspace with "package `zenmetrics-cli` depends on `zensim`
+          # with feature `feature-regime-v2` but `zensim` does not have that
+          # feature". MUST also be < 471ce401, which made `feature_v2.rs` call
+          # `crate::attribution::*` while `mod attribution` stays gated behind
+          # `custom-profiles`; that breaks `cargo build -p zenmetrics-cli
+          # --no-default-features --features cpu-metrics` (where feature
+          # unification cannot pull `custom-profiles` in) with E0433. a7caccd5 is
+          # the newest commit satisfying both bounds, verified by building this
+          # workspace against it. When bumping past 471ce401, first confirm
+          # zensim compiles with `feature-regime-v2` on and `custom-profiles` OFF.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 5afc4f64d98d6d42bb5101aa9c6d070bfa15e834
+          git -C ../zensim checkout a7caccd5fac22afb011a7286977e8cc014616a50
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
