@@ -21,6 +21,7 @@ pub mod catalog;
 pub mod content;
 pub mod control;
 pub mod cost;
+pub mod epoch;
 pub mod gc;
 pub mod idle;
 pub mod ids;
@@ -36,6 +37,9 @@ pub use catalog::{CatalogEntry, SemanticId};
 pub use content::{BlobRef, ContentError, Sha256Hex, blob_key, sha256};
 pub use control::RunControl;
 pub use cost::{FleetCost, WorkerReport, aggregate, cost_per_1000_by_tier, over_budget};
+pub use epoch::{
+    ClaimMode, EpochShardCfg, Roster, ShardDecision, epoch_index, hrw_owner, shard_decision,
+};
 pub use gc::{BlobIndexEntry, GcPlan, GcVerdict, Tombstone, gc_plan, lru_cap_evict, verdict};
 pub use idle::{
     IdleReason, IdleThresholds, IdleWarning, Severity, detect_idle, wasted_burn_usd_per_hr,

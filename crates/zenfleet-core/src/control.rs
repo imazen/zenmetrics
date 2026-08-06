@@ -10,12 +10,27 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::epoch::ClaimMode;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunControl {
     #[serde(default)]
     pub paused: bool,
     #[serde(default)]
     pub drain: bool,
+    /// Campaign-level claim mode (see [`ClaimMode`]). `None` = the worker's own config decides
+    /// (default lease). Setting it here converges the WHOLE fleet on the next pass without
+    /// per-box env edits — important because mixed claim modes on one run re-introduce the
+    /// duplicate-work tax (each mode's dedup is invisible to the other).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim_mode: Option<ClaimMode>,
+    /// Campaign override for [`crate::EpochShardCfg::epoch_len_secs`] (used when `claim_mode`
+    /// is `epoch_sharded`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epoch_len_secs: Option<u64>,
+    /// Campaign override for [`crate::EpochShardCfg::heartbeat_interval_secs`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heartbeat_interval_secs: Option<u64>,
 }
 
 impl RunControl {
@@ -23,16 +38,25 @@ impl RunControl {
     pub const RUNNING: RunControl = RunControl {
         paused: false,
         drain: false,
+        claim_mode: None,
+        epoch_len_secs: None,
+        heartbeat_interval_secs: None,
     };
     /// Hard stop — claim nothing until resumed.
     pub const PAUSED: RunControl = RunControl {
         paused: true,
         drain: false,
+        claim_mode: None,
+        epoch_len_secs: None,
+        heartbeat_interval_secs: None,
     };
     /// Claim no new work; let in-flight jobs finish.
     pub const DRAINING: RunControl = RunControl {
         paused: false,
         drain: true,
+        claim_mode: None,
+        epoch_len_secs: None,
+        heartbeat_interval_secs: None,
     };
 
     /// A worker should claim no new jobs when paused or draining.
@@ -50,6 +74,27 @@ mod tests {
         assert!(!RunControl::RUNNING.claims_blocked());
         assert!(RunControl::PAUSED.claims_blocked());
         assert!(RunControl::DRAINING.claims_blocked());
+    }
+
+    #[test]
+    fn claim_mode_rides_the_control_object_compatibly() {
+        // Old control objects (no claim fields) parse with None — worker config decides.
+        let old: RunControl = serde_json::from_str(r#"{"paused":false,"drain":false}"#).unwrap();
+        assert_eq!(old.claim_mode, None);
+        // A campaign flips the whole fleet by writing the mode (+ optional overrides).
+        let c: RunControl = serde_json::from_str(
+            r#"{"claim_mode":"epoch_sharded","epoch_len_secs":300}"#,
+        )
+        .unwrap();
+        assert_eq!(c.claim_mode, Some(crate::epoch::ClaimMode::EpochSharded));
+        assert_eq!(c.epoch_len_secs, Some(300));
+        assert_eq!(c.heartbeat_interval_secs, None);
+        assert!(!c.claims_blocked());
+        // None fields stay OFF the wire, so old workers see exactly the old shape.
+        assert_eq!(
+            serde_json::to_string(&RunControl::RUNNING).unwrap(),
+            r#"{"paused":false,"drain":false}"#
+        );
     }
 
     #[test]
