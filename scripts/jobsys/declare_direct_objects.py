@@ -26,10 +26,22 @@ for pp in pairs_arg.split(","):
         key = ip if full else os.path.basename(ip)   # full s3 uri, or ref basename
         val = dm if full else os.path.basename(dm)
         files.setdefault(key, []).append(val)
+# HDR ScoreFile (HDR-corpus): ZEN_SCOREFILE_HDR=1 adds "hdr":true (+ optional
+# ZEN_SCOREFILE_HDR_TRANSFER=pu-rescale|pq) to the job kind — the executor then
+# decodes ref+variants to absolute nits and applies the per-metric HDR feeding.
+# The flag changes every content-addressed job id (correct: different work).
+# Absent => byte-identical SDR manifests (append-only schema, like the Rust side).
+HDR = os.environ.get("ZEN_SCOREFILE_HDR") == "1"
+HDR_TRANSFER = os.environ.get("ZEN_SCOREFILE_HDR_TRANSFER", "")
 manifest = []
 for bn, members in files.items():
     for i in range(0, len(members), CHUNK):
-        manifest.append({"kind": {"kind": "score_file", "metrics": METRICS},
+        kind = {"kind": "score_file", "metrics": METRICS}
+        if HDR:
+            kind["hdr"] = True
+            if HDR_TRANSFER:
+                kind["hdr_transfer"] = HDR_TRANSFER
+        manifest.append({"kind": kind,
                          "inputs": members[i:i+CHUNK],
                          "cell": {"image_path": bn, "codec": CELL_CODEC, "q": -1, "knob_tuple_json": "scorefile"},
                          "hint": None})
