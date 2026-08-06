@@ -321,6 +321,29 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **JobId is `serde_json/preserve_order`-SENSITIVE — the core golden test fails in any
+  build that co-compiles zenmetrics-cli (found 2026-08-06, pre-existing, NOT epoch-shard
+  related).** `JobId::of` serializes `serde_json::json!({"kind":…,"inputs":…})` — a
+  `Value`, whose map ordering flips from alphabetical (BTreeMap) to insertion-order
+  (IndexMap) when ANY crate in the build enables `serde_json/preserve_order`.
+  zenmetrics-cli enables it deliberately (compare-output ordering), and both
+  `zenfleet-sweep` (hard dep) and `zenfleet-vastai` (default `inline-sweep` feature)
+  pull zenmetrics-cli in. Consequence: `cargo test -p zenfleet-core -p zenfleet-sweep`
+  (or `-p zenfleet-vastai`) fails `job::tests::scorefile_sdr_serialization_and_job_id_
+  are_golden_stable` (`797c1300…` vs golden `6e79bec2…`) — VERIFIED identical on plain
+  master 9093cc23 with untouched job.rs/Cargo.tomls, so it is a feature-unification
+  property, not a regression. The latent hazard is real: a binary built in a combined
+  invocation that includes zenmetrics-cli computes DIFFERENT JobIds than a solo-built
+  `zenfleet-worker` — cross-binary dedup/claims/ledger joins would silently miss. Today's
+  shipping practice dodges it (worker + executor images build per-crate), and per-crate
+  `cargo test -p zenfleet-core` is green. FIX (not done here — identity code is frozen
+  while the avifgen campaign runs on live JobIds): make `JobId::of` order-insensitive by
+  serializing through an explicitly-sorted structure that reproduces the CURRENT default
+  bytes (alphabetical at every level), so preserve_order builds converge on the existing
+  ids and no ledger orphans. Until then: never build worker/ctl binaries in a combined
+  cargo invocation with zenmetrics-cli, and don't add zenmetrics-cli deps to job-identity
+  crates.
+
 - **master CI fully red since at least 97acd176 (2026-07-29) — pre-existing,
   unrelated to code pushes** (verified 2026-08-01 across runs 30492728715 /
   30497489195 / 30614138205 / 30680693237, all docs-only commits, identical
