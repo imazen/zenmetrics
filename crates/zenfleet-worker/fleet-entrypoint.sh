@@ -164,11 +164,20 @@ hb "manifest ready ($(wc -c </tmp/manifest.json 2>/dev/null || echo '?') bytes);
 idle=0 i=0 fails=0
 while [ "$idle" -lt "${ZEN_IDLE_PASSES:-5}" ]; do
   i=$((i + 1))
+  # --ledger-in done-set snapshot (same contract as POOL mode, which has always fetched it):
+  # without it the reconcile view is EMPTY, the gap is ALL cells every pass, and dedup falls to
+  # the claim lease — the documented 2.0-3.4x re-work tax (compact_ledgers.py docstring), which
+  # single-run workers paid until 2026-08-06 (avifgen encode run, measured rate collapse in the
+  # tail). Re-fetched EVERY pass so long-lived workers pick up operator-side refreshes. Absent
+  # snapshot (fresh run, nobody compacted yet) = old behaviour.
+  SNAP=/tmp/ledger_snapshot.parquet
+  s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "s3://$ZEN_BUCKET/$ZEN_RUN/ledger_snapshot.parquet" "$SNAP" >/dev/null 2>&1 || rm -f "$SNAP"
+  LIN=(); [ -s "$SNAP" ] && LIN=(--ledger-in "$SNAP")
   # HEARTBEAT emitted BEFORE the blocking call: if the worker hangs, this line has
   # no matching '▸ progress pass N' — a visible stall, not silence. `timeout` turns
   # a genuine hang into a LOUD rc=124 failure instead of an infinite silent block.
-  hb "pass $i start (worker=$WORKER provider=$PROVIDER idle=$idle/${ZEN_IDLE_PASSES:-5} consec_fails=$fails)"
-  out=$(timeout "${ZEN_PASS_TIMEOUT:-1800}" zenfleet-worker --manifest /tmp/manifest.json \
+  hb "pass $i start (worker=$WORKER provider=$PROVIDER idle=$idle/${ZEN_IDLE_PASSES:-5} consec_fails=$fails snap=$([ -s "$SNAP" ] && wc -c <"$SNAP" || echo none))"
+  out=$(timeout "${ZEN_PASS_TIMEOUT:-1800}" zenfleet-worker --manifest /tmp/manifest.json "${LIN[@]}" \
     --ledger-out "s3://$ZEN_BUCKET/$ZEN_RUN/ledger/pass-$WORKER-$i.parquet" \
     --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "$ZEN_RUN/blobs" \
     --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "$ZEN_RUN/claims" \
