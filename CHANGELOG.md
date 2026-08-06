@@ -13,6 +13,13 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-cli + zenfleet-core + zenfleet-ctl (HDR corpus B1-B4/B7)
+
+### Added
+- **HDR encode jobs** (`JobKind::Encode { hdr }`, the HDR-corpus B1 extension): jobexec routes `hdr:true` encode cells through a 16-bit PQ reference decode + the HDR codec arms instead of the SDR rgb8 pipeline; `metric`-kind HDR jobs are refused (two-stage `Encode`→`ScoreFile` is the fleet shape). Append-only serde like `ScoreFile.hdr` — a golden test pins the SDR serialization bytes so every pre-existing content-addressed encode job id (including live campaign ledgers) stays valid. `EncodeDeclareItem.hdr` + `declare_encodes` carry the flag from emit-cells JSONL. (d7318527)
+- **Two new HDR codec arms** (`sweep/hdr.rs::HdrCodec` — a separate enum from `CodecKind`, fleet-path-only): `zenav1-svt` (feature `hdr-svt`; PQ RGB16 → BT.2020nc limited 10-bit 4:2:0 → the byte-gated SVT-AV1 port's native `try_encode_frame_420_hbd`, still CQP, AVIF-muxed by zenavif-serialize with nclx {src primaries, transfer 16, matrix 9, limited}; decode-back through the ordinary AVIF path) and `jpeg-gainmap` (rides `hdr-gainmap`; PQ → linear 203-nit white → the crate's own tonemap + `compute_gainmap` + `Encoder` assembly). The gainmap arm composes ultrahdr primitives rather than its built-in HDR-only path because that path quantizes gain-map bytes on the CONFIG boost range while storing metadata that declares the content ACTUAL range — every conformant reader reconstructs under-boosted (imazen/ultrahdr#33; measured 2000-nit ramp → 732 nits, corrected to 1916.7 by declaring the true quantization grid). Round-trip tests gate both arms. (d7318527)
+- **The Diffmap executor** (`JobKind::Diffmap { metric, hdr }` finally has an implementation — the HDR-corpus B2 blocker): decode reference + ONE persisted variant, compute the per-pixel map with the SAME feeding the recorded scalar uses (butteraugli: CPU reference crate, linear at 1.0==intensity_target; cvvdp: the in-tree port's `score_from_linear_planes_with_diffmap` at the HDR display model), emit one gzip'd PFM blob (exact f32, self-describing dims; zenflate). ssim2 is refused with the registered absent-not-failed wording — no in-tree per-pixel map API. `declare_diffmaps` in zenfleet-ctl + a `declare-diffmaps` jobctl subcommand; `declare_direct_objects.py` gains `ZEN_SCOREFILE_HDR`, `ZEN_DECLARE_KIND=diffmap` (true per-variant cell identity from the pairs parquet — multi-codec safe) and `ZEN_MANIFEST_OUT` (merge-before-upload for per-codec passes over one run). (9093cc23, 96caf81f)
+
 ## zenfleet-core + zenfleet-worker + zenfleet-sim
 
 ### Added
