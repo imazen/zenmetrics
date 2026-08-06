@@ -192,7 +192,9 @@ impl FaultStore {
         let objs = self.inner.objs.borrow();
         match objs.get(key) {
             Some(o) if self.is_visible(o, Some(worker)) => Ok(o.bytes.clone()),
-            _ => Err(CloudError::Storage(format!("no such key (or not yet visible): {key}"))),
+            _ => Err(CloudError::Storage(format!(
+                "no such key (or not yet visible): {key}"
+            ))),
         }
     }
 

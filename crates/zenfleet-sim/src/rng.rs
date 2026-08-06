@@ -16,7 +16,11 @@ impl Rng {
     /// the all-zero state) so `Rng::new(0)` still produces a stream.
     pub fn new(seed: u64) -> Self {
         Self {
-            state: if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed },
+            state: if seed == 0 {
+                0x9E37_79B9_7F4A_7C15
+            } else {
+                seed
+            },
         }
     }
 
@@ -54,10 +58,16 @@ mod tests {
 
     #[test]
     fn is_deterministic_for_a_seed() {
-        let a: Vec<u64> = (0..8).scan(Rng::new(42), |r, _| Some(r.next_u64())).collect();
-        let b: Vec<u64> = (0..8).scan(Rng::new(42), |r, _| Some(r.next_u64())).collect();
+        let a: Vec<u64> = (0..8)
+            .scan(Rng::new(42), |r, _| Some(r.next_u64()))
+            .collect();
+        let b: Vec<u64> = (0..8)
+            .scan(Rng::new(42), |r, _| Some(r.next_u64()))
+            .collect();
         assert_eq!(a, b, "same seed → same stream");
-        let c: Vec<u64> = (0..8).scan(Rng::new(43), |r, _| Some(r.next_u64())).collect();
+        let c: Vec<u64> = (0..8)
+            .scan(Rng::new(43), |r, _| Some(r.next_u64()))
+            .collect();
         assert_ne!(a, c, "different seed → different stream");
     }
 

@@ -22,14 +22,20 @@ type TierToken = archmage::NeonToken;
 type TierToken = archmage::X64V3Token;
 
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
-const TIER_NAME: &str = if cfg!(target_arch = "aarch64") { "neon" } else { "v3(avx2)" };
+const TIER_NAME: &str = if cfg!(target_arch = "aarch64") {
+    "neon"
+} else {
+    "v3(avx2)"
+};
 
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 fn set_simd(enabled: bool) -> bool {
     TierToken::dangerously_disable_token_process_wide(!enabled).is_ok()
 }
 #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
-fn set_simd(_e: bool) -> bool { false }
+fn set_simd(_e: bool) -> bool {
+    false
+}
 
 const N: usize = 1 << 20;
 
@@ -77,8 +83,12 @@ fn bench_math(suite: &mut Suite) {
 
     pair!("vexp_into", |s: &[f32], o: &mut [f32]| k::vexp_into(s, o));
     pair!("vlog_into", |s: &[f32], o: &mut [f32]| k::vlog_into(s, o));
-    pair!("vpow_into/p=2.4", |s: &[f32], o: &mut [f32]| k::vpow_into(s, o, 2.4));
-    pair!("vpow_into/p=0.42", |s: &[f32], o: &mut [f32]| k::vpow_into(s, o, 0.42));
+    pair!("vpow_into/p=2.4", |s: &[f32], o: &mut [f32]| k::vpow_into(
+        s, o, 2.4
+    ));
+    pair!("vpow_into/p=0.42", |s: &[f32], o: &mut [f32]| k::vpow_into(
+        s, o, 0.42
+    ));
 
     set_simd(true);
 }

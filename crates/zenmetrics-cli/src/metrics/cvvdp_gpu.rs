@@ -552,7 +552,6 @@ fn score_pair_cached_cpu<R: Runtime>(
 // only the batch-scoring instance cache remains, since it depends
 // on holding a typed `cvvdp::Cvvdp<R>` across pairs.
 
-
 /// One-time-per-runtime liveness probe, cached for the process.
 ///
 /// Builds a 1×1 cvvdp metric through the umbrella purely to run its

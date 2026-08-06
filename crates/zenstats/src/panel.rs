@@ -1832,7 +1832,11 @@ mod per_group_tests {
         let s: Vec<f64> = t.iter().map(|x| -x).collect();
 
         let auto = per_group_srocc(&s, &t, &groups, 3, Orientation::Auto).unwrap();
-        assert!(auto.mean > 0.99, "Auto must see correct ladders: {}", auto.mean);
+        assert!(
+            auto.mean > 0.99,
+            "Auto must see correct ladders: {}",
+            auto.mean
+        );
         assert_eq!(auto.frac_negative, 0.0, "no ladder is backwards here");
 
         let told = per_group_srocc(&s, &t, &groups, 3, Orientation::LowerIsBetter).unwrap();
@@ -1963,7 +1967,10 @@ mod per_group_tests {
         let s = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0];
         let r = per_group_srocc(&s, &t, &groups, 3, Orientation::HigherIsBetter).unwrap();
         assert_eq!(r.n_groups, 1, "constant-target group must be dropped");
-        assert!((r.mean - 1.0).abs() < 1e-12, "mean must not be dragged to 0.5");
+        assert!(
+            (r.mean - 1.0).abs() < 1e-12,
+            "mean must not be dragged to 0.5"
+        );
 
         // Constant score in group 1 (a clamped/saturated model).
         let s2 = [1.0, 2.0, 3.0, 7.0, 7.0, 7.0];

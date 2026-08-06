@@ -6,8 +6,8 @@
 //! named — a box that **refuses to tear down** and keeps burning money. Each
 //! asserts the canonical detector flags it and a reaper built on it bounds spend.
 
-use zenfleet_sim::{BoxFault, BoxState, SimBox, SimClock, SimFleet};
 use zenfleet_core::{IdleReason, IdleThresholds, ResourceClass, Severity, detect_idle};
+use zenfleet_sim::{BoxFault, BoxState, SimBox, SimClock, SimFleet};
 
 // A realistic epoch so `booted_at > 0` (detect_idle ignores a last-seen of 0).
 const EPOCH: u64 = 1_000_000;

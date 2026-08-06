@@ -139,14 +139,34 @@ pub fn run_to_convergence(
             let row = match (spec.script)(attempts) {
                 ExecResult::Done => {
                     let out = sha256(format!("{}-{attempts}", id.as_str()).as_bytes());
-                    make_row(&spec.desired, JobStatus::Done, None, Some(out), attempts, clock.now(), worker)
+                    make_row(
+                        &spec.desired,
+                        JobStatus::Done,
+                        None,
+                        Some(out),
+                        attempts,
+                        clock.now(),
+                        worker,
+                    )
                 }
-                ExecResult::Transient(e) => {
-                    make_row(&spec.desired, JobStatus::Failed, Some(e), None, attempts, clock.now(), worker)
-                }
-                ExecResult::Deterministic(e) => {
-                    make_row(&spec.desired, JobStatus::Failed, Some(e), None, attempts, clock.now(), worker)
-                }
+                ExecResult::Transient(e) => make_row(
+                    &spec.desired,
+                    JobStatus::Failed,
+                    Some(e),
+                    None,
+                    attempts,
+                    clock.now(),
+                    worker,
+                ),
+                ExecResult::Deterministic(e) => make_row(
+                    &spec.desired,
+                    JobStatus::Failed,
+                    Some(e),
+                    None,
+                    attempts,
+                    clock.now(),
+                    worker,
+                ),
             };
             ledger.insert(id.clone(), row);
             // Release the claim so a retry (if this was a failure) is free to any
@@ -160,7 +180,15 @@ pub fn run_to_convergence(
             let prev = ledger.get(id);
             let attempts = prev.map(|r| r.attempts).unwrap_or(1);
             let err = prev.and_then(|r| r.error_class);
-            let row = make_row(&spec.desired, JobStatus::Poison, err, None, attempts, clock.now(), worker);
+            let row = make_row(
+                &spec.desired,
+                JobStatus::Poison,
+                err,
+                None,
+                attempts,
+                clock.now(),
+                worker,
+            );
             ledger.insert(id.clone(), row);
         }
 

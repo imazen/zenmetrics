@@ -148,7 +148,11 @@ impl BlobStore for R2BlobStore {
     }
 
     fn exists(&self, sha: &Sha256Hex) -> bool {
-        crate::s3io::head_exists(&self.target.endpoint, &self.target.bucket, &self.obj_key(sha))
+        crate::s3io::head_exists(
+            &self.target.endpoint,
+            &self.target.bucket,
+            &self.obj_key(sha),
+        )
     }
 }
 
@@ -639,7 +643,12 @@ where
     macro_rules! cmark {
         ($p:expr) => {
             if ctimed {
-                eprintln!("zenfleet-worker[time] {:<16} {:?} ({} jobs)", $p, ct.elapsed(), desired.len());
+                eprintln!(
+                    "zenfleet-worker[time] {:<16} {:?} ({} jobs)",
+                    $p,
+                    ct.elapsed(),
+                    desired.len()
+                );
             }
         };
     }
@@ -1794,7 +1803,10 @@ mod tests {
         // Unset or garbage → the resource-aware concurrent chunked path.
         assert_eq!(resolve_chunk_wall_sec(None), DEFAULT_CHUNK_WALL_SEC);
         assert_eq!(resolve_chunk_wall_sec(Some("  ")), DEFAULT_CHUNK_WALL_SEC);
-        assert_eq!(resolve_chunk_wall_sec(Some("not-a-number")), DEFAULT_CHUNK_WALL_SEC);
+        assert_eq!(
+            resolve_chunk_wall_sec(Some("not-a-number")),
+            DEFAULT_CHUNK_WALL_SEC
+        );
         // A positive value sets a custom chunk target.
         assert_eq!(resolve_chunk_wall_sec(Some("120")), 120.0);
         // Explicit 0 (or negative) is the ONLY way to get the serial per-cell path.

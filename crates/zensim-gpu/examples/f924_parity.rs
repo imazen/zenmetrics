@@ -21,7 +21,11 @@ fn synth(w: usize, h: usize, seed: u32, shift: f32) -> Vec<[u8; 3]> {
             // Structured content (gradients + edges) plus noise, so the
             // feature vector is not degenerate.
             let g = (x as f32 / w as f32) * 0.6 + (y as f32 / h as f32) * 0.3;
-            let edge = if (x / 16 + y / 16) % 2 == 0 { 0.15 } else { 0.0 };
+            let edge = if (x / 16 + y / 16) % 2 == 0 {
+                0.15
+            } else {
+                0.0
+            };
             let px = |c: usize| {
                 let base = g + edge + n * 0.08 + c as f32 * 0.02 + shift;
                 (base.clamp(0.0, 1.0) * 255.0) as u8
@@ -61,7 +65,10 @@ fn main() {
         let s = &f[lo..hi.min(f.len())];
         let nz = s.iter().filter(|v| **v != 0.0).count();
         let mx = s.iter().cloned().fold(0.0f64, |a, b| a.max(b.abs()));
-        println!("  {name:<22} [{lo:>4}..{hi:>4})  nonzero={nz:>4}/{:<4} max|v|={mx:.6}", s.len());
+        println!(
+            "  {name:<22} [{lo:>4}..{hi:>4})  nonzero={nz:>4}/{:<4} max|v|={mx:.6}",
+            s.len()
+        );
     };
     println!("\nCPU 924 layout:");
     block("v1-basic", 0, 156);
@@ -70,16 +77,18 @@ fn main() {
     block("append-204", 720, 924);
 
     // ---- GPU side: what does it actually produce today? ----
-    use cubecl::wgpu::WgpuRuntime;
     use cubecl::prelude::*;
+    use cubecl::wgpu::WgpuRuntime;
     type Backend = WgpuRuntime;
 
     let flat_ref: Vec<u8> = refe.iter().flatten().copied().collect();
     let flat_dst: Vec<u8> = dist.iter().flatten().copied().collect();
     let client = Backend::client(&Default::default());
-    let mut zg = zensim_gpu::Zensim::<Backend>::new(client, W as u32, H as u32)
-        .expect("zensim-gpu init");
-    let gpu = zg.compute_features(&flat_ref, &flat_dst).expect("gpu features");
+    let mut zg =
+        zensim_gpu::Zensim::<Backend>::new(client, W as u32, H as u32).expect("zensim-gpu init");
+    let gpu = zg
+        .compute_features(&flat_ref, &flat_dst)
+        .expect("gpu features");
 
     println!("\nGPU output:");
     println!("  len = {} (regime = v1 layout)", gpu.len());
@@ -113,7 +122,10 @@ fn main() {
     println!("  max |diff| = {worst:.6e} at index {worst_i}   (f32 GPU vs f64 CPU)");
 
     let peak_nz = gpu[156..].iter().filter(|v| **v != 0.0).count();
-    println!("  GPU [156..228) peak block: {peak_nz}/{} nonzero — discarded by", gpu.len() - 156);
+    println!(
+        "  GPU [156..228) peak block: {peak_nz}/{} nonzero — discarded by",
+        gpu.len() - 156
+    );
     println!("  the folded layout, which emits 0.0 across [156..372).");
 
     // ---- stage 1 check: is the v2 SSIM formula transcribed correctly? ----
@@ -150,7 +162,9 @@ fn main() {
     let mut s = 0x2545_F491u64;
     for _ in 0..200_000 {
         let mut nx = || {
-            s ^= s << 13; s ^= s >> 7; s ^= s << 17;
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
             (s >> 40) as f64 / 16_777_216.0
         };
         // PHYSICALLY VALID inputs. `ssq` is not free: the denominator
@@ -171,7 +185,9 @@ fn main() {
         let a = v2_ssim_d_f64(mu1, mu2, s12, ssq);
         let b = v2_ssim_d_f32(mu1 as f32, mu2 as f32, s12 as f32, ssq as f32) as f64;
         let dd = (a - b).abs();
-        if dd > worst_d { worst_d = dd; }
+        if dd > worst_d {
+            worst_d = dd;
+        }
         cases += 1;
     }
     println!("\nstage 1 — v2_ssim_d transcription (f32 host vs f64 CPU reference):");

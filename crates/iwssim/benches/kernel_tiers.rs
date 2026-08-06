@@ -20,7 +20,11 @@ type TierToken = archmage::NeonToken;
 type TierToken = archmage::X64V3Token;
 
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
-const TIER_NAME: &str = if cfg!(target_arch = "aarch64") { "neon" } else { "v3(avx2)" };
+const TIER_NAME: &str = if cfg!(target_arch = "aarch64") {
+    "neon"
+} else {
+    "v3(avx2)"
+};
 
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 fn set_simd(on: bool) -> bool {
@@ -28,7 +32,9 @@ fn set_simd(on: bool) -> bool {
     TierToken::dangerously_disable_token_process_wide(!on).is_ok()
 }
 #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
-fn set_simd(_on: bool) -> bool { false }
+fn set_simd(_on: bool) -> bool {
+    false
+}
 
 const W: usize = 1024;
 const H: usize = 1024;
@@ -64,25 +70,42 @@ fn bench(suite: &mut Suite) {
                 g.throughput(Throughput::Bytes((n * 4) as u64));
                 for (arm, simd) in [(TIER_NAME, true), ("scalar", false)] {
                     g.bench(arm, move |bch| {
-                        bch.with_input(move || { set_simd(simd); $out })
-                            .run(move |mut o| { $call(&mut o); o })
+                        bch.with_input(move || {
+                            set_simd(simd);
+                            $out
+                        })
+                        .run(move |mut o| {
+                            $call(&mut o);
+                            o
+                        })
                     });
                 }
             });
         };
     }
 
-    ab!("square_into", vec![0f32; n], |o: &mut Vec<f32>| k::square_into(a, o));
-    ab!("mul_into", vec![0f32; n], |o: &mut Vec<f32>| k::mul_into(a, b_, o));
-    ab!("cs_combine_into", vec![0f32; n],
-        |o: &mut Vec<f32>| k::cs_combine_into(a, b_, c, d, e, o, true));
+    ab!("square_into", vec![0f32; n], |o: &mut Vec<f32>| {
+        k::square_into(a, o)
+    });
+    ab!("mul_into", vec![0f32; n], |o: &mut Vec<f32>| k::mul_into(
+        a, b_, o
+    ));
+    ab!("cs_combine_into", vec![0f32; n], |o: &mut Vec<f32>| {
+        k::cs_combine_into(a, b_, c, d, e, o, true)
+    });
     // Valid-mode 11-tap: the output is 10 shorter along the filtered axis.
     const DW: usize = W - 10;
     const DH: usize = H - 10;
-    ab!("ssim_gauss_h_pass", vec![0f32; H * DW],
-        |o: &mut Vec<f32>| k::ssim_gauss_h_pass(a, H, W, DW, o));
-    ab!("ssim_gauss_v_pass", vec![0f32; DH * W],
-        |o: &mut Vec<f32>| k::ssim_gauss_v_pass(a, H, DH, W, o));
+    ab!("ssim_gauss_h_pass", vec![0f32; H * DW], |o: &mut Vec<
+        f32,
+    >| {
+        k::ssim_gauss_h_pass(a, H, W, DW, o)
+    });
+    ab!("ssim_gauss_v_pass", vec![0f32; DH * W], |o: &mut Vec<
+        f32,
+    >| {
+        k::ssim_gauss_v_pass(a, H, DH, W, o)
+    });
 
     // Reduction, no output buffer.
     suite.compare("weighted_sum_pair", |g| {

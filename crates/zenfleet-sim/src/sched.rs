@@ -293,7 +293,9 @@ fn admit_compute(cap: &BoxCap, slots: &mut [Slot]) {
         let (running, gpu_used) = compute_footprint(slots);
         let pick = slots.iter().position(|s| {
             s.phase == Phase::Ready
-                && cap.budget.can_admit(&running, s.task.mem_bytes, s.task.threads)
+                && cap
+                    .budget
+                    .can_admit(&running, s.task.mem_bytes, s.task.threads)
                 && (!s.task.gpu || gpu_used < cap.gpu_lanes)
         });
         match pick {
@@ -449,8 +451,15 @@ pub fn run_fleet(
         }
 
         // 3. Termination: nothing running anywhere and no source has work.
-        let any_slots = slots.iter().enumerate().any(|(b, s)| alive[b] && !s.is_empty());
-        let any_queued = !shared.is_empty() || per_box_q.iter().enumerate().any(|(b, q)| alive[b] && !q.is_empty());
+        let any_slots = slots
+            .iter()
+            .enumerate()
+            .any(|(b, s)| alive[b] && !s.is_empty());
+        let any_queued = !shared.is_empty()
+            || per_box_q
+                .iter()
+                .enumerate()
+                .any(|(b, q)| alive[b] && !q.is_empty());
         if !any_slots && !any_queued {
             break;
         }

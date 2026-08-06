@@ -6,7 +6,9 @@
 //! token-race claim can double-acquire under an eventual-consistency window; the
 //! conditional claim cannot.
 
-use zenfleet_sim::{ClaimOutcome, FaultSpec, FaultStore, SimClock, claim_conditional, claim_token_race};
+use zenfleet_sim::{
+    ClaimOutcome, FaultSpec, FaultStore, SimClock, claim_conditional, claim_token_race,
+};
 
 const SIDECAR: &str = "runs/r/omni/chunk-abc.parquet";
 const CLAIM: &str = "claims/r/chunk-abc.claim";
@@ -28,7 +30,10 @@ fn conditional_claim_is_exactly_once_under_a_consistency_window() {
     let w2 = claim_conditional(&store, "box-2", SIDECAR, CLAIM, STALE);
 
     let wins = [w1, w2].into_iter().filter(|o| acquired(*o)).count();
-    assert_eq!(wins, 1, "exactly one worker may own the chunk; got {w1:?} / {w2:?}");
+    assert_eq!(
+        wins, 1,
+        "exactly one worker may own the chunk; got {w1:?} / {w2:?}"
+    );
     assert!(
         [w1, w2].contains(&ClaimOutcome::HeldByPeer),
         "the loser must learn a peer holds it (not silently retry-forever)"
@@ -74,7 +79,10 @@ fn token_race_is_safe_when_settle_covers_the_window() {
     let w2 = claim_token_race(&store, "box-2", SIDECAR, CLAIM, STALE, settle);
 
     let wins = [w1, w2].into_iter().filter(|o| acquired(*o)).count();
-    assert_eq!(wins, 1, "settle >= window → exactly-once again; got {w1:?} / {w2:?}");
+    assert_eq!(
+        wins, 1,
+        "settle >= window → exactly-once again; got {w1:?} / {w2:?}"
+    );
 }
 
 /// Bad credentials must surface as an error the caller retries, never as a false

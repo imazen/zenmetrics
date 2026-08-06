@@ -263,7 +263,10 @@ mod tests {
         let r = b.report(clock.now());
         assert_eq!(r.last_report_unix_secs, Some(10_000), "beats up to now");
         assert!(r.jobs_done > 100, "an hour at 0.05/s ~ 180 jobs");
-        assert!((b.spend_usd(clock.now()) - 0.40).abs() < 1e-9, "1 hr * $0.40");
+        assert!(
+            (b.spend_usd(clock.now()) - 0.40).abs() < 1e-9,
+            "1 hr * $0.40"
+        );
     }
 
     #[test]
