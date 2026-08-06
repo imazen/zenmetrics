@@ -41,6 +41,36 @@ Workspace conventions per the global rules:
 
 ## Workspace
 
+### Fixed
+
+- **CI is buildable again after a month red** (last green run 2026-07-06;
+  160 failures / 2 successes in the following 200 runs). Four independent
+  breakages had stacked up, each hidden behind the one before it:
+  - `[patch.crates-io] zenavif-parse = { path = "../zenavif-parse" }` landed
+    without a matching sibling clone in `ci.yml`, so cargo failed to resolve
+    the workspace on **every** platform before compiling anything. The patch
+    was never used — `../zenavif` absorbed zenavif-parse as a workspace member
+    and supplies 0.7.0 itself, and `Cargo.lock` recorded the entry as
+    `[[patch.unused]]` — so it was removed rather than given a clone (8bc3e05d)
+  - the CI zensim pin (`5afc4f64`) predated the `feature-regime-v2` feature
+    that `zenmetrics-cli` and `zensim-gpu` request; bumped to `a7caccd5`, which
+    is the newest zensim commit that both has that feature and still compiles
+    with `custom-profiles` OFF (zensim ≥ `471ce401` calls `crate::attribution::*`
+    from `feature_v2.rs` while the module stays `custom-profiles`-gated, which
+    breaks the cpu-metrics CLI build). Both bounds are recorded at the pin sites (11d8fd77)
+  - the `zensim-gpu` `f924_parity` example imported `cubecl::wgpu` with no cfg
+    gate — the only one of the crate's 12 wgpu-using examples missing the
+    cuda-preferred gate its siblings share — so it failed E0432 under the
+    ubuntu `--all-targets` step's `cuda,all-metrics` feature set, where cubecl
+    does not re-export `wgpu`. Gated to match, plus the `[[example]]`
+    `required-features` entry its siblings all carry
+  - `cargo fmt --check` had 43 unformatted hunks across 11 files (15339e39)
+  - `clippy -D warnings` could not compile: `record_runtime` called the
+    `gpu-*`-gated `runtime_label` without the gate (E0425), and rustc 1.97.1's
+    new `float_literal_f32_fallback` lint fired 395 times on the cubecl GPU
+    kernels. All 410 rewritten float literals were verified numerically
+    identical, so no metric coefficient moved (74280a8a)
+
 ### Added
 
 - **`tower/zen-mosh/` — tower terminal gateway** (mosh + tmux + herdr in a
