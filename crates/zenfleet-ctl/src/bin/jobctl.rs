@@ -13,7 +13,9 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use zenfleet_core::{DesiredJob, LedgerView, RetryPolicy};
-use zenfleet_ctl::{DeclareSpec, coverage, declare, declare_encodes, gap, parse_emit_cells};
+use zenfleet_ctl::{
+    DeclareSpec, coverage, declare, declare_diffmaps, declare_encodes, gap, parse_emit_cells,
+};
 
 #[derive(Parser)]
 #[command(
@@ -41,6 +43,17 @@ enum Cmd {
         cells: PathBuf,
         #[arg(long)]
         out: PathBuf,
+    },
+    /// Declare per-pixel DIFFMAP jobs from the same spec.json shape as `declare`
+    /// (items x metrics; metrics must be map owners: butteraugli, cvvdp). The
+    /// HDR-corpus B2 wave. `--hdr` computes maps at the HDR display peak.
+    DeclareDiffmaps {
+        #[arg(long)]
+        spec: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        hdr: bool,
     },
     /// Print coverage (done/poison/gap per codec×metric) for a manifest vs the ledger (goal I).
     Catalog {
@@ -98,6 +111,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let jobs = declare(&s)?;
             std::fs::write(&out, serde_json::to_vec_pretty(&jobs)?)?;
             eprintln!("declared {} jobs -> {}", jobs.len(), out.display());
+        }
+        Cmd::DeclareDiffmaps { spec, out, hdr } => {
+            let s: DeclareSpec = serde_json::from_slice(&std::fs::read(&spec)?)?;
+            let jobs = declare_diffmaps(&s, hdr)?;
+            std::fs::write(&out, serde_json::to_vec_pretty(&jobs)?)?;
+            eprintln!(
+                "declared {} diffmap jobs (hdr={hdr}) -> {}",
+                jobs.len(),
+                out.display()
+            );
         }
         Cmd::DeclareEncodes { cells, out } => {
             let items = parse_emit_cells(&std::fs::read_to_string(&cells)?)?;
