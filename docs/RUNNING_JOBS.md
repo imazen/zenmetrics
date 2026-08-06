@@ -245,6 +245,26 @@ This is exactly the configuration proven on 2026-05-30: ledger DONE rows
 
 For **real work** set `ZEN_EXEC` to your baked executor before launching (default is `/bin/cat`).
 
+### 5b. Epoch-sharded claiming (opt-in; kills claim contention + the stale-view re-work tax)
+
+For a dedicated single-run fleet, set `ZEN_CLAIM_MODE=epoch-sharded` on every worker (or write
+`{"claim_mode":"epoch_sharded"}` into the run's RunControl object — the control object overrides
+worker config fleet-wide, which is also the safe way to flip an already-running fleet). Instead of
+racing R2 leases, workers then re-shard the remaining gap at every wall-clock boundary
+(`ZEN_EPOCH_LEN_SECS`, default 600): each pulls the ledger snapshot, reads the alive roster (tiny
+per-epoch heartbeats under `claims/hb/`), and computes its own disjoint shard by rendezvous
+hashing — deterministic, coordinator-free, and **zero claim traffic in steady state**. Leases stay
+as the seam guard: cells whose ownership just moved (a box joined/died) are still claimed
+per-cell, a not-yet-rostered joiner runs one lease-mode pass, and a worker that exhausts its shard
+tail-steals peers' remaining cells lease-guarded (`--no-tail-steal` to have it drain out instead).
+Exactly-once remains ledger-enforced exactly as in lease mode. Requirements: the chunked path
+(default), `--claims-r2-bucket` (heartbeat + seam-lease namespace), NTP-sane clocks, and **one
+mode per run** — mixed modes stay correct but re-introduce the duplicate-work tax (the avifgen
+encode run measured 3.6× under lease claiming with empty views). POOL mode keeps lease claiming
+(sporadic per-run visits never build a stable roster). Gates: `zenfleet-core::epoch` unit tests +
+`zenfleet-sim/tests/epoch_shard.rs` (steady state = total work exactly == distinct cells, zero
+leases; boundary takeover of a killed worker; steal-vs-owner duplicate bounds).
+
 ---
 
 ## 6. The Unraid basement tier  🏠

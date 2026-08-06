@@ -16,6 +16,12 @@
 #   ZEN_SPEC_THRESHOLD_SECS — optional speculative-execution threshold (goal E)
 #   ZEN_CONTROL_KEY   — optional s3 key of a RunControl object for pause/drain (goal C)
 #   ZEN_IDLE_PASSES (5) / ZEN_PASS_SLEEP (0.2) — drain detection + pacing
+#   ZEN_CLAIM_MODE    — optional: `lease` (default) or `epoch-sharded` (wall-clock epochs +
+#                       rendezvous-hash ownership; zero claim traffic in steady state — see
+#                       docs/RUNNING_JOBS.md "Epoch-sharded claiming"). Single-run mode only;
+#                       ALL of a run's workers must use one mode (or set it once in the run's
+#                       RunControl object via ZEN_CONTROL_KEY, which overrides this fleet-wide).
+#   ZEN_EPOCH_LEN_SECS (600) / ZEN_EPOCH_HB_SECS (120) — epoch-sharded tuning knobs
 set -uo pipefail
 : "${ZEN_R2_ENDPOINT:?}" "${ZEN_BUCKET:?}"
 # ZEN_RUN/ZEN_MANIFEST_URI are required only for single-run mode; POOL mode (ZEN_POOL_RUNLIST) is self-describing.
@@ -184,6 +190,9 @@ while [ "$idle" -lt "${ZEN_IDLE_PASSES:-5}" ]; do
     ${ZEN_SPEC_THRESHOLD_SECS:+--spec-threshold-secs "$ZEN_SPEC_THRESHOLD_SECS"} \
     ${ZEN_CONTROL_KEY:+--control-r2-key "$ZEN_CONTROL_KEY"} \
     ${ZEN_CAPABILITY:+$(for c in ${ZEN_CAPABILITY//,/ }; do printf -- '--capability %s ' "$c"; done)} \
+    ${ZEN_CLAIM_MODE:+--claim-mode "$ZEN_CLAIM_MODE"} \
+    ${ZEN_EPOCH_LEN_SECS:+--epoch-len-secs "$ZEN_EPOCH_LEN_SECS"} \
+    ${ZEN_EPOCH_HB_SECS:+--epoch-heartbeat-secs "$ZEN_EPOCH_HB_SECS"} \
     --r2-endpoint "$ZEN_R2_ENDPOINT" --exec "$EXEC" --worker "$WORKER" --provider "$PROVIDER" 2>&1)
   rc=$?
 
@@ -193,8 +202,8 @@ while [ "$idle" -lt "${ZEN_IDLE_PASSES:-5}" ]; do
   # Surface the worker's mode/budget line the FIRST time it appears. Pass 1 is often
   # PAUSED (run control) and never prints it — the mode line only shows on the first
   # UNPAUSED pass — so don't gate this on pass number, or it's lost like it used to be.
-  if [ -z "${mode_shown:-}" ] && printf '%s\n' "$out" | grep -qaE 'resource-aware concurrent mode|serial per-cell'; then
-    prog "worker mode :: $(printf '%s\n' "$out" | grep -aE 'resource-aware concurrent mode|serial per-cell' | head -1)"
+  if [ -z "${mode_shown:-}" ] && printf '%s\n' "$out" | grep -qaE 'resource-aware concurrent mode|serial per-cell|epoch-sharded epoch'; then
+    prog "worker mode :: $(printf '%s\n' "$out" | grep -aE 'resource-aware concurrent mode|serial per-cell|epoch-sharded epoch' | head -1)"
     mode_shown=1
   fi
 
