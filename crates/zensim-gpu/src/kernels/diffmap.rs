@@ -347,7 +347,7 @@ pub fn diffmap_zero_kernel(dest: &mut Array<f32>, n: u32) {
     if idx >= n as usize {
         terminate!();
     }
-    dest[idx] = f32::new(0.0);
+    dest[idx] = f32::new(0.0_f32);
 }
 
 /// Per-pixel weighted modified-SSIM diffmap kernel — one launch per
@@ -401,10 +401,10 @@ pub fn per_scale_weighted_ssim_kernel(
         terminate!();
     }
     let pt = pad_total as usize;
-    let c2: f32 = f32::new(0.0009);
-    let one: f32 = f32::new(1.0);
-    let two: f32 = f32::new(2.0);
-    let zero: f32 = f32::new(0.0);
+    let c2: f32 = f32::new(0.0009_f32);
+    let one: f32 = f32::new(1.0_f32);
+    let two: f32 = f32::new(2.0_f32);
+    let zero: f32 = f32::new(0.0_f32);
 
     // Channel 0 (X).
     let m1_x = mu1_all[idx];

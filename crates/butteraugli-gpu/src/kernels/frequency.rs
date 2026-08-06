@@ -39,7 +39,7 @@ fn remove_range_around_zero(x: f32, w: f32) -> f32 {
     } else if x < -w {
         x + w
     } else {
-        f32::new(0.0)
+        f32::new(0.0_f32)
     }
 }
 
@@ -258,7 +258,7 @@ pub fn zero_plane_kernel(dst: &mut Array<f32>) {
     if idx >= dst.len() {
         terminate!();
     }
-    dst[idx] = f32::new(0.0);
+    dst[idx] = f32::new(0.0_f32);
 }
 
 /// `dst[i] = src[i]` — used to relocate intermediate results that the

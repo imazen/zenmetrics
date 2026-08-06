@@ -73,34 +73,34 @@ fn apply_eotf_branch(
     let bias = y_black + y_refl;
     let scale = y_peak - y_black;
 
-    let v_clamped = if v < f32::new(0.0) {
-        f32::new(0.0)
-    } else if v > f32::new(1.0) {
-        f32::new(1.0)
+    let v_clamped = if v < f32::new(0.0_f32) {
+        f32::new(0.0_f32)
+    } else if v > f32::new(1.0_f32) {
+        f32::new(1.0_f32)
     } else {
         v
     };
 
     if eotf_tag == 1u32 {
         // PQ (SMPTE ST 2084). Reference: pycvvdp `pq2lin`.
-        let l_max = f32::new(10000.0);
-        let m1 = f32::new(0.159_301_75);
-        let m2 = f32::new(78.843_75);
-        let c1 = f32::new(0.835_937_5);
-        let c2 = f32::new(18.851_562);
-        let c3 = f32::new(18.687_5);
+        let l_max = f32::new(10000.0_f32);
+        let m1 = f32::new(0.159_301_75_f32);
+        let m2 = f32::new(78.843_75_f32);
+        let c1 = f32::new(0.835_937_5_f32);
+        let c2 = f32::new(18.851_562_f32);
+        let c3 = f32::new(18.687_5_f32);
         // PQ accepts raw v (no 0..1 clamp; HDR PQ-encoded can exceed
         // 1 in theory but realistic inputs are clamped upstream).
-        let im_t = f32::powf(v, f32::new(1.0) / m2);
+        let im_t = f32::powf(v, f32::new(1.0_f32) / m2);
         let num_raw = im_t - c1;
-        let num = if num_raw < f32::new(0.0) {
-            f32::new(0.0)
+        let num = if num_raw < f32::new(0.0_f32) {
+            f32::new(0.0_f32)
         } else {
             num_raw
         };
         let den = c2 - c3 * im_t;
-        let lin = l_max * f32::powf(num / den, f32::new(1.0) / m1);
-        let floor_val = f32::new(0.005);
+        let lin = l_max * f32::powf(num / den, f32::new(1.0_f32) / m1);
+        let floor_val = f32::new(0.005_f32);
         let clamped_lo = if lin < floor_val { floor_val } else { lin };
         let clamped = if clamped_lo > y_peak {
             y_peak
@@ -110,20 +110,20 @@ fn apply_eotf_branch(
         clamped + bias
     } else if eotf_tag == 2u32 {
         // HLG inverse OETF. OOTF applied by caller (depends on Y_s).
-        let a = f32::new(0.178_832_77);
-        let b = f32::new(1.0) - f32::new(4.0) * a;
-        let c = f32::new(0.5) - a * f32::ln(f32::new(4.0) * a);
-        let lin = if v_clamped <= f32::new(0.5) {
-            (v_clamped * v_clamped) / f32::new(3.0)
+        let a = f32::new(0.178_832_77_f32);
+        let b = f32::new(1.0_f32) - f32::new(4.0_f32) * a;
+        let c = f32::new(0.5_f32) - a * f32::ln(f32::new(4.0_f32) * a);
+        let lin = if v_clamped <= f32::new(0.5_f32) {
+            (v_clamped * v_clamped) / f32::new(3.0_f32)
         } else {
-            (f32::exp((v_clamped - c) / a) + b) / f32::new(12.0)
+            (f32::exp((v_clamped - c) / a) + b) / f32::new(12.0_f32)
         };
         scale * lin + bias
     } else if eotf_tag == 3u32 {
         // Linear-light input. Clip to [max(0.005, y_black), y_peak]
         // then add y_refl (NOT bias — Linear's path doesn't re-add
         // y_black, per pycvvdp's branch).
-        let floor_val = f32::new(0.005);
+        let floor_val = f32::new(0.005_f32);
         let floor_eff = if y_black > floor_val {
             y_black
         } else {
@@ -138,15 +138,15 @@ fn apply_eotf_branch(
         clamped + y_refl
     } else if eotf_tag == 4u32 {
         // BT.1886 — gamma 2.4 with black-level lift. L = a · (V + b)^γ.
-        let gamma = f32::new(2.4);
-        let inv_gamma = f32::new(1.0) / gamma;
+        let gamma = f32::new(2.4_f32);
+        let inv_gamma = f32::new(1.0_f32) / gamma;
         let y_p_g = f32::powf(y_peak, inv_gamma);
         let y_b_g = f32::powf(y_black, inv_gamma);
         let lift_a = f32::powf(y_p_g - y_b_g, gamma);
         let lift_b = y_b_g / (y_p_g - y_b_g);
         let sum = v_clamped + lift_b;
-        let sum_pos = if sum < f32::new(0.0) {
-            f32::new(0.0)
+        let sum_pos = if sum < f32::new(0.0_f32) {
+            f32::new(0.0_f32)
         } else {
             sum
         };
@@ -161,13 +161,13 @@ fn apply_eotf_branch(
         // LUT path when it knows the EOTF is sRGB; this branch only
         // fires if the linear-planes / non-byte entry routes a tag-0
         // value through here.
-        let lin = if v_clamped > f32::new(0.040_45) {
+        let lin = if v_clamped > f32::new(0.040_45_f32) {
             f32::powf(
-                (v_clamped + f32::new(0.055)) / f32::new(1.055),
-                f32::new(2.4),
+                (v_clamped + f32::new(0.055_f32)) / f32::new(1.055_f32),
+                f32::new(2.4_f32),
             )
         } else {
-            v_clamped / f32::new(12.92)
+            v_clamped / f32::new(12.92_f32)
         };
         scale * lin + bias
     }
@@ -197,27 +197,29 @@ fn hlg_ootf(
     let bias = y_black + y_refl;
     // Strip the bias / scale applied by apply_eotf_branch so we get
     // back to inverse_oetf(v) in 0..12.
-    let inv_r = if scale > f32::new(0.0) {
+    let inv_r = if scale > f32::new(0.0_f32) {
         (lr_pre - bias) / scale
     } else {
-        f32::new(0.0)
+        f32::new(0.0_f32)
     };
-    let inv_g = if scale > f32::new(0.0) {
+    let inv_g = if scale > f32::new(0.0_f32) {
         (lg_pre - bias) / scale
     } else {
-        f32::new(0.0)
+        f32::new(0.0_f32)
     };
-    let inv_b = if scale > f32::new(0.0) {
+    let inv_b = if scale > f32::new(0.0_f32) {
         (lb_pre - bias) / scale
     } else {
-        f32::new(0.0)
+        f32::new(0.0_f32)
     };
     // BT.2100 luma coefficients (R, G, B) = (0.2627, 0.6780, 0.0593).
-    let y_s = f32::new(0.262_7) * inv_r + f32::new(0.678_0) * inv_g + f32::new(0.059_3) * inv_b;
-    let factor = if y_s > f32::new(0.0) {
-        f32::powf(y_s, gamma - f32::new(1.0))
+    let y_s = f32::new(0.262_7_f32) * inv_r
+        + f32::new(0.678_0_f32) * inv_g
+        + f32::new(0.059_3_f32) * inv_b;
+    let factor = if y_s > f32::new(0.0_f32) {
+        f32::powf(y_s, gamma - f32::new(1.0_f32))
     } else {
-        f32::new(0.0)
+        f32::new(0.0_f32)
     };
     let lr = scale * (inv_r * factor) + bias;
     let lg = scale * (inv_g * factor) + bias;
@@ -300,7 +302,7 @@ pub fn srgb_to_dkl_kernel(
     // closed-form `apply_eotf_branch` on every other tag. Linear-light
     // input is 0..1 byte/255 normalised before the branch (matches the
     // host scalar's `display_byte_to_dkl_scalar` shape).
-    let inv_255 = f32::new(1.0) / f32::new(255.0);
+    let inv_255 = f32::new(1.0_f32) / f32::new(255.0_f32);
     let s = y_peak - y_black;
     let bias = y_black + y_refl;
     let lr_pre = if eotf_tag == 0u32 {

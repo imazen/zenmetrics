@@ -404,7 +404,7 @@ fn load_tile(
             let l1 = lum1[global_idx];
             tile[i_us] = compute_diff(l0, l1, norm1, norm2_0gt1, norm2_0lt1);
         } else {
-            tile[i_us] = f32::new(0.0);
+            tile[i_us] = f32::new(0.0_f32);
         }
         i += serial_stride;
     }
@@ -512,7 +512,7 @@ fn load_tile_split(
             let l1 = lum1[(lum1_off as usize) + global_idx];
             tile[i_us] = compute_diff(l0, l1, norm1, norm2_0gt1, norm2_0lt1);
         } else {
-            tile[i_us] = f32::new(0.0);
+            tile[i_us] = f32::new(0.0_f32);
         }
         i += serial_stride;
     }

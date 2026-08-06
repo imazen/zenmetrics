@@ -206,24 +206,24 @@ pub fn diffmap_band_accumulate_kernel(
     let src_w_f = src_w as f32;
     let src_h_f = src_h as f32;
 
-    let fx = (x_dst as f32 + f32::new(0.5)) * (src_w_f / dst_w_f) - f32::new(0.5);
-    let fy = (y_dst as f32 + f32::new(0.5)) * (src_h_f / dst_h_f) - f32::new(0.5);
+    let fx = (x_dst as f32 + f32::new(0.5_f32)) * (src_w_f / dst_w_f) - f32::new(0.5_f32);
+    let fy = (y_dst as f32 + f32::new(0.5_f32)) * (src_h_f / dst_h_f) - f32::new(0.5_f32);
 
     // Clamp fx/fy to [0, src_w-1] / [0, src_h-1] so out-of-range
     // sample positions snap to the boundary (extend-by-edge), then
     // compute the integer/fractional split.
-    let zero = f32::new(0.0);
+    let zero = f32::new(0.0_f32);
     let fx_c = if fx < zero {
         zero
-    } else if fx > src_w_f - f32::new(1.0) {
-        src_w_f - f32::new(1.0)
+    } else if fx > src_w_f - f32::new(1.0_f32) {
+        src_w_f - f32::new(1.0_f32)
     } else {
         fx
     };
     let fy_c = if fy < zero {
         zero
-    } else if fy > src_h_f - f32::new(1.0) {
-        src_h_f - f32::new(1.0)
+    } else if fy > src_h_f - f32::new(1.0_f32) {
+        src_h_f - f32::new(1.0_f32)
     } else {
         fy
     };
@@ -247,7 +247,7 @@ pub fn diffmap_band_accumulate_kernel(
     let i10 = (y1 * src_w + x0) as usize;
     let i11 = (y1 * src_w + x1) as usize;
 
-    let one = f32::new(1.0);
+    let one = f32::new(1.0_f32);
     let w00 = (one - dx) * (one - dy);
     let w01 = dx * (one - dy);
     let w10 = (one - dx) * dy;
@@ -314,7 +314,7 @@ pub fn diffmap_channel_pool_kernel(
         terminate!();
     }
 
-    let zero = f32::new(0.0);
+    let zero = f32::new(0.0_f32);
 
     let v_a = acc_a[idx];
     let v_a_pos = if v_a < zero { zero } else { v_a };
@@ -329,7 +329,7 @@ pub fn diffmap_channel_pool_kernel(
     let c_vy = f32::powf(v_vy_pos, beta);
 
     let acc = c_a + c_rg + c_vy;
-    let one = f32::new(1.0);
+    let one = f32::new(1.0_f32);
     out[idx] = f32::powf(acc, one / beta);
 }
 
@@ -346,7 +346,7 @@ pub fn diffmap_zero_kernel(dest: &mut Array<f32>, n: u32) {
     if idx >= n as usize {
         terminate!();
     }
-    dest[idx] = f32::new(0.0);
+    dest[idx] = f32::new(0.0_f32);
 }
 
 // Scalar helpers `bilinear_sample_scalar` and `channel_pool_scalar`

@@ -335,6 +335,23 @@ pub(crate) fn auto_order() -> &'static [GpuRuntime] {
 /// `false`, or the empty string. Read once per process and cached — the
 /// value must not change mid-run, or two rows in one parquet could have been
 /// produced under different guarantees.
+///
+/// Its only non-test caller is [`auto_order`], which carries the `gpu-*` gate
+/// above, so in a build with every `gpu-*` feature off this is dead in the lib
+/// while still being live in the unit tests below. Allow the lint exactly in
+/// that slice rather than gating the function out, which would break those
+/// tests.
+#[cfg_attr(
+    not(any(
+        feature = "gpu-butteraugli",
+        feature = "gpu-ssim2",
+        feature = "gpu-dssim",
+        feature = "gpu-iwssim",
+        feature = "gpu-zensim",
+        feature = "gpu-cvvdp"
+    )),
+    allow(dead_code)
+)]
 pub(crate) fn require_gpu() -> bool {
     static REQUIRE_GPU: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *REQUIRE_GPU
@@ -349,6 +366,20 @@ pub(crate) fn require_gpu() -> bool {
 /// whitespace ignored) mean "allow the CPU rung"; anything else means
 /// "require a GPU". Defaulting *unset* to false keeps existing behaviour
 /// byte-identical for every caller that has not opted in.
+///
+/// Same dead-in-the-CPU-only-lib situation as [`require_gpu`], its only
+/// non-test caller.
+#[cfg_attr(
+    not(any(
+        feature = "gpu-butteraugli",
+        feature = "gpu-ssim2",
+        feature = "gpu-dssim",
+        feature = "gpu-iwssim",
+        feature = "gpu-zensim",
+        feature = "gpu-cvvdp"
+    )),
+    allow(dead_code)
+)]
 pub(crate) fn require_gpu_from_env_value(v: Option<String>) -> bool {
     match v {
         Some(v) => {
@@ -372,6 +403,12 @@ pub(crate) fn require_gpu_from_env_value(v: Option<String>) -> bool {
 ///
 /// Thread-local because `score-pairs` scores pairs in parallel; a process-wide
 /// cell would race and attribute one thread's runtime to another's row.
+///
+/// `src/metrics/` is compiled into BOTH crate targets, and the only caller is
+/// the `zenmetrics` bin (`main.rs`, the `score-pairs` row assembly). The lib
+/// target therefore never calls it in any feature combination, so this is an
+/// unconditional allow rather than a cfg-conditional one.
+#[allow(dead_code)]
 pub(crate) fn last_runtime_label() -> &'static str {
     LAST_RUNTIME.with(|c| c.get())
 }
@@ -381,6 +418,22 @@ thread_local! {
 }
 
 /// Record the runtime that just produced a score on this thread.
+///
+/// Gated exactly like [`runtime_label`], which it calls: both call sites
+/// (`run_gpu_via_umbrella` here and the `gpu-cvvdp` cascade in `cvvdp_gpu.rs`)
+/// live behind the same `gpu-*` gate, so a CPU-only build has no caller. Without
+/// the gate this body still referenced the gated `runtime_label`, so any build
+/// with none of the `gpu-*` features on — `--features wgpu,all-metrics`, which
+/// is what the Lint and Doctests jobs use — failed with
+/// `E0425: cannot find function \`runtime_label\` in this scope`.
+#[cfg(any(
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-dssim",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim",
+    feature = "gpu-cvvdp"
+))]
 pub(crate) fn record_runtime(rt: GpuRuntime) {
     LAST_RUNTIME.with(|c| c.set(runtime_label(rt)));
 }

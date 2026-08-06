@@ -253,13 +253,10 @@ fn parse_geometry(obj: &serde_json::Map<String, serde_json::Value>) -> Option<Di
         .and_then(serde_json::Value::as_f64)
     {
         m as f32
-    } else if let Some(inches) = obj
-        .get("viewing_distance_inches")
-        .and_then(serde_json::Value::as_f64)
-    {
-        (inches * 0.0254) as f32
     } else {
-        return None;
+        (obj.get("viewing_distance_inches")
+            .and_then(serde_json::Value::as_f64)?
+            * 0.0254) as f32
     };
 
     if let Some(diag) = obj

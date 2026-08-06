@@ -79,8 +79,8 @@ pub fn pool_band_kernel(
         terminate!();
     }
     let v = band_diff[idx];
-    let abs_v = if v < f32::new(0.0) { -v } else { v };
-    let eps = f32::new(1e-5);
+    let abs_v = if v < f32::new(0.0_f32) { -v } else { v };
+    let eps = f32::new(1e-5_f32);
     // safe_pow_lp(|v|, beta) — accumulator gets the raw safe-pow
     // contribution; the - eps^beta and 1/beta exponentiation
     // happen host-side once per (band, channel).
@@ -119,21 +119,29 @@ pub fn pool_band_3ch_kernel(
     if idx >= n as usize {
         terminate!();
     }
-    let eps = f32::new(1e-5);
+    let eps = f32::new(1e-5_f32);
     let eps_pow_beta = f32::powf(eps, beta);
 
     let v_a = band_diff_a[idx];
-    let abs_a = if v_a < f32::new(0.0) { -v_a } else { v_a };
+    let abs_a = if v_a < f32::new(0.0_f32) { -v_a } else { v_a };
     let c_a = f32::powf(abs_a + eps, beta) - eps_pow_beta;
     partials[partial_idx_a as usize].fetch_add(c_a);
 
     let v_rg = band_diff_rg[idx];
-    let abs_rg = if v_rg < f32::new(0.0) { -v_rg } else { v_rg };
+    let abs_rg = if v_rg < f32::new(0.0_f32) {
+        -v_rg
+    } else {
+        v_rg
+    };
     let c_rg = f32::powf(abs_rg + eps, beta) - eps_pow_beta;
     partials[partial_idx_rg as usize].fetch_add(c_rg);
 
     let v_vy = band_diff_vy[idx];
-    let abs_vy = if v_vy < f32::new(0.0) { -v_vy } else { v_vy };
+    let abs_vy = if v_vy < f32::new(0.0_f32) {
+        -v_vy
+    } else {
+        v_vy
+    };
     let c_vy = f32::powf(abs_vy + eps, beta) - eps_pow_beta;
     partials[partial_idx_vy as usize].fetch_add(c_vy);
 }
@@ -183,21 +191,29 @@ pub fn pool_band_3ch_offset_kernel(
     if idx >= band_total as usize {
         terminate!();
     }
-    let eps = f32::new(1e-5);
+    let eps = f32::new(1e-5_f32);
     let eps_pow_beta = f32::powf(eps, beta);
 
     let v_a = band_diff_a[idx];
-    let abs_a = if v_a < f32::new(0.0) { -v_a } else { v_a };
+    let abs_a = if v_a < f32::new(0.0_f32) { -v_a } else { v_a };
     let c_a = f32::powf(abs_a + eps, beta) - eps_pow_beta;
     partials[partial_idx_a as usize].fetch_add(c_a);
 
     let v_rg = band_diff_rg[idx];
-    let abs_rg = if v_rg < f32::new(0.0) { -v_rg } else { v_rg };
+    let abs_rg = if v_rg < f32::new(0.0_f32) {
+        -v_rg
+    } else {
+        v_rg
+    };
     let c_rg = f32::powf(abs_rg + eps, beta) - eps_pow_beta;
     partials[partial_idx_rg as usize].fetch_add(c_rg);
 
     let v_vy = band_diff_vy[idx];
-    let abs_vy = if v_vy < f32::new(0.0) { -v_vy } else { v_vy };
+    let abs_vy = if v_vy < f32::new(0.0_f32) {
+        -v_vy
+    } else {
+        v_vy
+    };
     let c_vy = f32::powf(abs_vy + eps, beta) - eps_pow_beta;
     partials[partial_idx_vy as usize].fetch_add(c_vy);
 }
@@ -246,7 +262,7 @@ pub fn pool_band_3ch_lds_kernel(
     let idx = ABSOLUTE_POS;
     let n_usize = n as usize;
 
-    let eps = f32::new(1e-5);
+    let eps = f32::new(1e-5_f32);
     let eps_pow_beta = f32::powf(eps, beta);
 
     // Safe-load index: read from `idx` if in range, else from 0 (and
@@ -262,19 +278,35 @@ pub fn pool_band_3ch_lds_kernel(
     let safe_idx = if in_range { idx } else { zero_idx };
 
     let v_a = band_diff_a[safe_idx];
-    let abs_a = if v_a < f32::new(0.0) { -v_a } else { v_a };
+    let abs_a = if v_a < f32::new(0.0_f32) { -v_a } else { v_a };
     let c_a_raw = f32::powf(abs_a + eps, beta) - eps_pow_beta;
-    let c_a = if in_range { c_a_raw } else { f32::new(0.0) };
+    let c_a = if in_range { c_a_raw } else { f32::new(0.0_f32) };
 
     let v_rg = band_diff_rg[safe_idx];
-    let abs_rg = if v_rg < f32::new(0.0) { -v_rg } else { v_rg };
+    let abs_rg = if v_rg < f32::new(0.0_f32) {
+        -v_rg
+    } else {
+        v_rg
+    };
     let c_rg_raw = f32::powf(abs_rg + eps, beta) - eps_pow_beta;
-    let c_rg = if in_range { c_rg_raw } else { f32::new(0.0) };
+    let c_rg = if in_range {
+        c_rg_raw
+    } else {
+        f32::new(0.0_f32)
+    };
 
     let v_vy = band_diff_vy[safe_idx];
-    let abs_vy = if v_vy < f32::new(0.0) { -v_vy } else { v_vy };
+    let abs_vy = if v_vy < f32::new(0.0_f32) {
+        -v_vy
+    } else {
+        v_vy
+    };
     let c_vy_raw = f32::powf(abs_vy + eps, beta) - eps_pow_beta;
-    let c_vy = if in_range { c_vy_raw } else { f32::new(0.0) };
+    let c_vy = if in_range {
+        c_vy_raw
+    } else {
+        f32::new(0.0_f32)
+    };
 
     let mut lds_a = SharedMemory::<f32>::new(POOL_LDS_BLOCK_DIM_USIZE);
     let mut lds_rg = SharedMemory::<f32>::new(POOL_LDS_BLOCK_DIM_USIZE);

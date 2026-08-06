@@ -66,29 +66,29 @@ pub fn csf_apply_per_pixel_kernel(
     }
 
     // LUT axis constants (uniform log spacing).
-    let axis_min = f32::new(-2.301_03);
+    let axis_min = f32::new(-2.301_03_f32);
     // 31 / (4.0 - (-2.3010299957)) = 4.919830570740858 at f64.
     // Tick 203 fix: the previous literal 4.920_640_4 was 31/6.3
     // (denominator rounded to 1 decimal) instead of 31/6.30103
     // — a 1.6e-4 relative error that compounded through the linear
     // interp to produce the 0.9% rel T_p divergence chased through
     // ticks 196-202. See docs/CHROMA_DRIFT_INVESTIGATION.md.
-    let inv_step = f32::new(4.919_830_6);
+    let inv_step = f32::new(4.919_830_6_f32);
     // Upper clamp just below 31.0 so floor(off_lo) ∈ [0, 30] and
     // hi_idx = lo_idx + 1 stays in [1, 31] — last valid bracket of
     // the 32-point axis. Setting it to 30.0 would mishandle queries
     // at log_l_bkg = 4.0 (axis max) by collapsing frac to 0.
-    let max_idx_f = f32::new(30.999_999);
+    let max_idx_f = f32::new(30.999_999_f32);
 
     // sensitivity_correction in log10 space: log10(10^(-0.279742/20))
     //                                    = -0.279742 / 20 = -0.013987.
-    let log_correction = f32::new(-0.013_987_1);
+    let log_correction = f32::new(-0.013_987_1_f32);
 
     let log_l = log_l_bkg[idx];
     let off_raw = (log_l - axis_min) * inv_step;
 
-    let off_lo = if off_raw < f32::new(0.0) {
-        f32::new(0.0)
+    let off_lo = if off_raw < f32::new(0.0_f32) {
+        f32::new(0.0_f32)
     } else if off_raw > max_idx_f {
         max_idx_f
     } else {
@@ -146,16 +146,16 @@ pub fn csf_apply_3ch_kernel(
 
     // LUT axis constants (uniform log spacing) — same as the
     // per-channel kernel above.
-    let axis_min = f32::new(-2.301_03);
-    let inv_step = f32::new(4.919_830_6); // tick 203 fix — see csf_apply_per_pixel_kernel
-    let max_idx_f = f32::new(30.999_999);
-    let log_correction = f32::new(-0.013_987_1);
+    let axis_min = f32::new(-2.301_03_f32);
+    let inv_step = f32::new(4.919_830_6_f32); // tick 203 fix — see csf_apply_per_pixel_kernel
+    let max_idx_f = f32::new(30.999_999_f32);
+    let log_correction = f32::new(-0.013_987_1_f32);
 
     // Bracket math: shared across all 3 channels.
     let log_l = log_l_bkg[idx];
     let off_raw = (log_l - axis_min) * inv_step;
-    let off_lo = if off_raw < f32::new(0.0) {
-        f32::new(0.0)
+    let off_lo = if off_raw < f32::new(0.0_f32) {
+        f32::new(0.0_f32)
     } else if off_raw > max_idx_f {
         max_idx_f
     } else {
@@ -244,16 +244,16 @@ pub fn csf_apply_6ch_kernel(
         terminate!();
     }
 
-    let axis_min = f32::new(-2.301_03);
-    let inv_step = f32::new(4.919_830_6); // tick 203 fix — see csf_apply_per_pixel_kernel
-    let max_idx_f = f32::new(30.999_999);
-    let log_correction = f32::new(-0.013_987_1);
+    let axis_min = f32::new(-2.301_03_f32);
+    let inv_step = f32::new(4.919_830_6_f32); // tick 203 fix — see csf_apply_per_pixel_kernel
+    let max_idx_f = f32::new(30.999_999_f32);
+    let log_correction = f32::new(-0.013_987_1_f32);
 
     // Bracket math: shared across all 6 outputs.
     let log_l = log_l_bkg[idx];
     let off_raw = (log_l - axis_min) * inv_step;
-    let off_lo = if off_raw < f32::new(0.0) {
-        f32::new(0.0)
+    let off_lo = if off_raw < f32::new(0.0_f32) {
+        f32::new(0.0_f32)
     } else if off_raw > max_idx_f {
         max_idx_f
     } else {

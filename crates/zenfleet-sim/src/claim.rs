@@ -77,19 +77,17 @@ pub fn claim_token_race(
 
     // 2. Probe an existing claim; back off only for a fresh peer.
     let now = store.clock().now();
-    match store.get_as(worker, claim_key) {
-        Ok(bytes) => {
-            if let Some((_, ts, owner)) = parse_claim(&bytes) {
-                let fresh = !Lease::new(owner.clone(), ts, stale_secs).can_steal(now);
-                if fresh && owner != worker {
-                    return ClaimOutcome::HeldByPeer;
-                }
-                // stale or self-owned → fall through and (over)write.
-            }
+    // An `Err` (absent-or-not-visible) reads as "no claim" — the token-race
+    // can't tell the difference, which is the whole hazard — so the error arm
+    // is a deliberate no-op and this is an `if let`, not a `match`.
+    if let Ok(bytes) = store.get_as(worker, claim_key)
+        && let Some((_, ts, owner)) = parse_claim(&bytes)
+    {
+        let fresh = !Lease::new(owner.clone(), ts, stale_secs).can_steal(now);
+        if fresh && owner != worker {
+            return ClaimOutcome::HeldByPeer;
         }
-        // Absent-or-not-visible reads as "no claim" — the token-race can't tell
-        // the difference, which is the whole hazard.
-        Err(_) => {}
+        // stale or self-owned → fall through and (over)write.
     }
 
     // 3. Write our claim.

@@ -45,10 +45,10 @@ fn store(endpoint: &str, bucket: &str) -> Result<Arc<AmazonS3>, String> {
         .with_secret_access_key(&sk)
         .with_region("auto")
         .with_virtual_hosted_style_request(false);
-    if let Ok(tok) = std::env::var("AWS_SESSION_TOKEN") {
-        if !tok.is_empty() {
-            b = b.with_token(tok);
-        }
+    if let Ok(tok) = std::env::var("AWS_SESSION_TOKEN")
+        && !tok.is_empty()
+    {
+        b = b.with_token(tok);
     }
     let s: Arc<AmazonS3> = Arc::new(b.build().map_err(|e| format!("s3io build: {e}"))?);
     let mut g = m.lock().unwrap_or_else(|p| p.into_inner());
@@ -56,6 +56,13 @@ fn store(endpoint: &str, bucket: &str) -> Result<Arc<AmazonS3>, String> {
 }
 
 /// Upload (overwrite) an object.
+///
+/// The unconditional counterpart to [`put_create`], kept so this module offers
+/// the whole object surface (`put` / `put_create` / `head_exists` / `delete`).
+/// Only `put_create` has a caller today — the claim/blob paths all want
+/// conditional writes — so allow the dead-code lint rather than drop a correct
+/// primitive that the next uploader would immediately re-add.
+#[allow(dead_code)]
 pub fn put(endpoint: &str, bucket: &str, key: &str, bytes: &[u8]) -> Result<(), String> {
     let s = store(endpoint, bucket)?;
     let p = OsPath::from(key);

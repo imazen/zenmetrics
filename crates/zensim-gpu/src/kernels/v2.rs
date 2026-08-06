@@ -46,5 +46,5 @@ pub fn v2_ssim_d(mu1: f32, mu2: f32, s12: f32, ssq: f32) -> f32 {
     let d = ssq - mu1 * mu1 - mu2 * mu2 + C2_V2;
     let local = (a * c) / (b * d);
     let out = 1.0 - local;
-    if out > 0.0 { out } else { f32::new(0.0) }
+    if out > 0.0 { out } else { f32::new(0.0_f32) }
 }

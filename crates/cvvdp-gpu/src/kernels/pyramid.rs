@@ -134,11 +134,11 @@ pub fn downscale_kernel(
     let sh_i = src_h as i32;
     let sw_i = src_w as i32;
 
-    let k0 = f32::new(0.05);
-    let k1 = f32::new(0.25);
-    let k2 = f32::new(0.40);
-    let k3 = f32::new(0.25);
-    let k4 = f32::new(0.05);
+    let k0 = f32::new(0.05_f32);
+    let k1 = f32::new(0.25_f32);
+    let k2 = f32::new(0.40_f32);
+    let k3 = f32::new(0.25_f32);
+    let k4 = f32::new(0.05_f32);
 
     // Symmetric reflection at boundaries [0, n). For kernel-radius-2
     // accesses near the edge: one fold covers all cases (the most
@@ -237,11 +237,11 @@ pub fn downscale_kernel(
             // Reflect gave the "odd-W" patch result; pycvvdp picks
             // even-W (using sh's parity). Delta = pycvvdp_even -
             // reflect_odd = -0.05*vs_last2 - 0.20*vs_last.
-            total_v += f32::new(-0.05) * vs_last2 + f32::new(-0.20) * vs_last;
+            total_v += f32::new(-0.05_f32) * vs_last2 + f32::new(-0.20_f32) * vs_last;
         } else if !sw_odd && sh_odd {
             // Reflect gave "even-W"; pycvvdp picks odd-W.
             // Delta = +0.05*vs_last2 + 0.20*vs_last.
-            total_v += f32::new(0.05) * vs_last2 + f32::new(0.20) * vs_last;
+            total_v += f32::new(0.05_f32) * vs_last2 + f32::new(0.20_f32) * vs_last;
         }
     }
 
@@ -319,11 +319,11 @@ pub fn downscale_strip_kernel(
     let sw_i = src_w as i32;
     let src_off = src_strip_offset as i32;
 
-    let k0 = f32::new(0.05);
-    let k1 = f32::new(0.25);
-    let k2 = f32::new(0.40);
-    let k3 = f32::new(0.25);
-    let k4 = f32::new(0.05);
+    let k0 = f32::new(0.05_f32);
+    let k1 = f32::new(0.25_f32);
+    let k2 = f32::new(0.40_f32);
+    let k3 = f32::new(0.25_f32);
+    let k4 = f32::new(0.05_f32);
 
     // Reflect against LOGICAL src dims (not buffer). One fold is
     // enough for kernel-radius-2 accesses: `cy-2 = -2 → 1`, and
@@ -415,9 +415,9 @@ pub fn downscale_strip_kernel(
         let sw_odd = sw % 2 == 1;
         let lsh_odd = (logical_src_h as usize) % 2 == 1;
         if sw_odd && !lsh_odd {
-            total_v += f32::new(-0.05) * vs_last2 + f32::new(-0.20) * vs_last;
+            total_v += f32::new(-0.05_f32) * vs_last2 + f32::new(-0.20_f32) * vs_last;
         } else if !sw_odd && lsh_odd {
-            total_v += f32::new(0.05) * vs_last2 + f32::new(0.20) * vs_last;
+            total_v += f32::new(0.05_f32) * vs_last2 + f32::new(0.20_f32) * vs_last;
         }
     }
 
@@ -545,11 +545,11 @@ pub fn downscale_tiled_kernel(
     let tcy = 2 * ty as usize + 2;
     let stride = DOWNSCALE_TILED_TILE_DIM_USIZE;
 
-    let k0 = f32::new(0.05);
-    let k1 = f32::new(0.25);
-    let k2 = f32::new(0.40);
-    let k3 = f32::new(0.25);
-    let k4 = f32::new(0.05);
+    let k0 = f32::new(0.05_f32);
+    let k1 = f32::new(0.25_f32);
+    let k2 = f32::new(0.40_f32);
+    let k3 = f32::new(0.25_f32);
+    let k4 = f32::new(0.05_f32);
 
     let r0 = tcy - 2;
     let r1 = tcy - 1;
@@ -618,9 +618,9 @@ pub fn downscale_tiled_kernel(
         let sw_odd = src_w % 2 == 1;
         let sh_odd = src_h % 2 == 1;
         if sw_odd && !sh_odd {
-            total_v += f32::new(-0.05) * vs_last2 + f32::new(-0.20) * vs_last;
+            total_v += f32::new(-0.05_f32) * vs_last2 + f32::new(-0.20_f32) * vs_last;
         } else if !sw_odd && sh_odd {
-            total_v += f32::new(0.05) * vs_last2 + f32::new(0.20) * vs_last;
+            total_v += f32::new(0.05_f32) * vs_last2 + f32::new(0.20_f32) * vs_last;
         }
     }
 
@@ -669,11 +669,11 @@ pub fn upscale_v_kernel(
     let y = idx / sw;
     let x = idx - y * sw;
 
-    let k0 = f32::new(0.1);
-    let k1 = f32::new(0.5);
-    let k2 = f32::new(0.8);
-    let k3 = f32::new(0.5);
-    let k4 = f32::new(0.1);
+    let k0 = f32::new(0.1_f32);
+    let k1 = f32::new(0.5_f32);
+    let k2 = f32::new(0.8_f32);
+    let k3 = f32::new(0.5_f32);
+    let k4 = f32::new(0.1_f32);
 
     let back_v = (dst_h as i32) + 2 + ((dst_h as i32) & 1);
     let sh_i = src_h as i32;
@@ -737,11 +737,31 @@ pub fn upscale_v_kernel(
         0u32.into()
     };
 
-    let m0 = if v0 { f32::new(1.0) } else { f32::new(0.0) };
-    let m1 = if v1 { f32::new(1.0) } else { f32::new(0.0) };
-    let m2 = if v2 { f32::new(1.0) } else { f32::new(0.0) };
-    let m3 = if v3 { f32::new(1.0) } else { f32::new(0.0) };
-    let m4 = if v4 { f32::new(1.0) } else { f32::new(0.0) };
+    let m0 = if v0 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m1 = if v1 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m2 = if v2 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m3 = if v3 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m4 = if v4 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
 
     dst[idx] = (k0 * m0) * src[y0 as usize * sw + x]
         + (k1 * m1) * src[y1 as usize * sw + x]
@@ -797,11 +817,11 @@ pub fn upscale_v_strip_kernel(
     let local_y = idx / sw;
     let x = idx - local_y * sw;
 
-    let k0 = f32::new(0.1);
-    let k1 = f32::new(0.5);
-    let k2 = f32::new(0.8);
-    let k3 = f32::new(0.5);
-    let k4 = f32::new(0.1);
+    let k0 = f32::new(0.1_f32);
+    let k1 = f32::new(0.5_f32);
+    let k2 = f32::new(0.8_f32);
+    let k3 = f32::new(0.5_f32);
+    let k4 = f32::new(0.1_f32);
 
     let back_v = (logical_dst_h as i32) + 2 + ((logical_dst_h as i32) & 1);
     let sh_i = logical_src_h as i32;
@@ -873,11 +893,31 @@ pub fn upscale_v_strip_kernel(
         0u32.into()
     };
 
-    let m0 = if v0 { f32::new(1.0) } else { f32::new(0.0) };
-    let m1 = if v1 { f32::new(1.0) } else { f32::new(0.0) };
-    let m2 = if v2 { f32::new(1.0) } else { f32::new(0.0) };
-    let m3 = if v3 { f32::new(1.0) } else { f32::new(0.0) };
-    let m4 = if v4 { f32::new(1.0) } else { f32::new(0.0) };
+    let m0 = if v0 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m1 = if v1 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m2 = if v2 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m3 = if v3 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m4 = if v4 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
 
     dst[idx] = (k0 * m0) * src[y0 as usize * sw + x]
         + (k1 * m1) * src[y1 as usize * sw + x]
@@ -907,11 +947,11 @@ pub fn upscale_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, src_w: u32, dst_
     let y = idx / dw;
     let x = idx - y * dw;
 
-    let k0 = f32::new(0.1);
-    let k1 = f32::new(0.5);
-    let k2 = f32::new(0.8);
-    let k3 = f32::new(0.5);
-    let k4 = f32::new(0.1);
+    let k0 = f32::new(0.1_f32);
+    let k1 = f32::new(0.5_f32);
+    let k2 = f32::new(0.8_f32);
+    let k3 = f32::new(0.5_f32);
+    let k4 = f32::new(0.1_f32);
 
     let back_h = (dst_w as i32) + 2 + ((dst_w as i32) & 1);
     let sw_i = src_w as i32;
@@ -975,11 +1015,31 @@ pub fn upscale_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, src_w: u32, dst_
         0u32.into()
     };
 
-    let m0 = if v0 { f32::new(1.0) } else { f32::new(0.0) };
-    let m1 = if v1 { f32::new(1.0) } else { f32::new(0.0) };
-    let m2 = if v2 { f32::new(1.0) } else { f32::new(0.0) };
-    let m3 = if v3 { f32::new(1.0) } else { f32::new(0.0) };
-    let m4 = if v4 { f32::new(1.0) } else { f32::new(0.0) };
+    let m0 = if v0 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m1 = if v1 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m2 = if v2 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m3 = if v3 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m4 = if v4 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
 
     let base = y * sw;
     dst[idx] = (k0 * m0) * src[base + x0 as usize]
@@ -1026,11 +1086,11 @@ pub fn upscale_h_strip_kernel(
     let y = idx / dw;
     let x = idx - y * dw;
 
-    let k0 = f32::new(0.1);
-    let k1 = f32::new(0.5);
-    let k2 = f32::new(0.8);
-    let k3 = f32::new(0.5);
-    let k4 = f32::new(0.1);
+    let k0 = f32::new(0.1_f32);
+    let k1 = f32::new(0.5_f32);
+    let k2 = f32::new(0.8_f32);
+    let k3 = f32::new(0.5_f32);
+    let k4 = f32::new(0.1_f32);
 
     let back_h = (dst_w as i32) + 2 + ((dst_w as i32) & 1);
     let sw_i = src_w as i32;
@@ -1094,11 +1154,31 @@ pub fn upscale_h_strip_kernel(
         0u32.into()
     };
 
-    let m0 = if v0 { f32::new(1.0) } else { f32::new(0.0) };
-    let m1 = if v1 { f32::new(1.0) } else { f32::new(0.0) };
-    let m2 = if v2 { f32::new(1.0) } else { f32::new(0.0) };
-    let m3 = if v3 { f32::new(1.0) } else { f32::new(0.0) };
-    let m4 = if v4 { f32::new(1.0) } else { f32::new(0.0) };
+    let m0 = if v0 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m1 = if v1 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m2 = if v2 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m3 = if v3 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
+    let m4 = if v4 {
+        f32::new(1.0_f32)
+    } else {
+        f32::new(0.0_f32)
+    };
 
     let base = y * sw;
     dst[idx] = (k0 * m0) * src[base + x0 as usize]
@@ -1162,9 +1242,9 @@ pub fn weber_contrast_compute_kernel(
     if idx >= n as usize {
         terminate!();
     }
-    let l_min = f32::new(0.01);
-    let l_max = f32::new(1000.0);
-    let l_min_neg = f32::new(-1000.0);
+    let l_min = f32::new(0.01_f32);
+    let l_max = f32::new(1000.0_f32);
+    let l_min_neg = f32::new(-1000.0_f32);
 
     let raw_lbkg = expanded_lbkg[idx];
     let l = if raw_lbkg < l_min { l_min } else { raw_lbkg };
@@ -1215,9 +1295,9 @@ pub fn weber_contrast_compute_3ch_kernel(
     if idx >= n as usize {
         terminate!();
     }
-    let l_min = f32::new(0.01);
-    let l_max = f32::new(1000.0);
-    let l_min_neg = f32::new(-1000.0);
+    let l_min = f32::new(0.01_f32);
+    let l_max = f32::new(1000.0_f32);
+    let l_min_neg = f32::new(-1000.0_f32);
 
     let raw_lbkg = expanded_lbkg[idx];
     let l = if raw_lbkg < l_min { l_min } else { raw_lbkg };
@@ -1305,9 +1385,9 @@ pub fn subtract_weber_3ch_kernel(
     if idx >= n as usize {
         terminate!();
     }
-    let l_min = f32::new(0.01);
-    let l_max = f32::new(1000.0);
-    let l_min_neg = f32::new(-1000.0);
+    let l_min = f32::new(0.01_f32);
+    let l_max = f32::new(1000.0_f32);
+    let l_min_neg = f32::new(-1000.0_f32);
 
     let raw_lbkg = expanded_lbkg[idx];
     let l = if raw_lbkg < l_min { l_min } else { raw_lbkg };
@@ -1426,9 +1506,9 @@ pub fn subtract_weber_3ch_strip_kernel(
     let buf_y = (body_offset_y as usize) + dy_local - (src_strip_offset as usize);
     let idx = buf_y * w + dx;
 
-    let l_min = f32::new(0.01);
-    let l_max = f32::new(1000.0);
-    let l_min_neg = f32::new(-1000.0);
+    let l_min = f32::new(0.01_f32);
+    let l_max = f32::new(1000.0_f32);
+    let l_min_neg = f32::new(-1000.0_f32);
 
     let raw_lbkg = expanded_lbkg[idx];
     let l = if raw_lbkg < l_min { l_min } else { raw_lbkg };

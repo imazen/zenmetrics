@@ -87,8 +87,8 @@ pub fn error_maps_kernel(
     let numer = 1.0 + f32::abs(dis - m2);
     let d1 = numer * denom - 1.0;
 
-    let art = if d1 > 0.0 { d1 } else { f32::new(0.0) };
-    let dl = if d1 < 0.0 { -d1 } else { f32::new(0.0) };
+    let art = if d1 > 0.0 { d1 } else { f32::new(0.0_f32) };
+    let dl = if d1 < 0.0 { -d1 } else { f32::new(0.0_f32) };
     out_artifact[idx] = art;
     out_detail[idx] = dl;
 }
@@ -253,10 +253,10 @@ pub fn error_maps_strip_from_full_ref_kernel(
     let numer = 1.0 + f32::abs(dis - m2);
     let d1 = numer * denom - 1.0;
 
-    let art_raw = if d1 > 0.0 { d1 } else { f32::new(0.0) };
-    let dl_raw = if d1 < 0.0 { -d1 } else { f32::new(0.0) };
-    let art = if in_body { art_raw } else { f32::new(0.0) };
-    let dl = if in_body { dl_raw } else { f32::new(0.0) };
+    let art_raw = if d1 > 0.0 { d1 } else { f32::new(0.0_f32) };
+    let dl_raw = if d1 < 0.0 { -d1 } else { f32::new(0.0_f32) };
+    let art = if in_body { art_raw } else { f32::new(0.0_f32) };
+    let dl = if in_body { dl_raw } else { f32::new(0.0_f32) };
     out_artifact[idx] = art;
     out_detail[idx] = dl;
 }
@@ -315,8 +315,8 @@ pub fn error_maps_broadcast_batched_kernel(
     let numer = 1.0 + f32::abs(dis - m2);
     let d1 = numer * denom - 1.0;
 
-    let art = if d1 > 0.0 { d1 } else { f32::new(0.0) };
-    let dl = if d1 < 0.0 { -d1 } else { f32::new(0.0) };
+    let art = if d1 > 0.0 { d1 } else { f32::new(0.0_f32) };
+    let dl = if d1 < 0.0 { -d1 } else { f32::new(0.0_f32) };
     out_artifact[idx] = art;
     out_detail[idx] = dl;
 }

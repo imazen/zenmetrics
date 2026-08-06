@@ -281,7 +281,7 @@ pub fn masked_iw_kernel(
 
         // Per-CPU `ssim_channel_masked_inner`: `((1 - q) * mask).max(0)`.
         if do_ext == 1u32 {
-            let d_m = (raw_sd * mask_w).max(f32::new(0.0));
+            let d_m = (raw_sd * mask_w).max(f32::new(0.0_f32));
             let d_m_sq = d_m * d_m;
             let d_m_4 = d_m_sq * d_m_sq;
             s0 += d_m;
@@ -289,7 +289,7 @@ pub fn masked_iw_kernel(
             s2 += d_m_sq;
         }
         if do_iw == 1u32 {
-            let d_i = (raw_sd * iw_w).max(f32::new(0.0));
+            let d_i = (raw_sd * iw_w).max(f32::new(0.0_f32));
             let d_i_sq = d_i * d_i;
             let d_i_4 = d_i_sq * d_i_sq;
             s6 += d_i;
@@ -307,8 +307,8 @@ pub fn masked_iw_kernel(
 
         if do_ext == 1u32 {
             let ed_m = ed_raw * mask_w;
-            let art_m = ed_m.max(f32::new(0.0));
-            let det_m = (-ed_m).max(f32::new(0.0));
+            let art_m = ed_m.max(f32::new(0.0_f32));
+            let det_m = (-ed_m).max(f32::new(0.0_f32));
             let am2 = art_m * art_m;
             let dm2 = det_m * det_m;
             s3 += am2 * am2;
@@ -319,8 +319,8 @@ pub fn masked_iw_kernel(
         }
         if do_iw == 1u32 {
             let ed_i = ed_raw * iw_w;
-            let art_i = ed_i.max(f32::new(0.0));
-            let det_i = (-ed_i).max(f32::new(0.0));
+            let art_i = ed_i.max(f32::new(0.0_f32));
+            let det_i = (-ed_i).max(f32::new(0.0_f32));
             let ai2 = art_i * art_i;
             let di2 = det_i * det_i;
             s9 += ai2 * ai2;

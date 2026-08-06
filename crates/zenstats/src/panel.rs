@@ -419,6 +419,12 @@ pub fn sa_st_curve(scores: &[f64], humans: &[f64], n_points: usize) -> Vec<(f64,
             }
         }
     };
+    // Only the rayon `reduce` below consumes this; without the gate it is dead
+    // code in a non-`parallel` build (an unused-variable warning that `-D
+    // warnings` turns into a hard error). Gate it rather than underscore-prefix
+    // it: the sole call site is `#[cfg(feature = "parallel")]`, so a rename
+    // would compile clean here and break the parallel build instead.
+    #[cfg(feature = "parallel")]
     let merge_diffs = |mut x: (Vec<i64>, Vec<i64>), y: (Vec<i64>, Vec<i64>)| {
         for (dst, src) in x.0.iter_mut().zip(y.0.iter()) {
             *dst += *src;

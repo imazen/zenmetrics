@@ -657,7 +657,7 @@ pub fn vertical_blur_2ch_uhf_split_lut_kernel(
     } else if diff_x < -remove_uhf_range {
         diff_x + remove_uhf_range
     } else {
-        f32::new(0.0)
+        f32::new(0.0_f32)
     };
     out_uhf_x[idx] = uhf_x;
     let new_hf_x = if bx > remove_hf_range {
@@ -665,7 +665,7 @@ pub fn vertical_blur_2ch_uhf_split_lut_kernel(
     } else if bx < -remove_hf_range {
         bx + remove_hf_range
     } else {
-        f32::new(0.0)
+        f32::new(0.0_f32)
     };
     out_hf_x[idx] = new_hf_x;
 
@@ -675,34 +675,34 @@ pub fn vertical_blur_2ch_uhf_split_lut_kernel(
     let orig_y = hf_y_orig[idx];
 
     // maximum_clamp(by, 28.469181) with KMUL=0.72421615
-    let max_hf = f32::new(28.469_181);
+    let max_hf = f32::new(28.469_181_f32);
     let hf_clamped = if by >= max_hf {
-        (by - max_hf) * f32::new(0.724_216_15) + max_hf
+        (by - max_hf) * f32::new(0.724_216_15_f32) + max_hf
     } else if by < -max_hf {
-        (by + max_hf) * f32::new(0.724_216_15) - max_hf
+        (by + max_hf) * f32::new(0.724_216_15_f32) - max_hf
     } else {
         by
     };
     let uhf_val = orig_y - hf_clamped;
-    let max_uhf = f32::new(5.191_753);
+    let max_uhf = f32::new(5.191_753_f32);
     let uhf_clamped = if uhf_val >= max_uhf {
-        (uhf_val - max_uhf) * f32::new(0.724_216_15) + max_uhf
+        (uhf_val - max_uhf) * f32::new(0.724_216_15_f32) + max_uhf
     } else if uhf_val < -max_uhf {
-        (uhf_val + max_uhf) * f32::new(0.724_216_15) - max_uhf
+        (uhf_val + max_uhf) * f32::new(0.724_216_15_f32) - max_uhf
     } else {
         uhf_val
     };
-    out_uhf_y[idx] = uhf_clamped * f32::new(2.693_137_6);
+    out_uhf_y[idx] = uhf_clamped * f32::new(2.693_137_6_f32);
 
     // amplify_range_around_zero(hf_clamped * HF_MUL, HF_AMPLIFY)
-    let scaled = hf_clamped * f32::new(2.155);
-    let hf_amp = f32::new(0.132);
+    let scaled = hf_clamped * f32::new(2.155_f32);
+    let hf_amp = f32::new(0.132_f32);
     let new_hf_y = if scaled > hf_amp {
         scaled + hf_amp
     } else if scaled < -hf_amp {
         scaled - hf_amp
     } else {
-        f32::new(2.0) * scaled
+        f32::new(2.0_f32) * scaled
     };
     out_hf_y[idx] = new_hf_y;
 }
@@ -790,7 +790,7 @@ pub fn vertical_blur_3ch_hf_split_lut_kernel(
     } else if bx < -remove_mf_range {
         bx + remove_mf_range
     } else {
-        f32::new(0.0)
+        f32::new(0.0_f32)
     };
     out_mf_x[idx] = mx;
 
@@ -802,7 +802,7 @@ pub fn vertical_blur_3ch_hf_split_lut_kernel(
     } else if by < -add_mf_range {
         by - add_mf_range
     } else {
-        f32::new(2.0) * by
+        f32::new(2.0_f32) * by
     };
     out_mf_y[idx] = my;
 

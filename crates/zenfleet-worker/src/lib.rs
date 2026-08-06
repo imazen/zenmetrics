@@ -91,9 +91,12 @@ pub struct R2Target {
     pub prefix: String,
 }
 
-/// Content-addressed blob store over R2 via the `s5cmd` CLI. Requires `s5cmd` on PATH and
-/// `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in the environment at runtime (the launcher maps the
-/// `R2_*` creds to `AWS_*`). The `blobs/<sha>` layout was verified live against R2.
+/// Content-addressed blob store over R2. Every operation is in-process via
+/// [`crate::s3io`] (`object_store`) — the `s5cmd`/`aws` CLI spawns this type
+/// used to shell out to are gone, so `s5cmd` is no longer required on PATH.
+/// Still needs `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in the environment
+/// at runtime (the launcher maps the `R2_*` creds to `AWS_*`). The
+/// `blobs/<sha>` layout was verified live against R2.
 pub struct R2BlobStore {
     target: R2Target,
 }
@@ -117,12 +120,6 @@ impl R2BlobStore {
             self.target.prefix.trim_matches('/'),
             sha
         )
-    }
-
-    fn s5cmd(&self) -> Command {
-        let mut c = Command::new("s5cmd");
-        c.arg("--endpoint-url").arg(&self.target.endpoint);
-        c
     }
 }
 

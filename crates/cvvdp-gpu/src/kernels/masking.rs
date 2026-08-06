@@ -81,19 +81,19 @@ pub fn pu_blur_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, w: u32, h: u32) 
     let half = 6_i32;
 
     // 13-tap Gaussian (σ=3), normalized — matches PU_BLUR_KERNEL_1D.
-    let k0 = f32::new(1.854_402_2e-2);
-    let k1 = f32::new(3.416_694_2e-2);
-    let k2 = f32::new(5.633_176_4e-2);
-    let k3 = f32::new(8.310_854e-2);
-    let k4 = f32::new(1.097_193e-1);
-    let k5 = f32::new(1.296_180_3e-1);
-    let k6 = f32::new(1.370_228_2e-1);
-    let k7 = f32::new(1.296_180_3e-1);
-    let k8 = f32::new(1.097_193e-1);
-    let k9 = f32::new(8.310_854e-2);
-    let k10 = f32::new(5.633_176_4e-2);
-    let k11 = f32::new(3.416_694_2e-2);
-    let k12 = f32::new(1.854_402_2e-2);
+    let k0 = f32::new(1.854_402_2e-2_f32);
+    let k1 = f32::new(3.416_694_2e-2_f32);
+    let k2 = f32::new(5.633_176_4e-2_f32);
+    let k3 = f32::new(8.310_854e-2_f32);
+    let k4 = f32::new(1.097_193e-1_f32);
+    let k5 = f32::new(1.296_180_3e-1_f32);
+    let k6 = f32::new(1.370_228_2e-1_f32);
+    let k7 = f32::new(1.296_180_3e-1_f32);
+    let k8 = f32::new(1.097_193e-1_f32);
+    let k9 = f32::new(8.310_854e-2_f32);
+    let k10 = f32::new(5.633_176_4e-2_f32);
+    let k11 = f32::new(3.416_694_2e-2_f32);
+    let k12 = f32::new(1.854_402_2e-2_f32);
 
     // Reflect-12 unroll, inline. For each tap t in 0..13, source
     // index is x + (t - half), reflected into [0, w).
@@ -149,7 +149,7 @@ pub fn diff_abs_3ch_kernel(
     if idx >= n as usize {
         terminate!();
     }
-    let zero = f32::new(0.0);
+    let zero = f32::new(0.0_f32);
 
     let da = t_p_dis_a[idx] - t_p_ref_a[idx];
     d_a[idx] = if da < zero { -da } else { da };
@@ -187,19 +187,19 @@ pub fn pu_blur_h_3ch_kernel(
     let x_i = x as i32;
     let half = 6_i32;
 
-    let k0 = f32::new(1.854_402_2e-2);
-    let k1 = f32::new(3.416_694_2e-2);
-    let k2 = f32::new(5.633_176_4e-2);
-    let k3 = f32::new(8.310_854e-2);
-    let k4 = f32::new(1.097_193e-1);
-    let k5 = f32::new(1.296_180_3e-1);
-    let k6 = f32::new(1.370_228_2e-1);
-    let k7 = f32::new(1.296_180_3e-1);
-    let k8 = f32::new(1.097_193e-1);
-    let k9 = f32::new(8.310_854e-2);
-    let k10 = f32::new(5.633_176_4e-2);
-    let k11 = f32::new(3.416_694_2e-2);
-    let k12 = f32::new(1.854_402_2e-2);
+    let k0 = f32::new(1.854_402_2e-2_f32);
+    let k1 = f32::new(3.416_694_2e-2_f32);
+    let k2 = f32::new(5.633_176_4e-2_f32);
+    let k3 = f32::new(8.310_854e-2_f32);
+    let k4 = f32::new(1.097_193e-1_f32);
+    let k5 = f32::new(1.296_180_3e-1_f32);
+    let k6 = f32::new(1.370_228_2e-1_f32);
+    let k7 = f32::new(1.296_180_3e-1_f32);
+    let k8 = f32::new(1.097_193e-1_f32);
+    let k9 = f32::new(8.310_854e-2_f32);
+    let k10 = f32::new(5.633_176_4e-2_f32);
+    let k11 = f32::new(3.416_694_2e-2_f32);
+    let k12 = f32::new(1.854_402_2e-2_f32);
 
     let s0 = reflect_pu_idx(x_i - half, w_i);
     let s1 = reflect_pu_idx(x_i + 1 - half, w_i);
@@ -308,19 +308,19 @@ pub fn pu_blur_h_3ch_strip_aware_kernel(
     let x_i = x as i32;
     let half = 6_i32;
 
-    let k0 = f32::new(1.854_402_2e-2);
-    let k1 = f32::new(3.416_694_2e-2);
-    let k2 = f32::new(5.633_176_4e-2);
-    let k3 = f32::new(8.310_854e-2);
-    let k4 = f32::new(1.097_193e-1);
-    let k5 = f32::new(1.296_180_3e-1);
-    let k6 = f32::new(1.370_228_2e-1);
-    let k7 = f32::new(1.296_180_3e-1);
-    let k8 = f32::new(1.097_193e-1);
-    let k9 = f32::new(8.310_854e-2);
-    let k10 = f32::new(5.633_176_4e-2);
-    let k11 = f32::new(3.416_694_2e-2);
-    let k12 = f32::new(1.854_402_2e-2);
+    let k0 = f32::new(1.854_402_2e-2_f32);
+    let k1 = f32::new(3.416_694_2e-2_f32);
+    let k2 = f32::new(5.633_176_4e-2_f32);
+    let k3 = f32::new(8.310_854e-2_f32);
+    let k4 = f32::new(1.097_193e-1_f32);
+    let k5 = f32::new(1.296_180_3e-1_f32);
+    let k6 = f32::new(1.370_228_2e-1_f32);
+    let k7 = f32::new(1.296_180_3e-1_f32);
+    let k8 = f32::new(1.097_193e-1_f32);
+    let k9 = f32::new(8.310_854e-2_f32);
+    let k10 = f32::new(5.633_176_4e-2_f32);
+    let k11 = f32::new(3.416_694_2e-2_f32);
+    let k12 = f32::new(1.854_402_2e-2_f32);
 
     let s0 = reflect_pu_idx(x_i - half, w_i);
     let s1 = reflect_pu_idx(x_i + 1 - half, w_i);
@@ -393,19 +393,19 @@ pub fn pu_blur_v_kernel(src: &Array<f32>, dst: &mut Array<f32>, w: u32, h: u32) 
     let y_i = y as i32;
     let half = 6_i32;
 
-    let k0 = f32::new(1.854_402_2e-2);
-    let k1 = f32::new(3.416_694_2e-2);
-    let k2 = f32::new(5.633_176_4e-2);
-    let k3 = f32::new(8.310_854e-2);
-    let k4 = f32::new(1.097_193e-1);
-    let k5 = f32::new(1.296_180_3e-1);
-    let k6 = f32::new(1.370_228_2e-1);
-    let k7 = f32::new(1.296_180_3e-1);
-    let k8 = f32::new(1.097_193e-1);
-    let k9 = f32::new(8.310_854e-2);
-    let k10 = f32::new(5.633_176_4e-2);
-    let k11 = f32::new(3.416_694_2e-2);
-    let k12 = f32::new(1.854_402_2e-2);
+    let k0 = f32::new(1.854_402_2e-2_f32);
+    let k1 = f32::new(3.416_694_2e-2_f32);
+    let k2 = f32::new(5.633_176_4e-2_f32);
+    let k3 = f32::new(8.310_854e-2_f32);
+    let k4 = f32::new(1.097_193e-1_f32);
+    let k5 = f32::new(1.296_180_3e-1_f32);
+    let k6 = f32::new(1.370_228_2e-1_f32);
+    let k7 = f32::new(1.296_180_3e-1_f32);
+    let k8 = f32::new(1.097_193e-1_f32);
+    let k9 = f32::new(8.310_854e-2_f32);
+    let k10 = f32::new(5.633_176_4e-2_f32);
+    let k11 = f32::new(3.416_694_2e-2_f32);
+    let k12 = f32::new(1.854_402_2e-2_f32);
 
     let s0 = reflect_pu_idx(y_i - half, h_i);
     let s1 = reflect_pu_idx(y_i + 1 - half, h_i);
@@ -468,19 +468,19 @@ pub fn pu_blur_v_3ch_scaled_kernel(
     let y_i = y as i32;
     let half = 6_i32;
 
-    let k0 = f32::new(1.854_402_2e-2);
-    let k1 = f32::new(3.416_694_2e-2);
-    let k2 = f32::new(5.633_176_4e-2);
-    let k3 = f32::new(8.310_854e-2);
-    let k4 = f32::new(1.097_193e-1);
-    let k5 = f32::new(1.296_180_3e-1);
-    let k6 = f32::new(1.370_228_2e-1);
-    let k7 = f32::new(1.296_180_3e-1);
-    let k8 = f32::new(1.097_193e-1);
-    let k9 = f32::new(8.310_854e-2);
-    let k10 = f32::new(5.633_176_4e-2);
-    let k11 = f32::new(3.416_694_2e-2);
-    let k12 = f32::new(1.854_402_2e-2);
+    let k0 = f32::new(1.854_402_2e-2_f32);
+    let k1 = f32::new(3.416_694_2e-2_f32);
+    let k2 = f32::new(5.633_176_4e-2_f32);
+    let k3 = f32::new(8.310_854e-2_f32);
+    let k4 = f32::new(1.097_193e-1_f32);
+    let k5 = f32::new(1.296_180_3e-1_f32);
+    let k6 = f32::new(1.370_228_2e-1_f32);
+    let k7 = f32::new(1.296_180_3e-1_f32);
+    let k8 = f32::new(1.097_193e-1_f32);
+    let k9 = f32::new(8.310_854e-2_f32);
+    let k10 = f32::new(5.633_176_4e-2_f32);
+    let k11 = f32::new(3.416_694_2e-2_f32);
+    let k12 = f32::new(1.854_402_2e-2_f32);
 
     let s0 = reflect_pu_idx(y_i - half, h_i);
     let s1 = reflect_pu_idx(y_i + 1 - half, h_i);
@@ -609,19 +609,19 @@ pub fn pu_blur_v_3ch_scaled_strip_aware_kernel(
     let y_global_i = y_strip as i32 + body_off_i;
     let half = 6_i32;
 
-    let k0 = f32::new(1.854_402_2e-2);
-    let k1 = f32::new(3.416_694_2e-2);
-    let k2 = f32::new(5.633_176_4e-2);
-    let k3 = f32::new(8.310_854e-2);
-    let k4 = f32::new(1.097_193e-1);
-    let k5 = f32::new(1.296_180_3e-1);
-    let k6 = f32::new(1.370_228_2e-1);
-    let k7 = f32::new(1.296_180_3e-1);
-    let k8 = f32::new(1.097_193e-1);
-    let k9 = f32::new(8.310_854e-2);
-    let k10 = f32::new(5.633_176_4e-2);
-    let k11 = f32::new(3.416_694_2e-2);
-    let k12 = f32::new(1.854_402_2e-2);
+    let k0 = f32::new(1.854_402_2e-2_f32);
+    let k1 = f32::new(3.416_694_2e-2_f32);
+    let k2 = f32::new(5.633_176_4e-2_f32);
+    let k3 = f32::new(8.310_854e-2_f32);
+    let k4 = f32::new(1.097_193e-1_f32);
+    let k5 = f32::new(1.296_180_3e-1_f32);
+    let k6 = f32::new(1.370_228_2e-1_f32);
+    let k7 = f32::new(1.296_180_3e-1_f32);
+    let k8 = f32::new(1.097_193e-1_f32);
+    let k9 = f32::new(8.310_854e-2_f32);
+    let k10 = f32::new(5.633_176_4e-2_f32);
+    let k11 = f32::new(3.416_694_2e-2_f32);
+    let k12 = f32::new(1.854_402_2e-2_f32);
 
     // Reflect each tap's global y against logical_h, then translate
     // back to a strip-buffer row by subtracting body_offset_y.
@@ -736,7 +736,7 @@ pub fn min_abs_3ch_kernel(
     if idx >= n as usize {
         terminate!();
     }
-    let zero = f32::new(0.0);
+    let zero = f32::new(0.0_f32);
 
     let ta = t_p_a[idx];
     let abs_ta = if ta < zero { -ta } else { ta };
@@ -803,25 +803,25 @@ pub fn mult_mutual_3ch_no_blur_kernel(
     }
 
     // cvvdp v0.5.4 constants — bake to match host scalar exactly.
-    let mask_p = f32::new(2.264_355_2);
-    let mask_q_0 = f32::new(1.302_622_7);
-    let mask_q_1 = f32::new(2.888_590_8);
-    let mask_q_2 = f32::new(3.680_771_3);
-    let pu_scale = f32::new(0.160_188_4); // 10^MASK_C with MASK_C = -0.79549712
-    let d_max_lin = f32::new(366.732_25); // 10^D_MAX with D_MAX = 2.5642455
+    let mask_p = f32::new(2.264_355_2_f32);
+    let mask_q_0 = f32::new(1.302_622_7_f32);
+    let mask_q_1 = f32::new(2.888_590_8_f32);
+    let mask_q_2 = f32::new(3.680_771_3_f32);
+    let pu_scale = f32::new(0.160_188_4_f32); // 10^MASK_C with MASK_C = -0.79549712
+    let d_max_lin = f32::new(366.732_25_f32); // 10^D_MAX with D_MAX = 2.5642455
 
     // XCM_3X3 (row-major: [in][out]) baked as scalar consts.
-    let xcm_00 = f32::new(0.876_968);
-    let xcm_01 = f32::new(0.016_103_15);
-    let xcm_02 = f32::new(0.050_159_38);
-    let xcm_10 = f32::new(5.918_792);
-    let xcm_11 = f32::new(1.269_323);
-    let xcm_12 = f32::new(0.152_080_92);
-    let xcm_20 = f32::new(14.041_055);
-    let xcm_21 = f32::new(0.498_209_6);
-    let xcm_22 = f32::new(0.697_756_55);
+    let xcm_00 = f32::new(0.876_968_f32);
+    let xcm_01 = f32::new(0.016_103_15_f32);
+    let xcm_02 = f32::new(0.050_159_38_f32);
+    let xcm_10 = f32::new(5.918_792_f32);
+    let xcm_11 = f32::new(1.269_323_f32);
+    let xcm_12 = f32::new(0.152_080_92_f32);
+    let xcm_20 = f32::new(14.041_055_f32);
+    let xcm_21 = f32::new(0.498_209_6_f32);
+    let xcm_22 = f32::new(0.697_756_55_f32);
 
-    let eps = f32::new(1e-5);
+    let eps = f32::new(1e-5_f32);
 
     let t_a = t_p_a[idx];
     let t_rg = t_p_rg[idx];
@@ -830,12 +830,28 @@ pub fn mult_mutual_3ch_no_blur_kernel(
     let r_rg = r_p_rg[idx];
     let r_vy = r_p_vy[idx];
 
-    let abs_t_a = if t_a < f32::new(0.0) { -t_a } else { t_a };
-    let abs_t_rg = if t_rg < f32::new(0.0) { -t_rg } else { t_rg };
-    let abs_t_vy = if t_vy < f32::new(0.0) { -t_vy } else { t_vy };
-    let abs_r_a = if r_a < f32::new(0.0) { -r_a } else { r_a };
-    let abs_r_rg = if r_rg < f32::new(0.0) { -r_rg } else { r_rg };
-    let abs_r_vy = if r_vy < f32::new(0.0) { -r_vy } else { r_vy };
+    let abs_t_a = if t_a < f32::new(0.0_f32) { -t_a } else { t_a };
+    let abs_t_rg = if t_rg < f32::new(0.0_f32) {
+        -t_rg
+    } else {
+        t_rg
+    };
+    let abs_t_vy = if t_vy < f32::new(0.0_f32) {
+        -t_vy
+    } else {
+        t_vy
+    };
+    let abs_r_a = if r_a < f32::new(0.0_f32) { -r_a } else { r_a };
+    let abs_r_rg = if r_rg < f32::new(0.0_f32) {
+        -r_rg
+    } else {
+        r_rg
+    };
+    let abs_r_vy = if r_vy < f32::new(0.0_f32) {
+        -r_vy
+    } else {
+        r_vy
+    };
 
     // M_mm = min(|T_p|, |R_p|) * 10^mask_c.
     let mm_a = if abs_t_a < abs_r_a { abs_t_a } else { abs_r_a };
@@ -865,19 +881,19 @@ pub fn mult_mutual_3ch_no_blur_kernel(
 
     // D[c] = clamp_diffs(safe_pow(|T_p[c] - R_p[c]|, p) / (1 + M[c])).
     let diff_a = t_a - r_a;
-    let abs_diff_a = if diff_a < f32::new(0.0) {
+    let abs_diff_a = if diff_a < f32::new(0.0_f32) {
         -diff_a
     } else {
         diff_a
     };
     let diff_rg = t_rg - r_rg;
-    let abs_diff_rg = if diff_rg < f32::new(0.0) {
+    let abs_diff_rg = if diff_rg < f32::new(0.0_f32) {
         -diff_rg
     } else {
         diff_rg
     };
     let diff_vy = t_vy - r_vy;
-    let abs_diff_vy = if diff_vy < f32::new(0.0) {
+    let abs_diff_vy = if diff_vy < f32::new(0.0_f32) {
         -diff_vy
     } else {
         diff_vy
@@ -887,9 +903,9 @@ pub fn mult_mutual_3ch_no_blur_kernel(
     let sp_rg = f32::powf(abs_diff_rg + eps, mask_p) - f32::powf(eps, mask_p);
     let sp_vy = f32::powf(abs_diff_vy + eps, mask_p) - f32::powf(eps, mask_p);
 
-    let d_u_a = sp_a / (f32::new(1.0) + m_a_pool);
-    let d_u_rg = sp_rg / (f32::new(1.0) + m_rg_pool);
-    let d_u_vy = sp_vy / (f32::new(1.0) + m_vy_pool);
+    let d_u_a = sp_a / (f32::new(1.0_f32) + m_a_pool);
+    let d_u_rg = sp_rg / (f32::new(1.0_f32) + m_rg_pool);
+    let d_u_vy = sp_vy / (f32::new(1.0_f32) + m_vy_pool);
 
     d_a[idx] = d_max_lin * d_u_a / (d_max_lin + d_u_a);
     d_rg[idx] = d_max_lin * d_u_rg / (d_max_lin + d_u_rg);
@@ -928,31 +944,39 @@ pub fn mult_mutual_3ch_with_blurred_kernel(
         terminate!();
     }
 
-    let mask_p = f32::new(2.264_355_2);
-    let mask_q_0 = f32::new(1.302_622_7);
-    let mask_q_1 = f32::new(2.888_590_8);
-    let mask_q_2 = f32::new(3.680_771_3);
-    let d_max_lin = f32::new(366.732_25);
+    let mask_p = f32::new(2.264_355_2_f32);
+    let mask_q_0 = f32::new(1.302_622_7_f32);
+    let mask_q_1 = f32::new(2.888_590_8_f32);
+    let mask_q_2 = f32::new(3.680_771_3_f32);
+    let d_max_lin = f32::new(366.732_25_f32);
 
-    let xcm_00 = f32::new(0.876_968);
-    let xcm_01 = f32::new(0.016_103_15);
-    let xcm_02 = f32::new(0.050_159_38);
-    let xcm_10 = f32::new(5.918_792);
-    let xcm_11 = f32::new(1.269_323);
-    let xcm_12 = f32::new(0.152_080_92);
-    let xcm_20 = f32::new(14.041_055);
-    let xcm_21 = f32::new(0.498_209_6);
-    let xcm_22 = f32::new(0.697_756_55);
+    let xcm_00 = f32::new(0.876_968_f32);
+    let xcm_01 = f32::new(0.016_103_15_f32);
+    let xcm_02 = f32::new(0.050_159_38_f32);
+    let xcm_10 = f32::new(5.918_792_f32);
+    let xcm_11 = f32::new(1.269_323_f32);
+    let xcm_12 = f32::new(0.152_080_92_f32);
+    let xcm_20 = f32::new(14.041_055_f32);
+    let xcm_21 = f32::new(0.498_209_6_f32);
+    let xcm_22 = f32::new(0.697_756_55_f32);
 
-    let eps = f32::new(1e-5);
+    let eps = f32::new(1e-5_f32);
 
     let m_a = m_mm_a[idx];
     let m_rg = m_mm_rg[idx];
     let m_vy = m_mm_vy[idx];
 
-    let abs_m_a = if m_a < f32::new(0.0) { -m_a } else { m_a };
-    let abs_m_rg = if m_rg < f32::new(0.0) { -m_rg } else { m_rg };
-    let abs_m_vy = if m_vy < f32::new(0.0) { -m_vy } else { m_vy };
+    let abs_m_a = if m_a < f32::new(0.0_f32) { -m_a } else { m_a };
+    let abs_m_rg = if m_rg < f32::new(0.0_f32) {
+        -m_rg
+    } else {
+        m_rg
+    };
+    let abs_m_vy = if m_vy < f32::new(0.0_f32) {
+        -m_vy
+    } else {
+        m_vy
+    };
 
     let term_a = f32::powf(abs_m_a + eps, mask_q_0) - f32::powf(eps, mask_q_0);
     let term_rg = f32::powf(abs_m_rg + eps, mask_q_1) - f32::powf(eps, mask_q_1);
@@ -970,19 +994,19 @@ pub fn mult_mutual_3ch_with_blurred_kernel(
     let r_vy = r_p_vy[idx];
 
     let diff_a = t_a - r_a;
-    let abs_diff_a = if diff_a < f32::new(0.0) {
+    let abs_diff_a = if diff_a < f32::new(0.0_f32) {
         -diff_a
     } else {
         diff_a
     };
     let diff_rg = t_rg - r_rg;
-    let abs_diff_rg = if diff_rg < f32::new(0.0) {
+    let abs_diff_rg = if diff_rg < f32::new(0.0_f32) {
         -diff_rg
     } else {
         diff_rg
     };
     let diff_vy = t_vy - r_vy;
-    let abs_diff_vy = if diff_vy < f32::new(0.0) {
+    let abs_diff_vy = if diff_vy < f32::new(0.0_f32) {
         -diff_vy
     } else {
         diff_vy
@@ -992,9 +1016,9 @@ pub fn mult_mutual_3ch_with_blurred_kernel(
     let sp_rg = f32::powf(abs_diff_rg + eps, mask_p) - f32::powf(eps, mask_p);
     let sp_vy = f32::powf(abs_diff_vy + eps, mask_p) - f32::powf(eps, mask_p);
 
-    let d_u_a = sp_a / (f32::new(1.0) + m_a_pool);
-    let d_u_rg = sp_rg / (f32::new(1.0) + m_rg_pool);
-    let d_u_vy = sp_vy / (f32::new(1.0) + m_vy_pool);
+    let d_u_a = sp_a / (f32::new(1.0_f32) + m_a_pool);
+    let d_u_rg = sp_rg / (f32::new(1.0_f32) + m_rg_pool);
+    let d_u_vy = sp_vy / (f32::new(1.0_f32) + m_vy_pool);
 
     d_a[idx] = d_max_lin * d_u_a / (d_max_lin + d_u_a);
     d_rg[idx] = d_max_lin * d_u_rg / (d_max_lin + d_u_rg);

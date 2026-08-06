@@ -293,7 +293,11 @@ pub fn fused_features_kernel(
         let inner_ds_inner = fma(-mu1, mu1, ssq);
         let denom_s = fma(-mu2, mu2, inner_ds_inner) + C2;
         let sd_raw = 1.0 - (num_m * num_s) / denom_s;
-        let sd0 = if sd_raw > 0.0 { sd_raw } else { f32::new(0.0) };
+        let sd0 = if sd_raw > 0.0 {
+            sd_raw
+        } else {
+            f32::new(0.0_f32)
+        };
         // Multiplicative body-row mask. Halo rows contribute 0 to
         // every accumulator (and 0 can't change `max` peaks). Keeps
         // the CFG of every per-pixel op identical to the pre-body
@@ -302,9 +306,9 @@ pub fn fused_features_kernel(
         // to < 1e-9 rel).
         let is_body = y >= y_body_start && y < y_body_end;
         let mask = if is_body {
-            f32::new(1.0)
+            f32::new(1.0_f32)
         } else {
-            f32::new(0.0)
+            f32::new(0.0_f32)
         };
         let sd = sd0 * mask;
         let sd2 = sd * sd;
@@ -320,8 +324,8 @@ pub fn fused_features_kernel(
         let diff1 = f32::abs(sv - mu1);
         let diff2 = f32::abs(dv - mu2);
         let ed = (1.0 + diff2) / (1.0 + diff1) - 1.0;
-        let artifact0 = if ed > 0.0 { ed } else { f32::new(0.0) };
-        let detail_lost0 = if ed < 0.0 { -ed } else { f32::new(0.0) };
+        let artifact0 = if ed > 0.0 { ed } else { f32::new(0.0_f32) };
+        let detail_lost0 = if ed < 0.0 { -ed } else { f32::new(0.0_f32) };
         let artifact = artifact0 * mask;
         let detail_lost = detail_lost0 * mask;
         let a2_v = artifact * artifact;
@@ -687,13 +691,17 @@ pub fn fused_features_kernel_persist(
         let inner_ds_inner = fma(-mu1, mu1, ssq);
         let denom_s = fma(-mu2, mu2, inner_ds_inner) + C2;
         let sd_raw = 1.0 - (num_m * num_s) / denom_s;
-        let sd0 = if sd_raw > 0.0 { sd_raw } else { f32::new(0.0) };
+        let sd0 = if sd_raw > 0.0 {
+            sd_raw
+        } else {
+            f32::new(0.0_f32)
+        };
         // See `fused_features_kernel` for body-mask rationale.
         let is_body = y >= y_body_start && y < y_body_end;
         let mask = if is_body {
-            f32::new(1.0)
+            f32::new(1.0_f32)
         } else {
-            f32::new(0.0)
+            f32::new(0.0_f32)
         };
         let sd = sd0 * mask;
         let sd2 = sd * sd;
@@ -709,8 +717,8 @@ pub fn fused_features_kernel_persist(
         let diff1 = f32::abs(sv - mu1);
         let diff2 = f32::abs(dv - mu2);
         let ed = (1.0 + diff2) / (1.0 + diff1) - 1.0;
-        let artifact0 = if ed > 0.0 { ed } else { f32::new(0.0) };
-        let detail_lost0 = if ed < 0.0 { -ed } else { f32::new(0.0) };
+        let artifact0 = if ed > 0.0 { ed } else { f32::new(0.0_f32) };
+        let detail_lost0 = if ed < 0.0 { -ed } else { f32::new(0.0_f32) };
         let artifact = artifact0 * mask;
         let detail_lost = detail_lost0 * mask;
         let a2_v = artifact * artifact;

@@ -139,7 +139,7 @@ pub fn blur_pass_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, heig
     // Zero the ring slots for this thread.
     let mut k: u32 = 0;
     while k < RING_SIZE {
-        ring[ring_base + (k as usize)] = f32::new(0.0);
+        ring[ring_base + (k as usize)] = f32::new(0.0_f32);
         k += 1;
     }
 
@@ -168,7 +168,7 @@ pub fn blur_pass_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, heig
         let right_val = if right < h {
             src[(right as usize) * w + x]
         } else {
-            f32::new(0.0)
+            f32::new(0.0_f32)
         };
 
         let left_val = if left_present {
@@ -176,7 +176,7 @@ pub fn blur_pass_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, heig
             let slot = (i - TWO_N) % RING_SIZE;
             ring[ring_base + (slot as usize)]
         } else {
-            f32::new(0.0)
+            f32::new(0.0_f32)
         };
 
         let sum = left_val + right_val;
@@ -268,7 +268,7 @@ pub fn blur_h_pass_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, he
 
     let mut k: u32 = 0;
     while k < RING_SIZE {
-        ring[ring_base + (k as usize)] = f32::new(0.0);
+        ring[ring_base + (k as usize)] = f32::new(0.0_f32);
         k += 1;
     }
 
@@ -296,14 +296,14 @@ pub fn blur_h_pass_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, he
         let right_val = if right < w {
             src[row_base + (right as usize)]
         } else {
-            f32::new(0.0)
+            f32::new(0.0_f32)
         };
 
         let left_val = if left_present {
             let slot = (i - TWO_N) % RING_SIZE;
             ring[ring_base + (slot as usize)]
         } else {
-            f32::new(0.0)
+            f32::new(0.0_f32)
         };
 
         let sum = left_val + right_val;
@@ -372,7 +372,7 @@ pub fn blur_pass_batched_kernel(
 
     let mut k: u32 = 0;
     while k < RING_SIZE {
-        ring[ring_base + (k as usize)] = f32::new(0.0);
+        ring[ring_base + (k as usize)] = f32::new(0.0_f32);
         k += 1;
     }
 
@@ -396,14 +396,14 @@ pub fn blur_pass_batched_kernel(
         let right_val = if right < h {
             src[plane_off + (right as usize) * w + (x as usize)]
         } else {
-            f32::new(0.0)
+            f32::new(0.0_f32)
         };
 
         let left_val = if left_present {
             let slot = (i - TWO_N) % RING_SIZE;
             ring[ring_base + (slot as usize)]
         } else {
-            f32::new(0.0)
+            f32::new(0.0_f32)
         };
 
         let sum = left_val + right_val;

@@ -400,7 +400,7 @@ pub fn run_fleet(
             // difference between ~80% and ~97% utilization under imbalance.
             // Production has the same signal (the encode time/resource estimate).
             let mut v: Vec<Task> = tasks.to_vec();
-            v.sort_by(|a, b| b.compute_secs.cmp(&a.compute_secs));
+            v.sort_by_key(|t| std::cmp::Reverse(t.compute_secs));
             shared.extend(v);
         }
         FleetPolicy::StaticSplit => {

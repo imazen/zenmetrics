@@ -187,14 +187,14 @@ pub fn l2_asym_diff_broadcast_batched_kernel(
         } else if v1 < -too_big {
             -v1 - too_big
         } else {
-            f32::new(0.0)
+            f32::new(0.0_f32)
         }
     } else if v1 < too_small {
         too_small - v1
     } else if v1 > too_big {
         v1 - too_big
     } else {
-        f32::new(0.0)
+        f32::new(0.0_f32)
     };
 
     total += vw_lt * v * v;
@@ -233,14 +233,14 @@ pub fn l2_asym_diff_kernel(
         } else if v1 < -too_big {
             -v1 - too_big
         } else {
-            f32::new(0.0)
+            f32::new(0.0_f32)
         }
     } else if v1 < too_small {
         too_small - v1
     } else if v1 > too_big {
         v1 - too_big
     } else {
-        f32::new(0.0)
+        f32::new(0.0_f32)
     };
 
     total += vw_lt * v * v;
@@ -286,14 +286,14 @@ pub fn l2_asym_plus_l2_kernel(
         } else if v1 < -too_big {
             -v1 - too_big
         } else {
-            f32::new(0.0)
+            f32::new(0.0_f32)
         }
     } else if v1 < too_small {
         too_small - v1
     } else if v1 > too_big {
         v1 - too_big
     } else {
-        f32::new(0.0)
+        f32::new(0.0_f32)
     };
 
     total += vw_lt * v * v;
