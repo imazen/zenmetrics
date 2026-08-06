@@ -21,11 +21,12 @@ the corpus `_MANIFEST.json`.
 
 | | |
 |---|---|
-| **Phase** | registered; building pinned executor images |
+| **Phase** | ENCODE FLEET LIVE (6 nodes) — run `jobs/avifgen-enc-20260806` |
 | **Grid** | frozen in appendix Z (main 472,680 + probe 90,720 + huge 900; monsters >16MP excluded) |
 | **zenavif pin** | `66e3c417b43ff950323d402824aeb1ecbbc7f683` (path-dep sibling; source tree == commit tree) |
-| **Ledger fill** | n/a (not declared yet) |
-| **First-cell encode gate (G-Z2)** | NOT YET RUN — hard gate before any fleet scale-up |
+| **Images** | CPU `ghcr.io/imazen/zenfleet-worker:exec-avifgen-66e3c417`; GPU `…:exec-gpu-avifgen-66e3c417` (both built locally from the pinned checkouts, pushed) |
+| **Ledger fill** | see incidents log tail / `~/tmp/avifgen/progress.log` on the operator |
+| **First-cell encode gate (G-Z2)** | **PASSED 2026-08-06 ~14:45** (sha match + decode-back + byte-stable) |
 | **First-cell score gate (G-Z3)** | NOT YET RUN — hard gate before the second GPU box |
 
 ### Milestones
@@ -33,10 +34,10 @@ the corpus `_MANIFEST.json`.
 - [x] Recon: budget doc, job-system caps, June estate precedent, zenavif state
 - [x] Appendix Z pre-registered + pushed (`ab22e07a`) BEFORE launch
 - [x] Planner dry-runs audited (dropped-axis + alias-merge + invalid-strata reports read)
-- [ ] Executor images rebuilt at the pin (CPU `:exec-…` + GPU `:exec-gpu-…` tags) + pushed
-- [ ] Encode run declared; scoped creds minted
-- [ ] **G-Z2 first-cell encode gate PASSED** (blob on R2 + ledger sha match + decode-back)
-- [ ] Fleet scaled to all CPU nodes
+- [x] Executor images rebuilt at the pin (CPU + GPU tags) + pushed
+- [x] Encode run declared (564,300 jobs); scoped creds minted (run+refs prefixes, 7-day TTL)
+- [x] **G-Z2 first-cell encode gate PASSED** (blob on R2 + ledger sha match + decode-back + byte-stability)
+- [x] Fleet scaled: node-2, node-3, i265, ryzen5800xt, lianli (systemd units) + tower (Docker, cpuset 0-23, shares 256, mem 40g)
 - [ ] Encode ledger 50%
 - [ ] Encode ledger ≥99.5% (G-Z4)
 - [ ] ScoreFile GPU run declared (ssim2-gpu + butteraugli-gpu); **G-Z3 gate on node-2**
@@ -76,3 +77,4 @@ the corpus `_MANIFEST.json`.
 | 2026-08-06 ~14:07 | Encode run `jobs/avifgen-enc-20260806` declared (564,300 jobs, manifest 283 MB). CPU image `ghcr.io/imazen/zenfleet-worker:exec-avifgen-66e3c417` built from the pinned checkouts + pushed. Local probe through the production jobexec path: SDR s4 ~1.1–1.7 s/MP, α ~0.17 s, RSS ~18 MB/MP (16 MP cell = 226 MB) — encode is 2–3× cheaper than the HDR-derived bound; no memory-admission risk. |
 | 2026-08-06 ~14:30 | **G-Z2 incident (caught by the gate, before scale-up):** the two-bucket corpus credential (`ZEN_CORPUS_AWS_*`) is NOT threaded into the in-process objstore source GET — documented gap at `jobexec.rs:202` ("not yet threaded into objstore"). Every cell of the first 21-min gate window failed the corpus GET, **misclassified `encoder_panic`** (a second defect: source-fetch failures land in the encoder's error class), deterministic → poison. 359 all-FAILED sidecars (143,600 cells) verified by content + pre-restart timestamp, deleted; cells re-opened. Fix adopted: refs re-hosted at `s3://zentrain/refs/train-renditions-2026-06-14/` (single-bucket, the pattern every prior wave used); one scoped RW cred (run prefix + refs prefix). The objstore corpus-cred gap + the error-class mislabel are recorded here for the next zenfleet maintenance pass. |
 | 2026-08-06 ~14:45 | **G-Z2 PASSED**: blob sha256 == ledger `output_sha`; `ftypavif` valid, decode-back + ssim2 sane (79.9 @ q50 tiny); **byte-stable** — container fleet encode == bare local re-encode, byte-identical; ledger rows carry full cell identity + worker/provider provenance. Milestone ping 1 sent. |
+| 2026-08-06 ~14:50 | Fleet scaled: node-3/i265/ryzen5800xt/node-2/lianli via `homefleet zenmetrics/scripts/jobsys/avifgen_encode_bringup.sh` (unit + env + pinned image, all `active`); tower `zen-avifgen` container (cpuset 0-23, cpu-shares 256, mem 40g; array 95% full — nothing written to the array). ryzen was restart-looping a drained 720-era pool (done=0 cycles) — repurposed. GPU image `:exec-gpu-avifgen-66e3c417` built + pushed. `pairs_from_encode_ledger.py` added: the Encode→ScoreFile bridge (ledger → full-URI pairs parquet for `declare_direct_objects.py` ZEN_FULL_URI=1 + the writeback join table). Note for G-Z3: jobexec ScoreFile JSONL rows carry no `runtime` column — the gate therefore rests on `ZENMETRICS_REQUIRE_GPU=1` (CPU rung structurally removed) + an on-node hidden-GPU refusal probe, not on per-row provenance. lianli lacks the nvidia docker runtime (node-2 has it) — `gpu-setup.sh` queued before lianli joins the score queue. |
