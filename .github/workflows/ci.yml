@@ -168,6 +168,14 @@ jobs:
           git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
           git clone --quiet https://github.com/imazen/zentone.git ../zentone
           git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
+          # zenmetrics-cli's `hdr-svt` feature path-dep
+          # (`../../../zenav1-svt/rust/svtav1`, the HDR-corpus zenav1-svt
+          # arm). OFF in every CI build below, but cargo validates the path
+          # during workspace manifest load. Pinned to the rev the corpus
+          # images were built against. No submodules needed — the C reference
+          # tree is a differential-test asset, not a cargo dependency.
+          git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
+          git -C ../zenav1-svt checkout 4c5c13246c53d0a3d4d667cb7c66804d5921c31a
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -391,6 +399,14 @@ jobs:
           git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
           git clone --quiet https://github.com/imazen/zentone.git ../zentone
           git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
+          # zenmetrics-cli's `hdr-svt` feature path-dep
+          # (`../../../zenav1-svt/rust/svtav1`, the HDR-corpus zenav1-svt
+          # arm). OFF in every CI build below, but cargo validates the path
+          # during workspace manifest load. Pinned to the rev the corpus
+          # images were built against. No submodules needed — the C reference
+          # tree is a differential-test asset, not a cargo dependency.
+          git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
+          git -C ../zenav1-svt checkout 4c5c13246c53d0a3d4d667cb7c66804d5921c31a
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -574,6 +590,14 @@ jobs:
           git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
           git clone --quiet https://github.com/imazen/zentone.git ../zentone
           git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
+          # zenmetrics-cli's `hdr-svt` feature path-dep
+          # (`../../../zenav1-svt/rust/svtav1`, the HDR-corpus zenav1-svt
+          # arm). OFF in every CI build below, but cargo validates the path
+          # during workspace manifest load. Pinned to the rev the corpus
+          # images were built against. No submodules needed — the C reference
+          # tree is a differential-test asset, not a cargo dependency.
+          git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
+          git -C ../zenav1-svt checkout 4c5c13246c53d0a3d4d667cb7c66804d5921c31a
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -712,6 +736,14 @@ jobs:
           git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
           git clone --quiet https://github.com/imazen/zentone.git ../zentone
           git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
+          # zenmetrics-cli's `hdr-svt` feature path-dep
+          # (`../../../zenav1-svt/rust/svtav1`, the HDR-corpus zenav1-svt
+          # arm). OFF in every CI build below, but cargo validates the path
+          # during workspace manifest load. Pinned to the rev the corpus
+          # images were built against. No submodules needed — the C reference
+          # tree is a differential-test asset, not a cargo dependency.
+          git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
+          git -C ../zenav1-svt checkout 4c5c13246c53d0a3d4d667cb7c66804d5921c31a
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -847,6 +879,14 @@ jobs:
           git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
           git clone --quiet https://github.com/imazen/zentone.git ../zentone
           git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
+          # zenmetrics-cli's `hdr-svt` feature path-dep
+          # (`../../../zenav1-svt/rust/svtav1`, the HDR-corpus zenav1-svt
+          # arm). OFF in every CI build below, but cargo validates the path
+          # during workspace manifest load. Pinned to the rev the corpus
+          # images were built against. No submodules needed — the C reference
+          # tree is a differential-test asset, not a cargo dependency.
+          git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
+          git -C ../zenav1-svt checkout 4c5c13246c53d0a3d4d667cb7c66804d5921c31a
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
