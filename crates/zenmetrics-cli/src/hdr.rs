@@ -50,12 +50,46 @@ pub struct NitsImage {
     pub height: u32,
 }
 
-impl NitsImage {
-    fn max_luma(&self) -> f32 {
-        self.rgb
-            .chunks_exact(3)
-            .map(|p| 0.2627 * p[0] + 0.6780 * p[1] + 0.0593 * p[2])
-            .fold(0.0f32, f32::max)
+/// MEASURED content peak (cd/m²) of an absolute-nits image, via the
+/// zenpixels-main measurement owner (`zenpixels_convert::CllMeasure::
+/// measure_max`, `LightLevelMethod::MaxRgb` — the CTA-861.3 MaxCLL
+/// convention), clamped to `[SDR_WHITE_NITS, 10 000]` for display-model
+/// sanity (a sub-SDR-white "HDR display" is degenerate; 10 000 is the PQ
+/// container ceiling).
+///
+/// This is what parameterizes the luminance-aware score paths (cvvdp
+/// `DisplayModel::y_peak`, butteraugli `intensity_target`, the
+/// linear-planes normalization): the display peak is a CONTENT property,
+/// measured from the reference pixels — never a configured constant
+/// (config is usually wrong: a 1000-nit constant clips a 4000-nit source
+/// and over-states the display for a 300-nit one). `MaxRgb` (not luma)
+/// because the planes normalize per CHANNEL — the peak must bound the
+/// worst channel or saturated colours clip.
+///
+/// The buffer is wrapped as a relative-linear `RgbF32` slice with a
+/// 1.0-nit anchor, so the owner's absolute readout IS cd/m² (u16-nit
+/// granularity, ample for a display model). Negative/NaN samples clamp
+/// to 0 inside the owner.
+pub fn measured_display_peak_nits(img: &NitsImage) -> f32 {
+    use zenpixels::hdr::{ContentLightLevel, DiffuseWhite};
+    use zenpixels_convert::hdr::measure::{CllMeasure, LightLevelMethod};
+    let bytes: &[u8] = bytemuck::cast_slice(&img.rgb);
+    let cll = zenpixels::PixelSlice::new(
+        bytes,
+        img.width,
+        img.height,
+        img.width as usize * 12,
+        zenpixels::PixelDescriptor::RGBF32_LINEAR,
+    )
+    .ok()
+    .and_then(|px| {
+        ContentLightLevel::measure_max(px, DiffuseWhite::new(1.0), LightLevelMethod::MaxRgb)
+    });
+    match cll {
+        Some(c) => f32::from(c.max_content_light_level).clamp(SDR_WHITE_NITS, 10_000.0),
+        // Zero-area / descriptor-rejected input (unreachable for decoded
+        // images): fall back to the SDR-white floor rather than guessing.
+        None => SDR_WHITE_NITS,
     }
 }
 
@@ -561,45 +595,63 @@ pub fn to_sdr_rgb8(img: &NitsImage, transfer: HdrTransfer) -> Rgb8Image {
     }
 }
 
-/// Normalize by the display peak → sRGB-encode → sRGB8, for cvvdp (which scales
-/// sRGB back to its display peak internally). Returns `(image, peak_nits)` so
-/// the caller can build the matching display model.
-pub fn to_cvvdp_rgb8(img: &NitsImage) -> (Rgb8Image, f32) {
-    // Cap the peak at a sane HDR display (1000 cd/m²) so a stray super-bright
-    // pixel doesn't crush everything else into the bottom of the u8 range.
-    let peak = img.max_luma().clamp(SDR_WHITE_NITS, 1000.0);
+/// Normalize by `peak_nits` → sRGB-encode → sRGB8, for the cvvdp u8 shell
+/// (which scales sRGB back to its display peak internally).
+///
+/// `peak_nits` is the REFERENCE image's measured peak
+/// ([`measured_cvvdp_u8_peak`]) — both sides of a pair MUST be encoded at
+/// the SAME (reference-anchored) peak, or a variant that crushes/boosts
+/// brightness gets renormalized by its own peak and the luminance error
+/// disappears from the score.
+pub fn to_cvvdp_rgb8(img: &NitsImage, peak_nits: f32) -> Rgb8Image {
     let pixels = img
         .rgb
         .iter()
-        .map(|&y| (srgb_oetf((y / peak).clamp(0.0, 1.0)) * 255.0).round() as u8)
+        .map(|&y| (srgb_oetf((y / peak_nits).clamp(0.0, 1.0)) * 255.0).round() as u8)
         .collect();
-    (
-        Rgb8Image {
-            pixels,
-            width: img.width,
-            height: img.height,
-        },
-        peak,
-    )
+    Rgb8Image {
+        pixels,
+        width: img.width,
+        height: img.height,
+    }
 }
 
-/// Reference HDR display peak (cd/m²) for the faithful cvvdp path. Content is
-/// normalized display-relative to this peak; cvvdp's CSF adapts its sensitivity
-/// to it, and content brighter than this clips (as a real display would). 1000
-/// cd/m² is the common HDR mastering target. Must match the `y_peak` the caller
-/// gives `DisplayTarget::hdr`.
+/// The u8-shell cvvdp peak for a reference: MEASURED content peak
+/// ([`measured_display_peak_nits`]) capped at 1000 cd/m². The cap is a u8
+/// artifact, not a display opinion: normalizing an 8-bit sRGB shell by a
+/// multi-thousand-nit peak crushes everything below the highlights into a
+/// few code values. The faithful linear-planes path has no such cap.
+pub fn measured_cvvdp_u8_peak(reference: &NitsImage) -> f32 {
+    measured_display_peak_nits(reference).min(1000.0)
+}
+
+/// The PU-rescale u8-SHELL peak (cd/m²): the nit level that maps to code
+/// 255 in [`HdrTransfer::PuRescale`]. This is a FEEDING DEFINITION — part
+/// of the validated u8-shell score/feature regime (zensim's v1 HDR
+/// u8-shell features were extracted with it, iwssim's float-PU rescale was
+/// validated with it) — NOT a display model, so it stays a fixed constant.
+/// Changing it silently would redefine stored features (regime purity —
+/// campaign appendix AA). The luminance-aware display parameters (cvvdp
+/// `y_peak`, butteraugli `intensity_target`, linear-planes normalization)
+/// do NOT use this: they take the per-reference MEASURED peak
+/// ([`measured_display_peak_nits`]).
 pub const HDR_DISPLAY_PEAK_NITS: f32 = 1000.0;
 
 /// Split absolute-luminance RGB (cd/m²) into the three display-relative `[0,1]`
-/// planes the **faithful** GPU HDR paths expect — no u8 round-trip, full
-/// highlight precision up to the display peak. `v = nits / HDR_DISPLAY_PEAK_NITS`
+/// planes the **faithful** HDR paths expect — no u8 round-trip, full
+/// highlight precision up to the display peak. `v = nits / peak_nits`
 /// clamped to `[0,1]`. Tightly packed (`padded_width == width`). Shared by
 /// cvvdp's `score_from_linear_planes` (paired with `DisplayTarget::hdr(peak)`,
 /// reconstructs `≈nits`) and butteraugli's linear-planes path (paired with
 /// `intensity_target = peak`, its opsin scales `v` back to `≈nits`).
-pub fn to_cvvdp_linear_planes(img: &NitsImage) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+///
+/// `peak_nits` MUST be the same value handed to the metric's display model,
+/// and is the REFERENCE's measured peak ([`measured_display_peak_nits`]) —
+/// at the measured peak nothing in the reference clips; distorted content
+/// brighter than the reference peak clips as on a real display.
+pub fn to_cvvdp_linear_planes(img: &NitsImage, peak_nits: f32) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
     let n = (img.width as usize) * (img.height as usize);
-    let inv = 1.0 / HDR_DISPLAY_PEAK_NITS;
+    let inv = 1.0 / peak_nits;
     let (mut r, mut g, mut b) = (
         Vec::with_capacity(n),
         Vec::with_capacity(n),
@@ -733,12 +785,16 @@ fn score_via_hdr_scorer_inner(
     d: &NitsImage,
     transfer: HdrTransfer,
 ) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
-    let mut scorer = zenmetrics_api::hdr::HdrScorer::new(
+    // Shell peak stays the fixed regime constant; the DISPLAY peak (cvvdp
+    // y_peak / butter intensity_target / linear-planes normalization) is
+    // MEASURED from the reference (appendix AA — config is usually wrong).
+    let mut scorer = zenmetrics_api::hdr::HdrScorer::new_with_display_peak(
         kind,
         backend,
         r.width,
         r.height,
         HDR_DISPLAY_PEAK_NITS,
+        measured_display_peak_nits(r),
     )?
     .with_transfer(to_umbrella_transfer(transfer));
     let scores = scorer.compute_multi(&r.rgb, &d.rgb)?;
@@ -765,10 +821,12 @@ fn score_via_hdr_scorer_inner(
 //   | metric            | feeding                                                            |
 //   |-------------------|--------------------------------------------------------------------|
 //   | cvvdp-gpu         | FAITHFUL: `to_cvvdp_linear_planes` → `CvvdpBatchScorer` built with |
-//   |                   | `DisplayTarget::hdr(HDR_DISPLAY_PEAK_NITS)`                        |
+//   |                   | `DisplayTarget::hdr(ref.measured_peak_nits())` (MEASURED, not      |
+//   |                   | config — appendix AA)                                              |
 //   | butteraugli-gpu   | FAITHFUL: [`score_via_hdr_scorer`] (umbrella linear planes,        |
-//   |                   | intensity_target = peak)                                           |
-//   | cvvdp (CPU port)  | `to_cvvdp_rgb8` u8 pair (per-image peak-normalized sRGB)           |
+//   |                   | intensity_target = the ref's MEASURED peak)                        |
+//   | cvvdp (CPU port)  | `to_cvvdp_rgb8` u8 pair (REFERENCE-measured-peak-normalized sRGB,  |
+//   |                   | both sides — `measured_cvvdp_u8_peak`)                             |
 //   | zensim / -gpu     | `to_sdr_rgb8` PU21 u8 shell → feature-bearing zensim call          |
 //   | everything else   | `to_sdr_rgb8` u8 shell (PU21-rescale by default) → `run_metric`    |
 //   | dssim / dssim-gpu | REFUSED — no HDR path by design (external dssim-core transform).   |
@@ -794,7 +852,8 @@ pub struct HdrImageFeeds {
     nits: NitsImage,
     transfer: HdrTransfer,
     sdr_u8: OnceCell<Rgb8Image>,
-    cvvdp_u8: OnceCell<Rgb8Image>,
+    measured_peak: OnceCell<f32>,
+    cvvdp_u8: std::cell::RefCell<Option<(u32, Rgb8Image)>>,
 }
 
 impl HdrImageFeeds {
@@ -803,7 +862,8 @@ impl HdrImageFeeds {
             nits,
             transfer,
             sdr_u8: OnceCell::new(),
-            cvvdp_u8: OnceCell::new(),
+            measured_peak: OnceCell::new(),
+            cvvdp_u8: std::cell::RefCell::new(None),
         }
     }
 
@@ -819,6 +879,15 @@ impl HdrImageFeeds {
         self.nits.height
     }
 
+    /// This image's MEASURED display peak ([`measured_display_peak_nits`]),
+    /// computed once. Only the REFERENCE side's value parameterizes a pair's
+    /// display model — never the distorted side's.
+    pub fn measured_peak_nits(&self) -> f32 {
+        *self
+            .measured_peak
+            .get_or_init(|| measured_display_peak_nits(&self.nits))
+    }
+
     /// The PU21/PQ u8 shell (`to_sdr_rgb8`) — what `score-pairs --hdr` feeds
     /// every u8-shell metric and the zensim feature path (the v1 PU21
     /// u8-shell feature regime).
@@ -827,10 +896,20 @@ impl HdrImageFeeds {
             .get_or_init(|| to_sdr_rgb8(&self.nits, self.transfer))
     }
 
-    /// The cvvdp-u8 feeding (`to_cvvdp_rgb8`, per-image peak-normalized sRGB)
-    /// — what `score-pairs --hdr` feeds the native-CPU `cvvdp` port.
-    pub fn cvvdp_u8(&self) -> &Rgb8Image {
-        self.cvvdp_u8.get_or_init(|| to_cvvdp_rgb8(&self.nits).0)
+    /// The cvvdp-u8 feeding (`to_cvvdp_rgb8` at `peak_nits`) — what
+    /// `score-pairs --hdr` feeds the native-CPU `cvvdp` port. `peak_nits` is
+    /// the pair's REFERENCE-side [`measured_cvvdp_u8_peak`] (both sides of a
+    /// pair share it), so the cache re-derives only if a different reference's
+    /// peak shows up (never, within one ScoreFile job).
+    pub fn cvvdp_u8_at(&self, peak_nits: f32) -> std::cell::Ref<'_, Rgb8Image> {
+        let bits = peak_nits.to_bits();
+        let hit = matches!(self.cvvdp_u8.borrow().as_ref(), Some((c, _)) if *c == bits);
+        if !hit {
+            *self.cvvdp_u8.borrow_mut() = Some((bits, to_cvvdp_rgb8(&self.nits, peak_nits)));
+        }
+        std::cell::Ref::map(self.cvvdp_u8.borrow(), |o| {
+            &o.as_ref().expect("filled above").1
+        })
     }
 }
 
@@ -840,8 +919,12 @@ impl HdrImageFeeds {
 /// GPU-instance construction once per job, not once per variant.
 pub struct HdrPairScorers {
     runtime: crate::metrics::GpuRuntime,
+    /// `(display_peak_bits, scorer)` — the batch scorer bakes the display
+    /// model at construction, and the display peak is per-REFERENCE
+    /// (measured), so the cache is keyed on it: one build per job in
+    /// jobexec (one reference), a rebuild per reference in score-pairs.
     #[cfg(feature = "gpu-cvvdp")]
-    cvvdp_gpu: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer>,
+    cvvdp_gpu: Option<(u32, crate::metrics::cvvdp_gpu::CvvdpBatchScorer)>,
     #[cfg(feature = "gpu-zensim")]
     zensim_cache: Option<crate::metrics::cache::MetricCache>,
 }
@@ -886,27 +969,31 @@ pub fn score_hdr_pair_per_score_pairs(
     hdr_dims_check(reference, distorted)?;
     match metric {
         // FAITHFUL cvvdp-gpu: display-relative linear planes into the batch
-        // scorer built with the HDR display target — `score-pairs --hdr`'s
-        // exact construction (`DisplayTarget::hdr(HDR_DISPLAY_PEAK_NITS)`).
+        // scorer built with the HDR display target at the REFERENCE's
+        // MEASURED peak — `score-pairs --hdr`'s exact construction
+        // (`DisplayTarget::hdr(reference.measured_peak_nits())`).
         #[cfg(feature = "gpu-cvvdp")]
         M::CvvdpGpu => {
-            let scorer = match scorers.cvvdp_gpu.as_mut() {
-                Some(s) => s,
-                None => {
-                    let target =
-                        crate::metrics::cvvdp_gpu::DisplayTarget::hdr(HDR_DISPLAY_PEAK_NITS);
-                    scorers.cvvdp_gpu = Some(
-                        crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(
-                            scorers.runtime,
-                            target,
-                        )
-                        .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
-                    );
-                    scorers.cvvdp_gpu.as_mut().expect("just built")
-                }
-            };
-            let (rr, rg, rb) = to_cvvdp_linear_planes(reference.nits());
-            let (dr, dg, db) = to_cvvdp_linear_planes(distorted.nits());
+            let peak = reference.measured_peak_nits();
+            let peak_bits = peak.to_bits();
+            let rebuild = !matches!(&scorers.cvvdp_gpu, Some((b, _)) if *b == peak_bits);
+            if rebuild {
+                // Drop the stale instance BEFORE constructing the replacement
+                // so its GPU pool slot is reusable.
+                scorers.cvvdp_gpu = None;
+                let target = crate::metrics::cvvdp_gpu::DisplayTarget::hdr(peak);
+                scorers.cvvdp_gpu = Some((
+                    peak_bits,
+                    crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(
+                        scorers.runtime,
+                        target,
+                    )
+                    .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
+                ));
+            }
+            let (_, scorer) = scorers.cvvdp_gpu.as_mut().expect("built above");
+            let (rr, rg, rb) = to_cvvdp_linear_planes(reference.nits(), peak);
+            let (dr, dg, db) = to_cvvdp_linear_planes(distorted.nits(), peak);
             let v = scorer.score_from_linear_planes(
                 &rr,
                 &rg,
@@ -967,15 +1054,17 @@ pub fn score_hdr_pair_per_score_pairs(
             "dssim-gpu has no HDR path by design (see dssim) — score SDR or pick another metric"
                 .into(),
         ),
-        // The native-CPU cvvdp port: per-image peak-normalized sRGB u8
-        // (`to_cvvdp_rgb8`) into the normal dispatch — score-pairs' hdr_u8_pair
-        // construction for the cvvdp kinds.
-        M::Cvvdp => crate::metrics::run_metric(
-            metric,
-            reference.cvvdp_u8(),
-            distorted.cvvdp_u8(),
-            scorers.runtime,
-        ),
+        // The native-CPU cvvdp port: REFERENCE-peak-normalized sRGB u8
+        // (`to_cvvdp_rgb8` at the ref's measured peak, BOTH sides) into the
+        // normal dispatch — score-pairs' hdr_u8_pair construction for the
+        // cvvdp kinds. Reference-anchored so a variant's brightness error
+        // cannot be renormalized away by its own peak.
+        M::Cvvdp => {
+            let peak = measured_cvvdp_u8_peak(reference.nits());
+            let r = reference.cvvdp_u8_at(peak);
+            let d = distorted.cvvdp_u8_at(peak);
+            crate::metrics::run_metric(metric, &r, &d, scorers.runtime)
+        }
         // Everything else — ssim2(-gpu), iwssim(-gpu), CPU butteraugli, plain
         // zensim(-gpu) scoring: the PU21/PQ u8 shell into the normal dispatch,
         // exactly score-pairs' `to_sdr_rgb8` + `score_one_pair_maybe_hdr`.
@@ -1072,38 +1161,111 @@ mod tests {
         // collapse) while staying far above the 5-nit shadow.
         assert!(pu.pixels[0] > 200 && pu.pixels[0] < 255);
         assert!(pu.pixels[3] < pu.pixels[0] - 50);
-        let (cv, peak) = to_cvvdp_rgb8(&img);
+        let peak = measured_cvvdp_u8_peak(&img);
+        assert!((peak - 600.0).abs() < 1.0); // MEASURED MaxRGB drives the peak
+        let cv = to_cvvdp_rgb8(&img, peak);
         assert_eq!(cv.pixels.len(), 6);
-        assert!((peak - 600.0).abs() < 1.0); // luma-weighted max drives the peak
         assert_eq!(cv.pixels[0], 255); // highlight normalizes to peak → sRGB 255
     }
 
     #[test]
-    fn cvvdp_linear_planes_are_display_relative() {
-        // px0 = peak-bright, px1 = 100 cd/m² (0.1 of a 1000-nit display).
+    fn measured_peak_is_content_not_config() {
+        // The load-bearing appendix-AA property: the display peak comes from
+        // the PIXELS (zenpixels CllMeasure MaxRGB), not from any configured
+        // constant — here the actual content peak (612 nits, on the RED
+        // channel only) differs from every config value in this module.
         let img = NitsImage {
-            rgb: vec![
-                HDR_DISPLAY_PEAK_NITS,
-                HDR_DISPLAY_PEAK_NITS,
-                HDR_DISPLAY_PEAK_NITS,
-                100.0,
-                100.0,
-                100.0,
-            ],
+            rgb: vec![612.0, 10.0, 10.0, 40.0, 40.0, 40.0],
             width: 2,
             height: 1,
         };
-        let (r, g, b) = to_cvvdp_linear_planes(&img);
-        assert_eq!((r.len(), g.len(), b.len()), (2, 2, 2));
-        assert!((r[0] - 1.0).abs() < 1e-6); // peak → 1.0 (no u8 clamp)
-        assert!((r[1] - 0.1).abs() < 1e-6); // 100/1000 → 0.1, full precision
-        // A 4000-nit highlight clamps to 1.0 (display can't exceed its peak).
+        let peak = measured_display_peak_nits(&img);
+        assert!(
+            (peak - 612.0).abs() < 1.0,
+            "measured MaxRGB peak expected ~612, got {peak}"
+        );
+        assert_ne!(peak, HDR_DISPLAY_PEAK_NITS, "must not be the shell config");
+        // Clamps: dim content floors at SDR white; super-PQ content caps at
+        // the 10 000 cd/m² container ceiling.
+        let dim = NitsImage {
+            rgb: vec![50.0, 50.0, 50.0],
+            width: 1,
+            height: 1,
+        };
+        assert_eq!(measured_display_peak_nits(&dim), SDR_WHITE_NITS);
+        let hot = NitsImage {
+            rgb: vec![30_000.0, 0.0, 0.0],
+            width: 1,
+            height: 1,
+        };
+        assert_eq!(measured_display_peak_nits(&hot), 10_000.0);
+        // The u8-shell variant additionally caps at 1000 (u8 crush guard).
         let bright = NitsImage {
             rgb: vec![4000.0, 4000.0, 4000.0],
             width: 1,
             height: 1,
         };
-        assert!((to_cvvdp_linear_planes(&bright).0[0] - 1.0).abs() < 1e-6);
+        assert_eq!(measured_cvvdp_u8_peak(&bright), 1000.0);
+    }
+
+    #[test]
+    fn hdr_feeds_use_reference_measured_peak_not_config() {
+        // End-to-end over HdrImageFeeds: a 400-nit-peak reference must
+        // parameterize the pair at ~400 nits (measured), NOT the 1000-nit
+        // shell constant — and the distorted side is encoded at the
+        // REFERENCE's peak, so a brightness-crushing variant stays visible.
+        let reference = HdrImageFeeds::new(
+            NitsImage {
+                rgb: vec![400.0, 400.0, 400.0, 100.0, 100.0, 100.0],
+                width: 2,
+                height: 1,
+            },
+            HdrTransfer::PuRescale,
+        );
+        let distorted = HdrImageFeeds::new(
+            NitsImage {
+                rgb: vec![200.0, 200.0, 200.0, 100.0, 100.0, 100.0],
+                width: 2,
+                height: 1,
+            },
+            HdrTransfer::PuRescale,
+        );
+        let peak = reference.measured_peak_nits();
+        assert!((peak - 400.0).abs() < 1.0, "measured ref peak, got {peak}");
+        assert_ne!(peak, HDR_DISPLAY_PEAK_NITS);
+        let u8_peak = measured_cvvdp_u8_peak(reference.nits());
+        let r = reference.cvvdp_u8_at(u8_peak);
+        let d = distorted.cvvdp_u8_at(u8_peak);
+        // Ref highlight hits the ceiling at ITS OWN measured peak; the
+        // crushed variant reads visibly darker (under per-image peaks both
+        // would be 255 and the error would vanish).
+        assert_eq!(r.pixels[0], 255);
+        assert!(d.pixels[0] < 200, "crushed highlight must stay visible");
+    }
+
+    #[test]
+    fn cvvdp_linear_planes_are_display_relative() {
+        // px0 = peak-bright, px1 = 100 cd/m² — planes normalized at the
+        // MEASURED reference peak (400): peak → 1.0 exactly (nothing in the
+        // reference clips), 100 → 0.25.
+        let img = NitsImage {
+            rgb: vec![400.0, 400.0, 400.0, 100.0, 100.0, 100.0],
+            width: 2,
+            height: 1,
+        };
+        let peak = measured_display_peak_nits(&img);
+        let (r, g, b) = to_cvvdp_linear_planes(&img, peak);
+        assert_eq!((r.len(), g.len(), b.len()), (2, 2, 2));
+        assert!((r[0] - 1.0).abs() < 1e-2); // measured peak → 1.0 (u16-nit rounding)
+        assert!((r[1] - 0.25).abs() < 1e-2); // 100/400, full precision
+        // Distorted content brighter than the REF peak clamps to 1.0 (a
+        // real `peak`-nit display can't show more).
+        let bright = NitsImage {
+            rgb: vec![4000.0, 4000.0, 4000.0],
+            width: 1,
+            height: 1,
+        };
+        assert!((to_cvvdp_linear_planes(&bright, peak).0[0] - 1.0).abs() < 1e-6);
     }
 }
 

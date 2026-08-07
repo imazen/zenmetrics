@@ -22,8 +22,9 @@
 #![cfg(all(feature = "hdr", feature = "cpu-metrics"))]
 
 use zenmetrics_cli::hdr::{
-    HdrImageFeeds, HdrPairScorers, HdrTransfer, NitsImage, score_hdr_pair_per_score_pairs,
-    score_hdr_zensim_with_features_per_score_pairs, to_cvvdp_rgb8, to_sdr_rgb8,
+    HdrImageFeeds, HdrPairScorers, HdrTransfer, NitsImage, measured_cvvdp_u8_peak,
+    score_hdr_pair_per_score_pairs, score_hdr_zensim_with_features_per_score_pairs, to_cvvdp_rgb8,
+    to_sdr_rgb8,
 };
 use zenmetrics_cli::metrics::{
     GpuRuntime, MetricKind, ZensimFeatureRegime, run_metric, run_zensim_with_features,
@@ -91,7 +92,10 @@ const TRANSFER: HdrTransfer = HdrTransfer::PuRescale;
 /// cross-check instead).
 fn score_pairs_side(metric: MetricKind, r: &NitsImage, d: &NitsImage) -> Vec<(&'static str, f64)> {
     let (ru8, du8) = if matches!(metric, MetricKind::Cvvdp) {
-        (to_cvvdp_rgb8(r).0, to_cvvdp_rgb8(d).0)
+        // Reference-measured peak, BOTH sides (appendix AA) — the exact
+        // construction the main.rs hdr_u8_pair blocks use.
+        let peak = measured_cvvdp_u8_peak(r);
+        (to_cvvdp_rgb8(r, peak), to_cvvdp_rgb8(d, peak))
     } else {
         (to_sdr_rgb8(r, TRANSFER), to_sdr_rgb8(d, TRANSFER))
     };

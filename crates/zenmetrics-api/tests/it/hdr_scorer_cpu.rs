@@ -115,3 +115,74 @@ fn dssim_hdr_scorer_cpu_rejected_by_design() {
         "unexpected error: {err}"
     );
 }
+
+/// APPENDIX AA (measured-nits): `new_with_display_peak` splits the two peak
+/// roles.
+///
+/// 1. The DISPLAY peak drives the luminance-aware linear-planes path: a
+///    ~3900-nit highlight pair scored at a *configured* 1000-nit display
+///    clips both sides to 1000 before the metric sees them; at the MEASURED
+///    content peak nothing clips — the scores must differ. (This is the
+///    "actual peak != configured peak" failure the measured parameterization
+///    exists to fix.)
+/// 2. The u8/PU-shell feedings ignore the display peak: ssim2's
+///    integrated-PU score takes absolute nits, so it is bit-identical across
+///    display peaks (the shell/regime peak is the constructor's other arg,
+///    held fixed).
+#[test]
+fn display_peak_split_measured_vs_config() {
+    let (w, h) = (64u32, 64u32);
+    // Bright pair: hdr_pair spans 50..650; ×6 → 300..3900 cd/m², well above
+    // the 1000 cd/m² shell constant.
+    let (r, d) = {
+        let (r, d) = hdr_pair(w, h);
+        let r6: Vec<f32> = r.iter().map(|&v| v * 6.0).collect();
+        let d6: Vec<f32> = d.iter().map(|&v| v * 6.0).collect();
+        (r6, d6)
+    };
+    let measured_peak = r.iter().fold(0.0f32, |a, &v| a.max(v));
+    assert!(measured_peak > 3800.0 && measured_peak < 4000.0);
+
+    // (1) butter linear planes: configured-1000 clips, measured does not.
+    let mut cfg =
+        HdrScorer::new(MetricKind::Butter, Backend::Cpu, w, h, HDR_PEAK_NITS).expect("cfg butter");
+    let mut meas = HdrScorer::new_with_display_peak(
+        MetricKind::Butter,
+        Backend::Cpu,
+        w,
+        h,
+        HDR_PEAK_NITS,
+        measured_peak,
+    )
+    .expect("measured butter");
+    assert_eq!(meas.peak_nits(), HDR_PEAK_NITS);
+    assert_eq!(meas.display_peak_nits(), measured_peak);
+    let s_cfg = cfg.compute(&r, &d).expect("cfg score").value;
+    let s_meas = meas.compute(&r, &d).expect("measured score").value;
+    assert!(s_cfg.is_finite() && s_meas.is_finite());
+    assert!(
+        (s_cfg - s_meas).abs() > 1e-6,
+        "configured-1000 (clipping) vs measured-peak butter must differ: {s_cfg} vs {s_meas}"
+    );
+
+    // (2) ssim2 integrated PU (absolute nits in): display peak irrelevant —
+    // bit-identical across display peaks at a fixed shell peak.
+    let mut a =
+        HdrScorer::new(MetricKind::Ssim2, Backend::Cpu, w, h, HDR_PEAK_NITS).expect("ssim2 a");
+    let mut b = HdrScorer::new_with_display_peak(
+        MetricKind::Ssim2,
+        Backend::Cpu,
+        w,
+        h,
+        HDR_PEAK_NITS,
+        measured_peak,
+    )
+    .expect("ssim2 b");
+    let va = a.compute(&r, &d).expect("ssim2 a score").value;
+    let vb = b.compute(&r, &d).expect("ssim2 b score").value;
+    assert_eq!(
+        va.to_bits(),
+        vb.to_bits(),
+        "integrated-PU ssim2 must ignore the display peak: {va} vs {vb}"
+    );
+}

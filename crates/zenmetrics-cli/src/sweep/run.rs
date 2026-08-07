@@ -336,7 +336,7 @@ pub struct SweepConfig {
     /// codec path (zenjxl today — see `sweep::hdr`), decode back to
     /// nits, and score via the validated per-metric HDR feedings
     /// (`zenmetrics_api::hdr::hdr_feeding`). The output TSV gains a
-    /// trailing `hdr_mode` column (`pq1000`). SDR-only codecs, plan
+    /// trailing `hdr_mode` column (`pq-mcll`). SDR-only codecs, plan
     /// mode, and the u8 sidecar options are rejected at startup —
     /// never silently degraded (imazen/zenmetrics#25 class).
     ///
@@ -1631,7 +1631,7 @@ fn decode_encoded_bytes(bytes: &[u8], codec: CodecKind) -> Result<Rgb8Image, Box
 /// `Mutex<csv::Writer>`), with the HDR pipeline at every stage: PQ-PNG →
 /// nits reference, `sweep::hdr::encode_hdr`, nits decode-back,
 /// `sweep::hdr::score_hdr_cached`. Every row carries the trailing
-/// `hdr_mode` column (`pq1000`).
+/// `hdr_mode` column (`pq-mcll`).
 #[cfg(feature = "hdr")]
 fn run_hdr_source(
     cfg: &SweepConfig,
@@ -1733,7 +1733,7 @@ fn run_hdr_source(
                     row.push("".to_string());
                 }
             }
-            row.push(crate::sweep::hdr::HDR_MODE_PQ1000.to_string());
+            row.push(crate::sweep::hdr::HDR_MODE_PQ_MCLL.to_string());
             CellOutcome::DecodeFailed { row }
         });
         match outcome {
@@ -1785,7 +1785,7 @@ fn compute_cell_hdr(
     distort: Option<Option<&[u16]>>,
 ) -> CellOutcome {
     use crate::sweep::hdr::{
-        HDR_MODE_PQ1000, HdrCodec, decode_encoded_to_nits, decode_png_to_nits, encode_hdr,
+        HDR_MODE_PQ_MCLL, HdrCodec, decode_encoded_to_nits, decode_png_to_nits, encode_hdr,
         score_hdr_cached,
     };
 
@@ -1807,7 +1807,7 @@ fn compute_cell_hdr(
                 row.push("".to_string());
             }
         }
-        row.push(HDR_MODE_PQ1000.to_string());
+        row.push(HDR_MODE_PQ_MCLL.to_string());
     };
 
     // Encode. Plan-identity tuples ({"cell","fp","plan"}) have no HDR
@@ -1934,7 +1934,13 @@ fn compute_cell_hdr(
 
     let mut any_score_failed = false;
     for &metric in &cfg.metrics {
-        match score_hdr_cached(metric, &source.nits, &decoded, cfg.gpu_runtime) {
+        match score_hdr_cached(
+            metric,
+            &source.nits,
+            &decoded,
+            source.display_peak_nits,
+            cfg.gpu_runtime,
+        ) {
             Ok(cols) => {
                 for (_name, value) in cols {
                     row.push(format!("{value:.6}"));
@@ -1953,7 +1959,7 @@ fn compute_cell_hdr(
             }
         }
     }
-    row.push(HDR_MODE_PQ1000.to_string());
+    row.push(HDR_MODE_PQ_MCLL.to_string());
 
     CellOutcome::Ok {
         row,

@@ -39,10 +39,12 @@
 //!    design). Scorers are cached process-static, mirroring
 //!    `metrics::cache::MetricCache`'s cubecl-pool discipline.
 //!
-//! The output TSV gains a trailing `hdr_mode` column (value `pq1000`:
-//! PQ-decoded absolute nits scored at the 1000 cd/m² reference peak) so
-//! downstream parquet/training joins can never confuse HDR rows with SDR
-//! rows. SDR sweeps are byte-identical to before (no column added).
+//! The output TSV gains a trailing `hdr_mode` column (value `pq-mcll`:
+//! PQ-decoded absolute nits; the luminance-aware metrics score at the
+//! reference's MEASURED content peak — appendix AA) so downstream
+//! parquet/training joins can never confuse HDR rows with SDR rows, nor
+//! measured-peak rows with the retired static-1000 `pq1000` rows. SDR
+//! sweeps are byte-identical to before (no column added).
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -58,9 +60,14 @@ use crate::sweep::encode::{CodecKind, EncodedCell};
 type Err = Box<dyn std::error::Error>;
 
 /// The `hdr_mode` TSV column value for this mode: PQ-decoded absolute
-/// nits, scored at the [`HDR_DISPLAY_PEAK_NITS`] (1000 cd/m²) reference
-/// peak via the validated per-metric feedings.
-pub const HDR_MODE_PQ1000: &str = "pq1000";
+/// nits via the validated per-metric feedings, with the luminance-aware
+/// display parameters (cvvdp `y_peak` / butteraugli `intensity_target` /
+/// linear-planes normalization) at the reference's MEASURED content peak
+/// (`crate::hdr::measured_display_peak_nits`, appendix AA). The u8/PU
+/// shell feedings keep the fixed [`HDR_DISPLAY_PEAK_NITS`] regime peak.
+/// Rows tagged `pq1000` (pre-2026-08-07) were scored with a STATIC
+/// 1000 cd/m² display peak instead — do not mix the two without noting it.
+pub const HDR_MODE_PQ_MCLL: &str = "pq-mcll";
 
 /// An HDR reference: raw 16-bit PQ code values (for codec HDR input) +
 /// cICP (color authority for re-encode) + absolute-luminance nits (for
@@ -76,6 +83,11 @@ pub struct HdrRef {
     /// Absolute-luminance interleaved RGB (cd/m²), derived from `rgb16`
     /// via the PQ EOTF.
     pub nits: NitsImage,
+    /// The source's MEASURED display peak
+    /// (`crate::hdr::measured_display_peak_nits` — zenpixels `CllMeasure`,
+    /// appendix AA), computed once at decode; parameterizes every
+    /// luminance-aware scorer for this reference's cells.
+    pub display_peak_nits: f32,
 }
 
 /// Decode an HDR sweep reference. PQ-PNG (16-bit + cICP transfer 16) is
@@ -99,12 +111,14 @@ pub fn decode_hdr_ref(path: &Path) -> Result<HdrRef, Err> {
         let data = std::fs::read(path)?;
         let (rgb16, width, height, cicp) = crate::hdr::png_to_rgb16_pq(&data)?;
         let nits = crate::hdr::rgb16_pq_to_nits(&rgb16, width, height);
+        let display_peak_nits = crate::hdr::measured_display_peak_nits(&nits);
         Ok(HdrRef {
             rgb16,
             width,
             height,
             cicp,
             nits,
+            display_peak_nits,
         })
     }
     #[cfg(not(feature = "png"))]
@@ -1106,6 +1120,10 @@ fn umbrella_kind_and_backend(
 struct ScorerSlot {
     width: u32,
     height: u32,
+    /// Bit pattern of the display peak the scorer was built with — the
+    /// display model is per-REFERENCE (measured), so a new reference with a
+    /// different measured peak rebuilds the slot.
+    display_peak_bits: u32,
     scorer: zenmetrics_api::hdr::HdrScorer,
 }
 
@@ -1122,6 +1140,7 @@ pub fn score_hdr_cached(
     metric: MetricKind,
     reference: &NitsImage,
     distorted: &NitsImage,
+    display_peak_nits: f32,
     runtime: GpuRuntime,
 ) -> Result<Vec<(&'static str, f64)>, Box<dyn Error>> {
     if reference.width != distorted.width || reference.height != distorted.height {
@@ -1144,26 +1163,35 @@ pub fn score_hdr_cached(
             // inside one cell's scoring must not poison every later cell.
             poison.into_inner()
         });
+    let display_peak_bits = display_peak_nits.to_bits();
     let needs_build = match cache.get(&metric) {
-        Some(slot) => slot.width != reference.width || slot.height != reference.height,
+        Some(slot) => {
+            slot.width != reference.width
+                || slot.height != reference.height
+                || slot.display_peak_bits != display_peak_bits
+        }
         None => true,
     };
     if needs_build {
         // Drop the stale instance BEFORE constructing the replacement so
         // its pool slot is reusable (MetricCache does the same dance).
         cache.remove(&metric);
-        let scorer = zenmetrics_api::hdr::HdrScorer::new(
+        // Shell peak = the fixed regime constant; DISPLAY peak = the
+        // reference's measured content peak (appendix AA).
+        let scorer = zenmetrics_api::hdr::HdrScorer::new_with_display_peak(
             kind,
             backend,
             reference.width,
             reference.height,
             HDR_DISPLAY_PEAK_NITS,
+            display_peak_nits,
         )?;
         cache.insert(
             metric,
             ScorerSlot {
                 width: reference.width,
                 height: reference.height,
+                display_peak_bits,
                 scorer,
             },
         );

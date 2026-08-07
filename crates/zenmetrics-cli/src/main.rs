@@ -473,7 +473,7 @@ struct SweepArgs {
     /// per-metric HDR feedings (`zenmetrics_api::hdr::hdr_feeding`).
     /// SDR-only codecs / plan mode / u8 sidecar options error at
     /// startup. The output TSV gains a trailing `hdr_mode` column
-    /// (`pq1000`). GPU metrics need an explicit `--gpu-runtime cuda`
+    /// (`pq-mcll`). GPU metrics need an explicit `--gpu-runtime cuda`
     /// or `wgpu`. See `sweep::hdr` module docs + docs/PLAN_SWEEPS.md.
     #[cfg(feature = "hdr")]
     #[arg(long)]
@@ -1281,34 +1281,30 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     // off, or `cvvdp` with `cpu-cvvdp` off, errors clearly in `run_metric`.
     #[cfg(feature = "gpu-cvvdp")]
     let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
+    // HDR: the display target is per-REFERENCE (the ref's MEASURED peak,
+    // appendix AA), so the HDR scorer is (re)built inside the loop, keyed on
+    // the measured peak — never prebuilt from a configured constant.
+    #[cfg(all(feature = "gpu-cvvdp", feature = "hdr"))]
+    let mut cvvdp_hdr_scorer: Option<(u32, crate::metrics::cvvdp_gpu::CvvdpBatchScorer)> = None;
     #[cfg(feature = "gpu-cvvdp")]
     if args.metric == crate::metrics::MetricKind::CvvdpGpu {
-        // --hdr swaps in the HDR display target (peak + linear EOTF) so the
-        // faithful linear-planes path in the loop reconstructs absolute nits.
-        // Mirrors `batch --hdr`'s cvvdp construction.
         #[cfg(feature = "hdr")]
         let hdr_target = args.hdr;
         #[cfg(not(feature = "hdr"))]
         let hdr_target = false;
-        let target = if hdr_target {
-            #[cfg(feature = "hdr")]
-            {
-                crate::metrics::cvvdp_gpu::DisplayTarget::hdr(hdr::HDR_DISPLAY_PEAK_NITS)
-            }
-            #[cfg(not(feature = "hdr"))]
-            {
-                unreachable!()
-            }
-        } else {
-            match args.display_model.as_deref() {
+        if !hdr_target {
+            let target = match args.display_model.as_deref() {
                 Some(name) => crate::metrics::cvvdp_gpu::DisplayTarget::by_name(name)?,
                 None => crate::metrics::cvvdp_gpu::DisplayTarget::default(),
-            }
-        };
-        cvvdp_scorer = Some(
-            crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(args.gpu_runtime, target)
+            };
+            cvvdp_scorer = Some(
+                crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(
+                    args.gpu_runtime,
+                    target,
+                )
                 .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
-        );
+            );
+        }
     }
     #[cfg(all(not(feature = "gpu-cvvdp"), not(feature = "cpu-cvvdp")))]
     if args.metric == crate::metrics::MetricKind::Cvvdp {
@@ -1413,11 +1409,11 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         let faithful_hdr_result: Option<Result<Vec<f64>, Box<dyn std::error::Error>>> = None;
         #[cfg(feature = "hdr")]
         if hdr_mode {
-            // cvvdp-gpu faithful linear-planes (paired with DisplayTarget::hdr).
+            // cvvdp-gpu faithful linear-planes, display target at the
+            // REFERENCE's MEASURED peak (appendix AA) — the scorer rebuilds
+            // when the measured peak changes across references.
             #[cfg(feature = "gpu-cvvdp")]
-            if args.metric == crate::metrics::MetricKind::CvvdpGpu
-                && let Some(scorer) = cvvdp_scorer.as_mut()
-            {
+            if args.metric == crate::metrics::MetricKind::CvvdpGpu {
                 faithful_hdr_result = Some((|| {
                     let r = hdr::decode_to_nits(&ref_path)?;
                     let d = hdr::decode_to_nits(&dist_path)?;
@@ -1433,8 +1429,22 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
                         )
                         .into());
                     }
-                    let (rr, rg, rb) = hdr::to_cvvdp_linear_planes(&r);
-                    let (dr, dg, db) = hdr::to_cvvdp_linear_planes(&d);
+                    let peak = hdr::measured_display_peak_nits(&r);
+                    let peak_bits = peak.to_bits();
+                    if !matches!(&cvvdp_hdr_scorer, Some((b, _)) if *b == peak_bits) {
+                        cvvdp_hdr_scorer = None; // free the stale GPU slot first
+                        cvvdp_hdr_scorer = Some((
+                            peak_bits,
+                            crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(
+                                args.gpu_runtime,
+                                crate::metrics::cvvdp_gpu::DisplayTarget::hdr(peak),
+                            )
+                            .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
+                        ));
+                    }
+                    let (_, scorer) = cvvdp_hdr_scorer.as_mut().expect("built above");
+                    let (rr, rg, rb) = hdr::to_cvvdp_linear_planes(&r, peak);
+                    let (dr, dg, db) = hdr::to_cvvdp_linear_planes(&d, peak);
                     scorer
                         .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, r.width, r.height)
                         .map(|v| vec![v])
@@ -1491,7 +1501,11 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
                     args.metric,
                     crate::metrics::MetricKind::Cvvdp | crate::metrics::MetricKind::CvvdpGpu
                 ) {
-                    Ok((hdr::to_cvvdp_rgb8(&r).0, hdr::to_cvvdp_rgb8(&d).0))
+                    Ok({
+                        // Reference-measured peak, BOTH sides (appendix AA).
+                        let peak = hdr::measured_cvvdp_u8_peak(&r);
+                        (hdr::to_cvvdp_rgb8(&r, peak), hdr::to_cvvdp_rgb8(&d, peak))
+                    })
                 } else {
                     Ok((
                         hdr::to_sdr_rgb8(&r, args.hdr_transfer),
@@ -2008,7 +2022,11 @@ fn cmd_score(
             args.metric,
             metrics::MetricKind::Cvvdp | metrics::MetricKind::CvvdpGpu
         ) {
-            (hdr::to_cvvdp_rgb8(&r).0, hdr::to_cvvdp_rgb8(&d).0)
+            {
+                // Reference-measured peak, BOTH sides (appendix AA).
+                let peak = hdr::measured_cvvdp_u8_peak(&r);
+                (hdr::to_cvvdp_rgb8(&r, peak), hdr::to_cvvdp_rgb8(&d, peak))
+            }
         } else {
             (
                 hdr::to_sdr_rgb8(&r, args.hdr_transfer),
@@ -2120,33 +2138,29 @@ fn cmd_batch(
     // unsuffixed `cvvdp` (native-CPU port) uses the umbrella CPU path.
     #[cfg(feature = "gpu-cvvdp")]
     let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
+    // HDR: the display target is per-REFERENCE (the ref's MEASURED peak,
+    // appendix AA) — built inside the row loop, keyed on the measured peak.
+    #[cfg(all(feature = "gpu-cvvdp", feature = "hdr"))]
+    let mut cvvdp_hdr_scorer: Option<(u32, crate::metrics::cvvdp_gpu::CvvdpBatchScorer)> = None;
     #[cfg(feature = "gpu-cvvdp")]
     if args.metric == crate::metrics::MetricKind::CvvdpGpu {
-        // --hdr swaps in the HDR display target (peak + linear EOTF) so the
-        // faithful linear-planes path in the loop reconstructs absolute nits.
         #[cfg(feature = "hdr")]
         let hdr_target = args.hdr;
         #[cfg(not(feature = "hdr"))]
         let hdr_target = false;
-        let target = if hdr_target {
-            #[cfg(feature = "hdr")]
-            {
-                crate::metrics::cvvdp_gpu::DisplayTarget::hdr(hdr::HDR_DISPLAY_PEAK_NITS)
-            }
-            #[cfg(not(feature = "hdr"))]
-            {
-                unreachable!()
-            }
-        } else {
-            match args.display_model.as_deref() {
+        if !hdr_target {
+            let target = match args.display_model.as_deref() {
                 Some(name) => crate::metrics::cvvdp_gpu::DisplayTarget::by_name(name)?,
                 None => crate::metrics::cvvdp_gpu::DisplayTarget::default(),
-            }
-        };
-        cvvdp_scorer = Some(
-            crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(args.gpu_runtime, target)
+            };
+            cvvdp_scorer = Some(
+                crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(
+                    args.gpu_runtime,
+                    target,
+                )
                 .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
-        );
+            );
+        }
     }
 
     for record in rdr.records() {
@@ -2165,33 +2179,48 @@ fn cmd_batch(
         // Rgb8Image path entirely for this row.
         #[cfg(all(feature = "hdr", feature = "gpu-cvvdp"))]
         if hdr_mode && args.metric == crate::metrics::MetricKind::CvvdpGpu {
-            if let Some(scorer) = cvvdp_scorer.as_mut() {
-                let r = hdr::decode_to_nits(&ref_path)?;
-                let d = hdr::decode_to_nits(&dist_path)?;
-                if r.width != d.width || r.height != d.height {
-                    return Err(format!(
-                        "dimension mismatch on row: {} ({}x{}) vs {} ({}x{})",
-                        ref_path.display(),
-                        r.width,
-                        r.height,
-                        dist_path.display(),
-                        d.width,
-                        d.height
-                    )
-                    .into());
-                }
-                let (rr, rg, rb) = hdr::to_cvvdp_linear_planes(&r);
-                let (dr, dg, db) = hdr::to_cvvdp_linear_planes(&d);
-                let jod = scorer
-                    .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, r.width, r.height)?;
-                let mut row: Vec<String> = record.iter().map(String::from).collect();
-                row.push(format!("{jod:.6}"));
-                wtr.write_record(&row)?;
-                continue;
+            let r = hdr::decode_to_nits(&ref_path)?;
+            let d = hdr::decode_to_nits(&dist_path)?;
+            if r.width != d.width || r.height != d.height {
+                return Err(format!(
+                    "dimension mismatch on row: {} ({}x{}) vs {} ({}x{})",
+                    ref_path.display(),
+                    r.width,
+                    r.height,
+                    dist_path.display(),
+                    d.width,
+                    d.height
+                )
+                .into());
             }
+            // Display target at the REFERENCE's MEASURED peak (appendix AA);
+            // the scorer rebuilds when the measured peak changes across rows.
+            let peak = hdr::measured_display_peak_nits(&r);
+            let peak_bits = peak.to_bits();
+            if !matches!(&cvvdp_hdr_scorer, Some((b, _)) if *b == peak_bits) {
+                cvvdp_hdr_scorer = None; // free the stale GPU slot first
+                cvvdp_hdr_scorer = Some((
+                    peak_bits,
+                    crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(
+                        args.gpu_runtime,
+                        crate::metrics::cvvdp_gpu::DisplayTarget::hdr(peak),
+                    )
+                    .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
+                ));
+            }
+            let (_, scorer) = cvvdp_hdr_scorer.as_mut().expect("built above");
+            let (rr, rg, rb) = hdr::to_cvvdp_linear_planes(&r, peak);
+            let (dr, dg, db) = hdr::to_cvvdp_linear_planes(&d, peak);
+            let jod =
+                scorer.score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, r.width, r.height)?;
+            let mut row: Vec<String> = record.iter().map(String::from).collect();
+            row.push(format!("{jod:.6}"));
+            wtr.write_record(&row)?;
+            continue;
         }
         // Faithful HDR butteraugli-gpu: same display-relative planes →
-        // butteraugli's native linear-planes path (intensity_target = HDR peak).
+        // butteraugli's native linear-planes path (intensity_target = the
+        // reference's MEASURED peak, applied inside `score_via_hdr_scorer`).
         #[cfg(all(feature = "hdr", feature = "gpu-butteraugli"))]
         if hdr_mode && args.metric == crate::metrics::MetricKind::ButteraugliGpu {
             let r = hdr::decode_to_nits(&ref_path)?;
@@ -2235,7 +2264,11 @@ fn cmd_batch(
                     args.metric,
                     crate::metrics::MetricKind::Cvvdp | crate::metrics::MetricKind::CvvdpGpu
                 ) {
-                    (hdr::to_cvvdp_rgb8(&r).0, hdr::to_cvvdp_rgb8(&d).0)
+                    {
+                        // Reference-measured peak, BOTH sides (appendix AA).
+                        let peak = hdr::measured_cvvdp_u8_peak(&r);
+                        (hdr::to_cvvdp_rgb8(&r, peak), hdr::to_cvvdp_rgb8(&d, peak))
+                    }
                 } else {
                     (
                         hdr::to_sdr_rgb8(&r, args.hdr_transfer),

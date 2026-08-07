@@ -13,6 +13,11 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-cli + zenmetrics-api (measured-nits display parameterization — campaign appendix AA)
+
+### Changed
+- **HDR display parameters are MEASURED from the reference, never configured** (user directive; zensim campaign appendix AA): every luminance-aware HDR score/diffmap path — cvvdp `DisplayModel::y_peak` (GPU `DisplayTarget::hdr`, CPU port, u8 shell), butteraugli `intensity_target`, and the shared linear-planes normalization — now takes the REFERENCE's measured content peak via the zenpixels owner (`zenpixels_convert::CllMeasure::measure_max`, MaxRGB per CTA-861.3, clamped `[203, 10000]`; `hdr::measured_display_peak_nits`) instead of the static 1000 cd/m² constant. Fixes both failure directions: >1000-nit sources no longer clip before the metric sees them, ≪1000-nit sources are no longer scored with an over-stated display. Applies to jobexec ScoreFile-HDR + Diffmap executors, `score-pairs`/`score`/`batch --hdr`, and the sweep's HDR inline scoring. The cvvdp-u8 shell additionally becomes REFERENCE-anchored (both sides encoded at the ref's measured peak, `measured_cvvdp_u8_peak`, cap 1000 for u8 range) — a variant's brightness error can no longer be renormalized away by its own peak; the old per-image BT.2020-luma `max_luma` reimplementation is deleted in favor of the owner. The PU/u8-shell rescale peak (`HDR_DISPLAY_PEAK_NITS`, zensim v1 HDR feature regime + validated SSIM-family feedings) deliberately stays fixed — regime purity per appendix AA. Sweep TSV `hdr_mode` tag: `pq1000` → `pq-mcll` so measured-peak rows are never confused with static-1000 rows. `HdrScorer::new_with_display_peak` splits the two peak roles (shell vs display; additive API — `new` unchanged); locked by `hdr_scorer_cpu::display_peak_split_measured_vs_config` (config-1000 clips a ~3900-nit pair, measured does not; integrated-PU ssim2 bit-identical across display peaks) + `hdr::tests` measured-vs-config units + the byte-exact `hdr_pair_parity` gate. zenpixels/zenpixels-convert min 0.2.16 (+`hdr-experimental` for the measure module).
+
 ## zenmetrics-cli + zenfleet-core + zenfleet-ctl (HDR corpus B1-B4/B7)
 
 ### Added

@@ -1223,11 +1223,13 @@ fn diffmap_to_pfm_gz(map: &[f32], width: u32, height: u32) -> Result<Vec<u8>, Bo
 /// Metrics with an in-tree per-pixel map:
 /// - `butteraugli` — the CPU reference crate's diffmap (`with_compute_diffmap`).
 ///   HDR feeding: interleaved linear f32 at `1.0 == intensity_target` with
-///   `intensity_target = HDR_DISPLAY_PEAK_NITS` (the `compute_butter_linear`
-///   convention); SDR: sRGB8 at the crate's default 80 cd/m² target.
+///   `intensity_target` = the REFERENCE's MEASURED peak
+///   (`hdr::measured_display_peak_nits`, appendix AA — matching the scoring
+///   paths); SDR: sRGB8 at the crate's default 80 cd/m² target.
 /// - `cvvdp` — the in-tree CPU port's diffmap (`score_from_linear_planes_with_diffmap`
 ///   at the HDR display / `score_with_diffmap` at the SDR default), the same
-///   `DisplayModel` construction the scoring paths use.
+///   `DisplayModel` construction the scoring paths use — `y_peak` = the
+///   reference's measured peak.
 ///
 /// `ssim2` has NO per-pixel map API in-tree — requesting it errors with the
 /// registered absent-not-failed wording rather than approximating one.
@@ -1310,10 +1312,13 @@ fn diffmap_pair_to_blob(
                 .into());
             }
             let (w, h) = (reference.width, reference.height);
+            // The display peak is MEASURED from the reference (appendix AA):
+            // both metric arms parameterize their display model / intensity
+            // target from the content, never from a configured constant.
+            let peak = crate::hdr::measured_display_peak_nits(&reference);
             match metric {
                 #[cfg(feature = "cpu-metrics")]
                 "butteraugli" => {
-                    let peak = crate::hdr::HDR_DISPLAY_PEAK_NITS;
                     let to_linear = |img: &crate::hdr::NitsImage| -> Vec<rgb::RGB<f32>> {
                         img.rgb
                             .chunks_exact(3)
@@ -1343,7 +1348,6 @@ fn diffmap_pair_to_blob(
                      (the CPU reference crate)"
                     .into()),
                 "cvvdp" => {
-                    let peak = crate::hdr::HDR_DISPLAY_PEAK_NITS;
                     let params = cvvdp::CvvdpParams {
                         display: cvvdp::DisplayModel {
                             y_peak: peak,
@@ -1353,8 +1357,8 @@ fn diffmap_pair_to_blob(
                     };
                     let mut scorer = cvvdp::Cvvdp::new(w, h, params)
                         .map_err(|e| format!("cvvdp::Cvvdp::new: {e}"))?;
-                    let (rr, rg, rb) = crate::hdr::to_cvvdp_linear_planes(&reference);
-                    let (dr, dg, db) = crate::hdr::to_cvvdp_linear_planes(&distorted);
+                    let (rr, rg, rb) = crate::hdr::to_cvvdp_linear_planes(&reference, peak);
+                    let (dr, dg, db) = crate::hdr::to_cvvdp_linear_planes(&distorted, peak);
                     let mut dm = Vec::new();
                     scorer
                         .score_from_linear_planes_with_diffmap(

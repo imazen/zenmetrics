@@ -387,6 +387,7 @@ pub struct HdrScorer {
     kind: crate::MetricKind,
     feeding: HdrFeeding,
     peak_nits: f32,
+    display_peak_nits: f32,
 }
 
 impl HdrScorer {
@@ -397,6 +398,12 @@ impl HdrScorer {
     /// only); the SSIM-family use default params (fed via pu-rescale at score
     /// time). Errors with [`Error::MetricNotEnabled`](crate::Error) if `kind`'s
     /// Cargo feature is off.
+    ///
+    /// This uses ONE peak for both the display model and the PU/u8 shell
+    /// rescale. When the display peak should follow the MEASURED content
+    /// light (zenpixels `CllMeasure` — the usually-right choice for the
+    /// luminance-aware metrics) while the shell rescale stays on a fixed
+    /// validated peak, use [`Self::new_with_display_peak`].
     pub fn new(
         kind: crate::MetricKind,
         backend: crate::Backend,
@@ -404,23 +411,59 @@ impl HdrScorer {
         height: u32,
         peak_nits: f32,
     ) -> crate::Result<Self> {
+        Self::new_with_display_peak(kind, backend, width, height, peak_nits, peak_nits)
+    }
+
+    /// [`Self::new`] with the two peak roles split:
+    ///
+    /// - `shell_peak_nits` — the PU-rescale / u8-shell peak
+    ///   ([`HdrFeeding::SdrU8`] + [`HdrFeeding::PuLumaGrayF32`]). This is a
+    ///   *feeding definition* (255 == `PU21(shell_peak)`), part of the
+    ///   validated feature/score regime — keep it fixed
+    ///   ([`HDR_PEAK_NITS`]) unless re-validating the regime.
+    /// - `display_peak_nits` — the display model the luminance-aware
+    ///   metrics assume: cvvdp `DisplayModel::y_peak`, butteraugli
+    ///   `intensity_target`, and the [`HdrFeeding::LinearPlanes`]
+    ///   normalization (`nits / display_peak`, clamped). This is a
+    ///   *content property* — measure it from the reference pixels
+    ///   (zenpixels-convert `CllMeasure::measure_max`) instead of passing
+    ///   a configured constant; content above a configured peak clips
+    ///   before the metric ever sees it, and content far below one is
+    ///   scored with the wrong display adaptation.
+    pub fn new_with_display_peak(
+        kind: crate::MetricKind,
+        backend: crate::Backend,
+        width: u32,
+        height: u32,
+        shell_peak_nits: f32,
+        display_peak_nits: f32,
+    ) -> crate::Result<Self> {
         let feeding = hdr_feeding(kind, backend);
-        // Bake the peak into the metric's display model (cvvdp/butter) AND record
-        // it as the metric's `display_peak`, so `Metric::compute_pixels` feeds HDR
-        // at the same peak this scorer targets — the two stay in sync.
-        let metric =
-            build_hdr_metric(kind, backend, width, height, peak_nits)?.with_display_peak(peak_nits);
+        // Bake the display peak into the metric's display model (cvvdp/butter)
+        // AND record it as the metric's `display_peak`, so
+        // `Metric::compute_pixels` feeds HDR at the same peak this scorer
+        // targets — the two stay in sync.
+        let metric = build_hdr_metric(kind, backend, width, height, display_peak_nits)?
+            .with_display_peak(display_peak_nits);
         Ok(Self {
             metric,
             kind,
             feeding,
-            peak_nits,
+            peak_nits: shell_peak_nits,
+            display_peak_nits,
         })
     }
 
-    /// The HDR display peak (cd/m²) this scorer targets.
+    /// The PU/u8-shell peak (cd/m²) this scorer rescales with.
     pub fn peak_nits(&self) -> f32 {
         self.peak_nits
+    }
+
+    /// The display peak (cd/m²) baked into the luminance-aware metrics'
+    /// display model (== [`Self::peak_nits`] unless built via
+    /// [`Self::new_with_display_peak`]).
+    pub fn display_peak_nits(&self) -> f32 {
+        self.display_peak_nits
     }
 
     /// The metric kind being scored.
@@ -467,13 +510,15 @@ impl HdrScorer {
                 self.metric.compute_srgb_u8_multi(&r, &d)
             }
             HdrFeeding::LinearPlanes => {
-                // Display-relative [0,1] linear = nits / peak, CLAMPED to [0,1]:
-                // content brighter than the display peak clips (a real `peak`-nit
-                // display can't show more), matching the baked cvvdp display peak
-                // / butter intensity_target. The clamp is load-bearing — without
-                // it, super-peak highlights pass through as > 1.0 and the score
-                // diverges from the validated display-referred behaviour.
-                let inv = 1.0 / self.peak_nits;
+                // Display-relative [0,1] linear = nits / display peak, CLAMPED
+                // to [0,1]: content brighter than the display peak clips (a real
+                // `peak`-nit display can't show more), matching the baked cvvdp
+                // display peak / butter intensity_target. The clamp is
+                // load-bearing — without it, super-peak highlights pass through
+                // as > 1.0 and the score diverges from the validated
+                // display-referred behaviour. (With a MEASURED display peak the
+                // clamp is exact-max — nothing clips.)
+                let inv = 1.0 / self.display_peak_nits;
                 let r: Vec<f32> = ref_nits
                     .iter()
                     .map(|&v| (v * inv).clamp(0.0, 1.0))
