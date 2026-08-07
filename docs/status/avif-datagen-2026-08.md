@@ -159,3 +159,46 @@ claimed only undone work. The campaign is kill-and-resume-safe at any point:
 | 2026-08-06 ~22:05 | **(epochshard lane, FYI):** weighted sharding landed on top of epoch-sharded claiming — `fleet/handicaps.toml` now carries REGISTERED per-box speed multipliers seeded from YOUR attribution audit (`0f9fa073`): the `encode.zenavif` column is the per-box distinct-done/active-hour credit normalized to lianli=1.0 (i265 0.72, ryzen5800xt 0.67, tower 0.67, node-3 0.19; node-2 0.64 low-confidence 10-min sample). Available-not-adopted for this campaign, per your own recorded decision — nothing changes for the running waves (mode still opt-in, default lease, no image rebuild needed or wanted mid-campaign). |
 | 2026-08-07 ~03:20 | **ENCODE CLOSED AT 100% OF UNIQUE JOBS — and the stall was an accounting discovery, not lost work.** The daemon's stall flag fired at 562,860 "of 564,300": diagnosis showed the manifest's 564,300 declared cells collapse to **562,860 unique content-addressed jobs** — **4 byte-identical rendition pairs** (8134↔8136, 8210↔8212, 8312↔8314, 8380↔8382 — different origin numbers, identical bytes; 360 main-leg cells each = 1,440 duplicate preimages) which the job system correctly deduplicated at declare time. **Split-leakage audit: all 4 pairs are train/train — zero leakage** (`duplicate_renditions.json`). True residue was **3 cells** (transient `upload_fail`, poisoned at the attempt cap): re-encoded locally through the pinned jobexec (deterministic bytes), blobs content-addressed into the run, one schema-exact DONE sidecar appended (`pass-wsl-manual-gapfill-1.parquet`) — final bridge reads **562,860/562,860 DONE, 0 skipped**. The cell table fans the 4 duplicate names back out: **pairs_final_fanned.parquet = exactly 564,300 cell rows** (every declared cell present; duplicate names share `encode_sha` by construction). Also fixed: my daemon's 99.5% floor constant was typo'd (563,479 vs the correct 561,479) — the hold was the typo, the fleet had actually finished. |
 | 2026-08-07 ~03:30 | **SCORE PHASE FULLY LIVE.** Final declares over 534,464 unique (ref, blob) pairs: `avifgen-sf-gpu-20260806` (ssim2-gpu + butteraugli max+pnorm3) and `avifgen-sf-cpu-20260806` (cvvdp native CPU + zensim-foldapp2 944 features) — **45,129 ScoreFile jobs each**. Fleet: node-2 + lianli on the GPU queue (both with `ZEN_REQUIRE_GPU=1`+`ZENMETRICS_REQUIRE_GPU=1`, envs verified); i265 + ryzen5800xt + tower on the CPU queue (AVX2-tier-pure for the 944 features — lianli/AVX-512 excluded from feature extraction by construction). Daemon relaunched into its score-watch loop (snapshots for both runs every ~15 min); monitor re-armed on `SCORE_FINAL.done`. 29,836 cells share bytes with another cell (564,300 − 534,464) — scored once, fanned to all owners at writeback. |
+
+## GPU profiling pass + the OOM storm (user-directed, 2026-08-07 ~05:30-06:30Z)
+
+**dmon (60 s, both boxes, workers live):** lianli sm 32-82% avg ~57%, FB swinging 2.3-7.7 GB;
+node-2 sm alternating 85→0→49→0 with FB dropping to 17 MB — **host-stall dominated, worst on
+node-2**: the chunked claim path runs each ScoreFile job as a FRESH process (by design, for the
+memory bound), so every job pays CUDA context + JIT + scorer-cache init; `ZEN_PERSISTENT_EXEC=1`
+is a no-op under chunking (the serial `ZEN_CHUNK_WALL_SEC=0` path is what honors it). nsys was
+SKIPPED — the queue was near-drained and the dmon + ledger evidence already identified the
+binding defect below; api_sum profiling belongs to the next wave with the levers under test.
+
+**THE REAL FINDING — VRAM OOM storm, 10,291 jobs (23% of pairs):** ledger scan showed 10,291
+sf-gpu jobs FAILED (`encoder_panic` mislabel again); manual re-run captured the true error:
+`CUDA_ERROR_OUT_OF_MEMORY`. Mechanism: **BoxBudget admission has no VRAM dimension** — unhinted
+ScoreFile jobs (512 MB default) admitted 10-16 concurrent GPU processes per 8 GB card.
+`ZENMETRICS_REQUIRE_GPU=1` then refused each starved process LOUDLY (correct! no silent CPU
+numbers — B6 did its job); the scheduler was the defect. node-2 failed 6,961 / lianli 3,330.
+Also recorded: my progressive re-declare created a second job-id generation (chunk boundaries
+differ), so ~60% of pairs were scored under earlier-generation ids — wasteful but convergent
+(content-addressed rows dedup at writeback).
+
+**RECOVERY (live):** definitive pair coverage computed from the score BLOBS (458,316/534,464
+pairs both-metrics-complete; 76,148 missing incl. 8,815 single-metric partials, concentrated in
+365 mostly-big sources) → retry declared as **8,580 jobs, CHUNK=9** (new chunk boundaries escape
+the poisoned ids) **with ResourceHints (10 GiB / 5 threads)** via the new
+`ZEN_SCOREFILE_HINT_MEM_GB/_THREADS` support in `declare_direct_objects.py` — hints bound
+admission to ≤2 concurrent GPU jobs/box. **Verified live on lianli: exactly 2 jobexec
+processes, FB stable 5.2 GB, sm 23-62%.** Fleet follow-up registered: BoxBudget needs a real
+VRAM admission dimension; ScoreFile cost estimates need pixel-aware sizing.
+
+**sf-cpu COMPLETE, zero failures: 45,129/45,129** (cvvdp + zensim-foldapp2 944, AVX2-tier-pure).
+Attribution: tower 19,799 / ryzen5800xt 18,224 / i265 7,106 — a MEASURED same-window basis for
+the `metric` handicap rows, and it confirms the seed's own warning: the memory-bound metric
+ranking differs sharply from encode (i265 0.72-seeded → 0.36 measured; tower 0.67 → 1.00
+fleet-max; ryzen 0.67 → 0.92). `fleet/handicaps.toml` metric rows updated with citations
+(registry sanity tests green). `gpu_metric` derivation stays TODO **deliberately**: the only
+concurrent GPU window so far is OOM-contaminated (done-rates reflect failure storms, not card
+speed); derive from the clean hinted-retry window instead.
+
+**Revised ETA: the 30 h GPU bound was wrong by an order of magnitude** — the corpus is
+tiny-pair-dominated and the cards run near-5070 parity: sf-gpu reached 85.7% pair coverage in
+~2 h despite the OOM storm. Retry wave ≈ 2-5 h at the safe concurrency → campaign close
+expected within the day, writeback + manifest + mirrors to follow.

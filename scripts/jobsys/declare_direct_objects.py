@@ -10,6 +10,15 @@ METRICS = [m for m in os.environ.get("ZEN_SCOREFILE_METRICS", "zensim-gpu").spli
 # Cell codec label (metadata only — the join key is the variant filename in `inputs`, which already
 # carries the codec). Default zenjpeg for back-compat; set ZEN_CELL_CODEC per codec for correct sidecars.
 CELL_CODEC = os.environ.get("ZEN_CELL_CODEC", "zenjpeg")
+# Optional scheduling hint attached to every declared job (does NOT enter the JobId).
+# ZEN_SCOREFILE_HINT_MEM_GB sizes BoxBudget admission (host-RAM proxy; use it to bound
+# concurrent GPU processes per box — the 2026-08-07 avifgen sf-gpu OOM storm was N unhinted
+# GPU jobs admitted by host RAM on 8 GB cards). ZEN_SCOREFILE_HINT_THREADS bounds by cores.
+_hm = os.environ.get("ZEN_SCOREFILE_HINT_MEM_GB")
+_ht = os.environ.get("ZEN_SCOREFILE_HINT_THREADS")
+HINT = None
+if _hm or _ht:
+    HINT = {"peak_mem_bytes": int(float(_hm or 0.5) * (1 << 30)), "threads": int(_ht or 1)}
 ep = "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
 env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
            AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
@@ -71,7 +80,7 @@ for bn, members in files.items():
         manifest.append({"kind": kind,
                          "inputs": members[i:i+CHUNK],
                          "cell": {"image_path": bn, "codec": CELL_CODEC, "q": -1, "knob_tuple_json": "scorefile"},
-                         "hint": None})
+                         "hint": HINT})
 # ZEN_MANIFEST_OUT: write the manifest JSON locally and SKIP the upload — for
 # multi-invocation runs (e.g. per-codec passes over one run id) whose parts are
 # merged and uploaded once by the caller. Uploading per invocation would

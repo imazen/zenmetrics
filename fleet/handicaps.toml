@@ -50,22 +50,25 @@ zenavif = 1.00     # MEASURED: 135,246 distinct-done / ~6.5 h = 20.8k/h (fleet m
 default = 1.00     # UNMEASURED for other encoder types — type-bench TODO (no cross-type extrapolation)
 
 [workers.i265]
-metric = 0.72      # basis: proportional to measured zenavif encode credit (TODO cvvdp-rate bench)
+metric = 0.36      # MEASURED: sf-cpu ledger (cvvdp+foldapp2-944 ScoreFile), 45,129-job run 2026-08-07,
+                   # same window/workload as tower+ryzen: i265 7,106 vs tower 19,799 done — the
+                   # memory-bound metric ranking indeed differs sharply from encode (encode seed was 0.72)
 gpu_metric = 0.0   # basis: no CUDA-capable worker runtime enrolled on this box (excluded)
 [workers.i265.encode]
 zenavif = 0.72     # MEASURED: 97,361 / ~6.5 h = 15.0k/h (20T) — 0f9fa073
 default = 1.00     # UNMEASURED — type-bench TODO
 
 [workers.ryzen5800xt]
-metric = 0.67      # basis: proportional to measured zenavif encode credit; SMT-heavy 32T-on-16C —
-                   # the memory-bound metric ranking likely differs, measure before relying on it
+metric = 0.92      # MEASURED: sf-cpu ledger 2026-08-07 — 18,224 vs tower 19,799 done, same window.
+                   # SMT-heavy box holds up on the metric workload (the encode-derived 0.67 was wrong here)
 gpu_metric = 0.0   # basis: no CUDA-capable worker runtime enrolled on this box (excluded)
 [workers.ryzen5800xt.encode]
 zenavif = 0.67     # MEASURED: 91,195 / ~6.5 h = 14.0k/h (32T on 16C) — 0f9fa073
 default = 1.00     # UNMEASURED — type-bench TODO
 
 [workers.tower]
-metric = 0.67      # basis: proportional to measured zenavif encode credit (TODO cvvdp-rate bench)
+metric = 1.00      # MEASURED: sf-cpu ledger 2026-08-07 — 19,799 done = the CPU-metric fleet max
+                   # (32T Threadripper, capped cpuset 0-23; beat every encode-derived seed)
 gpu_metric = 0.0   # basis: no NVIDIA GPU (Threadripper 2950X, Unraid; Docker-only CPU worker)
 [workers.tower.encode]
 zenavif = 0.67     # MEASURED: 90,402 / ~6.5 h = 13.9k/h (capped cpuset 24T, cpu-shares 256) — 0f9fa073
