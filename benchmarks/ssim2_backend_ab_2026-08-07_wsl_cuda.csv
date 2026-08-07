@@ -1,0 +1,5 @@
+size,pixels,cuda_med_ms,vk_med_ms,cuda_min_ms,vk_min_ms,cuda_p90_ms,vk_p90_ms,ratio_vk_over_cuda,cuda_create_ms,vk_create_ms,cuda_score,vk_score,score_abs_delta
+64x64,4096,2.0835,NaN,1.2018,NaN,5.4579,NaN,NaN,3.112,NaN,-61.854164,NaN,NaN
+256x256,65536,2.6844,NaN,1.8616,NaN,8.1078,NaN,NaN,13.564,NaN,-194.745017,NaN,NaN
+1024x1024,1048576,4.2504,NaN,3.1462,NaN,5.0663,NaN,NaN,217.573,NaN,-409.574777,NaN,NaN
+2048x2048,4194304,9.5534,NaN,8.6222,NaN,155.8610,NaN,NaN,1169.222,NaN,-435.631671,NaN,NaN
