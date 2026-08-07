@@ -53,6 +53,20 @@ HDR_TRANSFER = os.environ.get("ZEN_SCOREFILE_HDR_TRANSFER", "")
 # (the executor's one-blob-per-job contract; output = the gzip'd PFM map).
 # CHUNK is ignored in this mode. Same full-URI resolution path as score_file.
 DECLARE_KIND = os.environ.get("ZEN_DECLARE_KIND", "score_file")
+# Pixel-derived per-job memory hints (ZEN_HINT_MIB_PER_MP + ZEN_HINT_BASE_MIB):
+# hint.peak_mem_bytes = base + megapixels(ref scale name) * per_mp. First real
+# consumer = the HDR-corpus GPU wave (all-big pairs on 8 GB cards; the flat
+# <=2-jobs/box bound cannot see two coincident 7 MP pairs). The dims come from
+# the `scaleWxH` token in the ref name; refs without one get base only.
+import re as _re
+HINT_PER_MP = float(os.environ.get("ZEN_HINT_MIB_PER_MP", "0") or 0)
+HINT_BASE = float(os.environ.get("ZEN_HINT_BASE_MIB", "0") or 0)
+def _hint_for(ref):
+    if HINT_PER_MP <= 0 and HINT_BASE <= 0:
+        return None
+    m = _re.search(r"scale(\d+)x(\d+)", ref)
+    mp = (int(m.group(1)) * int(m.group(2)) / 1e6) if m else 0.0
+    return {"peak_mem_bytes": int((HINT_BASE + mp * HINT_PER_MP) * 1048576), "threads": 1}
 manifest = []
 for bn, members in files.items():
     if DECLARE_KIND == "diffmap":
@@ -69,7 +83,7 @@ for bn, members in files.items():
                 kind = {"kind": "diffmap", "metric": metric}
                 if HDR:
                     kind["hdr"] = True
-                manifest.append({"kind": kind, "inputs": [m], "cell": cell, "hint": None})
+                manifest.append({"kind": kind, "inputs": [m], "cell": cell, "hint": _hint_for(bn) or HINT})
         continue
     for i in range(0, len(members), CHUNK):
         kind = {"kind": "score_file", "metrics": METRICS}
@@ -80,7 +94,7 @@ for bn, members in files.items():
         manifest.append({"kind": kind,
                          "inputs": members[i:i+CHUNK],
                          "cell": {"image_path": bn, "codec": CELL_CODEC, "q": -1, "knob_tuple_json": "scorefile"},
-                         "hint": HINT})
+                         "hint": _hint_for(bn) or HINT})
 # ZEN_MANIFEST_OUT: write the manifest JSON locally and SKIP the upload — for
 # multi-invocation runs (e.g. per-codec passes over one run id) whose parts are
 # merged and uploaded once by the caller. Uploading per invocation would
