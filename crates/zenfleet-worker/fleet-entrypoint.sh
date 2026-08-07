@@ -170,6 +170,19 @@ hb "manifest ready ($(wc -c </tmp/manifest.json 2>/dev/null || echo '?') bytes);
 idle=0 i=0 fails=0
 while [ "$idle" -lt "${ZEN_IDLE_PASSES:-5}" ]; do
   i=$((i + 1))
+  # Scratch hygiene BETWEEN passes (2026-08-06 ENOSPC incident, hdrgrid encode
+  # wave): the executor's warm-process source cache (`jobexec_src_<pid>_*`) is
+  # keyed by pid and never evicted, so every executor generation re-downloads
+  # the sources it touches and the container writable layer grows without
+  # bound — measured ~620 GB across two operator-box containers (~15 MB
+  # retained/cell), which filled the root disk and ENOSPC-killed the wave at
+  # 83%. Between passes no executor is alive (they are children of the pass's
+  # worker process), so deleting the whole scratch set is race-free; a warm
+  # process that later misses its cache simply re-downloads. Variant/dist
+  # temps are same-class leaks on the scoring path. Long single passes still
+  # need an operator-side TTL cleaner on a bind-mounted /tmp (the incident's
+  # 620 GB grew INSIDE passes); this sweep bounds the between-pass baseline.
+  rm -f /tmp/jobexec_src_* /tmp/jobexec_var_* /tmp/jobexec_dist_* 2>/dev/null || true
   # --ledger-in done-set snapshot (same contract as POOL mode, which has always fetched it):
   # without it the reconcile view is EMPTY, the gap is ALL cells every pass, and dedup falls to
   # the claim lease — the documented 2.0-3.4x re-work tax (compact_ledgers.py docstring), which
