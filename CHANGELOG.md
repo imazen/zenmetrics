@@ -13,6 +13,24 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace (LAN object-store support — `ZEN_S3_ENDPOINT`)
+
+### Added
+- **`ZEN_S3_ENDPOINT` selects the object store for all operator tooling** (84ff5158,
+  b5318411, 8c2fc367, 4185b098): new single resolver `scripts/lib/s3env.sh` /
+  `scripts/lib/zen_s3env.py` (unset ⇒ R2 exactly as before; set ⇒ that endpoint with
+  `ZEN_S3_ACCESS_KEY_ID`/`ZEN_S3_SECRET_ACCESS_KEY` creds), sourced by the standing entry
+  points and honored by 39 more operator scripts. Cloud launchers stay pinned to R2
+  (`launch_fleet.sh`/`pool_launch.sh` refuse loud) — a LAN store is unreachable from
+  cloud boxes. Docs: `RUNNING_JOBS.md` §2b; status: `docs/status/lan-storage-2026-08.md`.
+
+### Fixed
+- **zenfleet-worker s3io: plain-http S3 endpoints work** (55f8a339): the in-proc
+  `object_store` client now sets `allow_http` for `http://` endpoints — blob puts against
+  a LAN store failed `upload_fail` while the aws-CLI claim path succeeded; https (R2)
+  unaffected. Same commit pins `demo_e2e_r2.sh` to the serial claim path its
+  ledger-object assertions were written for (broken since chunk-default claiming).
+
 ## zenmetrics-cli + zenmetrics-api (measured-nits display parameterization — campaign appendix AA)
 
 ### Changed
