@@ -607,9 +607,18 @@ fn warmref_score_eligible(
     metrics: &[&str],
 ) -> Result<Vec<String>, Box<dyn Error>> {
     use crate::orchestrator_runner::{
-        build_orchestrator, metric_orchestrator_eligible, rekey_orchestrator_columns,
+        OrchestratorHandle, build_orchestrator, metric_orchestrator_eligible,
+        rekey_orchestrator_columns,
     };
     use zenmetrics_orchestrator::{Task, TaskData};
+
+    // Process-global warm orchestrator (the shared-res session wiring, zenmetrics#47): built ONCE
+    // per executor process and reused across warmref BATCHES and — in `--serve` mode — across
+    // JOBS, so GPU kernels stay compiled and the session pool stays device-resident while only
+    // the bitmap data changes. Take-out/put-back: the handle returns to the slot only on normal
+    // completion, so any `?`-exit drops the instance and the next call rebuilds from clean state
+    // (a wedged GPU context must not poison subsequent jobs).
+    static WARM_ORCH: std::sync::Mutex<Option<OrchestratorHandle>> = std::sync::Mutex::new(None);
 
     // Which requested metrics are orchestrator-eligible? (butteraugli/-gpu are not.) zensim variants
     // are handled by the inline feature path, NOT here, so exclude them too.
@@ -629,8 +638,14 @@ fn warmref_score_eligible(
         return Ok(Vec::new());
     }
 
-    let opts = crate::orchestrator_glue::OrchestratorRuntimeOpts::default();
-    let mut orch = build_orchestrator(&opts)?;
+    let handle = match WARM_ORCH.lock().unwrap_or_else(|p| p.into_inner()).take() {
+        Some(h) => h,
+        None => {
+            let opts = crate::orchestrator_glue::OrchestratorRuntimeOpts::default();
+            OrchestratorHandle::new(build_orchestrator(&opts)?)
+        }
+    };
+    let mut orch = handle.lock();
 
     // Build the (variant × eligible-metric) task matrix. task_id encodes (variant_idx, metric_idx)
     // so we can correlate the completion-ordered results back to the right row. All tasks carry the
@@ -697,6 +712,10 @@ fn warmref_score_eligible(
         }
         rows.push(serde_json::to_string(&Value::Object(o))?);
     }
+    // Normal completion: return the warm instance to the process-global slot for the next
+    // batch/job. Error exits above skip this — the instance drops and the next call rebuilds.
+    drop(orch);
+    *WARM_ORCH.lock().unwrap_or_else(|p| p.into_inner()) = Some(handle);
     Ok(rows)
 }
 
@@ -801,117 +820,135 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         Ok(serde_json::to_string(&Value::Object(o))?)
     };
 
-    // PART 2 — warm-reference batch path (opt-in via ZEN_SCOREFILE_WARMREF=1, orchestrator-cuda build).
-    // Decode every variant ONCE up front, score the orchestrator-eligible metrics via a single
-    // `run_all` (ref uploaded once per source, not per variant), then score butteraugli +
-    // zensim-with-features inline over the SAME decoded buffers. Default OFF -> the byte-identical
-    // one-shot loop below.
+    // PART 2 — warm-reference batch path (orchestrator-cuda builds). DEFAULT ON since 2026-08-08
+    // (#46): the real-GPU A/B measured 1.60× wall with scores identical to 9.5e-7 and that number
+    // is a floor (docs/SCOREMANY_OPT.md); opt OUT with ZEN_SCOREFILE_WARMREF=0. Builds without
+    // orchestrator-cuda compile this block away — behavior there is unchanged.
+    //
+    // Variants are processed in BOUNDED batches (ZEN_SCOREFILE_WARMREF_BATCH, default 8): the
+    // pre-flip shape decoded EVERY variant up front, which on a 26 MP × 30-variant ladder holds
+    // ~2.3 GB of decoded pixels at once — the over-admission shape the avifgen OOM storm taught
+    // us to bound. Per batch: decode the batch, score the orchestrator-eligible metrics via one
+    // `run_all` (ref uploads once per BATCH, not per variant — a 30-pair ladder pays 4 ref
+    // uploads instead of 30), then score butteraugli + zensim-with-features inline over the SAME
+    // decoded buffers. Peak decoded residency = one batch, ≈ the one-shot path's.
     #[cfg(all(feature = "orchestrator", feature = "orchestrator-cuda"))]
     if std::env::var("ZEN_SCOREFILE_WARMREF")
-        .map(|v| v == "1")
-        .unwrap_or(false)
+        .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+        .unwrap_or(true)
     {
-        // Decode all variants once (tar-shard local read via fetch_variant).
-        let mut decoded: Vec<(String, Rgb8Image)> = Vec::with_capacity(shas.len());
-        for sha in &shas {
-            match fetch_variant(sha, ext) {
-                Ok((p, owned)) => {
-                    let d = decode_image_to_rgb8(&p);
-                    if owned {
-                        let _ = std::fs::remove_file(&p);
-                    }
-                    match d {
-                        Ok(img) => decoded.push(((*sha).to_string(), img)),
-                        Err(e) => rows.push(mk_row(
-                            sha,
-                            serde_json::json!({ "error": format!("decode: {e}") }),
-                        )?),
-                    }
-                }
-                Err(e) => rows.push(mk_row(
-                    sha,
-                    serde_json::json!({ "error": format!("fetch: {e}") }),
-                )?),
-            }
-        }
-        // Eligible metrics -> one warm-ref batch.
-        rows.extend(warmref_score_eligible(
-            image_path, codec_name, &reference, &decoded, &metrics,
-        )?);
-        // Butteraugli (orchestrator-ineligible) + zensim (needs its feature sidecar) inline, reusing
-        // the decoded buffers so no variant is decoded twice.
-        for (sha, distorted) in &decoded {
-            for metric in &metrics {
-                #[cfg(feature = "cpu-metrics")]
-                if is_zensim_feature_metric(metric) {
-                    // FEATURES ONLY (no score): "zensim"/"zensim-gpu" = the v2-ab
-                    // 720 vector; "zensim-foldapp" = the folded+append STREAMING
-                    // 924 vector (zensim C5; the bf924 runs carry ONLY this metric
-                    // per the 2026-07-27 directive); "zensim-foldapp2" = the 944
-                    // vector (924 ++ append2-20; the bf944 wave — dst-activity
-                    // OFF per the SOTA-944 P1.5 adjudication). Gated on
-                    // `cpu-metrics` (NOT gpu-zensim) so a CPU-ONLY executor
-                    // (`:exec`, no GPU) emits features — the backfills run on
-                    // cheap CPU boxes. V2Ab reuses the precomputed ref pyramid
-                    // across this source's variants (bit-identical); the folded
-                    // regimes are streaming-only (no cached-ref path since C5)
-                    // and always run per-pair.
-                    let (regime, regime_tag, folded) = zensim_regime_for_metric(metric);
-                    let res = if folded {
-                        crate::metrics::run_zensim_features(&reference, distorted, regime)
-                    } else {
-                        ref_ctx.as_ref().map_or_else(
-                            || crate::metrics::run_zensim_features(&reference, distorted, regime),
-                            |c| {
-                                crate::metrics::zensim::extract_features_regime_with_ctx(
-                                    c, distorted, regime,
-                                )
-                            },
-                        )
-                    };
-                    match res {
-                        Ok(feats) => {
-                            let mut fo = Map::new();
-                            fo.insert("kind".into(), serde_json::json!("feature"));
-                            fo.insert("image_path".into(), serde_json::json!(image_path));
-                            fo.insert("codec".into(), serde_json::json!(codec_name));
-                            fo.insert("encode_sha".into(), serde_json::json!(sha));
-                            fo.insert("regime".into(), serde_json::json!(regime_tag));
-                            fo.insert("features".into(), serde_json::json!(feats));
-                            rows.push(serde_json::to_string(&Value::Object(fo))?);
+        let warmref_batch = std::env::var("ZEN_SCOREFILE_WARMREF_BATCH")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|&b| b > 0)
+            .unwrap_or(8);
+        for shas_batch in shas.chunks(warmref_batch) {
+            // Decode this batch's variants once (tar-shard local read via fetch_variant).
+            let mut decoded: Vec<(String, Rgb8Image)> = Vec::with_capacity(shas_batch.len());
+            for sha in shas_batch {
+                match fetch_variant(sha, ext) {
+                    Ok((p, owned)) => {
+                        let d = decode_image_to_rgb8(&p);
+                        if owned {
+                            let _ = std::fs::remove_file(&p);
                         }
-                        Err(e) => rows.push(mk_row(
-                            sha,
-                            serde_json::json!({ "metric": metric, "error": e.to_string() }),
-                        )?),
-                    }
-                    continue;
-                }
-                // butteraugli / butteraugli-gpu (and any non-eligible, non-zensim metric): one-shot.
-                if *metric == "butteraugli" || *metric == "butteraugli-gpu" {
-                    match score(metric, &reference, distorted) {
-                        Ok(pairs) => {
-                            let mut scores = Map::new();
-                            for (n, v) in &pairs {
-                                scores.insert((*n).to_string(), serde_json::json!(v));
-                            }
-                            rows.push(mk_row(
+                        match d {
+                            Ok(img) => decoded.push(((*sha).to_string(), img)),
+                            Err(e) => rows.push(mk_row(
                                 sha,
-                                serde_json::json!({
-                                    "metric": metric,
-                                    "score": pairs.first().map(|(_, v)| *v),
-                                    "scores": scores,
-                                }),
-                            )?);
+                                serde_json::json!({ "error": format!("decode: {e}") }),
+                            )?),
                         }
-                        Err(e) => rows.push(mk_row(
-                            sha,
-                            serde_json::json!({ "metric": metric, "error": e.to_string() }),
-                        )?),
+                    }
+                    Err(e) => rows.push(mk_row(
+                        sha,
+                        serde_json::json!({ "error": format!("fetch: {e}") }),
+                    )?),
+                }
+            }
+            // Eligible metrics -> one warm-ref batch per decode batch.
+            rows.extend(warmref_score_eligible(
+                image_path, codec_name, &reference, &decoded, &metrics,
+            )?);
+            // Butteraugli (orchestrator-ineligible) + zensim (needs its feature sidecar) inline, reusing
+            // the decoded buffers so no variant is decoded twice.
+            for (sha, distorted) in &decoded {
+                for metric in &metrics {
+                    #[cfg(feature = "cpu-metrics")]
+                    if is_zensim_feature_metric(metric) {
+                        // FEATURES ONLY (no score): "zensim"/"zensim-gpu" = the v2-ab
+                        // 720 vector; "zensim-foldapp" = the folded+append STREAMING
+                        // 924 vector (zensim C5; the bf924 runs carry ONLY this metric
+                        // per the 2026-07-27 directive); "zensim-foldapp2" = the 944
+                        // vector (924 ++ append2-20; the bf944 wave — dst-activity
+                        // OFF per the SOTA-944 P1.5 adjudication). Gated on
+                        // `cpu-metrics` (NOT gpu-zensim) so a CPU-ONLY executor
+                        // (`:exec`, no GPU) emits features — the backfills run on
+                        // cheap CPU boxes. V2Ab reuses the precomputed ref pyramid
+                        // across this source's variants (bit-identical); the folded
+                        // regimes are streaming-only (no cached-ref path since C5)
+                        // and always run per-pair.
+                        let (regime, regime_tag, folded) = zensim_regime_for_metric(metric);
+                        let res = if folded {
+                            crate::metrics::run_zensim_features(&reference, distorted, regime)
+                        } else {
+                            ref_ctx.as_ref().map_or_else(
+                                || {
+                                    crate::metrics::run_zensim_features(
+                                        &reference, distorted, regime,
+                                    )
+                                },
+                                |c| {
+                                    crate::metrics::zensim::extract_features_regime_with_ctx(
+                                        c, distorted, regime,
+                                    )
+                                },
+                            )
+                        };
+                        match res {
+                            Ok(feats) => {
+                                let mut fo = Map::new();
+                                fo.insert("kind".into(), serde_json::json!("feature"));
+                                fo.insert("image_path".into(), serde_json::json!(image_path));
+                                fo.insert("codec".into(), serde_json::json!(codec_name));
+                                fo.insert("encode_sha".into(), serde_json::json!(sha));
+                                fo.insert("regime".into(), serde_json::json!(regime_tag));
+                                fo.insert("features".into(), serde_json::json!(feats));
+                                rows.push(serde_json::to_string(&Value::Object(fo))?);
+                            }
+                            Err(e) => rows.push(mk_row(
+                                sha,
+                                serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                            )?),
+                        }
+                        continue;
+                    }
+                    // butteraugli / butteraugli-gpu (and any non-eligible, non-zensim metric): one-shot.
+                    if *metric == "butteraugli" || *metric == "butteraugli-gpu" {
+                        match score(metric, &reference, distorted) {
+                            Ok(pairs) => {
+                                let mut scores = Map::new();
+                                for (n, v) in &pairs {
+                                    scores.insert((*n).to_string(), serde_json::json!(v));
+                                }
+                                rows.push(mk_row(
+                                    sha,
+                                    serde_json::json!({
+                                        "metric": metric,
+                                        "score": pairs.first().map(|(_, v)| *v),
+                                        "scores": scores,
+                                    }),
+                                )?);
+                            }
+                            Err(e) => rows.push(mk_row(
+                                sha,
+                                serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                            )?),
+                        }
                     }
                 }
             }
-        }
+        } // per-batch loop
         return Ok(rows.join("\n").into_bytes());
     }
 
