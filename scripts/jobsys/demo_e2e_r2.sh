@@ -57,6 +57,12 @@ echo "[A] gap with no ledger (nothing done yet):"
 echo "    gap before work = $(n "$W/gap0.json") jobs"
 echo
 
+# The demo's assertions read the exact --ledger-out object (pass1.parquet), which is the
+# SERIAL per-cell path's name; the chunked default (ZEN_CHUNK_WALL_SEC=300) writes
+# pass1.chunk-<id8>.parquet sidecars instead and the coverage/gap steps below would 404.
+# Pin the serial path the demo was written for (override by exporting a nonzero value).
+export ZEN_CHUNK_WALL_SEC="${ZEN_CHUNK_WALL_SEC:-0}"
+
 # ── E. worker pass 1: claim (R2 conditional-write) → exec → R2 blobs + R2 Parquet ledger ──
 echo "[E] worker pass 1 (claims via R2 lease, exec=/bin/cat, ledger+blobs to R2):"
 "$WK" --manifest "$W/gap0.json" \

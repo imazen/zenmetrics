@@ -44,7 +44,10 @@ fn store(endpoint: &str, bucket: &str) -> Result<Arc<AmazonS3>, String> {
         .with_access_key_id(&ak)
         .with_secret_access_key(&sk)
         .with_region("auto")
-        .with_virtual_hosted_style_request(false);
+        .with_virtual_hosted_style_request(false)
+        // plain-http endpoints (LAN object stores) are refused by the builder unless
+        // explicitly allowed; https endpoints (R2) are unaffected by this flag.
+        .with_allow_http(endpoint.starts_with("http://"));
     if let Ok(tok) = std::env::var("AWS_SESSION_TOKEN")
         && !tok.is_empty()
     {
