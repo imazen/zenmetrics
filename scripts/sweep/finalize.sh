@@ -13,7 +13,7 @@ set -a
 # shellcheck disable=SC1091
 source "$HOME/.config/cloudflare/r2-credentials"
 set +a
-R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+R2_ENDPOINT="${ZEN_S3_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
 export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
 export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 

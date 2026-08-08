@@ -10,7 +10,7 @@ R2_PREFIX=s3://zentrain/jxl-lossy-hqfill-A/2026-07-01
 TOWER=/mnt/tower/output/jxl-hqfill-A-2026-07-01
 export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
 export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
-ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+ENDPOINT="${ZEN_S3_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
 export S3_ENDPOINT_URL="$ENDPOINT"
 
 echo "=== sha256 canonical parquet ==="

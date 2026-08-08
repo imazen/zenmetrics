@@ -55,7 +55,7 @@ KEY = ["image_path", "config_name", "q"]
 
 
 def ep():
-    return f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
+    return os.environ.get("ZEN_S3_ENDPOINT") or f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
 
 
 def aws(*a):

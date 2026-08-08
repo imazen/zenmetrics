@@ -7,7 +7,7 @@ import sys, os, subprocess, glob
 import pyarrow.parquet as pq, pyarrow as pa
 codec, RUNS = sys.argv[1], sys.argv[2:]
 OUT = "/mnt/v/zen/zensim-training/2026-06-24-cpu/unified/%s" % codec
-ep = "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
+ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
 env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
            AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
 def s5(*a): subprocess.run(["s5cmd", "--endpoint-url", ep, *a], env=env, check=False,

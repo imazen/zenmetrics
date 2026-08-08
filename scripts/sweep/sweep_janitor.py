@@ -31,7 +31,7 @@ IDLE_CPU_PCT = 5             # < this cpu% averaged over recent samples => reap
 IDLE_RECENT_SAMPLES = 6      # how many recent samples to average for idle test
 # ---------------------------------------------------------------------------
 
-R2_ENDPOINT = f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
+R2_ENDPOINT = os.environ.get("ZEN_S3_ENDPOINT") or f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
 R2_ENV = {
     "AWS_ACCESS_KEY_ID": os.environ["R2_ACCESS_KEY_ID"],
     "AWS_SECRET_ACCESS_KEY": os.environ["R2_SECRET_ACCESS_KEY"],

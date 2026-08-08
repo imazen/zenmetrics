@@ -67,7 +67,7 @@ def envs():
     e["AWS_ACCESS_KEY_ID"] = e["R2_ACCESS_KEY_ID"]
     e["AWS_SECRET_ACCESS_KEY"] = e["R2_SECRET_ACCESS_KEY"]
     e["AWS_REGION"] = "auto"
-    e["EP"] = "https://%s.r2.cloudflarestorage.com" % e["R2_ACCOUNT_ID"]
+    e["EP"] = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % e["R2_ACCOUNT_ID"]
     return e
 
 

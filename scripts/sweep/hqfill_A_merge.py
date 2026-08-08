@@ -22,7 +22,7 @@ SCORE_COLS = ["score_zensim_gpu", "score_ssim2", "score_butteraugli_max_gpu",
               "score_dssim", "score_iwssim_gpu"]
 
 acct = os.environ["R2_ACCOUNT_ID"]
-EP = f"https://{acct}.r2.cloudflarestorage.com"
+EP = os.environ.get("ZEN_S3_ENDPOINT") or f"https://{acct}.r2.cloudflarestorage.com"
 env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
            AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
 def s5(*a): subprocess.run(["s5cmd", "--endpoint-url", EP, *a], env=env, check=True,

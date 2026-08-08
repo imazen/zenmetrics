@@ -124,7 +124,7 @@ def main():
         if not args.no_r2:
             url = pq.read_table(os.path.join(d, "train.parquet"),
                                 columns=["source_r2_url"]).column("source_r2_url")[0].as_py()
-            ep = f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
+            ep = os.environ.get("ZEN_S3_ENDPOINT") or f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
             rc = subprocess.run(["aws", "s3", "ls", url, "--endpoint-url", ep],
                                 capture_output=True, text=True)
             if rc.returncode == 0 and rc.stdout.strip():

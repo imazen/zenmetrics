@@ -69,7 +69,7 @@ echo "[hdr-score $(ts)] $(($(wc -l < "$lpairs")-1)) local pairs from omni" | tee
 
 if [ "$UPLOAD" = 1 ]; then
   set -a; . ~/.config/cloudflare/r2-credentials; set +a
-  EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+  EP="${ZEN_S3_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
   r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }
 fi
 

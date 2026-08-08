@@ -25,7 +25,7 @@ import sys
 run_id, pairs_r2, data_prefix, out_prefix = sys.argv[1:5]
 chunk_rows = int(sys.argv[5]) if len(sys.argv) > 5 else 600
 
-ep = "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
+ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
 env = dict(
     os.environ,
     AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],

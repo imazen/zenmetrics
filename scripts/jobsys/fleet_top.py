@@ -80,7 +80,7 @@ def r2_env():
 
 
 def s5(env, *args):
-    ep = f"https://{env.get('R2_ACCOUNT_ID','')}.r2.cloudflarestorage.com"
+    ep = os.environ.get("ZEN_S3_ENDPOINT") or f"https://{env.get('R2_ACCOUNT_ID','')}.r2.cloudflarestorage.com"
     return subprocess.run(["s5cmd", "--endpoint-url", ep, *args],
                           env=env, capture_output=True, text=True)
 

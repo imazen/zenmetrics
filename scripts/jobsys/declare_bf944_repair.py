@@ -20,7 +20,7 @@ for line in open(os.path.expanduser('~/.config/cloudflare/r2-credentials')):
     if line.startswith('R2_') and '=' in line:
         k,v=line.split('=',1); E[k]=v.strip().strip('"').strip("'")
 E['AWS_ACCESS_KEY_ID']=E['R2_ACCESS_KEY_ID']; E['AWS_SECRET_ACCESS_KEY']=E['R2_SECRET_ACCESS_KEY']; E['AWS_REGION']='auto'
-EP='https://%s.r2.cloudflarestorage.com'%E['R2_ACCOUNT_ID']
+EP=os.environ.get('ZEN_S3_ENDPOINT') or 'https://%s.r2.cloudflarestorage.com'%E['R2_ACCOUNT_ID']
 
 def s5(*a, stdin=None):
     r=subprocess.run(['s5cmd','--endpoint-url',EP,*a],env=E,capture_output=True,input=stdin)

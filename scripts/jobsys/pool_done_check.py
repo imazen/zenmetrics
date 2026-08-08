@@ -10,7 +10,7 @@ for line in open(os.path.expanduser("~/.config/cloudflare/r2-credentials")):
     line = line.strip()
     if line.startswith("R2_") and "=" in line:
         k, v = line.split("=", 1); E[k] = v.strip().strip('"').strip("'")
-EP = "https://%s.r2.cloudflarestorage.com" % E["R2_ACCOUNT_ID"]
+EP = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % E["R2_ACCOUNT_ID"]
 S3 = fs.S3FileSystem(access_key=E["R2_ACCESS_KEY_ID"], secret_key=E["R2_SECRET_ACCESS_KEY"], endpoint_override=EP, region="auto")
 TOTAL_JOBS = 490173  # 5,882,076 variants / 12 (approx; used only for the completion ratio)
 

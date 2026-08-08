@@ -70,7 +70,7 @@ except ImportError:
             file=sys.stderr,
         )
 
-R2_ENDPOINT = os.environ.get("R2_ENDPOINT") or (
+R2_ENDPOINT = os.environ.get("ZEN_S3_ENDPOINT") or os.environ.get("R2_ENDPOINT") or (
     f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
     if "R2_ACCOUNT_ID" in os.environ
     else None

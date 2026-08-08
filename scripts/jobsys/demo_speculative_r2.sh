@@ -12,7 +12,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WK="$ROOT/target/debug/zenfleet-worker"
 JC="$ROOT/target/debug/zenfleet-ctl"
 SCORER="$ROOT/scripts/jobsys/slow_scorer.sh"; chmod +x "$SCORER"
-EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"; BUCKET="$R2_BUCKET"
+EP="${ZEN_S3_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"; BUCKET="$R2_BUCKET"
 export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 export AWS_REGION=auto AWS_DEFAULT_REGION=auto
 PFX="jobsys-spec-$(date -u +%Y%m%d-%H%M%S)"; W="$(mktemp -d)"; APID=""

@@ -88,6 +88,8 @@ def mode_of(codec: str, cell: str) -> str:
 
 
 def ep() -> str:
+    if e := os.environ.get("ZEN_S3_ENDPOINT"):
+        return e
     acct = os.environ["R2_ACCOUNT_ID"]
     return f"https://{acct}.r2.cloudflarestorage.com"
 

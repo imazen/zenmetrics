@@ -10,7 +10,7 @@ DGP="${ZEN_DATAGEN_PREFIX:-picker-sweep-2026-06-22/datagen-2026-06-23}"
 LOG=/tmp/unpack_variants.log; : > "$LOG"
 log(){ echo "[$(date -u +%H:%M:%S)] $*" | tee -a "$LOG"; }
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
-EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+EP="${ZEN_S3_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
 r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }
 D="/mnt/v/zen/variants-unpack-$CODEC"; rm -rf "$D"; mkdir -p "$D/out"
 log "downloading $CODEC variants.tar"

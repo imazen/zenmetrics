@@ -32,7 +32,7 @@ from pathlib import Path
 RUN_ID = sys.argv[1] if (len(sys.argv) > 1 and not sys.argv[1].startswith("--")) else "sweep-v15r-2026-05-06"
 JSON_OUT = "--json" in sys.argv
 
-R2_ENDPOINT = f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
+R2_ENDPOINT = os.environ.get("ZEN_S3_ENDPOINT") or f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
 R2_ENV = {
     "AWS_ACCESS_KEY_ID": os.environ["R2_ACCESS_KEY_ID"],
     "AWS_SECRET_ACCESS_KEY": os.environ["R2_SECRET_ACCESS_KEY"],

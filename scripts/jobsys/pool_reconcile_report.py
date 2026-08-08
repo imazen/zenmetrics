@@ -25,7 +25,7 @@ for line in open(os.path.expanduser("~/.config/cloudflare/r2-credentials")):
         E[k] = v.strip().strip('"').strip("'")
 S3 = fs.S3FileSystem(
     access_key=E["R2_ACCESS_KEY_ID"], secret_key=E["R2_SECRET_ACCESS_KEY"],
-    endpoint_override="https://%s.r2.cloudflarestorage.com" % E["R2_ACCOUNT_ID"],
+    endpoint_override=os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % E["R2_ACCOUNT_ID"],
     region="auto")
 BUCKET = E.get("ZEN_BUCKET", "zentrain")
 RUNLIST = sys.argv[1] if len(sys.argv) > 1 else "jobs/_pool944v4/runlist.tsv"

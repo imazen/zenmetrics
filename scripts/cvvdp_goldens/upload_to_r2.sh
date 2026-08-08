@@ -22,7 +22,7 @@ R2_PREFIX=${2:?usage: upload_to_r2.sh <local-dir> <r2-prefix>}
 # shellcheck disable=SC1091
 source "$HOME/.config/cloudflare/r2-credentials"
 
-R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+R2_ENDPOINT="${ZEN_S3_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
 export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
 export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 

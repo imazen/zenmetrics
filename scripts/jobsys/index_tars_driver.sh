@@ -4,7 +4,7 @@
 # skips a run whose manifest.json already exists in R2. Progress -> /root/index_driver.log.
 set -uo pipefail
 set -a; . /root/idxenv.sh; set +a
-EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+EP="${ZEN_S3_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
 LOG=/root/index_driver.log; : > "$LOG"
 r2(){ s5cmd --endpoint-url "$EP" "$@"; }
 log(){ echo "[$(date -u +%H:%M:%S)] $*" | tee -a "$LOG"; }

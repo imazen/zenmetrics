@@ -19,7 +19,7 @@ _ht = os.environ.get("ZEN_SCOREFILE_HINT_THREADS")
 HINT = None
 if _hm or _ht:
     HINT = {"peak_mem_bytes": int(float(_hm or 0.5) * (1 << 30)), "threads": int(_ht or 1)}
-ep = "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
+ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
 env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
            AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
 def r2cp(local, key): subprocess.run(["s5cmd","--endpoint-url",ep,"cp",local,"s3://%s/%s"%(BUCKET,key)], env=env, check=True, stdout=subprocess.DEVNULL)

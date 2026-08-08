@@ -49,7 +49,7 @@ if LEDGER.startswith("s3://"):
         AWS_SECRET_ACCESS_KEY=creds["R2_SECRET_ACCESS_KEY"],
         AWS_REGION="auto",
     )
-    ep = "https://%s.r2.cloudflarestorage.com" % creds["R2_ACCOUNT_ID"]
+    ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % creds["R2_ACCOUNT_ID"]
     subprocess.run(
         ["aws", "s3", "cp", "--endpoint-url", ep, LEDGER, tmp, "--recursive", "--quiet"],
         env=env,

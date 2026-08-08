@@ -14,7 +14,7 @@ ap.add_argument("--metrics", required=True)
 ap.add_argument("--chunk", type=int, default=int(os.environ.get("ZEN_SCOREFILE_CHUNK", "12")))
 a = ap.parse_args()
 METRICS = a.metrics.split(",")
-ep = "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
+ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
 env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
            AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
 def r2(*args):

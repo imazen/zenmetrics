@@ -19,7 +19,7 @@ PREFIX="${PREFIX:-picker-sweep-2026-06-22/datagen-2026-06-23}"
 mkdir -p "$OUT"/{enc,omni,pairs,index,log}
 
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
-EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+EP="${ZEN_S3_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
 r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }
 
 # ref renditions uploaded once (shared across codecs; the scorer's ref images)

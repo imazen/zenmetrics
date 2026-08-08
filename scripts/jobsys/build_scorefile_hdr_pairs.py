@@ -51,7 +51,7 @@ if TRANSFER not in ("", "pu-rescale", "pq"):
     print("FATAL: ZEN_HDR_TRANSFER must be empty, pu-rescale, or pq", flush=True)
     sys.exit(1)
 
-ep = "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
+ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
 env = dict(
     os.environ,
     AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],

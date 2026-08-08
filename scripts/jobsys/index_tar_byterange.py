@@ -8,7 +8,7 @@
 #   usage: index_and_declare.py <tar_s3_uri> <cell_codec> <run> <bucket>
 import sys, os, re, json, gzip, subprocess, tarfile, time
 tar_uri, CODEC, RUN, BUCKET = sys.argv[1:5]
-EP = "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
+EP = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
 ENV = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["AWS_ACCESS_KEY_ID"],
            AWS_SECRET_ACCESS_KEY=os.environ["AWS_SECRET_ACCESS_KEY"], AWS_REGION="auto")
 if os.environ.get("AWS_SESSION_TOKEN"):
