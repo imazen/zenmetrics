@@ -557,6 +557,17 @@ struct ScorePairsArgs {
     /// Only iwssim honours this flag today; other metrics ignore it.
     #[arg(long, default_value_t = false)]
     allow_small_images: bool,
+    /// Same-ref batched scoring (zenmetrics#46): STABLE-sort the input rows by
+    /// `ref_path` before scoring, so every reference is decoded (and, for CPU
+    /// zensim, pyramid-precomputed) ONCE per ladder via the reference cache —
+    /// regardless of input row order. Within a ladder the input order (the q
+    /// sweep) is preserved. Scores are unchanged; only the OUTPUT ROW ORDER
+    /// follows the grouped order (deterministic run-to-run) — consumers join
+    /// on the identity tuple per CVVDP_SIDECAR_SCHEMA.md, never on row order.
+    /// The q-ladder corpora (same ref × ~30 quality points) are the shape this
+    /// exists for.
+    #[arg(long, default_value_t = false)]
+    group_by_ref: bool,
     /// Gate sidecar emission on a post-scoring distribution sanity check.
     /// When set, after the parquet is written, [`bogus_check`] inspects the
     /// score column and exits with rc=2 (NOT rc=1) if any of these hold:
@@ -1359,8 +1370,34 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     // source instead of once per variant. See `CachedRef`.
     let mut ref_cache: Option<CachedRef> = None;
 
-    for record in rdr.records() {
-        let record = record?;
+    // Materialize the rows (score-pairs already buffers all outputs in memory — see the note
+    // above), then optionally group them. `--group-by-ref` makes the CachedRef hit rate
+    // input-order-INDEPENDENT: a shuffled pairs TSV degrades the consecutive-same-ref cache to
+    // ~0% hits (one ref decode per PAIR); stable-sorting by ref_path restores one ref decode per
+    // LADDER while preserving each ladder's internal q order.
+    let mut records: Vec<csv::StringRecord> = Vec::new();
+    for r in rdr.records() {
+        records.push(r?);
+    }
+    if args.group_by_ref {
+        records.sort_by(|a, b| {
+            a.get(ref_idx)
+                .unwrap_or("")
+                .cmp(b.get(ref_idx).unwrap_or(""))
+        });
+        let n_refs = records
+            .iter()
+            .map(|r| r.get(ref_idx).unwrap_or(""))
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+        eprintln!(
+            "[score-pairs] --group-by-ref: {} rows grouped into {} reference ladders",
+            records.len(),
+            n_refs
+        );
+    }
+
+    for record in &records {
         let ref_path = PathBuf::from(record.get(ref_idx).ok_or("missing ref_path")?);
         let dist_path = PathBuf::from(record.get(dist_idx).ok_or("missing dist_path")?);
 

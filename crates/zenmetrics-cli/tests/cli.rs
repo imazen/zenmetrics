@@ -1829,3 +1829,114 @@ fn require_gpu_makes_missing_gpu_a_hard_error() {
          build; stderr={stderr:?}"
     );
 }
+
+/// `score-pairs --group-by-ref` parity gate (zenmetrics#46): grouping changes ONLY the output
+/// row order (stable-sorted by ref_path), never the scores. Two runs over the same shuffled
+/// TSV — grouped and ungrouped — must produce identity-tuple-matched rows with BIT-IDENTICAL
+/// scores (same binary, same deterministic CPU metric, same inputs), and the grouped run must
+/// emit each reference's ladder contiguously with its input q order preserved.
+#[test]
+#[cfg(all(feature = "sweep", feature = "cpu-metrics"))]
+fn score_pairs_group_by_ref_is_score_identical_and_grouped() {
+    use parquet::file::reader::FileReader;
+    use parquet::record::RowAccessor;
+
+    let dir = fixtures_dir();
+    let staged = tempfile::tempdir().expect("tmp");
+    // Interleave two reference ladders so the ungrouped run cannot benefit from the
+    // consecutive-same-ref cache — the exact shape --group-by-ref exists to fix.
+    let tsv = staged.path().join("pairs.tsv");
+    let r64 = dir.join("ref_64.png");
+    let r256 = dir.join("ref_256.png");
+    let d64a = dir.join("dist_noisy_64.png");
+    let d64b = dir.join("dist_identical_64.png");
+    let d256 = dir.join("dist_noisy_256.png");
+    std::fs::write(
+        &tsv,
+        format!(
+            "ref_path\tdist_path\timage_path\tcodec\tq\tknob_tuple_json\n\
+             {r64}\t{d64a}\tref64\tc\t10\t{{}}\n\
+             {r256}\t{d256}\tref256\tc\t10\t{{}}\n\
+             {r64}\t{d64b}\tref64\tc\t20\t{{}}\n",
+            r64 = r64.display(),
+            r256 = r256.display(),
+            d64a = d64a.display(),
+            d64b = d64b.display(),
+            d256 = d256.display(),
+        ),
+    )
+    .unwrap();
+
+    let run = |grouped: bool, out: &std::path::Path| {
+        let mut c = cli();
+        c.args([
+            "score-pairs",
+            "--metric",
+            "ssim2",
+            "--pairs-tsv",
+            tsv.to_str().unwrap(),
+            "--out-parquet",
+            out.to_str().unwrap(),
+        ]);
+        if grouped {
+            c.arg("--group-by-ref");
+        }
+        let out = c.output().expect("run cli");
+        assert!(
+            out.status.success(),
+            "score-pairs failed: stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    let pq_plain = staged.path().join("plain.parquet");
+    let pq_grouped = staged.path().join("grouped.parquet");
+    run(false, &pq_plain);
+    run(true, &pq_grouped);
+
+    // (image_path, q) → score-bits rows, in file order.
+    let read_rows = |p: &std::path::Path| -> Vec<(String, i64, u64)> {
+        let f = std::fs::File::open(p).expect("open parquet");
+        let r = parquet::file::reader::SerializedFileReader::new(f).expect("reader");
+        // Column layout: image_path, codec, q, knob_tuple_json, <score>, runtime — find by name.
+        let schema = r.metadata().file_metadata().schema_descr();
+        let col = |name: &str| {
+            (0..schema.num_columns())
+                .find(|&i| schema.column(i).name() == name)
+                .unwrap_or_else(|| panic!("column {name} missing"))
+        };
+        let (ip, qi) = (col("image_path"), col("q"));
+        let si = (0..schema.num_columns())
+            .find(|&i| schema.column(i).name().starts_with("ssim2"))
+            .expect("ssim2 score column");
+        r.get_row_iter(None)
+            .expect("row iter")
+            .map(|row| {
+                let row = row.expect("row");
+                (
+                    row.get_string(ip).expect("image_path").clone(),
+                    row.get_long(qi).expect("q"),
+                    row.get_double(si).expect("score").to_bits(),
+                )
+            })
+            .collect()
+    };
+    let plain = read_rows(&pq_plain);
+    let grouped = read_rows(&pq_grouped);
+    assert_eq!(plain.len(), 3);
+    assert_eq!(grouped.len(), 3);
+
+    // Parity: identity-matched rows carry BIT-identical scores.
+    let mut a = plain.clone();
+    let mut b = grouped.clone();
+    a.sort();
+    b.sort();
+    assert_eq!(a, b, "grouping must not change any score");
+
+    // Grouping: the two ref64 rows are contiguous AND keep their input q order (10 before 20).
+    let order: Vec<(&str, i64)> = grouped.iter().map(|(p, q, _)| (p.as_str(), *q)).collect();
+    assert_eq!(
+        order,
+        vec![("ref256", 10), ("ref64", 10), ("ref64", 20)],
+        "stable sort by ref_path: ladders contiguous, q order preserved"
+    );
+}
