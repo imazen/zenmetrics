@@ -139,6 +139,39 @@ changing the executor. `scripts/jobsys/example_executor.py` remains a template i
 
 ---
 
+## 2b. Choosing the object store: `ZEN_S3_ENDPOINT` (one env var)
+
+Everything above says "R2", but the job system is store-agnostic: any S3-compatible
+endpoint that supports conditional `PUT If-None-Match: *` (the claim lease) works. The
+operator-side selection is ONE env var, resolved by `scripts/lib/s3env.sh` (shell) /
+`scripts/lib/zen_s3env.py` (Python) — the single owner of endpoint+credential
+resolution; never re-derive an endpoint in a new script:
+
+| `ZEN_S3_ENDPOINT` | store | credentials |
+|---|---|---|
+| unset (default) | Cloudflare R2 (derived from `~/.config/cloudflare/r2-credentials`) | R2 creds, scoped temp mints for workers — unchanged legacy behavior |
+| set | that endpoint (e.g. a LAN deployment) | `ZEN_S3_ACCESS_KEY_ID`/`ZEN_S3_SECRET_ACCESS_KEY`, or `~/.config/zen/lanstore.env` (override path with `ZEN_S3_ENV`) |
+
+Rules:
+
+- **Default-unset = zero behavior change.** In-flight runs and their creds are untouched;
+  cutover applies to NEW declares only.
+- **Workers are already endpoint-agnostic** — they receive `ZEN_R2_ENDPOINT` + `AWS_*` by
+  injection at launch. Launchers that source `s3env.sh` inject the resolved `$EP`, so the
+  fleet follows the operator's selection with no worker-side changes.
+- **Cloud tiers cannot use a LAN store** (it is not reachable from Hetzner/vast/Salad and
+  never will be — no inbound ports to the LAN, by design). `launch_fleet.sh` refuses loud
+  if `ZEN_S3_ENDPOINT` is set while cloud tiers are requested; the cloud-only launchers
+  (`pool_launch.sh`, `hetzner_*`, `gpu_*` vast launchers, `loo_fleet.sh`,
+  `launch_backfill.sh`) stay pinned to R2 regardless of the env, so a stray operator
+  variable can never strand a paid fleet. Choose per RUN: LAN-resident fleets (household
+  boxes + local) on the LAN store; cloud-burst fleets on R2.
+- On a LAN store there is no temp-cred mint (that API is R2-only): LAN workers receive
+  the store credential directly (trusted segment), and `ZEN_CORPUS_AWS_*` stays unset —
+  corpus reads fall back to the ambient cred, which covers all buckets there.
+- Bucket names are identical on every store (`zentrain` / `codec-corpus` / `zenfuzz`),
+  so `s3://…` paths are portable; only the endpoint swaps.
+
 ## 3. Prerequisites (one-time)
 
 - **Built CLIs on the workstation:** `cargo build --release -p zenfleet-worker -p zenfleet-ctl`
