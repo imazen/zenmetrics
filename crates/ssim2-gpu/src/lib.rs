@@ -320,6 +320,24 @@ pub enum Error {
     /// whole-image path for RD-search if you need a cached reference,
     /// or wait for the v2 strip-aware set_reference.
     CachedRefNotSupportedInStripMode,
+    /// Reading the reduction sums buffer back from the device failed.
+    /// Previously an `.expect()`, i.e. a panic on whatever thread got there.
+    SumsReadbackFailed(String),
+    /// The reduction sums buffer came back **all zeros**, meaning the GPU
+    /// kernels never wrote it — the dispatch failed (typically VRAM
+    /// exhaustion) even though nothing returned an error.
+    ///
+    /// This cannot happen for a real image pair. `sums` is zero-filled at the
+    /// start of every compute and every scale contributes strictly positive
+    /// Σ(ssim); even two *identical* images yield large non-zero sums. So
+    /// all-zero is an unambiguous "the kernels did not run" signature, not a
+    /// degenerate-but-valid input.
+    ///
+    /// Why this is an error and not a score: all-zero sums flow through the
+    /// SSIMULACRA2 sigmoid to ≈ **99.99**, i.e. "images are identical /
+    /// perfect quality" — a plausible, in-range, maximally-wrong value that
+    /// silently poisons any sidecar it lands in. See imazen/zenmetrics#41.
+    ReductionDidNotRun,
 }
 
 impl std::fmt::Display for Error {
@@ -350,6 +368,15 @@ impl std::fmt::Display for Error {
                 f,
                 "set_reference is not supported on strip-mode instances — \
                  fall back to the whole-image path (Ssim2::new) for cached-reference RD-search"
+            ),
+            Error::SumsReadbackFailed(e) => {
+                write!(f, "failed to read the reduction sums buffer back: {e}")
+            }
+            Error::ReductionDidNotRun => write!(
+                f,
+                "GPU reduction produced an all-zero sums buffer — the kernels did not run \
+                 (typically VRAM exhaustion). Refusing to return the ~99.99 'identical \
+                 images' score this would otherwise produce"
             ),
         }
     }

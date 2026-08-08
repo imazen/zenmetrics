@@ -758,7 +758,7 @@ impl<R: Runtime> Ssim2<R> {
         self.run_finalizer();
 
         Ok(GpuSsim2Result {
-            score: self.read_and_aggregate(),
+            score: self.read_and_aggregate()?,
         })
     }
 
@@ -827,7 +827,7 @@ impl<R: Runtime> Ssim2<R> {
             self.process_scale(s, mode);
         }
         self.run_finalizer();
-        let score = self.read_and_aggregate();
+        let score = self.read_and_aggregate()?;
         self.xyb_flavor = prev_flavor;
 
         Ok(GpuSsim2Result { score })
@@ -937,7 +937,7 @@ impl<R: Runtime> Ssim2<R> {
         self.run_finalizer();
 
         Ok(GpuSsim2Result {
-            score: self.read_and_aggregate(),
+            score: self.read_and_aggregate()?,
         })
     }
 
@@ -1326,7 +1326,7 @@ impl<R: Runtime> Ssim2<R> {
         self.run_finalizer();
 
         Ok(GpuSsim2Result {
-            score: self.read_and_aggregate(),
+            score: self.read_and_aggregate()?,
         })
     }
 
@@ -1422,7 +1422,7 @@ impl<R: Runtime> Ssim2<R> {
             let bytes = self
                 .client
                 .read_one(self.sums.clone())
-                .expect("read sums buffer (strip cached-ref)");
+                .map_err(|e| Error::SumsReadbackFailed(format!("{e:?}")))?;
             let raw = f32::from_bytes(&bytes);
             debug_assert_eq!(raw.len(), SUMS_LEN);
             for slot in 0..n_slots {
@@ -1433,7 +1433,7 @@ impl<R: Runtime> Ssim2<R> {
         }
 
         Ok(GpuSsim2Result {
-            score: self.aggregate_from_accumulators(&acc_sum, &acc_p4, meta),
+            score: self.aggregate_from_accumulators(&acc_sum, &acc_p4, meta)?,
         })
     }
 
@@ -1569,7 +1569,7 @@ impl<R: Runtime> Ssim2<R> {
 
     /// Strip-mode mode-E error_maps: ref inputs from full buffers
     /// (transposed orientation, inner stride = `full_h`); dist inputs
-    /// + outputs in strip-shape transposed (inner stride = `strip_h`).
+    /// and outputs in strip-shape transposed (inner stride = `strip_h`).
     /// `strip_top_at_s` is the row offset where the strip starts in
     /// the full transposed buffer's inner-index axis.
     fn run_error_maps_strip_cached_ref(&self, scale: usize, mode: Ssim2Mode, strip_top_at_s: u32) {
@@ -1747,7 +1747,7 @@ impl<R: Runtime> Ssim2<R> {
             let bytes = self
                 .client
                 .read_one(self.sums.clone())
-                .expect("read sums buffer (strip)");
+                .map_err(|e| Error::SumsReadbackFailed(format!("{e:?}")))?;
             let raw = f32::from_bytes(&bytes);
             debug_assert_eq!(raw.len(), SUMS_LEN);
             for slot in 0..n_slots {
@@ -1764,7 +1764,7 @@ impl<R: Runtime> Ssim2<R> {
         // sigmoid as `read_and_aggregate` but driven from the
         // host-side accumulators instead of the on-device sums buffer.
         Ok(GpuSsim2Result {
-            score: self.aggregate_from_accumulators(&acc_sum, &acc_p4, meta),
+            score: self.aggregate_from_accumulators(&acc_sum, &acc_p4, meta)?,
         })
     }
 
@@ -1882,7 +1882,20 @@ impl<R: Runtime> Ssim2<R> {
     /// summed across strips and the n_pix divisor taken from `meta` (the
     /// **full image** pixel count at each scale, not the per-strip
     /// count — every strip's body sums add up to one whole-image sum).
-    fn aggregate_from_accumulators(&self, acc_sum: &[f64], acc_p4: &[f64], meta: StripMeta) -> f64 {
+    fn aggregate_from_accumulators(
+        &self,
+        acc_sum: &[f64],
+        acc_p4: &[f64],
+        meta: StripMeta,
+    ) -> Result<f64> {
+        // Dead-reduction guard, strip-mode twin of the one in
+        // `read_and_aggregate` (imazen/zenmetrics#41). Accumulators start at
+        // zero and every strip adds strictly positive S(ssim), so an all-zero
+        // accumulator means NO strip's kernels ran. Returning normally here
+        // would yield the ~99.99 "identical images" score.
+        if acc_sum.iter().all(|&x| x == 0.0) && acc_p4.iter().all(|&x| x == 0.0) {
+            return Err(Error::ReductionDidNotRun);
+        }
         let mut avg_ssim = vec![[0.0_f64; 6]; NUM_SCALES];
         let mut avg_edgediff = vec![[0.0_f64; 12]; NUM_SCALES];
 
@@ -1919,7 +1932,7 @@ impl<R: Runtime> Ssim2<R> {
                 avg_edgediff[scale][ch * 4 + 3] = (one_per_pixels * acc_p4[d_slot]).sqrt().sqrt();
             }
         }
-        score_from_stats(&avg_ssim, &avg_edgediff, n_scales)
+        Ok(score_from_stats(&avg_ssim, &avg_edgediff, n_scales))
     }
 
     // ───────────────────────── helpers ─────────────────────────
@@ -2307,7 +2320,7 @@ impl<R: Runtime> Ssim2<R> {
     /// Output orientation: TRANSPOSED (`height × width` row-major).
     /// This is the original "v-pass + transpose + v-pass" three-step;
     /// it's still used by strip-mode mode-E (`set_reference_strip_mode`
-    /// + `compute_with_reference_strip_with_mode`) because the cached
+    /// and `compute_with_reference_strip_with_mode`) because the cached
     /// `ref_xyb_t_full`, `mu1_full_full`, `sigma11_full_full` slots are
     /// in transposed orientation and the `error_maps_strip_from_full_ref_kernel`
     /// indexes them under the `full_inner_stride = full_h` (transposed
@@ -2953,13 +2966,29 @@ impl<R: Runtime> Ssim2<R> {
     /// Read the sums buffer back to host and compute the final SSIMULACRA2
     /// score. Mirrors `ssimulacra2::Msssim::score` exactly (same WEIGHT
     /// table, same sigmoid).
-    fn read_and_aggregate(&mut self) -> f64 {
+    fn read_and_aggregate(&mut self) -> Result<f64> {
         let bytes = self
             .client
             .read_one(self.sums.clone())
-            .expect("read sums buffer");
+            .map_err(|e| Error::SumsReadbackFailed(format!("{e:?}")))?;
         let raw = f32::from_bytes(&bytes);
         debug_assert_eq!(raw.len(), SUMS_LEN);
+
+        // Dead-reduction guard (imazen/zenmetrics#41). `sums` is zero-filled at
+        // the start of every compute, so an all-zero readback means the kernels
+        // never wrote it — the dispatch failed silently, which is what VRAM
+        // exhaustion looks like from here: cubecl panics on its own worker
+        // thread, no Result on this thread observes it, and we would sail on.
+        //
+        // No false positives: every scale contributes strictly positive
+        // Σ(ssim), so even two identical images produce large non-zero sums.
+        // Exactly-zero is unreachable for real input.
+        //
+        // Without this, all-zero sums flow through the sigmoid below to ≈99.99
+        // — "perfect quality" — and get written to a sidecar as if measured.
+        if raw.iter().all(|&x| x == 0.0) {
+            return Err(Error::ReductionDidNotRun);
+        }
 
         // T_y.A (2026-05-17): the per-call zero-fill moved to the
         // START of `compute_with_mode` / `compute_with_reference_with_mode`
@@ -2999,7 +3028,11 @@ impl<R: Runtime> Ssim2<R> {
             }
         }
 
-        score_from_stats(&avg_ssim, &avg_edgediff, self.scales.len())
+        Ok(score_from_stats(
+            &avg_ssim,
+            &avg_edgediff,
+            self.scales.len(),
+        ))
     }
 }
 
