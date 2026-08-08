@@ -165,6 +165,27 @@ gpu-zensim = ["dep:zenmetrics-api", "zenmetrics-api/zensim", "cpu-metrics"]
 # per-crate gets the right backend feature.
 gpu-cuda = ["zenmetrics-api?/cuda", "cubecl?/cuda"]
 gpu-wgpu = ["zenmetrics-api?/wgpu", "cubecl?/wgpu"]
+# Opt-in: compile the wgpu backend's kernels through cubecl's NATIVE SPIR-V
+# codegen (cubecl-spirv) instead of the default WGSL -> naga -> SPIR-V path.
+# Vulkan only; cubecl-wgpu documents `msl` and `spirv` as mutually exclusive, so
+# this must NOT be enabled for a Metal build.
+#
+# MEASURED 2026-08-07 on lianli (RTX 2080, ssim2, min-of-run, back-to-back):
+# 1.35x faster at 64x64, 1.27x at 256x256, 1.15x at 1024x1024, narrowing the
+# Vulkan-vs-CUDA gap at 1024x1024 from 2.09x to 1.59x. Scores unchanged.
+# See benchmarks/ssim2_backend_ab_2026-08-07.md and imazen/zenmetrics#44.
+#
+# Left OFF by default deliberately: the numbers above come from a card shared
+# with a fleet worker (repeatability floor 4-9%, so the 1024x1024 figure is not
+# comfortably clear of noise) and cover ONE metric on ONE card. Re-measure on an
+# idle GPU across metrics before promoting this to a default for wgpu images.
+#
+# Enables `dep:cubecl` itself rather than using `cubecl?/vulkan`: the optional
+# `cubecl` dep is only turned on by `gpu-butteraugli` / `gpu-cvvdp`, so the `?`
+# form would SILENTLY NO-OP in any combination without those (e.g.
+# `gpu-ssim2,gpu-wgpu-spirv`) — you would get the WGSL path while believing you
+# had SPIR-V. Verified with `cargo tree -e features -i zenforks-cubecl-wgpu`.
+gpu-wgpu-spirv = ["gpu-wgpu", "dep:cubecl", "cubecl/vulkan"]
 gpu-hip = ["zenmetrics-api?/hip", "cubecl?/hip"]
 gpu-cpu = ["zenmetrics-api?/cpu", "cubecl?/cpu"]
 
