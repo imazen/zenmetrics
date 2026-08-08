@@ -46,6 +46,15 @@ pub enum ErrorClass {
     MetricNan,
     UploadFail,
     WorkerLost,
+    /// Fetching the job's SOURCE bytes (corpus image / persisted variant) failed — network, cred, or
+    /// object-missing. Transient by default: a retry on another box (or after a cred refresh)
+    /// usually succeeds; a deterministic config gap (the G-Z2 corpus-cred incident, 2026-08-06,
+    /// where every fetch failed and was mislabeled `encoder_panic`) still poisons at the retry cap.
+    SourceFetch,
+    /// `ENOSPC` — no space on the box's scratch/output disk. Box-level and transient: another box
+    /// (or the same box after the between-pass scratch sweep) succeeds. Previously mislabeled
+    /// `encoder_panic` (the hdrgrid ENOSPC incident, `9d30a00b`) which poisoned the cells.
+    DiskFull,
     Unknown,
 }
 
@@ -61,8 +70,28 @@ impl ErrorClass {
                 | ErrorClass::Oom
                 | ErrorClass::UploadFail
                 | ErrorClass::WorkerLost
+                | ErrorClass::SourceFetch
+                | ErrorClass::DiskFull
                 | ErrorClass::Unknown
         )
+    }
+
+    /// Strict parse of the snake_case wire/ledger string (`"oom"`, `"source_fetch"`, …).
+    /// `None` for anything this binary doesn't know — callers decide whether unknown means
+    /// "ignore the claim" (executor marker lines) or "degrade to [`ErrorClass::Unknown`]"
+    /// (ledger rows written by a newer binary — see [`ErrorClass::parse_lossy`]).
+    pub fn parse_strict(s: &str) -> Option<ErrorClass> {
+        serde_json::from_value(serde_json::Value::String(s.to_string())).ok()
+    }
+
+    /// Forgiving parse for cross-version reads: an error-class string this binary doesn't know
+    /// (written by a newer worker/executor) degrades to [`ErrorClass::Unknown`] — which is
+    /// TRANSIENT, so the reconciler retries rather than poisons — instead of failing the whole
+    /// ledger read. Classification is advisory metadata; refusing to load a million-row ledger
+    /// over one unknown label is the wrong trade (rolling-upgrade hazard: a mixed-rev fleet
+    /// shares snapshots).
+    pub fn parse_lossy(s: &str) -> ErrorClass {
+        Self::parse_strict(s).unwrap_or(ErrorClass::Unknown)
     }
 }
 
@@ -74,9 +103,32 @@ mod tests {
     fn transient_vs_deterministic() {
         assert!(ErrorClass::Timeout.is_transient());
         assert!(ErrorClass::WorkerLost.is_transient());
+        assert!(ErrorClass::SourceFetch.is_transient());
+        assert!(ErrorClass::DiskFull.is_transient());
         assert!(!ErrorClass::DecodeError.is_transient());
         assert!(!ErrorClass::MetricNan.is_transient());
         assert!(!ErrorClass::EncoderPanic.is_transient());
+    }
+
+    #[test]
+    fn error_class_parse_strict_and_lossy() {
+        assert_eq!(ErrorClass::parse_strict("oom"), Some(ErrorClass::Oom));
+        assert_eq!(
+            ErrorClass::parse_strict("source_fetch"),
+            Some(ErrorClass::SourceFetch)
+        );
+        assert_eq!(
+            ErrorClass::parse_strict("disk_full"),
+            Some(ErrorClass::DiskFull)
+        );
+        // Unknown string: strict refuses (caller ignores the claim)…
+        assert_eq!(ErrorClass::parse_strict("gpu_meltdown_v2"), None);
+        // …lossy degrades to the transient Unknown (cross-version ledger read).
+        assert_eq!(
+            ErrorClass::parse_lossy("gpu_meltdown_v2"),
+            ErrorClass::Unknown
+        );
+        assert_eq!(ErrorClass::parse_lossy("disk_full"), ErrorClass::DiskFull);
     }
 
     #[test]

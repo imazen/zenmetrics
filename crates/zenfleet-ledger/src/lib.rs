@@ -247,13 +247,14 @@ pub fn read_ledger(path: &Path) -> Result<Vec<LedgerRow>, LedgerError> {
                     })?)
                 },
                 status: enum_parse::<JobStatus>(status.value(i), "status")?,
+                // FORGIVING parse (2026-08-08): an error-class string this binary doesn't know —
+                // written by a newer worker rev in a mixed-rev fleet — degrades to the transient
+                // `Unknown` instead of failing the whole ledger/snapshot read. Classification is
+                // advisory; `status` (which drives correctness) stays strict below/above.
                 error_class: if error_class.is_null(i) {
                     None
                 } else {
-                    Some(enum_parse::<ErrorClass>(
-                        error_class.value(i),
-                        "error_class",
-                    )?)
+                    Some(ErrorClass::parse_lossy(error_class.value(i)))
                 },
                 attempts: attempts.value(i),
                 ts: ts.value(i),
@@ -569,6 +570,57 @@ mod tests {
         assert_eq!(back.len(), 2);
         // order is preserved within a single write
         assert_eq!(back, rows);
+        std::fs::remove_file(&p).ok();
+    }
+
+    /// A ledger written by a NEWER binary may carry error-class strings this binary doesn't know.
+    /// The read must degrade them to the transient `Unknown` — never fail the whole read (mixed-rev
+    /// fleets share snapshots; refusing to load a snapshot over one label is a fleet outage).
+    /// Simulates the future writer by patching a known class string in the raw parquet build path.
+    #[test]
+    fn unknown_error_class_reads_as_unknown_not_error() {
+        let p = tmp("futureclass");
+        let r = &row(
+            "ssim2",
+            b"a",
+            JobStatus::Failed,
+            100,
+            Some(ErrorClass::Timeout),
+        );
+        // Build the batch exactly as write_ledger does, but with a class string from the future.
+        let schema = ledger_schema();
+        let batch = RecordBatch::try_new(
+            schema.clone(),
+            vec![
+                Arc::new(StringArray::from_iter_values([r.job_id.as_str()])),
+                Arc::new(StringArray::from_iter_values([r.cell.image_path.as_str()])),
+                Arc::new(StringArray::from_iter_values([r.cell.codec.as_str()])),
+                Arc::new(Int64Array::from_iter_values([r.cell.q])),
+                Arc::new(StringArray::from_iter_values([r
+                    .cell
+                    .knob_tuple_json
+                    .as_str()])),
+                Arc::new(StringArray::from(vec![None::<&str>])),
+                Arc::new(StringArray::from_iter_values([enum_str(&r.status)])),
+                Arc::new(StringArray::from_iter_values(["vram_starvation_v9"])),
+                Arc::new(UInt32Array::from_iter_values([r.attempts])),
+                Arc::new(UInt64Array::from_iter_values([r.ts])),
+                Arc::new(StringArray::from_iter_values([r.worker.as_str()])),
+                Arc::new(StringArray::from_iter_values([r.provider.as_str()])),
+                Arc::new(StringArray::from_iter_values([serde_json::to_string(
+                    &r.kind,
+                )
+                .unwrap()])),
+            ],
+        )
+        .unwrap();
+        write_batch(&p, schema, batch).unwrap();
+        let back = read_ledger(&p).expect("unknown error_class must not fail the read");
+        assert_eq!(back.len(), 1);
+        assert_eq!(back[0].error_class, Some(ErrorClass::Unknown));
+        assert!(back[0].error_class.unwrap().is_transient());
+        // status stays STRICT — it drives correctness, not classification.
+        assert_eq!(back[0].status, JobStatus::Failed);
         std::fs::remove_file(&p).ok();
     }
 
