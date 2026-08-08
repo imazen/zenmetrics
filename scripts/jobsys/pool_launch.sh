@@ -32,6 +32,8 @@ HCLOUD_TOKEN="${HCLOUD_TOKEN:-$(grep -E '^api_token=' ~/.config/hetzner/credenti
 [ -n "$HCLOUD_TOKEN" ] || { echo "FATAL: no hcloud token"; exit 1; }
 export HCLOUD_TOKEN
 LOG=~/tmp/hz720/pool_launch.log; mkdir -p ~/tmp/hz720; log(){ echo "[$(date -u +%H:%M:%S)] $*" | tee -a "$LOG"; }
+# pool_launch brings up CLOUD boxes — a LAN store is unreachable from them; fail loud.
+[ -n "${ZEN_S3_ENDPOINT:-}" ] && { echo "FATAL: pool_launch.sh launches cloud boxes; unset ZEN_S3_ENDPOINT (LAN store unreachable from cloud)" >&2; exit 1; }
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }

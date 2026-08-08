@@ -19,10 +19,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WK="$ROOT/target/debug/zenfleet-worker"
 JC="$ROOT/target/debug/zenfleet-ctl"
-EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-BUCKET="$R2_BUCKET"
-export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
-export AWS_REGION=auto AWS_DEFAULT_REGION=auto
+# EP + creds via the single resolver (ZEN_S3_ENDPOINT overrides; default = R2, unchanged)
+. "$ROOT/scripts/lib/s3env.sh"
+BUCKET="${R2_BUCKET:-zentrain}"
+export AWS_DEFAULT_REGION=auto
 PFX="jobsys-demo-$(date -u +%Y%m%d-%H%M%S)"
 W="$(mktemp -d)"
 cleanup() {

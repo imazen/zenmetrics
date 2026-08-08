@@ -32,7 +32,7 @@ need_run() { [[ -n "${1:-}" ]] || { echo "need <run>" >&2; usage; }; }
 
 r2_count() {  # s3-uri-prefix  regex → count of matching keys
     [[ -z "${R2_ACCOUNT_ID:-}" ]] && { echo 0; return; }
-    s5cmd --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+    s5cmd --endpoint-url "${ZEN_S3_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}" \
         ls "$1" 2>/dev/null | grep -Ec "${2:-.}" || true
 }
 

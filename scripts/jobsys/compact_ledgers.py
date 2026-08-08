@@ -17,17 +17,13 @@ import os, sys, time
 import pyarrow as pa, pyarrow.dataset as ds, pyarrow.fs as fs, pyarrow.parquet as pq, pyarrow.compute as pc
 
 E = dict(os.environ)
-_cred = os.path.expanduser("~/.config/cloudflare/r2-credentials")
-if os.path.exists(_cred):
-    for line in open(_cred):
-        line = line.strip()
-        if line.startswith("R2_") and "=" in line:
-            k, v = line.split("=", 1)
-            E[k] = v.strip().strip('"').strip("'")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+from zen_s3env import resolve  # noqa: E402  (ZEN_S3_ENDPOINT overrides; default = R2, unchanged)
 
+_ep, _ak, _sk = resolve()
 S3 = fs.S3FileSystem(
-    access_key=E["R2_ACCESS_KEY_ID"], secret_key=E["R2_SECRET_ACCESS_KEY"],
-    endpoint_override="https://%s.r2.cloudflarestorage.com" % E["R2_ACCOUNT_ID"], region="auto")
+    access_key=_ak, secret_key=_sk,
+    endpoint_override=_ep, region="auto")
 
 run = sys.argv[1]
 bucket = E.get("ZEN_BUCKET", "zentrain")

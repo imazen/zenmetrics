@@ -10,8 +10,8 @@
 # Runs on the box holding the R2 creds (dev box / launcher) — never bakes creds onto a remote worker.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-set -a; . "$HOME/.config/cloudflare/r2-credentials"; set +a
-EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+# EP + creds via the single resolver (ZEN_S3_ENDPOINT overrides; default = R2, unchanged)
+. "$HERE/../lib/s3env.sh"
 BUCKET="${ZEN_BUCKET:-zentrain}"
 SNAP_DIR="$HOME/tmp/zen-snaps"; mkdir -p "$SNAP_DIR"
 LOG="$SNAP_DIR/refresh.log"

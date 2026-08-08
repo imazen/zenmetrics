@@ -14,7 +14,9 @@ log(){ echo "[$(date -u +%H:%M:%SZ)] $*" >> "$LOG"; }
 #    (pool_done_check.py reads every ledger and is too slow at fleet scale — it stays a manual tool only.)
 if [ -f ~/tmp/hz720/pool_done.marker ]; then log "done marker present — no launch"; exit 0; fi
 set -a; . ~/.config/cloudflare/r2-credentials 2>/dev/null; set +a
-EP="https://${R2_ACCOUNT_ID:-x}.r2.cloudflarestorage.com"
+# endpoint override only (pool boxes are cloud-side; this cron's drain-beacon read follows the
+# store the pool actually runs on — ZEN_S3_ENDPOINT is honored for a future LAN-resident pool)
+EP="${ZEN_S3_ENDPOINT:-https://${R2_ACCOUNT_ID:-x}.r2.cloudflarestorage.com}"
 DRAINED=$(AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:-}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:-}" AWS_REGION=auto \
   s5cmd --endpoint-url "$EP" ls "s3://zentrain/jobs/_pool/drained/" 2>/dev/null \
   | awk -v now="$(date +%s)" '{n=split($NF,a,"-"); e=a[n]+0; if (e>0 && now-e < 4200) c++} END{print c+0}')

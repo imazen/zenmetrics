@@ -34,23 +34,36 @@ N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"
 BUCKET="${ZEN_FLEET_BUCKET:-zentrain}"   # run-WRITE bucket: manifest / claims / ledger / blobs
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-set -a; . ~/.config/cloudflare/r2-credentials; set +a
-EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+# EP + creds via the single resolver (ZEN_S3_ENDPOINT overrides; default = R2, unchanged)
+. "$ROOT/scripts/lib/s3env.sh"
+if [ -n "${ZEN_S3_ENDPOINT:-}" ] && { [ "$N_HZ" != "0" ] || [ "$N_VAST" != "0" ] || [ "$N_HZ_ARM" != "0" ]; }; then
+  echo "FATAL: ZEN_S3_ENDPOINT is set but cloud tiers were requested (hz=$N_HZ vast=$N_VAST arm=$N_HZ_ARM)." >&2
+  echo "       A LAN store is not reachable from cloud boxes — run cloud fleets on the default store," >&2
+  echo "       or pass 0 for every cloud tier." >&2
+  exit 1
+fi
 RUN="fleet-$(date -u +%Y%m%d-%H%M%S)"
 echo "### launching fleet on s3://$BUCKET/$RUN/  image=$IMAGE  jobs=$N_JOBS  hetzner-x86=$N_HZ hetzner-arm=$N_HZ_ARM vast=$N_VAST"
 
 # 1. mint SCOPED temp creds (object-read-write to this run only; never the root key on remote boxes)
+if [ -n "${ZEN_S3_ENDPOINT:-}" ]; then
+  # LAN store: the temp-cred mint API is R2-only. LAN-tier workers (household boxes on the same
+  # trusted segment) receive the store credential directly; cloud tiers are refused above.
+  AK="$R2_ACCESS_KEY_ID"; SK="$R2_SECRET_ACCESS_KEY"; ST=""
+  echo "LAN store selected: static store cred for workers (no scoped mint)"
+else
 body=$(python3 -c "import json,os;print(json.dumps({'bucket':'$BUCKET','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':10800,'prefixes':['$RUN/']}))")
 curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$body" \
   "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/fleet_cred.json
 read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/fleet_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
 echo "minted scoped run creds (3h, rw $BUCKET/$RUN)"
+fi
 
 # 1b. Corpus READ-ONLY cred — a SECOND single-bucket cred for the corpus when it differs from the run
 # bucket (R2 temp creds are single-bucket). jobexec reads codec-corpus with this via ZEN_CORPUS_AWS_*;
 # the run cred above (rw, scoped to $RUN/) never touches the read-only corpus.
 CAK=""; CSK=""; CST=""; CORPUS_CRED_ENV=""
-if [ "$CORPUS_BUCKET" != "$BUCKET" ]; then
+if [ -z "${ZEN_S3_ENDPOINT:-}" ] && [ "$CORPUS_BUCKET" != "$BUCKET" ]; then
   cbody=$(CB="$CORPUS_BUCKET" CP="$CORPUS" python3 -c "import json,os;p=os.environ.get('CP','').strip('/');print(json.dumps({'bucket':os.environ['CB'],'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-only','ttlSeconds':10800,**({'prefixes':[p+'/']} if p else {})}))")
   curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$cbody" \
     "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/fleet_corpus_cred.json
@@ -107,7 +120,7 @@ json.dump(j, open("/tmp/fleet_manifest_"+w+".json","w"))'
 # common env block the entrypoint reads (scoped creds + queue coordinates + pause control).
 # $1 = provider label, $2 = ZEN_MANIFEST_URI (defaults to the shared manifest if omitted).
 envblock() { cat <<EOF
--e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK -e AWS_SESSION_TOKEN=$ST -e AWS_REGION=auto
+-e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK ${ST:+-e AWS_SESSION_TOKEN=$ST} -e AWS_REGION=auto
 -e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUN -e ZEN_MANIFEST_URI=${2:-$MANIFEST}
 -e ZEN_PROVIDER=$1 -e ZEN_EXEC=$EXEC -e ZEN_CORPUS_BUCKET=$CORPUS_BUCKET -e ZEN_CORPUS_PREFIX=$CORPUS $CORPUS_CRED_ENV -e ZEN_SPEC_THRESHOLD_SECS=20 -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_IDLE_PASSES=8
 EOF
