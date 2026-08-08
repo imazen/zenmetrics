@@ -23,9 +23,9 @@ mod s3io;
 
 use zenfleet_core::epoch::{self, ClaimMode, EpochShardCfg, Handicaps, Roster, ShardDecision};
 use zenfleet_core::{
-    BlobIndexEntry, BoxBudget, DesiredJob, ErrorClass, InFlight, JobCost, JobId, JobStatus,
-    LedgerRow, LedgerView, Regenerability, ResourceClass, ResourceHint, RetryPolicy, RunControl,
-    Sha256Hex, Tombstone, gc_plan, lru_cap_evict, reconcile, sha256, worker_serves,
+    BlobIndexEntry, BoxBudget, DesiredJob, ErrorClass, InFlight, JobCost, JobId, JobKind,
+    JobStatus, LedgerRow, LedgerView, Regenerability, ResourceClass, ResourceHint, RetryPolicy,
+    RunControl, Sha256Hex, Tombstone, gc_plan, lru_cap_evict, reconcile, sha256, worker_serves,
 };
 
 /// A classified execution failure — becomes a FAILED ledger row carrying this `error_class`, which
@@ -1420,16 +1420,19 @@ fn classify_child_failure(status: &std::process::ExitStatus) -> ErrorClass {
     ErrorClass::EncoderPanic
 }
 
-/// A long-lived `program --serve` child for the persistent executor. One per worker PROCESS; since the
-/// fleet runs one (long) pass per process, this child stays warm across all of a pass's jobs, so CUDA
-/// init + GPU kernel compilation are paid ONCE rather than per job.
+/// A long-lived `program --serve` child for the persistent executor. Children live in a
+/// [`WarmExecPool`] (one per worker PROCESS); since the fleet runs one (long) pass per process,
+/// each child stays warm across many of the pass's jobs, so CUDA init + GPU kernel compilation are
+/// paid ONCE per child rather than per job.
 struct PersistentExec {
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
 }
 
-static PERSISTENT: Mutex<Option<PersistentExec>> = Mutex::new(None);
+/// The process-global warm pool [`exec_command_persistent`] draws from (one worker pass = one
+/// process = one executor program, so a single global is the pass-lifetime pool).
+static PERSISTENT: Mutex<Option<Arc<WarmExecPool>>> = Mutex::new(None);
 
 fn persistent_io_lost(e: io::Error) -> HandlerError {
     HandlerError::new(ErrorClass::WorkerLost, format!("persistent exec io: {e}"))
@@ -1526,29 +1529,165 @@ impl PersistentExec {
     }
 }
 
-/// Persistent variant of [`exec_command`]: keep ONE warm `program --serve` child for this worker
-/// process and stream length-framed jobs to it, so CUDA init + kernel compilation are paid once rather
-/// than per job (the fix for ~20s/job cold-process overhead on GPU metric fleets). On child death the
-/// global handle is dropped and the next call respawns; a per-job error/panic (child still alive) is a
-/// deterministic failure that does NOT kill the warm child.
-pub fn exec_command_persistent(program: &str, job: &DesiredJob) -> Result<Vec<u8>, HandlerError> {
-    let job_json = serde_json::to_vec(job)
-        .map_err(|e| HandlerError::new(ErrorClass::Unknown, format!("serialize job: {e}")))?;
-    let mut guard = PERSISTENT.lock().unwrap_or_else(|p| p.into_inner());
-    if guard.is_none() {
-        *guard = Some(spawn_serve(program)?);
-    }
-    let res = guard.as_mut().expect("just set above").run_job(&job_json);
-    if let Err(e) = &res
-        && matches!(e.class, ErrorClass::WorkerLost)
-    {
-        // Child presumed dead → drop it so the next job respawns a fresh warm child.
-        if let Some(mut pe) = guard.take() {
-            let _ = pe.child.kill();
-            let _ = pe.child.wait();
+/// Recycle policy for warm executor children. Long-lived GPU processes accumulate RSS (allocator
+/// high-water, decoder scratch, driver caches) — a child past either bound is killed after its
+/// current job and the next job spawns a fresh one, re-paying CUDA init + JIT ONCE per recycle
+/// instead of per job.
+#[derive(Debug, Clone, Copy)]
+pub struct WarmPoolCfg {
+    /// Kill a child whose `/proc/<pid>/status` VmRSS exceeds this after a job. `0` disables.
+    pub rss_max_bytes: u64,
+    /// Kill a child after this many jobs. `0` disables.
+    pub max_jobs_per_child: u64,
+}
+
+impl WarmPoolCfg {
+    /// Defaults: 8 GiB RSS watermark (`ZEN_PERSISTENT_RSS_MAX_GB`), 10,000 jobs
+    /// (`ZEN_PERSISTENT_MAX_JOBS`). The watermark also bounds the admission blind spot: idle warm
+    /// children's RSS is NOT counted by [`BoxBudget::can_admit`] (only admitted jobs' hints are),
+    /// so worst-case unaccounted memory ≈ watermark × idle children.
+    pub fn from_env() -> Self {
+        let gb = std::env::var("ZEN_PERSISTENT_RSS_MAX_GB")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(8.0);
+        let max_jobs = std::env::var("ZEN_PERSISTENT_MAX_JOBS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(10_000);
+        WarmPoolCfg {
+            rss_max_bytes: (gb.max(0.0) * (1u64 << 30) as f64) as u64,
+            max_jobs_per_child: max_jobs,
         }
     }
-    res
+}
+
+/// VmRSS of `pid` in bytes from `/proc/<pid>/status` (Linux; `None` elsewhere or on parse failure —
+/// the RSS watermark simply doesn't fire there, `max_jobs_per_child` still bounds recycling).
+fn rss_bytes_of_pid(pid: u32) -> Option<u64> {
+    let s = std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    let line = s.lines().find(|l| l.starts_with("VmRSS:"))?;
+    let kb: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
+    Some(kb * 1024)
+}
+
+struct PooledChild {
+    pe: PersistentExec,
+    jobs_run: u64,
+}
+
+/// A pool of warm `program --serve` children for this worker process — the chunked-path fix for
+/// GPU duty cycle (#45): the chunked claim path admits cells CONCURRENTLY (`can_admit`), so a
+/// single warm child would serialize the pass; instead each admitted cell checks a child out
+/// (spawning one if none is idle), streams its length-framed job, and returns the child warm.
+/// Pool size is therefore bounded by peak admitted concurrency (≤2 on the hinted GPU queues) —
+/// never configured, never grows past it.
+///
+/// Crash isolation is per-JOB: a child that dies mid-job fails THAT job (`WorkerLost`, transient)
+/// and is not returned; the next checkout spawns fresh. A framed per-job error keeps the child
+/// warm. [`WarmPoolCfg`] recycles children at an RSS watermark / job count so leaks stay bounded.
+pub struct WarmExecPool {
+    program: String,
+    cfg: WarmPoolCfg,
+    idle: Mutex<Vec<PooledChild>>,
+}
+
+impl WarmExecPool {
+    pub fn new(program: impl Into<String>, cfg: WarmPoolCfg) -> Self {
+        WarmExecPool {
+            program: program.into(),
+            cfg,
+            idle: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn kill_child(mut c: PooledChild) {
+        let _ = c.pe.child.kill();
+        let _ = c.pe.child.wait();
+    }
+
+    /// Run one job on a warm child (checkout → framed round-trip → recycle-or-checkin).
+    pub fn run_job(&self, job: &DesiredJob) -> Result<Vec<u8>, HandlerError> {
+        let job_json = serde_json::to_vec(job)
+            .map_err(|e| HandlerError::new(ErrorClass::Unknown, format!("serialize job: {e}")))?;
+        let mut child = {
+            let popped = self.idle.lock().unwrap_or_else(|p| p.into_inner()).pop();
+            match popped {
+                Some(c) => c,
+                None => PooledChild {
+                    pe: spawn_serve(&self.program)?,
+                    jobs_run: 0,
+                },
+            }
+        };
+        let res = child.pe.run_job(&job_json);
+        match &res {
+            // Framing I/O failed → the child is presumed dead. Do NOT return it; the job's
+            // FAILED row is transient (`WorkerLost`) and the next checkout spawns fresh.
+            Err(e) if matches!(e.class, ErrorClass::WorkerLost) => Self::kill_child(child),
+            // Success or a framed per-job failure: the child is alive and warm. Recycle it if
+            // it crossed the RSS watermark or job cap, else return it to the pool.
+            _ => {
+                child.jobs_run += 1;
+                let over_jobs = self.cfg.max_jobs_per_child > 0
+                    && child.jobs_run >= self.cfg.max_jobs_per_child;
+                let over_rss = self.cfg.rss_max_bytes > 0
+                    && rss_bytes_of_pid(child.pe.child.id())
+                        .is_some_and(|rss| rss > self.cfg.rss_max_bytes);
+                if over_jobs || over_rss {
+                    eprintln!(
+                        "zenfleet-worker: recycling warm executor child (pid {}, jobs {}, {}) — \
+                         next job spawns fresh",
+                        child.pe.child.id(),
+                        child.jobs_run,
+                        if over_rss {
+                            "RSS over watermark"
+                        } else {
+                            "job cap reached"
+                        }
+                    );
+                    Self::kill_child(child);
+                } else {
+                    self.idle
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .push(child);
+                }
+            }
+        }
+        res
+    }
+}
+
+impl Drop for WarmExecPool {
+    fn drop(&mut self) {
+        // Kill-and-reap (hang-proof): serve children hold no un-flushed state — outputs stream
+        // per job — so SIGKILL at pass end loses nothing.
+        let children = std::mem::take(&mut *self.idle.lock().unwrap_or_else(|p| p.into_inner()));
+        for c in children {
+            Self::kill_child(c);
+        }
+    }
+}
+
+/// Persistent variant of [`exec_command`]: run the job on a warm `program --serve` child from the
+/// process-global [`WarmExecPool`], so CUDA init + kernel compilation are paid once per child rather
+/// than per job (the fix for ~20s/job cold-process overhead on GPU metric fleets). Under concurrent
+/// callers the pool holds one child per concurrent job; a dead child fails only its own job
+/// (transient) and is respawned on the next call.
+pub fn exec_command_persistent(program: &str, job: &DesiredJob) -> Result<Vec<u8>, HandlerError> {
+    let pool = {
+        let mut guard = PERSISTENT.lock().unwrap_or_else(|p| p.into_inner());
+        guard
+            .get_or_insert_with(|| Arc::new(WarmExecPool::new(program, WarmPoolCfg::from_env())))
+            .clone()
+    };
+    if pool.program != program {
+        // Defensive: one worker pass has one executor; a mismatched program falls back to the
+        // one-shot path rather than running the wrong warm binary.
+        return exec_command(program, job);
+    }
+    pool.run_job(job)
 }
 
 /// Choose the executor handler: the warm persistent child (one `--serve` process reused across jobs)
@@ -1564,6 +1703,46 @@ fn dispatch_exec(
     } else {
         exec_command(program, job)
     }
+}
+
+/// The manifest kind-tag of a job (`snake_case`, matching the wire `{"kind": {"kind": …}}`).
+fn kind_name(kind: &JobKind) -> &'static str {
+    match kind {
+        JobKind::Encode { .. } => "encode",
+        JobKind::Metric { .. } => "metric",
+        JobKind::ScoreFile { .. } => "score_file",
+        JobKind::Feature { .. } => "feature",
+        JobKind::Diffmap { .. } => "diffmap",
+        JobKind::Resample { .. } => "resample",
+        JobKind::Bake { .. } => "bake",
+    }
+}
+
+/// Which job kinds run on WARM children under the chunked path (`ZEN_PERSISTENT_KINDS`, csv;
+/// `all` = every kind). Default: the decode+score kinds (`score_file`, `diffmap`, `feature`) —
+/// the GPU-metric shapes where per-job CUDA init + JIT dominates. `encode`/`metric` stay on
+/// fresh processes by default: both re-encode, and the jxl `modes_full` per-cell RSS ramp
+/// (13–24 GB within one process — see zenmetrics CLAUDE.md Known Bugs) is exactly the shape the
+/// fresh-process design bounds. Opting them in is allowed (the RSS watermark then bounds the
+/// ramp) but is a deliberate, per-fleet decision.
+fn warm_kinds_from_env() -> Vec<String> {
+    match std::env::var("ZEN_PERSISTENT_KINDS") {
+        Ok(v) => v
+            .split(',')
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect(),
+        Err(_) => vec![
+            "score_file".to_string(),
+            "diffmap".to_string(),
+            "feature".to_string(),
+        ],
+    }
+}
+
+fn kind_is_warm_eligible(kind: &JobKind, warm_kinds: &[String]) -> bool {
+    let name = kind_name(kind);
+    warm_kinds.iter().any(|k| k == "all" || k == name)
 }
 
 /// Configuration for one worker pass (the runnable `zenfleet-worker` binary parses CLI args into this).
@@ -1904,9 +2083,32 @@ fn run_chunked(
         params.budget.ram_budget_bytes as f64 / (1u64 << 30) as f64,
         params.budget.cores
     );
-    // Fresh process per cell (NOT the persistent warm child) — keeps the modes_full per-cell memory
-    // bound and lets cells run truly concurrently under the budget.
-    let handler = |job: &DesiredJob| exec_command(&cfg.exec, job);
+    // Executor dispatch (#45, the warm-process fix): with `ZEN_PERSISTENT_EXEC=1`, warm-eligible
+    // kinds (default: the decode+score kinds — see [`warm_kinds_from_env`]) run on POOLED warm
+    // `--serve` children, so CUDA init + CubeCL JIT are paid once per child instead of per job
+    // (pre-fix dmon on the avifgen sf-gpu wave: node-2 sm 85→0→49→0, host-stall dominated).
+    // Everything else — and everything, when the env is unset — keeps the fresh-process path,
+    // which bounds the jxl modes_full per-cell RSS ramp by construction. Cells still run truly
+    // concurrently under the budget either way: the pool hands each concurrent job its own child.
+    let persistent = std::env::var("ZEN_PERSISTENT_EXEC")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let warm_kinds = warm_kinds_from_env();
+    if persistent {
+        eprintln!(
+            "zenfleet-worker: warm persistent executor ENABLED for kinds [{}] (ZEN_PERSISTENT_EXEC; \
+             recycle: {:?})",
+            warm_kinds.join(","),
+            WarmPoolCfg::from_env()
+        );
+    }
+    let handler = |job: &DesiredJob| {
+        if persistent && kind_is_warm_eligible(&job.kind, &warm_kinds) {
+            exec_command_persistent(&cfg.exec, job)
+        } else {
+            exec_command(&cfg.exec, job)
+        }
+    };
     let ledger_out_uri = cfg.ledger_out.to_string_lossy().into_owned();
     let mut flush = |chunk_id: &str, rows: &[LedgerRow]| {
         flush_chunk_rows(&ledger_out_uri, endpoint, chunk_id, rows);
@@ -2524,7 +2726,53 @@ mod tests {
         assert_eq!(resolve_chunk_wall_sec(Some("-5")), 0.0);
         // The dispatch (run) selects chunked iff chunk_wall_sec > 0.0, so the
         // default (300) is chunked and only an explicit 0 falls through to serial.
-        assert!(DEFAULT_CHUNK_WALL_SEC > 0.0);
+        const {
+            assert!(DEFAULT_CHUNK_WALL_SEC > 0.0);
+        }
+    }
+
+    #[test]
+    fn warm_kind_gating() {
+        // Default warm set = the decode+score kinds; encode/metric stay fresh-process.
+        let defaults = ["score_file", "diffmap", "feature"].map(String::from);
+        let score = JobKind::ScoreFile {
+            metrics: vec!["ssim2".into()],
+            hdr: false,
+            hdr_transfer: None,
+        };
+        let feat = JobKind::Feature {
+            regime: "944".into(),
+        };
+        let diff = JobKind::Diffmap {
+            metric: "ssim2".into(),
+            hdr: false,
+        };
+        let enc = JobKind::Encode {
+            codec: "zenjxl".into(),
+            q: 80,
+            knobs: "{}".into(),
+            hdr: false,
+        };
+        let met = JobKind::Metric {
+            metric: "cvvdp".into(),
+        };
+        assert!(kind_is_warm_eligible(&score, &defaults));
+        assert!(kind_is_warm_eligible(&feat, &defaults));
+        assert!(kind_is_warm_eligible(&diff, &defaults));
+        assert!(
+            !kind_is_warm_eligible(&enc, &defaults),
+            "encode keeps the fresh-process memory bound by default"
+        );
+        assert!(!kind_is_warm_eligible(&met, &defaults));
+        // 'all' opts everything in; an explicit list opts kinds in by name.
+        let all = ["all".to_string()];
+        assert!(kind_is_warm_eligible(&enc, &all));
+        let with_metric = ["metric".to_string()];
+        assert!(kind_is_warm_eligible(&met, &with_metric));
+        assert!(!kind_is_warm_eligible(&score, &with_metric));
+        // kind_name covers every variant the manifest can carry.
+        assert_eq!(kind_name(&score), "score_file");
+        assert_eq!(kind_name(&enc), "encode");
     }
 
     #[test]

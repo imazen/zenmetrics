@@ -21,6 +21,11 @@ path = "src/bin/jobexec.rs"
 name = "zenfleet-gc"
 path = "src/bin/jobgc.rs"
 
+# Test-support executor (warm-pool tests via CARGO_BIN_EXE_fake-serve-exec) — never deployed.
+[[bin]]
+name = "fake-serve-exec"
+path = "src/bin/fake_serve_exec.rs"
+
 [dependencies]
 zenfleet-core = { version = "0.0.1", path = "../zenfleet-core" }
 zenfleet-ledger = { version = "0.0.1", path = "../zenfleet-ledger" }
