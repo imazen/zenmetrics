@@ -39,9 +39,12 @@ work = "/mnt/v/zen/writeback-%s-%s" % (codec, RUNS[0]); os.makedirs(work, exist_
 
 # 1) download all blobs
 bdir = "%s/blobs" % work; os.makedirs(bdir, exist_ok=True)
-for RUN in RUNS:
-    print("downloading blobs from %s..." % RUN, flush=True)
-    s5("cp", "s3://%s/jobs/%s/blobs/*" % (JOBS_BUCKET, RUN), bdir + "/")
+if os.environ.get("ZEN_SKIP_DOWNLOAD") == "1":
+    print("ZEN_SKIP_DOWNLOAD=1 — using existing local blobs", flush=True)
+else:
+    for RUN in RUNS:
+        print("downloading blobs from %s..." % RUN, flush=True)
+        s5("cp", "s3://%s/jobs/%s/blobs/*" % (JOBS_BUCKET, RUN), bdir + "/")
 blobs = glob.glob(bdir + "/*")
 print("  %d blobs" % len(blobs), flush=True)
 
