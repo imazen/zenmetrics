@@ -137,6 +137,78 @@ fn score(
     run_metric(metric_kind(metric)?, reference, distorted, GpuRuntime::Auto)
 }
 
+/// A CLASSIFIED executor failure — `class` is the snake_case `ErrorClass` string the fleet worker
+/// maps into the ledger's `error_class` column (zenmetrics#45, error-class fidelity). The executor
+/// deliberately speaks the STRING contract (not the zenfleet-core enum) so the wire stays additive:
+/// a class this worker build doesn't know degrades to the transient `unknown` on the worker side.
+///
+/// Emission channels (both in this file):
+/// - serve mode: a status-3 frame `{"class": …, "detail": …}` (`run_serve`);
+/// - one-shot mode: a `ZEN_ERROR_CLASS: <class>` stderr marker line before the nonzero exit.
+#[derive(Debug)]
+pub struct ExecError {
+    pub class: &'static str,
+    pub msg: String,
+}
+
+impl std::fmt::Display for ExecError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] {}", self.class, self.msg)
+    }
+}
+
+impl Error for ExecError {}
+
+impl ExecError {
+    /// Fetching the job's source/variant bytes failed (corpus GET, variant range-GET, index GET).
+    /// The G-Z2 incident (2026-08-06): every corpus GET failed on an unthreaded cred and 143,600
+    /// cells were poisoned as `encoder_panic`; this is the honest, transient label for that shape.
+    fn source_fetch(msg: impl Into<String>) -> Box<dyn Error> {
+        Box::new(ExecError {
+            class: "source_fetch",
+            msg: msg.into(),
+        })
+    }
+}
+
+/// Wrap a fetch-path failure as `source_fetch` — unless its message says the box's DISK is full
+/// (landing the temp file hit ENOSPC), which is `disk_full`: a different remedy (another box /
+/// the between-pass scratch sweep), so it must not hide under the fetch label.
+fn wrap_fetch_err(context: &str, e: Box<dyn Error>) -> Box<dyn Error> {
+    if classify_msg(&e.to_string()) == Some("disk_full") {
+        Box::new(ExecError {
+            class: "disk_full",
+            msg: format!("{context}: {e}"),
+        })
+    } else {
+        ExecError::source_fetch(format!("{context}: {e}"))
+    }
+}
+
+/// Conservative raw-string classification for errors/panics that were not born as [`ExecError`]:
+/// CUDA VRAM exhaustion (the avifgen sf-gpu storm: 10,291 `CUDA_ERROR_OUT_OF_MEMORY` jobs
+/// mislabeled `encoder_panic`) and ENOSPC (the hdrgrid incident). Exact, unambiguous markers only —
+/// a false transient label would make a deterministic failure retry (bounded by the poison cap,
+/// but still wasted work).
+fn classify_msg(msg: &str) -> Option<&'static str> {
+    if msg.contains("CUDA_ERROR_OUT_OF_MEMORY") || msg.contains("OutOfMemory") {
+        return Some("oom");
+    }
+    if msg.contains("No space left on device") || msg.contains("ENOSPC") {
+        return Some("disk_full");
+    }
+    None
+}
+
+/// Best classification for a job error: a typed [`ExecError`] carries its own class; anything else
+/// gets the conservative raw-string scan. `None` = unclassified (legacy status-1/exit-1 behavior).
+fn error_class_of(e: &(dyn Error + 'static)) -> Option<&'static str> {
+    if let Some(xe) = e.downcast_ref::<ExecError>() {
+        return Some(xe.class);
+    }
+    classify_msg(&e.to_string())
+}
+
 /// Point an s5cmd `Command` at the read-only corpus credential (`ZEN_CORPUS_AWS_*`) when one is set,
 /// so corpus reads don't reuse the run-write cred. No-op when `ZEN_CORPUS_AWS_ACCESS_KEY_ID` is unset —
 /// the command then inherits the ambient `AWS_*` (single-cred / single-bucket setups). When the corpus
@@ -161,7 +233,17 @@ fn apply_corpus_creds(cmd: &mut Command) {
 }
 
 /// Resolve `cell.image_path` to a readable local file, fetching from R2 if needed.
+/// Any failure is classified [`ExecError::source_fetch`] (transient; see zenmetrics#45 — the G-Z2
+/// shape where fetch failures were poisoned as `encoder_panic`).
 fn resolve_source(
+    image_path: &str,
+    corpus_prefix: Option<&str>,
+) -> Result<PathBuf, Box<dyn Error>> {
+    resolve_source_raw(image_path, corpus_prefix)
+        .map_err(|e| wrap_fetch_err(&format!("resolve source {image_path}"), e))
+}
+
+fn resolve_source_raw(
     image_path: &str,
     corpus_prefix: Option<&str>,
 ) -> Result<PathBuf, Box<dyn Error>> {
@@ -351,7 +433,15 @@ fn parse_variant_index(tsv: &str) -> std::collections::HashMap<String, VariantLo
 ///
 /// Returns the local path plus whether the caller OWNS it (must delete after decode). TAR-SHARD reads
 /// are borrowed (do NOT delete — they belong to the shared extract dir); range-GETs are owned temps.
+///
+/// Any failure is classified [`ExecError::source_fetch`] (transient — zenmetrics#45), EXCEPT a
+/// local disk-write failure inside, which the message scan may re-classify (`disk_full`) at the
+/// serve/one-shot boundary.
 fn fetch_variant(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>> {
+    fetch_variant_raw(sha, ext).map_err(|e| wrap_fetch_err(&format!("fetch variant {sha}"), e))
+}
+
+fn fetch_variant_raw(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Error>> {
     // FULL-URI input: the declare put the variant's whole `s3://bucket/key` as the job
     // input — GET it in-process. Lets ONE run/fleet span many codecs (each variant is
     // self-locating; no per-box ZEN_ENCODES_PREFIX). No tar, no index, no spawn.
@@ -1632,16 +1722,30 @@ fn run_serve(corpus_prefix: Option<&str>) -> Result<(), Box<dyn Error>> {
                 .map_err(|e| -> Box<dyn Error> { format!("parse DesiredJob: {e}").into() })?;
             run_one_job(&job, corpus_prefix)
         }));
+        // Frame the outcome. Classified failures (typed ExecError, or a panic/error whose text
+        // carries a known transient marker — CUDA OOM / ENOSPC) go out as a status-3
+        // `{"class","detail"}` frame so the worker records the REAL error class instead of
+        // `encoder_panic` (zenmetrics#45); unclassified failures keep the legacy 1/2 frames.
+        let classified = |class: &str, detail: String| -> Vec<u8> {
+            serde_json::to_vec(&serde_json::json!({"class": class, "detail": detail}))
+                .unwrap_or_else(|_| detail.into_bytes())
+        };
         let (status, payload): (u8, Vec<u8>) = match outcome {
             Ok(Ok(bytes)) => (0, bytes),
-            Ok(Err(e)) => (1, e.to_string().into_bytes()),
+            Ok(Err(e)) => match error_class_of(e.as_ref()) {
+                Some(class) => (3, classified(class, e.to_string())),
+                None => (1, e.to_string().into_bytes()),
+            },
             Err(p) => {
                 let msg = p
                     .downcast_ref::<&str>()
                     .map(|s| (*s).to_string())
                     .or_else(|| p.downcast_ref::<String>().cloned())
                     .unwrap_or_else(|| "panic".to_string());
-                (2, format!("jobexec panic: {msg}").into_bytes())
+                match classify_msg(&msg) {
+                    Some(class) => (3, classified(class, format!("jobexec panic: {msg}"))),
+                    None => (2, format!("jobexec panic: {msg}").into_bytes()),
+                }
             }
         };
         w.write_all(&[status])?;
@@ -1663,7 +1767,18 @@ pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
     let mut buf = String::new();
     std::io::stdin().read_to_string(&mut buf)?;
     let job: Value = serde_json::from_str(&buf).map_err(|e| format!("parse DesiredJob: {e}"))?;
-    let bytes = run_one_job(&job, corpus_prefix.as_deref())?;
+    let bytes = match run_one_job(&job, corpus_prefix.as_deref()) {
+        Ok(b) => b,
+        Err(e) => {
+            // One-shot classification channel (zenmetrics#45): print the marker line the fleet
+            // worker scans out of captured stderr, then exit nonzero as before. Panics bypass
+            // this (they unwind) — the worker's raw-marker stderr scan covers those.
+            if let Some(class) = error_class_of(e.as_ref()) {
+                eprintln!("ZEN_ERROR_CLASS: {class}");
+            }
+            return Err(e);
+        }
+    };
     let mut out = std::io::stdout().lock();
     out.write_all(&bytes)?;
     out.flush()?;
@@ -1709,6 +1824,40 @@ mod tests {
         assert!(!m.contains_key("badline_no_tabs"));
         assert!(!m.contains_key("also")); // "also\tbad" — size col unparseable
         assert_eq!(m.len(), 2);
+    }
+
+    #[test]
+    fn error_classification_channels() {
+        // Typed ExecError carries its class through the dyn Error boundary.
+        let e = ExecError::source_fetch("corpus GET refused");
+        assert_eq!(error_class_of(e.as_ref()), Some("source_fetch"));
+        // Raw-marker scan: CUDA VRAM exhaustion + ENOSPC, and nothing else.
+        assert_eq!(
+            classify_msg("DriverError(CUDA_ERROR_OUT_OF_MEMORY, \"out of memory\")"),
+            Some("oom")
+        );
+        assert_eq!(
+            classify_msg("write /scratch/v.tmp: No space left on device (os error 28)"),
+            Some("disk_full")
+        );
+        assert_eq!(classify_msg("unknown codec \"zenbmp\""), None);
+        // An untyped error whose text carries a marker classifies via the scan.
+        let plain: Box<dyn Error> = "ENOSPC while staging".to_string().into();
+        assert_eq!(error_class_of(plain.as_ref()), Some("disk_full"));
+        let unclass: Box<dyn Error> = "encoder exploded".to_string().into();
+        assert_eq!(error_class_of(unclass.as_ref()), None);
+    }
+
+    #[test]
+    fn wrap_fetch_err_distinguishes_disk_full() {
+        let net: Box<dyn Error> = "connection reset by peer".to_string().into();
+        let w = wrap_fetch_err("fetch variant abc", net);
+        assert_eq!(error_class_of(w.as_ref()), Some("source_fetch"));
+        let disk: Box<dyn Error> = "write temp variant: No space left on device"
+            .to_string()
+            .into();
+        let w2 = wrap_fetch_err("fetch variant abc", disk);
+        assert_eq!(error_class_of(w2.as_ref()), Some("disk_full"));
     }
 }
 
