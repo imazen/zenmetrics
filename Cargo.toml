@@ -97,9 +97,25 @@ cubecl-ir      = "0.10.0"
 
 # CPU reference crates used by parity tests.
 butteraugli = { version = "0.9.4" }
-# local dssim-core 3.5.0 (../../dssim/dssim-core, patched below) needs `threads` to compile —
-# its no-threads path calls into_par_iter unconditionally (crates.io 3.4.0 built without it).
-dssim-core = { version = "3.5", default-features = false, features = ["threads"] }
+# `threads` is required: the no-threads path calls into_par_iter unconditionally.
+#
+# Requirement is ^3.4, NOT ^3.5 (imazen/zenmetrics#43). ^3.5 made the whole
+# workspace unresolvable on every box except the one dev machine that happens to
+# hold an *unpushed* local dssim-core 3.5.0 — crates.io tops out at 3.4.0, so the
+# patch below silently failed to apply anywhere else and cargo fell back to the
+# index and errored, blocking crates that have nothing to do with dssim.
+#
+# ^3.4 is also the honest constraint: dssim-gpu's own lib.rs states its parity
+# target is "the published dssim-core v3.4 crate", and the only surface it uses
+# (`Dssim`, `ToRGBAPLU`, in tests/it/parity_lock.rs) is unchanged in 3.5 — that
+# release is SIMD internals (tolab simd_x86/simd_neon). The patch below still
+# wins where a newer sibling exists, so the primary box is unaffected.
+#
+# NOTE this permits different boxes to build different dssim-core patch versions
+# (patched sibling vs crates.io 3.4.0). Making it deterministic needs a decision
+# recorded in #43: either push the 3.5.0 work and pin a git rev, or drop the
+# path patch and pin the published version outright.
+dssim-core = { version = "3.4", default-features = false, features = ["threads"] }
 ssimulacra2 = { version = "0.5" }
 zensim = { version = "0.3.0" }
 
