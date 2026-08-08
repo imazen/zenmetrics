@@ -1266,16 +1266,19 @@ pub(crate) mod tests {
     #[cfg(feature = "jxl")]
     #[test]
     fn hdr_jxl_encode_rejects_unknown_knobs() {
+        let nits = NitsImage {
+            rgb: vec![0.0; 16 * 16 * 3],
+            width: 16,
+            height: 16,
+        };
         let src = HdrRef {
             rgb16: vec![0u16; 16 * 16 * 3],
             width: 16,
             height: 16,
             cicp: zenpixels::Cicp::new(9, 16, 0, true),
-            nits: NitsImage {
-                rgb: vec![0.0; 16 * 16 * 3],
-                width: 16,
-                height: 16,
-            },
+            // Derived exactly as decode does (appendix AA measured-peak params).
+            display_peak_nits: crate::hdr::measured_display_peak_nits(&nits),
+            nits,
         };
         let mut knobs = Map::new();
         knobs.insert("progressive".into(), Value::Bool(true));
