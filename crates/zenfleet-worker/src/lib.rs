@@ -1345,20 +1345,56 @@ pub fn exec_command(program: &str, job: &DesiredJob) -> Result<Vec<u8>, HandlerE
     if output.status.success() {
         Ok(output.stdout)
     } else {
+        // Classification priority: (1) the executor's own stderr classification — an explicit
+        // `ZEN_ERROR_CLASS: <class>` marker line, or a well-known raw failure string (CUDA OOM /
+        // ENOSPC) — then (2) the exit-shape heuristic below. This is the one-shot half of the
+        // error-class fidelity fix (#45): before it, a CUDA_ERROR_OUT_OF_MEMORY panic (avifgen
+        // sf-gpu storm, 10,291 jobs) and ENOSPC (hdrgrid) exited nonzero → `encoder_panic` →
+        // poisoned as deterministic, though both are transient.
+        let stderr = String::from_utf8_lossy(&output.stderr);
         // A signal-killed child (no exit code) is a lost worker / OOM under memory pressure — TRANSIENT,
         // so the reconciler requeues it instead of poisoning it. Only a real non-zero EXIT code is a
         // deterministic EncoderPanic. (Before: every failure was EncoderPanic, so an OOM-killed cell was
         // poisoned and its 720 features lost forever — a latent trap raised by ZEN_CORE_OVERSUBSCRIBE>1.)
-        let class = classify_child_failure(&output.status);
+        let class =
+            class_from_stderr(&stderr).unwrap_or_else(|| classify_child_failure(&output.status));
         let detail = match output.status.code() {
             Some(code) => format!("{program} exited {code}"),
             None => format!("{program} killed by signal"),
         };
-        Err(HandlerError::new(
-            class,
-            format!("{detail}: {}", String::from_utf8_lossy(&output.stderr)),
-        ))
+        Err(HandlerError::new(class, format!("{detail}: {stderr}")))
     }
+}
+
+/// Extract the executor's own failure classification from its captured stderr.
+///
+/// Two channels, in priority order:
+/// 1. An explicit `ZEN_ERROR_CLASS: <snake_case>` marker line printed by a class-aware executor
+///    (`zenmetrics jobexec`) just before a nonzero exit. Last occurrence wins; an unknown class
+///    token is IGNORED (strict parse — a garbled marker must not upgrade a deterministic failure
+///    to transient).
+/// 2. Well-known raw failure strings for class-unaware executors and panics that unwound past
+///    classification: CUDA VRAM exhaustion → [`ErrorClass::Oom`]; ENOSPC → [`ErrorClass::DiskFull`].
+///    Deliberately conservative — exact, unambiguous markers only.
+fn class_from_stderr(stderr: &str) -> Option<ErrorClass> {
+    const MARKER: &str = "ZEN_ERROR_CLASS:";
+    if let Some(idx) = stderr.rfind(MARKER) {
+        let token = stderr[idx + MARKER.len()..]
+            .lines()
+            .next()
+            .unwrap_or("")
+            .trim();
+        if let Some(c) = ErrorClass::parse_strict(token) {
+            return Some(c);
+        }
+    }
+    if stderr.contains("CUDA_ERROR_OUT_OF_MEMORY") || stderr.contains("OutOfMemory") {
+        return Some(ErrorClass::Oom);
+    }
+    if stderr.contains("No space left on device") || stderr.contains("ENOSPC") {
+        return Some(ErrorClass::DiskFull);
+    }
+    None
 }
 
 /// Classify a failed child's exit into an [`ErrorClass`]. A **signal-killed** child (`code() == None`)
@@ -1453,14 +1489,39 @@ impl PersistentExec {
         self.stdout
             .read_exact(&mut payload)
             .map_err(persistent_io_lost)?;
-        if status[0] == 0 {
-            Ok(payload)
-        } else {
-            // The child framed an error/panic for THIS job and stayed alive → deterministic failure.
-            Err(HandlerError::new(
-                ErrorClass::EncoderPanic,
-                String::from_utf8_lossy(&payload).into_owned(),
-            ))
+        match status[0] {
+            0 => Ok(payload),
+            // Status 3 = CLASSIFIED error frame (`{"class":"…","detail":"…"}`) from a class-aware
+            // executor — the serve-mode half of the error-class fidelity fix (#45). An unknown
+            // class string (newer executor) degrades to the transient `Unknown`, mirroring the
+            // forgiving ledger read; a malformed payload falls back to `EncoderPanic` + raw text.
+            3 => {
+                #[derive(serde::Deserialize)]
+                struct ClassifiedError {
+                    class: String,
+                    #[serde(default)]
+                    detail: String,
+                }
+                match serde_json::from_slice::<ClassifiedError>(&payload) {
+                    Ok(c) => Err(HandlerError::new(
+                        ErrorClass::parse_lossy(&c.class),
+                        c.detail,
+                    )),
+                    Err(_) => Err(HandlerError::new(
+                        ErrorClass::EncoderPanic,
+                        String::from_utf8_lossy(&payload).into_owned(),
+                    )),
+                }
+            }
+            // Status 1 (job error) / 2 (caught panic) from a legacy executor, or anything else:
+            // the child framed a failure for THIS job and stayed alive → deterministic failure.
+            // Raw-marker scan still rescues the two known transient shapes (CUDA OOM / ENOSPC)
+            // when a legacy frame carries them in its message text.
+            _ => {
+                let text = String::from_utf8_lossy(&payload).into_owned();
+                let class = class_from_stderr(&text).unwrap_or(ErrorClass::EncoderPanic);
+                Err(HandlerError::new(class, text))
+            }
         }
     }
 }
@@ -2300,6 +2361,82 @@ mod tests {
             ErrorClass::WorkerLost,
             "infra failure → retryable, not poison"
         );
+    }
+
+    #[test]
+    fn class_from_stderr_marker_and_raw_scan() {
+        // Explicit marker wins, last occurrence, trimmed.
+        assert_eq!(
+            class_from_stderr("blah\nZEN_ERROR_CLASS: oom\nmore"),
+            Some(ErrorClass::Oom)
+        );
+        assert_eq!(
+            class_from_stderr("ZEN_ERROR_CLASS: decode_error\nZEN_ERROR_CLASS: source_fetch"),
+            Some(ErrorClass::SourceFetch)
+        );
+        // Garbled/unknown marker token is IGNORED (must not upgrade to transient)…
+        assert_eq!(class_from_stderr("ZEN_ERROR_CLASS: banana"), None);
+        // …but a raw CUDA marker elsewhere still classifies.
+        assert_eq!(
+            class_from_stderr(
+                "ZEN_ERROR_CLASS: banana\nDriverError(CUDA_ERROR_OUT_OF_MEMORY, \"oom\")"
+            ),
+            Some(ErrorClass::Oom)
+        );
+        // Raw markers for class-unaware executors.
+        assert_eq!(
+            class_from_stderr("thread panicked: DriverError(CUDA_ERROR_OUT_OF_MEMORY)"),
+            Some(ErrorClass::Oom)
+        );
+        assert_eq!(
+            class_from_stderr("write /scratch/x: No space left on device (os error 28)"),
+            Some(ErrorClass::DiskFull)
+        );
+        assert_eq!(class_from_stderr("ordinary encoder panic"), None);
+    }
+
+    /// One-shot executor prints the explicit class marker on stderr + exits nonzero →
+    /// the FAILED row carries the real class, not `encoder_panic` (#45, the avifgen
+    /// OOM-storm / hdrgrid-ENOSPC mislabel fix, one-shot half).
+    #[test]
+    #[cfg(unix)]
+    fn exec_command_reads_stderr_class_marker() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tmp();
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("fail_disk_full.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\ncat >/dev/null\necho 'scratch: No space left on device' >&2\necho 'ZEN_ERROR_CLASS: disk_full' >&2\nexit 7\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let d = desired("cvvdp", b"a");
+        let err = exec_command(script.to_str().unwrap(), &d).unwrap_err();
+        assert_eq!(err.class, ErrorClass::DiskFull, "msg: {}", err.msg);
+        assert!(err.class.is_transient());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A class-UNAWARE executor whose panic text carries the CUDA OOM string is still
+    /// classified transient by the raw-marker scan (panics unwind past classification).
+    #[test]
+    #[cfg(unix)]
+    fn exec_command_raw_cuda_oom_scan() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tmp();
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("fail_cuda_oom.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\ncat >/dev/null\necho 'thread panicked: DriverError(CUDA_ERROR_OUT_OF_MEMORY, \"out of memory\")' >&2\nexit 101\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let d = desired("cvvdp", b"a");
+        let err = exec_command(script.to_str().unwrap(), &d).unwrap_err();
+        assert_eq!(err.class, ErrorClass::Oom, "msg: {}", err.msg);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
