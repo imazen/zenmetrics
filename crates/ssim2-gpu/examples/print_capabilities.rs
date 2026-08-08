@@ -17,7 +17,53 @@ use cubecl::Runtime;
 use cubecl::ir::features::AtomicUsage;
 use cubecl::ir::{ElemType, FloatKind, IntKind, StorageType, Type, UIntKind};
 
+/// Which runtime the `Backend` alias above actually resolved to.
+const SELECTED_RUNTIME: &str = if cfg!(feature = "cuda") {
+    "CudaRuntime"
+} else if cfg!(feature = "wgpu") {
+    "WgpuRuntime"
+} else {
+    "<none — build with --features cuda or wgpu>"
+};
+
+/// Report the Vulkan adapter cubecl-wgpu would select.
+///
+/// This exists because a Mesa-equipped Linux box enumerates **two** Vulkan
+/// devices — the real discrete GPU and `llvmpipe`, a CPU software rasterizer.
+/// Landing on llvmpipe yields correct scores at CPU speed while still calling
+/// itself "Vulkan", which silently invalidates any performance measurement.
+/// Nothing in the tree used to print this (imazen/zenmetrics#42), so there was
+/// no way to tell the two apart after the fact.
+#[cfg(feature = "wgpu")]
+fn report_wgpu_adapter() {
+    use cubecl::wgpu::{RuntimeOptions, Vulkan, WgpuDevice, init_setup};
+
+    println!("== wgpu Vulkan adapter ==");
+    let setup = init_setup::<Vulkan>(&WgpuDevice::default(), RuntimeOptions::default());
+    let info = setup.adapter.get_info();
+    let dtype = format!("{:?}", info.device_type);
+    println!("  name        = {:?}", info.name);
+    println!("  device_type = {dtype}");
+    println!("  backend     = {:?}", info.backend);
+    println!("  driver      = {:?} {}", info.driver, info.driver_info);
+    if !dtype.contains("DiscreteGpu") {
+        println!(
+            "  WARNING: this is NOT a discrete GPU. Timings taken on this adapter \
+             measure a software rasterizer, not the GPU."
+        );
+    }
+    println!();
+}
+
+#[cfg(not(feature = "wgpu"))]
+fn report_wgpu_adapter() {
+    println!("== wgpu Vulkan adapter ==\n  (not built with --features wgpu)\n");
+}
+
 fn main() {
+    println!("== selected cubecl runtime ==\n  {SELECTED_RUNTIME}\n");
+    report_wgpu_adapter();
+
     let client = Backend::client(&Default::default());
     let props = client.properties();
 

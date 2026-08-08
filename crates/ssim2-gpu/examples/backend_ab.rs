@@ -209,8 +209,9 @@ mod ab {
         let cuda_client = cubecl::cuda::CudaRuntime::client(&Default::default());
         println!("  cuda   : CudaRuntime (default device)");
 
-        use cubecl::wgpu::{RuntimeOptions, Vulkan, WgpuDevice, WgpuRuntime, init_device,
-                           init_setup};
+        use cubecl::wgpu::{
+            RuntimeOptions, Vulkan, WgpuDevice, WgpuRuntime, init_device, init_setup,
+        };
         let setup = init_setup::<Vulkan>(&WgpuDevice::default(), RuntimeOptions::default());
         let info = setup.adapter.get_info();
         let dtype = format!("{:?}", info.device_type);
@@ -288,7 +289,14 @@ mod ab {
 
         println!(
             "{:>11} {:>10} {:>10} {:>10} {:>10} {:>8}  {:>12} {:>12}  {}",
-            "size", "cuda_med", "vk_med", "cuda_min", "vk_min", "vk/cuda", "cuda_new", "vk_new",
+            "size",
+            "cuda_med",
+            "vk_med",
+            "cuda_min",
+            "vk_min",
+            "vk/cuda",
+            "cuda_new",
+            "vk_new",
             "score_delta"
         );
 
@@ -362,7 +370,10 @@ mod ab {
 
             if let Some(e) = failed {
                 println!("{:>11} FAILED: {}", format!("{w}x{h}"), e);
-                csv.push_str(&format!("{w}x{h},{},,,,,,,,,,,,FAILED\n", w as u64 * h as u64));
+                csv.push_str(&format!(
+                    "{w}x{h},{},,,,,,,,,,,,FAILED\n",
+                    w as u64 * h as u64
+                ));
                 continue;
             }
 

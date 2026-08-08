@@ -9,11 +9,24 @@
 //! See `crates/zenmetrics-api/docs/VRAM_LIFECYCLE_DESIGN_2026-05-30.md`
 //! and issue imazen/zenmetrics#17 (open item).
 //!
-//! ## HARDWARE CAVEAT (read first)
-//! This spike runs on a WSL2 / Windows host with an NVIDIA card. There is
-//! **NO Apple GPU here**, so Metal cannot run. wgpu selects Vulkan or DX12
-//! automatically on this host (the selected backend is printed at runtime
-//! via `client.info()`). cubecl-wgpu's memory layer
+//! ## HARDWARE CAVEAT (read first) — CORRECTED 2026-08-08
+//! **Do NOT run this spike on the WSL2 box and trust the result.** The header
+//! previously claimed "wgpu selects Vulkan or DX12 automatically on this host".
+//! That is **false on WSL2** (measured 2026-08-04, imazen/zenmetrics#42): that
+//! host has **no NVIDIA Vulkan ICD** — `/usr/share/vulkan/icd.d/` holds only
+//! intel/lvp/radeon/virtio, and `/usr/lib/wsl/lib` ships CUDA + D3D12 but no
+//! Vulkan ICD — so `vulkaninfo` enumerates exactly ONE device:
+//! `llvmpipe (DRIVER_ID_MESA_LLVMPIPE, PHYSICAL_DEVICE_TYPE_CPU)`. wgpu's DX12
+//! backend is Windows-only and unavailable under WSL2, so there is no DX12
+//! fallback either. A run there exercises a **CPU software rasterizer**, whose
+//! VRAM-pool behaviour says nothing about a GPU's — which is fatal for a spike
+//! whose entire purpose is per-stream **VRAM** isolation (open item on #17).
+//! **If any conclusion on #17 rests on a WSL2 run of this spike, re-run it on
+//! lianli first** (RTX 2080, real NVIDIA Vulkan ICD) and assert the adapter is
+//! `DiscreteGpu` — see `ssim2-gpu/examples/backend_ab.rs` for that guard.
+//!
+//! There is **NO Apple GPU** on either box, so Metal cannot run here.
+//! cubecl-wgpu's memory layer
 //! (`WgpuMemManager` + the `SchedulerMultiStream` stream pool) is
 //! **backend-agnostic within wgpu** — the exact same code serves
 //! Metal/Vulkan/DX12. So a Vulkan/DX12 result here is the load-bearing
