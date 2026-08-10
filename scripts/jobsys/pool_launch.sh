@@ -32,8 +32,17 @@ HCLOUD_TOKEN="${HCLOUD_TOKEN:-$(grep -E '^api_token=' ~/.config/hetzner/credenti
 [ -n "$HCLOUD_TOKEN" ] || { echo "FATAL: no hcloud token"; exit 1; }
 export HCLOUD_TOKEN
 LOG=~/tmp/hz720/pool_launch.log; mkdir -p ~/tmp/hz720; log(){ echo "[$(date -u +%H:%M:%S)] $*" | tee -a "$LOG"; }
-# pool_launch brings up CLOUD boxes — a LAN store is unreachable from them; fail loud.
-[ -n "${ZEN_S3_ENDPOINT:-}" ] && { echo "FATAL: pool_launch.sh launches cloud boxes; unset ZEN_S3_ENDPOINT (LAN store unreachable from cloud)" >&2; exit 1; }
+# pool_launch brings up CLOUD boxes — a LAN store is unreachable from them, so this script is
+# PINNED to R2 (it derives EP from R2_ACCOUNT_ID below and never consults the resolver).
+# Since 2026-08-10 the workspace default store is the LAN store, so "operator selected nothing"
+# no longer means R2 — refuse only an EXPLICIT non-R2 selection, and say plainly that we pinned.
+if [ -n "${ZEN_S3_ENDPOINT:-}" ] || { [ -n "${ZEN_STORE:-}" ] && [ "${ZEN_STORE}" != "r2" ]; }; then
+  echo "FATAL: pool_launch.sh launches cloud boxes, which cannot reach a LAN store." >&2
+  echo "       You selected ZEN_STORE='${ZEN_STORE:-}' ZEN_S3_ENDPOINT='${ZEN_S3_ENDPOINT:-}'." >&2
+  echo "       Re-run with ZEN_STORE=r2 (or unset both) to launch on Cloudflare R2." >&2
+  exit 1
+fi
+log "store: PINNED to Cloudflare R2 (cloud boxes cannot route to the LAN store)"
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 r2(){ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto s5cmd --endpoint-url "$EP" "$@"; }

@@ -13,6 +13,42 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace (GPU-efficiency program — warm executor + same-ref batching, #45-#49)
+
+### Added
+- **zenfleet-worker: warm persistent executor under CHUNKED claiming** (35543e66):
+  `WarmExecPool` — pooled long-lived `jobexec --serve` children; `ZEN_PERSISTENT_EXEC=1`
+  routes warm-eligible kinds (`ZEN_PERSISTENT_KINDS`, default
+  `score_file,diffmap,feature`) through them so CUDA init + CubeCL JIT are paid per
+  child, not per job (pre-fix dmon: node-2 sm 85→0→49→0, host-stall dominated). Crash
+  isolation per job (child death = transient FAILED + respawn), RSS-watermark/job-cap
+  recycle (`ZEN_PERSISTENT_RSS_MAX_GB` 8 GiB / `ZEN_PERSISTENT_MAX_JOBS` 10k), one-shot
+  vs warm byte-identity gated; encode/metric kinds keep the fresh-process memory bound.
+- **`score-pairs --group-by-ref`** (365672d3): stable-sort input rows by `ref_path` so
+  the reference cache hits once per LADDER regardless of input order; scores
+  bit-identical (parity test), within-ladder q order preserved.
+- **ScoreFile warm-ref DEFAULT ON + bounded batches + process-warm orchestrator**
+  (e7e04994): `ZEN_SCOREFILE_WARMREF` defaults on in orchestrator-cuda builds (opt out
+  `=0`; measured 1.60× floor, docs/SCOREMANY_OPT.md); variants decode in
+  `ZEN_SCOREFILE_WARMREF_BATCH` (default 8) batches so peak residency ≈ the one-shot
+  path's; warmref batches + `--serve` jobs share one process-global
+  `OrchestratorHandle` (kernels compiled once, session pool device-resident).
+- **`scripts/jobsys/gpu_util_harness.sh`** (64c4b9e0): repeatable one-shot-vs-warm-serve
+  GPU utilization A/B (dmon + optional nsys) with sweep-discipline provenance (#48).
+
+### Fixed
+- **Executor error-class fidelity** (cdb8e62c, d1f389e4, 79349331): new transient
+  `SourceFetch`/`DiskFull` classes; jobexec emits `ZEN_ERROR_CLASS:` stderr markers
+  (one-shot) + status-3 `{class,detail}` frames (serve); worker scans both plus raw
+  CUDA-OOM/ENOSPC markers — ends the `encoder_panic` mislabel (avifgen OOM storm
+  10,291 jobs; G-Z2 143,600 cells; hdrgrid ENOSPC). Ledger `error_class` read is now
+  forgiving cross-rev (unknown → transient `Unknown`).
+- **zenmetrics-cli objstore: plain-http LAN endpoints work** (e7e04994): same
+  `allow_http` fix s3io got in 55f8a339 — without it `jobexec` on a LAN-store fleet
+  failed every source/variant/index GET.
+- **`cargo test --features sweep` compiles again** (6837f8ea): the sweep+jxl HDR test
+  fixture gained the `display_peak_nits` field the nitsaudit lane added to `HdrRef`.
+
 ## Workspace (LAN object-store support — `ZEN_S3_ENDPOINT`)
 
 ### Added

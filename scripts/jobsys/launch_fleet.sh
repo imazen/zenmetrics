@@ -33,29 +33,38 @@ CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-codec-corpus}"  # corpus READ-ONLY bucket (s
 N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"
 BUCKET="${ZEN_FLEET_BUCKET:-zentrain}"   # run-WRITE bucket: manifest / claims / ledger / blobs
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Launcher scratch. NOT /tmp: it is wiped at unpredictable times (banned workspace-wide)
+# AND fleet_cred.json / fleet_corpus_cred.json hold live minted R2 credentials, which have
+# no business sitting in a world-readable directory. 0700, under $HOME.
+FLEET_TMP="${FLEET_TMP:-$HOME/tmp/fleet-launch}"
+mkdir -p "$FLEET_TMP" && chmod 700 "$FLEET_TMP"
+export FLEET_TMP
 
-# EP + creds via the single resolver (ZEN_S3_ENDPOINT overrides; default = R2, unchanged)
+# EP + creds via the single resolver. Since 2026-08-10 the DEFAULT store is the LAN
+# store, so this guard MUST branch on reachability, not on "is ZEN_S3_ENDPOINT set" —
+# under the new default that variable is empty while EP still points at the LAN.
 . "$ROOT/scripts/lib/s3env.sh"
-if [ -n "${ZEN_S3_ENDPOINT:-}" ] && { [ "$N_HZ" != "0" ] || [ "$N_VAST" != "0" ] || [ "$N_HZ_ARM" != "0" ]; }; then
-  echo "FATAL: ZEN_S3_ENDPOINT is set but cloud tiers were requested (hz=$N_HZ vast=$N_VAST arm=$N_HZ_ARM)." >&2
-  echo "       A LAN store is not reachable from cloud boxes — run cloud fleets on the default store," >&2
-  echo "       or pass 0 for every cloud tier." >&2
+if [ "${ZEN_S3_CLOUD_REACHABLE:-0}" != "1" ] && { [ "$N_HZ" != "0" ] || [ "$N_VAST" != "0" ] || [ "$N_HZ_ARM" != "0" ]; }; then
+  echo "FATAL: store '$ZEN_S3_STORE' ($EP) is not reachable from cloud boxes, but cloud tiers were" >&2
+  echo "       requested (hz=$N_HZ vast=$N_VAST arm=$N_HZ_ARM)." >&2
+  echo "       Run cloud fleets with ZEN_STORE=r2, pass 0 for every cloud tier, or set" >&2
+  echo "       ZEN_S3_CLOUD_REACHABLE=1 if the store is genuinely published to the internet." >&2
   exit 1
 fi
 RUN="fleet-$(date -u +%Y%m%d-%H%M%S)"
 echo "### launching fleet on s3://$BUCKET/$RUN/  image=$IMAGE  jobs=$N_JOBS  hetzner-x86=$N_HZ hetzner-arm=$N_HZ_ARM vast=$N_VAST"
 
 # 1. mint SCOPED temp creds (object-read-write to this run only; never the root key on remote boxes)
-if [ -n "${ZEN_S3_ENDPOINT:-}" ]; then
-  # LAN store: the temp-cred mint API is R2-only. LAN-tier workers (household boxes on the same
+if [ "$ZEN_S3_STORE" != "r2" ]; then
+  # Non-R2 store: the temp-cred mint API is R2-only. LAN-tier workers (household boxes on the same
   # trusted segment) receive the store credential directly; cloud tiers are refused above.
   AK="$R2_ACCESS_KEY_ID"; SK="$R2_SECRET_ACCESS_KEY"; ST=""
-  echo "LAN store selected: static store cred for workers (no scoped mint)"
+  echo "store '$ZEN_S3_STORE' selected: static store cred for workers (no scoped mint)"
 else
 body=$(python3 -c "import json,os;print(json.dumps({'bucket':'$BUCKET','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':10800,'prefixes':['$RUN/']}))")
 curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$body" \
-  "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/fleet_cred.json
-read -r AK SK ST < <(python3 -c 'import json;r=json.load(open("/tmp/fleet_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
+  "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > $FLEET_TMP/fleet_cred.json
+read -r AK SK ST < <(python3 -c 'import json,os;r=json.load(open(os.environ["FLEET_TMP"]+"/fleet_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
 echo "minted scoped run creds (3h, rw $BUCKET/$RUN)"
 fi
 
@@ -63,12 +72,12 @@ fi
 # bucket (R2 temp creds are single-bucket). jobexec reads codec-corpus with this via ZEN_CORPUS_AWS_*;
 # the run cred above (rw, scoped to $RUN/) never touches the read-only corpus.
 CAK=""; CSK=""; CST=""; CORPUS_CRED_ENV=""
-if [ -z "${ZEN_S3_ENDPOINT:-}" ] && [ "$CORPUS_BUCKET" != "$BUCKET" ]; then
+if [ "$ZEN_S3_STORE" = "r2" ] && [ "$CORPUS_BUCKET" != "$BUCKET" ]; then
   cbody=$(CB="$CORPUS_BUCKET" CP="$CORPUS" python3 -c "import json,os;p=os.environ.get('CP','').strip('/');print(json.dumps({'bucket':os.environ['CB'],'parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-only','ttlSeconds':10800,**({'prefixes':[p+'/']} if p else {})}))")
   curl -sS -X POST -H "Authorization: Bearer $R2_API_TOKEN" -H "Content-Type: application/json" -d "$cbody" \
-    "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > /tmp/fleet_corpus_cred.json
-  read -r CAK CSK CST < <(python3 -c 'import json;r=json.load(open("/tmp/fleet_corpus_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
-  [ -n "${CAK:-}" ] || { echo "FAILED to mint scoped corpus creds:"; cat /tmp/fleet_corpus_cred.json; exit 1; }
+    "https://api.cloudflare.com/client/v4/accounts/$R2_ACCOUNT_ID/r2/temp-access-credentials" > $FLEET_TMP/fleet_corpus_cred.json
+  read -r CAK CSK CST < <(python3 -c 'import json,os;r=json.load(open(os.environ["FLEET_TMP"]+"/fleet_corpus_cred.json"))["result"];print(r["accessKeyId"],r["secretAccessKey"],r["sessionToken"])')
+  [ -n "${CAK:-}" ] || { echo "FAILED to mint scoped corpus creds:"; cat $FLEET_TMP/fleet_corpus_cred.json; exit 1; }
   CORPUS_CRED_ENV="-e ZEN_CORPUS_AWS_ACCESS_KEY_ID=$CAK -e ZEN_CORPUS_AWS_SECRET_ACCESS_KEY=$CSK -e ZEN_CORPUS_AWS_SESSION_TOKEN=$CST"
   echo "minted scoped corpus read-only cred (ro $CORPUS_BUCKET/${CORPUS:-<all>})"
 fi
@@ -78,19 +87,19 @@ fi
 # sweep (e.g. `zenfleet-ctl declare-encodes` output). Without it, fall back to the synthetic demo spec
 # (N_JOBS zenjpeg/cvvdp jobs with fake encode_shas) that proves the fleet plumbing at zero encode cost.
 if [ -n "${ZEN_MANIFEST_FILE:-}" ]; then
-  cp "$ZEN_MANIFEST_FILE" /tmp/fleet_manifest.json
-  echo "using REAL manifest $ZEN_MANIFEST_FILE ($(python3 -c "import json;print(len(json.load(open('/tmp/fleet_manifest.json'))))") jobs)"
+  cp "$ZEN_MANIFEST_FILE" $FLEET_TMP/fleet_manifest.json
+  echo "using REAL manifest $ZEN_MANIFEST_FILE ($(python3 -c "import json,os;print(len(json.load(open(os.environ['FLEET_TMP']+'/fleet_manifest.json'))))") jobs)"
 else
-  python3 - "$N_JOBS" > /tmp/fleet_spec.json <<'PY'
+  python3 - "$N_JOBS" > $FLEET_TMP/fleet_spec.json <<'PY'
 import json,sys,hashlib
 n=int(sys.argv[1])
 print(json.dumps({"items":[{"image_path":"fleet/img-%05d.png"%i,"codec":"zenjpeg","q":80,
   "encode_sha":hashlib.sha256(("fleet-%d"%i).encode()).hexdigest()} for i in range(n)],"metrics":["cvvdp"]}))
 PY
-  "$ROOT/target/release/zenfleet-ctl" declare --spec /tmp/fleet_spec.json --out /tmp/fleet_manifest.json
+  "$ROOT/target/release/zenfleet-ctl" declare --spec $FLEET_TMP/fleet_spec.json --out $FLEET_TMP/fleet_manifest.json
 fi
 AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
-  s5cmd --endpoint-url "$EP" cp /tmp/fleet_manifest.json "s3://$BUCKET/$RUN/manifest.json" >/dev/null
+  s5cmd --endpoint-url "$EP" cp $FLEET_TMP/fleet_manifest.json "s3://$BUCKET/$RUN/manifest.json" >/dev/null
 MANIFEST="s3://$BUCKET/$RUN/manifest.json"
 echo "uploaded $N_JOBS-job manifest"
 
@@ -98,9 +107,9 @@ echo "uploaded $N_JOBS-job manifest"
 # every tier (each idles on the RunControl while it boots — the entrypoint waits, doesn't exit), then
 # RESUME once all are up so they race the queue simultaneously. Workers honor it via --control-r2-key.
 CTLKEY="$RUN/control.json"
-printf '{"paused":true}' > /tmp/fleet_ctl.json
+printf '{"paused":true}' > $FLEET_TMP/fleet_ctl.json
 AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
-  s5cmd --endpoint-url "$EP" cp /tmp/fleet_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
+  s5cmd --endpoint-url "$EP" cp $FLEET_TMP/fleet_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
 echo "run starts PAUSED (control=$CTLKEY); will resume after boot"
 
 # Per-worker shuffled manifest: same job set + same R2 claims namespace (ONE queue), but each worker
@@ -110,10 +119,10 @@ echo "run starts PAUSED (control=$CTLKEY); will resume after boot"
 shuf_manifest() {  # worker -> echoes the uploaded shuffled-manifest URI
   local w="$1"
   W="$w" python3 -c 'import json,random,os
-w=os.environ["W"]; j=json.load(open("/tmp/fleet_manifest.json")); random.seed(w); random.shuffle(j)
-json.dump(j, open("/tmp/fleet_manifest_"+w+".json","w"))'
+w=os.environ["W"]; j=json.load(open(os.environ["FLEET_TMP"]+"/fleet_manifest.json")); random.seed(w); random.shuffle(j)
+json.dump(j, open(os.environ["FLEET_TMP"]+"/fleet_manifest_"+w+".json","w"))'
   AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
-    s5cmd --endpoint-url "$EP" cp "/tmp/fleet_manifest_$w.json" "s3://$BUCKET/$RUN/manifest-$w.json" >/dev/null 2>&1
+    s5cmd --endpoint-url "$EP" cp "$FLEET_TMP/fleet_manifest_$w.json" "s3://$BUCKET/$RUN/manifest-$w.json" >/dev/null 2>&1
   echo "s3://$BUCKET/$RUN/manifest-$w.json"
 }
 
@@ -174,11 +183,11 @@ while [ "$_e" -lt "$WAIT" ]; do
   sleep 25; _e=$((_e + 25))
   echo "♥ [hb $(date -u +%H:%M:%SZ)] boot-wait ${_e}/${WAIT}s — R2 boot-records=$(_bootcount) (watchdog below hard-flags any box that never starts working)"
 done
-printf '{"paused":false}' > /tmp/fleet_ctl.json
+printf '{"paused":false}' > $FLEET_TMP/fleet_ctl.json
 AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
-  s5cmd --endpoint-url "$EP" cp /tmp/fleet_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
+  s5cmd --endpoint-url "$EP" cp $FLEET_TMP/fleet_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
 echo "### RESUMED — RUN=$RUN — watch: scripts/jobsys/fleet watch $RUN ; teardown: scripts/jobsys/fleet kill $RUN"
-echo "$RUN" > /tmp/fleet_run.txt
+echo "$RUN" > $FLEET_TMP/fleet_run.txt
 
 # 5. Startup watchdog (background): KNOW within ~2 min if any launched box never starts working
 #    (image-pull hang / onstart crash / 6-80s fast-crash). Provider-agnostic via R2 boot records
@@ -186,10 +195,10 @@ echo "$RUN" > /tmp/fleet_run.txt
 #    self-stops once every box is working. Disable with ZEN_NO_STARTUP_WATCH=1.
 if [ "${ZEN_NO_STARTUP_WATCH:-0}" != "1" ]; then
   FLEET="$(dirname "$0")/fleet"
-  echo "### fleet watch (bg): flags any box idle / not-started-within-2min → /tmp/$RUN-startup.log"
+  echo "### fleet watch (bg): flags any box idle / not-started-within-2min → $FLEET_TMP/$RUN-startup.log"
   ( AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
     R2_ACCOUNT_ID="$R2_ACCOUNT_ID" ZEN_FLEET_BUCKET="$BUCKET" \
     bash "$FLEET" watch "$RUN" --label "$RUN" --max-wait 600 \
-      >"/tmp/$RUN-startup.log" 2>&1 & )
-  echo "    tail -f /tmp/$RUN-startup.log   (or:  scripts/jobsys/fleet status $RUN)"
+      >"$FLEET_TMP/$RUN-startup.log" 2>&1 & )
+  echo "    tail -f $FLEET_TMP/$RUN-startup.log   (or:  scripts/jobsys/fleet status $RUN)"
 fi
