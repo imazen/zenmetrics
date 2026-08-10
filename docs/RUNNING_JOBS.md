@@ -139,18 +139,43 @@ changing the executor. `scripts/jobsys/example_executor.py` remains a template i
 
 ---
 
-## 2b. Choosing the object store: `ZEN_S3_ENDPOINT` (one env var)
+## 2b. Choosing the object store: `ZEN_STORE` (the LAN store is the DEFAULT)
 
 Everything above says "R2", but the job system is store-agnostic: any S3-compatible
 endpoint that supports conditional `PUT If-None-Match: *` (the claim lease) works. The
-operator-side selection is ONE env var, resolved by `scripts/lib/s3env.sh` (shell) /
+operator-side selection is resolved by `scripts/lib/s3env.sh` (shell) /
 `scripts/lib/zen_s3env.py` (Python) — the single owner of endpoint+credential
 resolution; never re-derive an endpoint in a new script:
 
-| `ZEN_S3_ENDPOINT` | store | credentials |
+| selection | store | credentials |
 |---|---|---|
-| unset (default) | Cloudflare R2 (derived from `~/.config/cloudflare/r2-credentials`) | R2 creds, scoped temp mints for workers — unchanged legacy behavior |
-| set | that endpoint (e.g. a LAN deployment) | `ZEN_S3_ACCESS_KEY_ID`/`ZEN_S3_SECRET_ACCESS_KEY`, or `~/.config/zen/lanstore.env` (override path with `ZEN_S3_ENV`) |
+| **nothing set (DEFAULT)** | **the LAN store** | `ZEN_S3_ACCESS_KEY_ID`/`ZEN_S3_SECRET_ACCESS_KEY`, or `~/.config/zen/lanstore.env` (override path with `ZEN_S3_ENV`) |
+| `ZEN_STORE=r2` | Cloudflare R2 (derived from `~/.config/cloudflare/r2-credentials`) | R2 creds, scoped temp mints for workers |
+| `ZEN_S3_ENDPOINT=<url>` | that endpoint verbatim | as the LAN row |
+
+**The default INVERTED on 2026-08-10 (user directive): it used to be R2.** Consequences
+you must internalize:
+
+- **A script that selects nothing now writes to the LAN store.** Anything that launches or
+  feeds CLOUD boxes must pass `ZEN_STORE=r2` — cloud boxes cannot route to the LAN.
+  `ZEN_STORE=r2` deliberately outranks an ambient `ZEN_S3_ENDPOINT`, so it is a reliable
+  one-liner escape hatch: `ZEN_STORE=r2 bash scripts/jobsys/launch_fleet.sh …`.
+- **Never gate on "is `ZEN_S3_ENDPOINT` set" again.** That test silently inverted when the
+  default flipped — under the new default the variable is empty while `EP` points at the
+  LAN. The resolver exports `ZEN_S3_STORE` (`lan`|`r2`|`explicit`) and
+  `ZEN_S3_CLOUD_REACHABLE` (`1`|`0`); **branch on those.** `launch_fleet.sh` and
+  `pool_launch.sh` were converted; set `ZEN_S3_CLOUD_REACHABLE=1` only once the LAN store
+  is genuinely published to the internet.
+- **A cron or long-lived wave pinned to one store must SAY so.** The `refresh_snapshots.sh`
+  cron is pinned `ZEN_STORE=r2` while its pools are R2-based — a LAN snapshot for an R2 pool
+  is unreadable to its workers. Flip it with the pools' next generation, not before.
+- **Non-interactive shells do NOT inherit the shell profile.** `~/.bashrc` exports
+  `ZEN_STORE=tower` + the lanstore env for interactive use, but cron and `bash -c` skip
+  `.bashrc` entirely. The resolver's own built-in default still yields the LAN store there;
+  the ~20 scripts that inline `os.environ.get("ZEN_S3_ENDPOINT") or <R2 fallback>` instead
+  of calling the resolver will still fall back to R2 in those contexts. Converting them to
+  the resolver is the outstanding work — see the tracking note in
+  `docs/status/lan-storage-2026-08.md`.
 
 Rules:
 
