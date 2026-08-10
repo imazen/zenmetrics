@@ -67,21 +67,67 @@ snapshot cadences) gain ~9×; concurrency-heavy bursts gain 2.6-4.9×.
   set. **Cloud-burst fleets stay on R2** — no inbound path to the LAN, by design.
 - Mixed store on ONE run is unsupported: one queue/ledger endpoint per run.
 
+## Measured op bill (API-measured 2026-08-10) — what the migration is actually chasing
+
+Method: mint an Analytics-Read token with `CF_TOKEN_MINT_TOKEN`, query GraphQL
+`r2OperationsAdaptiveGroups` (dimensions `date|datetimeHour|datetimeMinute` × `actionType`
+× `bucketName`). Per-minute granularity distinguishes a cron (bursts at :00/:30) from a
+daemon (smooth drip) — that alone identified every writer. Analytics lag ~10-15 min.
+
+14 days to 2026-08-10 — Class A was **15.6M ops, 98.2% of it PutObject**:
+
+| bucket → op | 14d | share of Class A |
+|---|---:|---|
+| **zenfuzz → PutObject** | 10,839,370 | **69%** |
+| zentrain → PutObject | 4,481,300 | 29% |
+| zenfuzz → ListObjects | 201,230 | 1% |
+| zentrain → ListObjects | 82,190 | <1% |
+
+Monthly at that rate: Class A ~$151, Class B ~$55 (71M Get/Head), storage ~$33 (2.2 TB) —
+**~$239/mo**, consistent with the ~$200/mo estimate this migration was scoped against.
+
+**The headline finding inverts part of the migration premise.** The single biggest op
+stream was NOT the job system — it was the fuzz farm re-uploading its entire corpus every
+target visit, because `s5cmd sync`'s default compares size AND mtime and the preceding
+`cp` pull stamps every local file `mtime=now`. Fixed in place with `--size-only` on both
+directions (`~/work/zenfuzz-farm/fuzz-rotate.sh`, deployed 2026-08-10); verified ~99%
+reduction on a scratch prefix before deploy. Expected post-fix: **Class A ~$29/mo, total
+~$104/mo** — i.e. ~$135/mo of the ~$239/mo bill was one bug, recovered without moving a
+byte. Full writeup: `~/work/zenfuzz-farm/OPERATIONS-NOTES.md` (2026-08-10 section).
+
+**Consequences for this migration:**
+- The remaining R2 op bill is ~$29/mo Class A, of which the job system (`zentrain`) is the
+  bulk. LAN cutover still wins on **latency** (~9× on claim/heartbeat paths, measured
+  above) and marginal-op cost, but the *urgency* was the fuzz bug, and that is gone.
+- **Storage, not ops, is now the binding constraint on moving fleet data to the NAS.**
+  `zentrain` is **1,850 GB and growing +252 GB/14d (~18 GB/day)**. On 2026-08-10 the NAS
+  had **501 GiB free on the NVMe tier** (`zenstore` itself is only 5 MB so far) and
+  **1.8 TiB free on the array at 95% full**. A wholesale `zentrain` move does not fit
+  today, and the ≥1 TiB-free floor makes it user-gated. The op-generating traffic (claims,
+  ledgers, heartbeats, sidecars) is tiny in bytes and moves freely — keep bulk artifacts
+  and the byte-heavy prefixes off the NAS until the array is relieved.
+- `zenfuzz` is 0.4 GB across **556k objects** — the extreme object-count-to-bytes ratio is
+  exactly why it dominated ops while being invisible in storage. Archive it as
+  **tar-per-target**, never object-per-file, wherever it lands.
+
 ## Standing op generators — audit + retarget state
 
 | generator | cadence / volume | store today | state |
 |---|---|---|---|
 | zenfleet claims/sidecars/heartbeats | per-wave, the dominant op stream | R2 | new LAN-resident declares go LAN (proven above) |
 | `refresh_snapshots.sh` cron (:*/30) | live — compacting bf944 pool runs (verified 12:03Z today) | R2 | honors `ZEN_S3_ENDPOINT`; flips WITH its pools' next generation (a LAN snapshot for an R2 pool would be unreadable to its workers) |
-| fuzz farm corpus sync (`fuzz-rotate.sh`, 2 cloud boxes) | ~288 pull/push cycles/day vs `zenfuzz` | R2 | **cannot go LAN** (cloud-resident boxes). The task premise "sync-tree.sh → R2" was measured WRONG — sync-tree is rsync-over-SSH to the boxes, zero store ops. Registered options (user-gated): corpus hub on a farm box + nightly consolidated offsite push; longer slices; or measure its actual share of the ops bill first |
-| workstation `triage-crashes.sh` cron (:*/30) | crash-prefix LISTs vs `zenfuzz` | R2 | follows the crash prefix (same decision as above) |
+| fuzz farm corpus sync (`fuzz-rotate.sh`, 2 cloud boxes) | ~288 pull/push cycles/day vs `zenfuzz` | R2 | **RESOLVED 2026-08-10 — it was a BUG, not a placement problem. Do not migrate it.** It was **69% of all Class A ops** (~900k PutObject/day, ~$1.6k/yr); a one-line `--size-only` fix cut it ~99% *in place*. See "Measured op bill" below. Stays on R2 (cloud-resident boxes, no inbound LAN path) |
+| workstation `triage-crashes.sh` cron (:*/30) | crash-prefix LISTs vs `zenfuzz` | R2 | stays on R2. `zenfuzz` ListObjects is only ~15k/day (~1% of Class A) — not worth moving |
 
 ## Archive inventory + R2 rundown (REGISTERED; execution user-gated / deferred)
 
-Bucket totals were not enumerated by full LIST (that op class is what we're paying for;
-a 2-min attempt timed out previously). The account's R2 token lacks GraphQL-analytics
-scope, so exact totals should be read off the Cloudflare dashboard when wanted; the
-inventory below uses documented sizes + the NAS mirror state (verified today).
+Bucket totals no longer need a full LIST (that op class is what we're paying for; a 2-min
+attempt timed out previously) **and no longer need the dashboard**. The stored R2 tokens
+lack analytics scope, but you can **mint one** with `CF_TOKEN_MINT_TOKEN` (permission group
+`b89a480218d04ceb98b4fe57ca29dc1f` "Account Analytics Read") and read exact per-bucket
+size/object-count/op-counts from the GraphQL API — see "Measured op bill" below. Totals in
+that section are API-measured 2026-08-10; the (a)/(b)/(c) inventory below still uses
+documented sizes + the NAS mirror state.
 
 **(a) Already mirrored to the NAS array (no copy needed — verify sha spots, then eligible
 for rundown):** `kadis700k` (+GPU variant canonicals), `kadis-720-2026-07-24`,
