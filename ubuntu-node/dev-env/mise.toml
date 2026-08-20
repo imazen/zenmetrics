@@ -119,7 +119,10 @@ gh        = "latest"
 "cargo:vtracer"          = "latest"
 "cargo:img2svg"          = "latest"
 "cargo:pdf_oxide_cli"    = "latest"
-"cargo:tract"            = "latest"
+# PINNED, deliberately not "latest": tract went LIBRARY-ONLY at 0.23 and ships no binary,
+# so `cargo install tract` fails with "there is nothing to install". 0.22.0 is the last
+# version with the CLI, and there is no separate tract-cli crate on crates.io.
+"cargo:tract"            = "0.22.0"
 
 # ── Misc ─────────────────────────────────────────────────────────────────────────────
 "cargo:obsidian-export" = "latest"

@@ -162,6 +162,17 @@ under `scripts/` removed:
 ## Verified by actually running it (2026-08-20, Ubuntu 26.04, 9950X3D)
 
 - **apt: 73 requested -> 241 installed with dependencies, exit 0, no errors.**
+- **mise: 79/79 installed, 0 missing.** Verified running in a login shell, and several are
+  large jumps over the outgoing box: node v12.22.9 -> **26.7.0**, deno 1.32.1 -> **2.9.5**,
+  rustc 1.97.1 -> **1.98.0**, python 3.10.12 -> **3.14.7**.
+- `cargo:tract` is **pinned to 0.22.0, not "latest"** — tract went library-only at 0.23 and
+  ships no binary, so `cargo install` fails outright. There is no separate tract-cli crate.
+  A case where "latest" is actively wrong.
+- **148 of the 177 copied `~/.local/bin` entries were broken Python scripts** (3.10 shebangs,
+  libs in `~/.local/lib/python3.10`) against 25 working native binaries. They were not inert:
+  `~/.local/bin` precedes `/usr/bin` in a login shell, so the broken pip `cmake` shadowed the
+  working apt cmake 4.2.3 and threw a Traceback, which would break any build shelling out to
+  it. Quarantined to `~/.local/bin.python310-broken/` (preserved, with a README).
 - Two defects the dry-run caught that `apt-cache show` did not:
   - `qemu-user-static` is a *pure virtual* package on Ubuntu 26 with several providers,
     so `apt-get install` refuses it even though `apt-cache show` succeeds. Replaced with
