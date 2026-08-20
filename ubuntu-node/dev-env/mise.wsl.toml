@@ -1,0 +1,20 @@
+# mise.wsl.toml — WSL-only overrides, layered on top of mise.toml.
+#
+# THIS IS THE SYNC MECHANISM between the WSL box and the bare-metal orchestrator: both
+# boxes share mise.toml verbatim, and anything that genuinely differs goes in a per-box
+# environment file selected with MISE_ENV.
+#
+#   mise install                 # dev / any node: base only
+#   MISE_ENV=wsl mise install    # this box: base + these overrides
+#
+# VERIFIED with mise 2026.8.10: environment files layer additively and override by key —
+# a tool named in both takes the environment file's version, tools only in the base are
+# inherited, tools only here are added.
+#
+# Keep this file SMALL. Every entry is a divergence between the two boxes, and the point
+# of the exercise is to have as few of those as possible.
+
+[tools]
+# wsl-open — opens URLs/files in the Windows host browser. The outgoing box had it as an
+# npm global (wsl-open@2.2.1). Meaningless on bare metal, so it lives here, not in the base.
+"npm:wsl-open" = "latest"

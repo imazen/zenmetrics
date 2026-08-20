@@ -1,6 +1,6 @@
 # apt-packages.txt — the system layer for any zen node (dev box, orchestrator, PXE worker).
 #
-# Division of labour, same as ~/work/zen/scripts/.mise.toml states for ARM:
+# Division of labour (see mise.toml and mise.aarch64.toml in this directory):
 #   mise owns user-space toolchains and CLIs   -> see mise.toml (arch-neutral)
 #   apt  owns system libraries and dev headers -> this file
 # So CLIs that mise already provides (gh, jq, ripgrep, fd, fzf, zoxide, just, delta, ...)
@@ -9,7 +9,7 @@
 # Derived from a real diff: `apt-mark showmanual` on the outgoing box (183) minus the new
 # box (54) = 164 differing. That raw list is NOT what you want to install — see EXCLUDED.
 #
-#   sudo apt update && sudo apt install -y $(grep -vE '^\s*(#|$)' apt-packages.txt)
+#   sudo apt update && sudo apt install -y $(sed 's/#.*//' apt-packages.txt | grep -vE '^\s*$')
 
 # ── Build toolchain ──────────────────────────────────────────────────────────────────
 build-essential
@@ -24,7 +24,9 @@ musl
 musl-dev
 musl-tools
 gcc-aarch64-linux-gnu
-libclang-14-dev
+# libclang-dev is the META package (-> clang 21 on Ubuntu 26). Never pin a clang major
+# here: the old box had libclang-14-dev, which does not exist on 26.
+libclang-dev
 mmdebstrap
 
 # ── Codec / imaging dev headers — the core of this workspace ─────────────────────────
@@ -56,12 +58,7 @@ libelf-dev
 libunwind-dev
 libcap-dev
 
-# ── GPU / CUDA / Vulkan ──────────────────────────────────────────────────────────────
-# cuda-keyring must land BEFORE the cuda-toolkit packages resolve; it adds NVIDIA's repo.
-# Sizeable (~4 GB). Skip if this box will not run GPU metric work.
-cuda-keyring
-cuda-toolkit-13-2
-nvidia-container-toolkit
+# ── GPU: Vulkan / VA-API (works on any GPU, including AMD integrated) ────────────────
 mesa-vulkan-drivers
 libvulkan1
 vulkan-tools
@@ -118,6 +115,17 @@ qemu-user-static
 # Provided by mise instead (see mise.toml) — do not apt-install these:
 #   gh  jq  ripgrep  fd-find  fzf  zoxide  golang-go  npm  cmake(*)
 #   (*) cmake is kept above because several -sys crates want the system one.
+#
+# NVIDIA CUDA — NOT in this list, and NOT in Ubuntu's archive at all.
+#   cuda-keyring / cuda-toolkit-13-2 / nvidia-container-toolkit do not resolve until
+#   NVIDIA's repo is added, and they are pointless without a discrete NVIDIA GPU.
+#   VERIFIED: the 9950X3D orchestrator has NO NVIDIA GPU — lspci reports only
+#   "AMD Granite Ridge [Radeon Graphics]", the CPU's integrated adapter. The outgoing WSL
+#   box had an RTX 5070, so local CUDA work is a capability that does NOT carry over.
+#   On a box that DOES have one:
+#     wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/cuda-keyring_1.1-1_all.deb
+#     sudo dpkg -i cuda-keyring_1.1-1_all.deb && sudo apt update
+#     sudo apt install -y cuda-toolkit-13-2 nvidia-container-toolkit
 #
 # Vendor CLIs / clouds — install deliberately if needed, not as part of a base build:
 #   azure-cli  heroku  powershell  packages-microsoft-prod  tailscale

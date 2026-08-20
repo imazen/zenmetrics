@@ -38,8 +38,9 @@
 # 2022) and deno 1.32.1 purely because they came from Ubuntu 22.04 apt / a stale manual
 # install. Reproducing those would be reproducing a bug.
 rust   = "stable"          # rustup still owns the extra pins: 1.85 (workspace MSRV), nightly
-node   = "lts"             # was v12.22.9 — EOL
-python = "3.12"            # was 3.10.12; the new box shipped 3.14.4. See the python note below.
+node   = "latest"          # was v12.22.9 (EOL 2022). "lts" if you prefer stability over newest.
+python = "latest"          # was 3.10.12 — resolves to 3.14.x, matching Ubuntu 26's system python,
+                           # which is what makes the copied ~/.local python CLIs reinstallable
 go     = "latest"          # was 1.26.0
 deno   = "latest"          # was 1.32.1 — deno is on 2.x
 bun    = "latest"          # was 1.3.10

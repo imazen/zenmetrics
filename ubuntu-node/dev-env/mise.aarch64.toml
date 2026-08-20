@@ -1,0 +1,128 @@
+# mise.aarch64.toml — ARM/aarch64 variant of the zen tool fleet.
+#
+# MOVED HERE 2026-08-20 from ~/work/zen/scripts/.mise.toml, which was tracked in NO
+# repository despite calling itself "the canonical source of truth for the zen dev tool
+# fleet". It now lives in git; the copy under scripts/ was removed.
+#
+# STATUS: secondary. `mise.toml` in this directory is the primary, arch-neutral config —
+# it covers the full measured tool set (79 entries, validated) and pins no CPU target.
+# This file is kept because it carries one thing the primary deliberately does not:
+#
+#     RUSTFLAGS = "-C target-cpu=neoverse-n1"
+#
+# which is meaningful for a dedicated Neoverse-N1 build box and meaningless (harmful)
+# anywhere else. Use it ONLY on such a box, layered after the primary. If you are
+# provisioning a generic ARM node, use mise.toml — it resolves per-platform.
+#
+# Applied by setup-arm-box.sh in this directory.
+#
+# ---------------------------------------------------------------------------------------
+# Original header follows.
+# ---------------------------------------------------------------------------------------
+
+# Declarative tool fleet for the zen workspace.
+#
+# Apply (one-shot):
+#   cd ~/work/zen/scripts && mise install
+#
+# Apply globally (so every shell in the workspace inherits these tools):
+#   mise use --global --file <this file>
+#
+# This file is the canonical source of truth for the zen dev tool fleet.
+# The setup-arm-box.sh script bootstraps mise + invokes `mise install`
+# against this file — system libs / dev headers stay apt-managed, mise
+# owns user-space toolchains and CLIs.
+#
+# Backend prefixes used here:
+#   core:        — mise's first-class plugin (rust/node/python)
+#   aqua:/asdf:  — mise registry entries (preferred when available)
+#   cargo:       — falls back to `cargo binstall` then `cargo install`;
+#                  requires cargo-binstall in PATH for fast prebuilt ARM
+#   pipx:        — used for Python CLIs that need isolation
+#
+# Notes:
+# - cargo-binstall is bootstrapped via mise's cargo backend (recursive,
+#   but mise handles it).
+# - For tools that show up in `mise registry`, prefer the registry form;
+#   the bare name (e.g. `jj = "latest"`) resolves to the highest-priority
+#   backend mise picks. We pin the backend explicitly when the registry
+#   entry is ambiguous.
+
+[tools]
+# === Languages / runtimes ===
+rust   = "stable"
+node   = "lts"
+python = "3.12"
+
+# === Workspace VCS + taskrunner + profilers (gap-fillers vs current arm-zen) ===
+jj     = "latest"  # jujutsu VCS (aqua:jj-vcs/jj)
+just   = "latest"  # taskrunner   (aqua:casey/just)
+"cargo:samply" = "latest"  # CPU profiler — no native registry entry
+
+# === Search / view / shell perf workflow ===
+ripgrep   = "latest"
+fd        = "latest"
+bat       = "latest"
+fzf       = "latest"
+hyperfine = "latest"
+
+# === Cargo subcommands (no native plugins — cargo backend, prefers binstall) ===
+"cargo:cargo-binstall"     = "latest"   # mise uses this to speed up `cargo:` installs
+"cargo:cargo-nextest"      = "latest"
+"cargo:cargo-llvm-cov"     = "latest"
+"cargo:cargo-llvm-lines"   = "latest"
+"cargo:cargo-show-asm"     = "latest"
+"cargo:cargo-asm"          = "latest"
+"cargo:cargo-expand"       = "latest"
+"cargo:flamegraph"         = "latest"   # crate name is `flamegraph`, installs as cargo-flamegraph
+"cargo:cargo-bloat"        = "latest"
+"cargo:cargo-deny"         = "latest"
+"cargo:cargo-audit"        = "latest"
+"cargo:cargo-hack"         = "latest"
+"cargo:cargo-msrv"         = "latest"
+"cargo:cargo-outdated"     = "latest"
+"cargo:cargo-edit"         = "latest"
+"cargo:cargo-public-api"   = "latest"
+"cargo:cargo-semver-checks" = "latest"
+"cargo:cargo-sweep"        = "latest"
+"cargo:cargo-fuzz"         = "latest"
+"cargo:cargo-watch"        = "latest"
+"cargo:critcmp"            = "latest"
+"cargo:cross"              = "latest"
+
+# === Docs + WASM tooling ===
+"cargo:mdbook" = "latest"   # aqua:rust-lang/mdBook has no aarch64 prebuilt; cargo backend works
+wasm-tools   = "latest"   # aqua:bytecodealliance/wasm-tools
+"cargo:wasm-pack"     = "latest"
+"cargo:mdbook-mermaid" = "latest"
+
+# === Image / perf utilities ===
+oxipng        = "latest"   # aqua:oxipng/oxipng
+"cargo:inferno" = "latest" # flamegraph rendering
+
+# === CLIs ===
+# gh — installed via cloud-init/apt (`apt install gh` from cli.github.com repo).
+#   The aqua:cli/cli registry entry exists but its attestation-verify step hits
+#   the same GitHub API rate limit even with the binstall token (which only
+#   covers the cargo backend). apt-managed avoids the rate-limit churn.
+
+# Note on tools intentionally NOT here (still managed elsewhere):
+#   dssim, butteraugli-cli, git-delta — cargo install from setup script
+#     (no published prebuilts; build-from-source acceptable for these)
+#   gh — apt (see above)
+#   hcloud, s5cmd, rclone, oci — cloud CLIs handled by setup-arm-box.sh
+#     (vendor installers / pipx; outside the dev-toolchain scope)
+#   claude (npm @anthropic-ai/claude-code) — installed via nvm/npm path
+#   System deps (clang, lld, cmake, ninja, mold, valgrind, heaptrack,
+#     libssl-dev, libjpeg-dev, etc.) — apt-managed; mise is user-space.
+
+[env]
+RUSTFLAGS         = "-C target-cpu=neoverse-n1"
+CARGO_TERM_COLOR  = "always"
+
+[settings]
+# Use cargo-binstall when present for any `cargo:<crate>` install — huge
+# wall-clock win on ARM (binary download vs full source rebuild).
+cargo.binstall    = true
+experimental      = true
+trusted_config_paths = ["~/work/zen"]

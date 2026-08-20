@@ -13,7 +13,10 @@ several will run Claude concurrently — see "Concurrent Claude" below.
 | [`inventory-software.sh`](inventory-software.sh) | the collector. Run it on any box; diff two outputs to see what is missing. Reproducible, not hand-maintained. |
 | [`inventory-x86_64.md`](inventory-x86_64.md) | generated output for the outgoing x86_64 box — the measured baseline to bring other nodes up to |
 | [`mise.toml`](mise.toml) | user-space toolchains and CLIs. **Validated: 79/79 entries resolve against mise 2026.8.10, zero failures.** |
-| [`apt-packages.txt`](apt-packages.txt) | the system layer — libraries and dev headers only |
+| [`apt-packages.txt`](apt-packages.txt) | the system layer — libraries and dev headers only. **All 73 verified to resolve on Ubuntu 26.04.** |
+| [`mise.wsl.toml`](mise.wsl.toml) | WSL-only overlay — the per-box divergence mechanism |
+| [`mise.aarch64.toml`](mise.aarch64.toml) | ARM variant (secondary; carries the Neoverse-N1 RUSTFLAG) |
+| [`setup-arm-box.sh`](setup-arm-box.sh), [`install_mise.sh`](install_mise.sh) | ARM bootstrap, moved here out of untracked scripts/ |
 
 Division of labour: **mise owns user-space toolchains and CLIs; apt owns system libraries
 and dev headers.** A tool appears in exactly one of the two. CLIs mise provides are
@@ -76,6 +79,14 @@ exactly what mise pinning `python = "3.12"` plus reinstalling those tools fixes.
 **Missing on the new box entirely:** `node`, `npm`, `go`, `docker`, `mise`, `pipx`, and all
 of `/usr/local/bin` (9 binaries — see below). apt manual selections: 183 vs 54.
 
+**The new box has NO NVIDIA GPU.** `lspci` reports only `AMD Granite Ridge [Radeon
+Graphics]` — the 9950X3D's integrated adapter. The outgoing WSL box had an RTX 5070, so
+local CUDA work does **not** carry over: no `cuda-toolkit`, no `nvidia-container-toolkit`,
+and the `nsys` / `nsys-ui` profilers from `/usr/local/bin` have nothing to profile. GPU
+metric scoring has to run on a fleet node with a discrete card. This is a real capability
+regression for an "orchestrator" that previously also did local GPU work — worth deciding
+deliberately rather than discovering later.
+
 **Two stale runtimes are deliberately NOT reproduced.** The old box carried `node v12.22.9`
 (EOL since 2022) and `deno 1.32.1` only because they came from Ubuntu 22.04 apt and a stale
 manual install. `mise.toml` specifies `node = "lts"` and `deno = "latest"` instead —
@@ -105,20 +116,39 @@ Nsight Systems — the workspace's mandated GPU profiler), `kubectl`, `lazygit`,
 **`~/bin`** — 12 local scripts that came across with `/home`, including `run-heavy`'s
 siblings. Note `shrink-wsl-disk.md` is WSL-only.
 
-## ⚠ Untracked: `~/work/zen/scripts/` is in no repository
+## Keeping several boxes in sync — the templating answer
 
-`~/work/zen/scripts/` is **not a git repo and its contents are tracked nowhere**, despite
-containing:
+**One shared `mise.toml`, plus a per-box `mise.<env>.toml` selected by `MISE_ENV`.**
 
-- `run-heavy` — which the workspace CLAUDE.md makes **mandatory** for every CPU/RAM-heavy
-  command (`~/work/zen/scripts/run-heavy`)
-- `.mise.toml` — which describes itself as "the canonical source of truth for the zen dev
-  tool fleet" (ARM-targeted; this directory's `mise.toml` is the x86_64 counterpart)
-- `setup-arm-box.sh`, `install_mise.sh`, `fuzz-sweep.sh`, `cross-platform-test.sh`
+```
+mise install                 # dev / any node: the shared base
+MISE_ENV=wsl mise install    # the WSL box: base + mise.wsl.toml on top
+```
 
-They survive on the 4 TB copy of `/home`, so they are not lost — but they are one drive
-away from it, and a mandated tool living only in an untracked directory on a box being
-decommissioned should be committed somewhere.
+**Verified against mise 2026.8.10**, not assumed: environment files layer additively and
+override by key. On the real config, base resolves 79 entries; `MISE_ENV=wsl` resolves 80,
+with `npm:wsl-open` present only under the overlay. A tool named in both takes the overlay's
+version; tools only in the base are inherited.
+
+Keep the overlays tiny — every entry in one is a divergence between boxes, and the point is
+to have as few as possible. Right now the only genuine WSL divergence is `wsl-open`.
+
+`mise trust <dir>` is required before mise will read a config it has not seen. Expect to run
+it once per box per checkout.
+
+## `~/work/zen/scripts/` — resolved
+
+That directory was not a git repo and its contents were tracked nowhere. As of 2026-08-20
+the mise-related files were **moved into this directory and committed**, and the copies
+under `scripts/` removed:
+
+- `.mise.toml` → [`mise.aarch64.toml`](mise.aarch64.toml)
+- `install_mise.sh`, `setup-arm-box.sh` → here, with their path references updated
+
+**Correction:** an earlier draft of this file claimed `run-heavy` was untracked. It is not —
+`scripts/run-heavy` is a symlink to `~/work/claudehints/scripts/run-heavy`, which is tracked
+(claudehints `c482e5e`). Still untracked and still only on the outgoing box:
+`arm`, `cross-platform-test.sh`, `fuzz-sweep.sh`.
 
 ## Order of operations on a fresh box
 
