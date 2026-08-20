@@ -10,6 +10,11 @@
 # box (54) = 164 differing. That raw list is NOT what you want to install — see EXCLUDED.
 #
 #   sudo apt update && sudo apt install -y $(sed 's/#.*//' apt-packages.txt | grep -vE '^\s*$')
+#
+# VALIDATE with --dry-run, never with `apt-cache show`. apt-cache show SUCCEEDS for a pure
+# virtual package (qemu-user-static) that `apt-get install` then refuses because it has
+# several providers and none can be auto-selected. Only --dry-run catches that:
+#   sudo apt-get install -y --dry-run $(sed 's/#.*//' apt-packages.txt | grep -vE '^\s*$')
 
 # ── Build toolchain ──────────────────────────────────────────────────────────────────
 build-essential
@@ -93,12 +98,13 @@ net-tools
 nfs-common
 cifs-utils
 btrfs-progs
+xfsprogs
 parallel
 unzip
 zip
 p7zip-full
 wget
-qemu-user-static
+qemu-user-binfmt
 
 # =====================================================================================
 # EXCLUDED — present on the outgoing box, deliberately NOT carried over

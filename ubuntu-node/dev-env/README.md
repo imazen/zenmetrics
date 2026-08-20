@@ -159,6 +159,18 @@ under `scripts/` removed:
 (claudehints `c482e5e`). Still untracked and still only on the outgoing box:
 `arm`, `cross-platform-test.sh`, `fuzz-sweep.sh`.
 
+## Verified by actually running it (2026-08-20, Ubuntu 26.04, 9950X3D)
+
+- **apt: 73 requested -> 241 installed with dependencies, exit 0, no errors.**
+- Two defects the dry-run caught that `apt-cache show` did not:
+  - `qemu-user-static` is a *pure virtual* package on Ubuntu 26 with several providers,
+    so `apt-get install` refuses it even though `apt-cache show` succeeds. Replaced with
+    `qemu-user-binfmt`. **Validate this list with `--dry-run`, never `apt-cache show`.**
+  - `xfsprogs` was missing entirely — `/home` is XFS on these boxes, so `xfs_growfs` and
+    `xfs_repair` were unavailable. Added.
+- The box has **60 GiB RAM**, not the 30 GiB an older probe recorded. That clears the
+  earlier concern about the measured >39.9 GiB jxl-at-108MP peak not fitting.
+
 ## Order of operations on a fresh box
 
 1. `sudo apt install -y $(grep -vE '^\s*(#|$)' apt-packages.txt)`
