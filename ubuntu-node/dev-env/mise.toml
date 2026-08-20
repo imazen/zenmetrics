@@ -1,0 +1,136 @@
+# mise.toml — declarative tool fleet for ANY zen node (dev box, orchestrator, PXE worker).
+#
+# ARCH-NEUTRAL BY CONSTRUCTION. Nothing below pins an architecture: mise resolves every
+# entry per-platform at install time, so the same file serves x86_64 and aarch64. The one
+# thing that would break that is a target-cpu RUSTFLAG, which is deliberately absent —
+# see [env].
+#
+# THIS FILE SUPERSEDES ~/work/zen/scripts/.mise.toml, which targeted ARM only, pinned
+# RUSTFLAGS = "-C target-cpu=neoverse-n1", listed ~25 tools against this box's measured 76
+# cargo crates, and — despite calling itself "the canonical source of truth for the zen dev
+# tool fleet" — is tracked in NO repository. Retire it in favour of this one rather than
+# maintaining both.
+#
+# WHERE THIS SITS IN THE STACK, for a PXE-installed node:
+#   1. render_install.py         base OS + docker + ssh + a minimal apt set
+#   2. apt-packages.txt          system libraries and dev headers          <- this dir
+#   3. mise.toml                 user-space toolchains and CLIs            <- this file
+#   4. setup-node-dev.sh         (homefleet) the older combined apt+cargo installer;
+#                                overlaps steps 2-3 and predates mise. Prefer 2+3.
+#
+# Division of labour: mise owns user-space toolchains and CLIs; apt owns system libraries
+# and dev headers. A tool must appear in exactly one of the two.
+#
+#   mise install                       # apply
+#   mise use --global --file <this>    # make it the box default
+#
+# Backends: bare names resolve through mise's registry (aqua/ubi → prebuilt binaries, much
+# faster than building); `cargo:` builds from crates.io, via cargo-binstall where a prebuilt
+# exists (see [settings]).
+#
+# VALIDATED: 79/79 entries resolve against mise 2026.8.10 on x86_64, zero failures.
+# The aarch64 resolution is NOT yet verified — run `mise ls --current` on an ARM box before
+# trusting it there.
+
+[tools]
+# ── Language runtimes ────────────────────────────────────────────────────────────────
+# DELIBERATE UPGRADES, not replication. The x86_64 dev box carried node v12.22.9 (EOL since
+# 2022) and deno 1.32.1 purely because they came from Ubuntu 22.04 apt / a stale manual
+# install. Reproducing those would be reproducing a bug.
+rust   = "stable"          # rustup still owns the extra pins: 1.85 (workspace MSRV), nightly
+node   = "lts"             # was v12.22.9 — EOL
+python = "3.12"            # was 3.10.12; the new box shipped 3.14.4. See the python note below.
+go     = "latest"          # was 1.26.0
+deno   = "latest"          # was 1.32.1 — deno is on 2.x
+bun    = "latest"          # was 1.3.10
+uv     = "latest"          # was 0.10.0
+
+# ── Core CLI workflow (registry: prebuilt binaries) ──────────────────────────────────
+jj        = "latest"   # jujutsu — the workspace VCS
+just      = "latest"
+ripgrep   = "latest"
+fd        = "latest"
+bat       = "latest"
+fzf       = "latest"
+hyperfine = "latest"
+delta     = "latest"   # crate is git-delta
+zellij    = "latest"
+yazi      = "latest"   # crates: yazi-fm + yazi-cli
+dust      = "latest"   # crate is du-dust
+ast-grep  = "latest"
+oxipng    = "latest"
+mdbook    = "latest"
+wasm-tools = "latest"
+"aqua:mstange/samply" = "latest"   # CPU profiler — no bare registry entry; aqua gives a prebuilt
+gh        = "latest"
+
+# ── Cargo subcommands (no registry entries — cargo backend) ──────────────────────────
+"cargo:cargo-binstall"      = "latest"   # keep first: everything below rides on it
+"cargo:cargo-nextest"       = "latest"
+"cargo:cargo-llvm-cov"      = "latest"
+"cargo:cargo-llvm-lines"    = "latest"
+"cargo:cargo-show-asm"      = "latest"
+"cargo:cargo-asm"           = "latest"
+"cargo:cargo-expand"        = "latest"
+"cargo:cargo-bloat"         = "latest"
+"cargo:cargo-deny"          = "latest"
+"cargo:cargo-audit"         = "latest"
+"cargo:cargo-hack"          = "latest"
+"cargo:cargo-msrv"          = "latest"
+"cargo:cargo-outdated"      = "latest"
+"cargo:cargo-edit"          = "latest"
+"cargo:cargo-public-api"    = "latest"
+"cargo:cargo-semver-checks" = "latest"
+"cargo:cargo-sweep"         = "latest"
+"cargo:cargo-fuzz"          = "latest"
+"cargo:cargo-tarpaulin"     = "latest"
+"cargo:cargo-geiger"        = "latest"
+"cargo:cargo-crev"          = "latest"
+"cargo:cargo-rdme"          = "latest"
+"cargo:cargo-depsize"       = "latest"
+"cargo:cargo-disasm"        = "latest"
+"cargo:cargo-download"      = "latest"
+"cargo:cargo-export"        = "latest"
+"cargo:cargo-override"      = "latest"
+"cargo:cargo-scan"          = "latest"
+"cargo:cargo-trust"         = "latest"
+"cargo:cargo-crap"          = "latest"
+"cargo:critcmp"             = "latest"
+"cargo:cross"               = "latest"
+"cargo:flamegraph"          = "latest"   # installs as cargo-flamegraph
+"cargo:inferno"             = "latest"
+
+# ── Build / codegen / wasm ───────────────────────────────────────────────────────────
+"cargo:bindgen-cli"      = "latest"
+"cargo:wasm-bindgen-cli" = "latest"
+"cargo:wasm-pack"        = "latest"
+"cargo:trunk"            = "latest"
+"cargo:twiggy"           = "latest"
+"cargo:c2rust"           = "latest"
+"cargo:mdbook-mermaid"   = "latest"
+
+# ── Imaging / metrics (the actual domain of this workspace) ──────────────────────────
+"cargo:butteraugli-cli"  = "latest"
+"cargo:dssim"            = "latest"
+"cargo:jxl-oxide-cli"    = "latest"
+"cargo:jxl-encoder-cli"  = "latest"
+"cargo:resvg"            = "latest"
+"cargo:vtracer"          = "latest"
+"cargo:img2svg"          = "latest"
+"cargo:pdf_oxide_cli"    = "latest"
+"cargo:tract"            = "latest"
+
+# ── Misc ─────────────────────────────────────────────────────────────────────────────
+"cargo:obsidian-export" = "latest"
+"cargo:crusader"        = "latest"
+"cargo:durs"            = "latest"
+"cargo:frum"            = "latest"
+"cargo:rs-hack"         = "latest"
+
+[env]
+CARGO_TERM_COLOR = "always"
+# No RUSTFLAGS target-cpu here — see the header. Set it per-benchmark, never globally.
+
+[settings]
+cargo.binstall = true          # prebuilt download instead of a full source build
+experimental   = true

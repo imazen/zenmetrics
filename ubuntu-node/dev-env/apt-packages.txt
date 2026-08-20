@@ -1,0 +1,127 @@
+# apt-packages.txt — the system layer for any zen node (dev box, orchestrator, PXE worker).
+#
+# Division of labour, same as ~/work/zen/scripts/.mise.toml states for ARM:
+#   mise owns user-space toolchains and CLIs   -> see mise.toml (arch-neutral)
+#   apt  owns system libraries and dev headers -> this file
+# So CLIs that mise already provides (gh, jq, ripgrep, fd, fzf, zoxide, just, delta, ...)
+# are deliberately ABSENT here even though the outgoing box had them apt-installed.
+#
+# Derived from a real diff: `apt-mark showmanual` on the outgoing box (183) minus the new
+# box (54) = 164 differing. That raw list is NOT what you want to install — see EXCLUDED.
+#
+#   sudo apt update && sudo apt install -y $(grep -vE '^\s*(#|$)' apt-packages.txt)
+
+# ── Build toolchain ──────────────────────────────────────────────────────────────────
+build-essential
+cmake
+g++
+make
+nasm
+bison
+flex
+pkg-config
+musl
+musl-dev
+musl-tools
+gcc-aarch64-linux-gnu
+libclang-14-dev
+mmdebstrap
+
+# ── Codec / imaging dev headers — the core of this workspace ─────────────────────────
+libjpeg-dev
+libpng-dev
+libwebp-dev
+libgif-dev
+libtiff-tools
+libopenexr-dev
+liblcms2-dev
+libvips-dev
+libbrotli-dev
+libzstd-dev
+liblzma-dev
+zlib1g-dev
+libbz2-dev
+ffmpeg
+imagemagick
+jpeginfo
+poppler-utils
+libimage-exiftool-perl
+
+# ── Profiling / perf (the workspace mandates heaptrack for memory claims) ────────────
+heaptrack
+valgrind
+linux-tools-generic
+libdw-dev
+libelf-dev
+libunwind-dev
+libcap-dev
+
+# ── GPU / CUDA / Vulkan ──────────────────────────────────────────────────────────────
+# cuda-keyring must land BEFORE the cuda-toolkit packages resolve; it adds NVIDIA's repo.
+# Sizeable (~4 GB). Skip if this box will not run GPU metric work.
+cuda-keyring
+cuda-toolkit-13-2
+nvidia-container-toolkit
+mesa-vulkan-drivers
+libvulkan1
+vulkan-tools
+libva-dev
+vainfo
+
+# ── General dev libs pulled in by the above / by cargo builds ────────────────────────
+libssl-dev
+libffi-dev
+libsqlite3-dev
+libreadline-dev
+libncursesw5-dev
+libxml2-dev
+libxmlsec1-dev
+libyaml-dev
+libdrm-dev
+libegl1-mesa-dev
+libgtk-3-dev
+libxdo-dev
+tk-dev
+
+# ── Python system layer (mise owns the interpreter; these are for system tooling) ─────
+python3-pip
+python3-venv
+python3-setuptools
+
+# ── Networking / filesystems / ops ───────────────────────────────────────────────────
+openssh-server
+rsync
+mosh
+net-tools
+nfs-common
+cifs-utils
+btrfs-progs
+parallel
+unzip
+zip
+p7zip-full
+wget
+qemu-user-static
+
+# =====================================================================================
+# EXCLUDED — present on the outgoing box, deliberately NOT carried over
+# =====================================================================================
+# WSL / host-specific, meaningless on bare metal:
+#   ubuntu-wsl  wsl-setup  show-motd  update-motd  cloud-init  ubuntu-server
+#   linux-cloud-tools-generic
+#
+# Already installed on the new box (they only showed in the diff because they are marked
+# 'manual' on the old box and 'auto' on the new one — verified with dpkg -s):
+#   libc6  base-files  base-passwd  login  ncurses-base  sysvinit-utils  bsdutils
+#   tzdata  ca-certificates  openssl  libssl3  zlib1g  xz-utils  python3  git  make
+#
+# Provided by mise instead (see mise.toml) — do not apt-install these:
+#   gh  jq  ripgrep  fd-find  fzf  zoxide  golang-go  npm  cmake(*)
+#   (*) cmake is kept above because several -sys crates want the system one.
+#
+# Vendor CLIs / clouds — install deliberately if needed, not as part of a base build:
+#   azure-cli  heroku  powershell  packages-microsoft-prod  tailscale
+#
+# Desktop / toys / one-offs from the old box:
+#   darktable  emacs  feh  micro  adb  lynx  qrencode  zangband  pacman4console
+#   dbus-x11  fonts-ubuntu  default-jre  qemu-system-x86
