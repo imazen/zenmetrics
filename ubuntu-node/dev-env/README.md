@@ -182,6 +182,67 @@ under `scripts/` removed:
 - The box has **60 GiB RAM**, not the 30 GiB an older probe recorded. That clears the
   earlier concern about the measured >39.9 GiB jxl-at-108MP peak not fitting.
 
+## Python tool fleet — ONE shared venv, not 78 isolated tools
+
+All 148 broken scripts were mapped back to their **78 owning packages** by parsing the old
+`site-packages/*.dist-info/RECORD` files — the tools got reinstalled, not guessed at.
+
+**Architecture: a single shared venv at `~/.venvs/pytools` (Python 3.14), appended to PATH.**
+`uv tool install` gives each CLI its own environment, which is the right default — but about
+eight of these (cvvdp, pyiqa, rembg, super-image, transformers, accelerate, datasets,
+tensorboard) depend on **torch at 1.7 GB**. Isolated installs would duplicate torch eight
+times over. The shared venv is 6.7 GB total, 252 packages, 159 scripts.
+
+Six lightweight standalone CLIs stay `uv tool`-isolated in `~/.local/bin` and win on PATH:
+`meson`, `pre-commit`, `poetry`, `awscli`, `vastai`, `huggingface_hub`.
+
+**Verified before the GPU arrives:** `torch 2.13.0+cu130` reports `sm_75` in its arch list,
+so it will drive the incoming RTX 2080 (Turing). Checked with `torch.cuda.get_arch_list()`,
+which works without a GPU present.
+
+Three packages could not be restored, each for a different reason:
+- **`cppmm`** — no longer on PyPI at all. Unrecoverable from the registry.
+- **`onnxruntime-gpu`, `triton`** — GPU-specific and conflict with the CPU runtime. Install
+  after the 2080 is in.
+- `transformers-cli` and the `openai` CLI are not missing, they are **renamed/removed
+  upstream**: transformers v5 ships `transformers`, and openai dropped its CLI entrypoint.
+
+## PATH: three sources, deliberate order
+
+```
+~/.local/share/mise/shims   # mise: runtimes + CLIs          (.profile, prepended)
+~/.cargo/bin                # rust toolchain + local crates
+~/.local/bin                # uv-isolated tools
+/usr/bin ...                # system
+~/.venvs/pytools/bin        # shared python fleet            (.profile, APPENDED)
+```
+
+The venv is **appended, never prepended** — prepending puts the pip `cmake` ahead of apt's
+and reintroduces the exact shadowing that broke builds.
+
+**`.profile`, not `.bashrc`.** Ubuntu's `.bashrc` returns early for non-interactive shells,
+so anything appended there never runs under `ssh host cmd`, scripts, or cron. mise needs
+both: shims on PATH in `.profile` for non-interactive use, and `mise activate` in `.bashrc`
+for interactive.
+
+### Stale `~/.cargo/bin` copies shadow mise — quarantine them
+
+The home import carried 125 binaries in `~/.cargo/bin`, many of which mise now supersedes.
+They silently won, because **mise installs some registry tools with the binary at the top of
+the install dir rather than in `bin/`**, so `mise exec` prepends a nonexistent `bin/` and
+falls through to the next PATH entry. `mise reshim` does not fix it. Observed:
+
+```
+jj      mise 0.44.0 -> got 0.40.0      zellij  mise 0.44.3 -> got 0.43.1
+just    mise 1.58.0 -> got 1.46.0      oxipng  mise 10.2.0 -> got 10.1.0
+rg      mise 15.2.0 -> got 14.1.1      mdbook  mise  0.5.4 -> got  0.5.2
+delta   mise 0.19.2 -> got 0.18.2
+```
+
+Fixed by quarantining the 59 superseded duplicates to `~/.cargo/bin.superseded-by-mise/`,
+keeping the rust toolchain itself and the local-path/git crates. Verify with
+`mise ls --current` against what the shell actually resolves — they can disagree silently.
+
 ## Python CLIs — use `uv tool install`, never `pip --user`
 
 This is the fix for the 148-broken-scripts problem, not a style preference. `pip --user`
