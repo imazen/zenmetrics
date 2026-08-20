@@ -79,13 +79,22 @@ exactly what mise pinning `python = "3.12"` plus reinstalling those tools fixes.
 **Missing on the new box entirely:** `node`, `npm`, `go`, `docker`, `mise`, `pipx`, and all
 of `/usr/local/bin` (9 binaries — see below). apt manual selections: 183 vs 54.
 
-**The new box has NO NVIDIA GPU.** `lspci` reports only `AMD Granite Ridge [Radeon
-Graphics]` — the 9950X3D's integrated adapter. The outgoing WSL box had an RTX 5070, so
-local CUDA work does **not** carry over: no `cuda-toolkit`, no `nvidia-container-toolkit`,
-and the `nsys` / `nsys-ui` profilers from `/usr/local/bin` have nothing to profile. GPU
-metric scoring has to run on a fleet node with a discrete card. This is a real capability
-regression for an "orchestrator" that previously also did local GPU work — worth deciding
-deliberately rather than discovering later.
+**GPU: none at inventory time, an RTX 2080 incoming.** `lspci` on the new box reported only
+`AMD Granite Ridge [Radeon Graphics]` — the 9950X3D's integrated adapter. An RTX 2080 is
+being moved into it, so CUDA tooling *is* required; `apt-packages.txt` documents the
+NVIDIA-repo step, and `nsys` / `nsys-ui` from `/usr/local/bin` become worth placing again.
+Install once `lspci | grep -i nvidia` shows the card.
+
+Two consequences worth holding in view:
+
+- **It is a downgrade from the outgoing box, not a like-for-like move.** That box has an
+  RTX 5070 (Blackwell); the 2080 is Turing, compute capability 7.5, 8 GB. Anything that
+  depended on newer CUDA features or on more than 8 GB of VRAM needs re-checking, not
+  assuming.
+- **The 2080 currently lives in `lianli`**, which the fleet roster lists as one of its two
+  GPU metric-scoring nodes. Moving it makes the orchestrator GPU-capable at the cost of
+  that scorer, leaving `node-2` (RTX 3070) plus the orchestrator. Worth a deliberate look
+  at fleet GPU topology rather than treating it as a pure gain.
 
 **Two stale runtimes are deliberately NOT reproduced.** The old box carried `node v12.22.9`
 (EOL since 2022) and `deno 1.32.1` only because they came from Ubuntu 22.04 apt and a stale

@@ -119,10 +119,10 @@ qemu-user-static
 # NVIDIA CUDA — NOT in this list, and NOT in Ubuntu's archive at all.
 #   cuda-keyring / cuda-toolkit-13-2 / nvidia-container-toolkit do not resolve until
 #   NVIDIA's repo is added, and they are pointless without a discrete NVIDIA GPU.
-#   VERIFIED: the 9950X3D orchestrator has NO NVIDIA GPU — lspci reports only
-#   "AMD Granite Ridge [Radeon Graphics]", the CPU's integrated adapter. The outgoing WSL
-#   box had an RTX 5070, so local CUDA work is a capability that does NOT carry over.
-#   On a box that DOES have one:
+#   STATE 2026-08-20: the 9950X3D orchestrator had no discrete GPU at inventory time —
+#   lspci reported only "AMD Granite Ridge [Radeon Graphics]", the CPU's integrated
+#   adapter. An RTX 2080 is being moved into it, so these DO become required. Install them
+#   once the card is in and `lspci | grep -i nvidia` shows it:
 #     wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/cuda-keyring_1.1-1_all.deb
 #     sudo dpkg -i cuda-keyring_1.1-1_all.deb && sudo apt update
 #     sudo apt install -y cuda-toolkit-13-2 nvidia-container-toolkit
