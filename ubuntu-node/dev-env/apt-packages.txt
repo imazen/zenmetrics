@@ -94,6 +94,9 @@ python3-setuptools
 openssh-server
 rsync
 mosh
+# tmux: the persistence half of the fleet's mosh+tmux+herdr convention (NODES.md).
+# Missing it means roaming mosh sessions still die with the connection.
+tmux
 net-tools
 nfs-common
 cifs-utils
