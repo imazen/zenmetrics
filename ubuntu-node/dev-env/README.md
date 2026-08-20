@@ -182,6 +182,34 @@ under `scripts/` removed:
 - The box has **60 GiB RAM**, not the 30 GiB an older probe recorded. That clears the
   earlier concern about the measured >39.9 GiB jxl-at-108MP peak not fitting.
 
+## Python CLIs — use `uv tool install`, never `pip --user`
+
+This is the fix for the 148-broken-scripts problem, not a style preference. `pip --user`
+puts every CLI's libraries in one shared `~/.local/lib/python3.X/site-packages`, so a single
+interpreter upgrade breaks all of them at once — which is exactly what happened crossing
+3.10 -> 3.14. `uv tool install` gives each CLI its own isolated environment.
+
+Installed as the core set: `meson`, `pre-commit`, `poetry`, `awscli`, `vastai`,
+`huggingface_hub`.
+
+**NOT reinstalled, deliberately — decide before pulling it in.** The old
+`~/.local/lib/python3.10` is **11 GB**, including **torch at 1.7 GB**. The ML/imaging stack
+that sits on it — `cvvdp` (the pycvvdp metric, workspace-relevant), `pyiqa`, `rembg`,
+`super-image`, `tensorboard`, `transformers-cli`, `accelerate`, `torchrun`, `playwright` —
+is a separate and much larger decision than a CLI toolchain.
+
+Two gotchas hit while doing this:
+
+- `uv tool install awscli` fails with "Executables already exist" if stale non-Python files
+  from a previous install are still in `~/.local/bin`. On this box those were `aws.cmd` (a
+  *Windows* batch file carried over from WSL) and two shell completers — not Python scripts,
+  so the quarantine correctly left them. Use `--force` after clearing them.
+- `summarize` from the measureme profiler needs `RUSTFLAGS="--cap-lints=warn"`: the pinned
+  rev sets `#![deny(warnings)]`, and rustc 1.98 now reports `unsafe { __cpuid() }` as an
+  unnecessary unsafe block, turning a warning into a hard error.
+  **Do NOT `cargo install summarize` from crates.io** — that name belongs to an unrelated
+  audio/video CLI. It must come from the git rev.
+
 ## Order of operations on a fresh box
 
 1. `sudo apt install -y $(grep -vE '^\s*(#|$)' apt-packages.txt)`
