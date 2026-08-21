@@ -122,6 +122,29 @@ Install with `cargo install --path <dir>` after the repos are present.
 Nsight Systems — the workspace's mandated GPU profiler), `kubectl`, `lazygit`, `cagent`,
 `wsl-open` (WSL-only, drop it).
 
+**Moshi hooks** — [`moshi-hook`](https://getmoshi.app/docs/hooks) is the companion daemon that
+lets coding agents report events (inbox, approvals, Live Activities) to the Moshi mobile app.
+Directly useful here because several boxes run Claude concurrently.
+
+```
+curl -fsSL https://getmoshi.app/install.sh | sh      # -> ~/.local/bin, no sudo
+moshi-hook pair --token <token> --store file --name <box>
+moshi-hook install          # writes ~/.claude/settings.json for Claude Code
+moshi-hook service install  # systemd --user unit
+sudo loginctl enable-linger $USER     # REQUIRED on headless boxes
+```
+
+- The pairing token comes from the **Moshi iPhone app -> Settings -> Integrations**, and it is
+  **reusable across hosts** — each box gets its own host id from the same token.
+- `--store file` on Linux; Keychain is the macOS default and is unavailable over ssh.
+- **`loginctl enable-linger` is not optional on a headless box.** Without it a systemd *user*
+  service is killed when the last session ends, so the daemon dies the moment you log out.
+- macOS uses Homebrew and needs `brew trust rjyo/moshi` first — modern Homebrew refuses
+  untrusted third-party taps, and `brew install` fails with "Refusing to load formula ...
+  from untrusted tap" if you skip it.
+- The tower is deliberately excluded: its Unraid host is stateless and RAM-booted, so a host
+  install is both against the Docker-only rule and lost on reboot.
+
 **`~/bin`** — 12 local scripts that came across with `/home`, including `run-heavy`'s
 siblings. Note `shrink-wsl-disk.md` is WSL-only.
 

@@ -64,6 +64,11 @@ mdbook    = "latest"
 wasm-tools = "latest"
 "aqua:mstange/samply" = "latest"   # CPU profiler — no bare registry entry; aqua gives a prebuilt
 gh        = "latest"
+# Both were hand-placed binaries in /usr/local/bin on the outgoing box, so they did not
+# survive the /home import (that directory is system-level). mise has registry entries for
+# both, which is the right home for them under the mise-owns-CLIs division.
+kubectl   = "latest"
+lazygit   = "latest"
 
 # ── Cargo subcommands (no registry entries — cargo backend) ──────────────────────────
 "cargo:cargo-binstall"      = "latest"   # keep first: everything below rides on it
