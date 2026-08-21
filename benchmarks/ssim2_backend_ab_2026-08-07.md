@@ -1,5 +1,11 @@
 # ssim2 GPU backend A/B — CUDA vs Vulkan, and native Linux vs WSL2
 
+> **CORRECTION (2026-08-21):** the Vulkan-vs-CUDA ratios below were measured on a
+> **contended** GPU and are inflated. On an idle card the WGSL gap is 1.07-1.52x,
+> not 1.67-2.67x, and with native SPIR-V codegen Vulkan is *faster* than CUDA at
+> small sizes. See `ssim2_backend_ab_2026-08-21_idle.md`. The WSL2-vs-native
+> findings in section Q2 are unaffected (they compare CUDA to CUDA).
+
 **Date:** 2026-08-07
 **Harness:** `crates/ssim2-gpu/examples/backend_ab.rs` (landed `2d4100cc`)
 **Raw data:** `ssim2_backend_ab_2026-08-07_{lianli,lianli_cuda,wsl_cuda}.csv`
