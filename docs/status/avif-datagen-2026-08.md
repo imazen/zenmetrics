@@ -21,7 +21,7 @@ the corpus `_MANIFEST.json`.
 
 | | |
 |---|---|
-| **Phase** | ENCODE FLEET LIVE (6 nodes) — run `jobs/avifgen-enc-20260806` |
+| **Phase** | CLOSE-OUT (2026-08-21 revival, LAN-only policy) — encode + CPU scores closed; GPU rescue residue draining on the LAN store; see "THE 13-DAY STALL + REVIVAL" below |
 | **Grid** | frozen in appendix Z (main 472,680 + probe 90,720 + huge 900; monsters >16MP excluded) |
 | **zenavif pin** | `66e3c417b43ff950323d402824aeb1ecbbc7f683` (path-dep sibling; source tree == commit tree) |
 | **Images** | CPU `ghcr.io/imazen/zenfleet-worker:exec-avifgen-66e3c417`; GPU `…:exec-gpu-avifgen-66e3c417` (both built locally from the pinned checkouts, pushed) |
@@ -202,4 +202,61 @@ speed); derive from the clean hinted-retry window instead.
 tiny-pair-dominated and the cards run near-5070 parity: sf-gpu reached 85.7% pair coverage in
 ~2 h despite the OOM storm. Retry wave ≈ 2-5 h at the safe concurrency → campaign close
 expected within the day, writeback + manifest + mirrors to follow.
+| 2026-08-08 ~14:44Z | Rescue re-declared as the UNION (8,623 jobs: all pairs of the 99 affected renditions + the 2,000-pair stratified verification sample), proportional per-MP hints (2–17.2 GiB; zenmetrics `1406f59c`). Both GPU boxes draining; operator daemon watching the count. |
+
+## THE 13-DAY STALL + REVIVAL (2026-08-08 22:00Z → 2026-08-21) — the recurring silent-waiter class, again
+
+**Honest record: this lane sat dead for 13 days on a silently-failed waiter.** Chronology,
+every claim measured from the salvaged ledger/journals on 2026-08-21:
+
+1. **The daemon died lying quietly.** `rescue_daemon.sh` logged healthy counts to 21:47Z
+   (4,429/8,623), then four consecutive `done=fail` lines 21:57–22:13Z and stopped. Root
+   cause MEASURED at revival: its `timeout 560` on `compact_ledgers.py` — the R2
+   ledger-read crossed 560 s as sidecars grew past ~10k files (measured 768 s on
+   2026-08-21); the kill left no `distinct_done=` line and the daemon's `tail -1` masked
+   ALL stderr, so "fail" carried zero evidence. **This is exactly the evidence-free
+   bespoke-waiter class the latency discipline bans** — same class as the 2026-08-06
+   4 h orphaned-waiter incident in this very campaign. The owning session then died in
+   harness restarts ~22:00Z with no surviving monitor.
+2. **The fleet did NOT fail — the workers drained on for 2.5 more days.** lianli
+   (now `r7900x`, then carrying the RTX 2080) worked the queue until the scoped cred
+   expired **2026-08-11 09:37Z** (last sidecar 09:36Z — to the minute). node-2 had
+   already dropped out 2026-08-08 via repeated `status=137` SIGKILL worker deaths.
+   Terminal state reached: **8,361/8,623 union jobs DONE (97.0%), residue 262**.
+3. **13 days of loud-but-unheard failure.** node-2's `zen-worker.service` crash-looped
+   on the expired cred (`SignatureDoesNotMatch`, exit 4, restart counter 246 by
+   revival) — the fail-loud design worked; nobody was listening. Meanwhile the fleet
+   hosts were renamed (`lianli`→`r7900x`, node-2 heartbeats `i134`), the RTX 2080 left
+   r7900x (GTX 1060 6GB now sits there, unenrolled), and the 2026-08-10 s3env
+   LAN-default flip made a bare `compact_ledgers.py` resolve to the LAN store where
+   this run does not exist (FileNotFoundError) — the salvage read needed `ZEN_STORE=r2`.
+4. **Revival (2026-08-21):** truth audit via the canonical `zenfleet-ctl ids` join
+   (my hand JSON JobId reconstruction matched 0/8,623 — use the owner); cred re-minted
+   (7-day scoped); snapshot refreshed (the stale 08-08 snapshot would have re-done
+   ~4,000 jobs); node-2 restarted and closed **90 jobs, 0 failures** before the
+   LAN-only directive landed. Replacement daemon staged with stderr capture + a
+   3-strike STALLED flag (`~/tmp/avifgen/rescue_daemon2.sh`) — the done=fail class is
+   now structurally impossible to repeat silently.
+5. **USER DIRECTIVE (mid-revival): LAN-only — R2 is read-only salvage, one pass.**
+   Executed: ONE rate-limited `--size-only` salvage sync — 10,306 ledger sidecars
+   (82 MB), 8,590 score-row blobs (60 MB → `/mnt/v/zen/writeback-rescue/blobs/`),
+   1,545 residue encode blobs (379 MB → `/mnt/v/zen/avifgen-residue-inputs/blobs/`).
+   Nothing touches R2 after this pass — no declares, snapshots, mirrors, or heartbeats.
+6. **The baked-image blocker, reported + resolved parity-safe.** The pinned GPU image's
+   binaries (built 2026-08-06) predate BOTH allow_http fixes (worker s3io `55f8a339`;
+   executor objstore in `e7e04994`), so it cannot talk to the plain-http LAN store.
+   Resolution kept the metric pin exact: the pinned workspace tree (`1406f59c`)
+   already carried the worker fix; the ONE-line executor objstore hunk was applied to
+   the pinned tree; both binaries rebuilt from it (separate cargo invocations per the
+   JobId preserve_order known-bug) and bind-mounted over the pinned image on node-2 —
+   metric code untouched by construction.
+7. **Residue re-declared on the LAN store** as a 172-job gap manifest
+   (`jobs/avifgen-sf-gpu-rescue2-lan-20260821`; inputs mirrored 1:1 — 1,545 encode
+   blobs + 22 refs). First-cell gate PASSED: sidecar + 30 score blobs on the LAN store
+   within 3.5 min of container start (patched http GET + PUT proven end-to-end).
+8. **Sample verdict (registered AC.R1 decision rule): RESCUE-WINS.** 1,997/2,000
+   sample pairs checked against stored scores: **3 mismatches, rate 0.0015** (< the
+   0.005 escalation threshold; the 3 are additional VRAM-era corruption outside the
+   exact-saturation census, cured by the same rescue overlay). No full re-score.
+
 | 2026-08-08 ~09:30 | **G-Z5 CAUGHT SILENT GPU-SCORE CORRUPTION — manifest correctly delayed.** The registered default-stratum ssim2 bar missed (0.9876 vs 0.99) and diagnosis of the violators found the real cause: **VRAM-pressure-era garbage** — med/large ladders where ssim2_gpu reads impossible flat 100.0 + butteraugli 0.0 at q≤70 while the SAME pairs' cvvdp (CPU queue) rises perfectly 8.03→10.0 JOD (which also proves pair association + table joins correct). Census: **2,169 impossible-class cells across 99 renditions, 100% med/large** — the pre-hint OOM-window population; exact saturation is a lower bound. cvvdp + 944 features CLEAN. **Rescue running:** all 40,466 pairs of the 99 affected renditions + a 2,000-pair stratified verification sample = 5,573 hinted jobs (`avifgen-sf-gpu-rescue-20260808`), both GPU boxes. Decision rule pre-stated: sample-clean ⇒ patch affected cells (rescue rows win) + re-gate; sample-dirty ⇒ full GPU re-score. Also recorded: the **training-view split is structurally train-only** — every origin in `train_renditions_2026-06-14` ends 0/2/4/6/8 (it IS the June train-split rendition set), so validate/test views are empty by the canonical rule; wave-12 sources val/test elsewhere. Lean columnar writeback landed the 564,300-cell tables (scores 8 cols / features 944; the stock per-row-dict join OOM'd at 53.8 GB uncapped — my run-heavy violation, owned; rebuilt under a 24G cgroup cap at 8.5 GB peak, 1,045 s). |
