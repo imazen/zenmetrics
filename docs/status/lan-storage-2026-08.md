@@ -119,6 +119,49 @@ byte. Full writeup: `~/work/zenfuzz-farm/OPERATIONS-NOTES.md` (2026-08-10 sectio
 | fuzz farm corpus sync (`fuzz-rotate.sh`, 2 cloud boxes) | ~288 pull/push cycles/day vs `zenfuzz` | R2 | **RESOLVED 2026-08-10 — it was a BUG, not a placement problem. Do not migrate it.** It was **69% of all Class A ops** (~900k PutObject/day, ~$1.6k/yr); a one-line `--size-only` fix cut it ~99% *in place*. See "Measured op bill" below. Stays on R2 (cloud-resident boxes, no inbound LAN path) |
 | workstation `triage-crashes.sh` cron (:*/30) | crash-prefix LISTs vs `zenfuzz` | R2 | stays on R2. `zenfuzz` ListObjects is only ~15k/day (~1% of Class A) — not worth moving |
 
+## Status refresh 2026-08-21 (live-measured)
+
+Store is **healthy and unchanged in role**: `zen-lanstore` container up 12 days on the NAS,
+all three buckets present and listable with the operator credentials.
+
+**Almost nothing has actually moved yet** — measured today:
+
+| bucket | on the LAN store | on R2 |
+|---|---|---|
+| `zentrain` | 2,984 objects / **494 MB** | **1,850 GB** (measured 2026-08-10) |
+| `codec-corpus` | 8 objects / 10 KB | — |
+| `zenfuzz` | 0 objects | 0.4 GB / 556k objects |
+
+So the cutover is proven end-to-end but the corpus is still R2-resident. (The R2 figure is the
+2026-08-10 API measurement, deliberately not aged forward — the doc records ~18 GB/day growth,
+but a projected number is not a measurement.)
+
+**The blocker named above has cleared.** This doc gated the bulk move on NAS headroom:
+"501 GiB free on the NVMe tier and 1.8 TiB free on the array at 95% full", concluding "a
+wholesale `zentrain` move does not fit today". Measured 2026-08-21:
+
+```
+/mnt/user   35T size   24T used   12T avail   67% used
+/mnt/disk1  17T (5.1T avail, 70%)     /mnt/disk2  17T (6.0T avail, 64%)
+```
+
+The array is now **12 TB free at 67%**, comfortably past the ≥1 TiB-free floor even for a
+whole-`zentrain` copy. Whatever relieved it (disk expansion — two 17T members now), the
+storage argument for deferring (b) and (c) no longer holds. The *decision* is still the
+user's; what changed is that capacity is no longer the reason to wait.
+
+**Rundown step 3 is newly unblocked.** Step 3 was "when the in-flight waves drain … delete the
+drained `jobs/` runs". The avifgen campaign **closed 2026-08-21** (`docs/status/avif-datagen-2026-08.md`),
+its outputs consolidated to `/mnt/v` + Tower with NO R2 copies, leaving its raw
+`zentrain/jobs/avifgen-*` prefixes as pure op residue.
+
+**Credential distribution is thinner than this doc implies.** `~/.config/zen/lanstore.env`
+exists on the operator box and on **r7900x only** (under `lilith`, 0600). It is **absent on
+i134, r5900xt, r5600g and i265** — under both `zen` and the new `lilith` account. The old
+"node-2 PENDING (SSH host key rotated)" note is stale in its reasoning: i134 was renamed and
+r5600g was fully reinstalled on 2026-08-20, so those boxes cannot run a LAN-store job until
+the env is written. Not done here — distributing credentials is a user-gated act.
+
 ## Archive inventory + R2 rundown (REGISTERED; execution user-gated / deferred)
 
 Bucket totals no longer need a full LIST (that op class is what we're paying for; a 2-min
