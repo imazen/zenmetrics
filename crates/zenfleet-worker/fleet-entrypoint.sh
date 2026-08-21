@@ -76,8 +76,16 @@ done
 if [ -r /usr/local/bin/cuda-select.sh ]; then
   # shellcheck source=/dev/null
   . /usr/local/bin/cuda-select.sh || ferr "cuda-select failed; continuing with the image default"
-  [ -n "${ZEN_CUDA_SELECTED:-}" ] && [ "${ZEN_CUDA_SELECTED}" != none ] \
-    && prog "CUDA ${ZEN_CUDA_SELECTED} selected for this box (${CUDA_PATH:-?})"
+  case "${ZEN_CUDA_SELECTED:-none}" in
+    missing-*)
+      # A GPU is present and we know which toolkit it needs, but the image lacks it. That is a
+      # broken image, NOT a CPU box — fail loud here rather than let the box claim GPU cells and
+      # fail them one at a time, or worse, silently compile against the wrong toolkit.
+      ferr "image lacks the CUDA toolkit this GPU requires (${ZEN_CUDA_SELECTED#missing-}) — rebuild the base image"
+      [ "${ZEN_REQUIRE_GPU:-0}" = "1" ] && exit 3 ;;
+    none) : ;;
+    *) prog "CUDA ${ZEN_CUDA_SELECTED} selected for this box (${CUDA_PATH:-?})" ;;
+  esac
 fi
 
 if [ "${ZEN_REQUIRE_GPU:-0}" = "1" ]; then

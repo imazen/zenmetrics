@@ -68,7 +68,16 @@ _cs_apply() {
   local major="$1" dir
   [ "$major" = none ] && { _cs_log "no GPU detected; leaving CUDA env untouched"; return 0; }
   dir=$(ls -d /usr/local/cuda-"$major".* 2>/dev/null | sort -V | tail -1)
-  [ -n "$dir" ] || { _cs_log "WANTED CUDA $major but no /usr/local/cuda-$major.* in this image"; return 1; }
+  if [ -z "$dir" ]; then
+    # DISTINCT from "no GPU". A GPU is present and we know which toolkit it needs, but that
+    # toolkit is not in this image — a build/packaging fault, not a benign CPU box. Say so
+    # unmistakably, or the caller treats a broken image as "nothing to do".
+    export ZEN_CUDA_SELECTED="missing-$major"
+    _cs_log "FAULT: GPU needs CUDA $major but no /usr/local/cuda-$major.* exists here."
+    _cs_log "       GPU work will fail or silently use the wrong toolkit. Rebuild the image"
+    _cs_log "       with both toolkits, or install cuda-nvrtc-$major-x + cuda-nvrtc-dev-$major-x."
+    return 1
+  fi
   # Prefer LD_LIBRARY_PATH over re-symlinking: works unprivileged and per-process, so two
   # containers on one host can disagree without fighting over a shared symlink.
   export CUDA_PATH="$dir"
