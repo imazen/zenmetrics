@@ -55,3 +55,6 @@ mac-worker/*.log
 mac-worker/zen-exec.sh
 mac-worker/payload/
 mac-worker/s5cmd
+
+# Local-only dep overrides (see the dssim-core note in Cargo.toml).
+.cargo/
