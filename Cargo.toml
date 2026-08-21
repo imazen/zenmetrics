@@ -360,7 +360,8 @@ jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
 butteraugli  = { path = "../../butteraugli/butteraugli" }
 # dssim-core: local sibling ~/work/dssim/dssim-core (3.5.0, semver-compatible with the 3.4 request) so
 # the dssim score uses local source, not the crates.io artifact ("scores must use local").
-dssim-core   = { path = "../../dssim/dssim-core" }
+# EXPERIMENT (#43): patch dropped; resolve dssim-core from crates.io.
+# dssim-core   = { path = "../../dssim/dssim-core" }
 # fast-ssim2: the CPU integrated-PU21 HDR entry
 # (`fast_ssim2::compute_ssimulacra2_pu_nits`, behind the `hdr-pu` feature) is
 # git-main-only — crates.io 0.8.1 predates it. zenmetrics-api's cpu-ssim2
