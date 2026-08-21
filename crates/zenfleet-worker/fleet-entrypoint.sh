@@ -67,6 +67,19 @@ done
 # We also verify a GPU is actually visible HERE, at boot, rather than letting the box claim cells and
 # fail them one by one: a boot failure is one loud line, whereas per-cell failures burn lease time and
 # look like flaky data. Same spirit as the baked-tool check above — fail loud, fail early.
+# ── CUDA 12-vs-13 selection ────────────────────────────────────────────────────────────────────────
+# Runs on EVERY boot, before any scoring, and is a no-op on CPU boxes. CUDA Toolkit 13.0 dropped
+# offline compilation for Maxwell/Pascal/Volta (floor is sm_75/Turing), and this fleet straddles that
+# line: GTX 1050 / GTX 1060 are sm_61 and can only be served by CUDA 12, newer parts want 13. The
+# image bakes BOTH; this picks from the GPU actually present and exports CUDA_PATH/LD_LIBRARY_PATH so
+# cudarc's dlopen resolves the right NVRTC. Force with ZEN_CUDA_MAJOR=12|13.
+if [ -r /usr/local/bin/cuda-select.sh ]; then
+  # shellcheck source=/dev/null
+  . /usr/local/bin/cuda-select.sh || ferr "cuda-select failed; continuing with the image default"
+  [ -n "${ZEN_CUDA_SELECTED:-}" ] && [ "${ZEN_CUDA_SELECTED}" != none ] \
+    && prog "CUDA ${ZEN_CUDA_SELECTED} selected for this box (${CUDA_PATH:-?})"
+fi
+
 if [ "${ZEN_REQUIRE_GPU:-0}" = "1" ]; then
   export ZENMETRICS_REQUIRE_GPU=1
   command -v nvidia-smi >/dev/null \

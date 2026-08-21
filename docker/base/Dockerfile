@@ -89,14 +89,27 @@ CMD ["bash"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage `cuda`: the :x86-cuda base image. amd64 only.
-# CUDA 12.6 NVRTC + cudart + the cuda_dlsym_stub shim — identical to the proven
-# sweep image (Dockerfile.sweep.v27 L4-L7). Binaries that link cubecl-cuda are
-# built with CUDARC_CUDA_VERSION=12000 (covers all driver versions) in the LEAF.
+# BOTH CUDA 12 and 13 NVRTC + cudart, plus the cuda_dlsym_stub shim. Binaries that
+# link cubecl-cuda are still built with CUDARC_CUDA_VERSION=12000 in the LEAF — that
+# governs the DRIVER api, which is backward compatible; only NVRTC is version-sensitive.
+#
+# WHY BOTH: CUDA Toolkit 13.0 dropped offline compilation for Maxwell/Pascal/Volta, so
+# sm_75 (Turing) is its floor. The fleet straddles that line — GTX 1050 and GTX 1060 are
+# sm_61 and can ONLY be served by CUDA 12, while newer parts want 13. One baked toolkit
+# silently loses half the fleet. scripts/cuda/cuda-select.sh picks at container start
+# from the GPU actually present; see that file for the mechanism.
+#
+# The -dev packages are REQUIRED, not optional: they provide the UNVERSIONED
+# libnvrtc.so / libcudart.so symlinks, and the unversioned name is cudarc's FIRST
+# dlopen candidate (cudarc get_lib_name_candidates). Without it, LD_LIBRARY_PATH
+# selection silently falls through to whatever ldconfig cached and the choice is a no-op.
 # ─────────────────────────────────────────────────────────────────────────────
 FROM common AS cuda
 ARG TARGETARCH
 ARG CUDA_PKG_VERSION=12-6
 ARG CUDA_DIR_VERSION=12.6
+ARG CUDA13_PKG_VERSION=13-0
+ARG CUDA13_DIR_VERSION=13.0
 RUN [ "$TARGETARCH" = "amd64" ] || { echo "zenfleet-worker base:cuda is amd64-only (got $TARGETARCH)" >&2; exit 1; }
 
 RUN export PATH="/usr/local/sbin:/usr/sbin:/sbin:${PATH}" \
@@ -105,14 +118,23 @@ RUN export PATH="/usr/local/sbin:/usr/sbin:/sbin:${PATH}" \
     && dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb \
     && apt-get update -qq \
     && apt-get install -y --no-install-recommends \
-         cuda-nvrtc-${CUDA_PKG_VERSION} cuda-cudart-${CUDA_PKG_VERSION} cuda-cudart-dev-${CUDA_PKG_VERSION} \
+         cuda-nvrtc-${CUDA_PKG_VERSION} cuda-nvrtc-dev-${CUDA_PKG_VERSION} \
+         cuda-cudart-${CUDA_PKG_VERSION} cuda-cudart-dev-${CUDA_PKG_VERSION} \
+         cuda-nvrtc-${CUDA13_PKG_VERSION} cuda-nvrtc-dev-${CUDA13_PKG_VERSION} \
+         cuda-cudart-${CUDA13_PKG_VERSION} cuda-cudart-dev-${CUDA13_PKG_VERSION} \
     && rm -rf /var/lib/apt/lists/* \
     && echo "/usr/local/cuda-${CUDA_DIR_VERSION}/lib64" > /etc/ld.so.conf.d/cuda.conf \
     && ldconfig \
     && ln -sf /usr/local/cuda-${CUDA_DIR_VERSION} /usr/local/cuda \
     && test -f /usr/local/cuda/include/cuda_runtime.h \
     && test -f /usr/local/cuda/lib64/libcudart.so.12 \
-    && ldconfig -p | grep -q libnvrtc.so.12
+    && ldconfig -p | grep -q libnvrtc.so.12 \
+    `# both toolkits present, and BOTH carry the unversioned libnvrtc.so that` \
+    `# cuda-select.sh relies on — assert it here so a packaging change cannot` \
+    `# silently turn runtime selection back into a no-op.` \
+    && test -f /usr/local/cuda-${CUDA_DIR_VERSION}/lib64/libnvrtc.so \
+    && test -f /usr/local/cuda-${CUDA13_DIR_VERSION}/lib64/libnvrtc.so \
+    && test -f /usr/local/cuda-${CUDA13_DIR_VERSION}/lib64/libcudart.so.13
 
 # cuda_dlsym_stub.so — LD_PRELOAD shim cubecl-cuda needs for CUDA 13.x drivers
 # (stubs coredump-callback symbols removed from libcuda.so). Same source the
@@ -128,8 +150,10 @@ ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidi
     CUDA_PATH=/usr/local/cuda \
     PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin \
     LD_PRELOAD=/usr/local/lib/cuda_dlsym_stub.so
-RUN ldconfig -p | grep -q libnvrtc.so.12 \
+COPY scripts/cuda/cuda-select.sh /usr/local/bin/cuda-select.sh
+RUN chmod +x /usr/local/bin/cuda-select.sh \
+    && ldconfig -p | grep -q libnvrtc.so.12 \
     && test -f /usr/local/lib/cuda_dlsym_stub.so \
     && python3 -c "import pyarrow.parquet, numpy" \
-    && echo "zenfleet-worker base cuda (amd64, CUDA ${CUDA_DIR_VERSION}) ready"
+    && echo "zenfleet-worker base cuda (amd64, CUDA ${CUDA_DIR_VERSION} + ${CUDA13_DIR_VERSION}, runtime-selected) ready"
 CMD ["bash"]

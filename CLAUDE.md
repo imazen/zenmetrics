@@ -224,6 +224,37 @@ scalar-axis landings (zenjpeg fff81900 / zenavif e9de3022 / zenjxl 4c0d672f / ze
 700aa4a8) extend the id grammars + fingerprints — declare/execute builds must pair at
 those revs or newer (PLAN_SWEEPS.md §6 "Codec-rev pairing").
 
+## CUDA 12 vs 13 — selected at RUNTIME, never baked (2026-08-20)
+
+**CUDA Toolkit 13.0 dropped offline compilation for Maxwell, Pascal and Volta; its floor is
+sm_75 (Turing).** This fleet straddles that line, so no single baked toolkit serves it:
+
+| card | sm | CUDA 12 | CUDA 13 |
+|---|---|---|---|
+| GTX 1050, GTX 1060 | 6.1 | ✅ | ❌ cannot target |
+| GTX 1660 Ti, RTX 2080 | 7.5 | ✅ | ✅ |
+| RTX 3070 | 8.6 | ✅ | ✅ |
+| RTX 5070 (Blackwell) | 12.0 | ❌ | ✅ |
+
+The `:x86-cuda` base image therefore bakes **both**, and
+[`scripts/cuda/cuda-select.sh`](scripts/cuda/cuda-select.sh) picks per box at container start.
+`fleet-entrypoint.sh` sources it before any scoring; it is a no-op on CPU boxes.
+
+**How selection works without a rebuild:** cudarc loads NVRTC via `dlopen`, and its FIRST
+candidate is the **unversioned** `libnvrtc.so` (`get_lib_name_candidates`, cudarc src/lib.rs).
+`dlopen` resolves that through `LD_LIBRARY_PATH`, so exporting `CUDA_PATH` +
+`LD_LIBRARY_PATH` chooses the toolkit. The binary stays built with
+`CUDARC_CUDA_VERSION=12000` — that governs the **driver** API, which is backward compatible;
+only NVRTC is version-sensitive.
+
+**The `-dev` packages are load-bearing.** They provide the unversioned `libnvrtc.so` symlink.
+Without it in BOTH toolkit dirs, `dlopen` falls through to whatever `ldconfig` cached and
+selection silently becomes a no-op. The Dockerfile asserts both exist at build time.
+
+Decision order: no GPU → no-op · compute cap < 7.5 → **12** · driver advertises CUDA < 13 →
+**12** · else **13**. Override with `ZEN_CUDA_MAJOR=12|13`. Driver capability is read from
+`nvidia-smi`'s reported CUDA version rather than a hardcoded driver-number table.
+
 ## Sweep build cheat sheet
 
 - **Default CPU+GPU build (development)**:
