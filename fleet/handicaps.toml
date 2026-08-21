@@ -31,7 +31,7 @@
 # Seed provenance (2026-08-06): the `encode.zenavif` column is MEASURED from the avifgen
 # encode-run ledger attribution audit (status doc `docs/status/avif-datagen-2026-08.md`,
 # commit 0f9fa073; whole-campaign scan, 1,518,977 rows / 508,239 distinct DONE at 21:30Z):
-# per-box distinct-done credit over the stated active window, normalized to lianli = 1.0
+# per-box distinct-done credit over the stated active window, normalized to r7900x = 1.0
 # (20.8k cells/h). svt / jxl / gainmap encode types have NO per-box data yet (the HDR encode
 # wave ran operator-box-only) → they fall back to `default = 1.0` with the type-bench TODO;
 # per the user's directive, cross-type extrapolation is wrong, so we do not seed them from
@@ -40,12 +40,12 @@
 # memory-bound ranking may differ, notably for SMT-heavy boxes). `gpu_metric` bases are per
 # row. Ratios are what matter; absolute scale is arbitrary.
 
-[workers.lianli]
+[workers.r7900x]
 metric = 1.0       # basis: proportional to measured zenavif encode credit (TODO cvvdp-rate bench)
 gpu_metric = 1.0   # basis: reference card; G-Z3 probe showed node-2's 3070 ≈ the 5070-measured
                    # 0.40 s/MP·metric at 7.2 MP — re-derive both from the sf-gpu score ledger
-                   # once lianli joins the score queue (TODO ledger derivation)
-[workers.lianli.encode]
+                   # once r7900x joins the score queue (TODO ledger derivation)
+[workers.r7900x.encode]
 zenavif = 1.00     # MEASURED: 135,246 distinct-done / ~6.5 h = 20.8k/h (fleet max; 24T) — 0f9fa073
 default = 1.00     # UNMEASURED for other encoder types — type-bench TODO (no cross-type extrapolation)
 
@@ -58,11 +58,11 @@ gpu_metric = 0.0   # basis: no CUDA-capable worker runtime enrolled on this box 
 zenavif = 0.72     # MEASURED: 97,361 / ~6.5 h = 15.0k/h (20T) — 0f9fa073
 default = 1.00     # UNMEASURED — type-bench TODO
 
-[workers.ryzen5800xt]
+[workers.r5900xt]
 metric = 0.92      # MEASURED: sf-cpu ledger 2026-08-07 — 18,224 vs tower 19,799 done, same window.
                    # SMT-heavy box holds up on the metric workload (the encode-derived 0.67 was wrong here)
 gpu_metric = 0.0   # basis: no CUDA-capable worker runtime enrolled on this box (excluded)
-[workers.ryzen5800xt.encode]
+[workers.r5900xt.encode]
 zenavif = 0.67     # MEASURED: 91,195 / ~6.5 h = 14.0k/h (32T on 16C) — 0f9fa073
 default = 1.00     # UNMEASURED — type-bench TODO
 

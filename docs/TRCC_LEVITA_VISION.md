@@ -1,6 +1,6 @@
-# TRCC + Levita Vision on ryzen5800xt — investigation, 2026-08-03
+# TRCC + Levita Vision on r5900xt — investigation, 2026-08-03
 
-Getting the Thermalright **Levita Vision** LCD (on ryzen5800xt's CPU cooler) to play
+Getting the Thermalright **Levita Vision** LCD (on r5900xt's CPU cooler) to play
 video under Linux via [TRCC Linux](https://github.com/Lexonight1/thermalright-trcc-linux),
 the community port of Thermalright's Windows LCD Control Center.
 
@@ -16,7 +16,7 @@ box, not inferred.
 
 | | |
 |---|---|
-| Box | `ryzen5800xt` (LAN IP in homefleet NODES.md), Ubuntu 26.04, Python 3.14, 64 GB RAM |
+| Box | `r5900xt` (LAN IP in homefleet NODES.md), Ubuntu 26.04, Python 3.14, 64 GB RAM |
 | Device | `lsusb` → `Bus 001 Device 005: ID 87ad:70db ChiZhu Tech USBDISPLAY` |
 | TRCC | **9.9.5**, installed from the project's `.deb` (`trcc-linux-latest_all.deb`) |
 | Installed package | `/usr/lib/python3/dist-packages/trcc` ← **edit here to test hot-fixes** |
@@ -129,7 +129,7 @@ renderer before choosing.
 ## 6. Reproducing from scratch
 
 ```bash
-ssh zen@ryzen5800xt   # IP in homefleet NODES.md
+ssh zen@r5900xt   # IP in homefleet NODES.md
 sudo pkill -f "python3 /usr/local/bin/[t]rcc"     # bracket avoids self-match, see §8
 trcc device connect 87ad:70db                      # -> 1600×720, model_id 64
 trcc display color 87ad:70db "#ff0000"             # panel turns RED (works)

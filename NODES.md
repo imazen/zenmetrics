@@ -6,7 +6,7 @@ PXE server, per-OS worker setup) lives in the **private** repo
 (checked out locally at `~/work/zen/homefleet/zenmetrics/NODES.md`).
 
 Public docs and benchmarks refer to nodes only by neutral IDs:
-`node-2`, `node-3`, `tower`, `lianli`, `mac`, `ryzen5800xt`, `i265`.
+`node-2`, `node-3`, `tower`, `r7900x`, `mac`, `r5900xt`, `i265`.
 
 ## Standing rule (REVISED 2026-08-06): `node-2` is a permanent Ubuntu worker; `node-3` defaults to Windows
 
@@ -20,7 +20,7 @@ cells, which other workers redo), PXE worker flag CLEARED, rebooted, verified up
 - Do NOT re-flip `node-3` to Ubuntu on the strength of the 2026-08-05 rule — that rule is
   superseded for `node-3`. Borrowing `node-3` again is a user-approval action.
 - Everything below about `node-2` still stands: permanent Ubuntu worker, one of the two GPU
-  metric-scoring nodes (with `lianli`); if found in its other OS, repair it back to Ubuntu.
+  metric-scoring nodes (with `r7900x`); if found in its other OS, repair it back to Ubuntu.
 
 ## Superseded (for `node-3`) — standing rule of 2026-08-05: `node-2` and `node-3` are permanent Ubuntu workers
 
@@ -35,7 +35,7 @@ default, on every boot.
 Practical consequences for anyone driving the fleet:
 
 - Treat `node-2` and `node-3` as **always-Ubuntu workers**, in the same class as
-  `lianli` and `i265` — not as borrowed capacity with a return deadline.
+  `r7900x` and `i265` — not as borrowed capacity with a return deadline.
 - **Do not flip them back as routine hygiene** at the end of a job or sweep.
   Returning a box to its other OS is now an explicit, deliberate, user-requested
   action only.
@@ -47,7 +47,7 @@ Practical consequences for anyone driving the fleet:
   interrupted cell requeues and is re-scored in the next window.
 
 Both boxes carry GPUs; `node-2` is one of the two GPU metric-scoring nodes
-(with `lianli`). The provisioning commands, addressing, and per-box hardware
+(with `r7900x`). The provisioning commands, addressing, and per-box hardware
 detail live in the private repo linked above.
 
 ### Yank rule: check session state, then reboot (2026-08-05)
