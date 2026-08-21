@@ -42,9 +42,13 @@
 
 [workers.r7900x]
 metric = 1.0       # basis: proportional to measured zenavif encode credit (TODO cvvdp-rate bench)
-gpu_metric = 1.0   # basis: reference card; G-Z3 probe showed node-2's 3070 ≈ the 5070-measured
-                   # 0.40 s/MP·metric at 7.2 MP — re-derive both from the sf-gpu score ledger
-                   # once r7900x joins the score queue (TODO ledger derivation)
+gpu_metric = 0.0   # EXCLUDED 2026-08-21: the measured card (RTX 2080 8GB) left this box ~2026-08-1x
+                   # (moved to the dev node); current card is a GTX 1060 6GB — UNMEASURED, Pascal
+                   # (CUDA-12-only tier), not enrolled as a GPU scorer. Historical basis for the
+                   # departed 2080: the avifgen-sf-gpu-rescue-20260808 clean hinted window (this box,
+                   # then heartbeating `lianli`) sustained ~1,545 done ScoreFile-jobs/hr when active
+                   # and was the window's fleet-max — see fleet/handicap_gpu_rescue_2026-08-21.md.
+                   # If a measured card returns, re-derive before re-enrolling.
 [workers.r7900x.encode]
 zenavif = 1.00     # MEASURED: 135,246 distinct-done / ~6.5 h = 20.8k/h (fleet max; 24T) — 0f9fa073
 default = 1.00     # UNMEASURED for other encoder types — type-bench TODO (no cross-type extrapolation)
@@ -75,13 +79,28 @@ zenavif = 0.67     # MEASURED: 90,402 / ~6.5 h = 13.9k/h (capped cpuset 24T, cpu
 default = 1.00     # UNMEASURED — type-bench TODO
 
 [workers.node-2]
+# KEY MIGRATED 2026-08-21: this box now heartbeats as `i134` (see that section — the live rows).
+# Section kept so any stale image still heartbeating `node-2` shards with the same measured weights.
 metric = 0.64      # basis: proportional to the LOW-CONFIDENCE encode sample below (TODO bench)
-gpu_metric = 1.0   # basis: G-Z3 measured 2.9 s/metric at 7.2 MP on the 3070 ≈ the 5070-rate
-                   # (0.40 s/MP) — parity seed; re-derive from the sf-gpu ledger (scoring since
-                   # 2026-08-06 20:01Z) once a second GPU box accumulates rows (TODO)
+gpu_metric = 1.0   # MEASURED 2026-08-21 (was the G-Z3 parity seed): avifgen-sf-gpu-rescue-20260808
+                   # clean hinted window — same-queue concurrent basis vs the r7900x-2080 (9 shared
+                   # 5-min buckets: 616 vs 1,016 done ScoreFile-jobs => 0.61x the departed 2080);
+                   # rescaled to 1.0 as the fleet's ONLY enrolled GPU scorer after the 2080 left
+                   # r7900x. Absolute rate when active: ~659 jobs/hr. Ratios are what matter; a
+                   # second enrolled card re-anchors this column. fleet/handicap_gpu_rescue_2026-08-21.md
 [workers.node-2.encode]
 zenavif = 0.64     # MEASURED but LOW CONFIDENCE: 2,227 distinct-done in ~10 min ≈ 13.4k/h (16T);
                    # the box left the encode pool for the score queue — re-measure via type-bench
+default = 1.00     # UNMEASURED — type-bench TODO
+
+[workers.i134]
+# The box formerly heartbeating `node-2` (worker env ZEN_WORKER=i134 since the 2026-08-2x fleet
+# rename). Rows mirror [workers.node-2]; measurement bases identical.
+metric = 0.64      # basis: proportional to the LOW-CONFIDENCE encode sample (see node-2; TODO bench)
+gpu_metric = 1.0   # MEASURED 2026-08-21 — same basis as [workers.node-2].gpu_metric (rescue-window
+                   # concurrent buckets, 0.61x the departed r7900x-2080, rescaled to sole-GPU reference)
+[workers.i134.encode]
+zenavif = 0.64     # MEASURED but LOW CONFIDENCE (see node-2)
 default = 1.00     # UNMEASURED — type-bench TODO
 
 [workers.node-3]
