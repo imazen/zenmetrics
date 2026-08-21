@@ -1,21 +1,31 @@
 #!/usr/bin/env python3
-# avifgen_training_views.py — emit the wave-12 train/validate/test views for the
-# avif944 corpus (zensim campaign appendix Z).
+# avifgen_training_views.py — emit the AC.R1-AMENDED wave-12 views for the avif944
+# corpus (zensim campaign appendix Z / AC.R1, 2026-08-08; revival close-out 2026-08-21).
 #
-# Joins the writeback outputs (scores.parquet + features.parquet, keyed on the full
-# cell identity) into one row per cell, attaches the origin split via the CANONICAL
-# scripts/picker/origin_split.py rule (never re-derived), and writes
-#   <outdir>/{train,validate,test}_944.parquet
+# The corpus is TRAIN-SPLIT-ONLY by construction (train_renditions_2026-06-14: every
+# origin ends 0/2/4/6/8 — it IS the June even/odd train-side rendition set), so the
+# original train/validate/test emit was structurally wrong (val + test were empty).
+# AC.R1 amendment 2 registers instead:
+#   train_944 = origins ending 0/2/4/6   (the wave-12 training view)
+#   eval8_944 = origins ending 8         (leg-side eval holdout — never trained on)
+# Any other terminal digit is a HARD ERROR (it would mean a non-train-side origin
+# leaked into the corpus).
 #
-# usage: avifgen_training_views.py <writeback_dir> <outdir>
+# Implementation is COLUMNAR over the row-aligned unified tables (identity-column
+# equality asserted) — the previous per-row dict join OOM'd at 53.8 GB on the 564,300
+# x 948 join (2026-08-08 incident); this build peaks ~8.5 GB.
+#
+# usage: avifgen_training_views.py <unified_dir> <outdir>
 import importlib.util
+import json
 import os
 import sys
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
-WB, OUT = sys.argv[1], sys.argv[2]
+U, OUT = sys.argv[1], sys.argv[2]
 os.makedirs(OUT, exist_ok=True)
 
 # import the split owner by path (scripts/ is not a package)
@@ -27,49 +37,39 @@ origin_split = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(origin_split)
 
 ID = ["image_path", "q", "knob_tuple_json", "encode_sha"]
-sc = pq.read_table(os.path.join(WB, "scores.parquet")).to_pydict()
-ft = pq.read_table(os.path.join(WB, "features.parquet"))
-n_feat = sum(1 for c in ft.column_names if c.startswith("feat_"))
-ft = ft.to_pydict()
+sc = pq.read_table(os.path.join(U, "scores.parquet"))
+ft = pq.read_table(os.path.join(U, "features.parquet"))
+for c in ID:
+    assert sc[c].equals(ft[c]), f"ID column {c} misaligned between scores and features"
 
-fidx = {}
-for i in range(len(ft["image_path"])):
-    fidx[(ft["image_path"][i], ft["q"][i], ft["knob_tuple_json"][i], ft["encode_sha"][i])] = i
+names = sc["image_path"].to_pylist()
+origins = [origin_split.origin_id(n) for n in names]
+leg = []
+for o in origins:
+    if not o:
+        raise SystemExit(f"unsplittable origin for a corpus row (origin_id returned {o!r})")
+    d = o[-1]
+    if d in "0246":
+        leg.append("train")
+    elif d == "8":
+        leg.append("eval8")
+    else:
+        raise SystemExit(f"origin {o} ends in {d} — non-train-side origin in a train-only corpus")
 
-score_cols = [c for c in sc if c not in ID]
-feat_cols = ["feat_%d" % i for i in range(n_feat)]
-out_cols = ID + ["origin", "split"] + score_cols + (["zensim_score"] if "zensim_score" not in score_cols else []) + feat_cols
-rows = {c: [] for c in out_cols}
-miss_feat = 0
-split_counts = {}
-for i in range(len(sc["image_path"])):
-    key = (sc["image_path"][i], sc["q"][i], sc["knob_tuple_json"][i], sc["encode_sha"][i])
-    fi = fidx.get(key)
-    if fi is None:
-        miss_feat += 1
-        continue
-    name = sc["image_path"][i]
-    sp = origin_split.split_of(name)
-    if sp is None:
-        continue
-    rows["origin"].append(origin_split.origin_id(name))
-    rows["split"].append(sp)
-    for c in ID:
-        rows[c].append(sc[c][i])
-    for c in score_cols:
-        rows[c].append(sc[c][i])
-    if "zensim_score" not in score_cols:
-        rows["zensim_score"].append(ft.get("zensim_score", [None] * (fi + 1))[fi])
-    for j, c in enumerate(feat_cols):
-        rows[c].append(ft[c][fi])
-    split_counts[sp] = split_counts.get(sp, 0) + 1
+t = sc
+for c in ft.column_names:
+    if c not in ID:
+        t = t.append_column(c, ft[c])
+t = t.append_column("origin", pa.array(origins)).append_column("leg", pa.array(leg))
 
-t = pa.table(rows)
-name_map = {"train": "train", "val": "validate", "test": "test"}
-import pyarrow.compute as pc
-for sp, out_name in name_map.items():
-    sub = t.filter(pc.equal(t["split"], sp))
-    p = os.path.join(OUT, f"{out_name}_944.parquet")
+counts, ocounts = {}, {}
+for name in ("train", "eval8"):
+    sub = t.filter(pc.equal(t["leg"], name))
+    p = os.path.join(OUT, f"{name}_944.parquet")
     pq.write_table(sub, p, compression="zstd")
-    print(f"{out_name}: {sub.num_rows} rows -> {p}")
-print(f"total joined {t.num_rows} (feat width {n_feat}; cells missing features: {miss_feat}); splits {split_counts}")
+    counts[name] = sub.num_rows
+    ocounts[name] = len({o for o, l in zip(origins, leg) if l == name})
+    print(name, sub.num_rows, "rows ->", p, flush=True)
+print("origins per leg:", ocounts)
+json.dump({"rows": counts, "origins": ocounts}, open(os.path.join(OUT, "view_counts.json"), "w"))
+print("VIEWS_DONE")
