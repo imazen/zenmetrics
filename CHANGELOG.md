@@ -13,6 +13,21 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace (avifgen close-out revival, 2026-08-21)
+
+### Added
+- Measured `gpu_metric` handicap rows from the avifgen rescue clean window; r7900x
+  excluded after its RTX 2080 departed; `[workers.i134]` key migration; derivation
+  record `fleet/handicap_gpu_rescue_2026-08-21.md` (c3ea0fef)
+- avifgen close-out tools in `scripts/jobsys/`: AC.R1-amended view emitter
+  (`train_944`/`eval8_944`, columnar low-mem — replaces the 53.8 GB per-row join),
+  rescue verdict+rebuild comparator, final-manifest builder (a7c99fcb)
+
+### Fixed
+- Status doc carries the honest 13-day-stall record: 560s-timeout silent waiter,
+  cred-expiry drain stop, LAN-default-flip landmine, LAN-only close-out chronology
+  (79792426)
+
 ## Workspace (GPU-efficiency program — warm executor + same-ref batching, #45-#49)
 
 ### Added

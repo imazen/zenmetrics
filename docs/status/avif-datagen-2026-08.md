@@ -21,7 +21,7 @@ the corpus `_MANIFEST.json`.
 
 | | |
 |---|---|
-| **Phase** | CLOSE-OUT (2026-08-21 revival, LAN-only policy) — encode + CPU scores closed; GPU rescue residue draining on the LAN store; see "THE 13-DAY STALL + REVIVAL" below |
+| **Phase** | **CLOSED 2026-08-21 (LAN-only close-out).** Campaign terminal record: zensim appendix **Z.R** (`fb731572`). Rescue union 8,623/8,623; verdict RESCUE-WINS (3/2,000); G-Z5 re-gate **PASSED 0.999313**; views train_944 (459,780) + eval8_944 (104,520) emitted + manifested; mirrors /mnt/v + Tower (sha-verified), NO R2 copies. Corpus `_MANIFEST.json` sha `1cc50769…e6224397`. WAVE-12 DATA GATE: **OPEN**. |
 | **Grid** | frozen in appendix Z (main 472,680 + probe 90,720 + huge 900; monsters >16MP excluded) |
 | **zenavif pin** | `66e3c417b43ff950323d402824aeb1ecbbc7f683` (path-dep sibling; source tree == commit tree) |
 | **Images** | CPU `ghcr.io/imazen/zenfleet-worker:exec-avifgen-66e3c417`; GPU `…:exec-gpu-avifgen-66e3c417` (both built locally from the pinned checkouts, pushed) |
@@ -254,9 +254,27 @@ every claim measured from the salvaged ledger/journals on 2026-08-21:
    (`jobs/avifgen-sf-gpu-rescue2-lan-20260821`; inputs mirrored 1:1 — 1,545 encode
    blobs + 22 refs). First-cell gate PASSED: sidecar + 30 score blobs on the LAN store
    within 3.5 min of container start (patched http GET + PUT proven end-to-end).
-8. **Sample verdict (registered AC.R1 decision rule): RESCUE-WINS.** 1,997/2,000
-   sample pairs checked against stored scores: **3 mismatches, rate 0.0015** (< the
-   0.005 escalation threshold; the 3 are additional VRAM-era corruption outside the
-   exact-saturation census, cured by the same rescue overlay). No full re-score.
+8. **Sample verdict (registered AC.R1 decision rule): RESCUE-WINS.** Final (post-drain)
+   run: 2,000/2,000 sample pairs checked against stored scores: **3 mismatches, rate
+   0.0015** (< the 0.005 escalation threshold; the 3 are additional VRAM-era corruption
+   outside the exact-saturation census, cured by the same rescue overlay). No full re-score.
+9. **LAN residue drain: COMPLETE in ~9 minutes.** 172/172 jobs done, zero failures, on
+   node-2 alone (the "hard tail" was an artifact of the storm-era conditions, not the
+   pairs). **JobId drift found and contained:** the pinned-tree (1406f59c) worker build
+   computes DIFFERENT JobIds than the Aug-6 fleet binaries + main-repo ctl — the
+   JobId::of rev-fragility class the Known Bugs section warns about, observed live
+   across revs (not just feature unification). Verified harmless here: pinned-ctl ids
+   match the LAN ledger 172/172 and the gap ids are exactly the union residue, so union
+   coverage composes to **8,623/8,623**; the writeback joins on (image_path, encode_sha)
+   and never on job ids. Do NOT mix worker/ctl builds from different revs on one run.
+10. **Close-out chain completed 2026-08-21 ~06:1xZ:** rebuild (74,241 cells patched
+    rescue-wins; pre-rescue kept as `scores.pre-rescue.bak.parquet`) → post-rebuild
+    census = 3 cells, all rescue-RE-VERIFIED pixel-identical flat-content (rendition
+    7048, s4-noqm, q 1/5/30 — legit, not corruption) → G-Z5 re-gate **PASSED 0.999313**
+    (per-column: ssim2 0.9975, cvvdp 0.9979, butter_max 0.9950, butter_p3 0.9954) →
+    views + view manifest → final corpus `_MANIFEST.json` (sha `1cc50769…e6224397`) →
+    Tower mirrors sha-verified. Worker container removed; stale units disabled on both
+    GPU boxes; `/opt/zen-lan/` on node-2 keeps the patched pinned binaries + env for
+    reference.
 
 | 2026-08-08 ~09:30 | **G-Z5 CAUGHT SILENT GPU-SCORE CORRUPTION — manifest correctly delayed.** The registered default-stratum ssim2 bar missed (0.9876 vs 0.99) and diagnosis of the violators found the real cause: **VRAM-pressure-era garbage** — med/large ladders where ssim2_gpu reads impossible flat 100.0 + butteraugli 0.0 at q≤70 while the SAME pairs' cvvdp (CPU queue) rises perfectly 8.03→10.0 JOD (which also proves pair association + table joins correct). Census: **2,169 impossible-class cells across 99 renditions, 100% med/large** — the pre-hint OOM-window population; exact saturation is a lower bound. cvvdp + 944 features CLEAN. **Rescue running:** all 40,466 pairs of the 99 affected renditions + a 2,000-pair stratified verification sample = 5,573 hinted jobs (`avifgen-sf-gpu-rescue-20260808`), both GPU boxes. Decision rule pre-stated: sample-clean ⇒ patch affected cells (rescue rows win) + re-gate; sample-dirty ⇒ full GPU re-score. Also recorded: the **training-view split is structurally train-only** — every origin in `train_renditions_2026-06-14` ends 0/2/4/6/8 (it IS the June train-split rendition set), so validate/test views are empty by the canonical rule; wave-12 sources val/test elsewhere. Lean columnar writeback landed the 564,300-cell tables (scores 8 cols / features 944; the stock per-row-dict join OOM'd at 53.8 GB uncapped — my run-heavy violation, owned; rebuilt under a 24G cgroup cap at 8.5 GB peak, 1,045 s). |
