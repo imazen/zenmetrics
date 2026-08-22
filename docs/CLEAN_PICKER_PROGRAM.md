@@ -64,7 +64,14 @@ leaks across the split). Deterministic — no seed, no manifest lookup needed:
 
 ## CANONICAL CORPUS = imazen-26 (provenanced), NOT dense-r6
 
-- **Use `imazen-26`** — the sha256-provenanced origin set in
+- **SOURCE OF TRUTH (USER DIRECTIVE 2026-08-22): the `imazen/codec-corpus` repo** —
+  `imazen-26/` + `CORPUS-MANIFEST.tsv` (2160 images, the membership oracle) + the
+  canonical split manifests `imazen-26/manifests/{train,validate,test,split_map}.tsv`
+  (last-digit rule, **1084 train / 658 validate / 418 test**, sha256 per image;
+  codec-corpus PR #12). Anything derived from another imazen-26 copy is broken unless
+  sha-verified against those manifests. The rows below describe the historical
+  feature-era cache (2157 of the 2160 images) — still useful, no longer the truth.
+- **Historical cache:** the sha256-provenanced origin set in
   `/mnt/v/output/imazen-26-features/imazen26_manifest.tsv` (2157 origins;
   `PROVENANCE.md` per source folder under `/mnt/v/imazen-26/`). Under the split
   rule: **1082 train / 657 val / 418 test** origins, balanced across all 12 content

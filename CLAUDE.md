@@ -103,7 +103,13 @@ sessions: read it; do NOT invent a split or pick a corpus ad-hoc.
   parity or use a seeded/random shuffle (the old `train_hybrid` per-rendition 20% shuffle was WRONG:
   per-rendition → scale leakage). `train_hybrid` now hard-errors if `origin_split` isn't on PYTHONPATH
   (add `scripts/picker`) — refuses a leaky fallback — and reports held-out **test** (7/9) alongside val.
-- **Canonical corpus = imazen-26** (`/mnt/v/output/imazen-26-features/imazen26_manifest.tsv`, sha256-
+- **Canonical imazen-26 = the `imazen/codec-corpus` REPO (USER DIRECTIVE 2026-08-22).** Source of
+  truth is `codec-corpus/imazen-26/` + its `CORPUS-MANIFEST.tsv` (membership oracle, 2160 images) +
+  the canonical split manifests `imazen-26/manifests/{train,validate,test,split_map}.tsv`
+  (last-digit rule, 1084/658/418; codec-corpus PR #12; sha256 per image). **Anything derived from
+  any OTHER imazen-26 copy is broken unless sha-verified against those manifests** — the `/mnt/v`
+  copies below are caches, and the historical feature-era manifest has 2157 of the 2160 images.
+- Historical cache (feature era): `/mnt/v/output/imazen-26-features/imazen26_manifest.tsv` (sha256-
   provenanced, 2157 origins → 1082 train / 657 val / 418 test, balanced across all 12 content classes).
   Segmented: `scripts/picker/segment_imazen26.py` → `imazen26_split_evenodd.tsv` + `imazen-26-split/{train,validate,test}/`.
   **dense-r6 is SUPERSEDED for clean training** (built from `K500_even` reps → train-biased, only 64 val
