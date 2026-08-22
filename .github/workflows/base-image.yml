@@ -104,3 +104,10 @@ jobs:
             test -f /usr/local/lib/cuda_dlsym_stub.so
             echo "CUDA 12.6 runtime + dlsym stub present"
           '
+
+      # Public image -> a baked credential is a public leak. Fail the build on one.
+      - name: Scan for leaked secrets (gate)
+        uses: ./.github/actions/scan-image-secrets
+        with:
+          images: ${{ env.IMAGE_NAME }}:${{ matrix.tag }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
