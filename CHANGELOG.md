@@ -22,9 +22,10 @@ Workspace conventions per the global rules:
   preconditions (#38 JobId, chunked-path SIGTERM claim release, single-run
   `ZEN_MAX_MIN`, VRAM admission) + phased rollout + consolidated defect register.
   **MEASURED store gate: SeaweedFS 4.44 PASSES the two-writer `If-None-Match: *`
-  race (5/5; MinIO control PASS) at PUT-faster/GET-parity on 1000×4KiB** — designated
-  LAN-store successor for multi-box capacity (non-versioned buckets only; re-gate at
-  every pin change). Harness committed: `scripts/lanstore/{condput_gate.py,store_ab_gate.sh}`.
+  race (5/5; MinIO control PASS) at PUT-faster/GET-parity on 1000×4KiB** — the live
+  LAN store already runs SeaweedFS 4.43 (switched 2026-08-21, private fleet repo);
+  this re-gate on a second box pre-validates the next pin bump (non-versioned buckets
+  only; re-gate at every pin change). Harness: `scripts/lanstore/{condput_gate.py,store_ab_gate.sh}`.
 - **Training roadmap** (b82e1edd): `docs/status/training-roadmap-2026-08.md` —
   ordered next steps for zensim / zenavif / zenjxl / zenanalyze + cross-cutting data
   rules (canonical corpus + split inheritance, vendor-class partitioning, JobId build

@@ -19,6 +19,15 @@ fleet repo: `homefleet zenmetrics/ORCHESTRATION-2026-08.md`. Neutral node IDs on
   zenfleet launchers + R2 + self-destruct): ephemeral paid spot boxes joining a LAN
   raft quorum is the wrong shape, and there is no inbound path to the LAN store anyway.
 - Windows sides of dual-boot boxes: out of scope (idle-only native workers unchanged).
+- **Relationship to the 2026-08-21 orchestration evaluation** (private fleet repo):
+  that review concluded "not yet — nothing in the current service set wants to be
+  scheduled", while withdrawing its licence objection and naming Nomad the
+  front-runner over k3s for this fleet. This ADR supersedes the "not yet" **for the
+  worker fleet specifically**, on operator direction (2026-08-22): the schedulable
+  service is the worker lifecycle itself — one service class across ~8 heterogeneous,
+  partly-intermittent boxes, whose hand-rolled management layer is what recent
+  campaign incident logs kept paying for. The licence analysis and Nomad-vs-k8s
+  reasoning there remain the operative record.
 
 ## What Nomad replaces vs what stays
 
@@ -75,28 +84,33 @@ will never manage), coverage/catalog, blob GC.
   monitoring paths; decide whether POOL mode's lease claiming can drop to
   epoch-sharded now that membership is observable.
 
-## LAN store, next generation: SeaweedFS PASSES the gate (measured 2026-08-22)
+## LAN store: SeaweedFS is LIVE (switched 2026-08-21); 4.44 re-gated on a second box
 
-Why revisit the 2026-08-10 store verdict: **capacity now binds** (`zentrain` ~1.85 TB
-growing ~18 GB/day vs ~500 GiB free on the NAS hot tier), new multi-TB disks are
-arriving on a new LAN box, and the MinIO community pin is frozen (AGPL); the op-bill
-motivation was resolved separately (the fuzz-sync `--size-only` fix). SeaweedFS was
-never gated before — only assumed-out.
+Correction over this doc's first revision, which pre-dated a fetch: **the LAN store
+already switched from MinIO to SeaweedFS 4.43 on 2026-08-21** (MinIO's community
+edition is archived/EOL with unfixable advisories; endpoint unchanged, migration
+manifest byte-identical, gate re-run at cutover — record in the private fleet repo's
+LANSTORE doc; MinIO parked as rollback). What THIS review adds is the forward story:
+**capacity is the binding constraint** (`zentrain` ~1.85 TB growing ~18 GB/day vs
+~500 GiB free on the NAS hot tier), and SeaweedFS's native multi-box volume servers +
+per-collection replication + R2 cloud-tiering are the designed answer once the new
+box's 2×2 TB disks land.
 
-Gate = the mandatory two-writer `PUT If-None-Match: *` race (harness committed at
-[`scripts/lanstore/condput_gate.py`](../../scripts/lanstore/condput_gate.py); A/B
-driver [`scripts/lanstore/store_ab_gate.sh`](../../scripts/lanstore/store_ab_gate.sh)),
-run on a LAN worker box, loopback docker, stock config, 2026-08-22:
+Independent re-gate = the mandatory two-writer `PUT If-None-Match: *` race (harness
+committed at [`scripts/lanstore/condput_gate.py`](../../scripts/lanstore/condput_gate.py);
+A/B driver [`scripts/lanstore/store_ab_gate.sh`](../../scripts/lanstore/store_ab_gate.sh)),
+run on a SECOND LAN worker box, loopback docker, stock config, 2026-08-22 — this
+pre-validates the **next pin bump** (the live store runs 4.43):
 
 | store | sequential | 8-way race ×5 | 1000×4KiB PUT (median of 3, s5cmd) | GET |
 |---|---|---|---|---|
 | **seaweedfs 4.44** | 200 → 412 | 1 win / 7 `PreconditionFailed`, 5/5 | **0.09 s** | 0.11 s |
 | minio `2025-09-07` (control) | 200 → 412 | 1 win / 7, 5/5 | 0.14 s | 0.10 s |
 
-**Verdict: SeaweedFS 4.44 is the designated successor** — passes the exactly-once
-gate, PUT-faster/GET-parity on our tiny-object shape, Apache-2.0, actively released,
-built for many-small-objects, per-collection replication across boxes, and native
-cloud-tiering (R2 as the cold remote). Constraints:
+**Verdict: 4.44 pre-validated for the next pin bump** — passes the exactly-once gate
+at PUT-faster/GET-parity vs the retired MinIO pin on our tiny-object shape (sub-0.2 s
+runs are near timing floor: read parity-or-better, not a precise ratio). Standing
+constraints:
 
 - **Non-versioned buckets ONLY.** Upstream recently fixed conditional writes under
   versioning+locking, but that path is outside our gate — never enable versioning or
@@ -104,12 +118,13 @@ cloud-tiering (R2 as the cold remote). Constraints:
 - **Pin the version; re-run the gate at the exact pin before any consumer moves and
   after EVERY upgrade** (the Garage lesson: silent `If-None-Match` no-ops are the
   worst failure mode and produce no log line).
-- Buckets/roles/cred pattern unchanged (`zentrain`/`codec-corpus`/`zenfuzz`,
-  `ZEN_S3_ENDPOINT` swap; `allow_http` already fixed in 55f8a339 + e7e04994).
-- Migration: stand up alongside MinIO, `s5cmd sync` the buckets, cut over per-run at
-  declare time (same rule as the R2→LAN cutover), retire MinIO only after a full wave
-  + burn-in. Topology (which boxes host volume servers, replication classes, filer
-  metadata backup) is in the private companion doc.
+- Buckets/roles/cred pattern unchanged (`zentrain`/`codec-corpus`/`zenfuzz`;
+  `allow_http` already fixed in 55f8a339 + e7e04994).
+- Expansion (storage v2, when the new box lands): volume servers on its 2×2 TB SATA
+  as the bulk tier + optional volumes on two always-on boxes; canonical collections
+  move to replication `010` once ≥2 volume hosts are up; filer metadata backed up
+  nightly like a ledger; `weed filer.remote.sync` → R2 for new canonical data.
+  Storage stays OUTSIDE Nomad at every phase. Topology in the private companion doc.
 
 ## zenfleet defect register (consolidated 2026-08-22)
 
