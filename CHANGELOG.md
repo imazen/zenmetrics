@@ -13,6 +13,31 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace (fleet-orchestration review + canonical-corpus directive, 2026-08-22)
+
+### Added
+- **Nomad ADR + LAN-store next-generation gate** (b82e1edd):
+  `docs/status/fleet-orchestration-2026-08.md` — Nomad (CE 1.11.x) piloted as the LAN
+  box-lifecycle layer ONLY; zenfleet keeps the whole work-distribution plane;
+  preconditions (#38 JobId, chunked-path SIGTERM claim release, single-run
+  `ZEN_MAX_MIN`, VRAM admission) + phased rollout + consolidated defect register.
+  **MEASURED store gate: SeaweedFS 4.44 PASSES the two-writer `If-None-Match: *`
+  race (5/5; MinIO control PASS) at PUT-faster/GET-parity on 1000×4KiB** — designated
+  LAN-store successor for multi-box capacity (non-versioned buckets only; re-gate at
+  every pin change). Harness committed: `scripts/lanstore/{condput_gate.py,store_ab_gate.sh}`.
+- **Training roadmap** (b82e1edd): `docs/status/training-roadmap-2026-08.md` —
+  ordered next steps for zensim / zenavif / zenjxl / zenanalyze + cross-cutting data
+  rules (canonical corpus + split inheritance, vendor-class partitioning, JobId build
+  discipline, variants spec).
+
+### Changed
+- **Canonical imazen-26 is the `imazen/codec-corpus` repo** (b82e1edd; USER DIRECTIVE
+  2026-08-22): repo manifests `imazen-26/manifests/{train,validate,test,split_map}.tsv`
+  (last-digit rule, 1084/658/418, sha256 per image; codec-corpus PR #12) are the
+  source of truth; `/mnt/v` copies demoted to caches; data derived from non-canonical
+  copies is broken unless sha-verified. `CLAUDE.md` + `docs/CLEAN_PICKER_PROGRAM.md`
+  updated in place.
+
 ## Workspace (avifgen close-out revival, 2026-08-21)
 
 ### Added

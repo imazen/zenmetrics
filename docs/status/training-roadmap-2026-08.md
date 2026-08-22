@@ -30,26 +30,24 @@ steps; the program docs stay authoritative for their own details.
 
 ## zensim (944 era)
 
-1. **Close the avifgen GPU-score rescue** — the pre-stated decision rule
-   (verification sample clean ⇒ patch rescue rows + re-run G-Z5; dirty ⇒ full GPU
-   re-score). Only then: `_MANIFEST.json`, writeback views, provenance entries.
-2. **Wave-12 (AVIF leg)** launches on the gated `scores.parquet`: `avif944` as a
-   train-only leg (val weight 0) + `eval8_944` (origins ending 8) per the registered
-   split amendment.
-3. **Ship route stays distillation (wave-6 arm F)** from the seed ensembles
+1. **avifgen data-gate CLEARED 2026-08-21** (04d03359: LAN drain 172/172, union
+   8,623/8,623, verdict RESCUE-WINS 3/2,000, G-Z5 re-gate 0.999313, views + manifests
+   + Tower mirrors sha-verified) — **wave-12 is unblocked**: launch it on the
+   AC.R1-amended views (`train_944` train-only + `eval8_944`).
+2. **Ship route stays distillation (wave-6 arm F)** from the seed ensembles
    (`W5_E1_k2` CID22 0.89425 / `W6_GE2_trio` KonJND 0.4543 are eval functions, not
    bakes); every freeze candidate needs `bake_dial_refit add-spline` first (G-RANGE).
    The freeze decision itself is the USER's.
-4. **Classic-IQA breadth is the binding axis** on the balanced board (0/172 cells pass
+3. **Classic-IQA breadth is the binding axis** on the balanced board (0/172 cells pass
    all 8 floors; CSIQ/LIVE ≥ 0.83 is what fails) — attack via distill mixes that
    include the classic anchors, not by more single-corpus tuning.
-5. **Publish chain (user-gated)**: zenpredict 0.2.x with the v3 runtime →
+4. **Publish chain (user-gated)**: zenpredict 0.2.x with the v3 runtime →
    `zensim 0.3.0` (#46) → unblocks zenwebp/zenavif/imageflow migration to profile B.
 
 ## zenavif
 
-1. Finish the rescue + writeback (shared with zensim item 1); record per-box
-   `gpu_metric` handicaps from the clean hinted window (registered TODO).
+1. Campaign CLOSED 2026-08-21 (04d03359); `gpu_metric` handicaps derived from the
+   rescue clean window already landed (c3ea0fef). Nothing left here but consumption.
 2. **Clean picker, still undelivered**: newest committed `.bin`s are 2026-05-04; the
    2026-06-28 clean/veto picker was validated but never committed. Path: canonical
    `modes_full`-class re-sweep **including odd origins** (LAN fleet + LAN store, job
@@ -88,8 +86,8 @@ steps; the program docs stay authoritative for their own details.
 
 ## Sequencing note
 
-The rescue-verdict (zensim/zenavif item 1) gates the most downstream value and runs on
-GPU boxes; the jxl P0 confirmation and the zenavif odd-origin sweep are CPU-fleet work
+With the avifgen gate cleared, wave-12 training is the highest-value next launch; the
+jxl P0 confirmation and the zenavif odd-origin sweep are CPU-fleet work
 and can run concurrently on the LAN fleet under the job system. Nothing in this
 roadmap needs paid cloud except (optionally) jxl P0 scale-up, capped per its $25
 budget line.
