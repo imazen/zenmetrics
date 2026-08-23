@@ -19,9 +19,13 @@ steps; the program docs stay authoritative for their own details.
    structurally train-only (all origins even); val/test always come from odd-digit
    origins elsewhere. New sweeps must cover odd origins where a picker needs held-out
    evaluation (they never have: zenjpeg/zenavif/zenwebp odd origins were never swept).
-3. **Variant generation** follows `codec-corpus imazen-26/VARIANTS-SPEC.md` (v1):
-   leading-id naming ⇒ mechanical split inheritance, Mitchell-in-linear-light, the
-   canonical size ladder, mandatory `variants.tsv` with generator commit + sha256.
+3. **Variant generation** follows `codec-corpus imazen-26/VARIANTS-SPEC.md` (v2):
+   density is chosen per task by the measured procedures (thumbnail coverage floor;
+   k-means reps at the K-knee on content features, within-split; budget-first FPS
+   with prefix-truncatable GP budgets), sizes come from one candidate grid,
+   id-leading dot-chain names ⇒ mechanical split inheritance, kernel/sharpen/
+   colorspace are recorded axes, mandatory `variants.tsv` with selection method +
+   generator commit + sha256.
 4. **Vendor-class partitioning** (zensim#56): any feature re-extraction wave
    partitions boxes by CPU-vendor class — the MSCN append slots are
    vendor-nondeterministic at ~1e-8.
