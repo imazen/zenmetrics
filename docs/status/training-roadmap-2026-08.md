@@ -7,10 +7,10 @@ steps; the program docs stay authoritative for their own details.
 
 ## Cross-cutting data rules (apply to every program below)
 
-1. **Canonical imazen-26 = the `imazen/codec-corpus` repo** (USER DIRECTIVE
-   2026-08-22): `imazen-26/` + `CORPUS-MANIFEST.tsv` (membership oracle) + the
-   canonical split manifests `imazen-26/manifests/{train,validate,test}.tsv`
-   (last-digit rule, codec-corpus PR #12). **Anything derived from any other
+1. **Canonical imazen-26 = the dedicated `imazen/imazen-26` repo** (moved
+   2026-08-23; predecessor = codec-corpus PR #12): `CORPUS-MANIFEST.tsv`
+   (membership oracle) + `manifests/{train,validate,test}.tsv` (last-digit rule)
+   + the `variant-sets/` registry (per-set sha manifests + consumer map). **Anything derived from any other
    imazen-26 copy is broken unless sha-verified against those manifests.** The
    `/mnt/v` copies are caches. Near-term blast radius is small and enumerable —
    3 renamed ids (9231/9869/9874) + metadata-only EXIF rewrites (pixels verified
@@ -19,7 +19,9 @@ steps; the program docs stay authoritative for their own details.
    structurally train-only (all origins even); val/test always come from odd-digit
    origins elsewhere. New sweeps must cover odd origins where a picker needs held-out
    evaluation (they never have: zenjpeg/zenavif/zenwebp odd origins were never swept).
-3. **Variant generation** follows `codec-corpus imazen-26/VARIANTS-SPEC.md` (v2):
+3. **Variant generation** follows `imazen-26` repo `VARIANTS-SPEC.md` (v2) via the
+   registered entrypoint `scripts/make_variant_set.py` (sets are born versioned in
+   `variant-sets/`):
    density is chosen per task by the measured procedures (thumbnail coverage floor;
    k-means reps at the K-knee on content features, within-split; budget-first FPS
    with prefix-truncatable GP budgets), sizes come from one candidate grid,
