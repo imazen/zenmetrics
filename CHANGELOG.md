@@ -31,6 +31,14 @@ Workspace conventions per the global rules:
   severity); the full wake→auto-place→drain cycle proven end-to-end for the first time
   (G-P3): a Nomad job submitted against sleeping nodes queues correctly, WoL wakes them,
   and Nomad places the already-queued allocations with zero manual intervention.
+- **G-T1 throughput ladders — 3 of 4 measured** (claim-mode was already covered above):
+  `ZEN_PERSISTENT_EXEC` (warm-exec) measured as a **regression** on the GPU-score leg —
+  440s/3,995-done vs the baseline's 311s/4,000-done for an identical 4,000-job batch, a
+  ~41% wall-clock increase — recommend leaving it off; `ZEN_CORE_OVERSUBSCRIBE` measured
+  a small (~12-14%), direction-consistent speedup on plain zenjpeg encode across a
+  2-slice-crossed design (4 short runs, 0 failures), a mild surprise against the knob's
+  own documented fetch-bound-only intent, flagged as low-precision (6-8s runs) and a
+  follow-up candidate rather than a default change. VRAM admission remains unmeasured.
 
 ### Fixed
 - **Chunk-mode's per-chunk lease claim gives ZERO cross-worker dedup on a heterogeneous-

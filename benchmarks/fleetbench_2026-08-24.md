@@ -630,8 +630,11 @@ all 5 GPU metrics.
 
 The mission names four ladders: per-box concurrency (`ZEN_CORE_OVERSUBSCRIBE`),
 GPU admission via VRAM hints, warm-exec on/off, and epoch-sharded vs lease
-claiming. **1 of 4 is measured and ready to ship; 3 remain untested** — stated
-as a fraction, not "tuning done," per this repo's own completion-reporting rule.
+claiming. **3 of 4 are measured; 1 remains untested** — stated as a fraction,
+not "tuning done," per this repo's own completion-reporting rule. Of the 3
+measured, only claim-mode is a confident, ready-to-ship recommendation; the
+other 2 (warm-exec, oversubscribe) are real single-pass measurements with
+honestly-flagged limits (see below), not exhaustively-repeated results.
 
 **Claim mode — MEASURED, ready to register.** This is the by-product of the
 G-P0/epoch-sharded/G-N1/G-P3 runs above, not a purpose-built ladder test, but
@@ -655,15 +658,97 @@ convention), not in `fleet/handicaps.toml` (that file is for PER-BOX-TYPE
 axis from "which claim mode" — and its own measurement procedure requires the
 dedicated `handicap_typebench.sh` tool, not this mixed-codec fleetbench data).
 
-**Not yet measured — concurrency (`ZEN_CORE_OVERSUBSCRIBE`), VRAM admission,
-warm-exec (`ZEN_PERSISTENT_EXEC`).** No ladder runs done for any of these
-three in this session. `ZEN_PERSISTENT_EXEC` is the most cheaply testable
-next (a single documented on/off env toggle against the same frozen
-workload); VRAM admission needs a GPU-metric-heavy cell mix specifically
-sized to exercise the admission boundary; concurrency oversubscribe needs a
-CPU-bound comparison across box classes. None of these three should be
-considered "tuned" — the shipped config for them is still whatever the
-untuned default already was, not a measured argmax.
+**Warm-exec (`ZEN_PERSISTENT_EXEC`) — MEASURED: OFF is faster for this
+GPU-score workload shape, a REGRESSION from the intended optimization.**
+Same jobspec (`fleetbench-gpuscore.nomad.hcl`), same box (r7900x), same
+4,000-job size (800 cells × 5 GPU metrics), a disjoint 800-cell slice
+(`items[800:1600]` of the same 8,415-cell superset the baseline GPU-score
+leg drew `items[0:800]` from) — single env-var flip, sequential runs (no
+concurrency confound):
+
+| run | `ZEN_PERSISTENT_EXEC` | jobs completed | wall-clock (real work) | done | failed | throughput |
+|---|---|---|---|---|---|---|
+| GPU-score baseline | unset (off) | 4,000/4,000 | 06:14:43Z→06:19:54Z = **311s** | 3,931 | 69 | 12.86 jobs/s |
+| GPU-score warm-exec | `1` (on) | 3,995/4,000 | 06:26:26Z→06:33:46Z = **440s** | 3,932 | 63 | 9.08 jobs/s |
+
+Warm-exec did **less** work (3,995 vs 4,000) in **more** time (440s vs
+311s) — unambiguous on both axes, not a rate difference sensitive to the
+small count delta. That's a **~41% wall-clock increase / ~29% throughput
+drop** from turning the optimization on. (Timestamps are the container
+log's `pass 1 start` → `pass 1 rc=0` lines — the actual compute-bound
+interval — not the Nomad `nomad job run` invocation time, which includes
+~5s of scheduling/eval overhead common to both runs and would understate
+the gap slightly if included on only one side.) Not root-caused further
+(out of scope for this ladder pass) — plausible, UNVERIFIED hypothesis:
+the pooled warm-child mechanism is documented in-source
+(`crates/zenfleet-worker/src/lib.rs:1592`) as bounded to "≤2 on the hinted
+GPU queues," a lower concurrency ceiling than this box's normal
+`can_admit`-based admission would otherwise allow for this cell size —
+i.e. the pool may be trading a per-job JIT/init saving for a worse
+concurrency bound, a net loss at this workload's cost ratio. **Secondary
+finding, also unexplained:** distinct `job_id` count in the warm-exec
+ledger is exactly 3,995 (not a duplicate-collision artifact — verified via
+`SELECT COUNT(DISTINCT job_id)`), so 5/4,000 declared jobs (0.125%) never
+reached a terminal ledger row in the real pass or any of the 5 subsequent
+idle-confirmation passes; filed as a minor open question, not chased
+further here. **Recommendation: leave `ZEN_PERSISTENT_EXEC` unset (off)**
+for GPU-score-shaped fleetbench workloads on this fleet.
+
+**Concurrency oversubscribe (`ZEN_CORE_OVERSUBSCRIBE`) — MEASURED: a
+small, consistent, same-direction speedup even on this COMPUTE-bound
+workload**, which the knob's own source comment
+(`crates/zenfleet-worker/src/lib.rs:2028-2034`) says is designed for
+*fetch-dominated* I/O-bound work and should be left at 1.0 for "CPU-bound
+tiers (encode/GPU)" — i.e. this result is a mild surprise relative to the
+documented expectation, not a confirmation of it. This mission's frozen
+workload has no genuinely fetch-dominated job kind (CPU-score/GPU-score
+both re-encode locally rather than fetching over the network — confirmed
+by reading `jobexec.rs` directly), so plain `zenjpeg` encode (the fastest,
+most purely-CPU-bound job kind available) was used as the nearest
+available compute-bound proxy. Two independent zenjpeg slices from the
+original 8,415-cell `all_encode_cells.jsonl` (lines 1-1450 / "ctrl-slice",
+1450 cells; lines 1451-2907 / "treat-slice", 1457 cells — the entire
+zenjpeg pool, split in half), each run at BOTH oversubscribe settings
+(slice-crossed design, to separate a slice-content effect from an
+oversubscribe effect) — 4 short sequential runs on r7900x, fresh run
+names each time so no run's ledger could see another's completed work:
+
+| slice | `OVERSUBSCRIBE=1` (default) | `OVERSUBSCRIBE=3` | delta |
+|---|---|---|---|
+| ctrl-slice (1,450 cells) | 8s | 7s | -1s |
+| treat-slice (1,457 cells) | 7s | 6s | -1s |
+
+All 4 runs: 0 failed. The 1s-faster-at-oversub=3 result reproduces
+**across both slices** (ctrl-slice is slower than treat-slice regardless
+of setting — 8/7 vs 7/6 — a real content-cost difference between the two
+halves of the zenjpeg pool — but *within* each slice, oversub=3 is
+consistently faster), which rules out slice-content as the explanation
+for the direction, even though the absolute magnitude (~12-14%) is
+imprecise: each run lasted only 6-8 seconds and timestamps come from
+whole-second container-log lines, so the true per-run precision is
+roughly ±0.5-1s — a large fraction of the effect size itself. Plausible,
+unconfirmed explanation: even a "CPU-bound" encode cell has a small
+non-CPU tail (LAN-store upload of the encoded bytes, ledger-row writes,
+chunk-packing bookkeeping) that mild oversubscription can overlap across
+more concurrent cells, the same mechanism the source comment describes
+for fetch-dominated work, just at much smaller scale. **Recommendation:**
+the direction is consistent enough to be worth a longer, lower-noise
+follow-up run (full corpus, repeated trials) before changing any default,
+but NOT worth blocking on here — this is a genuinely small effect on a
+job kind that isn't the workload the knob targets. Do not read this as
+validating oversubscribe for encode/GPU tiers generally; it's one
+data point on one box for one codec.
+
+**Not yet measured — VRAM admission.** No ladder run done for this axis
+in this session. It needs a GPU-metric-heavy cell mix specifically sized
+to exercise the admission boundary (this fleet's only GPU box, r7900x, has
+a 6 GB GTX 1060 — `DEFAULT_GPU_JOB_VRAM_BYTES` is a flat 2 GiB/job
+estimate per `crates/zenfleet-worker/src/lib.rs:2064`, so ~2 concurrent
+GPU jobs should be the admitted ceiling at the 90%-of-VRAM budget; the
+useful test is confirming concurrent GPU-metric admission never exceeds
+that ceiling and never triggers a CUDA OOM, not a throughput comparison).
+Should not be considered "tuned" — the shipped config is still whatever
+the untuned default already was, not a measured argmax.
 
 ## Gate verdicts (summary)
 
@@ -707,14 +792,22 @@ untuned default already was, not a measured argmax.
   documented heterogeneous-chunk bug) confounds a clean idle-awake-hours
   measurement. A clean numeric pass needs a fresh, matched G-N1/G-P3 pair,
   ideally epoch-sharded to sidestep the redundant-tail confound.
-- **G-T1 throughput tuning** — ⚠️ **1 of 4 ladders measured.** Claim mode:
-  ✅ MEASURED and recommended (epoch-sharded 1.51-1.69x vs lease-mode's 3.49x
-  row-count ratio on this heterogeneous fleet) — registered as a jobspec/docs
-  convention, deliberately NOT as a crate-wide compiled-in default change
-  (broader-than-scoped). Concurrency (`ZEN_CORE_OVERSUBSCRIBE`), VRAM
-  admission, and warm-exec (`ZEN_PERSISTENT_EXEC`): ❌ not measured at all —
-  no ladder runs done, no argmax to ship, current behavior is whatever the
-  untuned default already was. `fleet/handicaps.toml` deliberately NOT
-  populated from this mixed-codec run (its own documented measurement
-  procedure requires the dedicated `handicap_typebench.sh` tool per encoder
-  type, which this fleetbench workload doesn't isolate).
+- **G-T1 throughput tuning** — ⚠️ **3 of 4 ladders measured, 1 confidently
+  ready to ship.** Claim mode: ✅ MEASURED and recommended (epoch-sharded
+  1.51-1.69x vs lease-mode's 3.49x row-count ratio on this heterogeneous
+  fleet) — registered as a jobspec/docs convention, deliberately NOT as a
+  crate-wide compiled-in default change (broader-than-scoped). Warm-exec
+  (`ZEN_PERSISTENT_EXEC`): ✅ MEASURED — a **regression** for GPU-score work
+  (440s/3,995-done vs baseline's 311s/4,000-done, a single but unambiguous
+  large-N trial) — recommend leaving it OFF. Concurrency
+  (`ZEN_CORE_OVERSUBSCRIBE`): ✅ MEASURED — a small, direction-consistent
+  speedup (~12-14%, reproduced across a 2-slice-crossed design) even on the
+  compute-bound encode job kind the source comment says shouldn't benefit —
+  real but low-precision (6-8s runs, whole-second timestamps, no repeated
+  trials), flagged as a follow-up candidate rather than an immediate default
+  change. VRAM admission: ❌ not measured — no ladder run done, no argmax to
+  ship, current behavior is whatever the untuned default (`DEFAULT_GPU_JOB_
+  VRAM_BYTES` flat 2 GiB/job estimate) already was. `fleet/handicaps.toml`
+  deliberately NOT populated from this mixed-codec run (its own documented
+  measurement procedure requires the dedicated `handicap_typebench.sh` tool
+  per encoder type, which this fleetbench workload doesn't isolate).
