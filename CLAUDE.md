@@ -359,28 +359,20 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
-- **JobId is `serde_json/preserve_order`-SENSITIVE — the core golden test fails in any
-  build that co-compiles zenmetrics-cli (found 2026-08-06, pre-existing, NOT epoch-shard
-  related).** `JobId::of` serializes `serde_json::json!({"kind":…,"inputs":…})` — a
-  `Value`, whose map ordering flips from alphabetical (BTreeMap) to insertion-order
-  (IndexMap) when ANY crate in the build enables `serde_json/preserve_order`.
-  zenmetrics-cli enables it deliberately (compare-output ordering), and both
-  `zenfleet-sweep` (hard dep) and `zenfleet-vastai` (default `inline-sweep` feature)
-  pull zenmetrics-cli in. Consequence: `cargo test -p zenfleet-core -p zenfleet-sweep`
-  (or `-p zenfleet-vastai`) fails `job::tests::scorefile_sdr_serialization_and_job_id_
-  are_golden_stable` (`797c1300…` vs golden `6e79bec2…`) — VERIFIED identical on plain
-  master 9093cc23 with untouched job.rs/Cargo.tomls, so it is a feature-unification
-  property, not a regression. The latent hazard is real: a binary built in a combined
-  invocation that includes zenmetrics-cli computes DIFFERENT JobIds than a solo-built
-  `zenfleet-worker` — cross-binary dedup/claims/ledger joins would silently miss. Today's
-  shipping practice dodges it (worker + executor images build per-crate), and per-crate
-  `cargo test -p zenfleet-core` is green. FIX (not done here — identity code is frozen
-  while the avifgen campaign runs on live JobIds): make `JobId::of` order-insensitive by
-  serializing through an explicitly-sorted structure that reproduces the CURRENT default
-  bytes (alphabetical at every level), so preserve_order builds converge on the existing
-  ids and no ledger orphans. Until then: never build worker/ctl binaries in a combined
-  cargo invocation with zenmetrics-cli, and don't add zenmetrics-cli deps to job-identity
-  crates.
+- **`zenfleet-worker`'s `tests::exec_command_reads_stderr_class_marker` flakes under
+  concurrent/high system load — 100% stable in isolation (found 2026-08-24, during the
+  Nomad-migration P0 precondition landing).** Observed exactly twice, both times in a
+  full `cargo test -p zenfleet-worker --lib` run executed back-to-back with several other
+  heavy `cargo check`/`cargo test`/`cargo clippy` invocations from the same session (i.e.
+  under real ambient box load), never once across ~10 other full-suite runs on the same
+  commits, and never in isolation (`cargo test ... tests::exec_command_reads_stderr_
+  class_marker`, 3/3 clean). The test writes a small shell script to a per-test `tmp()`
+  dir (uniquely named via an atomic counter + pid, so it is not a naming collision) and
+  asserts a specific `ErrorClass::DiskFull` classification from its stderr marker. Not
+  investigated further — unrelated to the JobId/VRAM/SIGTERM/claim-CAS changes landed
+  the same session (verified: the same flake pattern would need to implicate shared
+  process-spawn timing under load, not any of that logic). Re-run the full suite a few
+  times before trusting a single red run from this test specifically.
 
 - **master CI fully red since at least 97acd176 (2026-07-29) — pre-existing,
   unrelated to code pushes** (verified 2026-08-01 across runs 30492728715 /
@@ -446,6 +438,27 @@ over those persisted variants — never re-encode per metric.
   macos-Metal job (8 GB unified) may hit the same wall.
 
 ### Resolved
+
+- **JobId was `serde_json/preserve_order`-SENSITIVE — the core golden test failed in any
+  build that co-compiled zenmetrics-cli (found 2026-08-06) — FIXED 2026-08-24
+  (`1b2a1452`).** `JobId::of` serialized `serde_json::json!({"kind":…,"inputs":…})` — a
+  `Value`, whose map ordering flips from alphabetical (BTreeMap) to insertion-order
+  (IndexMap) when ANY crate in the build enables `serde_json/preserve_order`.
+  zenmetrics-cli enables it deliberately (compare-output ordering), and both
+  `zenfleet-sweep` (hard dep) and `zenfleet-vastai` (default `inline-sweep` feature)
+  pull zenmetrics-cli in. Consequence: `cargo test -p zenfleet-core -p zenfleet-sweep`
+  (or `-p zenfleet-vastai`) failed `job::tests::scorefile_sdr_serialization_and_job_id_
+  are_golden_stable` (`797c1300…` vs golden `6e79bec2…`) — the latent hazard was real: a
+  binary built in a combined invocation that includes zenmetrics-cli computed DIFFERENT
+  JobIds than a solo-built `zenfleet-worker` — cross-binary dedup/claims/ledger joins
+  would have silently missed. Fix: `JobId::of` now hashes a plain `#[derive(Serialize)]`
+  struct instead of a `Value` — struct field order is fixed at compile time by
+  declaration order and is not sensitive to `preserve_order` at all. Field order chosen
+  to reproduce the historical alphabetical byte output exactly, so no existing JobId,
+  ledger row, or manifest changed — verified golden-stable under both a plain build and
+  one co-compiled with zenmetrics-cli. **Combined worker/ctl + zenmetrics-cli builds are
+  no longer required to avoid this** (the old workaround — never build them together —
+  is no longer necessary, though harmless if still followed).
 
 - **POOL-mode sweep RE-SCORED already-done cells on RESUMED runs — the pool pass passed no
   `--ledger-in` — FIXED 2026-07-21 (`1ce1fd7a`).** `fleet-entrypoint.sh` POOL mode passed only

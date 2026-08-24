@@ -13,6 +13,37 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace (Nomad-migration P0 preconditions landed, 2026-08-24)
+
+### Fixed
+- **JobId #38 (`serde_json/preserve_order` sensitivity) + GPU/CPU metric routing**
+  (1b2a1452): `JobId::of` now hashes a plain `#[derive(Serialize)]` struct instead of a
+  `serde_json::Value`, so a co-compiled-with-`zenmetrics-cli` build computes the same job
+  ids as a plain build (verified: golden hash matches under both). Same commit fixed
+  `job::metric_class()` (hardcoded every metric to `ResourceClass::Gpu` regardless of
+  name) and the same-root-cause `epoch::any_gpu_metric` (checked the wrong GPU-name
+  suffix, so epoch-sharded claiming's GPU-vs-CPU handicap weighting never actually fired
+  for a real metric job).
+- **VRAM admission dimension in `BoxBudget`** (58c5db95): a third, optional
+  `vram_budget_bytes` axis on `can_admit` (`None` = unchanged behavior);
+  `host_box_budget()` probes real GPU VRAM via `nvidia-smi`.
+- **SIGTERM chunk-claim release on the chunked path** (0de119d6) + **entrypoint SIGTERM
+  forwarding** (45c57bd3): `run_chunked`'s lease-claiming arm now releases its in-flight
+  chunk claim on SIGTERM/SIGINT instead of waiting out the full TTL; `fleet-entrypoint.sh`
+  now backgrounds each pass + `wait`s (with a `trap` forwarding the signal) instead of a
+  blocking command substitution that couldn't react to signals promptly.
+- **`ZEN_MAX_MIN` honored in single-run mode, and `ZEN_LONG_LIVED=1` long-lived idle
+  backoff** (45c57bd3): both in `fleet-entrypoint.sh`, verified end-to-end with a
+  fake-tool test harness (60s budget exit; 35 idle passes survived over 3.5s vs. the
+  default 5-pass exit; default behavior regression-tested unchanged).
+- **Claim CAS ported off the `aws`-CLI spawn to native `object_store`-backed `s3io`**
+  (a916d24d): `claim_or_steal_r2_key` and `fetch_control_r2` no longer shell out per
+  claim/pass attempt. Verified LIVE against the real LAN store (SeaweedFS) via the
+  existing `examples/lease_live.rs`.
+
+All five are the Nomad-migration ADR's stated preconditions
+(`docs/status/fleet-orchestration-2026-08.md`), now landed before any P1 pilot churn.
+
 ## Workspace (fleet-orchestration review + canonical-corpus directive, 2026-08-22)
 
 ### Added

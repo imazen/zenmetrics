@@ -52,19 +52,59 @@ will never manage), coverage/catalog, blob GC.
 
 ## Preconditions — fix in zenfleet BEFORE Nomad-managed churn
 
-1. **#38 `JobId` preserve_order sensitivity** — until `JobId::of` serializes through an
+**Status (2026-08-24): all five landed on `master`**, per the HANDOFF's directive to land
+them before P1 pilot churn. Verified (test suites + one item live against the real LAN
+store — see each entry); the ledger snapshot decision below stayed conservative anyway.
+
+1. **#38 `JobId` preserve_order sensitivity** — ~~until `JobId::of` serializes through an
    explicitly-sorted structure, any Nomad-era build/CI pipeline MUST keep per-crate
-   binary builds (a unified workspace build silently forks every job identity).
-   Identity code stays frozen while live campaigns run on current ids.
-2. **SIGTERM chunk-claim release on the chunked path** — today a drain/reschedule
-   strands the in-flight chunk's claim for the full TTL (release exists only on the
-   serial path). Nomad makes drains routine; this becomes a per-drain stall otherwise.
-3. **`ZEN_MAX_MIN` honored in single-run mode** (the wsl-gate 5-6 h unbudgeted-worker
-   incident) — Nomad kill_timeout is a backstop, not a substitute.
-4. **VRAM admission dimension in `BoxBudget`** (the avifgen OOM-storm follow-up).
-   Nomad's device plugin reports VRAM; admission decisions stay zenfleet's.
-5. **Worker task shape decision**: long-lived task with internal idle backoff
-   (preferred under Nomad) vs today's drain-exit loop + `Restart=always` poll churn.
+   binary builds~~ **FIXED, `1b2a1452`**: `JobId::of` now hashes a plain
+   `#[derive(Serialize)]` struct (field order fixed at compile time by declaration order)
+   instead of a `serde_json::Value` built via `json!` (whose key order is sensitive to the
+   `preserve_order` cargo feature). Reproduces the pre-fix byte output exactly — verified
+   via the golden test under both a plain build and one co-compiled with `zenmetrics-cli`
+   (the combination that used to fork identities). **Combined per-crate binary builds are
+   no longer required for identity correctness** — a unified Nomad-era build is safe on
+   this axis. (Same commit also fixed two related bugs found auditing this: `metric_class`
+   hardcoded every metric job to `ResourceClass::Gpu` regardless of name, and
+   `epoch::any_gpu_metric` checked the wrong suffix — see the commit message for detail.)
+2. **SIGTERM chunk-claim release on the chunked path** — ~~today a drain/reschedule
+   strands the in-flight chunk's claim for the full TTL~~ **FIXED, `0de119d6` +
+   `45c57bd3`**: `run_chunked`'s lease-claiming arm now tracks its in-flight chunk claim
+   and releases it on SIGTERM/SIGINT (`spawn_spot_reclaim_chunk`, mirroring the existing
+   per-cell `spawn_spot_reclaim`). A companion fix in `fleet-entrypoint.sh` was necessary
+   for this to be reachable at all under real container orchestration: the old
+   `out=$(timeout ... zenfleet-worker ...)` blocked the shell inside a command
+   substitution, which does not act on signals until the command finishes — refactored to
+   background the pass + `wait`, with a `trap` that forwards SIGTERM/SIGINT to it. Verified
+   with a fake-tool harness: signal reaches the child in ~0.03s (not the pass's full
+   duration), no leaked temp files.
+3. **`ZEN_MAX_MIN` honored in single-run mode** — ~~the wsl-gate 5-6 h unbudgeted-worker
+   incident~~ **FIXED, `45c57bd3`**: wired identically to `pool_mode`'s existing pattern.
+   Verified end-to-end: `ZEN_MAX_MIN=1` exits at exactly 60s wall-clock. Nomad
+   `kill_timeout` remains the backstop, not the primary mechanism.
+4. **VRAM admission dimension in `BoxBudget`** — ~~the avifgen OOM-storm follow-up~~
+   **FIXED, `58c5db95`**: `BoxBudget` gained an optional third `vram_budget_bytes` axis
+   (`None` = don't gate, unchanged behavior for CPU-only/unprobed boxes);
+   `host_box_budget()` probes real GPU VRAM via `nvidia-smi` and sets a 90%-of-probed
+   budget. Nomad's device plugin can report VRAM later; the admission decision itself
+   stays zenfleet's regardless, per the ADR's original framing.
+5. **Worker task shape decision** — ~~long-lived task with internal idle backoff
+   (preferred under Nomad) vs today's drain-exit loop + `Restart=always` poll churn~~
+   **DECIDED AND LANDED, `45c57bd3`**: long-lived, opt-in via `ZEN_LONG_LIVED=1` (defaults
+   to today's drain-exit behavior, since paid cloud/vast.ai/Hetzner boxes rely on it to
+   self-destroy and stop billing — this flag is LAN-fleet-only, set by the Nomad jobspec
+   when P1 lands it). Idle passes back off exponentially (capped) instead of exiting.
+   Verified: stayed alive through 35 consecutive idle passes over 3.5s (would have exited
+   at 5 passes / ~0.5s under default behavior); default behavior itself regression-tested
+   byte-identical to pre-change.
+
+Also ported off the `aws`-CLI-spawn per the defect register (not one of the five above,
+but blocking the same "mac tier loses every claim race" symptom): `claim_or_steal_r2_key`
+(the claim-with-steal CAS) and `fetch_control_r2` now use native `object_store`-backed
+`s3io` calls instead of shelling out to `aws s3api` per attempt — **FIXED, `a916d24d`**,
+verified LIVE against the real LAN store (SeaweedFS, `zentrain` bucket, scratch-prefixed
+and cleaned up) via the crate's existing `examples/lease_live.rs`.
 
 ## Phases
 
@@ -126,16 +166,25 @@ constraints:
   nightly like a ledger; `weed filer.remote.sync` → R2 for new canonical data.
   Storage stays OUTSIDE Nomad at every phase. Topology in the private companion doc.
 
-## zenfleet defect register (consolidated 2026-08-22)
+## zenfleet defect register (consolidated 2026-08-22; updated 2026-08-24)
 
-Open, in priority order: **#38** JobId preserve_order (dual-encoding ledgers measured
-on bf944); **VRAM admission dimension missing** in BoxBudget; **chunked-path SIGTERM
-claim release missing**; **claim CAS shells out to the aws CLI** (the mac skip-all
-root cause; port to native s3io); **`ZEN_MAX_MIN` ignored in single-run mode**;
-capability routing is dead code (`metric_class()` returns `Gpu` unconditionally);
-`WorkerReport`/dash inputs produced by nothing in production; `Lease::renew` has no
-caller (claims age out from original timestamp only); verify the warm-exec `/tmp`
-source-cache sweep reached every fleet box (the 620 GB ENOSPC class). Landed this
-month and load-bearing: error-class fidelity (`SourceFetch`/`DiskFull` + markers),
-ledger-snapshot `--ledger-in` contract in both modes, epoch-sharded claiming +
-weighted handicaps, warm exec pool + ScoreFile warm-ref.
+**Fixed 2026-08-24** (see "Preconditions" above for commits + verification): #38 JobId
+preserve_order; VRAM admission dimension missing in BoxBudget; chunked-path SIGTERM claim
+release missing; claim CAS shells out to the aws CLI; `ZEN_MAX_MIN` ignored in single-run
+mode; worker task shape (long-lived + idle backoff, opt-in `ZEN_LONG_LIVED=1`); capability
+routing dead code (`metric_class()` returned `Gpu` unconditionally — fixed alongside #38
+in the same commit, `1b2a1452`, along with a same-root-cause bug in
+`epoch::any_gpu_metric`'s GPU-suffix check).
+
+Still open, in priority order: `WorkerReport`/dash inputs produced by nothing in
+production; `Lease::renew` has no caller (claims age out from original timestamp only —
+relevant again now that the worker can be long-lived: a long `ZEN_LONG_LIVED=1` idle-poll
+cycle holding a claim across many minutes should renew it, not just let it ride the
+original timestamp toward staleness); verify the warm-exec `/tmp` source-cache sweep
+reached every fleet box (the 620 GB ENOSPC class); `crates/zenfleet-vastai`'s chunk worker
+has the same SIGTERM-release gap as the now-fixed zenfleet-worker chunked path (out of
+scope for the LAN/Nomad precondition, since cloud burst stays zenfleet+R2 unchanged — left
+as a separate, lower-priority item). Landed this month and load-bearing: error-class
+fidelity (`SourceFetch`/`DiskFull` + markers), ledger-snapshot `--ledger-in` contract in
+both modes, epoch-sharded claiming + weighted handicaps, warm exec pool + ScoreFile
+warm-ref.
