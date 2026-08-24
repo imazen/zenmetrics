@@ -835,6 +835,35 @@ crate, for precision — but that's a refinement, not a fix for a defect.
 concurrency on a GPU-metrics workload — log the scheduler's own admission
 decision directly if that number matters.**
 
+## Fleet-waste finding: a batch job with a permanently-stuck 5-job gap
+looped idle-drain cycles for ~46 minutes instead of stopping (caught live,
+stopped, not fully root-caused)
+
+Found while cleaning up after the VRAM-admission reruns above, per this
+repo's own "actively flag idle/wasted infrastructure" standing rule — not
+part of the VRAM investigation itself, just discovered in its wreckage.
+The original `fleetbench-gpuscore-warmexec` job (reused the
+`fleetbench-gpuscore` job name — see the warm-exec section's known
+secondary finding: 5/4,000 declared jobs never got a terminal ledger row)
+finished its real work at 06:33:46Z, then kept running — `nomad job status`
+still showed it `running` at 07:19Z, **~46 minutes later**, on the fleet's
+only GPU box. Its logs showed a repeating cycle: 5 idle passes → `"drained
+(idle 5 consecutive no-work passes) — exiting clean"` → a BRAND NEW
+`"pass 1 start"` with idle reset to 0, over and over, forever — never
+actually stopping the container. Each cycle's passes all report
+`skipped=3995` (the same permanently-unresolved 5-job gap from the
+warm-exec run). `fleet-entrypoint.sh`'s own drain logic
+(`fleet-entrypoint.sh:292-294`) does `break` out of the pass loop once
+`idle >= ZEN_IDLE_PASSES` in non-long-lived mode, which should end the
+script — so something OUTSIDE that logic (the Nomad task `restart` stanza,
+or another layer not yet identified) is restarting the whole container
+after each clean exit. **Not root-caused** — stopped the job
+(`nomad job stop -purge fleetbench-gpuscore`) rather than let it keep
+burning box-time while investigating; confirmed no other job was in the
+same state afterward. Filed as a real, actionable, UNRESOLVED finding
+(see CLAUDE.md Known Bugs) rather than swept under the VRAM section it was
+found alongside.
+
 ## Gate verdicts (summary)
 
 - **G-P0 baseline** — ✅ measured: cells/hour not cleanly isolated from the

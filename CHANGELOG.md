@@ -31,6 +31,15 @@ Workspace conventions per the global rules:
   severity); the full wake→auto-place→drain cycle proven end-to-end for the first time
   (G-P3): a Nomad job submitted against sleeping nodes queues correctly, WoL wakes them,
   and Nomad places the already-queued allocations with zero manual intervention.
+
+### Fleet-waste found (open, not root-caused)
+- **A batch job with a permanently-unresolved 5-job gap looped idle-drain cycles for
+  ~46 minutes instead of stopping**, burning box-time on the fleet's only GPU box —
+  caught live per the repo's fleet-monitoring standing rule, stopped
+  (`nomad job stop -purge`), not root-caused. `fleet-entrypoint.sh`'s own drain logic
+  correctly `break`s its pass loop at `ZEN_IDLE_PASSES`, so something outside it
+  (candidate: the Nomad task `restart` stanza) is restarting the container after each
+  clean drain-exit. See CLAUDE.md Known Bugs + `benchmarks/fleetbench_2026-08-24.md`.
 - **G-T1 throughput ladders — 4 of 4 measured** (claim-mode was already covered above):
   `ZEN_PERSISTENT_EXEC` (warm-exec) measured as a **regression** on the GPU-score leg —
   440s/3,995-done vs the baseline's 311s/4,000-done for an identical 4,000-job batch, a

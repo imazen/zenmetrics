@@ -359,6 +359,31 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **A batch job whose gap has a permanently-unresolved handful of jobs never
+  actually stops — it cycles idle-drain forever instead of exiting, wasting
+  box-time (found 2026-08-24, caught live via the fleet-monitoring standing
+  rule, NOT root-caused).** The `fleetbench-gpuscore` (warm-exec) job kept
+  running for ~46 minutes after its real work finished (06:33:46Z→~07:19Z)
+  on the fleet's only GPU box. Logs show a repeating cycle: 5 idle passes →
+  `"drained (idle 5 consecutive no-work passes) — exiting clean"` → a BRAND
+  NEW `"pass 1 start"` with idle reset to 0, forever — the container never
+  actually stops. Every pass reports `skipped=3995` — the same 5/4,000
+  declared jobs that never got a terminal ledger row in the original
+  warm-exec run (a permanently-unclaimable/unresolvable chunk, cause also
+  unknown). `fleet-entrypoint.sh`'s own drain logic
+  (`fleet-entrypoint.sh:292-294`) `break`s the pass loop once
+  `idle >= ZEN_IDLE_PASSES` in non-long-lived mode, which should end the
+  script — so something OUTSIDE that logic (candidate: the Nomad task
+  `restart` stanza treating a clean-but-nonzero exit as a failure and
+  restarting the whole container; not confirmed) is restarting it after
+  each clean exit. Stopped via `nomad job stop -purge` rather than
+  investigate further while it kept burning box-time; no other job was
+  found in the same state. Two connected mysteries to resolve together if
+  anyone picks this up: (1) why do exactly 5 specific declared jobs never
+  resolve to a terminal ledger row, (2) why does the container restart
+  after a clean drain-exit instead of actually stopping. Full context:
+  `benchmarks/fleetbench_2026-08-24.md`'s "Fleet-waste finding" section.
+
 - **`zenjxl` encoder panics on specific inputs — observed via fleetbench's GPU-score
   leg (found 2026-08-24, NOT a zenmetrics/fleet-orchestration bug — an upstream
   dependency finding, out of scope to root-cause here).** 69/4,000 GPU-score jobs
