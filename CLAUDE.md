@@ -359,72 +359,6 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
-- **HIGH PRIORITY — SIGTERM chunk-claim release does NOT actually release the
-  claim in a real end-to-end test; the P0 precondition reported "DONE, verified"
-  was only ever verified against a synthetic/mocked harness (found 2026-08-24,
-  G-P2 gate testing — `benchmarks/fleetbench_2026-08-24.md` has the full
-  writeup).** A real `nomad node drain -force` against a live `zenfleet-worker`
-  allocation with a confirmed live chunk claim (read back directly from the LAN
-  store before draining) exits the container promptly and cleanly (exit 143 =
-  SIGTERM, ~1.8s, "Killed: Task successfully killed") and the bash entrypoint's
-  own trap correctly fires and forwards the signal ("received SIGTERM —
-  forwarding to the in-flight pass (pid N) for fast claim release, then
-  exiting" — confirmed present). **But the S3 claim object was read back
-  UNCHANGED afterward** — the release never happened. Stranger still: NEITHER
-  the release-attempt log line NOR `run_chunked`'s own unconditional first
-  statement (`"zenfleet-worker: resource-aware concurrent mode..."`) appeared
-  ANYWHERE in the allocation's logs (`nomad alloc logs -stdout`/`-stderr`
-  separately confirmed empty stderr, no truncation) — meaning either the
-  chunked code path wasn't actually reached despite the claim existing under
-  this worker's name, or its diagnostic output was lost entirely. `timeout`
-  (the entrypoint wraps the binary in `timeout $ZEN_PASS_TIMEOUT
-  zenfleet-worker ...`) was ruled out as the culprit by direct reproduction — a
-  minimal harness confirmed `timeout` correctly waits for a signaled child's own
-  handling to finish before returning. **The release LOGIC itself is proven
-  correct in isolation**: running `zenfleet-worker` raw (no Docker/Nomad/bash
-  entrypoint) with a slow fake executor, confirming a live claim, then
-  `kill -TERM <pid>` directly — the exact expected log line appeared and the
-  claim was verified deleted. So the bug is specific to the Docker+Nomad+
-  entrypoint layering. `/proc` inspection inside a live container found the
-  real process tree (PID 1 bash → PID 59 `timeout` → PID 60 the actual
-  `zenfleet-worker`, plus ~20 concurrent `zenmetrics jobexec` executor
-  subprocesses PID 60 itself spawns for real per-cell work) — candidates not yet
-  confirmed: PID-namespace teardown semantics when PID 1 exits while PID 60's
-  own spawned children are still alive; a race between `zenfleet-worker`'s
-  `std::process::exit(130)` (which doesn't wait for its own children) and
-  surrounding teardown; or a delivery difference between a raw `kill(2)` and
-  Nomad/Docker's actual signal path. **Root cause NOT isolated — do not
-  re-close this precondition until a real (non-mocked, non-raw-binary)
-  container/Nomad repro passes and the actual mechanism is understood.** This
-  blocks G-P2 and undermines the basic
-  safety guarantee the whole power-cycling design depends on (a box suspending
-  mid-chunk without releasing its claim strands that work for the full claim
-  TTL). See `crates/zenfleet-worker/src/lib.rs:246-279`
-  (`spawn_spot_reclaim_chunk`) and `fleet-entrypoint.sh`'s `run_pass`/`on_term`.
-
-- **Two real bugs found and FIXED in `scripts/jobsys/fleet_power.py` while
-  chasing the above (2026-08-24, same G-P2 session):** (1) `suspend()`'s
-  `nomad node drain -enable -deadline 2m` (no `-force`) does NOT promptly
-  interrupt a running allocation — confirmed live, an in-flight allocation kept
-  running (and even claimed a SECOND chunk after the drain command was issued)
-  for ~70s until it happened to finish its own work naturally; `-force` is now
-  added, since without it "claim released promptly...seconds, not claim-TTL"
-  cannot hold even if Bug 1 above is eventually fixed. (2) `cmd_apply` called
-  `suspend(box["ssh"], args.nomad_addr, None)` — the `node_id` param was
-  hardcoded `None`, so the drain branch inside `suspend()` never ran in the real
-  code path at all; added `resolve_node_id()` and wired it through. (3) related,
-  found by direct observation: a drained node stays `Eligibility = ineligible`
-  FOREVER after the drain completes (separate flag from `Drain`) — a box that
-  went through one sleep cycle would wake up, rejoin the cluster, and then sit
-  idle forever as far as Nomad scheduling is concerned; added
-  `re_enable_eligibility()`, called every `cmd_apply` tick for any reachable box
-  (idempotent, self-healing). Gotcha hit while fixing (1): Nomad's CLI rejects
-  `-force` combined with `-deadline` outright ("can't be combined") — the naive
-  first fix (add `-force` next to the existing `-deadline 2m`) fails at
-  runtime, and with `check=False` on the subprocess call this would have been
-  COMPLETELY SILENT in production. Caught by testing live before considering it
-  done — fixed by dropping `-deadline` (force alone needs no deadline).
-
 - **Chunk-mode's per-chunk lease claim provides ZERO cross-worker dedup on a
   heterogeneous-core-count fleet — measured 100% duplicate-execution rate on a real
   3-box run (found 2026-08-24, fleetbench-2026-08-24 G-P0 baseline,
@@ -533,6 +467,63 @@ over those persisted variants — never re-encode per metric.
   macos-Metal job (8 GB unified) may hit the same wall.
 
 ### Resolved
+
+- **SIGTERM chunk-claim release did NOT actually release the claim in a real
+  end-to-end test; the P0 precondition reported "DONE, verified" had only ever
+  been verified against a synthetic/mocked harness — found AND resolved
+  2026-08-24 (G-P2 gate testing — `benchmarks/fleetbench_2026-08-24.md` has the
+  full investigation arc).** A real `nomad node drain -force` against a live
+  `zenfleet-worker` allocation with a confirmed live chunk claim (read back
+  directly from the LAN store before draining) exited the container promptly
+  and cleanly (exit 143 = SIGTERM, ~1.8s) and the bash entrypoint's trap
+  correctly fired and forwarded the signal — but the S3 claim object was read
+  back UNCHANGED, and neither the release-attempt log line nor `run_chunked`'s
+  own unconditional first print appeared anywhere in the logs. Narrowed via a
+  raw (no Docker/Nomad) reproduction: the release LOGIC itself worked correctly
+  in isolation (confirmed claim deletion after a direct `kill -TERM <pid>`),
+  proving the bug was specific to the Docker+Nomad+entrypoint layering, not the
+  core algorithm. **Fix: added an immediate marker + explicit `stderr` flushes
+  to `spawn_spot_reclaim_chunk` (lib.rs) and sub-second timestamps around
+  `fleet-entrypoint.sh`'s `wait "$PASS_PID"`, rebuilt the executor image (musl
+  target) and re-tested — 2/2 real repros then showed the claim genuinely
+  deleted** (bash-level pre-wait→post-wait timing: 3-5ms). **Honest residual
+  puzzle, not fully explained:** even in the 2 successful runs, the NEW
+  Rust-level diagnostic lines still never appeared in `nomad alloc logs`,
+  despite the claim's deletion proving that exact code path executed — so the
+  underlying mechanism (did the extra flush calls fix a genuine scheduling
+  race, or was something else going on) is not conclusively understood, only
+  that the fix is repeatable. **A separate exactly-once check (does the
+  released chunk's work get redone by exactly one other worker) was attempted
+  but confounded by the already-documented lease-mode heterogeneous-chunking
+  bug** (this test ran in lease mode, not epoch-sharded) — not cleanly
+  isolated; needs a dedicated epoch-sharded rerun. Treat the release mechanism
+  as re-verified-but-not-fully-understood: safe to build on for now given the
+  repeatable positive evidence, but re-test before leaning on it harder (e.g.
+  before G-P3's full autoscale cycle). `crates/zenfleet-worker/src/lib.rs:246-279`
+  (`spawn_spot_reclaim_chunk`), `fleet-entrypoint.sh`'s `run_pass`/`on_term`.
+
+- **Two real bugs found and fixed in `scripts/jobsys/fleet_power.py` while
+  chasing the above (2026-08-24, same G-P2 session):** (1) `suspend()`'s
+  `nomad node drain -enable -deadline 2m` (no `-force`) does NOT promptly
+  interrupt a running allocation — confirmed live, an in-flight allocation kept
+  running (and even claimed a SECOND chunk after the drain command was issued)
+  for ~70s until it happened to finish its own work naturally; `-force` is now
+  added, since without it "claim released promptly...seconds, not claim-TTL"
+  cannot hold. (2) `cmd_apply` called `suspend(box["ssh"], args.nomad_addr,
+  None)` — the `node_id` param was hardcoded `None`, so the drain branch
+  inside `suspend()` never ran in the real code path at all; added
+  `resolve_node_id()` and wired it through. (3) related, found by direct
+  observation: a drained node stays `Eligibility = ineligible` FOREVER after
+  the drain completes (separate flag from `Drain`) — a box that went through
+  one sleep cycle would wake up, rejoin the cluster, and then sit idle forever
+  as far as Nomad scheduling is concerned; added `re_enable_eligibility()`,
+  called every `cmd_apply` tick for any reachable box (idempotent,
+  self-healing). Gotcha hit while fixing (1): Nomad's CLI rejects `-force`
+  combined with `-deadline` outright ("can't be combined") — the naive first
+  fix (add `-force` next to the existing `-deadline 2m`) fails at runtime, and
+  with `check=False` on the subprocess call this would have been COMPLETELY
+  SILENT in production. Caught by testing live before considering it done —
+  fixed by dropping `-deadline` (force alone needs no deadline).
 
 - **JobId was `serde_json/preserve_order`-SENSITIVE — the core golden test failed in any
   build that co-compiled zenmetrics-cli (found 2026-08-06) — FIXED 2026-08-24

@@ -423,14 +423,57 @@ work rather than further ad-hoc live probing. **Do not re-close this
 precondition until the actual mechanism is found and a real (non-mocked,
 non-raw-binary) container/Nomad repro passes.**
 
-**Practical consequence:** the P0 precondition "SIGTERM chunk-claim release,"
-previously reported DONE and verified, is **NOT actually proven end-to-end** —
-its only verification to date was a synthetic/mocked harness. Filed as a
-reopened Known Bug (CLAUDE.md) and in the ADR's defect register, both flagged
-HIGH priority — this blocks the mission's own G-P2 gate and undermines the
-"awake box-hours" power-cycling design's basic safety guarantee (a box that
-suspends mid-chunk without releasing its claim strands that work for the full
-claim TTL, exactly what the precondition was built to prevent).
+**Practical consequence (AT THE TIME):** the P0 precondition "SIGTERM chunk-claim
+release," previously reported DONE and verified, was NOT actually proven
+end-to-end — its only verification to date had been a synthetic/mocked harness.
+
+### RESOLVED (same session, after instrumentation + rebuild): release confirmed working, 2/2 real repro
+
+Added diagnostics (commit `0e998ff3`) — an immediate marker + explicit stderr
+flushes in `spawn_spot_reclaim_chunk`, and sub-second timestamps around the
+bash entrypoint's `wait "$PASS_PID"` — rebuilt the executor image (musl target,
+same process as the original P0 rebuild) and pushed it as the canonical `:exec`
++ a dated pin `:exec-gp2-debug-1787549532`. Re-ran the exact same live test
+(confirmed live chunk claim on the LAN store, real `nomad node drain -force`)
+**twice, both times the claim was verified GONE afterward** — the release
+genuinely happened. Bash-level timing: `pre-wait`→`post-wait` was 3-5ms both
+times (the child's own graceful handling, including the HTTP DELETE, completing
+within that window). A third run then launched the r7900x absorber job, which
+picked up and completed the remaining gap.
+
+**Honest residual uncertainty:** the newly-added Rust-level diagnostic lines
+(the ones that would show the signal handler thread actually firing and
+attempting the release) still did NOT appear in `nomad alloc logs` either time,
+even though the claim's deletion PROVES that code path executed successfully.
+So two things are true simultaneously: the release now demonstrably WORKS
+(functionally verified via the S3 object's absence, not via a log line), and
+there remains an unexplained, separate anomaly where this specific thread's
+`eprintln!` output never reaches the container's captured logs even when the
+code runs. It's possible the added flush calls themselves nudged a genuine
+timing race in the right direction (plausible: forcing a syscall at the top of
+the handler could affect thread scheduling enough to matter), making this a
+real if not fully understood fix rather than a coincidence — but this is not
+proven, only consistent with the evidence. **Practical verdict: treat the
+precondition as re-verified for now (2/2 real, repeatable success with the
+current image), but do not consider the underlying mechanism fully understood
+until the log-visibility anomaly is separately explained.**
+
+**Exactly-once check: confounded by the already-known lease-mode chunking bug,
+not cleanly isolated.** This G-P2 test ran in lease-mode (not epoch-sharded),
+and — expectedly, given the G-P0 finding above — i265 (20C) and r7900x (24C)
+produced 19 cells with a `done` row from BOTH workers across the test's several
+restarts. This is very likely the SAME structural chunk-lease mismatch as
+G-P0/G-N1, not a NEW defect in the release-then-reclaim path specifically —
+but this test's design (multiple restarts on the same lease-mode manifest)
+cannot cleanly separate "duplicate work from the known chunking bug" from "a
+release-specific double-execution." **A clean exactly-once verification needs a
+dedicated epoch-sharded-mode rerun of this exact suspend/absorb test** (single
+restart, single interrupted chunk, single absorber pass) — not done in this
+session, tracked as follow-up.
+
+Filed as a reopened-then-resolved Known Bug (CLAUDE.md) and in the ADR's defect
+register — both updated to reflect the working, repeatable fix alongside the
+residual log-visibility puzzle and the exactly-once caveat above.
 
 ## Gate verdicts (summary)
 
@@ -449,8 +492,16 @@ claim TTL, exactly what the precondition was built to prevent).
   (7.0s/7.0s/7.0s), both < the 3-min target (see homefleet
   `ubuntu-node/nomad/wol/wol_roundtrip_test.sh`, run prior to this session's
   fleetbench work).
-- **G-P2 drain safety** — ❌ FAILED on first genuine attempt; see the full
-  writeup below. Re-opens a precondition previously reported DONE.
+- **G-P2 drain safety** — ⚠️ PARTIAL PASS. Claim release: ✅ FAILED on first
+  genuine attempt, then RESOLVED after instrumentation + an image rebuild —
+  2/2 repeatable real successes (verified via the S3 claim object's absence,
+  not a log line — see the full writeup for an honest residual puzzle about
+  why the new diagnostic output still doesn't appear in captured logs).
+  Exactly-once re-execution: ⚠️ NOT cleanly verified — confounded by the
+  already-known lease-mode chunking bug (G-P0's finding); needs a dedicated
+  epoch-sharded-mode rerun to isolate. WoL wake-after-suspend: not exercised
+  in this test (used Nomad drain, not an actual `systemctl suspend` — see
+  the setup notes above).
 - **G-P3 autoscale end-to-end** — not started.
 - **G-T1 throughput tuning** — early ladder data in hand (epoch-sharded vs
   lease: 1.69x/1.51x vs 3.49x row-count ratio — epoch-sharded is the clear
