@@ -522,8 +522,14 @@ over those persisted variants — never re-encode per metric.
   combined with `-deadline` outright ("can't be combined") — the naive first
   fix (add `-force` next to the existing `-deadline 2m`) fails at runtime, and
   with `check=False` on the subprocess call this would have been COMPLETELY
-  SILENT in production. Caught by testing live before considering it done —
-  fixed by dropping `-deadline` (force alone needs no deadline).
+  SILENT in production. **Caught twice, the second time for real**: validated
+  the correct shape (drop `-deadline`) via raw CLI testing and wrote it up as
+  fixed — but the actual code edit that day only ADDED `-force` next to
+  `-deadline`, never removed it, so the bug shipped anyway; it resurfaced
+  live during the first real G-P3 test (`suspend()` silently failed on both
+  target boxes). Fixed for real this time (`1cf5003a`) — a docs/commit-message
+  claim of a fix is not the same fact as the code containing it; re-read the
+  file (or re-run the exact call) before writing "fixed".
 
 - **JobId was `serde_json/preserve_order`-SENSITIVE — the core golden test failed in any
   build that co-compiled zenmetrics-cli (found 2026-08-06) — FIXED 2026-08-24
