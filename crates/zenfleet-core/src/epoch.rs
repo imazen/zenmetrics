@@ -329,8 +329,14 @@ pub enum ShardMode<'a> {
     GpuMetric,
 }
 
+/// Delegates to `crate::job::is_gpu_metric_name` — the single source of truth for GPU-vs-CPU
+/// metric-name classification (also used by `JobKind::profile()`'s resource-class routing). This
+/// used to check only an `_gpu` (underscore) suffix, which no real `MetricKind` name has ever
+/// used (they're all hyphenated, e.g. `ssim2-gpu`) — so this never actually matched a real GPU
+/// metric job, and epoch-sharded claiming's GPU-vs-CPU handicap weighting silently always fell
+/// through to the plain `Metric` column. Fixed alongside the sibling `metric_class` bug in job.rs.
 fn any_gpu_metric<'a, I: IntoIterator<Item = &'a str>>(names: I) -> bool {
-    names.into_iter().any(|m| m.ends_with("_gpu"))
+    names.into_iter().any(crate::job::is_gpu_metric_name)
 }
 
 /// Map a job to its handicap mode (see [`ShardMode`]).
@@ -946,7 +952,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(bad.weight(&ShardMode::Metric), 0.0);
-        // Mode mapping: encode by type; the _gpu metric-name suffix selects GpuMetric.
+        // Mode mapping: encode by type; a GPU-suffixed metric name selects GpuMetric.
         let enc = JobKind::Encode {
             codec: "zenavif".into(),
             q: 50,
@@ -954,6 +960,7 @@ mod tests {
             hdr: false,
         };
         assert_eq!(shard_mode(&enc), ShardMode::Encode { codec: "zenavif" });
+        // "_gpu" (parquet-column style) still classifies as GpuMetric...
         let gm = JobKind::Metric {
             metric: "butteraugli_max_gpu".into(),
         };
@@ -962,6 +969,31 @@ mod tests {
             metric: "butteraugli_max".into(),
         };
         assert_eq!(shard_mode(&cm), ShardMode::Metric);
+        // ...and so does "-gpu", the REAL MetricKind convention (zenmetrics-cli/src/metrics/mod.rs
+        // — ssim2-gpu, butteraugli-gpu, cvvdp-gpu, ...). This regressed silently before the fix:
+        // any_gpu_metric checked only the underscore form, so every real GPU metric job fell
+        // through to ShardMode::Metric and never used the gpu_metric handicap column.
+        let gm_real = JobKind::Metric {
+            metric: "butteraugli-gpu".into(),
+        };
+        assert_eq!(shard_mode(&gm_real), ShardMode::GpuMetric);
+        let cm_real = JobKind::Metric {
+            metric: "cvvdp".into(),
+        };
+        assert_eq!(shard_mode(&cm_real), ShardMode::Metric);
+        // ScoreFile: any-of semantics over the real hyphenated convention.
+        let sf_mixed = JobKind::ScoreFile {
+            metrics: vec!["cvvdp".into(), "ssim2-gpu".into()],
+            hdr: false,
+            hdr_transfer: None,
+        };
+        assert_eq!(shard_mode(&sf_mixed), ShardMode::GpuMetric);
+        let sf_cpu_only = JobKind::ScoreFile {
+            metrics: vec!["cvvdp".into(), "dssim".into()],
+            hdr: false,
+            hdr_transfer: None,
+        };
+        assert_eq!(shard_mode(&sf_cpu_only), ShardMode::Metric);
     }
 
     #[test]

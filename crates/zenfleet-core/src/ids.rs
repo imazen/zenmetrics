@@ -39,13 +39,42 @@ impl CellId {
 #[serde(transparent)]
 pub struct JobId(pub Sha256Hex);
 
+/// Canonical wire form for hashing — a plain **struct**, deliberately not a `serde_json::Value`
+/// built via the `json!` macro. A struct's `#[derive(Serialize)]` always emits fields in
+/// declaration order, which is fixed at compile time and independent of any cargo feature; a
+/// `json!({...})` map is a `serde_json::Value::Object`, backed by `serde_json::Map`, whose
+/// iteration/serialization order flips from alphabetical (the default `BTreeMap`) to
+/// macro-literal insertion order (`IndexMap`) the instant ANY crate anywhere in the same build
+/// enables `serde_json/preserve_order` — cargo unifies feature flags workspace-wide, so this was
+/// sensitive to what ELSE got compiled alongside `zenfleet-core`, not just this crate's own
+/// `Cargo.toml`. That was zenmetrics#38 (see `CLAUDE.md`'s "Known Bugs": `zenmetrics-cli` enables
+/// `preserve_order` for its own `compare`-output ordering, and `zenfleet-sweep`/`zenfleet-vastai`
+/// pull it in transitively through default features, so `cargo test -p zenfleet-core
+/// -p zenfleet-sweep` computed a DIFFERENT `JobId` for the same logical job than
+/// `cargo test -p zenfleet-core` alone — reproduced live 2026-08-24, golden hash
+/// `6e79bec221...` (plain) vs `797c1300af...` (co-compiled with zenmetrics-cli)).
+///
+/// Field order below (`inputs` before `kind`) is chosen to reproduce the historical
+/// alphabetically-sorted-by-key byte output exactly (`i` < `k`), so this fix changes NO existing
+/// content-addressed `JobId`, ledger row, or manifest computed by a plain (non-`preserve_order`)
+/// build — verified against `job::tests::scorefile_sdr_serialization_and_job_id_are_golden_stable`
+/// under both a plain build and one co-compiled with `zenmetrics-cli`.
+#[derive(Serialize)]
+struct JobIdCanonForm<'a> {
+    inputs: &'a [&'a str],
+    kind: &'a JobKind,
+}
+
 impl JobId {
     pub fn of(kind: &JobKind, input_shas: &[Sha256Hex]) -> Self {
         // Canonicalize: sort + dedup inputs so input order can't change the identity.
         let mut inputs: Vec<&str> = input_shas.iter().map(Sha256Hex::as_str).collect();
         inputs.sort_unstable();
         inputs.dedup();
-        let canon = serde_json::json!({ "kind": kind, "inputs": inputs });
+        let canon = JobIdCanonForm {
+            inputs: &inputs,
+            kind,
+        };
         let bytes = serde_json::to_vec(&canon).expect("JobKind is always serializable");
         JobId(sha256(&bytes))
     }

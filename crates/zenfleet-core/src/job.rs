@@ -215,10 +215,11 @@ impl JobKind {
                 // Re-scoring is cheap *given the encode already exists*.
                 output_regenerability: Regenerability::CheapRegenerable,
             },
-            // Whole-file scoring: the SourceSha grouping made concrete — one GPU job decodes the ref
+            // Whole-file scoring: the SourceSha grouping made concrete — one job decodes the ref
             // once and scores every metric for every variant (no per-(cell,metric) re-encode/re-decode).
-            JobKind::ScoreFile { .. } => JobProfile {
-                class: ResourceClass::Gpu,
+            // Needs a GPU-capable worker iff any listed metric does (see `scorefile_class`).
+            JobKind::ScoreFile { metrics, .. } => JobProfile {
+                class: scorefile_class(metrics),
                 group_by: GroupBy::SourceSha,
                 output_regenerability: Regenerability::CheapRegenerable,
             },
@@ -263,10 +264,51 @@ fn encode_cost(codec: &str) -> (ResourceClass, Regenerability) {
     }
 }
 
-/// The production metric set (cvvdp/butter/ssim2/dssim/iwssim/zensim) is GPU-backed; route metrics to
-/// GPU workers by default. A future pure-CPU metric can override to `CpuArm`/`CpuLight` here.
-fn metric_class(_metric: &str) -> ResourceClass {
-    ResourceClass::Gpu
+/// True iff `name` is a GPU-backed metric name by the project's naming convention: every
+/// GPU-backed `MetricKind` in `zenmetrics-cli` (`ssim2-gpu`, `butteraugli-gpu`, `dssim-gpu`,
+/// `iwssim-gpu`, `zensim-gpu`, `cvvdp-gpu`, ...) carries an explicit `-gpu` suffix; the bare name
+/// (`cvvdp`, `ssim2`, `dssim`, `iwssim`, ...) is the CPU-native metric (see
+/// `docs/METRIC_DISPATCH_CONSOLIDATION.md`). Also accepts a `_gpu` suffix (parquet-column style,
+/// e.g. `score_butteraugli_max_gpu`) so either separator style classifies correctly.
+///
+/// Single source of truth for GPU-vs-CPU metric-name classification — `crate::epoch`'s
+/// `any_gpu_metric` (handicap-mode selection for epoch-sharded claiming) calls this too; keep
+/// both call sites agreeing rather than drifting.
+///
+/// **Fixes two real defects found auditing the Nomad-migration ADR's defect register
+/// (docs/status/fleet-orchestration-2026-08.md):** this function used to unconditionally return
+/// `Gpu` for every metric name regardless of content ("capability routing is dead code" in the
+/// ADR's register — see `metric_class`/`scorefile_class` below), and `crate::epoch`'s
+/// `any_gpu_metric` independently checked only an `_gpu` (underscore) suffix, which no real
+/// `MetricKind` name has ever used (they're all hyphenated) — so epoch-sharded claiming's
+/// GPU-vs-CPU handicap weighting silently never fired for any real GPU metric job either.
+/// Neither bug touched job identity or the ledger: `ResourceClass` isn't part of `JobKind`'s
+/// serialization or `JobId::of`'s hash, only runtime routing and handicap-weight selection.
+pub(crate) fn is_gpu_metric_name(name: &str) -> bool {
+    name.ends_with("-gpu") || name.ends_with("_gpu")
+}
+
+/// Route a metric job by name: GPU-suffixed names need a GPU-capable worker; everything else
+/// (the CPU-native metrics — `cvvdp`, `ssim2`, `dssim`, `iwssim`, ...) is CPU work, classed
+/// `CpuHeavy` (perceptual metrics are compute-heavy, the same tier as WebP/JXL/AVIF encode).
+fn metric_class(metric: &str) -> ResourceClass {
+    if is_gpu_metric_name(metric) {
+        ResourceClass::Gpu
+    } else {
+        ResourceClass::CpuHeavy
+    }
+}
+
+/// `ScoreFile` scores a whole list of metrics against one decoded reference in a single pass — it
+/// needs a GPU-capable worker iff ANY metric in the list does (mirrors `any_gpu_metric`'s "any"
+/// semantics for the same reason: the executor decodes once and must be able to run every metric
+/// in the list, so one GPU-only metric forces the whole job onto a GPU box).
+fn scorefile_class(metrics: &[String]) -> ResourceClass {
+    if metrics.iter().any(|m| is_gpu_metric_name(m)) {
+        ResourceClass::Gpu
+    } else {
+        ResourceClass::CpuHeavy
+    }
 }
 
 impl JobKind {
@@ -330,13 +372,48 @@ mod tests {
     }
 
     #[test]
-    fn metric_groups_by_source_on_gpu() {
-        let p = JobKind::Metric {
+    fn metric_groups_by_source_and_routes_by_gpu_suffix() {
+        // Bare metric name (the CPU-native convention, e.g. real `cvvdp`) → CpuHeavy.
+        let cpu = JobKind::Metric {
             metric: "cvvdp".into(),
         }
         .profile();
-        assert_eq!(p.group_by, GroupBy::SourceSha);
-        assert_eq!(p.class, ResourceClass::Gpu);
+        assert_eq!(cpu.group_by, GroupBy::SourceSha);
+        assert_eq!(cpu.class, ResourceClass::CpuHeavy);
+        // "-gpu"-suffixed name (the real MetricKind convention, e.g. `cvvdp-gpu`) → Gpu.
+        let gpu = JobKind::Metric {
+            metric: "cvvdp-gpu".into(),
+        }
+        .profile();
+        assert_eq!(gpu.group_by, GroupBy::SourceSha);
+        assert_eq!(gpu.class, ResourceClass::Gpu);
+        // "_gpu" (parquet-column style) also classifies as Gpu.
+        let gpu_underscore = JobKind::Metric {
+            metric: "butteraugli_max_gpu".into(),
+        }
+        .profile();
+        assert_eq!(gpu_underscore.class, ResourceClass::Gpu);
+    }
+
+    #[test]
+    fn scorefile_needs_gpu_iff_any_metric_does() {
+        // All-CPU list → CpuHeavy, no GPU box required.
+        let all_cpu = JobKind::ScoreFile {
+            metrics: vec!["cvvdp".into(), "dssim".into()],
+            hdr: false,
+            hdr_transfer: None,
+        }
+        .profile();
+        assert_eq!(all_cpu.class, ResourceClass::CpuHeavy);
+        // One GPU metric mixed in with CPU ones → the whole job needs a GPU worker (the
+        // executor decodes the reference once and must run every listed metric).
+        let mixed = JobKind::ScoreFile {
+            metrics: vec!["cvvdp".into(), "ssim2-gpu".into()],
+            hdr: false,
+            hdr_transfer: None,
+        }
+        .profile();
+        assert_eq!(mixed.class, ResourceClass::Gpu);
     }
 
     #[test]
@@ -408,9 +485,12 @@ mod tests {
 
     #[test]
     fn capability_routing_matches_class() {
-        let metric = JobKind::Metric {
+        let cpu_metric = JobKind::Metric {
             metric: "cvvdp".into(),
-        }; // Gpu
+        }; // CpuHeavy — the CPU-native metric name (no "-gpu" suffix)
+        let gpu_metric = JobKind::Metric {
+            metric: "cvvdp-gpu".into(),
+        }; // Gpu — the GPU-backed MetricKind name
         let jpeg = JobKind::Encode {
             codec: "zenjpeg".into(),
             q: 80,
@@ -425,15 +505,17 @@ mod tests {
         }; // CpuHeavy
         let gpu = [ResourceClass::Gpu];
         let cpu = [ResourceClass::CpuLight, ResourceClass::CpuHeavy];
-        // GPU worker serves the metric, not the encodes.
-        assert!(worker_serves(&gpu, &metric));
+        // GPU worker serves the GPU metric, not the encodes or the CPU-native metric.
+        assert!(worker_serves(&gpu, &gpu_metric));
         assert!(!worker_serves(&gpu, &jpeg));
-        // CPU worker serves both encodes, not the GPU metric.
+        assert!(!worker_serves(&gpu, &cpu_metric));
+        // CPU worker serves both encodes AND the CPU-native metric, not the GPU one.
         assert!(worker_serves(&cpu, &jpeg));
         assert!(worker_serves(&cpu, &avif));
-        assert!(!worker_serves(&cpu, &metric));
+        assert!(worker_serves(&cpu, &cpu_metric));
+        assert!(!worker_serves(&cpu, &gpu_metric));
         // empty set = general worker, serves everything.
-        assert!(worker_serves(&[], &metric) && worker_serves(&[], &jpeg));
+        assert!(worker_serves(&[], &gpu_metric) && worker_serves(&[], &jpeg));
     }
 
     #[test]
@@ -566,8 +648,10 @@ mod tests {
     fn scorefile_hdr_changes_job_id_and_roundtrips() {
         use crate::content::sha256;
         use crate::ids::JobId;
+        // A GPU-suffixed metric name, so the routing-profile assertion below (GPU, SourceSha)
+        // exercises the intended case: HDR must not perturb a GPU job's routing.
         let mk = |hdr: bool, t: Option<&str>| JobKind::ScoreFile {
-            metrics: vec!["cvvdp".into()],
+            metrics: vec!["cvvdp-gpu".into()],
             hdr,
             hdr_transfer: t.map(str::to_string),
         };
