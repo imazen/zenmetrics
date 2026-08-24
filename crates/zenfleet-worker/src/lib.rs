@@ -259,6 +259,18 @@ fn spawn_spot_reclaim_chunk(
     };
     std::thread::spawn(move || {
         if signals.forever().next().is_some() {
+            // Diagnostic 2026-08-24 (G-P2 gate testing, benchmarks/fleetbench_2026-08-24.md /
+            // CLAUDE.md Known Bugs): a real Docker+Nomad drain against a live chunk claim showed
+            // NONE of this function's output (not even this handler ever having fired) in the
+            // container's captured logs, while the exact same signal delivered to a raw (no
+            // Docker/Nomad) `zenfleet-worker` process worked and printed correctly. This
+            // unconditional, immediate marker + explicit flush is here so the NEXT real-container
+            // test can distinguish "handler thread never ran / never got the signal" (marker
+            // absent) from "handler ran but the release call itself hung/failed" (marker present,
+            // no follow-up line) from "output lost after being written" (both present in the
+            // process's own view but never in `docker logs`/`nomad alloc logs`).
+            eprintln!("zenfleet-worker: spot preemption — signal handler fired, attempting release");
+            let _ = io::stderr().flush();
             if let Some(cid) = inflight.lock().ok().and_then(|g| g.clone()) {
                 let released = release_claim_r2_key(&endpoint, &bucket, &prefix, &cid);
                 eprintln!(
@@ -273,6 +285,7 @@ fn spawn_spot_reclaim_chunk(
             } else {
                 eprintln!("zenfleet-worker: spot preemption — no in-flight chunk claim to release");
             }
+            let _ = io::stderr().flush();
             std::process::exit(130);
         }
     });

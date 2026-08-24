@@ -88,7 +88,13 @@ on_term(){
   if [ -n "$PASS_PID" ] && kill -0 "$PASS_PID" 2>/dev/null; then
     hb "received $sig — forwarding to the in-flight pass (pid $PASS_PID) for fast claim release, then exiting"
     kill -TERM "$PASS_PID" 2>/dev/null
+    # Diagnostic 2026-08-24 (G-P2 gate testing): timestamp both sides of this wait so a real
+    # container test can show whether it blocks for the child's real graceful-exit duration or
+    # returns early — see the matching diagnostic in spawn_spot_reclaim_chunk (lib.rs) and
+    # benchmarks/fleetbench_2026-08-24.md / CLAUDE.md Known Bugs for the investigation this is for.
+    hb "on_term: pre-wait $(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)"
     wait "$PASS_PID" 2>/dev/null
+    hb "on_term: post-wait $(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ) rc=$?"
   else
     hb "received $sig — no pass in flight, exiting"
   fi
