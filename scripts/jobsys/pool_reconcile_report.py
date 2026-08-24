@@ -9,6 +9,7 @@ import gzip
 import io
 import json
 import os
+import pathlib
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -17,17 +18,17 @@ import pyarrow.compute as pc
 import pyarrow.dataset as ds
 import pyarrow.fs as fs
 
-E = dict(os.environ)
-for line in open(os.path.expanduser("~/.config/cloudflare/r2-credentials")):
-    line = line.strip()
-    if line.startswith("R2_") and "=" in line:
-        k, v = line.split("=", 1)
-        E[k] = v.strip().strip('"').strip("'")
+# THE resolver (scripts/lib/zen_s3env.py) — never re-derive endpoint/creds in a new script.
+# FIXED 2026-08-24: this used to hardcode a read of ~/.config/cloudflare/r2-credentials
+# regardless of ZEN_STORE — see pool_progress.py's matching fix for the full story.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "lib"))
+from zen_s3env import resolve
+
+_endpoint, _access_key, _secret_key = resolve()
 S3 = fs.S3FileSystem(
-    access_key=E["R2_ACCESS_KEY_ID"], secret_key=E["R2_SECRET_ACCESS_KEY"],
-    endpoint_override=os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % E["R2_ACCOUNT_ID"],
-    region="auto")
-BUCKET = E.get("ZEN_BUCKET", "zentrain")
+    access_key=_access_key, secret_key=_secret_key,
+    endpoint_override=_endpoint, region="auto")
+BUCKET = os.environ.get("ZEN_BUCKET", "zentrain")
 RUNLIST = sys.argv[1] if len(sys.argv) > 1 else "jobs/_pool944v4/runlist.tsv"
 
 with S3.open_input_stream(f"{BUCKET}/{RUNLIST}") as f:

@@ -10,18 +10,22 @@ refresh. Runs with no snapshot yet (never-worked) count as 0.
   python3 pool_progress.py [total_jobs]     # default total 490173 (bf944 = bf924 corpus)
   ZEN_PROGRESS_RUNLISTS="jobs/_pool/runlist.tsv" python3 pool_progress.py  # the 720-era pool
 """
-import os, sys, time, concurrent.futures as cf
+import os, sys, time, pathlib, concurrent.futures as cf
 import pyarrow.fs as fs, pyarrow.parquet as pq
 
-E = dict(os.environ)
-for line in open(os.path.expanduser("~/.config/cloudflare/r2-credentials")):
-    line = line.strip()
-    if line.startswith("R2_") and "=" in line:
-        k, v = line.split("=", 1)
-        E[k] = v.strip().strip('"').strip("'")
-S3 = fs.S3FileSystem(access_key=E["R2_ACCESS_KEY_ID"], secret_key=E["R2_SECRET_ACCESS_KEY"],
-    endpoint_override=os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % E["R2_ACCOUNT_ID"], region="auto")
-BUCKET = E.get("ZEN_BUCKET", "zentrain")
+# THE resolver (scripts/lib/zen_s3env.py) — never re-derive endpoint/creds in a new script.
+# FIXED 2026-08-24: this used to hardcode a read of ~/.config/cloudflare/r2-credentials
+# regardless of ZEN_STORE, so pointing it at the LAN store via ZEN_S3_ENDPOINT still
+# authenticated with the R2 access key — rejected by SeaweedFS (wrong key), not a graceful
+# fallback. compact_ledgers.py/refresh_snapshots.sh already used the resolver correctly;
+# this script and pool_reconcile_report.py were the two stragglers.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "lib"))
+from zen_s3env import resolve
+
+_endpoint, _access_key, _secret_key = resolve()
+S3 = fs.S3FileSystem(access_key=_access_key, secret_key=_secret_key,
+    endpoint_override=_endpoint, region="auto")
+BUCKET = os.environ.get("ZEN_BUCKET", "zentrain")
 TOTAL = int(sys.argv[1]) if len(sys.argv) > 1 else 490173
 
 RUNLISTS = os.environ.get(
