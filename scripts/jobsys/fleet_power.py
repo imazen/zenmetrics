@@ -90,18 +90,25 @@ SLEEP_ROSTER = {
         "mac": "04:7c:16:b3:18:51",
         "ssh": "zen@192.168.50.148",
         "nomad_node_name": "i134",
-        "gate": None,  # G-P1 attempted 2026-08-24 (user authorized 10 days, kids not
-        # present) and FAILED round 1 (240s timeout) -- but arm_wol.sh was never run
-        # first (a process error, not a confirmed hardware verdict -- see homefleet
-        # NODES.md's G-P1 table). Box is currently ASLEEP and unreachable as a result.
-        # Re-test AFTER arm_wol.sh + a physical/keyboard wake, do not retry blindly.
+        "power_mode": "poweroff",  # S3 suspend-WoL FAILED 2026-08-24 (arm_wol.sh was skipped --
+        # a process error, not a confirmed hardware verdict). User-directed pivot: use S5
+        # (real power off/on) instead of chasing S3-arming on a PXE-netboot-every-boot machine --
+        # S5-WoL just worked with ZERO extra config via `fleet-pxe worker <mac>` the same
+        # session S3 failed. Trade-off accepted: slower wake (full cold boot, tens of seconds+)
+        # for a wake mechanism that doesn't depend on OS/driver state surviving a netboot cycle.
+        "gate": None,  # Box is currently ASLEEP (stuck from the S3 attempt) and unreachable —
+        # needs a physical/keyboard nudge before ANY gate can be attempted. Once reachable:
+        # run a poweroff/WoL round-trip gate (NOT wol_roundtrip_test.sh as-is -- it hardcodes
+        # `systemctl suspend`; needs a poweroff variant or a manual 3x power-off+WoL round trip)
+        # before setting this to a real number.
     },
     "r5600g": {
         "mac": "04:7c:16:8a:b5:b7",
         "ssh": "zen@192.168.50.193",
         "nomad_node_name": "r5600g",
-        "gate": None,  # Same story as i134 above, same day, same root cause (arm_wol.sh
-        # skipped) -- see homefleet NODES.md's G-P1 table. Currently ASLEEP, unreachable.
+        "power_mode": "poweroff",  # Same story and same S5 pivot as i134 above, same day.
+        "gate": None,  # Same story as i134 above -- currently ASLEEP, unreachable, needs a
+        # physical/keyboard nudge, then a poweroff/WoL round-trip gate before a real number.
     },
 }
 
@@ -295,7 +302,7 @@ def wol(mac: str):
         )
 
 
-def suspend(ssh_target: str, addr: str, node_id: str | None):
+def suspend(ssh_target: str, addr: str, node_id: str | None, power_mode: str = "suspend"):
     # -force is load-bearing, not optional: plain `-enable` (no -force) lets a running
     # allocation drain VOLUNTARILY -- it keeps running (and was observed, live, to even
     # pick up a NEW chunk claim after the drain command was issued) until it finishes on
@@ -318,8 +325,17 @@ def suspend(ssh_target: str, addr: str, node_id: str | None):
         # future edit to this argument list.
         subprocess.run(["nomad", "node", "drain", "-enable", "-force", "-self=false", "-yes",
                          node_id], env=dict(os.environ, NOMAD_ADDR=addr), check=False)
-    subprocess.run(["ssh", "-o", "BatchMode=yes", ssh_target, "sudo", "systemctl", "suspend"],
-                    check=False, timeout=10)
+    # power_mode "suspend" (S3, default): fast resume (i265/r3500 measured 7-8s) but needs the
+    # NIC armed for wake-from-S3 (arm_wol.sh) -- a real, repeat gap on PXE-netboot-every-boot
+    # machines (r3500 needed it; i134/r5600g's G-P1 failed 2026-08-24 because it was skipped).
+    # power_mode "poweroff" (S5): slower resume (full cold boot, tens of seconds+) but WoL-from-off
+    # just worked with ZERO extra config on every box tried this fleet (i134, r5600g both cold-booted
+    # cleanly via `fleet-pxe worker <mac>` the same session their S3 gate failed) -- S5-WoL is a
+    # firmware-level feature that doesn't depend on OS/driver state surviving a netboot cycle the
+    # way S3-arming does. Use poweroff for boxes where wake latency doesn't matter (opportunistic/
+    # borrowed compute, not a dedicated low-latency worker) and where S3-arming is a recurring risk.
+    cmd = ["sudo", "systemctl", "poweroff"] if power_mode == "poweroff" else ["sudo", "systemctl", "suspend"]
+    subprocess.run(["ssh", "-o", "BatchMode=yes", ssh_target, *cmd], check=False, timeout=10)
 
 
 def cmd_status(args):
@@ -379,7 +395,7 @@ def cmd_apply(args):
     # for now, a fixed priority order recorded from the crossnode_2026-08-04 bench
     # (benchmarks/crossnode_2026-08-04/VERDICT.md): i265 > r3500 (r7900x/i134 excluded/
     # not-gated). Sleep order is just "whoever qualifies", order doesn't matter there.
-    wake_priority = ["i265", "r3500", "r5900xt", "i134"]
+    wake_priority = ["i265", "r3500", "r5900xt", "i134", "r5600g"]
     acted = []
     for name in wake_priority:
         box = SLEEP_ROSTER[name]
@@ -405,7 +421,7 @@ def cmd_apply(args):
             if action == "wake":
                 wol(box["mac"])
             elif action == "sleep":
-                suspend(box["ssh"], args.nomad_addr, node_id)
+                suspend(box["ssh"], args.nomad_addr, node_id, box.get("power_mode", "suspend"))
             state.setdefault(name, {})["last_action_ts"] = time.time()
             state[name]["last_action"] = action
         print(f"{'[LIVE]' if args.live else '[DRY-RUN]'} {name}: {action} (gap={total_gap}, up={up}, allocs={alloc_n}, node_id={node_id})")
