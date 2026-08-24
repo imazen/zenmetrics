@@ -528,13 +528,49 @@ once complete):**
    within ~15s of the WoL call. This is the core G-P3 mechanic (declare work
    while asleep → wake → Nomad serves the queued work automatically) working
    end-to-end for the first time.
-7. Gap draining in real time: 1,311 → 1,177 cells within the first ~45s of
-   both allocations running.
+7. Gap draining in real time: 1,311 → 1,177 → ... → 0 cells, reaching full
+   coverage (8,415/8,415 declared, **zero lost cells**) at 06:00:30Z — **11m40s
+   from the wake call (05:48:50Z) to full coverage.**
+8. **Confounded tail, honestly reported:** after the gap hit 0, neither worker
+   reached its own natural 5-consecutive-idle-pass exit — both kept finding
+   "new" chunks to (redundantly) claim and burned real CPU on them (i265
+   observed at ~1950% CPU / ~19.5 cores, r3500 at ~595% / ~6 cores) for several
+   more minutes. This is the ALREADY-DOCUMENTED lease-mode heterogeneous-chunk
+   bug from the G-P0 section above, not a new G-P3-specific defect — with the
+   real gap at 0, "new" chunk claims are pure re-execution of already-done
+   cells, and since this run (correctly, for G-N1/G-P3 isolation) never
+   switched to epoch-sharded mode, that inefficiency was always going to show
+   up here too. **Consequence for G-P3 specifically: a box that keeps finding
+   redundant chunks to claim never reaches `alloc_n==0` on its own, which
+   means it can never become sleep-eligible under `decide()`'s current logic
+   — the SLEEP half of the autoscale cycle can be blocked indefinitely by this
+   bug in the worst case.** Rather than burn further real box-hours watching
+   a known, already-understood inefficiency run its course, the job was
+   manually stopped once the ledger read 8,415/8,415 (06:03:42Z).
+9. Confirmed `alloc_n` dropped to 0 immediately after the manual stop. Ran
+   `fleet power apply --live` (06:04:11Z) — **the sleep decision fired
+   correctly for both boxes**: `[LIVE] i265: sleep (gap=0, up=True,
+   allocs=0, ...)` / `[LIVE] r3500: sleep (gap=0, up=True, allocs=0, ...)`.
+   Both drains completed cleanly this time (no `-force`/`-deadline` conflict —
+   the real fix from the section above, verified for the first time under
+   real conditions rather than a manual CLI test) and both boxes suspended:
+   `nomad node status` showed `ready` (heartbeat lag) but direct SSH to both
+   timed out — genuinely asleep. **Total wall-clock, wake call to sleep
+   call: 15m21s** (05:48:50Z → 06:04:11Z).
 
-<!-- FILL IN once the gap reaches 0 and both boxes return to sleep: total
-     wall-clock (wake call to sleep call), idle-awake box-hours proxy, zero-
-     lost-cells confirmation (distinct-done == declared), comparison against
-     the >=70% idle-awake-hours-reduction / <=110%-wall-time gate targets. -->
+**Verdict:** the core G-P3 mechanic — declare work while asleep, WoL wake in
+response to queue depth, Nomad auto-places the queued work with zero manual
+intervention, and the fleet returns to sleep once genuinely idle — is proven
+end-to-end for the first time, with zero lost cells. The "≤110% of G-N1's
+wall-time" and "≥70% idle-awake-hours reduction" numeric thresholds are NOT
+computed here: this test reused G-N1's partial-completion state rather than
+running the full manifest from scratch (so wall-clock isn't comparable
+apples-to-apples to G-N1's own number), and the confounded tail (item 8 above)
+means "idle-awake box-hours" isn't a clean measurement from this run either.
+A clean numeric pass needs either an epoch-sharded rerun (sidesteps the
+redundant-tail confound) or a fresh full-manifest G-P3 run sized for direct
+comparison against a fresh G-N1 baseline — tracked as follow-up, alongside the
+epoch-sharded G-P2 exactly-once rerun noted above.
 
 ## Gate verdicts (summary)
 
@@ -563,7 +599,21 @@ once complete):**
   epoch-sharded-mode rerun to isolate. WoL wake-after-suspend: not exercised
   in this test (used Nomad drain, not an actual `systemctl suspend` — see
   the setup notes above).
-- **G-P3 autoscale end-to-end** — not started.
+- **G-P3 autoscale end-to-end** — ⚠️ PARTIAL PASS. Core mechanic ✅ proven
+  end-to-end for the first time: submit work against sleeping nodes → it
+  queues → `fleet power apply --live` WoLs them → Nomad auto-places the
+  queued allocations with zero manual intervention → gap drains to zero
+  lost cells (8,415/8,415) → `apply` correctly decides to sleep once
+  genuinely idle → both boxes verified asleep (SSH timeout). Along the way,
+  found the sleep decision's `alloc_n` signal was ALWAYS 0 regardless of
+  reality (a 4th real `fleet_power.py` bug, now fixed) and re-confirmed the
+  `-force`/`-deadline` fix under real conditions for the first time. Numeric
+  thresholds (≤110% wall-time vs G-N1, ≥70% idle-awake-hours reduction) NOT
+  computed — this run reused G-N1's partial state rather than a fresh
+  full-manifest run, and a lease-mode redundant-work tail (the already-
+  documented heterogeneous-chunk bug) confounds a clean idle-awake-hours
+  measurement. A clean numeric pass needs a fresh, matched G-N1/G-P3 pair,
+  ideally epoch-sharded to sidestep the redundant-tail confound.
 - **G-T1 throughput tuning** — early ladder data in hand (epoch-sharded vs
   lease: 1.69x/1.51x vs 3.49x row-count ratio — epoch-sharded is the clear
   early leader, with its own smaller-scope tail-pileup caveat), but no
