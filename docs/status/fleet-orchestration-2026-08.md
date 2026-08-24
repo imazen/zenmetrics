@@ -6,10 +6,14 @@ fleet repo: `homefleet zenmetrics/ORCHESTRATION-2026-08.md`. Neutral node IDs on
 
 ## Decision
 
-- **Pilot HashiCorp Nomad (CE 1.11.x; BUSL — fine for internal, non-competing use) as
-  the BOX-LIFECYCLE layer for the LAN fleet only**: node membership + liveness, worker
-  deployment/restart, drain (before dual-boot OS flips), image rolls, resource caps,
-  periodic plumbing jobs, and node metadata (arch/SIMD-vendor/GPU/VRAM as node attrs).
+- **Pilot HashiCorp Nomad (CE **2.0.5**, corrected 2026-08-24 from this doc's original
+  "1.11.x" — see the private topology doc's "Nomad specifics" for the full version
+  analysis: the free/CE line moved to the 2.x series after 1.11.3, 1.11.4+ is
+  Enterprise-only and never got 2.0.4's two Docker-driver CVE fixes, licence terms are
+  unaffected; BUSL — fine for internal, non-competing use) as the BOX-LIFECYCLE layer
+  for the LAN fleet only**: node membership + liveness, worker deployment/restart,
+  drain (before dual-boot OS flips), image rolls, resource caps, periodic plumbing
+  jobs, and node metadata (arch/SIMD-vendor/GPU/VRAM as node attrs).
 - **zenfleet stays the work-distribution data plane, unchanged**: content-addressed
   `JobId`s, declare→gap→reconcile, S3 conditional-PUT claim leases, epoch-sharded
   claiming + registered handicaps, the Parquet ledger, retry-vs-poison error classes,
