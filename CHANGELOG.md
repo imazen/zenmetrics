@@ -38,24 +38,22 @@ Workspace conventions per the global rules:
   a small (~12-14%), direction-consistent speedup on plain zenjpeg encode across a
   2-slice-crossed design (4 short runs, 0 failures), a mild surprise against the knob's
   own documented fetch-bound-only intent, flagged as low-precision (6-8s runs) and a
-  follow-up candidate rather than a default change. **VRAM admission measured AND
-  FAILED — see Fixed/Reopened below, this is the significant result of the four.**
-
-### Reopened (not yet resolved)
-- **VRAM admission (P0 precondition #4, believed fixed `58c5db95`) does not bind
-  concurrency in a real test** — a live 500-job GPU-score run hit 16 concurrent CUDA
-  contexts on a 6 GB card against a predicted ~2-3 ceiling from the documented flat
-  2 GiB/job estimate and a correctly-probed ~5.8 GB budget (the probe itself directly
-  verified working inside the exact container image). Probe failure, GPU-metric
-  misclassification, a stale hint bypassing the fallback estimate, and a broken
-  `InFlight` counter were each checked against source and ruled out; root cause not
-  isolated. No OOM occurred in the observed run only because real per-job usage
-  (8-256 MiB) stayed far under the reservation estimate — a larger-tier GPU workload
-  would likely OOM for real. Do not treat VRAM admission as a working OOM guard until
-  root-caused. Full writeup: `benchmarks/fleetbench_2026-08-24.md`, CLAUDE.md Known
-  Bugs, `docs/status/fleet-orchestration-2026-08.md` preconditions + defect register.
+  follow-up candidate rather than a default change; VRAM admission was FIRST measured as
+  broken, then CORRECTED same session with direct ground-truth instrumentation — see
+  Fixed below, `can_admit` was right all along.
 
 ### Fixed
+- **VRAM admission (`BoxBudget::can_admit`) was WRONGLY reported reopened mid-session,
+  then corrected same session** — a live 500-job GPU-score run's `nvidia-smi
+  --query-compute-apps` reading (16 concurrent against a predicted ~2-3 ceiling)
+  suggested the admission ceiling wasn't binding. Rather than leave "needs dedicated
+  tracing" as follow-up, added `ZEN_DEBUG_ADMIT=1`-gated instrumentation logging
+  `can_admit`'s actual inputs, rebuilt the GPU exec image, and re-ran the exact same
+  scenario plus a smaller confirmatory run: **750/750 real admissions never exceeded
+  the correct 2-concurrent ceiling.** `can_admit` was correct throughout; `nvidia-smi`'s
+  PID count is not a reliable proxy for a scheduler's admitted concurrency on this
+  GPU-metrics workload. No code fix needed. Full first-conclusion-then-correction
+  writeup: `benchmarks/fleetbench_2026-08-24.md`'s G-T1 VRAM-admission section.
 - **Chunk-mode's per-chunk lease claim gives ZERO cross-worker dedup on a heterogeneous-
   core-count fleet** — measured 100% duplicate-execution rate on a real 3-box run
   (chunk-id hashes chunk membership, and membership comes from the CALLING BOX'S OWN

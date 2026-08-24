@@ -630,12 +630,14 @@ all 5 GPU metrics.
 
 The mission names four ladders: per-box concurrency (`ZEN_CORE_OVERSUBSCRIBE`),
 GPU admission via VRAM hints, warm-exec on/off, and epoch-sharded vs lease
-claiming. **All 4 are now measured** — stated plainly, but "measured" does not
-mean "all four passed": claim-mode is a confident, ready-to-ship recommendation;
-warm-exec and oversubscribe are real single-pass measurements with honestly-
-flagged limits; and VRAM admission's measurement **found the P0 precondition
-doesn't actually hold** under a real test (see below) — a re-opened defect, the
-most important result in this section, not a tuning number.
+claiming. **All 4 are now measured.** Claim-mode is a confident, ready-to-ship
+recommendation; warm-exec and oversubscribe are real single-pass measurements
+with honestly-flagged limits; VRAM admission's FIRST measurement wrongly
+suggested a broken P0 precondition, but a same-session re-test with direct
+ground-truth instrumentation showed `can_admit` is actually correct — see
+below for the full first-conclusion-then-correction writeup, which is worth
+reading for the methodology lesson (nvidia-smi's compute-apps count is not a
+reliable proxy for a scheduler's admitted concurrency) as much as the result.
 
 **Claim mode — MEASURED, ready to register.** This is the by-product of the
 G-P0/epoch-sharded/G-N1/G-P3 runs above, not a purpose-built ladder test, but
@@ -740,88 +742,98 @@ job kind that isn't the workload the knob targets. Do not read this as
 validating oversubscribe for encode/GPU tiers generally; it's one
 data point on one box for one codec.
 
-**VRAM admission — MEASURED: the expected ~2-3-concurrent ceiling did NOT
-hold in a real run, re-opening this P0 precondition** (same pattern as the
-SIGTERM chunk-claim release above: believed armed from code + unit tests,
-found not actually binding under a real end-to-end test). Fresh 500-job
+**VRAM admission — MEASURED, then CORRECTED after direct instrumentation:
+`can_admit` is right. The initial alarming finding below was a
+measurement-methodology artifact, not a real defect.** Recording the wrong
+first conclusion AND the correction, because the correction process is
+itself the useful part of this section.
+
+**First pass (WRONG conclusion, kept for the record):** a fresh 500-job
 GPU-score manifest (100 cells × 5 GPU metrics, `items[1600:1700]` of the
-same 8,415-cell superset, `fleetbench-gpuscore-vram.nomad.hcl`), watched
-LIVE via `nvidia-smi --query-compute-apps=pid,used_memory` polled every 5s
-on the host during the run:
+same 8,415-cell superset, `fleetbench-gpuscore-vram.nomad.hcl`), watched via
+`nvidia-smi --query-compute-apps=pid,used_memory` polled every 5s on the
+host, peaked at **16 concurrent CUDA-context PIDs** against a predicted
+ceiling of ~2-3 (`DEFAULT_GPU_JOB_VRAM_BYTES` 2 GiB/job vs. a
+correctly-probed ~5.8 GB budget). Run completed in ~38s, 500/500 jobs, 0
+failures, no CUDA OOM. This was written up as "P0 precondition #4 re-opened,
+VRAM admission does not bind" and pushed to master/main.
 
-| t+ | concurrent CUDA-context PIDs observed | per-PID VRAM |
-|---|---|---|
-| ~10s | 5 | 96-192 MiB |
-| ~16s | 6 | 192-256 MiB |
-| ~21s | **16** | 8-192 MiB |
-| ~27s | 16 | 96-192 MiB |
-| ~32s | 16 | 8-256 MiB |
+**Direct re-test with ground-truth instrumentation (the correction):**
+"needs dedicated tracing" was cheap enough to just do rather than leave as
+follow-up. Added two `eprintln!` calls gated behind `ZEN_DEBUG_ADMIT=1` —
+one logging `pack_chunks_lpt`'s chunk count/sizes, one logging every
+admission's actual `cand_vram` and post-admit
+`running.count`/`running.vram_bytes`/`budget.vram_budget_bytes` directly at
+`can_admit`'s call site (`lib.rs:1298-1301`, inside the same lock, so no
+added race) — rebuilt the GPU exec image (reusing the already-proven
+`zenmetrics` binary extracted via `docker cp` from the deployed
+`:exec-gpu-zensimv2-0953c94671` image, since a fresh local `cargo build` of
+`zenmetrics-cli` had drifted to a newer glibc — `GLIBC_2.43` not found in
+the GPU_BASE rootfs — than the working binary; only `zenfleet-worker` needed
+rebuilding), pushed as `:exec-gpu-vram-debug`, and re-ran the **exact same
+100-cell slice** under a fresh run name (`fleetbench-gpuscore-vram2-2026-08-24`).
 
-**Peak observed: 16 concurrent CUDA contexts** on a single 6 GB GTX 1060 —
-run completed in ~38s wall-clock (06:44:52Z→06:45:30Z), 500/500 jobs, 0
-failures, no CUDA OOM. This contradicts the ceiling `can_admit`'s own math
-predicts: `DEFAULT_GPU_JOB_VRAM_BYTES` = 2 GiB/job
-(`crates/zenfleet-worker/src/lib.rs:2064`) against a correctly-probed
-~5.8 GB budget (90% of 6144 MiB — **directly verified the probe itself
-works inside this exact image**: `docker run --entrypoint sh
-ghcr.io/imazen/zenfleet-worker:exec-gpu-... -c 'nvidia-smi --query-gpu=
-memory.total ...'` returned `6144`, ruling out "probe silently fails in
-this container" as the explanation) should admit at most 2-3 concurrent
-jobs (`5.8 / 2 ≈ 2.9`), not 16. Checked and RULED OUT as explanations,
-each verified by reading the exact source, not assumed:
-- `is_gpu_metric_name` correctly matches the `-gpu` suffix on all 5 metric
-  names used here (`job.rs:287-289`) → `JobKind::Metric.profile().class`
-  correctly resolves to `ResourceClass::Gpu` (`job.rs:211-217`).
-- `fallback_hint.vram_bytes` is `None` (`lib.rs:2123`), and these
-  declared jobs carry no `hint` at all (confirmed: no `hint` key in the
-  spec JSON items) → `default_vram_estimate` (2 GiB for `Gpu` class) is
-  genuinely the value that should be reaching `can_admit`, not skipped by
-  an already-populated hint.
-- `InFlight::add`/`remove` correctly increment/decrement `count` on every
-  admit/release (`schedule.rs:52-64`) — not a broken counter permanently
-  wedged at the `running.count == 0` unconditional-admit fast path.
+**Result: across 500 real admissions, post-admit `running.count` was `1`
+once and `2` for every other admission — NEVER higher.** `cand_vram` was
+exactly `2147483648` (2 GiB) every time, `running.vram_bytes` topped out at
+exactly `4294967296` (2×2 GiB), `budget.vram_budget_bytes` was
+`Some(5798205849)` (~5.8 GB) throughout — precisely the correct, intended
+behavior: 2 concurrent jobs admitted, a 3rd correctly refused
+(3×2 GiB = 6 GiB > 5.8 GB). Meanwhile `nvidia-smi --query-compute-apps`
+polled on the SAME run at the SAME time showed the PID count swinging
+wildly — 0, 2, 5, 8, 14, 17, 20, 24, 26 — with no relationship to the
+ground-truth admission count sitting steadily at 2. **`can_admit`'s own
+accounting is correct; the 16 (and up to 26) figures were never real
+concurrently-admitted zenfleet jobs — they were `nvidia-smi`'s
+compute-apps listing overcounting under this workload's CUDA usage
+pattern** (most likely: each `zenmetrics jobexec` process scores 5 GPU
+metrics per cell in sequence, and if each metric crate creates/tears down
+its own CUDA/CubeCL context rather than sharing one, a single admitted job
+can transiently register multiple driver-level context entries, or
+recently-exited contexts can linger in the driver's accounting for a beat —
+not confirmed further, out of scope, and irrelevant to the conclusion
+since the ground truth came from `can_admit` itself, not from
+re-explaining `nvidia-smi`).
 
-**Not fully root-caused** — the exact point where the accounting diverges
-from 16 observed vs. ~3 predicted needs dedicated tracing (timestamped
-instrumentation of `can_admit`'s actual `cand_vram` argument + a
-rebuild-instrument-retest cycle), scoped as follow-up rather than more
-live probing, per this doc's own precedent for the SIGTERM investigation.
-Two more hypotheses also traced and RULED OUT, narrowing the follow-up's
-scope: **(a) cross-chunk concurrency** — `execute_gap_chunked`'s chunk loop
-(`lib.rs:1197-1224`) is a plain sequential `for &ci in &order` over
-`pack_chunks_lpt`'s chunks, each `run_chunk_concurrent` call blocking
-(`std::thread::scope`) until every member of that chunk finishes before the
-next chunk starts, so at most one chunk's `Shared`/`InFlight` state is ever
-live at a time — this is NOT multiple independent admission ledgers running
-in parallel; **(b) a TOCTOU race between the `can_admit` check and
-`running.add()`** — both happen inside the same `MutexGuard` scope
-(`lib.rs:1298-1301`) with no lock release between them, so two threads can't
-both observe `count == 0` (or any other stale state) and double-admit. The
-narrowed follow-up: either `default_vram_estimate`'s 2 GiB isn't actually
-the `cand_vram` value reaching `can_admit` at runtime for these jobs (despite
-every individual piece checking out in isolation above), or a brief overlap
-at CHUNK BOUNDARIES (a fresh chunk's first job hits the `count == 0`
-unconditional-admit bypass while the previous chunk's last jobs are still in
-CUDA driver teardown, which can lag the Rust-level "done") repeats often
-enough across many small chunks to stack up to 16 — plausible given a
-500-tiny-job batch likely packs into several chunks, but not confirmed;
-needs the actual chunk count and per-chunk timing from a traced rerun.
-**No real-world harm occurred in this run**: actual per-job VRAM usage
-(8-256 MiB) stayed far below the 2 GiB reservation estimate throughout,
-so even 16-way concurrency (≈2.4 GB actual) never approached the 6 GB
-card's real limit — this workload's cell sizes happen to be small enough
-that the (apparently non-binding) ceiling was never actually tested
-against reality. **The risk this exposes:** the doc's own comment
-estimates ≈1.3 GB REAL usage at the "large" (2048px) tier — if the
-admission ceiling really doesn't bind at ~2-3 concurrent, 16 concurrent
-large-tier jobs would need ≈21 GB, far exceeding this card, and WOULD
-CUDA-OOM for real. **Recommendation: re-open P0 precondition #2 (VRAM
-admission) as not-actually-verified-in-production; do not rely on it to
-protect a GPU box from OOM until root-caused; the flat 2 GiB estimate
-itself is also DELIBERATELY COARSE per its own doc comment and should be
-replaced with the per-metric `estimate_gpu_memory_bytes` functions already
-shipped in each GPU metric crate before shipping any large-tier GPU-heavy
-fleet workload.**
+A smaller confirmatory run (250 jobs, a disjoint 50-cell slice,
+`items[1700:1750]`, packed into 2 chunks of 170/80) showed the same
+pattern even more cleanly: 248/250 admissions at `count=2`, 1 at
+`count=1`, across the chunk-1→chunk-2 boundary with no spike — directly
+ruling out the "chunk-boundary overlap" hypothesis this section originally
+proposed as a follow-up candidate.
+
+**Bonus finding: the SIGTERM-release investigation's "residual puzzle" —
+new diagnostic lines never appearing in captured logs even on success — is
+now fully explained, not just newly true here.** `fleet-entrypoint.sh`'s
+`run_pass()` (`fleet-entrypoint.sh:114-126`) redirects the whole pass's
+combined stdout+stderr to an `mktemp`-created file, held open but `rm -f`'d
+immediately after `wait` returns; the caller only forwards SPECIFIC
+extracted lines (the done/failed summary always; the FULL output only on
+pass 1 or a non-zero exit; anything matching `surface_problems`'s patterns)
+to the container's actual stdout — so an `eprintln!` that doesn't match one
+of those forwarding rules is captured into the temp file and genuinely
+invisible in `docker logs`/`nomad alloc logs` **while the pass is still
+running**, but **does surface once the pass completes** if it's pass 1
+(full dump) or the pass fails (tail-15). A still-running pass's raw output
+is readable via `sudo cat /proc/<zenfleet-worker-pid>/fd/2` on the host
+(the file is unlinked but the still-open fd keeps the data readable) — this
+is how the ground-truth `debug-admit` trace above was actually recovered,
+both live and after completion. Real gap for genuinely custom mid-run
+diagnostics, not a black hole — check `/proc/PID/fd/2` on a live process
+before concluding output is lost.
+
+**Corrected recommendation: DO NOT re-open P0 precondition #2/#4.**
+`can_admit`'s VRAM gating is measured-correct on this fleet's GPU-score
+workload, confirmed via 750 total ground-truth-instrumented admissions
+across two independent runs (500 + 250 jobs) with zero exceptions. The flat
+2 GiB/job estimate (`DEFAULT_GPU_JOB_VRAM_BYTES`) is still DELIBERATELY
+COARSE per its own doc comment and worth replacing with the per-metric
+`estimate_gpu_memory_bytes` functions already shipped in each GPU metric
+crate, for precision — but that's a refinement, not a fix for a defect.
+**The actual lesson of this whole detour: don't use `nvidia-smi
+--query-compute-apps` PID count as a proxy for a scheduler's admitted
+concurrency on a GPU-metrics workload — log the scheduler's own admission
+decision directly if that number matters.**
 
 ## Gate verdicts (summary)
 
@@ -865,31 +877,32 @@ fleet workload.**
   documented heterogeneous-chunk bug) confounds a clean idle-awake-hours
   measurement. A clean numeric pass needs a fresh, matched G-N1/G-P3 pair,
   ideally epoch-sharded to sidestep the redundant-tail confound.
-- **G-T1 throughput tuning** — ⚠️ **4 of 4 ladders measured; 1 result is a
-  re-opened defect, not a tuning number.** Claim mode: ✅ MEASURED and
-  recommended (epoch-sharded 1.51-1.69x vs lease-mode's 3.49x row-count
-  ratio on this heterogeneous fleet) — registered as a jobspec/docs
-  convention, deliberately NOT as a crate-wide compiled-in default change
-  (broader-than-scoped). Warm-exec (`ZEN_PERSISTENT_EXEC`): ✅ MEASURED — a
-  **regression** for GPU-score work (440s/3,995-done vs baseline's
-  311s/4,000-done, a single but unambiguous large-N trial) — recommend
-  leaving it OFF. Concurrency (`ZEN_CORE_OVERSUBSCRIBE`): ✅ MEASURED — a
-  small, direction-consistent speedup (~12-14%, reproduced across a
-  2-slice-crossed design) even on the compute-bound encode job kind the
-  source comment says shouldn't benefit — real but low-precision (6-8s
-  runs, whole-second timestamps, no repeated trials), flagged as a
+- **G-T1 throughput tuning** — ⚠️ **4 of 4 ladders measured.** Claim mode:
+  ✅ MEASURED and recommended (epoch-sharded 1.51-1.69x vs lease-mode's
+  3.49x row-count ratio on this heterogeneous fleet) — registered as a
+  jobspec/docs convention, deliberately NOT as a crate-wide compiled-in
+  default change (broader-than-scoped). Warm-exec (`ZEN_PERSISTENT_EXEC`):
+  ✅ MEASURED — a **regression** for GPU-score work (440s/3,995-done vs
+  baseline's 311s/4,000-done, a single but unambiguous large-N trial) —
+  recommend leaving it OFF. Concurrency (`ZEN_CORE_OVERSUBSCRIBE`): ✅
+  MEASURED — a small, direction-consistent speedup (~12-14%, reproduced
+  across a 2-slice-crossed design) even on the compute-bound encode job
+  kind the source comment says shouldn't benefit — real but low-precision
+  (6-8s runs, whole-second timestamps, no repeated trials), flagged as a
   follow-up candidate rather than an immediate default change. **VRAM
-  admission: 🔴 MEASURED AND FAILED** — a live 500-job GPU-score run hit
-  **16 concurrent CUDA contexts on a 6 GB card**, far above the ~2-3 the
-  admission math (2 GiB/job flat estimate vs. a correctly-probed ~5.8 GB
-  budget — the probe itself was directly verified working inside the
-  exact image) predicts; no OOM occurred only because this workload's real
-  per-job usage (8-256 MiB) stayed far under the reservation estimate, not
-  because the ceiling held. **P0 precondition #2 (VRAM admission) is
-  re-opened** — believed armed from code + unit tests, not actually
-  binding under a real test, the same pattern as the SIGTERM-release saga
-  above. Root cause not isolated (needs dedicated tracing, scoped as
-  follow-up). `fleet/handicaps.toml` deliberately NOT populated from this
-  mixed-codec run (its own documented
-  measurement procedure requires the dedicated `handicap_typebench.sh` tool
-  per encoder type, which this fleetbench workload doesn't isolate).
+  admission: ✅ MEASURED CORRECT, after a same-session self-correction** —
+  a first live 500-job GPU-score run's `nvidia-smi --query-compute-apps`
+  reading (16 concurrent) wrongly suggested `can_admit`'s 2 GiB/job vs
+  ~5.8 GB budget ceiling (~2-3 predicted) wasn't binding; a re-test with
+  direct ground-truth instrumentation (`ZEN_DEBUG_ADMIT=1` logging
+  `can_admit`'s actual inputs) on the SAME 500-job scenario plus a smaller
+  250-job confirmatory run showed 750/750 real admissions never exceeding
+  `count=2` — the scheduler was correct throughout; `nvidia-smi`'s PID
+  count was the unreliable signal, not `can_admit`. **P0 precondition #2/#4
+  (VRAM admission) is NOT re-opened** — do not carry forward the earlier
+  "re-opened" framing from mid-session; this doc's own VRAM-admission
+  section has the full first-conclusion-then-correction writeup.
+  `fleet/handicaps.toml` deliberately NOT populated from this mixed-codec
+  run (its own documented measurement procedure requires the dedicated
+  `handicap_typebench.sh` tool per encoder type, which this fleetbench
+  workload doesn't isolate).

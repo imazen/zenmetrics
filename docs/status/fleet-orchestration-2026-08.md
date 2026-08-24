@@ -56,20 +56,24 @@ will never manage), coverage/catalog, blob GC.
 
 ## Preconditions — fix in zenfleet BEFORE Nomad-managed churn
 
-**Status (2026-08-24, revised twice same day): three of five hold up; #2 was
-REOPENED then RESOLVED; #4 is REOPENED and NOT yet resolved** — item 2's original
-verification (a synthetic/mocked harness) did not catch that the real release
-never fired in a real end-to-end test (found during G-P2 gate testing, same day)
-— **then RESOLVED later the same day** after adding diagnostics + rebuilding the
-executor image (see item 2 and `benchmarks/fleetbench_2026-08-24.md`); treat it
-as re-verified-but-not-fully-understood (2/2 real repro, mechanism not
-conclusively pinned down). Item 4 (VRAM admission) hit the SAME pattern during
-the G-T1 ladder pass (later still, same day) — code + unit tests said done, a
-real 500-job GPU-score run measured 16 concurrent CUDA contexts against a
-predicted ~2-3 ceiling — and is **NOT yet resolved** (root cause not isolated;
-see item 4 and CLAUDE.md's Known Bugs). Items 1/3/5 (test suites + one item live
-against the real LAN store — see each entry) held throughout; the ledger
-snapshot decision below stayed conservative anyway.
+**Status (2026-08-24, revised three times same day): all five hold up.** Item 2
+was briefly REOPENED then RESOLVED same day — its original verification (a
+synthetic/mocked harness) did not catch that the real release never fired in a
+real end-to-end test (found during G-P2 gate testing) — **RESOLVED** after
+adding diagnostics + rebuilding the executor image (see item 2 and
+`benchmarks/fleetbench_2026-08-24.md`); treat it as re-verified-but-not-fully-
+understood (2/2 real repro, mechanism not conclusively pinned down). Item 4
+(VRAM admission) was ALSO briefly (and wrongly) reported reopened during the
+later G-T1 ladder pass — a live 500-job GPU-score run's `nvidia-smi
+--query-compute-apps` reading (16 concurrent) suggested `can_admit`'s ceiling
+wasn't binding — **but a same-session re-test with direct ground-truth
+instrumentation on the exact same scenario showed 750/750 real admissions
+never exceeded the correct ceiling; `can_admit` was right, `nvidia-smi`'s PID
+count was the unreliable signal.** See item 4 and
+`benchmarks/fleetbench_2026-08-24.md`'s G-T1 VRAM-admission section for the
+full first-conclusion-then-correction writeup. Items 1/3/5 (test suites + one
+item live against the real LAN store — see each entry) held throughout; the
+ledger snapshot decision below stayed conservative anyway.
 
 1. **#38 `JobId` preserve_order sensitivity** — ~~until `JobId::of` serializes through an
    explicitly-sorted structure, any Nomad-era build/CI pipeline MUST keep per-crate
@@ -109,28 +113,29 @@ snapshot decision below stayed conservative anyway.
    Verified end-to-end: `ZEN_MAX_MIN=1` exits at exactly 60s wall-clock. Nomad
    `kill_timeout` remains the backstop, not the primary mechanism.
 4. **VRAM admission dimension in `BoxBudget`** — ~~the avifgen OOM-storm follow-up~~
-   believed **FIXED, `58c5db95`** (`BoxBudget` gained an optional third
+   **FIXED, `58c5db95`** (`BoxBudget` gained an optional third
    `vram_budget_bytes` axis, `None` = don't gate; `host_box_budget()` probes real
-   GPU VRAM via `nvidia-smi` and sets a 90%-of-probed budget) — **⚠️ REOPENED
-   2026-08-24 (G-T1 ladder pass), NOT yet resolved.** A live 500-job GPU-score
-   run (`fleetbench-gpuscore-vram.nomad.hcl`, r7900x, 6 GB GTX 1060, watched via
-   `nvidia-smi --query-compute-apps` every 5s) hit **16 concurrent CUDA contexts**
-   — the admission math (`DEFAULT_GPU_JOB_VRAM_BYTES` 2 GiB/job vs. a
-   correctly-probed ~5.8 GB budget, probe itself directly verified working
-   inside the exact container image) predicts a ceiling of ~2-3. Individually
-   ruled out: probe failure, GPU-metric misclassification, a stale/populated
-   hint bypassing the fallback estimate, and a broken `InFlight` counter — each
-   checked against source, none explains the gap. Root cause NOT isolated
-   (needs dedicated timestamped tracing of `can_admit`'s runtime `cand_vram`
-   argument). No OOM occurred in the observed run only because real per-job
-   VRAM usage (8-256 MiB) stayed far under the 2 GiB reservation — the
-   documented "large tier" (~1.3 GB real/job) would put 16-way concurrency at
-   ≈21 GB, a genuine OOM on this card. **Do not treat VRAM admission as a
-   working OOM guard until root-caused.** Full writeup:
-   `benchmarks/fleetbench_2026-08-24.md`'s G-T1 VRAM-admission section;
-   CLAUDE.md Known Bugs. Nomad's device plugin can report VRAM later; the
-   admission decision itself stays zenfleet's regardless, per the ADR's
-   original framing — that framing is unaffected by this defect.
+   GPU VRAM via `nvidia-smi` and sets a 90%-of-probed budget). **Briefly (and
+   wrongly) reported REOPENED 2026-08-24 during the G-T1 ladder pass, corrected
+   the same day.** A live 500-job GPU-score run's `nvidia-smi
+   --query-compute-apps` reading (16 concurrent CUDA contexts against a
+   predicted ~2-3 ceiling from `DEFAULT_GPU_JOB_VRAM_BYTES` 2 GiB/job vs. a
+   correctly-probed ~5.8 GB budget) was initially written up as a broken
+   admission ceiling. A same-session re-test with direct ground-truth
+   instrumentation (`ZEN_DEBUG_ADMIT=1` logging `can_admit`'s actual
+   `cand_vram`/running totals at its call site) on the EXACT same scenario,
+   plus a smaller confirmatory run, showed **750/750 real admissions never
+   exceeded the correct 2-concurrent ceiling** — `can_admit` was right the
+   whole time; `nvidia-smi`'s compute-apps PID count is simply not a reliable
+   proxy for a scheduler's admitted concurrency on this GPU-metrics workload
+   (5 metrics scored per cell per process, plausibly transient multi-context
+   registration or driver teardown lag — not confirmed further, and
+   irrelevant to the conclusion). **VRAM admission is confirmed working; this
+   item does NOT need further action.** Full first-conclusion-then-correction
+   writeup: `benchmarks/fleetbench_2026-08-24.md`'s G-T1 VRAM-admission
+   section; CLAUDE.md's `### Resolved`. Nomad's device plugin can report VRAM
+   later; the admission decision itself stays zenfleet's regardless, per the
+   ADR's original framing.
 5. **Worker task shape decision** — ~~long-lived task with internal idle backoff
    (preferred under Nomad) vs today's drain-exit loop + `Restart=always` poll churn~~
    **DECIDED AND LANDED, `45c57bd3`**: long-lived, opt-in via `ZEN_LONG_LIVED=1` (defaults
@@ -244,11 +249,13 @@ constraints:
 ## zenfleet defect register (consolidated 2026-08-22; updated 2026-08-24)
 
 **Fixed 2026-08-24** (see "Preconditions" above for commits + verification): #38 JobId
-preserve_order; claim CAS shells out to
-the aws CLI; `ZEN_MAX_MIN` ignored in single-run mode; worker task shape (long-lived +
-idle backoff, opt-in `ZEN_LONG_LIVED=1`); capability routing dead code (`metric_class()`
-returned `Gpu` unconditionally — fixed alongside #38 in the same commit, `1b2a1452`,
-along with a same-root-cause bug in `epoch::any_gpu_metric`'s GPU-suffix check).
+preserve_order; VRAM admission dimension missing in BoxBudget (also re-verified
+correct via direct instrumentation later the same day — see below); claim CAS
+shells out to the aws CLI; `ZEN_MAX_MIN` ignored in single-run mode; worker task
+shape (long-lived + idle backoff, opt-in `ZEN_LONG_LIVED=1`); capability routing
+dead code (`metric_class()` returned `Gpu` unconditionally — fixed alongside #38
+in the same commit, `1b2a1452`, along with a same-root-cause bug in
+`epoch::any_gpu_metric`'s GPU-suffix check).
 
 **REOPENED then RESOLVED 2026-08-24, same day (G-P2 gate testing):** chunked-path
 SIGTERM claim release — reported fixed above (`0de119d6`/`45c57bd3`) on the strength
@@ -259,17 +266,18 @@ reliably (2/2 real repro) — see "Preconditions" item 2 above, CLAUDE.md's
 investigation, including the honest residual puzzle about why the new diagnostic
 output still doesn't appear in captured logs despite the fix working.
 
-**REOPENED 2026-08-24, same day, NOT yet resolved (G-T1 ladder pass):** VRAM
-admission dimension in `BoxBudget` — reported fixed above (`58c5db95`) on the
-strength of code review + unit tests; a real 500-job GPU-score run measured 16
-concurrent CUDA contexts on a 6 GB card against a predicted ~2-3 ceiling. Probe
-failure, metric misclassification, a stale hint, and a broken `InFlight` counter
-were each individually checked against source and ruled out — root cause not
-isolated. No OOM occurred in the observed run only because this workload's real
-per-job VRAM usage stayed far under the flat 2 GiB/job reservation estimate; a
-larger-tier GPU workload would likely OOM for real. See "Preconditions" item 4
-above, CLAUDE.md Known Bugs, and `benchmarks/fleetbench_2026-08-24.md`'s G-T1
-VRAM-admission section for the full investigation.
+**BRIEFLY (WRONGLY) REOPENED then CORRECTED 2026-08-24, same day (G-T1 ladder
+pass):** VRAM admission dimension in `BoxBudget` — a live 500-job GPU-score
+run's `nvidia-smi --query-compute-apps` reading (16 concurrent against a
+predicted ~2-3 ceiling) was initially written up as "does not bind" and
+briefly pushed as a reopened defect. A same-session re-test with direct
+ground-truth instrumentation on the exact same scenario (plus a smaller
+confirmatory run) showed 750/750 real admissions never exceeded the correct
+ceiling — `can_admit` was right the whole time; `nvidia-smi`'s PID count was
+the unreliable signal, not the scheduler. No code fix was needed. See
+"Preconditions" item 4 above, CLAUDE.md's `### Resolved`, and
+`benchmarks/fleetbench_2026-08-24.md`'s G-T1 VRAM-admission section for the
+full first-conclusion-then-correction writeup.
 
 Also found + fixed the same day, in `scripts/jobsys/fleet_power.py` (chasing the
 above): `suspend()`'s drain lacked `-force` (a plain `-enable -deadline 2m` doesn't

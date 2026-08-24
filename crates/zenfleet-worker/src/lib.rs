@@ -1148,6 +1148,21 @@ where
     cmark!("job-costs");
     let chunks = params.budget.pack_chunks_lpt(&costs, params.chunk_wall_sec);
     cmark!("pack-chunks");
+    // Admission debug trace (ZEN_DEBUG_ADMIT=1, silent otherwise — same gating pattern as
+    // ZEN_TIME_PASS/`ctimed` above). Added 2026-08-24 to get ground truth on `can_admit`'s
+    // actual decisions after `nvidia-smi --query-compute-apps` produced a misleading high
+    // concurrency reading on a GPU-score run (see benchmarks/fleetbench_2026-08-24.md's G-T1
+    // VRAM-admission section — nvidia-smi's compute-apps PID count is NOT a reliable proxy
+    // for a scheduler's admitted concurrency on this workload; log the real thing instead).
+    // Kept as a standing debug flag: logs how many chunks a gap packed into and each size.
+    if std::env::var("ZEN_DEBUG_ADMIT").ok().as_deref() == Some("1") {
+        eprintln!(
+            "zenfleet-worker[debug-admit] packed {} jobs into {} chunk(s), sizes={:?}",
+            gap.len(),
+            chunks.len(),
+            chunks.iter().map(|m| m.len()).collect::<Vec<_>>()
+        );
+    }
     let chunk_ids: Vec<String> = chunks
         .iter()
         .map(|members| {
@@ -1298,6 +1313,18 @@ where
                             if budget.can_admit(&g.running, mem, thr, vram) {
                                 g.running.add(mem, thr, vram);
                                 g.cursor += 1;
+                                // Same ZEN_DEBUG_ADMIT flag as the pack_chunks_lpt log above.
+                                // Logs the actual cand_vram this admission used and the
+                                // post-add running total, directly against
+                                // budget.vram_budget_bytes — this is the ground truth that
+                                // proved can_admit correct when nvidia-smi's compute-apps
+                                // count looked wrong (see benchmarks/fleetbench_2026-08-24.md).
+                                if std::env::var("ZEN_DEBUG_ADMIT").ok().as_deref() == Some("1") {
+                                    eprintln!(
+                                        "zenfleet-worker[debug-admit] admit gi={gi} count={} vram={} running_vram={} budget_vram={:?}",
+                                        g.running.count, vram, g.running.vram_bytes, budget.vram_budget_bytes
+                                    );
+                                }
                                 break (gi, mem, thr, vram);
                             }
                             // running full → wait for an in-flight cell to finish and free room.
