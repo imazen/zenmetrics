@@ -127,25 +127,59 @@ def bucket():
 
 
 def queue_gap(run: str) -> tuple[int, int] | None:
-    """(declared, distinct_done) for one run, or None if no snapshot/manifest yet.
-    Mirrors pool_progress.py's footer-only read (fast: no full ledger scan)."""
+    """(declared, distinct_done) for one run, or None if no manifest is found at all.
+
+    Two manifest path conventions coexist in this codebase and this function must find
+    either (found live 2026-08-24 running the first real G-P3 test — a plain declared-
+    manifest run has NO `jobs/` prefix and NO ledger_snapshot.parquet at all, so the
+    original jobs/-prefix-only version of this function silently returned "no manifest"
+    for every non-pool run):
+      - POOL-mode runs: `jobs/<run>/manifest.json[.gz]` + a pre-compacted
+        `jobs/<run>/ledger_snapshot.parquet` (pool_progress.py's exact mechanism — a fast
+        footer-only read, no full scan, built for pool-scale runs with many workers).
+      - Plain declared-manifest runs (`zenfleet-ctl declare-encodes` + `launch_fleet.sh` /
+        the ad-hoc systemd/Nomad deploys this session used): `<run>/manifest.json`, no
+        snapshot file at all — falls back to a real scan of `<run>/ledger/*.parquet`
+        (distinct job_id count, latest-wins by ts). Slower than the footer read, but every
+        run tested this session (up to ~30k ledger rows) resolved in well under a second;
+        revisit with a real snapshot-writer if a run's ledger ever gets large enough for
+        this to matter.
+    """
     S3, _ = s3()
     B = bucket()
-    try:
-        with S3.open_input_file(f"{B}/jobs/{run}/manifest.json.gz") as f:
-            import gzip, io
-            declared = len(json.load(gzip.open(io.BytesIO(f.read()))))
-    except Exception:
+    declared = None
+    for prefix in (f"jobs/{run}/", f"{run}/"):
         try:
-            with S3.open_input_file(f"{B}/jobs/{run}/manifest.json") as f:
-                declared = len(json.loads(f.read()))
+            with S3.open_input_file(f"{B}/{prefix}manifest.json.gz") as f:
+                import gzip, io
+                declared = len(json.load(gzip.open(io.BytesIO(f.read()))))
+            break
         except Exception:
-            return None
+            pass
+        try:
+            with S3.open_input_file(f"{B}/{prefix}manifest.json") as f:
+                declared = len(json.loads(f.read()))
+            break
+        except Exception:
+            pass
+    if declared is None:
+        return None
+    done = 0
     try:
         with S3.open_input_file(f"{B}/jobs/{run}/ledger_snapshot.parquet") as f:
             done = pq.read_metadata(f).num_rows
     except Exception:
-        done = 0
+        try:
+            import pyarrow.dataset as ds
+            d = ds.dataset(f"{B}/{run}/ledger", filesystem=S3, format="parquet")
+            latest = {}
+            for r in d.to_table(columns=["job_id", "status", "ts"]).to_pylist():
+                jid = r["job_id"]
+                if jid not in latest or r["ts"] > latest[jid]["ts"]:
+                    latest[jid] = r
+            done = sum(1 for r in latest.values() if str(r["status"]).lower() == "done")
+        except Exception:
+            done = 0
     return declared, done
 
 
