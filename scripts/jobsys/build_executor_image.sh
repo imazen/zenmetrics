@@ -4,11 +4,29 @@
 # crates must be present — i.e. the workstation). amd64 only (the workstation arch); an arm64 image
 # needs an arm64 zenmetrics binary built where the siblings live.
 #
-#   cargo build --release -p zenmetrics-cli --no-default-features \
-#     --features sweep,png,jpeg,webp,avif,jxl,cpu-metrics      # produces target/release/zenmetrics
-#   PUSH=1 bash scripts/jobsys/build_executor_image.sh         # build + push (needs ghcr login)
+# USE THE MUSL TARGET (found + fixed 2026-08-24, see fleet.env's dated note): a dynamically-linked
+# `cargo build --release` binary requires whatever glibc the BUILD box happens to run — the base
+# image (`:latest`) is Debian bookworm / glibc 2.36, and a build box that has since drifted to a newer
+# OS (e.g. Ubuntu 26.04 / glibc 2.43) produces a binary that BUILDS and even smoke-tests fine on the
+# build box itself, then refuses to start inside the actual image (`GLIBC_2.43' not found`). The musl
+# target sidesteps this permanently — a fully static binary, immune to the base image's libc version:
 #
-# Usage: [PUSH=1] [ZEN_METRICS_BIN=path] build_executor_image.sh [IMAGE]
+#   rustup target add x86_64-unknown-linux-musl   # + `apt install musl-tools` for musl-gcc, once
+#   cargo build --release --target x86_64-unknown-linux-musl -p zenmetrics-cli --no-default-features \
+#     --features sweep,png,jpeg,webp,avif,jxl,cpu-metrics
+#     # produces target/x86_64-unknown-linux-musl/release/zenmetrics
+#   cargo build --release --target x86_64-unknown-linux-musl -p zenfleet-worker
+#     # produces target/x86_64-unknown-linux-musl/release/zenfleet-worker (this script overlays it
+#     # automatically if present at the plain target/release/ path — pass ZEN_WORKER_BIN to point it
+#     # at the musl path instead, or symlink/copy it there)
+#   PUSH=1 ZEN_METRICS_BIN=target/x86_64-unknown-linux-musl/release/zenmetrics \
+#     ZEN_WORKER_BIN=target/x86_64-unknown-linux-musl/release/zenfleet-worker \
+#     bash scripts/jobsys/build_executor_image.sh         # build + push (needs ghcr login)
+#
+# Verify before shipping: `docker run --rm --entrypoint /bin/sh <image> -c 'ldd /usr/local/bin/zenmetrics'`
+# must say "statically linked", never a glibc version list.
+#
+# Usage: [PUSH=1] [ZEN_METRICS_BIN=path] [ZEN_WORKER_BIN=path] build_executor_image.sh [IMAGE]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="${1:-ghcr.io/imazen/zenfleet-worker:exec}"
@@ -22,13 +40,18 @@ cp "$BIN" "$CTX/zenmetrics"
 cp "$ROOT/scripts/jobsys/zenfleet-exec" "$CTX/zenfleet-exec"
 # Overlay the CURRENT zenfleet-worker too (base :latest bakes a stale one). Built by
 # `cargo build --release -p zenfleet-worker`. Skipped if absent (keeps base's).
-WK="$ROOT/target/release/zenfleet-worker"
+WK="${ZEN_WORKER_BIN:-$ROOT/target/release/zenfleet-worker}"
 [ -f "$WK" ] && cp "$WK" "$CTX/zenfleet-worker" || echo "note: no local zenfleet-worker — image keeps base's"
 # Overlay the CURRENT entrypoint — the :latest base bakes a stale one, so without this
 # copy an edited fleet-entrypoint.sh never reaches :exec (this bit us on the tar-prefetch).
 cp "$ROOT/crates/zenfleet-worker/fleet-entrypoint.sh" "$CTX/fleet-entrypoint.sh"
 cp "$ROOT/crates/zenfleet-worker/Dockerfile.executor" "$CTX/Dockerfile"
 echo "building $IMAGE (base = ghcr.io/imazen/zenfleet-worker:latest + zenmetrics $(du -h "$BIN" | cut -f1))"
+# --chmod on COPY needs BuildKit (`docker buildx version` to check); if the build box's docker
+# lacks the buildx plugin (seen on a fresh docker.io install, 2026-08-24), either install it
+# (https://docs.docker.com/go/buildx/) or drop --chmod from Dockerfile.executor's COPY lines and add
+# a trailing `RUN chmod 0755 ...` instead — the source files are already executable, but classic
+# (non-BuildKit) `docker build` doesn't reliably preserve that without an explicit chmod step.
 docker build -t "$IMAGE" "$CTX"
 # Smoke: the binary loads + jobexec is present.
 docker run --rm --entrypoint /usr/local/bin/zenmetrics "$IMAGE" jobexec --help >/dev/null \
