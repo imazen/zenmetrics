@@ -13,6 +13,56 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace (fleetbench gates + `fleet power` + a heterogeneous-fleet lease bug, 2026-08-24 later)
+
+### Added
+- **`fleet power status|apply`** (4267a562, `scripts/jobsys/fleet_power.py`): queue-driven
+  suspend/wake for the LAN fleet's sleep-gated boxes — hysteresis (wake threshold > sleep
+  threshold), a minimum awake dwell, WoL wake, `nomad node drain -force` + `systemctl
+  suspend` for sleep, all state in the LAN store (stateless periodic-job safe).
+  NEVER_SLEEP hardcoded (dev/tower/r7900x/wsl/mac), never derived from a live signal.
+- **fleetbench-2026-08-24**: the frozen workload the gate program runs identically across
+  every A/B — 8,415 real encode DesiredJobs (zenjpeg/zenavif/zenjxl/zenpng, imazen-26
+  test-split sources) declared through the normal job system. Full provenance:
+  `benchmarks/fleetbench_2026-08-24.md`.
+- **G-P0/G-N1/epoch-sharded/G-P2/G-P3 gate results** (same doc) — see Fixed below for the
+  bugs found running them; qualitative highlights: Nomad confirmed orthogonal to
+  zenfleet's claim mechanism (G-N1 shows the same defect class as G-P0 at comparable
+  severity); the full wake→auto-place→drain cycle proven end-to-end for the first time
+  (G-P3): a Nomad job submitted against sleeping nodes queues correctly, WoL wakes them,
+  and Nomad places the already-queued allocations with zero manual intervention.
+
+### Fixed
+- **Chunk-mode's per-chunk lease claim gives ZERO cross-worker dedup on a heterogeneous-
+  core-count fleet** — measured 100% duplicate-execution rate on a real 3-box run
+  (chunk-id hashes chunk membership, and membership comes from the CALLING BOX'S OWN
+  core/RAM budget, so different-core boxes partition an identical gap into non-colliding
+  chunks). Not fixed in code (documented, with epoch-sharded claiming measured as the
+  working alternative — 1.5-1.7x re-work tax vs lease-mode's 3.49x) — every household LAN
+  fleet is heterogeneous by construction, so this is a standing Known Bug, not a one-off.
+- **SIGTERM chunk-claim release did not actually release the claim in a real end-to-end
+  test** (0e998ff3, 367f16b1) — the P0 precondition below had only been verified against
+  a synthetic/mocked harness. Diagnosed via a raw (no Docker/Nomad) reproduction that
+  proved the release logic itself was correct, narrowing the bug to the container/Nomad/
+  entrypoint layering; added tracing + rebuilt the executor image and the release then
+  worked reliably (2/2 real repro) — mechanism not fully understood (a residual log-
+  visibility puzzle remains), but the fix is repeatable.
+- **Four real bugs in `scripts/jobsys/fleet_power.py`**, all found running real gate
+  tests, none caught by review alone: `suspend()`'s drain lacked `-force` (plain
+  `-enable -deadline 2m` doesn't promptly interrupt a running allocation — measured
+  ~70s, not "seconds"); a first attempted fix for that added `-force` NEXT TO the
+  existing `-deadline` instead of replacing it, which Nomad's CLI rejects outright, and
+  with `check=False` this failure was completely silent in production (fixed for real
+  the second time, 1cf5003a); `cmd_apply` hardcoded `node_id=None` so the drain branch
+  never ran in the real path; a drained node stays `Eligibility=ineligible` forever
+  after the drain completes with nothing to re-enable it, so a box would wake from one
+  sleep cycle and never receive Nomad work again; `queue_gap()` hardcoded a `jobs/`
+  manifest-path prefix that only pool-mode runs use, so it silently reported "no
+  manifest" for every plain declared-manifest run (39368392); `node_alloc_count()`
+  guessed a JSON shape (`"Allocs"` key) that `nomad node status -json -verbose` doesn't
+  actually have, so it ALWAYS returned 0 regardless of real running allocations — a
+  safety bug for the sleep decision's `alloc_n==0` check (1cb2eef3).
+
 ## Workspace (Nomad-migration P0 preconditions landed, 2026-08-24)
 
 ### Fixed
