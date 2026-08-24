@@ -359,6 +359,37 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **VRAM admission (the Nomad-migration P0 precondition #2 in `BoxBudget`) does NOT
+  actually bind concurrency in a real test — RE-OPENED 2026-08-24, same pattern as
+  the SIGTERM-release saga below (believed armed from code + unit tests, found not
+  working under a real end-to-end test).** A live 500-job GPU-score run
+  (`fleetbench-gpuscore-vram.nomad.hcl`, r7900x, 6 GB GTX 1060) hit **16 concurrent
+  CUDA contexts** (`nvidia-smi --query-compute-apps`, polled every 5s during the
+  run), far above the ~2-3 that `can_admit`'s own math predicts:
+  `DEFAULT_GPU_JOB_VRAM_BYTES` = 2 GiB/job (`crates/zenfleet-worker/src/lib.rs:2064`)
+  against a budget of 90% × 6144 MiB ≈ 5.8 GB should cap admission at `5.8/2 ≈ 2.9`.
+  Individually verified and RULED OUT as explanations (each read from source, not
+  assumed): the VRAM probe itself works inside the exact container image (`docker
+  run --entrypoint sh ghcr.io/imazen/zenfleet-worker:exec-gpu-... -c 'nvidia-smi
+  --query-gpu=memory.total ...'` → `6144`, confirmed live); GPU-metric-name
+  classification correctly resolves to `ResourceClass::Gpu` for all 5 metrics used
+  (`job.rs:211-217`, `287-289`); the declared jobs carry no `hint` at all so
+  `fallback_hint`'s `vram_bytes: None` (`lib.rs:2123`) correctly triggers
+  `default_vram_estimate`'s 2 GiB return; `InFlight::add`/`remove` correctly
+  increment/decrement `count` (`schedule.rs:52-64`, not stuck on the `count == 0`
+  unconditional-admit fast path). **Root cause NOT isolated** — the exact point
+  where real concurrency diverges from the predicted ceiling needs dedicated
+  timestamped tracing of `can_admit`'s actual `cand_vram` argument at runtime, not
+  more live probing. **No real-world harm in the observed run**: actual per-job
+  VRAM usage (8-256 MiB) stayed far below the 2 GiB reservation estimate, so even
+  16-way concurrency (~2.4 GB actual) never approached the 6 GB card's limit — this
+  workload's cell sizes are small enough that the (apparently non-binding) ceiling
+  was never tested against reality. **Real risk this exposes**: the "large" (2048px)
+  tier's documented ≈1.3 GB real per-job estimate would put 16-way concurrency at
+  ≈21 GB — a genuine CUDA OOM on this card if the ceiling really doesn't bind at
+  2-3. Do not rely on VRAM admission to protect a GPU box until root-caused. Full
+  writeup: `benchmarks/fleetbench_2026-08-24.md`'s G-T1 VRAM-admission section.
+
 - **`zenjxl` encoder panics on specific inputs — observed via fleetbench's GPU-score
   leg (found 2026-08-24, NOT a zenmetrics/fleet-orchestration bug — an upstream
   dependency finding, out of scope to root-cause here).** 69/4,000 GPU-score jobs

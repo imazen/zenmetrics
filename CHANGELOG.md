@@ -31,14 +31,29 @@ Workspace conventions per the global rules:
   severity); the full wake→auto-place→drain cycle proven end-to-end for the first time
   (G-P3): a Nomad job submitted against sleeping nodes queues correctly, WoL wakes them,
   and Nomad places the already-queued allocations with zero manual intervention.
-- **G-T1 throughput ladders — 3 of 4 measured** (claim-mode was already covered above):
+- **G-T1 throughput ladders — 4 of 4 measured** (claim-mode was already covered above):
   `ZEN_PERSISTENT_EXEC` (warm-exec) measured as a **regression** on the GPU-score leg —
   440s/3,995-done vs the baseline's 311s/4,000-done for an identical 4,000-job batch, a
   ~41% wall-clock increase — recommend leaving it off; `ZEN_CORE_OVERSUBSCRIBE` measured
   a small (~12-14%), direction-consistent speedup on plain zenjpeg encode across a
   2-slice-crossed design (4 short runs, 0 failures), a mild surprise against the knob's
   own documented fetch-bound-only intent, flagged as low-precision (6-8s runs) and a
-  follow-up candidate rather than a default change. VRAM admission remains unmeasured.
+  follow-up candidate rather than a default change. **VRAM admission measured AND
+  FAILED — see Fixed/Reopened below, this is the significant result of the four.**
+
+### Reopened (not yet resolved)
+- **VRAM admission (P0 precondition #4, believed fixed `58c5db95`) does not bind
+  concurrency in a real test** — a live 500-job GPU-score run hit 16 concurrent CUDA
+  contexts on a 6 GB card against a predicted ~2-3 ceiling from the documented flat
+  2 GiB/job estimate and a correctly-probed ~5.8 GB budget (the probe itself directly
+  verified working inside the exact container image). Probe failure, GPU-metric
+  misclassification, a stale hint bypassing the fallback estimate, and a broken
+  `InFlight` counter were each checked against source and ruled out; root cause not
+  isolated. No OOM occurred in the observed run only because real per-job usage
+  (8-256 MiB) stayed far under the reservation estimate — a larger-tier GPU workload
+  would likely OOM for real. Do not treat VRAM admission as a working OOM guard until
+  root-caused. Full writeup: `benchmarks/fleetbench_2026-08-24.md`, CLAUDE.md Known
+  Bugs, `docs/status/fleet-orchestration-2026-08.md` preconditions + defect register.
 
 ### Fixed
 - **Chunk-mode's per-chunk lease claim gives ZERO cross-worker dedup on a heterogeneous-

@@ -630,11 +630,12 @@ all 5 GPU metrics.
 
 The mission names four ladders: per-box concurrency (`ZEN_CORE_OVERSUBSCRIBE`),
 GPU admission via VRAM hints, warm-exec on/off, and epoch-sharded vs lease
-claiming. **3 of 4 are measured; 1 remains untested** — stated as a fraction,
-not "tuning done," per this repo's own completion-reporting rule. Of the 3
-measured, only claim-mode is a confident, ready-to-ship recommendation; the
-other 2 (warm-exec, oversubscribe) are real single-pass measurements with
-honestly-flagged limits (see below), not exhaustively-repeated results.
+claiming. **All 4 are now measured** — stated plainly, but "measured" does not
+mean "all four passed": claim-mode is a confident, ready-to-ship recommendation;
+warm-exec and oversubscribe are real single-pass measurements with honestly-
+flagged limits; and VRAM admission's measurement **found the P0 precondition
+doesn't actually hold** under a real test (see below) — a re-opened defect, the
+most important result in this section, not a tuning number.
 
 **Claim mode — MEASURED, ready to register.** This is the by-product of the
 G-P0/epoch-sharded/G-N1/G-P3 runs above, not a purpose-built ladder test, but
@@ -739,16 +740,68 @@ job kind that isn't the workload the knob targets. Do not read this as
 validating oversubscribe for encode/GPU tiers generally; it's one
 data point on one box for one codec.
 
-**Not yet measured — VRAM admission.** No ladder run done for this axis
-in this session. It needs a GPU-metric-heavy cell mix specifically sized
-to exercise the admission boundary (this fleet's only GPU box, r7900x, has
-a 6 GB GTX 1060 — `DEFAULT_GPU_JOB_VRAM_BYTES` is a flat 2 GiB/job
-estimate per `crates/zenfleet-worker/src/lib.rs:2064`, so ~2 concurrent
-GPU jobs should be the admitted ceiling at the 90%-of-VRAM budget; the
-useful test is confirming concurrent GPU-metric admission never exceeds
-that ceiling and never triggers a CUDA OOM, not a throughput comparison).
-Should not be considered "tuned" — the shipped config is still whatever
-the untuned default already was, not a measured argmax.
+**VRAM admission — MEASURED: the expected ~2-3-concurrent ceiling did NOT
+hold in a real run, re-opening this P0 precondition** (same pattern as the
+SIGTERM chunk-claim release above: believed armed from code + unit tests,
+found not actually binding under a real end-to-end test). Fresh 500-job
+GPU-score manifest (100 cells × 5 GPU metrics, `items[1600:1700]` of the
+same 8,415-cell superset, `fleetbench-gpuscore-vram.nomad.hcl`), watched
+LIVE via `nvidia-smi --query-compute-apps=pid,used_memory` polled every 5s
+on the host during the run:
+
+| t+ | concurrent CUDA-context PIDs observed | per-PID VRAM |
+|---|---|---|
+| ~10s | 5 | 96-192 MiB |
+| ~16s | 6 | 192-256 MiB |
+| ~21s | **16** | 8-192 MiB |
+| ~27s | 16 | 96-192 MiB |
+| ~32s | 16 | 8-256 MiB |
+
+**Peak observed: 16 concurrent CUDA contexts** on a single 6 GB GTX 1060 —
+run completed in ~38s wall-clock (06:44:52Z→06:45:30Z), 500/500 jobs, 0
+failures, no CUDA OOM. This contradicts the ceiling `can_admit`'s own math
+predicts: `DEFAULT_GPU_JOB_VRAM_BYTES` = 2 GiB/job
+(`crates/zenfleet-worker/src/lib.rs:2064`) against a correctly-probed
+~5.8 GB budget (90% of 6144 MiB — **directly verified the probe itself
+works inside this exact image**: `docker run --entrypoint sh
+ghcr.io/imazen/zenfleet-worker:exec-gpu-... -c 'nvidia-smi --query-gpu=
+memory.total ...'` returned `6144`, ruling out "probe silently fails in
+this container" as the explanation) should admit at most 2-3 concurrent
+jobs (`5.8 / 2 ≈ 2.9`), not 16. Checked and RULED OUT as explanations,
+each verified by reading the exact source, not assumed:
+- `is_gpu_metric_name` correctly matches the `-gpu` suffix on all 5 metric
+  names used here (`job.rs:287-289`) → `JobKind::Metric.profile().class`
+  correctly resolves to `ResourceClass::Gpu` (`job.rs:211-217`).
+- `fallback_hint.vram_bytes` is `None` (`lib.rs:2123`), and these
+  declared jobs carry no `hint` at all (confirmed: no `hint` key in the
+  spec JSON items) → `default_vram_estimate` (2 GiB for `Gpu` class) is
+  genuinely the value that should be reaching `can_admit`, not skipped by
+  an already-populated hint.
+- `InFlight::add`/`remove` correctly increment/decrement `count` on every
+  admit/release (`schedule.rs:52-64`) — not a broken counter permanently
+  wedged at the `running.count == 0` unconditional-admit fast path.
+
+**Not fully root-caused** — the exact point where the accounting diverges
+from 16 observed vs. ~3 predicted needs dedicated tracing (timestamped
+instrumentation of `can_admit`'s actual `cand_vram` argument + a
+rebuild-instrument-retest cycle), scoped as follow-up rather than more
+live probing, per this doc's own precedent for the SIGTERM investigation.
+**No real-world harm occurred in this run**: actual per-job VRAM usage
+(8-256 MiB) stayed far below the 2 GiB reservation estimate throughout,
+so even 16-way concurrency (≈2.4 GB actual) never approached the 6 GB
+card's real limit — this workload's cell sizes happen to be small enough
+that the (apparently non-binding) ceiling was never actually tested
+against reality. **The risk this exposes:** the doc's own comment
+estimates ≈1.3 GB REAL usage at the "large" (2048px) tier — if the
+admission ceiling really doesn't bind at ~2-3 concurrent, 16 concurrent
+large-tier jobs would need ≈21 GB, far exceeding this card, and WOULD
+CUDA-OOM for real. **Recommendation: re-open P0 precondition #2 (VRAM
+admission) as not-actually-verified-in-production; do not rely on it to
+protect a GPU box from OOM until root-caused; the flat 2 GiB estimate
+itself is also DELIBERATELY COARSE per its own doc comment and should be
+replaced with the per-metric `estimate_gpu_memory_bytes` functions already
+shipped in each GPU metric crate before shipping any large-tier GPU-heavy
+fleet workload.**
 
 ## Gate verdicts (summary)
 
@@ -792,22 +845,31 @@ the untuned default already was, not a measured argmax.
   documented heterogeneous-chunk bug) confounds a clean idle-awake-hours
   measurement. A clean numeric pass needs a fresh, matched G-N1/G-P3 pair,
   ideally epoch-sharded to sidestep the redundant-tail confound.
-- **G-T1 throughput tuning** — ⚠️ **3 of 4 ladders measured, 1 confidently
-  ready to ship.** Claim mode: ✅ MEASURED and recommended (epoch-sharded
-  1.51-1.69x vs lease-mode's 3.49x row-count ratio on this heterogeneous
-  fleet) — registered as a jobspec/docs convention, deliberately NOT as a
-  crate-wide compiled-in default change (broader-than-scoped). Warm-exec
-  (`ZEN_PERSISTENT_EXEC`): ✅ MEASURED — a **regression** for GPU-score work
-  (440s/3,995-done vs baseline's 311s/4,000-done, a single but unambiguous
-  large-N trial) — recommend leaving it OFF. Concurrency
-  (`ZEN_CORE_OVERSUBSCRIBE`): ✅ MEASURED — a small, direction-consistent
-  speedup (~12-14%, reproduced across a 2-slice-crossed design) even on the
-  compute-bound encode job kind the source comment says shouldn't benefit —
-  real but low-precision (6-8s runs, whole-second timestamps, no repeated
-  trials), flagged as a follow-up candidate rather than an immediate default
-  change. VRAM admission: ❌ not measured — no ladder run done, no argmax to
-  ship, current behavior is whatever the untuned default (`DEFAULT_GPU_JOB_
-  VRAM_BYTES` flat 2 GiB/job estimate) already was. `fleet/handicaps.toml`
-  deliberately NOT populated from this mixed-codec run (its own documented
+- **G-T1 throughput tuning** — ⚠️ **4 of 4 ladders measured; 1 result is a
+  re-opened defect, not a tuning number.** Claim mode: ✅ MEASURED and
+  recommended (epoch-sharded 1.51-1.69x vs lease-mode's 3.49x row-count
+  ratio on this heterogeneous fleet) — registered as a jobspec/docs
+  convention, deliberately NOT as a crate-wide compiled-in default change
+  (broader-than-scoped). Warm-exec (`ZEN_PERSISTENT_EXEC`): ✅ MEASURED — a
+  **regression** for GPU-score work (440s/3,995-done vs baseline's
+  311s/4,000-done, a single but unambiguous large-N trial) — recommend
+  leaving it OFF. Concurrency (`ZEN_CORE_OVERSUBSCRIBE`): ✅ MEASURED — a
+  small, direction-consistent speedup (~12-14%, reproduced across a
+  2-slice-crossed design) even on the compute-bound encode job kind the
+  source comment says shouldn't benefit — real but low-precision (6-8s
+  runs, whole-second timestamps, no repeated trials), flagged as a
+  follow-up candidate rather than an immediate default change. **VRAM
+  admission: 🔴 MEASURED AND FAILED** — a live 500-job GPU-score run hit
+  **16 concurrent CUDA contexts on a 6 GB card**, far above the ~2-3 the
+  admission math (2 GiB/job flat estimate vs. a correctly-probed ~5.8 GB
+  budget — the probe itself was directly verified working inside the
+  exact image) predicts; no OOM occurred only because this workload's real
+  per-job usage (8-256 MiB) stayed far under the reservation estimate, not
+  because the ceiling held. **P0 precondition #2 (VRAM admission) is
+  re-opened** — believed armed from code + unit tests, not actually
+  binding under a real test, the same pattern as the SIGTERM-release saga
+  above. Root cause not isolated (needs dedicated tracing, scoped as
+  follow-up). `fleet/handicaps.toml` deliberately NOT populated from this
+  mixed-codec run (its own documented
   measurement procedure requires the dedicated `handicap_typebench.sh` tool
   per encoder type, which this fleetbench workload doesn't isolate).
