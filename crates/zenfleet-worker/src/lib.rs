@@ -1277,7 +1277,7 @@ where
             scope.spawn(|| {
                 loop {
                     // Acquire the next admissible cell (admission-gated), or stop when none remain.
-                    let (gi, mem, thr) = {
+                    let (gi, mem, thr, vram) = {
                         let mut g = shared.lock().unwrap_or_else(|p| p.into_inner());
                         loop {
                             if g.cursor >= members.len() {
@@ -1286,10 +1286,13 @@ where
                             let gi = members[g.cursor];
                             let h = gap[gi].hint.unwrap_or(fallback);
                             let (mem, thr) = (h.peak_mem_bytes, h.threads.max(1));
-                            if budget.can_admit(&g.running, mem, thr) {
-                                g.running.add(mem, thr);
+                            let vram = h
+                                .vram_bytes
+                                .unwrap_or_else(|| default_vram_estimate(&gap[gi].kind));
+                            if budget.can_admit(&g.running, mem, thr, vram) {
+                                g.running.add(mem, thr, vram);
                                 g.cursor += 1;
-                                break (gi, mem, thr);
+                                break (gi, mem, thr, vram);
                             }
                             // running full → wait for an in-flight cell to finish and free room.
                             g = cv.wait(g).unwrap_or_else(|p| p.into_inner());
@@ -1304,7 +1307,7 @@ where
                     let mapped = res.map_err(|he| he.class);
                     {
                         let mut g = shared.lock().unwrap_or_else(|p| p.into_inner());
-                        g.running.remove(mem, thr);
+                        g.running.remove(mem, thr, vram);
                         g.results.push((gi, mapped));
                     }
                     cv.notify_all(); // a slot freed → wake a waiter to admit the next cell
@@ -1967,12 +1970,48 @@ fn total_ram_bytes() -> Option<u64> {
     String::from_utf8(out.stdout).ok()?.trim().parse().ok()
 }
 
+/// Total GPU VRAM in bytes for THIS box, summed across every `nvidia-smi`-reported device, or
+/// `None` if there's no GPU (command absent/fails) — [`host_box_budget`] then leaves
+/// `vram_budget_bytes` at `None` and admission simply doesn't gate on VRAM, identical to
+/// pre-VRAM-axis behavior. `ZEN_VRAM_BYTES` env override for testing/atypical hardware (same
+/// pattern as `ZEN_RAM_BYTES`). Summing is a simplification: every box in this fleet has at most
+/// one GPU today (see homefleet NODES.md's roster) so it's equivalent to "the GPU's VRAM"; a
+/// genuinely multi-GPU box would need a smarter per-device budget, out of scope here.
+fn total_vram_bytes() -> Option<u64> {
+    if let Ok(v) = std::env::var("ZEN_VRAM_BYTES")
+        && let Ok(n) = v.trim().parse::<u64>()
+        && n > 0
+    {
+        return Some(n);
+    }
+    let out = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8(out.stdout).ok()?;
+    let mut total_mib: u64 = 0;
+    let mut saw_any = false;
+    for line in text.lines() {
+        if let Ok(mib) = line.trim().parse::<u64>() {
+            total_mib = total_mib.saturating_add(mib);
+            saw_any = true;
+        }
+    }
+    saw_any.then(|| total_mib.saturating_mul(1024 * 1024))
+}
+
 /// This box's admission budget for the chunked path: **RAM budget = 75 % of physical RAM** (leaves
 /// headroom for the OS, page cache, GPU readback, and the estimate's slop — see [`BoxBudget`]) and
 /// **cores = usable parallelism** (`available_parallelism` honors cgroup/cpuset affinity, which the
 /// fleet onstart pins; RAM is bounded separately by `can_admit`, so we do NOT also shrink cores by
 /// RAM the way a blind N-per-core launcher would). Conservative fallbacks (2 GiB / 1 core) if either
-/// probe fails — never panics.
+/// probe fails — never panics. **VRAM budget = 90 % of probed GPU memory** (a smaller margin than
+/// RAM's 75 % — VRAM has no page cache/OS competing for it, just the driver's own context
+/// overhead), left `None` on a CPU-only box so admission never gates on an axis it can't measure
+/// (the Nomad-migration P0 precondition: "VRAM admission dimension missing in BoxBudget").
 fn host_box_budget() -> BoxBudget {
     let total_ram = total_ram_bytes().unwrap_or(2 << 30); // 2 GiB only if every probe fails
     let ram_budget = (((total_ram as f64) * 0.75) as u64).max(1);
@@ -1993,7 +2032,37 @@ fn host_box_budget() -> BoxBudget {
         .filter(|f| f.is_finite() && *f >= 1.0)
         .unwrap_or(1.0);
     let cores = (((phys_cores as f64) * oversub).round() as u32).max(1);
-    BoxBudget::new(ram_budget, cores)
+    let budget = BoxBudget::new(ram_budget, cores);
+    match total_vram_bytes() {
+        Some(total_vram) => {
+            let vram_budget = (((total_vram as f64) * 0.9) as u64).max(1);
+            budget.with_vram_budget(vram_budget)
+        }
+        None => budget,
+    }
+}
+
+/// Coarse per-job VRAM estimate for admission when a job carries no explicit
+/// `ResourceHint::vram_bytes` — true of every Metric/ScoreFile job declared today (see
+/// `ResourceHint`'s doc: no declare-time path computes one yet). Every GPU metric crate already
+/// ships an exact per-image estimator
+/// (`crates/{cvvdp,ssim2,butteraugli,dssim,iwssim,zensim}-gpu/src/memory_mode.rs`'s
+/// `estimate_gpu_memory_bytes(width, height[, regime])`); wiring one of those into a metric job's
+/// declare-time hint is the natural follow-up for precise admission, tracked for the G-T1 tuning
+/// pass (docs/status/fleet-orchestration-2026-08.md). Until then, any `ResourceClass::Gpu` job
+/// with no hint uses this flat constant so the VRAM axis is functionally meaningful today instead
+/// of a silent no-op: the order of magnitude of ssim2-gpu's own pyramid-sum formula at this
+/// fleet's fleetbench "medium" tier (768px longest side, ≈590K px) is ≈184 MB, and ≈1.3 GB at the
+/// "large" tier (2048px) — 2 GiB covers the large tier plus driver/context overhead with margin.
+/// **DELIBERATELY COARSE, NOT a measurement** — same spirit as `JobKind::estimate_cost_sec`.
+const DEFAULT_GPU_JOB_VRAM_BYTES: u64 = 2 << 30;
+
+fn default_vram_estimate(kind: &JobKind) -> u64 {
+    if kind.profile().class == ResourceClass::Gpu {
+        DEFAULT_GPU_JOB_VRAM_BYTES
+    } else {
+        0
+    }
 }
 
 /// Per-chunk wall-time target (seconds) when the box is left to its default: the
@@ -2045,6 +2114,7 @@ fn default_chunk_params(chunk_wall_sec: f64) -> ChunkParams {
         fallback_hint: ResourceHint {
             peak_mem_bytes: 512 << 20,
             threads: 1,
+            vram_bytes: None,
         },
     }
 }
@@ -2814,6 +2884,7 @@ mod tests {
             hint: Some(ResourceHint {
                 peak_mem_bytes: 4 << 20,
                 threads: 1,
+                vram_bytes: None,
             }),
         }
     }
@@ -2825,6 +2896,7 @@ mod tests {
             fallback_hint: ResourceHint {
                 peak_mem_bytes: 512 << 20,
                 threads: 1,
+                vram_bytes: None,
             },
         }
     }

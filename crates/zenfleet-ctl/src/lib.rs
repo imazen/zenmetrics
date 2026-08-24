@@ -428,6 +428,7 @@ mod tests {
         let hint = ResourceHint {
             peak_mem_bytes: 8 << 30,
             threads: 4,
+            vram_bytes: None,
         };
         let item = EncodeDeclareItem {
             image_path: "corpus/x.png".into(),

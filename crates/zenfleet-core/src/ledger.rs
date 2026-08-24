@@ -51,6 +51,18 @@ pub struct ResourceHint {
     /// (`ResourceEstimate::threading().effective_threads(cores)`). Feeds the
     /// core term of admission control; `1` for a serial encode.
     pub threads: u32,
+    /// Conservative upper-bound GPU VRAM footprint for this job, in bytes — feeds the VRAM term of
+    /// [`BoxBudget::can_admit`](crate::schedule::BoxBudget::can_admit) (the Nomad-migration P0
+    /// precondition: "VRAM admission dimension missing in BoxBudget", the avifgen OOM-storm
+    /// follow-up). `None` for encode jobs (no GPU involved) and for any job whose declarer hasn't
+    /// computed a precise estimate yet. Every GPU metric crate already ships an exact per-image
+    /// estimator (`crates/{cvvdp,ssim2,butteraugli,dssim,iwssim,zensim}-gpu/src/memory_mode.rs`'s
+    /// `estimate_gpu_memory_bytes(width, height[, regime])`) — wiring one of those into a metric
+    /// job's declare-time hint is the natural follow-up for exact admission (tracked for the G-T1
+    /// tuning pass); until then, `zenfleet-worker`'s admission loop falls back to a coarse
+    /// per-GPU-job constant for any `ResourceClass::Gpu` job with no explicit hint.
+    #[serde(default)]
+    pub vram_bytes: Option<u64>,
 }
 
 /// A job an agent or the reconciler *wants* to exist: its kind + content-addressed inputs + the
@@ -232,6 +244,7 @@ mod tests {
         let hinted = base.clone().with_hint(ResourceHint {
             peak_mem_bytes: 8 << 30,
             threads: 4,
+            vram_bytes: None,
         });
         // Identity hashes kind + inputs only — the hint is advisory metadata.
         assert_eq!(base.job_id(), hinted.job_id());
@@ -239,7 +252,8 @@ mod tests {
             hinted.hint,
             Some(ResourceHint {
                 peak_mem_bytes: 8 << 30,
-                threads: 4
+                threads: 4,
+                vram_bytes: None,
             })
         );
     }
@@ -250,6 +264,7 @@ mod tests {
         let hinted = sample_desired().with_hint(ResourceHint {
             peak_mem_bytes: 80 << 20,
             threads: 1,
+            vram_bytes: Some(2 << 30),
         });
         let json = serde_json::to_string(&hinted).unwrap();
         assert_eq!(serde_json::from_str::<DesiredJob>(&json).unwrap(), hinted);
@@ -258,5 +273,18 @@ mod tests {
         let legacy = r#"{"kind":{"kind":"encode","codec":"zenjpeg","q":80,"knobs":"{}"},"inputs":["aa"],"cell":{"image_path":"x","codec":"zenjpeg","q":80,"knob_tuple_json":"{}"}}"#;
         let parsed: DesiredJob = serde_json::from_str(legacy).unwrap();
         assert_eq!(parsed.hint, None);
+        // A manifest written before `vram_bytes` existed on ResourceHint (hint present, but no
+        // vram_bytes key) still deserializes — `#[serde(default)]` on that field fills it with
+        // None rather than erroring the whole manifest.
+        let pre_vram = r#"{"kind":{"kind":"encode","codec":"zenjpeg","q":80,"knobs":"{}"},"inputs":["aa"],"cell":{"image_path":"x","codec":"zenjpeg","q":80,"knob_tuple_json":"{}"},"hint":{"peak_mem_bytes":100,"threads":1}}"#;
+        let parsed_pre_vram: DesiredJob = serde_json::from_str(pre_vram).unwrap();
+        assert_eq!(
+            parsed_pre_vram.hint,
+            Some(ResourceHint {
+                peak_mem_bytes: 100,
+                threads: 1,
+                vram_bytes: None,
+            })
+        );
     }
 }

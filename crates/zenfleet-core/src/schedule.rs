@@ -19,10 +19,20 @@
 /// RAM — leave headroom for the OS, page cache, GPU readback buffers, and the
 /// estimate's own slop (use the estimate's `peak_memory_bytes_max`). `cores`
 /// is the usable CPU thread count.
+///
+/// `vram_budget_bytes` is the **third, optional** admission axis (landed as a Nomad-migration P0
+/// precondition — the ADR's "VRAM admission dimension missing in BoxBudget" defect, the avifgen
+/// OOM-storm follow-up): `None` means "don't gate on VRAM" — a CPU-only box, or a GPU box whose
+/// VRAM capacity couldn't be probed — and admission behaves exactly as before (RAM + cores only).
+/// `Some(bytes)` adds `Σ vram ≤ vram_budget_bytes` to [`can_admit`](Self::can_admit) alongside the
+/// existing two axes, so concurrent GPU-metric jobs can't silently overrun a card's memory. Set it
+/// with [`Self::with_vram_budget`] — `new()` stays 2-arg and defaults to `None` so every existing
+/// call site keeps compiling unchanged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BoxBudget {
     pub ram_budget_bytes: u64,
     pub cores: u32,
+    pub vram_budget_bytes: Option<u64>,
 }
 
 /// What is currently running on the box — the running sum the packer checks
@@ -32,18 +42,24 @@ pub struct BoxBudget {
 pub struct InFlight {
     pub mem_bytes: u64,
     pub threads: u32,
+    /// Running VRAM sum, bytes. `0` for every non-GPU job (pass `0` for `vram_bytes` on
+    /// [`Self::add`]/[`Self::remove`] when a job has no VRAM footprint — harmless no-op on this
+    /// field either way).
+    pub vram_bytes: u64,
     pub count: u32,
 }
 
 impl InFlight {
-    pub fn add(&mut self, mem_bytes: u64, threads: u32) {
+    pub fn add(&mut self, mem_bytes: u64, threads: u32, vram_bytes: u64) {
         self.mem_bytes = self.mem_bytes.saturating_add(mem_bytes);
         self.threads = self.threads.saturating_add(threads);
+        self.vram_bytes = self.vram_bytes.saturating_add(vram_bytes);
         self.count = self.count.saturating_add(1);
     }
-    pub fn remove(&mut self, mem_bytes: u64, threads: u32) {
+    pub fn remove(&mut self, mem_bytes: u64, threads: u32, vram_bytes: u64) {
         self.mem_bytes = self.mem_bytes.saturating_sub(mem_bytes);
         self.threads = self.threads.saturating_sub(threads);
+        self.vram_bytes = self.vram_bytes.saturating_sub(vram_bytes);
         self.count = self.count.saturating_sub(1);
     }
 }
@@ -69,24 +85,43 @@ impl BoxBudget {
         Self {
             ram_budget_bytes,
             cores,
+            vram_budget_bytes: None,
         }
     }
 
-    /// Can a candidate encode — its estimated `(cand_mem, cand_threads)` — start
-    /// now without pushing the box past its RAM or core budget, given what is
-    /// already in flight?
+    /// Attach a VRAM budget (builder style) — see the [`BoxBudget`] doc for what this gates.
+    pub fn with_vram_budget(mut self, vram_budget_bytes: u64) -> Self {
+        self.vram_budget_bytes = Some(vram_budget_bytes);
+        self
+    }
+
+    /// Can a candidate encode — its estimated `(cand_mem, cand_threads, cand_vram)` — start now
+    /// without pushing the box past its RAM, core, or (if set) VRAM budget, given what is already
+    /// in flight? Pass `cand_vram: 0` for a job with no GPU-memory footprint.
     ///
     /// When nothing is running this **always admits**, so a single job whose
     /// footprint exceeds the whole budget still makes progress (it runs alone
     /// rather than deadlocking the queue). Once anything is running, a
-    /// candidate that would breach either limit waits.
-    pub fn can_admit(&self, running: &InFlight, cand_mem: u64, cand_threads: u32) -> bool {
+    /// candidate that would breach any set limit waits. The VRAM axis only
+    /// binds when [`Self::vram_budget_bytes`] is `Some` — a box with no probed
+    /// GPU never gates on it, identical to the pre-VRAM behavior.
+    pub fn can_admit(
+        &self,
+        running: &InFlight,
+        cand_mem: u64,
+        cand_threads: u32,
+        cand_vram: u64,
+    ) -> bool {
         if running.count == 0 {
             return true;
         }
         let mem_ok = running.mem_bytes.saturating_add(cand_mem) <= self.ram_budget_bytes;
         let thr_ok = running.threads.saturating_add(cand_threads) <= self.cores;
-        mem_ok && thr_ok
+        let vram_ok = match self.vram_budget_bytes {
+            Some(budget) => running.vram_bytes.saturating_add(cand_vram) <= budget,
+            None => true,
+        };
+        mem_ok && thr_ok && vram_ok
     }
 
     /// Greedy maximum concurrency for a homogeneous batch of `(mem, threads)`
@@ -245,15 +280,15 @@ mod tests {
     fn admission_respects_both_limits() {
         let b = BoxBudget::new(24 * GB, 16);
         let mut run = InFlight::default();
-        run.add(8 * GB, 4);
-        run.add(8 * GB, 4); // 16 GB, 8 threads in flight
+        run.add(8 * GB, 4, 0);
+        run.add(8 * GB, 4, 0); // 16 GB, 8 threads in flight
         // a 3rd 8 GB job would be 24 GB ≤ 24 GB (mem ok) and 12 ≤ 16 (thr ok) → admit
-        assert!(b.can_admit(&run, 8 * GB, 4));
-        run.add(8 * GB, 4); // 24 GB, 12 threads
+        assert!(b.can_admit(&run, 8 * GB, 4, 0));
+        run.add(8 * GB, 4, 0); // 24 GB, 12 threads
         // a 4th would be 32 GB > 24 GB → memory blocks it
-        assert!(!b.can_admit(&run, 8 * GB, 4));
+        assert!(!b.can_admit(&run, 8 * GB, 4, 0));
         // but a tiny job is still thread-blocked? 24 GB + 80 MB > 24 GB → no.
-        assert!(!b.can_admit(&run, 80 * MB, 1));
+        assert!(!b.can_admit(&run, 80 * MB, 1, 0));
     }
 
     #[test]
@@ -261,11 +296,51 @@ mod tests {
         // A 64 GB JXL on a 24 GB box: deadlock-free — admitted when idle.
         let b = BoxBudget::new(24 * GB, 16);
         let idle = InFlight::default();
-        assert!(b.can_admit(&idle, 64 * GB, 16));
+        assert!(b.can_admit(&idle, 64 * GB, 16, 0));
         // but not alongside anything.
         let mut run = InFlight::default();
-        run.add(MB, 1);
-        assert!(!b.can_admit(&run, 64 * GB, 16));
+        run.add(MB, 1, 0);
+        assert!(!b.can_admit(&run, 64 * GB, 16, 0));
+    }
+
+    #[test]
+    fn vram_budget_none_never_gates() {
+        // A box with no probed GPU (vram_budget_bytes: None, the BoxBudget::new default) admits
+        // purely on RAM/cores regardless of how much VRAM a candidate claims — identical to the
+        // pre-VRAM-axis behavior. This is the compatibility case: every existing caller that never
+        // learned about VRAM keeps working unchanged.
+        let b = BoxBudget::new(24 * GB, 16);
+        assert_eq!(b.vram_budget_bytes, None);
+        let mut run = InFlight::default();
+        run.add(MB, 1, 100 * GB); // absurd VRAM claim
+        assert!(b.can_admit(&run, MB, 1, 100 * GB));
+    }
+
+    #[test]
+    fn vram_admission_gates_gpu_jobs() {
+        // A 12 GB-VRAM box (e.g. an RTX 2080/3070-class card in this fleet): two 8 GB-VRAM GPU
+        // metric jobs can't run concurrently even though RAM/cores have plenty of headroom.
+        let b = BoxBudget::new(64 * GB, 32).with_vram_budget(12 * GB);
+        let mut run = InFlight::default();
+        run.add(GB, 2, 8 * GB); // one job in flight: 1 GB RAM, 2 threads, 8 GB VRAM
+        // A 2nd 8 GB-VRAM job: RAM (2 GB ≤ 64) and cores (4 ≤ 32) are fine, but VRAM
+        // (16 GB > 12 GB) blocks it — this is the axis that didn't exist before.
+        assert!(!b.can_admit(&run, GB, 2, 8 * GB));
+        // A small 2 GB-VRAM job fits (1+2=3 ≤ 12).
+        assert!(b.can_admit(&run, MB, 1, 2 * GB));
+    }
+
+    #[test]
+    fn vram_over_budget_singleton_runs_alone() {
+        // Same deadlock-freedom guarantee as RAM/cores: a single job whose VRAM need exceeds the
+        // whole card still runs when the box is idle (CappedPyramid/Strip modes exist precisely so
+        // a metric can shrink its footprint, but admission must never wedge the queue either way).
+        let b = BoxBudget::new(64 * GB, 32).with_vram_budget(12 * GB);
+        let idle = InFlight::default();
+        assert!(b.can_admit(&idle, GB, 2, 20 * GB));
+        let mut run = InFlight::default();
+        run.add(MB, 1, GB);
+        assert!(!b.can_admit(&run, GB, 2, 20 * GB));
     }
 
     #[test]
@@ -275,6 +350,7 @@ mod tests {
         let light = ResourceHint {
             peak_mem_bytes: 80 * MB,
             threads: 1,
+            vram_bytes: None,
         };
         // A manifest of mostly-light jobs with one 8 GB / 4-thread JXL: the heavy
         // one binds → 24/8 = 3 (mem-bound), NOT the 16 the light jobs alone allow.
@@ -283,10 +359,12 @@ mod tests {
             Some(ResourceHint {
                 peak_mem_bytes: 8 * GB,
                 threads: 4,
+                vram_bytes: None,
             }),
             Some(ResourceHint {
                 peak_mem_bytes: 120 * MB,
                 threads: 1,
+                vram_bytes: None,
             }),
             None, // no hint → fallback (light)
         ];

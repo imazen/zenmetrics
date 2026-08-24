@@ -279,7 +279,11 @@ fn compute_footprint(slots: &[Slot]) -> (InFlight, u32) {
     let (mut running, mut gpu) = (InFlight::default(), 0u32);
     for s in slots {
         if s.phase == Phase::Compute {
-            running.add(s.task.mem_bytes, s.task.threads);
+            // The simulator models GPU concurrency via its own lane-count cap (`gpu`/`gpu_lanes`
+            // below), not VRAM bytes — pass 0 here rather than double-modeling the same
+            // constraint two ways. `BoxBudget`'s VRAM-bytes axis (the real fleet's admission
+            // mechanism) has no simulator counterpart yet.
+            running.add(s.task.mem_bytes, s.task.threads, 0);
             if s.task.gpu {
                 gpu += 1;
             }
@@ -295,7 +299,7 @@ fn admit_compute(cap: &BoxCap, slots: &mut [Slot]) {
             s.phase == Phase::Ready
                 && cap
                     .budget
-                    .can_admit(&running, s.task.mem_bytes, s.task.threads)
+                    .can_admit(&running, s.task.mem_bytes, s.task.threads, 0)
                 && (!s.task.gpu || gpu_used < cap.gpu_lanes)
         });
         match pick {

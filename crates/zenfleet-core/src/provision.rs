@@ -86,6 +86,8 @@ impl CellCost {
         ResourceHint {
             peak_mem_bytes: self.encode_peak_ram_bytes,
             threads: self.encode_threads.max(1),
+            // Encode jobs never touch the GPU.
+            vram_bytes: None,
         }
     }
 }
@@ -216,6 +218,7 @@ pub fn recommend_instance(
     let fallback = ResourceHint {
         peak_mem_bytes: 1,
         threads: 1,
+        vram_bytes: None,
     };
     let recommended_concurrency = if cells.is_empty() {
         1
