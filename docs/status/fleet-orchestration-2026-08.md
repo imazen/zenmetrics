@@ -112,10 +112,27 @@ and cleaned up) via the crate's existing `examples/lease_live.rs`.
 
 ## Phases
 
-- **P0** — preconditions 1–3; pick the 3-server quorum (always-on boxes only).
-- **P1 pilot** — servers up; two client boxes run the standard worker image as a Nomad
-  job against one pool run; compare ledger convergence, re-work tax, and idle
-  detection against their systemd twins. No other box changes.
+- **P0** — preconditions 1–3 **DONE** (see "Preconditions" above); 3-server quorum
+  **LIVE** (dev + tower(container) + r7900x, CE 2.0.5, raft healthy, dev leader).
+- **P1 pilot** — servers up **DONE**. First client (i265) up and MECHANISM PROVEN
+  2026-08-24 (not yet the full gate — see below): a real `service` job (Docker driver,
+  the freshly-rebuilt `:exec` image, `ZEN_LONG_LIVED=1`) claimed + executed a 3-job
+  smoke manifest end-to-end (`done=3`), stayed alive through 10+ idle passes with
+  correctly growing/capped backoff (proving the P0 idle-backoff precondition works
+  under real Nomad, not just the fake-tool harness), and — the one that matters most
+  for G-P2 — a real `nomad node drain` delivered SIGTERM through Docker to the
+  script's own PID-1 trap and the container exited gracefully in ~3s under an
+  artificially-widened 20s `kill_timeout` (ruling out "it just happened to be faster
+  than the forced-kill timeout" as an explanation). Jobspec:
+  `homefleet zenmetrics/ubuntu-node/nomad/jobs/zenfleet-worker-pilot.nomad.hcl`.
+  **NOT yet satisfied**: G-N1's real-workload throughput comparison (this was a
+  synthetic `/bin/cat` smoke test, not fleetbench) and the second pilot client (the
+  ADR's r5900xt is WoL-blocked — see NODES.md; i134 is next in line as a substitute).
+  Two real findings along the way, both fixed: Nomad's docker driver does not
+  re-pull an already-cached tag by default (`force_pull = true` now required in
+  every jobspec using a moving tag), and the executor image's binaries must be built
+  with the musl target or a build-box-glibc-drift silently produces a binary that
+  can't even start in the (older-glibc) base image.
 - **P2 enrollment/creds** — jobspec replaces `enroll_running_node.sh --start`; creds
   land via Nomad Variables → template → `worker.env` (LAN-store static cred; scoped
   7-day R2 mints where a wave needs R2).
