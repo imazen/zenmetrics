@@ -179,12 +179,20 @@ pub fn try_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &JobId) 
     crate::s3io::put_create(endpoint, bucket, &key, b"").unwrap_or(false)
 }
 
-/// Release (delete) a claim so the job requeues immediately — used on spot preemption (goal F:
-/// "spot reclaim is a non-event") instead of waiting out the claim TTL. Best-effort: a failed delete
-/// just falls back to the slower TTL-based stale-reclaim (goal E), so correctness never depends on it.
+/// Release (delete) a claim by its raw R2 key so it requeues immediately — used on spot preemption
+/// (goal F: "spot reclaim is a non-event") instead of waiting out the claim TTL. Best-effort: a
+/// failed delete just falls back to the slower TTL-based stale-reclaim (goal E), so correctness
+/// never depends on it. Shared by the per-cell path ([`release_claim_r2`], keyed on a [`JobId`])
+/// and the chunked path ([`spawn_spot_reclaim_chunk`], keyed on a chunk id string) — one claim
+/// namespace is just `<prefix>/<key>` either way.
+pub fn release_claim_r2_key(endpoint: &str, bucket: &str, prefix: &str, key: &str) -> bool {
+    let full_key = format!("{}/{}", prefix.trim_matches('/'), key);
+    crate::s3io::delete(endpoint, bucket, &full_key).is_ok() // in-proc DELETE (was `aws delete-object`)
+}
+
+/// Release (delete) a per-cell claim so the job requeues immediately. See [`release_claim_r2_key`].
 pub fn release_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &JobId) -> bool {
-    let key = format!("{}/{}", prefix.trim_matches('/'), job_id.as_str());
-    crate::s3io::delete(endpoint, bucket, &key).is_ok() // in-proc DELETE (was `aws delete-object`)
+    release_claim_r2_key(endpoint, bucket, prefix, job_id.as_str())
 }
 
 /// Install the spot-preemption handler (goal F): on SIGTERM/SIGINT, release the in-flight claim (if
@@ -235,6 +243,83 @@ fn spawn_spot_reclaim(
     _bucket: &str,
     _prefix: &str,
 ) {
+}
+
+/// Install the SAME spot-preemption handler as [`spawn_spot_reclaim`], but for the **chunked**
+/// path's in-flight claim (a `chunk-<sha256>` string, not a [`JobId`]).
+///
+/// This closes the Nomad-migration P0 precondition — "SIGTERM chunk-claim release on the chunked
+/// path" — the ADR's one hard blocker for power-cycling boxes: without it, `nomad node drain`
+/// (or any SIGTERM-based stop, including today's spot preemption) left the in-flight chunk's claim
+/// to sit out its full TTL before another box could pick the chunk back up, turning every
+/// drain/suspend into a claim-TTL-long stall. [`run_chunked`]'s lease-claiming arm updates
+/// `inflight` inside its `claim_chunk` closure exactly like the per-cell path already does (see
+/// the `execute_gap_claimed` call site) — this function only needs to read it back on signal.
+#[cfg(unix)]
+fn spawn_spot_reclaim_chunk(
+    inflight: Arc<Mutex<Option<String>>>,
+    endpoint: &str,
+    bucket: &str,
+    prefix: &str,
+) {
+    let (endpoint, bucket, prefix) = (endpoint.to_string(), bucket.to_string(), prefix.to_string());
+    let Ok(mut signals) = signal_hook::iterator::Signals::new([
+        signal_hook::consts::SIGTERM,
+        signal_hook::consts::SIGINT,
+    ]) else {
+        return;
+    };
+    std::thread::spawn(move || {
+        if signals.forever().next().is_some() {
+            if let Some(cid) = inflight.lock().ok().and_then(|g| g.clone()) {
+                let released = release_claim_r2_key(&endpoint, &bucket, &prefix, &cid);
+                eprintln!(
+                    "zenfleet-worker: spot preemption — {} chunk claim {cid} for fast requeue \
+                     (its cells re-enter the gap; any already-flushed cells in it stay Done)",
+                    if released {
+                        "released"
+                    } else {
+                        "could not release"
+                    },
+                );
+            } else {
+                eprintln!("zenfleet-worker: spot preemption — no in-flight chunk claim to release");
+            }
+            std::process::exit(130);
+        }
+    });
+}
+
+/// Non-unix (Windows) build: see [`spawn_spot_reclaim`]'s non-unix twin — no POSIX signals here either.
+#[cfg(not(unix))]
+fn spawn_spot_reclaim_chunk(
+    _inflight: Arc<Mutex<Option<String>>>,
+    _endpoint: &str,
+    _bucket: &str,
+    _prefix: &str,
+) {
+}
+
+/// Wrap a chunk `claim_chunk` function so a **won** claim also records the chunk id into
+/// `inflight` — the cell [`spawn_spot_reclaim_chunk`]'s signal handler reads from. Generic over
+/// the underlying claim function (not hardcoded to [`claim_or_steal_r2_key`]) so the wiring is
+/// unit-testable with a fake, network-free claim function — see
+/// `track_chunk_inflight_records_only_successful_claims` below. A lost claim (another worker owns
+/// the chunk) must NOT overwrite `inflight` with something this box doesn't actually hold.
+fn track_chunk_inflight<CC>(
+    inflight: Arc<Mutex<Option<String>>>,
+    claim_chunk: CC,
+) -> impl Fn(&str) -> bool
+where
+    CC: Fn(&str) -> bool,
+{
+    move |cid: &str| {
+        let won = claim_chunk(cid);
+        if won && let Ok(mut g) = inflight.lock() {
+            *g = Some(cid.to_string());
+        }
+        won
+    }
 }
 
 static CLAIM_TMP_N: AtomicU64 = AtomicU64::new(0);
@@ -1079,9 +1164,14 @@ pub struct ChunkParams {
 /// cells. Content-addressed blob puts make any re-run cell a no-op — no cell is lost or harmfully
 /// double-run.
 ///
-/// Spot preemption: a chunk claim simply ages out (TTL stale-reclaim, goal E) and another box takes
-/// it — chunk 2 does not fast-release a chunk claim on SIGTERM (the per-cell path's nicety); that is
-/// a follow-up. Correctness is unaffected.
+/// Spot preemption: a chunk claim ages out (TTL stale-reclaim, goal E) and another box takes it
+/// regardless — this function itself has no signal handling (it's a plain synchronous call, agnostic
+/// to what `claim_chunk` actually does: a real R2 lease for [`run_chunked`]'s lease-claiming arm, or
+/// just an epoch-liveness check for [`run_epoch_sharded`], which has no lease to release at all).
+/// The lease-claiming caller fast-releases the in-flight chunk's claim on SIGTERM/SIGINT instead of
+/// waiting out the full TTL — see [`spawn_spot_reclaim_chunk`] and its call site in
+/// [`run_chunked`]'s `claim_chunk` closure (the Nomad-migration P0 precondition this closed).
+/// Correctness is unaffected either way — fast release only shortens the stall before a re-claim.
 #[allow(clippy::too_many_arguments)]
 pub fn execute_gap_chunked<H, B, CC, F>(
     desired: &[DesiredJob],
@@ -2186,14 +2276,22 @@ fn run_chunked(
     let out = match (&cfg.r2, &cfg.claims) {
         (Some(t), Some(cc)) => {
             let store = R2BlobStore::new(t.endpoint.clone(), t.bucket.clone(), t.prefix.clone());
+            // Spot-reclaim for the chunked path (goal F, and the Nomad-migration P0 precondition
+            // "SIGTERM chunk-claim release on the chunked path" — see spawn_spot_reclaim_chunk's
+            // doc): track the in-flight CHUNK claim; on SIGTERM/SIGINT release it so its cells
+            // requeue immediately instead of waiting out the full claim TTL. Same pattern as the
+            // per-cell path's `inflight` below, just keyed on the chunk id string.
+            let chunk_inflight: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+            spawn_spot_reclaim_chunk(chunk_inflight.clone(), &t.endpoint, &cc.bucket, &cc.prefix);
             execute_gap_chunked(
                 desired,
                 view,
                 policy,
                 handler,
                 &store,
-                |cid| {
-                    // One R2 lease per chunk (spec-execution off for chunks; TTL reclaim covers it).
+                // One R2 lease per chunk (spec-execution off for chunks; TTL reclaim covers it).
+                // Wrapped so a WON claim also records the chunk id for spot-reclaim (see above).
+                track_chunk_inflight(chunk_inflight, |cid| {
                     claim_or_steal_r2_key(
                         &t.endpoint,
                         &cc.bucket,
@@ -2204,7 +2302,7 @@ fn run_chunked(
                         None,
                         &cfg.worker,
                     )
-                },
+                }),
                 params,
                 &mut flush,
                 ctx,
@@ -2863,6 +2961,39 @@ mod tests {
     }
 
     // ──────────────────── chunked claim path (ZEN_CHUNK_WALL_SEC) ────────────────────
+
+    /// The Nomad-migration P0 precondition this landed: the chunked path now tracks its in-flight
+    /// claim (previously nothing did — `spawn_spot_reclaim_chunk` would always find `None` and
+    /// SIGTERM would just fall through to the full-TTL stale-reclaim, the exact stall the ADR
+    /// calls "the one hard blocker for power cycling"). This test exercises the wiring
+    /// (`track_chunk_inflight`) with a fake, network-free claim function — no real R2 endpoint
+    /// involved, matching this file's existing convention of unit-testing claim LOGIC
+    /// (`claim_staleness_check`, `r2_key_derivation`) without exercising real S3 I/O.
+    #[test]
+    fn track_chunk_inflight_records_only_successful_claims() {
+        let inflight: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        let wrapped = track_chunk_inflight(inflight.clone(), |cid| cid == "chunk-win");
+
+        // A lost claim (another worker owns this chunk) must not overwrite `inflight` with a
+        // chunk this box doesn't actually hold — that would make spot-reclaim release SOMEONE
+        // ELSE'S claim on SIGTERM.
+        assert!(!wrapped("chunk-lose"));
+        assert_eq!(
+            *inflight.lock().unwrap(),
+            None,
+            "a lost claim must never be recorded as in-flight"
+        );
+
+        // A won claim IS recorded — this is what spawn_spot_reclaim_chunk's signal handler reads.
+        assert!(wrapped("chunk-win"));
+        assert_eq!(*inflight.lock().unwrap(), Some("chunk-win".to_string()));
+
+        // A later chunk's claim (a fresh cursor position after the first chunk finished) replaces
+        // the tracked id — spot-reclaim always targets the CURRENT chunk, not a completed one.
+        let wrapped2 = track_chunk_inflight(inflight.clone(), |cid| cid == "chunk-2");
+        assert!(wrapped2("chunk-2"));
+        assert_eq!(*inflight.lock().unwrap(), Some("chunk-2".to_string()));
+    }
 
     /// A distinct, cheap encode cell (4 MB / 1 thread → packs many per chunk). Distinct `inputs`
     /// give each a distinct content-addressed `JobId`.
