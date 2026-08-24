@@ -56,9 +56,12 @@ will never manage), coverage/catalog, blob GC.
 
 ## Preconditions — fix in zenfleet BEFORE Nomad-managed churn
 
-**Status (2026-08-24): all five landed on `master`**, per the HANDOFF's directive to land
-them before P1 pilot churn. Verified (test suites + one item live against the real LAN
-store — see each entry); the ledger snapshot decision below stayed conservative anyway.
+**Status (2026-08-24, revised same day): four of five hold up; #2 does NOT and is
+REOPENED** — item 2's original verification (a synthetic/mocked harness) did not
+catch that the real release never fires in a real end-to-end test (found during
+G-P2 gate testing, same day — see item 2 and `benchmarks/fleetbench_2026-08-24.md`).
+The other four (test suites + one item live against the real LAN store — see each
+entry) still hold; the ledger snapshot decision below stayed conservative anyway.
 
 1. **#38 `JobId` preserve_order sensitivity** — ~~until `JobId::of` serializes through an
    explicitly-sorted structure, any Nomad-era build/CI pipeline MUST keep per-crate
@@ -72,17 +75,30 @@ store — see each entry); the ledger snapshot decision below stayed conservativ
    this axis. (Same commit also fixed two related bugs found auditing this: `metric_class`
    hardcoded every metric job to `ResourceClass::Gpu` regardless of name, and
    `epoch::any_gpu_metric` checked the wrong suffix — see the commit message for detail.)
-2. **SIGTERM chunk-claim release on the chunked path** — ~~today a drain/reschedule
-   strands the in-flight chunk's claim for the full TTL~~ **FIXED, `0de119d6` +
-   `45c57bd3`**: `run_chunked`'s lease-claiming arm now tracks its in-flight chunk claim
-   and releases it on SIGTERM/SIGINT (`spawn_spot_reclaim_chunk`, mirroring the existing
-   per-cell `spawn_spot_reclaim`). A companion fix in `fleet-entrypoint.sh` was necessary
-   for this to be reachable at all under real container orchestration: the old
+2. **SIGTERM chunk-claim release on the chunked path** — ⚠️ **REOPENED 2026-08-24
+   (G-P2 gate testing) — the `0de119d6`/`45c57bd3` fix below was verified ONLY
+   against a synthetic/mocked harness, and does NOT actually release the claim
+   in a real end-to-end test.** `run_chunked`'s lease-claiming arm tracks its
+   in-flight chunk claim and is supposed to release it on SIGTERM/SIGINT
+   (`spawn_spot_reclaim_chunk`, mirroring the existing per-cell
+   `spawn_spot_reclaim`); `fleet-entrypoint.sh` backgrounds the pass + `wait`s
+   on it, with a `trap` forwarding SIGTERM/SIGINT to it (the old
    `out=$(timeout ... zenfleet-worker ...)` blocked the shell inside a command
-   substitution, which does not act on signals until the command finishes — refactored to
-   background the pass + `wait`, with a `trap` that forwards SIGTERM/SIGINT to it. Verified
-   with a fake-tool harness: signal reaches the child in ~0.03s (not the pass's full
-   duration), no leaked temp files.
+   substitution, unable to act on signals until the command finished — that
+   part IS still correct and independently reproduced). A REAL test (real
+   `zenfleet-worker:exec` image, real Nomad allocation, a confirmed live chunk
+   claim read directly off the LAN store, a real `nomad node drain -force`)
+   shows: the container exits promptly and cleanly (exit 143/SIGTERM, ~1.8s)
+   and the bash trap correctly fires and forwards the signal — but the S3 claim
+   object is read back completely UNCHANGED afterward, and neither the
+   release-attempt log line nor `run_chunked`'s own unconditional first
+   diagnostic line appear anywhere in the allocation's logs at all. Root cause
+   NOT isolated (see CLAUDE.md Known Bugs + `benchmarks/fleetbench_2026-08-24.md`
+   for the full investigation, including ruling out `timeout` as the culprit via
+   direct reproduction). **Do not treat this precondition as satisfied.** The
+   original "fake-tool harness" verification (signal reaches a mocked child in
+   ~0.03s) proved the entrypoint's forwarding logic in isolation; it did not
+   prove the real binary's own release logic fires in a real container.
 3. **`ZEN_MAX_MIN` honored in single-run mode** — ~~the wsl-gate 5-6 h unbudgeted-worker
    incident~~ **FIXED, `45c57bd3`**: wired identically to `pool_mode`'s existing pattern.
    Verified end-to-end: `ZEN_MAX_MIN=1` exits at exactly 60s wall-clock. Nomad
@@ -112,18 +128,22 @@ and cleaned up) via the crate's existing `examples/lease_live.rs`.
 
 ## Phases
 
-- **P0** — preconditions 1–3 **DONE** (see "Preconditions" above); 3-server quorum
-  **LIVE** (dev + tower(container) + r7900x, CE 2.0.5, raft healthy, dev leader).
+- **P0** — preconditions 1, 3, 4, 5 **DONE** (see "Preconditions" above); precondition 2
+  (SIGTERM chunk-claim release) **REOPENED 2026-08-24** — do not treat P0 as fully closed.
+  3-server quorum **LIVE** (dev + tower(container) + r7900x, CE 2.0.5, raft healthy, dev
+  leader).
 - **P1 pilot** — servers up **DONE**. First client (i265) up and MECHANISM PROVEN
   2026-08-24 (not yet the full gate — see below): a real `service` job (Docker driver,
   the freshly-rebuilt `:exec` image, `ZEN_LONG_LIVED=1`) claimed + executed a 3-job
   smoke manifest end-to-end (`done=3`), stayed alive through 10+ idle passes with
   correctly growing/capped backoff (proving the P0 idle-backoff precondition works
-  under real Nomad, not just the fake-tool harness), and — the one that matters most
-  for G-P2 — a real `nomad node drain` delivered SIGTERM through Docker to the
-  script's own PID-1 trap and the container exited gracefully in ~3s under an
+  under real Nomad, not just the fake-tool harness), and a real `nomad node drain`
+  delivered SIGTERM through Docker to the script's own PID-1 trap and the container
+  exited gracefully in ~3s under an
   artificially-widened 20s `kill_timeout` (ruling out "it just happened to be faster
-  than the forced-kill timeout" as an explanation). Jobspec:
+  than the forced-kill timeout" as an explanation) — **this proves the container-level
+  signal delivery, NOT that the claim actually gets released; that turned out to be a
+  separate, still-broken step — see precondition 2's reopening above.** Jobspec:
   `homefleet zenmetrics/ubuntu-node/nomad/jobs/zenfleet-worker-pilot.nomad.hcl`.
   Two real findings along the way, both fixed: Nomad's docker driver does not
   re-pull an already-cached tag by default (`force_pull = true` now required in
@@ -202,14 +222,32 @@ constraints:
 ## zenfleet defect register (consolidated 2026-08-22; updated 2026-08-24)
 
 **Fixed 2026-08-24** (see "Preconditions" above for commits + verification): #38 JobId
-preserve_order; VRAM admission dimension missing in BoxBudget; chunked-path SIGTERM claim
-release missing; claim CAS shells out to the aws CLI; `ZEN_MAX_MIN` ignored in single-run
-mode; worker task shape (long-lived + idle backoff, opt-in `ZEN_LONG_LIVED=1`); capability
-routing dead code (`metric_class()` returned `Gpu` unconditionally — fixed alongside #38
-in the same commit, `1b2a1452`, along with a same-root-cause bug in
-`epoch::any_gpu_metric`'s GPU-suffix check).
+preserve_order; VRAM admission dimension missing in BoxBudget; claim CAS shells out to
+the aws CLI; `ZEN_MAX_MIN` ignored in single-run mode; worker task shape (long-lived +
+idle backoff, opt-in `ZEN_LONG_LIVED=1`); capability routing dead code (`metric_class()`
+returned `Gpu` unconditionally — fixed alongside #38 in the same commit, `1b2a1452`,
+along with a same-root-cause bug in `epoch::any_gpu_metric`'s GPU-suffix check).
 
-Still open, in priority order: `WorkerReport`/dash inputs produced by nothing in
+**REOPENED 2026-08-24, same day (G-P2 gate testing):** chunked-path SIGTERM claim
+release — reported fixed above (`0de119d6`/`45c57bd3`) on the strength of a
+synthetic/mocked harness only; a real end-to-end test shows the claim is NOT actually
+released. Now the top-priority open item — see "Preconditions" item 2 above,
+CLAUDE.md Known Bugs, and `benchmarks/fleetbench_2026-08-24.md` for the full
+investigation. Blocks G-P2 and undermines the power-cycling design's basic safety
+guarantee.
+
+Also found + fixed the same day, in `scripts/jobsys/fleet_power.py` (chasing the
+above): `suspend()`'s drain lacked `-force` (a plain `-enable -deadline 2m` doesn't
+promptly interrupt a running allocation — measured ~70s, not "seconds"); `-force` and
+`-deadline` are mutually exclusive Nomad CLI flags (the naive fix errors at runtime,
+silently, since the call site uses `check=False` — caught by testing live before
+shipping); `cmd_apply` passed `node_id=None` to `suspend()`, so the drain branch never
+actually ran; a drained node stays `ineligible` forever after the drain completes
+(separate flag from `Drain`) with no code anywhere to re-enable it, so a box would wake
+from one sleep cycle and then never receive Nomad work again — all four fixed.
+
+Still open, in priority order: the reopened SIGTERM release item above (now top
+priority); `WorkerReport`/dash inputs produced by nothing in
 production; `Lease::renew` has no caller (claims age out from original timestamp only —
 relevant again now that the worker can be long-lived: a long `ZEN_LONG_LIVED=1` idle-poll
 cycle holding a claim across many minutes should renew it, not just let it ride the

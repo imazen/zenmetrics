@@ -321,6 +321,95 @@ actively deleted) but none were observed to block or corrupt any subsequent
 read in this session; a rigorous "stranded claim" audit (claim exists with no
 corresponding ledger resolution) is a good G-T1/tooling addition, not done here.
 
+## G-P2 — drain safety: FAILED on first genuine test, re-opens P0 precondition #3
+
+The first REAL end-to-end test of "deliberately suspend/drain a box mid-chunk"
+(as opposed to the earlier P0 verification, which the session summary itself
+now flags as "a fake-tool harness" — a synthetic/mocked test, never a real
+`zenfleet-worker` binary with a real in-flight chunk claim under real container
+orchestration). Two independent bugs were found and fixed along the way before
+reaching the core (negative) result; all three are real, all three matter.
+
+**Setup:** `homefleet/ubuntu-node/nomad/jobs/gp2-suspend-test.nomad.hcl`, i265
+alone (WoL-gated, G-P1 PASSED 3/3), `RAYON_NUM_THREADS=2`/`OMP_NUM_THREADS=2`
+throttling a 243-cell zenjxl rd_core manifest (9 large 2048px sources ×
+q{40,50,70,90}) so a chunk stays genuinely in-flight for a comfortable manual
+window instead of finishing in ~20s.
+
+**Bug 1 (found, fixed): `nomad node drain -enable` (no `-force`) does not
+promptly interrupt a running allocation.** Plain `-enable -deadline 2m` let the
+in-flight allocation keep running — it even claimed a SECOND chunk after the
+drain command was issued — and only stopped ~70s later when it happened to
+finish its own assigned work naturally, not because the drain interrupted it.
+`fleet_power.py`'s `suspend()` used exactly this plain form, meaning in
+production a box could be told to suspend, wait up to the full 2-minute
+deadline (or longer, if the natural-completion path takes longer than that —
+Nomad would then force it, but only at the deadline), all without ever
+delivering a prompt SIGTERM — directly violating "claim released promptly...
+must be seconds, not claim-TTL." **Fixed:** added `-force` to `suspend()`'s
+drain call (zenmetrics `scripts/jobsys/fleet_power.py`).
+
+**Bug 2 (found while fixing Bug 1): `-force` and `-deadline` are mutually
+exclusive Nomad CLI flags** ("`-deadline` can't be combined with `-force` or
+`-no-deadline`") — the naive fix (just add `-force` next to the existing
+`-deadline 2m`) fails outright. Caught by testing the fix live BEFORE
+considering it done, which is exactly why it wasn't shipped broken: with
+`check=False` on the `subprocess.run` call, this failure would have been
+COMPLETELY SILENT in production — the drain would error immediately, nothing
+would happen, and `systemctl suspend` would fire on a box with a live claim in
+flight and zero graceful handling — worse than the original bug. **Fixed:**
+drop `-deadline` entirely (force alone means "immediately," no deadline
+needed).
+
+**Bug 3 (found, NOT fixed — the real finding): the forced drain DOES exit the
+container promptly and cleanly (confirmed via `nomad alloc status`: exit code
+143 = SIGTERM, "Killed: Task successfully killed," ~1.8s from drain-issue to
+"All allocations... have stopped" — well within "seconds"), and the bash
+entrypoint's own SIGTERM trap DOES fire and forward the signal correctly
+("received SIGTERM — forwarding to the in-flight pass (pid 59) for fast claim
+release, then exiting" — this exact log line, confirmed present). But the
+S3 chunk claim object itself was verified UNCHANGED after this — read back
+directly (`s5cmd cat`), byte-identical to its original claimed-at content
+(`1787548370 i265-gp2`, timestamp matching the claim's creation, not an
+updated/release time).** The claim was not released.
+
+Digging further: `spawn_spot_reclaim_chunk`'s signal-handler thread
+(`crates/zenfleet-worker/src/lib.rs:246-279`) is supposed to print
+`"zenfleet-worker: {released|could not release} chunk claim {cid}..."` on
+catching SIGTERM/SIGINT — this line, and even the earlier unconditional
+`"zenfleet-worker: resource-aware concurrent mode..."` line that `run_chunked`
+prints as its very first statement, **never appeared anywhere in the
+allocation's logs** — confirmed via `nomad alloc logs -verbose` /
+`-stdout` / `-stderr` separately (stderr came back completely empty; no
+truncation). `timeout` (the entrypoint wraps `zenfleet-worker` in
+`timeout "$ZEN_PASS_TIMEOUT" zenfleet-worker ...`) was ruled out as the culprit
+by direct reproduction — a minimal `timeout ... | trap ... TERM` harness
+correctly waits for the wrapped child to finish its own signal handling before
+`timeout` itself returns, and bash's `wait` on `timeout`'s PID correctly
+blocks until then.
+
+**Root cause NOT fully isolated in this session** — the complete absence of
+ANY Rust-level diagnostic output (not just the release-attempt line, but the
+function's very first, unconditional print) is itself the puzzling part, and
+narrowing it further needs either a local repro outside the container/Nomad
+stack or added tracing that survives a fast-exit path. Candidate explanations,
+none confirmed: the `run_chunked`/`execute_gap_chunked` code path was for some
+reason not actually reached despite the S3 claim existing under this worker's
+name; a Docker/containerd log-driver race losing the last write(s) before a
+very fast container exit; or a real gap in how `signal_hook`'s handler thread
+interacts with `std::process::exit(130)` under this exact runtime shape. **Do
+not re-close this precondition until the actual mechanism is found and a real
+(non-mocked) repro passes.**
+
+**Practical consequence:** the P0 precondition "SIGTERM chunk-claim release,"
+previously reported DONE and verified, is **NOT actually proven end-to-end** —
+its only verification to date was a synthetic/mocked harness. Filed as a
+reopened Known Bug (CLAUDE.md) and in the ADR's defect register, both flagged
+HIGH priority — this blocks the mission's own G-P2 gate and undermines the
+"awake box-hours" power-cycling design's basic safety guarantee (a box that
+suspends mid-chunk without releasing its claim strands that work for the full
+claim TTL, exactly what the precondition was built to prevent).
+
 ## Gate verdicts (summary)
 
 - **G-P0 baseline** — ✅ measured: cells/hour not cleanly isolated from the
@@ -338,13 +427,8 @@ corresponding ledger resolution) is a good G-T1/tooling addition, not done here.
   (7.0s/7.0s/7.0s), both < the 3-min target (see homefleet
   `ubuntu-node/nomad/wol/wol_roundtrip_test.sh`, run prior to this session's
   fleetbench work).
-- **G-P2 drain safety** — ⏳ NOT YET a genuine test. What exists so far: 7/7
-  graceful SIGTERM-under-real-load exits (`systemctl stop` ×4, `nomad job stop`
-  ×3), all `rc=0`/`complete`, none `failed`/`lost` — strong evidence the release
-  mechanism itself works under load, but this is SIGTERM/stop, not a real
-  suspend-to-RAM + WoL wake cycle mid-chunk. A genuine G-P2 test (dedicated run,
-  deliberate `systemctl suspend` on a WoL-gated box with real work in flight,
-  verify claim release + exactly-once re-execution + wake) is still needed.
+- **G-P2 drain safety** — ❌ FAILED on first genuine attempt; see the full
+  writeup below. Re-opens a precondition previously reported DONE.
 - **G-P3 autoscale end-to-end** — not started.
 - **G-T1 throughput tuning** — early ladder data in hand (epoch-sharded vs
   lease: 1.69x/1.51x vs 3.49x row-count ratio — epoch-sharded is the clear

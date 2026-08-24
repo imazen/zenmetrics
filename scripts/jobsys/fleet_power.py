@@ -197,6 +197,31 @@ def is_reachable(ssh_target: str) -> bool:
     ).returncode == 0
 
 
+def resolve_node_id(addr: str, node_name: str) -> str | None:
+    """The Nomad node ID for a friendly node name (drain/eligibility need the ID, not the
+    name). None if the node isn't visible (down, or never joined)."""
+    try:
+        nodes = json.loads(nomad(addr, "node", "status", "-json"))
+    except Exception:
+        return None
+    node = next((n for n in nodes if n.get("Name") == node_name), None)
+    return node["ID"] if node else None
+
+
+def re_enable_eligibility(addr: str, node_id: str):
+    """A drained node stays `Eligibility = ineligible` forever after the drain completes
+    (Nomad's own semantics -- draining and eligibility are separate flags) -- confirmed
+    live 2026-08-24 (gp2-suspend-test): i265 came back `ready` but `ineligible` after its
+    drain finished and never received another allocation. Without this call, a box that
+    goes through one sleep cycle would wake up, rejoin the cluster, and then sit idle
+    forever as far as Nomad scheduling is concerned -- the single most important bug a
+    real wake-cycle test could have caught. Called right after WoL: harmless to call
+    before the node has actually rejoined (Nomad just applies it once the node reconnects).
+    """
+    subprocess.run(["nomad", "node", "eligibility", "-enable", node_id],
+                    env=dict(os.environ, NOMAD_ADDR=addr), check=False)
+
+
 def wol(mac: str):
     if os.path.isfile(FLEET_PXE) and os.access(FLEET_PXE, os.X_OK):
         subprocess.run([FLEET_PXE, "wol", mac], check=False)
@@ -209,8 +234,20 @@ def wol(mac: str):
 
 
 def suspend(ssh_target: str, addr: str, node_id: str | None):
+    # -force is load-bearing, not optional: plain `-enable` (no -force) lets a running
+    # allocation drain VOLUNTARILY -- it keeps running (and was observed, live, to even
+    # pick up a NEW chunk claim after the drain command was issued) until it finishes on
+    # its own or the deadline hits. Measured 2026-08-24 (gp2-suspend-test): a real
+    # in-flight allocation took ~70s to stop under plain `-enable -deadline 2m`, not the
+    # "seconds, not claim-TTL" the G-P2 gate requires -- SIGTERM-under-real-load itself is
+    # fast (~3s, verified 7/7 via `nomad job stop` / `systemctl stop`), but plain drain
+    # never delivers that signal promptly in the first place. `-force` makes Nomad
+    # immediately move to stop the allocation (still via the task's normal kill_timeout
+    # graceful-SIGTERM-then-SIGKILL sequence, not a raw bypass), which is what actually
+    # gets the fast release. Suspending right after a slow, non-forced drain would freeze
+    # the box mid-execution with the claim never released at all.
     if node_id:
-        subprocess.run(["nomad", "node", "drain", "-enable", "-self=false", "-yes",
+        subprocess.run(["nomad", "node", "drain", "-enable", "-force", "-self=false", "-yes",
                          "-deadline", "2m", node_id], env=dict(os.environ, NOMAD_ADDR=addr), check=False)
     subprocess.run(["ssh", "-o", "BatchMode=yes", ssh_target, "sudo", "systemctl", "suspend"],
                     check=False, timeout=10)
@@ -280,7 +317,17 @@ def cmd_apply(args):
         if box["gate"] is None:
             continue  # refuse to touch an ungated box, per the module docstring
         up = is_reachable(box["ssh"])
+        node_id = resolve_node_id(args.nomad_addr, box["nomad_node_name"]) if up else None
         alloc_n = node_alloc_count(args.nomad_addr, box["nomad_node_name"]) if up else None
+        # Self-heal every tick, independent of the wake/sleep decision below: a drained
+        # node stays `ineligible` FOREVER after the drain completes (Nomad's own
+        # semantics — draining and eligibility are separate flags), so a box that just
+        # woke from a sleep cycle would otherwise sit reachable-but-never-scheduled
+        # indefinitely. Confirmed live 2026-08-24 (gp2-suspend-test) — see
+        # re_enable_eligibility's docstring. Idempotent and cheap; safe to call on an
+        # already-eligible node every tick.
+        if up and node_id and args.live:
+            re_enable_eligibility(args.nomad_addr, node_id)
         action = decide(name, box, up, alloc_n, total_gap, state)
         if action is None:
             continue
@@ -289,10 +336,10 @@ def cmd_apply(args):
             if action == "wake":
                 wol(box["mac"])
             elif action == "sleep":
-                suspend(box["ssh"], args.nomad_addr, None)
+                suspend(box["ssh"], args.nomad_addr, node_id)
             state.setdefault(name, {})["last_action_ts"] = time.time()
             state[name]["last_action"] = action
-        print(f"{'[LIVE]' if args.live else '[DRY-RUN]'} {name}: {action} (gap={total_gap}, up={up}, allocs={alloc_n})")
+        print(f"{'[LIVE]' if args.live else '[DRY-RUN]'} {name}: {action} (gap={total_gap}, up={up}, allocs={alloc_n}, node_id={node_id})")
     if not acted:
         print(f"no action needed (gap={total_gap})")
     if args.live:
