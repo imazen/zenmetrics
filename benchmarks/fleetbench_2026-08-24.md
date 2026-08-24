@@ -321,7 +321,7 @@ actively deleted) but none were observed to block or corrupt any subsequent
 read in this session; a rigorous "stranded claim" audit (claim exists with no
 corresponding ledger resolution) is a good G-T1/tooling addition, not done here.
 
-## G-P2 — drain safety: FAILED on first genuine test, re-opens P0 precondition #3
+## G-P2 — drain safety: FAILED on first genuine test, re-opens P0 precondition #2
 
 The first REAL end-to-end test of "deliberately suspend/drain a box mid-chunk"
 (as opposed to the earlier P0 verification, which the session summary itself
