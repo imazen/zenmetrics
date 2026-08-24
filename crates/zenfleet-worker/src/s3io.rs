@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use object_store::{
-    ObjectStore, ObjectStoreExt, PutMode, PutOptions, PutPayload,
+    ObjectStore, ObjectStoreExt, PutMode, PutOptions, PutPayload, UpdateVersion,
     aws::{AmazonS3, AmazonS3Builder},
     path::Path as OsPath,
 };
@@ -86,6 +86,57 @@ pub fn put_create(endpoint: &str, bucket: &str, key: &str, bytes: &[u8]) -> Resu
         Ok(_) => Ok(true),
         Err(object_store::Error::AlreadyExists { .. }) => Ok(false),
         Err(e) => Err(format!("s3io put_create {bucket}/{key}: {e}")),
+    }
+}
+
+/// Fetch an object's bytes. `None` on any error (missing, network, ...) — matches the old
+/// `aws s3api get-object` CLI callers' error handling (fail-open: caller treats "can't read" the
+/// same as "absent").
+pub fn get(endpoint: &str, bucket: &str, key: &str) -> Option<Vec<u8>> {
+    get_with_etag(endpoint, bucket, key).map(|(bytes, _etag)| bytes.to_vec())
+}
+
+/// Fetch an object's bytes AND its ETag in one round-trip — the read half of the claim CAS (the
+/// steal path needs the current ETag for the `If-Match` conditional PUT in [`put_update`]).
+/// `None` on any error, or if the store didn't return an ETag at all (R2/S3-compatible stores
+/// always do; a store that doesn't would make conditional updates meaningless anyway).
+pub fn get_with_etag(endpoint: &str, bucket: &str, key: &str) -> Option<(bytes::Bytes, String)> {
+    let s = store(endpoint, bucket).ok()?;
+    let p = OsPath::from(key);
+    runtime().block_on(async move {
+        let res = s.get(&p).await.ok()?;
+        let etag = res.meta.e_tag.clone()?;
+        let body = res.bytes().await.ok()?;
+        Some((body, etag))
+    })
+}
+
+/// Conditional update (`If-Match: <etag>`) — the dead-claim-steal CAS. Returns `Ok(true)` iff
+/// THIS caller's write won (the object's current ETag still matched `etag` at write time),
+/// `Ok(false)` on a precondition failure (someone else's claim/steal/heartbeat already changed
+/// the object since we read `etag` — safe: no double-execute, exactly like [`put_create`]'s
+/// `AlreadyExists` case for a fresh claim).
+pub fn put_update(
+    endpoint: &str,
+    bucket: &str,
+    key: &str,
+    bytes: &[u8],
+    etag: &str,
+) -> Result<bool, String> {
+    let s = store(endpoint, bucket)?;
+    let p = OsPath::from(key);
+    let payload = PutPayload::from_bytes(bytes::Bytes::copy_from_slice(bytes));
+    let opts = PutOptions {
+        mode: PutMode::Update(UpdateVersion {
+            e_tag: Some(etag.to_string()),
+            version: None,
+        }),
+        ..Default::default()
+    };
+    match runtime().block_on(async move { s.put_opts(&p, payload, opts).await }) {
+        Ok(_) => Ok(true),
+        Err(object_store::Error::Precondition { .. }) => Ok(false),
+        Err(e) => Err(format!("s3io put_update {bucket}/{key}: {e}")),
     }
 }
 

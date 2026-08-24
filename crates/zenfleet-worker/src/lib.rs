@@ -16,7 +16,6 @@ use std::collections::{HashMap, HashSet};
 use std::io::{self, BufReader, Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
 mod s3io;
@@ -168,17 +167,6 @@ pub struct ClaimCfg {
     pub spec_threshold_secs: Option<u64>,
 }
 
-/// Atomically claim a job via R2 conditional write (`If-None-Match: *`). Returns true iff THIS worker
-/// won (object created); false if it already existed (another worker owns it) or on error. R2 admits
-/// exactly one create per key, so concurrent workers can't both win — no double execution.
-pub fn try_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &JobId) -> bool {
-    let key = format!("{}/{}", prefix.trim_matches('/'), job_id.as_str());
-    // In-process conditional PUT (If-None-Match:*). Won iff WE created it. Replaces the
-    // per-claim `aws s3api put-object` spawn (aws-cli's ~1.5s Python startup, at claim
-    // rate, was the box's top CPU cost). Any error → not won (safe: no double-execute).
-    crate::s3io::put_create(endpoint, bucket, &key, b"").unwrap_or(false)
-}
-
 /// Release (delete) a claim by its raw R2 key so it requeues immediately — used on spot preemption
 /// (goal F: "spot reclaim is a non-event") instead of waiting out the claim TTL. Best-effort: a
 /// failed delete just falls back to the slower TTL-based stale-reclaim (goal E), so correctness
@@ -322,41 +310,14 @@ where
     }
 }
 
-static CLAIM_TMP_N: AtomicU64 = AtomicU64::new(0);
-
-fn aws_s3api(endpoint: &str) -> Command {
-    let mut c = Command::new("aws");
-    c.arg("--endpoint-url").arg(endpoint).arg("s3api");
-    c
-}
-
 /// Read the run-control object (goal C: pause/drain). Absent or unparseable → `RUNNING` — fail-open,
-/// so a missing/garbled control object can never wedge the fleet.
+/// so a missing/garbled control object can never wedge the fleet. In-process GET (was `aws s3api
+/// get-object`) — this runs once per pass, at fleet pass rates the CLI startup cost added up the
+/// same way it did for the claim CAS below.
 pub fn fetch_control_r2(endpoint: &str, bucket: &str, key: &str) -> RunControl {
-    let n = CLAIM_TMP_N.fetch_add(1, Ordering::Relaxed);
-    let out = std::env::temp_dir().join(format!("zenctl_{}_{}", std::process::id(), n));
-    let ok = aws_s3api(endpoint)
-        .arg("get-object")
-        .arg("--bucket")
-        .arg(bucket)
-        .arg("--key")
-        .arg(key)
-        .arg(&out)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-    let ctl = if ok {
-        std::fs::read(&out)
-            .ok()
-            .and_then(|b| serde_json::from_slice::<RunControl>(&b).ok())
-            .unwrap_or_default()
-    } else {
-        RunControl::default()
-    };
-    let _ = std::fs::remove_file(&out);
-    ctl
+    crate::s3io::get(endpoint, bucket, key)
+        .and_then(|b| serde_json::from_slice::<RunControl>(&b).ok())
+        .unwrap_or_default()
 }
 
 /// Pure staleness check: a claim is stealable once its age reaches the TTL.
@@ -365,32 +326,15 @@ fn claim_is_stale(now: u64, claim_ts: u64, ttl_secs: u64) -> bool {
 }
 
 /// Read a claim's `(etag, ts)` — `ts` is the first whitespace token of the body. None on any error.
+/// In-process GET-with-etag (was `aws s3api get-object --query ETag`).
 fn read_claim(endpoint: &str, bucket: &str, key: &str) -> Option<(String, u64)> {
-    let n = CLAIM_TMP_N.fetch_add(1, Ordering::Relaxed);
-    let out = std::env::temp_dir().join(format!("zenclaim_rd_{}_{}", std::process::id(), n));
-    let res = aws_s3api(endpoint)
-        .arg("get-object")
-        .arg("--bucket")
-        .arg(bucket)
-        .arg("--key")
-        .arg(key)
-        .arg(&out)
-        .arg("--query")
-        .arg("ETag")
-        .arg("--output")
-        .arg("text")
-        .stderr(Stdio::null())
-        .output();
-    let etag = match res {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
-        _ => {
-            let _ = std::fs::remove_file(&out);
-            return None;
-        }
-    };
-    let body = std::fs::read_to_string(&out).ok();
-    let _ = std::fs::remove_file(&out);
-    let ts = body?.split_whitespace().next()?.parse::<u64>().ok()?;
+    let (body, etag) = crate::s3io::get_with_etag(endpoint, bucket, key)?;
+    let ts = std::str::from_utf8(&body)
+        .ok()?
+        .split_whitespace()
+        .next()?
+        .parse::<u64>()
+        .ok()?;
     Some((etag, ts))
 }
 
@@ -438,76 +382,35 @@ pub fn claim_or_steal_r2_key(
     owner: &str,
 ) -> bool {
     let key = format!("{}/{}", prefix.trim_matches('/'), id);
-    let n = CLAIM_TMP_N.fetch_add(1, Ordering::Relaxed);
-    let body = std::env::temp_dir().join(format!("zenclaim_bd_{}_{}", std::process::id(), n));
-    if std::fs::write(&body, format!("{now} {owner}")).is_err() {
-        return false;
-    }
-    // 1. fresh claim (create-if-absent)
-    let fresh = aws_s3api(endpoint)
-        .arg("put-object")
-        .arg("--bucket")
-        .arg(bucket)
-        .arg("--key")
-        .arg(&key)
-        .arg("--body")
-        .arg(&body)
-        .arg("--if-none-match")
-        .arg("*")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-    if fresh {
-        let _ = std::fs::remove_file(&body);
+    let body = format!("{now} {owner}");
+    // 1. fresh claim (create-if-absent) — in-process conditional PUT (was `aws s3api put-object
+    //    --if-none-match`). At fleet claim rates the CLI startup (aws-cli's ~1.5s Python init) was
+    //    the box's top CPU cost, and a slow/flaky cold start here is the documented root cause of
+    //    the mac tier losing every claim race (it starts from a colder process cache than the
+    //    always-warm Linux boxes) — this is the zenfleet defect register's "claim CAS shells out to
+    //    the aws CLI (the mac skip-all root cause)".
+    if crate::s3io::put_create(endpoint, bucket, &key, body.as_bytes()).unwrap_or(false) {
         return true;
     }
-    // 2. exists — steal only if stale, via If-Match CAS on the current ETag
-    let won = match read_claim(endpoint, bucket, &key) {
-        Some((etag, prev_ts)) if claim_is_stale(now, prev_ts, ttl_secs) => aws_s3api(endpoint)
-            .arg("put-object")
-            .arg("--bucket")
-            .arg(bucket)
-            .arg("--key")
-            .arg(&key)
-            .arg("--body")
-            .arg(&body)
-            .arg("--if-match")
-            .arg(&etag)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false),
+    // 2. exists — steal only if stale, via If-Match CAS on the current ETag (in-process; was
+    //    `aws s3api put-object --if-match`).
+    match read_claim(endpoint, bucket, &key) {
+        Some((etag, prev_ts)) if claim_is_stale(now, prev_ts, ttl_secs) => {
+            crate::s3io::put_update(endpoint, bucket, &key, body.as_bytes(), &etag).unwrap_or(false)
+        }
         // 3. live but a straggler (age in [spec_threshold, ttl)) → speculate: take a *separate*
         //    spec claim (create-if-absent, so at most one speculator) and co-run it. The ledger's
         //    latest-wins on job_id makes the loser a harmless duplicate.
         Some((_, prev_ts)) => match spec_threshold_secs {
             Some(spec) if now.saturating_sub(prev_ts) >= spec => {
                 let spec_key = format!("{}/spec/{}", prefix.trim_matches('/'), id);
-                aws_s3api(endpoint)
-                    .arg("put-object")
-                    .arg("--bucket")
-                    .arg(bucket)
-                    .arg("--key")
-                    .arg(&spec_key)
-                    .arg("--body")
-                    .arg(&body)
-                    .arg("--if-none-match")
-                    .arg("*")
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .map(|s| s.success())
+                crate::s3io::put_create(endpoint, bucket, &spec_key, body.as_bytes())
                     .unwrap_or(false)
             }
             _ => false,
         },
         None => false,
-    };
-    let _ = std::fs::remove_file(&body);
-    won
+    }
 }
 
 // ─────────────────── epoch-sharded claiming (claim mode `epoch_sharded`) ───────────────────
