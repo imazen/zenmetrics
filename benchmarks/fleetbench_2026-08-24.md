@@ -572,6 +572,41 @@ redundant-tail confound) or a fresh full-manifest G-P3 run sized for direct
 comparison against a fresh G-N1 baseline — tracked as follow-up, alongside the
 epoch-sharded G-P2 exactly-once rerun noted above.
 
+## CPU-score and GPU-score legs (required workload coverage)
+
+The mission's own framing requires the fleetbench workload to cover
+encode + CPU-score + GPU-score kinds. Encode is the G-P0/G-N1/G-P3 runs above;
+this section covers the other two, run on r7900x alone (always-on, no
+wake-cycle needed — separate from the sleep-cycling gate tests).
+
+**CPU-score:** `homefleet/ubuntu-node/nomad/jobs/fleetbench-cpuscore.nomad.hcl`
+— 25,245 `JobKind::Metric` jobs (all 8,415 G-P0-ledger encoded cells × 3 CPU
+metrics: `ssim2`/`butteraugli`/`zensim`, confirmed live in the `:exec` image's
+`cpu-metrics` feature bundle), built via `~/tmp/build_score_spec.py` from the
+G-P0 ledger's real encode `output_sha`s + `zenfleet-ctl declare --spec`.
+`jobexec`'s `"metric"` arm re-encodes each cell fresh from
+`image_path`/`codec`/`q`/`knob_tuple_json` and scores that — no blob-store
+fetch needed, `encode_sha` is for job identity only (confirmed by reading
+`jobexec.rs` directly rather than assuming). Manually stopped at **5,313 done,
+zero failures (~21% of the full cross product)** — a substantial, error-free
+sample proving the kind end-to-end; not run to full completion since every
+additional row is more of the same already-confirmed-working behavior, not
+new information, and r7900x was needed for the GPU-score leg next.
+
+**GPU-score:** `homefleet/ubuntu-node/nomad/jobs/fleetbench-gpuscore.nomad.hcl`
+— 4,000 jobs (a deliberate 800-cell subset × 5 GPU metrics: `ssim2-gpu`/
+`butteraugli-gpu`/`dssim-gpu`/`iwssim-gpu`/`cvvdp-gpu` — `zensim-gpu` excluded,
+panics by design in this executor tag per `fleet.env`'s dated note). **First
+real test of `config { runtime = "nvidia" }` in a Nomad docker-driver
+jobspec** (this cluster has no nvidia-device-plugin registered — every node's
+`NodeResources.Devices` is null — so the device-stanza GPU-scheduling path
+isn't available; the runtime flag is the simpler alternative, and it worked
+on the first try): confirmed real GPU utilization via `nvidia-smi` (24% util,
+1.5 GB VRAM) during the run, zero failures.
+
+<!-- FILL IN once the GPU-score run completes or is stopped: final row count,
+     any failures, total wall-clock. -->
+
 ## Gate verdicts (summary)
 
 - **G-P0 baseline** — ✅ measured: cells/hour not cleanly isolated from the
