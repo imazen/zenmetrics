@@ -15,7 +15,22 @@
 #   ZEN_EXEC          — executor program (default /bin/cat; a real box bakes its encoder/scorer)
 #   ZEN_SPEC_THRESHOLD_SECS — optional speculative-execution threshold (goal E)
 #   ZEN_CONTROL_KEY   — optional s3 key of a RunControl object for pause/drain (goal C)
-#   ZEN_IDLE_PASSES (5) / ZEN_PASS_SLEEP (0.2) — drain detection + pacing
+#   ZEN_IDLE_PASSES (5) / ZEN_PASS_SLEEP (0.2) — drain detection + pacing (single-run mode; ignored
+#                       when ZEN_LONG_LIVED=1, see below)
+#   ZEN_MAX_MIN       — optional wall-clock budget in minutes, honored in BOTH single-run mode and
+#                       POOL mode (single-run default: unset = unbounded, the LAN-fleet norm; POOL
+#                       mode's own default is 55 = one paid hour). Exits clean at budget either way.
+#   ZEN_LONG_LIVED (0) — 1 = never exit on idle (Nomad-migration precondition: a long-lived service
+#                       with internal idle backoff, so `nomad node drain` — SIGTERM, see below — is
+#                       the only normal way this script stops, and a restart isn't a poll-loop churn
+#                       signal). Idle passes back off exponentially (ZEN_PASS_SLEEP doubling, capped
+#                       at ZEN_IDLE_BACKOFF_CAP_SECS (60)) instead of counting toward ZEN_IDLE_PASSES.
+#                       DO NOT set this on a paid cloud/vast.ai/Hetzner box — those rely on the
+#                       default drain-then-EXIT behavior to trigger onstart's self-destroy-on-exit
+#                       and stop billing; ZEN_LONG_LIVED is for the always-on LAN fleet only.
+#   SIGTERM/SIGINT    — forwarded to the in-flight pass (fast chunk/cell claim release — goal F —
+#                       instead of waiting out the full claim TTL), then this script exits. This is
+#                       what `nomad node drain` / `docker stop` / spot preemption all deliver.
 #   ZEN_CLAIM_MODE    — optional: `lease` (default) or `epoch-sharded` (wall-clock epochs +
 #                       rendezvous-hash ownership; zero claim traffic in steady state — see
 #                       docs/RUNNING_JOBS.md "Epoch-sharded claiming"). Single-run mode only;
@@ -48,6 +63,60 @@ surface_problems(){ # $1: text blob — re-emit each distinct problem line LOUDL
   [ -z "$h" ] && return 1
   printf '%s\n' "$h" | while IFS= read -r l; do ferr "worker output: $l"; done
   return 0
+}
+
+# ── SIGTERM/SIGINT forwarding to the in-flight pass ─────────────────────────────────────────────────
+# A drain (`nomad node drain`, `docker stop`, spot preemption, or the operator's own Ctrl-C) sends
+# this script SIGTERM. A plain `out=$(timeout ... zenfleet-worker ... 2>&1)` blocks the shell inside a
+# command substitution, and a shell waiting on a foreground command generally does NOT act on most
+# signals until that command finishes — so the whole point of the worker's own SIGTERM handler
+# (spawn_spot_reclaim / spawn_spot_reclaim_chunk: release the in-flight claim for a fast requeue
+# instead of waiting out the full claim TTL) would never actually be reached in time. Running the
+# pass as a background job + `wait` instead lets a `trap` interrupt promptly (traps DO interrupt
+# `wait`, unlike a command substitution), so this script can forward the signal to the pass and give
+# it a moment to run its own release-and-exit path before this script exits.
+#
+# `timeout` itself forwards a signal it receives to the command it's monitoring (verified empirically
+# 2026-08-24; also documented GNU coreutils behavior since 8.24) — so sending TERM to `timeout`'s pid
+# reaches `zenfleet-worker` underneath it. This is the fast path; the container runtime's own
+# `kill_timeout` (Nomad) / stop grace period (Docker) remains the hard backstop either way.
+PASS_PID=""
+PASS_OUTFILE="" # set by run_pass before backgrounding, so on_term can clean it up if it interrupts
+PASS_ENV=() # optional per-call env prefix (pool mode's per-run ZEN_ENCODES_*/ZEN_VARIANTS_* vars)
+on_term(){
+  local sig="$1"
+  if [ -n "$PASS_PID" ] && kill -0 "$PASS_PID" 2>/dev/null; then
+    hb "received $sig — forwarding to the in-flight pass (pid $PASS_PID) for fast claim release, then exiting"
+    kill -TERM "$PASS_PID" 2>/dev/null
+    wait "$PASS_PID" 2>/dev/null
+  else
+    hb "received $sig — no pass in flight, exiting"
+  fi
+  # `exit` from a trap never returns to run_pass, so its own cleanup below never runs — do it here
+  # instead of leaking a temp file per interrupted pass (harmless in a container that's about to be
+  # torn down entirely, but a real leak on a long-lived Nomad client box across many drain cycles).
+  [ -n "$PASS_OUTFILE" ] && rm -f "$PASS_OUTFILE"
+  exit 143
+}
+trap 'on_term SIGTERM' TERM
+trap 'on_term SIGINT' INT
+
+# Run one worker pass in the background under `wait` (see above) instead of a blocking command
+# substitution. Sets PASS_RC and PASS_OUT (the pass's combined stdout+stderr) as globals — bash
+# functions can't usefully `return` a string, and re-wrapping this in `$(run_pass ...)` would
+# reintroduce the exact signal-deferral problem this exists to avoid.
+run_pass(){
+  local outfile; outfile="$(mktemp /tmp/zfw_pass_out.XXXXXX)"
+  PASS_OUTFILE="$outfile"
+  env "${PASS_ENV[@]}" timeout "${ZEN_PASS_TIMEOUT:-1800}" zenfleet-worker "$@" >"$outfile" 2>&1 &
+  PASS_PID=$!
+  wait "$PASS_PID"
+  PASS_RC=$?
+  PASS_OUT="$(cat "$outfile" 2>/dev/null)"
+  rm -f "$outfile"
+  PASS_PID=""
+  PASS_OUTFILE=""
+  PASS_ENV=()
 }
 
 # Every baked tool must exist (bake-everything rule) — including `timeout`, which
@@ -147,12 +216,13 @@ pool_mode(){
       local snap="/tmp/snap_${run}.parquet"
       s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "s3://$ZEN_BUCKET/jobs/$run/ledger_snapshot.parquet" "$snap" >/dev/null 2>&1 || rm -f "$snap"
       local li=(); [ -s "$snap" ] && li=(--ledger-in "$snap")
-      out=$(env "${venv[@]}" \
-        timeout "${ZEN_PASS_TIMEOUT:-1800}" zenfleet-worker --manifest "$mf" "${li[@]}" \
+      PASS_ENV=("${venv[@]}")
+      run_pass --manifest "$mf" "${li[@]}" \
         --ledger-out "s3://$ZEN_BUCKET/jobs/$run/ledger/pool-$WORKER-$cyc.parquet" \
         --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "jobs/$run/blobs" \
         --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "jobs/$run/claims" \
-        --r2-endpoint "$ZEN_R2_ENDPOINT" --exec "$EXEC" --worker "$WORKER" --provider "$PROVIDER" 2>&1); local rc=$?
+        --r2-endpoint "$ZEN_R2_ENDPOINT" --exec "$EXEC" --worker "$WORKER" --provider "$PROVIDER"
+      local out="$PASS_OUT" rc=$PASS_RC
       surface_problems "$out" || true
       local s; s=$(printf '%s\n' "$out" | grep -oE 'done=[0-9]+' | head -1 | cut -d= -f2)
       # "made progress" = scored (done>0) OR the pass timed out (rc=124: still had claimable work, just slow).
@@ -188,8 +258,35 @@ else
 fi
 hb "manifest ready ($(wc -c </tmp/manifest.json 2>/dev/null || echo '?') bytes); $WORKER ($PROVIDER) claiming from s3://$ZEN_BUCKET/$ZEN_RUN/"
 
+# ZEN_MAX_MIN (paid-hour budget): honored here too, not just in POOL mode — a single-run worker
+# that never sets it (the common LAN-fleet case) runs unbounded, same as always. Set it and this
+# exits clean at budget exactly like POOL mode does (the wsl-gate incident: an unbudgeted single-run
+# worker ran ~5-6h on the operator box because only POOL mode enforced this).
+SINGLE_RUN_END=""
+if [ -n "${ZEN_MAX_MIN:-}" ] && [ "${ZEN_MAX_MIN}" -gt 0 ] 2>/dev/null; then
+  SINGLE_RUN_END=$(( $(date +%s) + ZEN_MAX_MIN * 60 ))
+  hb "ZEN_MAX_MIN=${ZEN_MAX_MIN}min budget wired for single-run mode — exits clean at budget"
+fi
+# ZEN_LONG_LIVED=1 (the Nomad-migration P0 precondition "worker task shape": a long-lived service
+# with internal idle backoff, ADR precondition 5): instead of exiting after ZEN_IDLE_PASSES
+# consecutive empty passes, keep polling forever with exponential backoff (capped at
+# ZEN_IDLE_BACKOFF_CAP_SECS) once idle, resetting to ZEN_PASS_SLEEP the moment work reappears. This
+# is what makes `nomad node drain` (SIGTERM, handled above) the ONLY normal way this script stops —
+# so a drain means something and a restart isn't a poll-loop churn signal. Defaults to 0 (today's
+# drain-exit behavior) because PAID cloud/vast.ai/Hetzner boxes rely on exit-on-drain to trigger
+# their onstart's self-destroy-on-exit and stop billing — do NOT set this on a paid box.
+LONG_LIVED="${ZEN_LONG_LIVED:-0}"
+BACKOFF="${ZEN_PASS_SLEEP:-0.2}"
 idle=0 i=0 fails=0
-while [ "$idle" -lt "${ZEN_IDLE_PASSES:-5}" ]; do
+while :; do
+  if [ -n "$SINGLE_RUN_END" ] && [ "$(date +%s)" -ge "$SINGLE_RUN_END" ]; then
+    prog "$WORKER hit ZEN_MAX_MIN=${ZEN_MAX_MIN}min budget — exiting clean"
+    break
+  fi
+  if [ "$LONG_LIVED" != "1" ] && [ "$idle" -ge "${ZEN_IDLE_PASSES:-5}" ]; then
+    prog "$WORKER drained (idle $idle consecutive no-work passes) — exiting clean"
+    break
+  fi
   i=$((i + 1))
   # Scratch hygiene BETWEEN passes (2026-08-06 ENOSPC incident, hdrgrid encode
   # wave): the executor's warm-process source cache (`jobexec_src_<pid>_*`) is
@@ -216,8 +313,8 @@ while [ "$idle" -lt "${ZEN_IDLE_PASSES:-5}" ]; do
   # HEARTBEAT emitted BEFORE the blocking call: if the worker hangs, this line has
   # no matching '▸ progress pass N' — a visible stall, not silence. `timeout` turns
   # a genuine hang into a LOUD rc=124 failure instead of an infinite silent block.
-  hb "pass $i start (worker=$WORKER provider=$PROVIDER idle=$idle/${ZEN_IDLE_PASSES:-5} consec_fails=$fails snap=$([ -s "$SNAP" ] && wc -c <"$SNAP" || echo none))"
-  out=$(timeout "${ZEN_PASS_TIMEOUT:-1800}" zenfleet-worker --manifest /tmp/manifest.json "${LIN[@]}" \
+  hb "pass $i start (worker=$WORKER provider=$PROVIDER idle=$idle/${ZEN_IDLE_PASSES:-5} consec_fails=$fails snap=$([ -s "$SNAP" ] && wc -c <"$SNAP" || echo none) backoff=${BACKOFF}s long_lived=$LONG_LIVED)"
+  run_pass --manifest /tmp/manifest.json "${LIN[@]}" \
     --ledger-out "s3://$ZEN_BUCKET/$ZEN_RUN/ledger/pass-$WORKER-$i.parquet" \
     --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "$ZEN_RUN/blobs" \
     --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "$ZEN_RUN/claims" \
@@ -227,8 +324,8 @@ while [ "$idle" -lt "${ZEN_IDLE_PASSES:-5}" ]; do
     ${ZEN_CLAIM_MODE:+--claim-mode "$ZEN_CLAIM_MODE"} \
     ${ZEN_EPOCH_LEN_SECS:+--epoch-len-secs "$ZEN_EPOCH_LEN_SECS"} \
     ${ZEN_EPOCH_HB_SECS:+--epoch-heartbeat-secs "$ZEN_EPOCH_HB_SECS"} \
-    --r2-endpoint "$ZEN_R2_ENDPOINT" --exec "$EXEC" --worker "$WORKER" --provider "$PROVIDER" 2>&1)
-  rc=$?
+    --r2-endpoint "$ZEN_R2_ENDPOINT" --exec "$EXEC" --worker "$WORKER" --provider "$PROVIDER"
+  out="$PASS_OUT" rc=$PASS_RC
 
   # Pass 1: surface the FULL worker output ONCE (startup warnings, run-control state,
   # etc.) so the box's real first pass is in the logs — not tail -1'd away.
@@ -279,6 +376,14 @@ while [ "$idle" -lt "${ZEN_IDLE_PASSES:-5}" ]; do
   else
     idle=0
   fi
-  sleep "${ZEN_PASS_SLEEP:-0.2}"
+  # Backoff: reset to the base pacing the moment work reappears; grow (capped) on each additional
+  # idle pass ONLY in long-lived mode — a non-long-lived worker exits at ZEN_IDLE_PASSES anyway (the
+  # loop-top check above), so it never needs to back off at all, and keeps today's flat pacing.
+  if [ "$idle" -eq 0 ]; then
+    BACKOFF="${ZEN_PASS_SLEEP:-0.2}"
+  elif [ "$LONG_LIVED" = "1" ]; then
+    BACKOFF=$(awk -v b="$BACKOFF" -v cap="${ZEN_IDLE_BACKOFF_CAP_SECS:-60}" \
+      'BEGIN{ nb = b * 2; if (nb > cap) nb = cap; printf "%.2f", nb }')
+  fi
+  sleep "$BACKOFF"
 done
-prog "$WORKER drained (idle $idle consecutive no-work passes) — exiting clean"
