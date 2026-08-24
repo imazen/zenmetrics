@@ -604,8 +604,27 @@ isn't available; the runtime flag is the simpler alternative, and it worked
 on the first try): confirmed real GPU utilization via `nvidia-smi` (24% util,
 1.5 GB VRAM) during the run, zero failures.
 
-<!-- FILL IN once the GPU-score run completes or is stopped: final row count,
-     any failures, total wall-clock. -->
+**GPU-score ran to full completion** (started 06:14:43Z, all 4,000 jobs landed
+a terminal row by 06:19:54Z — **~5m11s wall-clock**): **3,931 done, 69 failed
+(1.7% failure rate)**, all `error_class: encoder_panic`. Not a metric-scoring
+bug — the panics happen in the RE-ENCODE step `jobexec`'s `"metric"` arm does
+before scoring (see the CPU-score paragraph above), so this is a real codec
+robustness finding, surfaced correctly as FAILED rows rather than silently
+lost or corrupting a score. Breakdown: 4 distinct source images (3 of 4 are
+`scans-illustrations`/`gen_illustrations` content — flat-color line art is a
+plausible common factor, not confirmed), `zenjxl` 68/69 (`zenavif` 1/69),
+spread across effort 5/7/9 (both VarDCT `vd-e*` and modular `mod-e*` cells)
+and all 5 GPU metrics roughly evenly (12-15 failures each) — i.e. the panic
+happens during the shared re-encode step, before metric-specific code runs,
+consistent with a `zenjxl` encoder bug on specific inputs rather than a
+metric-specific issue. The actual panic message wasn't recoverable from
+`nomad alloc logs` after the job completed (subprocess stderr not captured
+into the parent's log stream — possibly the same capture gap as the SIGTERM-
+release investigation's missing diagnostic lines above, though not confirmed
+as the same root cause). **Out of scope for this mission to root-cause** — a
+real, actionable finding for whoever owns zenjxl robustness, not a fleet-
+orchestration defect. The other 3,931/4,000 (98.3%) succeeded cleanly across
+all 5 GPU metrics.
 
 ## Gate verdicts (summary)
 

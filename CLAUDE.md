@@ -359,6 +359,24 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **`zenjxl` encoder panics on specific inputs — observed via fleetbench's GPU-score
+  leg (found 2026-08-24, NOT a zenmetrics/fleet-orchestration bug — an upstream
+  dependency finding, out of scope to root-cause here).** 69/4,000 GPU-score jobs
+  (1.7%) failed with `error_class: encoder_panic` during `jobexec`'s metric-job
+  re-encode step (re-encode happens before scoring; see `benchmarks/
+  fleetbench_2026-08-24.md`'s CPU/GPU-score section for the full breakdown).
+  4 distinct source images (3 of 4 are `scans-illustrations`/`gen_illustrations`
+  content — flat-color line art is a plausible common factor, not confirmed),
+  `zenjxl` 68/69 (`zenavif` 1/69), spread across effort 5/7/9 (both VarDCT and
+  modular cells) and evenly across all 5 GPU metrics being scored (confirming the
+  panic is in the shared re-encode, not metric-specific code). The actual panic
+  message wasn't recoverable from `nomad alloc logs` post-completion (subprocess
+  stderr not captured into the parent's log stream — possibly the same capture gap
+  as the SIGTERM-release investigation below, though not confirmed as the same
+  cause). Correctly surfaced as FAILED rows, not silently lost or corrupting a
+  score — the job system's design worked as intended here. Flagging for whoever
+  owns `zenjxl` robustness; not investigated further in this session.
+
 - **Chunk-mode's per-chunk lease claim provides ZERO cross-worker dedup on a
   heterogeneous-core-count fleet — measured 100% duplicate-execution rate on a real
   3-box run (found 2026-08-24, fleetbench-2026-08-24 G-P0 baseline,
