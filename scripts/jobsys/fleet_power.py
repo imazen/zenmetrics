@@ -281,8 +281,15 @@ def suspend(ssh_target: str, addr: str, node_id: str | None):
     # gets the fast release. Suspending right after a slow, non-forced drain would freeze
     # the box mid-execution with the claim never released at all.
     if node_id:
+        # -force and -deadline are mutually exclusive Nomad CLI flags ("can't be combined") --
+        # -force alone needs no deadline (it means immediately, not "wait up to N then force").
+        # Caught live 2026-08-24: the first version of this fix added -force NEXT TO the
+        # existing -deadline 2m instead of replacing it, which errors at runtime -- and with
+        # check=False here that failure is SILENT, so this line shipped broken once already.
+        # Re-verify with a real `nomad node drain` call (not just reading the diff) after ANY
+        # future edit to this argument list.
         subprocess.run(["nomad", "node", "drain", "-enable", "-force", "-self=false", "-yes",
-                         "-deadline", "2m", node_id], env=dict(os.environ, NOMAD_ADDR=addr), check=False)
+                         node_id], env=dict(os.environ, NOMAD_ADDR=addr), check=False)
     subprocess.run(["ssh", "-o", "BatchMode=yes", ssh_target, "sudo", "systemctl", "suspend"],
                     check=False, timeout=10)
 
