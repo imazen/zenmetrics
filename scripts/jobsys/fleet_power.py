@@ -90,7 +90,18 @@ SLEEP_ROSTER = {
         "mac": "04:7c:16:b3:18:51",
         "ssh": "zen@192.168.50.148",
         "nomad_node_name": "i134",
-        "gate": None,  # blocked 2026-08-24: found mid-active-session in Windows, not even attempted
+        "gate": None,  # G-P1 attempted 2026-08-24 (user authorized 10 days, kids not
+        # present) and FAILED round 1 (240s timeout) -- but arm_wol.sh was never run
+        # first (a process error, not a confirmed hardware verdict -- see homefleet
+        # NODES.md's G-P1 table). Box is currently ASLEEP and unreachable as a result.
+        # Re-test AFTER arm_wol.sh + a physical/keyboard wake, do not retry blindly.
+    },
+    "r5600g": {
+        "mac": "04:7c:16:8a:b5:b7",
+        "ssh": "zen@192.168.50.193",
+        "nomad_node_name": "r5600g",
+        "gate": None,  # Same story as i134 above, same day, same root cause (arm_wol.sh
+        # skipped) -- see homefleet NODES.md's G-P1 table. Currently ASLEEP, unreachable.
     },
 }
 
