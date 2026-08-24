@@ -475,6 +475,67 @@ Filed as a reopened-then-resolved Known Bug (CLAUDE.md) and in the ADR's defect
 register — both updated to reflect the working, repeatable fix alongside the
 residual log-visibility puzzle and the exactly-once caveat above.
 
+## G-P3 — full autoscale end-to-end
+
+Reuses the EXISTING `fleetbench-gn1-2026-08-24` run's remaining ~1,311-cell gap
+(from the G-N1 throughput test, stopped at 84.4%) rather than declaring fresh
+work — real, substantial, already-there. Jobspec:
+`homefleet/ubuntu-node/nomad/jobs/gp3-autoscale-test.nomad.hcl`, targeting
+i265+r3500 (the sleep-gated pair) by hostname regex.
+
+**Found + fixed TWO more real bugs getting this far** (both in
+`scripts/jobsys/fleet_power.py`, both real production bugs the mission's own
+tooling needed working before G-P3 could even be attempted):
+
+1. **`queue_gap()` couldn't see plain declared-manifest runs at all** — it
+   hardcoded the `jobs/<run>/` manifest path (`pool_progress.py`'s convention,
+   for pool-mode runs with a pre-compacted `ledger_snapshot.parquet`) as the
+   ONLY path checked. A plain run (this whole session's G-P0/G-N1/G-P2 tests,
+   and anything from `zenfleet-ctl declare-encodes` + `launch_fleet.sh`) has no
+   `jobs/` prefix and no snapshot file — `fleet power status --run
+   fleetbench-gn1-2026-08-24` silently reported "no manifest/snapshot yet" for
+   a run with a very real 1,311-cell gap. Fixed: try both path conventions;
+   fall back to a real ledger scan (fast enough at this scale — sub-second up
+   to ~30k rows) when no snapshot exists.
+2. **The `-deadline`/`-force` fix from the G-P2 section above had ALSO shipped
+   broken** — the commit message and CLAUDE.md claimed it was fixed (drop
+   `-deadline`), but the actual code edit had only ADDED `-force` next to the
+   existing `-deadline 2m`, never removed it. The claim was validated via raw
+   CLI testing, written up as done, and the corresponding code edit simply
+   never happened. This resurfaced live: `suspend()` failed silently
+   (`check=False`) on BOTH i265 and r3500 during G-P3 test setup. Fixed for
+   real this time, verified via the actual function call succeeding. **A
+   docs/commit-message claim of a fix is not the same fact as the code
+   containing it** — this is now called out explicitly in both the code
+   comment and CLAUDE.md.
+
+**Test sequence (in progress as this section is written; final numbers below
+once complete):**
+1. Submitted `gp3-autoscale-test` while i265+r3500 were still up → placed
+   immediately (wrong for the test) → stopped, purged.
+2. Manually suspended both boxes (`fleet_power.suspend()` directly — this
+   is where bug 2 above was caught) — confirmed `down` in `nomad node status`.
+3. Re-submitted the job → confirmed QUEUED ("failed to place 2 allocations...
+   waiting for additional capacity") — the correct starting state.
+4. `fleet power apply --run fleetbench-gn1-2026-08-24 --live`
+   (`ZEN_POWER_MIN_DWELL_SECS=90` test-only override, down from the 1800s
+   production default, so the full cycle completes in test-reasonable time
+   without changing the mechanics being tested) → WoL sent to both MACs.
+5. Both boxes back `up=True` within the gated round-trip times (i265 ~8s,
+   r3500 ~7s) — matching G-P1's measurements exactly.
+6. **Nomad auto-placed the already-queued allocations onto both nodes with
+   zero manual intervention** the moment they reconnected — both `running`
+   within ~15s of the WoL call. This is the core G-P3 mechanic (declare work
+   while asleep → wake → Nomad serves the queued work automatically) working
+   end-to-end for the first time.
+7. Gap draining in real time: 1,311 → 1,177 cells within the first ~45s of
+   both allocations running.
+
+<!-- FILL IN once the gap reaches 0 and both boxes return to sleep: total
+     wall-clock (wake call to sleep call), idle-awake box-hours proxy, zero-
+     lost-cells confirmation (distinct-done == declared), comparison against
+     the >=70% idle-awake-hours-reduction / <=110%-wall-time gate targets. -->
+
 ## Gate verdicts (summary)
 
 - **G-P0 baseline** — ✅ measured: cells/hour not cleanly isolated from the
