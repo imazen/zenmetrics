@@ -208,7 +208,20 @@ def nomad(addr: str, *args: str) -> str:
 
 def node_alloc_count(addr: str, node_name: str) -> int | None:
     """How many non-terminal allocations are currently placed on this Nomad node. None if
-    the node isn't visible at all (down, or never joined) -- distinct from 0 (up + idle)."""
+    the node isn't visible at all (down, or never joined) -- distinct from 0 (up + idle).
+
+    BUG FOUND + FIXED 2026-08-24 (first real G-P3 test): `nomad node status -json
+    -verbose <id>` does NOT have an "Allocs" key at all (verified directly: `'Allocs' in
+    json.loads(...)` is False) -- the CLI's `-verbose` flag only adds an Events/Drivers
+    table to the human-readable text output, not a JSON allocations list. The original
+    `.get("Allocs", []) or []` silently returned empty every time, so this function ALWAYS
+    returned 0 regardless of real running allocations -- a serious latent bug for the
+    "sleep" decision (`gap<=50 AND alloc_n==0 AND dwell_ok`), which could have suspended a
+    box while it genuinely still held work. Caught live: two real allocations were
+    `running` per `nomad node status` at the exact moment this returned 0. Fixed by
+    hitting the correct endpoint, `GET /v1/node/:id/allocations` (a flat list with
+    `ClientStatus`, confirmed via curl), instead of guessing at the CLI's JSON shape.
+    """
     try:
         nodes = json.loads(nomad(addr, "node", "status", "-json"))
     except Exception:
@@ -217,10 +230,14 @@ def node_alloc_count(addr: str, node_name: str) -> int | None:
     if node is None:
         return None
     try:
-        allocs = json.loads(nomad(addr, "node", "status", "-json", "-verbose", node["ID"]))
+        out = subprocess.run(
+            ["curl", "-sf", f"{addr}/v1/node/{node['ID']}/allocations"],
+            capture_output=True, text=True, timeout=10,
+        )
+        allocs = json.loads(out.stdout) if out.returncode == 0 else []
     except Exception:
         return 0
-    return sum(1 for a in allocs.get("Allocs", []) or [] if a.get("ClientStatus") == "running")
+    return sum(1 for a in allocs if a.get("ClientStatus") == "running")
 
 
 def is_reachable(ssh_target: str) -> bool:
