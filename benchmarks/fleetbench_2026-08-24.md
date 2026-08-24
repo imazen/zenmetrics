@@ -388,18 +388,40 @@ correctly waits for the wrapped child to finish its own signal handling before
 `timeout` itself returns, and bash's `wait` on `timeout`'s PID correctly
 blocks until then.
 
-**Root cause NOT fully isolated in this session** — the complete absence of
-ANY Rust-level diagnostic output (not just the release-attempt line, but the
-function's very first, unconditional print) is itself the puzzling part, and
-narrowing it further needs either a local repro outside the container/Nomad
-stack or added tracing that survives a fast-exit path. Candidate explanations,
-none confirmed: the `run_chunked`/`execute_gap_chunked` code path was for some
-reason not actually reached despite the S3 claim existing under this worker's
-name; a Docker/containerd log-driver race losing the last write(s) before a
-very fast container exit; or a real gap in how `signal_hook`'s handler thread
-interacts with `std::process::exit(130)` under this exact runtime shape. **Do
-not re-close this precondition until the actual mechanism is found and a real
-(non-mocked) repro passes.**
+**Narrowed further: the release LOGIC itself is correct — reproduced directly.**
+Ran `zenfleet-worker` raw (no Docker, no Nomad, no bash entrypoint) against a
+fresh manifest with a slow fake executor (`sleep 3` per cell, enough to hold a
+real chunk claim open), confirmed a live claim on the LAN store, then
+`kill -TERM <pid>` directly. Result: the exact expected diagnostic line
+appeared immediately (`"zenfleet-worker: spot preemption — released chunk
+claim <cid> for fast requeue..."`) and the claim object was verified GONE from
+the LAN store afterward. **`spawn_spot_reclaim_chunk`'s signal-handler thread
+and `release_claim_r2_key` both work correctly when the binary runs directly.**
+This rules out a logic bug in the release code itself and narrows the bug to
+something specific to the Docker+Nomad+bash-entrypoint layering.
+
+Follow-up probing inside a live container (`nomad alloc exec ... /proc`
+inspection) found the real process tree: PID 1 = the bash entrypoint, PID 59 =
+`timeout 1800 zenfleet-worker ...` (what bash's `$PASS_PID` actually is — NOT
+the Rust binary directly), PID 60 = the actual `zenfleet-worker` process
+(timeout's child), plus ~20 concurrent `zenmetrics jobexec` executor
+subprocesses (PIDs 66+) doing the real per-cell work. An attempt to signal PID
+1 directly from inside via `nomad alloc exec ... kill -TERM 1` had NO
+observable effect (the allocation kept running) — inconclusive, not a valid
+reproduction of the real drain path, and not pursued further. **Root cause
+NOT fully isolated in this session** — the remaining candidates (not
+confirmed): PID-namespace teardown semantics when a container's PID 1 exits
+while descendants (including the ~20 jobexec subprocesses PID 60 itself
+spawned) are still alive; a race between `zenfleet-worker`'s own exit
+(`std::process::exit(130)`, which does not wait for or clean up ITS OWN spawned
+children) and the surrounding process tree's teardown; or a genuine timing
+difference between a raw `kill(2)` and however Nomad's `-force` drain /
+Docker's stop sequence actually delivers the signal into the container. Closing
+this needs deliberate instrumentation (timestamped tracing that survives a fast
+exit path) and a rebuild-instrument-retest cycle, scoped as dedicated follow-up
+work rather than further ad-hoc live probing. **Do not re-close this
+precondition until the actual mechanism is found and a real (non-mocked,
+non-raw-binary) container/Nomad repro passes.**
 
 **Practical consequence:** the P0 precondition "SIGTERM chunk-claim release,"
 previously reported DONE and verified, is **NOT actually proven end-to-end** —

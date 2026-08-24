@@ -380,9 +380,23 @@ over those persisted variants — never re-encode per metric.
   (the entrypoint wraps the binary in `timeout $ZEN_PASS_TIMEOUT
   zenfleet-worker ...`) was ruled out as the culprit by direct reproduction — a
   minimal harness confirmed `timeout` correctly waits for a signaled child's own
-  handling to finish before returning. **Root cause NOT isolated — do not
-  re-close this precondition until a real (non-mocked) repro passes and the
-  actual mechanism is understood.** This blocks G-P2 and undermines the basic
+  handling to finish before returning. **The release LOGIC itself is proven
+  correct in isolation**: running `zenfleet-worker` raw (no Docker/Nomad/bash
+  entrypoint) with a slow fake executor, confirming a live claim, then
+  `kill -TERM <pid>` directly — the exact expected log line appeared and the
+  claim was verified deleted. So the bug is specific to the Docker+Nomad+
+  entrypoint layering. `/proc` inspection inside a live container found the
+  real process tree (PID 1 bash → PID 59 `timeout` → PID 60 the actual
+  `zenfleet-worker`, plus ~20 concurrent `zenmetrics jobexec` executor
+  subprocesses PID 60 itself spawns for real per-cell work) — candidates not yet
+  confirmed: PID-namespace teardown semantics when PID 1 exits while PID 60's
+  own spawned children are still alive; a race between `zenfleet-worker`'s
+  `std::process::exit(130)` (which doesn't wait for its own children) and
+  surrounding teardown; or a delivery difference between a raw `kill(2)` and
+  Nomad/Docker's actual signal path. **Root cause NOT isolated — do not
+  re-close this precondition until a real (non-mocked, non-raw-binary)
+  container/Nomad repro passes and the actual mechanism is understood.** This
+  blocks G-P2 and undermines the basic
   safety guarantee the whole power-cycling design depends on (a box suspending
   mid-chunk without releasing its claim strands that work for the full claim
   TTL). See `crates/zenfleet-worker/src/lib.rs:246-279`
