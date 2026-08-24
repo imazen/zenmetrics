@@ -125,14 +125,26 @@ and cleaned up) via the crate's existing `examples/lease_live.rs`.
   artificially-widened 20s `kill_timeout` (ruling out "it just happened to be faster
   than the forced-kill timeout" as an explanation). Jobspec:
   `homefleet zenmetrics/ubuntu-node/nomad/jobs/zenfleet-worker-pilot.nomad.hcl`.
-  **NOT yet satisfied**: G-N1's real-workload throughput comparison (this was a
-  synthetic `/bin/cat` smoke test, not fleetbench) and the second pilot client (the
-  ADR's r5900xt is WoL-blocked — see NODES.md; i134 is next in line as a substitute).
   Two real findings along the way, both fixed: Nomad's docker driver does not
   re-pull an already-cached tag by default (`force_pull = true` now required in
   every jobspec using a moving tag), and the executor image's binaries must be built
   with the musl target or a build-box-glibc-drift silently produces a binary that
   can't even start in the (older-glibc) base image.
+  **Update 2026-08-24 (later same day):** the second pilot client is **r3500**, not
+  i134 — both of the ADR's original picks turned out genuinely blocked (r5900xt never
+  answers WoL at all; i134 was found mid-active-session in Windows and correctly left
+  alone) and r3500 (freshly installed, no shared-use concerns) substituted cleanly.
+  **G-P1 (WoL round-trip) PASSED 3/3 on both i265 (8s/8s/8s) and r3500 (7s/7s/7s)** —
+  harness: homefleet `ubuntu-node/nomad/wol/{arm_wol.sh,wol_roundtrip_test.sh}` (built
+  from scratch, nothing existed before). **fleetbench-2026-08-24 is now frozen and
+  declared** (8,415 real encode DesiredJobs — zenjpeg/zenavif/zenjxl/zenpng, see
+  `benchmarks/fleetbench_2026-08-24.md`) and **G-N1's real-workload throughput
+  comparison is in progress**: the G-P0 systemd baseline is running against it on
+  r7900x/i265/r3500 as this line is written, with a significant early finding —
+  lease-mode claiming's genuine duplicate-execution rate climbed from 62% to 84%+ as
+  the gap neared completion (a severe, LAN-latency-amplified case of the documented
+  §5b lease-race, not a defect in the new deployment path — see the benchmarks doc for
+  the full readout once G-P0 exits and G-N1 has run the identical manifest).
 - **P2 enrollment/creds** — jobspec replaces `enroll_running_node.sh --start`; creds
   land via Nomad Variables → template → `worker.env` (LAN-store static cred; scoped
   7-day R2 mints where a wave needs R2).

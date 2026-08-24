@@ -107,9 +107,36 @@ a short run still forms multiple chunk-claim boundaries).
 
 Started: r7900x 04:24:57Z, i265 04:25:13Z, r3500 04:25:35Z (2026-08-24).
 
+**Interim finding (mid-run, ~7483/8415 distinct jobs done, will be finalized below):
+lease-mode claiming has a LARGE genuine duplicate-execution rate on this 3-box LAN
+fleet — 61.85% of distinct job_ids had a "done" row from more than one DISTINCT
+(worker, ts) pair** (e.g. r7900x finished a cell at ts=1787545497, i265 independently
+finished the SAME job_id 14s later at ts=1787545513 — both wrote successful ledger
+rows). This is the documented lease-mode race (`docs/RUNNING_JOBS.md` §5b: "the
+avifgen encode run measured 3.6x under lease claiming with empty views"), sharply
+amplified here vs. the geo-distributed cloud fleets that number was measured on:
+near-zero LAN latency between 3 fast local boxes means claim-view staleness windows
+overlap constantly. **This is expected lease-mode behavior being measured
+correctly, not a bug in the systemd deployment** — `zenfleet-worker`'s claim
+algorithm is identical regardless of what launches the process, so G-N1 (same
+image, same default lease-mode claiming, Nomad-launched instead of systemd-
+launched) should show a SIMILAR duplicate rate if Nomad is genuinely orthogonal to
+work-distribution per the ADR's framing; a large delta between G-P0 and G-N1 here
+would itself be the anomaly worth chasing. Neither run set `ZEN_CLAIM_MODE=epoch-
+sharded` — epoch-sharded claiming (the documented fix for exactly this failure
+mode) is deferred to the G-T1 claim-mode tuning ladder, run separately against
+this same frozen workload once G-P0/G-N1 parity is established under the shared
+(lease-mode) baseline.
+
+Raw row-count ratio (rows / distinct job_ids) at the same checkpoint: 1.7369 —
+noted separately from the 61.85% figure above because it also counts normal
+claimed-then-done bookkeeping (not itself waste); the duplicate-(worker,ts) metric
+is the one that actually measures wasted compute.
+
 <!-- FILL IN once the run reaches all-inactive: finish timestamps, total wall-clock
-     (from earliest start to latest finish), final ledger row count (expect 8415,
-     zero poison/failed), per-box row share, any re-claimed/re-executed cells. -->
+     (from earliest start to latest finish), final ledger row count, final distinct
+     job_id count (expect 8415, zero poison/failed), final duplicate-execution rate,
+     per-box row share. -->
 
 ## G-N1 — Nomad-managed
 
