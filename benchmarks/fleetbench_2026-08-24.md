@@ -626,6 +626,45 @@ real, actionable finding for whoever owns zenjxl robustness, not a fleet-
 orchestration defect. The other 3,931/4,000 (98.3%) succeeded cleanly across
 all 5 GPU metrics.
 
+## G-T1 — throughput tuning ladders
+
+The mission names four ladders: per-box concurrency (`ZEN_CORE_OVERSUBSCRIBE`),
+GPU admission via VRAM hints, warm-exec on/off, and epoch-sharded vs lease
+claiming. **1 of 4 is measured and ready to ship; 3 remain untested** — stated
+as a fraction, not "tuning done," per this repo's own completion-reporting rule.
+
+**Claim mode — MEASURED, ready to register.** This is the by-product of the
+G-P0/epoch-sharded/G-N1/G-P3 runs above, not a purpose-built ladder test, but
+it IS a real, repeated, consistent measurement: on this exact 3-box
+heterogeneous-core fleet (r7900x 24C / i265 20C / r3500 6C), **epoch-sharded
+claiming measured a 1.51-1.69x row-count re-work ratio vs. lease-mode's
+3.49x** — roughly 2x less wasted compute — with the important caveat (also
+measured, not assumed) that epoch-sharded's own tail-steal mechanism
+reintroduces a SMALLER-scope version of the same duplicate-work pattern near
+completion (see the epoch-sharded section above). **Recommendation for LAN/
+Nomad-managed fleets: default new fleetbench-style jobspecs to
+`ZEN_CLAIM_MODE=epoch-sharded`** (as `fleetbench-gt1-epoch.nomad.hcl` already
+does) rather than the zenfleet-worker crate's own compiled-in `lease` default.
+**Deliberately NOT changing the crate's compiled-in default** — that default
+is shared by cloud-burst and POOL-mode workers with different characteristics
+(sporadic per-run visits, homogeneous cloud instance types) where lease mode's
+tradeoffs may differ; flipping it would be an unreviewed, broader-than-scoped
+behavior change. The registration lives here (a benchmark record + jobspec
+convention), not in `fleet/handicaps.toml` (that file is for PER-BOX-TYPE
+`cells_per_hour` weights feeding weighted rendezvous sharding — a different
+axis from "which claim mode" — and its own measurement procedure requires the
+dedicated `handicap_typebench.sh` tool, not this mixed-codec fleetbench data).
+
+**Not yet measured — concurrency (`ZEN_CORE_OVERSUBSCRIBE`), VRAM admission,
+warm-exec (`ZEN_PERSISTENT_EXEC`).** No ladder runs done for any of these
+three in this session. `ZEN_PERSISTENT_EXEC` is the most cheaply testable
+next (a single documented on/off env toggle against the same frozen
+workload); VRAM admission needs a GPU-metric-heavy cell mix specifically
+sized to exercise the admission boundary; concurrency oversubscribe needs a
+CPU-bound comparison across box classes. None of these three should be
+considered "tuned" — the shipped config for them is still whatever the
+untuned default already was, not a measured argmax.
+
 ## Gate verdicts (summary)
 
 - **G-P0 baseline** — ✅ measured: cells/hour not cleanly isolated from the
@@ -668,10 +707,14 @@ all 5 GPU metrics.
   documented heterogeneous-chunk bug) confounds a clean idle-awake-hours
   measurement. A clean numeric pass needs a fresh, matched G-N1/G-P3 pair,
   ideally epoch-sharded to sidestep the redundant-tail confound.
-- **G-T1 throughput tuning** — early ladder data in hand (epoch-sharded vs
-  lease: 1.69x/1.51x vs 3.49x row-count ratio — epoch-sharded is the clear
-  early leader, with its own smaller-scope tail-pileup caveat), but no
-  concurrency/VRAM/warm-exec ladders run yet, and `fleet/handicaps.toml` was
-  deliberately NOT populated from this mixed-codec run (its own documented
-  measurement procedure requires the dedicated `handicap_typebench.sh` tool per
-  encoder type, which this fleetbench workload doesn't isolate).
+- **G-T1 throughput tuning** — ⚠️ **1 of 4 ladders measured.** Claim mode:
+  ✅ MEASURED and recommended (epoch-sharded 1.51-1.69x vs lease-mode's 3.49x
+  row-count ratio on this heterogeneous fleet) — registered as a jobspec/docs
+  convention, deliberately NOT as a crate-wide compiled-in default change
+  (broader-than-scoped). Concurrency (`ZEN_CORE_OVERSUBSCRIBE`), VRAM
+  admission, and warm-exec (`ZEN_PERSISTENT_EXEC`): ❌ not measured at all —
+  no ladder runs done, no argmax to ship, current behavior is whatever the
+  untuned default already was. `fleet/handicaps.toml` deliberately NOT
+  populated from this mixed-codec run (its own documented measurement
+  procedure requires the dedicated `handicap_typebench.sh` tool per encoder
+  type, which this fleetbench workload doesn't isolate).
