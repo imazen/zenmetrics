@@ -14,6 +14,9 @@
 #   fleet status <run> [--label <vast-label>]            # one-shot: boxes·burn·util·idle·startup·progress
 #   fleet watch  <run> [--label <p>] [--poll 20] [--max-burn 1.0] [--destroy]
 #   fleet top    <run>                                   # live ledger top
+#   fleet power status [--run <run> ...]                 # LAN-fleet sleep roster + queue depth (no action)
+#   fleet power apply  [--run <run> ...] [--live]         # queue-driven wake/sleep (Nomad-migration power
+#                                                         #   management — dry-run by default, --live to act)
 #   fleet kill   <run>                                   # tear it all down
 #   fleet smoke-image <IMAGE>                            # prove a rebuilt GPU executor on a real card (1 box, auto-destroy)
 #
@@ -140,6 +143,7 @@ case "${1:-}" in
     status) shift; cmd_status "$@";;
     watch)  shift; cmd_watch "$@";;
     top)    shift; exec python3 "$HERE/fleet_top.py" "$@";;
+    power)  shift; exec python3 "$HERE/fleet_power.py" "$@";;
     smoke-image) shift; exec python3 "$HERE/fleet_smoke_image.py" "$@";;
     kill)   shift; exec bash "$HERE/teardown_fleet.sh" "$@";;
     -h|--help|"") usage 0;;

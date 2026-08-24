@@ -3,7 +3,8 @@
   "canonical": {
     "monitor": [
       "scripts/jobsys/fleet",
-      "scripts/jobsys/fleet_top.py"
+      "scripts/jobsys/fleet_top.py",
+      "scripts/jobsys/fleet_power.py"
     ],
     "verify": [
       "scripts/jobsys/fleet_smoke_image.py"
