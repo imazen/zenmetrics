@@ -257,17 +257,99 @@ the G-T1 ladder proper.
 
 Jobspec: `homefleet/zenmetrics/ubuntu-node/nomad/jobs/fleetbench-gn1.nomad.hcl` —
 `type = "batch"`, same 3-box `regexp` + `distinct_hosts` constraint, same image
-(`force_pull = true`), same `ZEN_CHUNK_WALL_SEC=60`, `ZEN_LONG_LIVED` deliberately
-unset (matches G-P0's exit-on-empty-gap semantics so wall-clock-to-exit is
-comparable). Only the run id / manifest URI / corpus prefix change.
+(`force_pull = true`), same `ZEN_CHUNK_WALL_SEC=60`, same claim mode (lease,
+`ZEN_CLAIM_MODE` deliberately unset — see the file's header comment for why this
+must not be "fixed" to epoch-sharded; that's a separate G-T1 ladder entry,
+`fleetbench-gt1-epoch.nomad.hcl`), `ZEN_LONG_LIVED` deliberately unset (matches
+G-P0's exit-on-empty-gap semantics). Only the run id / manifest URI / corpus
+prefix / `ZEN_WORKER` suffix differ from G-P0's config — Nomad is the only real
+variable. Verified directly on a live allocation (`nomad alloc exec ... env`):
+`ZEN_CLAIM_MODE` absent, `ZEN_RUN`/`ZEN_CHUNK_WALL_SEC` correct.
 
-<!-- FILL IN once launched: launch command, per-alloc start times, finish
-     timestamps, total wall-clock, final ledger row count, comparison ratio vs
-     G-P0 (target >=95% throughput), re-work tax vs G-P0 (target <=), ledger
-     divergence check (target zero). -->
+Launched via `nomad job run fleetbench-gn1.nomad.hcl` at 04:54:30Z — 3 allocations
+created immediately, one per constrained host, 0 queued/failed. Manually stopped
+via `nomad job stop fleetbench-gn1` at 04:59:37Z (5m7s later) at **84.4% distinct
+coverage (7,104/8,415)** — the same "stop once the tail-pileup dynamic dominates
+and further waiting adds mostly duplicate work, not new coverage" call as the
+other two runs, applied at a closely comparable completion percentage
+(G-P0's epoch-sharded rerun stopped at 84.7%) for a fair three-way comparison.
+**All 3 allocations exited `complete` (not `failed`/`lost`) — Nomad's own stop
+path delivered SIGTERM cleanly through the container under real in-flight
+chunk/claim execution, extending the graceful-exit count to 7/7 across both
+`systemctl stop` and `nomad job stop`, both under genuine load.**
 
-## Gate verdicts
+**Result at stop time: 10,758 total rows for 7,104 distinct done (0 failed) —
+1.514x row-count ratio, 45.57% genuine duplicate-(worker,ts) rate.** Per-worker
+raw rows: i265-gn1 4,845 · r7900x-gn1 4,419 · r3500-gn1 1,494.
 
-<!-- FILL IN: G-P0 status, G-N1 status (pass/fail against the HANDOFF thresholds),
-     and pointers to G-P2/G-P3/G-T1 sections once those runs use this same
-     workload. -->
+**Qualitative verdict — confirmed: Nomad is orthogonal to zenfleet's claim
+mechanism, as expected.** G-N1 shows the SAME defect class as G-P0 (duplicate
+execution climbing with completion percentage — the identical chunk-mode
+heterogeneous-fleet break, since Nomad just launches the same worker binary
+with the same claim code) at a broadly comparable order of magnitude for the
+completion point reached. No evidence Nomad makes the claim-dedup problem
+meaningfully better or worse — which is exactly the ADR's own framing ("Nomad
+is the LAN box-lifecycle layer ONLY; zenfleet stays the entire work-distribution
+plane") holding up under a real measurement, not just an architectural claim.
+
+**Quantitative verdict — honest limitation, not a fabricated percentage.** The
+HANDOFF gate wants "throughput ≥95% of G-P0, re-work tax ≤ G-P0" as precise
+numbers. Both runs were monitored via manual polling (20-30s cadence) rather
+than synchronized elapsed-time snapshots, and were stopped at DIFFERENT absolute
+distinct-done counts (G-P0 at 100%/8,415, G-N1 at 84.4%/7,104) — so a directly
+comparable "cells/hour" or "re-work tax at matched completion" figure is NOT
+available from this data without risking a misleadingly precise number from a
+noisy comparison base (per the repo's own "never fabricate/estimate performance
+numbers" discipline). What IS defensible: G-N1's row-count ratio at its 84.4%
+stop point (1.514x) is LOWER than G-P0's ratio at earlier, less-complete
+checkpoints of its own run (e.g. 1.737x at 96.8% coverage per the interim-finding
+checkpoint above) — i.e. nothing in the data suggests G-N1 is WORSE than G-P0;
+if anything the raw numbers lean the other way, but not by a margin this
+polling cadence can responsibly quantify as a percentage. **A rerun with
+synchronized per-N-second ledger snapshots (not ad-hoc manual polling) is the
+right way to produce a defensible throughput-ratio number for a strict pass/fail
+against the 95% threshold** — tracked as a G-T1/measurement-tooling follow-up,
+not resolved by manufacturing a number here.
+
+**Zero ledger divergence, zero stranded claims (as far as observed):** both
+runs' ledgers show 0 failed/poisoned rows and 100% of attempted cells eventually
+landing a `done` row with a real `output_sha` — no silent data loss, no
+inconsistent state between the two schedulers. Leftover `claims/` objects exist
+under both run prefixes post-stop (331 for G-P0, expected — claims are not
+auto-GC'd on completion by design; they age out past TTL rather than being
+actively deleted) but none were observed to block or corrupt any subsequent
+read in this session; a rigorous "stranded claim" audit (claim exists with no
+corresponding ledger resolution) is a good G-T1/tooling addition, not done here.
+
+## Gate verdicts (summary)
+
+- **G-P0 baseline** — ✅ measured: cells/hour not cleanly isolated from the
+  duplicate-execution confound (see above), re-work tax **3.49x**, distinct-done
+  == declared (8,415 == 8,415), 0 failed. Headline finding: chunk-mode's
+  per-chunk lease gives **zero** cross-worker dedup on this heterogeneous-core
+  fleet (100% duplicate rate) — filed as a Known Bug + ADR defect register entry.
+- **G-N1 parity** — ⚠️ PARTIAL: qualitative parity confirmed (Nomad is
+  orthogonal to the claim mechanism, same defect class at comparable severity,
+  0 failed/poisoned, no ledger divergence observed) — but the strict numeric
+  "≥95% throughput / ≤ re-work tax" thresholds are NOT rigorously verified from
+  this run's polling data (see the honest-limitation note above). Needs a
+  synchronized-snapshot rerun to close out numerically.
+- **G-P1 wake round-trips** — ✅ PASSED 3/3 on i265 (8.0s/8.0s/8.0s) and r3500
+  (7.0s/7.0s/7.0s), both < the 3-min target (see homefleet
+  `ubuntu-node/nomad/wol/wol_roundtrip_test.sh`, run prior to this session's
+  fleetbench work).
+- **G-P2 drain safety** — ⏳ NOT YET a genuine test. What exists so far: 7/7
+  graceful SIGTERM-under-real-load exits (`systemctl stop` ×4, `nomad job stop`
+  ×3), all `rc=0`/`complete`, none `failed`/`lost` — strong evidence the release
+  mechanism itself works under load, but this is SIGTERM/stop, not a real
+  suspend-to-RAM + WoL wake cycle mid-chunk. A genuine G-P2 test (dedicated run,
+  deliberate `systemctl suspend` on a WoL-gated box with real work in flight,
+  verify claim release + exactly-once re-execution + wake) is still needed.
+- **G-P3 autoscale end-to-end** — not started.
+- **G-T1 throughput tuning** — early ladder data in hand (epoch-sharded vs
+  lease: 1.69x/1.51x vs 3.49x row-count ratio — epoch-sharded is the clear
+  early leader, with its own smaller-scope tail-pileup caveat), but no
+  concurrency/VRAM/warm-exec ladders run yet, and `fleet/handicaps.toml` was
+  deliberately NOT populated from this mixed-codec run (its own documented
+  measurement procedure requires the dedicated `handicap_typebench.sh` tool per
+  encoder type, which this fleetbench workload doesn't isolate).
