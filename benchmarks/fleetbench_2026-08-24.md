@@ -195,13 +195,63 @@ encode ledger is still valid — the DISTINCT done set is complete and correct �
 but the epoch-sharded rerun's ledger is the more representative encode-cost
 baseline to score from for any downstream timing claims).
 
-### Epoch-sharded rerun (the fix, tested)
+### Epoch-sharded rerun (the fix, tested) — MASSIVE improvement, with an honest caveat
 
-<!-- FILL IN: ZEN_CLAIM_MODE=epoch-sharded rerun on the same 3 boxes / same
-     manifest content — final row count, distinct job_ids, duplicate rate,
-     wall-clock to full coverage. This is the fair, correctly-configured
-     baseline G-N1 should be measured against, per RUNNING_JOBS.md §5b's own
-     guidance for "a dedicated single-run fleet" (this workload, exactly). -->
+Same 3 boxes, same manifest content, separate run/ledger namespace
+(`fleetbench-epoch-2026-08-24`), `ZEN_CLAIM_MODE=epoch-sharded`
+`ZEN_EPOCH_LEN_SECS=60` `ZEN_EPOCH_HB_SECS=15` (epoch length shrunk from the
+600s zenfleet default so this short run crosses ≥1 boundary — see
+`fleetbench_systemd_worker.sh`'s `ZEN_FB_*` overrides). Started 04:45:57Z,
+manually stopped 04:53:15Z (7m18s) at **84.7% distinct-cell coverage** — same
+"stop the low-marginal-value tail" call as G-P0, for the same reason (see below).
+
+**Result at stop time: 12,047 total rows for 7,131 distinct done cells (0
+failed) — a 1.689x row-count ratio, vastly better than lease-mode's FINAL
+3.49x, and dramatically better through most of the run** (14–15% genuine
+duplicate rate through ~75% completion, vs. lease-mode's 62%+ at the same
+completion point). This directly confirms the root-cause hypothesis from the
+lease-mode finding above: epoch-sharded claiming shards by rendezvous-hashing
+individual CELLS, independent of any box's local `BoxBudget`, so it does not
+suffer chunk-mode's non-colliding-chunk-id structural break.
+
+**Honest caveat — the SAME tail-pileup dynamic reappears near completion, at
+smaller scale.** Genuine duplicate rate climbed 14%→24%→36%→49%→58% as distinct
+coverage crept from ~34%→77%→82%→84%→84.7%, with real NEW-cell progress nearly
+stalling in the last few minutes (r3500, 6 cores, the slow box, was still
+visibly working — confirmed alive at ~100% CPU via `docker stats`, not
+hung — but its shrinking remaining share was increasingly contested by
+tail-steal attempts from the two already-finished-their-own-share fast boxes).
+This is very likely epoch-sharded's own documented "tail-steal" mechanism
+("a worker that exhausts its shard tail-steals peers' remaining cells
+lease-guarded") racing against a slow box's still-in-flight local execution —
+the per-cell lease should prevent this in principle, but a steal attempt that
+checks "is this cell DONE in the ledger yet" (not "is someone else actively
+mid-execution on it") would still produce a genuine duplicate if the slow
+box's execution hasn't landed a ledger row yet. Narrower blast radius than
+lease-mode's structural break (only the LAST ~15% of cells are affected, not
+the whole manifest), but real and worth a G-T1 follow-up (e.g. `--no-tail-steal`
+comparison, or a longer `ZEN_EPOCH_LEN_SECS` that gives the slow box more room
+before triggering a steal).
+
+**Bonus SIGTERM-under-real-load confirmation, now 3/3 (this run) + 1/3 (G-P0)
+= 4/4 real-load graceful exits:** `systemctl stop zen-fleetbench-worker` on
+all three boxes (mid real, non-idle chunk/epoch execution) each returned
+`rc=0`.
+
+Per-worker raw row share: r7900x 5,252 · i265 4,887 · r3500 1,908 — closer to
+proportional-but-not-exactly-core-weighted than lease-mode's near-independent
+full-copies, consistent with epoch-sharded's unweighted (no `handicaps.toml`
+entries registered for these 3 boxes yet) roughly-equal-shares-plus-tail-steal
+model rather than lease-mode's "everyone races the whole thing" model.
+
+**Verdict for G-N1 (important, corrects an earlier same-session mistake):**
+epoch-sharded is a genuine G-T1 tuning-ladder finding, NOT a "fix" to swap into
+the G-N1 comparison. G-N1 isolates the SCHEDULER as the only variable, so it
+must run the SAME claim mode G-P0 used (lease) — see
+`fleetbench-gn1.nomad.hcl`'s header comment (reverted after a wrong first
+instinct, homefleet commit `b3420e32`). The epoch-sharded Nomad-side
+comparison lives in a separate jobspec, `fleetbench-gt1-epoch.nomad.hcl`, for
+the G-T1 ladder proper.
 
 ## G-N1 — Nomad-managed
 
