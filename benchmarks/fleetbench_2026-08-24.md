@@ -786,6 +786,26 @@ from 16 observed vs. ~3 predicted needs dedicated tracing (timestamped
 instrumentation of `can_admit`'s actual `cand_vram` argument + a
 rebuild-instrument-retest cycle), scoped as follow-up rather than more
 live probing, per this doc's own precedent for the SIGTERM investigation.
+Two more hypotheses also traced and RULED OUT, narrowing the follow-up's
+scope: **(a) cross-chunk concurrency** — `execute_gap_chunked`'s chunk loop
+(`lib.rs:1197-1224`) is a plain sequential `for &ci in &order` over
+`pack_chunks_lpt`'s chunks, each `run_chunk_concurrent` call blocking
+(`std::thread::scope`) until every member of that chunk finishes before the
+next chunk starts, so at most one chunk's `Shared`/`InFlight` state is ever
+live at a time — this is NOT multiple independent admission ledgers running
+in parallel; **(b) a TOCTOU race between the `can_admit` check and
+`running.add()`** — both happen inside the same `MutexGuard` scope
+(`lib.rs:1298-1301`) with no lock release between them, so two threads can't
+both observe `count == 0` (or any other stale state) and double-admit. The
+narrowed follow-up: either `default_vram_estimate`'s 2 GiB isn't actually
+the `cand_vram` value reaching `can_admit` at runtime for these jobs (despite
+every individual piece checking out in isolation above), or a brief overlap
+at CHUNK BOUNDARIES (a fresh chunk's first job hits the `count == 0`
+unconditional-admit bypass while the previous chunk's last jobs are still in
+CUDA driver teardown, which can lag the Rust-level "done") repeats often
+enough across many small chunks to stack up to 16 — plausible given a
+500-tiny-job batch likely packs into several chunks, but not confirmed;
+needs the actual chunk count and per-chunk timing from a traced rerun.
 **No real-world harm occurred in this run**: actual per-job VRAM usage
 (8-256 MiB) stayed far below the 2 GiB reservation estimate throughout,
 so even 16-way concurrency (≈2.4 GB actual) never approached the 6 GB
