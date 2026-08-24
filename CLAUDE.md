@@ -359,6 +359,35 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **Chunk-mode's per-chunk lease claim provides ZERO cross-worker dedup on a
+  heterogeneous-core-count fleet — measured 100% duplicate-execution rate on a real
+  3-box run (found 2026-08-24, fleetbench-2026-08-24 G-P0 baseline,
+  `benchmarks/fleetbench_2026-08-24.md` has the full writeup).** `chunk-id =
+  sha256(member job-ids)` and chunk MEMBERSHIP comes from
+  `BoxBudget::pack_chunks_lpt(&self, jobs, target_wall_sec)`, where `&self` is the
+  CALLING BOX'S OWN core/RAM budget (`crates/zenfleet-worker/src/lib.rs:2141-2148`).
+  Boxes with different core counts (r7900x 24C / i265 20C / r3500 6C, in the
+  measured run) partition the identical job gap into differently-shaped chunks, so
+  their chunk-ids never collide and the lease has nothing to catch — confirmed
+  directly: r7900x logged `done=8415 … skipped=0` for its own pass 1 (all 8,415
+  cells, alone), i265 logged the identical tally for its own concurrent pass 1.
+  Two fast boxes each independently executed the ENTIRE manifest. **This is
+  DIFFERENT and more severe than the documented lease-mode race in
+  `docs/RUNNING_JOBS.md` §5b** (the "avifgen … 3.6x" figure — likely measured on a
+  homogeneous fleet where same-shaped chunking WOULD collide) — this is a
+  structural non-collision, not a milder stale-view race. **Every household LAN
+  fleet is heterogeneous by construction**, so this bug is maximally relevant to
+  exactly the fleet the Nomad-migration mission targets. NOT fixed here — likely
+  fix directions: (a) derive chunk boundaries from a canonical box-independent
+  partition so chunk-ids are comparable across boxes, or (b) epoch-sharded
+  claiming (`ZEN_CLAIM_MODE=epoch-sharded`, shards by rendezvous-hashing
+  individual cells, independent of any box's `BoxBudget`) — untested against this
+  exact failure mode as of this writing; see the benchmarks doc for the rerun
+  once done. Secondary finding along the way: `LedgerRow.ts` is `ctx.now`, set
+  ONCE per `run()` call (one pass) and stamped on every row that pass writes
+  (`lib.rs:970,1178`) — NOT a per-cell completion timestamp; don't derive
+  per-cell timing from raw ledger `ts` values.
+
 - **`zenfleet-worker`'s `tests::exec_command_reads_stderr_class_marker` flakes under
   concurrent/high system load — 100% stable in isolation (found 2026-08-24, during the
   Nomad-migration P0 precondition landing).** Observed exactly twice, both times in a

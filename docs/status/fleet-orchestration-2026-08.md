@@ -221,3 +221,16 @@ as a separate, lower-priority item). Landed this month and load-bearing: error-c
 fidelity (`SourceFetch`/`DiskFull` + markers), ledger-snapshot `--ledger-in` contract in
 both modes, epoch-sharded claiming + weighted handicaps, warm exec pool + ScoreFile
 warm-ref.
+
+**New 2026-08-24 (fleetbench G-P0 baseline, high priority — directly relevant to this
+mission's fleet shape):** chunk-mode's per-chunk lease claim provides **zero**
+cross-worker dedup on a heterogeneous-core-count fleet — measured 100%
+duplicate-execution rate on a real 3-box run (r7900x 24C / i265 20C / r3500 6C).
+Root cause: chunk-id hashes chunk MEMBERSHIP, and membership comes from
+`BoxBudget::pack_chunks_lpt`, which takes the calling box's OWN core/RAM budget —
+different-core boxes partition the identical gap into non-matching chunks, so
+leases never collide. Every household LAN fleet is heterogeneous by construction,
+making this maximally relevant here. Full writeup + likely fixes (canonical
+box-independent chunk partitioning, or verify epoch-sharded claiming sidesteps it
+since it shards by cell hash, not local budget): `benchmarks/fleetbench_2026-08-24.md`,
+CLAUDE.md Known Bugs.

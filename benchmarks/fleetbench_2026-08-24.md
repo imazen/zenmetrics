@@ -107,36 +107,101 @@ a short run still forms multiple chunk-claim boundaries).
 
 Started: r7900x 04:24:57Z, i265 04:25:13Z, r3500 04:25:35Z (2026-08-24).
 
-**Interim finding (mid-run, ~7483/8415 distinct jobs done, will be finalized below):
-lease-mode claiming has a LARGE genuine duplicate-execution rate on this 3-box LAN
-fleet — 61.85% of distinct job_ids had a "done" row from more than one DISTINCT
-(worker, ts) pair** (e.g. r7900x finished a cell at ts=1787545497, i265 independently
-finished the SAME job_id 14s later at ts=1787545513 — both wrote successful ledger
-rows). This is the documented lease-mode race (`docs/RUNNING_JOBS.md` §5b: "the
-avifgen encode run measured 3.6x under lease claiming with empty views"), sharply
-amplified here vs. the geo-distributed cloud fleets that number was measured on:
-near-zero LAN latency between 3 fast local boxes means claim-view staleness windows
-overlap constantly. **This is expected lease-mode behavior being measured
-correctly, not a bug in the systemd deployment** — `zenfleet-worker`'s claim
-algorithm is identical regardless of what launches the process, so G-N1 (same
-image, same default lease-mode claiming, Nomad-launched instead of systemd-
-launched) should show a SIMILAR duplicate rate if Nomad is genuinely orthogonal to
-work-distribution per the ADR's framing; a large delta between G-P0 and G-N1 here
-would itself be the anomaly worth chasing. Neither run set `ZEN_CLAIM_MODE=epoch-
-sharded` — epoch-sharded claiming (the documented fix for exactly this failure
-mode) is deferred to the G-T1 claim-mode tuning ladder, run separately against
-this same frozen workload once G-P0/G-N1 parity is established under the shared
-(lease-mode) baseline.
+### RESULT: 100% duplicate-execution rate — a real, heterogeneous-fleet-specific defect in chunk-mode lease claiming (not the documented lease-mode race)
 
-Raw row-count ratio (rows / distinct job_ids) at the same checkpoint: 1.7369 —
-noted separately from the 61.85% figure above because it also counts normal
-claimed-then-done bookkeeping (not itself waste); the duplicate-(worker,ts) metric
-is the one that actually measures wasted compute.
+**Final numbers** (run manually stopped 04:41Z once distinct-job coverage hit 100% —
+see "why stopped early" below): **29,400 total ledger rows for 8,415 distinct
+job_ids (0 failed/poisoned) — a 3.49x row-count ratio, and every single one of the
+8,415 distinct jobs (100.00%) has a "done" row from more than one DISTINCT
+(worker, ts) execution.** Sample (repeats across many different job_ids with the
+EXACT same ts pair, which is itself a clue — see below):
+`[('i265', 1787545513), ('i265', 1787546176), ('r7900x', 1787545497)]`.
 
-<!-- FILL IN once the run reaches all-inactive: finish timestamps, total wall-clock
-     (from earliest start to latest finish), final ledger row count, final distinct
-     job_id count (expect 8415, zero poison/failed), final duplicate-execution rate,
-     per-box row share. -->
+**Root cause (verified against source, not inferred from the data alone):**
+chunk-mode's per-chunk R2 lease is keyed on `chunk-id = sha256(member job-ids)`
+(`docs/RUNNING_JOBS.md` §"Chunk 2"), and chunk MEMBERSHIP is computed by
+`BoxBudget::pack_chunks_lpt(&self, jobs, target_wall_sec)` — `&self` is the
+CALLING BOX'S OWN budget (`crates/zenfleet-worker/src/lib.rs:2141-2148` logs it:
+r7900x "budget 22.5 GiB / 24 cores", i265 "22.6 GiB / 20 cores", r3500's own,
+smaller, 6-core budget). **Three boxes with three different core counts partition
+the IDENTICAL 8,415-cell gap into three DIFFERENTLY-SHAPED sets of chunks, so
+their chunk-ids never collide — the lease has nothing to catch, because from its
+point of view r7900x, i265, and r3500 are each claiming entirely different
+(non-overlapping-by-name) chunks, even though the underlying cells inside those
+chunks overlap almost completely.** Confirmed directly in the run: r7900x logged
+`done=8415 failed=0 poisoned=0 skipped=0` for its OWN pass 1 alone (`skipped`
+is "gap jobs another worker claimed first" — zero means it never once lost a
+claim race to i265, which was running the identical manifest concurrently) — i265
+logged the identical `done=8415 … skipped=0` for ITS pass 1. **Each of the two
+fast boxes independently executed the ENTIRE 8,415-cell manifest, unaware of the
+other, for that box's whole first pass** (~11 minutes); r3500 (6 cores, ~4x fewer
+than r7900x) was still grinding through its own independent full copy when the
+run was stopped.
+
+**This is a DIFFERENT, more severe finding than the documented lease-mode race**
+(`docs/RUNNING_JOBS.md` §5b's "avifgen … 3.6x under lease claiming with empty
+views", presumably measured on a homogeneous cloud fleet where same-shaped
+chunking WOULD collide and the lease WOULD catch most of it — a milder
+stale-view race, not a structural non-collision). **A household LAN fleet is
+heterogeneous by construction** (different-generation desktops with different
+core counts), which makes this the fleet shape MOST exposed to the bug — directly
+relevant to this whole mission. Filed as a new Known Bug (zenmetrics CLAUDE.md)
+and in the ADR's defect register. Likely fix directions (not implemented here):
+(a) derive chunk boundaries from a canonical, box-independent partition (e.g. a
+declare-time fixed sharding) so chunk-ids are comparable across boxes, or (b) use
+epoch-sharded claiming (`ZEN_CLAIM_MODE=epoch-sharded`), which shards by
+rendezvous-hashing individual CELLS — independent of any box's local
+`BoxBudget` — so it should not exhibit this failure mode. (b) is testable without
+a code change and is exactly what RUNNING_JOBS.md §5b already recommends "for a
+dedicated single-run fleet" (this workload, exactly) — see the epoch-sharded
+rerun below.
+
+**A secondary, narrower finding**: `LedgerRow.ts` is `ctx.now` — captured ONCE per
+`run()` invocation (one pass) and stamped on every row that pass writes
+(`crates/zenfleet-worker/src/lib.rs:970,1178`), NOT a true per-cell completion
+timestamp. This is why many different job_ids share bit-identical `(worker, ts)`
+pairs above, and why "time to full coverage" cannot be derived from ledger `ts`
+values — use direct wall-clock observation instead (see below). Anyone deriving
+per-cell timing from this ledger needs to know this.
+
+**Wall-clock (directly observed, not derived from `ts`):** r7900x started
+04:24:57Z; live log inspection at 04:36:09Z showed r7900x's pass 1 had already
+reached `done=8415` (i.e. full manifest coverage, achieved by ONE box alone) —
+**~11m12s wall-clock to full 8,415-cell coverage**, dominated by the fastest
+box's own single (fully redundant, as it turned out) pass. i265 reached the same
+point at 04:36:16Z, ~7s later. r3500 was still on its own first pass when stopped.
+
+**Why the run was manually stopped at 04:41Z instead of let idle out on its
+own:** once distinct-job coverage hit 8,415/8,415 (confirmed via a live ledger
+read), r3500 continuing its own independent full pass could only ever produce
+MORE duplicate work, never new coverage — letting a ~4x-slower box grind through
+a fully-redundant third copy of the whole manifest (estimated another 25-30
+minutes based on its per-core throughput vs. the two faster boxes) would have
+burned real box-hours for zero additional signal, which is precisely the
+"actively flag and stop wasted infrastructure" discipline this mission is partly
+about. Stopping doubled as a bonus SIGTERM-under-real-load check: `systemctl stop
+zen-fleetbench-worker` on r3500 (mid real chunk execution, not idle) returned
+`rc=0` — the P0 SIGTERM-release precondition holds under genuine in-flight work,
+not just the earlier synthetic Nomad-drain smoke test.
+
+**Per-worker raw row share** (NOT a fair 1/3 split — each box independently
+produced close to its own full copy, scaled by how far it individually got):
+r7900x 13,322 · i265 11,842 · r3500 4,236 rows.
+
+**CPU-score spec generated from this ledger**: `~/tmp/build_score_spec.py` wrote
+8,415 items × 3 metrics (ssim2/butteraugli/zensim) — ready to declare, but held
+pending the epoch-sharded rerun decision below (scoring against a 100%-duplicated
+encode ledger is still valid — the DISTINCT done set is complete and correct —
+but the epoch-sharded rerun's ledger is the more representative encode-cost
+baseline to score from for any downstream timing claims).
+
+### Epoch-sharded rerun (the fix, tested)
+
+<!-- FILL IN: ZEN_CLAIM_MODE=epoch-sharded rerun on the same 3 boxes / same
+     manifest content — final row count, distinct job_ids, duplicate rate,
+     wall-clock to full coverage. This is the fair, correctly-configured
+     baseline G-N1 should be measured against, per RUNNING_JOBS.md §5b's own
+     guidance for "a dedicated single-run fleet" (this workload, exactly). -->
 
 ## G-N1 — Nomad-managed
 
