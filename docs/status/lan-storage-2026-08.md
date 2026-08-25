@@ -14,7 +14,7 @@ repos use only `ZEN_S3_ENDPOINT` and neutral terms — see `docs/RUNNING_JOBS.md
 
 | milestone | status |
 |---|---|
-| Store container up on the NAS host (pinned MinIO, capped CPU/mem, NVMe-backed) | DONE 2026-08-08 |
+| Store container up on the NAS host (bring-up MinIO 2026-08-08; **swapped to SeaweedFS 4.43 on 2026-08-21**, MinIO parked as rollback), capped CPU/mem, NVMe-backed | DONE |
 | 3 buckets mirroring cloud names 1:1 (`zentrain`/`codec-corpus`/`zenfuzz`) | DONE |
 | Conditional-write gate (`PUT If-None-Match: *` race = exactly one winner) | **PASS** (sequential 200→412; concurrent race: 1 winner, 1 `PreconditionFailed`) |
 | `ZEN_S3_ENDPOINT` plumbing (resolver lib + 45 operator scripts + docs) | DONE — `84ff5158`, `b5318411`, `8c2fc367`, `4185b098` |
@@ -123,6 +123,11 @@ byte. Full writeup: `~/work/zenfuzz-farm/OPERATIONS-NOTES.md` (2026-08-10 sectio
 
 Store is **healthy and unchanged in role**: `zen-lanstore` container up 12 days on the NAS,
 all three buckets present and listable with the operator credentials.
+
+> **Impl note (2026-08-25, live-verified):** the `zen-lanstore` container image is
+> `chrislusf/seaweedfs:4.43` (host `:3900` → container `:8333`, SeaweedFS S3). The role
+> is unchanged; the *implementation* changed at the 08-21 swap (community MinIO is EOL).
+> Earlier text on this page saying "pinned MinIO" / "unchanged" predates the swap.
 
 **Almost nothing has actually moved yet** — measured today:
 
