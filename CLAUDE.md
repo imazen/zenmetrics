@@ -359,6 +359,40 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **r3500's Nomad client cannot register on the LAN cluster — persistent, NOT
+  root-caused, unrelated to power/WoL (found 2026-08-25, i265 and r3500 both
+  woken and healthy at the network level; r3500's `nomad` agent alone fails).**
+  Every `Node.Register` RPC from r3500 to all 3 servers (dev/tower/r7900x)
+  returns `rpc error: Permission denied` — this is a live RPC round-trip
+  returning a real denial, not a connectivity/timeout issue. Nomad 2.0.5's
+  "client introduction" feature is in play (`nomad node intro create` mints
+  real JWTs; `nomad acl policy list` independently confirms classic ACLs are
+  OFF — "ACL support disabled" — so this is NOT an ACL issue). Ruled out,
+  each verified directly rather than assumed: 3 independently-minted, never-
+  before-used introduction tokens (one single-use theory disproven — even a
+  token r3500 was the FIRST to touch still failed); a full client identity
+  wipe (fresh `client-id`/`secret-id`, fresh random node_id) combined with
+  each of the above; a restart of tower's `nomad-server` container (in case
+  of a stale/diverged keyring on one raft member — servers stayed alive/3-of-3
+  throughout, `dev` remained leader); clock skew (all 3 boxes' clocks agree
+  to within 1s, NTP-synced). **i265 — the same class of box, same config
+  template, same troubleshooting attempts — DOES register successfully now**
+  (`nomad node status` shows it `ready`/`eligible`), though its own history
+  shows the SAME error flapping intermittently before settling, which is
+  itself a loose end (why does registration succeed/fail inconsistently for
+  a client that eventually works, when r3500 fails 100% of attempts?).
+  Config diff between i265's and r3500's `agent.hcl` is byte-identical apart
+  from name/IP/meta values. **Workaround in place: proceed with i265 alone
+  for fleet work; r3500 stays reachable via SSH (health otherwise fine) but
+  excluded from Nomad-scheduled work until this is root-caused.** Candidates
+  for whoever picks this up: per-node-pool or per-node-name token scoping
+  Nomad might silently enforce beyond what `-node-pool=default` covers;
+  something specific to r3500's original provisioning (it's the newest box,
+  installed 2026-08-23) that never fully matched i265/r3500's shared
+  template despite the file diff looking clean; a Nomad 2.0.5 behavior this
+  session's knowledge of the (very recently introduced) node-introduction
+  feature doesn't yet cover.
+
 - **A batch job whose gap has a permanently-unresolved handful of jobs never
   actually stops — it cycles idle-drain forever instead of exiting, wasting
   box-time (found 2026-08-24, caught live via the fleet-monitoring standing
