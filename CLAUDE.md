@@ -393,29 +393,14 @@ over those persisted variants — never re-encode per metric.
   session's knowledge of the (very recently introduced) node-introduction
   feature doesn't yet cover.
 
-- **A batch job whose gap has a permanently-unresolved handful of jobs never
-  actually stops — it cycles idle-drain forever instead of exiting, wasting
-  box-time (found 2026-08-24, caught live via the fleet-monitoring standing
-  rule, NOT root-caused).** The `fleetbench-gpuscore` (warm-exec) job kept
-  running for ~46 minutes after its real work finished (06:33:46Z→~07:19Z)
-  on the fleet's only GPU box. Logs show a repeating cycle: 5 idle passes →
-  `"drained (idle 5 consecutive no-work passes) — exiting clean"` → a BRAND
-  NEW `"pass 1 start"` with idle reset to 0, forever — the container never
-  actually stops. Every pass reports `skipped=3995` — the same 5/4,000
-  declared jobs that never got a terminal ledger row in the original
-  warm-exec run (a permanently-unclaimable/unresolvable chunk, cause also
-  unknown). `fleet-entrypoint.sh`'s own drain logic
-  (`fleet-entrypoint.sh:292-294`) `break`s the pass loop once
-  `idle >= ZEN_IDLE_PASSES` in non-long-lived mode, which should end the
-  script — so something OUTSIDE that logic (candidate: the Nomad task
-  `restart` stanza treating a clean-but-nonzero exit as a failure and
-  restarting the whole container; not confirmed) is restarting it after
-  each clean exit. Stopped via `nomad job stop -purge` rather than
-  investigate further while it kept burning box-time; no other job was
-  found in the same state. Two connected mysteries to resolve together if
-  anyone picks this up: (1) why do exactly 5 specific declared jobs never
-  resolve to a terminal ledger row, (2) why does the container restart
-  after a clean drain-exit instead of actually stopping. Full context:
+- **A batch job's gap can have a permanently-unresolved handful of jobs that
+  never get a terminal ledger row — NOT root-caused (the restart-loop half of
+  this same incident IS resolved, see "Resolved" below).** The
+  `fleetbench-gpuscore` (warm-exec) job's every pass reported `skipped=3995` —
+  the same 5/4,000 declared jobs that never got a terminal ledger row in the
+  original warm-exec run (a permanently-unclaimable/unresolvable chunk, cause
+  unknown). Open question if anyone picks this up: why do exactly 5 specific
+  declared jobs never resolve to a terminal ledger row. Full context:
   `benchmarks/fleetbench_2026-08-24.md`'s "Fleet-waste finding" section.
 
 - **`zenjxl` encoder panics on specific inputs — observed via fleetbench's GPU-score
@@ -544,6 +529,43 @@ over those persisted variants — never re-encode per metric.
   macos-Metal job (8 GB unified) may hit the same wall.
 
 ### Resolved
+
+- **Root cause found for the "batch job restarts forever after a clean idle-drain"
+  half of the `fleetbench-gpuscore` (warm-exec) incident above — FIXED 2026-08-25
+  in `homefleet` (commit `a176613482b1`), NOT in this repo.** The working theory
+  in this doc ("the Nomad `restart` stanza treating a clean-but-nonzero exit as a
+  failure") is **DISPROVEN by live testing**: `fleet-entrypoint.sh`'s own exit
+  code on the `idle >= ZEN_IDLE_PASSES` drain-and-`break` path is verified **0**
+  — reproduced twice by running the actual, unmodified script (mocked `aws`/
+  `s5cmd`/`zenfleet-worker` so it drains fast) as PID 1 of a real Docker
+  container under a real Nomad batch job with the exact `restart{attempts=2,
+  mode="fail"}` stanza these jobspecs use: both times `Client Status=complete`,
+  `Exit Code: 0`, `Total Restarts: 0`. The **actual** mechanism, also confirmed
+  live: every one of these jobspecs' `template` blocks reads a Nomad Variable
+  shared across ~20 jobs (`nomad/jobs/zenfleet-worker-pilot`, the R2 creds) and
+  none of them set `change_mode`, so Nomad's **default `change_mode = "restart"`**
+  applies — whenever that variable's rendered content changes (a credential
+  rotation via `nomad var put`, per `homefleet/zenmetrics/ORCHESTRATION-2026-08.md`),
+  Nomad SIGKILLs the task and starts a fresh attempt, **counted against the same
+  `restart{}` policy**, regardless of whether the task was mid-work or sitting
+  idle-draining. Verified live twice: default `change_mode` → updating the
+  shared var mid-run produced `"Restart Signaled: Template with change_mode
+  restart re-rendered"` → `Terminated Exit Code: 137` → a brand-new task attempt
+  (fresh PID 1, `Total Restarts` incremented) — the exact "fresh pass 1, idle
+  reset to 0" symptom: with `change_mode = "noop"` instead, the identical
+  rotation re-rendered the secrets file (confirmed via `nomad alloc exec`) but
+  left the running task untouched, and a full end-to-end run of the real
+  `fleet-entrypoint.sh` (8 configured idle passes, credential rotated mid-run)
+  completed every pass and reached `Client Status=complete / Exit Code=0 /
+  Total Restarts=0`. **Fix (homefleet, not this repo):** `change_mode = "noop"`
+  added to the shared template block in all 19 `type="batch"` jobspecs under
+  `zenmetrics/ubuntu-node/nomad/jobs/`; the one `type="service"` job sharing the
+  pattern (`zenfleet-worker-pilot.nomad.hcl`) intentionally keeps the default
+  restart-on-rotation behavior since a long-lived worker legitimately should
+  pick up rotated creds. This does not touch anything in this repo — no code
+  or jobspec here needed to change; `fleet-entrypoint.sh`'s exit-code handling
+  was already correct. The other half of the incident (5/4,000 jobs never
+  resolving to a terminal ledger row) remains open, see "Known Bugs" above.
 
 - **`dev` (one of the 3 Nomad servers, `node_class=always_on` + docker-driver
   client per its own config) had no Docker installed — found and FIXED
