@@ -393,14 +393,6 @@ over those persisted variants — never re-encode per metric.
   session's knowledge of the (very recently introduced) node-introduction
   feature doesn't yet cover.
 
-- **`dev` (one of the 3 Nomad servers, `node_class=always_on` + docker-driver client
-  per its own config) does not actually have Docker installed** (found 2026-08-25:
-  `systemctl is-active docker` → `inactive`; `docker` → `command not found`). Every
-  docker-driver job constrained to `dev` fails to place ("missing drivers" filter).
-  Not fixed yet — noted, not urgent since `r7900x`/`i265`/`tower` cover docker-driver
-  capacity; `dev` still works fine as a Nomad SERVER and for anything not needing
-  the docker driver (raw shell/CLI work, this session's own use of it).
-
 - **A batch job whose gap has a permanently-unresolved handful of jobs never
   actually stops — it cycles idle-drain forever instead of exiting, wasting
   box-time (found 2026-08-24, caught live via the fleet-monitoring standing
@@ -552,6 +544,16 @@ over those persisted variants — never re-encode per metric.
   macos-Metal job (8 GB unified) may hit the same wall.
 
 ### Resolved
+
+- **`dev` (one of the 3 Nomad servers, `node_class=always_on` + docker-driver
+  client per its own config) had no Docker installed — found and FIXED
+  2026-08-25.** `systemctl is-active docker` → `inactive`; `docker` → `command
+  not found`; every docker-driver job constrained to `dev` failed to place
+  ("missing drivers" filter). Fixed via the official `get.docker.com` install
+  script (Docker Engine 29.7.2) + `systemctl restart nomad` to pick up the
+  newly-available driver. Verified live: a `jxl-lossy-dense-dev` job that had
+  previously failed to place now placed and ran successfully
+  (`Client Status = running`) after the fix.
 
 - **SIGTERM chunk-claim release did NOT actually release the claim in a real
   end-to-end test; the P0 precondition reported "DONE, verified" had only ever
