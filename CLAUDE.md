@@ -369,23 +369,52 @@ over those persisted variants — never re-encode per metric.
   declared jobs never resolve to a terminal ledger row. Full context:
   `benchmarks/fleetbench_2026-08-24.md`'s "Fleet-waste finding" section.
 
-- **`zenjxl` encoder panics on specific inputs — observed via fleetbench's GPU-score
-  leg (found 2026-08-24, NOT a zenmetrics/fleet-orchestration bug — an upstream
-  dependency finding, out of scope to root-cause here).** 69/4,000 GPU-score jobs
-  (1.7%) failed with `error_class: encoder_panic` during `jobexec`'s metric-job
-  re-encode step (re-encode happens before scoring; see `benchmarks/
-  fleetbench_2026-08-24.md`'s CPU/GPU-score section for the full breakdown).
-  4 distinct source images (3 of 4 are `scans-illustrations`/`gen_illustrations`
-  content — flat-color line art is a plausible common factor, not confirmed),
-  `zenjxl` 68/69 (`zenavif` 1/69), spread across effort 5/7/9 (both VarDCT and
-  modular cells) and evenly across all 5 GPU metrics being scored (confirming the
-  panic is in the shared re-encode, not metric-specific code). The actual panic
-  message wasn't recoverable from `nomad alloc logs` post-completion (subprocess
-  stderr not captured into the parent's log stream — possibly the same capture gap
-  as the SIGTERM-release investigation below, though not confirmed as the same
-  cause). Correctly surfaced as FAILED rows, not silently lost or corrupting a
-  score — the job system's design worked as intended here. Flagging for whoever
-  owns `zenjxl` robustness; not investigated further in this session.
+- **`zenjxl` encoder panics on specific inputs — root-caused 2026-08-25, fix landed
+  upstream + independently re-verified, but NOT YET ACTIVE in this repo's production
+  path (needs a human decision before it changes fleet behavior) — see
+  `benchmarks/autonomous_fix_run_2026-08-25.md` Track 1 for the full writeup.**
+  Originally observed via fleetbench's GPU-score leg (found 2026-08-24): 69/4,000
+  GPU-score jobs (1.7%) failed with `error_class: encoder_panic` during `jobexec`'s
+  metric-job re-encode step (see `benchmarks/fleetbench_2026-08-24.md`'s CPU/GPU-score
+  section). 4 distinct source images (3 of 4 flat-color line-art/illustration
+  content — plausible, not proven, common factor), `zenjxl` 68/69 (`zenavif` 1/69),
+  spread across effort 5/7/9 (both VarDCT and modular cells) and evenly across all 5
+  GPU metrics scored (confirms the panic is in the shared re-encode, not
+  metric-specific code). **Root cause (confirmed 2026-08-25 by reproducing the exact
+  failing image bit-for-bit under `ulimit -v`):** `count_zero_coefficients` allocates
+  small fixed-size (≤16 KiB) scratch buckets infallibly; under genuine allocator
+  starvation this hits Rust's default `handle_alloc_error`, which **aborts the whole
+  process** (SIGABRT) — not a catchable panic, a hard process abort, hence the message
+  never reaching `nomad alloc logs` via normal stderr capture. **Fix: jxl-encoder
+  commit `cf50d7cf99de11dbe943b831317bbee49c3abe36`** converts these allocations to
+  fallible (`Result`-returning, opt-in via `Limits::with_fallible_alloc(true)`,
+  respecting the crate's existing caller-controls-fallibility design) +
+  **zenjxl commit `e79179ecce51b4250d9106584b3ce9d68d994ea3`**. Independently
+  re-verified: both commits are current `origin/main` HEAD in their repos; the new
+  tests pass on a fresh build; the exact real failing image reproduces the original
+  SIGABRT without the flag and a graceful `Result::Err` with it, under identical
+  `ulimit -v`. **Confirmed NOT yet active in production**: `zenmetrics-cli`'s
+  `sweep/plan.rs` zenjxl re-encode call site uses bare `.with_threads(1).encode(...)`
+  with no `Limits` object, so the fallible path is never engaged today — fleet
+  behavior for this crash class is unchanged until a deliberate zenmetrics-side change
+  opts in. **Decision pending (yours):** should `plan.rs` opt into
+  `with_fallible_alloc(true)`, or should jxl-encoder's default policy for small bounded
+  scratch buffers change unconditionally (overriding the crate's per-caller-fallibility
+  convention)? Neither was decided for you. Also still open: zenmetrics'
+  `classify_msg()` labels this failure `encoder_panic`, which is accurate-enough but
+  imprecise (it's an allocator abort, not a Rust `panic!()`) — flagged, not fixed.
+
+- **fleetbench GPU-score OOM under concurrency — found 2026-08-25, separate class from
+  the encoder_panic above, NOT fixed (this repo's problem, unlike the panic above).**
+  A single jxl encode is small (~0.8–1.1 GB measured), but the zenfleet-worker
+  GPU-score executor admits multiple concurrent single-threaded encodes into one
+  memory-capped container — each fits alone, the aggregate exceeds the cap. This is a
+  `BoxBudget`/admission-control accounting gap for concurrent re-encode processes, not
+  a jxl-encoder or zenjxl issue. Not root-caused further or fixed; needs
+  `zenfleet-worker` admission control to account for concurrent re-encode memory, not
+  just per-job VRAM (see the existing VRAM-admission work in `### Resolved` below for
+  the analogous GPU-side mechanism). Full context:
+  `benchmarks/autonomous_fix_run_2026-08-25.md` Track 1.
 
 - **Chunk-mode's per-chunk lease claim provides ZERO cross-worker dedup on a
   heterogeneous-core-count fleet — measured 100% duplicate-execution rate on a real
