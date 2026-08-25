@@ -116,6 +116,10 @@ SLEEP_ROSTER = {
 WAKE_GAP_THRESHOLD = int(os.environ.get("ZEN_POWER_WAKE_GAP", "500"))  # cells of undone work
 SLEEP_GAP_THRESHOLD = int(os.environ.get("ZEN_POWER_SLEEP_GAP", "50"))  # must be < wake threshold
 MIN_AWAKE_DWELL_SECS = int(os.environ.get("ZEN_POWER_MIN_DWELL_SECS", str(30 * 60)))
+# User directive 2026-08-25 ("just disable sleeping everywhere"), default ON -- see decide()'s
+# docstring-adjacent comment for the two incidents that prompted this. Set
+# ZEN_POWER_ALLOW_SLEEP=1 to re-enable, and only with the user's explicit go-ahead.
+SLEEP_DISABLED = os.environ.get("ZEN_POWER_ALLOW_SLEEP", "0") != "1"
 FLEET_PXE = str(
     pathlib.Path(__file__).resolve().parent.parent.parent.parent
     / "homefleet" / "zenmetrics" / "ubuntu-node" / "pxe" / "fleet-pxe"
@@ -370,6 +374,17 @@ def decide(name: str, box: dict, up: bool, alloc_n: int | None, total_gap: int, 
     now = time.time()
     last_action = state.get(name, {}).get("last_action_ts", 0)
     dwell_ok = (now - last_action) >= MIN_AWAKE_DWELL_SECS
+    if SLEEP_DISABLED:
+        # User directive 2026-08-25: "just disable sleeping everywhere." Prompted by two real
+        # incidents the same week -- i134/r5600g stuck asleep after an S3-WoL gate failure, and
+        # r5900xt stranded ~2.5 days by an unrelated auto-reboot hitting its already-broken WoL.
+        # With the user away until 2026-09-03 and unable to physically recover a stuck box,
+        # the risk of an automated sleep outweighs the power savings. WAKE still works (boxes
+        # can still be brought up on demand); only the SLEEP action is suppressed, fleet-wide,
+        # regardless of gate/roster status. Re-enable by setting ZEN_POWER_ALLOW_SLEEP=1 --
+        # only do that with the user's explicit go-ahead, not as a default reversion.
+        if up:
+            return None
     if not up:
         if total_gap >= WAKE_GAP_THRESHOLD:
             return "wake"
