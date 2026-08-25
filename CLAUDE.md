@@ -393,6 +393,14 @@ over those persisted variants — never re-encode per metric.
   session's knowledge of the (very recently introduced) node-introduction
   feature doesn't yet cover.
 
+- **`dev` (one of the 3 Nomad servers, `node_class=always_on` + docker-driver client
+  per its own config) does not actually have Docker installed** (found 2026-08-25:
+  `systemctl is-active docker` → `inactive`; `docker` → `command not found`). Every
+  docker-driver job constrained to `dev` fails to place ("missing drivers" filter).
+  Not fixed yet — noted, not urgent since `r7900x`/`i265`/`tower` cover docker-driver
+  capacity; `dev` still works fine as a Nomad SERVER and for anything not needing
+  the docker driver (raw shell/CLI work, this session's own use of it).
+
 - **A batch job whose gap has a permanently-unresolved handful of jobs never
   actually stops — it cycles idle-drain forever instead of exiting, wasting
   box-time (found 2026-08-24, caught live via the fleet-monitoring standing
