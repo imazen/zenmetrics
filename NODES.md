@@ -86,3 +86,76 @@ Verified by a full reboot cycle on `node-3`: boot ID changed, `BootCurrent`
 stayed the PXE entry, and it returned to Ubuntu unattended. **Before concluding
 "firmware regression", check the worker flag first** — it is the far more likely
 cause and costs one command to rule out.
+
+## Nomad client stuck on `Node.Register: Permission denied` after a PARTIAL identity wipe (found + fixed 2026-08-25)
+
+A LAN Nomad client (`r3500`) could not register on the 3-server cluster
+(`dev` / `tower` / `r7900x`, all healthy, no ACLs, matching config, matching
+clocks, matching root keyring across all three) — every `Node.Register` RPC
+came back `rpc error: Permission denied`, and re-minting fresh
+`nomad node intro create` tokens (including ones with an explicit `-ttl`)
+never helped, no matter how quickly the token was deployed after minting.
+
+**Root cause, confirmed via server-side `nomad monitor -log-level=DEBUG
+-server-id=<raft-leader>`** (client-side logs never show the real reason —
+only the generic `Permission denied`; you have to watch the leader's own
+log at the moment of the RPC): the server logged, on every attempt,
+
+```
+[ERROR] nomad.client: node registration introduction authentication failure:
+enforcement_level=warn node_id=<old-node-id> node_pool=default node_name=r3500
+error="invalid claims: go-jose/go-jose/jwt: validation failed, token is expired (exp)"
+```
+
+— even immediately (single-digit seconds) after minting a token with a
+30-minute TTL, and even after **deleting the intro-token file from disk
+entirely**. That ruled out "the token itself is stale" outright: the client
+was not authenticating with the file on disk at all.
+
+The actual culprit was `state.db` in the client's data dir
+(`<data_dir>/client/state.db`). A prior session's "wipe the client identity
+for a fresh node_id" step had deleted `client-id` and `secret-id` but **left
+`state.db` untouched**. `state.db` had a cached, previously-issued **node
+identity token** (a separate, longer-lived JWT from the one-shot
+introduction token — proof-of-identity used for ongoing RPCs after
+registration) tied to the *old*, already-superseded `node_id`, and that
+cached token had genuinely expired hours earlier. The client kept presenting
+that stale cached identity instead of using the fresh introduction token,
+so the "expired (exp)" error was **completely accurate** — just about the
+wrong credential, one that no amount of re-minting could touch.
+
+**Fix — wipe ALL FOUR client-identity files together, never just
+`client-id`/`secret-id`:**
+
+```
+systemctl stop nomad
+rm -f <data_dir>/client/{client-id,secret-id,state.db,intro_token.jwt}
+nomad node intro create -node-name=<name> -node-pool=default -ttl=30m -json   # run on any server
+# deploy the returned JWT to <data_dir>/client/intro_token.jwt (chmod 600), then:
+systemctl start nomad
+```
+
+Verified: `node registration complete` on first start, and the node stayed
+`ready`/`eligible` across 2 additional full `systemctl restart` cycles plus
+60s of idle heartbeating with zero further RPC errors.
+
+**Side finding on the "is registration just flaky here" question:** a
+similarly-affected node (`i265`) that already had a long-lived successful
+registration was separately seen throwing `Permission denied` on
+`Node.UpdateStatus`/`Node.GetClientAllocs` (heartbeat RPCs, not
+`Node.Register`) for about 30 seconds during the same investigation window,
+then recovering on its own. That is a different, self-healing symptom
+(an already-valid, already-registered session hitting a transient auth
+hiccup) — don't conflate it with the `Node.Register` failure above, which
+does **not** self-heal no matter how many times the client retries, because
+the bad credential is cached on disk, not in a race.
+
+Nomad's default `client_introduction` server config (no `client_introduction`
+block was set on any of the 3 servers, so all defaults) is
+`enforcement = "warn"`, `default_identity_ttl = "5m"`, `max_identity_ttl =
+"30m"` — confirmed by requesting `-ttl=2h` and observing the server log
+`node introduction identity TTL request exceeds server maximum, using
+server maximum: requested_ttl=2h0m0s server_max_ttl=30m0s`. `warn`
+enforcement only soft-allows a client that presents **no** introduction
+token at all; a client that presents one and fails validation (expired,
+wrong node, malformed) is hard-denied regardless of enforcement level.
