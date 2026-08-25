@@ -1,0 +1,42 @@
+# fleet_power.py's hysteresis + safety settings. Versioned settings file, not env vars —
+# per user directive 2026-08-25 ("env vars are unreliable, better versioned settings file we
+# edit as needs change"). Edit this file and commit; do not reach for an env var override for
+# anything that's meant to persist. `scripts/jobsys/fleet_power.py` reads this at each
+# invocation (stdlib `tomllib`, no extra dependency) — a missing file or missing key falls back
+# to the hardcoded default noted alongside each setting below, so a stale checkout still runs
+# safely, just without the latest tuning.
+#
+# UPDATE PROCEDURE: edit the value, cite the reason in a comment on the same line or just above,
+# commit. No separate "registry" ceremony like fleet/handicaps.toml needs (that file tracks
+# per-box measured multipliers; this one is a handful of fleet-wide knobs) — just keep every
+# change's reasoning in the commit message and, for anything safety-relevant like
+# sleep_disabled, in this file too so a reader doesn't need git-blame to know why.
+
+# Cells of undone work across the tracked runs before a sleeping, gated box gets woken.
+wake_gap_threshold = 500
+
+# Cells of undone work below which an awake, idle, gated box becomes eligible to sleep
+# (only relevant when sleep_disabled = false). Must stay well below wake_gap_threshold —
+# that gap between the two thresholds IS the hysteresis; without it a box would wake, drain
+# the last handful of cells, and immediately re-qualify to sleep on the next tick.
+sleep_gap_threshold = 50
+
+# Minimum seconds a box must stay awake after any wake/sleep action before it's eligible for
+# the OPPOSITE action again — the other half of the hysteresis (paired with the gap-threshold
+# gap above). Prevents rapid wake/sleep flapping around the threshold boundary.
+min_awake_dwell_secs = 1800
+
+# Global kill switch: TRUE suppresses the "sleep" decision fleet-wide, for every box,
+# regardless of gate/roster status. WAKE is unaffected either way — boxes can still be
+# brought up on demand, only the automatic sleep-back-down action is suppressed.
+#
+# Set to true 2026-08-25 (user directive: "just disable sleeping everywhere"), prompted by
+# two real incidents the same week: i134/r5600g stuck asleep after an S3-WoL gate failure,
+# and r5900xt stranded ~2.5 days by an unrelated auto-reboot hitting its already-broken WoL.
+# With the user away until 2026-09-03 and unable to physically recover a stuck box, the risk
+# of an automated sleep outweighs the power savings.
+#
+# Only flip back to false with the user's explicit go-ahead — not as a default reversion once
+# a WoL fix looks like it's holding. Re-verify each gated box's wake reliability (a fresh
+# G-P1/G-P2 round, not just "it hasn't failed recently") before trusting sleep again.
+sleep_disabled = true

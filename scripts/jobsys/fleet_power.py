@@ -50,6 +50,7 @@ import pathlib
 import subprocess
 import sys
 import time
+import tomllib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "lib"))
 from zen_s3env import resolve  # THE resolver — see pool_progress.py's 2026-08-24 fix
@@ -113,13 +114,31 @@ SLEEP_ROSTER = {
 }
 
 # ── Hysteresis knobs (all overridable via env for tuning without a code edit) ───────────
-WAKE_GAP_THRESHOLD = int(os.environ.get("ZEN_POWER_WAKE_GAP", "500"))  # cells of undone work
-SLEEP_GAP_THRESHOLD = int(os.environ.get("ZEN_POWER_SLEEP_GAP", "50"))  # must be < wake threshold
-MIN_AWAKE_DWELL_SECS = int(os.environ.get("ZEN_POWER_MIN_DWELL_SECS", str(30 * 60)))
-# User directive 2026-08-25 ("just disable sleeping everywhere"), default ON -- see decide()'s
-# docstring-adjacent comment for the two incidents that prompted this. Set
-# ZEN_POWER_ALLOW_SLEEP=1 to re-enable, and only with the user's explicit go-ahead.
-SLEEP_DISABLED = os.environ.get("ZEN_POWER_ALLOW_SLEEP", "0") != "1"
+# Versioned settings file, not env vars (user directive 2026-08-25: "env vars are unreliable,
+# better versioned settings file we edit as needs change"). See fleet/power_settings.toml for
+# what each knob means and the update procedure. A missing file or missing key falls back to
+# the hardcoded default here, so a stale checkout still runs safely.
+_SETTINGS_PATH = pathlib.Path(__file__).resolve().parent.parent.parent / "fleet" / "power_settings.toml"
+
+
+def _load_power_settings() -> dict:
+    try:
+        with open(_SETTINGS_PATH, "rb") as f:
+            return tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        print(f"fleet_power: WARNING could not read {_SETTINGS_PATH} ({e}) — using hardcoded "
+              f"defaults, including sleep_disabled=True (fail safe, not fail open)", file=sys.stderr)
+        return {}
+
+
+_settings = _load_power_settings()
+WAKE_GAP_THRESHOLD = int(_settings.get("wake_gap_threshold", 500))  # cells of undone work
+SLEEP_GAP_THRESHOLD = int(_settings.get("sleep_gap_threshold", 50))  # must be < wake threshold
+MIN_AWAKE_DWELL_SECS = int(_settings.get("min_awake_dwell_secs", 30 * 60))
+# Fail SAFE if the settings file is missing/unreadable/missing this key: default to sleep
+# DISABLED, not enabled -- an accidental blank/missing file must never silently re-arm
+# automatic sleep. This mirrors the "fail safe" framing this whole knob was added for.
+SLEEP_DISABLED = bool(_settings.get("sleep_disabled", True))
 FLEET_PXE = str(
     pathlib.Path(__file__).resolve().parent.parent.parent.parent
     / "homefleet" / "zenmetrics" / "ubuntu-node" / "pxe" / "fleet-pxe"
