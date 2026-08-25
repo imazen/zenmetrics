@@ -309,7 +309,7 @@ zenrav1e     = { path = "../zenrav1e" }
 # this once zenavif-serialize 0.2.0 publishes to crates.io.
 # Equivalent git ref when the sibling checkout is gone:
 #   { git = "https://github.com/imazen/zenavif-serialize", rev = "<commit>" }
-zenavif-serialize = { path = "../zenavif-serialize" }
+zenavif-serialize = { path = "../zenavif/zenavif-serialize" }
 # zenavif-parse: deliberately NOT patched. ../zenavif absorbed it as a
 # workspace member on 2026-07-16 and declares it as
 # `zenavif-parse = { version = "0.7.0", path = "zenavif-parse" }`, so the
