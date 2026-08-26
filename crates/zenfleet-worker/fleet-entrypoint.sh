@@ -221,6 +221,14 @@ pool_mode(){
       # with scripts/jobsys/refresh_snapshots.sh (on the cred-holding box, never baked onto a worker).
       local snap="/tmp/snap_${run}.parquet"
       s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "s3://$ZEN_BUCKET/jobs/$run/ledger_snapshot.parquet" "$snap" >/dev/null 2>&1 || rm -f "$snap"
+
+  # Invariant 3 (anti-wedge doc, 2026-08-26): a silently-absent snapshot on a long
+  # single-run queue is the documented 2.0-3.4x re-work treadmill. Strict mode makes
+  # the miss FATAL instead of a benign-looking snap=none heartbeat.
+  if [ "${ZEN_REQUIRE_SNAPSHOT:-0}" = "1" ] && [ ! -s "$snap" ]; then
+    echo "FATAL: ZEN_REQUIRE_SNAPSHOT=1 but no ledger_snapshot.parquet for $run — run compact_ledgers.py + upload, or set ZEN_REQUIRE_SNAPSHOT=0" >&2
+    exit 3
+  fi
       local li=(); [ -s "$snap" ] && li=(--ledger-in "$snap")
       PASS_ENV=("${venv[@]}")
       run_pass --manifest "$mf" "${li[@]}" \
