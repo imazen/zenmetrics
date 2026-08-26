@@ -80,6 +80,14 @@ pub struct DesiredJob {
     /// cleanly as `None`.
     #[serde(default)]
     pub hint: Option<ResourceHint>,
+    /// Executor capability tokens this job REQUIRES (anti-wedge invariant 5, 2026-08-26):
+    /// compiled-feature names of the `zenmetrics` executor (e.g. `hdr-gainmap`, `gpu-cvvdp`).
+    /// A worker probes its executor's `capabilities` output at pass start and self-excludes
+    /// from jobs whose requirements it cannot serve — a stale-image worker then claims
+    /// NOTHING instead of grinding failures. Not part of [`JobId`] (like `hint`), and
+    /// `#[serde(default)]` so pre-field manifests deserialize as "no requirements".
+    #[serde(default)]
+    pub requires: Vec<String>,
 }
 
 impl DesiredJob {
@@ -90,7 +98,14 @@ impl DesiredJob {
             inputs,
             cell,
             hint: None,
+            requires: Vec::new(),
         }
+    }
+
+    /// Declare executor capability tokens this job requires (invariant 5). Chainable.
+    pub fn with_requires(mut self, tokens: impl IntoIterator<Item = String>) -> Self {
+        self.requires = tokens.into_iter().collect();
+        self
     }
 
     /// Attach a scheduling [`ResourceHint`] (builder style). Does not affect
@@ -210,6 +225,22 @@ mod tests {
         v.apply(row(id.clone(), JobStatus::Claimed, 100));
         v.apply(row(id.clone(), JobStatus::Done, 100)); // same ts, higher rank wins
         assert_eq!(v.get(&id).unwrap().status, JobStatus::Done);
+    }
+
+    #[test]
+    fn requires_field_is_serde_additive() {
+        // Pre-invariant-5 manifests (no `requires`) must deserialize as empty.
+        let j = serde_json::to_value(sample_desired()).unwrap();
+        let mut old = j.clone();
+        old.as_object_mut().unwrap().remove("requires");
+        let d: DesiredJob = serde_json::from_value(old).unwrap();
+        assert!(d.requires.is_empty());
+        // Round-trip keeps tokens, and job_id ignores them (non-key, like hint).
+        let with = sample_desired().with_requires(["hdr-gainmap".to_string()]);
+        let back: DesiredJob =
+            serde_json::from_slice(&serde_json::to_vec(&with).unwrap()).unwrap();
+        assert_eq!(back.requires, vec!["hdr-gainmap".to_string()]);
+        assert_eq!(back.job_id(), sample_desired().job_id());
     }
 
     fn sample_desired() -> DesiredJob {

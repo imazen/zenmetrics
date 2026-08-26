@@ -24,7 +24,7 @@ use zenfleet_core::epoch::{self, ClaimMode, EpochShardCfg, Handicaps, Roster, Sh
 use zenfleet_core::{
     BlobIndexEntry, BoxBudget, DesiredJob, ErrorClass, InFlight, JobCost, JobId, JobKind,
     JobStatus, LedgerRow, LedgerView, Regenerability, ResourceClass, ResourceHint, RetryPolicy,
-    RunControl, Sha256Hex, Tombstone, gc_plan, lru_cap_evict, reconcile, reconcile_at, sha256,
+    RunControl, Sha256Hex, Tombstone, gc_plan, lru_cap_evict, reconcile_at, sha256,
     worker_serves,
 };
 
@@ -1983,6 +1983,61 @@ fn kind_is_warm_eligible(kind: &JobKind, warm_kinds: &[String]) -> bool {
     warm_kinds.iter().any(|k| k == "all" || k == name)
 }
 
+/// Anti-wedge invariant 5: ask the executor which capability tokens it was compiled with
+/// (`<exec> capabilities`, one token per line; `build=`-prefixed lines are informational).
+/// `None` = the probe failed (old executor, missing binary) — callers must then treat every
+/// non-empty `requires` as unserved.
+pub fn probe_exec_capabilities(exec: &str) -> Option<std::collections::BTreeSet<String>> {
+    let out = Command::new(exec).arg("capabilities").output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    Some(
+        text.split_whitespace()
+            .filter(|t| !t.starts_with("build="))
+            .map(str::to_string)
+            .collect(),
+    )
+}
+
+/// Drop every desired job whose `requires` tokens the executor cannot serve (invariant 5).
+/// LOUD: prints how many were excluded and which tokens were missing. Jobs with empty
+/// `requires` always stay — pre-field manifests behave exactly as before.
+pub fn filter_by_exec_capabilities(desired: &mut Vec<DesiredJob>, exec: &str) {
+    if desired.iter().all(|d| d.requires.is_empty()) {
+        return; // nothing declares requirements: skip the probe entirely
+    }
+    let caps = probe_exec_capabilities(exec);
+    let have = caps.clone().unwrap_or_default();
+    let before = desired.len();
+    let mut missing: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    desired.retain(|d| {
+        let unserved: Vec<&String> =
+            d.requires.iter().filter(|r| !have.contains(*r)).collect();
+        if unserved.is_empty() {
+            true
+        } else {
+            for u in unserved {
+                missing.insert(u.clone());
+            }
+            false
+        }
+    });
+    let dropped = before - desired.len();
+    if dropped > 0 {
+        eprintln!(
+            "[capability-gate] excluded {dropped}/{before} jobs: executor '{exec}' {} (missing tokens: {})",
+            if caps.is_none() {
+                "has no `capabilities` self-report (stale image?)"
+            } else {
+                "lacks required tokens"
+            },
+            missing.into_iter().collect::<Vec<_>>().join(",")
+        );
+    }
+}
+
 /// Configuration for one worker pass (the runnable `zenfleet-worker` binary parses CLI args into this).
 #[derive(Debug, Clone)]
 pub struct WorkerConfig {
@@ -2588,6 +2643,12 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
     if !cfg.served.is_empty() {
         desired.retain(|d| worker_serves(&cfg.served, &d.kind));
     }
+    // Executor capability gating (anti-wedge invariant 5, 2026-08-26): jobs may declare
+    // `requires` tokens (executor compiled features, e.g. `hdr-gainmap`). Probe the executor's
+    // `capabilities` self-report ONCE and self-exclude from jobs it cannot serve — a
+    // stale-image worker then claims NOTHING instead of grinding failures. Probe failure
+    // (old executor without the subcommand) serves only requirement-free jobs, loudly.
+    filter_by_exec_capabilities(&mut desired, &cfg.exec);
 
     // Ledger paths may be local or s3:// — the R2 endpoint (if any) comes from the blob target.
     let endpoint = cfg.r2.as_ref().map(|t| t.endpoint.as_str());
@@ -2896,6 +2957,31 @@ mod tests {
     }
 
     #[test]
+    fn capability_gate_self_excludes_unserved_requires() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tmp();
+        std::fs::create_dir_all(&dir).unwrap();
+        let exec = dir.join("fake_exec.sh");
+        std::fs::write(&exec, "#!/bin/sh\n[ \"$1\" = capabilities ] || exit 2\necho hdr\necho cpu-metrics\necho build=1.2.3\n").unwrap();
+        std::fs::set_permissions(&exec, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let free = desired("m0", b"a");
+        let served = desired("m1", b"b").with_requires(["hdr".to_string()]);
+        let unserved = desired("m2", b"c").with_requires(["gpu-cvvdp".to_string()]);
+        let mut jobs = vec![free.clone(), served.clone(), unserved];
+        filter_by_exec_capabilities(&mut jobs, exec.to_str().unwrap());
+        let kept: Vec<_> = jobs.iter().map(|d| d.job_id()).collect();
+        assert_eq!(kept, vec![free.job_id(), served.job_id()], "unserved-requires job must drop");
+        // probe failure (no such executor): requirement-free jobs survive, requiring ones drop
+        let mut jobs2 = vec![free.clone(), served];
+        filter_by_exec_capabilities(&mut jobs2, "/nonexistent/exec-binary");
+        assert_eq!(jobs2.iter().map(|d| d.job_id()).collect::<Vec<_>>(), vec![free.job_id()]);
+        // no declared requirements: no probe, untouched even with a broken exec path
+        let mut jobs3 = vec![free.clone()];
+        filter_by_exec_capabilities(&mut jobs3, "/nonexistent/exec-binary");
+        assert_eq!(jobs3.len(), 1);
+    }
+
+    #[test]
     fn sidecar_fold_is_tolerant_and_latest_wins() {
         // A local ledger_out dir with: a snapshot fed via ledger_in, one NEWER sidecar
         // carrying a done row, and one CORRUPT parquet. The fold must apply the sidecar,
@@ -3012,6 +3098,7 @@ mod tests {
     }
     fn desired(metric: &str, enc: &[u8]) -> DesiredJob {
         DesiredJob {
+            requires: vec![],
             kind: JobKind::Metric {
                 metric: metric.into(),
             },
@@ -3427,6 +3514,7 @@ mod tests {
     /// give each a distinct content-addressed `JobId`.
     fn cheap_cell(i: u8) -> DesiredJob {
         DesiredJob {
+            requires: vec![],
             kind: JobKind::Encode {
                 codec: "zenjpeg".into(),
                 q: 80,

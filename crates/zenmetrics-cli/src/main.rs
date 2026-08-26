@@ -190,6 +190,11 @@ enum Command {
     FleetPlan(fleet_plan::FleetPlanArgs),
     /// Print available metrics and which require a GPU.
     ListMetrics,
+    /// Print the capability tokens this binary was compiled with, one per line
+    /// (the cargo feature names, plus a `build=<version>` info line). Consumed by
+    /// `zenfleet-worker` claim-time capability gating (anti-wedge invariant 5):
+    /// jobs whose `requires` tokens this executor lacks are self-excluded.
+    Capabilities,
     /// Print supported input formats.
     ListFormats,
 }
@@ -813,6 +818,10 @@ fn main() -> ExitCode {
         },
         Command::ListMetrics => {
             print_metric_list();
+            ExitCode::SUCCESS
+        }
+        Command::Capabilities => {
+            print_capabilities();
             ExitCode::SUCCESS
         }
         Command::ListFormats => {
@@ -2408,6 +2417,47 @@ fn find_col(headers: &csv::StringRecord, names: &[&str]) -> Result<usize, String
     Err(format!(
         "input TSV is missing one of the expected columns: {names:?}"
     ))
+}
+
+/// Anti-wedge invariant 5: the executor's self-report. One compiled cargo-feature
+/// token per line; `build=` is informational (shas are unordered — versioning by
+/// TOKEN, e.g. a future `snapshot-v2`, is the supported mechanism, not min-sha).
+fn print_capabilities() {
+    macro_rules! cap {
+        ($name:literal) => {
+            if cfg!(feature = $name) {
+                println!($name);
+            }
+        };
+    }
+    cap!("png");
+    cap!("jpeg");
+    cap!("webp");
+    cap!("avif");
+    cap!("jxl");
+    cap!("gif");
+    cap!("tiff");
+    cap!("hdr");
+    cap!("hdr-gainmap");
+    cap!("hdr-svt");
+    cap!("cpu-metrics");
+    cap!("cpu-cvvdp");
+    cap!("cpu-iwssim");
+    cap!("gpu-butteraugli");
+    cap!("gpu-ssim2");
+    cap!("gpu-dssim");
+    cap!("gpu-cvvdp");
+    cap!("gpu-iwssim");
+    cap!("gpu-zensim");
+    cap!("gpu-cuda");
+    cap!("gpu-wgpu");
+    cap!("gpu-hip");
+    cap!("gpu-cpu");
+    cap!("jobexec");
+    cap!("sweep");
+    cap!("assemble");
+    cap!("orchestrator");
+    println!("build={}", env!("CARGO_PKG_VERSION"));
 }
 
 fn print_metric_list() {

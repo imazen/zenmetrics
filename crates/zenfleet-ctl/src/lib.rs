@@ -114,6 +114,7 @@ pub fn declare_encodes(items: &[EncodeDeclareItem]) -> Result<Vec<DesiredJob>, S
             }
         }
         out.push(DesiredJob {
+            requires: vec![],
             kind: JobKind::Encode {
                 codec: it.codec.clone(),
                 q: it.q,
@@ -156,6 +157,7 @@ pub fn declare(spec: &DeclareSpec) -> Result<Vec<DesiredJob>, String> {
             .map_err(|e| format!("item {}: {e}", it.image_path))?;
         for m in &spec.metrics {
             out.push(DesiredJob {
+            requires: vec![],
                 kind: JobKind::Metric { metric: m.clone() },
                 inputs: vec![sha.clone()],
                 cell: CellId {
@@ -187,6 +189,7 @@ pub fn declare_diffmaps(spec: &DeclareSpec, hdr: bool) -> Result<Vec<DesiredJob>
             .map_err(|e| format!("item {}: {e}", it.image_path))?;
         for m in &spec.metrics {
             out.push(DesiredJob {
+            requires: vec![],
                 kind: JobKind::Diffmap {
                     metric: m.clone(),
                     hdr,

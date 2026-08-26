@@ -118,6 +118,7 @@ mod tests {
 
     fn desired(metric: &str, enc: &[u8]) -> DesiredJob {
         DesiredJob {
+            requires: vec![],
             kind: JobKind::Metric {
                 metric: metric.into(),
             },

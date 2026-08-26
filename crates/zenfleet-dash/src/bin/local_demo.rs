@@ -31,6 +31,7 @@ fn cell(i: usize) -> CellId {
 fn desired_set() -> Vec<DesiredJob> {
     (0..5)
         .map(|i| DesiredJob {
+            requires: vec![],
             kind: JobKind::Metric {
                 metric: "cvvdp".into(),
             },
