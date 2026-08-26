@@ -25,7 +25,7 @@ KIND="${2:?gpu|cpu}"; shift 2
 [ "$#" -ge 1 ] || { echo "need >=1 bucket" >&2; exit 2; }
 case "$KIND" in
   gpu) IMG="ghcr.io/imazen/zenfleet-worker:exec-gpu-avifgen-66e3c417" ;;
-  cpu) IMG="ghcr.io/imazen/zenfleet-worker:exec-zensim944-57b7b9ad" ;;
+  cpu) IMG="ghcr.io/imazen/zenfleet-worker:exec-zensim944-2af6dbc3" ;;
   *) echo "kind must be gpu|cpu" >&2; exit 2 ;;
 esac
 S3BUCKET="${ZEN_FLEET_BUCKET:-zentrain}"
