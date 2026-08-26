@@ -828,7 +828,7 @@ fn epoch_exec<B: BlobStore + Sync>(
     // Phase 1 — the lease-free fast shard (zero claim traffic; this is the whole point).
     if !fast.is_empty() {
         let o = execute_gap_chunked(
-            &fast, view, policy, handler, store, gate, params, &mut flush, ctx,
+            &fast, view, policy, handler, store, gate, params.clone(), &mut flush, ctx,
         );
         merge_outcome(&mut out, o);
     }
@@ -845,7 +845,7 @@ fn epoch_exec<B: BlobStore + Sync>(
         }
         if !won.is_empty() {
             let o = execute_gap_chunked(
-                &won, view, policy, handler, store, gate, params, &mut flush, ctx,
+                &won, view, policy, handler, store, gate, params.clone(), &mut flush, ctx,
             );
             merge_outcome(&mut out, o);
         }
@@ -884,7 +884,7 @@ fn epoch_exec<B: BlobStore + Sync>(
                     continue;
                 }
                 let o = execute_gap_chunked(
-                    &won, view, policy, handler, store, gate, params, &mut flush, ctx,
+                    &won, view, policy, handler, store, gate, params.clone(), &mut flush, ctx,
                 );
                 merge_outcome(&mut out, o);
             }
@@ -1045,7 +1045,7 @@ pub fn chunk_id(job_ids: &[JobId]) -> String {
 }
 
 /// The per-box knobs the chunked claim path runs under (see [`execute_gap_chunked`]).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone)]
 pub struct ChunkParams {
     /// RAM + core admission envelope (≈ 0.75 × physical RAM, usable cores). Caps in-chunk concurrency.
     pub budget: BoxBudget,
@@ -1053,7 +1053,23 @@ pub struct ChunkParams {
     pub chunk_wall_sec: f64,
     /// Footprint assumed for a gap job carrying no [`ResourceHint`] (declare couldn't estimate it).
     pub fallback_hint: ResourceHint,
+    /// Progress-conditioned lease renewal hook (anti-wedge invariant 1): called with
+    /// (chunk_id, done, total) as completions accumulate. `None` = no renewal (claims age
+    /// out on the TTL alone, the pre-invariant behavior).
+    pub renew: Option<std::sync::Arc<dyn Fn(&str, u32, u32) + Send + Sync>>,
 }
+
+impl std::fmt::Debug for ChunkParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChunkParams")
+            .field("budget", &self.budget)
+            .field("chunk_wall_sec", &self.chunk_wall_sec)
+            .field("fallback_hint", &self.fallback_hint)
+            .field("renew", &self.renew.as_ref().map(|_| "<fn>"))
+            .finish()
+    }
+}
+
 
 /// Chunked, resource-bounded gap execution — the DEFAULT path (`ZEN_CHUNK_WALL_SEC > 0`, and it
 /// defaults to 300s), with [`execute_gap_claimed`] the serial `ZEN_CHUNK_WALL_SEC=0` opt-out. Two
@@ -1221,7 +1237,7 @@ where
         }
         // Won the chunk — run its cells concurrently under the budget (fresh processes), then turn
         // each (post-persist) result into a ledger row.
-        let results = run_chunk_concurrent(members, &gap, &params, &handler, store);
+        let results = run_chunk_concurrent(members, &gap, &params, &handler, store, cid);
         let mut chunk_rows: Vec<LedgerRow> = Vec::with_capacity(results.len());
         for (gi, res) in results {
             let d = gap[gi];
@@ -1274,6 +1290,7 @@ fn run_chunk_concurrent<H, B>(
     params: &ChunkParams,
     handler: &H,
     store: &B,
+    chunk_cid: &str,
 ) -> Vec<(usize, Result<Sha256Hex, ErrorClass>)>
 where
     H: Fn(&DesiredJob) -> Result<Vec<u8>, HandlerError> + Sync,
@@ -1345,6 +1362,18 @@ where
                         let mut g = shared.lock().unwrap_or_else(|p| p.into_inner());
                         g.running.remove(mem, thr, vram);
                         g.results.push((gi, mapped));
+                        // Anti-wedge invariant 1: progress-conditioned lease renewal — renew the
+                        // chunk claim as completions accumulate (every ~total/10, min 1). A chunk
+                        // making NO progress renews nothing, its claim ts ages past the TTL, and
+                        // another worker steals it: a wedged holder loses the lease by construction.
+                        if let Some(renew) = params.renew.as_ref() {
+                            let done_now = g.results.len() as u32;
+                            let total = members.len() as u32;
+                            let stride = (total / 10).max(1);
+                            if done_now % stride == 0 || done_now == total {
+                                renew(chunk_cid, done_now, total);
+                            }
+                        }
                     }
                     cv.notify_all(); // a slot freed → wake a waiter to admit the next cell
                 }
@@ -1397,6 +1426,20 @@ pub fn exec_command_deadline(
     }
     let mut child = cmd
         .spawn()
+        .or_else(|e| {
+            let mut last = e;
+            for _ in 0..20 {
+                if last.raw_os_error() != Some(26) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                match cmd.spawn() {
+                    Ok(c) => return Ok(c),
+                    Err(e2) => last = e2,
+                }
+            }
+            Err(last)
+        })
         .map_err(|e| HandlerError::new(ErrorClass::WorkerLost, format!("spawn {program}: {e}")))?;
     if let Some(mut stdin) = child.stdin.take() {
         stdin
@@ -1487,6 +1530,27 @@ pub fn exec_command(program: &str, job: &DesiredJob) -> Result<Vec<u8>, HandlerE
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
+        .or_else(|e| {
+            // ETXTBSY: another process forked while the program file's write fd was open
+            // (test-suite fork races); the window closes in ms — retry briefly.
+            let mut last = e;
+            for _ in 0..20 {
+                if last.raw_os_error() != Some(26) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                match Command::new(program)
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                {
+                    Ok(c) => return Ok(c),
+                    Err(e2) => last = e2,
+                }
+            }
+            Err(last)
+        })
         .map_err(|e| HandlerError::new(ErrorClass::WorkerLost, format!("spawn {program}: {e}")))?;
     if let Some(mut stdin) = child.stdin.take() {
         stdin
@@ -1594,12 +1658,31 @@ fn persistent_io_lost(e: io::Error) -> HandlerError {
 }
 
 fn spawn_serve(program: &str) -> Result<PersistentExec, HandlerError> {
-    let mut child = Command::new(program)
-        .arg("--serve")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        // stderr inherited → the child's logs land in the worker's stderr (the fleet box log).
-        .spawn()
+    let spawn_once = || {
+        Command::new(program)
+            .arg("--serve")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            // stderr inherited → the child's logs land in the worker's stderr (the fleet box log).
+            .spawn()
+    };
+    let mut child = spawn_once()
+        .or_else(|e| {
+            // ETXTBSY: a concurrently forked process briefly holds the program file's write fd
+            // between fork and exec (test-suite fork races); the window closes in ms.
+            let mut last = e;
+            for _ in 0..20 {
+                if last.raw_os_error() != Some(26) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                match spawn_once() {
+                    Ok(c) => return Ok(c),
+                    Err(e2) => last = e2,
+                }
+            }
+            Err(last)
+        })
         .map_err(|e| {
             HandlerError::new(
                 ErrorClass::WorkerLost,
@@ -2319,6 +2402,7 @@ fn default_chunk_params(chunk_wall_sec: f64) -> ChunkParams {
             threads: 1,
             vram_bytes: None,
         },
+            renew: None,
     }
 }
 
@@ -2416,7 +2500,28 @@ fn run_chunked(
                         &cfg.worker,
                     )
                 }),
-                params,
+                {
+                    // Invariant 1: real renewal on the lease path — overwrite OUR claim with a
+                    // fresh ts + progress. read_claim parses the FIRST token, so the progress
+                    // suffix is compatible with every steal-side reader.
+                    let (ep, bkt, pfx, wk) = (
+                        t.endpoint.clone(),
+                        cc.bucket.clone(),
+                        cc.prefix.clone(),
+                        cfg.worker.clone(),
+                    );
+                    let mut p = params;
+                    p.renew = Some(std::sync::Arc::new(move |cid: &str, done: u32, total: u32| {
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        let key = format!("{}/{}", pfx.trim_matches('/'), cid);
+                        let body = format!("{now} {wk} {done}/{total}");
+                        let _ = crate::s3io::put(&ep, &bkt, &key, body.as_bytes());
+                    }));
+                    p
+                },
                 &mut flush,
                 ctx,
             )
@@ -2431,7 +2536,7 @@ fn run_chunked(
                 handler,
                 &store,
                 |_| true,
-                params,
+                params.clone(),
                 &mut flush,
                 ctx,
             )
@@ -2446,7 +2551,7 @@ fn run_chunked(
                 handler,
                 &store,
                 |_| true,
-                params,
+                params.clone(),
                 &mut flush,
                 ctx,
             )
@@ -2742,6 +2847,54 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn chunk_claim_renews_with_progress() {
+        // Invariant 1: the renew hook fires as completions accumulate and ends at (total, total).
+        let store = LocalBlobStore::new(tmp()).unwrap();
+        let cells: Vec<DesiredJob> = (0..8u8).map(cheap_cell).collect();
+        let calls: Arc<Mutex<Vec<(String, u32, u32)>>> = Arc::new(Mutex::new(Vec::new()));
+        let mut params = test_params();
+        {
+            let calls = calls.clone();
+            params.renew = Some(std::sync::Arc::new(move |cid: &str, d: u32, t: u32| {
+                calls.lock().unwrap().push((cid.to_string(), d, t));
+            }));
+        }
+        let out = execute_gap_chunked(
+            &cells,
+            &LedgerView::new(),
+            RetryPolicy::default(),
+            |_job| Ok(b"enc".to_vec()),
+            &store,
+            |_| true,
+            params,
+            |_cid, _rows| {},
+            WorkerCtx {
+                worker: "w1",
+                provider: "local",
+                now: 300,
+            },
+        );
+        assert_eq!(out.done, 8);
+        let got = calls.lock().unwrap();
+        assert!(!got.is_empty(), "renew hook never fired");
+        // LPT may pack the cells into several chunks; renewal is PER-CHUNK (cid, done, total).
+        // Packing-agnostic contract: done <= total always, each chunk's final renewal reports
+        // done == total, and the chunk totals sum to every cell exactly once.
+        use std::collections::HashMap as Map;
+        let mut final_by_cid: Map<String, (u32, u32)> = Map::new();
+        for (cid, d, t) in got.iter() {
+            assert!(d <= t, "done {d} > total {t}");
+            final_by_cid.insert(cid.clone(), (*d, *t));
+        }
+        let mut sum = 0u32;
+        for (cid, (d, t)) in &final_by_cid {
+            assert_eq!(d, t, "chunk {cid} final renewal must report (total, total)");
+            sum += t;
+        }
+        assert_eq!(sum, 8, "chunk totals must cover every cell exactly once");
+    }
+
     #[test]
     fn sidecar_fold_is_tolerant_and_latest_wins() {
         // A local ledger_out dir with: a snapshot fed via ledger_in, one NEWER sidecar
@@ -3304,6 +3457,7 @@ mod tests {
                 threads: 1,
                 vram_bytes: None,
             },
+            renew: None,
         }
     }
 
