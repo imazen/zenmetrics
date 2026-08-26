@@ -51,3 +51,28 @@ reconcile with `ZEN_STORE=r2` to reach the R2-hosted jobs, without questioning i
   `s3env.sh` header, and confirm `ZEN_STORE`/endpoint resolves to the LAN store.
 - A worker's `ZEN_R2_ENDPOINT` value must be asserted to be the SeaweedFS endpoint
   before scaling up (add to the first-cell gate).
+
+## Resolution chapter 2: the stale-image failure the migration exposed (same day)
+
+Resuming on SeaweedFS hit a second latent defect: every sf2-cpu cell failed as
+`encoder_panic` in ~35ms. Manual single-cell repro (jobexec + full stderr) showed
+`GET http://192.168.50.170:3900/... in 112µs — HTTP error: builder error`: the
+`object_store` client REFUSES to build plain-http requests unless `allow_http` is
+set. Current source already fixes this in BOTH clients (worker s3io `55f8a339`,
+jobexec objstore `e7e04994`) — but the baked exec image `exec-zensim944-57b7b9ad`
+predates `e7e04994`: a split-brain image whose worker half wrote SW ledgers fine
+while its jobexec half failed every read. (Secondary real gap fixed en route: the
+jobs' reference images live under `refs/` — migrated too, 10.35 GiB.)
+
+Remedy, all verified: rebuilt both binaries musl-static from master, built + pushed
+`ghcr.io/imazen/zenfleet-worker:exec-zensim944-2af6dbc3` (ldd: "statically linked"
+×2), re-ran the manual single-cell repro on r5900xt against SeaweedFS (exit 0, real
+cvvdp JSON), relaunched the 3-box CPU fleet with it, and confirmed a fresh ledger
+chunk of 14/14 `done` rows on SeaweedFS while R2 stays frozen. Launcher defaults
+bumped so the stale tag can't come back. NOTE: the GPU image
+`exec-gpu-avifgen-66e3c417` predates the fix too — GPU rebuild in progress
+(build_executor_image_gpu.sh path); until it ships, GPU scoring against the LAN
+store will fail the same way.
+
+Dev-box gotcha fixed en route: `~/.docker/config.json` carried a WSL-era
+`"credsStore": "desktop.exe"` that broke every `docker login` (removed; backup kept).
