@@ -2487,15 +2487,85 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
     // Ledger paths may be local or s3:// — the R2 endpoint (if any) comes from the blob target.
     let endpoint = cfg.r2.as_ref().map(|t| t.endpoint.as_str());
     let mut view = LedgerView::new();
+    let mut snap_max_ts: u64 = 0;
     for p in &cfg.ledger_in {
         let uri = p.to_string_lossy();
         for row in zenfleet_ledger::read_ledger_uri(uri.as_ref(), endpoint)
             .map_err(|e| WorkerRunError::Ledger(e.to_string()))?
         {
+            snap_max_ts = snap_max_ts.max(row.ts);
             view.apply(row);
         }
     }
     mark!("read-ledger");
+    // Sidecar fold (anti-wedge invariants 4+7, 2026-08-26): the snapshot ages the moment
+    // chunk sidecars land after it, and a stale view re-works the delta (the documented
+    // 2.0-3.4x tax). Fold every sidecar in ledger_out's directory newer than the snapshot
+    // (1h margin), TOLERANT per file — an in-flight/footerless chunk is skipped and counted,
+    // never fatal. Default-on; ZEN_NO_SIDECAR_FOLD=1 restores the snapshot-only view.
+    if std::env::var("ZEN_NO_SIDECAR_FOLD").ok().as_deref() != Some("1") {
+        let (mut folded, mut rows_in, mut skipped) = (0u32, 0u64, 0u32);
+        let cutoff = snap_max_ts.saturating_sub(3600);
+        let out = cfg.ledger_out.to_string_lossy();
+        if let Some(rest) = out.strip_prefix("s3://") {
+            if let (Some((bucket, key)), Some(t)) = (rest.split_once('/'), cfg.r2.as_ref()) {
+                let dir = key.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+                if let Ok(entries) = s3io::list_entries(&t.endpoint, bucket, dir) {
+                    for (name, mtime) in entries {
+                        if mtime < cutoff as i64 || !name.ends_with(".parquet") {
+                            continue;
+                        }
+                        let uri = format!("s3://{bucket}/{dir}/{name}");
+                        match zenfleet_ledger::read_ledger_uri(&uri, endpoint) {
+                            Ok(rows) => {
+                                folded += 1;
+                                for row in rows {
+                                    rows_in += 1;
+                                    view.apply(row);
+                                }
+                            }
+                            Err(_) => skipped += 1,
+                        }
+                    }
+                }
+            }
+        } else if let Some(dir) = cfg.ledger_out.parent() {
+            if let Ok(rd) = std::fs::read_dir(dir) {
+                for ent in rd.flatten() {
+                    let path = ent.path();
+                    if path.extension().and_then(|e| e.to_str()) != Some("parquet") {
+                        continue;
+                    }
+                    let mtime = ent
+                        .metadata()
+                        .ok()
+                        .and_then(|m| m.modified().ok())
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs())
+                        .unwrap_or(u64::MAX);
+                    if mtime < cutoff {
+                        continue;
+                    }
+                    match zenfleet_ledger::read_ledger(&path) {
+                        Ok(rows) => {
+                            folded += 1;
+                            for row in rows {
+                                rows_in += 1;
+                                view.apply(row);
+                            }
+                        }
+                        Err(_) => skipped += 1,
+                    }
+                }
+            }
+        }
+        if folded > 0 || skipped > 0 {
+            eprintln!(
+                "zenfleet-worker: sidecar fold — {folded} file(s) ({rows_in} rows) newer than the snapshot folded into the view; {skipped} unreadable/in-flight skipped"
+            );
+        }
+    }
+    mark!("sidecar-fold");
 
     // Run control (goal C): if the run is paused/draining, pull no new work this pass. Fail-open —
     // an absent control object reads as RUNNING. The ledger is untouched, so resuming continues
@@ -2672,6 +2742,52 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn sidecar_fold_is_tolerant_and_latest_wins() {
+        // A local ledger_out dir with: a snapshot fed via ledger_in, one NEWER sidecar
+        // carrying a done row, and one CORRUPT parquet. The fold must apply the sidecar,
+        // skip the corrupt file, and never error.
+        let dir = std::env::temp_dir().join(format!("zf_fold_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let d1 = desired("cvvdp", b"a");
+        let mut done_row = LedgerRow {
+            job_id: d1.job_id(),
+            kind: d1.kind.clone(),
+            cell: d1.cell.clone(),
+            output_sha: Some(sha256(b"out")),
+            status: JobStatus::Done,
+            error_class: None,
+            attempts: 1,
+            ts: 2_000_000_000,
+            worker: "t".into(),
+            provider: "t".into(),
+        };
+        let side = dir.join("pass.chunk-aa.parquet");
+        zenfleet_ledger::write_ledger(&side, std::slice::from_ref(&done_row)).unwrap();
+        std::fs::write(dir.join("pass.chunk-bb.parquet"), b"NOT A PARQUET").unwrap();
+        // Build a view the way run() does, via the same fold logic in miniature:
+        let mut view = LedgerView::new();
+        let mut folded = 0;
+        let mut skipped = 0;
+        for ent in std::fs::read_dir(&dir).unwrap().flatten() {
+            match zenfleet_ledger::read_ledger(&ent.path()) {
+                Ok(rows) => {
+                    folded += 1;
+                    for r in rows {
+                        view.apply(r);
+                    }
+                }
+                Err(_) => skipped += 1,
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!((folded, skipped), (1, 1));
+        done_row.ts = 1; // older duplicate must NOT displace the folded row
+        view.apply(done_row.clone());
+        assert_eq!(view.get(&done_row.job_id).unwrap().ts, 2_000_000_000);
+        assert_eq!(view.get(&done_row.job_id).unwrap().status, JobStatus::Done);
+    }
+
     #[test]
     fn exec_command_deadline_kills_and_classifies_timeout() {
         // A child that sleeps far past the deadline must be killed, classified

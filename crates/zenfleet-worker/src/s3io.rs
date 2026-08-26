@@ -164,6 +164,26 @@ pub fn list_basenames(endpoint: &str, bucket: &str, prefix: &str) -> Result<Vec<
         .collect())
 }
 
+/// List the objects directly under `prefix/` with their last-modified times (unix secs).
+/// The sidecar-fold (anti-wedge invariant 4/7) uses this to fold only chunk files newer
+/// than the worker's snapshot view.
+pub fn list_entries(endpoint: &str, bucket: &str, prefix: &str) -> Result<Vec<(String, i64)>, String> {
+    let s = store(endpoint, bucket)?;
+    let p = OsPath::from(prefix.trim_matches('/'));
+    let res = runtime()
+        .block_on(async move { s.list_with_delimiter(Some(&p)).await })
+        .map_err(|e| format!("s3io list {bucket}/{prefix}: {e}"))?;
+    Ok(res
+        .objects
+        .into_iter()
+        .filter_map(|m| {
+            m.location
+                .filename()
+                .map(|n| (n.to_string(), m.last_modified.timestamp()))
+        })
+        .collect())
+}
+
 /// Delete an object (idempotent — NotFound is OK).
 pub fn delete(endpoint: &str, bucket: &str, key: &str) -> Result<(), String> {
     let s = store(endpoint, bucket)?;
