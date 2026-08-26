@@ -69,7 +69,7 @@ for bp in blobs:
                     continue
                 metric_data[(norm_sha(r["encode_sha"]), r["metric"])] = r.get("scores") or {r["metric"]: r.get("score")}
             elif k == "feature":
-                feat_data[norm_sha(r["encode_sha"])] = (r.get("zensim_score"), r.get("features"))
+                feat_data[norm_sha(r["encode_sha"])] = (r.get("zensim_score"), r.get("features"), r.get("regime"))
 print("  metric entries=%d, feature entries=%d, error rows skipped=%d" % (len(metric_data), len(feat_data), err_rows), flush=True)
 
 # 3+4) CELL rows -> encode_sha. Two sources:
@@ -102,8 +102,35 @@ else:
                       "knob_tuple_json": c.get("knob_tuple_json", ""),
                       "dist_sha": name2sha.get(os.path.basename(c.get("dist_path", "")))})
 
+ID_COLS = ["image_path", "q", "knob_tuple_json", "encode_sha"]
+if cells and cells[0].get("codec"):
+    ID_COLS = ["image_path", "codec", "q", "knob_tuple_json", "encode_sha"]
 all_score_cols = set()
-score_rows = []; feat_rows = []
+score_rows = []
+
+# Per-regime batched feature writers (regime purity; bounded memory).
+_FEAT_BATCH = int(os.environ.get("ZEN_FEAT_BATCH", "20000"))
+_fw = {}  # regime -> {"writer": ParquetWriter|None, "rows": [], "n": int, "width": int}
+def _feat_batch_add(base, ft):
+    zs, feats, regime = ft[0], ft[1], (ft[2] or "unknown")
+    st = _fw.setdefault(regime, {"writer": None, "rows": [], "n": 0, "width": len(feats)})
+    if len(feats) != st["width"]:
+        raise SystemExit("feature width %d != %d within regime %r — refusing to mix"
+                         % (len(feats), st["width"], regime))
+    row = dict(base); row["zensim_score"] = zs
+    for i, v in enumerate(feats): row["feat_%d" % i] = v
+    st["rows"].append(row); st["n"] += 1
+    if len(st["rows"]) >= _FEAT_BATCH: _feat_flush(regime)
+def _feat_flush(regime):
+    st = _fw[regime]
+    if not st["rows"]: return
+    cols = ID_COLS + ["zensim_score"] + ["feat_%d" % i for i in range(st["width"])]
+    tbl = pa.table({c: [r.get(c) for r in st["rows"]] for c in cols})
+    if st["writer"] is None:
+        os.makedirs(OUTDIR, exist_ok=True)
+        st["writer"] = pq.ParquetWriter("%s/features_%s.parquet" % (OUTDIR, regime),
+                                        tbl.schema, compression="zstd")
+    st["writer"].write_table(tbl); st["rows"] = []
 miss_sha = miss_score = 0
 for c in cells:
     sha = c["dist_sha"]
@@ -122,13 +149,11 @@ for c in cells:
     if ft and ft[1]:
         srow["zensim_score"] = ft[0]; all_score_cols.add("zensim_score")
         got = True
-        # ZEN_SKIP_FEATURES=1: scores-only pass. The per-row feature dicts are the
-        # memory hog (534k rows x 372 python floats OOM-killed a 60G box,
-        # 2026-08-26); skip building them when only scores are needed.
+        # Features are written INCREMENTALLY, one parquet PER REGIME (regime purity:
+        # never column-mix 372/720/924/944 rows), via batched ParquetWriter — the
+        # old whole-table feat_rows list OOM-killed a 60G box (57.9G rss, 2026-08-26).
         if os.environ.get("ZEN_SKIP_FEATURES") != "1":
-            frow = dict(base); frow["zensim_score"] = ft[0]
-            for i, v in enumerate(ft[1]): frow["feat_%d" % i] = v
-            feat_rows.append(frow)
+            _feat_batch_add(base, ft)
     if got: score_rows.append(srow)
     else: miss_score += 1
 print("  score_rows=%d feat_rows=%d (miss_sha=%d miss_score=%d)"
@@ -137,17 +162,17 @@ print("  score_rows=%d feat_rows=%d (miss_sha=%d miss_score=%d)"
 # 5) write parquet (ragged-safe: r.get(col) -> None fill). Feature width is taken from the
 # data (372 = with-iw v1, 720 = V2Ab, 924 = foldapp, 944 = foldapp2) — never assumed.
 ID = ["image_path", "q", "knob_tuple_json", "encode_sha"]
-if any("codec" in r for r in score_rows[:1] + feat_rows[:1]):
+if any("codec" in r for r in score_rows[:1]):
     ID = ["image_path", "codec", "q", "knob_tuple_json", "encode_sha"]
 scols = ID + sorted(all_score_cols)
 pq.write_table(pa.table({c: [r.get(c) for r in score_rows] for c in scols}),
                "%s/scores.parquet" % OUTDIR, compression="zstd")
-n_feat = max((len(f[1]) for f in feat_data.values() if f and f[1]), default=372)
 if os.environ.get("ZEN_SKIP_FEATURES") == "1":
-    print("ZEN_SKIP_FEATURES=1 — features.parquet NOT written (scores-only pass)", flush=True)
+    print("ZEN_SKIP_FEATURES=1 — features NOT written (scores-only pass)", flush=True)
 else:
-    fcols = ID + ["zensim_score"] + ["feat_%d" % i for i in range(n_feat)]
-    pq.write_table(pa.table({c: [r.get(c) for r in feat_rows] for c in fcols}),
-                   "%s/features.parquet" % OUTDIR, compression="zstd")
-print("WROTE %s/{scores,features}.parquet — scores %d rows x %d cols, features %d rows x %d feat"
-      % (OUTDIR, len(score_rows), len(scols), len(feat_rows), n_feat), flush=True)
+    for _rg in list(_fw):
+        _feat_flush(_rg)
+        if _fw[_rg]["writer"] is not None: _fw[_rg]["writer"].close()
+        print("  features_%s.parquet: %d rows x %d feat" % (_rg, _fw[_rg]["n"], _fw[_rg]["width"]), flush=True)
+print("WROTE %s — scores %d rows x %d cols (+ per-regime feature files above)"
+      % (OUTDIR, len(score_rows), len(scols)), flush=True)
