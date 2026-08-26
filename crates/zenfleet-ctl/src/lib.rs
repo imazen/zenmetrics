@@ -135,6 +135,11 @@ pub fn declare_encodes(items: &[EncodeDeclareItem]) -> Result<Vec<DesiredJob>, S
             hint: it.hint,
         });
     }
+    // Anti-wedge invariant 5: stamp kind-derived executor capability requirements
+    // so a stale-image worker self-excludes instead of grinding failures.
+    for d in &mut out {
+        d.requires = d.kind.required_capabilities();
+    }
     Ok(out)
 }
 
@@ -172,6 +177,11 @@ pub fn declare(spec: &DeclareSpec) -> Result<Vec<DesiredJob>, String> {
             });
         }
     }
+    // Anti-wedge invariant 5: stamp kind-derived executor capability requirements
+    // so a stale-image worker self-excludes instead of grinding failures.
+    for d in &mut out {
+        d.requires = d.kind.required_capabilities();
+    }
     Ok(out)
 }
 
@@ -205,6 +215,11 @@ pub fn declare_diffmaps(spec: &DeclareSpec, hdr: bool) -> Result<Vec<DesiredJob>
                 hint: None,
             });
         }
+    }
+    // Anti-wedge invariant 5: stamp kind-derived executor capability requirements
+    // so a stale-image worker self-excludes instead of grinding failures.
+    for d in &mut out {
+        d.requires = d.kind.required_capabilities();
     }
     Ok(out)
 }

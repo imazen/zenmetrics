@@ -197,6 +197,74 @@ pub enum JobKind {
 }
 
 impl JobKind {
+    /// Anti-wedge invariant 5: executor capability tokens (cargo feature names of the
+    /// `zenmetrics` executor) this job kind CERTAINLY needs. Conservative by design:
+    /// under-claiming merely skips the claim-time gate, while over-claiming would make
+    /// capable workers refuse work — so only structurally certain mappings are emitted
+    /// (`-gpu`/`_gpu` metric names → their `gpu-*` feature via [`metric_capability`];
+    /// encode codec → its codec feature; `hdr` flags → the `hdr` arm features).
+    /// Declare-side builders stamp this into [`crate::DesiredJob::requires`].
+    pub fn required_capabilities(&self) -> Vec<String> {
+        let mut req: Vec<String> = Vec::new();
+        let mut add = |t: &str| {
+            if !req.iter().any(|r| r == t) {
+                req.push(t.to_string());
+            }
+        };
+        match self {
+            JobKind::Encode { codec, hdr, .. } => {
+                let c = codec.to_ascii_lowercase();
+                if c.contains("svt") {
+                    add("hdr-svt");
+                } else if c.contains("gainmap") {
+                    add("hdr-gainmap");
+                } else if c.contains("jpeg") || c.contains("jpg") {
+                    add("jpeg");
+                } else if c.contains("png") {
+                    add("png");
+                } else if c.contains("webp") {
+                    add("webp");
+                } else if c.contains("avif") {
+                    add("avif");
+                } else if c.contains("jxl") {
+                    add("jxl");
+                } else if c.contains("gif") {
+                    add("gif");
+                } else if c.contains("tiff") {
+                    add("tiff");
+                }
+                if *hdr {
+                    add("hdr");
+                }
+            }
+            JobKind::Metric { metric } => {
+                if let Some(t) = metric_capability(metric) {
+                    add(&t);
+                }
+            }
+            JobKind::Diffmap { metric, hdr } => {
+                if let Some(t) = metric_capability(metric) {
+                    add(&t);
+                }
+                if *hdr {
+                    add("hdr");
+                }
+            }
+            JobKind::ScoreFile { metrics, hdr, .. } => {
+                for m in metrics {
+                    if let Some(t) = metric_capability(m) {
+                        add(&t);
+                    }
+                }
+                if *hdr {
+                    add("hdr");
+                }
+            }
+            JobKind::Feature { .. } | JobKind::Resample { .. } | JobKind::Bake { .. } => {}
+        }
+        req
+    }
+
     /// The routing/batching/GC profile for this kind. This is the single place asymmetries live.
     pub fn profile(&self) -> JobProfile {
         match self {
@@ -304,6 +372,21 @@ fn diffmap_class(metric: &str) -> ResourceClass {
     } else {
         metric_class(metric)
     }
+}
+
+/// The `gpu-*` executor feature for a GPU-suffixed metric name (`cvvdp-gpu` → `gpu-cvvdp`),
+/// or `None` for CPU-native names — their feature composition (e.g. which of
+/// `cpu-metrics`/`hdr` carries the CPU cvvdp) is a cli-crate detail this crate must not guess.
+/// Only the known GPU metric bases map; unknown names return `None` (under-claim, never guess).
+fn metric_capability(metric: &str) -> Option<String> {
+    let m = metric.to_ascii_lowercase();
+    let base = m.strip_suffix("-gpu").or_else(|| m.strip_suffix("_gpu"))?;
+    for known in ["butteraugli", "ssim2", "dssim", "iwssim", "zensim", "cvvdp"] {
+        if base == known || base.ends_with(known) {
+            return Some(format!("gpu-{known}"));
+        }
+    }
+    None
 }
 
 fn metric_class(metric: &str) -> ResourceClass {
@@ -506,6 +589,43 @@ mod tests {
         assert_eq!(ResourceClass::from_peak_mem(80 * MB), CpuLight); // small JPEG
         assert_eq!(ResourceClass::from_peak_mem(600 * MB), CpuHeavy); // mid AVIF
         assert_eq!(ResourceClass::from_peak_mem(8192 * MB), HighRam); // JXL-modular-e9
+    }
+
+    #[test]
+    fn required_capabilities_are_conservative_and_kind_derived() {
+        let sdr_jpeg = JobKind::Encode {
+            codec: "zenjpeg".into(),
+            q: 80,
+            knobs: "{}".into(),
+            hdr: false,
+        };
+        assert_eq!(sdr_jpeg.required_capabilities(), vec!["jpeg".to_string()]);
+        let hdr_svt = JobKind::Encode {
+            codec: "zenav1-svt".into(),
+            q: 60,
+            knobs: "{}".into(),
+            hdr: true,
+        };
+        assert_eq!(
+            hdr_svt.required_capabilities(),
+            vec!["hdr-svt".to_string(), "hdr".to_string()]
+        );
+        assert_eq!(
+            JobKind::Metric { metric: "cvvdp-gpu".into() }.required_capabilities(),
+            vec!["gpu-cvvdp".to_string()]
+        );
+        // CPU-native names under-claim (their feature composition is a cli detail)
+        assert!(JobKind::Metric { metric: "cvvdp".into() }.required_capabilities().is_empty());
+        let sf = JobKind::ScoreFile {
+            metrics: vec!["ssim2-gpu".into(), "cvvdp".into()],
+            hdr: true,
+            hdr_transfer: None,
+        };
+        assert_eq!(
+            sf.required_capabilities(),
+            vec!["gpu-ssim2".to_string(), "hdr".to_string()]
+        );
+        assert!(JobKind::Bake { view: "v".into() }.required_capabilities().is_empty());
     }
 
     #[test]
