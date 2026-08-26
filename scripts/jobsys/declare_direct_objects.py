@@ -19,9 +19,21 @@ _ht = os.environ.get("ZEN_SCOREFILE_HINT_THREADS")
 HINT = None
 if _hm or _ht:
     HINT = {"peak_mem_bytes": int(float(_hm or 0.5) * (1 << 30)), "threads": int(_ht or 1)}
-ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
-env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
-           AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
+# LAN-vs-R2 coordination (fixed 2026-08-26, same class of bug as
+# pairs_from_encode_ledger.py): respect ambient AWS_* creds + ZEN_S3_ENDPOINT for a
+# LAN-store BUCKET instead of unconditionally requiring R2_* env vars -- this script's
+# own docstring/name is R2-flavored but the upload mechanism (s5cmd against an
+# S3-compatible endpoint) works identically against SeaweedFS.
+if os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"):
+    ep = os.environ.get("ZEN_S3_ENDPOINT")
+    if not ep:
+        sys.exit("ambient AWS_* creds set but no ZEN_S3_ENDPOINT -- set it explicitly "
+                 "(LAN store or R2) rather than guessing.")
+    env = dict(os.environ)
+else:
+    ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
+    env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
+               AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
 def r2cp(local, key): subprocess.run(["s5cmd","--endpoint-url",ep,"cp",local,"s3://%s/%s"%(BUCKET,key)], env=env, check=True, stdout=subprocess.DEVNULL)
 files = {}  # ref basename -> [dist_member,...]
 cellinfo = {}  # dist member -> (codec, q, knob_tuple_json) when the pairs carry identity
