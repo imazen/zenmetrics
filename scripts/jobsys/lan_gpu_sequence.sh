@@ -24,7 +24,7 @@ HOST="${1:?usage: lan_gpu_sequence.sh <host> <gpu|cpu> <bucket>...}"
 KIND="${2:?gpu|cpu}"; shift 2
 [ "$#" -ge 1 ] || { echo "need >=1 bucket" >&2; exit 2; }
 case "$KIND" in
-  gpu) IMG="ghcr.io/imazen/zenfleet-worker:exec-gpu-avifgen-66e3c417" ;;
+  gpu) IMG="ghcr.io/imazen/zenfleet-worker:exec-gpu-2af6dbc3" ;;
   cpu) IMG="ghcr.io/imazen/zenfleet-worker:exec-zensim944-2af6dbc3" ;;
   *) echo "kind must be gpu|cpu" >&2; exit 2 ;;
 esac
