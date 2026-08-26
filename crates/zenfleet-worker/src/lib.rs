@@ -2147,8 +2147,33 @@ fn default_chunk_params(chunk_wall_sec: f64) -> ChunkParams {
     ChunkParams {
         budget: host_box_budget(),
         chunk_wall_sec,
+        // 2 GiB, not 512 MiB (raised 2026-08-26 — same "deliberately coarse, not a
+        // measurement" spirit as DEFAULT_GPU_JOB_VRAM_BYTES above, and the SAME
+        // underlying gap: no declare-time path computes a real per-cell hint for
+        // Metric/ScoreFile jobs today, so every one of them falls back to this
+        // constant for `can_admit`'s Σpeak_mem ≤ budget check. 512 MiB was already
+        // measured wrong for a bare encode alone (jxl lossless modular: 1.50 GB
+        // single-encode peak, jxl-encoder's own Limits::DEFAULT_MAX_MEMORY_BYTES
+        // is 4 GiB / _LOSSLESS is 8 GiB) — and a JobKind::Metric cell does MORE
+        // than a bare encode (decode the reference + re-encode + up to N GPU-metric
+        // scores in the SAME process), so 512 MiB under-estimated real usage by
+        // several times. Under-estimation isn't just a wrong number: `can_admit`
+        // trusts it directly, so LPT packs far more concurrent jobs than the box's
+        // real RAM supports, and real allocations under that manufactured pressure
+        // is exactly how a fallback-hinted encode's own small internal scratch
+        // allocations (e.g. jxl-encoder's count_zero_coefficients, <=16 KiB) hit
+        // real starvation and abort — reproduced directly (see plan.rs's
+        // with_fallible_alloc fix, landed the same day) on both this session's own
+        // 112,800-job wsl run (pass 1 TIMED OUT after 1800s, no hint anywhere) and
+        // an independent 9+ hour run of a different manifest (hdrgrid-diffmap,
+        // "provider=basement") hitting the identical failure signature. 2 GiB is
+        // still a coarse, NOT-a-measurement fallback, not a real per-cell
+        // estimator — the tracked follow-up (per DEFAULT_GPU_JOB_VRAM_BYTES's own
+        // comment) is wiring each codec's real `estimate_encode_resources`/GPU
+        // crates' `estimate_gpu_memory_bytes` into the declare-time hint so
+        // `can_admit` sees real numbers instead of any flat constant.
         fallback_hint: ResourceHint {
-            peak_mem_bytes: 512 << 20,
+            peak_mem_bytes: 2 << 30,
             threads: 1,
             vram_bytes: None,
         },

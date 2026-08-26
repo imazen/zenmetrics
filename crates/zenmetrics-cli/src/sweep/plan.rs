@@ -92,24 +92,39 @@ impl PlannedConfig {
             Self::Zenjxl(variant) => {
                 // Threads pinned in every cell (playbook pattern 9 —
                 // ambient-machine defaults poison content addressing).
+                //
+                // fallible_alloc(true): opt into jxl-encoder's graceful-OOM path
+                // (jxl-encoder cf50d7cf99de / zenjxl e79179ecce51, 2026-08-25) instead
+                // of the infallible default. `Limits::default()` otherwise applies
+                // the SAME soft caps as passing no Limits at all (every field is
+                // `None`/`false`, and the encoder falls back to
+                // DEFAULT_MAX_MEMORY_BYTES{,_LOSSLESS} either way) — this changes
+                // only the alloc-failure behavior, not the caps. Without this, a
+                // small internal scratch allocation under real memory pressure
+                // (count_zero_coefficients, <=16 KiB) hits Rust's default
+                // handle_alloc_error and ABORTS THE WHOLE PROCESS instead of
+                // returning a scoreable, retriable error — confirmed as the fleet's
+                // `encoder_panic` class on fleetbench-2026-08-24/2026-08-26 (both
+                // independently reproduced: cf. CLAUDE.md Known Bugs, jobexec.rs's
+                // classify_msg needing the matching graceful-error pattern too).
+                // Note: LossyConfig/LosslessConfig's convenience `.encode(...)` has no
+                // `.with_limits()` of its own (that lives on `EncodeRequest`, per
+                // `.encode_request()`'s own doc: "Use this when you need to attach
+                // metadata, limits, or cancellation") -- go through encode_request()
+                // instead of the shortcut to actually reach it.
+                let limits = jxl_encoder::Limits::default().with_fallible_alloc(true);
                 match variant.build() {
                     zenjxl::sweep::BuiltConfig::Lossy(c) => c
                         .with_threads(1)
-                        .encode(
-                            &source.pixels,
-                            source.width,
-                            source.height,
-                            zenjxl::PixelLayout::Rgb8,
-                        )
+                        .encode_request(source.width, source.height, zenjxl::PixelLayout::Rgb8)
+                        .with_limits(&limits)
+                        .encode(&source.pixels)
                         .map_err(|e| format!("zenjxl plan-cell encode failed: {e:?}"))?,
                     zenjxl::sweep::BuiltConfig::Lossless(c) => c
                         .with_threads(1)
-                        .encode(
-                            &source.pixels,
-                            source.width,
-                            source.height,
-                            zenjxl::PixelLayout::Rgb8,
-                        )
+                        .encode_request(source.width, source.height, zenjxl::PixelLayout::Rgb8)
+                        .with_limits(&limits)
+                        .encode(&source.pixels)
                         .map_err(|e| format!("zenjxl plan-cell encode failed: {e:?}"))?,
                 }
             }
