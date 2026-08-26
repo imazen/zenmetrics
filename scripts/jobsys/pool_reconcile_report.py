@@ -16,6 +16,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
+import pyarrow as pa
+import pyarrow.parquet as pq
+from pyarrow import fs
 import pyarrow.fs as fs
 
 # THE resolver (scripts/lib/zen_s3env.py) — never re-derive endpoint/creds in a new script.
@@ -51,8 +54,19 @@ def one(run: str):
             declared = len(json.load(gzip.open(io.BytesIO(raw))))
         except gzip.BadGzipFile:
             declared = len(json.loads(raw))  # transport already inflated it
-        t = ds.dataset(f"{BUCKET}/jobs/{run}/ledger/", filesystem=S3,
-                       format="parquet").to_table(columns=["job_id", "status"])
+        # Read per-file with tolerance: a worker mid-pass writes chunks that are
+        # briefly footerless on SeaweedFS; one in-flight file must not kill the
+        # whole report (2026-08-26). Skipped files are counted loudly.
+        _sel = fs.FileSelector(f"{BUCKET}/jobs/{run}/ledger/")
+        _frags, _skipped = [], 0
+        for _fi in S3.get_file_info(_sel):
+            if _fi.size == 0: _skipped += 1; continue
+            try:
+                _frags.append(pq.read_table(_fi.path, filesystem=S3, columns=["job_id", "status"]))
+            except Exception:
+                _skipped += 1
+        if _skipped: print(f"  [{run}] WARNING: skipped {_skipped} unreadable/in-flight ledger chunk(s)")
+        t = pa.concat_tables(_frags, promote_options="permissive") if _frags else None
         st = t.column("status").to_pylist()
         jid = t.column("job_id").to_pylist()
         done = {j for j, s in zip(jid, st) if s == "done"}
