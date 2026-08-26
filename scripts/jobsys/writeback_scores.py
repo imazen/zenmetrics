@@ -53,7 +53,7 @@ print("  %d blobs" % len(blobs), flush=True)
 # Full-URI declares (declare_direct_objects.py ZEN_FULL_URI=1) put the whole s3://.../blobs/<sha>
 # in encode_sha — normalize to the bare content sha so the pairs join keys match.
 def norm_sha(s): return os.path.basename(s or "")
-metric_data = {}; feat_data = {}
+metric_data = {}; feat_data = {}; err_rows = 0
 for bp in blobs:
     with open(bp) as fh:
         for line in fh:
@@ -61,21 +61,31 @@ for bp in blobs:
             r = json.loads(line)
             k = r.get("kind")
             if k == "metric":
+                # Per-cell ERROR records ride the blob stream (kind:"metric" + `error`, no
+                # metric key — e.g. the hdrgrid R2-era failures). Skip + count; a retry that
+                # later succeeded emits a separate scored row under the same encode_sha.
+                if "metric" not in r or r.get("error"):
+                    err_rows += 1
+                    continue
                 metric_data[(norm_sha(r["encode_sha"]), r["metric"])] = r.get("scores") or {r["metric"]: r.get("score")}
             elif k == "feature":
                 feat_data[norm_sha(r["encode_sha"])] = (r.get("zensim_score"), r.get("features"))
-print("  metric entries=%d, feature entries=%d" % (len(metric_data), len(feat_data)), flush=True)
+print("  metric entries=%d, feature entries=%d, error rows skipped=%d" % (len(metric_data), len(feat_data), err_rows), flush=True)
 
 # 3+4) CELL rows -> encode_sha. Two sources:
 #   - ZEN_PAIRS_PARQUET (two-stage runs): the bridge parquet ALREADY carries the content sha per cell.
 #   - classic June layout: hash variants.tar members, join via pairs.tsv basename(dist_path).
 cells = []
 if PAIRS_PARQUET:
-    t = pq.read_table(PAIRS_PARQUET,
-                      columns=["image_path", "q", "knob_tuple_json", "encode_sha"]).to_pydict()
+    # codec rides through in two-stage mode: multi-arm manifests (hdrgrid: zenjxl /
+    # zenav1-svt / jpeg-gainmap in ONE run) need the arm identity in the output tables.
+    _pf = pq.read_table(PAIRS_PARQUET)
+    _cols = ["image_path", "q", "knob_tuple_json", "encode_sha"] + (["codec"] if "codec" in _pf.column_names else [])
+    t = _pf.select(_cols).to_pydict()
     for i in range(len(t["image_path"])):
         cells.append({"image_path": t["image_path"][i], "q": t["q"][i],
-                      "knob_tuple_json": t["knob_tuple_json"][i], "dist_sha": norm_sha(t["encode_sha"][i])})
+                      "knob_tuple_json": t["knob_tuple_json"][i], "dist_sha": norm_sha(t["encode_sha"][i]),
+                      "codec": (t.get("codec") or [None]*len(t["image_path"]))[i]})
     print("  %d cells from %s" % (len(cells), PAIRS_PARQUET), flush=True)
 else:
     tar_local = "%s/variants.tar" % work
@@ -102,6 +112,7 @@ for c in cells:
     except (ValueError, TypeError): q = -1
     base = {"image_path": os.path.basename(c["image_path"]), "q": q,
             "knob_tuple_json": c.get("knob_tuple_json", ""), "encode_sha": sha}
+    if c.get("codec"): base["codec"] = c["codec"]
     srow = dict(base); got = False
     for m in METRICS:
         sc = metric_data.get((sha, m))
@@ -121,6 +132,8 @@ print("  score_rows=%d feat_rows=%d (miss_sha=%d miss_score=%d)"
 # 5) write parquet (ragged-safe: r.get(col) -> None fill). Feature width is taken from the
 # data (372 = with-iw v1, 720 = V2Ab, 924 = foldapp, 944 = foldapp2) — never assumed.
 ID = ["image_path", "q", "knob_tuple_json", "encode_sha"]
+if any("codec" in r for r in score_rows[:1] + feat_rows[:1]):
+    ID = ["image_path", "codec", "q", "knob_tuple_json", "encode_sha"]
 scols = ID + sorted(all_score_cols)
 pq.write_table(pa.table({c: [r.get(c) for r in score_rows] for c in scols}),
                "%s/scores.parquet" % OUTDIR, compression="zstd")
