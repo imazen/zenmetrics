@@ -39,4 +39,4 @@ scp -o BatchMode=yes -o ConnectTimeout=10 "$DRIVER" "$HOST:lan_gpu_seq_run.sh" >
 # auto-picks Strip mode for large images instead of OOMing. Set it to the card's
 # real VRAM (e.g. 5500000000 for a 6 GB card, 7500000000 for 8 GB). Space-free.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
-  "chmod +x lan_gpu_seq_run.sh; setsid nohup env ZM_KIND='$KIND' ZM_IMG='$IMG' ZM_S3BUCKET='$S3BUCKET' ZM_VRAM_CAP='${ZM_VRAM_CAP:-}' bash lan_gpu_seq_run.sh $* >/dev/null 2>&1 & echo \"\$(hostname): sequencer launched over: $* (vram_cap=${ZM_VRAM_CAP:-none})\""
+  "chmod +x lan_gpu_seq_run.sh; setsid nohup env ZM_KIND='$KIND' ZM_IMG='$IMG' ZM_S3BUCKET='$S3BUCKET' ZM_VRAM_CAP='${ZM_VRAM_CAP:-}' ZM_STORE='${ZEN_STORE:-tower}' bash lan_gpu_seq_run.sh $* >/dev/null 2>&1 & echo \"\$(hostname): sequencer launched over: $* (store=${ZEN_STORE:-tower} vram_cap=${ZM_VRAM_CAP:-none})\""

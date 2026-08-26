@@ -5,11 +5,14 @@
 # Do not invoke directly — use lan_gpu_sequence.sh.
 set -uo pipefail
 
-CREDS="$HOME/.config/cloudflare/r2-credentials"
-[ -r "$CREDS" ] || { echo "no R2 creds at $CREDS on $(hostname)" >&2; exit 3; }
-set -a; . "$CREDS"; set +a
-: "${R2_ACCOUNT_ID:?R2_ACCOUNT_ID missing from creds}"
-EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+# Store resolution via the CANONICAL s3env.sh (never a copy): LAN store (tower
+# SeaweedFS) by default, R2 only when ZM_STORE=r2. Fixes the 2026-08-26 bug where
+# this driver HARDCODED the R2 endpoint and drove the whole GPU fleet to write R2.
+export ZEN_STORE="${ZM_STORE:-tower}"
+S3ENV="$HOME/.config/zen/s3env.sh"
+[ -r "$S3ENV" ] || { echo "no s3env.sh at $S3ENV on $(hostname) — distribute scripts/lib/s3env.sh + lanstore.env first" >&2; exit 3; }
+# shellcheck disable=SC1090
+. "$S3ENV"   # exports EP, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY per ZEN_STORE
 
 LOG="$HOME/lan_gpu_seq.log"; : > "$LOG"
 rm -f "$HOME/lan_gpu_seq.COMPLETE"
@@ -31,7 +34,7 @@ for js in "$@"; do
   sudo -n docker rm -f "$ctr" >/dev/null 2>&1 || true
   # blocking run (no -d): returns when the worker self-exits on drain (idle passes)
   sudo -n docker run --rm --name "$ctr" "${GPU_ARGS[@]}" "${VRAM[@]}" \
-    -e AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
+    -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
     -e ZEN_R2_ENDPOINT="$EP" -e ZEN_BUCKET="${ZM_S3BUCKET:-zentrain}" \
     -e ZEN_RUN="jobs/$js" \
     -e ZEN_MANIFEST_URI="s3://${ZM_S3BUCKET:-zentrain}/jobs/$js/manifest.json" \
