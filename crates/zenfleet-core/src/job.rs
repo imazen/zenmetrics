@@ -229,7 +229,7 @@ impl JobKind {
                 output_regenerability: Regenerability::CheapRegenerable,
             },
             JobKind::Diffmap { metric, .. } => JobProfile {
-                class: metric_class(metric),
+                class: diffmap_class(metric),
                 group_by: GroupBy::SourceSha,
                 // A GPU pass to rebuild — keep unless under storage pressure.
                 output_regenerability: Regenerability::ExpensiveRegenerable,
@@ -291,6 +291,21 @@ pub(crate) fn is_gpu_metric_name(name: &str) -> bool {
 /// Route a metric job by name: GPU-suffixed names need a GPU-capable worker; everything else
 /// (the CPU-native metrics — `cvvdp`, `ssim2`, `dssim`, `iwssim`, ...) is CPU work, classed
 /// `CpuHeavy` (perceptual metrics are compute-heavy, the same tier as WebP/JXL/AVIF encode).
+/// Diffmap routing reflects EXECUTOR truth, not the metric-name suffix: the jobexec diffmap
+/// route runs butteraugli via `butteraugli-gpu` regardless of whether the declare wrote the
+/// bare name (`"butteraugli"`, as hdrgrid-diffmap-20260807 did) or the `-gpu`-suffixed one —
+/// so butteraugli diffmap cells MUST class `Gpu` for the VRAM admission axis to gate them
+/// (found 2026-08-26: bare-named cells classed CpuHeavy → vram estimate 0 → ungated GPU
+/// concurrency). cvvdp diffmap runs on CPU; everything else falls back to the suffix rule.
+fn diffmap_class(metric: &str) -> ResourceClass {
+    let base = metric.trim_end_matches("-gpu").trim_end_matches("_gpu");
+    if base == "butteraugli" {
+        ResourceClass::Gpu
+    } else {
+        metric_class(metric)
+    }
+}
+
 fn metric_class(metric: &str) -> ResourceClass {
     if is_gpu_metric_name(metric) {
         ResourceClass::Gpu
@@ -342,6 +357,16 @@ impl JobKind {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn diffmap_butteraugli_classes_gpu_regardless_of_suffix() {
+        for m in ["butteraugli", "butteraugli-gpu", "butteraugli_gpu"] {
+            let k = JobKind::Diffmap { metric: m.to_string(), hdr: true };
+            assert_eq!(k.profile().class, ResourceClass::Gpu, "metric {m}");
+        }
+        let k = JobKind::Diffmap { metric: "cvvdp".to_string(), hdr: true };
+        assert_eq!(k.profile().class, ResourceClass::CpuHeavy);
+    }
+
     use super::*;
 
     #[test]
