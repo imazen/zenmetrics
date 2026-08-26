@@ -14,6 +14,11 @@
 #   rustup target add x86_64-unknown-linux-musl   # + `apt install musl-tools` for musl-gcc, once
 #   cargo build --release --target x86_64-unknown-linux-musl -p zenmetrics-cli --no-default-features \
 #     --features sweep,png,jpeg,webp,avif,jxl,cpu-metrics
+#   # HDR waves (score_file hdr:true) need MORE: add `hdr-gainmap` (pulls `hdr`) or
+#   # jpeg-gainmap variants fail to decode ("needs the hdr-gainmap build feature") —
+#   # found the hard way on the 2026-08-26 hdrfeat944 first-cell gate. The HDR image
+#   # convention: tag exec-zensim944hdr-<sha>, features
+#   #   sweep,png,jpeg,webp,avif,jxl,cpu-metrics,hdr-gainmap
 #     # produces target/x86_64-unknown-linux-musl/release/zenmetrics
 #   cargo build --release --target x86_64-unknown-linux-musl -p zenfleet-worker
 #     # produces target/x86_64-unknown-linux-musl/release/zenfleet-worker (this script overlays it
