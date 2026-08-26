@@ -17,6 +17,11 @@
 #   # HDR waves (score_file hdr:true) need MORE: add `hdr-gainmap` (pulls `hdr`) or
 #   # jpeg-gainmap variants fail to decode ("needs the hdr-gainmap build feature") —
 #   # found the hard way on the 2026-08-26 hdrfeat944 first-cell gate. The HDR image
+# 2026-08-26 (2nd instance, GPU side): the DIFFMAP route decodes variants too —
+#   the exec-gpu image built without `hdr-gainmap` failed 100% of jpeg-gainmap
+#   diffmap cells (46,680 rows, hdrgrid-diffmap-20260807) as encoder_panic while
+#   zenjxl/svt sailed. EVERY image that decodes HDR variants (features, scores,
+#   diffmaps; CPU or GPU) needs `hdr-gainmap` in its cargo features.
 #   # convention: tag exec-zensim944hdr-<sha>, features
 #   #   sweep,png,jpeg,webp,avif,jxl,cpu-metrics,hdr-gainmap
 #     # produces target/x86_64-unknown-linux-musl/release/zenmetrics
