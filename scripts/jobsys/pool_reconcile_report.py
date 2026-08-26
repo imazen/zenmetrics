@@ -29,7 +29,15 @@ S3 = fs.S3FileSystem(
     access_key=_access_key, secret_key=_secret_key,
     endpoint_override=_endpoint, region="auto")
 BUCKET = os.environ.get("ZEN_BUCKET", "zentrain")
-RUNLIST = sys.argv[1] if len(sys.argv) > 1 else "jobs/_pool944v4/runlist.tsv"
+# --auto-pause: after reconciling, set control.json {"paused":true} on every run
+# whose gap==0. A completed job whose workers are still attached re-scores it
+# every pass (coarse claims never let it idle), which is how one done job burned
+# 37.8x rescore-tax on the LAN while the real gap sat unworked (2026-08-26). This
+# makes the reconcile loop self-heal that: a completed run is paused so no worker
+# wastes another pass on it. Idempotent (skips runs already paused).
+AUTO_PAUSE = "--auto-pause" in sys.argv
+_pos = [a for a in sys.argv[1:] if not a.startswith("--")]
+RUNLIST = _pos[0] if _pos else "jobs/_pool944v4/runlist.tsv"
 
 with S3.open_input_stream(f"{BUCKET}/{RUNLIST}") as f:
     runs = [ln.split("\t")[0] for ln in f.read().decode().splitlines() if ln.strip()]
@@ -60,6 +68,7 @@ with ThreadPoolExecutor(max_workers=8) as ex:
     rows = list(ex.map(one, runs))
 tot_decl = tot_done = tot_fail = tot_gap = tot_rows = 0
 bad = []
+complete = []  # runs with gap==0 (declared > 0), for --auto-pause
 for run, decl, done, fail, gap, raw in sorted(rows):
     if decl < 0:
         print(f"{run}: ERROR {raw}")
@@ -72,7 +81,33 @@ for run, decl, done, fail, gap, raw in sorted(rows):
     tot_rows += raw
     flag = "" if gap == 0 else f"  <-- GAP {gap}"
     print(f"{run}: declared={decl} done={done} failed-only={fail} raw_rows={raw}{flag}")
+    if gap <= 0:  # all declared cells done (gap can go negative on re-declared runs)
+        complete.append((run, raw, done))
 print(f"\nTOTAL declared={tot_decl} distinct_done={tot_done} failed-only={tot_fail} "
       f"gap={tot_gap} raw_ledger_rows={tot_rows} (rescore tax {tot_rows / max(tot_done, 1):.2f}x) "
       f"errors={len(bad)} ({time.time() - t0:.0f}s)")
 print("VERDICT:", "COMPLETE — every run gap==0" if tot_gap == 0 and not bad else "NOT COMPLETE")
+
+if AUTO_PAUSE and complete:
+    import json as _json
+    print(f"\n--auto-pause: {len(complete)} run(s) at gap<=0 — pausing so no worker re-scores them")
+    for run, raw, done in complete:
+        ckey = f"{BUCKET}/jobs/{run}/control.json"
+        try:
+            with S3.open_input_stream(ckey) as f:
+                cur = _json.loads(f.read().decode() or "{}")
+        except Exception:  # noqa: BLE001 — missing/unreadable control.json => treat as unpaused
+            cur = {}
+        if cur.get("paused") is True:
+            print(f"  {run}: already paused (rescore tax {raw / max(done, 1):.1f}x)")
+            continue
+        cur["paused"] = True
+        try:
+            with S3.open_output_stream(ckey) as f:
+                f.write(_json.dumps(cur).encode())
+            print(f"  AUTO-PAUSED {run}: control.json paused:true "
+                  f"(was re-scoring {done} done cells at {raw / max(done, 1):.1f}x tax)")
+        except Exception as e:  # noqa: BLE001 — report, don't abort the other pauses
+            print(f"  {run}: FAILED to pause ({str(e)[:80]})")
+elif AUTO_PAUSE:
+    print("\n--auto-pause: no run at gap<=0; nothing to pause")
