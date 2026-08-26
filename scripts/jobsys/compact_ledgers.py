@@ -7,7 +7,10 @@ On a resumed run whose earlier claims have expired (e.g. a fleet's prior work), 
 re-scoring already-done cells — a measured 2.0-3.4x tax on the big runs. Feeding the worker
 a done-set snapshot as --ledger-in makes its gap = only-undone, killing the tax.
 
-This writes snapshot = all status=='done' rows, deduped by job_id (keep first), TAKEn from the
+This writes snapshot = all status=='done' rows (first-wins) PLUS, for job_ids with NO done row,
+the NEWEST failed row (anti-wedge invariant 4, 2026-08-26: done-only snapshots erased attempt
+history, so failed attempts recomputed as 1 forever and the retry->Poison ladder never fired —
+pathological cells retried infinitely). TAKEn from the
 worker's own ledger parquets so the arrow schema matches read_ledger exactly. Read-only against
 the live ledger/ dir; the caller uploads the result to jobs/<run>/ledger_snapshot.parquet.
 
@@ -39,6 +42,21 @@ for i, j in enumerate(done.column("job_id").to_pylist()):
     if j not in seen:
         seen.add(j); keep.append(i)
 snap = done.take(keep)
+# Invariant 4: carry the NEWEST failed row for every job_id that has no done row, so the
+# worker's view preserves attempt history and the retry->Poison ladder actually fires.
+failed = t.filter(pc.equal(t.column("status"), "failed"))
+best = {}
+fj = failed.column("job_id").to_pylist(); fts = failed.column("ts").to_pylist()
+for i, (j, ts) in enumerate(zip(fj, fts)):
+    if j in seen:
+        continue
+    cur = best.get(j)
+    if cur is None or ts > cur[0]:
+        best[j] = (ts, i)
+if best:
+    fk = [i for (_ts, i) in best.values()]
+    snap = pa.concat_tables([snap, failed.take(sorted(fk))])
+print("  snapshot: %d done + %d newest-failed rows" % (len(keep), len(best)), flush=True)
 out = os.path.join(snap_dir, "snap_%s.parquet" % run)
 # zstd, NOT pyarrow's default snappy: zenfleet-ledger's parquet reader is built with
 # features=["arrow","zstd"] (no "snap"), so the worker reads this snapshot as --ledger-in.
