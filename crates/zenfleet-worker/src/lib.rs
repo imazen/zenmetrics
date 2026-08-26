@@ -792,7 +792,7 @@ fn epoch_exec<B: BlobStore + Sync>(
 ) -> ExecOutcome {
     let len = es.epoch_len_secs.max(1);
     let params = default_chunk_params(cfg.chunk_wall_sec);
-    let handler = |job: &DesiredJob| exec_command(&cfg.exec, job);
+    let handler = |job: &DesiredJob| exec_command_deadline(&cfg.exec, job, cell_deadline_secs(job));
     let ledger_out_uri = cfg.ledger_out.to_string_lossy().into_owned();
     let mut flush = |chunk_id: &str, rows: &[LedgerRow]| {
         flush_chunk_rows(&ledger_out_uri, endpoint, chunk_id, rows);
@@ -1363,6 +1363,122 @@ where
 /// success; spawn failure → transient `WorkerLost`; non-zero exit → `EncoderPanic` (deterministic).
 /// Any executor honoring this stdin-JSON → stdout-bytes contract plugs in (e.g. a future
 /// `zenmetrics jobexec` subcommand).
+/// Kind-aware per-cell deadline (anti-wedge invariant 2): a generous multiple of the coarse
+/// cost model, floored high enough that spawn/fetch jitter never clips a real cell. The
+/// watchdog stops INFINITE holds; it does not police slow-but-working cells.
+fn cell_deadline_secs(job: &DesiredJob) -> u64 {
+    let mem = job.hint.map(|h| h.peak_mem_bytes).unwrap_or(2 << 30);
+    let est = job.kind.estimate_cost_sec(mem);
+    ((est * 20.0).ceil() as u64).clamp(120, 4 * 3600)
+}
+
+/// [`exec_command`] under a hard per-cell deadline (anti-wedge invariant 2, 2026-08-26): no
+/// cell may hold an execution slot forever. Safe-Rust kill: stdout/stderr are drained on
+/// reader threads (avoiding pipe-buffer deadlock), the spawning thread polls `try_wait` and
+/// calls `Child::kill` at the deadline, and the death is recorded as
+/// [`ErrorClass::Timeout`] naming the deadline — never a silent respawn.
+pub fn exec_command_deadline(
+    program: &str,
+    job: &DesiredJob,
+    deadline_secs: u64,
+) -> Result<Vec<u8>, HandlerError> {
+    use std::io::Read;
+    let job_json = serde_json::to_vec(job)
+        .map_err(|e| HandlerError::new(ErrorClass::Unknown, format!("serialize job: {e}")))?;
+    let mut cmd = Command::new(program);
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    // Unix: make the child its own process-group leader so the deadline kill can take the
+    // WHOLE group — a killed direct child whose grandchildren keep the pipe write-ends open
+    // would otherwise hold the reader threads (and this slot) hostage until they exit.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| HandlerError::new(ErrorClass::WorkerLost, format!("spawn {program}: {e}")))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(&job_json)
+            .map_err(|e| HandlerError::new(ErrorClass::WorkerLost, format!("write stdin: {e}")))?;
+    }
+    let mut out_pipe = child.stdout.take();
+    let mut err_pipe = child.stderr.take();
+    let out_h = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(p) = out_pipe.as_mut() {
+            let _ = p.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let err_h = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(p) = err_pipe.as_mut() {
+            let _ = p.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(deadline_secs);
+    let mut timed_out = false;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(st)) => break st,
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    timed_out = true;
+                    // Kill the whole process group (child is its own leader via process_group(0))
+                    // so grandchildren release the pipes; fall back to a direct kill elsewhere.
+                    #[cfg(unix)]
+                    {
+                        let _ = std::process::Command::new("kill")
+                            .args(["-9", &format!("-{}", child.id())])
+                            .status();
+                    }
+                    let _ = child.kill();
+                    match child.wait() {
+                        Ok(st) => break st,
+                        Err(e) => {
+                            return Err(HandlerError::new(
+                                ErrorClass::Timeout,
+                                format!("cell deadline {deadline_secs}s exceeded; wait after kill failed: {e}"),
+                            ));
+                        }
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            Err(e) => {
+                return Err(HandlerError::new(
+                    ErrorClass::WorkerLost,
+                    format!("try_wait {program}: {e}"),
+                ));
+            }
+        }
+    };
+    let stdout = out_h.join().unwrap_or_default();
+    let stderr_b = err_h.join().unwrap_or_default();
+    if timed_out {
+        let stderr = String::from_utf8_lossy(&stderr_b);
+        let tail: String = stderr.chars().rev().take(400).collect::<String>().chars().rev().collect();
+        return Err(HandlerError::new(
+            ErrorClass::Timeout,
+            format!("cell deadline {deadline_secs}s exceeded; child killed. stderr tail: {tail}"),
+        ));
+    }
+    if status.success() {
+        Ok(stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&stderr_b);
+        let class = class_from_stderr(&stderr).unwrap_or_else(|| classify_child_failure(&status));
+        let detail = match status.code() {
+            Some(code) => format!("{program} exited {code}"),
+            None => format!("{program} killed by signal"),
+        };
+        Err(HandlerError::new(class, format!("{detail}: {stderr}")))
+    }
+}
+
 pub fn exec_command(program: &str, job: &DesiredJob) -> Result<Vec<u8>, HandlerError> {
     let job_json = serde_json::to_vec(job)
         .map_err(|e| HandlerError::new(ErrorClass::Unknown, format!("serialize job: {e}")))?;
@@ -2263,7 +2379,7 @@ fn run_chunked(
         if persistent && kind_is_warm_eligible(&job.kind, &warm_kinds) {
             exec_command_persistent(&cfg.exec, job)
         } else {
-            exec_command(&cfg.exec, job)
+            exec_command_deadline(&cfg.exec, job, cell_deadline_secs(job))
         }
     };
     let ledger_out_uri = cfg.ledger_out.to_string_lossy().into_owned();
@@ -2556,6 +2672,40 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn exec_command_deadline_kills_and_classifies_timeout() {
+        // A child that sleeps far past the deadline must be killed, classified
+        // Timeout, and return within ~deadline (not hang the slot).
+        let dir = std::env::temp_dir().join(format!("zf_wd_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let prog = dir.join("slow.sh");
+        std::fs::write(&prog, "#!/bin/sh\nsleep 30\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&prog, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let job = desired("cvvdp", b"probe");
+        let t0 = std::time::Instant::now();
+        let r = exec_command_deadline(prog.to_str().unwrap(), &job, 1);
+        let dt = t0.elapsed();
+        let _ = std::fs::remove_dir_all(&dir);
+        match r {
+            Err(e) => {
+                assert_eq!(e.class, ErrorClass::Timeout, "class: {:?} msg {}", e.class, e.msg);
+                assert!(e.msg.contains("deadline 1s"), "msg: {}", e.msg);
+            }
+            Ok(_) => panic!("slow child must not succeed"),
+        }
+        assert!(dt.as_secs() < 10, "returned in {dt:?} — watchdog must not hang");
+    }
+
+    #[test]
+    fn cell_deadline_is_floored_and_capped() {
+        let d = cell_deadline_secs(&desired("cvvdp", b"probe"));
+        assert!((120..=4 * 3600).contains(&d), "deadline {d}");
+    }
+
     #[test]
     fn cgroup_mem_limit_parses_and_ignores_sentinels() {
         // Pure-parse contract check via the real fn on this host: whatever it returns must be
