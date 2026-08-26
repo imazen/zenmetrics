@@ -156,8 +156,8 @@ for c in cells:
             _feat_batch_add(base, ft)
     if got: score_rows.append(srow)
     else: miss_score += 1
-print("  score_rows=%d feat_rows=%d (miss_sha=%d miss_score=%d)"
-      % (len(score_rows), len(feat_rows), miss_sha, miss_score), flush=True)
+print("  score_rows=%d feat_streamed=%d (miss_sha=%d miss_score=%d)"
+      % (len(score_rows), sum(st["n"] for st in _fw.values()), miss_sha, miss_score), flush=True)
 
 # 5) write parquet (ragged-safe: r.get(col) -> None fill). Feature width is taken from the
 # data (372 = with-iw v1, 720 = V2Ab, 924 = foldapp, 944 = foldapp2) — never assumed.
