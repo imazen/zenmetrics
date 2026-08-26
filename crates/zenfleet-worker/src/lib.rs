@@ -24,7 +24,8 @@ use zenfleet_core::epoch::{self, ClaimMode, EpochShardCfg, Handicaps, Roster, Sh
 use zenfleet_core::{
     BlobIndexEntry, BoxBudget, DesiredJob, ErrorClass, InFlight, JobCost, JobId, JobKind,
     JobStatus, LedgerRow, LedgerView, Regenerability, ResourceClass, ResourceHint, RetryPolicy,
-    RunControl, Sha256Hex, Tombstone, gc_plan, lru_cap_evict, reconcile, sha256, worker_serves,
+    RunControl, Sha256Hex, Tombstone, gc_plan, lru_cap_evict, reconcile, reconcile_at, sha256,
+    worker_serves,
 };
 
 /// A classified execution failure — becomes a FAILED ledger row carrying this `error_class`, which
@@ -632,8 +633,9 @@ fn partition_epoch(
     prev: Option<&Roster>,
     me: &str,
     handicaps: &Handicaps,
+    now: u64,
 ) -> EpochParts {
-    let plan = reconcile(desired, view, policy);
+    let plan = reconcile_at(desired, view, policy, now, policy.stale_claim_after);
     let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
     let mut p = EpochParts {
         fast: Vec::new(),
@@ -728,6 +730,7 @@ fn run_epoch_sharded(
         prev.as_ref(),
         &me,
         handicaps,
+        cfg.now,
     );
     eprintln!(
         "zenfleet-worker: epoch-sharded epoch {e_now} (len {len}s, boundary in {}s): roster {} \
@@ -945,7 +948,7 @@ where
     B: BlobStore,
     C: Fn(&JobId) -> bool,
 {
-    let mut plan = reconcile(desired, view, policy);
+    let mut plan = reconcile_at(desired, view, policy, ctx.now, policy.stale_claim_after);
     // Shuffle the gap per worker so concurrent workers don't all iterate from job 0 in the same order
     // and collide on (wasting an aws claim-attempt skipping) the same already-claimed prefix — without
     // this, a late-joining box burns ~1s/job skipping thousands of jobs the early boxes already claimed
@@ -1120,7 +1123,7 @@ where
             }
         };
     }
-    let plan = reconcile(desired, view, policy);
+    let plan = reconcile_at(desired, view, policy, ctx.now, policy.stale_claim_after);
     cmark!("reconcile");
     let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
     cmark!("by_id-hashmap");
@@ -2350,6 +2353,9 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
 
     let policy = RetryPolicy {
         max_attempts: cfg.max_attempts,
+        // Claim-TTL staleness at reconcile time (the 2026-08-26 stuck-29 fix): an in-flight
+        // row older than the claim TTL is abandoned work, back into the gap.
+        stale_claim_after: cfg.claims.as_ref().map(|c| c.ttl_secs),
     };
     let ctx = WorkerCtx {
         worker: &cfg.worker,
@@ -2643,7 +2649,7 @@ mod tests {
         let out = execute_gap(
             &d,
             &view,
-            RetryPolicy { max_attempts: 3 },
+            RetryPolicy { max_attempts: 3, stale_claim_after: None },
             |_| Ok(vec![1, 2, 3]),
             &store,
             WorkerCtx {

@@ -21,11 +21,18 @@ use crate::status::JobStatus;
 pub struct RetryPolicy {
     /// Max delivery attempts before a transient failure is poisoned.
     pub max_attempts: u32,
+    /// When set, a `Claimed`/`Pending` row whose age (`now - ts`) has reached this many seconds is
+    /// treated as abandoned and re-enqueued by [`reconcile_at`] instead of counting `in_flight`
+    /// forever (the 2026-08-26 stuck-29 deadlock: a dead worker's claim row pins its cell because
+    /// the claim-time TTL steal only fires for cells that get enqueued). Callers wire the claim
+    /// TTL here; `None` keeps the old behavior bit-for-bit (and [`reconcile`] always behaves as
+    /// `None` — it passes no clock).
+    pub stale_claim_after: Option<u64>,
 }
 
 impl Default for RetryPolicy {
     fn default() -> Self {
-        Self { max_attempts: 3 }
+        Self { max_attempts: 3, stale_claim_after: None }
     }
 }
 
@@ -46,6 +53,26 @@ pub struct ReconcilePlan {
 /// Compute the gap between what's desired and what the ledger shows. Desired entries that resolve to
 /// the same [`JobId`] are de-duplicated, so declaring overlapping work never double-enqueues.
 pub fn reconcile(desired: &[DesiredJob], view: &LedgerView, policy: RetryPolicy) -> ReconcilePlan {
+    reconcile_at(desired, view, policy, 0, None)
+}
+
+/// [`reconcile`] with claim-staleness awareness (the 2026-08-26 stuck-29 fix).
+///
+/// A `Claimed` row is normally `in_flight` — never enqueued, so no claim attempt happens, so the
+/// claim-time TTL steal ([`claim_is_stale`]'s consumer) can never fire for it: a dead worker's
+/// claim row pins its cell in_flight FOREVER. This deadlocked 29 sf2-cpu cells on 2026-08-26
+/// (broken-image worker claimed chunks, died mid-era; its cells were unreachable until the claim
+/// objects were deleted by hand). With `stale_claim_after = Some(ttl)` a Claimed/Pending row whose
+/// age (`now - ts`) has reached the TTL is treated as abandoned and re-enqueued — the same
+/// staleness rule the claim-object steal uses, applied where the decision actually gets made.
+/// `None` (or `reconcile`) keeps the old behavior bit-for-bit.
+pub fn reconcile_at(
+    desired: &[DesiredJob],
+    view: &LedgerView,
+    policy: RetryPolicy,
+    now: u64,
+    stale_claim_after: Option<u64>,
+) -> ReconcilePlan {
     let mut plan = ReconcilePlan::default();
     let mut seen: HashSet<JobId> = HashSet::new();
 
@@ -59,7 +86,13 @@ pub fn reconcile(desired: &[DesiredJob], view: &LedgerView, policy: RetryPolicy)
             Some(r) => match r.status {
                 JobStatus::Done => plan.done += 1,
                 JobStatus::Poison => {} // already given up; recorded
-                JobStatus::Pending | JobStatus::Claimed => plan.in_flight += 1,
+                JobStatus::Pending | JobStatus::Claimed => {
+                    match stale_claim_after {
+                        // Abandoned in-flight row (owner presumed dead) → back into the gap.
+                        Some(ttl) if now.saturating_sub(r.ts) >= ttl => plan.enqueue.push(id),
+                        _ => plan.in_flight += 1,
+                    }
+                }
                 JobStatus::Failed => {
                     let transient = r.error_class.map(|e| e.is_transient()).unwrap_or(false);
                     if transient && r.attempts < policy.max_attempts {
@@ -150,7 +183,7 @@ mod tests {
         let plan = reconcile(
             std::slice::from_ref(&d),
             &view,
-            RetryPolicy { max_attempts: 3 },
+            RetryPolicy { max_attempts: 3, stale_claim_after: None },
         );
         assert_eq!(plan.enqueue, vec![d.job_id()]);
         assert!(plan.poison.is_empty());
@@ -168,7 +201,7 @@ mod tests {
         let plan = reconcile(
             std::slice::from_ref(&d),
             &view,
-            RetryPolicy { max_attempts: 3 },
+            RetryPolicy { max_attempts: 3, stale_claim_after: None },
         );
         assert_eq!(plan.poison, vec![d.job_id()]);
         assert!(plan.enqueue.is_empty());
@@ -186,7 +219,7 @@ mod tests {
         let plan = reconcile(
             std::slice::from_ref(&d),
             &view,
-            RetryPolicy { max_attempts: 3 },
+            RetryPolicy { max_attempts: 3, stale_claim_after: None },
         );
         assert_eq!(plan.poison, vec![d.job_id()]);
         assert!(plan.enqueue.is_empty());
@@ -214,5 +247,36 @@ mod tests {
             1,
             "content-addressed dedup: same work declared thrice = one enqueue"
         );
+    }
+
+    /// The stuck-29 class (2026-08-26): a Claimed row from a dead worker must become enqueueable
+    /// once its age reaches the TTL — and must stay in_flight while fresh.
+    #[test]
+    fn stale_claimed_row_reenqueues_at_ttl() {
+        let d = desired("cvvdp", b"enc");
+        let mut r = row(d.job_id(), JobStatus::Claimed, None, 1);
+        r.ts = 1_000;
+        let view = LedgerView::from_rows([r]);
+        let ds = [d.clone()];
+
+        // Fresh (age < ttl): in_flight, nothing enqueued.
+        let p = reconcile_at(&ds, &view, RetryPolicy::default(), 1_500, Some(600));
+        assert_eq!(p.in_flight, 1);
+        assert!(p.enqueue.is_empty());
+
+        // Stale (age >= ttl): back into the gap.
+        let p = reconcile_at(&ds, &view, RetryPolicy::default(), 1_600, Some(600));
+        assert_eq!(p.in_flight, 0);
+        assert_eq!(p.enqueue, vec![d.job_id()]);
+
+        // Staleness disabled: old behavior exactly (in_flight forever).
+        let p = reconcile_at(&ds, &view, RetryPolicy::default(), 9_999_999, None);
+        assert_eq!(p.in_flight, 1);
+        assert!(p.enqueue.is_empty());
+
+        // The plain reconcile() wrapper keeps the old behavior bit-for-bit.
+        let p = reconcile(&ds, &view, RetryPolicy::default());
+        assert_eq!(p.in_flight, 1);
+        assert!(p.enqueue.is_empty());
     }
 }
