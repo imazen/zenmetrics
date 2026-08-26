@@ -45,7 +45,7 @@ CTR="zen-score-${ROLE}"
 # command — the 2026-08-26 `--gpus all` bug); GPU flags are rebuilt on the remote.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
-  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" 'bash -s' <<'REMOTE'
+  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
 S3ENV="$HOME/.config/zen/s3env.sh"
@@ -70,10 +70,15 @@ ENCP=(); [ -n "${ZM_ENC_PREFIX:-}" ] && ENCP=(-e "ZEN_ENCODES_PREFIX=$ZM_ENC_PRE
 [ -n "${ZM_PASS_TIMEOUT:-}" ] && ENCP+=(-e "ZEN_PASS_TIMEOUT=$ZM_PASS_TIMEOUT")
 [ -n "${ZM_CHUNK_WALL:-}" ] && ENCP+=(-e "ZEN_CHUNK_WALL_SEC=$ZM_CHUNK_WALL")
 [ -n "${ZM_CAPABILITY:-}" ] && ENCP+=(-e "ZEN_CAPABILITY=$ZM_CAPABILITY")
+# Resource caps for shared boxes (tower rule: never an uncapped worker on the media server).
+CAPS=()
+[ -n "${ZM_CPUSET:-}" ] && CAPS+=(--cpuset-cpus "$ZM_CPUSET")
+[ -n "${ZM_CPU_SHARES:-}" ] && CAPS+=(--cpu-shares "$ZM_CPU_SHARES")
+[ -n "${ZM_MEMORY:-}" ] && CAPS+=(--memory "$ZM_MEMORY")
 
 sudo -n docker pull "$ZM_IMG" >/dev/null 2>&1 || true
 sudo -n docker rm -f "$ZM_CTR" >/dev/null 2>&1 || true
-sudo -n docker run -d --name "$ZM_CTR" --restart unless-stopped "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" \
+sudo -n docker run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart unless-stopped "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" \
   -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
   -e ZEN_R2_ENDPOINT="$EP" -e ZEN_BUCKET="$ZM_BUCKET" \
   -e ZEN_RUN="jobs/$ZM_JOBSET" \
