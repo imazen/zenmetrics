@@ -37,6 +37,9 @@ import subprocess
 import sys
 import tarfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+from zen_s3env import resolve_full  # noqa: E402
+
 CORPUS, RUN = sys.argv[1].rstrip("/"), sys.argv[2]
 METRICS = os.environ.get(
     "ZEN_METRICS", "zensim-gpu,ssim2-gpu,cvvdp,iwssim-gpu,butteraugli-gpu"
@@ -51,13 +54,11 @@ if TRANSFER not in ("", "pu-rescale", "pq"):
     print("FATAL: ZEN_HDR_TRANSFER must be empty, pu-rescale, or pq", flush=True)
     sys.exit(1)
 
-ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
-env = dict(
-    os.environ,
-    AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
-    AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"],
-    AWS_REGION="auto",
-)
+# Store resolution via scripts/lib/zen_s3env.py -- defaults to the LAN store,
+# ZEN_STORE=r2 opts out. Fixed 2026-08-26 (was: unconditional R2_* env vars).
+ep, _ak, _sk, _store_kind, _reachable = resolve_full()
+print(f"build_scorefile_hdr_pairs: store={_store_kind} endpoint={ep}", file=sys.stderr)
+env = dict(os.environ, AWS_ACCESS_KEY_ID=_ak, AWS_SECRET_ACCESS_KEY=_sk, AWS_REGION="auto")
 
 
 def s5(args, **kw):

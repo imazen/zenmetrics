@@ -5,11 +5,15 @@
 #   usage: consolidate_cpu_sweep.py <codec_dir> <run_id> [<run_id2> ...]   (multiple runs = bulk + big-tier)
 import sys, os, subprocess, glob
 import pyarrow.parquet as pq, pyarrow as pa
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+from zen_s3env import resolve_full  # noqa: E402
 codec, RUNS = sys.argv[1], sys.argv[2:]
 OUT = "/mnt/v/zen/zensim-training/2026-06-24-cpu/unified/%s" % codec
-ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
-env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
-           AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
+# Store resolution via scripts/lib/zen_s3env.py -- defaults to the LAN store,
+# ZEN_STORE=r2 opts out. Fixed 2026-08-26 (was: unconditional R2_* env vars).
+ep, _ak, _sk, _store_kind, _reachable = resolve_full()
+print(f"consolidate_cpu_sweep: store={_store_kind} endpoint={ep}", file=sys.stderr)
+env = dict(os.environ, AWS_ACCESS_KEY_ID=_ak, AWS_SECRET_ACCESS_KEY=_sk, AWS_REGION="auto")
 def s5(*a): subprocess.run(["s5cmd", "--endpoint-url", ep, *a], env=env, check=False,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 os.makedirs(OUT, exist_ok=True)

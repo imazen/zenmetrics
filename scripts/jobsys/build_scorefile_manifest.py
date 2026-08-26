@@ -9,13 +9,17 @@
 #     radius are finer than per-file.
 #   usage: build_scorefile_manifest.py <codec_dir> <ext> <run_id>
 import json, csv, os, sys, tarfile, subprocess, gzip, hashlib
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+from zen_s3env import resolve_full  # noqa: E402
 codec, ext, RUN = sys.argv[1], sys.argv[2], sys.argv[3]
 DGP = os.environ.get("ZEN_DATAGEN_PREFIX", "picker-sweep-2026-06-22/datagen-2026-06-23")
 METRICS = ["butteraugli-gpu", "cvvdp", "dssim-gpu", "iwssim-gpu", "ssim2-gpu", "zensim-gpu"]
 CHUNK = int(os.environ.get("ZEN_SCOREFILE_CHUNK", "12"))
-ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
-env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
-           AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
+# Store resolution via scripts/lib/zen_s3env.py -- defaults to the LAN store,
+# ZEN_STORE=r2 opts out. Fixed 2026-08-26 (was: unconditional R2_* env vars).
+ep, _ak, _sk, _store_kind, _reachable = resolve_full()
+print(f"build_scorefile_manifest: store={_store_kind} endpoint={ep}", file=sys.stderr)
+env = dict(os.environ, AWS_ACCESS_KEY_ID=_ak, AWS_SECRET_ACCESS_KEY=_sk, AWS_REGION="auto")
 def r2(*a): subprocess.run(["s5cmd", "--endpoint-url", ep, *a], env=env, check=True,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 def r2cat(key): return subprocess.run(["s5cmd", "--endpoint-url", ep, "cat", "s3://codec-corpus/%s" % key],

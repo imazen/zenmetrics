@@ -12,6 +12,9 @@
 import json, os, sys, tarfile, subprocess, gzip, hashlib
 import pyarrow.parquet as pq
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+from zen_s3env import resolve_full  # noqa: E402
+
 pairs_arg, TAR_URI, RUN = sys.argv[1], sys.argv[2], sys.argv[3]
 # ZEN_SCOREFILE_METRICS (comma-sep) overrides the default. For the zensim-720 CPU
 # backfill set it to "zensim-gpu" — a CPU (:exec) box emits the 720 feature vector and
@@ -20,9 +23,11 @@ METRICS = [m.strip() for m in os.environ.get(
     "ZEN_SCOREFILE_METRICS", "butteraugli-gpu,cvvdp,dssim-gpu,iwssim-gpu,ssim2-gpu,zensim-gpu"
 ).split(",") if m.strip()]
 CHUNK = int(os.environ.get("ZEN_SCOREFILE_CHUNK", "12"))
-ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
-env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
-           AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
+# Store resolution via scripts/lib/zen_s3env.py -- defaults to the LAN store,
+# ZEN_STORE=r2 opts out. Fixed 2026-08-26 (was: unconditional R2_* env vars).
+ep, _ak, _sk, _store_kind, _reachable = resolve_full()
+print(f"build_scorefile_from_pairs: store={_store_kind} endpoint={ep}", file=sys.stderr)
+env = dict(os.environ, AWS_ACCESS_KEY_ID=_ak, AWS_SECRET_ACCESS_KEY=_sk, AWS_REGION="auto")
 
 def r2cp(src, dst):
     subprocess.run(["s5cmd", "--endpoint-url", ep, "cp", src, dst], env=env, check=True,

@@ -4,13 +4,17 @@
 # (matches the ref renditions under <PREFIX>/ref/ that jobexec resolves via ZEN_CORPUS_PREFIX).
 #   usage: build_score_spec.py <codec> [out.json]   (env: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY)
 import csv, json, os, sys, subprocess
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+from zen_s3env import resolve_full  # noqa: E402
 codec = sys.argv[1]
 out = sys.argv[2] if len(sys.argv) > 2 else "/tmp/%s_spec.json" % codec
 P = os.environ.get("ZEN_DATAGEN_PREFIX", "picker-sweep-2026-06-22/datagen-2026-06-23")
 METRICS = ["butteraugli-gpu", "cvvdp", "dssim-gpu", "iwssim-gpu", "ssim2-gpu", "zensim-gpu"]
-ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
-env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
-           AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
+# Store resolution via scripts/lib/zen_s3env.py -- defaults to the LAN store,
+# ZEN_STORE=r2 opts out. Fixed 2026-08-26 (was: unconditional R2_* env vars).
+ep, _ak, _sk, _store_kind, _reachable = resolve_full()
+print(f"build_score_spec: store={_store_kind} endpoint={ep}", file=sys.stderr)
+env = dict(os.environ, AWS_ACCESS_KEY_ID=_ak, AWS_SECRET_ACCESS_KEY=_sk, AWS_REGION="auto")
 def dl(key, dst):
     subprocess.run(["s5cmd", "--endpoint-url", ep, "cp",
                     "s3://codec-corpus/%s/%s/%s" % (P, codec, key), dst],
