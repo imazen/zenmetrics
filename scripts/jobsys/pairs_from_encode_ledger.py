@@ -20,8 +20,14 @@
 #       s3://zentrain/jobs/avifgen-enc-20260806/blobs \
 #       /mnt/v/output/avifgen-2026-08-06/pairs
 #
-# R2 access: sources root creds from ~/.config/cloudflare/r2-credentials when the
-# ledger argument is s3:// (workstation-side tool; never runs on workers).
+# Store resolution goes through scripts/lib/zen_s3env.py (mirrors s3env.sh) -- the
+# canonical resolver, DEFAULTS TO THE LAN STORE (~/.config/zen/lanstore.env), and
+# takes ZEN_STORE=r2 as the explicit opt-out for cloud-hosted ledgers. Previously
+# this hand-rolled its own R2-only credential load (unconditionally required
+# ~/.config/cloudflare/r2-credentials, no LAN-store awareness at all beyond an
+# overridable endpoint) -- exactly the class of regression the LAN-vs-R2
+# coordination rule in docs/RUNNING_JOBS.md 2 exists to prevent. Fixed 2026-08-26
+# to use the shared resolver instead of a second, partial reimplementation of it.
 import os
 import subprocess
 import sys
@@ -30,42 +36,18 @@ import tempfile
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+from zen_s3env import resolve_full  # noqa: E402
+
 LEDGER, REFS, BLOBS, OUT = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 REFS = REFS.rstrip("/")
 BLOBS = BLOBS.rstrip("/")
 
 if LEDGER.startswith("s3://"):
     tmp = tempfile.mkdtemp(prefix="pairs_ledger_")
-    # LAN-vs-R2 coordination: respect ambient AWS_* creds first (the LAN-store
-    # convention -- see docs/RUNNING_JOBS.md 2 "LAN workers receive the store
-    # credential directly"/scripts/lib/s3env.sh) and only auto-load the R2 root
-    # credential file as a fallback. Previously this unconditionally read
-    # ~/.config/cloudflare/r2-credentials for ANY s3:// ledger -- fine for R2-hosted
-    # runs, but silently wrong (auth failure, or worse a false-positive against the
-    # wrong backend) for a LAN-store-hosted ledger even with ZEN_S3_ENDPOINT set,
-    # since only the endpoint was overridable, not the credential source. Fixed
-    # 2026-08-26 after hitting this directly building a LAN-store declare spec.
-    if os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"):
-        env = dict(os.environ)
-        ep = os.environ.get("ZEN_S3_ENDPOINT")
-        if not ep:
-            sys.exit("LEDGER is s3:// with ambient AWS_* creds set but no ZEN_S3_ENDPOINT -- "
-                     "set it explicitly (LAN store or R2) rather than guessing.")
-    else:
-        creds = {}
-        with open(os.path.expanduser("~/.config/cloudflare/r2-credentials")) as f:
-            for line in f:
-                line = line.strip()
-                if "=" in line and not line.startswith("#"):
-                    k, v = line.split("=", 1)
-                    creds[k.strip()] = v.strip().strip('"').strip("'")
-        env = dict(
-            os.environ,
-            AWS_ACCESS_KEY_ID=creds["R2_ACCESS_KEY_ID"],
-            AWS_SECRET_ACCESS_KEY=creds["R2_SECRET_ACCESS_KEY"],
-            AWS_REGION="auto",
-        )
-        ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % creds["R2_ACCOUNT_ID"]
+    ep, ak, sk, store_kind, _reachable = resolve_full()
+    print(f"pairs_from_encode_ledger: store={store_kind} endpoint={ep}", file=sys.stderr)
+    env = dict(os.environ, AWS_ACCESS_KEY_ID=ak, AWS_SECRET_ACCESS_KEY=sk, AWS_REGION="auto")
     subprocess.run(
         ["aws", "s3", "cp", "--endpoint-url", ep, LEDGER, tmp, "--recursive", "--quiet"],
         env=env,

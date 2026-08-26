@@ -4,6 +4,8 @@
 # the encode filename; the worker GETs <ZEN_ENCODES_PREFIX>/<name> in-process.
 #   usage: declare_direct_objects.py <pairs.parquet[,...]> <run_id> <jobs_bucket>
 import json, os, sys, gzip, subprocess, pyarrow.parquet as pq
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+from zen_s3env import resolve_full  # noqa: E402
 pairs_arg, RUN, BUCKET = sys.argv[1], sys.argv[2], sys.argv[3]
 CHUNK = int(os.environ.get("ZEN_SCOREFILE_CHUNK", "12"))
 METRICS = [m for m in os.environ.get("ZEN_SCOREFILE_METRICS", "zensim-gpu").split(",") if m]
@@ -19,21 +21,13 @@ _ht = os.environ.get("ZEN_SCOREFILE_HINT_THREADS")
 HINT = None
 if _hm or _ht:
     HINT = {"peak_mem_bytes": int(float(_hm or 0.5) * (1 << 30)), "threads": int(_ht or 1)}
-# LAN-vs-R2 coordination (fixed 2026-08-26, same class of bug as
-# pairs_from_encode_ledger.py): respect ambient AWS_* creds + ZEN_S3_ENDPOINT for a
-# LAN-store BUCKET instead of unconditionally requiring R2_* env vars -- this script's
-# own docstring/name is R2-flavored but the upload mechanism (s5cmd against an
-# S3-compatible endpoint) works identically against SeaweedFS.
-if os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"):
-    ep = os.environ.get("ZEN_S3_ENDPOINT")
-    if not ep:
-        sys.exit("ambient AWS_* creds set but no ZEN_S3_ENDPOINT -- set it explicitly "
-                 "(LAN store or R2) rather than guessing.")
-    env = dict(os.environ)
-else:
-    ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % os.environ["R2_ACCOUNT_ID"]
-    env = dict(os.environ, AWS_ACCESS_KEY_ID=os.environ["R2_ACCESS_KEY_ID"],
-               AWS_SECRET_ACCESS_KEY=os.environ["R2_SECRET_ACCESS_KEY"], AWS_REGION="auto")
+# Store resolution via scripts/lib/zen_s3env.py (fixed 2026-08-26, same class of bug
+# as pairs_from_encode_ledger.py -- this script's own docstring/name is R2-flavored
+# but the upload mechanism, s5cmd against an S3-compatible endpoint, works identically
+# against the LAN store's SeaweedFS). DEFAULTS TO THE LAN STORE; ZEN_STORE=r2 opts out.
+ep, _ak, _sk, _store_kind, _reachable = resolve_full()
+print(f"declare_direct_objects: store={_store_kind} endpoint={ep}", file=sys.stderr)
+env = dict(os.environ, AWS_ACCESS_KEY_ID=_ak, AWS_SECRET_ACCESS_KEY=_sk, AWS_REGION="auto")
 def r2cp(local, key): subprocess.run(["s5cmd","--endpoint-url",ep,"cp",local,"s3://%s/%s"%(BUCKET,key)], env=env, check=True, stdout=subprocess.DEVNULL)
 files = {}  # ref basename -> [dist_member,...]
 cellinfo = {}  # dist member -> (codec, q, knob_tuple_json) when the pairs carry identity
