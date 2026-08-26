@@ -1237,6 +1237,36 @@ fn score_hdr_decoded_variant(
         Ok(serde_json::to_string(&Value::Object(o))?)
     };
     for metric in metrics {
+        // Folded regimes (924/944) on HDR pairs: FEATURES ONLY (no score), same
+        // contract as the SDR folded arm — routed to the absolute-nits extractor
+        // (crate::hdr::hdr_foldapp_features; wired 2026-08-26 for the hdrfeat944
+        // wave). Gated on cpu-metrics like the SDR arm.
+        #[cfg(feature = "cpu-metrics")]
+        if *metric == "zensim-foldapp" || *metric == "zensim-foldapp2" {
+            let (_, regime_tag, _) = zensim_regime_for_metric(metric);
+            match crate::hdr::hdr_foldapp_features(
+                reference,
+                distorted,
+                *metric == "zensim-foldapp2",
+            ) {
+                Ok(feats) => {
+                    let mut fo = Map::new();
+                    fo.insert("kind".into(), serde_json::json!("feature"));
+                    fo.insert("image_path".into(), serde_json::json!(image_path));
+                    fo.insert("codec".into(), serde_json::json!(codec_name));
+                    fo.insert("encode_sha".into(), serde_json::json!(sha));
+                    fo.insert("hdr".into(), serde_json::json!(true));
+                    fo.insert("regime".into(), serde_json::json!(regime_tag));
+                    fo.insert("features".into(), serde_json::json!(feats));
+                    rows.push(serde_json::to_string(&Value::Object(fo))?);
+                }
+                Err(e) => rows.push(mk_row(
+                    sha,
+                    serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                )?),
+            }
+            continue;
+        }
         // zensim(-gpu): score + the feature vector from the SAME u8-shell
         // feeding — the exact score-pairs --hdr --feature-output path.
         if *metric == "zensim-gpu" || *metric == "zensim" {

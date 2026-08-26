@@ -1083,6 +1083,88 @@ pub fn score_hdr_pair_per_score_pairs(
 /// `--hdr-features-pu-linear`) feeds the same feature-bearing zensim calls the
 /// SDR path uses. GPU: the umbrella `MetricCache::compute_zensim_features`
 /// (reused across variants). CPU: `run_zensim_with_features`.
+/// Folded-regime (924/944) feature extraction on ABSOLUTE-NITS HDR pairs — the
+/// missing wire between the fleet's `zensim-foldapp`/`zensim-foldapp2` metric
+/// strings and zensim's `compute_folded720_append{,2}_features_hdr` (found
+/// 2026-08-26: the hdrfeat944 first-cell gate hit "unknown metric" because the
+/// HDR route only knew the v1/372 path). Inputs are the decoded `NitsImage`s the
+/// HDR route already holds, declared `HdrEncoding::Linear` (absolute cd/m² — the
+/// same physical values the PQ-file route decodes to; NOTE this is a different
+/// HDR feeding pipeline than the hdr944-leg's `Pq{peak_nits}` display-model
+/// decode of PQ code values, so features are internally consistent within a wave
+/// but not byte-comparable to that leg's extraction). Toggles default (append2
+/// dst-activity OFF per SOTA-944 P1.5); CPU-only (`cpu-metrics`).
+#[cfg(feature = "cpu-metrics")]
+pub fn hdr_foldapp_features(
+    reference: &HdrImageFeeds,
+    distorted: &HdrImageFeeds,
+    append2: bool,
+) -> Result<Vec<f64>, Err> {
+    use zensim::feature_v2::{HdrEncoding, V2NewFeatureToggles, V2Scratch};
+    use zensim::source::{AlphaMode, ImageSource, PixelFormat};
+
+    hdr_dims_check(reference, distorted)?;
+
+    /// Absolute-linear cd/m² source over interleaved RGBA f32 (the
+    /// `upiq_features_extract` adapter shape).
+    struct LinearNitsSource {
+        data: Vec<[f32; 4]>,
+        w: usize,
+        h: usize,
+    }
+    impl ImageSource for LinearNitsSource {
+        fn width(&self) -> usize {
+            self.w
+        }
+        fn height(&self) -> usize {
+            self.h
+        }
+        fn pixel_format(&self) -> PixelFormat {
+            PixelFormat::LinearF32Rgba
+        }
+        fn alpha_mode(&self) -> AlphaMode {
+            AlphaMode::Opaque
+        }
+        fn is_hdr(&self) -> bool {
+            true
+        }
+        fn row_bytes(&self, y: usize) -> &[u8] {
+            bytemuck::cast_slice(&self.data[y * self.w..(y + 1) * self.w])
+        }
+    }
+    fn to_src(n: &NitsImage) -> LinearNitsSource {
+        let (w, h) = (n.width as usize, n.height as usize);
+        let data = (0..w * h)
+            .map(|i| [n.rgb[3 * i], n.rgb[3 * i + 1], n.rgb[3 * i + 2], 1.0])
+            .collect();
+        LinearNitsSource { data, w, h }
+    }
+
+    let r = to_src(reference.nits());
+    let d = to_src(distorted.nits());
+    let z = zensim::Zensim::new(zensim::ZensimProfile::codec_target());
+    let mut scratch = V2Scratch::new();
+    let res = if append2 {
+        z.compute_folded720_append2_features_hdr(
+            &r,
+            &d,
+            HdrEncoding::Linear,
+            V2NewFeatureToggles::default(),
+            &mut scratch,
+        )
+    } else {
+        z.compute_folded720_append_features_hdr(
+            &r,
+            &d,
+            HdrEncoding::Linear,
+            V2NewFeatureToggles::default(),
+            &mut scratch,
+        )
+    };
+    res.map(zensim::feature_v2::ZensimV2Result::into_features)
+        .map_err(|e| format!("hdr foldapp extraction: {e}").into())
+}
+
 pub fn score_hdr_zensim_with_features_per_score_pairs(
     metric: crate::metrics::MetricKind,
     reference: &HdrImageFeeds,
