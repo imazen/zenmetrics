@@ -35,5 +35,8 @@ DRIVER="$HERE/_lan_gpu_seq_driver.sh"   # standalone; committed alongside
 scp -o BatchMode=yes -o ConnectTimeout=10 "$DRIVER" "$HOST:lan_gpu_seq_run.sh" >/dev/null \
   || { echo "scp driver to $HOST failed" >&2; exit 4; }
 # env vars are single-token (safe on the ssh line); buckets are positional args.
+# ZM_VRAM_CAP (bytes) → ZENMETRICS_VRAM_CAP_BYTES in the worker, so the GPU metric
+# auto-picks Strip mode for large images instead of OOMing. Set it to the card's
+# real VRAM (e.g. 5500000000 for a 6 GB card, 7500000000 for 8 GB). Space-free.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
-  "chmod +x lan_gpu_seq_run.sh; setsid nohup env ZM_KIND='$KIND' ZM_IMG='$IMG' ZM_S3BUCKET='$S3BUCKET' bash lan_gpu_seq_run.sh $* >/dev/null 2>&1 & echo \"\$(hostname): sequencer launched over: $*\""
+  "chmod +x lan_gpu_seq_run.sh; setsid nohup env ZM_KIND='$KIND' ZM_IMG='$IMG' ZM_S3BUCKET='$S3BUCKET' ZM_VRAM_CAP='${ZM_VRAM_CAP:-}' bash lan_gpu_seq_run.sh $* >/dev/null 2>&1 & echo \"\$(hostname): sequencer launched over: $* (vram_cap=${ZM_VRAM_CAP:-none})\""

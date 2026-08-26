@@ -17,6 +17,10 @@ log(){ echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"; }
 
 GPU_ARGS=(); REQ=()
 if [ "${ZM_KIND:-gpu}" = gpu ]; then GPU_ARGS=(--gpus all); REQ=(-e ZEN_REQUIRE_GPU=1); fi
+# ZENMETRICS_VRAM_CAP_BYTES makes the GPU metric's auto mode pick Strip (bounded
+# VRAM) instead of Full for large images — without it, large HDR images OOM the
+# card ("encoder_panic" CUDA OOM, 2026-08-26). Set it to the card's real VRAM.
+VRAM=(); [ -n "${ZM_VRAM_CAP:-}" ] && VRAM=(-e "ZENMETRICS_VRAM_CAP_BYTES=$ZM_VRAM_CAP")
 sudo -n docker pull "$ZM_IMG" >/dev/null 2>&1 || true
 
 log "sequencer start on $(hostname): $# buckets ($*)"
@@ -26,7 +30,7 @@ for js in "$@"; do
   log "START $js (role=$role, worker=$(hostname)-$role)"
   sudo -n docker rm -f "$ctr" >/dev/null 2>&1 || true
   # blocking run (no -d): returns when the worker self-exits on drain (idle passes)
-  sudo -n docker run --rm --name "$ctr" "${GPU_ARGS[@]}" \
+  sudo -n docker run --rm --name "$ctr" "${GPU_ARGS[@]}" "${VRAM[@]}" \
     -e AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
     -e ZEN_R2_ENDPOINT="$EP" -e ZEN_BUCKET="${ZM_S3BUCKET:-zentrain}" \
     -e ZEN_RUN="jobs/$js" \
