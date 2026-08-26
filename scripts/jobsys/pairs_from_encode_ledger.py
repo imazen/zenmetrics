@@ -36,20 +36,36 @@ BLOBS = BLOBS.rstrip("/")
 
 if LEDGER.startswith("s3://"):
     tmp = tempfile.mkdtemp(prefix="pairs_ledger_")
-    creds = {}
-    with open(os.path.expanduser("~/.config/cloudflare/r2-credentials")) as f:
-        for line in f:
-            line = line.strip()
-            if "=" in line and not line.startswith("#"):
-                k, v = line.split("=", 1)
-                creds[k.strip()] = v.strip().strip('"').strip("'")
-    env = dict(
-        os.environ,
-        AWS_ACCESS_KEY_ID=creds["R2_ACCESS_KEY_ID"],
-        AWS_SECRET_ACCESS_KEY=creds["R2_SECRET_ACCESS_KEY"],
-        AWS_REGION="auto",
-    )
-    ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % creds["R2_ACCOUNT_ID"]
+    # LAN-vs-R2 coordination: respect ambient AWS_* creds first (the LAN-store
+    # convention -- see docs/RUNNING_JOBS.md 2 "LAN workers receive the store
+    # credential directly"/scripts/lib/s3env.sh) and only auto-load the R2 root
+    # credential file as a fallback. Previously this unconditionally read
+    # ~/.config/cloudflare/r2-credentials for ANY s3:// ledger -- fine for R2-hosted
+    # runs, but silently wrong (auth failure, or worse a false-positive against the
+    # wrong backend) for a LAN-store-hosted ledger even with ZEN_S3_ENDPOINT set,
+    # since only the endpoint was overridable, not the credential source. Fixed
+    # 2026-08-26 after hitting this directly building a LAN-store declare spec.
+    if os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"):
+        env = dict(os.environ)
+        ep = os.environ.get("ZEN_S3_ENDPOINT")
+        if not ep:
+            sys.exit("LEDGER is s3:// with ambient AWS_* creds set but no ZEN_S3_ENDPOINT -- "
+                     "set it explicitly (LAN store or R2) rather than guessing.")
+    else:
+        creds = {}
+        with open(os.path.expanduser("~/.config/cloudflare/r2-credentials")) as f:
+            for line in f:
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    creds[k.strip()] = v.strip().strip('"').strip("'")
+        env = dict(
+            os.environ,
+            AWS_ACCESS_KEY_ID=creds["R2_ACCESS_KEY_ID"],
+            AWS_SECRET_ACCESS_KEY=creds["R2_SECRET_ACCESS_KEY"],
+            AWS_REGION="auto",
+        )
+        ep = os.environ.get("ZEN_S3_ENDPOINT") or "https://%s.r2.cloudflarestorage.com" % creds["R2_ACCOUNT_ID"]
     subprocess.run(
         ["aws", "s3", "cp", "--endpoint-url", ep, LEDGER, tmp, "--recursive", "--quiet"],
         env=env,
