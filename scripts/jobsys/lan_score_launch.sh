@@ -45,7 +45,7 @@ CTR="zen-score-${ROLE}"
 # command — the 2026-08-26 `--gpus all` bug); GPU flags are rebuilt on the remote.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
-  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" 'bash -s' <<'REMOTE'
+  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
 S3ENV="$HOME/.config/zen/s3env.sh"
@@ -69,6 +69,7 @@ ENCP=(); [ -n "${ZM_ENC_PREFIX:-}" ] && ENCP=(-e "ZEN_ENCODES_PREFIX=$ZM_ENC_PRE
 # rc=124-killed each pass, wasting the in-flight tail chunk (observed node-2 2026-08-26).
 [ -n "${ZM_PASS_TIMEOUT:-}" ] && ENCP+=(-e "ZEN_PASS_TIMEOUT=$ZM_PASS_TIMEOUT")
 [ -n "${ZM_CHUNK_WALL:-}" ] && ENCP+=(-e "ZEN_CHUNK_WALL_SEC=$ZM_CHUNK_WALL")
+[ -n "${ZM_CAPABILITY:-}" ] && ENCP+=(-e "ZEN_CAPABILITY=$ZM_CAPABILITY")
 
 sudo -n docker pull "$ZM_IMG" >/dev/null 2>&1 || true
 sudo -n docker rm -f "$ZM_CTR" >/dev/null 2>&1 || true
