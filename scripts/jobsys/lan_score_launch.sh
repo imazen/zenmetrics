@@ -45,7 +45,7 @@ CTR="zen-score-${ROLE}"
 # command — the 2026-08-26 `--gpus all` bug); GPU flags are rebuilt on the remote.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
-  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" 'bash -s' <<'REMOTE'
+  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
 S3ENV="$HOME/.config/zen/s3env.sh"
@@ -65,6 +65,9 @@ VRAM=(); [ -n "${ZM_VRAM_CAP:-}" ] && VRAM=(-e "ZENMETRICS_VRAM_CAP_BYTES=$ZM_VR
 ENCP=(); [ -n "${ZM_ENC_PREFIX:-}" ] && ENCP=(-e "ZEN_ENCODES_PREFIX=$ZM_ENC_PREFIX")
 # Encode jobs resolve bare cell.image_path at s3://$ZEN_BUCKET/$ZEN_CORPUS_PREFIX/<name>.
 [ -n "${ZM_CORPUS_PREFIX:-}" ] && ENCP+=(-e "ZEN_CORPUS_PREFIX=$ZM_CORPUS_PREFIX")
+# Pass budget override: big-cell workloads (HDR diffmaps) exceed the 1800s default and get
+# rc=124-killed each pass, wasting the in-flight tail chunk (observed node-2 2026-08-26).
+[ -n "${ZM_PASS_TIMEOUT:-}" ] && ENCP+=(-e "ZEN_PASS_TIMEOUT=$ZM_PASS_TIMEOUT")
 
 sudo -n docker pull "$ZM_IMG" >/dev/null 2>&1 || true
 sudo -n docker rm -f "$ZM_CTR" >/dev/null 2>&1 || true
