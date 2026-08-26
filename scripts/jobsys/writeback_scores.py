@@ -121,9 +121,14 @@ for c in cells:
     ft = feat_data.get(sha)
     if ft and ft[1]:
         srow["zensim_score"] = ft[0]; all_score_cols.add("zensim_score")
-        frow = dict(base); frow["zensim_score"] = ft[0]
-        for i, v in enumerate(ft[1]): frow["feat_%d" % i] = v
-        feat_rows.append(frow); got = True
+        got = True
+        # ZEN_SKIP_FEATURES=1: scores-only pass. The per-row feature dicts are the
+        # memory hog (534k rows x 372 python floats OOM-killed a 60G box,
+        # 2026-08-26); skip building them when only scores are needed.
+        if os.environ.get("ZEN_SKIP_FEATURES") != "1":
+            frow = dict(base); frow["zensim_score"] = ft[0]
+            for i, v in enumerate(ft[1]): frow["feat_%d" % i] = v
+            feat_rows.append(frow)
     if got: score_rows.append(srow)
     else: miss_score += 1
 print("  score_rows=%d feat_rows=%d (miss_sha=%d miss_score=%d)"
@@ -138,8 +143,11 @@ scols = ID + sorted(all_score_cols)
 pq.write_table(pa.table({c: [r.get(c) for r in score_rows] for c in scols}),
                "%s/scores.parquet" % OUTDIR, compression="zstd")
 n_feat = max((len(f[1]) for f in feat_data.values() if f and f[1]), default=372)
-fcols = ID + ["zensim_score"] + ["feat_%d" % i for i in range(n_feat)]
-pq.write_table(pa.table({c: [r.get(c) for r in feat_rows] for c in fcols}),
-               "%s/features.parquet" % OUTDIR, compression="zstd")
+if os.environ.get("ZEN_SKIP_FEATURES") == "1":
+    print("ZEN_SKIP_FEATURES=1 — features.parquet NOT written (scores-only pass)", flush=True)
+else:
+    fcols = ID + ["zensim_score"] + ["feat_%d" % i for i in range(n_feat)]
+    pq.write_table(pa.table({c: [r.get(c) for r in feat_rows] for c in fcols}),
+                   "%s/features.parquet" % OUTDIR, compression="zstd")
 print("WROTE %s/{scores,features}.parquet — scores %d rows x %d cols, features %d rows x %d feat"
       % (OUTDIR, len(score_rows), len(scols), len(feat_rows), n_feat), flush=True)
