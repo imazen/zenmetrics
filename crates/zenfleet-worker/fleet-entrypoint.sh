@@ -324,6 +324,13 @@ while :; do
   SNAP=/tmp/ledger_snapshot.parquet
   s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "s3://$ZEN_BUCKET/$ZEN_RUN/ledger_snapshot.parquet" "$SNAP" >/dev/null 2>&1 || rm -f "$SNAP"
   LIN=(); [ -s "$SNAP" ] && LIN=(--ledger-in "$SNAP")
+  # Invariant 3 (anti-wedge doc, 2026-08-26): on a long single-run queue a silently
+  # absent snapshot is the documented 2.0-3.4x re-work treadmill (measured 2.44x live).
+  # Strict mode (launcher default) makes the miss FATAL with the remedy named.
+  if [ "${ZEN_REQUIRE_SNAPSHOT:-0}" = "1" ] && [ ! -s "$SNAP" ]; then
+    echo "FATAL: ZEN_REQUIRE_SNAPSHOT=1 but no ledger_snapshot.parquet for $ZEN_RUN — run compact_ledgers.py + upload it, or launch with ZEN_REQUIRE_SNAPSHOT=0 (fresh run)" >&2
+    exit 3
+  fi
   # HEARTBEAT emitted BEFORE the blocking call: if the worker hangs, this line has
   # no matching '▸ progress pass N' — a visible stall, not silence. `timeout` turns
   # a genuine hang into a LOUD rc=124 failure instead of an infinite silent block.
