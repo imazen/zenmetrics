@@ -45,7 +45,7 @@ CTR="zen-score-${ROLE}"
 # command — the 2026-08-26 `--gpus all` bug); GPU flags are rebuilt on the remote.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
-  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" 'bash -s' <<'REMOTE'
+  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
 S3ENV="$HOME/.config/zen/s3env.sh"
@@ -56,10 +56,14 @@ WORKER="$(hostname)-${ZM_ROLE}"
 
 GPU_ARGS=(); REQ_GPU=()
 if [ "$ZM_KIND" = "gpu" ]; then GPU_ARGS=(--gpus all); REQ_GPU=(-e ZEN_REQUIRE_GPU=1); fi
+# ZENMETRICS_VRAM_CAP_BYTES makes the GPU metric's auto mode pick Strip (bounded
+# VRAM) instead of Full, so large HDR images don't OOM the card (2026-08-26). Set
+# ZEN_VRAM_CAP to the card's usable VRAM (e.g. 5500000000 for 8 GB, 9500000000 for 12 GB).
+VRAM=(); [ -n "${ZM_VRAM_CAP:-}" ] && VRAM=(-e "ZENMETRICS_VRAM_CAP_BYTES=$ZM_VRAM_CAP")
 
 sudo -n docker pull "$ZM_IMG" >/dev/null 2>&1 || true
 sudo -n docker rm -f "$ZM_CTR" >/dev/null 2>&1 || true
-sudo -n docker run -d --name "$ZM_CTR" --restart unless-stopped "${GPU_ARGS[@]}" \
+sudo -n docker run -d --name "$ZM_CTR" --restart unless-stopped "${GPU_ARGS[@]}" "${VRAM[@]}" \
   -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
   -e ZEN_R2_ENDPOINT="$EP" -e ZEN_BUCKET="$ZM_BUCKET" \
   -e ZEN_RUN="jobs/$ZM_JOBSET" \
