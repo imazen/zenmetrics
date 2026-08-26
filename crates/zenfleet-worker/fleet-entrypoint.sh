@@ -321,6 +321,15 @@ while :; do
   # single-run workers paid until 2026-08-06 (avifgen encode run, measured rate collapse in the
   # tail). Re-fetched EVERY pass so long-lived workers pick up operator-side refreshes. Absent
   # snapshot (fresh run, nobody compacted yet) = old behaviour.
+  # Invariant 9 (anti-wedge, 2026-08-26 store-full outage): the store can be READ-healthy and
+  # WRITE-dead (disk full -> every PUT 500s -> a whole fleet no-ops silently for hours). Probe the
+  # WRITE path at pass start; fail LOUD so the operator sees a dead store, not a quiet fleet.
+  if [ "${ZEN_SKIP_WRITE_PROBE:-0}" != "1" ]; then
+    if ! printf 'w' | s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" pipe "s3://$ZEN_BUCKET/$ZEN_RUN/_probe/$WORKER-$(date +%s)" >/dev/null 2>&1; then
+      echo "FATAL: store WRITE probe failed (endpoint $ZEN_R2_ENDPOINT) — store full or write-path down; fix the store, do not let workers no-op" >&2
+      exit 4
+    fi
+  fi
   SNAP=/tmp/ledger_snapshot.parquet
   s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "s3://$ZEN_BUCKET/$ZEN_RUN/ledger_snapshot.parquet" "$SNAP" >/dev/null 2>&1 || rm -f "$SNAP"
   LIN=(); [ -s "$SNAP" ] && LIN=(--ledger-in "$SNAP")
