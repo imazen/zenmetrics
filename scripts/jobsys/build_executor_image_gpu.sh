@@ -31,10 +31,12 @@ cp "$ROOT/scripts/jobsys/zenfleet-exec" "$CTX/zenfleet-exec"
 # zenmetrics (the warm loop) and zenfleet-worker (the warm-child handler). Build them first with
 # `cargo build --release -p zenmetrics-cli --no-default-features --features sweep,png,jpeg,webp,avif,jxl,gpu,gpu-cuda`
 # and `-p zenfleet-worker`.
-[ -x "$ROOT/target/release/zenmetrics" ] || { echo "FATAL: target/release/zenmetrics missing — build it first"; exit 1; }
-[ -x "$ROOT/target/release/zenfleet-worker" ] || { echo "FATAL: target/release/zenfleet-worker missing — build it first"; exit 1; }
-cp "$ROOT/target/release/zenmetrics" "$CTX/zenmetrics"
-cp "$ROOT/target/release/zenfleet-worker" "$CTX/zenfleet-worker"
+ZM_BIN="${ZEN_METRICS_BIN:-$ROOT/target/release/zenmetrics}"
+WK_BIN="${ZEN_WORKER_BIN:-$ROOT/target/release/zenfleet-worker}"
+[ -x "$ZM_BIN" ] || { echo "FATAL: $ZM_BIN missing — build it first"; exit 1; }
+[ -x "$WK_BIN" ] || { echo "FATAL: $WK_BIN missing — build it first"; exit 1; }
+cp "$ZM_BIN" "$CTX/zenmetrics"
+cp "$WK_BIN" "$CTX/zenfleet-worker"
 
 echo "building $IMAGE"
 echo "  WORKER_BASE = $WORKER_BASE   (source of zenfleet-worker/-gc + aws-cli + entrypoint)"
