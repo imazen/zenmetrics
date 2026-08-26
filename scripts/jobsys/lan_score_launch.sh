@@ -31,10 +31,8 @@ KIND="${4:-gpu}"
 BUCKET="${ZEN_FLEET_BUCKET:-zentrain}"
 
 case "$KIND" in
-  gpu) DEF_IMG="ghcr.io/imazen/zenfleet-worker:exec-gpu-avifgen-66e3c417"
-       GPU_ARGS="--gpus all"; REQ_GPU="-e ZEN_REQUIRE_GPU=1" ;;
-  cpu) DEF_IMG="ghcr.io/imazen/zenfleet-worker:exec-zensim944-57b7b9ad"
-       GPU_ARGS=""; REQ_GPU="" ;;
+  gpu) DEF_IMG="ghcr.io/imazen/zenfleet-worker:exec-gpu-avifgen-66e3c417" ;;
+  cpu) DEF_IMG="ghcr.io/imazen/zenfleet-worker:exec-zensim944-57b7b9ad" ;;
   *) echo "lan_score_launch: KIND must be gpu|cpu (got '$KIND')" >&2; exit 2 ;;
 esac
 IMG="${5:-$DEF_IMG}"
@@ -42,9 +40,13 @@ CTR="zen-score-${ROLE}"
 
 # Config is passed through the environment; creds are read on the REMOTE box (they
 # were distributed to ~/.config/cloudflare/r2-credentials), never sent over the wire.
+# NOTE: every passed value is SPACE-FREE — ssh joins `VAR=val` args into the remote
+# command line, so a space in a value would split into a bogus command (the 2026-08-26
+# `--gpus all` → "all: command not found" bug). GPU flags are rebuilt on the remote
+# from ZM_KIND, never passed as a multi-token string.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
-  ZM_IMG="$IMG" ZM_GPU_ARGS="$GPU_ARGS" ZM_REQ_GPU="$REQ_GPU" 'bash -s' <<'REMOTE'
+  ZM_IMG="$IMG" ZM_KIND="$KIND" 'bash -s' <<'REMOTE'
 set -euo pipefail
 CREDS="$HOME/.config/cloudflare/r2-credentials"
 [ -r "$CREDS" ] || { echo "no R2 creds at $CREDS on $(hostname) — distribute first" >&2; exit 3; }
@@ -53,16 +55,19 @@ set -a; . "$CREDS"; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 WORKER="$(hostname)-${ZM_ROLE}"   # collision-proof: hostname is unique per box
 
+# Rebuild multi-token docker args HERE (remote), where quoting is intact.
+GPU_ARGS=(); REQ_GPU=()
+if [ "$ZM_KIND" = "gpu" ]; then GPU_ARGS=(--gpus all); REQ_GPU=(-e ZEN_REQUIRE_GPU=1); fi
+
 sudo -n docker pull "$ZM_IMG" >/dev/null 2>&1 || true
 sudo -n docker rm -f "$ZM_CTR" >/dev/null 2>&1 || true
-# shellcheck disable=SC2086  # ZM_GPU_ARGS / ZM_REQ_GPU are intentional word-splits
-sudo -n docker run -d --name "$ZM_CTR" --restart unless-stopped $ZM_GPU_ARGS \
+sudo -n docker run -d --name "$ZM_CTR" --restart unless-stopped "${GPU_ARGS[@]}" \
   -e AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
   -e ZEN_R2_ENDPOINT="$EP" -e ZEN_BUCKET="$ZM_BUCKET" \
   -e ZEN_RUN="jobs/$ZM_JOBSET" \
   -e ZEN_MANIFEST_URI="s3://$ZM_BUCKET/jobs/$ZM_JOBSET/manifest.json" \
   -e ZEN_CONTROL_KEY="jobs/$ZM_JOBSET/control.json" \
-  $ZM_REQ_GPU -e ZEN_WORKER="$WORKER" -e ZEN_PROVIDER=basement \
+  "${REQ_GPU[@]}" -e ZEN_WORKER="$WORKER" -e ZEN_PROVIDER=basement \
   -e ZEN_MAX_MIN=1400 -e ZEN_IDLE_PASSES=8 -e ZEN_CORE_OVERSUBSCRIBE=2 \
   --entrypoint /usr/local/bin/fleet-entrypoint.sh "$ZM_IMG" >/dev/null
 echo "$(hostname) -> $ZM_JOBSET as $WORKER : $(sudo -n docker ps --format '{{.Names}} {{.Status}}' | grep "$ZM_CTR" || echo FAILED-TO-START)"
