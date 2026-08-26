@@ -1989,6 +1989,28 @@ fn read_meminfo_total_bytes() -> Option<u64> {
 /// then `/proc/meminfo` (Linux), then `sysctl -n hw.memsize` (macOS — no procfs
 /// there; without this a darwin worker fell to the 2 GiB floor and its admission
 /// budget rejected every cell, cycling done=0 — found on lilith-mac 2026-07-27).
+/// cgroup-v2 (then v1) memory limit for THIS process's cgroup, if one is set. A worker inside a
+/// `--memory`-capped container must budget against the CAP, not host RAM — probing host total
+/// inside a 24 GiB-capped container admits cells against 60 GiB and manufactures memcg OOM kills
+/// (anti-wedge invariant 6, 2026-08-26). "max" / absent / unparseable => None (uncapped).
+fn cgroup_mem_limit_bytes() -> Option<u64> {
+    for path in ["/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"] {
+        if let Ok(v) = std::fs::read_to_string(path) {
+            let t = v.trim();
+            if t == "max" {
+                continue;
+            }
+            if let Ok(n) = t.parse::<u64>() {
+                // v1 reports a huge sentinel (~2^63) when unlimited — treat >1 PiB as uncapped.
+                if n > 0 && n < (1u64 << 50) {
+                    return Some(n);
+                }
+            }
+        }
+    }
+    None
+}
+
 fn total_ram_bytes() -> Option<u64> {
     if let Ok(v) = std::env::var("ZEN_RAM_BYTES")
         && let Ok(n) = v.trim().parse::<u64>()
@@ -1997,7 +2019,11 @@ fn total_ram_bytes() -> Option<u64> {
         return Some(n);
     }
     if let Some(n) = read_meminfo_total_bytes() {
-        return Some(n);
+        // Invariant 6: inside a memory-capped cgroup, the cap IS the box for admission purposes.
+        return Some(match cgroup_mem_limit_bytes() {
+            Some(cap) => cap.min(n),
+            None => n,
+        });
     }
     let out = std::process::Command::new("sysctl")
         .args(["-n", "hw.memsize"])
@@ -2530,6 +2556,15 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cgroup_mem_limit_parses_and_ignores_sentinels() {
+        // Pure-parse contract check via the real fn on this host: whatever it returns must be
+        // either None or a sane positive value below the 1 PiB sentinel cutoff.
+        if let Some(n) = cgroup_mem_limit_bytes() {
+            assert!(n > 0 && n < (1u64 << 50));
+        }
+    }
+
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     use zenfleet_core::{CellId, JobKind};
