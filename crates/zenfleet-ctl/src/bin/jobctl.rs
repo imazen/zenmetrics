@@ -716,11 +716,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             zenfleet_ledger::write_bytes_uri(&format!("s3://{bucket}/jobs/{run}/manifest.json"), &manifest, Some(&ep))?;
             zenfleet_ledger::write_bytes_uri(&format!("s3://{bucket}/jobs/{run}/manifest.json.gz"), &gz.stdout, Some(&ep))?;
-            zenfleet_ledger::write_bytes_uri(
-                &format!("s3://{bucket}/jobs/{run}/control.json"),
-                b"{\"paused\":false}",
-                Some(&ep),
-            )?;
+            // control.json: create ONLY IF ABSENT — unconditionally writing
+            // {"paused":false} would silently UNPAUSE an existing run on a
+            // re-declare (a live hazard the Python this replaced also had).
+            let ckey = format!("s3://{bucket}/jobs/{run}/control.json");
+            if zenfleet_ledger::read_bytes_uri(&ckey, Some(&ep)).is_err() {
+                zenfleet_ledger::write_bytes_uri(&ckey, b"{\"paused\":false}", Some(&ep))?;
+            } else {
+                println!("control.json exists — left untouched (pause state preserved)");
+            }
             println!(
                 "declared {} jobs for {} pairs rows -> s3://{bucket}/jobs/{run}/ (direct-object; requires stamped)",
                 jobs.len(),

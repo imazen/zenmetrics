@@ -72,24 +72,24 @@ for r in csv.DictReader(r2cat("%s/%s/pairs.tsv" % (DGP, codec)).splitlines(), de
     files.setdefault(bn, {"codec": r["codec"], "shas": []})["shas"].append(info[2])
 if SKIP:
     print("skip-shas: skipped %d already-scored cells" % skipped, flush=True)
-# Chunk each file's variants so resumability + the OOM blast radius are FINER than per-file: a file
-# could have thousands of variants, and a per-file job that OOMs/dies partway would lose all of them.
-# Each chunk is an independent DesiredJob (own content-addressed job_id) so the job system retries/
-# poisons per chunk. The ref (a cheap PNG decode) is re-decoded per chunk; the variant decode-once-
-# for-all-6-metrics win is fully kept.
-manifest = []
+# DesiredJob emission goes through THE owner (`zenfleet-ctl declare-scorefiles`,
+# migrated 2026-08-27): this script keeps the tar/sha ETL (python-natural) and
+# writes a small bridge parquet; the CLI does chunking, cell shape, invariant-5
+# `requires` stamping, manifest.json(.gz) + control.json (create-if-absent)
+# uploads. The old inline dict emission is exactly the hand-rolled-wire-JSON
+# drift class the migration ledger documents.
+import pyarrow as pa, pyarrow.parquet as pq
+bridge = "%s/bridge_pairs.parquet" % work
+bn_col, sha_col = [], []
 for bn, info in files.items():
-    shas = info["shas"]
-    for i in range(0, len(shas), CHUNK):
-        manifest.append({"kind": {"kind": "score_file", "metrics": METRICS}, "inputs": shas[i:i + CHUNK],
-                         "cell": {"image_path": bn, "codec": info["codec"], "q": -1,
-                                  "knob_tuple_json": "scorefile"}, "hint": None})
-mpath = "%s/manifest.json" % work
-json.dump(manifest, open(mpath, "w"))
-with open(mpath, "rb") as fi, gzip.open(mpath + ".gz", "wb") as g:
-    g.write(fi.read())
-r2("cp", mpath, "s3://codec-corpus/jobs/%s/manifest.json" % RUN)
-r2("cp", mpath + ".gz", "s3://codec-corpus/jobs/%s/manifest.json.gz" % RUN)
+    for sha in info["shas"]:
+        bn_col.append(bn); sha_col.append(sha)
+pq.write_table(pa.table({"image_path": bn_col, "dist_member": sha_col}), bridge, compression="zstd")
+codec_label = next(iter(files.values()))["codec"] if files else codec
+JOBCTL = os.environ.get("ZEN_JOBCTL", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                   "..", "..", "target", "release", "zenfleet-ctl"))
+subprocess.run([JOBCTL, "declare-scorefiles", "--pairs", bridge, "--run", RUN,
+                "--bucket", "codec-corpus", "--metrics", ",".join(METRICS),
+                "--chunk", str(CHUNK), "--cell-codec", codec_label], env=env, check=True)
 tot = sum(len(i["shas"]) for i in files.values())
-print("uploaded manifest: %d chunk jobs, %d variants (chunk=%d) for %d files"
-      % (len(manifest), tot, CHUNK, len(files)), flush=True)
+print("declared via zenfleet-ctl: %d variants (chunk=%d) for %d files" % (tot, CHUNK, len(files)), flush=True)
