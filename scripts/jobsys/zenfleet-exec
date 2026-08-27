@@ -4,4 +4,11 @@
 # `zenmetrics jobexec` can't be named directly in ZEN_EXEC. This shim bridges that: it forwards
 # stdin/stdout untouched to `zenmetrics jobexec`. Bake it into the real-executor image and set
 # ZEN_EXEC=/usr/local/bin/zenfleet-exec.  `zenmetrics` must be on PATH (it is in the baked image).
+# The worker's invariant-5 capability probe invokes `<exec> capabilities`;
+# route it to the REAL subcommand (misrouting it into jobexec made every
+# requires-bearing job invisible — the 2026-08-27 fix11-delta lesson:
+# "[capability-gate] excluded 230 jobs: no capabilities self-report").
+if [ "${1:-}" = "capabilities" ]; then
+  exec zenmetrics capabilities
+fi
 exec zenmetrics jobexec "$@"
