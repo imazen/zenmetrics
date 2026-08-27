@@ -296,7 +296,25 @@ pub fn compact_ledger(inputs: &[&Path], out: &Path) -> Result<usize, LedgerError
 static URI_TMP_N: AtomicU64 = AtomicU64::new(0);
 
 fn s5cmd_cp(endpoint: &str, src: &str, dst: &str) -> Result<(), LedgerError> {
-    let st = Command::new("s5cmd")
+    let st = {
+        // Hanging-GET guard (2026-08-27, bitten live): a store serving objects whose
+        // chunks died (damaged/quarantined volumes) can HANG the transfer instead of
+        // erroring — which wedged every ledger reader (worker sidecar folds, jobctl
+        // report) behind 67 dead objects. Bound every s5cmd transfer; override via
+        // ZEN_S5CMD_TIMEOUT_SEC (0 disables).
+        let t = std::env::var("ZEN_S5CMD_TIMEOUT_SEC")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(120);
+        let mut c;
+        if t > 0 {
+            c = Command::new("timeout");
+            c.arg(t.to_string()).arg("s5cmd");
+        } else {
+            c = Command::new("s5cmd");
+        }
+        c
+    }
         .arg("--endpoint-url")
         .arg(endpoint)
         .arg("cp")
