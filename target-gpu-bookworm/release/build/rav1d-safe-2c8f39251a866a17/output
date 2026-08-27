@@ -1,0 +1,6 @@
+cargo:rustc-link-arg-benches=-rdynamic
+cargo::rustc-check-cfg=cfg(asm_msac)
+cargo::rustc-check-cfg=cfg(asm_loopfilter)
+cargo::rustc-check-cfg=cfg(asm_fn_ptrs)
+cargo::rustc-check-cfg=cfg(rav1d_arm_dotprod)
+cargo::rustc-check-cfg=cfg(rav1d_arm_i8mm)

@@ -1,0 +1,16 @@
+pub const RADIUS: usize = 5_usize;
+pub const VERT_MUL_IN_1: f32 = 0.055295236_f32;
+pub const VERT_MUL_IN_3: f32 = -0.058836687_f32;
+pub const VERT_MUL_IN_5: f32 = 0.012955819_f32;
+pub const VERT_MUL_PREV_1: f32 = -1.9021131_f32;
+pub const VERT_MUL_PREV_3: f32 = -1.1755705_f32;
+pub const VERT_MUL_PREV_5: f32 = -0.00000000000000012246469_f32;
+pub const MUL_IN_1: f32 = 0.055295236_f32;
+pub const MUL_IN_3: f32 = -0.058836687_f32;
+pub const MUL_IN_5: f32 = 0.012955819_f32;
+pub const MUL_PREV_1: f32 = 1.9021131_f32;
+pub const MUL_PREV_3: f32 = 1.1755705_f32;
+pub const MUL_PREV_5: f32 = 0.00000000000000012246469_f32;
+pub const MUL_PREV2_1: f32 = -1_f32;
+pub const MUL_PREV2_3: f32 = -1_f32;
+pub const MUL_PREV2_5: f32 = -1_f32;

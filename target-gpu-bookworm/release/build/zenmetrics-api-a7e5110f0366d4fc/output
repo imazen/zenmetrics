@@ -1,0 +1,2 @@
+cargo:rerun-if-changed=build.rs
+cargo:warning=zenmetrics-api `cubecl-types` is enabled — the umbrella assumes every enabled metric crate resolves to the same cubecl version (Cargo workspace inheritance handles this in-tree). If you've patched one of the *-gpu crates to a different cubecl, MetricContext sharing will fail to compile.

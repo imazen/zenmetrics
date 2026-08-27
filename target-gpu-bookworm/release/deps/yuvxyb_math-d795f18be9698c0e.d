@@ -1,0 +1,12 @@
+/work/zen/zenmetrics/target-gpu-bookworm/release/deps/yuvxyb_math-d795f18be9698c0e.d: /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/lib.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/cbrtf.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/matrix.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/mul_add.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/pow_exp.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/cbrtf_simd.rs
+
+/work/zen/zenmetrics/target-gpu-bookworm/release/deps/libyuvxyb_math-d795f18be9698c0e.rlib: /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/lib.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/cbrtf.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/matrix.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/mul_add.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/pow_exp.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/cbrtf_simd.rs
+
+/work/zen/zenmetrics/target-gpu-bookworm/release/deps/libyuvxyb_math-d795f18be9698c0e.rmeta: /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/lib.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/cbrtf.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/matrix.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/mul_add.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/pow_exp.rs /cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/cbrtf_simd.rs
+
+/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/lib.rs:
+/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/cbrtf.rs:
+/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/matrix.rs:
+/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/mul_add.rs:
+/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/pow_exp.rs:
+/cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/yuvxyb-math-0.1.1/src/cbrtf_simd.rs:
