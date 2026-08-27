@@ -1648,6 +1648,21 @@ impl<R: Runtime> Ssim2<R> {
         ref_srgb: &[u8],
         dist_srgb: &[u8],
     ) -> Result<GpuSsim2Result> {
+        self.compute_stripped_with_mode_and_stop(mode, ref_srgb, dist_srgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_stripped_with_mode`] with cooperative cancellation
+    /// (zenmetrics#30): `stop` is polled once per strip, before that
+    /// strip's upload + kernels are issued; a cancellation returns
+    /// [`Error::Cancelled`] with no score. Pass [`enough::Unstoppable`]
+    /// for the uncancellable form (it inlines to nothing).
+    pub fn compute_stripped_with_mode_and_stop(
+        &mut self,
+        mode: Ssim2Mode,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuSsim2Result> {
         let meta = self.strip.ok_or(Error::ModeUnsupported(
             "compute_stripped requires strip-mode instance",
         ))?;
@@ -1687,6 +1702,8 @@ impl<R: Runtime> Ssim2<R> {
         let mut strip_idx = 0usize;
         let mut body_start = 0u32;
         while body_start < image_h {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             let body_end = (body_start + h_body).min(image_h);
             // Halo: extend halo rows above body_start and below body_end,
             // clamped to image bounds.

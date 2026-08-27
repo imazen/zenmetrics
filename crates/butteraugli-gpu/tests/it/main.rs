@@ -7,6 +7,7 @@
 //! filter: `cargo test --test it <name>::`.
 
 mod auto_fallback;
+mod cancel;
 mod dims_overflow;
 mod memory_mode;
 mod multires_strip;

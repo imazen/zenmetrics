@@ -33,7 +33,16 @@ Workspace conventions per the global rules:
   GPU. `MetricParams::kind()` is new (public, additive).
 - Gates (all mutation-verified on Metal / no-GPU): `butteraugli-gpu tests/it/dims_overflow.rs`,
   `ssim2-gpu tests/it/dims_overflow.rs`, `zenmetrics-api metric::params_mismatch_tests`.
-- Still open under #30 (part 1): cooperative cancellation (`*_with_stop`) on the GPU `compute_*` paths.
+- **Cooperative cancellation on the GPU strip walkers (#30, part 1 of 2)** — additive `enough::Stop`
+  variants, polled once per strip before that strip's upload + kernels, returning the new
+  `Error::Cancelled(StopReason)` with no score and the instance (and any cached reference) reusable:
+  `Butteraugli::compute_strip_with_options_and_stop` + `compute_with_reference_with_stop` (mode E strip
+  walker; whole-image path polls once before its single submission), `Ssim2::compute_stripped_with_mode_and_stop`,
+  `Zensim::compute_with_reference_vec_with_stop`. The existing entry points delegate with
+  `enough::Unstoppable` (inlines to nothing — bit-identical, gated by the new `cancel::` tests). New
+  dep `enough = "0.4.4"` on butteraugli-gpu / ssim2-gpu / zensim-gpu (dev: `almost-enough`). Not yet
+  wired: dssim-gpu / cvvdp-gpu / iwssim-gpu strip paths and the umbrella `zenmetrics-api::Metric`
+  (which has no `Stop` plumbing) — 3 of 6 GPU crates covered.
 
 ## zensim-gpu (open-issue fixes, 2026-08-27)
 

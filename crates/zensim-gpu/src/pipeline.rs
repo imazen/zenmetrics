@@ -1122,6 +1122,22 @@ impl<R: Runtime> Zensim<R> {
     /// [`Error::NoCachedReference`] if [`Zensim::set_reference`] hasn't
     /// been called.
     pub fn compute_with_reference_vec(&mut self, dist_srgb: &[u8]) -> Result<Vec<f64>> {
+        self.compute_with_reference_vec_with_stop(dist_srgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_with_reference_vec`] with cooperative cancellation
+    /// (zenmetrics#30). On a strip-mode instance `stop` is polled once per
+    /// strip, before that strip's upload + kernels are issued; on a
+    /// whole-image instance the pipeline is a single submission, so
+    /// `stop` is polled once before it is issued. A cancellation returns
+    /// [`Error::Cancelled`] with no features; the cached reference is
+    /// left intact. Pass [`enough::Unstoppable`] for the uncancellable
+    /// form (it inlines to nothing).
+    pub fn compute_with_reference_vec_with_stop(
+        &mut self,
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Vec<f64>> {
         if !self.has_reference {
             return Err(Error::NoCachedReference);
         }
@@ -1130,8 +1146,9 @@ impl<R: Runtime> Zensim<R> {
         // strips; the full-image fast path stays inline so the warm
         // hot loop pays no extra dispatch cost.
         if self.strip.is_some() {
-            return self.compute_with_reference_vec_strip(dist_srgb);
+            return self.compute_with_reference_vec_strip(dist_srgb, stop);
         }
+        stop.check()?;
         self.upload_u8(false, dist_srgb);
         self.run_xyb_pyramid(false);
 
@@ -1344,7 +1361,11 @@ impl<R: Runtime> Zensim<R> {
     /// gating, accumulates raw per-(scale, ch, slot) sums across strips
     /// on the host, then packs the feature vector using the full image
     /// height for the per-pixel normaliser.
-    fn compute_with_reference_vec_strip(&mut self, dist_srgb: &[u8]) -> Result<Vec<f64>> {
+    fn compute_with_reference_vec_strip(
+        &mut self,
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Vec<f64>> {
         // Caller guarantees `self.strip.is_some()` and validated dims.
         let strip_state = self.strip.expect("strip mode");
         let n_scales = self.scales.len();
@@ -1359,6 +1380,8 @@ impl<R: Runtime> Zensim<R> {
 
         let strips = strip_state.strips();
         for &(body_lo, body_hi, up_lo, up_hi) in strips.iter() {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             // Run one strip through the pipeline.
             self.run_one_strip_ref(dist_srgb, body_lo, body_hi, up_lo, up_hi)?;
 

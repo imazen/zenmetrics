@@ -262,6 +262,16 @@ pub enum Error {
     /// cap. (Strip is implemented since task #75; this fires only when
     /// the smallest viable strip still doesn't fit.)
     TooBigForFull { needed: usize, cap: usize },
+    /// A `*_with_stop` entry point observed its [`enough::Stop`] between
+    /// strips and bailed out (zenmetrics#30). No features were produced;
+    /// the instance (and its cached reference) is reusable.
+    Cancelled(enough::StopReason),
+}
+
+impl From<enough::StopReason> for Error {
+    fn from(r: enough::StopReason) -> Self {
+        Error::Cancelled(r)
+    }
 }
 
 impl std::fmt::Display for Error {
@@ -272,6 +282,7 @@ impl std::fmt::Display for Error {
                 "dimension mismatch: expected {expected} bytes, got {got}"
             ),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
+            Error::Cancelled(reason) => write!(f, "cancelled between strips: {reason:?}"),
             Error::InvalidImageSize => write!(f, "image must be at least 8×8 pixels"),
             Error::ExtendedPlaneBudgetExceeded {
                 needed_bytes,

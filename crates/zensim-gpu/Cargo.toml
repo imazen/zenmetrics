@@ -42,8 +42,12 @@ zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = fals
 # `zensim` crate's bake-eval path).
 zensim = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+# Cooperative cancellation for the strip walkers (`*_with_stop`, zenmetrics#30).
+enough = "0.4.4"
 
 [dev-dependencies]
+# Constructible `Stop` flag for the cancellation tests.
+almost-enough = "0.4.4"
 # `custom-profiles` lets the parity-lock test reconstruct the removed
 # linear `PreviewV0_2` built-in as a `Custom` profile (bit-identical
 # params) — needed so the CPU reference score matches the GPU path's

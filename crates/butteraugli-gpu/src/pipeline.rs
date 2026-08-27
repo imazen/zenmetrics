@@ -670,6 +670,21 @@ impl<R: Runtime> Butteraugli<R> {
         dist_srgb: &[u8],
         params: &ButteraugliParams,
     ) -> Result<GpuButteraugliResult> {
+        self.compute_strip_with_options_and_stop(ref_srgb, dist_srgb, params, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_strip_with_options`] with cooperative cancellation
+    /// (zenmetrics#30): `stop` is polled once per strip, before that
+    /// strip's upload + kernels are issued, and a cancellation returns
+    /// [`Error::Cancelled`] with no score. Pass [`enough::Unstoppable`]
+    /// for the uncancellable form (it inlines to nothing).
+    pub fn compute_strip_with_options_and_stop(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        params: &ButteraugliParams,
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuButteraugliResult> {
         if self.halo_h == 0 {
             // Whole-image instance — caller probably meant `compute`.
             return Err(Error::StripModeUnsupported(
@@ -686,6 +701,7 @@ impl<R: Runtime> Butteraugli<R> {
                 self.body_h,
                 self.halo_h,
                 params,
+                stop,
             )
         } else {
             crate::strip::run_strip_pipeline(
@@ -697,6 +713,7 @@ impl<R: Runtime> Butteraugli<R> {
                 self.body_h,
                 self.halo_h,
                 params,
+                stop,
             )
         }
     }
@@ -1132,14 +1149,35 @@ impl<R: Runtime> Butteraugli<R> {
     }
 
     fn compute_with_reference_inner(&mut self, dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
+        self.compute_with_reference_inner_with_stop(dist_srgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_with_reference`] with cooperative cancellation
+    /// (zenmetrics#30). On a strip-mode (mode E) instance `stop` is polled
+    /// once per strip; on a whole-image instance the pipeline is a single
+    /// submission, so `stop` is polled once before it is issued.
+    pub fn compute_with_reference_with_stop(
+        &mut self,
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuButteraugliResult> {
+        self.compute_with_reference_inner_with_stop(dist_srgb, stop)
+    }
+
+    fn compute_with_reference_inner_with_stop(
+        &mut self,
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuButteraugliResult> {
         if self.halo_h > 0 {
             // Mode E (strip-mode instance with cached ref).
-            return self.compute_with_reference_strip_mode(dist_srgb);
+            return self.compute_with_reference_strip_mode(dist_srgb, stop);
         }
         if !self.has_reference {
             return Err(Error::NoCachedReference);
         }
         self.check_dims(dist_srgb)?;
+        stop.check()?;
         self.populate_linear_from_srgb(false, dist_srgb);
         // do_a=false: reference side is cached; do_b=true: distorted side needs computing.
         self.run_pipeline_from_linear(false, true);
@@ -1157,6 +1195,7 @@ impl<R: Runtime> Butteraugli<R> {
     fn compute_with_reference_strip_mode(
         &mut self,
         dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
     ) -> Result<GpuButteraugliResult> {
         if !self.has_reference || self.ref_cache_full.is_none() {
             return Err(Error::NoCachedReference);
@@ -1177,6 +1216,7 @@ impl<R: Runtime> Butteraugli<R> {
             self.body_h,
             self.halo_h,
             &params,
+            stop,
         )
     }
 

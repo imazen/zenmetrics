@@ -345,6 +345,16 @@ pub enum Error {
     /// silently under-allocating on 32-bit targets or an allocator panic
     /// on 64-bit.
     InvalidDimensions { width: u32, height: u32 },
+    /// A `*_and_stop` entry point observed its [`enough::Stop`] between
+    /// strips and bailed out (zenmetrics#30). No score was produced; the
+    /// instance is reusable.
+    Cancelled(enough::StopReason),
+}
+
+impl From<enough::StopReason> for Error {
+    fn from(r: enough::StopReason) -> Self {
+        Error::Cancelled(r)
+    }
 }
 
 impl std::fmt::Display for Error {
@@ -384,6 +394,7 @@ impl std::fmt::Display for Error {
             Error::SumsReadbackFailed(e) => {
                 write!(f, "failed to read the reduction sums buffer back: {e}")
             }
+            Error::Cancelled(reason) => write!(f, "cancelled between strips: {reason:?}"),
             Error::ReductionDidNotRun => write!(
                 f,
                 "GPU reduction produced an all-zero sums buffer — the kernels did not run \

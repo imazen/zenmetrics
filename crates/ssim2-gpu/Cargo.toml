@@ -74,11 +74,15 @@ cudarse-parity = []
 cubecl = { workspace = true }
 zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = false }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+# Cooperative cancellation for the strip walkers (`*_with_stop`, zenmetrics#30).
+enough = "0.4.4"
 
 [build-dependencies]
 nalgebra = { version = "0.33", default-features = false, features = ["std"] }
 
 [dev-dependencies]
+# Constructible `Stop` flag for the cancellation tests.
+almost-enough = "0.4.4"
 # `coefficient` was previously a dev-dep here for the now-deleted
 # `tests/cudarse_parity.rs` (which compared this crate's CubeCL SSIM2
 # kernels against coefficient's cudarse/turbo-metrics SSIM2 backend).

@@ -280,6 +280,7 @@ pub(crate) fn run_strip_pipeline<R: Runtime>(
     body_h: u32,
     halo_h: u32,
     params: &ButteraugliParams,
+    stop: &dyn enough::Stop,
 ) -> Result<GpuButteraugliResult> {
     crate::pipeline::validate_params(params)?;
     let expected = (image_w as usize) * (image_h as usize) * 3;
@@ -304,6 +305,8 @@ pub(crate) fn run_strip_pipeline<R: Runtime>(
     // in image coordinates. Strips are non-overlapping in their bodies.
     let mut body_top: u32 = 0;
     while body_top < image_h {
+        // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+        stop.check()?;
         let body_end = (body_top + body_h).min(image_h);
         let this_body_h = body_end - body_top;
 
@@ -411,6 +414,7 @@ pub(crate) fn run_strip_pipeline_multires<R: Runtime>(
     body_h: u32,
     halo_h: u32,
     params: &ButteraugliParams,
+    stop: &dyn enough::Stop,
 ) -> Result<GpuButteraugliResult> {
     crate::pipeline::validate_params(params)?;
     let expected = (image_w as usize) * (image_h as usize) * 3;
@@ -443,6 +447,8 @@ pub(crate) fn run_strip_pipeline_multires<R: Runtime>(
 
     let mut body_top: u32 = 0;
     while body_top < image_h {
+        // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+        stop.check()?;
         let body_end = (body_top + body_h).min(image_h);
         let this_body_h = body_end - body_top;
 
@@ -576,6 +582,7 @@ pub(crate) fn run_strip_pipeline_cached_ref<R: Runtime>(
     body_h: u32,
     halo_h: u32,
     params: &ButteraugliParams,
+    stop: &dyn enough::Stop,
 ) -> Result<GpuButteraugliResult> {
     crate::pipeline::validate_params(params)?;
     let expected = (image_w as usize) * (image_h as usize) * 3;
@@ -598,6 +605,8 @@ pub(crate) fn run_strip_pipeline_cached_ref<R: Runtime>(
 
     let mut body_top: u32 = 0;
     while body_top < image_h {
+        // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+        stop.check()?;
         let body_end = (body_top + body_h).min(image_h);
         let this_body_h = body_end - body_top;
 

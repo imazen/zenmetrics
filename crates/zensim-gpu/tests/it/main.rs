@@ -9,6 +9,7 @@
 mod auto_fallback;
 #[cfg(any(feature = "cuda", feature = "wgpu"))]
 mod cached_ref_slot_rebuild;
+mod cancel;
 #[cfg(feature = "cubecl-types")]
 mod cpu_gpu_diffmap_parity;
 #[cfg(feature = "cubecl-types")]

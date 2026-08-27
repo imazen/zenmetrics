@@ -165,6 +165,16 @@ pub enum Error {
     /// infallible `new` documents as a panic (zenmetrics#30). Untrusted
     /// dimensions should go through `try_new`.
     InvalidDimensions { width: u32, height: u32 },
+    /// A `*_with_stop` entry point observed its [`enough::Stop`] between
+    /// strips and bailed out (zenmetrics#30). No score was produced; the
+    /// instance is reusable.
+    Cancelled(enough::StopReason),
+}
+
+impl From<enough::StopReason> for Error {
+    fn from(r: enough::StopReason) -> Self {
+        Error::Cancelled(r)
+    }
 }
 
 impl std::fmt::Display for Error {
@@ -178,6 +188,7 @@ impl std::fmt::Display for Error {
                 f,
                 "invalid dimensions: {width} × {height} (× 3 bytes) overflows usize on this target"
             ),
+            Error::Cancelled(reason) => write!(f, "cancelled between strips: {reason:?}"),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
             Error::InvalidParams(msg) => write!(f, "invalid params: {msg}"),
             Error::StripModeUnsupported(api) => write!(
