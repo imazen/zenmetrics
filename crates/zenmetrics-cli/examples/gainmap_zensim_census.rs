@@ -59,6 +59,15 @@ struct CellResult {
     bytes_best: Vec<u8>,
 }
 
+fn env_knobs() -> Map<String, serde_json::Value> {
+    // GMC_KNOBS='{"gm_scale":1,"gm_quality":100,"gm_multi":true}' — arm-wave
+    // configs (ceiling levers). Unset = arm defaults (gm_quality=85, gm_scale=4).
+    match std::env::var("GMC_KNOBS") {
+        Ok(j) if !j.is_empty() => serde_json::from_str(&j).expect("GMC_KNOBS json"),
+        _ => Map::new(),
+    }
+}
+
 fn search_cell(
     source: &HdrRef,
     target: f64,
@@ -67,8 +76,16 @@ fn search_cell(
     ref_path: &str,
     tmp_jpg: &str,
 ) -> Result<CellResult, String> {
-    let knobs = Map::new(); // arm defaults: gm_quality=85, gm_scale=4
-    let (mut lo, mut hi) = (1i32, 100i32);
+    let knobs = env_knobs();
+    // GMC_FIXED_Q=<q>: skip the search, single encode at exactly q
+    // (ceiling-lever wave mode; k is ignored beyond the first trial).
+    let fixed_q: Option<i32> = std::env::var("GMC_FIXED_Q")
+        .ok()
+        .and_then(|v| v.parse().ok());
+    let (mut lo, mut hi) = match fixed_q {
+        Some(q) => (q, q),
+        None => (1i32, 100i32),
+    };
     let mut best: Option<(f64, u8, f64, Vec<u8>)> = None; // (|err|, q, score, bytes)
     let mut used = 0u8;
     while used < k && lo <= hi {

@@ -639,7 +639,7 @@ fn encode_svt_hdr(
 /// default 4). The cell `q` drives the BASE JPEG quality. Anything else
 /// errors loudly.
 #[cfg(feature = "hdr-gainmap")]
-const GAINMAP_HDR_KNOBS: &[&str] = &["gm_quality", "gm_scale"];
+const GAINMAP_HDR_KNOBS: &[&str] = &["gm_quality", "gm_scale", "gm_multi"];
 
 /// The gain-map quantization range, linear domain: `[1.0, 10000/203]`.
 /// Mirrors the ultrahdr-rs HDR-only defaults (`gain_map_min` 1.0,
@@ -653,11 +653,14 @@ const GAINMAP_MAX_BOOST: f32 = 10000.0 / 203.0;
 /// full `[1.0, 10000/203]` quantization grid. One definition so the encode
 /// path and the metadata-contract test pin the same grid.
 #[cfg(feature = "hdr-gainmap")]
-fn gainmap_hdr_config(gm_scale: u8) -> ultrahdr_core::gainmap::compute::GainMapConfig {
+fn gainmap_hdr_config(
+    gm_scale: u8,
+    multi_channel: bool,
+) -> ultrahdr_core::gainmap::compute::GainMapConfig {
     ultrahdr_core::gainmap::compute::GainMapConfig {
         scale_factor: gm_scale,
         gamma: 1.0,
-        multi_channel: false,
+        multi_channel,
         min_boost: 1.0,
         max_boost: GAINMAP_MAX_BOOST,
         base_offset: 1.0 / 64.0,
@@ -718,6 +721,10 @@ fn encode_gainmap_hdr(
         .and_then(Value::as_u64)
         .unwrap_or(4)
         .clamp(1, 8) as u8;
+    let gm_multi = knobs
+        .get("gm_multi")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     let primaries = match source.cicp.color_primaries {
         1 => ColorPrimaries::Bt709,
@@ -776,7 +783,7 @@ fn encode_gainmap_hdr(
 
     // Gain map on the crate's own kernel, with the crate-default HDR-only
     // config (single-channel luminance, gamma 1, 1/64 offsets).
-    let config = gainmap_hdr_config(gm_scale);
+    let config = gainmap_hdr_config(gm_scale, gm_multi);
     // The returned metadata declares the config quantization grid (ultrahdr
     // ≥ a09478f0); the bytes and the declared mapping agree without any
     // rewrite here.
@@ -1471,7 +1478,7 @@ pub(crate) mod tests {
         )
         .expect("sdr buffer");
 
-        let config = gainmap_hdr_config(4);
+        let config = gainmap_hdr_config(4, false);
         let (_gainmap, metadata) =
             compute_gainmap(&hdr_buf, &sdr_buf, &config, ultrahdr_core::Unstoppable)
                 .expect("compute_gainmap");
@@ -1499,6 +1506,29 @@ pub(crate) mod tests {
     /// variant at the gain-map-source 4× display boost would clip the 2000-nit
     /// top of this ramp at ~812 and fail it.
     #[cfg(feature = "hdr-gainmap")]
+    #[test]
+    fn gainmap_gm_multi_knob_accepted_and_roundtrips() {
+        // The gm_multi knob (ceiling-levers wave 2026-08-27) must be accepted
+        // by the knob guard and produce a decodable multi-channel Ultra HDR
+        // JPEG; an unknown knob must still be rejected loudly.
+        let src = synthetic_pq_ref(64, 48, 2000.0);
+        let mut knobs = Map::new();
+        knobs.insert("gm_multi".into(), serde_json::Value::Bool(true));
+        knobs.insert("gm_scale".into(), serde_json::Value::from(1u64));
+        let cell =
+            encode_hdr(HdrCodec::JpegGainmap, &src, 90.0, &knobs).expect("uhdr multi encode");
+        assert_eq!(&cell.bytes[..2], &[0xFF, 0xD8], "must be a JPEG");
+        let dec = decode_encoded_to_nits(&cell.bytes, HdrCodec::JpegGainmap).expect("decode-back");
+        assert_eq!((dec.width, dec.height), (64, 48));
+        let mut bad = Map::new();
+        bad.insert("gm_bogus".into(), serde_json::Value::Bool(true));
+        let err = encode_hdr(HdrCodec::JpegGainmap, &src, 90.0, &bad).unwrap_err();
+        assert!(
+            err.to_string().contains("gm_bogus"),
+            "unknown knob must be named: {err}"
+        );
+    }
+
     #[test]
     fn gainmap_arm_roundtrips_and_preserves_above_812_nits() {
         let src = synthetic_pq_ref(64, 48, 2000.0);

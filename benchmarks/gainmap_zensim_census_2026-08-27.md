@@ -91,3 +91,67 @@ column. THIS census is single-era by construction (one binary, one tree,
 today) and family-comparable (the svt census ran the same-era judge
 yesterday).
 
+
+## ARM WAVE 1 (registered 2026-08-27, pre-run): ceiling levers
+
+The census's structural verdict makes seed arms pointless and points every
+lever at the ARM. This wave measures the CEILING (not target-hitting) per
+config on the same 9 instrument scenes, q=100 fixed (1 encode/cell via the
+harness's `GMC_FIXED_Q` mode; knobs via `GMC_KNOBS` JSON):
+
+| arm | gm_scale | gm_quality | gm_multi | hypothesis |
+|---|---|---|---|---|
+| C0 | 4 | 85 | false | fleet default (measured: −4.1..27.5) |
+| C1 | 1 | 85 | false | map resolution is the binding loss |
+| C2 | 4 | 100 | false | map quantization is the binding loss |
+| C3 | 1 | 100 | false | both |
+| C4 | 1 | 100 | true | LUMINANCE-ONLY gain is the binding loss (colored highlights — tulips/cake score NEGATIVE at C0) |
+
+`gm_multi` is a NEW fleet-arm knob (this commit: `GAINMAP_HDR_KNOBS` +
+`gainmap_hdr_config(multi_channel)`, knob-guard + roundtrip test); enabling
+it exposed and fixed an encode-half bug at the owner (ultrahdr `971ad8d4`:
+multi-channel maps fed w*h*3 bytes into a Gray8 encoder — now YCbCr 4:4:4 +
+regression test, the #27 decode-half counterpart).
+
+Gates: measurement wave (no PASS bar). Decision output = does ANY config
+cross t70 on ANY scene; lever ranking (median ceiling delta per lever).
+Judge + refs identical to the census.
+
+### Results
+
+| scene (abbr) | C0 def | C1 s1 | C2 q100 | C3 s1q100 | C4 +multi |
+|---|---|---|---|---|---|
+| tulips (neg @C0) | −5.44 | −0.67 | −5.03 | −0.61 | −3.62 |
+| storage-room | 13.65 | 15.66 | 13.80 | 15.83 | 14.37 |
+| castle | 12.45 | 14.55 | 12.70 | 14.77 | 13.90 |
+| sashimi | 4.84 | 7.59 | 5.27 | 7.88 | 3.06 |
+| sunset | 27.54 | 27.77 | 27.59 | 27.75 | 27.58 |
+| archway | 11.92 | 14.82 | 12.17 | 15.00 | 14.12 |
+| cathedral | 13.89 | 16.44 | 13.98 | 16.42 | 15.89 |
+| cake (neg @C0) | −1.28 | 1.94 | −1.11 | 2.68 | −0.39 |
+| lighthouse | 25.13 | 27.26 | 26.00 | 27.36 | 13.76 |
+| **median** | **12.45** | **14.82** | 12.70 | **15.00** | 13.90 |
+
+**Decision output: NO config crosses t70 on ANY scene** (best ceiling
+anywhere = 27.77). The instrument's targets are unreachable for Ultra HDR
+under EVERY available config — the ceiling is structural to the format
+pipeline (filmic-tonemapped SDR base + gain-map reconstruction vs the PQ
+ref under the PU judge), not to the knobs. Lever ranking:
+- **gm_scale=1 is the only real lever**: +2.4 median, up to +5.3
+  (tulips −5.4→−0.7, cake −1.3→+1.9 — both negatives rescued toward 0).
+  Byte cost NOT measured here; a fleet-default change is a PROPOSAL only
+  (user-gated).
+- gm_quality 85→100: ≈ +0.2 (noise-level).
+- **multi-channel: neutral-to-harmful on 9/9 (C4 ≤ C3 everywhere;
+  lighthouse craters 27.4→13.8)** — the colored-highlight hypothesis is
+  FALSIFIED; per-channel gains do not rescue the negative scenes. The
+  lighthouse crater flags the multi-channel compute/apply path as
+  worse-conditioned (encode roundtrip is now test-proven, so the loss is
+  in map computation/reconstruction, not the container) — recorded, not
+  pursued (the lever is dead for the ceiling question either way).
+
+The zensim-target-loop story for jpeg-gainmap therefore stands as the
+census wrote it: ceiling-bound at every config; the format serves
+low/mid-fidelity HDR delivery, and t70+ HDR targets need a different
+format (zenjxl / zenav1-svt reach 94+ on the same corpus).
+
