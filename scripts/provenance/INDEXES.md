@@ -16,7 +16,11 @@ All 1082 rendition `source_stem`s link to a hashed source original — **0 orpha
 ## Manifest (the stem→original map)
 - `/mnt/v/output/imazen-26-features/imazen26_manifest.tsv` (2157 originals)
 - R2: `s3://codec-corpus/picker-sweep-2026-06-22/imazen26_manifest.tsv`
-- sha256: `fa36092485eed4afdc09ed340b8f46c8da81200d6659054b3f9a5d34a15ba10c`
+- sha256: `4a884e03df66ffa8b271b216900e7ced14ad58d3f74f04d1b711e8e1bac8c86a` (2026-08-27 correction: header was mislabeled `sha256` for the
+  stem column and the `split` values were stale bookkeeping on 1239/2157 rows — both fixed to
+  this documented schema + the canonical last-digit rule; pre-fix bytes kept as
+  `.pre-splitfix.bak`, pre-fix sha `fa36092485eed4afdc09ed340b8f46c8da81200d6659054b3f9a5d34a15ba10c`;
+  the R2 copy still holds the pre-fix bytes — local is canonical for consumers)
 - schema: `stem  split  content_class  source  original_path`
 
 ## renditions_index_2026-06-23.tsv
