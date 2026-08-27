@@ -238,9 +238,16 @@ enum Cmd {
         /// worker_lost") so those jobs' attempts reset and the retry ladder
         /// gives them a fresh run. For outage-caused failure waves — a store
         /// that died mid-run poisons cells whose only sin was bad timing.
-        /// Genuine classes (encoder_panic) should NOT be amnestied.
+        /// Genuine classes (encoder_panic) should NOT be amnestied — unless
+        /// scoped by --amnesty-before to a documented broken-era window.
         #[arg(long)]
         amnesty_classes: Option<String>,
+        /// Only amnesty failed rows OLDER than this unix ts (scopes a class
+        /// amnesty to a documented incident window, e.g. the 2026-08-26
+        /// missing-hdr-gainmap image era whose encoder_panics were image
+        /// artifacts, not data failures).
+        #[arg(long)]
+        amnesty_before: Option<u64>,
     },
     /// Write the not-yet-done subset (the gap) of a manifest, given the ledger.
     Gap {
@@ -984,6 +991,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             out_dir,
             upload,
             amnesty_classes,
+            amnesty_before,
         } => {
             let ep = resolve_endpoint(endpoint)?;
             let t0 = std::time::Instant::now();
@@ -1003,7 +1011,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .flatten()
                             .and_then(|v| v.as_str().map(str::to_string))
                             .unwrap_or_default();
-                        if classes.iter().any(|c| c == &ec) {
+                        let in_window = amnesty_before.is_none_or(|cut| r.ts < cut);
+                        if in_window && classes.iter().any(|c| c == &ec) {
                             *dropped.entry(ec).or_default() += 1;
                             return false;
                         }
