@@ -15,6 +15,8 @@ Workspace conventions per the global rules:
 
 ## Workspace / zenmetrics-cli (zencodec 0.1.26 from the registry, 2026-08-27)
 
+All entries in this section: `9796743f`.
+
 ### Changed
 - **zencodec comes from crates.io 0.1.26 (the two-level `ErrorCategory` taxonomy) — the
   `[patch.crates-io] zencodec = { git …, rev = "fde07d07" }` flat-taxonomy pin is gone** and
