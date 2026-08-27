@@ -223,6 +223,28 @@ enum Cmd {
     /// self-inflicted at 9,159 cells for ~40 min). Failed+transient+attempts=0
     /// is the reconcile code's own retry vocabulary. Genuine failures
     /// re-poison with CURRENT-era evidence after exactly one retry.
+    /// Re-assert buried DONE rows: for jobs whose LATEST row is Failed but an
+    /// OLDER done row exists AND its output blob is still present, append a
+    /// fresh done-copy row (ts=now). The inverse of --scan-errors, for bogus
+    /// failure OVERLAYS (2026-08-27 case: a broken-cuda worker booted on a
+    /// PARTIAL mid-migration ledger view, re-claimed an already-done run and
+    /// failed all 2,280 cells over valid score blobs). Scope with
+    /// --overlay-worker so only the diagnosed overlay is reversed.
+    Reassert {
+        #[arg(long)]
+        run: String,
+        #[arg(long, default_value = "zentrain")]
+        bucket: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        /// Only reverse failure rows written by this worker (the diagnosed
+        /// bogus overlay). REQUIRED — an unscoped reassert could mask real
+        /// failures.
+        #[arg(long)]
+        overlay_worker: String,
+        #[arg(long)]
+        dry_run: bool,
+    },
     Requeue {
         #[arg(long)]
         run: String,
@@ -991,6 +1013,72 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "appended {} failed rows -> {key} (latest-wins: those jobs re-enter the gap)",
                     missing.len()
                 );
+            }
+        }
+        Cmd::Reassert {
+            run,
+            bucket,
+            endpoint,
+            overlay_worker,
+            dry_run,
+        } => {
+            let ep = resolve_endpoint(endpoint)?;
+            let (rows, skipped) = read_run_ledgers(&ep, &bucket, &run);
+            if skipped > 0 {
+                println!("WARNING: {skipped} unreadable ledger chunk(s)");
+            }
+            // full history per job: latest row + newest done row
+            use std::collections::HashMap;
+            let mut latest: HashMap<&str, &zenfleet_core::LedgerRow> = HashMap::new();
+            let mut best_done: HashMap<&str, &zenfleet_core::LedgerRow> = HashMap::new();
+            for r in &rows {
+                let e = latest.entry(r.job_id.as_str()).or_insert(r);
+                if r.ts > e.ts || (r.ts == e.ts && r.status.rank() > e.status.rank()) {
+                    *e = r;
+                }
+                if r.status == zenfleet_core::JobStatus::Done {
+                    let d = best_done.entry(r.job_id.as_str()).or_insert(r);
+                    if r.ts > d.ts {
+                        *d = r;
+                    }
+                }
+            }
+            let have: std::collections::HashSet<String> =
+                zenfleet_ledger::list_keys_uri(&format!("s3://{bucket}/jobs/{run}/blobs/"), Some(&ep))
+                    .into_iter()
+                    .collect();
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_secs();
+            let mut out: Vec<zenfleet_core::LedgerRow> = Vec::new();
+            let mut no_blob = 0usize;
+            for (id, l) in &latest {
+                if l.status != zenfleet_core::JobStatus::Failed || l.worker != overlay_worker {
+                    continue;
+                }
+                let Some(d) = best_done.get(id) else { continue };
+                let Some(sha) = d.output_sha.as_ref() else { continue };
+                if !have.contains(sha.as_str()) {
+                    no_blob += 1;
+                    continue;
+                }
+                let mut n = (*d).clone();
+                n.ts = now;
+                n.worker = "reassert".into();
+                out.push(n);
+            }
+            println!(
+                "reassert: {} buried done rows to re-assert (overlay worker {overlay_worker:?}); {no_blob} skipped for MISSING blobs",
+                out.len()
+            );
+            if out.is_empty() || dry_run {
+                if dry_run {
+                    println!("(dry-run: no sidecar written)");
+                }
+            } else {
+                let key = format!("s3://{bucket}/jobs/{run}/ledger/pass-reassert-{now}.parquet");
+                zenfleet_ledger::write_ledger_uri(&key, &out, Some(&ep))?;
+                println!("appended {} done rows -> {key}", out.len());
             }
         }
         Cmd::Requeue {
