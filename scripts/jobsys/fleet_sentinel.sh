@@ -27,7 +27,7 @@ while [ $# -gt 0 ]; do case "$1" in
   *) echo "unknown arg $1"; exit 2;;
 esac; done
 END=$((SECONDS + BUDGET*60))
-ssh_fail=0; plex_fail=0; write_fail=0; write_was_ok=0
+ssh_fail=0; plex_fail=0; write_fail=0; write_was_ok=0; prev_write=""; write_streak_fails=0
 last_gap=""; gap_same=0
 STORE_HOST=${ZEN_STORE_HOST:-192.168.50.170}; STORE_PORT=${ZEN_STORE_PORT:-3900}
 probe_write() {
@@ -69,8 +69,18 @@ while [ $SECONDS -lt $END ]; do
   fi
   echo "$TS avail=${AVAIL}G mover=$MOVER plex=$PLEX write=$W$GAPTXT"
   [ "$AVAIL" -ge "$GATE" ] && { echo "CONDITION: SPACE-GATE-MET (${AVAIL}G >= ${GATE}G) — run the relaunch runbook"; exit 10; }
-  [ "$W" = ok ] && [ "$write_was_ok" = 1 ] && [ -z "$RUNLIST" ] && [ "$AVAIL" -lt "$GATE" ] && [ "${announced_writable:-0}" = 0 ] && { echo "CONDITION: STORE-WRITABLE (below gate — partial relaunch possible)"; exit 11; }
-  [ $write_fail -eq 3 ] && [ "$write_was_ok" = 1 ] && { echo "CONDITION: STORE-WRITE-DIED (probe failing x3 after being ok)"; exit 17; }
+  # TRANSITION-based signals (2026-08-27 fixes, both bitten live):
+  #  - -eq 3 fired only on EXACTLY the third fail; a streak that passed that
+  #    tick unnoticed never fired again -> -ge.
+  #  - the writable-again signal was guarded out under --runlist, so a parked
+  #    worker had no restart wake -> fire on the fail->ok transition always.
+  if [ "$W" = ok ] && [ "$prev_write" = fail ]; then
+    echo "CONDITION: STORE-WRITABLE-AGAIN (write recovered after $write_streak_fails failing tick(s)) — restart parked workers"
+    exit 11
+  fi
+  if [ "$W" = fail ]; then write_streak_fails=$((write_streak_fails+1)); else write_streak_fails=0; fi
+  prev_write=$W
+  [ $write_fail -ge 3 ] && [ "$write_was_ok" = 1 ] && { echo "CONDITION: STORE-WRITE-DIED (probe failing x$write_fail after being ok)"; exit 17; }
   [ "$MOVER" = "0" ] && [ "$AVAIL" -lt "$GATE" ] && { echo "CONDITION: MOVER-DONE-LOW-SPACE (${AVAIL}G < ${GATE}G)"; exit 12; }
   sleep "$IVL"
 done
