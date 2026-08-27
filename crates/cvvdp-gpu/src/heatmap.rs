@@ -15,6 +15,17 @@
 //! ```
 
 /// Heatmap rendering mode, matching upstream pycvvdp's colormap types.
+///
+/// **No `Monochromatic` variant, deliberately** (checked against upstream
+/// `main` on 2026-08-27 for zenmetrics#14): `visualize_diff_map.py` does
+/// carry a `'monochromatic'` branch, but its colormap is a constant white
+/// `[[1,1,1],[1,1,1]]` over `[0, 1]` — after the chromaticity normalisation
+/// and the luminance blend the output is just the tonemapped context image,
+/// with the diffmap contributing nothing — and `cvvdp_metric.py` never
+/// exposes it: its allowed set is `["threshold", "supra-threshold", "raw",
+/// "none", None]`. Reproducing a dead branch that renders no difference
+/// signal would be a footgun, so the three reachable modes are the complete
+/// upstream surface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HeatmapMode {
     /// 5-color gradient (blue → cyan → green → yellow → red) over
