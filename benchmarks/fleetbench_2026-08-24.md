@@ -697,6 +697,25 @@ idle-confirmation passes; filed as a minor open question, not chased
 further here. **Recommendation: leave `ZEN_PERSISTENT_EXEC` unset (off)**
 for GPU-score-shaped fleetbench workloads on this fleet.
 
+**Follow-up (2026-08-27, source read only — no re-measurement, zenmetrics#45):**
+the "≤2 pool ceiling" hypothesis above does not survive reading the pool.
+`WarmExecPool::run_job` (`crates/zenfleet-worker/src/lib.rs`) pops an idle
+child or spawns a fresh one for every concurrent caller and never caps the
+count; the "≤2 on the hinted GPU queues" in its doc comment is the
+admission bound it *inherits* from `can_admit`, not a limit the pool
+imposes — admitted concurrency is the same on the warm and one-shot paths.
+Two things that DO differ and were not controlled for in this run: (1) the
+default `ZEN_PERSISTENT_KINDS` is `score_file,diffmap,feature`, and the
+GPU-score cells here are `JobKind::Metric` (re-encode + score), so unless
+the jobspec set `ZEN_PERSISTENT_KINDS=metric` (or `all`) the warm children
+were never used for this workload and the 41% delta has a different cause
+(check the jobspec env before re-running); (2) if they were used, each
+long-lived child keeps a cubecl CUDA memory pool that never returns pages
+(the same growth the one-process test suites hit), whereas one-shot
+processes free VRAM on exit — a plausible source of the slowdown under two
+concurrent children on an 8 GB card. Needs the box to rerun with the env
+logged.
+
 **Concurrency oversubscribe (`ZEN_CORE_OVERSUBSCRIBE`) — MEASURED: a
 small, consistent, same-direction speedup even on this COMPUTE-bound
 workload**, which the knob's own source comment

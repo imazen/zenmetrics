@@ -32,7 +32,7 @@ Workspace conventions per the global rules:
   `ensure_params_match` gate ahead of the backend probe so the answer is the same on a box with no usable
   GPU. `MetricParams::kind()` is new (public, additive).
 - Gates (all mutation-verified on Metal / no-GPU): `butteraugli-gpu tests/it/dims_overflow.rs`,
-  `ssim2-gpu tests/it/dims_overflow.rs`, `zenmetrics-api metric::params_mismatch_tests`.
+  `ssim2-gpu tests/it/dims_overflow.rs`, `zenmetrics-api metric::params_mismatch_tests`. (0e88be71)
 - **Cooperative cancellation on the GPU strip walkers (#30, part 1 of 2)** — additive `enough::Stop`
   variants, polled once per strip before that strip's upload + kernels, returning the new
   `Error::Cancelled(StopReason)` with no score and the instance (and any cached reference) reusable:
@@ -42,7 +42,34 @@ Workspace conventions per the global rules:
   `enough::Unstoppable` (inlines to nothing — bit-identical, gated by the new `cancel::` tests). New
   dep `enough = "0.4.4"` on butteraugli-gpu / ssim2-gpu / zensim-gpu (dev: `almost-enough`). Not yet
   wired: dssim-gpu / cvvdp-gpu / iwssim-gpu strip paths and the umbrella `zenmetrics-api::Metric`
-  (which has no `Stop` plumbing) — 3 of 6 GPU crates covered.
+  (which has no `Stop` plumbing) — 3 of 6 GPU crates covered. (dbe30766)
+
+## cvvdp-gpu (#14 roadmap check, 2026-08-27)
+
+### Changed
+- **`HeatmapMode` documents why there is no `Monochromatic` variant** (ae484a4f, refs #14): checked
+  against upstream pycvvdp `main` on 2026-08-27 — `visualize_diff_map.py`'s `'monochromatic'` colormap is
+  constant white over `[0, 1]`, so the rendered output is just the tonemapped context image with no
+  difference signal, and `cvvdp_metric.py` never exposes it (allowed set `["threshold",
+  "supra-threshold", "raw", "none", None]`). The #14 "monochromatic mode, ~10 lines" item is not a parity
+  gap; the three reachable modes are the complete upstream surface. Video/temporal, per-band score
+  breakdown, and runtime parameter loading remain open under #14.
+
+## zenfleet-worker (#45 warm-exec regression — code-level finding, 2026-08-27)
+
+### Fleet-waste found (open, not root-caused)
+- **The `benchmarks/fleetbench_2026-08-24.md` hypothesis for the warm-exec slowdown ("the pool is
+  bounded to ≤2 on the hinted GPU queues, a lower ceiling than `can_admit`") does not survive a source
+  read.** `WarmExecPool::run_job` (`crates/zenfleet-worker/src/lib.rs`) pops an idle child or spawns a
+  new one per concurrent caller and never caps the count — the "≤2" in its doc comment describes the
+  admission-side bound it inherits, not a limit it imposes; admitted concurrency is identical on both
+  paths. Two candidate causes that DO differ between the paths and are untested: (1) the default
+  `ZEN_PERSISTENT_KINDS` is `score_file,diffmap,feature`, so `JobKind::Metric` cells (the fleetbench
+  GPU-score workload re-encodes + scores, i.e. `metric`) only run warm if the jobspec overrode it — if it
+  did not, the 41% slowdown came from something other than warm children; (2) if it did, long-lived
+  children each keep a cubecl CUDA memory pool that never shrinks (the same pool growth documented for the
+  one-process test suites) while one-shot processes release VRAM on exit. Needs a fleet box to measure;
+  no zenmetrics code changed. (this commit)
 
 ## zensim-gpu (open-issue fixes, 2026-08-27)
 
@@ -55,7 +82,7 @@ Workspace conventions per the global rules:
   100.0. Both inputs are still length-validated first (a wrong-length identical pair errors, never
   zeros); no device work runs and the cached reference is left untouched. Gate:
   `cpu_parity::gpu_compute_features_identical_returns_zeros` (exact zeros; one flipped byte still
-  reaches the kernels; wrong length still errors), mutation-verified on Metal.
+  reaches the kernels; wrong length still errors), mutation-verified on Metal. (f29595f4)
 
 ## zenmetrics-cli (open-issue fixes, 2026-08-27)
 
@@ -67,7 +94,7 @@ Workspace conventions per the global rules:
   so even an already source-grouped TSV stops re-decoding the reference per pair. Scores unchanged;
   only the output row order follows the grouping (all input columns pass through). Gate:
   `tests/cli.rs::batch_group_by_ref_is_score_identical_and_grouped` (bit-identical score text
-  grouped vs ungrouped, ungrouped order untouched, ladders contiguous with input order preserved).
+  grouped vs ungrouped, ungrouped order untouched, ladders contiguous with input order preserved). (7568b6b1)
 
 ### Changed
 - **HDR jpeg-gainmap arm: metadata-rewrite workaround retired (#40).** `sweep/hdr.rs::encode_gainmap_hdr`
@@ -78,11 +105,12 @@ Workspace conventions per the global rules:
   `gainmap_hdr_config` helper shared by the encode path and a new structural gate
   `gainmap_library_declares_config_grid` (fails by name if the library ever regresses to declaring the
   content range); `gainmap_arm_roundtrips_and_preserves_above_812_nits` stays the end-to-end gate.
+  (aebcb254)
 
 ### Fixed
 - **`hdr-svt`/`hdr-gainmap` test builds didn't compile** — the shared `synthetic_pq_ref` test helper
   predated `HdrRef.display_peak_nits` (6471f4d7); same repair as 6837f8ea applied to the gainmap/svt
-  arm tests. No expectation changed. (#40)
+  arm tests. No expectation changed. (#40, aebcb254)
 
 ## Workspace (fleetbench gates + `fleet power` + a heterogeneous-fleet lease bug, 2026-08-24 later)
 

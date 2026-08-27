@@ -359,6 +359,16 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **zensim-gpu `it` suite on macOS/Metal (wgpu): 2 deterministic failures, pre-existing
+  (verified 2026-08-27 — identical values on baseline b07a0485 before that day's commits, in
+  isolation and serially):** `diffmap_invariants::invariant_1_identity_yields_near_zero_diffmap`
+  (identity score 2.3330367, expected ~0 — the default CPU-diffmap path, 16×16) and
+  `cached_ref_slot_rebuild::gpu_score_correct_after_foreign_size_rebuild` (one-shot AND cached-ref
+  GPU 51.2412 vs CPU 48.8323, 2.41 JOD off after the 1024→1448 rebuild + `reclaim_pooled_vram`).
+  Not root-caused; the other 103 tests pass. Command:
+  `cargo test -p zensim-gpu --no-default-features --features wgpu --tests`. The CI macos-latest
+  Metal job runs this same suite — check whether it is red there before blaming a local change.
+
 - **A batch job's gap can have a permanently-unresolved handful of jobs that
   never get a terminal ledger row — NOT root-caused (the restart-loop half of
   this same incident IS resolved, see "Resolved" below).** The
