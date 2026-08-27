@@ -39,7 +39,15 @@ while [ $# -gt 0 ]; do case "$1" in
   *) echo "unknown arg $1"; exit 2;;
 esac; done
 [ -n "$CYCLE_SSH" ] && [ -z "$CYCLE_CTR" ] && { echo "--cycle-ssh needs --cycle-container"; exit 2; }
+# Initial worker state comes from REALITY, not an assumption — a sentinel armed
+# while the worker is parked (the normal arming moment: right after an outage)
+# must know it, or the first recovery transition would restart nothing.
 worker_state=running; cycles=0; parked_ticks=0
+if [ -n "$CYCLE_SSH" ]; then
+  _run=$(ssh -o ConnectTimeout=10 "$CYCLE_SSH" "sudo -n docker inspect --format '{{.State.Running}}' $CYCLE_CTR 2>/dev/null || docker inspect --format '{{.State.Running}}' $CYCLE_CTR 2>/dev/null" 2>/dev/null)
+  [ "$_run" = "true" ] || worker_state=parked
+  echo "cycling: $CYCLE_CTR on $CYCLE_SSH initial state=$worker_state"
+fi
 END=$((SECONDS + BUDGET*60))
 ssh_fail=0; plex_fail=0; write_fail=0; write_was_ok=0; prev_write=""; write_streak_fails=0
 last_gap=""; gap_same=0
