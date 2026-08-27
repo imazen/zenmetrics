@@ -85,3 +85,22 @@ Invariants 3, 6, 7 are small and immediate. 1, 2, 4 are one focused zenfleet
 wave (claim-body schema + watchdog + snapshot schema, each with a live-store
 test per the preconditions pattern). 5 rides the orchestrator capability cache.
 8 is the ADR's P2/P3, already in motion.
+
+## Addendum (2026-08-27, bitten live): W9 — the hanging-GET wedge
+
+A store serving objects whose chunks are GONE (damaged/quarantined volumes)
+can HANG the transfer instead of erroring. Measured: 67 dead ledger sidecars
+wedged every reader in the system at once — worker pass-start sidecar folds
+(invariant 4's own machinery!), `jobctl report`'s per-file fallback, and an
+operator verify task — while direct probes of healthy objects stayed green,
+making the store look fine from outside. The tolerant-reader contract
+(invariant 7) is not enough when "unreadable" presents as "never returns".
+
+**Invariant 9b: every remote transfer is BOUNDED.** zenfleet-ledger's s5cmd
+transfers now carry a timeout (default 120 s, `ZEN_S5CMD_TIMEOUT_SEC`,
+0 disables) so a hanging object becomes a counted skip, never a wedge
+(`294a6944`). Mitigation verb for the incident class: identify dead objects
+with short-timeout parallel scans and DELETE them — their data is already
+lost with the volumes, and the job system's latest-wins + gap semantics
+re-run the affected cells (the 2026-08-27 recovery: 67 objects, report went
+from wedged to 2 s, zero completed-work loss confirmed by `audit-blobs`).
