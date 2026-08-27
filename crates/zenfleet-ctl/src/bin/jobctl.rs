@@ -618,6 +618,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let sha = |r: &zenfleet_core::LedgerRow| {
                 r.output_sha.as_ref().map(|s| s.as_str().to_string()).unwrap_or_default()
             };
+            // Metric column: a diffmap/metric run has one DONE row per (cell x
+            // metric) sharing the cell identity — without this column the join
+            // table cannot tell a butteraugli map from a cvvdp map (endgame of
+            // hdrgrid-diffmap-20260807, 2026-08-27). Empty for encode rows.
+            let metric_of = |r: &zenfleet_core::LedgerRow| -> String {
+                match &r.kind {
+                    zenfleet_core::JobKind::Diffmap { metric, .. }
+                    | zenfleet_core::JobKind::Metric { metric } => metric.clone(),
+                    zenfleet_core::JobKind::ScoreFile { metrics, .. } => metrics.join("+"),
+                    _ => String::new(),
+                }
+            };
             let batch = RecordBatch::try_from_iter(vec![
                 ("ref_path", s_col(&|r| format!("{refs_prefix}/{}", r.cell.image_path))),
                 ("dist_path", s_col(&|r| format!("{blobs_prefix}/{}", sha(r)))),
@@ -629,6 +641,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ),
                 ("knob_tuple_json", s_col(&|r| r.cell.knob_tuple_json.clone())),
                 ("encode_sha", s_col(&|r| sha(r))),
+                ("metric", s_col(&|r| metric_of(r))),
                 ("worker", s_col(&|r| r.worker.clone())),
                 ("provider", s_col(&|r| r.provider.clone())),
             ])?;
@@ -643,13 +656,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             w.write(&batch)?;
             w.close()?;
             let mut tsv = String::from(
-                "ref_path\tdist_path\timage_path\tcodec\tq\tknob_tuple_json\tencode_sha\tworker\tprovider\n",
+                "ref_path\tdist_path\timage_path\tcodec\tq\tknob_tuple_json\tencode_sha\tmetric\tworker\tprovider\n",
             );
             for r in &done {
                 use std::fmt::Write as _;
                 let _ = writeln!(
                     tsv,
-                    "{refs_prefix}/{}\t{blobs_prefix}/{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    "{refs_prefix}/{}\t{blobs_prefix}/{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                     r.cell.image_path,
                     sha(r),
                     r.cell.image_path,
@@ -657,6 +670,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     r.cell.q,
                     r.cell.knob_tuple_json,
                     sha(r),
+                    metric_of(r),
                     r.worker,
                     r.provider
                 );
