@@ -357,17 +357,43 @@ fn read_ledger_prefix(ep: &str, prefix: &str) -> (Vec<zenfleet_core::LedgerRow>,
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status();
+    let bulk_ok = status.map(|s| s.success()).unwrap_or(false);
     let mut rows = Vec::new();
     let mut skipped = 0usize;
-    if status.map(|s| s.success()).unwrap_or(false) {
-        if let Ok(rd) = std::fs::read_dir(&tmp) {
-            for e in rd.flatten() {
-                match zenfleet_ledger::read_ledger(&e.path()) {
-                    Ok(mut r) => rows.append(&mut r),
-                    Err(_) => skipped += 1,
-                }
+    // Read whatever the bulk cp landed EITHER WAY — s5cmd exits nonzero if ANY
+    // object fails (e.g. chunks on a damaged volume), and treating that as
+    // all-or-nothing silently zeroed a 2,111-file ledger on 2026-08-27
+    // (report printed done=0 while the data was fine). Partial results + a
+    // LOUD per-file fallback for the residue is the tolerant contract.
+    if let Ok(rd) = std::fs::read_dir(&tmp) {
+        for e in rd.flatten() {
+            match zenfleet_ledger::read_ledger(&e.path()) {
+                Ok(mut r) => rows.append(&mut r),
+                Err(_) => skipped += 1,
             }
         }
+    }
+    if !bulk_ok {
+        // Per-file fallback for objects the bulk pass missed entirely.
+        let have: std::collections::HashSet<String> = std::fs::read_dir(&tmp)
+            .map(|rd| rd.flatten().filter_map(|e| e.file_name().into_string().ok()).collect())
+            .unwrap_or_default();
+        let mut fetched = 0usize;
+        for name in zenfleet_ledger::list_keys_uri(prefix, Some(ep)) {
+            if have.contains(&name) {
+                continue;
+            }
+            match zenfleet_ledger::read_ledger_uri(&format!("{prefix}{name}"), Some(ep)) {
+                Ok(mut r) => {
+                    rows.append(&mut r);
+                    fetched += 1;
+                }
+                Err(_) => skipped += 1,
+            }
+        }
+        eprintln!(
+            "WARNING: bulk ledger download failed for {prefix} — per-file fallback read {fetched} more file(s), {skipped} unreadable"
+        );
     }
     let _ = std::fs::remove_dir_all(&tmp);
     (rows, skipped)
