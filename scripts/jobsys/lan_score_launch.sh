@@ -32,7 +32,7 @@ STORE="${ZEN_STORE:-tower}"   # LAN SeaweedFS by default; 'r2' = legacy opt-out
 
 case "$KIND" in
   gpu) DEF_IMG="ghcr.io/imazen/zenfleet-worker:exec-gpu-399abe82" ;;
-  cpu) DEF_IMG="ghcr.io/imazen/zenfleet-worker:exec-zensim944hdr-399abe82" ;;
+  cpu) DEF_IMG="ghcr.io/imazen/zenfleet-worker:exec-zensim944hdr-9dffa5ca" ;;
   *) echo "lan_score_launch: KIND must be gpu|cpu (got '$KIND')" >&2; exit 2 ;;
 esac
 IMG="${5:-$DEF_IMG}"
