@@ -1830,6 +1830,103 @@ fn require_gpu_makes_missing_gpu_a_hard_error() {
     );
 }
 
+/// `batch --group-by-ref` parity gate (zenmetrics#46, the `batch` twin of the score-pairs gate
+/// below): grouping changes ONLY the output row order (stable-sorted by ref_path), never the
+/// scores. Two runs over the same interleaved TSV — grouped and ungrouped — must produce
+/// tag-matched rows with BIT-IDENTICAL score text (same binary, same deterministic CPU metric,
+/// same inputs), every pass-through column intact, and the grouped run must emit each
+/// reference's ladder contiguously with its input order preserved.
+#[test]
+#[cfg(feature = "cpu-metrics")]
+fn batch_group_by_ref_is_score_identical_and_grouped() {
+    let dir = fixtures_dir();
+    let staged = tempfile::tempdir().expect("tmp");
+    // Interleave two reference ladders so the ungrouped run cannot benefit from the
+    // consecutive-same-ref cache — the exact shape --group-by-ref exists to fix.
+    let tsv = staged.path().join("pairs.tsv");
+    let r64 = dir.join("ref_64.png");
+    let r256 = dir.join("ref_256.png");
+    let d64a = dir.join("dist_noisy_64.png");
+    let d64b = dir.join("dist_identical_64.png");
+    let d256 = dir.join("dist_noisy_256.png");
+    std::fs::write(
+        &tsv,
+        format!(
+            "ref_path\tdist_path\ttag\n\
+             {r64}\t{d64a}\tref64-a\n\
+             {r256}\t{d256}\tref256\n\
+             {r64}\t{d64b}\tref64-b\n",
+            r64 = r64.display(),
+            r256 = r256.display(),
+            d64a = d64a.display(),
+            d64b = d64b.display(),
+            d256 = d256.display(),
+        ),
+    )
+    .unwrap();
+
+    let run = |grouped: bool, out: &std::path::Path| -> Vec<(String, String)> {
+        let mut c = cli();
+        c.args([
+            "batch",
+            "--metric",
+            "ssim2",
+            "--pairs",
+            tsv.to_str().unwrap(),
+            "--output",
+            out.to_str().unwrap(),
+        ]);
+        if grouped {
+            c.arg("--group-by-ref");
+        }
+        let res = c.output().expect("run cli");
+        assert!(
+            res.status.success(),
+            "batch failed: stderr={}",
+            String::from_utf8_lossy(&res.stderr)
+        );
+        let text = std::fs::read_to_string(out).unwrap();
+        let mut lines = text.lines();
+        let header = lines.next().expect("header");
+        let cols: Vec<&str> = header.split('\t').collect();
+        let tag_i = cols.iter().position(|c| *c == "tag").expect("tag col");
+        let score_i = cols
+            .iter()
+            .position(|c| c.starts_with("ssim2"))
+            .expect("ssim2 col");
+        // (tag, score text) in file order — the score TEXT is compared so the
+        // parity is bit-for-bit on what the consumer reads, no re-parsing.
+        lines
+            .map(|l| {
+                let f: Vec<&str> = l.split('\t').collect();
+                (f[tag_i].to_string(), f[score_i].to_string())
+            })
+            .collect()
+    };
+    let plain = run(false, &staged.path().join("plain.tsv"));
+    let grouped = run(true, &staged.path().join("grouped.tsv"));
+    assert_eq!(plain.len(), 3);
+    assert_eq!(grouped.len(), 3);
+
+    // Parity: tag-matched rows carry identical scores.
+    let mut a = plain.clone();
+    let mut b = grouped.clone();
+    a.sort();
+    b.sort();
+    assert_eq!(a, b, "grouping must not change any score");
+    // Ungrouped output keeps input order (no behaviour change without the flag).
+    let plain_tags: Vec<&str> = plain.iter().map(|(t, _)| t.as_str()).collect();
+    assert_eq!(plain_tags, ["ref64-a", "ref256", "ref64-b"]);
+    // Grouped: the ref64 ladder is contiguous AND keeps its input order (a before b);
+    // ref_256.png sorts before ref_64.png.
+    let grouped_tags: Vec<&str> = grouped.iter().map(|(t, _)| t.as_str()).collect();
+    assert_eq!(
+        grouped_tags,
+        ["ref256", "ref64-a", "ref64-b"],
+        "stable sort by ref_path: ladders contiguous, input order preserved"
+    );
+}
+
 /// `score-pairs --group-by-ref` parity gate (zenmetrics#46): grouping changes ONLY the output
 /// row order (stable-sorted by ref_path), never the scores. Two runs over the same shuffled
 /// TSV — grouped and ungrouped — must produce identity-tuple-matched rows with BIT-IDENTICAL

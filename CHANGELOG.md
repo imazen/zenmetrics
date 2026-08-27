@@ -28,6 +28,16 @@ Workspace conventions per the global rules:
 
 ## zenmetrics-cli (open-issue fixes, 2026-08-27)
 
+### Added
+- **`batch --group-by-ref`** (#46, the `batch` twin of `score-pairs --group-by-ref`): stable-sort the
+  input rows by `ref_path` so each reference is decoded ONCE per ladder regardless of input order.
+  `batch` now caches the decoded reference across consecutive same-`ref_path` rows on every path
+  (sRGB8 for SDR, absolute nits for `--hdr` — including the cvvdp-gpu / butteraugli-gpu HDR fast paths),
+  so even an already source-grouped TSV stops re-decoding the reference per pair. Scores unchanged;
+  only the output row order follows the grouping (all input columns pass through). Gate:
+  `tests/cli.rs::batch_group_by_ref_is_score_identical_and_grouped` (bit-identical score text
+  grouped vs ungrouped, ungrouped order untouched, ladders contiguous with input order preserved).
+
 ### Changed
 - **HDR jpeg-gainmap arm: metadata-rewrite workaround retired (#40).** `sweep/hdr.rs::encode_gainmap_hdr`
   no longer rewrites the per-channel gain-map min/max after `compute_gainmap` — ultrahdr ≥ `a09478f0`

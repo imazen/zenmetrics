@@ -265,6 +265,17 @@ struct BatchArgs {
     /// through one CubeCL stream.
     #[arg(long, default_value = "1")]
     jobs: usize,
+    /// Same-ref batched scoring (zenmetrics#46, the `score-pairs` flag's
+    /// `batch` twin): STABLE-sort the input rows by `ref_path` before
+    /// scoring, so every reference is decoded ONCE per ladder via the
+    /// reference cache regardless of input row order (a shuffled TSV
+    /// otherwise re-decodes the reference once per PAIR). Within a ladder
+    /// the input order (the q sweep) is preserved. Scores are unchanged;
+    /// only the OUTPUT ROW ORDER follows the grouped order — every input
+    /// column is passed through, so consumers join on their own identity
+    /// columns, never on row order.
+    #[arg(long, default_value_t = false)]
+    group_by_ref: bool,
     /// Treat each row's ref/dist as HDR sources (EXR / Ultra HDR JPEG /
     /// gain-map HEIC). Each pair decodes to absolute luminance (cd/m²),
     /// then PU21-encodes for the SDR metrics (cvvdp gets a peak-normalized
@@ -2209,8 +2220,41 @@ fn cmd_batch(
         }
     }
 
-    for record in rdr.records() {
-        let record = record?;
+    // Materialize the rows, then optionally group them (zenmetrics#46 — the
+    // same shape as `score-pairs --group-by-ref`): a stable sort by ref_path
+    // makes the reference-cache hit rate input-order-INDEPENDENT (one ref
+    // decode per LADDER instead of per PAIR on a shuffled TSV) while
+    // preserving each ladder's internal q order.
+    let mut records: Vec<csv::StringRecord> = Vec::new();
+    for r in rdr.records() {
+        records.push(r?);
+    }
+    if args.group_by_ref {
+        records.sort_by(|a, b| {
+            a.get(ref_idx)
+                .unwrap_or("")
+                .cmp(b.get(ref_idx).unwrap_or(""))
+        });
+        let n_refs = records
+            .iter()
+            .map(|r| r.get(ref_idx).unwrap_or(""))
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+        eprintln!(
+            "[batch] --group-by-ref: {} rows grouped into {} reference ladders",
+            records.len(),
+            n_refs
+        );
+    }
+    // The decoded reference, cached across consecutive rows that share a
+    // `ref_path` (contiguous by construction under --group-by-ref; the
+    // SPLIT's pairs.tsv is source-grouped even without it). One cache per
+    // decode domain: sRGB8 for the SDR path, absolute nits for --hdr.
+    let mut rgb8_ref_cache: Option<(PathBuf, decode::Rgb8Image)> = None;
+    #[cfg(feature = "hdr")]
+    let mut nits_ref_cache: Option<(PathBuf, hdr::NitsImage)> = None;
+
+    for record in &records {
         let ref_path = PathBuf::from(record.get(ref_idx).ok_or("missing ref_path")?);
         let dist_path = PathBuf::from(record.get(dist_idx).ok_or("missing dist_path")?);
         // HDR rows decode to absolute luminance, then prep per metric (PU21
@@ -2225,7 +2269,7 @@ fn cmd_batch(
         // Rgb8Image path entirely for this row.
         #[cfg(all(feature = "hdr", feature = "gpu-cvvdp"))]
         if hdr_mode && args.metric == crate::metrics::MetricKind::CvvdpGpu {
-            let r = hdr::decode_to_nits(&ref_path)?;
+            let r = batch_cached_nits_ref(&mut nits_ref_cache, &ref_path)?;
             let d = hdr::decode_to_nits(&dist_path)?;
             if r.width != d.width || r.height != d.height {
                 return Err(format!(
@@ -2241,7 +2285,7 @@ fn cmd_batch(
             }
             // Display target at the REFERENCE's MEASURED peak (appendix AA);
             // the scorer rebuilds when the measured peak changes across rows.
-            let peak = hdr::measured_display_peak_nits(&r);
+            let peak = hdr::measured_display_peak_nits(r);
             let peak_bits = peak.to_bits();
             if !matches!(&cvvdp_hdr_scorer, Some((b, _)) if *b == peak_bits) {
                 cvvdp_hdr_scorer = None; // free the stale GPU slot first
@@ -2255,7 +2299,7 @@ fn cmd_batch(
                 ));
             }
             let (_, scorer) = cvvdp_hdr_scorer.as_mut().expect("built above");
-            let (rr, rg, rb) = hdr::to_cvvdp_linear_planes(&r, peak);
+            let (rr, rg, rb) = hdr::to_cvvdp_linear_planes(r, peak);
             let (dr, dg, db) = hdr::to_cvvdp_linear_planes(&d, peak);
             let jod =
                 scorer.score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, r.width, r.height)?;
@@ -2269,7 +2313,7 @@ fn cmd_batch(
         // reference's MEASURED peak, applied inside `score_via_hdr_scorer`).
         #[cfg(all(feature = "hdr", feature = "gpu-butteraugli"))]
         if hdr_mode && args.metric == crate::metrics::MetricKind::ButteraugliGpu {
-            let r = hdr::decode_to_nits(&ref_path)?;
+            let r = batch_cached_nits_ref(&mut nits_ref_cache, &ref_path)?;
             let d = hdr::decode_to_nits(&dist_path)?;
             if r.width != d.width || r.height != d.height {
                 return Err(format!(
@@ -2288,7 +2332,7 @@ fn cmd_batch(
             // regression, and it retires the ad-hoc linear scorer). hip falls
             // through to the u8 path below (the umbrella opaque is cuda/wgpu/cpu).
             if let Some(result) =
-                hdr::score_via_hdr_scorer(args.metric, &r, &d, args.hdr_transfer, args.gpu_runtime)
+                hdr::score_via_hdr_scorer(args.metric, r, &d, args.hdr_transfer, args.gpu_runtime)
             {
                 let rows = result?;
                 let mut row: Vec<String> = record.iter().map(String::from).collect();
@@ -2299,10 +2343,10 @@ fn cmd_batch(
                 continue;
             }
         }
-        let (reference, distorted) = if hdr_mode {
+        let (reference, distorted): (BatchRef<'_>, decode::Rgb8Image) = if hdr_mode {
             #[cfg(feature = "hdr")]
             {
-                let r = hdr::decode_to_nits(&ref_path)?;
+                let r = batch_cached_nits_ref(&mut nits_ref_cache, &ref_path)?;
                 let d = hdr::decode_to_nits(&dist_path)?;
                 // cvvdp (CPU and GPU) take peak-normalized sRGB; the rest go
                 // through the chosen `--hdr-transfer`.
@@ -2312,12 +2356,15 @@ fn cmd_batch(
                 ) {
                     {
                         // Reference-measured peak, BOTH sides (appendix AA).
-                        let peak = hdr::measured_cvvdp_u8_peak(&r);
-                        (hdr::to_cvvdp_rgb8(&r, peak), hdr::to_cvvdp_rgb8(&d, peak))
+                        let peak = hdr::measured_cvvdp_u8_peak(r);
+                        (
+                            BatchRef::Owned(hdr::to_cvvdp_rgb8(r, peak)),
+                            hdr::to_cvvdp_rgb8(&d, peak),
+                        )
                     }
                 } else {
                     (
-                        hdr::to_sdr_rgb8(&r, args.hdr_transfer),
+                        BatchRef::Owned(hdr::to_sdr_rgb8(r, args.hdr_transfer)),
                         hdr::to_sdr_rgb8(&d, args.hdr_transfer),
                     )
                 }
@@ -2326,7 +2373,7 @@ fn cmd_batch(
             unreachable!()
         } else {
             (
-                decode::decode_image_to_rgb8(&ref_path)?,
+                BatchRef::Cached(batch_cached_rgb8_ref(&mut rgb8_ref_cache, &ref_path)?),
                 decode::decode_image_to_rgb8(&dist_path)?,
             )
         };
@@ -2363,6 +2410,57 @@ fn cmd_batch(
     }
     wtr.flush()?;
     Ok(())
+}
+
+/// The reference image one `batch` row scores against: either a borrow of
+/// the decoded-sRGB8 reference cache (the SDR path — decoded once per
+/// consecutive same-`ref_path` run, zenmetrics#46) or a per-row owned
+/// conversion (the `--hdr` path, whose reference is cached upstream as
+/// absolute nits and re-tonemapped per metric). Derefs to the image so the
+/// scoring calls below don't care which.
+enum BatchRef<'a> {
+    Cached(&'a decode::Rgb8Image),
+    #[cfg_attr(not(feature = "hdr"), allow(dead_code))]
+    Owned(decode::Rgb8Image),
+}
+
+impl std::ops::Deref for BatchRef<'_> {
+    type Target = decode::Rgb8Image;
+    fn deref(&self) -> &decode::Rgb8Image {
+        match self {
+            BatchRef::Cached(r) => r,
+            BatchRef::Owned(r) => r,
+        }
+    }
+}
+
+/// Decode `path` to sRGB8 unless the cache already holds that exact path;
+/// returns a borrow of the cached image. One entry: the cache only ever
+/// needs the CURRENT ladder's reference (rows are contiguous per ref under
+/// `--group-by-ref`; a ref change simply replaces the entry).
+fn batch_cached_rgb8_ref<'a>(
+    cache: &'a mut Option<(PathBuf, decode::Rgb8Image)>,
+    path: &std::path::Path,
+) -> Result<&'a decode::Rgb8Image, Box<dyn std::error::Error>> {
+    if !cache.as_ref().is_some_and(|(p, _)| p == path) {
+        let img = decode::decode_image_to_rgb8(path)?;
+        *cache = Some((path.to_path_buf(), img));
+    }
+    Ok(&cache.as_ref().expect("populated above").1)
+}
+
+/// `--hdr` twin of [`batch_cached_rgb8_ref`]: the reference decoded to
+/// absolute nits once per consecutive same-`ref_path` run.
+#[cfg(feature = "hdr")]
+fn batch_cached_nits_ref<'a>(
+    cache: &'a mut Option<(PathBuf, hdr::NitsImage)>,
+    path: &std::path::Path,
+) -> Result<&'a hdr::NitsImage, Box<dyn std::error::Error>> {
+    if !cache.as_ref().is_some_and(|(p, _)| p == path) {
+        let img = hdr::decode_to_nits(path)?;
+        *cache = Some((path.to_path_buf(), img));
+    }
+    Ok(&cache.as_ref().expect("populated above").1)
 }
 
 /// Returns `Ok(true)` when every cell succeeded and `Ok(false)` when at
