@@ -338,6 +338,13 @@ pub enum Error {
     /// perfect quality" — a plausible, in-range, maximally-wrong value that
     /// silently poisons any sidecar it lands in. See imazen/zenmetrics#41.
     ReductionDidNotRun,
+    /// The requested `width × height` (its packed-u32 upload byte count, or
+    /// the batch multiple) does not fit in `usize` on this target
+    /// (zenmetrics#30). Returned by `Ssim2::new` / `Ssim2Batch::new`
+    /// before any device allocation instead of a wrapped product
+    /// silently under-allocating on 32-bit targets or an allocator panic
+    /// on 64-bit.
+    InvalidDimensions { width: u32, height: u32 },
 }
 
 impl std::fmt::Display for Error {
@@ -346,6 +353,11 @@ impl std::fmt::Display for Error {
             Error::DimensionMismatch { expected, got } => write!(
                 f,
                 "dimension mismatch: expected {expected} bytes, got {got}"
+            ),
+            Error::InvalidDimensions { width, height } => write!(
+                f,
+                "invalid dimensions: {width} × {height} (packed u32 upload / batch bytes) \
+                 overflows usize on this target"
             ),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
             Error::InvalidImageSize => write!(f, "image must be at least 8×8 pixels"),

@@ -365,6 +365,19 @@ impl<R: Runtime> Ssim2<R> {
         }
     }
 
+    /// `width × height`, validated so the packed-u32 upload (`× 4` bytes)
+    /// fits in `usize` on this target (zenmetrics#30). Widened to usize
+    /// BEFORE multiplying — a bare `(width * height) as usize` wraps the
+    /// u32 product on 32-bit targets and silently under-allocates; on
+    /// 64-bit the byte count is what overflows. Shared with
+    /// [`crate::Ssim2Batch::new`].
+    pub(crate) fn checked_pixel_count(width: u32, height: u32) -> Result<usize> {
+        (width as usize)
+            .checked_mul(height as usize)
+            .filter(|n| n.checked_mul(4).is_some())
+            .ok_or(Error::InvalidDimensions { width, height })
+    }
+
     pub fn new(client: ComputeClient<R>, width: u32, height: u32) -> Result<Self> {
         // Reflect-pad sub-MIN_PAD_DIM up to the pyramid floor: build for
         // the padded extent, store the plan, report logical via dims(),
@@ -375,7 +388,7 @@ impl<R: Runtime> Ssim2<R> {
         if width < 8 || height < 8 {
             return Err(Error::InvalidImageSize);
         }
-        let n = (width as usize) * (height as usize);
+        let n = Self::checked_pixel_count(width, height)?;
 
         // Pyramid dimensions: 6 levels, each ceil(prev/2). Stop early
         // if a level would shrink below 8×8 — same as the CPU crate.

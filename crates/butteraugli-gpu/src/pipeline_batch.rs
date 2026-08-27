@@ -16,7 +16,7 @@ use cubecl::prelude::*;
 
 use crate::kernels::{blur, colors, diffmap, downscale, frequency, malta, masking, reduction};
 use crate::pipeline::Butteraugli;
-use crate::{ButteraugliParams, Result};
+use crate::{ButteraugliParams, Error, Result};
 
 const SIGMA_LF: f32 = 7.155_933_4;
 const SIGMA_OPSIN: f32 = 1.2;
@@ -107,21 +107,25 @@ fn alloc_b3<R: Runtime>(client: &ComputeClient<R>, n: usize) -> [cubecl::server:
 }
 
 impl<R: Runtime> BatchBuffers<R> {
-    fn new(client: &ComputeClient<R>, width: u32, height: u32, batch_n: usize) -> Self {
-        // Widen to usize before the multiply (matches Butteraugli::new). A bare
-        // `(width * height) as usize` wraps the u32 product on huge dimensions
-        // in release and produces silently-under-allocated batch buffers.
-        let plane = (width as usize)
-            .checked_mul(height as usize)
-            .expect("width × height overflows usize");
-        let total = plane
+    /// `(plane, total, total_bytes)` for `width × height × batch_n` images,
+    /// or [`Error::InvalidDimensions`] if any product overflows `usize`.
+    /// Widen to usize before the multiply (matches `Butteraugli::try_new`):
+    /// a bare `(width * height) as usize` wraps the u32 product on huge
+    /// dimensions in release and produces silently-under-allocated batch
+    /// buffers. sRGB bytes are uploaded as u32 (`total × 3` u32 slots) —
+    /// see colors.rs / pipeline.rs for the wgpu Array<u8> caveat.
+    fn checked_lens(width: u32, height: u32, batch_n: usize) -> Result<(usize, usize, usize)> {
+        let plane = Butteraugli::<R>::checked_plane_len(width, height)?;
+        plane
             .checked_mul(batch_n)
-            .expect("plane × batch_n overflows usize");
-        // sRGB bytes uploaded as u32 — see colors.rs / pipeline.rs
-        // for the wgpu Array<u8> caveat.
-        let total_bytes = total.checked_mul(3).expect("total × 3 overflows usize");
+            .and_then(|total| total.checked_mul(3).map(|bytes| (plane, total, bytes)))
+            .ok_or(Error::InvalidDimensions { width, height })
+    }
+
+    fn new(client: &ComputeClient<R>, width: u32, height: u32, batch_n: usize) -> Result<Self> {
+        let (plane, total, total_bytes) = Self::checked_lens(width, height, batch_n)?;
         let src_u8_batch = client.create_from_slice(u32::as_bytes(&vec![0_u32; total_bytes]));
-        Self {
+        Ok(Self {
             width,
             height,
             plane,
@@ -144,7 +148,7 @@ impl<R: Runtime> BatchBuffers<R> {
             temp1_batch: alloc_b(client, total),
             temp2_batch: alloc_b(client, total),
             _runtime: std::marker::PhantomData,
-        }
+        })
     }
 
     fn total(&self) -> usize {
@@ -167,21 +171,45 @@ pub struct ButteraugliBatch<R: Runtime> {
 }
 
 impl<R: Runtime> ButteraugliBatch<R> {
+    /// # Panics
+    ///
+    /// Panics if `batch_size == 0` or if `width × height × batch_size × 3`
+    /// overflows `usize`. Untrusted dimensions should go through
+    /// [`Self::try_new`], which returns [`Error::InvalidDimensions`] for the
+    /// overflow case instead.
     pub fn new(client: ComputeClient<R>, width: u32, height: u32, batch_size: usize) -> Self {
+        Self::try_new(client, width, height, batch_size).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    /// Fallible [`Self::new`] (zenmetrics#30): [`Error::InvalidDimensions`]
+    /// when any of the per-image / per-batch products overflows `usize`.
+    /// Every product is validated before any device allocation. Still
+    /// panics on `batch_size == 0` (a caller bug, not an input-size
+    /// question).
+    pub fn try_new(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        batch_size: usize,
+    ) -> Result<Self> {
         assert!(batch_size > 0, "batch_size must be > 0");
-        let inner = Butteraugli::<R>::new_multires(client.clone(), width, height);
-        let full = BatchBuffers::new(&client, width, height, batch_size);
+        // Validate the full-res batch products up front so the inner
+        // (multires) pipeline never allocates for dimensions the batch
+        // buffers would then reject.
+        BatchBuffers::<R>::checked_lens(width, height, batch_size)?;
+        let inner = Butteraugli::<R>::try_new_multires(client.clone(), width, height)?;
+        let full = BatchBuffers::new(&client, width, height, batch_size)?;
         let half = if width >= MIN_SIZE_FOR_SUBSAMPLE && height >= MIN_SIZE_FOR_SUBSAMPLE {
             Some(BatchBuffers::new(
                 &client,
                 width.div_ceil(2),
                 height.div_ceil(2),
                 batch_size,
-            ))
+            )?)
         } else {
             None
         };
-        Self {
+        Ok(Self {
             inner,
             batch_size,
             full,
@@ -189,7 +217,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             client,
             width,
             height,
-        }
+        })
     }
 
     pub fn batch_size(&self) -> usize {

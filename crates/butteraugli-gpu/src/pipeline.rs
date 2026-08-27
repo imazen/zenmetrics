@@ -309,26 +309,34 @@ impl<R: Runtime> Butteraugli<R> {
     /// # Panics
     ///
     /// Panics if `width × height × 3` overflows `usize`. Callers passing
-    /// untrusted dimensions should pre-validate with the same upper bound
-    /// the sibling pipelines use (e.g. reject anything where
-    /// `width.checked_mul(height).is_none()`).
+    /// untrusted dimensions should use [`Self::try_new`], which returns
+    /// [`Error::InvalidDimensions`] for the same condition instead.
     pub fn new(client: ComputeClient<R>, width: u32, height: u32) -> Self {
-        // Widen to usize before the multiply: a single `(width * height) as usize`
-        // wraps the u32-typed product silently on huge dimensions in release,
-        // producing under-allocated GPU buffers and garbage scores. Sibling
-        // pipelines (ssim2-gpu, dssim-gpu, zensim-gpu) already widen first.
-        let n = (width as usize)
+        Self::try_new(client, width, height).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    /// `width × height` pixel count, validated so that the `× 3`-byte sRGB
+    /// input length fits in `usize` on this target. Widen to usize before
+    /// the multiply: a single `(width * height) as usize` wraps the
+    /// u32-typed product silently on huge dimensions in release, producing
+    /// under-allocated GPU buffers and garbage scores. Pre-validating the
+    /// byte count here means downstream `vec![0_u32; n]` / `vec![0.0_f32;
+    /// n]` allocations can't surface a confusing alloc-failure for a
+    /// caller's mistake. Shared by [`Butteraugli::try_new`] and the batch
+    /// constructor.
+    pub(crate) fn checked_plane_len(width: u32, height: u32) -> Result<usize> {
+        (width as usize)
             .checked_mul(height as usize)
-            .expect("width × height overflows usize");
-        // Defensive overflow check: `n * 3` is the upper bound on
-        // sRGB input length (3 bytes per pixel). Pre-validating here
-        // means downstream `vec![0_u32; n]` / `vec![0.0_f32; n]`
-        // allocations can't surface a confusing alloc-failure for a
-        // caller's mistake; they'll trip this expect first. Result
-        // unused — kept for the side-effect panic.
-        let _n_bytes = n
-            .checked_mul(3)
-            .expect("width × height × 3 overflows usize");
+            .filter(|n| n.checked_mul(3).is_some())
+            .ok_or(Error::InvalidDimensions { width, height })
+    }
+
+    /// Fallible [`Self::new`]: returns [`Error::InvalidDimensions`] instead
+    /// of panicking when `width × height × 3` overflows `usize`
+    /// (zenmetrics#30 — the untrusted-dimensions entry point). No device
+    /// allocation happens before the check.
+    pub fn try_new(client: ComputeClient<R>, width: u32, height: u32) -> Result<Self> {
+        let n = Self::checked_plane_len(width, height)?;
         // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
         // (R | G<<8 | B<<16; alpha unused). Length = n, not n*3. Cuts
         // per-call host→device upload from `n × 12 B` to `n × 4 B`.
@@ -377,7 +385,7 @@ impl<R: Runtime> Butteraugli<R> {
         }
         let blur_tables = blur_tables.map(|h| h.unwrap());
 
-        Self {
+        Ok(Self {
             client,
             width,
             height,
@@ -414,7 +422,7 @@ impl<R: Runtime> Butteraugli<R> {
             blur_tables,
             blur_radii,
             blur_table_lens,
-        }
+        })
     }
 
     /// Allocate buffers sized for a `body_h + 2 × HALO_ROWS` strip,
@@ -495,7 +503,7 @@ impl<R: Runtime> Butteraugli<R> {
         use crate::MemoryMode;
         use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
         match mode {
-            MemoryMode::Full => Ok(Self::new(client, width, height)),
+            MemoryMode::Full => Self::try_new(client, width, height),
             MemoryMode::Strip { h_body } => {
                 let body = h_body.unwrap_or_else(|| {
                     let cap = vram_cap_bytes();
@@ -507,7 +515,7 @@ impl<R: Runtime> Butteraugli<R> {
             MemoryMode::Auto => {
                 let cap = vram_cap_bytes();
                 match resolve_auto(width, height, cap)? {
-                    ResolvedMode::Full => Ok(Self::new(client, width, height)),
+                    ResolvedMode::Full => Self::try_new(client, width, height),
                     ResolvedMode::Strip { h_body } => {
                         Ok(Self::new_strip(client, width, height, h_body))
                     }
@@ -562,14 +570,22 @@ impl<R: Runtime> Butteraugli<R> {
     /// For very small images (`w < 16` or `h < 16`) the sibling is
     /// skipped — same threshold CPU butteraugli uses.
     pub fn new_multires(client: ComputeClient<R>, width: u32, height: u32) -> Self {
+        Self::try_new_multires(client, width, height).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    /// Fallible [`Self::new_multires`] (zenmetrics#30): returns
+    /// [`Error::InvalidDimensions`] instead of panicking when
+    /// `width × height × 3` overflows `usize`. No device allocation happens
+    /// before the check.
+    pub fn try_new_multires(client: ComputeClient<R>, width: u32, height: u32) -> Result<Self> {
         const MIN_SIZE_FOR_SUBSAMPLE: u32 = 16;
-        let mut full = Self::new(client.clone(), width, height);
+        let mut full = Self::try_new(client.clone(), width, height)?;
         if width >= MIN_SIZE_FOR_SUBSAMPLE && height >= MIN_SIZE_FOR_SUBSAMPLE {
             let half_w = width.div_ceil(2);
             let half_h = height.div_ceil(2);
-            full.half_res = Some(Box::new(Self::new(client, half_w, half_h)));
+            full.half_res = Some(Box::new(Self::try_new(client, half_w, half_h)?));
         }
-        full
+        Ok(full)
     }
 
     /// Construct a multi-resolution strip-mode `Butteraugli` instance.

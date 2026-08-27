@@ -159,6 +159,12 @@ pub enum Error {
     /// smaller image, or pick [`MemoryMode::Strip`](crate::MemoryMode)
     /// with an explicit `h_body`.
     TooBigForFull { needed: usize, cap: usize },
+    /// The requested `width × height` (or its `× 3` sRGB byte count /
+    /// batch multiple) does not fit in `usize` on this target — the
+    /// fallible-constructor (`try_new`) form of the overflow that the
+    /// infallible `new` documents as a panic (zenmetrics#30). Untrusted
+    /// dimensions should go through `try_new`.
+    InvalidDimensions { width: u32, height: u32 },
 }
 
 impl std::fmt::Display for Error {
@@ -167,6 +173,10 @@ impl std::fmt::Display for Error {
             Error::DimensionMismatch { expected, got } => write!(
                 f,
                 "dimension mismatch: expected {expected} bytes, got {got}"
+            ),
+            Error::InvalidDimensions { width, height } => write!(
+                f,
+                "invalid dimensions: {width} × {height} (× 3 bytes) overflows usize on this target"
             ),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
             Error::InvalidParams(msg) => write!(f, "invalid params: {msg}"),

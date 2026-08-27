@@ -173,6 +173,15 @@ impl<R: Runtime> Ssim2Batch<R> {
         if width < crate::pipeline::MIN_PAD_DIM || height < crate::pipeline::MIN_PAD_DIM {
             return Err(Error::InvalidImageSize);
         }
+        // Validate the batch's packed-upload size BEFORE the inner
+        // pipeline allocates anything (zenmetrics#30): the per-image
+        // count is checked by `Ssim2::new` too, but `× batch_size` is only
+        // known here, and a wrapped product would silently under-allocate.
+        let n_full = Ssim2::<R>::checked_pixel_count(width, height)?;
+        let total_u32 = n_full
+            .checked_mul(batch_size as usize)
+            .filter(|t| t.checked_mul(4).is_some())
+            .ok_or(Error::InvalidDimensions { width, height })?;
         let inner = Ssim2::new(client.clone(), width, height)?;
 
         let bscales: Vec<BatchScale> = (0..inner.n_scales())
@@ -182,13 +191,9 @@ impl<R: Runtime> Ssim2Batch<R> {
             })
             .collect();
 
-        let n_full = (width as usize) * (height as usize);
         // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
         // (R | G<<8 | B<<16). Length = n_pixels (per image × batch),
         // not n_pixels × 3. Cuts upload 3×; see CUBECL_GOTCHAS.md G6.6.
-        let total_u32 = n_full
-            .checked_mul(batch_size as usize)
-            .expect("n_full × 3 × batch_size overflows usize");
         let src_u8_batch = client.create_from_slice(u32::as_bytes(&vec![0_u32; total_u32]));
         // T_x.O (2026-05-17): no more `pack_scratch: Vec<u32>` — the
         // per-call pack writes directly into a pinned staging buffer

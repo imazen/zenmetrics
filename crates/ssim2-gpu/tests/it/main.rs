@@ -11,6 +11,7 @@ mod aliasing_invariants;
 mod auto_fallback;
 #[cfg(feature = "cubecl-types")]
 mod blur_mode_api;
+mod dims_overflow;
 #[cfg(all(feature = "cubecl-types", feature = "fir"))]
 mod fir_path;
 mod memory_mode;

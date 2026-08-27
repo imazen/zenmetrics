@@ -13,6 +13,28 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## butteraugli-gpu / ssim2-gpu / zenmetrics-api (untrusted-dimension hardening, 2026-08-27)
+
+### Added
+- **Fallible constructors for untrusted dimensions (#30, part 2 of 2).** `Butteraugli::try_new` /
+  `try_new_multires` and `ButteraugliBatch::try_new` return the new `Error::InvalidDimensions { width,
+  height }` when `width × height × 3` (or the batch multiple) overflows `usize`, before any device
+  allocation; the infallible `new` / `new_multires` / `ButteraugliBatch::new` delegate to them and keep
+  their documented panic (no API change). `new_with_memory_mode`'s `Full` / `Auto→Full` arms route
+  through `try_new`, so the umbrella constructor surfaces the error too.
+- **`ssim2-gpu`: `Ssim2::new` / `Ssim2Batch::new` return `Error::InvalidDimensions`** (new variant) when
+  the packed-u32 upload byte count or its batch multiple overflows `usize` — the batch check now runs
+  BEFORE the inner pipeline allocates. On 32-bit targets the bare `(w as usize) * (h as usize)` in
+  `Ssim2::new` wrapped silently (under-allocated buffers); it is `checked_mul` now.
+- **`zenmetrics-api`: a `MetricParams` variant that doesn't match the requested `MetricKind` is
+  `Error::Metric { message: "MetricParams variant mismatch (expected …)" }`, never a panic** — all 18
+  `panic!` arms in `Metric::new` / `new_with_memory_mode` / the session builder replaced, plus an early
+  `ensure_params_match` gate ahead of the backend probe so the answer is the same on a box with no usable
+  GPU. `MetricParams::kind()` is new (public, additive).
+- Gates (all mutation-verified on Metal / no-GPU): `butteraugli-gpu tests/it/dims_overflow.rs`,
+  `ssim2-gpu tests/it/dims_overflow.rs`, `zenmetrics-api metric::params_mismatch_tests`.
+- Still open under #30 (part 1): cooperative cancellation (`*_with_stop`) on the GPU `compute_*` paths.
+
 ## zensim-gpu (open-issue fixes, 2026-08-27)
 
 ### Changed

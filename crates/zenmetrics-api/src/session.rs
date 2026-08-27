@@ -727,6 +727,7 @@ fn build_session_scorer(
     params: MetricParams,
     mode: MemoryMode,
 ) -> Result<crate::metric::Metric> {
+    crate::metric::ensure_params_match(kind, &params)?;
     // Session metrics are constructions too: an explicit GPU backend whose
     // runtime cannot actually run kernels must fail loudly here (#37), not
     // hand back a stream-bound scorer whose dispatches silently no-op.
@@ -745,7 +746,7 @@ fn build_session_scorer(
         MetricKind::Cvvdp => {
             let p = match params {
                 MetricParams::Cvvdp(p) => p,
-                _ => panic!("MetricParams variant mismatch (expected Cvvdp)"),
+                _ => return Err(crate::metric::params_mismatch("cvvdp", "Cvvdp")),
             };
             let b = crate::metric::cvvdp_backend(backend)?;
             let opaque = cvvdp_gpu::session::new_opaque_on_stream(
@@ -779,7 +780,7 @@ fn build_session_scorer(
         MetricKind::Ssim2 => {
             let p = match params {
                 MetricParams::Ssim2(p) => p,
-                _ => panic!("MetricParams variant mismatch (expected Ssim2)"),
+                _ => return Err(crate::metric::params_mismatch("ssim2", "Ssim2")),
             };
             let b = crate::metric::ssim2_backend(backend)?;
             let opaque = ssim2_gpu::session::new_opaque_on_stream(
@@ -812,7 +813,7 @@ fn build_session_scorer(
         MetricKind::Butter => {
             let p = match params {
                 MetricParams::Butter(p) => p,
-                _ => panic!("MetricParams variant mismatch (expected Butter)"),
+                _ => return Err(crate::metric::params_mismatch("butter", "Butter")),
             };
             let b = crate::metric::butter_backend(backend)?;
             let opaque = butteraugli_gpu::session::new_opaque_on_stream(
@@ -845,7 +846,7 @@ fn build_session_scorer(
         MetricKind::Dssim => {
             let p = match params {
                 MetricParams::Dssim(p) => p,
-                _ => panic!("MetricParams variant mismatch (expected Dssim)"),
+                _ => return Err(crate::metric::params_mismatch("dssim", "Dssim")),
             };
             let b = crate::metric::dssim_backend(backend)?;
             let opaque = dssim_gpu::session::new_opaque_on_stream(
@@ -878,7 +879,7 @@ fn build_session_scorer(
         MetricKind::Iwssim => {
             let p = match params {
                 MetricParams::Iwssim(p) => p,
-                _ => panic!("MetricParams variant mismatch (expected Iwssim)"),
+                _ => return Err(crate::metric::params_mismatch("iwssim", "Iwssim")),
             };
             let b = crate::metric::iwssim_backend(backend)?;
             let opaque = iwssim_gpu::session::new_opaque_on_stream(
@@ -911,7 +912,7 @@ fn build_session_scorer(
         MetricKind::Zensim => {
             let p = match params {
                 MetricParams::Zensim(p) => p,
-                _ => panic!("MetricParams variant mismatch (expected Zensim)"),
+                _ => return Err(crate::metric::params_mismatch("zensim", "Zensim")),
             };
             let b = crate::metric::zensim_backend(backend)?;
             let opaque = zensim_gpu::session::new_opaque_on_stream(

@@ -169,6 +169,19 @@ impl MetricKind {
             MetricKind::Zensim => "zensim",
         }
     }
+
+    /// The `MetricParams` variant name for this kind (`"Cvvdp"`, …), for
+    /// the variant-mismatch diagnostic.
+    pub(crate) fn variant_name(self) -> &'static str {
+        match self {
+            MetricKind::Cvvdp => "Cvvdp",
+            MetricKind::Butter => "Butter",
+            MetricKind::Ssim2 => "Ssim2",
+            MetricKind::Dssim => "Dssim",
+            MetricKind::Iwssim => "Iwssim",
+            MetricKind::Zensim => "Zensim",
+        }
+    }
 }
 
 // ---------------------------------------------------------------
@@ -273,6 +286,31 @@ impl Scores {
 // MetricParams
 // ---------------------------------------------------------------
 
+/// A `MetricParams` variant that doesn't match the requested `MetricKind`
+/// — a caller protocol violation, surfaced as [`Error::Metric`] rather than
+/// a panic (zenmetrics#30) so a scorer behind a server endpoint returns an
+/// error instead of crashing. `kind` is the metric's short tag, `expected`
+/// the variant name.
+pub(crate) fn params_mismatch(kind: &'static str, expected: &'static str) -> Error {
+    Error::Metric {
+        kind,
+        message: format!("MetricParams variant mismatch (expected {expected})"),
+    }
+}
+
+/// Reject a `(kind, params)` pair whose variant doesn't match BEFORE any
+/// backend probe or device work — the single early gate every constructor
+/// (`Metric::new`, `Metric::new_with_memory_mode`, the session builder)
+/// runs, so the mismatch is a plain `Result::Err` regardless of which
+/// backend is compiled in or reachable (zenmetrics#30).
+pub(crate) fn ensure_params_match(kind: MetricKind, params: &MetricParams) -> Result<()> {
+    if params.kind() == kind {
+        Ok(())
+    } else {
+        Err(params_mismatch(kind.tag(), kind.variant_name()))
+    }
+}
+
 /// Per-metric parameter bundle. Wraps each metric crate's own
 /// `<Metric>Params` so the umbrella keeps a single parameter type.
 ///
@@ -336,6 +374,24 @@ pub enum MetricParams {
 }
 
 impl MetricParams {
+    /// The [`MetricKind`] this parameter bundle belongs to.
+    pub fn kind(&self) -> MetricKind {
+        match self {
+            #[cfg(any(feature = "cvvdp", feature = "cpu-cvvdp"))]
+            MetricParams::Cvvdp(_) => MetricKind::Cvvdp,
+            #[cfg(any(feature = "butter", feature = "cpu-butter"))]
+            MetricParams::Butter(_) => MetricKind::Butter,
+            #[cfg(any(feature = "ssim2", feature = "cpu-ssim2"))]
+            MetricParams::Ssim2(_) => MetricKind::Ssim2,
+            #[cfg(any(feature = "dssim", feature = "cpu-dssim"))]
+            MetricParams::Dssim(_) => MetricKind::Dssim,
+            #[cfg(any(feature = "iwssim", feature = "cpu-iwssim"))]
+            MetricParams::Iwssim(_) => MetricKind::Iwssim,
+            #[cfg(any(feature = "zensim", feature = "cpu-zensim"))]
+            MetricParams::Zensim(_) => MetricKind::Zensim,
+        }
+    }
+
     /// Default-construct the params variant matching `kind`. Panics if
     /// the requested metric's Cargo feature is disabled in this build
     /// — callers should match the build's enabled metrics or use
@@ -737,10 +793,12 @@ impl MetricInner {
     /// - [`Error::Metric`] if the underlying metric crate's
     ///   constructor fails (e.g. invalid image size).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if `params` does not match `kind` (e.g. asking for
-    /// `MetricKind::Cvvdp` with `MetricParams::Dssim(...)`). Use
+    /// Returns [`Error::Metric`] (message `MetricParams variant mismatch`)
+    /// if `params` does not match `kind` (e.g. asking for
+    /// `MetricKind::Cvvdp` with `MetricParams::Dssim(...)`) — a protocol
+    /// violation surfaced as a `Result`, never a panic (zenmetrics#30). Use
     /// [`MetricParams::default_for`] when in doubt.
     #[allow(unused_variables)]
     pub fn new(
@@ -750,6 +808,7 @@ impl MetricInner {
         height: u32,
         params: MetricParams,
     ) -> Result<Self> {
+        ensure_params_match(kind, &params)?;
         // `Backend::Cpu` (optimized native, task #159 phase 2) routes to the
         // fast native crates, not the per-crate `-gpu` opaque shims — so
         // intercept it before the GPU backend conversion below. `resolve()`
@@ -775,7 +834,7 @@ impl MetricInner {
             MetricKind::Cvvdp => {
                 let p = match params {
                     MetricParams::Cvvdp(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Cvvdp)"),
+                    _ => return Err(crate::metric::params_mismatch("cvvdp", "Cvvdp")),
                 };
                 let b = cvvdp_backend(backend)?;
                 cvvdp_gpu::CvvdpOpaque::new(b, width, height, p)
@@ -789,7 +848,7 @@ impl MetricInner {
             MetricKind::Butter => {
                 let p = match params {
                     MetricParams::Butter(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Butter)"),
+                    _ => return Err(crate::metric::params_mismatch("butter", "Butter")),
                 };
                 let b = butter_backend(backend)?;
                 butteraugli_gpu::ButteraugliOpaque::new(b, width, height, p)
@@ -803,7 +862,7 @@ impl MetricInner {
             MetricKind::Ssim2 => {
                 let p = match params {
                     MetricParams::Ssim2(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Ssim2)"),
+                    _ => return Err(crate::metric::params_mismatch("ssim2", "Ssim2")),
                 };
                 let b = ssim2_backend(backend)?;
                 ssim2_gpu::Ssim2Opaque::new(b, width, height, p)
@@ -817,7 +876,7 @@ impl MetricInner {
             MetricKind::Dssim => {
                 let p = match params {
                     MetricParams::Dssim(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Dssim)"),
+                    _ => return Err(crate::metric::params_mismatch("dssim", "Dssim")),
                 };
                 let b = dssim_backend(backend)?;
                 dssim_gpu::DssimOpaque::new(b, width, height, p)
@@ -831,7 +890,7 @@ impl MetricInner {
             MetricKind::Iwssim => {
                 let p = match params {
                     MetricParams::Iwssim(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Iwssim)"),
+                    _ => return Err(crate::metric::params_mismatch("iwssim", "Iwssim")),
                 };
                 let b = iwssim_backend(backend)?;
                 iwssim_gpu::IwssimOpaque::new(b, width, height, p)
@@ -845,7 +904,7 @@ impl MetricInner {
             MetricKind::Zensim => {
                 let p = match params {
                     MetricParams::Zensim(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Zensim)"),
+                    _ => return Err(crate::metric::params_mismatch("zensim", "Zensim")),
                 };
                 let b = zensim_backend(backend)?;
                 zensim_gpu::ZensimOpaque::new(b, width, height, p)
@@ -893,6 +952,7 @@ impl MetricInner {
         params: MetricParams,
         mode: MemoryMode,
     ) -> Result<Self> {
+        ensure_params_match(kind, &params)?;
         // Backend::Cpu (optimized native, task #159 phase 2): MemoryMode is a
         // GPU concern, so `mode` is ignored and we route to the native CPU
         // dispatch. `resolve()` keeps this correct once Auto can pick Cpu.
@@ -917,7 +977,7 @@ impl MetricInner {
             MetricKind::Cvvdp => {
                 let p = match params {
                     MetricParams::Cvvdp(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Cvvdp)"),
+                    _ => return Err(crate::metric::params_mismatch("cvvdp", "Cvvdp")),
                 };
                 let b = cvvdp_backend(backend)?;
                 cvvdp_gpu::CvvdpOpaque::new_with_memory_mode(b, width, height, p, mode.into())
@@ -931,7 +991,7 @@ impl MetricInner {
             MetricKind::Butter => {
                 let p = match params {
                     MetricParams::Butter(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Butter)"),
+                    _ => return Err(crate::metric::params_mismatch("butter", "Butter")),
                 };
                 let b = butter_backend(backend)?;
                 butteraugli_gpu::ButteraugliOpaque::new_with_memory_mode(
@@ -951,7 +1011,7 @@ impl MetricInner {
             MetricKind::Ssim2 => {
                 let p = match params {
                     MetricParams::Ssim2(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Ssim2)"),
+                    _ => return Err(crate::metric::params_mismatch("ssim2", "Ssim2")),
                 };
                 let b = ssim2_backend(backend)?;
                 ssim2_gpu::Ssim2Opaque::new_with_memory_mode(b, width, height, p, mode.into())
@@ -965,7 +1025,7 @@ impl MetricInner {
             MetricKind::Dssim => {
                 let p = match params {
                     MetricParams::Dssim(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Dssim)"),
+                    _ => return Err(crate::metric::params_mismatch("dssim", "Dssim")),
                 };
                 let b = dssim_backend(backend)?;
                 dssim_gpu::DssimOpaque::new_with_memory_mode(b, width, height, p, mode.into())
@@ -979,7 +1039,7 @@ impl MetricInner {
             MetricKind::Iwssim => {
                 let p = match params {
                     MetricParams::Iwssim(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Iwssim)"),
+                    _ => return Err(crate::metric::params_mismatch("iwssim", "Iwssim")),
                 };
                 let b = iwssim_backend(backend)?;
                 iwssim_gpu::IwssimOpaque::new_with_memory_mode(b, width, height, p, mode.into())
@@ -993,7 +1053,7 @@ impl MetricInner {
             MetricKind::Zensim => {
                 let p = match params {
                     MetricParams::Zensim(p) => p,
-                    _ => panic!("MetricParams variant mismatch (expected Zensim)"),
+                    _ => return Err(crate::metric::params_mismatch("zensim", "Zensim")),
                 };
                 let b = zensim_backend(backend)?;
                 zensim_gpu::ZensimOpaque::new_with_memory_mode(b, width, height, p, mode.into())
@@ -2884,5 +2944,48 @@ mod tests {
     #[test]
     fn priority_default_is_speed() {
         assert_eq!(Priority::default(), Priority::Speed);
+    }
+}
+
+#[cfg(all(test, feature = "butter", feature = "ssim2"))]
+mod params_mismatch_tests {
+    use super::*;
+
+    /// zenmetrics#30: a `MetricParams` variant that doesn't match the
+    /// requested kind is a protocol violation surfaced as `Error::Metric`
+    /// — never a panic — and it is caught BEFORE any backend probe, so the
+    /// result is the same on a machine with no usable GPU at all (this test
+    /// names `Backend::Cuda` and must still see the mismatch, not a
+    /// backend error).
+    #[test]
+    fn mismatched_params_is_an_error_not_a_panic() {
+        let params = MetricParams::Butter(butteraugli_gpu::ButteraugliParams::default());
+        for build in [
+            |p: MetricParams| Metric::new(MetricKind::Ssim2, Backend::Cuda, 64, 64, p),
+            |p: MetricParams| {
+                Metric::new_with_memory_mode(
+                    MetricKind::Ssim2,
+                    Backend::Cuda,
+                    64,
+                    64,
+                    p,
+                    MemoryMode::Full,
+                )
+            },
+        ] {
+            let err = build(params.clone()).err().expect("mismatch must be Err");
+            match err {
+                Error::Metric { kind, message } => {
+                    assert_eq!(kind, "ssim2");
+                    assert!(
+                        message.contains("variant mismatch (expected Ssim2)"),
+                        "{message}"
+                    );
+                }
+                other => panic!("expected Error::Metric mismatch, got {other:?}"),
+            }
+        }
+        // The matching variant passes the gate (whatever the backend then does).
+        assert!(ensure_params_match(MetricKind::Butter, &params).is_ok());
     }
 }
