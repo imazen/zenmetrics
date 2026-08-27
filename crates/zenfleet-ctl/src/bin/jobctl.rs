@@ -615,6 +615,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let s_col = |f: &dyn Fn(&zenfleet_core::LedgerRow) -> String| -> ArrayRef {
                 Arc::new(StringArray::from_iter_values(done.iter().map(|r| f(r))))
             };
+            // Full-URI declares store ABSOLUTE s3:// paths in cell.image_path —
+            // prefixing those would double-prefix (hdrgrid diffmap endgame,
+            // 2026-08-27). Join verbatim when the value is already absolute.
+            let join_pfx = |pfx: &str, v: &str| -> String {
+                if v.starts_with("s3://") || pfx.is_empty() {
+                    v.to_string()
+                } else {
+                    format!("{pfx}/{v}")
+                }
+            };
             let sha = |r: &zenfleet_core::LedgerRow| {
                 r.output_sha.as_ref().map(|s| s.as_str().to_string()).unwrap_or_default()
             };
@@ -631,8 +641,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             let batch = RecordBatch::try_from_iter(vec![
-                ("ref_path", s_col(&|r| format!("{refs_prefix}/{}", r.cell.image_path))),
-                ("dist_path", s_col(&|r| format!("{blobs_prefix}/{}", sha(r)))),
+                ("ref_path", s_col(&|r| join_pfx(refs_prefix, &r.cell.image_path))),
+                ("dist_path", s_col(&|r| join_pfx(blobs_prefix, &sha(r)))),
                 ("image_path", s_col(&|r| r.cell.image_path.clone())),
                 ("codec", s_col(&|r| r.cell.codec.clone())),
                 (
@@ -662,9 +672,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 use std::fmt::Write as _;
                 let _ = writeln!(
                     tsv,
-                    "{refs_prefix}/{}\t{blobs_prefix}/{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                    r.cell.image_path,
-                    sha(r),
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    join_pfx(refs_prefix, &r.cell.image_path),
+                    join_pfx(blobs_prefix, &sha(r)),
                     r.cell.image_path,
                     r.cell.codec,
                     r.cell.q,
