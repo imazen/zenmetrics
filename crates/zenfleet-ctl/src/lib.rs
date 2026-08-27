@@ -333,6 +333,28 @@ mod accounting_flip_tests {
         }
     }
 
+    /// Snapshot counterpart of the flip class: the snapshot must carry the
+    /// flip's failed row and DROP the stale done row, so a worker booting
+    /// from the snapshot alone sees the re-opened job.
+    #[test]
+    fn snapshot_surfaces_flip_over_stale_done() {
+        let rows = vec![
+            row("a", JobStatus::Done, 100),
+            row("a", JobStatus::Failed, 200), // audit flip
+            row("b", JobStatus::Done, 100),
+        ];
+        let (snap, n_done, n_failed) = snapshot_rows(rows);
+        assert_eq!((n_done, n_failed), (1, 1));
+        let a_rows: Vec<_> = snap.iter().filter(|r| r.ts == 200).collect();
+        assert_eq!(a_rows.len(), 1, "flip's failed row present");
+        assert!(
+            !snap
+                .iter()
+                .any(|r| r.ts == 100 && r.status == JobStatus::Done && snap.iter().any(|x| x.ts == 200 && x.job_id == r.job_id)),
+            "stale done row for the flipped job must be dropped"
+        );
+    }
+
     /// The 2026-08-27 hdrgrid class: done at t1, audit-flipped Failed at t2.
     /// Ever-done stays 1 (accounting continuity); live_done drops to 0 and
     /// gap_live re-opens — the number auto-pause must consult.
@@ -359,17 +381,47 @@ mod accounting_flip_tests {
 /// retry→Poison ladder actually fires. Returns (snapshot, n_done, n_failed).
 pub fn snapshot_rows(rows: Vec<LedgerRow>) -> (Vec<LedgerRow>, usize, usize) {
     use std::collections::{HashMap, HashSet};
+    // Queue-truth first (2026-08-27): resolve every job by LATEST-WINS before
+    // deciding what the snapshot keeps. A job whose latest row is Failed —
+    // including an audit-blobs flip OVER an older Done (error-carrying blob)
+    // — must surface its newest failed row, NOT its stale done row; the old
+    // "done first-wins unconditionally" shape silently buried flips and left
+    // correctness riding on the sidecar fold window.
+    let mut view = LedgerView::new();
+    for r in &rows {
+        view.apply(r.clone());
+    }
+    let mut latest_done: HashSet<&str> = HashSet::new();
+    let mut latest_failed: HashSet<&str> = HashSet::new();
+    for r in view.rows() {
+        match r.status {
+            JobStatus::Done => {
+                latest_done.insert(r.job_id.as_str());
+            }
+            JobStatus::Failed | JobStatus::Poison => {
+                latest_failed.insert(r.job_id.as_str());
+            }
+            _ => {}
+        }
+    }
+    // done rows: FIRST-WINS per job, only for jobs still done under latest-wins
     let mut done_seen: HashSet<String> = HashSet::new();
     let mut snap: Vec<LedgerRow> = Vec::new();
     for r in &rows {
-        if r.status == JobStatus::Done && done_seen.insert(r.job_id.as_str().to_string()) {
+        if r.status == JobStatus::Done
+            && latest_done.contains(r.job_id.as_str())
+            && done_seen.insert(r.job_id.as_str().to_string())
+        {
             snap.push(r.clone());
         }
     }
     let n_done = snap.len();
+    // failed rows: NEWEST per job, for jobs failed/poison under latest-wins
     let mut best: HashMap<&str, &LedgerRow> = HashMap::new();
     for r in &rows {
-        if r.status == JobStatus::Failed && !done_seen.contains(r.job_id.as_str()) {
+        if matches!(r.status, JobStatus::Failed | JobStatus::Poison)
+            && latest_failed.contains(r.job_id.as_str())
+        {
             let e = best.entry(r.job_id.as_str()).or_insert(r);
             if r.ts > e.ts {
                 *e = r;
