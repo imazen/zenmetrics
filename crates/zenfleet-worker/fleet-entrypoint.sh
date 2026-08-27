@@ -170,6 +170,16 @@ if [ "${ZEN_REQUIRE_GPU:-0}" = "1" ]; then
   nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | grep -q . \
     || { ferr "ZEN_REQUIRE_GPU=1 but no GPU is visible to nvidia-smi — refusing to score on CPU under GPU column names"; exit 3; }
   prog "GPU-only scoring enforced (ZENMETRICS_REQUIRE_GPU=1); visible GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"
+  # nvidia-smi (NVML) passing does NOT prove CUDA works — the 2026-08-27 wsl
+  # saga: NVML fine, every cuInit dead (driver updated under a live box), and
+  # the worker claimed + error-filled 2,500+ cells across three attempts.
+  # `capabilities --probe` runs a REAL tiny ssim2 on explicit cuda
+  # (init + dispatch, #37-proof); anything but yes = refuse to claim.
+  if ! zenmetrics capabilities --probe 2>/dev/null | grep -q '^gpu-cuda-operational=yes$'; then
+    ferr "ZEN_REQUIRE_GPU=1 but the operational CUDA probe FAILED: $(zenmetrics capabilities --probe 2>&1 | grep '^gpu-cuda-operational' || echo 'probe unavailable (image predates capabilities --probe)')"
+    exit 3
+  fi
+  prog "operational CUDA probe passed (real init + dispatch)"
 fi
 
 # The manifest can be large (92MB+ for big sweeps) and some fleet boxes choke on large R2 downloads

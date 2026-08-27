@@ -193,8 +193,16 @@ enum Command {
     /// Print the capability tokens this binary was compiled with, one per line
     /// (the cargo feature names, plus a `build=<version>` info line). Consumed by
     /// `zenfleet-worker` claim-time capability gating (anti-wedge invariant 5):
-    /// jobs whose `requires` tokens this executor lacks are self-excluded.
-    Capabilities,
+        /// Print the executor's baked capability set. With `--probe`, ALSO run a
+    /// real end-to-end GPU check (tiny synthetic ssim2 on explicit cuda) and
+    /// append `gpu-cuda-operational=yes|no` — the compiled-features list alone
+    /// says NOTHING about whether this box's driver works (2026-08-27 wsl
+    /// lesson: `gpu-cuda` printed while every cuInit failed).
+    Capabilities {
+        /// Run the operational GPU probe (real init + dispatch, #37-proof).
+        #[arg(long)]
+        probe: bool,
+    },
     /// Print supported input formats.
     ListFormats,
 }
@@ -831,8 +839,11 @@ fn main() -> ExitCode {
             print_metric_list();
             ExitCode::SUCCESS
         }
-        Command::Capabilities => {
+        Command::Capabilities { probe } => {
             print_capabilities();
+            if probe {
+                probe_gpu_operational();
+            }
             ExitCode::SUCCESS
         }
         Command::ListFormats => {
@@ -2520,6 +2531,39 @@ fn find_col(headers: &csv::StringRecord, names: &[&str]) -> Result<usize, String
 /// Anti-wedge invariant 5: the executor's self-report. One compiled cargo-feature
 /// token per line; `build=` is informational (shas are unordered — versioning by
 /// TOKEN, e.g. a future `snapshot-v2`, is the supported mechanism, not min-sha).
+/// Real operational GPU probe: constructs + runs ssim2 on an explicit Cuda
+/// backend over a 64x64 synthetic pair. Catches BOTH init failures and the
+/// silently-dead-dispatch trap (zenmetrics#37) — a passing probe means a GPU
+/// job on this box can actually score. Prints exactly one line.
+fn probe_gpu_operational() {
+    #[cfg(all(feature = "gpu-ssim2", feature = "gpu-cuda"))]
+    {
+        use zenmetrics_api::{Backend, MetricKind, score_pair};
+        let n = 64usize;
+        let reference: Vec<u8> = (0..n * n * 3).map(|i| (i % 251) as u8).collect();
+        let mut distorted = reference.clone();
+        for v in distorted.iter_mut().step_by(7) {
+            *v = v.wrapping_add(3);
+        }
+        match score_pair(
+            MetricKind::Ssim2,
+            Backend::Cuda,
+            n as u32,
+            n as u32,
+            &reference,
+            &distorted,
+        ) {
+            Ok(_) => println!("gpu-cuda-operational=yes"),
+            Err(e) => println!("gpu-cuda-operational=no ({e})"),
+        }
+        return;
+    }
+    #[allow(unreachable_code)]
+    {
+        println!("gpu-cuda-operational=no (gpu features not compiled in)");
+    }
+}
+
 fn print_capabilities() {
     macro_rules! cap {
         ($name:literal) => {
