@@ -189,6 +189,33 @@ pub struct Table {
 }
 
 impl Table {
+    /// Rename columns per `from -> to` (unknown `from` = error; collision
+    /// with an existing name = error). Used by the flat-picker mode to map
+    /// harvest metric names onto the picker-schema `score_*` convention.
+    pub fn rename_columns(
+        mut self,
+        renames: &std::collections::BTreeMap<String, String>,
+    ) -> Result<Self, AssembleError> {
+        for (from, to) in renames {
+            if !self.names.iter().any(|n| n == from) {
+                return Err(AssembleError::Schema(format!(
+                    "rename: no column `{from}`"
+                )));
+            }
+            if self.names.iter().any(|n| n == to) {
+                return Err(AssembleError::Schema(format!(
+                    "rename: target `{to}` already exists"
+                )));
+            }
+        }
+        for n in &mut self.names {
+            if let Some(to) = renames.get(n) {
+                *n = to.clone();
+            }
+        }
+        Ok(self)
+    }
+
     /// Build a table from `(name, column)` pairs, validating equal lengths.
     pub fn from_columns(cols: Vec<(String, Column)>) -> Result<Self, AssembleError> {
         let n_rows = cols.first().map(|(_, c)| c.len()).unwrap_or(0);

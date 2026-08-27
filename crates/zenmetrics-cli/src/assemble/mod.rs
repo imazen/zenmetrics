@@ -47,6 +47,7 @@
 //!   `image_basename`, namespace colliding `feat_<N>` columns, write one
 //!   parquet per codec.
 
+pub mod flat_picker;
 pub mod join;
 pub mod key;
 pub mod parquet_io;
@@ -67,6 +68,9 @@ pub enum AssembleMode {
     /// zensim features × source features, one output parquet per codec.
     #[default]
     PerCodec,
+    /// Flat encode_sha-keyed harvest scores -> picker-shape parquet for the
+    /// result browser (typed strict join; see `flat_picker` module docs).
+    FlatPicker,
 }
 
 /// `zenmetrics assemble` arguments. Mirrors `build_per_codec_training.py`'s
@@ -82,7 +86,7 @@ pub struct AssembleArgs {
     /// R2 run ids to ingest. For each run, the assembler syncs the
     /// `s3://<bucket>/<run>/{omni,zensim_features,source_features}/` sidecar
     /// prefixes. Pass once per run: `--runs a --runs b`.
-    #[arg(long = "runs", action = clap::ArgAction::Append, required = true)]
+    #[arg(long = "runs", action = clap::ArgAction::Append)]
     pub runs: Vec<String>,
 
     /// R2 bucket the run prefixes live under. Default `zentrain` matches the
@@ -121,6 +125,40 @@ pub struct AssembleArgs {
     /// `--cache-dir/<run>/<kind>/`. Useful for re-runs and offline tests.
     #[arg(long, default_value_t = false)]
     pub no_sync: bool,
+
+    // ── flat-picker mode inputs (ignored by per-codec) ───────────────────
+    /// flat-picker: the flat encode_sha-keyed scores parquet.
+    #[arg(long)]
+    pub scores: Option<PathBuf>,
+
+    /// flat-picker: `sha\tbytes` TSV (blob listing) supplying encoded_bytes.
+    #[arg(long)]
+    pub sizes_tsv: Option<PathBuf>,
+
+    /// flat-picker: extra encode_sha-keyed f64 score sidecars (repeatable).
+    #[arg(long = "extra-scores", action = clap::ArgAction::Append)]
+    pub extra_scores: Vec<PathBuf>,
+
+    /// flat-picker: column renames `from=to` (repeatable; applied after joins).
+    #[arg(long = "rename", action = clap::ArgAction::Append)]
+    pub rename: Vec<String>,
+
+    /// flat-picker: constant metadata columns `key=value` (repeatable).
+    #[arg(long = "meta", action = clap::ArgAction::Append)]
+    pub meta: Vec<String>,
+
+    /// flat-picker: value for the `mode` column (lossy/lossless).
+    #[arg(long, default_value = "lossy")]
+    pub enc_mode: String,
+
+    /// flat-picker: record NaN (with a loud count) for scores rows whose
+    /// encode_sha has no bytes in --sizes-tsv, instead of erroring.
+    #[arg(long, default_value_t = false)]
+    pub allow_missing_bytes: bool,
+
+    /// flat-picker: output parquet path.
+    #[arg(long)]
+    pub out_parquet: Option<PathBuf>,
 }
 
 /// Per-pair key the cell-level join uses. Defined here (not in `key`) because
@@ -151,7 +189,31 @@ const OMNI_PASSTHROUGH: &[&str] = &[
 /// Entry point for `zenmetrics assemble`.
 pub fn run_assemble(args: &AssembleArgs) -> Result<(), AssembleError> {
     match args.mode {
-        AssembleMode::PerCodec => run_per_codec(args),
+        AssembleMode::PerCodec => {
+            if args.runs.is_empty() {
+                return Err(AssembleError::Schema(
+                    "--runs is required for --mode per-codec".into(),
+                ));
+            }
+            run_per_codec(args)
+        }
+        AssembleMode::FlatPicker => {
+            let need = |o: &Option<PathBuf>, n: &str| {
+                o.clone().ok_or_else(|| {
+                    AssembleError::Schema(format!("--{n} is required for --mode flat-picker"))
+                })
+            };
+            flat_picker::run_flat_picker(
+                &need(&args.scores, "scores")?,
+                &need(&args.sizes_tsv, "sizes-tsv")?,
+                &args.extra_scores,
+                &args.rename,
+                &args.meta,
+                &args.enc_mode,
+                args.allow_missing_bytes,
+                &need(&args.out_parquet, "out-parquet")?,
+            )
+        }
     }
 }
 
