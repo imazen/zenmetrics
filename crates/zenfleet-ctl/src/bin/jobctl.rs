@@ -983,6 +983,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             endpoint,
             out_dir,
             upload,
+            amnesty_classes,
         } => {
             let ep = resolve_endpoint(endpoint)?;
             let t0 = std::time::Instant::now();
