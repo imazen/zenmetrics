@@ -23,9 +23,12 @@ set -uo pipefail
 HOST="${1:?usage: lan_gpu_sequence.sh <host> <gpu|cpu> <bucket>...}"
 KIND="${2:?gpu|cpu}"; shift 2
 [ "$#" -ge 1 ] || { echo "need >=1 bucket" >&2; exit 2; }
+# Default pins = the CURRENT fleet images (fleet.env is the pin ledger);
+# ZM_IMG overrides for experiments. Stale-pin hazard: the 2af6dbc3 defaults
+# predate the operational-CUDA-probe entrypoint and the hdr-gainmap feature.
 case "$KIND" in
-  gpu) IMG="ghcr.io/imazen/zenfleet-worker:exec-gpu-2af6dbc3" ;;
-  cpu) IMG="ghcr.io/imazen/zenfleet-worker:exec-zensim944-2af6dbc3" ;;
+  gpu) IMG="${ZM_IMG:-ghcr.io/imazen/zenfleet-worker:exec-gpu-6d4f9963}" ;;
+  cpu) IMG="${ZM_IMG:-ghcr.io/imazen/zenfleet-worker:exec-zensim944hdr-9dffa5ca}" ;;
   *) echo "kind must be gpu|cpu" >&2; exit 2 ;;
 esac
 S3BUCKET="${ZEN_FLEET_BUCKET:-zentrain}"
