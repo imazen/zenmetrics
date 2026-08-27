@@ -1409,9 +1409,21 @@ fn run_diffmap_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, 
         .and_then(Value::as_str)
         .ok_or("diffmap: inputs[0] (the variant sha/URI) missing")?;
 
+    let t0 = std::time::Instant::now();
     let src_path = resolve_source(image_path, corpus_prefix)?;
     let (var_path, owned) = fetch_variant(sha, ext_for(codec_name))?;
+    let t_fetch = t0.elapsed().as_millis();
+    let t1 = std::time::Instant::now();
     let result = diffmap_pair_to_blob(metric, hdr, &src_path, &var_path);
+    let t_map = t1.elapsed().as_millis();
+    // Per-cell phase timing (ZEN_JOB_TIMING=1): the profile line the 2026-08-27
+    // bottleneck question had no answer to. map+gz is the CPU phase; fetch is I/O.
+    if std::env::var("ZEN_JOB_TIMING").ok().as_deref() == Some("1") {
+        let bytes = result.as_ref().map(|b| b.len()).unwrap_or(0);
+        eprintln!(
+            "[job-timing] diffmap metric={metric} hdr={hdr} fetch_ms={t_fetch} map_gz_ms={t_map} out_bytes={bytes} cell={image_path}"
+        );
+    }
     if owned {
         let _ = std::fs::remove_file(&var_path);
     }

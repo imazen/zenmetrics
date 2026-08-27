@@ -359,19 +359,21 @@ pub(crate) fn is_gpu_metric_name(name: &str) -> bool {
 /// Route a metric job by name: GPU-suffixed names need a GPU-capable worker; everything else
 /// (the CPU-native metrics — `cvvdp`, `ssim2`, `dssim`, `iwssim`, ...) is CPU work, classed
 /// `CpuHeavy` (perceptual metrics are compute-heavy, the same tier as WebP/JXL/AVIF encode).
-/// Diffmap routing reflects EXECUTOR truth, not the metric-name suffix: the jobexec diffmap
-/// route runs butteraugli via `butteraugli-gpu` regardless of whether the declare wrote the
-/// bare name (`"butteraugli"`, as hdrgrid-diffmap-20260807 did) or the `-gpu`-suffixed one —
-/// so butteraugli diffmap cells MUST class `Gpu` for the VRAM admission axis to gate them
-/// (found 2026-08-26: bare-named cells classed CpuHeavy → vram estimate 0 → ungated GPU
-/// concurrency). cvvdp diffmap runs on CPU; everything else falls back to the suffix rule.
+/// Diffmap routing reflects EXECUTOR truth: BOTH in-tree map owners are CPU
+/// implementations — butteraugli via the CPU reference crate
+/// (`butteraugli::butteraugli_linear`, `cpu-metrics` feature) and cvvdp via the
+/// in-tree CPU port (`score_from_linear_planes_with_diffmap`) — verified against
+/// `run_diffmap_job`/`diffmap_pair_to_blob` in zenmetrics-cli 2026-08-27. So
+/// diffmap cells class **CpuHeavy** for BOTH, regardless of name suffix, and the
+/// whole CPU fleet can serve a diffmap queue. (CORRECTS 2026-08-26's `9cae2b20`,
+/// whose comment claimed the route "runs butteraugli via butteraugli-gpu" — that
+/// was the SCORING backend's story, not the map executor's; classing this Gpu
+/// pinned a pure-CPU queue to GPU boxes and left every CPU box idle. The VRAM
+/// admission concern that motivated it does not apply to a route that never
+/// touches the GPU.)
 fn diffmap_class(metric: &str) -> ResourceClass {
-    let base = metric.trim_end_matches("-gpu").trim_end_matches("_gpu");
-    if base == "butteraugli" {
-        ResourceClass::Gpu
-    } else {
-        metric_class(metric)
-    }
+    let _ = metric;
+    ResourceClass::CpuHeavy
 }
 
 /// The `gpu-*` executor feature for a GPU-suffixed metric name (`cvvdp-gpu` → `gpu-cvvdp`),
@@ -441,13 +443,13 @@ impl JobKind {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn diffmap_butteraugli_classes_gpu_regardless_of_suffix() {
-        for m in ["butteraugli", "butteraugli-gpu", "butteraugli_gpu"] {
-            let k = JobKind::Diffmap { metric: m.to_string(), hdr: true };
-            assert_eq!(k.profile().class, ResourceClass::Gpu, "metric {m}");
+    fn diffmap_class_is_cpu_for_both_map_owners() {
+        // Executor truth (2026-08-27): both in-tree per-pixel map owners are CPU
+        // implementations; any name form classes CpuHeavy so the CPU fleet serves them.
+        for m in ["butteraugli", "butteraugli-gpu", "cvvdp", "cvvdp-gpu"] {
+            let k = JobKind::Diffmap { metric: m.into(), hdr: false };
+            assert_eq!(k.profile().class, ResourceClass::CpuHeavy, "{m}");
         }
-        let k = JobKind::Diffmap { metric: "cvvdp".to_string(), hdr: true };
-        assert_eq!(k.profile().class, ResourceClass::CpuHeavy);
     }
 
     use super::*;
