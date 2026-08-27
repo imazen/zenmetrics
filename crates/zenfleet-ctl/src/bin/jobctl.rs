@@ -880,29 +880,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     j.hint = flat_hint.clone();
                 }
             }
-            // GUARD (2026-08-27): a job whose inputs are s3:// blobs but whose
-            // cell.image_path is a bare basename is unfetchable — the worker's
-            // source_fetch fails forever (11 live instances pinned the hdrgrid
-            // sf-gpu drain until hand-repaired). Refuse at declare time.
-            let bad: Vec<&str> = jobs
-                .iter()
-                .filter(|j| {
-                    j.inputs.iter().any(|i| i.as_str().starts_with("s3://"))
-                        && !j.cell.image_path.starts_with("s3://")
-                })
-                .map(|j| j.cell.image_path.as_str())
-                .take(5)
-                .collect();
-            if !bad.is_empty() {
-                return Err(format!(
-                    "declare-scorefiles: {} job(s) have s3:// inputs but a NON-URI cell.image_path                      (e.g. {:?}) — the worker cannot fetch a bare basename. Use --full-uri pairs or                      a refs-prefixed bridge so image_path is a complete s3:// URI.",
-                    jobs.iter()
-                        .filter(|j| j.inputs.iter().any(|i| i.as_str().starts_with("s3://"))
-                            && !j.cell.image_path.starts_with("s3://"))
-                        .count(),
-                    bad
-                )
-                .into());
+            // GUARD (2026-08-27): in full-URI mode every cell.image_path must BE a
+            // URI — a bare basename slips through when the pairs input itself
+            // carries basenames in ref_path, and the worker's source_fetch then
+            // fails forever (11 live instances pinned the hdrgrid sf-gpu drain
+            // until hand-repaired). Refuse at declare time; pool-mode (non
+            // full-URI) declares resolve names against the variants tar and are
+            // exempt by design. (Inputs are bare Sha256Hex — the URI forms at
+            // serialization — so the mode flag, not input sniffing, is the gate.)
+            if full_uri {
+                let bad: Vec<&str> = jobs
+                    .iter()
+                    .filter(|j| !j.cell.image_path.starts_with("s3://"))
+                    .map(|j| j.cell.image_path.as_str())
+                    .take(5)
+                    .collect();
+                if !bad.is_empty() {
+                    return Err(format!(
+                        "declare-scorefiles --full-uri: {} job(s) have a NON-URI cell.image_path (e.g. {:?}) — the worker cannot fetch a bare basename. Fix the pairs input's ref_path column to complete s3:// URIs.",
+                        jobs.iter().filter(|j| !j.cell.image_path.starts_with("s3://")).count(),
+                        bad
+                    )
+                    .into());
+                }
             }
             let manifest = serde_json::to_vec(&jobs)?;
             if let Some(mo) = manifest_out {
