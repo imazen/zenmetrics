@@ -199,6 +199,30 @@ enum Cmd {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Ledger-layer pardon: append PENDING rows (the schema's own queue status,
+    /// fresh ts, attempts=0) for jobs whose LATEST row is Poison/Failed with a
+    /// matching error_class inside the incident window — superseding the poison
+    /// in latest-wins so the retry ladder gives one fresh run. This is the verb
+    /// snapshot-level amnesty cannot be: poison rows live in sidecars the
+    /// workers' fold re-applies on top of any snapshot (measured 2026-08-27:
+    /// 24,429 poison rows re-buried a cleaned snapshot). Genuine failures
+    /// re-poison with CURRENT-era evidence after exactly one retry.
+    Requeue {
+        #[arg(long)]
+        run: String,
+        #[arg(long, default_value = "zentrain")]
+        bucket: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        /// Comma list of error_class values eligible for requeue.
+        #[arg(long)]
+        classes: String,
+        /// Only jobs whose latest failure/poison ts is OLDER than this unix ts.
+        #[arg(long)]
+        before: Option<u64>,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Per-run reconcile accounting over LIVE s3 ledgers: declared vs distinct
     /// done/failed-only/gap, tolerant per-file reads, TOTAL + VERDICT lines.
     Report {
@@ -853,6 +877,70 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "appended {} failed rows -> {key} (latest-wins: those jobs re-enter the gap)",
                     missing.len()
                 );
+            }
+        }
+        Cmd::Requeue {
+            run,
+            bucket,
+            endpoint,
+            classes,
+            before,
+            dry_run,
+        } => {
+            let ep = resolve_endpoint(endpoint)?;
+            let classes: Vec<String> = classes.split(',').map(|c| c.trim().to_string()).collect();
+            let (rows, skipped) = read_run_ledgers(&ep, &bucket, &run);
+            if skipped > 0 {
+                println!("WARNING: {skipped} unreadable ledger chunk(s)");
+            }
+            let mut view = LedgerView::new();
+            for r in rows {
+                view.apply(r);
+            }
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_secs();
+            let mut pardons: Vec<zenfleet_core::LedgerRow> = Vec::new();
+            let mut by_class: std::collections::BTreeMap<String, usize> = Default::default();
+            for r in view.rows() {
+                if !matches!(r.status, zenfleet_core::JobStatus::Poison | zenfleet_core::JobStatus::Failed) {
+                    continue;
+                }
+                if before.is_some_and(|cut| r.ts >= cut) {
+                    continue;
+                }
+                let ec = r
+                    .error_class
+                    .as_ref()
+                    .and_then(|e| serde_json::to_value(e).ok())
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .unwrap_or_default();
+                if !classes.iter().any(|c| c == &ec) {
+                    continue;
+                }
+                *by_class.entry(ec).or_default() += 1;
+                let mut p = r.clone();
+                p.status = zenfleet_core::JobStatus::Pending;
+                p.error_class = None;
+                p.output_sha = None;
+                p.attempts = 0;
+                p.ts = now;
+                p.worker = "requeue-pardon".into();
+                p.provider = "operator".into();
+                pardons.push(p);
+            }
+            for (c, n) in &by_class {
+                println!("  eligible {c}: {n}");
+            }
+            println!("requeue: {} job(s) eligible", pardons.len());
+            if pardons.is_empty() || dry_run {
+                if dry_run {
+                    println!("(dry-run: no sidecar written)");
+                }
+            } else {
+                let key = format!("s3://{bucket}/jobs/{run}/ledger/pass-requeue-pardon-{now}.parquet");
+                zenfleet_ledger::write_ledger_uri(&key, &pardons, Some(&ep))?;
+                println!("appended {} PENDING rows -> {key}", pardons.len());
             }
         }
         Cmd::Report {
