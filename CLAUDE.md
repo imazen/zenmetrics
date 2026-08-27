@@ -361,6 +361,20 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **`zenfleet-worker::tests::exec_command_deadline_kills_and_classifies_timeout` FAILS on
+  the ubuntu-latest CI runner — the per-cell watchdog does not stop a `sh -c 'sleep 30'`
+  child at its 1 s deadline there; the call returns after the full 30.00 s
+  (`returned in 30.002861621s — watchdog must not hang`, lib.rs:3163). First seen on the
+  first CI run that could reach the step at all (run 33091197770, commit 60ab7452, 2026-08-27);
+  the watchdog (`exec_command_deadline`, `3a5e94ed`, 2026-08-24) has never been CI-tested on
+  Linux before because every job died at manifest load from `9093cc23` to `9796743f`.
+  Passes on macOS (this suite: 40/40 locally on aarch64 darwin). The zencodec 0.1.26
+  migration commit touched that function only via `cargo fmt` reflow (`git diff -w` is empty
+  there), so this is pre-existing Linux behavior — likely the `kill -- -<pgid>` / `child.kill()`
+  pair not reaching the grandchild `sleep` (so the stdout/stderr reader threads block until it
+  exits) — NOT root-caused, NOT fixed. This is the only red job in `Compile (ubuntu-latest)`;
+  the same step's other 39 tests pass there.
+
 - **zensim-gpu `it` suite on macOS/Metal (wgpu): 2 deterministic failures, pre-existing
   (verified 2026-08-27 — identical values on baseline b07a0485 before that day's commits, in
   isolation and serially):** `diffmap_invariants::invariant_1_identity_yields_near_zero_diffmap`
