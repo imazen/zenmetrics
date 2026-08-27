@@ -13,6 +13,23 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-cli (open-issue fixes, 2026-08-27)
+
+### Changed
+- **HDR jpeg-gainmap arm: metadata-rewrite workaround retired (#40).** `sweep/hdr.rs::encode_gainmap_hdr`
+  no longer rewrites the per-channel gain-map min/max after `compute_gainmap` — ultrahdr ≥ `a09478f0`
+  (imazen/ultrahdr#33, consumed by path dep) declares the config quantization grid itself, so the loop
+  was a no-op writing the values the library already produces. Files written by the workaround are
+  byte-identical to post-fix library output; no data regeneration. The gain-map config now lives in one
+  `gainmap_hdr_config` helper shared by the encode path and a new structural gate
+  `gainmap_library_declares_config_grid` (fails by name if the library ever regresses to declaring the
+  content range); `gainmap_arm_roundtrips_and_preserves_above_812_nits` stays the end-to-end gate.
+
+### Fixed
+- **`hdr-svt`/`hdr-gainmap` test builds didn't compile** — the shared `synthetic_pq_ref` test helper
+  predated `HdrRef.display_peak_nits` (6471f4d7); same repair as 6837f8ea applied to the gainmap/svt
+  arm tests. No expectation changed. (#40)
+
 ## Workspace (fleetbench gates + `fleet power` + a heterogeneous-fleet lease bug, 2026-08-24 later)
 
 ### Added

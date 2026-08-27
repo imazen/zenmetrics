@@ -648,6 +648,25 @@ const GAINMAP_HDR_KNOBS: &[&str] = &["gm_quality", "gm_scale"];
 #[cfg(feature = "hdr-gainmap")]
 const GAINMAP_MAX_BOOST: f32 = 10000.0 / 203.0;
 
+/// The gain-map config the jpeg-gainmap arm encodes on: the crate-default
+/// HDR-only shape (single-channel luminance, gamma 1, 1/64 offsets) over the
+/// full `[1.0, 10000/203]` quantization grid. One definition so the encode
+/// path and the metadata-contract test pin the same grid.
+#[cfg(feature = "hdr-gainmap")]
+fn gainmap_hdr_config(gm_scale: u8) -> ultrahdr_core::gainmap::compute::GainMapConfig {
+    ultrahdr_core::gainmap::compute::GainMapConfig {
+        scale_factor: gm_scale,
+        gamma: 1.0,
+        multi_channel: false,
+        min_boost: 1.0,
+        max_boost: GAINMAP_MAX_BOOST,
+        base_offset: 1.0 / 64.0,
+        alternate_offset: 1.0 / 64.0,
+        base_hdr_headroom: 1.0,
+        alternate_hdr_headroom: GAINMAP_MAX_BOOST,
+    }
+}
+
 /// JPEG + gain map (Ultra HDR) HDR encode: PQ code values → PQ EOTF →
 /// linear RGBA f32 at SDR-white 203 cd/m² = 1.0 (BT.2408, the crate's
 /// LinearFloat convention) → filmic tonemap (the crate's own
@@ -655,21 +674,17 @@ const GAINMAP_MAX_BOOST: f32 = 10000.0 / 203.0;
 /// → `ultrahdr_core::compute_gainmap` → base JPEG at the cell q +
 /// gain-map JPEG, assembled by `ultrahdr_rs::Encoder`.
 ///
-/// **Why this composes primitives instead of calling the crate's built-in
-/// HDR-only path (`set_hdr_image` + `encode()` alone), measured
-/// 2026-08-06:** that path quantizes gain-map bytes against the CONFIG
-/// boost range (`compute_and_encode_gain`: `config.min_boost.ln()` /
-/// `config.max_boost.ln()`) but stores metadata declaring the
-/// content-derived ACTUAL range (`compute_gainmap`:
-/// `log2(actual_min/max_boost)`), so every conformant reader — including
-/// the crate's own `decode_hdr` at full weight — dequantizes on the wrong
-/// grid and reconstructs under-boosted (a 2000-nit ramp came back at
-/// 732 nits; the byte math reproduces the measurement exactly). Until
-/// that is fixed upstream, this arm runs the SAME kernel and then
-/// **rewrites the per-channel metadata min/max to the quantization grid
-/// it was actually encoded on** (the config range — the libultrahdr
-/// convention), which makes the stored bytes and the declared mapping
-/// agree. The round-trip test below is the gate.
+/// The composition of primitives (rather than `set_hdr_image` + `encode()`
+/// alone) is kept so the gain-map config is explicit and pinned at this
+/// call site — the encoder's HDR-only default grid is the same
+/// `[1.0, 10000/203]` range. The metadata `compute_gainmap` returns declares
+/// exactly that config grid (the libultrahdr convention; imazen/ultrahdr#33,
+/// fixed upstream in `a09478f0`), so the arm takes it as-is. The metadata
+/// rewrite this arm carried while #33 was open was retired in zenmetrics#40:
+/// files it wrote are byte-identical to what the library now produces.
+/// [`tests::gainmap_library_declares_config_grid`] pins the library contract
+/// and [`tests::gainmap_arm_roundtrips_and_preserves_above_812_nits`] is the
+/// end-to-end gate.
 #[cfg(feature = "hdr-gainmap")]
 fn encode_gainmap_hdr(
     source: &HdrRef,
@@ -678,7 +693,7 @@ fn encode_gainmap_hdr(
 ) -> Result<EncodedCell, Err> {
     use std::time::Instant;
     use ultrahdr_core::color::tonemap::tonemap_image_to_srgb8;
-    use ultrahdr_core::gainmap::compute::{GainMapConfig, compute_gainmap};
+    use ultrahdr_core::gainmap::compute::compute_gainmap;
     use ultrahdr_rs::{ColorPrimaries, PixelFormat, TransferFunction, pixel_buffer_from_vec};
 
     if let Some(unknown) = knobs
@@ -761,27 +776,13 @@ fn encode_gainmap_hdr(
 
     // Gain map on the crate's own kernel, with the crate-default HDR-only
     // config (single-channel luminance, gamma 1, 1/64 offsets).
-    let config = GainMapConfig {
-        scale_factor: gm_scale,
-        gamma: 1.0,
-        multi_channel: false,
-        min_boost: 1.0,
-        max_boost: GAINMAP_MAX_BOOST,
-        base_offset: 1.0 / 64.0,
-        alternate_offset: 1.0 / 64.0,
-        base_hdr_headroom: 1.0,
-        alternate_hdr_headroom: GAINMAP_MAX_BOOST,
-    };
-    let (gainmap, mut metadata) =
+    let config = gainmap_hdr_config(gm_scale);
+    // The returned metadata declares the config quantization grid (ultrahdr
+    // ≥ a09478f0); the bytes and the declared mapping agree without any
+    // rewrite here.
+    let (gainmap, metadata) =
         compute_gainmap(&hdr_buf, &sdr_buf, &config, ultrahdr_core::Unstoppable)
             .map_err(|e| format!("jpeg-gainmap hdr: compute_gainmap: {e:?}"))?;
-    // THE METADATA CORRECTION (see the function doc): declare the range the
-    // bytes were actually quantized on. Headroom fields (weight policy) are
-    // left as computed.
-    for ch in metadata.channels.iter_mut() {
-        ch.min = (config.min_boost as f64).log2();
-        ch.max = (config.max_boost as f64).log2();
-    }
 
     let mut enc = ultrahdr_rs::Encoder::new();
     enc.set_hdr_image(hdr_buf)
@@ -1361,6 +1362,7 @@ pub(crate) mod tests {
             width: w,
             height: h,
             cicp: zenpixels::Cicp::new(1, 16, 0, true),
+            display_peak_nits: crate::hdr::measured_display_peak_nits(&nits),
             nits,
         }
     }
@@ -1417,6 +1419,78 @@ pub(crate) mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("not wired in HDR mode"), "{err}");
+    }
+
+    /// Library contract the jpeg-gainmap arm relies on since the
+    /// metadata-rewrite workaround was retired (zenmetrics#40): the metadata
+    /// `compute_gainmap` returns declares the CONFIG quantization grid the
+    /// bytes were encoded on (ultrahdr ≥ a09478f0, imazen/ultrahdr#33).
+    /// Pinned structurally — a 64×48 gradient whose observed boost range is
+    /// strictly narrower than the grid — so a regression to declaring the
+    /// content's actual range fails here by name, independent of the
+    /// round-trip tolerance below.
+    #[cfg(feature = "hdr-gainmap")]
+    #[test]
+    fn gainmap_library_declares_config_grid() {
+        use ultrahdr_core::color::tonemap::tonemap_image_to_srgb8;
+        use ultrahdr_core::gainmap::compute::compute_gainmap;
+        use ultrahdr_rs::{ColorPrimaries, PixelFormat, TransferFunction, pixel_buffer_from_vec};
+
+        let (w, h) = (64u32, 48u32);
+        // Linear RGBA f32, 1.0 = 203 nits; ramp from black to ~1000 nits so
+        // the observed boost (≈4.9×) is well inside the [1, 49.26] grid.
+        let mut lin = vec![0u8; (w * h) as usize * 16];
+        for y in 0..h {
+            for x in 0..w {
+                let t = x as f32 / (w - 1) as f32;
+                let v = 1000.0 / crate::hdr::SDR_WHITE_NITS * t;
+                let o = ((y * w + x) * 16) as usize;
+                for c in 0..3 {
+                    lin[o + 4 * c..o + 4 * c + 4].copy_from_slice(&v.to_le_bytes());
+                }
+                lin[o + 12..o + 16].copy_from_slice(&1.0f32.to_le_bytes());
+            }
+        }
+        let hdr_buf = pixel_buffer_from_vec(
+            lin,
+            w,
+            h,
+            PixelFormat::RgbaF32,
+            ColorPrimaries::Bt2020,
+            TransferFunction::Linear,
+        )
+        .expect("hdr buffer");
+        let sdr_pixels = tonemap_image_to_srgb8(&hdr_buf, ColorPrimaries::Bt709).expect("tonemap");
+        let sdr_buf = pixel_buffer_from_vec(
+            sdr_pixels,
+            w,
+            h,
+            PixelFormat::Rgba8,
+            ColorPrimaries::Bt709,
+            TransferFunction::Srgb,
+        )
+        .expect("sdr buffer");
+
+        let config = gainmap_hdr_config(4);
+        let (_gainmap, metadata) =
+            compute_gainmap(&hdr_buf, &sdr_buf, &config, ultrahdr_core::Unstoppable)
+                .expect("compute_gainmap");
+        let want_min = (config.min_boost as f64).log2();
+        let want_max = (config.max_boost as f64).log2();
+        for (i, ch) in metadata.channels.iter().enumerate() {
+            assert!(
+                (ch.min - want_min).abs() < 1e-6,
+                "channel {i}: declared min {} != config grid {want_min} \
+                 (library regressed to declaring the content range?)",
+                ch.min
+            );
+            assert!(
+                (ch.max - want_max).abs() < 1e-6,
+                "channel {i}: declared max {} != config grid {want_max} \
+                 (library regressed to declaring the content range?)",
+                ch.max
+            );
+        }
     }
 
     /// The jpeg-gainmap arm end-to-end: PQ ref → Ultra HDR JPEG (internal
