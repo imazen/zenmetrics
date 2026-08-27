@@ -137,30 +137,30 @@ print("tar: %d members, %.1f MiB" % (len(sha_by_rel), os.path.getsize(tar_path) 
 
 # 4. chunked manifest — kind carries hdr:true (+ hdr_transfer only when non-default,
 #    keeping the content-addressed id minimal; absent = executor default pu-rescale).
-kind = {"kind": "score_file", "metrics": METRICS, "hdr": True}
-if TRANSFER and TRANSFER != "pu-rescale":
-    kind["hdr_transfer"] = TRANSFER
-manifest = []
+# 4. DesiredJob emission via THE owner (`zenfleet-ctl declare-scorefiles`,
+#    2026-08-27): bridge parquet with VERBATIM keys (--full-uri: ref_path =
+#    the corpus-relative ref path, dist_path = the content sha), cell knobs
+#    "scorefile-hdr", --hdr; --hdr-transfer only when non-default (the id-
+#    minimality rule the inline kind build kept). Chunking, requires,
+#    manifest uploads + control.json (create-if-absent) are owner-side.
+import pyarrow as pa
+import pyarrow.parquet as pq
+bridge = os.path.join(work, "bridge_pairs.parquet")
+rp_col, dp_col = [], []
 for ref_rel, dists in refs.items():
-    shas = [sha_by_rel[d] for d in dists]
-    for i in range(0, len(shas), CHUNK):
-        manifest.append(
-            {
-                "kind": kind,
-                "inputs": shas[i : i + CHUNK],
-                "cell": {
-                    "image_path": ref_rel,
-                    "codec": os.path.basename(CORPUS),
-                    "q": -1,
-                    "knob_tuple_json": "scorefile-hdr",
-                },
-                "hint": None,
-            }
-        )
-mpath = os.path.join(work, "manifest.json")
-json.dump(manifest, open(mpath, "w"))
-with open(mpath, "rb") as fi, gzip.open(mpath + ".gz", "wb") as g:
-    g.write(fi.read())
+    for d in dists:
+        rp_col.append(ref_rel); dp_col.append(sha_by_rel[d])
+pq.write_table(pa.table({"ref_path": rp_col, "dist_path": dp_col}), bridge, compression="zstd")
+JOBCTL = os.environ.get("ZEN_JOBCTL", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                   "..", "..", "target", "release", "zenfleet-ctl"))
+_cmd = [JOBCTL, "declare-scorefiles", "--pairs", bridge, "--run", RUN,
+        "--bucket", "codec-corpus", "--metrics", ",".join(METRICS),
+        "--chunk", str(CHUNK), "--full-uri", "--hdr",
+        "--cell-knobs", "scorefile-hdr", "--cell-codec", os.path.basename(CORPUS)]
+if TRANSFER and TRANSFER != "pu-rescale":
+    _cmd += ["--hdr-transfer", TRANSFER]
+subprocess.run(_cmd, env=env, check=True)
+manifest = []  # kept for the summary line below (job count now printed by the CLI)
 
 # 5. dist_sha_map.tsv: dist relpath -> sha256, so the write-back can rejoin each
 #    JSONL row (keyed on encode_sha) to the corpus pairs.tsv row (keyed on
@@ -179,14 +179,13 @@ bucket_prefix = "s3://codec-corpus/jobs/%s" % RUN
 for name in (
     "variants.tar",
     "variant_index.tsv",
-    "manifest.json",
-    "manifest.json.gz",
+    # manifest.json(.gz) + control.json are uploaded by zenfleet-ctl declare-scorefiles
     "dist_sha_map.tsv",
 ):
     s5(["cp", os.path.join(work, name), "%s/%s" % (bucket_prefix, name)],
        stdout=subprocess.DEVNULL)
 print(
-    "uploaded run %s: %d chunk jobs, %d variants (chunk=%d) for %d refs — hdr:true%s\n"
+    "uploaded run %s inputs: %d chunk jobs declared by zenfleet-ctl, %d variants (chunk=%d) for %d refs — hdr:true%s\n"
     "local staging kept at %s (delete after the run verifies)"
     % (
         RUN,

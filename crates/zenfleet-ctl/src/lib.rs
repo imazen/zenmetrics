@@ -679,6 +679,7 @@ pub fn declare_scorefile_jobs(
     metrics: &[String],
     chunk: usize,
     cell_codec: &str,
+    cell_knobs: &str,
     hdr: bool,
     hdr_transfer: Option<&str>,
     diffmap: bool,
@@ -726,6 +727,13 @@ pub fn declare_scorefile_jobs(
             }
         } else {
             let names: Vec<&PairRow> = members;
+            // Per-ref codec label: the rows' identity codec when the pairs carry
+            // one (multi-codec corpora — build_scorefile_from_pairs), else the
+            // flag (single-codec runs).
+            let ref_codec = names
+                .iter()
+                .find_map(|m| m.identity.as_ref().map(|(c, _, _)| c.clone()))
+                .unwrap_or_else(|| cell_codec.to_string());
             for ch in names.chunks(chunk.max(1)) {
                 let kind = JobKind::ScoreFile {
                     metrics: metrics.to_vec(),
@@ -738,9 +746,9 @@ pub fn declare_scorefile_jobs(
                     inputs: ch.iter().map(|m| Sha256Hex::raw_object_key(m.member.clone())).collect(),
                     cell: CellId {
                         image_path: rk.to_string(),
-                        codec: cell_codec.to_string(),
+                        codec: ref_codec.clone(),
                         q: -1,
-                        knob_tuple_json: "scorefile".into(),
+                        knob_tuple_json: cell_knobs.to_string(),
                     },
                     hint: hint.clone(),
                 };
@@ -767,7 +775,7 @@ mod declare_scorefile_tests {
     #[test]
     fn scorefile_chunks_per_ref_and_stamps_requires() {
         let jobs = declare_scorefile_jobs(
-            &rows(), &["ssim2-gpu".to_string()], 2, "zenavif", false, None, false, None,
+            &rows(), &["ssim2-gpu".to_string()], 2, "fallback", "scorefile", false, None, false, None,
         );
         // a: 3 members / chunk 2 -> 2 jobs; b: 1 job
         assert_eq!(jobs.len(), 3);
@@ -777,12 +785,17 @@ mod declare_scorefile_tests {
         assert_eq!(jobs[0].inputs.len(), 2);
         assert_eq!(jobs[1].inputs.len(), 1);
         assert_eq!(jobs[0].cell.knob_tuple_json, "scorefile");
+        // per-ref identity codec wins over the flag; refs with no identity fall back
+        let a_job = jobs.iter().find(|j| j.cell.image_path == "a.png").unwrap();
+        assert_eq!(a_job.cell.codec, "zenavif");
+        let b_job = jobs.iter().find(|j| j.cell.image_path == "b.png").unwrap();
+        assert_eq!(b_job.cell.codec, "fallback");
     }
 
     #[test]
     fn diffmap_one_job_per_variant_x_metric_with_true_identity() {
         let jobs = declare_scorefile_jobs(
-            &rows(), &["butteraugli".to_string(), "cvvdp".to_string()], 12, "zenjpeg", true, None, true, None,
+            &rows(), &["butteraugli".to_string(), "cvvdp".to_string()], 12, "zenjpeg", "scorefile", true, None, true, None,
         );
         assert_eq!(jobs.len(), 8); // 4 variants x 2 metrics
         let with_id = jobs.iter().find(|j| j.cell.q == 10).expect("true identity carried");

@@ -103,25 +103,31 @@ print("indexed %d/%d wanted members (skipped %d already-scored)" % (n_idx, len(w
 if n_idx < len(want) * 0.98:
     print("FATAL: >2%% of wanted members missing from tar — wrong tar or truncated", flush=True); sys.exit(1)
 
-# 3. chunked manifest (identical shape to build_scorefile_manifest.py)
-manifest = []
-for bn, info in files.items():
-    shas = info["shas"]
-    for i in range(0, len(shas), CHUNK):
-        manifest.append({"kind": {"kind": "score_file", "metrics": METRICS}, "inputs": shas[i:i + CHUNK],
-                         "cell": {"image_path": bn, "codec": info["codec"], "q": -1,
-                                  "knob_tuple_json": "scorefile"}, "hint": None})
-mpath = "%s/manifest.json" % work
-json.dump(manifest, open(mpath, "w"))
-with open(mpath, "rb") as fi, gzip.open(mpath + ".gz", "wb") as g:
-    g.write(fi.read())
+# 3. DesiredJob emission via THE owner (`zenfleet-ctl declare-scorefiles`,
+#    2026-08-27): bridge parquet carries per-src codec (multi-codec corpora
+#    supported — the CLI uses each ref's identity codec); chunking, cell
+#    shape, invariant-5 requires, manifest.json(.gz) + control.json
+#    (create-if-absent) uploads are owner-side.
 # Output bucket (ZEN_JOBS_BUCKET) — default codec-corpus. Set to `zentrain` when the
 # variant tar lives in zentrain, so the run + tar are ONE bucket (R2 temp creds are
 # single-bucket; a cross-bucket run can't be scoped and every fetch 403s).
 JOBS_BUCKET = os.environ.get("ZEN_JOBS_BUCKET", "codec-corpus")
 r2cp(idx_path, "s3://%s/jobs/%s/variant_index.tsv" % (JOBS_BUCKET, RUN))
-r2cp(mpath, "s3://%s/jobs/%s/manifest.json" % (JOBS_BUCKET, RUN))
-r2cp(mpath + ".gz", "s3://%s/jobs/%s/manifest.json.gz" % (JOBS_BUCKET, RUN))
+import pyarrow as pa
+bridge = "%s/bridge_pairs.parquet" % work
+bn_col, sha_col, codec_col, q_col, knob_col = [], [], [], [], []
+for bn, info in files.items():
+    for sha in info["shas"]:
+        bn_col.append(bn); sha_col.append(sha)
+        codec_col.append(info["codec"]); q_col.append(-1); knob_col.append("")
+pq.write_table(pa.table({"image_path": bn_col, "dist_member": sha_col, "codec": codec_col,
+                         "q": pa.array(q_col, pa.int64()), "knob_tuple_json": knob_col}),
+               bridge, compression="zstd")
+JOBCTL = os.environ.get("ZEN_JOBCTL", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                   "..", "..", "target", "release", "zenfleet-ctl"))
+subprocess.run([JOBCTL, "declare-scorefiles", "--pairs", bridge, "--run", RUN,
+                "--bucket", JOBS_BUCKET, "--metrics", ",".join(METRICS),
+                "--chunk", str(CHUNK)], env=env, check=True)
 tot = sum(len(i["shas"]) for i in files.values())
-print("uploaded run %s: %d chunk jobs, %d variants (chunk=%d) for %d files"
-      % (RUN, len(manifest), tot, CHUNK, len(files)), flush=True)
+print("declared run %s via zenfleet-ctl: %d variants (chunk=%d) for %d files"
+      % (RUN, tot, CHUNK, len(files)), flush=True)

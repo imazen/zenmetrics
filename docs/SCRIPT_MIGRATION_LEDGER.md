@@ -35,14 +35,12 @@ creds → 403).
 | `refresh_snapshots.sh` | cron wrapper around `zenfleet-ctl compact --upload` (migrated caller) |
 | `hdrgrid_cells.py`, `declare_bf944*.py`, `avifgen_*.py` | campaign DATA generators — they EMIT the inputs the ctl declare commands consume (cells JSONL / manifest rewrites); one-shot, provenance-documented |
 | `fleet_top.py`, `fleet_power.py` | operator TUIs/reports composing owner mechanisms (snapshot footers, ledgers) for display; python-owner domain |
-| `writeback_scores.py`, `build_scorefile_from_pairs.py`, `build_scorefile_hdr_pairs.py` | **wave-3 queue** (below) |
+| `writeback_scores.py` | **wave-3 queue** (below) |
+| `build_scorefile_from_pairs.py`, `build_scorefile_hdr_pairs.py` | **MIGRATED-IN-PLACE 2026-08-27** (the exemplar pattern): tar/sha ETL stays python; DesiredJob emission via `zenfleet-ctl declare-scorefiles` bridge parquets — from_pairs carries per-src codec columns (multi-codec corpora, CLI uses identity codec), hdr_pairs uses --full-uri verbatim keys + --cell-knobs scorefile-hdr + the hdr_transfer id-minimality conditional |
 | `build_scorefile_manifest.py` | **wave-3 exemplar, MIGRATED-IN-PLACE 2026-08-27**: keeps its tar/sha ETL, hands DesiredJob emission to `zenfleet-ctl declare-scorefiles` via a bridge parquet (fixture parity: canon-identical incl. chunk boundaries, modulo the stamped `requires`); the CLI gained control.json CREATE-IF-ABSENT (the unconditional write would unpause an existing run on re-declare) and snappy for pairs READS only (pyarrow's default; the ledger contract stays zstd-only) |
 
 ## Wave-3 queue (recorded, not started)
 
 - `writeback_scores.py` vs `zenmetrics assemble`: audit overlap — the typed
   full-key join is assemble's charter; the JSONL-blob ingestion may belong there.
-- `build_scorefile_from_pairs.py` / `build_scorefile_hdr_pairs.py`: the tar-streaming index build is Python-native, but
-  their hand-rolled DesiredJob emission should route through
-  `declare_scorefile_jobs` (same drift class the wave-2 declare migration fixed).
 - `backfill_overnight_manager.py`, `fleet_smoke_image.py`: classify on next touch.

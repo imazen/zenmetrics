@@ -156,6 +156,9 @@ enum Cmd {
         /// Cell codec label when the pairs carry no identity columns.
         #[arg(long, default_value = "zenjpeg")]
         cell_codec: String,
+        /// Cell knob_tuple_json sentinel ("scorefile-hdr" for the HDR corpus runs).
+        #[arg(long, default_value = "scorefile")]
+        cell_knobs: String,
         /// Group by full ref URI + use dist_path URIs (else basenames of
         /// image_path/dist_member).
         #[arg(long)]
@@ -588,6 +591,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             metrics,
             chunk,
             cell_codec,
+            cell_knobs,
             full_uri,
             hdr,
             hdr_transfer,
@@ -674,7 +678,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 })
             };
             let mut jobs = zenfleet_ctl::declare_scorefile_jobs(
-                &rows, &metrics, chunk, &cell_codec, hdr, hdr_transfer.as_deref(), diffmap, flat_hint.clone(),
+                &rows, &metrics, chunk, &cell_codec, &cell_knobs, hdr, hdr_transfer.as_deref(), diffmap, flat_hint.clone(),
             );
             for j in &mut jobs {
                 if let Some(h) = pixel_hint(&j.cell.image_path) {
