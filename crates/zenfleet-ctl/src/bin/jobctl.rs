@@ -184,6 +184,21 @@ enum Cmd {
         #[arg(long)]
         manifest_out: Option<PathBuf>,
     },
+    /// Audit DONE rows against the run's actual output blobs: any done job whose
+    /// output_sha object is MISSING from jobs/<run>/blobs/ gets a schema-exact
+    /// FAILED row appended (newest ts wins -> the job re-enters the gap). The
+    /// damaged-volume recovery path: ledger says done, bytes are gone, re-run.
+    AuditBlobs {
+        #[arg(long)]
+        run: String,
+        #[arg(long, default_value = "zentrain")]
+        bucket: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        /// Report only — do not append the failed-row sidecar.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Per-run reconcile accounting over LIVE s3 ledgers: declared vs distinct
     /// done/failed-only/gap, tolerant per-file reads, TOTAL + VERDICT lines.
     Report {
@@ -760,6 +775,70 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 jobs.len(),
                 rows.len()
             );
+        }
+        Cmd::AuditBlobs {
+            run,
+            bucket,
+            endpoint,
+            dry_run,
+        } => {
+            let ep = resolve_endpoint(endpoint)?;
+            let (rows, skipped) = read_run_ledgers(&ep, &bucket, &run);
+            if skipped > 0 {
+                println!("WARNING: {skipped} unreadable ledger chunk(s) — audit covers the readable set");
+            }
+            let mut view = LedgerView::new();
+            for r in rows {
+                view.apply(r);
+            }
+            // One LIST of the blob dir (never per-object HEADs — 100k stats vs one listing).
+            let have: std::collections::HashSet<String> =
+                zenfleet_ledger::list_keys_uri(&format!("s3://{bucket}/jobs/{run}/blobs/"), Some(&ep))
+                    .into_iter()
+                    .collect();
+            println!("blobs present: {}", have.len());
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_secs();
+            let mut missing: Vec<zenfleet_core::LedgerRow> = Vec::new();
+            let mut done_n = 0usize;
+            for r in view.rows() {
+                if r.status != zenfleet_core::JobStatus::Done {
+                    continue;
+                }
+                done_n += 1;
+                let Some(sha) = r.output_sha.as_ref() else { continue };
+                if !have.contains(sha.as_str()) {
+                    let mut f = r.clone();
+                    f.status = zenfleet_core::JobStatus::Failed;
+                    f.error_class = Some(zenfleet_core::ErrorClass::SourceFetch);
+                    f.attempts = r.attempts.saturating_add(1);
+                    f.ts = now;
+                    f.worker = "audit-blobs".into();
+                    missing.push(f);
+                }
+            }
+            println!(
+                "audit: {done_n} done rows, {} with MISSING output blobs",
+                missing.len()
+            );
+            if missing.is_empty() {
+                println!("nothing to requeue");
+            } else if dry_run {
+                for m in missing.iter().take(10) {
+                    println!("  missing: {} ({})", m.job_id.as_str(), m.cell.image_path);
+                }
+                println!("(dry-run: no sidecar written)");
+            } else {
+                let key = format!(
+                    "s3://{bucket}/jobs/{run}/ledger/pass-audit-blobs-{now}.parquet"
+                );
+                zenfleet_ledger::write_ledger_uri(&key, &missing, Some(&ep))?;
+                println!(
+                    "appended {} failed rows -> {key} (latest-wins: those jobs re-enter the gap)",
+                    missing.len()
+                );
+            }
         }
         Cmd::Report {
             runlist,
