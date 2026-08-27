@@ -1,0 +1,16 @@
+# CUDA-13 overlay on the GPU executor (2026-08-27): exec-gpu-6d4f9963 shipped
+# only CUDA 12.6 (the v29 sweep-base lineage never migrated to the dual-CUDA
+# docker/base), so Blackwell cards (RTX 50, sm_120) die in NVRTC with
+# "invalid value for --gpu-architecture" — measured verbatim on the wsl 5070
+# (driver advertises CUDA 13.2). This overlay adds the CUDA 13.0 runtime +
+# the cuda-select.sh runtime selector, which fleet-entrypoint.sh already
+# sources when present (per-process LD_LIBRARY_PATH; no symlink fights).
+# Pascal boxes keep CUDA 12 via the selector's sm_75-floor rule.
+FROM ghcr.io/imazen/zenfleet-worker:exec-gpu-6d4f9963
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      cuda-nvrtc-13-0 cuda-nvrtc-dev-13-0 cuda-cudart-13-0 cuda-cudart-dev-13-0 \
+ && rm -rf /var/lib/apt/lists/* \
+ && test -f /usr/local/cuda-13.0/lib64/libnvrtc.so \
+ && test -f /usr/local/cuda-13.0/lib64/libcudart.so.13
+COPY cuda-select.sh /usr/local/bin/cuda-select.sh
+RUN chmod +x /usr/local/bin/cuda-select.sh
