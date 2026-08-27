@@ -233,6 +233,14 @@ enum Cmd {
         /// Also upload to s3://<bucket>/jobs/<run>/ledger_snapshot.parquet.
         #[arg(long)]
         upload: bool,
+        /// Operator amnesty: DROP failed history whose error_class is in this
+        /// comma list (snake_case, e.g. "upload_fail,source_fetch,timeout,
+        /// worker_lost") so those jobs' attempts reset and the retry ladder
+        /// gives them a fresh run. For outage-caused failure waves — a store
+        /// that died mid-run poisons cells whose only sin was bad timing.
+        /// Genuine classes (encoder_panic) should NOT be amnestied.
+        #[arg(long)]
+        amnesty_classes: Option<String>,
     },
     /// Write the not-yet-done subset (the gap) of a manifest, given the ledger.
     Gap {
@@ -978,9 +986,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             let ep = resolve_endpoint(endpoint)?;
             let t0 = std::time::Instant::now();
-            let (rows, skipped) = read_run_ledgers(&ep, &bucket, &run);
+            let (mut rows, skipped) = read_run_ledgers(&ep, &bucket, &run);
             if skipped > 0 {
                 println!("  [{run}] WARNING: skipped {skipped} unreadable/in-flight ledger chunk(s)");
+            }
+            if let Some(list) = &amnesty_classes {
+                let classes: Vec<String> = list.split(',').map(|c| c.trim().to_string()).collect();
+                let mut dropped: std::collections::BTreeMap<String, usize> = Default::default();
+                rows.retain(|r| {
+                    if r.status == zenfleet_core::JobStatus::Failed {
+                        let ec = r
+                            .error_class
+                            .as_ref()
+                            .map(|e| serde_json::to_value(e).ok())
+                            .flatten()
+                            .and_then(|v| v.as_str().map(str::to_string))
+                            .unwrap_or_default();
+                        if classes.iter().any(|c| c == &ec) {
+                            *dropped.entry(ec).or_default() += 1;
+                            return false;
+                        }
+                    }
+                    true
+                });
+                for (c, n) in &dropped {
+                    println!("  amnesty: dropped {n} failed row(s) of class {c}");
+                }
             }
             let raw = rows.len();
             let (snap, n_done, n_failed) = zenfleet_ctl::snapshot_rows(rows);
