@@ -73,7 +73,7 @@ leaks across the split). Deterministic — no seed, no manifest lookup needed:
   feature-era cache (2157 of the 2160 images) — still useful, no longer the truth.
 - **Historical cache:** the sha256-provenanced origin set in
   `/mnt/v/output/imazen-26-features/imazen26_manifest.tsv` (2157 origins;
-  `PROVENANCE.md` per source folder under `/mnt/v/imazen-26/`). Under the split
+  per-folder `PROVENANCE.md`/`MANIFEST.tsv` in the canonical `imazen/imazen-26` repo — the former `/mnt/v/imazen-26/` collection copy is quarantined as `imazen-26-inspo`, never use). Under the split
   rule: **1082 train / 657 val / 418 test** origins, balanced across all 12 content
   classes (~50/30/20 each — verified).
 - **Materialized split:** `/mnt/v/output/imazen-26-features/imazen26_split_evenodd.tsv`
