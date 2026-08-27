@@ -6,7 +6,15 @@
 # refuse to sleep through outages. Heartbeats go to stdout every tick.
 #
 #   fleet_sentinel.sh [--runlist <runlist.tsv>] [--gate-gb 80] [--interval 300]
-#                     [--budget-min 720]
+#                     [--budget-min 720] [--cycle-ssh <host> --cycle-container <name>]
+#
+# --cycle-ssh/--cycle-container: automate the PROVEN-MECHANICAL park/restart
+# pair (measured 2026-08-27: three identical judgment-free cycles at ~10 min
+# writable / ~10-15 min dead — waking the supervisor per transition was the
+# idle-attached anti-pattern). The sentinel docker-stops the worker on a dead
+# store and docker-starts it on recovery, and EXITS only for conditions that
+# need judgment: a store outage that stays dead >8 ticks while parked (17), a
+# thrash guard (>8 cycles → 18), and every non-store condition unchanged.
 #
 # Exit codes (each a distinct condition for the supervisor):
 #   10 SPACE-GATE-MET       tower cache avail >= gate → run the relaunch runbook
@@ -16,16 +24,22 @@
 #   14 DRAIN-STALL          --runlist gap unchanged 4 ticks while store writable
 #   15 BUDGET-EXHAUSTED     watch window ended with no condition
 #   16 PLEX-HARD-DOWN       media server stopped answering (3 ticks)
-#   17 STORE-WRITE-DIED     write probe newly failing (3 ticks) after being ok
+#   17 STORE-WRITE-DIED     write probe failing (3 ticks; with cycling: parked
+#                           AND still dead after 8 more ticks — abnormal outage)
+#   18 CYCLE-THRASH         >8 park/restart cycles this run — judgment needed
 set -u
-RUNLIST=""; GATE=80; IVL=300; BUDGET=720
+RUNLIST=""; GATE=80; IVL=300; BUDGET=720; CYCLE_SSH=""; CYCLE_CTR=""
 while [ $# -gt 0 ]; do case "$1" in
   --runlist) RUNLIST=$2; shift 2;;
   --gate-gb) GATE=$2; shift 2;;
   --interval) IVL=$2; shift 2;;
   --budget-min) BUDGET=$2; shift 2;;
+  --cycle-ssh) CYCLE_SSH=$2; shift 2;;
+  --cycle-container) CYCLE_CTR=$2; shift 2;;
   *) echo "unknown arg $1"; exit 2;;
 esac; done
+[ -n "$CYCLE_SSH" ] && [ -z "$CYCLE_CTR" ] && { echo "--cycle-ssh needs --cycle-container"; exit 2; }
+worker_state=running; cycles=0; parked_ticks=0
 END=$((SECONDS + BUDGET*60))
 ssh_fail=0; plex_fail=0; write_fail=0; write_was_ok=0; prev_write=""; write_streak_fails=0
 last_gap=""; gap_same=0
@@ -75,12 +89,31 @@ while [ $SECONDS -lt $END ]; do
   #  - the writable-again signal was guarded out under --runlist, so a parked
   #    worker had no restart wake -> fire on the fail->ok transition always.
   if [ "$W" = ok ] && [ "$prev_write" = fail ]; then
-    echo "CONDITION: STORE-WRITABLE-AGAIN (write recovered after $write_streak_fails failing tick(s)) — restart parked workers"
-    exit 11
+    if [ -n "$CYCLE_SSH" ]; then
+      if [ "$worker_state" = parked ]; then
+        ssh -o ConnectTimeout=10 "$CYCLE_SSH" "sudo -n docker start $CYCLE_CTR >/dev/null 2>&1 || docker start $CYCLE_CTR >/dev/null 2>&1"           && { echo "$TS CYCLED: store writable -> $CYCLE_CTR restarted (cycle $((cycles+1)))"; worker_state=running; cycles=$((cycles+1)); parked_ticks=0; }           || { echo "CONDITION: CYCLE-RESTART-FAILED ($CYCLE_CTR on $CYCLE_SSH)"; exit 11; }
+        [ $cycles -gt 8 ] && { echo "CONDITION: CYCLE-THRASH ($cycles park/restart cycles — the bounce rhythm needs judgment)"; exit 18; }
+      fi
+    else
+      echo "CONDITION: STORE-WRITABLE-AGAIN (write recovered after $write_streak_fails failing tick(s)) — restart parked workers"
+      exit 11
+    fi
   fi
   if [ "$W" = fail ]; then write_streak_fails=$((write_streak_fails+1)); else write_streak_fails=0; fi
   prev_write=$W
-  [ $write_fail -ge 3 ] && [ "$write_was_ok" = 1 ] && { echo "CONDITION: STORE-WRITE-DIED (probe failing x$write_fail after being ok)"; exit 17; }
+  if [ $write_fail -ge 3 ] && [ "$write_was_ok" = 1 ]; then
+    if [ -n "$CYCLE_SSH" ]; then
+      if [ "$worker_state" = running ]; then
+        ssh -o ConnectTimeout=10 "$CYCLE_SSH" "sudo -n docker stop $CYCLE_CTR >/dev/null 2>&1 || docker stop $CYCLE_CTR >/dev/null 2>&1"           && { echo "$TS CYCLED: store dead -> $CYCLE_CTR parked"; worker_state=parked; parked_ticks=0; }           || { echo "CONDITION: CYCLE-PARK-FAILED ($CYCLE_CTR on $CYCLE_SSH)"; exit 17; }
+      else
+        parked_ticks=$((parked_ticks+1))
+        [ $parked_ticks -ge 8 ] && { echo "CONDITION: STORE-WRITE-DIED (parked and still dead after $parked_ticks ticks — abnormal outage)"; exit 17; }
+      fi
+    else
+      echo "CONDITION: STORE-WRITE-DIED (probe failing x$write_fail after being ok)"
+      exit 17
+    fi
+  fi
   [ "$MOVER" = "0" ] && [ "$AVAIL" -lt "$GATE" ] && { echo "CONDITION: MOVER-DONE-LOW-SPACE (${AVAIL}G < ${GATE}G)"; exit 12; }
   sleep "$IVL"
 done
