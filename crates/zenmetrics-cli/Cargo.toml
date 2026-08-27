@@ -483,3 +483,7 @@ serde_json = { workspace = true }
 # back the parquet file the CLI produced. Aligned with the `parquet` version
 # used by the sweep feature.
 parquet = { version = "58.2.0", default-features = false, features = ["arrow", "zstd", "snap"] }
+
+[[example]]
+name = "gainmap_zensim_census"
+required-features = ["sweep", "hdr-gainmap", "png"]

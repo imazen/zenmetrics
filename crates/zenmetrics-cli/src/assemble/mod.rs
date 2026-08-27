@@ -384,7 +384,12 @@ fn load_kind(
 ) -> Result<Table, AssembleError> {
     let mut all_tables: Vec<Table> = Vec::new();
     for run in &args.runs {
-        let local = args.cache_dir.as_ref().expect("checked at dispatch").join(run).join(kind);
+        let local = args
+            .cache_dir
+            .as_ref()
+            .expect("checked at dispatch")
+            .join(run)
+            .join(kind);
         if let Some(s) = sync {
             let prefix = format!("s3://{}/{}/{}/", args.bucket, run, kind);
             eprintln!("  syncing {prefix} → {}", local.display());

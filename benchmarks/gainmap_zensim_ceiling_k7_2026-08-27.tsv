@@ -1,0 +1,11 @@
+scene	tier	target	q_best	encodes_used	score_best	abs_err	bytes_best	secs
+1520_nature_tulips-in-garden_notre-dame-versailles-france_ip15pro_iso80-f1p8_img-3545_4284x5712	large	999	75	7	-4.101	1003.101	578241	5.2
+1242_interiors_storage-room-clutter_la-pedrera-barcelona_zfold7_iso640-f2p2_20260319-183704_3000x4000	large	999	100	7	13.648	985.352	2027267	4.7
+1064_general_castle-bridge-moat_montjuic-castle-barcelona_zfold7_iso40-f1p7_20260315-175347_3000x4000	large	999	97	7	12.448	986.552	1464158	4.4
+1639_food_sashimi-on-plate_colorado_s25u_iso200-f1p7_20250425-214145_4000x3000	mid	999	88	7	4.881	994.119	182830	1.2
+1494_nature_sunset-over-forest_colorado_zfold7_iso250-f1p7_20251110-170409_4000x3000	mid	999	100	7	27.537	971.463	435962	1.2
+1229_interiors_lighted-archway-ceiling_casa-batllo-barcelona_zfold7_iso1250-f1p7_20260315-210321_3000x4000	mid	999	88	7	12.611	986.389	345723	1.1
+1065_general_cathedral-model-workshop_sagrada-familia-barcelona_zfold7_iso64-f1p7_20260317-165822_3000x4000	small	999	100	7	13.895	985.105	155040	0.3
+1640_food_birthday-cake-table_colorado_ip16pro_iso125-f1p8_img-2666_4284x5712	small	999	94	7	-1.060	1000.060	92638	0.3
+1495_nature_lighthouse-on-island_york-maine_ip13pro_iso50-f1p5_fullsizerender-1_3855x2891	small	999	100	7	25.126	973.874	121014	0.3
+# k7: n=9 median|err|=986.389 +-2hits=0/9 per-t: t999=986.39 per-tier: large=986.55 mid=986.39 small=985.11 

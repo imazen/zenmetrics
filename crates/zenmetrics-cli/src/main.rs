@@ -193,7 +193,7 @@ enum Command {
     /// Print the capability tokens this binary was compiled with, one per line
     /// (the cargo feature names, plus a `build=<version>` info line). Consumed by
     /// `zenfleet-worker` claim-time capability gating (anti-wedge invariant 5):
-        /// Print the executor's baked capability set. With `--probe`, ALSO run a
+    /// Print the executor's baked capability set. With `--probe`, ALSO run a
     /// real end-to-end GPU check (tiny synthetic ssim2 on explicit cuda) and
     /// append `gpu-cuda-operational=yes|no` — the compiled-features list alone
     /// says NOTHING about whether this box's driver works (2026-08-27 wsl

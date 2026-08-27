@@ -42,7 +42,9 @@ fn str_col<'t>(t: &'t Table, name: &str, what: &str) -> Result<Vec<Option<String
 fn assert_unique(keys: &[Option<String>], what: &str) -> Result<(), AssembleError> {
     let mut seen: HashMap<&str, usize> = HashMap::with_capacity(keys.len());
     for (i, k) in keys.iter().enumerate() {
-        let k = k.as_deref().ok_or_else(|| err(format!("{what}: null encode_sha at row {i}")))?;
+        let k = k
+            .as_deref()
+            .ok_or_else(|| err(format!("{what}: null encode_sha at row {i}")))?;
         if let Some(prev) = seen.insert(k, i) {
             return Err(err(format!(
                 "{what}: DUPLICATE encode_sha `{k}` at rows {prev} and {i} — refusing the join"
@@ -64,8 +66,12 @@ fn parse_rendition(p: &str) -> Result<(String, i64, i64), AssembleError> {
     let (w, h) = scale
         .split_once('x')
         .ok_or_else(|| err(format!("rendition `{base}`: scale token not WxH")))?;
-    let wi: i64 = w.parse().map_err(|_| err(format!("rendition `{base}`: bad width")))?;
-    let hi: i64 = h.parse().map_err(|_| err(format!("rendition `{base}`: bad height")))?;
+    let wi: i64 = w
+        .parse()
+        .map_err(|_| err(format!("rendition `{base}`: bad width")))?;
+    let hi: i64 = h
+        .parse()
+        .map_err(|_| err(format!("rendition `{base}`: bad height")))?;
     Ok((origin.to_string(), wi, hi))
 }
 
@@ -112,7 +118,10 @@ pub fn run_flat_picker(
         let (k, v) = line
             .split_once('\t')
             .ok_or_else(|| err(format!("sizes tsv line {}: not `sha\\tbytes`", ln + 1)))?;
-        let b: f64 = v.trim().parse().map_err(|_| err(format!("sizes tsv line {}: bad bytes", ln + 1)))?;
+        let b: f64 = v
+            .trim()
+            .parse()
+            .map_err(|_| err(format!("sizes tsv line {}: bad bytes", ln + 1)))?;
         if sizes.insert(k.trim(), b).is_some() {
             return Err(err(format!("sizes tsv: DUPLICATE sha `{}`", k.trim())));
         }
@@ -187,7 +196,12 @@ pub fn run_flat_picker(
             }
             let src = match s.column(&cname) {
                 Some(Column::F64(v)) => v.clone(),
-                _ => return Err(err(format!("extra-scores {}: `{cname}` must be f64", p.display()))),
+                _ => {
+                    return Err(err(format!(
+                        "extra-scores {}: `{cname}` must be f64",
+                        p.display()
+                    )));
+                }
             };
             let mut joined = Vec::with_capacity(n);
             let mut miss = 0usize;

@@ -16,16 +16,27 @@ fn scores_fixture(dir: &std::path::Path, shas: &[&str]) -> std::path::PathBuf {
             Column::Str(vec![Some("77.scale64x48.png".into()); n]),
         ),
         ("codec".into(), Column::Str(vec![Some("zenavif".into()); n])),
-        ("q".into(), Column::I64((0..n as i64).map(|i| i * 10).collect())),
+        (
+            "q".into(),
+            Column::I64((0..n as i64).map(|i| i * 10).collect()),
+        ),
         (
             "knob_tuple_json".into(),
-            Column::Str(vec![Some(r#"{"cell":"s2-420","fp":"ab","plan":"rd_core"}"#.into()); n]),
+            Column::Str(vec![
+                Some(
+                    r#"{"cell":"s2-420","fp":"ab","plan":"rd_core"}"#.into()
+                );
+                n
+            ]),
         ),
         (
             "encode_sha".into(),
             Column::Str(shas.iter().map(|s| Some((*s).into())).collect()),
         ),
-        ("ssim2_gpu".into(), Column::F64((0..n).map(|i| 50.0 + i as f64).collect())),
+        (
+            "ssim2_gpu".into(),
+            Column::F64((0..n).map(|i| 50.0 + i as f64).collect()),
+        ),
     ])
     .unwrap();
     let p = dir.join("scores.parquet");
@@ -46,17 +57,39 @@ fn duplicate_sha_in_scores_is_legal_but_in_sidecars_is_an_error() {
     let d = tempfile::tempdir().unwrap();
     let s = scores_fixture(d.path(), &["aaa", "aaa"]);
     let z = sizes_fixture(d.path(), &[("aaa", 10)]);
-    run_flat_picker(&s, &z, &[], &[], &[], "lossy", false, &d.path().join("o.parquet")).unwrap();
+    run_flat_picker(
+        &s,
+        &z,
+        &[],
+        &[],
+        &[],
+        "lossy",
+        false,
+        &d.path().join("o.parquet"),
+    )
+    .unwrap();
     // sha-keyed sidecar side: duplicates are corruption — hard error.
     let extra = Table::from_columns(vec![
-        ("encode_sha".into(), Column::Str(vec![Some("aaa".into()), Some("aaa".into())])),
+        (
+            "encode_sha".into(),
+            Column::Str(vec![Some("aaa".into()), Some("aaa".into())]),
+        ),
         ("zensim_c944".into(), Column::F64(vec![1.0, 2.0])),
     ])
     .unwrap();
     let xp = d.path().join("extra.parquet");
     write_parquet(&extra, &xp).unwrap();
-    let e = run_flat_picker(&s, &z, &[xp], &[], &[], "lossy", false, &d.path().join("o2.parquet"))
-        .unwrap_err();
+    let e = run_flat_picker(
+        &s,
+        &z,
+        &[xp],
+        &[],
+        &[],
+        "lossy",
+        false,
+        &d.path().join("o2.parquet"),
+    )
+    .unwrap_err();
     assert!(e.to_string().contains("DUPLICATE encode_sha"), "{e}");
 }
 
@@ -98,7 +131,10 @@ fn happy_path_derives_identity_and_joins_extra_scores() {
         &s,
         &z,
         &[xp],
-        &["ssim2_gpu=score_ssim2".into(), "zensim_c944=score_zensim".into()],
+        &[
+            "ssim2_gpu=score_ssim2".into(),
+            "zensim_c944=score_zensim".into(),
+        ],
         &["sweep_run=avifgen-test".into()],
         "lossy",
         false,
@@ -108,8 +144,17 @@ fn happy_path_derives_identity_and_joins_extra_scores() {
     let t = read_parquet(&out).unwrap();
     assert_eq!(t.num_rows(), 2);
     for c in [
-        "origin_id", "width", "height", "cell", "knob_plan", "encoded_bytes",
-        "encoded_filename", "mode", "score_ssim2", "score_zensim", "sweep_run",
+        "origin_id",
+        "width",
+        "height",
+        "cell",
+        "knob_plan",
+        "encoded_bytes",
+        "encoded_filename",
+        "mode",
+        "score_ssim2",
+        "score_zensim",
+        "sweep_run",
     ] {
         assert!(t.has_column(c), "missing {c}");
     }
@@ -132,7 +177,13 @@ fn rename_collision_is_an_error() {
     let s = scores_fixture(d.path(), &["aaa"]);
     let z = sizes_fixture(d.path(), &[("aaa", 10)]);
     let e = run_flat_picker(
-        &s, &z, &[], &["ssim2_gpu=codec".into()], &[], "lossy", false,
+        &s,
+        &z,
+        &[],
+        &["ssim2_gpu=codec".into()],
+        &[],
+        "lossy",
+        false,
         &d.path().join("o.parquet"),
     )
     .unwrap_err();

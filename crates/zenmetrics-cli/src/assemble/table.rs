@@ -198,9 +198,7 @@ impl Table {
     ) -> Result<Self, AssembleError> {
         for (from, to) in renames {
             if !self.names.iter().any(|n| n == from) {
-                return Err(AssembleError::Schema(format!(
-                    "rename: no column `{from}`"
-                )));
+                return Err(AssembleError::Schema(format!("rename: no column `{from}`")));
             }
             if self.names.iter().any(|n| n == to) {
                 return Err(AssembleError::Schema(format!(
