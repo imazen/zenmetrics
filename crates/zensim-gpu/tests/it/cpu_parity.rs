@@ -146,9 +146,9 @@ fn diff_features(cpu: &[f64], gpu: &[f64]) -> Vec<(usize, &'static str, f64, f64
 
 // ───────────────────────── parity ─────────────────────────
 
-/// Identical input → both sides return all-zero features (the CPU
-/// short-circuits to zeros for byte-identical inputs; the GPU runs the
-/// full kernel and rounds to 0.0 within ULP).
+/// Identical input → both sides return all-zero features (both the CPU
+/// crate and, since zenmetrics#11, the GPU cold entry short-circuit
+/// byte-identical inputs to zeros).
 #[test]
 fn identical_input_all_zeros() {
     let w = 64;
@@ -167,12 +167,12 @@ fn identical_input_all_zeros() {
         cpu.len(),
         TOTAL_FEATURES
     );
-    // CPU short-circuits to zeros; the first 228 must match GPU within
-    // a tight bound for the SSIM term (mu1 == mu2 → sd == 0 analytically)
-    // even though GPU runs the kernel. The HF terms can pick up sub-ULP
-    // noise from the f32 σ² division. Previous gate (5e-2) was 70× the
-    // measured floor — tightened 2026-05-22 to 2e-3 (measured max
-    // 6.8e-4 → 3× margin).
+    // CPU short-circuits to zeros; since zenmetrics#11 the GPU cold entry
+    // short-circuits byte-equal inputs the same way, so this is exact.
+    // (Before that, the GPU ran the kernel and the HF terms picked up
+    // sub-ULP noise from the f32 σ² division — measured max 6.8e-4; the
+    // 2e-3 band below is kept as the historical cross-path tolerance,
+    // `gpu_compute_features_identical_returns_zeros` is the exact gate.)
     let mut max_abs = 0.0_f64;
     for i in 0..TOTAL_FEATURES {
         let a = (gpu[i] - cpu[i]).abs();
@@ -182,6 +182,47 @@ fn identical_input_all_zeros() {
     }
     eprintln!("identical: max |gpu - cpu| = {max_abs:.4e}");
     assert!(max_abs < 2e-3, "identical case max diff {max_abs}");
+}
+
+/// zenmetrics#11: byte-equal (ref, dist) must yield EXACTLY zero features on
+/// the GPU cold entry (`compute_features` / `compute_features_vec`), matching
+/// the CPU crate's `images_byte_identical` guard — not the ≤6.8e-4 f32
+/// residual the kernels produce when run on identical input. A same-length
+/// pair that differs in one byte must still go through the kernels (some slot
+/// non-zero), and a wrong-length pair must still be rejected up front.
+#[test]
+fn gpu_compute_features_identical_returns_zeros() {
+    let w = 64;
+    let h = 64;
+    let img = gradient(w, h);
+
+    let mut z = Zensim::<Backend>::new(make_client!(), w as u32, h as u32).unwrap();
+    let gpu = z.compute_features(&img, &img).unwrap();
+    for (i, v) in gpu.iter().enumerate() {
+        assert_eq!(
+            *v, 0.0,
+            "slot {i}: identical input must be exactly 0, got {v:e}"
+        );
+    }
+    let vec = z.compute_features_vec(&img, &img).unwrap();
+    assert_eq!(vec.len(), z.regime().total_features());
+    assert!(vec.iter().all(|v| *v == 0.0), "vec entry must be all-zero");
+
+    // One flipped byte is NOT identical: the kernels must run and see it.
+    let mut one_off = img.clone();
+    one_off[(w * h / 2) * 3] ^= 0x80;
+    let diff = z.compute_features(&img, &one_off).unwrap();
+    assert!(
+        diff.iter().any(|v| *v != 0.0),
+        "a one-byte difference must produce a non-zero feature"
+    );
+
+    // Length validation still precedes the short-circuit.
+    let short = &img[..img.len() - 3];
+    assert!(
+        z.compute_features(short, short).is_err(),
+        "wrong-length identical buffers must error, not short-circuit to zeros"
+    );
 }
 
 /// Noisy-gradient corpus: every feature must agree within a category-

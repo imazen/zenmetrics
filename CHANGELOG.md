@@ -13,6 +13,19 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zensim-gpu (open-issue fixes, 2026-08-27)
+
+### Changed
+- **Byte-equal inputs short-circuit to exact zero features on the GPU cold entry (#11).**
+  `Zensim::compute_features` / `compute_features_vec` (and every opaque `compute_features_*` /
+  `compute_srgb_u8_with_features` caller) now return an all-zero vector when `ref == dist`, matching
+  the CPU crate's `images_byte_identical` guard — previously the kernels ran and left ≤6.8e-4 f32
+  residuals in the feature sidecar next to a score the opaque path had already short-circuited to
+  100.0. Both inputs are still length-validated first (a wrong-length identical pair errors, never
+  zeros); no device work runs and the cached reference is left untouched. Gate:
+  `cpu_parity::gpu_compute_features_identical_returns_zeros` (exact zeros; one flipped byte still
+  reaches the kernels; wrong length still errors), mutation-verified on Metal.
+
 ## zenmetrics-cli (open-issue fixes, 2026-08-27)
 
 ### Changed

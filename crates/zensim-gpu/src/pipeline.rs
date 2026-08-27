@@ -940,7 +940,24 @@ impl<R: Runtime> Zensim<R> {
     /// In Full (non-strip) mode `set_reference_host_cached_only` is
     /// exactly equivalent to `set_reference` (no host cache is used), so
     /// this routing is a strip-only behaviour change.
+    ///
+    /// **Byte-identical inputs short-circuit to an all-zero vector**
+    /// (zenmetrics#11), mirroring the CPU `zensim` crate's
+    /// `images_byte_identical` guard: every per-pixel SSIM / edge / IW
+    /// term collapses to 0 exactly when `ref == dist`, but the f32 GPU
+    /// kernels pick up ULP residuals at the coarse pyramid scales
+    /// (measured ≤ 6.8e-4 per slot), which is the one place the two
+    /// feature paths disagreed. Both inputs are still length-validated
+    /// first, so a same-length-but-wrong-length pair errors as before.
+    /// No device work runs on this path and the cached reference (if
+    /// any) is left untouched — this is the cold one-shot entry, not
+    /// `set_reference`.
     pub fn compute_features_vec(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<Vec<f64>> {
+        self.check_dims(ref_srgb)?;
+        self.check_dims(dist_srgb)?;
+        if ref_srgb == dist_srgb {
+            return Ok(vec![0.0_f64; self.regime.total_features()]);
+        }
         if self.strip.is_some() {
             // Cold one-shot strip: skip the redundant full-image device
             // ref cache; the per-strip ref rebuild is bit-exact.
