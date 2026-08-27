@@ -2083,10 +2083,8 @@ impl Cvvdp {
 
         // Run shallow + deep band-fold halves in parallel via rayon::join.
         // Each half does its own par_iter_mut over its band slot vector.
-        let (shallow_results, deep_results): (
-            Vec<([f32; 3], Option<DiffmapAccum>)>,
-            Vec<([f32; 3], Option<DiffmapAccum>)>,
-        ) = rayon::join(
+        type BandFold = ([f32; 3], Option<DiffmapAccum>);
+        let (shallow_results, deep_results): (Vec<BandFold>, Vec<BandFold>) = rayon::join(
             || {
                 if k_split == 0 {
                     return Vec::new();
@@ -2115,10 +2113,8 @@ impl Cvvdp {
             },
         );
 
-        let band_results: Vec<([f32; 3], Option<DiffmapAccum>)> = shallow_results
-            .into_iter()
-            .chain(deep_results.into_iter())
-            .collect();
+        let band_results: Vec<([f32; 3], Option<DiffmapAccum>)> =
+            shallow_results.into_iter().chain(deep_results).collect();
 
         let q_per_ch: Vec<[f32; 3]> = band_results.iter().map(|(q, _)| *q).collect();
 

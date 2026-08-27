@@ -126,8 +126,8 @@ fn checkerboard(w: usize, h: usize) -> Vec<u8> {
 /// Flat single color fill.
 fn flat(w: usize, h: usize, rgb: [u8; 3]) -> Vec<u8> {
     let mut b = vec![0u8; w * h * 3];
-    for px in b.chunks_exact_mut(3) {
-        px.copy_from_slice(&rgb);
+    for px in b.as_chunks_mut::<3>().0 {
+        *px = rgb;
     }
     b
 }
@@ -200,7 +200,9 @@ fn wide_gamut_bars(w: usize, h: usize) -> Vec<u8> {
 /// distortion (small directional perturbation).
 fn offset_dist(reference: &[u8], dr: i16, dg: i16, db: i16) -> Vec<u8> {
     reference
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .flat_map(|p| {
             [
                 (i16::from(p[0]) + dr).clamp(0, 255) as u8,
@@ -634,7 +636,9 @@ pub fn all_situations() -> Vec<Situation> {
         ));
         // pure chroma shift: rotate R↔B (luma roughly preserved)
         let chroma = r
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .flat_map(|p| [p[2], p[1], p[0]])
             .collect::<Vec<u8>>();
         out.push(mk(

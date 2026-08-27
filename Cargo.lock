@@ -2803,7 +2803,7 @@ dependencies = [
  "rgb",
  "thiserror",
  "whereat",
- "zenjxl-decoder",
+ "zenjxl-decoder 0.3.10",
  "zensim",
 ]
 
@@ -7046,7 +7046,7 @@ dependencies = [
  "thiserror",
  "whereat",
  "zencodec",
- "zenjxl-decoder",
+ "zenjxl-decoder 0.4.0",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -7054,7 +7054,28 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder"
 version = "0.3.10"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=0599dcf3728c3982f3cf2cad22beb053037da356#0599dcf3728c3982f3cf2cad22beb053037da356"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2d68502daf17b161b6fb73657f4a4c60ba5a0491846aae769e33b34dc5ec513"
+dependencies = [
+ "aligned-vec",
+ "array-init",
+ "atomic_refcell",
+ "bytemuck",
+ "byteorder",
+ "enough",
+ "num-derive",
+ "num-traits",
+ "paste",
+ "smallvec",
+ "thiserror",
+ "zenjxl-decoder-macros 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zenjxl-decoder-simd 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "zenjxl-decoder"
+version = "0.4.0"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=f1faec70e41b0c1f31e9db3d2142071bf02d08d5#f1faec70e41b0c1f31e9db3d2142071bf02d08d5"
 dependencies = [
  "aligned-vec",
  "array-init",
@@ -7068,14 +7089,15 @@ dependencies = [
  "smallvec",
  "thiserror",
  "whereat",
- "zenjxl-decoder-macros",
- "zenjxl-decoder-simd",
+ "zenjxl-decoder-macros 0.3.9 (git+https://github.com/imazen/zenjxl-decoder?rev=f1faec70e41b0c1f31e9db3d2142071bf02d08d5)",
+ "zenjxl-decoder-simd 0.3.9 (git+https://github.com/imazen/zenjxl-decoder?rev=f1faec70e41b0c1f31e9db3d2142071bf02d08d5)",
 ]
 
 [[package]]
 name = "zenjxl-decoder-macros"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=0599dcf3728c3982f3cf2cad22beb053037da356#0599dcf3728c3982f3cf2cad22beb053037da356"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d5f705a56b0a01d283503fbe7d5e3b3e51d7321b5f1bba7b07bdeea7e2c6f3d"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -7084,9 +7106,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenjxl-decoder-macros"
+version = "0.3.9"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=f1faec70e41b0c1f31e9db3d2142071bf02d08d5#f1faec70e41b0c1f31e9db3d2142071bf02d08d5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.118",
+]
+
+[[package]]
 name = "zenjxl-decoder-simd"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=0599dcf3728c3982f3cf2cad22beb053037da356#0599dcf3728c3982f3cf2cad22beb053037da356"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "237f3740d3d098854c6008515cdff29d8cbadcb6b4e3a1582e28dd3a04e3213e"
+dependencies = [
+ "archmage",
+ "paste",
+]
+
+[[package]]
+name = "zenjxl-decoder-simd"
+version = "0.3.9"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=f1faec70e41b0c1f31e9db3d2142071bf02d08d5#f1faec70e41b0c1f31e9db3d2142071bf02d08d5"
 dependencies = [
  "archmage",
  "paste",
@@ -7296,9 +7338,7 @@ dependencies = [
 
 [[package]]
 name = "zenrav1e"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c2f798defdace5a2d991e4f679697768cf256a3cef130bfa2d84702cebf3a76"
+version = "0.2.0"
 dependencies = [
  "aligned-vec",
  "arbitrary",
@@ -7325,6 +7365,7 @@ dependencies = [
  "thiserror",
  "v_frame 0.3.9",
  "wasm-bindgen",
+ "whereat",
 ]
 
 [[package]]
@@ -7593,12 +7634,3 @@ dependencies = [
 name = "rav1d-safe"
 version = "0.5.7"
 source = "git+https://github.com/imazen/rav1d-safe?rev=f6aed27e81baa5e74a8eba413562efb8813641fd#f6aed27e81baa5e74a8eba413562efb8813641fd"
-
-[[patch.unused]]
-name = "zencodec"
-version = "0.1.25"
-source = "git+https://github.com/imazen/zencodec?rev=fde07d075711ab1f9a02a935f61e1d3cc655c3a3#fde07d075711ab1f9a02a935f61e1d3cc655c3a3"
-
-[[patch.unused]]
-name = "zenrav1e"
-version = "0.2.0"

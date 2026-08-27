@@ -315,15 +315,15 @@ fn s5cmd_cp(endpoint: &str, src: &str, dst: &str) -> Result<(), LedgerError> {
         }
         c
     }
-        .arg("--endpoint-url")
-        .arg(endpoint)
-        .arg("cp")
-        .arg(src)
-        .arg(dst)
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .status()
-        .map_err(|e| LedgerError::Io(format!("s5cmd spawn: {e}")))?;
+    .arg("--endpoint-url")
+    .arg(endpoint)
+    .arg("cp")
+    .arg(src)
+    .arg(dst)
+    .stdout(Stdio::null())
+    .stderr(Stdio::piped())
+    .status()
+    .map_err(|e| LedgerError::Io(format!("s5cmd spawn: {e}")))?;
     if st.success() {
         Ok(())
     } else {

@@ -191,7 +191,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[inline]
 pub fn rgb_u8_to_gray_bt601(rgb: &[u8], out: &mut [f32]) {
     assert_eq!(rgb.len(), out.len() * 3, "rgb len mismatch");
-    for (px, o) in rgb.chunks_exact(3).zip(out.iter_mut()) {
+    for (px, o) in rgb.as_chunks::<3>().0.iter().zip(out.iter_mut()) {
         let r = px[0] as f32;
         let g = px[1] as f32;
         let b = px[2] as f32;

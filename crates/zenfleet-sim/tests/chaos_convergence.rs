@@ -49,7 +49,10 @@ fn job(i: usize, script: fn(u32) -> ExecResult) -> JobSpec {
     }
 }
 
-const POLICY: RetryPolicy = RetryPolicy { max_attempts: 3, stale_claim_after: None };
+const POLICY: RetryPolicy = RetryPolicy {
+    max_attempts: 3,
+    stale_claim_after: None,
+};
 
 fn status_of<'a>(r: &'a HashMap<zenfleet_core::JobId, JobStatus>, j: &JobSpec) -> &'a JobStatus {
     r.get(&j.desired.job_id())

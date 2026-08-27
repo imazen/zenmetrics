@@ -72,7 +72,10 @@ fn row(
 #[test]
 fn full_run_converges() {
     let desired = desired_set();
-    let policy = RetryPolicy { max_attempts: 3, stale_claim_after: None };
+    let policy = RetryPolicy {
+        max_attempts: 3,
+        stale_claim_after: None,
+    };
 
     // ---- Round 1: empty ledger → the whole set is the gap (goal A: declare→enqueue). ----
     let view0 = zenfleet_core::LedgerView::new();

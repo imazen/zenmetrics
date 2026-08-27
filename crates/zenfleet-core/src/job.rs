@@ -447,7 +447,10 @@ mod tests {
         // Executor truth (2026-08-27): both in-tree per-pixel map owners are CPU
         // implementations; any name form classes CpuHeavy so the CPU fleet serves them.
         for m in ["butteraugli", "butteraugli-gpu", "cvvdp", "cvvdp-gpu"] {
-            let k = JobKind::Diffmap { metric: m.into(), hdr: false };
+            let k = JobKind::Diffmap {
+                metric: m.into(),
+                hdr: false,
+            };
             assert_eq!(k.profile().class, ResourceClass::CpuHeavy, "{m}");
         }
     }
@@ -613,11 +616,20 @@ mod tests {
             vec!["hdr-svt".to_string(), "hdr".to_string()]
         );
         assert_eq!(
-            JobKind::Metric { metric: "cvvdp-gpu".into() }.required_capabilities(),
+            JobKind::Metric {
+                metric: "cvvdp-gpu".into()
+            }
+            .required_capabilities(),
             vec!["gpu-cvvdp".to_string()]
         );
         // CPU-native names under-claim (their feature composition is a cli detail)
-        assert!(JobKind::Metric { metric: "cvvdp".into() }.required_capabilities().is_empty());
+        assert!(
+            JobKind::Metric {
+                metric: "cvvdp".into()
+            }
+            .required_capabilities()
+            .is_empty()
+        );
         let sf = JobKind::ScoreFile {
             metrics: vec!["ssim2-gpu".into(), "cvvdp".into()],
             hdr: true,
@@ -627,7 +639,11 @@ mod tests {
             sf.required_capabilities(),
             vec!["gpu-ssim2".to_string(), "hdr".to_string()]
         );
-        assert!(JobKind::Bake { view: "v".into() }.required_capabilities().is_empty());
+        assert!(
+            JobKind::Bake { view: "v".into() }
+                .required_capabilities()
+                .is_empty()
+        );
     }
 
     #[test]

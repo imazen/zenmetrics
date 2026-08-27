@@ -2408,7 +2408,12 @@ impl<R: Runtime> Iwssim<R> {
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
-            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(src.chunks_exact(3)) {
+            for (chunk_out, triple) in dst
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(src.as_chunks::<3>().0.iter())
+            {
                 chunk_out[0] = triple[0];
                 chunk_out[1] = triple[1];
                 chunk_out[2] = triple[2];

@@ -223,10 +223,12 @@ input parquets (`generate_sweep_input.py --cells-jsonl`; the sweep runner's tupl
 routes them through `resolve_verified` — byte-identical to the Planned path, tested).
 Contract + per-codec scalar-axis inventory: `docs/PLAN_SWEEPS.md`; job-system flow:
 `docs/RUNNING_JOBS.md` §4b. Local-build note: the `zenjxl-decoder` workspace patch is
-now a pinned git rev (0bd33d21, decoder main with `reject_progressive`) — zenjxl main
-(b04ca75 onward; sibling checkout + CI pin now at 4c0d672f, the 2026-06-12 scalar-axes
-landing) consumes that unreleased API; drop the patch when zenjxl-decoder 0.3.11
-publishes AND zenjxl bumps its `jxl` dep (Cargo.toml patch comment). The 2026-06-12
+a pinned git rev (f1faec7 = decoder origin/main, version 0.4.0, since the 2026-08-27
+zencodec 0.1.26 migration; earlier 0bd33d21 → 0599dcf) — zenjxl main (9226d3a, the CI
+pin too) REQUIRES `zenjxl-decoder = "0.4.0"`, which is unpublished (crates.io: 0.3.10);
+drop the patch when 0.4.0 publishes AND zenjxl bumps its `jxl` dep (Cargo.toml patch
+comment). Sibling `jxl-encoder` still wants `^0.3`, so the lock carries BOTH decoders
+(registry 0.3.10 + git 0.4.0) until it moves. The 2026-06-12
 scalar-axis landings (zenjpeg fff81900 / zenavif e9de3022 / zenjxl 4c0d672f / zenwebp
 700aa4a8) extend the id grammars + fingerprints — declare/execute builds must pair at
 those revs or newer (PLAN_SWEEPS.md §6 "Codec-rev pairing").
@@ -470,20 +472,19 @@ over those persisted variants — never re-encode per metric.
   process-spawn timing under load, not any of that logic). Re-run the full suite a few
   times before trusting a single red run from this test specifically.
 
-- **master CI fully red since at least 97acd176 (2026-07-29) — pre-existing,
-  unrelated to code pushes** (verified 2026-08-01 across runs 30492728715 /
-  30497489195 / 30614138205 / 30680693237, all docs-only commits, identical
-  failure set). Two independent causes: (1) every Compile/tests job dies at
-  workspace resolution with `failed to load source for dependency
-  zenavif-parse — No such file or directory` — the workspace `[patch]` points
-  at the sibling path `~/work/zen/zenavif-parse`, but zenavif-parse moved into
-  the zenavif repo (`~/work/zen/zenavif/zenavif-parse`) and CI's
-  clone-sibling-repos step doesn't produce the old path; (2) the Lint job's
-  `cargo fmt --check` fails on committed-unformatted
-  `crates/cvvdp/benches/kernel_tiers.rs` + `crates/iwssim/benches/kernel_tiers.rs`.
-  Fix needs the CI sibling-clone step updated for the zenavif restructure (or
-  the patch table corrected) + a `style: cargo fmt` commit for the two bench
-  files. No push can go green until both land.
+- **master CI was fully red from at least 97acd176 (2026-07-29) through d5dacbd2
+  (2026-08-27), independent of code pushes.** The 2026-07-29 causes (a stale
+  `zenavif-parse` sibling path + two unformatted `kernel_tiers.rs` benches) were
+  fixed in between; from `9093cc23` on, every job died at manifest load instead
+  with `failed to read …/zenflate/Cargo.toml` (the `hdr` feature's new zenflate
+  path-dep had no CI sibling clone). The zencodec 0.1.26 migration commit
+  (2026-08-27) adds that clone, bumps every CI sibling pin to the 0.1.26-era
+  sibling HEADs, and clears the stable-1.98 clippy debt the month-dead Lint job
+  had been hiding — see CHANGELOG `[Unreleased]`. **Rule this teaches: every
+  new `path = "../../../<sibling>"` dep in a workspace manifest needs a matching
+  `git clone` in ALL FIVE copies of ci.yml's "Clone sibling-repo path-dep
+  targets" step in the same commit**, or CI dies at `cargo metadata` before any
+  job runs.
 
 - **zenmetrics-api `it::backend_resolve::resolve_auto_host_and_force_no_gpu`
   fails on DEFAULT-features runs — test const out of lockstep with the

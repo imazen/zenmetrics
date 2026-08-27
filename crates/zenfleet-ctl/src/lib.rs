@@ -837,7 +837,7 @@ pub fn declare_scorefile_jobs(
                         kind,
                         inputs: vec![Sha256Hex::raw_object_key(m.member.clone())],
                         cell: cell.clone(),
-                        hint: hint.clone(),
+                        hint,
                     };
                     out.push(j);
                 }
@@ -870,7 +870,7 @@ pub fn declare_scorefile_jobs(
                         q: -1,
                         knob_tuple_json: cell_knobs.to_string(),
                     },
-                    hint: hint.clone(),
+                    hint,
                 };
                 out.push(j);
             }

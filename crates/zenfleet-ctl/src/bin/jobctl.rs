@@ -29,10 +29,10 @@ use clap::{Parser, Subcommand};
 use zenfleet_core::{DesiredJob, LedgerView, RetryPolicy};
 
 fn shellexpand_home(p: &str) -> String {
-    if let Some(rest) = p.strip_prefix("~/") {
-        if let Ok(h) = std::env::var("HOME") {
-            return format!("{h}/{rest}");
-        }
+    if let Some(rest) = p.strip_prefix("~/")
+        && let Ok(h) = std::env::var("HOME")
+    {
+        return format!("{h}/{rest}");
     }
     p.to_string()
 }
@@ -871,13 +871,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 hdr,
                 hdr_transfer.as_deref(),
                 diffmap,
-                flat_hint.clone(),
+                flat_hint,
             );
             for j in &mut jobs {
                 if let Some(h) = pixel_hint(&j.cell.image_path) {
                     j.hint = Some(h);
                 } else if j.hint.is_none() {
-                    j.hint = flat_hint.clone();
+                    j.hint = flat_hint;
                 }
             }
             // GUARD (2026-08-27): in full-URI mode every cell.image_path must BE a
@@ -1422,8 +1422,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let ec = r
                             .error_class
                             .as_ref()
-                            .map(|e| serde_json::to_value(e).ok())
-                            .flatten()
+                            .and_then(|e| serde_json::to_value(e).ok())
                             .and_then(|v| v.as_str().map(str::to_string))
                             .unwrap_or_default();
                         let in_window = amnesty_before.is_none_or(|cut| r.ts < cut);

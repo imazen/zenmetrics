@@ -24,8 +24,7 @@ use zenfleet_core::epoch::{self, ClaimMode, EpochShardCfg, Handicaps, Roster, Sh
 use zenfleet_core::{
     BlobIndexEntry, BoxBudget, DesiredJob, ErrorClass, InFlight, JobCost, JobId, JobKind,
     JobStatus, LedgerRow, LedgerView, Regenerability, ResourceClass, ResourceHint, RetryPolicy,
-    RunControl, Sha256Hex, Tombstone, gc_plan, lru_cap_evict, reconcile_at, sha256,
-    worker_serves,
+    RunControl, Sha256Hex, Tombstone, gc_plan, lru_cap_evict, reconcile_at, sha256, worker_serves,
 };
 
 /// A classified execution failure — becomes a FAILED ledger row carrying this `error_class`, which
@@ -270,7 +269,9 @@ fn spawn_spot_reclaim_chunk(
             // absent) from "handler ran but the release call itself hung/failed" (marker present,
             // no follow-up line) from "output lost after being written" (both present in the
             // process's own view but never in `docker logs`/`nomad alloc logs`).
-            eprintln!("zenfleet-worker: spot preemption — signal handler fired, attempting release");
+            eprintln!(
+                "zenfleet-worker: spot preemption — signal handler fired, attempting release"
+            );
             let _ = io::stderr().flush();
             if let Some(cid) = inflight.lock().ok().and_then(|g| g.clone()) {
                 let released = release_claim_r2_key(&endpoint, &bucket, &prefix, &cid);
@@ -625,6 +626,7 @@ pub fn resolve_handicaps(ctl: &RunControl) -> Handicaps {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn partition_epoch(
     desired: &[DesiredJob],
     view: &LedgerView,
@@ -635,16 +637,25 @@ fn partition_epoch(
     handicaps: &Handicaps,
     now: u64,
 ) -> EpochParts {
-    let plan = reconcile_at(desired, view, policy, now, policy.stale_claim_after.or_else(|| {
+    let plan = reconcile_at(
+        desired,
+        view,
+        policy,
+        now,
+        policy.stale_claim_after.or_else(|| {
             // Deadlock guard (2026-08-27, self-inflicted at 9,159 cells): with None, a
             // fresh Pending/Claimed row pins its cell in_flight FOREVER (the documented
             // sf2 class). Default a 30-min TTL; ZEN_STALE_CLAIM_SEC overrides (0 = off).
-            match std::env::var("ZEN_STALE_CLAIM_SEC").ok().and_then(|v| v.parse::<u64>().ok()) {
+            match std::env::var("ZEN_STALE_CLAIM_SEC")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+            {
                 Some(0) => None,
                 Some(t) => Some(t),
                 None => Some(1800),
             }
-        }));
+        }),
+    );
     let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
     let mut p = EpochParts {
         fast: Vec::new(),
@@ -837,7 +848,15 @@ fn epoch_exec<B: BlobStore + Sync>(
     // Phase 1 — the lease-free fast shard (zero claim traffic; this is the whole point).
     if !fast.is_empty() {
         let o = execute_gap_chunked(
-            &fast, view, policy, handler, store, gate, params.clone(), &mut flush, ctx,
+            &fast,
+            view,
+            policy,
+            handler,
+            store,
+            gate,
+            params.clone(),
+            &mut flush,
+            ctx,
         );
         merge_outcome(&mut out, o);
     }
@@ -854,7 +873,15 @@ fn epoch_exec<B: BlobStore + Sync>(
         }
         if !won.is_empty() {
             let o = execute_gap_chunked(
-                &won, view, policy, handler, store, gate, params.clone(), &mut flush, ctx,
+                &won,
+                view,
+                policy,
+                handler,
+                store,
+                gate,
+                params.clone(),
+                &mut flush,
+                ctx,
             );
             merge_outcome(&mut out, o);
         }
@@ -893,7 +920,15 @@ fn epoch_exec<B: BlobStore + Sync>(
                     continue;
                 }
                 let o = execute_gap_chunked(
-                    &won, view, policy, handler, store, gate, params.clone(), &mut flush, ctx,
+                    &won,
+                    view,
+                    policy,
+                    handler,
+                    store,
+                    gate,
+                    params.clone(),
+                    &mut flush,
+                    ctx,
                 );
                 merge_outcome(&mut out, o);
             }
@@ -957,16 +992,25 @@ where
     B: BlobStore,
     C: Fn(&JobId) -> bool,
 {
-    let mut plan = reconcile_at(desired, view, policy, ctx.now, policy.stale_claim_after.or_else(|| {
+    let mut plan = reconcile_at(
+        desired,
+        view,
+        policy,
+        ctx.now,
+        policy.stale_claim_after.or_else(|| {
             // Deadlock guard (2026-08-27, self-inflicted at 9,159 cells): with None, a
             // fresh Pending/Claimed row pins its cell in_flight FOREVER (the documented
             // sf2 class). Default a 30-min TTL; ZEN_STALE_CLAIM_SEC overrides (0 = off).
-            match std::env::var("ZEN_STALE_CLAIM_SEC").ok().and_then(|v| v.parse::<u64>().ok()) {
+            match std::env::var("ZEN_STALE_CLAIM_SEC")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+            {
                 Some(0) => None,
                 Some(t) => Some(t),
                 None => Some(1800),
             }
-        }));
+        }),
+    );
     // Shuffle the gap per worker so concurrent workers don't all iterate from job 0 in the same order
     // and collide on (wasting an aws claim-attempt skipping) the same already-claimed prefix — without
     // this, a late-joining box burns ~1s/job skipping thousands of jobs the early boxes already claimed
@@ -1074,6 +1118,7 @@ pub struct ChunkParams {
     /// Progress-conditioned lease renewal hook (anti-wedge invariant 1): called with
     /// (chunk_id, done, total) as completions accumulate. `None` = no renewal (claims age
     /// out on the TTL alone, the pre-invariant behavior).
+    #[allow(clippy::type_complexity)]
     pub renew: Option<std::sync::Arc<dyn Fn(&str, u32, u32) + Send + Sync>>,
 }
 
@@ -1087,7 +1132,6 @@ impl std::fmt::Debug for ChunkParams {
             .finish()
     }
 }
-
 
 /// Chunked, resource-bounded gap execution — the DEFAULT path (`ZEN_CHUNK_WALL_SEC > 0`, and it
 /// defaults to 300s), with [`execute_gap_claimed`] the serial `ZEN_CHUNK_WALL_SEC=0` opt-out. Two
@@ -1157,16 +1201,25 @@ where
             }
         };
     }
-    let plan = reconcile_at(desired, view, policy, ctx.now, policy.stale_claim_after.or_else(|| {
+    let plan = reconcile_at(
+        desired,
+        view,
+        policy,
+        ctx.now,
+        policy.stale_claim_after.or_else(|| {
             // Deadlock guard (2026-08-27, self-inflicted at 9,159 cells): with None, a
             // fresh Pending/Claimed row pins its cell in_flight FOREVER (the documented
             // sf2 class). Default a 30-min TTL; ZEN_STALE_CLAIM_SEC overrides (0 = off).
-            match std::env::var("ZEN_STALE_CLAIM_SEC").ok().and_then(|v| v.parse::<u64>().ok()) {
+            match std::env::var("ZEN_STALE_CLAIM_SEC")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+            {
                 Some(0) => None,
                 Some(t) => Some(t),
                 None => Some(1800),
             }
-        }));
+        }),
+    );
     cmark!("reconcile");
     let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
     cmark!("by_id-hashmap");
@@ -1397,7 +1450,7 @@ where
                             let done_now = g.results.len() as u32;
                             let total = members.len() as u32;
                             let stride = (total / 10).max(1);
-                            if done_now % stride == 0 || done_now == total {
+                            if done_now.is_multiple_of(stride) || done_now == total {
                                 renew(chunk_cid, done_now, total);
                             }
                         }
@@ -1442,7 +1495,9 @@ pub fn exec_command_deadline(
     let job_json = serde_json::to_vec(job)
         .map_err(|e| HandlerError::new(ErrorClass::Unknown, format!("serialize job: {e}")))?;
     let mut cmd = Command::new(program);
-    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     // Unix: make the child its own process-group leader so the deadline kill can take the
     // WHOLE group — a killed direct child whose grandchildren keep the pipe write-ends open
     // would otherwise hold the reader threads (and this slot) hostage until they exit.
@@ -1511,7 +1566,9 @@ pub fn exec_command_deadline(
                         Err(e) => {
                             return Err(HandlerError::new(
                                 ErrorClass::Timeout,
-                                format!("cell deadline {deadline_secs}s exceeded; wait after kill failed: {e}"),
+                                format!(
+                                    "cell deadline {deadline_secs}s exceeded; wait after kill failed: {e}"
+                                ),
                             ));
                         }
                     }
@@ -1530,7 +1587,14 @@ pub fn exec_command_deadline(
     let stderr_b = err_h.join().unwrap_or_default();
     if timed_out {
         let stderr = String::from_utf8_lossy(&stderr_b);
-        let tail: String = stderr.chars().rev().take(400).collect::<String>().chars().rev().collect();
+        let tail: String = stderr
+            .chars()
+            .rev()
+            .take(400)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect();
         return Err(HandlerError::new(
             ErrorClass::Timeout,
             format!("cell deadline {deadline_secs}s exceeded; child killed. stderr tail: {tail}"),
@@ -2040,8 +2104,7 @@ pub fn filter_by_exec_capabilities(desired: &mut Vec<DesiredJob>, exec: &str) {
     let before = desired.len();
     let mut missing: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     desired.retain(|d| {
-        let unserved: Vec<&String> =
-            d.requires.iter().filter(|r| !have.contains(*r)).collect();
+        let unserved: Vec<&String> = d.requires.iter().filter(|r| !have.contains(*r)).collect();
         if unserved.is_empty() {
             true
         } else {
@@ -2275,7 +2338,10 @@ fn read_meminfo_total_bytes() -> Option<u64> {
 /// inside a 24 GiB-capped container admits cells against 60 GiB and manufactures memcg OOM kills
 /// (anti-wedge invariant 6, 2026-08-26). "max" / absent / unparseable => None (uncapped).
 fn cgroup_mem_limit_bytes() -> Option<u64> {
-    for path in ["/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"] {
+    for path in [
+        "/sys/fs/cgroup/memory.max",
+        "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+    ] {
         if let Ok(v) = std::fs::read_to_string(path) {
             let t = v.trim();
             if t == "max" {
@@ -2484,7 +2550,7 @@ fn default_chunk_params(chunk_wall_sec: f64) -> ChunkParams {
             threads: 1,
             vram_bytes: None,
         },
-            renew: None,
+        renew: None,
     }
 }
 
@@ -2593,15 +2659,17 @@ fn run_chunked(
                         cfg.worker.clone(),
                     );
                     let mut p = params;
-                    p.renew = Some(std::sync::Arc::new(move |cid: &str, done: u32, total: u32| {
-                        let now = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .map(|d| d.as_secs())
-                            .unwrap_or(0);
-                        let key = format!("{}/{}", pfx.trim_matches('/'), cid);
-                        let body = format!("{now} {wk} {done}/{total}");
-                        let _ = crate::s3io::put(&ep, &bkt, &key, body.as_bytes());
-                    }));
+                    p.renew = Some(std::sync::Arc::new(
+                        move |cid: &str, done: u32, total: u32| {
+                            let now = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_secs())
+                                .unwrap_or(0);
+                            let key = format!("{}/{}", pfx.trim_matches('/'), cid);
+                            let body = format!("{now} {wk} {done}/{total}");
+                            let _ = crate::s3io::put(&ep, &bkt, &key, body.as_bytes());
+                        },
+                    ));
                     p
                 },
                 &mut flush,
@@ -2722,33 +2790,33 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                     }
                 }
             }
-        } else if let Some(dir) = cfg.ledger_out.parent() {
-            if let Ok(rd) = std::fs::read_dir(dir) {
-                for ent in rd.flatten() {
-                    let path = ent.path();
-                    if path.extension().and_then(|e| e.to_str()) != Some("parquet") {
-                        continue;
-                    }
-                    let mtime = ent
-                        .metadata()
-                        .ok()
-                        .and_then(|m| m.modified().ok())
-                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs())
-                        .unwrap_or(u64::MAX);
-                    if mtime < cutoff {
-                        continue;
-                    }
-                    match zenfleet_ledger::read_ledger(&path) {
-                        Ok(rows) => {
-                            folded += 1;
-                            for row in rows {
-                                rows_in += 1;
-                                view.apply(row);
-                            }
+        } else if let Some(dir) = cfg.ledger_out.parent()
+            && let Ok(rd) = std::fs::read_dir(dir)
+        {
+            for ent in rd.flatten() {
+                let path = ent.path();
+                if path.extension().and_then(|e| e.to_str()) != Some("parquet") {
+                    continue;
+                }
+                let mtime = ent
+                    .metadata()
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+                    .unwrap_or(u64::MAX);
+                if mtime < cutoff {
+                    continue;
+                }
+                match zenfleet_ledger::read_ledger(&path) {
+                    Ok(rows) => {
+                        folded += 1;
+                        for row in rows {
+                            rows_in += 1;
+                            view.apply(row);
                         }
-                        Err(_) => skipped += 1,
                     }
+                    Err(_) => skipped += 1,
                 }
             }
         }
@@ -2997,11 +3065,18 @@ mod tests {
         let mut jobs = vec![free.clone(), served.clone(), unserved];
         filter_by_exec_capabilities(&mut jobs, exec.to_str().unwrap());
         let kept: Vec<_> = jobs.iter().map(|d| d.job_id()).collect();
-        assert_eq!(kept, vec![free.job_id(), served.job_id()], "unserved-requires job must drop");
+        assert_eq!(
+            kept,
+            vec![free.job_id(), served.job_id()],
+            "unserved-requires job must drop"
+        );
         // probe failure (no such executor): requirement-free jobs survive, requiring ones drop
         let mut jobs2 = vec![free.clone(), served];
         filter_by_exec_capabilities(&mut jobs2, "/nonexistent/exec-binary");
-        assert_eq!(jobs2.iter().map(|d| d.job_id()).collect::<Vec<_>>(), vec![free.job_id()]);
+        assert_eq!(
+            jobs2.iter().map(|d| d.job_id()).collect::<Vec<_>>(),
+            vec![free.job_id()]
+        );
         // no declared requirements: no probe, untouched even with a broken exec path
         let mut jobs3 = vec![free.clone()];
         filter_by_exec_capabilities(&mut jobs3, "/nonexistent/exec-binary");
@@ -3074,12 +3149,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         match r {
             Err(e) => {
-                assert_eq!(e.class, ErrorClass::Timeout, "class: {:?} msg {}", e.class, e.msg);
+                assert_eq!(
+                    e.class,
+                    ErrorClass::Timeout,
+                    "class: {:?} msg {}",
+                    e.class,
+                    e.msg
+                );
                 assert!(e.msg.contains("deadline 1s"), "msg: {}", e.msg);
             }
             Ok(_) => panic!("slow child must not succeed"),
         }
-        assert!(dt.as_secs() < 10, "returned in {dt:?} — watchdog must not hang");
+        assert!(
+            dt.as_secs() < 10,
+            "returned in {dt:?} — watchdog must not hang"
+        );
     }
 
     #[test]
@@ -3242,7 +3326,10 @@ mod tests {
         let out = execute_gap(
             &d,
             &view,
-            RetryPolicy { max_attempts: 3, stale_claim_after: None },
+            RetryPolicy {
+                max_attempts: 3,
+                stale_claim_after: None,
+            },
             |_| Ok(vec![1, 2, 3]),
             &store,
             WorkerCtx {

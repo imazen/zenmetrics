@@ -586,7 +586,12 @@ impl<R: Runtime> Dssim<R> {
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
-            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(srgb.chunks_exact(3)) {
+            for (chunk_out, triple) in dst
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(srgb.as_chunks::<3>().0.iter())
+            {
                 chunk_out[0] = triple[0];
                 chunk_out[1] = triple[1];
                 chunk_out[2] = triple[2];
@@ -775,7 +780,12 @@ impl<R: Runtime> Dssim<R> {
             {
                 let dst: &mut [u8] = &mut bytes;
                 debug_assert_eq!(dst.len(), pinned_len);
-                for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(ref_srgb.chunks_exact(3)) {
+                for (chunk_out, triple) in dst
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
+                    .zip(ref_srgb.as_chunks::<3>().0.iter())
+                {
                     chunk_out[0] = triple[0];
                     chunk_out[1] = triple[1];
                     chunk_out[2] = triple[2];
@@ -1442,7 +1452,12 @@ impl<R: Runtime> Dssim<R> {
             }
             let src_start = (plan.read_start_in_image as usize) * row_bytes;
             let src_slice = &image_srgb[src_start..src_start + strip_n * 3];
-            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(src_slice.chunks_exact(3)) {
+            for (chunk_out, triple) in dst
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(src_slice.as_chunks::<3>().0.iter())
+            {
                 chunk_out[0] = triple[0];
                 chunk_out[1] = triple[1];
                 chunk_out[2] = triple[2];
@@ -1609,7 +1624,12 @@ impl<R: Runtime> Dssim<R> {
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
-            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(srgb.chunks_exact(3)) {
+            for (chunk_out, triple) in dst
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(srgb.as_chunks::<3>().0.iter())
+            {
                 chunk_out[0] = triple[0];
                 chunk_out[1] = triple[1];
                 chunk_out[2] = triple[2];

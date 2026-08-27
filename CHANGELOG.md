@@ -13,6 +13,53 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace / zenmetrics-cli (zencodec 0.1.26 from the registry, 2026-08-27)
+
+### Changed
+- **zencodec comes from crates.io 0.1.26 (the two-level `ErrorCategory` taxonomy) — the
+  `[patch.crates-io] zencodec = { git …, rev = "fde07d07" }` flat-taxonomy pin is gone** and
+  `zenmetrics-cli`'s minimum is `0.1.26` (was `0.1.24`). The lock now carries ONE zencodec
+  (registry 0.1.26); the git rev had already been a `[[patch.unused]]` entry because every
+  sibling codec requires `^0.1.26`. No source fallout: zenmetrics only consumes the
+  encode/decode traits, and `--features sweep` builds again — the `hdr.rs` /
+  `hdr_pair_parity.rs` / `Cargo.toml` "blocked on the sibling-codec ErrorCategory reshape"
+  caveats are retired (the `jxl` feature stays opt-in to `sweep` for build leanness, no
+  longer as a migration workaround).
+- **Root `[patch.crates-io] zenjxl-decoder` re-pinned to `f1faec7` (origin/main, 0.4.0)**
+  from `0599dcf` (0.3.10): sibling zenjxl main (`9226d3a`) requires `zenjxl-decoder = "0.4.0"`
+  (unpublished; crates.io latest is 0.3.10) via a path patch this workspace ignores, so the
+  workspace could not re-resolve at all. The sibling `jxl-encoder` still requires `^0.3`, so
+  the lock also carries registry 0.3.10 — two decoders until jxl-encoder moves.
+- **CI sibling clone pins bumped to the sibling HEADs this migration builds against** (all
+  five copies of the clone step; every one is on GitHub) — the old pins were 0.1.13–0.1.25
+  flat-taxonomy revs that would no longer compile against registry 0.1.26 once the patch was
+  dropped. `zensim`'s pin-bound comment (`< 471ce401`) is retired: `ea7d493d` builds with
+  `cpu-metrics` and `custom-profiles` OFF.
+
+### Fixed
+- **CI: every job died at manifest load with `failed to read …/zenflate/Cargo.toml`** —
+  `9093cc23` added the `zenflate` path-dep (`hdr` feature) without a sibling clone; the
+  clone step now clones it (`486e04ce`). Red since that commit, independent of code.
+- **CI Lint (`clippy --workspace -D warnings` + `fmt --check`): a month of stable-1.98 lint
+  debt the dead job had hidden.** 44 `clippy::chunks_exact_to_as_chunks` sites rewritten to
+  `as_chunks::<N>()` (MSRV 1.93 ≥ 1.88; identical semantics — both drop the remainder) across
+  zenmetrics-gpu-core, iwssim, cvvdp-gpu, cvvdp-conformance, ssim2-gpu, iwssim-gpu,
+  butteraugli-gpu, dssim-gpu, zensim-gpu, zenmetrics-api, zenmetrics-orchestrator, zenfleet-ctl
+  and the heaptrack drivers; zenfleet-worker: `is_multiple_of`, one let-chain collapse,
+  `#[allow]`s for `too_many_arguments` (`partition_epoch`) and `type_complexity` (the `renew`
+  hook field — a `pub type` alias would be new public API); zenfleet-ctl: redundant clones /
+  field shorthands / `map+flatten → and_then` (`cargo clippy --fix`, diff reviewed);
+  `cpu_profile` bins: crate-level `#![allow]` for the cosmetic `doc_overindented_list_items` /
+  `doc_lazy_continuation` (column-aligned mode tables); cvvdp (`parallel` feature, default-on):
+  a private `BandFold` alias for the `rayon::join` result type + one redundant `.into_iter()`.
+  Pre-existing debt OUTSIDE CI's lib/bin-only Lint scope was left alone and is noted here so
+  nobody re-diagnoses it: `cvvdp` tests/examples (`unreadable_literal`, `needless_range_loop`,
+  a no-op `.min(255)`), and cvvdp-gpu / iwssim-gpu `opaque.rs` dead code that only fires with
+  NO backend feature. `cargo fmt` on zenfleet-core /
+  zenfleet-ledger / zenfleet-sim / zenfleet-worker / gpu_vram_profile (committed unformatted;
+  `git diff -w` residual is pure reflow). The ci.yml Clippy step's comment describes `-A`
+  allows the command never carried — the command is bare `-D warnings` and stays so.
+
 ## butteraugli-gpu / ssim2-gpu / zenmetrics-api (untrusted-dimension hardening, 2026-08-27)
 
 ### Added

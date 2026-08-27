@@ -189,7 +189,9 @@ pub fn synth_pair_offset_dist(width: u32, height: u32) -> (Vec<u8>, Vec<u8>) {
         }
     }
     let d: Vec<u8> = r
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .flat_map(|p| {
             [
                 p[0].saturating_sub(8),

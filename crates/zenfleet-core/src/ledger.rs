@@ -237,8 +237,7 @@ mod tests {
         assert!(d.requires.is_empty());
         // Round-trip keeps tokens, and job_id ignores them (non-key, like hint).
         let with = sample_desired().with_requires(["hdr-gainmap".to_string()]);
-        let back: DesiredJob =
-            serde_json::from_slice(&serde_json::to_vec(&with).unwrap()).unwrap();
+        let back: DesiredJob = serde_json::from_slice(&serde_json::to_vec(&with).unwrap()).unwrap();
         assert_eq!(back.requires, vec!["hdr-gainmap".to_string()]);
         assert_eq!(back.job_id(), sample_desired().job_id());
     }

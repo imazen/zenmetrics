@@ -50,7 +50,7 @@ avif = ["dep:zenavif"]
 # jxl pulls the direct `jxl-encoder` dep too: the sweep encode path configures
 # expert LossyConfig knobs the zenjxl wrapper doesn't expose. Kept here (not in
 # `sweep`) so a non-jxl sweep (`--features sweep,jpeg`) need not compile
-# jxl-encoder / zenjxl at all — important while zenjxl is mid zencodec migration.
+# jxl-encoder / zenjxl at all (they are the heaviest codec crates in the graph).
 jxl = ["dep:zenjxl", "dep:jxl-encoder"]
 # gif/tiff are plan-only sweep codecs (no `--knob-grid` vocabulary). Each
 # pulls only its own codec crate so a sweep that doesn't target it stays lean.
@@ -212,8 +212,8 @@ jobexec = ["dep:object_store", "dep:tokio", "dep:bytes"]
 sweep = [
     # jpeg/webp/avif are pulled for convenience (a bare `--features sweep`
     # builds them). `jxl` is intentionally NOT force-pulled: enable it
-    # explicitly (`--features sweep,jxl`) when you need it. This lets a
-    # jpeg/webp/avif sweep build while zenjxl is mid zencodec migration.
+    # explicitly (`--features sweep,jxl`) when you need it. This keeps a
+    # jpeg/webp/avif sweep build lean (no jxl-encoder / zenjxl compile).
     # The `zenjxl?/__expert` / `zenjxl?/zencodec` activations below stay
     # conditional and only fire when `jxl` is separately enabled.
     "jpeg",
@@ -391,7 +391,7 @@ jxl-encoder  = { path = "../../../jxl-encoder/jxl-encoder",         optional = t
 # Pulled in by the `sweep` feature. zencodec exposes the EncodeJob /
 # Encoder traits that drive zenjxl encoding; almost_enough is the
 # cooperative-cancellation crate zenavif's encoder takes by value.
-zencodec = { version = "0.1.24", optional = true }
+zencodec = { version = "0.1.26", optional = true }
 almost-enough = { version = "0.4.3", optional = true }
 
 # zenpixels exposes the PixelBuffer / PixelSlice types returned by zen

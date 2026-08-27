@@ -59,9 +59,9 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout f1bf0b9a43d73a97a4e02bbc3ab379d41c888727
+          git -C ../zenjpeg checkout 2b33b9922600016044569425a3253a8dd16dfb2e
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
+          git -C ../zenanalyze checkout 313bd75ad65daa898e3a69c5e2d23b075ab7a3a7
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
@@ -75,7 +75,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28ee00eb9771b3a25f7e37bd14c08e59158010ef
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout cd9a7325f97f5e178863d867c81b694cd8b169aa
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -84,20 +84,20 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 7bce0e3e053bafd369fc6cab00ec7b0de1d57fcb
+          git -C ../zenpng checkout f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout aa1665ec54d22179ba61029720c01afb54a82565
+          git -C ../zenwebp checkout d10eec2a2e98f70a4b868b13959cb6b0eb868c7c
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
+          git -C ../zenavif checkout 6e69831d3f069e4ed54f18f3828f7c871a6c3fc4
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
           # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
           git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
-          git -C ../zenrav1e checkout 2fac1af6
+          git -C ../zenrav1e checkout e4883037553434efb57ecbf4414c8b49922ba3e4
           # zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
           # requirement to zenavif-serialize = "0.2.0", but only 0.1.4 is
           # published, so [patch.crates-io] pins the local ../zenavif-serialize
@@ -107,31 +107,26 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
           git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
+          git -C ../zenjxl checkout 9226d3a32cfd82f6c079f2921a8237f4ae05ee24
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
-          git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
+          git -C ../zengif checkout 510e7a884b91e4cd573a09efa1086626e13f0576
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
-          git -C ../zenextras checkout e2d067c59c34e70cfad7d0c16593336c3a247821
+          git -C ../zenextras checkout 340b00e00f0dcb31a53ff3898772a28694591683
           git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
-          git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
+          git -C ../ravif checkout cb06487cfc8013413f5cb268a957bc87c15d9756
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
           # zensim pin. MUST be >= c28d29b8, which added the `feature-regime-v2`
           # feature that `zenmetrics-cli` (cpu-metrics) and `zensim-gpu` both
-          # request — the previous pin 5afc4f64 predates it, so cargo refused the
-          # whole workspace with "package `zenmetrics-cli` depends on `zensim`
-          # with feature `feature-regime-v2` but `zensim` does not have that
-          # feature". MUST also be < 471ce401, which made `feature_v2.rs` call
-          # `crate::attribution::*` while `mod attribution` stays gated behind
-          # `custom-profiles`; that breaks `cargo build -p zenmetrics-cli
-          # --no-default-features --features cpu-metrics` (where feature
-          # unification cannot pull `custom-profiles` in) with E0433. a7caccd5 is
-          # the newest commit satisfying both bounds, verified by building this
-          # workspace against it. When bumping past 471ce401, first confirm
-          # zensim compiles with `feature-regime-v2` on and `custom-profiles` OFF.
+          # request. The old upper bound (< 471ce401, whose `feature_v2.rs`
+          # called `crate::attribution::*` behind `custom-profiles` and broke
+          # `cargo build -p zenmetrics-cli --no-default-features --features
+          # cpu-metrics` with E0433) no longer applies: ea7d493d (zensim main,
+          # 2026-08-27) builds that exact feature set — verified locally with
+          # the zencodec 0.1.26 migration. When bumping, re-check that build.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout a7caccd5fac22afb011a7286977e8cc014616a50
+          git -C ../zensim checkout ea7d493d735bc1dbc2ed87a0583e18fddd40f8db
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -141,7 +136,7 @@ jobs:
           # ../../butteraugli so that ../../butteraugli/butteraugli/
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
+          git -C ../../butteraugli checkout 791d08d725f27b5331ef7b96e73aad89ed895f45
           # fast-ssim2 (zenmetrics-cli path dep `../../../fast-ssim2/fast-ssim2`
           # AND root [patch.crates-io] source for zenmetrics-api/-orchestrator —
           # the `hdr-pu` integrated-PU21 entry the CPU ssim2 HDR routing calls is
@@ -152,7 +147,7 @@ jobs:
           # workspace builds against (stable, fetchable). The fast-ssim2 pin must
           # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later).
           git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
-          git -C ../fast-ssim2 checkout 8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec
+          git -C ../fast-ssim2 checkout 7628f9ee7d165b9cc8b64fabb546235b66dfc76b
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
           # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
@@ -163,11 +158,11 @@ jobs:
           # root pulls `../zenjpeg/zenjpeg` (already cloned above). heic is
           # pinned to the ISO 21496-1 tmap-preference fix.
           git clone --quiet https://github.com/imazen/ultrahdr.git ../ultrahdr
-          git -C ../ultrahdr checkout a45314867a8220ce43a1b716f5a1aa35fe2ae882
+          git -C ../ultrahdr checkout 230552db465af5ea48f1bba17bc206041d977fe1
           git clone --quiet https://github.com/imazen/heic.git ../heic
-          git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
+          git -C ../heic checkout 8d40c94e018082f4bffcfc688dfbb8e83925a1b0
           git clone --quiet https://github.com/imazen/zentone.git ../zentone
-          git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
+          git -C ../zentone checkout df84ca43dcc4f6ca10b6b53631c182853b84ea43
           # zenmetrics-cli's `hdr-svt` feature path-dep
           # (`../../../zenav1-svt/rust/svtav1`, the HDR-corpus zenav1-svt
           # arm). OFF in every CI build below, but cargo validates the path
@@ -175,7 +170,14 @@ jobs:
           # images were built against. No submodules needed — the C reference
           # tree is a differential-test asset, not a cargo dependency.
           git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
-          git -C ../zenav1-svt checkout 4c5c13246c53d0a3d4d667cb7c66804d5921c31a
+          git -C ../zenav1-svt checkout aeb619cd86622cf6b6d4d3e8d7df93dbc298dc95
+          # zenmetrics-cli's `hdr` feature path-deps `zenflate` too
+          # (`../../../zenflate`, gzip for the Diffmap executor's PFM blobs —
+          # added in 9093cc23 without this clone, which is what turned every
+          # CI job red at manifest load: "failed to read .../zenflate/Cargo.toml").
+          # OFF in every CI build below, but the path must exist.
+          git clone --quiet https://github.com/imazen/zenflate.git ../zenflate
+          git -C ../zenflate checkout 486e04ce7a75edbf5cbbaf50f6600f306243ec43
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -290,9 +292,9 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout f1bf0b9a43d73a97a4e02bbc3ab379d41c888727
+          git -C ../zenjpeg checkout 2b33b9922600016044569425a3253a8dd16dfb2e
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
+          git -C ../zenanalyze checkout 313bd75ad65daa898e3a69c5e2d23b075ab7a3a7
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
@@ -306,7 +308,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28ee00eb9771b3a25f7e37bd14c08e59158010ef
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout cd9a7325f97f5e178863d867c81b694cd8b169aa
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -315,20 +317,20 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 7bce0e3e053bafd369fc6cab00ec7b0de1d57fcb
+          git -C ../zenpng checkout f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout aa1665ec54d22179ba61029720c01afb54a82565
+          git -C ../zenwebp checkout d10eec2a2e98f70a4b868b13959cb6b0eb868c7c
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
+          git -C ../zenavif checkout 6e69831d3f069e4ed54f18f3828f7c871a6c3fc4
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
           # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
           git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
-          git -C ../zenrav1e checkout 2fac1af6
+          git -C ../zenrav1e checkout e4883037553434efb57ecbf4414c8b49922ba3e4
           # zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
           # requirement to zenavif-serialize = "0.2.0", but only 0.1.4 is
           # published, so [patch.crates-io] pins the local ../zenavif-serialize
@@ -338,31 +340,26 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
           git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
+          git -C ../zenjxl checkout 9226d3a32cfd82f6c079f2921a8237f4ae05ee24
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
-          git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
+          git -C ../zengif checkout 510e7a884b91e4cd573a09efa1086626e13f0576
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
-          git -C ../zenextras checkout e2d067c59c34e70cfad7d0c16593336c3a247821
+          git -C ../zenextras checkout 340b00e00f0dcb31a53ff3898772a28694591683
           git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
-          git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
+          git -C ../ravif checkout cb06487cfc8013413f5cb268a957bc87c15d9756
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
           # zensim pin. MUST be >= c28d29b8, which added the `feature-regime-v2`
           # feature that `zenmetrics-cli` (cpu-metrics) and `zensim-gpu` both
-          # request — the previous pin 5afc4f64 predates it, so cargo refused the
-          # whole workspace with "package `zenmetrics-cli` depends on `zensim`
-          # with feature `feature-regime-v2` but `zensim` does not have that
-          # feature". MUST also be < 471ce401, which made `feature_v2.rs` call
-          # `crate::attribution::*` while `mod attribution` stays gated behind
-          # `custom-profiles`; that breaks `cargo build -p zenmetrics-cli
-          # --no-default-features --features cpu-metrics` (where feature
-          # unification cannot pull `custom-profiles` in) with E0433. a7caccd5 is
-          # the newest commit satisfying both bounds, verified by building this
-          # workspace against it. When bumping past 471ce401, first confirm
-          # zensim compiles with `feature-regime-v2` on and `custom-profiles` OFF.
+          # request. The old upper bound (< 471ce401, whose `feature_v2.rs`
+          # called `crate::attribution::*` behind `custom-profiles` and broke
+          # `cargo build -p zenmetrics-cli --no-default-features --features
+          # cpu-metrics` with E0433) no longer applies: ea7d493d (zensim main,
+          # 2026-08-27) builds that exact feature set — verified locally with
+          # the zencodec 0.1.26 migration. When bumping, re-check that build.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout a7caccd5fac22afb011a7286977e8cc014616a50
+          git -C ../zensim checkout ea7d493d735bc1dbc2ed87a0583e18fddd40f8db
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -372,7 +369,7 @@ jobs:
           # ../../butteraugli so that ../../butteraugli/butteraugli/
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
+          git -C ../../butteraugli checkout 791d08d725f27b5331ef7b96e73aad89ed895f45
           # fast-ssim2 (zenmetrics-cli path dep `../../../fast-ssim2/fast-ssim2`
           # AND root [patch.crates-io] source for zenmetrics-api/-orchestrator —
           # the `hdr-pu` integrated-PU21 entry the CPU ssim2 HDR routing calls is
@@ -383,7 +380,7 @@ jobs:
           # workspace builds against (stable, fetchable). The fast-ssim2 pin must
           # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later).
           git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
-          git -C ../fast-ssim2 checkout 8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec
+          git -C ../fast-ssim2 checkout 7628f9ee7d165b9cc8b64fabb546235b66dfc76b
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
           # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
@@ -394,11 +391,11 @@ jobs:
           # root pulls `../zenjpeg/zenjpeg` (already cloned above). heic is
           # pinned to the ISO 21496-1 tmap-preference fix.
           git clone --quiet https://github.com/imazen/ultrahdr.git ../ultrahdr
-          git -C ../ultrahdr checkout a45314867a8220ce43a1b716f5a1aa35fe2ae882
+          git -C ../ultrahdr checkout 230552db465af5ea48f1bba17bc206041d977fe1
           git clone --quiet https://github.com/imazen/heic.git ../heic
-          git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
+          git -C ../heic checkout 8d40c94e018082f4bffcfc688dfbb8e83925a1b0
           git clone --quiet https://github.com/imazen/zentone.git ../zentone
-          git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
+          git -C ../zentone checkout df84ca43dcc4f6ca10b6b53631c182853b84ea43
           # zenmetrics-cli's `hdr-svt` feature path-dep
           # (`../../../zenav1-svt/rust/svtav1`, the HDR-corpus zenav1-svt
           # arm). OFF in every CI build below, but cargo validates the path
@@ -406,7 +403,14 @@ jobs:
           # images were built against. No submodules needed — the C reference
           # tree is a differential-test asset, not a cargo dependency.
           git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
-          git -C ../zenav1-svt checkout 4c5c13246c53d0a3d4d667cb7c66804d5921c31a
+          git -C ../zenav1-svt checkout aeb619cd86622cf6b6d4d3e8d7df93dbc298dc95
+          # zenmetrics-cli's `hdr` feature path-deps `zenflate` too
+          # (`../../../zenflate`, gzip for the Diffmap executor's PFM blobs —
+          # added in 9093cc23 without this clone, which is what turned every
+          # CI job red at manifest load: "failed to read .../zenflate/Cargo.toml").
+          # OFF in every CI build below, but the path must exist.
+          git clone --quiet https://github.com/imazen/zenflate.git ../zenflate
+          git -C ../zenflate checkout 486e04ce7a75edbf5cbbaf50f6600f306243ec43
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -481,9 +485,9 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout f1bf0b9a43d73a97a4e02bbc3ab379d41c888727
+          git -C ../zenjpeg checkout 2b33b9922600016044569425a3253a8dd16dfb2e
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
+          git -C ../zenanalyze checkout 313bd75ad65daa898e3a69c5e2d23b075ab7a3a7
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
@@ -497,7 +501,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28ee00eb9771b3a25f7e37bd14c08e59158010ef
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout cd9a7325f97f5e178863d867c81b694cd8b169aa
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -506,20 +510,20 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 7bce0e3e053bafd369fc6cab00ec7b0de1d57fcb
+          git -C ../zenpng checkout f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout aa1665ec54d22179ba61029720c01afb54a82565
+          git -C ../zenwebp checkout d10eec2a2e98f70a4b868b13959cb6b0eb868c7c
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
+          git -C ../zenavif checkout 6e69831d3f069e4ed54f18f3828f7c871a6c3fc4
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
           # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
           git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
-          git -C ../zenrav1e checkout 2fac1af6
+          git -C ../zenrav1e checkout e4883037553434efb57ecbf4414c8b49922ba3e4
           # zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
           # requirement to zenavif-serialize = "0.2.0", but only 0.1.4 is
           # published, so [patch.crates-io] pins the local ../zenavif-serialize
@@ -529,31 +533,26 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
           git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
+          git -C ../zenjxl checkout 9226d3a32cfd82f6c079f2921a8237f4ae05ee24
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
-          git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
+          git -C ../zengif checkout 510e7a884b91e4cd573a09efa1086626e13f0576
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
-          git -C ../zenextras checkout e2d067c59c34e70cfad7d0c16593336c3a247821
+          git -C ../zenextras checkout 340b00e00f0dcb31a53ff3898772a28694591683
           git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
-          git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
+          git -C ../ravif checkout cb06487cfc8013413f5cb268a957bc87c15d9756
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
           # zensim pin. MUST be >= c28d29b8, which added the `feature-regime-v2`
           # feature that `zenmetrics-cli` (cpu-metrics) and `zensim-gpu` both
-          # request — the previous pin 5afc4f64 predates it, so cargo refused the
-          # whole workspace with "package `zenmetrics-cli` depends on `zensim`
-          # with feature `feature-regime-v2` but `zensim` does not have that
-          # feature". MUST also be < 471ce401, which made `feature_v2.rs` call
-          # `crate::attribution::*` while `mod attribution` stays gated behind
-          # `custom-profiles`; that breaks `cargo build -p zenmetrics-cli
-          # --no-default-features --features cpu-metrics` (where feature
-          # unification cannot pull `custom-profiles` in) with E0433. a7caccd5 is
-          # the newest commit satisfying both bounds, verified by building this
-          # workspace against it. When bumping past 471ce401, first confirm
-          # zensim compiles with `feature-regime-v2` on and `custom-profiles` OFF.
+          # request. The old upper bound (< 471ce401, whose `feature_v2.rs`
+          # called `crate::attribution::*` behind `custom-profiles` and broke
+          # `cargo build -p zenmetrics-cli --no-default-features --features
+          # cpu-metrics` with E0433) no longer applies: ea7d493d (zensim main,
+          # 2026-08-27) builds that exact feature set — verified locally with
+          # the zencodec 0.1.26 migration. When bumping, re-check that build.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout a7caccd5fac22afb011a7286977e8cc014616a50
+          git -C ../zensim checkout ea7d493d735bc1dbc2ed87a0583e18fddd40f8db
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -563,7 +562,7 @@ jobs:
           # ../../butteraugli so that ../../butteraugli/butteraugli/
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
+          git -C ../../butteraugli checkout 791d08d725f27b5331ef7b96e73aad89ed895f45
           # fast-ssim2 (zenmetrics-cli path dep `../../../fast-ssim2/fast-ssim2`
           # AND root [patch.crates-io] source for zenmetrics-api/-orchestrator —
           # the `hdr-pu` integrated-PU21 entry the CPU ssim2 HDR routing calls is
@@ -574,7 +573,7 @@ jobs:
           # workspace builds against (stable, fetchable). The fast-ssim2 pin must
           # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later).
           git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
-          git -C ../fast-ssim2 checkout 8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec
+          git -C ../fast-ssim2 checkout 7628f9ee7d165b9cc8b64fabb546235b66dfc76b
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
           # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
@@ -585,11 +584,11 @@ jobs:
           # root pulls `../zenjpeg/zenjpeg` (already cloned above). heic is
           # pinned to the ISO 21496-1 tmap-preference fix.
           git clone --quiet https://github.com/imazen/ultrahdr.git ../ultrahdr
-          git -C ../ultrahdr checkout a45314867a8220ce43a1b716f5a1aa35fe2ae882
+          git -C ../ultrahdr checkout 230552db465af5ea48f1bba17bc206041d977fe1
           git clone --quiet https://github.com/imazen/heic.git ../heic
-          git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
+          git -C ../heic checkout 8d40c94e018082f4bffcfc688dfbb8e83925a1b0
           git clone --quiet https://github.com/imazen/zentone.git ../zentone
-          git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
+          git -C ../zentone checkout df84ca43dcc4f6ca10b6b53631c182853b84ea43
           # zenmetrics-cli's `hdr-svt` feature path-dep
           # (`../../../zenav1-svt/rust/svtav1`, the HDR-corpus zenav1-svt
           # arm). OFF in every CI build below, but cargo validates the path
@@ -597,7 +596,14 @@ jobs:
           # images were built against. No submodules needed — the C reference
           # tree is a differential-test asset, not a cargo dependency.
           git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
-          git -C ../zenav1-svt checkout 4c5c13246c53d0a3d4d667cb7c66804d5921c31a
+          git -C ../zenav1-svt checkout aeb619cd86622cf6b6d4d3e8d7df93dbc298dc95
+          # zenmetrics-cli's `hdr` feature path-deps `zenflate` too
+          # (`../../../zenflate`, gzip for the Diffmap executor's PFM blobs —
+          # added in 9093cc23 without this clone, which is what turned every
+          # CI job red at manifest load: "failed to read .../zenflate/Cargo.toml").
+          # OFF in every CI build below, but the path must exist.
+          git clone --quiet https://github.com/imazen/zenflate.git ../zenflate
+          git -C ../zenflate checkout 486e04ce7a75edbf5cbbaf50f6600f306243ec43
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -627,9 +633,9 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout f1bf0b9a43d73a97a4e02bbc3ab379d41c888727
+          git -C ../zenjpeg checkout 2b33b9922600016044569425a3253a8dd16dfb2e
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
+          git -C ../zenanalyze checkout 313bd75ad65daa898e3a69c5e2d23b075ab7a3a7
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
@@ -643,7 +649,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28ee00eb9771b3a25f7e37bd14c08e59158010ef
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout cd9a7325f97f5e178863d867c81b694cd8b169aa
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -652,20 +658,20 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 7bce0e3e053bafd369fc6cab00ec7b0de1d57fcb
+          git -C ../zenpng checkout f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout aa1665ec54d22179ba61029720c01afb54a82565
+          git -C ../zenwebp checkout d10eec2a2e98f70a4b868b13959cb6b0eb868c7c
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
+          git -C ../zenavif checkout 6e69831d3f069e4ed54f18f3828f7c871a6c3fc4
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
           # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
           git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
-          git -C ../zenrav1e checkout 2fac1af6
+          git -C ../zenrav1e checkout e4883037553434efb57ecbf4414c8b49922ba3e4
           # zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
           # requirement to zenavif-serialize = "0.2.0", but only 0.1.4 is
           # published, so [patch.crates-io] pins the local ../zenavif-serialize
@@ -675,31 +681,26 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
           git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
+          git -C ../zenjxl checkout 9226d3a32cfd82f6c079f2921a8237f4ae05ee24
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
-          git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
+          git -C ../zengif checkout 510e7a884b91e4cd573a09efa1086626e13f0576
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
-          git -C ../zenextras checkout e2d067c59c34e70cfad7d0c16593336c3a247821
+          git -C ../zenextras checkout 340b00e00f0dcb31a53ff3898772a28694591683
           git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
-          git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
+          git -C ../ravif checkout cb06487cfc8013413f5cb268a957bc87c15d9756
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
           # zensim pin. MUST be >= c28d29b8, which added the `feature-regime-v2`
           # feature that `zenmetrics-cli` (cpu-metrics) and `zensim-gpu` both
-          # request — the previous pin 5afc4f64 predates it, so cargo refused the
-          # whole workspace with "package `zenmetrics-cli` depends on `zensim`
-          # with feature `feature-regime-v2` but `zensim` does not have that
-          # feature". MUST also be < 471ce401, which made `feature_v2.rs` call
-          # `crate::attribution::*` while `mod attribution` stays gated behind
-          # `custom-profiles`; that breaks `cargo build -p zenmetrics-cli
-          # --no-default-features --features cpu-metrics` (where feature
-          # unification cannot pull `custom-profiles` in) with E0433. a7caccd5 is
-          # the newest commit satisfying both bounds, verified by building this
-          # workspace against it. When bumping past 471ce401, first confirm
-          # zensim compiles with `feature-regime-v2` on and `custom-profiles` OFF.
+          # request. The old upper bound (< 471ce401, whose `feature_v2.rs`
+          # called `crate::attribution::*` behind `custom-profiles` and broke
+          # `cargo build -p zenmetrics-cli --no-default-features --features
+          # cpu-metrics` with E0433) no longer applies: ea7d493d (zensim main,
+          # 2026-08-27) builds that exact feature set — verified locally with
+          # the zencodec 0.1.26 migration. When bumping, re-check that build.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout a7caccd5fac22afb011a7286977e8cc014616a50
+          git -C ../zensim checkout ea7d493d735bc1dbc2ed87a0583e18fddd40f8db
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -709,7 +710,7 @@ jobs:
           # ../../butteraugli so that ../../butteraugli/butteraugli/
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
+          git -C ../../butteraugli checkout 791d08d725f27b5331ef7b96e73aad89ed895f45
           # fast-ssim2 (zenmetrics-cli path dep `../../../fast-ssim2/fast-ssim2`
           # AND root [patch.crates-io] source for zenmetrics-api/-orchestrator —
           # the `hdr-pu` integrated-PU21 entry the CPU ssim2 HDR routing calls is
@@ -720,7 +721,7 @@ jobs:
           # workspace builds against (stable, fetchable). The fast-ssim2 pin must
           # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later).
           git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
-          git -C ../fast-ssim2 checkout 8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec
+          git -C ../fast-ssim2 checkout 7628f9ee7d165b9cc8b64fabb546235b66dfc76b
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
           # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
@@ -731,11 +732,11 @@ jobs:
           # root pulls `../zenjpeg/zenjpeg` (already cloned above). heic is
           # pinned to the ISO 21496-1 tmap-preference fix.
           git clone --quiet https://github.com/imazen/ultrahdr.git ../ultrahdr
-          git -C ../ultrahdr checkout a45314867a8220ce43a1b716f5a1aa35fe2ae882
+          git -C ../ultrahdr checkout 230552db465af5ea48f1bba17bc206041d977fe1
           git clone --quiet https://github.com/imazen/heic.git ../heic
-          git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
+          git -C ../heic checkout 8d40c94e018082f4bffcfc688dfbb8e83925a1b0
           git clone --quiet https://github.com/imazen/zentone.git ../zentone
-          git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
+          git -C ../zentone checkout df84ca43dcc4f6ca10b6b53631c182853b84ea43
           # zenmetrics-cli's `hdr-svt` feature path-dep
           # (`../../../zenav1-svt/rust/svtav1`, the HDR-corpus zenav1-svt
           # arm). OFF in every CI build below, but cargo validates the path
@@ -743,7 +744,14 @@ jobs:
           # images were built against. No submodules needed — the C reference
           # tree is a differential-test asset, not a cargo dependency.
           git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
-          git -C ../zenav1-svt checkout 4c5c13246c53d0a3d4d667cb7c66804d5921c31a
+          git -C ../zenav1-svt checkout aeb619cd86622cf6b6d4d3e8d7df93dbc298dc95
+          # zenmetrics-cli's `hdr` feature path-deps `zenflate` too
+          # (`../../../zenflate`, gzip for the Diffmap executor's PFM blobs —
+          # added in 9093cc23 without this clone, which is what turned every
+          # CI job red at manifest load: "failed to read .../zenflate/Cargo.toml").
+          # OFF in every CI build below, but the path must exist.
+          git clone --quiet https://github.com/imazen/zenflate.git ../zenflate
+          git -C ../zenflate checkout 486e04ce7a75edbf5cbbaf50f6600f306243ec43
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -770,9 +778,9 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout f1bf0b9a43d73a97a4e02bbc3ab379d41c888727
+          git -C ../zenjpeg checkout 2b33b9922600016044569425a3253a8dd16dfb2e
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
+          git -C ../zenanalyze checkout 313bd75ad65daa898e3a69c5e2d23b075ab7a3a7
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
@@ -786,7 +794,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout 28ee00eb9771b3a25f7e37bd14c08e59158010ef
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout cd9a7325f97f5e178863d867c81b694cd8b169aa
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -795,20 +803,20 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 7bce0e3e053bafd369fc6cab00ec7b0de1d57fcb
+          git -C ../zenpng checkout f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout aa1665ec54d22179ba61029720c01afb54a82565
+          git -C ../zenwebp checkout d10eec2a2e98f70a4b868b13959cb6b0eb868c7c
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 3636a3e4087a8d78e8c19b04651653b641ceacde
+          git -C ../zenavif checkout 6e69831d3f069e4ed54f18f3828f7c871a6c3fc4
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
           # workspace on ANY platform ("failed to read .../zenrav1e/Cargo.toml").
           git clone --quiet https://github.com/imazen/zenrav1e.git ../zenrav1e
-          git -C ../zenrav1e checkout 2fac1af6
+          git -C ../zenrav1e checkout e4883037553434efb57ecbf4414c8b49922ba3e4
           # zenavif-serialize: ../ravif/ravif (zenravif 0.2.0) bumped its own
           # requirement to zenavif-serialize = "0.2.0", but only 0.1.4 is
           # published, so [patch.crates-io] pins the local ../zenavif-serialize
@@ -818,31 +826,26 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
           git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout cea954f8c17b9b52c8c60167b89057d465ed3d61
+          git -C ../zenjxl checkout 9226d3a32cfd82f6c079f2921a8237f4ae05ee24
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
-          git -C ../zengif checkout 908a54f40abbd79e31959da6963c333f2e2c0c53
+          git -C ../zengif checkout 510e7a884b91e4cd573a09efa1086626e13f0576
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
-          git -C ../zenextras checkout e2d067c59c34e70cfad7d0c16593336c3a247821
+          git -C ../zenextras checkout 340b00e00f0dcb31a53ff3898772a28694591683
           git clone --quiet https://github.com/imazen/cavif-rs.git ../ravif
-          git -C ../ravif checkout 91e048b2827f6d1f9f5a81a291f34d679e2fed39
+          git -C ../ravif checkout cb06487cfc8013413f5cb268a957bc87c15d9756
           # zenjxl-decoder is no longer a sibling-path patch: the workspace
           # [patch.crates-io] pins a git rev directly (see Cargo.toml patch
           # comment), so cargo fetches it itself — no clone needed here.
           # zensim pin. MUST be >= c28d29b8, which added the `feature-regime-v2`
           # feature that `zenmetrics-cli` (cpu-metrics) and `zensim-gpu` both
-          # request — the previous pin 5afc4f64 predates it, so cargo refused the
-          # whole workspace with "package `zenmetrics-cli` depends on `zensim`
-          # with feature `feature-regime-v2` but `zensim` does not have that
-          # feature". MUST also be < 471ce401, which made `feature_v2.rs` call
-          # `crate::attribution::*` while `mod attribution` stays gated behind
-          # `custom-profiles`; that breaks `cargo build -p zenmetrics-cli
-          # --no-default-features --features cpu-metrics` (where feature
-          # unification cannot pull `custom-profiles` in) with E0433. a7caccd5 is
-          # the newest commit satisfying both bounds, verified by building this
-          # workspace against it. When bumping past 471ce401, first confirm
-          # zensim compiles with `feature-regime-v2` on and `custom-profiles` OFF.
+          # request. The old upper bound (< 471ce401, whose `feature_v2.rs`
+          # called `crate::attribution::*` behind `custom-profiles` and broke
+          # `cargo build -p zenmetrics-cli --no-default-features --features
+          # cpu-metrics` with E0433) no longer applies: ea7d493d (zensim main,
+          # 2026-08-27) builds that exact feature set — verified locally with
+          # the zencodec 0.1.26 migration. When bumping, re-check that build.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout a7caccd5fac22afb011a7286977e8cc014616a50
+          git -C ../zensim checkout ea7d493d735bc1dbc2ed87a0583e18fddd40f8db
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -852,7 +855,7 @@ jobs:
           # ../../butteraugli so that ../../butteraugli/butteraugli/
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
+          git -C ../../butteraugli checkout 791d08d725f27b5331ef7b96e73aad89ed895f45
           # fast-ssim2 (zenmetrics-cli path dep `../../../fast-ssim2/fast-ssim2`
           # AND root [patch.crates-io] source for zenmetrics-api/-orchestrator —
           # the `hdr-pu` integrated-PU21 entry the CPU ssim2 HDR routing calls is
@@ -863,7 +866,7 @@ jobs:
           # workspace builds against (stable, fetchable). The fast-ssim2 pin must
           # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later).
           git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
-          git -C ../fast-ssim2 checkout 8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec
+          git -C ../fast-ssim2 checkout 7628f9ee7d165b9cc8b64fabb546235b66dfc76b
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
           # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
@@ -874,11 +877,11 @@ jobs:
           # root pulls `../zenjpeg/zenjpeg` (already cloned above). heic is
           # pinned to the ISO 21496-1 tmap-preference fix.
           git clone --quiet https://github.com/imazen/ultrahdr.git ../ultrahdr
-          git -C ../ultrahdr checkout a45314867a8220ce43a1b716f5a1aa35fe2ae882
+          git -C ../ultrahdr checkout 230552db465af5ea48f1bba17bc206041d977fe1
           git clone --quiet https://github.com/imazen/heic.git ../heic
-          git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
+          git -C ../heic checkout 8d40c94e018082f4bffcfc688dfbb8e83925a1b0
           git clone --quiet https://github.com/imazen/zentone.git ../zentone
-          git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
+          git -C ../zentone checkout df84ca43dcc4f6ca10b6b53631c182853b84ea43
           # zenmetrics-cli's `hdr-svt` feature path-dep
           # (`../../../zenav1-svt/rust/svtav1`, the HDR-corpus zenav1-svt
           # arm). OFF in every CI build below, but cargo validates the path
@@ -886,7 +889,14 @@ jobs:
           # images were built against. No submodules needed — the C reference
           # tree is a differential-test asset, not a cargo dependency.
           git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
-          git -C ../zenav1-svt checkout 4c5c13246c53d0a3d4d667cb7c66804d5921c31a
+          git -C ../zenav1-svt checkout aeb619cd86622cf6b6d4d3e8d7df93dbc298dc95
+          # zenmetrics-cli's `hdr` feature path-deps `zenflate` too
+          # (`../../../zenflate`, gzip for the Diffmap executor's PFM blobs —
+          # added in 9093cc23 without this clone, which is what turned every
+          # CI job red at manifest load: "failed to read .../zenflate/Cargo.toml").
+          # OFF in every CI build below, but the path must exist.
+          git clone --quiet https://github.com/imazen/zenflate.git ../zenflate
+          git -C ../zenflate checkout 486e04ce7a75edbf5cbbaf50f6600f306243ec43
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

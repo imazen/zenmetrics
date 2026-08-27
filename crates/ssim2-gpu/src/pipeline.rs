@@ -704,7 +704,12 @@ impl<R: Runtime> Ssim2<R> {
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
-            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(srgb.chunks_exact(3)) {
+            for (chunk_out, triple) in dst
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(srgb.as_chunks::<3>().0.iter())
+            {
                 chunk_out[0] = triple[0];
                 chunk_out[1] = triple[1];
                 chunk_out[2] = triple[2];
@@ -855,7 +860,7 @@ impl<R: Runtime> Ssim2<R> {
         let mut r = vec![0.0f32; n];
         let mut g = vec![0.0f32; n];
         let mut b = vec![0.0f32; n];
-        for (i, px) in rgb.chunks_exact(3).enumerate() {
+        for (i, px) in rgb.as_chunks::<3>().0.iter().enumerate() {
             r[i] = px[0];
             g[i] = px[1];
             b[i] = px[2];
@@ -1077,7 +1082,12 @@ impl<R: Runtime> Ssim2<R> {
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
-            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(ref_srgb.chunks_exact(3)) {
+            for (chunk_out, triple) in dst
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(ref_srgb.as_chunks::<3>().0.iter())
+            {
                 chunk_out[0] = triple[0];
                 chunk_out[1] = triple[1];
                 chunk_out[2] = triple[2];
@@ -1827,7 +1837,11 @@ impl<R: Runtime> Ssim2<R> {
                 let src_row = &srgb[image_y * src_row_stride..(image_y + 1) * src_row_stride];
                 let dst_row =
                     &mut dst[sy * row_stride_bytes..sy * row_stride_bytes + row_stride_bytes];
-                for (chunk_out, triple) in dst_row.chunks_exact_mut(4).zip(src_row.chunks_exact(3))
+                for (chunk_out, triple) in dst_row
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
+                    .zip(src_row.as_chunks::<3>().0.iter())
                 {
                     chunk_out[0] = triple[0];
                     chunk_out[1] = triple[1];
@@ -2065,7 +2079,12 @@ impl<R: Runtime> Ssim2<R> {
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
-            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(srgb.chunks_exact(3)) {
+            for (chunk_out, triple) in dst
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(srgb.as_chunks::<3>().0.iter())
+            {
                 chunk_out[0] = triple[0];
                 chunk_out[1] = triple[1];
                 chunk_out[2] = triple[2];

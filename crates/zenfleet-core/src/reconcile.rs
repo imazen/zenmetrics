@@ -32,7 +32,10 @@ pub struct RetryPolicy {
 
 impl Default for RetryPolicy {
     fn default() -> Self {
-        Self { max_attempts: 3, stale_claim_after: None }
+        Self {
+            max_attempts: 3,
+            stale_claim_after: None,
+        }
     }
 }
 
@@ -184,7 +187,10 @@ mod tests {
         let plan = reconcile(
             std::slice::from_ref(&d),
             &view,
-            RetryPolicy { max_attempts: 3, stale_claim_after: None },
+            RetryPolicy {
+                max_attempts: 3,
+                stale_claim_after: None,
+            },
         );
         assert_eq!(plan.enqueue, vec![d.job_id()]);
         assert!(plan.poison.is_empty());
@@ -202,7 +208,10 @@ mod tests {
         let plan = reconcile(
             std::slice::from_ref(&d),
             &view,
-            RetryPolicy { max_attempts: 3, stale_claim_after: None },
+            RetryPolicy {
+                max_attempts: 3,
+                stale_claim_after: None,
+            },
         );
         assert_eq!(plan.poison, vec![d.job_id()]);
         assert!(plan.enqueue.is_empty());
@@ -220,7 +229,10 @@ mod tests {
         let plan = reconcile(
             std::slice::from_ref(&d),
             &view,
-            RetryPolicy { max_attempts: 3, stale_claim_after: None },
+            RetryPolicy {
+                max_attempts: 3,
+                stale_claim_after: None,
+            },
         );
         assert_eq!(plan.poison, vec![d.job_id()]);
         assert!(plan.enqueue.is_empty());

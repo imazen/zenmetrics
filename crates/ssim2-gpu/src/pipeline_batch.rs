@@ -356,7 +356,12 @@ impl<R: Runtime> Ssim2Batch<R> {
             let stride = n_full * 4;
             for (i, d) in dis.iter().enumerate() {
                 let slot = &mut dst[i * stride..(i + 1) * stride];
-                for (chunk_out, triple) in slot.chunks_exact_mut(4).zip(d.chunks_exact(3)) {
+                for (chunk_out, triple) in slot
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
+                    .zip(d.as_chunks::<3>().0.iter())
+                {
                     chunk_out[0] = triple[0];
                     chunk_out[1] = triple[1];
                     chunk_out[2] = triple[2];

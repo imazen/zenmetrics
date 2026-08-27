@@ -8,8 +8,9 @@
 //! `hdr_u8_pair` construction — `to_cvvdp_rgb8` for the cvvdp kinds, `to_sdr_rgb8`
 //! otherwise — then `run_metric` via `score_one_pair_maybe_hdr`; zensim features via
 //! `run_zensim_with_features`). Composing the primitives rather than invoking
-//! `cmd_score_pairs` itself keeps this test buildable while the `sweep` feature is
-//! blocked on the sibling-codec ErrorCategory reshape (score-pairs is `sweep`-gated);
+//! `cmd_score_pairs` itself keeps this test buildable without the `sweep` feature
+//! (score-pairs is `sweep`-gated; the feature was unbuildable during the sibling-codec
+//! ErrorCategory reshape and builds again since the zencodec 0.1.26 migration);
 //! the equivalence to the real command is by construction — the referenced blocks are
 //! the only code between decode-to-nits and the primitive calls. A follow-on
 //! end-to-end run against the staged fleet binary covers the GPU metrics

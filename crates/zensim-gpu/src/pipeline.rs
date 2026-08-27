@@ -1632,7 +1632,7 @@ impl<R: Runtime> Zensim<R> {
         for (dst, chunk) in self
             .pack_scratch_full
             .iter_mut()
-            .zip(ref_srgb.chunks_exact(3))
+            .zip(ref_srgb.as_chunks::<3>().0.iter())
         {
             *dst = (chunk[0] as u32) | ((chunk[1] as u32) << 8) | ((chunk[2] as u32) << 16);
         }
@@ -1850,7 +1850,11 @@ impl<R: Runtime> Zensim<R> {
         // out; on-device math is unchanged. 3× H2D bandwidth saving
         // vs the older "widen each u8 to its own u32" layout —
         // significant on WSL2 where PCIe is virtualised to ~3 GB/s.
-        for (dst, chunk) in self.pack_scratch.iter_mut().zip(srgb.chunks_exact(3)) {
+        for (dst, chunk) in self
+            .pack_scratch
+            .iter_mut()
+            .zip(srgb.as_chunks::<3>().0.iter())
+        {
             *dst = (chunk[0] as u32) | ((chunk[1] as u32) << 8) | ((chunk[2] as u32) << 16);
         }
         // T4.M (2026-05-16): pinned-host upload via the lilith/cubecl
@@ -1896,7 +1900,7 @@ impl<R: Runtime> Zensim<R> {
             .pack_scratch
             .iter_mut()
             .take(strip_pixels)
-            .zip(strip_slice.chunks_exact(3))
+            .zip(strip_slice.as_chunks::<3>().0.iter())
         {
             *dst = (chunk[0] as u32) | ((chunk[1] as u32) << 8) | ((chunk[2] as u32) << 16);
         }
@@ -2374,7 +2378,7 @@ fn srgb_u8_to_linear_planes_tight(
     let (r_plane, gb_planes) = out.split_first_mut().unwrap();
     let (g_plane, b_planes) = gb_planes.split_first_mut().unwrap();
     let b_plane = &mut b_planes[0];
-    for (i, pixel) in src.chunks_exact(3).enumerate() {
+    for (i, pixel) in src.as_chunks::<3>().0.iter().enumerate() {
         r_plane[i] = lut[pixel[0] as usize];
         g_plane[i] = lut[pixel[1] as usize];
         b_plane[i] = lut[pixel[2] as usize];

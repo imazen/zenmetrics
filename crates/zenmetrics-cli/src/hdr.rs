@@ -836,10 +836,10 @@ fn score_via_hdr_scorer_inner(
 //
 // [`score_hdr_pair_per_score_pairs`] + [`score_hdr_zensim_with_features_per_score_pairs`]
 // are that table as code — ONE implementation for jobexec's `score_file` HDR arm today,
-// and the target for `cmd_score_pairs`' HDR blocks to delegate to once the `sweep`
-// feature builds again (blocked on the sibling-codec ErrorCategory reshape; the blocks
-// in main.rs are line-for-line the same primitive calls, so behaviour already matches).
-// `hdr_pair_parity.rs` (tests) locks the equivalence per metric.
+// and the target for `cmd_score_pairs`' HDR blocks to delegate to (the blocks in main.rs
+// are line-for-line the same primitive calls, so behaviour already matches; the `sweep`
+// feature builds again since the zencodec 0.1.26 migration, so nothing blocks that
+// delegation now). `hdr_pair_parity.rs` (tests) locks the equivalence per metric.
 
 use std::cell::OnceCell;
 

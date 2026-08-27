@@ -259,7 +259,12 @@ pub(crate) fn pack_strip_srgb_into(
         let dst_off = sy * w * 4;
         let src_row = &src[src_off..src_off + w * 3];
         let dst_row = &mut dst[dst_off..dst_off + w * 4];
-        for (chunk_out, triple) in dst_row.chunks_exact_mut(4).zip(src_row.chunks_exact(3)) {
+        for (chunk_out, triple) in dst_row
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(src_row.as_chunks::<3>().0.iter())
+        {
             chunk_out[0] = triple[0];
             chunk_out[1] = triple[1];
             chunk_out[2] = triple[2];

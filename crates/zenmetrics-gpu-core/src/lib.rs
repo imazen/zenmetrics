@@ -307,8 +307,10 @@ pub fn convert_to_linear_f32(
     }
     // Reinterpret the f32 bytes without an alignment assumption.
     Ok(out
-        .chunks_exact(4)
-        .map(|b| f32::from_ne_bytes([b[0], b[1], b[2], b[3]]))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| f32::from_ne_bytes(*b))
         .collect())
 }
 /// Split an interleaved RGB `f32` buffer (`[R,G,B, R,G,B, …]`, length `3·n`)
@@ -325,7 +327,7 @@ pub fn deinterleave_rgb_f32(rgb: &[f32]) -> Option<(Vec<f32>, Vec<f32>, Vec<f32>
     let mut r = Vec::with_capacity(n);
     let mut g = Vec::with_capacity(n);
     let mut b = Vec::with_capacity(n);
-    for px in rgb.chunks_exact(3) {
+    for px in rgb.as_chunks::<3>().0 {
         r.push(px[0]);
         g.push(px[1]);
         b.push(px[2]);

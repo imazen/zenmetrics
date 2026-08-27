@@ -2335,7 +2335,7 @@ fn deinterleave_rgb(rgb: &[f32], which: &'static str) -> Result<(Vec<f32>, Vec<f
         Vec::with_capacity(n),
         Vec::with_capacity(n),
     );
-    for px in rgb.chunks_exact(3) {
+    for px in rgb.as_chunks::<3>().0 {
         r.push(px[0]);
         g.push(px[1]);
         b.push(px[2]);

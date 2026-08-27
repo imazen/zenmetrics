@@ -167,7 +167,11 @@ pub fn list_basenames(endpoint: &str, bucket: &str, prefix: &str) -> Result<Vec<
 /// List the objects directly under `prefix/` with their last-modified times (unix secs).
 /// The sidecar-fold (anti-wedge invariant 4/7) uses this to fold only chunk files newer
 /// than the worker's snapshot view.
-pub fn list_entries(endpoint: &str, bucket: &str, prefix: &str) -> Result<Vec<(String, i64)>, String> {
+pub fn list_entries(
+    endpoint: &str,
+    bucket: &str,
+    prefix: &str,
+) -> Result<Vec<(String, i64)>, String> {
     let s = store(endpoint, bucket)?;
     let p = OsPath::from(prefix.trim_matches('/'));
     let res = runtime()
