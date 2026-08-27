@@ -41,11 +41,21 @@ fn sizes_fixture(dir: &std::path::Path, rows: &[(&str, u64)]) -> std::path::Path
 }
 
 #[test]
-fn duplicate_encode_sha_is_a_hard_error() {
+fn duplicate_sha_in_scores_is_legal_but_in_sidecars_is_an_error() {
+    // scores side: many cells may share one byte-identical encode — legal.
     let d = tempfile::tempdir().unwrap();
     let s = scores_fixture(d.path(), &["aaa", "aaa"]);
     let z = sizes_fixture(d.path(), &[("aaa", 10)]);
-    let e = run_flat_picker(&s, &z, &[], &[], &[], "lossy", false, &d.path().join("o.parquet"))
+    run_flat_picker(&s, &z, &[], &[], &[], "lossy", false, &d.path().join("o.parquet")).unwrap();
+    // sha-keyed sidecar side: duplicates are corruption — hard error.
+    let extra = Table::from_columns(vec![
+        ("encode_sha".into(), Column::Str(vec![Some("aaa".into()), Some("aaa".into())])),
+        ("zensim_c944".into(), Column::F64(vec![1.0, 2.0])),
+    ])
+    .unwrap();
+    let xp = d.path().join("extra.parquet");
+    write_parquet(&extra, &xp).unwrap();
+    let e = run_flat_picker(&s, &z, &[xp], &[], &[], "lossy", false, &d.path().join("o2.parquet"))
         .unwrap_err();
     assert!(e.to_string().contains("DUPLICATE encode_sha"), "{e}");
 }

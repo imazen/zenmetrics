@@ -81,8 +81,25 @@ pub fn run_flat_picker(
 ) -> Result<(), AssembleError> {
     let t = read_parquet(scores)?;
     let n = t.num_rows();
+    // Row identity in the scores table is the CELL, not the sha: content
+    // addressing legitimately maps many cells onto one byte-identical encode
+    // (e.g. q-extremes on flat renditions), so `encode_sha` here is a
+    // many-to-one JOIN KEY to attributes that are functions of the bytes
+    // (size, model scores). Uniqueness IS enforced on the sha-keyed side
+    // (sizes tsv, extra sidecars) below.
     let shas = str_col(&t, "encode_sha", "scores")?;
-    assert_unique(&shas, "scores")?;
+    let distinct: std::collections::HashSet<&str> =
+        shas.iter().filter_map(|s| s.as_deref()).collect();
+    if distinct.len() < n {
+        eprintln!(
+            "[flat-picker] note: {} cells share {} distinct encode_shas (byte-identical encodes; expected under content addressing)",
+            n,
+            distinct.len()
+        );
+    }
+    if shas.iter().any(|s| s.is_none()) {
+        return Err(err("scores: null encode_sha".into()));
+    }
 
     // bytes from the blob listing
     let sizes_raw = std::fs::read_to_string(sizes_tsv)

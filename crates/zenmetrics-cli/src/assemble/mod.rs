@@ -94,14 +94,15 @@ pub struct AssembleArgs {
     #[arg(long, default_value = "zentrain")]
     pub bucket: String,
 
-    /// Local cache for downloaded sidecars. Re-used (resumable) across runs.
+    /// Local cache for downloaded sidecars (per-codec mode). Re-used
+    /// (resumable) across runs.
     #[arg(long)]
-    pub cache_dir: PathBuf,
+    pub cache_dir: Option<PathBuf>,
 
     /// Output directory for the per-codec parquets
     /// (`<out_dir>/<codec>_training.parquet`).
     #[arg(long)]
-    pub out_dir: PathBuf,
+    pub out_dir: Option<PathBuf>,
 
     /// Filter to these codec column values. Default: every codec found in the
     /// joined data.
@@ -193,6 +194,11 @@ pub fn run_assemble(args: &AssembleArgs) -> Result<(), AssembleError> {
             if args.runs.is_empty() {
                 return Err(AssembleError::Schema(
                     "--runs is required for --mode per-codec".into(),
+                ));
+            }
+            if args.cache_dir.is_none() || args.out_dir.is_none() {
+                return Err(AssembleError::Schema(
+                    "--cache-dir and --out-dir are required for --mode per-codec".into(),
                 ));
             }
             run_per_codec(args)
@@ -307,8 +313,9 @@ fn run_per_codec(args: &AssembleArgs) -> Result<(), AssembleError> {
     );
 
     // === STEP E: split per codec + write (with integrity guards) ===
-    std::fs::create_dir_all(&args.out_dir)
-        .map_err(|e| AssembleError::Io(format!("mkdir {}: {e}", args.out_dir.display())))?;
+    let out_dir = args.out_dir.as_ref().expect("checked at dispatch");
+    std::fs::create_dir_all(out_dir)
+        .map_err(|e| AssembleError::Io(format!("mkdir {}: {e}", out_dir.display())))?;
     let codecs_in_data = joined.distinct_str("codec")?;
     let codecs_to_write: Vec<String> = if args.codecs.is_empty() {
         codecs_in_data.clone()
@@ -352,7 +359,7 @@ fn run_per_codec(args: &AssembleArgs) -> Result<(), AssembleError> {
             }
         }
 
-        let out_path = args.out_dir.join(format!("{codec}_training.parquet"));
+        let out_path = out_dir.join(format!("{codec}_training.parquet"));
         parquet_io::write_parquet(&sub, &out_path)?;
         let size = std::fs::metadata(&out_path).map(|m| m.len()).unwrap_or(0);
         eprintln!(
@@ -377,7 +384,7 @@ fn load_kind(
 ) -> Result<Table, AssembleError> {
     let mut all_tables: Vec<Table> = Vec::new();
     for run in &args.runs {
-        let local = args.cache_dir.join(run).join(kind);
+        let local = args.cache_dir.as_ref().expect("checked at dispatch").join(run).join(kind);
         if let Some(s) = sync {
             let prefix = format!("s3://{}/{}/{}/", args.bucket, run, kind);
             eprintln!("  syncing {prefix} → {}", local.display());
