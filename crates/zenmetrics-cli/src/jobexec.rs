@@ -689,6 +689,7 @@ fn warmref_score_eligible(
         o.insert("codec".into(), serde_json::json!(codec_name));
         o.insert("encode_sha".into(), serde_json::json!(sha));
         o.insert("metric".into(), serde_json::json!(m));
+        o.insert("runtime".into(), serde_json::json!(metric_runtime(m)));
         match res.outcome {
             Ok(score) => {
                 let mut scores = Map::new();
@@ -816,6 +817,11 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         o.insert("encode_sha".into(), serde_json::json!(sha));
         if let Value::Object(m) = extra {
             o.extend(m);
+        }
+        // Runtime provenance, derived from the row's own metric name — one
+        // insertion covers every mk_row caller (score + error rows alike).
+        if let Some(Value::String(m)) = o.get("metric").cloned() {
+            o.insert("runtime".into(), serde_json::json!(metric_runtime(&m)));
         }
         Ok(serde_json::to_string(&Value::Object(o))?)
     };
@@ -1348,6 +1354,31 @@ fn score_hdr_decoded_variant(
 /// exact (no quantization decision to defend), and standard-tool-readable; gzip
 /// because diffmaps are smooth and compress well, via the in-house `zenflate`.
 #[cfg(feature = "hdr")]
+
+/// Runtime provenance for a scored row (GOAL FLEET criterion: "runtime column
+/// proves it"). Truthful by construction: a `-gpu`/`_gpu` metric name can only
+/// execute on the built GPU backend (the dispatch errors otherwise), and bare
+/// names are CPU-native per docs/METRIC_DISPATCH_CONSOLIDATION.md — so the
+/// name + compiled backend IS the runtime.
+fn metric_runtime(metric: &str) -> &'static str {
+    let m = metric.to_ascii_lowercase();
+    if m.ends_with("-gpu") || m.ends_with("_gpu") {
+        if cfg!(feature = "gpu-cuda") {
+            "gpu-cuda"
+        } else if cfg!(feature = "gpu-wgpu") {
+            "gpu-wgpu"
+        } else if cfg!(feature = "gpu-hip") {
+            "gpu-hip"
+        } else if cfg!(feature = "gpu-cpu") {
+            "gpu-cpu-emu"
+        } else {
+            "gpu"
+        }
+    } else {
+        "cpu"
+    }
+}
+
 fn diffmap_to_pfm_gz(map: &[f32], width: u32, height: u32) -> Result<Vec<u8>, Box<dyn Error>> {
     use zenflate::{CompressionLevel, Compressor, Unstoppable};
     let (w, h) = (width as usize, height as usize);
