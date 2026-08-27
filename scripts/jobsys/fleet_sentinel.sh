@@ -57,7 +57,8 @@ while [ $SECONDS -lt $END ]; do
   if probe_write; then W=ok; write_was_ok=1; write_fail=0; else W=fail; write_fail=$((write_fail+1)); fi
   GAPTXT=""
   if [ -n "$RUNLIST" ] && [ "$W" = ok ]; then
-    G=$(cd "$(dirname "$0")/../.." && timeout 500 /usr/bin/python3 scripts/jobsys/pool_reconcile_report.py "$RUNLIST" 2>/dev/null | grep -a "TOTAL" | grep -oE "gap=[0-9]+" | head -1)
+    JOBCTL="${ZEN_JOBCTL:-$(cd "$(dirname "$0")/../.." && pwd)/target/release/zenfleet-ctl}"
+    G=$(timeout 170 "$JOBCTL" report --runlist "$RUNLIST" 2>/dev/null | grep -a "^TOTAL" | grep -oE "gap=[0-9]+" | head -1)
     GAPTXT=" $G"
     if [ -n "$G" ]; then
       if [ "$G" = "$last_gap" ]; then gap_same=$((gap_same+1)); else gap_same=0; fi

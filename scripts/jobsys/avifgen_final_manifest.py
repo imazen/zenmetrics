@@ -53,7 +53,7 @@ m['provenance'] = {
     'rescue': rescue_truth,
     'sample_verdict': verdict,
     'stall': ('The rescue union was declared 2026-08-08 14:44Z; its operator daemon died silently from 21:57Z '
-              '(compact_ledgers.py timeout 560s < the measured 768s ledger-read at ~10k sidecars — the count parse '
+              '(the old compact timeout 560s < the measured 768s ledger-read at ~10k sidecars — the count parse '
               'returned nothing and the daemon masked stderr) and the owning session was lost in harness restarts ~22:00Z. '
               'The WORKERS kept draining to 8,361/8,623 and stopped at scoped-cred expiry 2026-08-11 09:37Z. '
               'The lane sat dead 13 days (no waiter, no heartbeat) until the 2026-08-21 revival: fresh scoped cred minted, '

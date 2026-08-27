@@ -226,7 +226,7 @@ pool_mode(){
   # single-run queue is the documented 2.0-3.4x re-work treadmill. Strict mode makes
   # the miss FATAL instead of a benign-looking snap=none heartbeat.
   if [ "${ZEN_REQUIRE_SNAPSHOT:-0}" = "1" ] && [ ! -s "$snap" ]; then
-    echo "FATAL: ZEN_REQUIRE_SNAPSHOT=1 but no ledger_snapshot.parquet for $run — run compact_ledgers.py + upload, or set ZEN_REQUIRE_SNAPSHOT=0" >&2
+    echo "FATAL: ZEN_REQUIRE_SNAPSHOT=1 but no ledger_snapshot.parquet for $run — run \`zenfleet-ctl compact --run <run> --upload\`, or set ZEN_REQUIRE_SNAPSHOT=0" >&2
     exit 3
   fi
       local li=(); [ -s "$snap" ] && li=(--ledger-in "$snap")
@@ -317,7 +317,7 @@ while :; do
   rm -f /tmp/jobexec_src_* /tmp/jobexec_var_* /tmp/jobexec_dist_* 2>/dev/null || true
   # --ledger-in done-set snapshot (same contract as POOL mode, which has always fetched it):
   # without it the reconcile view is EMPTY, the gap is ALL cells every pass, and dedup falls to
-  # the claim lease — the documented 2.0-3.4x re-work tax (compact_ledgers.py docstring), which
+  # the claim lease — the documented 2.0-3.4x re-work tax (\`zenfleet-ctl compact\` docs), which
   # single-run workers paid until 2026-08-06 (avifgen encode run, measured rate collapse in the
   # tail). Re-fetched EVERY pass so long-lived workers pick up operator-side refreshes. Absent
   # snapshot (fresh run, nobody compacted yet) = old behaviour.
@@ -337,7 +337,7 @@ while :; do
   # absent snapshot is the documented 2.0-3.4x re-work treadmill (measured 2.44x live).
   # Strict mode (launcher default) makes the miss FATAL with the remedy named.
   if [ "${ZEN_REQUIRE_SNAPSHOT:-0}" = "1" ] && [ ! -s "$SNAP" ]; then
-    echo "FATAL: ZEN_REQUIRE_SNAPSHOT=1 but no ledger_snapshot.parquet for $ZEN_RUN — run compact_ledgers.py + upload it, or launch with ZEN_REQUIRE_SNAPSHOT=0 (fresh run)" >&2
+    echo "FATAL: ZEN_REQUIRE_SNAPSHOT=1 but no ledger_snapshot.parquet for $ZEN_RUN — run \`zenfleet-ctl compact --run <run> --upload\`, or launch with ZEN_REQUIRE_SNAPSHOT=0 (fresh run)" >&2
     exit 3
   fi
   # HEARTBEAT emitted BEFORE the blocking call: if the worker hangs, this line has

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use zenfleet_core::{
     CellId, DesiredJob, JobKind, JobStatus, LedgerView, ResourceHint, RetryPolicy, Sha256Hex,
-    reconcile,
+    reconcile, LedgerRow,
 };
 
 fn empty_knobs() -> String {
@@ -234,6 +234,80 @@ fn metric_label(kind: &JobKind) -> String {
         JobKind::Bake { .. } => "bake".into(),
         JobKind::ScoreFile { metrics, .. } => format!("scorefile:{}", metrics.join("+")),
     }
+}
+
+/// Per-run reconcile accounting (the `jobctl report` core; migrated 2026-08-27
+/// from `scripts/jobsys/pool_reconcile_report.py` — Python read parquet ledgers
+/// and re-derived done/failed sets, duplicating [`LedgerView`] semantics).
+/// `distinct_done` = distinct job_ids with a done row; `failed_only` = distinct
+/// job_ids with a failed row and NO done row; `gap` = declared − distinct_done
+/// (can go negative on re-declared runs — reported as 0-floored in totals by
+/// the caller, matching the Python).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RunAccounting {
+    pub declared: usize,
+    pub distinct_done: usize,
+    pub failed_only: usize,
+    pub gap: i64,
+    pub raw_rows: usize,
+}
+
+/// Account raw ledger rows against a declared count. Pure; the bin owns I/O.
+pub fn account_rows(declared: usize, rows: &[LedgerRow]) -> RunAccounting {
+    use std::collections::HashSet;
+    let mut done: HashSet<&str> = HashSet::new();
+    let mut failed: HashSet<&str> = HashSet::new();
+    for r in rows {
+        match r.status {
+            JobStatus::Done => {
+                done.insert(r.job_id.as_str());
+            }
+            JobStatus::Failed => {
+                failed.insert(r.job_id.as_str());
+            }
+            _ => {}
+        }
+    }
+    let failed_only = failed.iter().filter(|j| !done.contains(**j)).count();
+    RunAccounting {
+        declared,
+        distinct_done: done.len(),
+        failed_only,
+        gap: declared as i64 - done.len() as i64,
+        raw_rows: rows.len(),
+    }
+}
+
+/// Build a snapshot row set from raw ledger rows (the `jobctl compact` core;
+/// migrated 2026-08-27 from `scripts/jobsys/compact_ledgers.py`): every
+/// status==done row FIRST-WINS per job_id, PLUS — anti-wedge invariant 4 —
+/// the NEWEST (max ts) failed row for every job_id with no done row, so the
+/// worker's `--ledger-in` view preserves attempt history and the
+/// retry→Poison ladder actually fires. Returns (snapshot, n_done, n_failed).
+pub fn snapshot_rows(rows: Vec<LedgerRow>) -> (Vec<LedgerRow>, usize, usize) {
+    use std::collections::{HashMap, HashSet};
+    let mut done_seen: HashSet<String> = HashSet::new();
+    let mut snap: Vec<LedgerRow> = Vec::new();
+    for r in &rows {
+        if r.status == JobStatus::Done && done_seen.insert(r.job_id.as_str().to_string()) {
+            snap.push(r.clone());
+        }
+    }
+    let n_done = snap.len();
+    let mut best: HashMap<&str, &LedgerRow> = HashMap::new();
+    for r in &rows {
+        if r.status == JobStatus::Failed && !done_seen.contains(r.job_id.as_str()) {
+            let e = best.entry(r.job_id.as_str()).or_insert(r);
+            if r.ts > e.ts {
+                *e = r;
+            }
+        }
+    }
+    let n_failed = best.len();
+    let mut failed_rows: Vec<LedgerRow> = best.into_values().cloned().collect();
+    failed_rows.sort_by(|a, b| a.job_id.as_str().cmp(b.job_id.as_str()));
+    snap.extend(failed_rows);
+    (snap, n_done, n_failed)
 }
 
 /// Coverage per (codec, metric): done / poison / still-a-gap, derived purely from the ledger
@@ -580,5 +654,86 @@ mod tests {
             gap(&d, &view, RetryPolicy::default()).is_empty(),
             "fully-done declaration → no-op"
         );
+    }
+}
+
+#[cfg(test)]
+mod migrate_tests {
+    use super::*;
+    use zenfleet_core::{CellId, JobKind, JobStatus, LedgerRow};
+
+    fn row(tag: &str, status: JobStatus, ts: u64) -> LedgerRow {
+        let job = DesiredJob::new(
+            JobKind::Metric { metric: "cvvdp".into() },
+            vec![zenfleet_core::sha256(tag.as_bytes())],
+            CellId {
+                image_path: format!("{tag}.png"),
+                codec: "zenjxl".into(),
+                q: 80,
+                knob_tuple_json: "{}".into(),
+            },
+        );
+        LedgerRow {
+            job_id: job.job_id(),
+            kind: job.kind.clone(),
+            cell: job.cell.clone(),
+            output_sha: None,
+            status,
+            error_class: None,
+            attempts: 1,
+            ts,
+            worker: "t".into(),
+            provider: "t".into(),
+        }
+    }
+
+    #[test]
+    fn account_rows_python_semantics() {
+        // a: done (twice) — counts once; b: failed only; c: failed then done — done wins
+        let rows = vec![
+            row("a", JobStatus::Done, 10),
+            row("a", JobStatus::Done, 11),
+            row("b", JobStatus::Failed, 5),
+            row("c", JobStatus::Failed, 6),
+            row("c", JobStatus::Done, 7),
+        ];
+        let acc = account_rows(4, &rows);
+        assert_eq!(
+            acc,
+            RunAccounting {
+                declared: 4,
+                distinct_done: 2,
+                failed_only: 1,
+                gap: 2,
+                raw_rows: 5
+            }
+        );
+        // negative gap on re-declared runs is preserved, not clamped here
+        assert_eq!(account_rows(1, &rows).gap, -1);
+    }
+
+    #[test]
+    fn snapshot_rows_first_wins_done_plus_newest_failed() {
+        let rows = vec![
+            row("a", JobStatus::Done, 10), // kept (first)
+            row("a", JobStatus::Done, 99), // dropped (first-wins)
+            row("b", JobStatus::Failed, 5),
+            row("b", JobStatus::Failed, 9), // kept (newest failed, no done)
+            row("c", JobStatus::Failed, 6), // dropped (c has a done row)
+            row("c", JobStatus::Done, 7),   // kept
+        ];
+        let (snap, n_done, n_failed) = snapshot_rows(rows);
+        assert_eq!((n_done, n_failed), (2, 1));
+        assert_eq!(snap.len(), 3);
+        let done_ts: Vec<u64> = snap
+            .iter()
+            .filter(|r| r.status == JobStatus::Done)
+            .map(|r| r.ts)
+            .collect();
+        assert_eq!(done_ts, vec![10, 7], "first done row wins, in scan order");
+        let failed: Vec<&LedgerRow> =
+            snap.iter().filter(|r| r.status == JobStatus::Failed).collect();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].ts, 9, "newest failed row carried");
     }
 }

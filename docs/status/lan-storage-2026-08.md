@@ -44,7 +44,7 @@ snapshot cadences) gain ~9×; concurrency-heavy bursts gain 2.6-4.9×.
 - `scripts/lib/s3env.sh` + `scripts/lib/zen_s3env.py` — THE endpoint+creds resolver.
   `ZEN_S3_ENDPOINT` unset ⇒ R2 exactly as before (byte-identical behavior); set ⇒ that
   endpoint + `ZEN_S3_ACCESS_KEY_ID`/`ZEN_S3_SECRET_ACCESS_KEY` (env or `ZEN_S3_ENV` file).
-- Standing entry points source the lib: `refresh_snapshots.sh`+`compact_ledgers.py`,
+- Standing entry points source the lib: `refresh_snapshots.sh`+``zenfleet-ctl compact` (migrated 2026-08-27 from compact_ledgers.py)`,
   `launch_fleet.sh` (LAN mode: static store cred, no CF mint, **cloud tiers refused
   loud**), `demo_e2e_r2.sh`, `writeback_scores.py`.
 - 39 more operator-side scripts honor the override mechanically. Deliberately pinned to

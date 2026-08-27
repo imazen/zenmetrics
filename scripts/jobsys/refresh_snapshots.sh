@@ -44,14 +44,16 @@ runs=$(cut -f1 /tmp/runlist_refresh.tsv | grep -E '^bf' | sort -u)
 echo "$(date -u +%FT%TZ) refresh START: $(printf '%s\n' "$runs" | grep -c .) runs" | tee -a "$LOG"
 
 compact_one(){
-  local run="$1" snap="$HOME/tmp/zen-snaps/snap_${1}.parquet"
-  if nice -n 19 python3 "$HERE/compact_ledgers.py" "$run" >/dev/null 2>&1 && [ -s "$snap" ]; then
-    if AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
-       s5cmd --endpoint-url "$EP" cp "$snap" "s3://$BUCKET/jobs/${run}/ledger_snapshot.parquet" >/dev/null 2>&1; then
-      echo "OK $run"
-    else echo "UPLOAD-FAIL $run"; fi
+  # zenfleet-ctl compact --upload = the whole build+upload (migrated 2026-08-27
+  # from compact_ledgers.py + the separate s5cmd cp; the OK/UPLOAD-FAIL split
+  # collapses into one verb because upload is part of the command now).
+  local run="$1"
+  if AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
+     ZEN_R2_ENDPOINT="$EP" nice -n 19 "$JOBCTL" compact --run "$run" --bucket "$BUCKET" --upload >/dev/null 2>&1; then
+    echo "OK $run"
   else echo "COMPACT-FAIL $run"; fi
 }
-export -f compact_one; export EP R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY HOME HERE BUCKET
+JOBCTL="${ZEN_JOBCTL:-$(cd "$HERE/../.." && pwd)/target/release/zenfleet-ctl}"
+export -f compact_one; export EP R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY HOME HERE BUCKET JOBCTL
 printf '%s\n' "$runs" | xargs -P 3 -I{} bash -c 'compact_one "$@"' _ {} | tee -a "$LOG"
 echo "$(date -u +%FT%TZ) refresh DONE" | tee -a "$LOG"

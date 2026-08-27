@@ -17,8 +17,8 @@ import pyarrow.fs as fs, pyarrow.parquet as pq
 # FIXED 2026-08-24: this used to hardcode a read of ~/.config/cloudflare/r2-credentials
 # regardless of ZEN_STORE, so pointing it at the LAN store via ZEN_S3_ENDPOINT still
 # authenticated with the R2 access key — rejected by SeaweedFS (wrong key), not a graceful
-# fallback. compact_ledgers.py/refresh_snapshots.sh already used the resolver correctly;
-# this script and pool_reconcile_report.py were the two stragglers.
+# fallback. refresh_snapshots.sh (and the since-migrated compact tool) already used the resolver correctly;
+# this script and the (since-migrated) reconcile report were the two stragglers.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "lib"))
 from zen_s3env import resolve
 
