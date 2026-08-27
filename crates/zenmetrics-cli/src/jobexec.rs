@@ -741,6 +741,32 @@ fn cli_kind_from_metric_kind(k: MetricKind) -> Option<crate::metrics::MetricKind
 /// metrics are scored via one warm-reference `run_all` batch (ref uploaded once per source, not per
 /// variant — the fix for the 54% H2D / ~10% GPU util); butteraugli + zensim-with-features stay on the
 /// inline path. Default OFF = byte-identical one-shot behaviour.
+/// All-error guard (2026-08-27, the hdrgrid lesson): a ScoreFile job whose
+/// EVERY row is an error row means the executor ENVIRONMENT is broken (bad
+/// image vintage, non-operational GPU, missing build feature) — completing it
+/// "done" buries the failure in blob content where no ledger gauge sees it
+/// (7,449 such cells found by `audit-blobs --scan-errors`). Per-variant
+/// partial errors stay legitimate; ALL-error fails the job so the retry
+/// ladder + poison evidence work as designed.
+fn all_error_guard(rows: &[String]) -> Result<(), Box<dyn Error>> {
+    if !rows.is_empty()
+        && rows
+            .iter()
+            .all(|r| serde_json::from_str::<Value>(r).is_ok_and(|v| v.get("error").is_some()))
+    {
+        let first = serde_json::from_str::<Value>(&rows[0])
+            .ok()
+            .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
+            .unwrap_or_default();
+        return Err(format!(
+            "score_file: ALL {} rows are error rows — executor environment broken (first: {first})",
+            rows.len()
+        )
+        .into());
+    }
+    Ok(())
+}
+
 fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<dyn Error>> {
     let cell = &job["cell"];
     let image_path = cell["image_path"]
@@ -955,6 +981,7 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                 }
             }
         } // per-batch loop
+        all_error_guard(&rows)?;
         return Ok(rows.join("\n").into_bytes());
     }
 
@@ -1052,6 +1079,7 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
             }
         }
     }
+    all_error_guard(&rows)?;
     Ok(rows.join("\n").into_bytes())
 }
 
@@ -1165,6 +1193,7 @@ fn run_score_file_hdr(
         }
         Ok(())
     })?;
+    all_error_guard(&rows)?;
     Ok(rows.join("\n").into_bytes())
 }
 
@@ -2260,5 +2289,29 @@ mod hdr_tests {
             .to_string();
         assert!(err.contains("absent-not-failed"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod all_error_guard_tests {
+    use super::*;
+
+    #[test]
+    fn all_error_rows_fail_the_job() {
+        let rows = vec![
+            r#"{"kind":"metric","error":"hdr decode: x"}"#.to_string(),
+            r#"{"kind":"metric","error":"hdr decode: y"}"#.to_string(),
+        ];
+        assert!(all_error_guard(&rows).is_err());
+    }
+
+    #[test]
+    fn partial_errors_and_empty_are_fine() {
+        let mixed = vec![
+            r#"{"kind":"metric","error":"one bad variant"}"#.to_string(),
+            r#"{"kind":"metric","metric":"ssim2-gpu","score":90.0}"#.to_string(),
+        ];
+        assert!(all_error_guard(&mixed).is_ok());
+        assert!(all_error_guard(&[]).is_ok());
     }
 }
