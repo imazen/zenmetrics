@@ -1,1 +1,0 @@
-{"rustc":2467252760697041086,"features":"","declared_features":"","target":0,"profile":0,"path":0,"deps":[[16507408748234786101,"build_script_build",false,4777967672729241276]],"local":[{"RerunIfChanged":{"output":"release/build/zenmetrics-api-a7e5110f0366d4fc/output","paths":["build.rs"]}}],"rustflags":[],"config":0,"compile_kind":0}

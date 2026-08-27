@@ -59,3 +59,4 @@ mac-worker/s5cmd
 # Local-only dep overrides (see the dssim-core note in Cargo.toml).
 .cargo/
 target-bookworm/
+/target-gpu-bookworm/
