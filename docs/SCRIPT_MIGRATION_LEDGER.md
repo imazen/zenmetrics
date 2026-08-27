@@ -39,8 +39,18 @@ creds → 403).
 | `build_scorefile_from_pairs.py`, `build_scorefile_hdr_pairs.py` | **MIGRATED-IN-PLACE 2026-08-27** (the exemplar pattern): tar/sha ETL stays python; DesiredJob emission via `zenfleet-ctl declare-scorefiles` bridge parquets — from_pairs carries per-src codec columns (multi-codec corpora, CLI uses identity codec), hdr_pairs uses --full-uri verbatim keys + --cell-knobs scorefile-hdr + the hdr_transfer id-minimality conditional |
 | `build_scorefile_manifest.py` | **wave-3 exemplar, MIGRATED-IN-PLACE 2026-08-27**: keeps its tar/sha ETL, hands DesiredJob emission to `zenfleet-ctl declare-scorefiles` via a bridge parquet (fixture parity: canon-identical incl. chunk boundaries, modulo the stamped `requires`); the CLI gained control.json CREATE-IF-ABSENT (the unconditional write would unpause an existing run on re-declare) and snappy for pairs READS only (pyarrow's default; the ledger contract stays zstd-only) |
 
-## Wave-3 queue (recorded, not started)
+## Wave-4 queue (recorded, not started)
 
-- `writeback_scores.py` vs `zenmetrics assemble`: audit overlap — the typed
-  full-key join is assemble's charter; the JSONL-blob ingestion may belong there.
+- `writeback_scores.py` vs `zenmetrics assemble` — **AUDITED 2026-08-27,
+  verdict: complementary today, one real seam.** assemble owns the typed
+  full-key JOIN (PairKey's four-field constructor makes the ref-only collapse
+  inexpressible; safe_join errors on dupes; leak + constant-per-ref guards —
+  the structural answer to the 2026-05-25 corruption). writeback owns
+  blob-stream INGEST (ScoreFile JSONL → per-(sha, metric) score maps +
+  regime-pure batched feature writers) — python-natural ETL, not a join
+  duplicate. The SEAM: writeback's cells→sha→scores join builds its own key
+  and guards (regime width purity) instead of assemble's typed key + guards.
+  Wave-4 shape: either expose assemble's join/guards as a callable surface
+  the ingest shells, or grow assemble an `ingest-jsonl` mode; writeback's
+  ingest half stays python either way.
 - `backfill_overnight_manager.py`, `fleet_smoke_image.py`: classify on next touch.
