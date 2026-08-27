@@ -635,7 +635,16 @@ fn partition_epoch(
     handicaps: &Handicaps,
     now: u64,
 ) -> EpochParts {
-    let plan = reconcile_at(desired, view, policy, now, policy.stale_claim_after);
+    let plan = reconcile_at(desired, view, policy, now, policy.stale_claim_after.or_else(|| {
+            // Deadlock guard (2026-08-27, self-inflicted at 9,159 cells): with None, a
+            // fresh Pending/Claimed row pins its cell in_flight FOREVER (the documented
+            // sf2 class). Default a 30-min TTL; ZEN_STALE_CLAIM_SEC overrides (0 = off).
+            match std::env::var("ZEN_STALE_CLAIM_SEC").ok().and_then(|v| v.parse::<u64>().ok()) {
+                Some(0) => None,
+                Some(t) => Some(t),
+                None => Some(1800),
+            }
+        }));
     let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
     let mut p = EpochParts {
         fast: Vec::new(),
@@ -948,7 +957,16 @@ where
     B: BlobStore,
     C: Fn(&JobId) -> bool,
 {
-    let mut plan = reconcile_at(desired, view, policy, ctx.now, policy.stale_claim_after);
+    let mut plan = reconcile_at(desired, view, policy, ctx.now, policy.stale_claim_after.or_else(|| {
+            // Deadlock guard (2026-08-27, self-inflicted at 9,159 cells): with None, a
+            // fresh Pending/Claimed row pins its cell in_flight FOREVER (the documented
+            // sf2 class). Default a 30-min TTL; ZEN_STALE_CLAIM_SEC overrides (0 = off).
+            match std::env::var("ZEN_STALE_CLAIM_SEC").ok().and_then(|v| v.parse::<u64>().ok()) {
+                Some(0) => None,
+                Some(t) => Some(t),
+                None => Some(1800),
+            }
+        }));
     // Shuffle the gap per worker so concurrent workers don't all iterate from job 0 in the same order
     // and collide on (wasting an aws claim-attempt skipping) the same already-claimed prefix — without
     // this, a late-joining box burns ~1s/job skipping thousands of jobs the early boxes already claimed
@@ -1139,7 +1157,16 @@ where
             }
         };
     }
-    let plan = reconcile_at(desired, view, policy, ctx.now, policy.stale_claim_after);
+    let plan = reconcile_at(desired, view, policy, ctx.now, policy.stale_claim_after.or_else(|| {
+            // Deadlock guard (2026-08-27, self-inflicted at 9,159 cells): with None, a
+            // fresh Pending/Claimed row pins its cell in_flight FOREVER (the documented
+            // sf2 class). Default a 30-min TTL; ZEN_STALE_CLAIM_SEC overrides (0 = off).
+            match std::env::var("ZEN_STALE_CLAIM_SEC").ok().and_then(|v| v.parse::<u64>().ok()) {
+                Some(0) => None,
+                Some(t) => Some(t),
+                None => Some(1800),
+            }
+        }));
     cmark!("reconcile");
     let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
     cmark!("by_id-hashmap");

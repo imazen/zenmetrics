@@ -199,13 +199,17 @@ enum Cmd {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Ledger-layer pardon: append PENDING rows (the schema's own queue status,
-    /// fresh ts, attempts=0) for jobs whose LATEST row is Poison/Failed with a
-    /// matching error_class inside the incident window — superseding the poison
-    /// in latest-wins so the retry ladder gives one fresh run. This is the verb
-    /// snapshot-level amnesty cannot be: poison rows live in sidecars the
-    /// workers' fold re-applies on top of any snapshot (measured 2026-08-27:
-    /// 24,429 poison rows re-buried a cleaned snapshot). Genuine failures
+    /// Ledger-layer pardon: append FAILED rows with a TRANSIENT class
+    /// (worker_lost — the faulty-worker era WAS the fault) and attempts=0 for
+    /// jobs whose LATEST row is Poison/Failed with a matching error_class
+    /// inside the incident window. reconcile's transient-retry path enqueues
+    /// them immediately. Measured lessons stacked here (2026-08-27): (1)
+    /// snapshot-level amnesty is re-buried by poison rows the fold re-applies
+    /// (24,429 of them); (2) a PENDING pardon row DEADLOCKS — the fleet runs
+    /// stale_claim_after=None, so fresh Pending counts as someone's live
+    /// in-flight claim forever (the documented 29-cell sf2 deadlock class,
+    /// self-inflicted at 9,159 cells for ~40 min). Failed+transient+attempts=0
+    /// is the reconcile code's own retry vocabulary. Genuine failures
     /// re-poison with CURRENT-era evidence after exactly one retry.
     Requeue {
         #[arg(long)]
@@ -918,10 +922,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if !classes.iter().any(|c| c == &ec) {
                     continue;
                 }
+                if r.worker == "requeue-pardon" {
+                    continue; // already pardoned — idempotent
+                }
                 *by_class.entry(ec).or_default() += 1;
                 let mut p = r.clone();
-                p.status = zenfleet_core::JobStatus::Pending;
-                p.error_class = None;
+                p.status = zenfleet_core::JobStatus::Failed;
+                p.error_class = Some(zenfleet_core::ErrorClass::WorkerLost);
                 p.output_sha = None;
                 p.attempts = 0;
                 p.ts = now;
