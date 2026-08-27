@@ -17,7 +17,7 @@ RUNS = sys.argv[3].split(",")  # comma-sep: merge blobs from multiple runs (e.g.
 DGP = os.environ.get("ZEN_DATAGEN_PREFIX", "picker-sweep-2026-06-22/datagen-2026-06-23")
 OUTDIR = os.environ.get("ZEN_WRITEBACK_DIR", "/mnt/v/zen/zensim-training/2026-06-24/unified/%s" % codec)
 # Two-stage (Encode->ScoreFile) runs: jobs live in the RUN bucket (zentrain), not codec-corpus,
-# and the cell->encode_sha map comes from pairs_from_encode_ledger.py's parquet instead of
+# and the cell->encode_sha map comes from `zenfleet-ctl pairs`' parquet (migrated 2026-08-27 from pairs_from_encode_ledger.py) instead of
 # hashing variants.tar members. Both default OFF = byte-identical June behaviour.
 JOBS_BUCKET = os.environ.get("ZEN_JOBS_BUCKET", "codec-corpus")
 PAIRS_PARQUET = os.environ.get("ZEN_PAIRS_PARQUET")  # bridge parquet: image_path/q/knob_tuple_json/encode_sha
@@ -50,7 +50,7 @@ blobs = glob.glob(bdir + "/*")
 print("  %d blobs" % len(blobs), flush=True)
 
 # 2) parse blobs -> metric_data[(sha,metric)] = scores{}, feat_data[sha] = (zensim_score, [feat...])
-# Full-URI declares (declare_direct_objects.py ZEN_FULL_URI=1) put the whole s3://.../blobs/<sha>
+# Full-URI declares (`zenfleet-ctl declare-scorefiles --full-uri`, migrated from declare_direct_objects.py) put the whole s3://.../blobs/<sha>
 # in encode_sha — normalize to the bare content sha so the pairs join keys match.
 def norm_sha(s): return os.path.basename(s or "")
 metric_data = {}; feat_data = {}; err_rows = 0

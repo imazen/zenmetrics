@@ -657,6 +657,144 @@ mod tests {
     }
 }
 
+/// One pairs row for [`declare_scorefile_jobs`] (migrated 2026-08-27 from
+/// scripts/jobsys/declare_direct_objects.py). `ref_key` is the grouping key
+/// (full ref URI, or basename); `member` the variant object name/URI; the
+/// identity triple is carried when the pairs parquet has it.
+#[derive(Debug, Clone)]
+pub struct PairRow {
+    pub ref_key: String,
+    pub member: String,
+    pub identity: Option<(String, i64, String)>, // (codec, q, knob_tuple_json)
+}
+
+/// Build ScoreFile jobs (CHUNKed per ref) or Diffmap jobs (one per variant x
+/// metric) from pairs rows — the DesiredJob emission the Python did by hand-
+/// rolling wire JSON, which silently drifted from the schema the moment
+/// invariant 5 added `requires` (hand-emitted manifests carried none). Here
+/// the REAL types build the jobs and `required_capabilities()` stamps them.
+#[allow(clippy::too_many_arguments)]
+pub fn declare_scorefile_jobs(
+    rows: &[PairRow],
+    metrics: &[String],
+    chunk: usize,
+    cell_codec: &str,
+    hdr: bool,
+    hdr_transfer: Option<&str>,
+    diffmap: bool,
+    hint: Option<ResourceHint>,
+) -> Vec<DesiredJob> {
+    use std::collections::BTreeMap;
+    // BTreeMap: deterministic ref order (the Python used dict insertion order;
+    // sorted order is the stable, diff-friendly choice — noted in the parity gate).
+    let mut by_ref: BTreeMap<&str, Vec<&PairRow>> = BTreeMap::new();
+    for r in rows {
+        by_ref.entry(r.ref_key.as_str()).or_default().push(r);
+    }
+    let mut out = Vec::new();
+    for (rk, members) in by_ref {
+        if diffmap {
+            for m in members {
+                let cell = match &m.identity {
+                    Some((codec, q, knobs)) => CellId {
+                        image_path: rk.to_string(),
+                        codec: codec.clone(),
+                        q: *q,
+                        knob_tuple_json: knobs.clone(),
+                    },
+                    None => CellId {
+                        image_path: rk.to_string(),
+                        codec: cell_codec.to_string(),
+                        q: -1,
+                        knob_tuple_json: "diffmap".into(),
+                    },
+                };
+                for metric in metrics {
+                    let kind = JobKind::Diffmap {
+                        metric: metric.clone(),
+                        hdr,
+                    };
+                    let j = DesiredJob {
+                        requires: kind.required_capabilities(),
+                        kind,
+                        inputs: vec![Sha256Hex::raw_object_key(m.member.clone())],
+                        cell: cell.clone(),
+                        hint: hint.clone(),
+                    };
+                    out.push(j);
+                }
+            }
+        } else {
+            let names: Vec<&PairRow> = members;
+            for ch in names.chunks(chunk.max(1)) {
+                let kind = JobKind::ScoreFile {
+                    metrics: metrics.to_vec(),
+                    hdr,
+                    hdr_transfer: hdr_transfer.map(str::to_string),
+                };
+                let j = DesiredJob {
+                    requires: kind.required_capabilities(),
+                    kind,
+                    inputs: ch.iter().map(|m| Sha256Hex::raw_object_key(m.member.clone())).collect(),
+                    cell: CellId {
+                        image_path: rk.to_string(),
+                        codec: cell_codec.to_string(),
+                        q: -1,
+                        knob_tuple_json: "scorefile".into(),
+                    },
+                    hint: hint.clone(),
+                };
+                out.push(j);
+            }
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod declare_scorefile_tests {
+    use super::*;
+
+    fn rows() -> Vec<PairRow> {
+        vec![
+            PairRow { ref_key: "a.png".into(), member: "a_q10.avif".into(), identity: Some(("zenavif".into(), 10, "{}".into())) },
+            PairRow { ref_key: "a.png".into(), member: "a_q20.avif".into(), identity: Some(("zenavif".into(), 20, "{}".into())) },
+            PairRow { ref_key: "a.png".into(), member: "a_q30.avif".into(), identity: None },
+            PairRow { ref_key: "b.png".into(), member: "b_q10.avif".into(), identity: None },
+        ]
+    }
+
+    #[test]
+    fn scorefile_chunks_per_ref_and_stamps_requires() {
+        let jobs = declare_scorefile_jobs(
+            &rows(), &["ssim2-gpu".to_string()], 2, "zenavif", false, None, false, None,
+        );
+        // a: 3 members / chunk 2 -> 2 jobs; b: 1 job
+        assert_eq!(jobs.len(), 3);
+        assert!(jobs.iter().all(|j| matches!(j.kind, JobKind::ScoreFile { .. })));
+        // invariant 5: the capability tokens the Python never stamped
+        assert!(jobs.iter().all(|j| j.requires == vec!["gpu-ssim2".to_string()]));
+        assert_eq!(jobs[0].inputs.len(), 2);
+        assert_eq!(jobs[1].inputs.len(), 1);
+        assert_eq!(jobs[0].cell.knob_tuple_json, "scorefile");
+    }
+
+    #[test]
+    fn diffmap_one_job_per_variant_x_metric_with_true_identity() {
+        let jobs = declare_scorefile_jobs(
+            &rows(), &["butteraugli".to_string(), "cvvdp".to_string()], 12, "zenjpeg", true, None, true, None,
+        );
+        assert_eq!(jobs.len(), 8); // 4 variants x 2 metrics
+        let with_id = jobs.iter().find(|j| j.cell.q == 10).expect("true identity carried");
+        assert_eq!(with_id.cell.codec, "zenavif");
+        let no_id = jobs.iter().find(|j| j.cell.knob_tuple_json == "diffmap").expect("fallback cell");
+        assert_eq!(no_id.cell.q, -1);
+        // hdr:true rides the kind and requires carries the hdr arm + gpu metric class
+        assert!(jobs.iter().all(|j| matches!(j.kind, JobKind::Diffmap { hdr: true, .. })));
+        assert!(jobs.iter().all(|j| j.requires.contains(&"hdr".to_string())));
+    }
+}
+
 #[cfg(test)]
 mod migrate_tests {
     use super::*;

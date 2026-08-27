@@ -25,6 +25,19 @@ impl Sha256Hex {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Wrap a raw object key/name WITHOUT hex validation — the DIRECT-OBJECT
+    /// input contract (2026-08: `declare_direct_objects` manifests): a
+    /// ScoreFile/Diffmap job's `inputs` may name individually-addressable
+    /// store objects (`encodes/<name>`), which the worker resolves via
+    /// `ZEN_ENCODES_PREFIX` instead of the content-addressed blob dir. The
+    /// wire format has always admitted this (`#[serde(transparent)]` skips
+    /// [`Self::parse`] on deserialize); this constructor makes the Rust side
+    /// able to EMIT what the wire already carries, instead of hand-rolled
+    /// JSON. [`Self::parse`] stays strict for genuine digests.
+    pub fn raw_object_key(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
 }
 
 impl std::fmt::Display for Sha256Hex {

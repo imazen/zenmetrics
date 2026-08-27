@@ -9,7 +9,7 @@ a `fleet` subcommand (see scripts/jobsys/fleet's `power` case-arm), not a new sc
 family, and reuses the SAME signals + thresholds the rest of the job system already uses:
 
   • Queue depth: `jobs/<run>/ledger_snapshot.parquet` footer row counts (num_rows == distinct
-    done), the exact mechanism `pool_progress.py` uses — never a new counter.
+    done), the exact mechanism `zenfleet-ctl progress` uses (migrated from pool_progress.py) — never a new counter.
   • Idle/awake-but-unproductive: `zenfleet_core::idle`'s thresholds, MIRRORED here (no
     heartbeat 180s / GPU <=10% / <=1 job/hr) — see idle_thresholds_note() below for why this
     file can't literally import the Rust crate and how the mirror is kept honest.
@@ -53,7 +53,7 @@ import time
 import tomllib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "lib"))
-from zen_s3env import resolve  # THE resolver — see pool_progress.py's 2026-08-24 fix
+from zen_s3env import resolve  # THE resolver — see the 2026-08-24 straggler fix
 
 import pyarrow.fs as fs
 import pyarrow.parquet as pq
@@ -176,7 +176,7 @@ def queue_gap(run: str) -> tuple[int, int] | None:
     original jobs/-prefix-only version of this function silently returned "no manifest"
     for every non-pool run):
       - POOL-mode runs: `jobs/<run>/manifest.json[.gz]` + a pre-compacted
-        `jobs/<run>/ledger_snapshot.parquet` (pool_progress.py's exact mechanism — a fast
+        `jobs/<run>/ledger_snapshot.parquet` (`zenfleet-ctl progress`'s exact mechanism — a fast
         footer-only read, no full scan, built for pool-scale runs with many workers).
       - Plain declared-manifest runs (`zenfleet-ctl declare-encodes` + `launch_fleet.sh` /
         the ad-hoc systemd/Nomad deploys this session used): `<run>/manifest.json`, no

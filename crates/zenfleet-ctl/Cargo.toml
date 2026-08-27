@@ -19,3 +19,7 @@ zenfleet-ledger = { version = "0.0.1", path = "../zenfleet-ledger" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
+# pairs.parquet emission + pairs reading for declare-scorefiles (same pins as zenfleet-ledger)
+parquet = { version = "58.2.0", default-features = false, features = ["arrow", "zstd"] }
+arrow-array = "58.2.0"
+arrow-schema = "58.2.0"

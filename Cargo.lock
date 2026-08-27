@@ -6623,7 +6623,10 @@ dependencies = [
 name = "zenfleet-ctl"
 version = "0.0.1"
 dependencies = [
+ "arrow-array",
+ "arrow-schema",
  "clap",
+ "parquet",
  "serde",
  "serde_json",
  "zenfleet-core",

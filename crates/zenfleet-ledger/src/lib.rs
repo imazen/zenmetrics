@@ -170,6 +170,16 @@ fn col_str<'a>(
 }
 
 /// Read ledger rows back from a parquet sidecar.
+/// Row count from a parquet FOOTER only (no data pages decoded) — the
+/// `jobctl progress` primitive (migrated 2026-08-27 from pool_progress.py,
+/// which read snapshot footers so a 54-run progress readout costs seconds).
+pub fn parquet_num_rows(path: &Path) -> Result<usize, LedgerError> {
+    use parquet::file::reader::{FileReader, SerializedFileReader};
+    let f = std::fs::File::open(path).map_err(|e| LedgerError::Io(e.to_string()))?;
+    let r = SerializedFileReader::new(f).map_err(|e| LedgerError::Io(e.to_string()))?;
+    Ok(r.metadata().file_metadata().num_rows() as usize)
+}
+
 pub fn read_ledger(path: &Path) -> Result<Vec<LedgerRow>, LedgerError> {
     let file =
         File::open(path).map_err(|e| LedgerError::Io(format!("open {}: {e}", path.display())))?;
