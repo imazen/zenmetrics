@@ -947,7 +947,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 let key = format!("s3://{bucket}/jobs/{run}/ledger/pass-requeue-pardon-{now}.parquet");
                 zenfleet_ledger::write_ledger_uri(&key, &pardons, Some(&ep))?;
-                println!("appended {} PENDING rows -> {key}", pardons.len());
+                println!("appended {} pardon rows (failed/worker_lost/attempts=0) -> {key}", pardons.len());
             }
         }
         Cmd::Report {
