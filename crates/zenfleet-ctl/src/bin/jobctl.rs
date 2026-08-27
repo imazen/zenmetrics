@@ -198,6 +198,18 @@ enum Cmd {
         /// Report only — do not append the failed-row sidecar.
         #[arg(long)]
         dry_run: bool,
+        /// ALSO scan the CONTENT of present blobs (JSONL) for rows carrying an
+        /// `error` key: a done job whose blob records per-variant errors gets a
+        /// FAILED row with a TRANSIENT class (worker_lost + attempts=0, the
+        /// requeue-pardon vocabulary — the faulty-image era WAS the fault), so
+        /// reconcile re-enqueues it on the fixed image. Prints an error-string
+        /// histogram; dry-run prints without appending.
+        #[arg(long)]
+        scan_errors: bool,
+        /// With --scan-errors: only flip jobs whose error strings contain this
+        /// substring (scope the requeue to one diagnosed failure class).
+        #[arg(long)]
+        error_substring: Option<String>,
     },
     /// Ledger-layer pardon: append FAILED rows with a TRANSIENT class
     /// (worker_lost — the faulty-worker era WAS the fault) and attempts=0 for
@@ -848,6 +860,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             bucket,
             endpoint,
             dry_run,
+            scan_errors,
+            error_substring,
         } => {
             let ep = resolve_endpoint(endpoint)?;
             let (rows, skipped) = read_run_ledgers(&ep, &bucket, &run);
@@ -885,8 +899,80 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     missing.push(f);
                 }
             }
+            // ── content scan: error rows inside PRESENT blobs ────────────
+            if scan_errors {
+                let tmp = std::env::temp_dir().join(format!(
+                    "jobctl_blobscan_{}_{run}",
+                    std::process::id()
+                ));
+                let _ = std::fs::remove_dir_all(&tmp);
+                std::fs::create_dir_all(&tmp)?;
+                let _ = std::process::Command::new("s5cmd")
+                    .args([
+                        "--endpoint-url",
+                        &ep,
+                        "cp",
+                        &format!("s3://{bucket}/jobs/{run}/blobs/*"),
+                        &format!("{}/", tmp.display()),
+                    ])
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status();
+                let mut hist: std::collections::BTreeMap<String, usize> =
+                    std::collections::BTreeMap::new();
+                let mut flipped = 0usize;
+                let mut scanned = 0usize;
+                for r in view.rows() {
+                    if r.status != zenfleet_core::JobStatus::Done {
+                        continue;
+                    }
+                    let Some(sha) = r.output_sha.as_ref() else { continue };
+                    let path = tmp.join(sha.as_str());
+                    let Ok(body) = std::fs::read_to_string(&path) else {
+                        continue; // missing handled by the presence audit above
+                    };
+                    scanned += 1;
+                    let mut err_rows = 0usize;
+                    let mut matches_filter = false;
+                    for line in body.lines() {
+                        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+                            continue;
+                        };
+                        if let Some(e) = v.get("error").and_then(|e| e.as_str()) {
+                            err_rows += 1;
+                            // histogram on a stable prefix so variant paths don't explode it
+                            let key: String = e.chars().take(80).collect();
+                            *hist.entry(key).or_insert(0) += 1;
+                            if error_substring
+                                .as_deref()
+                                .map(|s| e.contains(s))
+                                .unwrap_or(true)
+                            {
+                                matches_filter = true;
+                            }
+                        }
+                    }
+                    if err_rows > 0 && matches_filter {
+                        let mut f = r.clone();
+                        f.status = zenfleet_core::JobStatus::Failed;
+                        f.error_class = Some(zenfleet_core::ErrorClass::WorkerLost);
+                        f.attempts = 0;
+                        f.ts = now;
+                        f.worker = "audit-blobs-scan".into();
+                        missing.push(f);
+                        flipped += 1;
+                    }
+                }
+                println!("scan-errors: {scanned} blobs scanned, {flipped} done jobs carry error rows{}",
+                    error_substring.as_deref().map(|s| format!(" matching {s:?}")).unwrap_or_default());
+                println!("error histogram (80-char prefixes):");
+                for (k, v) in &hist {
+                    println!("  {v:>8}  {k}");
+                }
+                let _ = std::fs::remove_dir_all(&tmp);
+            }
             println!(
-                "audit: {done_n} done rows, {} with MISSING output blobs",
+                "audit: {done_n} done rows, {} to requeue (missing blobs + error-carrying)",
                 missing.len()
             );
             if missing.is_empty() {
@@ -1004,6 +1090,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Err("report: no runs (pass --runlist or --run)".into());
             }
             let (mut td, mut tdn, mut tf, mut tg, mut tr) = (0usize, 0usize, 0usize, 0i64, 0usize);
+            let (mut tld, mut tgl) = (0usize, 0i64);
             let mut bad: Vec<String> = Vec::new();
             let mut complete: Vec<(String, usize, usize)> = Vec::new();
             run_names.sort();
@@ -1032,14 +1119,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         "  [{run}] WARNING: skipped {skipped} unreadable/in-flight ledger chunk(s)\n"
                                     ));
                                 }
-                                let flag = if acc.gap == 0 {
+                                let flag = if acc.gap_live == 0 {
                                     String::new()
                                 } else {
-                                    format!("  <-- GAP {}", acc.gap)
+                                    format!("  <-- LIVE GAP {}", acc.gap_live)
                                 };
                                 text.push_str(&format!(
-                                    "{run}: declared={} done={} failed-only={} raw_rows={}{flag}",
-                                    acc.declared, acc.distinct_done, acc.failed_only, acc.raw_rows
+                                    "{run}: declared={} ever_done={} live_done={} failed-only={} raw_rows={}{flag}",
+                                    acc.declared, acc.distinct_done, acc.live_done, acc.failed_only, acc.raw_rows
                                 ));
                                 (text, Some(acc))
                             }
@@ -1056,24 +1143,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Some(acc) => {
                         td += acc.declared;
                         tdn += acc.distinct_done;
+                        tld += acc.live_done;
                         tf += acc.failed_only;
                         tg += acc.gap.max(0);
+                        tgl += acc.gap_live.max(0);
                         tr += acc.raw_rows;
-                        if acc.gap <= 0 {
+                        // COMPLETE means queue-truth complete: latest-wins gap.
+                        if acc.gap_live <= 0 {
                             complete.push((run_names[i].clone(), acc.raw_rows, acc.distinct_done));
                         }
                     }
                 }
             }
             println!(
-                "\nTOTAL declared={td} distinct_done={tdn} failed-only={tf} gap={tg} raw_ledger_rows={tr} (rescore tax {:.2}x) errors={} ({:.0}s)",
+                "\nTOTAL declared={td} ever_done={tdn} live_done={tld} failed-only={tf} gap_ever={tg} gap_live={tgl} raw_ledger_rows={tr} (rescore tax {:.2}x) errors={} ({:.0}s)",
                 tr as f64 / tdn.max(1) as f64,
                 bad.len(),
                 t0.elapsed().as_secs_f64()
             );
             println!(
                 "VERDICT: {}",
-                if tg == 0 && bad.is_empty() { "COMPLETE — every run gap==0" } else { "NOT COMPLETE" }
+                if tgl == 0 && bad.is_empty() { "COMPLETE — every run live-gap==0" } else { "NOT COMPLETE" }
             );
             if auto_pause && !complete.is_empty() {
                 println!(

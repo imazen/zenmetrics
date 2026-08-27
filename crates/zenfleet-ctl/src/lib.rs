@@ -246,9 +246,21 @@ fn metric_label(kind: &JobKind) -> String {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RunAccounting {
     pub declared: usize,
+    /// EVER-done: distinct job_ids with a done row anywhere in history.
+    /// Historical/accounting semantics — a later Failed flip (audit-blobs
+    /// --scan-errors) does NOT reduce this. Use `live_done` for queue truth.
     pub distinct_done: usize,
     pub failed_only: usize,
+    /// declared − EVER-done. Kept for continuity; can hide re-opened work.
     pub gap: i64,
+    /// LATEST-WINS done: job_ids whose newest row is Done — the same
+    /// resolution reconcile/workers see. An audit flip reduces this.
+    pub live_done: usize,
+    /// declared − live_done: the queue-truth gap. `--auto-pause` and any
+    /// "is this run finished" decision MUST use this, never `gap` (the
+    /// 2026-08-27 hdrgrid lesson: 7,449 error-carrying done cells were
+    /// invisible to ever-done gap and auto-pause froze their re-drain).
+    pub gap_live: i64,
     pub raw_rows: usize,
 }
 
@@ -269,12 +281,73 @@ pub fn account_rows(declared: usize, rows: &[LedgerRow]) -> RunAccounting {
         }
     }
     let failed_only = failed.iter().filter(|j| !done.contains(**j)).count();
+    // Latest-wins resolution — the queue truth the workers see.
+    let mut view = LedgerView::new();
+    for r in rows {
+        view.apply(r.clone());
+    }
+    let live_done = view
+        .rows()
+        .filter(|r| r.status == JobStatus::Done)
+        .count();
     RunAccounting {
         declared,
         distinct_done: done.len(),
         failed_only,
         gap: declared as i64 - done.len() as i64,
+        live_done,
+        gap_live: declared as i64 - live_done as i64,
         raw_rows: rows.len(),
+    }
+}
+
+#[cfg(test)]
+mod accounting_flip_tests {
+    use super::*;
+    use zenfleet_core::{CellId, JobId, JobKind};
+
+    fn row(id: &str, status: JobStatus, ts: u64) -> LedgerRow {
+        LedgerRow {
+            job_id: JobId::of(
+                &JobKind::Metric {
+                    metric: id.into(),
+                },
+                &[],
+            ),
+            kind: JobKind::Metric {
+                metric: "cvvdp".into(),
+            },
+            cell: CellId {
+                image_path: "x.png".into(),
+                codec: "test".into(),
+                q: 1,
+                knob_tuple_json: "{}".into(),
+            },
+            output_sha: None,
+            status,
+            error_class: None,
+            attempts: 0,
+            ts,
+            worker: String::new(),
+            provider: String::new(),
+        }
+    }
+
+    /// The 2026-08-27 hdrgrid class: done at t1, audit-flipped Failed at t2.
+    /// Ever-done stays 1 (accounting continuity); live_done drops to 0 and
+    /// gap_live re-opens — the number auto-pause must consult.
+    #[test]
+    fn audit_flip_reopens_live_gap_but_not_ever_done() {
+        let rows = vec![
+            row("a", JobStatus::Done, 100),
+            row("a", JobStatus::Failed, 200),
+            row("b", JobStatus::Done, 100),
+        ];
+        let acc = account_rows(2, &rows);
+        assert_eq!(acc.distinct_done, 2, "ever-done keeps the flipped job");
+        assert_eq!(acc.gap, 0);
+        assert_eq!(acc.live_done, 1, "latest-wins sees the flip");
+        assert_eq!(acc.gap_live, 1, "queue truth re-opens");
     }
 }
 
@@ -856,6 +929,8 @@ mod migrate_tests {
                 distinct_done: 2,
                 failed_only: 1,
                 gap: 2,
+                live_done: 2,
+                gap_live: 2,
                 raw_rows: 5
             }
         );
