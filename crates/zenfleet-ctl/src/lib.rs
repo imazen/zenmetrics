@@ -13,8 +13,8 @@
 use serde::{Deserialize, Serialize};
 
 use zenfleet_core::{
-    CellId, DesiredJob, JobKind, JobStatus, LedgerView, ResourceHint, RetryPolicy, Sha256Hex,
-    reconcile, LedgerRow,
+    CellId, DesiredJob, JobKind, JobStatus, LedgerRow, LedgerView, ResourceHint, RetryPolicy,
+    Sha256Hex, reconcile,
 };
 
 fn empty_knobs() -> String {
@@ -162,7 +162,7 @@ pub fn declare(spec: &DeclareSpec) -> Result<Vec<DesiredJob>, String> {
             .map_err(|e| format!("item {}: {e}", it.image_path))?;
         for m in &spec.metrics {
             out.push(DesiredJob {
-            requires: vec![],
+                requires: vec![],
                 kind: JobKind::Metric { metric: m.clone() },
                 inputs: vec![sha.clone()],
                 cell: CellId {
@@ -199,7 +199,7 @@ pub fn declare_diffmaps(spec: &DeclareSpec, hdr: bool) -> Result<Vec<DesiredJob>
             .map_err(|e| format!("item {}: {e}", it.image_path))?;
         for m in &spec.metrics {
             out.push(DesiredJob {
-            requires: vec![],
+                requires: vec![],
                 kind: JobKind::Diffmap {
                     metric: m.clone(),
                     hdr,
@@ -286,10 +286,7 @@ pub fn account_rows(declared: usize, rows: &[LedgerRow]) -> RunAccounting {
     for r in rows {
         view.apply(r.clone());
     }
-    let live_done = view
-        .rows()
-        .filter(|r| r.status == JobStatus::Done)
-        .count();
+    let live_done = view.rows().filter(|r| r.status == JobStatus::Done).count();
     RunAccounting {
         declared,
         distinct_done: done.len(),
@@ -308,12 +305,7 @@ mod accounting_flip_tests {
 
     fn row(id: &str, status: JobStatus, ts: u64) -> LedgerRow {
         LedgerRow {
-            job_id: JobId::of(
-                &JobKind::Metric {
-                    metric: id.into(),
-                },
-                &[],
-            ),
+            job_id: JobId::of(&JobKind::Metric { metric: id.into() }, &[]),
             kind: JobKind::Metric {
                 metric: "cvvdp".into(),
             },
@@ -348,9 +340,9 @@ mod accounting_flip_tests {
         let a_rows: Vec<_> = snap.iter().filter(|r| r.ts == 200).collect();
         assert_eq!(a_rows.len(), 1, "flip's failed row present");
         assert!(
-            !snap
-                .iter()
-                .any(|r| r.ts == 100 && r.status == JobStatus::Done && snap.iter().any(|x| x.ts == 200 && x.job_id == r.job_id)),
+            !snap.iter().any(|r| r.ts == 100
+                && r.status == JobStatus::Done
+                && snap.iter().any(|x| x.ts == 200 && x.job_id == r.job_id)),
             "stale done row for the flipped job must be dropped"
         );
     }
@@ -868,7 +860,10 @@ pub fn declare_scorefile_jobs(
                 let j = DesiredJob {
                     requires: kind.required_capabilities(),
                     kind,
-                    inputs: ch.iter().map(|m| Sha256Hex::raw_object_key(m.member.clone())).collect(),
+                    inputs: ch
+                        .iter()
+                        .map(|m| Sha256Hex::raw_object_key(m.member.clone()))
+                        .collect(),
                     cell: CellId {
                         image_path: rk.to_string(),
                         codec: ref_codec.clone(),
@@ -890,23 +885,53 @@ mod declare_scorefile_tests {
 
     fn rows() -> Vec<PairRow> {
         vec![
-            PairRow { ref_key: "a.png".into(), member: "a_q10.avif".into(), identity: Some(("zenavif".into(), 10, "{}".into())) },
-            PairRow { ref_key: "a.png".into(), member: "a_q20.avif".into(), identity: Some(("zenavif".into(), 20, "{}".into())) },
-            PairRow { ref_key: "a.png".into(), member: "a_q30.avif".into(), identity: None },
-            PairRow { ref_key: "b.png".into(), member: "b_q10.avif".into(), identity: None },
+            PairRow {
+                ref_key: "a.png".into(),
+                member: "a_q10.avif".into(),
+                identity: Some(("zenavif".into(), 10, "{}".into())),
+            },
+            PairRow {
+                ref_key: "a.png".into(),
+                member: "a_q20.avif".into(),
+                identity: Some(("zenavif".into(), 20, "{}".into())),
+            },
+            PairRow {
+                ref_key: "a.png".into(),
+                member: "a_q30.avif".into(),
+                identity: None,
+            },
+            PairRow {
+                ref_key: "b.png".into(),
+                member: "b_q10.avif".into(),
+                identity: None,
+            },
         ]
     }
 
     #[test]
     fn scorefile_chunks_per_ref_and_stamps_requires() {
         let jobs = declare_scorefile_jobs(
-            &rows(), &["ssim2-gpu".to_string()], 2, "fallback", "scorefile", false, None, false, None,
+            &rows(),
+            &["ssim2-gpu".to_string()],
+            2,
+            "fallback",
+            "scorefile",
+            false,
+            None,
+            false,
+            None,
         );
         // a: 3 members / chunk 2 -> 2 jobs; b: 1 job
         assert_eq!(jobs.len(), 3);
-        assert!(jobs.iter().all(|j| matches!(j.kind, JobKind::ScoreFile { .. })));
+        assert!(
+            jobs.iter()
+                .all(|j| matches!(j.kind, JobKind::ScoreFile { .. }))
+        );
         // invariant 5: the capability tokens the Python never stamped
-        assert!(jobs.iter().all(|j| j.requires == vec!["gpu-ssim2".to_string()]));
+        assert!(
+            jobs.iter()
+                .all(|j| j.requires == vec!["gpu-ssim2".to_string()])
+        );
         assert_eq!(jobs[0].inputs.len(), 2);
         assert_eq!(jobs[1].inputs.len(), 1);
         assert_eq!(jobs[0].cell.knob_tuple_json, "scorefile");
@@ -920,15 +945,32 @@ mod declare_scorefile_tests {
     #[test]
     fn diffmap_one_job_per_variant_x_metric_with_true_identity() {
         let jobs = declare_scorefile_jobs(
-            &rows(), &["butteraugli".to_string(), "cvvdp".to_string()], 12, "zenjpeg", "scorefile", true, None, true, None,
+            &rows(),
+            &["butteraugli".to_string(), "cvvdp".to_string()],
+            12,
+            "zenjpeg",
+            "scorefile",
+            true,
+            None,
+            true,
+            None,
         );
         assert_eq!(jobs.len(), 8); // 4 variants x 2 metrics
-        let with_id = jobs.iter().find(|j| j.cell.q == 10).expect("true identity carried");
+        let with_id = jobs
+            .iter()
+            .find(|j| j.cell.q == 10)
+            .expect("true identity carried");
         assert_eq!(with_id.cell.codec, "zenavif");
-        let no_id = jobs.iter().find(|j| j.cell.knob_tuple_json == "diffmap").expect("fallback cell");
+        let no_id = jobs
+            .iter()
+            .find(|j| j.cell.knob_tuple_json == "diffmap")
+            .expect("fallback cell");
         assert_eq!(no_id.cell.q, -1);
         // hdr:true rides the kind and requires carries the hdr arm + gpu metric class
-        assert!(jobs.iter().all(|j| matches!(j.kind, JobKind::Diffmap { hdr: true, .. })));
+        assert!(
+            jobs.iter()
+                .all(|j| matches!(j.kind, JobKind::Diffmap { hdr: true, .. }))
+        );
         assert!(jobs.iter().all(|j| j.requires.contains(&"hdr".to_string())));
     }
 }
@@ -940,7 +982,9 @@ mod migrate_tests {
 
     fn row(tag: &str, status: JobStatus, ts: u64) -> LedgerRow {
         let job = DesiredJob::new(
-            JobKind::Metric { metric: "cvvdp".into() },
+            JobKind::Metric {
+                metric: "cvvdp".into(),
+            },
             vec![zenfleet_core::sha256(tag.as_bytes())],
             CellId {
                 image_path: format!("{tag}.png"),
@@ -1009,8 +1053,10 @@ mod migrate_tests {
             .map(|r| r.ts)
             .collect();
         assert_eq!(done_ts, vec![10, 7], "first done row wins, in scan order");
-        let failed: Vec<&LedgerRow> =
-            snap.iter().filter(|r| r.status == JobStatus::Failed).collect();
+        let failed: Vec<&LedgerRow> = snap
+            .iter()
+            .filter(|r| r.status == JobStatus::Failed)
+            .collect();
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].ts, 9, "newest failed row carried");
     }

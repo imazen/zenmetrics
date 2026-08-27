@@ -39,13 +39,13 @@ STAMP=$(date -u +%Y-%m-%d)
 export ZEN_STORE=tower ZEN_JOBS_BUCKET=zentrain ZEN_PAIRS_PARQUET="$HG/pairs_full.parquet"
 export ZEN_WRITEBACK_DIR="$HG/harvest-$STAMP/%s"   # writeback substitutes codec if it %s-formats; else per-codec below
 SF_RUNS="hdrgrid-sf-gpu-20260807,hdrgrid-sf-gpu-huge-20260807,hdrgrid-sf-gpu-small-20260807,hdrgrid-sf2-gpu-20260807,hdrgrid-sf2-gpu-huge-20260807,hdrgrid-sf2-gpu-small-20260807,hdrgrid-sf-cpu-20260807,hdrgrid-sf2-cpu-20260807"
-for CODEC_EXT in "zenjxl jxl" "zenav1-svt avif" "jpeg-gainmap jpg"; do
-  set -- $CODEC_EXT
-  export ZEN_WRITEBACK_DIR="$HG/harvest-$STAMP/$1"
-  say "  writeback $1 (.$2) over all score runs"
-  python3 "$HERE/writeback_scores.py" "$1" "$2" "$SF_RUNS" \
-    || { say "WRITEBACK FAIL for $1 — check its two-stage env contract (this script's args were staged pre-drain; touch up and re-run)"; exit 4; }
-done
+# ONE call: writeback's codec arg is a label, and the pairs bridge covers the
+# whole corpus — the 2026-08-27 run's per-codec loop produced 3 IDENTICAL
+# full-corpus harvests (canonical promoted to the harvest root, dupes bak'd).
+export ZEN_WRITEBACK_DIR="$HG/harvest-$STAMP"
+say "  writeback (full corpus, single call)"
+python3 "$HERE/writeback_scores.py" hdrgrid all "$SF_RUNS" \
+  || { say "WRITEBACK FAIL — check the two-stage env contract"; exit 4; }
 
 say "STEP 3: judge-era refresh (era-B is the consumable zensim slice)"
 python3 /home/lilith/work/zen/zensim/scripts/canonical_corpus/derive_hdrgrid_zensim_judge_era.py \

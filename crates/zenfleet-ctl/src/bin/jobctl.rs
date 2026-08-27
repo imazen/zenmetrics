@@ -352,7 +352,9 @@ fn resolve_endpoint(cli: Option<String>) -> Result<String, Box<dyn std::error::E
     cli.or_else(|| std::env::var("EP").ok())
         .or_else(|| std::env::var("ZEN_S3_ENDPOINT").ok())
         .or_else(|| std::env::var("ZEN_R2_ENDPOINT").ok())
-        .ok_or_else(|| "no endpoint: pass --endpoint or source scripts/lib/s3env.sh (exports EP)".into())
+        .ok_or_else(|| {
+            "no endpoint: pass --endpoint or source scripts/lib/s3env.sh (exports EP)".into()
+        })
 }
 
 /// Declared cell count from jobs/<run>/manifest.json.gz (else plain .json).
@@ -397,7 +399,9 @@ fn declared_count(ep: &str, bucket: &str, run: &str) -> Result<usize, String> {
     };
     let v: serde_json::Value =
         serde_json::from_slice(&plain).map_err(|e| format!("manifest parse: {e}"))?;
-    v.as_array().map(|a| a.len()).ok_or_else(|| "manifest is not an array".into())
+    v.as_array()
+        .map(|a| a.len())
+        .ok_or_else(|| "manifest is not an array".into())
 }
 
 /// Tolerant read of every sidecar under jobs/<run>/ledger/ — an in-flight
@@ -468,7 +472,11 @@ fn read_ledger_prefix(ep: &str, prefix: &str) -> (Vec<zenfleet_core::LedgerRow>,
     if !bulk_ok {
         // Per-file fallback for objects the bulk pass missed entirely.
         let have: std::collections::HashSet<String> = std::fs::read_dir(&tmp)
-            .map(|rd| rd.flatten().filter_map(|e| e.file_name().into_string().ok()).collect())
+            .map(|rd| {
+                rd.flatten()
+                    .filter_map(|e| e.file_name().into_string().ok())
+                    .collect()
+            })
             .unwrap_or_default();
         let mut fetched = 0usize;
         for name in zenfleet_ledger::list_keys_uri(prefix, Some(ep)) {
@@ -550,7 +558,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut runs: Vec<String> = Vec::new();
             for rl in &runlists {
                 let bytes = if rl.starts_with("s3://") {
-                    zenfleet_ledger::read_bytes_uri(rl, Some(&ep)).map_err(|e| format!("runlist {rl}: {e:?}"))
+                    zenfleet_ledger::read_bytes_uri(rl, Some(&ep))
+                        .map_err(|e| format!("runlist {rl}: {e:?}"))
                 } else if rl.starts_with("jobs/") {
                     zenfleet_ledger::read_bytes_uri(&format!("s3://{bucket}/{rl}"), Some(&ep))
                         .map_err(|e| format!("runlist {rl}: {e:?}"))
@@ -569,41 +578,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             let next = std::sync::atomic::AtomicUsize::new(0);
-            let counts: Vec<std::sync::Mutex<Option<usize>>> =
-                (0..runs.len()).map(|_| std::sync::Mutex::new(None)).collect();
+            let counts: Vec<std::sync::Mutex<Option<usize>>> = (0..runs.len())
+                .map(|_| std::sync::Mutex::new(None))
+                .collect();
             std::thread::scope(|sc| {
                 for _ in 0..16.min(runs.len().max(1)) {
-                    sc.spawn(|| loop {
-                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        if i >= runs.len() {
-                            break;
+                    sc.spawn(|| {
+                        loop {
+                            let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            if i >= runs.len() {
+                                break;
+                            }
+                            let tmp = std::env::temp_dir()
+                                .join(format!("jobctl_snap_{}_{i}.parquet", std::process::id()));
+                            let uri =
+                                format!("s3://{bucket}/jobs/{}/ledger_snapshot.parquet", runs[i]);
+                            let n = if std::process::Command::new("s5cmd")
+                                .args(["--endpoint-url", &ep, "cp", &uri, &tmp.to_string_lossy()])
+                                .stdout(std::process::Stdio::null())
+                                .stderr(std::process::Stdio::null())
+                                .status()
+                                .map(|st| st.success())
+                                .unwrap_or(false)
+                            {
+                                zenfleet_ledger::parquet_num_rows(&tmp).unwrap_or(0)
+                            } else {
+                                0
+                            };
+                            let _ = std::fs::remove_file(&tmp);
+                            *counts[i].lock().unwrap() = Some(n);
                         }
-                        let tmp = std::env::temp_dir().join(format!(
-                            "jobctl_snap_{}_{i}.parquet",
-                            std::process::id()
-                        ));
-                        let uri = format!("s3://{bucket}/jobs/{}/ledger_snapshot.parquet", runs[i]);
-                        let n = if std::process::Command::new("s5cmd")
-                            .args(["--endpoint-url", &ep, "cp", &uri, &tmp.to_string_lossy()])
-                            .stdout(std::process::Stdio::null())
-                            .stderr(std::process::Stdio::null())
-                            .status()
-                            .map(|st| st.success())
-                            .unwrap_or(false)
-                        {
-                            zenfleet_ledger::parquet_num_rows(&tmp).unwrap_or(0)
-                        } else {
-                            0
-                        };
-                        let _ = std::fs::remove_file(&tmp);
-                        *counts[i].lock().unwrap() = Some(n);
                     });
                 }
             });
-            let res: Vec<usize> = counts.iter().map(|m| m.lock().unwrap().unwrap_or(0)).collect();
+            let res: Vec<usize> = counts
+                .iter()
+                .map(|m| m.lock().unwrap().unwrap_or(0))
+                .collect();
             let sum: usize = res.iter().sum();
-            let missing: Vec<&String> =
-                runs.iter().zip(&res).filter(|(_, n)| **n == 0).map(|(r, _)| r).collect();
+            let missing: Vec<&String> = runs
+                .iter()
+                .zip(&res)
+                .filter(|(_, n)| **n == 0)
+                .map(|(r, _)| r)
+                .collect();
             println!(
                 "distinct_done={sum} / {total} = {:.2}%  (from {}/{} snapshots)",
                 100.0 * sum as f64 / total.max(1) as f64,
@@ -613,7 +631,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !missing.is_empty() {
                 println!(
                     "no-snapshot runs (~0 done): {}",
-                    missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" ")
+                    missing
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ")
                 );
             }
         }
@@ -660,7 +682,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             let sha = |r: &zenfleet_core::LedgerRow| {
-                r.output_sha.as_ref().map(|s| s.as_str().to_string()).unwrap_or_default()
+                r.output_sha
+                    .as_ref()
+                    .map(|s| s.as_str().to_string())
+                    .unwrap_or_default()
             };
             // Metric column: a diffmap/metric run has one DONE row per (cell x
             // metric) sharing the cell identity — without this column the join
@@ -675,15 +700,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             let batch = RecordBatch::try_from_iter(vec![
-                ("ref_path", s_col(&|r| join_pfx(refs_prefix, &r.cell.image_path))),
+                (
+                    "ref_path",
+                    s_col(&|r| join_pfx(refs_prefix, &r.cell.image_path)),
+                ),
                 ("dist_path", s_col(&|r| join_pfx(blobs_prefix, &sha(r)))),
                 ("image_path", s_col(&|r| r.cell.image_path.clone())),
                 ("codec", s_col(&|r| r.cell.codec.clone())),
                 (
                     "q",
-                    Arc::new(Int64Array::from_iter_values(done.iter().map(|r| r.cell.q))) as ArrayRef,
+                    Arc::new(Int64Array::from_iter_values(done.iter().map(|r| r.cell.q)))
+                        as ArrayRef,
                 ),
-                ("knob_tuple_json", s_col(&|r| r.cell.knob_tuple_json.clone())),
+                (
+                    "knob_tuple_json",
+                    s_col(&|r| r.cell.knob_tuple_json.clone()),
+                ),
                 ("encode_sha", s_col(&|r| sha(r))),
                 ("metric", s_col(&|r| metric_of(r))),
                 ("worker", s_col(&|r| r.worker.clone())),
@@ -744,11 +776,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             hint_base_mib,
             manifest_out,
         } => {
-            let metrics: Vec<String> = metrics.split(',').filter(|m| !m.is_empty()).map(str::to_string).collect();
+            let metrics: Vec<String> = metrics
+                .split(',')
+                .filter(|m| !m.is_empty())
+                .map(str::to_string)
+                .collect();
             let diffmap = match kind.as_str() {
                 "score_file" => false,
                 "diffmap" => true,
-                other => return Err(format!("--kind must be score_file|diffmap (got {other})").into()),
+                other => {
+                    return Err(format!("--kind must be score_file|diffmap (got {other})").into());
+                }
             };
             let flat_hint = match (hint_mem_gb, hint_threads) {
                 (None, None) => None,
@@ -771,7 +809,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .column_by_name(name)
                             .and_then(|c| c.as_any().downcast_ref::<arrow_array::StringArray>())
                     };
-                    let (ipc, memc) = if full_uri { ("ref_path", "dist_path") } else { ("image_path", "dist_member") };
+                    let (ipc, memc) = if full_uri {
+                        ("ref_path", "dist_path")
+                    } else {
+                        ("image_path", "dist_member")
+                    };
                     let (Some(ip), Some(dm)) = (get(ipc), get(memc)) else {
                         return Err(format!("{pp}: missing {ipc}/{memc} columns").into());
                     };
@@ -814,13 +856,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Some(w.parse::<f64>().ok()? * h.parse::<f64>().ok()? / 1e6)
                 });
                 Some(zenfleet_core::ResourceHint {
-                    peak_mem_bytes: ((hint_base_mib + mp.unwrap_or(0.0) * hint_mib_per_mp) * 1048576.0) as u64,
+                    peak_mem_bytes: ((hint_base_mib + mp.unwrap_or(0.0) * hint_mib_per_mp)
+                        * 1048576.0) as u64,
                     threads: 1,
                     vram_bytes: None,
                 })
             };
             let mut jobs = zenfleet_ctl::declare_scorefile_jobs(
-                &rows, &metrics, chunk, &cell_codec, &cell_knobs, hdr, hdr_transfer.as_deref(), diffmap, flat_hint.clone(),
+                &rows,
+                &metrics,
+                chunk,
+                &cell_codec,
+                &cell_knobs,
+                hdr,
+                hdr_transfer.as_deref(),
+                diffmap,
+                flat_hint.clone(),
             );
             for j in &mut jobs {
                 if let Some(h) = pixel_hint(&j.cell.image_path) {
@@ -828,6 +879,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else if j.hint.is_none() {
                     j.hint = flat_hint.clone();
                 }
+            }
+            // GUARD (2026-08-27): a job whose inputs are s3:// blobs but whose
+            // cell.image_path is a bare basename is unfetchable — the worker's
+            // source_fetch fails forever (11 live instances pinned the hdrgrid
+            // sf-gpu drain until hand-repaired). Refuse at declare time.
+            let bad: Vec<&str> = jobs
+                .iter()
+                .filter(|j| {
+                    j.inputs.iter().any(|i| i.as_str().starts_with("s3://"))
+                        && !j.cell.image_path.starts_with("s3://")
+                })
+                .map(|j| j.cell.image_path.as_str())
+                .take(5)
+                .collect();
+            if !bad.is_empty() {
+                return Err(format!(
+                    "declare-scorefiles: {} job(s) have s3:// inputs but a NON-URI cell.image_path                      (e.g. {:?}) — the worker cannot fetch a bare basename. Use --full-uri pairs or                      a refs-prefixed bridge so image_path is a complete s3:// URI.",
+                    jobs.iter()
+                        .filter(|j| j.inputs.iter().any(|i| i.as_str().starts_with("s3://"))
+                            && !j.cell.image_path.starts_with("s3://"))
+                        .count(),
+                    bad
+                )
+                .into());
             }
             let manifest = serde_json::to_vec(&jobs)?;
             if let Some(mo) = manifest_out {
@@ -860,8 +935,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !gz.status.success() {
                 return Err("gzip failed".into());
             }
-            zenfleet_ledger::write_bytes_uri(&format!("s3://{bucket}/jobs/{run}/manifest.json"), &manifest, Some(&ep))?;
-            zenfleet_ledger::write_bytes_uri(&format!("s3://{bucket}/jobs/{run}/manifest.json.gz"), &gz.stdout, Some(&ep))?;
+            zenfleet_ledger::write_bytes_uri(
+                &format!("s3://{bucket}/jobs/{run}/manifest.json"),
+                &manifest,
+                Some(&ep),
+            )?;
+            zenfleet_ledger::write_bytes_uri(
+                &format!("s3://{bucket}/jobs/{run}/manifest.json.gz"),
+                &gz.stdout,
+                Some(&ep),
+            )?;
             // control.json: create ONLY IF ABSENT — unconditionally writing
             // {"paused":false} would silently UNPAUSE an existing run on a
             // re-declare (a live hazard the Python this replaced also had).
@@ -888,17 +971,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let ep = resolve_endpoint(endpoint)?;
             let (rows, skipped) = read_run_ledgers(&ep, &bucket, &run);
             if skipped > 0 {
-                println!("WARNING: {skipped} unreadable ledger chunk(s) — audit covers the readable set");
+                println!(
+                    "WARNING: {skipped} unreadable ledger chunk(s) — audit covers the readable set"
+                );
             }
             let mut view = LedgerView::new();
             for r in rows {
                 view.apply(r);
             }
             // One LIST of the blob dir (never per-object HEADs — 100k stats vs one listing).
-            let have: std::collections::HashSet<String> =
-                zenfleet_ledger::list_keys_uri(&format!("s3://{bucket}/jobs/{run}/blobs/"), Some(&ep))
-                    .into_iter()
-                    .collect();
+            let have: std::collections::HashSet<String> = zenfleet_ledger::list_keys_uri(
+                &format!("s3://{bucket}/jobs/{run}/blobs/"),
+                Some(&ep),
+            )
+            .into_iter()
+            .collect();
             println!("blobs present: {}", have.len());
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
@@ -910,7 +997,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     continue;
                 }
                 done_n += 1;
-                let Some(sha) = r.output_sha.as_ref() else { continue };
+                let Some(sha) = r.output_sha.as_ref() else {
+                    continue;
+                };
                 if !have.contains(sha.as_str()) {
                     let mut f = r.clone();
                     f.status = zenfleet_core::JobStatus::Failed;
@@ -923,10 +1012,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             // ── content scan: error rows inside PRESENT blobs ────────────
             if scan_errors {
-                let tmp = std::env::temp_dir().join(format!(
-                    "jobctl_blobscan_{}_{run}",
-                    std::process::id()
-                ));
+                let tmp = std::env::temp_dir()
+                    .join(format!("jobctl_blobscan_{}_{run}", std::process::id()));
                 let _ = std::fs::remove_dir_all(&tmp);
                 std::fs::create_dir_all(&tmp)?;
                 let _ = std::process::Command::new("s5cmd")
@@ -948,7 +1035,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if r.status != zenfleet_core::JobStatus::Done {
                         continue;
                     }
-                    let Some(sha) = r.output_sha.as_ref() else { continue };
+                    let Some(sha) = r.output_sha.as_ref() else {
+                        continue;
+                    };
                     let path = tmp.join(sha.as_str());
                     let Ok(body) = std::fs::read_to_string(&path) else {
                         continue; // missing handled by the presence audit above
@@ -985,8 +1074,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         flipped += 1;
                     }
                 }
-                println!("scan-errors: {scanned} blobs scanned, {flipped} done jobs carry error rows{}",
-                    error_substring.as_deref().map(|s| format!(" matching {s:?}")).unwrap_or_default());
+                println!(
+                    "scan-errors: {scanned} blobs scanned, {flipped} done jobs carry error rows{}",
+                    error_substring
+                        .as_deref()
+                        .map(|s| format!(" matching {s:?}"))
+                        .unwrap_or_default()
+                );
                 println!("error histogram (80-char prefixes):");
                 for (k, v) in &hist {
                     println!("  {v:>8}  {k}");
@@ -1005,9 +1099,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 println!("(dry-run: no sidecar written)");
             } else {
-                let key = format!(
-                    "s3://{bucket}/jobs/{run}/ledger/pass-audit-blobs-{now}.parquet"
-                );
+                let key = format!("s3://{bucket}/jobs/{run}/ledger/pass-audit-blobs-{now}.parquet");
                 zenfleet_ledger::write_ledger_uri(&key, &missing, Some(&ep))?;
                 println!(
                     "appended {} failed rows -> {key} (latest-wins: those jobs re-enter the gap)",
@@ -1043,10 +1135,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
-            let have: std::collections::HashSet<String> =
-                zenfleet_ledger::list_keys_uri(&format!("s3://{bucket}/jobs/{run}/blobs/"), Some(&ep))
-                    .into_iter()
-                    .collect();
+            let have: std::collections::HashSet<String> = zenfleet_ledger::list_keys_uri(
+                &format!("s3://{bucket}/jobs/{run}/blobs/"),
+                Some(&ep),
+            )
+            .into_iter()
+            .collect();
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
                 .as_secs();
@@ -1057,7 +1151,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     continue;
                 }
                 let Some(d) = best_done.get(id) else { continue };
-                let Some(sha) = d.output_sha.as_ref() else { continue };
+                let Some(sha) = d.output_sha.as_ref() else {
+                    continue;
+                };
                 if !have.contains(sha.as_str()) {
                     no_blob += 1;
                     continue;
@@ -1105,7 +1201,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut pardons: Vec<zenfleet_core::LedgerRow> = Vec::new();
             let mut by_class: std::collections::BTreeMap<String, usize> = Default::default();
             for r in view.rows() {
-                if !matches!(r.status, zenfleet_core::JobStatus::Poison | zenfleet_core::JobStatus::Failed) {
+                if !matches!(
+                    r.status,
+                    zenfleet_core::JobStatus::Poison | zenfleet_core::JobStatus::Failed
+                ) {
                     continue;
                 }
                 if before.is_some_and(|cut| r.ts >= cut) {
@@ -1143,9 +1242,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("(dry-run: no sidecar written)");
                 }
             } else {
-                let key = format!("s3://{bucket}/jobs/{run}/ledger/pass-requeue-pardon-{now}.parquet");
+                let key =
+                    format!("s3://{bucket}/jobs/{run}/ledger/pass-requeue-pardon-{now}.parquet");
                 zenfleet_ledger::write_ledger_uri(&key, &pardons, Some(&ep))?;
-                println!("appended {} pardon rows (failed/worker_lost/attempts=0) -> {key}", pardons.len());
+                println!(
+                    "appended {} pardon rows (failed/worker_lost/attempts=0) -> {key}",
+                    pardons.len()
+                );
             }
         }
         Cmd::Report {
@@ -1160,7 +1263,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut run_names: Vec<String> = runs;
             if let Some(rl) = runlist {
                 let bytes = if rl.starts_with("s3://") {
-                    zenfleet_ledger::read_bytes_uri(&rl, Some(&ep)).map_err(|e| format!("runlist: {e:?}"))?
+                    zenfleet_ledger::read_bytes_uri(&rl, Some(&ep))
+                        .map_err(|e| format!("runlist: {e:?}"))?
                 } else if rl.starts_with("jobs/") {
                     zenfleet_ledger::read_bytes_uri(&format!("s3://{bucket}/{rl}"), Some(&ep))
                         .map_err(|e| format!("runlist: {e:?}"))?
@@ -1251,7 +1355,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
             println!(
                 "VERDICT: {}",
-                if tgl == 0 && bad.is_empty() { "COMPLETE — every run live-gap==0" } else { "NOT COMPLETE" }
+                if tgl == 0 && bad.is_empty() {
+                    "COMPLETE — every run live-gap==0"
+                } else {
+                    "NOT COMPLETE"
+                }
             );
             if auto_pause && !complete.is_empty() {
                 println!(
@@ -1260,16 +1368,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
                 for (run, raw, done) in &complete {
                     let ckey = format!("s3://{bucket}/jobs/{run}/control.json");
-                    let mut cur: serde_json::Value = zenfleet_ledger::read_bytes_uri(&ckey, Some(&ep))
-                        .ok()
-                        .and_then(|b| serde_json::from_slice(&b).ok())
-                        .unwrap_or_else(|| serde_json::json!({}));
+                    let mut cur: serde_json::Value =
+                        zenfleet_ledger::read_bytes_uri(&ckey, Some(&ep))
+                            .ok()
+                            .and_then(|b| serde_json::from_slice(&b).ok())
+                            .unwrap_or_else(|| serde_json::json!({}));
                     if cur.get("paused").and_then(|p| p.as_bool()) == Some(true) {
-                        println!("  {run}: already paused (rescore tax {:.1}x)", *raw as f64 / (*done).max(1) as f64);
+                        println!(
+                            "  {run}: already paused (rescore tax {:.1}x)",
+                            *raw as f64 / (*done).max(1) as f64
+                        );
                         continue;
                     }
                     cur["paused"] = serde_json::Value::Bool(true);
-                    match zenfleet_ledger::write_bytes_uri(&ckey, cur.to_string().as_bytes(), Some(&ep)) {
+                    match zenfleet_ledger::write_bytes_uri(
+                        &ckey,
+                        cur.to_string().as_bytes(),
+                        Some(&ep),
+                    ) {
                         Ok(()) => println!(
                             "  AUTO-PAUSED {run}: control.json paused:true (was re-scoring {done} done cells at {:.1}x tax)",
                             *raw as f64 / (*done).max(1) as f64
@@ -1294,7 +1410,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let t0 = std::time::Instant::now();
             let (mut rows, skipped) = read_run_ledgers(&ep, &bucket, &run);
             if skipped > 0 {
-                println!("  [{run}] WARNING: skipped {skipped} unreadable/in-flight ledger chunk(s)");
+                println!(
+                    "  [{run}] WARNING: skipped {skipped} unreadable/in-flight ledger chunk(s)"
+                );
             }
             if let Some(list) = &amnesty_classes {
                 let classes: Vec<String> = list.split(',').map(|c| c.trim().to_string()).collect();
