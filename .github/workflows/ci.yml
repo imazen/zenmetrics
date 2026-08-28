@@ -259,6 +259,31 @@ jobs:
     # below. Re-enable when the large-image path is capped/fixed for the
     # 8 GB runner — tracked in the zenmetrics#24 Metal stream. See the
     # README "GPU CI / Metal" note.
+    #
+    # STILL DISABLED after the 2026-08-28 Metal pass (#24). The 8 GB
+    # capacity problem above is now only ONE of three blockers, and it is
+    # no longer the binding one — these two would make the job red at any
+    # resolution budget, so capping the grid alone does NOT unblock it:
+    #
+    #   1. iwssim-gpu `opaque::opaque_gray_f32_identity_and_typed_parity`
+    #      fails deterministically on Metal (0.9999679561389043, wants
+    #      < 0.999). Root-caused 2026-08-28 to the `compute_gray_f32`
+    #      INGRESS, not to Metal: on the same content the GPU u8 path
+    #      scores 0.98448 and the CPU reference 0.98579, while the f32
+    #      path returns ~identity. iwssim-gpu IS in this matrix.
+    #   2. zensim-gpu has 2 deterministic Metal failures
+    #      (`diffmap_invariants::invariant_1_identity_yields_near_zero_diffmap`,
+    #      `cached_ref_slot_rebuild::gpu_score_correct_after_foreign_size_rebuild`).
+    #      zensim-gpu IS in this matrix.
+    #
+    # Both are written up in CLAUDE.md "Known Bugs" with reproductions.
+    # Re-enabling before they are FIXED would just add a permanently-red
+    # job; the only ways to make it green today would be to weaken the
+    # parity assertions or `#[ignore]` the tests, and neither is
+    # acceptable. Order of work to unblock: fix (1) and (2), then split
+    # the parity grid by resolution so the 12 MP cells run only where
+    # they fit, then flip this back on with rust-cache
+    # `cache-on-failure: true`.
     if: false
     runs-on: ${{ matrix.os }}
     # Fail-fast safety net (belt-and-suspenders now that Intel is dropped): a
