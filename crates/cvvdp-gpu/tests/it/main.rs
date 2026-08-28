@@ -11,6 +11,7 @@ mod common;
 mod auto_fallback;
 #[cfg(feature = "cubecl-types")]
 mod band_weights_invariants;
+mod cancel;
 mod capped_pyramid_smoke;
 #[cfg(feature = "cubecl-types")]
 mod clamp_phase_uncertainty_invariants;

@@ -3195,7 +3195,7 @@ impl<R: Runtime> Cvvdp<R> {
         if trace {
             eprintln!("[trace] weber(dist): {:?}", t_weber_dis.elapsed());
         }
-        self._run_d_bands_band_loop(log_l_bkg_baseband)
+        self._run_d_bands_band_loop(log_l_bkg_baseband, &enough::Unstoppable)
     }
 
     /// Run color stage + Gaussian-pyramid reduce loop. Returns the
@@ -4806,14 +4806,22 @@ impl<R: Runtime> Cvvdp<R> {
         result.map(|_| ())
     }
 
-    fn _dispatch_d_bands_into_scratch(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<()> {
+    fn _dispatch_d_bands_into_scratch(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<()> {
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
+        // Cancellation checkpoint (zenmetrics#30): before the REF
+        // Weber pyramid stage.
+        stop.check()?;
         let t_weber_ref = std::time::Instant::now();
         let log_l_bkg_baseband = self._dispatch_ref_weber_pyramid_only(ref_srgb)?;
         if trace {
             eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
         }
-        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)
+        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband, stop)
     }
 
     /// Handle-flavored sibling of [`Self::_dispatch_d_bands_into_scratch`].
@@ -4849,19 +4857,23 @@ impl<R: Runtime> Cvvdp<R> {
         &mut self,
         dist_srgb: &[u8],
         log_l_bkg_baseband: f32,
+        stop: &dyn enough::Stop,
     ) -> Result<()> {
         // CVVDP_TRACE=1 enables per-phase eprintln timings so we can
         // see where the dispatch spends its time without committing
         // instrumentation. Zero cost when unset.
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
 
+        // Cancellation checkpoint (zenmetrics#30): before the DIST
+        // Weber pyramid stage.
+        stop.check()?;
         let t_weber_dis = std::time::Instant::now();
         self._dispatch_dist_weber_pyramid_only(dist_srgb)?;
         if trace {
             eprintln!("[trace] weber(dist): {:?}", t_weber_dis.elapsed());
         }
 
-        self._run_d_bands_band_loop(log_l_bkg_baseband)
+        self._run_d_bands_band_loop(log_l_bkg_baseband, stop)
     }
 
     /// Handle-flavored sibling of [`Self::_dispatch_d_bands_dist_and_band_loop`].
@@ -4879,7 +4891,7 @@ impl<R: Runtime> Cvvdp<R> {
         if trace {
             eprintln!("[trace] weber(dist): {:?}", t_weber_dis.elapsed());
         }
-        self._run_d_bands_band_loop(log_l_bkg_baseband)
+        self._run_d_bands_band_loop(log_l_bkg_baseband, &enough::Unstoppable)
     }
 
     /// Per-level CSF + masking band loop. Both REF and DIST weber
@@ -4901,7 +4913,11 @@ impl<R: Runtime> Cvvdp<R> {
     /// pyramid + masking V-blur) and the Phase 2 recipe that resolves
     /// it (per-strip body+halo-shaped `bands_dis_strip` / `t_p_*` /
     /// `m_*` transients + K_SPLIT hybrid for deep levels).
-    fn _run_d_bands_band_loop(&mut self, log_l_bkg_baseband: f32) -> Result<()> {
+    fn _run_d_bands_band_loop(
+        &mut self,
+        log_l_bkg_baseband: f32,
+        stop: &dyn enough::Stop,
+    ) -> Result<()> {
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
         let n_levels = self.n_levels as usize;
         let cube_dim = CubeDim::new_1d(64);
@@ -5005,11 +5021,14 @@ impl<R: Runtime> Cvvdp<R> {
         // Run strip-major-outer for shallow levels (Mode B only).
         // The deep-level + baseband loop below picks up at k_split.
         if mode_b_pair && k_split_us > 0 {
-            self._run_d_bands_strip_major_shallow(k_split_us)?;
+            self._run_d_bands_strip_major_shallow(k_split_us, stop)?;
         }
 
         let t_band_loop = std::time::Instant::now();
         for k in 0..n_levels {
+            // Cancellation checkpoint (zenmetrics#30): one poll per
+            // pyramid level (Full / Mode E / Mode B deep levels).
+            stop.check()?;
             // P2.1c: Mode B already ran shallow levels strip-major-
             // outer above; skip them in the level-major-outer loop.
             if mode_b_pair && k < k_split_us {
@@ -5542,7 +5561,11 @@ impl<R: Runtime> Cvvdp<R> {
     /// Propagates errors from
     /// [`Self::_dispatch_dist_weber_csf_strip_s_for_level`] (the only
     /// fallible op in the chain). Masking helper is infallible.
-    fn _run_d_bands_strip_major_shallow(&mut self, k_split_us: usize) -> Result<()> {
+    fn _run_d_bands_strip_major_shallow(
+        &mut self,
+        k_split_us: usize,
+        stop: &dyn enough::Stop,
+    ) -> Result<()> {
         // PU blur post-scale (10^MASK_C) — constant per Cvvdp config.
         let pu_scale = 10.0_f32.powf(MASK_C);
 
@@ -5642,6 +5665,8 @@ impl<R: Runtime> Cvvdp<R> {
 
         // Strip-major outer over shallow levels.
         for s in 0..n_strips_at_0 {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             for k in 0..k_split_us {
                 let inp = &per_level_inputs[k];
                 let band_ref_a = &inp.band_ref_a;
@@ -6998,7 +7023,7 @@ impl<R: Runtime> Cvvdp<R> {
         ) {
             return Err(Error::InvalidImageSize);
         }
-        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
+        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, &enough::Unstoppable)?;
 
         let n_levels = self.n_levels as usize;
         let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
@@ -7131,6 +7156,24 @@ impl<R: Runtime> Cvvdp<R> {
     /// described in the Backend support section above is NOT
     /// surfaced via this error path; it unwinds.
     pub fn compute_dkl_jod(&mut self, ref_srgb: &[u8], dist_srgb: &[u8], ppd: f32) -> Result<f32> {
+        self.compute_dkl_jod_with_stop(ref_srgb, dist_srgb, ppd, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_dkl_jod`] with cooperative cancellation
+    /// (zenmetrics#30). `stop` is polled before the REF and DIST Weber
+    /// pyramid stages, once per strip in the Mode B strip-major walker,
+    /// and once per pyramid level in the band loop (Full / Mode E /
+    /// Mode B deep levels); a cancellation returns [`Error::Cancelled`]
+    /// with no score and the instance stays reusable. Pass
+    /// [`enough::Unstoppable`] for the uncancellable form (it inlines
+    /// to nothing).
+    pub fn compute_dkl_jod_with_stop(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        ppd: f32,
+        stop: &dyn enough::Stop,
+    ) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
 
         // Byte-identical inputs are definitionally zero-difference —
@@ -7155,7 +7198,7 @@ impl<R: Runtime> Cvvdp<R> {
         // to host. `compute_dkl_d_bands` (the parity-test helper)
         // adds a per-band readback on top, paying ~432 MB of
         // GPU→host transfer at 12 MP — JOD skips that.
-        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
+        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, stop)?;
         // Mode B (StripPair) and Mode E (CachedRef via warm_ref) route
         // the pool stage through the strip-aware walker that
         // partitions each band's per-pixel pool into row-strips and
@@ -7329,7 +7372,7 @@ impl<R: Runtime> Cvvdp<R> {
         ppd: f32,
     ) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
-        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
+        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, &enough::Unstoppable)?;
         self._host_pool_and_finalize_jod()
     }
 
@@ -7425,7 +7468,11 @@ impl<R: Runtime> Cvvdp<R> {
         // `ref_full_state`. See compute_dkl_jod_with_warm_ref for the
         // full rationale.
         let log_l_bkg_baseband = self._warm_ref_baseband_log_l_bkg_for_dispatch()?;
-        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)?;
+        self._dispatch_d_bands_dist_and_band_loop(
+            dist_srgb,
+            log_l_bkg_baseband,
+            &enough::Unstoppable,
+        )?;
         self._host_pool_and_finalize_jod()
     }
 
@@ -7786,6 +7833,21 @@ impl<R: Runtime> Cvvdp<R> {
     /// section on [`Cvvdp::compute_dkl_jod`] for the full
     /// `Atomic<f32>::fetch_add` story.
     pub fn compute_dkl_jod_with_warm_ref(&mut self, dist_srgb: &[u8], ppd: f32) -> Result<f32> {
+        self.compute_dkl_jod_with_warm_ref_with_stop(dist_srgb, ppd, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_dkl_jod_with_warm_ref`] with cooperative
+    /// cancellation (zenmetrics#30). `stop` is polled before the DIST
+    /// Weber pyramid stage and once per pyramid level in the band loop;
+    /// a cancellation returns [`Error::Cancelled`] with no score and
+    /// leaves the warm reference intact. Pass [`enough::Unstoppable`]
+    /// for the uncancellable form (it inlines to nothing).
+    pub fn compute_dkl_jod_with_warm_ref_with_stop(
+        &mut self,
+        dist_srgb: &[u8],
+        ppd: f32,
+        stop: &dyn enough::Stop,
+    ) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
         // Tick 248: validate dist length before checking warm state.
         // If a caller has both problems, the wrong-size buffer is the
@@ -7813,7 +7875,7 @@ impl<R: Runtime> Cvvdp<R> {
         // matches Mode B (strip-aware masking + strip-aware pool) with
         // the only per-mode difference being the REF source.
         let log_l_bkg_baseband = self._warm_ref_baseband_log_l_bkg_for_dispatch()?;
-        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)?;
+        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband, stop)?;
         // Mode B (StripPair) and Mode E (CachedRef) both route the
         // per-band pool through the strip-aware walker that partitions
         // each band's per-pixel pool into row-strips and dispatches
@@ -8496,6 +8558,19 @@ impl<R: Runtime> Cvvdp<R> {
     /// [`Error::InvalidImageSize`] if a GPU readback or dispatch
     /// fails inside the underlying [`Cvvdp::compute_dkl_jod`].
     pub fn score(&mut self, reference_srgb: &[u8], distorted_srgb: &[u8]) -> Result<f64> {
+        self.score_with_stop(reference_srgb, distorted_srgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::score`] with cooperative cancellation (zenmetrics#30) —
+    /// see [`Self::compute_dkl_jod_with_stop`] for the polling
+    /// contract. A cancellation returns [`Error::Cancelled`] with no
+    /// score; the instance stays reusable.
+    pub fn score_with_stop(
+        &mut self,
+        reference_srgb: &[u8],
+        distorted_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<f64> {
         // Validate the LOGICAL extent; sub-MIN_PAD_DIM inputs reflect-pad
         // to the padded extent at the upload chokepoint (no-op at ≥min).
         let expected = self.pad.logical_len(3);
@@ -8522,7 +8597,7 @@ impl<R: Runtime> Cvvdp<R> {
         // 4096²); the constructor today still allocates Full-mode
         // buffers, so runtime savings are zero until Chunk 2 lands.
         let ppd = self.geometry.pixels_per_degree();
-        let jod = self.compute_dkl_jod(reference_srgb, distorted_srgb, ppd)?;
+        let jod = self.compute_dkl_jod_with_stop(reference_srgb, distorted_srgb, ppd, stop)?;
         Ok(f64::from(jod))
     }
 
@@ -8722,7 +8797,7 @@ impl<R: Runtime> Cvvdp<R> {
             diffmap_out.resize((self.width as usize) * (self.height as usize), 0.0);
             return Ok(10.0);
         }
-        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
+        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, &enough::Unstoppable)?;
         self._pool_and_finalize_jod_with_diffmap(diffmap_out)
     }
 
@@ -8752,7 +8827,11 @@ impl<R: Runtime> Cvvdp<R> {
             });
         }
         let log_l_bkg_baseband = self._warm_ref_baseband_log_l_bkg_for_dispatch()?;
-        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)?;
+        self._dispatch_d_bands_dist_and_band_loop(
+            dist_srgb,
+            log_l_bkg_baseband,
+            &enough::Unstoppable,
+        )?;
         self._pool_and_finalize_jod_with_diffmap(diffmap_out)
     }
 

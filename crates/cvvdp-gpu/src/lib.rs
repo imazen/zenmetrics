@@ -473,6 +473,17 @@ pub enum Error {
         /// Configured VRAM cap.
         cap: usize,
     },
+    /// A `*_with_stop` entry point observed its [`enough::Stop`] at a
+    /// stage / strip / pyramid-level boundary and bailed out
+    /// (zenmetrics#30). No score was produced; the instance (and any
+    /// warm reference) is reusable.
+    Cancelled(enough::StopReason),
+}
+
+impl From<enough::StopReason> for Error {
+    fn from(r: enough::StopReason) -> Self {
+        Error::Cancelled(r)
+    }
 }
 
 impl std::fmt::Display for Error {
@@ -506,6 +517,7 @@ impl std::fmt::Display for Error {
                  scoring (which has a lower memory floor than Auto's \
                  preferred picks)"
             ),
+            Error::Cancelled(reason) => write!(f, "cancelled between strips: {reason:?}"),
         }
     }
 }
