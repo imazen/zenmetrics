@@ -77,3 +77,30 @@ fn try_new_accepts_ordinary_dimensions() {
     let b = Butteraugli::<BackendT>::try_new(client(), 64, 48).expect("ordinary dims build");
     assert_eq!(b.dimensions(), (64, 48));
 }
+
+/// A plane that fits `usize` (and `× 3` bytes) on 64-bit hosts but not
+/// the u32 kernel index space (65536² = 2³² pixels) is rejected at
+/// construction — previously `ButteraugliBatch::plane_stride_u32` would
+/// have panicked at compute time instead (zenmetrics#30).
+#[test]
+fn try_new_rejects_planes_beyond_the_u32_index_space() {
+    let (w, h) = (65_536_u32, 65_536_u32);
+    let err = Butteraugli::<BackendT>::try_new(client(), w, h)
+        .err()
+        .expect("2^32-pixel plane must be Err, not a panic or an alloc");
+    assert!(
+        matches!(err, Error::InvalidDimensions { width, height } if width == w && height == h),
+        "expected InvalidDimensions, got {err:?}"
+    );
+    assert!(err.to_string().contains("u32 kernel index space"), "{err}");
+    let err = ButteraugliBatch::<BackendT>::try_new(client(), w, h, 1)
+        .err()
+        .expect("batch: 2^32-pixel plane must be Err, not a panic or an alloc");
+    assert!(
+        matches!(err, Error::InvalidDimensions { width, height } if width == w && height == h),
+        "expected InvalidDimensions, got {err:?}"
+    );
+    // One pixel under the bound is accepted by the range check (it may
+    // still be far too large to allocate, so only the check is exercised).
+    assert!(Butteraugli::<BackendT>::try_new(client(), 1, 1).is_ok());
+}

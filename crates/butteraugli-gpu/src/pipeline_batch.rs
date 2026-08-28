@@ -286,25 +286,22 @@ impl<R: Runtime> ButteraugliBatch<R> {
         )
     }
 
-    /// `width × height` as a `u32`, panicking if it overflows. The kernel
-    /// `plane_stride` argument is u32-typed (GPU index space), so this
-    /// caps `Butteraugli`'s usable image area at `u32::MAX` pixels per
-    /// plane regardless of host pointer width.
+    /// `width × height` as a `u32` — the kernel `plane_stride` argument is
+    /// u32-typed (GPU index space). Infallible: `checked_plane_len`
+    /// rejected any plane that does not fit `u32` at construction
+    /// (`Error::InvalidDimensions`, zenmetrics#30), so the cast is
+    /// lossless here.
     fn plane_stride_u32(&self) -> u32 {
-        self.width
-            .checked_mul(self.height)
-            .expect("width × height overflows u32 (kernel plane_stride argument)")
+        self.full.plane as u32
     }
 
     /// Internal: run everything from sRGB upload through the final
     /// full-res diffmap_batch. Both reduction variants share this.
     fn run_batch_pipeline(&mut self, dist_batch: &[u8]) {
         let n = self.batch_size;
-        // Widen to usize before the multiply (mirrors Butteraugli::new H1).
-        let bytes_per_image = (self.width as usize)
-            .checked_mul(self.height as usize)
-            .and_then(|n| n.checked_mul(3))
-            .expect("width × height × 3 overflows usize");
+        // `plane × batch × 3` was range-checked by `checked_lens` at
+        // construction, so the per-image byte count cannot overflow.
+        let bytes_per_image = self.full.plane * 3;
         assert_eq!(
             dist_batch.len(),
             n * bytes_per_image,

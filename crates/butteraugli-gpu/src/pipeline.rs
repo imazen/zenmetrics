@@ -328,6 +328,11 @@ impl<R: Runtime> Butteraugli<R> {
         (width as usize)
             .checked_mul(height as usize)
             .filter(|n| n.checked_mul(3).is_some())
+            // The kernels index planes with u32 (`plane_stride`, cube
+            // counts), so a plane must also fit the u32 index space —
+            // otherwise `ButteraugliBatch::plane_stride_u32` would have to
+            // panic at compute time on 64-bit hosts (zenmetrics#30).
+            .filter(|n| u32::try_from(*n).is_ok())
             .ok_or(Error::InvalidDimensions { width, height })
     }
 

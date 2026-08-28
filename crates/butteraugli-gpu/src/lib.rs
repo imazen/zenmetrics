@@ -186,7 +186,8 @@ impl std::fmt::Display for Error {
             ),
             Error::InvalidDimensions { width, height } => write!(
                 f,
-                "invalid dimensions: {width} × {height} (× 3 bytes) overflows usize on this target"
+                "invalid dimensions: {width} × {height} (× 3 bytes) overflows usize on this target, \
+                 or the plane exceeds the u32 kernel index space"
             ),
             Error::Cancelled(reason) => write!(f, "cancelled between strips: {reason:?}"),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
