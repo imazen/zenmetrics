@@ -58,6 +58,7 @@ mod hdr_scorer_cpu;
 mod metric_base_hdr;
 mod pixels_smoke;
 mod score_pair;
+mod session_alloc_flat;
 #[cfg(all(feature = "cuda", feature = "cvvdp"))]
 mod session_cap;
 mod session_owned;
