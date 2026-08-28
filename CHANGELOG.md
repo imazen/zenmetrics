@@ -13,6 +13,14 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace (CI)
+
+### Fixed
+- **`fleet-guard` red since 590c1dc2 (2026-08-27):** `scripts/jobsys/fleet_sentinel.sh` (the
+  supervisor watchdog that exits per condition so the operating session is woken) was never
+  registered in `fleet-tools.json`, so `check_fleet_tools.py --strict` failed every push. Registered
+  under `monitor` (it is a distinct concern from `fleet watch`, not a fork of it).
+
 ## zensim-gpu / zenmetrics-api (zenmetrics#25 — GPU zensim integrated PU, the last u8-shell row, 2026-08-28)
 
 ### Added

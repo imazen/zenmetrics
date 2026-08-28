@@ -4,7 +4,8 @@
     "monitor": [
       "scripts/jobsys/fleet",
       "scripts/jobsys/fleet_top.py",
-      "scripts/jobsys/fleet_power.py"
+      "scripts/jobsys/fleet_power.py",
+      "scripts/jobsys/fleet_sentinel.sh"
     ],
     "verify": [
       "scripts/jobsys/fleet_smoke_image.py"
