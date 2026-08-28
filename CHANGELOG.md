@@ -78,6 +78,44 @@ All entries in this section: `ff8113ea44d9`.
   stable-1.98 clippy `-D warnings` with the `pixels` feature (not CI-gated today — the Lint job
   runs `wgpu,all-metrics` only).
 
+## cvvdp-gpu (zenmetrics#14 §3 runtime parameter loading — masking calibration, 2026-08-28)
+
+### Added
+- **`MaskingCalibration` + `Cvvdp::set_masking_calibration` / `masking_calibration`** (`522e849f3fe5`):
+  the `mult_mutual_3ch_{no_blur,with_blurred}` kernels now take `mask_p`, `mask_q[0..3]`,
+  `10^mask_c` and `10^d_max` as runtime scalars instead of baked literals — the mechanical
+  plumbing the issue describes. `MaskingCalibration::V0_5_4` (= `Default`) carries the exact
+  former literals, so production output is unchanged: the pycvvdp-golden parity suite reports the
+  same drifts as before the change on Metal (0.0000 / 0.0011 / 0.0015 / 0.0023 / 0.0033 / 0.0000
+  JOD at q1/5/20/45/70/90) and the `masking_kernel` host-parity tests pass with the arguments.
+  `MaskingCalibration::from_upstream_json` loads a pycvvdp `cvvdp_parameters.json`
+  (`mask_p` / `mask_q` / `mask_c` / `d_max`, validated finite and positive).
+  `tests/it/masking_calibration.rs` proves the kernels consume the runtime values (q5 corpus
+  pair, `d_max × 0.5`: 8.8902 → 9.1288; q45 pair, `mask_p × 1.25`: 9.8295 → 9.6151) and that the
+  vendored JSON scores like the const default (≤ 1e-4 JOD).
+- Still baked after this chunk (called out on the struct docs): the XCM 3×3 in the same kernels
+  and the host-side band/channel Minkowski + `met2jod` finalizer constants; pooling betas, the
+  color/EOTF scalars and the CSF LUT were already runtime.
+
+### Known (recorded, not changed)
+- **Provenance of the kernels' linear-unit literals** (`kernels::masking::D_MAX_LIN` /
+  `PU_SCALE_LIN` docs): the baked `366.73225` and `0.1601884` sit 2.4e-4 / 3.0e-4 relative
+  *above* the true `10^D_MAX = 366.6448` / `10^MASK_C = 0.160141` that the host scalar
+  (`clamp_diff_soft`) uses. Kept as production (the GPU path matches pycvvdp to ≤ 0.0033 JOD
+  with them); `from_upstream_json` yields the true powers instead. Changing the consts changes
+  GPU scores.
+
+## zenmetrics-api (zenmetrics#47 acceptance gate 1 — session pool flat across a ladder, 2026-08-28)
+
+### Added
+- `tests/it/session_alloc_flat.rs` (`90f35f1fed3c`): a 6-rung same-shape warm-ref ladder per metric
+  through an `OwnedSessionMetric` asserts the session's stream pool
+  (`__stream_reserved_bytes` = cubecl `bytes_reserved`) is flat after the first scoring —
+  measured flat on Metal at 512² for all six kinds (cvvdp 48 MiB, ssim2 144 MiB, dssim 48 MiB,
+  iwssim 96 MiB, butter 160 MiB, zensim 80 MiB). This is the "buffers re-used, only bitmap data
+  changes" half of #47's first gate; the `cuMemAllocAsync`-count / nsys half still needs a CUDA
+  box.
+
 ## cvvdp-gpu (zenmetrics#14 output completeness — per-channel / per-band scores, 2026-08-28)
 
 ### Added
