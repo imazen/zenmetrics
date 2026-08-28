@@ -45,9 +45,38 @@ Workspace conventions per the global rules:
   matches_full_at_{128,1024}` / `_dispatches_n_strips_at_1024` / `_at_1024_h_body_256` tests
   fail identically on Metal (single-strip 64×64 / h_body 512 passes). cvvdp-gpu is already
   omitted from CI's Metal matrix. Recorded in CLAUDE.md Known Bugs.
-- Still open for #30 after this chunk: the umbrella `zenmetrics-api::Metric` has no Stop
-  plumbing (next chunk), and the CUDA/Metal parity gates of the new tests ran only on Metal
-  (no CUDA card in this session).
+- The CUDA parity gates of the new cancellation tests ran only on Metal (no CUDA card in this
+  session); the umbrella chunk below closes the "no Stop plumbing in `zenmetrics-api`" gap.
+
+## zenmetrics-api + GPU opaques (zenmetrics#30 cancellation through the umbrella, 2026-08-28)
+
+All entries in this section: `ff8113ea44d9`.
+
+### Added
+- **`MetricInner::compute_srgb_u8_with_stop` / `compute_with_reference_srgb_u8_with_stop` /
+  `compute_pixels_with_stop` and `Metric::compute_pixels_with_stop`** take a `&dyn enough::Stop`
+  and surface a fired token as the new typed **`Error::Cancelled(StopReason)`** (each metric
+  crate's own `Cancelled` is mapped, never flattened into `Error::Metric`'s string); the scorer
+  and its cached reference stay usable. GPU scorers poll at their natural checkpoints (per strip
+  / per pyramid level / once before a single submission); `Backend::Cpu` has no internal
+  checkpoint and polls once before scoring. `zenmetrics_api::enough` is re-exported.
+- **Every GPU opaque gains `compute_srgb_u8_with_stop` + `compute_with_reference_srgb_u8_with_stop`**
+  (`ButteraugliOpaque`, `Ssim2Opaque`, `DssimOpaque`, `IwssimOpaque`, `CvvdpOpaque`,
+  `ZensimOpaque`) routed to the crate-level `*_with_stop` walkers. ssim2-gpu adds
+  `Ssim2::compute_with_mode_and_stop` / `compute_with_reference_with_mode_and_stop` (the
+  cached-ref strip walker now polls once per strip); zensim-gpu adds
+  `Zensim::compute_features_vec_with_stop` (poll before the ref-side precompute, then the
+  existing per-strip / pre-submission contract).
+- `zenmetrics-api/tests/it/cancel.rs`: three GPU tests over all six kinds (one-shot, cached
+  reference survives a cancel, `compute_pixels_with_stop` SDR routing) — green on Metal — plus
+  `cancel::cpu_dispatch_with_stop_polls_once_and_is_bit_identical_otherwise`, named so CI's
+  `cpu-metrics-tests` filter runs it on the GPU-less runner. Mutation-verified: removing the
+  `Backend::Cpu` poll fails 4/4; flattening the cvvdp `Cancelled` mapping fails the GPU tests.
+
+### Fixed
+- `zenmetrics-api/src/hdr.rs`: `chunks_exact(3)` → `as_chunks::<3>()` so the lib passes
+  stable-1.98 clippy `-D warnings` with the `pixels` feature (not CI-gated today — the Lint job
+  runs `wgpu,all-metrics` only).
 
 ## Workspace / zenmetrics-cli (zencodec 0.1.26 from the registry, 2026-08-27)
 
