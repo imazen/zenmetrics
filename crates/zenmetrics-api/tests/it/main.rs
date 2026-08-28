@@ -10,6 +10,7 @@
 mod backend_matrix;
 mod backend_resolve;
 mod cached_ref_parity;
+mod cancel;
 #[cfg(all(feature = "cubecl-types", feature = "cuda"))]
 mod compute_handles;
 #[cfg(all(feature = "butter", feature = "cuda", feature = "zensim"))]

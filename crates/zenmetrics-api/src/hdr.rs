@@ -241,7 +241,9 @@ pub fn nits_interleaved_to_pu_luma_gray(rgb_nits: &[f32], peak_nits: f32) -> Vec
     let pu_max = pu21_encode(peak_nits).max(1.0);
     let scale = 255.0 / pu_max;
     rgb_nits
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|c| {
             let y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
             pu21_encode(y) * scale

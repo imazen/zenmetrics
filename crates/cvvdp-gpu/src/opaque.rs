@@ -43,6 +43,20 @@ trait CvvdpInner: Send {
     ) -> Result<Score>;
     fn has_reference(&self) -> bool;
     fn is_strip_mode(&self) -> bool;
+    /// `compute_srgb_u8` with cooperative cancellation (zenmetrics#30).
+    fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score>;
+    /// `compute_with_warm_ref_srgb` (no diffmap) with cooperative
+    /// cancellation (zenmetrics#30).
+    fn compute_with_warm_ref_srgb_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score>;
     #[allow(clippy::too_many_arguments)]
     fn compute_from_linear_planes(
         &mut self,
@@ -130,6 +144,34 @@ where
 
     fn is_strip_mode(&self) -> bool {
         Cvvdp::is_strip_mode(self)
+    }
+
+    fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let jod = Cvvdp::score_with_stop(self, ref_rgb, dis_rgb, stop)?;
+        Ok(Score {
+            value: jod,
+            metric_name: "cvvdp",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn compute_with_warm_ref_srgb_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let ppd = Cvvdp::geometry_ppd_for_warm_ref(self);
+        let jod = Cvvdp::compute_dkl_jod_with_warm_ref_with_stop(self, dis_rgb, ppd, stop)?;
+        Ok(Score {
+            value: f64::from(jod),
+            metric_name: "cvvdp",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
     }
 
     fn compute_with_warm_ref_srgb(
@@ -476,6 +518,21 @@ impl CvvdpOpaque {
         self.inner.compute_srgb_u8(&r, &d)
     }
 
+    /// [`Self::compute_srgb_u8`] with cooperative cancellation
+    /// (zenmetrics#30): `stop` is polled before the REF and DIST Weber
+    /// stages, once per Mode B strip and once per pyramid level. A
+    /// cancellation returns [`crate::Error::Cancelled`] with no score.
+    pub fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let r = self.pad_rgb(ref_rgb)?;
+        let d = self.pad_rgb(dis_rgb)?;
+        self.inner.compute_srgb_u8_with_stop(&r, &d, stop)
+    }
+
     /// Score from [`PixelSlice`] inputs.
     #[cfg(feature = "pixels")]
     pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
@@ -562,6 +619,19 @@ impl CvvdpOpaque {
     pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         let d = self.pad_rgb(dis_rgb)?;
         self.inner.compute_with_warm_ref_srgb(&d, None)
+    }
+
+    /// [`Self::compute_with_reference_srgb_u8`] with cooperative
+    /// cancellation (zenmetrics#30): `stop` is polled before the DIST
+    /// Weber stage and once per pyramid level; the warm reference
+    /// survives a cancellation.
+    pub fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let d = self.pad_rgb(dis_rgb)?;
+        self.inner.compute_with_warm_ref_srgb_with_stop(&d, stop)
     }
 
     /// Score a DIST candidate against the cached REF state, also filling

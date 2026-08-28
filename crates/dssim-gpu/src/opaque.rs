@@ -55,6 +55,20 @@ trait DssimInner: Send {
     fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()>;
     /// Score one candidate against the cached reference.
     fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score>;
+    /// `compute_srgb_u8` with cooperative cancellation (zenmetrics#30).
+    fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score>;
+    /// `compute_with_reference_srgb_u8` with cooperative cancellation
+    /// (zenmetrics#30).
+    fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score>;
     /// Drop cached reference state.
     fn clear_reference(&mut self);
     /// Whether a reference has been cached.
@@ -104,6 +118,33 @@ where
 
     fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         let r = Dssim::compute_with_reference(self, dis_rgb)?;
+        Ok(Score {
+            value: r.score,
+            metric_name: "dssim",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let r = Dssim::compute_with_stop(self, ref_rgb, dis_rgb, stop)?;
+        Ok(Score {
+            value: r.score,
+            metric_name: "dssim",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let r = Dssim::compute_with_reference_with_stop(self, dis_rgb, stop)?;
         Ok(Score {
             value: r.score,
             metric_name: "dssim",
@@ -318,6 +359,22 @@ impl DssimOpaque {
         self.inner.compute_srgb_u8(&r, &d)
     }
 
+    /// [`Self::compute_srgb_u8`] with cooperative cancellation
+    /// (zenmetrics#30): strip-mode instances poll `stop` once per strip
+    /// per pass, whole-image instances once before their single
+    /// submission. A cancellation returns [`crate::Error::Cancelled`]
+    /// with no score.
+    pub fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let r = self.pad_rgb(ref_rgb)?;
+        let d = self.pad_rgb(dis_rgb)?;
+        self.inner.compute_srgb_u8_with_stop(&r, &d, stop)
+    }
+
     /// Score one reference / distorted pair from [`PixelSlice`]
     /// inputs.
     ///
@@ -391,6 +448,20 @@ impl DssimOpaque {
     pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         let d = self.pad_rgb(dis_rgb)?;
         self.inner.compute_with_reference_srgb_u8(&d)
+    }
+
+    /// [`Self::compute_with_reference_srgb_u8`] with cooperative
+    /// cancellation (zenmetrics#30) — same polling contract as
+    /// [`Self::compute_srgb_u8_with_stop`]; the cached reference survives
+    /// a cancellation.
+    pub fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let d = self.pad_rgb(dis_rgb)?;
+        self.inner
+            .compute_with_reference_srgb_u8_with_stop(&d, stop)
     }
 
     /// Drop cached reference state.

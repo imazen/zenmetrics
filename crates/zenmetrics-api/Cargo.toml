@@ -184,8 +184,13 @@ image = { workspace = true, optional = true }
 cubecl = { workspace = true, optional = true }
 
 thiserror = { workspace = true }
+# Cooperative cancellation token for the `*_with_stop` entry points
+# (zenmetrics#30); re-exported as `zenmetrics_api::enough`.
+enough = "0.4.4"
 
 [dev-dependencies]
+# Constructible `Stop` flag for the cancellation tests (zenmetrics#30).
+almost-enough = "0.4.4"
 image = { workspace = true, features = ["exr", "png"] }
 # Smoke tests construct a PixelBuffer for the `compute_pixels` path.
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }

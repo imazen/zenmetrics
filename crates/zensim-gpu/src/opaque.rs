@@ -186,6 +186,20 @@ trait ZensimInner: Send {
     /// [`crate::Error::NoCachedReference`] if [`Self::set_reference`]
     /// was never called.
     fn compute_with_reference_vec(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>>;
+    /// `compute_features_vec` with cooperative cancellation (zenmetrics#30).
+    fn compute_features_vec_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Vec<f64>>;
+    /// `compute_with_reference_vec` with cooperative cancellation
+    /// (zenmetrics#30).
+    fn compute_with_reference_vec_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Vec<f64>>;
     fn dims(&self) -> (u32, u32);
     fn has_reference(&self) -> bool;
     fn clear_reference(&mut self);
@@ -274,6 +288,23 @@ where
 
     fn compute_with_reference_vec(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>> {
         Zensim::compute_with_reference_vec(self, dis_rgb)
+    }
+
+    fn compute_features_vec_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Vec<f64>> {
+        Zensim::compute_features_vec_with_stop(self, ref_rgb, dis_rgb, stop)
+    }
+
+    fn compute_with_reference_vec_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Vec<f64>> {
+        Zensim::compute_with_reference_vec_with_stop(self, dis_rgb, stop)
     }
 
     fn dims(&self) -> (u32, u32) {
@@ -846,6 +877,25 @@ impl ZensimOpaque {
         }
     }
 
+    /// [`Self::compute_with_reference_srgb_u8`] with cooperative
+    /// cancellation (zenmetrics#30): once per strip (strip mode) or once
+    /// before the single submission (whole-image); the cached reference
+    /// survives a cancellation.
+    pub fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        if self.params.profile.is_some() {
+            let d = self.pad_rgb(dis_rgb)?;
+            let features = self.inner.compute_with_reference_vec_with_stop(&d, stop)?;
+            let (w, h) = self.inner.dims();
+            Ok(self.score_from_profile_vec(&features, w, h, None))
+        } else {
+            Err(crate::Error::NoCachedReference)
+        }
+    }
+
     /// Set + upload + pre-build the reference's XYB pyramid from
     /// [`PixelSlice`] input. Companion to
     /// [`Self::compute_with_reference_pixels`].
@@ -914,6 +964,34 @@ impl ZensimOpaque {
         } else {
             let features = self.inner.compute_features(&r, &d)?;
             Ok(self.score_from_linear(features))
+        }
+    }
+
+    /// [`Self::compute_srgb_u8`] with cooperative cancellation
+    /// (zenmetrics#30): `stop` is polled before the reference-side
+    /// precompute, then once per strip (strip mode) or once before the
+    /// single submission (whole-image). A cancellation returns
+    /// [`crate::Error::Cancelled`] with no score. The byte-identity
+    /// short-circuit still returns 100 without touching the GPU.
+    pub fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        if let Some(score) = identity_short_circuit(ref_rgb, dis_rgb) {
+            return Ok(score);
+        }
+        let r = self.pad_rgb(ref_rgb)?;
+        let d = self.pad_rgb(dis_rgb)?;
+        let features = self.inner.compute_features_vec_with_stop(&r, &d, stop)?;
+        if self.params.profile.is_some() {
+            let (w, h) = self.inner.dims();
+            Ok(self.score_from_profile_vec(&features, w, h, None))
+        } else {
+            let mut arr = [0.0_f64; TOTAL_FEATURES];
+            arr.copy_from_slice(&features[..TOTAL_FEATURES]);
+            Ok(self.score_from_linear(arr))
         }
     }
 

@@ -953,11 +953,31 @@ impl<R: Runtime> Zensim<R> {
     /// any) is left untouched — this is the cold one-shot entry, not
     /// `set_reference`.
     pub fn compute_features_vec(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<Vec<f64>> {
+        self.compute_features_vec_with_stop(ref_srgb, dist_srgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_features_vec`] with cooperative cancellation
+    /// (zenmetrics#30): `stop` is polled once before the reference-side
+    /// upload/precompute and then per the
+    /// [`Self::compute_with_reference_vec_with_stop`] contract (once per
+    /// strip in strip mode, once before the single submission
+    /// otherwise). A cancellation returns [`Error::Cancelled`] with no
+    /// features; the instance stays reusable. Pass
+    /// [`enough::Unstoppable`] for the uncancellable form.
+    pub fn compute_features_vec_with_stop(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Vec<f64>> {
         self.check_dims(ref_srgb)?;
         self.check_dims(dist_srgb)?;
         if ref_srgb == dist_srgb {
             return Ok(vec![0.0_f64; self.regime.total_features()]);
         }
+        // Cancellation checkpoint (zenmetrics#30): before the ref-side
+        // upload / precompute.
+        stop.check()?;
         if self.strip.is_some() {
             // Cold one-shot strip: skip the redundant full-image device
             // ref cache; the per-strip ref rebuild is bit-exact.
@@ -965,7 +985,7 @@ impl<R: Runtime> Zensim<R> {
         } else {
             self.set_reference(ref_srgb)?;
         }
-        self.compute_with_reference_vec(dist_srgb)
+        self.compute_with_reference_vec_with_stop(dist_srgb, stop)
     }
 
     /// Cache the reference pyramid; subsequent

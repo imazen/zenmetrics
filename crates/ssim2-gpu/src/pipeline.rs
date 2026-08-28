@@ -896,7 +896,25 @@ impl<R: Runtime> Ssim2<R> {
         // times the whole compute — strip + non-strip — so the macos-Metal CI
         // runtime breakdown is visible. Zero-overhead when the flag is off.
         zenmetrics_gpu_core::time_phase("ssim2.compute_with_mode", || {
-            self.compute_with_mode_inner(mode, ref_srgb, dist_srgb)
+            self.compute_with_mode_inner(mode, ref_srgb, dist_srgb, &enough::Unstoppable)
+        })
+    }
+
+    /// [`Self::compute_with_mode`] with cooperative cancellation
+    /// (zenmetrics#30): a strip-mode instance polls `stop` once per strip
+    /// (see [`Self::compute_stripped_with_mode_and_stop`]); a whole-image
+    /// instance is a single submission, so `stop` is polled once before it
+    /// is issued. A cancellation returns [`Error::Cancelled`] with no
+    /// score. Pass [`enough::Unstoppable`] for the uncancellable form.
+    pub fn compute_with_mode_and_stop(
+        &mut self,
+        mode: Ssim2Mode,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuSsim2Result> {
+        zenmetrics_gpu_core::time_phase("ssim2.compute_with_mode", || {
+            self.compute_with_mode_inner(mode, ref_srgb, dist_srgb, stop)
         })
     }
 
@@ -905,15 +923,19 @@ impl<R: Runtime> Ssim2<R> {
         mode: Ssim2Mode,
         ref_srgb: &[u8],
         dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
     ) -> Result<GpuSsim2Result> {
         if self.strip.is_some() {
             // Strip-mode instances allocate strip-sized scale-0 buffers
             // (image_w × (h_body + 2*halo)); they can't hold a full-frame
             // upload. Route the caller to compute_stripped instead.
-            return self.compute_stripped_with_mode(mode, ref_srgb, dist_srgb);
+            return self.compute_stripped_with_mode_and_stop(mode, ref_srgb, dist_srgb, stop);
         }
         self.check_dims(ref_srgb)?;
         self.check_dims(dist_srgb)?;
+        // Cancellation checkpoint (zenmetrics#30): whole-image mode is
+        // one submission, so poll once before issuing it.
+        stop.check()?;
 
         // Per-call zero-fill of partials so:
         // (a) Skipped reduction slots in non-Full mode contribute
@@ -1307,13 +1329,32 @@ impl<R: Runtime> Ssim2<R> {
         mode: Ssim2Mode,
         dist_srgb: &[u8],
     ) -> Result<GpuSsim2Result> {
+        self.compute_with_reference_with_mode_and_stop(mode, dist_srgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_with_reference_with_mode`] with cooperative
+    /// cancellation (zenmetrics#30): a strip-mode instance polls `stop`
+    /// once per strip before that strip's upload + kernels; a whole-image
+    /// instance polls once before its single submission. A cancellation
+    /// returns [`Error::Cancelled`] with no score and leaves the cached
+    /// reference intact. Pass [`enough::Unstoppable`] for the
+    /// uncancellable form.
+    pub fn compute_with_reference_with_mode_and_stop(
+        &mut self,
+        mode: Ssim2Mode,
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuSsim2Result> {
         if self.strip.is_some() {
-            return self.compute_with_reference_strip_with_mode(mode, dist_srgb);
+            return self.compute_with_reference_strip_with_mode(mode, dist_srgb, stop);
         }
         if !self.has_reference {
             return Err(Error::NoCachedReference);
         }
         self.check_dims(dist_srgb)?;
+        // Cancellation checkpoint (zenmetrics#30): whole-image mode is
+        // one submission, so poll once before issuing it.
+        stop.check()?;
 
         // See `compute_with_mode` for the rationale on per-call zeroing.
         reduction::launch_zero_fill_f32(&self.client, self.partials.clone(), PARTIALS_LEN);
@@ -1363,6 +1404,7 @@ impl<R: Runtime> Ssim2<R> {
         &mut self,
         mode: Ssim2Mode,
         dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
     ) -> Result<GpuSsim2Result> {
         if !self.has_reference || self.strip_cached_ref.is_none() {
             return Err(Error::NoCachedReference);
@@ -1388,6 +1430,8 @@ impl<R: Runtime> Ssim2<R> {
 
         let mut body_start = 0u32;
         while body_start < image_h {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             let body_end = (body_start + h_body).min(image_h);
             let strip_top = body_start.saturating_sub(halo);
             let strip_bot = (body_end + halo).min(image_h);

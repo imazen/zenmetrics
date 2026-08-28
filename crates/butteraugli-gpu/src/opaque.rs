@@ -42,6 +42,21 @@ trait ButteraugliInner: Send {
         dis_rgb: &[u8],
         params: &ButteraugliParams,
     ) -> Result<(Score, f64)>;
+    /// `compute_srgb_u8` with cooperative cancellation (zenmetrics#30).
+    fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        params: &ButteraugliParams,
+        stop: &dyn enough::Stop,
+    ) -> Result<Score>;
+    /// `compute_with_reference_srgb_u8` with cooperative cancellation
+    /// (zenmetrics#30).
+    fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score>;
     /// Score from display-relative `[0,1]` linear-RGB f32 planes (the HDR
     /// "faithful" path — no sRGB→linear LUT, no u8 quantization). Uploads
     /// the six planes onto the inner instance's own client and drives the
@@ -139,6 +154,41 @@ where
             metric_version: env!("CARGO_PKG_VERSION"),
         };
         Ok((score, r.pnorm_3 as f64))
+    }
+
+    fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        params: &ButteraugliParams,
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let r = if self.is_strip_mode() {
+            Butteraugli::compute_strip_with_options_and_stop(self, ref_rgb, dis_rgb, params, stop)?
+        } else {
+            // Whole-image mode is a single submission: poll once before
+            // issuing it (zenmetrics#30).
+            stop.check()?;
+            Butteraugli::compute_with_options(self, ref_rgb, dis_rgb, params)?
+        };
+        Ok(Score {
+            value: r.score as f64,
+            metric_name: "butter",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let r = Butteraugli::compute_with_reference_with_stop(self, dis_rgb, stop)?;
+        Ok(Score {
+            value: r.score as f64,
+            metric_name: "butter",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
     }
 
     #[cfg(feature = "internals")]
@@ -462,6 +512,20 @@ impl ButteraugliOpaque {
             .compute_srgb_u8_with_pnorm3(ref_rgb, dis_rgb, &self.params)
     }
 
+    /// [`Self::compute_srgb_u8`] with cooperative cancellation
+    /// (zenmetrics#30): strip-mode instances poll `stop` once per strip,
+    /// whole-image instances once before their single submission. A
+    /// cancellation returns [`crate::Error::Cancelled`] with no score.
+    pub fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        self.inner
+            .compute_srgb_u8_with_stop(ref_rgb, dis_rgb, &self.params, stop)
+    }
+
     /// Score one pair from display-relative `[0,1]` linear-RGB f32 planes
     /// (`nits / intensity_target` per channel) — the faithful HDR path that
     /// bypasses the sRGB→linear LUT and u8 quantization, so the full HDR
@@ -664,6 +728,28 @@ impl ButteraugliOpaque {
         }
         self.inner
             .compute_with_reference_srgb_u8(dis_rgb, &self.params)
+    }
+
+    /// [`Self::compute_with_reference_srgb_u8`] with cooperative
+    /// cancellation (zenmetrics#30) — same polling contract as
+    /// [`Self::compute_srgb_u8_with_stop`]; the cached reference survives
+    /// a cancellation.
+    pub fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        if self.inner.is_strip_mode() {
+            let held = match self.cached_ref_strip.as_ref() {
+                Some(buf) => buf.clone(),
+                None => return Err(crate::Error::NoCachedReference),
+            };
+            return self
+                .inner
+                .compute_srgb_u8_with_stop(&held, dis_rgb, &self.params, stop);
+        }
+        self.inner
+            .compute_with_reference_srgb_u8_with_stop(dis_rgb, stop)
     }
 
     /// Drop cached reference state (both the strip-mode held buffer and

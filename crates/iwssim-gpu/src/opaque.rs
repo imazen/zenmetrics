@@ -75,6 +75,20 @@ trait IwssimInner: Send {
     fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()>;
     /// Score a candidate against the cached reference (Phase 2A).
     fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score>;
+    /// `compute_srgb_u8` with cooperative cancellation (zenmetrics#30).
+    fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score>;
+    /// `compute_with_reference_srgb_u8` with cooperative cancellation
+    /// (zenmetrics#30).
+    fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score>;
     /// Drop the cached reference state.
     fn clear_reference(&mut self);
     /// Whether a reference has been cached and is ready to score against.
@@ -147,6 +161,48 @@ where
         let result = if Iwssim::is_strip_mode(self) {
             Iwssim::compute_rgb_with_reference_stripped(self, dis_rgb)?
         } else {
+            let dis_gray = crate::pipeline::rgb_u8_to_gray_bt601(dis_rgb);
+            Iwssim::compute_with_reference(self, &dis_gray)?
+        };
+        Ok(Score {
+            value: result.score,
+            metric_name: "iwssim",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let r = if Iwssim::is_strip_mode(self) {
+            Iwssim::compute_rgb_stripped_with_stop(self, ref_rgb, dis_rgb, stop)?
+        } else {
+            // Whole-image mode is a single submission: poll once before
+            // issuing it (zenmetrics#30).
+            stop.check()?;
+            Iwssim::compute_rgb(self, ref_rgb, dis_rgb)?
+        };
+        Ok(Score {
+            value: r.score,
+            metric_name: "iwssim",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let result = if Iwssim::is_strip_mode(self) {
+            Iwssim::compute_rgb_with_reference_stripped_with_stop(self, dis_rgb, stop)?
+        } else {
+            // Whole-image mode is a single submission: poll once before
+            // issuing it (zenmetrics#30).
+            stop.check()?;
             let dis_gray = crate::pipeline::rgb_u8_to_gray_bt601(dis_rgb);
             Iwssim::compute_with_reference(self, &dis_gray)?
         };
@@ -348,6 +404,20 @@ impl IwssimOpaque {
         self.inner.compute_srgb_u8(ref_rgb, dis_rgb)
     }
 
+    /// [`Self::compute_srgb_u8`] with cooperative cancellation
+    /// (zenmetrics#30): strip-mode instances poll `stop` once per strip
+    /// per pass, whole-image instances once before their single
+    /// submission. A cancellation returns [`crate::Error::Cancelled`]
+    /// with no score.
+    pub fn compute_srgb_u8_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        self.inner.compute_srgb_u8_with_stop(ref_rgb, dis_rgb, stop)
+    }
+
     /// Score one gray-f32 pair (`width × height` samples each, 0..255
     /// scale — the range the sRGB path's BT.601 conversion produces).
     /// This is the ingress for **float PU(luma)** HDR feeding: PU21
@@ -401,6 +471,19 @@ impl IwssimOpaque {
     /// cached.
     pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         self.inner.compute_with_reference_srgb_u8(dis_rgb)
+    }
+
+    /// [`Self::compute_with_reference_srgb_u8`] with cooperative
+    /// cancellation (zenmetrics#30) — same polling contract as
+    /// [`Self::compute_srgb_u8_with_stop`]; the cached reference survives
+    /// a cancellation.
+    pub fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        self.inner
+            .compute_with_reference_srgb_u8_with_stop(dis_rgb, stop)
     }
 
     /// Drop cached reference state. Subsequent

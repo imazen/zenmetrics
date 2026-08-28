@@ -773,6 +773,29 @@ impl Metric {
         }
         self.compute_pixels_multi(r, d).map(|s| s.primary_score())
     }
+
+    /// [`Self::compute_pixels`] with cooperative cancellation
+    /// (zenmetrics#30). The SDR sRGB8 path delegates to
+    /// [`MetricInner::compute_pixels_with_stop`] (per-strip / per-level
+    /// polling inside the metric crates); the HDR multi-score path is
+    /// one host-side conversion + one submission, so it polls `stop`
+    /// once before running. A cancellation returns
+    /// [`Error::Cancelled`] with no score.
+    #[cfg(feature = "pixels")]
+    pub fn compute_pixels_with_stop(
+        &mut self,
+        r: PixelSlice<'_>,
+        d: PixelSlice<'_>,
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let both_srgb8 = r.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB
+            && d.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB;
+        if both_srgb8 {
+            return self.inner.compute_pixels_with_stop(r, d, stop);
+        }
+        stop.check()?;
+        self.compute_pixels_multi(r, d).map(|s| s.primary_score())
+    }
 }
 
 impl MetricInner {
@@ -1189,6 +1212,67 @@ impl MetricInner {
                         message: e.to_string(),
                     })
             }
+        }
+    }
+
+    /// [`Self::compute_srgb_u8`] with cooperative cancellation
+    /// (zenmetrics#30). The GPU scorers poll `stop` at their natural
+    /// checkpoints — once per strip on strip-mode instances, once per
+    /// pyramid level / stage on cvvdp, once before the single submission
+    /// on whole-image instances — and a cancellation surfaces as
+    /// [`Error::Cancelled`] with no score; the scorer stays usable. The
+    /// optimized-CPU backend has no internal checkpoint, so it polls once
+    /// before scoring. Pass [`enough::Unstoppable`] for the uncancellable
+    /// form (bit-identical to [`Self::compute_srgb_u8`]).
+    pub fn compute_srgb_u8_with_stop(
+        &mut self,
+        r: &[u8],
+        d: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        match self {
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
+            MetricInner::Cpu(s, _) => {
+                stop.check()?;
+                s.compute_srgb_u8(r, d)
+            }
+            #[cfg(feature = "cvvdp")]
+            MetricInner::Cvvdp(m) => m
+                .compute_srgb_u8_with_stop(r, d, stop)
+                .map(convert_score)
+                .map_err(map_err_cvvdp),
+            #[cfg(feature = "butter")]
+            MetricInner::Butter(m) => m
+                .compute_srgb_u8_with_stop(r, d, stop)
+                .map(convert_score_butter)
+                .map_err(map_err_butter),
+            #[cfg(feature = "ssim2")]
+            MetricInner::Ssim2(m) => m
+                .compute_srgb_u8_with_stop(r, d, stop)
+                .map(convert_score_ssim2)
+                .map_err(map_err_ssim2),
+            #[cfg(feature = "dssim")]
+            MetricInner::Dssim(m) => m
+                .compute_srgb_u8_with_stop(r, d, stop)
+                .map(convert_score_dssim)
+                .map_err(map_err_dssim),
+            #[cfg(feature = "iwssim")]
+            MetricInner::Iwssim(m) => m
+                .compute_srgb_u8_with_stop(r, d, stop)
+                .map(convert_score_iwssim)
+                .map_err(map_err_iwssim),
+            #[cfg(feature = "zensim")]
+            MetricInner::Zensim(m) => m
+                .compute_srgb_u8_with_stop(r, d, stop)
+                .map(convert_score_zensim)
+                .map_err(map_err_zensim),
         }
     }
 
@@ -1964,6 +2048,36 @@ impl MetricInner {
         }
     }
 
+    /// [`Self::compute_pixels`] with cooperative cancellation
+    /// (zenmetrics#30): both slices are converted to packed sRGB8 up
+    /// front (the per-crate `compute_pixels` shims do the same
+    /// conversion internally) and scored through
+    /// [`Self::compute_srgb_u8_with_stop`].
+    #[cfg(feature = "pixels")]
+    pub fn compute_pixels_with_stop(
+        &mut self,
+        r: PixelSlice<'_>,
+        d: PixelSlice<'_>,
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        let (w, h) = self.dims();
+        if r.width() != w || r.rows() != h {
+            return Err(Error::DimensionMismatch {
+                expected: (w, h),
+                got: (r.width(), r.rows()),
+            });
+        }
+        if d.width() != w || d.rows() != h {
+            return Err(Error::DimensionMismatch {
+                expected: (w, h),
+                got: (d.width(), d.rows()),
+            });
+        }
+        let ref_buf = to_srgb_rgb8(&r, w, h)?;
+        let dis_buf = to_srgb_rgb8(&d, w, h)?;
+        self.compute_srgb_u8_with_stop(&ref_buf, &dis_buf, stop)
+    }
+
     // -----------------------------------------------------------
     // Cached-reference API (Phase 2A — cvvdp + zensim + iwssim).
     //
@@ -2117,6 +2231,61 @@ impl MetricInner {
         }
     }
 
+    /// [`Self::compute_with_reference_srgb_u8`] with cooperative
+    /// cancellation (zenmetrics#30) — same checkpoint contract as
+    /// [`Self::compute_srgb_u8_with_stop`]; the cached reference survives
+    /// a cancellation.
+    pub fn compute_with_reference_srgb_u8_with_stop(
+        &mut self,
+        d: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<Score> {
+        match self {
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
+            MetricInner::Cpu(s, _) => {
+                stop.check()?;
+                s.compute_with_cached_reference(d)
+            }
+            #[cfg(feature = "cvvdp")]
+            MetricInner::Cvvdp(m) => m
+                .compute_with_reference_srgb_u8_with_stop(d, stop)
+                .map(convert_score)
+                .map_err(map_err_cvvdp),
+            #[cfg(feature = "zensim")]
+            MetricInner::Zensim(m) => m
+                .compute_with_reference_srgb_u8_with_stop(d, stop)
+                .map(convert_score_zensim)
+                .map_err(map_err_zensim),
+            #[cfg(feature = "iwssim")]
+            MetricInner::Iwssim(m) => m
+                .compute_with_reference_srgb_u8_with_stop(d, stop)
+                .map(convert_score_iwssim)
+                .map_err(map_err_iwssim),
+            #[cfg(feature = "butter")]
+            MetricInner::Butter(m) => m
+                .compute_with_reference_srgb_u8_with_stop(d, stop)
+                .map(convert_score_butter)
+                .map_err(map_err_butter),
+            #[cfg(feature = "ssim2")]
+            MetricInner::Ssim2(m) => m
+                .compute_with_reference_srgb_u8_with_stop(d, stop)
+                .map(convert_score_ssim2)
+                .map_err(map_err_ssim2),
+            #[cfg(feature = "dssim")]
+            MetricInner::Dssim(m) => m
+                .compute_with_reference_srgb_u8_with_stop(d, stop)
+                .map(convert_score_dssim)
+                .map_err(map_err_dssim),
+        }
+    }
+
     /// Drop cached reference state. No-op for cvvdp/zensim whose
     /// opaque shims don't expose an explicit clear accessor —
     /// they implicitly overwrite on the next `set_reference_srgb_u8`.
@@ -2266,6 +2435,75 @@ fn convert_score(s: cvvdp_gpu::Score) -> Score {
         value: s.value,
         metric_name: s.metric_name,
         metric_version: s.metric_version,
+    }
+}
+
+/// Map a metric crate's error for the `*_with_stop` paths: the crate's
+/// `Cancelled` becomes [`Error::Cancelled`] (typed, matchable) instead of
+/// being flattened into [`Error::Metric`]'s string (zenmetrics#30).
+#[cfg(feature = "cvvdp")]
+fn map_err_cvvdp(e: cvvdp_gpu::Error) -> Error {
+    match e {
+        cvvdp_gpu::Error::Cancelled(r) => Error::Cancelled(r),
+        e => Error::Metric {
+            kind: "cvvdp",
+            message: e.to_string(),
+        },
+    }
+}
+
+#[cfg(feature = "butter")]
+fn map_err_butter(e: butteraugli_gpu::Error) -> Error {
+    match e {
+        butteraugli_gpu::Error::Cancelled(r) => Error::Cancelled(r),
+        e => Error::Metric {
+            kind: "butter",
+            message: e.to_string(),
+        },
+    }
+}
+
+#[cfg(feature = "ssim2")]
+fn map_err_ssim2(e: ssim2_gpu::Error) -> Error {
+    match e {
+        ssim2_gpu::Error::Cancelled(r) => Error::Cancelled(r),
+        e => Error::Metric {
+            kind: "ssim2",
+            message: e.to_string(),
+        },
+    }
+}
+
+#[cfg(feature = "dssim")]
+fn map_err_dssim(e: dssim_gpu::Error) -> Error {
+    match e {
+        dssim_gpu::Error::Cancelled(r) => Error::Cancelled(r),
+        e => Error::Metric {
+            kind: "dssim",
+            message: e.to_string(),
+        },
+    }
+}
+
+#[cfg(feature = "iwssim")]
+fn map_err_iwssim(e: iwssim_gpu::Error) -> Error {
+    match e {
+        iwssim_gpu::Error::Cancelled(r) => Error::Cancelled(r),
+        e => Error::Metric {
+            kind: "iwssim",
+            message: e.to_string(),
+        },
+    }
+}
+
+#[cfg(feature = "zensim")]
+fn map_err_zensim(e: zensim_gpu::Error) -> Error {
+    match e {
+        zensim_gpu::Error::Cancelled(r) => Error::Cancelled(r),
+        e => Error::Metric {
+            kind: "zensim",
+            message: e.to_string(),
+        },
     }
 }
 

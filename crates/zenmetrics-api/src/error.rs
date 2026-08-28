@@ -67,6 +67,18 @@ pub enum Error {
         /// Short backend tag (`"cuda"`, `"wgpu"`, `"hip"`, `"cpu"`).
         backend: &'static str,
     },
+    /// A `*_with_stop` entry point observed its [`enough::Stop`] at a
+    /// checkpoint (per strip / per pyramid level / before a single
+    /// submission — see each metric crate's `*_with_stop` docs) and
+    /// bailed out (zenmetrics#30). No score was produced; the scorer and
+    /// any cached reference stay usable.
+    Cancelled(enough::StopReason),
+}
+
+impl From<enough::StopReason> for Error {
+    fn from(r: enough::StopReason) -> Self {
+        Error::Cancelled(r)
+    }
 }
 
 impl fmt::Display for Error {
@@ -96,6 +108,7 @@ impl fmt::Display for Error {
                 "too many live MetricSessions on backend '{backend}' (cap is 128 per backend); \
                  drop a session to free a slot before acquiring another"
             ),
+            Error::Cancelled(reason) => write!(f, "cancelled at a checkpoint: {reason:?}"),
         }
     }
 }

@@ -79,6 +79,11 @@ mod session;
 #[cfg(feature = "cubecl-types")]
 pub mod context;
 
+/// The cooperative-cancellation token crate the `*_with_stop` entry points
+/// take (`&dyn enough::Stop`; `enough::Unstoppable` for the uncancellable
+/// form) — re-exported so callers can name the trait without a direct
+/// dependency (zenmetrics#30).
+pub use enough;
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
 #[doc(hidden)]
