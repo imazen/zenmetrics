@@ -107,6 +107,23 @@ All entries in this section: `ff8113ea44d9`.
 
 ## zenmetrics-api (zenmetrics#47 acceptance gate 1 — session pool flat across a ladder, 2026-08-28)
 
+### Known (recorded, not changed)
+- **Butteraugli orchestrator eligibility (#47 item 4) — the stale premise is corrected on
+  `metric_orchestrator_eligible`'s docs** (this commit): `ButteraugliOpaque` already routes its
+  strip arms through `Butteraugli::new_multires_strip` (pinned ≤ 1e-4 rel vs multires-whole and
+  ≤ 1e-7 opaque-vs-typed by butteraugli-gpu's own tests), so "the opaque doesn't wire it up
+  yet" no longer holds. What keeps butter on the legacy path is the Phase 7.7.1 parity gate
+  (bit-exact or ≤ ~5e-5): the multires strip walker sits ~1e-4 rel from `new_multires`, and the
+  chooser may pick `Strip` where legacy `Auto` runs whole-image. Flipping needs a user decision
+  (accept the ≤ 1e-4 drift, or force `MemoryMode::Full` for butter in `executor::construct`)
+  plus the 54-cell CUDA parity sweep — not doable from a Metal-only session. Not flipped.
+- **Grow-only device buffers sized to the group max (#47 item 2) — not started.** Every GPU
+  crate binds `width × height` at construction (buffers, strip plans, pyramid dims), so
+  reusing an instance for a smaller image needs sub-dimension scoring inside each of the six
+  pipelines — a multi-day per-crate change — and its VRAM-envelope / `cuMemAllocAsync` / nsys
+  gates need an 8 GB CUDA card. The `WarmSessionPool` today keys entries on exact
+  `(metric, w, h, params, ref)`; same-shape reuse is what gate 1 above verifies.
+
 ### Added
 - `tests/it/session_alloc_flat.rs` (`90f35f1fed3c`): a 6-rung same-shape warm-ref ladder per metric
   through an `OwnedSessionMetric` asserts the session's stream pool

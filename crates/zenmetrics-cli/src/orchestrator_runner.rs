@@ -282,15 +282,27 @@ pub fn rekey_orchestrator_columns(
 ///   where `Strip` fits the VRAM cap (i.e. most production sizes)
 ///   it drops to single-resolution. Single-res scores diverge from
 ///   multires scores by ~14–30 % depending on image / quality,
-///   far beyond any "atomic-reorder noise" parity tolerance. Until
-///   `ButteraugliOpaque::new_with_memory_mode`'s strip arms route
-///   through `Butteraugli::new_multires_strip` (the multi-resolution
-///   strip walker exists already but the opaque doesn't wire it up
-///   yet — a per-crate API change that needs its own review),
-///   butter sweeps must use the legacy CLI's typed
-///   `butter_pnorm3::score_both` path to stay bit-identical with
-///   production data. Tracked: see `INTEGRATION_NOTES.md` Phase
-///   7.7.1 path forward.
+///   far beyond any "atomic-reorder noise" parity tolerance.
+///
+///   **Status 2026-08-28 (zenmetrics#47 item 4, re-verified against
+///   source):** the per-crate wiring that paragraph waited for HAS
+///   landed — `ButteraugliOpaque::new_with_memory_mode`'s strip arms
+///   construct `Butteraugli::new_multires_strip` on cuda/wgpu, and
+///   butteraugli-gpu pins it (`tests/it/multires_strip.rs`: multires
+///   strip vs multires whole ≤ 1e-4 rel; `tests/it/opaque_strip_parity.rs`:
+///   opaque vs typed strip ≤ 1e-7). What still keeps butter on the
+///   legacy path is the parity *gate*, not missing code: the
+///   multires strip walker drifts up to ~1e-4 rel from `new_multires`
+///   (per-strip halo re-blur + host-side partial folding), which is
+///   above the Phase 7.7.1 "bit-exact or ≤ ~5e-5 atomic-reorder noise"
+///   acceptance, and the orchestrator's chooser may pick `Strip` at
+///   sizes where legacy `Auto` would run whole-image. Flipping this
+///   therefore needs (a) a user decision — accept the ≤ 1e-4 strip
+///   drift for butter under the orchestrator, or force
+///   `MemoryMode::Full` for butter in `executor::construct` so the
+///   two paths stay bit-identical — and (b) the 54-cell CUDA parity
+///   sweep (`scripts/orchestrator_parity_sweep.py`) re-run on a real
+///   card. Neither is possible from a macOS/Metal session.
 /// - **Cvvdp**: orchestrator-eligible. The orchestrator surfaces the
 ///   versioned column tag from `Score::metric_version`, then
 ///   `executor::build_output_columns` keys it under
