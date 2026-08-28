@@ -7,6 +7,7 @@
 //! filter: `cargo test --test it <name>::`.
 
 mod auto_fallback;
+mod cancel;
 mod memory_mode;
 #[cfg(feature = "cubecl-types")]
 mod opaque;

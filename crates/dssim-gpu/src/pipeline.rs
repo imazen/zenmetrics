@@ -625,14 +625,34 @@ impl<R: Runtime> Dssim<R> {
     /// Score one image pair, both sRGB packed RGB u8 of length
     /// `width × height × 3`.
     pub fn compute(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<GpuDssimResult> {
+        self.compute_with_stop(ref_srgb, dist_srgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute`] with cooperative cancellation (zenmetrics#30).
+    /// On a strip-mode instance `stop` is polled once per strip in each
+    /// of the two passes, before that strip's upload + kernels are
+    /// issued; on a whole-image instance the pipeline is a single
+    /// submission, so `stop` is polled once before it is issued. A
+    /// cancellation returns [`Error::Cancelled`] with no score; the
+    /// instance is reusable. Pass [`enough::Unstoppable`] for the
+    /// uncancellable form (it inlines to nothing).
+    pub fn compute_with_stop(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuDssimResult> {
         if self.strip_config.is_some() {
             // Route image-sized buffers through the strip driver
             // automatically so backwards-compatibility is preserved
             // for callers that only know about `compute()`.
-            return self.compute_stripped(ref_srgb, dist_srgb);
+            return self.compute_stripped_with_stop(ref_srgb, dist_srgb, stop);
         }
         self.check_dims(ref_srgb)?;
         self.check_dims(dist_srgb)?;
+        // Cancellation checkpoint (zenmetrics#30): whole-image mode is
+        // one submission, so poll once before issuing it.
+        stop.check()?;
 
         self.upload_and_srgb_to_linear(true, ref_srgb);
         self.upload_and_srgb_to_linear(false, dist_srgb);
@@ -972,13 +992,32 @@ impl<R: Runtime> Dssim<R> {
     /// ref state lives in [`Self::ref_full`] and is sliced per-strip
     /// while the dist side walks in strip-sized buffers.
     pub fn compute_with_reference(&mut self, dist_srgb: &[u8]) -> Result<GpuDssimResult> {
+        self.compute_with_reference_with_stop(dist_srgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_with_reference`] with cooperative cancellation
+    /// (zenmetrics#30). On a strip-mode instance `stop` is polled once
+    /// per strip in each of the two passes, before that strip's upload +
+    /// kernels are issued; on a whole-image instance the pipeline is a
+    /// single submission, so `stop` is polled once before it is issued.
+    /// A cancellation returns [`Error::Cancelled`] with no score; the
+    /// cached reference is left intact. Pass [`enough::Unstoppable`]
+    /// for the uncancellable form (it inlines to nothing).
+    pub fn compute_with_reference_with_stop(
+        &mut self,
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuDssimResult> {
         if !self.has_reference {
             return Err(Error::NoCachedReference);
         }
         if self.strip_config.is_some() {
-            return self.compute_with_reference_stripped(dist_srgb);
+            return self.compute_with_reference_stripped(dist_srgb, stop);
         }
         self.check_dims(dist_srgb)?;
+        // Cancellation checkpoint (zenmetrics#30): whole-image mode is
+        // one submission, so poll once before issuing it.
+        stop.check()?;
 
         self.upload_and_srgb_to_linear(false, dist_srgb);
         self.build_linear_pyramid(false);
@@ -1043,7 +1082,11 @@ impl<R: Runtime> Dssim<R> {
     /// halo rows that affect blur reach are sliced from the full
     /// ref state and the dist side re-derives them per strip exactly
     /// as it would in whole-image mode).
-    fn compute_with_reference_stripped(&mut self, dist_srgb: &[u8]) -> Result<GpuDssimResult> {
+    fn compute_with_reference_stripped(
+        &mut self,
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuDssimResult> {
         let cfg = self
             .strip_config
             .as_ref()
@@ -1063,6 +1106,8 @@ impl<R: Runtime> Dssim<R> {
         // Pass 1: Σ ssim per scale across body rows of every strip.
         self.zero_partials();
         for strip in 0..self.n_strips() {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             let plan = self.strip_plan(strip);
             self.set_strip_data_extents(&plan);
             // Install ref state for this strip — copies the relevant
@@ -1092,6 +1137,8 @@ impl<R: Runtime> Dssim<R> {
         // |ssim - avg| and sum the mad map over body rows.
         self.zero_partials();
         for strip in 0..self.n_strips() {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             let plan = self.strip_plan(strip);
             self.set_strip_data_extents(&plan);
             self.install_ref_state_for_strip(&plan);
@@ -1250,6 +1297,21 @@ impl<R: Runtime> Dssim<R> {
         ref_srgb: &[u8],
         dist_srgb: &[u8],
     ) -> Result<GpuDssimResult> {
+        self.compute_stripped_with_stop(ref_srgb, dist_srgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_stripped`] with cooperative cancellation
+    /// (zenmetrics#30): `stop` is polled once per strip in each of the
+    /// two passes, before that strip's upload + kernels are issued; a
+    /// cancellation returns [`Error::Cancelled`] with no score. Pass
+    /// [`enough::Unstoppable`] for the uncancellable form (it inlines
+    /// to nothing).
+    pub fn compute_stripped_with_stop(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuDssimResult> {
         if self.strip_config.is_none() {
             // Borrow the same error variant — strip mode wasn't
             // requested at construction time. (The
@@ -1267,6 +1329,8 @@ impl<R: Runtime> Dssim<R> {
         // Pass 1: sum Σ ssim per scale across all strips.
         self.zero_partials();
         for strip in 0..self.n_strips() {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             let plan = self.strip_plan(strip);
             self.set_strip_data_extents(&plan);
             self.upload_strip(true, ref_srgb, &plan);
@@ -1292,6 +1356,8 @@ impl<R: Runtime> Dssim<R> {
         // map over body rows.
         self.zero_partials();
         for strip in 0..self.n_strips() {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             let plan = self.strip_plan(strip);
             self.set_strip_data_extents(&plan);
             self.upload_strip(true, ref_srgb, &plan);

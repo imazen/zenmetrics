@@ -37,7 +37,9 @@ macro_rules! make_client {
 fn cpu_dssim(ref_data: &[u8], dis_data: &[u8], w: usize, h: usize) -> f64 {
     let dssim = DssimCpu::new();
     let to_rgb = |buf: &[u8]| -> Vec<RGB<u8>> {
-        buf.chunks_exact(3)
+        buf.as_chunks::<3>()
+            .0
+            .iter()
             .map(|c| RGB::new(c[0], c[1], c[2]))
             .collect()
     };

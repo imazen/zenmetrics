@@ -1385,7 +1385,9 @@ dependencies = [
 name = "cvvdp-gpu"
 version = "0.0.1"
 dependencies = [
+ "almost-enough",
  "cvvdp",
+ "enough",
  "image",
  "serde_json",
  "sha2",
@@ -1602,8 +1604,10 @@ dependencies = [
 name = "dssim-gpu"
 version = "0.0.1"
 dependencies = [
+ "almost-enough",
  "bytemuck",
  "dssim-core",
+ "enough",
  "image",
  "imgref",
  "rgb",
@@ -2698,7 +2702,9 @@ dependencies = [
 name = "iwssim-gpu"
 version = "0.0.1"
 dependencies = [
+ "almost-enough",
  "bytemuck",
+ "enough",
  "image",
  "iwssim",
  "zenforks-cubecl",
