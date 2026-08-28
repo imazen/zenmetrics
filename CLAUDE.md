@@ -361,6 +361,29 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **zensim-gpu integrated-PU (HDR) score drifts from CPU `compute_pu_linear` by up to ~0.5 points
+  on textured content — an f32 peak-feature precision limit at HDR magnitudes, NOT the PU kernel
+  or the routing (measured 2026-08-28 on Metal/wgpu; zenmetrics#25).** `ZensimOpaque::
+  compute_pu_linear_nits_interleaved` vs CPU on the same nits pair: |Δ| 5.0e-3 at 128×96, 0.47 at
+  200×150, 0.36 at 256×256. Attribution (per-feature diff + block-swap rescoring): the scale-0
+  PU-XYB planes match < 5e-5 and the mean-pooled basic features < 2e-3; the gap is the
+  `ssim_max` / `ssim_p95` peak features (idx 156 + 18·scale + 6·ch + {0,3}) — GPU 4.5e-3 vs CPU
+  1.5e-3 on Y at 256×256. Both sides form the local variance as `E[x²] − μ²` in f32; PU-XYB Y is
+  up to ≈ 2.5 (4000 cd/m²) vs ≲ 1 on SDR planes, so the cancellation noise in smooth regions is
+  ~6× larger, the two blur orderings round it differently, and a `max` pool picks the worst pixel.
+  Scaling the same pair ×0.002 collapses the drift to 5e-3 (magnitude-pinned). The SDR peaks show
+  the same class at ~4% relative (score Δ ~1e-3), so the SDR parity locks are unaffected. Fix
+  direction if it matters: a cancellation-stable local variance (blur of `(x−μ)²`, or centred
+  planes) in BOTH the CPU and GPU kernels — a feature-definition change that re-bakes BHdr.
+  CUDA/Vulkan envelope not yet recorded (the SDR peak drift is smaller there than on Metal).
+  Gate + numbers: `crates/zensim-gpu/tests/it/pu_xyb_parity.rs::PU_SCORE_ABS_TOL`.
+  **Corollary for test authors:** a pure linear-gradient pair (the umbrella tests' `hdr_pair`
+  ramp) is NOT a valid GPU↔CPU parity input on EITHER path — `hf_mag_loss` (basic feature 11) is
+  ill-conditioned there (a box mean reproduces a ramp exactly; Σ|x−μ| is rounding noise on both
+  backends): CPU 0.22 vs GPU 0.07 on PU, CPU 0.19 vs GPU 0.0 on SDR at the same feature, 4.3
+  points apart through the BHdr bake (1e-2 through B). Use textured content for cross-backend
+  checks.
+
 - **iwssim-gpu `it::opaque::opaque_gray_f32_identity_and_typed_parity` FAILS on macOS/Metal
   (wgpu), pre-existing — verified 2026-08-28 in a throwaway jj workspace at `ef94c52c` (the
   commit before that day's #30/#14/#47 work) with the identical value:** the distorted gray-f32

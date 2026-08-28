@@ -5,10 +5,11 @@
 //!   - **Primary path**: [`score_via_hdr_scorer`] hands absolute nits to the
 //!     umbrella's `HdrScorer`, which applies the per-metric feeding from
 //!     `zenmetrics_api::hdr::hdr_feeding` — cvvdp/butter linear planes, ssim2
-//!     integrated PU21 on every backend, CPU zensim integrated PU, iwssim
-//!     float PU(luma) on every backend, the remaining SSIM-family the u8
-//!     shell. `--hdr-transfer` only affects the u8-shell metrics (it cannot
-//!     override the integrated/float feedings).
+//!     + zensim integrated PU21 on every backend, iwssim
+//!     float PU(luma) on every backend; dssim is refused. No umbrella row
+//!     routes the u8 shell any more (zenmetrics#25), so `--hdr-transfer` is a
+//!     no-op on this path (it cannot override the integrated/float feedings)
+//!     and only shapes the explicit u8 sidecar / fallback feedings below.
 //!   - **Fallback** (kinds with no umbrella mapping / hip runtime): HDR→u8 via
 //!     [`HdrTransfer`] (default `pu-rescale`; `pu-clamp` is the legacy degraded
 //!     path). See `benchmarks/hdr_feeding_validation_2026-06-03.md`.

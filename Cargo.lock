@@ -6562,6 +6562,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenavif-serialize"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenavif-serialize?rev=990bd6d025ece47da74cbd74c245302bd45bbf8e#990bd6d025ece47da74cbd74c245302bd45bbf8e"
+dependencies = [
+ "arrayvec",
+ "whereat",
+]
+
+[[package]]
 name = "zenbench"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7144,6 +7153,7 @@ dependencies = [
 name = "zenmetrics-api"
 version = "0.0.1"
 dependencies = [
+ "almost-enough",
  "butteraugli",
  "butteraugli-gpu",
  "bytemuck",
@@ -7151,6 +7161,7 @@ dependencies = [
  "cvvdp-gpu",
  "dssim-core",
  "dssim-gpu",
+ "enough",
  "fast-ssim2 0.8.2",
  "image",
  "imgref",
@@ -7201,7 +7212,7 @@ dependencies = [
  "ultrahdr-rs",
  "zenav1-svt",
  "zenavif",
- "zenavif-serialize",
+ "zenavif-serialize 0.2.0",
  "zencodec",
  "zenflate 0.4.0",
  "zenfleet-core",
@@ -7345,6 +7356,7 @@ dependencies = [
 [[package]]
 name = "zenrav1e"
 version = "0.2.0"
+source = "git+https://github.com/imazen/zenrav1e?rev=e4883037553434efb57ecbf4414c8b49922ba3e4#e4883037553434efb57ecbf4414c8b49922ba3e4"
 dependencies = [
  "aligned-vec",
  "arbitrary",
@@ -7377,6 +7389,7 @@ dependencies = [
 [[package]]
 name = "zenravif"
 version = "0.2.0"
+source = "git+https://github.com/imazen/cavif-rs?rev=f6c883b6e7395fad67c87ddab676c4df59575a41#f6c883b6e7395fad67c87ddab676c4df59575a41"
 dependencies = [
  "almost-enough",
  "imgref",
@@ -7384,7 +7397,7 @@ dependencies = [
  "quick-error",
  "rgb",
  "whereat",
- "zenavif-serialize",
+ "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif-serialize?rev=990bd6d025ece47da74cbd74c245302bd45bbf8e)",
  "zenrav1e",
 ]
 
@@ -7640,3 +7653,7 @@ dependencies = [
 name = "rav1d-safe"
 version = "0.5.7"
 source = "git+https://github.com/imazen/rav1d-safe?rev=f6aed27e81baa5e74a8eba413562efb8813641fd#f6aed27e81baa5e74a8eba413562efb8813641fd"
+
+[[patch.unused]]
+name = "zenrav1e"
+version = "0.2.0"

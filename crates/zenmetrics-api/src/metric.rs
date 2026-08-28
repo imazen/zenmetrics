@@ -1644,10 +1644,14 @@ impl MetricInner {
     /// (`fast_ssim2::compute_ssimulacra2_pu_nits`, the same
     /// PU21-for-cube-root swap in the CPU pipeline — UPIQ SRCC 0.7044 at
     /// fast-ssim2 git 35f198af; `hdr-pu` feature, workspace `[patch]` pin
-    /// until a fast-ssim2 release ships it), and by **zensim on the
+    /// until a fast-ssim2 release ships it), by **zensim on the
     /// native-CPU dispatch** (`zensim::Zensim::compute_pu_linear`, the PU21
     /// banding_glare front-end from zensim PR #44 replacing the SDR
-    /// cube-root — no u8 round-trip). Every other variant returns
+    /// cube-root — no u8 round-trip), and by the **GPU zensim opaque**
+    /// (`zensim_gpu::ZensimOpaque::compute_pu_linear_nits_interleaved`: the
+    /// on-device PU-XYB front-end + the profile's PU-linear bake, B → BHdr,
+    /// mirroring the CPU entry; score + the regime-length feature vector from
+    /// one pass). Every other variant returns
     /// [`Error::Metric`] so a caller that ignored `hdr::hdr_feeding` fails
     /// loudly instead of silently mis-scoring; feed those metrics per their
     /// own `hdr_feeding` recipe.
@@ -1708,7 +1712,17 @@ impl MetricInner {
             #[cfg(feature = "iwssim")]
             MetricInner::Iwssim(_) => Err(no_pu_nits_path("iwssim")),
             #[cfg(feature = "zensim")]
-            MetricInner::Zensim(_) => Err(no_pu_nits_path("zensim")),
+            MetricInner::Zensim(m) => m
+                .compute_pu_linear_nits_interleaved(ref_nits, dis_nits)
+                .map(|(score, features)| {
+                    let mut s = Scores::single(convert_score_zensim(score));
+                    s.features = features;
+                    s
+                })
+                .map_err(|e| Error::Metric {
+                    kind: "zensim",
+                    message: e.to_string(),
+                }),
         }
     }
 

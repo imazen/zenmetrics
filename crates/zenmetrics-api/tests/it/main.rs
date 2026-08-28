@@ -41,6 +41,12 @@ mod cpu_zensim_pu;
 mod cvvdp_display;
 mod dispatch;
 #[cfg(all(
+    any(feature = "cuda", feature = "wgpu"),
+    feature = "hdr",
+    feature = "zensim"
+))]
+mod gpu_zensim_pu;
+#[cfg(all(
     feature = "butter",
     feature = "cuda",
     feature = "hdr",

@@ -617,8 +617,12 @@ struct ScorePairsArgs {
     /// butteraugli-gpu get their native linear-planes path with peak +
     /// linear EOTF) — the SPLIT-fleet / datagen HDR ingest, matching
     /// `batch --hdr` and `sweep --hdr`. The zensim feature sidecar
-    /// (`--feature-output`) is extracted from the PU21 u8 feeding (the
-    /// GPU-zensim HDR shell). Requires the `hdr` build feature. See
+    /// (`--feature-output`) is extracted from the PU21 u8 feeding (the v1
+    /// HDR u8-shell sidecar regime — an explicit `score-pairs` data
+    /// contract, NOT the umbrella `HdrScorer` feeding, which routes zensim
+    /// through integrated PU on every backend since zenmetrics#25; opt into
+    /// the PU-linear v3 regime with `--hdr-features-pu-linear`). Requires
+    /// the `hdr` build feature. See
     /// zensim `docs/HDR_PLAN.md`.
     #[cfg(feature = "hdr")]
     #[arg(long)]

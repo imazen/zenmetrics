@@ -34,9 +34,10 @@
 //!    codec dropped the HDR signaling and the cell is not an HDR cell.
 //! 4. **Scoring** ([`score_hdr_cached`]): `zenmetrics_api::hdr::HdrScorer`
 //!    applies the validated per-metric feeding (`hdr_feeding`: cvvdp /
-//!    butteraugli linear planes, GPU ssim2 integrated PU21, iwssim float
-//!    PU(luma), SSIM-family PU-rescale u8; dssim is Unsupported by
-//!    design). Scorers are cached process-static, mirroring
+//!    butteraugli linear planes, ssim2 + zensim integrated PU21 on every
+//!    backend, iwssim float PU(luma); dssim is Unsupported by design — no
+//!    metric routes the PU-rescale u8 shell since zenmetrics#25 closed).
+//!    Scorers are cached process-static, mirroring
 //!    `metrics::cache::MetricCache`'s cubecl-pool discipline.
 //!
 //! The output TSV gains a trailing `hdr_mode` column (value `pq-mcll`:

@@ -337,9 +337,10 @@ plausible and mean nothing (the imazen/zenmetrics#25 failure class).
   candidates; either needs an honest decode-back-to-nits path before
   it may join.
 - **Scoring**: `zenmetrics_api::hdr::hdr_feeding` per metric — cvvdp /
-  butteraugli linear planes, GPU ssim2 integrated PU21, iwssim float
-  PU(luma) gray, SSIM-family PU-rescale u8; dssim is Unsupported by
-  design. Scorers live in a process-static cache mirroring
+  butteraugli linear planes, ssim2 + zensim integrated PU21 on every
+  backend, iwssim float PU(luma) gray; dssim is Unsupported by design (no
+  metric routes the PU-rescale u8 shell since zenmetrics#25 closed —
+  GPU zensim was the last row, flipped 2026-08-28). Scorers live in a process-static cache mirroring
   `MetricCache`'s cubecl-pool discipline. GPU metrics need an explicit
   `--gpu-runtime cuda|wgpu`.
 - **Output schema**: the TSV (and therefore the fleet omni parquet,

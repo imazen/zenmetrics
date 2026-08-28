@@ -13,6 +13,34 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zensim-gpu / zenmetrics-api (zenmetrics#25 — GPU zensim integrated PU, the last u8-shell row, 2026-08-28)
+
+### Added
+- **zensim-gpu: `ZensimOpaque::compute_pu_linear_nits_interleaved`** — the GPU twin of CPU
+  `Zensim::compute_pu_linear`: absolute-nits interleaved f32 in, the on-device PU-XYB front-end
+  (`linear_nits_to_positive_pu_xyb_kernel`, 17715350) + the profile's PU-linear bake (`B` → `BHdr`,
+  mirroring CPU `params_pu_linear`), `(score, 372 features)` from one pass; byte-identical inputs
+  short-circuit to 100, wrong-length buffers are `DimensionMismatch`. Gates in
+  `tests/it/pu_xyb_parity.rs`: score tracks CPU `compute_pu_linear` (mean-pooled basic block
+  < 2e-3 per feature, score within the measured Metal envelope — see Known Bugs), the `B` → `BHdr`
+  routing is exact-checked against the public forward pass and mutation-verified (scoring PU
+  features with the SDR `B` bake fails both gates), identity = 100.
+- **zenmetrics-api: `Metric::compute_pu_nits_interleaved_multi` serves GPU zensim** (score +
+  feature vector) instead of a loud "no integrated-PU21 path" error.
+
+### Changed
+- **`hdr::hdr_feeding(Zensim, <any GPU backend>)` → `IntegratedPuNits`** — zensim now routes
+  integrated PU21 on EVERY backend, so no metric routes the `SdrU8(PuRescale)` u8 shell any more
+  (`HdrScorer::set_transfer` is a documented no-op on every current row). `HdrScorer` /
+  `Metric::compute_pixels_multi` / `sweep --hdr` GPU-zensim HDR scores change accordingly: they
+  were the SDR `B` bake over PU-u8 features; they are now the `BHdr` bake over on-device PU-XYB
+  features, the same metric the CPU backend scores (routing tests
+  `hdr_feeding_zensim_routes_integrated_pu_on_every_backend`; umbrella tests
+  `tests/it/gpu_zensim_pu.rs` on CUDA or wgpu: bit-equal to the direct opaque call, features pass
+  through, identity 100, GPU ↔ CPU |Δ| 5.0e-3 on a textured 128×96 pair on Metal). The
+  `score-pairs --hdr` zensim feature SIDECAR keeps its explicit v1 PU21-u8 regime (an opt-in data
+  contract; `--hdr-features-pu-linear` is the PU-linear v3 regime) — unchanged.
+
 ## dssim-gpu / iwssim-gpu / cvvdp-gpu (zenmetrics#30 cooperative cancellation, 2026-08-28)
 
 ### Added
