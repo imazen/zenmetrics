@@ -1259,6 +1259,21 @@ impl<R: Runtime> Iwssim<R> {
         ref_gray: &[f32],
         dis_gray: &[f32],
     ) -> Result<GpuIwssimResult> {
+        self.compute_gray_stripped_with_stop(ref_gray, dis_gray, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_gray_stripped`] with cooperative cancellation
+    /// (zenmetrics#30): `stop` is polled once per strip in each of the
+    /// two passes, before that strip's upload + kernels are issued; a
+    /// cancellation returns [`Error::Cancelled`] with no score and the
+    /// instance stays reusable. Pass [`enough::Unstoppable`] for the
+    /// uncancellable form (it inlines to nothing).
+    pub fn compute_gray_stripped_with_stop(
+        &mut self,
+        ref_gray: &[f32],
+        dis_gray: &[f32],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuIwssimResult> {
         let strip_state = match self.strip {
             Some(s) => s,
             None => return Err(Error::NotStripMode),
@@ -1296,6 +1311,8 @@ impl<R: Runtime> Iwssim<R> {
         let mut has_parent_per_scale = vec![false; n_scales_iw];
 
         for &(body_lo, body_hi, up_lo, up_hi) in strips.iter() {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             let actual_strip_h = up_hi - up_lo;
             self.set_scale_dims_for_strip(actual_strip_h, image_w);
             self.upload_strip_gray(ref_gray, dis_gray, up_lo, up_hi);
@@ -1374,6 +1391,8 @@ impl<R: Runtime> Iwssim<R> {
         let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
 
         for &(body_lo, body_hi, up_lo, up_hi) in strips.iter() {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             let actual_strip_h = up_hi - up_lo;
             self.set_scale_dims_for_strip(actual_strip_h, image_w);
             self.upload_strip_gray(ref_gray, dis_gray, up_lo, up_hi);
@@ -1764,6 +1783,20 @@ impl<R: Runtime> Iwssim<R> {
     /// numerically identical to running `compute_gray_stripped` on
     /// the same `(ref, dis)` pair.
     pub fn compute_with_reference_stripped(&mut self, dis_gray: &[f32]) -> Result<GpuIwssimResult> {
+        self.compute_with_reference_stripped_with_stop(dis_gray, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_with_reference_stripped`] with cooperative
+    /// cancellation (zenmetrics#30): `stop` is polled once per strip,
+    /// before that strip's upload + kernels are issued; a cancellation
+    /// returns [`Error::Cancelled`] with no score and leaves the cached
+    /// reference intact. Pass [`enough::Unstoppable`] for the
+    /// uncancellable form (it inlines to nothing).
+    pub fn compute_with_reference_stripped_with_stop(
+        &mut self,
+        dis_gray: &[f32],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuIwssimResult> {
         let strip_state = match self.strip {
             Some(s) => s,
             None => return Err(Error::NotStripMode),
@@ -1814,6 +1847,8 @@ impl<R: Runtime> Iwssim<R> {
         let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
 
         for (strip_idx, &(body_lo, body_hi, up_lo, up_hi)) in strips.iter().enumerate() {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             let actual_strip_h = up_hi - up_lo;
             self.set_scale_dims_for_strip(actual_strip_h, image_w);
 
@@ -1984,6 +2019,18 @@ impl<R: Runtime> Iwssim<R> {
         ref_rgb: &[u8],
         dis_rgb: &[u8],
     ) -> Result<GpuIwssimResult> {
+        self.compute_rgb_stripped_with_stop(ref_rgb, dis_rgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_rgb_stripped`] with cooperative cancellation
+    /// (zenmetrics#30) — see [`Self::compute_gray_stripped_with_stop`]
+    /// for the polling contract.
+    pub fn compute_rgb_stripped_with_stop(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuIwssimResult> {
         if self.strip.is_none() {
             return Err(Error::NotStripMode);
         }
@@ -2002,7 +2049,7 @@ impl<R: Runtime> Iwssim<R> {
         }
         let ref_gray = rgb_u8_to_gray_bt601(ref_rgb);
         let dis_gray = rgb_u8_to_gray_bt601(dis_rgb);
-        self.compute_gray_stripped(&ref_gray, &dis_gray)
+        self.compute_gray_stripped_with_stop(&ref_gray, &dis_gray, stop)
     }
 
     /// RGB-u8 variant of [`Self::set_reference_stripped`] — converts
@@ -2030,6 +2077,18 @@ impl<R: Runtime> Iwssim<R> {
         &mut self,
         dis_rgb: &[u8],
     ) -> Result<GpuIwssimResult> {
+        self.compute_rgb_with_reference_stripped_with_stop(dis_rgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_rgb_with_reference_stripped`] with cooperative
+    /// cancellation (zenmetrics#30) — see
+    /// [`Self::compute_with_reference_stripped_with_stop`] for the
+    /// polling contract.
+    pub fn compute_rgb_with_reference_stripped_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuIwssimResult> {
         if self.strip.is_none() {
             return Err(Error::NotStripMode);
         }
@@ -2041,7 +2100,7 @@ impl<R: Runtime> Iwssim<R> {
             });
         }
         let dis_gray = rgb_u8_to_gray_bt601(dis_rgb);
-        self.compute_with_reference_stripped(&dis_gray)
+        self.compute_with_reference_stripped_with_stop(&dis_gray, stop)
     }
 
     /// Native-RGB variant of [`Self::compute_rgb_with_reference_stripped`]
@@ -2083,6 +2142,20 @@ impl<R: Runtime> Iwssim<R> {
     pub fn compute_rgb_with_reference_stripped_native(
         &mut self,
         dis_rgb: &[u8],
+    ) -> Result<GpuIwssimResult> {
+        self.compute_rgb_with_reference_stripped_native_with_stop(dis_rgb, &enough::Unstoppable)
+    }
+
+    /// [`Self::compute_rgb_with_reference_stripped_native`] with
+    /// cooperative cancellation (zenmetrics#30): `stop` is polled once
+    /// per strip, before that strip's upload + kernels are issued; a
+    /// cancellation returns [`Error::Cancelled`] with no score and
+    /// leaves the cached reference intact. Pass [`enough::Unstoppable`]
+    /// for the uncancellable form (it inlines to nothing).
+    pub fn compute_rgb_with_reference_stripped_native_with_stop(
+        &mut self,
+        dis_rgb: &[u8],
+        stop: &dyn enough::Stop,
     ) -> Result<GpuIwssimResult> {
         let strip_state = match self.strip {
             Some(s) => s,
@@ -2128,6 +2201,8 @@ impl<R: Runtime> Iwssim<R> {
         let rgb_row_stride = image_w as usize * 3;
 
         for (strip_idx, &(body_lo, body_hi, up_lo, up_hi)) in strips.iter().enumerate() {
+            // Cancellation checkpoint (zenmetrics#30): one poll per strip.
+            stop.check()?;
             let actual_strip_h = up_hi - up_lo;
             self.set_scale_dims_for_strip(actual_strip_h, image_w);
 

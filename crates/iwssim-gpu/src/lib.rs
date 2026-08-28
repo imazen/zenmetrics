@@ -240,6 +240,16 @@ pub enum Error {
     /// [`MemoryMode::Auto`](crate::MemoryMode) couldn't fit either
     /// Full or Strip into the VRAM cap.
     TooBigForFull { needed: usize, cap: usize },
+    /// A `*_with_stop` entry point observed its [`enough::Stop`] between
+    /// strips and bailed out (zenmetrics#30). No score was produced; the
+    /// instance (and any cached reference) is reusable.
+    Cancelled(enough::StopReason),
+}
+
+impl From<enough::StopReason> for Error {
+    fn from(r: enough::StopReason) -> Self {
+        Error::Cancelled(r)
+    }
 }
 
 impl std::fmt::Display for Error {
@@ -273,6 +283,7 @@ impl std::fmt::Display for Error {
                 "Auto could not place image in {cap} byte cap; needs at least {needed} bytes \
                  (set ZENMETRICS_VRAM_CAP_BYTES or use MemoryMode::Strip explicitly)"
             ),
+            Error::Cancelled(reason) => write!(f, "cancelled between strips: {reason:?}"),
         }
     }
 }

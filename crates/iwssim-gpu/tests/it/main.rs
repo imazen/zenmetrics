@@ -9,6 +9,7 @@
 mod auto_fallback;
 #[cfg(feature = "cubecl-types")]
 mod cached_ref_strip;
+mod cancel;
 mod memory_mode;
 #[cfg(feature = "cubecl-types")]
 mod opaque;
