@@ -144,6 +144,12 @@ required-features = ["cubecl-types"]
 name = "strip_parity_numbers"
 required-features = ["cubecl-types"]
 
+# zenmetrics#47 item 4: corpus-scale multires strip-vs-whole drift
+# measurement (real images × JPEG quality ladder × strip bodies).
+[[example]]
+name = "strip_drift_corpus"
+required-features = ["cubecl-types"]
+
 [[example]]
 name = "bench_strip_vs_whole_cuda"
 required-features = ["cubecl-types", "cuda"]
