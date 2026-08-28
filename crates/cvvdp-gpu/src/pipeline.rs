@@ -124,7 +124,9 @@ use crate::kernels::pyramid::{
     upscale_v_strip_kernel,
 };
 use crate::params::CvvdpParams;
-use crate::{BandBreakdown, Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
+use crate::{
+    BandBreakdown, Error, MAX_LEVELS, MaskingCalibration, N_CHANNELS, PYRAMID_MIN_DIM, Result,
+};
 
 /// Return shape of [`Cvvdp::compute_dkl_weber_pyramid`].
 ///
@@ -1081,6 +1083,10 @@ pub struct Cvvdp<R: Runtime> {
     /// masking (when the kernels are ported to logical-image
     /// reflection).
     strip_dispatch_counter: core::sync::atomic::AtomicU32,
+    /// Runtime masking calibration passed to the `mult_mutual_3ch_*`
+    /// kernels (zenmetrics#14 §3). Defaults to
+    /// [`MaskingCalibration::V0_5_4`]; see [`Self::set_masking_calibration`].
+    masking_calib: MaskingCalibration,
 }
 
 fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
@@ -2431,6 +2437,7 @@ impl<R: Runtime> Cvvdp<R> {
             strip_config: None,
             ref_full_state: None,
             strip_dispatch_counter: core::sync::atomic::AtomicU32::new(0),
+            masking_calib: MaskingCalibration::V0_5_4,
         })
     }
 
@@ -2660,6 +2667,22 @@ impl<R: Runtime> Cvvdp<R> {
     pub fn reset_strip_dispatch_counter(&self) {
         self.strip_dispatch_counter
             .store(0, core::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// The masking calibration the `mult_mutual_3ch_*` kernels run with
+    /// (zenmetrics#14 §3). [`MaskingCalibration::V0_5_4`] unless
+    /// [`Self::set_masking_calibration`] changed it.
+    pub fn masking_calibration(&self) -> MaskingCalibration {
+        self.masking_calib
+    }
+
+    /// Install a runtime masking calibration (zenmetrics#14 §3 "runtime
+    /// parameter loading"). Takes effect on the next scoring call; the
+    /// warm reference is unaffected (masking runs per DIST call, after
+    /// the REF Weber/CSF stages). `MaskingCalibration::V0_5_4` restores
+    /// the production default bit-for-bit.
+    pub fn set_masking_calibration(&mut self, calib: MaskingCalibration) {
+        self.masking_calib = calib;
     }
 
     /// Pyramid level `k`'s spatial dimensions as `(bw, bh, n_px)`.
@@ -5414,6 +5437,11 @@ impl<R: Runtime> Cvvdp<R> {
                             ArrayArg::from_raw_parts(d_h[1].clone(), n_px),
                             ArrayArg::from_raw_parts(d_h[2].clone(), n_px),
                             n_px as u32,
+                            self.masking_calib.mask_p,
+                            self.masking_calib.mask_q[0],
+                            self.masking_calib.mask_q[1],
+                            self.masking_calib.mask_q[2],
+                            self.masking_calib.d_max_lin,
                         );
                     } else {
                         // Small band: inline no-blur masker (band ≤ PU_PADSIZE).
@@ -5434,6 +5462,12 @@ impl<R: Runtime> Cvvdp<R> {
                             ArrayArg::from_raw_parts(d_h[1].clone(), n_px),
                             ArrayArg::from_raw_parts(d_h[2].clone(), n_px),
                             n_px as u32,
+                            self.masking_calib.mask_p,
+                            self.masking_calib.mask_q[0],
+                            self.masking_calib.mask_q[1],
+                            self.masking_calib.mask_q[2],
+                            self.masking_calib.pu_scale_lin,
+                            self.masking_calib.d_max_lin,
                         );
                     }
                 }
@@ -6901,6 +6935,11 @@ impl<R: Runtime> Cvvdp<R> {
                 ArrayArg::from_raw_parts(d_rg_b.clone(), n_strip_body),
                 ArrayArg::from_raw_parts(d_vy_b.clone(), n_strip_body),
                 n_strip_body as u32,
+                self.masking_calib.mask_p,
+                self.masking_calib.mask_q[0],
+                self.masking_calib.mask_q[1],
+                self.masking_calib.mask_q[2],
+                self.masking_calib.d_max_lin,
             );
         }
         self.strip_dispatch_counter

@@ -58,6 +58,29 @@ pub use cvvdp::kernels::masking::{
     phase_uncertainty_band, phase_uncertainty_no_blur, safe_pow,
 };
 
+/// The soft-clip ceiling in linear units as the production
+/// `mult_mutual_3ch_*` kernels have always baked it. Kept as the exact f32
+/// literal the kernels used so the runtime-argument form of the kernels
+/// (zenmetrics#14 §3) stays bit-identical to the literal form;
+/// `MaskingCalibration::V0_5_4` carries it.
+///
+/// Provenance note (measured 2026-08-28 while lifting the literal): the
+/// kernels' comment calls this `10^D_MAX`, but `10^2.5642455 = 366.6448`,
+/// so the baked value sits **2.4e-4 relative above** it (the host scalar
+/// `clamp_diff_soft` uses the true `10f32.powf(D_MAX)`). The GPU path
+/// matches the pycvvdp goldens to ≤ 0.0033 JOD with this literal, so it is
+/// kept as production; `MaskingCalibration::from_upstream_json` yields the
+/// true power instead. Changing this const changes GPU scores.
+pub const D_MAX_LIN: f32 = 366.732_25;
+
+/// The post-blur scale `mult_mutual_3ch_no_blur_kernel` applies itself
+/// for the deepest pyramid levels (the blurred path folds the
+/// host-computed `10f32.powf(MASK_C)` into `pu_blur_v_3ch_scaled_kernel`
+/// instead). Same exact-literal rationale — and the same kind of
+/// provenance offset — as [`D_MAX_LIN`]: `10^-0.79549712 = 0.160141`, the
+/// baked literal is **3.0e-4 relative above** it.
+pub const PU_SCALE_LIN: f32 = 0.160_188_4;
+
 /// Horizontal pass of the σ=3 separable Gaussian blur, with reflect
 /// padding. Per-output-pixel thread. Input `src` is `w × h`
 /// row-major; output `dst` is the same shape. Caller multiplies the
@@ -796,19 +819,22 @@ pub fn mult_mutual_3ch_no_blur_kernel(
     d_rg: &mut Array<f32>,
     d_vy: &mut Array<f32>,
     n: u32,
+    // Masking calibration as runtime scalars (zenmetrics#14 §3): the host
+    // passes `MaskingCalibration` — `V0_5_4` reproduces the literals the
+    // kernel used to bake (`MASK_P`, `MASK_Q`, `PU_SCALE_LIN`, `D_MAX_LIN`)
+    // bit-for-bit; these feed non-integer `powf` exponents, so nothing was
+    // specialised on them being compile-time constants.
+    mask_p: f32,
+    mask_q_0: f32,
+    mask_q_1: f32,
+    mask_q_2: f32,
+    pu_scale: f32,
+    d_max_lin: f32,
 ) {
     let idx = ABSOLUTE_POS;
     if idx >= n as usize {
         terminate!();
     }
-
-    // cvvdp v0.5.4 constants — bake to match host scalar exactly.
-    let mask_p = f32::new(2.264_355_2_f32);
-    let mask_q_0 = f32::new(1.302_622_7_f32);
-    let mask_q_1 = f32::new(2.888_590_8_f32);
-    let mask_q_2 = f32::new(3.680_771_3_f32);
-    let pu_scale = f32::new(0.160_188_4_f32); // 10^MASK_C with MASK_C = -0.79549712
-    let d_max_lin = f32::new(366.732_25_f32); // 10^D_MAX with D_MAX = 2.5642455
 
     // XCM_3X3 (row-major: [in][out]) baked as scalar consts.
     let xcm_00 = f32::new(0.876_968_f32);
@@ -938,17 +964,19 @@ pub fn mult_mutual_3ch_with_blurred_kernel(
     d_rg: &mut Array<f32>,
     d_vy: &mut Array<f32>,
     n: u32,
+    // Masking calibration as runtime scalars (zenmetrics#14 §3) — see
+    // `mult_mutual_3ch_no_blur_kernel`; the blurred path receives its
+    // `10^MASK_C` already folded into `m_mm_*` by the blur v-pass.
+    mask_p: f32,
+    mask_q_0: f32,
+    mask_q_1: f32,
+    mask_q_2: f32,
+    d_max_lin: f32,
 ) {
     let idx = ABSOLUTE_POS;
     if idx >= n as usize {
         terminate!();
     }
-
-    let mask_p = f32::new(2.264_355_2_f32);
-    let mask_q_0 = f32::new(1.302_622_7_f32);
-    let mask_q_1 = f32::new(2.888_590_8_f32);
-    let mask_q_2 = f32::new(3.680_771_3_f32);
-    let d_max_lin = f32::new(366.732_25_f32);
 
     let xcm_00 = f32::new(0.876_968_f32);
     let xcm_01 = f32::new(0.016_103_15_f32);

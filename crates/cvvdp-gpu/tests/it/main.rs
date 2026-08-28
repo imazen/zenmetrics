@@ -64,6 +64,7 @@ mod lib_constants;
 mod lib_reexports;
 #[cfg(feature = "cubecl-types")]
 mod mask_pool_pixel_invariants;
+mod masking_calibration;
 #[cfg(feature = "cubecl-types")]
 mod masking_constants;
 #[cfg(feature = "cubecl-types")]

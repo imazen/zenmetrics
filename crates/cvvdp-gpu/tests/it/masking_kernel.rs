@@ -16,6 +16,10 @@ use crate::common;
 
 use common::Backend;
 
+/// The production calibration — the kernels take it as runtime scalars
+/// now (zenmetrics#14 §3); `V0_5_4` is the exact literal set they baked.
+const CALIB: cvvdp_gpu::MaskingCalibration = cvvdp_gpu::MaskingCalibration::V0_5_4;
+
 #[test]
 fn mult_mutual_3ch_no_blur_matches_host_scalar() {
     let client = Backend::client(&Default::default());
@@ -63,6 +67,12 @@ fn mult_mutual_3ch_no_blur_matches_host_scalar() {
             ArrayArg::from_raw_parts(d_rg_h.clone(), n),
             ArrayArg::from_raw_parts(d_vy_h.clone(), n),
             n as u32,
+            CALIB.mask_p,
+            CALIB.mask_q[0],
+            CALIB.mask_q[1],
+            CALIB.mask_q[2],
+            CALIB.pu_scale_lin,
+            CALIB.d_max_lin,
         );
     }
 
@@ -474,6 +484,11 @@ fn mult_mutual_with_blurred_pipeline_matches_host() {
             ArrayArg::from_raw_parts(d_rg_h.clone(), n),
             ArrayArg::from_raw_parts(d_vy_h.clone(), n),
             n as u32,
+            CALIB.mask_p,
+            CALIB.mask_q[0],
+            CALIB.mask_q[1],
+            CALIB.mask_q[2],
+            CALIB.d_max_lin,
         );
     }
 

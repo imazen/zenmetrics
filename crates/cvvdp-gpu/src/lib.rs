@@ -258,6 +258,102 @@ pub use pipeline::{
 /// ```
 pub const N_CHANNELS: usize = 3;
 
+/// Runtime masking calibration for the `mult_mutual_3ch_*` kernels
+/// (zenmetrics#14 §3 "runtime parameter loading"). [`Self::V0_5_4`] is the
+/// production default and reproduces the literals the kernels baked before
+/// this existed bit-for-bit; [`Self::from_upstream_json`] loads a pycvvdp
+/// `cvvdp_parameters.json`. Install with [`Cvvdp::set_masking_calibration`].
+///
+/// Only the masking stage is runtime-loadable so far: the pooling betas are
+/// already runtime kernel arguments (`pool_band_3ch_kernel(.., beta)`), the
+/// color/EOTF/primaries scalars are runtime (display dispatch), the CSF LUT
+/// is an uploaded buffer; the host-side band/channel Minkowski + `met2jod`
+/// finalizer (`do_pooling_and_jod_still_3ch`) and the XCM 3×3 still read
+/// the `cvvdp::kernels::{pool, masking}` consts.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MaskingCalibration {
+    /// Excitation exponent (`mask_p`).
+    pub mask_p: f32,
+    /// Per-channel inhibition exponents (`mask_q[0..3]`: `Y`, `RG`, `YV`).
+    /// Upstream's 4th entry belongs to the transient channel (video) and
+    /// is not used by the still-image path.
+    pub mask_q: [f32; N_CHANNELS],
+    /// `10^d_max` — the soft-clip ceiling in linear units.
+    pub d_max_lin: f32,
+    /// `10^mask_c` — the post-blur scale the no-blur (deepest-level)
+    /// kernel applies itself.
+    pub pu_scale_lin: f32,
+}
+
+impl MaskingCalibration {
+    /// pycvvdp v0.5.4 (`data/cvvdp_parameters.json`) — the values the
+    /// kernels have always used, as the exact f32 literals.
+    pub const V0_5_4: Self = Self {
+        mask_p: kernels::masking::MASK_P,
+        mask_q: kernels::masking::MASK_Q,
+        d_max_lin: kernels::masking::D_MAX_LIN,
+        pu_scale_lin: kernels::masking::PU_SCALE_LIN,
+    };
+
+    /// Parse the masking fields (`mask_p`, `mask_q[0..3]`, `mask_c`,
+    /// `d_max`) from a pycvvdp `cvvdp_parameters.json`. `d_max` / `mask_c`
+    /// are converted to linear units with `10f32.powf`, so a JSON that
+    /// carries the v0.5.4 numbers round-trips `mask_p` / `mask_q` exactly
+    /// but lands `d_max_lin` / `pu_scale_lin` on the true powers —
+    /// 2.4e-4 / 3.0e-4 relative below the literals the kernels baked (see
+    /// `kernels::masking::D_MAX_LIN` for the provenance note). Use
+    /// [`Self::V0_5_4`] for the bit-exact production default.
+    pub fn from_upstream_json(json: &str) -> core::result::Result<Self, String> {
+        let v: serde_json::Value =
+            serde_json::from_str(json).map_err(|e| format!("cvvdp_parameters.json: {e}"))?;
+        let f = |key: &str| -> core::result::Result<f32, String> {
+            v.get(key)
+                .and_then(serde_json::Value::as_f64)
+                .map(|x| x as f32)
+                .ok_or_else(|| format!("cvvdp_parameters.json: missing numeric `{key}`"))
+        };
+        let q = v
+            .get("mask_q")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| "cvvdp_parameters.json: missing array `mask_q`".to_string())?;
+        if q.len() < N_CHANNELS {
+            return Err(format!(
+                "cvvdp_parameters.json: `mask_q` has {} entries, need ≥ {N_CHANNELS}",
+                q.len()
+            ));
+        }
+        let mut mask_q = [0.0_f32; N_CHANNELS];
+        for (dst, src) in mask_q.iter_mut().zip(q) {
+            *dst = src
+                .as_f64()
+                .ok_or_else(|| "cvvdp_parameters.json: non-numeric `mask_q` entry".to_string())?
+                as f32;
+        }
+        let out = Self {
+            mask_p: f("mask_p")?,
+            mask_q,
+            d_max_lin: 10.0_f32.powf(f("d_max")?),
+            pu_scale_lin: 10.0_f32.powf(f("mask_c")?),
+        };
+        if !(out.mask_p.is_finite() && out.mask_p > 0.0)
+            || !out.mask_q.iter().all(|q| q.is_finite() && *q > 0.0)
+            || !(out.d_max_lin.is_finite() && out.d_max_lin > 0.0)
+            || !(out.pu_scale_lin.is_finite() && out.pu_scale_lin > 0.0)
+        {
+            return Err(format!(
+                "cvvdp_parameters.json: masking calibration must be finite and positive, got {out:?}"
+            ));
+        }
+        Ok(out)
+    }
+}
+
+impl Default for MaskingCalibration {
+    fn default() -> Self {
+        Self::V0_5_4
+    }
+}
+
 /// [`Cvvdp::score_with_band_breakdown`]'s result: the JOD plus the
 /// per-(pyramid level, channel) band scores it was pooled from — upstream
 /// pycvvdp's still-image `Q_per_ch` (zenmetrics#14).
