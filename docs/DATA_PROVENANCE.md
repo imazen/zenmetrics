@@ -73,6 +73,14 @@ scores, no features):
 2. **All cells have a 300-feature zensim vector** in the sibling
    `zensim_features/<chunk>.parquet`. Join the two parquets on
    `(image_path, codec, q, knob_tuple_json)`.
+   Sidecar schema versions (2026-08-28, zenmetrics#13 §5): every SDR
+   sidecar is schema `1` (`image_path / codec / q / knob_tuple_json /
+   zensim_score / feat_*` — the shape above, unchanged); `score-pairs --hdr`
+   sidecars are schema `2.0-hdr` = schema 1 + trailing `hdr_mode /
+   feature_regime (pu21-u8-shell | pu-linear) / hdr_source / ref_peak_nits`.
+   Sidecars written from 2026-08-28 on stamp `zenmetrics.sidecar_schema` +
+   `zenmetrics.n_features` in the parquet footer; older files have no footer
+   key and are schema 1. Name-based readers (`feat_*` by prefix) read both.
 3. **Encoded variants are preserved on R2** at
    `s3://zentrain/<run>/encoded/<chunk>/<encoded_filename>` so
    future metric backfills can re-use them without re-encoding.

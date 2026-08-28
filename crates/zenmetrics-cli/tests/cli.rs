@@ -2037,3 +2037,190 @@ fn score_pairs_group_by_ref_is_score_identical_and_grouped() {
         "stable sort by ref_path: ladders contiguous, q order preserved"
     );
 }
+
+/// Parquet footer key-value metadata of a written file, as `(key, value)`.
+#[cfg(all(feature = "sweep", feature = "hdr", feature = "cpu-metrics"))]
+fn read_parquet_kv(path: &std::path::Path) -> Vec<(String, String)> {
+    use parquet::file::reader::FileReader;
+    let file = std::fs::File::open(path).expect("open parquet");
+    let reader = parquet::file::reader::SerializedFileReader::new(file).expect("parquet reader");
+    reader
+        .metadata()
+        .file_metadata()
+        .key_value_metadata()
+        .map(|kv| {
+            kv.iter()
+                .map(|k| (k.key.clone(), k.value.clone().unwrap_or_default()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The named columns of the first row of a parquet file, rendered with
+/// parquet's `Field::to_string` (strings come back quoted).
+#[cfg(all(feature = "sweep", feature = "hdr", feature = "cpu-metrics"))]
+fn read_parquet_first_row(path: &std::path::Path) -> Vec<(String, String)> {
+    use parquet::file::reader::FileReader;
+    let file = std::fs::File::open(path).expect("open parquet");
+    let reader = parquet::file::reader::SerializedFileReader::new(file).expect("parquet reader");
+    let row = reader
+        .get_row_iter(None)
+        .expect("row iter")
+        .next()
+        .expect("at least one row")
+        .expect("row");
+    row.get_column_iter()
+        .map(|(k, v)| (k.clone(), v.to_string()))
+        .collect()
+}
+
+/// Stage an absolute-nits EXR pair (a 50..650 cd/m² ramp + a 10%-darker
+/// copy) and a SPLIT-contract pairs.tsv over it.
+#[cfg(all(feature = "sweep", feature = "hdr", feature = "cpu-metrics"))]
+fn stage_hdr_score_pairs_inputs(
+    staged: &std::path::Path,
+) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+    use std::io::Write;
+    let (w, h) = (64u32, 64u32);
+    let mut reference = image::Rgb32FImage::new(w, h);
+    for (x, y, p) in reference.enumerate_pixels_mut() {
+        let v = 50.0 + 600.0 * (x + y) as f32 / (w + h) as f32;
+        *p = image::Rgb([v, v, v]);
+    }
+    let mut distorted = reference.clone();
+    for p in distorted.pixels_mut() {
+        for c in p.0.iter_mut() {
+            *c *= 0.9;
+        }
+    }
+    let ref_exr = staged.join("ref.exr");
+    let dist_exr = staged.join("dist.exr");
+    reference.save(&ref_exr).expect("write ref.exr");
+    distorted.save(&dist_exr).expect("write dist.exr");
+
+    let pairs_tsv = staged.join("pairs.tsv");
+    let mut f = std::fs::File::create(&pairs_tsv).expect("create pairs.tsv");
+    writeln!(
+        f,
+        "image_path\tcodec\tq\tknob_tuple_json\tref_path\tdist_path"
+    )
+    .unwrap();
+    writeln!(
+        f,
+        "{r}\tzenjxl\t50\t{{}}\t{r}\t{d}",
+        r = ref_exr.display(),
+        d = dist_exr.display()
+    )
+    .unwrap();
+    writeln!(f, "{r}\tzenjxl\t100\t{{}}\t{r}\t{r}", r = ref_exr.display()).unwrap();
+    drop(f);
+    (
+        pairs_tsv,
+        staged.join("scores.parquet"),
+        staged.join("features.parquet"),
+    )
+}
+
+/// `score-pairs --hdr --feature-output` (zenmetrics#13 §5): the zensim
+/// feature sidecar is **schema `2.0-hdr`** — schema 1's columns in their
+/// exact positions, then the four trailing per-row HDR provenance columns
+/// (`hdr_mode / feature_regime / hdr_source / ref_peak_nits`), with the
+/// version stamped in the parquet footer. Runs the v1 `pu21-u8-shell`
+/// regime (default) and the v3 `pu-linear` regime
+/// (`--hdr-features-pu-linear`) and checks each row's `feature_regime`
+/// says which one produced its `feat_*`. The SDR control (schema 1,
+/// no trailing columns) is `score_pairs_writes_zensim_feature_parquet_cpu`.
+#[cfg(all(feature = "sweep", feature = "hdr", feature = "cpu-metrics"))]
+#[test]
+fn score_pairs_hdr_writes_schema_v2_feature_parquet() {
+    let staged = tempfile::tempdir().expect("tmp");
+    let (pairs_tsv, out_pq, feat_pq) = stage_hdr_score_pairs_inputs(staged.path());
+    let feature_n = zenmetrics_cli::metrics::ZensimFeatureRegime::WithIw.total_features();
+    let expected_cols = 5 + feature_n + 4;
+
+    for (regime_flag, want_regime) in [
+        (None, "pu21-u8-shell"),
+        (Some("--hdr-features-pu-linear"), "pu-linear"),
+    ] {
+        let mut args = vec![
+            "score-pairs",
+            "--metric",
+            "zensim",
+            "--hdr",
+            "--pairs-tsv",
+            pairs_tsv.to_str().unwrap(),
+            "--out-parquet",
+            out_pq.to_str().unwrap(),
+            "--feature-output",
+            feat_pq.to_str().unwrap(),
+            "--zensim-features-regime",
+            "with-iw",
+        ];
+        if let Some(flag) = regime_flag {
+            args.push(flag);
+        }
+        let result = cli().args(&args).output().expect("run cli");
+        assert!(
+            result.status.success(),
+            "score-pairs --hdr ({want_regime}) failed: stderr={}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+
+        let (names, num_rows) = read_parquet_schema(&feat_pq);
+        assert_eq!(num_rows, 2, "({want_regime}) expected 2 feature rows");
+        assert_eq!(
+            names.len(),
+            expected_cols,
+            "({want_regime}) expected {expected_cols} columns, got {}",
+            names.len()
+        );
+        // Schema 1's columns keep their exact positions...
+        assert_eq!(
+            &names[..5],
+            &[
+                "image_path",
+                "codec",
+                "q",
+                "knob_tuple_json",
+                "zensim_score"
+            ]
+        );
+        assert_eq!(names[5], "feat_0");
+        assert_eq!(names[5 + feature_n - 1], format!("feat_{}", feature_n - 1));
+        // ...and the HDR provenance trails them.
+        assert_eq!(
+            &names[5 + feature_n..],
+            &["hdr_mode", "feature_regime", "hdr_source", "ref_peak_nits"]
+        );
+        let kv = read_parquet_kv(&feat_pq);
+        assert!(
+            kv.contains(&(
+                "zenmetrics.sidecar_schema".to_string(),
+                "2.0-hdr".to_string()
+            )),
+            "({want_regime}) footer must stamp sidecar schema 2.0-hdr: {kv:?}"
+        );
+        assert!(kv.contains(&("zenmetrics.n_features".to_string(), feature_n.to_string())));
+
+        let row = read_parquet_first_row(&feat_pq);
+        let get = |k: &str| {
+            row.iter()
+                .find(|(n, _)| n == k)
+                .map(|(_, v)| v.clone())
+                .unwrap_or_else(|| panic!("column {k} missing from {row:?}"))
+        };
+        assert_eq!(get("hdr_mode"), "\"nits-mcll\"");
+        assert_eq!(get("feature_regime"), format!("\"{want_regime}\""));
+        assert_eq!(get("hdr_source"), "\"linear-exr\"");
+        // The reference's measured MaxCLL peak: the ramp tops out at
+        // 50 + 600·126/128 ≈ 640.6 cd/m² (MaxRgb; above the 203-nit clamp floor).
+        let peak: f32 = get("ref_peak_nits").parse().expect("ref_peak_nits f32");
+        assert!(
+            (peak - 640.6).abs() < 1.0,
+            "({want_regime}) ref_peak_nits {peak} should be the measured ramp peak ≈ 640.6"
+        );
+        // The score parquet is still written alongside.
+        let (_, score_rows) = read_parquet_schema(&out_pq);
+        assert_eq!(score_rows, 2);
+    }
+}

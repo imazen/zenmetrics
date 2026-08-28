@@ -546,8 +546,13 @@ struct ScorePairsArgs {
     /// alongside the `--out-parquet` scores. The schema is **byte-for-byte
     /// identical** to the `sweep --feature-output` sidecar
     /// (`image_path / codec / q / knob_tuple_json / zensim_score /
-    /// feat_0..feat_<N-1>`) so SPLIT-fleet feature sidecars join cleanly
-    /// against sweep-produced ones. Width follows
+    /// feat_0..feat_<N-1>`, sidecar schema `1`) so SPLIT-fleet feature
+    /// sidecars join cleanly against sweep-produced ones. With `--hdr` the
+    /// sidecar is schema `2.0-hdr`: the same columns plus trailing
+    /// `hdr_mode / feature_regime / hdr_source / ref_peak_nits` per row
+    /// (`feature_regime` = `pu21-u8-shell`, or `pu-linear` with
+    /// `--hdr-features-pu-linear`); both stamp the version in the parquet
+    /// footer (`zenmetrics.sidecar_schema`). Width follows
     /// `--zensim-features-regime` (default `with-iw` = 372). Ignored for
     /// non-zensim metrics (a warning is emitted).
     #[arg(long)]
@@ -1389,7 +1394,19 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         }
         Some(path) => {
             let n = args.zensim_features_regime.total_features();
-            Some(FeatureParquetWriter::create_with_n(path, n)?)
+            // `--hdr` sidecars are schema 2.0-hdr (zenmetrics#13 §5): the
+            // same columns plus per-row HDR provenance, so a concatenated
+            // fleet sidecar can never confuse HDR rows / feature regimes
+            // with SDR rows. SDR sidecars keep schema 1 byte-for-byte.
+            #[cfg(feature = "hdr")]
+            let sidecar_hdr = args.hdr;
+            #[cfg(not(feature = "hdr"))]
+            let sidecar_hdr = false;
+            Some(if sidecar_hdr {
+                FeatureParquetWriter::create_with_n_hdr(path, n)?
+            } else {
+                FeatureParquetWriter::create_with_n(path, n)?
+            })
         }
         None => None,
     };
@@ -1562,11 +1579,17 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         // other metric): decode to nits once and PU21/cvvdp-u8 encode per the
         // metric, mirroring `batch --hdr`'s `(reference, distorted)` block.
         // Decoded lazily only when an HDR u8 path is actually taken.
+        // The reference's measured MaxCLL peak (cd/m²) for the HDR feature
+        // sidecar's `ref_peak_nits` column — captured from the one decode
+        // below so the sidecar never re-decodes the source.
+        #[cfg(feature = "hdr")]
+        let mut hdr_ref_peak_nits: Option<f32> = None;
         #[cfg(feature = "hdr")]
         let hdr_u8_pair: Option<DecodedRgb8Pair> = if hdr_mode && faithful_hdr_result.is_none() {
             Some((|| {
                 let r = hdr::decode_to_nits(&ref_path)?;
                 let d = hdr::decode_to_nits(&dist_path)?;
+                hdr_ref_peak_nits = Some(hdr::measured_display_peak_nits(&r));
                 // cvvdp (CPU and GPU) take peak-normalized sRGB; the rest go
                 // through the chosen `--hdr-transfer`.
                 if matches!(
@@ -1602,6 +1625,15 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         // scoring branches.
         let want_features = feature_writer.is_some() && metric_is_zensim;
         let mut features_for_pair: Option<Vec<f64>> = None;
+        // Per-row provenance for a schema-2.0-hdr sidecar: (hdr_source,
+        // ref_peak_nits, feature_regime). Set by whichever HDR feature
+        // branch produced `features_for_pair`.
+        #[cfg(feature = "hdr")]
+        let mut hdr_row_meta: Option<(
+            &'static str,
+            f32,
+            crate::sweep::feature_writer::FeatureRegimeTag,
+        )> = None;
         let pair_result: Result<Vec<f64>, Box<dyn std::error::Error>> = if let Some(faithful) =
             faithful_hdr_result
         {
@@ -1631,6 +1663,11 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
                         r.width as usize,
                         r.height as usize,
                     )?;
+                    hdr_row_meta = Some((
+                        hdr::hdr_source_kind(&ref_path),
+                        hdr::measured_display_peak_nits(&r),
+                        crate::sweep::feature_writer::FeatureRegimeTag::PuLinear,
+                    ));
                     features_for_pair = Some(features);
                     Ok(vec![score])
                 })()
@@ -1691,6 +1728,18 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
                     };
                     match res {
                         Ok((score, features)) => {
+                            #[cfg(feature = "hdr")]
+                            if hdr_mode {
+                                // The v1 PU21-u8-shell feature regime; the
+                                // peak is NaN only if the pair never went
+                                // through `decode_to_nits` (an HDR pair that
+                                // fell back to the sRGB decoder).
+                                hdr_row_meta = Some((
+                                    hdr::hdr_source_kind(&ref_path),
+                                    hdr_ref_peak_nits.unwrap_or(f32::NAN),
+                                    crate::sweep::feature_writer::FeatureRegimeTag::Pu21U8Shell,
+                                ));
+                            }
                             features_for_pair = Some(features);
                             Ok(vec![score])
                         }
@@ -1801,6 +1850,31 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         // score parquet on `(image_path, codec, q, knob_tuple_json)`.
         if let (Some(writer), Some(features)) = (feature_writer.as_mut(), &features_for_pair) {
             let zensim_score = per_pair.first().copied().unwrap_or(f64::NAN) as f32;
+            #[cfg(feature = "hdr")]
+            if writer.is_hdr() {
+                let (hdr_source, ref_peak_nits, feature_regime) = hdr_row_meta.ok_or(
+                    "score-pairs --hdr: zensim features were produced without HDR provenance \
+                     (the pair was scored through a non-HDR feature path) — refusing to write a \
+                     schema-2.0-hdr sidecar row without it",
+                )?;
+                writer.push_row_hdr(
+                    &image_path,
+                    &codec,
+                    q as f64,
+                    &knob,
+                    zensim_score,
+                    features,
+                    crate::sweep::feature_writer::HdrRowMeta {
+                        hdr_mode: crate::sweep::feature_writer::HDR_MODE_NITS_MCLL,
+                        feature_regime,
+                        hdr_source,
+                        ref_peak_nits,
+                    },
+                )?;
+            } else {
+                writer.push_row(&image_path, &codec, q as f64, &knob, zensim_score, features)?;
+            }
+            #[cfg(not(feature = "hdr"))]
             writer.push_row(&image_path, &codec, q as f64, &knob, zensim_score, features)?;
         }
 

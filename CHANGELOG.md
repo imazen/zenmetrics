@@ -13,6 +13,29 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-cli (zenmetrics#13 §5 — feature sidecar schema 2.0-hdr, 2026-08-28)
+
+### Added
+- **`sweep::feature_writer` schema `2.0-hdr`** (`FeatureParquetWriter::create_with_n_hdr` +
+  `push_row_hdr`): schema 1's columns in their exact positions, then trailing per-row
+  `hdr_mode` (`nits-mcll`) / `feature_regime` (`pu21-u8-shell` | `pu-linear`) / `hdr_source`
+  (`linear-exr`, `cicp-png`, `pq-jxl`, `pq-avif`, `gainmap-jpeg`, `gainmap-heic`) /
+  `ref_peak_nits` (the reference's measured MaxCLL), so concatenated fleet sidecars are
+  self-describing. Both schemas now stamp `zenmetrics.sidecar_schema` (`1` / `2.0-hdr`) and
+  `zenmetrics.n_features` in the parquet footer. The two row entries are shape-locked (an HDR
+  writer refuses `push_row`, an SDR writer refuses `push_row_hdr`). SDR sidecars are byte-for-byte
+  the historical schema 1 (no columns added). Unit tests in `feature_writer.rs`; end-to-end
+  `tests/cli.rs::score_pairs_hdr_writes_schema_v2_feature_parquet` (both regimes over an EXR pair).
+- **`score-pairs --hdr --feature-output` writes schema `2.0-hdr`** with the provenance captured
+  from the pair's single `decode_to_nits` (`hdr::hdr_source_kind`, `measured_display_peak_nits`);
+  a zensim feature row produced without HDR provenance is refused rather than written blank.
+- New `hdr::hdr_source_kind(path)`.
+
+### Fixed
+- `sweep::hdr::tests::gainmap_arm_roundtrips_and_preserves_above_812_nits` was not gated on
+  `hdr-gainmap`, so `cargo test -p zenmetrics-cli --features sweep` (without the gain-map arm)
+  failed to compile the bin's unit tests.
+
 ## Workspace (CI)
 
 ### Fixed

@@ -1530,6 +1530,7 @@ pub(crate) mod tests {
         );
     }
 
+    #[cfg(feature = "hdr-gainmap")]
     #[test]
     fn gainmap_arm_roundtrips_and_preserves_above_812_nits() {
         let src = synthetic_pq_ref(64, 48, 2000.0);

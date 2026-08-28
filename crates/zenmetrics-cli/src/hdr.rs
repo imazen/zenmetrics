@@ -107,6 +107,29 @@ fn srgb_oetf(lin: f32) -> f32 {
 
 /// Decode an HDR source (EXR / Ultra HDR JPEG / gain-map HEIC / 16-bit PQ
 /// PNG with cICP) to absolute-luminance interleaved RGB f32 (cd/m²).
+/// The HDR source's signaling class, by the same extension dispatch
+/// [`decode_to_nits`] uses — the `hdr_source` column of the schema-`2.0-hdr`
+/// feature sidecar (`sweep::feature_writer`): `linear-exr` (absolute cd/m²
+/// stored directly), `cicp-png` (16-bit PNG, cICP transfer 16 PQ / 18 HLG),
+/// `pq-jxl`, `pq-avif`, `gainmap-jpeg` (Ultra HDR), `gainmap-heic`, or
+/// `unknown` for an extension `decode_to_nits` would reject.
+pub fn hdr_source_kind(path: &Path) -> &'static str {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "exr" => "linear-exr",
+        "heic" | "heif" => "gainmap-heic",
+        "jpg" | "jpeg" => "gainmap-jpeg",
+        "png" => "cicp-png",
+        "jxl" => "pq-jxl",
+        "avif" => "pq-avif",
+        _ => "unknown",
+    }
+}
+
 pub fn decode_to_nits(path: &Path) -> Result<NitsImage, Err> {
     let ext = path
         .extension()
