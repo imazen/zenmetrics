@@ -78,6 +78,20 @@ All entries in this section: `ff8113ea44d9`.
   stable-1.98 clippy `-D warnings` with the `pixels` feature (not CI-gated today — the Lint job
   runs `wgpu,all-metrics` only).
 
+## cvvdp-gpu (zenmetrics#14 output completeness — per-channel / per-band scores, 2026-08-28)
+
+### Added
+- **`Cvvdp::score_with_band_breakdown` → `BandBreakdown { jod, q_per_ch }`** (`%s`): upstream
+  pycvvdp's still-image `Q_per_ch` (`q_per_ch[level][channel]`, level 0 = finest … baseband last;
+  channel `Y` / `RG` / `YV`) after the spatial Minkowski pool, next to the JOD. It is exactly the
+  input of `kernels::pool::do_pooling_and_jod_still_3ch`, which reproduces `jod` bit-for-bit;
+  `jod` matches `score()` on the same instance to the pool's f32-atomic reorder noise (≤ 1e-4
+  JOD). Byte-identical inputs short-circuit to `jod = 10.0` with all-zero bands, like
+  `compute_dkl_jod`. Works in Full, Mode B and Mode E. Internally
+  `_pool_and_finalize_jod{,_strip}` became thin finalizers over `_pool_q_per_ch{,_strip}`
+  (same dispatches, same kernels). `tests/it/band_breakdown.rs` covers Full, single-strip Mode B,
+  the short-circuit and the dims gate (Metal).
+
 ## butteraugli-gpu (zenmetrics#30 closure — no dimension-overflow panic left, 2026-08-28)
 
 ### Fixed
