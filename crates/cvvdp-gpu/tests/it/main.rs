@@ -9,6 +9,7 @@
 mod common;
 
 mod auto_fallback;
+mod band_breakdown;
 #[cfg(feature = "cubecl-types")]
 mod band_weights_invariants;
 mod cancel;

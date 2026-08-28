@@ -258,6 +258,21 @@ pub use pipeline::{
 /// ```
 pub const N_CHANNELS: usize = 3;
 
+/// [`Cvvdp::score_with_band_breakdown`]'s result: the JOD plus the
+/// per-(pyramid level, channel) band scores it was pooled from — upstream
+/// pycvvdp's still-image `Q_per_ch` (zenmetrics#14).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BandBreakdown {
+    /// The JOD, bit-identical to [`Cvvdp::score`] on the same instance.
+    pub jod: f64,
+    /// `q_per_ch[level][channel]`: level 0 = finest, last = baseband;
+    /// channel 0 = `Y` (achromatic), 1 = `RG`, 2 = `YV`. Each entry is
+    /// the spatial Minkowski pool (`kernels::pool::BETA_SPATIAL`) of that
+    /// band's per-pixel visual difference; `do_pooling_and_jod_still_3ch`
+    /// over this slice reproduces `jod` exactly.
+    pub q_per_ch: Vec<[f32; N_CHANNELS]>,
+}
+
 /// Maximum pyramid depth supported by the kernel allocations.
 /// `pipeline::pyramid_levels` caps the per-image pyramid depth at
 /// this value, so images with `min(w, h) > PYRAMID_MIN_DIM ×

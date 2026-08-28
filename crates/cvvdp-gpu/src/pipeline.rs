@@ -124,7 +124,7 @@ use crate::kernels::pyramid::{
     upscale_v_strip_kernel,
 };
 use crate::params::CvvdpParams;
-use crate::{Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
+use crate::{BandBreakdown, Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
 
 /// Return shape of [`Cvvdp::compute_dkl_weber_pyramid`].
 ///
@@ -7898,6 +7898,17 @@ impl<R: Runtime> Cvvdp<R> {
     /// `compute_dkl_jod_with_warm_ref` — the dispatch path that
     /// landed the bands differs, but the pool/fold tail is identical.
     fn _pool_and_finalize_jod(&mut self) -> Result<f32> {
+        let q_per_ch = self._pool_q_per_ch()?;
+        Ok(do_pooling_and_jod_still_3ch(&q_per_ch))
+    }
+
+    /// Pool the resident per-band D planes (Full / Mode E after
+    /// `_dispatch_d_bands_into_scratch`) into the per-(level, channel)
+    /// band scores — upstream's still-image `Q_per_ch` — without the
+    /// final band/channel Minkowski + met2jod step. [`Self::
+    /// _pool_and_finalize_jod`] is exactly this followed by
+    /// `do_pooling_and_jod_still_3ch`.
+    fn _pool_q_per_ch(&mut self) -> Result<Vec<[f32; N_CHANNELS]>> {
         let n_levels = self.n_levels as usize;
         let n_partials = n_levels * N_CHANNELS;
         let cube_dim = CubeDim::new_1d(64);
@@ -7996,7 +8007,7 @@ impl<R: Runtime> Cvvdp<R> {
             q_per_ch.push(q);
         }
 
-        Ok(do_pooling_and_jod_still_3ch(&q_per_ch))
+        Ok(q_per_ch)
     }
 
     /// Mode E Phase 3 strip-aware variant of [`Self::_pool_and_finalize_jod`].
@@ -8029,6 +8040,14 @@ impl<R: Runtime> Cvvdp<R> {
     /// [`Self::_pool_and_finalize_jod`] — single-dispatch is faster
     /// when partitioning isn't needed.
     fn _pool_and_finalize_jod_strip(&mut self) -> Result<f32> {
+        let q_per_ch = self._pool_q_per_ch_strip()?;
+        Ok(do_pooling_and_jod_still_3ch(&q_per_ch))
+    }
+
+    /// Strip-walker sibling of [`Self::_pool_q_per_ch`] (Mode B / Mode
+    /// E): the same per-(level, channel) band scores, pooled slab by
+    /// slab through `pool_band_3ch_offset_kernel`.
+    fn _pool_q_per_ch_strip(&mut self) -> Result<Vec<[f32; N_CHANNELS]>> {
         let n_levels = self.n_levels as usize;
         let n_partials = n_levels * N_CHANNELS;
         let cube_dim = CubeDim::new_1d(64);
@@ -8157,7 +8176,7 @@ impl<R: Runtime> Cvvdp<R> {
             q_per_ch.push(q);
         }
 
-        Ok(do_pooling_and_jod_still_3ch(&q_per_ch))
+        Ok(q_per_ch)
     }
 
     /// Lazy-allocate the diffmap GPU scratch (one-time alloc, reused
@@ -8599,6 +8618,62 @@ impl<R: Runtime> Cvvdp<R> {
         let ppd = self.geometry.pixels_per_degree();
         let jod = self.compute_dkl_jod_with_stop(reference_srgb, distorted_srgb, ppd, stop)?;
         Ok(f64::from(jod))
+    }
+
+    /// [`Self::score`] plus the per-(pyramid level, channel) pooled band
+    /// scores the JOD is computed from — upstream pycvvdp's `Q_per_ch`
+    /// in its still-image shape (`band × channel`, no frame axis; the
+    /// `frame` axis of upstream's `channel × frame × band` is 1 here).
+    /// zenmetrics#14 "output completeness".
+    ///
+    /// `q_per_ch[k][c]` is level `k` (0 = finest, last = baseband) of
+    /// channel `c` (0 = achromatic `Y`, 1 = `RG`, 2 = `YV`) after the
+    /// spatial Minkowski pool (`BETA_SPATIAL`), i.e. exactly the input
+    /// of `do_pooling_and_jod_still_3ch`, so
+    /// `do_pooling_and_jod_still_3ch(&bb.q_per_ch) == bb.jod as f32`
+    /// bit-for-bit (pinned by `tests/it/band_breakdown.rs`). `jod`
+    /// matches [`Self::score`] on the same instance to the pool's
+    /// f32-atomic reorder noise (~1e-4 JOD): the two share every
+    /// dispatch; this entry point only keeps the intermediate. Byte-
+    /// identical inputs short-circuit to
+    /// `jod = 10.0` with an all-zero `q_per_ch` (same contract as
+    /// [`Self::compute_dkl_jod`]). Works in Full, Mode B (`StripPair`)
+    /// and Mode E (via the resident dispatch) alike.
+    pub fn score_with_band_breakdown(
+        &mut self,
+        reference_srgb: &[u8],
+        distorted_srgb: &[u8],
+    ) -> Result<BandBreakdown> {
+        let expected = self.pad.logical_len(3);
+        if reference_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: reference_srgb.len(),
+            });
+        }
+        if distorted_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: distorted_srgb.len(),
+            });
+        }
+        let ppd = self.geometry.pixels_per_degree();
+        self.debug_assert_ppd_matches_geometry(ppd);
+        let n_levels = self.n_levels as usize;
+        if reference_srgb == distorted_srgb {
+            return Ok(BandBreakdown {
+                jod: 10.0,
+                q_per_ch: vec![[0.0; N_CHANNELS]; n_levels],
+            });
+        }
+        self._dispatch_d_bands_into_scratch(reference_srgb, distorted_srgb, &enough::Unstoppable)?;
+        let q_per_ch = if self.strip_config.is_some() {
+            self._pool_q_per_ch_strip()?
+        } else {
+            self._pool_q_per_ch()?
+        };
+        let jod = f64::from(do_pooling_and_jod_still_3ch(&q_per_ch));
+        Ok(BandBreakdown { jod, q_per_ch })
     }
 
     /// Cache the reference side for repeated `score_with_reference`
