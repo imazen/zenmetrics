@@ -78,6 +78,19 @@ All entries in this section: `ff8113ea44d9`.
   stable-1.98 clippy `-D warnings` with the `pixels` feature (not CI-gated today — the Lint job
   runs `wgpu,all-metrics` only).
 
+## butteraugli-gpu (zenmetrics#30 closure — no dimension-overflow panic left, 2026-08-28)
+
+### Fixed
+- **`ButteraugliBatch::plane_stride_u32` / `run_batch_pipeline` no longer `.expect()` on the
+  `width × height` products at compute time** (`47870482e609`). `checked_plane_len` — shared by
+  `Butteraugli::try_new` and the batch constructor — now also rejects a plane that does not fit
+  the u32 kernel index space (`Error::InvalidDimensions`), so a 65536² image (2³² pixels: fits
+  `usize` on 64-bit hosts, not `u32`) is a constructor `Err` instead of a panic on the first
+  `compute*`; the two former panic sites read the validated `plane` instead. Pinned by
+  `tests/it/dims_overflow.rs::try_new_rejects_planes_beyond_the_u32_index_space` for both
+  constructors. With this, every `.expect("… overflows …")` the #30 audit listed is gone
+  (`grep -rn overflows crates/*-gpu/src` → only the two `Display` strings).
+
 ## Workspace / zenmetrics-cli (zencodec 0.1.26 from the registry, 2026-08-27)
 
 All entries in this section: `9796743f`.
