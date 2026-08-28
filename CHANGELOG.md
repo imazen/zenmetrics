@@ -13,6 +13,42 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## dssim-gpu / iwssim-gpu / cvvdp-gpu (zenmetrics#30 cooperative cancellation, 2026-08-28)
+
+### Added
+- **dssim-gpu: `Dssim::compute_with_stop` / `compute_stripped_with_stop` /
+  `compute_with_reference_with_stop`** poll an `enough::Stop` once per strip in each of the two
+  strip passes (once before the single submission in whole-image mode) and return the new
+  `Error::Cancelled(StopReason)` with no score; the plain entries delegate with `Unstoppable`
+  and stay bit-identical (`tests/it/cancel.rs`, mutation-verified — 3/4 tests fail with every
+  poll removed) (`0d51f27c`).
+- **iwssim-gpu: `Iwssim::compute_gray_stripped_with_stop` / `compute_rgb_stripped_with_stop` /
+  `compute_with_reference_stripped_with_stop` / `compute_rgb_with_reference_stripped_with_stop` /
+  `compute_rgb_with_reference_stripped_native_with_stop`** — same per-strip polling contract and
+  a new `Error::Cancelled`; a cancellation leaves the cached strip reference intact
+  (`tests/it/cancel.rs`, mutation-verified 3/4) (`9a114731`).
+- **cvvdp-gpu: `Cvvdp::score_with_stop` / `compute_dkl_jod_with_stop` /
+  `compute_dkl_jod_with_warm_ref_with_stop`** poll before the REF and DIST Weber stages, once
+  per Mode B strip in the strip-major shallow walker and once per pyramid level in the band loop;
+  new `Error::Cancelled`. `tests/it/cancel.rs` pins the per-level poll with a poll-counting
+  `Stop` (removing only that poll fails 1/3, removing all polls fails 3/3 on Metal); the
+  multi-strip Mode B poll test is `cuda`-gated — see Fixed/Known Bugs (`5cc8ec33`).
+
+### Fixed
+- dssim-gpu `tests/it/parity_lock.rs`: `chunks_exact(3)` → `as_chunks::<3>()` so the test
+  target passes stable-1.98 clippy `-D warnings` (`0d51f27c`).
+
+### Known (not fixed here)
+- The multi-strip Mode B (`StripPair`) cvvdp-gpu walker panics inside wgpu on macOS/Metal
+  (`wgpu_core.rs:1277` in the `DSD-*` device thread → cubecl `client.rs:105 CallError`) before
+  any crate code runs — pre-existing: the baseline `mode_b_walker_parity::mode_b_walker_jod_
+  matches_full_at_{128,1024}` / `_dispatches_n_strips_at_1024` / `_at_1024_h_body_256` tests
+  fail identically on Metal (single-strip 64×64 / h_body 512 passes). cvvdp-gpu is already
+  omitted from CI's Metal matrix. Recorded in CLAUDE.md Known Bugs.
+- Still open for #30 after this chunk: the umbrella `zenmetrics-api::Metric` has no Stop
+  plumbing (next chunk), and the CUDA/Metal parity gates of the new tests ran only on Metal
+  (no CUDA card in this session).
+
 ## Workspace / zenmetrics-cli (zencodec 0.1.26 from the registry, 2026-08-27)
 
 All entries in this section: `9796743f`.

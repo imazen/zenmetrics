@@ -361,6 +361,20 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **cvvdp-gpu multi-strip Mode B (`StripPair`) walker panics inside wgpu on macOS/Metal —
+  pre-existing, NOT root-caused (verified 2026-08-28 on the baseline before the #30
+  cancellation commits):** `cargo test -p cvvdp-gpu --no-default-features --features wgpu
+  --test it mode_b_walker_parity::` fails `mode_b_walker_jod_matches_full_at_128`,
+  `_at_1024`, `_at_1024_h_body_256` and `mode_b_walker_dispatches_n_strips_at_1024` with a
+  `DSD-*` device-thread panic at `wgpu-29.0.3/src/backend/wgpu_core.rs:1277` surfacing as
+  `zenforks-cubecl-runtime-0.10.1/src/client.rs:105: called Result::unwrap() on an Err value:
+  CallError`. Any geometry that yields ≥ 2 strips at level 0 (e.g. 256×256 / h_body 64,
+  128×128 / h_body 32) hits it; the single-strip 64×64 / h_body 512 case
+  (`strip_mode_b_parity::mode_b_score_matches_full_64x64`) passes. Full mode and Mode E
+  (warm ref) are fine on Metal. cvvdp-gpu is already omitted from CI's Metal matrix (the
+  `Atomic<f32>` pool-kernel note in ci.yml), so CI never sees this either way; the #30
+  `tests/it/cancel.rs::strip_pair_mode_polls_per_strip` test is `cuda`-gated for this reason.
+
 - **`zenfleet-worker::tests::exec_command_deadline_kills_and_classifies_timeout` FAILS on
   the ubuntu-latest CI runner — the per-cell watchdog does not stop a `sh -c 'sleep 30'`
   child at its 1 s deadline there; the call returns after the full 30.00 s
