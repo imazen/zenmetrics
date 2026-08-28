@@ -361,6 +361,16 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **iwssim-gpu `it::opaque::opaque_gray_f32_identity_and_typed_parity` FAILS on macOS/Metal
+  (wgpu), pre-existing — verified 2026-08-28 in a throwaway jj workspace at `ef94c52c` (the
+  commit before that day's #30/#14/#47 work) with the identical value:** the distorted gray-f32
+  pair scores `0.9999679561389043` (the test wants `< 0.999`); deterministic in isolation and
+  in the full suite, with or without `RUST_TEST_THREADS=1`. The other 91 tests pass. Not
+  root-caused (smells like the `IwssimOpaque` gray-f32 path on Metal collapsing the
+  distortion; `iwssim-gpu` IS in CI's Metal matrix, so check that job before blaming a local
+  change). Command: `cargo test -p iwssim-gpu --no-default-features --features wgpu --test it
+  opaque::opaque_gray_f32_identity_and_typed_parity`.
+
 - **cvvdp-gpu multi-strip Mode B (`StripPair`) walker panics inside wgpu on macOS/Metal —
   pre-existing, NOT root-caused (verified 2026-08-28 on the baseline before the #30
   cancellation commits):** `cargo test -p cvvdp-gpu --no-default-features --features wgpu
