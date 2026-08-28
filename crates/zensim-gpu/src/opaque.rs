@@ -1204,6 +1204,102 @@ impl ZensimOpaque {
             .compute_features_pu_linear_nits([&rr, &rg, &rb], [&dr, &dg, &db]))
     }
 
+    /// **Integrated-PU21 HDR score + features** (imazen/zenmetrics#25): the
+    /// GPU twin of CPU `zensim::Zensim::compute_pu_linear`. Takes two
+    /// **absolute-luminance interleaved linear-RGB f32** buffers (cd/m²,
+    /// `[R,G,B, …]`, each `width·height·3`), runs
+    /// [`Self::compute_features_pu_linear_nits`] (PU21 in place of the
+    /// cube-root, on-device, no u8 round-trip) and scores the resulting
+    /// regime-length feature vector through the profile's **PU-linear
+    /// weights** — the same routing `compute_pu_linear` applies:
+    /// [`zensim::ZensimProfile::B`] scores with the `BHdr` bake (the
+    /// generation-B HDR weights, fit on this PU-XYB feature distribution);
+    /// every other profile scores with its own bake. Returns
+    /// `(score, features)` so the umbrella can expose both from one pass.
+    ///
+    /// Byte-identical inputs short-circuit to `100.0` (the same contract as
+    /// [`Self::compute_srgb_u8`] / CPU `mark_identical`); the features are
+    /// still extracted on-device, matching
+    /// [`Self::compute_srgb_u8_with_features`]. Legacy `weights`-only
+    /// params (no profile) have no PU-linear bake — the score is NaN, the
+    /// features are still returned. Buffers whose length is not
+    /// `width·height·3` error with [`crate::Error::DimensionMismatch`].
+    pub fn compute_pu_linear_nits_interleaved(
+        &mut self,
+        ref_nits: &[f32],
+        dis_nits: &[f32],
+    ) -> Result<(Score, Vec<f64>)> {
+        let (lw, lh) = (self.logical_w as usize, self.logical_h as usize);
+        let expected = lw * lh * 3;
+        for buf in [ref_nits, dis_nits] {
+            if buf.len() != expected {
+                return Err(crate::Error::DimensionMismatch {
+                    expected,
+                    got: buf.len(),
+                });
+            }
+        }
+        // `expected` is a multiple of 3, so the deinterleave cannot fail.
+        let (rr, rg, rb) = zenmetrics_gpu_core::deinterleave_rgb_f32(ref_nits).ok_or(
+            crate::Error::DimensionMismatch {
+                expected,
+                got: ref_nits.len(),
+            },
+        )?;
+        let (dr, dg, db) = zenmetrics_gpu_core::deinterleave_rgb_f32(dis_nits).ok_or(
+            crate::Error::DimensionMismatch {
+                expected,
+                got: dis_nits.len(),
+            },
+        )?;
+        let features = self.compute_features_pu_linear_nits([&rr, &rg, &rb], [&dr, &dg, &db])?;
+        let score = if ref_nits == dis_nits {
+            Score {
+                value: 100.0,
+                metric_name: "zensim",
+                metric_version: env!("CARGO_PKG_VERSION"),
+            }
+        } else {
+            let (w, h) = self.inner.dims();
+            self.score_pu_linear_from_profile_vec(&features, w, h)
+        };
+        Ok((score, features))
+    }
+
+    /// The profile whose bake scores **PU-linear (absolute-nits) features**
+    /// — mirrors CPU `zensim::ZensimProfile::params_pu_linear` (crate-private
+    /// there): generation-B routes to the `BHdr` weights, every other
+    /// profile scores with its own params. Routing keys on the ENTRY PATH
+    /// (the caller decoded to nits), never on pixel values.
+    fn pu_linear_profile(profile: zensim::ZensimProfile) -> zensim::ZensimProfile {
+        match profile {
+            zensim::ZensimProfile::B => zensim::ZensimProfile::BHdr,
+            other => other,
+        }
+    }
+
+    /// [`Self::score_from_profile_vec`] for PU-linear features: same
+    /// `score_features_with_profile_and_codec` forward pass, through
+    /// [`Self::pu_linear_profile`]. No codec hint (HDR cells carry none).
+    fn score_pu_linear_from_profile_vec(&self, features: &[f64], width: u32, height: u32) -> Score {
+        let value = match self.params.profile {
+            Some(profile) => zensim::score_features_with_profile_and_codec(
+                Self::pu_linear_profile(profile),
+                features,
+                width,
+                height,
+                None,
+            )
+            .unwrap_or(f64::NAN),
+            None => f64::NAN,
+        };
+        Score {
+            value,
+            metric_name: "zensim",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        }
+    }
+
     /// Non-planar (interleaved) variant of [`Self::score_from_linear_planes`]:
     /// two interleaved linear-RGB f32 buffers (`[R,G,B, R,G,B, …]`, each
     /// `width·height·3`) instead of six planar slices, deinterleaved on the

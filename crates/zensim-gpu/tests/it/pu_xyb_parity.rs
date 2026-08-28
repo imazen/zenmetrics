@@ -203,3 +203,224 @@ fn opaque_pu_features_basic_returns_228() {
         "all PU features finite"
     );
 }
+
+// ───────────── integrated-PU score path (zenmetrics#25) ─────────────
+
+/// Interleaved absolute-nits pair for the score tests: `make_nits_pixels`
+/// as the reference, a uniformly 10%-darker copy as the distortion (the
+/// same pair shape the umbrella's HDR tests use). Flattened `[R,G,B, …]`.
+fn interleaved_pair(w: usize, h: usize) -> (Vec<f32>, Vec<f32>) {
+    let r: Vec<f32> = make_nits_pixels(7, w, h).into_iter().flatten().collect();
+    let d: Vec<f32> = r.iter().map(|&v| v * 0.9).collect();
+    (r, d)
+}
+
+/// Score tolerance for the GPU integrated-PU path vs CPU
+/// `Zensim::compute_pu_linear` on the same nits pair (profile B → the
+/// BHdr bake on both sides).
+///
+/// **Measured on Metal (Apple aarch64, wgpu) at land time:** |Δ| =
+/// 5.0e-3 at 128×96, 4.66e-1 at 200×150, 3.6e-1 at 256×256. The drift is
+/// NOT the PU color stage (the scale-0 PU-XYB parity above is < 5e-5) and
+/// not the mean-pooled features (block gate below, < 2e-3 per feature): it
+/// is concentrated in the **peak** features — `ssim_max` / `ssim_p95`
+/// (feature indices 156 + 18·scale + 6·ch + {0, 3}) — GPU 4.5e-3 vs CPU
+/// 1.5e-3 at 256×256 on the Y channel. Both implementations form the local
+/// variance as `E[x²] − μ²` in f32; on PU-XYB planes (Y up to ≈ 2.5 at
+/// 4000 cd/m², vs ≲ 1 on the SDR cube-root planes) the cancellation noise
+/// in smooth regions is ~6× larger, the two blur orderings round it
+/// differently, and a `max` pool picks the single worst pixel — so the
+/// same peak features that agree to ~4% on SDR content diverge 3× here.
+/// Scaling the pair down (×0.002, all pixels < 10 cd/m²) collapses the
+/// score drift to 5e-3, which pins it to magnitude, not to the PU kernel
+/// or the routing. The SDR path is unaffected (its own parity locks
+/// stand). Tracked as a Known Bug in the repo CLAUDE.md; CUDA/Vulkan
+/// numbers are still to be recorded (the SDR peak drift is smaller
+/// there).
+///
+/// Content caveat (measured the same day): a **pure linear gradient** pair
+/// (the umbrella tests' `hdr_pair`, 50..650 cd/m² ramp × 0.9) is NOT a
+/// valid GPU↔CPU parity input on either path — `hf_mag_loss`
+/// (`max(0, 1 − Σ|dst−μ_dst| / Σ|src−μ_src|)`, basic feature 11) is
+/// ill-conditioned there because a box mean reproduces a ramp exactly, so
+/// both sums are rounding noise and the ratio is arbitrary: CPU 0.22 vs
+/// GPU 0.07 (PU, scale 2), CPU 0.19 vs GPU 0.0 (SDR, same feature). The
+/// SDR bake barely weights it (score Δ 1e-2) but BHdr does (Δ 16 points on
+/// PU). Use textured content (`make_nits_pixels`) for cross-backend
+/// checks; the gradient stays fine for identity / monotonicity tests.
+///
+/// `1.0` is therefore a coarse-but-real gate: the u8-shell score this path
+/// replaces (`SdrU8(PuRescale)` → SDR bake) and the wrong-bake mutation
+/// (`B` instead of `BHdr` on PU features, exact-checked below) both land
+/// > 1 point away.
+const PU_SCORE_ABS_TOL: f64 = 1.0;
+
+/// Per-feature tolerance for the **mean-pooled basic block** (4 scales × 3
+/// channels × 13 = features 0..156) of the GPU PU features vs CPU
+/// `compute_pu_linear`. Measured max |Δ| on Metal at land time: 1.4e-4
+/// (200×150), 1.8e-4 (256×256), 3.1e-4 (256×256 at ×0.002 gain) — the
+/// same f32-vs-f64 reduction class the SDR `cpu_parity` family bounds. A
+/// broken pyramid tail, mirror pad, or PU encode shifts these by orders
+/// of magnitude.
+const PU_MEAN_FEATURE_ABS_TOL: f64 = 2e-3;
+/// Mean-pooled basic block extent: `n_scales(4) × 3 ch × 13`.
+const PU_MEAN_BLOCK_END: usize = 156;
+
+/// The opaque's integrated-PU score tracks CPU `compute_pu_linear` (profile
+/// B → the BHdr bake on both sides) within the measured envelope, the
+/// mean-pooled basic features match tightly, and the canonical
+/// 372-feature vector comes out of the same pass.
+#[test]
+fn opaque_pu_score_matches_cpu_compute_pu_linear() {
+    use zensim_gpu::{ZensimOpaque, ZensimParams};
+    for (w, h) in [(128usize, 96usize), (200, 150), (256, 256)] {
+        let (r, d) = interleaved_pair(w, h);
+        let mut z = ZensimOpaque::new(
+            BACKEND_E,
+            w as u32,
+            h as u32,
+            ZensimParams::new().with_profile(zensim::ZensimProfile::B),
+        )
+        .expect("opaque new B");
+        let (gpu, feats) = z
+            .compute_pu_linear_nits_interleaved(&r, &d)
+            .expect("gpu pu score");
+        assert_eq!(feats.len(), 372, "profile B → WithIw → 372 PU features");
+        assert!(feats.iter().all(|f| f.is_finite()));
+
+        let cres = zensim::Zensim::new(zensim::ZensimProfile::B)
+            .compute_pu_linear(&r, &d, w, h, 3 * w, 3 * w)
+            .expect("cpu compute_pu_linear");
+        let cpu = cres.score();
+        let cf = cres.features();
+        assert_eq!(cf.len(), 372);
+        let (mut worst_i, mut worst_d) = (0usize, 0.0f64);
+        for i in 0..PU_MEAN_BLOCK_END {
+            let ad = (feats[i] - cf[i]).abs();
+            if ad > worst_d {
+                worst_d = ad;
+                worst_i = i;
+            }
+        }
+        eprintln!(
+            "pu_score_parity {w}x{h}: gpu {} cpu {cpu} |Δ| {:.3e}; mean-block worst idx {worst_i} |Δ| {worst_d:.3e}",
+            gpu.value,
+            (gpu.value - cpu).abs()
+        );
+        assert!(gpu.value.is_finite(), "gpu score finite");
+        assert!(
+            (gpu.value - cpu).abs() < PU_SCORE_ABS_TOL,
+            "{w}x{h}: gpu {} vs cpu {cpu} exceeds tol {PU_SCORE_ABS_TOL}",
+            gpu.value
+        );
+        assert!(
+            worst_d < PU_MEAN_FEATURE_ABS_TOL,
+            "{w}x{h}: mean-pooled feature {worst_i} gpu {} cpu {} |Δ| {worst_d:.3e} >= {PU_MEAN_FEATURE_ABS_TOL:.0e}",
+            feats[worst_i],
+            cf[worst_i]
+        );
+    }
+}
+
+/// Routing gate: PU-linear features MUST be scored with the profile's
+/// PU-linear bake (`B` → `BHdr`, mirroring CPU `params_pu_linear`), never
+/// the SDR `B` bake. The opaque score equals the public
+/// `score_features_with_profile_and_codec(BHdr, features)` forward pass
+/// bit-for-bit, and differs materially from scoring the same features with
+/// `B` — so dropping the mapping fails here.
+#[test]
+fn opaque_pu_score_routes_b_to_bhdr_bake() {
+    use zensim_gpu::{ZensimOpaque, ZensimParams};
+    let (w, h) = (128usize, 96usize);
+    let (r, d) = interleaved_pair(w, h);
+    let mut z = ZensimOpaque::new(
+        BACKEND_E,
+        w as u32,
+        h as u32,
+        ZensimParams::new().with_profile(zensim::ZensimProfile::B),
+    )
+    .expect("opaque new B");
+    let (gpu, feats) = z
+        .compute_pu_linear_nits_interleaved(&r, &d)
+        .expect("gpu pu score");
+    let (pw, ph) = (w as u32, h as u32);
+    let via_bhdr = zensim::score_features_with_profile_and_codec(
+        zensim::ZensimProfile::BHdr,
+        &feats,
+        pw,
+        ph,
+        None,
+    )
+    .expect("BHdr scores 372 PU features");
+    let via_b = zensim::score_features_with_profile_and_codec(
+        zensim::ZensimProfile::B,
+        &feats,
+        pw,
+        ph,
+        None,
+    )
+    .expect("B scores 372 features");
+    assert_eq!(
+        gpu.value, via_bhdr,
+        "opaque PU score must be the BHdr forward pass"
+    );
+    assert!(
+        (via_b - via_bhdr).abs() > 1.0,
+        "SDR B bake on PU features ({via_b}) must differ from BHdr ({via_bhdr}) — otherwise this gate is void"
+    );
+
+    // An explicit BHdr profile scores identically (the mapping is idempotent).
+    let mut zh = ZensimOpaque::new(
+        BACKEND_E,
+        w as u32,
+        h as u32,
+        ZensimParams::new().with_profile(zensim::ZensimProfile::BHdr),
+    )
+    .expect("opaque new BHdr");
+    let (gpu_h, _) = zh
+        .compute_pu_linear_nits_interleaved(&r, &d)
+        .expect("gpu pu score BHdr");
+    assert_eq!(gpu_h.value, gpu.value, "explicit BHdr == B routed to BHdr");
+}
+
+/// Identity scores exactly 100 (the `mark_identical` contract) with the
+/// features still extracted; a wrong-length buffer is a loud
+/// `DimensionMismatch`, not a mis-scored pair.
+#[test]
+fn opaque_pu_score_identity_100_and_length_check() {
+    use zensim_gpu::{ZensimOpaque, ZensimParams};
+    let (w, h) = (64usize, 64usize);
+    let (r, d) = interleaved_pair(w, h);
+    let mut z = ZensimOpaque::new(
+        BACKEND_E,
+        w as u32,
+        h as u32,
+        ZensimParams::new().with_profile(zensim::ZensimProfile::B),
+    )
+    .expect("opaque new B");
+    let (id, feats) = z
+        .compute_pu_linear_nits_interleaved(&r, &r)
+        .expect("identity");
+    assert_eq!(
+        id.value, 100.0,
+        "identity must short-circuit to exactly 100"
+    );
+    assert_eq!(feats.len(), 372);
+
+    let (dist, _) = z
+        .compute_pu_linear_nits_interleaved(&r, &d)
+        .expect("distorted");
+    assert!(
+        dist.value < 100.0,
+        "darkened copy {} must score below identity",
+        dist.value
+    );
+
+    let err = z
+        .compute_pu_linear_nits_interleaved(&r, &d[..d.len() - 3])
+        .expect_err("short buffer must be rejected");
+    assert!(
+        matches!(err, zensim_gpu::Error::DimensionMismatch { .. }),
+        "expected DimensionMismatch, got {err:?}"
+    );
+}
