@@ -384,19 +384,77 @@ over those persisted variants — never re-encode per metric.
   points apart through the BHdr bake (1e-2 through B). Use textured content for cross-backend
   checks.
 
-- **iwssim-gpu `it::opaque::opaque_gray_f32_identity_and_typed_parity` FAILS on macOS/Metal
-  (wgpu), pre-existing — verified 2026-08-28 in a throwaway jj workspace at `ef94c52c` (the
-  commit before that day's #30/#14/#47 work) with the identical value:** the distorted gray-f32
-  pair scores `0.9999679561389043` (the test wants `< 0.999`); deterministic in isolation and
-  in the full suite, with or without `RUST_TEST_THREADS=1`. The other 91 tests pass. Not
-  root-caused (smells like the `IwssimOpaque` gray-f32 path on Metal collapsing the
-  distortion; `iwssim-gpu` IS in CI's Metal matrix, so check that job before blaming a local
-  change). Command: `cargo test -p iwssim-gpu --no-default-features --features wgpu --test it
+- **iwssim-gpu `it::opaque::opaque_gray_f32_identity_and_typed_parity` — ROOT-CAUSED
+  2026-08-28: the bug is the `compute_gray_f32` INGRESS, and it is NOT Metal-specific.
+  Still not FIXED.** The distorted gray-f32 pair scores `0.9999679561389043` (the test wants
+  `< 0.999`), deterministic, with or without `RUST_TEST_THREADS=1`; the other 91 tests pass.
+  The earlier note guessed "smells like the gray-f32 path on Metal collapsing the distortion".
+  **Half right — it IS the gray-f32 path collapsing the distortion, but Metal is exonerated.**
+  A probe fed the SAME content (the test's 256×256 ramp, every 5th pixel +14.0) through three
+  paths on this Metal box:
+
+  | path | identical pair | distorted pair |
+  |---|---|---|
+  | GPU `compute_gray_f32` | 0.9999999468992812 | **0.9999679561389043** |
+  | GPU `compute_srgb_u8` | 1.0000001836245906 | **0.9844796071748093** |
+  | CPU `iwssim::score` (u8) | 0.9999999973515667 | **0.9857888858819658** |
+
+  The GPU's u8 path detects the distortion and agrees with the CPU reference to 1.3e-3. Only
+  the f32 ingress loses it — ~470× less response to the identical distortion. So the pyramid,
+  the reduction and the Metal backend are all fine; the defect is in how `compute_gray_f32`
+  feeds scale 0. **Prime suspect (read, not yet proven):** `compute_rgb` fills the EXISTING
+  `scales[0].g_ref`/`g_dis` buffers via the `rgb_u32_to_gray_kernel` dispatch
+  (`pipeline.rs:1152`, `rgb_u32_to_gray_from_packed`), whereas `compute_gray` *replaces the
+  handles themselves* with fresh `create_from_slice` allocations (`pipeline.rs:1224-1225`,
+  "Swap handles into scale-0"). Anything in the pipeline still bound to the original scale-0
+  buffers would then read stale contents. That would explain a distorted score pinned near the
+  identity score but not exactly equal to it. Next step: check what else aliases
+  `scales[0].g_ref`/`g_dis` across `run_pipeline()`, and make `compute_gray` write INTO the
+  existing buffers (as the RGB path does) instead of swapping handles.
+  Command: `cargo test -p iwssim-gpu --no-default-features --features wgpu --test it
   opaque::opaque_gray_f32_identity_and_typed_parity`.
 
-- **cvvdp-gpu multi-strip Mode B (`StripPair`) walker panics inside wgpu on macOS/Metal —
-  pre-existing, NOT root-caused (verified 2026-08-28 on the baseline before the #30
-  cancellation commits):** `cargo test -p cvvdp-gpu --no-default-features --features wgpu
+- **iwssim-gpu has ZERO CPU↔GPU parity coverage on the wgpu/Metal backend — found
+  2026-08-28.** `tests/it/parity_cpu.rs` is the only GPU↔CPU parity module and it is
+  `#![cfg(feature = "cuda")]` AND `#[ignore]`d, so `cargo test -p iwssim-gpu
+  --no-default-features --features wgpu --test it parity_cpu::` runs **0 tests** (92 filtered
+  out). Every wgpu/Metal iwssim result is currently unchecked against the canonical CPU port.
+  This is why the gray-f32 ingress defect above could sit undetected behind a test that only
+  asserts a threshold. Incidental datum from the probe above: on this Metal box the u8 path
+  drifts 1.3e-3 from CPU, which is **above** `parity_cpu.rs`'s own `TOL = 1e-3` — so simply
+  un-gating that module would need its cross-backend tolerance re-derived on evidence (a
+  tolerance change needs user sign-off; do NOT just widen it).
+
+- **cvvdp-gpu multi-strip Mode B (`StripPair`) walker on macOS/Metal — ROOT-CAUSED
+  2026-08-28. The cause is an UNALIGNED STORAGE-BUFFER BINDING OFFSET, and the fix is
+  caller-side in cvvdp-gpu (not yet made).** The walker slices row-strips out of its planes
+  with `Handle::offset_start(byte_off)` (`pipeline.rs:2926-2929, 3469, 3612-3613, 3662, 3698,
+  3795-3803`), where `byte_off = strip_row × level_width × 4`. Metal requires every storage
+  binding to start on a multiple of `min_storage_buffer_offset_alignment`, which is **256** on
+  this device (measured — `min_uniform_buffer_offset_alignment` is also 256). An image
+  pyramid's narrow levels have a row stride BELOW 256 bytes, so those strip offsets are not
+  256-aligned: the observed failing offsets are 8-, 48- and 64-aligned (e.g. 3138368 = 256·12259
+  + 64, 3139632 = 256·12264 + 48, 5109256 = 256·19958 + 8). CUDA and HIP have no such
+  requirement, which is exactly why this is Metal-only — **the walker's offsets are wrong on
+  every backend; only Metal enforces it.**
+
+  `wgpu` raises this in `Device::create_bind_group`, which runs on a `DSD-*` device-service
+  thread, so it arrived as a panic no `Result` on the caller's thread could see — surfacing as
+  the misleading `zenforks-cubecl-runtime/src/client.rs: called Result::unwrap() on an Err
+  value: CallError`. **Fixed on the cubecl side** in imazen/zenforks-cubecl `f528c4b5`: the
+  wgpu backend now validates each binding offset and reports the offset, the required
+  alignment, and the fact that cubecl's own allocations are always aligned so an unaligned one
+  came from a caller-built `offset_start` sub-view. Same commit also corrects the pool
+  alignment to `max(min_uniform, min_storage)` — it previously used the uniform limit alone
+  for pools created with `BufferUsages::STORAGE`. That makes the failure honest and
+  actionable; **it does not make the walker work.**
+
+  **The remaining fix is in cvvdp-gpu**: round `byte_off` DOWN to a multiple of 256 and pass
+  the leftover element offset to the kernel as a scalar (or pad each pyramid level's row
+  stride up to a multiple of 64 elements). Both are real design changes across the strip
+  kernels and need the Mode B parity tests as the gate — do NOT weaken those tolerances.
+
+  Original symptom record: `cargo test -p cvvdp-gpu --no-default-features --features wgpu
   --test it mode_b_walker_parity::` fails `mode_b_walker_jod_matches_full_at_128`,
   `_at_1024`, `_at_1024_h_body_256` and `mode_b_walker_dispatches_n_strips_at_1024` with a
   `DSD-*` device-thread panic at `wgpu-29.0.3/src/backend/wgpu_core.rs:1277` surfacing as

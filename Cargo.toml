@@ -73,27 +73,43 @@ zenfleet-hetzner = { version = "0.0.1", path = "crates/zenfleet-hetzner", defaul
 
 # CubeCL — single source of truth for the GPU backend version.
 #
-# Phase 8f (2026-05-27): switched from `git = "lilith/cubecl"` rev pins
-# to crates.io publication via the `imazen/zenforks-cubecl` rename.
-#   - 11 renamed crates (zenforks-cubecl-*) at 0.10.1 ship pinned-upload
-#     + PTX cache widening + Metal Atomic<f32> capability honesty patches.
-#   - 5 non-renamed crates (cubecl-common, cubecl-ir, cubecl-macros,
-#     cubecl-macros-internal, cubecl-zspace) come from upstream
-#     tracel-ai/cubecl crates.io publication unchanged.
+# History:
+#   - Phase 8f (2026-05-27) moved off `git = "lilith/cubecl"` rev pins onto
+#     the crates.io publication of the `imazen/zenforks-cubecl` rename
+#     (11 renamed crates at 0.10.1: pinned-upload + PTX cache widening +
+#     Metal Atomic<f32> capability honesty).
+#   - 2026-08-28 moved back to a git rev pin so the fork's post-0.10.1
+#     commits are consumable without a crates.io release. See below.
 # The [lib] name = "cubecl_*" shim in each renamed crate keeps source
 # code paths like `use cubecl_runtime::*` resolving without changes.
-# See ../zenforks-cubecl-work/ZENFORKS_README.md for the full strategy.
-cubecl         = { package = "zenforks-cubecl",         version = "0.10.1", default-features = false, features = ["std"] }
-cubecl-runtime = { package = "zenforks-cubecl-runtime", version = "0.10.1", default-features = false }
-cubecl-core    = { package = "zenforks-cubecl-core",    version = "0.10.1", default-features = false }
-cubecl-cuda    = { package = "zenforks-cubecl-cuda",    version = "0.10.1", default-features = false }
-cubecl-cpu     = { package = "zenforks-cubecl-cpu",     version = "0.10.2", default-features = false }
-cubecl-wgpu    = { package = "zenforks-cubecl-wgpu",    version = "0.10.1", default-features = false }
-cubecl-hip     = { package = "zenforks-cubecl-hip",     version = "0.10.1", default-features = false }
-cubecl-cpp     = { package = "zenforks-cubecl-cpp",     version = "0.10.1", default-features = false }
-# Non-renamed leaves stay on upstream's crates.io publication:
-cubecl-common  = "0.10.0"
-cubecl-ir      = "0.10.0"
+# Full fork strategy + upstream resync log: the ZENFORKS_README.md in
+# https://github.com/imazen/zenforks-cubecl.
+# 2026-08-28 resync: switched from the crates.io 0.10.1 publication to a
+# git rev pin on imazen/zenforks-cubecl main @ 92e4a157
+# (crates version 0.10.2, deliberately NOT published — publishing is
+# user-gated). This picks up the fork commits made after the 0.10.1
+# publish wave: strict f64 handling on Metal (2509e67c / PR #2), the CPU
+# implicit sync_cube fix, the EnumSet::difference fix, the worker-thread
+# panic removal (385373f6), and the wgpu storage-binding alignment fix
+# (f528c4b5) that makes cvvdp-gpu's Mode B strip-walker failure on Metal
+# report its actual cause instead of a CallError unwrap (zenmetrics#24).
+#
+# cubecl-common and cubecl-ir are NOT renamed in the fork, but they must
+# come from the SAME git source as the renamed crates — pulling them from
+# crates.io instead would put two distinct `cubecl_ir` crates in the graph
+# (same version, different source), and every `cubecl::ir::*` type
+# zenmetrics passes across that boundary would fail to unify.
+cubecl         = { package = "zenforks-cubecl",         git = "https://github.com/imazen/zenforks-cubecl", rev = "92e4a157e160198490b484618896d8dad0313e2c", default-features = false, features = ["std"] }
+cubecl-runtime = { package = "zenforks-cubecl-runtime", git = "https://github.com/imazen/zenforks-cubecl", rev = "92e4a157e160198490b484618896d8dad0313e2c", default-features = false }
+cubecl-core    = { package = "zenforks-cubecl-core",    git = "https://github.com/imazen/zenforks-cubecl", rev = "92e4a157e160198490b484618896d8dad0313e2c", default-features = false }
+cubecl-cuda    = { package = "zenforks-cubecl-cuda",    git = "https://github.com/imazen/zenforks-cubecl", rev = "92e4a157e160198490b484618896d8dad0313e2c", default-features = false }
+cubecl-cpu     = { package = "zenforks-cubecl-cpu",     git = "https://github.com/imazen/zenforks-cubecl", rev = "92e4a157e160198490b484618896d8dad0313e2c", default-features = false }
+cubecl-wgpu    = { package = "zenforks-cubecl-wgpu",    git = "https://github.com/imazen/zenforks-cubecl", rev = "92e4a157e160198490b484618896d8dad0313e2c", default-features = false }
+cubecl-hip     = { package = "zenforks-cubecl-hip",     git = "https://github.com/imazen/zenforks-cubecl", rev = "92e4a157e160198490b484618896d8dad0313e2c", default-features = false }
+cubecl-cpp     = { package = "zenforks-cubecl-cpp",     git = "https://github.com/imazen/zenforks-cubecl", rev = "92e4a157e160198490b484618896d8dad0313e2c", default-features = false }
+# Non-renamed leaves — same git source, see note above:
+cubecl-common  = { git = "https://github.com/imazen/zenforks-cubecl", rev = "92e4a157e160198490b484618896d8dad0313e2c" }
+cubecl-ir      = { git = "https://github.com/imazen/zenforks-cubecl", rev = "92e4a157e160198490b484618896d8dad0313e2c" }
 
 # CPU reference crates used by parity tests.
 butteraugli = { version = "0.9.4" }
