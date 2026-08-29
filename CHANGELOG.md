@@ -13,6 +13,23 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace (rav1d-safe pin alignment, 2026-08-29)
+
+### Fixed
+- **The `[patch.crates-io] rav1d-safe` entry was DEAD, and had been pinning nothing.** Its comment claimed to mirror `../zenavif/Cargo.toml:301` and to replace a crates.io `^0.5.3` requirement that would otherwise produce "11 compile errors in zenavif". Every clause was stale: zenavif deleted its own `[patch.crates-io]` and made `rav1d-safe` a **direct git dep on its dependency line** (`../zenavif/Cargo.toml:95`), so nothing in this graph wants `rav1d-safe` from the registry and there is nothing for a crates-io patch to replace. Cargo agreed — the entry was recorded as `[[patch.unused]]` in `Cargo.lock`, the lock was resolving `140f9145` rather than the `f6aed27e` the manifest named, and the line number the comment mirrored had moved. Entry removed; the lock's `[[patch.unused]] rav1d-safe` stanza drops out with it, which is the proof it was inert.
+- **A git-source patch cannot replace it either** — measured, not assumed: `[patch."https://github.com/imazen/rav1d-safe"]` pointing at the same URL with a different rev makes `cargo metadata` exit 101 with *"patch for `rav1d-safe` points to the same source, but patches must point to different sources"*. Cargo compares patch sources by URL; `?rev=` is not part of that identity. **This workspace therefore cannot pin `rav1d-safe` at all** — zenavif's dependency line owns the rev, and the only lever here is *which zenavif* is resolved against. `Cargo.toml` now says so where the dead entry used to sit.
+
+### CI
+- **The `../zenavif` clone rev IS this repo's `rav1d-safe` pin** — bumped `6e69831d → b186cb8b` in all five copies of the "Clone sibling-repo path-dep targets" step, which moves the resolved decoder `140f9145 → 66f58fa6`, and annotated each site to say so. Local and CI had silently drifted apart (the sibling checkout was already on 66f58fa6 while CI pinned a zenavif on 140f9145), which is how the dead patch entry went unnoticed.
+- **No CI job compiles `rav1d-safe`** — verified with `cargo tree -e normal`: `cuda,all-metrics` (Compile), `wgpu,all-metrics` (Lint, Doctests) and `cpu-metrics` (CLI build) all run `--no-default-features` with sets that exclude `avif`, so the graph resolves without `zenavif`/`rav1d-safe`. The **production** executor image *does* compile it (`--features sweep,…,avif,…` for `x86_64-unknown-linux-musl`, `scripts/jobsys/build_executor_image.sh:15`) — which is exactly the platform rav1d-safe#524 affects. **This bump is a production fix with no CI coverage; a green CI run says nothing about the decoder.**
+
+### Changed
+- **`rav1d-safe 140f9145 → 66f58fa6`**, measured before landing — `benchmarks/rav1d_pin_66f58fa6_2026-08-29.tsv{.zst,.meta}`. 140 AVIFs from `../codec-corpus` decoded through this repo's own path (`zenmetrics score`), with **zenavif held fixed** at b186cb8 in both arms so the rav1d-safe rev is the only variable (the old arm builds against a scratch clone whose sole delta is that one line):
+  - Carries **rav1d-safe@3426ebf7 (rav1d-safe#524)** — an intermittent `DisjointMut` overlap panic in the 8bpc x86_64 loop-filter H kernels, whose window was sized from the plane's worst case instead of the run's mask and so ran one column past the end of an unpadded picture row. A decoder **crash**, never wrong pixels. Every earlier pin in this workspace predates it.
+  - **`Settings::strictness` now defaults to `Strict`** (rav1d-safe@2e0f7e8); zenmetrics never names `Settings` and inherits it through zenavif's `DecoderConfig`. **Exactly one verdict changes across 140 files**: `avif-conformance/invalid/corrupted_mdat.avif` went from **ACCEPT scoring a perfect `ssim2 = 100.000000`** to `REJECT: Malformed AVIF: Failed to decode primary frame`. **Keeping Strict** — silently emitting a perfect score for a file in `invalid/` is the exact failure this repo exists to avoid, and such a row would be indistinguishable from a real one in a sweep parquet. The other 16 rejects are unchanged zenavif-level container/policy refusals, not decoder strictness.
+  - **Decoded pixels do not move**: all 123 files accepted by both arms produce byte-identical output. Corroborated in imazen/ravif's companion record, which bisected the same range over 400 sweep cells with encoded bytes held fixed — `140f9145 → 66f58fa6` moves 0/400 SSIMULACRA2 scores.
+  - `Decoder::flush()` draining owed frames (rav1d-safe@59eb17b) does not reach this workspace — every `.flush()` here is `std::io::Write::flush`.
+
 ## Workspace (dependency resolution, 2026-08-29)
 
 ### Fixed

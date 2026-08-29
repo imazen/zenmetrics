@@ -90,8 +90,17 @@ jobs:
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
+          # THIS PIN IS ALSO THE rav1d-safe PIN. zenavif takes rav1d-safe as a
+          # direct git dep on its own dependency line, and the workspace cannot
+          # override it (see the rav1d-safe note in Cargo.toml's
+          # [patch.crates-io]: a crates-io patch is unused because nothing wants
+          # rav1d-safe from the registry, and a same-URL git patch is rejected).
+          # So whichever zenavif this checks out decides the decoder. b186cb8 =
+          # rav1d-safe 66f58fa6 (was 6e69831d = 140f9145, which predates
+          # rav1d-safe#524's x86_64 loop-filter fix). When bumping, re-read
+          # ../zenavif/Cargo.toml's rav1d-safe rev and update Cargo.toml's note.
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 6e69831d3f069e4ed54f18f3828f7c871a6c3fc4
+          git -C ../zenavif checkout b186cb8b1e2624c96e16435247205f0b0e02b943
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
@@ -354,8 +363,17 @@ jobs:
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
+          # THIS PIN IS ALSO THE rav1d-safe PIN. zenavif takes rav1d-safe as a
+          # direct git dep on its own dependency line, and the workspace cannot
+          # override it (see the rav1d-safe note in Cargo.toml's
+          # [patch.crates-io]: a crates-io patch is unused because nothing wants
+          # rav1d-safe from the registry, and a same-URL git patch is rejected).
+          # So whichever zenavif this checks out decides the decoder. b186cb8 =
+          # rav1d-safe 66f58fa6 (was 6e69831d = 140f9145, which predates
+          # rav1d-safe#524's x86_64 loop-filter fix). When bumping, re-read
+          # ../zenavif/Cargo.toml's rav1d-safe rev and update Cargo.toml's note.
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 6e69831d3f069e4ed54f18f3828f7c871a6c3fc4
+          git -C ../zenavif checkout b186cb8b1e2624c96e16435247205f0b0e02b943
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
@@ -547,8 +565,17 @@ jobs:
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
+          # THIS PIN IS ALSO THE rav1d-safe PIN. zenavif takes rav1d-safe as a
+          # direct git dep on its own dependency line, and the workspace cannot
+          # override it (see the rav1d-safe note in Cargo.toml's
+          # [patch.crates-io]: a crates-io patch is unused because nothing wants
+          # rav1d-safe from the registry, and a same-URL git patch is rejected).
+          # So whichever zenavif this checks out decides the decoder. b186cb8 =
+          # rav1d-safe 66f58fa6 (was 6e69831d = 140f9145, which predates
+          # rav1d-safe#524's x86_64 loop-filter fix). When bumping, re-read
+          # ../zenavif/Cargo.toml's rav1d-safe rev and update Cargo.toml's note.
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 6e69831d3f069e4ed54f18f3828f7c871a6c3fc4
+          git -C ../zenavif checkout b186cb8b1e2624c96e16435247205f0b0e02b943
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
@@ -695,8 +722,17 @@ jobs:
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
+          # THIS PIN IS ALSO THE rav1d-safe PIN. zenavif takes rav1d-safe as a
+          # direct git dep on its own dependency line, and the workspace cannot
+          # override it (see the rav1d-safe note in Cargo.toml's
+          # [patch.crates-io]: a crates-io patch is unused because nothing wants
+          # rav1d-safe from the registry, and a same-URL git patch is rejected).
+          # So whichever zenavif this checks out decides the decoder. b186cb8 =
+          # rav1d-safe 66f58fa6 (was 6e69831d = 140f9145, which predates
+          # rav1d-safe#524's x86_64 loop-filter fix). When bumping, re-read
+          # ../zenavif/Cargo.toml's rav1d-safe rev and update Cargo.toml's note.
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 6e69831d3f069e4ed54f18f3828f7c871a6c3fc4
+          git -C ../zenavif checkout b186cb8b1e2624c96e16435247205f0b0e02b943
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
@@ -851,8 +887,17 @@ jobs:
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
+          # THIS PIN IS ALSO THE rav1d-safe PIN. zenavif takes rav1d-safe as a
+          # direct git dep on its own dependency line, and the workspace cannot
+          # override it (see the rav1d-safe note in Cargo.toml's
+          # [patch.crates-io]: a crates-io patch is unused because nothing wants
+          # rav1d-safe from the registry, and a same-URL git patch is rejected).
+          # So whichever zenavif this checks out decides the decoder. b186cb8 =
+          # rav1d-safe 66f58fa6 (was 6e69831d = 140f9145, which predates
+          # rav1d-safe#524's x86_64 loop-filter fix). When bumping, re-read
+          # ../zenavif/Cargo.toml's rav1d-safe rev and update Cargo.toml's note.
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 6e69831d3f069e4ed54f18f3828f7c871a6c3fc4
+          git -C ../zenavif checkout b186cb8b1e2624c96e16435247205f0b0e02b943
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole

@@ -298,13 +298,40 @@ zenwebp      = { path = "../zenwebp" }
 # + the `__expert` feature (Cargo.toml:149, src/lib.rs:73). The speed6
 # branch that lacked both is no longer the ../zenavif checkout.
 zenavif      = { path = "../zenavif" }
-# rav1d-safe: zenavif's OWN [patch.crates-io] pins this to git rev f6aed27e (a
-# 0.5.x carrying the managed `Error::Cancelled` / `map_error` API that
-# zenavif/src/decoder_managed.rs uses), but a *dependency's* [patch] section is
-# ignored once the crate is pulled into this workspace — only the root's counts.
-# Without replicating it, rav1d-safe resolves to crates.io ^0.5.3, which lacks
-# those APIs → 11 compile errors in zenavif. Mirrors ../zenavif/Cargo.toml:301.
-rav1d-safe   = { git = "https://github.com/imazen/rav1d-safe", rev = "f6aed27e81baa5e74a8eba413562efb8813641fd" }
+# rav1d-safe: DELIBERATELY NOT PATCHED, and this workspace CANNOT pin it.
+# The entry that used to sit here —
+#   rav1d-safe = { git = "…/rav1d-safe", rev = "f6aed27e81ba…" }
+# — was dead, and its comment described a world zenavif has left. It read:
+# "zenavif's OWN [patch.crates-io] pins this to git rev f6aed27e … a
+# dependency's [patch] is ignored, only the root's counts … without
+# replicating it, rav1d-safe resolves to crates.io ^0.5.3 → 11 compile errors
+# in zenavif. Mirrors ../zenavif/Cargo.toml:301." Every clause of that is now
+# false: zenavif deleted its crates-io patch and made rav1d-safe a DIRECT GIT
+# DEP on its dependency line (../zenavif/Cargo.toml:95, and its own note at
+# :565 records the removal), so nothing in this graph requires rav1d-safe from
+# crates.io and a crates-io patch has nothing to replace. Cargo agreed: the
+# entry was recorded as `[[patch.unused]]` in Cargo.lock and pinned nothing —
+# the lock was resolving 140f9145, not f6aed27e, and the line number the
+# comment mirrored had moved.
+#
+# A git-source patch does not work either. `[patch."https://github.com/imazen/
+# rav1d-safe"] rav1d-safe = { git = <same url>, rev = <other> }` is REJECTED —
+# measured 2026-08-29, `cargo metadata` exits 101 with "patch for `rav1d-safe`
+# points to the same source, but patches must point to different sources".
+# Cargo compares the patch's source by URL; `?rev=` is not part of that
+# identity, so a same-repo-different-rev patch is not a distinct source. Only
+# a `path`/other-URL patch would qualify, which would mean cloning rav1d-safe
+# on every CI runner to pin a rev we do not otherwise need locally.
+#
+# So the rav1d-safe rev this workspace builds is OWNED BY ZENAVIF'S DEPENDENCY
+# LINE, and the only lever this repo has is WHICH ZENAVIF it resolves against:
+#   * locally — the `zenavif = { path = "../zenavif" }` sibling checkout;
+#   * in CI  — the pinned `git clone …/zenavif.git ../zenavif` +
+#     `git -C ../zenavif checkout <rev>` in .github/workflows/ci.yml (all five
+#     copies of the "Clone sibling-repo path-dep targets" step).
+# Those two silently drifted apart, which is how the dead entry above went
+# unnoticed. Treat the CI zenavif pin as the rav1d-safe pin, and re-check the
+# rev on ../zenavif/Cargo.toml:95 whenever you move it.
 # zenrav1e: ../zenavif -> ravif (zenravif 0.2.0, ../ravif/ravif) depends on
 # zenrav1e = "0.2.0" BY CRATES.IO VERSION, but only 0.1.4 is published, so a
 # fresh resolve fails (`failed to select a version for zenrav1e = ^0.2.0`).

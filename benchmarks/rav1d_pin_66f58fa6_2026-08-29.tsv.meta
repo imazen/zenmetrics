@@ -1,0 +1,135 @@
+rav1d_pin_66f58fa6 / 2026-08-29
+Exposure measurement for moving this workspace's rav1d-safe from
+140f91450c35 -> 66f58fa6a64c (96 commits), taken BEFORE the pin landed.
+
+WHAT WAS ACTUALLY PINNED, AND WHERE (the drift this fixes)
+  Three revs were live across the zen workspace: zenavif on 66f58fa6 (its
+  current main), ravif on a6a7e232, and this workspace resolving 140f9145.
+  The `[patch.crates-io] rav1d-safe = { … rev = "f6aed27e…" }` entry in
+  Cargo.toml was NOT the pin — it was dead. zenavif had stopped taking
+  rav1d-safe from crates.io (it is a direct git dep on zenavif's dependency
+  line now), so nothing in this graph wanted rav1d-safe from the registry and
+  Cargo recorded the entry as `[[patch.unused]]`. The real rev came from
+  whichever ../zenavif was checked out — locally the sibling, in CI the pinned
+  clone in .github/workflows/ci.yml, and those two had drifted apart.
+  A git-source patch cannot fix that either: `[patch."https://github.com/
+  imazen/rav1d-safe"]` pointing at the same URL with a different rev is
+  REJECTED — measured, `cargo metadata` exits 101 with "patch for `rav1d-safe`
+  points to the same source, but patches must point to different sources"
+  (Cargo compares patch sources by URL; `?rev=` is not part of that identity).
+  So the CI zenavif clone rev IS this repo's rav1d-safe pin, and that is what
+  this change moves (6e69831d -> b186cb8, i.e. 140f9145 -> 66f58fa6).
+
+WHERE rav1d-safe IS COMPILED (and where it is not)
+  NO CI JOB COMPILES IT. Every job in ci.yml runs `--no-default-features` with
+  a feature set that excludes `avif`; verified with `cargo tree -e normal` —
+  `cuda,all-metrics` (Compile), `wgpu,all-metrics` (Lint + Doctests) and
+  `cpu-metrics` (CLI build) all resolve WITHOUT zenavif or rav1d-safe in the
+  graph. CI only has to RESOLVE the ../zenavif path, never build it.
+  The PRODUCTION fleet binary does compile it: the executor image is built
+  `--features sweep,png,jpeg,webp,avif,jxl,cpu-metrics` for
+  x86_64-unknown-linux-musl (scripts/jobsys/build_executor_image.sh:15). That
+  is exactly the platform rav1d-safe#524 affects, and the AVIF decode reached
+  by `zenavif::decode_with` (crates/zenmetrics-cli/src/decode.rs:216) and
+  `ManagedAvifDecoder` (hdr.rs:175, sweep/hdr.rs:888) during a sweep.
+  So: this bump is a PRODUCTION fix with NO CI coverage. Do not read a green
+  CI run as evidence about the decoder.
+
+INSTRUMENT
+  `zenmetrics score --metric ssim2 --reference F --distorted F` over every
+  AVIF in ../codec-corpus (140 files: 106 avif-conformance/valid, 19
+  edge-cases, 12 invalid, 3 elsewhere). Self-comparison, so a decode that
+  succeeds scores exactly 100.000000 and the interesting output is the
+  accept/reject verdict plus the error text. Release build,
+  `--no-default-features --features avif,cpu-metrics`.
+
+  SINGLE-VARIABLE DESIGN. zenavif is held FIXED at b186cb8 in both arms; only
+  the rav1d-safe rev differs. The old arm builds against a scratch clone of
+  zenavif b186cb8 whose ONLY delta is its rav1d-safe rev line (140f9145 vs
+  66f58fa6) — `git diff --stat` on that clone is `Cargo.toml | 2 +-`. This
+  avoids confounding the decoder change with the two days of zenavif changes
+  between the old and new CI clone revs.
+
+RESULT — one verdict changes, and it is a deliberately-corrupt vector
+  arm  rav1d-safe   ACCEPT  REJECT
+  old  140f91450c35    124      16
+  new  66f58fa6a64c    123      17
+
+  Set diff over all 140 files — exactly one row moves:
+    avif-conformance/invalid/corrupted_mdat.avif
+      old: ACCEPT, ssim2 = 100.000000
+      new: REJECT, "zenavif: Malformed AVIF: Failed to decode primary frame"
+
+  Cause: rav1d-safe@2e0f7e8 made `Settings::strictness` default to
+  `Strictness::Strict`, so non-conforming streams are `Error::InvalidData`
+  instead of being concealed. zenmetrics never names `Settings` — it inherits
+  the default through zenavif's `DecoderConfig` — so it takes the new
+  behaviour automatically. This reproduces zenavif's own survey (315
+  AVIFs/OBUs, identical verdicts except this same file) and upstream's
+  53,484-AVIF sweep (0 disagreements).
+
+  RECOMMENDATION: KEEP STRICT. Do not set `Strictness::Lenient` here. The old
+  behaviour scored a file in `avif-conformance/invalid/` as a PERFECT
+  ssim2 = 100.000000 — a metrics harness silently emitting a perfect score for
+  a corrupt input is the exact failure mode this repo exists to avoid, and any
+  such row would have been indistinguishable from a real one in a sweep
+  parquet. Rejecting it is the correct outcome, and the reject is loud.
+
+  The other 16 rejects are unchanged across both arms and are zenavif-level
+  container/policy refusals, not decoder strictness: 4 grid-with-alpha
+  unsupported, 3 bad ftyp brand, 2 ftyp not first, 1 NCL matrix_coefficients
+  refusal, and 6 assorted parse errors (tmap version, missing pitm, zero ispe,
+  box size mismatch, …).
+
+DECODED PIXELS DO NOT MOVE
+  On all 123 files accepted by BOTH arms, the result text is byte-identical
+  (every one `metric=ssim2 ssim2=100.000000`). Independently corroborated on
+  the encoder side in imazen/ravif's
+  benchmarks/rav1d_pin_66f58fa6_2026-08-29.tsv.meta, which bisected the same
+  range on 400 sweep cells: 140f9145 -> 66f58fa6 moves 0/400 SSIMULACRA2
+  scores with encoded bytes held fixed. (That measurement also found that the
+  EARLIER range a6a7e232 -> 140f9145 does move aarch64 pixels — the 2026-08-07
+  NEON conformance campaign that took rav1d-safe from 302/766 to 766/766
+  against dav1d's MD5s. This workspace was already past that point, so it is
+  not in scope here; ravif was not, and took it in the same wave.)
+
+flush()
+  `Decoder::flush()` draining owed frames before it resets (rav1d-safe@59eb17b,
+  rav1d-safe#423) does not reach zenmetrics: every `.flush()` in this workspace
+  is `std::io::Write::flush`. zenavif calls it, in decode_av1.rs and
+  decoder_managed/decoder.rs, where it strictly recovers frames that were
+  previously dropped — it cannot lose one. Still-image AVIF decode returns a
+  single frame from one `decode()` call, so there is nothing owed to drain in
+  the common path here anyway.
+
+WHAT LANDED WITH THIS
+  * .github/workflows/ci.yml — the ../zenavif clone rev, all five copies of
+    the "Clone sibling-repo path-dep targets" step, 6e69831d -> b186cb8, with
+    a comment at each saying that this pin IS the rav1d-safe pin.
+  * Cargo.toml — the dead `[patch.crates-io] rav1d-safe` entry removed and
+    replaced by a note recording why neither a crates-io nor a git-source
+    patch can pin it from here.
+  * Cargo.lock — rav1d-safe + rav1d-disjoint-mut 140f9145 -> 66f58fa6, and the
+    `[[patch.unused]] rav1d-safe 0.5.7 @ f6aed27e` stanza drops out, which is
+    the proof the old entry was inert. (`[[patch.unused]] zenrav1e` remains; it
+    was already unused on master and is unrelated.)
+
+PROVENANCE
+  zenmetrics     e248ea05 (master) + this commit
+  zenavif        b186cb8b1e2624c96e16435247205f0b0e02b943  (both arms)
+  rav1d-safe     140f91450c3551c25a5699d12ded6d629ecf6d97  (old arm)
+                 66f58fa6a64c689998721cc5cdb16a4698e26eec  (new arm)
+  corpus         ../codec-corpus, 140 .avif files
+  rustc          1.98.0 (88d9e12ae 2026-08-18)
+  host           Apple M4 Pro, arm64, macOS 26.5.2, 12 cores
+  every build and run under `nice -n 19`
+  NOTE ON ARCH: this host is aarch64. rav1d-safe#524's loop-filter defect is
+  in the 8bpc x86_64 H kernels, so the crash it fixes CANNOT be exercised
+  here. The accept/reject and decode-identity results above are
+  architecture-independent (container parsing + strictness gating + the
+  decoded output the metric consumes); the x86_64 crash fix is taken on
+  upstream's evidence and zenavif's, not on a local run.
+
+DATA
+  rav1d_pin_66f58fa6_2026-08-29.tsv.zst — 280 rows, both arms x 140 files.
+    arm  rav1d_safe_rev  file  verdict  result
