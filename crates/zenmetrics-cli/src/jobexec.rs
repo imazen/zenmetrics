@@ -2120,11 +2120,22 @@ mod hdr_tests {
                 "{m} unexpectedly errored: {row}"
             );
         }
-        // butteraugli emits both columns (max + pnorm3) like the SDR arm.
-        let butter = parsed
+        // butteraugli emits both columns (max + pnorm3) like the SDR arm,
+        // EXACTLY ONCE. The once-ness matters as of 2026-08-28: butteraugli is
+        // orchestrator-eligible now (zenmetrics#47 item 4), so the warm-ref
+        // batch scores it AND the inline "ineligible metrics" loop used to
+        // match it by name unconditionally — a `.find()` would happily pass
+        // while every butter row was written twice.
+        let butter_rows: Vec<_> = parsed
             .iter()
-            .find(|p| p["metric"] == "butteraugli")
-            .expect("butteraugli row");
+            .filter(|p| p["metric"] == "butteraugli")
+            .collect();
+        assert_eq!(
+            butter_rows.len(),
+            1,
+            "butteraugli must be emitted exactly once (double-emit = the              warm-ref batch and the inline loop both scored it): {butter_rows:?}"
+        );
+        let butter = butter_rows[0];
         assert!(
             butter["scores"].as_object().is_some_and(|s| s.len() >= 2),
             "butteraugli should emit 2 columns: {butter}"
