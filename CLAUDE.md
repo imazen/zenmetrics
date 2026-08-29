@@ -479,20 +479,6 @@ over those persisted variants — never re-encode per metric.
   `Atomic<f32>` pool-kernel note in ci.yml), so CI never sees this either way; the #30
   `tests/it/cancel.rs::strip_pair_mode_polls_per_strip` test is `cuda`-gated for this reason.
 
-- **`zenfleet-worker::tests::exec_command_deadline_kills_and_classifies_timeout` FAILS on
-  the ubuntu-latest CI runner — the per-cell watchdog does not stop a `sh -c 'sleep 30'`
-  child at its 1 s deadline there; the call returns after the full 30.00 s
-  (`returned in 30.002861621s — watchdog must not hang`, lib.rs:3163). First seen on the
-  first CI run that could reach the step at all (run 33091197770, commit 60ab7452, 2026-08-27);
-  the watchdog (`exec_command_deadline`, `3a5e94ed`, 2026-08-24) has never been CI-tested on
-  Linux before because every job died at manifest load from `9093cc23` to `9796743f`.
-  Passes on macOS (this suite: 40/40 locally on aarch64 darwin). The zencodec 0.1.26
-  migration commit touched that function only via `cargo fmt` reflow (`git diff -w` is empty
-  there), so this is pre-existing Linux behavior — likely the `kill -- -<pgid>` / `child.kill()`
-  pair not reaching the grandchild `sleep` (so the stdout/stderr reader threads block until it
-  exits) — NOT root-caused, NOT fixed. This is the only red job in `Compile (ubuntu-latest)`;
-  the same step's other 39 tests pass there.
-
 - **zensim-gpu `it` suite on macOS/Metal (wgpu): 2 deterministic failures, pre-existing
   (verified 2026-08-27 — identical values on baseline b07a0485 before that day's commits, in
   isolation and serially):** `diffmap_invariants::invariant_1_identity_yields_near_zero_diffmap`
@@ -605,7 +591,9 @@ over those persisted variants — never re-encode per metric.
   times before trusting a single red run from this test specifically.
 
 - **master CI was fully red from at least 97acd176 (2026-07-29) through d5dacbd2
-  (2026-08-27), independent of code pushes.** The 2026-07-29 causes (a stale
+  (2026-08-27), independent of code pushes.** (Epilogue: the last remaining red
+  job, `Compile (ubuntu-latest)`, went green on 2026-08-28 — see the
+  `exec_command_deadline` entry under Resolved.) The 2026-07-29 causes (a stale
   `zenavif-parse` sibling path + two unformatted `kernel_tiers.rs` benches) were
   fixed in between; from `9093cc23` on, every job died at manifest load instead
   with `failed to read …/zenflate/Cargo.toml` (the `hdr` feature's new zenflate
@@ -667,6 +655,34 @@ over those persisted variants — never re-encode per metric.
   macos-Metal job (8 GB unified) may hit the same wall.
 
 ### Resolved
+
+- **`exec_command_deadline` could hang for the child's FULL runtime instead of
+  its deadline — root-caused and FIXED 2026-08-28 (`031f5aa6`), confirmed green
+  on the ubuntu runner.** This is the failure that held `Compile
+  (ubuntu-latest)` red from 2026-08-27
+  (`exec_command_deadline_kills_and_classifies_timeout`, "returned in
+  30.002861621s", passing on macOS). **Cause:** the deadline kill targets the
+  child's process *group*, which normally reaches grandchildren — but the
+  stdout/stderr reader threads were collected with `join()`, and `read_to_end`
+  returns only when EVERY write-end of the pipe is closed, including a
+  grandchild the group kill missed. `join()` was therefore an unbounded wait on
+  a process the watchdog does not control, which is exactly what the deadline
+  exists to prevent. The old note's guess ("the kill not reaching the
+  grandchild, so the reader threads block") named the right mechanism but drew
+  the wrong conclusion: whether the kill lands is not something the watchdog can
+  guarantee, so the **wait** is what has to be bounded. **Fix:** the readers
+  deliver over `mpsc` channels and are collected with `recv_timeout` (2 s on the
+  timeout path, 60 s on the normal path); the group kill also gained the `--`
+  separator, without which a `kill` implementation may read `-<pgid>` as an
+  option and refuse the invocation silently (the status is discarded).
+  **Verified, not assumed:** the new test
+  `exec_command_deadline_returns_even_when_a_grandchild_escapes_the_kill`
+  reproduces the class on any Unix (the child backgrounds a `perl -e 'setpgrp;
+  …'` grandchild that leaves the group and holds the pipes), and reverting the
+  collect to an unbounded wait makes it fail with "returned in 30.178194625s" —
+  matching the CI symptom to the second. **Lesson for anyone writing a
+  watchdog:** killing a process does not close pipes that a grandchild still
+  holds; bound the collection, do not trust the kill.
 
 - **r3500's Nomad client registration failure (`Node.Register` → `Permission
   denied`) — root-caused and FIXED 2026-08-25, homefleet commit `f6546ce355af`

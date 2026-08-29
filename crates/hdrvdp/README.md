@@ -18,8 +18,11 @@ measured against:
 
 Landed in chunks (tracked in [imazen/zenmetrics#50]). `hdrvdp::hdrvdp()` now takes
 two images in absolute luminance and returns `Q_MOS` (0–100, 100 = best), the raw
-`Q`, and the per-pixel visibility maps `P_map` / `C_map`. 98 tests, zero
-dependencies.
+`Q`, and the per-pixel visibility maps `P_map` / `C_map`. 100 tests (98 unit +
+2 end-to-end on real corpus pixels) and **zero runtime dependencies** — the FFT,
+interpolation and quadrature are in-crate, so i686 / wasm / windows-arm builds
+carry nothing extra. The only dev-dependencies are an image decoder and the
+shared corpus, used by the end-to-end test and example.
 
 | stage | module |
 |---|---|
