@@ -361,6 +361,19 @@ over those persisted variants — never re-encode per metric.
 
 ## Known Bugs
 
+- **`zenmetrics-orchestrator --lib`: 2 tests fail on ANY macOS host — environment, not a
+  regression (confirmed 2026-08-28).** `tests::detect_cpu_returns_nonempty_brand` (lib.rs:938)
+  asserts `detect_cpu().brand` is non-empty, and `detect_cpu` has no macOS/`sysctl` arm, so the
+  brand comes back `""`. `tests::fresh_profile_is_not_stale_by_time` (lib.rs:893) builds a
+  `fake_profile()` claiming an `NVIDIA GeForce RTX 5070` with `gpu.present = true`;
+  `is_profile_stale` then calls the REAL `detect_gpu()`, which finds no NVIDIA card on a Mac and
+  returns `true`. Both are pure host-capability assertions with no cross-platform arm — neither
+  touches the executor / chooser / adapter code. The other 78 pass. Do NOT chase these as a
+  regression from an orchestrator change; the fix (if anyone wants one) is a macOS branch in
+  `detect_cpu` plus making `fresh_profile_is_not_stale_by_time` use a GPU-absent fake profile.
+  Command: `cargo test -p zenmetrics-orchestrator --no-default-features
+  --features bench,cuda,cpu-butter --lib`.
+
 - **zensim-gpu integrated-PU (HDR) score drifts from CPU `compute_pu_linear` by up to ~0.5 points
   on textured content — an f32 peak-feature precision limit at HDR magnitudes, NOT the PU kernel
   or the routing (measured 2026-08-28 on Metal/wgpu; zenmetrics#25).** `ZensimOpaque::
