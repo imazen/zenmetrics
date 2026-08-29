@@ -125,7 +125,16 @@ RUN export PATH="/usr/local/sbin:/usr/sbin:/sbin:${PATH}" \
     && rm -rf /var/lib/apt/lists/* \
     && echo "/usr/local/cuda-${CUDA_DIR_VERSION}/lib64" > /etc/ld.so.conf.d/cuda.conf \
     && ldconfig \
-    && ln -sf /usr/local/cuda-${CUDA_DIR_VERSION} /usr/local/cuda \
+    `# -n is LOAD-BEARING. cuda-toolkit-13-0-config-common registers` \
+    `# update-alternatives providing /usr/local/cuda -> /usr/local/cuda-13.0, so by` \
+    `# this point the link name ALREADY EXISTS as a symlink to a directory. Plain` \
+    `# 'ln -sf' DEREFERENCES it and drops the new link INSIDE the target dir` \
+    `# (/usr/local/cuda-13.0/cuda-12.6), silently leaving /usr/local/cuda on 13.0 --` \
+    `# which then fails the libcudart.so.12 assertion below. --no-dereference` \
+    `# replaces the symlink itself. Before CUDA 13 was added the link did not exist,` \
+    `# so 'ln -sf' happened to work; adding the second toolkit is what broke it.` \
+    && ln -sfn /usr/local/cuda-${CUDA_DIR_VERSION} /usr/local/cuda \
+    && test "$(readlink /usr/local/cuda)" = "/usr/local/cuda-${CUDA_DIR_VERSION}" \
     && test -f /usr/local/cuda/include/cuda_runtime.h \
     && test -f /usr/local/cuda/lib64/libcudart.so.12 \
     && ldconfig -p | grep -q libnvrtc.so.12 \

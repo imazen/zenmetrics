@@ -13,6 +13,14 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## docker/base (base-x86-cuda build fix, 2026-08-29)
+
+### Fixed
+- **`zenfleet-worker base tags` has been red since 2026-08-21 (run [32431269625](https://github.com/imazen/zenmetrics/actions/runs/32431269625)) because `ln -sf` silently stopped repointing `/usr/local/cuda`.** Only the `base-x86-cuda` job failed; `base-x86` and `base-arm` stayed green, so the CPU bases kept publishing while the **GPU base tag went stale at the 2026-06-25 build** — every leaf image `FROM ghcr.io/imazen/zenfleet-worker:base-x86-cuda` has been built on a base that predates the CUDA 12/13 dual-toolkit work, i.e. the runtime selection documented in `CLAUDE.md` was never actually in a published GPU base.
+  - **Mechanism (reproduced, not inferred).** `apt-get install` fully succeeds — the log shows all 8 CUDA packages unpacked and configured. The failure is in the silent `test -f` chain after it. Installing the CUDA 13 packages pulls `cuda-toolkit-13-0-config-common`, which registers `update-alternatives: using /usr/local/cuda-13.0 to provide /usr/local/cuda (cuda)`. By the time `ln -sf /usr/local/cuda-12.6 /usr/local/cuda` runs, the link name **already exists as a symlink to a directory**, and GNU `ln -sf` *dereferences* it: it creates `/usr/local/cuda-13.0/cuda-12.6` and leaves `/usr/local/cuda` pointing at 13.0. `test -f /usr/local/cuda/lib64/libcudart.so.12` then fails (13.0 ships `libcudart.so.13`), the `&&` chain exits 1, and `test -f` prints nothing — hence a red build with no error message. Verified directly in `ubuntu:24.04`: after `ln -sf`, `readlink /usr/local/cuda` → `/usr/local/cuda-13.0` and a stray `cuda-12.6` appears inside it; with `ln -sfn` → `/usr/local/cuda-12.6`.
+  - **This is a latent bug that only the second toolkit exposed.** With CUDA 12 alone, `cuda-toolkit-12-6-config-common` provides only `/usr/local/cuda-12`, never `/usr/local/cuda` — so the link name did not exist and `ln -sf` created it correctly. Adding CUDA 13 is what turned the same line into a no-op.
+  - **Fix:** `ln -sfn` (`--no-dereference`, replaces the symlink itself) plus an explicit `test "$(readlink /usr/local/cuda)" = "/usr/local/cuda-${CUDA_DIR_VERSION}"` assertion so a future packaging change fails *at the link*, naming the actual problem, instead of surfacing three lines later as an anonymous `test -f`. No existing assertion was weakened or removed. The load-bearing `-n` is commented in place.
+
 ## Workspace (zencodec/zenpixels version ranges, 2026-08-29)
 
 ### Changed
