@@ -52,6 +52,29 @@
 
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
+// With NO metric feature enabled — the `hdr`-only consumer, which wants
+// `HdrTransfer` / `to_sdr_u8` / `hdr_feeding` and no metric backend at all —
+// every dispatch body is `cfg`'d away and its parameters, imports and helpers
+// go unused. That is the configuration working correctly, not a defect, so the
+// resulting noise is silenced for that configuration only. Every real build
+// enables at least one metric and keeps the full warning set.
+#![cfg_attr(
+    not(any(
+        feature = "cvvdp",
+        feature = "butter",
+        feature = "ssim2",
+        feature = "dssim",
+        feature = "iwssim",
+        feature = "zensim",
+        feature = "cpu-cvvdp",
+        feature = "cpu-butter",
+        feature = "cpu-ssim2",
+        feature = "cpu-dssim",
+        feature = "cpu-iwssim",
+        feature = "cpu-zensim",
+    )),
+    allow(unused_variables, unused_imports, dead_code, unreachable_code)
+)]
 
 mod capability;
 /// Optimized native-CPU dispatch backing `Backend::Cpu` (task #159 phase 2).

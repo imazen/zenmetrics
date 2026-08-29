@@ -53,6 +53,28 @@ Workspace conventions per the global rules:
   and the CCFL-LCD emission table's five negative noise-floor samples (down to −3.53e-6) are
   integrated as-is rather than clamped.
 
+## zenmetrics-api (#21 item 3 — the crate compiles with no metric feature again, 2026-08-28)
+
+### Fixed
+- **`cargo check -p zenmetrics-api --no-default-features [--features hdr]` now compiles.**
+  It had been failing with **15 × E0004** (non-exhaustive `match self`) in `metric.rs`: with
+  no metric feature, `MetricParams` / `MetricInner` have no variants, and a match on an
+  uninhabited type reached through a reference is not exhaustive on stable Rust. Each of the
+  15 matches gains an explicit `#[cfg(not(any(<all 12 metric features>)))] _ => unreachable!()`
+  arm — inert in every real build, since any enabled metric compiles it out. The
+  `#[doc(hidden)] _Uninhabited(Infallible)` shortcut tried in an earlier session does not work
+  for `&mut self` matches, which is why the explicit arms are needed.
+- A matching crate-level `cfg_attr(..., allow(unused_variables, unused_imports, dead_code,
+  unreachable_code))` for that same no-metric configuration: with every dispatch body
+  `cfg`'d away its parameters and helpers are genuinely unused, which is the configuration
+  working correctly rather than a defect. Both no-metric configs now build **warning-free**.
+  Every real build keeps the full warning set.
+
+Verified unchanged under the configurations that matter: the CI-shaped clippy
+(`--features wgpu,all-metrics -D warnings`) is clean, and the CI CPU-metrics test set
+(`--features all-metrics,cpu-metrics,wgpu,pixels,encoded --test it -- backend_matrix
+cpu_dispatch cpu_ssim2_pu cpu_zensim_pu`) passes 22/22 locally.
+
 ## zenfleet-worker (the ubuntu CI blocker, ROOT-CAUSED and fixed, 2026-08-28)
 
 ### Fixed

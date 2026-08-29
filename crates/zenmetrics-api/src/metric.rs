@@ -389,6 +389,25 @@ impl MetricParams {
             MetricParams::Iwssim(_) => MetricKind::Iwssim,
             #[cfg(any(feature = "zensim", feature = "cpu-zensim"))]
             MetricParams::Zensim(_) => MetricKind::Zensim,
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -1115,6 +1134,25 @@ impl MetricInner {
             MetricInner::Iwssim(_) => MetricKind::Iwssim,
             #[cfg(feature = "zensim")]
             MetricInner::Zensim(_) => MetricKind::Zensim,
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -1142,6 +1180,25 @@ impl MetricInner {
             MetricInner::Iwssim(m) => m.dims(),
             #[cfg(feature = "zensim")]
             MetricInner::Zensim(m) => m.dims(),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -1212,6 +1269,25 @@ impl MetricInner {
                         message: e.to_string(),
                     })
             }
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -1273,6 +1349,25 @@ impl MetricInner {
                 .compute_srgb_u8_with_stop(r, d, stop)
                 .map(convert_score_zensim)
                 .map_err(map_err_zensim),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -1371,6 +1466,25 @@ impl MetricInner {
                     kind: "zensim",
                     message: e.to_string(),
                 }),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -1460,6 +1574,25 @@ impl MetricInner {
                     kind: "zensim",
                     message: e.to_string(),
                 }),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -1550,6 +1683,25 @@ impl MetricInner {
                     kind: "zensim",
                     message: e.to_string(),
                 }),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -1723,6 +1875,25 @@ impl MetricInner {
                     kind: "zensim",
                     message: e.to_string(),
                 }),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -1785,6 +1956,25 @@ impl MetricInner {
             MetricInner::Dssim(_) => Err(no_pu_gray_path("dssim")),
             #[cfg(feature = "zensim")]
             MetricInner::Zensim(_) => Err(no_pu_gray_path("zensim")),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -2167,6 +2357,25 @@ impl MetricInner {
                 kind: "dssim",
                 message: e.to_string(),
             }),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -2242,6 +2451,25 @@ impl MetricInner {
                     kind: "dssim",
                     message: e.to_string(),
                 }),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -2297,6 +2525,25 @@ impl MetricInner {
                 .compute_with_reference_srgb_u8_with_stop(d, stop)
                 .map(convert_score_dssim)
                 .map_err(map_err_dssim),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -2330,6 +2577,25 @@ impl MetricInner {
             MetricInner::Ssim2(m) => m.clear_reference(),
             #[cfg(feature = "dssim")]
             MetricInner::Dssim(m) => m.clear_reference(),
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
@@ -2370,6 +2636,25 @@ impl MetricInner {
             MetricInner::Cvvdp(m) => m.has_reference(),
             #[cfg(feature = "zensim")]
             MetricInner::Zensim(_) => false,
+            #[cfg(not(any(
+                feature = "cvvdp",
+                feature = "butter",
+                feature = "ssim2",
+                feature = "dssim",
+                feature = "iwssim",
+                feature = "zensim",
+                feature = "cpu-cvvdp",
+                feature = "cpu-butter",
+                feature = "cpu-ssim2",
+                feature = "cpu-dssim",
+                feature = "cpu-iwssim",
+                feature = "cpu-zensim",
+            )))]
+            _ => unreachable!(
+                "no metric feature is enabled, so this enum has no variants and \
+                 no value of it can exist; the arm only exists because an \
+                 uninhabited-through-reference match is not exhaustive on stable"
+            ),
         }
     }
 
