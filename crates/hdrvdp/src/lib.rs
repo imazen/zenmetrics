@@ -11,10 +11,10 @@
 //! field's reference HDR metric: 0.936 SROCC on AIC-HDR2025 and 0.812 on UPIQ,
 //! above every metric currently in this workspace.
 //!
-//! ## Status: chunk 1 of 6
+//! ## Status: chunk 2 of 6
 //!
 //! This crate is being landed in chunks (see imazen/zenmetrics#50). **What is
-//! here now** is the front of the visual pathway, complete and unit-tested:
+//! here now**, complete and unit-tested:
 //!
 //! | stage | module | status |
 //! |---|---|---|
@@ -24,10 +24,15 @@
 //! | photoreceptor non-linearity (JND space) | [`photoreceptor`] | ✅ |
 //! | neural CSF | [`csf`] | ✅ |
 //! | achromatic response (stages 1–5) | [`pathway`] | ✅ |
-//! | steerable-pyramid decomposition | — | ⏳ chunk 2 |
-//! | contrast masking | — | ⏳ chunk 2 |
+//! | steerable-pyramid decomposition | [`spyr`] | ✅ |
+//! | contrast masking | — | ⏳ chunk 2b |
 //! | probability pooling, `P_det` / `P_map` | — | ⏳ chunk 3 |
 //! | quality correlate `Q` / `Q_MOS` | — | ⏳ chunk 3 |
+//!
+//! One boundary caveat is carried openly rather than papered over: the
+//! pyramid's *synthesis* boundary rule is principled and self-consistent but
+//! has not been compared against upstream's C implementation. It affects only
+//! the visibility map's border pixels, never `Q` / `Q_MOS`. See [`spyr`].
 //!
 //! **There is no end-to-end score yet.** Nothing in this crate should be
 //! reported as an HDR-VDP-2 number until chunk 4 lands and its UPIQ SROCC is
@@ -42,9 +47,11 @@
 //!
 //! ## Licensing
 //!
-//! Ported from the ISC-licensed HDR-VDP-2.2 MATLAB release, with two upstream
-//! helpers deliberately **not** ported (they carry no permission grant) and
-//! reimplemented in [`fft`] instead. See `THIRD-PARTY-NOTICES.md`.
+//! Ported from the ISC-licensed HDR-VDP-2.2 MATLAB release, with three
+//! upstream helpers deliberately **not** ported (they carry no permission
+//! grant) and reimplemented in [`fft`] / [`spectral`] instead. The steerable
+//! pyramid comes from the MIT-licensed matlabPyrTools. See
+//! `THIRD-PARTY-NOTICES.md`.
 
 pub mod csf;
 pub mod display;
@@ -53,12 +60,15 @@ pub mod interp;
 pub mod params;
 pub mod pathway;
 pub mod photoreceptor;
+pub mod sp3_filters;
 pub mod spectral;
+pub mod spyr;
 
 pub use display::ColorEncoding;
 pub use params::{Params, pix_per_deg};
 pub use pathway::{Pathway, visual_pathway};
 pub use photoreceptor::Photoreceptor;
+pub use spyr::{Band, SteerablePyramid};
 
 /// Errors this crate can return.
 #[derive(Debug, Clone, PartialEq)]

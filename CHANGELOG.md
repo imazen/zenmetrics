@@ -53,6 +53,42 @@ Workspace conventions per the global rules:
   and the CCFL-LCD emission table's five negative noise-floor samples (down to −3.53e-6) are
   integrated as-is rather than clamped.
 
+## hdrvdp (chunk 2a — steerable pyramid, zenmetrics#50, 2026-08-28)
+
+### Added
+- **`crates/hdrvdp/src/spyr.rs` + `sp3_filters.rs`** — the `sp3Filters` steerable pyramid
+  (4 orientations) HDR-VDP-2 runs its masking model on: `corr_dn` / `up_conv`, `build`,
+  `reconstruct`, `max_pyr_height`, `reflect1`, and `SteerablePyramid::band_frequencies`
+  (which reproduces the `[15, 7.5, …, 0.2344]` cpd grid the 2.2 quality weights are
+  tabulated on, at the 30 pixels/degree the fit used). Taps are generated mechanically
+  from `sp3Filters.m` (MIT, Simoncelli & Freeman) rather than typed by hand — including
+  the trap that `bfilts` is stored transposed and read back column-major, so the nine
+  lines written per band are the filter's *columns*; reading them as rows silently swaps
+  the horizontal and vertical bands. 13 tests, including one that a vertical grating
+  excites band 0 over band 2 by >4× and vice versa, which is exactly what that
+  transposition would flip.
+
+### Notes — three measured properties, none of them assumed
+- **`corr_dn` is faithful to upstream.** matlabPyrTools' `reflect1` `REDUCE` branch folds
+  out-of-range taps onto the mirrored interior sample, which is identical to gathering
+  through a reflected index map.
+- **`up_conv`'s boundary is NOT verified against upstream.** matlabPyrTools uses a
+  separate `EXPAND` branch in `edges.c` — a different C rule, *not* the transpose of
+  `REDUCE` — which is not ported here. This port instead defines synthesis as the
+  restriction of the infinite operation on the `reflect1` extension, and pins that
+  exactly (analysis bit-identical, synthesis < 1e-12 against a 3-period tiled extension).
+  In the interior the two coincide; at the outermost pixels they may differ. The literal
+  scatter-adjoint was tried first and is *wrong*: folded contributions pile onto the
+  outermost pixels and a constant reconstructs ~45 % high at the border.
+- **The spatial sp3 set is only approximately self-inverting** — measured from the taps,
+  the level condition `|L/2|² + Σ|B_o|²` lands in 0.99–1.03 across the passband and
+  `lofilt`'s four ×2-decimation parity classes sum to 0.4932 / 0.4964 / 0.4964 / 0.5141
+  rather than 0.5. Reconstruction therefore costs ≈1 % per level traversed, and is worse
+  at the border. `buildSFpyr` is the exactly-PR variant; HDR-VDP-2 does not use it.
+- **Scope of the caveat:** `reconstruct` feeds only the visibility map (`S_map` → `P_map` /
+  `P_det`). The quality correlate `Q` / `Q_MOS` — the UPIQ validation target — is
+  accumulated in the band loop and never calls it.
+
 ## butteraugli-gpu / zenmetrics-orchestrator / zenmetrics-cli (zenmetrics#47 item 4 — butteraugli is orchestrator-eligible, 2026-08-28)
 
 ### Added
