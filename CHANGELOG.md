@@ -13,6 +13,33 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace (Dependabot: why it fails here, and the advisories applied by hand, 2026-08-29)
+
+### Fixed
+- **Applied by hand the security updates Dependabot cannot open PRs for.**
+  - `quinn-proto 0.11.14 → 0.11.15` (GHSA-4w2j-m93h-cj5j, **high**) in all three lockfiles that carried it: the root `Cargo.lock`, `crates/burn-ranknet-spike/Cargo.lock` and `crates/burn-conv-spike/Cargo.lock`. The two spike crates declare their own `[workspace]`, so their locks are live and each needed its own bump.
+  - `postcss 8.5.15 → 8.5.26` in `crates/zenfleet-dash/web/package-lock.json`, clearing **both** open postcss advisories (GHSA-r28c-9q8g-f849 high, fixed 8.5.18; GHSA-fxqj-rqcc-2cmp medium, fixed 8.5.23). Transitive dependency, so `npm update postcss --package-lock-only` — `package.json` is untouched.
+
+### Known issues
+- **`thrift` (GHSA-2f9f-gq7v-9h6m, medium) cannot be fixed by a lockfile bump, and a working Dependabot could not have fixed it either.** `cargo update -p thrift --precise 0.23.0` fails: *"failed to select a version for the requirement `thrift = "^0.17"` … required by package `parquet v58.3.0`"*. The advisory needs `thrift >= 0.23.0`, which no `parquet 58.x` accepts. Closing it means moving to `parquet 59.x` (currently 59.2.0) — an arrow-rs **major** bump across the zenfleet crates, with real API churn. **Owner decision, deliberately not taken here.** This is the class Dependabot would report as `security_update_not_possible`.
+- **`Dependabot Updates` has been red since 2026-07-27 (not merely 2026-08-28), and it is structural — the repository cannot be resolved by anything that clones only this repository.** Root cause, read from the 2026-08-28 log (run [33154495344](https://github.com/imazen/zenmetrics/actions/runs/33154495344)) while it was still inside the 90-day retention window, and then reproduced locally byte-for-byte by running `cargo metadata` in a fresh standalone clone:
+
+  ```
+  dependency_file_not_resolvable
+  error: failed to load manifest for workspace member `.../crates/zenhdr-corpus`
+  referenced by workspace at `.../Cargo.toml`
+  Caused by: failed to load manifest for dependency `heic`
+  Caused by: failed to read `.../heic/Cargo.toml`: No such file or directory (os error 2)
+  ```
+
+  `crates/zenhdr-corpus` is a `[workspace] members` entry that depends on `../../../heic` (and `../../../ultrahdr/*`); `crates/zenmetrics-cli` carries a dozen more sibling path deps. Dependabot runs against a lone checkout with no siblings, so `cargo metadata` dies before any update is attempted. CI only passes because every job runs the "Clone sibling-repo path-dep targets" step first — Dependabot has no equivalent and cannot be given one.
+
+  **Decision: not "fixed", and not silently tolerated either.** Making Dependabot work would mean dismantling the sibling-path architecture that step exists to support, which is a deliberate workspace policy (it is what lets a codec change and its zenmetrics consumer land together without a publish round-trip). That trade is not worth an automated PR bot.
+
+  **The important correction to the "red Dependabot means nobody hears about advisories" worry: alerts are unaffected.** Dependabot *alerts* come from GitHub's dependency graph, which parses committed lockfiles and never runs cargo — they have kept working correctly throughout (6 open alerts were reported here while the updater had been failing for a month, and `git push` prints them). What the failure costs is only the automatic *pull request*. Hence the hand-applied bumps above.
+
+  **Owner action, if the red mark should stop:** Dependabot **security updates** cannot be turned off by any file in the repository — `.github/dependabot.yml` configures *version* updates only. The switch is Settings → Code security → "Dependabot security updates". Note it is **already** `{"enabled": true, "paused": true}` server-side (GitHub pauses the updater on a repo whose jobs keep failing), which is why the run frequency has dropped rather than stopped. Turning it off would end the red mark and would **not** stop the alerts.
+
 ## docker/base (base-x86-cuda build fix, 2026-08-29)
 
 ### Fixed
