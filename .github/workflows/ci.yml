@@ -59,9 +59,9 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 2b33b9922600016044569425a3253a8dd16dfb2e
+          git -C ../zenjpeg checkout f325ca4fc8cfe5c07629f7b284fe8df9005b9788
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 313bd75ad65daa898e3a69c5e2d23b075ab7a3a7
+          git -C ../zenanalyze checkout 6b080abf84ae2407bc7f2b127940404b3adb70b0
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
@@ -323,9 +323,9 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 2b33b9922600016044569425a3253a8dd16dfb2e
+          git -C ../zenjpeg checkout f325ca4fc8cfe5c07629f7b284fe8df9005b9788
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 313bd75ad65daa898e3a69c5e2d23b075ab7a3a7
+          git -C ../zenanalyze checkout 6b080abf84ae2407bc7f2b127940404b3adb70b0
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
@@ -516,9 +516,9 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 2b33b9922600016044569425a3253a8dd16dfb2e
+          git -C ../zenjpeg checkout f325ca4fc8cfe5c07629f7b284fe8df9005b9788
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 313bd75ad65daa898e3a69c5e2d23b075ab7a3a7
+          git -C ../zenanalyze checkout 6b080abf84ae2407bc7f2b127940404b3adb70b0
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
@@ -664,9 +664,9 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 2b33b9922600016044569425a3253a8dd16dfb2e
+          git -C ../zenjpeg checkout f325ca4fc8cfe5c07629f7b284fe8df9005b9788
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 313bd75ad65daa898e3a69c5e2d23b075ab7a3a7
+          git -C ../zenanalyze checkout 6b080abf84ae2407bc7f2b127940404b3adb70b0
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
@@ -820,9 +820,9 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 2b33b9922600016044569425a3253a8dd16dfb2e
+          git -C ../zenjpeg checkout f325ca4fc8cfe5c07629f7b284fe8df9005b9788
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 313bd75ad65daa898e3a69c5e2d23b075ab7a3a7
+          git -C ../zenanalyze checkout 6b080abf84ae2407bc7f2b127940404b3adb70b0
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI

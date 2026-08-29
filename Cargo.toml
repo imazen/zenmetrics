@@ -277,6 +277,19 @@ zensim = { path = "../zensim/zensim" }
 #
 # zenjpeg already uses an explicit `path = ../../../zenjpeg/zenjpeg`
 # in zenmetrics-cli/Cargo.toml so it's not patched here.
+# zenanalyze: same "a dependency's [patch] is ignored, only the root's counts"
+# rule as rav1d-safe below. zenjpeg's 2026-08-28 zenanalyze migration made it
+# take `zenanalyze = "0.2.0"` from the registry and supply the unpublished
+# 0.2.x line through zenjpeg's OWN [patch.crates-io]; consumed here as a path
+# dep, that patch does not apply, so every resolve failed with `failed to
+# select a version for the requirement zenanalyze = "^0.2.0"` (crates.io
+# latest is 0.1.0; the 0.2.x line lives on git until it publishes).
+# PATH, not git: `zenfleet-vastai` (../../../zenanalyze) and the `zenavif`
+# path dep already bind the local checkout, and ci.yml clones it to
+# ../zenanalyze — a git patch would put a SECOND zenanalyze in the graph and
+# nothing crossing between the two copies would type-unify.
+# Drop when zenanalyze 0.2.0 publishes.
+zenanalyze   = { path = "../zenanalyze" }
 zenpng       = { path = "../zenpng" }
 zenwebp      = { path = "../zenwebp" }
 # zenavif: the former ../zenavif--main worktree (zenavif main) was

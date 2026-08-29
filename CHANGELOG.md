@@ -13,6 +13,14 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace (dependency resolution, 2026-08-29)
+
+### Fixed
+- **Every build of this workspace failed to resolve** after zenjpeg's 2026-08-28 zenanalyze migration: `error: failed to select a version for the requirement zenanalyze = "^0.2.0"`. zenjpeg now takes `zenanalyze` from the registry and supplies the unpublished 0.2.x line through *its own* `[patch.crates-io]` — and a dependency's patch table is ignored when that dependency is consumed as a path dep; only the root workspace's applies (the same rule already documented here for `rav1d-safe`). Carried the entry at the root as `zenanalyze = { path = "../zenanalyze" }`. **Path, not git, deliberately:** `zenfleet-vastai` (`../../../zenanalyze`) and the `zenavif` path dep already bind the local checkout and `ci.yml` clones it to `../zenanalyze`, so a git patch would have put a *second* `zenanalyze` in the graph, where nothing crossing between the two copies type-unifies. Verified: exactly one `zenanalyze` in `cargo metadata`, and a cold `cargo check --workspace` is clean. Remove this entry once `zenanalyze 0.2.0` publishes.
+
+### CI
+- **Resynced the sibling pins**, which were the reason the break above was invisible on CI: `../zenjpeg` `2b33b992 → f325ca4f` and `../zenanalyze` `313bd75a → 6b080abf` (five clone steps each). CI had been testing against a two-day-old snapshot of both siblings, so it kept passing while every local build was broken. These are the exact revs the cold `cargo check --workspace` above was run against.
+
 ## hdrvdp (NEW crate — HDR-VDP-2.2 port, chunk 1 of 6, `db0b1e8a`, zenmetrics#50, 2026-08-28)
 
 ### Added
