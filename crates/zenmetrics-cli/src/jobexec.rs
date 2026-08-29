@@ -2133,7 +2133,7 @@ mod hdr_tests {
         assert_eq!(
             butter_rows.len(),
             1,
-            "butteraugli must be emitted exactly once (double-emit = the              warm-ref batch and the inline loop both scored it): {butter_rows:?}"
+            "butteraugli must be emitted exactly once (double-emit = warm-ref batch + inline loop both scored it): {butter_rows:?}"
         );
         let butter = butter_rows[0];
         assert!(
