@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-## hdrvdp (NEW crate — HDR-VDP-2.2 port, chunk 1 of 6, zenmetrics#50, 2026-08-28)
+## hdrvdp (NEW crate — HDR-VDP-2.2 port, chunk 1 of 6, `db0b1e8a`, zenmetrics#50, 2026-08-28)
 
 ### Added
 - **`crates/hdrvdp`** — a pure-Rust `f64` CPU reference port of HDR-VDP-2.2 (Mantiuk, Kim,
@@ -53,7 +53,22 @@ Workspace conventions per the global rules:
   and the CCFL-LCD emission table's five negative noise-floor samples (down to −3.53e-6) are
   integrated as-is rather than clamped.
 
-## zenmetrics-api (#21 item 3 — the crate compiles with no metric feature again, 2026-08-28)
+## zenmetrics-cli (`28029883`, 2026-08-28)
+
+### Fixed
+- **`metrics/butter_pnorm3.rs`'s module doc stated a capability gap that no longer exists.**
+  It opened with "the umbrella's opaque `Metric::compute_srgb_u8` returns a single
+  `Score { value }` for butter — the max-norm only", which is the reason the module drives
+  the typed `Butteraugli<R>` pipeline. That has been false since `a7fb1f35` shipped
+  `compute_srgb_u8_multi` → `[max, pnorm_3]` from the same fused kernel, and the other
+  reason (preserving `Butteraugli<HipRuntime>`) went away when HIP was dropped by owner
+  decision. The doc now says what is actually true: the module is foldable, and what gates
+  the fold is a *measurement* — `benchmarks/butter_strip_drift_2026-08-28.md` measured the
+  strip-vs-whole difference the fold would introduce as bit-identical max-norm in
+  6,810/6,810 cells but up to 1.72e-6 relative on `pnorm_3`, which shifts a column
+  already-harvested fleet rows carry. Doc-only; no code path changed. zenmetrics#21 item 1.
+
+## zenmetrics-api (#21 item 3 — the crate compiles with no metric feature again, `9b2d7dc6`, 2026-08-28)
 
 ### Fixed
 - **`cargo check -p zenmetrics-api --no-default-features [--features hdr]` now compiles.**
@@ -75,7 +90,7 @@ Verified unchanged under the configurations that matter: the CI-shaped clippy
 (`--features all-metrics,cpu-metrics,wgpu,pixels,encoded --test it -- backend_matrix
 cpu_dispatch cpu_ssim2_pu cpu_zensim_pu`) passes 22/22 locally.
 
-## zenfleet-worker (the ubuntu CI blocker, ROOT-CAUSED and fixed, 2026-08-28)
+## zenfleet-worker (the ubuntu CI blocker, ROOT-CAUSED and fixed, `031f5aa6`; CI wiring `df665291`; docs `99434130`, 2026-08-28)
 
 ### Fixed
 - **`exec_command_deadline` could hang for the child's full runtime instead of its
@@ -103,7 +118,7 @@ cpu_dispatch cpu_ssim2_pu cpu_zensim_pu`) passes 22/22 locally.
   CPU-metrics job. `cargo build --workspace --all-targets` was compiling the crate but
   nothing ever executed its tests.
 
-## hdrvdp (chunk 4a — first scores on real pixels, zenmetrics#50, 2026-08-28)
+## hdrvdp (chunk 4a — first scores on real pixels, `a11bcad4`, zenmetrics#50, 2026-08-28)
 
 ### Added
 - **`benchmarks/hdrvdp2_corpus_ladder_2026-08-28.{tsv,md}`** — the port's first end-to-end
@@ -133,7 +148,7 @@ measurement against the published 0.812 has not been made** and must run where U
 (harness: `scripts/hdr/upiq_corr.py`). Until it does, no number from this crate may be
 reported as an HDR-VDP-2 score — the benchmark doc says so in its own second paragraph.
 
-## hdrvdp (chunk 3 — pooling, Q/Q_MOS, and an end-to-end metric, zenmetrics#50, 2026-08-28)
+## hdrvdp (chunk 3 — pooling, Q/Q_MOS, and an end-to-end metric, `5f597a3e`, zenmetrics#50, 2026-08-28)
 
 ### Added
 - **`crates/hdrvdp/src/pool.rs`** — visibility pooling (`S_map` → `C_map` / `C_max` /
@@ -164,7 +179,7 @@ ladder, the visibility map localises a left-third distortion, the same relative 
 is measurably less visible at ~0.04 cd/m² than at ~80 cd/m²) establish that the pipeline
 behaves like a luminance-aware metric — not that it *is* HDR-VDP-2 numerically.
 
-## hdrvdp (chunk 2b — band list, MATLAB-compatible imresize, contrast masking, zenmetrics#50, 2026-08-28)
+## hdrvdp (chunk 2b — band list, MATLAB-compatible imresize, contrast masking, `824363d0`, zenmetrics#50, 2026-08-28)
 
 ### Added
 - **`crates/hdrvdp/src/bands.rs`** — the flat band list the masking loop actually walks
@@ -190,7 +205,7 @@ behaves like a luminance-aware metric — not that it *is* HDR-VDP-2 numerically
   length silently shifted every band's CSF lookup and quality weight by an octave. The test
   now pins the length against `Params::quality_band_freq` as well as the values.
 
-## hdrvdp (chunk 2a — steerable pyramid, zenmetrics#50, 2026-08-28)
+## hdrvdp (chunk 2a — steerable pyramid, `0557f423`, zenmetrics#50, 2026-08-28)
 
 ### Added
 - **`crates/hdrvdp/src/spyr.rs` + `sp3_filters.rs`** — the `sp3Filters` steerable pyramid
