@@ -101,9 +101,11 @@ struct Cli {
     /// has no OOM fallback ladder, no persistent capability cache,
     /// and no cached-reference auto-detect — it's the pre-Phase-7.7.1
     /// default kept available for sweeps that need bit-identical
-    /// output with archived parquet sidecars, and for the butter
-    /// metric which still flows through legacy unconditionally
-    /// (orchestrator ineligibility documented in
+    /// output with archived parquet sidecars. Since 2026-08-28 EVERY
+    /// metric (butter included) is orchestrator-eligible, so this flag
+    /// is the only way to pin the legacy dispatch; note the orchestrator
+    /// also chooses the BACKEND, which for butter can cross a ~1.3e-2
+    /// worst-case CPU↔GPU envelope (measured — see
     /// `crate::orchestrator_runner::metric_orchestrator_eligible`).
     ///
     /// May also be enabled by setting `ZENMETRICS_USE_LEGACY_SCHEDULER=1`.

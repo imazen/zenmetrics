@@ -269,49 +269,83 @@ pub fn rekey_orchestrator_columns(
 /// Decide whether a given CLI metric kind can flow through the
 /// orchestrator path.
 ///
-/// **Phase 7.7.1 change**: `ButteraugliGpu` is back on the legacy
-/// path until the per-crate multi-resolution Strip mode lands.
+/// **Every metric kind is eligible as of 2026-08-28.** Butteraugli was
+/// the last holdout; the history and the accepted tolerance are below
+/// because the reason it was excluded is easy to re-derive wrongly.
 ///
-/// - **Butteraugli (CPU + GPU)**: legacy on both. The legacy GPU
-///   path is `butter_pnorm3::score_both` which calls
-///   `Butteraugli::new_multires` directly and ALWAYS returns the
-///   multi-resolution score (full-res + half-res sibling supersampled
-///   into the diffmap — matches CPU butteraugli's default mode).
-///   The orchestrator path routes through `ButteraugliOpaque` whose
-///   `MemoryMode::Auto` resolver is *strip-preferred* — at any size
-///   where `Strip` fits the VRAM cap (i.e. most production sizes)
-///   it drops to single-resolution. Single-res scores diverge from
-///   multires scores by ~14–30 % depending on image / quality,
-///   far beyond any "atomic-reorder noise" parity tolerance.
+/// - **Butteraugli (CPU + GPU)** — eligible since 2026-08-28
+///   (zenmetrics#47 item 4). Phase 7.7.1 had reverted it to the legacy
+///   path: the legacy GPU helper `butter_pnorm3::score_both` calls
+///   `Butteraugli::new_multires` and ALWAYS returns the
+///   multi-resolution score, while `ButteraugliOpaque`'s strip-preferred
+///   `MemoryMode::Auto` resolver at the time dropped to a
+///   SINGLE-resolution walker — a ~14–30 % divergence. That defect was
+///   fixed in butteraugli-gpu `77020757` (opaque Strip → the
+///   multi-resolution `new_multires_strip`, `HALO_ROWS` 40 → 80).
 ///
-///   **Status 2026-08-28 (zenmetrics#47 item 4, re-verified against
-///   source):** the per-crate wiring that paragraph waited for HAS
-///   landed — `ButteraugliOpaque::new_with_memory_mode`'s strip arms
-///   construct `Butteraugli::new_multires_strip` on cuda/wgpu, and
-///   butteraugli-gpu pins it (`tests/it/multires_strip.rs`: multires
-///   strip vs multires whole ≤ 1e-4 rel; `tests/it/opaque_strip_parity.rs`:
-///   opaque vs typed strip ≤ 1e-7). What still keeps butter on the
-///   legacy path is the parity *gate*, not missing code: the
-///   multires strip walker drifts up to ~1e-4 rel from `new_multires`
-///   (per-strip halo re-blur + host-side partial folding), which is
-///   above the Phase 7.7.1 "bit-exact or ≤ ~5e-5 atomic-reorder noise"
-///   acceptance, and the orchestrator's chooser may pick `Strip` at
-///   sizes where legacy `Auto` would run whole-image. Flipping this
-///   therefore needs (a) a user decision — accept the ≤ 1e-4 strip
-///   drift for butter under the orchestrator, or force
-///   `MemoryMode::Full` for butter in `executor::construct` so the
-///   two paths stay bit-identical — and (b) the 54-cell CUDA parity
-///   sweep (`scripts/orchestrator_parity_sweep.py`) re-run on a real
-///   card. Neither is possible from a macOS/Metal session.
+///   What kept the flag `false` afterwards was the *gate*, not missing
+///   code: the strip walker was documented as drifting "up to ~1e-4
+///   rel", above the Phase 7.7.1 "bit-exact or ≤ ~5e-5 atomic-reorder
+///   noise" acceptance. **That ~1e-4 was the tests' assertion
+///   TOLERANCE, not a measured drift.** The only measurement that ever
+///   produced it (`benchmarks/butter_strip_halo_2026-05-31.md`) was the
+///   PRE-fix `HALO_ROWS = 40` half-res sibling; the same document's
+///   post-fix table already read `0.00e0`.
+///
+///   **Accepted tolerance (measured, `benchmarks/butter_strip_drift_2026-08-28.{csv,md}`):**
+///   6,810 cells — 95 real images (photo / screen / illustration /
+///   line-art, 0.004–10.5 MP) × 15 JPEG quality levels (butteraugli
+///   score 0.32–31.62) × strip bodies {auto, 128, 256, 512}, i.e. 1–75
+///   dispatched strips:
+///   * `new_multires_strip` vs `new_multires`, **max-norm score:
+///     bit-identical in 6,810 / 6,810 cells** (`rel = 0.00e0`);
+///   * the same pair's `pnorm_3`: **≤ 1.72e-6** rel (p99 4.6e-7) —
+///     host-side partial-fold ordering;
+///   * the production surface (`ButteraugliOpaque` `Full` vs `Auto`):
+///     **bit-identical in 6,810 / 6,810**;
+///   * flat on every axis — magnitude, megapixels, strip count,
+///     quality, content class — and invariant to the strip body itself
+///     (2,118 / 2,118 groups identical across all bodies tested).
+///   That is inside the ≤ 5e-5 gate by two orders of magnitude, so no
+///   `MemoryMode::Full` pin is needed in `executor::construct`.
+///
+///   Bit-identity is the *expected* outcome, not luck: `HALO_ROWS = 80`
+///   gives the half-res sibling 40 real halo rows against a 34-row blur
+///   requirement (`butteraugli_gpu::strip` module docs), so each body
+///   pixel's diffmap value sees exactly the whole-image inputs, and the
+///   max-norm fold (`max`) is exact and order-independent. Only
+///   `pnorm_3` sums, hence its ~1e-7…1e-6 residual.
+///
+///   **Scope of that evidence:** `cubecl-wgpu`/Metal, with the portable
+///   per-thread-partials reduction (the crate default). CUDA was not
+///   available on the measuring host, so the 54-cell CUDA parity sweep
+///   (`scripts/orchestrator_parity_sweep.py`) is still outstanding. The
+///   argument above is backend-independent, but butteraugli-gpu's
+///   opt-in `fast-reduction` feature (CUDA-only) replaces the
+///   deterministic fold with `Atomic<f32>::fetch_add`, whose ordering is
+///   nondeterministic — under that flag neither path is reproducible
+///   run-to-run and this tolerance does not apply.
+///
+///   **Separate axis, deliberately not gated here:** eligibility also
+///   hands the backend choice to `zenmetrics_orchestrator::chooser`.
+///   `OrchestratorMetricSpec::prefer_cpu` is NOT forwarded into the
+///   `Task` (it only drives a build-config error in
+///   `orchestrator_glue.rs`), and `chooser::cpu_wins_oneshot_max_pixels`
+///   returns `u64::MAX` for butter, so an `ExecContext::OneShot` task
+///   prefers CPU at any size when `cpu-butter` is compiled in. That is
+///   true of all ten eligible metric kinds, not butter specifically.
+///   Measured envelope for butter on the same corpus: CPU
+///   `butteraugli_strip(256)` vs CPU whole ≤ 9.4e-8, but GPU-whole vs
+///   CPU-whole is median 2.02e-4 / p95 2.37e-4 / **max 1.29e-2** — far
+///   larger than the strip term. Sweeps that need byte-identical butter
+///   columns against archived sidecars should pin the backend or pass
+///   `--use-legacy-scheduler`.
 /// - **Cvvdp**: orchestrator-eligible. The orchestrator surfaces the
 ///   versioned column tag from `Score::metric_version`, then
 ///   `executor::build_output_columns` keys it under
 ///   `cvvdp_gpu::CVVDP_COLUMN_NAME`.
-pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
-    !matches!(
-        kind,
-        CliMetricKind::Butteraugli | CliMetricKind::ButteraugliGpu,
-    )
+pub fn metric_orchestrator_eligible(_kind: CliMetricKind) -> bool {
+    true
 }
 
 /// Build the orchestrator at the start of a CLI command. Wraps the
@@ -579,26 +613,23 @@ mod tests {
     }
 
     #[test]
-    fn metric_eligibility_phase_7_7_1_excludes_butter() {
-        // Phase 7.7.1: butter (BOTH CPU and GPU) reverts to the
-        // legacy path. The Phase 7.5 GPU-eligibility was premature
-        // — `ButteraugliOpaque::new_with_memory_mode` resolves Auto
-        // to strip-mode at most sizes (butter is strip-preferred),
-        // which drops to single-resolution. The legacy CLI's GPU
-        // butter helper (`butter_pnorm3::score_both`) calls
-        // `Butteraugli::new_multires` unconditionally — always
-        // multi-resolution. Routing GPU butter through the
-        // orchestrator's Auto path produced single-res scores
-        // diverging from multires by ~14-30 % (see
+    fn every_metric_kind_is_orchestrator_eligible() {
+        // Butteraugli was the last holdout (Phase 7.7.1 reverted it
+        // when `ButteraugliOpaque`'s Auto resolver still dropped to a
+        // single-resolution walker, ~14-30 % off multires — see
         // `benchmarks/orchestrator_parity_2026-05-27_phase771_run2.csv`).
-        // Until the opaque API wires `new_multires_strip` (the
-        // multi-resolution strip walker that already exists in
-        // `butteraugli_gpu::pipeline.rs`), butter stays on the
-        // legacy code path so parquet sidecar shape stays
-        // bit-identical to production data.
-        assert!(!metric_orchestrator_eligible(CliMetricKind::Butteraugli));
-        assert!(!metric_orchestrator_eligible(CliMetricKind::ButteraugliGpu));
-        // Every other metric: orchestrator-eligible.
+        // butteraugli-gpu `77020757` routed opaque Strip to
+        // `new_multires_strip` with `HALO_ROWS = 80`, and the 6,810-cell
+        // corpus measurement in
+        // `benchmarks/butter_strip_drift_2026-08-28.{csv,md}` shows that
+        // walker is BIT-IDENTICAL to `new_multires` on the max-norm
+        // score (0.00e0 in 6,810/6,810) and <= 1.72e-6 rel on pnorm_3 —
+        // inside the <= 5e-5 Phase 7.7.1 gate. Accepted tolerance and
+        // the scope of that evidence (wgpu/Metal; CUDA sweep still
+        // outstanding) are documented on
+        // `metric_orchestrator_eligible` itself.
+        assert!(metric_orchestrator_eligible(CliMetricKind::Butteraugli));
+        assert!(metric_orchestrator_eligible(CliMetricKind::ButteraugliGpu));
         assert!(metric_orchestrator_eligible(CliMetricKind::Cvvdp));
         assert!(metric_orchestrator_eligible(CliMetricKind::CvvdpGpu));
         assert!(metric_orchestrator_eligible(CliMetricKind::Ssim2));

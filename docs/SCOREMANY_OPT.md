@@ -27,12 +27,16 @@ variants extracted, 0 per-variant R2.
 
 ## Part 2 — warm-reference batch scoring (`ZEN_SCOREFILE_WARMREF=1`)
 All variants in a ScoreFile job share ONE reference. The orchestrator-eligible metrics
-(cvvdp/dssim/iwssim/ssim2 — everything except butteraugli, which is `metric_orchestrator_eligible ==
-false`) are routed through one `Orchestrator::run_all` batch. `run_all` groups tasks by `ref_hash`
+(cvvdp/dssim/iwssim/ssim2 — and, since 2026-08-28, butteraugli too: `metric_orchestrator_eligible`
+now returns `true` for every kind, see zenmetrics#47 item 4) are routed through one
+`Orchestrator::run_all` batch. `run_all` groups tasks by `ref_hash`
 and warm-holds the reference precompute device-resident (`session_pool::score` →
 `score_with_warm_ref`), so the reference uploads ONCE per source instead of per variant — the fix for
-the 54% H2D. butteraugli (ineligible) + zensim (needs its 372-feature sidecar) stay on the inline
-path over the SAME decoded buffers (no double decode). Default OFF = byte-identical one-shot path.
+the 54% H2D. zensim (needs its 372-feature sidecar) stays on the inline path over the SAME decoded
+buffers (no double decode). Default OFF = byte-identical one-shot path. butteraugli joins the batch
+as of 2026-08-28, but does NOT get the warm-ref saving: `ExecMetric::supports_cached_ref()` reports
+`false` for umbrella butter so its `butteraugli_pnorm3_gpu` column survives — the umbrella has no
+`compute_with_reference_srgb_u8_with_pnorm3` yet.
 
 ## Real-GPU A/B (vast RTX 3060, 12 GB, driver 570; 8 sources × 315 variants × 6 metrics = 15,120 scorings)
 | | baseline (one-shot) | warm-ref (Part 1+2) |

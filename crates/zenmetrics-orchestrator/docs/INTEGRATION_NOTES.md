@@ -91,6 +91,20 @@ TaskResult.output_columns + butter/cvvdp metric-specific columns`
   `pnorm_3` field to the CPU adapter's return type or document that
   CPU butter is single-column.
 
+  **SUPERSEDED 2026-08-28 (zenmetrics#47 item 4).** Phase 7.7.1 later
+  reverted BOTH butter variants to legacy (row 5 of the fix table
+  below); as of 2026-08-28 `metric_orchestrator_eligible` returns
+  `true` for every kind. The `pnorm_3` gap named above was real and is
+  now fixed rather than documented away: `CpuAdapter` records
+  `last_pnorm3` on all four butter compute arms and
+  `CpuAdapter::last_extras()` surfaces `butteraugli_pnorm3_gpu`, which
+  the executor's `Cpu` arm merges into `output_columns`. The GPU
+  umbrella's cached-ref entry still has no `..._with_pnorm3` sibling,
+  so `ExecMetric::supports_cached_ref()` now reports `false` for
+  umbrella butter — the pool always takes `compute_with_extras` for it
+  and keeps both columns, at the cost of butter forgoing warm-ref
+  until that API addition lands.
+
 ### `cmd_batch` and `cmd_compare` warm but don't dispatch [PARTIAL — Phase 7.6 work]
 
 The Phase 7 status quo carries forward: `cmd_batch` / `cmd_compare`
@@ -242,7 +256,7 @@ fixes + one newly-discovered chooser bug + one butter carve-out:
 | 1+2 | `executor::construct` uses `MemoryMode::Auto` for first attempt; explicit `Full`/`Strip` mode only on OOM ladder retry | (this branch) | ssim2-gpu @ 4096 + the structural piece that the brief identified for butter |
 | 3 | `rekey_orchestrator_columns` re-keys orchestrator's versioned `iwssim_imazen_v*` back to legacy `iwssim_gpu` (or bare `iwssim` for the CLI bare variant) | (this branch) | iwssim-gpu 9/9 |
 | 4 | `evaluate_candidate` rejects non-positive log-linear extrapolation (`RejectReason::NonPositivePrediction`) — discovered when re-running parity after fix 1+2 still showed ssim2 4096 picking CPU on a NEGATIVE extrapolated ns/px | (this branch) | ssim2-gpu @ 4096 (was wrongly picking CPU); also blocks future bad-extrapolation issues |
-| 5 | Butter (BOTH CPU and GPU CLI variants) reverted to legacy path via `metric_orchestrator_eligible` — the `ButteraugliOpaque::new_with_memory_mode(.., Auto)` resolver is strip-preferred and drops to single-resolution; legacy CLI's `butter_pnorm3::score_both` calls `new_multires` unconditionally so the two diverge by ~14-30 %. Butter via `ButteraugliOpaque` needs the per-crate `new_multires_strip` wire-up — out of scope for Phase 7.7.1 | (this branch) | butteraugli-gpu 9/9 |
+| 5 | **[REVERSED 2026-08-28 — see zenmetrics#47 item 4 and `benchmarks/butter_strip_drift_2026-08-28.md`; butter is orchestrator-eligible again]** Butter (BOTH CPU and GPU CLI variants) reverted to legacy path via `metric_orchestrator_eligible` — the `ButteraugliOpaque::new_with_memory_mode(.., Auto)` resolver is strip-preferred and drops to single-resolution; legacy CLI's `butter_pnorm3::score_both` calls `new_multires` unconditionally so the two diverge by ~14-30 %. Butter via `ButteraugliOpaque` needs the per-crate `new_multires_strip` wire-up — out of scope for Phase 7.7.1 | (this branch) | butteraugli-gpu 9/9 |
 
 After all 5 fixes, parity sweep result: **54 of 54 cells PASS-EXACT**
 (bit-identical). See:

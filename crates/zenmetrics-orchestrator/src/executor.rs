@@ -418,11 +418,17 @@ impl ExecMetric {
                 // as a hard "Other" — the ladder ends. The chooser
                 // ensures CPU is the last attempt anyway.
                 //
-                // CPU adapters never produce extras today; if a future
-                // cpu-butter adapter starts returning pnorm_3 too,
-                // wire the extras BTreeMap through here.
+                // Extras: `CpuAdapter::last_extras()` mirrors the GPU
+                // umbrella arm above. Today only cpu-butter fills it
+                // (`butteraugli_pnorm3_gpu`), so a butter task the
+                // chooser routes to CPU keeps the two-column shape the
+                // legacy path writes instead of silently dropping
+                // pnorm3. Empty for every other CPU metric.
                 match adapter.compute(r, d) {
-                    Ok(s) => Ok((s, BTreeMap::new())),
+                    Ok(s) => {
+                        let extras = adapter.last_extras();
+                        Ok((s, extras))
+                    }
                     Err(e) => Err(CallErr::Other(e.to_string())),
                 }
             }
@@ -1348,18 +1354,28 @@ impl ExecMetric {
         &mut self,
         d: &[u8],
     ) -> Result<(Score, BTreeMap<String, f64>), CallErrPub> {
-        // Butter via the umbrella has cached-ref support but the
-        // current opaque API drops pnorm_3 from the cached path. For
-        // now route butter cached-ref through the regular compute by
-        // surfacing extras as empty — the worker pool will see a
-        // single-column score and the parquet writer can still emit
-        // `butteraugli_max_gpu`. Phase 7.5+ work: add a
-        // `compute_with_cached_reference_with_pnorm3` to butter's
-        // opaque trait. Until then, the cached-ref path produces the
-        // primary column but not the pnorm_3 extra — same shape as
-        // every other metric.
+        // GPU butter via the umbrella still has no cached-ref API that
+        // returns pnorm_3 (it would need a
+        // `compute_with_reference_srgb_u8_with_pnorm3` on
+        // `ButteraugliOpaque` + `zenmetrics_api::Metric`). Rather than
+        // silently emit a one-column butter row here,
+        // `supports_cached_ref()` reports FALSE for umbrella butter so
+        // the pool never reaches this function with it — see the note
+        // there. Every other umbrella metric is single-column anyway,
+        // so an empty extras map is correct for them.
+        //
+        // CPU adapters DO carry their extras in adapter state
+        // (`CpuAdapter::last_extras`), and cpu-butter fills it on the
+        // cached-ref arms too, so the CPU cached-ref path keeps butter's
+        // two columns.
         match self.compute_with_cached_reference(d) {
-            Ok(s) => Ok((s, BTreeMap::new())),
+            Ok(s) => {
+                let extras = match self {
+                    ExecMetric::Cpu(adapter) => adapter.last_extras(),
+                    _ => BTreeMap::new(),
+                };
+                Ok((s, extras))
+            }
             Err(e) => Err(e),
         }
     }
@@ -1376,9 +1392,29 @@ impl ExecMetric {
     /// caller delegates so a cvvdp fallback still benefits from
     /// `warm_reference`, while ssim2 / butter / zensim CPU fall back
     /// to regular compute.
+    ///
+    /// **Umbrella butter reports FALSE (2026-08-28, zenmetrics#47 item
+    /// 4).** Butter is the one two-column metric
+    /// (`butteraugli_max_gpu` + `butteraugli_pnorm3_gpu`), and the
+    /// umbrella's cached-ref entry (`compute_with_reference_srgb_u8`)
+    /// returns only the primary `Score` — there is no
+    /// `..._with_pnorm3` sibling of it. Butter became
+    /// orchestrator-eligible on 2026-08-28, which is what first lets
+    /// pool tasks reach the cached-ref branch for it; taking that
+    /// branch would silently drop `butteraugli_pnorm3_gpu` from the
+    /// sidecar, so the branch is closed instead. The pool then always
+    /// calls `compute_with_extras`, which routes butter through
+    /// `compute_srgb_u8_with_pnorm3` and keeps both columns.
+    ///
+    /// Cost: GPU butter forgoes the warm-reference saving (the ref-side
+    /// precompute re-runs per pair). Lifting this needs the additive
+    /// `compute_with_reference_srgb_u8_with_pnorm3` on
+    /// `butteraugli_gpu::ButteraugliOpaque` and
+    /// `zenmetrics_api::Metric` — an API addition, deliberately not
+    /// made here.
     pub(crate) fn supports_cached_ref(&self) -> bool {
         match self {
-            ExecMetric::Umbrella(_) => true,
+            ExecMetric::Umbrella(m) => m.kind() != MetricKind::Butter,
             ExecMetric::CvvdpStripPair(_) => false,
             ExecMetric::Cpu(adapter) => adapter.supports_cached_ref(),
         }

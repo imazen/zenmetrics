@@ -189,6 +189,20 @@ struct ButterState {
     /// warm path. The corresponding `supports_cached_ref()` arm is
     /// flipped from `false` to `true`.
     cached_ref: Option<butteraugli::ButteraugliReference>,
+    /// `pnorm_3` from the MOST RECENT compute on this adapter, so the
+    /// executor can emit butteraugli's second column.
+    ///
+    /// The legacy CLI path always writes BOTH `butteraugli_max*` and
+    /// `butteraugli_pnorm3*`, and the GPU umbrella path in
+    /// `executor::compute_phase4_with_extras` matches that via
+    /// `compute_srgb_u8_with_pnorm3`. Before this field the CPU adapter
+    /// discarded `ButteraugliResult::pnorm_3` and the executor's `Cpu`
+    /// arm returned empty extras — so any butter task the chooser routed
+    /// to CPU silently produced a ONE-column sidecar. The value is free
+    /// (the CPU crate computes it in the same pass); only the plumbing
+    /// was missing. Written by every butter compute arm (one-shot,
+    /// strip, warm-ref, warm-ref strip).
+    last_pnorm3: Option<f64>,
 }
 
 #[cfg(feature = "cpu-zensim")]
@@ -262,6 +276,34 @@ impl std::error::Error for CpuAdapterError {}
 // ---------------------------------------------------------------------------
 
 impl CpuAdapter {
+    /// Metric-specific extra output columns produced by the most recent
+    /// `compute*` call on this adapter, keyed exactly like the GPU
+    /// umbrella path's extras so
+    /// `executor::build_output_columns` needs no CPU/GPU branch.
+    ///
+    /// Only butteraugli populates this today: it emits
+    /// `butteraugli_pnorm3_gpu` alongside the primary
+    /// `butteraugli_max_gpu`, matching the legacy CLI's two-column
+    /// output (`crates/zenmetrics-cli/src/metrics/cache.rs`). Without it
+    /// a butter task the chooser routed to CPU dropped the pnorm3
+    /// column from the sidecar. Returns an empty map for every other
+    /// metric, and for butter before the first successful compute.
+    ///
+    /// The `_gpu` suffix is the orchestrator's canonical key spelling,
+    /// not a backend claim — `rekey_orchestrator_columns` strips it for
+    /// the CPU CLI variant.
+    #[allow(dead_code)] // only called when feature = "cuda" is on (via executor.rs)
+    pub fn last_extras(&self) -> std::collections::BTreeMap<String, f64> {
+        let mut out = std::collections::BTreeMap::new();
+        #[cfg(feature = "cpu-butter")]
+        if let CpuAdapterState::Butter(s) = &self.state
+            && let Some(p) = s.last_pnorm3
+        {
+            out.insert("butteraugli_pnorm3_gpu".to_string(), p);
+        }
+        out
+    }
+
     /// Build a CPU adapter for `metric` at `width × height` with
     /// `params`. Returns `Err(FeatureNotEnabled)` when the matching
     /// `cpu-<metric>` feature is off in the current build.
@@ -578,6 +620,7 @@ impl CpuAdapter {
                 let dist_img = ImgRef::new(dist_rgb, s.width, s.height);
                 let result = butteraugli::butteraugli_strip(ref_img, dist_img, &s.params, h)
                     .map_err(|e| CpuAdapterError::Failed(format!("butteraugli_strip: {e:?}")))?;
+                s.last_pnorm3 = Some(result.pnorm_3);
                 Ok(make_score(
                     "butter",
                     env!("CARGO_PKG_VERSION"),
@@ -717,6 +760,8 @@ impl CpuAdapter {
                         "butteraugli ButteraugliReference::compare_strip: {e:?}"
                     ))
                 })?;
+                let pnorm3 = result.pnorm_3;
+                s.last_pnorm3 = Some(pnorm3);
                 Ok(make_score(
                     "butter",
                     env!("CARGO_PKG_VERSION"),
@@ -858,6 +903,8 @@ impl CpuAdapter {
                 let result = pre
                     .compare(dist_bytes)
                     .map_err(|e| CpuAdapterError::Failed(format!("butteraugli compare: {e:?}")))?;
+                let pnorm3 = result.pnorm_3;
+                s.last_pnorm3 = Some(pnorm3);
                 Ok(make_score(
                     "butter",
                     env!("CARGO_PKG_VERSION"),
@@ -1164,6 +1211,7 @@ fn construct_butter(
         height: height as usize,
         params,
         cached_ref: None,
+        last_pnorm3: None,
     }))
 }
 
@@ -1196,6 +1244,7 @@ fn compute_butter(
     let dist_img = ImgRef::new(dist_rgb, s.width, s.height);
     let result = butteraugli::butteraugli(ref_img, dist_img, &s.params)
         .map_err(|e| CpuAdapterError::Failed(format!("butteraugli: {e:?}")))?;
+    s.last_pnorm3 = Some(result.pnorm_3);
     Ok(make_score(
         "butter",
         env!("CARGO_PKG_VERSION"),

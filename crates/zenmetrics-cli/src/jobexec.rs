@@ -586,14 +586,16 @@ fn fetch_variant_raw(sha: &str, ext: &str) -> Result<(PathBuf, bool), Box<dyn Er
 /// All variants in a ScoreFile job share ONE reference. The one-shot path (`run_metric` per
 /// (variant, metric)) re-uploads that reference to the GPU on EVERY call — nsys shows
 /// `cuMemcpyHtoDAsync` at 54% of CUDA API time and GPU sm util ~10% (upload-bound). This routes the
-/// orchestrator-eligible metrics (everything except butteraugli, which is
-/// `metric_orchestrator_eligible == false`) through `Orchestrator::run_all`, which groups tasks by
+/// orchestrator-eligible metrics (since 2026-08-28 that is EVERY metric kind, butteraugli included —
+/// zenmetrics#47 item 4) through `Orchestrator::run_all`, which groups tasks by
 /// `ref_hash` and warm-holds the reference precompute device-resident across the group — so the ref
 /// uploads ONCE per source and only the distorted side uploads per variant.
 ///
-/// Returns the emitted JSONL rows for the eligible metrics. Butteraugli + zensim-with-features stay
-/// on the caller's inline decode-reuse loop (butter is orchestrator-ineligible; zensim needs its
-/// 372-feature sidecar which the umbrella score path doesn't emit). Decode is shared: the caller
+/// Returns the emitted JSONL rows for the eligible metrics. zensim-with-features stays on the
+/// caller's inline decode-reuse loop (it needs its 372-feature sidecar, which the umbrella score
+/// path doesn't emit). Butteraugli now flows through the batch, though it does NOT take the
+/// cached-ref fast path — `ExecMetric::supports_cached_ref()` reports `false` for umbrella butter so
+/// its second column (`butteraugli_pnorm3_gpu`) is preserved. Decode is shared: the caller
 /// passes the already-decoded `(sha, Rgb8Image)` pairs so no variant is decoded twice.
 ///
 /// Gated by `ZEN_SCOREFILE_WARMREF=1` at the call site; default OFF = byte-identical one-shot path.
@@ -739,8 +741,9 @@ fn cli_kind_from_metric_kind(k: MetricKind) -> Option<crate::metrics::MetricKind
 ///
 /// PART 2: with `ZEN_SCOREFILE_WARMREF=1` (and an orchestrator-cuda build), the orchestrator-eligible
 /// metrics are scored via one warm-reference `run_all` batch (ref uploaded once per source, not per
-/// variant — the fix for the 54% H2D / ~10% GPU util); butteraugli + zensim-with-features stay on the
-/// inline path. Default OFF = byte-identical one-shot behaviour.
+/// variant — the fix for the 54% H2D / ~10% GPU util); zensim-with-features stays on the inline
+/// path, and so does any metric `metric_orchestrator_eligible` rejects (as of 2026-08-28 that is
+/// none — butteraugli joined the batch). Default OFF = byte-identical one-shot behaviour.
 /// All-error guard (2026-08-27, the hdrgrid lesson): a ScoreFile job whose
 /// EVERY row is an error row means the executor ENVIRONMENT is broken (bad
 /// image vintage, non-operational GPU, missing build feature) — completing it
@@ -902,8 +905,12 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
             rows.extend(warmref_score_eligible(
                 image_path, codec_name, &reference, &decoded, &metrics,
             )?);
-            // Butteraugli (orchestrator-ineligible) + zensim (needs its feature sidecar) inline, reusing
-            // the decoded buffers so no variant is decoded twice.
+            // Whatever `warmref_score_eligible` did NOT score, inline over the SAME decoded
+            // buffers so no variant is decoded twice. Since 2026-08-28 butteraugli IS
+            // orchestrator-eligible (zenmetrics#47 item 4), so the butter arm below MUST be
+            // gated on the same predicate `warmref_score_eligible` filters with — an
+            // unconditional butter arm would emit every butteraugli row TWICE on this
+            // default-ON path.
             for (sha, distorted) in &decoded {
                 for metric in &metrics {
                     #[cfg(feature = "cpu-metrics")]
@@ -955,8 +962,14 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                         }
                         continue;
                     }
-                    // butteraugli / butteraugli-gpu (and any non-eligible, non-zensim metric): one-shot.
-                    if *metric == "butteraugli" || *metric == "butteraugli-gpu" {
+                    // butteraugli / butteraugli-gpu (and any non-eligible, non-zensim metric):
+                    // one-shot — but ONLY when the warm-ref batch above skipped it.
+                    if (*metric == "butteraugli" || *metric == "butteraugli-gpu")
+                        && !metric_kind(metric)
+                            .ok()
+                            .and_then(cli_kind_from_metric_kind)
+                            .is_some_and(crate::orchestrator_runner::metric_orchestrator_eligible)
+                    {
                         match score(metric, &reference, distorted) {
                             Ok(pairs) => {
                                 let mut scores = Map::new();

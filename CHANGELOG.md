@@ -13,6 +13,50 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## butteraugli-gpu / zenmetrics-orchestrator / zenmetrics-cli (zenmetrics#47 item 4 — butteraugli is orchestrator-eligible, 2026-08-28)
+
+### Added
+- **`benchmarks/butter_strip_drift_2026-08-28.{csv,md}` + `crates/butteraugli-gpu/examples/strip_drift_corpus.rs`**
+  (`9706a4e5`): 6,810-cell corpus measurement of `Butteraugli::new_multires_strip` vs
+  `new_multires` — 95 real images (photo / screen / illustration / line-art, 0.004–10.5 MP) ×
+  15 JPEG quality levels (butteraugli score 0.32–31.62) × strip bodies {auto,128,256,512}
+  (1–75 strips). Result: the **max-norm score is bit-identical in 6,810/6,810 cells**, `pnorm_3`
+  drifts ≤ **1.72e-6** rel, the production `ButteraugliOpaque` `Full`-vs-`Auto` pair is identical
+  in 6,810/6,810, and the walker's output does not depend on the strip body at all (2,118/2,118
+  groups). Flat on every axis; the negative control (single-res vs multires whole) is a median
+  6.3 % / max 25.9 %, so the harness is demonstrably sensitive. Measured on wgpu/Metal (Apple
+  M4 Pro), portable reduction — CUDA not re-measured.
+
+### Changed
+- **`metric_orchestrator_eligible` now returns `true` for every metric kind**, butteraugli
+  included. The "~1e-4 strip drift" that kept it `false` since Phase 7.7.1 was the tests'
+  assertion TOLERANCE, not a measurement; the only run that ever produced ~1e-4
+  (`butter_strip_halo_2026-05-31.md`) was the pre-fix `HALO_ROWS = 40` half-res sibling.
+  Accepted tolerance is now documented on the function with its provenance. Stale
+  "butter is ineligible" claims corrected in `main.rs`, `sweep/run.rs`, `jobexec.rs`,
+  `docs/SCOREMANY_OPT.md` and `zenmetrics-orchestrator/docs/INTEGRATION_NOTES.md`.
+- **`ExecMetric::supports_cached_ref()` reports `false` for umbrella butteraugli.** Butter is the
+  only two-column metric and the umbrella's cached-ref entry has no `..._with_pnorm3` sibling, so
+  the pool's cached-ref branch would have silently dropped `butteraugli_pnorm3_gpu` the moment
+  butter became eligible. The pool now always takes `compute_with_extras` for butter (both columns
+  preserved), at the cost of butter forgoing the warm-reference saving until
+  `compute_with_reference_srgb_u8_with_pnorm3` is added to `ButteraugliOpaque` +
+  `zenmetrics_api::Metric`.
+
+### Fixed
+- **CPU butteraugli no longer loses its `pnorm_3` column under the orchestrator.** `CpuAdapter`
+  records `last_pnorm3` on all four butter compute arms (one-shot, strip, warm-ref, warm-ref
+  strip) and `CpuAdapter::last_extras()` surfaces it as `butteraugli_pnorm3_gpu`; the executor's
+  `Cpu` arm merges it into `output_columns` instead of returning an empty extras map. Latent
+  until now (butter never reached the orchestrator); a live one-column regression the moment the
+  chooser routed a butter task to CPU — which it prefers in `ExecContext::OneShot` at any size.
+- **`jobexec`'s warm-ref path no longer double-emits butteraugli rows.** The inline
+  "orchestrator-ineligible metrics" loop matched `butteraugli` / `butteraugli-gpu` by name
+  unconditionally, so with butter now eligible every butteraugli row would have been written
+  twice on the default-ON `ZEN_SCOREFILE_WARMREF` path. The arm is gated on the same
+  `metric_orchestrator_eligible` predicate `warmref_score_eligible` filters with.
+
+
 ## zenmetrics-cli (zenmetrics#13 §5 — feature sidecar schema 2.0-hdr, 2026-08-28)
 
 ### Added

@@ -1336,13 +1336,13 @@ fn compute_cell(
             // Phase 7.5: orchestrator-driven scoring. Skipped for
             // ZensimGpu+want_features_gpu because the orchestrator
             // doesn't yet expose feature emission; that branch
-            // still uses MetricCache below. Phase 7.7.1: also
-            // skipped for `Butteraugli` / `ButteraugliGpu`
-            // because the orchestrator's strip-preferred Auto
-            // resolver picks single-resolution scoring which
-            // diverges from the legacy CLI's
-            // `Butteraugli::new_multires`-always output by
-            // ~14-30 %. See
+            // still uses MetricCache below. `Butteraugli` /
+            // `ButteraugliGpu` were also skipped from Phase 7.7.1
+            // until 2026-08-28; they are eligible again now that the
+            // opaque Strip arm runs the MULTI-resolution walker and
+            // that walker is measured bit-identical to
+            // `new_multires` on 6,810 corpus cells
+            // (`benchmarks/butter_strip_drift_2026-08-28.md`). See
             // `crate::orchestrator_runner::metric_orchestrator_eligible`.
             #[cfg(feature = "orchestrator")]
             {
