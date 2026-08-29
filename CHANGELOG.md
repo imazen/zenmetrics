@@ -13,6 +13,46 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## hdrvdp (NEW crate — HDR-VDP-2.2 port, chunk 1 of 6, zenmetrics#50, 2026-08-28)
+
+### Added
+- **`crates/hdrvdp`** — a pure-Rust `f64` CPU reference port of HDR-VDP-2.2 (Mantiuk, Kim,
+  Rempel & Heidrich, SIGGRAPH 2011; quality recalibrated by Narwaria et al., JEI 2015), the
+  gold-standard HDR metric this workspace has been benchmarking *against* without being able
+  to run (AIC-HDR2025 0.936, UPIQ 0.812 — above every metric we ship). Chunk 1 lands the
+  front of the visual pathway, complete and unit-tested (52 tests, zero dependencies):
+  - `display` — the five colour encodings → cd/m² (`luminance`, `luma-display`,
+    `srgb-display`, `rgb-bt.709`, `xyz`) + `looks_relative`, upstream's
+    "you passed relative values" check returned as a fact instead of printed.
+  - `spectral` — Smith–Pokorny cone fundamentals, CIE scotopic V′, display emission spectra,
+    and the `channels × LMSR` mixing matrix.
+  - `csf` — optical MTF, neural CSF, and the rod / cone contrast-versus-intensity curves.
+  - `photoreceptor` — the luminance → JND-space response (integrating sensitivity so equal
+    distance means equal discriminability), cone and rod tables.
+  - `fft` — a dependency-free complex FFT (radix-2 + Bluestein for arbitrary lengths), the
+    radial cycles-per-degree grid, and zero-phase convolution with post-padding.
+  - `pathway` — stages 1–5 assembled: MTF → LMSR → adapting luminance → photoreceptor
+    non-linearity → separate cone/rod DC removal → achromatic response.
+- **`crates/hdrvdp/THIRD-PARTY-NOTICES.md`** — the licensing audit this port rests on. The
+  HDR-VDP-2 core files are **ISC** (permissive; the notice must travel with the port, and
+  does). Three upstream helpers — `create_cycdeg_image.m`, `fast_conv_fft.m`,
+  `load_spectral_resp.m` — carry *"internal use, do not redistribute"* and are therefore
+  **not** ported: `fft.rs` and `spectral.rs` implement them from their descriptions instead,
+  with the one knowable behavioural difference (odd-length frequency axes, unreachable in the
+  pipeline) documented at the site. The steerable pyramid due in chunk 2 is MIT.
+
+### Notes
+- **No end-to-end score yet.** Decomposition + masking (chunk 2), pooling + `Q`/`Q_MOS`
+  (chunk 3), UPIQ validation (chunk 4), umbrella wiring (chunk 5) and the CubeCL port
+  (chunk 6) are still open. Nothing from this crate may be reported as an HDR-VDP-2 number
+  until chunk 4's measured SROCC lands in `benchmarks/`.
+- Two upstream quirks are reproduced deliberately, because the calibration was fitted through
+  them and "fixing" either would move every number off the published correlations: the
+  spectral resampling grid is **420 points from 360–780 nm** (upstream passes `(780-360)/1`
+  as `linspace`'s *count*, so the spacing is 420/419 nm, not the 1 nm its docstring claims),
+  and the CCFL-LCD emission table's five negative noise-floor samples (down to −3.53e-6) are
+  integrated as-is rather than clamped.
+
 ## butteraugli-gpu / zenmetrics-orchestrator / zenmetrics-cli (zenmetrics#47 item 4 — butteraugli is orchestrator-eligible, 2026-08-28)
 
 ### Added

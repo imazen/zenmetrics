@@ -6,6 +6,7 @@ members = [
     "crates/cvvdp-conformance",
     "crates/cvvdp-gpu",
     "crates/dssim-gpu",
+    "crates/hdrvdp",
     "crates/iwssim",
     "crates/iwssim-gpu",
     "crates/ssim2-gpu",

@@ -1,0 +1,22 @@
+[package]
+name = "hdrvdp"
+version = "0.0.1"
+description = "Pure-Rust f64 CPU reference port of HDR-VDP-2.2 (Mantiuk et al. 2011)"
+readme = "README.md"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+# No features: the reference implementation is std-only f64 scalar math with no
+# optional surface. SIMD / no_std / GPU variants belong in `hdrvdp-gpu` and a
+# later optimisation pass, not behind flags on the reference (zenmetrics#50).
+
+[dependencies]
+# Deliberately none. The FFT, interpolation and quadrature this port needs are
+# in `src/fft.rs` and `src/interp.rs` — a few hundred lines that keep the
+# reference auditable against the paper without a dependency to pin, and keep
+# i686 / wasm / windows-arm builds trivially portable.
