@@ -13,6 +13,11 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## Workspace (zencodec/zenpixels version ranges, 2026-08-29)
+
+### Changed
+- **Every `zencodec` / `zenpixels` / `zenpixels-convert` requirement in the workspace now spans the published minor AND the next one** — 26 requirement lines across `butteraugli-gpu`, `cvvdp`, `cvvdp-gpu`, `dssim-gpu`, `iwssim`, `iwssim-gpu`, `ssim2-gpu`, `zenmetrics-api`, `zenmetrics-cli`, `zenmetrics-gpu-core`, `zensim-gpu`. `zencodec` becomes `>=0.1.26, <0.3.0`; `zenpixels` and `zenpixels-convert` become `>=0.2.11, <0.4.0` (or `>=0.2.16, <0.4.0` where the crate already required 0.2.16). For a `0.x` crate Cargo treats the minor as the major, so a plain `"0.2.11"` meant `^0.2.11` = `>=0.2.11, <0.3.0` and a `zenpixels 0.3.0` release would have been invisible until all eleven manifests were hand-edited. Floors are unchanged (each crate keeps its own minimum) and nothing newer is published, so resolution is identical: `cargo metadata` still yields exactly one `zencodec 0.1.26`, one `zenpixels`, one `zenpixels-convert`. **This is the mechanism the note below is about, viewed from the other side:** the dropped `zenpixels`/`zenpixels-convert` patch pin conflicted with a sibling's `>=0.2.16, <0.3` precisely because a narrow ceiling in one consumer can split the graph; a uniform current-plus-next range on every consumer is what keeps a future `0.2.0`/`0.3.0` from resolving as two non-unifying copies. `[patch.crates-io]` entries are untouched — a patch replaces the source regardless of the requirement. The standing rule is documented in the zencodec repo's `CLAUDE.md`.
+
 ## Workspace (rav1d-safe pin alignment, 2026-08-29)
 
 ### Fixed

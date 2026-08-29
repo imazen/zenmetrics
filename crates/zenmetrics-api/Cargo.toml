@@ -173,10 +173,10 @@ rgb         = { workspace = true, optional = true }
 bytemuck    = { workspace = true, optional = true }
 
 # Re-exported pixel slice for the umbrella `compute_pixels` path.
-zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 # PixelSlice -> sRGB8 conversion for the optimized-CPU `compute_pixels` path
 # (task #159 phase 3); the GPU arms convert inside each `-gpu` crate.
-zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels-convert = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 # Decoder for the `score_encoded` front door (task #159 phase 4c).
 image = { workspace = true, optional = true }
 
@@ -193,7 +193,7 @@ enough = "0.4.4"
 almost-enough = "0.4.4"
 image = { workspace = true, features = ["exr", "png"] }
 # Smoke tests construct a PixelBuffer for the `compute_pixels` path.
-zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"] }
 # Phase 4 compute_handles test needs the cubecl runtime to build a
 # shared client. Only used by `tests/compute_handles.rs`, which is
 # gated on `cuda,cubecl-types`.

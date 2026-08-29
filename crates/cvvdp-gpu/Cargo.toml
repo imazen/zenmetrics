@@ -45,8 +45,8 @@ zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = fals
 serde_json = { workspace = true }
 # Cooperative cancellation for the strip walkers (`*_with_stop`, zenmetrics#30).
 enough = "0.4.4"
-zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
-zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
+zenpixels-convert = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 # Constructible `Stop` flag for the cancellation tests.
@@ -60,7 +60,7 @@ zenmetrics-corpus = { workspace = true }
 sha2 = "0.10.9"
 ureq = "3.3.0"
 zenbench = { version = "0.1.8", features = ["criterion-compat"] }
-zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"] }
 
 [[bench]]
 name = "score"

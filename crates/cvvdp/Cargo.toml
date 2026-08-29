@@ -66,8 +66,8 @@ magetypes = { workspace = true }
 # preset registry (src/presets.rs).
 serde_json = { workspace = true }
 rayon = { version = "1.10", optional = true }
-zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
-zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
+zenpixels-convert = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 zenbench = "0.1.7"

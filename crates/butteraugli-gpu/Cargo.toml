@@ -74,7 +74,7 @@ internals = []
 [dependencies]
 cubecl = { workspace = true }
 zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = false }
-zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 # Cooperative cancellation for the strip walkers (`*_with_stop`, zenmetrics#30).
 enough = "0.4.4"
 
@@ -87,7 +87,7 @@ imgref = { workspace = true }
 rgb = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg"] }
 zenmetrics-corpus = { workspace = true }
-zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"] }
 zenbench = "0.1.8"
 
 # Examples and tests consuming the typed Butteraugli<R> require
