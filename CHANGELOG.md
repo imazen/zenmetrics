@@ -53,6 +53,37 @@ Workspace conventions per the global rules:
   and the CCFL-LCD emission table's five negative noise-floor samples (down to −3.53e-6) are
   integrated as-is rather than clamped.
 
+## hdrvdp (chunk 3 — pooling, Q/Q_MOS, and an end-to-end metric, zenmetrics#50, 2026-08-28)
+
+### Added
+- **`crates/hdrvdp/src/pool.rs`** — visibility pooling (`S_map` → `C_map` / `C_max` /
+  `P_map` / `P_det`) and the quality mapping (`Q` → `Q_MOS`, the 2.2 logistic with
+  `q1 = 3.455`, `q2 = 0.8886`).
+- **`crates/hdrvdp/src/metric.rs` + `hdrvdp::hdrvdp()`** — **the metric now scores a pair
+  end to end.** Two images in absolute luminance (or any of the five colour encodings) in;
+  `Q_MOS` on 0–100, `Q`, and the two per-pixel maps out. `Error::InvalidResolution` was
+  added so an unset `pix_per_deg` fails loudly instead of producing NaN scores, and
+  upstream's `hdrvdp:lowvals` warning is returned as `HdrVdpResult::input_looks_relative`
+  rather than printed to a stream nobody reads.
+
+### Notes — two properties worth knowing before reading a number
+- **After spatial pooling, `C_max` is a total, not a peak.** `S_map ·= sum/max` scales the
+  map so its new maximum equals its old *sum*, so a `C_max` of 400 does not mean "400×
+  threshold"; the map's spatial shape is unchanged (uniform rescale), so `P_map` still
+  localises. Pinned by a test that also checks the argmax does not move.
+- **An identical pair scores 99.9998, not 100.** Every band's `msre` is 0, so each quality
+  term is `log(0 + 1e-12)`; that epsilon is finite. This is upstream behaviour, not a port
+  defect — the 2.1.2 ChangeLog says the updated epsilons "prevent NaN due to log of 0, but
+  also cause Q_MOS to be relatively low for two identical images".
+
+### Still not validated
+No number from this crate may be published as an HDR-VDP-2 score until chunk 4 measures
+UPIQ SROCC against the reference's published **0.812** and records it in `benchmarks/`.
+The behavioural tests that exist (quality falls monotonically along a 5-rung distortion
+ladder, the visibility map localises a left-third distortion, the same relative distortion
+is measurably less visible at ~0.04 cd/m² than at ~80 cd/m²) establish that the pipeline
+behaves like a luminance-aware metric — not that it *is* HDR-VDP-2 numerically.
+
 ## hdrvdp (chunk 2b — band list, MATLAB-compatible imresize, contrast masking, zenmetrics#50, 2026-08-28)
 
 ### Added

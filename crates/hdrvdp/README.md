@@ -14,33 +14,47 @@ measured against:
 | AIC-HDR2025 (HDR compression JND) | **0.936** | SSIMULACRA2 0.906 |
 | UPIQ (380 HDR compression pairs, JOD) | **0.812** | cvvdp faithful 0.758 |
 
-## Status — chunk 1 of 6, **not yet a metric**
+## Status — chunks 1–3 of 6: **it scores a pair, it is not yet validated**
 
-This crate lands in chunks (tracked in [imazen/zenmetrics#50]). Today it holds
-the **front of the visual pathway**, complete and unit-tested (52 tests):
+Landed in chunks (tracked in [imazen/zenmetrics#50]). `hdrvdp::hdrvdp()` now takes
+two images in absolute luminance and returns `Q_MOS` (0–100, 100 = best), the raw
+`Q`, and the per-pixel visibility maps `P_map` / `C_map`. 98 tests, zero
+dependencies.
 
-- `display` — the five colour encodings → cd/m² (`luminance`, `luma-display`,
-  `srgb-display`, `rgb-bt.709`, `xyz`), plus the "you passed relative values"
-  detector.
-- `spectral` — Smith–Pokorny cone fundamentals, CIE scotopic V′, display
-  emission spectra, and the `channels × LMSR` mixing matrix.
-- `csf` — the eye's optical MTF, the neural CSF, and the rod / cone
-  contrast-versus-intensity curves.
-- `photoreceptor` — the luminance → JND-space response, built by integrating
-  sensitivity so that **equal distance means equal discriminability**.
-- `fft` — a dependency-free complex FFT (radix-2 + Bluestein), the radial
-  cycles-per-degree grid, and zero-phase convolution with post-padding.
-- `pathway` — stages 1–5 assembled: MTF → LMSR → adapting luminance →
-  photoreceptor non-linearity → separate cone/rod DC removal → achromatic
-  response.
+| stage | module |
+|---|---|
+| the five colour encodings → cd/m², plus the "you passed relative values" detector | `display` |
+| optical MTF, neural CSF, rod/cone contrast-versus-intensity | `csf` + `fft` |
+| cone fundamentals, scotopic V′, display emission, the LMSR mixing matrix | `spectral` |
+| luminance → JND-space photoreceptor response | `photoreceptor` |
+| MTF → LMSR → adapting luminance → non-linearity → cone/rod DC removal | `pathway` |
+| `sp3` steerable pyramid (4 orientations), build + reconstruct | `spyr` |
+| the `[1, 4×H, 1]` band list + base-band CSF filtering | `bands` |
+| MATLAB-compatible `imresize` (bicubic, antialiased) | `resize` |
+| mutual masking, the three masking terms, the transducer, per-band `D` | `masking` |
+| `S_map` → `P_map` / `P_det` / `C_max`, and `Q` → `Q_MOS` | `pool` |
+| the end-to-end entry point | `metric` |
 
-**Still to come:** the steerable-pyramid decomposition and contrast masking
-(chunk 2), probability pooling and the `Q` / `Q_MOS` quality correlate (chunk 3),
-end-to-end scoring and UPIQ validation (chunk 4), umbrella wiring (chunk 5), and
-a CubeCL GPU port gated against this `f64` reference (chunk 6).
+**Still open:** UPIQ validation (chunk 4), umbrella wiring as
+`MetricKind::Hdrvdp` (chunk 5), and a CubeCL port gated against this `f64`
+reference (chunk 6).
 
-**Do not report any number out of this crate as an HDR-VDP-2 score** until chunk
-4 lands and its measured UPIQ SROCC is recorded in `benchmarks/`.
+**Do not publish any number from this crate as an HDR-VDP-2 score yet.** The
+pipeline is complete and behaves like a luminance-aware metric — quality falls
+monotonically along a distortion ladder, the visibility map localises, and the
+same relative distortion is measurably less visible at ~0.04 cd/m² than at
+~80 cd/m² — but "behaves correctly" is not "matches the reference". Chunk 4
+measures UPIQ SROCC against the published **0.812** and records it in
+`benchmarks/`; until that lands, treat the output as a work in progress.
+
+### Two things to know before reading a number
+
+- **After spatial pooling, `C_max` is a total, not a peak.** `S_map ·= sum/max`
+  makes the new maximum equal the old sum, so a `C_max` of 400 does not mean
+  "400× threshold". `P_map`'s spatial shape is unaffected.
+- **An identical pair scores 99.9998, not 100** — every band's error is 0, so
+  each quality term is `log(0 + 1e-12)`, and that epsilon is finite. Upstream
+  behaviour, documented in its own 2.1.2 ChangeLog.
 
 ## Units
 

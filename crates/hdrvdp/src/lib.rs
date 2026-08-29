@@ -11,10 +11,11 @@
 //! field's reference HDR metric: 0.936 SROCC on AIC-HDR2025 and 0.812 on UPIQ,
 //! above every metric currently in this workspace.
 //!
-//! ## Status: chunk 2 of 6 (complete)
+//! ## Status: chunks 1–3 complete of 6
 //!
-//! This crate is being landed in chunks (see imazen/zenmetrics#50). **What is
-//! here now**, complete and unit-tested:
+//! This crate is being landed in chunks (see imazen/zenmetrics#50). **The
+//! metric now scores a pair end to end** — [`hdrvdp`] takes two images in
+//! absolute luminance and returns `Q_MOS`, `Q`, and the visibility maps.
 //!
 //! | stage | module | status |
 //! |---|---|---|
@@ -26,17 +27,25 @@
 //! | achromatic response (stages 1–5) | [`pathway`] | ✅ |
 //! | steerable-pyramid decomposition | [`spyr`] + [`bands`] | ✅ |
 //! | contrast masking + per-band `D` | [`masking`] | ✅ |
-//! | probability pooling, `P_det` / `P_map` | — | ⏳ chunk 3 |
-//! | quality correlate `Q` / `Q_MOS` | — | ⏳ chunk 3 |
+//! | probability pooling, `P_det` / `P_map` | [`pool`] | ✅ |
+//! | quality correlate `Q` / `Q_MOS` | [`pool`] | ✅ |
+//! | end-to-end entry point | [`metric`] | ✅ |
+//! | UPIQ validation (SROCC vs the published 0.812) | — | ⏳ chunk 4 |
+//! | umbrella wiring (`MetricKind::Hdrvdp`) | — | ⏳ chunk 5 |
+//! | CubeCL GPU port | — | ⏳ chunk 6 |
 //!
 //! One boundary caveat is carried openly rather than papered over: the
 //! pyramid's *synthesis* boundary rule is principled and self-consistent but
 //! has not been compared against upstream's C implementation. It affects only
 //! the visibility map's border pixels, never `Q` / `Q_MOS`. See [`spyr`].
 //!
-//! **There is no end-to-end score yet.** Nothing in this crate should be
-//! reported as an HDR-VDP-2 number until chunk 4 lands and its UPIQ SROCC is
-//! recorded in `benchmarks/`.
+//! **The score is not yet validated.** The pipeline is complete and its
+//! behaviour is unit-tested (quality falls monotonically along a distortion
+//! ladder, the visibility map localises, the same relative distortion is less
+//! visible in near-darkness than at photopic levels), but no number out of
+//! this crate should be published as an HDR-VDP-2 score until chunk 4
+//! measures UPIQ SROCC against the reference implementation's 0.812 and
+//! records it in `benchmarks/`.
 //!
 //! ## Units
 //!
@@ -59,20 +68,24 @@ pub mod display;
 pub mod fft;
 pub mod interp;
 pub mod masking;
+pub mod metric;
 pub mod params;
 pub mod pathway;
 pub mod photoreceptor;
+pub mod pool;
 pub mod resize;
 pub mod sp3_filters;
 pub mod spectral;
 pub mod spyr;
 
+pub use bands::{BandPyramid, decompose};
 pub use display::ColorEncoding;
+pub use masking::Masking;
+pub use metric::{HdrVdpResult, hdrvdp};
 pub use params::{Params, pix_per_deg};
 pub use pathway::{Pathway, visual_pathway};
 pub use photoreceptor::Photoreceptor;
-pub use bands::{BandPyramid, decompose};
-pub use masking::Masking;
+pub use pool::Visibility;
 pub use spyr::{Band, SteerablePyramid};
 
 /// Errors this crate can return.
@@ -97,7 +110,14 @@ pub enum Error {
     },
     /// A pixel value was not finite after the display model.
     ImpossibleValues(f64),
+    /// `Params::pix_per_deg` was not a positive finite number. It has no
+    /// meaningful default — derive it from display geometry with
+    /// [`pix_per_deg`].
+    InvalidResolution(f64),
 }
+
+/// Result alias for this crate.
+pub type Result<T> = core::result::Result<T, Error>;
 
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -118,6 +138,11 @@ impl core::fmt::Display for Error {
             Self::ImpossibleValues(v) => {
                 write!(f, "non-finite luminance after the display model: {v}")
             }
+            Self::InvalidResolution(v) => write!(
+                f,
+                "pix_per_deg must be a positive finite number, got {v} — derive it from \
+                 display geometry with `pix_per_deg(diagonal_in, [w, h], distance_m)`"
+            ),
         }
     }
 }
