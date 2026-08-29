@@ -2,8 +2,6 @@
 
 //! Butteraugli GPU two-column emit.
 //!
-//! The umbrella's opaque [`zenmetrics_api::Metric::compute_srgb_u8`]
-//! returns a single `Score { value }` for butter — the max-norm only.
 //! Our TSV / parquet schema emits **both** the max-norm
 //! (`butteraugli_max_gpu`) and the libjxl 3-norm
 //! (`butteraugli_pnorm3_gpu`, matching `butteraugli_main --pnorm` and
@@ -18,6 +16,28 @@
 //! now routes through `zenmetrics_api::hdr::HdrScorer` (see
 //! `crate::hdr::score_via_hdr_scorer`), so only the sRGB-u8 two-column emit
 //! remains.
+//!
+//! ## This module is foldable — its original rationale is obsolete
+//!
+//! It used to open with "the umbrella's opaque
+//! [`zenmetrics_api::Metric::compute_srgb_u8`] returns a single
+//! `Score { value }` for butter — the max-norm only". **That has been false
+//! since `a7fb1f35`**, which shipped
+//! [`zenmetrics_api::Metric::compute_srgb_u8_multi`] returning
+//! `Scores = [max, pnorm_3]` from the same single fused kernel. The other
+//! reason to keep the typed path — preserving `Butteraugli<HipRuntime>`, which
+//! the shared opaque `Backend` does not carry — went away when HIP was dropped
+//! by owner decision on 2026-08-28.
+//!
+//! So this module can be replaced by one `compute_srgb_u8_multi` call at its
+//! only caller (`crate::metrics::run_metric`'s `ButteraugliGpu` arm). What that
+//! change is gated on is *measurement, not capability*: the umbrella builds
+//! butteraugli in `MemoryMode::Auto` (strip-preferred) where this path is
+//! whole-image, and `benchmarks/butter_strip_drift_2026-08-28.md` measured that
+//! difference over 6,810 cells — the max-norm is **bit-identical** in
+//! 6,810/6,810, but `pnorm_3` drifts up to **1.72e-6** relative. That is small,
+//! and it is not zero, so folding shifts a column that already-harvested fleet
+//! rows carry. Tracked as item 1 of imazen/zenmetrics#21.
 
 use cubecl::Runtime;
 use zenmetrics_api::butter;
