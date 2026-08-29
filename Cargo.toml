@@ -325,7 +325,12 @@ zenavif      = { path = "../zenavif" }
 #
 # So the rav1d-safe rev this workspace builds is OWNED BY ZENAVIF'S DEPENDENCY
 # LINE, and the only lever this repo has is WHICH ZENAVIF it resolves against:
-#   * locally — the `zenavif = { path = "../zenavif" }` sibling checkout;
+#   * locally — the sibling checkout, bound TWICE and at two different relative
+#     depths: the `zenavif = { path = "../zenavif" }` entry just above, and
+#     zenmetrics-cli's OWN direct `zenavif = { path = "../../../zenavif",
+#     optional = true }` (crates/zenmetrics-cli/Cargo.toml). The direct dep is
+#     the one that actually binds for the CLI — a root patch does not override
+#     a path dep — so repointing only the entry above does nothing;
 #   * in CI  — the pinned `git clone …/zenavif.git ../zenavif` +
 #     `git -C ../zenavif checkout <rev>` in .github/workflows/ci.yml (all five
 #     copies of the "Clone sibling-repo path-dep targets" step).
