@@ -53,6 +53,36 @@ Workspace conventions per the global rules:
   and the CCFL-LCD emission table's five negative noise-floor samples (down to −3.53e-6) are
   integrated as-is rather than clamped.
 
+## hdrvdp (chunk 4a — first scores on real pixels, zenmetrics#50, 2026-08-28)
+
+### Added
+- **`benchmarks/hdrvdp2_corpus_ladder_2026-08-28.{tsv,md}`** — the port's first end-to-end
+  run on real content: `zenmetrics-corpus`' 256×256 source PNG against its own JPEG ladder
+  (q1/q5/q20/q45/q70/q90), scored twice — through HDR-VDP-2's `srgb-display` model, and
+  with the same content presented at a 1000 cd/m² peak and fed as absolute-luminance
+  `rgb-bt.709`. `Q_MOS` is strictly monotone in JPEG quality on **both** feeds
+  (SDR 60.42 → 98.97, HDR 65.12 → 98.68) and `C_max` falls monotonically across ~600×.
+- **`crates/hdrvdp/examples/score_corpus_ladder.rs`** — the harness that produced it.
+- **`crates/hdrvdp/tests/corpus_ladder.rs`** — a reduced 128×128, three-rung version of the
+  same ladder as a CI gate (~6 s in debug), plus an identical-real-pair check. Real codec
+  artefacts, not synthetic gratings, which a metric can flatter itself on.
+
+### Notes
+- `P_det` saturates at 1.0 on every rung. That is expected, not a defect: spatial pooling
+  scales the map by `sum/max`, so any distortion with spatial extent drives it to 1.
+  `P_det` discriminates near the visibility threshold; `Q_MOS` is the axis for a
+  supra-threshold codec ladder.
+- The SDR and HDR curves **cross** (HDR higher at q1, lower at q90), so the model is not
+  applying a constant luminance offset. Whether that crossing matches the reference is a
+  question only the UPIQ measurement can answer.
+
+### Blocker on the real validation (named, not hand-waved)
+The UPIQ HDR subset (380 pairs + JOD truth) lives at `/mnt/v/datasets/upiq_extracted/` on
+the Linux dev box; this port was written on an aarch64 laptop with no `/mnt/v`. **The SROCC
+measurement against the published 0.812 has not been made** and must run where UPIQ lives
+(harness: `scripts/hdr/upiq_corr.py`). Until it does, no number from this crate may be
+reported as an HDR-VDP-2 score — the benchmark doc says so in its own second paragraph.
+
 ## hdrvdp (chunk 3 — pooling, Q/Q_MOS, and an end-to-end metric, zenmetrics#50, 2026-08-28)
 
 ### Added

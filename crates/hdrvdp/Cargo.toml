@@ -20,3 +20,12 @@ publish = false
 # in `src/fft.rs` and `src/interp.rs` — a few hundred lines that keep the
 # reference auditable against the paper without a dependency to pin, and keep
 # i686 / wasm / windows-arm builds trivially portable.
+
+[dev-dependencies]
+# Decoding the real corpus images for the end-to-end ladder example. Dev-only:
+# the library itself stays dependency-free.
+image = { workspace = true, features = ["png", "jpeg"] }
+zenmetrics-corpus = { path = "../zenmetrics-corpus" }
+
+[[example]]
+name = "score_corpus_ladder"
