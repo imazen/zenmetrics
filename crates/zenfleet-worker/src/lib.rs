@@ -1528,21 +1528,32 @@ pub fn exec_command_deadline(
             .write_all(&job_json)
             .map_err(|e| HandlerError::new(ErrorClass::WorkerLost, format!("write stdin: {e}")))?;
     }
+    // The reader threads DELIVER over channels rather than being `join()`ed.
+    // `read_to_end` returns only when every write-end of the pipe is closed,
+    // which includes any grandchild that inherited it — so a `join()` here is
+    // an unbounded wait on a process this function does not control. On the
+    // timeout path below that is exactly the hang the deadline exists to
+    // prevent (measured: a 1 s deadline returning after 30.00 s on Linux,
+    // where the group kill did not reach the grandchild). A channel lets the
+    // wait be bounded without leaking the threads: they finish on their own
+    // when the pipe finally closes, and drop their buffer into a dead channel.
     let mut out_pipe = child.stdout.take();
     let mut err_pipe = child.stderr.take();
-    let out_h = std::thread::spawn(move || {
+    let (out_tx, out_rx) = std::sync::mpsc::channel::<Vec<u8>>();
+    let (err_tx, err_rx) = std::sync::mpsc::channel::<Vec<u8>>();
+    std::thread::spawn(move || {
         let mut buf = Vec::new();
         if let Some(p) = out_pipe.as_mut() {
             let _ = p.read_to_end(&mut buf);
         }
-        buf
+        let _ = out_tx.send(buf);
     });
-    let err_h = std::thread::spawn(move || {
+    std::thread::spawn(move || {
         let mut buf = Vec::new();
         if let Some(p) = err_pipe.as_mut() {
             let _ = p.read_to_end(&mut buf);
         }
-        buf
+        let _ = err_tx.send(buf);
     });
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(deadline_secs);
     let mut timed_out = false;
@@ -1554,10 +1565,15 @@ pub fn exec_command_deadline(
                     timed_out = true;
                     // Kill the whole process group (child is its own leader via process_group(0))
                     // so grandchildren release the pipes; fall back to a direct kill elsewhere.
+                    // `--` matters: without it a `kill` implementation is free
+                    // to read the leading `-` of `-<pgid>` as an option and
+                    // refuse the whole invocation — silently, since the status
+                    // is discarded. BSD `kill` tolerates the bare form, procps
+                    // is the one to worry about.
                     #[cfg(unix)]
                     {
                         let _ = std::process::Command::new("kill")
-                            .args(["-9", &format!("-{}", child.id())])
+                            .args(["-9", "--", &format!("-{}", child.id())])
                             .status();
                     }
                     let _ = child.kill();
@@ -1583,8 +1599,18 @@ pub fn exec_command_deadline(
             }
         }
     };
-    let stdout = out_h.join().unwrap_or_default();
-    let stderr_b = err_h.join().unwrap_or_default();
+    // On the normal path the child has exited, so the pipes close promptly and
+    // this is the same blocking wait as before — but still bounded, so a
+    // grandchild that outlives its parent cannot pin the slot forever. On the
+    // timeout path the bound is short: whatever the kill did or did not reach,
+    // this function returns.
+    let collect_wait = if timed_out {
+        std::time::Duration::from_secs(2)
+    } else {
+        std::time::Duration::from_secs(60)
+    };
+    let stdout = out_rx.recv_timeout(collect_wait).unwrap_or_default();
+    let stderr_b = err_rx.recv_timeout(collect_wait).unwrap_or_default();
     if timed_out {
         let stderr = String::from_utf8_lossy(&stderr_b);
         let tail: String = stderr
@@ -3127,6 +3153,88 @@ mod tests {
         view.apply(done_row.clone());
         assert_eq!(view.get(&done_row.job_id).unwrap().ts, 2_000_000_000);
         assert_eq!(view.get(&done_row.job_id).unwrap().status, JobStatus::Done);
+    }
+
+    /// Reproduces the class of hang that made
+    /// `exec_command_deadline_kills_and_classifies_timeout` return after the
+    /// full 30 s on the ubuntu CI runner while passing on macOS.
+    ///
+    /// The deadline kill targets the child's process **group**, so it normally
+    /// reaches grandchildren too. A grandchild that has left the group (here,
+    /// explicitly via `setpgrp`; on the runner, by whatever made the group kill
+    /// miss) survives it — and because it inherited the stdout/stderr pipes,
+    /// `read_to_end` in the reader threads cannot return until it exits. Waiting
+    /// on those threads with `join()` is therefore an unbounded wait on a
+    /// process this function does not control, which is precisely what the
+    /// deadline exists to prevent.
+    ///
+    /// The fix is that the readers deliver over channels and are collected with
+    /// `recv_timeout`, so the function returns whatever the kill did or did not
+    /// reach. This test fails (30 s) against the `join()` version.
+    #[cfg(unix)]
+    #[test]
+    fn exec_command_deadline_returns_even_when_a_grandchild_escapes_the_kill() {
+        let dir = std::env::temp_dir().join(format!("zf_esc_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let marker = dir.join("escaped.pid");
+        let prog = dir.join("escape.sh");
+        // The backgrounded `perl` leaves the process group, records its pid so
+        // the test can prove it really escaped (and clean it up), and holds the
+        // inherited pipes open well past the deadline.
+        std::fs::write(
+            &prog,
+            format!(
+                "#!/bin/sh\nperl -e 'setpgrp; open(F, \">\", \"{}\") or exit 1; print F $$; \
+                 close F; sleep 30' &\nsleep 30\n",
+                marker.display()
+            ),
+        )
+        .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&prog, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let job = desired("cvvdp", b"probe");
+        let t0 = std::time::Instant::now();
+        let r = exec_command_deadline(prog.to_str().unwrap(), &job, 1);
+        let dt = t0.elapsed();
+
+        // Clean up the escapee before asserting, so a failure does not leave a
+        // stray 30 s process behind.
+        let escaped_pid = std::fs::read_to_string(&marker).ok();
+        if let Some(pid) = escaped_pid
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            let _ = std::process::Command::new("kill")
+                .args(["-9", pid])
+                .status();
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // Loud, not vacuous: if `perl` is missing or `setpgrp` failed, no
+        // grandchild escaped and this test would be testing nothing.
+        let pid = escaped_pid
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .expect("no grandchild escaped the process group — this test needs `perl`");
+        assert!(
+            pid.parse::<u32>().is_ok(),
+            "escapee wrote a non-pid marker: {pid:?}"
+        );
+
+        match r {
+            Err(e) => assert_eq!(e.class, ErrorClass::Timeout, "msg: {}", e.msg),
+            Ok(_) => panic!("a child past its deadline must not succeed"),
+        }
+        assert!(
+            dt.as_secs() < 10,
+            "returned in {dt:?} — an escaped grandchild holding the pipes must not \
+             extend the deadline"
+        );
     }
 
     #[test]

@@ -53,6 +53,34 @@ Workspace conventions per the global rules:
   and the CCFL-LCD emission table's five negative noise-floor samples (down to −3.53e-6) are
   integrated as-is rather than clamped.
 
+## zenfleet-worker (the ubuntu CI blocker, ROOT-CAUSED and fixed, 2026-08-28)
+
+### Fixed
+- **`exec_command_deadline` could hang for the child's full runtime instead of its
+  deadline** — the failure that has held `Compile (ubuntu-latest)` red since 2026-08-27
+  (`exec_command_deadline_kills_and_classifies_timeout`, "returned in 30.002861621s").
+  Root cause: the deadline kill targets the child's process *group*, but the stdout/stderr
+  reader threads were collected with `join()`, and `read_to_end` returns only when **every**
+  write-end of the pipe closes — including a grandchild the group kill missed. `join()` was
+  therefore an unbounded wait on a process the function does not control, which is exactly
+  what the deadline exists to prevent. The readers now deliver over `mpsc` channels and are
+  collected with `recv_timeout`, so the function returns whatever the kill did or did not
+  reach; the group kill also gained the `--` separator that keeps a `kill` implementation
+  from reading `-<pgid>` as an option.
+- **`exec_command_deadline_returns_even_when_a_grandchild_escapes_the_kill`** — a new
+  regression test that reproduces the failure class on any Unix by having the child
+  background a grandchild that leaves the process group (`perl -e 'setpgrp; …'`) while
+  holding the inherited pipes. **Mutation-verified**: reverting the collect to an unbounded
+  wait makes it fail with "returned in 30.178s", matching the CI symptom to the second.
+  The test asserts the escapee actually escaped (it records its pid) so it cannot go
+  vacuous if `perl` is absent, and it cleans the escapee up.
+
+### CI
+- **`cargo test -p hdrvdp --release` now runs**, in the Compile matrix (macOS +
+  windows-11-arm coverage for the hand-written f64 FFT / interpolation) and in the
+  CPU-metrics job. `cargo build --workspace --all-targets` was compiling the crate but
+  nothing ever executed its tests.
+
 ## hdrvdp (chunk 4a — first scores on real pixels, zenmetrics#50, 2026-08-28)
 
 ### Added
