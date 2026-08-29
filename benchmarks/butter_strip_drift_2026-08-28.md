@@ -33,7 +33,7 @@ behaviour holds far outside the single synthetic checkerboard it was measured on
 | | |
 |---|---|
 | date | 2026-08-28 |
-| repo commit | `f7ce8d2a1f4e0c311e8f03d2f7dc11d1c4429b8e` (`master`) |
+| repo commit measured | `f7ce8d2a1f4e0c311e8f03d2f7dc11d1c4429b8e` (`master` at run time; the harness + this record landed as `9706a4e5`) |
 | host | Mac mini, Apple M4 Pro, 12 CPU cores (8P/4E), 16 GPU cores, 24 GB unified, macOS 26.5.2, arm64 |
 | backend | **`cubecl-wgpu` → Metal** (`vram_cap_bytes()` = 8 GiB, the default cap — no live probe override) |
 | **CUDA** | **not available on this host — the CUDA envelope is NOT measured here** (see "What is still open") |
@@ -41,6 +41,13 @@ behaviour holds far outside the single synthetic checkerboard it was measured on
 | reduction | portable per-thread-partials (`fast-reduction` **off**, the crate default — Metal silently no-ops `Atomic<f32>::fetch_add`) |
 | harness | `crates/butteraugli-gpu/examples/strip_drift_corpus.rs` (committed with this record) |
 | raw data | `benchmarks/butter_strip_drift_2026-08-28.csv` |
+
+**Reading the CSV.** It has **2,118 rows**, one per `(pass, image, scale, quality)`; the
+**6,810 cells** quoted throughout are rows × `bodies_tested`. The body dimension is
+collapsed because it is provably inert: `body_invariant == yes` in 2,118 / 2,118 rows
+(identical `strip_score` AND `strip_p3` across every body tested), and `body_h_list` /
+`n_strips_list` record exactly which bodies each row covers. Re-running the commands below
+reproduces the un-collapsed per-body form.
 
 ### Reproducing
 
@@ -60,9 +67,9 @@ cargo run --release -p butteraugli-gpu --no-default-features \
 
 ## Grid
 
-Four passes, 6,810 rows total, 77 distinct geometries.
+Four passes, 6,810 cells total (2,118 CSV rows), 77 distinct geometries.
 
-| pass | rows | what it varies |
+| pass | cells | what it varies |
 |---|---:|---|
 | `native` | 4,320 | 95 images at native size × q{100,98,95,90,85,75,65,50,35,20,10,5} × body{auto,128,256,512} |
 | `size_ladder` | 1,290 | 16 images × Lanczos3 long-edge {128,256,512,1024,2048,3072} × q{95,85,70,50,30,15} × body{auto,128,256} |
