@@ -53,6 +53,32 @@ Workspace conventions per the global rules:
   and the CCFL-LCD emission table's five negative noise-floor samples (down to −3.53e-6) are
   integrated as-is rather than clamped.
 
+## hdrvdp (chunk 2b — band list, MATLAB-compatible imresize, contrast masking, zenmetrics#50, 2026-08-28)
+
+### Added
+- **`crates/hdrvdp/src/bands.rs`** — the flat band list the masking loop actually walks
+  (`[1, 4×H, 1]`: high-pass, oriented levels, low-pass), with upstream's
+  `oc = min(o, sz(b))` orientation clamp, plus the base-band nCSF filtering. The
+  reference's base-band FFT pad value is threaded into the test image's decomposition,
+  which is what upstream 2.1.3 changed to stop a false detection along the border.
+- **`crates/hdrvdp/src/resize.rs`** — MATLAB-compatible `imresize`: bicubic (`a = −0.5`),
+  **antialiasing on** (the kernel is stretched by `1/scale` when shrinking), `reflect2`
+  boundary, weights renormalised per output sample. A ½-scale reduction of a Nyquist
+  checkerboard leaves 0.075 of the ±1 pattern instead of the solid +1 point sampling gives.
+- **`crates/hdrvdp/src/masking.rs`** — the transducer band loop: mutual masking
+  (`min(|B_test|, |B_ref|)` box-blurred), the self / cross-orientation /
+  cross-neighbouring-band terms, per-pixel `N_nCSF` from the local adapting luminance,
+  `D = ex_diff / sqrt(N_nCSF^2p + N_mask²)`, the psychometric reshaping, and the per-plane
+  quality terms. 9 tests, including that the *same* distortion produces less signal on busy
+  content than on smooth (the point of masking) and that `do_masking = false` raises it.
+
+### Fixed
+- **`SteerablePyramid::band_frequencies` was off by one band** (introduced in chunk 2a): it
+  returned `H+1` entries covering only the oriented levels plus the low-pass. Upstream's
+  `2.^-(0:(spyrHt+1))·ppd/2` has **`H+2`** — the high-pass residual is band 0. The old
+  length silently shifted every band's CSF lookup and quality weight by an octave. The test
+  now pins the length against `Params::quality_band_freq` as well as the values.
+
 ## hdrvdp (chunk 2a — steerable pyramid, zenmetrics#50, 2026-08-28)
 
 ### Added

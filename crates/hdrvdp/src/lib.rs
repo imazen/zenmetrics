@@ -11,7 +11,7 @@
 //! field's reference HDR metric: 0.936 SROCC on AIC-HDR2025 and 0.812 on UPIQ,
 //! above every metric currently in this workspace.
 //!
-//! ## Status: chunk 2 of 6
+//! ## Status: chunk 2 of 6 (complete)
 //!
 //! This crate is being landed in chunks (see imazen/zenmetrics#50). **What is
 //! here now**, complete and unit-tested:
@@ -24,8 +24,8 @@
 //! | photoreceptor non-linearity (JND space) | [`photoreceptor`] | ✅ |
 //! | neural CSF | [`csf`] | ✅ |
 //! | achromatic response (stages 1–5) | [`pathway`] | ✅ |
-//! | steerable-pyramid decomposition | [`spyr`] | ✅ |
-//! | contrast masking | — | ⏳ chunk 2b |
+//! | steerable-pyramid decomposition | [`spyr`] + [`bands`] | ✅ |
+//! | contrast masking + per-band `D` | [`masking`] | ✅ |
 //! | probability pooling, `P_det` / `P_map` | — | ⏳ chunk 3 |
 //! | quality correlate `Q` / `Q_MOS` | — | ⏳ chunk 3 |
 //!
@@ -53,13 +53,16 @@
 //! pyramid comes from the MIT-licensed matlabPyrTools. See
 //! `THIRD-PARTY-NOTICES.md`.
 
+pub mod bands;
 pub mod csf;
 pub mod display;
 pub mod fft;
 pub mod interp;
+pub mod masking;
 pub mod params;
 pub mod pathway;
 pub mod photoreceptor;
+pub mod resize;
 pub mod sp3_filters;
 pub mod spectral;
 pub mod spyr;
@@ -68,6 +71,8 @@ pub use display::ColorEncoding;
 pub use params::{Params, pix_per_deg};
 pub use pathway::{Pathway, visual_pathway};
 pub use photoreceptor::Photoreceptor;
+pub use bands::{BandPyramid, decompose};
+pub use masking::Masking;
 pub use spyr::{Band, SteerablePyramid};
 
 /// Errors this crate can return.

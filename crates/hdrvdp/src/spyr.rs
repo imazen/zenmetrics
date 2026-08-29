@@ -99,18 +99,23 @@ impl SteerablePyramid {
         self.levels.len()
     }
 
-    /// Band centre frequencies in cycles/degree, indexed as HDR-VDP-2 indexes
-    /// its band loop: `[0]` is the finest oriented level and the last entry is
-    /// the low-pass residual, `2^-b · ppd / 2`.
+    /// Band centre frequencies in cycles/degree, in the order HDR-VDP-2's band
+    /// loop walks them: `[0]` is the **high-pass residual**, `[1..=H]` the
+    /// oriented levels fine → coarse, and `[H+1]` the low-pass residual, each
+    /// at `2^-b · ppd / 2`.
     ///
-    /// There is one entry per oriented level plus one for the low-pass residual
-    /// — `height_levels() + 1` in total. At the calibration resolution of
-    /// 30 pixels/degree this is exactly
-    /// `[15, 7.5, 3.75, 1.875, 0.9375, 0.4688, 0.2344]`, the frequencies
-    /// [`crate::params::Params::quality_band_freq`] tabulates.
+    /// That is `height_levels() + 2` entries — upstream's
+    /// `2.^-(0:(spyrHt+1)) · ppd/2`, matching `bands.sz = [1, 4×H, 1]`. Getting
+    /// this off by one silently shifts every band's CSF lookup and quality
+    /// weight by one octave.
+    ///
+    /// At the calibration resolution of 30 pixels/degree, a 5-level pyramid
+    /// gives exactly `[15, 7.5, 3.75, 1.875, 0.9375, 0.4688, 0.2344]` — the
+    /// frequencies [`crate::params::Params::quality_band_freq`] tabulates, which
+    /// is how we know the 2.2 quality fit was done at 30 ppd.
     #[must_use]
     pub fn band_frequencies(&self, pix_per_deg: f64) -> Vec<f64> {
-        (0..=self.height_levels())
+        (0..self.height_levels() + 2)
             .map(|b| 2f64.powi(-(b as i32)) * pix_per_deg / 2.0)
             .collect()
     }
@@ -608,8 +613,15 @@ mod tests {
         let pyr = build(&ramp_plus_texture(w, h), w, h, None);
         assert_eq!(pyr.height_levels(), 5);
         let f = pyr.band_frequencies(30.0);
-        let want = [15.0, 7.5, 3.75, 1.875, 0.9375, 0.46875];
+        // 5 oriented levels → 7 entries: high-pass, 5 levels, low-pass. These
+        // are `Params::quality_band_freq` verbatim.
+        let want = [15.0, 7.5, 3.75, 1.875, 0.9375, 0.46875, 0.234375];
+        assert_eq!(f.len(), pyr.height_levels() + 2);
         assert_eq!(f.len(), want.len());
+        assert_eq!(
+            f.len(),
+            crate::params::Params::default().quality_band_freq.len()
+        );
         for (a, b) in f.iter().zip(want) {
             assert!((a - b).abs() < 1e-12, "{f:?}");
         }
