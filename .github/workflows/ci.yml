@@ -230,6 +230,12 @@ jobs:
           cargo build -p cvvdp --release
           cargo build -p cvvdp --no-default-features --features "alloc parallel" --release
           cargo test  -p cvvdp --release
+      # hdrvdp is the f64 CPU reference port of HDR-VDP-2.2 (zenmetrics#50):
+      # no features, no dependencies, no GPU runtime. The workspace build above
+      # compiles it but nothing ran its tests, so they are run here — including
+      # `tests/corpus_ladder.rs`, the end-to-end gate on real corpus pixels.
+      - name: Test hdrvdp pure-CPU reference port (no GPU runtime)
+        run: cargo test -p hdrvdp --release
       - name: Build CLI (CPU metrics only — no GPU runtime needed at compile time)
         run: cargo build -p zenmetrics-cli --no-default-features --features cpu-metrics --release
 
@@ -787,6 +793,17 @@ jobs:
             --no-default-features \
             --features all-metrics,cpu-metrics,wgpu,pixels,encoded \
             --test it -- backend_matrix cpu_dispatch cpu_ssim2_pu cpu_zensim_pu
+      # hdrvdp — the f64 CPU reference port of HDR-VDP-2.2 (zenmetrics#50). No
+      # features, no dependencies, no GPU runtime, so it belongs on a CPU job.
+      # It runs HERE rather than only next to the cvvdp CPU tests in the
+      # Compile job because that job's earlier "fleet-orchestration tests" step
+      # is red on ubuntu for a pre-existing, unrelated reason (the
+      # zenfleet-worker watchdog test — see CLAUDE.md "Known Bugs"), which
+      # skips every step after it. This job is green, so the gate is real.
+      # Includes `tests/corpus_ladder.rs`, the end-to-end score on real corpus
+      # pixels.
+      - name: hdrvdp reference port (pure CPU)
+        run: cargo test -p hdrvdp --release
 
   # Linting + formatting.
   lint:
