@@ -218,7 +218,8 @@ pub fn extract_features_regime(
     // so it must see the RAW image — this fn's external padding would diverge
     // from the `v2_ab_extract` foldapp/foldapp2 driver on tiny cells (regime
     // purity).
-    if regime == R::Folded720Append || regime == R::Folded720Append2 {
+    if regime == R::Folded720Append || regime == R::Folded720Append2
+        || regime == R::Folded720Append2Carriers {
         return extract_features_folded_streaming(reference, distorted, regime);
     }
     // Pad both identically to the 64px pyramid floor (no-op when already ≥64).
@@ -242,7 +243,7 @@ pub fn extract_features_regime(
         R::Extended => (true, false),
         R::WithIw | R::V2Ab => (true, true),
         // Handled by the early return above (streaming-only, no v1 block).
-        R::Folded720Append | R::Folded720Append2 => {
+        R::Folded720Append | R::Folded720Append2 | R::Folded720Append2Carriers => {
             unreachable!("folded streaming early-returns above")
         }
     };
@@ -293,9 +294,16 @@ fn extract_features_folded_streaming(
     use std::cell::RefCell;
     use zensim::feature_v2::{V2NewFeatureToggles, V2Scratch};
     use zensim::{RgbSlice, Zensim, ZensimProfile};
-    let append2 = match regime {
-        crate::metrics::ZensimFeatureRegime::Folded720Append => false,
-        crate::metrics::ZensimFeatureRegime::Folded720Append2 => true,
+    let (append2, v1_pools) = match regime {
+        crate::metrics::ZensimFeatureRegime::Folded720Append => {
+            (false, zensim::feature_v2::V1PoolsMode::Off)
+        }
+        crate::metrics::ZensimFeatureRegime::Folded720Append2 => {
+            (true, zensim::feature_v2::V1PoolsMode::Off)
+        }
+        crate::metrics::ZensimFeatureRegime::Folded720Append2Carriers => {
+            (true, zensim::feature_v2::V1PoolsMode::Carriers)
+        }
         other => return Err(format!("zensim: not a folded streaming regime: {other:?}").into()),
     };
     thread_local! {
@@ -317,6 +325,7 @@ fn extract_features_folded_streaming(
                     &dst,
                     V2NewFeatureToggles {
                         append2_block: append2,
+                        v1_pools,
                         ..V2NewFeatureToggles::default()
                     },
                     &mut s.borrow_mut(),
@@ -401,7 +410,10 @@ pub fn extract_features_regime_with_ctx(
     // No ctx path for the folded regimes: C5 deleted the cached-reference
     // machinery, and ctx.padded diverges from the streaming walk's own sub-64
     // pad. Callers use extract_features_regime (per-pair, thread-local scratch).
-    if regime == R::Folded720Append || regime == R::Folded720Append2 {
+    if regime == R::Folded720Append
+        || regime == R::Folded720Append2
+        || regime == R::Folded720Append2Carriers
+    {
         return Err(
             "zensim: folded streaming regimes have no ref-ctx path — call extract_features_regime"
                 .into(),
@@ -424,7 +436,7 @@ pub fn extract_features_regime_with_ctx(
         R::Extended => (true, false),
         R::WithIw | R::V2Ab => (true, true),
         // Rejected by the early return above (no ctx path for the folded regimes).
-        R::Folded720Append | R::Folded720Append2 => {
+        R::Folded720Append | R::Folded720Append2 | R::Folded720Append2Carriers => {
             unreachable!("folded streaming rejected above")
         }
     };
@@ -537,6 +549,63 @@ mod tests {
     /// pair, and the append2 tail must be finite and bounded [0,1] (the SDR
     /// HL bins' exact 0 lies inside that range). Covers sub-64 + odd dims
     /// like the 924 test.
+    /// The carriers regime = the same streaming call with
+    /// `V1PoolsMode::Carriers`: bit-identical to a direct call, 944 wide,
+    /// exactly the ten carrier slots differ from the plain 944 regime.
+    #[test]
+    fn folded944carriers_matches_driver_args() {
+        use zensim::feature_v2::{V1PoolsMode, V2NewFeatureToggles, V2Scratch};
+        use zensim::{RgbSlice, Zensim, ZensimProfile};
+        for (w, h) in [(96u32, 80u32), (127, 93)] {
+            let reference = synth(21, w, h);
+            let distorted = synth(22, w, h);
+            let ours = extract_features_regime(
+                &reference,
+                &distorted,
+                crate::metrics::ZensimFeatureRegime::Folded720Append2Carriers,
+            )
+            .unwrap();
+            let plain = extract_features_regime(
+                &reference,
+                &distorted,
+                crate::metrics::ZensimFeatureRegime::Folded720Append2,
+            )
+            .unwrap();
+            let r3: &[[u8; 3]] = bytemuck::cast_slice(&reference.pixels);
+            let d3: &[[u8; 3]] = bytemuck::cast_slice(&distorted.pixels);
+            let mut scratch = V2Scratch::new();
+            let direct = Zensim::new(ZensimProfile::codec_target())
+                .with_parallel(false)
+                .compute_folded720_append_features_streaming(
+                    &RgbSlice::new(r3, w as usize, h as usize),
+                    &RgbSlice::new(d3, w as usize, h as usize),
+                    V2NewFeatureToggles {
+                        append2_block: true,
+                        v1_pools: V1PoolsMode::Carriers,
+                        ..V2NewFeatureToggles::default()
+                    },
+                    &mut scratch,
+                )
+                .unwrap();
+            assert_eq!(ours.len(), 944, "{w}×{h}");
+            for (i, (a, b)) in ours.iter().zip(direct.features()).enumerate() {
+                assert_eq!(a.to_bits(), b.to_bits(), "slot {i} differs ({w}×{h})");
+            }
+            let mut live = 0;
+            for (i, (a, b)) in ours.iter().zip(plain.iter()).enumerate() {
+                if V1PoolsMode::CARRIER_SLOTS.contains(&i) {
+                    assert_eq!(*b, 0.0, "plain 944 slot {i} must be the structural 0");
+                    if *a != 0.0 {
+                        live += 1;
+                    }
+                } else {
+                    assert_eq!(a.to_bits(), b.to_bits(), "non-carrier slot {i} differs ({w}×{h})");
+                }
+            }
+            assert!(live >= 8, "{w}×{h}: only {live} carrier slots live on a distorted pair");
+        }
+    }
+
     #[test]
     fn folded944_matches_driver_args() {
         use zensim::feature_v2::{V2NewFeatureToggles, V2Scratch};

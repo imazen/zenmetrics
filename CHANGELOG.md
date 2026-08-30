@@ -16,6 +16,14 @@ Workspace conventions per the global rules:
 ## zenmetrics-cli
 
 ### Changed
+- **New zensim feature metric `zensim-foldapp2carriers`** (regime `folded720append2carriers`,
+  944 wide): the streaming 944 extraction with v1's ten CARRIER slots emitted live in
+  `f156..372` (`V1PoolsMode::Carriers`, zensim `f19b8469` — the `fused944native` regime;
+  art_l8 f178/190/196/226, masked_art_4th f231/237/243, iw_art_4th f303/321/333, every
+  other pool slot 0). Same width as `zensim-foldapp2`, a different regime — the JSONL
+  `regime` tag is the purity marker. SDR-only: the HDR arm emits an explicit error row.
+  Gate `folded944carriers_matches_driver_args` (bit-identical to the direct call; exactly
+  the ten slots differ from the plain 944 regime).
 - **aom-rs datagen executor image rebuilt on zenav1-aom `0c92ef1f`** (KB-41 roots
   #18-#21: the cpu-4/5 screen residuals — AB split-ctx reuse gate, output-run txfm ctx
   stamp, visible-only predict-skip SSE, searched entropy ctx for pick-skip'd txbs —

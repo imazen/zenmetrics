@@ -1013,6 +1013,16 @@ pub enum ZensimFeatureRegime {
     /// REGIME PURITY: never column-mix with 924/720/v1 parquets.
     #[value(name = "folded720append2")]
     Folded720Append2,
+    /// 944 features — `Folded720Append2` with v1's ten CARRIER slots emitted
+    /// LIVE in `f156..372` (`V1PoolsMode::Carriers`, zensim `f19b8469`:
+    /// art_l8 f178/190/196/226, masked_art_4th f231/237/243, iw_art_4th
+    /// f303/321/333 — bit-identical to v1's 372 at exact widths; every other
+    /// pool slot stays 0). Same width as `Folded720Append2`, a DIFFERENT
+    /// regime (the `fused944native` one) — REGIME PURITY: never column-mix
+    /// with zeroed-block 944 rows; the JSONL `regime` tag is the marker.
+    /// SDR-only (no HDR route yet; the HDR arm rejects it explicitly).
+    #[value(name = "folded720append2carriers")]
+    Folded720Append2Carriers,
 }
 
 impl ZensimFeatureRegime {
@@ -1026,6 +1036,7 @@ impl ZensimFeatureRegime {
             ZensimFeatureRegime::V2Ab => 372 + 348,
             ZensimFeatureRegime::Folded720Append => 720 + 204,
             ZensimFeatureRegime::Folded720Append2 => 720 + 204 + 20,
+            ZensimFeatureRegime::Folded720Append2Carriers => 720 + 204 + 20,
         }
     }
 }
@@ -1044,7 +1055,9 @@ impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
             // Folded720Append(2) likewise have no GPU-umbrella equivalent (the
             // folded streaming walk is CPU-only); the CPU path handles them
             // directly and never converts.
-            ZensimFeatureRegime::Folded720Append | ZensimFeatureRegime::Folded720Append2 => {
+            ZensimFeatureRegime::Folded720Append
+            | ZensimFeatureRegime::Folded720Append2
+            | ZensimFeatureRegime::Folded720Append2Carriers => {
                 zenmetrics_api::zensim::ZensimFeatureRegime::WithIw
             }
         }

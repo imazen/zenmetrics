@@ -105,7 +105,7 @@ fn metric_kind(metric: &str) -> Result<MetricKind, Box<dyn Error>> {
 fn is_zensim_feature_metric(metric: &str) -> bool {
     matches!(
         metric,
-        "zensim" | "zensim-gpu" | "zensim-foldapp" | "zensim-foldapp2"
+        "zensim" | "zensim-gpu" | "zensim-foldapp" | "zensim-foldapp2" | "zensim-foldapp2carriers"
     )
 }
 
@@ -122,6 +122,9 @@ fn zensim_regime_for_metric(
     use crate::metrics::ZensimFeatureRegime as R;
     match metric {
         "zensim-foldapp2" => (R::Folded720Append2, "folded720append2", true),
+        // 944 with v1's ten carrier slots LIVE (`V1PoolsMode::Carriers`; the
+        // `fused944native` regime) — SDR only.
+        "zensim-foldapp2carriers" => (R::Folded720Append2Carriers, "folded720append2carriers", true),
         "zensim-foldapp" => (R::Folded720Append, "folded720append", true),
         _ => (R::V2Ab, "v2-ab", false),
     }
@@ -1289,6 +1292,16 @@ fn score_hdr_decoded_variant(
         // contract as the SDR folded arm — routed to the absolute-nits extractor
         // (crate::hdr::hdr_foldapp_features; wired 2026-08-26 for the hdrfeat944
         // wave). Gated on cpu-metrics like the SDR arm.
+        #[cfg(feature = "cpu-metrics")]
+        if *metric == "zensim-foldapp2carriers" {
+            // No absolute-nits route for the live pool blocks yet — an explicit
+            // error row, never a silent SDR extraction on an HDR pair.
+            rows.push(mk_row(
+                sha,
+                serde_json::json!({ "metric": metric, "error": "zensim-foldapp2carriers has no HDR route (SDR-only regime)" }),
+            )?);
+            continue;
+        }
         #[cfg(feature = "cpu-metrics")]
         if *metric == "zensim-foldapp" || *metric == "zensim-foldapp2" {
             let (_, regime_tag, _) = zensim_regime_for_metric(metric);
