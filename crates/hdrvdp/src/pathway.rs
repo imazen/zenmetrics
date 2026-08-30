@@ -81,7 +81,6 @@ pub fn visual_pathway(
         nits,
         width,
         height,
-        par,
         pn,
         lmsr,
         surround,
@@ -106,13 +105,13 @@ pub(crate) fn mtf_filter_for(width: usize, height: usize, par: &Params) -> Optio
 }
 
 /// [`visual_pathway`] with the MTF filter (from [`mtf_filter_for`]) supplied
-/// by the caller so an image pair shares one.
+/// by the caller so an image pair shares one. The filter is the only thing
+/// the pathway body ever read from `Params`, so the parameters stay outside.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn visual_pathway_with_filter(
     nits: &[f64],
     width: usize,
     height: usize,
-    par: &Params,
     pn: &Photoreceptor,
     lmsr: &[[f64; 4]],
     surround: &[f64],

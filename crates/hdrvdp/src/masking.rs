@@ -84,10 +84,16 @@ pub fn mutual_masking(test: &Band, reference: &Band) -> Band {
 
 /// 3×3 box blur with `conv2(..., 'same')` semantics — zero outside the image,
 /// so border pixels see a *smaller* sum divided by the same 9.
+///
+/// Interior pixels take a branch-free path that performs the identical nine
+/// additions in the identical `(dy, dx)` row-major order (starting from the
+/// same `0.0` accumulator), so it is bit-identical to the bounds-checked loop,
+/// which still handles the borders.
 fn box3x3(src: &[f64], w: usize, h: usize) -> Vec<f64> {
     let mut out = vec![0.0; w * h];
-    for y in 0..h {
-        for x in 0..w {
+
+    let border = |out: &mut Vec<f64>, y: usize, xs: core::ops::Range<usize>| {
+        for x in xs {
             let mut acc = 0.0;
             for dy in -1isize..=1 {
                 let sy = y as isize + dy;
@@ -103,6 +109,36 @@ fn box3x3(src: &[f64], w: usize, h: usize) -> Vec<f64> {
                 }
             }
             out[y * w + x] = acc / 9.0;
+        }
+    };
+
+    if w >= 3 && h >= 3 {
+        border(&mut out, 0, 0..w);
+        for y in 1..h - 1 {
+            let up = &src[(y - 1) * w..y * w];
+            let mid = &src[y * w..(y + 1) * w];
+            let dn = &src[(y + 1) * w..(y + 2) * w];
+            border(&mut out, y, 0..1);
+            let orow = &mut out[y * w..(y + 1) * w];
+            for x in 1..w - 1 {
+                let acc = 0.0
+                    + up[x - 1]
+                    + up[x]
+                    + up[x + 1]
+                    + mid[x - 1]
+                    + mid[x]
+                    + mid[x + 1]
+                    + dn[x - 1]
+                    + dn[x]
+                    + dn[x + 1];
+                orow[x] = acc / 9.0;
+            }
+            border(&mut out, y, w - 1..w);
+        }
+        border(&mut out, h - 1, 0..w);
+    } else {
+        for y in 0..h {
+            border(&mut out, y, 0..w);
         }
     }
     out

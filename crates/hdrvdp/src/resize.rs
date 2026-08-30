@@ -118,32 +118,59 @@ pub fn imresize(
         return image.to_vec();
     }
 
-    // Horizontal pass: width → out_width.
+    // Horizontal pass: width → out_width. Slicing the per-output weight/index
+    // rows keeps the tap loop bounds-check-free; the accumulation order per
+    // output is unchanged (taps ascending).
     let hc = contributions(width, out_width);
     let mut tmp = vec![0.0; out_width * height];
-    for y in 0..height {
-        let src = &image[y * width..y * width + width];
-        for x in 0..out_width {
+    for (row, src) in tmp
+        .chunks_exact_mut(out_width)
+        .zip(image.chunks_exact(width))
+    {
+        for (x, o) in row.iter_mut().enumerate() {
             let base = x * hc.taps;
+            let wr = &hc.weights[base..base + hc.taps];
+            let ir = &hc.indices[base..base + hc.taps];
             let mut acc = 0.0;
-            for t in 0..hc.taps {
-                acc += hc.weights[base + t] * src[hc.indices[base + t]];
+            for (w, &i) in wr.iter().zip(ir) {
+                acc += w * src[i];
             }
-            tmp[y * out_width + x] = acc;
+            *o = acc;
         }
     }
 
-    // Vertical pass: height → out_height.
+    // Vertical pass: height → out_height. Blocked 8 outputs wide so the tap
+    // loop reads 8 adjacent columns per source row (whole cache lines) and
+    // LLVM can vectorise across outputs; each output still accumulates its
+    // taps in ascending order, so this is bit-identical to the direct loop.
     let vc = contributions(height, out_height);
     let mut out = vec![0.0; out_width * out_height];
-    for y in 0..out_height {
+    const BLK: usize = 8;
+    for (y, orow) in out.chunks_exact_mut(out_width).enumerate() {
         let base = y * vc.taps;
-        for x in 0..out_width {
-            let mut acc = 0.0;
-            for t in 0..vc.taps {
-                acc += vc.weights[base + t] * tmp[vc.indices[base + t] * out_width + x];
+        let wr = &vc.weights[base..base + vc.taps];
+        let ir = &vc.indices[base..base + vc.taps];
+        let mut x = 0usize;
+        while x + BLK <= out_width {
+            let mut acc = [0.0f64; BLK];
+            for (w, &i) in wr.iter().zip(ir) {
+                let s: &[f64; BLK] = tmp[i * out_width + x..i * out_width + x + BLK]
+                    .try_into()
+                    .expect("BLK-sized window");
+                for (a, v) in acc.iter_mut().zip(s) {
+                    *a += w * v;
+                }
             }
-            out[y * out_width + x] = acc;
+            orow[x..x + BLK].copy_from_slice(&acc);
+            x += BLK;
+        }
+        while x < out_width {
+            let mut acc = 0.0;
+            for (w, &i) in wr.iter().zip(ir) {
+                acc += w * tmp[i * out_width + x];
+            }
+            orow[x] = acc;
+            x += 1;
         }
     }
     out
