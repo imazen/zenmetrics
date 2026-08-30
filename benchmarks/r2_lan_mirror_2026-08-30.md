@@ -38,6 +38,11 @@ which ones exist differs per dataset:
 
 Two consequences that shaped the mirror:
 
+> **This decision was REVISED mid-pass — see the note at the end of this
+> section.** The redundancy argument below holds only while the `encodes/`
+> mirror is expected to finish; once it was deferred (§3b), the box tars stopped
+> being redundant and became the primary path.
+
 - **The box tars for the five regrouped datasets are byte-redundant with their
   `encodes/` objects** (`mandfix2-zenjpeg` totals 47,450,193,920 B — exactly the
   sum of that dataset's three `variants.<split>.tar`). Mirroring all of them
@@ -55,8 +60,27 @@ Two consequences that shaped the mirror:
 
 So the minimal *complete* byte set is: **`encodes/` for the five datasets that
 have it, plus the 32 box tars of the two that do not, plus the byte-range
-indexes** — and that is what was mirrored, with `mandfix2-zenjpeg`'s 8 boxes
-added as insurance for the one dataset that has no second path.
+indexes** — and that is what the pass started on, with `mandfix2-zenjpeg`'s 8
+boxes added as insurance for the one dataset that has no second path.
+
+**REVISION (made mid-pass, after the load ceiling in §3 forced the `encodes/`
+lanes to stop).** With `encodes/` deferred for four datasets, "redundant" no
+longer described the box tars — for `zenwebp_lossy`, `zenpng_lossless` and
+`zenjxl_lossless` the tar is now the *only* LAN-resident byte path, and each of
+those three already has its `variant_index.tsv` mirrored, so the tar-range fetch
+works the moment the tar lands. The choice became:
+
+| to complete those three datasets | objects | GiB |
+|---|--:|--:|
+| their `encodes/` prefixes | **1,290,639** | 89.69 |
+| their box tars (`mandfix2-zenpng`, `mandfix2-zenwebp`, `jxl-modular`) | **21** | 97.12 |
+
+Nearly the same bytes, five orders of magnitude fewer objects — and object rate,
+not bytes, is what this store cannot absorb (§3). Those 21 tars were therefore
+moved from *registered-redundant* into the mirror queue. With them, **every
+dataset in the corpus is byte-complete and fetchable on the LAN store through
+the tar + index path**, and the `encodes/` prefixes become a convenience
+(a plain GET instead of a ranged GET) rather than a prerequisite.
 
 ## 2. Inventory — built from usage, not guesswork
 
@@ -79,7 +103,10 @@ Consumers were found by grepping `s3://` reads across `zenmetrics/scripts/jobsys
 | `zentrain/canonical/2026-06-27/*/{_MANIFEST.json,pairs.*,train|validate|test}.parquet` | 8.30 | 50 | build_canonical/verify_canonical; every picker script | **MIRRORED+VERIFIED** |
 | `zentrain/canonical/2026-06-27/originals/` | 1.03 | 3 | corpus originals | **MIRRORED+VERIFIED** |
 | `codec-corpus/clean-picker-corpus-2026-06-26/` | 1.02 | 4,497 | pairs.*.parquet ref_path | **MIRRORED+VERIFIED** |
-| `zentrain/jxl-lossy/runs/mandfix2-zenjpeg-1782584881/variants/` | 44.19 | 8 | INSURANCE for zenjpeg encodes (no tar index) | **IN FLIGHT (gentle lane)** |
+| `zentrain/jxl-lossy/runs/mandfix2-zenjpeg-1782584881/variants/` | 44.19 | 8 | INSURANCE for zenjpeg encodes (no tar index) | **MIRRORED+VERIFIED** |
+| `zentrain/jxl-lossy/runs/mandfix2-zenpng-1782584881/variants/` | 12.81 | 2 | tar-range bytes for zenpng_lossless (its index is mirrored; encodes deferred) | **QUEUED (tars3 lane)** |
+| `zentrain/jxl-lossy/runs/mandfix2-zenwebp-1782584881/variants/` | 29.71 | 9 | tar-range bytes for zenwebp_lossy+lossless (index mirrored; encodes deferred) | **QUEUED (tars3 lane)** |
+| `zentrain/jxl-lossy/runs/jxl-modular-1782596759/variants/` | 54.60 | 10 | tar-range bytes for zenjxl_lossless (index mirrored; encodes deferred) | **QUEUED (tars3 lane)** |
 
 ### P1 — eval instruments + regime training tables (local `/mnt/v` mirrors exist; the LAN copy makes them fleet-addressable)
 
@@ -121,7 +148,6 @@ Consumers were found by grepping `s3://` reads across `zenmetrics/scripts/jobsys
 | bucket/prefix | GiB | objects | what reads it | status |
 |---|--:|--:|---|---|
 | `zentrain/canonical/2026-06-27/*/variants.<split>.tar` | 141.30 | 15 | NO CONSUMER FOUND; byte-redundant with encodes/ | **NOT-MIRRORED** |
-| `zentrain/jxl-lossy/runs/{jxl-modular,mandfix2-zenwebp,mandfix2-zenpng}/variants/` | 97.12 | 21 | byte-redundant with those encodes/; each has a mirrored variant_index.tsv | **NOT-MIRRORED** |
 | `zentrain/kadis-700k-gpu/distorted/` | 197.43 | 699,999 | rescore-from-links PNGs; canonical parquet IS mirrored | **NOT-MIRRORED** |
 | `codec-corpus/picker-sweep-2026-06-22/` | 165.91 | 6,069 | superseded by canonical/2026-06-27 | **NOT-MIRRORED** |
 | `codec-corpus/kadis-hdr-2026-07-13/` | 66.54 | 12,695 | HDR distortion corpus; no active LAN reader | **NOT-MIRRORED** |
@@ -176,7 +202,16 @@ background volume work whose *read* amplification, not the writes, was the thing
 saturating the box.
 
 All lanes were stopped immediately — this box runs the household's media, which
-outranks the mirror unconditionally. The operational rule this establishes:
+outranks the mirror unconditionally. **Read `%iowait` and `%idle`, not load average, when judging this box.** During
+the healthy large-object phase it sat at load 16-19 with **94.5 % CPU idle and
+0.3 % iowait** — the load figure counts IO-blocked threads and runs high here
+even when nothing is strained. The incident looked different in the way that
+matters: load 30.7 *with* **48.9 % iowait and 37 % idle**. The committed gate in
+`scripts/lanstore/mirror_r2.sh` still keys on load average because it is one
+cheap `ssh` and errs toward pausing when it need not; when it pauses on a box
+whose iowait is near zero, that is the gate being conservative, not a signal.
+
+The operational rule this establishes:
 **large sequential objects are cheap for this store; sustained small-object PUT
 rates are not.** A small-object lane must be load-gated (poll
 `/proc/loadavg` on the tower and pause above ~12) and run at a fraction of the
@@ -313,16 +348,7 @@ listings, which are stable.
 | `zentrain/kadis-700k-gpu/canonical/` | 1 / 1 | 936,367,503 / 936,367,503 | **YES** | 3/3 sha256 range OK (head+mid+tail) |
 | `zentrain/canonical/2026-06-27/zenpng_lossless/encodes/` | 76,449 / 27,500 | 13,691,411,533 / 6,165,342,628 | **PARTIAL** | interrupted mid-upload by the load stop (§3); resumes by diff |
 | `zentrain/canonical/2026-06-27/zenjxl_lossless/encodes/` | 269,820 / 0 | 58,419,699,144 / 0 | **DEFERRED** | not started — see §5b (tower-local ingest once the mover drains) |
-
-Two checks reach past "the two stores agree" to "the LAN copy is the artifact the
-project wrote down months ago":
-
-- the **21 canonical parquets** match the per-file sha256 recorded in each
-  dataset's `_MANIFEST.json` **at build time, 2026-06-27** — 0 mismatch;
-- `canonical-2026-05-21/features/cvvdp_iwssim_LARGE_372col.parquet` hashes in
-  full to `14c205332701b5ff6f2842a8d60f8ac1282f8be3d5cd89c11700e1e4b864a20f`,
-  the value written into `zensim/CLAUDE.md` when that file was extracted in
-  May 2026 (85,519,403 B).
+| `zentrain/jxl-lossy/runs/mandfix2-zenjpeg-1782584881/variants/` | 8 / 8 | 47,450,193,920 / 47,450,193,920 | **YES** | 6/6 sha256 range OK (head+tail on 3 of 8 boxes) |
 
 Large objects (multi-GB tars, >64 MB parquets) are spot-checked by **byte
 range** rather than whole-file hash: identical ranges are fetched from both
