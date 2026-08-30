@@ -35,7 +35,8 @@ end-to-end FNV digest per size, unchanged from baseline through every commit:
 | + FFT plans (5c156c2e) | 0.008 | 0.017 | 0.066 | 1.112 | 18.468 |
 | + invariant hoists (624615e8) | 0.008 | 0.016 | 0.061 | 1.047 | 17.472 |
 | + box3x3/imresize (5cc2c63d) | 0.008 | 0.016 | 0.057 | 0.973 | 16.295 |
-| **total speedup** | **2.00×** | **4.88×** | **5.00×** | **4.93×** | **5.03×** |
+| + conv pad-row dedup (see git log) | 0.008 | 0.015 | 0.055 | 0.946 | 15.737 |
+| **total speedup** | **2.00×** | **5.20×** | **5.18×** | **5.07×** | **5.20×** |
 
 97² is the odd-size (Bluestein FFT) probe: the FFT-plan commit alone was 3.06×
 there because the direct code rebuilt the chirp *and* re-transformed the chirp
@@ -82,6 +83,10 @@ amortise it, but that needs an API for reusable state — owner call, see below.
    for the mutual-masking blur (identical nine additions in identical order);
    imresize per-output weight rows sliced (kills bounds checks) and the
    vertical pass blocked 8 wide. ~1.07× more.
+6. **conv_fft_real pad-row dedup**: every padded row below the image is the
+   same all-`pad_value` row, and a DFT is a deterministic function of its
+   input — transform one, copy into the rest (forward row pass only).
+   ~1.03× more.
 
 ## Profile evidence
 
@@ -110,6 +115,12 @@ the bit-identically-irreducible parts, see below.)
   re-baseline the metric.
 - **Real-input FFT (rfft) / split-radix / radix-4**: all reorder or refactor
   the float DAG → different bits. Same owner gate.
+- **corr_dn micro-variants** (indexed `for j` instead of `iter_mut().zip`,
+  BLK 8 → 16): both measured *neutral* on the 256² kernel bench (57.9–61.3
+  Mops/s across variants, within run-to-run noise) — LLVM already
+  SLP-vectorises the products and the ordered per-output `fadd` chain is the
+  floor; reverted. The ordered-reduction serialisation is the bit-exactness
+  tax; only reassociation (owner-gated) lifts it.
 - **Uniform-grid direct indexing instead of `interp1_linear`'s binary search**
   in the masking CSF lookup (~2 %): the grid is only uniform up to libm
   rounding (`log10(10^x)`), so direct index computation can pick a different

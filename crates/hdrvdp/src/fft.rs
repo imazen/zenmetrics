@@ -289,10 +289,17 @@ fn fft2_planned(buf: &mut [Complex], width: usize, height: usize, wplan: &Plan, 
     for row in buf.chunks_exact_mut(width) {
         wplan.run(row);
     }
-    // Columns in blocks of 8: one Complex is 16 bytes, so 8 adjacent columns
-    // span a whole cache line per touched row instead of using 1/8th of it.
-    // Each column still gets the identical 1-D transform — columns are
-    // independent, so the grouping cannot change a single bit.
+    fft2_cols_planned(buf, width, height, hplan);
+}
+
+/// The column half of [`fft2_planned`], split out so [`conv_fft_real`] can run
+/// a smarter row pass first.
+///
+/// Columns go in blocks of 8: one Complex is 16 bytes, so 8 adjacent columns
+/// span a whole cache line per touched row instead of using 1/8th of it. Each
+/// column still gets the identical 1-D transform — columns are independent, so
+/// the grouping cannot change a single bit.
+fn fft2_cols_planned(buf: &mut [Complex], width: usize, height: usize, hplan: &Plan) {
     const CB: usize = 8;
     let mut cols = vec![Complex::default(); height * CB];
     let mut x = 0usize;
@@ -421,7 +428,24 @@ pub fn conv_fft_real(
 
     // One plan pair serves the forward and the inverse transform.
     let (wplan, hplan) = (Plan::new(pad_w), Plan::new(pad_h));
-    fft2_planned(&mut buf, pad_w, pad_h, &wplan, &hplan);
+
+    // Forward row pass, exploiting the padding structure: every row below the
+    // image (`height..pad_h`) is the same all-`pad_value` row, and a DFT is a
+    // deterministic function of its input — so those rows' transforms are
+    // bit-identical. Transform one and copy it into the rest, then run the
+    // column pass as usual.
+    for row in buf[..height * pad_w].chunks_exact_mut(pad_w) {
+        wplan.run(row);
+    }
+    if height < pad_h {
+        let (first, rest) = buf[height * pad_w..].split_at_mut(pad_w);
+        wplan.run(first);
+        for row in rest.chunks_exact_mut(pad_w) {
+            row.copy_from_slice(first);
+        }
+    }
+    fft2_cols_planned(&mut buf, pad_w, pad_h, &hplan);
+
     for (b, f) in buf.iter_mut().zip(filter) {
         *b = b.scale(*f);
     }
