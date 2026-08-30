@@ -68,44 +68,44 @@ Consumers were found by grepping `s3://` reads across `zenmetrics/scripts/jobsys
 
 | bucket/prefix | GiB | objects | what reads it | status |
 |---|--:|--:|---|---|
-| `zentrain/canonical/2026-06-27/zenwebp_lossless/encodes/` | 6.48 | 40,473 | resolve_bigcodec_pair_uris.py object-mode; fetch_bigcodec_bytes.py | **PENDING** |
-| `zentrain/canonical/2026-06-27/zenpng_lossless/encodes/` | 12.75 | 76,449 | same | **PENDING** |
-| `zentrain/canonical/2026-06-27/zenjxl_lossless/encodes/` | 54.40 | 269,820 | same | **PENDING** |
-| `zentrain/canonical/2026-06-27/zenwebp_lossy/encodes/` | ? | ? | same | **PENDING** |
-| `zentrain/canonical/2026-06-27/zenjpeg_lossy/encodes/` | ? | ? | same (ONLY path - no tar index exists) | **PENDING** |
-| `zentrain/jxl-lossy/runs/mandfix4-zenavif-1782593621/variants/` | 47.20 | 8 | tarrange bytes for zenavif_lossy (no encodes/) | **PENDING** |
-| `zentrain/jxl-lossy/runs/jxl-lossy-vardct-1782609551/variants/` | 30.80 | 24 | tarrange bytes for zenjxl_lossy (no encodes/) | **PENDING** |
-| `zentrain/jobs/bf-{zavif,zjxll,zjxlm,zpng,zwebp}-t*/variant_index.tsv` | 0.65 | 53 | byte-range index for tarrange fetch | **DONE** |
-| `zentrain/canonical/2026-06-27/*/{_MANIFEST.json,pairs.*,train|validate|test}.parquet` | 8.30 | 50 | build_canonical/verify_canonical; every picker script | **PENDING** |
-| `zentrain/canonical/2026-06-27/originals/` | 1.03 | 3 | corpus originals | **PENDING** |
-| `codec-corpus/clean-picker-corpus-2026-06-26/` | 1.02 | 4,497 | pairs.*.parquet ref_path | **PENDING** |
-| `zentrain/jxl-lossy/runs/mandfix2-zenjpeg-1782584881/variants/` | 44.19 | 8 | INSURANCE for zenjpeg encodes (no tar index) | **PENDING** |
+| `zentrain/canonical/2026-06-27/zenwebp_lossless/encodes/` | 6.48 | 40,473 | resolve_bigcodec_pair_uris.py object-mode; fetch_bigcodec_bytes.py | **MIRRORED+VERIFIED** |
+| `zentrain/canonical/2026-06-27/zenpng_lossless/encodes/` | 12.75 | 76,449 | same | **PARTIAL 27,500/76,449** |
+| `zentrain/canonical/2026-06-27/zenjxl_lossless/encodes/` | 54.41 | 269,820 | same | **DEFERRED (tower-local ingest)** |
+| `zentrain/canonical/2026-06-27/zenwebp_lossy/encodes/` | 22.53 | 944,370 | same | **DEFERRED (tower-local ingest)** |
+| `zentrain/canonical/2026-06-27/zenjpeg_lossy/encodes/` | 43.13 | 1,484,010 | same (ONLY path - no tar index exists) | **DEFERRED (bytes already on tower)** |
+| `zentrain/jxl-lossy/runs/mandfix4-zenavif-1782593621/variants/` | 47.20 | 8 | tarrange bytes for zenavif_lossy (no encodes/) | **MIRRORED+VERIFIED** |
+| `zentrain/jxl-lossy/runs/jxl-lossy-vardct-1782609551/variants/` | 30.80 | 24 | tarrange bytes for zenjxl_lossy (no encodes/) | **MIRRORED+VERIFIED** |
+| `zentrain/jobs/bf-{zavif,zjxll,zjxlm,zpng,zwebp}-t*/variant_index.tsv` | 0.65 | 53 | byte-range index for tarrange fetch | **MIRRORED+VERIFIED** |
+| `zentrain/canonical/2026-06-27/*/{_MANIFEST.json,pairs.*,train|validate|test}.parquet` | 8.30 | 50 | build_canonical/verify_canonical; every picker script | **MIRRORED+VERIFIED** |
+| `zentrain/canonical/2026-06-27/originals/` | 1.03 | 3 | corpus originals | **MIRRORED+VERIFIED** |
+| `codec-corpus/clean-picker-corpus-2026-06-26/` | 1.02 | 4,497 | pairs.*.parquet ref_path | **MIRRORED+VERIFIED** |
+| `zentrain/jxl-lossy/runs/mandfix2-zenjpeg-1782584881/variants/` | 44.19 | 8 | INSURANCE for zenjpeg encodes (no tar index) | **IN FLIGHT (gentle lane)** |
 
 ### P1 — eval instruments + regime training tables (local `/mnt/v` mirrors exist; the LAN copy makes them fleet-addressable)
 
 | bucket/prefix | GiB | objects | what reads it | status |
 |---|--:|--:|---|---|
-| `zentrain/eval-grids/` | 0.020 | 4 | bake_verdict dial+corruption grids | **PENDING** |
-| `zentrain/canonical-2026-05-21/` | 1.35 | 29 | canonical 372-feature trainer input | **PENDING** |
-| `zentrain/kadis-700k/canonical/` | 0.84 | 1 | KADIS-700k canonical parquet | **PENDING** |
-| `zentrain/kadis-700k-gpu/canonical/` | 0.87 | 1 | KADIS-700k GPU-metric canonical parquet | **PENDING** |
-| `zentrain/ext944-canonical-2026-08-01/` | 26.51 | 85 | 944-regime legs | **PENDING** |
-| `zentrain/tbig-944-2026-08-02/` | 29.29 | 16 | bigcodec 944 views | **PENDING** |
-| `zentrain/kadis-944-2026-08-01/` | 3.09 | 7 | KADIS 944 rescore | **PENDING** |
-| `zentrain/ext924-canonical-2026-07-27/` | 49.96 | 36 | 924-regime legs | **PENDING** |
-| `zentrain/ext720-canonical-2026-07-22/` | 55.58 | 37 | 720-regime legs | **PENDING** |
-| `zentrain/tbig-720-2026-07-22/` | 17.59 | 2 | bigcodec 720 views | **PENDING** |
-| `zentrain/kadis-720-2026-07-24/` | 3.13 | 3 | KADIS 720 rescore | **PENDING** |
-| `zentrain/hdr/` | 4.77 | 185 | HDR corpora/tables | **PENDING** |
-| `zentrain/canonical-2026-07-15/` | 0.004 | 4 | HF near-lossless + kadis_negrich training parquets (the recurring-priority set) | **PENDING** |
-| `zentrain/canonical-gates-2026-07-29/` | 0.001 | 57 | canonical-source gate verdicts | **PENDING** |
-| `zentrain/profiles/` | 0.001 | 6 | Profile C ship artifacts (C-2026-08-05) | **PENDING** |
-| `zentrain/hdr-corpora/` | 0.034 | 4 | HDR corpora tables | **PENDING** |
-| `zentrain/jxl-nearlossless-2026-07-06/` | 0.050 | 29 | input to build_hf_nearlossless_2026-07-15.py | **PENDING** |
-| `zentrain/kadis-924-2026-07-27/` | 2.88 | 3 | KADIS 924 rescore | **PENDING** |
-| `zentrain/canonical-training-2026-05-18/` | 0.75 | 14 | May-era canonical training tables | **PENDING** |
-| `zentrain/dualmodel-2026-06-28/` | 5.20 | 171 | LOO fleet / hetzner_ml_train inputs | **PENDING** |
-| `zentrain/strategy-fleet-2026-07-02/` | 11.61 | 36 | reproduce_t1dro51.sh + strategy_fleet.sh inputs | **PENDING** |
+| `zentrain/eval-grids/` | 0.020 | 4 | bake_verdict dial+corruption grids | **MIRRORED+VERIFIED** |
+| `zentrain/canonical-2026-05-21/` | 1.35 | 29 | canonical 372-feature trainer input | **MIRRORED+VERIFIED** |
+| `zentrain/kadis-700k/canonical/` | 0.84 | 1 | KADIS-700k canonical parquet | **MIRRORED+VERIFIED** |
+| `zentrain/kadis-700k-gpu/canonical/` | 0.87 | 1 | KADIS-700k GPU-metric canonical parquet | **MIRRORED+VERIFIED** |
+| `zentrain/ext944-canonical-2026-08-01/` | 26.51 | 85 | 944-regime legs | **QUEUED (gentle lane)** |
+| `zentrain/tbig-944-2026-08-02/` | 29.29 | 16 | bigcodec 944 views | **QUEUED (gentle lane)** |
+| `zentrain/kadis-944-2026-08-01/` | 3.09 | 7 | KADIS 944 rescore | **QUEUED (gentle lane)** |
+| `zentrain/ext924-canonical-2026-07-27/` | 49.96 | 36 | 924-regime legs | **QUEUED (gentle lane)** |
+| `zentrain/ext720-canonical-2026-07-22/` | 55.58 | 37 | 720-regime legs | **QUEUED (gentle lane)** |
+| `zentrain/tbig-720-2026-07-22/` | 17.59 | 2 | bigcodec 720 views | **QUEUED (gentle lane)** |
+| `zentrain/kadis-720-2026-07-24/` | 3.13 | 3 | KADIS 720 rescore | **QUEUED (gentle lane)** |
+| `zentrain/hdr/` | 4.77 | 185 | HDR corpora/tables | **QUEUED (gentle lane)** |
+| `zentrain/canonical-2026-07-15/` | 0.004 | 4 | HF near-lossless + kadis_negrich training parquets (the recurring-priority set) | **QUEUED (gentle lane)** |
+| `zentrain/canonical-gates-2026-07-29/` | 0.001 | 57 | canonical-source gate verdicts | **QUEUED (gentle lane)** |
+| `zentrain/profiles/` | 0.001 | 6 | Profile C ship artifacts (C-2026-08-05) | **QUEUED (gentle lane)** |
+| `zentrain/hdr-corpora/` | 0.034 | 4 | HDR corpora tables | **QUEUED (gentle lane)** |
+| `zentrain/jxl-nearlossless-2026-07-06/` | 0.050 | 29 | input to build_hf_nearlossless_2026-07-15.py | **QUEUED (gentle lane)** |
+| `zentrain/kadis-924-2026-07-27/` | 2.88 | 3 | KADIS 924 rescore | **QUEUED (gentle lane)** |
+| `zentrain/canonical-training-2026-05-18/` | 0.75 | 14 | May-era canonical training tables | **QUEUED (gentle lane)** |
+| `zentrain/dualmodel-2026-06-28/` | 5.20 | 171 | LOO fleet / hetzner_ml_train inputs | **QUEUED (gentle lane)** |
+| `zentrain/strategy-fleet-2026-07-02/` | 11.61 | 36 | reproduce_t1dro51.sh + strategy_fleet.sh inputs | **QUEUED (gentle lane)** |
 
 ### Already on the LAN store before this pass (verified by listing, not re-copied)
 
@@ -159,10 +159,98 @@ The full P0+P1 working set is well under 0.5 TiB against 21 T free, so **no
 prefix had to be refused for capacity**; the prefixes left unmirrored were
 refused for *redundancy or absent consumers*, not space (§2).
 
-**Shared-box discipline.** Every transfer ran `nice -n19 ionice -c3` with bounded
-parallelism (3 transfers × 4 upload streams for multi-GB tars; 12 transfers for
-small-object prefixes). Tower load stayed ≈10 on 32 threads with 81 % CPU idle
-and 6.5 % iowait, with Plex and the *arr stack live throughout.
+**Shared-box discipline, and the one place it was breached — recorded because it
+is the operational limit of this store.** Every transfer ran `nice -n19 ionice -c3`
+with bounded parallelism, and for the large-object lanes (3 rclone transfers × 4
+upload streams) the tower stayed healthy: load ≈10 on 32 threads, 81-90 % CPU
+idle, 3.5-6.5 % iowait, Plex and the *arr stack live throughout.
+
+**The small-object lanes are a different animal.** Pushing `encodes/` objects at
+~333 PUT/s (s5cmd, 96 upload workers) drove the tower to **load 30.7 with 48.9 %
+iowait and only 37 % idle**, and the S3 endpoint stopped answering — a
+`head-object` timed out at 30 s and in-flight transfers collapsed from ~50 MiB/s
+to 1 KB/s. `top` on the tower showed `weed` itself at 121 % CPU / 5.7 GB RSS and
+a **loop device pinned at 100 % util serving 212 MB/s of reads**, with another
+361 MB/s read off the NVMe cache: the write storm had triggered SeaweedFS
+background volume work whose *read* amplification, not the writes, was the thing
+saturating the box.
+
+All lanes were stopped immediately — this box runs the household's media, which
+outranks the mirror unconditionally. The operational rule this establishes:
+**large sequential objects are cheap for this store; sustained small-object PUT
+rates are not.** A small-object lane must be load-gated (poll
+`/proc/loadavg` on the tower and pause above ~12) and run at a fraction of the
+concurrency the raw benchmark suggests. The 333 obj/s figure is what SeaweedFS
+will *accept*; it is not what this tower can *sustain*.
+
+
+## 3b. Two discoveries that change how the REST of this should be done
+
+Both were found while diagnosing the load incident, and both mean the remaining
+work is cheaper than it looks — but must not be done the way the first half was.
+
+### The tower already holds the bulk of these bytes as plain files
+
+`/mnt/disk1/coefficient/zen924/` on the tower carries, from the July/August
+bf-924 waves:
+
+| tree | size | what it is |
+|---|--:|---|
+| `zen924/tars/<6 run dirs>/` | **235,474,984,976 B (219.3 GiB)** | **all 61 `box-N.tar` files**, all six runs — byte-for-byte the set measured on R2 (235,474,984,960 B + a 16 B `mirror.log`) |
+| `zen924/zjl2-encodes/` | 33 GiB on disk1 + 14 GiB still on cache, ~1.48 M files | **the whole `zenjpeg_lossy/encodes/` corpus** — filenames match the canonical keys exactly (e.g. `o_1011.png.scale108x192_db148f3cd8359d3f_zenjpeg_q15_027d8a471f5b5481.jpg` is present in both) |
+| `zen924/refs/` | 1.1 GiB | reference renditions |
+
+So **the bytes were never at risk on this box; what was missing was S3
+addressability at the canonical key.** A plain file on the array cannot be
+fetched by `s3://…` byte range from a fleet worker or by
+`resolve_bigcodec_pair_uris.py`, which is precisely what the mirror provides —
+so the work is still necessary. But it means the *remaining* ingest is a
+**tower-local operation** (array file → SeaweedFS, over the loopback) rather
+than a 78-GiB-and-up pull across the WAN. That is both faster and free of R2
+egress. Anyone continuing this should ingest from `zen924/tars/` and
+`zen924/zjl2-encodes/` in place, not re-pull from R2.
+
+### An Unraid `mover` job has been running since 2026-08-26
+
+`ps` on the tower: `/usr/local/sbin/mover start`, **started Wed Aug 26 17:19:50,
+elapsed 3 d 21 h** at the time of this measurement. It is draining
+`zen924/zjl2-encodes` from the cache pool to the array — **902,005 files already
+moved, 582,013 still on cache** — and Unraid's mover calls `fuser` on *every
+file*, which is what the repeated short-lived `fuser` processes at 20-55 % CPU
+were.
+
+That job is the tower's load floor right now, it writes to **disk1 — the same
+array disk that holds SeaweedFS's `/data2`** — and it is not going to finish
+soon. It is also, notably, moving *another copy of the same zenjpeg encodes this
+mirror was about to write a third copy of*.
+
+**Consequence for scheduling:** small-object ingest into SeaweedFS must wait for
+that mover to drain. Until it does, this box can absorb large sequential objects
+at low concurrency and little else.
+
+### A store setting worth revisiting before the next bulk ingest
+
+`zen-lanstore` runs with **`-master.volumeSizeLimitMB=1024`** — a 1 GB volume
+cap, **30x below SeaweedFS's 30 GB default**:
+
+```
+weed -logtostderr=true server -dir=/data -volume.max=0 \
+     -master.volumeSizeLimitMB=1024 -s3 -s3.config=/conf/s3.json -dir=/data,/data2
+```
+
+With ~1 TB stored that yields **1,123 volume files** (569 under `/data`, 554
+under `/data2`) and **2,633 open file descriptors** in the `weed` process, and
+the count grows linearly with every gigabyte added. Under the write burst the
+master was still allocating fresh volumes (IDs past 4890) while the ingest ran.
+Per-volume index and housekeeping cost is what the box was paying, and it does
+not go away when the writes stop: `weed` sat at **238-276 % CPU for more than
+ten minutes after every client of mine was killed**.
+
+Raising the cap toward the default would cut the volume count ~30x for the same
+bytes. **Not changed here** — it is a live store other lanes depend on and the
+change is the owner's call — but the next bulk ingest should be preceded by that
+conversation, because this mirror's remaining work roughly doubles the stored
+bytes.
 
 
 ## 4. Method + verification
@@ -221,6 +309,7 @@ and for R2-side listings, which are stable.
 | `zentrain/canonical/2026-06-27/zenwebp_lossless/encodes/` | 40,473 / 40,473 | 6,954,651,422 / 6,954,651,422 | **YES** | 5/5 sha256 full-object OK |
 | `zentrain/kadis-700k/canonical/` | 1 / 1 | 906,001,718 / 906,001,718 | **YES** | 2/2 sha256 range OK (head+tail) |
 | `zentrain/kadis-700k-gpu/canonical/` | 1 / 1 | 936,367,503 / 936,367,503 | **YES** | 2/2 sha256 range OK (head+tail) |
+| `zentrain/canonical/2026-06-27/zenpng_lossless/encodes/` | 76,449 / 27,500 | 13,691,411,533 / 6,165,342,628 | **NO** | aws-lister |
 
 Large objects (multi-GB tars, >64 MB parquets) are spot-checked by **byte
 range** rather than whole-file hash: identical ranges are fetched from both
@@ -255,6 +344,45 @@ than done here:
    `resolve_bigcodec_pair_uris.py` will not resolve it because the map has six
    entries and this is the seventh canonical picker dataset. Flagged, not
    changed: it belongs to the zensim lane.
+
+## 5b. What remains, and the cheapest way to finish it
+
+**The half that mattered most is done.** `zenavif_lossy` and `zenjxl_lossy` were
+the only two datasets with *no* per-object path at all — the ones that made the
+fleet structurally unusable for half the round-7 cells. Both are mirrored and
+verified, along with all 53 byte-range indexes, so **the tar-range fetch path is
+fully LAN-resident and was proven end to end** (§4: sampled ranges taken from
+the mirrored `variant_index.tsv` itself).
+
+**What is deferred, and why it should NOT be finished the way it started:**
+
+| remaining | size | why deferred |
+|---|--:|---|
+| `zenjpeg_lossy/encodes/` | 43.13 GiB / 1,484,010 obj | the tower **already holds this exact corpus** as `zen924/zjl2-encodes` (§3b), and Unraid's mover is *still moving it* — a third copy written across the WAN would be the worst of all options |
+| `zenwebp_lossy/encodes/` | 22.53 GiB / 944,370 obj | small-object PUT rate is the thing that took the store down; needs the mover drained first |
+| `zenjxl_lossless/encodes/` | 54.41 GiB / 269,820 obj | same |
+| `zenpng_lossless/encodes/` | 12.75 GiB / 76,449 obj | **partial: 27,500 of 76,449 already on the LAN store**; resumes by diff |
+
+The cheap path for all four, once the mover has drained:
+
+1. **Ingest from the tower's own disk, not from R2.** `zen924/tars/` already holds
+   all 61 box tars and `zen924/zjl2-encodes/` holds the zenjpeg objects. A
+   tower-local `s5cmd cp` into the LAN store moves the same bytes over loopback
+   with zero WAN transfer and zero R2 egress.
+2. **Gate on tower load and keep upload concurrency low** — the measured ceiling
+   is not SeaweedFS's accept rate (333 obj/s) but what this box sustains beside
+   Plex and a running mover.
+3. **Diff first, always.** Every lane here recomputed `(R2 keys − LAN keys)` and
+   moved only the difference, so a resumed pass costs only what is genuinely
+   missing. Use `aws s3 ls` for the LAN side of that diff, never `s5cmd ls` (§4).
+
+**One pre-existing store error, noted in passing and not touched:** the filer
+holds a dangling reference — `volume 473 not found for fileId 473,11bb5f1c703c7b`
+— and something is polling the object behind it
+(`zentrain/fleetbench-epoch-2026-08-24/claims/chunk-7fbea38b…`) in a tight retry
+loop, several failures per second. Volume 473 is not in
+`zenstore-quarantine-20260827/` (that holds 568/570/572), so this is a separate
+loss. It predates this mirror and belongs to whoever owns that fleet run.
 
 ## 6. Reproducing / extending this mirror
 
