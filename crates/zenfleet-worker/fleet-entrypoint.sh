@@ -407,12 +407,23 @@ while :; do
     exit 5
   fi
 
-  # Drain / pause bookkeeping (unchanged semantics; now announced).
+  # Drain / pause bookkeeping.
+  #
+  # "Idle" must mean THERE IS NO WORK, not "I lost every race". `skipped=N` (N>0) says the
+  # gap is non-empty and every chunk in it is claimed by another box right now — the box
+  # should keep polling until those claims resolve, because the moment one does the cells
+  # are its to take. Counting that as idle is what emptied the fleet during the 2026-08-30
+  # aom wave's straggler tail: two boxes drained out at ZEN_IDLE_PASSES while a third
+  # ground on alone for 1.07 h (measured 5.67 idle box-hours in windows where >=1 box was
+  # still working). A run that is genuinely finished has skipped=0 and still exits.
   if printf '%s\n' "$out" | grep -qiE 'run control ='; then
     hb "run control active (paused/draining) — holding, not counting toward drain-exit"
     idle=0
-  elif printf '%s\n' "$out" | grep -qE 'done=0 '; then
+  elif printf '%s\n' "$out" | grep -qE 'done=0 ' && ! printf '%s\n' "$out" | grep -qE 'skipped=[1-9]'; then
     idle=$((idle + 1))
+  elif printf '%s\n' "$out" | grep -qE 'skipped=[1-9]'; then
+    hb "work exists but every chunk is claimed elsewhere ($(printf '%s\n' "$out" | grep -oE 'skipped=[0-9]+' | tail -1)) — holding, not counting toward drain-exit"
+    idle=0
   else
     idle=0
   fi

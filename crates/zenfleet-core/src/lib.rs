@@ -52,5 +52,7 @@ pub use lease::{Lease, recommended_ttl_secs};
 pub use ledger::{DesiredJob, LedgerRow, LedgerView, ResourceHint};
 pub use provision::{CellCost, InstanceRecommendation, recommend_instance};
 pub use reconcile::{ReconcilePlan, RetryPolicy, reconcile, reconcile_at};
-pub use schedule::{BoxBudget, InFlight, JobCost};
+pub use schedule::{
+    BoxBudget, FLEET_REF_CONCURRENCY, InFlight, JobCost, MIN_CHUNK_CELLS, TAIL_SPREAD,
+};
 pub use status::{ErrorClass, JobStatus};

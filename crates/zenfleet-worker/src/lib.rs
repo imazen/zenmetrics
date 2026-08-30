@@ -1257,7 +1257,33 @@ where
         })
         .collect();
     cmark!("job-costs");
-    let chunks = params.budget.pack_chunks_lpt(&costs, params.chunk_wall_sec);
+    // FLEET-UNIFORM chunk boundaries (2026-08-30). `pack_chunks_lpt` closes chunks on
+    // `budget.max_concurrent(..)` — a per-BOX quantity — so on a heterogeneous fleet no two
+    // workers ever computed the same `chunk_id` and the per-chunk claim excluded NOBODY:
+    // MEASURED 36,068 of 184,302 executions (19.6%) on avifaom-enc-20260830 were a second box
+    // re-encoding a cell another box was encoding at that moment. `pack_chunks_lpt_uniform`
+    // draws boundaries from the gap alone (fleet-constant reference concurrency + a
+    // gap-relative cell cap that shrinks chunks as the gap drains, so the tail spreads across
+    // idle boxes instead of hiding inside one claimed chunk). Execution concurrency is
+    // untouched — cells still run under `can_admit`, so each box saturates its own envelope.
+    // ZEN_CHUNK_UNIFORM=0 restores the old per-box packing (escape hatch only; setting it on
+    // ONE box of a fleet re-creates the collapse).
+    let uniform = std::env::var("ZEN_CHUNK_UNIFORM").ok().as_deref() != Some("0");
+    let chunks = if uniform {
+        let refc = std::env::var("ZEN_CHUNK_REF_CONCURRENCY")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(zenfleet_core::FLEET_REF_CONCURRENCY);
+        let spread = std::env::var("ZEN_CHUNK_TAIL_SPREAD")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(zenfleet_core::TAIL_SPREAD);
+        params
+            .budget
+            .pack_chunks_lpt_uniform(&costs, params.chunk_wall_sec, refc, spread)
+    } else {
+        params.budget.pack_chunks_lpt(&costs, params.chunk_wall_sec)
+    };
     cmark!("pack-chunks");
     // Admission debug trace (ZEN_DEBUG_ADMIT=1, silent otherwise — same gating pattern as
     // ZEN_TIME_PASS/`ctimed` above). Added 2026-08-24 to get ground truth on `can_admit`'s

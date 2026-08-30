@@ -198,15 +198,74 @@ impl BoxBudget {
     /// every worker forms identical chunks and the per-chunk claim remains
     /// exclusive. Returned indices are into the ORIGINAL `jobs` slice.
     pub fn pack_chunks_lpt(&self, jobs: &[JobCost], target_wall_sec: f64) -> Vec<Vec<usize>> {
-        let mut order: Vec<usize> = (0..jobs.len()).collect();
-        order.sort_by(|&a, &b| {
-            jobs[b]
-                .cost_sec
-                .partial_cmp(&jobs[a].cost_sec)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then(a.cmp(&b))
-        });
-        self.pack_in_order(jobs, &order, target_wall_sec)
+        self.pack_in_order(jobs, &lpt_order(jobs), target_wall_sec)
+    }
+
+    /// [`pack_chunks_lpt`](Self::pack_chunks_lpt) with **fleet-uniform boundaries** — the
+    /// packing every worker on a HETEROGENEOUS fleet must use for the per-chunk claim to
+    /// mean anything.
+    ///
+    /// `pack_chunks_lpt` closes a chunk at `Σcost / self.max_concurrent(..) >= target`, and
+    /// `max_concurrent` is a property of THIS BOX (its cores and RAM budget). Its doc claim
+    /// that "every worker forms identical chunks and the per-chunk claim remains exclusive"
+    /// therefore held only on a homogeneous fleet: the LPT *order* is deterministic, but the
+    /// *boundaries* are not. MEASURED on `avifaom-enc-20260830` (2026-08-30), three boxes of
+    /// different core counts on one run: chunk sizes 19 / 41 / 82 cells, so no two workers
+    /// ever computed the same `chunk_id`, every claim succeeded, and **36,068 of 184,302
+    /// executions (19.6%) were a second box redundantly re-encoding a cell another box was
+    /// encoding at that moment** — 24,695 distinct cells hit twice or more.
+    ///
+    /// Two changes, both deterministic given only `jobs` (so all workers agree):
+    ///
+    /// 1. **`ref_concurrency`** replaces `self.max_concurrent(..)` in the close test. It is a
+    ///    fleet-wide constant ([`FLEET_REF_CONCURRENCY`]), not a box property. Execution
+    ///    concurrency is untouched — cells still run under `can_admit`, so each box still
+    ///    saturates its own cores within its own RAM envelope. Only the CLAIM granularity
+    ///    becomes uniform.
+    /// 2. **A gap-relative cell cap**: no chunk holds more than `gap_len / spread` cells
+    ///    (`spread` = [`TAIL_SPREAD`], floored at [`MIN_CHUNK_CELLS`]). On a big gap the cost target closes chunks
+    ///    long before the cap binds, so nothing changes; as the gap DRAINS the cap shrinks
+    ///    the chunks, which is the straggler-tail lever — the same wave ended with one box
+    ///    grinding while two sat idle at `rows=0` for 1.07 h because every remaining cell was
+    ///    inside one already-claimed chunk. A cap of `gap/64` puts ≥ 64 claimable chunks in
+    ///    front of the fleet no matter how small the remainder gets.
+    ///
+    /// Exactly-once is unaffected: this changes only how the gap is grouped, never the
+    /// claim/ledger reduce. Every job still appears in exactly one chunk.
+    pub fn pack_chunks_lpt_uniform(
+        &self,
+        jobs: &[JobCost],
+        target_wall_sec: f64,
+        ref_concurrency: u32,
+        spread: u32,
+    ) -> Vec<Vec<usize>> {
+        let order = lpt_order(jobs);
+        let target = target_wall_sec.max(1.0);
+        let conc = ref_concurrency.max(1) as f64;
+        // Floor the cap at MIN_CHUNK_CELLS: below it the "chunk" stops batching claims at
+        // all and every cheap cell pays a full claim round-trip, which is the overhead
+        // chunking exists to remove. Genuinely expensive tail cells are already isolated by
+        // the cost target (a cell whose own cost >= target becomes its own chunk), so the
+        // floor only ever groups CHEAP cells.
+        let cap = (jobs.len() / spread.max(1) as usize).max(MIN_CHUNK_CELLS);
+        let mut chunks: Vec<Vec<usize>> = Vec::new();
+        let mut cur: Vec<usize> = Vec::new();
+        let mut sum_cost = 0.0f64;
+        for &i in &order {
+            sum_cost += jobs[i].cost_sec.max(0.0);
+            cur.push(i);
+            // Effective concurrency can't exceed the cells actually in the chunk (same
+            // guard as `pack_in_order`: a lone heavy cell runs alone, not at full fan-out).
+            let eff = conc.min(cur.len() as f64).max(1.0);
+            if sum_cost / eff >= target || cur.len() >= cap {
+                chunks.push(std::mem::take(&mut cur));
+                sum_cost = 0.0;
+            }
+        }
+        if !cur.is_empty() {
+            chunks.push(cur);
+        }
+        chunks
     }
 
     /// Greedy packer over a given visitation `order` of `jobs` (indices into
@@ -252,6 +311,42 @@ impl BoxBudget {
         }
         chunks
     }
+}
+
+/// The fleet-wide reference concurrency used to close chunks in
+/// [`BoxBudget::pack_chunks_lpt_uniform`]. It is deliberately a CONSTANT and not any box's
+/// real fan-out: its only job is to make every worker draw the same chunk boundaries so the
+/// per-chunk claim is exclusive. Execution concurrency is still per-box (`can_admit`).
+///
+/// 8 is the middle of the observed LAN fleet's admitted fan-out (the 2026-08-30 aom wave
+/// packed at 19/41/82 cells per chunk on three boxes); a value in that range keeps chunk
+/// wall-times near `chunk_wall_sec` on every box rather than optimal on one and wrong on
+/// the rest. Override fleet-WIDE (never per box) if a fleet's shape changes.
+pub const FLEET_REF_CONCURRENCY: u32 = 8;
+
+/// Minimum number of claimable chunks the packer keeps in front of the fleet, via the
+/// gap-relative cell cap in [`BoxBudget::pack_chunks_lpt_uniform`]. Sized so a fleet several
+/// times larger than today's three boxes still has spare chunks to claim as the gap drains.
+pub const TAIL_SPREAD: u32 = 64;
+
+/// Floor for the gap-relative cell cap in [`BoxBudget::pack_chunks_lpt_uniform`]. Keeps a
+/// small gap from degenerating into one-claim-per-cell — the per-claim store round-trip is
+/// exactly the overhead chunk claiming was introduced to amortize. Expensive cells are
+/// isolated by the cost target regardless, so this only groups cheap ones.
+pub const MIN_CHUNK_CELLS: usize = 4;
+
+/// Longest-processing-time-first visitation order: descending `cost_sec`, ties broken by
+/// original index so it is deterministic (identical on every worker).
+fn lpt_order(jobs: &[JobCost]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..jobs.len()).collect();
+    order.sort_by(|&a, &b| {
+        jobs[b]
+            .cost_sec
+            .partial_cmp(&jobs[a].cost_sec)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.cmp(&b))
+    });
+    order
 }
 
 #[cfg(test)]
@@ -529,6 +624,131 @@ mod tests {
             all,
             (0..500).collect::<Vec<_>>(),
             "every original cell appears exactly once"
+        );
+    }
+
+    /// THE 2026-08-30 heterogeneous-fleet claim collapse, as a gate.
+    ///
+    /// `pack_chunks_lpt` closes chunks on `self.max_concurrent(..)`, a per-BOX quantity, so
+    /// three boxes of different core counts drew three different sets of chunk boundaries,
+    /// produced three disjoint sets of `chunk_id`s, and every claim succeeded — 19.6% of the
+    /// wave's executions were redundant. `pack_chunks_lpt_uniform` must be byte-identical
+    /// across boxes.
+    #[test]
+    fn uniform_packing_is_identical_across_heterogeneous_boxes() {
+        let jobs: Vec<JobCost> = (0..500)
+            .map(|i| JobCost {
+                cost_sec: 1.0 + (i % 37) as f64 * 3.0,
+                peak_mem_bytes: (64 << 20) * (1 + (i % 5) as u64),
+                threads: 1 + (i % 4) as u32,
+            })
+            .collect();
+        let small = BoxBudget {
+            cores: 12,
+            ram_budget_bytes: 8 * GB,
+            vram_budget_bytes: None,
+        };
+        let big = BoxBudget {
+            cores: 48,
+            ram_budget_bytes: 45 * GB,
+            vram_budget_bytes: None,
+        };
+        // The OLD packer disagrees — this is the defect, pinned so a regression is loud.
+        assert_ne!(
+            small.pack_chunks_lpt(&jobs, 300.0),
+            big.pack_chunks_lpt(&jobs, 300.0),
+            "per-box packing is expected to differ; that is the bug uniform packing fixes"
+        );
+        // The NEW packer agrees, exactly.
+        let a = small.pack_chunks_lpt_uniform(&jobs, 300.0, FLEET_REF_CONCURRENCY, TAIL_SPREAD);
+        let b = big.pack_chunks_lpt_uniform(&jobs, 300.0, FLEET_REF_CONCURRENCY, TAIL_SPREAD);
+        assert_eq!(a, b, "chunk boundaries must not depend on the box");
+        // Coverage: every job in exactly one chunk (exactly-once is downstream of this).
+        let mut seen: Vec<usize> = a.iter().flatten().copied().collect();
+        seen.sort_unstable();
+        assert_eq!(seen, (0..jobs.len()).collect::<Vec<_>>());
+    }
+
+    /// The straggler-tail lever: as the gap drains, chunks must shrink so the remainder is
+    /// claimable by more than one box. The same wave ended with one box grinding while two
+    /// sat idle for 1.07 h because every remaining cell was inside one claimed chunk.
+    #[test]
+    fn gap_relative_cap_spreads_the_tail_and_is_inert_on_a_big_gap() {
+        let bb = BoxBudget {
+            cores: 32,
+            ram_budget_bytes: 32 * GB,
+            vram_budget_bytes: None,
+        };
+        // A small remainder of cheap cells: cost alone would put them all in ONE chunk.
+        let tail: Vec<JobCost> = (0..312)
+            .map(|_| JobCost {
+                cost_sec: 0.5,
+                peak_mem_bytes: 64 << 20,
+                threads: 1,
+            })
+            .collect();
+        // spread=1 -> cap = max(312/1, MIN) = 312, i.e. the cost target alone applies.
+        let one = bb.pack_chunks_lpt_uniform(&tail, 300.0, FLEET_REF_CONCURRENCY, 1);
+        assert_eq!(one.len(), 1, "with spread=1 the cost target alone applies");
+        let spread = bb.pack_chunks_lpt_uniform(&tail, 300.0, FLEET_REF_CONCURRENCY, TAIL_SPREAD);
+        assert!(
+            spread.len() >= TAIL_SPREAD as usize,
+            "a {}-cell tail must offer >= {} claimable chunks, got {}",
+            tail.len(),
+            TAIL_SPREAD,
+            spread.len()
+        );
+        assert!(
+            spread
+                .iter()
+                .all(|c| c.len() <= (312 / TAIL_SPREAD as usize).max(MIN_CHUNK_CELLS))
+        );
+        let mut seen: Vec<usize> = spread.iter().flatten().copied().collect();
+        seen.sort_unstable();
+        assert_eq!(seen, (0..tail.len()).collect::<Vec<_>>());
+
+        // Inert on a big gap: 100k cells at 30 s each close on cost long before gap/64.
+        let big: Vec<JobCost> = (0..100_000)
+            .map(|_| JobCost {
+                cost_sec: 30.0,
+                peak_mem_bytes: 64 << 20,
+                threads: 1,
+            })
+            .collect();
+        let c = bb.pack_chunks_lpt_uniform(&big, 300.0, FLEET_REF_CONCURRENCY, TAIL_SPREAD);
+        let cap = 100_000 / TAIL_SPREAD as usize;
+        assert!(
+            c.iter().all(|k| k.len() < cap),
+            "on a big gap the cost target must bind, not the cap"
+        );
+    }
+
+    /// LPT ordering is preserved by the uniform packer: the heaviest cells land in the
+    /// earliest chunks, so the drain tail is cheap cells rather than one grinding giant.
+    #[test]
+    fn uniform_packing_keeps_lpt_heaviest_first() {
+        let bb = BoxBudget {
+            cores: 16,
+            ram_budget_bytes: 16 * GB,
+            vram_budget_bytes: None,
+        };
+        let jobs: Vec<JobCost> = (0..200)
+            .map(|i| JobCost {
+                cost_sec: i as f64,
+                peak_mem_bytes: 64 << 20,
+                threads: 1,
+            })
+            .collect();
+        let c = bb.pack_chunks_lpt_uniform(&jobs, 100.0, FLEET_REF_CONCURRENCY, TAIL_SPREAD);
+        let first: f64 = c[0].iter().map(|&i| jobs[i].cost_sec).sum::<f64>() / c[0].len() as f64;
+        let last: f64 = c[c.len() - 1]
+            .iter()
+            .map(|&i| jobs[i].cost_sec)
+            .sum::<f64>()
+            / c[c.len() - 1].len() as f64;
+        assert!(
+            first > last,
+            "heaviest cells must land first ({first} vs {last})"
         );
     }
 }

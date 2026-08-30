@@ -386,6 +386,93 @@ real encode/score work, bake your executor into a worker image (FROM `ghcr.io/im
 
 ---
 
+## 6b. Wall time: how the fleet divides work, and what it costs when it divides it wrong
+
+**The claim unit is a CHUNK, and every worker must draw the same chunk boundaries or the
+claim excludes nobody.** This section exists because for months it did not.
+
+### What went wrong (MEASURED, `avifaom-enc-20260830`, 2026-08-30)
+
+`BoxBudget::pack_chunks_lpt` sorted the gap by descending cost (deterministic, fine) and then
+closed each chunk when `Σcost / self.max_concurrent(mem, threads)` reached the target — and
+`max_concurrent` is a property of **the box doing the packing**. Its doc claimed "every worker
+forms identical chunks and the per-chunk claim remains exclusive"; that held only on a
+homogeneous fleet. On the three LAN boxes it produced chunks of **19 / 41 / 82 cells**, so no
+two workers ever computed the same `chunk_id`, every `claim_or_steal_r2_key` succeeded, and
+boxes redundantly re-encoded each other's in-flight cells:
+
+| measurement | value |
+|---|---|
+| wall clock | **12.09 h** (05:27:31Z → 17:33:05Z), 3 boxes |
+| fleet box-time idle (10-min resolution) | **18.17 of 37.00 box-h = 49.1 %** |
+| — whole fleet down (operator loop: rebuild → requeue → relaunch → 10-min poll) | 12.50 box-h |
+| — **≥1 box working while others idle (scheduler-addressable)** | **5.67 box-h** |
+| executions vs distinct cells | 184,302 / 126,000 = **1.463×** |
+| — concurrent duplicates (2nd box on a cell another was encoding, ≤900 s apart) | **36,068 executions over 24,695 cells = 19.6 % of all work** |
+| — legitimate cross-generation retries after a pardon | 22,234 |
+| the same wave's 312-cell remainder round | **1.990×** redundancy (621 executions / 312 cells) |
+
+The remainder number is the important one: **the smaller the gap, the worse per-box packing
+gets**, because a remainder that fits in one box's chunk gets packed whole by all three.
+
+### What ships
+
+`BoxBudget::pack_chunks_lpt_uniform` (zenfleet-core `schedule.rs`), used by the chunked path:
+
+1. **Fleet-uniform boundaries.** The close test uses `FLEET_REF_CONCURRENCY` (a constant, 8),
+   never the local box's fan-out. Identical `chunk_id`s everywhere ⇒ the claim excludes again.
+   **Execution concurrency is unchanged** — cells still run under `can_admit`, so each box
+   still saturates its own cores inside its own RAM envelope. Only the *claim granularity*
+   became uniform.
+2. **A gap-relative cell cap** — no chunk exceeds `max(gap_len / TAIL_SPREAD, MIN_CHUNK_CELLS)`
+   cells (64, 4). Inert on a large gap (the cost target closes chunks first); as the gap
+   drains it keeps ≥ 64 claimable chunks in front of the fleet, so the tail spreads instead of
+   hiding inside one box's claim. Expensive cells are already isolated by the cost target
+   (a cell costing ≥ target is its own chunk), so the floor only ever groups cheap cells.
+3. **`skipped > 0` is no longer "idle".** `fleet-entrypoint.sh` counted any `done=0` pass
+   toward `ZEN_IDLE_PASSES` and exited. But `skipped=N` means *the gap is non-empty and every
+   chunk in it is claimed right now* — the box should wait, because the moment a claim resolves
+   the work is its to take. Counting it as idle is what emptied the fleet during the tail. A
+   genuinely finished run still has `skipped=0` and still exits.
+
+Exactly-once and resumability are untouched: this changes only how the gap is *grouped*.
+Claim semantics, the ledger's latest-wins reduce, and DONE-row idempotence are unchanged, and
+chunk ids are re-derived from the gap every pass, so any partial pass still converges.
+
+Escape hatches (fleet-WIDE only — setting one on a single box re-creates the collapse):
+`ZEN_CHUNK_UNIFORM=0` (old per-box packing), `ZEN_CHUNK_REF_CONCURRENCY`, `ZEN_CHUNK_TAIL_SPREAD`.
+
+### Predicted saving (simulated on the measured profile before writing the code)
+
+`scripts/jobsys/fleet_walltime.py` reconstructs the profile from the live ledger (chunk
+sidecar mtimes are the completion instants; **ledger row `ts` is the pass clock, not the cell's
+completion time — never use it for durations**), and `scripts/jobsys/fleet_schedule_sim.py`
+replays it through each candidate:
+
+```
+whole wave (176,332 cells, 22.54 core-h, ideal 7.51 h on 3 boxes)
+  per_box_chunks (shipped)   redundancy 1.463   makespan 10.99 h
+  uniform_chunks             redundancy 1.000   makespan  7.51 h   -3.48 h (31.6 %)
+  uniform_spread (ships)     redundancy 1.000   makespan  7.51 h   -3.48 h (31.6 %)
+
+312-cell remainder (5.78 core-h, ideal 1.93 h)
+  per_box_chunks (shipped)                   makespan 2.921 h  (1.51x ideal)
+  uniform_chunks                             makespan 1.997 h  (1.04x ideal)
+  uniform_spread (cap = gap/64, floor 4)     makespan 1.934 h  (1.00x ideal)
+```
+
+The spread lever adds little to the *aggregate* number (176k cells balance trivially across 3
+boxes at any chunk size) — its value is entirely in the remainder, which is where the measured
+5.67 idle box-hours actually accumulated.
+
+### Not the scheduler's fault, and much bigger: the operator loop
+
+12.50 of the 18.17 idle box-hours were the **whole fleet down** between generations —
+image rebuild → `requeue` → `compact` → relaunch, plus a 10-minute poll interval, ×5 rounds,
+including one 2.06 h window where the run had drained and nothing ran at all until the next
+manual requeue. No claim scheduler can recover that. It is an orchestration problem (auto
+pardon-and-relaunch on drain, and a completion beacon instead of a poll), tracked separately.
+
 ## 7. Monitor
 
 - **Dashboard (no SSH):** the Railway control plane at

@@ -43,6 +43,37 @@ Workspace conventions per the global rules:
   of poison now prints a loud PROBLEM line naming the remedy. The summary's existing
   prefix is unchanged, so drain detectors that match on it keep working.
 
+### Changed
+- **Chunk boundaries are now FLEET-UNIFORM, and `skipped>0` is no longer "idle".**
+  `BoxBudget::pack_chunks_lpt` closed a chunk on `self.max_concurrent(mem, threads)` — a
+  property of the box doing the packing — while its doc claimed every worker formed identical
+  chunks so the per-chunk claim stayed exclusive. On a heterogeneous fleet that is false.
+  MEASURED on `avifaom-enc-20260830` (three LAN boxes, one run): chunk sizes 19 / 41 / 82
+  cells, no two workers ever computed the same `chunk_id`, every claim succeeded, and
+  **36,068 of 184,302 executions (19.6%) were a second box re-encoding a cell another box was
+  encoding at that moment** — 24,695 distinct cells hit 2+ times; overall redundancy 1.463×,
+  and **1.990× on the 312-cell remainder round** (the smaller the gap, the worse it gets).
+  `pack_chunks_lpt_uniform` draws boundaries from the gap alone: a fleet-constant reference
+  concurrency (`FLEET_REF_CONCURRENCY`) plus a gap-relative cell cap
+  (`max(gap/TAIL_SPREAD, MIN_CHUNK_CELLS)`) that shrinks chunks as the gap drains so the
+  straggler tail spreads across idle boxes. Execution concurrency is unchanged (cells still
+  run under `can_admit`); only claim granularity became uniform, and exactly-once /
+  resumability are untouched. `fleet-entrypoint.sh` no longer counts a `skipped>0` pass toward
+  `ZEN_IDLE_PASSES`: that pass means work exists but is claimed elsewhere, and treating it as
+  idle is what drained two boxes out while a third ground on alone for 1.07 h. Simulated on
+  the measured profile: 10.99 h → 7.51 h makespan (−31.6%) on the full wave, 2.921 h → 1.934 h
+  (1.51× → 1.00× ideal) on a 312-cell remainder. Escape hatches, fleet-wide only:
+  `ZEN_CHUNK_UNIFORM=0`, `ZEN_CHUNK_REF_CONCURRENCY`, `ZEN_CHUNK_TAIL_SPREAD`.
+- **New wall-time forensics: `scripts/jobsys/fleet_walltime.py` + `fleet_schedule_sim.py`.**
+  Reconstruct a run's schedule from the live ledger alone (chunk sidecar object mtimes are the
+  completion instants; a ledger row's `ts` is the PASS clock and must never be used for
+  durations) — per-worker busy/idle timeline, chunk size/duration distributions, straggler-tail
+  attribution, and duplicate-execution accounting — then replay the recovered cell set through
+  alternative claim schedulers. The aom wave: 12.09 h wall, **18.17 of 37.00 box-h idle
+  (49.1%)**, of which 12.50 box-h was the whole fleet down between operator relaunch
+  generations and 5.67 box-h was scheduler-addressable. Mechanism documented in
+  `docs/RUNNING_JOBS.md` §6b.
+
 ## zenmetrics-cli
 
 ### Changed
