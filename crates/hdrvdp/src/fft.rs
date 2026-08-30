@@ -108,11 +108,156 @@ pub fn fft(buf: &mut [Complex]) {
     if n <= 1 {
         return;
     }
-    if n.is_power_of_two() {
-        fft_radix2(buf);
-    } else {
-        let out = fft_bluestein(buf);
-        buf.copy_from_slice(&out);
+    Plan::new(n).run(buf);
+}
+
+/// A DFT plan for one length: the per-stage twiddle factors (and, for
+/// non-power-of-two lengths, the Bluestein chirp and pre-transformed filter),
+/// computed once and reused across every transform of that length.
+///
+/// Every value is produced by the *same expressions* the direct implementation
+/// evaluated inline — `expi(-2π/len · k)` per stage, the `k² mod 2n` chirp —
+/// so a planned transform is bit-identical to the unplanned one; the plan only
+/// memoises. `fft2` reuses one plan across all rows and one across all
+/// columns, and [`conv_fft_real`] across its forward and inverse passes, which
+/// is where the win concentrates: the direct form recomputed `sin_cos` for
+/// every butterfly of every row.
+struct Plan {
+    n: usize,
+    kind: PlanKind,
+}
+
+enum PlanKind {
+    /// `n <= 1`: nothing to do.
+    Trivial,
+    /// Power-of-two Cooley–Tukey; `stages[s]` holds the `2^s` twiddles of the
+    /// stage with butterfly span `2^(s+1)`.
+    Radix2 { stages: Vec<Vec<Complex>> },
+    /// Bluestein chirp-z: `chirp[k] = e^{-iπk²/n}` and `bf` = the length-`m`
+    /// FFT of the chirp filter, with the radix-2 plan for `m`.
+    Bluestein {
+        chirp: Vec<Complex>,
+        bf: Vec<Complex>,
+        m: usize,
+        mplan: Vec<Vec<Complex>>,
+    },
+}
+
+/// Per-stage twiddles for a power-of-two length — exactly the values the
+/// direct loop computed as `expi(ang · k)` per block, hoisted.
+fn radix2_stages(n: usize) -> Vec<Vec<Complex>> {
+    debug_assert!(n.is_power_of_two() && n >= 2);
+    let mut stages = Vec::with_capacity(n.trailing_zeros() as usize);
+    let mut len = 2;
+    while len <= n {
+        let ang = -2.0 * PI / len as f64;
+        let half = len / 2;
+        stages.push((0..half).map(|k| Complex::expi(ang * k as f64)).collect());
+        len <<= 1;
+    }
+    stages
+}
+
+impl Plan {
+    fn new(n: usize) -> Self {
+        let kind = if n <= 1 {
+            PlanKind::Trivial
+        } else if n.is_power_of_two() {
+            PlanKind::Radix2 {
+                stages: radix2_stages(n),
+            }
+        } else {
+            let m = (2 * n - 1).next_power_of_two();
+            let chirp: Vec<Complex> = (0..n)
+                .map(|k| {
+                    let kk = (k as u128 * k as u128 % (2 * n as u128)) as f64;
+                    Complex::expi(-PI * kk / n as f64)
+                })
+                .collect();
+            let mplan = radix2_stages(m);
+            let mut bf = vec![Complex::default(); m];
+            for k in 0..n {
+                bf[k] = chirp[k].conj();
+                if k > 0 {
+                    bf[m - k] = chirp[k].conj();
+                }
+            }
+            fft_radix2_planned(&mut bf, &mplan);
+            PlanKind::Bluestein {
+                chirp,
+                bf,
+                m,
+                mplan,
+            }
+        };
+        Self { n, kind }
+    }
+
+    fn run(&self, buf: &mut [Complex]) {
+        debug_assert_eq!(buf.len(), self.n);
+        match &self.kind {
+            PlanKind::Trivial => {}
+            PlanKind::Radix2 { stages } => fft_radix2_planned(buf, stages),
+            PlanKind::Bluestein {
+                chirp,
+                bf,
+                m,
+                mplan,
+            } => {
+                let n = self.n;
+                let mut a = vec![Complex::default(); *m];
+                for k in 0..n {
+                    a[k] = buf[k].mul(chirp[k]);
+                }
+                fft_radix2_planned(&mut a, mplan);
+                for (x, y) in a.iter_mut().zip(bf) {
+                    *x = x.mul(*y);
+                }
+                for v in a.iter_mut() {
+                    *v = v.conj();
+                }
+                fft_radix2_planned(&mut a, mplan);
+                let s = 1.0 / *m as f64;
+                for v in a.iter_mut() {
+                    *v = v.conj().scale(s);
+                }
+                for (k, out) in buf.iter_mut().enumerate() {
+                    *out = a[k].mul(chirp[k]);
+                }
+            }
+        }
+    }
+
+}
+
+/// Iterative radix-2 with precomputed per-stage twiddles. The butterfly body,
+/// its iteration order, and the twiddle values are those of the direct
+/// implementation; only the `expi` calls moved out of the loop.
+fn fft_radix2_planned(buf: &mut [Complex], stages: &[Vec<Complex>]) {
+    let n = buf.len();
+    debug_assert!(n.is_power_of_two());
+
+    // Bit-reversal permutation.
+    let bits = n.trailing_zeros();
+    for i in 0..n {
+        let j = (i as u32).reverse_bits() >> (32 - bits);
+        let j = j as usize;
+        if j > i {
+            buf.swap(i, j);
+        }
+    }
+
+    for tw in stages {
+        let half = tw.len();
+        let len = half * 2;
+        for start in (0..n).step_by(len) {
+            for (k, &w) in tw.iter().enumerate() {
+                let u = buf[start + k];
+                let v = buf[start + k + half].mul(w);
+                buf[start + k] = u.add(v);
+                buf[start + k + half] = u.sub(v);
+            }
+        }
     }
 }
 
@@ -132,109 +277,61 @@ pub fn ifft(buf: &mut [Complex]) {
     }
 }
 
-/// Iterative radix-2 Cooley–Tukey, decimation in time.
-fn fft_radix2(buf: &mut [Complex]) {
-    let n = buf.len();
-    debug_assert!(n.is_power_of_two());
-
-    // Bit-reversal permutation.
-    let bits = n.trailing_zeros();
-    for i in 0..n {
-        let j = (i as u32).reverse_bits() >> (32 - bits);
-        let j = j as usize;
-        if j > i {
-            buf.swap(i, j);
-        }
-    }
-
-    let mut len = 2;
-    while len <= n {
-        let ang = -2.0 * PI / len as f64;
-        let half = len / 2;
-        for start in (0..n).step_by(len) {
-            for k in 0..half {
-                let w = Complex::expi(ang * k as f64);
-                let u = buf[start + k];
-                let v = buf[start + k + half].mul(w);
-                buf[start + k] = u.add(v);
-                buf[start + k + half] = u.sub(v);
-            }
-        }
-        len <<= 1;
-    }
-}
-
-/// Bluestein's chirp-z algorithm: an arbitrary-length DFT expressed as a
-/// power-of-two convolution.
-fn fft_bluestein(buf: &[Complex]) -> Vec<Complex> {
-    let n = buf.len();
-    let m = (2 * n - 1).next_power_of_two();
-
-    // chirp_k = e^{-iπk²/n}; k² is taken mod 2n to keep the angle accurate for
-    // large k (k² overflows the useful precision of f64 otherwise).
-    let chirp: Vec<Complex> = (0..n)
-        .map(|k| {
-            let kk = (k as u128 * k as u128 % (2 * n as u128)) as f64;
-            Complex::expi(-PI * kk / n as f64)
-        })
-        .collect();
-
-    let mut a = vec![Complex::default(); m];
-    for k in 0..n {
-        a[k] = buf[k].mul(chirp[k]);
-    }
-
-    let mut b = vec![Complex::default(); m];
-    for k in 0..n {
-        b[k] = chirp[k].conj();
-        if k > 0 {
-            b[m - k] = chirp[k].conj();
-        }
-    }
-
-    fft_radix2(&mut a);
-    fft_radix2(&mut b);
-    for (x, y) in a.iter_mut().zip(&b) {
-        *x = x.mul(*y);
-    }
-    // Inverse of the length-m power-of-two transform.
-    for v in a.iter_mut() {
-        *v = v.conj();
-    }
-    fft_radix2(&mut a);
-    let s = 1.0 / m as f64;
-    for v in a.iter_mut() {
-        *v = v.conj().scale(s);
-    }
-
-    (0..n).map(|k| a[k].mul(chirp[k])).collect()
-}
-
 /// Forward 2D DFT of a row-major `height × width` buffer, in place.
 pub fn fft2(buf: &mut [Complex], width: usize, height: usize) {
+    let (wplan, hplan) = (Plan::new(width), Plan::new(height));
+    fft2_planned(buf, width, height, &wplan, &hplan);
+}
+
+/// [`fft2`] with the two 1-D plans supplied, so callers doing several
+/// same-size transforms (or a forward + inverse pair) build them once.
+fn fft2_planned(buf: &mut [Complex], width: usize, height: usize, wplan: &Plan, hplan: &Plan) {
     debug_assert_eq!(buf.len(), width * height);
     for row in buf.chunks_exact_mut(width) {
-        fft(row);
+        wplan.run(row);
     }
-    let mut col = vec![Complex::default(); height];
-    for x in 0..width {
-        for (y, c) in col.iter_mut().enumerate() {
-            *c = buf[y * width + x];
+    // Columns in blocks of 8: one Complex is 16 bytes, so 8 adjacent columns
+    // span a whole cache line per touched row instead of using 1/8th of it.
+    // Each column still gets the identical 1-D transform — columns are
+    // independent, so the grouping cannot change a single bit.
+    const CB: usize = 8;
+    let mut cols = vec![Complex::default(); height * CB];
+    let mut x = 0usize;
+    while x < width {
+        let nb = CB.min(width - x);
+        for y in 0..height {
+            let src = &buf[y * width + x..y * width + x + nb];
+            for (j, &v) in src.iter().enumerate() {
+                cols[j * height + y] = v;
+            }
         }
-        fft(&mut col);
-        for (y, c) in col.iter().enumerate() {
-            buf[y * width + x] = *c;
+        for c in cols.chunks_exact_mut(height).take(nb) {
+            hplan.run(c);
         }
+        for y in 0..height {
+            let dst = &mut buf[y * width + x..y * width + x + nb];
+            for (j, d) in dst.iter_mut().enumerate() {
+                *d = cols[j * height + y];
+            }
+        }
+        x += nb;
     }
 }
 
 /// Inverse 2D DFT (normalised by `1/(width·height)`), in place.
 pub fn ifft2(buf: &mut [Complex], width: usize, height: usize) {
+    let (wplan, hplan) = (Plan::new(width), Plan::new(height));
+    ifft2_planned(buf, width, height, &wplan, &hplan);
+}
+
+/// [`ifft2`] with the plans supplied — same conjugate–forward–conjugate
+/// construction, same normalisation.
+fn ifft2_planned(buf: &mut [Complex], width: usize, height: usize, wplan: &Plan, hplan: &Plan) {
     debug_assert_eq!(buf.len(), width * height);
     for v in buf.iter_mut() {
         *v = v.conj();
     }
-    fft2(buf, width, height);
+    fft2_planned(buf, width, height, wplan, hplan);
     let s = 1.0 / (width * height) as f64;
     for v in buf.iter_mut() {
         *v = v.conj().scale(s);
@@ -323,11 +420,13 @@ pub fn conv_fft_real(
         }
     }
 
-    fft2(&mut buf, pad_w, pad_h);
+    // One plan pair serves the forward and the inverse transform.
+    let (wplan, hplan) = (Plan::new(pad_w), Plan::new(pad_h));
+    fft2_planned(&mut buf, pad_w, pad_h, &wplan, &hplan);
     for (b, f) in buf.iter_mut().zip(filter) {
         *b = b.scale(*f);
     }
-    ifft2(&mut buf, pad_w, pad_h);
+    ifft2_planned(&mut buf, pad_w, pad_h, &wplan, &hplan);
 
     let mut out = Vec::with_capacity(width * height);
     for y in 0..height {
