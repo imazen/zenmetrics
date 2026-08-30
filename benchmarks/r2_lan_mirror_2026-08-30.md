@@ -127,21 +127,21 @@ datasets, against 61 tar objects for 219 GiB carrying the same bytes.
 | `zentrain/kadis-700k/canonical/` | 0.84 | 1 | KADIS-700k canonical parquet | **MIRRORED+VERIFIED** |
 | `zentrain/kadis-700k-gpu/canonical/` | 0.87 | 1 | KADIS-700k GPU-metric canonical parquet | **MIRRORED+VERIFIED** |
 | `zentrain/ext944-canonical-2026-08-01/` | 26.51 | 85 | 944-regime legs | **MIRRORED+VERIFIED** |
-| `zentrain/tbig-944-2026-08-02/` | 29.29 | 16 | bigcodec 944 views | **QUEUED (gentle lane)** |
-| `zentrain/kadis-944-2026-08-01/` | 3.09 | 7 | KADIS 944 rescore | **QUEUED (gentle lane)** |
-| `zentrain/ext924-canonical-2026-07-27/` | 49.96 | 36 | 924-regime legs | **QUEUED (gentle lane)** |
-| `zentrain/ext720-canonical-2026-07-22/` | 55.58 | 37 | 720-regime legs | **QUEUED (gentle lane)** |
-| `zentrain/tbig-720-2026-07-22/` | 17.59 | 2 | bigcodec 720 views | **QUEUED (gentle lane)** |
-| `zentrain/kadis-720-2026-07-24/` | 3.13 | 3 | KADIS 720 rescore | **QUEUED (gentle lane)** |
-| `zentrain/hdr/` | 4.77 | 185 | HDR corpora/tables | **QUEUED (gentle lane)** |
-| `zentrain/canonical-2026-07-15/` | 0.004 | 4 | HF near-lossless + kadis_negrich training parquets (the recurring-priority set) | **QUEUED (gentle lane)** |
-| `zentrain/canonical-gates-2026-07-29/` | 0.001 | 57 | canonical-source gate verdicts | **QUEUED (gentle lane)** |
-| `zentrain/profiles/` | 0.001 | 6 | Profile C ship artifacts (C-2026-08-05) | **QUEUED (gentle lane)** |
-| `zentrain/hdr-corpora/` | 0.034 | 4 | HDR corpora tables | **QUEUED (gentle lane)** |
-| `zentrain/jxl-nearlossless-2026-07-06/` | 0.050 | 29 | input to build_hf_nearlossless_2026-07-15.py | **QUEUED (gentle lane)** |
-| `zentrain/kadis-924-2026-07-27/` | 2.88 | 3 | KADIS 924 rescore | **QUEUED (gentle lane)** |
-| `zentrain/canonical-training-2026-05-18/` | 0.75 | 14 | May-era canonical training tables | **QUEUED (gentle lane)** |
-| `zentrain/dualmodel-2026-06-28/` | 5.20 | 171 | LOO fleet / hetzner_ml_train inputs | **QUEUED (gentle lane)** |
+| `zentrain/tbig-944-2026-08-02/` | 29.29 | 16 | bigcodec 944 views | **MIRRORED+VERIFIED** |
+| `zentrain/kadis-944-2026-08-01/` | 3.09 | 7 | KADIS 944 rescore | **MIRRORED+VERIFIED** |
+| `zentrain/ext924-canonical-2026-07-27/` | 49.96 | 36 | 924-regime legs | **MIRRORED+VERIFIED** |
+| `zentrain/ext720-canonical-2026-07-22/` | 55.58 | 37 | 720-regime legs | **MIRRORED+VERIFIED** |
+| `zentrain/tbig-720-2026-07-22/` | 17.59 | 2 | bigcodec 720 views | **MIRRORED+VERIFIED** |
+| `zentrain/kadis-720-2026-07-24/` | 3.13 | 3 | KADIS 720 rescore | **MIRRORED+VERIFIED** |
+| `zentrain/hdr/` | 4.77 | 185 | HDR corpora/tables | **MIRRORED+VERIFIED** |
+| `zentrain/canonical-2026-07-15/` | 0.004 | 4 | HF near-lossless + kadis_negrich training parquets (the recurring-priority set) | **MIRRORED+VERIFIED** |
+| `zentrain/canonical-gates-2026-07-29/` | 0.001 | 57 | canonical-source gate verdicts | **MIRRORED+VERIFIED** |
+| `zentrain/profiles/` | 0.001 | 6 | Profile C ship artifacts (C-2026-08-05) | **MIRRORED+VERIFIED** |
+| `zentrain/hdr-corpora/` | 0.034 | 4 | HDR corpora tables | **MIRRORED+VERIFIED** |
+| `zentrain/jxl-nearlossless-2026-07-06/` | 0.050 | 29 | input to build_hf_nearlossless_2026-07-15.py | **MIRRORED+VERIFIED** |
+| `zentrain/kadis-924-2026-07-27/` | 2.88 | 3 | KADIS 924 rescore | **MIRRORED+VERIFIED** |
+| `zentrain/canonical-training-2026-05-18/` | 0.75 | 14 | May-era canonical training tables | **MIRRORED+VERIFIED** |
+| `zentrain/dualmodel-2026-06-28/` | 5.20 | 171 | LOO fleet / hetzner_ml_train inputs | **MIRRORED+VERIFIED** |
 | `zentrain/strategy-fleet-2026-07-02/` | 11.61 | 36 | reproduce_t1dro51.sh + strategy_fleet.sh inputs | **QUEUED (gentle lane)** |
 
 ### Already on the LAN store before this pass (verified by listing, not re-copied)
@@ -375,6 +375,21 @@ listings, which are stable.
 | `zentrain/jxl-lossy/runs/mandfix2-zenjpeg-1782584881/variants/` | 8 / 8 | 47,450,193,920 / 47,450,193,920 | **YES** | aws-lister |
 | `zentrain/canonical/2026-06-27/zenjpeg_lossy/encodes/` | 1,484,010 / 0 | 46,311,414,326 / 0 | **DEFERRED** | not started — the tower already holds this corpus as zen924/zjl2-encodes (§3b) |
 | `zentrain/ext944-canonical-2026-08-01/` | 85 / 85 | 28,469,449,306 / 28,469,449,306 | **YES** | count+bytes verified (aws lister) |
+| `zentrain/tbig-944-2026-08-02/` | 16 / 16 | 31,449,116,778 / 31,449,116,778 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/kadis-944-2026-08-01/` | 7 / 7 | 3,317,392,480 / 3,317,392,480 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/canonical-2026-07-15/` | 4 / 4 | 4,754,909 / 4,754,909 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/canonical-gates-2026-07-29/` | 57 / 57 | 1,276,519 / 1,276,519 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/profiles/` | 6 / 6 | 1,597,790 / 1,597,790 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/hdr-corpora/` | 4 / 4 | 36,793,583 / 36,793,583 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/jxl-nearlossless-2026-07-06/` | 29 / 29 | 54,093,184 / 54,093,184 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/ext924-canonical-2026-07-27/` | 36 / 36 | 53,640,872,892 / 53,640,872,892 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/kadis-924-2026-07-27/` | 3 / 3 | 3,088,633,446 / 3,088,633,446 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/ext720-canonical-2026-07-22/` | 37 / 37 | 59,681,276,484 / 59,681,276,484 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/tbig-720-2026-07-22/` | 2 / 2 | 18,888,658,867 / 18,888,658,867 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/kadis-720-2026-07-24/` | 3 / 3 | 3,361,642,799 / 3,361,642,799 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/hdr/` | 185 / 185 | 5,126,444,482 / 5,126,444,482 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/canonical-training-2026-05-18/` | 14 / 14 | 803,725,902 / 803,725,902 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/dualmodel-2026-06-28/` | 171 / 171 | 5,579,193,537 / 5,579,193,537 | **YES** | count+bytes verified (aws lister, both stores) |
 
 Large objects (multi-GB tars, >64 MB parquets) are spot-checked by **byte
 range** rather than whole-file hash: identical ranges are fetched from both
