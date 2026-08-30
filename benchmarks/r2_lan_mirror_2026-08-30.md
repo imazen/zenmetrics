@@ -357,8 +357,11 @@ listings, which are stable.
 | `zentrain/kadis-700k/canonical/` | 1 / 1 | 906,001,718 / 906,001,718 | **YES** | 3/3 sha256 range OK (head+mid+tail) |
 | `zentrain/kadis-700k-gpu/canonical/` | 1 / 1 | 936,367,503 / 936,367,503 | **YES** | 3/3 sha256 range OK (head+mid+tail) |
 | `zentrain/canonical/2026-06-27/zenpng_lossless/encodes/` | 76,449 / 27,500 | 13,691,411,533 / 6,165,342,628 | **PARTIAL** | interrupted mid-upload by the load stop (§3); resumes by diff |
-| `zentrain/canonical/2026-06-27/zenjxl_lossless/encodes/` | 269,820 / 0 | 58,419,699,144 / 0 | **DEFERRED** | not started — see §5b (tower-local ingest once the mover drains) |
+| `zentrain/canonical/2026-06-27/zenjxl_lossless/encodes/` | 269,820 / 0 | 58,419,699,144 / 0 | **DEFERRED** | not started — bytes covered by the jxl-modular tars + bf-zjxlm indexes (§5b) |
 | `zentrain/jxl-lossy/runs/mandfix2-zenjpeg-1782584881/variants/` | 8 / 8 | 47,450,193,920 / 47,450,193,920 | **YES** | 6/6 sha256 range OK (head+tail on 3 of 8 boxes) |
+| `zentrain/canonical/2026-06-27/zenwebp_lossy/encodes/` | 944,370 / 0 | 24,187,758,994 / 0 | **NO** | aws-lister |
+| `zentrain/jxl-lossy/runs/mandfix2-zenjpeg-1782584881/variants/` | 8 / 8 | 47,450,193,920 / 47,450,193,920 | **YES** | aws-lister |
+| `zentrain/canonical/2026-06-27/zenjpeg_lossy/encodes/` | 1,484,010 / 0 | 46,311,414,326 / 0 | **DEFERRED** | not started — the tower already holds this corpus as zen924/zjl2-encodes (§3b) |
 
 Large objects (multi-GB tars, >64 MB parquets) are spot-checked by **byte
 range** rather than whole-file hash: identical ranges are fetched from both
