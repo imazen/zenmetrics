@@ -26,6 +26,11 @@ Workspace conventions per the global rules:
   cpu 8/6/4 on the byte-exact port, so the 512² renditions no longer defer; the
   40-minute case the cap exists for is 1080p at cpu 4. Ships in the next executor
   image; the running wave keeps 0.25 until its drain (a relaunch orphans in-flight claims).
+- **aom-rs datagen executor image rebuilt on zenav1-aom `4e0229e1`** (KB-41 roots
+  #14-#17: the cpu-4 screen-frame fixes — restoration disabled under `allow_intrabc`,
+  var-tx first-child bound, est-rd tx-type prune, post-prune pixel-domain gate) with
+  the 0.30 MP screen cap; the drained `avifaom-enc-20260830` run's 3,439
+  `encoder_panic` cells (deferred + byte-refused screen frames) are re-queued onto it.
 
 ## hdrvdp (CPU optimisation pass, bit-identical, 2026-08-29)
 
