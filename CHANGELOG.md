@@ -16,6 +16,13 @@ Workspace conventions per the global rules:
 ## zenmetrics-cli
 
 ### Changed
+- **`writeback_scores.py` keys score + feature rows by `(ref basename, encode_sha[, metric])`,
+  not by `encode_sha` alone.** Different source images can encode to byte-identical bytes
+  (2026-08-30: 15 shas shared across 30 svt q=1 tiny cells, 7 shas / 14 cells on the aom
+  wave), and the sha-only key made the LAST cell's (ref, dist) values win for every cell
+  sharing the sha — verified on 7064/7020.scale128x128 (refs differ in 99.9% of pixels, same
+  blob). Both svt harvests + views were re-written from the cached blobs (old files kept as
+  `shakey-bak/`); earlier harvests carry the same latent defect wherever a sha is shared.
 - **Executor image rebuilt on `c0cdf095`** (`exec-zensim944hdr-c0cdf095`: the carriers metric
   + the same byte-exact aom port); `fleet.env` `ZEN_FLEET_IMAGE_CPU` pinned to it;
   `avifsvt-sf-carriers-20260830` launched on the tower as a second capped worker

@@ -53,6 +53,7 @@ print("  %d blobs" % len(blobs), flush=True)
 # Full-URI declares (`zenfleet-ctl declare-scorefiles --full-uri`, migrated from declare_direct_objects.py) put the whole s3://.../blobs/<sha>
 # in encode_sha — normalize to the bare content sha so the pairs join keys match.
 def norm_sha(s): return os.path.basename(s or "")
+def norm_ip(s): return os.path.basename(s or "")
 metric_data = {}; feat_data = {}; err_rows = 0
 for bp in blobs:
     with open(bp) as fh:
@@ -67,9 +68,13 @@ for bp in blobs:
                 if "metric" not in r or r.get("error"):
                     err_rows += 1
                     continue
-                metric_data[(norm_sha(r["encode_sha"]), r["metric"])] = r.get("scores") or {r["metric"]: r.get("score")}
+                # Keyed by (ref basename, sha, metric): different source images CAN
+                # encode to byte-identical bytes (2026-08-30: 15 shas shared across
+                # 30 svt q=1 tiny cells, 7/14 on the aom wave) and a sha-only key made
+                # the LAST cell's (ref, dist) scores win for every cell sharing the sha.
+                metric_data[(norm_ip(r.get("image_path")), norm_sha(r["encode_sha"]), r["metric"])] = r.get("scores") or {r["metric"]: r.get("score")}
             elif k == "feature":
-                feat_data[norm_sha(r["encode_sha"])] = (r.get("zensim_score"), r.get("features"), r.get("regime"))
+                feat_data[(norm_ip(r.get("image_path")), norm_sha(r["encode_sha"]))] = (r.get("zensim_score"), r.get("features"), r.get("regime"))
 print("  metric entries=%d, feature entries=%d, error rows skipped=%d" % (len(metric_data), len(feat_data), err_rows), flush=True)
 
 # 3+4) CELL rows -> encode_sha. Two sources:
@@ -141,11 +146,12 @@ for c in cells:
             "knob_tuple_json": c.get("knob_tuple_json", ""), "encode_sha": sha}
     if c.get("codec"): base["codec"] = c["codec"]
     srow = dict(base); got = False
+    ipb = os.path.basename(c["image_path"])
     for m in METRICS:
-        sc = metric_data.get((sha, m))
+        sc = metric_data.get((ipb, sha, m))
         if sc:
             srow.update(sc); all_score_cols.update(sc.keys()); got = True
-    ft = feat_data.get(sha)
+    ft = feat_data.get((ipb, sha))
     if ft and ft[1]:
         srow["zensim_score"] = ft[0]; all_score_cols.add("zensim_score")
         got = True
