@@ -403,14 +403,29 @@ verified, along with all 53 byte-range indexes, so **the tar-range fetch path is
 fully LAN-resident and was proven end to end** (§4: sampled ranges taken from
 the mirrored `variant_index.tsv` itself).
 
-**What is deferred, and why it should NOT be finished the way it started:**
+**Byte-completeness is reached through the tars, not the objects.** **Six of the
+seven** datasets have their `variant_index.tsv` on the LAN store (all 53 were
+mirrored and verified) — every one except `zenjpeg_lossy`, for which no index
+exists anywhere — so for those six the tar-range fetch works the moment the box
+tars land. `mandfix4-zenavif`, `jxl-lossy-vardct`
+and `mandfix2-zenjpeg` are mirrored and verified; the remaining three runs
+(`mandfix2-zenpng`, `mandfix2-zenwebp`, `jxl-modular` — 21 objects, 97.12 GiB of
+large sequential transfer) are queued behind the same load gate.
 
-| remaining | size | why deferred |
+**What is deferred is the per-object convenience layer, not the bytes:**
+
+| deferred `encodes/` prefix | size | why, and what covers it meanwhile |
 |---|--:|---|
-| `zenjpeg_lossy/encodes/` | 43.13 GiB / 1,484,010 obj | the tower **already holds this exact corpus** as `zen924/zjl2-encodes` (§3b), and Unraid's mover is *still moving it* — a third copy written across the WAN would be the worst of all options |
-| `zenwebp_lossy/encodes/` | 22.53 GiB / 944,370 obj | small-object PUT rate is the thing that took the store down; needs the mover drained first |
-| `zenjxl_lossless/encodes/` | 54.41 GiB / 269,820 obj | same |
-| `zenpng_lossless/encodes/` | 12.75 GiB / 76,449 obj | **partial: 27,500 of 76,449 already on the LAN store**; resumes by diff |
+| `zenjpeg_lossy/` | 43.13 GiB / 1,484,010 obj | the tower **already holds this exact corpus** as `zen924/zjl2-encodes` (§3b) and Unraid's mover is *still moving it*; a third copy written across the WAN would be the worst available option. `mandfix2-zenjpeg` tars are mirrored — but note this dataset has **no `variant_index.tsv` anywhere**, so an index would have to be built (`zenmetrics/scripts/jobsys/index_tar_byterange.py`) before the tar path works for it. |
+| `zenwebp_lossy/` | 22.53 GiB / 944,370 obj | small-object PUT rate is what took the store down; `mandfix2-zenwebp` tars + `bf-zwebp-t0..8` indexes cover the bytes |
+| `zenjxl_lossless/` | 54.41 GiB / 269,820 obj | same; `jxl-modular` tars + `bf-zjxlm-t0..9` indexes cover the bytes |
+| `zenpng_lossless/` | 12.75 GiB / 76,449 obj | **partial: 27,500 of 76,449 already on the LAN store**, resumes by diff; `mandfix2-zenpng` tars + `bf-zpng-t0..1` indexes cover the bytes |
+
+So the honest statement of state is: **the corpus is byte-complete and fetchable
+on the LAN store via tar + index for six of the seven datasets** (the seventh,
+`zenjpeg_lossy`, has its tars but needs an index built), and four datasets do not
+yet have the plain-GET `encodes/` path that `resolve_bigcodec_pair_uris.py`
+currently expects for object mode.
 
 The cheap path for all four, once the mover has drained:
 
