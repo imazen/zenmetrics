@@ -41,6 +41,7 @@ for js in "$@"; do
     -e ZEN_CONTROL_KEY="jobs/$js/control.json" \
     "${REQ[@]}" -e ZEN_WORKER="$(hostname)-$role" -e ZEN_PROVIDER=basement \
     -e ZEN_MAX_MIN=1400 -e ZEN_IDLE_PASSES=8 -e ZEN_CORE_OVERSUBSCRIBE=2 \
+    -e ZEN_PASS_TIMEOUT="${ZM_PASS_TIMEOUT:-1800}" \
     --entrypoint /usr/local/bin/fleet-entrypoint.sh "$ZM_IMG" >> "$LOG" 2>&1
   log "DONE $js rc=$?"
 done
