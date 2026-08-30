@@ -247,6 +247,10 @@ codegen-units = 1
 # re-collects with the post-W44 RD curves rather than reusing
 # the pre-W44 cached sidecars.
 [patch.crates-io]
+# DEV-ONLY (2026-08-29): zenjpeg 0.9.0 (synced) requires zenanalyze ^0.2.0,
+# unpublished — supply the local sibling until the 0.2.0 publish. zenjpeg's
+# own workspace uses a git rev for CI; a path-dep build root must patch here.
+zenanalyze = { path = "../zenanalyze" }
 # zenpixels / zenpixels-convert: previously git-rev-pinned (e890b671, 0.2.15)
 # because ultrahdr-core needed an unpublished ^0.2.15. DROPPED 2026-07-27:
 # 0.2.16 is on crates.io and the zenpng sibling now requires
