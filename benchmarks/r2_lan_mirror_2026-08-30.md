@@ -306,13 +306,23 @@ listings, which are stable.
 | `zentrain/canonical/2026-06-27/originals/` | 3 / 3 | 1,100,933,120 / 1,100,933,120 | **YES** | 6/6 sha256 range OK (head+tail x3) |
 | `zentrain/jxl-lossy/runs/jxl-lossy-vardct-1782609551/variants/` | 24 / 24 | 33,067,909,120 / 33,067,909,120 | **YES** | 4/4 sha256 range OK (incl. 2 real member ranges from variant_index) |
 | `codec-corpus/clean-picker-corpus-2026-06-26/` | 4,497 / 4,497 | 1,097,459,519 / 1,097,459,519 | **YES** | 3/3 sha256 full-object OK |
-| `zentrain/canonical-2026-05-21/` | 29 / 29 | 1,454,864,166 / 1,454,864,166 | **YES** | 1/1 sha256 full-object OK (2 objects >64MB skipped) |
+| `zentrain/canonical-2026-05-21/` | 29 / 29 | 1,454,864,166 / 1,454,864,166 | **YES** | 1 full-object + 6 range sha256 OK; `features/cvvdp_iwssim_LARGE_372col.parquet` additionally matches the sha256 recorded in zensim/CLAUDE.md (14c2053327…) in full |
 | `zentrain/canonical/2026-06-27/*/ (metadata: 50 objects)` | 50 / 50 | - / - | **YES** | 21/21 parquets match the sha256 recorded in _MANIFEST.json at BUILD time (2026-06-27), 0 mismatch |
 | `zentrain/canonical/2026-06-27/zenwebp_lossless/encodes/` | 40,473 / 40,473 | 6,954,651,422 / 6,954,651,422 | **YES** | 5/5 sha256 full-object OK |
-| `zentrain/kadis-700k/canonical/` | 1 / 1 | 906,001,718 / 906,001,718 | **YES** | 2/2 sha256 range OK (head+tail) |
-| `zentrain/kadis-700k-gpu/canonical/` | 1 / 1 | 936,367,503 / 936,367,503 | **YES** | 2/2 sha256 range OK (head+tail) |
+| `zentrain/kadis-700k/canonical/` | 1 / 1 | 906,001,718 / 906,001,718 | **YES** | 3/3 sha256 range OK (head+mid+tail) |
+| `zentrain/kadis-700k-gpu/canonical/` | 1 / 1 | 936,367,503 / 936,367,503 | **YES** | 3/3 sha256 range OK (head+mid+tail) |
 | `zentrain/canonical/2026-06-27/zenpng_lossless/encodes/` | 76,449 / 27,500 | 13,691,411,533 / 6,165,342,628 | **PARTIAL** | interrupted mid-upload by the load stop (§3); resumes by diff |
 | `zentrain/canonical/2026-06-27/zenjxl_lossless/encodes/` | 269,820 / 0 | 58,419,699,144 / 0 | **DEFERRED** | not started — see §5b (tower-local ingest once the mover drains) |
+
+Two checks reach past "the two stores agree" to "the LAN copy is the artifact the
+project wrote down months ago":
+
+- the **21 canonical parquets** match the per-file sha256 recorded in each
+  dataset's `_MANIFEST.json` **at build time, 2026-06-27** — 0 mismatch;
+- `canonical-2026-05-21/features/cvvdp_iwssim_LARGE_372col.parquet` hashes in
+  full to `14c205332701b5ff6f2842a8d60f8ac1282f8be3d5cd89c11700e1e4b864a20f`,
+  the value written into `zensim/CLAUDE.md` when that file was extracted in
+  May 2026 (85,519,403 B).
 
 Large objects (multi-GB tars, >64 MB parquets) are spot-checked by **byte
 range** rather than whole-file hash: identical ranges are fetched from both
