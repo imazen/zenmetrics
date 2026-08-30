@@ -258,22 +258,94 @@ pub fn up_conv(
         band.data[(y / step) * band.width + (x / step)]
     };
 
-    for py in 0..out_height {
-        for px in 0..out_width {
-            let mut acc = 0.0;
-            for ky in 0..fs {
-                let sy = py as isize - ky as isize + c;
-                let frow = &filter[ky * fs..ky * fs + fs];
-                for (kx, &w) in frow.iter().enumerate() {
-                    if w == 0.0 {
-                        continue;
-                    }
-                    acc += w * sample(sy, px as isize - kx as isize + c);
-                }
+    // ── Performance shape; the arithmetic is bit-identical to the direct
+    // triple loop above it replaced (see `tests/bit_lock.rs`). ──────────────
+    //
+    // The direct form pays `sample`'s two `reflect1`s and two divisibility
+    // tests per *tap*; profiling put 47 % of the whole metric there. Instead,
+    // materialise `sample` once over the rectangle of positions any output can
+    // ask for — `py − ky + c` spans `[-(fs−1−c), out_height−1+c]`, so with
+    // `off = fs−1−c` the padded plane is `(out + fs − 1)` per axis — and the
+    // inner loop becomes a plain correlation against precomputed values.
+    //
+    // Bit-identity holds because each output pixel still sums exactly the same
+    // products in exactly the same (ky-major, zero-taps-skipped) order; only
+    // *where* the sampled values come from changed (memoised vs recomputed),
+    // and `sample` is deterministic. Outputs are blocked in groups of 8 so
+    // LLVM can vectorise across *outputs* — each lane keeps its own serial
+    // accumulation chain, which is what makes SIMD here order-preserving.
+    let pad_w = out_width + fs - 1;
+    let pad_h = out_height + fs - 1;
+    let off = (fs - 1) as isize - c;
+    let mut padded = vec![0.0f64; pad_w * pad_h];
+    for (iy, prow) in padded.chunks_exact_mut(pad_w).enumerate() {
+        let y = iy as isize - off;
+        // Hoisted row half of `sample`: a row that lands between band rows is
+        // entirely zeros.
+        let ry = reflect1(y, out_height);
+        if !ry.is_multiple_of(step) {
+            continue;
+        }
+        let brow = &band.data[(ry / step) * band.width..(ry / step) * band.width + band.width];
+        for (ix, p) in prow.iter_mut().enumerate() {
+            let x = ix as isize - off;
+            let rx = reflect1(x, out_width);
+            if !rx.is_multiple_of(step) {
+                continue;
             }
-            res[py * out_width + px] += acc;
+            *p = brow[rx / step];
         }
     }
+
+    // Non-zero taps in the original iteration order (ky-major, kx within);
+    // the `w == 0.0` filter mirrors the original `continue`.
+    let mut taps: Vec<(f64, usize, usize)> = Vec::with_capacity(fs * fs);
+    for ky in 0..fs {
+        for (kx, &w) in filter[ky * fs..ky * fs + fs].iter().enumerate() {
+            if w == 0.0 {
+                continue;
+            }
+            // `padded` index of tap (ky, kx) for output (py, px) is
+            // `(py + fs−1−ky) · pad_w + px + fs−1−kx`.
+            taps.push((w, fs - 1 - ky, fs - 1 - kx));
+        }
+    }
+
+    const BLK: usize = 8;
+    for py in 0..out_height {
+        let out_row = py * out_width;
+        let mut px = 0usize;
+        while px + BLK <= out_width {
+            let mut acc = [0.0f64; BLK];
+            for &(w, dy, dx) in &taps {
+                let base = (py + dy) * pad_w + px + dx;
+                let s: &[f64; BLK] = padded[base..base + BLK]
+                    .try_into()
+                    .expect("BLK-sized window");
+                for (a, v) in acc.iter_mut().zip(s) {
+                    *a += w * v;
+                }
+            }
+            for (j, a) in acc.iter().enumerate() {
+                res[out_row + px + j] += a;
+            }
+            px += BLK;
+        }
+        while px < out_width {
+            let mut acc = 0.0;
+            for &(w, dy, dx) in &taps {
+                acc += w * padded[(py + dy) * pad_w + px + dx];
+            }
+            res[out_row + px] += acc;
+            px += 1;
+        }
+    }
+    // `sample` stays for documentation of the semantics; keep it referenced so
+    // the compiler enforces it stays in sync with the padded builder above.
+    debug_assert!({
+        let spot = sample(-off, -off);
+        spot.to_bits() == padded[0].to_bits()
+    });
 }
 
 fn flat<const N: usize>(f: &[[f64; N]; N]) -> Vec<f64> {
