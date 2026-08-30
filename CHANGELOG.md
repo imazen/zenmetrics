@@ -16,6 +16,13 @@ Workspace conventions per the global rules:
 ## zenmetrics-cli
 
 ### Changed
+- **aom-rs datagen executor image rebuilt on zenav1-aom `0c92ef1f`** (KB-41 roots
+  #18-#21: the cpu-4/5 screen residuals — AB split-ctx reuse gate, output-run txfm ctx
+  stamp, visible-only predict-skip SSE, searched entropy ctx for pick-skip'd txbs —
+  census 102/102 byte-identical). Tag `exec-zensim944hdr-e7a99c2d`; `fleet.env`
+  `ZEN_FLEET_IMAGE_CPU` pinned to it; the `avifaom-enc-20260830` run's 2,976
+  `encoder_panic` (cap-deferred) cells re-queued onto it and the three LAN boxes
+  relaunched at 13:20Z.
 - **aom-rs screen-content size cap default 0.30 → 16 MP** (`ZEN_AOMRS_MAX_SCREEN_MP`):
   after KB-41 roots #18-#21 (zenav1-aom, the cpu-4/5 screen residuals — all
   byte-exact) the 9-cell cpu-4 screen census with three 1920x1080 cells runs in
