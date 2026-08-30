@@ -1003,10 +1003,12 @@ fn encode_avif(
             }
             #[cfg(not(feature = "avif-svt"))]
             {
-                return Err("zenavif backend \"svt-rs\" requested but this build lacks the \
+                return Err(
+                    "zenavif backend \"svt-rs\" requested but this build lacks the \
                             `avif-svt` feature (rebuild with `--features avif-svt`); refusing \
                             to fall back to zenravif and mislabel the cell"
-                    .into());
+                        .into(),
+                );
             }
         }
         Some(other) => {
