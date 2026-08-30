@@ -58,6 +58,24 @@ work no longer buries it); it is per-call setup (Photoreceptor JND tables,
 spectral matrix, FFT plans). A caller scoring many pairs at one geometry could
 amortise it, but that needs an API for reusable state — owner call, see below.
 
+### Per-commit α / β (derived from the TSV rows above)
+
+α from the small end (line through 64² and 256², so ±1–2 ms at the probe's
+1 ms print granularity); β as the three segment slopes. Every commit moved
+**β**; none targeted α — the fixed cost stays ~4–5 ms throughout, and the
+baseline's "−1.9 ms" α is an artefact of a 4.4 µs/px slope burying the
+intercept at 64² (16 ms total vs ~18 ms of pure slope).
+
+| stage | α_small (ms) | β 64→256 (µs/px) | β 256→1024 | β 1024→4096 |
+|---|---|---|---|---|
+| baseline | −1.9 | 4.378 | 4.594 | 4.901 |
+| + up_conv | 3.4 | 2.344 | 2.596 | 2.810 |
+| + corr_dn | 4.3 | 1.400 | 1.619 | 1.802 |
+| + fft_plans | 4.1 | 0.944 | 1.064 | 1.103 |
+| + hoists | 4.5 | 0.863 | 1.003 | 1.044 |
+| + box3x3/imresize | 4.7 | 0.798 | 0.932 | 0.974 |
+| + pad_row_dedup | 4.9 | 0.765 | 0.906 | 0.940 |
+
 ## What changed (each landed as its own commit, each bit-identical)
 
 1. **up_conv** (was 47 % of the metric, `sample` closure = 2×`reflect1` + 2
