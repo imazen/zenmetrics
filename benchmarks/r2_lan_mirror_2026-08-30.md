@@ -157,8 +157,8 @@ datasets, against 61 tar objects for 219 GiB carrying the same bytes.
 
 | bucket/prefix | GiB | objects | what reads it | status |
 |---|--:|--:|---|---|
-| `zentrain/canonical/2026-06-27/*/variants.<split>.tar` | 141.30 | 15 | NO CONSUMER FOUND; byte-redundant with encodes/ | **NOT-MIRRORED** |
-| `zentrain/kadis-700k-gpu/distorted/` | 197.43 | 699,999 | rescore-from-links PNGs; canonical parquet IS mirrored | **NOT-MIRRORED** |
+| `zentrain/canonical/2026-06-27/*/variants.<split>.tar` | 141.30 | 15 | NO CONSUMER FOUND anywhere; a re-grouping of the SAME bytes the box tars carry (per-dataset totals match exactly), and those tars are mirrored | **NOT-MIRRORED** |
+| `zentrain/kadis-700k-gpu/distorted/` | 197.43 | 699,999 | rescore-from-links PNGs; the canonical parquet IS mirrored, and 700k small objects is exactly the shape this store cannot absorb (§3) | **NOT-MIRRORED** |
 | `codec-corpus/picker-sweep-2026-06-22/` | 165.91 | 6,069 | superseded by canonical/2026-06-27 | **NOT-MIRRORED** |
 | `codec-corpus/kadis-hdr-2026-07-13/` | 66.54 | 12,695 | HDR distortion corpus; no active LAN reader | **NOT-MIRRORED** |
 | `codec-corpus/synthetic-v2/` | 38.22 | 729,703 | no active reader (one code comment + a CLAUDE.md pointer); Tower archive holds it (59G images + 2.3G tables) | **NOT-MIRRORED** |
