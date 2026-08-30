@@ -130,14 +130,17 @@ impl BandPyramid {
 #[must_use]
 pub fn decompose(pathway: &Pathway, par: &Params, bb_padvalue: Option<f64>) -> (BandPyramid, f64) {
     let pyr: SteerablePyramid = build(&pathway.achromatic, pathway.width, pathway.height, None);
+    let levels = pyr.height_levels();
 
-    let mut bands: Vec<Vec<Band>> = Vec::with_capacity(pyr.height_levels() + 2);
-    bands.push(vec![pyr.high_pass.clone()]);
-    for level in &pyr.levels {
-        bands.push(level.to_vec());
+    // Move the pyramid's planes into the band list — it is consumed here, so
+    // cloning ~1.3× the image in f64 planes would be pure memcpy waste.
+    let mut bands: Vec<Vec<Band>> = Vec::with_capacity(levels + 2);
+    bands.push(vec![pyr.high_pass]);
+    for level in pyr.levels {
+        bands.push(level.into());
     }
-    bands.push(vec![pyr.low_pass.clone()]);
-    debug_assert_eq!(bands.len(), pyr.height_levels() + 2);
+    bands.push(vec![pyr.low_pass]);
+    debug_assert_eq!(bands.len(), levels + 2);
     debug_assert!(
         bands[1..bands.len() - 1]
             .iter()

@@ -53,6 +53,12 @@ pub struct Photoreceptor {
     jnd_cone: Vec<f64>,
     /// Rod response in JND units, already scaled by `sensitivity_correction`.
     jnd_rod: Vec<f64>,
+    /// `10^log_lum[0]`, memoised: [`Self::cone`] / [`Self::rod`] clamp against
+    /// the table range per *pixel*, and recomputing `powf` there was a
+    /// measurable slice of the whole metric. Same expression, computed once.
+    lum_min: f64,
+    /// `10^log_lum[last]`, memoised likewise.
+    lum_max: f64,
 }
 
 impl Photoreceptor {
@@ -102,23 +108,27 @@ impl Photoreceptor {
             .map(|v| v * sc)
             .collect();
 
+        let lum_min = 10f64.powf(log_lum[0]);
+        let lum_max = 10f64.powf(log_lum[log_lum.len() - 1]);
         Self {
             log_lum,
             jnd_cone,
             jnd_rod,
+            lum_min,
+            lum_max,
         }
     }
 
     /// Lowest tabulated luminance in cd/m² (`1e-5`).
     #[must_use]
     pub fn lum_min(&self) -> f64 {
-        10f64.powf(self.log_lum[0])
+        self.lum_min
     }
 
     /// Highest tabulated luminance in cd/m² (`1e5`).
     #[must_use]
     pub fn lum_max(&self) -> f64 {
-        10f64.powf(self.log_lum[self.log_lum.len() - 1])
+        self.lum_max
     }
 
     fn step(&self) -> f64 {

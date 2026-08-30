@@ -76,6 +76,48 @@ pub fn visual_pathway(
     lmsr: &[[f64; 4]],
     surround: &[f64],
 ) -> Pathway {
+    let mtf_filter = mtf_filter_for(width, height, par);
+    visual_pathway_with_filter(
+        nits,
+        width,
+        height,
+        par,
+        pn,
+        lmsr,
+        surround,
+        mtf_filter.as_deref(),
+    )
+}
+
+/// The Fourier-domain optical MTF filter [`visual_pathway`] applies, on the
+/// 2×-padded lattice — `None` when `par.do_mtf` is off.
+///
+/// The filter depends only on the geometry and `par`, never on the pixels, so
+/// the metric computes it once and shares it across the reference and test
+/// images instead of rebuilding it (a full grid of `exp` calls) per image.
+pub(crate) fn mtf_filter_for(width: usize, height: usize, par: &Params) -> Option<Vec<f64>> {
+    let (pad_w, pad_h) = (width * 2, height * 2);
+    par.do_mtf.then(|| {
+        cycles_per_degree_grid(pad_w, pad_h, par.pix_per_deg)
+            .into_iter()
+            .map(|rho| mtf(rho, par))
+            .collect()
+    })
+}
+
+/// [`visual_pathway`] with the MTF filter (from [`mtf_filter_for`]) supplied
+/// by the caller so an image pair shares one.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn visual_pathway_with_filter(
+    nits: &[f64],
+    width: usize,
+    height: usize,
+    par: &Params,
+    pn: &Photoreceptor,
+    lmsr: &[[f64; 4]],
+    surround: &[f64],
+    mtf_filter: Option<&[f64]>,
+) -> Pathway {
     let channels = lmsr.len();
     assert_eq!(
         nits.len(),
@@ -91,17 +133,11 @@ pub fn visual_pathway(
 
     // ── 1. Optical transfer function ─────────────────────────────────────
     let (pad_w, pad_h) = (width * 2, height * 2);
-    let mtf_filter: Option<Vec<f64>> = par.do_mtf.then(|| {
-        cycles_per_degree_grid(pad_w, pad_h, par.pix_per_deg)
-            .into_iter()
-            .map(|rho| mtf(rho, par))
-            .collect()
-    });
 
     let mut optical: Vec<Vec<f64>> = Vec::with_capacity(channels);
     for c in 0..channels {
         let plane: Vec<f64> = (0..n).map(|i| nits[i * channels + c]).collect();
-        let filtered = match &mtf_filter {
+        let filtered = match mtf_filter {
             Some(f) => conv_fft_real(&plane, width, height, f, pad_w, pad_h, surround[c])
                 .into_iter()
                 .map(|v| crate::interp::clamp(v, MIN_NITS, MAX_NITS))

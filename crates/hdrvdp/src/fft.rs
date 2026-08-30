@@ -227,7 +227,6 @@ impl Plan {
             }
         }
     }
-
 }
 
 /// Iterative radix-2 with precomputed per-stage twiddles. The butterfly body,

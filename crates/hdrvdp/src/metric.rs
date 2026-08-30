@@ -34,7 +34,7 @@ use crate::bands::decompose;
 use crate::display::{ColorEncoding, looks_relative, to_nits};
 use crate::masking::{self, diff_mask};
 use crate::params::Params;
-use crate::pathway::{surround_per_channel, visual_pathway};
+use crate::pathway::{mtf_filter_for, surround_per_channel, visual_pathway_with_filter};
 use crate::photoreceptor::Photoreceptor;
 use crate::pool::{Visibility, quality_correlate, quality_mos, visibility};
 use crate::spectral::{emission_spectra, lmsr_matrix};
@@ -124,8 +124,31 @@ pub fn hdrvdp(
     let lmsr = lmsr_matrix(&emission_spectra(encoding.spectra(), channels));
     let pn = Photoreceptor::new(par);
 
-    let path_ref = visual_pathway(&ref_nits, width, height, par, &pn, &lmsr, &surround);
-    let path_test = visual_pathway(&test_nits, width, height, par, &pn, &lmsr, &surround);
+    // The optical MTF filter depends only on geometry + parameters: build it
+    // once and share it across the pair (bit-identical to per-image builds —
+    // the filter is a deterministic function of (w, h, par)).
+    let mtf_filter = mtf_filter_for(width, height, par);
+    let path_ref = visual_pathway_with_filter(
+        &ref_nits,
+        width,
+        height,
+        par,
+        &pn,
+        &lmsr,
+        &surround,
+        mtf_filter.as_deref(),
+    );
+    let path_test = visual_pathway_with_filter(
+        &test_nits,
+        width,
+        height,
+        par,
+        &pn,
+        &lmsr,
+        &surround,
+        mtf_filter.as_deref(),
+    );
+    drop(mtf_filter);
 
     // Reference first, so its base-band pad value can be reused.
     let (bands_ref, pad) = decompose(&path_ref, par, None);
