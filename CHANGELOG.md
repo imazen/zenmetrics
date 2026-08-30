@@ -16,6 +16,14 @@ Workspace conventions per the global rules:
 ## zenmetrics-cli
 
 ### Changed
+- **aom-rs screen-content size cap default 0.30 → 16 MP** (`ZEN_AOMRS_MAX_SCREEN_MP`):
+  after KB-41 roots #18-#21 (zenav1-aom, the cpu-4/5 screen residuals — all
+  byte-exact) the 9-cell cpu-4 screen census with three 1920x1080 cells runs in
+  81.5 s including the oracle encode and both decodes (~20 s per 1080p cell at
+  cpu 4; the DV search is off at cpu >= 8), so the 2,976 `encoder_panic`-class
+  DEFERRED cells of `avifaom-enc-20260830` (112 renditions > 0.30 MP, all q, all
+  three speeds, refused 11:52-12:11Z on the 0.30 cap) are real encodes now;
+  the largest rendition (3062x4096, 12.5 MP) is ~2-3 min at cpu 4.
 - **aom-rs datagen executor image rebuilt on zenav1-aom `38a92657`** (KB-41 roots
   #7-#13: search-ctx CDF shadows, detector-driven search-time `allow_intrabc`,
   IntraBC-off under nonrd, frame-edge 4-way strips, screen-content arm order —

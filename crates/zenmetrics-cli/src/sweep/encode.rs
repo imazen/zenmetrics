@@ -1192,19 +1192,25 @@ fn encode_avif_aom_rs(
     // the first fleet chunk refused was a screen-detected frame.
     let screen = aom_bench::stream_allows_screen_content_tools(&bootstrap);
     // Throughput guard (KB-41 perf note): with the screen tools mirrored ON the
-    // port's IntraBC DV search dominates — ~80 s per 1080p screenshot at cpu6 and
-    // >40 min at cpu4 (oracle: ~1 s). Screen-detected frames above the cap are
-    // REFUSED with a distinct message so their ledger rows can be pardoned and
-    // re-declared once the port's search is fast; nothing is silently dropped
-    // or mis-encoded. ZEN_AOMRS_MAX_SCREEN_MP (default 0.30) sets the cap.
+    // port's IntraBC DV search dominates. Screen-detected frames above the cap
+    // are REFUSED with a distinct message so their ledger rows can be pardoned
+    // and re-declared once the port's search is fast; nothing is silently
+    // dropped or mis-encoded. ZEN_AOMRS_MAX_SCREEN_MP sets the cap.
     // MEASURED 2026-08-30 on a screen-detected 512x512 (0.262 MP, cid22_6292444,
-    // zenav1-aom 38a92657): encode+verify 0.12 s / 0.38 s / 3.2 s at cpu 8/6/4,
-    // so the 512² renditions clear the cap; the 40-min case is 1080p at cpu 4.
+    // zenav1-aom 38a92657): encode+verify 0.12 s / 0.38 s / 3.2 s at cpu 8/6/4;
+    // the cap was 0.30 MP while 1080p at cpu 4 took >40 min. RE-MEASURED after
+    // KB-41 roots #18-#21 (the cpu-4/5 screen residuals, all byte-exact): the
+    // 9-cell cpu-4 screen census — three 1920x1080 cells among them — runs in
+    // 81.5 s INCLUDING the oracle encode and both decodes, i.e. ~20 s per 1080p
+    // cell at cpu 4 (the DV search is off at cpu >= 8 per root #10, and the
+    // hash search bounds it below). Default cap now 16 MP (the largest wave
+    // rendition is 3062x4096 = 12.5 MP, ~2-3 min at cpu 4): every screen
+    // rendition runs; the env override remains for a throughput emergency.
     if screen {
         let cap_mp: f64 = std::env::var("ZEN_AOMRS_MAX_SCREEN_MP")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(0.30);
+            .unwrap_or(16.0);
         let mp = (w * h) as f64 / 1e6;
         if mp > cap_mp {
             return Err(format!(
