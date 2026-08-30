@@ -21,6 +21,11 @@ Workspace conventions per the global rules:
   IntraBC-off under nonrd, frame-edge 4-way strips, screen-content arm order —
   census 57/57 byte-identical). Tag `exec-zensim944hdr-<this commit>`; the
   `avifaom-enc-20260830` run's `encoder_panic` cells are re-queued onto it.
+- **aom-rs screen-content size cap default 0.25 → 0.30 MP** (`ZEN_AOMRS_MAX_SCREEN_MP`):
+  a screen-detected 512² cell (0.262 MP) encodes+verifies in 0.12/0.38/3.2 s at
+  cpu 8/6/4 on the byte-exact port, so the 512² renditions no longer defer; the
+  40-minute case the cap exists for is 1080p at cpu 4. Ships in the next executor
+  image; the running wave keeps 0.25 until its drain (a relaunch orphans in-flight claims).
 
 ## hdrvdp (CPU optimisation pass, bit-identical, 2026-08-29)
 

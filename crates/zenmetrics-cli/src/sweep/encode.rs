@@ -1196,12 +1196,15 @@ fn encode_avif_aom_rs(
     // >40 min at cpu4 (oracle: ~1 s). Screen-detected frames above the cap are
     // REFUSED with a distinct message so their ledger rows can be pardoned and
     // re-declared once the port's search is fast; nothing is silently dropped
-    // or mis-encoded. ZEN_AOMRS_MAX_SCREEN_MP (default 0.25) sets the cap.
+    // or mis-encoded. ZEN_AOMRS_MAX_SCREEN_MP (default 0.30) sets the cap.
+    // MEASURED 2026-08-30 on a screen-detected 512x512 (0.262 MP, cid22_6292444,
+    // zenav1-aom 38a92657): encode+verify 0.12 s / 0.38 s / 3.2 s at cpu 8/6/4,
+    // so the 512² renditions clear the cap; the 40-min case is 1080p at cpu 4.
     if screen {
         let cap_mp: f64 = std::env::var("ZEN_AOMRS_MAX_SCREEN_MP")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(0.25);
+            .unwrap_or(0.30);
         let mp = (w * h) as f64 / 1e6;
         if mp > cap_mp {
             return Err(format!(
