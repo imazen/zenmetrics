@@ -13,6 +13,15 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-cli
+
+### Changed
+- **aom-rs datagen executor image rebuilt on zenav1-aom `38a92657`** (KB-41 roots
+  #7-#13: search-ctx CDF shadows, detector-driven search-time `allow_intrabc`,
+  IntraBC-off under nonrd, frame-edge 4-way strips, screen-content arm order —
+  census 57/57 byte-identical). Tag `exec-zensim944hdr-<this commit>`; the
+  `avifaom-enc-20260830` run's `encoder_panic` cells are re-queued onto it.
+
 ## hdrvdp (CPU optimisation pass, bit-identical, 2026-08-29)
 
 ### Added
