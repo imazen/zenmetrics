@@ -47,6 +47,11 @@ png = ["dep:zenpng", "zenpng/quantize", "zenpng/imagequant"]
 jpeg = ["dep:zenjpeg", "zenjpeg/zencodec"]
 webp = ["dep:zenwebp"]
 avif = ["dep:zenavif"]
+# `avif-svt`: the zenavif `backend: "svt-rs"` sweep knob — routes the SDR AVIF
+# encode through zenavif's own Av1Backend::SvtRs (the pure-Rust zenav1-svt port,
+# muxed in-crate by zenavif-serialize). Opt-in: it pulls the whole zenav1-svt
+# encoder into the graph; a wave that never sets `backend` need not compile it.
+avif-svt = ["avif", "zenavif/encode-svt-rs"]
 # jxl pulls the direct `jxl-encoder` dep too: the sweep encode path configures
 # expert LossyConfig knobs the zenjxl wrapper doesn't expose. Kept here (not in
 # `sweep`) so a non-jxl sweep (`--features sweep,jpeg`) need not compile

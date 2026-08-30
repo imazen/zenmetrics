@@ -191,6 +191,10 @@ const WEBP_KNOBS: &[&str] = &[
 const AVIF_KNOBS: &[&str] = &[
     "speed",
     "lossless",
+    // AV1 encoder backend: "zenravif" (default) | "svt-rs" (zenavif's
+    // Av1Backend::SvtRs; needs the `avif-svt` feature, else a loud error —
+    // never a silent fallback to zenravif, which would mislabel the cell).
+    "backend",
     "partition_range",
     "lrf",
     "fast_deblock",
@@ -983,6 +987,34 @@ fn encode_avif(
     let mut cfg = EncoderConfig::new().quality(q as f32);
     if let Some(s) = knobs.get("speed").and_then(Value::as_u64) {
         cfg = cfg.speed(s.min(10) as u8);
+    }
+    match knobs.get("backend").and_then(Value::as_str) {
+        None | Some("zenravif") => {}
+        Some("svt-rs") => {
+            #[cfg(feature = "avif-svt")]
+            {
+                // The svt-rs backend is a 4:2:0 still encoder (zenavif refuses
+                // any other subsampling for it), so the cell's chroma is
+                // implied by `backend=svt-rs` — recorded in the arm's provenance,
+                // not a separate knob.
+                cfg = cfg
+                    .backend(zenavif::Av1Backend::SvtRs)
+                    .chroma_subsampling(zenavif::EncodeChromaSubsampling::Yuv420);
+            }
+            #[cfg(not(feature = "avif-svt"))]
+            {
+                return Err("zenavif backend \"svt-rs\" requested but this build lacks the \
+                            `avif-svt` feature (rebuild with `--features avif-svt`); refusing \
+                            to fall back to zenravif and mislabel the cell"
+                    .into());
+            }
+        }
+        Some(other) => {
+            return Err(format!(
+                "zenavif knob backend={other:?} is not wired (supported: \"zenravif\", \"svt-rs\")"
+            )
+            .into());
+        }
     }
     if let Some(b) = knobs.get("lossless").and_then(Value::as_bool) {
         cfg = cfg.with_lossless(b);
