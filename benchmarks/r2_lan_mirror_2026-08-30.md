@@ -114,9 +114,9 @@ datasets, against 61 tar objects for 219 GiB carrying the same bytes.
 | `zentrain/canonical/2026-06-27/originals/` | 1.03 | 3 | corpus originals | **MIRRORED+VERIFIED** |
 | `codec-corpus/clean-picker-corpus-2026-06-26/` | 1.02 | 4,497 | pairs.*.parquet ref_path | **MIRRORED+VERIFIED** |
 | `zentrain/jxl-lossy/runs/mandfix2-zenjpeg-1782584881/variants/` | 44.19 | 8 | INSURANCE for zenjpeg encodes (no tar index) | **MIRRORED+VERIFIED** |
-| `zentrain/jxl-lossy/runs/mandfix2-zenpng-1782584881/variants/` | 12.81 | 2 | tar-range bytes for zenpng_lossless (its index is mirrored; encodes deferred) | **QUEUED (tars3 lane)** |
-| `zentrain/jxl-lossy/runs/mandfix2-zenwebp-1782584881/variants/` | 29.71 | 9 | tar-range bytes for zenwebp_lossy+lossless (index mirrored; encodes deferred) | **QUEUED (tars3 lane)** |
-| `zentrain/jxl-lossy/runs/jxl-modular-1782596759/variants/` | 54.60 | 10 | tar-range bytes for zenjxl_lossless (index mirrored; encodes deferred) | **QUEUED (tars3 lane)** |
+| `zentrain/jxl-lossy/runs/mandfix2-zenpng-1782584881/variants/` | 12.81 | 2 | tar-range bytes for zenpng_lossless (its index is mirrored; encodes deferred) | **MIRRORED+VERIFIED** |
+| `zentrain/jxl-lossy/runs/mandfix2-zenwebp-1782584881/variants/` | 29.71 | 9 | tar-range bytes for zenwebp_lossy+lossless (index mirrored; encodes deferred) | **MIRRORED+VERIFIED** |
+| `zentrain/jxl-lossy/runs/jxl-modular-1782596759/variants/` | 54.60 | 10 | tar-range bytes for zenjxl_lossless (index mirrored; encodes deferred) | **MIRRORED+VERIFIED** |
 
 ### P1 — eval instruments + regime training tables (local `/mnt/v` mirrors exist; the LAN copy makes them fleet-addressable)
 
@@ -142,7 +142,7 @@ datasets, against 61 tar objects for 219 GiB carrying the same bytes.
 | `zentrain/kadis-924-2026-07-27/` | 2.88 | 3 | KADIS 924 rescore | **MIRRORED+VERIFIED** |
 | `zentrain/canonical-training-2026-05-18/` | 0.75 | 14 | May-era canonical training tables | **MIRRORED+VERIFIED** |
 | `zentrain/dualmodel-2026-06-28/` | 5.20 | 171 | LOO fleet / hetzner_ml_train inputs | **MIRRORED+VERIFIED** |
-| `zentrain/strategy-fleet-2026-07-02/` | 11.61 | 36 | reproduce_t1dro51.sh + strategy_fleet.sh inputs | **QUEUED (gentle lane)** |
+| `zentrain/strategy-fleet-2026-07-02/` | 11.61 | 36 | reproduce_t1dro51.sh + strategy_fleet.sh inputs | **MIRRORED+VERIFIED** |
 
 ### Already on the LAN store before this pass (verified by listing, not re-copied)
 
@@ -189,19 +189,26 @@ datasets, against 61 tar objects for 219 GiB carrying the same bytes.
 
 An early snapshot (10 minutes in) showed `data2` growing while `data` had moved
 only 544 KB, which looked like SeaweedFS placing everything on the emptier dir.
-**That reading was wrong, and is corrected here:** over the full pass the split
-was **`data2` +101.63 GiB (471.68 → 573.31) and `data` +65.53 GiB (506.71 →
-572.24)** — 167.16 GiB total, roughly 60/40 across array and NVMe, with volume
-counts ending at 575 on the array and 590 on the cache. New volumes are
-allocated round-robin across the `-dir` list, not steered by free space.
+**That reading was wrong.** Final split over the whole pass:
+
+| SeaweedFS dir | backing | before | after | delta |
+|---|---|--:|--:|--:|
+| `/data2` | array disk1 | 471.68 GiB | 718.90 GiB | **+247.22 GiB** |
+| `/data`  | NVMe cache  | 506.71 GiB | 717.03 GiB | **+210.32 GiB** |
+| | | | **total** | **+457.54 GiB** |
+
+Roughly 54/46 across array and NVMe. New volumes are allocated round-robin
+across the `-dir` list, **not** steered toward free space.
 
 So this mirror **does** consume the NVMe cache pool the household containers
-share. It is affordable at this size — the cache went 1.1 T → 993 G free (47 %
-used) — but it is a real cost and it scales with everything still queued, which
-is the other reason (beyond §3's load ceiling) not to push the 2.8 M-object
-`encodes/` layer onto this store without a plan. If cache residency is
-undesirable, that is a `-dir` / volume-placement conversation with the store's
-owner, not something a mirror can control.
+share: the cache went **1.1 T → 849 G free (47 % → 55 % used)** while the array
+barely moved (**20 T still free, 42 % used** — the 15 %-free floor was never
+approached). That asymmetry matters, because the cache is the scarce, shared,
+latency-sensitive tier and it absorbed nearly half of this. It is the second
+reason (beyond §3's load ceiling) not to push the 2.8 M-object `encodes/` layer
+onto this store without a plan. If cache residency is undesirable, that is a
+`-dir` / volume-placement conversation with the store's owner, not something a
+mirror can control.
 
 The full P0+P1 working set is well under 0.5 TiB against 21 T free, so **no
 prefix had to be refused for capacity**; the prefixes left unmirrored were
@@ -390,6 +397,9 @@ listings, which are stable.
 | `zentrain/hdr/` | 185 / 185 | 5,126,444,482 / 5,126,444,482 | **YES** | count+bytes verified (aws lister, both stores) |
 | `zentrain/canonical-training-2026-05-18/` | 14 / 14 | 803,725,902 / 803,725,902 | **YES** | count+bytes verified (aws lister, both stores) |
 | `zentrain/dualmodel-2026-06-28/` | 171 / 171 | 5,579,193,537 / 5,579,193,537 | **YES** | count+bytes verified (aws lister, both stores) |
+| `zentrain/jxl-lossy/runs/mandfix2-zenpng-1782584881/variants/` | 2 / 2 | 13,750,087,680 / 13,750,087,680 | **YES** | 2/2 sha256 range OK (incl. a real member range from bf-zpng-t0) |
+| `zentrain/jxl-lossy/runs/mandfix2-zenwebp-1782584881/variants/` | 9 / 9 | 31,897,057,280 / 31,897,057,280 | **YES** | 2/2 sha256 range OK (incl. a real member range from bf-zwebp-t0) |
+| `zentrain/jxl-lossy/runs/jxl-modular-1782596759/variants/` | 10 / 10 | 58,627,102,720 / 58,627,102,720 | **YES** | 2/2 sha256 range OK (incl. a real member range from bf-zjxlm-t0) |
 
 Large objects (multi-GB tars, >64 MB parquets) are spot-checked by **byte
 range** rather than whole-file hash: identical ranges are fetched from both
@@ -479,11 +489,26 @@ loop, several failures per second. Volume 473 is not in
 `zenstore-quarantine-20260827/` (that holds 568/570/572), so this is a separate
 loss. It predates this mirror and belongs to whoever owns that fleet run.
 
-## 5c. Running state at the time of writing
+## 5c. Final state — both lanes completed
 
-The two large-object lanes were still draining when this was written, both behind
-the tower load gate, and they are **self-harvesting** — nothing needs to be
-watched:
+Both large-object lanes drained to completion behind the tower load gate, every
+prefix `rc=0`:
+
+- **gentle lane** — 18 prefixes (the P1 tables + `mandfix2-zenjpeg` tars), longest
+  single prefix `ext720-canonical` at 1,028 s for 55.58 GiB;
+- **tars3 lane** — the 3 remaining box-tar runs, `jxl-modular` last at 1,039 s for
+  54.60 GiB.
+
+**32 prefixes are MIRRORED+VERIFIED**, every one matching R2 on object count AND
+total bytes under the `aws` lister on both stores, **0 mismatches**. All **61 box
+tars** are now on the LAN store, and the tar-range fetch path is proven end to
+end for all six datasets that have an index — for each, a real member offset was
+read out of the mirrored `variant_index.tsv` and that exact byte range hashed
+identically from both stores.
+
+Total moved: **457.54 GiB**. Tower finished at load 5.69.
+
+The lane artifacts remain on disk for anyone continuing:
 
 - `~/tmp/r2lan/incremental_verify.txt` — each prefix is count+byte verified
   against R2 the moment its transfer finishes, so results accumulate as they land
