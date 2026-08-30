@@ -50,8 +50,21 @@ cp "$BIN" "$CTX/zenmetrics"
 cp "$ROOT/scripts/jobsys/zenfleet-exec" "$CTX/zenfleet-exec"
 # Overlay the CURRENT zenfleet-worker too (base :latest bakes a stale one). Built by
 # `cargo build --release -p zenfleet-worker`. Skipped if absent (keeps base's).
-WK="${ZEN_WORKER_BIN:-$ROOT/target/release/zenfleet-worker}"
-[ -f "$WK" ] && cp "$WK" "$CTX/zenfleet-worker" || echo "note: no local zenfleet-worker — image keeps base's"
+# Prefer the STATIC musl worker when it exists: the glibc build inherits the
+# build box's libc (Ubuntu 26.04 -> GLIBC_2.38/2.39 symbols) and refuses to start
+# inside the 24.04 base ("version `GLIBC_2.39' not found", 2026-08-30 first-chunk
+# gate on r5900xt: every pass rc=1 before a single cell ran). Same trap the
+# header describes for zenmetrics; the overlay had the glibc default.
+WK_MUSL="$ROOT/target/x86_64-unknown-linux-musl/release/zenfleet-worker"
+WK="${ZEN_WORKER_BIN:-$([ -f "$WK_MUSL" ] && echo "$WK_MUSL" || echo "$ROOT/target/release/zenfleet-worker")}"
+if [ -f "$WK" ]; then
+  if file "$WK" 2>/dev/null | grep -q "dynamically linked"; then
+    echo "WARNING: overlaying a DYNAMICALLY linked zenfleet-worker ($WK) — it must not need a newer glibc than the base image; build the musl target instead (cargo build --release --target x86_64-unknown-linux-musl -p zenfleet-worker)" >&2
+  fi
+  cp "$WK" "$CTX/zenfleet-worker"
+else
+  echo "note: no local zenfleet-worker — image keeps base's"
+fi
 # Overlay the CURRENT entrypoint — the :latest base bakes a stale one, so without this
 # copy an edited fleet-entrypoint.sh never reaches :exec (this bit us on the tar-prefetch).
 cp "$ROOT/crates/zenfleet-worker/fleet-entrypoint.sh" "$CTX/fleet-entrypoint.sh"
