@@ -41,6 +41,9 @@ fn main() {
         ("ZENJPEG", "../../../zenjpeg"),
         ("ZENWEBP", "../../../zenwebp"),
         ("BUTTERAUGLI", "../../../../butteraugli"),
+        // The `avif-aom` arm's encoder (the zenav1-aom port) — stamped so every
+        // aom-rs cell carries the exact port commit it was byte-verified at.
+        ("ZENAV1_AOM", "../../../zenav1-aom"),
     ];
     for (name, rel) in codecs {
         let key = format!("ZEN_CODEC_{name}_COMMIT");
@@ -48,6 +51,23 @@ fn main() {
         println!("cargo:rustc-env={key}={val}");
         println!("cargo:rerun-if-changed={rel}/.git/HEAD");
         println!("cargo:rerun-if-env-changed={key}");
+    }
+    // `avif-aom` on a *-musl target: link the fopen64 shim (csrc/musl_lfs_compat.c)
+    // so the glibc-built libaom oracle objects resolve. Never compiled elsewhere.
+    let target = std::env::var("TARGET").unwrap_or_default();
+    if target.contains("musl") && std::env::var_os("CARGO_FEATURE_AVIF_AOM").is_some() {
+        // Link the shim as a bare OBJECT, not an archive: an archive is only
+        // searched for symbols already undefined when the linker reaches it,
+        // and rustc places `-l static=...` before the rlibs that carry the
+        // libaom objects — the first attempt left every `fopen64` unresolved.
+        let objs = cc::Build::new()
+            .file("csrc/musl_lfs_compat.c")
+            .cargo_metadata(false)
+            .compile_intermediates();
+        for o in objs {
+            println!("cargo:rustc-link-arg={}", o.display());
+        }
+        println!("cargo:rerun-if-changed=csrc/musl_lfs_compat.c");
     }
     let zm = std::env::var("ZEN_METRICS_COMMIT").unwrap_or_else(|_| git_short("."));
     println!("cargo:rustc-env=ZEN_METRICS_COMMIT={zm}");

@@ -30,6 +30,10 @@ path = "src/main.rs"
 name = "zenmetrics_cli"
 path = "src/lib.rs"
 
+[build-dependencies]
+# Only used for the `avif-aom` musl link-compat shim (build.rs); latest 1.4.4 verified 2026-08-30.
+cc = "1.4.4"
+
 [features]
 # Defaults are CPU-only with the zen decoders available on crates.io that
 # build cleanly against the latest archmage / magetypes. JPEG is omitted
