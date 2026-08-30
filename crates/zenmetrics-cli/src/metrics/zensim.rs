@@ -218,8 +218,11 @@ pub fn extract_features_regime(
     // so it must see the RAW image — this fn's external padding would diverge
     // from the `v2_ab_extract` foldapp/foldapp2 driver on tiny cells (regime
     // purity).
-    if regime == R::Folded720Append || regime == R::Folded720Append2
-        || regime == R::Folded720Append2Carriers {
+    if regime == R::Folded720Append
+        || regime == R::Folded720Append2
+        || regime == R::Folded720Append2Carriers
+        || regime == R::Folded720Append2Pools
+    {
         return extract_features_folded_streaming(reference, distorted, regime);
     }
     // Pad both identically to the 64px pyramid floor (no-op when already ≥64).
@@ -243,7 +246,10 @@ pub fn extract_features_regime(
         R::Extended => (true, false),
         R::WithIw | R::V2Ab => (true, true),
         // Handled by the early return above (streaming-only, no v1 block).
-        R::Folded720Append | R::Folded720Append2 | R::Folded720Append2Carriers => {
+        R::Folded720Append
+        | R::Folded720Append2
+        | R::Folded720Append2Carriers
+        | R::Folded720Append2Pools => {
             unreachable!("folded streaming early-returns above")
         }
     };
@@ -273,8 +279,9 @@ pub fn extract_features_regime(
     Ok(features)
 }
 
-/// Folded+append streaming extraction (regimes `Folded720Append` = 924 and
-/// `Folded720Append2` = 944) — the STREAMING-ONLY walk (zensim C5,
+/// Folded+append streaming extraction (regimes `Folded720Append` = 924,
+/// `Folded720Append2` = 944, and the two live-pool 944 variants
+/// `Folded720Append2Carriers` / `Folded720Append2Pools`) — the STREAMING-ONLY walk (zensim C5,
 /// 2026-07-26): O(width) rolling planes, no prepared reference (the cached-ref
 /// machinery was deleted in C5), per-thread `V2Scratch` reuse across calls.
 /// Every argument is pinned to the `v2_ab_extract` foldapp/foldapp2 driver —
@@ -303,6 +310,9 @@ fn extract_features_folded_streaming(
         }
         crate::metrics::ZensimFeatureRegime::Folded720Append2Carriers => {
             (true, zensim::feature_v2::V1PoolsMode::Carriers)
+        }
+        crate::metrics::ZensimFeatureRegime::Folded720Append2Pools => {
+            (true, zensim::feature_v2::V1PoolsMode::Full)
         }
         other => return Err(format!("zensim: not a folded streaming regime: {other:?}").into()),
     };
@@ -413,6 +423,7 @@ pub fn extract_features_regime_with_ctx(
     if regime == R::Folded720Append
         || regime == R::Folded720Append2
         || regime == R::Folded720Append2Carriers
+        || regime == R::Folded720Append2Pools
     {
         return Err(
             "zensim: folded streaming regimes have no ref-ctx path — call extract_features_regime"
@@ -436,7 +447,10 @@ pub fn extract_features_regime_with_ctx(
         R::Extended => (true, false),
         R::WithIw | R::V2Ab => (true, true),
         // Rejected by the early return above (no ctx path for the folded regimes).
-        R::Folded720Append | R::Folded720Append2 | R::Folded720Append2Carriers => {
+        R::Folded720Append
+        | R::Folded720Append2
+        | R::Folded720Append2Carriers
+        | R::Folded720Append2Pools => {
             unreachable!("folded streaming rejected above")
         }
     };
@@ -552,6 +566,111 @@ mod tests {
     /// The carriers regime = the same streaming call with
     /// `V1PoolsMode::Carriers`: bit-identical to a direct call, 944 wide,
     /// exactly the ten carrier slots differ from the plain 944 regime.
+    /// The all-944-LIVE regime (`Folded720Append2Pools`, jobexec metric
+    /// "zensim-foldapp2pools"): ONE streaming pass emitting f0..155 basic ++
+    /// f156..371 v1 pools LIVE (all 216) ++ v2-348 ++ append2-20. Three
+    /// things are pinned here, and the third is the point of the regime:
+    ///   1. bit-identical to a DIRECT zensim call with `V1PoolsMode::Full`;
+    ///   2. every NON-pool slot bit-identical to the plain 944 regime (the
+    ///      pool block is purely additive — the fold arithmetic is untouched),
+    ///      and the ten carrier slots agree with the carriers regime;
+    ///   3. **f156..372 bit-identical to the v1 372-wide `WithIw` regime** at
+    ///      exact widths (`simd_padded_width(w) == w`), i.e. the live block
+    ///      really is v1's pool block and not a look-alike. Widths 96×64 and
+    ///      208×144 are exact; zensim's own `folded720_v1_pools_match_v1_path`
+    ///      makes the same assertion one layer down.
+    #[test]
+    fn folded944pools_matches_driver_args_and_v1_block() {
+        use zensim::feature_v2::{V1PoolsMode, V2NewFeatureToggles, V2Scratch};
+        use zensim::{RgbSlice, Zensim, ZensimProfile};
+        // Both widths are SIMD-exact (`(w+15)&!15 == w`, < 512), so the
+        // folded pool block is bit-comparable to the buffered v1 path.
+        for (w, h) in [(96u32, 64u32), (208, 144)] {
+            let reference = synth(31, w, h);
+            let distorted = synth(32, w, h);
+            let ours = extract_features_regime(
+                &reference,
+                &distorted,
+                crate::metrics::ZensimFeatureRegime::Folded720Append2Pools,
+            )
+            .unwrap();
+            let plain = extract_features_regime(
+                &reference,
+                &distorted,
+                crate::metrics::ZensimFeatureRegime::Folded720Append2,
+            )
+            .unwrap();
+            let carriers = extract_features_regime(
+                &reference,
+                &distorted,
+                crate::metrics::ZensimFeatureRegime::Folded720Append2Carriers,
+            )
+            .unwrap();
+            let v1 = extract_features_regime(
+                &reference,
+                &distorted,
+                crate::metrics::ZensimFeatureRegime::WithIw,
+            )
+            .unwrap();
+            let r3: &[[u8; 3]] = bytemuck::cast_slice(&reference.pixels);
+            let d3: &[[u8; 3]] = bytemuck::cast_slice(&distorted.pixels);
+            let mut scratch = V2Scratch::new();
+            let direct = Zensim::new(ZensimProfile::codec_target())
+                .with_parallel(false)
+                .compute_folded720_append_features_streaming(
+                    &RgbSlice::new(r3, w as usize, h as usize),
+                    &RgbSlice::new(d3, w as usize, h as usize),
+                    V2NewFeatureToggles {
+                        append2_block: true,
+                        v1_pools: V1PoolsMode::Full,
+                        ..V2NewFeatureToggles::default()
+                    },
+                    &mut scratch,
+                )
+                .unwrap();
+            assert_eq!(ours.len(), 944, "{w}×{h}");
+            assert_eq!(v1.len(), 372, "{w}×{h}");
+            // 1. driver-args parity.
+            for (i, (a, b)) in ours.iter().zip(direct.features()).enumerate() {
+                assert_eq!(a.to_bits(), b.to_bits(), "slot {i} differs ({w}×{h})");
+            }
+            // 2. additive-only vs the plain 944 regime + carrier agreement.
+            let mut live = 0;
+            for i in 0..944 {
+                if (156..372).contains(&i) {
+                    assert_eq!(plain[i], 0.0, "plain 944 slot {i} must be the structural 0");
+                    if ours[i] != 0.0 {
+                        live += 1;
+                    }
+                    if V1PoolsMode::CARRIER_SLOTS.contains(&i) {
+                        assert_eq!(
+                            ours[i].to_bits(),
+                            carriers[i].to_bits(),
+                            "carrier slot {i} disagrees with the carriers regime ({w}×{h})"
+                        );
+                    }
+                } else {
+                    assert_eq!(
+                        ours[i].to_bits(),
+                        plain[i].to_bits(),
+                        "non-pool slot {i} differs from the plain 944 regime ({w}×{h})"
+                    );
+                }
+            }
+            assert!(live >= 200, "{w}×{h}: only {live}/216 pool slots live");
+            // 3. THE POINT: the live block IS v1's, bit-for-bit.
+            for i in 156..372 {
+                assert_eq!(
+                    ours[i].to_bits(),
+                    v1[i].to_bits(),
+                    "pool slot {i} ({:e}) != v1 372-regime ({:e}) at {w}×{h}",
+                    ours[i],
+                    v1[i]
+                );
+            }
+        }
+    }
+
     #[test]
     fn folded944carriers_matches_driver_args() {
         use zensim::feature_v2::{V1PoolsMode, V2NewFeatureToggles, V2Scratch};

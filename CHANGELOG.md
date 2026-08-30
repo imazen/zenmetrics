@@ -27,6 +27,17 @@ Workspace conventions per the global rules:
   + the same byte-exact aom port); `fleet.env` `ZEN_FLEET_IMAGE_CPU` pinned to it;
   `avifsvt-sf-carriers-20260830` launched on the tower as a second capped worker
   (`zen-score-carriers`, cpuset 0-23 / shares 256 / 24 GiB, 4 h pass budget) at 14:04Z.
+- **New zensim feature metric `zensim-foldapp2pools`** (regime `folded720append2pools`,
+  944 wide): the ALL-944-LIVE extraction — one streaming pass emitting `f0..155` basic ++
+  `f156..371` v1 pools **LIVE (all 216: peaks 72 + masked 72 + IW 72)** ++ the v2-348 block
+  ++ append2-20 (`V1PoolsMode::Full`, zensim `f19b8469`). One pass, one width, every slot:
+  it removes the need to fuse pool values in from a separate 720/372-width table, where v1
+  pool features diverge across widths. Same width as `zensim-foldapp2` /
+  `zensim-foldapp2carriers`, a THIRD regime — the JSONL `regime` tag is the purity marker;
+  never column-mix zeroed / carriers-only / full-pool 944 rows. SDR-only: the HDR arm emits
+  an explicit error row. Gate `folded944pools_matches_driver_args_and_v1_block` — bit-identical
+  to the direct zensim call, additive-only vs the plain 944 regime, and `f156..372`
+  bit-identical to the v1 372-wide `WithIw` regime at SIMD-exact widths.
 - **New zensim feature metric `zensim-foldapp2carriers`** (regime `folded720append2carriers`,
   944 wide): the streaming 944 extraction with v1's ten CARRIER slots emitted live in
   `f156..372` (`V1PoolsMode::Carriers`, zensim `f19b8469` — the `fused944native` regime;

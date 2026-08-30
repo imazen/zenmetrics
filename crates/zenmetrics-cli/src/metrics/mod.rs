@@ -1023,6 +1023,18 @@ pub enum ZensimFeatureRegime {
     /// SDR-only (no HDR route yet; the HDR arm rejects it explicitly).
     #[value(name = "folded720append2carriers")]
     Folded720Append2Carriers,
+    /// 944 features — `Folded720Append2` with **all 216** of v1's pool slots
+    /// emitted LIVE in `f156..372` (`V1PoolsMode::Full`, zensim `f19b8469`:
+    /// peaks 72 + masked 72 + IW 72 — bit-identical to v1's 372 at exact
+    /// widths, gated by zensim's `folded720_v1_pools_match_v1_path`). Same
+    /// width as `Folded720Append2` / `Folded720Append2Carriers`, a THIRD
+    /// regime: this is the all-944-live extraction (`f0..155` basic ++
+    /// `f156..371` pools LIVE ++ v2-348 ++ append2-20) — one pass, one
+    /// width, every slot. REGIME PURITY: never column-mix with zeroed-block
+    /// or carriers-only 944 rows; the JSONL `regime` tag is the marker.
+    /// SDR-only (no HDR route yet; the HDR arm rejects it explicitly).
+    #[value(name = "folded720append2pools")]
+    Folded720Append2Pools,
 }
 
 impl ZensimFeatureRegime {
@@ -1037,6 +1049,7 @@ impl ZensimFeatureRegime {
             ZensimFeatureRegime::Folded720Append => 720 + 204,
             ZensimFeatureRegime::Folded720Append2 => 720 + 204 + 20,
             ZensimFeatureRegime::Folded720Append2Carriers => 720 + 204 + 20,
+            ZensimFeatureRegime::Folded720Append2Pools => 720 + 204 + 20,
         }
     }
 }
@@ -1057,7 +1070,8 @@ impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
             // directly and never converts.
             ZensimFeatureRegime::Folded720Append
             | ZensimFeatureRegime::Folded720Append2
-            | ZensimFeatureRegime::Folded720Append2Carriers => {
+            | ZensimFeatureRegime::Folded720Append2Carriers
+            | ZensimFeatureRegime::Folded720Append2Pools => {
                 zenmetrics_api::zensim::ZensimFeatureRegime::WithIw
             }
         }
