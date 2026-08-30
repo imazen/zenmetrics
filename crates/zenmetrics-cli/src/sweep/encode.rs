@@ -1191,6 +1191,27 @@ fn encode_avif_aom_rs(
     // mismatch, not a port divergence — KB-41 localizer (zenav1-aom): every cell
     // the first fleet chunk refused was a screen-detected frame.
     let screen = aom_bench::stream_allows_screen_content_tools(&bootstrap);
+    // Throughput guard (KB-41 perf note): with the screen tools mirrored ON the
+    // port's IntraBC DV search dominates — ~80 s per 1080p screenshot at cpu6 and
+    // >40 min at cpu4 (oracle: ~1 s). Screen-detected frames above the cap are
+    // REFUSED with a distinct message so their ledger rows can be pardoned and
+    // re-declared once the port's search is fast; nothing is silently dropped
+    // or mis-encoded. ZEN_AOMRS_MAX_SCREEN_MP (default 0.25) sets the cap.
+    if screen {
+        let cap_mp: f64 = std::env::var("ZEN_AOMRS_MAX_SCREEN_MP")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.25);
+        let mp = (w * h) as f64 / 1e6;
+        if mp > cap_mp {
+            return Err(format!(
+                "aom-rs: DEFERRED screen-detected {w}x{h} ({mp:.2} MP > cap {cap_mp} MP): the port's \
+                 IntraBC search is too slow for the wave at this size (KB-41 perf) — re-declare \
+                 when it is; not a divergence"
+            )
+            .into());
+        }
+    }
     let knobs = aom_bench::ToggleKnobs {
         enable_palette: screen,
         enable_intrabc: screen,
