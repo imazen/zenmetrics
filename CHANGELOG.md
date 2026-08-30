@@ -26,22 +26,27 @@ Workspace conventions per the global rules:
   bit-unchanged at 64²/97²/256²/1024²/4096².
 - `examples/perf_probe.rs` (1223a583): deterministic profiling target that
   prints per-call wall time + an output bit-digest per size.
-- zenbench suite `benches/pipeline.rs` (this commit): interleaved end-to-end
+- zenbench suite `benches/pipeline.rs` (4cf99288): interleaved end-to-end
   (64², 256²) + hot-kernel groups (corr_dn, up_conv, fft2, imresize).
-- `benchmarks/hdrvdp_perf_2026-08-29.{tsv,md}` (this commit): full size sweep
-  per optimisation with host/commit provenance, `α + β·pixels` fits, profile
-  evidence, and the not-landed/remaining list.
+- `benchmarks/hdrvdp_perf_2026-08-29.{tsv,md}` (4cf99288, dec95f49): full
+  size sweep per optimisation with host/commit provenance, `α + β·pixels`
+  fits, profile evidence, and the not-landed/remaining list — including the
+  implemented-measured-REVERTED FFT-SoA experiment and the macOS
+  `___sincos_stret` vs separate `sin`+`cos` 1-ULP trap it uncovered
+  (`lock_fft_paths` now covers 512/1024/2048-point transforms to catch that
+  class).
 
 ### Changed
-- **5.0× end-to-end speedup at 256²–4096², 2.0× at 64², 4.9× at odd sizes,
-  bit-identical output throughout** (measured, Apple M4 Pro, release, best of
-  reps; see the benchmarks file). Five commits, each with its own numbers:
-  `up_conv` pad-once + tap-list + 8-wide output blocking (1223a583);
-  `corr_dn` reflect-pad once + dense blocked correlation (2447406a); FFT
-  per-length plans with hoisted twiddles/chirp shared across rows/cols and
-  forward+inverse (5c156c2e); pair-shared MTF filter + memoised Photoreceptor
-  LUT range + move-not-clone band planes (624615e8); box3x3 interior fast
-  path + imresize tap slicing / 8-wide vertical blocks (5cc2c63d).
+- **5.1–5.2× end-to-end speedup at 97²–4096², 2.0× at 64², bit-identical
+  output throughout** (measured, Apple M4 Pro, release, best of reps; see
+  the benchmarks file). Six commits, each with its own numbers: `up_conv`
+  pad-once + tap-list + 8-wide output blocking (1223a583); `corr_dn`
+  reflect-pad once + dense blocked correlation (2447406a); FFT per-length
+  plans with hoisted twiddles/chirp shared across rows/cols and
+  forward+inverse (5c156c2e); pair-shared MTF filter + memoised
+  Photoreceptor LUT range + move-not-clone band planes (624615e8); box3x3
+  interior fast path + imresize tap slicing / 8-wide vertical blocks
+  (5cc2c63d); conv_fft_real constant-pad-row forward-FFT dedup (2443d88c).
 
 ## Workspace (Dependabot: why it fails here, and the advisories applied by hand, 2026-08-29)
 

@@ -92,7 +92,7 @@ amortise it, but that needs an API for reusable state — owner call, see below.
 
 macOS `sample` (10 s) on `perf_probe 512`, top of stack, before → after:
 
-| symbol | baseline | after all 5 |
+| symbol | baseline | after the landed passes |
 |---|---|---|
 | `up_conv` | 47 % | ~10 % |
 | `corr_dn` | 26 % | ~18 % |
