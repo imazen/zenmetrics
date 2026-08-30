@@ -26,6 +26,12 @@ publish = false
 # the library itself stays dependency-free.
 image = { workspace = true, features = ["png", "jpeg"] }
 zenmetrics-corpus = { path = "../zenmetrics-corpus" }
+# Interleaved benchmarking with paired statistics (workspace standard).
+zenbench = "0.1.7"
 
 [[example]]
 name = "score_corpus_ladder"
+
+[[bench]]
+name = "pipeline"
+harness = false

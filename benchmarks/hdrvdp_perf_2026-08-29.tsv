@@ -1,0 +1,35 @@
+# hdrvdp end-to-end wall time, one scored pair (Luminance encoding), examples/perf_probe, best of reps
+# host: Apple M4 Pro (12-core aarch64), macOS Darwin 25.5.0, rustc 1.98.0, release profile (opt-level 3, lto=thin), nice -n 19, no target-cpu=native
+# stage commits: baseline=e58e985f  up_conv=1223a583  corr_dn=2447406a  fft_plans=5c156c2e  hoists=624615e8  box_imresize=5cc2c63d
+# end-to-end output digest per size, IDENTICAL across every stage (bit-exact): 64=0xfccf99da9363dad1 97=0x6b2ea6ab77db7a03 256=0xb7bf4ac18a3dce32 1024=0x0c3c45ea79735ecc 4096=0xbe959ded56ea5a44
+stage	commit	side	pixels	seconds
+baseline	e58e985f	64	4096	0.016
+baseline	e58e985f	97	9409	0.078
+baseline	e58e985f	256	65536	0.285
+baseline	e58e985f	1024	1048576	4.801
+baseline	e58e985f	4096	16777216	81.890
+up_conv	1223a583	64	4096	0.013
+up_conv	1223a583	97	9409	0.061
+up_conv	1223a583	256	65536	0.157
+up_conv	1223a583	1024	1048576	2.709
+up_conv	1223a583	4096	16777216	46.904
+corr_dn	2447406a	64	4096	0.010
+corr_dn	2447406a	97	9409	0.052
+corr_dn	2447406a	256	65536	0.096
+corr_dn	2447406a	1024	1048576	1.688
+corr_dn	2447406a	4096	16777216	30.038
+fft_plans	5c156c2e	64	4096	0.008
+fft_plans	5c156c2e	97	9409	0.017
+fft_plans	5c156c2e	256	65536	0.066
+fft_plans	5c156c2e	1024	1048576	1.112
+fft_plans	5c156c2e	4096	16777216	18.468
+hoists	624615e8	64	4096	0.008
+hoists	624615e8	97	9409	0.016
+hoists	624615e8	256	65536	0.061
+hoists	624615e8	1024	1048576	1.047
+hoists	624615e8	4096	16777216	17.472
+box_imresize	5cc2c63d	64	4096	0.008
+box_imresize	5cc2c63d	97	9409	0.016
+box_imresize	5cc2c63d	256	65536	0.057
+box_imresize	5cc2c63d	1024	1048576	0.973
+box_imresize	5cc2c63d	4096	16777216	16.295

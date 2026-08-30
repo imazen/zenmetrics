@@ -2247,6 +2247,7 @@ name = "hdrvdp"
 version = "0.0.1"
 dependencies = [
  "image",
+ "zenbench",
  "zenmetrics-corpus",
 ]
 

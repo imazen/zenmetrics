@@ -13,6 +13,36 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## hdrvdp (CPU optimisation pass, bit-identical, 2026-08-29)
+
+### Added
+- **Byte-exact output lock** (`tests/bit_lock.rs`, f4a380e9): frozen verbatim
+  copies of every pipeline stage run against production code with
+  `f64::to_bits` equality on every element, plus a portable FNV bit-hash pin
+  on the shared constant tables (sp3 taps + `Params` calibration literals).
+  Mutation-verified: a last-decimal filter-tap change, a `1e-12 → 1.02e-12`
+  epsilon change, and a mul+add→FMA rewrite each turn the right layer red.
+  Every optimisation below passes it, and the end-to-end output digest is
+  bit-unchanged at 64²/97²/256²/1024²/4096².
+- `examples/perf_probe.rs` (1223a583): deterministic profiling target that
+  prints per-call wall time + an output bit-digest per size.
+- zenbench suite `benches/pipeline.rs` (this commit): interleaved end-to-end
+  (64², 256²) + hot-kernel groups (corr_dn, up_conv, fft2, imresize).
+- `benchmarks/hdrvdp_perf_2026-08-29.{tsv,md}` (this commit): full size sweep
+  per optimisation with host/commit provenance, `α + β·pixels` fits, profile
+  evidence, and the not-landed/remaining list.
+
+### Changed
+- **5.0× end-to-end speedup at 256²–4096², 2.0× at 64², 4.9× at odd sizes,
+  bit-identical output throughout** (measured, Apple M4 Pro, release, best of
+  reps; see the benchmarks file). Five commits, each with its own numbers:
+  `up_conv` pad-once + tap-list + 8-wide output blocking (1223a583);
+  `corr_dn` reflect-pad once + dense blocked correlation (2447406a); FFT
+  per-length plans with hoisted twiddles/chirp shared across rows/cols and
+  forward+inverse (5c156c2e); pair-shared MTF filter + memoised Photoreceptor
+  LUT range + move-not-clone band planes (624615e8); box3x3 interior fast
+  path + imresize tap slicing / 8-wide vertical blocks (5cc2c63d).
+
 ## Workspace (Dependabot: why it fails here, and the advisories applied by hand, 2026-08-29)
 
 ### Fixed
