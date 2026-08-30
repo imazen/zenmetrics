@@ -1618,7 +1618,9 @@ fn constant_tables_are_frozen() {
 
 #[test]
 fn lock_fft_paths() {
-    for n in [1usize, 2, 4, 8, 64, 256, 512, 1024, 2048, 3, 5, 7, 12, 15, 33, 100, 122, 194] {
+    for n in [
+        1usize, 2, 4, 8, 64, 256, 512, 1024, 2048, 3, 5, 7, 12, 15, 33, 100, 122, 194,
+    ] {
         let mut rng = Rng(0x5eed + n as u64);
         let src: Vec<(f64, f64)> = (0..n)
             .map(|_| (rng.next() - 0.5, rng.next() - 0.5))
