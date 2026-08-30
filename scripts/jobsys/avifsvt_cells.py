@@ -5,7 +5,14 @@
 # benchmarks/balance_campaign_2026-08-28.md "FRESH AVIF WAVE — SVT BACKEND".
 #
 #   usage: avifsvt_cells.py <source_dir> <out_cells.jsonl> [--sha-cache <tsv>]
-#                          [--speeds 4,6,8] [--max-mp 16]
+#                          [--speeds 4,6,8] [--max-mp 16] [--backend svt-rs|aom-rs]
+#                          [--exclude-min-dim LO:HI]
+#
+#   --backend aom-rs emits the zenav1-aom port arm (executor `avif-aom`; every cell
+#   byte-verified against the C oracle). --exclude-min-dim 720:1080 skips sources
+#   with LO <= min(w,h) < HI — the band where the port diverges today
+#   (imazen/zenav1-aom#14); excluded names are written to <out>.excluded.txt so
+#   the residual can be re-declared additively (content-addressed) later.
 #
 # Grid (uniform, additive-later):
 #   - q: 1 + step 5 across 5..70 + step 2 across 72..100 = 30 points (the avif944
@@ -32,16 +39,26 @@ def main():
     sha_cache = sys.argv[sys.argv.index("--sha-cache") + 1] if "--sha-cache" in sys.argv else None
     speeds = [int(x) for x in (sys.argv[sys.argv.index("--speeds") + 1] if "--speeds" in sys.argv else "4,6,8").split(",")]
     max_mp = float(sys.argv[sys.argv.index("--max-mp") + 1]) if "--max-mp" in sys.argv else 16.0
+    backend = sys.argv[sys.argv.index("--backend") + 1] if "--backend" in sys.argv else "svt-rs"
+    if backend not in ("svt-rs", "aom-rs"):
+        sys.exit("--backend must be svt-rs or aom-rs")
+    band = None
+    if "--exclude-min-dim" in sys.argv:
+        lo, hi = sys.argv[sys.argv.index("--exclude-min-dim") + 1].split(":")
+        band = (int(lo), int(hi))
     dim_re = re.compile(r"\.scale(\d+)x(\d+)\.")
-    names, excluded = [], []
+    names, excluded, band_excluded = [], [], []
     for n in sorted(os.listdir(src_dir)):
         if not n.endswith(".png"):
             continue
         m = dim_re.search(n)
         if not m:
             sys.exit(f"cannot parse scaleWxH from {n}")
-        if int(m.group(1)) * int(m.group(2)) > max_mp * 1e6:
+        w, h = int(m.group(1)), int(m.group(2))
+        if w * h > max_mp * 1e6:
             excluded.append(n)
+        elif band is not None and band[0] <= min(w, h) < band[1]:
+            band_excluded.append(n)
         else:
             names.append(n)
     if not names:
@@ -72,7 +89,7 @@ def main():
     with open(out_path, "w") as out:
         for n in names:
             for sp in speeds:
-                knobs = json.dumps({"backend": "svt-rs", "speed": sp}, separators=(",", ":"))
+                knobs = json.dumps({"backend": backend, "speed": sp}, separators=(",", ":"))
                 for q in qs:
                     out.write(json.dumps({
                         "image_path": n, "codec": "zenavif", "q": q,
@@ -81,8 +98,11 @@ def main():
                     cells += 1
     expect = len(names) * len(speeds) * len(qs)
     assert cells == expect, (cells, expect)
-    print("wrote %d cells (%d sources x %d speeds x %d q; %d excluded > %.0f MP) -> %s"
-          % (cells, len(names), len(speeds), len(qs), len(excluded), max_mp, out_path))
+    if band_excluded:
+        with open(out_path + ".excluded.txt", "w") as f:
+            f.write("".join(n + "\n" for n in band_excluded))
+    print("wrote %d cells (%d sources x %d speeds x %d q; backend %s; %d excluded > %.0f MP; %d excluded in min-dim band %s) -> %s"
+          % (cells, len(names), len(speeds), len(qs), backend, len(excluded), max_mp, len(band_excluded), band, out_path))
 
 if __name__ == "__main__":
     main()

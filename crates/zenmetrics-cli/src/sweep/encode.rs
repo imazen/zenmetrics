@@ -1160,7 +1160,13 @@ fn encode_avif_aom_rs(
     aom_sys_ref::ref_init();
     // The oracle's plain `aomenc --allintra` defaults stream (cdef OFF,
     // loop-restoration ON, qm OFF): the header-field bootstrap + the parity target.
-    let bootstrap = cell.c_encode_defaults();
+    // Diagnostic toggle (parity localisation only, never a product knob):
+    // ZEN_AOMRS_BOOTSTRAP=nolr bootstraps from the `--enable-restoration=0`
+    // oracle config instead of the allintra defaults.
+    let bootstrap = match std::env::var("ZEN_AOMRS_BOOTSTRAP").as_deref() {
+        Ok("nolr") => cell.c_encode(),
+        _ => cell.c_encode_defaults(),
+    };
     if bootstrap.is_empty() {
         return Err(format!("aom-rs: C oracle encode failed for {}", cell.label).into());
     }
