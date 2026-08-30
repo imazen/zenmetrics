@@ -1157,6 +1157,20 @@ fn encode_avif_aom_rs(
         u: u8p.iter().map(|&v| u16::from(v)).collect(),
         v: v8p.iter().map(|&v| u16::from(v)).collect(),
     };
+    // Diagnostic: ZEN_AOMRS_DUMP_PLANES=<dir> writes the exact u8 planes the
+    // port + oracle are fed (<w>x<h>_cq<cq>_s<speed>.{y,u,v,json}) so a
+    // zenav1-aom localizer can replay a diverging cell bit-for-bit.
+    if let Ok(dir) = std::env::var("ZEN_AOMRS_DUMP_PLANES") {
+        let stem = format!("{dir}/{w}x{h}_cq{cq_level}_s{speed}");
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(format!("{stem}.y"), &y8)?;
+        std::fs::write(format!("{stem}.u"), &u8p)?;
+        std::fs::write(format!("{stem}.v"), &v8p)?;
+        std::fs::write(
+            format!("{stem}.json"),
+            format!("{{\"w\":{w},\"h\":{h},\"cw\":{cw},\"ch\":{ch},\"cq_level\":{cq_level},\"speed\":{speed},\"matrix\":\"bt601-full\"}}"),
+        )?;
+    }
     aom_sys_ref::ref_init();
     // The oracle's plain `aomenc --allintra` defaults stream (cdef OFF,
     // loop-restoration ON, qm OFF): the header-field bootstrap + the parity target.
@@ -1170,13 +1184,26 @@ fn encode_avif_aom_rs(
     if bootstrap.is_empty() {
         return Err(format!("aom-rs: C oracle encode failed for {}", cell.label).into());
     }
-    let port_payload = cell.port_encode(&bootstrap);
+    // Mirror the oracle's OWN defaults: real aomenc's ALLINTRA config has palette +
+    // IntraBC ON and screen-detects the frame (`allow_screen_content_tools` in
+    // its header); the port's `ToggleKnobs::default()` has both OFF. Driving the
+    // port with tools the oracle never enabled (or vice versa) is a harness
+    // mismatch, not a port divergence — KB-41 localizer (zenav1-aom): every cell
+    // the first fleet chunk refused was a screen-detected frame.
+    let screen = aom_bench::stream_allows_screen_content_tools(&bootstrap);
+    let knobs = aom_bench::ToggleKnobs {
+        enable_palette: screen,
+        enable_intrabc: screen,
+        ..aom_bench::ToggleKnobs::default()
+    };
+    let port_payload = cell.port_encode_with(&bootstrap, &knobs);
     let oracle_payload = EncodeCell::frame_obu_payload(&bootstrap);
     if port_payload != oracle_payload {
         return Err(format!(
-            "aom-rs: PORT DIVERGED from the C oracle on {} (port {} B vs oracle {} B frame OBU \
-             payload) — refusing to emit unverified bytes",
+            "aom-rs: PORT DIVERGED from the C oracle on {} (screen_tools={}; port {} B vs oracle {} B \
+             frame OBU payload) — refusing to emit unverified bytes",
             cell.label,
+            screen,
             port_payload.len(),
             oracle_payload.len()
         )
