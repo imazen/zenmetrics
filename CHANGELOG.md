@@ -62,8 +62,12 @@ Workspace conventions per the global rules:
   `ZEN_IDLE_PASSES`: that pass means work exists but is claimed elsewhere, and treating it as
   idle is what drained two boxes out while a third ground on alone for 1.07 h. Simulated on
   the measured profile: 10.99 h → 7.51 h makespan (−31.6%) on the full wave, 2.921 h → 1.934 h
-  (1.51× → 1.00× ideal) on a 312-cell remainder. Escape hatches, fleet-wide only:
-  `ZEN_CHUNK_UNIFORM=0`, `ZEN_CHUNK_REF_CONCURRENCY`, `ZEN_CHUNK_TAIL_SPREAD`.
+  (1.51× → 1.00× ideal) on a 312-cell remainder. **MEASURED A/B on the same three boxes back to
+  back: 917 executions / 312 cells (2.939×, every box running the whole gap) → 59 / 59
+  (1.000×, split 24/8/27, chunk sizes identical on every box); a contended pass now reports
+  `skipped=8` and keeps polling (r7900x reached pass 38) instead of draining out.** Escape
+  hatches, fleet-wide only: `ZEN_CHUNK_UNIFORM=0`, `ZEN_CHUNK_REF_CONCURRENCY`,
+  `ZEN_CHUNK_TAIL_SPREAD`. Record: `benchmarks/fleet_walltime_aom_2026-08-30.md`.
 - **New wall-time forensics: `scripts/jobsys/fleet_walltime.py` + `fleet_schedule_sim.py`.**
   Reconstruct a run's schedule from the live ledger alone (chunk sidecar object mtimes are the
   completion instants; a ledger row's `ts` is the PASS clock and must never be used for

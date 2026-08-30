@@ -465,6 +465,28 @@ The spread lever adds little to the *aggregate* number (176k cells balance trivi
 boxes at any chunk size) — its value is entirely in the remainder, which is where the measured
 5.67 idle box-hours actually accumulated.
 
+### Measured A/B on the fleet (same three boxes, back to back)
+
+| | BEFORE — per-box packing | AFTER — fleet-uniform |
+|---|---|---|
+| gap | 312 cells | 59 cells |
+| executions / distinct | 917 / 312 = **2.939×** | 59 / 59 = **1.000×** |
+| work split per box | 312 / 312 / 293 — every box did the whole gap | 24 / 8 / 27 — disjoint, sums to exactly 59 |
+| chunk sizes | 19 / 41 / 82 (differs per box) | 4 ×14 + 3 ×1, **identical on every box** |
+| contended pass | box drains out (`done=0` counted idle) | `skipped=8` → keeps polling (pass 38) |
+
+Exactly-once held: 59 executions for 59 cells, no cell twice, all three boxes contributing.
+The prediction was conservative — real per-box redundancy on a small gap (2.939×) is worse
+than the whole-wave average the simulation assumed (1.463×). Full record:
+`benchmarks/fleet_walltime_aom_2026-08-30.md`.
+
+**Sidecar names are not an archive.** Chunk sidecars are keyed
+`pass-<worker>-<pass>.chunk-<chunk-id>`, so the same worker re-running the same chunk in a
+later generation OVERWRITES the earlier file. Current truth is unaffected — the uploaded
+`ledger_snapshot.parquet` is the durable done-set, which is exactly what `compact --upload`
+is for — but do not treat the sidecar set as a historical record (the wave's raw row count
+fell 228,059 → 221,276 across a requeue round for this reason).
+
 ### Not the scheduler's fault, and much bigger: the operator loop
 
 12.50 of the 18.17 idle box-hours were the **whole fleet down** between generations —
