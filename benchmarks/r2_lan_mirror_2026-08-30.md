@@ -283,15 +283,17 @@ mirror driven or verified by `s5cmd ls` diffs will report phantom-missing
 objects forever, re-transfer them, and still call the prefix INCOMPLETE. It cost
 one wasted retry pass here before it was caught. **Every count/byte figure in
 this document comes from `aws s3 ls --recursive --summarize` on both stores.**
-`s5cmd` is still used for bulk `cp` (where it is 11.5x faster than rclone, §4)
-and for R2-side listings, which are stable.
+`s5cmd` is still used for bulk `cp` — measured at **190 obj/s end-to-end**
+(339 obj/s down from R2, 433 obj/s up to the LAN store) against rclone's
+**16.5 obj/s** on the same prefix, an **11.5x** difference — and for R2-side
+listings, which are stable.
 
 **Verification per prefix** (three independent checks):
 
-1. **object count** — `s5cmd ls 's3://<b>/<p>*' | wc -l`, both stores;
-2. **total bytes** — sum of the size column of that same listing, both stores;
-3. **sha256 spot-check** — >= 3 objects per prefix downloaded from *both* stores
-   and hashed locally.
+1. **object count** — `aws s3 ls s3://<b>/<p> --recursive --summarize`, both stores;
+2. **total bytes** — the `Total Size` line of that same call, both stores;
+3. **sha256 spot-check** — at least 3 objects per prefix fetched from *both*
+   stores and hashed locally (by byte range for multi-GB objects).
 
 
 ### Results
@@ -309,7 +311,8 @@ and for R2-side listings, which are stable.
 | `zentrain/canonical/2026-06-27/zenwebp_lossless/encodes/` | 40,473 / 40,473 | 6,954,651,422 / 6,954,651,422 | **YES** | 5/5 sha256 full-object OK |
 | `zentrain/kadis-700k/canonical/` | 1 / 1 | 906,001,718 / 906,001,718 | **YES** | 2/2 sha256 range OK (head+tail) |
 | `zentrain/kadis-700k-gpu/canonical/` | 1 / 1 | 936,367,503 / 936,367,503 | **YES** | 2/2 sha256 range OK (head+tail) |
-| `zentrain/canonical/2026-06-27/zenpng_lossless/encodes/` | 76,449 / 27,500 | 13,691,411,533 / 6,165,342,628 | **NO** | aws-lister |
+| `zentrain/canonical/2026-06-27/zenpng_lossless/encodes/` | 76,449 / 27,500 | 13,691,411,533 / 6,165,342,628 | **PARTIAL** | interrupted mid-upload by the load stop (§3); resumes by diff |
+| `zentrain/canonical/2026-06-27/zenjxl_lossless/encodes/` | 269,820 / 0 | 58,419,699,144 / 0 | **DEFERRED** | not started — see §5b (tower-local ingest once the mover drains) |
 
 Large objects (multi-GB tars, >64 MB parquets) are spot-checked by **byte
 range** rather than whole-file hash: identical ranges are fetched from both
