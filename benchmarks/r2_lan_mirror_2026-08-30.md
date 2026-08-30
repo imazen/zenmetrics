@@ -88,6 +88,16 @@ Consumers were found by grepping `s3://` reads across `zenmetrics/scripts/jobsys
 `zenmetrics/scripts/picker`, `zensim/scripts`, `zenanalyze` and the live
 `~/tmp/*.sh` fleet chains. Sizes are `s5cmd du` against R2 on 2026-08-30.
 
+**Totals.** Mirror queue: **P0 369.61 GiB / 2,819,786 objects** (the bigcodec
+corpus) + **P1 213.52 GiB / 730 objects** (eval instruments and regime
+training tables) = **583 GiB / 2,820,516 objects**.
+Measured-and-registered but deliberately not mirrored: **609 GiB /
+1,448,481 objects** — for redundancy or an absent consumer, never for capacity (§3).
+
+The `encodes/` object count is what makes this a long transfer rather than a big
+one: **2,815,122 objects for 139.29 GiB** (~50 KB mean) across the five object-mode
+datasets, against 61 tar objects for 219 GiB carrying the same bytes.
+
 ### P0 — the bigcodec corpus (no LAN copy existed; the round-7 bottleneck)
 
 | bucket/prefix | GiB | objects | what reads it | status |
