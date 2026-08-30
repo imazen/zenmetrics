@@ -39,7 +39,8 @@ fn hdr_field(w: usize, h: usize, seed: u64) -> Vec<f64> {
     (0..w * h)
         .map(|i| {
             let (x, y) = ((i % w) as f64, (i / w) as f64);
-            let base = 60.0 * (1.0 + 0.4 * (2.0 * pi * x / 17.0).sin() * (2.0 * pi * y / 23.0).cos())
+            let base = 60.0
+                * (1.0 + 0.4 * (2.0 * pi * x / 17.0).sin() * (2.0 * pi * y / 23.0).cos())
                 + 6.0 * (rng() - 0.5);
             let (cx, cy) = (w as f64 * 0.7, h as f64 * 0.3);
             let r2 = ((x - cx).powi(2) + (y - cy).powi(2)) / (0.02 * (w * h) as f64 + 1.0);
@@ -50,10 +51,7 @@ fn hdr_field(w: usize, h: usize, seed: u64) -> Vec<f64> {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let side: usize = args
-        .next()
-        .and_then(|a| a.parse().ok())
-        .unwrap_or(512);
+    let side: usize = args.next().and_then(|a| a.parse().ok()).unwrap_or(512);
     let reps: usize = args.next().and_then(|a| a.parse().ok()).unwrap_or(1);
 
     let par = Params::new(30.0);
@@ -70,8 +68,15 @@ fn main() {
 
     for rep in 0..reps {
         let t0 = std::time::Instant::now();
-        let r = hdrvdp(&test, &reference, side, side, ColorEncoding::Luminance, &par)
-            .expect("perf_probe: metric failed");
+        let r = hdrvdp(
+            &test,
+            &reference,
+            side,
+            side,
+            ColorEncoding::Luminance,
+            &par,
+        )
+        .expect("perf_probe: metric failed");
         let dt = t0.elapsed();
         let digest = fnv1a(
             r.p_map

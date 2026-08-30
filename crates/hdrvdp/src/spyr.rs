@@ -178,21 +178,83 @@ pub fn corr_dn(
     let c = (fs / 2) as isize;
     let mut out = vec![0.0; out_w * out_h];
 
+    // ── Performance shape; the arithmetic is bit-identical to the direct
+    // gather `acc += filter[ky·fs+kx] · image[reflect1(oy·step+ky−c),
+    // reflect1(ox·step+kx−c)]` in ky-major tap order (see tests/bit_lock.rs).
+    //
+    // The direct form pays two `reflect1`s (mod + branches) per tap — 26 % of
+    // the whole metric under profiling. Instead the `reflect1` extension is
+    // materialised once — the interior of each padded row is a straight copy,
+    // only the `c`-wide borders reflect — and the inner loop is a dense
+    // correlation. Outputs are blocked in groups of 8 so LLVM vectorises
+    // across outputs; each output keeps its own serial accumulation chain in
+    // the original tap order, which is what keeps SIMD order-preserving. All
+    // taps participate (the original has no zero-skip), so even `+0.0·x`
+    // contributions land identically.
+    let pad_w = (out_w - 1) * step + fs;
+    let pad_h = (out_h - 1) * step + fs;
+    let cu = fs / 2;
+    let mut padded = vec![0.0f64; pad_w * pad_h];
+    for (iy, prow) in padded.chunks_exact_mut(pad_w).enumerate() {
+        let sy = reflect1(iy as isize - c, height);
+        let srow = &image[sy * width..sy * width + width];
+        // Left border, interior memcpy, right border.
+        for (ix, p) in prow[..cu.min(pad_w)].iter_mut().enumerate() {
+            *p = srow[reflect1(ix as isize - c, width)];
+        }
+        if pad_w > cu {
+            let mid = width.min(pad_w - cu);
+            prow[cu..cu + mid].copy_from_slice(&srow[..mid]);
+            for (i, p) in prow[cu + mid..].iter_mut().enumerate() {
+                *p = srow[reflect1((cu + mid + i) as isize - c, width)];
+            }
+        }
+    }
+
+    const BLK: usize = 8;
     for oy in 0..out_h {
-        let base_y = (oy * step) as isize;
-        for ox in 0..out_w {
-            let base_x = (ox * step) as isize;
-            let mut acc = 0.0;
+        let win_row = oy * step;
+        let out_row = &mut out[oy * out_w..(oy + 1) * out_w];
+        let mut ox = 0usize;
+        while ox + BLK <= out_w {
+            let mut acc = [0.0f64; BLK];
+            let x0 = ox * step;
             for ky in 0..fs {
-                let sy = reflect1(base_y + ky as isize - c, height);
-                let row = &image[sy * width..sy * width + width];
+                let prow = &padded[(win_row + ky) * pad_w..(win_row + ky + 1) * pad_w];
                 let frow = &filter[ky * fs..ky * fs + fs];
-                for (kx, &w) in frow.iter().enumerate() {
-                    let sx = reflect1(base_x + kx as isize - c, width);
-                    acc += w * row[sx];
+                if step == 1 {
+                    for (kx, &w) in frow.iter().enumerate() {
+                        let s: &[f64; BLK] = prow[x0 + kx..x0 + kx + BLK]
+                            .try_into()
+                            .expect("BLK-sized window");
+                        for (a, v) in acc.iter_mut().zip(s) {
+                            *a += w * v;
+                        }
+                    }
+                } else {
+                    for (kx, &w) in frow.iter().enumerate() {
+                        let s = &prow[x0 + kx..];
+                        for (j, a) in acc.iter_mut().enumerate() {
+                            *a += w * s[j * step];
+                        }
+                    }
                 }
             }
-            out[oy * out_w + ox] = acc;
+            out_row[ox..ox + BLK].copy_from_slice(&acc);
+            ox += BLK;
+        }
+        while ox < out_w {
+            let mut acc = 0.0;
+            let x0 = ox * step;
+            for ky in 0..fs {
+                let prow = &padded[(win_row + ky) * pad_w..];
+                let frow = &filter[ky * fs..ky * fs + fs];
+                for (kx, &w) in frow.iter().enumerate() {
+                    acc += w * prow[x0 + kx];
+                }
+            }
+            out_row[ox] = acc;
+            ox += 1;
         }
     }
     Band {
