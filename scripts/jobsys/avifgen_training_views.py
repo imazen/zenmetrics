@@ -46,11 +46,18 @@ ID = ["image_path", "q", "knob_tuple_json", "encode_sha"]
 # unevenly — the 2026-08-30 aom harvest had scores 125,688 vs features 125,687,
 # which the old positional `sc[c].equals(ft[c])` assert reported as "ID column
 # image_path misaligned" (a true statement about row ORDER that says nothing
-# about which cell is missing). So: KEY-JOIN, never zip. The key is
-# (image_path, encode_sha) — encode_sha alone is NOT unique, different sources
-# can encode to byte-identical bytes (15 shas shared across 30 svt cells, 7/14
-# on aom; zenmetrics `03fb7311`).
-KEY = ["image_path", "encode_sha"]
+# about which cell is missing). So: KEY-JOIN, never zip.
+#
+# The key is the WHOLE CELL IDENTITY, not (image_path, encode_sha): MEASURED on
+# that same aom harvest, (image_path, encode_sha) has **4,242 duplicate rows on
+# each side** — a source re-encoded at different `q` can land byte-identical
+# bytes (tiny renditions like 9642.scale128x85 / 9134.scale64x96 saturate), so
+# that pair addresses several cells at once and joining on it would pair rows
+# across q. `(image_path, q, knob_tuple_json, encode_sha)` is unique on both
+# sides (verified before the join, below, and asserted every run). encode_sha
+# alone is worse still — different SOURCES can share bytes (15 shas over 30 svt
+# cells, 7 over 14 aom; zenmetrics `03fb7311`).
+KEY = ID
 
 
 def _find_features_table(d):
@@ -114,9 +121,9 @@ idx_sc = pa.array(sc_take, type=pa.int64())
 idx_ft = pa.array(ft_take, type=pa.int64())
 sc = sc.take(idx_sc)
 ft = ft.take(idx_ft)
-# The remaining ID columns must AGREE on every joined row — they are redundant
-# with the key, so a disagreement means the two write-backs disagree about the
-# cell itself, not merely about row order.
+# Belt-and-braces: after a take-index join on KEY, every ID column must agree
+# row-for-row. With KEY == ID this is a tautology and costs one pass; it stops
+# being one the moment someone narrows KEY, which is exactly when it matters.
 for c in ID:
     if not sc[c].equals(ft[c]):
         a, b = sc[c].to_pylist(), ft[c].to_pylist()
