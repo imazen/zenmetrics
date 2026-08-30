@@ -16,6 +16,10 @@ Workspace conventions per the global rules:
 ## zenmetrics-cli
 
 ### Changed
+- **Executor image rebuilt on `c0cdf095`** (`exec-zensim944hdr-c0cdf095`: the carriers metric
+  + the same byte-exact aom port); `fleet.env` `ZEN_FLEET_IMAGE_CPU` pinned to it;
+  `avifsvt-sf-carriers-20260830` launched on the tower as a second capped worker
+  (`zen-score-carriers`, cpuset 0-23 / shares 256 / 24 GiB, 4 h pass budget) at 14:04Z.
 - **New zensim feature metric `zensim-foldapp2carriers`** (regime `folded720append2carriers`,
   944 wide): the streaming 944 extraction with v1's ten CARRIER slots emitted live in
   `f156..372` (`V1PoolsMode::Carriers`, zensim `f19b8469` — the `fused944native` regime;
