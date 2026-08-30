@@ -10,6 +10,9 @@ mod auto_fallback;
 #[cfg(any(feature = "cuda", feature = "wgpu"))]
 mod cached_ref_slot_rebuild;
 mod cancel;
+// The CPU correctness oracle, with its walk (buffered vs the streaming fold)
+// selectable — see the module doc. Ungated: its own test needs no GPU.
+mod cpu_oracle;
 #[cfg(feature = "cubecl-types")]
 mod cpu_gpu_diffmap_parity;
 #[cfg(feature = "cubecl-types")]

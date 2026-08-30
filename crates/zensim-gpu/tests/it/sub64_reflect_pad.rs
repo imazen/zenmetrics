@@ -16,7 +16,7 @@
 
 #![cfg(all(feature = "cubecl-types", any(feature = "cuda", feature = "wgpu")))]
 
-use zensim::{RgbSlice, Zensim as ZensimCpu, ZensimProfile};
+use zensim::{RgbSlice, ZensimProfile};
 use zensim_gpu::{Backend, ZensimOpaque, ZensimParams};
 
 #[cfg(feature = "cuda")]
@@ -65,7 +65,7 @@ fn gpu_score(w: u32, h: u32, r: &[u8], d: &[u8]) -> f64 {
 }
 
 fn cpu_score(w: u32, h: u32, r: &[u8], d: &[u8]) -> f64 {
-    let z = ZensimCpu::new(ZensimProfile::latest_preview());
+    let z = crate::cpu_oracle::cpu_oracle(ZensimProfile::latest_preview());
     let to_pix =
         |buf: &[u8]| -> Vec<[u8; 3]> { buf.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect() };
     let src = to_pix(r);

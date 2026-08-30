@@ -69,7 +69,7 @@
 #![cfg(all(feature = "cubecl-types", any(feature = "cuda", feature = "wgpu")))]
 
 use cubecl::Runtime;
-use zensim::{RgbSlice, Zensim as ZensimCpu, ZensimProfile};
+use zensim::{RgbSlice, ZensimProfile};
 use zensim_gpu::{TOTAL_FEATURES_WITH_IW, Zensim, ZensimFeatureRegime};
 
 #[cfg(feature = "cuda")]
@@ -196,7 +196,7 @@ fn add_noise(data: &[u8], amount: i16, seed: u32) -> Vec<u8> {
 }
 
 fn cpu_372(rgb_ref: &[u8], rgb_dis: &[u8], w: usize, h: usize) -> Vec<f64> {
-    let z = ZensimCpu::new(ZensimProfile::A);
+    let z = crate::cpu_oracle::cpu_oracle(ZensimProfile::A);
     let to_pix =
         |buf: &[u8]| -> Vec<[u8; 3]> { buf.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect() };
     let src = to_pix(rgb_ref);

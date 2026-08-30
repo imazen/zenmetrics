@@ -30,7 +30,7 @@
 //! bump that changes pool-reuse semantics (or a regression that drops
 //! the reclaim) re-trips it.
 
-use zensim::{RgbSlice, Zensim as ZensimCpu, ZensimProfile};
+use zensim::{RgbSlice, ZensimProfile};
 use zensim_gpu::{Backend, MemoryMode, ZensimOpaque, ZensimParams};
 
 #[cfg(feature = "cuda")]
@@ -77,7 +77,7 @@ fn to_pix(b: &[u8]) -> Vec<[u8; 3]> {
 }
 
 fn cpu_score(w: u32, h: u32, r: &[u8], d: &[u8]) -> f64 {
-    let z = ZensimCpu::new(ZensimProfile::A);
+    let z = crate::cpu_oracle::cpu_oracle(ZensimProfile::A);
     let rp = to_pix(r);
     let dp = to_pix(d);
     let rs = RgbSlice::new(&rp, w as usize, h as usize);

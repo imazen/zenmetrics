@@ -20,7 +20,7 @@
 //! Array<f64>.
 
 use cubecl::Runtime;
-use zensim::{RgbSlice, Zensim as ZensimCpu, ZensimProfile};
+use zensim::{RgbSlice, ZensimProfile};
 use zensim_gpu::{Zensim, score_from_features};
 
 /// Reconstruct the former linear `PreviewV0_2` built-in as a `Custom`
@@ -57,7 +57,7 @@ macro_rules! make_client {
 // ───────────────────────── helpers ─────────────────────────
 
 fn cpu_score(rgb_ref: &[u8], rgb_dis: &[u8], w: usize, h: usize) -> f64 {
-    let z = ZensimCpu::new(cpu_linear_profile());
+    let z = crate::cpu_oracle::cpu_oracle(cpu_linear_profile());
     let to_pix =
         |buf: &[u8]| -> Vec<[u8; 3]> { buf.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect() };
     let src = to_pix(rgb_ref);

@@ -27,7 +27,7 @@
 #![cfg(all(feature = "cubecl-types", any(feature = "cuda", feature = "wgpu")))]
 
 use cubecl::Runtime;
-use zensim::{RgbSlice, Zensim as ZensimCpu, ZensimProfile};
+use zensim::{RgbSlice, ZensimProfile};
 use zensim_gpu::{
     TOTAL_FEATURES, TOTAL_FEATURES_EXTENDED, TOTAL_FEATURES_WITH_IW, Zensim, ZensimFeatureRegime,
 };
@@ -130,7 +130,7 @@ fn cpu_372_features(rgb_ref: &[u8], rgb_dis: &[u8], w: usize, h: usize) -> Vec<f
     // ZensimProfile::latest() carries compute_iw_features: true, so
     // compute_extended_features returns a 372-feature vector
     // (combine_scores Pass 4 appends the IW block).
-    let z = ZensimCpu::new(ZensimProfile::latest());
+    let z = crate::cpu_oracle::cpu_oracle(ZensimProfile::latest());
     let to_pix =
         |buf: &[u8]| -> Vec<[u8; 3]> { buf.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect() };
     let src = to_pix(rgb_ref);
