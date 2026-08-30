@@ -182,14 +182,26 @@ datasets, against 61 tar objects for 219 GiB carrying the same bytes.
 | `/mnt/disk1` (array member) | 17 T | 7.2 T | 9.3 T | holds SeaweedFS `/data2` |
 | `/mnt/cache` (NVMe pool) | 1.9 T | 802 G | 1.1 T | holds SeaweedFS `/data` |
 
-**SeaweedFS spans both tiers** — `zen-lanstore` runs
+**SeaweedFS spans both tiers, and it uses both** — `zen-lanstore` runs
 `server -s3 -dir=/data,/data2` with `/data` bound to
-`/mnt/cache/appdata/zenstore-sw/data` and `/data2` bound to
-`/mnt/disk1/coefficient/zenstore-data2`. Measured during this mirror: **every new
-byte landed on `/data2` (the array)** — `data2` grew while `data` moved 544 KB —
-because SeaweedFS places new volumes on the dir with the most free space, and
-disk1 has 9.3 T against the cache's 1.1 T. So this mirror does **not** consume
-the NVMe cache pool the household containers share.
+`/mnt/cache/appdata/zenstore-sw/data` (NVMe) and `/data2` bound to
+`/mnt/disk1/coefficient/zenstore-data2` (array).
+
+An early snapshot (10 minutes in) showed `data2` growing while `data` had moved
+only 544 KB, which looked like SeaweedFS placing everything on the emptier dir.
+**That reading was wrong, and is corrected here:** over the full pass the split
+was **`data2` +101.63 GiB (471.68 → 573.31) and `data` +65.53 GiB (506.71 →
+572.24)** — 167.16 GiB total, roughly 60/40 across array and NVMe, with volume
+counts ending at 575 on the array and 590 on the cache. New volumes are
+allocated round-robin across the `-dir` list, not steered by free space.
+
+So this mirror **does** consume the NVMe cache pool the household containers
+share. It is affordable at this size — the cache went 1.1 T → 993 G free (47 %
+used) — but it is a real cost and it scales with everything still queued, which
+is the other reason (beyond §3's load ceiling) not to push the 2.8 M-object
+`encodes/` layer onto this store without a plan. If cache residency is
+undesirable, that is a `-dir` / volume-placement conversation with the store's
+owner, not something a mirror can control.
 
 The full P0+P1 working set is well under 0.5 TiB against 21 T free, so **no
 prefix had to be refused for capacity**; the prefixes left unmirrored were
