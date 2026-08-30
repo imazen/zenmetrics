@@ -27,6 +27,19 @@ Workspace conventions per the global rules:
   + the same byte-exact aom port); `fleet.env` `ZEN_FLEET_IMAGE_CPU` pinned to it;
   `avifsvt-sf-carriers-20260830` launched on the tower as a second capped worker
   (`zen-score-carriers`, cpuset 0-23 / shares 256 / 24 GiB, 4 h pass budget) at 14:04Z.
+- **CPU executor image repointed to `exec-zensim944hdr-03bdf64b`** (`fleet.env`
+  `ZEN_FLEET_IMAGE_CPU`) — a strict superset of `-c0cdf095`: same cargo features and
+  musl static build, plus the `zensim-foldapp2pools` metric. Verified on the BAKED
+  binary (a live 1-cell `jobexec` run inside the image emitted
+  `regime=folded720append2pools`, 944 features, bit-identical to the local binary),
+  not merely at build time. Digest `sha256:6224582c…`.
+- **`avifgen_training_views.py` joins scores↔features on the cell identity** instead of
+  asserting positional row alignment. The two tables are independent write-backs and
+  can differ by a row (the 2026-08-30 aom harvest: scores 125,688 vs features 125,687).
+  The key is all four ID columns — MEASURED, `(image_path, encode_sha)` has 4,242
+  duplicate rows per side because a source re-encoded at a different `q` can land
+  byte-identical bytes. Rows on only one side are dropped with a loud count + sample
+  keys; key uniqueness is asserted on both sides.
 - **New zensim feature metric `zensim-foldapp2pools`** (regime `folded720append2pools`,
   944 wide): the ALL-944-LIVE extraction — one streaming pass emitting `f0..155` basic ++
   `f156..371` v1 pools **LIVE (all 216: peaks 72 + masked 72 + IW 72)** ++ the v2-348 block
