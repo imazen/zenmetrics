@@ -51,6 +51,13 @@ pub struct ReconcilePlan {
     pub done: usize,
     /// Claimed/pending, not yet terminal.
     pub in_flight: usize,
+    /// Desired jobs whose latest ledger row is ALREADY `Poison` — permanently given
+    /// up on, and therefore absent from `enqueue`, `poison`, `done` and `in_flight`
+    /// alike. Counted (2026-08-30) because an un-counted poison wall is INVISIBLE:
+    /// a worker over 312 poisoned cells and a worker over a finished run both print
+    /// `done=0 failed=0 poisoned=0 skipped=0 rows=0`, and the operator reads the
+    /// second. That ambiguity hid a burned 312-cell pardon for hours.
+    pub already_poison: usize,
 }
 
 /// Compute the gap between what's desired and what the ledger shows. Desired entries that resolve to
@@ -88,7 +95,9 @@ pub fn reconcile_at(
             None => plan.enqueue.push(id), // never seen → the gap
             Some(r) => match r.status {
                 JobStatus::Done => plan.done += 1,
-                JobStatus::Poison => {} // already given up; recorded
+                // Already given up on. Not schedulable, but COUNTED — see
+                // `ReconcilePlan::already_poison`.
+                JobStatus::Poison => plan.already_poison += 1,
                 JobStatus::Pending | JobStatus::Claimed => {
                     match stale_claim_after {
                         // Abandoned in-flight row (owner presumed dead) → back into the gap.
@@ -260,6 +269,79 @@ mod tests {
             1,
             "content-addressed dedup: same work declared thrice = one enqueue"
         );
+    }
+
+    /// THE 2026-08-30 pardon-burn class: the operator's requeue pardon, one worker
+    /// attempt, and the poison that follows — plus the counter that makes the result
+    /// visible instead of indistinguishable from a finished run.
+    ///
+    /// `zenfleet-ctl requeue` writes `Failed / worker_lost / attempts=0` OVER an earlier
+    /// verdict. Latest-wins must surface that pardon (so the cell is claimable again) —
+    /// but the very next deterministic failure poisons it, and a job that is ALREADY
+    /// Poison produces no plan entry at all. Before `already_poison` a worker facing a
+    /// wall of 312 poisoned cells and a worker on a fully-done run printed the identical
+    /// `done=0 … rows=0`, which is how a burned pardon stayed invisible for hours.
+    #[test]
+    fn pardon_reopens_a_poisoned_job_and_already_poison_is_counted() {
+        let d = desired("cvvdp", b"enc");
+        let ds = [d.clone()];
+        let pol = RetryPolicy::default();
+
+        // 1. Poison at t=100 — not schedulable, and now COUNTED.
+        let mut poisoned = row(
+            d.job_id(),
+            JobStatus::Poison,
+            Some(ErrorClass::EncoderPanic),
+            2,
+        );
+        poisoned.ts = 100;
+        let view = LedgerView::from_rows([poisoned.clone()]);
+        let p = reconcile(&ds, &view, pol);
+        assert!(p.enqueue.is_empty(), "a poisoned job is never re-enqueued");
+        assert!(p.poison.is_empty(), "…and is not re-poisoned either");
+        assert_eq!(p.done, 0);
+        assert_eq!(p.in_flight, 0);
+        assert_eq!(
+            p.already_poison, 1,
+            "the poison wall must be countable — this is the whole visibility fix"
+        );
+
+        // 2. The operator pardon (newer ts, transient class, attempts reset) wins
+        //    latest-wins and puts the cell back in the gap.
+        let mut pardon = row(
+            d.job_id(),
+            JobStatus::Failed,
+            Some(ErrorClass::WorkerLost),
+            0,
+        );
+        pardon.ts = 200;
+        pardon.worker = "requeue-pardon".into();
+        let view = LedgerView::from_rows([poisoned.clone(), pardon.clone()]);
+        let p = reconcile(&ds, &view, pol);
+        assert_eq!(p.enqueue, vec![d.job_id()], "the pardon re-opens the cell");
+        assert_eq!(p.already_poison, 0);
+
+        // 3. Row order must not matter — the reduce is latest-wins, not last-applied.
+        let view = LedgerView::from_rows([pardon.clone(), poisoned.clone()]);
+        assert_eq!(reconcile(&ds, &view, pol).enqueue, vec![d.job_id()]);
+
+        // 4. ONE deterministic failure after the pardon spends it: `encoder_panic` is not
+        //    transient, so the cap is irrelevant and the cell poisons immediately. This is
+        //    the measured 28-second burn — intended for a genuine encoder bug, disastrous
+        //    when the executor simply lacked the feature (see
+        //    `JobKind::required_capabilities`, which is what now prevents the claim).
+        let mut refail = row(
+            d.job_id(),
+            JobStatus::Failed,
+            Some(ErrorClass::EncoderPanic),
+            1,
+        );
+        refail.ts = 300;
+        let view = LedgerView::from_rows([poisoned, pardon, refail]);
+        let p = reconcile(&ds, &view, pol);
+        assert_eq!(p.poison, vec![d.job_id()]);
+        assert!(p.enqueue.is_empty());
+        assert_eq!(p.already_poison, 0, "poisoned THIS pass, not already");
     }
 
     /// The stuck-29 class (2026-08-26): a Claimed row from a dead worker must become enqueueable

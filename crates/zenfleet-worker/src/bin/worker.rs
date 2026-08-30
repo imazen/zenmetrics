@@ -167,12 +167,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let out = run(&cfg)?;
     eprintln!(
-        "zenfleet-worker: done={} failed={} poisoned={} skipped={} rows={}",
+        "zenfleet-worker: done={} failed={} poisoned={} skipped={} rows={} already_poison={}",
         out.done,
         out.failed,
         out.poisoned,
         out.skipped,
-        out.rows.len()
+        out.rows.len(),
+        out.already_poison
     );
+    // A pass that is idle BECAUSE the remaining work is all poison looks exactly like a
+    // pass on a finished run (`done=0 ... rows=0`). Say which one it is, loudly, once —
+    // the 2026-08-30 aom-rs incident read the second and concluded "nothing claimed"
+    // while 312 freshly-pardoned cells had just been burned to Poison in 28 seconds.
+    if out.already_poison > 0 && out.rows.is_empty() {
+        eprintln!(
+            "zenfleet-worker: PROBLEM — this pass did nothing because {} desired job(s) are \
+             already POISON in the ledger (given up on). This is NOT a drained run. Inspect with \
+             `zenfleet-ctl audit`/`pairs`, then `zenfleet-ctl requeue --classes <class>` once the \
+             cause is fixed — and CHECK THE EXECUTOR IMAGE serves the job's `requires` tokens \
+             before re-queueing, or the pardon burns again on the first pass.",
+            out.already_poison
+        );
+    }
     Ok(())
 }

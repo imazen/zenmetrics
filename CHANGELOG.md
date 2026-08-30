@@ -13,6 +13,36 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenfleet-core / zenfleet-worker / zenmetrics-cli
+
+### Fixed
+- **The claim-time capability gate was blind to the encode `backend` knob, and a
+  mis-featured executor could burn an operator pardon in seconds.**
+  `JobKind::required_capabilities()` derived encode tokens from the CODEC NAME only, so
+  the aom-rs wave (`codec="zenavif"`, `knobs={"backend":"aom-rs",…}`) required just
+  `avif` — a token every CPU executor advertises. MEASURED on `avifaom-enc-20260830`
+  (2026-08-30 17:32:33Z→17:33:05Z): an executor built WITHOUT the `avif-aom` feature
+  claimed all 312 freshly-pardoned cells, its encode arm hard-errored
+  (`sweep/encode.rs:1021`, "this build lacks the `avif-aom` feature"), the non-zero exit
+  classified as `encoder_panic` (DETERMINISTIC), and `reconcile_at` poisoned every one on
+  the first failure — 594 executions and 483 poison rows over 312 cells in **28 seconds**,
+  the whole round finishing before the operator's first 10-minute poll.
+  `required_capabilities()` now also reads the `backend` knob
+  (`aom-rs → avif-aom`, `svt-rs → avif-svt`; `encode_backend_capability`), conservative on
+  anything it cannot parse, and `zenmetrics capabilities` advertises `avif-aom` / `avif-svt`
+  so a capable image still claims. `requires` is not part of the content address, so
+  re-declaring an existing run to pick this up leaves every `job_id` unchanged (gated by a
+  unit test).
+- **A worker idling over a wall of POISON was indistinguishable from a worker on a
+  finished run.** `reconcile_at`'s `JobStatus::Poison` arm counted nothing, so a pass with
+  312 permanently-poisoned desired jobs printed the same
+  `done=0 failed=0 poisoned=0 skipped=0 rows=0` as a drained run — which is exactly how the
+  burned pardon above stayed invisible. `ReconcilePlan` gained `already_poison`,
+  `ExecOutcome` carries it through every execution path (serial, chunked, epoch-sharded),
+  the worker summary line appends `already_poison=N`, and a pass that did nothing BECAUSE
+  of poison now prints a loud PROBLEM line naming the remedy. The summary's existing
+  prefix is unchanged, so drain detectors that match on it keep working.
+
 ## zenmetrics-cli
 
 ### Changed

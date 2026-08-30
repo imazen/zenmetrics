@@ -196,6 +196,29 @@ pub enum JobKind {
     },
 }
 
+/// Map an encode cell's `backend` knob to the executor cargo feature that implements it.
+///
+/// The zenavif cell knob `{"backend":"aom-rs"|"svt-rs",...}` picks a *different encoder*
+/// (`zenav1-aom` / `zenav1-svt` ports) whose executor arm is cfg-gated on `avif-aom` /
+/// `avif-svt`. Without the feature the executor refuses the cell outright rather than
+/// falling back, so the backend token is a hard requirement — see
+/// [`JobKind::required_capabilities`] for the incident this closes.
+///
+/// Conservative: a knob string that is not a JSON object, has no `backend`, or names an
+/// unknown backend yields `None`.
+pub fn encode_backend_capability(knobs: &str) -> Option<&'static str> {
+    // Cheap reject before paying for a JSON parse (most cells have no backend knob).
+    if !knobs.contains("backend") {
+        return None;
+    }
+    let v: serde_json::Value = serde_json::from_str(knobs).ok()?;
+    match v.get("backend")?.as_str()? {
+        "aom-rs" => Some("avif-aom"),
+        "svt-rs" => Some("avif-svt"),
+        _ => None,
+    }
+}
+
 impl JobKind {
     /// Anti-wedge invariant 5: executor capability tokens (cargo feature names of the
     /// `zenmetrics` executor) this job kind CERTAINLY needs. Conservative by design:
@@ -212,7 +235,9 @@ impl JobKind {
             }
         };
         match self {
-            JobKind::Encode { codec, hdr, .. } => {
+            JobKind::Encode {
+                codec, knobs, hdr, ..
+            } => {
                 let c = codec.to_ascii_lowercase();
                 if c.contains("svt") {
                     add("hdr-svt");
@@ -232,6 +257,20 @@ impl JobKind {
                     add("gif");
                 } else if c.contains("tiff") {
                     add("tiff");
+                }
+                // The `backend` KNOB selects a different encoder inside the same
+                // codec crate, and each backend is its own cfg-gated executor
+                // feature — so the codec token alone is NOT sufficient. The
+                // zenavif aom-rs / svt-rs arms hard-error ("this build lacks the
+                // `avif-aom` feature") on an executor built without them, which
+                // the worker classifies `encoder_panic` (DETERMINISTIC) and the
+                // reconciler poisons on the FIRST failure. Measured 2026-08-30:
+                // an image without `avif-aom` claimed 312 freshly-pardoned
+                // aom-rs cells and burned every one of them to Poison in 28 s,
+                // because `requires` said only "avif" — a token every CPU
+                // executor has. Reading the knob closes that hole.
+                if let Some(t) = encode_backend_capability(knobs) {
+                    add(t);
                 }
                 if *hdr {
                     add("hdr");
@@ -643,6 +682,80 @@ mod tests {
             JobKind::Bake { view: "v".into() }
                 .required_capabilities()
                 .is_empty()
+        );
+    }
+
+    /// THE 2026-08-30 aom-rs incident, as a gate.
+    ///
+    /// `avifaom-enc-20260830` declares `codec="zenavif"` with
+    /// `knobs={"backend":"aom-rs","speed":S}`. Before this fix `required_capabilities()`
+    /// read the codec name ONLY and returned `["avif"]` — a token every CPU executor
+    /// advertises — so the claim-time gate never fired, an executor built without the
+    /// `avif-aom` feature claimed 312 freshly-pardoned cells, its encode arm hard-errored
+    /// ("this build lacks the `avif-aom` feature"), the worker classified that as
+    /// `encoder_panic` (DETERMINISTIC), and the reconciler poisoned all 312 on the first
+    /// failure — 28 seconds from pardon to burn.
+    #[test]
+    fn encode_backend_knob_is_a_hard_capability_requirement() {
+        use crate::content::sha256;
+        use crate::ids::JobId;
+        let aom = JobKind::Encode {
+            codec: "zenavif".into(),
+            q: 50,
+            knobs: r#"{"backend":"aom-rs","speed":6}"#.into(),
+            hdr: false,
+        };
+        assert_eq!(
+            aom.required_capabilities(),
+            vec!["avif".to_string(), "avif-aom".to_string()],
+            "the aom-rs backend knob must require the feature that implements it"
+        );
+        let svt = JobKind::Encode {
+            codec: "zenavif".into(),
+            q: 50,
+            knobs: r#"{"backend":"svt-rs","speed":4}"#.into(),
+            hdr: false,
+        };
+        assert_eq!(
+            svt.required_capabilities(),
+            vec!["avif".to_string(), "avif-svt".to_string()]
+        );
+        // Plain zenavif (no backend knob) keeps exactly its old requirement — adding a
+        // token here would make every capable worker refuse the existing avifgen waves.
+        let plain = JobKind::Encode {
+            codec: "zenavif".into(),
+            q: 50,
+            knobs: r#"{"effort":6}"#.into(),
+            hdr: false,
+        };
+        assert_eq!(plain.required_capabilities(), vec!["avif".to_string()]);
+        // `backend` naming the DEFAULT arm is not a separate feature.
+        let zenravif = JobKind::Encode {
+            codec: "zenavif".into(),
+            q: 50,
+            knobs: r#"{"backend":"zenravif"}"#.into(),
+            hdr: false,
+        };
+        assert_eq!(zenravif.required_capabilities(), vec!["avif".to_string()]);
+        // Conservative on junk: an unparseable knob string must not invent a token
+        // (over-claiming makes capable workers refuse work).
+        assert_eq!(encode_backend_capability("not json"), None);
+        assert_eq!(encode_backend_capability("{}"), None);
+        assert_eq!(encode_backend_capability(r#"{"backend":42}"#), None);
+        assert_eq!(encode_backend_capability(r#"{"backend":"who-rs"}"#), None);
+        // Identity is unchanged: `requires` is not part of the content address, so
+        // re-declaring an existing run to pick this up is a no-op for every job_id.
+        assert_eq!(
+            JobId::of(&aom, &[sha256(b"src")]),
+            JobId::of(
+                &JobKind::Encode {
+                    codec: "zenavif".into(),
+                    q: 50,
+                    knobs: r#"{"backend":"aom-rs","speed":6}"#.into(),
+                    hdr: false,
+                },
+                &[sha256(b"src")]
+            )
         );
     }
 

@@ -579,6 +579,9 @@ struct EpochParts {
     fast: Vec<DesiredJob>,
     guarded_enq: Vec<DesiredJob>,
     guarded_poison: Vec<DesiredJob>,
+    /// Jobs already Poison in the view (not schedulable, but counted so an
+    /// "idle" pass over a poison wall is visible).
+    already_poison: usize,
     others_enq: Vec<DesiredJob>,
 }
 
@@ -662,6 +665,7 @@ fn partition_epoch(
         guarded_enq: Vec::new(),
         guarded_poison: Vec::new(),
         others_enq: Vec::new(),
+        already_poison: plan.already_poison,
     };
     let tagged = plan
         .enqueue
@@ -696,6 +700,7 @@ fn merge_outcome(a: &mut ExecOutcome, mut b: ExecOutcome) {
     a.done += b.done;
     a.failed += b.failed;
     a.poisoned += b.poisoned;
+    a.already_poison += b.already_poison;
     a.skipped += b.skipped;
 }
 
@@ -835,6 +840,7 @@ fn epoch_exec<B: BlobStore + Sync>(
         guarded_enq,
         guarded_poison,
         others_enq,
+        already_poison,
     } = parts;
 
     let mut out = ExecOutcome {
@@ -843,6 +849,7 @@ fn epoch_exec<B: BlobStore + Sync>(
         failed: 0,
         poisoned: 0,
         skipped: 0,
+        already_poison,
     };
 
     // Phase 1 — the lease-free fast shard (zero claim traffic; this is the whole point).
@@ -955,6 +962,10 @@ pub struct ExecOutcome {
     pub poisoned: usize,
     /// Gap jobs another worker claimed first (concurrent-safety; not executed here).
     pub skipped: usize,
+    /// Desired jobs whose latest ledger row is ALREADY `Poison` (given up on in an
+    /// earlier pass/wave). They are not schedulable, produce no rows, and used to be
+    /// completely invisible — see [`zenfleet_core::ReconcilePlan::already_poison`].
+    pub already_poison: usize,
 }
 
 /// Execute the reconciler's gap (single worker — no concurrent claiming). Thin wrapper over
@@ -1030,6 +1041,7 @@ where
         failed: 0,
         poisoned: 0,
         skipped: 0,
+        already_poison: plan.already_poison,
     };
 
     let make = |d: &DesiredJob,
@@ -1288,6 +1300,7 @@ where
         failed: 0,
         poisoned: 0,
         skipped: 0,
+        already_poison: plan.already_poison,
     };
     let make = |d: &DesiredJob,
                 status: JobStatus,
@@ -2872,6 +2885,7 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
             failed: 0,
             poisoned: 0,
             skipped: 0,
+            already_poison: 0,
         });
     }
 

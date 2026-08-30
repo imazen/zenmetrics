@@ -2656,6 +2656,14 @@ fn print_capabilities() {
     cap!("jpeg");
     cap!("webp");
     cap!("avif");
+    // The zenavif `backend` knob selects a DIFFERENT encoder (the zenav1-svt /
+    // zenav1-aom ports) whose sweep arm is cfg-gated on these features and hard-errors
+    // without them. They must be advertised separately from plain `avif`: the claim-time
+    // capability gate (anti-wedge invariant 5) is what stops an image built without them
+    // from claiming — and burning — those cells. Added 2026-08-30 after an executor with
+    // `avif` but not `avif-aom` poisoned 312 pardoned aom-rs cells in 28 s.
+    cap!("avif-svt");
+    cap!("avif-aom");
     cap!("jxl");
     cap!("gif");
     cap!("tiff");
