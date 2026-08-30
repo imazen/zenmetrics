@@ -399,8 +399,30 @@ loss. It predates this mirror and belongs to whoever owns that fleet run.
 
 ## 6. Reproducing / extending this mirror
 
-The drivers are throwaway operator scripts, not committed code; the reproducible
-statement is the recipe:
+**Committed tool: `scripts/lanstore/mirror_r2.sh`** (`copy` / `verify`), which
+encodes the three things this pass had to learn the hard way — the `aws` lister
+for LAN-side counts, a tower load gate, and `rclone copyto` for single objects
+inside a job-run prefix:
+
+```
+scripts/lanstore/mirror_r2.sh verify zentrain canonical/2026-06-27/zenwebp_lossless/encodes/
+scripts/lanstore/mirror_r2.sh copy   zentrain eval-grids/ canonical-2026-05-21/
+# ZEN_LOAD_GATE (default 15), ZEN_TRANSFERS (default 2), ZEN_MIRROR_LOG
+```
+
+**⚠ A credential trap that bit this script during development, and will bite
+anything else that mirrors *from* R2 *to* the LAN store.** `scripts/lib/s3env.sh`
+re-exports the *selected* store's key under the legacy `R2_ACCESS_KEY_ID` /
+`R2_SECRET_ACCESS_KEY` names for back-compat. When the selected store is the LAN
+one (the default), those names therefore hold the **LAN** key. A script that
+sources `s3env.sh` and then reaches for `$R2_ACCESS_KEY_ID` to talk to actual R2
+hands Cloudflare the wrong key — and **the failure is silent**: listings come
+back empty and every prefix looks like it has zero objects, which reads as
+"nothing to copy" rather than as an auth error. `mirror_r2.sh` reads the R2
+credentials into its own `SRC_*` variables from
+`~/.config/cloudflare/r2-credentials` *after* `s3env.sh` has run.
+
+The underlying recipe, for anything the tool does not cover:
 
 ```
 # resolve the store (LAN is the default; ZEN_STORE=r2 is the opt-out)
