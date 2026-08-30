@@ -126,7 +126,7 @@ datasets, against 61 tar objects for 219 GiB carrying the same bytes.
 | `zentrain/canonical-2026-05-21/` | 1.35 | 29 | canonical 372-feature trainer input | **MIRRORED+VERIFIED** |
 | `zentrain/kadis-700k/canonical/` | 0.84 | 1 | KADIS-700k canonical parquet | **MIRRORED+VERIFIED** |
 | `zentrain/kadis-700k-gpu/canonical/` | 0.87 | 1 | KADIS-700k GPU-metric canonical parquet | **MIRRORED+VERIFIED** |
-| `zentrain/ext944-canonical-2026-08-01/` | 26.51 | 85 | 944-regime legs | **QUEUED (gentle lane)** |
+| `zentrain/ext944-canonical-2026-08-01/` | 26.51 | 85 | 944-regime legs | **MIRRORED+VERIFIED** |
 | `zentrain/tbig-944-2026-08-02/` | 29.29 | 16 | bigcodec 944 views | **QUEUED (gentle lane)** |
 | `zentrain/kadis-944-2026-08-01/` | 3.09 | 7 | KADIS 944 rescore | **QUEUED (gentle lane)** |
 | `zentrain/ext924-canonical-2026-07-27/` | 49.96 | 36 | 924-regime legs | **QUEUED (gentle lane)** |
@@ -374,6 +374,7 @@ listings, which are stable.
 | `zentrain/canonical/2026-06-27/zenwebp_lossy/encodes/` | 944,370 / 0 | 24,187,758,994 / 0 | **NO** | aws-lister |
 | `zentrain/jxl-lossy/runs/mandfix2-zenjpeg-1782584881/variants/` | 8 / 8 | 47,450,193,920 / 47,450,193,920 | **YES** | aws-lister |
 | `zentrain/canonical/2026-06-27/zenjpeg_lossy/encodes/` | 1,484,010 / 0 | 46,311,414,326 / 0 | **DEFERRED** | not started — the tower already holds this corpus as zen924/zjl2-encodes (§3b) |
+| `zentrain/ext944-canonical-2026-08-01/` | 85 / 85 | 28,469,449,306 / 28,469,449,306 | **YES** | count+bytes verified (aws lister) |
 
 Large objects (multi-GB tars, >64 MB parquets) are spot-checked by **byte
 range** rather than whole-file hash: identical ranges are fetched from both
@@ -462,6 +463,23 @@ holds a dangling reference — `volume 473 not found for fileId 473,11bb5f1c703c
 loop, several failures per second. Volume 473 is not in
 `zenstore-quarantine-20260827/` (that holds 568/570/572), so this is a separate
 loss. It predates this mirror and belongs to whoever owns that fleet run.
+
+## 5c. Running state at the time of writing
+
+The two large-object lanes were still draining when this was written, both behind
+the tower load gate, and they are **self-harvesting** — nothing needs to be
+watched:
+
+- `~/tmp/r2lan/incremental_verify.txt` — each prefix is count+byte verified
+  against R2 the moment its transfer finishes, so results accumulate as they land
+  rather than at the end.
+- `~/tmp/r2lan/harvest_report.txt` — written once both lanes finish (or on a
+  5 h timeout), with the full per-prefix verification plus the store's disk state.
+- `~/tmp/r2_mirror_2026-08-30.log` — the continuous transfer log, including every
+  gate pause and its measured tower load.
+
+Because `rclone copy` is diff-driven and re-runnable, an interrupted lane costs
+only what is genuinely missing on a re-run; nothing has to be restarted.
 
 ## 6. Reproducing / extending this mirror
 
