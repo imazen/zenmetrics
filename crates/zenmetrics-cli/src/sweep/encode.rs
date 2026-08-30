@@ -1011,9 +1011,22 @@ fn encode_avif(
                 );
             }
         }
+        Some("aom-rs") => {
+            #[cfg(feature = "avif-aom")]
+            {
+                return encode_avif_aom_rs(source, q, knobs);
+            }
+            #[cfg(not(feature = "avif-aom"))]
+            {
+                return Err("zenavif backend \"aom-rs\" requested but this build lacks the \
+                            `avif-aom` feature (rebuild with `--features avif-aom`); refusing \
+                            to fall back to zenravif and mislabel the cell"
+                    .into());
+            }
+        }
         Some(other) => {
             return Err(format!(
-                "zenavif knob backend={other:?} is not wired (supported: \"zenravif\", \"svt-rs\")"
+                "zenavif knob backend={other:?} is not wired (supported: \"zenravif\", \"svt-rs\", \"aom-rs\")"
             )
             .into());
         }
@@ -1076,6 +1089,123 @@ fn encode_avif(
     _knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     Err("zenavif encode is disabled (rebuild with `--features sweep`)".into())
+}
+
+// ── zenavif backend "aom-rs": the zenav1-aom port, byte-verified per cell ──
+
+/// SDR AVIF through the pure-Rust zenav1-aom ALLINTRA encoder (`avif-aom`).
+///
+/// Colour path: RGB8 -> BT.601 full-range YCbCr 4:2:0 via `zenyuv` (THE owner;
+/// the same convention zenavif's svt-rs backend codes). Quality: `q` in 0..=100
+/// maps to libaom `cq_level = round((100 - q) * 63 / 100)` clamped to 1..=63
+/// (cq 0 = the lossless two-pass probe, out of the port's driver scope; recorded
+/// as this arm's mapping, NOT zenravif's). Speed: knob `speed` = `--cpu-used`
+/// 0..=9 (default 6, the avifenc default); every value inside the landed
+/// byte-identity gates.
+///
+/// Every cell runs the port AND the pinned C oracle: the oracle stream is the
+/// port's header-field bootstrap, and the port's frame OBU payload must equal
+/// the oracle's byte-for-byte — a mismatch is a loud per-cell failure, never a
+/// silently different AVIF. The emitted bytes are the PORT's payload spliced
+/// into the oracle's OBU frame (sequence header + frame), temporal delimiters
+/// dropped, muxed by zenavif-serialize.
+#[cfg(all(feature = "sweep", feature = "avif-aom"))]
+fn encode_avif_aom_rs(
+    source: &Rgb8Image,
+    q: f64,
+    knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Box<dyn Error>> {
+    use aom_bench::EncodeCell;
+    use aom_bench::rd_close::splice_frame_obu;
+    use aom_dsp::entropy::leb128::uleb_decode;
+    use aom_dsp::entropy::obu::read_obu_header;
+    use std::time::Instant;
+
+    if let Some(unknown) = knobs.keys().find(|k| !["backend", "speed"].contains(&k.as_str())) {
+        return Err(format!(
+            "zenavif aom-rs backend: knob '{unknown}' is not wired (supported: backend, speed); \
+             refusing to silently ignore it"
+        )
+        .into());
+    }
+    let speed = knobs.get("speed").and_then(Value::as_u64).unwrap_or(6);
+    if speed > 9 {
+        return Err(format!("aom-rs speed={speed} out of the byte-verified --cpu-used range 0..=9").into());
+    }
+    let cq_level = (((100.0 - q) * 63.0 / 100.0).round() as i32).clamp(1, 63);
+    let (w, h) = (source.width as usize, source.height as usize);
+    let (cw, ch) = (w.div_ceil(2), h.div_ceil(2));
+
+    let start = Instant::now();
+    let mut y8 = vec![0u8; w * h];
+    let mut u8p = vec![0u8; cw * ch];
+    let mut v8p = vec![0u8; cw * ch];
+    zenyuv::YuvContext::new(zenyuv::Range::Full, zenyuv::Matrix::Bt601)
+        .encode_420_u8(&source.pixels, &mut y8, &mut u8p, &mut v8p, w, h);
+    let cell = EncodeCell {
+        label: format!("aom-rs {w}x{h} cq{cq_level} s{speed}"),
+        w,
+        h,
+        mono: false,
+        ss_x: 1,
+        ss_y: 1,
+        usage: 2, // AOM_USAGE_ALL_INTRA — the avifenc still-image mode
+        cq_level,
+        speed: speed as i32,
+        bd: 8,
+        y: y8.iter().map(|&v| u16::from(v)).collect(),
+        u: u8p.iter().map(|&v| u16::from(v)).collect(),
+        v: v8p.iter().map(|&v| u16::from(v)).collect(),
+    };
+    aom_sys_ref::ref_init();
+    // The oracle's plain `aomenc --allintra` defaults stream (cdef OFF,
+    // loop-restoration ON, qm OFF): the header-field bootstrap + the parity target.
+    let bootstrap = cell.c_encode_defaults();
+    if bootstrap.is_empty() {
+        return Err(format!("aom-rs: C oracle encode failed for {}", cell.label).into());
+    }
+    let port_payload = cell.port_encode(&bootstrap);
+    let oracle_payload = EncodeCell::frame_obu_payload(&bootstrap);
+    if port_payload != oracle_payload {
+        return Err(format!(
+            "aom-rs: PORT DIVERGED from the C oracle on {} (port {} B vs oracle {} B frame OBU \
+             payload) — refusing to emit unverified bytes",
+            cell.label,
+            port_payload.len(),
+            oracle_payload.len()
+        )
+        .into());
+    }
+    let tu = splice_frame_obu(&bootstrap, &port_payload);
+    // AVIF item data = the OBU sequence without temporal delimiters (type 2).
+    let mut obus = Vec::with_capacity(tu.len());
+    let mut pos = 0usize;
+    while pos < tu.len() {
+        let hdr = read_obu_header(&tu[pos..]).ok_or("aom-rs: malformed OBU header in port stream")?;
+        let after = pos + hdr.header_len;
+        if !hdr.obu_has_size_field {
+            return Err("aom-rs: OBU without size field in port stream".into());
+        }
+        let (size, size_bytes) =
+            uleb_decode(&tu[after..]).ok_or("aom-rs: malformed OBU size in port stream")?;
+        let end = after + size_bytes + size as usize;
+        if end > tu.len() {
+            return Err("aom-rs: truncated OBU in port stream".into());
+        }
+        if hdr.obu_type != 2 {
+            obus.extend_from_slice(&tu[pos..end]);
+        }
+        pos = end;
+    }
+    let mut aviffy = zenavif_serialize::Aviffy::new();
+    aviffy
+        .set_color_primaries(zenavif_serialize::constants::ColorPrimaries::Bt709)
+        .set_transfer_characteristics(zenavif_serialize::constants::TransferCharacteristics::Srgb)
+        .set_matrix_coefficients(zenavif_serialize::constants::MatrixCoefficients::Bt601)
+        .set_full_color_range(true);
+    let bytes = aviffy.to_vec(&obus, None, source.width, source.height, 8);
+    let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
+    Ok(EncodedCell { bytes, encode_ms })
 }
 
 // ── zenjxl ──────────────────────────────────────────────────────────────

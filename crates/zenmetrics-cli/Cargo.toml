@@ -52,6 +52,15 @@ avif = ["dep:zenavif"]
 # muxed in-crate by zenavif-serialize). Opt-in: it pulls the whole zenav1-svt
 # encoder into the graph; a wave that never sets `backend` need not compile it.
 avif-svt = ["avif", "zenavif/encode-svt-rs"]
+# `avif-aom`: the zenavif `backend: "aom-rs"` sweep knob — the pure-Rust
+# zenav1-aom ALLINTRA encoder port, exercised on EVERY cell and byte-verified
+# against the pinned C libaom v3.14.1 oracle (aom-sys-ref, cmake-built by its
+# build.rs): the port's frame OBU payload must equal the oracle's or the cell
+# fails loud. The port still bootstraps its sequence/frame HEADER FIELDS from the
+# oracle stream (its coding decisions are its own), so the oracle is a build+run
+# dependency of this arm until the port derives headers standalone. Opt-in:
+# needs cmake + nasm + a C compiler at build time.
+avif-aom = ["avif", "dep:aom-bench", "dep:aom-sys-ref", "dep:aom-dsp", "dep:zenyuv", "dep:zenavif-serialize"]
 # jxl pulls the direct `jxl-encoder` dep too: the sweep encode path configures
 # expert LossyConfig knobs the zenjxl wrapper doesn't expose. Kept here (not in
 # `sweep`) so a non-jxl sweep (`--features sweep,jpeg`) need not compile
@@ -369,6 +378,16 @@ zenav1-svt   = { path = "../../../zenav1-svt/rust/svtav1",                     o
 # AVIF/MIAF muxer for the zenav1-svt arm's raw AV1 OBUs. Version resolves to
 # the workspace [patch.crates-io] entry (local ../zenavif-serialize sibling).
 zenavif-serialize = { version = "0.2.0",                                       optional = true }
+# zenav1-aom (the pure-Rust libaom port, sibling checkout) for the `avif-aom` arm:
+# the bench crate owns the end-to-end ALLINTRA driver (`EncodeCell::port_encode`),
+# the DSP crate the OBU header/leb128 readers, and sys-ref the C oracle the port
+# is byte-verified against. Path deps (unpublished; git-only work-in-progress).
+aom-bench   = { package = "zenav1-aom-bench",   path = "../../../zenav1-aom/crates/aom-bench",   optional = true }
+aom-sys-ref = { package = "zenav1-aom-sys-ref", path = "../../../zenav1-aom/crates/aom-sys-ref", optional = true }
+aom-dsp     = { package = "zenav1-aom-dsp",     path = "../../../zenav1-aom/crates/aom-dsp",     optional = true }
+# zenyuv (zenjpeg workspace member): THE RGB->YCbCr 4:2:0 owner for the aom-rs arm
+# (BT.601 full range — the same convention zenavif's svt-rs backend codes).
+zenyuv      = { path = "../../../zenjpeg/zenyuv", optional = true }
 image        = { version = "0.25",                optional = true, default-features = false, features = ["exr"] }
 bytemuck     = { workspace = true,                optional = true }
 # In-process pooled S3/R2 client for the jobexec fetch path — replaces the

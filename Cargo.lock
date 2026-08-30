@@ -1115,7 +1115,7 @@ dependencies = [
  "iwssim",
  "rgb",
  "zenbench",
- "zensim",
+ "zensim 0.3.0",
 ]
 
 [[package]]
@@ -2814,7 +2814,7 @@ dependencies = [
  "thiserror",
  "whereat",
  "zenjxl-decoder 0.3.10",
- "zensim",
+ "zensim 0.3.0",
 ]
 
 [[package]]
@@ -6445,6 +6445,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenav1-aom-bench"
+version = "0.0.1"
+dependencies = [
+ "zenav1-aom-decode",
+ "zenav1-aom-dsp",
+ "zenav1-aom-encode",
+ "zenav1-aom-sys-ref",
+ "zensim 0.2.7",
+]
+
+[[package]]
+name = "zenav1-aom-decode"
+version = "0.0.1"
+dependencies = [
+ "enough",
+ "zenav1-aom-dsp",
+]
+
+[[package]]
+name = "zenav1-aom-dsp"
+version = "0.0.1"
+dependencies = [
+ "archmage",
+ "magetypes",
+]
+
+[[package]]
+name = "zenav1-aom-encode"
+version = "0.0.1"
+dependencies = [
+ "zenav1-aom-dsp",
+]
+
+[[package]]
+name = "zenav1-aom-sys-ref"
+version = "0.0.1"
+
+[[package]]
 name = "zenav1-svt"
 version = "0.1.0"
 dependencies = [
@@ -7136,7 +7174,7 @@ dependencies = [
  "zenmetrics-gpu-core",
  "zenpixels",
  "zenpixels-convert",
- "zensim",
+ "zensim 0.3.0",
  "zensim-gpu",
 ]
 
@@ -7172,6 +7210,9 @@ dependencies = [
  "tokio",
  "ultrahdr-core 0.6.0",
  "ultrahdr-rs",
+ "zenav1-aom-bench",
+ "zenav1-aom-dsp",
+ "zenav1-aom-sys-ref",
  "zenav1-svt",
  "zenavif",
  "zenavif-serialize 0.2.0",
@@ -7187,9 +7228,10 @@ dependencies = [
  "zenpixels",
  "zenpixels-convert",
  "zenpng",
- "zensim",
+ "zensim 0.3.0",
  "zentiff",
  "zenwebp",
+ "zenyuv 0.1.3",
 ]
 
 [[package]]
@@ -7230,7 +7272,7 @@ dependencies = [
  "toml",
  "xxhash-rust",
  "zenmetrics-api",
- "zensim",
+ "zensim 0.3.0",
 ]
 
 [[package]]
@@ -7365,6 +7407,22 @@ dependencies = [
 
 [[package]]
 name = "zensim"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f46ead96f329b3f706ce66c8f36bf5b5bc1bb1fc5135c467079728379560b93c"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "imgref",
+ "linear-srgb",
+ "magetypes",
+ "rayon",
+ "rgb",
+ "thiserror",
+]
+
+[[package]]
+name = "zensim"
 version = "0.3.0"
 dependencies = [
  "archmage",
@@ -7392,7 +7450,7 @@ dependencies = [
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
  "zenpixels",
- "zensim",
+ "zensim 0.3.0",
 ]
 
 [[package]]
