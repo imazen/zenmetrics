@@ -35,7 +35,7 @@ end-to-end FNV digest per size, unchanged from baseline through every commit:
 | + FFT plans (5c156c2e) | 0.008 | 0.017 | 0.066 | 1.112 | 18.468 |
 | + invariant hoists (624615e8) | 0.008 | 0.016 | 0.061 | 1.047 | 17.472 |
 | + box3x3/imresize (5cc2c63d) | 0.008 | 0.016 | 0.057 | 0.973 | 16.295 |
-| + conv pad-row dedup (see git log) | 0.008 | 0.015 | 0.055 | 0.946 | 15.737 |
+| + conv pad-row dedup (2443d88c) | 0.008 | 0.015 | 0.055 | 0.946 | 15.737 |
 | **total speedup** | **2.00×** | **5.20×** | **5.18×** | **5.07×** | **5.20×** |
 
 97² is the odd-size (Bluestein FFT) probe: the FFT-plan commit alone was 3.06×
@@ -51,7 +51,7 @@ given. Fits use the four power-of-two sizes (97² sits on a different code path)
 | | α (ms) | β (µs/px) | segment slopes (µs/px): 64→256 / 256→1024 / 1024→4096 |
 |---|---|---|---|
 | baseline | ≈ 0 (−117 by global LSQ — the 4096² point dominates; the small-size extrapolation gives −2 ms, i.e. no measurable intercept) | 4.887 | 4.38 / 4.59 / 4.90 |
-| optimised | ≈ 5 (small-size extrapolation; global LSQ −16) | 0.972 | 0.80 / 0.93 / 0.97 |
+| optimised (2443d88c) | ≈ 5 (small-size extrapolation; global LSQ −15) | 0.940 | 0.76 / 0.91 / 0.94 |
 
 The optimised build's ~5 ms fixed cost is now visible at 64² (the per-pixel
 work no longer buries it); it is per-call setup (Photoreceptor JND tables,
@@ -115,6 +115,31 @@ the bit-identically-irreducible parts, see below.)
   re-baseline the metric.
 - **Real-input FFT (rfft) / split-radix / radix-4**: all reorder or refactor
   the float DAG → different bits. Same owner gate.
+- **FFT SoA (split re/im planes) — implemented, measured, REVERTED.** The
+  full rewrite (SoA butterflies + SoA 2-D passes + `conv_fft_real` building
+  planes directly) was bit-identical after the sincos fix below and measured:
+  64² −12 %, 97² −13 %, 256² −3 %, 512² −11 %, but **1024² +2.9 % and 4096²
+  +4.4 %** (0.946→0.973 s, 15.74→16.43 s). The loss concentrates in the
+  column pass and big-`n` butterflies: split planes touch twice the cache
+  lines/pages per gathered row (two half-line reads instead of one full
+  line), which at 8192-row columns becomes TLB-bound; a CB 8→16 block-width
+  "fix" made every size worse (512² 0.219→0.240). A size-thresholded hybrid
+  would keep both wins but means two butterfly implementations with a
+  machine-tuned crossover in a reference crate — not taken. Reverted; the
+  ≤512² gains are documented here for anyone revisiting with a blocked
+  transpose.
+- **THE TRAP FOUND BY THE LOCK — libm `sincos` vs separate `sin`+`cos` are
+  not the same bits on macOS.** During the SoA attempt, twiddle construction
+  that pushed `w.re` / `w.im` into two vecs made LLVM emit separate `_sin` +
+  `_cos` calls where the AoS collect-of-`expi` shape had merged them into
+  `___sincos_stret` — and Apple's fused and separate entries disagree by
+  1 ULP on some angles (first divergent stage: 1024-point, twiddle k=125).
+  End-to-end digests at ≥512² flipped while every ≤256² fixture stayed
+  clean. Fix: build `Vec<Complex>` with the exact original collect shape,
+  then split the finished values. `lock_fft_paths` now covers n up to 2048
+  so this class of divergence is caught by the lock itself, not just the
+  probe digests. **Any future refactor near `Complex::expi` call sites must
+  keep the collect shape or re-baseline deliberately.**
 - **corr_dn micro-variants** (indexed `for j` instead of `iter_mut().zip`,
   BLK 8 → 16): both measured *neutral* on the 256² kernel bench (57.9–61.3
   Mops/s across variants, within run-to-run noise) — LLVM already
@@ -133,9 +158,10 @@ the bit-identically-irreducible parts, see below.)
    cvvdp's `vpow` is ≈128 ULP by design). If the owner ever re-baselines the
    metric (e.g. for the planned `hdrvdp-gpu`, which cannot be bit-equal to f64
    CPU anyway), a vectorised pow is the single biggest CPU win left.
-2. **FFT butterflies ~18 %**: an SoA (split re/im) layout would let LLVM
-   vectorise pairs of butterflies with the identical per-butterfly DAG
-   (bit-safe in principle) — a substantial rewrite; not attempted this pass.
+2. **FFT butterflies ~18 %**: attempted via SoA — see the reverted
+   experiment above. A future attempt needs a cache-oblivious/blocked
+   transpose for the column pass before the butterfly gains survive at
+   ≥2048-point transforms.
 3. **Threading**: every stage is per-pixel/per-band parallel, and the crate is
    deliberately dependency-free (no rayon) — owner call on the policy. The
    fleet already parallelises across pairs, so per-pair threads may be moot.

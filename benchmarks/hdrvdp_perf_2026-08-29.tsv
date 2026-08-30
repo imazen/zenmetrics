@@ -33,8 +33,8 @@ box_imresize	5cc2c63d	97	9409	0.016
 box_imresize	5cc2c63d	256	65536	0.057
 box_imresize	5cc2c63d	1024	1048576	0.973
 box_imresize	5cc2c63d	4096	16777216	16.295
-pad_row_dedup	HEAD	64	4096	0.008
-pad_row_dedup	HEAD	97	9409	0.015
-pad_row_dedup	HEAD	256	65536	0.055
-pad_row_dedup	HEAD	1024	1048576	0.946
-pad_row_dedup	HEAD	4096	16777216	15.737
+pad_row_dedup	2443d88c	64	4096	0.008
+pad_row_dedup	2443d88c	97	9409	0.015
+pad_row_dedup	2443d88c	256	65536	0.055
+pad_row_dedup	2443d88c	1024	1048576	0.946
+pad_row_dedup	2443d88c	4096	16777216	15.737
