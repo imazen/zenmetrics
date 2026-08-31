@@ -1,0 +1,109 @@
+project: zenmetrics — encoder-search-loop integration cost for zensim / SSIMULACRA2 / butteraugli
+task: #163
+date_utc: 2026-08-30
+question: "what does ONE MORE distorted candidate cost, once the reference is warm,
+          and where is the CPU/GPU crossover for a codec quality-search loop"
+
+# ---------------------------------------------------------------------------
+# HOST — note this is NOT the 7950X/RTX-5070 box the 2026-05 sweeps used.
+# ---------------------------------------------------------------------------
+host: Apple M4 Pro, 12 cores, 24 GB unified memory, macOS (Darwin 25.5.0)
+gpu_on_this_host: Apple integrated (Metal via wgpu). NO CUDA. Every GPU number
+  quoted in the writeup is the previously-committed CUDA/RTX-5070 measurement
+  (benchmarks/gpu_coldstart_2026-05-29.tsv, setref_clean_all_2026-05-29.tsv);
+  none of it was re-measured here and it is labelled as CUDA everywhere it
+  appears. NO Metal GPU number is claimed.
+toolchain: rustc 1.98.0 (88d9e12ae 2026-08-18)
+repo_commit (build base): f240bb937fdaabee5e0f7f4d1cdcfd33c49f01e1
+
+# ---------------------------------------------------------------------------
+# HARNESS
+# ---------------------------------------------------------------------------
+driver: benchmarks/heaptrack/drivers/cpu_profile/src/bin/loop_wall.rs  (bin: loop-wall)
+sweep:  scripts/loopbench_sweep.sh
+fit:    scripts/loopbench_analyze.py
+build:  cargo build --release -p cpu-profile --bin loop-wall
+        RUSTFLAGS="", NO `-C target-cpu=native` (runtime SIMD dispatch is what
+        callers get — CLAUDE.md). Runs under `nice -n 19`.
+run:    LOOP_WALL_NO_GATE=1 loop-wall <size> <out.tsv> [metric]
+
+why a new driver instead of reusing cpu-wall:
+  cpu-wall (#139/#141) times the packed sRGB u8 entry points. jxl-encoder's
+  three search loops do not use them. `vardct/perceptual_loop.rs`,
+  `vardct/zensim_loop.rs` and `vardct/ssim2_loop.rs` all hold the
+  reconstruction as PLANAR LINEAR f32 at a padded stride (`recon_r/g/b`,
+  stride `padded_width`) and score the full frame — there is no u8 anywhere in
+  them. loop-wall measures that shape. cpu-wall was extended in the same
+  change with the missing 64/128/256 size labels (its ladder started at 512²).
+
+entry points timed (all planar linear f32, stride = width + 16):
+  butter  ButteraugliReference::new_linear_planar / compare_linear_planar
+          / compare_linear_planar_into (the diffmap-recycling variant)
+  zensim  Zensim::precompute_reference_linear_planar
+          / compute_with_ref_and_diffmap_linear_planar
+  ssim2   Ssimulacra2Reference::new / compare / compare_with(&mut CompareContext)
+          — via imgref::Img, since fast-ssim2 has NO planar entry point
+
+cells: oneshot | precompute | warm_strided | warm_zeroalloc |
+       warm_tight_plus_copy (zensim) | copy_only | loop_n5
+sizes: 64² 128² 256² 512² 1024² 2048² 4096²   (0.004 → 16.8 MP)
+
+# ---------------------------------------------------------------------------
+# STATISTICS — why MIN across runs, not mean
+# ---------------------------------------------------------------------------
+n_runs: 4 single-thread + 4 multi-thread + 2 multi-thread with fast-ssim2 `rayon`
+estimator: per-cell MINIMUM across runs.
+  This box is shared with other agent sessions and was NOT quiet: a competing
+  `sectioned_k_corpus` job held ~511 % CPU through part of the run and a rustc
+  build through another part (load average 2.7–7.9 across the session). Every
+  sample is therefore `true_cost + contention` with contention >= 0, so the
+  minimum is the only estimator that converges on the uncontended cost; a mean
+  converges on the contention level, which is not a property of the code.
+  Reported means come from zenbench's interleaved round-robin per cell, so
+  ordering bias within a group is already removed — the min-of-runs handles
+  the between-run level shifts contention causes.
+
+measured contention sensitivity (why the single-thread table is the primary one):
+  warm/oneshot RATIO, 4 runs, worst spread per cell —
+    multi-thread : up to 58.6 % (zensim @1024²)
+    single-thread: 3.8–13 % typical, and the ratio is FLAT across three orders
+                   of magnitude of pixel count (butter 0.605–0.640,
+                   zensim 0.883–0.938, ssim2 0.582–0.589)
+  Absolute multi-thread wall on a contended box is unreliable; the ST table and
+  the ratios are what the recommendation rests on. MT slopes are reported and
+  used, with that caveat stated at every use.
+
+zenbench resource gate: DISABLED (LOOP_WALL_NO_GATE=1). Its per-round `sysinfo`
+  process enumeration costs more than the kernels being timed on macOS — with
+  the gate on, a 64² zensim group ran 23.2 s at CV 138–205 %; with it off, 7.4 s
+  with no CV warning and means ~40 % lower. Interleaved round-robin and paired
+  statistics are unaffected; only the auto-pause is dropped. Same rationale and
+  toggle as cpu-wall's CPU_WALL_NO_GATE (documented in
+  cpu_wall_all_metrics_2026-05-29.meta).
+
+# ---------------------------------------------------------------------------
+# CORRECTNESS EVIDENCE (emitted in the same TSV as the wall time, by design —
+# the recommendation is "drop the copy / keep the warm ref", which is only
+# sound if the numbers do not move)
+# ---------------------------------------------------------------------------
+Every parity delta is EXACTLY 0.0 at every one of the 7 sizes:
+  butter  strided-stride vs tight-stride score        : 0
+  zensim  strided-stride vs tight-stride score        : 0
+  zensim  repeated warm compare vs first warm compare : 0
+  ssim2   warm-reference vs cold compute_ssimulacra2  : 0
+  ssim2   compare_with(ctx) vs compare (fresh alloc)  : 0
+Rows are in metric_loop_{st,mt}_2026-08-30.tsv with mode `PARITY:*`.
+
+# ---------------------------------------------------------------------------
+# FILES
+# ---------------------------------------------------------------------------
+metric_loop_st_2026-08-30.tsv   min-of-4, single-thread (RAYON_NUM_THREADS=1)
+metric_loop_mt_2026-08-30.tsv   min-of-4, multi-thread (crate defaults)
+metric_loop_raw_2026-08-30.tsv.zst  all 10 runs, every cell, unaggregated
+metric_loop_2026-08-30.md       the decision + crossover rule
+
+NO EXTRAPOLATION: every CPU cell is a real zenbench run at the stated dims on
+this host. No number in the writeup is scaled from another size or host. The
+CUDA GPU columns are quoted verbatim from the 2026-05-29 files and are labelled
+as such, including the caveat that butteraugli-gpu's cached-reference behaviour
+CHANGED after they were taken (commit 302ff4fc, 2026-05-31 — see the writeup).

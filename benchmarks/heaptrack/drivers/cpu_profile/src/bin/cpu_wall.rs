@@ -27,7 +27,7 @@
 //!
 //! Usage:
 //!   cpu-wall <size_label> <out_tsv>
-//!   size_label ∈ { 512 1024 2K 4096 12MP 30MP }
+//!   size_label ∈ { 64 128 256 512 1024 2K 4096 12MP 30MP }
 //!
 //! Writes/appends rows to <out_tsv>:
 //!   size_label  metric  mode  cold_or_warm  w  h  mean_ns  mean_ms  n_rounds  score
@@ -85,6 +85,16 @@ const STRIP_H: u32 = 512;
 
 fn size_dims(label: &str) -> Option<(u32, u32)> {
     match label {
+        // Task #163 (2026-08-30): tiny/small added. The prior sweep started at
+        // 512², which is ABOVE the regime an encoder quality-search loop
+        // actually lives in for thumbnails/small renditions — and it is the
+        // regime where the per-call INTERCEPT (allocation, plan build, pyramid
+        // setup, MLP load) dominates instead of the per-pixel slope. Fitting
+        // `total = α + β·pixels` needs points where α dominates, so 64² and
+        // 256² are mandatory per CLAUDE.md sweep discipline, not optional.
+        "64" => Some((64, 64)),
+        "128" => Some((128, 128)),
+        "256" => Some((256, 256)),
         "512" => Some((512, 512)),
         "1024" => Some((1024, 1024)),
         "2K" => Some((2048, 2048)),
@@ -103,7 +113,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 || args.len() > 4 {
         eprintln!(
-            "usage: cpu-wall <size_label> <out_tsv> [metric_filter]\n  size_label: 512 1024 2K 4096 12MP 30MP\n  metric_filter (optional): cvvdp ssim2 dssim butter iwssim zensim\n    — when set, only that metric's cells register (bounds peak harness RAM\n      at large sizes where holding all 6 warmed refs would be heavy).\n      Cells still interleave WITHIN the metric's modes (the comparison that\n      matters: full vs strip vs warm)."
+            "usage: cpu-wall <size_label> <out_tsv> [metric_filter]\n  size_label: 64 128 256 512 1024 2K 4096 12MP 30MP\n  metric_filter (optional): cvvdp ssim2 dssim butter iwssim zensim\n    — when set, only that metric's cells register (bounds peak harness RAM\n      at large sizes where holding all 6 warmed refs would be heavy).\n      Cells still interleave WITHIN the metric's modes (the comparison that\n      matters: full vs strip vs warm)."
         );
         std::process::exit(64);
     }
@@ -141,6 +151,12 @@ fn main() {
     // rounds (min_rounds floor) within a large wall budget rather than
     // pinning a fixed high round count (which would run for an hour).
     let (group_wall, per_cell_max_time, min_rounds) = match label.as_str() {
+        // Tiny/small (task #163): calls are sub-millisecond, so the binding
+        // constraint is ROUND COUNT, not wall. More rounds = tighter mean at
+        // the size where the intercept is the whole answer.
+        "64" => (Duration::from_secs(300), Duration::from_secs(6), 32usize),
+        "128" => (Duration::from_secs(300), Duration::from_secs(6), 32),
+        "256" => (Duration::from_secs(420), Duration::from_secs(8), 24),
         "512" => (Duration::from_secs(600), Duration::from_secs(10), 16usize),
         "1024" => (Duration::from_secs(700), Duration::from_secs(12), 16),
         "2K" => (Duration::from_secs(900), Duration::from_secs(16), 14),

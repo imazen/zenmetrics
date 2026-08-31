@@ -359,7 +359,81 @@ over those persisted variants — never re-encode per metric.
   SPLIT images from a `$HOME` context.
 - Doc: `benchmarks/picker_fleet_2026-06-23.md`; memory `heterogeneous-fleet-split.md`.
 
+## Metrics in an ENCODER SEARCH LOOP — CPU warm-ref, never GPU (MEASURED 2026-08-30)
+
+A quality-search loop scores ONE reference against N candidates. That is a
+different problem from fleet scoring and it has the opposite answer. Full
+numbers, provenance and the decision function: `benchmarks/metric_loop_2026-08-30.md`
+(+ `.meta`, `metric_loop_{st,mt}_2026-08-30.tsv`). Harness:
+`benchmarks/heaptrack/drivers/cpu_profile/src/bin/loop_wall.rs` (bin `loop-wall`)
+— it times the **planar linear f32** entry points, which is what jxl-encoder's
+`vardct/{perceptual,zensim,ssim2}_loop.rs` actually use; `cpu-wall` times the
+packed-sRGB-u8 sweep shape and answers a different question.
+
+- **All three metrics already have a CPU warm-reference API** — `butteraugli::
+  ButteraugliReference`, `zensim::Zensim::precompute_reference{,_linear_planar}`,
+  `fast_ssim2::Ssimulacra2Reference`. Nothing is missing; do not go build one.
+- **Warm reference pays back at N ≥ 2 for every metric at every size** (64²–4096²).
+  Use it unconditionally. `T(N) = precompute + N × per_candidate` is accurate to
+  −2.9…+1.8 % against a measured 5-candidate loop.
+- **Warm/cold ratio is FLAT across three orders of magnitude of pixel count** —
+  butteraugli 0.61, SSIMULACRA2 0.58, zensim 0.92 (ST) / 0.78 (MT). One number
+  per metric predicts the saving at any size.
+- **zensim's warm saving is structurally capped ~10–22 %**, not a bug: its warm
+  reference hoists only the ref XYB + pyramid, because `fused_blur_h_ssim`
+  (`zensim/src/blur.rs:2289`) deliberately fuses `blur(src)`/`blur(dst)`/
+  `blur(src·dst)` into one pass. Don't chase it in the shipped v1 path.
+- **GPU is a batch decision, not a loop decision.** Candidates needed on ONE
+  image before GPU (CUDA RTX-5070 figures) beats CPU (M4 Pro): 14–299 for a
+  fresh instance; **1** if the instance is reused across images. jxl-encoder
+  runs **3 compares at e8, 5 at e9/e10**, 18 at e11. So: CPU for e8–e10 at every
+  size, GPU only for e12+ or for fleet scoring. **The deciding variable is
+  instance reuse, not image size or candidate count.**
+- **Threading**: butteraugli 2.83× on 12 cores, zensim 4.49×, **SSIMULACRA2 1.02×
+  (it does not parallelise)**. `fast-ssim2`'s non-default `rayon` feature is
+  correctly left OFF by every consumer — measured 1.00–1.04× at ≥256² and
+  **0.31× (3.2× SLOWER) at 64²**. Do not "fix" that by enabling it.
+- **zensim below ~128²: force single-threaded.** Its multi-core dispatch
+  intercept (0.332 ms) exceeds an entire 64² compare (0.249 ms ST vs 0.315 MT).
+- **Stride**: butteraugli and zensim take an arbitrary `stride` on both sides and
+  are **bit-identical** to the tight path (parity delta exactly 0 at all 7 sizes).
+  fast-ssim2 does NOT — `ToLinearRgb` always materialises a packed
+  `LinearRgbImage` (`fast-ssim2/src/input.rs:25-58`), costing 5–8 % per candidate.
+  A planar `Ssimulacra2Reference::new_linear_planar` is the ONE missing API found.
+- Report **α and β separately** for anything in this space: fitting
+  `α + β·MP` over the whole 64²–4096² ladder returns a *negative* intercept for
+  every metric (unweighted OLS tilted by the 16 MP point). Fit α on 64²–512² and
+  β on 1024²–4096².
+
 ## Known Bugs
+
+- **`ButteraugliOpaque`'s cached reference is a NO-OP for any image taller than
+  224 px — it silently replays the full one-shot. Found 2026-08-30 (task #163),
+  by reading; not a regression, a design consequence.** `resolve_auto` tries
+  Strip *first* — "even if Full fits, butter is strip-preferred"
+  (`crates/butteraugli-gpu/src/memory_mode.rs:190-194`) — whenever
+  `height > MIN_STRIP_BODY + 2 × HALO_ROWS` = 64 + 2·80 = **224**. In strip mode
+  `set_reference_srgb_u8` only does `self.cached_ref_strip = Some(ref_rgb.to_vec())`
+  (`opaque.rs:703`), and `compute_with_reference_srgb_u8` calls
+  `self.inner.compute_srgb_u8(&held, dis_rgb, …)` (`opaque.rs:726`) — the whole
+  pair compute, **plus a host `Vec` clone of the reference on every call**. So a
+  warm-reference loop on an `Auto`-built instance is the cold path with extra
+  memcpy. The crate's own doc claim that "the cached-ref score is **identical**
+  to the one-shot score — no parity risk" (`opaque.rs:317-322`, `:676-680`,
+  `:712-714`) is TRUE and VACUOUS: identical because it is the same computation.
+  The umbrella hits this too — `zenmetrics-api/src/memory_mode.rs:107` maps
+  `Auto → butteraugli_gpu::MemoryMode::Auto`.
+  **Workaround: construct with `MemoryMode::Full`** to get the real device-cached
+  reference (`pipeline.rs:920-933` caches opsin + frequency separation + ref mask
+  at both resolutions). The typed multires-strip pipeline rejects `set_reference`
+  outright (`pipeline.rs:912-914`, `StripModeUnsupported`) — the opaque layer is
+  what papers over it.
+  **Corollary — `benchmarks/gpu_coldstart_2026-05-29.tsv`'s butteraugli
+  `warm_per_call_ms` (1.5 / 3.6 / 12.9 / 50.2 ms) is STALE for the opaque API.**
+  That file predates the strip held-reference, which landed 2026-05-31 in
+  `302ff4fc` ("#160"); before it, strip-mode `set_reference` errored. Those are
+  whole-image numbers. Do not quote them for an `Auto`-constructed instance
+  without re-measuring under `MemoryMode::Full`.
 
 - **`zenmetrics-orchestrator --lib`: 2 tests fail on ANY macOS host — environment, not a
   regression (confirmed 2026-08-28).** `tests::detect_cpu_returns_nonempty_brand` (lib.rs:938)

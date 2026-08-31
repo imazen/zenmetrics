@@ -21,6 +21,16 @@ zenbench     = "0.1.8"
 cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std"] }
 iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std"] }
 zensim       = { path = "../../../../../zensim/zensim" }
+# MEASURED 2026-08-30 (task #163), do NOT "fix" this by adding `rayon`:
+# fast-ssim2's `rayon` feature is off by default and no consumer in the
+# workspace enables it (jxl-encoder Cargo.toml:65, zenmetrics-api:165,
+# zenmetrics-orchestrator:119 all take `["imgref"]`). That is CORRECT.
+# A/B on this M4 Pro (min-of-2 MT runs, benchmarks/metric_loop_2026-08-30.md):
+#   64^2  0.31x  (rayon is 3.2x SLOWER - dispatch overhead on a 0.1 ms kernel)
+#   256^2 1.00x   1024^2 1.04x   2048^2 1.03x   4096^2 0.98x
+# i.e. no speedup above the noise floor anywhere, and a large regression at
+# thumbnail sizes. Keep the feature set identical to production consumers so
+# the harness measures what ships.
 fast-ssim2   = { version = "0.8.1", features = ["imgref"] }
 # Inherit the workspace spec (3.5 + `threads`). The local dssim-core pin's
 # no-`threads` path doesn't compile (its zero-dep rayon fallback is a WIP
@@ -39,3 +49,11 @@ debug = 1
 lto = false
 codegen-units = 1
 incremental = false
+
+# Task #163: encoder-search-loop harness. Times the LINEAR F32 PLANAR call
+# shape that jxl-encoder's vardct loops actually use (cpu-wall times the
+# packed-sRGB-u8 sweep shape), decomposed into precompute / ingress /
+# warm-compare so `T(N) = precompute + N*(ingress + warm)` can be fit.
+[[bin]]
+name = "loop-wall"
+path = "src/bin/loop_wall.rs"
