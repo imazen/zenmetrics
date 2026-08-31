@@ -757,7 +757,11 @@ cost well under $0.10** at $4.50/million.
 This is a **storage-line** saving. It does not touch the operations spend that
 the LAN migration was actually undertaken to kill.
 
-### 7.6 Durability after this deletion — registered, NOT executed
+### 7.6 Durability after this deletion
+
+> **Both single-copy items identified here were subsequently CLOSED — see §7.7.**
+> This section is kept for the copy census and the reasoning; its "registered, not
+> executed" status no longer holds.
 
 The framing "the bigcodec bytes now exist on one physical machine" turns out to
 be **wrong**, and the correction matters more than the recommendation:
@@ -771,7 +775,7 @@ be **wrong**, and the correction matters more than the recommendation:
 | **`originals/` — `originals.{train,validate,test}.tar`, 1.03 GiB** | **1 (LAN store only)** — the R2 copy is gone and no local `/mnt/v` copy exists |
 
 So an off-site copy of the compact form **already exists on R2** and no action is
-needed for it. Two things are worth the user's decision, neither executed here:
+needed for it. Two things remained (both since closed in §7.7):
 
 1. **`originals/` is genuinely single-copy now — 1.03 GiB, three tar objects.**
    This is the acute gap and the cheapest to close; it became single-copy as a
@@ -782,3 +786,79 @@ needed for it. Two things are worth the user's decision, neither executed here:
 If the R2 box tars are ever retired too, that removes the only off-site copy of
 the encode bytes and the compact-form second copy becomes urgent rather than
 already-satisfied.
+
+### 7.7 Durability gap CLOSED — `originals/` and `bf-zjpeg-*` second-copied (2026-08-30)
+
+§7.6 registered two single-copy items. Both are now second-copied and verified,
+so nothing this deletion touched is single-copy any more.
+
+**Where, and why R2 rather than `/mnt/v`.** The risk being closed is *"the tower
+is lost"*, and only an **off-site** copy closes that. `/mnt/v` is the dev box —
+same building, same power, same network as the tower, and itself a 74 %-full
+working volume; a copy there is convenient, not durable. It would have made the
+count two while leaving the failure mode intact. R2 is a different provider in a
+different place, and — decisively — **`originals/` is irreplaceable source data**:
+every encode in this corpus can be re-derived from the originals plus a codec,
+and nothing can re-derive the originals. They earn the off-site slot at least as
+much as the box tars that already have one.
+
+**`originals/` → `s3://zentrain/_archive/bigcodec-2026-08-30/originals/`**
+(3 objects, 1,100,933,120 B — byte-identical to the LAN listing)
+
+| object | bytes | sha256 |
+|---|--:|---|
+| `originals.test.tar` | 195,594,240 | `5c5c9930eddda5585fb44eb0d43ff64ed8bce387a623d4146ae929092dd57642` |
+| `originals.validate.tar` | 343,777,280 | `8fe35ae67874ba56a95fc4feca4b2a8043dd39547bad179cbdf13c6822cea493` |
+| `originals.train.tar` | 561,561,600 | `c15171d2e2980a5cd202bb3913e03907abc99d6055285ced1ac1bbd1e3cb0302` |
+
+**`bf-zjpeg-t0..7` → `s3://zentrain/_archive/bigcodec-2026-08-30/indexes/bf-zjpeg-t<N>/variant_index.tsv`**
+(8 objects, 242,272,708 B)
+
+| index | bytes | sha256 |
+|---|--:|---|
+| `bf-zjpeg-t0` | 30,351,650 | `2f205d16fee9c5c18b1ca5672a2afbdb3268fefea7727fcb478a486408f6a7d5` |
+| `bf-zjpeg-t1` | 30,332,611 | `18b32b0acd128ca4f8748f54163e275a667a0a16ef8b3eb1edb86d8c9eb8c8a0` |
+| `bf-zjpeg-t2` | 30,365,295 | `d7da1c20104f23c475b46e02f5f83f26c81bb9f22b17f2c0a7c715b8a1788142` |
+| `bf-zjpeg-t3` | 30,423,189 | `ee796ca35c405fd3c401aa372a087b338a3c5b3a6b6f0fc980ab226bbc875a30` |
+| `bf-zjpeg-t4` | 30,268,428 | `86077a387bb0405568c26ac94e3df964d00e8f62493b5edc9b3a35226c29dab6` |
+| `bf-zjpeg-t5` | 30,333,651 | `158c00458c003fff42e8876d5343f6e6268392d88316320e6edc02734450163d` |
+| `bf-zjpeg-t6` | 30,298,096 | `0679e3faa19edd07878c09861269b090c3ff58200c399a6ab678f1e09b055069` |
+| `bf-zjpeg-t7` | 29,899,788 | `d274bea343d76a2a6de558434622b17d598ec852b5f710c9cda243c00f1bc770` |
+
+Note this also restores symmetry: the other 53 `bf-*` indexes were already on R2
+(`jobs/bf-*`, out of the deletion scope) — `bf-zjpeg` was the only family that
+existed nowhere but the LAN store. It is filed under `_archive/` rather than
+`jobs/` deliberately: a bare `variant_index.tsv` under `jobs/<run>/` looks like a
+run without being one, and `_archive/` says "cold copy" unambiguously.
+
+**Verification:** every one of the 11 objects was re-downloaded from R2 after
+upload and re-hashed — **11/11 sha256 identical to the LAN-store source, 0
+mismatches** — and the LAN copies were re-listed afterwards and are untouched
+(`originals/` 3/1,100,933,120; `bf-zjpeg-t0`/`t7` unchanged).
+
+**Cost of closing the gap:** 1,343,205,828 B = 1.343 GB x $0.015/GB-month =
+**$0.02/month**, against the $4.68/month the deletion freed — net saving
+**~$4.66/month**. Upload was free (Class A `PutObject` on 11 objects is
+negligible; egress to fetch from the LAN store is local).
+
+**Regenerating `bf-zjpeg-*` from scratch, if it is ever needed anyway** — recorded
+so no future session has to rediscover the `ZEN_INDEX_ONLY` flag. ~28-66 s per
+box, ~8 min for all eight, reading the tars from whichever store is nearer:
+
+```bash
+. ~/tmp/_lan_env.sh                       # or the R2 env, for the R2 tars
+export ZEN_S3_ENDPOINT="$EP" AWS_REGION=auto
+export ZEN_INDEX_ONLY=1                   # index ONLY — no manifest.json/control.json,
+                                          # i.e. no claimable job is created
+export ZEN_IDX_WORK=~/tmp/idxwork
+cd ~/work/zen/zenmetrics
+for i in 0 1 2 3 4 5 6 7; do
+  python3 scripts/jobsys/index_tar_byterange.py \
+    "s3://zentrain/jxl-lossy/runs/mandfix2-zenjpeg-1782584881/variants/box-$i.tar" \
+    zenjpeg "bf-zjpeg-t$i" zentrain
+done
+```
+
+Correctness bar for a regenerated index: the eight boxes must total **1,484,010**
+members (185,790 x 7 + 183,480), and a member read by its offset must be
+byte-identical to the same member fetched any other way.
