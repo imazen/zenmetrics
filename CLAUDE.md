@@ -383,12 +383,17 @@ packed-sRGB-u8 sweep shape and answers a different question.
   reference hoists only the ref XYB + pyramid, because `fused_blur_h_ssim`
   (`zensim/src/blur.rs:2289`) deliberately fuses `blur(src)`/`blur(dst)`/
   `blur(src·dst)` into one pass. Don't chase it in the shipped v1 path.
-- **GPU is a batch decision, not a loop decision.** Candidates needed on ONE
-  image before GPU (CUDA RTX-5070 figures) beats CPU (M4 Pro): 14–299 for a
-  fresh instance; **1** if the instance is reused across images. jxl-encoder
-  runs **3 compares at e8, 5 at e9/e10**, 18 at e11. So: CPU for e8–e10 at every
-  size, GPU only for e12+ or for fleet scoring. **The deciding variable is
-  instance reuse, not image size or candidate count.**
+- **Whether GPU pays off depends on the GPU's MEMORY ARCHITECTURE, not on image
+  size or candidate count.** Candidates needed on ONE image before GPU beats
+  this host's 12-core CPU:
+  **Metal / Apple integrated (measured here): N\* = 2–4 at >=512^2**, because
+  setup is only 45–60 ms at 1 MP (no NVRTC, no discrete upload).
+  **Discrete CUDA (RTX-5070, quoted from `gpu_coldstart_2026-05-29.tsv`):
+  N\* = 14–299.** Either way N\* = **1** if the instance is reused across
+  images. jxl-encoder runs **3 compares at e8, 5 at e9/e10**, 18 at e11 — so a
+  unified-memory GPU already wins at e8 above 1 MP, while a discrete one does
+  not until e12. Below 0.25 MP no GPU wins for any metric. Driver for the Metal
+  numbers: `crates/zenmetrics-api/examples/loop_gpu_probe.rs`.
 - **Threading**: butteraugli 2.83× on 12 cores, zensim 4.49×, **SSIMULACRA2 1.02×
   (it does not parallelise)**. `fast-ssim2`'s non-default `rayon` feature is
   correctly left OFF by every consumer — measured 1.00–1.04× at ≥256² and
@@ -423,6 +428,12 @@ packed-sRGB-u8 sweep shape and answers a different question.
   `:712-714`) is TRUE and VACUOUS: identical because it is the same computation.
   The umbrella hits this too — `zenmetrics-api/src/memory_mode.rs:107` maps
   `Auto → butteraugli_gpu::MemoryMode::Auto`.
+  **MEASURED on Metal (task #163, `benchmarks/metric_loop_gpu_metal_2026-08-30.tsv`,
+  driver `crates/zenmetrics-api/examples/loop_gpu_probe.rs`): `warm/cold` under
+  `Auto` = 1.002 / 1.010 / 1.011 / 1.003 at 256²/512²/1024²/2048² — dead flat at
+  1.0. Under `Full`: 0.95 / 1.17 / 0.79 / 0.66.** `Full` is also the *cheaper*
+  constructor (166 vs 201 ms at 2048²), so there is no reason to take `Auto` for
+  a warm-reference workload. Scores are identical in every cell, both modes.
   **Workaround: construct with `MemoryMode::Full`** to get the real device-cached
   reference (`pipeline.rs:920-933` caches opsin + frequency separation + ref mask
   at both resolutions). The typed multires-strip pipeline rejects `set_reference`

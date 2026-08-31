@@ -8,11 +8,27 @@ question: "what does ONE MORE distorted candidate cost, once the reference is wa
 # HOST — note this is NOT the 7950X/RTX-5070 box the 2026-05 sweeps used.
 # ---------------------------------------------------------------------------
 host: Apple M4 Pro, 12 cores, 24 GB unified memory, macOS (Darwin 25.5.0)
-gpu_on_this_host: Apple integrated (Metal via wgpu). NO CUDA. Every GPU number
-  quoted in the writeup is the previously-committed CUDA/RTX-5070 measurement
-  (benchmarks/gpu_coldstart_2026-05-29.tsv, setref_clean_all_2026-05-29.tsv);
-  none of it was re-measured here and it is labelled as CUDA everywhere it
-  appears. NO Metal GPU number is claimed.
+gpu_on_this_host: Apple integrated (Metal via wgpu). NO CUDA.
+  Metal GPU numbers WERE measured here — driver
+  crates/zenmetrics-api/examples/loop_gpu_probe.rs, through the umbrella
+  `Metric` API with Backend::Wgpu, 15 reps x 2 runs, min of medians, results in
+  metric_loop_gpu_metal_2026-08-30.tsv. Build:
+    cargo build --release -p zenmetrics-api --no-default-features \
+      --features wgpu,butter,ssim2,zensim,cubecl-types --example loop_gpu_probe
+  Run: LOOP_GPU_BACKEND=wgpu LOOP_GPU_SIZES=256,512,1024,2048 LOOP_GPU_REPS=15
+  CUDA numbers are NOT re-measured — they are quoted verbatim from the
+  previously-committed benchmarks/gpu_coldstart_2026-05-29.tsv (RTX 5070) and
+  are labelled as CUDA everywhere they appear. The two GPU datasets are on
+  different machines and are never subtracted from each other; each is compared
+  only against a CPU baseline, and the Metal one against THIS host's CPU.
+  Metal caveats honoured: `fast-reduction` left off for ssim2/butteraugli (Metal
+  silently no-ops Atomic<f32>::fetch_add). The known-red Metal tests
+  (zensim-gpu cached_ref_slot_rebuild / diffmap_invariants, cvvdp-gpu Mode B
+  walker) were not triggered by this probe — it does not use cvvdp, does not
+  rebuild an instance at a foreign size, and does not request a CPU diffmap.
+  GPU sample discipline: the FIRST metric_new in a process absorbs the cubecl
+  device-registry init, so the 256^2 butteraugli `auto` constructor row is
+  inflated; per-metric setup is read from the >=512^2 rows.
 toolchain: rustc 1.98.0 (88d9e12ae 2026-08-18)
 repo_commit (build base): f240bb937fdaabee5e0f7f4d1cdcfd33c49f01e1
 
@@ -99,11 +115,26 @@ Rows are in metric_loop_{st,mt}_2026-08-30.tsv with mode `PARITY:*`.
 # ---------------------------------------------------------------------------
 metric_loop_st_2026-08-30.tsv   min-of-4, single-thread (RAYON_NUM_THREADS=1)
 metric_loop_mt_2026-08-30.tsv   min-of-4, multi-thread (crate defaults)
-metric_loop_raw_2026-08-30.tsv.zst  all 10 runs, every cell, unaggregated
+metric_loop_raw_2026-08-30.tsv.zst  all 10 CPU runs, every cell, unaggregated
+metric_loop_gpu_metal_2026-08-30.tsv  Metal GPU: setup / cold / warm per
+                                 candidate, both butteraugli memory modes,
+                                 joined to this host's CPU for the crossover
 metric_loop_2026-08-30.md       the decision + crossover rule
 
 NO EXTRAPOLATION: every CPU cell is a real zenbench run at the stated dims on
-this host. No number in the writeup is scaled from another size or host. The
-CUDA GPU columns are quoted verbatim from the 2026-05-29 files and are labelled
-as such, including the caveat that butteraugli-gpu's cached-reference behaviour
-CHANGED after they were taken (commit 302ff4fc, 2026-05-31 — see the writeup).
+this host, and every Metal GPU cell is a real run at the stated dims on this
+host. No number in the writeup is scaled from another size or host. The CUDA
+columns are quoted verbatim from the 2026-05-29 files and are labelled as such,
+including the caveat that butteraugli-gpu's cached-reference behaviour CHANGED
+after they were taken (commit 302ff4fc, 2026-05-31 — see the writeup). Metal and
+CUDA are never combined into one figure.
+
+GPU sample size: the Metal probe uses wall-clock `Instant` around each umbrella
+call, 15 reps x 2 runs, min of per-run medians. That is thinner than the CPU
+side's zenbench treatment and it is a HOST-SIDE timer — adequate here because
+every call ends in a synchronous readback (`Score` is returned to the host), so
+there is no un-awaited async submission to hide behind, but it is not a
+kernel-level profile. The load-bearing GPU result is a RATIO measured inside one
+process (`warm_ref / cold_warm`), which is insensitive to a constant timer bias;
+the absolute setup figures should be re-taken with GPU events before being used
+for anything finer than the order-of-magnitude crossover they support here.

@@ -7,10 +7,13 @@ Task #163, 2026-08-30. Host: Apple M4 Pro (12c, 24 GB), macOS. Build base
 against many distorted candidates. What does one *more* candidate cost once the
 reference is warm, and where does a GPU start winning?
 
-**The answer, in one line.** Warm-reference on CPU for all three, always — it
-pays back by the second candidate at every size and every parity delta is
-exactly zero. GPU is a batch-scoring decision, not an encoder-loop decision: it
-needs 7–299 candidates on one image to repay its setup, and the encoder runs 3–5.
+**The answer, in one line.** Warm-reference always — it pays back by the second
+candidate at every size, on CPU and GPU alike, and every parity delta is exactly
+zero. Whether to use a GPU at all **depends on the GPU's memory architecture,
+not on the image size or the candidate count**: on a unified-memory GPU (Metal,
+measured here) the crossover is 2–4 candidates and the encoder's 3–5 already
+clears it; on discrete CUDA it is 14–299 and the encoder never gets there
+unless the metric instance is reused across images.
 
 ---
 
@@ -39,8 +42,10 @@ CPU, planar linear f32, multi-core (crate defaults). `N` = candidates per refere
 | **zensim** | `precompute_reference_linear_planar` once → `compute_with_ref_and_diffmap_linear_planar` per candidate, **at the padded stride** | **11.4 ms** | 0.78× | **N ≥ 2** | 1.7–3.9 % today, and it is avoidable — see §4 |
 | **SSIMULACRA2** | `Ssimulacra2Reference::new` once → `compare_with(&mut CompareContext)` per candidate | **28.1 ms** | 0.58× | **N ≥ 2** | 5–8 %, **not** avoidable through today's API |
 
-GPU: **do not** put any of these on a GPU for a per-image search loop. Use GPU
-only when one metric instance is reused across many images (fleet scoring). §5.
+GPU: depends on the GPU. On **unified memory (Metal / Apple integrated)** the
+GPU beats this table from N ≥ 3 at ≥ 1 MP — setup is only 45–60 ms. On
+**discrete CUDA** it does not, until N ≥ 14 (or always, if the instance is
+reused across images). Full numbers and the decision function: §5.
 
 ### Cost model, validated
 
@@ -177,13 +182,60 @@ which is why they are still the ones to use in a loop.
 
 ---
 
-## 5. GPU: a batch decision, not a loop decision
+## 5. GPU
 
-**No GPU number here was measured on this host** — it is Metal-only and every
-committed GPU measurement in this repo is CUDA/RTX-5070. The columns below are
-quoted verbatim from `gpu_coldstart_2026-05-29.tsv` and joined against this
-host's CPU numbers. Read them as "how far apart are these two classes of
-machine", not as a same-box A/B.
+Two datasets, and they disagree — which is the finding.
+
+**(a) Metal, measured here, same box as the CPU numbers.** Driver:
+`crates/zenmetrics-api/examples/loop_gpu_probe.rs`, run through the umbrella
+`Metric` API (what production uses), `Backend::Wgpu`, 15 reps × 2 runs, min of
+medians. Data: `metric_loop_gpu_metal_2026-08-30.tsv`.
+
+**(b) CUDA / RTX 5070, quoted from `gpu_coldstart_2026-05-29.tsv`.** Not
+re-measured; this host has no CUDA. Read (b) as "a different class of machine",
+not a same-box A/B — and note trap 2 below before quoting its butteraugli row.
+
+### (a) Metal — the crossover is 2–4 candidates
+
+Setup = `metric_new + first_compute` (constructor + first-dispatch shader
+compile). `N*` = candidates on one image before GPU total beats this host's
+12-core CPU total.
+
+| metric | mode | size | setup (ms) | GPU/cand (ms) | CPU/cand (ms) | **N\*** | warm/cold |
+|---|---|---|---|---|---|---|---|
+| butteraugli | Auto | 512² | 17.0 | 4.04 | 8.40 | 3 | **1.010** |
+| butteraugli | **Full** | 512² | 13.4 | 6.68 | 8.40 | 4 | 1.171 |
+| butteraugli | Auto | 1024² | 55.7 | 10.47 | 22.41 | 4 | **1.011** |
+| butteraugli | **Full** | 1024² | 44.7 | 8.83 | 22.41 | **3** | 0.791 |
+| butteraugli | Auto | 2048² | 201.5 | 35.47 | 96.98 | 3 | **1.003** |
+| butteraugli | **Full** | 2048² | 166.1 | 22.33 | 96.98 | **2** | 0.656 |
+| SSIMULACRA2 | Auto | 512² | 32.2 | 4.20 | 6.37 | 14 | 0.642 |
+| SSIMULACRA2 | Auto | 1024² | 59.7 | 9.33 | 28.08 | **3** | 0.674 |
+| SSIMULACRA2 | Auto | 2048² | 214.2 | 21.68 | 117.91 | **2** | 0.654 |
+| zensim | Auto | 512² | 7.4 | 6.71 | 3.57 | never | 0.965 |
+| zensim | Auto | 1024² | 24.3 | 9.94 | 11.45 | 15 | 0.894 |
+| zensim | Auto | 2048² | 33.1 | 22.35 | 43.21 | **2** | 0.890 |
+
+At 256² the GPU never wins for any metric — CPU is 1.3–2.3 ms/candidate there
+and no GPU dispatch competes with that.
+
+Why Metal is so different from CUDA: **there is no NVRTC and no discrete-memory
+upload.** First-dispatch shader compile is 4–50 ms (CUDA: 130–915 ms) and
+`metric_new` is 0.08–171 ms (CUDA: 40–5734 ms; zensim-gpu is ~0.1 ms because it
+allocates lazily). Total setup at 1024² is **45–60 ms on Metal vs 574–653 ms on
+CUDA** — an order of magnitude, and it is the whole crossover.
+
+**The `warm/cold` column is the empirical proof of the butteraugli-gpu no-op.**
+Under `Auto` it is 1.002 / 1.010 / 1.011 / 1.003 at 256²/512²/1024²/2048² —
+dead flat at 1.0, the cached reference saves nothing. Under `Full` it falls to
+0.79 at 1 MP and 0.66 at 4 MP. Same scores in every cell, both modes:
+butteraugli 20.7495 / 20.9070 / 22.3951 / 25.3907, cold == warm exactly.
+`Full` is also the *cheaper* constructor (166 vs 201 ms at 2048²).
+**Always build butteraugli-gpu with `MemoryMode::Full` for a search loop.**
+zensim's 0.89–0.98 and SSIMULACRA2's 0.64–0.68 on Metal match their CPU ratios
+(0.78 / 0.58) — the same structural split as §2, on a different processor.
+
+### (b) CUDA — the crossover is 14–299 candidates
 
 `N*` = candidates on **one** image before GPU total beats CPU total, where
 GPU total = `cold_total + N x gpu_warm` and CPU total = `precompute + N x cpu_warm`.
@@ -210,30 +262,40 @@ jxl-encoder's actual candidate counts, from the effort ladder
 ### The decision function
 
 ```
-use_gpu(metric, pixels, N, instance_reused_across_images):
-    if instance_reused_across_images:   return true    # N* == 1 everywhere
-    if N < 7:                           return false   # below every measured N*
-    return N >= N_star(metric, pixels)                 # table above
+use_gpu(metric, pixels, N, gpu_kind, instance_reused_across_images):
+    if instance_reused_across_images:  return true        # N* == 1 everywhere
+    if pixels < 0.25 MP:               return false       # CPU is 1-3 ms/cand; nothing beats it
+    if gpu_kind == unified_memory:                        # Metal / integrated
+        return N >= 3    at >= 1 MP                       # measured N* = 2-4
+        return N >= 14   at 0.25 MP                       # ssim2 14, butter 3-4, zensim never
+    else:                                                 # discrete, NVRTC/PCIe
+        return N >= N_star_cuda(metric, pixels)           # 14-299, table above
 ```
 
-Which resolves, for the encoder, to:
+For the encoder specifically:
 
-- **e8 / e9 / e10 (N = 3–5): CPU, at every size, for every metric.** Not close —
-  the smallest N\* measured is 7, and at ≤1 MP it is 28–299.
-- **e11 (N = 18): CPU below ~4 MP.** At 16 MP, zensim (7) and SSIMULACRA2 (9)
-  cross; butteraugli (14) crosses marginally.
-- **e12+ (N = 68–132): GPU wins at ≥1 MP** for all three, if a GPU is present.
+- **Unified-memory GPU (Metal, Apple integrated) at ≥1 MP: GPU wins from
+  e8 (N = 3).** Setup is 45–60 ms and per-candidate is 2.5× cheaper than CPU.
+  Below 0.25 MP, CPU — every metric.
+- **Discrete CUDA, e8 / e9 / e10 (N = 3–5): CPU, at every size.** Not close —
+  the smallest CUDA N\* is 7, and at ≤1 MP it is 28–299.
+- **Discrete CUDA, e11 (N = 18): CPU below ~4 MP.** At 16 MP, zensim (7) and
+  SSIMULACRA2 (9) cross; butteraugli (14) crosses marginally.
+- **Discrete CUDA, e12+ (N = 68–132): GPU wins at ≥1 MP** for all three.
 - **Fleet/batch scoring — one instance over many images: GPU always,
-  N\* = 1.** Setup is paid once for the whole run. cubecl's device registry is a
-  process-global `static` (`cubecl-common/src/device/handle/mutex.rs:34`), so
-  the ~180 ms client init is once per process and shared across *all* metrics;
-  what does not amortise is `metric_new` (up to 3.8 s at 16 MP for butteraugli,
-  5.7 s for ssim2, ~0 for zensim) and the first-dispatch shader/NVRTC compile.
-  Hold the instance.
+  N\* = 1, both architectures.** Setup is paid once for the whole run. cubecl's
+  device registry is a process-global `static`
+  (`cubecl-common/src/device/handle/mutex.rs:34`), so client init is once per
+  process and shared across *all* metrics; what does not amortise is
+  `metric_new` (up to 3.8 s at 16 MP for butteraugli on CUDA, 5.7 s for ssim2,
+  ~0 for zensim) and the first-dispatch shader/NVRTC compile. Hold the instance.
 
-**The deciding variable is instance reuse, not image size and not candidate
-count.** A per-image encoder search loop cannot amortise GPU setup; a scoring
-fleet amortises it to nothing.
+**The two deciding variables are instance reuse and GPU memory architecture —
+not image size and not candidate count.** A per-image search loop cannot
+amortise *discrete* GPU setup, because NVRTC compile and device upload dominate;
+on unified memory there is barely any setup to amortise, so the same loop wins.
+That is why a single "does GPU pay off" answer does not exist and the brief's
+framing (one crossover in N and pixels) is one dimension short.
 
 ### GPU traps that would invalidate a naive benchmark
 
@@ -247,7 +309,9 @@ fleet amortises it to nothing.
    construct with `MemoryMode::Full` to get a real device-cached reference.**
    The umbrella maps `MemoryMode::Auto → butteraugli_gpu::MemoryMode::Auto`
    (`zenmetrics-api/src/memory_mode.rs:107`), so umbrella-built butteraugli gets
-   the replay path.
+   the replay path. **Measured on Metal (§5a): `warm/cold` = 1.002 / 1.010 /
+   1.011 / 1.003 at 256²/512²/1024²/2048² under `Auto`, versus 0.95 / 1.17 /
+   0.79 / 0.66 under `Full`.** This is no longer a source reading.
 2. **The committed butteraugli-gpu `warm_per_call_ms` predates this behaviour.**
    `gpu_coldstart_2026-05-29.tsv` is dated 2026-05-29; the strip held-reference
    landed 2026-05-31 (`302ff4fc`, "#160"). Before it, strip-mode `set_reference`
