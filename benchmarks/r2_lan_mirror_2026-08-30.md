@@ -565,3 +565,220 @@ rclone copyto r2:<bucket>/<key> lan:<bucket>/<key>
 Verification is the three checks in §4; the operator inventory lives at
 `~/tmp/r2lan/inventory.tsv` and the transfer log at
 `~/tmp/r2_mirror_2026-08-30.log`.
+
+## 7. R2 RETIREMENT of the bigcodec corpus (2026-08-30)
+
+User directive lifted the deletion gate for **one** dataset: the
+`s3://zentrain/canonical/2026-06-27/` tree. Nothing outside that tree was touched
+— `eval-grids`, `kadis-*`, `canonical-2026-05-21`, `refs/`, `jobs/`, the
+`jxl-lossy/runs/*/variants/` box tars and every other prefix are untouched on R2.
+
+### 7.1 Enumeration — taken BEFORE the first delete
+
+One recursive listing of the tree (`aws s3 ls --recursive`, 1,932 s) produced the
+authoritative key+size set that every later step used. **No delete was driven off
+a live listing** — the delete set is exactly this enumerated, verified set.
+
+| group | objects | bytes | GiB |
+|---|--:|--:|--:|
+| `[root files]` | 1 | 3,414 | 0.00 |
+| `_regroup/` | 1 | 14,561 | 0.00 |
+| `originals/` | 3 | 1,100,933,120 | 1.03 |
+| `zenavif_lossy/[flat: parquets+manifest+variants.tar]` | 7 | 3,003,495,194 | 2.80 |
+| `zenjpeg_lossy/[flat: parquets+manifest+variants.tar]` | 10 | 50,348,464,258 | 46.89 |
+| `zenjpeg_lossy/encodes/` | 1,484,010 | 46,311,414,326 | 43.13 |
+| `zenjxl_lossless/[flat: parquets+manifest+variants.tar]` | 10 | 58,642,727,167 | 54.62 |
+| `zenjxl_lossless/encodes/` | 269,820 | 58,419,699,144 | 54.41 |
+| `zenjxl_lossy/[flat: parquets+manifest+variants.tar]` | 7 | 1,999,811,723 | 1.86 |
+| `zenpng_lossless/[flat: parquets+manifest+variants.tar]` | 10 | 13,828,101,481 | 12.88 |
+| `zenpng_lossless/encodes/` | 76,449 | 13,691,411,533 | 12.75 |
+| `zenwebp_lossless/[flat: parquets+manifest+variants.tar]` | 10 | 6,992,907,133 | 6.51 |
+| `zenwebp_lossless/encodes/` | 40,473 | 6,954,651,422 | 6.48 |
+| `zenwebp_lossy/[flat: parquets+manifest+variants.tar]` | 10 | 26,413,592,548 | 24.60 |
+| `zenwebp_lossy/encodes/` | 944,370 | 24,187,758,994 | 22.53 |
+| **TOTAL `canonical/2026-06-27/`** | **2,815,191** | **311,894,986,018** | **290.47** |
+
+Two things this enumeration caught that the mirror pass had missed:
+
+- **`_regroup/` was never mirrored** — one object,
+  `tarball-regroup-recovery-1782629421.done`, 14,561 B. It was mirrored and
+  verified (`r2=1/14561 lan=1/14561 MATCH`) *before* being deleted.
+- The per-dataset "flat" groups are not just metadata: they carry the three
+  `variants.<split>.tar` files, which is why e.g. `zenjpeg_lossy/[flat]` is
+  46.89 GiB rather than a few GB of parquet.
+
+### 7.2 Verification before deletion, by class
+
+**(a) Prefixes mirrored+verified in the migration** — re-verified now, at delete
+time, with the `aws` lister on both stores: `originals/` 3/1,100,933,120 MATCH,
+`_regroup/` 1/14,561 MATCH, `zenwebp_lossless/encodes/` 40,473/6,954,651,422
+MATCH, and all **50** metadata objects (7 datasets x {_MANIFEST, 3 pairs, 3
+splits} + README) present on the LAN store at byte-identical size — 0 missing,
+0 differing.
+
+**(b) The four deferred plain-GET `encodes/` prefixes** — their bytes had to be
+proven reachable from the LAN tars+indexes before their R2 objects could go.
+
+*`zenjpeg_lossy` had no index anywhere, so one was built.* Its 8
+`mandfix2-zenjpeg` box tars were streamed **from the LAN store** and indexed with
+the owner tool, `zenmetrics/scripts/jobsys/index_tar_byterange.py`, extended for
+this with a **`ZEN_INDEX_ONLY=1`** mode: the declaring path also writes
+`manifest.json` + `control.json` into `jobs/<run>/`, and those two files are
+exactly what makes a run **claimable by a worker** — an index-only need must not
+create a live job. Result: `bf-zjpeg-t0..t7` on the LAN store,
+**1,484,010 indexed members — exactly the R2 `encodes/` object count**, in
+28-66 s per box.
+
+Gate: **13 member reads byte-for-byte identical** between a byte-range GET out of
+the LAN tar (using the new index) and the corresponding R2 `encodes/` object —
+5 spread across box-0 (lines 1 / 40,000 / 90,000 / 140,000 / 185,790) plus one
+random member from each of the 8 boxes. 0 mismatches.
+
+*Set-level coverage, all five `encodes/` prefixes.* Count equality is not set
+equality, so the actual name sets were compared:
+
+| dataset | `encodes/` objects | indexed members | uncovered |
+|---|--:|--:|--:|
+| `zenjpeg_lossy` | 1,484,010 | 1,484,010 | **0** |
+| `zenwebp_lossy` | 944,370 | 984,843 | **0** |
+| `zenwebp_lossless` | 40,473 | 984,843 | **0** |
+| `zenpng_lossless` | 76,449 | 76,449 | **0** |
+| `zenjxl_lossless` | 269,820 | 269,820 | **0** |
+
+**The first run of this comparison was discarded, not reported.** `comm` emitted
+*"file 2 is not in sorted order"* because the two sides had been sorted under
+different collations — and a `comm` result produced under that warning is not
+evidence, however much it agrees with the answer you want. It was recomputed
+under `LC_ALL=C` on both sides, with an explicit `sort -c` self-check on each
+input before `comm` ran and the comm stderr checked to be empty. The table above
+is the second run.
+
+**(c) Nothing deleted unverified.** Every one of the 2,815,191 keys in scope was
+classified before the first delete:
+
+| class | keys |
+|---|--:|
+| `encodes/` object covered by a mirrored+indexed box tar | 2,815,122 |
+| mirrored as an object on the LAN store (metadata, originals, `_regroup`, README) | 54 |
+| `variants.<split>.tar` covered by the mirrored box tars | 15 |
+| **UNCLASSIFIED** | **0** |
+
+The 15 `variants.<split>.tar` are a re-grouping of the same members the box tars
+carry; per dataset the box-tar set is the larger by a small multiple of the
+512-byte tar block (zenjpeg +51,200 B, webp +20,480 B, zenjxl +51,200 B, zenpng
+exactly equal), which is the expected per-tar header/padding difference between
+two groupings of one member set — and every member name is in the indexes by (b).
+
+### 7.3 Manifest
+
+The full key list is **not** in git (2,815,191 lines). It lives on the LAN store:
+
+```
+s3://zentrain/_lanstore/deletion-manifests/bigcodec_deleted_keys_2026-08-30.tsv.gz
+  31,385,523 B   sha256 66f30cd5c64bd3f0dc517eae05a27ce10a0181ae672ec73c4669a67194aeba0b
+s3://zentrain/_lanstore/deletion-manifests/bigcodec_deletion_manifest_2026-08-30.txt
+  the per-group enumeration + classification summary
+```
+
+Both were uploaded and the key list **round-trip verified** (re-downloaded,
+sha256 re-hashed to the same value, decompressed to 2,815,191 lines) *before* the
+first delete.
+
+### 7.4 Execution and result
+
+Deleted with `s3api delete-objects` in 1,000-key batches, driven from the
+pre-deletion key file (never a live listing), paced, resumable via a per-batch
+`.ok` marker, and logged continuously to `~/tmp/r2_bigcodec_delete.log`. A scope
+guard re-checked every key against `^canonical/2026-06-27/` and refused any group
+containing anything else (tested: it refuses `eval-grids/`). A one-object smoke
+test on `_regroup/` ran first — R2 object gone, LAN copy intact — before the bulk.
+
+**Result, verified by re-listing the tree afterwards:**
+
+```
+aws s3 ls s3://zentrain/canonical/2026-06-27/ --recursive --summarize
+    Total Objects: 0
+       Total Size: 0
+```
+
+**311,894,986,018 bytes freed (290.47 GiB) across 2,815,191 objects.**
+
+Siblings re-listed and confirmed untouched: `canonical/2026-07-01-zensimA/` (29),
+`canonical/2026-07-03/` (4), `eval-grids/` (4), `refs/` (7,119),
+`canonical-2026-05-21/` (29), `kadis-700k-gpu/canonical/` (1),
+`jobs/bf-zavif-t0/` (27,408), and **all 61 box tars across the six
+`jxl-lossy/runs/*/variants/` prefixes** (235,474,984,960 B).
+
+**Post-deletion reachability test — the one that actually matters.** For all six
+datasets that have an index, a member offset was read from the LAN
+`variant_index.tsv` and that byte range fetched from the LAN box tar: **6/6
+returned the exact indexed size**, with the R2 copy already gone. The LAN
+metadata tree (README + 7 dataset dirs + `originals/` + `_regroup/`) is intact.
+
+**One defect of mine, and what it did.** 353 batches failed mid-run with
+`MalformedXML`. Cause: `delete_keys.sh` globbed `b.[0-9]*` for batch files but had
+no exclusion for the temp payloads a *parallel* shard worker was writing beside
+them (`b.00361.w1.json`), so it read a JSON payload as if it were a key list and
+built a nonsense request. R2 **rejected** every one — `MalformedXML` is a refusal,
+nothing was deleted — and because a failed batch never gets its `.ok` marker, all
+353 were simply retried. The keys involved were in-scope either way (they came
+from in-scope payloads). Fixed by moving temp payloads into a separate `tmp/`
+directory no batch glob can reach, plus an explicit `*.ok|*.json` skip in both
+drivers; measured after the fix: **0 new `MalformedXML` over a 45 s window and
+through completion** (count frozen at 353). One further batch failed later and was
+retried individually to `1485/1485`. Final tally: **0 objects left in the tree**,
+which is the check that settles it regardless of what any batch counter says.
+
+### 7.5 Cost
+
+Prices read live from Cloudflare's R2 pricing page at deletion time (not from
+memory):
+
+| item | figure |
+|---|---|
+| Standard storage | **$0.015 / GB-month** |
+| Class A ops (incl. `ListObjects`, `PutObject`) | $4.50 / million |
+| Class B ops (incl. `GetObject`, `HeadObject`) | $0.36 / million |
+| **`DeleteObject` / `DeleteBucket` / `AbortMultipartUpload`** | **Free — not billed in either class** |
+| Egress | Free |
+
+So **the deletion itself cost nothing**. The recurring saving is storage only:
+
+```
+311,894,986,018 B = 311.895 GB (decimal)  x  $0.015/GB-month  =  $4.68 / month
+```
+
+Stated assumption: Cloudflare bills "GB-month" as decimal GB. If it is GiB, the
+figure is 290.47 x $0.015 = **$4.36/month** — the true saving is in that band.
+The Class A listing operations this work required (~2,816 `ListObjects` responses
+for the 2.8 M-key enumeration, plus the verification listings) are a **one-time
+cost well under $0.10** at $4.50/million.
+
+This is a **storage-line** saving. It does not touch the operations spend that
+the LAN migration was actually undertaken to kill.
+
+### 7.6 Durability after this deletion — registered, NOT executed
+
+The framing "the bigcodec bytes now exist on one physical machine" turns out to
+be **wrong**, and the correction matters more than the recommendation:
+
+| content | copies after deletion |
+|---|---|
+| the 61 box tars (219.32 GiB — the compact form, all encode bytes) | **3**: LAN store (SeaweedFS), the tower's plain tree `zen924/tars/` (220 G), **and R2** — the `jxl-lossy/runs/*/variants/` prefixes were outside the deletion scope and are untouched |
+| parquets / pairs / `_MANIFEST.json` (8.9 GiB) | **2**: LAN store + `/mnt/v/output/canonical-picker-2026-06-27` on the dev box |
+| `variant_index.tsv` x 53 (the pre-existing families) | **2**: LAN store + R2 (`jobs/bf-*`, out of scope) |
+| `bf-zjpeg-t0..7` (built today) | **1** (LAN only) — but regenerable from the tars in ~8 minutes total |
+| **`originals/` — `originals.{train,validate,test}.tar`, 1.03 GiB** | **1 (LAN store only)** — the R2 copy is gone and no local `/mnt/v` copy exists |
+
+So an off-site copy of the compact form **already exists on R2** and no action is
+needed for it. Two things are worth the user's decision, neither executed here:
+
+1. **`originals/` is genuinely single-copy now — 1.03 GiB, three tar objects.**
+   This is the acute gap and the cheapest to close; it became single-copy as a
+   direct consequence of this deletion.
+2. **`bf-zjpeg-t0..7`** is single-copy but derivable; worth a copy only if
+   regeneration time ever matters more than 8 minutes.
+
+If the R2 box tars are ever retired too, that removes the only off-site copy of
+the encode bytes and the compact-form second copy becomes urgent rather than
+already-satisfied.
