@@ -405,6 +405,13 @@ packed-sRGB-u8 sweep shape and answers a different question.
   fast-ssim2 does NOT — `ToLinearRgb` always materialises a packed
   `LinearRgbImage` (`fast-ssim2/src/input.rs:25-58`), costing 5–8 % per candidate.
   A planar `Ssimulacra2Reference::new_linear_planar` is the ONE missing API found.
+- **Batching (`ssim2-gpu::Ssim2Batch`) beats sequential warm-reference calls from
+  N=2 and scales further on Metal than CUDA: 1.95x/2.86x/5.65x/**7.24x** at
+  N=2/4/8/16 (256^2) vs CUDA's 2.00/2.84/3.30/3.58. At N=1 it is a 5% LOSS —
+  gate on N>=2. `butteraugli-gpu` has `ButteraugliBatch`; **`zensim-gpu` has no
+  batch API**; neither batch type is reachable from the opaque layer.
+  Inapplicable to jxl-encoder's loops as written — they are sequential by
+  construction (candidate i+1 depends on candidate i's score).
 - Report **α and β separately** for anything in this space: fitting
   `α + β·MP` over the whole 64²–4096² ladder returns a *negative* intercept for
   every metric (unweighted OLS tilted by the 16 MP point). Fit α on 64²–512² and

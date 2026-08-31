@@ -333,20 +333,39 @@ framing (one crossover in N and pixels) is one dimension short.
    rebuild, so a warm-reference GPU path on Metal needs that resolved before it
    can be recommended.
 
-### Batching (not measured here)
+### Batching — measured on Metal
 
-- `ssim2-gpu` has `Ssim2Batch<R>` — one cached reference, N distorted in a
-  single pinned upload. Prior committed measurement
-  (`ssim2-gpu/benchmarks/bench_batch_2026-05-02.md`, 256², CUDA): **2.00× at
-  N=2, 2.84× at N=4, 3.58× at N=16** over sequential warm-reference calls.
-- `butteraugli-gpu` has `ButteraugliBatch<R>` (one flat `N×W×H×3` buffer, fixed
-  N, panics rather than returning `Result`).
-- **`zensim-gpu` has no batch API.**
+`ssim2-gpu`'s `Ssim2Batch<R>` holds one cached reference and uploads N distorted
+images in a single pinned buffer, then dispatches batched kernels. Measured with
+the crate's existing `examples/bench_batch.rs` (its `WgpuRuntime` arm needed no
+change), 256², median of 5 post-warmup — `metric_loop_batch_metal_2026-08-30.tsv`:
 
-Batching only helps a search that evaluates several candidates per round
-(multi-seed, trellis alternatives). jxl-encoder's loops are sequential —
-candidate `i+1`'s quantisation depends on candidate `i`'s score — so batching is
-inapplicable to the buttloop as written, regardless of the speedup available.
+| batch N | sequential /img | batched /img | **Metal speedup** | CUDA speedup (2026-05-02, same driver + size) |
+|---|---|---|---|---|
+| 1 | 4.10 ms | 4.30 ms | 0.95× | 1.02× |
+| 2 | 4.08 ms | 2.09 ms | **1.95×** | 2.00× |
+| 4 | 4.03 ms | 1.41 ms | **2.86×** | 2.84× |
+| 8 | 4.04 ms | 0.72 ms | **5.65×** | 3.30× |
+| 16 | 4.06 ms | 0.56 ms | **7.24×** | 3.58× |
+
+Batching beats sequential warm-reference calls from N = 2, and on Metal it keeps
+scaling where CUDA plateaus — 7.24× vs 3.58× at N = 16, per-image dropping from
+4.06 ms to 0.56 ms. At N = 1 it is a 5 % loss (the pack/finalise overhead with
+nothing to amortise it over), so gate it on N ≥ 2.
+
+Availability differs by metric: `ssim2-gpu` has `Ssim2Batch`; `butteraugli-gpu`
+has `ButteraugliBatch` (one flat `N×W×H×3` buffer, fixed N, panics rather than
+returning `Result`); **`zensim-gpu` has no batch API at all.** Neither batch type
+is reachable from the opaque layer — both are typed-API only (`cubecl-types`).
+
+**This does not apply to jxl-encoder's loops as written.** They are sequential by
+construction: candidate `i+1`'s quantisation field is derived from candidate
+`i`'s score, so there are never N independent candidates in flight. Batching pays
+for a search that evaluates several candidates per round — multi-seed sweeps,
+trellis alternatives, or the outer seed loop (`perceptual_loop.rs:1816` runs 2–4
+seeds, but sequentially and with different quant state, so even that would need
+restructuring). Treat the 2–7× as available to a *redesigned* search, not as a
+speedup the current loop can pick up.
 
 ---
 

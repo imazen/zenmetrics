@@ -119,6 +119,10 @@ metric_loop_raw_2026-08-30.tsv.zst  all 10 CPU runs, every cell, unaggregated
 metric_loop_gpu_metal_2026-08-30.tsv  Metal GPU: setup / cold / warm per
                                  candidate, both butteraugli memory modes,
                                  joined to this host's CPU for the crossover
+metric_loop_batch_metal_2026-08-30.tsv  Metal: ssim2-gpu Ssim2Batch vs
+                                 sequential warm-reference calls, N=1..16 at
+                                 256^2, via the crate's existing
+                                 examples/bench_batch.rs (no new driver)
 metric_loop_2026-08-30.md       the decision + crossover rule
 
 NO EXTRAPOLATION: every CPU cell is a real zenbench run at the stated dims on

@@ -1,0 +1,18 @@
+# ssim2-gpu Ssim2Batch vs sequential compute_with_reference — Metal (wgpu).
+# Task #163, 2026-08-30. Host: Apple M4 Pro (12c, 24 GB unified), macOS.
+# Driver: crates/ssim2-gpu/examples/bench_batch.rs (existing; its
+#   `#[cfg(not(feature="cuda"))] type Backend = WgpuRuntime` arm needed no change).
+# Build: cargo build --release -p ssim2-gpu --no-default-features \
+#          --features wgpu,cubecl-types --example bench_batch
+# 256x256 source, JPEG corpus repeated to fill batch slots, median of 5 post-warmup.
+# Both paths share ONE cached reference; the difference is N distorted uploaded
+# and dispatched together vs N sequential compute_with_reference calls.
+# CUDA column: previously committed, same driver + same 256^2 size, from
+#   crates/ssim2-gpu/benchmarks/bench_batch_2026-05-02.md (RTX 5070). NOT
+#   re-measured here; the two hosts are never combined into one figure.
+batch	seq_total_ms	seq_per_img_ms	batch_total_ms	batch_per_img_ms	speedup_metal	speedup_cuda_2026_05_02
+1	4.10	4.10	4.30	4.30	0.95	1.02
+2	8.16	4.08	4.17	2.09	1.95	2.00
+4	16.11	4.03	5.63	1.41	2.86	2.84
+8	32.32	4.04	5.72	0.72	5.65	3.30
+16	64.96	4.06	8.97	0.56	7.24	3.58
