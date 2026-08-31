@@ -1,0 +1,7 @@
+# resolved dependency versions — fast-ssim2 re-measurement 2026-08-30
+# repo_commit: 5c30063500c048b062ee00901176194a7a8afced
+# host: mac  Apple M4 Pro
+fast-ssim2	fast-ssim2 v0.8.2 (/Users/lilith/work/zen/fast-ssim2/fast-ssim2)
+butteraugli	butteraugli v0.9.4 (/Users/lilith/work/butteraugli/butteraugli)
+zensim	zensim v0.3.0 (/Users/lilith/work/zen/zensim/zensim)
+imgref	imgref v1.12.3

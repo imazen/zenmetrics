@@ -3,6 +3,53 @@
 Task #163, 2026-08-30. Host: Apple M4 Pro (12c, 24 GB), macOS. Build base
 `f240bb93`. Provenance, statistics and caveats: `metric_loop_2026-08-30.meta`.
 
+> ## ⚠ CORRECTION — 2026-08-30, after review
+>
+> **Two published fast-ssim2 conclusions were wrong. They are struck through and
+> replaced below, not silently rewritten.** butteraugli, zensim, the
+> warm-reference recommendation, the flat warm/cold ratio, the Metal-vs-CUDA
+> crossover and the butteraugli-gpu `Auto` no-op are all **unaffected** — the
+> correction is confined to fast-ssim2.
+>
+> **C1 — "fast-ssim2 is the one stride-rule violation of the three" is WRONG.**
+> It supports stride and does so correctly. `impl ToLinearRgb for
+> ImgRef<'_, [f32; 3]>` walks `self.pixels()` (`fast-ssim2/src/input.rs:261-266`),
+> which honours `imgref`'s stride. **Measured (new cells
+> `ssim2__warm_imgref_{packed,strided}`): strided/packed = 0.984–1.008 across all
+> seven sizes on both thread configs — free within noise — and the scores are
+> bit-identical (`PARITY:imgref_stride_parity_abs_delta` = 0 everywhere).**
+> fast-ssim2 obeys the workspace stride rule. I reached the wrong conclusion by
+> reading `ToLinearRgb` and never running a strided input: every ssim2 cell in the
+> first pass pre-flattened planar data into a *packed* `Img::new(...)`, so the
+> harness never exercised stride at all. Reading an implementation is not
+> measuring it.
+>
+> **C2 — the 5–8 % ingress cost was real but MIS-ATTRIBUTED.** It is not a stride
+> penalty; it is the **planar→interleaved repack** a *planar* caller must do
+> because fast-ssim2 has no planar entry point. Re-measured on 0.8.2:
+> **4.1–8.8 %**. A caller that already holds interleaved pixels pays **zero** and
+> can hand over a strided `ImgRef` directly. The missing API is narrower than
+> published: not "stride support", but `Ssimulacra2Reference::new_linear_planar`.
+>
+> **C3 — version provenance was not recorded, and it matters here.** The
+> measurements are `fast-ssim2 0.8.2` (local path, via this workspace's
+> `[patch.crates-io]`) — confirmed by `cargo tree`, recorded in
+> `metric_loop_ssim2_corrected_2026-08-30.versions`. But **`jxl-encoder`, the
+> consumer these recommendations are addressed to, resolves `fast-ssim2 0.7.1`
+> from the registry** (`jxl-encoder/Cargo.toml:65` requires `^0.7.1`; the patch
+> offers 0.8.2, which is outside that range, so Cargo silently leaves it on the
+> registry copy). Consequence: **`CompareContext` / `compare_with` landed in 0.8.1**
+> (fast-ssim2 CHANGELOG), so the zero-allocation entry point recommended in §1 is
+> **not reachable from jxl-encoder today** without bumping its dep. See §7.
+>
+> **C4 — the `rayon` A/B is aarch64-only and I reported it as general.** Re-scoped
+> in §3. The x86 answer is **NOT MEASURED**.
+>
+> Corrected data: `metric_loop_ssim2_corrected_2026-08-30.tsv` (+ `.versions`).
+> The superseded ssim2 columns in `metric_loop_{st,mt}_2026-08-30.tsv` are left in
+> place as the record of what was published.
+
+
 **The question.** A quality-targeting search loop scores one fixed reference
 against many distorted candidates. What does one *more* candidate cost once the
 reference is warm, and where does a GPU start winning?
@@ -24,7 +71,7 @@ unless the metric instance is reused across images.
 | "CPU zensim and fast-ssim2 have no reference-reuse API; determine whether one exists" | **Both have one, and both are already in production use.** `zensim::Zensim::precompute_reference{,_linear_planar}` → `compute_with_ref*` (`zensim/src/metric.rs:1977`, `:2303`), and `fast_ssim2::Ssimulacra2Reference::new` → `compare` / `compare_with` (`fast-ssim2/src/precompute.rs:230`, `:329`, `:360`). jxl-encoder already calls both (`ssim2_loop.rs:172`, `zensim_loop.rs:1017`). There is no missing CPU warm-reference type for any of the three. |
 | "the metrics take sRGB u8 or a PixelSlice" — implying u8 ingress is the thing to measure | **The encoder loops are linear f32 planar end to end.** `perceptual_loop.rs:2275` / `zensim_loop.rs:1147` produce `recon_r/g/b` as planar linear f32 at `padded_width` stride and score the full frame. No u8 appears in any of the three loops. Timing the u8 path answers a different question, so this work re-measured the planar f32 path. |
 | butteraugli-gpu's cached-ref "is identical to the one-shot score — verify that claim" | **The claim is true and vacuous.** In strip mode `set_reference_srgb_u8` only does `self.cached_ref_strip = Some(ref_rgb.to_vec())` (`butteraugli-gpu/src/opaque.rs:703`) and `compute_with_reference_srgb_u8` calls `self.inner.compute_srgb_u8(&held, dis_rgb, …)` (`:726`) — the full one-shot, plus a host `Vec` clone per call. It scores identically because it does identical work. See §5; this is the most consequential GPU finding here. |
-| implied: strided input might force a packed copy | **butteraugli and zensim both take an arbitrary `stride` on both sides and are bit-identical to the tight path** (measured, §4). fast-ssim2 accepts `ImgRef` but `ToLinearRgb` always materialises a packed `LinearRgbImage`, so it alone forces a repack. |
+| implied: strided input might force a packed copy | **All three take stride correctly.** butteraugli and zensim take an arbitrary `stride` on both sides; fast-ssim2 takes it through `ImgRef`. All are bit-identical to the tight path (measured, §4). ~~fast-ssim2 alone forces a repack~~ — **corrected, see C1**: what fast-ssim2 lacks is a *planar* entry point, not stride support. |
 
 A fifth, found on the way: **`fast-ssim2`'s `rayon` feature is off in every
 consumer, and that is correct** — enabling it measured 1.00–1.04× at 256²–2048²
@@ -40,7 +87,7 @@ CPU, planar linear f32, multi-core (crate defaults). `N` = candidates per refere
 |---|---|---|---|---|---|
 | **butteraugli** | `ButteraugliReference::new_linear_planar` once → `compare_linear_planar_into` per candidate | **22.4 ms** | 0.55× | **N ≥ 2** | none — pass `padded_width` straight through |
 | **zensim** | `precompute_reference_linear_planar` once → `compute_with_ref_and_diffmap_linear_planar` per candidate, **at the padded stride** | **11.4 ms** | 0.78× | **N ≥ 2** | 1.7–3.9 % today, and it is avoidable — see §4 |
-| **SSIMULACRA2** | `Ssimulacra2Reference::new` once → `compare_with(&mut CompareContext)` per candidate | **28.1 ms** | 0.58× | **N ≥ 2** | 5–8 %, **not** avoidable through today's API |
+| **SSIMULACRA2** | `Ssimulacra2Reference::new` once → `compare_with(&mut CompareContext)` per candidate — **needs fast-ssim2 ≥ 0.8.1; jxl-encoder is on 0.7.1 (§7)** | **24.9 ms** (0.8.2, re-measured) | **0.53×** | **N ≥ 2** | **0 %** if the caller holds interleaved pixels — a strided `ImgRef` goes straight in. **4.1–8.8 %** if the caller holds *planar* data, which must be interleaved because there is no planar entry point. |
 
 GPU: depends on the GPU. On **unified memory (Metal / Apple integrated)** the
 GPU beats this table from N ≥ 3 at ≥ 1 MP — setup is only 45–60 ms. On
@@ -125,11 +172,26 @@ like free performance left on the floor. It is not:
 
 | fast-ssim2 `rayon` off → on, multi-core, min-of-2 | 64² | 256² | 1024² | 2048² | 4096² |
 |---|---|---|---|---|---|
-| speedup | **0.31×** | 1.00× | 1.04× | 1.03× | 0.98× |
+| speedup **(aarch64 / M4 Pro / 0.8.2 only)** | **0.31×** | 1.00× | 1.04× | 1.03× | 0.98× |
 
-No gain above the noise floor anywhere, and rayon's dispatch overhead makes a
-0.1 ms kernel **3.2× slower**. Leave it off. (Recorded as a comment on the
-harness's dependency so a future session does not "fix" it back.)
+**Scope, corrected 2026-08-30 (C4): this result is aarch64-only and
+version-specific, and the first pass reported it as general.** It was taken on
+one Apple M4 Pro (12 cores, unified memory, NEON) against fast-ssim2 0.8.2. On
+this host there is no gain above the noise floor anywhere, and rayon's dispatch
+overhead makes a 0.1 ms kernel 3.2× slower.
+
+**The x86 answer is NOT MEASURED.** The owner reports that fast-ssim2 *used to be
+much faster with more threads on x86* — a different core count, memory bandwidth
+and SIMD width, so nothing here transfers, and extrapolating across
+architectures is exactly what the workspace rule forbids. Re-run this A/B on the
+7950X (16C/32T, DDR5, AVX-512) before drawing any conclusion for x86; until then
+the honest statement is "no benefit on aarch64, unknown on x86".
+
+For a consumer choosing today: leaving `rayon` off is right *on aarch64* and is
+what every consumer already does. Do not turn it on globally on the strength of
+this table, and do not turn it off on x86 on the strength of it either.
+(Recorded as a comment on the harness's dependency, with the same scoping, so a
+future session neither "fixes" it back nor over-generalises it.)
 
 butteraugli (`rayon` on by default) and zensim (`threads` on by default) do
 parallelise — 2.83× and 4.49× respectively on 12 cores.
@@ -153,14 +215,30 @@ to accept it:
   path still runs a full `copy_from_slice` of all three planes. Measured cost of
   that copy: **1.7 % of the per-candidate wall at 1 MP, 3.9 % at 16 MP** (MT).
   Deleting it is free — the scores are bit-identical (below).
-- **SSIMULACRA2 — 5–8 %, and unavoidable today.** `ToLinearRgb` always
-  materialises a packed `LinearRgbImage` (`fast-ssim2/src/input.rs:25-58`), so
-  `ssim2_loop.rs:319-325`'s planar→`Vec<[f32; 3]>` repack cannot be elided from
-  the caller side. **fast-ssim2 is the one metric of the three that violates the
-  workspace's "multi-row pixel APIs handle stride natively at no cost on the
-  packed path" rule.** Closing it needs a planar entry point on fast-ssim2
-  (`Ssimulacra2Reference::new_linear_planar` + a planar `compare_with`), which
-  does not exist. That is the only genuinely missing API found in this work.
+- **SSIMULACRA2 — takes stride natively and for free; the cost is the *planar*
+  repack.** ~~fast-ssim2 is the one metric of the three that violates the
+  workspace stride rule~~ — **WRONG, corrected 2026-08-30 (C1).**
+  `impl ToLinearRgb for ImgRef<'_, [f32; 3]>` iterates `self.pixels()`
+  (`fast-ssim2/src/input.rs:261-266`), which honours `imgref`'s stride. Measured
+  on 0.8.2 with a genuinely padded `Img::new_stride` (cells
+  `ssim2__warm_imgref_{packed,strided}`):
+
+  | strided ÷ packed | 64² | 128² | 256² | 512² | 1024² | 2048² | 4096² |
+  |---|---|---|---|---|---|---|---|
+  | single-thread | 1.003 | 0.999 | 0.998 | 1.003 | 1.000 | 0.999 | 0.984 |
+  | multi-thread | 1.003 | 0.999 | 1.001 | 1.003 | 0.997 | 0.999 | 1.008 |
+
+  Free within noise at every size, and bit-identical
+  (`PARITY:imgref_stride_parity_abs_delta` = 0 everywhere) — the padding columns
+  are never read. **fast-ssim2 satisfies the stride rule.**
+
+  What *does* cost is the **planar→interleaved** repack, because there is no
+  planar entry point: `ssim2_loop.rs:319-325` holds `recon_r/g/b` and must build
+  `Vec<[f32; 3]>` every candidate. Re-measured on 0.8.2: **4.1 % at 64² rising to
+  8.8 % at 1 MP** of the per-candidate wall. A caller holding *interleaved*
+  pixels pays nothing and can pass a strided `ImgRef` directly. The missing API
+  is therefore narrower than first published — `Ssimulacra2Reference::new_linear_planar`
+  + a planar `compare_with`, not stride support.
 
 ### Numeric parity — measured, not assumed
 
@@ -369,7 +447,65 @@ speedup the current loop can pick up.
 
 ---
 
-## 6. Concrete follow-ups
+---
+
+## 6. The version-resolution trap (found by the review of this doc)
+
+The first pass published fast-ssim2 numbers without recording **which**
+fast-ssim2 produced them. Doing that check turned up a live defect worth more
+than the correction that prompted it.
+
+**There are TWO fast-ssim2 in this workspace's graph, and the manifest comment
+says there is one.** `cargo metadata` on zenmetrics resolves both:
+
+| version | source | who gets it |
+|---|---|---|
+| **0.8.2** | local path `/Users/lilith/work/zen/fast-ssim2/fast-ssim2` | every crate requiring `^0.8` — all zenmetrics crates, and `cpu-profile` (this harness) |
+| **0.7.1** | crates.io registry | **`jxl-encoder`**, which requires `^0.7.1` (`jxl-encoder/Cargo.toml:65`) |
+
+`Cargo.toml:445` already carries `fast-ssim2 = { path = ... }` **inside
+`[patch.crates-io]`**, and that patch *is* live — it is not in
+`[[patch.unused]]`. But **a `[patch.crates-io]` entry only applies to
+requirements its version satisfies.** 0.8.2 does not satisfy `^0.7.1`, so Cargo
+quietly leaves jxl-encoder on the registry copy and reports nothing: the patch is
+"used", just not by that consumer. Adding a second patch entry cannot fix it
+(duplicate key); only jxl-encoder bumping its own requirement can.
+
+This is a nastier variant of the inert-`[patch]` class already catalogued in this
+workspace. An inert patch is at least uniformly inert. **This one is live for most
+of the graph and silently absent for one consumer**, and nothing surfaces the
+split — not `[[patch.unused]]`, not a warning, not the manifest comment, which
+claims the arrangement keeps "one fast-ssim2 in the graph". That sentence is
+false and is corrected in the same change as this doc.
+
+### Why it matters for the recommendation
+
+`CompareContext` and `Ssimulacra2Reference::compare_with` — the zero-allocation
+per-candidate entry point recommended in §1 — **landed in 0.8.1**
+(fast-ssim2 `CHANGELOG.md`, "[0.8.1] - 2026-05-27"). jxl-encoder is on 0.7.1, so
+**it cannot call them today.** Its `ssim2_loop.rs:327` uses `compare`, which is
+correct for the version it has. Adopting the §1 recommendation there requires
+bumping `jxl-encoder`'s `fast-ssim2` requirement to `^0.8.1` first — a
+one-character change in a repo that is read-only to this work.
+
+Everything measured in this doc is 0.8.2 and is labelled as such. The
+0.7.1 behaviour is **NOT MEASURED**; if jxl-encoder's current ssim2 loop cost
+matters specifically, measure it against 0.7.1 rather than assuming these numbers
+carry across two minor versions.
+
+### Methodology rule this adds
+
+**Record the resolved version of every crate under measurement, next to the
+results.** A declared dependency version is not the resolved one — patches,
+sibling paths and semver ranges all intervene, and in this workspace they
+routinely do. `scripts/loopbench_sweep.sh` now emits a `.versions` sidecar from
+`cargo tree -p <harness> -i <crate>` (the authoritative resolver output, not the
+manifest text) alongside every results TSV, with the repo commit and host. It
+costs one `cargo tree` per run and it is the check that would have caught this
+before publication.
+
+
+## 7. Concrete follow-ups
 
 1. **`zensim_backend.rs:363-366` (jxl-encoder): delete the strided→tight copy**
    and pass `padded_width` as `stride`. Bit-identical (measured), worth 1.7 % at
@@ -379,11 +515,21 @@ speedup the current loop can pick up.
    3 iterations of `butteraugli_linear` with *both* images rebuilt as
    `Vec<RGB<f32>>` per call (`tile_distmap.rs:211-219`). At 3 candidates a warm
    reference is already past break-even (N\* = 2): ~35 % off its metric time.
-3. **fast-ssim2 needs a planar entry point.** `Ssimulacra2Reference::new_linear_planar`
-   + a planar `compare_with` would remove a 5–8 % per-candidate repack and fix
-   the only stride-rule violation of the three. This is the one API that does
-   not exist.
+3. **fast-ssim2 needs a planar entry point** (corrected scope).
+   `Ssimulacra2Reference::new_linear_planar` + a planar `compare_with` would
+   remove the 4.1–8.8 % per-candidate repack that a planar caller pays. It is
+   **not** a stride fix — stride already works and is free (§4). This is the one
+   API that does not exist.
 4. **Re-measure butteraugli-gpu warm-reference with `MemoryMode::Full`** and
    correct `gpu_coldstart_2026-05-29.tsv`'s butteraugli row, or annotate it.
 5. **zensim below ~128²: force single-threaded.** Its MT dispatch alpha
    (0.332 ms) exceeds a whole 64² compare.
+6. **Bump `jxl-encoder`'s `fast-ssim2` requirement from `^0.7.1` to `^0.8.1`**
+   (`jxl-encoder/Cargo.toml:65`, and the dev-dep at `:415`). Until then it cannot
+   use `compare_with`/`CompareContext`, it does not receive this workspace's
+   `[patch.crates-io]`, and it is the only consumer in the graph on the registry
+   copy (§6). One-character change; read-only to this work, so it needs the owner
+   of that repo.
+7. **Re-run the `rayon` A/B on the x86 workstation** (7950X, AVX-512). The
+   aarch64 answer is "no benefit, 3.2× worse at 64²"; the x86 answer is unknown
+   and the owner expects it to differ (§3).

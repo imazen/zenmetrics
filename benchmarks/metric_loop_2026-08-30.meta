@@ -33,6 +33,30 @@ toolchain: rustc 1.98.0 (88d9e12ae 2026-08-18)
 repo_commit (build base): f240bb937fdaabee5e0f7f4d1cdcfd33c49f01e1
 
 # ---------------------------------------------------------------------------
+# RESOLVED DEPENDENCY VERSIONS  (added 2026-08-30 after review — see the .md's
+# CORRECTION banner and section 6. The first pass omitted this and published
+# fast-ssim2 numbers without recording which fast-ssim2 produced them.)
+#
+# From `cargo tree -p cpu-profile -i <crate>` — the RESOLVER's answer, not the
+# manifest's declared requirement. Sidecar for the re-measurement:
+# metric_loop_ssim2_corrected_2026-08-30.versions
+# ---------------------------------------------------------------------------
+resolved_fast_ssim2: 0.8.2  (LOCAL PATH /Users/lilith/work/zen/fast-ssim2/fast-ssim2,
+  reached via this workspace's [patch.crates-io]; NOT the registry 0.7.1)
+resolved_butteraugli: 0.9.4 (LOCAL PATH /Users/lilith/work/butteraugli/butteraugli)
+resolved_zensim: 0.3.0      (LOCAL PATH /Users/lilith/work/zen/zensim/zensim)
+resolved_imgref: 1.12.3     (registry)
+
+WARNING — the graph carries TWO fast-ssim2. jxl-encoder requires ^0.7.1 and so
+  resolves the REGISTRY 0.7.1; the patch (0.8.2) does not satisfy that range and
+  is silently skipped for it. Every number in this study is 0.8.2. The 0.7.1
+  behaviour is NOT MEASURED. Full analysis: the .md's section 6.
+
+METHODOLOGY RULE this adds: record the resolved version of every crate under
+  measurement, next to the results. A declared dep version is not the resolved
+  one. scripts/loopbench_sweep.sh now writes a `.versions` sidecar per run.
+
+# ---------------------------------------------------------------------------
 # HARNESS
 # ---------------------------------------------------------------------------
 driver: benchmarks/heaptrack/drivers/cpu_profile/src/bin/loop_wall.rs  (bin: loop-wall)
@@ -102,7 +126,9 @@ zenbench resource gate: DISABLED (LOOP_WALL_NO_GATE=1). Its per-round `sysinfo`
 # the recommendation is "drop the copy / keep the warm ref", which is only
 # sound if the numbers do not move)
 # ---------------------------------------------------------------------------
-Every parity delta is EXACTLY 0.0 at every one of the 7 sizes:
+Every parity delta is EXACTLY 0.0 at every one of the 7 sizes
+(the imgref-stride row was added by the 2026-08-30 correction):
+  ssim2   strided ImgRef vs packed ImgRef              : 0
   butter  strided-stride vs tight-stride score        : 0
   zensim  strided-stride vs tight-stride score        : 0
   zensim  repeated warm compare vs first warm compare : 0
@@ -123,6 +149,12 @@ metric_loop_batch_metal_2026-08-30.tsv  Metal: ssim2-gpu Ssim2Batch vs
                                  sequential warm-reference calls, N=1..16 at
                                  256^2, via the crate's existing
                                  examples/bench_batch.rs (no new driver)
+metric_loop_ssim2_corrected_2026-08-30.tsv  fast-ssim2 0.8.2 RE-MEASUREMENT
+                                 (2026-08-30 correction): adds the strided-vs-
+                                 packed ImgRef A/B that the first pass never ran,
+                                 and re-derives warm/cold + the planar-repack
+                                 share. Min of 3 ST runs / 2 MT runs.
+metric_loop_ssim2_corrected_2026-08-30.versions  resolved versions for the above
 metric_loop_2026-08-30.md       the decision + crossover rule
 
 NO EXTRAPOLATION: every CPU cell is a real zenbench run at the stated dims on

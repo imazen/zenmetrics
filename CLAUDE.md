@@ -394,17 +394,42 @@ packed-sRGB-u8 sweep shape and answers a different question.
   unified-memory GPU already wins at e8 above 1 MP, while a discrete one does
   not until e12. Below 0.25 MP no GPU wins for any metric. Driver for the Metal
   numbers: `crates/zenmetrics-api/examples/loop_gpu_probe.rs`.
-- **Threading**: butteraugli 2.83× on 12 cores, zensim 4.49×, **SSIMULACRA2 1.02×
-  (it does not parallelise)**. `fast-ssim2`'s non-default `rayon` feature is
-  correctly left OFF by every consumer — measured 1.00–1.04× at ≥256² and
-  **0.31× (3.2× SLOWER) at 64²**. Do not "fix" that by enabling it.
+- **Threading (aarch64 numbers — x86 NOT MEASURED)**: on this M4 Pro,
+  butteraugli 2.83× on 12 cores, zensim 4.49×, **SSIMULACRA2 1.02× (it does not
+  parallelise as shipped)**. `fast-ssim2`'s non-default `rayon` feature measured
+  1.00–1.04× at ≥256² and **0.31× (3.2× SLOWER) at 64²** — so leaving it off is
+  right *here*, which is what every consumer already does.
+  **Do NOT generalise this to x86.** The owner reports fast-ssim2 used to be much
+  faster with more threads on x86; different core count, memory bandwidth and
+  SIMD width, and extrapolating across architectures is banned. Re-run the A/B on
+  the 7950X before concluding anything for x86.
 - **zensim below ~128²: force single-threaded.** Its multi-core dispatch
   intercept (0.332 ms) exceeds an entire 64² compare (0.249 ms ST vs 0.315 MT).
-- **Stride**: butteraugli and zensim take an arbitrary `stride` on both sides and
-  are **bit-identical** to the tight path (parity delta exactly 0 at all 7 sizes).
-  fast-ssim2 does NOT — `ToLinearRgb` always materialises a packed
-  `LinearRgbImage` (`fast-ssim2/src/input.rs:25-58`), costing 5–8 % per candidate.
-  A planar `Ssimulacra2Reference::new_linear_planar` is the ONE missing API found.
+- **Stride: ALL THREE take it correctly and for free.** butteraugli and zensim
+  take an arbitrary `stride` on both sides; fast-ssim2 takes it through `ImgRef`
+  (`impl ToLinearRgb for ImgRef<'_, [f32; 3]>` walks `self.pixels()`,
+  `fast-ssim2/src/input.rs:261-266`). All bit-identical to the tight path (parity
+  delta exactly 0 at all 7 sizes). Measured strided÷packed for fast-ssim2:
+  **0.984–1.008** across 64²–4096², both thread configs.
+  **CORRECTION 2026-08-30: an earlier version of this section said fast-ssim2
+  violated the stride rule. That was WRONG** — it came from reading
+  `ToLinearRgb` and never running a strided input (the harness pre-flattened to
+  a packed `Img`). Reading an implementation is not measuring it.
+  What fast-ssim2 actually lacks is a **planar** entry point, so a *planar*
+  caller must interleave: **4.1–8.8 %** of the per-candidate wall (0.8.2). An
+  *interleaved* caller pays zero. `Ssimulacra2Reference::new_linear_planar` is
+  the ONE missing API.
+- **fast-ssim2 version trap — the graph carries TWO.** `[patch.crates-io]` pins
+  local **0.8.2** for anything requiring `^0.8` (all zenmetrics crates), but
+  **jxl-encoder requires `^0.7.1` and silently gets the REGISTRY 0.7.1** — a
+  patch only applies to requirements its version satisfies, and because the
+  patch IS used elsewhere it never appears in `[[patch.unused]]`. Consequence:
+  `CompareContext`/`compare_with` landed in **0.8.1**, so **jxl-encoder cannot
+  call them today**; bumping its dep to `^0.8.1` is a prerequisite for the
+  zero-alloc recommendation. **Anything benchmarking against this workspace MUST
+  record the RESOLVED version** (`cargo tree -p <pkg> -i <crate>`), not the
+  declared one — `scripts/loopbench_sweep.sh` writes a `.versions` sidecar per
+  run. Detail: `benchmarks/metric_loop_2026-08-30.md` §6.
 - **Batching (`ssim2-gpu::Ssim2Batch`) beats sequential warm-reference calls from
   N=2 and scales further on Metal than CUDA: 1.95x/2.86x/5.65x/**7.24x** at
   N=2/4/8/16 (256^2) vs CUDA's 2.00/2.84/3.30/3.58. At N=1 it is a 5% LOSS —

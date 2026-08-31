@@ -33,6 +33,8 @@
 //! | `copy_only`           | the strided->tight copy alone (ingress in isolation)  |
 //! | `warm_zeroalloc`      | warm compare through the scratch-recycling entry point |
 //! | `loop_n5`             | precompute + 5 warm compares (additivity check)        |
+//! | `warm_imgref_packed`  | (ssim2) warm compare, TIGHT interleaved `ImgRef`       |
+//! | `warm_imgref_strided` | (ssim2) warm compare, PADDED interleaved `ImgRef`      |
 //!
 //! `warm_strided` vs `warm_tight_plus_copy` is the load-bearing pair: both
 //! butteraugli and zensim accept an arbitrary `stride` on BOTH sides, so the
@@ -40,9 +42,23 @@
 //! it on every candidate anyway (and its `padded_width == width` fast path still
 //! does a full `copy_from_slice` of all three planes). This measures the bill.
 //!
-//! fast-ssim2 has no planar entry point at all, so its distorted side must be
-//! interleaved into `Vec<[f32; 3]>` every candidate — that is `copy_only` for
+//! fast-ssim2 has no planar entry point, so a PLANAR caller's distorted side must
+//! be interleaved into `Vec<[f32; 3]>` every candidate — that is `copy_only` for
 //! ssim2, and it is not avoidable through the current API.
+//!
+//! It DOES, however, take a stride: `impl ToLinearRgb for ImgRef<'_, [f32; 3]>`
+//! walks `self.pixels()` (`fast-ssim2/src/input.rs:261-266`), which honours
+//! `imgref`'s stride. `warm_imgref_packed` vs `warm_imgref_strided` is the pair
+//! that proves it — the same entry point handed a tight and a padded interleaved
+//! buffer, with no caller-side repack in either. Measured 2026-08-30 on 0.8.2:
+//! ratio 0.984–1.008 over 64²–4096², and the scores are bit-identical
+//! (`PARITY:imgref_stride_parity_abs_delta` = 0).
+//!
+//! These two cells exist because the FIRST pass of this study concluded from
+//! reading `ToLinearRgb` that fast-ssim2 could not take stride, and published
+//! that. It never ran a strided input — every ssim2 cell pre-flattened planar
+//! data into a packed `Img::new(...)`. Reading an implementation is not
+//! measuring it; if a claim is about runtime behaviour, there must be a cell.
 //!
 //! # Usage
 //!   loop-wall <size_label> <out_tsv> [metric_filter]
@@ -530,6 +546,64 @@ fn main() {
                         })
                     }
                 });
+                // ---- CORRECTION 2026-08-30: the stride A/B the first pass missed.
+                //
+                // The cells above pre-flatten planar -> a PACKED interleaved Vec and
+                // hand fast-ssim2 a tight `Img::new(...)`. So they never exercised a
+                // strided input at all, and the first pass wrongly concluded from
+                // reading `ToLinearRgb` that fast-ssim2 cannot take stride. It CAN:
+                // `impl ToLinearRgb for ImgRef<'_, [f32; 3]>` walks `self.pixels()`,
+                // which honours the stride (`input.rs:261-266`).
+                //
+                // These two cells isolate the real question the workspace stride rule
+                // asks — "does accepting a stride cost anything ON THE PACKED PATH?" —
+                // by handing the SAME entry point an interleaved buffer twice: once
+                // tight, once padded. The caller does NO repack in either; the buffer
+                // is built outside the timed region, exactly as a caller holding
+                // interleaved pixels would have it.
+                g.bench("ssim2__warm_imgref_packed", {
+                    let (rp, dp) = (refp.clone(), distp.clone());
+                    let mut ri: Vec<[f32; 3]> = Vec::new();
+                    interleave_into(&mut ri, &rp, stride, w, h);
+                    let pre = Ssimulacra2Reference::new(Img::new(ri.as_slice(), w, h)).unwrap();
+                    // Tight interleaved distorted: stride == width.
+                    let mut di: Vec<[f32; 3]> = Vec::new();
+                    interleave_into(&mut di, &dp, stride, w, h);
+                    move |b| {
+                        b.iter(|| {
+                            zenbench::black_box(pre.compare(Img::new(di.as_slice(), w, h)).unwrap())
+                        })
+                    }
+                });
+                g.bench("ssim2__warm_imgref_strided", {
+                    let (rp, dp) = (refp.clone(), distp.clone());
+                    let mut ri: Vec<[f32; 3]> = Vec::new();
+                    interleave_into(&mut ri, &rp, stride, w, h);
+                    let pre = Ssimulacra2Reference::new(Img::new(ri.as_slice(), w, h)).unwrap();
+                    // PADDED interleaved distorted: a `stride`-wide row of [f32; 3]
+                    // holding `w` real pixels, then PAD columns of filler that a
+                    // correct stride-aware ingress must never read.
+                    let mut di_pad: Vec<[f32; 3]> = vec![[0.5, 0.5, 0.5]; stride * h];
+                    for y in 0..h {
+                        for x in 0..w {
+                            let s = y * stride + x;
+                            di_pad[y * stride + x] = [dp[0][s], dp[1][s], dp[2][s]];
+                        }
+                    }
+                    move |b| {
+                        b.iter(|| {
+                            zenbench::black_box(
+                                pre.compare(imgref::Img::new_stride(
+                                    di_pad.as_slice(),
+                                    w,
+                                    h,
+                                    stride,
+                                ))
+                                .unwrap(),
+                            )
+                        })
+                    }
+                });
                 // Same, through the scratch-recycling entry (zero Vec allocs
                 // after the first call).
                 g.bench("ssim2__warm_zeroalloc", {
@@ -752,6 +826,25 @@ fn record_scores(
         ));
         // Does the scratch-recycling path agree with the allocating one?
         scores.push(("ssim2__zeroalloc_abs_delta".into(), (s_warm - s_ctx).abs()));
+
+        // CORRECTION 2026-08-30: does a STRIDED ImgRef score the same as a packed
+        // one? If the ingress read the padding columns this would be non-zero.
+        // This is the actual test of "supports stride", as opposed to merely
+        // accepting the type — and it is the check the first pass never ran.
+        let mut di_pad: Vec<[f32; 3]> = vec![[0.5, 0.5, 0.5]; stride * h];
+        for y in 0..h {
+            for x in 0..w {
+                let s = y * stride + x;
+                di_pad[y * stride + x] = [dp[0][s], dp[1][s], dp[2][s]];
+            }
+        }
+        let s_strided_imgref = pre
+            .compare(imgref::Img::new_stride(di_pad.as_slice(), w, h, stride))
+            .unwrap();
+        scores.push((
+            "ssim2__imgref_stride_parity_abs_delta".into(),
+            (s_warm - s_strided_imgref).abs(),
+        ));
     }
 }
 

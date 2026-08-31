@@ -21,16 +21,23 @@ zenbench     = "0.1.8"
 cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std"] }
 iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std"] }
 zensim       = { path = "../../../../../zensim/zensim" }
-# MEASURED 2026-08-30 (task #163), do NOT "fix" this by adding `rayon`:
-# fast-ssim2's `rayon` feature is off by default and no consumer in the
-# workspace enables it (jxl-encoder Cargo.toml:65, zenmetrics-api:165,
-# zenmetrics-orchestrator:119 all take `["imgref"]`). That is CORRECT.
-# A/B on this M4 Pro (min-of-2 MT runs, benchmarks/metric_loop_2026-08-30.md):
-#   64^2  0.31x  (rayon is 3.2x SLOWER - dispatch overhead on a 0.1 ms kernel)
+# RESOLVED VERSION: this requirement reads 0.8.1, but the workspace's
+# [patch.crates-io] supplies the LOCAL sibling, so `cargo tree -p cpu-profile -i
+# fast-ssim2` resolves **0.8.2 (local path)**. Always check the resolver, not
+# this line — the graph also contains a registry 0.7.1 that jxl-encoder's ^0.7.1
+# pins, and the two are easy to confuse (zenmetrics Cargo.toml, fast-ssim2 note).
+#
+# Do NOT add `rayon` on the strength of the aarch64 A/B alone. It is off by
+# default and no consumer enables it (jxl-encoder Cargo.toml:65,
+# zenmetrics-api:165, zenmetrics-orchestrator:119 all take ["imgref"]).
+# MEASURED 2026-08-30 on THIS host only (Apple M4 Pro, aarch64, fast-ssim2 0.8.2;
+# min-of-2 MT runs, benchmarks/metric_loop_2026-08-30.md):
+#   64^2  0.31x  (rayon 3.2x SLOWER - dispatch overhead on a 0.1 ms kernel)
 #   256^2 1.00x   1024^2 1.04x   2048^2 1.03x   4096^2 0.98x
-# i.e. no speedup above the noise floor anywhere, and a large regression at
-# thumbnail sizes. Keep the feature set identical to production consumers so
-# the harness measures what ships.
+# i.e. no speedup above the noise floor on aarch64, big regression at thumbnail
+# sizes. **x86 is NOT MEASURED** and the owner reports it used to benefit from
+# more threads there — do not extrapolate either way. Keep the feature set
+# identical to production consumers so the harness measures what ships.
 fast-ssim2   = { version = "0.8.1", features = ["imgref"] }
 # Inherit the workspace spec (3.5 + `threads`). The local dssim-core pin's
 # no-`threads` path doesn't compile (its zero-dep rayon fallback is a WIP

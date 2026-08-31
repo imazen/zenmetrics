@@ -436,8 +436,23 @@ butteraugli  = { path = "../../butteraugli/butteraugli" }
 # PU-shell front-end capped at ~0.61 UPIQ-class vs 0.7044 integrated, #25),
 # so the workspace pins the sibling package dir — the SAME path
 # zenmetrics-cli's direct dep already uses (../../../fast-ssim2/fast-ssim2
-# from its crate dir), keeping one fast-ssim2 in the graph. CI clones
-# imazen/fast-ssim2 at a pinned rev (see .github/workflows/ci.yml).
+# from its crate dir). CI clones imazen/fast-ssim2 at a pinned rev (see
+# .github/workflows/ci.yml).
+#
+# CORRECTION 2026-08-30 (task #163): this comment used to claim the arrangement
+# keeps "one fast-ssim2 in the graph". IT DOES NOT, and `cargo metadata` says so:
+#   0.8.2  local path  -> everything requiring ^0.8 (all zenmetrics crates)
+#   0.7.1  registry    -> jxl-encoder, whose Cargo.toml:65 requires ^0.7.1
+# A [patch.crates-io] entry only applies to requirements its version SATISFIES.
+# 0.8.2 is outside ^0.7.1, so Cargo silently leaves jxl-encoder on the registry
+# copy — and because the patch IS used by the other consumers it is never listed
+# in [[patch.unused]], so nothing surfaces the split. Adding a second entry here
+# cannot fix it (duplicate key); only jxl-encoder bumping its own requirement to
+# ^0.8.1 can. Consequence worth knowing: `CompareContext`/`compare_with` landed
+# in fast-ssim2 0.8.1, so jxl-encoder cannot call them today.
+# Anything BENCHMARKING against this workspace must record the RESOLVED version
+# (`cargo tree -p <pkg> -i fast-ssim2`), not the declared one — see
+# benchmarks/metric_loop_2026-08-30.md section 6.
 # Equivalent git ref (use when the sibling checkout is gone):
 #   { git = "https://github.com/imazen/fast-ssim2", rev = "8c9b16d2f4ab6055bfa22d8b4a079a8778f285ec" }
 # Drop this patch when a fast-ssim2 release ships `hdr-pu` (0.8.2+) and the
