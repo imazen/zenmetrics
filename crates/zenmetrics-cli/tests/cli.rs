@@ -78,6 +78,116 @@ fn list_formats_runs() {
 }
 
 #[cfg(feature = "cpu-metrics")]
+/// **zenmetrics D14** — a runtime-selected zensim bake actually reaches the
+/// score, and the unselected default is untouched.
+///
+/// `--zensim-bake` / `--zensim-profile` / `ZENMETRICS_ZENSIM_PROFILE` all
+/// route through `zenmetrics_api::zensim_profile` into the CLI's
+/// `metrics::zensim` score path. Before the selector existed every site
+/// hard-coded `ZensimProfile::latest_preview()` and no flag could change it.
+///
+/// **No graceful skip**: the bake path comes from `ZENMETRICS_TEST_ZENSIM_BAKE`
+/// (default below) and an absent file FAILS the test. Referenced BY PATH —
+/// nothing vendored.
+#[cfg(feature = "cpu-metrics")]
+#[test]
+fn zensim_bake_selector_changes_the_score_and_default_is_unchanged() {
+    /// ADD156, 3,575 B, sha256 51437a34f04887ce850b25eff4f72a6bcd12926873ce060a12878d558a7517db
+    const DEFAULT_BAKE: &str = "/mnt/v/output/zensim/corr-lq/ADD156_safesyn_only_raw_lasso.bin";
+    const BAKE_ENV: &str = "ZENMETRICS_TEST_ZENSIM_BAKE";
+
+    let bake = std::env::var(BAKE_ENV).unwrap_or_else(|_| DEFAULT_BAKE.to_string());
+    assert!(
+        PathBuf::from(&bake).is_file(),
+        "zensim bake not found at {bake:?}. This test does NOT skip itself — \
+         point it at a readable ZNPR bake with {BAKE_ENV}=<path>, or restore \
+         the default at {DEFAULT_BAKE}"
+    );
+
+    let fx = fixtures_dir();
+    let r = fx.join("ref_256.png");
+    let d = fx.join("dist_noisy_256.png");
+
+    let score_of = |extra: &[&str], env: Option<(&str, &str)>| -> f64 {
+        let mut c = cli();
+        c.args(["score", "--metric", "zensim"])
+            .args(extra)
+            .arg("--reference")
+            .arg(&r)
+            .arg("--distorted")
+            .arg(&d);
+        if let Some((k, v)) = env {
+            c.env(k, v);
+        } else {
+            c.env_remove("ZENMETRICS_ZENSIM_PROFILE");
+        }
+        let out = c.output().expect("run cli");
+        assert!(
+            out.status.success(),
+            "args={extra:?} stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let s = String::from_utf8_lossy(&out.stdout);
+        s.split_whitespace()
+            .find_map(|t| t.strip_prefix("zensim="))
+            .unwrap_or_else(|| panic!("no zensim= token in {s:?}"))
+            .parse()
+            .expect("parse zensim score")
+    };
+
+    let default = score_of(&[], None);
+    let named_b = score_of(&["--zensim-profile", "b"], None);
+    let by_flag = score_of(&["--zensim-bake", &bake], None);
+    let by_env = score_of(&[], Some(("ZENMETRICS_ZENSIM_PROFILE", &bake)));
+
+    // Default behaviour is unchanged: the shipped default IS `zensim-b`, so
+    // naming it explicitly must reproduce the un-flagged number exactly.
+    assert_eq!(
+        default, named_b,
+        "--zensim-profile b must be bit-identical to the unflagged default"
+    );
+    // The selected bake reaches the score.
+    assert_ne!(
+        by_flag, default,
+        "--zensim-bake did not change the score (it was ignored)"
+    );
+    assert_eq!(by_flag, by_env, "flag and env must select the same profile");
+    assert!(by_flag.is_finite(), "bake score must be finite");
+    // The spline-without-skip_score_mapping trap returns exactly 0.000000.
+    assert_ne!(by_flag, 0.0, "bake scored exactly 0 — misconfigured spline");
+
+    // A bad spec is a hard error, never a silent fall back to the default.
+    let bad = cli()
+        .args(["score", "--metric", "zensim", "--zensim-profile", "no-such-profile"])
+        .arg("--reference")
+        .arg(&r)
+        .arg("--distorted")
+        .arg(&d)
+        .output()
+        .expect("run cli");
+    assert!(!bad.status.success(), "a bogus --zensim-profile must fail");
+    let msg = String::from_utf8_lossy(&bad.stderr);
+    assert!(
+        msg.contains("unknown zensim profile spec"),
+        "stderr={msg}"
+    );
+
+    // …and the two flags are mutually exclusive.
+    let both = cli()
+        .args(["score", "--metric", "zensim", "--zensim-profile", "b", "--zensim-bake"])
+        .arg(&bake)
+        .arg("--reference")
+        .arg(&r)
+        .arg("--distorted")
+        .arg(&d)
+        .output()
+        .expect("run cli");
+    assert!(
+        !both.status.success(),
+        "--zensim-profile and --zensim-bake must conflict"
+    );
+}
+
 #[test]
 fn score_zensim_identical_pngs() {
     let dir = fixtures_dir();

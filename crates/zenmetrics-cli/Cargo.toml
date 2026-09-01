@@ -121,6 +121,11 @@ cpu-metrics = [
     # does the zero-copy &[u8] -> &[[u8;3]] cast those APIs require.
     "zensim/training",
     "zensim/feature-regime-v2",
+    # `custom-profiles` unlocks `ZensimProfile::Custom` + `ProfileParams::
+    # builder()` — what `--zensim-bake` wraps a runtime bake with. Declared
+    # here rather than relying on feature unification through
+    # `zenmetrics-api/cpu-zensim`, which a trimmed build could drop.
+    "zensim/custom-profiles",
     "dep:bytemuck",
     "dep:fast-ssim2",
     "dep:dssim-core",

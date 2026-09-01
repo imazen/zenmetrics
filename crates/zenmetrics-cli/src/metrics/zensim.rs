@@ -4,13 +4,65 @@
 
 use crate::decode::Rgb8Image;
 
+// ─── Runtime profile selection (zenmetrics D14) ───────────────────────────────
+//
+// The CLI's zensim SCORE path never touches `MetricParams` — `metrics::run_metric`
+// calls `zensim::score()` here directly rather than going through the umbrella —
+// so the `--zensim-profile` / `--zensim-bake` selection has to be read here too.
+// The selector itself lives in ONE place, `zenmetrics_api::zensim_profile`; this
+// is a reader, not a second implementation.
+//
+// Only the SCORE-bearing sites below consult it. The feature-extraction entry
+// points are deliberately pinned (`PreviewV0_2` for the v2-348 block,
+// `codec_target()` for the folded-streaming driver) so their regimes stay
+// byte-identical; overriding those would silently change extracted features,
+// which is not what a profile flag means.
+
+/// Env fallback for the profile selection, so a fleet worker (or any
+/// consumer of this crate as a library, e.g. `zenfleet-vastai`, which never
+/// runs `main()`) can select without argv. Same grammar as `--zensim-profile`:
+/// a built-in name OR a path to a ZNPR bake.
+pub const ZENSIM_PROFILE_ENV: &str = "ZENMETRICS_ZENSIM_PROFILE";
+
+/// Resolved-once env selection. `Ok(None)` = nothing requested.
+static ENV_PROFILE: std::sync::OnceLock<Result<Option<zensim::ZensimProfile>, String>> =
+    std::sync::OnceLock::new();
+
+/// The zensim profile the CLI's score paths use.
+///
+/// Precedence: an explicit override installed by `--zensim-profile` /
+/// `--zensim-bake` (via `zenmetrics_api::zensim_profile::set_default`) →
+/// `ZENMETRICS_ZENSIM_PROFILE` → `ZensimProfile::latest_preview()`. Unset,
+/// this is byte-identical to the literal each site used to hard-code.
+///
+/// A malformed env value is an ERROR, never a silent fall back to the
+/// default — scoring a whole fleet with the wrong model because a path
+/// typo was swallowed is exactly the failure this must not have.
+pub(crate) fn selected_profile() -> Result<zensim::ZensimProfile, Box<dyn std::error::Error>> {
+    if let Some(p) = zenmetrics_api::zensim_profile::override_profile() {
+        return Ok(p);
+    }
+    let from_env = ENV_PROFILE.get_or_init(|| match std::env::var(ZENSIM_PROFILE_ENV) {
+        Ok(spec) if !spec.trim().is_empty() => zenmetrics_api::zensim_profile::resolve(spec.trim())
+            .map(Some)
+            .map_err(|e| format!("{ZENSIM_PROFILE_ENV}={spec:?}: {e}")),
+        _ => Ok(None),
+    });
+    match from_env {
+        Ok(Some(p)) => Ok(*p),
+        Ok(None) => Ok(zensim::ZensimProfile::latest_preview()),
+        Err(msg) => Err(msg.clone().into()),
+    }
+}
+
+
 pub(crate) fn score(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
 ) -> Result<f64, Box<dyn std::error::Error>> {
     use zensim::{PixelFormat, StridedBytes, Zensim};
 
-    let z = Zensim::new(zensim::ZensimProfile::latest_preview());
+    let z = Zensim::new(selected_profile()?);
     let w = reference.width as usize;
     let h = reference.height as usize;
     let stride = w * 3;
@@ -46,7 +98,7 @@ pub(crate) fn precompute_ref(
     reference: &Rgb8Image,
 ) -> Result<PrecomputedRef, Box<dyn std::error::Error>> {
     use zensim::{PixelFormat, StridedBytes, Zensim};
-    let z = Zensim::new(zensim::ZensimProfile::latest_preview());
+    let z = Zensim::new(selected_profile()?);
     let w = reference.width as usize;
     let h = reference.height as usize;
     let src = StridedBytes::try_new(&reference.pixels, w, h, w * 3, PixelFormat::Srgb8Rgb)
@@ -65,7 +117,7 @@ pub(crate) fn score_with_precomputed(
     distorted: &Rgb8Image,
 ) -> Result<f64, Box<dyn std::error::Error>> {
     use zensim::{PixelFormat, StridedBytes, Zensim};
-    let z = Zensim::new(zensim::ZensimProfile::latest_preview());
+    let z = Zensim::new(selected_profile()?);
     let w = distorted.width as usize;
     let h = distorted.height as usize;
     let dst = StridedBytes::try_new(&distorted.pixels, w, h, w * 3, PixelFormat::Srgb8Rgb)
@@ -95,7 +147,7 @@ pub fn score_with_features(
 ) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
     use zensim::{PixelFormat, StridedBytes, Zensim};
 
-    let z = Zensim::new(zensim::ZensimProfile::latest_preview());
+    let z = Zensim::new(selected_profile()?);
     let w = reference.width as usize;
     let h = reference.height as usize;
     let stride = w * 3;
@@ -1057,7 +1109,7 @@ pub fn score_with_features_pu_linear(
     height: usize,
 ) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
     use zensim::Zensim;
-    let z = Zensim::new(zensim::ZensimProfile::latest_preview());
+    let z = Zensim::new(selected_profile()?);
     let stride = width * 3;
     let result = z
         .compute_pu_linear_extended_features(ref_nits, dist_nits, width, height, stride, stride)

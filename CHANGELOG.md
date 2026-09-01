@@ -13,6 +13,54 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-api / zenmetrics-cli
+
+### Added
+- **`zenmetrics` can now score an ARBITRARY zensim bake, not only the shipped
+  default (zensim audit D14).** Every zensim construction site built
+  `zensim::ZensimProfile::latest_preview()` as a literal
+  (`cpu_dispatch.rs:149`/`:269`, five score-bearing sites in the CLI's
+  `metrics/zensim.rs`), and no flag anywhere in the repo could change it — so a
+  candidate bake could not be scored through the fleet at all, which is where a
+  large re-scoring has to happen. New `zenmetrics_api::zensim_profile` module
+  resolves a profile *spec* — a built-in name (`zensim-b` / `b`, `zensim-c`,
+  `latest`, …) or a filesystem path to a ZNPR bake — into a
+  `zensim::ZensimProfile`, and installs it as a process-wide default the
+  dispatch consults. New global CLI flags `--zensim-profile <NAME>` and
+  `--zensim-bake <PATH>` (mutually exclusive) drive it, plus the
+  `ZENMETRICS_ZENSIM_PROFILE` env fallback for fleet workers and for library
+  consumers such as `zenfleet-vastai` that never run the CLI's `main`. A bad
+  name or unreadable bake exits non-zero before any scoring — never a silent
+  fall back to the default model.
+  **Default behaviour is unchanged**: with nothing selected,
+  `zensim_profile::default_profile()` returns `latest_preview()`, the exact
+  literal replaced, and `--zensim-profile b` reproduces the unflagged score
+  bit-identically (asserted by the tests below). Loading a bake needs zensim's
+  existing non-default `custom-profiles` feature, now enabled on the dependency;
+  no zensim change was required. Verified end-to-end: ADD156
+  (`ADD156_safesyn_only_raw_lasso.bin`, 3,575 B, sha256 `51437a34…`) scores
+  **-7.774280** on the fixture pair where the shipped default scores
+  **12.175023**. Tests: `zenmetrics-api/tests/zensim_bake_selector.rs::
+  cpu_umbrella_scores_a_runtime_selected_bake` (proven failing-first: reverting
+  the two dispatch lines makes the umbrella return the shipped `13.532122`
+  instead of the bake's `-30.821410`) and `zenmetrics-cli/tests/cli.rs::
+  zensim_bake_selector_changes_the_score_and_default_is_unchanged`.
+  (`e4bb566b`, plus this commit.)
+  KNOWN LIMIT: the CLI score path drives the v1 372-wide extraction route, so
+  944-input profiles (`c` / `c-hdr`, or a 944-wide bake) fail loud
+  ("bake declares more input features than the caller supplied") rather than
+  returning a wrong number. The feature-extraction entry points stay pinned to
+  their own profiles (`PreviewV0_2` for the v2-348 block, `codec_target()` for
+  the folded-streaming driver) so extracted features remain byte-identical — the
+  selector deliberately does not reach them.
+
+### Fixed
+- `zenmetrics-api`'s `examples/vram_drop_reclaim.rs` is `#![cfg(feature =
+  "cuda")]` but had no `required-features` gate, so every non-cuda
+  `cargo test -p zenmetrics-api` failed to build it with "`main` function not
+  found". Pre-existing; found while verifying the above on the CPU-only config.
+  (`e4bb566b`)
+
 ## zenfleet-core / zenfleet-worker / zenmetrics-cli
 
 ### Fixed

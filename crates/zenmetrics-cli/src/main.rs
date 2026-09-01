@@ -133,6 +133,41 @@ struct Cli {
     #[arg(long, global = true, default_value = "")]
     cpu_features: String,
 
+    /// Score zensim with a NAMED profile instead of the shipped default.
+    ///
+    /// Accepts the canonical spelling or the short form, any case:
+    /// `zensim-b` / `b`, `zensim-c` / `c`, `zensim-b-hdr`, `zensim-a`,
+    /// `zensim-preview-v0.2`, or the aliases `latest` / `codec-target`.
+    /// Unset, scoring is byte-identical to before this flag existed
+    /// (`ZensimProfile::latest_preview()`).
+    ///
+    /// LIMIT: the CLI's zensim score path drives the v1 372-wide extraction
+    /// route, so the 944-input generation-C profiles (`c` / `c-hdr`) fail loud
+    /// here ("bake declares more input features than the caller supplied")
+    /// rather than returning a wrong number. Same for a 944-wide
+    /// `--zensim-bake`.
+    ///
+    /// Conflicts with `--zensim-bake`. Also settable as
+    /// `ZENMETRICS_ZENSIM_PROFILE=<name-or-path>` for fleet workers, which is
+    /// the only route for library consumers that never run this `main`.
+    #[cfg(feature = "cpu-metrics")]
+    #[arg(long, global = true, conflicts_with = "zensim_bake")]
+    zensim_profile: Option<String>,
+
+    /// Score zensim with a ZNPR bake loaded from PATH — a candidate model that
+    /// is not one of the built-in profiles.
+    ///
+    /// The bake is configured like zensim's own shipped `B` profile: 372-wide
+    /// caller input (extended + IW feature blocks), the bake's own calibration
+    /// spline honoured (`skip_score_mapping`), and the negative dial tail kept
+    /// (`extrapolate_score`). A bad path is a hard error, never a silent
+    /// fallback to the default model.
+    ///
+    /// Conflicts with `--zensim-profile`.
+    #[cfg(feature = "cpu-metrics")]
+    #[arg(long, global = true, value_name = "PATH")]
+    zensim_bake: Option<PathBuf>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -649,6 +684,28 @@ struct ScorePairsArgs {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+
+    // zenmetrics D14 — install the runtime zensim profile selection BEFORE any
+    // subcommand dispatch, so every scorer built downstream (the umbrella's
+    // `Backend::Cpu` dispatch and the CLI's own `metrics::zensim` score paths
+    // alike) sees it. A bad name or an unreadable bake exits nonzero here
+    // rather than silently scoring a whole run with the default model.
+    #[cfg(feature = "cpu-metrics")]
+    {
+        let spec: Option<String> = cli
+            .zensim_profile
+            .clone()
+            .or_else(|| cli.zensim_bake.as_ref().map(|p| p.display().to_string()));
+        if let Some(spec) = spec {
+            match zenmetrics_api::zensim_profile::set_default_from_spec(&spec) {
+                Ok(p) => eprintln!("zensim profile: {}", p.name()),
+                Err(e) => {
+                    eprintln!("error: --zensim-profile/--zensim-bake {spec:?}: {e}");
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
+    }
 
     // Phase 7.7.1: the orchestrator is the default.
     //
