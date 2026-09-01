@@ -95,6 +95,14 @@ mod error;
 pub mod hdr;
 mod memory_mode;
 mod metric;
+/// Runtime selection of the **zensim scoring profile** — a named built-in or
+/// an arbitrary ZNPR bake loaded from disk — so the fleet metric path can
+/// score a candidate bake instead of only the hard-coded shipped default.
+/// Requires `zensim` or `cpu-zensim`. Default behaviour is unchanged:
+/// [`zensim_profile::default_profile`] returns
+/// `zensim::ZensimProfile::latest_preview()` unless an override is installed.
+#[cfg(any(feature = "zensim", feature = "cpu-zensim"))]
+pub mod zensim_profile;
 #[cfg(feature = "pixels")]
 mod pixels;
 mod session;
@@ -196,6 +204,17 @@ pub use ::iwssim as iwssim_cpu;
 /// feature is enabled).
 #[cfg(feature = "zensim")]
 pub use zensim_gpu as zensim;
+
+/// Re-export of the in-tree native-CPU [`zensim`](https://docs.rs/zensim)
+/// crate (when `zensim` or `cpu-zensim` is enabled). Distinct from the GPU
+/// [`zensim`](crate::zensim) (= `zensim_gpu`) re-export above so callers can
+/// name `ZensimProfile` / `profile::ProfileParams` — the types
+/// [`crate::zensim_profile`] hands out — without a direct crate dep.
+//
+// Leading `::` forces the EXTERN crate `zensim` (the native CPU metric),
+// never the local `pub use zensim_gpu as zensim` re-export above.
+#[cfg(any(feature = "zensim", feature = "cpu-zensim"))]
+pub use ::zensim as zensim_cpu;
 
 /// Result alias for the umbrella API. Most calls return this directly.
 pub type Result<T> = core::result::Result<T, Error>;

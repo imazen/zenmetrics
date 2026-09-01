@@ -37,7 +37,18 @@ butter = ["dep:butteraugli-gpu", "dep:zenmetrics-gpu-core", "butteraugli-gpu/int
 ssim2  = ["dep:ssim2-gpu", "dep:zenmetrics-gpu-core"]
 dssim  = ["dep:dssim-gpu", "dep:zenmetrics-gpu-core"]
 iwssim = ["dep:iwssim-gpu", "dep:zenmetrics-gpu-core"]
-zensim = ["dep:zensim-gpu", "dep:zenmetrics-gpu-core"]
+# `dep:zensim` (the native CPU crate) is pulled here too — it is ALREADY in the
+# link graph (zensim-gpu depends on it non-optionally for the canonical
+# `score_features_with_profile` scoring path), so the direct edge costs no extra
+# build; it exists so the `zensim_profile` runtime profile/bake selector is
+# reachable from a GPU-only build too, not just `cpu-zensim`.
+zensim = ["dep:zensim-gpu", "dep:zenmetrics-gpu-core", "dep:zensim", "zensim?/custom-profiles", "zensim-deprecated-profiles", "zensim-candidate-profiles"]
+# Pass-throughs so `zensim_profile::builtin` can name the profiles their zensim
+# Cargo features gate. Both are ON in zensim's own default feature set and are
+# enabled by `zensim` / `cpu-zensim` here; they exist as separate switches so a
+# `--no-default-features` zensim build stays compilable.
+zensim-deprecated-profiles = ["zensim?/deprecated-profiles"]
+zensim-candidate-profiles = ["zensim?/candidate-profiles"]
 
 # Backend selection — forwards through to every enabled metric crate.
 # Default ships `cuda` only; pass `--no-default-features --features
@@ -97,7 +108,11 @@ cpu-ssim2 = ["dep:fast-ssim2", "dep:imgref", "dep:bytemuck"]
 cpu-cvvdp = ["dep:cvvdp", "cvvdp/std"]
 cpu-dssim = ["dep:dssim-core", "dep:imgref", "dep:rgb", "dep:bytemuck"]
 cpu-butter = ["dep:butteraugli", "dep:imgref", "dep:rgb", "dep:bytemuck"]
-cpu-zensim = ["dep:zensim", "dep:bytemuck"]
+# `zensim/custom-profiles` unlocks `ZensimProfile::Custom` + `ProfileParams::
+# builder()`, the supported extension point the `zensim_profile` module uses to
+# wrap a ZNPR bake loaded at runtime. Enabling an existing non-default feature
+# of a dependency is not a public-API addition here.
+cpu-zensim = ["dep:zensim", "dep:bytemuck", "zensim?/custom-profiles", "zensim-deprecated-profiles", "zensim-candidate-profiles"]
 cpu-iwssim = ["dep:iwssim", "iwssim/std"]
 # Umbrella: every optimized native-CPU metric (parallels `all-metrics`).
 cpu-metrics = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim", "cpu-iwssim"]
@@ -230,3 +245,12 @@ path = "tests/it/main.rs"
 [[example]]
 name = "backend_liveness"
 required-features = ["ssim2", "cuda"]
+
+# The source is `#![cfg(feature = "cuda")]`, so without this gate every
+# non-cuda `cargo test -p zenmetrics-api` failed to build the example with
+# "`main` function not found" (pre-existing; found while verifying D14 on the
+# CPU-only config). Declaring the gate is what every other cfg'd example here
+# already does.
+[[example]]
+name = "vram_drop_reclaim"
+required-features = ["cuda"]

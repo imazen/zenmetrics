@@ -80,6 +80,36 @@ pub(crate) enum CpuMetricState {
     FeatureDisabled(MetricKind),
 }
 
+/// The zensim profile a `Backend::Cpu` scorer is built with, in precedence
+/// order: the process-wide [`crate::zensim_profile`] override → an explicit
+/// [`MetricParams::Zensim`] profile → `ZensimProfile::latest_preview()`.
+///
+/// The override comes FIRST on purpose — see
+/// [`crate::zensim_profile::override_profile`]: `MetricParams::default_for(
+/// MetricKind::Zensim)` always stamps `Some(latest())`, so params-wins would
+/// make an operator's `--zensim-bake` a no-op on every default-params call.
+///
+/// The `params`-carried profile only exists when the GPU `zensim` feature is
+/// on (that variant's payload is `zensim_gpu::ZensimParams`); the CPU-only
+/// build's `MetricParams::Zensim(())` placeholder carries nothing. Both
+/// configurations end at `latest_preview()` when nothing is set — the exact
+/// literal this replaced, and `default_for` carries the same `B`.
+#[cfg(feature = "cpu-zensim")]
+fn zensim_profile_for(params: &MetricParams) -> ::zensim::ZensimProfile {
+    if let Some(profile) = crate::zensim_profile::override_profile() {
+        let _ = params;
+        return profile;
+    }
+    #[cfg(feature = "zensim")]
+    if let MetricParams::Zensim(p) = params {
+        if let Some(profile) = p.profile {
+            return profile;
+        }
+    }
+    let _ = params;
+    ::zensim::ZensimProfile::latest_preview()
+}
+
 impl CpuMetricState {
     /// Build the optimized-CPU scorer for `kind` at `width × height`.
     /// Cheap for stateless metrics; for stateful ones this builds the
@@ -143,10 +173,18 @@ impl CpuMetricState {
             }
             #[cfg(feature = "cpu-zensim")]
             MetricKind::Zensim => {
-                // zensim exposes the same default profile the GPU crate
-                // wraps; `latest_preview()` matches production sweep workers
-                // (mirrors cpu_adapter::construct_zensim).
-                let inner = zensim::Zensim::new(zensim::ZensimProfile::latest_preview());
+                // Profile selection, in precedence order (zenmetrics D14):
+                //   1. an explicit `MetricParams::Zensim(p).profile` — the same
+                //      field the GPU arm already honours, so CPU and GPU now
+                //      agree instead of CPU silently ignoring it;
+                //   2. the process-wide `zensim_profile` override (what the
+                //      `--zensim-bake` / `--zensim-profile` CLI flags install);
+                //   3. `latest_preview()`.
+                // With no params profile and no override this is byte-identical
+                // to the `latest_preview()` literal that used to be hard-coded
+                // here, and `MetricParams::default_for(Zensim)` carries
+                // `latest()` — the same `B` — so the default path is unchanged.
+                let inner = zensim::Zensim::new(zensim_profile_for(params));
                 Ok(CpuMetricState::Zensim {
                     inner: Box::new(inner),
                     width,
@@ -266,7 +304,10 @@ impl CpuMetricState {
             }
             #[cfg(feature = "cpu-zensim")]
             MetricKind::Zensim => {
-                let inner = zensim::Zensim::new(zensim::ZensimProfile::latest_preview());
+                // `new_hdr` takes no `MetricParams`, so only the process-wide
+                // `zensim_profile` override applies here (unset ⇒ the same
+                // `latest_preview()` this used to hard-code).
+                let inner = zensim::Zensim::new(crate::zensim_profile::default_profile());
                 Ok(CpuMetricState::Zensim {
                     inner: Box::new(inner),
                     width,
