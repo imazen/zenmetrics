@@ -19,6 +19,18 @@ cell count from §4.
 | [`avif_knob_dossier_2026-09-01.md`](avif_knob_dossier_2026-09-01.md) | the bit-depth axis (§8.1 #11), the port's depth envelope (§4.2), the `with_bit_depth` coercion (§605) |
 | [`gainmap_zensim_census_2026-08-27.md`](gainmap_zensim_census_2026-08-27.md) | the HDR judge route, the frozen 27-cell HDR instrument |
 
+**Companion (the CAPABILITY layer under this arm):**
+[`bitdepth_capability_matrix_2026-09-02.md`](bitdepth_capability_matrix_2026-09-02.md) —
+backend × depth × {encode, decode, score}, every cell VERIFIED or BLOCKED-with-reason.
+It closes **TODO-4** (the fleet's u8 shell, `7051921a`) and hazard **H-BD-3** (the
+silent `with_bit_depth` coercion, zenav1-svt `6fe01232`), wires a real `bd` knob into
+the aom-rs backend (`0155c165`), and registers two things this doc should not
+re-derive: a NEW silent-coercion defect in `zenavif::encode_rgb16` (it ignores
+`config.bit_depth` entirely), and why `EncodeBitDepth::Twelve` stays out of scope.
+⚠ It also records a **scoring-era break**: stored `--hdr` ssim2/zensim/iwssim/
+butteraugli-CPU numbers from before `7051921a` are u8-shelled and are not comparable
+with numbers after it.
+
 ---
 
 ## 0. TL;DR
