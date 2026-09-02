@@ -20,7 +20,9 @@ first; §12 lists what is still UNVERIFIED.
    `svtav1-v4.1.0/` directory is a decoy — see **H-1**.
 2. **`tune` is a super-factor on both backends.** libaom's `tune=iq` forces 10
    other knobs; `zenav1-svt`'s `tune=3` forces 9. Make it the **outermost**
-   axis or your factorial is aliased (**H-4**).
+   axis or your factorial is aliased (**H-4**). On aomenc the precedence is
+   *split*: five of those knobs beat `--tune` from any argv position, six are
+   positional against it (**H-16**) — **log the resolved config, not the argv**.
 3. **The svt-rs speed dial has 10 levels but only 7 encodes** — speeds 7-10 are
    all preset 9, and presets 2/5/8 are unreachable. Sweep `preset` directly
    (**H-2**).
@@ -32,6 +34,10 @@ first; §12 lists what is still UNVERIFIED.
    one must be threaded explicitly.
 6. **Biggest single exposure gap: `tune=iq` on `zenav1-aom`** — fully ported and
    byte-gated, but absent from the harness knob struct (§5.2, §10).
+7. **Several libaom knobs go inert in regions of the grid without erroring** —
+   deltaq 1-5 above `cpu-used` 7, CDEF-adaptive below `cq` 32,
+   `--denoise-noise-level`'s value in all-intra (**H-17**, **H-18**, **H-19**).
+   Each looks like a measured null. Nest them inside the axis that kills them.
 
 ---
 
@@ -137,9 +143,9 @@ ranges from the `RANGE_CHECK` block ([`:700-960`](https://github.com/imazen/liba
 | CLI / control | Range (at pin) | Default | ALL-INTRA default | Still-image semantics | Source |
 |---|---|---|---|---|---|
 | `--cpu-used` / `AOME_SET_CPUUSED` | **`0..9`** (non-realtime); `0..12` only for `AOM_USAGE_REALTIME` | `0` | same | The speed dial. `0..9` is exactly the range the sweep uses. | [`:775-776`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L775-L776) |
-| `--cq-level` / `AOME_SET_CQ_LEVEL` | `0..63` | `10` | same | Quality dial in `AOM_Q` / `AOM_CQ` end-usage. **This is the AVIF quality knob.** | [`:802`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L802) |
+| `--cq-level` / `AOME_SET_CQ_LEVEL` | `0..63` | `10` | same | Quality dial in `AOM_Q` / `AOM_CQ` end-usage. **This is the AVIF quality knob.** There is **no `--qp`** at v3.14.1; 0..63 maps to qindex by table — `q*4` for 0..61, then **62→249, 63→255** (`av1/encoder/av1_quantize.c:1031-1043`), byte-identical to the port's `QUANTIZER_TO_QINDEX` (`crates/aom-encode/src/rc.rs:20-25`). | [`:802`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L802) |
 | `--tune` / `AOME_SET_TUNING` | `AOM_TUNE_PSNR(0) .. AOM_TUNE_SSIMULACRA2(11)` | `AOM_TUNE_PSNR` | same | **`IQ`=10 and `SSIMULACRA2`=11 are the image tunes** — "meant for image encoding … Using these tuning modes for videos isn't recommended". Each silently forces 9–10 other knobs — **hazard H-4**. | [`aomcx.h:1740-1804`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/aom/aomcx.h#L1740-L1804), [`av1_cx_iface.c:892`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L892) |
-| `--deltaq-mode` / `AV1E_SET_DELTAQ_MODE` | `0..6` | `DELTA_Q_OBJECTIVE(1)` | same | `0` none, `1` objective, `2` perceptual, `3` perceptual-AI (all-intra), `4` user-rating, `5` HDR, **`6` Variance Boost** (libaom's analogue of SVT's `--enable-variance-boost`). | [`encoder.h:153-162`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/encoder/encoder.h#L153-L162), [`:718`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L718) |
+| `--deltaq-mode` / `AV1E_SET_DELTAQ_MODE` | `0..6` | `DELTA_Q_OBJECTIVE(1)` | same | `0` none, `1` objective, `2` perceptual, `3` perceptual-AI (all-intra), `4` user-rating, `5` HDR, **`6` Variance Boost** (libaom's analogue of SVT's `--enable-variance-boost`) — which **forces `sb_size` to 64×64** (`encoder_utils.c:977-979`), so it is not orthogonal to the superblock axis. | [`encoder.h:153-162`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/encoder/encoder.h#L153-L162), [`:718`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L718) |
 | `--enable-qm` / `AV1E_SET_ENABLE_QM` | `0..1` | `0` | `0` | Quantization matrices. | [`:290`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L290) |
 | `--qm-min` / `--qm-max` | `0..15` (`NUM_QM_LEVELS=16`) | `5` / `9` (`DEFAULT_QM_FIRST/LAST`) | **`4` / `10`** (`DEFAULT_QM_*_ALLINTRA`) | QM flatness window. `tune=iq` forces **`2` / `10`** (`QM_FIRST/LAST_IQ_SSIMULACRA2`). | [`quant_common.h:37-42`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/common/quant_common.h#L37-L42) |
 | `--sharpness` / `AOME_SET_SHARPNESS` | **`0..7`** (unsigned — *not* SVT's `-7..7`) | `0` | same | Bias toward block sharpness in coefficient RDO. `tune=iq/ssimulacra2` forces **7**. | [`:798`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L798) |
@@ -152,7 +158,7 @@ ranges from the `RANGE_CHECK` block ([`:700-960`](https://github.com/imazen/liba
 | `--enable-intrabc` | `0..1` | `1` | same | Intra Block Copy. **Dominant cost on screen-detected frames** in the port. | [`:360`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L360) |
 | `--enable-restoration` | `0..1` | `1` | same | Loop restoration. libavif turns it **off for alpha**. | [`:286`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L286) |
 | `--sb-size` / `AV1E_SET_SUPERBLOCK_SIZE` | `64X64 .. DYNAMIC` | `DYNAMIC` | same | Superblock size. Unlike SVT, this **is** a real libaom knob. | [`:778-779`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L778-L779) |
-| `--tile-columns` / `--tile-rows` | `0..6` each (log2) | `0` / `0` | same | Parallelism vs efficiency; can show seams. `--auto-tiles` (`0..1`, default `0`) derives them. | [`:787-788`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L787-L788) |
+| `--tile-columns` / `--tile-rows` | `0..6` each (log2) | `0` / `0` | same | Parallelism vs efficiency; can show seams. `--auto-tiles` (`0..1`, default `0`) derives them — and **`--auto-tiles` hard-errors against explicit `--tile-columns`/`--tile-rows`** (`av1_cx_iface.c:1872-1874`, `:1886-1888`). | [`:787-788`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L787-L788) |
 | `--row-mt` | `0..1` | `1` | same | Row-level multithreading. Affects **speed**, and can affect determinism of timing but not bytes. | [`:784`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L784) |
 | `--lossless` / `AV1E_SET_LOSSLESS` | `0..1` | `0` | same | Coded-lossless. Conflicts with `enable-chroma-deltaq`. | [`:716`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L716) |
 | `--arnr-maxframes` / `--arnr-strength` | `0..15` / `0..6` | `7` / `5` | same | Alt-ref temporal filtering. **INERT for a 1-frame still** (no alt-ref to filter) — see hazard H-7. | [`:800-801`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L800-L801) |
@@ -465,16 +471,16 @@ crates but needs a harness field added first.
 | 1 | **`--cpu-used` 0..=9** | H (`speed`) | The master speed dial; range is exactly libaom's non-realtime bound. Drives every speed feature. | `RANGE_CHECK(cpu_used, 0, usage==REALTIME ? 12 : 9)` — [`:775-776`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L775-L776) | everything; **H-6** (screen cost at 0-1) |
 | 2 | **`--cq-level` 0..=63** | H (`q`) | THE quality dial under `AOM_Q` end-usage, which all-intra selects. | [`:802`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L802); libavif uses `AOME_SET_CQ_LEVEL` | qm level derivation; cdef-adaptive thresholds |
 | 3 | **`tune` ∈ {psnr, ssim, iq, ssimulacra2}** — **outermost axis** | **C** | libaom's packaged image recipe; forces 9-10 knobs. `iq` is libavif's default for colour on ≥3.13.0. **Almost certainly the largest single quality win available on this backend.** | *"AOM_TUNE_IQ and AOM_TUNE_SSIMULACRA2 are meant for image encoding"* — [`aomcx.h:1751-1766`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/aom/aomcx.h#L1751-L1766) | **H-4** — aliases qm, sharpness, dist-metric, cdef, chroma-deltaq, deltaq, screen-detection |
-| 4 | **`--enable-qm` + `--qm-min`/`--qm-max`** | H (`qm: Option<(min,max)>`) | Reshapes the quantizer across frequencies. Three distinct upstream windows exist — default `5/9`, all-intra `4/10`, tune-IQ `2/10` — which is upstream saying the optimum moves with the use case. | [`quant_common.h:37-42`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/common/quant_common.h#L37-L42) | tune (forces 2/10); `dist-metric=qm-psnr` weights the trellis by the same matrix |
-| 5 | **`--deltaq-mode` ∈ {0,1,2,3,6}** | H for 2/3; **C** for 6 | Per-SB qindex modulation. `3` = perceptual-AI is *the* all-intra mode; **`6` = Variance Boost** is the direct analogue of SVT's headline still-image lever and what `tune=iq` selects. | [`encoder.h:153-162`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/encoder/encoder.h#L153-L162) | tune (forces 6); `delta_lf_mode` rides on it |
-| 6 | **`--enable-cdef` ∈ {0,1,3}** | **C** | All-intra defaults it **OFF** because "CDEF has been found to blur images"; tune-IQ instead picks **3 = ADAPTIVE** (off at qindex ≤32, reduced 33-220, full 221-255). Two upstream opinions in one release — worth measuring. | [`:3065-3078`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L3065-L3078), [`pickcdef.h:22-29`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/encoder/pickcdef.h#L22-L29) | qindex (mode 3 is qindex-conditional); tune |
-| 7 | **`--sharpness` 0..=7** | **C** | Bias toward block sharpness in coefficient RDO. Both encoders' image tunes force **7** — the strongest cross-backend prior in this dossier. | forced to 7 by `handle_tuning` — [`:1951`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L1951) | `enable_adaptive_sharpness`; **H-14** (different scale from SVT) |
+| 4 | **`--enable-qm` + `--qm-min`/`--qm-max`** | H (`qm: Option<(min,max)>`) | Reshapes the quantizer across frequencies. Three distinct upstream windows exist — default `5/9`, all-intra `4/10`, tune-IQ `2/10` — which is upstream saying the optimum moves with the use case. | [`quant_common.h:37-42`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/common/quant_common.h#L37-L42) | tune (forces 2/10); `dist-metric=qm-psnr` weights the trellis by the same matrix; **H-23** — the still-image formulas run *opposite* to the legacy one and effectively use only levels 4-10 |
+| 5 | **`--deltaq-mode` ∈ {0,1,2,3,6}** | H for 2/3; **C** for 6 | Per-SB qindex modulation. `3` = perceptual-AI is *the* all-intra mode; **`6` = Variance Boost** is the direct analogue of SVT's headline still-image lever and what `tune=iq` selects. **Modes 1-5 are silently ignored at `cpu-used >= 8` (H-17)**, so only mode 6 survives the fast end — nest deltaq inside speed rather than crossing them; and mode 6 forces `sb_size` to 64×64. | [`encoder.h:153-162`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/encoder/encoder.h#L153-L162) | tune (forces 6); `delta_lf_mode` rides on it |
+| 6 | **`--enable-cdef` ∈ {0,1,3}** | **C** | All-intra defaults it **OFF** because "CDEF has been found to blur images"; tune-IQ instead picks **3 = ADAPTIVE** (off at qindex ≤32, reduced 33-220, full 221-255). Two upstream opinions in one release — worth measuring. **But mode 3 is inert below `cq_level` 32 and skips chroma (H-18)**, so its effect is confined to the high-quality end. | [`:3065-3078`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L3065-L3078), [`pickcdef.h:22-29`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/encoder/pickcdef.h#L22-L29) | qindex (mode 3 is qindex-conditional); tune |
+| 7 | **`--sharpness` 0..=7 — treat as CATEGORICAL, not ordinal** | **C** | Bias toward block sharpness in coefficient RDO. Both encoders' image tunes force **7** — the strongest cross-backend prior here. But it is not a smooth dial: `sharpness == 3` is a discrete behaviour switch at **8 unrelated sites** (`interp_search.c:486`, `mcomp.c:105/197`, `speed_features.c:1505`, `encoder_utils.c:648`, `gop_structure.c:933`, `temporal_filter.c:1142`, `rdopt.c:1640`), and **any** `sharpness != 0` short-circuits intra mode search for blocks >4×4 (`rdopt.c:5775-5779`). The quantizer term is `qrounding = 64 - 16*(7-s)/7` with integer-division plateaus and a discontinuity at s=0 (`av1_quantize.c:604-621`) → **48, 51, 53, 55, 58, 60, 62, 64**. **Do not fit a linear trend over 0..7.** | forced to 7 by `handle_tuning` — [`:1951`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L1951) | `enable_adaptive_sharpness`; **H-14** (different scale from SVT); **H-16** (always beats `--tune`) |
 | 8 | **`--disable-trellis-quant` ∈ {0,1,2,3}** | H | Coefficient-level RDO. A classic size-at-quality lever with a large, well-understood speed cost, and one of the few pure *effort* knobs that is not `cpu-used`. | `init_rd_sf` (`speed_features.c:2479-2498`) per the port's own citation | `dist-metric` (tune-IQ changes the trellis distortion **and** its `rshift`) |
 | 9 | **partition envelope: `min/max_partition_size_px` + `enable_{rect,ab,1to4}_partitions`** | H | The partition search is the dominant cost term and directly sets the size/quality frontier — and unlike `cpu-used` it moves one dimension at a time, which is what a model wants. | libaom CLI defaults 4 / 128, all three arms on | `cpu-used` (which already prunes these); `sb-size` |
 | 10 | **intra mode-set toggles** (`smooth`, `paeth`, `cfl`, `directional`, `diagonal`, `angle_delta`, `filter_intra`, `intra_edge_filter`) | H | For a still, intra IS the encoder. Eight orthogonal on/off arms, each a clean effort/quality contrast — the richest cheap factor block on either backend. | all default ON upstream | `cpu-used`; each other (mode-set overlap) |
 | 11 | **`--enable-palette` / `--enable-intrabc` / `--tune-content=screen`** | H | Screen-content tools. `tune_content_screen` is the only way to force them **deterministically** (bypasses the detector), which is what makes them designable factors instead of content lottery. | `av1_set_screen_content_options` (`encoder.c:2449-2455`) per the port's citation | **H-6** (cost + content stratification) |
 | 12 | **`--enable-tx64` / `--enable-rect-tx` / `--enable-flip-idtx` / `reduced_tx_type_set` / `enable_tx_size_search`** | H | Transform search surface. | — | **`enable_tx_size_search=0` + `enable_tx64=0` is FORBIDDEN by C** (`encodeframe.c:2461` assert) — exclude that cell |
-| 13 | **`--enable-chroma-deltaq`** | **C** | Lets the encoder adjust chroma quality for subsampling. Forced on by tune-IQ. | [`:1964-1966`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L1964-L1966) | **H-13** — hard-errors with `--lossless=1` |
+| 13 | **`--enable-chroma-deltaq`** | **C** | **Means two different things.** Under `tune=iq`/`ssimulacra2` it is a subsampling-aware formula (4:2:0 / 4:2:2 / 4:4:4 each different, `av1_quantize.c:888-970`); under every other tune it is a flat `+2` with a `TODO(aomedia:2717)` beside it. So it is aliased with `--tune` twice over — presence *and* semantics. | [`:1964-1966`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L1964-L1966) | **H-13** — hard-errors with `--lossless=1` |
 
 **Excluded and why:** `--arnr-*` (no alt-ref on a still, **H-7**), VMAF/Butteraugli
 tunes (build-flag gated and not ported, **H-12**), `coeff_cost_upd_freq` /
@@ -545,7 +551,7 @@ This is the single biggest threat to a factorial design, and it is symmetric.
 Crossing `tune` with `{qm*, sharpness, variance_boost*, deltaq-mode, cdef, chroma-deltaq, max_tx_size, screen-detection}` **aliases those factors into `tune`** and silently collapses cells.
 
 Two further wrinkles, each its own trap:
-- **libaom: ORDER decides.** `handle_tuning()` runs at the moment tune is set — from `AOME_SET_TUNING` ([`:1980-1988`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L1980-L1988)) *and* from the `aom_codec_set_option()` string path ([`:4477-4480`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L4477-L4480)). Set `sharpness` **before** `tune=iq` and it is overwritten; set it **after** and it wins. **The harness's option ordering silently changes the encode.** (Contrast the ALL_INTRA defaults, applied in `encoder_init` *before* any control call, so a later control always wins.)
+- **libaom: precedence is SPLIT, and argv order is only half the story — see H-16.** `handle_tuning()` runs at the moment tune is set — from `AOME_SET_TUNING` ([`:1980-1988`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L1980-L1988)) *and* from the `aom_codec_set_option()` string path ([`:4477-4480`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L4477-L4480)). Through the **control API** the last call wins, so ordering decides. Through **aomenc's CLI it does not**: five of the bundle's members are applied in a second loop that always runs after every control, so they beat `--tune` from any position (**H-16**). (Contrast the ALL_INTRA defaults, applied in `encoder_init` *before* any control call, so a later control always wins.)
 - **SVT: the mutation is STICKY.** `apply_tune_overrides(&mut self)` only ever *sets*. Reusing one `EncodePipeline` and moving `tune` 3 → 0 leaves `enable_qm`, `sharpness=7`, `variance_boost=true`, strength 3, curve 2 **still set from the IQ cell**. `pipeline.hdr` also reads back different values than were written.
   *DoE action:* **construct a fresh `EncodePipeline` per cell**, and make `tune` the OUTERMOST axis on both backends.
 
@@ -643,6 +649,103 @@ The aom-rs path hardcodes Bt709 / sRGB / Bt601-matrix / full-range in the muxer
 therefore **not a sweepable axis** in the current harness on that arm, and any
 metric computed against a differently-tagged reference inherits that convention.
 
+
+### H-16 — **aomenc precedence is split: five knobs ALWAYS beat `--tune`, six are positional**
+`apps/aomenc.c:1531-1547` runs the **control** loop to completion, *then* the
+**key-val** loop. `--tune` is a control ([`aomenc.c:355`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/apps/aomenc.c#L355)),
+so against the other controls — `--enable-cdef` (`:361`), `--enable-chroma-deltaq`
+(`:369`), `--enable-qm` (`:397`), `--qm-min` (`:398`), `--deltaq-mode` (`:411`) —
+**argv position decides**: `--tune=iq --enable-cdef=1` ⇒ cdef **1**;
+`--enable-cdef=1 --tune=iq` ⇒ cdef **3**. But `--sharpness`, `--dist-metric`,
+`--screen-detection-mode`, `--enable-adaptive-sharpness` and `--auto-tiles` are in
+`av1_key_val_args[]` ([`aomenc.c:461-475`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/apps/aomenc.c#L461-L475)),
+so they run in the **second** loop and **override `--tune` from any position**.
+Two further wrinkles: a repeated control overwrites **in place at its first
+occurrence's slot** (`aomenc.c:896-912`), so `--tune=iq … --tune=psnr` fires
+`psnr` at the *first* tune's position; and `--dist-metric` has no control id at
+all, which is why the port's own C shim routes it through `aom_codec_set_option`
+(`/home/lilith/work/zen/zenav1-aom/crates/aom-sys-ref/shim/dec_shim.c:3462-3475`).
+*DoE action:* **log the resolved `extra_cfg`, never the argv.** Two cells with
+identical option *sets* and different order are different encodes.
+
+### H-17 — deltaq modes 1-5 are silently ignored at `cpu-used ≥ 8` (all-intra)
+Documented upstream: *"Delta q modes 1-5 are unsupported and are **silently
+ignored** in non-RD mode. Non-RD mode is enabled by setting cpu-used >= 8 (all
+intra usage)"* ([`aomcx.h:1147-1149`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/aom/aomcx.h#L1147-L1149)).
+So at `--allintra --cpu-used 8..9`, **only `deltaq-mode=6` survives** — including
+mode 3, which `zenav1-aom` models (`ToggleKnobs::deltaq_mode3`). Nothing in the
+port's axis space forbids that combination, so `deltaq_mode3 × speed ≥ 8` is an
+**inert cell that looks like a measured null**.
+
+### H-18 — `--enable-cdef=3` (ADAPTIVE) is doubly gated, and off entirely below cq 32
+`av1/encoder/pickcdef.c:838-877`: adaptive CDEF applies only when
+`rc mode ∈ {AOM_Q, AOM_CQ}`, is turned **off completely when `cq_level <= 32`**
+(source comment: *"turning off CDEF around qindex 32 was best for still"*), and
+when active **skips chroma CDEF**. Since `tune=iq` forces `enable-cdef=3`, a large
+part of the quality grid has the bundle's CDEF component inert — which is why a
+tune-IQ gate can pass with CDEF overridden off. **Do not read a flat CDEF effect
+at low cq as evidence CDEF does not matter.**
+
+### H-19 — `--denoise-noise-level`'s *value* is discarded in all-intra
+`av1/encoder/encoder.c:4739-4758`: when `mode == ALLINTRA`, the number you passed
+is overwritten by `av1_estimate_noise_level()` on the source, then clamped to
+`[0, 5.0]`. The passed value survives only as a `> 0` **gate**. Sweeping
+`10/20/30/40/50` there measures nothing but the on/off contrast. (It is also
+divided by 10 on the way in, `av1_cx_iface.c:2631-2632`.)
+
+### H-20 — `--min-q=0 --max-q=0` is a back door into lossless that skips the lossless checks
+`is_lossless_requested()` is exactly `best_allowed_q == 0 && worst_allowed_q == 0`
+([`encoder.h:1117-1119`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/encoder/encoder.h#L1117-L1119)),
+so that pair reaches lossless **without** the config-time rejections the explicit
+`--lossless=1` path enforces (`aq_mode != 0`, `enable_chroma_deltaq`; `av1_cx_iface.c:902-907`).
+Do not grid `min-q`, `max-q` and `lossless` as independent factors.
+
+### H-21 — illegal partition sizes: C-release limps, the port aborts
+Upstream validates an **interval**, `RANGE_CHECK(extra_cfg, min_partition_size, 4, 128)`
+([`:931-933`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/av1_cx_iface.c#L931-L933)),
+so a non-power-of-two like 5 or 96 passes and reaches `dim_to_size`, whose
+`default:` arm is `assert(0); return 0;` — abort in debug, silently `BLOCK_4X4`
+in release. The port's `dim_to_bsize` **panics unconditionally**
+(`crates/aom-bench/src/lib.rs:681`). The two sides therefore diverge on illegal
+input. **Restrict the grid to {4,8,16,32,64,128} in the harness; neither side will
+do it for you.**
+
+### H-22 — three defaults traps in one file
+1. **There are TWO `default_extra_cfg` tables.** The non-realtime one is
+   `av1_cx_iface.c:253-407`; a second, for `CONFIG_REALTIME_ONLY=1` builds, is at
+   **`:408-565`** with *different* values (`enable intrabc` **0** at `:517`,
+   `enable angle delta` **0** at `:518`, against 1/1 in the first). Every default
+   in §3 and §5.1 is cited from the **non-RT** table. Never mix them.
+2. **`aomcx.h` states the wrong default for `--disable-trellis-quant`** —
+   [`aomcx.h:716`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/aom/aomcx.h#L716)
+   says *"0 = apply trellis quantization (default)"*; the real default is **3**
+   (`av1_cx_iface.c:289`, and `av1/arg_defs.c:465-469` agrees). Trust the
+   initializer + `arg_defs.c`.
+3. **`--deltaq-mode=2` has three different names in-tree** — "deltaq placeholder"
+   (`arg_defs.c:559-564`), "use modulation for local test" (`aomcx.h:1141`), and
+   `DELTA_Q_PERCEPTUAL` "Modulation to improve video perceptual quality"
+   (`encoder.h:156`). It is fully implemented, and the port byte-matches it.
+
+### H-23 — the QM formulas run in OPPOSITE directions, so `qm-min`/`qm-max` change meaning
+Legacy `aom_get_qmlevel(qindex, first, last) = first + qindex*(last+1-first)/QINDEX_RANGE`
+is **increasing** in qindex; the three still-image formulas
+(`aom_get_qmlevel_allintra`, `_luma_ssimulacra2`, `_444_chroma`) are **decreasing** —
+the source says so outright: *"This is a decreasing function in qindex"*
+([`quant_common.h:61-174`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/av1/common/quant_common.h#L61-L174)).
+The all-intra formula also *"only uses levels 4 through 10, unless qm-min and
+qm-max are both set below or above this range"* — so most of the nominal `0..15`
+range is unreachable in the default still configuration. **A QM sweep must hold
+the selecting branch fixed** (selection at `av1_quantize.c:989-1014`), or
+`qm-min`/`qm-max` mean opposite things in different cells.
+
+### H-24 — `AOM_USAGE_GOOD_QUALITY` collapses cpu-used 7-9 onto 6
+`set_good_speed_features_framesize_independent` ends its ladder at
+`if (speed >= 6)` (`speed_features.c:1466`), while the all-intra ladder runs
+through `if (speed >= 9)` (`:592`). So in GOOD usage, cpu-used 7/8/9 share
+6's framesize-independent speed features — the libaom analogue of **H-2**.
+The current harness already uses `usage = 2` (`AOM_USAGE_ALL_INTRA`); **keep it
+there** and do not add a GOOD arm to the speed axis.
+
 ---
 
 ## 10. PORT-MISSING knobs worth exposing, in priority order
@@ -689,6 +792,9 @@ tunes on aom — build-flag gated upstream and unported; anything multi-frame.
 | **U-5** | Whether SVT `--sharpness`'s upstream domain is genuinely signed `[-7..7]`. | The doc says `[-7-7]`; the port's field is `i8` but **clamped `0..=7` at use** (`pipeline.rs:2091`), so negatives are indistinguishable from 0. Cannot confirm upstream's intent without the C header (U-1). | Same as U-1; then decide whether the port's clamp is a bug. |
 | **U-6** | The `zenav1-aom` `ToggleKnobs` defaults transcribed in §5.1 are the port's, and each doc comment names the upstream C default. **I did not independently verify each stated C default against `upstream/`.** | Transcription risk on ~30 fields; the ones I *did* check against upstream (`enable_palette` 1, `enable_intrabc` 1, `min/max_partition_size` 4/128, `enable_tpl_model` 1) agree. Note `ToggleKnobs`'s **own** defaults for `enable_palette`/`enable_intrabc` are `false`, deliberately unlike C's `1`. | Cross-read each against `upstream/av1/av1_cx_iface.c` `default_extra_cfg`. |
 | **U-7** | Nothing in this dossier was executed. **No encode was run, no byte was compared, no timing was taken.** | This lane is research + source-verification only, by directive. | Everything above is a hypothesis with a source; the DoE lane's first job is the smoke tests named in U-2, U-3, U-4. |
+| **U-8** | What `--tune=vmaf_saliency_map` (9) does on a stock `CONFIG_TUNE_VMAF=0` build. | It passes `validate_config` (the build-flag guard covers only 4..7, `av1_cx_iface.c:884-885`) and its two consumers sit inside `#if CONFIG_SALIENCY_MAP` blocks (`partition_search.c:633-639`, `encoder.c:4306-4310`), so it *looks* inert — but neither lane traced it end to end. | **Keep it out of the grid** until someone does. |
+| **U-9** | Whether `--enable-tx-size-search=0` behaves as documented under `--allintra --cpu-used >= 8`. | [`aomcx.h:1401-1403`](https://github.com/imazen/libaom-mirror/blob/03087864cf4bea6abb0d28f95cf7843511413d8f/aom/aomcx.h#L1401-L1403) says it is ignored in non-RD mode, and the port independently pins it inert there (`config_perm.rs:1595-1606`) — two sources agreeing, neither executed. | Same shape as **H-17**; nest inside speed. |
+| **U-10** | That C libaom is bit-exact across `--threads` values. | Almost certainly **not**: `speed_features.c:2682-2687` forces `mv_cost_upd_level = INTERNAL_COST_UPD_SBROW` when `row_mt == 1 && num_workers > 1`, and `:2731-2740` disables loop restoration at speed ≥ 5 with `num_workers > 1`. Moot for the port (single-threaded, no rayon), but a C-side thread sweep **will move bytes**. | Treat `--threads` as a throughput-only axis, and hold it fixed in any byte-comparing cell. |
 
 ---
 
@@ -701,7 +807,7 @@ and the appendices (Variance-Boost, CommonQuestions, Palette, Intra-Block-Copy,
 Rate-Control, CDEF, Restoration, Film-Grain). libaom was read from the **pinned
 submodule on disk** at `03087864` (= v3.14.1). libavif was read at **v1.4.2**.
 Port claims cite absolute paths + line numbers in the working trees at the
-commits noted in §1.
+commits noted in §1. **Every deep line-link in this document was machine-verified against the bytes it cites** (63 links at first publication, re-verified after this revision); that check caught three libavif citations taken from `main` while citing `v1.4.2`, and two off-by-one libaom lines. The libaom upstream enumeration was performed twice by independent lanes and reconciled — §9's H-16..H-24 and the sharpness/deltaq/CDEF/QM shortlist corrections come from that second pass, which also caught the split `default_extra_cfg` table (**H-22**).
 
 Repos were claimed with `.workongoing` (`claude-knobdocs`) for the read;
 `zenavif` and `zenmetrics` carried a concurrent `claude-permretrofit` marker and
