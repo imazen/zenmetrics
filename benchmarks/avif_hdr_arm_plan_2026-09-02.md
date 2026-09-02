@@ -876,7 +876,7 @@ arms. (There are only 14 live non-default arms; the registered 4,320 = 15 × 9 �
 
 | gate | result |
 |---|---|
-| **G0.1** source integrity | 32 T1 sources, sha256 in the declared `source_sha`; 16 T2 refs sha256'd in the picks TSV |
+| **G0.1** source integrity | **PASS by identity chain** — see below; 16 T2 refs sha256'd in the picks TSV |
 | **G0.2** T2 refs are 16-bit cICP-16 PNG | **76/76 PASS**, re-run at execution via `scripts/hdr_corpus_precheck.py` (exit 0) |
 | **G0.5** primaries balance + disclosure | full-corpus cross-tab reproduced exactly (33 BT.709 / 43 P3; interiors 19/1, nature 8/39); K=16 picks carry **6 BT.709 / 10 P3**, both ≥ 5 |
 | **G1** first-cell artifact | **PASS** — `7/7 cells emitted; encode-fail=0 decode-fail=0 score-fail=0`, 7 distinct `.avif` blobs persisted and scored (ssim2 + zensim) |
@@ -885,6 +885,28 @@ arms. (There are only 14 live non-default arms; the registered 4,320 = 15 × 9 �
 | **G4** producer seam | declared: T1-a reported in two blocks split at speed 6/7 (preset 8 → 9); no BD-rate-vs-speed slope fitted across it |
 | **G6** no silent knob acceptance | unchanged — `hdr.rs:406` still refuses unwired HDR knobs; T1 is the SDR lane and spells knobs through `svt_knobs`, which cannot express an unknown key |
 | **G7** instrument statement | §3.4 and H-BD-4 reproduced in every report carrying a number from this arm |
+
+**G0.1 — the declared sources are the verified ones, by chain rather than by
+re-download.** A cell whose `inputs[0]` sha is not the corpus's is poison, and
+the corpus in the *store* is what workers actually encode. Stage A already
+proved store ≡ local for both corpora (32/32 each, 0 mismatches); rather than
+re-download 864 MB to prove it again, the T1 declarations are chained to those
+verified runs:
+
+| comparison | shared filenames | `source_sha` identical |
+|---|--:|--:|
+| **t1ac vs A0R** (both budget crop) | 32 | **32** |
+| **t1b vs A0R** (both budget crop) | 32 | **32** |
+| **t1d vs AG** (both native) | 32 | **32** |
+| *t1d vs A0R* (cross-corpus — **must** differ) | 32 | **19 identical / 13 differ** |
+
+Every image resolves to exactly one `source_sha` per run (no split identities).
+The last row is the control on the other three: it reproduces the documented
+19-passthrough / 13-genuinely-cropped split **exactly**, which is the third
+independent confirmation of that split in this arm — the first being the
+declared cell-key intersection (57 = 19 × 3 probe-q, §10.4) and the second
+Stage A's own corpus sha comparison. A chain that matched 32/32 everywhere,
+including cross-corpus, would have meant t1d was pointed at the wrong prefix.
 
 **G2 — every T1 cell has a matched 8-bit control, checked at declare time.**
 A BD-rate needs a `(image, speed, q)` partner at depth 8, and T1 declares no
@@ -1023,18 +1045,23 @@ Two consequences carry forward, both from that commit's own warnings:
   takes absolute nits and PU21-encodes in-kernel, so there is no transfer shell
   to select. A T2 invocation that passes it is not selecting anything.
 
-**T2 still did not run, and the remaining reasons are corpus and evidence, not
-wiring.** Stated precisely so the next lane starts from facts:
+**T2 still did not run. One of the three remaining reasons has since been
+closed by this lane; the other two are image and evidence, not wiring.**
+Stated precisely so the next lane starts from facts:
 
-1. **The 16 native references are not in the corpus store.** `codec-corpus/
-   imazen-26-variants/hdr-grid-15scale@2026-08-23/` holds 1,140 `.hdr.png`
-   (76 origins × 15 scales) but its ladder **tops out at 2304×3072** — there is
-   no native rung. §4.3's pool B is the **native** 3000×4000 set, so T2 needs
-   those 16 files staged (~0.6 GB) under their own prefix, or an explicit,
-   registered decision to run at a ladder size instead. Do not silently
-   substitute a 2304 rung for native: §1.2 already flags the derived size grid
-   as **mixed-zensim-era**, and the plan's own T1-d precedent is that reduced
-   size can flip a sign.
+1. ~~The 16 native references are not in the corpus store.~~ **✅ DONE
+   2026-09-02.** The staged HDR ladder
+   (`codec-corpus/imazen-26-variants/hdr-grid-15scale@2026-08-23/`, 1,140
+   files = 76 origins × 15 scales) **tops out at 2304×3072 — there is no native
+   rung**, and §4.3's pool B is the native 3000×4000 set. Substituting a 2304
+   rung was refused rather than done quietly: §1.2 flags that derived grid as
+   **mixed-zensim-era**, and T1-d's own precedent is that reduced size can flip
+   a sign. So the 16 native picks were staged to their own prefix,
+   **`s3://codec-corpus/avif-hbd-t2-refs-2026-09-02/`** (864 MB, 16/16
+   uploaded, 0 failed), and verified two ways: **16/16 store objects are
+   sha256-identical to their local bytes**, and **16/16 of the committed picks
+   TSV's `hdr_sha256` column matches the file bytes** — so the corpus, the
+   manifest and the store agree, which is what G0.1 asks of T2.
 2. **The worker image must be rebuilt on ≥ `7051921a`.** The image this lane
    built and verified (`exec-avifhbd-t1-32e68a8f`) predates the fix, so it would
    score T2 through the u8 shell — silently, since the shell is still the
