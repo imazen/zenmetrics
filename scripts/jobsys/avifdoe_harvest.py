@@ -24,6 +24,18 @@ Usage:
 """
 import argparse, collections, glob, json, os, sys
 
+def sha_key(x):
+    """Normalise an encode identity to its bare content address.
+
+    The two sides disagree on spelling: `zenfleet-ctl pairs` writes a BARE sha in
+    its `encode_sha` column (the full object URI is in `dist_path`), while the
+    score blobs write the full `s3://.../blobs/<sha>` URI into their own
+    `encode_sha` field. Keying on the basename joins them; keying on the raw
+    string silently produces ZERO rows (measured 2026-09-02 — the join returned
+    0 of 111,870 ndjson lines before this was added).
+    """
+    return x.rsplit("/", 1)[-1] if x else x
+
 def parse_label(label):
     """'s4-svt-420-acb1-mtx32' -> (speed=4, chroma='420', devs=['acb1','mtx32'])."""
     parts = label.split("-")
@@ -44,8 +56,14 @@ def main():
     ap.add_argument("--with-features", action="store_true", help="retain the 720-wide zensim vectors")
     a = ap.parse_args()
 
-    # --- cell metadata, from the canonical `zenfleet-ctl pairs` tables -------
-    cell = {}                      # encode_sha_uri -> dict
+    # --- cell rows, from the canonical `zenfleet-ctl pairs` tables ----------
+    # ONE ROW PER CELL, not per bitstream. Encoding is content-addressed, so two
+    # arms whose knobs make no difference to the output share an encode_sha —
+    # 40,896 A1+A2 cells collapse to ~28k distinct blobs. Keying rows on
+    # encode_sha would silently drop one of every such pair and destroy exactly
+    # the "this knob is inert here" signal the DOE is measuring. So cells are the
+    # row set and scores are attached to them, never the other way round.
+    cells = []
     for spec in a.pairs:
         run, path = spec.split("=", 1)
         with open(path) as f:
@@ -56,27 +74,29 @@ def main():
                 kt = json.loads(r[ix["knob_tuple_json"]])
                 lbl = kt.get("cell")
                 speed, chroma, devs = parse_label(lbl)
-                cell[r[ix["encode_sha"]]] = dict(
+                esha = sha_key(r[ix["encode_sha"]])
+                cells.append(dict(
                     run=run, image=r[ix["image_path"]], q=int(r[ix["q"]]),
                     arm=lbl, plan=kt.get("plan"), fp=kt.get("fp"),
                     speed=speed, chroma=chroma,
                     devs="|".join(sorted(devs)) if devs is not None else None,
                     n_dev=len(devs) if devs is not None else None,
-                )
-    print(f"cells from pairs tables: {len(cell)}", file=sys.stderr)
+                    encode_sha=esha,
+                ))
+    print(f"cell rows from pairs tables: {len(cells)}", file=sys.stderr)
+    print("  distinct encode_sha:", len({c["encode_sha"] for c in cells}), file=sys.stderr)
 
     # --- encoded bytes, from the object listing ------------------------------
     size = {}
     with open(a.sizes) as f:
         for line in f:
             k, v = line.rstrip("\n").split("\t")
-            size[k] = int(v)
+            size[sha_key(k)] = int(v)
     print(f"encode sizes: {len(size)}", file=sys.stderr)
 
-    # --- scores -------------------------------------------------------------
-    rows = {}                      # encode_sha -> row
+    # --- scores, keyed by bitstream ------------------------------------------
+    sc = {}
     nblob = nline = 0
-    dropped_no_cell = collections.Counter()
     for p in sorted(glob.glob(os.path.join(a.score_dir, "*"))):
         if not os.path.isfile(p):
             continue
@@ -91,55 +111,47 @@ def main():
                     d = json.loads(line)
                 except Exception:
                     continue
-                esha = d.get("encode_sha")
-                if not esha:
+                raw = d.get("encode_sha")
+                if not raw:
                     continue
-                r = rows.get(esha)
-                if r is None:
-                    meta = cell.get(esha)
-                    if meta is None:
-                        dropped_no_cell[esha.rsplit("/", 3)[1] if "/" in esha else "?"] += 1
-                        continue
-                    r = dict(meta)
-                    r["encode_sha"] = esha
-                    r["bytes"] = size.get(esha)
-                    r["_metrics"] = set()
-                    rows[esha] = r
+                e = sha_key(raw)
+                r = sc.setdefault(e, {"_m": set()})
                 if d.get("kind") == "metric":
                     m = d.get("metric")
                     if m:
-                        r["_metrics"].add(m)
-                        r[f"m_{m}"] = d.get("score")
+                        r["_m"].add(m); r[f"m_{m}"] = d.get("score")
                     for k, v in (d.get("scores") or {}).items():
-                        r["_metrics"].add(k)
-                        r.setdefault(f"m_{k}", v)
+                        r["_m"].add(k); r.setdefault(f"m_{k}", v)
                 elif d.get("kind") == "feature":
-                    r["_metrics"].add("zensim_features")
+                    r["_m"].add("zensim_features")
                     r["feature_regime"] = d.get("regime")
                     if a.with_features:
                         r["features"] = d.get("features")
-    print(f"score blobs read: {nblob}  ndjson lines: {nline}  joined rows: {len(rows)}", file=sys.stderr)
-    if dropped_no_cell:
-        print(f"WARNING dropped (no cell metadata) by run: {dict(dropped_no_cell)}", file=sys.stderr)
+    print(f"score blobs read: {nblob}  ndjson lines: {nline}  scored bitstreams: {len(sc)}", file=sys.stderr)
 
-    metric_cols = sorted({k for r in rows.values() for k in r if k.startswith("m_")})
-    for r in rows.values():
-        r["metrics_present"] = "|".join(sorted(r.pop("_metrics")))
-        for c in metric_cols:
-            r.setdefault(c, None)
-        r.setdefault("feature_regime", None)
+    metric_cols = sorted({k for r in sc.values() for k in r if k.startswith("m_")})
+    out = []
+    for c in cells:
+        s_ = sc.get(c["encode_sha"])
+        c["bytes"] = size.get(c["encode_sha"])
+        c["metrics_present"] = "|".join(sorted(s_["_m"])) if s_ else None
+        c["feature_regime"] = (s_ or {}).get("feature_regime")
+        for k in metric_cols:
+            c[k] = (s_ or {}).get(k)
         if a.with_features:
-            r.setdefault("features", None)
+            c["features"] = (s_ or {}).get("features")
+        out.append(c)
 
     import pyarrow as pa, pyarrow.parquet as pq
-    tbl = pa.Table.from_pylist(list(rows.values()))
+    tbl = pa.Table.from_pylist(out)
     pq.write_table(tbl, a.out, compression="zstd")
     print(f"wrote {a.out}: {tbl.num_rows} rows x {tbl.num_columns} cols", file=sys.stderr)
     print("metrics_present histogram:", file=sys.stderr)
-    for k, v in collections.Counter(r["metrics_present"] for r in rows.values()).most_common():
+    for k, v in collections.Counter(r["metrics_present"] for r in out).most_common():
         print(f"   {v:>7}  {k}", file=sys.stderr)
-    print("rows per run:", dict(collections.Counter(r["run"] for r in rows.values())), file=sys.stderr)
-    print("rows missing bytes:", sum(1 for r in rows.values() if r["bytes"] is None), file=sys.stderr)
+    print("rows per run:", dict(collections.Counter(r["run"] for r in out)), file=sys.stderr)
+    print("rows missing bytes:", sum(1 for r in out if r["bytes"] is None), file=sys.stderr)
+    print("rows UNSCORED (no ssim2):", sum(1 for r in out if r.get("m_ssim2") is None), file=sys.stderr)
 
 if __name__ == "__main__":
     main()
