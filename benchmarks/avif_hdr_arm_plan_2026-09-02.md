@@ -836,7 +836,7 @@ Recorded explicitly so they are greppable, per the docs-update discipline.
 
 ---
 
-## 10. EXECUTION RECORD — Track T1 declared, gated and staged; T2 blocked (2026-09-02)
+## 10. EXECUTION RECORD — Track T1 LAUNCHED and grinding; T2 corpus-blocked (2026-09-02)
 
 Appended by the execution lane. Everything below is measured on this box unless
 it names another. Nothing in §§1–9 is edited; where this section corrects a
@@ -1040,6 +1040,76 @@ is **6,087**, not the 6,144 a naive subtraction gives. Two overlaps:
 > already-done work and cost nothing), but any "does −1.02 % survive native
 > size" statement must be made over the 13 genuinely-cropped images and must
 > report that n. Q4 in §5.1 is answerable only at that n.
+
+### 10.4b LAUNCH — t1ac + t1d running, t1b held at the registered gate
+
+**B-6 cleared at 15:56Z: `total 25056, done 25056, poison 0, gap 0`.**
+
+> **Read the LEDGER, not the blob count.** B-6's `blobs/` prefix held **23,489**
+> objects at gap 0, not 25,056 — blobs are **content-addressed**, so cells whose
+> bitstreams are identical share one object. A blob-count progress meter
+> therefore **converges to less than 100 % by construction** and cannot detect
+> completion. `zenfleet-ctl compact --upload` + `catalog` is the truth;
+> `distinct_done` is the field that matters.
+
+**Launched 15:56:30Z**, image `exec-avifhbd-t1-32e68a8f`, both boxes pre-pulled
+at digest `sha256:92fdaa3a…`:
+
+| run | host | corpus prefix | worker |
+|---|---|---|---|
+| `t1ac` (2,016) | **r7900x** (24T, load 1.28 at launch) | `avif-doe-1024-2026-09-01` | `r7900x-t1ac` |
+| `t1d` (96) | **tower**, capped `cpuset 0-23 / shares 256 / mem 24g` | `avif-subsample-2026-09-01` (NATIVE) | `Tower-t1d` |
+| `t1b` (4,320) | — | — | **HELD PAUSED**, by design |
+
+**Ledger state 16:05:07Z — 8.6 min in:**
+
+| run | total | done | poison | gap |
+|---|--:|--:|--:|--:|
+| `t1ac` | 2,016 | **210** | **0** | 1,806 |
+| `t1d` | 96 | **48** | **0** | 48 |
+| `t1b` | 4,320 | 0 | 0 | 4,320 *(paused — correct)* |
+
+First blob landed **40 s** after launch. **Zero poison on both live runs.**
+
+**G3 ON REAL FLEET BLOBS — the gate this arm exists for.** Six blobs pulled
+back out of `t1ac`'s own `blobs/` prefix and read with `avif_depth_verify`:
+**6/6 PASS at depth 10**, `high_bitdepth = 1`, `twelve_bit = 0`, with the
+**av1C box, the AV1 sequence header and the decoder's `ImageInfo` all agreeing**
+on every file. Negative control on the same six with `--expect-depth 8` exits
+**1**. So the fleet is emitting genuinely 10-bit streams — not a coerced 8-bit
+encode wearing a 10-bit label, which is the whole of hazard H-BD-3.
+
+**Scoring** is the canonical gapfill loop **driven, not forked** —
+`ZEN_DOE_SFRUN=avifdoe-svt-t1-sf-cpu-20260902` with `t1d` mapped to the NATIVE
+refs prefix. Round 1: 30 + 4 DONE cells reduced to pairs, 5 scorefile jobs
+declared, `errors_total=0`, and `t1b` correctly skipped as "0 encode blobs".
+
+**Throughput, measured over 6 minutes on the ladder's HEAD:** t1ac **30.4
+cells/min**, t1d **7.1 cells/min**.
+
+> **⚠ Do NOT extrapolate that linearly, and this arm's own design is why.**
+> Cells are emitted in `svt_doe_main`'s value-per-CPU-second order — speed 4
+> first, **speed 1 last** — precisely because **speed 1 alone is 43.5 % of a
+> seven-speed sweep's encode cost** while being 1/7 of the cells. The measured
+> rate above is therefore the *cheap* end of the ladder. A linear projection
+> gives ~59 min for t1ac; the work-weighted figure is **materially longer**,
+> because s1's 288 cells cost ~0.77× what the other 1,728 cost combined. Stated
+> as an ESTIMATE, not a measurement: expect roughly **1.5–2×** the linear
+> number. The honest per-speed cost split will come out of the run itself, and
+> **A4 — not this arm — is the owner of any speed claim** (§6 caveat b).
+
+**Why t1b stays paused:** §6's cheapest-discriminating-first order. t1ac's s6
+leg and t1d together are the 384 cells that answer "is the effect real at a
+second preset and at native size", which is what gates whether t1b's 4,320
+cells are worth buying at all.
+
+**A note on the precondition, stated rather than glossed.** The registered
+sequencing is that this arm "must not contend for the same workers" as B-6.
+B-6's **encode** wave is at gap 0 and its two boxes (r7900x, tower) went idle —
+that is where T1 launched. B-6's **score** leg is still draining, on the **dev
+box only**, which T1 does not touch and which is saturated at load ~35/32; the
+committed topology note records that dev is deliberately excluded from this
+arm. So the two waves are disjoint by box, not merely by schedule.
 
 ### 10.5 ⛔ TRACK T2 IS SPLIT: T2-b is executable, **T2-a is BLOCKED**
 
