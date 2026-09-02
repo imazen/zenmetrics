@@ -2238,9 +2238,6 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
-dependencies = [
- "foldhash 0.2.0",
-]
 
 [[package]]
 name = "hdrvdp"
@@ -2800,7 +2797,7 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder"
-version = "0.4.0"
+version = "0.3.2"
 dependencies = [
  "archmage",
  "butteraugli",
@@ -2822,7 +2819,7 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder-macros"
-version = "0.4.0"
+version = "0.3.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2831,7 +2828,7 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder-simd"
-version = "0.4.0"
+version = "0.3.2"
 dependencies = [
  "archmage",
  "libm",
@@ -7497,7 +7494,7 @@ dependencies = [
  "byteorder-lite",
  "enough",
  "garb",
- "hashbrown 0.17.1",
+ "hashbrown 0.16.1",
  "libm",
  "linear-srgb",
  "magetypes",

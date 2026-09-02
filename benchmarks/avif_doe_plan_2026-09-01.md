@@ -961,3 +961,163 @@ Consequences and state:
 | G-CROP | every budget-corpus reference has a manifest row with its crop rect + both sha256s, its features **re-extracted from the crop**, and its cluster assignment checked against the parent's — with any class shift recorded, not silently accepted (§2.4) |
 | G-XSIZE | §3.8's T1/T2/T3, run on the AG cells before any A1/A2 conclusion is published. An arm failing T1 is **not** screened at reduced size |
 | G-SCORERATE | the realised per-variant score cost, measured on the first 200 scored variants, re-checked against the §3.7 budget (§7.3 fires on a miss) |
+
+---
+
+## 11. Execution record — 2026-09-02, the post-outage recovery lane
+
+Everything below is measured, in the order it happened. Two gates fired and one
+of them stopped the wave; both are recorded with what they caught.
+
+### 11.1 zenavif compiled for the first time
+
+The knob axis had never been compiled. It needed 10 fixes, all mechanical, none
+touching the design: 4× `E0063` (test-local `Stratum` literals missing the new
+`svt` field — all `Av1Backend::Zenravif` cells, where `SvtParams::default()` is
+inert, so their assertions are unchanged), 1× `E0382` (the safety-invariant test
+borrowed a config after `with_svt_params` consumed it), and 5×
+`clippy::field_reassign_with_default` carrying the same `#[allow]` and rationale
+the sibling test already had. Result: **clippy `-D warnings` clean, 438 tests
+pass, 0 fail, rustfmt clean** (zenavif `dd61d459`).
+
+Both registered safety invariants hold, and the design constants this plan
+asserts are checked by the tests and hold: **17** single-deviation knob sets,
+**17+120 = 137** pairwise sets, **24** strata at one q for `svt_doe_main`.
+
+⚠ **The resume file's build command is wrong and will mislead the next reader**:
+it names a `sweep` feature, which is a *zenmetrics* feature — zenavif has none,
+and gates `pub mod sweep` on `__expert`. The working invocation is
+`cargo test -p zenavif --features encode-svt-rs,__expert`.
+
+### 11.2 Budget corpus — built, but it is NOT the corpus §2.4 describes
+
+`avifdoe_build_budget_corpus.py` produced **32 references, 13 cropped + 19
+native**. §2.4 and the resume file both expect **23 cropped + 9 native**. The
+cause is the passthrough condition:
+
+```python
+if mp <= BUDGET_MP or w <= args.side or h <= args.side:
+```
+
+An image passes through **natively if EITHER dimension is ≤ 1024**, regardless of
+its pixel count — which is a different rule from the comment above it ("never
+crop something already at or under budget"). So every `1024×1536` / `1536×1024`
+pick (1.57 MP, 50 % over budget) and `1440×900` (1.30 MP) is encoded at native
+size. **Measured: 37.02 MP total against the 33.55 MP the budget implies —
++10.3 %, across 10 of 32 references.** That is a modest overshoot, not a
+wave-invalidating one, but §3.9's `α + β·pixels` fit and every CPU-h figure in
+§3.7 are stated against 1.048 MP references and should be read with it.
+
+Two references (`8288.scale375x667`, `8434.scale414x896`) are recorded
+`below_tile_floor=true`: below AV1's 512 px-per-axis floor for a 2×2 tiling, so
+**the tile axis is not measurable on them**. That is correctly recorded in the
+manifest rather than silently degraded.
+
+The corpus is uploaded and verified with the `aws` lister: **32 objects** at
+`s3://codec-corpus/avif-doe-1024-2026-09-01/`.
+
+### 11.3 G-CROP: NOT SATISFIED — and the flag that is supposed to satisfy it is a hole
+
+The builder exits non-zero with `*** G-CROP NOT SATISFIED ***`, which is correct:
+the crops' own features have not been re-extracted. **No A1/A2/A3 conclusion may
+be published until they are.**
+
+But the escape hatch is worse than the gate. `--features-cmd` is documented as
+the way to satisfy G-CROP, and the manifest records `feature_recheck="todo"`
+when it is passed and `"PENDING"` when it is not — while the gate fails only on
+`"PENDING"`. **`avifdoe_build_budget_corpus.py` never executes the command: the
+script imports no `subprocess` and calls nothing.** So passing `--features-cmd`
+flips the manifest to a passing value and satisfies the gate *without extracting
+a single feature* — on the one gate this plan calls "the one place the wave can
+silently change what an image is". Not used here; the corpus carries an honest
+`PENDING`. The flag must either run the command and perform the cluster check,
+or be removed.
+
+### 11.4 Declaration — 49,120 cells, and G-DEDUP explained
+
+| run | plan | q | cells | merged |
+|---|---|--:|--:|--:|
+| `avifdoe-svt-a0r-20260901` | `svt_speed_dense` | 29 | 6,496 | 87 |
+| `avifdoe-svt-a1-20260901` | `svt_doe_main` | 9 | 6,912 | 0 |
+| `avifdoe-svt-a2-20260901` | `svt_doe_pairwise` | 9 | 33,984 | 171 |
+| `avifdoe-svt-ag-20260901` | `svt_doe_transfer` (native corpus) | 3 | 1,728 | 0 |
+
+`invalid_skipped: 0` on all four — the confirmation that `avif-svt` is live in
+the declaring build, since without it every svt stratum would land there.
+
+**G-DEDUP PASSES, but the script's own warning needs a correction.** It says a
+knob plan reporting `duplicates_merged: 0` is a red flag. That is true only for
+plans that can *express* a collision. `svt_doe_main` and `svt_doe_transfer` run
+at `--max-deviations 1`, where no cell spells out two knobs at once, so hazard
+H-4 has nothing to merge and **0 is structurally correct there, not a warning
+sign**. Where the collision is expressible it fires exactly as designed: in the
+pairwise plan `s6-svt-420-tn3` (tune=IQ) absorbed **9** cells that spell out the
+knobs tune 3 forces — `vbst1.2.5`, `vbst1.3.5`, `qml1.4.10`, `qml1.2.10`,
+`qml1.8.15`, `shp3`, `shp7`, `scm3`, `mtx32` — visible in the plan's own
+`aliases` record.
+
+### 11.5 G-FIRSTCELL FAILED, and what it caught
+
+First stage-1 worker on r7900x, one worker, A1 only: **215 ledger rows, 0 blobs,
+every row `status: failed, error_class: encoder_panic`.** The gate did exactly
+its job — this was caught on one worker, not on thirty.
+
+Root cause, established with a control arm rather than assumed: the fleet image
+`ghcr.io/imazen/zenfleet-worker:exec-avifsub-svtaom-4a6876b9` **predates the knob
+axis**. Given a real source file it answers
+`unknown zenavif plan "svt_doe_main"; expected rd_core, modes_full,
+modes_full_alpha, or scalar_dense`. (A first attempt to prove this was
+inconclusive — with an empty sources dir *both* the real and a deliberately
+bogus plan name return `no source files found`, because the source check runs
+first. The control is what showed the test was measuring nothing.) The
+counter-evidence: the same cells encode **24/24, encode-fail=0** through a
+freshly built binary. So the code was fine and the image was stale — the
+opposite of the obvious reading.
+
+**Fix: a new image**, built from a musl-static zenmetrics + zenfleet-worker
+carrying zenavif `dd61d459` and zenmetrics `b0bb8340`, published as a new **tag
+on the existing package** (per the one-package-many-tags rule):
+
+```
+ghcr.io/imazen/zenfleet-worker:exec-avifdoe-svtknobs-b0bb8340
+sha256:a948e4dfabfbdbacd6f2d0b1ff4d5e4520c6b0753173587555ae2b151b1c4be9
+```
+
+Verified before relaunch: it resolves all four new plans, its control arm
+correctly rejects a bogus name *and now lists all eight plans*, and both
+binaries report `statically linked` (the documented glibc trap avoided).
+
+**G-FIRSTCELL then PASSES**: 39 blobs in the first 45 s, and the first blob is a
+well-formed AVIF — `ftypavif` + `mif1miaf` magic, `file(1)` "ISO Media, AVIF
+Image", 241,518 bytes.
+
+**G-CONTROL is verified working, not merely configured**: `control.json` was
+flipped to `paused` mid-incident to stop the failing wave, and the workers
+honoured it. This is the capability the A0 wave lacks.
+
+Two image-build gotchas worth baking into the runbook: r7900x's docker has **no
+buildx**, so `Dockerfile.executor`'s `COPY --chmod` fails on the legacy builder
+(fixed by installing the buildx plugin at user level — the script header's own
+first-choice remedy); and `build_executor_image.sh` treats the
+`zenfleet-worker` overlay as optional ("image keeps base's") while
+`Dockerfile.executor` **COPYs it unconditionally**, so omitting it fails the
+build rather than falling back.
+
+### 11.6 Scoring — the §6 blocking finding is cleared
+
+A capped score worker now runs on tower (`avifsub-score-svt-tower`,
+`--cpuset-cpus=22-23 --cpu-shares=256 --memory=16g`, leaving 8 cores free for
+the household per the tower-safety rule). `avifsub-svt-sf-cpu-20260901` score
+blobs moved **29 → 36 and rising** within minutes, after being flat at 29 for
+the whole preceding wave. Nothing about the score runs needed changing — they
+were correctly declared and refreshed, and simply had no consumer.
+
+### 11.7 Open, and deliberately not done here
+
+- **G-CROP** remains PENDING (§11.3). Encoding is not gated on it; **conclusions
+  are.**
+- The **215 failed A1 ledger rows** from the stale image are still recorded as
+  failures and need a `zenfleet-ctl gap` reconcile pass to be re-declared.
+- **A0R, A2 and AG have manifests and control keys uploaded but no workers yet.**
+  Only A1 is running, on one r7900x worker.
+- **A3 (the aom knob arms)** is untouched, as §5.3 registers.
