@@ -246,20 +246,6 @@ codegen-units = 1
 # different rd than stored data" so the multi-codec sweep
 # re-collects with the post-W44 RD curves rather than reusing
 # the pre-W44 cached sidecars.
-# ⚠ DEV-ONLY PATCH (2026-09-02, avif-hbd arm) — REVERT BEFORE LANDING.
-# zenavif moved zenav1-svt to a git-rev pin today (its Cargo.toml:151-180), and
-# that pin `ef0b122b` PREDATES the issue-#18 fix `3121b6a8` ("bd10 intra
-# prediction must not cross TILE boundaries"). Building against the pin
-# reproduced the defect EXACTLY (-57.049692 on the issue's own 3000x4000 cell),
-# so this arm cannot re-encode on a fixed binary without composing the fix in.
-# This is the recipe zenavif's own comment prescribes, placed here because
-# `[patch]` only takes effect from the workspace root being built.
-# Sibling verified CLEAN at 90fca425a (which has 3121b6a8 as an ancestor), so
-# the "dirty sibling" hazard that motivated the pin does not apply here.
-# The permanent fix is a rev bump in zenavif — another repo's call.
-[patch."https://github.com/imazen/zenav1-svt"]
-zenav1-svt = { path = "../zenav1-svt/rust/svtav1" }
-
 [patch.crates-io]
 # zenpixels / zenpixels-convert: previously git-rev-pinned (e890b671, 0.2.15)
 # because ultrahdr-core needed an unpublished ^0.2.15. DROPPED 2026-07-27:
