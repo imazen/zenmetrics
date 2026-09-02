@@ -55,7 +55,6 @@ pub(crate) fn selected_profile() -> Result<zensim::ZensimProfile, Box<dyn std::e
     }
 }
 
-
 pub(crate) fn score(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
@@ -770,10 +769,17 @@ mod tests {
                         live += 1;
                     }
                 } else {
-                    assert_eq!(a.to_bits(), b.to_bits(), "non-carrier slot {i} differs ({w}×{h})");
+                    assert_eq!(
+                        a.to_bits(),
+                        b.to_bits(),
+                        "non-carrier slot {i} differs ({w}×{h})"
+                    );
                 }
             }
-            assert!(live >= 8, "{w}×{h}: only {live} carrier slots live on a distorted pair");
+            assert!(
+                live >= 8,
+                "{w}×{h}: only {live} carrier slots live on a distorted pair"
+            );
         }
     }
 

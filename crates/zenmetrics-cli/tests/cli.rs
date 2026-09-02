@@ -158,7 +158,13 @@ fn zensim_bake_selector_changes_the_score_and_default_is_unchanged() {
 
     // A bad spec is a hard error, never a silent fall back to the default.
     let bad = cli()
-        .args(["score", "--metric", "zensim", "--zensim-profile", "no-such-profile"])
+        .args([
+            "score",
+            "--metric",
+            "zensim",
+            "--zensim-profile",
+            "no-such-profile",
+        ])
         .arg("--reference")
         .arg(&r)
         .arg("--distorted")
@@ -167,14 +173,18 @@ fn zensim_bake_selector_changes_the_score_and_default_is_unchanged() {
         .expect("run cli");
     assert!(!bad.status.success(), "a bogus --zensim-profile must fail");
     let msg = String::from_utf8_lossy(&bad.stderr);
-    assert!(
-        msg.contains("unknown zensim profile spec"),
-        "stderr={msg}"
-    );
+    assert!(msg.contains("unknown zensim profile spec"), "stderr={msg}");
 
     // …and the two flags are mutually exclusive.
     let both = cli()
-        .args(["score", "--metric", "zensim", "--zensim-profile", "b", "--zensim-bake"])
+        .args([
+            "score",
+            "--metric",
+            "zensim",
+            "--zensim-profile",
+            "b",
+            "--zensim-bake",
+        ])
         .arg(&bake)
         .arg("--reference")
         .arg(&r)

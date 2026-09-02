@@ -131,7 +131,11 @@ fn zensim_regime_for_metric(
         "zensim-foldapp2" => (R::Folded720Append2, "folded720append2", true),
         // 944 with v1's ten carrier slots LIVE (`V1PoolsMode::Carriers`; the
         // `fused944native` regime) — SDR only.
-        "zensim-foldapp2carriers" => (R::Folded720Append2Carriers, "folded720append2carriers", true),
+        "zensim-foldapp2carriers" => (
+            R::Folded720Append2Carriers,
+            "folded720append2carriers",
+            true,
+        ),
         // 944 with ALL 216 of v1's pool slots LIVE (`V1PoolsMode::Full`) — the
         // all-944-live extraction: one pass, one width, every slot. SDR only.
         "zensim-foldapp2pools" => (R::Folded720Append2Pools, "folded720append2pools", true),
