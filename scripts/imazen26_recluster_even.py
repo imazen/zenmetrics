@@ -31,21 +31,28 @@ def leading_id(path):
     return int(tok) if tok.isdigit() else None
 
 
-def load(parquet, parity):
+def load(parquet, parity, crop_label=None):
     pf = pq.ParquetFile(parquet)
     feats = [n for n in pf.schema.names if n.startswith("feat_")]
     content = [n for n in feats if not any(k in n for k in GEOM)]
     t = pq.read_table(
         parquet,
-        columns=["image_path", "crop_label", "content_class", "size_class"] + content,
+        columns=["image_path", "crop_label", "content_class", "size_class",
+                 "width", "height"] + content,
     )
     t = t.filter(pc.equal(t["size_class"], "native"))
     paths = t["image_path"].to_pylist()
     crops = t["crop_label"].to_pylist()
     cc = t["content_class"].to_pylist()
-    # EVEN-only (train) filter at crop granularity — keep every crop_label.
+    widths = t["width"].to_pylist()
+    heights = t["height"].to_pylist()
+    # EVEN-only (train) filter at crop granularity — keep every crop_label,
+    # UNLESS --crop-label restricts to one label (e.g. "full" = whole
+    # uncropped native image, so image_path is directly encode-ready with no
+    # virtual-crop step needed downstream).
     keep = [i for i, p in enumerate(paths)
-            if (leading_id(p) is not None and leading_id(p) % 2 == parity)]
+            if (leading_id(p) is not None and leading_id(p) % 2 == parity
+                and (crop_label is None or crops[i] == crop_label))]
     M = np.empty((len(keep), len(content)), np.float64)
     for j, name in enumerate(content):
         col = t[name].to_numpy(zero_copy_only=False).astype(np.float64)
@@ -53,6 +60,8 @@ def load(parquet, parity):
         med = med if np.isfinite(med) else 0.0
         col = np.where(np.isfinite(col), col, med)
         M[:, j] = col[keep]
+    widths = [widths[i] for i in keep]
+    heights = [heights[i] for i in keep]
     paths = [paths[i] for i in keep]
     crops = [crops[i] for i in keep]
     cc = [cc[i] for i in keep]
@@ -60,7 +69,7 @@ def load(parquet, parity):
     M = M[:, std > 1e-9]
     mu, sd = M.mean(0), M.std(0)
     sd[sd < 1e-9] = 1.0
-    return (M - mu) / sd, paths, crops, cc
+    return (M - mu) / sd, paths, crops, cc, widths, heights
 
 
 def main():
@@ -71,11 +80,17 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--parity", type=int, default=0,
                     help="0 = even (train, default); 1 = odd (holdout)")
+    ap.add_argument("--crop-label", default=None,
+                    help="restrict population to one crop_label before "
+                         "clustering (e.g. 'full' = whole native image, "
+                         "directly encode-ready). Default: no filter "
+                         "(all crop labels, original behavior).")
     a = ap.parse_args()
 
-    Z, paths, crops, cc = load(a.parquet, a.parity)
+    Z, paths, crops, cc, widths, heights = load(a.parquet, a.parity, a.crop_label)
     n = Z.shape[0]
-    print(f"# parity={a.parity} units={n} content_feats={Z.shape[1]}", file=sys.stderr)
+    print(f"# parity={a.parity} crop_label={a.crop_label} units={n} "
+          f"content_feats={Z.shape[1]}", file=sys.stderr)
 
     km = KMeans(n_clusters=a.select_k, n_init=10, random_state=a.seed).fit(Z)
     sizes = np.bincount(km.labels_, minlength=a.select_k)
@@ -86,12 +101,12 @@ def main():
             continue
         d = np.linalg.norm(Z[idx] - km.cluster_centers_[c], axis=1)
         r = int(idx[d.argmin()])
-        rows.append((paths[r], crops[r], cc[r], c, int(sizes[c])))
+        rows.append((paths[r], crops[r], cc[r], c, int(sizes[c]), widths[r], heights[r]))
 
     with open(a.out_manifest, "w") as f:
-        f.write("image_path\tcrop_label\tcontent_class\tcluster_id\tcluster_size\n")
-        for p, cr, klass, cid, sz in rows:
-            f.write(f"{p}\t{cr}\t{klass}\t{cid}\t{sz}\n")
+        f.write("image_path\tcrop_label\tcontent_class\tcluster_id\tcluster_size\twidth\theight\n")
+        for p, cr, klass, cid, sz, w, h in rows:
+            f.write(f"{p}\t{cr}\t{klass}\t{cid}\t{sz}\t{w}\t{h}\n")
 
     odd = sum(1 for r in rows if (leading_id(r[0]) or 0) % 2 == 1)
     distinct = len({r[0] for r in rows})
