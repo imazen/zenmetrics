@@ -251,6 +251,32 @@ big cells cannot finish → rc=124 every pass, zero progress while looking
 alive"), every worker in this wave launches with **`ZEN_PASS_TIMEOUT=14400`**
 (4 h), matching the fix that doc prescribes for exactly this shape of workload.
 
+**Correction found after writing the estimate above (checked before declaring,
+not after): the extreme aom-rs low-speed cost is a SCREEN-CONTENT-DETECTION
+artifact, not a general size/quantizer effect — and both local smoke-test
+images happened to be screenshots.** `imazen/zenav1-aom#14` (the port's
+byte-divergence band, originally filed against 1024×745/1280×800) is
+**CLOSED**: its own resolution states "the '720 ≤ min(w,h) < 1080 band' of the
+title was a coincidence of which train renditions are screen-detected" — the
+real cause was under-costed palette/IntraBC search on screen-detected frames
+(fixed across KB-41 roots #3-#21, census 30/30 → 102/102 → 104/104 byte-exact,
+including the exact repro dimensions). **No `--exclude-min-dim` band exclusion
+is needed for this wave** — the port is validated byte-exact for both photo
+and screen content as of 2026-08-30. What IS still true: screen-detected
+content pays a real throughput tax (IntraBC DV search, "~80 s per 1080p cell at
+cpu6" per the issue's own numbers), not a correctness one. My two tiny smoke
+images (`8288`, `8434`) are **both** `8100-lilith-web-screenshots` content —
+i.e. exactly the class that pays this tax — so the §3 aom-rs low-speed
+estimate (~167 CPU-h, calibrated on those two images) is very likely a
+substantial **overestimate** for the 27/32 picks that are photos, illustrations,
+scans, or product shots (not screen-detected, no DV-search tax). Only 5/32
+picks are `8100-lilith-web-screenshots`; the `7000-lilith-plots` class (6/32 —
+flat-color line art/charts) may or may not trigger the detector and is an open
+question this wave's own data will answer. Not re-measured locally (would cost
+the same serial local time the two-stage launch mandate exists to avoid) — the
+fleet's real per-source, per-speed timing is what lands in the harvest, and
+this note exists so a reader doesn't take the §3 number as tighter than it is.
+
 ## 4. Fleet topology (home LAN + local only — no cloud)
 
 | host | role | capacity used | notes |
