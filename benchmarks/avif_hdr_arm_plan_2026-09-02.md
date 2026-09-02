@@ -1470,6 +1470,71 @@ zenrav1e-backend arm, structurally outside #18. It is the workspace's first
 HDR-10 RD dataset, and with T2-a held it currently stands alone rather than as
 the contrast §4.3 designed it to be.
 
+### 10.4f #18 FULLY FIXED — t2a restarted on the complete fix, and a correction to my own analysis
+
+**`2ca060f4` completes the fix, and my orientation hypothesis was WRONG.** I
+reported the `3121b6a8` residual as orientation-dependent on the strength of
+one pair — 4000×3000 healthy (+88.96) vs 3000×4000 broken (−10.61) at identical
+area and identical sb-aligned area. **That pair was confounded: they are
+different source images** (`1442.scale4000x3000` and `1008.scale3000x4000`), so
+content varied too, and 1442 was already the mildest of the 8 broken cells
+pre-fix (mean +7.88 vs 1008's −59.84). Both shapes resolve to the same 1×2 tile
+grid.
+
+**The real axis was PRESET.** `dr_predict_hbd` — the **directional** HBD intra
+path — derived all four availability predicates from the FRAME while its u8
+twin was tile-scoped. Directional modes only enter the candidate set at
+**presets 0–5**, and every cell I measured sat at speed 4 = **preset 4**, dead
+centre of that band. The lesson I should have drawn from "same area, one
+repaired" was *find the axis that actually separates them*, not *assume the
+one that visibly differs*.
+
+> **META-FINDING, and it is the durable one.** The C-parity axis stayed green
+> through **both** bugs because every one of its cells ran at preset 6/10/13 —
+> outside the directional band. A parity or recon gate that samples only the
+> fast presets cannot see this defect class. **Extend recon/parity coverage
+> DOWN the preset band, not just across sizes.**
+
+**Verified repair** — bd10 q=90, speed 4 (preset 4), portrait over-limit:
+
+| dims | old pin `ef0b122bd` | `+3121b6a8` | **`+2ca060f4`** |
+|---|--:|--:|--:|
+| 3000×4000 | −57.05 | −10.61 | **+90.75** |
+| 3302×4844 | broken | +1.56 | **+75.57** |
+| 3286×4868 | broken | −15.45 | **+81.65** |
+
+The 8-bit control on 3000×4000 is 86.57, so bd10 now **beats** its 8-bit twin
+by +4.18 — which is the arm's whole premise, finally observable.
+
+**The pin was bumped in zenavif, not patched in zenmetrics** (`56179fcb`,
+`ef0b122bd` → `2ca060f42`, `cargo test --workspace` green). The workspace-root
+`[patch]` used for the interim measurement was **reverted** — left in place it
+would silently redirect every other lane's build to a local working copy, the
+exact hazard the pin exists to prevent.
+
+**New gate: `scripts/jobsys/avifhbd_recon_gate.sh`** — bd10 × multi-tile ×
+low-preset, the intersection both bugs hid in. It **refuses a source that does
+not force multi-tile** (a gate that silently ran single-tile would have passed
+through both bugs), and asserts **bd10 ≥ 8-bit − TOL on the same cell**, which
+is self-calibrating rather than a hard-coded quality floor. Verified both ways:
+**PASS** at +4.182 on the fixed binary, **FAIL (exit 1)** at −143.623 when fed
+the recorded pre-fix value.
+
+**Image `exec-avifhbd-t2fix-64252836`** (digest `sha256:81fb81f0…`), statically
+linked, resolves all three `svt_doe_t1_*` plans, and **reproduces the local
+binary exactly in-image (90.755 = 90.755)** on the recon cell.
+
+**t2a restarted as a FRESH RUN, `avifhbd-t2a-fix-20260902`** — 3,248 cells,
+gap 3,248. A fresh identity space rather than a requeue, because the cells are
+content-addressed: re-declaring into the old run would have counted its 120
+**invalid** cells as done and skipped them. The old run stays paused at
+120/3,248 as the annotated invalid record.
+
+**Verified grinding on the fixed image:** first blob 22:16:50Z; three *fleet*
+blobs at q 88/90/92 score **+76.67 / +81.07 / +83.08**, monotone in q, against
+the pre-fix wave's **−67.80 / −66.85 / −64.26**. HDR scoring is re-armed
+(`ZEN_DOE_SCORE_HDR=1`) over both t2a-fix and t2b.
+
 ### 10.5 ⛔ TRACK T2 IS SPLIT: T2-b is executable, **T2-a is BLOCKED**
 
 This is a wiring gap §2.6 did not record, found by reading the source at
