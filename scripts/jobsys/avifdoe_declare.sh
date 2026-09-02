@@ -272,6 +272,47 @@ The worker image MUST know the three `svt_doe_t1_*` plans. An older image
 answers `unknown zenavif plan "svt_doe_t1_bd10_ladder"` and every cell fails
 as an encoder panic -- the same trap B-6 documented. Rebuild + push the
 executor image before launching, and smoke ONE cell first.
+
+  built + verified for this wave:
+    ghcr.io/imazen/zenfleet-worker:exec-avifhbd-t1-32e68a8f
+    (statically linked musl; `sweep --plan NOPE` inside the image lists all
+     three svt_doe_t1_* plans, which is the stale-image check)
+
+RUNBOOK -- ENCODE. One canonical launcher per run; note the CORPUS PREFIX
+differs for t1d and getting it wrong is the silent-garbage hazard that
+avifdoe_score_gapfill.sh's header documents (the two corpora share all 32
+filenames; 13 of them are genuinely different pixels):
+
+  IMG=ghcr.io/imazen/zenfleet-worker:exec-avifhbd-t1-32e68a8f
+  # t1ac + t1b -- the 1024^2 BUDGET corpus
+  ZEN_CORPUS_BUCKET=codec-corpus ZEN_CORPUS_PREFIX=avif-doe-1024-2026-09-01 \
+    bash scripts/jobsys/lan_score_launch.sh <host> avifdoe-svt-t1ac-20260902 t1ac cpu "$IMG"
+  ZEN_CORPUS_BUCKET=codec-corpus ZEN_CORPUS_PREFIX=avif-doe-1024-2026-09-01 \
+    bash scripts/jobsys/lan_score_launch.sh <host> avifdoe-svt-t1b-20260902  t1b  cpu "$IMG"
+  # t1d -- the NATIVE corpus. NOT the budget one.
+  ZEN_CORPUS_BUCKET=codec-corpus ZEN_CORPUS_PREFIX=avif-subsample-2026-09-01 \
+    bash scripts/jobsys/lan_score_launch.sh <host> avifdoe-svt-t1d-20260902  t1d  cpu "$IMG"
+
+Each run is staged with control.json {"paused":true,"drain":true}; flip to
+{"paused":false,"drain":false} to start it. Launch t1ac + t1d FIRST and leave
+t1b paused -- their s6 and native legs are the 384 cells that gate whether
+t1b's 4,320 are worth buying.
+
+RUNBOOK -- SCORE. Do NOT fork the gapfill loop; it is parameterised for
+exactly this reuse. t1d takes the NATIVE refs prefix:
+
+  ZEN_DOE_SFRUN=avifdoe-svt-t1-sf-cpu-20260902 \
+  ZEN_DOE_RUNS="avifdoe-svt-t1ac-20260902=s3://codec-corpus/avif-doe-1024-2026-09-01/ \
+                avifdoe-svt-t1b-20260902=s3://codec-corpus/avif-doe-1024-2026-09-01/ \
+                avifdoe-svt-t1d-20260902=s3://codec-corpus/avif-subsample-2026-09-01/" \
+    bash scripts/jobsys/avifdoe_score_gapfill.sh
+
+GATE G3 before trusting any BD-rate -- a request for depth 10 is not evidence
+of a 10-bit stream:
+
+  cargo build --release -p zenmetrics-cli --example avif_depth_verify \
+    --no-default-features --features avif
+  ./target/release/examples/avif_depth_verify --expect-depth 10 <blobs-dir>/
 T1EOF
   exit 0
 fi
