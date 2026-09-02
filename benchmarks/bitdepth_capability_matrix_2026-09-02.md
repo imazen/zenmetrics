@@ -254,3 +254,169 @@ user-approved. It is queued in zenavif's CHANGELOG under
 break, and carrying §3's upstream facts (zenrav1e supports 12 end to end;
 zenav1-svt refuses it at init, matching C v4.2.0, so
 `reject_out_of_envelope_depth` must refuse early with the C-envelope reason).
+
+---
+
+# APPEND 2026-09-02 (imazen-only lane) — the THREE-BACKEND TRUTH TABLE
+
+Written under USER RULE **"IMAZEN-ONLY IMAGING/CODEC SOFTWARE"**
+(`~/work/zen/CLAUDE.md`, 2026-09-02). It was minted after a session wrongly
+declared zenav1-aom *"validation-only, not a backend"*; this section is the
+ground truth that claim should have been checked against. Everything below is
+read from SOURCE on the refs named, not from docs — and §7.4 lists four places
+where the repo's own docs disagree with its source.
+
+## 7.1 The table
+
+zenavif carries **two distinct backend enums**, which is the first thing that
+makes this easy to get wrong:
+
+- `Av1Backend` (**encode**) — `zenavif/src/encoder.rs:186` — `{ Zenravif, Svtav1
+  (deprecated, never shipped), SvtRs }`
+- `DecodeBackend` (**decode**) — `zenavif/src/decode_av1.rs:491` — `{ Rav1dSafe,
+  AomRs, Rav1dFfi }`
+
+zenavif `main` = `origin/main` = `8f203c1f`. **`default = ["avx512"]` only — no
+backend feature is default, and `encode` itself is not default.**
+
+| backend | op | ref | feature | default? | seam (file:line) | wiring state | tests |
+|---|---|---|---|---|---|---|---|
+| **zenrav1e** | ENCODE | `main` | `encode` | no | `src/encoder.rs:1067` `build_ravif_encoder`; default arm of `encode_rgb8_once` (`:1332`) | **fully wired** — `Av1Backend::Zenravif` is `#[default]`; every public encode entry falls through to it | `encode_roundtrip.rs`, `encode_contracts.rs`, `target_quality.rs`, `two_pass.rs` |
+| zenrav1e | DECODE | — | — | — | **no seam** | encode-only crate | — |
+| **zenav1-svt** | **ENCODE** | `main` | `encode-svt-rs` | no | `src/encoder_svt_rs.rs` (~1300 lines); entries `:814` rgb8, `:965` rgba8, `:1043` rgb16, `:1093` rgba16, `:1147` gray8; dispatched from `src/encoder.rs:1317,1359,1420,1463,1558` | **fully wired, real work** — muxes AVIF in-crate via `zenavif-serialize`; no `todo!()`; out-of-envelope configs get TYPED refusals (`validation.rs:253-330`, `encoder_svt_rs.rs:349,504`); feature off → `Error::Unsupported` (`encoder.rs:1322`) | `tests/svt_rs_backend.rs` (**24**), `cross_backend_decode.rs` svt arms, `validation.rs:384` |
+| zenav1-svt | DECODE | — | — | — | **no seam anywhere** | SVT-AV1 is encoder-only upstream | — |
+| **zenav1-aom** | **DECODE** | `main` | `aom-backend` | no | raw-OBU `src/decode_av1.rs:513/539` → `:548` `AomRs` arm → `:819`; **container** `src/decoder_managed/aom.rs` (`decode_full_aom:44`, `decode_grid_aom:75`), selected by `config.rs:159`, dispatched `decoder_managed/decoder.rs:203,:248`; animation `animation.rs:211/235`; gain-map `decode_av1.rs:58` | **fully wired to the public API** — stills, alpha, grid, animation, gain-map, 8/10/12-bit, mono. Only row-sink streaming refused (`sink.rs:163`, honest `Unsupported`) | `tests/product_aom_backend.rs` (**8**, incl. `animations_`/`grids_decode_identically_across_backends`), `cross_backend_decode.rs` (**7**) |
+| **zenav1-aom** | **ENCODE** | **none — no ref, no branch** | — | — | **NO SEAM EXISTS** | **absent from zenavif entirely** | — |
+| *rav1d-safe* (incumbent) | DECODE | `main` | none (non-optional dep) | **yes** | `decode_av1.rs:546/:557`; `decoder_managed/decoder.rs:101` | fully wired; `DecodeBackend::Rav1dSafe` is the config default (`config.rs:69`) | most of the suite |
+| *rav1d FFI* (C+asm) | DECODE | `main` | `unsafe-asm` | no | `decode_av1.rs:550` → `decoder.rs:503` | **benchmark arm only** — explicitly NOT accepted by `DecoderConfig::decode_backend` (`config.rs:157`) | `examples/decode_4way_bench.rs` |
+
+## 7.2 What PR #31 actually landed — and a date correction
+
+**Merge commit `a311b427a2f6f35b6d03644ae0f678e9c080bad6`**, `svtav1-rs-backend`
+→ `main`, *"feat: AV1 backend seams — svtav1-rs encode + zenav1-aom decode,
+unified ssim2 targeting, in-house YUV kernels"*.
+
+> ⚠ **Merged 2026-08-11T22:52Z, NOT 2026-07-13.** 2026-07-13 is `f5c51d9`, the
+> *branch* commit that introduced the svt encode seam; the aom decode seam
+> followed in `4f18d29` (2026-07-17) and both sat on the branch ~4 weeks. Any
+> statement dating these seams "on main in mid-July" is off by a month. (The
+> imazen-only rule's own parenthetical carries the 07-13 date; the rule's
+> substance — that the backends exist and predate the claim — is unaffected.)
+
+Verified present in the merge commit's tree: the svt encode seam
+(`src/encoder_svt_rs.rs` + `Av1Backend::SvtRs`), the aom decode seam
+(`DecodeBackend` + `aom-backend`), the in-house YUV kernel family (P1–P8),
+backend-generic ssim2 target search, cross-backend byte-identity gates, and
+`docs/BACKEND_SUPPORT_MATRIX.md`.
+
+## 7.3 The aom-ENCODE answer: no seam exists, on any ref, in any state
+
+Four independent lines of evidence:
+
+1. **The encode enum has no aom variant on any ref.** `Av1Backend`'s body was
+   dumped from `main`, `origin/svtav1-rs-backend`,
+   `origin/preserve/2026-07-25-svtav1-rs-backend`,
+   `origin/backup/svtav1-rs-backend-pre-rebase-2026-07-23`,
+   `origin/abandoned/spike-av1-backends-2026-05-23`, `origin/svtav1`,
+   `origin/cooptloop`, `origin/feat/gainmap-decode`. Every ref is
+   `{Zenravif, Svtav1}` or `{Zenravif, Svtav1, SvtRs}`. **Never an `Aom`.**
+2. **`git grep` across every local + remote ref** for
+   `aom_encode|aom-encode|encoder_aom|Av1Backend::Aom|zenav1-aom-encode` returns
+   exactly one hit: `Cargo.toml:448`, a **doc comment** — and itself a typo
+   (`Av1Backend::AomRs`; the function takes `DecodeBackend`). That one string is
+   why a naive grep for "aom encode" looks like a hit.
+3. **The encoder crate is never linked.** zenavif depends only on
+   `aom-decode = { package = "zenav1-aom-decode", path = "../zenav1-aom/crates/aom-decode" }`
+   (`Cargo.toml:105`). The sibling `aom-encode` crate appears in **no manifest on
+   any ref**, so no aom encoder symbol is reachable.
+4. **The only "aom encode" in the repo is the C reference.**
+   `scripts/rd_gap/aom_cell.sh` / `aom_only.sh` shell `aomenc`/`aomdec`
+   (`AOMENC="${AOMENC:?set AOMENC to a libaom aomenc build}"`) for RD-gap
+   baselines — libaom-the-C-project, not zenav1-aom. **Under the new rule these
+   two scripts are themselves a foreign-tool reach; they are RD-gap baselining,
+   not tuning-data generation, but they are named here so the next reader does
+   not mistake them for a port seam.**
+
+**`abandoned/spike-av1-backends-2026-05-23` is not an aom spike.** Single commit
+`669de3c`; it adds `src/backend.rs` (a `pub trait Av1DecoderBackend`) and
+`src/backend_ffmpeg.rs` behind `backend-ffmpeg` — an **ffmpeg shell-out hardware
+DECODE** probe (VA-API/D3D11VA/DXVA2/CUDA) to price HW decode. Nothing to
+salvage for encode.
+
+### TODO — `PREREQ-AOM-STANDALONE` (owner: **zenav1-aom**, not this repo)
+
+Today the ONLY route to zenav1-aom's encoder is `zenmetrics`'s sweep calling
+`aom_bench` / `aom-encode` **directly**, bypassing zenavif. That route is
+C-bound by construction: every `aom-bench` `port_encode*` takes a C-encoded
+`bootstrap` by signature (`zenav1-aom/crates/aom-bench/src/lib.rs:1150,:1176`),
+the screen-content decision is read out of the C stream, and the emitted AVIF
+splices the port payload into the **oracle's** OBU frame
+(`zenmetrics/crates/zenmetrics-cli/src/sweep/encode.rs:1307-1380`). `aom-bench`
+is the port's **differential-validation harness**, not a product encoder API.
+
+So two things are needed, in order, and **neither is this lane's to build**:
+
+1. **`PREREQ-AOM-STANDALONE`** — zenav1-aom exposes an encode entry point that
+   derives its own sequence + frame header (no `bootstrap: &[u8]`), emitting a
+   complete AV1 temporal unit. Owner: zenav1-aom.
+2. **A zenavif `Av1Backend::AomRs` encode seam** — a new variant + `encoder_aom.rs`
+   + an optional `aom-encode` dep + a feature gate. `src/encoder_svt_rs.rs` is
+   the exact template (it is the second encode backend and muxes in-crate via
+   `zenavif-serialize`). Owner: zenavif. **Blocked on (1)**; without it a seam
+   would just relocate the C dependency.
+
+Until (1) lands, the §1 aom-rs ENCODE rows above describe a **C-bootstrapped**
+encoder, and per the imazen-only rule their cells are **port-parity evidence,
+not tuning data**. Registered in
+`benchmarks/avif_doe_plan_2026-09-01.md` §16.
+
+## 7.4 Corrected basis for the §1 "BLOCKED, refused by name" rows
+
+§1's aom-rs sub-row justifies the bd>8 speed refusal as *"DIVERGENT vs the C
+libaom v3.14.1 oracle"*. That is a true fact but the **wrong basis** to state
+under the imazen-only rule, and it misreads the port. Corrected, from the port's
+own record:
+
+- zenav1-aom does **not** class bd10/bd12 × `--cpu-used` 1..=6 as broken. Its
+  coverage queue files that band under tier **T4 — "measured, pinned,
+  unlocalized (byte divergences, NO REFUSAL)"** (`zenav1-aom/CLAUDE.md` T4 table,
+  row `HBD_OPEN` / `b10_64`; the pinned set is
+  `crates/aom-bench/tests/s4cov_qm_axis.rs:380`). The port **encodes** there.
+- The refusal is forced **one level up, by the harness**: with the header spliced
+  from C, a payload that is not byte-identical to C has no stream to emit **at
+  any depth**. It is a harness limit, not a correctness verdict on the port.
+- C-parity is therefore **metadata**, never the admission criterion. Pinned by
+  `sweep::encode::aom_rs_depth_tests::hbd_outside_the_byte_verified_speed_band_is_refused_by_name`,
+  which now asserts the message cites the port-side pin file, names the bootstrap
+  constraint, and carries the disclaimer.
+
+## 7.5 Doc-vs-source discrepancies found while building this table
+
+Recorded, not fixed — three of the four are in zenavif, which this lane read
+read-only.
+
+1. **⚠ `zenavif/src/decoder_managed/aom.rs:25-27` is stale and contradicts the
+   code beneath it.** It reads *"Scope: non-grid stills; grid images and
+   animation return honest `Unsupported`…"*. **False**: `decode_grid_aom` is
+   implemented at `:75` and called at `:47`; animation is implemented at
+   `animation.rs:235` and wired at `:211`; both are pinned by passing tests
+   (`product_aom_backend.rs:163`, `:209`). `docs/BACKEND_SUPPORT_MATRIX.md` is
+   the accurate account; the module doc is the wrong one. **This is very likely
+   the origin of the "validation-only, not a backend" mistake** — it is the
+   comment a reader hits first.
+2. **⚠ PR #31 merge date** — 2026-08-11, not 2026-07-13 (§7.2).
+3. **⚠ `aom-backend` is absent from zenavif's README feature table**
+   (`README.md:286-296` lists `encode`, `encode-asm`, `encode-threading`,
+   `encode-imazen`, `encode-svt-rs`, `unsafe-asm`, `zencodec` — not
+   `aom-backend`), despite it being a wired, public, product-path decode backend.
+   Neither README mentions it at all.
+4. **⚠ `docs/BACKEND_SUPPORT_MATRIX.md`'s header block is stale** — self-dates
+   *"as of 2026-07-23 (branch `svtav1-rs-backend`)"* with rev pins
+   (`zenav1-svt 3e25f52b`, `rav1d-safe f9458f43`, `zenav1-aom 7b972e50`), but its
+   body has been updated since (cites a 2026-08-29 change and open issue #42) and
+   `main`'s real deps differ: `rav1d-safe` is `66f58fa6`, and zenav1-svt +
+   zenav1-aom are **path deps, not rev pins**. Body trustworthy, header not.
+5. **Trap, not a discrepancy:** zenavif's `Cargo.toml` carries **path deps** for
+   both zenav1-svt (`:175`) and zenav1-aom (`:105`), each with an in-file note to
+   return to a git-rev pin before landing. A clone without the siblings present
+   cannot resolve `encode-svt-rs` or `aom-backend`.
