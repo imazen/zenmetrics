@@ -674,7 +674,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             // Projection helpers live in the lib so the Parquet and TSV writers
             // below share ONE owner and cannot drift apart.
-            use zenfleet_ctl::{pairs_encode_sha as sha, pairs_join_prefix as join_pfx, pairs_metric as metric_of};
+            use zenfleet_ctl::{
+                pairs_encode_sha as sha, pairs_join_prefix as join_pfx, pairs_metric as metric_of,
+            };
             let batch = RecordBatch::try_from_iter(vec![
                 (
                     "ref_path",
