@@ -198,14 +198,21 @@ def main():
         if arm == f"s{sp}-svt-420":
             continue
         ctl_arm = f"s{sp}-svt-420"
+        # The source label carries the control ladder's ACTUAL point count, not an
+        # assumed one: A1/A2's in-run control is 9-q, but a Stage-B native block
+        # (svt_doe_b6) carries a 29-q in-run control, and a hardcoded "in-run-9q"
+        # would misreport which instrument produced the number.
+        def _inrun():
+            r = curves.get((run, sp, img, ctl_arm))
+            return r, (f"in-run-{len(r)}q" if r else "in-run-missing")
         if a.control == "inrun":
-            ref, src = curves.get((run, sp, img, ctl_arm)), "in-run-9q"
+            ref, src = _inrun()
         elif a.control == "a0r":
             ref, src = curves.get(("a0r", sp, img, ctl_arm)), "a0r-dense"
         else:
             ref, src = curves.get(("a0r", sp, img, ctl_arm)), "a0r-dense"
             if ref is None or len(ref) < 4:
-                ref, src = curves.get((run, sp, img, ctl_arm)), "in-run-9q"
+                ref, src = _inrun()
         if ref is None:
             continue
         v = bd_rate(frontier(pts), frontier(ref))

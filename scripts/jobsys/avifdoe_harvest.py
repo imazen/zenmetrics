@@ -38,6 +38,8 @@ def sha_key(x):
 
 def parse_label(label):
     """'s4-svt-420-acb1-mtx32' -> (speed=4, chroma='420', devs=['acb1','mtx32'])."""
+    if not label:
+        return None, None, None
     parts = label.split("-")
     if len(parts) < 3 or not parts[0].startswith("s"):
         return None, None, None
@@ -46,6 +48,28 @@ def parse_label(label):
     except ValueError:
         return None, None, None
     return speed, parts[2], [p for p in parts[3:] if p]
+
+# The naive preset x q sweeps (`avifsub-{svt,aom}-enc-*`) predate the DOE plan
+# vocabulary and spell their knob tuple `{"backend":"svt-rs","speed":N}` -- no
+# `cell`, no chroma. They are the DEFAULT-KNOB control at their own size, which
+# is exactly what a Stage-B native wave needs to difference against, so they
+# must be harvestable by the same tool rather than by a fork of it.
+#
+# The synthesized label asserts CHROMA, so it is backed by measurement, not by
+# convention: on run `avifdoe-svt-b6-20260902` the in-run control `sN-svt-420`
+# is byte-identical to `avifsub-svt-enc-20260901` speed N on 928/928 shared
+# (image, q) cells at each of N = 4, 6, 7, and byte-DISTINCT from every other
+# naive speed (2026-09-02, benchmarks/avif_doe_stageB6_analysis_2026-09-02.md
+# section 3). If a future backend's naive sweep is not 4:2:0 by default, that
+# identity check is what will catch it -- run it before trusting this path.
+NAIVE_BACKEND_CHROMA = {"svt-rs": "svt-420", "aom-rs": "aom-420"}
+
+def synth_label(kt):
+    """Naive-sweep knob tuple -> a DOE-vocabulary control label, or None."""
+    sp, be = kt.get("speed"), kt.get("backend")
+    if sp is None or be not in NAIVE_BACKEND_CHROMA:
+        return None
+    return f"s{int(sp)}-{NAIVE_BACKEND_CHROMA[be]}"
 
 def main():
     ap = argparse.ArgumentParser()
@@ -72,7 +96,7 @@ def main():
             for line in f:
                 r = line.rstrip("\n").split("\t")
                 kt = json.loads(r[ix["knob_tuple_json"]])
-                lbl = kt.get("cell")
+                lbl = kt.get("cell") or synth_label(kt)
                 speed, chroma, devs = parse_label(lbl)
                 esha = sha_key(r[ix["encode_sha"]])
                 cells.append(dict(

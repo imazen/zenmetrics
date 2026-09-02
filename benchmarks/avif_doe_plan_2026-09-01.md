@@ -2211,3 +2211,118 @@ discarded. What changes is what may be trained on them.
   same day to cite the port's own record and this harness constraint rather than
   C parity (`sweep/encode.rs`, `aom_rs_depth_tests::hbd_outside_the_byte_
   verified_speed_band_is_refused_by_name`).
+
+---
+
+## 17. B-6 COMPLETE and analysed — the screening failure was miscalibration, not a wrong direction (2026-09-02)
+
+**Record:** [`avif_doe_stageB6_analysis_2026-09-02.md`](avif_doe_stageB6_analysis_2026-09-02.md)
+(+ its `.pointer.md`). This section is the completion note; the record carries
+the tables, gates and limitations. **Analysis lane only — nothing was declared,
+launched or stopped here.**
+
+### 17.1 Completion
+
+| run | declared | live_done | failed-only | verdict |
+|---|--:|--:|--:|---|
+| `avifdoe-svt-b6-20260902` (encode, native) | 25,056 | 25,056 | 0 | COMPLETE |
+| `avifdoe-svt-b6-sf-cpu-20260902` (score, `ssim2,zensim`) | 2,112 | 5,907 | 0 | COMPLETE |
+
+**Score coverage is 100% counted correctly.** The score run's `done > declared`
+is the pre-sort-fix rework echo — score jobs are chunk-keyed, so a
+re-declaration after the chunk sort changed mints new job identities over the
+same cells. Deduped by cell: **23,489 distinct bitstreams, 23,489 scored, 0
+cells missing `ssim2`, 0 missing bytes.** §15.1's declared shape reproduces
+exactly (27 strata × 928, every stratum full).
+
+### 17.2 The registered question, answered
+
+B-6's registered purpose was to find out whether reduced-size screening was
+*miscalibrated* or *directionally wrong* for the two arms that failed T1.
+**Answer: miscalibrated.** On every (speed, knob) cell where **both** legs carry
+an effect above ±0.5%, budget and native agree on **sign 1.000 of the time**.
+
+- **`acb3` is NOT-MEASURED at native, not FAIL.** Only 2 of 11 cropped
+  references clear ±0.5% at speed 4 and **0 of 11** at speed 6. Stage A's
+  T1 = 0.25 was four references that cleared the floor on a **3-point** ladder.
+- **`shp3`'s failure is real and speed-4-specific**: FAIL-T1 at s4 (T1 **0.75**
+  vs the 0.80 bar, up from 0.62) and **PASS at s6** (T1 **1.000**). §4.2's
+  collapsed speed axis is why Stage A could not see this.
+- **T1 has a construction defect.** Its denominator counts a reference by its
+  *native* effect only and asks nothing of the budget leg, so it grades sign
+  agreement against **budget-side noise**. §8.2 named the vanishing-effect half
+  of this; the surviving-effect half is worse and produced one of B-6's two
+  arms. **Registered as a defect, NOT fixed here** — amending a pre-registered
+  bar after seeing results is the coordinator's call.
+
+### 17.3 The knob verdicts
+
+- **`ac_bias`: no native effect at any level.** 12 (speed, level) medians span
+  **−0.03% to +0.39%** BD-rate; at speed 7 every level is within ±0.02%.
+  `acb8` — the unclamped **H-10** level — is genuinely live (byte-identical to
+  the control on only 6.7% of cells, median **+0.559%** bytes, p95 +5.67%),
+  confirming §15.4's probe at corpus scale, and it is **the only `ac_bias` level
+  with a defensible effect and it is a LOSS**. All 2,784 `acb8` cells are flagged
+  as exercising an argument `SvtParams::clamped()` does not clamp.
+- **`sharpness`: a pure bit cost, rising toward the fast presets.** `shp7`
+  **+7.15% / +7.99% / +9.46%** at s4 / s6 / s7; `shp5` +5.57 / +5.67 / +7.52;
+  `shp3` +1.20 / +1.49 / +2.75; **`shp1` free** (+0.00 to +0.23%, moves the
+  bitstream on 90% of cells and its size by +0.000%). Class spread is
+  **10.97 pp** (`shp7` @s6: plot +0.17%, ai-gen +11.13%). **B-3 does not fire**
+  — no B-6 knob has opposite-signed class medians past ±1%.
+- **Neither earns a place in the per-image knob set.** A perfect oracle over all
+  8 levels buys a corpus median **−0.23 / −0.09 / −0.01 pp**; a realistic
+  speed-4-trained rule buys **−0.05 to −0.24 pp**. `ac_bias` is not learnable
+  (per-image sign stable across the three presets on 6–15 of 31 images);
+  `sharpness` is (26–29 of 31) but what is learnable is *"leave it at 0"*.
+  **One lead, n = 1–2**: `7004` and `7058` (both `plot`, 1.05 MP) are where
+  sharpness pays, −7.41% and −5.02% for `shp7` at s7.
+
+### 17.4 QM × sharpness at native — NOT MEASURED, and it stays that way
+
+B-6 carries **no QM axis** and no cross-wave join can manufacture one (Stage A's
+pair cells are 1024² crops whose native twins are provably different pixels:
+0/2,535 byte-identical). What B-6 re-measures is the **sharpness half of the
+additive baseline**, which shifts **−0.39 pp** at corpus level (−1.86 pp on
+cropped references alone, but 19 of 32 references are passthroughs contributing
+exactly zero). A −0.4 pp shift does not overturn §7.1's −5.2 to −5.5% residual,
+so **size is not a plausible explanation for the synergy** — but that is an
+argument about one input, not a measurement. **Confirming it needs a
+`(qml × shp)` grid at native; no declared wave contains one.**
+
+### 17.5 Three corrections this wave owes the record
+
+1. **§15.4's preset column is wrong.** Measured by byte identity against the
+   naive preset × q sweep, the mapping is literal: `s4`↔4, `s6`↔**6**, `s7`↔**7**
+   — **928/928 byte-identical** each, **0/928** against every other naive speed.
+   The CPU-cost measurements in §15.4 are unaffected; only the labels are.
+2. **Stage A §5.3's `6006` / `6018` exclusion is CROP-specific.** At native both
+   are ordinary images — `6006` yields BD-rates at all three speeds and is the
+   *largest* effect in the wave (`shp7` @s7: **+18.72%**); only `6018` at speed 4
+   still degenerates. **A native wave must re-test degeneracy at native rather
+   than inheriting the budget exclusion list.**
+3. **The naive sweep's speeds 7, 8, 9 and 10 are byte-identical** (1–6 are
+   mutually distinct) — the preset saturates at 7, so its speed-8/9/10 strata
+   (630 cells) measure preset 7 three more times. Same *shape* as §3's inert-knob
+   finding but on the **speed** axis. Flagged for the port program; **no issue
+   opened by this lane.**
+
+### 17.6 Budget spent, and what it says about the remaining triggers
+
+B-6 was costed at **13.2 CPU-h encode** (§15.4) against the 60 CPU-h Stage-B
+envelope — **0.22×** — and it retired the two arms §10 called *"the cheapest
+high-value cells"*. It bought: two knobs removed from the tuning-model candidate
+set, a construction defect found in the gate that generates B-6 triggers, and a
+native-size sharpness table that the QM × sharpness follow-up (B-2's strongest
+cluster, ~15,552 cells) would otherwise have had to buy for itself.
+
+**Still undeclared: the other 53 triggers.** Nothing here changes §10.1's 7.5×
+overrun or prioritises what comes next — that remains the coordinator's decision.
+Two inputs this wave adds:
+
+- **Anything keyed on `acb3` or `shp3` at reduced size should be re-scoped or
+  dropped**, and the same question should be asked of the 3 NOT-MEASURED arms
+  (`acb1`, `tl1.0`, `tl1.1`): their verdict may likewise be "no effect to
+  transfer" rather than "untested".
+- **B-2's QM × sharpness cluster is now the only route to the synergy question**,
+  and B-6 has removed the concern that its residual is a size artefact.
