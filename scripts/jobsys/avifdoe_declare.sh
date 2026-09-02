@@ -278,6 +278,22 @@ executor image before launching, and smoke ONE cell first.
     (statically linked musl; `sweep --plan NOPE` inside the image lists all
      three svt_doe_t1_* plans, which is the stale-image check)
 
+RUNBOOK -- STAGE. A declared run needs THREE objects at its prefix, not two.
+`declare-encodes` writes the manifest locally; upload it, upload a control.json,
+and then MAKE THE LEDGER SNAPSHOT -- `lan_score_launch.sh` sets
+ZEN_REQUIRE_SNAPSHOT=1 by default ("strict for single-run queues"), so a run
+with no `ledger_snapshot.parquet` at its root is REFUSED BY EVERY WORKER:
+
+  for r in t1ac t1b t1d; do
+    RUN=avifdoe-svt-$r-20260902
+    aws s3 cp --endpoint-url "$ZEN_S3_ENDPOINT" \
+      $OUT/${RUN}_manifest.json s3://zentrain/jobs/$RUN/manifest.json
+    echo '{"paused":true,"drain":true}' | \
+      aws s3 cp --endpoint-url "$ZEN_S3_ENDPOINT" - s3://zentrain/jobs/$RUN/control.json
+    ./target/release/zenfleet-ctl compact --run "$RUN" --bucket zentrain \
+      --endpoint "$ZEN_S3_ENDPOINT" --upload      # <-- the ledger_snapshot.parquet
+  done
+
 RUNBOOK -- ENCODE. One canonical launcher per run; note the CORPUS PREFIX
 differs for t1d and getting it wrong is the silent-garbage hazard that
 avifdoe_score_gapfill.sh's header documents (the two corpora share all 32
