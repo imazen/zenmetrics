@@ -1098,6 +1098,25 @@ cells/min**, t1d **7.1 cells/min**.
 > number. The honest per-speed cost split will come out of the run itself, and
 > **A4 — not this arm — is the owner of any speed claim** (§6 caveat b).
 
+**STATE AT 16:17:56Z (21 min in) — the pipeline is live end-to-end:**
+
+| run | total | done | poison | gap | where |
+|---|--:|--:|--:|--:|---|
+| `t1ac` | 2,016 | 726 | **0** | 1,290 | r7900x, grinding |
+| **`t1d`** | 96 | **96** | **0** | **0** | ✅ **COMPLETE** |
+| `t1b` | 4,320 | 0 | 0 | 4,320 | held paused |
+| `t1-sf-cpu` (score) | — | 12 blobs | — | — | tower, grinding |
+
+**T1-d is done** — the cross-size transfer gate's 96 native cells, in ~20
+minutes. **G3 re-run on its blobs, which are a different corpus and a different
+size class from t1ac's: 8/8 PASS at depth 10**, negative control at
+`--expect-depth 8` exits 1.
+
+When t1d finished, tower was **repointed to scoring** rather than left idle
+(`zen-score-t1sf`), so encode and score now run on separate boxes: t1ac encodes
+on r7900x, T1's scorefiles drain on tower, and the dev box is left entirely to
+B-6's score leg. First T1 score blob landed within seconds of that launch.
+
 **Why t1b stays paused:** §6's cheapest-discriminating-first order. t1ac's s6
 leg and t1d together are the 384 cells that answer "is the effect real at a
 second preset and at native size", which is what gates whether t1b's 4,320
