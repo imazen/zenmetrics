@@ -1788,7 +1788,19 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             // routing it here would silently re-anchor it. Dssim has no HDR
             // path by design and is refused downstream. Anything the umbrella
             // cannot express returns `None` and falls through to the shell.
+            //
+            // EXCLUDED WHEN THE ZENSIM FEATURE SIDECAR IS REQUESTED. That path
+            // owns the score AND the features together, and stamps the pair
+            // with a `feature_regime` column; taking the faithful route for
+            // the scalar while the features still came from the u8 shell would
+            // write a sidecar whose `zensim_score` and `feat_*` disagree about
+            // which regime produced them. So the feature path's regime wins for
+            // the whole row — `--hdr-features-pu-linear` for the PU-linear
+            // regime, the u8 shell otherwise. Changing the u8-shell feature
+            // regime is a DATA decision (trained models consume those vectors),
+            // not a routing one, and is deliberately not made here.
             if faithful_hdr_result.is_none()
+                && !(feature_writer.is_some() && metric_is_zensim)
                 && !matches!(
                     args.metric,
                     crate::metrics::MetricKind::Cvvdp | crate::metrics::MetricKind::Dssim

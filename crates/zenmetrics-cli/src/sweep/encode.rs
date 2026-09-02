@@ -1170,6 +1170,22 @@ pub(crate) fn aom_rs_cq_level(q: f64) -> i32 {
     (((100.0 - q) * 63.0 / 100.0).round() as i32).clamp(1, 63)
 }
 
+/// Promote an 8-bit sample to `bd` bits by BIT REPLICATION.
+///
+/// `(v << k) | (v >> (8 - k))` maps 255 to `(1 << bd) - 1` exactly, where a
+/// bare `v << k` tops out at 1020 of 1023 (bd 10) or 4080 of 4095 (bd 12) and
+/// leaves every promoted image fractionally dark with no reachable white
+/// point. At `bd == 8`, `k == 0` and `v >> 8` is 0 for a u8-valued u16, so the
+/// expression is the identity and the 8-bit path is byte-unchanged.
+///
+/// `bd` must be 8, 10 or 12 — the caller validates it before this point.
+#[cfg(all(feature = "sweep", feature = "avif-aom"))]
+pub(crate) fn promote_u8_to_depth(v: u8, bd: u64) -> u16 {
+    let k = (bd - 8) as u32;
+    let v = u16::from(v);
+    (v << k) | (v >> (8 - k))
+}
+
 #[cfg(all(feature = "sweep", feature = "avif-aom"))]
 fn encode_avif_aom_rs(
     source: &Rgb8Image,
@@ -1184,11 +1200,11 @@ fn encode_avif_aom_rs(
 
     if let Some(unknown) = knobs
         .keys()
-        .find(|k| !["backend", "speed"].contains(&k.as_str()))
+        .find(|k| !["backend", "speed", "bd"].contains(&k.as_str()))
     {
         return Err(format!(
-            "zenavif aom-rs backend: knob '{unknown}' is not wired (supported: backend, speed); \
-             refusing to silently ignore it"
+            "zenavif aom-rs backend: knob '{unknown}' is not wired (supported: backend, speed, \
+             bd); refusing to silently ignore it"
         )
         .into());
     }
@@ -1196,6 +1212,34 @@ fn encode_avif_aom_rs(
     if speed > 9 {
         return Err(format!(
             "aom-rs speed={speed} out of the byte-verified --cpu-used range 0..=9"
+        )
+        .into());
+    }
+    let bd = knobs.get("bd").and_then(Value::as_u64).unwrap_or(8);
+    if !matches!(bd, 8 | 10 | 12) {
+        return Err(format!("aom-rs bd={bd} is not an AV1 bit depth (8, 10 or 12)").into());
+    }
+    // The port's high-bit-depth encode is REAL — genuine highbd quantizers
+    // (`aom-encode/src/lib.rs:416` `let hbd = qp.bd > 8`, into the eight
+    // `aom_highbd_*` entry points), u16 planes end to end, and no refusal or
+    // narrowing anywhere — but it is byte-exact against the C libaom v3.14.1
+    // oracle only at `--cpu-used` 0, 7, 8 and 9. zenav1-aom pins speeds 1..=6
+    // as DIVERGENT for both bd10 and bd12 (`config_permutations.rs` `b10_64`
+    // context, enforced by the un-ignored `speed_envelope_stock_map_is_pinned`;
+    // coverage-queue entry HBD_OPEN, `zenav1-aom/CLAUDE.md`).
+    //
+    // Refuse the divergent band HERE, by name. Without this the cell would
+    // still fail — the port-vs-oracle payload compare below refuses any
+    // mismatch — but it would fail as an anonymous "PORT DIVERGED" after
+    // paying for a full C oracle encode plus a port encode, and a reader would
+    // have no way to tell a known-open speed from a new regression.
+    const HBD_BYTE_VERIFIED_SPEEDS: [u64; 4] = [0, 7, 8, 9];
+    if bd > 8 && !HBD_BYTE_VERIFIED_SPEEDS.contains(&speed) {
+        return Err(format!(
+            "aom-rs bd={bd} at speed={speed}: zenav1-aom's high-bit-depth encode is byte-verified \
+             against the C oracle only at --cpu-used {HBD_BYTE_VERIFIED_SPEEDS:?} (1..=6 are \
+             PINNED divergent for bd10 and bd12 — HBD_OPEN, luma-borne, unlocalized). Declare an \
+             HBD cell at one of those speeds, or leave bd unset for 8-bit"
         )
         .into());
     }
@@ -1215,8 +1259,22 @@ fn encode_avif_aom_rs(
         w,
         h,
     );
+    // Promote the 8-bit source to the coded depth by BIT REPLICATION, not a
+    // bare shift: `(v << k) | (v >> (8 - k))` maps 255 to (1 << bd) - 1
+    // exactly, where `v << k` alone would top out at 1020 of 1023 and make
+    // every 10-bit encode fractionally dark with no white point. At bd = 8,
+    // k = 0 and `v >> 8` is 0 for a u8-valued u16, so the same expression is
+    // the identity — the 8-bit path is byte-unchanged.
+    //
+    // NOTE what this cell measures: the SOURCE is 8-bit (the sweep lane's
+    // `Rgb8Image` funnel), so a bd10 cell is "encode 8-bit content at 10-bit
+    // internal depth" — the standard AVIF production trick, where the gain is
+    // the codec's own transform/prediction/loop-filter precision. It is NOT
+    // evidence that a high-bit-depth INPUT path works; nothing here reads a
+    // >8-bit source.
+    let promote = |v: u8| promote_u8_to_depth(v, bd);
     let cell = EncodeCell {
-        label: format!("aom-rs {w}x{h} cq{cq_level} s{speed}"),
+        label: format!("aom-rs {w}x{h} cq{cq_level} s{speed} bd{bd}"),
         w,
         h,
         mono: false,
@@ -1225,10 +1283,10 @@ fn encode_avif_aom_rs(
         usage: 2, // AOM_USAGE_ALL_INTRA — the avifenc still-image mode
         cq_level,
         speed: speed as i32,
-        bd: 8,
-        y: y8.iter().map(|&v| u16::from(v)).collect(),
-        u: u8p.iter().map(|&v| u16::from(v)).collect(),
-        v: v8p.iter().map(|&v| u16::from(v)).collect(),
+        bd: bd as u8,
+        y: y8.iter().copied().map(promote).collect(),
+        u: u8p.iter().copied().map(promote).collect(),
+        v: v8p.iter().copied().map(promote).collect(),
     };
     // Diagnostic: ZEN_AOMRS_DUMP_PLANES=<dir> writes the exact u8 planes the
     // port + oracle are fed (<w>x<h>_cq<cq>_s<speed>.{y,u,v,json}) so a
@@ -1342,7 +1400,10 @@ fn encode_avif_aom_rs(
         .set_transfer_characteristics(zenavif_serialize::constants::TransferCharacteristics::Srgb)
         .set_matrix_coefficients(zenavif_serialize::constants::MatrixCoefficients::Bt601)
         .set_full_color_range(true);
-    let bytes = aviffy.to_vec(&obus, None, source.width, source.height, 8);
+    // The container's `pixi`/`av1C` depth must match the coded depth, or the
+    // file lies about itself to every decoder that reads the container before
+    // the sequence header.
+    let bytes = aviffy.to_vec(&obus, None, source.width, source.height, bd as u8);
     let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
     Ok(EncodedCell { bytes, encode_ms })
 }
@@ -1644,5 +1705,208 @@ mod jpeg_knob_tests {
         let mut knobs = Map::new();
         knobs.insert("trellis".into(), serde_json::json!({"speed": "warp"}));
         assert!(encode_jpeg(&tiny_image(), 75.0, &knobs).is_err());
+    }
+}
+
+#[cfg(all(test, feature = "sweep", feature = "avif-aom"))]
+mod aom_rs_depth_tests {
+    use super::*;
+
+    fn knobs(pairs: &[(&str, Value)]) -> Map<String, Value> {
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), v.clone()))
+            .collect()
+    }
+
+    /// A small smooth gradient — enough structure for a real encode, small
+    /// enough that the C oracle encode is cheap.
+    fn source(w: u32, h: u32) -> Rgb8Image {
+        let mut pixels = Vec::with_capacity((w * h * 3) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                let t = ((x + y) * 255 / (w + h - 2)) as u8;
+                pixels.extend_from_slice(&[t, t.wrapping_add(20), t.wrapping_add(40)]);
+            }
+        }
+        Rgb8Image {
+            pixels,
+            width: w,
+            height: h,
+        }
+    }
+
+    /// Bit replication must hit the endpoints exactly, and must be the
+    /// identity at 8 bits (so wiring the knob cannot move an 8-bit cell).
+    #[test]
+    fn promotion_maps_endpoints_exactly_and_is_identity_at_8_bit() {
+        for v in [0u8, 1, 127, 128, 254, 255] {
+            assert_eq!(
+                promote_u8_to_depth(v, 8),
+                u16::from(v),
+                "bd8 must be identity"
+            );
+        }
+        assert_eq!(promote_u8_to_depth(0, 10), 0);
+        assert_eq!(
+            promote_u8_to_depth(255, 10),
+            1023,
+            "white must reach the 10-bit maximum"
+        );
+        assert_eq!(promote_u8_to_depth(0, 12), 0);
+        assert_eq!(
+            promote_u8_to_depth(255, 12),
+            4095,
+            "white must reach the 12-bit maximum"
+        );
+        // Monotone, and never above the depth's range.
+        for bd in [10u64, 12] {
+            let max = (1u16 << bd) - 1;
+            let mut prev = 0u16;
+            for v in 0..=255u8 {
+                let p = promote_u8_to_depth(v, bd);
+                assert!(p >= prev && p <= max, "bd{bd} v{v} -> {p}");
+                prev = p;
+            }
+        }
+    }
+
+    /// The divergent-band refusal. zenav1-aom pins `--cpu-used` 1..=6 as
+    /// DIVERGENT for bd10 and bd12; a cell declared there must fail by NAME,
+    /// before paying for an oracle encode.
+    #[test]
+    fn hbd_outside_the_byte_verified_speed_band_is_refused_by_name() {
+        for bd in [10u64, 12] {
+            for speed in [1u64, 2, 3, 4, 5, 6] {
+                let k = knobs(&[
+                    ("backend", Value::from("aom-rs")),
+                    ("speed", Value::from(speed)),
+                    ("bd", Value::from(bd)),
+                ]);
+                let err = encode_avif_aom_rs(&source(32, 32), 60.0, &k)
+                    .expect_err("bd>8 in the divergent band must be refused");
+                let msg = err.to_string();
+                assert!(
+                    msg.contains("byte-verified") && msg.contains("HBD_OPEN"),
+                    "bd{bd} s{speed}: refusal must name the band and the open entry, got: {msg}"
+                );
+            }
+        }
+    }
+
+    /// ...and only there: the verified speeds must NOT be refused by that gate.
+    #[test]
+    fn hbd_inside_the_byte_verified_speed_band_is_not_refused_by_the_band_gate() {
+        for speed in [0u64, 7, 8, 9] {
+            let k = knobs(&[
+                ("backend", Value::from("aom-rs")),
+                ("speed", Value::from(speed)),
+                ("bd", Value::from(10u64)),
+            ]);
+            if let Err(e) = encode_avif_aom_rs(&source(32, 32), 60.0, &k) {
+                let msg = e.to_string();
+                assert!(
+                    !msg.contains("byte-verified"),
+                    "speed {speed} is in the verified band and must not hit the band gate: {msg}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_non_av1_bit_depth_is_refused() {
+        for bd in [0u64, 7, 9, 11, 16] {
+            let k = knobs(&[
+                ("backend", Value::from("aom-rs")),
+                ("speed", Value::from(9u64)),
+                ("bd", Value::from(bd)),
+            ]);
+            let err = encode_avif_aom_rs(&source(32, 32), 60.0, &k)
+                .expect_err("a non-AV1 bit depth must be refused");
+            assert!(err.to_string().contains("not an AV1 bit depth"), "{err}");
+        }
+    }
+
+    /// The 8-bit path must be byte-unchanged by the knob's existence: omitting
+    /// `bd` and passing `bd: 8` must produce the identical blob. Together with
+    /// `promotion_maps_endpoints_exactly_and_is_identity_at_8_bit` this is the
+    /// no-regression proof for every already-declared aom-rs cell.
+    #[test]
+    fn omitting_bd_is_exactly_bd8() {
+        let src = source(64, 64);
+        let base = encode_avif_aom_rs(
+            &src,
+            60.0,
+            &knobs(&[
+                ("backend", Value::from("aom-rs")),
+                ("speed", Value::from(9u64)),
+            ]),
+        )
+        .expect("default encode");
+        let explicit = encode_avif_aom_rs(
+            &src,
+            60.0,
+            &knobs(&[
+                ("backend", Value::from("aom-rs")),
+                ("speed", Value::from(9u64)),
+                ("bd", Value::from(8u64)),
+            ]),
+        )
+        .expect("bd8 encode");
+        assert!(
+            base.bytes == explicit.bytes,
+            "omitting bd ({} B) must equal bd=8 ({} B)",
+            base.bytes.len(),
+            explicit.bytes.len()
+        );
+    }
+
+    /// THE READ-BACK GATE. A depth REQUEST is not evidence of a deep stream —
+    /// the only admissible evidence is a read from the emitted bitstream. Reads
+    /// `av1C` back through `zenavif_parse` (the same R1 route
+    /// `examples/avif_depth_verify.rs` gate G3 uses; not re-implemented here).
+    ///
+    /// Anti-vacuity: the bd8/bd10/bd12 blobs must also be pairwise DIFFERENT, so
+    /// a wiring bug that emitted the same 8-bit stream three times while
+    /// relabelling the container cannot pass.
+    ///
+    /// 12-bit is included because it is REAL on this backend, not aspirational:
+    /// zenav1-aom carries `encoder_gate_bd12_mono` and
+    /// `encoder_gate_bd10_bd12_420` in its DEFAULT (un-ignored) test tier, and
+    /// every cell here is compared byte-for-byte against the C libaom v3.14.1
+    /// oracle before any bytes are emitted. (zenavif's own `EncodeBitDepth` has
+    /// no `Twelve` and SVT-AV1 refuses 12 at init — those are different
+    /// backends; see the capability matrix in
+    /// `benchmarks/bitdepth_capability_matrix_2026-09-02.md`.)
+    #[test]
+    fn emitted_bitstream_carries_the_requested_depth() {
+        let src = source(64, 64);
+        let mut blobs = Vec::new();
+        for bd in [8u64, 10, 12] {
+            let k = knobs(&[
+                ("backend", Value::from("aom-rs")),
+                ("speed", Value::from(9u64)),
+                ("bd", Value::from(bd)),
+            ]);
+            let cell =
+                encode_avif_aom_rs(&src, 60.0, &k).unwrap_or_else(|e| panic!("bd{bd} encode: {e}"));
+            let parser = zenavif_parse::AvifParser::from_bytes(&cell.bytes)
+                .unwrap_or_else(|e| panic!("bd{bd}: container parse: {e}"));
+            let cfg = parser
+                .av1_config()
+                .unwrap_or_else(|| panic!("bd{bd}: emitted AVIF declares no av1C"));
+            assert_eq!(
+                u64::from(cfg.bit_depth),
+                bd,
+                "requested bd{bd} but the emitted av1C reads {}",
+                cfg.bit_depth
+            );
+            blobs.push(cell.bytes);
+        }
+        assert!(
+            blobs[0] != blobs[1] && blobs[1] != blobs[2] && blobs[0] != blobs[2],
+            "two of the bd8/bd10/bd12 encodes produced identical bytes — the depth \
+             knob is relabelling the container without changing the encode"
+        );
     }
 }
