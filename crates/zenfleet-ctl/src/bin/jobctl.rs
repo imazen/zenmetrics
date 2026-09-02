@@ -661,44 +661,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for r in rows {
                 view.apply(r);
             }
-            let done: Vec<&zenfleet_core::LedgerRow> = view
-                .rows()
-                .filter(|r| r.status == zenfleet_core::JobStatus::Done)
-                .collect();
+            // TOTAL, content-derived row order. Without it this table's ORDER is
+            // HashMap-random, and declare-scorefiles turns that order into job
+            // IDENTITY — see `zenfleet_ctl::pairs_done_sorted` for the mechanism
+            // and the measured 4.0x re-work it caused.
+            let done = zenfleet_ctl::pairs_done_sorted(&view);
             let skipped_jobs = view.rows().count() - done.len();
             use arrow_array::{ArrayRef, Int64Array, RecordBatch, StringArray};
             use std::sync::Arc;
             let s_col = |f: &dyn Fn(&zenfleet_core::LedgerRow) -> String| -> ArrayRef {
                 Arc::new(StringArray::from_iter_values(done.iter().map(|r| f(r))))
             };
-            // Full-URI declares store ABSOLUTE s3:// paths in cell.image_path —
-            // prefixing those would double-prefix (hdrgrid diffmap endgame,
-            // 2026-08-27). Join verbatim when the value is already absolute.
-            let join_pfx = |pfx: &str, v: &str| -> String {
-                if v.starts_with("s3://") || pfx.is_empty() {
-                    v.to_string()
-                } else {
-                    format!("{pfx}/{v}")
-                }
-            };
-            let sha = |r: &zenfleet_core::LedgerRow| {
-                r.output_sha
-                    .as_ref()
-                    .map(|s| s.as_str().to_string())
-                    .unwrap_or_default()
-            };
-            // Metric column: a diffmap/metric run has one DONE row per (cell x
-            // metric) sharing the cell identity — without this column the join
-            // table cannot tell a butteraugli map from a cvvdp map (endgame of
-            // hdrgrid-diffmap-20260807, 2026-08-27). Empty for encode rows.
-            let metric_of = |r: &zenfleet_core::LedgerRow| -> String {
-                match &r.kind {
-                    zenfleet_core::JobKind::Diffmap { metric, .. }
-                    | zenfleet_core::JobKind::Metric { metric } => metric.clone(),
-                    zenfleet_core::JobKind::ScoreFile { metrics, .. } => metrics.join("+"),
-                    _ => String::new(),
-                }
-            };
+            // Projection helpers live in the lib so the Parquet and TSV writers
+            // below share ONE owner and cannot drift apart.
+            use zenfleet_ctl::{pairs_encode_sha as sha, pairs_join_prefix as join_pfx, pairs_metric as metric_of};
             let batch = RecordBatch::try_from_iter(vec![
                 (
                     "ref_path",
@@ -731,27 +707,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut w = ArrowWriter::try_new(f, batch.schema(), Some(props))?;
             w.write(&batch)?;
             w.close()?;
-            let mut tsv = String::from(
-                "ref_path\tdist_path\timage_path\tcodec\tq\tknob_tuple_json\tencode_sha\tmetric\tworker\tprovider\n",
-            );
-            for r in &done {
-                use std::fmt::Write as _;
-                let _ = writeln!(
-                    tsv,
-                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                    join_pfx(refs_prefix, &r.cell.image_path),
-                    join_pfx(blobs_prefix, &sha(r)),
-                    r.cell.image_path,
-                    r.cell.codec,
-                    r.cell.q,
-                    r.cell.knob_tuple_json,
-                    sha(r),
-                    metric_of(r),
-                    r.worker,
-                    r.provider
-                );
-            }
-            std::fs::write(format!("{out}.tsv"), tsv)?;
+            std::fs::write(
+                format!("{out}.tsv"),
+                zenfleet_ctl::pairs_tsv(&done, refs_prefix, blobs_prefix),
+            )?;
             println!(
                 "pairs: {} DONE cells ({skipped_jobs} non-done job_ids skipped) from {nfiles} ledger rows -> {out}.parquet / .tsv",
                 done.len()

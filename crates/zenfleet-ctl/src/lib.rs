@@ -774,6 +774,132 @@ mod tests {
     }
 }
 
+// ─── the `pairs` projection: the Encode→ScoreFile bridge ─────────────────────
+
+/// Join a prefix onto a ledger value, leaving an already-absolute URI verbatim.
+///
+/// Full-URI declares store ABSOLUTE `s3://` paths in `cell.image_path` — blindly
+/// prefixing those double-prefixes them (hdrgrid diffmap endgame, 2026-08-27).
+pub fn pairs_join_prefix(prefix: &str, value: &str) -> String {
+    if value.starts_with("s3://") || prefix.is_empty() {
+        value.to_string()
+    } else {
+        format!("{prefix}/{value}")
+    }
+}
+
+/// The encode content hash of a DONE row (empty when the row carries none).
+pub fn pairs_encode_sha(row: &LedgerRow) -> String {
+    row.output_sha
+        .as_ref()
+        .map(|s| s.as_str().to_string())
+        .unwrap_or_default()
+}
+
+/// Metric column: a diffmap/metric run has one DONE row per (cell x metric)
+/// sharing the cell identity — without this column the join table cannot tell a
+/// butteraugli map from a cvvdp map (hdrgrid-diffmap endgame, 2026-08-27). Empty
+/// for encode rows.
+pub fn pairs_metric(row: &LedgerRow) -> String {
+    match &row.kind {
+        JobKind::Diffmap { metric, .. } | JobKind::Metric { metric } => metric.clone(),
+        JobKind::ScoreFile { metrics, .. } => metrics.join("+"),
+        _ => String::new(),
+    }
+}
+
+/// The DONE rows of a ledger view in a TOTAL, content-derived order, so the
+/// emitted pairs table is a pure function of the ledger's DONE set.
+///
+/// **ROW ORDER IS LOAD-BEARING, and it used to be random.** [`LedgerView`] stores
+/// rows in a `HashMap<JobId, _>`, so `view.rows()` yields them in Rust's
+/// per-process randomized hash order: two `pairs` invocations over a *frozen*
+/// ledger emitted the same SET of rows in a different ORDER.
+///
+/// That order becomes job IDENTITY downstream. `declare-scorefiles` groups the
+/// pairs table by ref and cuts each ref's member list into contiguous
+/// `--chunk`-sized slices, stamping `job_id = JobId::of(kind, inputs)` per slice.
+/// [`JobId::of`] sorts and dedups its inputs, so member order *within* a chunk
+/// cannot move an id — what moves it is which members SHARE a chunk. A
+/// permutation re-cuts that membership, and therefore re-mints every id, whenever
+/// a ref has MORE members than `--chunk`. Every round of a recurring gap-fill
+/// loop then re-declared the whole run as fresh jobs and the workers re-did cells
+/// that had already been scored. (This is a correction to the Stage-A writeup,
+/// which attributed the churn to input order directly; the distinction is what
+/// decides whether a given run is exposed — see
+/// `only_refs_larger_than_the_chunk_can_remint`.)
+///
+/// MEASURED on the AVIF-DOE score wave (`benchmarks/avif_doe_stageA_2026-09-02.md`
+/// §1.4): `declared=4,128` against `ever_done=16,476` — a 4.0x re-work multiplier
+/// with `errors=0`. It was still compounding when this landed: over rounds 37-40
+/// the encode side sat frozen at 49,120 DONE cells and `declared` was pinned at
+/// exactly 4,128, yet score blobs climbed 25,818 → 26,251 → 26,973 → 27,639,
+/// because each round re-minted the same work under new identities. Such a run
+/// can never drain.
+///
+/// It is a WASTE bug, not a correctness one — every blob is valid and the ledger
+/// converges, because identity is content-addressed — but it multiplies the cost
+/// of exactly the pattern the job system recommends: a recurring, idempotent
+/// declaration loop.
+///
+/// The key leads with the emitted cell identity (meaningful and diff-friendly, and
+/// it lands a ref's members in q order so chunks group related cells) and ends
+/// with `job_id` as the tie-break. `job_id` is unique by construction — it is the
+/// `LedgerView` map key — so no two rows compare equal, the order is total, and
+/// the result cannot depend on iteration or insertion order.
+pub fn pairs_done_sorted(view: &LedgerView) -> Vec<&LedgerRow> {
+    // Decorate-sort-undecorate: the metric/sha key parts allocate, so build each
+    // key once rather than once per comparison.
+    let mut keyed: Vec<((&str, &str, i64, &str, String, String, &str), &LedgerRow)> = view
+        .rows()
+        .filter(|r| r.status == JobStatus::Done)
+        .map(|r| {
+            (
+                (
+                    r.cell.image_path.as_str(),
+                    r.cell.codec.as_str(),
+                    r.cell.q,
+                    r.cell.knob_tuple_json.as_str(),
+                    pairs_metric(r),
+                    pairs_encode_sha(r),
+                    r.job_id.0.as_str(),
+                ),
+                r,
+            )
+        })
+        .collect();
+    // `sort_unstable` is safe precisely because the key is total (job_id is unique).
+    keyed.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    keyed.into_iter().map(|(_, r)| r).collect()
+}
+
+/// Render the pairs TSV. The single owner of the emitted column set, shared with
+/// the Parquet writer in `jobctl` so the two representations cannot drift.
+pub fn pairs_tsv(rows: &[&LedgerRow], refs_prefix: &str, blobs_prefix: &str) -> String {
+    use std::fmt::Write as _;
+    let mut tsv = String::from(
+        "ref_path\tdist_path\timage_path\tcodec\tq\tknob_tuple_json\tencode_sha\tmetric\tworker\tprovider\n",
+    );
+    for r in rows {
+        let sha = pairs_encode_sha(r);
+        let _ = writeln!(
+            tsv,
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            pairs_join_prefix(refs_prefix, &r.cell.image_path),
+            pairs_join_prefix(blobs_prefix, &sha),
+            r.cell.image_path,
+            r.cell.codec,
+            r.cell.q,
+            r.cell.knob_tuple_json,
+            sha,
+            pairs_metric(r),
+            r.worker,
+            r.provider
+        );
+    }
+    tsv
+}
+
 /// One pairs row for [`declare_scorefile_jobs`] (migrated 2026-08-27 from
 /// scripts/jobsys/declare_direct_objects.py). `ref_key` is the grouping key
 /// (full ref URI, or basename); `member` the variant object name/URI; the
@@ -1059,5 +1185,208 @@ mod migrate_tests {
             .collect();
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].ts, 9, "newest failed row carried");
+    }
+}
+
+#[cfg(test)]
+mod pairs_order_tests {
+    use super::*;
+    use zenfleet_core::{CellId, JobKind, JobStatus, LedgerRow};
+
+    /// A DONE encode row. `tag` varies the content hash so every row is a
+    /// distinct `job_id`, exactly as a real ledger's DONE set is.
+    fn done_row(image: &str, q: i64, tag: &str) -> LedgerRow {
+        let job = DesiredJob::new(
+            JobKind::Encode {
+                codec: "zenavif".into(),
+                q,
+                knobs: "{}".into(),
+                hdr: false,
+            },
+            vec![zenfleet_core::sha256(tag.as_bytes())],
+            CellId {
+                image_path: image.into(),
+                codec: "zenavif".into(),
+                q,
+                knob_tuple_json: "{}".into(),
+            },
+        );
+        LedgerRow {
+            job_id: job.job_id(),
+            kind: job.kind.clone(),
+            cell: job.cell.clone(),
+            output_sha: Some(zenfleet_core::sha256(format!("blob-{tag}").as_bytes())),
+            status: JobStatus::Done,
+            error_class: None,
+            attempts: 1,
+            ts: 1,
+            worker: "w".into(),
+            provider: "local".into(),
+        }
+    }
+
+    /// 30 rows across 5 refs — large enough that a HashMap ordering could not
+    /// coincidentally come out sorted.
+    fn corpus() -> Vec<LedgerRow> {
+        let mut v = Vec::new();
+        for i in 0..5 {
+            for q in [20i64, 40, 60, 80, 90, 95] {
+                let img = format!("s3://refs/img{i}.png");
+                v.push(done_row(&img, q, &format!("{i}-{q}")));
+            }
+        }
+        v
+    }
+
+    /// Deterministically permute, so the test never depends on HashMap luck.
+    fn rotated(rows: &[LedgerRow], by: usize) -> Vec<LedgerRow> {
+        let n = rows.len();
+        (0..n).map(|i| rows[(i + by) % n].clone()).collect()
+    }
+
+    fn view_of(rows: &[LedgerRow]) -> LedgerView {
+        let mut v = LedgerView::new();
+        for r in rows {
+            v.apply(r.clone());
+        }
+        v
+    }
+
+    #[test]
+    fn pairs_output_is_byte_identical_across_invocations() {
+        let base = corpus();
+        // Eight independently-built views. Each `LedgerView` owns a fresh
+        // `HashMap`, and `RandomState::new()` perturbs its hasher per map, so
+        // these genuinely differ in `view.rows()` order within one process —
+        // which is the nondeterminism that reached the emitted table.
+        let renders: Vec<String> = (0..8)
+            .map(|k| {
+                let v = view_of(&rotated(&base, k * 3));
+                pairs_tsv(&pairs_done_sorted(&v), "s3://refs", "s3://blobs")
+            })
+            .collect();
+        for (i, r) in renders.iter().enumerate() {
+            assert_eq!(
+                r, &renders[0],
+                "pairs TSV differs between invocation 0 and {i} — the emitted \
+                 table is not a pure function of the ledger's DONE set"
+            );
+        }
+        // Teeth: the output really is in the documented order, so deleting the
+        // sort fails here and not only by luck of the hash seed.
+        let v = view_of(&base);
+        let done = pairs_done_sorted(&v);
+        assert_eq!(done.len(), 30);
+        let keys: Vec<(&str, i64)> = done
+            .iter()
+            .map(|r| (r.cell.image_path.as_str(), r.cell.q))
+            .collect();
+        let mut sorted = keys.clone();
+        sorted.sort_unstable();
+        assert_eq!(keys, sorted, "emitted rows are not in cell-identity order");
+    }
+
+    /// The rows a `--full-uri` declare builds from the pairs table.
+    fn pair_rows(view: &LedgerView) -> Vec<PairRow> {
+        pairs_done_sorted(view)
+            .into_iter()
+            .map(|r| PairRow {
+                ref_key: pairs_join_prefix("s3://refs", &r.cell.image_path),
+                member: pairs_join_prefix("s3://blobs", &pairs_encode_sha(r)),
+                identity: Some((
+                    r.cell.codec.clone(),
+                    r.cell.q,
+                    r.cell.knob_tuple_json.clone(),
+                )),
+            })
+            .collect()
+    }
+
+    fn job_ids(rows: &[PairRow], chunk: usize) -> Vec<String> {
+        declare_scorefile_jobs(
+            rows,
+            &["ssim2".to_string(), "zensim".to_string()],
+            chunk,
+            "zenavif",
+            "scorefile",
+            false,
+            None,
+            false,
+            None,
+        )
+        .iter()
+        .map(|j| j.job_id().0.as_str().to_string())
+        .collect()
+    }
+
+    #[test]
+    fn chunk_boundaries_are_stable_across_ledger_insertion_order() {
+        let base = corpus();
+        // chunk=2 against 6 members per ref: three chunks per ref, so a
+        // reordering genuinely RE-CUTS membership. At chunk >= members/ref the
+        // property holds trivially and the test would have no teeth — see
+        // `only_refs_larger_than_the_chunk_can_remint`.
+        for chunk in [2usize, 4] {
+            let ids: Vec<Vec<String>> = (0..8)
+                .map(|k| job_ids(&pair_rows(&view_of(&rotated(&base, k * 3))), chunk))
+                .collect();
+            assert!(ids[0].len() >= 10, "chunk {chunk} should cut many jobs");
+            for (i, got) in ids.iter().enumerate() {
+                assert_eq!(
+                    got, &ids[0],
+                    "chunk={chunk}: declare-scorefiles job identity differs between \
+                     ledger insertion order 0 and {i} — a recurring declare would \
+                     re-mint every job_id and the fleet would redo finished work"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn permuted_pairs_rows_would_remint_job_ids() {
+        // The deterministic negative control that gives the tests above their
+        // teeth: chunk identity IS a function of row order, which is exactly why
+        // `pairs` must impose a total one.
+        let sorted = pair_rows(&view_of(&corpus()));
+        let permuted = rotated_pairs(&sorted, 1);
+        assert_ne!(
+            job_ids(&sorted, 2),
+            job_ids(&permuted, 2),
+            "if this ever passes, chunk membership stopped depending on row order \
+             and the pairs sort is no longer load-bearing"
+        );
+    }
+
+    #[test]
+    fn only_refs_larger_than_the_chunk_can_remint() {
+        // PINS THE PRECISE MECHANISM. `JobId::of` sorts and dedups its inputs, so
+        // member ORDER inside a chunk cannot move an id; what moves it is which
+        // members SHARE a chunk. A chunk is a contiguous slice of one ref's member
+        // list, so a permutation re-cuts membership only when a ref has MORE
+        // members than `--chunk`.
+        //
+        // This is why the AVIF-DOE run churned so hard: ~49,120 pairs rows over a
+        // 32-image corpus is ~1,535 members per ref at `--chunk 12`, i.e. ~128
+        // chunks per ref, every one re-cut on every round. It is also why the
+        // job COUNT stayed pinned at 4,128 while the identities rotated — a
+        // permutation changes which members pair up, never how many chunks fall out.
+        let sorted = pair_rows(&view_of(&corpus())); // 6 members per ref
+        let permuted = rotated_pairs(&sorted, 1);
+        assert_ne!(
+            job_ids(&sorted, 2),
+            job_ids(&permuted, 2),
+            "chunk 2 < 6 members/ref: membership must re-cut"
+        );
+        assert_eq!(
+            job_ids(&sorted, 12),
+            job_ids(&permuted, 12),
+            "chunk 12 >= 6 members/ref: one chunk per ref, so membership is \
+             invariant under permutation and ids must NOT move"
+        );
+    }
+
+    fn rotated_pairs(rows: &[PairRow], by: usize) -> Vec<PairRow> {
+        let n = rows.len();
+        (0..n).map(|i| rows[(i + by) % n].clone()).collect()
     }
 }
