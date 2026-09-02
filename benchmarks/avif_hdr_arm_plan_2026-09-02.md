@@ -1396,6 +1396,80 @@ declared for scoring**. A second loop now runs for **t2b only**
 `Tower-t2sf`). **t2a is deliberately excluded** — scoring known-broken output
 would burn compute and pollute the ledger.
 
+### 10.4e VALIDITY RE-AUDIT vs BOTH tile triggers, and the fix is HALF-COMPLETE
+
+`zenav1-svt#18` was root-caused to AV1's **forced tile grid** and fixed at
+`3121b6a8`. A `(0,0)` tile request is **clamped up** past either limit, so any
+encode past either was multi-tile and every such bd10 cell crossed tile edges:
+
+* **width > 4096** — *area-independent*
+* **sb-aligned area > 4096·2304** (9,437,184)
+
+**Re-audited every bd10 cell against BOTH limits** using final encode
+dimensions read from the corpus files (my earlier clearance was area-only, so
+the width limit was genuinely unchecked):
+
+| wave | backend | cells | valid | invalid | note |
+|---|---|--:|--:|--:|---|
+| **t1ac** (T1-a/T1-c) | zenav1-svt | 2,016 | **2,016** | **0** | budget corpus; widest file 1536×1024 |
+| **t1b** (unencoded) | zenav1-svt | 4,320 | 4,320 | 0 | would have been clean |
+| **t1d** (T1-d) | zenav1-svt | 96 | 72 | **24** | 8 native refs over the area limit |
+| **t2a** | zenav1-svt | 3,248 | 203 | **3,045** | 15/16 refs invalid |
+| **t2b** | **zenrav1e** | 432 | **432** | 0 | different backend — not affected |
+
+**No published number consumed an invalid cell.** The budget corpus is
+**0/32 invalid on both triggers** — its widest file is 1536×1024, so the width
+limit is not merely unexceeded, it is not approached. Both A1's `bd10` median
+and this arm's t1b refusal math ran entirely on it. **Verified, not asserted:**
+the gate was re-run with an explicit per-cell validity filter and returned
+**byte-identical** numbers — A1 repro n=31 median −1.025 % CI [−1.622, +0.213]
+23/31; T1-c n=31 median −0.214 % CI [−0.836, +1.321] 18/31.
+
+> **The t1b refusal STANDS on clean data.** Its inputs were never contaminated.
+
+Two corrections to my own earlier reporting, both from this audit:
+* The T1-d matched-q figure (mean ssim2 −20.5) consumed **24 invalid cells** and
+  is withdrawn — it was already marked unpublishable, and now it has a cause.
+* The 8 broken native images predicted by the triggers are **exactly** the 8
+  measured broken, so the root cause and the observation agree cell-for-cell.
+
+#### ⛔ The fix repairs the tile-COLUMN case only — portrait is still broken
+
+Composed `3121b6a8` in via a `[patch]` at the workspace root (zenavif moved
+`zenav1-svt` to a git-rev pin **today**, and that pin `ef0b122b` predates the
+fix — building against it reproduced `−57.049692` exactly). **The fix's own 4
+`issue18_repro` tests pass in this tree**, so this is a residual the synthetic
+cases do not reach, not a missing fix:
+
+| dims | orientation | sb-area | pre-fix | **post-fix** |
+|---|---|--:|--:|--:|
+| **4000×3000** | landscape | 12,128,256 | broken | **+88.96 ✅** |
+| **3000×4000** | **portrait** | 12,128,256 | −57.05 | **−10.61 ❌** |
+| 3302×4844 | portrait | 16,187,392 | broken | **+1.56 ❌** |
+| 3286×4868 | portrait | 16,400,384 | broken | **−15.45 ❌** |
+| 2479×3230 | portrait | under | fine | +88.21 ✅ |
+| 3000×2235 | landscape | under | fine | +90.10 ✅ |
+
+**4000×3000 and 3000×4000 have identical area and identical sb-aligned area;
+only the long axis differs, and only one is repaired.** The 8-bit control on
+that cell is 86.57, so ~88–90 is the target — −10.61 is still destroyed output.
+Reported as
+[#18 follow-up](https://github.com/imazen/zenav1-svt/issues/18#issuecomment-5516506667).
+
+> **DECISION: t2a is NOT restarted.** **14 of its 16 refs are portrait AND over
+> the area limit**, so re-encoding on the current fix would still mis-encode
+> **88 %** of the corpus — the same waste, a second time. Only 1 ref is
+> landscape-over-limit (repaired) and 1 is under both limits, and a 2-ref
+> restart would destroy the K=16 stratification and the G0.5 primaries balance
+> that make T2-a a baseline at all. It stays declared and paused at 120/3,248
+> pending the tile-row fix. Its 120 done cells stay **invalid** and are not
+> salvageable.
+
+**T2-b is COMPLETE and VALID: 432/432 encoded, 48/48 scored, zero poison** — a
+zenrav1e-backend arm, structurally outside #18. It is the workspace's first
+HDR-10 RD dataset, and with T2-a held it currently stands alone rather than as
+the contrast §4.3 designed it to be.
+
 ### 10.5 ⛔ TRACK T2 IS SPLIT: T2-b is executable, **T2-a is BLOCKED**
 
 This is a wiring gap §2.6 did not record, found by reading the source at
