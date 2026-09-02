@@ -1112,12 +1112,66 @@ blobs moved **29 → 36 and rising** within minutes, after being flat at 29 for
 the whole preceding wave. Nothing about the score runs needed changing — they
 were correctly declared and refreshed, and simply had no consumer.
 
-### 11.7 Open, and deliberately not done here
+### 11.7 The stale image poisoned 93 % of A1, and the pardon that recovered it
 
-- **G-CROP** remains PENDING (§11.3). Encoding is not gated on it; **conclusions
+The 215 ledger *files* the stale worker wrote were not 215 cells. Measured after
+the fix, with `zenfleet-ctl report`:
+
+```
+avifdoe-svt-a1-20260901: declared=6912 ever_done=480 live_done=480 failed-only=6432
+```
+
+**6,432 of 6,912 cells — 93 % of the main-effects arm — were poisoned by an
+image defect**, and a fresh worker on the *correct* image drained straight out
+(`done=0 failed=0 ... already_poison=6432`, then `drained (idle 12 consecutive
+no-work passes) — exiting clean`). A run can therefore be fully unblocked at the
+code level and still be dead at the ledger level; **fixing the image is not
+finishing the recovery.**
+
+Recovered with `zenfleet-ctl requeue`, which exists for exactly this ("the
+faulty-worker era WAS the fault"), scoped rather than blanket:
+
+```
+zenfleet-ctl requeue --run avifdoe-svt-a1-20260901 \
+    --classes encoder_panic --before <2026-09-02T03:50:00Z>
+→ appended 6432 pardon rows (failed/worker_lost/attempts=0)
+```
+
+The `--before` scope was **verified, not assumed**: cutoffs at 03:50Z, 03:55Z
+and 04:00Z all return exactly 6,432, identical to the unscoped count, which
+proves every failure predates the fix and the corrected era contributed none —
+so the pardon cannot mask a genuine current-era failure. `attempts=0` with a
+TRANSIENT class is the reconcile path's own retry vocabulary; a PENDING pardon
+row would deadlock (the documented `stale_claim_after=None` class), and
+`reassert` is the wrong tool here — it only reverses buried *done* rows and
+reports 0 for this run. Genuine failures re-poison with current-era evidence
+after exactly one retry, so nothing is permanently laundered.
+
+**Verified working, not merely applied**: A1 blobs resumed **458 → 545** on the
+next worker.
+
+### 11.8 Fleet snapshot and what is still open
+
+```
+SNAPSHOT 2026-09-02T04:49Z
+run                                   blobs   ledger   declared
+avifsub-svt-enc-20260901               6293      295       9600
+avifsub-aom-enc-20260901               3030      100       5179
+avifdoe-svt-a0r-20260901                  0        0       6496
+avifdoe-svt-a1-20260901                 604      290       6912
+avifdoe-svt-a2-20260901                5101       73      33984
+avifdoe-svt-ag-20260901                   0        0       1728
+avifsub-svt-sf-cpu-20260901             103       15          -
+avifsub-aom-sf-cpu-20260901             208        5          -
+```
+
+- **G-CROP remains PENDING** (§11.3). Encoding is not gated on it; **conclusions
   are.**
-- The **215 failed A1 ledger rows** from the stale image are still recorded as
-  failures and need a `zenfleet-ctl gap` reconcile pass to be re-declared.
-- **A0R, A2 and AG have manifests and control keys uploaded but no workers yet.**
-  Only A1 is running, on one r7900x worker.
+- **A0R and AG have manifests + control keys uploaded but no workers yet.** A1
+  runs on r7900x, A2 on a local worker.
+- **Local workers are back, with the outage's fix applied**:
+  `TMPDIR=/home/lilith/tmp/zfw-scratch`, so `jobexec`'s never-evicted source
+  cache stages on `/home` (822 GB free) instead of the quota'd `/tmp`. Verified:
+  1.2 GB staged in the new scratch within a minute, **`/tmp` flat at 1 %, and
+  zero `Disk quota exceeded` lines** where the pre-outage run logged dozens.
 - **A3 (the aom knob arms)** is untouched, as §5.3 registers.
