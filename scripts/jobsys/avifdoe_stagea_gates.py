@@ -124,6 +124,10 @@ def main():
             cur3[(run, sp, img, arm)].append((s_, b))
 
     # ---------------- AG TRANSFER GATE (§3.8 + §12.4 correction) -------------
+    # n floors: the §12.4 restatement gives at most 13 cropped refs, and the
+    # 3-q ladder loses more to non-monotone frontiers. Below these the test is
+    # not evaluable and says so.
+    MIN_CROP, MIN_EFF = 5, 3
     knobs = sorted({t["arm"][i].split("-", 3)[3] for i in range(n)
                     if t["run"][i] == "ag" and t["arm"][i].count("-") >= 3})
     gate_rows, ident_rows = [], []
@@ -147,9 +151,19 @@ def main():
         for img, bn, bb in pass_p:
             if abs(bn - bb) > 1e-9:
                 ident_rows.append(dict(knob=k, image=img, bd_native=bn, bd_budget=bb, resid=bb - bn))
-        if len(crop_p) < 3:
-            gate_rows.append(dict(knob=k, n_crop=len(crop_p), T1=None, T2=None, T3=None,
-                                  verdict="NOT-MEASURED (n<3 usable cropped refs)"))
+        # An arm that is byte-identical to the control has no effect to transfer.
+        # Reporting it as "FAIL-T1" would be a category error: |BD| >= 0.5% never
+        # holds, so T1 has an empty denominator. Same precedent as the zensim band
+        # rule -- an unusable cell is NOT-MEASURED with a reason, never a verdict.
+        if all(abs(bn) == 0.0 and abs(bb) == 0.0 for _, bn, bb in pairs) and pairs:
+            gate_rows.append(dict(knob=k, n_crop=len(crop_p), n_eff=0, T1=None, T2=None,
+                                  T3_med=None, T3_p=None, n_pass_identity=len(pass_p),
+                                  verdict="INERT (byte-identical to control; nothing to transfer)"))
+            continue
+        if len(crop_p) < MIN_CROP:
+            gate_rows.append(dict(knob=k, n_crop=len(crop_p), n_eff=None, T1=None, T2=None,
+                                  T3_med=None, T3_p=None, n_pass_identity=len(pass_p),
+                                  verdict=f"NOT-MEASURED (n={len(crop_p)} usable cropped refs, need {MIN_CROP})"))
             continue
         # T1 direction, counting only |bd_native| >= 0.5
         eff = [(i, bn, bb) for i, bn, bb in crop_p if abs(bn) >= 0.5]
@@ -167,12 +181,20 @@ def main():
         t3med = float(np.median(np.abs(resid)))
         npos = sum(1 for r in resid if r > 0)
         t3p = binom_two_sided(npos, len(resid))
-        okT1 = (t1 is not None and t1 >= 0.80)
+        # A T1 computed on fewer than MIN_EFF images is not a direction test --
+        # "sign agreement on 1 of 1" carries no information. Refuse the verdict
+        # rather than issue one the n cannot support. The BARS ARE UNCHANGED.
+        okT1 = (t1 is not None and len(eff) >= MIN_EFF and t1 >= 0.80)
         okT2 = (t2 is not None and t2 >= 0.70)
         okT3 = (t3med <= 1.0 and t3p >= 0.05)
-        verdict = ("PASS" if (okT1 and okT2 and okT3) else
-                   "FAIL-T1 (not screenable at budget)" if not okT1 else
-                   "PARTIAL (direction holds; magnitude/rank flagged)")
+        if t1 is None or len(eff) < MIN_EFF:
+            verdict = f"NOT-MEASURED (only {len(eff)} of {len(crop_p)} cropped refs move >=0.5% at native, need {MIN_EFF})"
+        elif okT1 and okT2 and okT3:
+            verdict = "PASS"
+        elif not okT1:
+            verdict = "FAIL-T1 (not screenable at budget)"
+        else:
+            verdict = "PARTIAL (direction holds; magnitude/rank flagged)"
         gate_rows.append(dict(knob=k, n_crop=len(crop_p), n_eff=len(eff),
                               T1=t1, T2=t2, T2_src=t2src, T3_med=t3med, T3_p=t3p,
                               n_pass_identity=len(pass_p), verdict=verdict))
@@ -285,6 +307,8 @@ def main():
                                      ", ".join(f"s{s} {x:+.2f}%" for s, x in sorted(d.items())),
                                  follow_up="fit with an explicit preset interaction; Stage-B grid at both presets"))
     for r in gate_rows:                               # B-6
+        if r["knob"] in inert:
+            continue
         if str(r["verdict"]).startswith("FAIL-T1"):
             trig.append(dict(id="B-6", key=r["knob"],
                              why=f"fails T1 (sign agreement {r.get('T1')}) — not screenable at reduced size",
