@@ -69,8 +69,15 @@ while true; do
     fi
   done
   if [ ${#PARGS[@]} -gt 0 ]; then
+    # HDR runs must declare with --hdr: the cells are PQ AVIFs, and since the
+    # 2026-09-02 tripwire (e9e2ef71) scoring one through the SDR path is REFUSED
+    # loudly rather than silently narrowed -- which surfaces as every job failing
+    # `encoder_panic` and then poisoning. Set ZEN_DOE_SCORE_HDR=1 for an HDR wave.
+    # (Found the hard way on the AVIF-HBD arm's T2: 46/46 jobs poisoned because
+    # this loop was SDR-shaped and passed no --hdr.)
+    HDRARGS=(); [ "${ZEN_DOE_SCORE_HDR:-0}" = "1" ] && HDRARGS=(--hdr)
     $CTL declare-scorefiles "${PARGS[@]}" --run "$SFRUN" --bucket zentrain --endpoint "$EP" \
-      --metrics ssim2,zensim --full-uri 2>&1 | tail -1 || { echo "❌ [$TS] declare-scorefiles FAILED"; RERR=$((RERR+1)); }
+      --metrics ssim2,zensim --full-uri ${HDRARGS[@]+"${HDRARGS[@]}"} 2>&1 | tail -1 || { echo "❌ [$TS] declare-scorefiles FAILED"; RERR=$((RERR+1)); }
     $CTL compact --run "$SFRUN" --bucket zentrain --endpoint "$EP" --upload 2>&1 | tail -1 || { echo "❌ [$TS] compact FAILED"; RERR=$((RERR+1)); }
   else
     echo "❌ [$TS] no pairs built this round"; RERR=$((RERR+1))
