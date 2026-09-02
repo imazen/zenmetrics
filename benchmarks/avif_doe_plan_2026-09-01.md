@@ -1490,3 +1490,282 @@ duplicates encodes A1 already declared at the same size on the same bytes —
 free *if* AG is redeclared before it runs. Not done here: redeclaring another
 lane's run mid-wave is exactly the move §11.7 warns about, and the wave owner
 should make that call. Flagged, with the arithmetic, so the choice is informed.
+
+---
+
+## 13. Scoring scale-up — 2026-09-02, from a trickle to parity
+
+§11.6 declared the §6 blocking finding "cleared" because one capped tower worker
+moved `avifsub-svt-sf-cpu` off 29. That was true and insufficient: the DOE's own
+four runs had **no score declaration at all**, and the one worker was 2 cores.
+This section measures the trickle, names its three causes, and fixes them.
+
+### 13.1 The diagnosis — three causes, one of them dominant
+
+Measured 2026-09-02T05:18Z, before any change:
+
+| run | encode blobs | score run | score blobs |
+|---|--:|---|--:|
+| `avifsub-svt-enc-20260901` | 6,496 | `avifsub-svt-sf-cpu-20260901` | 148 |
+| `avifsub-aom-enc-20260901` | 3,414 | `avifsub-aom-sf-cpu-20260901` | 256 |
+| `avifdoe-svt-a1-20260901` | 4,124 | — | — |
+| `avifdoe-svt-a2-20260901` | 21,902 | — | — |
+| `avifdoe-svt-a0r-20260901` | 0 | — | — |
+| `avifdoe-svt-ag-20260901` | 0 | — | — |
+
+**Cause 1 (dominant): the DOE backlog was UNDECLARED.** `aws s3 ls
+s3://zentrain/jobs/` returns four `avifdoe-*` encode runs and **zero**
+`avifdoe-*-sf-*` score runs. 26,026 encode blobs — every byte the DOE itself had
+produced — had nothing to score them. The pre-existing 5-minute gap-fill loop
+(`~/tmp/avifsub_gapfill_loop.sh`) was **alive** (round 51 at 05:13Z, not dead as
+assumed) but its `for backend in svt aom` loop is hard-coded to the two
+`avifsub-*-enc` runs of the *naive* wave. It never had a DOE branch to lose.
+
+**Cause 2: the fleet held exactly ONE score worker.**
+`avifsub-score-svt-tower` — `--cpuset-cpus=22-23`, i.e. **2 cores** — bound to
+`ZEN_RUN=jobs/avifsub-svt-sf-cpu-20260901`. No worker served the aom score run
+(its blobs sat flat at 256 across rounds 48-51 while its declared job count rose
+263 → 287), and the **32-thread dev box was running zero workers of any kind**
+(load 0.68).
+
+**Cause 3 is NOT per-pair cost or store I/O.** Both were measured and cleared —
+see 13.2, which also records the wrong answer this lane published to itself
+first.
+
+### 13.2 A measurement that was wrong, and the check that caught it
+
+The first timing run reported **6.72 s for a 12-pair chunk (0.56 s/pair)** and
+was **wrong** — it measured failure, not work. The local `zenmetrics` binary
+returned, for every row, `chooser: no measurements for metric 'ssim2'` with
+**zero numeric scores**, in 6.72 s.
+
+Acting on it would have been worse than slow. A first local worker launched on
+that binary wrote **322 `done` ledger rows over 333 error blobs in under three
+minutes** — a 93 %-poison incident of exactly the §11.7 shape, self-inflicted,
+and it looked like a *triumph* at the time: 257 blobs in 134 s, ~13× the rate the
+CPU budget allows. **The tell was the implausibility, not an error message** —
+nothing failed, exit codes were 0, blobs were well-formed JSONL of the right size
+and row count. What caught it was opening a blob and counting numeric scores.
+
+Root cause: the local binary was built without `--no-default-features`
+(`--features sweep,png,jpeg,webp,avif,jxl,cpu-metrics,avif-svt,avif-aom`), which
+pulls the orchestrator in; its persistent capability profile
+(`~/.cache/zenmetrics/capability_<hash>.toml`) carries an **empty `[metrics]`
+table**, so `Orchestrator::choose_backend` returns `ChooserError::UnknownMetric`
+for every metric. The box's CPU changed (the profile reads
+`AMD Ryzen 9 9950X3D`, 32 logical cores, against the 7950X/28-core this repo's
+docs assume), so its `machine_hash` is new and the older populated profiles do
+not apply. `ZENMETRICS_USE_LEGACY_SCHEDULER=1` does **not** bypass it — jobexec's
+score path routes through the chooser regardless. `zenmetrics score --metric
+ssim2` on the *same* ref/blob pair returns `ssim2=19.796691`, which is what makes
+this hard to see: the binary is fine everywhere except the path the fleet uses.
+
+The canonical fleet build (`scripts/jobsys/build_executor_image.sh:15`) uses
+`--no-default-features --features sweep,png,jpeg,webp,avif,jxl,cpu-metrics` and
+has no orchestrator, which is why the tower worker — with **no capability cache
+at all** — has been producing correct scores the whole time.
+
+**Resolution: use the proven image, not a speculative rebuild.** All local
+workers run `ghcr.io/imazen/zenfleet-worker:exec-avifsub-svtaom-4a6876b9`, the
+tag already producing correct scores on tower.
+
+**The 322 poisoned rows were removed, not pardoned.** `requeue` acts on
+failed/poison rows by `error_class` and `reassert` reverses buried *done* rows —
+neither targets a row that is genuinely `done` over a garbage blob. Every row in
+the snapshot was verified to be the single smoke worker's
+(`worker: {'wsl-score-smoke': 323}`, 322 done + 1 failed) with no other worker's
+work in the run, so the run's `ledger/`, `blobs/`, `claims/` and `_probe/` were
+cleared and re-compacted to `0 done + 0 newest-failed`. The cells simply re-enter
+the gap. This is only safe because the run was eight minutes old and entirely
+self-inflicted; on a shared run the answer is a scoped pardon.
+
+**Two `--run` prefix traps, hit and recorded.** `zenfleet-ctl declare-scorefiles
+--run jobs/<run>` and `compact --run jobs/<run>` both write to
+`s3://<bucket>/jobs/jobs/<run>/` — the tools prepend `jobs/` themselves and take
+the **bare run name**, while the worker's `ZEN_RUN` takes `jobs/<run>`. The
+orphaned `jobs/jobs/` declaration was deleted. (The pre-existing gap-fill loop
+sidesteps this by using `--manifest-out` plus an explicit `aws s3 cp`.)
+
+**A fresh run needs a snapshot before a strict worker will start.** The first
+correct launch crash-looped 7× on `FATAL: ZEN_REQUIRE_SNAPSHOT=1 but no
+ledger_snapshot.parquet`; `zenfleet-ctl compact --run <bare> --upload` (which
+also needs `~/tmp/zen-snaps/` to exist) is the fix, and is preferable to
+`ZEN_REQUIRE_SNAPSHOT=0` because it keeps the strict invariant for every later
+worker.
+
+### 13.3 What was declared
+
+```sh
+zenfleet-ctl pairs --ledger s3://zentrain/jobs/avifdoe-svt-<run>-20260901/ledger/ \
+  --refs-prefix s3://codec-corpus/avif-doe-1024-2026-09-01/ \
+  --blobs-prefix s3://zentrain/jobs/avifdoe-svt-<run>-20260901/blobs/ \
+  --out ~/tmp/avifdoe_pairs/<run>_pairs --endpoint $EP
+zenfleet-ctl declare-scorefiles --pairs .../a1_pairs.parquet --pairs .../a2_pairs.parquet \
+  --run avifdoe-svt-sf-cpu-20260902 --bucket zentrain --endpoint $EP \
+  --metrics ssim2,zensim,butteraugli --full-uri
+```
+
+One new score run, **`avifdoe-svt-sf-cpu-20260902`**, covering A1 + A2:
+**3,241 jobs / 38,796 pairs** at declaration (05:21Z), **3,373 / 40,356** one
+round later as A1 encodes landed. Chunk = 12 pairs; one blob = one chunk × 3
+metrics = 36 JSONL rows (12 `ssim2` + 12 `butteraugli` numeric, 12 `zensim`
+carrying a 720-wide `features` vector and no scalar — the same shape the naive
+wave's blobs already have).
+
+**AG is deliberately NOT declared here.** `avifdoe-svt-ag-20260901` encodes the
+**native** corpus (its declared `inputs` sha is `source_sha256`, not
+`crop_sha256` — §12.4), so it needs a different `--refs-prefix`; it has 0 blobs,
+and §12.4 registered that the wave owner may drop 19/32 of its cells before it
+runs. Declaring it against the crop prefix would have silently scored the wrong
+pixels — the §12.3 collision, which is the exact hazard that makes the two
+corpora share filenames. The recurring loop prints a loud notice if AG ever
+produces a blob.
+
+### 13.4 Recurring declaration, and how it fails loud
+
+`~/tmp/scorescale_gapfill.sh` (detached, PID in
+`~/tmp/scorescale_gapfill.pid`, log `~/tmp/scorescale_gapfill.log`) re-runs
+`pairs` → `declare-scorefiles` → `compact` for A1/A2/A0R every 5 minutes.
+`declare-scorefiles` is idempotent per cell, so it coexists with the older
+naive-wave loop rather than fighting it.
+
+Its predecessor's failure mode was dying silently. This one writes
+`~/tmp/scorescale_gapfill.heartbeat` every round with
+`round= errors_total= errors_this_round= score_blobs=`, prints a `❌` line for
+any failed canonical command, and skips a run with 0 encode blobs by name rather
+than erroring. A dead loop is a stale heartbeat mtime; a sick loop is a rising
+`errors_total`.
+
+### 13.5 Metric set reduced to `ssim2,zensim` — USER DIRECTIVE, mid-lane
+
+**User directive, 2026-09-02, verbatim: "you can skip butteraugli even."** All new
+score declarations for the DOE waves drop butteraugli and carry **`ssim2,zensim`**
+(the zensim row is the 720-wide `features` vector, not a scalar).
+
+**The already-declared 3-metric jobs could NOT be re-declared in place, and the
+reason is structural:** `DesiredJob::job_id()` is `JobId::of(&self.kind,
+&self.inputs)` (`zenfleet-core/src/ledger.rs:118`) and `kind` **carries the metric
+list**. Changing `["ssim2","zensim","butteraugli"]` → `["ssim2","zensim"]`
+therefore changes **every** job_id in the run: the re-declaration is not an
+edit, it is a second, disjoint job set. That is precisely the "churn the ledger
+or double-declare" case, so the sanctioned fallback was taken — **the recurring
+declaration was switched going forward**, at a recorded boundary:
+
+| | |
+|---|--:|
+| last 3-metric blob count (05:42:35Z) | **907** |
+| first 2-metric declaration | 3,424 jobs / 40,896 pairs (05:42:11Z) |
+
+**Consequence the analysis lane must key on: rows are HETEROGENEOUS.** The 907
+blobs written before the boundary carry 36 JSONL rows each (12 `ssim2` + 12
+`butteraugli` numeric + 12 `zensim` feature rows); every blob after carries 24
+(12 `ssim2` + 12 `zensim`). Verified on both sides of the cut, 0 errors. **Key on
+the metrics present per row, never on a fixed row count or a fixed metric set.**
+The pre-boundary butteraugli values are valid and were kept — extra data, not a
+defect — but they cover only the ~11 k pairs scored before 05:42Z, so butteraugli
+is **not** a corpus-wide column and must not be treated as one.
+
+Those 907 blobs' cells are re-scored under the new 2-metric job_ids (the old
+job_ids remain `done` in the ledger and are simply not in the current manifest).
+That re-work was accepted deliberately: it is ~11 k pairs against the ~40 k
+pairs that get the saving.
+
+### 13.6 Worker topology
+
+Every score worker runs the **proven** image
+`ghcr.io/imazen/zenfleet-worker:exec-avifsub-svtaom-4a6876b9`, launched through
+the canonical `scripts/jobsys/lan_score_launch.sh` (against `localhost` for the
+dev box — it resolves the store via `~/.config/zen/s3env.sh` exactly as a remote
+box does, so there is no second launch path). `ZEN_CONTROL_KEY` is set on every
+worker, so the whole fleet is pausable with the run's `control.json`.
+
+| host | worker | run | cpuset | mem | note |
+|---|---|---|---|--:|---|
+| dev | `dev-doe1` | `avifdoe-svt-sf-cpu-20260902` | 0-11 | 24 g | DOE, the bulk |
+| dev | `dev-doe2` | `avifdoe-svt-sf-cpu-20260902` | 12-19 | 18 g | DOE |
+| dev | `dev-aomsf` | `avifsub-aom-sf-cpu-20260901` | 20-23 | 10 g | naive aom (had NO consumer) |
+| dev | `dev-svtsf` | `avifsub-svt-sf-cpu-20260901` | 20-23 | 10 g | naive svt (tower alone = 12 h) |
+| tower | `tower-score-svt-1` | `avifsub-svt-sf-cpu-20260901` | 22-23 | 16 g | pre-existing, untouched |
+| r7900x | — | — | — | — | **encode only; nothing added** |
+
+**Dev-box cap honoured:** all containers sit inside cpuset `0-23`, leaving
+**cores 24-31 (8 of 32) free**, per the machine-safety rule. Measured under
+load: 38-40 GiB RAM available, per-container RSS 1.0-1.6 GiB against caps of
+10-24 GiB, no swap growth. Load average reads 60+ because
+`lan_score_launch.sh` sets `ZEN_CORE_OVERSUBSCRIBE=2` and the runnable queue is
+deep, but the cpuset confines it and `vmstat` still showed 27-31 % idle — the
+oversubscription is why a 4th worker fit on shared cores rather than a reason to
+back off.
+
+**r7900x was deliberately left alone.** It was carrying the A1 encode lane; it
+was observed before and after (load 11.00, 11 live `zenmetrics` encode
+processes) and **no score worker was added there**, so encode throughput could
+not regress from this lane. Tower's pre-existing 2-core score worker was left
+exactly as it was.
+### 13.7 Measured rates — before, after, and after the metric cut
+
+All figures are `aws` lister deltas over timed windows against the LAN store, on
+the runs named. **Before** is the state this lane inherited.
+
+| window | run | Δblobs | seconds | blobs/h | pairs/h |
+|---|---|--:|--:|--:|--:|
+| **before** (§11.8 → 05:18Z) | `avifsub-svt-sf-cpu` | — | — | **~20** | ~240 |
+| **before** | `avifsub-aom-sf-cpu` | flat at 256 (rounds 48-51) | — | **~0** | 0 |
+| **before** | `avifdoe-*` (all four) | — | — | **0 (undeclared)** | 0 |
+| after, 3-metric (05:32:52→05:36:07Z) | `avifdoe-svt-sf-cpu-20260902` | +239 | 196 | **4,389** | 52,670 |
+| after, 3-metric (05:36:58→05:40:44Z) | same | +273 | 218 | **4,508** | 54,100 |
+| after, 2-metric (05:42:35→05:44:55Z) | same | +336 | 140 | 8,640 | 103,700 |
+| **after, 2-metric (05:42:35→05:50:49Z)** | same | **+1,152** | **487** | **8,514** | **102,168** |
+| after (05:40:44→05:44:55Z) | `avifsub-svt-sf-cpu` | +30 | 251 | **430** | 5,160 |
+| after (05:40:44→05:44:55Z) | `avifsub-aom-sf-cpu` | +9 | 251 | **129** | 1,550 |
+
+**Headline: the DOE score lane went from 0 (nothing declared) to ~8,600
+blobs/h ≈ 103 k pairs/h, and `avifsub-svt-sf-cpu` from ~20/h to ~430/h.**
+
+**Dropping butteraugli bought ~1.9×, more than the ~0.27 s of ~0.6-0.9 s
+predicted.** 4,508 → 8,514 blobs/h (487 s window; three shorter windows read 8,124-8,928) across the boundary, same workers, same
+cores, same image — so at 1024² butteraugli was closer to *half* the 3-metric
+per-pair cost than a third. This is a measured before/after on one machine with
+everything else held constant, not an estimate.
+
+**A per-pair cost figure is deliberately NOT quoted from the first timing run.**
+That run measured failure (§13.2). The honest per-pair number is the one implied
+by the fleet windows above: ~102 k pairs/h across the 20 DOE-serving cores ≈ **0.70 CPU-s/pair**
+for `ssim2,zensim` at 1024², and ≈ 1.33 CPU-s/pair for the 3-metric set.
+### 13.8 Where the constraint now sits — scoring is no longer it
+
+**Encode state at 05:44Z** (`zenfleet-ctl report`, live-gap semantics):
+
+| run | declared | live_done | gap | workers |
+|---|--:|--:|--:|---|
+| `avifdoe-svt-a2-20260901` | 33,984 | 33,984 | **0 — COMPLETE** | — |
+| `avifdoe-svt-a1-20260901` | 6,912 | 6,432 | 480 | r7900x |
+| `avifdoe-svt-a0r-20260901` | 6,496 | 0 | 6,496 | **none** |
+| `avifdoe-svt-ag-20260901` | 1,728 | 0 | 1,728 | **none** |
+| `avifsub-svt-enc-20260901` | 6,496 | 6,496 | 0 | — |
+| `avifsub-aom-enc-20260901` | 9,280 | ~4,100 | ~5,200 | tower |
+
+**Projected score completion vs encode completion:**
+
+- **DOE (A1+A2), the wave's bulk: ~2,270 jobs left at 8,514 blobs/h ⇒ complete
+  ≈ 06:07Z**, i.e. **within ~16 minutes**, against an A2 encode leg that is
+  already finished and an A1 leg with 480 cells to go.
+- `avifsub-svt-sf-cpu`: ~400 jobs at 116-430 blobs/h ⇒ ≈ 06:45-08:20Z, and it accelerates
+  the moment the DOE workers drain and are repointed.
+- `avifsub-aom-sf-cpu` is **encode-bound, not score-bound**: its scorer idles
+  waiting for aom encode (~5,060 cells left at ~415/h ⇒ ~12 h).
+
+**So the brief's target — "finish scoring within ~a day of encodes finishing" —
+is met with a very large margin, and the binding constraint has moved.** Scoring
+now drains faster than encode produces. The open items are encode-side and
+belong to the wave owner:
+
+1. **A0R (6,496 cells) and AG (1,728 cells) have no encode workers at all** —
+   unchanged since §11.8. Until they run, 8,224 DOE cells cannot be scored
+   because they do not exist.
+2. **A1's 480-cell gap** is `failed-only`; whether those are genuine failures or
+   just un-retried is not diagnosed here (this lane did not touch encode
+   declarations).
+3. **AG additionally needs a score declaration with the NATIVE refs-prefix** when
+   it runs — see §13.3. The recurring loop declares A0R automatically and prints
+   a loud notice for AG rather than guessing its prefix.
