@@ -891,12 +891,29 @@ arms. (There are only 14 live non-default arms; the registered 4,320 = 15 × 9 �
 | **G0.1** source integrity | **PASS by identity chain** — see below; 16 T2 refs sha256'd in the picks TSV |
 | **G0.2** T2 refs are 16-bit cICP-16 PNG | **76/76 PASS**, re-run at execution via `scripts/hdr_corpus_precheck.py` (exit 0) |
 | **G0.5** primaries balance + disclosure | full-corpus cross-tab reproduced exactly (33 BT.709 / 43 P3; interiors 19/1, nature 8/39); K=16 picks carry **6 BT.709 / 10 P3**, both ≥ 5 |
-| **G1** first-cell artifact | **PASS** — `7/7 cells emitted; encode-fail=0 decode-fail=0 score-fail=0`, 7 distinct `.avif` blobs persisted and scored (ssim2 + zensim) |
+| **G1** first-cell artifact | **PASS** — `7/7 cells emitted; encode-fail=0 decode-fail=0 score-fail=0`, 7 distinct `.avif` blobs persisted and scored (ssim2 + zensim); **and the worker image reproduces all 7 byte-for-byte** (below) |
 | **G3** 10-bit decode-verify | **PASS** — see below |
 | **G2** control identity | **satisfiable for all four blocks — verified before launch, not assumed** (below) |
 | **G4** producer seam | declared: T1-a reported in two blocks split at speed 6/7 (preset 8 → 9); no BD-rate-vs-speed slope fitted across it |
 | **G6** no silent knob acceptance | unchanged — `hdr.rs:406` still refuses unwired HDR knobs; T1 is the SDR lane and spells knobs through `svt_knobs`, which cannot express an unknown key |
 | **G7** instrument statement | §3.4 and H-BD-4 reproduced in every report carrying a number from this arm |
+
+**G1's second half — the image encodes what the local binary encodes, proven
+rather than assumed.** The fleet runs a **statically-linked musl** binary built
+from a working tree that also held another lane's **uncommitted** edits (that
+lane owns `src/hdr.rs` and `sweep/encode.rs`; it landed TODO-4 as `7051921a`
+minutes later). T1 is a pure-SDR path and should not reach any of it — but
+"should not" is not evidence, and an image is exactly where a silent divergence
+hides. So the same cell set was encoded **inside the image** and compared to the
+locally-built glibc binary's output:
+
+**7/7 blobs BYTE-IDENTICAL** (`581d2f01…`, `7eada48d…`, `43c44df3…`,
+`753296cc…`, `3630d386…`, `e3f2f7cc…`, `beafe6cc…`), same seven cell
+identities. So the image's T1 encode path is bit-for-bit the one G3 was run
+against, the concurrent lane's in-flight code is provably not reached, and the
+encoder is deterministic **across the musl/glibc toolchain boundary** as well.
+The B-6 launch gate checked only that the first blob was a decodable AVIF; this
+is the stronger form and it is what makes launching on this image safe.
 
 **G0.1 — the declared sources are the verified ones, by chain rather than by
 re-download.** A cell whose `inputs[0]` sha is not the corpus's is poison, and
