@@ -881,9 +881,30 @@ arms. (There are only 14 live non-default arms; the registered 4,320 = 15 × 9 �
 | **G0.5** primaries balance + disclosure | full-corpus cross-tab reproduced exactly (33 BT.709 / 43 P3; interiors 19/1, nature 8/39); K=16 picks carry **6 BT.709 / 10 P3**, both ≥ 5 |
 | **G1** first-cell artifact | **PASS** — `7/7 cells emitted; encode-fail=0 decode-fail=0 score-fail=0`, 7 distinct `.avif` blobs persisted and scored (ssim2 + zensim) |
 | **G3** 10-bit decode-verify | **PASS** — see below |
+| **G2** control identity | **satisfiable for all four blocks — verified before launch, not assumed** (below) |
 | **G4** producer seam | declared: T1-a reported in two blocks split at speed 6/7 (preset 8 → 9); no BD-rate-vs-speed slope fitted across it |
 | **G6** no silent knob acceptance | unchanged — `hdr.rs:406` still refuses unwired HDR knobs; T1 is the SDR lane and spells knobs through `svt_knobs`, which cannot express an unknown key |
 | **G7** instrument statement | §3.4 and H-BD-4 reproduced in every report carrying a number from this arm |
+
+**G2 — every T1 cell has a matched 8-bit control, checked at declare time.**
+A BD-rate needs a `(image, speed, q)` partner at depth 8, and T1 declares no
+control cells of its own by design (they exist already). Whether those partners
+actually cover T1's speeds was **never checked by the plan**, and a gap would
+only have surfaced at analysis — after the compute was spent. Measured from the
+declared cell lists:
+
+| T1 block | control | coverage |
+|---|---|---|
+| T1-a, T1-c | **A0R** (`avifdoe-svt-a0r-20260901`) | **all 7 speeds × 29 q × 32** = 6,496 cells; 928 per speed. The 9-point knob ladder is a **strict subset** of the 29-point grid, so every T1-a/c cell differences with **no interpolation and no anchor error** |
+| T1-b | A0R, s6 default arm | the same s6 leg at the 9 shared q points |
+| T1-d | **AG** (`avifdoe-svt-ag-20260901`), stratum `s4-svt-420` | **96 cells = 32 images × q{15,45,90} on the NATIVE corpus** — an exact shape match to T1-d |
+
+So the arm is analyzable the moment it drains. Note T1-d's control is AG's
+**native** leg, not A0R's crop leg: the two corpora share all 32 filenames and
+13 carry genuinely different pixels, so differencing T1-d against A0R would
+silently compare native encodes to crop references on 13/32 of the corpus —
+the hazard `avifdoe_score_gapfill.sh`'s header already documents, and the
+reason t1d carries its own `--refs-prefix` in the runbook.
 
 **G3 in full — three independent reads, not one.** `avif_depth_verify`
 (`crates/zenmetrics-cli/examples/avif_depth_verify.rs`, `c863fd30`) reads the
