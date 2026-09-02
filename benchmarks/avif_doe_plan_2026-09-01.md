@@ -1836,3 +1836,220 @@ resolved-state fingerprint separates them. `tune=3` *does* change the bitstream,
 so `tune` is partly wired. Minimal repro, cells affected (8,972) and the
 fingerprint table are in the Stage-A record §3. **Not fixed here** — zenavif is
 another lane's subject.
+
+---
+
+## 15. Stage B — trigger B-6 declared and running (2026-09-02)
+
+**USER DECISION, 2026-09-02: "go with B-6 first".** This lane declares and runs
+**only** B-6. The other 53 triggers (§10) stay undeclared; the remaining
+Stage-B envelope is unspent and uncommitted.
+
+### 15.1 The two arms, and the cell arithmetic as VERIFIED
+
+B-6 fires when an arm fails **T1** of the cross-size transfer gate — its
+direction at the 1024² screening budget does not carry to native — and its
+follow-up is "*that knob's Stage-B grid runs at native size*" (§7.2). Stage A
+§8.1 certified only `mtx32` and `qml1.8.15` for reduced-size screening and
+found exactly two arms that **fail**:
+
+| arm | knob | A1 level | Stage-A T1 | median BD @1024² | median BD @native |
+|---|---|---|---|--:|--:|
+| `acb3` | `SvtParams::ac_bias` = 3.0 (`0.0..=8.0`, default 0.0) | 3.0 | **FAIL-T1** (dir 0.62 vs bar) | +0.07 % | −0.43 % |
+| `shp3` | `SvtParams::sharpness` = 3 (`0..=7`, default 0) | 3 | **FAIL-T1** (dir 0.62, 8/11 refs) | +0.50 % | +0.41 % |
+
+The Stage-B grid is B-1's registered follow-up shape — **5 levels × the full
+29-q ladder × 32 images × speeds {4, 6, 7}** — at native size.
+
+**Registered: 27,840.** Recomputed here and it reproduces exactly:
+`2 knobs × (5 × 29 × 32 × 3) = 2 × 13,920 = 27,840`.
+
+**Declared: 25,056.** The difference is **2,784** and it is not an error in
+either number — it is the two knobs' **shared default level**. `ac_bias` 0.0
+and `sharpness` 0 are the *same configuration* (the default stratum), so a
+plan that carries both knobs on one axis spells 9 levels, not 10. The
+trigger-list figure is the per-knob sum, which counts that control block once
+per knob; the declaration counts it once, full stop. `2,784 = 1 level × 29 q ×
+32 images × 3 speeds`.
+
+Declared shape, from the planner's own audit manifest:
+
+```
+plan svt_doe_b6: 783 cells/image × 32 sources = 25,056
+  = 27 strata (9 knob levels × 3 speeds) × 29 q
+duplicates_merged 0 · invalid_skipped 0 · compute_tier_skipped 0
+q_coarsenings 0 · dropped_axes 0 · over_budget false
+```
+
+The 9 levels: the shared default, `acb` {1.0, 3.0, 5.0, 8.0}, `shp` {1, 3, 5,
+7}. Each knob **retains both levels A1 already measured** (`acb` 1.0/3.0, `shp`
+3/7) so every native point has a budget-size partner to difference against —
+that is the whole purpose of the trigger — and each adds the range A1 never
+reached: `ac_bias` above 3.0 (the dossier calls 3.0 "the upper half"; it is
+37.5 % of the range, and 4.0–8.0 was untouched) and the odd `sharpness` steps.
+`sharpness` stays **categorical** (H-14): five levels is a level set for
+factor fitting, never an ordinal trend.
+
+**The two byte-inert knobs are absent by construction.** `tune = 0` and
+`screen_content_mode = Some(3)` (§3, imazen/zenav1-svt#17) consumed 8,972
+Stage-A cells producing bitstreams identical to the default. Neither appears in
+any B-6 level, and `svt_doe_b6_is_two_dense_grids_sharing_one_control` asserts
+it rather than trusting it.
+
+### 15.2 `--max-deviations 2`, and why 1 would have silently halved the block
+
+`speeds` is itself an axis, so a knob level at speed 6 or 7 costs **two**
+deviations — the same arithmetic §4.1 found in A1, where it collapsed the
+"7 presets" claim to two. At `--max-deviations 1` this block emits **11**
+strata instead of 27: only the speed-4 leg plus two bare controls. Measured,
+and pinned by a test.
+
+Two is safe here for a structural reason, not a lucky one: `svt_knobs` is
+**ONE axis**, so no cell can ever spell two knobs at once. The block is
+main-effects-only despite the looser bound. That is also why
+**`duplicates_merged: 0` is correct here** rather than the red flag the
+declare script warns about — no collision is *expressible*, so there is
+nothing to merge (the same argument §11.4 makes for `svt_doe_main`).
+
+### 15.3 Gates — five, none assumed
+
+1. **Corpus identity (native, not crop).** All **32/32** files at
+   `s3://codec-corpus/avif-subsample-2026-09-01/` sha256-match the local
+   native sources, **0 mismatches**; against the budget twin, **13 differ and
+   19 are byte-identical passthroughs** — exactly the as-built 13/19 split
+   §12.2 records. Stronger still, the collision is impossible at *cell* level,
+   not merely avoided: the declared `source_sha` for cropped ref `6604` is
+   `769b0df4…` from the native prefix and `4ac38273…` from the crop prefix, so
+   the two corpora produce **disjoint CellIds**.
+2. **Declaration determinism.** Two independent declare rounds into separate
+   directories produced **sha-equal** `_cells.jsonl` (`951a323d…`) and
+   `_manifest.json` (`41f4acb2…`).
+3. **Pairs determinism.** `zenfleet-ctl pairs` run twice against the same
+   ledger state gave a **sha-equal** parquet (`82aea675…`) — the deterministic
+   sort from `08215e84` holds on this run, so the 4.0× re-declaration
+   multiplier §14.2(5) recorded does not apply here.
+4. **G-FIRSTCELL, encode.** One worker, 4 cores: 60 blobs in the first ~7 s.
+   First blob is a well-formed AVIF — `ftypavif` + `mif1miaf` magic, `file(1)`
+   "ISO Media, AVIF Image", 27,675 bytes — and it **decodes and scores**
+   (ssim2 59.42), which magic bytes alone would not have shown.
+5. **G-FIRSTCELL, score.** First score blob carries the documented §13.3
+   shape: 12 `ssim2` rows with real scalars (67.9998) and 12 `zensim` rows
+   each carrying a 720-wide `features` vector and no scalar.
+
+### 15.4 Cost — MEASURED through the real executor, not extrapolated
+
+Every number below comes from running `zenmetrics jobexec` — the worker's own
+entry point — on the real native corpus, locally, before the fleet was scaled.
+
+**Per-speed totals over all 32 images at q45, default knobs** (not a per-pixel
+rate applied to a corpus — the actual sum):
+
+| speed | preset | 32-image total @ q45 | 29-q ladder factor | CPU-h per knob level |
+|---|---|--:|--:|--:|
+| s4 | 4 | **165.30 s** | 26.1–30.1 | 1.257 |
+| s6 | 7 | **13.16 s** | 30.1 | 0.110 |
+| s7 | 9 | **6.63 s** | 29.2–30.0 | 0.055 |
+
+⇒ **13.2 CPU-h encode for the whole wave** (9 levels, knob-cost factor 1.03
+from the measured `acb8`/`shp7` deltas) — **0.22× the registered 60 CPU-h
+envelope.** Blobs total **14.3 GB**, mean 0.57 MB/cell, against 20 TB free on
+the LAN store. **The B-6 budget is not at risk and no de-scope is needed.**
+
+Three things the probe established that the plan did not know:
+
+- **`ac_bias = 8.0` is safe AND live.** `SvtParams::clamped()` does **not**
+  clamp `ac_bias` (it clamps the variance-boost pair, the QM levels,
+  `max_tx_size` and `sharpness`), so the top of the documented range was a
+  genuine release-mode out-of-range risk — the **H-10** hazard class. It
+  encodes cleanly and *moves bytes* (29,049 vs the default's 28,516 at
+  s4/1.57 MP), so it is a real level, not another inert knob.
+- **Cost is not linear in pixels.** Preset 4 runs **1.842 MP/s at 1.57 MP but
+  0.591 MP/s at 16 MP** — 3.1× worse per pixel at the large end. An `α + β·pixels`
+  fit or a single "ms/MP" would misprice this block at whichever end it was not
+  fitted on.
+- **Preset dominates everything.** s4 is **17–27×** s6/s7 and carries **88 %**
+  of the wave's CPU. Consequently **cell-count progress overstates real
+  progress**: at 2,010 cells done the wave was 8.02 % of cells but only
+  **6.27 % of the work** (1.28×), because the cheap strata drain first. Report
+  B-6 fill work-weighted, not by cell count.
+- **Bytes and time have different q shapes.** The 29-q ladder factor is ~27–30
+  for *time* but **53–56 for bytes**. High-q cells are cheap to compute and
+  expensive to store; the storage plan and the CPU plan cannot share a factor.
+
+### 15.5 Machinery — four changes, all in the canonical owners
+
+| change | where | why |
+|---|---|---|
+| `svt_doe_b6` plan + test | zenavif `43423054` | the grid itself; the test pins levels, deviations, strata at max-dev 1 *and* 2, id distinctness and id **round-trip** (`svt_doe_cell_ids_roundtrip` only walks the pairwise plan, so `acb5`/`acb8`/`shp1`/`shp5` had no coverage anywhere) |
+| plan names get ONE owner | zenavif `386b82f8`, zenmetrics `6b3c41fe` | see §15.6 |
+| `avifdoe_declare.sh --stage-b6` | zenmetrics `8d5d3d93` | declares through the canonical builder; hard-codes the native corpus and `--max-deviations 2` so the two traps above cannot be re-hit by hand |
+| `avifdoe_score_gapfill.sh` run list parameterised | zenmetrics (this commit) | `ZEN_DOE_RUNS="<run>=<refs-prefix> …"`; B-6 runs as a **second instance of the same loop**, not a fork. The run→refs pairing stays explicit because mismatching it is the silent-garbage hazard that script exists to prevent |
+
+Fleet image **`ghcr.io/imazen/zenfleet-worker:exec-avifdoe-b6-6b3c41fe`**
+(digest `sha256:2495afda…`), a new **tag on the existing package** per the
+one-package-many-tags rule. Verified before launch: both binaries
+`statically linked`; the real plan resolves 27 cells/image; the **control arm**
+rejects a bogus plan *and now lists `svt_doe_b6`*; `capabilities` advertises
+`avif` + `avif-svt` so the claim-time gate admits these cells.
+(`exec-avifdoe-b6-8d5d3d93` was built and pushed first, then superseded by the
+§15.6 fix **before any worker ran on it** — it is unused, not stale-in-service.)
+
+### 15.6 A diagnostic that would have lied — the plan list had drifted
+
+zenmetrics' "unknown zenavif plan" error hand-typed the plan names, and its own
+comment called itself "the human-readable mirror" of `SweepAxes::by_name`. It
+drifted the instant `svt_doe_b6` landed: the message still named eight plans
+and omitted the ninth.
+
+That is not cosmetic. **That message IS the control arm §11.5 uses to prove a
+fleet image is not stale** — the check that cost this wave 93 % of its
+main-effects arm when it was skipped. A future reader running it against a
+perfectly good image would have been told the plan they had just declared does
+not exist. It was caught here only because the control arm was actually run
+(and the first run of it was itself useless — an empty sources dir makes the
+real and bogus arms return the *same* "no source files found", exactly the trap
+§11.5 documents; a real source had to be mounted before the test measured
+anything).
+
+Fixed at the owner: `PLANS` is now one static table that `by_name` looks up in
+and `names()` returns, so a second copy is no longer expressible, and
+zenmetrics renders the message from `names()`. A test asserts the two agree and
+that all nine wire-contract names survive.
+
+### 15.7 Topology, and a correction to the fleet's assumed state
+
+**The fleet was not idle when this lane opened.** `avifsub-aom-r7900x` and
+`avifsub-aom-tower` had been up **11 hours**; their run
+`avifsub-aom-enc-20260901` was **COMPLETE (live-gap 0, 5,179 declared /
+5,484 ever-done)** and both workers were re-touching poison for zero output —
+zenfleet's own `idle` waste, on the two boxes this wave needed. Both were
+stopped before launch; nothing was destroyed (the run is complete).
+
+| box | role | cap | note |
+|---|---|---|---|
+| r7900x (24c) | encode `r7900x-b6enc` | `--cpuset-cpus 0-19 --memory 32g` | dedicated worker box, 4 cores left |
+| tower (32c) | encode `Tower-b6enc` | `--cpuset-cpus 0-19 --cpu-shares 256 --memory 24g` | **live household media server** — the tower rule, never uncapped |
+| dev (32c) | score `dev-b6sf` | `--cpuset-cpus 20-29 --memory 24g` | shares the box with the Stage-A scoring lane's 4 workers; local encode was deliberately NOT added (load was already climbing and the Stage-A lane is another lane's live work) |
+
+Score run **`avifdoe-svt-b6-sf-cpu-20260902`**, metrics **`ssim2,zensim`**
+(butteraugli stays dropped per the standing user directive), fed by the
+parameterised gap-fill loop every 180 s with heartbeat + `errors_total`
+(`~/tmp/b6_score_gapfill.heartbeat`).
+
+**Two launch frictions worth baking into the runbook.** A fresh run has no
+`ledger_snapshot.parquet`, so `ZEN_REQUIRE_SNAPSHOT=1` fails the worker loud on
+every pass; the fix is `zenfleet-ctl compact --run <run> --upload` (which is
+preferable to `ZEN_REQUIRE_SNAPSHOT=0` because it keeps the strict invariant for
+every later worker), and the declare script's "next steps" block does not
+mention it. And `control.json`'s schema is `{"paused":false,"drain":false}` —
+a plausible-looking `{"state":"running"}` is not it.
+
+### 15.8 Corrections this lane owes the record
+
+- **There is no 16320×7612 image in this corpus.** The 32 native refs run
+  **0.25–16.00 MP** (largest `6604.scale3286x4868.png`), 161.59 MP total,
+  median 1.57. Any B-6 costing that assumed a ~124 MP pano is wrong by ~8× on
+  its worst cell.
+- **Stage-A §10's B-6 cost line is right, and its per-knob framing is what
+  makes it differ from the declaration.** Both numbers are correct for what
+  they count; see §15.1. Nothing needs re-registering.

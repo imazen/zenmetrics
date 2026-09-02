@@ -39,6 +39,11 @@ CTL=./target/release/zenfleet-ctl
 SFRUN="${ZEN_DOE_SFRUN:-avifdoe-svt-sf-cpu-20260902}"
 CROP_REFS="s3://codec-corpus/avif-doe-1024-2026-09-01/"
 AG_REFS="s3://codec-corpus/avif-subsample-2026-09-01/"     # NATIVE — see the hazard note above
+# The run -> refs-prefix map. OVERRIDABLE so a later wave reuses this loop
+# instead of forking it: space-separated `<full-run-name>=<refs-prefix>`.
+# Stage B's B-6 run encodes the NATIVE corpus, so it takes AG_REFS — getting
+# this wrong is the silent-garbage hazard documented above, not a typo.
+ZEN_DOE_RUNS="${ZEN_DOE_RUNS:-avifdoe-svt-a1-20260901=$CROP_REFS avifdoe-svt-a2-20260901=$CROP_REFS avifdoe-svt-a0r-20260901=$CROP_REFS avifdoe-svt-ag-20260901=$AG_REFS}"
 PAIRDIR="${ZEN_DOE_PAIRDIR:-$HOME/tmp/avifdoe_pairs}"
 HB="${ZEN_DOE_HEARTBEAT:-$HOME/tmp/avifdoe_score_gapfill.heartbeat}"
 SLEEP="${ZEN_DOE_SLEEP:-300}"
@@ -50,13 +55,13 @@ while true; do
   PARGS=()
   # run -> refs-prefix. AG is LAST and deliberately separate: same filenames,
   # different pixels. Never fold it into the crop loop.
-  for spec in "a1=$CROP_REFS" "a2=$CROP_REFS" "a0r=$CROP_REFS" "ag=$AG_REFS"; do
+  for spec in $ZEN_DOE_RUNS; do
     run="${spec%%=*}"; refs="${spec#*=}"
-    nb=$(aws --endpoint-url "$EP" s3 ls "s3://zentrain/jobs/avifdoe-svt-${run}-20260901/blobs/" --recursive 2>/dev/null | wc -l)
+    nb=$(aws --endpoint-url "$EP" s3 ls "s3://zentrain/jobs/${run}/blobs/" --recursive 2>/dev/null | wc -l)
     [ "$nb" -eq 0 ] && { echo "[$TS]   $run: 0 encode blobs, skip"; continue; }
-    if $CTL pairs --ledger "s3://zentrain/jobs/avifdoe-svt-${run}-20260901/ledger/" \
+    if $CTL pairs --ledger "s3://zentrain/jobs/${run}/ledger/" \
         --refs-prefix "$refs" \
-        --blobs-prefix "s3://zentrain/jobs/avifdoe-svt-${run}-20260901/blobs/" \
+        --blobs-prefix "s3://zentrain/jobs/${run}/blobs/" \
         --out "$PAIRDIR/${run}_pairs" --endpoint "$EP" 2>&1 | tail -1; then
       PARGS+=(--pairs "$PAIRDIR/${run}_pairs.parquet")
     else
