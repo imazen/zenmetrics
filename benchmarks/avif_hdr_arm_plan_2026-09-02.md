@@ -1130,6 +1130,89 @@ box only**, which T1 does not touch and which is saturated at load ~35/32; the
 committed topology note records that dev is deliberately excluded from this
 arm. So the two waves are disjoint by box, not merely by schedule.
 
+### 10.4c TRACK T2 — LAUNCHED, with the route proved and one container defect found
+
+The §10.5 blocker analysis below is **superseded by this section**: every item
+it lists was closed, and T2 is running. Kept as written because the reasoning
+is what made the fix sequence obvious.
+
+**Source pins for the T2 image** (recorded because one of them is about to
+move — a separate lane is fixing `zenavif::encode_rgb16`'s ignored
+`config.bit_depth`, and T2-b encodes through exactly that function):
+
+| repo | commit | why it matters here |
+|---|---|---|
+| zenmetrics | `89d0fb64` | carries `7051921a` (faithful f32 fleet HDR scoring) |
+| **zenavif** | **`bcd7978`** | `encode_rgb16` still hardcodes `MatrixCoefficients::Identity` and ignores `config.bit_depth`, so 16-bit input is **always 10-bit GBR 4:4:4** — which is what T2-b wants, *by accident of the current behaviour*. A fix that honours `config.bit_depth` could change T2-b's depth, so this image is the era marker. |
+| zenav1-svt | `6fe01232b` | `with_bit_depth` no longer coerces — **this is why H-BD-3's mechanism read as stale in §10.6**; that lane landed the fix mid-flight, confirming the source read rather than contradicting it |
+
+Image: `ghcr.io/imazen/zenfleet-worker:exec-avifhbd-t2-89d0fb64`, digest
+`sha256:afb0359d…`, statically linked, and verified to still resolve all three
+`svt_doe_t1_*` plans (one image serves both tracks).
+
+**G5 — SATISFIED, with positive evidence.** The registered zero-instrumentation
+discriminator was run on the **fleet** route (`score-pairs --hdr`), scoring one
+real T2 pair twice:
+
+| metric | `--hdr-transfer pq` | `--hdr-transfer pu-rescale` | \|Δ\| |
+|---|---|---|---|
+| ssim2 | 19.631674372447154 | 19.631674372447154 | **0.0** |
+| zensim | 30.935347555261213 | 30.935347555261213 | **0.0** |
+
+Identical to full float precision ⇒ **the faithful f32 route**, since
+`--hdr-transfer` is inert there and the shell's own test asserts
+`|pu − pq| > 1e-9`. **Honest scope:** the *positive* half is measured here; the
+*discriminating* half rests on that lane's committed tests, not on a pre-fix
+control of my own — the attempted control failed because the T1 image was built
+without the `hdr` feature at all, making it a no-HDR binary rather than a
+pre-fix HDR one.
+
+**TODO-0's tripwire, verified on this arm's own artifact.** The same PQ pair
+scored *without* `--hdr` is refused loudly — *"PNG signals an HDR transfer via
+cICP (transfer=16, PQ): refusing to crush it through the 8-bit SDR decode path
+— score it with --hdr instead"* — so a mis-routed T2 cell fails instead of
+returning a plausible number.
+
+**Declared and launched:**
+
+| run | cells | arms | q | host |
+|---|--:|---|--:|---|
+| `avifhbd-t2a-20260902` | **3,248** | `zenav1-svt` × presets {0,1,3,4,6,7,9} | 29 | tower (capped) |
+| `avifhbd-t2b-20260902` | **432** | `zenavif` × speeds {4,6,7} | 9 | r7900x |
+
+3,248 + 432 = **3,680**, exactly §4.3's phase-1 total. Cells emitted by
+**driving** `hdrgrid_cells.py` (not forking it); both sets **deterministic**
+across two rounds (`4438a26a…`, `2ff99a47…`); all 16 declared `source_sha`
+values **match the committed picks TSV exactly**.
+
+> **The preset/speed VALUES were not specified by §4.3 — only the counts.**
+> The 7 svt presets are **derived, not chosen**: `encoder_svt_rs.rs:192` maps
+> speed 1..=10 → preset 0..=9 clamped at M9, so {0,1,3,4,6,7,9} is *every
+> preset the dial can reach* (the same set `svt_doe_main` names). The 3 zenavif
+> speeds {4,6,7} **are a choice** — B-1's registered speed set, already used by
+> `svt_doe_b6`, with speed 4 leading as the default stratum. Recorded as a
+> choice so it is not mistaken for a derivation.
+
+**G3 on REAL FLEET blobs, both arms:** T2-b **5/5** and T2-a **4/4** PASS at
+depth 10 — av1C, sequence header and decoder `ImageInfo` all agreeing,
+`decoder_transfer = 16` (PQ) on every file; negative controls at
+`--expect-depth 8` exit 1. So both HDR arms emit genuinely 10-bit PQ streams.
+
+> **⚠ NEW DEFECT FOUND, and it is NOT a depth problem — the svt HDR arm's
+> `av1C` box disagrees with its own bitstream.** On T2-a blobs the **av1C
+> reports `seq_profile = 1`, `ssx = ssy = 0` (4:4:4)** while the **AV1 sequence
+> header reports `seq_profile = 0`** (Main, which is 4:2:0-only — the two are
+> not a legal pair). The encode really is 4:2:0 (`sweep/hdr.rs:501
+> to_yuv420_bd10`), so the **sequence header is right and the container is
+> mis-signalled**. It is specific to the **HDR** mux: T1's SDR svt blobs from
+> the same port mux correctly (`av1C` profile 0, ssx=ssy=1 → 4:2:0). Depth is
+> unaffected — `high_bitdepth = 1` on both reads and all three depth sources
+> agree at 10 — so **G3 stands and T2-a's bit-depth claim is untouched**; what
+> is wrong is the profile/chroma metadata a consumer would read from the
+> container. Recorded, not fixed: it lives in the zenavif/`zenavif-serialize`
+> mux, another lane is active in that repo, and the fleet runs a pinned
+> prebuilt image so it cannot change under the running wave.
+
 ### 10.5 ⛔ TRACK T2 IS SPLIT: T2-b is executable, **T2-a is BLOCKED**
 
 This is a wiring gap §2.6 did not record, found by reading the source at
