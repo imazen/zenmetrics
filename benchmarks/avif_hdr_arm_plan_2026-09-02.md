@@ -1155,7 +1155,7 @@ move — a separate lane is fixing `zenavif::encode_rgb16`'s ignored
 | repo | commit | why it matters here |
 |---|---|---|
 | zenmetrics | `89d0fb64` | carries `7051921a` (faithful f32 fleet HDR scoring) |
-| **zenavif** | **`bcd7978`** | `encode_rgb16` still hardcodes `MatrixCoefficients::Identity` and ignores `config.bit_depth`, so 16-bit input is **always 10-bit GBR 4:4:4** — which is what T2-b wants, *by accident of the current behaviour*. A fix that honours `config.bit_depth` could change T2-b's depth, so this image is the era marker. |
+| **zenavif** | **`bcd7978`** | `encode_rgb16` ignores `config.bit_depth`, so 16-bit input is **always 10-bit GBR 4:4:4** — what T2-b wants, *by accident of the behaviour at that commit*. **⚠ THAT COMMIT IS NO LONGER `main`:** `cc17cb8` — *"encode_rgb16/encode_rgba16 honour config.bit_depth instead of silently coding 10"* — landed **~10 minutes after this image was built**. The running wave is unaffected (the fleet runs the prebuilt image), and that is precisely why the pin was taken. **Any future T2 image MUST re-run G3 before it is trusted**: past `cc17cb8` the emitted depth is whatever `config.bit_depth` the HDR sweep supplies, which is no longer guaranteed to be 10. A rebuild that skips G3 could silently produce 8-bit cells that join the 10-bit ones. |
 | zenav1-svt | `6fe01232b` | `with_bit_depth` no longer coerces — **this is why H-BD-3's mechanism read as stale in §10.6**; that lane landed the fix mid-flight, confirming the source read rather than contradicting it |
 
 Image: `ghcr.io/imazen/zenfleet-worker:exec-avifhbd-t2-89d0fb64`, digest
