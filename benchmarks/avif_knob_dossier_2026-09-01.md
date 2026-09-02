@@ -708,5 +708,5 @@ Repos were claimed with `.workongoing` (`claude-knobdocs`) for the read;
 were therefore read **strictly read-only**, with no marker written and nothing
 modified. **⚠ That lane is auditing and retrofitting the AVIF sweep's knob
 permutations right now** — the harness facts in §6 are a snapshot of
-`zenmetrics @ <this commit's parent>` and may move under you. Re-check §6
+`zenmetrics e91a03b4` (this commit's parent) and may move under you. Re-check §6
 against the tree before designing on it.
