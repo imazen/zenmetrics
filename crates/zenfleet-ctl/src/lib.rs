@@ -848,9 +848,12 @@ pub fn pairs_metric(row: &LedgerRow) -> String {
 /// `LedgerView` map key — so no two rows compare equal, the order is total, and
 /// the result cannot depend on iteration or insertion order.
 pub fn pairs_done_sorted(view: &LedgerView) -> Vec<&LedgerRow> {
+    /// `(image_path, codec, q, knob_tuple_json, metric, encode_sha, job_id)`.
+    /// The trailing `job_id` is what makes the order TOTAL.
+    type SortKey<'a> = (&'a str, &'a str, i64, &'a str, String, String, &'a str);
     // Decorate-sort-undecorate: the metric/sha key parts allocate, so build each
     // key once rather than once per comparison.
-    let mut keyed: Vec<((&str, &str, i64, &str, String, String, &str), &LedgerRow)> = view
+    let mut keyed: Vec<(SortKey<'_>, &LedgerRow)> = view
         .rows()
         .filter(|r| r.status == JobStatus::Done)
         .map(|r| {
