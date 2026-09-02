@@ -529,3 +529,135 @@ needs, and it is already partly paid for.
 | alias probe (encode evidence) | `~/tmp/permretrofit/aliasprobe/svt_probe.tsv` |
 | zenavif change | `292582fb` on `zenavif main@origin` |
 
+
+---
+
+## 9. WHAT IT SAVES — measured, and smaller in CPU than in cells
+
+**The cell saving (17.8 %) is NOT a 17.8 % CPU saving**, and saying so would be
+wrong: the svt-rs speeds that merge away are the *cheapest* ones. Measured, not
+fitted.
+
+### 9.1 svt-rs cost per speed (measured)
+
+`zenmetrics sweep --knob-grid '{"backend":["svt-rs"],"speed":[1..10]}'
+--q-grid 1,50,98,100`, 5 corpus images spanning 0.25 -> 12.0 MP, median
+`encode_ms` over q, `--jobs 4` on the dev box:
+
+| image | MP | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | s10 |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| 8288 | 0.25 | 3,600 | 1,658 | 557 | 304 | 95 | 37 | 13 | 13 | 13 | 13 |
+| 7004 | 1.05 | 8,146 | 3,564 | 893 | 748 | 363 | 131 | 84 | 83 | 83 | 83 |
+| 9830 | 1.57 | 8,148 | 3,988 | 1,810 | 1,111 | 380 | 93 | 40 | 41 | 40 | 43 |
+| 6006 | 7.91 | 5,750 | 4,529 | 3,002 | 2,819 | 1,483 | 287 | 192 | 194 | 200 | 191 |
+| 1442 | 12.0 | 32,357 | 16,416 | 12,075 | 11,337 | 4,899 | 580 | 209 | 212 | 213 | 221 |
+
+Share of svt-rs encode cost: **s1 43.5 %, s2 22.6 %, s3 13.8 %, s4 12.2 %,
+s5 5.4 %, s6 0.85 %, s7–s10 0.41 % each.** So the three merged M9 spellings
+(s8, s9, s10) are **1.23 % of svt-rs encode CPU** while being 30 % of its cells.
+(The table is also its own alias evidence: s7–s10 agree to the millisecond.)
+
+### 9.2 Per-q cost is flat, so a merged q column costs ~1/30
+
+- aom-rs, 2 images x speeds {5,7,9} x 7 q: every q column is **14.27–14.62 %**
+  of the 7 sampled (uniform = 14.29 %); `q100 / mean = 0.999x`.
+- svt-rs, 5 images x 10 speeds x 4 q: `q100 / mean-of-sampled = 1.033x`.
+
+So dropping q=100 removes ≈ **1/30 = 3.3 %** of each backend's encode cost.
+
+### 9.3 The number
+
+| | cells removed | share of that backend's ENCODE cpu |
+|---|--:|--:|
+| svt-rs speeds 8/9/10 | 2,880 | **1.23 %** (measured) |
+| svt-rs q=100 (7 kept speeds) | 224 | ~3.3 % (measured per-q flatness) |
+| aom-rs q=100 | 320 | ~3.3 % (measured per-q flatness) |
+| **total** | **3,424 (17.8 % of cells)** | **~3.4 % of encode CPU** |
+
+Against the launch doc's own budget (~7.5 CPU-h svt + ~167 CPU-h aom = ~175
+CPU-h — **its number, its labelled planning estimate**, which that doc itself
+says likely OVER-states aom because both smoke images were screen-detected),
+that is **≈ 6 CPU-h avoided**: ~0.3 h svt + ~5.6 h aom. Treat the CPU-h figure
+as inheriting the launch doc's uncertainty; the *shares* above are measured and
+the *cell counts* are exact.
+
+**Where the 17.8 % does land in full: the score side.** Scoring cost per variant
+is independent of the encoder speed knob, so 3,424 fewer encoded variants is
+3,424 fewer score_file jobs — the full 17.8 % of the scoring workload
+(ssim2 + zensim + butteraugli + a zenanalyze feature vector each), plus 3,424
+fewer blobs in the store and 3,424 fewer duplicate rows in the training table.
+**For a tuning/size/speed model that last one is the real prize**: a duplicate
+row is not a free extra sample, it is a mislabelled one.
+
+---
+
+## 10. RECONCILE VERIFICATION (measured after the swap)
+
+`zenfleet_worker::run` re-reads the manifest per pass, but a *pass* is long: the
+r7900x svt worker had been in one pass since 00:45Z with the 9,600-job list held
+in memory. Its chunks written at 01:30–01:32Z — after the flattened manifest was
+in place — still read **29 in-grid / 1 out-of-grid per 30-row chunk**, i.e.
+exactly the q=100 column, still being encoded.
+
+So the six workers were restarted (2 local by PID, 4 via `docker restart`;
+never `pkill -f`). Each came back on the flattened manifest — the entrypoint
+logged `manifest ready (3187424 bytes)` for svt-rs and `(4553462 bytes)` for
+aom-rs, the flattened sizes. First chunks of the new pass (`pass ts 01:33:47Z`):
+
+```
+pass-r7900x-svt-1-1.chunk-4993b11a.parquet  30 rows: IN 30  OUT 0
+pass-r7900x-svt-1-1.chunk-fcc9418f.parquet  30 rows: IN 30  OUT 0
+```
+
+**30/30 in-grid, zero duplicates**, against 29/30 immediately before. No cell
+was lost: a killed worker's claims are content-addressed leases that expire and
+return to the gap, and every completed row stayed in the ledger.
+
+**Byte-neutrality of the rebuild, checked against production.** The local
+workers `--exec` the freshly rebuilt `zenmetrics` binary, so the `encode_avif`
+refactor had to be byte-neutral. 6 completed cells were replayed through
+`jobexec` on the new binary and their sha256 compared to the ledger's
+`output_sha`: **6 match, 0 mismatch**, across both backends.
+
+### Fill at 01:38Z, on the flattened denominator
+
+| | done | of | fill |
+|---|--:|--:|--:|
+| svt-rs | 2,209 | 6,496 | **34.0 %** |
+| aom-rs | 651 | 9,280 | **7.0 %** |
+| **total** | **2,860** | **15,776** | **18.1 %** |
+
+Plus **715 alias-duplicate cells burned before the flatten** (693 svt + 22 aom)
+— up from 92 when the audit began, which is how much duplicate work the run
+consumed during the audit itself.
+
+ETA is dominated by aom-rs speeds 0–1 (the launch doc's fit puts 88 % of aom
+cost there, revised down by its own screen-detection correction) and is not
+estimated here: the honest instrument is the run's own throughput now that the
+grid is correct, and the fleet has been running the flattened set for minutes,
+not hours. The `~/tmp/avifsub_gapfill_loop.sh` denominators (`/9600`) are stale
+by the same 17.8 %; the true denominators are 6,496 and 9,280.
+
+---
+
+## 11. RETROACTIVE SCOPE — the 2026-08-30 wave carries the q alias too
+
+The prior AVIF wave (`avifsvt-enc-20260830` / `avifaom-enc-20260830`, recorded
+in zensim `benchmarks/balance_campaign_2026-08-28.md`) used the same
+`scripts/jobsys/avifsvt_cells.py` emitter and the same 30-point q grid, so its
+**q=100 column duplicates its q=98 column on both backends**: of its 130,590 svt
++ 125,688 aom harvested cells, roughly 1/30 of each (~4,353 + ~4,190 rows) are
+byte-identical repeats. Anything training on those tables should de-duplicate on
+`output_sha` rather than treat `(speed, q)` as distinct samples.
+
+Its **speed** sampling `{4, 6, 8}` is *not* affected — those map to presets 4, 7
+and 9, genuinely distinct. What is worth knowing for interpretation: **speed 8
+is the M9 saturation point**, the fastest setting the dial reaches (identical to
+9 and 10, and to 7), not a midpoint between 6 and 10. A speed model fit on
+`{4, 6, 8}` therefore has no sample between preset 7 and saturation, and none at
+presets 0–3 at all.
+
+The ledger row for the zensim campaign doc is written but **not applied**: that
+repo's `.workongoing` was live (`claude-dnotax`, Profile D no-tax refactor, with
+uncommitted work in `@`) when this lane finished, so it was not claimed. Text:
+`~/tmp/permretrofit_ledger_row.md`.
