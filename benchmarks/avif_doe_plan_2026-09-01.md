@@ -45,8 +45,16 @@ follow-on lane; this document designs, budgets, registers and launches the
    without re-encoding. **The speed model currently has zero input.** Fixed by a
    dedicated, uncontended timing block (§3.5) rather than by trusting fleet-contended
    times.
-5. **Total: 56,080 cells, ≈ 46 CPU-h encode + ≈ 47 CPU-h score.** Two days of LAN-fleet
-   wall time at measured throughput. It fits *because* of the aom shrink.
+5. **The pixel budget is a free variable set by the permutation count, not a
+   constraint on it** (user directive, §2.4). Knob screening runs on
+   **1024×1024 content-aware CROPS at native resolution** — crops, not
+   downscales, because the knobs under test are high-frequency machinery and a
+   resampler removes exactly what they act on. That is what let the knob space
+   *grow*: A1 from 3 presets to all 7, A2 from 16 images back to 32, A3 from one
+   dense speed to three. ≈ **3,300 permutations per image**.
+6. **Total: 117,435 cells, ≈ 70.5 CPU-h encode.** Roughly 1.5 days of LAN-fleet
+   encode at measured throughput, plus scoring. It fits *because* of the aom
+   shrink and the pixel budget together.
 
 ---
 
@@ -132,6 +140,119 @@ Since every ladder point is a control grid point, the anchor is recovered *at an
 time* for free, exactly and per image, as soon as the baseline scores land — the ladder
 is a superset of what anchoring would have selected, at 9 points instead of 3.
 
+### 2.4 The pixel budget is a FREE VARIABLE set by the permutation count
+
+**User directive, 2026-09-01 mid-flight:** *"we may need to downscale or crop
+images to make encode time achievable for the permutation set we want to test
+per image… the permutation set you actually want should drive the design — don't
+shrink the knob space to fit native-size costs."*
+
+This inverts the sizing: the design picks the permutation set first, then buys
+the pixels that fit it. Concretely it is what let §3 go from a
+budget-constrained shape (3 presets, 16 images for interactions) to the **full**
+one (all 7 effective presets for main effects, all 32 images for interactions,
+all 23 aom arms).
+
+**Decision: crop to 1024×1024; never upscale; native stays native below budget.**
+
+| source | transform | n |
+|---|---|--:|
+| MP ≤ 1.05 | **native, untouched** (never upscale) | 9 |
+| MP > 1.05 | **1024×1024 crop at native resolution**, content-aware window | 23 |
+
+**Why crop and not downscale — the load-bearing choice.** A Lanczos or Mitchell
+downscale is a low-pass filter, and **the knobs under test are largely
+high-frequency machinery**: `ac_bias` is literally "RD bias toward
+high-frequency error… texture and grain retention", variance boost keys on
+per-superblock *variance*, `sharpness` biases the deblocking filter, CDEF is a
+directional de-ringing filter, `max_tx_size` decides whether 64×64 transforms
+are available, and SVT's screen-content detector keys on the crisp edges and
+flat palette-able regions that resampling is precisely designed to soften.
+Screening those knobs on resampled inputs measures them on content the
+resampler has already partly removed — an attenuation that is both large and
+knob-specific, i.e. exactly the kind of bias that survives into a trained model.
+A native-resolution crop keeps the grain, the sharpness and the noise floor
+intact; what it changes is *which* content, which the selection rule below
+controls and the transfer gate (§3.8) tests.
+
+**Why 1024 px and not 512.** The floor has to leave the encoder's machinery room
+to behave representatively:
+
+- **Tiles are an axis in this design** (`tile_cols_log2 = 1`, and `(1,1)`).
+  AV1's minimum tile width is 256 px and SVT resolves an over-large request down
+  to what the geometry supports rather than erroring, so a 2-column tiling needs
+  ≥ 512 px and a 2×2 tiling needs ≥ 512 in *both* axes to be a real
+  measurement rather than a silent degradation. 1024 gives 2× headroom on both.
+- **Superblocks**: SVT uses 128×128 at presets ≤ M6 and 64×64 at ≥ M7. 1024 is
+  8×128 and 16×64 — a full grid at either size, and an exact multiple of both,
+  so the screening arm carries **no partial-superblock cells**. That removes a
+  real confound from knob screening (partial-SB coding is its own code path);
+  the cost is that partial-SB behaviour is only exercised by the native arms,
+  which is where §3.8's gate looks.
+- **The intercept lesson** (workspace sweep discipline §1): at 0.25 MP an svt
+  speed-7 encode is 13 ms and is dominated by fixed overhead; at 1.05 MP it is
+  ~44 ms and the per-pixel term leads. 1 MP is in the slope-dominated regime at
+  every preset, so a knob effect measured there is not an artifact of α.
+- CDEF works on 64×64 units and loop-restoration units are 64–256 px; both have
+  many instances at 1024².
+
+**Two picks sit below the floor and stay there.** `8288.scale375x667` (0.25 MP)
+and `8434.scale414x896` (0.37 MP) are real phone screenshots and upscaling is
+forbidden, so they enter the screening arm at native size. **The tile axis and
+any partition-depth conclusion is NOT read on those two images** — recorded here
+rather than dropping them, because they are the only members of the tiny bucket
+and the byte-side intercept needs them.
+
+**Crop selection — cluster-preserving, not center and not max-activity.** A
+center crop lands on flat background often enough to matter; a
+maximum-activity crop biases the whole wave toward busy content and would
+inflate every knob's measured effect. The rule instead **preserves the parent's
+place in the k-means feature space that selected it**:
+
+1. Enumerate candidate 1024×1024 windows on a 5×5 stride grid over the source,
+   plus the exact center (≤ 26 candidates).
+2. Extract the same **84 zenanalyze content features** the subsample clustering
+   used, z-scored with the *population's* mean/σ (not the candidates').
+3. Choose the window minimising Euclidean distance to the **parent image's own**
+   feature vector.
+4. **Verify** the chosen crop's nearest k-means centroid is still the parent's
+   cluster. Record the distance, the assigned cluster, and — where it moves —
+   the class shift, per pick.
+
+**The transformed image IS the reference.** Each crop is persisted
+content-addressed alongside the native corpus
+(`s3://codec-corpus/avif-doe-1024-2026-09-01/`), named
+`<origin_id>.crop1024.png` so `avifsvt_cells.py`'s filename convention still
+parses, with a manifest row carrying `source_id`, the crop rect `(x, y, w, h)`,
+`transform = crop-native` (or `native`), the source sha256 and the crop sha256.
+**zenanalyze features are re-extracted from the crop**, never inherited from the
+parent: the tuning model conditions on features of *what was actually encoded*.
+The score jobs emit a feature vector per scored variant already, so the
+downstream table gets this for free; the selection step above is the only place
+that needs its own extraction.
+
+**Cost effect, measured-model.** Capping at 1.05 MP takes the corpus from
+161.6 to 32.1 megapixels (5.0×), but encode cost is **sublinear** in pixels
+(fitted `k` = 0.37–0.94 for svt, 0.54 for aom), so the honest saving is
+**2.1× (aom, and svt's fast presets) to 3.7× (svt speed 4)** — not 5×. Stating
+it as 5× would be the extrapolation error the discipline forbids. Per-(speed,
+one q, all 32 images) at the budget, from the same fits as §4.1:
+
+| svt speed → preset | native | at budget | aom cpu-used | native | at budget |
+|---|--:|--:|---|--:|--:|
+| 1 → 0 | 330.4 s | 205.9 s | 0 | 12,551 s | 6,013 s |
+| 2 → 1 | 186.5 s | 100.9 s | 1 | 4,942 s | 2,367 s |
+| 3 → 3 | 107.4 s | 38.2 s | 2 | 1,620 s | 776 s |
+| 4 → 4 | 95.7 s | 26.2 s | 4 | 267.7 s | 128 s |
+| 5 → 6 | 44.5 s | 10.1 s | 6 | 50.7 s | 24.3 s |
+| 6 → 7 | 7.5 s | 3.0 s | 8 | 11.8 s | 5.7 s |
+| 7 → 9 | 3.7 s | 1.35 s | 9 | 2.9 s | 1.4 s |
+
+**The second win is the score side, which was the binding constraint** (§6):
+scoring cost is per-variant and scales with *pixels*, so a 1.05 MP variant costs
+roughly a fifth of the 5.05 MP corpus mean. That is what makes a 119k-cell wave
+affordable at all.
+
 ---
 
 ## 3. The design
@@ -141,12 +262,16 @@ is a superset of what anchoring would have selected, at 9 points instead of 3.
 ```
                        tune  (OUTERMOST — H-4: rewrites 9 other knobs)
                         │
-      ┌─────────────────┼──────────────────┐
-   A0 control        A1 main effects    A2 pairwise
-   deviations = 0    deviations = 1     deviations = 2
-   29-q × 7 presets  9-q × 3 presets    9-q × 1 preset × 16 imgs
-                     (+A1b 3-q × preset 1)
+      ┌─────────────────┼──────────────────┬───────────────────┐
+   A0/A0R control    A1 main effects    A2 pairwise         AG transfer gate
+   deviations = 0    deviations = 1     deviations = 2      native vs budget
+   29-q × 7 presets  9-q × 7 presets    9-q × 1 preset      3-q × 2 presets
+   native + budget   × 32 imgs @budget  × 32 imgs @budget   × 32 imgs @native
 ```
+
+Every knob block runs at the **1024² pixel budget** (§2.4); the control runs at
+**both** sizes, which is what makes the two comparable and gives the bytes
+intercept for free (§3.9).
 
 `deviations` is **not a new concept** — it is `SweepCell::deviations`, computed by
 `zenavif::sweep::cross()` as the number of axes whose value index is non-zero, with
@@ -159,17 +284,34 @@ already bounds it. So "main effects, then pairwise" is the planner's own ladder,
 The `deviations = 0` stratum at each backend's default envelope. This is the reference
 every knob arm is differenced against, **and** the per-image RD backbone.
 
-| arm | grid | cells |
-|---|---|--:|
-| **A0-svt** | 7 presets × 29 q × 32 img — **unchanged** | 6,496 |
-| **A0-aom** | **SHRUNK** (§4): `cpu-used {4,6,8,9}` × 29 q + `{2,3,5,7}` × 9 q + `{0,1}` × 5 q, × 32 img, minus 5 poison cells | 5,184 |
+| arm | grid | size | cells |
+|---|---|---|--:|
+| **A0-svt** | 7 presets × 29 q × 32 img — **unchanged, in flight** | native | 6,496 |
+| **A0-aom** | **SHRUNK** (§4): `cpu-used {4,6,8,9}` × 29 q + `{2,3,5,7}` × 9 q + `{0,1}` × 5 q, minus 5 poison cells | native | 5,179 |
+| **A0R-svt** | 7 presets × 29 q × 32 img — the **same-size default** every svt knob arm is differenced against | budget | 6,496 |
+| **A0R-aom** | `cpu-used {2..9}` × 9 q + `cpu-used 1` × 3 q | budget | 2,400 |
 
 A0-aom's 5-point ladder at `cpu-used` 0/1 is `q ∈ {5, 25, 45, 76, 96}`.
 
+**A0R is not optional.** A knob cell at 1024² must be differenced against a
+*default* cell at 1024², on the same image, at the same q. The A1 plan already
+emits its `deviations = 0` stratum at the 9 ladder points, so the minimum was
+free; A0R buys the other 20 q points so the reduced-size RD curves are as dense
+as the native ones, for 3.1 CPU-h. `cpu-used 0` is deliberately absent from
+A0R-aom (6,013 s per q point even at budget); the native A0 arm carries it.
+
 ### 3.2 A1 — main effects, svt-rs
 
-17 single-deviation knob arms × **speeds {4, 6, 7}** (= SVT presets 4, 7, 9) × the
-9-point ladder × 32 images = **14,688 cells**.
+17 single-deviation knob arms × **all 7 effective presets** (speeds
+{4, 6, 7, 2, 5, 3, 1} → presets {4, 7, 9, 1, 6, 3, 0}) × the 9-point ladder ×
+**32 images at budget** = **34,272 cells**.
+
+This is the §2.4 authorization spent: at native size the same block over 3
+presets cost 4.55 CPU-h and could not have afforded the slow end at all; at
+budget the **whole** ladder costs 12.1 CPU-h, of which speed 1 (preset 0) alone
+is 8.75. The speeds axis is ordered `[4, 6, 7, 2, 5, 3, 1]` — default first,
+speed 1 last — precisely so the budget gate (§7.3) sheds preset 0 first and
+nothing else.
 
 | # | axis | levels (index 0 = current default) | dossier | why these levels |
 |--:|---|---|---|---|
@@ -201,32 +343,30 @@ Non-default level count: 2+3+3+2+1+2+1+2+1 = **17**.
 | speeds 8, 9, 10 | **H-2** — all preset 9, identical bytes *and* identical times (measured to the millisecond, retrofit §9.1). |
 | q 100 | merges with q 98 on both backends (measured, retrofit §3). |
 
-### 3.3 A1b — the slow-preset interaction probe, svt-rs
+### 3.3 A1b — FOLDED INTO A1 (superseded by §2.4)
 
-17 arms × **speed 2** (= SVT preset 1) × 3-point ladder × 32 img = **1,632 cells**.
-
-Rationale: A1 covers presets 4/7/9. A knob's effect can invert at the slow end (the
-preset table turns SG restoration, Wiener, filter-intra, wedge/diff-weighted prediction
-on below M4/M7/M9, so the search a knob perturbs is a different search). This block is
-the cheapest instrument that can detect such an inversion: it asks only for the *sign*
-of each main effect at preset 1, which 3 q points answer. Speeds 1 and 3 are not probed
-— speed 1 is 43.5 % of the arm's whole encode cost for a preset that no production
-still encode uses.
+A1b was a 3-q probe at preset 1, existing only because native-size costs made the
+slow presets unaffordable in the main block. At the pixel budget the **whole**
+preset ladder fits in A1 at full 9-q density, so the probe is redundant and is
+not declared. Its scientific purpose — detecting a knob effect that *inverts* at
+the slow end, where the preset table turns SG restoration, Wiener, filter-intra
+and wedge prediction on — is now served better by presets 0 and 1 at 9 q instead
+of 3, and remains a registered Stage-B trigger (**B-5**).
 
 ### 3.4 A2 — pairwise interactions, svt-rs
 
 All two-deviation combinations of the 17 A1 levels — `((Σd)² − Σd²)/2 = (289 − 37)/2 =`
-**126 strata** — × **speed 6** × the 9-point ladder × **16 images** = **18,144 cells**.
+**126 composed strata**, 137 with the singles — × **speed 6** × the 9-point ladder ×
+**all 32 images at budget** = **39,456 cells** before merges.
 
 - **Speed 6 (preset 7)** is the single point: it is the neighbourhood of libavif's own
   default (`--speed 6`), and it costs 0.85 % of the svt arm's encode CPU.
-- **16 images, not 32.** Per the brief's stated priority ("cut representative-image
-  count before cutting q density"), the image axis is what gives. Selection rule,
-  deterministic: **the largest cluster of each of the 12 content classes, then the 2
-  smallest-MP and 2 largest-MP remaining picks.** Result: 12/12 content classes,
-  MP 0.25–16.00 (all four size decades retained — an interaction that only appears on
-  tiny or on 16 MP inputs is still visible), 60.2 % of the 1,082-image population.
-  Frozen list in §9.
+- **32 images, not 16.** The earlier draft cut the image axis in half purely to fit
+  native-size cost, which cost 3 content classes' outliers and 40 % of the population
+  coverage. At budget the full corpus costs **1.02 CPU-h** for this block, so the cut
+  is withdrawn: interactions are now measured on exactly the same content the main
+  effects are. (The 16-image class-stratified subset survives in §9 as the
+  pre-registered *fallback* if the budget gate fires.)
 - **Aliased pairs cost nothing.** A pair like `(tune=3, qm=(4,10))` resolves to the same
   configuration as `tune=3` alone, because `apply_tune_overrides` forces exactly that QM
   window. The planner merges it by fingerprint and reports it in
@@ -248,10 +388,13 @@ touching the `zenav1-aom` repo**:
 | transform search | 5: `enable_tx64=0`, `enable_rect_tx=0`, `enable_flip_idtx=0`, `reduced_tx_type_set=1`, `use_intra_dct_only=1` | `enable_tx_size_search=0` **excluded**: C asserts against combining it with `enable_tx64=0` (`encodeframe.c:2461`), and it is independently inert at `cpu-used ≥ 8` (**U-9**). |
 | screen tools | 1: `tune_content_screen=1` | the only way to force palette + IntraBC **deterministically** (bypasses the detector), which makes them designable factors instead of a content lottery (**H-6**). |
 
-Grid: 23 arms × `cpu-used 6` × 9 q × 32 img (6,624) + 23 × `cpu-used 8` × 3 q × 32 img
-(2,208) + 23 × `cpu-used 4` × 3 q × 16 img (1,104) = **9,936 cells**.
+Grid: 23 arms × `cpu-used {4, 6, 8}` × 9 q × **32 images at budget** =
+**19,872 cells**, 9.1 CPU-h. (At native size the same coverage was 24 CPU-h and
+had to be cut to one dense speed plus two 3-q probes; §2.4 buys the full
+three-speed × 9-q block instead.)
 
-- `cpu-used 6` is libavif's default speed and carries the dense ladder.
+- `cpu-used 6` is libavif's default speed.
+- `cpu-used 4` is the quality end of the practical range.
 - `cpu-used 8` is the **non-RD-mode** probe: libaom silently disables deltaq modes 1–5
   and `enable_tx_size_search` above `cpu-used 7` (**H-17**, **U-9**). Which of these 23
   arms goes inert there is a fact the model must know, and it is exactly the kind of
@@ -303,21 +446,103 @@ the encode fleet drains**, with:
 ≈ 1,800 timed encodes. Recorded with host id, thread count, and a `contended=false`
 flag; every fleet-harvested time stays labelled **ranking-only** (retrofit §7).
 
+### 3.8 AG — the cross-size transfer gate (pre-registered, blocking)
+
+Reduced-size screening is only worth anything if a knob's effect at 1024² points
+the same way as at native size. That is an assumption, so it gets a gate rather
+than a paragraph of reassurance — and at speed 6/4 it is nearly free.
+
+**Grid:** all **17 main-effect arms** × speeds **{4, 6}** × 3 q `{15, 45, 90}` ×
+**all 32 images at NATIVE size** = **3,264 cells, 1.47 CPU-h**. The matching
+reduced-size half is already inside A1, so the gate costs only its native leg.
+
+**Criterion, fixed before the data exists.** For each (image, arm, speed),
+compute the BD-rate against that image's default arm at the same size, over the
+3 shared q points. Then, per arm:
+
+| test | bar |
+|---|---|
+| **T1 direction** | sign agreement between native and budget BD-rate on ≥ **80 %** of the 32 images, counting only images where `\|BD-rate\|` at native ≥ 0.5 % |
+| **T2 rank** | Spearman of the 32 per-image BD-rates, native vs budget, ≥ **0.7** |
+| **T3 magnitude** | median `\|BD-rate_budget − BD-rate_native\|` ≤ **1.0 %**, and no systematic sign in that residual (binomial p ≥ 0.05) |
+
+An arm passing all three is screened at budget and its Stage-B follow-up may
+stay at budget. An arm failing **T1** is **not** screened at reduced size: it is
+promoted to a native-size arm in Stage B and its A1/A2 numbers are annotated as
+size-conditional. An arm failing only T2/T3 keeps its *direction* (which is what
+Stage-B triggers key on) with the magnitude flagged.
+
+Expected failures, named in advance so a hit is not a surprise: `ac_bias`,
+`sharpness` and forced screen-content are the arms whose mechanism is most
+plausibly resolution-coupled — cropping preserves native HF content, which is
+exactly why crop was chosen over downscale (§2.4), but a crop still changes the
+*ratio* of frame area to feature scale, which is what the detector and the
+deblocking filter see.
+
+### 3.9 The α + β·pixels decomposition, free from the size pair
+
+Running the control at **both** sizes on the same images at the same (speed, q)
+gives every `(image, speed, q)` cell two pixel counts, which is a two-point fit
+of `total = α + β · pixels` per the discipline's requirement to report the
+intercept *and* the slope, never a bare "ms/MP" or "bpp":
+
+- **Bytes: free, from the fleet.** `encoded_bytes` is recorded for every cell, so
+  A0 (native) × A0R (budget) yields the `header_bytes + content_bpp · pixels`
+  split per (image, speed, q) with **no extra encodes**. This is the term the
+  discipline warns about hardest — a ~1 KB AVIF container is +0.4 bpp on a
+  thumbnail and ~0 at 4K, so a bitrate model without it ships wrong defaults at
+  the small end. The 2 sub-0.4 MP picks are what make the intercept identifiable.
+- **Time: NOT free, and not obtainable from these runs at all** — `encode_ms` is
+  not persisted by the fleet path (§6). The A4 block is the instrument, and it
+  carries a **6-point** size ladder (64², 256², 512², 1024², 2048², 4096²)
+  rather than two points, because a 2-point fit of a term the sweeps show to be
+  sublinear in pixels would be a straight line through a curve.
+
+Stating which half is free and which is not is the point: the size pair is a
+genuine opportunity for the *bytes* model and buys the *speed* model nothing.
+
 ### 3.7 Totals
 
-| block | cells | encode CPU-h |
-|---|--:|--:|
-| A0-svt control (in flight, unchanged) | 6,496 | 6.25 |
-| A0-aom control (**shrunk** from 9,280) | 5,184 | 32.4 |
-| A1 svt main effects | 14,688 | 4.55 |
-| A1b svt slow-preset probe | 1,632 | 2.64 |
-| A2 svt pairwise | 18,144 | 1.19 |
-| A3 aom main effects | 9,936 | ~4.0 |
-| **fleet total** | **56,080** | **≈ 51** |
-| A4 timing (single-host, not a fleet run) | ~1,800 | ~2 |
+| block | size | cells | encode CPU-h |
+|---|---|--:|--:|
+| A0-svt control (in flight, unchanged) | native | 6,496 | 6.25 |
+| A0-aom control (**shrunk** from 9,280) | native | 5,179 | 32.4 |
+| A0R-svt reduced control | budget | 6,496 | 3.11 |
+| A0R-aom reduced control | budget | 2,400 | 5.00 |
+| A1 svt main effects (17 arms × 7 presets × 9 q × 32) | budget | 34,272 | 12.1 |
+| A2 svt pairwise (137 sets × 1 preset × 9 q × 32) | budget | 39,456 | 1.02 |
+| A3 aom main effects (23 arms × 3 speeds × 9 q × 32) | budget | 19,872 | 9.10 |
+| AG cross-size transfer gate | native | 3,264 | 1.47 |
+| **fleet total** | | **117,435** | **≈ 70.5** |
+| A4 timing (single-host, not a fleet run) | ladder | ~1,800 | ~2 |
 
 Of the fleet total, **4,415 cells are already done** (3,562 svt + 853 aom at
 2026-09-02T01:55Z).
+
+**The math the directive asked for, laid out.** Permutations per image × sec per
+cell at the chosen pixel budget × K images, against fleet capacity:
+
+| block | permutations / image | sec/cell @budget (mean over the 32) | × K=32 | encode |
+|---|--:|--:|--:|--:|
+| A1 | 17 arms × 7 presets × 9 q = **1,071** | 0.353 s | 34,272 cells | 12.1 h |
+| A2 | 137 sets × 1 preset × 9 q = **1,233** | 0.093 s | 39,456 cells | 1.02 h |
+| A3 | 23 arms × 3 speeds × 9 q = **621** | 1.65 s | 19,872 cells | 9.10 h |
+| A0R | 7 × 29 + aom 75 = **278** | 1.26 s | 8,896 cells | 8.11 h |
+| AG | 17 × 2 × 3 = **102** (native) | 1.62 s | 3,264 cells | 1.47 h |
+
+**≈ 3,300 permutations per image**, against a native-size design that could
+afford roughly a third of that. Capacity: the LAN fleet is r7900x (24 threads,
+uncapped) + tower (capped, ≥ 8 cores left for the household) + local (2 workers,
+cpuset-capped at 6 cores each) ≈ **46 effective cores**. 70.5 CPU-h of encode is
+**≈ 1.5 days** wall at full occupancy, plus scoring.
+
+**Scoring is the co-equal cost and is measured, not assumed.** 117k variants ×
+3 CPU metrics + a zenanalyze feature vector each. Per-variant score cost scales
+with pixels, so the budget cells are ~5× cheaper than the native mean — but this
+lane has **not measured the per-variant rate** (nothing was scoring, §6).
+Registered gate **G-SCORERATE**: after the first 200 scored variants land,
+compute the realised rate and re-check this budget; if the total lands above
+50 CPU-h of scoring, the de-scope rule (§7.3) fires on A2 first.
 
 ---
 
@@ -520,7 +745,9 @@ Consequences and actions:
    response (the standing north star for non-photo content, and 11/32 picks are
    plots/screenshots).
 2. **Effect size = BD-rate of the arm against the `deviations = 0` control at the same
-   (image, speed)**, integrated over the ladder's quality span.
+   (image, speed) AND THE SAME SIZE**, integrated over the ladder's quality span.
+   The same-size requirement is why A0R exists: differencing a budget-size knob
+   cell against a native-size default would fold the crop into the knob effect.
 3. **Main effects** = per-arm BD-rate distribution over the 32 images, reported as
    median and IQR, per speed and per content class.
 4. **Interactions** = observed pairwise BD-rate minus the additive prediction from the
@@ -540,18 +767,30 @@ Consequences and actions:
 | **B-2** | pair `(k1,k2)` deviates from the additive prediction by `≥ 1.0 %` BD-rate on `≥ 25 %` of images | full `k1 × k2` grid, 3 levels each, 9-q, 32 images |
 | **B-3** | `k`'s BD-rate median has **opposite signs** in ≥ 2 content classes, each `\|median\| ≥ 1 %` | content-stratified dense follow-up + an explicit interaction term in the model |
 | **B-4** | the A4 speed fit's held-out MAPE `> 25 %` for any `(backend, speed)` | extend the timing block's size ladder / knob coverage until ≤ 25 % |
-| **B-5** | any A1 main effect **inverts sign** between A1b (preset 1) and A1 (presets 4/7/9) | that knob gets the full preset ladder, 9-q, 32 images |
+| **B-5** | any A1 main effect **inverts sign** across the preset ladder (median per-image BD-rate of opposite sign at two presets, each `\|median\| ≥ 1 %`) | that knob is fitted with an explicit preset interaction, and its Stage-B grid is run at both the inverting presets |
+| **B-6** | an arm fails **T1** of the cross-size gate (§3.8) | that knob's Stage-B grid runs at **native** size; its A1/A2 numbers stay annotated as size-conditional |
 
 **Stage-B budget envelope:** ≤ 60,000 cells, ≤ 60 CPU-h encode, ≤ 50 CPU-h score,
 declared as `avifdoe-{svt,aom}-b-<date>` through the same canonical builder.
 
 ### 7.3 Pre-registered de-scope rule (budget gate)
 
-If measured throughput 6 h after the DOE launch implies **> 4 days** to drain, **A2 is
-withdrawn** (declaration shrunk, per §4.4) — it is the largest block, the most
-dispensable (interactions refine an attribution that main effects already give), and
-the last declared. A1/A1b/A3 are not withdrawn; if they alone exceed the envelope, the
-image axis is cut per §3.4's rule before any q density is.
+Shed in this fixed order, each step a declaration shrink per §4.4 (reversible, no
+ledger row lost), re-checking after each:
+
+1. **A2 → the 16-image class-stratified subset** (§9). Halves the largest block
+   for the smallest scientific loss; the subset is pre-registered so the choice
+   is not made after seeing results.
+2. **A1 → drop speed 1 (preset 0).** It is 8.75 of A1's 12.1 CPU-h on its own,
+   and the axis is already ordered so `collapse_one_axis` takes it first.
+3. **A1 → drop speed 3 (preset 3).** Next most expensive; presets 1, 4, 7, 9
+   still span the ladder.
+4. **A3 → drop `cpu-used 4`.** 7.1 of A3's 9.1 CPU-h.
+
+Triggers: measured throughput 6 h after launch implying **> 4 days** to drain,
+or **G-SCORERATE** landing scoring above 50 CPU-h. **q density is never cut**
+and the knob set is never cut — those are the two things §2.4's authorization
+exists to protect.
 
 ---
 
@@ -570,9 +809,11 @@ image axis is cut per §3.4's rule before any q density is.
 
 ## 9. Frozen inputs
 
-**A2 16-image subset** (rule: largest cluster of each of the 12 content classes, then
-the 2 smallest-MP and 2 largest-MP remaining picks; 12/12 classes, MP 0.25–16.00,
-60.2 % population coverage):
+**A2 16-image FALLBACK subset** — A2 now runs on all 32 (§3.4); this list is the
+pre-registered first step of the de-scope ladder (§7.3), fixed now so it cannot
+be chosen after seeing results. Rule: largest cluster of each of the 12 content
+classes, then the 2 smallest-MP and 2 largest-MP remaining picks; 12/12 classes,
+MP 0.25–16.00, 60.2 % population coverage:
 
 ```
 1008.scale3000x4000.png  1220.scale3000x4000.png  1420.scale3000x4000.png
@@ -585,13 +826,127 @@ the 2 smallest-MP and 2 largest-MP remaining picks; 12/12 classes, MP 0.25–16.
 
 **Run names**
 
-| run | contents |
+| run | contents | corpus |
+|---|---|---|
+| `avifsub-svt-enc-20260901` / `avifsub-aom-enc-20260901` | A0 native control (existing; aom shrunk in place) | `codec-corpus/avif-subsample-2026-09-01` |
+| `avifdoe-svt-a0r-20260901` / `avifdoe-aom-a0r-20260901` | A0R same-size control | `codec-corpus/avif-doe-1024-2026-09-01` |
+| `avifdoe-svt-a1-20260901` | A1 main effects | budget corpus |
+| `avifdoe-svt-a2-20260901` | A2 pairwise | budget corpus |
+| `avifdoe-aom-a3-20260901` | A3 aom main effects | budget corpus |
+| `avifdoe-svt-ag-20260901` | AG cross-size transfer gate | native corpus |
+| `avifdoe-*-sf-cpu-20260901` | score runs (`ssim2,zensim,butteraugli` + a zenanalyze feature vector per variant) | — |
+
+**Budget corpus** (`s3://codec-corpus/avif-doe-1024-2026-09-01/`, mirrored at
+`/mnt/v/output/avif-doe-1024-2026-09-01/`): 32 references — 9 native symlinks
+(MP ≤ 1.05) and 23 `<origin_id>.crop1024.png` content-aware crops — plus
+`crop_manifest_2026-09-01.tsv` carrying, per pick: `origin_id`, `transform`
+(`native` | `crop-native`), `crop_rect` (x, y, w, h), `source_sha256`,
+`crop_sha256`, the parent's cluster id, the crop's **re-extracted** 84-feature
+vector, its distance to the parent's vector, its own nearest centroid, and a
+`class_shift` flag where those differ.
+
+## 10. Execution status
+
+**Done and verified.**
+
+| step | evidence |
 |---|---|
-| `avifsub-svt-enc-20260901` / `avifsub-aom-enc-20260901` | A0 control (existing; aom shrunk in place) |
-| `avifdoe-svt-a1-20260901` | A1 + A1b |
-| `avifdoe-svt-a2-20260901` | A2 |
-| `avifdoe-aom-a3-20260901` | A3 |
-| `avifdoe-*-sf-cpu-20260901` | score runs (`ssim2,zensim,butteraugli` + a zenanalyze feature vector per variant) |
+| Design registered | this document, `6bc743b8` on `zenmetrics master@origin` |
+| A0-aom shrunk 9,280 → 5,179 | `declare-encodes` on the flattened cells; verified a **strict subset with byte-identical retained jobs** (`new-is-subset-of-old: True`, `NEW-not-in-old: 0`, `removed: 4,101`) ⇒ no `JobId` moved, every completed cell reused. 483 of 793 done cells fall inside the new grid; the other 310 keep their ledger rows and blobs, they are simply no longer declared. |
+| Prior manifests preserved | `s3://zentrain/jobs/avifsub-aom-enc-20260901/manifest.pre-doeshrink-2026-09-01.json` (and the earlier `manifest.pre-flatten-2026-09-01.json`), plus a local `.bak` |
+| Workers picked it up | aom workers restarted on r7900x + tower + local; the local pair relaunched **cpuset-capped (6 cores each), `nice -n 19 ionice -c 3`**, with `--control-r2-key` so this lane's half of the wave IS pausable |
+| `control.json` seeded | `{"paused":false,"drain":false}` for both encode runs |
+| Score-side stall found | §6 — score blobs flat at 29 (svt) / 7 (aom) across 20 minutes while encode blobs grew by 1,279; no score worker running anywhere |
+
+**Design revised mid-flight** (2026-09-01, user directive) to make the per-image
+pixel budget a free variable set by the permutation count — §2.4, §3.8, §3.9.
+Net effect: the knob space **grew** rather than shrank. A1 went from 3 presets to
+all 7; A2 went from 16 images back to 32; A3 went from one dense speed plus two
+3-q probes to three speeds at full 9-q; A1b was folded into A1 and dropped; a
+same-size reduced control (A0R) and a cross-size transfer gate (AG) were added.
+≈ 3,300 permutations per image, ≈ 70.5 CPU-h of encode, 117,435 cells.
+
+**Implemented, NOT yet compiled or declared** (see the blocker below):
+
+- `zenavif`: `expert::SvtParams` (the nine §3.2 knobs, with `clamped()` for
+  hazard H-10 and `resolved(qp)` transcribing the port's own
+  `apply_tune_overrides`); `EncoderConfig::{with_svt_params, svt_params}`;
+  `encoder_svt_rs::apply_svt_params` on the colour pipeline; the
+  `SweepAxes::svt_knobs` axis with per-set deviation counting, the
+  `-tn/-vbst/-qml/-shp/-scm/-acb/-mtx/-tl` id grammar and its parser, the
+  resolved-state fingerprint extension, and the `svt_doe_main` /
+  `svt_doe_pairwise` plans. Eight new tests, including the two invariants that
+  make the axis safe to add (a default knob set moves **no** id and **no**
+  fingerprint) and the H-4 merge (`tune 3` absorbs the knobs it forces).
+- `zenmetrics`: `scripts/jobsys/avifdoe_declare.sh` (the declare path + G-DEDUP
+  readout), `scripts/jobsys/avifdoe_build_budget_corpus.py` (the §2.4 budget
+  corpus: cluster-preserving 1024² crops, native passthrough below budget, the
+  full provenance manifest, and a **loud non-zero exit** when the G-CROP feature
+  re-extraction has not run), and the zenavif plan-name error string.
+  **No other zenmetrics change is needed**: `build_zenavif_plan` dispatches plan
+  names generically through `zenavif::sweep::SweepAxes::by_name`, so the two new
+  plans are reachable from `--plan` without touching the executor.
+
+**Known gap in the budget-corpus builder, stated rather than papered over:** it
+selects the crop *position* from the existing imazen26 feature parquet's
+per-position crop rows, which is principled and needs no new tooling — but the
+**crop's own 84-feature re-extraction** (G-CROP) needs the imazen26 extractor
+pointed at the new PNGs, which this lane could not run. The script refuses to
+report success without it. The per-variant feature vectors the score jobs emit
+are from the *encoded pair*, so the tuning model's own features already describe
+the crop and never the parent; what is outstanding is the cluster-assignment
+sanity check, not the model's inputs.
+
+**BLOCKER (environment, not the design): the dev box's `/tmp` filesystem hit its
+quota and every shell invocation now fails.** Confirmed by a direct
+`EDQUOT: write` on a `/tmp/claude-*/scratchpad` file; the harness appends
+`&& pwd -P >| /tmp/claude-*-cwd` to every command, so an unwritable `/tmp` turns
+into a bare `exit 1` with no output on *every* command — including `true`.
+Consequences and state:
+
+- `cargo build` / `cargo test` / `jj commit` cannot run, so the zenavif change
+  above is **unverified and uncommitted** (it is on disk under
+  `/home/lilith/work/zen/zenavif`, which is a different, healthy filesystem).
+- The A0R / A1 / A2 / AG declarations have **not** been made, and the budget
+  corpus has **not** been built. The A0 shrink landed before the outage and is
+  the wave's live state: `avifsub-svt-enc-20260901` draining the native control
+  (3,562 of 6,496 done, ~3,036 cells/h ⇒ ~1.2 h left) and
+  `avifsub-aom-enc-20260901` draining the shrunk 5,179-cell grid on r7900x +
+  tower + the two cpuset-capped local workers.
+- **A3's aom knob threading is not written.** aom-rs has no `EncoderConfig` —
+  it is driven straight from `zenmetrics-cli` — so each arm must be applied to
+  **both** the port's `ToggleKnobs` and the C oracle via
+  `EncodeCell::c_encode_ctrls`, with a resolver registered in `sweep/dedup.rs`,
+  and gates G-AOM-BASE + G-AOM-ARM run first. Registered here; not started.
+  The svt arm carries the DOE if A3 slips.
+- The r7900x and tower workers are unaffected — they are separate boxes and
+  keep draining the shrunk A0 grid.
+- **The two local workers are spinning uselessly and must be killed first.**
+  MEASURED from `~/tmp/avifdoe/local_aom_worker.log`: every chunk fails with
+  `ledger write … failed: parquet External: Disk quota exceeded (os error 122)`,
+  dozens in a row. They claim a chunk, spend CPU encoding it, then cannot write
+  the ledger row — so the work is discarded, the claim expires, and the cell
+  returns to the gap for a remote worker. **No data is lost** (the ledger is
+  append-only, blobs are content-addressed, claims are leases), but the local
+  box is burning CPU for nothing and is a prime suspect for exhausting the quota
+  in the first place. Kill by recorded PID
+  (`~/tmp/avifdoe/local_{svt,aom}_worker.pid`) — never `pkill -f`, which
+  self-matches the invoking shell — and do not relaunch without pointing
+  `TMPDIR` at a filesystem with room. r7900x and tower are unaffected and have
+  been draining throughout.
+- Recovery, in order (full command sequence:
+  `~/tmp/avifdoe_RESUME_AFTER_SHELL.md`):
+  1. kill the local workers, then free space on the `/tmp` filesystem;
+  2. `cargo test -p zenavif --features sweep,encode-svt-rs,__expert`;
+  3. `scripts/jobsys/avifdoe_build_budget_corpus.py` + the G-CROP extraction,
+     then upload the budget corpus to
+     `s3://codec-corpus/avif-doe-1024-2026-09-01/`;
+  4. `scripts/jobsys/avifdoe_declare.sh --smoke`, then the full declare;
+  5. **start score workers** — nothing has been scoring (§6), and the DOE's
+     dependent variable is quality.
+- One verification the outage prevented: whether any `SweepAxes { .. }` struct
+  literal exists outside `src/sweep.rs` (examples/tests). Four in-crate literals
+  were found and updated by hand; the compiler will name any others.
 
 **Gates that must pass before each fleet scale-up** (two-stage launch):
 
@@ -603,3 +958,6 @@ the 2 smallest-MP and 2 largest-MP remaining picks; 12/12 classes, MP 0.25–16.
 | G-AOM-ARM | §5.3 — all 23 aom arms byte-match on the smoke set, or are dropped with their error class recorded |
 | G-CLAMP | `variance_boost_strength ∈ 1..=4`, `variance_octile ∈ 1..=8` enforced in the harness (**H-10**) |
 | G-CONTROL | every DOE worker launched with `ZEN_CONTROL_KEY` set, so the wave is pausable (unlike A0's) |
+| G-CROP | every budget-corpus reference has a manifest row with its crop rect + both sha256s, its features **re-extracted from the crop**, and its cluster assignment checked against the parent's — with any class shift recorded, not silently accepted (§2.4) |
+| G-XSIZE | §3.8's T1/T2/T3, run on the AG cells before any A1/A2 conclusion is published. An arm failing T1 is **not** screened at reduced size |
+| G-SCORERATE | the realised per-variant score cost, measured on the first 200 scored variants, re-checked against the §3.7 budget (§7.3 fires on a miss) |

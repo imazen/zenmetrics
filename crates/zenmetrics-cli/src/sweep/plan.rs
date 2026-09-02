@@ -399,7 +399,11 @@ pub fn build_zenavif_plan(
     use zenavif::sweep::{QualityGrid, SweepAxes, SweepBuilder};
     let axes = SweepAxes::by_name(name).ok_or_else(|| {
         format!(
-            "unknown zenavif plan {name:?}; expected rd_core, modes_full, modes_full_alpha, or scalar_dense"
+            // Names come from `SweepAxes::by_name`, which is the single
+            // owner; this list is the human-readable mirror of it.
+            "unknown zenavif plan {name:?}; expected rd_core, modes_full, modes_full_alpha, \
+             scalar_dense, svt_speed_dense, svt_doe_main, svt_doe_pairwise, \
+             or svt_doe_transfer"
         )
     })?;
     let grid = QualityGrid::Explicit(q_grid.iter().map(|&q| q as f32).collect());
