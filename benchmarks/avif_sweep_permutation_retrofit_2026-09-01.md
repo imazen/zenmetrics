@@ -17,6 +17,13 @@ orphaned**.
 Headline: **3,424 of 19,200 declared cells (17.8 %) are byte-wise duplicate
 work**, and **92 of them had already been encoded** when the audit ran.
 
+**Sibling document:** [`avif_knob_dossier_2026-09-01.md`](avif_knob_dossier_2026-09-01.md)
+— the upstream-sourced knob inventory for zenav1-svt (SVT-AV1 v4.2.0) and
+zenav1-aom (libaom v3.14.1), written the same day by the design-of-experiments
+lane. It records the same non-injective speed dial as its hazard **H-2** and
+cites this document's `aom_rs_cq_level` owner. Read it for *what each knob does*;
+read this one for *which knob tuples are the same encode*.
+
 ---
 
 ## 1. PRIOR ART — the machinery, its real names, and where it lives
