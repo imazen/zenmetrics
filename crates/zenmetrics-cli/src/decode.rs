@@ -205,6 +205,25 @@ fn decode_webp(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     Err("WebP decoding is disabled (compile with `--features webp`)".into())
 }
 
+/// Name the ITU-T H.273 transfer characteristics that carry absolute-luminance
+/// HDR, or `None` for every display-referred (SDR) code.
+///
+/// The same policy the PNG cICP tripwire above applies, so one rule covers both
+/// formats: **only** PQ (16) and HLG (18) are refused. The 8-vs-10-bit SDR AVIF
+/// track encodes 10-bit files that must keep decoding through this path, and
+/// BT.2020's SDR transfers (14, 15) sit adjacent to PQ/HLG in the CICP table —
+/// an over-broad guard would break both. Narrowing a 10-bit *SDR* AVIF to 8 bits
+/// is this module's documented contract; relabelling an HDR transfer as sRGB is
+/// not.
+#[cfg(feature = "avif")]
+fn hdr_transfer_name(transfer_characteristics: u8) -> Option<&'static str> {
+    match transfer_characteristics {
+        16 => Some("PQ"),
+        18 => Some("HLG"),
+        _ => None,
+    }
+}
+
 #[cfg(feature = "avif")]
 fn decode_avif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     // Single-threaded decode (threads(1)): rav1d-safe's default multi-threaded
@@ -214,8 +233,47 @@ fn decode_avif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     // safe because each decode owns its decoder/frame. ~no throughput loss in the
     // sweep (the rayon walk already parallelizes across cells).
     let cfg = zenavif::DecoderConfig::new().threads(1);
-    let pixels = zenavif::decode_with(data, &cfg, &enough::Unstoppable)
+    // `ManagedAvifDecoder::decode_full` rather than `zenavif::decode_with`,
+    // because the HDR tripwire below needs the `ImageInfo` that only
+    // `decode_full` hands back. It is the same decoder `decode_with` selects
+    // for this build (the `AvifDecoder` sibling is `unsafe-asm`-gated and we
+    // never enable it), and the same one `sweep::hdr::decode_avif_to_nits`
+    // already drives — so the decoded pixels are unchanged.
+    //
+    // It is also the single entry serving BOTH the grid (tiled) and non-grid
+    // shapes, so the tripwire covers both from one site: `decode_full` branches
+    // on `grid_config()` internally and returns an `ImageInfo` either way.
+    let mut decoder =
+        zenavif::ManagedAvifDecoder::new(data, &cfg).map_err(|e| format!("zenavif: {e}"))?;
+    let (pixels, info) = decoder
+        .decode_full(&enough::Unstoppable)
         .map_err(|e| format!("zenavif: {e}"))?;
+    // HDR tripwire — the AVIF twin of the PNG cICP refusal above. An AVIF whose
+    // `colr`/`nclx` box (or, absent one, whose AV1 sequence header) signals PQ or
+    // HLG carries absolute-luminance code values. The RGB8 funnel below would
+    // narrow them to 8 bits and relabel them sRGB, producing scores that look
+    // plausible and mean nothing, with no error anywhere — the
+    // imazen/zenmetrics#25 failure class.
+    //
+    // The second-line zenpixels `HdrSourceRequiresPeak` guard cannot catch this:
+    // the buffered decode never calls `descriptor_with_cicp` (only the row-sink
+    // paths do), so the buffer reaches `RowConverter` tagged
+    // `TransferFunction::Unknown` and the conversion is a byte passthrough.
+    // Measured pre-fix: a PQ-signalled copy of `tests/fixtures/ref_64.avif`
+    // scored bit-identically to the sRGB original, on both the plain and the
+    // grid-tiled shapes.
+    //
+    // HDR-aware callers route through `hdr::decode_to_nits` (`--hdr` on score /
+    // score-pairs / sweep), which preserves all 10 bits into f32 cd/m².
+    if let Some(name) = hdr_transfer_name(info.transfer_characteristics.0) {
+        return Err(format!(
+            "AVIF signals an HDR transfer via CICP (transfer={}, {}) at {}-bit: \
+             refusing to crush it through the 8-bit SDR decode path — score it \
+             with --hdr instead",
+            info.transfer_characteristics.0, name, info.bit_depth,
+        )
+        .into());
+    }
     pixel_buffer_to_rgb8(&pixels)
 }
 
@@ -357,4 +415,41 @@ fn pixel_slice_to_rgb8(
 #[cfg(feature = "png")]
 fn enough_unstoppable() -> Box<dyn enough::Stop + Send + Sync> {
     Box::new(enough::Unstoppable)
+}
+
+#[cfg(all(test, feature = "avif"))]
+mod tests {
+    use super::hdr_transfer_name;
+
+    /// The AVIF HDR tripwire's policy, pinned over the whole ITU-T H.273
+    /// transfer code space. Exhaustive rather than sampled because the guard
+    /// sits in front of every SDR AVIF this repo scores: an over-broad rule
+    /// would refuse live sweep cells, and a narrow one would let the
+    /// zenmetrics#25 corruption back through. Both directions are asserted.
+    ///
+    /// This also covers the tiled-vs-plain question by construction: there is
+    /// exactly ONE policy function and exactly one call site, reached from
+    /// `ManagedAvifDecoder::decode_full`, which serves the grid and non-grid
+    /// shapes alike. Tiling cannot select a different answer.
+    #[test]
+    fn only_pq_and_hlg_are_refused() {
+        for tc in 0u8..=255 {
+            let got = hdr_transfer_name(tc);
+            let want = match tc {
+                16 => Some("PQ"),
+                18 => Some("HLG"),
+                _ => None,
+            };
+            assert_eq!(got, want, "transfer code {tc} classified wrongly");
+        }
+    }
+
+    /// The two SDR codes most at risk from an over-broad guard: BT.2020's
+    /// 10-bit and 12-bit transfers, which neighbour PQ/HLG in the CICP table
+    /// and appear on wide-gamut SDR content.
+    #[test]
+    fn bt2020_sdr_transfers_are_not_hdr() {
+        assert_eq!(hdr_transfer_name(14), None);
+        assert_eq!(hdr_transfer_name(15), None);
+    }
 }
