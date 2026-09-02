@@ -398,12 +398,15 @@ pub fn build_zenavif_plan(
 ) -> Result<BuiltPlan, Box<dyn Error>> {
     use zenavif::sweep::{QualityGrid, SweepAxes, SweepBuilder};
     let axes = SweepAxes::by_name(name).ok_or_else(|| {
+        // The list is READ from `SweepAxes::names()`, never re-typed. The
+        // prose mirror this replaces silently stopped naming `svt_doe_b6`
+        // the moment that plan landed, so the one diagnostic that tells
+        // you which plans exist would have said this one does not — on
+        // the exact control arm the AVIF-DOE wave uses to prove an image
+        // is not stale (plan doc section 11.5).
         format!(
-            // Names come from `SweepAxes::by_name`, which is the single
-            // owner; this list is the human-readable mirror of it.
-            "unknown zenavif plan {name:?}; expected rd_core, modes_full, modes_full_alpha, \
-             scalar_dense, svt_speed_dense, svt_doe_main, svt_doe_pairwise, \
-             or svt_doe_transfer"
+            "unknown zenavif plan {name:?}; expected one of: {}",
+            SweepAxes::names().join(", ")
         )
     })?;
     let grid = QualityGrid::Explicit(q_grid.iter().map(|&q| q as f32).collect());
