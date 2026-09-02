@@ -167,11 +167,17 @@ declaration loop).
 > **2. "Not applied here" was the wrong call, because the run was not settling —
 > it was compounding.** The hold assumed the churn was a bounded historical
 > cost. It was live. Over rounds 37-40 the encode side sat frozen at 49,120 DONE
-> cells and `declared` was pinned at 4,128, yet score blobs climbed
+> cells and `declared` stayed pinned at 4,128, yet score blobs climbed
 > **25,818 → 26,251 → 26,973 → 27,639** — the same 4,128 jobs re-minted under
 > new identities every five minutes, with four workers re-scoring finished
-> cells. By the time the fix landed the multiplier had gone from 4.0× to 6.7×
-> and was still rising. **Such a run can never drain**, so holding did not avoid
+> cells. Re-measured at the moment the fix landed: `ever_done=29,664` against
+> `declared=4,128` — the multiplier had gone **4.0× → 7.19×**, i.e. ~7 full
+> passes over one pass of work, and was still rising. (Score blobs track
+> distinct completed `job_id`s about 1:1 — 29,608 against `ever_done` 29,664 —
+> which is why the blob count rose in step with the churn rather than with
+> coverage.) **Such a run never settles**: its gap closes each round and the
+> next round re-mints it, which is why `report` could say
+> `VERDICT: COMPLETE — live-gap==0` throughout. Holding the fix did not avoid
 > churn; it extended it. There was also no mid-flight hazard to weigh: the
 > encode ledgers are untouched by this change (encode job ids do not come from
 > pairs ordering), and the score run's ids were already rotating every round —

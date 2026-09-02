@@ -832,10 +832,12 @@ pub fn pairs_metric(row: &LedgerRow) -> String {
 /// MEASURED on the AVIF-DOE score wave (`benchmarks/avif_doe_stageA_2026-09-02.md`
 /// §1.4): `declared=4,128` against `ever_done=16,476` — a 4.0x re-work multiplier
 /// with `errors=0`. It was still compounding when this landed: over rounds 37-40
-/// the encode side sat frozen at 49,120 DONE cells and `declared` was pinned at
-/// exactly 4,128, yet score blobs climbed 25,818 → 26,251 → 26,973 → 27,639,
-/// because each round re-minted the same work under new identities. Such a run
-/// can never drain.
+/// the encode side sat frozen at 49,120 DONE cells and `declared` stayed pinned at
+/// exactly 4,128, while `ever_done` reached **29,664 — 7.19x** the declared work,
+/// i.e. the fleet had run ~7 full passes over the same 4,128 jobs. (Score blobs
+/// track distinct completed `job_id`s about 1:1, which is why they accumulated in
+/// step: 29,608 blobs for one pass worth of work.) Such a run never settles — the
+/// gap closes each round and the next round re-mints it.
 ///
 /// It is a WASTE bug, not a correctness one — every blob is valid and the ledger
 /// converges, because identity is content-addressed — but it multiplies the cost
