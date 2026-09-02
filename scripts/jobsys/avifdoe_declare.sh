@@ -323,6 +323,17 @@ exactly this reuse. t1d takes the NATIVE refs prefix:
                 avifdoe-svt-t1d-20260902=s3://codec-corpus/avif-subsample-2026-09-01/" \
     bash scripts/jobsys/avifdoe_score_gapfill.sh
 
+TOPOLOGY, measured 2026-09-02 while B-6 was draining (observe before load):
+  * r7900x  24 threads, load ~9   -- runs one B-6 encode worker; the natural
+            home for t1ac once B-6 clears.
+  * tower   32 threads, load ~11  -- ALSO runs a B-6 encode worker, ALONGSIDE
+            the household media stack (plex/sonarr/homeassistant/...). Never
+            launch uncapped here: ZEN_CPUSET=0-23 ZEN_CPU_SHARES=256
+            ZEN_MEMORY=24g leaves the household its 8 cores.
+  * dev     32 threads, load ~33  -- SATURATED by the 5 score workers. Do NOT
+            add an encode worker here; it is the box that scores.
+B-6's encode ran on BOTH tower and r7900x, so both free up together.
+
 GATE G3 before trusting any BD-rate -- a request for depth 10 is not evidence
 of a 10-bit stream:
 
