@@ -1096,11 +1096,32 @@ Stated precisely so the next lane starts from facts:
    score T2 through the u8 shell — silently, since the shell is still the
    documented fallback. This is the same class of trap as the stale-plan image,
    and it is worse here because it fails as a *plausible number*, not a panic.
-3. **G5 needs positive evidence against the NEW route**, not the old one. The
-   assertion to build is "this cell's ssim2/zensim came from
-   `faithful_hdr_rows`", and the honest way to get it is a decode/route marker
-   in the run log — not the absence of a refusal, and no longer "the run used
-   `sweep --hdr`", since the fleet path is now equally faithful.
+3. **G5 needs positive evidence against the NEW route** — and it is no longer
+   "the run used `sweep --hdr`", since the fleet path is now equally faithful.
+   **The route is a SILENT branch**: `faithful_hdr_rows` returns
+   `Option<Result<…>>` and a plain `None` means "the umbrella cannot express
+   this `(metric, backend)`", after which the caller drops to the u8 shell —
+   **no log line, no column, no warning**. So a run log cannot be grepped for
+   the route today, and "it didn't refuse" proves nothing.
+
+   **A zero-instrumentation discriminator exists, and it is already pinned by
+   tests in both directions.** `7051921a` makes `--hdr-transfer` **inert** on
+   the faithful route (it takes absolute nits and PU21-encodes in-kernel), while
+   on the shell the transfer selects the encoding and **provably changes the
+   number** — the lane's own tests assert both halves:
+   `hdr_transfer_is_inert_on_the_faithful_route` requires PQ ≡ PU-rescale, and
+   the shell test requires `|pu − pq| > 1e-9`. Therefore:
+
+   > **G5 route assertion (registered here, for whoever runs T2):** score one
+   > T2 pair **twice**, once with `--hdr-transfer pq` and once with
+   > `--hdr-transfer pu-rescale`, and compare.
+   > **Identical ⇒ the faithful f32 route was taken. Different ⇒ the u8 shell.**
+   > That is positive evidence, it needs no new instrumentation, and because
+   > both directions are gated by tests the discriminator cannot silently rot.
+
+   A route marker in the log would still be worth adding (it would make the
+   check O(1) instead of a second scoring pass) — but G5 is **satisfiable
+   today** without one, which it was not before this analysis.
 
 `hdrgrid_cells.py` is the right declaration template and already carries a
 `zenav1-svt` arm at `{"preset": 6}`; T2-a is that grammar at 7 presets × 29 q ×
