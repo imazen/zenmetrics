@@ -591,10 +591,16 @@ chroma, matrix), so it is a **contrast, not a controlled comparison** — report
   the manifest path. A cell whose `inputs[0]` sha is not in the manifest is poison.
 - **G0.2** T2 references must be **16-bit PNG, cICP transfer 16** — verified by reading
   the file, not the extension. **Pre-verified 2026-09-02: 76/76 PASS** (§1.2); re-run at
-  execution to catch corpus drift.
+  execution to catch corpus drift. **Owner: `scripts/hdr_corpus_precheck.py`** (committed
+  with this plan) — exit 0 = G0.2 PASS, 1 = at least one file would be refused by
+  `decode_hdr_ref`, 2 = nothing matched (an empty run must not pass silently). Verified
+  against all three paths on real data: 76/76 on the HDR corpus, **0/41 on the `.sdr.png`
+  renditions** (it correctly refuses 8-bit sRGB), exit 2 on an empty glob.
 - **G0.5 — primaries balance and disclosure.** The K=16 picks must carry ≥5 BT.709 and
   ≥5 P3, the picks TSV must record each pick's primaries, and the primaries × content
-  cross-tab must be published **with the picks, before any encode**. Any T2 finding
+  cross-tab must be published **with the picks, before any encode**. The same
+  `scripts/hdr_corpus_precheck.py` prints that cross-tab and emits the per-file TSV
+  (`--tsv`) that the picks table is built from. Any T2 finding
   stated in content terms must carry that cross-tab (§4.3).
 - **G0.3** if Tower is used, remount and re-verify `SHA256SUMS`; the 2026-09-02
   `StaleNetworkFileHandle` must be cleared, not worked around.
@@ -716,6 +722,7 @@ banding work permanently until it lands.
 | HDR PQ-PNG references (76) | `/mnt/v/output/imazen-26-png-v2/**/*.hdr.png` |
 | HDR size grid (1,140 files, 7.8 GB) | `/mnt/v/output/imazen-26-hdr-grid-2026-06-14/` ⚠ mixed zensim era |
 | HDR corpus provenance | `/mnt/v/output/imazen-26-png-v2/RECONVERT-REPORT-2026-06-11.md` |
+| **G0.2 + G0.5 precheck (this plan's tool)** | `zenmetrics/scripts/hdr_corpus_precheck.py` |
 | True-HDR EXR (30 refs) | `/mnt/v/datasets/upiq_extracted/upiq_dataset/images/{korshunov,narwaria}/` |
 | UPIQ subjective scores | `/mnt/v/datasets/upiq/upiq_subjective_scores.csv` |
 | si-hdr pixels (unstaged) | `/mnt/tower/input/datasets/si-hdr/{reference,reconstructions}.zip` + `SHA256SUMS` |
