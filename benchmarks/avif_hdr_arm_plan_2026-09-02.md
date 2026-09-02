@@ -1225,6 +1225,76 @@ depth 10 — av1C, sequence header and decoder `ImageInfo` all agreeing,
 > mux, another lane is active in that repo, and the fleet runs a pinned
 > prebuilt image so it cannot change under the running wave.
 
+> **✅ FIXED UPSTREAM 2026-09-02 — `zenavif` `ae9a354f` (on `main@origin`).**
+> The owner is `zenavif-serialize`'s `Aviffy::build_color_ipma`, which took the
+> `av1C` profile from the caller (`min_seq_profile`, **default 1**) and the
+> chroma from `self.chroma_subsampling` (**default `NONE` = 4:4:4**). It never
+> read the payload it was handed. The asymmetry the executor measured is exactly
+> the two call-site shapes: `zenavif`'s own `encoder_svt_rs::build_aviffy`
+> (`src/encoder_svt_rs.rs:725-727`) states `.set_seq_profile(0)` +
+> `.set_chroma_subsampling((true, true))` explicitly — so every SDR svt blob and
+> the whole **T2-b** arm (which routes through `zenavif::AvifEncoderConfig`, not
+> the raw muxer) mux correctly — while this repo's HDR svt arm
+> (`crates/zenmetrics-cli/src/sweep/hdr.rs:614`) builds `Aviffy::new()` and sets
+> only primaries/transfer/matrix/range, so it inherited both defaults.
+>
+> **The fix derives, it does not patch a literal.** `stream_seq_profile` walks
+> the OBUs to the first `OBU_SEQUENCE_HEADER` and reads its first three bits
+> (AV1 5.5.1); AV1 5.5.2 then *determines* chroma for the two profiles that
+> admit one format only — profile 0 is 4:2:0-or-mono (`ssx = ssy = 1`), profile 1
+> is 4:4:4 and never mono. Profile 2 (4:2:2, or any 12-bit) is genuinely
+> ambiguous and still takes the caller's subsampling, as does a payload with no
+> readable sequence header (pre-split OBUs, fixtures) — that fallback keeps the
+> pre-fix behaviour, so nothing that muxed correctly before changed.
+>
+> **Verified with this section's own G3 tool**, on a mux of the real
+> `link-u/fox.profile0.10bpc.yuv420.avif` payload through the `hdr.rs:614` shape:
+>
+> | | pre-fix | post-fix |
+> |---|---|---|
+> | `chroma` (R1, `av1C`) | **444** | **420** |
+> | `seq_profile` (R2, sequence header) | 0 | 0 |
+> | `av1c_depth` / `seqhdr_depth` / `decoder_depth` | 10 / 10 / 10 | 10 / 10 / 10 |
+> | `decoder_transfer` | 16 (PQ) | 16 (PQ) |
+> | `avif_depth_verify --expect-depth 10` | PASS | PASS |
+>
+> — the illegal pair reproduced exactly, and the depth columns untouched on both
+> sides, which is the same reason **G3 passed on the defective blobs and still
+> stands**. Six representative SDR muxes (explicit-profile call-site shape, full
+> container metadata, monochrome, alpha, 4:4:4, and both no-sequence-header
+> fixtures) are **byte-identical across the fix**, sha256
+> `1bb2ffef62e6c7a3ca98e728858048a0e1847f593eab752858e020b1202be9a4` on each
+> side. `cargo public-api`: **0 of 418 items differ**.
+>
+> **A SECOND, PREVIOUSLY UNREPORTED INSTANCE — `sweep/encode.rs:1397`, the aom-rs
+> SDR port arm** — has the identical omission (`Aviffy::new()` + colour knobs
+> only). It was never G3'd for profile, so its blobs were not measured; the
+> upstream fix covers it too, because the derivation is in the muxer rather than
+> at any call site. **Nothing in this repo was changed** — no call site needs the
+> two setters any more, and touching the sweep code under a running wave buys
+> nothing.
+>
+> **Blast radius on stored blobs: ANNOTATE, do not re-encode.** The affected run
+> is **`avifhbd-t2a-20260902`** (3,248 cells, `zenav1-svt` × presets
+> {0,1,3,4,6,7,9}, tower); **`avifhbd-t2b-20260902` is NOT affected** (zenavif
+> arm, correct mux). The AV1 payloads and every score derived from them are
+> **valid** — decoders read the sequence header, our own included, and G3's three
+> depth reads agree — so the defect is container metadata only and re-encoding
+> 3,248 cells would buy nothing. Searched for a consumer-facing use and found
+> none: no reference outside this plan doc in `scripts/` or `benchmarks/`, no
+> `site/` reference, no `/mnt/v/output` publication directory. They are internal
+> DOE artifacts in the job ledger and the `codec-corpus` store, read only by this
+> arm's own tooling.
+>
+> **Forward rule, beside the existing "future T2 image must re-run G3":** the
+> fix rides in automatically on any image rebuild — `zenavif-serialize` is a
+> **path** dep of this workspace (`Cargo.toml:362`), so a worker image built from
+> source on or after `ae9a354f` mints correct `av1C`. A rebuilt image should
+> therefore assert **profile/chroma agreement as well as depth**: run
+> `avif_depth_verify` and require the `chroma` column to read `420` with
+> `seq_profile` `0` on the svt HDR arm, not merely that the depths agree — the
+> defective blobs passed the depth-only gate.
+
 ### 10.5 ⛔ TRACK T2 IS SPLIT: T2-b is executable, **T2-a is BLOCKED**
 
 This is a wiring gap §2.6 did not record, found by reading the source at
