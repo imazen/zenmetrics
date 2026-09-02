@@ -2053,3 +2053,161 @@ a plausible-looking `{"state":"running"}` is not it.
 - **Stage-A §10's B-6 cost line is right, and its per-knob framing is what
   makes it differ from the declaration.** Both numbers are correct for what
   they count; see §15.1. Nothing needs re-registering.
+
+---
+
+## 16. A3 REDESIGNED — the C oracle leaves the tuning-data path (2026-09-02)
+
+**Registered, not declared.** A3 still awaits the user's Stage-B decisions; this
+section replaces its *design* only. Nothing here declares a run, changes a live
+declaration, or touches the draining waves.
+
+### 16.1 What invalidates the §3.5 / §5.3 design
+
+USER RULE **"IMAZEN-ONLY IMAGING/CODEC SOFTWARE"** (`~/work/zen/CLAUDE.md`,
+2026-09-02):
+
+> NEVER reach for imaging or codec software not written by imazen — for encoding,
+> decoding, probing, fixture generation, format/metadata inspection, oracles, or
+> gates — **especially anywhere in a pipeline that develops predictive models
+> designed to tune imazen software.** […] C references (libaom, SVT-AV1, libjxl,
+> …) are for **differential port validation inside the port repos only** — never
+> as tuning-data admission gates, never as the encoder behind sweep cells, never
+> as the truth a product model is trained against. **A port's own shipped
+> behavior is the ground truth for tuning it.**
+
+§3.5 selected A3's 23 arms by the criterion *"all `aom_bench::ToggleKnobs` fields
+whose C counterpart is emitted by `ToggleKnobs::c_ctrls()`"*, and §5.3 required
+each arm to *"drive the C side too, via `EncodeCell::c_encode_ctrls(ctrls)`"*
+behind gates **G-AOM-BASE** and **G-AOM-ARM**, both of which are sha-equality
+tests against C libaom v3.14.1. Under the rule above, that design is invalid as a
+source of tuning data on three separate counts, and the third is the one that
+bites hardest:
+
+1. **C as admission gate.** G-AOM-ARM drops an arm from the declaration when the
+   port's payload diverges from C. The surviving arm set is then a function of C
+   libaom's decisions, so the model's factor coverage is C-selected.
+2. **C as factor-space definition.** Restricting the arms to fields `c_ctrls()`
+   can express means the *design matrix itself* is bounded by the C CLI surface.
+   §3.5 already records the cost: `--tune=iq`/`ssimulacra2` and
+   `deltaq_mode2`/`deltaq_mode3` are excluded **for no reason except that C
+   cannot be driven to match** — port-side knobs, deliberately unmeasured.
+3. **C inside the encode itself.** MEASURED at
+   `crates/zenmetrics-cli/src/sweep/encode.rs:1307-1380` — this is not a gate,
+   it is the encoder. Every aom-rs cell today:
+   - calls `aom_sys_ref::ref_init()` and runs a **full C libaom encode**
+     (`cell.c_encode_defaults()`), which is the *sequence/frame header source*;
+   - reads the **screen-content decision out of the C stream**
+     (`aom_bench::stream_allows_screen_content_tools(&bootstrap)`) and feeds it
+     into the port's `ToggleKnobs` — so C's detector, not the port's, chooses
+     the port's coding tools;
+   - refuses to emit unless `port_payload == oracle_payload`;
+   - **splices the port's payload into the oracle's OBU frame**
+     (`splice_frame_obu(&bootstrap, &port_payload)`) — the emitted AVIF's
+     sequence header is C's bytes.
+
+   So the C oracle is simultaneously encoder (partially), probe, and admission
+   gate on the *existing A0 aom arm*, not merely on the proposed A3 one.
+
+### 16.2 The root cause is an API-shape mismatch, not a policy slip
+
+zenmetrics drives zenav1-aom through **`aom-bench`**, which is the port's
+**differential-validation harness**, not a product encoder API. This is
+structural, not incidental — every port encode takes a C stream by signature:
+
+```rust
+// zenav1-aom/crates/aom-bench/src/lib.rs:1150, :1176
+pub fn port_encode(&self, bootstrap: &[u8]) -> Vec<u8>
+pub fn port_encode_with(&self, bootstrap: &[u8], knobs: &ToggleKnobs) -> Vec<u8>
+```
+
+Its own doc calls the argument a *"bootstrap header-field parse"*. There is no
+`port_encode` overload that derives its own sequence header. `zenmetrics-cli`'s
+`Cargo.toml:60-66` already states the fact plainly — *"the port still bootstraps
+its sequence/frame HEADER FIELDS from the oracle stream […] so the oracle is a
+build+run dependency of this arm until the port derives headers standalone"* —
+so nothing here is newly discovered; what is new is that the rule now makes that
+dependency **disqualifying for tuning data**, where before it was a caveat.
+
+**Consequence, stated plainly:** deleting the byte-identity compare would not
+purge C. The header would still be C's and the screen decision would still be
+C's. The aom arm cannot be de-oracled at the zenmetrics layer at all.
+
+### 16.3 The corrected A3 design
+
+**A3's aom knob arms drive zenav1-aom's own encoder directly, and the port's own
+output is the ground truth.** Concretely:
+
+- **Factor space = the PORT's knob surface**, `aom_bench::ToggleKnobs` (or
+  whatever the standalone entry point exposes) — **not** the subset `c_ctrls()`
+  can mirror. §3.5's exclusions 2 and 3 (`--tune=iq`/`ssimulacra2`,
+  `deltaq_mode2`/`deltaq_mode3`) are re-classified from EXCLUDED to
+  **eligible**, because the only reason they were cut was C-drivability. They
+  return to the design on their own merits, subject to the usual cost gate.
+  The other §3.5 exclusions stand: they rest on *port-side* or *AV1-semantic*
+  reasoning (H-7 no alt-ref on a still, H-19 the value is discarded in
+  all-intra, H-20 the lossless back door, H-15 harness-pinned CICP, U-9
+  structural inertness above `cpu-used 7`), not on C parity.
+- **Ground truth = the port's emitted bitstream.** Bytes, `encode_ms`, and every
+  metric score come from the port's own stream. Nothing is compared to C to
+  decide whether a cell counts.
+- **Validity gate = the port's OWN correctness, self-contained**: the emitted
+  stream must decode through the port's own decoder,
+  `aom_decode::frame::decode_frame_obus` (`zenav1-aom/crates/aom-decode`), and
+  the AVIF must read back its declared depth/config through `zenavif-parse` —
+  the R1 route the landed gate G3 and
+  `sweep::encode::aom_rs_depth_tests::emitted_bitstream_carries_the_requested_depth`
+  already use. This is the imazen-only replacement for a C-parity gate, and it
+  is a *stronger* product statement: byte-equality with C never proved the
+  stream decodes; a decode does.
+- **G-AOM-BASE and G-AOM-ARM are WITHDRAWN as tuning-data gates.** Both are
+  sha-equality tests against C. They are re-registered, unchanged in content, as
+  **port-repo differential checks** — zenav1-aom's business, in zenav1-aom's
+  test tree, on zenav1-aom's schedule. An arm that diverges from C is **no
+  longer dropped from the declaration**; the divergence is recorded as a
+  *metadata column* on the cell (`c_parity: matched | diverged | not_measured`)
+  and the cell's data stands on its own decode-verified merit.
+- **The control arm changes accordingly.** §5.3's control was
+  `c_encode_defaults()` — a C encode. The corrected control is the port at
+  `ToggleKnobs::default()` with the port's own header derivation, i.e. a
+  single-deviation design whose base is the port's own default configuration.
+  That is what a model tuning zenav1-aom needs to price a knob against.
+- **The port's screen-content detector replaces C's.** §5.3's mirror-the-oracle
+  step (`stream_allows_screen_content_tools`) exists only because the header
+  came from C. With the port deriving its own header, `allow_screen_content_
+  tools` is the port's decision, as it is in production.
+
+### 16.4 The prerequisite, and who owns it
+
+The corrected design has exactly one blocker, and it is **not in this repo**:
+
+> **PREREQ-AOM-STANDALONE** — zenav1-aom must expose an encode entry point that
+> derives its own sequence + frame header (no `bootstrap: &[u8]`), emitting a
+> complete AV1 temporal unit. Owner: **zenav1-aom**, in its own repo.
+
+Until it lands, the honest status of the aom lane is:
+
+| | status |
+|---|---|
+| **A3 as designed in §3.5/§5.3** | **INVALID for tuning data** (§16.1). Not declared. Not to be declared. |
+| **A3 as redesigned in §16.3** | **BLOCKED on PREREQ-AOM-STANDALONE.** Registered, not declared. |
+| **The A0 aom arm now draining** | Produces C-bootstrapped, C-gated, C-header-spliced cells. **Not admissible as tuning-data for a model that tunes zenav1-aom.** Its cells remain valid as *port-parity evidence* — which is what the harness was built to produce. |
+| **The svt arm** | Unaffected. `zenav1-svt` is driven through zenavif's own `Av1Backend::SvtRs`, muxed by `zenavif-serialize`, with no C reference anywhere in the path. §9.x's *"the svt arm carries the DOE if A3 slips"* is now the load-bearing plan, not a fallback. |
+
+**No cells are re-run and nothing is deleted on this finding.** The A0 aom cells
+are content-addressed and already paid for; they are re-*labelled*, not
+discarded. What changes is what may be trained on them.
+
+### 16.5 What was NOT changed, and why
+
+- **The differential C validation itself is untouched and remains correct
+  practice.** The rule scopes it to the port repos, which is exactly where
+  `s4cov_*`, `encoder_gate_*`, and `config_permutations.rs` live. Nothing in
+  zenav1-aom is being asked to stop comparing against libaom.
+- **`sweep/encode.rs`'s byte-identity compare is left in place.** It is the only
+  thing standing between this arm and emitting unverified bytes *given* that the
+  header is spliced from C. Removing it without PREREQ-AOM-STANDALONE would make
+  the arm worse, not more compliant. The HBD band gate above it was re-keyed the
+  same day to cite the port's own record and this harness constraint rather than
+  C parity (`sweep/encode.rs`, `aom_rs_depth_tests::hbd_outside_the_byte_
+  verified_speed_band_is_refused_by_name`).

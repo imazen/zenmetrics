@@ -1222,24 +1222,53 @@ fn encode_avif_aom_rs(
     // The port's high-bit-depth encode is REAL — genuine highbd quantizers
     // (`aom-encode/src/lib.rs:416` `let hbd = qp.bd > 8`, into the eight
     // `aom_highbd_*` entry points), u16 planes end to end, and no refusal or
-    // narrowing anywhere — but it is byte-exact against the C libaom v3.14.1
-    // oracle only at `--cpu-used` 0, 7, 8 and 9. zenav1-aom pins speeds 1..=6
-    // as DIVERGENT for both bd10 and bd12 (`config_permutations.rs` `b10_64`
-    // context, enforced by the un-ignored `speed_envelope_stock_map_is_pinned`;
-    // coverage-queue entry HBD_OPEN, `zenav1-aom/CLAUDE.md`).
+    // narrowing anywhere.
     //
-    // Refuse the divergent band HERE, by name. Without this the cell would
-    // still fail — the port-vs-oracle payload compare below refuses any
-    // mismatch — but it would fail as an anonymous "PORT DIVERGED" after
-    // paying for a full C oracle encode plus a port encode, and a reader would
-    // have no way to tell a known-open speed from a new regression.
+    // WHAT THIS REFUSAL IS NOT (re-keyed 2026-09-02 under the IMAZEN-ONLY rule,
+    // `~/work/zen/CLAUDE.md`): it is NOT a finding that zenav1-aom's HBD encode
+    // is wrong at `--cpu-used` 1..=6. The PORT'S OWN record says the opposite.
+    // Its coverage queue files bd10/bd12 x 1..=6 under tier **T4 — "measured,
+    // pinned, unlocalized (byte divergences, NO REFUSAL)"**
+    // (`zenav1-aom/CLAUDE.md`, T4 table, row `HBD_OPEN` / `b10_64`): the port
+    // ENCODES there, does not refuse, and classes the difference as an
+    // unlocalized divergence FROM C — not as invalid output. The pinned set
+    // itself is `zenav1-aom/crates/aom-bench/tests/s4cov_qm_axis.rs:380`
+    // (`HBD_OPEN`), mirrored by `config_permutations.rs`'s `b10_64` context and
+    // enforced by `speed_envelope_stock_map_is_pinned`. A C-parity status is
+    // METADATA about this arm; it is not a correctness verdict on the port, and
+    // under the imazen-only rule it may not be a tuning-data admission gate.
+    //
+    // WHAT ACTUALLY FORCES THE REFUSAL is one level up, in this arm's harness.
+    // zenmetrics drives the port through `aom-bench::EncodeCell`, which is the
+    // port's DIFFERENTIAL-VALIDATION harness, not a product encoder API: every
+    // `port_encode*` takes a C-encoded `bootstrap` BY SIGNATURE
+    // (`zenav1-aom/crates/aom-bench/src/lib.rs:1150`, `:1176`), the screen-tool
+    // decision below is read out of that C stream, and the emitted AVIF splices
+    // the port's payload into the oracle's OBU frame. So a cell whose payload is
+    // not byte-identical to C has no stream to emit here AT ANY DEPTH. The gate
+    // below is the cheap, named form of a failure the splice hits anyway — it
+    // costs one C encode plus one port encode to reach it otherwise, and it
+    // arrives as an anonymous "PORT DIVERGED", indistinguishable from a new
+    // regression.
+    //
+    // ADMITTING the 1..=6 HBD band on the port's OWN correctness (encode, then
+    // decode-verify with the port's own `aom-decode`) needs a standalone port
+    // encode — the port deriving its own sequence/frame header instead of
+    // bootstrapping from the oracle. OWNER: zenav1-aom, in its own repo. Tracked
+    // in `benchmarks/bitdepth_capability_matrix_2026-09-02.md`; not this lane's
+    // to build, and not fixable by deleting this gate.
     const HBD_BYTE_VERIFIED_SPEEDS: [u64; 4] = [0, 7, 8, 9];
     if bd > 8 && !HBD_BYTE_VERIFIED_SPEEDS.contains(&speed) {
         return Err(format!(
-            "aom-rs bd={bd} at speed={speed}: zenav1-aom's high-bit-depth encode is byte-verified \
-             against the C oracle only at --cpu-used {HBD_BYTE_VERIFIED_SPEEDS:?} (1..=6 are \
-             PINNED divergent for bd10 and bd12 — HBD_OPEN, luma-borne, unlocalized). Declare an \
-             HBD cell at one of those speeds, or leave bd unset for 8-bit"
+            "aom-rs bd={bd} at speed={speed}: this arm cannot emit a payload that is not \
+             byte-identical to the C bootstrap it splices into — `aom-bench::EncodeCell` is \
+             zenav1-aom's differential harness and every `port_encode*` takes a C-encoded \
+             bootstrap by signature (aom-bench/src/lib.rs:1176) — and zenav1-aom pins bd10/bd12 \
+             x --cpu-used 1..=6 as divergent (HBD_OPEN, aom-bench/tests/s4cov_qm_axis.rs:380; \
+             luma-borne, unlocalized). The port's own record files that band under tier T4 \
+             (byte divergence, NO refusal), so its HBD encode is NOT claimed wrong here — this \
+             is a harness limit, not a correctness verdict. Declare an HBD cell at --cpu-used \
+             {HBD_BYTE_VERIFIED_SPEEDS:?}, or leave bd unset for 8-bit"
         )
         .into());
     }
@@ -1771,9 +1800,15 @@ mod aom_rs_depth_tests {
         }
     }
 
-    /// The divergent-band refusal. zenav1-aom pins `--cpu-used` 1..=6 as
-    /// DIVERGENT for bd10 and bd12; a cell declared there must fail by NAME,
-    /// before paying for an oracle encode.
+    /// The divergent-band refusal, and — since 2026-09-02 — the BASIS it must
+    /// cite. Under the IMAZEN-ONLY rule (`~/work/zen/CLAUDE.md`) a tuning-data
+    /// admission decision may not be keyed on agreement with a C reference, so
+    /// this refusal has to say what it actually rests on: this arm's own
+    /// harness cannot emit a non-byte-identical payload at ANY depth (every
+    /// `aom-bench` `port_encode*` takes a C-encoded bootstrap by signature),
+    /// plus the PORT's own pin. It must NOT read as a claim that zenav1-aom's
+    /// high-bit-depth encode is wrong at these speeds — the port's own record
+    /// says the opposite (tier T4: byte divergence, NO refusal).
     #[test]
     fn hbd_outside_the_byte_verified_speed_band_is_refused_by_name() {
         for bd in [10u64, 12] {
@@ -1786,9 +1821,30 @@ mod aom_rs_depth_tests {
                 let err = encode_avif_aom_rs(&source(32, 32), 60.0, &k)
                     .expect_err("bd>8 in the divergent band must be refused");
                 let msg = err.to_string();
+                // The stable sentinel for this gate (both this test and the
+                // in-band test key on it).
                 assert!(
-                    msg.contains("byte-verified") && msg.contains("HBD_OPEN"),
-                    "bd{bd} s{speed}: refusal must name the band and the open entry, got: {msg}"
+                    msg.contains("HBD_OPEN"),
+                    "bd{bd} s{speed}: refusal must name the port's open entry, got: {msg}"
+                );
+                // It must cite the PORT's own record as the pin's owner, by file.
+                assert!(
+                    msg.contains("s4cov_qm_axis.rs"),
+                    "bd{bd} s{speed}: refusal must cite the port-side pin's file, got: {msg}"
+                );
+                // It must name the harness constraint that actually forces the
+                // refusal — the C-bootstrap signature — not C parity as a
+                // correctness criterion.
+                assert!(
+                    msg.contains("bootstrap"),
+                    "bd{bd} s{speed}: refusal must name the harness bootstrap constraint, \
+                     got: {msg}"
+                );
+                // And it must explicitly disclaim the correctness reading.
+                assert!(
+                    msg.contains("NOT claimed wrong"),
+                    "bd{bd} s{speed}: refusal must disclaim any claim that the port's HBD \
+                     encode is wrong, got: {msg}"
                 );
             }
         }
@@ -1806,7 +1862,7 @@ mod aom_rs_depth_tests {
             if let Err(e) = encode_avif_aom_rs(&source(32, 32), 60.0, &k) {
                 let msg = e.to_string();
                 assert!(
-                    !msg.contains("byte-verified"),
+                    !msg.contains("HBD_OPEN"),
                     "speed {speed} is in the verified band and must not hit the band gate: {msg}"
                 );
             }
