@@ -1117,7 +1117,19 @@ When t1d finished, tower was **repointed to scoring** rather than left idle
 on r7900x, T1's scorefiles drain on tower, and the dev box is left entirely to
 B-6's score leg. First T1 score blob landed within seconds of that launch.
 
-**Why t1b stays paused:** §6's cheapest-discriminating-first order. t1ac's s6
+**Why t1b stays paused — re-checked 16:35Z, and the gate has NOT cleared.**
+The registered gate is T1-c (bd10 @ s6) **plus** T1-d, and T1-d is complete —
+but T1-c is not. Measured from t1ac's own DONE cells: the worker claims
+**across all seven strata concurrently**, not in the emitted priority order, so
+at 1,112 done the per-speed split is s1 184 / s2 127 / s3 196 / s4 165 / s5 160
+/ **s6 136** / s7 144 — every stratum partial, none of the 288-cell strata
+closed. A BD-rate at s6 needs the complete stratum *and* its scores. **t1b's
+4,320 cells stay unbought until then**, which is exactly what §6's staging is
+for. (Worth recording for anyone else planning a staged release: cells are
+*emitted* in priority order but *claimed* in chunks, so "the cheap strata
+finish first" is not true of the ledger.)
+
+**§6's cheapest-discriminating-first order.** t1ac's s6
 leg and t1d together are the 384 cells that answer "is the effect real at a
 second preset and at native size", which is what gates whether t1b's 4,320
 cells are worth buying at all.
