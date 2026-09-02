@@ -26,6 +26,10 @@
 //! filter step can drop or quarantine partial rows without having to re-run
 //! the sweep.
 
+/// Resolved-state dedup for the `--knob-grid` path: the identity that lets
+/// `--dry-run --emit-cells` declare one cell per distinct ENCODE instead of
+/// one per knob spelling. See the module docs for the add-a-codec rule.
+pub mod dedup;
 /// Persistent distortion-generation worker (`--distort-cmd`): generate each
 /// cell's distorted image via an external serve subprocess instead of a codec
 /// encode. See module docs for the length-framed wire protocol.

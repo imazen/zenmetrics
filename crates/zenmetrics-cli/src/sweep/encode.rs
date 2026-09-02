@@ -978,11 +978,61 @@ fn encode_avif(
     knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     use imgref::ImgRef;
-    use zenavif::EncoderConfig;
+
+    // aom-rs is not a zenavif `EncoderConfig` backend at all — it is the
+    // zenav1-aom port driven directly from here — so it dispatches before
+    // any config is built.
+    if knobs.get("backend").and_then(Value::as_str) == Some("aom-rs") {
+        #[cfg(feature = "avif-aom")]
+        {
+            return encode_avif_aom_rs(source, q, knobs);
+        }
+        #[cfg(not(feature = "avif-aom"))]
+        {
+            return Err(
+                "zenavif backend \"aom-rs\" requested but this build lacks the \
+                        `avif-aom` feature (rebuild with `--features avif-aom`); refusing \
+                        to fall back to zenravif and mislabel the cell"
+                    .into(),
+            );
+        }
+    }
+
+    let cfg = avif_config_from_knobs(q, knobs)?;
 
     // Build an ImgRef<Rgb<u8>> over the source buffer without copying.
     let pixels: &[rgb::Rgb<u8>] = bytemuck_cast_rgb(&source.pixels);
     let img = ImgRef::new(pixels, source.width as usize, source.height as usize);
+
+    let start = Instant::now();
+    let encoded = zenavif::encode_rgb8(
+        img,
+        &cfg,
+        almost_enough::StopToken::new(enough::Unstoppable),
+    )
+    .map_err(|e| format!("zenavif encode failed: {e}"))?;
+    let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+    Ok(EncodedCell {
+        bytes: encoded.avif_file,
+        encode_ms,
+    })
+}
+
+/// Resolve a zenavif knob tuple into the exact [`zenavif::EncoderConfig`]
+/// [`encode_avif`] encodes with.
+///
+/// Extracted so declare-time dedup (`crate::sweep::dedup`) resolves a knob
+/// tuple through the SAME code the encoder runs, instead of a mirror that can
+/// drift — the resolved-state discipline in `zenjpeg/docs/VARIANT_GENERATION.md`
+/// §3. `backend=aom-rs` is not representable here (it is not a zenavif
+/// backend); [`encode_avif`] dispatches it before calling this.
+#[cfg(all(feature = "sweep", feature = "avif"))]
+pub(crate) fn avif_config_from_knobs(
+    q: f64,
+    knobs: &Map<String, Value>,
+) -> Result<zenavif::EncoderConfig, Box<dyn Error>> {
+    use zenavif::EncoderConfig;
 
     let mut cfg = EncoderConfig::new().quality(q as f32);
     if let Some(s) = knobs.get("speed").and_then(Value::as_u64) {
@@ -1012,17 +1062,14 @@ fn encode_avif(
             }
         }
         Some("aom-rs") => {
-            #[cfg(feature = "avif-aom")]
-            {
-                return encode_avif_aom_rs(source, q, knobs);
-            }
-            #[cfg(not(feature = "avif-aom"))]
-            {
-                return Err("zenavif backend \"aom-rs\" requested but this build lacks the \
-                            `avif-aom` feature (rebuild with `--features avif-aom`); refusing \
-                            to fall back to zenravif and mislabel the cell"
-                    .into());
-            }
+            // Unreachable via `encode_avif` (it dispatches aom-rs first) and
+            // via `dedup` (same). A loud error rather than a silent zenravif
+            // config, which would mislabel the cell.
+            return Err(
+                "zenavif backend \"aom-rs\" has no EncoderConfig representation \
+                        (it is the zenav1-aom port, driven directly); this is a caller bug"
+                    .into(),
+            );
         }
         Some(other) => {
             return Err(format!(
@@ -1067,19 +1114,7 @@ fn encode_avif(
         }
     }
 
-    let start = Instant::now();
-    let encoded = zenavif::encode_rgb8(
-        img,
-        &cfg,
-        almost_enough::StopToken::new(enough::Unstoppable),
-    )
-    .map_err(|e| format!("zenavif encode failed: {e}"))?;
-    let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
-
-    Ok(EncodedCell {
-        bytes: encoded.avif_file,
-        encode_ms,
-    })
+    Ok(cfg)
 }
 
 #[cfg(not(all(feature = "sweep", feature = "avif")))]
@@ -1109,6 +1144,32 @@ fn encode_avif(
 /// silently different AVIF. The emitted bytes are the PORT's payload spliced
 /// into the oracle's OBU frame (sequence header + frame), temporal delimiters
 /// dropped, muxed by zenavif-serialize.
+/// THE aom-rs quality mediator: zenavif-convention `q` in 0..=100 mapped to
+/// libaom's `--cq-level` 1..=63.
+///
+/// This is the single owner of the mapping — `encode_avif_aom_rs` calls it, and
+/// so does the declare-time resolved-state dedup (`sweep::dedup`), so a knob
+/// tuple's identity can never drift from what the encoder actually runs.
+///
+/// # It is not injective, and the collision is at the top of the dial
+///
+/// `q = 100` computes `cq_level = 0`, which the `.clamp(1, 63)` lifts to 1 —
+/// the same level `q = 98` computes directly. So **q 98 and q 100 are one
+/// encode** on this backend. MEASURED, not merely derived: the live AVIF
+/// subsample sweep's ledger holds 7 aom-rs identical-`output_sha` groups (and
+/// 21 svt-rs ones), every single one of them exactly `{98, 100}` at a fixed
+/// speed — see zenmetrics
+/// `benchmarks/avif_sweep_permutation_retrofit_2026-09-01.md` §3.
+///
+/// The clamp itself is deliberate and stays: `cq_level = 0` is libaom's
+/// lossless quantizer, which is not what a caller asking for "quality 100" of
+/// a lossy ladder means (the same reasoning as zenavif's
+/// `quality_to_qp_gated`). Every other grid point in 0..=97 is distinct.
+#[cfg(all(feature = "sweep", feature = "avif-aom"))]
+pub(crate) fn aom_rs_cq_level(q: f64) -> i32 {
+    (((100.0 - q) * 63.0 / 100.0).round() as i32).clamp(1, 63)
+}
+
 #[cfg(all(feature = "sweep", feature = "avif-aom"))]
 fn encode_avif_aom_rs(
     source: &Rgb8Image,
@@ -1121,7 +1182,10 @@ fn encode_avif_aom_rs(
     use aom_dsp::entropy::obu::read_obu_header;
     use std::time::Instant;
 
-    if let Some(unknown) = knobs.keys().find(|k| !["backend", "speed"].contains(&k.as_str())) {
+    if let Some(unknown) = knobs
+        .keys()
+        .find(|k| !["backend", "speed"].contains(&k.as_str()))
+    {
         return Err(format!(
             "zenavif aom-rs backend: knob '{unknown}' is not wired (supported: backend, speed); \
              refusing to silently ignore it"
@@ -1130,9 +1194,12 @@ fn encode_avif_aom_rs(
     }
     let speed = knobs.get("speed").and_then(Value::as_u64).unwrap_or(6);
     if speed > 9 {
-        return Err(format!("aom-rs speed={speed} out of the byte-verified --cpu-used range 0..=9").into());
+        return Err(format!(
+            "aom-rs speed={speed} out of the byte-verified --cpu-used range 0..=9"
+        )
+        .into());
     }
-    let cq_level = (((100.0 - q) * 63.0 / 100.0).round() as i32).clamp(1, 63);
+    let cq_level = aom_rs_cq_level(q);
     let (w, h) = (source.width as usize, source.height as usize);
     let (cw, ch) = (w.div_ceil(2), h.div_ceil(2));
 
@@ -1140,8 +1207,14 @@ fn encode_avif_aom_rs(
     let mut y8 = vec![0u8; w * h];
     let mut u8p = vec![0u8; cw * ch];
     let mut v8p = vec![0u8; cw * ch];
-    zenyuv::YuvContext::new(zenyuv::Range::Full, zenyuv::Matrix::Bt601)
-        .encode_420_u8(&source.pixels, &mut y8, &mut u8p, &mut v8p, w, h);
+    zenyuv::YuvContext::new(zenyuv::Range::Full, zenyuv::Matrix::Bt601).encode_420_u8(
+        &source.pixels,
+        &mut y8,
+        &mut u8p,
+        &mut v8p,
+        w,
+        h,
+    );
     let cell = EncodeCell {
         label: format!("aom-rs {w}x{h} cq{cq_level} s{speed}"),
         w,
@@ -1168,7 +1241,9 @@ fn encode_avif_aom_rs(
         std::fs::write(format!("{stem}.v"), &v8p)?;
         std::fs::write(
             format!("{stem}.json"),
-            format!("{{\"w\":{w},\"h\":{h},\"cw\":{cw},\"ch\":{ch},\"cq_level\":{cq_level},\"speed\":{speed},\"matrix\":\"bt601-full\"}}"),
+            format!(
+                "{{\"w\":{w},\"h\":{h},\"cw\":{cw},\"ch\":{ch},\"cq_level\":{cq_level},\"speed\":{speed},\"matrix\":\"bt601-full\"}}"
+            ),
         )?;
     }
     aom_sys_ref::ref_init();
@@ -1244,7 +1319,8 @@ fn encode_avif_aom_rs(
     let mut obus = Vec::with_capacity(tu.len());
     let mut pos = 0usize;
     while pos < tu.len() {
-        let hdr = read_obu_header(&tu[pos..]).ok_or("aom-rs: malformed OBU header in port stream")?;
+        let hdr =
+            read_obu_header(&tu[pos..]).ok_or("aom-rs: malformed OBU header in port stream")?;
         let after = pos + hdr.header_len;
         if !hdr.obu_has_size_field {
             return Err("aom-rs: OBU without size field in port stream".into());

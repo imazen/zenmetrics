@@ -385,3 +385,39 @@ change — no zenfleet plumbing was touched for it.
   (what the fleet actually reads)
 - Extended: `zenmetrics/scripts/imazen26_recluster_even.py` (`--crop-label` flag,
   width/height passthrough — additive, backward-compatible)
+
+---
+
+## 7. APPENDED 2026-09-01 — permutation-builder retrofit (do not read §2 as final)
+
+**The grid registered in §2 was a naive Cartesian product, and 17.8 % of it is
+byte-wise duplicate work.** The zen codecs already own a settings-permutation
+builder (`SweepAxes` -> `SweepBuilder::plan()` -> `SweepPlan`, deduplicated by
+resolved-state byte-identity fingerprints) that exists to prevent exactly this;
+`scripts/jobsys/avifsvt_cells.py` bypasses it, and its closing
+`assert cells == len(names) * len(speeds) * len(qs)` is an assertion that no
+dedup happened.
+
+Full record, with `output_sha` evidence and the reconcile numbers:
+[`avif_sweep_permutation_retrofit_2026-09-01.md`](avif_sweep_permutation_retrofit_2026-09-01.md).
+
+Corrections that bear directly on §2 and §3 of this document:
+
+- **The svt-rs speed axis has 7 distinct settings, not 10.** zenavif speeds 7, 8,
+  9 and 10 all resolve to SVT preset 9 (C remaps every all-intra preset above M9
+  down to M9). §3's own smoke table already shows it — `speed 7 -> 12 ms/121 ms`,
+  `speeds 8-10 -> 12 ms/120 ms` — it was measured here and not recognised.
+- **q 98 and q 100 are one encode on BOTH backends** (each clamps its lossy dial
+  off the lossless quantizer: svt QP 1, aom cq 1). 29 distinct quantizers, not 30.
+- **Total: 19,200 declared -> 15,776 distinct encodes.** 3,424 removed
+  (2,880 svt speed-alias + 224 svt q100 + 320 aom q100); 92 of them had already
+  been encoded when the audit ran.
+- Both run manifests were replaced with the flattened set (originals preserved
+  as `manifest.pre-flatten-2026-09-01.json` in each run prefix). The declaration
+  is a **strict subset with byte-identical retained jobs**, so no `JobId` moved
+  and all 1,417 in-grid completed cells are reused; no worker was killed.
+- The gap-fill loop's `/9600` denominator is now stale — the real denominators
+  are **6,496 (svt)** and **9,280 (aom)**.
+
+zenavif change: `292582fb` on `main@origin` (backend axis + svt-rs resolved-state
+fingerprints + a repaired `speed_to_svt_preset` mirror).

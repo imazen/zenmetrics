@@ -62,6 +62,18 @@ mod orchestrator_glue;
 mod orchestrator_runner;
 
 use clap::{ArgAction, Parser, Subcommand, ValueEnum};
+
+/// How `--emit-cells` spells the `image_path` half of the content-addressed
+/// `CellId`. See the flag's docs — it decides whether declared jobs join an
+/// existing run's identity space or start a new one.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+enum EmitCellsImagePath {
+    /// The source path exactly as walked (the plan path's historical shape).
+    Full,
+    /// Just the file name — what a fleet worker resolves against
+    /// `ZEN_CORPUS_PREFIX`.
+    Basename,
+}
 use std::path::PathBuf;
 // `Path` is consumed only by `score_one_pair`, which lives behind
 // the `sweep` feature. Under `--no-default-features --features wgpu`
@@ -426,13 +438,22 @@ struct SweepArgs {
     /// explicitly to override that default.
     #[arg(long, requires = "plan")]
     max_deviations: Option<u8>,
-    /// Build the plan, write `<output>.plan.json`, print its stats, and
-    /// exit WITHOUT encoding. Alone it answers "how many cells/image
+    /// Build the cell set, write `<output>.plan.json`, print its stats,
+    /// and exit WITHOUT encoding. Alone it answers "how many cells/image
     /// will this cost?" for launchers; pair with `--emit-cells` to
-    /// produce the job-system declare manifest. Requires `--plan`.
-    #[arg(long, requires = "plan")]
+    /// produce the job-system declare manifest.
+    ///
+    /// Works with `--plan` (cells from the codec's curated planner) and,
+    /// since 2026-09-01, with `--knob-grid` (the Cartesian product,
+    /// deduplicated by resolved encoder state via
+    /// `crate::sweep::dedup::knob_cell_identity` — see that module for
+    /// why the AVIF svt-rs/aom-rs grid was 17.8 % duplicate work). A
+    /// knob-grid dry-run keeps the raw knob-map `knob_tuple_json`, so its
+    /// declare items are join-compatible with an already-running sweep;
+    /// only the alias-duplicate cells are dropped.
+    #[arg(long)]
     dry_run: bool,
-    /// Write one JSON line per (source image × plan cell) in
+    /// Write one JSON line per (source image × cell) in
     /// `zenfleet-ctl declare-encodes` item format: `{image_path, codec,
     /// q, knob_tuple_json, source_sha}` with `source_sha` =
     /// sha256(source bytes), the encode job's content-addressed input.
@@ -440,6 +461,17 @@ struct SweepArgs {
     /// are rejected, never truncated. Requires `--dry-run`.
     #[arg(long, requires = "dry_run")]
     emit_cells: Option<PathBuf>,
+    /// How `--emit-cells` spells `image_path`. `full` (default) writes the
+    /// path as given — what the plan path has always written, right for a
+    /// local or `s3://`-rooted corpus. `basename` writes just the file name,
+    /// which is what a fleet worker needs when it resolves sources against
+    /// `ZEN_CORPUS_PREFIX` (the shape `scripts/jobsys/avifsvt_cells.py` and
+    /// `hdrgrid_cells.py` emit). `image_path` is part of the
+    /// content-addressed `CellId`, so this choice decides whether the
+    /// declared jobs join an existing run's ledger or start a new identity
+    /// space — pick the one the run already uses.
+    #[arg(long, requires = "emit_cells", default_value = "full")]
+    emit_cells_image_path: EmitCellsImagePath,
     /// One or more metrics to score each cell with. Pass once per
     /// metric. Defaults to `zensim` if omitted.
     #[arg(long = "metric", value_enum, action = ArgAction::Append)]
@@ -1017,6 +1049,110 @@ fn cmd_sweep(
     // This is how launchers ask "how many cells?" and how the
     // content-addressed completion loop (declare → gap → reconcile)
     // gets its per-cell DesiredJob items.
+    if args.dry_run && args.plan.is_none() {
+        // Knob-grid dry-run: the same declare surface as the plan path, but
+        // over `--knob-grid`'s Cartesian product, DEDUPLICATED by resolved
+        // encoder state. `grid::iter_tuples` is face-value, so two spellings
+        // that resolve to the same encoder config used to get one encode job
+        // each; `dedup::knob_cell_identity` merges them keep-first and the
+        // manifest records every merge. A codec with no registered resolver
+        // returns `None` and is NOT deduped (the row-safe baseline).
+        //
+        // The emitted `knob_tuple_json` stays the raw knob map, so items are
+        // join-compatible with a sweep already running on that identity — the
+        // point of the AVIF subsample retrofit
+        // (benchmarks/avif_sweep_permutation_retrofit_2026-09-01.md): drop the
+        // duplicate cells without orphaning a single completed one.
+        use sha2::{Digest, Sha256};
+        use std::io::Write as _;
+
+        let mut kept: Vec<(f64, String)> = Vec::new();
+        let mut aliases: Vec<serde_json::Value> = Vec::new();
+        let mut by_identity: std::collections::HashMap<u64, usize> =
+            std::collections::HashMap::new();
+        let mut merged = 0usize;
+        let mut unresolved = 0usize;
+        for tuple in knob_grid.iter_tuples() {
+            let canonical = tuple.to_canonical_json();
+            for &q in &q_grid {
+                match crate::sweep::dedup::knob_cell_identity(args.codec, q, &tuple.0)? {
+                    Some(id) => {
+                        if let Some(&idx) = by_identity.get(&id) {
+                            merged += 1;
+                            aliases.push(serde_json::json!({
+                                "cell": {"q": kept[idx].0, "knobs": kept[idx].1},
+                                "merged": {"q": q, "knobs": canonical},
+                            }));
+                        } else {
+                            by_identity.insert(id, kept.len());
+                            kept.push((q, canonical.clone()));
+                        }
+                    }
+                    None => {
+                        unresolved += 1;
+                        kept.push((q, canonical.clone()));
+                    }
+                }
+            }
+        }
+
+        let manifest = serde_json::json!({
+            "plan": serde_json::Value::Null,
+            "knob_grid": args.knob_grid,
+            "q_grid": q_grid,
+            "cells": kept.len(),
+            "cells_before_dedup": knob_grid.cell_count() * q_grid.len(),
+            "duplicates_merged": merged,
+            "cells_without_resolver": unresolved,
+            "aliases": aliases,
+        });
+        let manifest_path = args.output.with_extension("plan.json");
+        std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)?;
+        println!(
+            "[sweep] knob-grid: {} cells/image (from {} spellings, {merged} merged by resolved \
+             state, {unresolved} without a resolver) x {} sources (manifest: {})",
+            kept.len(),
+            knob_grid.cell_count() * q_grid.len(),
+            sources.len(),
+            manifest_path.display()
+        );
+        if let Some(cells_path) = &args.emit_cells {
+            if let Some(bad) = q_grid.iter().find(|q| q.fract() != 0.0) {
+                return Err(format!(
+                    "--emit-cells requires integer q values (CellId.q is i64); got {bad}"
+                )
+                .into());
+            }
+            let mut out = std::io::BufWriter::new(std::fs::File::create(cells_path)?);
+            let mut emitted = 0usize;
+            for src in &sources {
+                let sha = format!("{:x}", Sha256::digest(std::fs::read(src)?));
+                for (q, knobs) in &kept {
+                    let item = serde_json::json!({
+                        "image_path": match args.emit_cells_image_path {
+                            EmitCellsImagePath::Full => src.display().to_string(),
+                            EmitCellsImagePath::Basename => src.file_name().map_or_else(
+                                || src.display().to_string(),
+                                |n| n.to_string_lossy().into_owned(),
+                            ),
+                        },
+                        "codec": args.codec.name(),
+                        "q": *q as i64,
+                        "knob_tuple_json": knobs,
+                        "source_sha": sha,
+                    });
+                    writeln!(out, "{item}")?;
+                    emitted += 1;
+                }
+            }
+            out.flush()?;
+            println!(
+                "[sweep] emitted {emitted} declare items to {}",
+                cells_path.display()
+            );
+        }
+        return Ok(());
+    }
     if args.dry_run {
         #[cfg(all(feature = "sweep", any(feature = "jpeg", feature = "avif")))]
         {
@@ -1055,7 +1191,13 @@ fn cmd_sweep(
                     let sha = format!("{:x}", Sha256::digest(std::fs::read(src)?));
                     for cell in &built.cells {
                         let item = serde_json::json!({
-                            "image_path": src.display().to_string(),
+                            "image_path": match args.emit_cells_image_path {
+                                EmitCellsImagePath::Full => src.display().to_string(),
+                                EmitCellsImagePath::Basename => src.file_name().map_or_else(
+                                    || src.display().to_string(),
+                                    |n| n.to_string_lossy().into_owned(),
+                                ),
+                            },
                             "codec": args.codec.name(),
                             "q": cell.q as i64,
                             "knob_tuple_json": cell.knob_json,
