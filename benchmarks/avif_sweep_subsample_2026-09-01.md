@@ -302,9 +302,60 @@ caveat) so every worker (none of which mount `/mnt/v`) can fetch them via
 
 - `avifsub-svt-enc-20260901` — svt-rs encode, `s3://zentrain/jobs/avifsub-svt-enc-20260901/`
 - `avifsub-aom-enc-20260901` — aom-rs encode, `s3://zentrain/jobs/avifsub-aom-enc-20260901/`
-- Score runs declared after the encode gate passes (ssim2-gpu + zensim CPU +
-  butteraugli, matching the prior wave's metric set), named
-  `avifsub-{svt,aom}-sf-{cpu,gpu}-20260901`.
+- `avifsub-svt-sf-cpu-20260901` / `avifsub-aom-sf-cpu-20260901` — score_file jobs,
+  **CPU-only metrics** (`ssim2,zensim,butteraugli` — no GPU/i134 needed, keeps
+  the score fleet on the same 3 LAN-only hosts as encode). Emits, per scored
+  variant: the 3 metric scores AND a zenanalyze feature vector (`"kind":
+  "feature","regime":"v2-ab"`) for free — directly useful for the
+  tuning/size/speed model this sweep exists to feed.
+- **Executor image**: `ghcr.io/imazen/zenfleet-worker:exec-avifsub-svtaom-4a6876b9`
+  — the DEFAULT pinned CPU image (`exec-zensim944hdr-03bdf64b`, per
+  `fleet.env`) does **NOT** carry `avif-svt`/`avif-aom` (verified: its
+  `capabilities` output has plain `avif` only — those features are opt-in
+  extras, not in the executor's default `sweep,png,jpeg,webp,avif,jxl,
+  cpu-metrics` build recipe). None of the 2026-08-30 campaign's custom-tagged
+  images were findable on ghcr under descriptive names either (only
+  `exec-avifgen-*`, a different/earlier campaign) — `exec-zensim944hdr-e7a99c2d`
+  specifically was checked and also lacks avif-svt/avif-aom (likely a
+  same-sha-different-build tag reuse). Built fresh this lane from the
+  **pre-existing local musl binaries at
+  `target/x86_64-unknown-linux-musl/release/{zenmetrics,zenfleet-worker}`**
+  (dated 2026-08-30, confirmed via `capabilities` to already carry
+  `avif-svt`+`avif-aom` — no rebuild needed, per "check disk before
+  building") via `PUSH=1 ZEN_METRICS_BIN=… ZEN_WORKER_BIN=…
+  build_executor_image.sh` — required `sudo` for this session (not in the
+  `docker` group; `usermod -aG docker` applied for future sessions) and a
+  stale root-owned `~/.docker/buildx/activity/default` file removed first.
+  Pulls credential-less on r7900x/tower (package-level public visibility
+  inherited from the existing `zenfleet-worker` package — no new package
+  created, per "one package, tags are the variants").
+
+**Two real bugs found and fixed while bringing the local worker up — both
+worth recording since they'd bite anyone launching `zenfleet-worker` directly
+(outside the Docker entrypoint) for the first time:**
+
+1. **Credential-variable confusion**: `AWS_ACCESS_KEY_ID="$AK"` — `$AK`/`$SK`
+   are `launch_fleet.sh`'s OWN local variable names (populated from a minted-cred
+   JSON response), not anything `scripts/lib/s3env.sh` exports. `s3env.sh`
+   exports the real credential directly under `AWS_ACCESS_KEY_ID`/
+   `AWS_SECRET_ACCESS_KEY`. Overriding them with the empty `$AK`/`$SK`
+   silently broke every claim (`object_store`'s conditional-PUT errors are
+   `.unwrap_or(false)`'d into "another worker claimed this job first" —
+   indistinguishable from a real race without reading source). Fix: don't
+   re-set what's already correctly exported.
+2. **`ZEN_R2_ENDPOINT` is required by the CHILD `jobexec` process, not
+   inherited from `zenfleet-worker`'s `--r2-endpoint` CLI flag** — they're
+   separate processes connected only by stdin/stdout (`--exec` spawns a
+   program that reads a JSON job and writes bytes; no flags cross that
+   boundary). Every corpus fetch failed `source_fetch` until `ZEN_R2_ENDPOINT`
+   was set as an actual env var alongside `--r2-endpoint`.
+
+**Gap-fill**: `~/tmp/avifsub_gapfill_loop.sh` (not committed — pure operational
+script, LAN-local paths) re-runs `zenfleet-ctl pairs` + `declare-scorefiles`
+for both backends every 5 minutes, so newly-DONE encode cells keep flowing
+into score work with no manual re-triggering. Uses only the canonical
+`zenfleet-ctl` commands (idempotent re-declare) — no hand-rolled claim/merge
+logic. Log: `~/tmp/avifsub_gapfill_loop.log`.
 
 **Speed-model validity columns.** The job-system `pairs` output already carries
 a `worker` column (verified against the prior wave's `pairs_svt.parquet`:
