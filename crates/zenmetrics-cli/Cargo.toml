@@ -50,7 +50,7 @@ png = ["dep:zenpng", "zenpng/quantize", "zenpng/imagequant"]
 # magetypes >= 0.9 compatibility and adds the `__expert` knob bundle.
 jpeg = ["dep:zenjpeg", "zenjpeg/zencodec"]
 webp = ["dep:zenwebp"]
-avif = ["dep:zenavif"]
+avif = ["dep:zenavif", "dep:zenavif-parse"]
 # `avif-svt`: the zenavif `backend: "svt-rs"` sweep knob — routes the SDR AVIF
 # encode through zenavif's own Av1Backend::SvtRs (the pure-Rust zenav1-svt port,
 # muxed in-crate by zenavif-serialize). Opt-in: it pulls the whole zenav1-svt
@@ -365,6 +365,15 @@ zenpng       = { path = "../../../zenpng",                                     o
 zenjpeg      = { path = "../../../zenjpeg/zenjpeg",        default-features = false, optional = true }
 zenwebp      = { path = "../../../zenwebp",                                    optional = true }
 zenavif      = { path = "../../../zenavif",                                    optional = true }
+# zenavif-parse: the container parser, taken from zenavif's OWN workspace member
+# (`../zenavif/Cargo.toml`: `zenavif-parse = { path = "zenavif-parse" }`) rather
+# than crates.io, so it resolves to the identical canonical directory zenavif
+# links and cargo unifies them into one crate — no second copy, no extra build
+# time. Deliberately NOT a `[patch.crates-io]` entry: see the workspace
+# Cargo.toml note explaining why patching this name is inert here.
+# Direct consumer: `examples/avif_depth_verify.rs` (gate G3), which needs the
+# `av1C` box + AV1 sequence header reads that `zenavif` does not re-export.
+zenavif-parse = { path = "../../../zenavif/zenavif-parse",                     optional = true }
 zenjxl       = { path = "../../../zenjxl",                                     optional = true }
 # zengif/zentiff: plan-driven sweep codecs (encode + sweep planner). zengif's
 # `zenquant` backend is the build default (matches its `compiled_backends()`
@@ -520,3 +529,11 @@ parquet = { version = "58.2.0", default-features = false, features = ["arrow", "
 [[example]]
 name = "gainmap_zensim_census"
 required-features = ["sweep", "hdr-gainmap", "png"]
+
+# G3 gate for the AVIF high-bit-depth arm (benchmarks/avif_hdr_arm_plan_2026-09-02.md
+# §5): reads a stored blob's bit depth back by three independent routes (av1C box,
+# AV1 sequence header, decoder ImageInfo) and fails loud when they disagree or when
+# the depth is not the one requested. Exists for hazard H-BD-3.
+[[example]]
+name = "avif_depth_verify"
+required-features = ["avif"]

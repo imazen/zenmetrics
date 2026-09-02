@@ -7216,6 +7216,7 @@ dependencies = [
  "zenav1-aom-sys-ref",
  "zenav1-svt",
  "zenavif",
+ "zenavif-parse",
  "zenavif-serialize 0.2.0",
  "zencodec",
  "zenflate 0.4.0",
