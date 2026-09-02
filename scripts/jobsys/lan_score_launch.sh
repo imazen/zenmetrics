@@ -17,6 +17,7 @@
 # Usage:
 #   lan_score_launch.sh <host> <job-set> <role> [gpu|cpu] [image]
 #   env: ZEN_STORE=tower|r2 (default tower), ZEN_FLEET_BUCKET (default zentrain).
+#        ZEN_CORPUS_BUCKET / ZEN_CORPUS_PREFIX -> where encode jobs resolve cell.image_path
 #        ZEN_CPUSET / ZEN_CPU_SHARES / ZEN_MEMORY -> docker --cpuset-cpus / --cpu-shares / --memory
 #        (the tower rule: e.g. ZEN_CPUSET=0-23 ZEN_CPU_SHARES=256 ZEN_MEMORY=24g — before 2026-08-30
 #        the remote read these but the ssh line never forwarded them, so tower launches were uncapped
@@ -49,7 +50,7 @@ CTR="zen-score-${ROLE}"
 # command — the 2026-08-26 `--gpus all` bug); GPU flags are rebuilt on the remote.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
-  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" 'bash -s' <<'REMOTE'
+  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
 S3ENV="$HOME/.config/zen/s3env.sh"
@@ -67,8 +68,14 @@ VRAM=(); [ -n "${ZM_VRAM_CAP:-}" ] && VRAM=(-e "ZENMETRICS_VRAM_CAP_BYTES=$ZM_VR
 # Encode jobs resolve bare source names at <ZEN_ENCODES_PREFIX>/<name> (jobexec);
 # forward it when the operator sets it (space-free, e.g. refs/imazen-26-hdr-grid-2026-06-14).
 ENCP=(); [ -n "${ZM_ENC_PREFIX:-}" ] && ENCP=(-e "ZEN_ENCODES_PREFIX=$ZM_ENC_PREFIX")
-# Encode jobs resolve bare cell.image_path at s3://$ZEN_BUCKET/$ZEN_CORPUS_PREFIX/<name>.
+# Encode jobs resolve bare cell.image_path at
+# s3://${ZEN_CORPUS_BUCKET:-$ZEN_BUCKET}/$ZEN_CORPUS_PREFIX/<name> (jobexec.rs:400).
+# ZEN_CORPUS_BUCKET is REQUIRED whenever the corpus lives in its own read-only bucket
+# (the normal case: codec-corpus). Without it jobexec falls back to the run bucket and
+# every cell fails to resolve its source — added 2026-09-02 after this script could not
+# launch the AVIF-DOE encode arms, whose corpus is in codec-corpus.
 [ -n "${ZM_CORPUS_PREFIX:-}" ] && ENCP+=(-e "ZEN_CORPUS_PREFIX=$ZM_CORPUS_PREFIX")
+[ -n "${ZM_CORPUS_BUCKET:-}" ] && ENCP+=(-e "ZEN_CORPUS_BUCKET=$ZM_CORPUS_BUCKET")
 # Pass budget override: big-cell workloads (HDR diffmaps) exceed the 1800s default and get
 # rc=124-killed each pass, wasting the in-flight tail chunk (observed node-2 2026-08-26).
 [ -n "${ZM_PASS_TIMEOUT:-}" ] && ENCP+=(-e "ZEN_PASS_TIMEOUT=$ZM_PASS_TIMEOUT")
