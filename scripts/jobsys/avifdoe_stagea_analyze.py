@@ -91,6 +91,22 @@ def q1q3(v):
     if len(v) < 2: return (float("nan"), float("nan"))
     return (float(np.percentile(v, 25)), float(np.percentile(v, 75)))
 
+def median_ci(v, n_boot=10000, seed=20260902):
+    """Percentile-bootstrap 95% CI of the median, resampling IMAGES.
+
+    The effect size here is a median over images, not a correlation, so this is
+    a plain resample rather than a zenstats call (zenstats owns rank/correlation
+    statistics and their CIs; it has no median-CI entry point). The RNG is
+    seeded so the interval is reproducible.
+    """
+    v = np.asarray(v, dtype=float)
+    if v.size < 3:
+        return (float("nan"), float("nan"))
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, v.size, size=(n_boot, v.size))
+    meds = np.median(v[idx], axis=1)
+    return (float(np.percentile(meds, 2.5)), float(np.percentile(meds, 97.5)))
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scored", required=True, help="avifdoe_harvest.py parquet")
@@ -215,13 +231,14 @@ def main():
             singles[(r_["speed"], r_["devs"][0])].append((r_["image"], r_["bd_rate"], r_["cls"]))
     main = {}
     with open(f"{a.outdir}/main_effects.tsv", "w") as f:
-        f.write("speed\tknob\tn_images\tmedian_bd\tiqr\tq25\tq75\tmean\tn_better\tmin\tmax\n")
+        f.write("speed\tknob\tn_images\tmedian_bd\tci_lo\tci_hi\tiqr\tq25\tq75\tmean\tn_better\tmin\tmax\n")
         for (sp, k), v in sorted(singles.items()):
             vals = [x[1] for x in v]
             lo, hi = q1q3(vals)
+            clo, chi = median_ci(vals)
             main[(sp, k)] = dict(median=float(np.median(vals)), iqr=hi - lo, n=len(vals),
-                                 vals={x[0]: x[1] for x in v})
-            f.write(f"{sp}\t{k}\t{len(vals)}\t{np.median(vals):.4f}\t{hi-lo:.4f}\t{lo:.4f}\t{hi:.4f}"
+                                 ci=(clo, chi), vals={x[0]: x[1] for x in v})
+            f.write(f"{sp}\t{k}\t{len(vals)}\t{np.median(vals):.4f}\t{clo:.4f}\t{chi:.4f}\t{hi-lo:.4f}\t{lo:.4f}\t{hi:.4f}"
                     f"\t{np.mean(vals):.4f}\t{sum(1 for x in vals if x<0)}\t{min(vals):.4f}\t{max(vals):.4f}\n")
 
     # ---- §7.1(4): interactions ---------------------------------------------
@@ -256,10 +273,10 @@ def main():
         if len(r_["devs"]) == 1:
             bycls[(r_["speed"], r_["devs"][0], r_["cls"])].append(r_["bd_rate"])
     with open(f"{a.outdir}/main_effects_by_class.tsv", "w") as f:
-        f.write("speed\tknob\tclass\tn\tmedian_bd\tq25\tq75\n")
+        f.write("speed\tknob\tclass\tn\tmedian_bd\tci_lo\tci_hi\tq25\tq75\n")
         for (sp, k, c), v in sorted(bycls.items()):
-            lo, hi = q1q3(v)
-            f.write(f"{sp}\t{k}\t{c}\t{len(v)}\t{np.median(v):.4f}\t{lo:.4f}\t{hi:.4f}\n")
+            lo, hi = q1q3(v); clo, chi = median_ci(v)
+            f.write(f"{sp}\t{k}\t{c}\t{len(v)}\t{np.median(v):.4f}\t{clo:.4f}\t{chi:.4f}\t{lo:.4f}\t{hi:.4f}\n")
 
     json.dump(dict(scored_rows=len(rows), bd_rows=len(bd), ctl_source=dict(ctl_source),
                    n_main=len(main), n_pairs=len(bypair)),

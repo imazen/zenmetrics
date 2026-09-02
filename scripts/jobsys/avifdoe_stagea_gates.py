@@ -59,7 +59,13 @@ def bd_rate(test, ref, min_pts=4):
     return (np.exp(avg) - 1.0) * 100.0
 
 def binom_two_sided(k, n, p=0.5):
-    """Exact two-sided binomial p for k successes of n. No scipy dependency."""
+    """Exact two-sided binomial p for k successes of n. No scipy dependency.
+
+    VERIFIED against scipy.stats.binomtest on 11 cases spanning the range this
+    gate uses (0/13, 1/13, 3/13, 5/13, 6/13, 7/13, 13/13, 10/20, 5/10, 0/1, 1/2):
+    max |difference| = 0.0 exactly (2026-09-02). The method is the standard
+    "sum every outcome no more likely than the observed one".
+    """
     if n == 0: return float("nan")
     C = math.comb
     pmf = [C(n, i) * p**i * (1-p)**(n-i) for i in range(n+1)]
@@ -71,6 +77,11 @@ def main():
     ap.add_argument("--scored", required=True)
     ap.add_argument("--crop-manifest", required=True)
     ap.add_argument("--native-sizes", required=True, help="TSV image\\tspeed\\tq\\tbytes for the NATIVE control run")
+    ap.add_argument("--native-dims", required=True,
+                    help="TSV image\\twidth\\theight read from the NATIVE PNGs. REQUIRED and separate "
+                         "from the crop manifest: that manifest's width/height are the CROP dims "
+                         "(1024x1024 for every cropped ref), so using it gives pn == pb and silently "
+                         "fits nothing at all.")
     ap.add_argument("--main-effects", required=True, help="main_effects.tsv from the analyzer")
     ap.add_argument("--interactions", required=True, help="interactions.tsv from the analyzer")
     ap.add_argument("--bd-per-image", required=True)
@@ -83,7 +94,13 @@ def main():
         man[r["corpus_key"]] = r
     cropped = sorted(k for k, v in man.items() if v["transform"] != "native")
     passthru = sorted(k for k, v in man.items() if v["transform"] == "native")
-    px = {k: int(v["width"]) * int(v["height"]) for k, v in man.items()}
+    px_budget = {k: int(v["width"]) * int(v["height"]) for k, v in man.items()}   # CROP dims
+    px_native = {}
+    for r in csv.DictReader(open(a.native_dims), delimiter="\t"):
+        px_native[r["image"]] = int(r["width"]) * int(r["height"])
+    missing = [k for k in man if k not in px_native]
+    if missing:
+        raise SystemExit(f"native dims missing for {len(missing)} references: {missing[:5]}")
     print(f"references: {len(man)}  cropped: {len(cropped)}  passthrough: {len(passthru)}")
 
     import pyarrow.parquet as pq
@@ -187,8 +204,9 @@ def main():
             # configurations match. This is a free config-identity gate.
             (identity_ok, identity_bad) = (identity_ok + 1, identity_bad) if nb == bb else (identity_ok, identity_bad + 1)
             continue
-        pn, pb = px[img], 1024 * 1024
-        if pn == pb: continue
+        pn, pb = px_native[img], px_budget[img]
+        if pn == pb:
+            continue   # no leverage: identical pixel counts cannot identify alpha
         beta = (nb - bb) / (pn - pb)
         alpha = bb - beta * pb
         fits.append(dict(image=img, speed=sp, q=q, bytes_native=nb, bytes_budget=bb,
@@ -208,13 +226,27 @@ def main():
     main = list(csv.DictReader(open(a.main_effects), delimiter="\t"))
     inter = list(csv.DictReader(open(a.interactions), delimiter="\t"))
     trig = []
+    # Structurally inert arms (byte-identical to the control on every cell) are
+    # not measurements and must not consume Stage-B budget. They are reported in
+    # their own section of the Stage-A record, not as triggers.
+    inert = set()
+    for r in csv.DictReader(open(os.path.join(os.path.dirname(a.main_effects), "arm_byte_identity.tsv")), delimiter="\t"):
+        devs = [d for d in r["arm"].split("-")[3:] if d]
+        if len(devs) == 1 and float(r["frac"]) == 1.0:
+            inert.add(devs[0])
+    if inert:
+        print("structurally INERT knobs (byte-identical to control on 100% of cells):", sorted(inert))
     for r in main:                                    # B-1
+        if r["knob"] in inert:
+            continue
         med, iqr = abs(float(r["median_bd"])), float(r["iqr"])
         if med >= 1.5 or iqr >= 3.0:
             trig.append(dict(id="B-1", key=f"{r['knob']}@s{r['speed']}",
                              why=f"|median| {med:.2f}% (bar 1.5) / IQR {iqr:.2f}% (bar 3.0)",
                              follow_up="dense grid: 5 levels x 29-q x 32 img x speeds {4,6,7}"))
     for r in inter:                                   # B-2
+        if r["k1"] in inert or r["k2"] in inert:
+            continue
         fr = float(r["frac_images_ge_1pct"])
         if fr >= 0.25:
             trig.append(dict(id="B-2", key=f"({r['k1']},{r['k2']})@s{r['speed']}",
@@ -223,18 +255,28 @@ def main():
     bycls = collections.defaultdict(dict)             # B-3
     for r in csv.DictReader(open(os.path.join(os.path.dirname(a.main_effects), "main_effects_by_class.tsv")), delimiter="\t"):
         bycls[(r["speed"], r["knob"])][r["class"]] = (float(r["median_bd"]), int(r["n"]))
+    # §7.2 B-3 does not name a minimum class size, and this corpus has content
+    # classes as small as n=1 (12 fine classes over 32 refs). A "median" of one
+    # image is a single observation, so every firing carries its contributing
+    # class sizes and any trigger with a class of n<3 is marked PROVISIONAL —
+    # reported, never silently promoted or silently dropped.
+    MIN_CLASS_N = 3
     for (sp, k), d in sorted(bycls.items()):
-        strong = {c: v for c, (v, nn) in d.items() if abs(v) >= 1.0}
-        if len({v > 0 for v in strong.values()}) == 2:
-            pos = [f"{c} {v:+.2f}%" for c, v in strong.items() if v > 0]
-            neg = [f"{c} {v:+.2f}%" for c, v in strong.items() if v < 0]
+        strong = {c: (v, nn) for c, (v, nn) in d.items() if abs(v) >= 1.0}
+        if len({v > 0 for v, _ in strong.values()}) == 2:
+            pos = [f"{c} {v:+.2f}% (n={nn})" for c, (v, nn) in strong.items() if v > 0]
+            neg = [f"{c} {v:+.2f}% (n={nn})" for c, (v, nn) in strong.items() if v < 0]
+            small = [c for c, (v, nn) in strong.items() if nn < MIN_CLASS_N]
+            tag = f" PROVISIONAL (class n<{MIN_CLASS_N}: {','.join(small)})" if small else ""
             trig.append(dict(id="B-3", key=f"{k}@s{sp}",
-                             why=f"opposite-sign class medians >=1%: [{', '.join(neg)}] vs [{', '.join(pos)}]",
+                             why=f"opposite-sign class medians >=1%: [{', '.join(neg)}] vs [{', '.join(pos)}]{tag}",
                              follow_up="content-stratified dense follow-up + explicit interaction term"))
     bysp = collections.defaultdict(dict)              # B-5
     for r in main:
         bysp[r["knob"]][int(r["speed"])] = float(r["median_bd"])
     for k, d in sorted(bysp.items()):
+        if k in inert:
+            continue
         if len(d) >= 2:
             v = [x for x in d.values() if abs(x) >= 1.0]
             if len(v) >= 2 and len({x > 0 for x in v}) == 2:
@@ -247,11 +289,41 @@ def main():
             trig.append(dict(id="B-6", key=r["knob"],
                              why=f"fails T1 (sign agreement {r.get('T1')}) — not screenable at reduced size",
                              follow_up="Stage-B grid at NATIVE size; A1/A2 numbers annotated size-conditional"))
+    # ---- price every follow-up against §7.2's registered envelope -----------
+    # B-1: 5 levels x 29 q x 32 img x speeds {4,6,7}          = 13,920 cells / knob
+    # B-2: 3 levels each (3x3=9 combos) x 9 q x 32 img        =  2,592 cells / pair
+    # B-3: content-stratified dense follow-up. §7.2 does not fix a grid for it;
+    #      priced as B-1's grid restricted to the triggering classes' images,
+    #      which is the cheapest reading of "content-stratified dense".
+    # B-5: "Stage-B grid at both inverting presets" = B-1's grid, 2 presets not 3.
+    # B-6: B-1's grid at native size.
+    COST = {"B-1": 5 * 29 * 32 * 3, "B-2": 9 * 9 * 32, "B-5": 5 * 29 * 32 * 2, "B-6": 5 * 29 * 32 * 3}
+    n_img_by_class = collections.Counter()
+    for r in csv.DictReader(open(os.path.join(os.path.dirname(a.main_effects), "main_effects_by_class.tsv")), delimiter="\t"):
+        n_img_by_class[r["class"]] = max(n_img_by_class[r["class"]], int(r["n"]))
+    for r in trig:
+        if r["id"] == "B-3":
+            imgs = sum(n for c, n in n_img_by_class.items() if c in r["why"])
+            r["cells"] = 5 * 29 * max(imgs, 1) * 3
+        else:
+            r["cells"] = COST.get(r["id"], 0)
     with open(f"{a.outdir}/stage_b_triggers.tsv", "w") as f:
-        f.write("trigger\tkey\twhy\tfollow_up\n")
+        f.write("trigger\tkey\tcells\twhy\tfollow_up\n")
         for r in sorted(trig, key=lambda x: (x["id"], x["key"])):
-            f.write(f"{r['id']}\t{r['key']}\t{r['why']}\t{r['follow_up']}\n")
-    print("Stage-B triggers:", dict(collections.Counter(r["id"] for r in trig)))
+            f.write(f"{r['id']}\t{r['key']}\t{r['cells']}\t{r['why']}\t{r['follow_up']}\n")
+    by = collections.Counter(); cells = collections.Counter()
+    for r in trig:
+        by[r["id"]] += 1; cells[r["id"]] += r["cells"]
+    total = sum(cells.values())
+    ENVELOPE = 60000
+    print("Stage-B triggers:", dict(by))
+    print("Stage-B cell cost by trigger:", dict(cells))
+    print(f"Stage-B TOTAL if every trigger is honoured: {total:,} cells "
+          f"vs the §7.2 envelope of {ENVELOPE:,} -> {total/ENVELOPE:.1f}x "
+          f"({'OVER' if total > ENVELOPE else 'within'} budget)")
+    json.dump(dict(triggers=dict(by), cells=dict(cells), total_cells=total,
+                   envelope_cells=ENVELOPE, over_by=total / ENVELOPE),
+              open(f"{a.outdir}/stage_b_budget.json", "w"), indent=1)
 
 if __name__ == "__main__":
     main()
