@@ -185,3 +185,72 @@ the absolutes. Sizes per the sweep discipline (tiny → large):
 
 Items 4–6 mean a depth *picker* cannot be trained honestly yet: the encode and the
 score are now depth-honest, the **corpus** is not.
+# PENDING APPEND — zenmetrics/benchmarks/bitdepth_capability_matrix_2026-09-02.md
+
+**Why this is here and not in the file:** at 2026-09-02T16:35Z the zenmetrics
+`.workongoing` marker read `claude-hbdexec T2: image rebuild from clean master,
+G5 discriminator, declare` (15 min stale) AND `jj status` showed a foreign
+uncommitted change to `benchmarks/avif_hdr_arm_plan_2026-09-02.md` in `@`.
+Because jj snapshots the whole working copy, any commit made in that repo would
+have swept that lane's in-flight file into it. Blocked on the concurrent lane,
+not on the content. **Apply this append verbatim when the marker is free.**
+
+Two edits, both additive.
+
+---
+
+## EDIT 1 — append to §2, after the "Why it was not fixed in this lane" paragraph
+
+**✅ FIXED 2026-09-02, zenavif `cc17cb86` (on `origin/main`).** The fix HONOURS
+the request rather than refusing it, as this section proposed:
+`EncodeBitDepth::Eight` on a 16-bit buffer now takes a narrowing route to an
+8-bit coded stream. `Ten` and `Auto` are untouched — `Auto` keeps its documented
+"16-bit input → 10-bit AV1" contract, and its output is **byte-identical**
+pre/post (rgb16 + rgba16 × {Auto, Ten}, four files, sha256 unchanged, built from
+the parent commit's sources and diffed).
+
+Mechanism, for the record: `encode_raw_planes_*` takes the coded depth as an
+*argument*, which overrides the encoder's own `with_bit_depth`.
+`build_ravif_encoder` had already computed the right answer via
+`resolve_bit_depth(config.bit_depth, true)` — it was discarded one line later.
+The svt-rs backend never had the bug (`encoder_svt_rs::effective_bit_depth`);
+this levels the zenrav1e path with it.
+
+Narrowing uses zenavif's existing owner `convert::scale_from_u16(v, 8)` (wrapped
+as `convert::narrow_to_u8` for the `[u8; 3]` plane API) — no new conversion rule
+was invented. It is the exact inverse of the widening rule (`scale_to_u16`, LSB
+replication), so 8-bit content promoted to 16 bits round-trips to the original
+bytes, and it matches the decode side's `downscale_to_8bit` ("high byte of each
+channel"). Half-up rounding was rejected on MEASUREMENT: it leaves the u8 domain
+at `0xFFFF` (→ 256) and corrupts the 8→16→8 round-trip for **128 of 256 bytes**.
+
+Gate: zenavif `tests/bit_depth_request.rs` — 5 tests, depth read back from the
+**bitstream** via `zenavif::detect::probe` (the R1 owner `zenavif_parse`), never
+from the request, per §4's rule. 3 of the 5 fail before the fix with
+`left: 10, right: 8`. Plus `convert::narrow_16_to_8`, 3 unit tests, one
+exhaustive over the whole u16 domain. No public API change (`cargo public-api`
+diff empty across 1,834 items).
+
+**No stored data is affected.** Verified by grep, not assumed: nothing outside
+zenavif calls `zenavif::encode_rgb16`/`encode_rgba16` (the one hit in
+`sweep/hdr.rs:391` is a comment; `:926` is `zenpng::encode_rgb16`, a different
+crate), no `EncodeBitDepth::Eight` appears anywhere in `zenmetrics/crates/`, and
+the sweep funnels through `Rgb8Image`. So no sweep cell ever reached the
+defective path, consistent with this section's own "does not affect the HBD
+arm's T2".
+
+---
+
+## EDIT 2 — replace the §6 item-8 row
+
+| 8 | `EncodeBitDepth::Twelve` | **REGISTERED** (§3) — §2 is now CLEARED (fixed 2026-09-02, zenavif `cc17cb86`); the remaining blocker is the semver break alone |
+
+Rationale: §3's change set lists "§2 first — otherwise `Twelve` is silently 10 on
+the 16-bit entries" as prerequisite 4. That prerequisite is met. `Twelve` was
+NOT added: `EncodeBitDepth` is not `#[non_exhaustive]`, so the variant is a
+0.1.7 → 0.2.0 break the workspace rules require to be real, unavoidable and
+user-approved. It is queued in zenavif's CHANGELOG under
+`QUEUED BREAKING CHANGES`, paired with `#[non_exhaustive]` so both ship in one
+break, and carrying §3's upstream facts (zenrav1e supports 12 end to end;
+zenav1-svt refuses it at init, matching C v4.2.0, so
+`reject_out_of_envelope_depth` must refuse early with the C-envelope reason).
