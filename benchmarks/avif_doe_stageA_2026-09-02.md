@@ -183,6 +183,19 @@ declaration loop).
 > pairs ordering), and the score run's ids were already rotating every round —
 > landing a stable sort simply made the next rotation the last one.
 >
+> **Confirmed in production.** The live gap-fill loop picked the fix up on its
+> own (it re-execs the binary each round), and rounds **43, 44 and 45 uploaded
+> byte-identical manifests** — sha `aeb915e2…`, `declared=4,128` each time. The
+> id set has stopped rotating.
+>
+> One thing not to misread: the blob count keeps rising for one more pass
+> (`ever_done` 29,664 → 30,264 over those rounds). That is expected and is the
+> *last* of it — round 43 minted a brand-new stable set, so the fleet is
+> completing those 4,128 jobs once. Because every later round re-declares the
+> **same** set, each of those rounds is a no-op, and the churn ends when this
+> pass does. Before the fix there was no such end state: each round replaced the
+> set outright.
+>
 > The sort key leads with the emitted cell identity and ends with `job_id` as
 > the tie-break — unique by construction, being the `LedgerView` map key — so
 > the order is total. Verified live: three separate `pairs` processes over a
