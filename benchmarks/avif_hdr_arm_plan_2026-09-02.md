@@ -1295,6 +1295,100 @@ depth 10 — av1C, sequence header and decoder `ImageInfo` all agreeing,
 > `seq_profile` `0` on the svt HDR arm, not merely that the depths agree — the
 > defective blobs passed the depth-only gate.
 
+### 10.4d THE GATE RAN — t1b is REFUSED, and the native leg found a correctness defect
+
+**Chain validation first, because every number below depends on it.** The whole
+pipeline (declare → encode → score → join → BD-rate) was pointed at A1's own
+published arm and reproduced it: **median −1.025 %, 23/31 wins, worst +5.90 %**
+against Stage-A's published **−1.02 %, 23/31, +5.9 %**. BD-rate is the OWNER's
+(`avifdoe_stagea_analyze.bd_rate`/`frontier`, imported, not reimplemented); only
+the control pairing is driven explicitly, because the analyzer's `auto` control
+would pair a *native* arm against a *crop* control.
+
+**Q1 / T1-c — the answer is NO.**
+
+| arm | n | mean | median | 95 % CI | wins |
+|---|--:|--:|--:|---|--:|
+| bd10 @ **s4** (A1 repro) | 31 | −0.713 % | **−1.025 %** | [−1.622, +0.213] | **23/31** |
+| bd10 @ **s6** (T1-c) | 31 | **+0.205 %** | **−0.214 %** | **[−0.836, +1.321]** | **18/31** |
+
+At s6 the median effect is **a fifth of s4's**, the CI **straddles zero**, and
+wins fall from 23/31 to 18/31. **`bd10`'s −1.02 % does not carry to s6.**
+
+> **DECISION: t1b is NOT released.** Its 4,320 cells ask whether 10-bit is
+> *additive with the knobs at s6* (Q3). With no reliable main effect at s6 that
+> question is close to vacuous — any "interaction" would be measured against a
+> ~zero baseline and would mostly be noise. This is exactly the outcome §6's
+> staging exists to catch, and buying the cells anyway would spend the compute
+> the gate was built to withhold. t1b stays declared and paused; it becomes
+> worth running only if the s6 main effect is re-established (e.g. at more
+> images, or if the defect below turns out to touch it).
+
+**⛔ Q4 / T1-d is NOT ANSWERABLE, because the native leg uncovered a
+silently-wrong-pixels defect.** Two independent reasons, and the second is the
+serious one:
+
+1. AG's native control is a **3-point** ladder and the registered `bd_rate`
+   requires ≥4 points on both sides, so no BD-rate exists for the native leg.
+2. A matched-q comparison instead showed bd10 "losing" enormously (mean ssim2
+   **−20.5**) — and that turned out to be **broken output, not compression
+   loss.**
+
+> **⛔ DEFECT: the `zenav1-svt` port's 10-bit encode produces wrong pixels above
+> ~8–12 MP.** Measured on T1-d's native leg, mean ssim2 per image:
+>
+> | size class | images | mean ssim2 |
+> |---|--:|---|
+> | **≤ 8.01 MP** | 24 | **+43.5 … +91.1** (healthy) |
+> | **≥ 12.00 MP** | 8 | **−59.8 … +7.9** (broken) |
+>
+> Worst case `1008.scale3000x4000` at **q=90**: the 8-bit control scores
+> **86.57**, bd10 scores **−57.05**. An ssim2 of −57 at q90 is destroyed
+> output, not a rate/quality trade.
+>
+> **Four controls, all measured, that pin the cause:**
+> - **Not the metric or the fleet** — the blob was pulled back and rescored
+>   locally: **−57.049692268057996**, reproducing the fleet value exactly.
+> - **Not geometry or depth** — the file is a well-formed **3000×4000, 10-bit**
+>   AVIF and passes G3 on all three reads.
+> - **Not 8-bit** — the 8-bit svt arm at the *same* 12 MP image and q scores
+>   **86.57**.
+> - **Not content** — the 6xxx scan family **spans the threshold**: 7.91 MP
+>   scans score **+89.4/+91.1**, 16 MP scans score **−19.4/−36.5**. Size is the
+>   discriminator, not class.
+> - **Not 64-alignment** (the obvious first hypothesis, **falsified**):
+>   `2320×3408` is just as unaligned (w%64 = 16) and scores **+89.4**.
+>
+> **The threshold is BRACKETED, not bisected: healthy at 8.01 MP, broken at
+> 12.00 MP.** Narrowing it needs encodes at intermediate sizes, which this lane
+> did not run.
+>
+> **Blast radius, measured rather than assumed:**
+> - **T1-a / T1-b / T1-c are UNAFFECTED** — the budget corpus tops out at
+>   3.69 MP, well under the threshold, and the A1 reproduction above is exact.
+> - **T1-d is contaminated on 8 of its 32 images** and its native BD-rate must
+>   not be published.
+> - **T2-a IS AFFECTED and was STOPPED.** Its refs are 12–24 MP; three
+>   completed cells at q 76/78 on a 24.5 MP HDR reference score **−67.80,
+>   −66.85, −64.26**. The run was **paused** the moment this was measured, at
+>   120/3,248 done — the remaining ~96 % was not spent.
+> - **T2-b is HEALTHY.** Same 12.2 MP class, different backend
+>   (`zenavif`/zenrav1e rather than the svt port): **+71.50, +71.03, +71.01**
+>   at q ≥ 90. So this is *not* "10-bit AVIF is broken at scale" and *not* an
+>   HDR-route problem — it is **the svt port's 10-bit path specifically**.
+>
+> Recorded, not fixed: it lives in `zenav1-svt`, another lane is active there,
+> and `STATUS.md:55-58` already documents a bd10 parity gap at low presets — but
+> that is a *byte-parity* note at 64-aligned sizes, not a >8 MP correctness
+> cliff, so this appears to be new.
+
+**T2 score coverage — counted, not assumed** (it was zero). The T1 gapfill loop's
+`ZEN_DOE_RUNS` covered only `t1ac/t1b/t1d`, so **no T2 cell had ever been
+declared for scoring**. A second loop now runs for **t2b only**
+(`avifhbd-t2-sf-cpu-20260902`, 46 jobs / 424 pairs declared, worker
+`Tower-t2sf`). **t2a is deliberately excluded** — scoring known-broken output
+would burn compute and pollute the ledger.
+
 ### 10.5 ⛔ TRACK T2 IS SPLIT: T2-b is executable, **T2-a is BLOCKED**
 
 This is a wiring gap §2.6 did not record, found by reading the source at
