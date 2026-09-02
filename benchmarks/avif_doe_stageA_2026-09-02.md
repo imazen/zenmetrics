@@ -26,7 +26,10 @@ the coordinator's.
    default on 288 of 288 cells, at both presets** — while the harness's own
    resolved-state fingerprint says they are different configurations. That is a
    knob plumbed to the fingerprint but not to the bitstream. It consumed
-   **8,972 cells** of this wave and must not consume any of Stage B's.
+   **8,972 cells** of this wave and must not consume any of Stage B's. Filed
+   with the port program as
+   [imazen/zenav1-svt#17](https://github.com/imazen/zenav1-svt/issues/17)
+   (2026-09-02).
 4. **The plan's §3.2 cell arithmetic is impossible under its own isolation
    rule.** §3.2 registers "17 arms × all 7 effective presets" = 34,272 cells,
    but `--max-deviations 1` means a non-default preset *is* the one permitted
@@ -133,21 +136,54 @@ failures anywhere (`rescore tax 1.01x`, `errors=0`). The waste is not retries.
 
 **Measured cause:** `zenfleet-ctl pairs`, run twice against a *frozen* ledger,
 emits **the same set of rows in a different order** (verified on AG: `same SET
-of encode_sha? YES`, byte-identical file? no). `declare-scorefiles` chunks the
-pairs table into groups of 12 and `job_id = JobId::of(kind, inputs)` takes the
-chunk's member list as `inputs` — so **a reordered pairs table yields entirely
-different job_ids for identical work.** Every 5-minute gap-fill round therefore
-re-declared the whole run as fresh jobs, and workers redid cells that were
-already scored.
+of encode_sha? YES`, byte-identical file? no). `LedgerView` stores rows in a
+`HashMap<JobId, _>`, so `view.rows()` yields Rust's per-process randomized hash
+order. `declare-scorefiles` then turns that order into job identity, and every
+5-minute gap-fill round re-declared the whole run as fresh jobs while workers
+redid cells that were already scored.
 
 It is a *waste* bug, not a correctness bug — every blob is valid and the ledger
-converges — but it multiplies the cost of exactly the pattern the job system
-recommends (a recurring, idempotent declaration loop). **The fix is a
-deterministic sort in `pairs`** (by `image_path, q, knob_tuple_json`, or simply
-by `encode_sha`), which would make chunk membership — and therefore job
-identity — stable across rounds. Not applied here: changing job identity
-mid-wave would churn the ledgers of the other runs in flight, which is the move
-§11.7 warns about. Recorded for the job-system owner.
+converges, because identity is content-addressed — but it multiplies the cost of
+exactly the pattern the job system recommends (a recurring, idempotent
+declaration loop).
+
+> **FIXED 2026-09-02** in zenmetrics `08215e84`, with two corrections to the
+> paragraph above that changed the decision to land it.
+>
+> **1. The mechanism is chunk MEMBERSHIP, not input order.** `JobId::of` sorts
+> and dedups its inputs (`ids.rs:69-73`, "so input order can't change the
+> identity"), so member order *within* a chunk cannot move an id. What moves it
+> is which members share a chunk: `declare-scorefiles` cuts each ref's member
+> list into contiguous `--chunk` slices, so a permutation re-cuts membership —
+> but **only when a ref has more members than `--chunk`**. This run was
+> maximally exposed: 32 refs × 203 members at `--chunk 12`, i.e. ~17 chunks per
+> ref, every one re-cut every round. A run whose refs fit inside one chunk was
+> never affected. That distinction is what decides whether any *other* run is
+> exposed, and it is now pinned by the test
+> `only_refs_larger_than_the_chunk_can_remint`. It also explains why `declared`
+> stayed pinned at exactly 4,128 while the identities rotated: a permutation
+> changes which members pair up, never how many chunks fall out.
+>
+> **2. "Not applied here" was the wrong call, because the run was not settling —
+> it was compounding.** The hold assumed the churn was a bounded historical
+> cost. It was live. Over rounds 37-40 the encode side sat frozen at 49,120 DONE
+> cells and `declared` was pinned at 4,128, yet score blobs climbed
+> **25,818 → 26,251 → 26,973 → 27,639** — the same 4,128 jobs re-minted under
+> new identities every five minutes, with four workers re-scoring finished
+> cells. By the time the fix landed the multiplier had gone from 4.0× to 6.7×
+> and was still rising. **Such a run can never drain**, so holding did not avoid
+> churn; it extended it. There was also no mid-flight hazard to weigh: the
+> encode ledgers are untouched by this change (encode job ids do not come from
+> pairs ordering), and the score run's ids were already rotating every round —
+> landing a stable sort simply made the next rotation the last one.
+>
+> The sort key leads with the emitted cell identity and ends with `job_id` as
+> the tie-break — unique by construction, being the `LedgerView` map key — so
+> the order is total. Verified live: three separate `pairs` processes over a
+> frozen 6,496-row ledger produced byte-identical `.tsv` and `.parquet`
+> (sha `148165c7…`), and two `declare-scorefiles` runs produced byte-identical
+> manifests (sha `2ce81289…`). Both gate tests were confirmed to fail with the
+> sort defeated.
 
 ---
 
@@ -234,7 +270,15 @@ own hazard H-10 documents clamping of out-of-band `pub` fields).
 
 **Not diagnosed further and deliberately not fixed here** — zenavif is another
 repo and another lane's subject. The repro above is the deliverable for the AV1
-port program.
+port program, and is now filed as
+[imazen/zenav1-svt#17](https://github.com/imazen/zenav1-svt/issues/17) with one
+lead read from the consumer side: `zenavif/src/expert.rs:258-266` documents that
+only tunes 3/4 rewrite other config fields (via the port's
+`apply_tune_overrides`), which would make tune 0 and the default tune 1 resolve
+to identical encoder state unless something downstream reads `tune` directly.
+The issue also notes that the existing parity test
+`resolved_matches_the_port_tune_overrides` compares **config to config**, so it
+cannot catch a field that resolves correctly and is then never consumed.
 
 ### 3.3 The blast radius, and why 27 A2 "interactions" are not interactions
 
