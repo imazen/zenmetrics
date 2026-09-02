@@ -997,14 +997,58 @@ today.** The two requirements are individually reachable and jointly are not:
 TODO-0 … and TODO-4" is therefore literally correct — TODO-4 is a T2-a
 prerequisite, not merely an alternative to it.
 
-**TODO-4 HAS A LIVE OWNER, and it is not this lane.** A concurrent capability
-lane (`claude-bitdepth`) holds a path-scoped marker in this repo declaring it
-owns `crates/zenmetrics-cli/src/sweep/encode.rs` (the aom `bd: 8` hardcode of
-§4.4) and **`crates/zenmetrics-cli/src/hdr.rs` — "fleet f32", i.e. TODO-4** —
-and explicitly disclaims `zenavif/src/sweep.rs` and `sweep/hdr.rs`, which are
-this lane's. Its files were being written during this execution. So T2-a is
-**sequenced behind that lane, not permanently blocked**, and this lane did not
-touch those paths.
+**✅ TODO-4 LANDED MID-EXECUTION — `7051921a`, and it clears T2-a's blocker.**
+A concurrent capability lane (`claude-bitdepth`) held a path-scoped marker
+claiming `crates/zenmetrics-cli/src/hdr.rs` "fleet f32", and shipped it while
+this section was being written: *"the fleet/score-pairs/batch HDR routes stop
+u8-shelling ssim2, zensim, iwssim and CPU butteraugli."* `score-pairs --hdr`,
+`batch --hdr` and jobexec's ScoreFile HDR arm now take the umbrella's validated
+`hdr_feeding` recipe through a new `hdr::faithful_hdr_rows`; the u8 shell
+survives only as a genuine fallback for a `(metric, backend)` the umbrella
+cannot express. That lane measured the stake directly on a PQ ramp against its
+own 8-bit quantization: **99.75 % of f32 samples differ where 5.82 % of u8
+bytes do — the shell was collapsing 94.17 % of the difference**, which is
+precisely the artifact a bit-depth arm exists to see.
+
+**So the paragraph above is superseded: T2-a is no longer blocked on wiring.**
+The fleet can now encode `zenav1-svt` HDR (jobexec, `HdrCodec::from_name`) *and*
+score it faithfully, which is the combination that did not exist an hour ago.
+Two consequences carry forward, both from that commit's own warnings:
+
+- **⚠ It is a SCORING-ERA break for HDR cells.** Every stored `--hdr`
+  ssim2/zensim/iwssim/butteraugli-CPU number from score-pairs, batch or jobexec
+  was computed on the u8 shell and **must not be joined across `7051921a`**.
+  T2, whenever it runs, is post-break by construction.
+- **⚠ `--hdr-transfer` is now INERT** on these metrics — the faithful route
+  takes absolute nits and PU21-encodes in-kernel, so there is no transfer shell
+  to select. A T2 invocation that passes it is not selecting anything.
+
+**T2 still did not run, and the remaining reasons are corpus and evidence, not
+wiring.** Stated precisely so the next lane starts from facts:
+
+1. **The 16 native references are not in the corpus store.** `codec-corpus/
+   imazen-26-variants/hdr-grid-15scale@2026-08-23/` holds 1,140 `.hdr.png`
+   (76 origins × 15 scales) but its ladder **tops out at 2304×3072** — there is
+   no native rung. §4.3's pool B is the **native** 3000×4000 set, so T2 needs
+   those 16 files staged (~0.6 GB) under their own prefix, or an explicit,
+   registered decision to run at a ladder size instead. Do not silently
+   substitute a 2304 rung for native: §1.2 already flags the derived size grid
+   as **mixed-zensim-era**, and the plan's own T1-d precedent is that reduced
+   size can flip a sign.
+2. **The worker image must be rebuilt on ≥ `7051921a`.** The image this lane
+   built and verified (`exec-avifhbd-t1-32e68a8f`) predates the fix, so it would
+   score T2 through the u8 shell — silently, since the shell is still the
+   documented fallback. This is the same class of trap as the stale-plan image,
+   and it is worse here because it fails as a *plausible number*, not a panic.
+3. **G5 needs positive evidence against the NEW route**, not the old one. The
+   assertion to build is "this cell's ssim2/zensim came from
+   `faithful_hdr_rows`", and the honest way to get it is a decode/route marker
+   in the run log — not the absence of a refusal, and no longer "the run used
+   `sweep --hdr`", since the fleet path is now equally faithful.
+
+`hdrgrid_cells.py` is the right declaration template and already carries a
+`zenav1-svt` arm at `{"preset": 6}`; T2-a is that grammar at 7 presets × 29 q ×
+16 refs, T2-b the `zenavif` arm at 3 speeds × 9 q × 16.
 
 **T2-b was NOT smoke-tested either, and the reason is the same lane.**
 `sweep/hdr.rs` calls into `src/hdr.rs` (`decode_to_nits`, `HdrTransfer`,
@@ -1015,14 +1059,14 @@ would be evidence about a tree that has never existed on `master` — worse than
 no measurement, because it looks like one. **G5 is therefore UNSATISFIED for
 both T2 blocks, by choice, and no T2 cell was declared or run.**
 
-- **T2-a (3,248 cells): BLOCKED on TODO-4**, which a concurrent lane owns and
-  is implementing. Not declared, not run, not estimated. **NOT MEASURED —
+- **T2-a (3,248 cells): wiring UNBLOCKED by `7051921a`; still not declared or
+  run** — pending the three items above (native refs staged, image rebuilt past
+  the fix, G5 evidence designed against `faithful_hdr_rows`). **NOT MEASURED —
   never a null, never a zero.**
-- **T2-b (432 cells): reachable in principle** — `zenavif` is admitted by
-  `validate_hdr_sweep` and `sweep --hdr` is the f32 umbrella route G5 names —
-  but **deferred**, because its scoring path is mid-edit in another lane (above).
-  Its corpus gates (G0.2, G0.4, G0.5) are nevertheless **complete and
-  committed**, so it is ready to run the moment that lane lands.
+- **T2-b (432 cells): reachable two ways now** — via `sweep --hdr` (which
+  `validate_hdr_sweep` admits for `zenavif`) or via the fleet, post-`7051921a`.
+  Still not run, for reasons 1 and 2 above. Its corpus gates (G0.2, G0.4, G0.5)
+  are **complete and committed**, so it is the cheaper of the two to start.
   Note §4.3's own caveat stands: T2-b differs from T2-a in **three** ways at
   once (backend, chroma, matrix), so it is a **contrast, not a controlled
   comparison** — and with T2-a blocked it currently has nothing to contrast
