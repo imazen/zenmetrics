@@ -981,6 +981,26 @@ tripwire uses). Disagreement is a FAIL on the blob's own evidence, with no
   reads. Stage A measured 0/288; a regression to 100 % would be the
   `tn0`/`scm3` inertness failure.
 
+### 10.3b Launch readiness — every prerequisite closed before the gate opened
+
+Sequenced behind B-6 per §6, so the wait was spent removing every way the
+launch could fail rather than idling:
+
+| item | state |
+|---|---|
+| run prefixes | all three carry the **full object triple** — `manifest.json`, `control.json` (staged `{"paused":true,"drain":true}`), `ledger_snapshot.parquet` |
+| manifests load | `zenfleet-ctl catalog` reports **total = gap** on each (2,016 / 4,320 / 96), **done 0, poison 0** |
+| worker image | `exec-avifhbd-t1-32e68a8f`, **pre-pulled on tower and r7900x**, digest `sha256:92fdaa3a…` **identical on both and to the pushed image** |
+| topology | measured, and recorded in the declare script: t1 encodes go to r7900x + tower (both capped on tower per the household rule); **not** to the dev box, which is saturated running the score fleet |
+
+**The snapshot was the trap.** `lan_score_launch.sh` sets
+`ZEN_REQUIRE_SNAPSHOT=1` by default, so a run whose prefix has a manifest and a
+control but **no `ledger_snapshot.parquet` is refused by every worker it
+launches** — and the declare path does not create one (`zenfleet-ctl compact
+--upload` does). Nothing in the declaration output said so. Caught by reading
+the launcher rather than by watching three workers fail to start, and the
+runbook now spells out the full stage step.
+
 ### 10.4 Declaration
 
 `avifdoe_declare.sh --track-t1`, through the canonical path:
