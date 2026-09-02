@@ -16,6 +16,7 @@
 # Usage:
 #   scripts/jobsys/avifdoe_declare.sh [--out DIR] [--sources DIR] [--dry-run-only]
 #   scripts/jobsys/avifdoe_declare.sh --smoke        # 2-image G-DEDUP smoke only
+#   scripts/jobsys/avifdoe_declare.sh --stage-b6     # Stage B, trigger B-6 only
 #
 # Requires: a zenmetrics built with `--features sweep,avif,avif-svt` (the svt
 # strata land in `invalid_skipped` without `avif-svt`, loudly, never silently),
@@ -32,12 +33,14 @@ NATIVE_SOURCES="${NATIVE_SOURCES:-/mnt/v/output/avifsvt-subsample-2026-09-01/sou
 OUT="${OUT:-$HOME/tmp/avifdoe/declare}"
 SMOKE=0
 DRY_ONLY=0
+STAGE_B6=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) OUT="$2"; shift 2 ;;
     --sources) SOURCES="$2"; shift 2 ;;
     --smoke) SMOKE=1; shift ;;
+    --stage-b6) STAGE_B6=1; shift ;;
     --dry-run-only) DRY_ONLY=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -137,6 +140,56 @@ fi
 # built by avifdoe_build_budget_corpus.py) for everything except AG, which is
 # the cross-size gate and must run on the NATIVE corpus.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# STAGE B, trigger B-6 — the ONLY Stage-B block declared (user decision
+# 2026-09-02: "go with B-6 first"). The rest of the 60k envelope stays
+# undeclared.
+#
+# B-6 fires when an arm fails T1 of the cross-size transfer gate: its
+# effect at the 1024^2 screening budget does not carry to native size, so
+# "that knob's Stage-B grid runs at NATIVE size" (plan doc section 7.2).
+# Stage A certified only mtx32 and qml1.8.15 for reduced-size screening;
+# `acb3` and `shp3` are the two arms it PROVED not screenable
+# (avif_doe_stageA_2026-09-02.md section 8.1).
+#
+# The grid is B-1's registered follow-up shape at native: 5 levels x the
+# FULL 29-q ladder x 32 images x speeds {4,6,7}. Both knobs share their
+# default level (ac_bias 0.0 == sharpness 0 == the default config), so the
+# axis carries 9 levels and the run is 27 strata x 29 q x 32 images =
+# 25,056 cells, not the trigger list's per-knob sum of 27,840. The 2,784
+# difference IS that shared control, counted once instead of twice.
+#
+# TWO things here differ from every other block and both are load-bearing:
+#   * NATIVE_SOURCES, not SOURCES. The two corpora share filenames by
+#     construction (section 12.3), so pointing this at the budget corpus
+#     would silently encode the wrong pixels. The declared `source_sha`
+#     makes the two disjoint at CellId level -- proven, not assumed.
+#   * --max-deviations 2, not 1. `speeds` is itself an axis, so a knob
+#     level at speed 6 or 7 spends TWO deviations; at 1 this block would
+#     silently emit 11 strata instead of 27 (only the speed-4 leg).
+#     It cannot leak interactions: `svt_knobs` is ONE axis, so no cell can
+#     spell two knobs at once. `duplicates_merged: 0` is therefore
+#     STRUCTURALLY CORRECT here, not the red flag it is on a pairwise plan.
+if [ "$STAGE_B6" = 1 ]; then
+  declare_block avifdoe-svt-b6-20260902 svt_doe_b6 "$Q_FULL29" \
+      "${NATIVE_SOURCES:-/mnt/v/output/avifsvt-subsample-2026-09-01/sources}" 2
+  cat <<'B6EOF'
+
+Declared B-6 into the output dir. NOT launched.
+
+  corpus prefix (workers):  s3://codec-corpus/avif-subsample-2026-09-01/
+  fleet image:              ghcr.io/imazen/zenfleet-worker:exec-avifdoe-b6-<sha>
+  control key:              jobs/avifdoe-svt-b6-20260902/control.json
+
+The image MUST carry zenavif >= 43423054 (the commit that adds the
+`svt_doe_b6` plan). An older image answers `unknown zenavif plan
+"svt_doe_b6"` and every cell fails as an encoder panic -- the exact
+G-FIRSTCELL failure section 11.5 records. Verify the tag resolves the plan
+before scaling past one worker.
+B6EOF
+  exit 0
+fi
+
 # A0R — the same-size default arm every knob cell is differenced against.
 declare_block avifdoe-svt-a0r-20260901 svt_speed_dense  "$Q_FULL29"  "$SOURCES" 9
 # A1  — 17 main-effect arms x ALL 7 effective presets x 9 q x 32 images.
