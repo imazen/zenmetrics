@@ -979,6 +979,54 @@ fn hdr_dims_check(r: &HdrImageFeeds, d: &HdrImageFeeds) -> Result<(), Err> {
     Ok(())
 }
 
+/// The umbrella's VALIDATED f32 HDR feeding for one pair, or `None` when this
+/// (metric, backend) genuinely has no umbrella path and the u8 shell is the
+/// only option.
+///
+/// Wraps [`score_via_hdr_scorer`] with the runtime ladder the `butteraugli-gpu`
+/// arm already walked by hand: the umbrella opaque can only be built on
+/// cuda/wgpu/cpu, so a GPU metric asked for `Auto` must resolve a CONCRETE
+/// backend first (`score_via_hdr_scorer` returns `None` for `Auto`) — first
+/// backend with an umbrella path wins, exactly as `run_metric`'s GPU dispatch
+/// resolves `Auto`. A CPU metric ignores the ladder (`Backend::Cpu`, one try).
+pub fn faithful_hdr_rows(
+    metric: crate::metrics::MetricKind,
+    r: &NitsImage,
+    d: &NitsImage,
+    transfer: HdrTransfer,
+    runtime: crate::metrics::GpuRuntime,
+) -> Option<Result<Vec<(&'static str, f64)>, Err>> {
+    // `auto_order` only exists when at least one `gpu-*` metric is compiled —
+    // and so does every `requires_gpu()` variant, so with none of them the
+    // ladder is unreachable and the single-runtime slice is the whole story.
+    #[cfg(any(
+        feature = "gpu-butteraugli",
+        feature = "gpu-ssim2",
+        feature = "gpu-dssim",
+        feature = "gpu-iwssim",
+        feature = "gpu-zensim",
+        feature = "gpu-cvvdp"
+    ))]
+    let candidates: &[crate::metrics::GpuRuntime] =
+        if metric.requires_gpu() && matches!(runtime, crate::metrics::GpuRuntime::Auto) {
+            crate::metrics::auto_order()
+        } else {
+            std::slice::from_ref(&runtime)
+        };
+    #[cfg(not(any(
+        feature = "gpu-butteraugli",
+        feature = "gpu-ssim2",
+        feature = "gpu-dssim",
+        feature = "gpu-iwssim",
+        feature = "gpu-zensim",
+        feature = "gpu-cvvdp"
+    )))]
+    let candidates: &[crate::metrics::GpuRuntime] = std::slice::from_ref(&runtime);
+    candidates
+        .iter()
+        .find_map(|rt| score_via_hdr_scorer(metric, r, d, transfer, *rt))
+}
+
 /// Score one metric over an HDR pair with the exact `score-pairs --hdr`
 /// per-metric feeding (see the contract table above). Returns the same
 /// `(column, value)` rows `run_metric` yields, so callers emit unchanged row
@@ -1090,14 +1138,38 @@ pub fn score_hdr_pair_per_score_pairs(
             crate::metrics::run_metric(metric, &r, &d, scorers.runtime)
         }
         // Everything else — ssim2(-gpu), iwssim(-gpu), CPU butteraugli, plain
-        // zensim(-gpu) scoring: the PU21/PQ u8 shell into the normal dispatch,
-        // exactly score-pairs' `to_sdr_rgb8` + `score_one_pair_maybe_hdr`.
-        _ => crate::metrics::run_metric(
+        // zensim(-gpu): the umbrella's VALIDATED f32 feeding (`hdr_feeding` —
+        // integrated PU21 nits for ssim2 + zensim, float PU(luma) gray for
+        // iwssim, display-relative linear planes for butteraugli), which is
+        // what `score --hdr` has always taken. These used to blanket-route
+        // through the PU21/PQ **u8 shell**, whose round-to-u8 is a 4:1
+        // reduction on a 10-bit signal: MEASURED on a 10-bit PQ ramp against
+        // its own 8-bit quantization, the shell collapses **94.17 %** of the
+        // differing samples to byte-identical (99.75 % of f32 samples differ,
+        // 5.82 % of u8 bytes do) — i.e. the fleet could not see banding, the
+        // one artifact a bit-depth decision is about
+        // (`tests/hdr_depth_sensitivity.rs`).
+        //
+        // The u8 shell stays as the genuine fallback, NOT as the default: a
+        // (metric, backend) the umbrella opaque cannot express — hip,
+        // cubecl-cpu, or an uncompiled `gpu-*` feature — still scores rather
+        // than failing. `run_metric` then resolves the backend as it always
+        // did.
+        _ => match faithful_hdr_rows(
             metric,
-            reference.sdr_u8(),
-            distorted.sdr_u8(),
+            reference.nits(),
+            distorted.nits(),
+            reference.transfer,
             scorers.runtime,
-        ),
+        ) {
+            Some(rows) => rows,
+            None => crate::metrics::run_metric(
+                metric,
+                reference.sdr_u8(),
+                distorted.sdr_u8(),
+                scorers.runtime,
+            ),
+        },
     }
 }
 

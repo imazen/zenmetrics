@@ -1774,6 +1774,51 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
                     }
                 })());
             }
+            // Every remaining metric with an umbrella path — ssim2(-gpu),
+            // zensim(-gpu), iwssim(-gpu), CPU butteraugli — takes the
+            // umbrella's VALIDATED f32 feeding (`hdr_feeding`), the same route
+            // `score --hdr` has always taken. These used to fall through to
+            // the PU21/PQ **u8 shell** below, whose round-to-u8 is a 4:1
+            // reduction on a 10-bit signal and erases ~94 % of a 10-bit-vs-
+            // 8-bit difference (MEASURED, `tests/hdr_depth_sensitivity.rs`) —
+            // so score-pairs could not see banding.
+            //
+            // `Cvvdp` is EXCLUDED deliberately: the CPU cvvdp port keeps its
+            // documented REFERENCE-peak-anchored u8 feeding (appendix AA), and
+            // routing it here would silently re-anchor it. Dssim has no HDR
+            // path by design and is refused downstream. Anything the umbrella
+            // cannot express returns `None` and falls through to the shell.
+            if faithful_hdr_result.is_none()
+                && !matches!(
+                    args.metric,
+                    crate::metrics::MetricKind::Cvvdp | crate::metrics::MetricKind::Dssim
+                )
+            {
+                faithful_hdr_result = (|| {
+                    let r = match hdr::decode_to_nits(&ref_path) {
+                        Ok(v) => v,
+                        Err(e) => return Some(Err(e)),
+                    };
+                    let d = match hdr::decode_to_nits(&dist_path) {
+                        Ok(v) => v,
+                        Err(e) => return Some(Err(e)),
+                    };
+                    if r.width != d.width || r.height != d.height {
+                        return Some(Err(format!(
+                            "dimension mismatch: {} ({}x{}) vs {} ({}x{})",
+                            ref_path.display(),
+                            r.width,
+                            r.height,
+                            dist_path.display(),
+                            d.width,
+                            d.height
+                        )
+                        .into()));
+                    }
+                    hdr::faithful_hdr_rows(args.metric, &r, &d, args.hdr_transfer, args.gpu_runtime)
+                        .map(|rows| rows.map(|cols| cols.into_iter().map(|(_, v)| v).collect()))
+                })();
+            }
         }
 
         // HDR u8 feeding for the non-faithful path (zensim features + every
@@ -2598,11 +2643,26 @@ fn cmd_batch(
             wtr.write_record(&row)?;
             continue;
         }
-        // Faithful HDR butteraugli-gpu: same display-relative planes →
-        // butteraugli's native linear-planes path (intensity_target = the
-        // reference's MEASURED peak, applied inside `score_via_hdr_scorer`).
-        #[cfg(all(feature = "hdr", feature = "gpu-butteraugli"))]
-        if hdr_mode && args.metric == crate::metrics::MetricKind::ButteraugliGpu {
+        // Faithful HDR: every metric with an umbrella path takes the
+        // umbrella's VALIDATED f32 feeding (`hdr_feeding` — linear planes for
+        // butteraugli/cvvdp, integrated PU21 nits for ssim2 + zensim, float
+        // PU(luma) gray for iwssim), the same route `score --hdr` takes. This
+        // used to fire for `butteraugli-gpu` ALONE, so `batch --hdr` put
+        // ssim2/zensim/iwssim through the PU21/PQ **u8 shell** — a 4:1
+        // reduction on a 10-bit signal that erases ~94 % of a 10-bit-vs-8-bit
+        // difference (MEASURED, `tests/hdr_depth_sensitivity.rs`).
+        //
+        // `Cvvdp` (the CPU port) is EXCLUDED deliberately: it keeps its
+        // documented REFERENCE-peak-anchored u8 feeding (appendix AA). Dssim
+        // has no HDR path by design. Anything the umbrella cannot express
+        // returns `None` and falls through to the u8 block below.
+        #[cfg(feature = "hdr")]
+        if hdr_mode
+            && !matches!(
+                args.metric,
+                crate::metrics::MetricKind::Cvvdp | crate::metrics::MetricKind::Dssim
+            )
+        {
             let r = batch_cached_nits_ref(&mut nits_ref_cache, &ref_path)?;
             let d = hdr::decode_to_nits(&dist_path)?;
             if r.width != d.width || r.height != d.height {
@@ -2622,7 +2682,7 @@ fn cmd_batch(
             // regression, and it retires the ad-hoc linear scorer). hip falls
             // through to the u8 path below (the umbrella opaque is cuda/wgpu/cpu).
             if let Some(result) =
-                hdr::score_via_hdr_scorer(args.metric, r, &d, args.hdr_transfer, args.gpu_runtime)
+                hdr::faithful_hdr_rows(args.metric, r, &d, args.hdr_transfer, args.gpu_runtime)
             {
                 let rows = result?;
                 let mut row: Vec<String> = record.iter().map(String::from).collect();

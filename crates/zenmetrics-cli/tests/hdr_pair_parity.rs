@@ -23,9 +23,9 @@
 #![cfg(all(feature = "hdr", feature = "cpu-metrics"))]
 
 use zenmetrics_cli::hdr::{
-    HdrImageFeeds, HdrPairScorers, HdrTransfer, NitsImage, measured_cvvdp_u8_peak,
-    score_hdr_pair_per_score_pairs, score_hdr_zensim_with_features_per_score_pairs, to_cvvdp_rgb8,
-    to_sdr_rgb8,
+    HdrImageFeeds, HdrPairScorers, HdrTransfer, NitsImage, faithful_hdr_rows,
+    measured_cvvdp_u8_peak, score_hdr_pair_per_score_pairs,
+    score_hdr_zensim_with_features_per_score_pairs, to_cvvdp_rgb8, to_sdr_rgb8,
 };
 use zenmetrics_cli::metrics::{
     GpuRuntime, MetricKind, ZensimFeatureRegime, run_metric, run_zensim_with_features,
@@ -88,10 +88,22 @@ const H: u32 = 192;
 const TRANSFER: HdrTransfer = HdrTransfer::PuRescale;
 
 /// Side (a): `cmd_score_pairs --hdr`'s feeding for one metric, composed from the
-/// exact primitives its HDR blocks call (u8-shell metrics + the cvvdp-u8 kinds;
-/// the GPU faithful paths need a GPU and are covered by the fleet-binary
-/// cross-check instead).
+/// exact primitives its HDR blocks call (the faithful umbrella arm + the
+/// cvvdp-u8 kind + the u8-shell fallback; the GPU faithful paths need a GPU and
+/// are covered by the fleet-binary cross-check instead).
+///
+/// The faithful arm FIRST, matching main.rs: since the HDR-feeding routing fix,
+/// score-pairs tries `hdr::faithful_hdr_rows` for every metric but `Cvvdp`
+/// (which keeps its reference-peak-anchored u8 feeding) and `Dssim` (refused),
+/// and only falls through to `to_sdr_rgb8` + `run_metric` when the umbrella has
+/// no path for that (metric, backend). Composing it in the same order is what
+/// keeps this a parity gate rather than a re-implementation.
 fn score_pairs_side(metric: MetricKind, r: &NitsImage, d: &NitsImage) -> Vec<(&'static str, f64)> {
+    if !matches!(metric, MetricKind::Cvvdp | MetricKind::Dssim)
+        && let Some(rows) = faithful_hdr_rows(metric, r, d, TRANSFER, GpuRuntime::Auto)
+    {
+        return rows.unwrap_or_else(|e| panic!("score-pairs-side faithful {metric:?}: {e}"));
+    }
     let (ru8, du8) = if matches!(metric, MetricKind::Cvvdp) {
         // Reference-measured peak, BOTH sides (appendix AA) — the exact
         // construction the main.rs hdr_u8_pair blocks use.
@@ -209,25 +221,92 @@ fn dimension_mismatch_errors_before_scoring() {
 
 #[test]
 fn transfer_choice_reaches_the_u8_shell() {
-    // PQ vs PU-rescale produce different u8 shells → different scores. Guards
-    // against the transfer silently not being threaded through the feeds.
+    // PQ vs PU-rescale produce different u8 shells. Guards against the
+    // transfer silently not being threaded through the feeds.
+    //
+    // Asserted on the SHELL, which is where the property lives. It used to be
+    // asserted through `score_hdr_pair_per_score_pairs(Ssim2, ..)` — valid
+    // while that function WAS the shell, and no longer so: ssim2 now takes the
+    // faithful f32 route, where the transfer is inert by design (see
+    // `hdr_transfer_is_inert_on_the_faithful_route`). Re-pointing keeps the
+    // property under test; scoring through a function that no longer uses the
+    // shell would have tested nothing.
     let r = synth_nits(3, 96, 96);
     let d = distort(&r, 13);
-    let mut scorers = HdrPairScorers::new(GpuRuntime::Auto);
-    let pu = {
-        let rf = HdrImageFeeds::new(synth_nits(3, 96, 96), HdrTransfer::PuRescale);
-        let df = HdrImageFeeds::new(distort(&synth_nits(3, 96, 96), 13), HdrTransfer::PuRescale);
-        score_hdr_pair_per_score_pairs(MetricKind::Ssim2, &rf, &df, &mut scorers).unwrap()[0].1
-    };
-    let pq = {
-        let rf = HdrImageFeeds::new(r, HdrTransfer::Pq);
-        let df = HdrImageFeeds::new(d, HdrTransfer::Pq);
-        score_hdr_pair_per_score_pairs(MetricKind::Ssim2, &rf, &df, &mut scorers).unwrap()[0].1
-    };
+    let pu = run_metric(
+        MetricKind::Ssim2,
+        &to_sdr_rgb8(&r, HdrTransfer::PuRescale),
+        &to_sdr_rgb8(&d, HdrTransfer::PuRescale),
+        GpuRuntime::Auto,
+    )
+    .unwrap()[0]
+        .1;
+    let pq = run_metric(
+        MetricKind::Ssim2,
+        &to_sdr_rgb8(&r, HdrTransfer::Pq),
+        &to_sdr_rgb8(&d, HdrTransfer::Pq),
+        GpuRuntime::Auto,
+    )
+    .unwrap()[0]
+        .1;
     assert!(
         (pu - pq).abs() > 1e-9,
         "PQ and PU-rescale shells should differ: pu={pu} pq={pq}"
     );
+    // ...and the feeds must carry the caller's choice into that shell.
+    let feeds_pu = HdrImageFeeds::new(synth_nits(3, 96, 96), HdrTransfer::PuRescale);
+    let feeds_pq = HdrImageFeeds::new(synth_nits(3, 96, 96), HdrTransfer::Pq);
+    assert!(
+        feeds_pu.sdr_u8().pixels != feeds_pq.sdr_u8().pixels,
+        "HdrImageFeeds must thread the transfer into its u8 shell"
+    );
+}
+
+/// The other half of the same fact, and a user-visible behaviour change worth
+/// pinning: on the FAITHFUL route `--hdr-transfer` does nothing.
+///
+/// `HdrScorer::with_transfer` only stores the transfer for the `SdrU8` feeding
+/// (zenmetrics-api `hdr.rs`); ssim2/zensim take `IntegratedPuNits`, whose input
+/// is absolute nits with the PU21 encode applied in-kernel, so there is no
+/// transfer shell to select. Since the routing fix that makes `--hdr-transfer`
+/// inert for these metrics — which is correct, but silent, so it is pinned
+/// here rather than left to be rediscovered.
+#[test]
+fn hdr_transfer_is_inert_on_the_faithful_route() {
+    let r = synth_nits(3, 96, 96);
+    let d = distort(&r, 13);
+    let mut scorers = HdrPairScorers::new(GpuRuntime::Auto);
+    let score = |t: HdrTransfer, scorers: &mut HdrPairScorers| {
+        let rf = HdrImageFeeds::new(synth_nits(3, 96, 96), t);
+        let df = HdrImageFeeds::new(distort(&synth_nits(3, 96, 96), 13), t);
+        score_hdr_pair_per_score_pairs(MetricKind::Ssim2, &rf, &df, scorers).unwrap()[0].1
+    };
+    let pu = score(HdrTransfer::PuRescale, &mut scorers);
+    let pq = score(HdrTransfer::Pq, &mut scorers);
+    assert!(
+        pu.to_bits() == pq.to_bits(),
+        "the faithful route takes absolute nits, so the transfer must not \
+         change the score: pu={pu} pq={pq}"
+    );
+    // Anti-vacuity: the shell on the SAME pair genuinely does differ, so this
+    // is inertness on the faithful route, not a degenerate pair.
+    let shell_pu = run_metric(
+        MetricKind::Ssim2,
+        &to_sdr_rgb8(&r, HdrTransfer::PuRescale),
+        &to_sdr_rgb8(&d, HdrTransfer::PuRescale),
+        GpuRuntime::Auto,
+    )
+    .unwrap()[0]
+        .1;
+    let shell_pq = run_metric(
+        MetricKind::Ssim2,
+        &to_sdr_rgb8(&r, HdrTransfer::Pq),
+        &to_sdr_rgb8(&d, HdrTransfer::Pq),
+        GpuRuntime::Auto,
+    )
+    .unwrap()[0]
+        .1;
+    assert!((shell_pu - shell_pq).abs() > 1e-9);
 }
 
 /// GPU-side parity — the faithful paths (cvvdp-gpu linear planes, butteraugli-gpu
