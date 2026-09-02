@@ -1769,3 +1769,70 @@ belong to the wave owner:
 3. **AG additionally needs a score declaration with the NATIVE refs-prefix** when
    it runs — see §13.3. The recurring loop declares A0R automatically and prints
    a loud notice for AG rather than guessing its prefix.
+
+---
+
+## 14. Wave completion + Stage A — 2026-09-02
+
+**Full record: [`avif_doe_stageA_2026-09-02.md`](avif_doe_stageA_2026-09-02.md).**
+This section is the pointer and the corrections this lane owes §3, §7 and §13.
+
+### 14.1 The wave is complete
+
+All four svt-rs encode runs reached live-gap 0 with **zero failed cells**:
+A1 6,912 · A2 33,984 · A0R 6,496 · AG 1,728 = **49,120 cells, all scored**.
+A0R and AG had no encode workers when the lane opened; both were launched here.
+
+**§13.8's "A1 480-cell `failed-only` gap" never existed.** A1's ledger shows the
+run finished at **04:47:21Z**, ~57 min before that snapshot, 6,912/6,912
+live-done, with **zero post-fix `encoder_panic`** — the pardon of §11.7 worked
+and nothing was laundered. Nothing was requeued and no poison was annotated.
+The reading was stale, which is worth knowing: `report` can under-read a
+*finished* run.
+
+### 14.2 Corrections this lane owes the plan
+
+1. **§3.2's cell arithmetic is impossible under its own isolation rule.** "17
+   arms × all 7 effective presets = 34,272" cannot be declared at
+   `--max-deviations 1`, because a non-default preset *is* the one permitted
+   deviation. zenavif's own test fixes the real design at **24 strata**
+   (1 default + 16 knob arms + 6 speeds + 1 bit-depth), i.e. the declared
+   **6,912**. Consequence: **knob main effects exist at two presets, s4 and s6,
+   not seven**; **B-5** is evaluable across one preset pair; and §3.3's claim
+   that folding A1b away was safe because "presets 0 and 1 at 9 q" would cover
+   it is **not true** — no knob arm exists at preset 0 or 1.
+2. **§3.9's bytes decomposition is not identifiable from the crop/native pair.**
+   A crop is a different image, not a smaller one, so the two-point intercept
+   absorbs the content difference: **SROCC(α, q) median 0.943** across 91
+   (image, speed) groups, α climbing **731 → 59,176 bytes** across the ladder
+   (81×) and going negative on 781 of 2,639 fits. The "free from the
+   fleet" claim does not hold; a same-content size ladder would be needed.
+3. **§3.8's transfer gate is thinner than §12.4 restated.** On top of the n=13
+   correction, AG's declared grid carries knob arms at **speed 4 only** (the s6
+   cells spend their deviation on the preset) and omits `bd10`; n = 11 after the
+   two degenerate crops. **2 PASS (`mtx32`, `qml1.8.15`) · 7 PARTIAL · 2 genuine
+   FAIL-T1 (`acb3`, `shp3`, which fire B-6) · 3 NOT-MEASURED · 2 INERT.** Its
+   most useful output is a result §6 alone would have got wrong: **tiling's
+   bitrate cost is largely a reduced-size artefact** — `tl1.0` +0.65 % at budget
+   vs **−0.12 % at native**, `tl1.1` 8.6× smaller, carrying the only two
+   significant T3 sign tests in the set (p = 0.012, 0.001).
+4. **§7.2's Stage-B envelope is exceeded by the triggers it defines.** Honouring
+   every trigger costs **447,636 cells against a registered 60,000 — 7.5×**
+   (B-1 17 · B-2 23 · B-3 13 · B-6 2). Prioritisation is a decision and it is
+   the coordinator's; **no Stage-B wave was declared here.**
+5. **A recurring score declaration re-does its own work.** `zenfleet-ctl pairs`
+   emits the same rows in a **different order** on consecutive runs against a
+   frozen ledger, and `declare-scorefiles` chunks by row order into the
+   `job_id`, so every gap-fill round re-declares the run as fresh jobs:
+   `declared=4,128` vs `ever_done=16,476`, a **4.0× multiplier** with zero
+   failures. A waste bug, not a correctness bug; the fix is a deterministic sort
+   in `pairs`. Not applied mid-wave.
+
+### 14.3 The finding for the port program
+
+**`tune=0` and `screen_content_mode=Some(3)` produce byte-identical bitstreams
+to the default on 288/288 cells at both presets**, while the harness's own
+resolved-state fingerprint separates them. `tune=3` *does* change the bitstream,
+so `tune` is partly wired. Minimal repro, cells affected (8,972) and the
+fingerprint table are in the Stage-A record §3. **Not fixed here** — zenavif is
+another lane's subject.
