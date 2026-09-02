@@ -17,6 +17,7 @@
 #   scripts/jobsys/avifdoe_declare.sh [--out DIR] [--sources DIR] [--dry-run-only]
 #   scripts/jobsys/avifdoe_declare.sh --smoke        # 2-image G-DEDUP smoke only
 #   scripts/jobsys/avifdoe_declare.sh --stage-b6     # Stage B, trigger B-6 only
+#   scripts/jobsys/avifdoe_declare.sh --track-t1     # HBD arm, Track T1 (bd10) only
 #
 # Requires: a zenmetrics built with `--features sweep,avif,avif-svt` (the svt
 # strata land in `invalid_skipped` without `avif-svt`, loudly, never silently),
@@ -34,6 +35,7 @@ OUT="${OUT:-$HOME/tmp/avifdoe/declare}"
 SMOKE=0
 DRY_ONLY=0
 STAGE_B6=0
+TRACK_T1=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -41,6 +43,7 @@ while [ $# -gt 0 ]; do
     --sources) SOURCES="$2"; shift 2 ;;
     --smoke) SMOKE=1; shift ;;
     --stage-b6) STAGE_B6=1; shift ;;
+    --track-t1) TRACK_T1=1; shift ;;
     --dry-run-only) DRY_ONLY=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -170,6 +173,109 @@ fi
 #     It cannot leak interactions: `svt_knobs` is ONE axis, so no cell can
 #     spell two knobs at once. `duplicates_merged: 0` is therefore
 #     STRUCTURALLY CORRECT here, not the red flag it is on a pairwise plan.
+# ---------------------------------------------------------------------------
+# HIGH-BIT-DEPTH ARM, TRACK T1 — the `bd10` coverage gaps.
+#
+# Design + gates: benchmarks/avif_hdr_arm_plan_2026-09-02.md §4.2 and §5.
+# This is the registered discharge of trigger B-3 for `bd10`, plus the two
+# gaps B-3 does not cover. Stage A measured `bd10` at speed 4 only and it
+# WON there (BD-rate -1.02%, CI [-1.23, -0.36], 23/31 images) while being
+# "the worst-covered arm in the wave" -- no s6 main effect, no interaction
+# coverage, no transfer evidence (avif_doe_stageA_2026-09-02.md §11.8).
+#
+# THREE runs, and the block-to-run mapping is not one-to-one -- read this
+# before comparing counts to the plan doc:
+#   * T1-a AND T1-c are ONE run. T1-c ("bd10 @ s6") is literally the s6 leg
+#     of T1-a's preset ladder, so declaring it separately would put the same
+#     CellIds in two runs' manifests and split one identity space in two.
+#     The ladder also KEEPS speed 4 -- already encoded by A1 -- because
+#     re-declaring a content-addressed cell is idempotent and free, and it
+#     makes the s4 leg a live identity check that this plan reproduces A1's
+#     cells (pinned by zenavif's `svt_doe_t1_ladder_s4_cell_ids_match_
+#     svt_doe_main`). So T1-a+c declares 7x288 = 2,016, not the plan's 1,728.
+#   * T1-b is its own run: 15 live arms x 9 q x 32 = 4,320, exactly as
+#     registered.
+#   * T1-d is its own run and the ONLY one on the NATIVE corpus.
+#
+# COUNT RECONCILIATION (both numbers are right for what they count, as with
+# B-6's 27,840-vs-25,056): the plan doc's block sum is 6,432 =
+# 1,728 (T1-a) + 4,320 (T1-b) + 288 (T1-c) + 96 (T1-d). T1-c's 288 cells are
+# counted there BOTH as their own block and inside T1-a's 6-speed ladder, and
+# they appear a third time as T1-b's default-knob stratum at s6. What gets
+# DECLARED here is 2,016 + 4,320 + 96 = 6,432 job ids. MEASURED distinct
+# cells: 6,087 -- two overlaps, both structural:
+#   * 288 = the s6 knob-default stratum, shared by the ladder and knob runs.
+#   * 57  = T1-d cells that are ALSO t1ac cells. 19 of the 32 corpus images
+#     are sub-budget PASSTHROUGHS: their "native" and "1024^2 budget" files
+#     are byte-identical, so they share a source_sha and therefore a CellId
+#     (Stage A measured this exactly -- "19 byte-identical passthroughs, 13
+#     genuinely different crops", and relies on it: A0-native == A0R on
+#     3,857/3,857 shared cells). 19 images x 3 probe-q = 57.
+#
+# ⚠ ANALYSIS CONSEQUENCE FOR T1-d, and it is not cosmetic: the transfer gate
+# has **n = 13 images, not 32**. On the 19 passthroughs there is no size
+# transfer to measure -- the two sizes are the same pixels and the same
+# encode. T1-d's 96 declared cells are the right declaration (the 57 are free,
+# already-done work), but any "does -1.02% survive native size" statement must
+# be made over the 13 genuinely-cropped images and must report that n.
+#
+# 10-BIT IS PINNED, NOT CROSSED, and that is the whole mechanism. In
+# `svt_doe_main` the bit-depth axis is [Auto, Ten], so at one deviation a
+# 10-bit cell has already spent it on depth and can only exist at the default
+# speed -- which is exactly why `bd10` lives only at s4 today. The T1 plans
+# pin `bit_depths = [Ten]`, making Ten index 0 and therefore ZERO deviations,
+# so the speed (or the knob) becomes the isolated deviation. Pinned by
+# zenavif's `svt_doe_t1_blocks_pin_ten_bit_as_the_zero_deviation_stratum`.
+#
+# LAUNCH IN STAGES, per the plan's cheapest-discriminating-first order:
+# declare all three (declaring is free), then run T1-a+c and T1-d FIRST --
+# their s6 and native legs are the 384 cells that answer "is the effect real
+# at a second preset and at native size", which is what gates whether T1-b's
+# 4,320 cells are worth buying at all.
+#
+# GATES that bind at execution, not here: G3 reads the DEPTH BACK OUT OF THE
+# STORED BITSTREAM (a request for depth 10 is not evidence of a 10-bit
+# stream -- `with_bit_depth` silently coerces, hazard H-BD-3), and G4 forbids
+# fitting a BD-rate-vs-speed slope across the preset 8/9 producer seam
+# (speeds 1-6 use the full-RD funnel, 7-10 the level-only post-pass -- H-BD-1).
+# Every T1 number is scoped by H-BD-4: at presets <= 8 the port is NOT
+# byte-identical to C SVT-AV1, so T1 measures THIS PORT's 10-bit encoder and
+# no result may be stated as a property of SVT-AV1.
+if [ "$TRACK_T1" = 1 ]; then
+  # T1-a + T1-c — the preset ladder, budget corpus, 9-q knob ladder.
+  declare_block avifdoe-svt-t1ac-20260902 svt_doe_t1_bd10_ladder "$Q_LADDER9" \
+      "$SOURCES" 1
+  # T1-b — bd10 x the 15 live single-deviation arms at speed 6.
+  declare_block avifdoe-svt-t1b-20260902 svt_doe_t1_bd10_knobs "$Q_LADDER9" \
+      "$SOURCES" 1
+  # T1-d — the cross-size transfer gate. NATIVE corpus, 3-point probe ladder.
+  # The two corpora share filenames by construction, so the declared
+  # source_sha is what keeps these disjoint from the budget cells at CellId
+  # level (proven on 6604: 769b0df4 native vs 4ac38273 crop).
+  declare_block avifdoe-svt-t1d-20260902 svt_doe_t1_bd10_transfer "$Q_LADDER3" \
+      "${NATIVE_SOURCES:-/mnt/v/output/avifsvt-subsample-2026-09-01/sources}" 1
+  cat <<'T1EOF'
+
+Declared Track T1 into the output dir. NOT launched.
+
+  expected: t1ac 2,016  +  t1b 4,320  +  t1d 96  =  6,432 declared
+            6,087 DISTINCT — minus 288 (the s6 knob-default stratum, shared
+            by the ladder and knob runs) and minus 57 (T1-d cells on the 19
+            byte-identical passthrough images, which ARE t1ac cells).
+            T1-d's transfer gate therefore has n=13 images, not 32.
+
+  corpus prefix (workers):  s3://codec-corpus/avif-doe-1024-2026-09-01/
+                            s3://codec-corpus/avif-subsample-2026-09-01/  (t1d)
+  control keys:             jobs/avifdoe-svt-t1{ac,b,d}-20260902/control.json
+
+The worker image MUST know the three `svt_doe_t1_*` plans. An older image
+answers `unknown zenavif plan "svt_doe_t1_bd10_ladder"` and every cell fails
+as an encoder panic -- the same trap B-6 documented. Rebuild + push the
+executor image before launching, and smoke ONE cell first.
+T1EOF
+  exit 0
+fi
+
 if [ "$STAGE_B6" = 1 ]; then
   declare_block avifdoe-svt-b6-20260902 svt_doe_b6 "$Q_FULL29" \
       "${NATIVE_SOURCES:-/mnt/v/output/avifsvt-subsample-2026-09-01/sources}" 2

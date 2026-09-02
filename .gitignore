@@ -11,6 +11,7 @@
 /target
 **/target
 .workongoing
+.workongoing.*
 .DS_Store
 
 # Python venvs and local outputs from scripts/cvvdp_goldens/.
