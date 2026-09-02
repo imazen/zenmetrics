@@ -249,6 +249,128 @@ fn apply_corpus_creds(cmd: &mut Command) {
     }
 }
 
+/// Filename prefix of every on-disk source-cache entry. The sweeper below will only ever
+/// delete a file starting with this, so an unrelated temp file can never be collected.
+const SRC_CACHE_PREFIX: &str = "jobexec_src_";
+
+/// Age at which an UNTOUCHED source-cache entry is collected. Override with
+/// `ZEN_JOBEXEC_SRC_CACHE_MAX_AGE_HOURS`; `0` disables sweeping entirely.
+const SRC_CACHE_MAX_AGE_HOURS: u64 = 24;
+
+/// Distinguishes concurrent writers' `.part` files within one process.
+static SRC_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// On-disk cache path for the source object at `uri`.
+///
+/// Keyed on the sha256 of the RESOLVED URI — not the process id, and not the basename.
+/// Both alternatives are wrong, in opposite directions:
+///
+/// - **PID-scoped** (`jobexec_src_<pid>_<basename>`, what this was) gives every process its
+///   own copy of the same bytes and never deletes any of them. The fleet runs a fresh
+///   jobexec process per cell, so the copy count grows without bound: measured, 10,413 dead
+///   pids held 60 distinct images as ~46 copies each = **22.93 GB**, which filled the disk
+///   and stopped the AVIF-DOE wave (`benchmarks/avif_doe_plan_2026-09-01.md` §11).
+/// - **Basename-only** would collapse those copies but silently serve the WRONG IMAGE when
+///   two corpora hold the same filename. That is not hypothetical here: §2.4 of the same
+///   plan keeps the corpus key UNCHANGED across the 1024² crop, so
+///   `avifsvt-subsample-2026-09-01/1442.scale4000x3000.png` and
+///   `avif-doe-1024-2026-09-01/1442.scale4000x3000.png` are different pixels under one
+///   basename. Only the full URI separates them. (The old PID scheme avoided this by
+///   accident, and only across processes — two such fetches in ONE process collided.)
+///
+/// The basename is kept as a readable suffix because it carries the EXTENSION, which the
+/// HDR decode path (`hdr::decode_to_nits`) dispatches on.
+fn src_cache_path(uri: &str) -> PathBuf {
+    use sha2::{Digest, Sha256};
+    let key = format!("{:x}", Sha256::digest(uri.as_bytes()));
+    let base = uri.rsplit('/').next().unwrap_or("src");
+    std::env::temp_dir().join(format!("{SRC_CACHE_PREFIX}{}_{base}", &key[..32]))
+}
+
+/// Refresh an entry's mtime so "age" means time-since-last-use, not time-since-download.
+/// Best-effort: a read-only or vanished cache dir is not an error.
+fn touch_src_cache(path: &std::path::Path) {
+    if let Ok(f) = std::fs::File::options().write(true).open(path) {
+        let now = std::time::SystemTime::now();
+        let _ = f.set_times(
+            std::fs::FileTimes::new()
+                .set_accessed(now)
+                .set_modified(now),
+        );
+    }
+}
+
+/// Collect stale source-cache entries. Runs at most ONCE per process, lazily on the first
+/// source resolution, so it needs no wiring into any entry point and a long-lived `--serve`
+/// worker still pays it exactly once.
+///
+/// Content-addressing alone takes the copy count from (processes × images) to (images) — the
+/// 46× fix. This bounds the remaining axis: a box that walks a large corpus would otherwise
+/// keep every image it ever touched, and it is also what collects the legacy PID-scoped
+/// entries left behind by any binary built before this change.
+///
+/// Safe against concurrent workers by construction: an entry is only removed after hours
+/// untouched, a cache hit touches the entry it serves, and a wrongly-collected entry costs
+/// one re-download — never a wrong or partial read, since publication is still an atomic
+/// rename of a fully-written file.
+fn sweep_src_cache_once() {
+    static SWEPT: std::sync::Once = std::sync::Once::new();
+    SWEPT.call_once(|| {
+        let hours = std::env::var("ZEN_JOBEXEC_SRC_CACHE_MAX_AGE_HOURS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(SRC_CACHE_MAX_AGE_HOURS);
+        if hours == 0 {
+            return;
+        }
+        let (n, bytes) = sweep_src_cache_in(
+            &std::env::temp_dir(),
+            std::time::Duration::from_secs(hours * 3600),
+        );
+        if n > 0 {
+            eprintln!(
+                "jobexec: source cache swept {n} stale entries, {:.2} GB reclaimed",
+                bytes as f64 / 1e9
+            );
+        }
+    });
+}
+
+/// The sweeper's body, factored out so a test can drive it on a scratch dir.
+/// Returns `(files removed, bytes reclaimed)`.
+fn sweep_src_cache_in(dir: &std::path::Path, max_age: std::time::Duration) -> (usize, u64) {
+    let now = std::time::SystemTime::now();
+    let (mut n, mut bytes) = (0usize, 0u64);
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return (0, 0);
+    };
+    for ent in rd.flatten() {
+        let name = ent.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if !name.starts_with(SRC_CACHE_PREFIX) {
+            continue; // not ours — never a candidate
+        }
+        let Ok(md) = ent.metadata() else { continue };
+        if !md.is_file() {
+            continue;
+        }
+        let stale = md
+            .modified()
+            .ok()
+            .and_then(|m| now.duration_since(m).ok())
+            .is_some_and(|age| age >= max_age);
+        if !stale {
+            continue;
+        }
+        let sz = md.len();
+        if std::fs::remove_file(ent.path()).is_ok() {
+            n += 1;
+            bytes += sz;
+        }
+    }
+    (n, bytes)
+}
+
 /// Resolve `cell.image_path` to a readable local file, fetching from R2 if needed.
 /// Any failure is classified [`ExecError::source_fetch`] (transient; see zenmetrics#45 — the G-Z2
 /// shape where fetch failures were poisoned as `encoder_panic`).
@@ -286,17 +408,18 @@ fn resolve_source_raw(
             _ => format!("s3://{bucket}/{image_path}"),
         }
     };
-    let dst = std::env::temp_dir().join(format!(
-        "jobexec_src_{}_{}",
-        std::process::id(),
-        image_path.rsplit('/').next().unwrap_or("src")
-    ));
-    // Warm-process source cache: in --serve mode one process scores many cells/metrics of the SAME
-    // source image (the manifest is image-major), and after the executor is kept warm the per-job R2
-    // download is the dominant cost. So reuse an already-fetched image instead of re-downloading. `dst`
-    // exists ONLY after a verified-complete download (we fetch to a sibling `.part` and rename on
-    // success), so a cache hit is always a whole file — never a truncated/partial one.
+    sweep_src_cache_once();
+    let dst = src_cache_path(&uri);
+    // Warm SHARED source cache: in --serve mode one process scores many cells/metrics of the SAME
+    // source image (the manifest is image-major), and the fleet runs a fresh process per cell, so
+    // without a cache the per-job R2 download is the dominant cost. `dst` exists ONLY after a
+    // verified-complete download (we fetch to a per-process `.part` sibling and rename on success),
+    // so a cache hit is always a whole file — never a truncated/partial one, and never another
+    // worker's in-flight write.
     if dst.exists() {
+        // Age is time-since-last-USE, not time-since-download, so the sweeper below cannot
+        // collect an entry a concurrent worker is actively serving from.
+        touch_src_cache(&dst);
         return Ok(dst);
     }
     // In-process pooled GET (no `s5cmd` spawn). Fetch to a `.part` sibling and rename
@@ -305,7 +428,15 @@ fn resolve_source_raw(
     // corpora put run+tar+refs in one bucket). A distinct read-only corpus credential
     // (ZEN_CORPUS_AWS_*, the old two-bucket setup) is not yet threaded into objstore.
     let _ = &endpoint; // objstore reads ZEN_R2_ENDPOINT itself
-    let part = std::path::PathBuf::from(format!("{}.part", dst.display()));
+    // The `.part` name must be unique per WRITER, not per cache entry: `dst` is now shared
+    // across every process on the box, so a `dst.part` sibling would let two concurrent
+    // workers interleave their writes into one file and then rename the mixture into place.
+    let part = dst.with_file_name(format!(
+        "{}.part.{}.{}",
+        dst.file_name().and_then(|n| n.to_str()).unwrap_or("src"),
+        std::process::id(),
+        SRC_SEQ.fetch_add(1, Ordering::Relaxed)
+    ));
     let bytes =
         crate::objstore::get_uri(&uri).map_err(|e| format!("objstore get source {uri}: {e}"))?;
     std::fs::write(&part, &bytes).map_err(|e| format!("write {part:?}: {e}"))?;
@@ -1967,6 +2098,130 @@ pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The bug a basename-only cache key would introduce, and the reason the key is the
+    /// full URI. Both corpora below hold `1442.scale4000x3000.png`, but the second is a
+    /// 1024x1024 crop of the first (AVIF-DOE plan section 2.4 deliberately keeps the corpus
+    /// key unchanged across the crop). If these shared a cache path, a worker would encode
+    /// one image's pixels while the ledger recorded the other's cell.
+    #[test]
+    fn src_cache_path_separates_same_basename_from_different_corpora() {
+        let native = src_cache_path(
+            "s3://codec-corpus/avifsvt-subsample-2026-09-01/1442.scale4000x3000.png",
+        );
+        let crop =
+            src_cache_path("s3://codec-corpus/avif-doe-1024-2026-09-01/1442.scale4000x3000.png");
+        assert_ne!(
+            native, crop,
+            "same basename from two corpora must not share a cache entry"
+        );
+        // ...while both stay recognisable and keep the extension the HDR decode dispatches on.
+        for p in [&native, &crop] {
+            let n = p.file_name().unwrap().to_str().unwrap();
+            assert!(n.starts_with(SRC_CACHE_PREFIX), "{n}");
+            assert!(n.ends_with("_1442.scale4000x3000.png"), "{n}");
+        }
+    }
+
+    /// The cache is SHARED, so its key must not carry the process id — that was the leak.
+    #[test]
+    fn src_cache_path_is_stable_and_carries_no_pid() {
+        let uri = "s3://codec-corpus/avif-doe-1024-2026-09-01/9444.scale1024x1536.png";
+        assert_eq!(
+            src_cache_path(uri),
+            src_cache_path(uri),
+            "key must be deterministic"
+        );
+        let name = src_cache_path(uri)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        let pid = std::process::id().to_string();
+        assert!(
+            !name.contains(&format!("_{pid}_")),
+            "cache key must be process-independent, got {name}"
+        );
+    }
+
+    /// The sweeper collects what is stale, keeps what is live, and — the safety property —
+    /// never touches a file that is not ours, however old it is.
+    #[test]
+    fn sweep_src_cache_collects_stale_keeps_fresh_and_ignores_foreign() {
+        let dir = std::env::temp_dir().join(format!(
+            "jobexec_sweep_test_{}_{}",
+            std::process::id(),
+            SRC_SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let write_aged = |name: &str, bytes: usize, age_secs: u64| {
+            let p = dir.join(name);
+            std::fs::write(&p, vec![7u8; bytes]).unwrap();
+            let t = std::time::SystemTime::now() - std::time::Duration::from_secs(age_secs);
+            let f = std::fs::File::options().write(true).open(&p).unwrap();
+            f.set_times(std::fs::FileTimes::new().set_accessed(t).set_modified(t))
+                .unwrap();
+            p
+        };
+
+        // Legacy PID-scoped entries — exactly what the outage left behind — plus an
+        // orphaned `.part` from a crashed writer, all long untouched.
+        let stale_a = write_aged("jobexec_src_10413_a.png", 1000, 48 * 3600);
+        let stale_b = write_aged("jobexec_src_deadbeef_b.png", 500, 48 * 3600);
+        let stale_part = write_aged("jobexec_src_cafe_c.png.part.99.0", 250, 48 * 3600);
+        // A live entry a concurrent worker touched a minute ago.
+        let fresh = write_aged("jobexec_src_feedface_d.png", 4000, 60);
+        // Not ours, and ancient. Must survive.
+        let foreign = write_aged("some_other_tool_cache.bin", 9000, 365 * 24 * 3600);
+
+        let (n, bytes) = sweep_src_cache_in(&dir, std::time::Duration::from_secs(24 * 3600));
+
+        assert_eq!(n, 3, "should collect exactly the three stale entries");
+        assert_eq!(bytes, 1000 + 500 + 250);
+        assert!(!stale_a.exists() && !stale_b.exists() && !stale_part.exists());
+        assert!(
+            fresh.exists(),
+            "a recently-used entry must not be collected"
+        );
+        assert!(
+            foreign.exists(),
+            "sweeper must only ever touch its own prefix"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A cache hit must reset the clock, or a heavily-reused entry would still age out
+    /// from under a live worker.
+    #[test]
+    fn touch_src_cache_resets_the_age_clock() {
+        let dir = std::env::temp_dir().join(format!(
+            "jobexec_touch_test_{}_{}",
+            std::process::id(),
+            SRC_SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("jobexec_src_abc_e.png");
+        std::fs::write(&p, b"x").unwrap();
+        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(48 * 3600);
+        let f = std::fs::File::options().write(true).open(&p).unwrap();
+        f.set_times(
+            std::fs::FileTimes::new()
+                .set_accessed(old)
+                .set_modified(old),
+        )
+        .unwrap();
+        drop(f);
+
+        touch_src_cache(&p);
+
+        let (n, _) = sweep_src_cache_in(&dir, std::time::Duration::from_secs(24 * 3600));
+        assert_eq!(n, 0, "a touched entry is no longer stale");
+        assert!(p.exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn parse_variant_index_4col_carries_name() {

@@ -54,10 +54,12 @@ def load(parquet, parity, crop_label=None):
             if (leading_id(p) is not None and leading_id(p) % 2 == parity
                 and (crop_label is None or crops[i] == crop_label))]
     M = np.empty((len(keep), len(content)), np.float64)
+    fill = []
     for j, name in enumerate(content):
         col = t[name].to_numpy(zero_copy_only=False).astype(np.float64)
         med = np.nanmedian(col)
         med = med if np.isfinite(med) else 0.0
+        fill.append(med)
         col = np.where(np.isfinite(col), col, med)
         M[:, j] = col[keep]
     widths = [widths[i] for i in keep]
@@ -66,10 +68,17 @@ def load(parquet, parity, crop_label=None):
     crops = [crops[i] for i in keep]
     cc = [cc[i] for i in keep]
     std = M.std(0)
-    M = M[:, std > 1e-9]
+    kept_cols = std > 1e-9
+    M = M[:, kept_cols]
     mu, sd = M.mean(0), M.std(0)
     sd[sd < 1e-9] = 1.0
-    return (M - mu) / sd, paths, crops, cc, widths, heights
+    # `fill` is the per-column NaN replacement, taken over the WHOLE native
+    # column (every parity, every crop_label) exactly as the loop above does —
+    # it must be captured here, not recomputed downstream, or a replayed row
+    # would be standardised against a different imputation.
+    ctx = dict(content=content, fill=np.asarray(fill, np.float64),
+               kept_cols=kept_cols, mu=mu, sd=sd)
+    return (M - mu) / sd, paths, crops, cc, widths, heights, ctx
 
 
 def main():
@@ -85,9 +94,18 @@ def main():
                          "clustering (e.g. 'full' = whole native image, "
                          "directly encode-ready). Default: no filter "
                          "(all crop labels, original behavior).")
+    ap.add_argument("--out-model", default=None,
+                    help="ALSO write the fitted geometry (feature column names, "
+                         "NaN-fill medians, surviving-column mask, mu, sd, and "
+                         "the KMeans centroids) to this .npz. This is what lets a "
+                         "row that was NOT in the clustering population - a crop "
+                         "of a pick, say - be assigned to a cluster in the SAME "
+                         "z-space the population defined, instead of a "
+                         "re-standardised approximation of it. Additive: omit it "
+                         "and nothing changes.")
     a = ap.parse_args()
 
-    Z, paths, crops, cc, widths, heights = load(a.parquet, a.parity, a.crop_label)
+    Z, paths, crops, cc, widths, heights, ctx = load(a.parquet, a.parity, a.crop_label)
     n = Z.shape[0]
     print(f"# parity={a.parity} crop_label={a.crop_label} units={n} "
           f"content_feats={Z.shape[1]}", file=sys.stderr)
@@ -115,6 +133,19 @@ def main():
     print(f"ODD-id reps (MUST be 0 for parity=0): {odd}", file=sys.stderr)
     print(f"crop_label distribution: {dict(Counter(r[1] for r in rows))}", file=sys.stderr)
     print(f"singleton clusters (outliers kept): {int((sizes == 1).sum())}", file=sys.stderr)
+
+    if a.out_model:
+        np.savez(a.out_model,
+                 content_names=np.array(ctx["content"], dtype=object),
+                 fill=ctx["fill"], kept_cols=ctx["kept_cols"],
+                 mu=ctx["mu"], sd=ctx["sd"],
+                 centroids=km.cluster_centers_, cluster_sizes=sizes,
+                 parquet=str(a.parquet), select_k=int(a.select_k),
+                 seed=int(a.seed), parity=int(a.parity),
+                 crop_label=str(a.crop_label), n_units=int(n),
+                 allow_pickle=True)
+        print(f"model geometry ({ctx['mu'].shape[0]} dims, {a.select_k} centroids) "
+              f"-> {a.out_model}", file=sys.stderr)
 
 
 if __name__ == "__main__":

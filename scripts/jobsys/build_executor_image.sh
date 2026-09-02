@@ -49,7 +49,12 @@ CTX="$ROOT/target/.exec-ctx"; rm -rf "$CTX"; mkdir -p "$CTX"; trap 'rm -rf "$CTX
 cp "$BIN" "$CTX/zenmetrics"
 cp "$ROOT/scripts/jobsys/zenfleet-exec" "$CTX/zenfleet-exec"
 # Overlay the CURRENT zenfleet-worker too (base :latest bakes a stale one). Built by
-# `cargo build --release -p zenfleet-worker`. Skipped if absent (keeps base's).
+# `cargo build --release -p zenfleet-worker`. REQUIRED, not optional: Dockerfile.executor
+# COPYs `zenfleet-worker` unconditionally, so "skip it and keep the base's" was never a
+# reachable outcome — it just turned a clear precondition into an opaque `COPY failed: file
+# not found` two minutes into a docker build. Requiring it is also the safer half of the
+# disagreement: a silently-inherited stale worker is exactly the failure that cost the
+# AVIF-DOE wave 93 % of its main-effects arm (plan section 11.5/11.7).
 # Prefer the STATIC musl worker when it exists: the glibc build inherits the
 # build box's libc (Ubuntu 26.04 -> GLIBC_2.38/2.39 symbols) and refuses to start
 # inside the 24.04 base ("version `GLIBC_2.39' not found", 2026-08-30 first-chunk
@@ -57,14 +62,17 @@ cp "$ROOT/scripts/jobsys/zenfleet-exec" "$CTX/zenfleet-exec"
 # header describes for zenmetrics; the overlay had the glibc default.
 WK_MUSL="$ROOT/target/x86_64-unknown-linux-musl/release/zenfleet-worker"
 WK="${ZEN_WORKER_BIN:-$([ -f "$WK_MUSL" ] && echo "$WK_MUSL" || echo "$ROOT/target/release/zenfleet-worker")}"
-if [ -f "$WK" ]; then
-  if file "$WK" 2>/dev/null | grep -q "dynamically linked"; then
-    echo "WARNING: overlaying a DYNAMICALLY linked zenfleet-worker ($WK) — it must not need a newer glibc than the base image; build the musl target instead (cargo build --release --target x86_64-unknown-linux-musl -p zenfleet-worker)" >&2
-  fi
-  cp "$WK" "$CTX/zenfleet-worker"
-else
-  echo "note: no local zenfleet-worker — image keeps base's"
+[ -f "$WK" ] || {
+  echo "build zenfleet-worker first; not found at $WK" >&2
+  echo "  cargo build --release --target x86_64-unknown-linux-musl -p zenfleet-worker" >&2
+  echo "  (or point ZEN_WORKER_BIN at one). Dockerfile.executor COPYs it unconditionally," >&2
+  echo "  so there is no 'keep the base's worker' path to fall back to." >&2
+  exit 1
+}
+if file "$WK" 2>/dev/null | grep -q "dynamically linked"; then
+  echo "WARNING: overlaying a DYNAMICALLY linked zenfleet-worker ($WK) — it must not need a newer glibc than the base image; build the musl target instead (cargo build --release --target x86_64-unknown-linux-musl -p zenfleet-worker)" >&2
 fi
+cp "$WK" "$CTX/zenfleet-worker"
 # Overlay the CURRENT entrypoint — the :latest base bakes a stale one, so without this
 # copy an edited fleet-entrypoint.sh never reaches :exec (this bit us on the tar-prefetch).
 cp "$ROOT/crates/zenfleet-worker/fleet-entrypoint.sh" "$CTX/fleet-entrypoint.sh"

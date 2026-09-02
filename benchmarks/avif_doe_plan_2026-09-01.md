@@ -155,10 +155,19 @@ all 23 aom arms).
 
 **Decision: crop to 1024×1024; never upscale; native stays native below budget.**
 
-| source | transform | n |
-|---|---|--:|
-| MP ≤ 1.05 | **native, untouched** (never upscale) | 9 |
-| MP > 1.05 | **1024×1024 crop at native resolution**, content-aware window | 23 |
+> **AMENDED 2026-09-02 (§12.2).** The rule as *implemented* also passes through
+> an image with **either axis already ≤ 1024**, which the counts below did not
+> anticipate. The as-built corpus is **13 cropped / 19 native**, 37.02 MP against
+> the 33.55 MP this budget implies (**+10.3 %**, 10 of 32 references). The
+> amendment stands and the corpus was **not** rebuilt; the arithmetic, the one
+> property actually lost, and the reason are in §12.2. The table below is the
+> ORIGINAL registration, kept for the record — read the as-built column beside it.
+
+| source | transform | n (registered) | n (as built) |
+|---|---|--:|--:|
+| MP ≤ 1.05 | **native, untouched** (never upscale) | 9 | 9 |
+| either axis ≤ 1024, MP > 1.05 | native (unanticipated clause) | — | 10 |
+| MP > 1.05 | **1024×1024 crop at native resolution**, content-aware window | 23 | 13 |
 
 **Why crop and not downscale — the load-bearing choice.** A Lanczos or Mitchell
 downscale is a low-pass filter, and **the knobs under test are largely
@@ -217,7 +226,9 @@ place in the k-means feature space that selected it**:
    feature vector.
 4. **Verify** the chosen crop's nearest k-means centroid is still the parent's
    cluster. Record the distance, the assigned cluster, and — where it moves —
-   the class shift, per pick.
+   the class shift, per pick. **EXECUTED 2026-09-02 — §12.1: 11 of 13 crops
+   preserved their cluster, 2 moved, and all 19 native references reproduced
+   theirs exactly (the control that makes the other 13 readable).**
 
 **The transformed image IS the reference.** Each crop is persisted
 content-addressed alongside the native corpus
@@ -1175,3 +1186,307 @@ avifsub-aom-sf-cpu-20260901             208        5          -
   1.2 GB staged in the new scratch within a minute, **`/tmp` flat at 1 %, and
   zero `Disk quota exceeded` lines** where the pre-outage run logged dozens.
 - **A3 (the aom knob arms)** is untouched, as §5.3 registers.
+
+---
+
+## 12. Gap closure — 2026-09-02, the three gaps §11 left open
+
+§11 closed the recovery honestly and named what it could not finish. This
+section closes those three. Everything below is measured; where a decision was
+made instead of a measurement, the deciding fact is stated first.
+
+### 12.1 G-CROP is CLEARED, and the escape hatch is gone
+
+**The hole, restated.** `--features-cmd` was documented as satisfying G-CROP and
+flipped the manifest from `PENDING` to `todo` when passed — while the script
+imported no `subprocess` and executed nothing. The gate failed only on
+`PENDING`, so the flag cleared it without extracting a feature.
+
+**Fix: the flag is REMOVED, not repaired.** A per-image "print 84 numbers"
+command was the wrong shape anyway — the canonical extractor
+(`zenanalyze/examples/extract_features_imazen26_crops`, the binary that produced
+the population parquet) is manifest-driven and batch. So
+`avifdoe_build_budget_corpus.py` now takes:
+
+- `--extractor <path>` — the canonical binary. The builder writes a manifest of
+  its own 32 outputs, **runs it once** (`--sizes "" --crop-fractions ""` ⇒ one
+  `full`/`native` row per reference), and treats a non-zero exit, a missing
+  output, or a short row count as fatal.
+- `--cluster-model <npz>` — the fitted clustering geometry, emitted by a new
+  additive `--out-model` on `scripts/imazen26_recluster_even.py` (the clustering
+  owner): content-feature names, the NaN-fill medians, the surviving-column
+  mask, `mu`/`sd`, and the 32 k-means centroids. Assignment happens **in that
+  space**; re-standardising locally would have answered a different question,
+  because the builder's own z-scoring spans a different population (all
+  parities, all crop labels) than the clustering's (train-even, `full` only).
+- `--native-drift-tol` (default 0.5).
+
+The two must be given together, and neither alone clears the gate.
+
+**The gate now validates itself, which is what makes it un-fakeable.** 19 of the
+32 references are symlinks — *bit-identical* to the parents that were clustered.
+So re-extracting them must reproduce the parents' own vectors and clusters.
+Those 19 rows are a control the extractor cannot satisfy by accident: a missing,
+no-op, wrong-schema or garbage extractor fails them, and the builder exits
+non-zero. A crop that moves is **recorded, not fatal** (§2.4 asks for the shift,
+not for its absence); a *native* that moves is fatal.
+
+`scripts/jobsys/test_avifdoe_budget_gate.py` pins it shut — 7 hermetic cases,
+all passing, no corpus or network: a missing binary, `exit 3`, **`exit 0` that
+extracts nothing (the original hole, verbatim)**, a short row count, honest
+features passing, a native landing in the wrong cluster, and a native inside the
+right cluster but beyond the drift tolerance (so both control arms are shown
+load-bearing, not just one).
+
+**The extractor-drift control, run first because the rest is meaningless
+without it.** The population parquet is from 2026-06-13; today's zenanalyze is
+`18971ef`. Re-extracting the 32 **parent** images and diffing against their
+stored rows over the 97 shared content columns:
+
+| | |
+|---|---|
+| cells differing by > 1e-6 relative | **33 of 3,104** |
+| worst column | `edge_slope_stdev`, 2.68e-2 rel (19.341875 today vs 18.836258 stored) |
+| **displacement in the clustering's z-space** | **max 0.0253, mean 0.0012** |
+
+Cluster distances are of order 2–7 and decision margins of order 0.3–8, so
+extractor drift is 1–2 orders of magnitude too small to move an assignment. The
+drift is real but not load-bearing, and that is a measurement, not an assumption.
+
+Schema note: the parquet carries **110** `feat_*` columns and today's extractor
+emits **117**, with the 110 an exact name-and-order prefix of the 117 — textbook
+append-only growth (`chroma_subsample_dct_loss` + six `highlight_*` from the HDR
+tier). The comparison is defined over the shared 110 only; the 7 new ones have
+no 2026-06-13 counterpart.
+
+**Result.**
+
+```
+G-CROP: features 133b93d80c15581f… over 32 references; native control PASSED (19/19)
+G-CROP: 2 of 13 crops changed cluster (recorded, not fatal):
+  1442.scale4000x3000.png  cluster 0 -> 25  (parent_z_dist 24.4071, margin 0.3021)
+  1634.scale3000x4000.png  cluster 25 -> 10 (parent_z_dist 4.5834,  margin 1.6077)
+```
+
+**The two shifts, and what they mean.** Neither is a defect; both are the crop
+doing exactly what §2.4 said it would.
+
+- **`1442.scale4000x3000`** (4000×3000 night aurora, `1400-lilith-nature`) — its
+  parent cluster **0 was a SINGLETON**, i.e. the parent was an outlier no other
+  image resembled. The 1024² crop is **24.41 z-units** from the parent and lands
+  in cluster 25 (n=78) with a margin of only **0.302** — a boundary assignment.
+  Cropping removed precisely the whole-frame structure that made it an outlier.
+  This is the significant one: it is the pick whose *representativeness* the crop
+  most changed, and any A1/A2 conclusion that leans on it should say so.
+- **`1634.scale3000x4000`** (`1600-lilith-food`) — 4.58 z-units, cluster 25 → 10
+  (n=42), margin 1.608. An ordinary interior reassignment.
+
+**"Preserved" is not the same as "unchanged", and one row proves it.**
+`6604.scale3286x4868` is recorded PRESERVED, but its parent's cluster 26 is also
+a singleton, so the centroid *is* the parent and the distance to it is the
+displacement: **67.72** — the largest content change in the corpus, in a row the
+verdict column calls preserved. Read `parent_z_dist` beside `feature_recheck`,
+never `feature_recheck` alone. (The identity `cluster_dist == parent_z_dist` on
+the singleton rows is also the internal check that the replayed geometry is the
+clustering's own.)
+
+**Provenance, recorded in three places.** The manifest gains six append-only
+columns — `source_path`, `assigned_cluster`, `cluster_dist`, `cluster_margin`,
+`parent_z_dist`, `features_sha256` — with the original 14 keeping their
+positions so any positional reader still parses. Alongside it,
+`gcrop_provenance.json` carries the extractor path and full argv, the features
+sha256, the cluster-model sha256, the population parquet, the tolerance, and the
+shift list. Both, plus the model and the feature table, are uploaded:
+
+| artifact | sha256 |
+|---|---|
+| `_gcrop/budget_features_2026-09-02.tsv` (32 × 117 feat) | `133b93d80c15581f6eeb6a6e29995f3589178d2f22ca2710210fe0e891ddf754` |
+| `kmeans_K32_full_even_2026-09-02.npz` | `a1211b950e7c7d36fe8e059d2918c5fd6167cc3ae6b6400b6d8b486edbf4ee7e` |
+
+R2: `s3://codec-corpus/avif-doe-1024-2026-09-01/` now holds the 32 sources plus
+`crop_manifest_2026-09-01.tsv`, `gcrop_provenance.json`,
+`kmeans_K32_full_even_2026-09-02.npz`, `_gcrop/budget_features_2026-09-02.tsv`.
+
+**Two independent reproductions, both byte-exact.** The `--out-model` extension
+to the clustering owner is **inert**: replaying the registered command reproduces
+`reps_K32_full_even_2026-09-01.tsv` byte-identically (sha
+`1ce1dbcd90ffc690b4f7330cfac9ca595be8a00b6036dcc4c5e2e3d212fb1a29`), with the
+same `units=1082 content_feats=82`, 0 odd-id reps and 4 singleton clusters. And
+the fixed builder, run into a scratch directory first, reproduced the live
+corpus exactly — **32/32 on-disk sha256 identical, 0 differences across the 9
+identity columns** — before anything in the live directory was touched; the
+extraction itself is deterministic across two runs with different working
+directories (**0 differing cells over 32 × 117**). The pre-gate manifest is kept
+as `crop_manifest_2026-09-01.tsv.pre-gcrop.bak`.
+
+**G-CROP is CLEARED. A1/A2/A3 conclusions are no longer blocked by it** — with
+the two shifts and the `6604` displacement carried into any write-up.
+
+### 12.2 The corpus deviation is AMENDED, not rebuilt — and the deciding fact is 13,532
+
+**The deciding fact, measured before the decision.** Blobs already encoded
+against the *current* budget-corpus references, 2026-09-02T04:53Z:
+
+| run | blobs |
+|---|--:|
+| `avifdoe-svt-a1-20260901` | 902 |
+| `avifdoe-svt-a2-20260901` | 12,630 |
+| **total** | **13,532** |
+
+and rising while the fleet ran. `avifdoe-svt-a0r-20260901` and
+`avifdoe-svt-ag-20260901` had 0. Twenty minutes later, at 05:13Z, the same two
+runs read **3,481 + 21,902 = 25,383** — the number a rebuild would have had to
+discard grew by 11,851 during this lane alone, which is the direction of the
+decision, not a coincidence.
+
+**Cell identity is content-addressed on the reference bytes — verified, not
+assumed.** For the same `image_path` `1008.scale3000x4000.png`, the declared
+`inputs` sha is `06fc50b2…` in A1/A2/A0R and `7c36c631…` in AG; those are exactly
+that row's `crop_sha256` and `source_sha256`. So a rebuilt reference produces
+*new* cells: the 13,532 existing blobs would be **orphaned, not silently wrong**.
+That removes the correctness argument for rebuilding and leaves only the cost
+one — and the cost is 13,532 encodes plus a redeclaration of three runs, on a
+wave that had just recovered from a 93 %-poison incident (§11.7).
+
+**What the deviation actually costs.** The 10 affected references:
+
+| reference | geometry | MP | superblock-exact? |
+|---|---|--:|---|
+| `9444` `9954` `9074` `9032` `9136` `9100` (1024×1536) | 1024×1536 | 1.573 | **yes** (128 and 64) |
+| `9118` `9830` `9654` (1536×1024) | 1536×1024 | 1.573 | **yes** (128 and 64) |
+| `8134.scale1440x900` | 1440×900 | 1.296 | **no** |
+
+Those 10 contribute 15.452 MP where the budget implies 10.486 — an excess of
+**+4.966 MP**, i.e. the corpus's **37.02 vs 33.55 MP (+10.3 %)**. So:
+
+- **Cost is a 10.3 % overshoot on a budget that was itself a free variable**
+  (§2.4's whole premise), not a breach of a constraint.
+- **The tile axis is unaffected**: every one of the 10 has both axes ≥ 900, well
+  clear of AV1's 512 px-per-axis floor for a 2×2 tiling.
+- **Superblock purity loses exactly ONE reference.** Nine of the ten are exact
+  multiples of both 128 and 64, so §2.4's "no partial-superblock cells" property
+  holds for them unchanged. Only **`8134.scale1440x900`** breaks it. (The corpus
+  has four partial-superblock natives in total; the other three —
+  `8288.scale375x667`, `8434.scale414x896`, `8414.scale1280x800` — are under
+  budget and would have been native under either rule, so they are not caused by
+  this deviation.)
+
+**Decision: AMEND.** Rebuilding would discard 13,532 encodes and force a
+three-run redeclaration to remove a 10.3 % pixel overshoot and one reference's
+superblock purity. §2.4 is amended in place above with the as-built column and a
+dated note; the module docstring of `avifdoe_build_budget_corpus.py` now states
+the rule truthfully (the old comment claimed "never crop something already at or
+under budget", which is not what the condition does), and the builder prints the
+MP overshoot on every run. **Spec and code now agree**, which was the actual
+requirement — the split was a documentation defect, not a data defect.
+
+Read every `α + β·pixels` fit (§3.9) and CPU-h figure (§3.7) against 37.02 MP,
+not 33.55.
+
+### 12.3 The jobexec source cache is content-addressed and swept
+
+**The outage's cause** (§11): `resolve_source_raw` cached every fetched source
+at `${TMPDIR}/jobexec_src_<pid>_<basename>`, kept it forever, and the fleet runs
+a fresh process per cell — 10,413 dead pids held 60 distinct images as ~46
+copies each = **22.93 GB**. §11's mitigation moved `TMPDIR` off the quota'd
+volume, which bought room without fixing the growth.
+
+**Fix, in `crates/zenmetrics-cli/src/jobexec.rs`:**
+
+1. **Content-addressed key.** `src_cache_path(uri)` keys on `sha256(resolved
+   URI)` (32 hex chars) plus the basename as a readable suffix — the basename is
+   kept because it carries the extension, which the HDR decode path dispatches
+   on. Copies collapse from (processes × images) to (images): the **46× fix**.
+   The repo already had this pattern one function away — the variant index is
+   URI-keyed and atomically published — so this is adopting the local
+   precedent, not inventing a scheme.
+2. **Basename-only was NOT an option, and the reason is in this very plan.**
+   §2.4 keeps the corpus key *unchanged* across the crop, so
+   `avifsvt-subsample-2026-09-01/1442.scale4000x3000.png` and
+   `avif-doe-1024-2026-09-01/1442.scale4000x3000.png` are different pixels under
+   one filename. Only the full URI separates them. (The old PID key avoided this
+   by accident and only across processes — two such fetches in ONE `--serve`
+   process collided and the second silently got the first's bytes. That latent
+   bug is closed by the same change.)
+3. **Per-writer `.part`.** With `dst` now shared, a `dst.part` sibling would let
+   two concurrent workers interleave into one file and rename the mixture into
+   place. `.part` now carries pid + a sequence counter; publication is still an
+   atomic rename of a fully-written file, so a cache hit is always whole.
+4. **Eviction, lazily once per process.** `sweep_src_cache_once()` runs on the
+   first source resolution — no entry-point wiring, and a long-lived `--serve`
+   worker pays it exactly once — removing entries under the `jobexec_src_`
+   prefix untouched for `ZEN_JOBEXEC_SRC_CACHE_MAX_AGE_HOURS` (default 24; `0`
+   disables). It collects the **legacy PID-scoped files** the outage left behind
+   and orphaned `.part` files, and it bounds the remaining axis (a box that
+   walks a large corpus would otherwise keep every image it ever touched).
+5. **Concurrency safety is structural, not hoped for.** A cache hit `touch`es
+   the entry, so "age" is time-since-last-**use**, not since download; the
+   sweeper only ever matches its own prefix; and a wrongly-collected entry costs
+   one re-download, never a wrong or partial read.
+
+**Tests** (4 new, `cargo test -p zenmetrics-cli --no-default-features --features
+jobexec,hdr --bin zenmetrics` → **24 passed, 0 failed**): the same basename from
+two corpora must not share an entry; the key is deterministic and carries no
+pid; the sweeper collects stale + legacy + orphaned-`.part` while keeping a
+fresh entry **and never touching a foreign file however old**; and a touch
+resets the age clock. `cargo fmt` clean.
+
+**`build_executor_image.sh` now agrees with `Dockerfile.executor`.** The script
+treated the `zenfleet-worker` overlay as optional ("image keeps base's") while
+the Dockerfile `COPY`s it unconditionally — so the "optional" branch was an
+unreachable outcome that turned a clear precondition into an opaque `COPY
+failed` minutes into a build. Made **required**, with the build command in the
+error. That is also the safer half of the disagreement: a silently-inherited
+stale worker is exactly what cost this wave 93 % of A1 (§11.5/§11.7).
+
+**These land in the repo now and change nothing running.** The fleet uses pinned
+image tags (`exec-avifdoe-svtknobs-b0bb8340`); it picks the cache fix up at the
+next image roll. No image was rolled here, because §12.2 chose not to rebuild
+and therefore forced no redeclaration.
+
+Pre-existing and NOT introduced here, recorded so the next reader does not chase
+it: `cargo clippy -p zenmetrics-cli --no-default-features --features jobexec,hdr`
+fails on `cvvdp-gpu` (`build_cvvdp_inner` is never used) — a dependency crate
+that clippies clean on its own, i.e. a feature-combination dead-code issue. Zero
+clippy diagnostics mention `jobexec.rs`. Likewise `--features jobexec` *without*
+`hdr` does not compile the bin at all (`zenflate` unresolved at jobexec.rs:1583,
+`metric_runtime` missing at :1001 — both inside `hdr`-gated regions with
+un-gated callers).
+
+### 12.4 AG's arithmetic, rechecked against the as-built corpus — it is degenerate
+
+**§3.8's cell count is right; its statistics are not, on this corpus.** The grid
+arithmetic checks out (17 arms × 2 speeds × 3 q × 32 images = 3,264), and AG is
+confirmed to run on the **native** corpus by data rather than by the doc — its
+declared `inputs` sha is the reference's `source_sha256`, while A1/A2/A0R carry
+the `crop_sha256` (§12.2).
+
+**But 19 of the 32 references are native passthroughs, so for those the "budget"
+and "native" legs are the SAME ENCODE of the SAME PIXELS.** T1/T2/T3 are all
+defined over "the 32 images", and 19 of those comparisons are identities:
+
+- **T3 cannot fail.** Its statistic is the *median* of 32 residuals, of which 19
+  are exactly 0 — so the median is 0 by construction, for every arm, whatever
+  the 13 crops do. A bar that cannot be failed is not a gate.
+- **T1 is weakened by more than half.** "Sign agreement on ≥ 80 % of 32" = ≥ 26
+  images, of which 19 agree automatically; the effective bar on the informative
+  subset is 7 of 13 (**54 %**), not 80 %. An arm could flip sign on six of the
+  thirteen real crops and still pass.
+- **T2 is inflated.** 19 points sit exactly on the identity line, which drags the
+  Spearman toward 1 mechanically.
+- The residual's binomial sign test likewise has 13 non-zero terms, not 32.
+
+**Registered correction (analysis-side, blocking on AG's readout).** T1/T2/T3
+must be computed over the **13 cropped references only** — the subset where
+"budget" and "native" denote different things — with the bars restated against
+n=13, and the 19 identity pairs reported separately as the null check they
+actually are (any non-zero residual there is a bug in the pipeline, not a
+transfer effect). n=13 is thin for a Spearman; state the CI rather than a bare
+coefficient.
+
+**Also registered, not executed:** AG's native leg for the 19 passthroughs
+duplicates encodes A1 already declared at the same size on the same bytes —
+19/32 of its cells. AG has **0 blobs and 0 ledger rows**, so dropping them is
+free *if* AG is redeclared before it runs. Not done here: redeclaring another
+lane's run mid-wave is exactly the move §11.7 warns about, and the wave owner
+should make that call. Flagged, with the arithmetic, so the choice is informed.
