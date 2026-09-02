@@ -259,11 +259,26 @@ Sweep workers occasionally fail with encoder hangs or decoder rejects.
 Examples surfaced in this fleet:
 
 - **jxl-encoder e9 checker pattern hang** (issue #27, PR #28 in jxl-encoder repo).
-- **zenjxl-decoder rejecting files libjxl C accepts** — confirmed via
-  `djxl 0.10.3` as the authority. **libjxl is the authority, not
-  jxl-oxide.** zenjxl-decoder is a fork of jxl-rs; both inherit the
-  same VarDCT-strict-validation lineage and reject some files libjxl C
-  accepts. When triaging, always test with `djxl` directly.
+- **zenjxl-decoder rejecting files that libjxl C accepts.** The technical
+  finding stands: zenjxl-decoder is a fork of jxl-rs, and both inherit the
+  same VarDCT-strict-validation lineage that rejects some files libjxl C
+  accepts (originally observed against `djxl 0.10.3`).
+
+  > ⚠ **SCOPED 2026-09-02.** This bullet used to end *"libjxl is the authority,
+  > not jxl-oxide… always test with `djxl` directly"* — a standing instruction
+  > to reach for a C reference, in the sweep pipeline's own runbook. Under the
+  > USER RULE **"IMAZEN-ONLY IMAGING/CODEC SOFTWARE"** (`~/work/zen/CLAUDE.md`,
+  > 2026-09-02) that is exactly backwards for anything here: a C decoder may
+  > **never** decide whether a sweep cell is admitted, because these cells train
+  > models that tune imazen codecs. **The spec is the authority; a port's own
+  > shipped behavior is the ground truth for tuning it.**
+  >
+  > Differential comparison against libjxl remains legitimate — but as
+  > **port-repo triage, in `zenjxl-decoder`'s own repo**, exactly as zenav1-aom
+  > runs its `s4cov_*` gates. It is not a sweep-side tool and not an admission
+  > criterion. If a sweep cell fails to decode, triage it with the imazen
+  > decoder and file it against the port; do not "confirm" it with `djxl` and
+  > silently keep or drop the cell on that basis.
 
 ## Sweep status, May 2026
 

@@ -420,3 +420,101 @@ read-only.
    both zenav1-svt (`:175`) and zenav1-aom (`:105`), each with an in-file note to
    return to a git-rev pin before landing. A clone without the siblings present
    cannot resolve `encode-svt-rs` or `aom-backend`.
+
+---
+
+# APPEND 2026-09-02 — NON-IMAZEN TOOL SWEEP of the campaign pipeline
+
+Bounded to the campaign paths named in this lane's brief: `zenmetrics/scripts/`,
+`zenmetrics/crates/zenmetrics-cli/src/sweep/`, and `zensim/scripts/`. Searched
+for magick/convert/identify/mogrify/montage, heif-*, exiftool/exiv2,
+ffmpeg/ffprobe, avifenc/avifdec, cjxl/djxl, cwebp/dwebp, cjpeg/djpeg/jpegtran,
+aomenc/aomdec, x264/x265, vips, and the Python imaging stacks (PIL, cv2,
+imageio, skimage, torchvision.io).
+
+**31 hits: 12 LIVE-IN-PIPELINE · 8 LIVE-BUT-PERIPHERAL · 5 DEAD · 6
+MENTION-ONLY.** The Rust sweep dir is **clean** — `sweep/encode.rs` contains no
+`Command` at all, and `distort.rs` spawns only the caller-supplied
+`--distort-cmd` (default `python3 -m kadis_distort.serve`, imazen).
+
+## 8.1 Fixed in this pass
+
+| file:line | was | now |
+|---|---|---|
+| `zensim/scripts/run_full_eval.sh:153-170` | `magick`/`convert` for **both** M3 axes — `-filter Mitchell -resize NxN` and `-quality Q` (ImageMagick's libjpeg) — plus a **graceful skip** (`M3_SIZES=(576)` + a warning) when neither binary was found | `zensim-bench/examples/m3_fixture_gen.rs` — **zenpng** decode/encode + **zenresize** `Filter::Mitchell` + **zenjpeg** encode. The skip is now a **fatal exit 3** with build instructions |
+| `zenmetrics/scripts/sweep/CLAUDE.md:259-265` | *"libjxl is the authority… always test with `djxl` directly"* — a committed instruction to reach for a C decoder, in the sweep runbook | scoped: the spec is the authority, differential libjxl comparison is **port-repo triage only**, never a sweep-side admission criterion |
+
+**The `run_full_eval.sh` hit was the most serious one found.** M3a is a
+first-class **model-selection** input (`docs/WAVE_PLAYBOOK.md` step 6; the
+`freeze_check --select` tie-break is `balanced_composite + 0.15·M3a`), so a
+foreign JPEG encoder was inside the loop that decides which zensim model ships.
+The graceful skip compounded it: with no `magick` on the box the size axis
+silently collapsed to 576-only, so **M3a changed meaning without failing**.
+
+**⚠ ERA HAZARD — MEASURED, not asserted.** zenjpeg's `q` is not
+ImageMagick-libjpeg's `q`. On `city_384` at identical nominal quality:
+
+| q | ImageMagick-era bytes | zenjpeg bytes | ratio |
+|--:|--:|--:|--:|
+| 20 | 11,852 | 10,752 | **0.907** |
+| 50 | 20,513 | 16,307 | **0.795** |
+| 75 | 30,113 | 24,897 | **0.827** |
+
+The Mitchell downscales differ too (`city_384.png` 241,630 B ImageMagick-era vs
+241,828 B zenresize; not byte-identical at either size). So a fixture made by
+the new owner is a **different rate point**, and an M3a measured on it is not
+comparable to any M3a in the record.
+
+Therefore the 48 ImageMagick-era fixtures under
+`/mnt/v/output/zensim/diffmap-coherence-2026-07-18/` are **left alone** and the
+default `$FIX` still points at them. The rewired loop only fills a **missing**
+file. **VERIFIED:** with the generator deliberately absent, the loop needs zero
+regenerations (full coverage) and the fixture-set digest is unchanged — **no
+published M3/M3a number moves on this commit.** Regenerating means pointing
+`ZENSIM_M3_FIXTURES` at a **new era-stamped directory**, same discipline as
+`2026-05-15-full-features` vs `2026-08-30-full-features-372`, and expecting the
+whole axis to re-base.
+
+## 8.2 Registered TODOs — owner named, not built here
+
+| # | file:line | tool | imazen owner | size |
+|--:|---|---|---|---|
+| T1 | `zenmetrics/scripts/jobsys/avifdoe_build_budget_corpus.py:375-376` | PIL open/convert/crop/save | **zencodecs** decode + **zenpng** encode | SMALL code, **BIG blast radius** — it builds 13 of the 32 DoE references and `.convert("RGB")` silently normalises depth/palette. Changing it **changes every `crop_sha256` in `crop_manifest_2026-09-01.tsv`**, and the wave is LIVE. Do it at an era boundary, never mid-wave |
+| T2 | `zensim/scripts/pu21_single_model_exp.sh:28` | `magick src -strip dst` | **zencodecs** decode + **zenpng** | SMALL. Decodes CID22 **distorted** jpg/webp — a foreign decoder on codec bitstreams under test |
+| T3 | `zensim/scripts/hdr/srgb_to_pq_png.py:36,46` | `cv2.imread` | **zencodecs** decode (the hand-rolled PQ numpy beside it is separately owned by **zenpixels-convert**/**zentone**) | SMALL for the decode; feeds the HDR 944 route |
+| T4 | `zensim/scripts/v_next/rd_probe_2026-07-18.sh:79` | `mogrify -format png *.ppm` | **zenbitmaps** (PNM) + **zenpng** | SMALL — converts zenjpeg's own PPM output |
+| T5 | `zensim/scripts/squintly/crop_holdout_check.py:58` | PIL | **zencodecs** decode | SMALL, but it is a **contamination GATE** — the rule names gates explicitly |
+| T6 | 4 dimension-only probes: `zenmetrics/scripts/provenance/index_sources.py:35` (`identify`), `provenance/index_corpus.py:54`, `picker/gen_dense_corpus.py:41`, `zensim/scripts/squintly/mine_adjudication_stimuli.py:385` (PIL) | ImageMagick / PIL | one shared **zencodecs header probe** | SMALL each. `index_sources.py` additionally swallows failures into `(0,0)` — silently wrong provenance rows |
+| T7 | `zenmetrics/scripts/jobsys/gpu_util_harness.sh:66,190` | `convert -resize`, `identify` | **zenresize** + the T6 probe | SMALL; perf-harness fixture only, no model data |
+| T8 | `zensim/scripts/corpus/synthetic/synth_nonphoto.py:60` | PIL + matplotlib **rasterisation** | **none exists** | **BIG.** This rasterises synthetic non-photo sources (text/charts/line-art) INTO the training corpus. Imazen has no rasteriser; needs a real decision, not a swap |
+| T9 | `zenavif/scripts/rd_gap/{aom_cell,aom_only}.sh` | `aomenc`/`aomdec` binaries | — | RD-gap **baselining**, not tuning data. Named so nobody mistakes it for a zenav1-aom seam (§7.3) |
+
+**T1–T7 share one missing piece**, and it is the single highest-leverage build
+in this list: a Rust entry point Python and shell can call. A
+`zenmetrics image {probe,decode,resize,encode}` subcommand covers every one of
+them, and would have covered `run_full_eval.sh` too (which needed its own
+example precisely because no such thing exists). Registered, not built.
+
+## 8.3 Judged compliant — recorded so the reading is explicit, not assumed
+
+- `zenmetrics/scripts/cvvdp_goldens/*.py` and `scripts/sweep/pycvvdp_worker.py`
+  (PIL + a pinned `cvvdp==0.5.4` venv) are **differential port validation for
+  `cvvdp-gpu`, inside the repo that owns it** — the rule's explicit carve-out.
+  `main.rs:205` already documents the worker as the parity counterpart to
+  `score-pairs`. **Flagged for confirmation rather than assumed.**
+- `zensim/scripts/external_reads/asrun/{avthdr,hdrvdc,sihdr}/` (ffmpeg/ffprobe,
+  cv2) are **frozen archival provenance copies** — their own README says *"Do
+  not extend them; extend the runner"*, and the live runner's `--from-stored`
+  path does no video decode. **But note the trap:** they are the only recorded
+  route to re-extract those HDR-video reads, and imazen has **no demuxer and no
+  HEVC/VVC video decoder**, so re-running that study is currently impossible
+  under the rule. Registered here rather than discovered mid-wave.
+- `zensim/scripts/canonical_corpus/make_dhash_montages.py` renders
+  **human-review** montages (its `montage()` is a local PIL function, not
+  ImageMagick). Review rendering, not measurement.
+- **False positives ruled out:** `probes/phone_rd_probe.sh:5-6,24-25` — `CJXL`
+  and `DJXL` there point at `jxl-encoder/…/cjxl-rs` and
+  `zenjxl-decoder-cli`, both **imazen** binaries with confusing variable names.
+  Also `identify`/`montage` as ordinary English in
+  `avifdoe_stagea_gates.py:231`, `run_with_error_trap.sh:121`, and two
+  `canonical_corpus` scripts.
