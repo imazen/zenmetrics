@@ -388,6 +388,55 @@ produces exactly the file type that triggers it. Worse, the behaviour is **incon
 a *grid-tiled* AVIF is tagged (`sink.rs:290`) and would be handled correctly, so the same
 experiment could produce correct and corrupt cells depending on tiling.
 
+**✅ RESOLVED 2026-09-02, commit `e9e2ef71`** (appended — the finding above stands as
+written except for point 4, corrected below).
+
+`decode_avif` now takes `ManagedAvifDecoder::decode_full` and **refuses** an AVIF whose
+`ImageInfo.transfer_characteristics` is PQ (16) or HLG (18), naming the code, the
+transfer and the real bit depth and pointing at `--hdr` — the same policy, and nearly the
+same wording, as the PNG cICP tripwire, so one rule now covers both formats. `decode_full`
+is the same decoder `decode_with` already selected here (the `AvifDecoder` sibling is
+`unsafe-asm`-gated and never enabled) and the one `sweep::hdr::decode_avif_to_nits`
+already drives, so **decoded pixels are unchanged**. Route (a) of the TODO was taken;
+route (b) would have been a change to zenavif's public behaviour and was not needed.
+
+*Measured pre-fix, on the then-current release binary:* `ref_64.avif` patched to `tc=16`
+and `tc=18` both scored `ssim2=96.137450`, **bit-identical to the sRGB original** — the
+signalling was ignored end to end. On genuine 10-bit PQ files
+(`cosmos1650_yuv444_10bpc_p3pq.avif`, `colors_hdr_rec2020.avif`), `100.000000` against
+themselves. Post-fix all four are a loud refusal, the 10-bit ones reporting `at 10-bit`.
+
+**Correction to point 4 — the tiled/plain divergence does not exist on this route, and
+the pre-fix behaviour was worse than recorded.** A real 1×5 grid AVIF
+(`sofa_grid1x5_420`) patched to `tc=16` also scored **silently** pre-fix
+(`ssim2=100.000000`). `sink.rs:290` is the *row-sink* grid path;
+`decoder.rs::decode_grid`, which the buffered `decode`/`decode_full` uses, does not call
+`descriptor_with_cicp` either. So **both** shapes were corrupt, not one — which makes the
+fix simpler, since there was no correct-for-grid behaviour to preserve. `decode_full`
+branches on `grid_config()` internally and returns an `ImageInfo` either way, so the
+single guard site covers both by construction. Post-fix the grid file is refused.
+
+**The guard is deliberately narrow — only 16 and 18.** Narrowing a 10-bit *SDR* AVIF to
+8 bits is `decode.rs`'s documented contract and **T1/`bd10` depends on it**; BT.2020's SDR
+transfers (14, 15) neighbour PQ/HLG in the CICP table. SDR non-regression was measured
+pre-fix vs post-fix binary — identical output on 8-bit AVIF vs PNG, the `tc=1` variant,
+grid-tiled SDR, and **genuine 10-bit SDR** AVIFs (`plum-blossom` profile0 10bpc 4:2:0 and
+profile1 10bpc 4:4:4).
+
+*Gates:* `crates/zenmetrics-cli/tests/avif_hdr_tripwire.rs` — `pq_transfer_is_refused`
+and `hlg_transfer_is_refused` (both **FAIL** at the parent commit, with the recorded
+message "expected a loud refusal, got a silent 64x64 decode (12288 bytes)"),
+`committed_sdr_fixture_decodes`, `patching_transfer_alone_does_not_change_pixels`,
+`refusal_is_scoped_to_hdr_transfers_only`; plus
+`decode::tests::only_pq_and_hlg_are_refused` (exhaustive over all 256 transfer codes) and
+`decode::tests::bt2020_sdr_transfers_are_not_hdr`. No public API change; no zenpixels or
+zenavif change.
+
+**What this does NOT do.** It refuses; it does not route. A T2 cell mis-sent to the SDR
+path now fails loudly instead of returning a number, which is what **G5** needs to be
+satisfiable — but G5 still requires positive evidence in the run log that the PQ `--hdr`
+route was taken, because a refusal proves only that the wrong route was rejected.
+
 ### 3.3 What each track may claim
 
 | track | reference | encode | compared at | instrument valid? |
@@ -700,7 +749,7 @@ above.
 
 | # | what | repo · file | est. | why |
 |---|---|---|--:|---|
-| **TODO-0** ⚠ | **Add the PNG-style HDR tripwire to `decode_avif`** — or call `descriptor_with_cicp` on zenavif's buffered path so the existing `HdrSourceRequiresPeak` guard fires | `zenmetrics` · `crates/zenmetrics-cli/src/decode.rs:208-220`; and/or `zenavif` · `src/decoder_managed/frame_convert.rs:65-166` | ~30 LOC + test | **a silent-corruption defect (§3.2)** — a PQ 10-bit AVIF scored without `--hdr` yields plausible, meaningless numbers with no error, and behaves *differently* for tiled vs plain files. It would poison T2 specifically. **Fix before executing.** Zero-tolerance class |
+| **TODO-0** ✅ **DONE** `e9e2ef71` | **Add the PNG-style HDR tripwire to `decode_avif`** — or call `descriptor_with_cicp` on zenavif's buffered path so the existing `HdrSourceRequiresPeak` guard fires | `zenmetrics` · `crates/zenmetrics-cli/src/decode.rs:208-220`; and/or `zenavif` · `src/decoder_managed/frame_convert.rs:65-166` | ~30 LOC + test | **a silent-corruption defect (§3.2)** — a PQ 10-bit AVIF scored without `--hdr` yields plausible, meaningless numbers with no error, and behaves *differently* for tiled vs plain files. It would poison T2 specifically. **Fix before executing.** Zero-tolerance class. — **DONE 2026-09-02, `e9e2ef71`**: route (a), refuse-loudly, matching the PNG tripwire's policy. Gated by `tests/avif_hdr_tripwire.rs` (`pq_transfer_is_refused`, `hlg_transfer_is_refused` — both fail at the parent commit) + `decode::tests::only_pq_and_hlg_are_refused`. The tiled-vs-plain divergence was **measured not to exist** — both shapes were silent pre-fix; see §3.2's appended resolution |
 | **TODO-1** | Correct `~/work/zen/CLAUDE.md`: `zenav1-svt` is listed "private; **NOT cloned locally**" — it **is** cloned at `/home/lilith/work/zen/zenav1-svt` (HEAD `30cf4b3d0`), consumed by zenavif as a **path** dep (`zenavif/Cargo.toml:136-152`) | zen workspace doc | 1 line | the crate index is the map sessions navigate by |
 | **TODO-2** | Teach `decode_hdr_ref` to accept **EXR** (absolute-luminance linear f32) → `HdrRef` via the existing PQ16 quantizer, with an explicit display model for `LUMINANCE=RELATIVE` sources | `zenmetrics` · `sweep/hdr.rs:97-110`; quantizer exists as `zenpixels-convert::encode_pq16` | ~120 LOC + tests | **unlocks the only banding-valid sources** (30 UPIQ EXR now, 181 si-hdr after TODO-7). Without it §3.4's ceiling can never lift. The display model must be a recorded parameter — the si-hdr study set the "registered display model" precedent |
 | **TODO-3** | Extend `AVIF_HDR_KNOBS` / `SVT_HDR_KNOBS` to the SDR DOE's knob set, mapping onto the same `EncodePipeline.hdr` fields | `zenmetrics` · `sweep/hdr.rs:384`, `:478`, `:386`, `:480` | ~200 LOC + tests | blocks the HDR **knob** DOE. Must preserve refuse-unknown-knobs (G6) and must handle SVT's **sticky `apply_tune_overrides`**, which only ever *sets* — reusing one pipeline leaks tune-3 state into later cells |
@@ -710,7 +759,9 @@ above.
 | **TODO-7** | Stage **si-hdr** `reference.zip` (181 EXR, 1.49 GB, on Tower with `SHA256SUMS`) | dataset staging | ~1 h + disk | 6× pool A; pairs with TODO-2 |
 | **TODO-8** | Correct the stale header in `bd10.rs`: "**UNWIRED** (add `pub mod bd10;` when integration starts)" while `lib.rs:15` already declares it | `zenav1-svt` · `rust/crates/svtav1-encoder/src/bd10.rs:3-5` | 3 lines | a reader who trusts it concludes 10-bit is unimplemented and abandons the arm — the exact wrong call, given `bd10` measured −1.02 % |
 
-**TODO-0 gates T2.** Nothing blocks T1. TODO-3 blocks the HDR knob block; TODO-2 blocks
+**TODO-0 gates T2** — **cleared 2026-09-02 (`e9e2ef71`)**; T2 is no longer blocked on the
+defect, though **G5 still requires positive route evidence** (a refusal proves only that
+the wrong route was rejected, not that the right one was taken). Nothing blocks T1. TODO-3 blocks the HDR knob block; TODO-2 blocks
 banding work permanently until it lands.
 
 ---
