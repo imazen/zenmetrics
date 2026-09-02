@@ -1380,7 +1380,14 @@ serious one:
 > Recorded, not fixed: it lives in `zenav1-svt`, another lane is active there,
 > and `STATUS.md:55-58` already documents a bd10 parity gap at low presets — but
 > that is a *byte-parity* note at 64-aligned sizes, not a >8 MP correctness
-> cliff, so this appears to be new.
+> cliff, so this appears to be new. **Filed as
+> [imazen/zenav1-svt#18](https://github.com/imazen/zenav1-svt/issues/18)** with
+> the five controls above.
+>
+> **What a fix costs this arm:** `bd10` results on sources above ~8 MP are
+> invalid until it lands. T1-a/b/c are unaffected (≤3.69 MP). T2-a would need
+> **re-encoding from scratch** — its 120 completed cells are not salvageable —
+> so it stays declared and paused rather than resumed.
 
 **T2 score coverage — counted, not assumed** (it was zero). The T1 gapfill loop's
 `ZEN_DOE_RUNS` covered only `t1ac/t1b/t1d`, so **no T2 cell had ever been
