@@ -519,9 +519,19 @@ needs, and it is already partly paid for.
   and shared), and the ledger carries `worker`/`provider` but not thread count
   or load. Treat encode times as a *ranking* signal per host, not a calibrated
   cost; the launch doc's §5 host-meta join is the intended repair.
-- **Do not** treat the 396 alias-duplicate rows as independent samples. They are
-  byte-identical repeats of rows that are still in the grid; joined naively they
-  will over-weight the M9 preset and the top quantizer.
+- **Do not** treat the alias-duplicate rows as independent samples (**715** of
+  them by the time the flatten landed — 693 svt + 22 aom; the count grew from 92
+  during the audit itself). They are byte-identical repeats of rows still in the
+  grid; joined naively they over-weight the M9 preset and the top quantizer.
+  They are trivially separable — a duplicate is any row whose `output_sha`
+  already appears for the same `image_path`, or equivalently any row with
+  `q == 100` or (svt-rs) `speed in {8,9,10}`.
+- **The score runs will still score those 715.** `zenfleet-ctl pairs` derives
+  score work from the encode ledger's DONE rows, not from the manifest, so the
+  already-burned duplicates remain in the scoring queue (~4.5 % of it). That is
+  correct behaviour — the ledger is the record of what exists — and it is
+  cheaper to let them score than to hand-filter a live pairs step; just
+  de-duplicate at training time.
 
 ---
 
