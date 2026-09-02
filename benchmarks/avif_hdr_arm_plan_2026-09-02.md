@@ -3,9 +3,11 @@
 **User decisions of record (2026-09-02):** the 2026-07-13 avif-HDR datagen halt is
 **LIFTED**, and high-bit-depth AVIF encode testing is to happen.
 
-**Status:** a **DESIGN + FEASIBILITY registration**. It declares nothing to the fleet
-and launches nothing. A concurrent lane owns Stage-B (B-6) declarations; §6 sequences
-this arm behind it.
+**Status:** a **DESIGN + FEASIBILITY registration**, now with an **EXECUTION RECORD**
+appended as §10 (2026-09-02). §§1–9 are the registration as frozen; §10 records what
+was declared, gated and run, and carries **two corrections to §4.2's counts** and the
+**T2-a wiring blocker** found at execution time. Read §10 before citing any number or
+cell count from §4.
 
 **Registered BEFORE any cell of this arm runs**, per the sweep/calibration discipline
 (`~/work/zen/CLAUDE.md`). Built on:
@@ -819,3 +821,212 @@ Recorded explicitly so they are greppable, per the docs-update discipline.
 8. **Also verified by this lane:** all 76 HDR references pass the `decode_hdr_ref`
    contract (16-bit, `cICP` transfer 16) — **76/76**, so T2 needs no corpus conversion
    step. (§1.2, G0.2.)
+
+---
+
+## 10. EXECUTION RECORD — Track T1 declared, gated and staged; T2 blocked (2026-09-02)
+
+Appended by the execution lane. Everything below is measured on this box unless
+it names another. Nothing in §§1–9 is edited; where this section corrects a
+number registered above it says so explicitly.
+
+### 10.1 Preconditions
+
+| precondition | state | evidence |
+|---|---|---|
+| **TODO-0** (the silent-narrowing defect) | **CLEARED** | `e9e2ef71` on `master@origin`, plan marked DONE at `cece471e`. Route (a), refuse-loudly. |
+| **B-6 drained** | **held for, then cleared** | polled on a bounded 10-min cycle writing `~/tmp/hbdexec/b6_heartbeat.txt`; encode leg on r7900x, score leg (`avifdoe-svt-b6-sf-cpu-20260902`) on the dev box |
+
+**A consequence of TODO-0's shape that matters for G5, recorded because it is
+easy to get backwards:** the fix **refuses**, it does not route. A T2 cell
+mis-sent to the SDR path now fails loudly instead of returning a number — which
+is what makes G5 *satisfiable* — but a refusal proves only that the wrong route
+was rejected. G5 still requires **positive** evidence that the right route was
+taken.
+
+### 10.2 What was built (zero deviation from §4.2's shape)
+
+Three new zenavif plans (`zenavif` `bcd79789`), registered in the ONE `PLANS`
+table so the "unknown plan" diagnostic names them:
+
+| plan | block | shape |
+|---|---|---|
+| `svt_doe_t1_bd10_ladder` | T1-a + T1-c | 7 speeds × 1 default arm |
+| `svt_doe_t1_bd10_knobs` | T1-b | 15 live arms at speed 6 |
+| `svt_doe_t1_bd10_transfer` | T1-d | speed 4, native corpus |
+
+**The mechanism, and it is why these are new plans rather than a flag.**
+`svt_doe_main` carries `bit_depths = [Auto, Ten]`, so at `with_max_deviations(1)`
+a 10-bit cell has **already spent its one deviation on depth** and can exist
+only at the default speed. That — not an oversight — is why `bd10` lives solely
+at s4 today, and §11.8's "no s6 main effect" is a structural consequence of the
+axis layout. The T1 plans pin `bit_depths = [Ten]`, which makes `Ten` **index
+0** and therefore **zero** deviations (`cross()`'s `idxs` array contains the
+bit-depth index), so the speed or the knob becomes the isolated deviation.
+
+`svt_doe_t1_live_knob_sets` **filters** `svt_doe_knob_sets` rather than
+re-listing it (unlike `svt_doe_b6_knob_sets`, which needed different levels), so
+a level added to the owner arrives automatically and the two cannot drift. It
+removes exactly `tn0` and `scm3` — 17 − 2 = **15**, which is §4.2's "15 live
+single-deviation arms": the **default plus 14 live knobs**, not 15 non-default
+arms. (There are only 14 live non-default arms; the registered 4,320 = 15 × 9 ×
+32 only closes with the default included.)
+
+### 10.3 Gates
+
+| gate | result |
+|---|---|
+| **G0.1** source integrity | 32 T1 sources, sha256 in the declared `source_sha`; 16 T2 refs sha256'd in the picks TSV |
+| **G0.2** T2 refs are 16-bit cICP-16 PNG | **76/76 PASS**, re-run at execution via `scripts/hdr_corpus_precheck.py` (exit 0) |
+| **G0.5** primaries balance + disclosure | full-corpus cross-tab reproduced exactly (33 BT.709 / 43 P3; interiors 19/1, nature 8/39); K=16 picks carry **6 BT.709 / 10 P3**, both ≥ 5 |
+| **G1** first-cell artifact | **PASS** — `7/7 cells emitted; encode-fail=0 decode-fail=0 score-fail=0`, 7 distinct `.avif` blobs persisted and scored (ssim2 + zensim) |
+| **G3** 10-bit decode-verify | **PASS** — see below |
+| **G4** producer seam | declared: T1-a reported in two blocks split at speed 6/7 (preset 8 → 9); no BD-rate-vs-speed slope fitted across it |
+| **G6** no silent knob acceptance | unchanged — `hdr.rs:406` still refuses unwired HDR knobs; T1 is the SDR lane and spells knobs through `svt_knobs`, which cannot express an unknown key |
+| **G7** instrument statement | §3.4 and H-BD-4 reproduced in every report carrying a number from this arm |
+
+**G3 in full — three independent reads, not one.** `avif_depth_verify`
+(`crates/zenmetrics-cli/examples/avif_depth_verify.rs`, `c863fd30`) reads the
+**av1C box** (`zenavif-parse`), the **AV1 sequence header**, and the **decoder's
+`ImageInfo`** (`ManagedAvifDecoder::decode_full` — the same reader the PQ/HLG
+tripwire uses). Disagreement is a FAIL on the blob's own evidence, with no
+`--expect-depth` needed.
+
+- Verified on **207 conformance vectors** (link-u 150 + libavif 57): zero depth
+  mismatches, zero cross-read disagreements; all 17 PQ vectors read 10/10/10;
+  profile-2 12bpc reads 12 with `twelve_bit = 1`.
+- **Negative controls, each watched to fail** — a gate that has never failed is
+  not known to work: 8-bit at `--expect-depth 10` → exit 1; 12-bit → exit 1;
+  an **av1C patched to claim 8 while the sequence header still says 10** (the
+  H-BD-3 shape) → exit 1 `reads DISAGREE`, *without* `--expect-depth`, which
+  also proves the three reads are genuinely independent; `--control` on a
+  byte-identical copy → exit 1; empty directory → exit 2.
+- **On this arm's own first cell: 7/7 PASS**, all three reads agreeing at depth
+  10, `high_bitdepth = 1`, `twelve_bit = 0`, profile 0, 4:2:0.
+- **G3's byte-identity half: 0/7** bd10 blobs are byte-identical to the 8-bit
+  control encoded from the same source at the same q (`svt_doe_transfer`,
+  `max-deviations 0`), and that control itself reads **depth 8** on all three
+  reads. Stage A measured 0/288; a regression to 100 % would be the
+  `tn0`/`scm3` inertness failure.
+
+### 10.4 Declaration
+
+`avifdoe_declare.sh --track-t1`, through the canonical path:
+
+| run | plan | q | corpus | cells |
+|---|---|---|---|--:|
+| `avifdoe-svt-t1ac-20260902` | `svt_doe_t1_bd10_ladder` | 9-point | budget | 2,016 |
+| `avifdoe-svt-t1b-20260902` | `svt_doe_t1_bd10_knobs` | 9-point | budget | 4,320 |
+| `avifdoe-svt-t1d-20260902` | `svt_doe_t1_bd10_transfer` | 3-point | **native** | 96 |
+
+- **6,432 declared job ids — matching §4.2's block sum exactly.**
+- `duplicates_merged 0 / invalid_skipped 0 / q_coarsenings 0 / dropped_axes 0 /
+  over_budget false` on all three. Zero merges is **structurally correct** here
+  (one knob axis, one pinned depth), not the red flag it is on a pairwise plan.
+- **DETERMINISTIC**: two independent rounds gave sha-equal `_cells.jsonl`
+  (`55715d26` / `aec2c512` / `40f57487`) and `plan.json` (`95e67de1` /
+  `12ea6904` / `50d1cb5b`).
+- Every declared cell carries the `bd10` token: 7 + 15 + 1 distinct cell shapes,
+  0 missing.
+
+**⚠ A COUNT CORRECTION TO §4.2, measured not assumed.** The distinct-cell count
+is **6,087**, not the 6,144 a naive subtraction gives. Two overlaps:
+
+1. **288** — the s6 knob-default stratum, shared by the ladder and knob runs
+   (this is T1-c, which §4.2 counts three times: as its own block, inside T1-a's
+   6-speed ladder, and as T1-b's default arm).
+2. **57** — T1-d cells that are **also t1ac cells**. 19 of the 32 corpus images
+   are sub-budget **passthroughs** whose native and 1024² files are
+   byte-identical, so they share a `source_sha` and therefore a `CellId`. Stage A
+   measured the same 19/13 split and *relies* on it (A0-native ≡ A0R on
+   3,857/3,857 shared cells). 19 images × 3 probe-q = 57.
+
+> **REGISTERED ANALYSIS RESTRICTION, and it is not cosmetic: T1-d's cross-size
+> transfer gate has n = 13 IMAGES, NOT 32.** On the 19 passthroughs there is no
+> size transfer to measure — the two sizes are the same pixels and the same
+> encode. The 96 declared cells remain the right declaration (the 57 are
+> already-done work and cost nothing), but any "does −1.02 % survive native
+> size" statement must be made over the 13 genuinely-cropped images and must
+> report that n. Q4 in §5.1 is answerable only at that n.
+
+### 10.5 ⛔ TRACK T2 IS SPLIT: T2-b is executable, **T2-a is BLOCKED**
+
+This is a wiring gap §2.6 did not record, found by reading the source at
+execution time. §2.6 identified the HDR **knob** gap (TODO-3); this is
+narrower and harder: **the `sweep --hdr` CLI cannot reach the svt backend at
+all, even at its two wired knobs.**
+
+- `validate_hdr_sweep` (`sweep/hdr.rs:134-141`) admits **only**
+  `CodecKind::Zenjxl | CodecKind::Zenavif`; every other codec "errors loudly at
+  sweep start". `HdrCodec::from_codec_kind` (`:256-263`) maps the same two.
+- `zenav1-svt` is **not a `CodecKind` at all** — the `--codec` enum is
+  zenpng/zenjpeg/zenwebp/zenavif/zenjxl/zengif/zentiff.
+- `HdrCodec::Zenav1Svt` is reachable **only** through `HdrCodec::from_name`,
+  whose sole caller is `jobexec.rs:1906` — the fleet path, whose ssim2/zensim
+  scoring is the **u8 shell** that §3.1 and **G5** forbid for T2.
+- In SDR the svt backend is reached as a `backend` **knob** on `zenavif`; the
+  HDR path's `AVIF_HDR_KNOBS` is `["lossless", "speed"]` and refuses unknown
+  keys by design (G6), so that door is shut too.
+
+**So T2-a as registered — svt HDR encodes with f32 scoring — is unsatisfiable
+today.** The two requirements are individually reachable and jointly are not:
+`sweep --hdr` gives f32 but not svt; jobexec gives svt but not f32.
+
+**This is exactly what TODO-4 is for**, and §4's "T2's baseline executes after
+TODO-0 … and TODO-4" is therefore literally correct — TODO-4 is a T2-a
+prerequisite, not merely an alternative to it.
+
+**TODO-4 HAS A LIVE OWNER, and it is not this lane.** A concurrent capability
+lane (`claude-bitdepth`) holds a path-scoped marker in this repo declaring it
+owns `crates/zenmetrics-cli/src/sweep/encode.rs` (the aom `bd: 8` hardcode of
+§4.4) and **`crates/zenmetrics-cli/src/hdr.rs` — "fleet f32", i.e. TODO-4** —
+and explicitly disclaims `zenavif/src/sweep.rs` and `sweep/hdr.rs`, which are
+this lane's. Its files were being written during this execution. So T2-a is
+**sequenced behind that lane, not permanently blocked**, and this lane did not
+touch those paths.
+
+**T2-b was NOT smoke-tested either, and the reason is the same lane.**
+`sweep/hdr.rs` calls into `src/hdr.rs` (`decode_to_nits`, `HdrTransfer`,
+`measured_display_peak_nits`), so any `sweep --hdr` run made from this working
+tree right now would exercise another lane's **in-flight, uncommitted** edits to
+the scoring path rather than `master`. A G5 route assertion produced that way
+would be evidence about a tree that has never existed on `master` — worse than
+no measurement, because it looks like one. **G5 is therefore UNSATISFIED for
+both T2 blocks, by choice, and no T2 cell was declared or run.**
+
+- **T2-a (3,248 cells): BLOCKED on TODO-4**, which a concurrent lane owns and
+  is implementing. Not declared, not run, not estimated. **NOT MEASURED —
+  never a null, never a zero.**
+- **T2-b (432 cells): reachable in principle** — `zenavif` is admitted by
+  `validate_hdr_sweep` and `sweep --hdr` is the f32 umbrella route G5 names —
+  but **deferred**, because its scoring path is mid-edit in another lane (above).
+  Its corpus gates (G0.2, G0.4, G0.5) are nevertheless **complete and
+  committed**, so it is ready to run the moment that lane lands.
+  Note §4.3's own caveat stands: T2-b differs from T2-a in **three** ways at
+  once (backend, chroma, matrix), so it is a **contrast, not a controlled
+  comparison** — and with T2-a blocked it currently has nothing to contrast
+  *against*. Its standalone value is a zenavif-arm HDR RD baseline, which is
+  still the first one in the workspace.
+
+### 10.6 Two findings for the record
+
+1. **`zenavif-parse` `read_iprp` drops the primary item's property set on
+   two-`ipma` files.** `associations = read_ipma(&mut b)?` is a plain assignment
+   inside the box loop, so a second `ipma` overwrites the first. Proven by an
+   independent ISOBMFF walk of `plum-blossom-large.profile0.10bpc.yuv420
+   .alpha-full.avif`: `pitm` = 1 **is** associated with `av1C` (ipco index 4),
+   yet `av1_config()`, `spatial_extents()`, `color_info()` and
+   `pixel_aspect_ratio()` all return `None`. It separates perfectly on alpha
+   across the conformance corpus (64/64 FAILs have `alpha` in the name; 0/86
+   PASSes do). **Inert for this arm** — its blobs are opaque, single-`ipma` and
+   non-grid — so it is recorded, not fixed mid-arm. The distinct grid case is
+   spec-correct (tiles carry `av1C`, not the derivation item).
+2. **H-BD-3's stated MECHANISM looks stale at current `zenav1-svt` HEAD.**
+   `svtav1/src/avif.rs:218` and `lib.rs:135` both read
+   `{ self.bit_depth = depth; self }` — no coercion — with a doc comment saying
+   it "deliberately does NOT coerce … It used to". §2.1 cites dossier §605 for
+   the coercing behaviour; that line is worth re-reading. **Read from source,
+   NOT measured** — the coercion was never exercised end to end here. **This
+   does not retire G3**: the zenavif/zenrav1e arm reaches depth by a different
+   path, whether the new refusal fires end-to-end is unverified, and G3's
+   byte-identity half is untouched either way.
