@@ -364,6 +364,40 @@ the two never overlap on the host. Fits reproduce with
 `scripts/jobsys/avif_speed_analyze.py --s1a <pass tsvs> --s1b <probe tsvs>
 --out-dir DIR`.
 
+### 6.6 CONTENDED WINDOW on r7900x from 2026-09-03T21:39Z — and why the estimator survives it
+
+The instrument reserves r7900x and §2 records "uncontended" as a precondition, with
+the box verified at load 0.05 and zero containers at launch. **At 21:39Z another
+lane started `cargo-nextest nextest run --workspace -j 8` on it** — multiple `rustc`
+and `rust-lld` processes at ~100 % each. Box load went 1.00 → 3.66.
+
+**Scope of the contamination, stated precisely rather than hand-waved:**
+
+| block | window | status |
+|---|---|---|
+| S1a pass 1 (640 cells) | 18:25:11 – 20:19:40Z | **CLEAN** — verified load 1.00, single-core, zero containers |
+| S1b pass 1 (180 cells) | 20:19:40 – 20:35:20Z | **CLEAN** |
+| S1a pass 2 | 20:35:20Z – | clean until **21:39Z**, contended after |
+| pass 3, S1c | later | unknown, depends on that lane |
+
+**Every result published in §6.1-§6.4b is from pass 1 and is therefore clean.** The
+α + β fits, the 24.3× content spread, both alias confirmations and the q-flatness
+falsification all predate 21:39Z.
+
+**And the estimator is built for exactly this.** §2 reports **min over N process
+starts**, not a mean — contention can only inflate a timing, never deflate it, so a
+contended pass loses to a clean one under `min()`. Since pass 1 is clean for every
+cell, every cell retains at least one uncontended sample. What contention *does*
+damage is the **drift control**: the pass-to-pass spread will now conflate
+machine-state drift with another lane's build, so a large spread on cells measured
+after 21:39Z is not evidence about this instrument. **Report drift from clean passes
+only, and say which those were.**
+
+**Not fixed by killing it.** The build is another lane's live work; the reservation
+was a plan, not a lock. The durable fix is a claim mechanism for the box — the
+`.workongoing` marker covers repos, not hosts — which is worth having before the
+next single-host timing wave.
+
 ## 7. Limitations — stated before any result
 
 1. **S1a's ladder covers 5 of 12 content classes**; S1c covers all 12 but only at
