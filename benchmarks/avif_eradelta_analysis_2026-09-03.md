@@ -225,6 +225,12 @@ Three things worth stating precisely:
 - **AI-generated content behaves like photo here**, not like screen content —
   9 images, 81 cells, zero divergence. Worth knowing before anyone assumes
   "synthetic ⇒ screen".
+- **The 31.25 % is a property of THIS corpus, not of web traffic.** The DOE's
+  K=32 budget corpus is deliberately screen-heavy — 6 plots, 5 screenshots,
+  5 scans, 9 AI-generated, 7 photos — so half of it is screen-adjacent by
+  construction. The transferable numbers are the *conditional* ones (median
+  −50.08 % where the knob fires, 0 % where it does not) and the content
+  boundary; the corpus-wide fraction would move with any other content mix.
 
 ### 3.1 Effect size
 
