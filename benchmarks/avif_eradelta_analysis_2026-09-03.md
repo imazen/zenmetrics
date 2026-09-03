@@ -59,8 +59,8 @@ tool with the same `--control inrun` instrument — and it is labelled as such.
 Every run below was verified with `zenfleet-ctl report` before any number was
 computed; a run with a live gap is not analysed.
 
-| run | role | declared | done | failed-only | verdict |
-|---|---|--:|--:|--:|---|
+| run | declared | done | failed-only | verdict |
+|---|--:|--:|--:|---|
 | `avifdoe-svt-eradelta-a1-20260903` (arm-set A, encode) | 6912 | 6912 | 0 | COMPLETE |
 | `avifdoe-svt-eradelta-b1-20260903` (arm-set B, encode) | 8640 | 8640 | 0 | COMPLETE |
 | `avifdoe-svt-eradelta-c1-20260903` (arm-set C, encode) | 96 | 96 | 0 | COMPLETE |
