@@ -23,9 +23,23 @@
 #        the remote read these but the ssh line never forwarded them, so tower launches were uncapped
 #        unless hand-run).
 #
-# Worker name = <hostname>-<role> (collision-proof). Container zen-score-<role>,
-# --restart unless-stopped; self-exits on drain (ZEN_IDLE_PASSES); torn down with
+# Worker name = <hostname>-<role> (collision-proof). Container zen-score-<role>;
+# self-exits on drain (ZEN_IDLE_PASSES) or ZEN_MAX_MIN budget; torn down with
 # `docker rm -f zen-score-<role>`.
+#
+# --restart on-failure:5 (2026-09-03 fix; was `unless-stopped`). The worker's
+# own clean drain-exit (fleet-entrypoint.sh, both the ZEN_IDLE_PASSES and the
+# ZEN_MAX_MIN paths) is `exit 0` with nothing after it in the script — and
+# `unless-stopped` restarts a container on ANY exit until it is explicitly
+# `docker stop`/`rm`'d, so a worker whose run had already gone COMPLETE looped
+# forever, re-fetching its manifest every cycle. Found on 10 containers across
+# 3 hosts, up to 7,457 restarts on one. Docker's `on-failure` policy restarts
+# ONLY on a non-zero exit, so a clean drain now stays stopped, while a genuine
+# crash/hang/fail-fast (exit 143/3/4/5) still gets bounded retries instead of
+# an infinite loop — the same policy already used for the Hetzner worker
+# (crates/zenfleet-hetzner/src/cloud_init.rs). Record: docs/RUNNING_JOBS.md
+# "Restart-loop on clean drain", benchmarks/avif_doe_plan_2026-09-01.md §18
+# point 2.
 set -uo pipefail
 
 HOST="${1:?usage: lan_score_launch.sh <host> <job-set> <role> [gpu|cpu] [image]}"
@@ -90,7 +104,7 @@ CAPS=()
 
 sudo -n docker pull "$ZM_IMG" >/dev/null 2>&1 || true
 sudo -n docker rm -f "$ZM_CTR" >/dev/null 2>&1 || true
-sudo -n docker run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart unless-stopped "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" \
+sudo -n docker run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" \
   -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
   -e ZEN_R2_ENDPOINT="$EP" -e ZEN_BUCKET="$ZM_BUCKET" \
   -e ZEN_RUN="jobs/$ZM_JOBSET" \

@@ -531,6 +531,42 @@ bash scripts/jobsys/teardown_fleet.sh <RUN>   # deletes every paid box for this 
 **Teardown verification (do every time):** `hcloud server list -l group=<RUN>` empty, Salad group gone,
 no stray containers — and your own `zen-arm-dev` / unrelated boxes untouched.
 
+### 9b. Restart-loop on clean drain (found + fixed 2026-09-03)
+
+`scripts/jobsys/lan_score_launch.sh` workers used to launch with `--restart unless-stopped`. The
+worker's own drain-exit (`fleet-entrypoint.sh`, both the `ZEN_IDLE_PASSES` and `ZEN_MAX_MIN`
+paths) is a clean `exit 0` with nothing after it in the script — and `unless-stopped` restarts a
+container on **any** exit until it is explicitly `docker stop`/`rm`'d. So once a run's manifest
+went COMPLETE, its worker looped forever: exit clean, restart, re-fetch the manifest, repeat —
+burning box time for zero work with no error anywhere to notice. Found on **10 containers across
+3 hosts** (local/r7900x/tower), up to **7,457 restarts** on one, every one reporting `done=0`.
+
+**Fixed**: the launcher now uses `--restart on-failure:5`. Docker's `on-failure` policy restarts
+a container only on a **non-zero** exit, so a clean drain (`exit 0`) now stays stopped, while a
+genuine crash/hang/fail-fast (`fleet-entrypoint.sh` exit 143/3/4/5) still gets bounded retries
+instead of an infinite loop. This mirrors the policy already used for the Hetzner worker
+(`crates/zenfleet-hetzner/src/cloud_init.rs`, `--restart=on-failure:5`); `launch_fleet.sh` /
+`pool_launch.sh` / `hetzner_scorefile_launch.sh` were already on `--restart no` (foreground,
+self-destroy-on-exit for paid boxes), so `lan_score_launch.sh` was the one outlier. Verified by
+launching a worker against a confirmed-COMPLETE run with the fixed script: it drained in 8 passes
+(~3.2s), exited 0, `RestartCount` stayed 0, and it was still `Exited` 30s later — plus a negative
+control (`exit 1` under the same policy) restarted 5 times then stopped, confirming the policy
+still gives real failures bounded retries rather than either extreme (never retry / retry
+forever).
+
+**When bringing up ANY worker container by hand** (outside these launchers), check what your
+worker's clean-completion exit code actually is before picking a restart policy —
+`unless-stopped`/`always` are only safe for a service that should *never* exit on its own;
+anything that self-drains (every worker in this job system) wants `on-failure[:N]` or `no`.
+
+**Spot-check for a stuck loop:** `docker ps -a --format '{{.Names}} {{.Status}}'` — many restarts
+in a short window, or a `Restarting (0)` status, means a container is looping on a clean exit
+under an always-restart policy. Cross-check the run before touching anything —
+`zenfleet-ctl report --run <run>`: a live-gap of 0 means the run is done and the container is
+safe to `docker rm -f`; a nonzero gap means real work may still be in flight.
+
+Record: `benchmarks/avif_doe_plan_2026-09-01.md` §18 point 2 (the finding).
+
 ---
 
 ## 10. Complete worked example (synthetic — runnable today)
