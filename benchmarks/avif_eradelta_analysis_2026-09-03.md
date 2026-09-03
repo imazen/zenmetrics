@@ -605,6 +605,36 @@ directional intra path. The 8-bit path's era-invariance is not taken on faith �
 
 ---
 
+## 4b. Implications for the next wave — NOT findings, clearly labelled
+
+Everything above is a registered measurement. This section is not: it is what
+this lane would tell whoever budgets the next wave, and it is separated so it
+cannot be mistaken for a result.
+
+1. **`scm3` at speed 7 looks like the largest single-knob win in the whole DOE
+   so far**, and it is currently off by default. The measured effect
+   (median −50 % conditional, 10/10 wins, zero effect on photo/AI content) is an
+   order of magnitude larger than anything Stage-A found, and it is *free* on
+   non-screen content because the encoder emits byte-identical output there. The
+   obvious follow-up is a content-classifier-gated default, and the obvious
+   prerequisite is a wider content corpus — 10 firing images is a strong signal
+   on a narrow base.
+2. **Re-running the era-stability check on every pin bump is cheap and worth
+   automating.** The whole verification is a `zenfleet-ctl pairs` join; it needs
+   no scoring at all to answer "did any byte change", and it answers it exactly.
+   `avifdoe_era_compare.py` is the tool; running it on arm-set A after each pin
+   bump costs one re-declare of an existing plan.
+3. **The 7 unverified speed-6 knobs are a small, bounded gap** (§2.2b) —
+   7 knobs × 288 cells = 2,016 cells to close it, on a plan that already exists.
+4. **The `t1b` block (`svt_doe_t1_bd10_knobs`, 4,320 declared, 0 done)** is
+   still the largest never-run declaration in this family. Nothing here changes
+   its priority either way; it is simply still there.
+5. **B-2 (QM × sharpness) remains the highest-value un-run Stage-B item** —
+   unchanged by this era's findings, since none of its knobs sit in the
+   AVIF-reachable delta. The speed-7 data adds a third preset for it if it runs.
+
+---
+
 ## 5. What this wave does NOT establish
 
 - **Nothing about the other 31 commits.** The identity join proves the delta
