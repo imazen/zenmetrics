@@ -204,7 +204,7 @@ q surface, which is what backend picking actually needs.
    be wrong for both ends.
 4. **q-flatness is a verdict, not an assumption**: per (backend, speed, size),
    report max relative spread of `encode_ms` across q {15, 45, 90}. The plan's
-   ±3.3 % svt claim is the thing under test.
+   ±3.3 % svt claim is the thing under test. **ANSWERED in §6.4b — falsified.**
 5. **Speeds are categorical.** svt speeds 7–10 are one encoder; zenrav1e's aliases
    are image-dependent. No ordinal trend is fitted across a saturation seam.
 6. **min over the 3 passes** is the reported statistic; the pass-to-pass spread is
@@ -298,6 +298,48 @@ zenrav1e leg is registered as *gated on that result* rather than pre-bought.
 ⚠ **Dial position is not matched quality.** These ratios are per-speed-index, and
 the two backends map speed to work differently. The quality-matched comparison is
 the RD wave's job, in quality space, not q space.
+
+### 6.4b Q-FLATNESS: the registered assumption is FALSIFIED
+
+The plan inherited a claim from the retrofit (§9.2) that per-q encode cost is flat
+— **"±1.2 % on aom and ±3.3 % on svt — so q density buys a speed model nothing"** —
+and §3.2 registered *verify, don't inherit*. S1b pass 1 (180 cells: 3 sizes × 10
+speeds × 2 backends × q {15, 45, 90}) verifies it, and it does not hold:
+
+| backend | median rel. spread over q | max | registered claim |
+|---|--:|--:|--:|
+| **svt-rs** | **0.752 (75.2 %)** | **3.528 (352.8 %)** | ±3.3 % |
+| **zenrav1e** | **0.433 (43.3 %)** | **2.671 (267.1 %)** | not stated |
+
+**The svt median is ~23× the registered tolerance and the worst cell is ~107×.**
+
+**Direction is unambiguous: cost RISES with quality.** Over all 60 (image, backend,
+speed) cells: **46 rise monotonically across q {15, 45, 90}, 0 fall monotonically**,
+14 are non-monotone. That is the expected mechanism — a lower quantizer keeps more
+coefficients and does more RD work — but its *size* is what was mis-registered.
+Example, `1442` at 1024², svt speed 1: **2,358.6 → 3,903.9 → 6,101.2 ms**.
+
+**Three consequences, and the first is the important one:**
+
+1. **The speed model needs a q axis.** A model over (backend, speed, pixels) alone
+   is not sufficient; at fixed size and speed, q moves cost by a median of 75 % on
+   svt. The claim that q density buys a speed model nothing is the opposite of what
+   the data says.
+2. **Every α + β fit in §6.1-§6.3 is q45-SPECIFIC** and must be labelled that way.
+   S1a is a single-q block by design (§3.1) — which was the right call for
+   affordability, but it means those coefficients describe q45 and no other point.
+3. **A registered de-scope step rested on this.** §4.1 of the companion doc costed
+   "29-q → 9-q" as cutting ~69 % of cost with ~69 % of cells, which assumes rough
+   flatness. With cost rising in q, *which* q points are cut changes the saving —
+   another reason that ladder should be rebuilt from measured per-axis cost.
+
+**ANOMALY, flagged and NOT explained away.** All 14 non-monotone cells are
+**zenrav1e at speeds 2-4**, where q90 comes out *faster* than q45 — on `1442` at
+1024², speed 2 reads **12,811.7 / 14,933.7 / 5,005.7 ms** at q15/45/90, i.e. q90 is
+**3.0× faster** than q45. Time falling as quality rises is counter-mechanistic. It
+is reproducible across the three sizes in this block but has **no explanation
+here**; it wants the per-q bitstream sizes and rav1e's speed/quantizer coupling,
+which is the analysis lane's work, not this instrument's.
 
 ### 6.5 Runtime, and a cost estimate that was wrong
 
