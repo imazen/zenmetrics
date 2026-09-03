@@ -197,22 +197,35 @@ moving target. Registered here so the omission is explicit.
 
 **Status: ALL SEVEN GATES PASS.** Evidence in §6.
 
-**G-RATE, MEASURED not estimated** (paired cgroup-CPU / blob-count sample over an
-89 s interval on the live `dev-brsdr` container, 84 cells): **7.17 CPU-s per cell**.
+**G-RATE, MEASURED — and the first measurement was wrong, which is recorded rather
+than quietly replaced.**
 
-| | cells | CPU-h |
-|---|--:|--:|
-| `brsdr` projected at the measured rate | 9,280 | **18.5** |
-| `brnat` (B-6-derived estimate) | 7,488 | ~4.0 |
-| **wave total** | 16,768 | **22.5** |
-| remaining envelope | 34,944 | 46.8 |
-| **margin** | | **52 %** |
+| window | cells | CPU-s/cell | `brsdr` projection | wave total | verdict |
+|---|--:|--:|--:|--:|---|
+| 89 s paired sample | 84 | 7.17 | 18.5 CPU-h | 22.5 | PASS (52 % margin) |
+| **cumulative from launch** | **323** | **15.42** | **39.7 CPU-h** | **43.7** | **PASS (7 % margin)** |
 
-**PASS**, and the de-scope in §4.1 does not fire. Note this *lowers* §1's 23.9 CPU-h
-`brsdr` estimate — that figure came from two content points and a per-q-flatness
-assumption; the direct measurement supersedes it. `brsdr` wall ETA at the observed
-rate (8.47 of 10 cores busy) is **~2.7 h**; `brnat` was filling at ~48 cells/min,
-so ~2.6 h. Both are work-weighted from live counters, not from the cell count.
+**The 89-second window was unrepresentative and the cumulative figure supersedes
+it.** The cause is already documented in §3 and §1: zenrav1e's per-pixel cost has a
+**3.4× content spread**, and the worker walks the corpus in image order, so any
+short window samples one content class rather than the mix. A rate sampled over
+~1.5 minutes of a multi-hour run is not a rate. Both numbers are kept here because
+the error is instructive: the short-window figure would have been reported as a
+comfortable 52 % margin when the real margin is 7 %.
+
+**The gate as pre-registered PASSES (43.7 ≤ 46.8), so the §4.1 de-scope does NOT
+fire** — a gate that passes is not re-argued after the fact. But the margin is now
+inside the uncertainty of the estimate itself, so G-RATE is treated as a
+**standing** gate rather than a one-shot: the cumulative rate is re-checked as the
+run drains, and de-scope step 1 fires the moment the projection crosses 46.8.
+
+Note the **cell** budget — the constraint the brief set — is not close: 16,768 of
+~34,944 is **48 %**. It is the plan's CPU-h envelope that is tight, and only because
+zenrav1e is genuinely expensive (its speed-1 cell costs 14.99 s on a 0.25 MP
+screenshot).
+
+Wall ETAs, work-weighted from live counters rather than from cell counts:
+`brnat` ~48 cells/min → **~1 h**; `brsdr` at 8.47 of 10 cores busy → **~4 h**.
 
 ### 4.1 Pre-registered de-scope (fires on G-RATE only)
 
