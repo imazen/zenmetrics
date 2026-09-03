@@ -434,6 +434,10 @@ question "does −1.02 % survive native resolution" therefore cannot be answered
 in the same currency as the −1.02 % it is asked about — that is a property of
 the block's design, not of this analysis.
 
+The artifact says so too: `c1_paired/main_effects.tsv` is **a header and no
+rows**. The analyzer ran, found no computable BD-rate, and wrote an empty table
+rather than a zero — which is the behaviour NOT-MEASURED should have.
+
 What the block *can* answer is the paired matched-q read: at each `q`, bd10's
 bytes and quality against its 8-bit twin.
 
