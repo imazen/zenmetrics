@@ -201,12 +201,15 @@ def main():
             cell = f"s{sp}-svt-420-{knob}"
             if o is None or nw is None:
                 verdict = "NOT-MEASURED-old" if o is None else "NOT-MEASURED-new"
-                rows.append((sp, knob, "" if o is None else f"{o['median_bd']:.4f}",
+                rows.append((sp, knob,
+                             f"{int(o['n_images']) if o else 0}/{int(nw['n_images']) if nw else 0}",
+                             "" if o is None else f"{o['median_bd']:.4f}",
                              "" if nw is None else f"{nw['median_bd']:.4f}",
                              "", "", verdict))
                 continue
             d = nw["median_bd"] - o["median_bd"]
-            if cell in exact_cells and abs(d) == 0.0:
+            same_n = int(o["n_images"]) == int(nw["n_images"])
+            if cell in exact_cells and abs(d) == 0.0 and same_n:
                 verdict = "HELD-EXACT (all bitstreams byte-identical)"
             elif abs(d) >= a.move_threshold:
                 verdict = f"MOVED by {d:+.2f} pp"
@@ -215,13 +218,17 @@ def main():
                 verdict = ("HELD (<%.1f pp, new median inside old CI)" % a.move_threshold
                            if inside else
                            "HELD-magnitude (<%.1f pp) but outside old CI" % a.move_threshold)
-            rows.append((sp, knob, f"{o['median_bd']:.4f}", f"{nw['median_bd']:.4f}",
+            if cell in exact_cells and abs(d) == 0.0 and not same_n:
+                verdict = (f"HELD-EXACT on shared images, n differs "
+                           f"({int(o['n_images'])} vs {int(nw['n_images'])})")
+            rows.append((sp, knob, f"{int(o['n_images'])}/{int(nw['n_images'])}",
+                         f"{o['median_bd']:.4f}", f"{nw['median_bd']:.4f}",
                          f"{d:+.4f}",
                          f"[{o['ci_lo']:.3f},{o['ci_hi']:.3f}] vs [{nw['ci_lo']:.3f},{nw['ci_hi']:.3f}]",
                          verdict))
         with open(f"{a.outdir}/era_effect_stability.tsv", "w") as f:
-            f.write(f"speed\tknob\tmedian_bd_{a.label_old}\tmedian_bd_{a.label_new}"
-                    "\tdelta_pp\tci_old_vs_new\tverdict\n")
+            f.write(f"speed\tknob\tn_images_old_vs_new\tmedian_bd_{a.label_old}"
+                    f"\tmedian_bd_{a.label_new}\tdelta_pp\tci_old_vs_new\tverdict\n")
             for r in rows:
                 f.write("\t".join(str(x) for x in r) + "\n")
         vc = collections.Counter(r[-1].split(" (")[0].split(" by ")[0] for r in rows)
