@@ -1,5 +1,10 @@
 # AVIF new-era delta audit — 2026-09-03
 
+> **✅ THE WAVE THIS AUDIT REGISTERED HAS RUN — results:
+> [`avif_eradelta_analysis_2026-09-03.md`](avif_eradelta_analysis_2026-09-03.md)**.
+> Every prediction in §2.1, §4.1 and §6.0 is confirmed by measurement; §6.0's
+> confirmation is annotated inline below.
+
 **Lane:** `claude-newera3` (Sonnet failover; `claude-newera` and `claude-newera2`
 both died to an Opus service incident, 500s, mid-early-phase — not their fault).
 Established progress adopted, not redone: the zenmetrics Cargo.lock working-tree

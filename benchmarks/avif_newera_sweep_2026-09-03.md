@@ -1,5 +1,15 @@
 # AVIF new-era sweep registration — 2026-09-03
 
+> **✅ RUN AND ANALYSED — results:
+> [`avif_eradelta_analysis_2026-09-03.md`](avif_eradelta_analysis_2026-09-03.md)**
+> (2026-09-03). Headline: arm-set A reproduced Stage-A's bitstreams
+> **byte-identically on every shared cell**, and arm-set B did the same
+> independently on 3,456 cells (vs `a1`) + 2,880 (vs `a2`) — so every covered
+> effect is the same number, not merely within CI. `scm3` at speed 7 fires on
+> **90/288 cells, exclusively on screen-adjacent content**, worth a **median
+> −50.08 % BD-rate** conditional on firing. Arm-set C's clean bd10-native read
+> **inverts** the superseded `t1d` answer.
+
 Companion to [`avif_newera_delta_2026-09-03.md`](avif_newera_delta_2026-09-03.md)
 (read that first — this doc assumes its findings). Registers what gets
 declared this wave, what's reconciled/deprioritized from the outstanding
