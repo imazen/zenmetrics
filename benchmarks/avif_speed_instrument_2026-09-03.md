@@ -289,6 +289,21 @@ zenrav1e leg is registered as *gated on that result* rather than pre-bought.
 the two backends map speed to work differently. The quality-matched comparison is
 the RD wave's job, in quality space, not q space.
 
+### 6.5 Runtime, and a cost estimate that was wrong
+
+The registered S1a pass estimate was ~2,591 s of encode. **MEASURED: 2,839 s
+bought only 27.13 of the ladder's 47.55 MP** — the photo sources cost ~104.6 s/MP
+summed over the 20 (backend, speed) cells, and the scan/screenshot sources that
+remain are dearer. A full S1a pass is therefore **~1.7 h**, not 43 min, and with
+S1b a pass is ~2.3-2.6 h; three passes plus S1c run overnight. Nothing is
+blocked on that: a chained harvester pushes the outputs to the LAN store on the
+`COMPLETE` marker, and a chained launcher starts S1c only after that marker AND
+after the last `zenmetrics` leaves the box, so the two never overlap and r7900x
+exclusivity holds unattended.
+
+The estimate was low for the same reason §6.1 is the headline — it was built from
+one image's speed curve, and β is a function of content.
+
 **Artifacts:** `~/speedinstr/out/run2/` on r7900x (`s1a_pass{1,2,3}.tsv`,
 `s1b_pass{1,2,3}.tsv`, `COMPLETE`), auto-pushed by a chained harvester to
 `s3://zentrain/instruments/avif-speed-2026-09-03/run2/`; S1c to
