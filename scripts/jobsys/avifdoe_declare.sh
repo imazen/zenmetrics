@@ -19,6 +19,10 @@
 #   scripts/jobsys/avifdoe_declare.sh --stage-b6     # Stage B, trigger B-6 only
 #   scripts/jobsys/avifdoe_declare.sh --track-t1     # HBD arm, Track T1 (bd10) only
 #   scripts/jobsys/avifdoe_declare.sh --era-delta    # zenav1-svt pin bump stability wave
+#   scripts/jobsys/avifdoe_declare.sh --stage-b-remainder
+#        Stage B remainder: the native s6 interaction block (QM x sharpness
+#        first) + the zenrav1e SDR RD arm.  Registered in
+#        benchmarks/avif_stageB_remainder_2026-09-03.md
 #                                                     # (benchmarks/avif_newera_sweep_2026-09-03.md)
 #
 # Requires: a zenmetrics built with `--features sweep,avif,avif-svt` (the svt
@@ -39,6 +43,7 @@ DRY_ONLY=0
 STAGE_B6=0
 TRACK_T1=0
 ERA_DELTA=0
+STAGE_BR=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -48,6 +53,7 @@ while [ $# -gt 0 ]; do
     --stage-b6) STAGE_B6=1; shift ;;
     --track-t1) TRACK_T1=1; shift ;;
     --era-delta) ERA_DELTA=1; shift ;;
+    --stage-b-remainder) STAGE_BR=1; shift ;;
     --dry-run-only) DRY_ONLY=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -124,6 +130,54 @@ for k in keys:
         print(f"    {k}: {v}")
 PY
   fi
+  [ "$DRY_ONLY" = 1 ] && return 0
+  "$ZFC_BIN" declare-encodes --cells "$OUT/${run}_cells.jsonl" \
+    --out "$OUT/${run}_manifest.json"
+}
+
+# ---------------------------------------------------------------------------
+# A STRATUM-FILTERED block.  The canonical builder mints the cells; this only
+# SELECTS a subset, so every declared CellId is bit-identical to the one the
+# full plan would mint and the block joins the existing identity space -- and
+# its A2 budget-size twin -- for free.  Filtering happens in
+# avifdoe_filter_cells.py, which HARD-ERRORS on a stratum name the plan does
+# not spell rather than silently shrinking the block.
+# ---------------------------------------------------------------------------
+declare_block_filtered() {   # $1 run $2 plan $3 q-grid $4 sources $5 max-dev $6 allowlist
+  local run="$1" plan="$2" qgrid="$3" src="$4" devs="$5" allow="$6"
+  echo "=== $run  (plan $plan, q $qgrid, max-deviations $devs, STRATUM-FILTERED)"
+  "$ZM_BIN" sweep --codec zenavif --plan "$plan" \
+    --sources "$src" --q-grid "$qgrid" \
+    --max-deviations "$devs" \
+    --dry-run --emit-cells "$OUT/${run}_cells_ALL.jsonl" \
+    --emit-cells-image-path basename \
+    --output "$OUT/$run"
+  python3 "$(dirname "${BASH_SOURCE[0]}")/avifdoe_filter_cells.py" \
+    "$OUT/${run}_cells_ALL.jsonl" "$allow" "$OUT/${run}_cells.jsonl"
+  echo "    cells: $(wc -l < "$OUT/${run}_cells.jsonl")"
+  [ "$DRY_ONLY" = 1 ] && return 0
+  "$ZFC_BIN" declare-encodes --cells "$OUT/${run}_cells.jsonl" \
+    --out "$OUT/${run}_manifest.json"
+}
+
+# ---------------------------------------------------------------------------
+# A KNOB-GRID block.  The zenavif `svt_doe_*` plans are svt-only by
+# construction, so the zenrav1e arm is declared through the builder's OTHER
+# canonical entry point -- `--knob-grid` -- which emits the same declare items
+# with the same content-addressed identity.  This is why the zenrav1e arm needs
+# no zenavif change and no new plan: `backend` is already a first-class zenavif
+# sweep knob ("zenravif" | "svt-rs" | "aom-rs", sweep/encode.rs:194), and
+# "zenravif" is the DEFAULT backend, so every existing image can execute it.
+# ---------------------------------------------------------------------------
+declare_block_knobgrid() {   # $1 run $2 knob-grid-json $3 q-grid $4 sources
+  local run="$1" grid="$2" qgrid="$3" src="$4"
+  echo "=== $run  (knob-grid, q $qgrid)"
+  "$ZM_BIN" sweep --codec zenavif --knob-grid "$grid" \
+    --sources "$src" --q-grid "$qgrid" \
+    --dry-run --emit-cells "$OUT/${run}_cells.jsonl" \
+    --emit-cells-image-path basename \
+    --output "$OUT/$run"
+  echo "    cells: $(wc -l < "$OUT/${run}_cells.jsonl")"
   [ "$DRY_ONLY" = 1 ] && return 0
   "$ZFC_BIN" declare-encodes --cells "$OUT/${run}_cells.jsonl" \
     --out "$OUT/${run}_manifest.json"
@@ -459,6 +513,173 @@ prior run's pixels were wrong at exactly the geometry this checks:
   built specifically to catch this bug class (bd10 x multi-tile x low
   preset), self-calibrating against the 8-bit control on the same cell.
 ERADELTAEOF
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# STAGE B REMAINDER (2026-09-03).  Registered in
+# benchmarks/avif_stageB_remainder_2026-09-03.md.  Two runs.
+#
+# BUDGET.  The Stage-B envelope is 60,000 cells / 60 CPU-h encode / 50 CPU-h
+# score (plan doc section 7.2).  B-6 spent 25,056 cells and 13.2 CPU-h, so
+# ~35,000 cells and ~46.8 CPU-h remain.  These two runs spend 16,768 cells and
+# an estimated ~19 CPU-h.  The rest is deliberately UNSPENT and held for the
+# gated follow-ons the registration doc ranks -- under-spending a ceiling is
+# allowed; spending it on the arms Stage A itself deprioritised is not.
+#
+# RUN 1 -- avifdoe-svt-brnat-20260903.  The native s6 interaction block.
+# `svt_doe_pairwise` at the NATIVE corpus, stratum-filtered to 26 of its 118
+# strata, over the 9-point knob ladder: 26 x 9 x 32 = 7,488 cells.
+#   * QM x SHARPNESS IS THE POINT and it is rank 1: Stage A section 10.1 calls
+#     it "the strongest measured structure in the wave", the era-delta wave
+#     re-flagged it unchanged, and B-6 section 17.4 established that no
+#     declared wave contains a native (qml x shp) grid while REMOVING the
+#     concern that the synergy residual is a size artefact (-0.39 pp at corpus
+#     level, against a -5.2 to -5.5% residual).  The 12 QM/shp strata here are
+#     a COMPLETE 4x3 factorial in (qml level, shp level) including both
+#     defaults -- which is B-2's registered "3 levels each" shape, exceeded on
+#     the qml axis, not a subset of it.
+#   * A2 already ran this plan at BUDGET size with the same q ladder, so the
+#     native block is a clean size A/B on the INTERACTION itself, cell for cell.
+#   * mtx32 (rank 3) completes the certified-knob picture: Stage A certified
+#     mtx32 for reduced-size screening, and it is the other knob B-2 pairs with
+#     both qml and shp.
+#   * tune x tile (rank 4) discharges the (tn3,tl1.1)@s6 B-2 trigger and the
+#     tl1.0/tl1.1/tn3 B-1 main effects at native.
+#   * DELIBERATELY ABSENT -- and this is a ranking, not an oversight:
+#       - every `vbst*` stratum.  Stage A section 10.1 point 4: the variance-
+#         boost arms are "the most expensive and the least certain", they
+#         trigger on IQR rather than median, and it says deprioritise them
+#         FIRST.  Six of the 17 B-1 triggers are vbst.
+#       - every `scm3` pair.  MOOTED by the era-delta wave, not skipped: at
+#         speed 6 `scm3` changes the bitstream on 0 of 288 cells (and 0/288 at
+#         speed 4; it is real only at speed 7, where it is screen-content-
+#         exclusive, 90/144 on plot+screenshot+scan and 0/144 on photo+AI).
+#         An interaction with a knob that is byte-identical to the control at
+#         this preset cannot exist.  See avif_eradelta_analysis_2026-09-03.md
+#         section 0.2 and section 3.
+#       - `acb*`.  B-6 retired ac_bias outright: 12 (speed, level) medians span
+#         -0.03% to +0.39% at native, and the only level with a defensible
+#         effect (acb8) is a LOSS.
+#
+# RUN 2 -- avifdoe-rav-brsdr-20260903.  The zenrav1e SDR RD arm.
+# USER DESIGN REQUIREMENT, 2026-09-03, mid-flight: "we want the model to be
+# able to pick the best backend for an image".  Backend selection is therefore
+# a model OUTPUT, and the corpus has ZERO zenrav1e SDR coverage -- svt is deep,
+# zenrav1e exists only in the 16-ref HDR arm.  Defaults-first (its knob surface
+# is a later tranche): 32 images x speeds 1..10 x the FULL 29-q control ladder
+# = 9,280 cells, on the BUDGET corpus.
+#   * BUDGET, not native, and that is the load-bearing choice: A0R-svt already
+#     holds the 29-q control ladder on these exact references, so this arm is
+#     directly comparable to svt cell-for-cell with no new svt encodes.  The
+#     29-q ladder is what makes the comparison exact in QUALITY space -- q
+#     values do NOT align across backends, so matching happens at analysis time
+#     on achieved ssim2/zensim, never on q.
+#   * The full 10-speed dial is measured even though the two backends alias
+#     differently: svt saturates at preset 9 (speeds 7-10 byte-identical, H-2),
+#     while zenrav1e's dial is still moving at speed 10 (MEASURED on r7900x
+#     2026-09-03: bytes 4559/5640/5896/6628 at speeds 1/4/7/10).  Aliased cells
+#     are free confirmation; assuming the alias structure transfers is not.
+#   * aom-rs is the third backend and is PLANNED-BLOCKED here, not forgotten:
+#     it needs era pins post-#15, and timing/RD of a port that is still landing
+#     byte-identity fixes would measure a moving target.
+# ---------------------------------------------------------------------------
+if [ "$STAGE_BR" = 1 ]; then
+  BR_ALLOW="$OUT/brnat_strata.txt"
+  cat > "$BR_ALLOW" <<'STRATA'
+# 26 strata of svt_doe_pairwise, all at s6.  Filter is by the plan's own
+# `cell` name; a name that does not resolve is a hard error.
+# --- control (the additive baseline every interaction is measured against)
+s6-svt-420
+# --- singles: the main-effect legs the additive prediction needs
+s6-svt-420-qml1.2.10
+s6-svt-420-qml1.4.10
+s6-svt-420-qml1.8.15
+s6-svt-420-shp3
+s6-svt-420-shp7
+s6-svt-420-mtx32
+s6-svt-420-tn0
+s6-svt-420-tn3
+s6-svt-420-tl1.0
+s6-svt-420-tl1.1
+# --- RANK 1: the QM x sharpness cluster, a complete 4x3 factorial with the
+#     singles + control above
+s6-svt-420-qml1.2.10-shp3
+s6-svt-420-qml1.2.10-shp7
+s6-svt-420-qml1.4.10-shp3
+s6-svt-420-qml1.4.10-shp7
+s6-svt-420-qml1.8.15-shp3
+s6-svt-420-qml1.8.15-shp7
+# --- RANK 3: mtx32 x {qml, shp}
+s6-svt-420-qml1.2.10-mtx32
+s6-svt-420-qml1.4.10-mtx32
+s6-svt-420-qml1.8.15-mtx32
+s6-svt-420-shp3-mtx32
+s6-svt-420-shp7-mtx32
+# --- RANK 4: tune x tile
+s6-svt-420-tn0-tl1.0
+s6-svt-420-tn0-tl1.1
+s6-svt-420-tn3-tl1.0
+s6-svt-420-tn3-tl1.1
+STRATA
+  declare_block_filtered avifdoe-svt-brnat-20260903 svt_doe_pairwise "$Q_LADDER9" \
+      "${NATIVE_SOURCES:-/mnt/v/output/avifsvt-subsample-2026-09-01/sources}" 2 \
+      "$BR_ALLOW"
+  declare_block_knobgrid avifdoe-rav-brsdr-20260903 \
+      '{"backend":["zenravif"],"speed":[1,2,3,4,5,6,7,8,9,10]}' \
+      "$Q_FULL29" "$SOURCES"
+  cat <<'BREOF'
+
+Declared the Stage-B remainder into the output dir. NOT launched.
+
+  expected: brnat 7,488  (26 strata x 9 q x 32 images, NATIVE corpus)
+            brsdr 9,280  (10 speeds x 29 q x 32 images, BUDGET corpus)
+            ------------
+            16,768 cells of the ~35,000 remaining envelope (47.9%)
+
+  corpus prefix (workers):
+    brnat  s3://codec-corpus/avif-subsample-2026-09-01/      <-- NATIVE
+    brsdr  s3://codec-corpus/avif-doe-1024-2026-09-01/       <-- BUDGET
+  The two corpora share all 32 filenames by construction and 13 of them are
+  genuinely different pixels, so crossing these prefixes is the silent-garbage
+  hazard avifdoe_score_gapfill.sh's header documents. The declared source_sha
+  is what keeps the two runs disjoint at CellId level.
+
+  brnat needs an image whose zenavif spells `svt_doe_pairwise` (every DOE image
+  does -- it is a Stage-A plan, not a new one).  brsdr needs NO plan at all:
+  "zenravif" is zenavif's DEFAULT backend, so any image with the `avif` feature
+  executes it.  Smoke ONE cell of each anyway -- the stale-image trap has cost
+  this wave 93% of an arm once already.
+
+RUNBOOK -- STAGE (three objects per run, not two; a run with no
+ledger_snapshot.parquet is REFUSED by every worker under ZEN_REQUIRE_SNAPSHOT=1):
+
+  for RUN in avifdoe-svt-brnat-20260903 avifdoe-rav-brsdr-20260903; do
+    aws s3 cp --endpoint-url "$ZEN_S3_ENDPOINT" \
+      $OUT/${RUN}_manifest.json s3://zentrain/jobs/$RUN/manifest.json
+    echo '{"paused":true,"drain":true}' | \
+      aws s3 cp --endpoint-url "$ZEN_S3_ENDPOINT" - s3://zentrain/jobs/$RUN/control.json
+    ./target/release/zenfleet-ctl compact --run "$RUN" --bucket zentrain \
+      --endpoint "$ZEN_S3_ENDPOINT" --upload
+  done
+
+RUNBOOK -- SCORE, AND IT IS DECLARED AT LAUNCH, NOT AFTER.  Three waves have
+launched with zero scoring; the gap-fill loop is parameterised so this is one
+env var, not a fork:
+
+  ZEN_DOE_SFRUN=avifdoe-br-sf-cpu-20260903 \
+  ZEN_DOE_RUNS="avifdoe-svt-brnat-20260903=s3://codec-corpus/avif-subsample-2026-09-01/ \
+                avifdoe-rav-brsdr-20260903=s3://codec-corpus/avif-doe-1024-2026-09-01/" \
+    bash scripts/jobsys/avifdoe_score_gapfill.sh
+
+  Metrics stay ssim2,zensim per the standing user directive (butteraugli dropped).
+
+RUNBOOK -- HOSTS.  r7900x is RESERVED for the uncontended timing instrument
+(scripts/jobsys/avif_speed_instrument.sh) until it writes its COMPLETE marker;
+a fleet worker there would invalidate every encode_ms it is measuring.  Launch
+on tower (household caps: --cpuset-cpus 0-19 --cpu-shares 256 --memory 24g) and
+local (cpuset-capped, >=8 of 32 cores left free) only, then scale onto r7900x.
+BREOF
   exit 0
 fi
 
