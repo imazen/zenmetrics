@@ -21,10 +21,11 @@ tool with the same `--control inrun` instrument — and it is labelled as such.
 
 1. **STABILITY — held, and held EXACTLY.** Arm-set A re-ran `svt_doe_main`
    unchanged at the new pin and reproduced Stage-A's bitstreams **byte-for-byte
-   on every shared cell**. Arm-set B — a *different* plan, written this era —
-   independently reproduced the same bytes on 3,456 speed-4/control cells
-   (vs Stage-A `a1`) and 2,880 speed-6 knob cells (vs Stage-A `a2`). Because the
-   bytes are identical **and the two waves' scorers agree exactly** (§2.5),
+   on 6,912 of 6,912 shared cells**. Arm-set B — a *different* plan, written
+   this era — independently reproduced the same bytes on **3,456 / 3,456**
+   speed-4/control cells (vs Stage-A `a1`) and **2,880 / 2,880** speed-6 knob
+   cells (vs Stage-A `a2`). Because the bytes are identical **and the two waves'
+   scorers agree to exactly 0 on all 6,912** (§2.5),
    every covered Stage-A effect is not merely "within CI" at the new pin — it is
    the *same number*. No statistical test was needed, and none is reported as if
    it were the evidence. Scope is enumerated in §2.2b: 7 of the 16 speed-6 knobs
