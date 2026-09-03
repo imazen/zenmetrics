@@ -31,6 +31,9 @@ import os
 import re
 from collections import defaultdict
 
+# A linear fit this far from 1.0 is not describing the data.
+R2_OK = 0.98
+
 CROP_RE = re.compile(r"\.crop(\d+)\.png$")
 
 
@@ -152,21 +155,53 @@ def main():
                    alpha_ms=alpha, beta_ms_per_px=beta,
                    beta_ms_per_mp=beta * 1e6, r2=r2,
                    px_min=min(xs), px_max=max(xs))
-        # A negative intercept is the LINEAR MODEL FAILING, not a fixed-cost
-        # saving.  Report the power fit alongside and say so.
-        if alpha < 0:
+        # TWO ways the linear model fails, and both must fire the power fit.
+        #   * a NEGATIVE intercept -- the classic tell (per-pixel cost RISING
+        #     with size makes the line dive under the origin); and
+        #   * a poor R^2 with a positive intercept, which is the SAME failure
+        #     wearing a respectable-looking alpha.  MEASURED on the first pass:
+        #     every arm had alpha > 0 and R^2 ran 0.60-0.95, so an alpha<0-only
+        #     test would have reported 20 of 20 arms as clean linear fits and
+        #     shipped an intercept nobody should quote.
+        rec["linear_model_failed"] = alpha < 0 or r2 < R2_OK
+        rec["fail_reason"] = ("negative_intercept" if alpha < 0
+                              else (f"r2<{R2_OK}" if r2 < R2_OK else ""))
+        if rec["linear_model_failed"]:
             pf = powerfit(xs, ys)
-            rec["linear_model_failed"] = True
             if pf:
                 rec["power_c"], rec["power_gamma"], rec["power_r2_log"] = pf
-        else:
-            rec["linear_model_failed"] = False
+        # WHICH failed -- the MODEL, or the POOLING?  A pooled fit over several
+        # sources can look terrible while the model is exactly right, because
+        # beta is a function of CONTENT and pooling averages incompatible
+        # slopes.  MEASURED on pass 1: pooled R^2 ran 0.60-0.95 while the SAME
+        # arms fit per source at R^2 0.989-1.0000 (median 0.999), and beta
+        # spanned 5.4x between two photographs at svt speed 1.  Reporting only
+        # the pooled number would have condemned a model that fits ~perfectly.
+        src_r2 = []
+        src_beta = []
+        for (bk, sp, src), spts in by_arm_src.items():
+            if bk != backend or sp != speed or len(spts) < 5:
+                continue
+            sf = ols([q[0] for q in spts], [q[1] for q in spts])
+            if sf:
+                src_r2.append(sf[2])
+                src_beta.append(sf[1])
+        if src_r2:
+            src_r2.sort()
+            rec["per_source_r2_median"] = src_r2[len(src_r2) // 2]
+            rec["n_source_fits"] = len(src_r2)
+            if src_beta and min(src_beta) > 0:
+                rec["beta_spread_across_sources"] = max(src_beta) / min(src_beta)
+            # The diagnosis the caller actually needs.
+            if rec["linear_model_failed"] and rec["per_source_r2_median"] >= R2_OK:
+                rec["fail_reason"] = "POOLING_NOT_MODEL (per-source fit is clean)"
         rows.append(rec)
 
     out_tsv = os.path.join(a.out_dir, "speed_alpha_beta.tsv")
     cols = ["backend", "speed", "n", "px_min", "px_max", "alpha_ms",
-            "beta_ms_per_mp", "r2", "linear_model_failed", "power_c",
-            "power_gamma", "power_r2_log"]
+            "beta_ms_per_mp", "r2", "per_source_r2_median", "n_source_fits",
+            "beta_spread_across_sources", "linear_model_failed", "fail_reason",
+            "power_c", "power_gamma", "power_r2_log"]
     with open(out_tsv, "w") as fh:
         fh.write("\t".join(cols) + "\n")
         for r in rows:

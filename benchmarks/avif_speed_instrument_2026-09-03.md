@@ -212,20 +212,90 @@ q surface, which is what backend picking actually needs.
 
 ---
 
-## 6. Results
+## 6. Results — FIRST FITS (pass 1, partial: 16 of 32 ladder inputs)
 
-**PENDING — the run is in flight.** This section is deliberately empty rather than
-filled with the discarded first run's numbers. What is already established and
-carried above: the `--no-score` cost/bias measurement (§1.1), the two backends'
-speed/byte curves at 1024² and the alias structures (§3.3), and the zenrav1e content
-spread (47.2 s/MP photo vs 160.9 s/MP screenshot, summed over the 10-speed dial).
+**Scope, stated first.** These come from the 328 flushed rows of S1a pass 1 —
+`1008` and `1442` complete at all 7 rungs, `6006` at its first 3. So: **two photo
+sources**, **one pass** (hence **no drift control yet** — the tool prints
+`NOT MEASURABLE`), and **q-flatness NOT MEASURED** (S1b runs after S1a). Passes 2–3
+and S1c are still in flight.
 
-Outputs will land at `~/speedinstr/out/run2/` on r7900x as
-`s1a_pass{1,2,3}.tsv` + `s1b_pass{1,2,3}.tsv`, with `COMPLETE` as the terminal
-marker, and are copied to `/mnt/v/output/avif-speed-instrument-2026-09-03/` with a
-`_MANIFEST.json` carrying `build_commit`, the binary sha256 and the host block.
+### 6.1 The headline: the α + β·pixels model is RIGHT, and pooling is what breaks
 
----
+| | pooled R² | per-source R² (median) | β spread across 2 sources |
+|---|---|---|---|
+| all 20 arms | **0.597 – 0.951** | **0.989 – 1.0000** | **1.46× – 5.40×** |
+
+A pooled fit that scores 0.60 looks like a failed model. It is not. **The same arm
+fit per source lands at R² 0.999**, and the pooled residual is entirely β varying
+with **content**. The analyzer reports this as
+`POOLING_NOT_MODEL (per-source fit is clean)` on **20 of 20 arms**.
+
+**This is the load-bearing result for the tuning model: a single (backend, speed) β
+is wrong by up to 5.4×, and it is wrong between two PHOTOGRAPHS** — `1008` (general
+photo) vs `1442` (nature photo), both 12 MP, same content class. At svt speed 1 they
+fit β = **15,961.6** and **2,953.5** ms/MP. So the speed model must be
+**feature-conditioned per image**, not a per-(backend, speed) constant — which is
+exactly what backend picking needs, since the question is always "how long will
+*this* image take".
+
+The nonlinearity check comes back clean on the same evidence: the power fits give
+**γ = 0.93–1.09**, i.e. near-linear in pixels, and no arm has a negative intercept.
+Cost is linear in pixels *within* a source.
+
+### 6.2 α and β, both terms, per (backend, speed)
+
+Pooled over the available sources — quote **with** the caveat above, never the β
+alone.
+
+| speed | svt α (ms) | svt β (ms/MP) | zenrav1e α (ms) | zenrav1e β (ms/MP) | β ratio |
+|--:|--:|--:|--:|--:|--:|
+| 1 | 874.53 | 9,514.7 | 345.16 | 35,276.0 | 3.7× |
+| 2 | 424.06 | 4,117.0 | 817.43 | 23,322.6 | 5.7× |
+| 3 | 105.34 | 1,323.0 | 255.80 | 13,968.5 | 10.6× |
+| 4 | 34.75 | 769.0 | 261.84 | 6,480.9 | 8.4× |
+| 5 | 0.29 | 287.3 | 69.48 | 1,511.4 | 5.3× |
+| 6 | 2.33 | 55.0 | 53.85 | 2,101.5 | 38.2× |
+| 7 | 0.52 | **23.35** | 80.49 | **1,509.0** | **64.6×** |
+| 8 | 0.51 | **23.25** | 81.75 | **1,507.4** | 64.8× |
+| 9 | 0.44 | **23.27** | 22.62 | 603.2 | 25.9× |
+| 10 | 0.47 | **23.26** | 14.59 | 328.1 | 14.1× |
+
+**The intercept is not decorative.** At svt speed 1, α = 874.5 ms — at the 64² rung
+(0.004 MP) the slope contributes 39 ms and the intercept 875. A "ms/MP" number alone
+would misprice that cell by ~20×. This is the discipline's α-matters case, measured.
+
+### 6.3 Both aliases confirmed across the whole ladder, not one cell
+
+- **svt speeds 7, 8, 9, 10** fit β = 23.351 / 23.251 / 23.271 / 23.259 ms/MP and
+  α = 0.52 / 0.51 / 0.44 / 0.47. Four independent 17-point regressions landing
+  within **0.4 %** — the preset-9 saturation (H-2) confirmed as a property of the
+  whole size ladder rather than the single cell §3.3 showed.
+- **zenrav1e speeds 7 and 8** fit β = 1509.01 / 1507.40 and α = 80.49 / 81.75 —
+  **0.1 % apart**. The 7/8 alias first seen on `8288` reproduces on photographs.
+  zenrav1e's 9 and 10 remain distinct (603.2, 328.1), so its dial genuinely runs
+  longer than svt's.
+
+### 6.4 Backend picking — what the speed axis already says
+
+At matched *dial position* svt-rs dominates zenrav1e on time by **3.7× to 64.8×**,
+and the gap is widest exactly in the fast-preset region a web pipeline would use.
+Combined with the single-cell RD read (§3.3: at 1024²/s6/q45 svt is also 40 %
+smaller **and** higher zensim), the SDR case for zenrav1e is looking thin — which is
+precisely why the Stage-B `brsdr` arm runs at budget size first, and why a native
+zenrav1e leg is registered as *gated on that result* rather than pre-bought.
+
+⚠ **Dial position is not matched quality.** These ratios are per-speed-index, and
+the two backends map speed to work differently. The quality-matched comparison is
+the RD wave's job, in quality space, not q space.
+
+**Artifacts:** `~/speedinstr/out/run2/` on r7900x (`s1a_pass{1,2,3}.tsv`,
+`s1b_pass{1,2,3}.tsv`, `COMPLETE`), auto-pushed by a chained harvester to
+`s3://zentrain/instruments/avif-speed-2026-09-03/run2/`; S1c to
+`~/speedinstr/out/run3_s1c/` via a chained launcher that waits on run2's marker so
+the two never overlap on the host. Fits reproduce with
+`scripts/jobsys/avif_speed_analyze.py --s1a <pass tsvs> --s1b <probe tsvs>
+--out-dir DIR`.
 
 ## 7. Limitations — stated before any result
 
