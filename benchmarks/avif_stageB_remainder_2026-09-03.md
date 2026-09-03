@@ -224,6 +224,19 @@ Note the **cell** budget — the constraint the brief set — is not close: 16,7
 zenrav1e is genuinely expensive (its speed-1 cell costs 14.99 s on a 0.25 MP
 screenshot).
 
+**G-SCORERATE — the co-equal constraint, measured on the current mix.** The
+registered score ceiling is 50 CPU-h. Measured on the live `dev-brsf` container:
+**2,437 CPU-s over 225 scored cells = 10.8 CPU-s/cell**.
+
+That figure is **native-dominated** — `brnat` (5.05 MP mean) was 46 % filled while
+`brsdr` (1.157 MP mean) was 5 %, so almost every scored cell so far is a native one,
+and score cost scales with pixels. A whole-run projection therefore depends on a
+mix that has not been observed yet, and multiplying by a pixel ratio to guess it is
+exactly the extrapolation this repo forbids. **What is established: the native leg
+alone projects to ~22.5 CPU-h of the 50.** The blended figure is re-measured once
+`brsdr` cells start entering the scorer; if the total crosses 50 CPU-h, the plan's
+own de-scope (§7.3) fires on the score side.
+
 Wall ETAs, work-weighted from live counters rather than from cell counts:
 `brnat` ~48 cells/min → **~1 h**; `brsdr` at 8.47 of 10 cores busy → **~4 h**.
 
