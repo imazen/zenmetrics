@@ -120,6 +120,11 @@ def main():
                          "and compare — they are not the same instrument.")
     ap.add_argument("--parity-check", default=None,
                     help="path to zenavif scripts/rd_gap/bd_arm.py — assert BD-rate agreement")
+    ap.add_argument("--paired-control-run", default=None,
+                    help="run label supplying the deviations=0 control for the PAIRED "
+                         "per-q table when an arm's own run carries none (e.g. a 3-point "
+                         "bd10 probe block). A CROSS-ERA control must be declared as such "
+                         "by the caller; the control's run is recorded in every row.")
     a = ap.parse_args()
     os.makedirs(a.outdir, exist_ok=True)
 
@@ -157,7 +162,8 @@ def main():
                          bytes=t["bytes"][i], qual=t[a.metric][i],
                          esha=t["encode_sha"][i], metrics=t["metrics_present"][i],
                          cls=man.get(img, {}).get("coarse", "?"),
-                         fine=man.get(img, {}).get("content_class", "?")))
+                         fine=man.get(img, {}).get("content_class", "?"),
+                         transform=man.get(img, {}).get("transform", "?")))
     print(f"scored rows: {len(rows)} of {n} cells")
 
     # ---- §7.1(7): alias detection by byte-identity -------------------------
@@ -285,8 +291,92 @@ def main():
             lo, hi = q1q3(v); clo, chi = median_ci(v)
             f.write(f"{sp}\t{k}\t{c}\t{len(v)}\t{np.median(v):.4f}\t{clo:.4f}\t{chi:.4f}\t{lo:.4f}\t{hi:.4f}\n")
 
+    # ---- PAIRED per-(image, q) arm-vs-control read --------------------------
+    # BD-rate needs >= 4 ladder points on BOTH sides (the guard in bd_rate above).
+    # A 3-point probe block (e.g. svt_doe_t1_bd10_transfer, q in {15,45,90}) can
+    # therefore NEVER yield one, and the honest report of such a block is the
+    # paired matched-q read, with BD-rate stated as NOT-MEASURED rather than
+    # manufactured by loosening the guard. This table is emitted for every arm,
+    # so a block that HAS a BD-rate gets both reads and they can be cross-checked.
+    #
+    # The control may live in a different run (a 3-point bd10 block carries no
+    # deviations=0 stratum of its own); --paired-control-run names it. Doing that
+    # across encoder pins is a CROSS-ERA join and must be declared as one by the
+    # caller — this code does not hide it, it records the control's run in
+    # every row.
+    idx = {}
+    for r in rows:
+        idx[(r["run"], r["speed"], r["image"], r["arm"], r["q"])] = r
+    ctl_runs = [a.paired_control_run] if a.paired_control_run else []
+    paired = []
+    for r in rows:
+        devs = [d for d in (r["arm"] or "").split("-")[3:] if d]
+        if len(devs) != 1:
+            continue
+        ctl_arm = f"s{r['speed']}-svt-420"
+        for crun in [r["run"]] + ctl_runs:
+            c = idx.get((crun, r["speed"], r["image"], ctl_arm, r["q"]))
+            if c is not None:
+                break
+        if c is None or not c["bytes"]:
+            continue
+        dq = r["qual"] - c["qual"]
+        db = 100.0 * (r["bytes"] - c["bytes"]) / c["bytes"]
+        if dq > 0 and db <= 0:
+            verdict = "DOMINATES"
+        elif dq < 0 and db >= 0:
+            verdict = "DOMINATED"
+        else:
+            verdict = "TRADE"
+        paired.append(dict(run=r["run"], ctl_run=crun, speed=r["speed"], image=r["image"],
+                           knob=devs[0], q=r["q"], bytes_arm=r["bytes"], bytes_ctl=c["bytes"],
+                           d_bytes_pct=db, qual_arm=r["qual"], qual_ctl=c["qual"],
+                           d_qual=dq, verdict=verdict, cls=r["cls"],
+                           transform=r["transform"]))
+    with open(f"{a.outdir}/paired_per_q.tsv", "w") as f:
+        # `transform` is load-bearing, not decoration: on this corpus 19 of 32
+        # images are byte-identical passthroughs between the native and 1024²
+        # builds, so a cross-SIZE question has n = 13 (`crop-native`), not 32
+        # (avif_hdr_arm_plan_2026-09-02.md §10.4a registered restriction).
+        f.write("run\tctl_run\tspeed\tknob\timage\tq\tbytes_arm\tbytes_ctl\td_bytes_pct"
+                f"\t{a.metric}_arm\t{a.metric}_ctl\td_qual\tverdict\tclass\ttransform\n")
+        for r_ in sorted(paired, key=lambda x: (x["run"], x["knob"], x["speed"], x["image"], x["q"])):
+            f.write(f"{r_['run']}\t{r_['ctl_run']}\t{r_['speed']}\t{r_['knob']}\t{r_['image']}"
+                    f"\t{r_['q']}\t{r_['bytes_arm']}\t{r_['bytes_ctl']}\t{r_['d_bytes_pct']:.4f}"
+                    f"\t{r_['qual_arm']:.6f}\t{r_['qual_ctl']:.6f}\t{r_['d_qual']:.6f}"
+                    f"\t{r_['verdict']}\t{r_['cls']}\t{r_['transform']}\n")
+    byknob = collections.defaultdict(list)
+    for r_ in paired:
+        byknob[(r_["run"], r_["speed"], r_["knob"], r_["q"])].append(r_)
+    with open(f"{a.outdir}/paired_summary.tsv", "w") as f:
+        f.write("run\tspeed\tknob\tq\tn\tmedian_d_bytes_pct\tci_lo\tci_hi"
+                "\tmedian_d_qual\tq_ci_lo\tq_ci_hi\tn_dominates\tn_dominated\tn_trade\n")
+        for k, v in sorted(byknob.items()):
+            db = [x["d_bytes_pct"] for x in v]; dq = [x["d_qual"] for x in v]
+            blo, bhi = median_ci(db); qlo, qhi = median_ci(dq)
+            f.write(f"{k[0]}\t{k[1]}\t{k[2]}\t{k[3]}\t{len(v)}\t{np.median(db):.4f}"
+                    f"\t{blo:.4f}\t{bhi:.4f}\t{np.median(dq):.4f}\t{qlo:.4f}\t{qhi:.4f}"
+                    f"\t{sum(1 for x in v if x['verdict']=='DOMINATES')}"
+                    f"\t{sum(1 for x in v if x['verdict']=='DOMINATED')}"
+                    f"\t{sum(1 for x in v if x['verdict']=='TRADE')}\n")
+    bytf = collections.defaultdict(list)
+    for r_ in paired:
+        bytf[(r_["run"], r_["speed"], r_["knob"], r_["q"], r_["transform"])].append(r_)
+    with open(f"{a.outdir}/paired_summary_by_transform.tsv", "w") as f:
+        f.write("run\tspeed\tknob\tq\ttransform\tn_images\tmedian_d_bytes_pct\tci_lo\tci_hi"
+                "\tmedian_d_qual\tq_ci_lo\tq_ci_hi\tn_dominates\tn_dominated\tn_trade\n")
+        for k, v in sorted(bytf.items()):
+            db = [x["d_bytes_pct"] for x in v]; dq = [x["d_qual"] for x in v]
+            blo, bhi = median_ci(db); qlo, qhi = median_ci(dq)
+            f.write(f"{k[0]}\t{k[1]}\t{k[2]}\t{k[3]}\t{k[4]}\t{len(v)}\t{np.median(db):.4f}"
+                    f"\t{blo:.4f}\t{bhi:.4f}\t{np.median(dq):.4f}\t{qlo:.4f}\t{qhi:.4f}"
+                    f"\t{sum(1 for x in v if x['verdict']=='DOMINATES')}"
+                    f"\t{sum(1 for x in v if x['verdict']=='DOMINATED')}"
+                    f"\t{sum(1 for x in v if x['verdict']=='TRADE')}\n")
+    print(f"paired per-q rows: {len(paired)}")
+
     json.dump(dict(scored_rows=len(rows), bd_rows=len(bd), ctl_source=dict(ctl_source),
-                   n_main=len(main), n_pairs=len(bypair)),
+                   n_main=len(main), n_pairs=len(bypair), paired_rows=len(paired)),
               open(f"{a.outdir}/_summary.json", "w"), indent=1)
     print(f"wrote tables to {a.outdir}")
 
