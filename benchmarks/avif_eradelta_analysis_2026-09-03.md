@@ -36,16 +36,21 @@ tool with the same `--control inrun` instrument — and it is labelled as such.
    plot + screenshot + scan**. At speeds 4 and 6 it is **0/288 and 0/288** —
    reproducing the dossier's "dead at preset ≤ 7" on a completely different
    instrument than the port-level probe that found the preset-9 edge.
-3. **`c1` supersedes `t1d` everywhere, and the corruption was worse than a
-   quarter of the block.** 72 of 96 cells reproduce byte-identically; **24
-   differ**, on exactly the 8 images the multi-tile predicate selects — zero
-   false positives, zero false negatives against the mechanism. But T1-d's
-   registered n for the cross-size question is **13 images, not 32**, and **8 of
-   those 13 (61.5 %) are the corrupt ones**. The old block's answer rested on 5
-   clean images out of 13.
-4. **What did NOT move ≥ 1 pp:** nothing, because nothing moved at all on the
-   replicated axis. The ≥ 1 pp movement question is answered `0.0000 pp` on
-   every replicated cell, by construction.
+3. **`c1` supersedes `t1d` everywhere, and the answer INVERTS.** 72 of 96 cells
+   reproduce byte-identically; **24 differ**, on exactly the 8 images the
+   multi-tile predicate selects — zero false positives, zero false negatives.
+   T1-d's registered n for the cross-size question is **13 images, not 32**, and
+   **8 of those 13 (61.5 %) are the corrupt ones**. On the clean read, at the
+   registered n = 13: q45 is **−0.69 % bytes for +0.244 ssim2, and bd10
+   DOMINATES its 8-bit twin on 10 of 13 images**; q90 is +18.0 % bytes for
+   +2.00 ssim2. The superseded block reported median Δssim2 **−104.80** at q90
+   with 8 of 13 DOMINATED. **A BD-rate is NOT MEASURED for this block in either
+   era** — a 3-point ladder cannot satisfy the BD-rate owner's ≥ 4-point guard,
+   and the guard was not loosened to produce one.
+4. **What did NOT move ≥ 1 pp:** nothing on the replicated axis — the ≥ 1 pp
+   movement question is answered `0.0000 pp` there, by construction, not by a
+   test. The things that DID move are the two axes that had no prior value:
+   speed 7 (new) and the bd10-native block (previously wrong).
 
 ---
 
@@ -342,6 +347,33 @@ same q, same paired read. This is the size of the error that was in the record:
 
 The pre-fix rows are shown **only** to size the correction; they are superseded
 and must not be cited as measurements of anything.
+
+Three things this table settles:
+
+- **The error was in the pixels, not the rate.** Δbytes is essentially unchanged
+  pre-to-post on every one of the 24 cells (e.g. `1442` q90: +66.29 % → +66.30 %).
+  The broken encoder produced a normally-sized bitstream containing wrong pixels
+  — which is exactly why a byte-count sanity check would never have caught it,
+  and why the quality column is where the damage shows.
+- **The verdict flips on every affected cell.** All 8 images go
+  `DOMINATED → TRADE` at q90 and `TRADE → DOMINATES` at q45. A reader of the
+  pre-fix block would have concluded that 10-bit encoding is *catastrophically*
+  worse at native size (median Δssim2 **−104.80** at q90 over the 13 images);
+  the clean read says **+2.00**.
+- **It independently reproduces the fix's own verification.** `1008` at q90
+  reads **+4.182** here — the same number `avif_hdr_arm_plan_2026-09-02.md`
+  §10.4f recorded from the local recon gate ("*bd10 now beats its 8-bit twin by
+  +4.18*"), arrived at through a completely different path: fleet encode, fleet
+  scoring, this analysis. Two independent instruments, same value to three
+  decimals.
+
+**Instrument note for this table.** The pre-fix (`t1d`) scores come from the
+`avifdoe-svt-t1-sf-cpu-20260902` score run and the post-fix (`c1`) scores from
+`avifdoe-svt-eradelta-sf-cpu-20260903` — different scoring images. That is safe
+for `ssim2` specifically: this lane measured `ssim2` to be **bit-identical
+across four different builds** on identical bitstreams (§2.5 here, and §1.2b of
+the HDR companion doc). It would **not** be safe for `zensim`, which is why no
+`zensim` number appears in this document.
 
 **Control provenance, declared rather than buried.** The 8-bit control is
 `avifdoe-svt-ag-20260901`'s `s4-svt-420` stratum — the exact shape match
