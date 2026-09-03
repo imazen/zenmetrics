@@ -319,6 +319,41 @@ NOT changed mid-flight** — reordering a de-scope ladder after seeing which arm
 expensive is exactly what pre-registration exists to prevent — but the ladder's
 order should be rebuilt from measured per-axis cost for the next wave.
 
+### 4.4 RESOLUTION — clean rate measured, de-scope REVERTED, full 29-q grid restored
+
+With both workers on the serial per-cell path (no timeouts on either host), a paired
+two-host cgroup-CPU / ledger sample over **429 s and 90 cells**:
+
+| | CPU-s/cell | full 9,280-cell grid | wave total vs 46.8 |
+|---|--:|--:|---|
+| contaminated (concurrent + 1800 s kill) | 15.42 → 28.1 | 57–72 CPU-h | **FAIL** |
+| **clean (serial, no waste)** | **9.52** | **24.6 CPU-h** | **28.6 → PASS, 39 % margin** |
+
+**So the de-scope was never warranted; it was fired on recomputation.** The shrink
+was **REVERTED** — `manifest_PRE_DESCOPE_29q.json` restored to `manifest.json`,
+verified at 4,425,398 B — and the arm keeps its full 29-point ladder, which is what
+makes quality-space matching against A0R-svt precise. Nothing was lost either way:
+no ledger row, no completed cell, no worker.
+
+**But serial is not the shipping configuration, and the same sample shows why.**
+Local and tower each burned **exactly 1.0 core** for 429 s — `ZEN_CHUNK_WALL_SEC=0`
+removes the waste by removing the concurrency. Projected wall time on that path:
+**~10.2 h**. The correct configuration keeps concurrency and simply gives chunks
+time to finish:
+
+**`ZEN_PASS_TIMEOUT=7200` with the default concurrent chunker** — MEASURED after
+relaunch: local **902 %** and tower **905 %** CPU (~18 cores), zero timeouts, full
+29-q manifest. At 9.52 CPU-s/cell that is ~113 cells/min, i.e. **~1.1 h** for the
+remaining grid instead of 10.2.
+
+**The generalisable rule, since this cost three relaunches to find:** zenfleet's
+concurrent chunker sizes work against an svt-calibrated cost model and the entrypoint
+kills a pass at 1800 s by default. For any backend materially slower than svt
+(zenrav1e here; aom-rs next), **raise `ZEN_PASS_TIMEOUT` — do not reach for
+`ZEN_CHUNK_WALL_SEC=0`.** The serial flag is the right *diagnostic* (it isolates
+intrinsic cost from recomputation by making every cell flush) and the wrong
+*production* setting (it throws away 9× the throughput).
+
 ### 4.1 Pre-registered de-scope (fires on G-RATE only)
 
 In this fixed order, re-checking after each step:
