@@ -607,8 +607,16 @@ Data pointer with paths, shas and the exact command chain:
 
 Tools (all in `scripts/jobsys/`, all committed):
 `avifdoe_score_gapfill.sh` → `avifdoe_harvest.py` →
-`avifdoe_stagea_analyze.py --control inrun` (BD-rate + the paired read) →
-`avifdoe_era_compare.py` (cross-era identity + effect stability).
+`avifdoe_stagea_analyze.py --control inrun --runs <one run>` (BD-rate + the
+paired matched-q read) → `avifdoe_era_compare.py` (cross-era identity,
+scorer-vs-encoder drift, effect stability).
+
+**`--runs` is load-bearing, not tidiness.** Arm-sets A and B share 3,456 cell
+identities; analysing them from one parquet without it would enter each of
+those images twice, with the same BD-rate, doubling n and narrowing the
+percentile bootstrap on values that carry no extra information. A `--paired-
+control-run` run (here `ag`) is loaded but contributes controls only, which is
+what lets arm-set C difference against a control that lives in another run.
 BD-rate parity against `zenavif/scripts/rd_gap/bd_arm.py` is asserted on every
 run (`--parity-check`), and was **exact (max |Δ| 0.0)** for this wave.
 
