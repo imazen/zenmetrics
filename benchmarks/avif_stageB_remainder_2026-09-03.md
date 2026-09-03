@@ -474,6 +474,32 @@ quotable to three figures.
 CPU-efficient configuration at either end of it, so it is the right choice under the
 uncertainty. The de-scope stays reverted because the full grid fits at both ends.
 
+### 4.7 Monitor the LIVENESS signal, not the lumpy counter
+
+The first progress monitor armed for `brsdr` alerted on `distinct_done` not moving
+for 30 minutes. It fired — **as a false positive**. Under `ZEN_PASS_TIMEOUT=7200` a
+legitimate pass can exceed 30 minutes before it flushes, so the stall bar was
+shorter than the interval it was policing. A monitor that cries wolf on healthy
+behaviour is its own failure mode: the next real stall arrives looking identical to
+the last three false ones.
+
+**What settled it was a direct liveness test**, and it is the one to monitor:
+`zenmetrics jobexec` accumulating CPU proportional to elapsed time. MEASURED at the
+moment of the false alarm: `brsdr1`'s encoder had **138.07 s of CPU over 2:18
+elapsed** (~100 % of a core on a single cell) and `brsdr0` was 2 s into a fresh one,
+with **zero** `TIMED OUT` lines since the relaunch. Compare the genuinely broken
+state 40 minutes earlier: `zenfleet-worker` at **0.08 s** of CPU after 9 minutes.
+
+The replacement monitor alerts on (a) any `TIMED OUT` in the last 30 min and (b) no
+encoder burning CPU for 20 min, and reports progress when the counter does move.
+Both are direct; neither depends on flush granularity.
+
+**Also worth carrying: cell cost varies enormously within this arm.** A single cell
+held one core for over 2 minutes while the arm's mean is ~9.5 s — consistent with
+the companion instrument's measured 24.3× content spread and its 3.7×-69× speed-dial
+spread. Any per-cell timeout or chunk sizing calibrated on a mean will be wrong for
+this backend.
+
 **The generalisable rule:** for a memory-bandwidth-bound codec, **scale workers
 out, not concurrency up** — and never measure a fleet rate from blob counts, ledger
 file counts, or the gap-fill's DONE line, all three of which lag or dedupe. Use
