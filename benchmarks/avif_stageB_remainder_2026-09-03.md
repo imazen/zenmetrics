@@ -240,6 +240,34 @@ own de-scope (§7.3) fires on the score side.
 Wall ETAs, work-weighted from live counters rather than from cell counts:
 `brnat` ~48 cells/min → **~1 h**; `brsdr` at 8.47 of 10 cores busy → **~4 h**.
 
+### 4.2 Completion — `brnat` is DONE, and a correction to how fill was being read
+
+**`avifdoe-svt-brnat-20260903`: COMPLETE — 7,488 / 7,488 DONE cells, 0 failed**
+(2026-09-03T19:38Z, ~66 min wall on tower under household caps). The worker then
+drained and began the restart loop described in §6; it was stopped and the box
+repointed at `brsdr`.
+
+**⛔ A blob count is NOT a cell count, and this lane read it as one for the first
+hour.** Blobs are **content-addressed**, so any two cells whose encoder output is
+byte-identical collapse onto **one** blob. `brnat` finished at **7,488 cells but
+only 5,817 distinct blobs** — **1,671 cells (22.3 %) produced bytes another cell
+had already produced.** Progress reported off the blob prefix therefore reads
+~78 % at completion and would never reach 100 %, which is exactly the shape of a
+stall. B-6 saw the same thing and said so (§17.1: "23,489 distinct bitstreams" for
+25,056 declared cells); this lane rediscovered it the slow way.
+
+**Read fill from the ledger**, i.e. the `pairs: N DONE cells` line the gap-fill loop
+emits every round, never from `aws s3 ls .../blobs/ | wc -l`.
+
+**The dedup rate is also a result, not just an accounting note.** 22.3 % of this
+block's cells are byte-identical to some other cell in it, and the block is 26
+strata over 32 images at 9 q. A stratum whose bytes equal the control's on an image
+has **zero** effect there — so that 22.3 % is an upper bound on how much of the
+declared grid can carry any interaction signal at all, and the per-stratum
+breakdown is a cheap first cut for the analysis lane (it needs no scores). Same
+caveat as always: byte-identity is measured per cell, so it must be counted per
+(stratum, image), never pooled.
+
 ### 4.1 Pre-registered de-scope (fires on G-RATE only)
 
 In this fixed order, re-checking after each step:
