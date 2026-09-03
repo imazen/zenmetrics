@@ -228,7 +228,27 @@ Three things worth stating precisely:
 
 ### 3.1 Effect size
 
-<!--TABLE:SCM3EFFECT-->
+| content class | images where `scm3` fires | median BD-rate % | min | max |
+|---|--:|--:|--:|--:|
+| plot | 5 | -66.93 | -85.44 | -18.57 |
+| scan | 2 | -87.53 | -88.86 | -86.20 |
+| screenshot | 3 | -25.99 | -33.23 | -24.46 |
+| **all firing** | **10** | **-50.08** | **-88.86** | **-18.57** |
+
+| image | class | `scm3` BD-rate % | `tn3` BD-rate % |
+|---|--:|--:|--:|
+| `6018.scale2320x3408.png` | scan | -88.86 | — |
+| `6006.scale2320x3408.png` | scan | -86.20 | -85.57 |
+| `7050.scale1024x1024.png` | plot | -85.44 | -85.83 |
+| `7052.scale1024x1024.png` | plot | -82.54 | -84.14 |
+| `7004.scale1024x1024.png` | plot | -66.93 | -68.75 |
+| `8414.scale1280x800.png` | screenshot | -33.23 | -38.44 |
+| `8434.scale414x896.png` | screenshot | -25.99 | -35.09 |
+| `8288.scale375x667.png` | screenshot | -24.46 | -30.53 |
+| `7042.scale1024x1024.png` | plot | -23.19 | -13.73 |
+| `7058.scale1024x1024.png` | plot | -18.57 | -26.80 |
+
+On the 22 images where `scm3` is inert, `tn3` at speed 7 still gives a median **-10.88 %** (n = 22) from its other eight aliased fields.
 
 ### 3.1b Where the BD-rate comes from — the paired matched-q bytes
 
@@ -236,16 +256,45 @@ A −50 % median BD-rate is large enough that it deserves the underlying bytes o
 the page rather than only the integral. `scm3` vs its own speed-7 control, on
 three of the firing images:
 
-<!--TABLE:SCM3BYTES-->
+| image (class) | q | bytes with `scm3` | bytes control | Δ bytes % | ssim2 `scm3` | ssim2 control | Δ ssim2 | verdict |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| `6018` (scan) | 5 | 28,925 | 41,984 | -31.10 | 73.419 | 12.857 | +60.562 | DOMINATES |
+| `6018` (scan) | 15 | 29,054 | 87,219 | -66.69 | 92.776 | 38.098 | +54.678 | DOMINATES |
+| `6018` (scan) | 25 | 29,029 | 128,913 | -77.48 | 96.300 | 56.036 | +40.263 | DOMINATES |
+| `6018` (scan) | 35 | 29,124 | 174,528 | -83.31 | 96.369 | 69.908 | +26.460 | DOMINATES |
+| `6018` (scan) | 45 | 29,183 | 217,741 | -86.60 | 96.706 | 79.964 | +16.742 | DOMINATES |
+| `6018` (scan) | 60 | 29,310 | 285,571 | -89.74 | 97.680 | 88.347 | +9.333 | DOMINATES |
+| `6018` (scan) | 76 | 29,388 | 340,061 | -91.36 | 98.264 | 92.503 | +5.760 | DOMINATES |
+| `6018` (scan) | 90 | 29,536 | 434,757 | -93.21 | 100.000 | 94.636 | +5.364 | DOMINATES |
+| `6018` (scan) | 96 | 29,625 | 511,253 | -94.21 | 100.000 | 95.305 | +4.695 | DOMINATES |
+| `7050` (plot) | 5 | 35,562 | 28,427 | +25.10 | 50.043 | -7.684 | +57.727 | TRADE |
+| `7050` (plot) | 15 | 35,770 | 51,002 | -29.87 | 58.737 | 21.760 | +36.977 | DOMINATES |
+| `7050` (plot) | 25 | 36,079 | 101,720 | -64.53 | 65.186 | 37.898 | +27.288 | DOMINATES |
+| `7050` (plot) | 35 | 36,625 | 176,390 | -79.24 | 73.968 | 55.488 | +18.480 | DOMINATES |
+| `7050` (plot) | 45 | 37,388 | 234,286 | -84.04 | 78.790 | 66.309 | +12.481 | DOMINATES |
+| `7050` (plot) | 60 | 38,716 | 335,430 | -88.46 | 82.425 | 77.423 | +5.002 | DOMINATES |
+| `7050` (plot) | 76 | 40,205 | 423,574 | -90.51 | 84.036 | 82.035 | +2.001 | DOMINATES |
+| `7050` (plot) | 90 | 44,359 | 542,873 | -91.83 | 83.522 | 83.691 | -0.170 | TRADE |
+| `7050` (plot) | 96 | 53,311 | 650,943 | -91.81 | 84.568 | 84.261 | +0.307 | DOMINATES |
+| `8414` (screenshot) | 5 | 26,606 | 19,617 | +35.63 | -7.580 | -19.951 | +12.371 | TRADE |
+| `8414` (screenshot) | 15 | 38,729 | 40,287 | -3.87 | 24.208 | 10.380 | +13.827 | DOMINATES |
+| `8414` (screenshot) | 25 | 43,734 | 63,592 | -31.23 | 36.451 | 30.110 | +6.341 | DOMINATES |
+| `8414` (screenshot) | 35 | 58,857 | 96,178 | -38.80 | 50.459 | 48.145 | +2.314 | DOMINATES |
+| `8414` (screenshot) | 45 | 81,307 | 129,816 | -37.37 | 62.260 | 59.249 | +3.012 | DOMINATES |
+| `8414` (screenshot) | 60 | 106,760 | 189,911 | -43.78 | 71.814 | 70.505 | +1.309 | DOMINATES |
+| `8414` (screenshot) | 76 | 149,937 | 249,802 | -39.98 | 77.913 | 75.085 | +2.828 | DOMINATES |
+| `8414` (screenshot) | 90 | 224,278 | 358,302 | -37.41 | 79.031 | 75.740 | +3.291 | DOMINATES |
+| `8414` (screenshot) | 96 | 279,514 | 430,396 | -35.06 | 79.470 | 76.101 | +3.369 | DOMINATES |
 
 Two things this makes visible that the BD-rate alone does not. **The win is not
 uniform in q** — at the very lowest q, palette/IntraBC coding costs *more* bytes
 (`7050` +25.1 %, `8414` +35.6 % at q5) while buying a great deal of quality
 (+57.7 and +12.4 ssim2), which is a trade the BD-rate integration prices
 correctly and a per-q byte comparison would misread. And **the top of the
-ladder is where it pays**: on `6018` (a scanned document) q90 goes 435 KB →
-29.5 KB at ssim2 100.000 vs 94.636 — the screen-content tools are coding the
-page essentially exactly at a fourteenth of the rate.
+ladder is where it pays**: on `6018` (a scanned document) q90 goes 434,757 B →
+29,536 B (**14.7×**) while ssim2 goes 94.636 → **100.000** — the screen-content
+tools are coding the page essentially exactly at a fifteenth of the rate, and
+`scm3` DOMINATES its control on all nine of that image's ladder points.
 
 ### 3.2 The single-cell prior, and what it is not
 
@@ -272,7 +321,17 @@ Stage-A never crossed a knob with speed 7 (preset 9); arm-set B does. These are
 **first measurements, not stability checks**, and nothing in this section is
 compared against a Stage-A number.
 
-<!--TABLE:S7EFFECTS-->
+| knob | n | median BD-rate % | 95% CI | IQR | mean | images improved | min | max |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| `qml1.2.10` | 32 | -4.8889 | [-6.0343, -2.9078] | 4.5370 | -4.3309 | 29/32 | -14.1627 | 12.8881 |
+| `qml1.4.10` | 32 | -4.0875 | [-5.1068, -2.5737] | 3.5100 | -3.7512 | 29/32 | -13.9825 | 9.7750 |
+| `scm3` | 32 | 0.0000 | [0.0000, 0.0000] | 23.5062 | -16.7317 | 10/32 | -88.8574 | 0.0000 |
+| `shp3` | 32 | 2.7838 | [2.1217, 3.1061] | 1.6826 | 2.5975 | 3/32 | -4.3885 | 7.2652 |
+| `shp7` | 32 | 9.1038 | [7.0338, 9.5592] | 4.5769 | 8.1177 | 2/32 | -8.4281 | 16.6559 |
+| `tn3` | 31 | -13.7313 | [-18.5620, -10.1941] | 18.9363 | -21.4314 | 28/31 | -85.8321 | 12.3397 |
+| `vbst1.2.5` | 32 | 0.0026 | [-2.2622, 1.9353] | 8.5979 | 1.8549 | 12/32 | -12.3601 | 44.4831 |
+| `vbst1.3.5` | 32 | 0.0758 | [-1.4988, 3.8141] | 10.8566 | 3.4660 | 11/32 | -12.6760 | 51.7889 |
+| `vbst1.3.7` | 32 | -1.4601 | [-2.2943, -0.0430] | 3.1140 | -1.4887 | 22/32 | -9.9487 | 12.0725 |
 
 **Why n is 30–32 and not always 32.** Two scanned documents — `6006` and
 `6018` — have an RD ladder whose Pareto frontier collapses to **2 points** at
@@ -288,7 +347,17 @@ this wave's `b1` (30 images, same 30). At speed 7 the saturation disappears
 two).** B-5 fires when a knob's |median BD-rate| ≥ 1 % at two presets *with
 opposite signs*. Adding speed 7 as a third point:
 
-<!--TABLE:B5-->
+| knob | s4 (p4) | s6 (p7) | s7 (p9) | presets with \|median\| ≥ 1 % | B-5 fires? |
+|---|--:|--:|--:|--:|--:|
+| `qml1.2.10` | -0.29 | -2.59 | -4.89 | 2 | no |
+| `qml1.4.10` | -0.42 | -2.03 | -4.09 | 2 | no |
+| `scm3` | +0.00 | +0.00 | +0.00 | 0 | no |
+| `shp3` | +0.91 | +1.65 | +2.78 | 2 | no |
+| `shp7` | +5.47 | +7.31 | +9.10 | 3 | no |
+| `tn3` | -7.03 | -4.48 | -13.73 | 3 | no |
+| `vbst1.2.5` | +0.38 | +0.01 | +0.00 | 0 | no |
+| `vbst1.3.5` | +0.78 | +0.32 | +0.08 | 0 | no |
+| `vbst1.3.7` | -0.97 | -1.39 | -1.46 | 2 | no |
 
 **B-5 still does not fire** — and the reason is now more interesting than
 "no flip found". Every knob whose effect is large enough to test is **monotone
