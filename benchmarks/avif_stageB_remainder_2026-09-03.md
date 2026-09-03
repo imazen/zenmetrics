@@ -16,7 +16,12 @@ their ranking), [`avif_doe_stageB6_analysis_2026-09-02.md`](avif_doe_stageB6_ana
 
 ## 0. TL;DR
 
-1. **Two runs, 16,768 cells, MEASURED 28.6 CPU-h encode** — against a remaining
+0. **FINAL SHAPE (after the §4.8 de-scope): `brnat` 7,488 cells COMPLETE + `brsdr`
+   de-scoped to the 9-q subset (2,880 declared, ~2,035 extra 29-q cells already
+   encoded and retained) = ~10,400 cells, MEASURED ~37.6 CPU-h of the 46.8
+   remaining.** The bullets below record the wave as *registered*; §4.8 records why
+   the `brsdr` grid was cut and what it cost.
+1. **As registered: two runs, 16,768 cells, then-estimated 28.6 CPU-h encode** — against a remaining
    envelope of **~34,944 cells / 46.8 CPU-h** (60,000 / 60 registered, minus B-6's
    25,056 / 13.2). The envelope is a **ceiling, not a target**: the balance is
    deliberately unspent and held for the gated follow-ons in §5, because the arms
