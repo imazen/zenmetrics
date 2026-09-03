@@ -47,12 +47,16 @@ pins separately, when its arms declare (§7).
    where scm3 is still dead — so it isn't contaminated, but it is untested at
    exactly the preset band where its own aliased field just showed new life
    (§5).
-6. **bd10 × native/large is now a clean, newly-open axis, not a re-test of
-   tainted data.** Stage A's only bd10 data is on 1024² crops (§6) — below
-   both tile-forcing thresholds (width>4096, sb-area>4096×2304) by
-   construction — so it was never exposed to the #18 bug and needs no
-   re-running. Native-size bd10 has *no* prior data at all (Stage-A
-   Limitations #8), which is exactly the axis the fix opens up.
+6. **bd10 × native/large is a mixed case, and one part of it IS tainted.**
+   Stage A's A1 bd10 data is on 1024² crops (§6.1) — below both tile-forcing
+   thresholds by construction, never exposed to the #18 bug, no re-run
+   needed. But a *separate*, already-existing native-size bd10 arm
+   (`svt_doe_t1_bd10_transfer`, run as `avifdoe-svt-t1d-20260902`) **was
+   found mid-audit to have encoded 2026-09-02 09:57–10:16 — hours before
+   either #18 fix landed.** 24 of its 96 cells (8 of 32 native images force
+   multi-tiling) ran the exact broken configuration. Re-declared fresh in
+   this wave (§6.0, §7 of the companion sweep doc) — no new code needed, the
+   plan already existed.
 7. **The aom prerequisite (zenav1-aom#15) is OPEN but far more advanced than
    this lane's brief assumed**, and it is being actively worked by the
    concurrent lane inside zenavif itself, right now (§7). Registered as a
@@ -280,6 +284,46 @@ Priority order, evidence-derived (not generic):
 ---
 
 ## 6. Newly-valid axes
+
+### 6.0 ⛔ FOUND MID-AUDIT: `avifdoe-svt-t1d-20260902` already ran bd10-native on
+the pre-fix binary — 24/96 cells are structurally corrupted, must re-run
+
+Before writing any new code for a "bd10 × native" arm, checked whether one
+already existed — it does. `SweepAxes::svt_doe_t1_bd10_transfer()`
+(`zenavif` `bcd7978`, 2026-09-02 08:30) is **exactly** the arm-set §6.1 below
+describes: bd10 on the native corpus, speed 4, 3-point probe ladder
+(`q∈{15,45,90}`), "does −1.02% survive native resolution". It was already
+declared and run as `avifdoe-svt-t1d-20260902` — **complete, 96/96, encoded
+2026-09-02 09:57:01–10:16:37** (`zenfleet-ctl report`, blob upload
+timestamps).
+
+**That is 4.5–5.7 hours before `3121b6a8` (14:49, #18 round 1) and nearly 7
+hours before `2ca060f4`/`56179fcb` (15:37/15:46, round 2 + pin bump).** Cross-
+referenced the manifest against the corpus dimensions: **8 of the 32 native
+images force multi-tiling** (`width>4096` or `sb-aligned area>4096×2304`) —
+the six 3000×4000-class 12 MP portraits/landscapes plus `6602`/`6604` at
+~16 MP — giving **24 of 96 T1-D cells** that ran the exact broken
+configuration §10.4f of `avif_hdr_arm_plan_2026-09-02.md` measured as
+producing scores of **−57 to −144** where the fix gives **+75 to +91**. These
+24 cells are not noisy, they are **wrong pixels**, per the zero-tolerance
+image-correctness rule — the existing `avifdoe-svt-t1d-20260902` run's
+"does bd10 survive native size" answer cannot be trusted as it stands.
+
+**Action, not just a flag**: the whole 96-cell block is cheap to redo (single
+speed, 3 q-points, native corpus — no new code, the plan already exists), so
+this lane re-declares it fresh rather than trying to surgically patch 24
+cells (§7 of the companion sweep doc). The other 72 cells (24 single-tile
+images) are outside the bug's blast radius regardless of pin and are expected
+to reproduce byte-identical — that reproduction is itself a check on this
+audit's own §2.1 claim that only 2 of 33 commits touch anything AVIF-
+reachable.
+
+**`svt_doe_t1_bd10_ladder` (budget corpus, COMPLETE 2016/2016) and
+`svt_doe_t1_bd10_knobs` (budget corpus, declared 4,320, 0 done — never ran)
+are unaffected** — every budget-corpus cell is a 1024² crop, provably below
+both tile-forcing thresholds (§6.1 below), regardless of which pin encoded
+it. `svt_doe_t1_bd10_knobs` is a genuine pre-existing gap (never run) but is
+not this era's problem — flagged, not adopted into this wave's scope.
 
 ### 6.1 bd10 × native/large — clean, not a re-test
 
