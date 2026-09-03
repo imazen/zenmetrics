@@ -476,6 +476,26 @@ struct SweepArgs {
     /// metric. Defaults to `zensim` if omitted.
     #[arg(long = "metric", value_enum, action = ArgAction::Append)]
     metrics: Vec<MetricKind>,
+    /// Encode and time every cell but score NOTHING: the emitted TSV carries
+    /// `encoded_bytes` + `encode_ms` and no `score_*` column.
+    ///
+    /// This exists for the TIMING instrument (`scripts/jobsys/
+    /// avif_speed_instrument.sh`, plan doc `avif_doe_plan_2026-09-01.md`
+    /// section 3.6). Scoring between timed encodes is not free and it is not
+    /// neutral: a multi-threaded perceptual metric run on every core between
+    /// two single-threaded encodes leaves the package in a different
+    /// boost/thermal state than the encode it precedes, which is a systematic
+    /// perturbation of exactly the quantity being measured. MEASURED on the
+    /// first launch of that instrument (r7900x, 2026-09-03): 23 minutes of
+    /// wall clock carried 15.0 s of `encode_ms` -- scoring and its per-cell
+    /// overhead were ~99% of the run.
+    ///
+    /// Conflicts with `--metric` rather than silently winning over it: an
+    /// invocation that asks for both is a mistake, and a mistake that
+    /// silently drops the scores would be indistinguishable from a scorer
+    /// that failed on every cell.
+    #[arg(long, conflicts_with = "metrics")]
+    no_score: bool,
     /// Output Pareto TSV path.
     #[arg(long)]
     output: PathBuf,
@@ -1021,13 +1041,18 @@ fn cmd_sweep(
         args.max_deviations
     };
     let mut metrics = args.metrics;
-    if metrics.is_empty() {
+    if metrics.is_empty() && !args.no_score {
         // Default metric set keeps the binary useful when invoked without
         // a `--metric` flag. zensim is the cheapest defensible default —
         // CPU-only, no GPU runtime needed, and already exposed by the
         // crate.
         metrics.push(MetricKind::Zensim);
     }
+    // `--no-score` leaves `metrics` EMPTY, which every scoring loop in
+    // `sweep::run` already treats as "nothing to score" (they all iterate
+    // `&cfg.metrics`) and which the header builder already renders as "no
+    // score_* columns". No scoring code path is special-cased for this flag.
+    debug_assert!(!args.no_score || metrics.is_empty());
 
     // Walk the source directory (no recursion). Every file we can sniff
     // is included; everything else is skipped silently.

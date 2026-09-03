@@ -801,6 +801,110 @@ fn sweep_zenwebp_emits_pareto_rows() {
     }
 }
 
+// `--no-score` is the TIMING instrument's mode: encode and time every cell,
+// score nothing. It exists because scoring between timed encodes perturbs the
+// quantity being timed (a multi-threaded metric on every core between two
+// single-threaded encodes leaves a different boost/thermal state), and because
+// it dominated the wall clock when the AVIF speed instrument first ran
+// (r7900x 2026-09-03: 23 min of wall, 15.0 s of encode_ms).
+#[cfg(feature = "sweep")]
+#[test]
+fn sweep_no_score_emits_timings_and_no_score_columns() {
+    let dir = fixtures_dir();
+    let staged = tempfile::tempdir().expect("tmp");
+    std::fs::copy(dir.join("ref_64.png"), staged.path().join("ref.png")).unwrap();
+    let out = staged.path().join("pareto.tsv");
+
+    let result = cli()
+        .args([
+            "sweep",
+            "--codec",
+            "zenwebp",
+            "--sources",
+            staged.path().to_str().unwrap(),
+            "--q-grid",
+            "50,90",
+            "--knob-grid",
+            r#"{"method": [4, 6]}"#,
+            "--no-score",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+    assert!(
+        result.status.success(),
+        "sweep --no-score failed: stderr={}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+
+    let body = std::fs::read_to_string(&out).expect("read tsv");
+    let lines: Vec<&str> = body.lines().collect();
+    // Same 4 cells (2 q x 2 method) as the scored twin -- --no-score changes
+    // what is measured, never which cells are encoded.
+    assert_eq!(lines.len(), 5, "got {} lines: {body}", lines.len());
+    // The whole point: no score column at all. Without the flag the default
+    // metric set injects `score_zensim`, so this assertion fails on a binary
+    // that ignores it.
+    assert!(
+        !lines[0].contains("score_"),
+        "header must carry no score_* column, got {:?}",
+        lines[0]
+    );
+    let cols: Vec<&str> = lines[0].split('\t').collect();
+    let ms_idx = cols
+        .iter()
+        .position(|c| *c == "encode_ms")
+        .expect("encode_ms column must survive --no-score");
+    let bytes_idx = cols
+        .iter()
+        .position(|c| *c == "encoded_bytes")
+        .expect("encoded_bytes column");
+    for row in &lines[1..] {
+        let f: Vec<&str> = row.split('\t').collect();
+        let ms: f64 = f[ms_idx]
+            .parse()
+            .unwrap_or_else(|e| panic!("bad encode_ms {:?} in {row:?}: {e}", f[ms_idx]));
+        assert!(ms > 0.0, "encode_ms must be populated, got {ms} in {row:?}");
+        let b: u64 = f[bytes_idx]
+            .parse()
+            .unwrap_or_else(|e| panic!("bad encoded_bytes in {row:?}: {e}"));
+        assert!(b > 0, "encoded_bytes must be populated in {row:?}");
+    }
+}
+
+// Asking for both is a mistake; silently dropping the scores would be
+// indistinguishable from a scorer that failed on every cell, so it is refused.
+#[cfg(feature = "sweep")]
+#[test]
+fn sweep_no_score_conflicts_with_metric() {
+    let staged = tempfile::tempdir().expect("tmp");
+    let out = staged.path().join("pareto.tsv");
+    let result = cli()
+        .args([
+            "sweep",
+            "--codec",
+            "zenwebp",
+            "--sources",
+            staged.path().to_str().unwrap(),
+            "--q-grid",
+            "50",
+            "--no-score",
+            "--metric",
+            "zensim",
+            "--output",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+    assert!(!result.status.success(), "--no-score --metric must be refused");
+    let err = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        err.contains("cannot be used with") || err.contains("conflict"),
+        "expected a clap conflict error, got: {err}"
+    );
+}
+
 #[cfg(all(feature = "sweep", feature = "jpeg"))]
 #[test]
 fn sweep_zenjpeg_plan_mode_emits_cells_and_manifest() {
