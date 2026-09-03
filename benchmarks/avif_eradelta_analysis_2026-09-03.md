@@ -149,6 +149,14 @@ inference about it.
 
 ### 2.4 Stability verdict table
 
+**How to read the verdict column.** `HELD-EXACT` is asserted only where the
+identity join proved *every* contributing bitstream reproduced **and** the two
+eras fitted the effect over the same number of images — it is never inferred
+from a zero delta. `NOT-MEASURED-new` on the speed-6 rows is correct rather than
+a gap: arm-set A replicates `svt_doe_main`, which carries knobs at speed 4 only;
+Stage-A's speed-6 knob effects came from run `a2`, and arm-set B's own table
+(below) is where those are re-verified.
+
 Because the contributing bitstreams are byte-identical, each effect's BD-rate
 is the same number in both eras — the response is a deterministic function of
 (bytes, decoded pixels), and both are unchanged. The verdict column below is
