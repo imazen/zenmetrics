@@ -480,8 +480,17 @@ memory-bandwidth-bound AV1) while discarding its wrong remedy: the launcher hard
 not disabling chunking. Eight 1-core workers give 8 cores of encoding at 2 concurrent
 encodes each.
 
-**Acceptance test, run rather than assumed:** a flush must appear within 20 minutes
-of relaunch. That is the property §4.5's configuration silently lacked for 1 h 45 m.
+**Acceptance test, run rather than assumed — PASSED in 3 minutes.** The bar was a
+flush within 20 minutes of relaunch. MEASURED: `distinct_done` 2080 → **2110 at
+22:54:29Z, 3 minutes after launch**, against **1 h 45 m and zero** under the serial
+configuration. That is the property §4.5's configuration silently lacked, and it is
+now a gate rather than an assumption.
+
+**Loss accounting, honestly.** The serial workers did flush once right at the end —
+`distinct_done` read 2020 at 22:50 and **2080** at relaunch, so 60 cells landed. The
+rest of their 1 h 45 m across 8 cores was discarded: at the measured ~13.8 s/cell
+that is on the order of **3,500 cells / ~13 CPU-h**, which is the price of the wrong
+recommendation in §4.5 and is counted against this lane, not the tooling.
 
 ### 4.6 Every short-window fleet rate here is LUMPY, and the envelope is a BRACKET
 
