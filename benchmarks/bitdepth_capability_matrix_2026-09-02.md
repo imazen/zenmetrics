@@ -518,3 +518,6 @@ example precisely because no such thing exists). Registered, not built.
   Also `identify`/`montage` as ordinary English in
   `avifdoe_stagea_gates.py:231`, `run_with_error_trap.sh:121`, and two
   `canonical_corpus` scripts.
+
+## Addendum 2026-09-03 — zenav1-aom standalone encode state (zenav1-aom#15)
+Sequence-header emitter, TU framing, standalone `encode_key_frame` landed (converging lanes; byte-exact gate 186/186, extended to 241 incl. bd10/12×tile matrix with 4 new NARROW pins, explicit tile knobs, SB128). DoD leg 2 (19-cell AVIF container round-trip via zenavif-parse) passed the port and found a genuine zenavif-parse frame-header bit-alignment re-parse bug — UNFILABLE, that repo is ARCHIVED (documented in zenav1-aom STATUS.md pending a tracking decision). Remaining on #15: the full `av1_determine_sc_tools_with_encoding` port (PARITY.md (M), multi-session; zero divergence under adversarial probing). Pointer note: references to "§7's capability matrix table" mean the backend truth table in this doc.
