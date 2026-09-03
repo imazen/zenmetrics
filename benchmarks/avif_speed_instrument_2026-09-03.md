@@ -322,6 +322,19 @@ speed) cells: **46 rise monotonically across q {15, 45, 90}, 0 fall monotonicall
 coefficients and does more RD work — but its *size* is what was mis-registered.
 Example, `1442` at 1024², svt speed 1: **2,358.6 → 3,903.9 → 6,101.2 ms**.
 
+**CONFIRMED ON TWO PASSES — it is not measurement noise.** S1b pass 2 (180 more
+cells) landed 22:46:01Z; recomputing the verdict as **min-of-2** barely moves it:
+
+| backend | pass 1 median / max | min-of-2 median / max |
+|---|--:|--:|
+| svt-rs | 0.7524 / 3.5276 | **0.7508 / 3.4988** |
+| zenrav1e | 0.4325 / 2.6712 | **0.4325 / 2.6712** |
+
+Noise is what `min()` removes. A spread that survives min-of-2 unchanged — moving
+0.2 % relative on svt and **0.0 %** on zenrav1e — is a property of the encoder, not
+of the measurement. Compare the drift control on the same instrument: **0.44 %
+median** (§6.4c). The q effect is ~170× that.
+
 **Three consequences, and the first is the important one:**
 
 1. **The speed model needs a q axis.** A model over (backend, speed, pixels) alone
