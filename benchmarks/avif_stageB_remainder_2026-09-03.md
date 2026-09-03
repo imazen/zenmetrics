@@ -492,6 +492,36 @@ rest of their 1 h 45 m across 8 cores was discarded: at the measured ~13.8 s/cel
 that is on the order of **3,500 cells / ~13 CPU-h**, which is the price of the wrong
 recommendation in §4.5 and is counted against this lane, not the tooling.
 
+### 4.5d ⛔ CORRECTION to §4.5's ATTRIBUTION: it is CPU PINNING, not oversubscription
+
+§4.5 concluded that `ZEN_CORE_OVERSUBSCRIBE=2` "thrashes memory-bandwidth-bound
+AV1". A third measured point falsifies that attribution. All three, same corpus,
+same backend, `distinct_done` on both ends of the window:
+
+| config | concurrent encodes | cpuset shape | cells/min | CPU-s/cell |
+|---|---|---|--:|--:|
+| 2 workers × **9-core** cpuset, oversub 2 | 18 on 9 cores | **wide** | 26.2 | 34.8 |
+| 8 workers × **1-core** cpuset, oversub 2 | 16 on 8 cores | **narrow** | **21.0** | **22.9** |
+| 8 workers × **1-core** cpuset, oversub 1 | 8 on 8 cores | narrow | 12.0 | 40.0 |
+
+**Rows 1 and 2 have essentially the same oversubscribe ratio (2:1) and differ 1.5×
+in cost.** What differs is cpuset *width*: with a 1-core cpuset each encode is
+pinned and keeps its cache; with a 9-core cpuset the scheduler migrates 18 encodes
+across 9 cores and they lose it. **Rows 2 and 3 have identical pinning and differ in
+concurrency** — and 2-per-core *beats* 1-per-core by 1.75×, because the second cell
+fills the first's serial and I/O phases.
+
+**So oversubscription HELPS here; wide cpusets hurt.** My §4.5 remedy (serial /
+`oversub=1`) was the worst of the three configurations on both axes, and it was
+adopted on a measurement that confounded the two effects. The corrected rule:
+
+> **Pin encodes with narrow per-worker cpusets, and keep oversubscription at 2.**
+> Scale by adding 1-core workers, not by widening a worker's cpuset.
+
+`ZEN_CORE_OVERSUBSCRIBE` is now forwardable by the launcher, but the measured
+default (2) is the right one for this backend — the knob's value here was in being
+able to *test* it, not in changing it.
+
 ### 4.6 Every short-window fleet rate here is LUMPY, and the envelope is a BRACKET
 
 **Ledger parquets are written per PASS** (`pass-<worker>-<n>.parquet`), and a pass
