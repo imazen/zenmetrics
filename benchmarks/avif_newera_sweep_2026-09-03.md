@@ -36,26 +36,31 @@ old bytes exactly — that expectation is itself the thing being tested).
 list, at the two product-reachable presets never crossed with a knob before
 
 New `SweepAxes` plan, `svt_doe_era_delta_r1` (implemented in zenavif, §2
-below), `--max-deviations 2`, restricted to an explicit (knob × speed) cross
-— **not** the full A2 pairwise grid:
+below), `--max-deviations 2` — following `svt_doe_b6`'s own established
+shape exactly (a restricted `svt_knobs` list × an explicit `speeds` list,
+full cross, every cell ≤2 deviations), rather than inventing asymmetric
+per-knob speed restriction the builder doesn't otherwise support:
 
-| knob | speed 6 (preset 7) | speed 7 (preset 9) | why |
-|---|:-:|:-:|---|
-| `tn3` (tune=3) | ✓ | ✓ | §5.1 top risk — forces scm3, which is live at speed 7 |
-| `shp7` | ✓ | ✓ | largest/most consistent cost (§6.1 Stage-A) |
-| `shp3` | ✓ | ✓ | same family, smaller magnitude |
-| `vbst1.2.5` | ✓ | ✓ | large-tail arm (§5.3) |
-| `vbst1.3.5` | ✓ | ✓ | large-tail arm |
-| `vbst1.3.7` | ✓ | ✓ | large-tail arm |
-| `qml1.2.10` | ✓ | ✓ | sign-flips between presets (§5.4) |
-| `qml1.4.10` | ✓ | ✓ | sign-flips between presets |
-| `scm3` | — | ✓ | dead at speed ≤6/preset ≤7 (measured, delta audit §4.1) — declaring speed 6 would just re-buy a known zero |
+| knob | why it's on the priority list |
+|---|---|
+| `tn3` (tune=3) | §5.1 top risk — forces scm3, which is live at speed 7 |
+| `shp7` | largest/most consistent cost (§6.1 Stage-A) |
+| `shp3` | same family, smaller magnitude |
+| `vbst1.2.5` | large-tail arm (§5.3) |
+| `vbst1.3.5` | large-tail arm |
+| `vbst1.3.7` | large-tail arm |
+| `qml1.2.10` | sign-flips between presets (§5.4) |
+| `qml1.4.10` | sign-flips between presets |
+| `scm3` | dead at speed ≤6/preset ≤7 but live at speed 7 (delta audit §4.1) |
 
-8 knobs × 2 speeds + 1 knob × 1 speed = 17 (knob, speed) combinations × 9q ×
-32 images = **4,896 cells.** The bare-speed-7 control stratum is already a
-member of arm-set A (`svt_doe_main`'s speed list includes 7), so arm-set B's
-control side is free (content-addressed dedup) as long as A is declared
-first or alongside.
+× **speeds {4, 6, 7}** (matching `svt_doe_b6`'s own speed set, so speed 4 is
+a free internal-consistency check against arm-set A, and speed 6/7 are the
+two points that matter). **10 knob levels (1 default + 9 above) × 3 speeds =
+30 combinations × 9q × 32 images = 8,640 cells.** The known-zero legs
+(`scm3`×speed4, `scm3`×speed6, every knob's speed-4 leg already in arm-set A)
+are accepted rather than hand-carved out — content-addressed dedup makes
+them free, and a uniform full cross is far less likely to have a declaration
+bug than an asymmetric one.
 
 ### Arm-set C — REVISED: re-run an existing, already-corrupted native bd10
 block, not a new one (delta audit §6.0)
@@ -82,11 +87,11 @@ to the pre-fix run (a live check on this audit's §2.1 claim that only 2 of
 from strongly negative to strongly positive, matching §10.4f's own
 verification table.
 
-**Total new declaration: 6,912 (A) + 4,896 (B) + 96 (C, re-run) = 11,904
+**Total new declaration: 6,912 (A) + 8,640 (B) + 96 (C, re-run) = 15,648
 cells.** Compare Stage-A's whole wave (117,435 cells, ≈70.5 CPU-h) — this is
-**10.1%** of that. Per §15.4's measured SVT cost profile (preset dominates:
+**13.3%** of that. Per §15.4's measured SVT cost profile (preset dominates:
 s4 is 17-27× s6/s7; budget-corpus cells are cheap; C's 96 native cells are a
-rounding error against A/B), the estimate is **≤2.5 CPU-h encode**,
+rounding error against A/B), the estimate is **≤3.5 CPU-h encode**,
 comfortably inside the fleet capacity freed by t2a-fix/t2b's completion (§8
 of the delta audit).
 
@@ -114,7 +119,9 @@ plan) added next to `svt_doe_b6()` in `src/sweep.rs`, following the same
 shape: a `Vec<SvtParams>` restricted knob list, an explicit small speed
 list, `PLANS` table entry (so the "unknown plan" diagnostic can't silently
 drift the way §15.6 of the DOE plan already found once), and a cell-count
-test pinning 4,896. Arm-set A reuses `svt_doe_main()` verbatim; arm-set C
+test pinning 8,640 (10 knob levels × 3 speeds, `--max-deviations 2`, the
+same arithmetic shape as `svt_doe_b6`'s own 9×3=27). Arm-set A reuses
+`svt_doe_main()` verbatim; arm-set C
 reuses `svt_doe_t1_bd10_transfer()` verbatim (§1) — neither needs any zenavif
 code change, only a fresh declaration under a new run name.
 
@@ -139,7 +146,7 @@ this era's findings:
 | **B-4** | still **NOT EVALUABLE** | A4 (the timing block) was never declared in Stage-A and isn't declared here either — `encode_ms` still isn't persisted by the fleet path. Out of this lane's scope (it's an instrumentation gap, not an era-pin question). |
 | **B-5** | still **does not fire** | Unchanged — no knob has |median| ≥1% at both presets with opposite signs, on the one preset pair (s4 vs s6) Stage-A could evaluate it on. Arm-set B's speed-7 data is a bonus third point for this trigger's evaluation once scored, at no extra declaration cost. |
 
-**Net effect on the 7.5× overrun**: this wave spends 11,904 of the 60,000-cell
+**Net effect on the 7.5× overrun**: this wave spends 15,648 of the 60,000-cell
 Stage-B envelope (21%) on stability verification + two newly-open axes,
 touches 2 of 6 open trigger classes (partial), and explicitly does **not**
 attempt to close the overrun — that remains a budget/priority call for

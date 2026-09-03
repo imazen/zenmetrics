@@ -18,6 +18,8 @@
 #   scripts/jobsys/avifdoe_declare.sh --smoke        # 2-image G-DEDUP smoke only
 #   scripts/jobsys/avifdoe_declare.sh --stage-b6     # Stage B, trigger B-6 only
 #   scripts/jobsys/avifdoe_declare.sh --track-t1     # HBD arm, Track T1 (bd10) only
+#   scripts/jobsys/avifdoe_declare.sh --era-delta    # zenav1-svt pin bump stability wave
+#                                                     # (benchmarks/avif_newera_sweep_2026-09-03.md)
 #
 # Requires: a zenmetrics built with `--features sweep,avif,avif-svt` (the svt
 # strata land in `invalid_skipped` without `avif-svt`, loudly, never silently),
@@ -36,6 +38,7 @@ SMOKE=0
 DRY_ONLY=0
 STAGE_B6=0
 TRACK_T1=0
+ERA_DELTA=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -44,6 +47,7 @@ while [ $# -gt 0 ]; do
     --smoke) SMOKE=1; shift ;;
     --stage-b6) STAGE_B6=1; shift ;;
     --track-t1) TRACK_T1=1; shift ;;
+    --era-delta) ERA_DELTA=1; shift ;;
     --dry-run-only) DRY_ONLY=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -341,6 +345,120 @@ of a 10-bit stream:
     --no-default-features --features avif
   ./target/release/examples/avif_depth_verify --expect-depth 10 <blobs-dir>/
 T1EOF
+  exit 0
+fi
+
+if [ "$ERA_DELTA" = 1 ]; then
+  # Arm-set A -- exact A1 replication at the new zenav1-svt pin
+  # (ef0b122b -> 2ca060f4, issue #18 both rounds). Same plan, same corpus,
+  # same ladder as the original avifdoe-svt-a1-20260901 -- a NEW run name
+  # is required (content-addressed cells would otherwise treat any
+  # byte-identical old-pin cell as already done, which is exactly what this
+  # wave wants to CONFIRM, not skip past silently).
+  declare_block avifdoe-svt-eradelta-a1-20260903 svt_doe_main "$Q_LADDER9" \
+      "$SOURCES" 1
+  # Arm-set B -- the new svt_doe_era_delta_r1 plan: the delta audit's
+  # risk-list knobs (tn3, shp7, shp3, 3x vbst, 2x qml, scm3) x speeds
+  # {4,6,7} -- the two presets (7 and 9) no prior wave crossed with any
+  # knob.
+  declare_block avifdoe-svt-eradelta-b1-20260903 svt_doe_era_delta_r1 \
+      "$Q_LADDER9" "$SOURCES" 2
+  # Arm-set C -- re-declare the EXISTING T1-d plan (bd10 native transfer)
+  # under a fresh run name. avifdoe-svt-t1d-20260902 encoded 2026-09-02
+  # 09:57-10:16, hours before either #18 fix -- 24 of its 96 cells (8 of 32
+  # native images force multi-tiling) ran the exact broken configuration.
+  # Re-declaring into the OLD run name would count those 24 wrong-pixel
+  # cells as already done and skip them -- the same trap
+  # avifhbd-t2a-fix-20260902 existed to avoid. NATIVE corpus, not budget.
+  declare_block avifdoe-svt-eradelta-c1-20260903 svt_doe_t1_bd10_transfer \
+      "$Q_LADDER3" \
+      "${NATIVE_SOURCES:-/mnt/v/output/avifsvt-subsample-2026-09-01/sources}" 1
+  cat <<'ERADELTAEOF'
+
+Declared the era-delta wave into the output dir. NOT launched.
+
+  expected: eradelta-a1 6,912  +  eradelta-b1 8,640  +  eradelta-c1 96
+            = 15,648 declared. Some legs are content-addressed duplicates of
+            already-DONE cells from other runs (arm-set A reproduces A1's
+            speed-4 knob cells; arm-set B's speed-4 legs reproduce the same;
+            arm-set C is a full re-encode by design, corrupted cells and
+            all) -- those score for free at declare time, they are not
+            re-encoded.
+
+  corpus prefix (workers):  s3://codec-corpus/avif-doe-1024-2026-09-01/       (a1, b1)
+                            s3://codec-corpus/avif-subsample-2026-09-01/      (c1)
+  control keys:             jobs/avifdoe-svt-eradelta-{a1,b1,c1}-20260903/control.json
+
+Record: benchmarks/avif_newera_delta_2026-09-03.md (the audit) and
+benchmarks/avif_newera_sweep_2026-09-03.md (this grid + Stage-B B-1/B-2/B-3
+reconciliation).
+
+The worker image MUST know `svt_doe_era_delta_r1` (zenavif `b552418e`) --
+an older image answers `unknown zenavif plan "svt_doe_era_delta_r1"` and
+every cell fails as an encoder panic, the same trap B-6 and Track T1 both
+already documented. Build + push a fresh executor image at the new pin
+before launching, and smoke ONE cell of EACH arm-set first (G3 below is not
+optional for arm-set C specifically -- it is the whole point of re-running
+it).
+
+RUNBOOK -- STAGE. Same three-object shape as every other run (manifest +
+control.json + ledger_snapshot.parquet -- lan_score_launch.sh's default
+ZEN_REQUIRE_SNAPSHOT=1 refuses a run with none):
+
+  for r in eradelta-a1 eradelta-b1 eradelta-c1; do
+    RUN=avifdoe-svt-$r-20260903
+    aws s3 cp --endpoint-url "$ZEN_S3_ENDPOINT" \
+      $OUT/${RUN}_manifest.json s3://zentrain/jobs/$RUN/manifest.json
+    echo '{"paused":true,"drain":true}' | \
+      aws s3 cp --endpoint-url "$ZEN_S3_ENDPOINT" - s3://zentrain/jobs/$RUN/control.json
+    ./target/release/zenfleet-ctl compact --run "$RUN" --bucket zentrain \
+      --endpoint "$ZEN_S3_ENDPOINT" --upload
+  done
+
+RUNBOOK -- ENCODE. CORPUS PREFIX differs for eradelta-c1 -- same
+silent-garbage hazard Track T1's runbook documents (the two corpora share
+all 32 filenames; 13 of them are genuinely different pixels):
+
+  IMG=ghcr.io/imazen/zenfleet-worker:exec-avifhbd-eradelta-<shortsha>
+  ZEN_CORPUS_BUCKET=codec-corpus ZEN_CORPUS_PREFIX=avif-doe-1024-2026-09-01 \
+    bash scripts/jobsys/lan_score_launch.sh <host> avifdoe-svt-eradelta-a1-20260903 eda1 cpu "$IMG"
+  ZEN_CORPUS_BUCKET=codec-corpus ZEN_CORPUS_PREFIX=avif-doe-1024-2026-09-01 \
+    bash scripts/jobsys/lan_score_launch.sh <host> avifdoe-svt-eradelta-b1-20260903 edb1 cpu "$IMG"
+  ZEN_CORPUS_BUCKET=codec-corpus ZEN_CORPUS_PREFIX=avif-subsample-2026-09-01 \
+    bash scripts/jobsys/lan_score_launch.sh <host> avifdoe-svt-eradelta-c1-20260903 edc1 cpu "$IMG"
+
+Each run stages paused; flip control.json to {"paused":false,"drain":false}
+to start it.
+
+RUNBOOK -- SCORE. Reuse the parameterised gap-fill loop, do not fork it.
+eradelta-c1 takes the NATIVE refs prefix:
+
+  ZEN_DOE_SFRUN=avifdoe-svt-eradelta-sf-cpu-20260903 \
+  ZEN_DOE_RUNS="avifdoe-svt-eradelta-a1-20260903=s3://codec-corpus/avif-doe-1024-2026-09-01/ \
+                avifdoe-svt-eradelta-b1-20260903=s3://codec-corpus/avif-doe-1024-2026-09-01/ \
+                avifdoe-svt-eradelta-c1-20260903=s3://codec-corpus/avif-subsample-2026-09-01/" \
+    bash scripts/jobsys/avifdoe_score_gapfill.sh
+
+TOPOLOGY: observe before load (per CLAUDE.md) -- do not trust a stale
+snapshot. `docker ps` on tower and a local `uptime`/`pgrep -x
+zenfleet-worker` are the two checks; this wave's own estimate is <=3.5
+CPU-h encode total, so it fits in whatever capacity is free without needing
+a dedicated topology plan the way B-6's 13.2 CPU-h did.
+
+GATE G3 before trusting ANY arm-set-C result -- a request for depth 10 is
+not evidence of a 10-bit stream, and this arm-set exists BECAUSE the
+prior run's pixels were wrong at exactly the geometry this checks:
+
+  cargo build --release -p zenmetrics-cli --example avif_depth_verify \
+    --no-default-features --features avif
+  ./target/release/examples/avif_depth_verify --expect-depth 10 <blobs-dir>/
+
+  ALSO run scripts/jobsys/avifhbd_recon_gate.sh on the fresh eradelta-c1
+  blobs for at least the two known-broken images (6602, 6604) before
+  trusting the "does bd10 survive native size" answer -- it is the gate
+  built specifically to catch this bug class (bd10 x multi-tile x low
+  preset), self-calibrating against the 8-bit control on the same cell.
+ERADELTAEOF
   exit 0
 fi
 
