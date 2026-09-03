@@ -2373,6 +2373,28 @@ arm** — the corpus had zero zenrav1e SDR coverage. Neither needed a zenavif ch
 or a new image. `vbst`, `scm3` and `acb` are excluded with citations (§10.1(4);
 era-delta's 0/288 at speed 6; §17.3). Scoring was declared **at launch**.
 
+### 18.2b ⛔ §3.6's q-flatness premise is FALSIFIED
+
+§3.6 justified pricing the timing block at 3 q points with: *"measured: per-q cost
+is flat to ±1.2 % on aom and ±3.3 % on svt — retrofit §9.2 — so q density buys a
+speed model nothing."* The instrument tested it rather than inheriting it.
+**MEASURED (S1b, 180 cells): svt-rs median relative spread over q {15, 45, 90} is
+0.752 (75.2 %), max 3.528; zenrav1e median 0.433, max 2.671.** The svt median is
+**~23×** the registered tolerance.
+
+**Cost RISES with quality** — 46 of 60 cells monotone up, **0** monotone down. So
+**the speed model needs a q axis**; (backend, speed, pixels) alone is not
+sufficient. Every α + β coefficient the instrument reports is **q45-specific**.
+
+This also touches the Stage-B de-scope ladder, whose step 1 ("29-q → 9-q") was
+costed as ~69 % of cost for ~69 % of cells on the flatness premise — with cost
+rising in q, *which* points are cut changes the saving. Record:
+[`avif_speed_instrument_2026-09-03.md`](avif_speed_instrument_2026-09-03.md) §6.4b.
+
+An anomaly is flagged there and left open: all 14 non-monotone cells are zenrav1e
+speeds 2-4, where q90 runs up to **3.0× faster** than q45 — counter-mechanistic and
+unexplained by this instrument.
+
 ### 18.3 Three corrections this lane owes the record
 
 1. **`avifdoe_build_budget_corpus.py`'s pixel budget did not follow `--side`.**
