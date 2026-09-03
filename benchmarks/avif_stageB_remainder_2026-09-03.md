@@ -576,6 +576,14 @@ the ledger regardless of the manifest, and they stay in the run. The wave theref
 delivers the registered 9-q grid **plus** partial 29-q coverage — which is strictly
 more than the de-scope promised.
 
+**COMPLETION IS NOW A GAP, NOT A COUNT.** After the shrink, `distinct_done`
+(3,070) **exceeds** the new declared total (2,880), because it counts the retained
+29-q extras. So "done" can no longer be read as `done >= declared` — completion is
+`zenfleet-ctl gap --manifest <shrunk> --ledger <snapshot>` reaching 0. MEASURED at
+the swap: **1,909 of 2,880 remain**. (A trap inside the trap: that command's output
+FILE is multi-line JSON records, so `wc -l` on it reads 40,090 — take the count from
+the tool's own `gap: N of M` line, not from the file.)
+
 **What the de-scope costs, stated:** quality-space matching against A0R-svt is now
 9-point rather than 29-point on the cells that remain. That still clears the BD-rate
 owner's ≥ 4-point guard, which is why this was step 1 of the ladder. §6.4b's finding
