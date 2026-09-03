@@ -3,9 +3,11 @@
 > **✅ RUN AND ANALYSED — results:
 > [`avif_eradelta_analysis_2026-09-03.md`](avif_eradelta_analysis_2026-09-03.md)**
 > (2026-09-03). Headline: arm-set A reproduced Stage-A's bitstreams
-> **byte-identically on every shared cell**, and arm-set B did the same
-> independently on 3,456 cells (vs `a1`) + 2,880 (vs `a2`) — so every covered
-> effect is the same number, not merely within CI. `scm3` at speed 7 fires on
+> **byte-identically on 6,912 / 6,912 shared cells**, and arm-set B did the same
+> independently on **3,456 / 3,456** (vs `a1`) + **2,880 / 2,880** (vs `a2`); the
+> two waves' scorers also agree on `ssim2` to **exactly 0** on 6,716 shared
+> bitstreams — so every covered effect is the same number, not merely within CI.
+> `scm3` at speed 7 fires on
 > **90/288 cells, exclusively on screen-adjacent content**, worth a **median
 > −50.08 % BD-rate** conditional on firing. Arm-set C's clean bd10-native read
 > **inverts** the superseded `t1d` answer.
