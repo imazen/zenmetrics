@@ -522,6 +522,51 @@ adopted on a measurement that confounded the two effects. The corrected rule:
 default (2) is the right one for this backend — the knob's value here was in being
 able to *test* it, not in changing it.
 
+### 4.8 FINAL G-RATE DECISION — de-scope step 1 FIRES and STAYS
+
+The decisive measurement, on the configuration §4.5d established as best, after the
+config churn had stopped: **1200 s window, 390 cells, `distinct_done` on both ends,
+zero timeouts.**
+
+| | |
+|---|--:|
+| rate | **19.5 cells/min** |
+| cost | **24.6 CPU-s/cell** |
+| full 9,280-cell grid | **63.5 CPU-h** |
+| remaining envelope | 46.8 CPU-h |
+| **verdict** | **OVER by 36 % — G-RATE FAILS** |
+
+**Why this supersedes the §4.4 revert.** That revert rested on 9.52 CPU-s/cell from
+a **429 s** window taken on the serial configuration — which §4.5c later proved was
+silently claiming the entire gap and flushing nothing. The number was measured on a
+broken config over a window too short to span a pass. This one is **2.8× longer, on
+a verified-healthy config, with an acceptance-tested flush cadence**. It is the best
+measurement this lane has and the decision follows it.
+
+**De-scope step 1 fired** (29-q → 9-q, 2,880 cells), the shrink applied through
+§4.4's sanctioned path with `manifest_PRE_DESCOPE_29q.json` preserved beside it.
+Arithmetic at the measured rate:
+
+| | cells | CPU-h |
+|---|--:|--:|
+| `brsdr` spent | 2,950 | 20.2 |
+| `brsdr` remaining in the 9-q subset | ~1,965 | 13.4 |
+| `brsdr` total | | **33.6** |
+| + `brnat` | 7,488 | ~4.0 |
+| **wave** | | **37.6 of 46.8 — FITS** |
+
+**The ~2,035 already-encoded cells outside the 9-q subset are not waste.** They are
+valid denser-q coverage on the images reached first, the gap-fill scores them from
+the ledger regardless of the manifest, and they stay in the run. The wave therefore
+delivers the registered 9-q grid **plus** partial 29-q coverage — which is strictly
+more than the de-scope promised.
+
+**What the de-scope costs, stated:** quality-space matching against A0R-svt is now
+9-point rather than 29-point on the cells that remain. That still clears the BD-rate
+owner's ≥ 4-point guard, which is why this was step 1 of the ladder. §6.4b's finding
+that cost **rises** with q also means the cut points were the expensive ones, so the
+saving is at least proportional.
+
 ### 4.6 Every short-window fleet rate here is LUMPY, and the envelope is a BRACKET
 
 **Ledger parquets are written per PASS** (`pass-<worker>-<n>.parquet`), and a pass
