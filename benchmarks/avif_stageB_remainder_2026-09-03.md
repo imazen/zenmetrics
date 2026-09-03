@@ -268,6 +268,57 @@ breakdown is a cheap first cut for the analysis lane (it needs no scores). Same
 caveat as always: byte-identity is measured per cell, so it must be counted per
 (stratum, image), never pooled.
 
+### 4.3 ⛔ The G-RATE measurement was CONTAMINATED, and the de-scope was fired on it
+
+**Found 2026-09-03T19:50Z, after firing.** The `brsdr` workers were running
+zenfleet's **resource-aware concurrent mode** — *"LPT + can_admit, chunk target
+300s"* — while `fleet-entrypoint.sh` kills a pass at **`ZEN_PASS_TIMEOUT`, default
+1800 s**. Two consecutive passes died that way:
+
+```
+[FLEET-ERROR 19:03:17Z] pass 26 TIMED OUT after 1800s — worker hung.
+  worker| spot preemption — released chunk claim chunk-9b4beae… for fast requeue
+         (its cells re-enter the gap; any already-flushed cells in it stay Done)
+[FLEET-ERROR 19:33:17Z] pass 27 TIMED OUT after 1800s — worker hung.
+```
+
+The chunk sizer admits cells against a cost model calibrated on svt-class work.
+**zenrav1e is 3.7×–64.8× slower per cell** (companion instrument, §3.3), so a
+"300 s" chunk of zenrav1e cells runs far past 1800 s, the pass is killed, the claim
+is released, and **every cell in it that had not yet flushed is recomputed**.
+
+**Consequence: the CPU-per-cell figures in §4.2 measure waste, not intrinsic cost.**
+The 15.42 → 28.1 CPU-s/cell "rise" is not content ordering as the earlier note
+assumed — it is recomputation accumulating. Both numbers are upper bounds of unknown
+tightness, and **G-RATE was failed against them**, which is why the de-scope fired.
+
+**What was done, in order, and why the order matters.** The de-scope is *reversible
+by construction* (§4.4's shrink preserves the previous manifest), so it was left in
+place rather than hastily reverted, and the operational defect was fixed first:
+both workers were relaunched with **`ZEN_CHUNK_WALL_SEC=0`** — the serial per-cell
+path the worker's own log advertises — under which **every completed cell flushes
+immediately** and a pass timeout can therefore lose at most one cell. The clean
+rate is measured on that path, and only then is the de-scope revisited. Reverting
+first would have re-measured the same contaminated number on a bigger grid.
+
+**The launcher already supported the fix and this lane did not use it.**
+`lan_score_launch.sh` passes `ZEN_CHUNK_WALL_SEC` and `ZEN_PASS_TIMEOUT` through,
+and its own comment says *"big-cell workloads (HDR diffmaps) exceed the 1800s
+default and get [an override]"*. A backend measured at up to 24 s for a single
+1 MP cell is a big-cell workload; it should have been launched that way. **Any
+future zenrav1e or aom-rs fleet arm must set `ZEN_CHUNK_WALL_SEC=0` (or a raised
+`ZEN_PASS_TIMEOUT`) at launch** — the concurrent chunk sizer is calibrated for svt
+and silently mis-sizes for anything much slower.
+
+**Registered correction to the de-scope LADDER, not applied here.** Measured from
+the speed instrument's dial curve, **speeds 1–2 carry ~73 % of zenrav1e's total
+cost across the 10-speed ladder** while being only 20 % of the cells. Step 2 of
+§4.1 ("drop speeds 1–2") is therefore a far better CPU-per-science trade than
+step 1 ("29-q → 9-q", 69 % of cells for ~69 % of cost). **The registered order was
+NOT changed mid-flight** — reordering a de-scope ladder after seeing which arm is
+expensive is exactly what pre-registration exists to prevent — but the ladder's
+order should be rebuilt from measured per-axis cost for the next wave.
+
 ### 4.1 Pre-registered de-scope (fires on G-RATE only)
 
 In this fixed order, re-checking after each step:
