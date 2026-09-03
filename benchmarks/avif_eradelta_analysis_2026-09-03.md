@@ -152,7 +152,17 @@ at a registered **1.0 pp** movement threshold, differencing the two eras' own
 `main_effects.tsv` (both `--control inrun`, so the instrument is held fixed and
 only the era varies).
 
+**Arm-set A vs Stage-A** (speed-4 knobs + `bd10`; Stage-A's speed-6 rows have
+no arm-set A counterpart and read NOT-MEASURED-new, which is correct — arm-set A
+replicates `svt_doe_main`, and `svt_doe_main` carries knobs at speed 4 only):
+
 <!--TABLE:STABILITY-->
+
+**Arm-set B vs Stage-A** (its speed-4 legs joined against `a1`, its speed-6 legs
+against `a2`; its speed-7 legs have no Stage-A counterpart and read
+NOT-MEASURED-old, which is the correct label for a new axis):
+
+<!--TABLE:STABILITYB-->
 
 ### 2.5 Scorer drift is separately accounted for
 
@@ -322,6 +332,16 @@ What the block *can* answer is the paired matched-q read: at each `q`, bd10's
 bytes and quality against its 8-bit twin.
 
 <!--TABLE:C1PAIRED-->
+
+### 4.4 How much the answer actually changed on the corrupt images
+
+The 8 multi-tile images, pre-fix (`t1d`) against post-fix (`c1`), same control,
+same q, same paired read. This is the size of the error that was in the record:
+
+<!--TABLE:C1VST1D-->
+
+The pre-fix rows are shown **only** to size the correction; they are superseded
+and must not be cited as measurements of anything.
 
 **Control provenance, declared rather than buried.** The 8-bit control is
 `avifdoe-svt-ag-20260901`'s `s4-svt-420` stratum — the exact shape match

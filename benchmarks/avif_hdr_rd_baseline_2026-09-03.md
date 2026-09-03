@@ -151,6 +151,18 @@ arm × arm matrix and a per-backend **Pareto envelope** (pool every dial setting
 a backend offers on that image, take the frontier), which is the product-level
 comparison that needs no cross-backend dial equivalence.
 
+**The two ladders are not equally dense, and the envelope is not neutral about
+that.** T2-a offers 7 presets × 29 quality points = 203 candidates per image;
+T2-b offers 3 speeds × 9 = 27. A denser grid produces a frontier that hugs the
+true RD curve more closely, so the envelope credits T2-a for *having more
+operating points*, which is a real product difference but not the same claim as
+"the encoder is better". Read the envelope together with the arm × arm matrix
+below it: if a single svt preset beats a single zenavif speed by about the same
+margin as the envelopes do, the advantage is the encoder; if the envelope gap
+is much larger, part of it is ladder density. The registered framing —
+a **contrast**, not a controlled comparison — covers this as well as the
+backend/chroma/matrix confound.
+
 <!--TABLE:Q6-->
 
 ---
