@@ -59,7 +59,18 @@ tool with the same `--control inrun` instrument — and it is labelled as such.
 Every run below was verified with `zenfleet-ctl report` before any number was
 computed; a run with a live gap is not analysed.
 
-<!--TABLE:COVERAGE-->
+| run | role | declared | done | failed-only | verdict |
+|---|---|--:|--:|--:|---|
+| `avifdoe-svt-eradelta-a1-20260903` (arm-set A, encode) | 6912 | 6912 | 0 | COMPLETE |
+| `avifdoe-svt-eradelta-b1-20260903` (arm-set B, encode) | 8640 | 8640 | 0 | COMPLETE |
+| `avifdoe-svt-eradelta-c1-20260903` (arm-set C, encode) | 96 | 96 | 0 | COMPLETE |
+
+| harvest | cells | scored (`ssim2`) | unscored |
+|---|--:|--:|--:|
+| `a1` | 6912 | 6912 | 0 |
+| `b1` | 8640 | 8640 | 0 |
+| `c1` | 96 | 96 | 0 |
+| **all three** | **15648** | **15648** | **0** |
 
 **A scoring gap was found and closed by this lane, not worked around.** The
 wave was declared with no score-side gapfill loop and no scoring worker, so at
@@ -169,13 +180,90 @@ only the era varies).
 no arm-set A counterpart and read NOT-MEASURED-new, which is correct — arm-set A
 replicates `svt_doe_main`, and `svt_doe_main` carries knobs at speed 4 only):
 
-<!--TABLE:STABILITY-->
+| speed | knob | n images (old/new) | median BD-rate, Stage-A era | median BD-rate, `2ca060f4` | Δ pp | verdict |
+|---|--:|--:|--:|--:|--:|--:|
+| 4 | `acb1` | 30/30 | 0.0938 | 0.0938 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `acb3` | 30/30 | 0.1508 | 0.1508 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `bd10` | 30/30 | -1.2232 | -1.2232 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `mtx32` | 30/30 | 0.2067 | 0.2067 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `qml1.2.10` | 30/30 | -0.2895 | -0.2895 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `qml1.4.10` | 30/30 | -0.4181 | -0.4181 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `qml1.8.15` | 30/30 | -0.1308 | -0.1308 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `scm3` | 30/30 | 0.0000 | 0.0000 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `shp3` | 30/30 | 0.9140 | 0.9140 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `shp7` | 30/30 | 5.4676 | 5.4676 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `tl1.0` | 30/30 | 1.6865 | 1.6865 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `tl1.1` | 30/30 | 3.3747 | 3.3747 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `tn0` | 30/30 | 0.0000 | 0.0000 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `tn3` | 30/30 | -7.0342 | -7.0342 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `vbst1.2.5` | 30/30 | 0.3833 | 0.3833 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `vbst1.3.5` | 30/30 | 0.7825 | 0.7825 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `vbst1.3.7` | 30/30 | -0.9673 | -0.9673 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 6 | `acb1` | 31/0 | 0.0006 |  |  | NOT-MEASURED-new |
+| 6 | `acb3` | 31/0 | -0.0054 |  |  | NOT-MEASURED-new |
+| 6 | `mtx32` | 31/0 | 0.0000 |  |  | NOT-MEASURED-new |
+| 6 | `qml1.2.10` | 31/0 | -2.5853 |  |  | NOT-MEASURED-new |
+| 6 | `qml1.4.10` | 31/0 | -2.0323 |  |  | NOT-MEASURED-new |
+| 6 | `qml1.8.15` | 31/0 | -0.5713 |  |  | NOT-MEASURED-new |
+| 6 | `scm3` | 31/0 | 0.0000 |  |  | NOT-MEASURED-new |
+| 6 | `shp3` | 31/0 | 1.6494 |  |  | NOT-MEASURED-new |
+| 6 | `shp7` | 31/0 | 7.3077 |  |  | NOT-MEASURED-new |
+| 6 | `tl1.0` | 31/0 | 0.8854 |  |  | NOT-MEASURED-new |
+| 6 | `tl1.1` | 31/0 | 1.7789 |  |  | NOT-MEASURED-new |
+| 6 | `tn0` | 31/0 | 0.0000 |  |  | NOT-MEASURED-new |
+| 6 | `tn3` | 31/0 | -4.4807 |  |  | NOT-MEASURED-new |
+| 6 | `vbst1.2.5` | 30/0 | 0.0069 |  |  | NOT-MEASURED-new |
+| 6 | `vbst1.3.5` | 30/0 | 0.3199 |  |  | NOT-MEASURED-new |
+| 6 | `vbst1.3.7` | 30/0 | -1.3927 |  |  | NOT-MEASURED-new |
 
 **Arm-set B vs Stage-A** (its speed-4 legs joined against `a1`, its speed-6 legs
 against `a2`; its speed-7 legs have no Stage-A counterpart and read
 NOT-MEASURED-old, which is the correct label for a new axis):
 
-<!--TABLE:STABILITYB-->
+| speed | knob | n images (old/new) | median BD-rate, Stage-A era | median BD-rate, `2ca060f4` | Δ pp | verdict |
+|---|--:|--:|--:|--:|--:|--:|
+| 4 | `acb1` | 30/0 | 0.0938 |  |  | NOT-MEASURED-new |
+| 4 | `acb3` | 30/0 | 0.1508 |  |  | NOT-MEASURED-new |
+| 4 | `bd10` | 30/0 | -1.2232 |  |  | NOT-MEASURED-new |
+| 4 | `mtx32` | 30/0 | 0.2067 |  |  | NOT-MEASURED-new |
+| 4 | `qml1.2.10` | 30/30 | -0.2895 | -0.2895 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `qml1.4.10` | 30/30 | -0.4181 | -0.4181 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `qml1.8.15` | 30/0 | -0.1308 |  |  | NOT-MEASURED-new |
+| 4 | `scm3` | 30/30 | 0.0000 | 0.0000 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `shp3` | 30/30 | 0.9140 | 0.9140 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `shp7` | 30/30 | 5.4676 | 5.4676 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `tl1.0` | 30/0 | 1.6865 |  |  | NOT-MEASURED-new |
+| 4 | `tl1.1` | 30/0 | 3.3747 |  |  | NOT-MEASURED-new |
+| 4 | `tn0` | 30/0 | 0.0000 |  |  | NOT-MEASURED-new |
+| 4 | `tn3` | 30/30 | -7.0342 | -7.0342 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `vbst1.2.5` | 30/30 | 0.3833 | 0.3833 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `vbst1.3.5` | 30/30 | 0.7825 | 0.7825 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 4 | `vbst1.3.7` | 30/30 | -0.9673 | -0.9673 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 6 | `acb1` | 31/0 | 0.0006 |  |  | NOT-MEASURED-new |
+| 6 | `acb3` | 31/0 | -0.0054 |  |  | NOT-MEASURED-new |
+| 6 | `mtx32` | 31/0 | 0.0000 |  |  | NOT-MEASURED-new |
+| 6 | `qml1.2.10` | 31/31 | -2.5853 | -2.5853 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 6 | `qml1.4.10` | 31/31 | -2.0323 | -2.0323 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 6 | `qml1.8.15` | 31/0 | -0.5713 |  |  | NOT-MEASURED-new |
+| 6 | `scm3` | 31/31 | 0.0000 | 0.0000 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 6 | `shp3` | 31/31 | 1.6494 | 1.6494 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 6 | `shp7` | 31/31 | 7.3077 | 7.3077 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 6 | `tl1.0` | 31/0 | 0.8854 |  |  | NOT-MEASURED-new |
+| 6 | `tl1.1` | 31/0 | 1.7789 |  |  | NOT-MEASURED-new |
+| 6 | `tn0` | 31/0 | 0.0000 |  |  | NOT-MEASURED-new |
+| 6 | `tn3` | 31/31 | -4.4807 | -4.4807 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 6 | `vbst1.2.5` | 30/30 | 0.0069 | 0.0069 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 6 | `vbst1.3.5` | 30/30 | 0.3199 | 0.3199 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 6 | `vbst1.3.7` | 30/30 | -1.3927 | -1.3927 | +0.0000 | HELD-EXACT (all bitstreams byte-identical) |
+| 7 | `qml1.2.10` | 0/32 |  | -4.8889 |  | NOT-MEASURED-old |
+| 7 | `qml1.4.10` | 0/32 |  | -4.0875 |  | NOT-MEASURED-old |
+| 7 | `scm3` | 0/32 |  | 0.0000 |  | NOT-MEASURED-old |
+| 7 | `shp3` | 0/32 |  | 2.7838 |  | NOT-MEASURED-old |
+| 7 | `shp7` | 0/32 |  | 9.1038 |  | NOT-MEASURED-old |
+| 7 | `tn3` | 0/31 |  | -13.7313 |  | NOT-MEASURED-old |
+| 7 | `vbst1.2.5` | 0/32 |  | 0.0026 |  | NOT-MEASURED-old |
+| 7 | `vbst1.3.5` | 0/32 |  | 0.0758 |  | NOT-MEASURED-old |
+| 7 | `vbst1.3.7` | 0/32 |  | -1.4601 |  | NOT-MEASURED-old |
 
 ### 2.5 Scorer drift is separately accounted for
 
@@ -184,7 +272,12 @@ because the bitstream is provably the same object, **any difference in the
 score is the scorer's, not the encoder's**. The two waves were scored by
 different worker images, so this is not hypothetical.
 
-<!--TABLE:SCOREDRIFT-->
+| quantity | value |
+|---|--:|
+| identical-byte cells compared | 6912 |
+| cells whose score differs | 0 |
+| max \|Δ m_ssim2\| | 0.0 |
+| max \|Δ bytes\| | 0 |
 
 ---
 
@@ -571,7 +664,7 @@ Three things this table settles:
 `avifdoe-svt-t1-sf-cpu-20260902` score run and the post-fix (`c1`) scores from
 `avifdoe-svt-eradelta-sf-cpu-20260903` — different scoring images. That is safe
 for `ssim2` specifically: this lane measured `ssim2` to be **bit-identical on
-every cross-build comparison it ran** — 6,716 cells across the era-delta and
+every cross-build comparison it ran** — 6,912 cells across the era-delta and
 Stage-A scorers (§2.5 here) and 351 cells across the two HDR scoring images
 (§1.2b of the companion doc), max |Δ| exactly 0 in both. No `zensim` number
 appears in this document.
