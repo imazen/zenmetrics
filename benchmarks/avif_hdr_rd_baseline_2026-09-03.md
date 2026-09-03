@@ -57,6 +57,26 @@ here, not instrument-driven, and reason (ii) alone is sufficient.
 
 <!--TABLE:COVERAGE-->
 
+### 1.1b Why the svt arm is `t2a-fix` and not `t2a` — this corpus is the worst
+case for zenav1-svt #18
+
+Worth stating because it is not incidental. #18 lived at the intersection of
+**10-bit × multi-tile × low preset**, and T2-a sits in all three at once: every
+cell is 10-bit PQ by construction; the 16 HDR references run **4000×2252
+(9.0 MP) to 4284×5712 (24.5 MP)**, and applying #18's own tile-forcing
+predicate (`width > 4096` OR sb-aligned area `> 4096×2304`) to them selects
+**15 of 16** — the single exception, `1231_interiors` at 4000×2252, misses the
+area threshold by 4 %; and four of its seven presets (0, 1, 3, 4) are
+inside the 0–5 band where the directional HBD intra path `dr_predict_hbd` is
+reachable. The original `avifhbd-t2a-20260902` was therefore *maximally*
+exposed, which is why it was abandoned at 120/3,248 and re-declared as a fresh
+run on the fixed binary rather than requeued.
+
+The companion doc's arm-set C measures the same defect's blast radius on the
+SDR side and finds the tile-forcing predicate selects the affected images with
+zero false positives and zero false negatives, which is the evidence that the
+restart was necessary rather than precautionary.
+
 ### 1.2 G5 — the route proof, re-run on this wave's own artifact
 
 The gate is not satisfiable by absence of failure; it needs positive evidence
