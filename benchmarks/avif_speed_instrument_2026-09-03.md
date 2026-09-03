@@ -214,7 +214,10 @@ q surface, which is what backend picking actually needs.
 
 ## 6. Results — FIRST FITS (pass 1, partial: 16 of 32 ladder inputs)
 
-**Scope, stated first.** S1a **pass 1 is COMPLETE — all 640 cells** (32 ladder
+**Scope, stated first.** S1a **passes 1 AND 2 are COMPLETE — 640 cells each**, so
+drift control is measured (§6.4c). The α+β table below is the min-of-2 estimate; it
+moves the coefficients by well under 1 % from pass 1 alone, as the 0.44 % median
+drift implies. Originally recorded as: S1a **pass 1 COMPLETE — all 640 cells** (32 ladder
 inputs × 10 speeds × 2 backends), across all **5 sources**. Still **one pass**, so
 **no drift control yet** (the tool prints `NOT MEASURABLE`), and **q-flatness NOT
 MEASURED** (S1b runs after S1a). Passes 2-3 and S1c are in flight.
@@ -340,6 +343,53 @@ Example, `1442` at 1024², svt speed 1: **2,358.6 → 3,903.9 → 6,101.2 ms**.
 is reproducible across the three sizes in this block but has **no explanation
 here**; it wants the per-q bitstream sizes and rav1e's speed/quantizer coupling,
 which is the analysis lane's work, not this instrument's.
+
+### 6.4c DRIFT CONTROL — measured, and the instrument is reproducible
+
+S1a pass 2 completed 22:29:52Z (640 cells), so the drift control the protocol
+promised is now measurable rather than `NOT MEASURABLE`.
+
+| statistic over (max−min)/min across the 2 passes, n=640 | value |
+|---|--:|
+| median | **0.44 %** |
+| p90 | **1.82 %** |
+| max | 20.0 % |
+
+**The worst spreads are the noise floor, not drift.** All eight worst cells are
+`1008.crop0064` — the 64² tile, where a pass reads **0.175 ms** and absolute clock
+resolution dominates. Split by cost: cells with min < 10 ms have median spread
+**0.79 %**, cells with min ≥ 1000 ms have **0.42 %**. The instrument is *more*
+reproducible exactly where the numbers matter.
+
+**N = 3 is comfortably sufficient here**, and the concern §7 registered from the
+zensim perf work (≥ 15 process starts needed to tame 10 % ASLR bimodality at 2304²)
+**does not materialise**: these encodes span ms to minutes, so per-process layout is
+a far smaller share than it is of a ~350 ms whole-image walk.
+
+**Bonus determinism check: 640/640 cells are BYTE-IDENTICAL across the two passes.**
+Both encoders are deterministic on this corpus, and the contended window changed
+timings only, never output.
+
+### 6.6b The 21:39Z contention had NO measurable effect — §6.6's caution is superseded
+
+§6.6 recorded the contended window and warned that drift after 21:39Z would conflate
+machine drift with another lane's build. **Measured, it did not.** The ladder walk is
+alphabetical, so the contended window falls on the LATE sources — and those have the
+*lowest* spread:
+
+| source (walk order →) | 1008 | 1442 | 6006 | 6602 | 8446 |
+|---|--:|--:|--:|--:|--:|
+| median spread | **1.11 %** | 0.50 % | 0.21 % | **0.26 %** | **0.24 %** |
+
+A contention signature would put the elevated spread on `6602`/`8446`, which ran
+during the build. It is on `1008` instead — the first source walked, and the one
+carrying the sub-millisecond 64² cells. **Whole-pass durations agree to 0.04 %**:
+pass 1 S1a ran 114.48 min, the partly-contended pass 2 ran 114.53 min.
+
+Mechanism: the sweep is `--jobs 1` single-threaded on a 24-thread box, so an 8-job
+build had spare cores to use. **§6.6's window record stands as provenance; its
+warning is retracted on evidence.** The estimator design (min over process starts)
+was sound but did not have to do any work here.
 
 ### 6.5 Runtime, and a cost estimate that was wrong
 
