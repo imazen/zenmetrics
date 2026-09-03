@@ -65,14 +65,13 @@ def load_picks(path):
     return out
 
 
-def img_key(image_path, picks):
+def img_key(image_path):
     """The harvest's `image` is the reference basename; picks key on `variant`."""
     base = image_path.rsplit("/", 1)[-1]
     for suf in (".hdr.png", ".png"):
         if base.endswith(suf):
-            base = base[: -len(suf)]
-            break
-    return base if base in picks else base
+            return base[: -len(suf)]
+    return base
 
 
 def main():
@@ -117,7 +116,7 @@ def main():
         if t[a.metric][i] is None or t["bytes"][i] is None:
             unscored += 1
             continue
-        img = img_key(t["image"][i], picks)
+        img = img_key(t["image"][i])
         meta = picks.get(img, {})
         rows.append(dict(run=t["run"][i], arm=t["arm"][i], dial=t["dial"][i],
                          dial_kind=t["dial_kind"][i], codec=t["codec"][i],
@@ -241,9 +240,9 @@ def main():
                     f"\t{min(v):.4f}\t{max(v):.4f}\n")
 
     # ---- per-category, with primaries carried (never dropped) ---------------
+    # Re-read the per-image file rather than re-deriving: one source of truth for
+    # every envelope number, and the class labels are already joined there.
     bycat = collections.defaultdict(list)
-    for (tb, rb), _ in env_pairs.items():
-        pass
     import csv as _csv
     with open(f"{a.outdir}/t2_envelope_per_image.tsv") as f:
         for r in _csv.DictReader(f, delimiter="\t"):
