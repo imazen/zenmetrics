@@ -64,12 +64,46 @@ def parse_label(label):
 # identity check is what will catch it -- run it before trusting this path.
 NAIVE_BACKEND_CHROMA = {"svt-rs": "svt-420", "aom-rs": "aom-420"}
 
-def synth_label(kt):
+def synth_label(kt, codec=None):
     """Naive-sweep knob tuple -> a DOE-vocabulary control label, or None."""
     sp, be = kt.get("speed"), kt.get("backend")
-    if sp is None or be not in NAIVE_BACKEND_CHROMA:
+    if sp is not None and be in NAIVE_BACKEND_CHROMA:
+        return f"s{int(sp)}-{NAIVE_BACKEND_CHROMA[be]}"
+    return hdr_label(kt, codec)
+
+
+# The HDR sweep lane (`sweep --hdr`, avif_hdr_arm_plan_2026-09-02.md §4.3)
+# emits a knob tuple with the ONE wired dial and no `backend` / `cell` key:
+# `{"preset":N}` for the zenav1-svt arm, `{"speed":N}` for the zenavif arm.
+# The backend is the pairs table's `codec` column there. The label deliberately
+# carries NO chroma token: the two HDR arms differ in chroma (svt 4:2:0 vs
+# zenavif 4:4:4 GBR) but this function has no evidence of it in hand, and the
+# existing chroma assertion above is backed by a byte-identity measurement.
+# `parse_label` returns (None, None, None) for these, which is correct — a
+# preset is not a speed — so the dial is carried by the explicit `dial` /
+# `dial_kind` columns instead of being smuggled into the label grammar.
+HDR_CODEC_TAG = {"zenav1-svt": "zenav1svt", "zenavif": "zenavif"}
+
+
+def hdr_label(kt, codec):
+    """HDR-lane knob tuple -> `<dial><N>-<codec>-hdr10`, or None."""
+    tag = HDR_CODEC_TAG.get(codec)
+    if tag is None or kt.get("backend") is not None or kt.get("cell") is not None:
         return None
-    return f"s{int(sp)}-{NAIVE_BACKEND_CHROMA[be]}"
+    for key, pfx in (("preset", "p"), ("speed", "s")):
+        if kt.get(key) is not None and len(kt) == 1:
+            return f"{pfx}{int(kt[key])}-{tag}-hdr10"
+    return None
+
+
+def dial_of(kt):
+    """(dial_value, dial_kind) for a single-dial HDR tuple, else (None, None)."""
+    if kt.get("cell") is not None or kt.get("backend") is not None or len(kt) != 1:
+        return (None, None)
+    for key in ("preset", "speed"):
+        if kt.get(key) is not None:
+            return (int(kt[key]), key)
+    return (None, None)
 
 def main():
     ap = argparse.ArgumentParser()
@@ -96,12 +130,15 @@ def main():
             for line in f:
                 r = line.rstrip("\n").split("\t")
                 kt = json.loads(r[ix["knob_tuple_json"]])
-                lbl = kt.get("cell") or synth_label(kt)
+                codec = r[ix["codec"]] if "codec" in ix else None
+                lbl = kt.get("cell") or synth_label(kt, codec)
                 speed, chroma, devs = parse_label(lbl)
+                dial, dial_kind = dial_of(kt)
                 esha = sha_key(r[ix["encode_sha"]])
                 cells.append(dict(
                     run=run, image=r[ix["image_path"]], q=int(r[ix["q"]]),
                     arm=lbl, plan=kt.get("plan"), fp=kt.get("fp"),
+                    codec=codec, dial=dial, dial_kind=dial_kind,
                     speed=speed, chroma=chroma,
                     devs="|".join(sorted(devs)) if devs is not None else None,
                     n_dev=len(devs) if devs is not None else None,
