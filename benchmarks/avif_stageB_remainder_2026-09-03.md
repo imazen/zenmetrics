@@ -16,11 +16,12 @@ their ranking), [`avif_doe_stageB6_analysis_2026-09-02.md`](avif_doe_stageB6_ana
 
 ## 0. TL;DR
 
-1. **Two runs, 16,768 cells, ~19 CPU-h estimated encode** — against a remaining
-   envelope of **~35,000 cells / ~46.8 CPU-h** (60,000 / 60 registered, minus B-6's
+1. **Two runs, 16,768 cells, MEASURED 28.6 CPU-h encode** — against a remaining
+   envelope of **~34,944 cells / 46.8 CPU-h** (60,000 / 60 registered, minus B-6's
    25,056 / 13.2). The envelope is a **ceiling, not a target**: the balance is
    deliberately unspent and held for the gated follow-ons in §5, because the arms
    that would fill it are the ones Stage A itself told us to deprioritise.
+   **`brnat` is COMPLETE** (7,488/7,488, 0 failed); `brsdr` is draining.
 2. **Rank 1 is QM × sharpness at native**, and the block that buys it is a
    **complete 4×3 factorial** in (qml level, shp level) — B-2's registered
    "3 levels each" shape, *exceeded* on the qml axis, not a subset of it.
@@ -35,6 +36,12 @@ their ranking), [`avif_doe_stageB6_analysis_2026-09-02.md`](avif_doe_stageB6_ana
 5. **Scoring was declared at launch**, in the same session, before this document was
    written. Three prior waves launched with nothing scoring; that is the failure this
    bullet exists to not repeat.
+6. **Two of this lane's own measurements were wrong and are corrected in place, not
+   quietly replaced** (§4.2, §4.3, §4.4): a blob count is not a cell count
+   (content-addressing collapses byte-identical cells, so `brnat` reads 78 % at
+   completion), and the G-RATE figure that fired the de-scope was **recomputation
+   from 1800 s pass timeouts**, not intrinsic cost. The clean rate is **9.52
+   CPU-s/cell**, the de-scope was **reverted**, and the full 29-q ladder stands.
 
 ---
 
@@ -240,6 +247,23 @@ own de-scope (§7.3) fires on the score side.
 Wall ETAs, work-weighted from live counters rather than from cell counts:
 `brnat` ~48 cells/min → **~1 h**; `brsdr` at 8.47 of 10 cores busy → **~4 h**.
 
+### 4.1 Pre-registered de-scope (fires on G-RATE only)
+
+In this fixed order, re-checking after each step:
+
+1. **`brsdr` 29-q → the 9-point knob ladder** (9,280 → 2,880 cells). This is the
+   first cut because 9 points still clears the BD-rate owner's ≥ 4-point guard, so
+   quality-space matching survives it; only the *precision* of the match degrades.
+2. **`brsdr` drops speeds 1–2** — the two most expensive cells on the dial
+   (speed 1 alone is 14.99 s on a 0.25 MP screenshot) and the two least likely to
+   be product choices.
+3. **`brnat` drops the rank-4 tune × tile group** (4 pairs + their 4 singles).
+
+**Never cut:** the QM × sharpness factorial, or the control. Those are the two
+things this wave's authorisation exists to protect.
+
+---
+
 ### 4.2 Completion — `brnat` is DONE, and a correction to how fill was being read
 
 **`avifdoe-svt-brnat-20260903`: COMPLETE — 7,488 / 7,488 DONE cells, 0 failed**
@@ -353,23 +377,6 @@ kills a pass at 1800 s by default. For any backend materially slower than svt
 `ZEN_CHUNK_WALL_SEC=0`.** The serial flag is the right *diagnostic* (it isolates
 intrinsic cost from recomputation by making every cell flush) and the wrong
 *production* setting (it throws away 9× the throughput).
-
-### 4.1 Pre-registered de-scope (fires on G-RATE only)
-
-In this fixed order, re-checking after each step:
-
-1. **`brsdr` 29-q → the 9-point knob ladder** (9,280 → 2,880 cells). This is the
-   first cut because 9 points still clears the BD-rate owner's ≥ 4-point guard, so
-   quality-space matching survives it; only the *precision* of the match degrades.
-2. **`brsdr` drops speeds 1–2** — the two most expensive cells on the dial
-   (speed 1 alone is 14.99 s on a 0.25 MP screenshot) and the two least likely to
-   be product choices.
-3. **`brnat` drops the rank-4 tune × tile group** (4 pairs + their 4 singles).
-
-**Never cut:** the QM × sharpness factorial, or the control. Those are the two
-things this wave's authorisation exists to protect.
-
----
 
 ## 5. What is held unspent, ranked, so a future tranche is mechanical
 
