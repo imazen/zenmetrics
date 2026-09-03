@@ -25,11 +25,17 @@
 #
 # Worker name = <hostname>-<role> (collision-proof). Container zen-score-<role>;
 # self-exits on drain (ZEN_IDLE_PASSES, default 8) or ZEN_MAX_MIN budget; torn down with
-#   ZEN_IDLE_PASSES raises the drain threshold. A SCORE worker chasing a LIVE encode
-#   wave needs this: it legitimately runs out of scored-able cells during any lull in
-#   the encode side, drains, and -- since the 2026-09-03 --restart on-failure:5 fix,
-#   correctly -- stays stopped, leaving nothing scoring while the wave keeps producing.
-#   Found the hard way on avifdoe-br-sf-cpu-20260903. Default is unchanged.
+#   ZEN_LONG_LIVED=1 is the right knob for a SCORE worker chasing a LIVE encode wave:
+#   such a worker legitimately runs out of scorable cells during any lull on the encode
+#   side, drains, and -- since the 2026-09-03 --restart on-failure:5 fix, correctly --
+#   stays stopped, leaving nothing scoring while the wave keeps producing. Under
+#   ZEN_LONG_LIVED=1 idle passes back off exponentially instead of counting toward the
+#   drain, which is exactly this case; the entrypoint documents it as "for the always-on
+#   LAN fleet only".
+#   ZEN_IDLE_PASSES also raises the drain threshold but is NOT the right lever here and
+#   was tried first: it counts PASSES, and an idle pass costs ZEN_PASS_SLEEP (0.2s), so
+#   even 200 drained in about two minutes on avifdoe-br-sf-cpu-20260903. Both defaults
+#   are unchanged.
 # `docker rm -f zen-score-<role>`.
 #
 # --restart on-failure:5 (2026-09-03 fix; was `unless-stopped`). The worker's
@@ -69,7 +75,7 @@ CTR="zen-score-${ROLE}"
 # command — the 2026-08-26 `--gpus all` bug); GPU flags are rebuilt on the remote.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
-  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" 'bash -s' <<'REMOTE'
+  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
 S3ENV="$HOME/.config/zen/s3env.sh"
@@ -117,6 +123,7 @@ sudo -n docker run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-fail
   -e ZEN_CONTROL_KEY="jobs/$ZM_JOBSET/control.json" \
   "${REQ_GPU[@]}" -e ZEN_WORKER="$WORKER" -e ZEN_PROVIDER=basement \
   -e ZEN_MAX_MIN=1400 -e ZEN_IDLE_PASSES="${ZM_IDLE_PASSES:-8}" -e ZEN_CORE_OVERSUBSCRIBE=2 \
+  -e ZEN_LONG_LIVED="${ZM_LONG_LIVED:-0}" \
   --entrypoint /usr/local/bin/fleet-entrypoint.sh "$ZM_IMG" >/dev/null
 echo "$(hostname) -> $ZM_JOBSET as $WORKER [store=$ZEN_S3_STORE ep=$EP] : $(sudo -n docker ps --format '{{.Names}} {{.Status}}' | grep "$ZM_CTR" || echo FAILED-TO-START)"
 REMOTE
