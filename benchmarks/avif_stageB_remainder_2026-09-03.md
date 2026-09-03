@@ -407,6 +407,40 @@ overlap I/O stalls — it thrashes. Serial-per-worker at 1 core each avoids it w
 `--cpu-shares 256`), each `ZEN_CHUNK_WALL_SEC=0 ZEN_LONG_LIVED=1
 --restart on-failure:5`.
 
+### 4.5b The serial workers ALSO timed out — because I dropped the setting that fixed it
+
+**MEASURED, and the cause was mine.** The 8 serial workers were relaunched with
+`ZEN_CHUNK_WALL_SEC=0 ZEN_LONG_LIVED=1` but **without** `ZEN_PASS_TIMEOUT=7200` —
+the override established one section earlier as necessary for this backend. Their
+process cmdline therefore read `timeout 1800`, and:
+
+```
+[FLEET-ERROR 20:54:53Z] pass 1 TIMED OUT after 1800s — worker hung.
+  worker| spot preemption — released claim 9f590d85… for fast requeue
+```
+
+A serial worker claims a batch and walks it at ~9.5 s/cell, so 1800 s covers only
+~190 cells; a larger claim never finishes, the pass is killed, and the claim is
+released. **`distinct_done` sat at 2020 for 38 minutes while eight cores ran flat
+out — ~4 CPU-h burned for zero net progress.** The tells were all visible and I read
+past them for half an hour: `docker stats` showing 100 % CPU on **42.9 MiB** of
+memory (an encode of a 1 MP image is hundreds of MB), `zenfleet-worker` with
+**0.08 s** of accumulated CPU, and a worker process only 9 minutes old inside a
+38-minute-old container.
+
+**The serial path is not immune to the timeout — nothing is.** `ZEN_PASS_TIMEOUT`
+governs the *pass*, and both chunkers put many cells in a pass. The correct
+configuration for a backend materially slower than svt is **both** settings
+together:
+
+```
+ZEN_CHUNK_WALL_SEC=0   # CPU-efficient: no oversubscription thrash (§4.5)
+ZEN_PASS_TIMEOUT=7200  # so a pass of that work can actually finish
+ZEN_LONG_LIVED=1       # for a worker trailing a live run
+```
+
+Relaunched with all three, verified in the live cmdline (`timeout 7200`).
+
 ### 4.6 Every short-window fleet rate here is LUMPY, and the envelope is a BRACKET
 
 **Ledger parquets are written per PASS** (`pass-<worker>-<n>.parquet`), and a pass
