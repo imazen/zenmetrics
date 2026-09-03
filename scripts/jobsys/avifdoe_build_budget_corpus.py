@@ -323,6 +323,17 @@ def main():
 
     picks = list(csv.DictReader(open(args.picks), delimiter="\t"))
     rows = []
+    # The pixel budget FOLLOWS --side. BUDGET_MP is the constant for the
+    # DEFAULT side (1024), and at --side 1024 this is byte-for-byte the same
+    # number (1024*1024/1e6 == 1.048576), so the registered corpus and every
+    # cell already encoded against it reproduce exactly. At any OTHER side the
+    # old constant was simply the wrong threshold: building a 64-px ladder rung
+    # would pass through every source under 1.048 MP untouched, silently
+    # emitting a native image where a 64x64 crop was asked for. Found while
+    # building the speed instrument's size ladder (2026-09-03), where exactly
+    # that happened on three cells; they were dropped rather than trusted.
+    side_budget_mp = (args.side * args.side) / 1e6
+
     for p in picks:
         key = p["corpus_key"]
         src = os.path.join(args.sources, key)
@@ -332,7 +343,7 @@ def main():
         mp = w * h / 1e6
         dst = os.path.join(args.out, "sources", key)
 
-        if mp <= BUDGET_MP or w <= args.side or h <= args.side:
+        if mp <= side_budget_mp or w <= args.side or h <= args.side:
             # NEVER upscale; leave native anything already under the pixel
             # budget OR already at/below `--side` on either axis. The second
             # clause is why the split is 13/19 and not the registered 23/9:
@@ -394,7 +405,7 @@ def main():
 
     n_crop = sum(1 for r in rows if r["transform"] == "crop-native")
     total_mp = sum(int(r["width"]) * int(r["height"]) for r in rows) / 1e6
-    budget_mp = len(rows) * BUDGET_MP
+    budget_mp = len(rows) * side_budget_mp
     print(f"{len(rows)} references -> {args.out}/sources  "
           f"({n_crop} cropped, {len(rows) - n_crop} native)")
     print(f"pixels: {total_mp:.2f} MP vs {budget_mp:.2f} MP at the budget "

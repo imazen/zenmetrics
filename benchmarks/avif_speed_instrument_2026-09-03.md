@@ -229,8 +229,18 @@ marker, and are copied to `/mnt/v/output/avif-speed-instrument-2026-09-03/` with
    enough — if it exceeds a few percent on the cheap cells, N must rise.
 5. **The knob-time axis is missing** (§4), so a knob's *time* price is still
    unknown; only the speed dial's is measured.
-6. **`avifdoe_build_budget_corpus.py`'s `BUDGET_MP` is a hardcoded 1.048576, not
-   derived from `--side`.** At side 1024 the two agree exactly, so the registered
-   corpus is unaffected; at other sides the passthrough rule fires against the wrong
-   threshold, which is why three ladder cells came back as passthroughs and were
-   dropped rather than trusted. Worth fixing at the owner before the next ladder.
+6. **Three ladder cells came back as passthroughs and were dropped**
+   (`8446` at sides 2048 and 2816, `6006` at 2816). That is the builder's
+   `w <= side or h <= side` clause behaving **correctly** — you cannot crop a
+   2560x1440 image to a 2816 square — and it is why the ladder is ragged. It is
+   *not* a defect.
+7. **A separate, genuine defect in the same rule was found and FIXED**
+   (`avifdoe_build_budget_corpus.py`): `BUDGET_MP` was a hardcoded 1.048576 rather
+   than derived from `--side`, so at any side other than 1024 the passthrough test
+   ran against the wrong threshold. It did **not** affect this ladder (all five
+   sources are >= 3.69 MP, far above the constant), but it would silently break any
+   ladder built from small sources: MEASURED, `8288` (0.25 MP) at `--side 64`
+   passed through whole under the old rule and now crops to 64x64. The pixel budget
+   now follows `--side`; at side 1024 the two are byte-for-byte the same number, and
+   rebuilding the registered corpus after the change reproduced it **5/5
+   byte-identical**.
