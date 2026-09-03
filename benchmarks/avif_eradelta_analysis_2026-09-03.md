@@ -710,9 +710,10 @@ cannot be mistaken for a result.
 
 1. **`scm3` at speed 7 looks like the largest single-knob win in the whole DOE
    so far**, and it is currently off by default. The measured effect
-   (median −50 % conditional, 10/10 wins, zero effect on photo/AI content) is an
-   order of magnitude larger than anything Stage-A found, and it is *free* on
-   non-screen content because the encoder emits byte-identical output there. The
+   (median −50.08 % conditional, 10/10 wins, zero effect on photo/AI content) is
+   **7× the largest effect Stage-A measured** (`tn3` at −7.03 %), and it is
+   *free* on non-screen content because the encoder emits byte-identical output
+   there. The
    obvious follow-up is a content-classifier-gated default, and the obvious
    prerequisite is a wider content corpus — 10 firing images is a strong signal
    on a narrow base.
