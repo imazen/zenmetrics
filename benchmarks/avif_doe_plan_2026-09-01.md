@@ -2326,3 +2326,70 @@ Two inputs this wave adds:
   transfer" rather than "untested".
 - **B-2's QM × sharpness cluster is now the only route to the synergy question**,
   and B-6 has removed the concern that its residual is a size artefact.
+
+---
+
+## 18. Stage-B remainder + the timing instrument — declared, launched, registered (2026-09-03)
+
+**Records:** [`avif_stageB_remainder_2026-09-03.md`](avif_stageB_remainder_2026-09-03.md)
+and [`avif_speed_instrument_2026-09-03.md`](avif_speed_instrument_2026-09-03.md).
+This section is the pointer; those carry the grids, gates and limitations.
+
+### 18.1 §3.6's A4 timing block is BUILT — B-4 is no longer structurally unevaluable
+
+§3.6 identified that `encode_ms` is persisted by no fleet path and specified a
+single-host instrument. It is now running on **r7900x, exclusively and uncontended**.
+Three corrections to §3.6's design, all measured:
+
+1. **It is `--no-score`.** §3.6 did not say to disable scoring. MEASURED on the first
+   launch: **23 min of wall clock against 15.0 s of `encode_ms`** — scoring was ~99 %
+   of the run, *and* running a multi-threaded metric on every core between two
+   single-threaded timed encodes is a systematic perturbation of the measured
+   quantity. `zenmetrics sweep --no-score` was added for this (`3f7281d1`); the first
+   run was discarded and relaunched.
+2. **The ladder is CROPS, not §3.6's "Lanczos derivatives".** §2.4 already argues
+   this for RD — a resampling kernel removes exactly the high-frequency signal — and
+   it binds harder for *time*, which is driven by that residual: a Lanczos-reduced
+   64² tile is not a small image, it is a smooth one, and fitting α on it charges the
+   intercept for a content change.
+3. **A backend axis was added** (coordinator requirement, 2026-09-03): svt-rs **and**
+   zenrav1e, full 10-speed dial each, because backend selection is now a model output.
+
+**Already measured, before the fits:** svt-rs is **52× faster** than zenrav1e at
+1024²/s6/q45 (143.9 vs 7,539.8 ms) *and* 40 % smaller *and* higher zensim; the dials
+**alias differently** (svt saturates at preset 9, zenrav1e still moves at speed 10
+and aliases at 7/8 on another image); zenrav1e's per-pixel cost has a **3.4× content
+spread**. **The knob-time half of §3.6 is BLOCKED with the blocker named** — the
+sweep's AVIF knob vocabulary does not carry the DOE deviations, and the plan path
+that does runs through the jobexec kind that persists no `encode_ms`.
+
+### 18.2 Two Stage-B runs, 16,768 cells of the ~34,944 remaining
+
+`avifdoe-svt-brnat-20260903` (7,488, NATIVE) is §17.4's missing **native QM ×
+sharpness grid**, as a complete 4×3 factorial, plus mtx32 and tune×tile; A2 ran the
+same plan at budget with the same ladder, so it is a clean **size A/B on the
+interaction**. `avifdoe-rav-brsdr-20260903` (9,280, BUDGET) is the **zenrav1e SDR RD
+arm** — the corpus had zero zenrav1e SDR coverage. Neither needed a zenavif change
+or a new image. `vbst`, `scm3` and `acb` are excluded with citations (§10.1(4);
+era-delta's 0/288 at speed 6; §17.3). Scoring was declared **at launch**.
+
+### 18.3 Three corrections this lane owes the record
+
+1. **`avifdoe_build_budget_corpus.py`'s pixel budget did not follow `--side`.**
+   `BUDGET_MP` was hardcoded to the default side's 1.048576, so at any other side the
+   passthrough test used the wrong threshold — a sub-1.048 MP source passed through
+   whole where a crop was asked for (MEASURED: `8288` at `--side 64`). **Fixed**
+   (`6b9101b7`); at side 1024 the two are the same number and the registered corpus
+   rebuilds **5/5 byte-identical**, so nothing already encoded is affected.
+2. **The drained-worker restart loop is systemic, not incidental.** `unless-stopped`
+   plus the worker's self-exit-on-drain means that the moment a run completes, docker
+   restarts the worker forever. Found on **five** containers today across three
+   hosts — B-6's on r7900x and tower at **2,466 restarts each**, and another lane's
+   three era-delta workers at 458 / 561 / 178 — every one reporting `done=0` and
+   re-fetching a 14 MB manifest each cycle. §15.7 found the same shape once; it is
+   now clearly a pattern worth a fix at the launcher, not repeated cleanup.
+3. **`rsync -a` on the native corpus stages BROKEN LINKS.** 30 of its 32 entries are
+   symlinks into `/mnt/v/output/imazen-26-png/`, so a plain `rsync -a` to a fleet box
+   produced 30 dangling links and 2 real files — a run would have quietly encoded 2
+   images and merely looked small. Use `--copy-links` and verify
+   `find -type f | wc -l` before arming anything.
