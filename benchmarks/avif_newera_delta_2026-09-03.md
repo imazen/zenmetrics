@@ -31,10 +31,13 @@ pins separately, when its arms declare (§7).
    `pipeline.rs`/`hdr_mode.rs` — it exists only for a C-parity differential
    test. **No tune-vmaf arm is registered in §7.**
 4. **The two previously-dead knobs are re-probed at HEAD and mostly still
-   dead — with one genuine, newly-measured exception.** `tn0` (tune=0) and
-   `scm0` are 0/36 divergent (fully dead, unchanged). `scm3` is now **4/36
-   divergent — all four at preset 8, all on screen content** (§4). This is a
-   real, freshly-measured finding, not a re-confirmation.
+   dead — with one genuine, newly-measured, and product-reachable exception.**
+   `tn0` (tune=0) and `scm0` are 0/36 divergent at every preset tested
+   (fully dead, unchanged). `scm3` diverges at **raw SVT presets 8 and 9**
+   (screen content only) — and while preset 8 is a dead end (see the
+   correction in §4.1: zenavif's speed dial cannot reach it at all), **preset
+   9 is reachable from the product speed dial at speed ∈ {7,8,9,10}**, which
+   all alias to it. This is a real, freshly-measured, and actionable finding.
 5. **`tn3` (tune=IQ) is the single highest-risk arm for the stability re-run**,
    and the risk is mechanistic, not generic: `tn3` forces
    `screen_content_mode=Some(3)` as one of its 9 aliased fields (dossier H-4),
@@ -189,22 +192,48 @@ detect a difference at all:
 | **`scm3` (screen_content_mode=Some(3))** | **32/288** | **NOT fully dead any more** — see below |
 | `fork_tn0` (tune=0 under `HdrForkConfig::hdr_fork()`) | 32/288 | diagnostic-only (§4.2) |
 
-### 4.1 scm3 is live at preset ≥8 on screen content
+### 4.1 scm3 is live at preset 8/9 on screen content — and preset 9 is the reachable one
 
-All 32 divergent `scm3` cells are `(screen, preset=8, qp∈{20,32,45,55})` — every
-qp at the single preset-≥8 point tested, on the one content class scm-3 exists
-for, and **zero** divergence anywhere else (photo/detail content, presets 4/6,
-or screen content at presets 4/6). This is a clean, freshly-measured result:
-Stage A's own probe (§3 of the Sep-2 knob dossier finding, cited in this
-lane's brief) tested presets 4 and 6 only and reported scm3 **100%** identical
-at both — that finding stands, unchanged. It simply never looked at preset
-≥8, and preset ≥8 is where the behaviour changes.
+Extended the probe's preset array from `[4,6,8]` to `[4,6,7,8,9]` (temporary
+local edit, run, reverted — nothing committed to zenav1-svt; not this lane's
+repo to modify permanently) to find the edge precisely. Result, `scm3` vs
+`base`, screen content, all 4 qp × each preset:
+
+| preset | divergent / 12 |
+|--:|--:|
+| 4 | 0 |
+| 6 | 0 |
+| 7 | 0 |
+| **8** | **4** |
+| **9** | **4** |
+
+Zero divergence anywhere on photo/detail content or at presets ≤7, at any qp.
+This is a clean, freshly-measured result: Stage A's own dossier probe tested
+presets 4 and 6 only and reported scm3 100% identical at both — that finding
+stands, unchanged. It simply never looked at preset ≥8, and 8/9 is where the
+behaviour changes.
+
+**Correction, checked against source before registering anything on this:**
+`encoder_svt_rs::speed_to_svt_preset` (the mapping zenavif's product "speed"
+1-10 knob actually uses — confirmed by reading `svt_doe_main()`'s own
+`axes.speeds = vec![4, 6, 7, 2, 5, 3, 1]`, which is the same 1-10 space) maps
+`speed → preset` as `{1:0, 2:1, 3:3, 4:4, 5:6, 6:7, 7:9, 8:9, 9:9, 10:9}` — 7
+distinct presets, **preset 8 unreachable at any speed value**. So the raw-preset
+finding at preset 8 is a **port-level curiosity with no product path** — it
+cannot be tuned around because it cannot be requested. **Preset 9, however, is
+exactly what speed ∈ {7,8,9,10} all alias to**, and that's where the second
+divergent row lives. **The actionable, product-reachable finding is: `scm3` at
+zenavif speed ≥7 (any of 7/8/9/10 — they're the same cell) is no longer inert
+on screen content.** Declaring more than one of {7,8,9,10} would just repeat
+the already-documented inert-alias trap (§17.5 point 3 of the Stage-A doc).
 
 **Not yet known: why.** This lane did not trace the mechanism (`sc_detect.rs`
 scoping, a preset-gated code path, or something else) — that's issue-#17-
 adjacent root-cause work in the port repo, out of this lane's scope. What's
-registered here is the *measurement*: scm3 is a genuine main effect at preset
-≥8 on screen content, worth a small dedicated arm (§7).
+registered here is the *measurement*: scm3 is a genuine main effect at speed
+7 (preset 9) on screen content, worth a small dedicated arm (§7), and NOT
+reachable at raw preset 8 despite that being where the divergence was first
+spotted.
 
 ### 4.2 fork_tn0's divergence is diagnostic, not a product finding
 
@@ -228,12 +257,13 @@ Priority order, evidence-derived (not generic):
    IQR 12.8–14.0, CI crossing zero at s4, worst image +21%, and per-content
    swings from -12.56% (scan) to +0.54% (plot). `tn3` forces
    `screen_content_mode=Some(3)` as one of its 9 aliased fields (dossier H-4
-   table). §4.1 shows that exact field stops being inert at preset ≥8 on
-   screen content — precisely the content class where `tn3`'s effect is
-   already largest (-11.57% screenshot, -12.56% scan at s6). The existing
-   measurement is not contaminated (it's entirely inside the ≤7 band), but it
-   is silent on whether the effect holds, grows, or inverts at preset ≥8.
-   **Registered as the first cell of the Phase-2 stability re-run (§7a).**
+   table). §4.1 shows that exact field stops being inert at speed ≥7 (preset
+   9) on screen content — precisely the content class where `tn3`'s effect is
+   already largest (-11.57% screenshot, -12.56% scan at s6). `tn3`'s existing
+   measurement only covers speeds 4 and 6 (presets 4 and 7), so it's silent
+   on speed 7 — the first product-reachable point where its own aliased
+   field just showed new life. **Registered as the first cell of the
+   Phase-2 stability re-run (§7a).**
 2. **`shp7` / `shp3` (sharpness) — largest and most consistent cost, worth
    confirming still holds.** Both backends' image tunes force sharpness=7
    (dossier H-14), so this is effectively confirming a default-adjacent
@@ -273,9 +303,10 @@ bd10 was excluded from AG and every native-size wave prior to today. It is now
 correct to measure, and there is zero prior data to reconcile against; this is
 a first measurement, not a re-measurement.
 
-### 6.2 scm3 at preset ≥8 on screen content (§4.1)
+### 6.2 scm3 at speed ≥7 (preset 9) on screen content (§4.1)
 
-Covered above — a small, targeted arm, not a full re-sweep.
+Covered above — a small, targeted arm at the one product-reachable point
+(speed 7; 8/9/10 alias to the same cell), not a full re-sweep.
 
 ---
 
@@ -289,8 +320,8 @@ record; declared cells and budget live in
   (§5.1), `shp7`/`shp3` second, `vbst*` third (tail-focused), QM-window knobs
   fourth — same budget corpus + ladders as Stage-A, sized to detect ≥1%
   BD-rate movement.
-- **(b) New-knob arms**: `scm3@p8` on screen content (§4.1/§6.2), bd10 on the
-  native corpus (§6.1). No tune-vmaf arm (§3 — falsified).
+- **(b) New-knob arms**: `scm3` at speed 7 on screen content (§4.1/§6.2), bd10
+  on the native corpus (§6.1). No tune-vmaf arm (§3 — falsified).
 - **(c) aom PLANNED-BLOCKED tranche** — registered, not declared. See §7 below
   for the current, more-advanced-than-briefed state of the prerequisite.
 - **(d) Stage-B B-1/B-2/B-3 reconciliation** — absorbed/deprioritized with
@@ -377,9 +408,13 @@ are legitimate pre-existing work; none were touched.
 - `zenrav1e` @ `e4883037553434efb57ecbf4414c8b49922ba3e4` (transitive, via
   `ravif`/cavif-rs @ `f6c883b6e7395fad67c87ddab676c4df59575a41`; unchanged
   this era)
-- Probe: `rust/svtav1/examples/knob_byte_identity.rs`, run at zenav1-svt HEAD
-  `2ca060f4`, raw TSV at `~/tmp/knob_probe_2026-09-03/knob_byte_identity.tsv`
-  (289 rows incl. header, 8 arms × 3 content × 3 preset × 4 qp)
+- Probe: `rust/svtav1/examples/knob_byte_identity.rs`, run unmodified at
+  zenav1-svt HEAD `2ca060f4`, raw TSV at
+  `~/tmp/knob_probe_2026-09-03/knob_byte_identity.tsv` (289 rows incl. header,
+  8 arms × 3 content × 3 preset {4,6,8} × 4 qp). A second run with the
+  `presets` array temporarily widened to `[4,6,7,8,9]` (local edit, reverted
+  after, nothing committed) pinned the scm3 edge exactly — TSV at
+  `~/tmp/knob_probe_2026-09-03b/knob_byte_identity.tsv` (481 rows).
 - `zenfleet-ctl` binary used for the fleet report: `target/release/zenfleet-ctl`
   (built 2026-09-02 03:52, predates the pin bump but is job-system tooling —
   no dependency on zenav1-svt/zenavif — so its own binary age is irrelevant
