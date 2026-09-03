@@ -214,17 +214,16 @@ q surface, which is what backend picking actually needs.
 
 ## 6. Results — FIRST FITS (pass 1, partial: 16 of 32 ladder inputs)
 
-**Scope, stated first.** These come from the 328 flushed rows of S1a pass 1 —
-`1008` and `1442` complete at all 7 rungs, `6006` at its first 3. So: **two photo
-sources**, **one pass** (hence **no drift control yet** — the tool prints
-`NOT MEASURABLE`), and **q-flatness NOT MEASURED** (S1b runs after S1a). Passes 2–3
-and S1c are still in flight.
+**Scope, stated first.** S1a **pass 1 is COMPLETE — all 640 cells** (32 ladder
+inputs × 10 speeds × 2 backends), across all **5 sources**. Still **one pass**, so
+**no drift control yet** (the tool prints `NOT MEASURABLE`), and **q-flatness NOT
+MEASURED** (S1b runs after S1a). Passes 2-3 and S1c are in flight.
 
 ### 6.1 The headline: the α + β·pixels model is RIGHT, and pooling is what breaks
 
-| | pooled R² | per-source R² (median) | β spread across 2 sources |
+| | pooled R² | per-source R² (median) | β spread across sources |
 |---|---|---|---|
-| all 20 arms | **0.597 – 0.951** | **0.989 – 1.0000** | **1.46× – 5.40×** |
+| all 20 arms (full pass, 5 sources) | **0.627 – 0.906** | **0.9969 – 0.9998** | **1.95× – 24.30×** |
 
 A pooled fit that scores 0.60 looks like a failed model. It is not. **The same arm
 fit per source lands at R² 0.999**, and the pooled residual is entirely β varying
@@ -232,12 +231,18 @@ with **content**. The analyzer reports this as
 `POOLING_NOT_MODEL (per-source fit is clean)` on **20 of 20 arms**.
 
 **This is the load-bearing result for the tuning model: a single (backend, speed) β
-is wrong by up to 5.4×, and it is wrong between two PHOTOGRAPHS** — `1008` (general
-photo) vs `1442` (nature photo), both 12 MP, same content class. At svt speed 1 they
-fit β = **15,961.6** and **2,953.5** ms/MP. So the speed model must be
-**feature-conditioned per image**, not a per-(backend, speed) constant — which is
-exactly what backend picking needs, since the question is always "how long will
-*this* image take".
+is wrong by up to 24.3×.** And it is already wrong by **5.4× between two
+PHOTOGRAPHS** — `1008` (general photo) vs `1442` (nature photo), both 12 MP, same
+content class, fitting β = 15,961.6 vs 2,953.5 ms/MP at svt speed 1. Adding the
+scan, patent and screenshot sources takes the spread to 24.3×. So the speed model
+must be **feature-conditioned per image**, not a per-(backend, speed) constant —
+which is exactly what backend picking needs, since the question is always "how long
+will *this* image take".
+
+**Six arms now fit a NEGATIVE intercept** (svt 1/3/4/5, zenrav1e 9) — the classic
+linear-model-failure tell. It is still pooling, not the model: those same arms fit
+per source at R² 0.9969-0.9998. A negative α is what a pooled line does when it is
+averaging incompatible slopes.
 
 The nonlinearity check comes back clean on the same evidence: the power fits give
 **γ = 0.93–1.09**, i.e. near-linear in pixels, and no arm has a negative intercept.
@@ -256,10 +261,14 @@ alone.
 | 4 | 34.75 | 769.0 | 261.84 | 6,480.9 | 8.4× |
 | 5 | 0.29 | 287.3 | 69.48 | 1,511.4 | 5.3× |
 | 6 | 2.33 | 55.0 | 53.85 | 2,101.5 | 38.2× |
-| 7 | 0.52 | **23.35** | 80.49 | **1,509.0** | **64.6×** |
-| 8 | 0.51 | **23.25** | 81.75 | **1,507.4** | 64.8× |
-| 9 | 0.44 | **23.27** | 22.62 | 603.2 | 25.9× |
-| 10 | 0.47 | **23.26** | 14.59 | 328.1 | 14.1× |
+| 7 | 0.50 | **28.41** | 33.16 | **1,963.4** | **69.1×** |
+| 8 | 0.51 | **28.33** | 34.03 | **1,962.3** | 69.3× |
+| 9 | 0.54 | **28.32** | −0.59 | 708.5 | 25.0× |
+| 10 | 0.52 | **28.33** | 0.36 | 393.7 | 13.9× |
+
+*(rows 1-6 are the partial-pass values and are superseded by the full-pass fits in
+`speed_alpha_beta.tsv`; svt 1 now fits α = −254.4, β = 13,244.4 and zenrav1e 1
+α = 2,008.8, β = 49,233.5.)*
 
 **The intercept is not decorative.** At svt speed 1, α = 874.5 ms — at the 64² rung
 (0.004 MP) the slope contributes 39 ms and the intercept 875. A "ms/MP" number alone
@@ -267,12 +276,13 @@ would misprice that cell by ~20×. This is the discipline's α-matters case, mea
 
 ### 6.3 Both aliases confirmed across the whole ladder, not one cell
 
-- **svt speeds 7, 8, 9, 10** fit β = 23.351 / 23.251 / 23.271 / 23.259 ms/MP and
-  α = 0.52 / 0.51 / 0.44 / 0.47. Four independent 17-point regressions landing
-  within **0.4 %** — the preset-9 saturation (H-2) confirmed as a property of the
-  whole size ladder rather than the single cell §3.3 showed.
-- **zenrav1e speeds 7 and 8** fit β = 1509.01 / 1507.40 and α = 80.49 / 81.75 —
-  **0.1 % apart**. The 7/8 alias first seen on `8288` reproduces on photographs.
+- **svt speeds 7, 8, 9, 10** fit β = 28.409 / 28.334 / 28.322 / 28.330 ms/MP and
+  α = 0.500 / 0.514 / 0.543 / 0.518. Four independent **32-point** regressions
+  landing within **0.3 %** — the preset-9 saturation (H-2) confirmed as a property
+  of the whole size ladder and all 5 content classes, not the single cell §3.3
+  showed.
+- **zenrav1e speeds 7 and 8** fit β = 1963.36 / 1962.33 — **0.05 % apart**. The 7/8
+  alias first seen on `8288` reproduces across the full ladder.
   zenrav1e's 9 and 10 remain distinct (603.2, 328.1), so its dial genuinely runs
   longer than svt's.
 

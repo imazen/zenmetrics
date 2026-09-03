@@ -378,6 +378,40 @@ kills a pass at 1800 s by default. For any backend materially slower than svt
 intrinsic cost from recomputation by making every cell flush) and the wrong
 *production* setting (it throws away 9× the throughput).
 
+### 4.5 Worker topology, MEASURED three ways — oversubscribed concurrency is the worst of them
+
+The `brsdr` arm was run under three worker configurations and each was measured
+with the **authoritative** counter (`zenfleet-ctl compact`'s `distinct_done`) on
+both ends of the window, after two earlier attempts were misled by lagging proxies:
+
+| configuration | cells/min | CPU-s/cell | 7,290 remaining cells |
+|---|--:|--:|---|
+| concurrent, `OVERSUBSCRIBE=2`, 1800 s kill | — | 15.4 → 28.1 (waste) | timed out, recomputing |
+| concurrent, `OVERSUBSCRIBE=2`, 7200 s | **26.2** | **34.8** | 4.6 h wall, **70.5 CPU-h** |
+| **serial, ×1 worker/host** | 12.6 | **9.52** | 9.6 h wall, 19.3 CPU-h |
+| **serial, ×4 workers/host (shipped)** | ~50 (projected) | 9.52 | ~2.4 h wall, 19.3 CPU-h |
+
+**Oversubscribed concurrency costs 3.7× the CPU for 2.1× the throughput** — and the
+CPU figure is what the Stage-B envelope is denominated in, so it is the axis that
+decides. At 34.8 CPU-s/cell the remaining grid alone is **70.5 CPU-h against 46.8
+remaining**; at 9.52 it is 19.3 and fits.
+
+**Cause:** `lan_score_launch.sh` hardcodes `ZEN_CORE_OVERSUBSCRIBE=2`, so a 9-core
+cpuset runs ~18 simultaneous AV1 encodes. AV1 encoding is memory-bandwidth- and
+cache-heavy with a large per-encode working set, so oversubscription does not
+overlap I/O stalls — it thrashes. Serial-per-worker at 1 core each avoids it while
+**scaling out instead of up**: eight 1-core workers give ~4× the throughput of two
+9-core oversubscribed ones at ~27 % of the CPU.
+
+**Shipped:** 8 serial workers (4 local on cores 20-23, 4 tower on 0-3 with
+`--cpu-shares 256`), each `ZEN_CHUNK_WALL_SEC=0 ZEN_LONG_LIVED=1
+--restart on-failure:5`.
+
+**The generalisable rule:** for a memory-bandwidth-bound codec, **scale workers
+out, not concurrency up** — and never measure a fleet rate from blob counts, ledger
+file counts, or the gap-fill's DONE line, all three of which lag or dedupe. Use
+`zenfleet-ctl compact`'s `distinct_done` on both ends of a fixed window.
+
 ## 5. What is held unspent, ranked, so a future tranche is mechanical
 
 18,176 cells and ~19 CPU-h remain after this wave. In priority order:
