@@ -35,6 +35,10 @@
 #   gap-fill-fed SCORE run, whose manifest is re-declared every round as encodes
 #   land. Measured on avifdoe-br-sf-cpu-20260903: the scorer sat idle at 0% CPU for
 #   3 hours on a manifest it had fetched exactly once, while 9,628 pairs waited.
+#   The same trap bites a DECLARATION SHRINK: swapping manifest.json (the sanctioned
+#   de-scope path) does NOT reach a running long-lived worker -- measured, both hosts
+#   kept reporting the pre-shrink 4,425,398-byte manifest until restarted. ANY
+#   manifest change requires restarting long-lived workers to take effect.
 #   For a gap-fill-fed scorer use ZEN_LONG_LIVED=0 with a large ZEN_IDLE_PASSES and
 #   `docker update --restart unless-stopped`: there the drain-exit-restart cycle IS
 #   the manifest-refresh mechanism, and it is the one case where unless-stopped is

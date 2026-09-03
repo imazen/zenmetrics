@@ -555,6 +555,16 @@ Arithmetic at the measured rate:
 | + `brnat` | 7,488 | ~4.0 |
 | **wave** | | **37.6 of 46.8 — FITS** |
 
+**⚠ The shrink did NOT take effect until the workers were RESTARTED.** §4.4's
+sanctioned path swaps `manifest.json`, but `ZEN_LONG_LIVED=1` pins the manifest
+(the fetch is outside the pass loop — the same trap that idled the scorer for 3 h).
+MEASURED: after the swap, both hosts still reported `manifest ready (4425398
+bytes)`, the pre-shrink size. Restarting all 8 workers brought them to
+`1373158 bytes`. **Any manifest change — de-scope, re-declaration, gap-fill —
+requires restarting long-lived workers.** Bounded chunks (§4.5c) are what made that
+restart cheap: ≤ 300 s of work per worker rather than the 1 h 45 m the unbounded
+configuration would have thrown away.
+
 **The ~2,035 already-encoded cells outside the 9-q subset are not waste.** They are
 valid denser-q coverage on the images reached first, the gap-fill scores them from
 the ledger regardless of the manifest, and they stay in the run. The wave therefore
