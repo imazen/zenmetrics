@@ -570,10 +570,11 @@ Three things this table settles:
 **Instrument note for this table.** The pre-fix (`t1d`) scores come from the
 `avifdoe-svt-t1-sf-cpu-20260902` score run and the post-fix (`c1`) scores from
 `avifdoe-svt-eradelta-sf-cpu-20260903` — different scoring images. That is safe
-for `ssim2` specifically: this lane measured `ssim2` to be **bit-identical
-across four different builds** on identical bitstreams (§2.5 here, and §1.2b of
-the HDR companion doc). It would **not** be safe for `zensim`, which is why no
-`zensim` number appears in this document.
+for `ssim2` specifically: this lane measured `ssim2` to be **bit-identical on
+every cross-build comparison it ran** — 6,716 cells across the era-delta and
+Stage-A scorers (§2.5 here) and 351 cells across the two HDR scoring images
+(§1.2b of the companion doc), max |Δ| exactly 0 in both. No `zensim` number
+appears in this document.
 
 **The registered answer to Q4 ("does the effect survive native resolution?"):
 YES, and if anything it is slightly stronger on the large images.** The two
@@ -662,11 +663,12 @@ cannot be mistaken for a result.
   so they are the same cell; nothing was learned about presets the product dial
   cannot reach (preset 8 in particular, where the port-level probe first saw the
   divergence, is unreachable and stays unmeasured *as a product configuration*).
-- **No `zensim` number anywhere.** The DOE emits `zensim` as a 720-wide feature
-  vector, and the scalar is instrument-era-stamped (measured in the HDR
-  companion doc, §1.2b: 11.14 points between two scoring images on identical
-  bytes). `ssim2` is the corpus-wide scalar response, exactly as the DOE plan's
-  §7.1 designates.
+- **No `zensim` number anywhere.** The DOE emits `zensim` as a wide feature
+  vector, not a corpus-wide scalar; `ssim2` is the designated response, exactly
+  as the DOE plan's §7.1 says. (The HDR companion's §1.2b measures `ssim2` to be
+  bit-identical across three builds and records a separate trap worth knowing:
+  `score-pairs --metric zensim` and the ScoreFile executor's `zensim` are
+  different quantities.)
 
 ---
 

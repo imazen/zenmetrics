@@ -114,36 +114,55 @@ same pair scored *without* `--hdr` is refused —
 — and `score-pairs` then exits non-zero rather than reporting an empty success.
 A mis-routed T2 cell fails; it does not return a plausible number.
 
-### 1.2b ⚠ THE QUALITY COLUMN IS `ssim2`, AND `zensim` IS NOT USABLE HERE — measured
+### 1.2b The quality column is `ssim2` — and a correction this lane owes the record
 
 The T2 corpus was touched by **two different scoring images**: `avifhbd-t2b`'s
 432 cells were scored 2026-09-02 by `exec-avifhbd-t2-89d0fb64`, and everything
 scored 2026-09-03 (all of `avifhbd-t2a-fix`, **plus a full re-score of t2b**)
-by `exec-avifhbd-t2fix-64252836`. Re-scoring one shared cell
-(`t2b / 1520_nature_tulips… / encode_sha 6bccb9f7…`) under the second image
-against the first image's stored blob:
+by `exec-avifhbd-t2fix-64252836`. The re-score gives 351 `(encode_sha, metric)`
+pairs scored by *both* images, on identical bitstreams:
 
-| metric | stored (`t2-89d0fb64`) | re-scored (`t2fix-64252836`) | Δ |
-|---|---|---|---|
-| `ssim2` | `77.2777570540571` | `77.2777570540571` | **0.0** |
-| `zensim` | `88.96769457440139` | `77.82319440419373` | **−11.14** |
+| metric | pairs compared | differing | max \|Δ\| |
+|---|--:|--:|--:|
+| `ssim2` | 351 | **0** | **0.0000000000** |
+| `zensim` | 351 | 225 | **1.156e-7** |
 
-So **`ssim2` is instrument-invariant across the two images and `zensim` is not**
-— the known image-era stamping of the zensim scalar, caught here in the wild on
-identical bytes. Consequences, applied:
+**So both images agree**: `ssim2` bit-exactly, `zensim` to within ordinary
+float non-determinism. There is **no material instrument era split inside this
+corpus**, and the analysis does not depend on there being one.
 
-- **Every number in this document is `ssim2`.** `zensim`/`zensim_score` is not
-  used for Q5 or Q6 and no cross-arm zensim claim is made.
-- **The 48 pre-era score blobs are EXCLUDED from the harvest.** The 2026-09-03
-  wave re-scores every t2b cell, so those 48 are duplicates on a *different*
-  instrument — and because the harvest keys on `encode_sha` with last-write-wins
-  over a filename-sorted glob, leaving them in would have made the era of each
-  t2b cell depend on a sha ordering. The published table is **one instrument end
-  to end**; the excluded key list is `t2_preera_blobs.txt` in the pointer doc's
-  output dir.
-- A third build (the local `zenmetrics-cli 0.6.0` working copy) also reproduces
-  `ssim2 = -113.52625369804514` exactly on the §1.2 cell while returning yet
-  another `zensim` — so the ssim2 invariance is across three builds, not two.
+> **⚠ CORRECTION — an earlier draft of this section claimed the two images
+> disagreed on `zensim` by 11.14 points, from a single hand-run.** That was
+> wrong, and the way it was wrong is worth keeping. The 11.14 gap
+> (`88.96769457440139` stored vs `77.82319440419373` re-run) is real, but it is
+> between the **fleet ScoreFile executor path** and a hand-run
+> **`score-pairs --metric zensim`** — *not* between the two images. A third
+> build reproduces the same shape in the other direction (local
+> `zenmetrics-cli 0.6.0` returns `−44.47` where the fleet stored `−136.72`).
+> The fleet's `zensim` comes from its 372-feature `with-iw` record
+> (`kind:"feature"`, `regime:"with-iw"`, whose `zensim_score` equals the metric
+> record's `score` exactly), while `score-pairs` scores with the CLI's shipped
+> default profile unless `--zensim-profile` says otherwise. **`score-pairs
+> --metric zensim` and the ScoreFile executor's `zensim` are different
+> quantities and must not be compared** — which is a finding in its own right,
+> and one that generalises past this arm.
+>
+> The n = 1 measurement was not wrong about its own cells; it was wrong about
+> *what varied between them*. The 351-pair check is what distinguishes the two
+> explanations, and it should have come first.
+
+Two decisions follow, and only the first is load-bearing:
+
+- **Every number in this document is `ssim2`.** That was already the DOE's
+  designated corpus-wide scalar (plan §7.1) and it is now measured
+  build-invariant across three builds. `zensim` is not used for Q5 or Q6.
+- **The 48 pre-era score blobs are still EXCLUDED from the harvest** — now as
+  hygiene rather than necessity. The 2026-09-03 wave re-scores every t2b cell,
+  and the harvest is last-write-wins over a filename-sorted glob, so leaving
+  both generations in would make each cell's provenance depend on a sha
+  ordering. Excluding them makes the table one instrument end to end by
+  construction; the measurement above says it would not have changed a number.
+  The excluded key list is `t2_preera_blobs.txt` in the output dir.
 
 ### 1.3 G0.5 — the primaries × content cross-tab, published with every content claim
 
@@ -239,10 +258,11 @@ chroma from the container of a pre-fix blob would be misled.**
   120/3,248 with structurally invalid cells) is **not** read here, and its rows
   are never pooled with `avifhbd-t2a-fix-20260902`'s.
 - **Nothing about `zensim` on this corpus** (§1.2b). The stored T2 parquet
-  carries a `m_zensim_score` column; it is single-instrument as published, but
-  no claim in this document rests on it, and anyone joining the earlier
-  2026-09-02 blobs back in would be mixing two instruments that differ by 11
-  points on identical bytes.
+  carries a `m_zensim_score` column and it is single-instrument as published,
+  but no claim in this document rests on it. Note the correction in §1.2b: the
+  two scoring images agree on `zensim` to 1.16e-7, and the 11-point gap this
+  lane first reported was between the ScoreFile executor and a hand-run
+  `score-pairs --metric zensim` — two different quantities, not two eras.
 
 ---
 
