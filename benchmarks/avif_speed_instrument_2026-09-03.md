@@ -124,6 +124,23 @@ The brief says **verify, don't inherit** — and no such number exists for zenra
 all. Splitting this out is what makes S1a affordable at the full 7-rung ladder: q is
 a separate question from the size fit, so it is asked on 3 sizes rather than 32.
 
+### 3.2b S1c — the content-class block
+
+**32 corpus images × 2 sizes (native + budget) × q45 × 3 passes**, svt at all 10
+speeds and zenrav1e at **{4, 7, 10}**.
+
+S1a's ladder buys 3.3 decades of pixels from **5** sources, i.e. 5 of the corpus's
+**12** content classes. S1c buys **all 12**, at two sizes. Neither substitutes for
+the other and both are needed: content changes β by a MEASURED **3.4×** on
+zenrav1e, while pixel count is what α + β is a fit *in*. Run second so the α + β
+deliverable is not held behind it.
+
+zenrav1e is restricted to 3 speeds here because at native the corpus is **161.59 MP**
+and its slow end costs 47–161 s/MP summed over the dial — the full ladder there
+would cost more than the rest of the instrument combined. svt keeps all 10 (it is
+~52× cheaper). **That restriction is a budget decision and is stated, not hidden:
+zenrav1e's speeds 1–3 have no content-class coverage.**
+
 ### 3.3 Both backends, full 10-speed dial
 
 svt-rs and zenrav1e (`backend: "svt-rs"` / `"zenravif"`), speeds 1–10 each. The
@@ -212,7 +229,10 @@ marker, and are copied to `/mnt/v/output/avif-speed-instrument-2026-09-03/` with
 
 ## 7. Limitations — stated before any result
 
-1. **Screen content is absent above 1024².** No corpus source is both
+1. **S1a's ladder covers 5 of 12 content classes**; S1c covers all 12 but only at
+   two sizes and, for zenrav1e, only 3 speeds. A per-(backend, speed) β for a class
+   outside S1a's five is therefore a two-point estimate, not a ladder fit.
+2. **Screen content is absent above 1024²** in the ladder. No corpus source is both
    screen-class and ≥ 2048² — the largest screenshot is 3.69 MP and the largest plot
    1.05 MP. β for screen content at the large end is therefore **not measured**, and
    given the 3.4× content spread already seen, it must not be interpolated from the

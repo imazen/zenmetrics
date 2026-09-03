@@ -26,7 +26,51 @@
 #     dedicated LAN worker (not the shared dev box or the household tower).
 #
 # Usage: avif_speed_instrument.sh <ladder-dir> <qprobe-dir> <out-dir> [passes]
+#        avif_speed_instrument.sh --s1c <native-dir> <budget-dir> <out-dir> [passes]
+#
+# S1c is the CONTENT-CLASS block and it is a separate invocation on purpose.
+# S1a's size ladder buys 3.3 decades of pixels from 5 sources, i.e. 5 of the
+# corpus's 12 content classes; S1c buys all 12 at two sizes instead. Neither
+# substitutes for the other -- content changes beta by a MEASURED 3.4x on
+# zenrav1e, and pixel count is what alpha+beta is a fit in. Running S1c second
+# keeps the alpha+beta deliverable on the earlier clock.
+#
+# S1c's zenrav1e leg is restricted to speeds {4,7,10}: at native the corpus is
+# 161.59 MP and zenrav1e's slow end costs 47-161 s/MP summed over the dial, so
+# the full ladder there would cost more than the rest of the instrument
+# combined. svt keeps all 10 speeds (it is ~52x cheaper).
 set -euo pipefail
+
+if [ "${1:-}" = "--s1c" ]; then
+  shift
+  NATIVE_DIR="${1:?native source dir}"
+  BUDGET_DIR="${2:?budget source dir}"
+  OUT="${3:?output dir}"
+  PASSES="${4:-3}"
+  BIN="${ZM_BIN:-$HOME/speedinstr/bin/zenmetrics}"
+  mkdir -p "$OUT"; LOG="$OUT/instrument.log"
+  hb() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -a "$LOG"; }
+  hb "START S1c host=$(hostname) passes=$PASSES"
+  hb "bin=$BIN sha256=$(sha256sum "$BIN" | cut -d' ' -f1)"
+  SVT='{"backend":["svt-rs"],"speed":[1,2,3,4,5,6,7,8,9,10]}'
+  RAV='{"backend":["zenravif"],"speed":[4,7,10]}'
+  for p in $(seq 1 "$PASSES"); do
+    for leg in native budget; do
+      if [ "$leg" = native ]; then SRC="$NATIVE_DIR"; else SRC="$BUDGET_DIR"; fi
+      for arm in svt rav; do
+        if [ "$arm" = svt ]; then GRID="$SVT"; else GRID="$RAV"; fi
+        hb "pass $p S1c $leg/$arm start"
+        "$BIN" sweep --codec zenavif --sources "$SRC" --q-grid 45 \
+            --knob-grid "$GRID" --jobs 1 --no-score \
+            --output "$OUT/s1c_${leg}_${arm}_pass${p}.tsv" >>"$LOG" 2>&1
+        hb "pass $p S1c $leg/$arm done rows=$(( $(wc -l < "$OUT/s1c_${leg}_${arm}_pass${p}.tsv") - 1 ))"
+      done
+    done
+  done
+  hb "COMPLETE S1c passes=$PASSES"
+  touch "$OUT/COMPLETE"
+  exit 0
+fi
 
 LADDER="${1:?ladder source dir}"
 QPROBE="${2:?q-probe source dir}"
