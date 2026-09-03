@@ -63,8 +63,7 @@ here, not instrument-driven, and reason (ii) alone is sufficient.
 
 <!--TABLE:COVERAGE-->
 
-### 1.1b Why the svt arm is `t2a-fix` and not `t2a` — this corpus is the worst
-case for zenav1-svt #18
+### 1.1b Why the svt arm is `t2a-fix`: this corpus is the worst case for #18
 
 Worth stating because it is not incidental. #18 lived at the intersection of
 **10-bit × multi-tile × low preset**, and T2-a sits in all three at once: every

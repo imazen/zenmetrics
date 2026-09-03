@@ -497,7 +497,9 @@ opposite signs*. Adding speed 7 as a third point:
 "no flip found". Every knob whose effect is large enough to test is **monotone
 in preset**: `qml1.2.10` and `qml1.4.10` strengthen from ≈0 at speed 4 to
 several percent at speed 7, `shp3`/`shp7`'s cost rises toward the fast presets,
-and the `vbst*` arms decay toward zero. Stage-A read `qml1.2.10` as
+the two positive `vbst` arms decay toward zero (`vbst1.2.5` +0.38 → +0.01 →
++0.00, `vbst1.3.5` +0.78 → +0.32 → +0.08) and `vbst1.3.7` holds a small
+negative that grows slightly (−0.97 → −1.39 → −1.46). Stage-A read `qml1.2.10` as
 "sign-flipping between presets" from two points; with three, it is a knob whose
 benefit grows with preset and merely passes through zero near speed 4.
 
