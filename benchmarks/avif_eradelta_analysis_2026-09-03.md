@@ -336,14 +336,69 @@ the block's design, not of this analysis.
 What the block *can* answer is the paired matched-q read: at each `q`, bd10's
 bytes and quality against its 8-bit twin.
 
-<!--TABLE:C1PAIRED-->
+**THE REGISTERED READ — n = 13 `crop-native` images (the cross-size question)**
+
+| q | n images | median Δbytes % | 95% CI | median Δssim2 | 95% CI | DOMINATES | DOMINATED | TRADE |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| 15 | 13 | -8.27 | [-8.41, -6.76] | -3.780 | [-4.01, -2.05] | 0 | 2 | 11 |
+| 45 | 13 | -0.69 | [-1.20, -0.31] | +0.244 | [+0.06, +0.62] | 10 | 0 | 3 |
+| 90 | 13 | +18.01 | [+14.86, +21.68] | +1.996 | [+0.80, +2.94] | 0 | 0 | 13 |
+
+**The 19 `native` passthroughs — no size transfer to measure here, reported as the internal control**
+
+| q | n images | median Δbytes % | 95% CI | median Δssim2 | 95% CI | DOMINATES | DOMINATED | TRADE |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| 15 | 19 | -7.86 | [-11.89, -5.06] | -4.912 | [-5.34, -3.46] | 0 | 0 | 19 |
+| 45 | 19 | -0.38 | [-1.17, +0.01] | +0.082 | [-0.19, +0.44] | 8 | 3 | 8 |
+| 90 | 19 | +18.20 | [+13.63, +20.83] | +0.559 | [+0.33, +1.27] | 0 | 2 | 17 |
+
+**⛔ SUPERSEDED — the same read on the pre-#18-fix block, for scale only**
+
+| q | n images | median Δbytes % | 95% CI | median Δssim2 | 95% CI | DOMINATES | DOMINATED | TRADE |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| 15 | 13 | -8.20 | [-8.27, -6.50] | -15.405 | [-42.12, -2.93] | 0 | 2 | 11 |
+| 45 | 13 | -0.69 | [-1.05, -0.31] | -67.209 | [-83.88, +0.06] | 2 | 0 | 11 |
+| 90 | 13 | +18.01 | [+14.81, +21.71] | -104.800 | [-114.52, +0.00] | 0 | 8 | 5 |
+
+**⛔ SUPERSEDED — its passthrough half, which is BYTE-IDENTICAL to c1's and so reproduces c1's numbers exactly**
+
+| q | n images | median Δbytes % | 95% CI | median Δssim2 | 95% CI | DOMINATES | DOMINATED | TRADE |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| 15 | 19 | -7.86 | [-11.89, -5.06] | -4.912 | [-5.34, -3.46] | 0 | 0 | 19 |
+| 45 | 19 | -0.38 | [-1.17, +0.01] | +0.082 | [-0.19, +0.44] | 8 | 3 | 8 |
+| 90 | 19 | +18.20 | [+13.63, +20.83] | +0.559 | [+0.33, +1.27] | 0 | 2 | 17 |
 
 ### 4.4 How much the answer actually changed on the corrupt images
 
 The 8 multi-tile images, pre-fix (`t1d`) against post-fix (`c1`), same control,
 same q, same paired read. This is the size of the error that was in the record:
 
-<!--TABLE:C1VST1D-->
+| image | q | Δbytes % pre-fix | Δbytes % post-fix | Δssim2 pre-fix | Δssim2 post-fix | verdict pre-fix | verdict post-fix |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| `1008` | 15 | -8.25 | -8.41 | -67.731 | -3.843 | TRADE | TRADE |
+| `1008` | 45 | -0.72 | -0.74 | -112.501 | +0.616 | TRADE | DOMINATES |
+| `1008` | 90 | +18.18 | +18.16 | -143.622 | +4.182 | DOMINATED | TRADE |
+| `1220` | 15 | -8.15 | -8.10 | -40.128 | -4.843 | TRADE | TRADE |
+| `1220` | 45 | -1.03 | -1.02 | -99.072 | +0.244 | TRADE | DOMINATES |
+| `1220` | 90 | +14.03 | +14.02 | -141.837 | +2.195 | DOMINATED | TRADE |
+| `1420` | 15 | -7.59 | -7.54 | -42.125 | -4.391 | TRADE | TRADE |
+| `1420` | 45 | -1.05 | -1.20 | -78.067 | +0.014 | TRADE | DOMINATES |
+| `1420` | 90 | +21.71 | +21.68 | -114.524 | +2.942 | DOMINATED | TRADE |
+| `1432` | 15 | -6.50 | -6.76 | -49.434 | -3.192 | TRADE | TRADE |
+| `1432` | 45 | -2.07 | -1.93 | -94.408 | +0.239 | TRADE | DOMINATES |
+| `1432` | 90 | +38.10 | +38.03 | -106.081 | +3.945 | DOMINATED | TRADE |
+| `1442` | 15 | -8.26 | -8.30 | -2.927 | -2.049 | TRADE | TRADE |
+| `1442` | 45 | -2.72 | -2.66 | -46.951 | +2.140 | TRADE | DOMINATES |
+| `1442` | 90 | +66.29 | +66.30 | -106.862 | +2.355 | DOMINATED | TRADE |
+| `1634` | 15 | -8.20 | -8.33 | -45.945 | -3.780 | TRADE | TRADE |
+| `1634` | 45 | -1.57 | -1.57 | -83.875 | +0.371 | TRADE | DOMINATES |
+| `1634` | 90 | +27.14 | +27.11 | -126.487 | +3.541 | DOMINATED | TRADE |
+| `6602` | 15 | -9.35 | -9.44 | -34.916 | -3.224 | TRADE | TRADE |
+| `6602` | 45 | -0.54 | -0.53 | -67.209 | +0.029 | TRADE | DOMINATES |
+| `6602` | 90 | +17.81 | +17.80 | -88.325 | +0.459 | DOMINATED | TRADE |
+| `6604` | 15 | -9.53 | -9.51 | -15.406 | -3.830 | TRADE | TRADE |
+| `6604` | 45 | -0.31 | -0.31 | -76.184 | +0.092 | TRADE | DOMINATES |
+| `6604` | 90 | +14.81 | +14.86 | -104.800 | +0.795 | DOMINATED | TRADE |
 
 The pre-fix rows are shown **only** to size the correction; they are superseded
 and must not be cited as measurements of anything.
@@ -374,6 +429,24 @@ for `ssim2` specifically: this lane measured `ssim2` to be **bit-identical
 across four different builds** on identical bitstreams (§2.5 here, and §1.2b of
 the HDR companion doc). It would **not** be safe for `zensim`, which is why no
 `zensim` number appears in this document.
+
+**The registered answer to Q4 ("does the effect survive native resolution?"):
+YES, and if anything it is slightly stronger on the large images.** The two
+halves of this table are a size contrast by construction — the 19 passthroughs
+are sources that were already at or below the budget size, the 13 `crop-native`
+are the genuinely large ones — and at q45, the q where `bd10` is closest to a
+free win:
+
+| population | median Δbytes % | median Δssim2 | images where bd10 DOMINATES |
+|---|--:|--:|---|
+| budget corpus, 1024², 32 images (Stage-A instrument, for reference) | −0.39 | +0.280 | 18/32 |
+| **native, 19 passthrough (small) images** | **−0.38** | **+0.082** | **8/19** |
+| **native, 13 `crop-native` (large) images — the registered n** | **−0.69** | **+0.244** | **10/13** |
+
+There is no size cliff here: the sign, the magnitude and the dominance rate all
+carry over, and the large-image half is marginally the better of the two. Note
+this is the *paired* read, not a BD-rate, so it is not directly comparable to
+Stage-A's −1.02 %/−1.22 % BD-rate figure — see the guard note above.
 
 **Control provenance, declared rather than buried.** The 8-bit control is
 `avifdoe-svt-ag-20260901`'s `s4-svt-420` stratum — the exact shape match
