@@ -559,8 +559,28 @@ trigger **B-3** for `bd10`, plus the two gaps B-3 does not cover.
 | **T1-a** preset ladder | `bd10` × 6 non-s4 speeds × 9 q × 32 | **1,728** | does the win hold across the speed dial — and does it break at the producer seam (H-BD-1)? |
 | **T1-b** interactions | `bd10` × 15 live single-deviation arms × 9 q × 32, at s6 | **4,320** | is 10-bit additive with the knobs, or does it substitute for the quantizer-domain ones? |
 | **T1-c** s6 main effect | `bd10` @ s6 × 9 q × 32 | **288** | the missing second preset; makes B-5 computable for `bd10` |
-| **T1-d** transfer gate | `bd10` × 3 q × 32, **native** | **96** | does −1.02 % survive native size, or is it a 1 MP crop artifact? |
+| **T1-d** transfer gate ⛔ **SUPERSEDED — see the note below §4.2's table** | `bd10` × 3 q × 32, **native** | **96** | does −1.02 % survive native size, or is it a 1 MP crop artifact? |
 | **T1 total** | | **6,432** | |
+
+> ### ⛔ T1-d IS SUPERSEDED BY `avifdoe-svt-eradelta-c1-20260903` — MEASURED 2026-09-03
+>
+> `avifdoe-svt-t1d-20260902` encoded 09:57–10:16 on 2026-09-02, **hours before
+> both zenav1-svt #18 fixes**. The re-run of the identical plan at the fixed pin
+> (`2ca060f4`) reproduces **72 of 96 cells byte-identically and differs on 24** —
+> all three q-points of exactly the 8 images that #18's own tile-forcing
+> predicate (`width > 4096` OR sb-aligned area `> 4096×2304`) selects out of the
+> 32-image native corpus, with **zero false positives and zero false negatives**.
+>
+> **And those 8 are 8 of the 13 images this block's question actually has** —
+> §10.4a's registered restriction (19 of 32 are byte-identical passthroughs, so
+> the cross-size n is 13, not 32). So **61.5 % of T1-d's effective n ran with
+> structurally wrong pixels.**
+>
+> **Do not cite any T1-d number.** Read `avifdoe-svt-eradelta-c1-20260903`
+> instead — `benchmarks/avif_eradelta_analysis_2026-09-03.md` §4, which also
+> records that a **BD-rate is NOT MEASURED for this block in either era** (the
+> 3-point ladder cannot satisfy the BD-rate owner's ≥ 4-point guard) and reports
+> the paired matched-q read that can be made.
 
 - **T1-b is the load-bearing block.** 10-bit and the QM/variance-boost arms all act on
   the quantizer; the wave measured them only in isolation from depth. If they substitute
@@ -708,6 +728,9 @@ a T2 number; H-BD-4 (port ≠ SVT-AV1) reproduced in any report carrying a T1 nu
 3. **Q3** Is `bd10` additive with the 15 live knobs, or does it substitute for the
    quantizer-domain ones (QM, variance boost)? *(T1-b — the primary question.)*
 4. **Q4** Does the effect survive native resolution? *(T1-d; `tl1.0`'s sign flip is the precedent.)*
+   **⛔ ANSWERED ON `avifdoe-svt-eradelta-c1-20260903`, NOT on T1-d** — T1-d's own
+   block is pre-#18-fix and 8 of its 13 effective images carry wrong pixels
+   (see the note under §4.2). `benchmarks/avif_eradelta_analysis_2026-09-03.md` §4.
 5. **Q5** What is the rate/quality curve of 10-bit AVIF on HDR stills? *(T2-a — a
    baseline, no PASS/FAIL bar, like the gain-map census.)*
 6. **Q6** How do the two wired HDR AVIF arms differ? *(T2-b — a contrast, not a controlled comparison.)*
@@ -1009,7 +1032,7 @@ runbook now spells out the full stage step.
 |---|---|---|---|--:|
 | `avifdoe-svt-t1ac-20260902` | `svt_doe_t1_bd10_ladder` | 9-point | budget | 2,016 |
 | `avifdoe-svt-t1b-20260902` | `svt_doe_t1_bd10_knobs` | 9-point | budget | 4,320 |
-| `avifdoe-svt-t1d-20260902` | `svt_doe_t1_bd10_transfer` | 3-point | **native** | 96 |
+| `avifdoe-svt-t1d-20260902` ⛔ **SUPERSEDED, do not cite** — pre-#18-fix; 24/96 cells wrong pixels; replaced by `avifdoe-svt-eradelta-c1-20260903` (2026-09-03) | `svt_doe_t1_bd10_transfer` | 3-point | **native** | 96 |
 
 - **6,432 declared job ids — matching §4.2's block sum exactly.**
 - `duplicates_merged 0 / invalid_skipped 0 / q_coarsenings 0 / dropped_axes 0 /

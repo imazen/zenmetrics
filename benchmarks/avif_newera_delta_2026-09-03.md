@@ -312,7 +312,17 @@ image-correctness rule — the existing `avifdoe-svt-t1d-20260902` run's
 **Action, not just a flag**: the whole 96-cell block is cheap to redo (single
 speed, 3 q-points, native corpus — no new code, the plan already exists), so
 this lane re-declares it fresh rather than trying to surgically patch 24
-cells (§7 of the companion sweep doc). The other 72 cells (24 single-tile
+cells (§7 of the companion sweep doc).
+
+> **✅ CONFIRMED BY MEASUREMENT 2026-09-03.** The re-run
+> (`avifdoe-svt-eradelta-c1-20260903`) reproduces **72/96 byte-identically and
+> differs on 24** — all 3 q-points of exactly the 8 predicted images, with the
+> tile-forcing predicate scoring **zero false positives and zero false
+> negatives** against the observed diff set. The 72 identical cells are also the
+> live check this section asked for on §2.1's "only 2 of 33 commits are
+> AVIF-reachable" claim: it passes. Full read, including the fact that **8 of
+> the 13 images the cross-size question actually has** were the corrupt ones:
+> `avif_eradelta_analysis_2026-09-03.md` §4. The other 72 cells (24 single-tile
 images) are outside the bug's blast radius regardless of pin and are expected
 to reproduce byte-identical — that reproduction is itself a check on this
 audit's own §2.1 claim that only 2 of 33 commits touch anything AVIF-
