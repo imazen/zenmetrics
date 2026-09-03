@@ -28,7 +28,18 @@
 #   ZEN_CORE_OVERSUBSCRIBE (default 2) sets concurrent cells per core. 2 is right for
 #   IO- or stall-heavy work; for a memory-bandwidth-bound codec it thrashes (measured
 #   on zenrav1e: 34.8 CPU-s/cell oversubscribed vs the intrinsic ~13.8). Set 1 there.
-#   ZEN_LONG_LIVED=1 is the right knob for a SCORE worker chasing a LIVE encode wave:
+#   ⛔ ZEN_LONG_LIVED=1 PINS THE MANIFEST. fleet-entrypoint.sh fetches
+#   ZEN_MANIFEST_URI ONCE, outside the pass loop, so a long-lived worker never sees
+#   jobs declared after it started. That is fine for a FIXED manifest (an encode run
+#   whose cells are all declared up front) and WRONG for a GROWING one -- a
+#   gap-fill-fed SCORE run, whose manifest is re-declared every round as encodes
+#   land. Measured on avifdoe-br-sf-cpu-20260903: the scorer sat idle at 0% CPU for
+#   3 hours on a manifest it had fetched exactly once, while 9,628 pairs waited.
+#   For a gap-fill-fed scorer use ZEN_LONG_LIVED=0 with a large ZEN_IDLE_PASSES and
+#   `docker update --restart unless-stopped`: there the drain-exit-restart cycle IS
+#   the manifest-refresh mechanism, and it is the one case where unless-stopped is
+#   correct rather than the restart-loop bug the 2026-09-03 fix removed.
+#   ZEN_LONG_LIVED=1 is the right knob for a SCORE worker on a FIXED manifest:
 #   such a worker legitimately runs out of scorable cells during any lull on the encode
 #   side, drains, and -- since the 2026-09-03 --restart on-failure:5 fix, correctly --
 #   stays stopped, leaving nothing scoring while the wave keeps producing. Under
