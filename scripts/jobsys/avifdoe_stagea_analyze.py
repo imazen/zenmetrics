@@ -120,6 +120,13 @@ def main():
                          "and compare — they are not the same instrument.")
     ap.add_argument("--parity-check", default=None,
                     help="path to zenavif scripts/rd_gap/bd_arm.py — assert BD-rate agreement")
+    ap.add_argument("--runs", default=None,
+                    help="comma-separated run labels to ANALYSE (default: all in the "
+                         "parquet). Load-bearing when one parquet holds several runs that "
+                         "SHARE cell identities: two runs that encoded the same (image, q, "
+                         "cell) produce the same BD-rate, and pooling them silently doubles "
+                         "n and narrows the bootstrap CI on duplicate values. Rows of OTHER "
+                         "runs are still available as controls via --paired-control-run.")
     ap.add_argument("--paired-control-run", default=None,
                     help="run label supplying the deviations=0 control for the PAIRED "
                          "per-q table when an arm's own run carries none (e.g. a 3-point "
@@ -152,9 +159,13 @@ def main():
     man = load_manifest(a.crop_manifest)
 
     # ---- rows: keep only scored cells with a rate and a quality -------------
+    keep_runs = set(a.runs.split(",")) if a.runs else None
+    ctl_only = {a.paired_control_run} if a.paired_control_run else set()
     rows = []
     for i in range(n):
         if t[a.metric][i] is None or t["bytes"][i] is None:
+            continue
+        if keep_runs is not None and t["run"][i] not in (keep_runs | ctl_only):
             continue
         img = t["image"][i]
         rows.append(dict(run=t["run"][i], image=img, q=t["q"][i], arm=t["arm"][i],
@@ -203,6 +214,8 @@ def main():
     for (run, sp, img, arm), pts in curves.items():
         if arm == f"s{sp}-svt-420":
             continue
+        if keep_runs is not None and run not in keep_runs:
+            continue          # a --paired-control-run run supplies controls only
         ctl_arm = f"s{sp}-svt-420"
         # The source label carries the control ladder's ACTUAL point count, not an
         # assumed one: A1/A2's in-run control is 9-q, but a Stage-B native block
@@ -310,6 +323,8 @@ def main():
     ctl_runs = [a.paired_control_run] if a.paired_control_run else []
     paired = []
     for r in rows:
+        if keep_runs is not None and r["run"] not in keep_runs:
+            continue
         devs = [d for d in (r["arm"] or "").split("-")[3:] if d]
         if len(devs) != 1:
             continue
