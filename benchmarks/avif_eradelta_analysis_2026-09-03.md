@@ -357,6 +357,32 @@ images — the `shp7` speed-4 image set is *identical* between Stage-A's `a1` an
 this wave's `b1` (30 images, same 30). At speed 7 the saturation disappears
 (the fast preset never reaches ssim2 100) and only `tn3` loses one image.
 
+### 3b.1 `tn3` vs `scm3` at preset 9, by content class
+
+The delta audit's §5.1 hypothesis was that `tn3`'s effect is largest exactly
+where its aliased `screen_content_mode` field just came alive. Speed 7 lets that
+be decomposed, because both knobs are measured at the same preset on the same
+images:
+
+| content class | n (`scm3`) | `scm3` median BD-rate % | 95% CI | n (`tn3`) | `tn3` median BD-rate % | 95% CI |
+|---|--:|--:|--:|--:|--:|--:|
+| photo | 7 | +0.00 | [+0.0, +0.0] | 7 | -4.52 | [-17.5, -0.9] |
+| ai-gen | 9 | +0.00 | [+0.0, +0.0] | 9 | -10.19 | [-12.3, -0.1] |
+| scan | 5 | +0.00 | [-88.9, +0.0] | 4 | -20.28 | [-85.6, -9.9] |
+| screenshot | 5 | -24.46 | [-33.2, +0.0] | 5 | -30.53 | [-38.4, -12.5] |
+| plot | 6 | -45.06 | [-84.0, -9.3] | 6 | -47.78 | [-85.0, -0.7] |
+
+**`tn3` helps every content class at preset 9; `scm3` helps only the
+screen-adjacent ones.** So `tn3`'s broad −4.5 % to −10 % on photo and
+AI-generated content comes from its other eight aliased fields, and its
+−30 % to −48 % on screenshot and plot is where `scm3` is doing the work — which
+is what §5.1 predicted, now measured rather than argued.
+
+*(These medians are over **all** images in a class, including the ones where
+`scm3` is inert — which is why its `scan` row reads `0.0000` although two of the
+five scans move by −86 % and −89 %. §3.1's conditional table is the companion
+read; neither alone is the whole picture.)*
+
 **Stage-B trigger B-5 (registered evaluation, now on three presets instead of
 two).** B-5 fires when a knob's |median BD-rate| ≥ 1 % at two presets *with
 opposite signs*. Adding speed 7 as a third point:
