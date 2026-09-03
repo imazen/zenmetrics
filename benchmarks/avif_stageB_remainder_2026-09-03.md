@@ -441,6 +441,48 @@ ZEN_LONG_LIVED=1       # for a worker trailing a live run
 
 Relaunched with all three, verified in the live cmdline (`timeout 7200`).
 
+### 4.5c ⛔ CORRECTION to §4.5: `ZEN_CHUNK_WALL_SEC=0` removes the CLAIM BOUND, not just concurrency
+
+§4.5 recommended serial-per-worker as the CPU-efficient configuration. **That
+recommendation was wrong for a large gap, and this is the correction.**
+
+MEASURED: with 8 serial workers relaunched at 21:05Z and **zero** pass timeouts,
+`distinct_done` sat at 2020 for **1 h 45 m**. The workers were demonstrably
+encoding the whole time — `brsdr0`'s current cell showed **153.34 s of CPU over
+2:33 elapsed**, ~100 % of a core — yet **zero passes had completed**.
+
+**The mechanism:** `ZEN_CHUNK_WALL_SEC` bounds how much work a worker CLAIMS, and
+setting it to 0 does not merely disable concurrency — it removes the bound, so the
+worker claims the **entire remaining gap** and writes its ledger only at pass end.
+With ~7,260 cells left at a measured ~13.8 s/cell mean (from the companion
+instrument's zenrav1e β), one such pass would take **~28 hours**. It would never
+complete, the 7200 s timeout would fire, and every unflushed cell — an estimated
+**~3,600 cells / ~14 CPU-h** of completed work — would be discarded.
+
+**So serial mode is unusable for a large run at any timeout.** The earlier §4.5
+measurement that made it look good (12.6 cells/min at 9.52 CPU-s/cell) was taken
+when the gap happened to be small enough that passes still closed; it does not
+generalise, and neither did the recommendation drawn from it.
+
+**The configuration that satisfies all three constraints** — bounded flushes, no
+oversubscription thrash, and passes that finish:
+
+```
+ZEN_CHUNK_WALL_SEC=300   # BOUNDED claim -> regular flushes, bounded loss window
+ZEN_PASS_TIMEOUT=7200    # a bounded chunk of slow cells still finishes
+ZEN_LONG_LIVED=1         # worker trailing a live run
+--cpuset-cpus <ONE core> # OVERSUBSCRIBE=2 then means 2 concurrent encodes, not 18
+```
+
+The last line is the trick that keeps §4.5's real finding (oversubscription thrashes
+memory-bandwidth-bound AV1) while discarding its wrong remedy: the launcher hardcodes
+`ZEN_CORE_OVERSUBSCRIBE=2`, so **shrinking the cpuset is how you bound concurrency**,
+not disabling chunking. Eight 1-core workers give 8 cores of encoding at 2 concurrent
+encodes each.
+
+**Acceptance test, run rather than assumed:** a flush must appear within 20 minutes
+of relaunch. That is the property §4.5's configuration silently lacked for 1 h 45 m.
+
 ### 4.6 Every short-window fleet rate here is LUMPY, and the envelope is a BRACKET
 
 **Ledger parquets are written per PASS** (`pass-<worker>-<n>.parquet`), and a pass
