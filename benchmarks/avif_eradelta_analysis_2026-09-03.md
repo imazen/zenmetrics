@@ -31,7 +31,7 @@ tool with the same `--control inrun` instrument — and it is labelled as such.
    were **not** re-measured this wave and keep their Stage-A numbers unverified.
 2. **`scm3` at speed 7 (preset 9) is REAL, and it is screen-content-exclusive.**
    First measurement through the sweep interface, statistics-free: at speed 7,
-   `scm3` changes the bitstream on **90 of 288 cells (31.3 %)**; the divergence
+   `scm3` changes the bitstream on **90 of 288 cells (31.25 %)**; the divergence
    is **0/144 on photo + AI-generated content** and **90/144 on
    plot + screenshot + scan**. At speeds 4 and 6 it is **0/288 and 0/288** —
    reproducing the dossier's "dead at preset ≤ 7" on a completely different
@@ -200,7 +200,7 @@ bitstream or it did not:
 | **7 (p9)** | scan | 45 | 27 | **18** (2 of 5 images) |
 | **7 (p9)** | screenshot | 45 | 18 | **27** (3 of 5 images) |
 | **7 (p9)** | plot | 54 | 9 | **45** (5 of 6 images) |
-| **7 (p9)** | **total** | **288** | **198** | **90 (31.3 %)** |
+| **7 (p9)** | **total** | **288** | **198** | **90 (31.25 %)** |
 
 Three things worth stating precisely:
 
@@ -578,6 +578,21 @@ directional intra path. The 8-bit path's era-invariance is not taken on faith �
   wave changes nothing there.
 - **`svt_doe_t1_bd10_knobs` (`avifdoe-svt-t1b-20260902`, 4,320 cells, 0 done)**
   is still an open pre-existing gap. Flagged, not adopted.
+- **7 of the 16 speed-6 knobs are not re-verified** (§2.2b). Their Stage-A
+  numbers stand, but this wave did not test them at the new pin.
+- **Nothing about `scm3`'s mechanism.** *Why* `screen_content_mode` becomes live
+  at preset 9 is untraced — `sc_detect.rs` scoping, a preset-gated path, or
+  something else. That is root-cause work in the port repo. This wave measures
+  the effect and its content boundary, nothing about its cause.
+- **No `scm3` speed sweep above 7.** Speeds 8, 9 and 10 all alias to preset 9,
+  so they are the same cell; nothing was learned about presets the product dial
+  cannot reach (preset 8 in particular, where the port-level probe first saw the
+  divergence, is unreachable and stays unmeasured *as a product configuration*).
+- **No `zensim` number anywhere.** The DOE emits `zensim` as a 720-wide feature
+  vector, and the scalar is instrument-era-stamped (measured in the HDR
+  companion doc, §1.2b: 11.14 points between two scoring images on identical
+  bytes). `ssim2` is the corpus-wide scalar response, exactly as the DOE plan's
+  §7.1 designates.
 
 ---
 
