@@ -28,7 +28,7 @@ WHAT THIS TOOL REFUSES TO DO.
   * It will not compute a BD-rate from fewer than 4 ladder points (the owner's
     own guard); such a cell is NOT-MEASURED, never a zero.
 """
-import argparse, collections, importlib.util, json, os, sys
+import argparse, collections, importlib.util, json, os, re, sys
 
 import numpy as np
 
@@ -41,6 +41,16 @@ frontier, bd_rate, median_ci, q1q3 = (
     _owner.frontier, _owner.bd_rate, _owner.median_ci, _owner.q1q3)
 
 BACKEND_OF = {"zenav1svt": "zenav1-svt", "zenavif": "zenavif"}
+
+# The imazen-26 variant convention ends every name with `_<W>x<H>`. Parsed
+# STRICTLY: a name that does not match yields no pixel count and the bpp column
+# is left empty rather than filled with a guess.
+_DIMS = re.compile(r"_(\d{2,5})x(\d{2,5})$")
+
+
+def pixels_of(variant):
+    m = _DIMS.search(variant)
+    return int(m.group(1)) * int(m.group(2)) if m else None
 
 
 def backend_of(arm):
@@ -150,6 +160,29 @@ def main():
             f.write(f"{r['run']}\t{r['backend']}\t{r['arm']}\t{r['dial_kind']}\t{r['dial']}"
                     f"\t{r['image']}\t{r['q']}\t{r['bytes']}\t{r['qual']:.6f}\t{q2}"
                     f"\t{r['category']}\t{r['primaries']}\n")
+
+    # ---- Q5: the reference RD curve, per arm x q -----------------------------
+    # This IS the T2-a deliverable: the baseline every future HDR arm differences
+    # against. Medians over the 16 references, with bpp where the variant name
+    # carries dimensions.
+    byaq = collections.defaultdict(list)
+    for r in rows:
+        byaq[(r["arm"], r["q"])].append(r)
+    with open(f"{a.outdir}/t2_rd_baseline.tsv", "w") as f:
+        f.write(f"arm\tbackend\tdial_kind\tdial\tq\tn_refs\tmedian_bytes\tmedian_bpp"
+                f"\tmedian_{a.metric}\tmedian_{a.second_metric}\n")
+        for (arm, q), v in sorted(byaq.items(), key=lambda kv: (kv[0][0], kv[0][1])):
+            b = [x["bytes"] for x in v]
+            bpp = [8.0 * x["bytes"] / pixels_of(x["image"])
+                   for x in v if pixels_of(x["image"])]
+            q1 = [x["qual"] for x in v]
+            q2 = [x["qual2"] for x in v if x["qual2"] is not None]
+            fields = [arm, backend_of(arm), v[0]["dial_kind"], v[0]["dial"], q, len(v),
+                      f"{np.median(b):.0f}",
+                      f"{np.median(bpp):.4f}" if bpp else "",
+                      f"{np.median(q1):.4f}",
+                      f"{np.median(q2):.4f}" if q2 else ""]
+            f.write("\t".join(str(x) for x in fields) + "\n")
 
     curves = collections.defaultdict(list)          # (arm,image) -> [(qual,bytes)]
     for r in rows:
