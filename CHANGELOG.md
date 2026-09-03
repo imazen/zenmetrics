@@ -13,6 +13,30 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## scripts/jobsys (LAN worker restart-loop fix, 2026-09-03)
+
+### Fixed
+
+- **`lan_score_launch.sh` workers looped forever after their run went
+  COMPLETE.** `--restart unless-stopped` restarts a container on ANY exit,
+  and the worker's own clean drain-exit (`fleet-entrypoint.sh`, both the
+  `ZEN_IDLE_PASSES` and `ZEN_MAX_MIN` paths) is `exit 0` — so once a run's
+  manifest was fully done, its worker looped forever, re-fetching the
+  manifest every cycle for zero work. Found on 10 containers across 3 hosts
+  (local/r7900x/tower), up to 7,457 restarts on one (measured via `docker
+  inspect .RestartCount` immediately before stopping each; each container's
+  bound run was independently confirmed `live-gap 0` via `zenfleet-ctl
+  report` before being stopped, never guessed from its name). Changed to
+  `--restart on-failure:5`, matching the policy already used for the Hetzner
+  worker (`crates/zenfleet-hetzner/src/cloud_init.rs`) — Docker's
+  `on-failure` restarts only on a non-zero exit, so a clean drain now stays
+  stopped while a genuine crash/hang/fail-fast still gets bounded retries
+  instead of an infinite loop. Verified end-to-end: a worker launched
+  against a confirmed-COMPLETE run drained in 8 passes (~3.2s), exited 0,
+  `RestartCount` stayed 0 and the container was still `Exited` 30s later; a
+  negative control (`exit 1` under the same policy) restarted 5 times then
+  stopped. Doc: `docs/RUNNING_JOBS.md` §9b. (62c1f2fb)
+
 ## zenmetrics-api / zenmetrics-cli
 
 ### Added
