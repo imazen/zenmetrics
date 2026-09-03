@@ -407,6 +407,39 @@ overlap I/O stalls — it thrashes. Serial-per-worker at 1 core each avoids it w
 `--cpu-shares 256`), each `ZEN_CHUNK_WALL_SEC=0 ZEN_LONG_LIVED=1
 --restart on-failure:5`.
 
+### 4.6 Every short-window fleet rate here is LUMPY, and the envelope is a BRACKET
+
+**Ledger parquets are written per PASS** (`pass-<worker>-<n>.parquet`), and a pass
+claims a large batch of the gap **in serial mode too**. MEASURED: with all 8 serial
+workers pinned at ~100 % CPU each, `distinct_done` moved **0 cells in 480 s** — not
+a stall, just no pass boundary inside the window. Conversely the earlier 429 s
+window caught 90 cells. **Short-window rates here are pass-lumpy, so any of them —
+including this lane's 9.52 CPU-s/cell — is an estimate with a wide error bar, not a
+measurement.** The four proxies that misled this lane in turn were blob counts,
+ledger-file counts, the gap-fill DONE line, and short `distinct_done` windows.
+
+**The independent anchor comes from the companion instrument**, which measures
+`encode_ms` directly with no claim/chunk/ledger machinery in the path. Pricing the
+`brsdr` grid from the complete S1a pass-1 fits (zenrav1e, 10-speed β sum
+**118,967 ms/MP**, α sum 4,797 ms) against the budget corpus's 37.02 MP × 29 q × 32
+images:
+
+| source | `brsdr` grid | wave total vs 46.8 |
+|---|--:|---|
+| speed instrument, direct `encode_ms` | **36.7 CPU-h** (35.5 slope + 1.2 intercept) | 40.7 — fits, 13 % margin |
+| fleet short-window, 9.52 CPU-s/cell | 24.5 CPU-h | 28.5 — fits, 39 % margin |
+
+**Both fit; treat 24.5–36.7 CPU-h as a bracket rather than picking one.** The
+instrument-derived figure is the better-founded of the two (direct measurement, no
+fleet machinery) but it applies the LADDER corpus's pooled β to the BUDGET corpus,
+and this same instrument measured β varying **24.3× with content** — so that step
+carries exactly the error the headline result warns about. Neither number is
+quotable to three figures.
+
+**What the bracket decides, and it is decided:** serial-per-worker is the
+CPU-efficient configuration at either end of it, so it is the right choice under the
+uncertainty. The de-scope stays reverted because the full grid fits at both ends.
+
 **The generalisable rule:** for a memory-bandwidth-bound codec, **scale workers
 out, not concurrency up** — and never measure a fleet rate from blob counts, ledger
 file counts, or the gap-fill's DONE line, all three of which lag or dedupe. Use
