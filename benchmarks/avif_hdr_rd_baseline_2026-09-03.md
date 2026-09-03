@@ -18,7 +18,13 @@ else:
 
 ---
 
-## 0. INSTRUMENT AND CORPUS LIMITATION (reproduced verbatim, plan §3.4)
+## 0. TL;DR
+
+<!--TABLE:TLDR-->
+
+---
+
+## 0b. INSTRUMENT AND CORPUS LIMITATION (reproduced verbatim, plan §3.4)
 
 > **INSTRUMENT AND CORPUS LIMITATION (registered 2026-09-02).**
 > On the SDR-paired track (T1) reference and both decodes are 8-bit, so the
@@ -221,7 +227,7 @@ chroma from the container of a pre-fix blob would be misled.**
 
 ## 5. What this document does NOT establish
 
-- **Nothing about banding.** §0, reason (ii) alone.
+- **Nothing about banding.** §0b, reason (ii) alone.
 - **No 10-bit-display claim, no aom comparison, no claim about SVT-AV1 itself**
   — explicitly not questions of this arm (plan §5.1).
 - **No content-class attribution that is separable from gamut** on this corpus
