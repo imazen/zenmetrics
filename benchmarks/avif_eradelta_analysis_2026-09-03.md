@@ -207,7 +207,16 @@ Three things worth stating precisely:
 - **The speed-4 and speed-6 zeros are a reproduction, not a null.** Stage-A's
   own `main_effects.tsv` reports `scm3` at exactly `0.0000` with a
   `[0.0000, 0.0000]` CI at both speeds — because the arm *was* the control.
-  This wave reproduces that on 576 cells at the new pin.
+  This wave reproduces that on 576 cells at the new pin, and the reproduction is
+  at the *bitstream* level: all 576 are byte-identical to their control, so the
+  zero is a fact about the encoder, not a metric that happened to land on zero.
+- **At speed 7, the median is still `0.0000` — and reporting only the median
+  would hide the whole effect.** 22 of 32 images are exactly zero (inert), so
+  the median sits on them; the mean is **−16.73 %** and the minimum is
+  **−88.86 %**. The right statistic here is the effect **conditional on the knob
+  firing**, which §3.1 gives, plus the count of images it fires on. A knob whose
+  effect is confined to a content class will always look dead in a
+  corpus-median.
 - **The divergence is content-exclusive, not content-graded.** Photo and
   AI-generated content are at 0/144. Every differing cell is
   plot / screenshot / scan. That is the behaviour a screen-content detector
@@ -265,6 +274,16 @@ compared against a Stage-A number.
 
 <!--TABLE:S7EFFECTS-->
 
+**Why n is 30–32 and not always 32.** Two scanned documents — `6006` and
+`6018` — have an RD ladder whose Pareto frontier collapses to **2 points** at
+speeds 4 and 6 (quality saturates at ssim2 100.0 across the top of the ladder
+and is non-monotone in bytes below it), so the BD-rate owner's ≥ 4-point guard
+declines to produce a number for them. That is the guard working, not a data
+gap, and it is **not new**: Stage-A's own tables carry the same n for the same
+images — the `shp7` speed-4 image set is *identical* between Stage-A's `a1` and
+this wave's `b1` (30 images, same 30). At speed 7 the saturation disappears
+(the fast preset never reaches ssim2 100) and only `tn3` loses one image.
+
 **Stage-B trigger B-5 (registered evaluation, now on three presets instead of
 two).** B-5 fires when a knob's |median BD-rate| ≥ 1 % at two presets *with
 opposite signs*. Adding speed 7 as a third point:
@@ -279,10 +298,23 @@ and the `vbst*` arms decay toward zero. Stage-A read `qml1.2.10` as
 "sign-flipping between presets" from two points; with three, it is a knob whose
 benefit grows with preset and merely passes through zero near speed 4.
 
-`shp7`'s rise (`+5.47 → +7.53 → +9.33 %` at s4/s6/s7) independently reproduces
+`shp7`'s rise (`+5.47 → +7.31 → +9.10 %` at s4/s6/s7) independently reproduces
 the Stage-B6 native-corpus finding of `+7.15 / +7.99 / +9.46 %` at the same
 three speeds, on a *different corpus* — the budget crops here vs B-6's native
-images.
+images. The two agree on direction, on ordering, and to within ~1.7 pp on
+magnitude.
+
+**A reproducibility note on the CIs, not the medians.** Arm-set B's speed-4 and
+speed-6 medians reproduce Stage-A's `stagea_inrun` values *exactly* (`shp7`
+5.4676 / 7.3077, `tn3` −7.0342 / −4.4807, `qml1.2.10` −0.2895 / −2.5853,
+`scm3` 0.0000 / 0.0000 — every digit), which is what byte identity plus an
+identical scorer predicts. The bootstrap **CI** bounds can differ in the third
+decimal (`shp3` s4: `[0.0111, 2.0097]` in Stage-A vs `[0.0130, 2.0097]` here)
+because `median_ci` resamples the per-image list in *insertion order* and the
+two runs enter their images in a different order. The resampling distribution
+is the same; the particular draw is not. Registered as an observation, not
+changed — making it order-invariant would move every published Stage-A CI, and
+that is a deliberate decision for the owner, not a drive-by.
 
 ---
 
