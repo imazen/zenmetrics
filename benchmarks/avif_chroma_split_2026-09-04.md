@@ -185,6 +185,27 @@ from `br420`'s own `blobs/` prefix, parsed by `zenavif-parse` through
 depth). Under the pre-`f15bb3a5` code every one of them would have read `444` /
 `seq_profile 1`.
 
+**Widened to a census once both arms were producing** — 40 blobs per arm, drawn
+from each run's own `blobs/` prefix, same instrument:
+
+| arm | `av1C` chroma | `seq_profile` | depth | n |
+|---|---|---|--:|--:|
+| `br420` | **420** | **0** (Main) | 8 | 40 / 40 |
+| `br444` | **444** | **1** (High) | 8 | 40 / 40 |
+
+Zero exceptions either way. This is what splits the confound *at the bitstream
+level* rather than by declaration: `br420` emits the same `seq_profile 0` /
+4:2:0 the svt arms emit on 448 / 448 of theirs, from the zenrav1e backend, and
+`br444` reproduces `brsdr`'s measured `seq_profile 1` / 4:4:4 on 640 / 640.
+
+The census is also **how `br444`'s chroma is established at all.** Its knob tuple
+carries no chroma token — that is what makes its CellIds `brsdr`'s — so the
+harvest deliberately reports its `chroma` column as `None` rather than
+synthesizing 4:4:4 from zenavif's default (`avifdoe_harvest.py`: "synthesizing
+`-420` here would be convention dressed as evidence"). The 4:4:4 label above is
+a **measurement**, on the same footing as the `NAIVE_BACKEND_CHROMA` assertion
+that rule protects.
+
 **Exclusions, fixed now:**
 
 1. The 2,099 uncontrolled 29-q `brsdr` extras — excluded from everything (§2).
