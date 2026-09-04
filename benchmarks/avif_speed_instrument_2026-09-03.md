@@ -207,6 +207,38 @@ split rather than re-deriving it.
 
 ---
 
+### 4.1 S2 — the reachable knob-time partial, PRE-REGISTERED and ready to run
+
+Registered now so the next lane runs it rather than re-deriving it. Uses only knobs
+`EncoderConfig` already exposes, so it needs **no zenavif change**.
+
+**Grid:** the 5 ladder sources at 2 rungs (**512², 1024²**) × **q45** × 3 passes,
+svt-rs at speeds **{4, 6, 7}** (the DOE's own presets), across:
+
+| arm | knob-grid | prices |
+|---|---|---|
+| control | `{}` | baseline |
+| `bd10` | `{"bit_depth":["ten"]}` | 10-bit's time cost — the one B-3 arm with a measured RD win |
+| `qm-on` | `{"qm":[true]}` | the coarse QM switch (NOT the `qml` window) |
+| `pr` | `{"partition_range":[...]}` | |
+| `lrf` / `fastdb` | `{"lrf":[...]}`, `{"fast_deblock":[...]}` | |
+
+**≈ 10 inputs × 3 speeds × 6 arms × 3 passes ≈ 540 timed encodes**, well under an
+hour at svt speeds — svt's measured β at s6 is 65.0 ms/MP, so the whole block is
+minutes of encode, not hours. Run it with the **same protocol as S1a** (`--no-score`,
+`--jobs 1`, min over process starts, uncontended host) and analyse with
+`avif_speed_analyze.py`.
+
+⚠ **Two things this block CANNOT price, and they are the expensive ones:** the QM
+*window* (`qml1.2.10` etc.) and the whole `tune` / `sharpness` / `ac_bias` /
+screen-content family. Those need `SvtParams`, i.e. a zenavif change (§4). Do not
+let a clean S2 result read as "the knob-time axis is covered".
+
+⚠ **The knob names above are the SWEEP's vocabulary** (`sweep/encode.rs` `AVIF_KNOBS`
+plus `bit_depth`/`qm` if wired); confirm each against `reject_unknown_knobs` before
+launching — an unknown knob is a hard error there, which is the desired behaviour but
+will abort the block.
+
 ## 5. Analysis plan (fixed before the data)
 
 1. **Fit `encode_ms = α + β·pixels` per (backend, speed)**, over S1a's 32 inputs.
