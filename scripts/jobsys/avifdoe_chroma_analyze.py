@@ -194,9 +194,9 @@ def main():
     a = ap.parse_args()
     os.makedirs(a.outdir, exist_ok=True)
 
-    man = json.load(open(a.crop_manifest)) if a.crop_manifest.endswith(".json") else None
-    if man is None:
-        man = {r["image"]: r for r in csv.DictReader(open(a.crop_manifest), delimiter="\t")}
+    # Same two lines brem uses (avifdoe_brem_analyze.py:216) -- the manifest is
+    # keyed by `corpus_key`, which IS the image_path the cells carry.
+    man = {r["corpus_key"]: r for r in csv.DictReader(open(a.crop_manifest), delimiter="\t")}
     cls_of = {k: COARSE.get(v["content_class"], "other") for k, v in man.items()}
 
     # ---- 0. era control ----------------------------------------------------
