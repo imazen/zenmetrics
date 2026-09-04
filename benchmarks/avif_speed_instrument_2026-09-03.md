@@ -568,6 +568,33 @@ evidence that §6.6d's caveat is real and load-bearing** — it was registered f
 CPU-vs-wall observation, and an independent pre-registered prediction then failed by
 exactly the amount that observation implies.
 
+#### A CONTROLLED TEST OF THE EXPLANATION — registered 02:14Z, before the leg lands
+
+If threading is really the cause, then a backend that does **not** thread should be
+predicted **accurately** by the same model, in the same pass, on the same corpus.
+zenrav1e is that control. MEASURED on the running native/rav leg: **1.000 mean
+cores** (2 OS threads, 1 core of work) against svt's 1.638.
+
+| | svt (native) | zenrav1e (native) |
+|---|--:|--:|
+| measured cores | 1.638 | **1.000** |
+| leg predicted | 3,537 s | **1,882 s** |
+| leg actual | 2,787 s (**−21.2 %**) | *pending* |
+
+**Registered before the data:** the native/rav leg started 01:53:46Z, so the
+prediction implies completion at **≈ 02:25:08Z**.
+
+- **If threading is the cause**, this leg should land **close to 1,882 s** — call it
+  confirmed within ±10 %, since the only difference from the svt case is the thing
+  being tested.
+- **If it also undershoots by ~20-27 %**, threading is NOT the explanation and the
+  miss is something common to both backends — most likely the pooled-β/corpus-mix
+  caveat, which would make §6.6d's account wrong and the coefficients
+  systematically high for *every* backend.
+
+This is the cheapest possible discriminator: it costs nothing, it was free in the
+block already running, and it can falsify the explanation I just committed to.
+
 **What it means for the deliverable, stated plainly:** the α + β coefficients predict
 **single-threaded wall time**. Applying them to a workload where the encoder threads
 (native-size svt) over-predicts by ~27 %. Until a `cpu_ms` column exists (§6.6d), a
