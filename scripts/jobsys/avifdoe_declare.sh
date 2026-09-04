@@ -20,6 +20,10 @@
 #   scripts/jobsys/avifdoe_declare.sh --track-t1     # HBD arm, Track T1 (bd10) only
 #   scripts/jobsys/avifdoe_declare.sh --era-delta    # zenav1-svt pin bump stability wave
 #   scripts/jobsys/avifdoe_declare.sh --stage-b-remainder
+#   scripts/jobsys/avifdoe_declare.sh --chroma-split
+#        The zenrav1e 4:2:0 arm + its 4:4:4 era control.  Splits the
+#        (backend x chroma) confound the backend table found.  Registered in
+#        benchmarks/avif_chroma_split_2026-09-04.md
 #        Stage B remainder: the native s6 interaction block (QM x sharpness
 #        first) + the zenrav1e SDR RD arm.  Registered in
 #        benchmarks/avif_stageB_remainder_2026-09-03.md
@@ -44,6 +48,7 @@ STAGE_B6=0
 TRACK_T1=0
 ERA_DELTA=0
 STAGE_BR=0
+CHROMA_SPLIT=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -54,6 +59,7 @@ while [ $# -gt 0 ]; do
     --track-t1) TRACK_T1=1; shift ;;
     --era-delta) ERA_DELTA=1; shift ;;
     --stage-b-remainder) STAGE_BR=1; shift ;;
+    --chroma-split) CHROMA_SPLIT=1; shift ;;
     --dry-run-only) DRY_ONLY=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -680,6 +686,96 @@ a fleet worker there would invalidate every encode_ms it is measuring.  Launch
 on tower (household caps: --cpuset-cpus 0-19 --cpu-shares 256 --memory 24g) and
 local (cpuset-capped, >=8 of 32 cores left free) only, then scale onto r7900x.
 BREOF
+  exit 0
+fi
+
+if [ "$CHROMA_SPLIT" = 1 ]; then
+  # -------------------------------------------------------------------------
+  # THE CHROMA SPLIT.  `benchmarks/avif_backend_selection_2026-09-03.md` Q2
+  # measured that its cross-backend table was a (backend x chroma) table: all
+  # 640 brsdr/zenrav1e bitstreams read seq_profile 1 / 4:4:4 and all 448+26
+  # svt ones read seq_profile 0 / 4:2:0, zero exceptions -- because the sweep
+  # had no chroma knob and zenavif's default is 4:4:4.  That knob exists now
+  # (sweep/encode.rs `avif_chroma_from_knobs`), so the confound is splittable.
+  #
+  # TWO runs, both 2,880 cells, both on the BUDGET corpus and the 9-q ladder --
+  # which is the only balanced, fully-crossed grid brsdr actually delivered
+  # (its 4,979 ledger cells include 2,099 UNCONTROLLED 29-q extras: whichever
+  # images the workers reached first, not a designed stratum).
+  #
+  #   br420 -- the arm.  chroma=420 on zenravif: the cell that has never
+  #            existed, and the only way to ask whether the reach failure on
+  #            plots/screens is a CHROMA property or a BACKEND property.
+  #
+  #   br444 -- the ERA CONTROL, and it is not optional.  The chroma knob is a
+  #            zenmetrics change, so this arm ships a NEW fleet image, and
+  #            zenavif has moved 28 commits past the brsdr era pin `56179fcb`
+  #            (including a breaking 0.1.8 -> 0.2.0 and +290 lines in
+  #            src/encoder.rs).  Its knob tuple carries NO chroma token, so its
+  #            CellIds are IDENTICAL to brsdr's 9-q subset by construction --
+  #            which makes `output_sha` directly comparable, cell for cell.
+  #            If it reproduces brsdr byte-for-byte, the era is proven inert
+  #            for zenravif SDR and the arm may be read against brsdr's 4,979
+  #            scored cells.  If it does not, br444 IS the same-era 4:4:4
+  #            comparator and everything is read within-era.  Either way the
+  #            question is MEASURED, not assumed -- the same discipline the
+  #            era-delta wave used (6,912/6,912 byte-identical).
+  #            It also puts both arms in ONE score run, so the scorer cannot
+  #            differ between them either.
+  # -------------------------------------------------------------------------
+  declare_block_knobgrid avifdoe-rav-br420-20260904 \
+      '{"backend":["zenravif"],"chroma":["420"],"speed":[1,2,3,4,5,6,7,8,9,10]}' \
+      "$Q_LADDER9" "$SOURCES"
+  declare_block_knobgrid avifdoe-rav-br444-20260904 \
+      '{"backend":["zenravif"],"speed":[1,2,3,4,5,6,7,8,9,10]}' \
+      "$Q_LADDER9" "$SOURCES"
+  cat <<'CSEOF'
+
+Declared the chroma split into the output dir. NOT launched.
+
+  expected: br420  2,880  (10 speeds x 9 q x 32 images, BUDGET, chroma=420)
+            br444  2,880  (10 speeds x 9 q x 32 images, BUDGET, era control)
+            -----------
+            5,760 cells
+
+  br444's cells must carry NO chroma token -- that is what makes their CellIds
+  equal to brsdr's, and the byte comparison possible.  If a `chroma` key ever
+  appears in br444's knob_tuple_json the control is void: check with
+
+    head -1 $OUT/avifdoe-rav-br444-20260904_cells.jsonl
+
+  corpus prefix (workers): s3://codec-corpus/avif-doe-1024-2026-09-01/ (BUDGET)
+  Do NOT cross with the NATIVE prefix: the two share all 32 filenames and 13
+  are different pixels.
+
+RUNBOOK -- STAGE (three objects per run; ZEN_REQUIRE_SNAPSHOT=1 refuses a run
+with no ledger_snapshot.parquet):
+
+  for RUN in avifdoe-rav-br420-20260904 avifdoe-rav-br444-20260904; do
+    aws s3 cp --endpoint-url "$ZEN_S3_ENDPOINT" \
+      $OUT/${RUN}_manifest.json s3://zentrain/jobs/$RUN/manifest.json
+    echo '{"paused":true,"drain":true}' | \
+      aws s3 cp --endpoint-url "$ZEN_S3_ENDPOINT" - s3://zentrain/jobs/$RUN/control.json
+    ./target/release/zenfleet-ctl compact --run "$RUN" --bucket zentrain \
+      --endpoint "$ZEN_S3_ENDPOINT" --upload
+  done
+
+RUNBOOK -- SCORE, DECLARED AT LAUNCH:
+
+  ZEN_DOE_SFRUN=avifdoe-cs-sf-cpu-20260904 \
+  ZEN_DOE_RUNS="avifdoe-rav-br420-20260904=s3://codec-corpus/avif-doe-1024-2026-09-01/ \
+                avifdoe-rav-br444-20260904=s3://codec-corpus/avif-doe-1024-2026-09-01/" \
+    bash scripts/jobsys/avifdoe_score_gapfill.sh
+
+RUNBOOK -- HOSTS + TOPOLOGY.  zenrav1e is 3.7x-64.8x slower per cell than svt,
+so ZEN_PASS_TIMEOUT=7200 (NOT the 1800 s default -- that caused recomputation
+and poisoned the brsdr cost figures).  Topology per section 4.5d's CORRECTION of
+4.5: the win is NARROW CPUSETS, not low oversubscribe -- 8 workers x 1-core
+cpuset at oversub 2 measured 21.0 min wall / 22.9 CPU-s per cell, against
+26.2/34.8 for 2 workers x 9-core at the same ratio and 12.0/40.0 for oversub 1.
+So: one core per worker, ZEN_CORE_OVERSUBSCRIBE=2.
+r7900x stays RESERVED while the timing instrument holds it.
+CSEOF
   exit 0
 fi
 
