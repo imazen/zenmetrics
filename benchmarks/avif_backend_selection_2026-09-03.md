@@ -602,6 +602,19 @@ avifdoe_brem_analyze.py --br-scored br_scored.parquet \
     --outdir tables --parity-check ~/work/zen/zenavif/scripts/rd_gap/bd_arm.py
 ```
 
+**⚠ Commit provenance — this document and its two scripts landed inside commit
+`c041466e`, whose message is another lane's** ("measure: threading explanation
+CONFIRMED by controlled test + Track T COMPLETE"). Cause: `jj` snapshots the
+whole working copy on *every* command, and this analysis ran in the primary
+checkout alongside a live speed-instrument lane, so that lane's next `jj`
+invocation swept these in-progress files into its own change and pushed them.
+Nothing was lost or altered — the files are verified byte-correct on
+`master@origin` — but `git log` will not lead a reader here from the commit
+subject, hence this note. **The lesson is general: an additive path-scoped
+`.workongoing` protects against concurrent EDITS to the same files, and does
+nothing about a shared `jj` working copy.** Two lanes writing to one checkout
+need a sibling `jj workspace`, not a marker convention.
+
 **Raw inputs** stay in their canonical homes: encode bitstreams
 `s3://zentrain/jobs/avifdoe-{svt-brnat,rav-brsdr}-20260903/blobs/`, score blobs
 `s3://zentrain/jobs/avifdoe-br-sf-cpu-20260903/blobs/`, corpora

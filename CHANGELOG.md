@@ -13,6 +13,39 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## scripts/jobsys (AVIF Stage-B remainder analysis, 2026-09-03)
+
+### Added
+
+- **`avifdoe_brem_analyze.py`** — the Stage-B remainder analyzer (native
+  QM × sharpness 4×3 factorial + the first per-image SDR cross-backend table,
+  matched in quality space and joined to the speed instrument). Imports
+  `frontier` / `bd_rate` / `median_ci` / `q1q3` / the content-class map from
+  `avifdoe_stagea_analyze.py`, `binom_two_sided` from `avifdoe_stagea_gates.py`
+  and `curves` / `load_scored` from `avifdoe_stageb6_analyze.py`; it
+  re-implements no statistic. Record:
+  `benchmarks/avif_backend_selection_2026-09-03.md`. (c041466e)
+
+### Changed
+
+- **`avifdoe_harvest.py` now harvests the SDR *backend* arms.** The DOE
+  builder's `--knob-grid` entry point emits a two-key tuple with an explicit
+  backend and no `cell` (`{"backend":"zenravif","speed":N}`); the harvester
+  previously produced a null `arm` and a null `dial` for those rows, losing the
+  ladder position entirely. It now labels them `s<N>-zenravif` and carries the
+  speed in the explicit `dial` / `dial_kind` columns. **The label deliberately
+  carries NO chroma token** — the existing `-420` assertions in
+  `NAIVE_BACKEND_CHROMA` are backed by a 928/928 byte-identity measurement and
+  no equivalent existed here, so synthesizing one would be convention dressed
+  as evidence. (That refusal is what let the analysis *measure* the chroma
+  question instead of assuming it: every zenravif cell turned out to be 4:4:4
+  and every svt cell 4:2:0, across 1,114 bitstreams.) The new branch is
+  **strictly additive by construction** — backends already in
+  `NAIVE_BACKEND_CHROMA` are excluded, so it is unreachable for every knob-tuple
+  shape the previous code handled — and was verified non-regressive on real
+  data: re-harvesting reproduces all 7,488 `brnat` rows byte-identically across
+  all 18 columns. (c041466e)
+
 ## scripts/jobsys (LAN worker restart-loop fix, 2026-09-03)
 
 ### Fixed
