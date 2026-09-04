@@ -151,6 +151,35 @@ reported as one rather than rounded to a story. **No outcome here is a null
 result** — all three change the decision surface, which is why the arm is worth
 running whichever way it lands.
 
+### 4.0.1 ADDENDUM (2026-09-04, before any result) — the ladder is itself a reach constraint
+
+The 16-reference set above was derived from svt's **29-q** grid, which reaches
+q98. Both chroma arms run the **9-q** ladder, which stops at q96. Measured cost
+of that restriction, on svt's own scored cells:
+
+* achieved max ssim2 drops by up to **2.106** points (worst: `1432`, 92.74 → 90.63);
+* it flips **exactly one** image's reach-90 verdict — `9954.scale1024x1536`,
+  90.49 → 89.64 — which is **ai-gen, not plot/screenshot**, so **the k₁₁
+  denominator of 11 is untouched and the decision rule in §4 is unaffected**.
+
+(The same computation reproduces the published `svt_qmax` exactly on all 32
+images from the 29-q cells, which is the check that the instrument is the same
+one.)
+
+Two consequences, both adopted:
+
+1. **Every arm is read on ONE ladder.** The analyzer restricts svt to the same 9
+   q points, so no comparison is confounded by ladder density. A `br420` miss is
+   then never attributable to a ceiling the other arms did not also have.
+2. **An in-wave reading is reported beside the registered one**: which images
+   svt-420 misses *here*, and whether `br420` and `br444` miss them too. That
+   version of the question is immune to ladder density by construction, because
+   all three arms share the ladder. The registered 16-image set stays PRIMARY —
+   it is what was registered — and both are printed rather than one being
+   quietly substituted for the other.
+
+---
+
 ## 4.1 The two clean axes
 
 With `br420` in hand the published `+7.3 %` (zenrav1e-444 vs svt-420 — backend

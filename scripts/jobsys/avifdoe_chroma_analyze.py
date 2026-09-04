@@ -221,11 +221,31 @@ def main():
     arms["svt420"] = svt
 
     # ---- 1. reach ----------------------------------------------------------
+    # EVERY arm is read on the SAME 9-q ladder (svt is restricted in arm_points
+    # above), because the ladder ceiling is itself a reach constraint: q96, not
+    # the 29-q grid's q98. MEASURED cost of that restriction on svt, 2026-09-04:
+    # up to 2.106 ssim2 points of achieved max, and it flips exactly ONE image's
+    # reach-90 verdict -- 9954.scale1024x1536.png, 90.49 -> 89.64. That image is
+    # ai-gen, NOT plot/screenshot, so the k11 denominator is untouched and the
+    # decisive test is unaffected. Both sets are reported rather than one being
+    # quietly substituted for the other.
     reach = reach_table(arms, cls_of, a.outdir)
     k = [img for img in SVT_CANNOT_REACH
          if reach.get(img, {}).get("br420") is not None
          and reach[img]["br420"] < REACH_BAR]
     k11 = [img for img in k if img in PLOT_SCREEN]
+    # The same question asked entirely INSIDE this wave, on one ladder: which
+    # images does svt-420 miss here, and does br420 miss them too? This is the
+    # reading that cannot be confounded by ladder density, because all three
+    # arms share it.
+    svt_fail_9q = sorted(img for img, m in reach.items()
+                         if m.get("svt420") is not None and m["svt420"] < REACH_BAR)
+    k_inwave = [img for img in svt_fail_9q
+                if reach[img].get("br420") is not None
+                and reach[img]["br420"] < REACH_BAR]
+    k444_inwave = [img for img in svt_fail_9q
+                   if reach[img].get("br444") is not None
+                   and reach[img]["br444"] < REACH_BAR]
     verdict = ("CHROMA" if len(k11) >= 9 else
                "BACKEND" if len(k11) <= 2 else "CONDITIONAL")
 
@@ -246,9 +266,17 @@ def main():
         json.dump(dict(era=era, reach_bar=REACH_BAR,
                        k_of_16=len(k), k11_of_11=len(k11), verdict=verdict,
                        k_images=sorted(k), axes=summaries,
-                       ladder=list(LADDER9)), f, indent=2)
-    print(f"[reach] br420 fails ssim2>={REACH_BAR} on {len(k)}/16 of the svt-fail set, "
-          f"{len(k11)}/11 plot+screenshot -> {verdict}")
+                       ladder=list(LADDER9),
+                       in_wave=dict(svt420_fails=svt_fail_9q,
+                                    n_svt420_fails=len(svt_fail_9q),
+                                    br420_also_fails=k_inwave,
+                                    n_br420_also_fails=len(k_inwave),
+                                    br444_also_fails=k444_inwave,
+                                    n_br444_also_fails=len(k444_inwave))), f, indent=2)
+    print(f"[reach] br420 fails ssim2>={REACH_BAR} on {len(k)}/16 of the registered "
+          f"svt-fail set, {len(k11)}/11 plot+screenshot -> {verdict}")
+    print(f"[reach in-wave, one ladder] svt420 misses 90 on {len(svt_fail_9q)}; "
+          f"br420 also misses on {len(k_inwave)}; br444 also misses on {len(k444_inwave)}")
     print(f"wrote tables to {a.outdir}")
 
 
