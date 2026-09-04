@@ -252,6 +252,28 @@ own de-scope (§7.3) fires on the score side.
 Wall ETAs, work-weighted from live counters rather than from cell counts:
 `brnat` ~48 cells/min → **~1 h**; `brsdr` at 8.47 of 10 cores busy → **~4 h**.
 
+### 4.9 ENCODE COMPLETE — both runs, verified 2026-09-04T02:09Z
+
+| run | declared | done | failed | verdict |
+|---|--:|--:|--:|---|
+| `avifdoe-svt-brnat-20260903` | 7,488 | **7,488** | **0** | **COMPLETE** |
+| `avifdoe-rav-brsdr-20260903` (9-q, post-de-scope) | 2,880 | **gap 0** | **0** | **COMPLETE** |
+
+`brsdr`'s ledger holds **4,979 distinct done cells** against its 2,880-cell
+manifest — the 2,099 retained 29-q extras (§4.8), confirmed again here. Measured
+against the **original** 9,280-cell manifest the gap is **4,301**, so the de-scope
+avoided 4,301 cells while the run still delivers **53.7 % of the original grid**:
+the 9-q ladder complete, plus partial 29-q coverage on the images reached first.
+
+**Clean throughout:** `0 newest-failed rows` on both runs and `failed=0 poisoned=0`
+across all 8 workers on both hosts. Total encode delivered: **12,467 cells**
+(7,488 + 4,979).
+
+**Scoring continues** — the gap-fill (83+ rounds, `errors_total=0`) declares from
+the ledger and the long-lived-off scorer refreshes its manifest each cycle
+(§4.5/§6). At 02:09Z it had 2,706 blobs against 12,463 scorable cells; it drains
+after the encode side, which is the intended order.
+
 ### 4.1 Pre-registered de-scope (fires on G-RATE only)
 
 In this fixed order, re-checking after each step:
