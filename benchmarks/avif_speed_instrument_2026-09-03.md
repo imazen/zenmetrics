@@ -543,6 +543,38 @@ up front:
 first-pass wall time lands within **+25 %** (≤ 2.31 h) and note any undershoot as a
 model error in the other direction.
 
+### 6.6d ⚠ β IS A WALL-TIME SLOPE, AND svt IS INTERNALLY MULTI-THREADED AT NATIVE SIZE
+
+Found while watching S1c, and it changes how every coefficient here must be *read*
+(not their correctness). `encode_ms` is the **wall time** of the encode call, and
+the sweep runs `--jobs 1` — but MEASURED on the S1c native/svt leg over a clean
+120 s window: **1.638 mean cores, 3 OS threads.** SVT-AV1 threads internally, and
+the sweep's `--jobs` does not constrain it.
+
+**It is size-dependent**, which is why S1a did not show it: throughout the ladder
+(≤ 2816²) the box sat at **load 1.00**; at native sizes (up to 16 MP) it runs
+~1.64 cores.
+
+**What this does and does not invalidate:**
+
+- **The fits stand.** They are wall-time fits, measured consistently, on an
+  uncontended box, and internally coherent (per-source R² 0.9929–0.9997). Nothing
+  in §6.0–§6.4c changes.
+- **Backend ratios stand** — svt's 3.7×–69.3× advantage is wall-clock, which is what
+  a latency-sensitive caller experiences.
+- **⛔ β is NOT a CPU-cost slope, and must not be used as one.** For capacity
+  planning — how many encodes fit on an N-core box — svt's true cost at native size
+  is up to **~1.64× its β**, while zenrav1e's ladder measurements sat at 1 core. A
+  scheduler that packs by β would over-commit svt and under-commit zenrav1e.
+- The self-prediction in §6.6c is a **wall-time** prediction and is unaffected.
+
+**Registered as the next measurement, not hand-waved:** the thread scaling is
+itself a function of frame size and preset and has been sampled at exactly one
+point (native, svt, mid-ladder speeds). A `cpu_ms` column alongside `encode_ms` —
+`getrusage` deltas around the encode call — would make the CPU-vs-wall split a
+first-class output instead of an observation. That is a small change to the owner
+and belongs with the S2 tranche (§4.1).
+
 ### 6.7 ⛔ `run2` died before its COMPLETE marker — I overwrote a RUNNING bash script
 
 **The run finished its work and then failed at the last line.** After
@@ -624,7 +656,10 @@ next single-host timing wave.
    photo sources.
 2. **Two sources cannot reach the top rungs**, so the ladder is ragged (7/7/7/6/5).
    Pooled fits are unbalanced by construction; per-source fits are not.
-3. **One host, one governor, one glibc.** Every absolute millisecond here is an
+3. **β is wall time, not CPU time** (§6.6d): svt threads internally to ~1.64 cores
+   at native size while the ladder ran at 1.0. Do not use β for core-count capacity
+   planning without that factor.
+4. **One host, one governor, one glibc.** Every absolute millisecond here is an
    r7900x number. Backend *ratios* are within-binary and within-host, so they
    travel; absolute times do not.
 4. **N = 3 passes** is the floor the brief set. The zensim perf work needed ≥ 15
