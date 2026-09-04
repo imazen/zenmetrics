@@ -612,6 +612,32 @@ unthreaded one lands slightly SLOWER** — which is exactly the direction §6.6c
 TSV write. Two backends, one pass, one corpus, one q, differing in the tested
 variable and agreeing with the prediction on both sides of it.
 
+#### FINAL SCORECARD — pass 1 complete, all four legs
+
+| leg | predicted | actual | error |
+|---|--:|--:|--:|
+| native/svt | 3,537 s | 2,787 s | **−21.2 %** |
+| native/rav | 1,882 s | 2,064 s | +9.7 % |
+| budget/svt | 810 s | 816 s | **+0.7 %** |
+| budget/rav | 431 s | 491 s | +13.9 % |
+| **WHOLE PASS** | **6,660 s (1.85 h)** | **6,158 s (1.71 h)** | **−7.5 %** |
+
+**Against the registered rule (≤ +25 %, i.e. ≤ 2.31 h): PASS.**
+
+**But the aggregate pass is partly FORTUITOUS and must not be read as calibration.**
+Per-leg errors span **−21.2 % to +13.9 %**; they land at −7.5 % together because the
+svt threading **over**-prediction happens to cancel the overhead **under**-prediction.
+Those are two unrelated error sources of opposite sign, not a well-centred model. A
+consumer running a **single-backend** workload sees the full per-leg error: −21 % for
+large threaded svt, +14 % for small zenrav1e. **Quote the per-leg numbers, not the
+aggregate**, unless the workload really is this corpus-wide backend mix.
+
+The two systematic terms are separately identified and both actionable: threading
+(§6.6d, fixable with a `cpu_ms` column) and fixed per-cell overhead — process spawn,
+decode, TSV write — which the model omits entirely and which shows up as the +9.7 %
+and +13.9 % on the two cheapest legs, exactly where a fixed cost is proportionally
+largest.
+
 #### A THIRD LEG makes it a WITHIN-backend control — the error tracks FRAME SIZE
 
 `budget/svt` landed at **816 s against a predicted 810 s: +0.7 %**. That is the
