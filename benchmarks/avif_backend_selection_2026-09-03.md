@@ -52,19 +52,27 @@ Companions: [`avif_speed_instrument_2026-09-03.md`](avif_speed_instrument_2026-0
    `a0r` / `brnat` / svt cell is **seq_profile 0, 4:2:0 (448/448 and 26/26)**.
    Zero exceptions. This is structural in the sweep tool, not a mis-specified
    grid (§4.1), and it is the single most important caveat in this document.
+   **UPDATE 2026-09-04 — SPLIT. See §8.** The confound is resolved: it is
+   **CHROMA, not backend** (k₁₁ = 11 of 11 on the pre-registered rule). Item 8
+   below is re-worded per that finding's own pre-registered consequence.
 7. **Read through that confound, the headline numbers are:** zenrav1e-4:4:4
    needs **+7.3 %** more bits than svt-4:2:0 at matched ssim2 (median over 32
    images, 95 % CI [−1.99, +19.81], **11 of 32 images go the other way**, sign
    test p = 0.11 — **not** a significant global win for either side). The
    band-restricted reading agrees: +8.83 % over ssim2 ∈ [30, 95], same 11/32.
-8. **The decisive axis is not bytes, it is REACH and TIME.** svt at 4:2:0
-   **cannot reach ssim2 90 on 16 of 32 references at any q, at any speed** —
-   on plots it tops out at **40.5 / 54.4 / 66.7 / 67.1** while zenrav1e reaches
-   94.2 / 94.4 / 90.9 / 93.2 on the same images. **The best of all 118 svt arms
+8. **The decisive axis is not bytes, it is REACH and TIME.** ~~svt at 4:2:0~~
+   **UPDATE 2026-09-04 (§8): re-worded per the chroma-split arm's own
+   pre-registered consequence — "svt" → "4:2:0."** **4:2:0
+   cannot reach ssim2 90 on 16 of 32 references at any q, at any speed** —
+   on plots it tops out at **40.5 / 54.4 / 66.7 / 67.1** while 4:4:4 reaches
+   94.2 / 94.4 / 90.9 / 93.2 on the same images — **and zenrav1e at 4:2:0 hits
+   the identical ceiling on the identical images** (k₁₁ = 11/11, §8): this is a
+   chroma property, not a backend one. **The best of all 118 svt arms
    in A2 does not fix it** (39.99 / 53.83 / 66.18 / 67.05). In the other
    direction, at a 100 ms budget zenrav1e is over-budget on **31 of 32**
    references and svt wins by default; per dial position svt is **3.9× to 69.3×
-   faster** at 1 MP.
+   faster** at 1 MP — the time/backend axis is untouched by the chroma split
+   (§8.4).
 9. **So backend selection is genuinely image-conditioned and the model needs it
    as an output — but the feature that decides it is chroma-vs-content, not
    backend identity.** The ranked gap list is §6; **gap 1 is a zenrav1e 4:2:0
@@ -480,7 +488,13 @@ worth up to **+54 ssim2 points of headroom** on plots. No rate knob substitutes
 for it (118 arms tried). Any picker that routes plot/screen content through a
 4:2:0 path has capped its own output before it starts. **This is the highest-value
 signal in the DOE so far and it was discovered as a confound, which means it has
-never been swept.**
+never been swept.** **UPDATE 2026-09-04 — no longer a confound, MEASURED (§8):
+k₁₁ = 11 of 11 on the pre-registered CHROMA/BACKEND rule. A picker that switches
+*backend* to fix a plot/screenshot reach failure will not fix it — zenrav1e hits
+the identical wall at 4:2:0 on the identical 11 images. Chroma is the only lever
+that opens the ceiling, and (§8.3) it costs ~0 bytes where both chromas can
+already reach a quality — the cost of 4:4:4 is not a bytes tradeoff, it is the
+thing that makes otherwise-unreachable content reachable at all.**
 
 **Decision 2 — backend, conditioned on a time budget first and content second.**
 Below ~500 ms/frame it is not a choice: zenrav1e cannot finish on 31 of 32
@@ -542,11 +556,11 @@ byte-identical), so it is not a decision at all.
 
 | rank | gap | why it blocks the model | cost |
 |--:|---|---|---|
-| **1** | **A zenrav1e 4:2:0 arm** on the budget corpus, defaults, same 29-q ladder | The ONLY way to split the backend effect from the chroma effect. Without it every §3 number is a joint attribution and the picker would learn "backend" when the signal is "chroma". zenavif already supports the knob for zenravif — **but the AVIF sweep path has no chroma knob wired**, so this is a small, well-scoped change to `avif_config_from_knobs` plus 9,280 cells. | ~24 CPU-h + one code change |
+| **1** | ~~A zenrav1e 4:2:0 arm~~ | **✅ CLOSED 2026-09-04.** The chroma-split arm (`avif_chroma_split_2026-09-04.md` §7) split it: **CHROMA, k₁₁ = 11/11**. Kept in this list so the sequence is visible rather than tidied away. | done |
 | **2** | **An svt 4:4:4 arm**, or a recorded decision that svt is 4:2:0-only | Decides whether "use 4:4:4 on synthetic content" is a *chroma* output the picker can set on either backend, or a *backend* output. Today `zenavif` hard-rejects it, so this is a zenavif/zenav1-svt feature question before it is a data question. | blocked upstream |
-| **3** | **Native-size cross-backend coverage** (registration §5 rank 5) | Every §3 number is budget-1024² only. §2.4 shows size effects are small for the interaction, but nothing establishes that for the backend/chroma comparison, and the reach ceiling in §3.3 is exactly the kind of thing that could be size-dependent. | 2,880 cells / ~19 CPU-h |
+| **3** | **Native-size cross-backend AND cross-chroma coverage** (registration §5 rank 5) | Every §3/§8 number is budget-1024² only. §2.4 shows size effects are small for the QM×sharpness interaction, but nothing establishes that for the backend/chroma reach ceiling, which is exactly the kind of thing that could be size-dependent. | 2,880+ cells / ~19+ CPU-h |
 | **4** | **The interaction at s4 and s7** | s6-only by construction, and B-6 measured that sharpness transfer is speed-specific — so the single most valuable knob pair in the DOE is unmeasured at two of three production presets. Needs `svt_doe_main`, a different plan. | ~15k cells |
-| **5** | **S1c content-class speed splits** | β varies 24.33× with content. Until S1c lands, the picker's time gate — the thing that decides backend below 500 ms — rests on a pooled β with R² 0.62–0.91. Chained and pending on r7900x. | in flight |
+| **5** | ~~S1c content-class speed splits~~ | **✅ LANDED 2026-09-04.** `avif_speed_instrument_2026-09-03.md` §8: between-coarse-class median spread 3.92× (1.5–2.2× at production speeds); within-class spread up to 52.6× — the 5-coarse-class label leaves real signal on the table vs the corpus's existing 12-fine-class one. **⚠ PRE-BACKEND-CHANGE ERA**: the AV1 backend is under active re-development in a concurrent session; these coefficients will need re-measurement once it lands. | done |
 | **6** | **More plot/screen references** (n = 6 and 5) | Plot is the class that breaks both headline results — no QM×shp synergy, and the whole quality ceiling. Every claim about it rests on 6 images. | corpus work |
 | **7** | **A second scalar quality response** (zensim scalar, or butteraugli) | Single-metric conclusions on synthetic content, per §5.2. | score-side |
 | **8** | **aom-rs as a third arm** | PLANNED-BLOCKED on era pins post-#15 (registration §3.4); unchanged. | — |
@@ -632,3 +646,64 @@ need a sibling `jj workspace`, not a marker convention.
 `s3://zentrain/jobs/avifdoe-{svt-brnat,rav-brsdr}-20260903/blobs/`, score blobs
 `s3://zentrain/jobs/avifdoe-br-sf-cpu-20260903/blobs/`, corpora
 `s3://codec-corpus/avif-{subsample,doe-1024}-2026-09-01/`.
+
+---
+
+## 8. The chroma confound is SPLIT — unconfounded re-cut (2026-09-04)
+
+**⚠ PRE-BACKEND-CHANGE ERA (2026-09-04): the AV1 backend is being actively
+re-developed in a concurrent session; the byte/reach numbers below are a
+zenavif `6dfdf6f` / zenrav1e `7ad86844` read and will need re-measurement
+after the backend redevelopment lands (the user's own estimate: ~2x faster).
+No new encodes were run for this section — it harvests an arm that had
+already finished encoding before the local box rebooted.**
+
+Full registration + methodology: `avif_chroma_split_2026-09-04.md` §1-6.
+Full results: same file §7. This section is the pointer + the decision-surface
+update; numbers are not re-derived here.
+
+**The gap this closes**: §0.6/§3.1 above established that every cross-backend
+number in §3 is a joint (backend × chroma) attribution — `brsdr`/zenrav1e was
+always 4:4:4, `brnat`/`a0r`/svt was always 4:2:0, zero exceptions on 1,114
+bitstreams. `avif_config_from_knobs` had no chroma knob for AVIF at all. The
+chroma-split arm added the knob (`f15bb3a5`) and ran zenrav1e at 4:2:0
+(`br420`, the cell that never existed) plus a same-era zenrav1e-4:4:4 control
+(`br444`), both on the 9-q ladder, both scored by one score run.
+
+**Controls, both unconditional passes**: era (encoder) 2,880/2,880
+byte-identical — `br444` reproduces `brsdr`'s 9-q subset exactly, so `br444`
+may be read against `brsdr`'s Stage-B-era scored cells. Scorer: max |Δ ssim2|
+= 0.0 on 2,880 shared bitstreams.
+
+**Verdict: CHROMA, not backend.** k₁₁ = 11 of 11 (every pre-registered
+plot+screenshot svt-4:2:0-fail image is ALSO a zenrav1e-4:2:0 fail); k = 16 of
+16 overall. This is the maximum-strength reading against the pre-registered
+rule (k₁₁ ≥ 9 → CHROMA). Corroborated by an independent ladder-density-immune
+reading: of svt-420's 17 in-wave-ladder misses, `br420` also misses all 17/17;
+`br444` misses only 2/17 (both pre-flagged edge cases).
+
+**The bytes axes say something DIFFERENT from the reach axis, and that
+difference is itself the finding.** Holding backend constant and varying only
+chroma moves BD-rate by a median of **+0.08%** (CI [−0.97, +0.93], sign test
+p = 0.860 — indistinguishable from zero). Holding chroma constant and varying
+backend moves it +10.19% svt-favouring (CI [+0.25, +19.15], sign p = 0.071).
+**So 4:2:0 is not a bytes-efficiency choice where both chromas can already
+reach a target quality — it is a hard reach CEILING that no amount of bitrate
+opens.** A picker reasoning about "chroma cost" in bytes alone would
+underweight it by an order of magnitude relative to its actual effect on
+reachable quality.
+
+**Decision-surface consequences** (full text: §4 Decision 1, updated inline
+above): a picker that reaches for "switch backend" to fix a plot/screenshot
+quality ceiling will not fix it. The only lever that opens the ceiling is the
+chroma knob (4:4:4), essentially free in bytes where both chromas already
+succeed. The time/backend axis (Decision 2) is untouched — it was never a
+chroma question.
+
+**Ranked gaps**: §6 rank 1 (the zenrav1e 4:2:0 arm) and rank 5 (S1c
+content-class splits, landed the same session — see
+`avif_speed_instrument_2026-09-03.md` §8, same PRE-BACKEND-CHANGE caveat) are
+both closed; the table above is updated in place with strikethrough + pointer
+per this doc's own convention for resolved items (§5 point 8).
+
+Outputs, triple-mirrored, sha256-verified: `avif_chroma_split_2026-09-04.pointer.md`.
