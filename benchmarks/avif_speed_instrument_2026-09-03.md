@@ -209,8 +209,13 @@ split rather than re-deriving it.
 
 ### 4.1 S2 — the reachable knob-time partial, PRE-REGISTERED and ready to run
 
-Registered now so the next lane runs it rather than re-deriving it. Uses only knobs
-`EncoderConfig` already exposes, so it needs **no zenavif change**.
+Registered now so the next lane runs it rather than re-deriving it. It needs **no
+zenavif change** — but it is **not zero-change**: `bit_depth` and `qm` are **not in
+the sweep's `AVIF_KNOBS`** today (which is `speed, lossless, backend,
+partition_range, lrf, fast_deblock`), so S2 requires first adding those two names and
+wiring them to `EncoderConfig::bit_depth()` / `with_qm()`. That is a **zenmetrics-only**
+edit of a few lines against setters that already exist, which is exactly what makes
+this the reachable tranche and the `qml`/`tune`/`shp`/`acb` family the blocked one.
 
 **Grid:** the 5 ladder sources at 2 rungs (**512², 1024²**) × **q45** × 3 passes,
 svt-rs at speeds **{4, 6, 7}** (the DOE's own presets), across:
@@ -234,10 +239,9 @@ minutes of encode, not hours. Run it with the **same protocol as S1a** (`--no-sc
 screen-content family. Those need `SvtParams`, i.e. a zenavif change (§4). Do not
 let a clean S2 result read as "the knob-time axis is covered".
 
-⚠ **The knob names above are the SWEEP's vocabulary** (`sweep/encode.rs` `AVIF_KNOBS`
-plus `bit_depth`/`qm` if wired); confirm each against `reject_unknown_knobs` before
-launching — an unknown knob is a hard error there, which is the desired behaviour but
-will abort the block.
+⚠ **`bit_depth` and `qm` must be added to `AVIF_KNOBS` first** — `reject_unknown_knobs`
+hard-errors on an unrecognised knob (correct behaviour, but it will abort the block on
+launch). `partition_range`, `lrf` and `fast_deblock` are already in the vocabulary.
 
 ## 5. Analysis plan (fixed before the data)
 
