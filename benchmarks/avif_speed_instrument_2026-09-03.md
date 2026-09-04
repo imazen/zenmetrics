@@ -267,10 +267,10 @@ launch). `partition_range`, `lrf` and `fast_deblock` are already in the vocabula
 
 ## 6. Results — FIRST FITS (pass 1, partial: 16 of 32 ladder inputs)
 
-**Scope, stated first.** S1a **passes 1 AND 2 are COMPLETE — 640 cells each**, so
-drift control is measured (§6.4c). The α+β table below is the min-of-2 estimate; it
-moves the coefficients by well under 1 % from pass 1 alone, as the 0.44 % median
-drift implies. Originally recorded as: S1a **pass 1 COMPLETE — all 640 cells** (32 ladder
+**Scope, stated first.** **All three S1a passes are COMPLETE (640 cells each)** and
+both S1b passes (180 each). The coefficients are **min-of-3** (§6.0), drift is
+measured (§6.4c), and q-flatness is confirmed on two passes (§6.4b). Only S1c — the
+content-class block — remains, chained on r7900x. (32 ladder
 inputs × 10 speeds × 2 backends), across all **5 sources**. Still **one pass**, so
 **no drift control yet** (the tool prints `NOT MEASURABLE`), and **q-flatness NOT
 MEASURED** (S1b runs after S1a). Passes 2-3 and S1c are in flight.
@@ -409,6 +409,35 @@ median** (§6.4c). The q effect is ~170× that.
 is reproducible across the three sizes in this block but has **no explanation
 here**; it wants the per-q bitstream sizes and rav1e's speed/quantizer coupling,
 which is the analysis lane's work, not this instrument's.
+
+### 6.0 FINAL COEFFICIENTS — min-of-3, and N=3 has demonstrably CONVERGED
+
+S1a pass 3 completed 2026-09-04T00:40:23Z (640 cells). **`speed_alpha_beta.tsv` is
+now the min over all three passes and is the definitive form of this deliverable.**
+
+**The third pass barely moves it, which is the evidence N=3 was enough** — not an
+assertion this time but a measurement of the estimator itself:
+
+| min-of-2 → min-of-3 movement | median | max |
+|---|--:|--:|
+| **β** | **0.125 %** | **0.471 %** |
+| α (arms with \|α\| > 1 ms) | 0.671 % | 5.315 % |
+
+Every β moves by **under 0.5 %**. The protocol registered N ≥ 3 as a floor and the
+data shows the estimator converged inside it — so the §7 concern inherited from the
+zensim perf work (≥ 15 process starts for ASLR bimodality) is not merely absent
+(§6.4c) but quantified as unnecessary *for this instrument*. α is looser because
+several arms have a near-zero intercept, where a relative move is not meaningful.
+
+Three-pass drift: **median 1.02 %, p90 2.79 %** — higher than the two-pass 0.44 %
+purely because (max − min) spans more samples, and still dominated by the
+sub-millisecond 64² cells (§6.4c).
+
+**Every headline result is unchanged under min-of-3**: pooling-not-model (per-source
+R² 0.9929–0.9997), the **24.33×** β content spread, svt's 7–10 saturation (β 28.227
+/ 28.158 / 28.124 / 28.131, within 0.4 %), zenrav1e's 7/8 alias (1956.17 / 1956.10,
+within **0.004 %**), and the q-flatness falsification (§6.4b, unchanged at 0.7508 /
+0.4325 since it is min-of-2 over the two S1b passes).
 
 ### 6.4c DRIFT CONTROL — measured, and the instrument is reproducible
 
