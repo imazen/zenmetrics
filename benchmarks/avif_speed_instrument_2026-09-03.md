@@ -188,6 +188,23 @@ a schema or contract consequence; neither is a thing to do mid-wave. **Registere
 scoped, not silently dropped.** What ships instead: the backend × speed × size ×
 q surface, which is what backend picking actually needs.
 
+**VERIFIED at the API level, 2026-09-03 — the blocker is real, and here is its exact
+shape.** Option (a) is not a zenmetrics-only change. The `--knob-grid` path builds a
+zenavif **`EncoderConfig`**, and that type exposes only `bit_depth()` and
+`with_qm(bool)` of the knobs this DOE sweeps — there is **no** setter for `tune`,
+`sharpness`, `ac_bias`, screen-content forcing, or the QM *window* (`with_qm` is a
+boolean, not the `qml<min>.<max>` range the arms use). Those live on `SvtParams`,
+reached only through the `SweepAxes` plan path. **So (a) requires a zenavif change**,
+and zenavif is currently claimed by another lane — which is why this stays registered
+rather than attempted.
+
+**What IS reachable today without touching zenavif**, and is the natural next
+tranche: `bd10` via `bit_depth()`, QM **on/off** via `with_qm()`, plus the sweep's
+existing AVIF knobs (`partition_range`, `lrf`, `fast_deblock`). That is a partial
+knob-time block — enough to price bit-depth and the coarse QM switch, not the QM
+window or the tune/sharpness/ac_bias family. Recorded so the next lane knows the
+split rather than re-deriving it.
+
 ---
 
 ## 5. Analysis plan (fixed before the data)
