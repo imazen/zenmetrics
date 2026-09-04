@@ -182,6 +182,42 @@ def reach_table(arms, cls_of, out):
     return reach
 
 
+# ------------------------------------------------------------- scorer --------
+def scorer_control(t, brsdr_scored, out):
+    """Does the SCORER agree across eras on identical bitstreams?
+
+    The era control (§3) proves the ENCODER is inert; it says nothing about the
+    metric. But br444's blobs are byte-identical to brsdr's, and the two were
+    scored by DIFFERENT score runs -- so joining on `encode_sha` and comparing
+    `m_ssim2` isolates the scorer exactly, for free. A non-zero delta here would
+    mean no cross-era ssim2 comparison is admissible, including the br420 vs
+    stored-svt backend axis.
+    """
+    import pyarrow.parquet as pq
+    b = pq.read_table(brsdr_scored).to_pydict()
+    old = {}
+    for i in range(len(b["run"])):
+        if b["run"][i] == "brsdr" and b["m_ssim2"][i] is not None:
+            old[b["encode_sha"][i]] = b["m_ssim2"][i]
+    deltas = []
+    for i in range(len(t["run"])):
+        if t["run"][i] != "br444" or t["m_ssim2"][i] is None:
+            continue
+        o = old.get(t["encode_sha"][i])
+        if o is not None:
+            deltas.append(t["m_ssim2"][i] - o)
+    res = dict(n=len(deltas),
+               max_abs=max((abs(d) for d in deltas), default=None),
+               n_nonzero=sum(1 for d in deltas if d != 0.0))
+    with open(f"{out}/scorer_control.tsv", "w") as f:
+        f.write("shared_bitstreams\tmax_abs_delta_ssim2\tn_nonzero\tverdict\n")
+        v = "SCORER INERT" if res["n"] and res["n_nonzero"] == 0 else (
+            "NO OVERLAP" if not res["n"] else "SCORER MOVED")
+        f.write(f"{res['n']}\t{res['max_abs']}\t{res['n_nonzero']}\t{v}\n")
+    res["verdict"] = v
+    return res
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scored", required=True, help="harvested chroma-split parquet (br420+br444)")
@@ -189,6 +225,8 @@ def main():
     ap.add_argument("--crop-manifest", required=True)
     ap.add_argument("--br444-pairs", required=True)
     ap.add_argument("--brsdr-pairs", required=True)
+    ap.add_argument("--brsdr-scored", default="/mnt/v/output/avif-backend-2026-09-03/br_scored_2026-09-03.parquet",
+                    help="the backend wave's harvested table; supplies brsdr's ssim2 for the scorer control")
     ap.add_argument("--outdir", required=True)
     ap.add_argument("--metric", default="m_ssim2")
     a = ap.parse_args()
@@ -219,6 +257,11 @@ def main():
         if s_ is not None and b_ is not None:
             svt[sa["image"][i]].append((s_, b_))
     arms["svt420"] = svt
+
+    # ---- 0b. scorer control ------------------------------------------------
+    sc = scorer_control(t, a.brsdr_scored, a.outdir) if os.path.exists(a.brsdr_scored) else \
+        dict(n=0, verdict="NOT RUN (no brsdr scored table)")
+    print(f"[scorer] shared bitstreams={sc['n']} max|d ssim2|={sc.get('max_abs')} -> {sc['verdict']}")
 
     # ---- 1. reach ----------------------------------------------------------
     # EVERY arm is read on the SAME 9-q ladder (svt is restricted in arm_points
@@ -263,7 +306,7 @@ def main():
               f"{na}_wins={s['a_wins']} {nb}_wins={s['b_wins']} p={fmt(s['sign_p'])}")
 
     with open(f"{a.outdir}/notes.json", "w") as f:
-        json.dump(dict(era=era, reach_bar=REACH_BAR,
+        json.dump(dict(era=era, scorer=sc, reach_bar=REACH_BAR,
                        k_of_16=len(k), k11_of_11=len(k11), verdict=verdict,
                        k_images=sorted(k), axes=summaries,
                        ladder=list(LADDER9),
