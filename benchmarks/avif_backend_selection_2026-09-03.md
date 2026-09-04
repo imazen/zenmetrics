@@ -16,12 +16,16 @@ Companions: [`avif_speed_instrument_2026-09-03.md`](avif_speed_instrument_2026-0
 
 ## 0. TL;DR
 
-1. **Score coverage is effectively complete and is stated as a fraction, not as
-   "done": `brnat` 7,488 / 7,488 cells (100.00 %), `brsdr` 4,971 / 4,979
-   (99.84 %) — 12,459 of 12,467, with 8 `brsdr` cells still in the scorer.**
-   Coverage is measured at the CELL level by joining through `encode_sha`; the
-   blob prefix is content-addressed and would have read 78 % / 80 % at
-   completion (registration §4.2).
+1. **Score coverage is COMPLETE: 12,467 / 12,467 cells (100.00 %).** It was
+   verified *before* any analysis and stated then as a fraction — `brnat`
+   7,488/7,488, `brsdr` 4,971/4,979 (99.84 %), 8 cells still in the scorer. Those
+   8 landed while this was being written, and **the entire analysis was re-run at
+   full coverage rather than arguing the residue was negligible**: every Q1 table
+   is byte-identical and the only change anywhere in the wave is one scan image's
+   BD-rate moving **0.009 pp** (−2.5001 → −2.5091). No median, CI, win count or
+   p-value moved. Coverage is measured at the CELL level by joining through
+   `encode_sha`; the blob prefix is content-addressed and would have read
+   78 % / 80 % at completion (registration §4.2).
 2. **Q1 — the QM × sharpness synergy HOLDS AT NATIVE, and it is a near-total
    cancellation, not a partial one.** At s6, `shp7` alone costs **+7.02 %**
    BD-rate; `qml1.2.10` alone saves **−2.86 %**; the additive model predicts
@@ -80,15 +84,24 @@ therefore computed by joining every ledger cell to the scored `encode_sha` set.
 
 | run | DONE cells | distinct blobs | cells with `ssim2` | blobs scored | cell coverage |
 |---|--:|--:|--:|--:|--:|
-| `avifdoe-svt-brnat-20260903` | 7,488 | 5,817 | **7,488** | 5,817 / 5,817 | **100.00 %** |
-| `avifdoe-rav-brsdr-20260903` | 4,979 | 4,607 | **4,971** | 4,599 / 4,607 | **99.84 %** |
-| total | 12,467 | 10,424 | **12,459** | 10,416 | **99.94 %** |
+| run | at first harvest | **final** |
+|---|--:|--:|
+| `avifdoe-svt-brnat-20260903` | 7,488 / 7,488 (100.00 %) | **7,488 / 7,488 (100.00 %)** |
+| `avifdoe-rav-brsdr-20260903` | 4,971 / 4,979 (99.84 %) | **4,979 / 4,979 (100.00 %)** |
+| total | 12,459 / 12,467 (99.94 %) | **12,467 / 12,467 (100.00 %)** |
 
-**8 `brsdr` cells (0.16 %) were unscored at analysis time** and are carried as
-`metrics_present = None` rather than dropped. The scorer was live throughout
-(five containers; the blob count moved 2,706 → 2,721 during this analysis), so
-the residue shrinks on its own; nothing here waits on it, and no table in this
-document changes by more than the eight cells' own contribution.
+(Distinct blobs: `brnat` 5,817, `brsdr` 4,607 — the numbers a blob-prefix count
+would have reported as "progress".)
+
+**8 `brsdr` cells (0.16 % of that run) were unscored at first harvest** and were
+carried as `metrics_present = None`, never dropped. The scorer stayed live
+throughout (five containers; blobs 2,706 → 2,721), the 8 landed, and **the whole
+analysis was re-run against 100 % coverage.** The re-run is the measurement that
+replaces the argument: **every table in §2 is byte-identical**, three backend
+tables changed, and the sole numeric delta in the wave is `6602`'s BD-rate
+(−2.5001 → −2.5091) and its banded twin (−4.2913 → −4.3082). The 11/21 win
+split, every median, every CI and every p-value are unchanged. **All numbers
+below are the 100 %-coverage run.**
 
 Every scored cell carries the same metric set — `ssim2 | zensim_features`, on
 **10,416 of 10,416** scored bitstreams — so this wave has none of Stage A's
@@ -516,7 +529,7 @@ byte-identical), so it is not a decision at all.
    9-point-dense for every image and denser only on some. That degrades match
    *precision*, not validity — 9 points clears the BD-rate owner's ≥ 4-point
    guard on every cell used.
-8. **8 `brsdr` cells (0.16 %) were unscored** at the time of analysis.
+8. ~~8 `brsdr` cells unscored~~ — **RESOLVED**: they landed during the analysis and everything was re-run at 100.00 % coverage (§1). Kept in this list so the sequence is visible rather than tidied away.
 9. **A0R covers svt speeds 1–7**; 8–10 are byte- and time-identical to 7
    (measured), so no coverage is lost, but the table's svt speed column never
    exceeds 7.

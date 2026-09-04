@@ -19,7 +19,7 @@ load 4.6). When the mount is repaired the same bytes appear at
 
 **Era pins:** `2026-09-03` — zenavif `56179fcb` / zenav1-svt `2ca060f4` / zenrav1e `e4883037`; fleet image `ghcr.io/imazen/zenfleet-worker:exec-avifhbd-eradelta-e015344f`. Producer commit `f9d890ad`. **Never join across eras.**
 
-**Score coverage at analysis time:** brnat 7488/7488, brsdr 4971/4979 — 8 cells unscored — **0.16 % of `brsdr`, 0.06 % of the wave**; scoring was still draining (five live containers).
+**Score coverage: 12,467 / 12,467 = 100.00 %** (brnat 7,488/7,488, brsdr 4,979/4,979). The 8 `brsdr` cells outstanding at first harvest landed during the analysis and everything was **re-run at full coverage**: every Q1 table byte-identical, sole delta one scan image's BD-rate at 0.009 pp. These files are the 100 %-coverage run.
 
 **Producers (both canonical owners, extended not forked):**
 
@@ -40,17 +40,17 @@ load 4.6). When the mount is repaired the same bytes appear at
 
 | file | bytes | sha256 |
 |---|--:|---|
-| `br_scored_2026-09-03.parquet` | 529,186 | `e2acbd257282f1d90b5ad721a34967f10d10b5e3b8500004fc97db73d152b79e` |
+| `br_scored_2026-09-03.parquet` | 529,175 | `447d50cebf06725c06e6ae5f4e91cd6b0434ce72c84d7a6ee7dc28880b1373b8` |
 | `brnat_pairs.parquet` | 445,260 | `77ccdc1e633a20aa6c7f568c80f4321d8af329a01136c29d518ffed90aa7ff40` |
 | `brsdr_pairs.parquet` | 350,214 | `a13baf3ed857db38d6b855380f95508ae8e4ab904ab041f83a29ec2e6313982f` |
 | `chroma_census_2026-09-03.parquet` | 42,584 | `38c2d5b9b21606b3b2fe9a99b350b30ea783ff44a8050584014bc1e5a5a33626` |
 | `parquet/arm_effects_budget.parquet` | 5,717 | `75114e9b1ce1883ac84a8d0d529ac8f36633323ce4472a0baf94733254716205` |
 | `parquet/arm_effects_native.parquet` | 5,738 | `15c165f0713eeae973efe338e1f92b03c171d5287612fb2a77a974b728b6cc91` |
 | `parquet/backend_iso_time.parquet` | 13,002 | `ac9911b7735efd6150c59f4c8b64120a5696a12fbb97b66f6078e3cf2649ec06` |
-| `parquet/backend_per_image.parquet` | 13,391 | `2caa1d3746853780fa36c9fe9d11debb54cf5efcf1e3b111ef2985abf9a593c8` |
-| `parquet/backend_per_image_speed.parquet` | 20,387 | `c8115201cf4493a16e4edf5b1902637f935b74938de1d080ebe0ca4aa0701676` |
+| `parquet/backend_per_image.parquet` | 13,391 | `92e0d92a1b1969eca74a6330460327a707ad99055879aecf3536355000212f0f` |
+| `parquet/backend_per_image_speed.parquet` | 20,391 | `85dbaf6f7ca7fba087395b9e16dcf07387ac88d662fe4c25f5745d9042137a98` |
 | `parquet/backend_speed_cost.parquet` | 9,578 | `7c6fe46c4390e9ccd0f0a4ca5203e48aeac4ae836f3bdb32632786922c4cd084` |
-| `parquet/backend_summary.parquet` | 5,413 | `bbdaba0c2b9bc79ab7637fcae34df5aabf978092f2e68b6fe02b75107035f83e` |
+| `parquet/backend_summary.parquet` | 5,413 | `0d643c6c464a46acda94a81c883e26cffc7cd465a16664fd5d6dc017d24b1085` |
 | `parquet/backend_three_axis.parquet` | 8,694 | `ff9060eedbc933a4d70f256a04c070c8d7c9fd465c0b1aef604f1a44a8dbb0f1` |
 | `parquet/bd_per_image.parquet` | 10,984 | `247c925e329e954c3a06b91caef46cf6ba41e13e427a257c5159c2d3dda73e46` |
 | `parquet/brnat_inert_per_stratum.parquet` | 2,105 | `52ce7db758667bbc9040c0632727146130f88163f52d581c6eb4a9c39441fa24` |
@@ -65,10 +65,10 @@ load 4.6). When the mount is repaired the same bytes appear at
 | `tables/arm_effects_budget.tsv` | 2,418 | `80efdae1825953f61949578e7ab367d2c581de891654403d11bb38cbad65a614` |
 | `tables/arm_effects_native.tsv` | 2,434 | `7b74c5459e6f6b4156be301dee520a1cb20fe447cabf37f4c4af9eb22633aa3b` |
 | `tables/backend_iso_time.tsv` | 56,744 | `ae8ce114c43f99867cc502f75d3f479d6c99ca94696ada3489bbbf86b875c526` |
-| `tables/backend_per_image.tsv` | 6,346 | `3bc430dd192e001217bccbd9c26844d8a71e04891786a53192b9182cd812e369` |
-| `tables/backend_per_image_speed.tsv` | 47,078 | `1b581b4b218fbda97a1b2fe698434fba5f5553281037d3e7e5dd15c58a260a32` |
+| `tables/backend_per_image.tsv` | 6,346 | `11036f1ffbf7e99cb5f3c7e1bff6d827bc6e3781ae91c42e69e5c387d7cc44ab` |
+| `tables/backend_per_image_speed.tsv` | 47,110 | `96a367604d97bb100ee101cfe2ba270c14f382173dd92497166204b483fb3139` |
 | `tables/backend_speed_cost.tsv` | 121,328 | `2a24742f44634f684642052306c6ef8e59f5b70c2d0c9eec8fd321a69fe46fd5` |
-| `tables/backend_summary.tsv` | 3,277 | `ca1ac9adc4a21571b436ec66db2bd34f796b98a00b19e91ccda0212322402141` |
+| `tables/backend_summary.tsv` | 3,277 | `03865a8c492ab8a3b9301f86a585c182362111bb535361941493329ce791f7ba` |
 | `tables/backend_three_axis.tsv` | 13,827 | `461c637b7b543e18ffc906db0106eada33d120e1155f728c375b20f0a7e45da2` |
 | `tables/bd_per_image.tsv` | 127,220 | `04cccf846b33d4daa3745be7ff7e7e976f465ee70983006a0636700185345fb8` |
 | `tables/brnat_inert_per_stratum.tsv` | 988 | `3954690ae7dd33900acd0304d173f34f1adf783ff2ec7758e35149e3e57d3c13` |
