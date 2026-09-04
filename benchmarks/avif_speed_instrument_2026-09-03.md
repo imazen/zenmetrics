@@ -595,6 +595,27 @@ prediction implies completion at **≈ 02:25:08Z**.
 This is the cheapest possible discriminator: it costs nothing, it was free in the
 block already running, and it can falsify the explanation I just committed to.
 
+#### RESULT OF THE CONTROLLED TEST — CONFIRMED, and the contrast is clean
+
+The native/rav leg ran **01:53:46 → 02:28:10 = 2,064 s** against a predicted
+**1,882 s** — **+9.7 %**, inside the ±10 % bar registered before the data. The
+contrast is the whole point:
+
+| backend (same pass, corpus, q) | measured cores | predicted | actual | error |
+|---|--:|--:|--:|--:|
+| **svt-rs** | **1.638** | 3,537 s | 2,787 s | **−21.2 %** (model over-predicts 26.9 %) |
+| **zenrav1e** | **1.000** | 1,882 s | 2,064 s | **+9.7 %** |
+
+**The threaded backend runs FASTER than its single-threaded β predicts; the
+unthreaded one lands slightly SLOWER** — which is exactly the direction §6.6c's
+"lower bound" caveat calls for, since the model omits process spawn, decode and
+TSV write. Two backends, one pass, one corpus, one q, differing in the tested
+variable and agreeing with the prediction on both sides of it.
+
+**§6.6d is therefore confirmed, not merely plausible.** β is a single-threaded
+wall-time slope: accurate (+9.7 %) where the encoder does not thread, and ~27 %
+high where it does.
+
 **What it means for the deliverable, stated plainly:** the α + β coefficients predict
 **single-threaded wall time**. Applying them to a workload where the encoder threads
 (native-size svt) over-predicts by ~27 %. Until a `cpu_ms` column exists (§6.6d), a

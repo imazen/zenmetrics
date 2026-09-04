@@ -64,12 +64,48 @@ def parse_label(label):
 # identity check is what will catch it -- run it before trusting this path.
 NAIVE_BACKEND_CHROMA = {"svt-rs": "svt-420", "aom-rs": "aom-420"}
 
+# The SDR *backend* arms (`--knob-grid {"backend":[...],"speed":[...]}`, the DOE
+# builder's other canonical entry point) emit a two-key tuple with an EXPLICIT
+# backend and no `cell`: `{"backend":"zenravif","speed":N}`
+# (avif_stageB_remainder_2026-09-03.md section 3). These are default-knob RD
+# ladders for a named backend, and they are what makes per-image cross-backend
+# comparison possible at all.
+#
+# THE LABEL DELIBERATELY CARRIES NO CHROMA TOKEN, for exactly the reason
+# `hdr_label` gives below: the chroma assertion in NAIVE_BACKEND_CHROMA is
+# backed by a 928/928 byte-identity measurement, and no equivalent measurement
+# exists for these backends. Synthesizing `-420` here would be convention
+# dressed as evidence. `parse_label` therefore returns (None, None, None) for
+# them -- correct, since there is no chroma to report -- and the speed is
+# carried by the explicit `dial` / `dial_kind` columns instead of being
+# smuggled into the label grammar.
+#
+# STRICTLY ADDITIVE BY CONSTRUCTION: a backend that already has a measured
+# chroma assertion in NAIVE_BACKEND_CHROMA is excluded here, so this branch is
+# UNREACHABLE for every knob-tuple shape the pre-2026-09-03 code handled. That
+# is the non-regression argument -- `svt-rs` / `aom-rs` naive tuples keep both
+# their old label AND their old (None, None) dial, rather than silently gaining
+# a redundant one.
+SDR_BACKEND_TAG = {"zenravif": "zenravif"}
+
+
+def sdr_backend_label(kt):
+    """SDR backend-arm knob tuple -> `s<N>-<backend>`, or None."""
+    sp, be = kt.get("speed"), kt.get("backend")
+    if be in NAIVE_BACKEND_CHROMA:
+        return None
+    tag = SDR_BACKEND_TAG.get(be)
+    if sp is None or tag is None or kt.get("cell") is not None or len(kt) != 2:
+        return None
+    return f"s{int(sp)}-{tag}"
+
+
 def synth_label(kt, codec=None):
     """Naive-sweep knob tuple -> a DOE-vocabulary control label, or None."""
     sp, be = kt.get("speed"), kt.get("backend")
     if sp is not None and be in NAIVE_BACKEND_CHROMA:
         return f"s{int(sp)}-{NAIVE_BACKEND_CHROMA[be]}"
-    return hdr_label(kt, codec)
+    return sdr_backend_label(kt) or hdr_label(kt, codec)
 
 
 # The HDR sweep lane (`sweep --hdr`, avif_hdr_arm_plan_2026-09-02.md §4.3)
@@ -97,8 +133,20 @@ def hdr_label(kt, codec):
 
 
 def dial_of(kt):
-    """(dial_value, dial_kind) for a single-dial HDR tuple, else (None, None)."""
-    if kt.get("cell") is not None or kt.get("backend") is not None or len(kt) != 1:
+    """(dial_value, dial_kind) for a single-dial tuple, else (None, None).
+
+    Covers both the HDR lane's one-key `{"preset":N}` / `{"speed":N}` and the
+    SDR backend arms' two-key `{"backend":B,"speed":N}` -- in the latter the
+    backend names the ARM and the speed is still the only dial, so dropping it
+    would leave the arm's ladder position unrecoverable from the table.
+    """
+    if kt.get("cell") is not None:
+        return (None, None)
+    if kt.get("backend") is not None:
+        if sdr_backend_label(kt) is not None:
+            return (int(kt["speed"]), "speed")
+        return (None, None)
+    if len(kt) != 1:
         return (None, None)
     for key in ("preset", "speed"):
         if kt.get(key) is not None:

@@ -269,10 +269,24 @@ the 9-q ladder complete, plus partial 29-q coverage on the images reached first.
 across all 8 workers on both hosts. Total encode delivered: **12,467 cells**
 (7,488 + 4,979).
 
-**Scoring continues** — the gap-fill (83+ rounds, `errors_total=0`) declares from
-the ledger and the long-lived-off scorer refreshes its manifest each cycle
-(§4.5/§6). At 02:09Z it had 2,706 blobs against 12,463 scorable cells; it drains
-after the encode side, which is the intended order.
+**SCORING COMPLETE — `gap: 0 of 1069`, 0 failed** (verified 02:35Z against the
+score run's own manifest). Fleet shut down: 8 encode workers, the scorer and the
+gap-fill loop all stopped.
+
+⚠ **And the "2,706 blobs against 12,463 cells" line this replaces was a
+COUNTING ERROR — the sixth of this wave.** Score blobs are **chunked**: a sampled
+blob holds **12 distinct `encode_sha`** (12 `metric` + 12 `feature` records), so
+2,721 blobs carry ~32,000 cell-records, not 2,721 cells. I read a chunked blob
+count against a per-cell count and diagnosed a backlog that did not exist —
+then went looking for a cause and found stale claims, which were real but were
+not what made the scorer idle. **The scorer was idle because it was finished.**
+The authoritative completeness signal is `zenfleet-ctl gap` against the run's own
+manifest; blob counts answer a different question at every layer of this system.
+
+*(The claim clearing was still correct and is kept: 587 claims dated 19:15-20:04
+were held by exited `dev-brsf` instances under `stale_claim_after=None`, so they
+could never expire. `release_claim_r2` — "delete a per-cell claim so the job
+requeues" — is the worker's own mechanism for exactly that.)*
 
 ### 4.1 Pre-registered de-scope (fires on G-RATE only)
 
