@@ -512,6 +512,37 @@ exclusivity holds unattended.
 The estimate was low for the same reason §6.1 is the headline — it was built from
 one image's speed curve, and β is a function of content.
 
+### 6.6c PRE-REGISTERED SELF-PREDICTION — the model predicts S1c's own runtime
+
+S1c launched 2026-09-04T01:07:19Z. Its cost is predicted **from this instrument's
+own min-of-3 β**, registered here **before the block finishes**, because a speed
+model that cannot predict a known encode workload has not earned its name.
+
+| leg | pixels | predicted |
+|---|--:|--:|
+| native / svt (10 speeds) | 161.59 MP | **3,537 s** |
+| native / zenrav1e (speeds 4, 7, 10) | 161.59 MP | **1,882 s** |
+| budget / svt (10 speeds) | 37.02 MP | **810 s** |
+| budget / zenrav1e (3 speeds) | 37.02 MP | **431 s** |
+| **per pass** | | **1.85 h** |
+| **3 passes** | | **5.5 h** → ETA ≈ 06:40Z |
+
+**This is a real test with a real way to fail**, and the honest caveats are stated
+up front:
+
+- It uses the **pooled** β, which §6.1 shows is wrong by up to 24.3× *per source*.
+  Pooling is legitimate here only because S1c runs the whole corpus, so the
+  per-source errors are being asked to cancel in aggregate — exactly the case
+  where a pooled β *should* work and the per-image case where it should not.
+- The coefficients are **q45-specific** (§6.4b) and S1c runs at q45. Had S1c used
+  another q the prediction would be invalid by 75 % on svt.
+- It ignores per-cell process spawn, source decode and TSV write, so the
+  prediction is a **lower bound**; the realised time should exceed it modestly.
+
+**Verdict rule, fixed now:** predicted 1.85 h/pass. Call it a pass if the realised
+first-pass wall time lands within **+25 %** (≤ 2.31 h) and note any undershoot as a
+model error in the other direction.
+
 ### 6.7 ⛔ `run2` died before its COMPLETE marker — I overwrote a RUNNING bash script
 
 **The run finished its work and then failed at the last line.** After
