@@ -570,9 +570,12 @@ requires restarting long-lived workers.** Bounded chunks (§4.5c) are what made 
 restart cheap: ≤ 300 s of work per worker rather than the 1 h 45 m the unbounded
 configuration would have thrown away.
 
-**The ~2,035 already-encoded cells outside the 9-q subset are not waste.** They are
-valid denser-q coverage on the images reached first, the gap-fill scores them from
-the ledger regardless of the manifest, and they stay in the run. The wave therefore
+**The already-encoded cells outside the 9-q subset are not waste — VERIFIED, not
+asserted.** The gap-fill builds its pairs table from the LEDGER, not the manifest,
+so the shrink does not orphan them. MEASURED after the swap: the `brsdr` pairs table
+holds **3,100 rows spanning all 29 distinct q values — 1,001 inside the 9-q subset
+and 2,099 outside it** — and all are declared into the score run. They are valid
+denser-q coverage on the images reached first, and they stay in the run. The wave therefore
 delivers the registered 9-q grid **plus** partial 29-q coverage — which is strictly
 more than the de-scope promised.
 
