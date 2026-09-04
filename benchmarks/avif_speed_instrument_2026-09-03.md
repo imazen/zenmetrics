@@ -612,9 +612,28 @@ unthreaded one lands slightly SLOWER** — which is exactly the direction §6.6c
 TSV write. Two backends, one pass, one corpus, one q, differing in the tested
 variable and agreeing with the prediction on both sides of it.
 
+#### A THIRD LEG makes it a WITHIN-backend control — the error tracks FRAME SIZE
+
+`budget/svt` landed at **816 s against a predicted 810 s: +0.7 %**. That is the
+same backend as the over-predicting leg, in the same pass, differing only in frame
+size:
+
+| leg | MP mean | measured cores | predicted | actual | error |
+|---|--:|--:|--:|--:|--:|
+| native/svt | 5.05 | **1.638** | 3,537 s | 2,787 s | **−21.2 %** |
+| native/rav | 5.05 | **1.000** | 1,882 s | 2,064 s | +9.7 % |
+| **budget/svt** | **1.16** | n/m (ladder-like) | 810 s | 816 s | **+0.7 %** |
+
+So there are now **two independent controls pointing the same way**: a
+*between-backend* one at fixed size (svt vs zenrav1e, isolating threading) and a
+*within-backend* one at fixed backend (svt native vs budget, isolating size). β is
+**near-exact in the small-frame regime it was fitted in** and ~27 % high where svt
+threads up. Nothing else plausibly produces that pattern — a pooled-β corpus-mix
+error would have shifted all three legs in one direction, and it did not.
+
 **§6.6d is therefore confirmed, not merely plausible.** β is a single-threaded
-wall-time slope: accurate (+9.7 %) where the encoder does not thread, and ~27 %
-high where it does.
+wall-time slope: near-exact (+0.7 %) in its fitted regime, accurate (+9.7 %) on a
+backend that does not thread, and ~27 % high where the encoder threads up.
 
 **What it means for the deliverable, stated plainly:** the α + β coefficients predict
 **single-threaded wall time**. Applying them to a workload where the encoder threads
