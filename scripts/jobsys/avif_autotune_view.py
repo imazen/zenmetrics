@@ -140,12 +140,17 @@ def build_commit():
     the colocated primary repo (`jj workspace list` names it `default: .`)."""
     here = Path(__file__).resolve().parents[2]
     for d in (here, here.parent / here.name.split("--")[0]):
-        try:
-            r = subprocess.run(["git", "-C", str(d), "rev-parse", "HEAD"],
-                               capture_output=True, text=True, check=True)
-            return r.stdout.strip()
-        except Exception:
-            continue
+        # Prefer the PUBLISHED tip over the local checkout's HEAD: work may have
+        # been committed from a sibling `jj workspace`, in which case the primary
+        # checkout's HEAD is some other lane's commit and recording it would name
+        # the wrong source for this data.
+        for rev in ("master@{u}", "main@{u}", "HEAD"):
+            try:
+                r = subprocess.run(["git", "-C", str(d), "rev-parse", rev],
+                                   capture_output=True, text=True, check=True)
+                return r.stdout.strip()
+            except Exception:
+                continue
     return None
 
 

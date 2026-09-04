@@ -1,25 +1,26 @@
 # avif-autotune-2026-09-04 — pointer
 
 The canonical AVIF autotune training view + the two v1 bakes. Nothing here is
-in git: the view alone is 14 MB. Record:
+in git: the view is 14 MB. Record:
 [`avif_autotune_v1_2026-09-04.md`](avif_autotune_v1_2026-09-04.md). Consumer
-contract (tracked copy): [`avif_autotune_contract_2026-09-04.md`](avif_autotune_contract_2026-09-04.md).
+contract (tracked copy):
+[`avif_autotune_contract_2026-09-04.md`](avif_autotune_contract_2026-09-04.md).
 
 ## Where
 
 | where | path | state |
 |---|---|---|
-| local | `/mnt/v/zen/avif-autotune-2026-09-04/` | 25 files, 14133761 B |
-| LAN | `s3://zentrain/analysis/avif-autotune-2026-09-04/` | see §mirrors below |
-| Tower | `/mnt/user/coefficient/output/avif-autotune-2026-09-04/` | see §mirrors below |
+| local | `/mnt/v/zen/avif-autotune-2026-09-04/` | 26 objects, 14133761 B |
+| LAN | `s3://zentrain/analysis/avif-autotune-2026-09-04/` | VERIFIED 26 objects |
+| Tower | `/mnt/user/coefficient/output/avif-autotune-2026-09-04/` | VERIFIED 26 files, sha256 spot-matched (written over SSH — `/mnt/tower` NFS was a stale handle) |
 
-## Build commits
+## Build commits (the PUBLISHED tip of each repo)
 
 ```json
 {
-  "zenanalyze": "18971ef9ec3d69121cee2623a360447368e9f2eb",
-  "zenmetrics": "3351b53d7ffeea16d97f20d8240298670a28e595",
-  "zensim": "ccef06991a971b484725a4677fba44fe038ede52"
+  "zenanalyze": "f7fe3435169716579670944d1b2cf1e0132c69db",
+  "zenmetrics": "ffe404c37178019e047fc9a78b958f91b242e1c9",
+  "zensim": "920760bb8e3981f3d1f33d875bead808008f22d8"
 }
 ```
 
@@ -53,5 +54,6 @@ contract (tracked copy): [`avif_autotune_contract_2026-09-04.md`](avif_autotune_
 | `validation/zenavif_autotune_v1_full_quality_lut.json` | 49208 | `918ad253f481ad57d686b44b62c30e11cdadb03d4d8fde1000613116568a2ef2` |
 | `validation/zenavif_autotune_v1_full_validation.json` | 4164 | `2b085f12bad1b3cab5b76c2e12d2280de4cb431424e92063fcde0108a653dd42` |
 
-Regenerate: see §6 of the contract. Every number in the record is reproducible
+`_ARTIFACTS.json` in the same dir carries this table machine-readably.
+Regenerate: §6 of the contract. Every number in the record is reproducible
 from these files plus the two `scripts/jobsys/avif_autotune_*.py` tools.
