@@ -548,6 +548,13 @@ broken config over a window too short to span a pass. This one is **2.8× longer
 a verified-healthy config, with an acceptance-tested flush cadence**. It is the best
 measurement this lane has and the decision follows it.
 
+**Rate confirmed post-de-scope, on a 30-minute window:** gap 1849 → 1279 =
+**570 cells at 19.0 cells/min**, against the 19.5 measured pre-de-scope on the same
+config. The shrink changed *what* is claimed, not throughput — as expected, and now
+measured rather than assumed. It also settles the intermediate 10-minute windows
+that read 6 cells/min: those were pass-lumpiness (§4.6), not a slowdown, and were
+correctly not acted on.
+
 **De-scope step 1 fired** (29-q → 9-q, 2,880 cells), the shrink applied through
 §4.4's sanctioned path with `manifest_PRE_DESCOPE_29q.json` preserved beside it.
 Arithmetic at the measured rate:
