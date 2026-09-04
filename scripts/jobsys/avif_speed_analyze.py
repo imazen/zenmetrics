@@ -21,6 +21,17 @@ Estimator, per the perf discipline:
 Usage:
   avif_speed_analyze.py --s1a run/s1a_pass*.tsv [--s1b run/s1b_pass*.tsv]
                         --out-dir DIR
+  # S1c (content-class coverage): the corpus filenames carry pre-crop scale
+  # tags (e.g. "1220.scale3000x4000.png") on BOTH the native corpus AND the
+  # budget corpus, where the budget file is actually a 1024^2 crop -- the
+  # name is wrong on purpose there (avif_speed_instrument_2026-09-03.md
+  # section on S1c).  Neither CROP_RE nor a scale-tag regex can be trusted
+  # for S1c, so pass --sources-dir pointing at the ACTUAL png files for
+  # that arm; pixels_of() then reads the true width*height from each file's
+  # own IHDR chunk instead of parsing any name.
+  avif_speed_analyze.py --s1a run/s1c_native_svt_pass*.tsv \\
+                        --sources-dir /mnt/v/output/avifsvt-subsample-2026-09-01/sources \\
+                        --out-dir DIR
 """
 import argparse
 import csv
@@ -29,12 +40,14 @@ import json
 import math
 import os
 import re
+import struct
 from collections import defaultdict
 
 # A linear fit this far from 1.0 is not describing the data.
 R2_OK = 0.98
 
 CROP_RE = re.compile(r"\.crop(\d+)\.png$")
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
 def parse_rows(paths):
@@ -55,7 +68,72 @@ def parse_rows(paths):
     return acc, meta
 
 
-def pixels_of(image):
+def read_png_dimensions(path):
+    """(width, height) read from a PNG's IHDR chunk -- header-only, no pixel
+    decode (same convention as scripts/hdr_corpus_precheck.py). None if the
+    file is not a readable PNG or IHDR isn't first, per spec it must be."""
+    try:
+        with open(path, "rb") as fh:
+            if fh.read(8) != PNG_MAGIC:
+                return None
+            head = fh.read(8)
+            if len(head) < 8:
+                return None
+            length, ctype = struct.unpack(">I4s", head)
+            if ctype != b"IHDR" or length < 8:
+                return None
+            data = fh.read(8)
+            if len(data) < 8:
+                return None
+            w, h = struct.unpack(">II", data)
+            return (w, h)
+    except OSError:
+        return None
+
+
+def load_pixel_map(dirs):
+    """{basename: pixels} from real PNG dimensions under `dirs`.
+
+    FAILS LOUD (raises SystemExit) if the same basename appears in more than
+    one dir with a DIFFERENT pixel count. That is not a corrupt corpus --
+    it is the S1c trap: the budget corpus deliberately reuses the native
+    corpus's filenames for its cropped (smaller) variants, so silently
+    picking either dimension would pool two different physical images under
+    one source key. One --sources-dir per analyzer invocation is the
+    supported shape; pass more than one only when you have checked they
+    don't share basenames at different sizes.
+    """
+    pixmap = {}
+    origin = {}
+    conflicts = []
+    for d in dirs:
+        for fn in sorted(os.listdir(d)):
+            if not fn.lower().endswith(".png"):
+                continue
+            wh = read_png_dimensions(os.path.join(d, fn))
+            if wh is None:
+                continue
+            px = wh[0] * wh[1]
+            if fn in pixmap and pixmap[fn] != px:
+                conflicts.append((fn, pixmap[fn], origin[fn], px, d))
+                continue
+            pixmap[fn] = px
+            origin[fn] = d
+    if conflicts:
+        lines = "\n".join(
+            f"  {fn}: {a}px ({ad}) vs {b}px ({bd})" for fn, a, ad, b, bd in conflicts
+        )
+        raise SystemExit(
+            "load_pixel_map: conflicting pixel counts for the same basename "
+            "across --sources-dir inputs -- refusing to pool native and "
+            "budget corpora silently:\n" + lines
+        )
+    return pixmap
+
+
+def pixels_of(image, pixmap=None):
+    if pixmap is not None and image in pixmap:
+        return pixmap[image]
     m = CROP_RE.search(image)
     if not m:
         return None
@@ -102,8 +180,19 @@ def main():
     ap.add_argument("--s1a", nargs="+", required=True)
     ap.add_argument("--s1b", nargs="*", default=[])
     ap.add_argument("--out-dir", required=True)
+    ap.add_argument(
+        "--sources-dir", nargs="*", default=[],
+        help="Dir(s) of the actual PNGs for this arm. When given, pixels_of() "
+             "reads true width*height from each file's IHDR chunk instead of "
+             "parsing a size out of the filename -- required for S1c, whose "
+             "budget-corpus files keep native-looking names on 1024^2 crops.")
     a = ap.parse_args()
     os.makedirs(a.out_dir, exist_ok=True)
+
+    pixmap = load_pixel_map(a.sources_dir) if a.sources_dir else None
+    if pixmap is not None:
+        print(f"pixel map: {len(pixmap)} basenames from {len(a.sources_dir)} "
+              f"--sources-dir dir(s)")
 
     s1a_paths = [p for g in a.s1a for p in sorted(glob.glob(g))]
     acc, _ = parse_rows(s1a_paths)
@@ -135,13 +224,24 @@ def main():
     # ---- alpha + beta*pixels per (backend, speed) --------------------------
     by_arm = defaultdict(list)          # (backend, speed) -> [(px, ms, image)]
     by_arm_src = defaultdict(list)      # (backend, speed, source) -> [(px, ms)]
+    unresolved = set()
     for (img, backend, speed, q), v in acc.items():
-        px = pixels_of(img)
+        px = pixels_of(img, pixmap)
         if px is None:
+            unresolved.add(img)
             continue
         ms = min(v)
         by_arm[(backend, speed)].append((px, ms, img))
         by_arm_src[(backend, speed, img.split(".")[0])].append((px, ms))
+    # NEVER a silent skip (project rule): a cell with no resolvable pixel
+    # count still drops out of the alpha+beta fit (there's nothing to fit
+    # against), but the drop is now visible and named instead of vanishing
+    # into an empty/degenerate arm table -- this is exactly the failure mode
+    # that hid the S1c trap the first time.
+    if unresolved:
+        print(f"pixels_of: {len(unresolved)} distinct image(s) UNRESOLVED "
+              f"(no --sources-dir match, no .crop(N).png name) -- EXCLUDED "
+              f"from the alpha+beta fit: {sorted(unresolved)}")
 
     rows = []
     for (backend, speed), pts in sorted(by_arm.items()):
@@ -258,7 +358,10 @@ def main():
 
     with open(os.path.join(a.out_dir, "summary.json"), "w") as fh:
         json.dump({"n_passes_max": n_passes, "drift": drift,
-                   "arms": rows, "q_flatness": qv}, fh, indent=2)
+                   "arms": rows, "q_flatness": qv,
+                   "pixel_source": "sources-dir" if pixmap is not None else "crop-regex",
+                   "n_images_unresolved": len(unresolved),
+                   "images_unresolved": sorted(unresolved)}, fh, indent=2)
 
 
 if __name__ == "__main__":
