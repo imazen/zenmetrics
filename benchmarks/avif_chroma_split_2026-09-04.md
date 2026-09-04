@@ -281,3 +281,129 @@ r7900x is **not used**: the timing instrument holds it.
 * **Native size** — budget-1024² only, exactly as §3 of the backend doc was.
 * **4:2:2** — `EncodeChromaSubsampling` names two variants; 4:2:2 has no config
   to resolve to and is refused by name.
+
+---
+
+## 7. Results (harvested 2026-09-04, post-reboot)
+
+**Coverage: 5,760 / 5,760 cell rows scored, 0 unscored, 0 missing bytes.**
+`zenfleet-ctl gap` reads `0 of 2880` on both `br420` and `br444`. The 5,760 cell
+rows join to **5,179 distinct `encode_sha`** (581 exact-duplicate bitstreams
+across cells — expected AVIF byte-convergence at high q/slow-speed, not a
+defect); every one of the 5,179 distinct bitstreams carries both `ssim2` and
+`zensim` features. `avifdoe_chroma_harvest.sh` is idempotent and was re-run
+clean at this fill level; nothing here is a partial read.
+
+### 7.1 Controls — both read exactly as the registration required to license anything else
+
+| control | reading |
+|---|---|
+| era (encoder) | **2,880 / 2,880 byte-identical** — `br444` reproduces `brsdr`'s 9-q subset exactly. **ERA INERT.** |
+| scorer | **max \|Δ ssim2\| = 0.0** on 2,880 shared bitstreams. **SCORER INERT.** |
+
+Both controls are unconditional passes, not "close enough" reads. Per §3's rule,
+this means `br444` may additionally be read against `brsdr`'s scored cells (era
+inert), and the backend axis (§7.3) is not an artefact of a scorer that moved
+between waves.
+
+### 7.2 The verdict — CHROMA, and it is not close
+
+**k₁₁ = 11 of 11, k = 16 of 16.** Every one of the 16 pre-registered
+svt-4:2:0-fails-90 references — all 11 plot+screenshot images included —
+is ALSO a reach-90 failure for **zenrav1e at 4:2:0** (`br420`). Per the fixed
+rule (k₁₁ ≥ 9 → CHROMA), this is the maximum-strength reading the design can
+produce: not one of the 11 plot/screenshot images is spared. Independently
+verified by hand against `tables/reach_per_image.tsv` (not just the script's
+own printed line) — `br420_reaches90` is `NO` on all 16 registered images.
+
+**The published headline is re-worded per the pre-registered consequence**:
+"svt cannot reach ssim2 90 on plots/screenshots" becomes **"4:2:0 cannot reach
+ssim2 90 on plots/screenshots"** — the backend behind the 4:2:0 encode does not
+matter; zenrav1e (a materially different encoder/RD-control implementation from
+svt) hits the identical ceiling, on the identical image set.
+
+**In-wave, one-ladder reading (§4.0.1's immune-to-ladder-density check, computed
+independently on the same 9-q ladder for all three arms) corroborates it with a
+second, non-overlapping method**: on this ladder svt-420 fails 90 on **17**
+images (16 registered + `9954`, the pre-flagged ladder-edge flip — ai-gen, not
+plot/screenshot, so it changes nothing about k₁₁). **`br420` also fails on all
+17 of those 17** (full intersection). **`br444` fails on only 2 of the 17**
+(`9444` and `9954` — both pre-flagged edge cases: `9444` was registered in §4 as
+"the honest edge case" where even 4:4:4 misses 90 by a hair, and `9954` is the
+ladder-restriction flip from §4.0.1). Two independent countings of "does the
+zenrav1e arm reach where svt fails" — the pre-registered 16/11-image set and the
+in-wave 17-image set — land on the same answer.
+
+Per-image detail: `tables/reach_per_image.tsv` (32 rows, `br420_max_ssim2` /
+`br444_max_ssim2` / `svt420_max_ssim2` / the three `*_reaches90` booleans).
+
+### 7.3 The two clean axes — bytes tell a DIFFERENT story than reach, and that difference IS the finding
+
+| axis | comparison | n | median BD-rate | 95% CI | wins (a / b) | sign p |
+|---|---|--:|--:|---|---|--:|
+| **chroma_true** | `br420` (a) vs `br444` (b) — backend HELD, chroma varies | 32 | **+0.08%** | [−0.97, +0.93] | 15 / 17 | 0.860 |
+| **backend_true** | `br420` (a) vs `svt420` (b) — chroma HELD at 4:2:0, backend varies | 31 (1 NOT MEASURED, BD-rate's ≥4-point overlap guard) | +10.19% | [+0.25, +19.15] | 10 / 21 | 0.071 |
+| published_confounded (original, for reference) | `br444` (a) vs `svt420` (b) — backend AND chroma jointly, as originally published | 31 (1 NOT MEASURED) | +5.60% | [−1.83, +14.19] | 12 / 19 | 0.281 |
+
+**Read this table together with §7.2, not instead of it.** Holding backend
+constant and varying only chroma (`chroma_true`) moves BD-rate by a median of
+**+0.08%** — statistically indistinguishable from zero (CI straddles 0, sign
+test a coin flip at p=0.860). Holding chroma constant and varying backend
+(`backend_true`) moves it by +10.19%, svt-favouring, CI excludes zero but only
+just (lower bound +0.25) and the sign test does not clear 0.05. **So chroma is
+not a bytes-efficiency lever at matched achievable quality — it is a quality
+CEILING.** The two axes measure different things and neither substitutes for
+the other: `chroma_true` says "when both arms can reach a quality, they cost
+about the same bytes to get there"; §7.2 says "one of the two arms frequently
+cannot get there no matter what it spends." A reader who only saw
+`chroma_true`'s near-zero median would wrongly conclude chroma barely matters;
+a reader who only saw §7.2 would not know that byte cost, where both arms
+succeed, is roughly chroma-neutral. Both are true and both are needed.
+
+`published_confounded` (the original backend×chroma-confounded comparison this
+whole arm exists to split) reproduces the qualitative shape of the originally
+published figure (svt-leaning, wide CI, not significant on this 9-q/31-image
+read) — consistent with, not contradicting, the original finding; this arm
+explains *why* it read that way rather than overturning it.
+
+Full per-image BD-rate: `tables/axis_backend_true.tsv`,
+`tables/axis_chroma_true.tsv`, `tables/axis_published_confounded.tsv`.
+
+### 7.4 What changes in the decision surface
+
+**Decision 1 (backend doc §4) is CONFIRMED as chroma, not backend, and is now
+measured rather than inferred from a confound.** A picker that reaches for
+"switch backend" to fix a plot/screenshot quality ceiling will not fix it —
+zenrav1e hits the same wall at 4:2:0. The only lever that opens the ceiling is
+the chroma knob itself (4:4:4), which costs essentially nothing in bytes where
+both chromas can already succeed (§7.3) and is the sole lever that makes the
+otherwise-unreachable images reachable at all.
+
+**Decision 2 (time/backend budget) is untouched by this arm** — it was never a
+chroma question — but should now be read as "which backend, at 4:4:4 chroma
+where reach demands it, within the time budget," not "which backend, full
+stop." This arm does not re-measure the time axis (§6, native-size and
+knob-time gaps are unchanged).
+
+### 7.5 Ranked gaps — revised
+
+Backend-doc §6 rank 1 ("a zenrav1e 4:2:0 arm... the ONLY way to split the
+backend effect from the chroma effect") is **CLOSED by this arm**. Remaining,
+renumbered:
+
+| rank | gap | status |
+|--:|---|---|
+| 1 (was 2) | An svt 4:4:4 arm, or a recorded decision that svt is 4:2:0-only | still blocked upstream in zenavif/zenav1-svt |
+| 2 (was 3) | Native-size cross-backend AND cross-chroma coverage | this arm is budget-1024² only (§6) |
+| 3 (was 4) | The QM×sharpness interaction at s4/s7 | unchanged |
+| 4 (was 5) | S1c content-class speed splits | **now available** — see `avif_speed_instrument_2026-09-03.md`, S1c section (companion lane, same session) |
+| 5 (was 6) | More plot/screen references (n=6/5) | unchanged — the CHROMA verdict rests on the same small n as the original finding it explains |
+| 6 (was 7) | A second scalar quality response | unchanged |
+| 7 (was 8) | aom-rs as a third arm | PLANNED-BLOCKED, unchanged |
+
+### 7.6 Outputs
+
+`/mnt/v/output/avif-chroma-2026-09-04/` — `chroma_scored_2026-09-04.parquet`
+(5,760 rows × 18 cols) + `tables/{era_control,scorer_control,axis_backend_true,
+axis_chroma_true,axis_published_confounded,reach_per_image,notes}.{tsv,json}`.
+Triple-mirror + pointer: `avif_chroma_split_2026-09-04.pointer.md`.
