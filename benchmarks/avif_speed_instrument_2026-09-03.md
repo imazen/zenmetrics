@@ -809,3 +809,127 @@ next single-host timing wave.
    now follows `--side`; at side 1024 the two are byte-for-byte the same number, and
    rebuilding the registered corpus after the change reproduced it **5/5
    byte-identical**.
+
+---
+
+## 8. S1c results — content-class β (2026-09-04, post-reboot)
+
+**⚠ PRE-BACKEND-CHANGE ERA (2026-09-04): the AV1 backend is being actively
+re-developed in a concurrent session; speed coefficients and possibly knob
+effects below will need re-measurement after it lands. Every number in this
+section is a read of the `f15bb3a5`/`exec-avifchroma-f15bb3a5`-era
+zenravif/svt-rs binaries — the same era as the rest of this instrument — and
+is NOT expected to hold once the backend redevelopment ships (the user's own
+estimate is ~2x faster).** No new encodes were run to produce this section —
+it harvests the S1c TSVs that finished encoding before the reboot and were
+sitting on r7900x/the LAN store; see §0 below and the resume doc.
+
+S1c finished 2026-09-04T06:15:22Z, matching the pre-reboot self-prediction's
+~06:15Z estimate. All 12 legs complete, `encode-fail=0` on all 12, row counts
+exact (320/320/320 for the 10-speed svt legs, 96/96/96 for zenravif's 3-speed
+{4,7,10} legs, both sizes). `COMPLETE` marker present; harvested to
+`/mnt/v/output/avif-speed-instrument-2026-09-03/s1c_*.tsv`.
+
+### 8.1 The analyzer trap, and the fix
+
+`avif_speed_analyze.py`'s `pixels_of()` parsed pixel count only from a
+`.crop(N).png` filename tag (§6's S1a/S1b naming). S1c's corpus keeps
+native-looking `NNNN.scaleWxH.png` names on **both** the native corpus
+(`avifsvt-subsample-2026-09-01`, true native resolution) and the budget
+corpus (`avif-doe-1024-2026-09-01`, a 1024²-class crop of the SAME basenames)
+— the budget names are wrong on purpose, so the two corpora share a filename
+for physically different pixel counts. Neither matched the crop-tag regex, so
+every S1c row was silently excluded from the fit with no error.
+
+Fixed at the owner (`scripts/jobsys/avif_speed_analyze.py`, commit
+`cf913382`): an optional `--sources-dir` reads true `width*height` from each
+PNG's own IHDR chunk (header-only, no pixel decode) and REFUSES (loud
+`SystemExit`) if two `--sources-dir` inputs disagree on one basename's pixel
+count — the exact native-vs-budget collision this corpus creates on purpose —
+rather than silently picking one. Verified against the real corpora before
+use: native resolves 32/32 basenames (max 15,996,248 px = `1220`'s true
+3000×4000); budget resolves 32/32 (max 1,572,864 px, mean 1.157 MP, matching
+the resume doc's independent measurement that zero budget images exceed 2 MP);
+the two-dir conflict path fires correctly on the real `1220.scale3000x4000.png`
+collision. 8 hermetic test cases in `scripts/jobsys/test_avif_speed_analyze.py`.
+CHANGELOG entry `3351b53d`.
+
+### 8.2 What "β" means here — a single point, not a ladder fit
+
+**S1c is not a size ladder.** Each (source, backend, speed) cell is ONE
+(pixels, ms) point at q45, so there is no regression β here — the table below
+reports **ms/MP directly** (min-of-3 passes, matching §2's estimator), never a
+fitted slope. Content classes are the corpus's own 12-class taxonomy
+(`avifdoe_stagea_analyze.py`'s `COARSE` map: `7000-lilith-plots` → plot,
+`8100-lilith-web-screenshots` → screenshot, three `9xxx-lilith-ai-*` classes →
+ai-gen, two `6xxx` scan classes → scan, five `1xxx`/`3xxx` classes → photo).
+32 images: 9 ai-gen, 7 photo, 6 plot, 5 scan, 5 screenshot — the corpus's own
+existing class map, reused, not re-derived.
+
+### 8.3 Between-class spread: real, but narrower than S1a's per-source figure — and it narrows further at production speeds
+
+| size | backend | speed | high class | high ms/MP | low class | low ms/MP | spread |
+|---|---|--:|---|--:|---|--:|--:|
+| budget | svt-rs | 1 (slowest) | scan | 19,026.63 | ai-gen | 4,848.17 | **3.92×** |
+| native | svt-rs | 1 | screenshot | 16,812.37 | ai-gen | 4,855.75 | 3.46× |
+| budget | zenravif | 4 (slowest measured) | scan | 13,173.82 | plot | 5,517.58 | 2.39× |
+| native | svt-rs | 7 (saturated) | plot | 38.94 | photo | 18.23 | 2.14× |
+| budget | svt-rs | 10 (fastest) | plot | 38.92 | ai-gen | 21.57 | 1.80× |
+| native | zenravif | 10 (fastest measured) | screenshot | 459.68 | ai-gen | 303.32 | 1.51× |
+
+Full 250-row grid (both sizes × both backends × every measured speed × 5
+coarse classes): `s1c_content_class_beta.tsv` (pointer). **The between-COARSE-
+class median spread tops out at 3.92× here**, well under S1a's headline
+per-source 24.33×. That is not a contradiction — it is coarser aggregation:
+5-class medians smooth over the per-image variance a single-source ladder
+fit captures directly. §8.4 shows where that variance went.
+
+**Read alongside S1a/§6.1, not instead of it**: at the fast/production end of
+the dial (svt s7–10, the region a web pipeline actually runs), the
+between-class spread SHRINKS to 1.5–2.2×, well below the slow-preset 3.9×.
+Speed 1–4 is where content class costs the most, both in absolute ms/MP and in
+relative spread — consistent with S1a's own finding that speeds 1–2 carry
+~73% of zenrav1e's total dial cost.
+
+### 8.4 The class label alone does not capture it — within-class spread exceeds the between-class figure
+
+The `spread_max_over_min` column in `s1c_content_class_beta.tsv` (max/min
+across the *individual images* inside one coarse class, same size/backend/
+speed cell) reaches **52.62×** — `scan` at budget/svt-rs/speed 1 (793.4 to
+41,747.4 ms/MP across its 5 images) — which EXCEEDS S1a's 24.33× headline.
+`scan` mixes two very different sub-classes by construction
+(`6000-lilith-scans-public-patents`, largely 1-bit line art, vs
+`6600-ia-scans-manuscript-illustrations`, halftone/continuous-tone), and the
+coarse map folds both into one bucket. **So a picker keyed on the 5-coarse-
+class label is leaving a >10× same-label spread on the table** — the fine
+12-class label (already present in the corpus manifest, already free) is a
+better feature than the coarse one wherever it's available, and even that may
+not be the floor: n per fine class here is 2-5 images, too small to rule out
+further heterogeneity.
+
+### 8.5 Limitations specific to this section
+
+1. **zenravif measured at only 3 speeds** ({4,7,10}) vs svt's full 10 — the
+   §3.2b budget decision (native at S1c's size costs 47–161 s/MP summed over
+   the dial; the full ladder there would have cost more than the rest of the
+   instrument combined). Speeds 1–3 have zero content-class coverage for
+   zenravif, same caveat as §7.1.
+2. **q45 only** — S1c inherits S1b's q-flatness falsification (§6.4b: cost
+   RISES with q, up to 3.5× svt/2.7× zenravif from q15→q90), so these ms/MP
+   figures are a q45 reading, not a corpus-wide constant, same as every other
+   coefficient in this instrument.
+3. **n per class is small** (5–9 images per coarse class, 2–5 per fine class)
+   — §8.4's within-class spread is a real measured range, not noise (min-of-3
+   passes, drift control in §6.4c holds instrument-wide), but a 5-image class
+   median is directional, not a population estimate.
+4. **One host, one governor** — same r7900x/`powersave` caveat as §7 point 4;
+   ratios travel, absolute ms/MP does not.
+
+### 8.6 Outputs
+
+`s1c_content_class_beta.tsv` (250 rows: size × backend × speed × coarse
+class, n/median/min/max/within-class-spread) and
+`s1c_content_class_beta_per_source.tsv` (per-image raw ms/MP with fine+coarse
+class, the input to the table above) — both pointer-referenced, not in git.
+Raw S1c pass TSVs: `/mnt/v/output/avif-speed-instrument-2026-09-03/s1c_*.tsv`
+(12 files, matches `_MANIFEST.json`'s existing S1a/S1b entries in shape).
