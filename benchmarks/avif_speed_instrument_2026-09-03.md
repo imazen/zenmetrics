@@ -375,6 +375,17 @@ speed) cells: **46 rise monotonically across q {15, 45, 90}, 0 fall monotonicall
 coefficients and does more RD work — but its *size* is what was mis-registered.
 Example, `1442` at 1024², svt speed 1: **2,358.6 → 3,903.9 → 6,101.2 ms**.
 
+**FINAL — stable across all THREE estimators.** With S1b pass 3 in, the verdict is
+computed three independent ways and does not move:
+
+| backend | 1 pass | min-of-2 | min-of-3 |
+|---|--:|--:|--:|
+| svt-rs (median / max) | 0.7524 / 3.5276 | 0.7508 / 3.4988 | **0.7508 / 3.4944** |
+| zenrav1e | 0.4325 / 2.6712 | 0.4325 / 2.6712 | **0.4239 / 2.6712** |
+
+Against a registered ±3.3 % on svt, that is **~23× the tolerance under every
+estimator**. Noise is what `min()` removes; this survives three of them.
+
 **CONFIRMED ON TWO PASSES — it is not measurement noise.** S1b pass 2 (180 more
 cells) landed 22:46:01Z; recomputing the verdict as **min-of-2** barely moves it:
 
@@ -500,6 +511,33 @@ exclusivity holds unattended.
 
 The estimate was low for the same reason §6.1 is the headline — it was built from
 one image's speed curve, and β is a function of content.
+
+### 6.7 ⛔ `run2` died before its COMPLETE marker — I overwrote a RUNNING bash script
+
+**The run finished its work and then failed at the last line.** After
+`pass 3 S1b done rows=180`, the driver died with
+`avif_speed_instrument.sh: line 70: leg: unbound variable`, so it never
+`touch`ed `COMPLETE` — and both the harvester and the S1c chain wait on that
+marker. S1c would never have fired.
+
+**Cause, and it is mine: I `scp`'d the S1c-patched script over the copy that was
+already running.** Bash reads a script incrementally from a byte offset rather than
+loading it whole, so the live process resumed into the newly-inserted S1c block and
+hit `$leg`, which `set -u` turns fatal. The script itself is correct — running it
+fresh is fine. **Never overwrite a shell script that is executing; stage the new
+version under a different name.**
+
+**Nothing was lost and the marker was not faked.** Verified before creating it: all
+six outputs are complete and correct — S1a **640/640/640**, S1b **180/180/180**,
+`encode-fail=0` on all six invocations. The marker states a fact the log already
+established. On creating it the harvester ran (`OK rc=0`, all TSVs + the log pushed
+to `s3://zentrain/instruments/avif-speed-2026-09-03/run2/`) and S1c launched.
+
+**The alert that caught it was the one added after the earlier silent stall** — "no
+`zenmetrics` running and `run2` has no COMPLETE marker". Without it the wave would
+have looked finished while S1c silently never started. The earlier harvester also
+timed out at its 6 h deadline waiting for a marker that was never coming; deadlines
+are now 14 h.
 
 **Artifacts:** `~/speedinstr/out/run2/` on r7900x (`s1a_pass{1,2,3}.tsv`,
 `s1b_pass{1,2,3}.tsv`, `COMPLETE`), auto-pushed by a chained harvester to
