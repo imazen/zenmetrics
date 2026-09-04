@@ -99,6 +99,21 @@ This is the same instrument the era-delta wave used (6,912 / 6,912
 byte-identical) and the same discipline: **byte identity is the evidence, not a
 statistical test that the difference is small.**
 
+### 3.1 …and a SCORER control, which the era control does not cover
+
+The era control proves the **encoder** is inert. The backend axis compares
+`br420` — scored by *this* wave's score run — against svt cells scored by
+Stage-A's. **If the scorer moved, that axis is inadmissible and §3 would not
+have caught it.**
+
+The control costs nothing: `br444`'s blobs are byte-identical to `brsdr`'s and
+the two were scored by *different* score runs, so joining on `encode_sha` and
+differencing `m_ssim2` isolates the scorer exactly.
+
+`scorer_control.tsv`, and **`NOT RUN` is a distinct named outcome from a zero
+delta**, so a missing input can never read as a pass. Both controls are
+recomputed on the full arm at completion.
+
 ---
 
 ## 4. The question, and the decision rule that answers it
