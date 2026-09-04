@@ -283,6 +283,16 @@ not what made the scorer idle. **The scorer was idle because it was finished.**
 The authoritative completeness signal is `zenfleet-ctl gap` against the run's own
 manifest; blob counts answer a different question at every layer of this system.
 
+⚠ **The error then propagated into my own monitoring.** The score-side monitor was
+armed with a completion test of `blobs >= 12400` and a 30-minute stall alert — both
+built on the same per-cell assumption. It duly fired `ALERT: score blobs stuck at
+2721 for 30 min (scorer up=0)` **after** scoring was verified complete and the
+scorer deliberately stopped: the finished state is indistinguishable from a stall
+to a monitor that counts the wrong thing. Stopped rather than left crying wolf.
+**A monitor inherits the counting assumptions of whoever wrote it**, so a
+completion predicate belongs on the authoritative signal (`zenfleet-ctl gap`), not
+on whatever is cheapest to `wc -l`.
+
 *(The claim clearing was still correct and is kept: 587 claims dated 19:15-20:04
 were held by exited `dev-brsf` instances under `stale_claim_after=None`, so they
 could never expire. `release_claim_r2` — "delete a per-cell claim so the job
