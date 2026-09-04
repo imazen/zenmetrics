@@ -677,6 +677,14 @@ enumerating.
 
 ## 6. Execution record — 2026-09-03
 
+⚠ **Provenance edits do not appear in this repo's git history.** The canonical
+index is `~/work/zen/DATA_PROVENANCE.md`, and `~/work/zen` is deliberately **not a
+git repo** (workspace `CLAUDE.md`). Its updates for this wave — the delivered
+run shapes, the de-scope, the retained-extras caveat — live on disk only, and
+commit `d7a1339a`, whose message describes them, is consequently **empty**. Do
+not read that commit's absence of a diff as the edit not having happened, and do
+not look for provenance changes in `git log`.
+
 **Machinery, all in the canonical owners, no forks:**
 
 | change | where |
