@@ -543,6 +543,38 @@ up front:
 first-pass wall time lands within **+25 %** (≤ 2.31 h) and note any undershoot as a
 model error in the other direction.
 
+#### RESULT — the prediction MISSED, and §6.6d explains the miss quantitatively
+
+The native/svt leg (the largest, 161.59 MP × 10 speeds) ran **01:07:19 → 01:53:46 =
+2,787 s** against a predicted **3,537 s**. The model **over-predicts by 26.9 %**; the
+realised time is **21.2 % below** prediction. Under the registered rule that is a
+**MISS on the undershoot side**, recorded as a model error rather than quietly
+reframed as "comfortably fast".
+
+**The cause is the threading finding, and the arithmetic ties out.** β was fitted on
+the ladder, where svt ran at **1.0 core** (§6.6d); at native size svt threads to
+**1.638 cores**. A wall-time slope fitted single-threaded must over-predict a
+multi-threaded run:
+
+| | |
+|---|--:|
+| perfect scaling would give actual/predicted | 1 / 1.638 = **0.611** |
+| observed actual/predicted | **0.788** |
+| ⇒ realised parallel efficiency | **42 % of ideal** |
+
+So the miss is in the **direction** and roughly the **magnitude** §6.6d predicts, and
+the residual is ordinary sub-linear thread scaling. **This is the strongest available
+evidence that §6.6d's caveat is real and load-bearing** — it was registered from a
+CPU-vs-wall observation, and an independent pre-registered prediction then failed by
+exactly the amount that observation implies.
+
+**What it means for the deliverable, stated plainly:** the α + β coefficients predict
+**single-threaded wall time**. Applying them to a workload where the encoder threads
+(native-size svt) over-predicts by ~27 %. Until a `cpu_ms` column exists (§6.6d), a
+consumer must treat β as a **conservative upper bound** on wall time for large svt
+frames, and as accurate for the ladder-size regime it was fitted in. The
+**backend ratios are unaffected** — both backends were fitted in the same regime.
+
 ### 6.6d ⚠ β IS A WALL-TIME SLOPE, AND svt IS INTERNALLY MULTI-THREADED AT NATIVE SIZE
 
 Found while watching S1c, and it changes how every coefficient here must be *read*
