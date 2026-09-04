@@ -135,6 +135,49 @@ mod tests {
         assert_ne!(a, c, "q96 resolves to cq_level 3 and is a distinct encode");
     }
 
+    /// The chroma axis must MINT A NEW CELL, or the 4:2:0 arm would dedup
+    /// onto the existing 4:4:4 cells and never encode. It does, because
+    /// `zenavif::sweep::fingerprint` hashes `chroma_subsampling`
+    /// (`zenavif/src/sweep.rs:2069`) -- this test pins that we depend on it.
+    ///
+    /// The back-compat half matters just as much: an explicit `chroma=444` on
+    /// zenravif must be the SAME identity as omitting the knob, or re-declaring
+    /// an existing grid with the axis spelled out would re-encode every cell.
+    #[test]
+    fn zenravif_chroma_420_and_444_are_distinct_cells_and_444_is_the_default() {
+        let base = knobs(&[
+            ("backend", Value::from("zenravif")),
+            ("speed", Value::from(6)),
+        ]);
+        let mut k444 = base.clone();
+        k444.insert("chroma".into(), Value::from("444"));
+        let mut k420 = base.clone();
+        k420.insert("chroma".into(), Value::from("420"));
+
+        let id_bare = knob_cell_identity(CodecKind::Zenavif, 60.0, &base).unwrap();
+        let id444 = knob_cell_identity(CodecKind::Zenavif, 60.0, &k444).unwrap();
+        let id420 = knob_cell_identity(CodecKind::Zenavif, 60.0, &k420).unwrap();
+
+        assert_eq!(
+            id_bare, id444,
+            "zenravif's default IS 4:4:4, so spelling it out must not re-encode \
+             the 4,979 cells already declared without the knob"
+        );
+        assert_ne!(
+            id420, id444,
+            "4:2:0 and 4:4:4 are different bitstreams and must not share a cell \
+             identity -- if they merged, the chroma arm would dedup away entirely"
+        );
+        // The JSON-number spelling is the same cell as the string spelling.
+        let mut k420n = base.clone();
+        k420n.insert("chroma".into(), Value::from(420));
+        assert_eq!(
+            id420,
+            knob_cell_identity(CodecKind::Zenavif, 60.0, &k420n).unwrap(),
+            "chroma=420 and chroma=\"420\" resolve to one config, hence one cell"
+        );
+    }
+
     #[cfg(feature = "avif-aom")]
     #[test]
     fn aom_rs_speed_dial_is_injective() {

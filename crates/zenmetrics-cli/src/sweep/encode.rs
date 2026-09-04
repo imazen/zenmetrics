@@ -195,6 +195,12 @@ const AVIF_KNOBS: &[&str] = &[
     // Av1Backend::SvtRs; needs the `avif-svt` feature, else a loud error —
     // never a silent fallback to zenravif, which would mislabel the cell).
     "backend",
+    // Chroma subsampling: "420" | "444" (string or JSON number). Absent = the
+    // backend's own default -- zenravif 4:4:4, svt-rs and aom-rs 4:2:0 -- so
+    // every cell declared before this knob existed keeps its exact identity.
+    // Wired 2026-09-04 to close the (backend x chroma) confound in
+    // `benchmarks/avif_backend_selection_2026-09-03.md` Q2/§4.1.
+    "chroma",
     "partition_range",
     "lrf",
     "fast_deblock",
@@ -1019,6 +1025,57 @@ fn encode_avif(
     })
 }
 
+// ── the AVIF chroma knob ────────────────────────────────────────────────
+
+/// The chroma axis, wired 2026-09-04 to close the confound the backend table
+/// found: **every** `brsdr`/zenrav1e cell shipped 4:4:4 and **every**
+/// `brnat`/svt cell shipped 4:2:0, on 1,114 bitstreams with zero exceptions,
+/// because [`avif_config_from_knobs`] pinned `Yuv420` for `backend=svt-rs` and
+/// left zenravif on zenavif's `Yuv444` default with no knob to say otherwise
+/// (`benchmarks/avif_backend_selection_2026-09-03.md` §4.1, Decision 1). The
+/// cross-backend table was therefore a (backend × chroma) table.
+///
+/// Absent = the backend's own default, so **every cell declared before this
+/// knob existed keeps its exact fingerprint**: zenavif hashes
+/// `chroma_subsampling` into `zenavif::sweep::fingerprint`
+/// (`zenavif/src/sweep.rs:2069`), and absent resolves to the same variant the
+/// backend already pinned. Gated by `omitting_chroma_is_exactly_the_backend_default`.
+#[cfg(all(feature = "sweep", feature = "avif"))]
+fn avif_chroma_from_knobs(
+    knobs: &Map<String, Value>,
+) -> Result<Option<zenavif::EncodeChromaSubsampling>, Box<dyn Error>> {
+    use zenavif::EncodeChromaSubsampling;
+
+    let Some(v) = knobs.get("chroma") else {
+        return Ok(None);
+    };
+    // Accept the string and the JSON-number spellings; both are unambiguous
+    // and both resolve to the same `EncoderConfig`, hence the same cell
+    // identity (`sweep::dedup`). Anything else is a hard error rather than a
+    // silent default, per `reject_unknown_knobs`'s contract.
+    let spelling = match v {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n.to_string(),
+        other => {
+            return Err(format!(
+                "zenavif knob chroma={other} must be \"420\" or \"444\" (string or number)"
+            )
+            .into());
+        }
+    };
+    match spelling.as_str() {
+        "420" => Ok(Some(EncodeChromaSubsampling::Yuv420)),
+        "444" => Ok(Some(EncodeChromaSubsampling::Yuv444)),
+        other => Err(format!(
+            "zenavif knob chroma={other:?} is not wired (supported: \"420\", \"444\"). \
+             AV1 also has 4:2:2 and 4:0:0, but `zenavif::EncodeChromaSubsampling` names \
+             only Yuv444 and Yuv420 (zenavif/src/encoder.rs:175, #[non_exhaustive]), so \
+             there is no config to resolve them to"
+        )
+        .into()),
+    }
+}
+
 /// Resolve a zenavif knob tuple into the exact [`zenavif::EncoderConfig`]
 /// [`encode_avif`] encodes with.
 ///
@@ -1038,15 +1095,43 @@ pub(crate) fn avif_config_from_knobs(
     if let Some(s) = knobs.get("speed").and_then(Value::as_u64) {
         cfg = cfg.speed(s.min(10) as u8);
     }
+    // Resolved BEFORE the backend match so a backend that pins its own
+    // subsampling refuses a conflicting request by name instead of silently
+    // overwriting it. Silently overwriting is what produced the confound: the
+    // cell would still carry `chroma=444` in its knob tuple and ship 4:2:0.
+    let chroma = avif_chroma_from_knobs(knobs)?;
     match knobs.get("backend").and_then(Value::as_str) {
-        None | Some("zenravif") => {}
+        None | Some("zenravif") => {
+            // zenravif encodes both (`zenavif/src/encoder.rs:1283` maps each
+            // variant onto `ravif::ChromaSubsampling`), and 4:4:4 is zenavif's
+            // default -- which is why every zenravif cell declared before this
+            // knob shipped 4:4:4.
+            if let Some(c) = chroma {
+                cfg = cfg.chroma_subsampling(c);
+            }
+        }
         Some("svt-rs") => {
+            // Checked before the feature gate: "svt-rs is 4:2:0-only" is a
+            // property of the backend, not of this build, so the grid is wrong
+            // whether or not `avif-svt` is compiled in.
+            if chroma == Some(zenavif::EncodeChromaSubsampling::Yuv444) {
+                return Err(
+                    "zenavif backend \"svt-rs\" encodes 4:2:0 only, so chroma=444 has no \
+                     encode: zenavif refuses the pair on its own encode path \
+                     (zenavif/src/encoder_svt_rs.rs:391 `reject_unsupported_config`, and \
+                     `validation.rs:459`). Refusing rather than pinning 4:2:0 under a cell \
+                     labelled 4:4:4 -- that mislabelling is the confound this knob exists \
+                     to close (benchmarks/avif_backend_selection_2026-09-03.md §4.1). \
+                     Declare chroma=420 for svt-rs, or backend=zenravif for 4:4:4"
+                        .into(),
+                );
+            }
             #[cfg(feature = "avif-svt")]
             {
                 // The svt-rs backend is a 4:2:0 still encoder (zenavif refuses
-                // any other subsampling for it), so the cell's chroma is
-                // implied by `backend=svt-rs` — recorded in the arm's provenance,
-                // not a separate knob.
+                // any other subsampling for it), so `chroma` is either absent
+                // or 420 here -- both resolve to the pin below, which keeps
+                // this backend's fingerprints byte-stable.
                 cfg = cfg
                     .backend(zenavif::Av1Backend::SvtRs)
                     .chroma_subsampling(zenavif::EncodeChromaSubsampling::Yuv420);
@@ -1200,13 +1285,33 @@ fn encode_avif_aom_rs(
 
     if let Some(unknown) = knobs
         .keys()
-        .find(|k| !["backend", "speed", "bd"].contains(&k.as_str()))
+        .find(|k| !["backend", "speed", "bd", "chroma"].contains(&k.as_str()))
     {
         return Err(format!(
             "zenavif aom-rs backend: knob '{unknown}' is not wired (supported: backend, speed, \
-             bd); refusing to silently ignore it"
+             bd, chroma); refusing to silently ignore it"
         )
         .into());
+    }
+    // Chroma: this arm's colour path is RGB8 -> BT.601 full-range YCbCr 4:2:0
+    // via `zenyuv` (below), and zenavif's own aom backend gates the same
+    // (`zenavif/src/encoder_aom.rs:273`, `validation.rs:388`: "encodes 4:2:0
+    // only; this seam has no forward RGB->YUV 4:4:4 kernel"). So `chroma` is
+    // accepted here only as an explicit spelling of what the arm already does
+    // -- never as a request this backend would silently ignore.
+    match knobs.get("chroma") {
+        None => {}
+        Some(Value::String(s)) if s == "420" => {}
+        Some(Value::Number(n)) if n.to_string() == "420" => {}
+        Some(other) => {
+            return Err(format!(
+                "zenavif aom-rs backend: chroma={other} has no encode -- this arm codes \
+                 YCbCr 4:2:0 only (zenavif/src/encoder_aom.rs:273; the seam has no forward \
+                 RGB->YUV 4:4:4 kernel). Declare chroma=420 or omit it; use \
+                 backend=zenravif for 4:4:4"
+            )
+            .into());
+        }
     }
     let speed = knobs.get("speed").and_then(Value::as_u64).unwrap_or(6);
     if speed > 9 {
@@ -1964,5 +2069,225 @@ mod aom_rs_depth_tests {
             "two of the bd8/bd10/bd12 encodes produced identical bytes — the depth \
              knob is relabelling the container without changing the encode"
         );
+    }
+}
+
+/// **THE CHROMA READ-BACK GATE.** A chroma *request* is not evidence of a
+/// subsampled stream — the only admissible evidence is a read from the emitted
+/// bitstream, the same discipline `examples/avif_depth_verify.rs` (gate G3)
+/// applies to bit depth. These tests exist because the backend table
+/// (`benchmarks/avif_backend_selection_2026-09-03.md` §4.1) was a
+/// (backend × chroma) confound that nothing in the tool could have caught:
+/// the chroma each cell actually shipped was implied by `backend`, never
+/// declared, never asserted, and never read back.
+#[cfg(all(test, feature = "sweep", feature = "avif"))]
+mod avif_chroma_tests {
+    use super::*;
+
+    fn knobs(pairs: &[(&str, Value)]) -> Map<String, Value> {
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), v.clone()))
+            .collect()
+    }
+
+    /// Sharp saturated colour edges on a 2-pixel pitch — content where 4:2:0's
+    /// quarter-resolution chroma is forced to differ from 4:4:4's. A smooth
+    /// gradient would let the two encodes coincide and make the anti-vacuity
+    /// assertion below vacuous.
+    fn chroma_edges(w: u32, h: u32) -> Rgb8Image {
+        let mut pixels = Vec::with_capacity((w * h * 3) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                let px = match (x / 2 + y / 2) % 3 {
+                    0 => [255u8, 0, 0],
+                    1 => [0, 255, 0],
+                    _ => [0, 0, 255],
+                };
+                pixels.extend_from_slice(&px);
+            }
+        }
+        Rgb8Image {
+            pixels,
+            width: w,
+            height: h,
+        }
+    }
+
+    /// R1 (`av1C` box) + R2 (AV1 sequence header) — the two routes the depth
+    /// gate names — read back as an `(x, y)` subsampling pair plus the
+    /// `seq_profile`.
+    fn read_back(bytes: &[u8]) -> ((u8, u8), (bool, bool), u8) {
+        let parser = zenavif_parse::AvifParser::from_bytes(bytes).expect("emitted AVIF must parse");
+        let cfg = parser
+            .av1_config()
+            .expect("emitted AVIF declares no av1C box");
+        assert!(!cfg.monochrome, "colour source must not encode monochrome");
+        let meta = parser
+            .primary_metadata()
+            .expect("emitted AVIF has no readable sequence header");
+        (
+            (cfg.chroma_subsampling_x, cfg.chroma_subsampling_y),
+            (
+                meta.chroma_subsampling.horizontal,
+                meta.chroma_subsampling.vertical,
+            ),
+            meta.seq_profile,
+        )
+    }
+
+    /// The knob has to be in the vocabulary at all — `reject_unknown_knobs`
+    /// hard-errors on anything not listed, so an unlisted `chroma` could never
+    /// reach a declared cell.
+    #[test]
+    fn chroma_is_a_recognized_avif_knob() {
+        for v in [Value::from("420"), Value::from("444"), Value::from(420)] {
+            reject_unknown_knobs(CodecKind::Zenavif, &knobs(&[("chroma", v.clone())]))
+                .unwrap_or_else(|e| panic!("chroma={v} must be recognized vocabulary: {e}"));
+        }
+    }
+
+    /// THE GATE. A declared 420-vs-444 pair must produce bitstreams whose
+    /// `av1C` **and** sequence header read the requested subsampling, and the
+    /// two must not be the same bytes.
+    #[test]
+    fn emitted_bitstream_carries_the_requested_chroma() {
+        let src = chroma_edges(64, 64);
+        let mut blobs = Vec::new();
+        for (spelling, want_xy, want_profile) in [("444", (0u8, 0u8), 1u8), ("420", (1, 1), 0)] {
+            let k = knobs(&[
+                ("backend", Value::from("zenravif")),
+                ("speed", Value::from(8u64)),
+                ("chroma", Value::from(spelling)),
+            ]);
+            let cell = encode_avif(&src, 60.0, &k)
+                .unwrap_or_else(|e| panic!("chroma={spelling} encode: {e}"));
+            let (av1c_xy, seq_hv, profile) = read_back(&cell.bytes);
+            assert_eq!(
+                av1c_xy, want_xy,
+                "chroma={spelling}: av1C reads subsampling {av1c_xy:?}, wanted {want_xy:?}"
+            );
+            assert_eq!(
+                seq_hv,
+                (want_xy.0 == 1, want_xy.1 == 1),
+                "chroma={spelling}: sequence header reads {seq_hv:?}, wanted {want_xy:?}"
+            );
+            assert_eq!(
+                profile, want_profile,
+                "chroma={spelling}: seq_profile {profile}, wanted {want_profile} \
+                 (4:4:4 is High/1, 4:2:0 is Main/0)"
+            );
+            blobs.push(cell.bytes);
+        }
+        assert!(
+            blobs[0] != blobs[1],
+            "the 444 and 420 encodes produced identical bytes — the chroma knob is \
+             relabelling the container without changing the encode"
+        );
+    }
+
+    /// Back-compat, byte-exact: omitting `chroma` must be the backend's own
+    /// pinned default. This is the no-regression proof for every AVIF cell
+    /// declared before the knob existed — including all 4,979 `brsdr` cells the
+    /// 4:2:0 arm is compared against.
+    #[test]
+    fn omitting_chroma_is_exactly_the_backend_default() {
+        let src = chroma_edges(64, 64);
+        let base = encode_avif(
+            &src,
+            60.0,
+            &knobs(&[
+                ("backend", Value::from("zenravif")),
+                ("speed", Value::from(8u64)),
+            ]),
+        )
+        .expect("default zenravif encode");
+        let explicit = encode_avif(
+            &src,
+            60.0,
+            &knobs(&[
+                ("backend", Value::from("zenravif")),
+                ("speed", Value::from(8u64)),
+                ("chroma", Value::from("444")),
+            ]),
+        )
+        .expect("explicit 444 encode");
+        assert!(
+            base.bytes == explicit.bytes,
+            "omitting chroma ({} B) must equal chroma=444 ({} B) on zenravif",
+            base.bytes.len(),
+            explicit.bytes.len()
+        );
+    }
+
+    /// svt-4:4:4 is blocked in the encoder, not here: zenavif's svt-rs backend
+    /// refuses any non-420 config on the encode path
+    /// (`zenavif/src/encoder_svt_rs.rs:391` `reject_unsupported_config`). The
+    /// sweep must refuse it BY NAME, citing that, rather than silently pinning
+    /// 420 and mislabelling the cell as 4:4:4 — which is precisely the class of
+    /// implicit-chroma bug the backend table tripped on.
+    #[test]
+    fn svt_rs_444_is_refused_by_name_with_its_evidence() {
+        let k = knobs(&[
+            ("backend", Value::from("svt-rs")),
+            ("chroma", Value::from("444")),
+        ]);
+        let err = avif_config_from_knobs(60.0, &k)
+            .expect_err("svt-rs cannot encode 4:4:4 and must not silently downgrade");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("encoder_svt_rs.rs"),
+            "refusal must cite the encoder-side gate by file, got: {msg}"
+        );
+        assert!(
+            msg.contains("4:2:0"),
+            "refusal must name what the backend does encode, got: {msg}"
+        );
+        // ...and 420 must still resolve, unchanged. Feature-gated because a
+        // build without `avif-svt` refuses every svt-rs cell on build grounds;
+        // the 444 refusal above is deliberately NOT gated, since "svt-rs is
+        // 4:2:0-only" is a property of the backend rather than of this build.
+        #[cfg(feature = "avif-svt")]
+        {
+            let cfg = avif_config_from_knobs(
+                60.0,
+                &knobs(&[
+                    ("backend", Value::from("svt-rs")),
+                    ("chroma", Value::from("420")),
+                ]),
+            )
+            .expect("svt-rs chroma=420 is the backend's own pin and must resolve");
+            let bare = avif_config_from_knobs(60.0, &knobs(&[("backend", Value::from("svt-rs"))]))
+                .expect("bare svt-rs must resolve");
+            assert_eq!(
+                zenavif::sweep::fingerprint(&cfg),
+                zenavif::sweep::fingerprint(&bare),
+                "chroma=420 is svt-rs's own pin, so it must not mint a new cell identity"
+            );
+        }
+    }
+
+    /// An unwired subsampling must be refused by name, not silently defaulted.
+    #[test]
+    fn an_unwired_chroma_value_is_refused_by_name() {
+        for bad in ["422", "400", "4:2:0", "", "yes"] {
+            let k = knobs(&[
+                ("backend", Value::from("zenravif")),
+                ("chroma", Value::from(bad)),
+            ]);
+            let err = avif_config_from_knobs(60.0, &k)
+                .err()
+                .unwrap_or_else(|| panic!("chroma={bad:?} must be refused"));
+            let msg = err.to_string();
+            assert!(
+                msg.contains("is not wired"),
+                "chroma={bad:?}: refusal must name the knob value, got: {msg}"
+            );
+            assert!(
+                msg.contains("encoder.rs:175"),
+                "chroma={bad:?}: refusal must cite where the two wired variants live, \
+                 got: {msg}"
+            );
+        }
     }
 }
