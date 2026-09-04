@@ -13,6 +13,26 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## scripts/jobsys (AVIF speed instrument, S1c pixel-count fix, 2026-09-04)
+
+### Fixed
+
+- **`avif_speed_analyze.py`'s `pixels_of()` silently excluded every S1c row
+  from the alpha+beta fit.** It parsed pixel count only from a `.crop(N).png`
+  filename tag; S1c's corpus keeps native-looking `NNNN.scaleWxH.png` names on
+  BOTH the native corpus and the 1024²-cropped budget corpus (the budget names
+  are wrong on purpose), so neither matched. Added an optional `--sources-dir`
+  flag: `pixels_of()` now reads true `width*height` from each PNG's own IHDR
+  chunk (header-only, no pixel decode, no new dependency) before falling back
+  to the crop-regex, so S1a/S1b callers are unaffected. `load_pixel_map()`
+  refuses (loud `SystemExit`) if two `--sources-dir` inputs disagree on one
+  basename's pixel count — the exact native-vs-budget collision this corpus
+  creates on purpose — instead of silently pooling two different physical
+  images under one source key. Unresolved cells are now named in stdout and
+  `summary.json` instead of vanishing into an empty/degenerate arm table.
+  New `scripts/jobsys/test_avif_speed_analyze.py` (8 cases, hermetic).
+  (`cf913382`)
+
 ## scripts/jobsys (AVIF Stage-B remainder analysis, 2026-09-03)
 
 ### Added
