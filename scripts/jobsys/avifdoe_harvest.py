@@ -89,15 +89,39 @@ NAIVE_BACKEND_CHROMA = {"svt-rs": "svt-420", "aom-rs": "aom-420"}
 SDR_BACKEND_TAG = {"zenravif": "zenravif"}
 
 
+# A tuple that DECLARES its chroma (`{"backend":"zenravif","chroma":"420",
+# "speed":N}`, the axis wired 2026-09-04 in sweep/encode.rs) is a different case
+# from the two above, and it is the one case where a chroma token in the label
+# is neither convention nor inference: the cell ASKED for that subsampling, and
+# the request is verified end to end by the av1C + sequence-header read-back
+# gate (`sweep::encode::avif_chroma_tests`, and the arm's own first-cell gate --
+# 6/6 fleet blobs reading `chroma 420` / `seq_profile 0`,
+# benchmarks/avif_chroma_split_2026-09-04.md section 5). Labelling what the cell
+# declared is the same standard NAIVE_BACKEND_CHROMA meets by measurement.
+#
+# STILL ADDITIVE: this branch needs an explicit `chroma` key, and no knob tuple
+# the pre-2026-09-04 code could produce has one -- the knob did not exist. A
+# tuple WITHOUT the key keeps returning the old 2-key label and a `chroma` of
+# None, which stays correct: absent means "the backend's default", and asserting
+# that default here would be exactly the convention-as-evidence the block above
+# refuses. The 4:4:4 arm's chroma is reported from an av1C census instead.
+DECLARED_CHROMA = {"420", "444"}
+
+
 def sdr_backend_label(kt):
-    """SDR backend-arm knob tuple -> `s<N>-<backend>`, or None."""
+    """SDR backend-arm knob tuple -> `s<N>-<backend>[-<chroma>]`, or None."""
     sp, be = kt.get("speed"), kt.get("backend")
     if be in NAIVE_BACKEND_CHROMA:
         return None
     tag = SDR_BACKEND_TAG.get(be)
-    if sp is None or tag is None or kt.get("cell") is not None or len(kt) != 2:
+    if sp is None or tag is None or kt.get("cell") is not None:
         return None
-    return f"s{int(sp)}-{tag}"
+    if len(kt) == 2:
+        return f"s{int(sp)}-{tag}"
+    ch = kt.get("chroma")
+    if len(kt) == 3 and str(ch) in DECLARED_CHROMA:
+        return f"s{int(sp)}-{tag}-{ch}"
+    return None
 
 
 def synth_label(kt, codec=None):
