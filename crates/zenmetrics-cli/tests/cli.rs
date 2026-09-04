@@ -897,7 +897,10 @@ fn sweep_no_score_conflicts_with_metric() {
         ])
         .output()
         .expect("run cli");
-    assert!(!result.status.success(), "--no-score --metric must be refused");
+    assert!(
+        !result.status.success(),
+        "--no-score --metric must be refused"
+    );
     let err = String::from_utf8_lossy(&result.stderr);
     assert!(
         err.contains("cannot be used with") || err.contains("conflict"),
