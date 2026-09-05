@@ -61,3 +61,5 @@ mac-worker/s5cmd
 .cargo/
 target-bookworm/
 /target-gpu-bookworm/
+/target-*/
+
