@@ -40,6 +40,8 @@ Workspace conventions per the global rules:
   ledger snapshot) now resolves under `${TMPDIR}` instead of the hardcoded `/tmp`, so the new
   discipline check actually governs where this worker writes.
 
+(`e52285dd`)
+
 ## scripts/jobsys (AVIF speed instrument, S1c pixel-count fix, 2026-09-04)
 
 ### Fixed
