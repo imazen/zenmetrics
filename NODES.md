@@ -159,3 +159,24 @@ server maximum: requested_ttl=2h0m0s server_max_ttl=30m0s`. `warn`
 enforcement only soft-allows a client that presents **no** introduction
 token at all; a client that presents one and fails validation (expired,
 wrong node, malformed) is hard-denied regardless of enforcement level.
+
+## Fleet /tmp: disk-backed only (ban RAM-backed tmp everywhere, 2026-09-05)
+
+**Standing rule**: no host or container in this fleet may serve worker scratch (pass output,
+pooled manifests/runlists, ledger snapshots, jobexec's source cache) off a RAM-backed `tmpfs`.
+`fleet-entrypoint.sh` now refuses to boot without a disk-backed `TMPDIR` — see
+`docs/RUNNING_JOBS.md` §9c "TMPDIR discipline" for the mechanism and the launcher-side fix
+(`lan_score_launch.sh`, `enroll_running_node.sh`). This table records what was audited directly
+on 2026-09-05; hosts not listed are covered by the same launcher fix going forward but were not
+individually re-verified this pass.
+
+| Host | `/tmp` before | Action | `/tmp` after | Effective |
+|---|---|---|---|---|
+| `r7900x` | `tmpfs 15G` (systemd `tmp.mount`, static-loaded, no `/etc/fstab` entry) | `sudo systemctl mask tmp.mount` (no live job disturbed — a training process was running; mount left live, no reboot) | still `tmpfs 15G` live | **next reboot** (masked unit can no longer start) |
+| `tower` (Unraid host) | host rootfs is RAM-booted by design — out of scope, never changed | none (host untouched, per the Docker-only rule) | unchanged | n/a |
+| `tower` (`zen*` containers) | container `/tmp` is the overlay writable layer on `/var/lib/docker` (`btrfs` on a cache-pool loop device — disk-backed already, not RAM); no running `zen*` compute container had a `TMPDIR`/scratch mount at audit time | created `/mnt/user/coefficient/scratch` (array-backed) for launcher use; `lan_score_launch.sh` now bind-mounts it at `/scratch` + sets `TMPDIR=/scratch` on every future launch | disk-backed via bind mount | **next launch** of any `zen-score-*` container (no live compute worker was running to disturb — only `zen-lanstore`, a storage container, was up) |
+| any LAN node enrolled via `enroll_running_node.sh` (the always-on pool workers) | depends on the box's own `tmp.mount` default | `enroll_running_node.sh` now bind-mounts `$HOME/tmp/zfw-scratch` (override `ZEN_TMPDIR_HOST_DIR`) at `/scratch` + sets `TMPDIR=/scratch` in the systemd unit's `ExecStart` | disk-backed via bind mount | **next `enroll_running_node.sh` run** (re-enroll to pick it up; not retroactive to an already-running unit) |
+
+Per-host `tmp.mount` state elsewhere in the fleet (node-2/node-3/mac/other Ubuntu boxes) was not
+re-audited this pass — check `findmnt -no FSTYPE,SIZE /tmp` before trusting any of them, and mask
+`tmp.mount` (Linux) the same way if it comes back `tmpfs`.

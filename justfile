@@ -83,3 +83,8 @@ fleet-check:
 # Strict: also fail on grandfathered forks (the post-Phase-E gate).
 fleet-check-strict:
     python3 scripts/ci/check_fleet_tools.py --strict
+
+# TMPDIR discipline (ban RAM-backed tmp everywhere): unset/tmpfs TMPDIR must be
+# rejected loud at worker boot. Pure-logic shell test, no cloud/GPU/secrets.
+test-tmpdir-discipline:
+    bash crates/zenfleet-worker/tests/tmpdir_discipline_test.sh

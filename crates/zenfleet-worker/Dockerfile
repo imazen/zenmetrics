@@ -39,4 +39,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=build /app/target/release/zenfleet-worker /usr/local/bin/zenfleet-worker
 COPY --from=build /app/target/release/zenfleet-gc /usr/local/bin/zenfleet-gc
 COPY --chmod=0755 crates/zenfleet-worker/fleet-entrypoint.sh /usr/local/bin/fleet-entrypoint.sh
+COPY --chmod=0755 crates/zenfleet-worker/tmpdir_discipline.sh /usr/local/bin/tmpdir_discipline.sh
 ENTRYPOINT ["/usr/local/bin/fleet-entrypoint.sh"]

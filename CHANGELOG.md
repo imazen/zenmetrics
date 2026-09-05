@@ -13,6 +13,33 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenfleet-worker + scripts/jobsys (TMPDIR discipline, 2026-09-05)
+
+### Added
+
+- **`crates/zenfleet-worker/tmpdir_discipline.sh`** — `check_tmpdir_discipline`, sourced by
+  `fleet-entrypoint.sh` at boot: fails loud if `TMPDIR` is unset, resolves to a `tmpfs` mount, or
+  `findmnt` is missing to check it. Ban RAM-backed tmp everywhere: a box's `/tmp` can be a
+  RAM-backed `tmpfs` (systemd's default `tmp.mount`), and both this script's own scratch
+  (pass output, pooled manifests, ledger snapshots) and jobexec's source cache
+  (`std::env::temp_dir()`) resolve through `$TMPDIR` — an unset/tmpfs `TMPDIR` means that
+  scratch silently lands in memory instead of on disk. Baked into every worker image
+  (`Dockerfile`, `Dockerfile.executor`, `build_executor_image.sh`).
+- **`crates/zenfleet-worker/tests/tmpdir_discipline_test.sh`** (`just test-tmpdir-discipline`,
+  wired into CI) — hermetic shell test covering unset / tmpfs (`/dev/shm`) / disk-backed /
+  missing-`findmnt` TMPDIR; written failing-first (fails against a stub that always returns
+  success, passes against the real check).
+- `lan_score_launch.sh`: every launch now bind-mounts a disk-backed host dir at `/scratch` and
+  sets `TMPDIR=/scratch`, auto-detecting `/mnt/user/coefficient/scratch` on an Unraid box (tower)
+  vs `$HOME/tmp/zfw-scratch` elsewhere; override via `ZEN_TMPDIR_HOST_DIR`.
+
+### Fixed
+
+- Every internal `/tmp/...` scratch path in `fleet-entrypoint.sh` (pass output, pool-mode
+  runlist/manifest/snapshot files, the drain beacon, single-run manifest, jobexec cache sweep,
+  ledger snapshot) now resolves under `${TMPDIR}` instead of the hardcoded `/tmp`, so the new
+  discipline check actually governs where this worker writes.
+
 ## scripts/jobsys (AVIF speed instrument, S1c pixel-count fix, 2026-09-04)
 
 ### Fixed

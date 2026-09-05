@@ -22,6 +22,10 @@
 #        (the tower rule: e.g. ZEN_CPUSET=0-23 ZEN_CPU_SHARES=256 ZEN_MEMORY=24g — before 2026-08-30
 #        the remote read these but the ssh line never forwarded them, so tower launches were uncapped
 #        unless hand-run).
+#        ZEN_TMPDIR_HOST_DIR -> override the host-side scratch dir bind-mounted at /scratch (TMPDIR
+#        discipline, 2026-09-05: every launch gets a disk-backed TMPDIR, never bare /tmp). Default
+#        auto-detects: /mnt/user/coefficient/scratch when the remote has an Unraid array mounted
+#        (tower), else $HOME/tmp/zfw-scratch on the remote.
 #
 # Worker name = <hostname>-<role> (collision-proof). Container zen-score-<role>;
 # self-exits on drain (ZEN_IDLE_PASSES, default 8) or ZEN_MAX_MIN budget; torn down with
@@ -93,7 +97,7 @@ CTR="zen-score-${ROLE}"
 # command — the 2026-08-26 `--gpus all` bug); GPU flags are rebuilt on the remote.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
-  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" 'bash -s' <<'REMOTE'
+  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_TMPDIR_HOST_DIR="${ZEN_TMPDIR_HOST_DIR:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
 S3ENV="$HOME/.config/zen/s3env.sh"
@@ -101,6 +105,22 @@ S3ENV="$HOME/.config/zen/s3env.sh"
 # shellcheck disable=SC1090
 . "$S3ENV"   # exports EP, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, ZEN_S3_STORE
 WORKER="$(hostname)-${ZM_ROLE}"
+
+# TMPDIR discipline (ban RAM-backed tmp everywhere, 2026-09-05): bind-mount a disk-backed
+# scratch dir at /scratch and export TMPDIR to it — fleet-entrypoint.sh's
+# check_tmpdir_discipline refuses to boot without this. Auto-detect an Unraid array (the
+# tower convention: /mnt/user/<share>/scratch, never the RAM-booted host root) vs a plain
+# box (this account's ~/tmp, per the workspace-wide "/tmp is banned, use ~/tmp" rule);
+# override with ZEN_TMPDIR_HOST_DIR for a box with its own convention.
+if [ -n "${ZM_TMPDIR_HOST_DIR:-}" ]; then
+  SCRATCH_HOST_DIR="$ZM_TMPDIR_HOST_DIR"
+elif [ -d /mnt/user/coefficient ]; then
+  SCRATCH_HOST_DIR="/mnt/user/coefficient/scratch"
+else
+  SCRATCH_HOST_DIR="$HOME/tmp/zfw-scratch"
+fi
+mkdir -p "$SCRATCH_HOST_DIR"
+TMPDIR_ARGS=(-e TMPDIR=/scratch -v "$SCRATCH_HOST_DIR:/scratch")
 
 GPU_ARGS=(); REQ_GPU=()
 if [ "$ZM_KIND" = "gpu" ]; then GPU_ARGS=(--gpus all); REQ_GPU=(-e ZEN_REQUIRE_GPU=1); fi
@@ -133,7 +153,7 @@ CAPS=()
 
 sudo -n docker pull "$ZM_IMG" >/dev/null 2>&1 || true
 sudo -n docker rm -f "$ZM_CTR" >/dev/null 2>&1 || true
-sudo -n docker run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" \
+sudo -n docker run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" "${TMPDIR_ARGS[@]}" \
   -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
   -e ZEN_R2_ENDPOINT="$EP" -e ZEN_BUCKET="$ZM_BUCKET" \
   -e ZEN_RUN="jobs/$ZM_JOBSET" \

@@ -76,6 +76,8 @@ cp "$WK" "$CTX/zenfleet-worker"
 # Overlay the CURRENT entrypoint — the :latest base bakes a stale one, so without this
 # copy an edited fleet-entrypoint.sh never reaches :exec (this bit us on the tar-prefetch).
 cp "$ROOT/crates/zenfleet-worker/fleet-entrypoint.sh" "$CTX/fleet-entrypoint.sh"
+# fleet-entrypoint.sh sources this at boot (TMPDIR discipline guard) — must travel with it.
+cp "$ROOT/crates/zenfleet-worker/tmpdir_discipline.sh" "$CTX/tmpdir_discipline.sh"
 cp "$ROOT/crates/zenfleet-worker/Dockerfile.executor" "$CTX/Dockerfile"
 echo "building $IMAGE (base = ghcr.io/imazen/zenfleet-worker:latest + zenmetrics $(du -h "$BIN" | cut -f1))"
 # --chmod on COPY needs BuildKit (`docker buildx version` to check); if the build box's docker

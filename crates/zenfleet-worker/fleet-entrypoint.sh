@@ -112,7 +112,7 @@ trap 'on_term SIGINT' INT
 # functions can't usefully `return` a string, and re-wrapping this in `$(run_pass ...)` would
 # reintroduce the exact signal-deferral problem this exists to avoid.
 run_pass(){
-  local outfile; outfile="$(mktemp /tmp/zfw_pass_out.XXXXXX)"
+  local outfile; outfile="$(mktemp ${TMPDIR}/zfw_pass_out.XXXXXX)"
   PASS_OUTFILE="$outfile"
   env "${PASS_ENV[@]}" timeout "${ZEN_PASS_TIMEOUT:-1800}" zenfleet-worker "$@" >"$outfile" 2>&1 &
   PASS_PID=$!
@@ -130,6 +130,17 @@ run_pass(){
 for tool in aws s5cmd zenfleet-worker gunzip timeout; do
   command -v "$tool" >/dev/null || { ferr "baked tool '$tool' missing — image is broken, rebuild"; exit 3; }
 done
+
+# ── TMPDIR discipline (ban RAM-backed tmp everywhere) ────────────────────────────────────────────────
+# check_tmpdir_discipline lives in tmpdir_discipline.sh (baked alongside this script) so
+# tests/tmpdir_discipline_test.sh can source + exercise it directly without running the rest of this
+# worker loop. Fail loud here, at boot, same spirit as the baked-tool check above: a missing/tmpfs
+# TMPDIR is a launcher bug, not a runtime condition to paper over. See docs/RUNNING_JOBS.md "TMPDIR
+# discipline".
+# shellcheck source=./tmpdir_discipline.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tmpdir_discipline.sh" \
+  || { ferr "tmpdir_discipline.sh missing next to fleet-entrypoint.sh — image is broken, rebuild"; exit 3; }
+check_tmpdir_discipline || exit $?
 
 # ── GPU-SCORING GUARANTEE ─────────────────────────────────────────────────────────────────────────
 # Set ZEN_REQUIRE_GPU=1 on a box whose scores MUST come from a GPU. It exports
@@ -196,12 +207,12 @@ fi
 # EXITS, which drops through to the cloud-init self-destruct. One box == one useful paid hour, no churn.
 pool_mode(){
   local END; END=$(( $(date +%s) + ${ZEN_MAX_MIN:-55} * 60 ))
-  s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$ZEN_POOL_RUNLIST" /tmp/runlist.raw \
+  s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$ZEN_POOL_RUNLIST" ${TMPDIR}/runlist.raw \
     || { ferr "cannot fetch pool runlist $ZEN_POOL_RUNLIST"; exit 4; }
   # Shuffle per box so a large fleet spreads across runs instead of all piling onto run #1 (which would
   # serialize on that one run's claim-lease). Each box still covers every run over successive cycles.
-  shuf /tmp/runlist.raw -o /tmp/runlist.tsv 2>/dev/null || cp /tmp/runlist.raw /tmp/runlist.tsv
-  hb "POOL mode: $(grep -c . /tmp/runlist.tsv) runs (shuffled), budget ${ZEN_MAX_MIN:-55}min (worker=$WORKER)"
+  shuf ${TMPDIR}/runlist.raw -o ${TMPDIR}/runlist.tsv 2>/dev/null || cp ${TMPDIR}/runlist.raw ${TMPDIR}/runlist.tsv
+  hb "POOL mode: $(grep -c . ${TMPDIR}/runlist.tsv) runs (shuffled), budget ${ZEN_MAX_MIN:-55}min (worker=$WORKER)"
   local cyc=0
   while [ "$(date +%s)" -lt "$END" ]; do
     cyc=$((cyc + 1)); local did=0 seen=0
@@ -209,7 +220,7 @@ pool_mode(){
       [ -z "$run" ] && continue
       [ "$(date +%s)" -ge "$END" ] && break
       seen=$((seen + 1))
-      local mf="/tmp/m_${run}.json"
+      local mf="${TMPDIR}/m_${run}.json"
       if [ ! -s "$mf" ]; then
         s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "s3://$ZEN_BUCKET/jobs/$run/manifest.json.gz" "$mf.gz" 2>/dev/null \
           && gunzip -f "$mf.gz" 2>/dev/null
@@ -229,7 +240,7 @@ pool_mode(){
       # every cell each pass). Re-fetched per pass so a cron-refreshed snapshot stays current; guarded
       # — a run with no snapshot yet just runs the old way (zero downside). Seed/refresh the snapshots
       # with scripts/jobsys/refresh_snapshots.sh (on the cred-holding box, never baked onto a worker).
-      local snap="/tmp/snap_${run}.parquet"
+      local snap="${TMPDIR}/snap_${run}.parquet"
       s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "s3://$ZEN_BUCKET/jobs/$run/ledger_snapshot.parquet" "$snap" >/dev/null 2>&1 || rm -f "$snap"
 
   # Invariant 3 (anti-wedge doc, 2026-08-26): a silently-absent snapshot on a long
@@ -253,14 +264,14 @@ pool_mode(){
       # Only a full cycle of genuinely EMPTY passes (done=0, clean exit) means the pool is drained.
       { [ "${s:-0}" -gt 0 ] || [ "$rc" -eq 124 ]; } && did=1
       prog "pool cyc=$cyc @$run done=${s:-0} ($(( (END - $(date +%s)) / 60 ))min left)"
-    done 3< /tmp/runlist.tsv
+    done 3< ${TMPDIR}/runlist.tsv
     if [ "$did" -eq 0 ]; then
       hb "POOL: nothing left across all $seen runs — backfill drained, exiting"
       # Completion beacon: this box did a FULL cycle and found EVERY run empty. pool_cron watches
       # s3://.../jobs/_pool/drained/ (a cheap small-prefix list) to auto-stop, instead of reading every
       # ledger. Filename carries the epoch so the cron can window it to "recent".
-      printf '%s drained cyc=%s\n' "$WORKER" "$cyc" > /tmp/drainmark 2>/dev/null || true
-      s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp /tmp/drainmark "s3://$ZEN_BUCKET/jobs/_pool/drained/${WORKER}-$(date +%s)" 2>/dev/null || true
+      printf '%s drained cyc=%s\n' "$WORKER" "$cyc" > ${TMPDIR}/drainmark 2>/dev/null || true
+      s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp ${TMPDIR}/drainmark "s3://$ZEN_BUCKET/jobs/_pool/drained/${WORKER}-$(date +%s)" 2>/dev/null || true
       break
     fi
     sleep "${ZEN_PASS_SLEEP:-0.2}"
@@ -272,15 +283,15 @@ if [ -n "${ZEN_POOL_RUNLIST:-}" ]; then pool_mode; exit 0; fi
 # Single-run mode below — safe to dereference ZEN_MANIFEST_URI now (pool mode has exited).
 MGZ="${ZEN_MANIFEST_URI%.gz}.gz"
 hb "fetching manifest ($MGZ, else plain) — this is the op that historically hung at 0 bytes on big sweeps"
-mfetch_err=$(s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$MGZ" /tmp/manifest.json.gz 2>&1)
+mfetch_err=$(s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$MGZ" ${TMPDIR}/manifest.json.gz 2>&1)
 if [ $? -eq 0 ]; then
-  gunzip -f /tmp/manifest.json.gz || { ferr "gunzip $MGZ failed"; exit 4; }
-elif s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "${ZEN_MANIFEST_URI%.gz}" /tmp/manifest.json 2>/dev/null; then
+  gunzip -f ${TMPDIR}/manifest.json.gz || { ferr "gunzip $MGZ failed"; exit 4; }
+elif s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "${ZEN_MANIFEST_URI%.gz}" ${TMPDIR}/manifest.json 2>/dev/null; then
   :
 else
   ferr "cannot fetch manifest ($MGZ or plain ${ZEN_MANIFEST_URI%.gz}); s5cmd said: ${mfetch_err:-<silent>}"; exit 4
 fi
-hb "manifest ready ($(wc -c </tmp/manifest.json 2>/dev/null || echo '?') bytes); $WORKER ($PROVIDER) claiming from s3://$ZEN_BUCKET/$ZEN_RUN/"
+hb "manifest ready ($(wc -c <${TMPDIR}/manifest.json 2>/dev/null || echo '?') bytes); $WORKER ($PROVIDER) claiming from s3://$ZEN_BUCKET/$ZEN_RUN/"
 
 # ZEN_MAX_MIN (paid-hour budget): honored here too, not just in POOL mode — a single-run worker
 # that never sets it (the common LAN-fleet case) runs unbounded, same as always. Set it and this
@@ -322,9 +333,13 @@ while :; do
   # worker process), so deleting the whole scratch set is race-free; a warm
   # process that later misses its cache simply re-downloads. Variant/dist
   # temps are same-class leaks on the scoring path. Long single passes still
-  # need an operator-side TTL cleaner on a bind-mounted /tmp (the incident's
-  # 620 GB grew INSIDE passes); this sweep bounds the between-pass baseline.
-  rm -f /tmp/jobexec_src_* /tmp/jobexec_var_* /tmp/jobexec_dist_* 2>/dev/null || true
+  # need an operator-side TTL cleaner on TMPDIR (the incident's 620 GB grew
+  # INSIDE passes); this sweep bounds the between-pass baseline. (2026-09-05:
+  # TMPDIR is now REQUIRED to be a bind-mounted disk path — see
+  # check_tmpdir_discipline above — so this growth lands on real disk, not RAM;
+  # it still wants the TTL cleaner, it just no longer risks an OOM on top of
+  # the ENOSPC.)
+  rm -f ${TMPDIR}/jobexec_src_* ${TMPDIR}/jobexec_var_* ${TMPDIR}/jobexec_dist_* 2>/dev/null || true
   # --ledger-in done-set snapshot (same contract as POOL mode, which has always fetched it):
   # without it the reconcile view is EMPTY, the gap is ALL cells every pass, and dedup falls to
   # the claim lease — the documented 2.0-3.4x re-work tax (\`zenfleet-ctl compact\` docs), which
@@ -340,7 +355,7 @@ while :; do
       exit 4
     fi
   fi
-  SNAP=/tmp/ledger_snapshot.parquet
+  SNAP=${TMPDIR}/ledger_snapshot.parquet
   s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "s3://$ZEN_BUCKET/$ZEN_RUN/ledger_snapshot.parquet" "$SNAP" >/dev/null 2>&1 || rm -f "$SNAP"
   LIN=(); [ -s "$SNAP" ] && LIN=(--ledger-in "$SNAP")
   # Invariant 3 (anti-wedge doc, 2026-08-26): on a long single-run queue a silently
@@ -354,7 +369,7 @@ while :; do
   # no matching '▸ progress pass N' — a visible stall, not silence. `timeout` turns
   # a genuine hang into a LOUD rc=124 failure instead of an infinite silent block.
   hb "pass $i start (worker=$WORKER provider=$PROVIDER idle=$idle/${ZEN_IDLE_PASSES:-5} consec_fails=$fails snap=$([ -s "$SNAP" ] && wc -c <"$SNAP" || echo none) backoff=${BACKOFF}s long_lived=$LONG_LIVED)"
-  run_pass --manifest /tmp/manifest.json "${LIN[@]}" \
+  run_pass --manifest ${TMPDIR}/manifest.json "${LIN[@]}" \
     --ledger-out "s3://$ZEN_BUCKET/$ZEN_RUN/ledger/pass-$WORKER-$i.parquet" \
     --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "$ZEN_RUN/blobs" \
     --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "$ZEN_RUN/claims" \

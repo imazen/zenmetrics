@@ -11,6 +11,7 @@ COPY --chmod=0755 zenmetrics  /usr/local/bin/zenmetrics
 COPY --chmod=0755 zenfleet-exec  /usr/local/bin/zenfleet-exec
 # Overlay the current entrypoint + worker (the base image's are stale — see build_executor_image.sh).
 COPY --chmod=0755 fleet-entrypoint.sh  /usr/local/bin/fleet-entrypoint.sh
+COPY --chmod=0755 tmpdir_discipline.sh  /usr/local/bin/tmpdir_discipline.sh
 COPY --chmod=0755 zenfleet-worker  /usr/local/bin/zenfleet-worker
 # Default ZEN_EXEC to the real executor; fleet-entrypoint.sh still honors an overriding ZEN_EXEC env.
 ENV ZEN_EXEC=/usr/local/bin/zenfleet-exec

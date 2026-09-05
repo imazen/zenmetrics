@@ -567,6 +567,46 @@ safe to `docker rm -f`; a nonzero gap means real work may still be in flight.
 
 Record: `benchmarks/avif_doe_plan_2026-09-01.md` §18 point 2 (the finding).
 
+### 9c. TMPDIR discipline (ban RAM-backed tmp everywhere, 2026-09-05)
+
+**Every worker launch MUST set `TMPDIR` to a disk-backed path — never leave it unset, and never
+point it at a tmpfs mount.** `fleet-entrypoint.sh` writes its own scratch (pass output, pooled
+manifests/runlists, ledger snapshots, the drain beacon) under `$TMPDIR`, and jobexec's
+warm-process source cache (`jobexec.rs::src_cache_path`) resolves the same way via Rust's
+`std::env::temp_dir()`, which reads `$TMPDIR` before falling back to `/tmp`. If a box's `/tmp`
+happens to be a `tmpfs` (systemd's default `tmp.mount` unit does this on plain Ubuntu unless
+masked) and `TMPDIR` is never set, every one of those scratch writes silently lands in RAM —
+the 2026-08-06 ENOSPC incident's failure mode (`benchmarks/` — the between-pass sweep this
+section's fix note references), just relocated from filling the disk to filling memory, on a
+box that may be running other live work.
+
+**Fixed**: `fleet-entrypoint.sh` now sources `tmpdir_discipline.sh` (baked alongside it in every
+worker image — `Dockerfile` / `Dockerfile.executor` / `build_executor_image.sh` all COPY it) and
+calls `check_tmpdir_discipline` before doing anything else. That function:
+
+1. Fails loud (`exit 3`) if `TMPDIR` is unset — no silent fallback to bare `/tmp`.
+2. Fails loud if `findmnt -T "$TMPDIR" -no FSTYPE` reports `tmpfs`.
+3. Fails loud if `findmnt` itself is missing (same "baked tool must exist" contract as the rest
+   of the entrypoint) rather than silently skipping the check.
+4. Otherwise `mkdir -p`s `$TMPDIR` and proceeds.
+
+Every internal `/tmp/...` path in `fleet-entrypoint.sh` was moved to `${TMPDIR}/...` so the check
+has teeth — validating `$TMPDIR` and then still writing to hardcoded `/tmp` would leave the
+"fix" enforcing nothing.
+
+**Launchers set it**: `lan_score_launch.sh` bind-mounts a disk-backed host dir at `/scratch` and
+exports `TMPDIR=/scratch` on every `docker run` — auto-detecting `/mnt/user/coefficient/scratch`
+on an Unraid box (tower) vs `$HOME/tmp/zfw-scratch` elsewhere, override with
+`ZEN_TMPDIR_HOST_DIR`. `enroll_running_node.sh`'s systemd-managed worker unit (private
+`homefleet` repo) does the same for the always-on LAN pool workers. A worker started by hand
+outside these launchers needs the same `-e TMPDIR=... -v host:container` — the entrypoint will
+refuse to boot without it, by design.
+
+**Test**: `crates/zenfleet-worker/tests/tmpdir_discipline_test.sh` (`just test-tmpdir-discipline`,
+wired into CI's `compile` job on `ubuntu-latest`) exercises unset / tmpfs (`/dev/shm`) /
+disk-backed / missing-`findmnt` TMPDIR against `check_tmpdir_discipline` directly, hermetic (no
+cloud, no GPU, no secrets, mounts nothing).
+
 ---
 
 ## 10. Complete worked example (synthetic — runnable today)
