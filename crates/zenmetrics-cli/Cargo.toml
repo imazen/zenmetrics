@@ -78,6 +78,13 @@ jxl = ["dep:zenjxl", "dep:jxl-encoder"]
 # encode side.
 gif = ["dep:zengif"]
 tiff = ["dep:zentiff"]
+# BMP: the REV2 RECALCULATION LAN wave's blocker (docs/PLAN_REV2_RECALC_2026-09-06.md
+# §7.2) — the stored LIVE 372-eval table was built from `.bmp` (LIVE's
+# `databaserelease2` originals), and this CLI had no BMP arm, so a `live`
+# Feature job failed loud ("could not detect image format") rather than
+# silently mis-scoring. Plain decode-only feature (`zenbitmaps`'s `bmp`
+# feature adds no extra deps — no encoder, no sweep planner needed).
+bmp = ["dep:zenbitmaps", "zenbitmaps/bmp"]
 
 # HDR scoring — CORE, default-on (`default` + `sweep` both pull it, so the
 # `--hdr` flag + PQ-PNG/PQ-JXL/EXR ref decode + the per-metric HDR feeding are
@@ -405,6 +412,9 @@ zenjxl       = { path = "../../../zenjxl",                                     o
 # them.
 zengif       = { path = "../../../zengif",                default-features = false, optional = true, features = ["std", "zenquant"] }
 zentiff      = { path = "../../../zenextras/zentiff",     default-features = false, optional = true, features = ["std", "lzw", "deflate"] }
+# BMP decode only (the `bmp` CLI feature above) — TID2013 and PIPAL also ship
+# `.bmp`, but LIVE (databaserelease2) is the one blocking a G-BITEXACT re-run.
+zenbitmaps   = { path = "../../../zenbitmaps",             default-features = false, optional = true, features = ["std", "bmp"] }
 # HDR decoders (gated by the `hdr` feature): Ultra HDR JPEG + gain-map HEIC →
 # absolute-luminance; image provides the EXR reader.
 ultrahdr-rs  = { path = "../../../ultrahdr/ultrahdr-rs",                       optional = true }

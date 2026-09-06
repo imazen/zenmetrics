@@ -6639,6 +6639,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenbitmaps"
+version = "0.2.0"
+dependencies = [
+ "enough",
+ "thiserror",
+ "whereat",
+]
+
+[[package]]
 name = "zencodec"
 version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7261,6 +7270,7 @@ dependencies = [
  "zenavif",
  "zenavif-parse",
  "zenavif-serialize 0.2.0",
+ "zenbitmaps",
  "zencodec",
  "zenflate 0.4.0",
  "zenfleet-core",

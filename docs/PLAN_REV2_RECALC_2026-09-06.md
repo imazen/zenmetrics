@@ -409,3 +409,94 @@ ZENSIM_FORMULA_REV=<REV> ZEN_CORPUS_BUCKET=<bucket> ZEN_CORPUS_PREFIX=<prefix> \
 
 Poll for the token at zensim `benchmarks/f4_arm_decision_2026-09-05.md` — the
 verdict section, not the §2 correction.
+
+---
+
+## 7.5 The two §7.2/§7.3 blockers are CLOSED (2026-09-06, ops lane)
+
+Both prerequisites §7 registered as blocking wave 2 are done. Neither
+required the arm token; both are independent of the F4 decision.
+
+### §7.3 (LAN reachability): the 372 corpora ARE on the LAN store
+
+All 8 re-extractable corpora (cid22, kadid, tid, csiq, live, aic3, konjnd,
+pipal — 43,870 rows, ~25 GB) are synced to
+`s3://codec-corpus/eval372-rev2-2026-09-06/<corpus>/`. Full record + per-corpus
+manifests: `docs/rev2_lan_stage.pointer.md` +
+`/mnt/v/zen/zensim-training/rev2-lan-stage-2026-09-06/`.
+
+**§4's "otherwise → resolved relative to the corpus prefix" contingency did
+not need building.** `resolve_source` / `resolve_feature_input`
+(`crates/zenmetrics-cli/src/jobexec.rs`) already fetch `s3://…` in-process for
+BOTH the reference and every distorted input — this was evidently built
+*for* the recalculation (the doc comments on both functions name this exact
+manifest) but had not yet been proven against real staged data. It now has:
+`scripts/jobsys/verify_lan_stage_reachability.sh <corpus>` declares and runs
+one Feature job against the staged `s3://` pairs TSV and the SAME pairs
+through their local-path originals, and diffs the feature vectors
+`to_bits()`. Run against csiq, live, pipal, konjnd: **0 cells differ, every
+time.** No code change to the executor was needed or made.
+
+Cross-node read: `r7900x` fetched 3 randomly-picked files by their manifest
+sha256 over the LAN store — 3/3 matched.
+
+**PIPAL is staged as a 23,200-pair SUPERSET, not a verified match to the
+postC root's 21,800.** Every PIPAL reference's label file has 116 valid
+(ref,dist) pairs (verified: `load_pipal` in `zensim-validate/src/main.rs`
+returns the un-truncated list, and `--max-images` — default 0 — is not
+passed by `build_eval372_root.sh`), while the stored table has exactly 109
+per reference, uniformly across all 200 refs. No selection rule for the
+missing 7-per-ref was found. All pixels for the full 23,200 are staged
+(nothing is missing for wave 2 to draw on); reconciling the exact historical
+21,800-row cut is registered, not resolved, here.
+
+### §7.2 (LIVE blocker): BMP arm shipped — G-BITEXACT PASSES
+
+`crates/zenmetrics-cli/src/decode.rs` gained a `bmp` feature
+(`zenbitmaps::decode_bmp`, funnelled through a new `bmp_layout_to_rgb8`
+covering all 10 named `PixelLayout` variants) — magic-byte sniff (`BM`),
+extension fallback, and the `decode_bytes_to_rgb8` dispatch arm, matching
+zensim's own `zen_decode.rs` choice of decoder (`zenbitmaps`, imazen-only).
+4 unit tests round-trip real BMP bytes (24-bit RGB, wrong-extension
+override, 32-bit alpha-drop, every `PixelLayout` variant) produced by
+`zenbitmaps`' own encoder — no hand-rolled BMP bytes, no third-party imaging
+crate.
+
+**§7.2's own framing of the fix was half right.** It correctly identified
+LIVE's stored row order as NOT matching `live_r2_pairs.tsv`'s file order,
+and said this "needs a key-based join." MEASURED: it does not — a **stable
+sort of the pairs by `basename(ref_path)`** (Python's `sorted(key=…)`,
+matching Rust's stable `sort_by` at
+`zensim-bench/examples/extract_features_372col.rs:216`, `rows.sort_by(|a,b|
+a.0.cmp(&b.0))`, which the "pairs-tsv" loader path runs after extraction)
+reproduces the stored table's exact row order — grouping AND within-group
+order — on all 779 rows, verified against both `ref_basename` and
+`human_score`. No join, no key beyond the reference's own filename.
+
+Gate re-run with the fixed binary
+(`--features sweep,png,jpeg,webp,avif,jxl,cpu-metrics,feature-jobs,feature-rev,bmp`)
+and the stable-sorted pairs TSV:
+
+```
+pairs: 779
+declared 58 feature jobs
+extracted 779 rows
+G-EXEC.2 idempotence: OK (job 0 byte-identical on re-run)
+row alignment: OK (ref_basename matches on all 779 compared rows)
+
+=== G-BITEXACT ===
+compared 289788 cells (779 rows x 372 features)
+  basic   0/121524 differ
+  peaks   0/56088 differ
+  masked  0/56088 differ
+  iw      0/56088 differ
+RESULT: BIT-EXACT — 0 of 289788 cells differ
+```
+
+**§7.1's G-BITEXACT table now covers all 4 re-extractable non-byte-copy
+producers this root has** (csiq/tid/kadid already passed; live now passes
+too) — 779 + 13,991 = 14,770 rows, 5,494,440 cells, 0 differ.
+
+Neither fix required or made any arithmetic change — `zensim` is untouched;
+this is entirely fleet-side (decode dispatch) and data-side (staging + a
+row-order finding).
