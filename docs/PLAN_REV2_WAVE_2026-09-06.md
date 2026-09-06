@@ -310,10 +310,15 @@ clean (exit 0) with **3,907 of 3,907 blobs** written.
 | konjnd | 1,008 | **0 differ** / 374,976 | **0 differ** |
 | live | 779 | **0 differ** / 289,788 | **0 differ** |
 | aic3 | 600 | **0 differ** / 223,200 | **0 differ** |
-| kadid | 10,125 | (queued) | **0 differ** |
-| cid22 | 4,292 | see §7.5 | **536 rows differ** |
-| pipal | 23,200 | (queued) | not in the r6b root |
-| **total** | **43,870** | | **6,092,616 cells, 0 differ** (6 corpora) |
+| kadid | 10,125 | **0 differ** / 3,766,500 | **0 differ** |
+| cid22 | 4,292 | **FAIL** 191,378 / 1,596,624 — see §7.5 | **536 rows differ** — §7.5 |
+| pipal | 23,200 | NOT COMPARABLE — the staged set is the 23,200-pair superset, the stored root holds 21,800 (the 7-per-ref cut the staging lane could not reconstruct) | not in the r6b root |
+| **total** | **43,870** | **6,092,616 cells, 0 differ** (the 6 comparable corpora) | **6,092,616 cells, 0 differ** (6 corpora) |
+
+Both columns cover the same six corpora and therefore the same 6,092,616 cells.
+cid22 fails identically in both columns and for the same reason (§7.5); pipal has
+no comparator at either revision because the stored root's row cut has never been
+reconstructed — that is a pre-existing open item, not something this wave broke.
 
 **G-IMG2.1 and G-IMG2.2 both PASS.** The second one is the load-bearing result:
 the fleet executor at `ZENSIM_FORMULA_REV=2`, running a different code path from
