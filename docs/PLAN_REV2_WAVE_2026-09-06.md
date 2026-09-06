@@ -663,3 +663,21 @@ fleet**: `--feature-corpus` materialises every column as a Python list, so peak 
 is ~`rows × features × 32 B` — MEASURED at ~12 GB for 196,086 × 944, which is fine
 here and is NOT fine for bigcodec. A chunked `pq.ParquetWriter` is the fix and is
 named in the tool's own header rather than left to be discovered.
+
+## 7.13 The 944 root is USABLE by a real 944 bake — verified, with one cosmetic gap
+
+Scoring shipped Profile C (`c_sdr_purity944_2026-08-29.bin`, 667 read ids, highest
+`f941`) against `2026-09-06-full-features-944-rev2`: `bake_verdict` **derives** the
+width as 944, reads the declared
+`basic+peaks+masked+iw+v2+append+append2@w944/era2r4_rev2#b782e349` out of the
+manifest, and proceeds. No refusal. The only note is
+`EraUnknown: era not established (bake unknown, table era2r4_rev2)` — a property of
+that *bake*, which declares no era, not of the root.
+
+**One cosmetic gap, named rather than fixed:** none of the five new roots is listed
+in `zensim_validate::eval_roots`, so every run prints `era UNKNOWN (not a
+registered root)` before going on to read the era correctly from the
+`_MANIFEST.json`. Harmless for a root passed explicitly — the feature-set line
+immediately below it resolves — but registering the paths there would make a
+flagless run self-describing, which is the whole point of that owner. A small
+additive change in zensim, left for the lane that owns that file.
