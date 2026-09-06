@@ -556,9 +556,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!(
                 "declared {} feature jobs (regime={regime} revision={} chunk={chunk}) from {} \
                  pairs -> {}",
+                jobs.len(),
                 revision.as_deref().unwrap_or("<shipped>"),
                 ps.len(),
-                jobs.len(),
                 out.display()
             );
         }

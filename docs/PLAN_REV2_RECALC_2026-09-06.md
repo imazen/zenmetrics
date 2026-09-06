@@ -323,3 +323,89 @@ named only a token every executor had.
 `zenmetrics capabilities`) and, when a revision is pinned, `feature-rev`.
 Deliberately NOT `cpu-metrics`: every CPU executor advertises that, which is
 the same under-claim in a new costume.
+
+---
+
+## 7. RESULTS as of 2026-09-06 — what is proven, what is blocked
+
+### 7.1 G-BITEXACT: PASSED, on both producers
+
+Executor output at revision 1, regime 372, vs the stored postC root
+(`build_commit 4fbd8ff8` — the commit this build's zensim is at), compared as
+`to_bits()` with row alignment verified on `ref_basename` first:
+
+| corpus | stored table's producer | rows | cells | differ |
+|---|---|--:|--:|--:|
+| csiq | `extract_features_372col` | 866 | 322,152 | **0** |
+| tid | `zensim-validate --extract-only` | 3,000 | 1,116,000 | **0** |
+| kadid | `zensim-validate --extract-only` | 10,125 | 3,766,500 | **0** |
+| | | **13,991** | **5,204,652** | **0** |
+
+The two-producer requirement §3 pre-registered turned out to matter more than
+expected: the producers differ in **decoder crate** (`zen_decode` → the imazen
+codecs vs `image::open`) **and** in zensim entry point
+(`compute_zensim_with_config` vs `compute_zensim_with_ref_and_config`). The
+executor is a *third* combination — imazen decoders + the cached-ref path — and
+reproduces both bit-exactly. Independently corroborated by R6's own C1 control
+(zensim `benchmarks/f4_arm_decision_2026-09-05.md` §1).
+
+### 7.2 ⛔ Blocker found by the gate: `live` cannot be re-extracted by the fleet
+
+MEASURED: the stored LIVE table was built from **`.bmp`** — its `ref_basename`
+is `bikes.bmp`, and `live_r2_pairs_png.tsv` misaligns against it, so the PNG
+list is NOT what produced it. zensim's `zen_decode` handles BMP/PNM/farbfeld
+via `zenbitmaps`; **`zenmetrics-cli/src/decode.rs` has no BMP arm**, so the
+executor fails loud ("could not detect image format"). That is G-EXEC.4 working,
+not a silent wrong answer. 779 of the 42,470 re-extractable rows (1.8 %).
+Fix, registered not run: add a `zenbitmaps` BMP arm to `decode.rs`. LIVE's
+stored row order is also not its pairs-TSV order, so it needs a key-based join,
+not the positional compare the other three corpora use.
+
+### 7.3 ⛔ A precondition §2 did not state: the 372 corpora are NOT on the LAN store
+
+The 372 root's pixels live at `/mnt/v/dataset*` — **local WSL paths no fleet
+node can see**. A declared 372 manifest (908 jobs / 13,991 pairs / 136
+references, produced and verified) is runnable *locally* today and on the fleet
+only after the corpora are staged to the LAN store under a corpus prefix. That
+staging is a prerequisite of wave 2, and it was not in the manifest's
+"pixels present?" column, which answers a different question (can this box
+rebuild it) than the fleet's (can a worker reach it).
+
+Waves 5–7 (safesyn / KADIS / bigcodec) do not have this problem: their pixels
+are already object-addressable.
+
+### 7.4 The wave is BLOCKED on the arm token, and correctly so
+
+R6 has published no F4 arm — `benchmarks/f4_arm_decision_2026-09-05.md` ends at
+its §2 correction with no verdict section, and `scripts/r6_decide.py` (the
+reader that applies the pre-registered rule) has not produced one. Declaring a
+rev2 wave now would put every row at an arm nobody chose.
+
+**Resume command**, once the token lands (`<ARM>` ∈ `c1` / `lorentz` / `clamp`,
+`<REV>` the revision token the zensim lane assigns it):
+
+```bash
+# 1. rebuild the executor against a zensim carrying the selector, and turn on
+#    the `feature-rev` capability so a revision pin is claimable at all:
+cargo build --release --target x86_64-unknown-linux-musl -p zenmetrics-cli \
+  --bin zenmetrics --no-default-features \
+  --features sweep,png,jpeg,webp,avif,jxl,cpu-metrics,feature-jobs,feature-rev,hdr-gainmap
+
+# 2. re-run the gate at rev1 FIRST (the new build must still be bit-exact):
+python3 scripts/jobsys/rev2_bitexact_gate.py \
+  --pairs /mnt/v/dataset/csiq/csiq_pairs.tsv \
+  --stored /mnt/v/zen/zensim-training/2026-09-05-full-features-372-postC/csiq_features_372col_2026-07-18.parquet \
+  --exec target/x86_64-unknown-linux-musl/release/zenmetrics --regime 372
+
+# 3. declare the rev2 wave (a DIFFERENT job id than the rev1 one, by design):
+target/release/zenfleet-ctl declare-features \
+  --pairs <pairs.tsv> --out <manifest.json> --regime 372 --revision <REV> --chunk 16
+
+# 4. launch with the revision pinned in the ENVIRONMENT (it is a launch-level
+#    pin — the executor refuses a job whose revision disagrees with its env):
+ZENSIM_FORMULA_REV=<REV> ZEN_CORPUS_BUCKET=<bucket> ZEN_CORPUS_PREFIX=<prefix> \
+  bash scripts/jobsys/lan_score_launch.sh <host> <job-set> feat cpu <image tag>
+```
+
+Poll for the token at zensim `benchmarks/f4_arm_decision_2026-09-05.md` — the
+verdict section, not the §2 correction.

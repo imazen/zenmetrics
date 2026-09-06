@@ -39,6 +39,11 @@
 # Usage: [PUSH=1] [ZEN_METRICS_BIN=path] [ZEN_WORKER_BIN=path] build_executor_image.sh [IMAGE]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# How to reach the docker daemon. On a box where the invoking user is not in the
+# `docker` group, `docker info` fails with "permission denied ... /var/run/docker.sock"
+# and every step below dies with an opaque error. `DOCKER="sudo -n docker"` is the
+# escape hatch; the default is unchanged, so nothing about an existing invocation moves.
+DOCKER="${DOCKER:-docker}"
 IMAGE="${1:-ghcr.io/imazen/zenfleet-worker:exec}"
 BIN="${ZEN_METRICS_BIN:-$ROOT/target/release/zenmetrics}"
 [ -x "$BIN" ] || { echo "build zenmetrics first (see header); not found at $BIN"; exit 1; }
@@ -85,8 +90,8 @@ echo "building $IMAGE (base = ghcr.io/imazen/zenfleet-worker:latest + zenmetrics
 # (https://docs.docker.com/go/buildx/) or drop --chmod from Dockerfile.executor's COPY lines and add
 # a trailing `RUN chmod 0755 ...` instead — the source files are already executable, but classic
 # (non-BuildKit) `docker build` doesn't reliably preserve that without an explicit chmod step.
-docker build -t "$IMAGE" "$CTX"
+$DOCKER build -t "$IMAGE" "$CTX"
 # Smoke: the binary loads + jobexec is present.
-docker run --rm --entrypoint /usr/local/bin/zenmetrics "$IMAGE" jobexec --help >/dev/null \
+$DOCKER run --rm --entrypoint /usr/local/bin/zenmetrics "$IMAGE" jobexec --help >/dev/null \
   && echo "OK: jobexec present in $IMAGE"
-if [ "${PUSH:-0}" = "1" ]; then docker push "$IMAGE" && echo "pushed $IMAGE"; fi
+if [ "${PUSH:-0}" = "1" ]; then $DOCKER push "$IMAGE" && echo "pushed $IMAGE"; fi

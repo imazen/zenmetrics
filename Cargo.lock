@@ -2797,7 +2797,7 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "archmage",
  "butteraugli",
@@ -2819,7 +2819,7 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder-macros"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2828,7 +2828,7 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder-simd"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "archmage",
  "libm",
@@ -6494,11 +6494,11 @@ dependencies = [
 [[package]]
 name = "zenav1-svt"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=2ca060f421760cff4b278fb4baf47ba86afcb5f2#2ca060f421760cff4b278fb4baf47ba86afcb5f2"
+source = "git+https://github.com/imazen/zenav1-svt?rev=2d75a105fe0b310bf586110951315f014e274fff#2d75a105fe0b310bf586110951315f014e274fff"
 dependencies = [
- "zenav1-svt-dsp 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2ca060f421760cff4b278fb4baf47ba86afcb5f2)",
- "zenav1-svt-encoder 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2ca060f421760cff4b278fb4baf47ba86afcb5f2)",
- "zenav1-svt-types 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2ca060f421760cff4b278fb4baf47ba86afcb5f2)",
+ "zenav1-svt-dsp 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2d75a105fe0b310bf586110951315f014e274fff)",
+ "zenav1-svt-encoder 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2d75a105fe0b310bf586110951315f014e274fff)",
+ "zenav1-svt-types 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2d75a105fe0b310bf586110951315f014e274fff)",
 ]
 
 [[package]]
@@ -6513,11 +6513,11 @@ dependencies = [
 [[package]]
 name = "zenav1-svt-dsp"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=2ca060f421760cff4b278fb4baf47ba86afcb5f2#2ca060f421760cff4b278fb4baf47ba86afcb5f2"
+source = "git+https://github.com/imazen/zenav1-svt?rev=2d75a105fe0b310bf586110951315f014e274fff#2d75a105fe0b310bf586110951315f014e274fff"
 dependencies = [
  "archmage",
  "magetypes",
- "zenav1-svt-types 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2ca060f421760cff4b278fb4baf47ba86afcb5f2)",
+ "zenav1-svt-types 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2d75a105fe0b310bf586110951315f014e274fff)",
 ]
 
 [[package]]
@@ -6536,15 +6536,15 @@ dependencies = [
 [[package]]
 name = "zenav1-svt-encoder"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=2ca060f421760cff4b278fb4baf47ba86afcb5f2#2ca060f421760cff4b278fb4baf47ba86afcb5f2"
+source = "git+https://github.com/imazen/zenav1-svt?rev=2d75a105fe0b310bf586110951315f014e274fff#2d75a105fe0b310bf586110951315f014e274fff"
 dependencies = [
  "almost-enough",
  "archmage",
  "enough",
  "magetypes",
  "whereat",
- "zenav1-svt-dsp 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2ca060f421760cff4b278fb4baf47ba86afcb5f2)",
- "zenav1-svt-types 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2ca060f421760cff4b278fb4baf47ba86afcb5f2)",
+ "zenav1-svt-dsp 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2d75a105fe0b310bf586110951315f014e274fff)",
+ "zenav1-svt-types 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2d75a105fe0b310bf586110951315f014e274fff)",
 ]
 
 [[package]]
@@ -6558,7 +6558,7 @@ dependencies = [
 [[package]]
 name = "zenav1-svt-types"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=2ca060f421760cff4b278fb4baf47ba86afcb5f2#2ca060f421760cff4b278fb4baf47ba86afcb5f2"
+source = "git+https://github.com/imazen/zenav1-svt?rev=2d75a105fe0b310bf586110951315f014e274fff#2d75a105fe0b310bf586110951315f014e274fff"
 dependencies = [
  "enough",
  "whereat",
@@ -6583,7 +6583,7 @@ dependencies = [
  "ultrahdr-core 0.5.0",
  "whereat",
  "yuv",
- "zenav1-svt 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2ca060f421760cff4b278fb4baf47ba86afcb5f2)",
+ "zenav1-svt 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=2d75a105fe0b310bf586110951315f014e274fff)",
  "zenavif-parse",
  "zenavif-serialize 0.2.0",
  "zencodec",
