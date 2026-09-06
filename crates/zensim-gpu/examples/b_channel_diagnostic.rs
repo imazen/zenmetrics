@@ -172,6 +172,17 @@ fn v_blur_plane(src: &[f32], width: usize, height: usize, radius: usize, out: &m
 // Currently unused — diagnostic uses summary metrics rather than per-pixel.
 // Kept around because the next b-channel divergence investigation will
 // likely want this verbatim.
+//
+// ⚠ THIS COMPUTES **REVISION 1** AND ONLY REVISION 1. It is the last unported
+// hand-copy of the per-pixel SSIM dissimilarity in this crate: `num_m` here is
+// the unbounded `1 - D²`, while the eight production sites now route through
+// `formula_rev` and clamp it at revision 2 (F4 / era `v1ssimcap`). Nothing
+// scored or shipped reaches this function — it is dead code in a diagnostic —
+// but its own comment above says the next investigator will take it VERBATIM,
+// and that is exactly how a revision-1 copy gets carried into a revision-2
+// investigation. If you reach for it: either compare against a revision-1 run,
+// or port it first (`crate::formula_rev::active_revision()` + the same
+// `if luma_clamp { max(num_m, 0.0) }` branch the kernels use).
 
 #[allow(dead_code)]
 const C2: f32 = 0.0009;

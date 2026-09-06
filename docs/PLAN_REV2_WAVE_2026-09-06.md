@@ -562,3 +562,64 @@ the answer is whichever era the consuming tables were built in.
   flagged it.
 * **The eval roots in §7.4/§7.6/§7.8 are unaffected**: their distorted sides are
   PNG/BMP, and six of seven comparable corpora are bit-exact.
+
+## 7.11 The GPU copy — MEASURED on a real Vulkan device, and a correction to its own count
+
+**Decision taken: PORT, not refuse** (§1's rule), and G-GPU.2 is **MEASURED**, not
+waived — by an instrument better than either option the brief offered. This box has
+Mesa **lavapipe** (Vulkan 1.4), so the `wgpu` backend runs the actual CubeCL
+codegen path — WGSL → naga → SPIR-V → Vulkan dispatch — and only the final
+SPIR-V→machine-code step is LLVM-on-CPU. That is categorically different from
+`cubecl/cpu`, which bypasses GPU codegen entirely and would have proved nothing.
+
+| gate | result | evidence |
+|---|---|---|
+| **G-GPU.1** rev1 byte-identity | **PASS** | 29,700 `to_bits()` values, PRE-PORT binary vs post-port at rev1, `cmp` clean — 3 sizes × 5 fixture pairs × 3 regimes × {cold, warm-ref} + strip + PU-HDR. Negative control: the pre-port binary is revision-blind. |
+| **G-GPU.2** rev2 agreement, executed | **PASS** | Full 114-test suite on lavapipe. rev1 104/6; rev2 (`ZENSIM_FORMULA_REV=2`, so CPU zensim and the GPU read the SAME variable) 104/6 with an **identical failure set**, using the suite's own tolerances with nothing invented. **Negative control:** the pre-port tree at rev2 fails **17 MORE** — `cpu_gpu_feature_sweep` ×12, `cpu_parity` ×2, `extended_parity`, `odd_dim_320x241`, `pu_xyb_parity` — exactly the divergence the port removes. |
+| **G-GPU.3** loud refusal | **PASS** | `ensure_diffmap_state` returns `Result` and refuses a revision it cannot serve; tested both directions plus the served case. |
+
+**Not covered, and named rather than glossed:** hardware-vendor f32 behaviour (fma
+contraction, denormals). The changed arithmetic is one `max` and one divide on
+already-loaded values, so vendor sensitivity is not expected — but that is
+reasoning, not measurement. `scripts/zensim_gpu_rev2_gate.sh` closes it in one
+command on r7900x's GTX 1060; it was not run because that box was executing this
+wave's safesyn leg, and a contended GPU run is worth less than an honest gap.
+
+**F5 is structurally absent**, read from source and pinned by a test:
+`ZensimFeatureRegime` is Basic 228 / Extended 300 / WithIw 372, with no raw-moment
+accumulator, no `GLOBAL_*` slots and no append kernel.
+
+### Three things §1 of this plan got wrong
+
+1. **EIGHT F4 sites, not four.** `kernels/diffmap.rs` holds five more — three
+   channels of `per_scale_weighted_ssim_kernel` plus its host-scalar reference —
+   and zensim's CPU diffmap routes through the same `ssim_form` owner as the
+   feature walk, so leaving them would have served rev1 pixels to a rev2 caller:
+   the exact G-GPU.3 defect. *(The landed commit message says NINE; that count is
+   wrong and is corrected here. The CHANGELOG states no count and is accurate.)*
+2. **`per_scale_weighted_ssim_kernel` DOES have a launch site** — the plan said the
+   only unlaunched kernel was `masked_iw_kernel`, which is true, but it implied the
+   diffmap kernels were out of scope. They are not.
+3. **The anti-vacuity trap is structural, not probabilistic.** §1 worried a fixture
+   "might not enter the changed regime". Worse: **F4 cannot be reached from 8-bit
+   sRGB at all** — 0 of 29,700 values move. The **PU-XYB (HDR)** route is what makes
+   it live: 192 SSIM-derived values move, `ssim_max` **5.4275 → 1.0**. Every SDR
+   fixture is vacuous for F4 by construction, which is also *why* R6 found no
+   pathology in 217,756 rows — every R6 corpus is SDR.
+
+### Two remaining hand-copies, both accounted for
+
+* `diffmap.rs:797`, inside `#[cfg(test)]` — a hand-mirror that pins the **rev1**
+  form against the rev1-pinned wrapper. Deliberately NOT ported: porting it would
+  delete the control. Same shape as zensim's own `legacy_scalar`.
+* `examples/b_channel_diagnostic.rs:182` — `#[allow(dead_code)]`, on no shipped or
+  scored path, and missed by the original survey because that survey grepped only
+  `src/`. Its own comment says the next investigator will take it **verbatim**,
+  which is precisely how a revision-1 copy walks into a revision-2 investigation.
+  Now carries a comment naming the revision it computes and how to port it.
+
+**Method note, transferable:** distrusting the plan's site count was right; a single
+`grep` over `src/` was not enough either, and a count re-read off one's own list is
+not a count. The check that worked was run only at verification time — enumerate
+every occurrence on the LANDED tree and classify each as ported /
+deliberately-not / missed.
