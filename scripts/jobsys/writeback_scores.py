@@ -12,6 +12,89 @@
 #   usage: writeback_scores.py <codec_dir> <ext> <run_id>
 import json, csv, os, sys, tarfile, subprocess, hashlib, glob
 import pyarrow as pa, pyarrow.parquet as pq
+
+# ── FEATURE-CORPUS mode ───────────────────────────────────────────────────────
+# A `JobKind::Feature` run over an EVAL CORPUS has no variant tar, no encode_sha
+# bridge and no codec/q cell identity: its cells ARE the rows of a pairs TSV
+# (`ref_path`, `dist_path`, `human_score`[, `sigma`]), and its output is one
+# parquet per corpus in the eval-root schema that `bake_verdict --features-root`
+# reads. That is a different JOIN from the ScoreFile writeback below (positional
+# against the pairs file rather than content-addressed through a variant index),
+# but it is the SAME JSONL -> parquet step, so it lives here rather than in a
+# second harvester (the executor emits JSONL precisely so this file stays the
+# one owner -- PLAN_REV2_RECALC_2026-09-06.md amendment A1).
+#
+#   writeback_scores.py --feature-corpus <pairs.tsv> --run <run-id> --out <parquet>
+#       [--blob-dir DIR]   reuse an already-downloaded blob dir instead of fetching
+#       [--expect N]       fail loud unless exactly N rows are recovered
+#
+# Row ORDER is the pairs file's order, which is what makes the output positionally
+# comparable with a stored root built by walking the same file. A pair the run did
+# not produce is a FAILURE, not a hole: the row would silently become a different
+# row's features under a positional read.
+def _feature_corpus_main(argv):
+    import argparse, gzip
+    ap = argparse.ArgumentParser(prog="writeback_scores.py --feature-corpus")
+    ap.add_argument("--feature-corpus", dest="pairs", required=True)
+    ap.add_argument("--run", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--bucket", default="zentrain")
+    ap.add_argument("--blob-dir", default=None)
+    ap.add_argument("--expect", type=int, default=0)
+    a = ap.parse_args(argv)
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+    from zen_s3env import resolve
+    ep, ak, sk = resolve()
+    env = dict(os.environ, AWS_ACCESS_KEY_ID=ak, AWS_SECRET_ACCESS_KEY=sk, AWS_REGION="auto")
+    work = a.blob_dir or ("/mnt/v/zen/writeback-featurecorpus-%s/blobs" % a.run)
+    os.makedirs(work, exist_ok=True)
+    if not os.listdir(work):
+        subprocess.run(["s5cmd", "--endpoint-url", ep, "cp",
+                        "s3://%s/jobs/%s/blobs/*" % (a.bucket, a.run), work + "/"],
+                       env=env, check=True, stdout=subprocess.DEVNULL)
+    rows, stamps = {}, {}
+    for f in os.listdir(work):
+        b = open(os.path.join(work, f), "rb").read()
+        if b[:2] == b"\x1f\x8b":
+            b = gzip.decompress(b)
+        for line in b.decode().splitlines():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            if r.get("kind") != "feature":
+                continue
+            rows[(r["image_path"], r["encode_sha"])] = r["features"]
+            if not stamps:
+                stamps = {k: r[k] for k in ("formula_revision", "feature_set_id", "regime",
+                                            "zensim_build_commit", "decoder_era") if k in r}
+    with open(a.pairs) as fh:
+        hdr = fh.readline().rstrip("\n").split("\t")
+        pairs = [l.rstrip("\n").split("\t") for l in fh]
+    ix = {n: i for i, n in enumerate(hdr)}
+    missing = [p for p in pairs if (p[ix["ref_path"]], p[ix["dist_path"]]) not in rows]
+    if missing:
+        sys.exit("FATAL: %d of %d pairs have no feature row in run %s (first: %s)"
+                 % (len(missing), len(pairs), a.run, missing[0][:2]))
+    if a.expect and len(pairs) != a.expect:
+        sys.exit("FATAL: pairs file has %d rows, --expect %d" % (len(pairs), a.expect))
+    nfeat = len(rows[(pairs[0][ix["ref_path"]], pairs[0][ix["dist_path"]])])
+    cols = {"ref_basename": [os.path.basename(p[ix["ref_path"]]) for p in pairs],
+            "dist_basename": [os.path.basename(p[ix["dist_path"]]) for p in pairs]}
+    if "human_score" in ix:
+        cols["human_score"] = [float(p[ix["human_score"]]) for p in pairs]
+    if "sigma" in ix:
+        cols["sigma"] = [float(p[ix["sigma"]]) for p in pairs]
+    for k in range(nfeat):
+        cols["f%d" % k] = [rows[(p[ix["ref_path"]], p[ix["dist_path"]])][k] for p in pairs]
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+    pq.write_table(pa.table(cols), a.out, compression="zstd")
+    print("wrote %s  rows=%d feats=%d  %s" % (a.out, len(pairs), nfeat, stamps))
+    return 0
+
+
+if len(sys.argv) > 1 and sys.argv[1] == "--feature-corpus":
+    sys.exit(_feature_corpus_main(sys.argv[1:]))
+
 codec, ext = sys.argv[1], sys.argv[2]
 RUNS = sys.argv[3].split(",")  # comma-sep: merge blobs from multiple runs (e.g. main + gap-fill)
 DGP = os.environ.get("ZEN_DATAGEN_PREFIX", "picker-sweep-2026-06-22/datagen-2026-06-23")

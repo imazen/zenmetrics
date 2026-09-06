@@ -293,3 +293,80 @@ any arithmetic:
 **The musl binary is not thrown away and not silently retired** — it remains the
 correct choice for any wave whose tables are never compared with a glibc-produced
 one, and it is the reason the finding surfaced at all.
+
+## 7.4 THE WAVE RAN — 43,870 rows at revision 2, on one box, in ~2.5 minutes
+
+Job set `s3://zentrain/jobs/rev2feat372-20260906`: **3,907 `JobKind::Feature` jobs**,
+`regime 372`, `revision 2`, `feature_set_id
+basic+peaks+masked+iw@w372/v1postc_rev2#d16a1091` declared once and echoed into
+every row. Executed by ONE worker (`r7900x-feat`, 24 cores,
+`ZEN_CORE_OVERSUBSCRIBE=1`) on the glibc image, claimed 05:37:02Z and drained
+clean (exit 0) with **3,907 of 3,907 blobs** written.
+
+| corpus | rows | vs postC at **rev1** | vs r6b `satexcess` at **rev2** |
+|---|--:|---|---|
+| csiq | 866 | **0 differ** / 322,152 | **0 differ** |
+| tid | 3,000 | **0 differ** / 1,116,000 | **0 differ** |
+| konjnd | 1,008 | **0 differ** / 374,976 | **0 differ** |
+| live | 779 | **0 differ** / 289,788 | **0 differ** |
+| aic3 | 600 | **0 differ** / 223,200 | **0 differ** |
+| kadid | 10,125 | (queued) | **0 differ** |
+| cid22 | 4,292 | see §7.5 | **536 rows differ** |
+| pipal | 23,200 | (queued) | not in the r6b root |
+| **total** | **43,870** | | **6,092,616 cells, 0 differ** (6 corpora) |
+
+**G-IMG2.1 and G-IMG2.2 both PASS.** The second one is the load-bearing result:
+the fleet executor at `ZENSIM_FORMULA_REV=2`, running a different code path from
+the local `extract_features_372col`, reproduces the R6b lane's `satexcess` tables
+**bit-for-bit**. That independently confirms the composition argument the R6b lane
+could only derive — that at width 372, revision 2 IS the `satexcess` arm, because
+`Clamp` moves zero cells on these pixels and `freecomp` is unreachable without an
+append block.
+
+Root: `/mnt/v/zen/zensim-training/2026-09-06-full-features-372-rev2/`
+(`_MANIFEST.json` carries `build_commit`, `feature_set_id`, `formula_revision`,
+per-format decoder era, per-file sha256, row counts, and the pairs corrections
+below). Mirrored to `s3://zentrain/eval-roots/…` and Tower.
+
+**Two pairs-file defects the gate found and this root corrects**, both invisible
+until something demanded bit-exactness:
+
+* **konjnd — 4 of 1,008 rows named the WRONG distorted file.** The LAN-staged TSV
+  derived the JND level with round-half-to-EVEN (Python's `round`); the stored
+  root used round-half-UP. The four rows whose PJND is exactly `X.5`
+  (`SRC0437` 58.5, `SRC0823`/`SRC0904`/`SRC0993` 30.5) therefore pointed at
+  `_030`/`_058` instead of `_031`/`_059`. Feature deltas up to **0.068** — a real
+  difference, not rounding. Re-extracting the four with the half-up file is
+  bit-exact to the stored root, which proves the diagnosis rather than asserting it.
+* **live — the staged TSV was in directory order**, not the stored table's order.
+  A **stable sort by `basename(ref_path)`** reproduces the stored order exactly on
+  all 779 rows (grouping AND within-group), as §7.5 of the recalc plan found.
+
+## 7.5 ⛔ A SECOND DEFECT THE WAVE FOUND: 12.5 % of CID22 is decoded by a NON-IMAZEN decoder
+
+cid22 is the only corpus where the fleet disagrees with the local roots, and the
+disagreement is **exactly the JPEG rows**: cid22's distorted side is 3,756 `.png`
++ **536 `.jpg`**, and **100 % of the `.jpg` rows differ while 0 % of the `.png`
+rows do** — ~360 of 372 slots each, max |Δ| **9.5e-3**.
+
+Cause, traced to source rather than inferred: the postC root's cid22 / kadid /
+tid / pipal legs are produced by **`zensim-validate --extract-only`**, which
+decodes with **`image::open()`** — the third-party `image` crate
+(`zensim-validate/src/main.rs:830, 854, 1720, 1744`). kadid (PNG) and tid (BMP)
+are bit-exact against the fleet because both decoders produce identical pixels
+for those formats; **JPEG is where they part.** `extract_features_372col` was
+migrated to the imazen decoders on 2026-09-04 (`shared/zen_decode.rs`);
+`zensim-validate` never was — the "extraction is not migration" failure this
+project has already paid for once.
+
+**Why it matters beyond this wave:** CID22 is the gold human-MOS validation
+holdout that every model in the project is graded on, and 12.5 % of its rows are
+therefore graded on pixels no imazen decoder produces. The r6b rev2 tables
+inherit it (they were built by the same two producers), so an in-era A/B on them
+is still single-confound and correct — but every published CID22 number is read
+partly through a foreign decoder, and the `_MANIFEST.json` `decoder_era` string
+names only `zen_decode.rs`, so the fact is invisible in the provenance.
+
+**This root's cid22 is the imazen-decoder one.** The price of the defect — what a
+bake's CID22 SROCC actually does across the two decode eras — is NOT measured
+here; it needs one bake scored on both tables, and that is registered, not run.
