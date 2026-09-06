@@ -684,6 +684,15 @@ additive change in zensim, left for the lane that owns that file.
 
 ## 7.14 The fast-class arm at rev2 — INERT, and a method finding that outranks it
 
+> **Evidence for §7.14, §7.15 and §7.16 lives in the refit lane's own record**, not
+> here: zensim **`benchmarks/rev2_refit_2026-09-06.md`** (`main@origin`
+> `d244c245`) — the per-codec tables, the pre-registration and its amendment, the
+> gate-by-gate verdict, the bake shas and the confounds — with artefacts at
+> **`/mnt/v/output/zensim/rev2-refit-2026-09-06/`** (277 files, per-file sha256,
+> `build_commit`, `formula_revision`, decoder era per format, the BLAS pin, the
+> libc). The three sections below summarise; that document measures.
+
+
 **Result: revision 2 is inert on the fast-class model class.** k=3 (seeds
 4004/4005/4006), rev1-in-era → rev2-in-era, identical recipe and pack chain:
 
@@ -813,6 +822,10 @@ Two build dirs are deliberately **not** reclaimed —
 `/home/lilith/work/zen/zensim/target-refit-rev2` (1.6 GB) and
 `target-refit-rev2-ccorpus` (92 MB) — because the W4 runner may want a binary
 matching the refit lane's numbers.
+
+Those numbers, and what the binaries were built to produce, are in zensim
+`benchmarks/rev2_refit_2026-09-06.md` — named here because a warning about a stale
+artifact is useless without a path to the thing it belongs to.
 
 **They were built at zensim `88477e38`, which is already several commits behind
 `main@origin`.** So they are the **right** binaries for reproducing §7.15's numbers
