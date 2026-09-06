@@ -508,3 +508,57 @@ The older `exec-featjobs-*` tag remains the separate hazard §2 named: it advert
 `feature-jobs`, so it CAN claim Feature cells, and it predates the BMP arm, so it
 would fail every LIVE cell deterministically and poison them. Neither of the two
 tags above has that gap.
+
+## 7.10 ⛔ THE TRAINING LEG DOES NOT TRANSFER: the fleet's AVIF decoder is a different era
+
+safesyn — the 196,086-row training leg, 16.6 GB of bitstreams — was staged to the
+LAN store (`s3://codec-corpus/safesyn-rev2-2026-09-06/`, 196,086 images + 3,218
+sources, complete after a retry pass for **one source whose filename contains
+spaces**, which s5cmd's whitespace-split `run` format had dropped: 57 objects) and
+extracted at revision 2 by four boxes (`rev2safesyn372-20260906`, 7,407 jobs).
+
+Against the R6b lane's LOCAL `satexcess` safesyn table — same pairs, same
+revision, row alignment verified **0 of 196,086 mismatched on BOTH `ref_basename`
+and `human_score`** — the fleet table differs on **37,379,073 of 72,943,992 cells
+(51.2 %)**, worst |Δ| **0.136**.
+
+That is not the extractor. Broken down by the distorted side's container (52
+sampled basic slots per row):
+
+| container | rows | rows differing | worst \|Δ\| |
+|---|--:|--:|--:|
+| `.jpg` | 111,068 | 63.8 % | **1.11e-07** |
+| `.jxl` | 26,362 | 64.5 % | **1.04e-07** |
+| `.webp` | 24,655 | 63.9 % | **8.57e-08** |
+| **`.avif`** | **34,001** | **99.3 %** | **0.0217** |
+
+**JPEG, JXL and WebP agree to ~1e-7 — rounding. AVIF disagrees by 0.0217 on 99.3 %
+of its rows, five orders of magnitude larger.** The eval corpora never saw this
+because their distorted sides ship as decoded PNG/BMP; safesyn is the first leg in
+this wave that decodes real bitstreams in-process, and it is where the two decode
+paths part.
+
+**So the fleet cannot currently produce a training leg that is interchangeable
+with the local one.** `zensim`'s `shared/zen_decode.rs` (at `e34f937d`, the era the
+R6b tables record) and `zenmetrics-cli/src/decode.rs` (at zenmetrics `master`) do
+not resolve to the same AVIF decoder — and zenavif is under an explicit hold for a
+backend rewrite, so this is exactly the moving part you would expect. Which one is
+"right" is NOT decided here and must not be guessed: both are imazen decoders, and
+the answer is whichever era the consuming tables were built in.
+
+**Consequences, stated so nobody has to rediscover them:**
+
+* The fleet safesyn table is published as its own era —
+  `/mnt/v/zen/zensim-training/2026-09-06-safesyn-rev2/` — and **must not be mixed
+  with the R6b gram or any table built from it.** The refit lane's gram stays the
+  local one; nothing about its A/B changes.
+* A fleet-extracted training leg needs the AVIF decoder **pinned** to the era of
+  the tables it will join, and that pin has to be a declared, checked property of
+  the image, not an accident of which commit it was built from. Today it is an
+  accident.
+* This is the same class as §7.5's CID22 finding — a decoder difference invisible
+  in the provenance — but two orders of magnitude larger, and it lands on the
+  TRAINING side rather than the eval side, where nothing downstream would have
+  flagged it.
+* **The eval roots in §7.4/§7.6/§7.8 are unaffected**: their distorted sides are
+  PNG/BMP, and six of seven comparable corpora are bit-exact.
