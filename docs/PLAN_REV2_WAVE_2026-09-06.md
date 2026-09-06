@@ -370,3 +370,46 @@ names only `zen_decode.rs`, so the fact is invisible in the provenance.
 **This root's cid22 is the imazen-decoder one.** The price of the defect — what a
 bake's CID22 SROCC actually does across the two decode eras — is NOT measured
 here; it needs one bake scored on both tables, and that is registered, not run.
+
+## 7.6 The 944 wave — the first rev2 extraction at a width where F5 is REACHABLE
+
+Job set `s3://zentrain/jobs/rev2feat944-20260906`: the same 3,907 cells at
+`regime 944`, `revision 2`, id
+`basic+peaks+masked+iw+v2+append+append2@w944/era2r4_rev2#b782e349` (the slots
+hash is unchanged from its non-rev2 sibling — the era names the build class, the
+hash names the slot set). Four boxes (r7900x 24c, r5900xt 32c, i265 20c, r3500
+6c), all observed idle with no `zen*` container before launch,
+`ZEN_CORE_OVERSUBSCRIBE=1`, **~3 minutes wall**, all 3,907 cells done.
+
+This is the leg the 372 wave could not be: at 944 the append block exists, so
+**all three revision-2 eras are live** (F4 at its 36 zeroed-pool slots, F17 at 12,
+F5/`freecomp` at 11) instead of only F17. Nothing existed at rev2 × 944 before.
+
+Root: `/mnt/v/zen/zensim-training/2026-09-06-full-features-944-rev2/`, mirrored to
+the LAN store and Tower. Two gates, both MEASURED rather than inferred from the
+regime string:
+
+* **Zeroed pools.** `f156..371` nonzero count = **0** across csiq/konjnd/live/tid/
+  aic3. The `folded720append2` shape is confirmed, not assumed.
+* **Cross-regime basic block.** `f0..155` against the 372 rev2 root on the SAME
+  pairs: 404,794 of 975,468 cells differ, **worst |Δ| 1.96e-8** (worst relative
+  1.7e-3, on a value of 4.5e-6). That is buffered-walk vs streaming-fold
+  accumulation order, not a formula difference — but it is NOT zero, so **the two
+  roots must not be column-mixed.** Each is internally consistent; that is what
+  the era token is for.
+
+## 7.7 What this lane did NOT do, named rather than omitted
+
+* **safesyn, KADIS and bigcodec are not in either wave.** safesyn's 47 GB of
+  bitstreams are absent from the LAN store and KADIS's distorted PNGs are R2-only,
+  so both need a staging pass before a worker can reach them; bigcodec is
+  capacity-bound behind those. The fleet is not the bottleneck — one box did
+  43,870 rows in 2.5 minutes and four did the 944 leg in three — **pixel staging
+  is**, and that is the next lane's first task, not a compute problem.
+* **The six byte-COPY corpora** (aic4, nonphoto, imazen26, sdr25, hfnlproxy,
+  hf_nearlossless) are in neither root and are excluded from every count here.
+  Their pixels are gone; a zero delta there would be an identity, not evidence.
+* **The `powf` era is registered, not landed** (§7.2), and no arithmetic was
+  changed by this lane.
+* **The CID22 decoder defect is priced at zero so far** — nobody has scored a bake
+  on both cid22 tables, so its cost in SROCC is unknown, not small.
