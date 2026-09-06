@@ -774,8 +774,8 @@ worth more than any single number in the table above.
 
 ### A prediction that was WEAKENED before the fact, then half falsified anyway
 
-*(Corrected at the lane's own insistence after the first draft of this section
-credited it with more than it claimed. The ordering is the point.)*
+*(Corrected after the first draft of this section credited the prediction with more
+than it claimed. The ordering is the point — not who caught it.)*
 
 The lane's **first** draft predicted that the logistic would gain and **the tree
 would be invariant**, because the logistic is linear in a value the ±8 standardised
@@ -785,9 +785,15 @@ applies to the tree as well, so tree-invariance was not claimable a priori. The
 measurement then confirmed the narrowed version and falsified the other half.
 
 **A prediction weakened before the fact is a different object from one that was
-right**, and the record should not let the two blur: what survives here is a
-weakened claim, not a vindicated one — and it is the lane that insisted on saying
-so, unprompted, after the summary had already been written the flattering way.
+right**, and a record that blurs them turns a narrowed claim into a vindicated one.
+What survives here is the narrowed claim.
+
+**The asymmetry is the whole argument for pre-registration, and it is worth stating
+as a rule rather than as an anecdote.** Narrowing the claim cost nothing, because no
+number existed yet — that is *only* true because it was written down before the run.
+Leaving the flattering version standing after publication would have been expensive
+and hard to undo. Cheap before, expensive after: that gap is what pre-registration
+buys, and it is available to any lane willing to write the prediction down first.
 
 **Relative claim (the narrowed one) HOLDS:** pAUC₅ moves **+0.54** for the logistic
 against **−0.05** for the tree, 11×. **Directional claim FAILS:** the logistic does not improve in the sense that matters — at T = 0.9 its
@@ -800,3 +806,17 @@ it did not make the head **separate** corruption from honest content any better,
 Also measured: the corruption corpus carries revision-1 `contrast_inc` up to
 **1.30e7** — higher than negrich's 1.22e7 — all of it pinned to that ±8 clip. F17's
 unboundedness is larger on this population than anywhere previously recorded.
+
+## 7.16 ⚠ A stale binary left on purpose, and the trap it sets
+
+Two build dirs are deliberately **not** reclaimed —
+`/home/lilith/work/zen/zensim/target-refit-rev2` (1.6 GB) and
+`target-refit-rev2-ccorpus` (92 MB) — because the W4 runner may want a binary
+matching the refit lane's numbers.
+
+**They were built at zensim `88477e38`, which is already several commits behind
+`main@origin`.** So they are the **right** binaries for reproducing §7.15's numbers
+and the **wrong** ones for measuring anything about current main. A stale binary is
+exactly the artifact that gets reused without checking — it runs, it produces
+plausible numbers, and nothing fails. Named here so that reuse is a decision rather
+than an accident. Delete them freely once W4 is done; nothing references them.
