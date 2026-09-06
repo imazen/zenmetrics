@@ -486,3 +486,25 @@ A root that declares a `feature_set_id` whose ERA is not yet in
 slots ARE populated; the era is what could not be resolved. Rebuilding
 `bake_verdict` after registering the era fixes it with no flag. The refusal is the
 registry doing its job; only the message is misleading.
+
+## 7.9 ⚠ TWO rev2 tags exist on the canonical package. Only ONE may be enrolled.
+
+| tag | libc | rev1 gate vs the postC root | use |
+|---|---|---|---|
+| `exec-featrev2glibc-88477e38` | **glibc** (bookworm 2.36) | **PASS — 0 of 6,092,616 cells** | **the wave's image.** Every table in §7.4–§7.8 came from it. |
+| `exec-featrev2-88477e38` | musl (static) | **FAIL — 77/322,152 csiq, 328/1,116,000 tid** | **do NOT enroll for any wave whose tables are compared with a glibc-produced one.** |
+
+The musl tag was built first, is pushed, and is deliberately **not deleted** — it
+is the artifact that produced the §7.1 measurement, and deleting the evidence for
+a finding to tidy a registry is the wrong trade. It is annotated here instead.
+Both were built from the same source; the only difference is the target triple.
+
+**A musl worker is not wrong in general** — it is the right choice for a wave
+whose output is only ever compared with other musl output, and static linking is
+why the fleet is immune to the base image's glibc version. It is wrong *here*,
+because every stored root this wave must join was produced with glibc.
+
+The older `exec-featjobs-*` tag remains the separate hazard §2 named: it advertises
+`feature-jobs`, so it CAN claim Feature cells, and it predates the BMP arm, so it
+would fail every LIVE cell deterministically and poison them. Neither of the two
+tags above has that gap.
