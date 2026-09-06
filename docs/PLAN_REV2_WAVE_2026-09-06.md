@@ -591,11 +591,16 @@ accumulator, no `GLOBAL_*` slots and no append kernel.
 
 ### Three things §1 of this plan got wrong
 
-1. **EIGHT F4 sites, not four.** `kernels/diffmap.rs` holds five more — three
-   channels of `per_scale_weighted_ssim_kernel` plus its host-scalar reference —
-   and zensim's CPU diffmap routes through the same `ssim_form` owner as the
-   feature walk, so leaving them would have served rev1 pixels to a rev2 caller:
-   the exact G-GPU.3 defect. *(The landed commit message says NINE; that count is
+1. **EIGHT F4 sites, not four.** `kernels/diffmap.rs` holds **four** more — the
+   three channels of `per_scale_weighted_ssim_kernel` plus its host-scalar
+   reference — and zensim's CPU diffmap routes through the same `ssim_form` owner
+   as the feature walk, so leaving them would have served rev1 pixels to a rev2
+   caller: the exact G-GPU.3 defect. The sum, spelled out so the next reader can
+   check rather than re-derive it: **`fused` 2 + `masked_iw` 1 +
+   `masked_iw_strip` 1 + `diffmap` 4 = 8.** (`diffmap.rs` contains a FIFTH
+   `mu_diff`, at `:797`, which is the `#[cfg(test)]` rev1 control listed below and
+   is deliberately not ported — counting it here is what produced the retired
+   NINE.) *(The landed commit message says NINE; that count is
    wrong and is corrected here. The CHANGELOG states no count and is accurate.)*
 2. **`per_scale_weighted_ssim_kernel` DOES have a launch site** — the plan said the
    only unlaunched kernel was `masked_iw_kernel`, which is true, but it implied the
