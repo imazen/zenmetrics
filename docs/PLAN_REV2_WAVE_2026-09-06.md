@@ -418,3 +418,71 @@ regime string:
   changed by this lane.
 * **The CID22 decoder defect is priced at zero so far** — nobody has scored a bake
   on both cid22 tables, so its cost in SROCC is unknown, not small.
+
+## 7.8 The CONTROL wave, and what a rev2 flip costs a bake that is NOT refitted
+
+A third wave — `s3://zentrain/jobs/rev1feat372-20260906`, the same 3,907 cells at
+**revision 1** — was run so that every comparison has one variable. Root:
+`/mnt/v/zen/zensim-training/2026-09-06-full-features-372-rev1-fleet/`. With it:
+
+* **rev1-fleet vs postC** isolates the DECODER (same revision, same walk).
+* **rev1-fleet vs rev2-fleet** isolates the REVISION (same producer, decoders,
+  image and libc).
+
+### The CID22 foreign-decoder defect, PRICED
+
+§7.5 said the cost was "NOT measured; it needs one bake scored on both tables."
+It is measured now, on all three shipped SDR bakes, CID22 SROCC:
+
+| bake | postC (`image`-crate cid22) | rev1-fleet (all-imazen) | Δ |
+|---|--:|--:|--:|
+| Profile **D** (the SDR default) | +0.8633 | +0.8632 | **−0.0001** |
+| Profile **B** | +0.8821 | +0.8821 | **0.0000** |
+| Profile **A** (v47-QAT) | +0.8655 | +0.8654 | **−0.0001** |
+
+**≤ 1e-4 on every shipped SDR bake.** So the defect is real, it is a genuine
+provenance and reproducibility failure — 536 rows of the gold holdout are not
+reproducible by any imazen-decoder extractor and the manifests misdescribe the
+decoder — and it is **NOT a ranking defect**. It stays `annotated`, not
+`invalidated`, in `benchmarks/eval_annotations.json`. The refit lane measured the
+same quantity independently on its own rev2 D bake and got **2e-5**, ~1/200th of
+the effect it was trying to see.
+
+### The revision flip, unrefitted — SROCC delta rev1-fleet → rev2-fleet
+
+| bake | CID22 | KonJND | AIC-3 | CSIQ | LIVE | TID |
+|---|--:|--:|--:|--:|--:|--:|
+| **D** | **0.00000** | **0.00000** | **0.00000** | **0.00000** | **0.00000** | **0.00000** |
+| **B** | 0.00000 | −0.00120 | 0.00000 | −0.00010 | −0.00140 | +0.00010 |
+| **A** (v47-QAT) | **+0.00030** | 0.00000 | 0.00000 | **+0.00090** | 0.00000 | **+0.00080** |
+
+**The SDR default is exactly unaffected** — six corpora, zero to five decimals —
+which is what you would expect of a 28-input bake whose only F17 exposure is
+`f116` and `f155`. A moves slightly UP on three corpora; B moves ≤0.0014 in mixed
+directions. This corroborates R6b's own serve-skew estimate (|6e-5| for D) with a
+different instrument and extends it to B and A.
+
+**It does NOT say the flip is free for a REFITTED bake.** The refit lane measured
+the opposite sign in the D *chain* — revision 2 costs CID22 −0.00456
+[−0.00549, −0.00364] at s156, CI-excluding, against R6b's +0.00272 on a denser
+model class. Serving an existing bake on rev2 features and refitting a bake on
+rev2 features are different questions with different answers.
+
+### A defect in this lane's own output, recorded rather than quietly fixed
+
+**PIPAL in all three new roots is FEATURES ONLY and is NOT SCOREABLE.** The
+LAN-staged pipal pairs TSV carries `ref_path` + `dist_path` and no target column
+at all — the only one of the eight that does — so the harvested parquet has no
+`human_score` and `bake_verdict` refuses it. Deliberately not repaired by deriving
+an elo here: a PIPAL normalisation that did not match `zensim-validate`'s own
+`load_pipal` would be worse than the gap. Recorded in all three manifests; the fix
+is to re-stage pipal's pairs with the target column.
+
+### A tooling note worth one line
+
+A root that declares a `feature_set_id` whose ERA is not yet in
+`benchmarks/feature_sets_registry.json` makes `bake_verdict` refuse every bake with
+`SlotsNotPopulated: the bake READS N slot(s) the table does not POPULATE`. The
+slots ARE populated; the era is what could not be resolved. Rebuilding
+`bake_verdict` after registering the era fixes it with no flag. The refusal is the
+registry doing its job; only the message is misleading.
