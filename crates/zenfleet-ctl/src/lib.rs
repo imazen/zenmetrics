@@ -291,6 +291,7 @@ pub fn declare_features(
     regime: &str,
     revision: Option<&str>,
     chunk: usize,
+    feature_set_id: Option<&str>,
 ) -> Result<Vec<DesiredJob>, String> {
     use std::collections::HashMap;
     if regime.trim().is_empty() {
@@ -346,9 +347,24 @@ pub fn declare_features(
                     // "not one cell" sentinel (`declare_scorefiles`).
                     codec: format!("zensim-{regime}"),
                     q: -1,
-                    knob_tuple_json: match revision {
-                        Some(rev) => format!("{{\"regime\":\"{regime}\",\"rev\":\"{rev}\"}}"),
-                        None => format!("{{\"regime\":\"{regime}\"}}"),
+                    // The cell knobs carry the wave's declared identity, which
+                    // the executor ECHOES into every row. `feature_set_id` is
+                    // declared here and never re-derived downstream:
+                    // `zensim::feature_set_id` is its owner, and R6 measured
+                    // that F4's blast radius keys on POOL STATE rather than
+                    // width (a pools-live 944 table moves 132 slots where a
+                    // zeroed-pool one moves 36), so the id is the only thing
+                    // that says what a table actually contains.
+                    knob_tuple_json: {
+                        let mut o = serde_json::Map::new();
+                        o.insert("regime".into(), serde_json::json!(regime));
+                        if let Some(rev) = revision {
+                            o.insert("rev".into(), serde_json::json!(rev));
+                        }
+                        if let Some(fsid) = feature_set_id {
+                            o.insert("feature_set_id".into(), serde_json::json!(fsid));
+                        }
+                        serde_json::Value::Object(o).to_string()
                     },
                 },
                 // CPU-heavy extraction; no encoder hint. The engine's default
@@ -1582,7 +1598,7 @@ mod declare_feature_tests {
     #[test]
     fn groups_by_reference_and_chunks() {
         let p = pairs(&[("r1", "d1"), ("r1", "d2"), ("r1", "d3"), ("r2", "d4")]);
-        let jobs = declare_features(&p, "944", None, 2).unwrap();
+        let jobs = declare_features(&p, "944", None, 2, None).unwrap();
         // r1 -> [d1,d2] + [d3]; r2 -> [d4]
         assert_eq!(jobs.len(), 3);
         assert_eq!(jobs[0].cell.image_path, "r1");
@@ -1598,7 +1614,7 @@ mod declare_feature_tests {
         assert_eq!(declared.iter().collect::<HashSet<_>>().len(), 4);
         // Reference order is the file's first-appearance order, so the same
         // pairs file always yields the same manifest.
-        let again = declare_features(&p, "944", None, 2).unwrap();
+        let again = declare_features(&p, "944", None, 2, None).unwrap();
         assert_eq!(
             serde_json::to_string(&jobs).unwrap(),
             serde_json::to_string(&again).unwrap(),
@@ -1614,11 +1630,11 @@ mod declare_feature_tests {
     #[test]
     fn refuses_a_distorted_token_shared_by_two_references() {
         let p = pairs(&[("r1", "d1"), ("r2", "d1")]);
-        let e = declare_features(&p, "944", None, 8).unwrap_err();
+        let e = declare_features(&p, "944", None, 8, None).unwrap_err();
         assert!(e.contains("two references"), "{e}");
         // An exact duplicate pair is deduped, not an error.
         let dup = pairs(&[("r1", "d1"), ("r1", "d1")]);
-        let jobs = declare_features(&dup, "944", None, 8).unwrap();
+        let jobs = declare_features(&dup, "944", None, 8, None).unwrap();
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].inputs.len(), 1);
     }
@@ -1627,9 +1643,9 @@ mod declare_feature_tests {
     /// self-excludes at claim time instead of poisoning the wave.
     #[test]
     fn declared_jobs_carry_the_capability_requirement() {
-        let jobs = declare_features(&pairs(&[("r", "d")]), "372", None, 8).unwrap();
+        let jobs = declare_features(&pairs(&[("r", "d")]), "372", None, 8, None).unwrap();
         assert!(jobs[0].requires.iter().any(|t| t == "feature-jobs"));
-        let pinned = declare_features(&pairs(&[("r", "d")]), "372", Some("2"), 8).unwrap();
+        let pinned = declare_features(&pairs(&[("r", "d")]), "372", Some("2"), 8, None).unwrap();
         assert!(pinned[0].requires.iter().any(|t| t == "feature-rev"));
     }
 
@@ -1638,8 +1654,8 @@ mod declare_feature_tests {
     #[test]
     fn a_revision_pin_makes_a_different_wave() {
         let p = pairs(&[("r", "d")]);
-        let a = declare_features(&p, "944", None, 8).unwrap();
-        let b = declare_features(&p, "944", Some("2"), 8).unwrap();
+        let a = declare_features(&p, "944", None, 8, None).unwrap();
+        let b = declare_features(&p, "944", Some("2"), 8, None).unwrap();
         assert_ne!(
             a[0].job_id(),
             b[0].job_id(),
@@ -1651,6 +1667,6 @@ mod declare_feature_tests {
     /// cells name no extraction.
     #[test]
     fn refuses_an_empty_regime() {
-        assert!(declare_features(&pairs(&[("r", "d")]), "  ", None, 8).is_err());
+        assert!(declare_features(&pairs(&[("r", "d")]), "  ", None, 8, None).is_err());
     }
 }

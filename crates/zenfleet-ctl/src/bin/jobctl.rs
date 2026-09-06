@@ -103,6 +103,11 @@ enum Cmd {
         /// Distorted pairs per job. Default 16.
         #[arg(long, default_value_t = 16)]
         chunk: usize,
+        /// The wave's feature-set id (`<compute>@w<layout>/<era>#<hash8>`,
+        /// from `zensim::feature_set_id` — its OWNER). Declared here and
+        /// echoed into every emitted row; never re-derived by the executor.
+        #[arg(long = "feature-set-id")]
+        feature_set_id: Option<String>,
     },
     /// Print coverage (done/poison/gap per codec×metric) for a manifest vs the ledger (goal I).
     Catalog {
@@ -549,9 +554,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             regime,
             revision,
             chunk,
+            feature_set_id,
         } => {
             let ps = parse_feature_pairs(&std::fs::read_to_string(&pairs)?)?;
-            let jobs = declare_features(&ps, &regime, revision.as_deref(), chunk)?;
+            let jobs = declare_features(
+                &ps,
+                &regime,
+                revision.as_deref(),
+                chunk,
+                feature_set_id.as_deref(),
+            )?;
             std::fs::write(&out, serde_json::to_vec_pretty(&jobs)?)?;
             eprintln!(
                 "declared {} feature jobs (regime={regime} revision={} chunk={chunk}) from {} \

@@ -15,3 +15,10 @@ COPY --chmod=0755 tmpdir_discipline.sh  /usr/local/bin/tmpdir_discipline.sh
 COPY --chmod=0755 zenfleet-worker  /usr/local/bin/zenfleet-worker
 # Default ZEN_EXEC to the real executor; fleet-entrypoint.sh still honors an overriding ZEN_EXEC env.
 ENV ZEN_EXEC=/usr/local/bin/zenfleet-exec
+# Which zensim the baked zenmetrics was compiled against. The Feature executor
+# stamps this into EVERY emitted row, because a feature table whose extractor
+# commit is unknown cannot be compared with one whose is (the 2026-08-30 stored-root
+# drift incident is exactly that failure). Empty = "the image did not record it",
+# which the row carries as null rather than as a guess.
+ARG ZENSIM_BUILD_COMMIT=""
+ENV ZEN_ZENSIM_BUILD_COMMIT=${ZENSIM_BUILD_COMMIT}
