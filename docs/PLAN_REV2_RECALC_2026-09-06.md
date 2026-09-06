@@ -245,3 +245,81 @@ Recorded now so it cannot be rationalized later:
   claim, that claim is false.
 * If a wave is declared before the R6 arm token arrives, its rows are at an
   arm nobody chose.
+
+---
+
+## 6. AMENDMENTS (each dated, each with its reason)
+
+A pre-registered plan that is edited to match a result is worthless. These are
+recorded as amendments, with what changed the decision, so a later reader can
+see the difference between "chosen before" and "learned during".
+
+### A1 — 2026-09-06: the output is JSON-lines, NOT a columnar chunk
+
+§4 pre-registered "a columnar chunk, not JSON rows", and §1.1 argued it from
+wire cost at 944 f64 × 5.74 M rows. **That argument is still true and the
+decision is still reversed**, for a reason that outranks it and that I did not
+know when I wrote §1:
+
+`scripts/jobsys/writeback_scores.py` is the harvester for every job-system
+blob, it is JSONL-shaped, and it **already dispatches on `{"kind":"feature"}`**
+(`writeback_scores.py:71`), keyed `(basename(image_path), basename(encode_sha))`
+— the exact row shape the `ScoreFile` feature arm emits today. The worker
+itself stores stdout as opaque bytes (`zenfleet-worker/src/lib.rs:1070-1073`,
+`store.put(&bytes)`), so a Parquet blob would have worked mechanically — but it
+would have needed a **second harvester**, which is a duplicate implementation
+of a thing that exists, and the no-duplication rule is not negotiable for a
+wire cost.
+
+So: the executor emits JSONL, and the Parquet conversion stays where it already
+lives, in `writeback_scores.py`. **The wire cost is real and is not
+hand-waved**: it is now a known, named cost of the bigcodec leg (§2 wave 7),
+and if it bites, the fix is to extend the harvester to accept both encodings —
+one owner, two input shapes — not to grow a parallel one.
+
+*Changed by reading, before any measurement. No result influenced it.*
+
+### A2 — 2026-09-06: the revision is a LAUNCH-level pin, not a per-job setting
+
+§4 pre-registered that the executor "refuses a job whose revision differs from
+the one its process resolved", implemented by setting `ZENSIM_FORMULA_REV`
+in-process on first use. **`zenmetrics` is `#![forbid(unsafe_code)]` and
+`std::env::set_var` is `unsafe` under the 2024 edition**, so that shape does
+not compile.
+
+The rewrite is stronger than the original, not a workaround: the launcher (or
+the image) exports `ZENSIM_FORMULA_REV`, and the executor **verifies** that
+every job's pinned revision equals the environment it is actually running in,
+refusing loudly otherwise. That pin is visible in `docker inspect`, survives a
+warm-child recycle, and cannot race the first zensim call — none of which was
+true of the in-process version. The refusal the plan asked for is intact; only
+who sets the value moved.
+
+*Changed by the compiler, not by a result.*
+
+### A3 — 2026-09-06: `feature_set_id` is DECLARED and echoed, never re-derived
+
+§4 pre-registered "every emitted table stamps `feature_set_id`". The executor
+does stamp it — but it **reads it from the declare** (it rides in
+`cell.knob_tuple_json`) rather than computing it. `zensim::feature_set_id` is
+that id's owner, and its era token is a registry concept the zensim lane owns;
+a second derivation inside the executor is exactly the "944 has named seven
+different feature sets" problem the naming directive exists to stop. Declared
+and echoed keeps one owner and still makes every row self-describing.
+
+### A4 — 2026-09-06: a capability token was added that the plan did not ask for
+
+Not a change of mind — a defect found while reading. `JobKind::Feature`'s
+`required_capabilities()` returned `[]`, and `filter_by_exec_capabilities`
+returns early when every job's `requires` is empty. So **a stale executor image
+with no Feature arm would happily claim the cells, exit non-zero, and poison
+every one of them** — `encoder_panic` is DETERMINISTIC, and the reconciler
+poisons on the FIRST failure. That is not a stalled wave, it is a destroyed
+one, and it is the measured shape of the 2026-08-30 incident where an image
+without `avif-aom` burned 312 freshly-pardoned cells in 28 s because `requires`
+named only a token every executor had.
+
+`Feature` now requires `feature-jobs` (a new no-op cargo feature, advertised by
+`zenmetrics capabilities`) and, when a revision is pinned, `feature-rev`.
+Deliberately NOT `cpu-metrics`: every CPU executor advertises that, which is
+the same under-claim in a new costume.

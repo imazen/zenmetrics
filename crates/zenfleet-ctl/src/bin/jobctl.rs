@@ -37,7 +37,8 @@ fn shellexpand_home(p: &str) -> String {
     p.to_string()
 }
 use zenfleet_ctl::{
-    DeclareSpec, coverage, declare, declare_diffmaps, declare_encodes, gap, parse_emit_cells,
+    DeclareSpec, coverage, declare, declare_diffmaps, declare_encodes, declare_features, gap,
+    parse_emit_cells, parse_feature_pairs,
 };
 
 #[derive(Parser)]
@@ -77,6 +78,31 @@ enum Cmd {
         out: PathBuf,
         #[arg(long)]
         hdr: bool,
+    },
+    /// Declare zensim FEATURE-extraction jobs from a pairs TSV (`ref_path` +
+    /// `dist_path` columns — the shape every eval corpus already ships).
+    /// One job per (reference, `--chunk` distorted pairs); the executor
+    /// decodes the reference once per job.
+    ///
+    /// `--revision` pins the zensim FORMULA REVISION (`ZENSIM_FORMULA_REV`).
+    /// Omit it for the executor's shipped revision. A pinned manifest gets a
+    /// DIFFERENT content-addressed job id than an unpinned one, which is the
+    /// whole point: rev1 and rev2 of the same pairs are different work.
+    DeclareFeatures {
+        #[arg(long)]
+        pairs: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        /// Extraction regime/width token the executor maps to a zensim
+        /// regime (`372`, `720`, `924`, `944`, `944carriers`, `944pools`).
+        #[arg(long)]
+        regime: String,
+        /// zensim formula revision to pin (`1` / `2`). Omitted = shipped.
+        #[arg(long)]
+        revision: Option<String>,
+        /// Distorted pairs per job. Default 16.
+        #[arg(long, default_value_t = 16)]
+        chunk: usize,
     },
     /// Print coverage (done/poison/gap per codec×metric) for a manifest vs the ledger (goal I).
     Catalog {
@@ -513,6 +539,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::fs::write(&out, serde_json::to_vec_pretty(&jobs)?)?;
             eprintln!(
                 "declared {} diffmap jobs (hdr={hdr}) -> {}",
+                jobs.len(),
+                out.display()
+            );
+        }
+        Cmd::DeclareFeatures {
+            pairs,
+            out,
+            regime,
+            revision,
+            chunk,
+        } => {
+            let ps = parse_feature_pairs(&std::fs::read_to_string(&pairs)?)?;
+            let jobs = declare_features(&ps, &regime, revision.as_deref(), chunk)?;
+            std::fs::write(&out, serde_json::to_vec_pretty(&jobs)?)?;
+            eprintln!(
+                "declared {} feature jobs (regime={regime} revision={} chunk={chunk}) from {} \
+                 pairs -> {}",
+                revision.as_deref().unwrap_or("<shipped>"),
+                ps.len(),
                 jobs.len(),
                 out.display()
             );

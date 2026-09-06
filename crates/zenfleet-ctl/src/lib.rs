@@ -224,11 +224,151 @@ pub fn declare_diffmaps(spec: &DeclareSpec, hdr: bool) -> Result<Vec<DesiredJob>
     Ok(out)
 }
 
+/// One (reference, distorted) pair to extract features for. This is exactly
+/// the shape of the pairs TSVs the eval corpora already ship
+/// (`csiq_pairs.tsv`, `live_r2_pairs.tsv`, `kadid_pairs_ab.tsv`, …):
+/// `ref_path`, `dist_path`, and whatever else the file carries, which the
+/// declare ignores. No new file format was invented for this.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FeaturePair {
+    /// The reference — becomes `cell.image_path`, resolved by the executor
+    /// as a local path / `s3://…` / corpus-prefix-relative key.
+    pub reference: String,
+    /// The distorted side — becomes one entry of `inputs`, resolved by the
+    /// same ordered rule.
+    pub distorted: String,
+}
+
+/// Parse a pairs TSV into [`FeaturePair`]s. Requires a header naming at least
+/// `ref_path` and `dist_path` (any column order, extra columns ignored) — a
+/// headerless or mis-named file is an ERROR, never a positional guess.
+pub fn parse_feature_pairs(text: &str) -> Result<Vec<FeaturePair>, String> {
+    let mut lines = text.lines().filter(|l| !l.trim().is_empty());
+    let header = lines.next().ok_or("pairs file is empty")?;
+    let cols: Vec<&str> = header.split('\t').map(str::trim).collect();
+    let ri = cols
+        .iter()
+        .position(|c| *c == "ref_path")
+        .ok_or("pairs header has no `ref_path` column")?;
+    let di = cols
+        .iter()
+        .position(|c| *c == "dist_path")
+        .ok_or("pairs header has no `dist_path` column")?;
+    let mut out = Vec::new();
+    for (n, l) in lines.enumerate() {
+        let f: Vec<&str> = l.split('\t').collect();
+        let (Some(r), Some(d)) = (f.get(ri), f.get(di)) else {
+            return Err(format!("pairs line {} has too few columns", n + 2));
+        };
+        if r.trim().is_empty() || d.trim().is_empty() {
+            return Err(format!("pairs line {} has an empty path", n + 2));
+        }
+        out.push(FeaturePair {
+            reference: r.trim().to_string(),
+            distorted: d.trim().to_string(),
+        });
+    }
+    Ok(out)
+}
+
+/// Declare a [`JobKind::Feature`] wave: one job per (reference, chunk of that
+/// reference's distorted pairs), which is the `GroupBy::SourceSha` shape the
+/// kind's own `profile()` already declares — the executor decodes the
+/// reference ONCE per job and extracts every pair in the chunk against it.
+///
+/// **Precondition, enforced not assumed:** a distorted token may appear under
+/// exactly ONE reference. [`crate::JobId`] is computed over
+/// `(inputs, kind)` and deliberately EXCLUDES `cell`, so two references
+/// sharing a distorted token would collapse to one job and silently drop a
+/// row. In a real pairs table a distorted file has exactly one reference, so
+/// a duplicate is a corpus defect — this refuses it loudly rather than
+/// producing a manifest that quietly under-counts.
+///
+/// Reference order is preserved from the input (first appearance), so the
+/// same pairs file always yields the same manifest.
+pub fn declare_features(
+    pairs: &[FeaturePair],
+    regime: &str,
+    revision: Option<&str>,
+    chunk: usize,
+) -> Result<Vec<DesiredJob>, String> {
+    use std::collections::HashMap;
+    if regime.trim().is_empty() {
+        return Err("declare_features: regime must not be empty".into());
+    }
+    let chunk = chunk.max(1);
+    // Stable grouping: reference order = first appearance in the file.
+    let mut order: Vec<String> = Vec::new();
+    let mut by_ref: HashMap<String, Vec<String>> = HashMap::new();
+    let mut seen_dist: HashMap<String, String> = HashMap::new();
+    for p in pairs {
+        if let Some(prev) = seen_dist.get(&p.distorted) {
+            if prev != &p.reference {
+                return Err(format!(
+                    "declare_features: distorted {:?} appears under two references ({:?} and \
+                     {:?}). JobId is computed over (inputs, kind) and excludes `cell`, so these \
+                     two pairs would collapse to ONE job and a row would be silently lost. Fix \
+                     the pairs table.",
+                    p.distorted, prev, p.reference
+                ));
+            }
+            continue; // exact duplicate pair — dedup, not an error
+        }
+        seen_dist.insert(p.distorted.clone(), p.reference.clone());
+        let e = by_ref.entry(p.reference.clone()).or_insert_with(|| {
+            order.push(p.reference.clone());
+            Vec::new()
+        });
+        e.push(p.distorted.clone());
+    }
+    let mut out = Vec::new();
+    for r in &order {
+        let dists = &by_ref[r];
+        for ch in dists.chunks(chunk) {
+            let kind = JobKind::Feature {
+                regime: regime.to_string(),
+                revision: revision.map(str::to_string),
+            };
+            out.push(DesiredJob {
+                requires: kind.required_capabilities(),
+                kind,
+                // `raw_object_key`, not `parse`: a Feature input is a PATH or
+                // URI (the corpora's pairs tables carry file paths), which the
+                // wire has always admitted — see `Sha256Hex::raw_object_key`.
+                inputs: ch
+                    .iter()
+                    .map(|d| Sha256Hex::raw_object_key(d.clone()))
+                    .collect(),
+                cell: CellId {
+                    image_path: r.clone(),
+                    // A feature chunk is not one encoded cell: `codec` names
+                    // the extraction, and `q = -1` is the established
+                    // "not one cell" sentinel (`declare_scorefiles`).
+                    codec: format!("zensim-{regime}"),
+                    q: -1,
+                    knob_tuple_json: match revision {
+                        Some(rev) => format!("{{\"regime\":\"{regime}\",\"rev\":\"{rev}\"}}"),
+                        None => format!("{{\"regime\":\"{regime}\"}}"),
+                    },
+                },
+                // CPU-heavy extraction; no encoder hint. The engine's default
+                // (2 GiB / 1 thread) is what the deadline and chunk packing
+                // use — see docs/PLAN_REV2_RECALC_2026-09-06.md.
+                hint: None,
+            });
+        }
+    }
+    Ok(out)
+}
+
 fn metric_label(kind: &JobKind) -> String {
     match kind {
         JobKind::Metric { metric } => metric.clone(),
         JobKind::Diffmap { metric, .. } => format!("diffmap:{metric}"),
-        JobKind::Feature { regime } => format!("feature:{regime}"),
+        JobKind::Feature { regime, revision } => match revision {
+            Some(r) => format!("feature:{regime}@rev{r}"),
+            None => format!("feature:{regime}"),
+        },
         JobKind::Encode { .. } => "encode".into(),
         JobKind::Resample { .. } => "resample".into(),
         JobKind::Bake { .. } => "bake".into(),
@@ -1393,5 +1533,124 @@ mod pairs_order_tests {
     fn rotated_pairs(rows: &[PairRow], by: usize) -> Vec<PairRow> {
         let n = rows.len();
         (0..n).map(|i| rows[(i + by) % n].clone()).collect()
+    }
+}
+
+#[cfg(test)]
+mod declare_feature_tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    fn pairs(v: &[(&str, &str)]) -> Vec<FeaturePair> {
+        v.iter()
+            .map(|(r, d)| FeaturePair {
+                reference: (*r).into(),
+                distorted: (*d).into(),
+            })
+            .collect()
+    }
+
+    /// The pairs TSV every eval corpus already ships parses as-is — no new
+    /// file format. Column ORDER must not matter and extra columns are ignored.
+    #[test]
+    fn parses_the_corpus_pairs_tsv_shape() {
+        let t = "ref_path\tdist_path\thuman_score\n/a/ref.png\t/a/d1.png\t0.93\n/a/ref.png\t/a/d2.png\t0.79\n";
+        let p = parse_feature_pairs(t).unwrap();
+        assert_eq!(p.len(), 2);
+        assert_eq!(p[0].reference, "/a/ref.png");
+        assert_eq!(p[1].distorted, "/a/d2.png");
+        // Reordered header, extra columns.
+        let t2 = "human_score\tdist_path\tnote\tref_path\n0.5\t/b/d.png\tx\t/b/r.png\n";
+        let p2 = parse_feature_pairs(t2).unwrap();
+        assert_eq!(p2[0].reference, "/b/r.png");
+        assert_eq!(p2[0].distorted, "/b/d.png");
+    }
+
+    /// A headerless or mis-named file is an ERROR. A positional guess would
+    /// silently swap reference and distorted, which produces a complete,
+    /// plausible, and entirely wrong feature table.
+    #[test]
+    fn refuses_a_pairs_file_it_cannot_name_the_columns_of() {
+        assert!(parse_feature_pairs("").is_err());
+        assert!(parse_feature_pairs("/a/r.png\t/a/d.png\n").is_err());
+        assert!(parse_feature_pairs("reference\tdistorted\n/a\t/b\n").is_err());
+    }
+
+    /// One job per (reference, chunk): the `GroupBy::SourceSha` shape the
+    /// kind's own profile declares, so the executor decodes each reference
+    /// once per job instead of once per pair.
+    #[test]
+    fn groups_by_reference_and_chunks() {
+        let p = pairs(&[("r1", "d1"), ("r1", "d2"), ("r1", "d3"), ("r2", "d4")]);
+        let jobs = declare_features(&p, "944", None, 2).unwrap();
+        // r1 -> [d1,d2] + [d3]; r2 -> [d4]
+        assert_eq!(jobs.len(), 3);
+        assert_eq!(jobs[0].cell.image_path, "r1");
+        assert_eq!(jobs[0].inputs.len(), 2);
+        assert_eq!(jobs[1].inputs.len(), 1);
+        assert_eq!(jobs[2].cell.image_path, "r2");
+        // Every pair is declared exactly once.
+        let declared: Vec<String> = jobs
+            .iter()
+            .flat_map(|j| j.inputs.iter().map(|i| i.as_str().to_string()))
+            .collect();
+        assert_eq!(declared.len(), 4);
+        assert_eq!(declared.iter().collect::<HashSet<_>>().len(), 4);
+        // Reference order is the file's first-appearance order, so the same
+        // pairs file always yields the same manifest.
+        let again = declare_features(&p, "944", None, 2).unwrap();
+        assert_eq!(
+            serde_json::to_string(&jobs).unwrap(),
+            serde_json::to_string(&again).unwrap(),
+            "declare must be deterministic"
+        );
+    }
+
+    /// `JobId` is computed over `(inputs, kind)` and EXCLUDES `cell`. So a
+    /// distorted token appearing under two references would collapse two
+    /// pairs into one job and silently drop a row. That is a corpus defect
+    /// and it is refused loudly — the failure this catches is invisible in
+    /// the output otherwise (the table is simply one row short).
+    #[test]
+    fn refuses_a_distorted_token_shared_by_two_references() {
+        let p = pairs(&[("r1", "d1"), ("r2", "d1")]);
+        let e = declare_features(&p, "944", None, 8).unwrap_err();
+        assert!(e.contains("two references"), "{e}");
+        // An exact duplicate pair is deduped, not an error.
+        let dup = pairs(&[("r1", "d1"), ("r1", "d1")]);
+        let jobs = declare_features(&dup, "944", None, 8).unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].inputs.len(), 1);
+    }
+
+    /// The declared jobs carry the capability requirement, so a stale image
+    /// self-excludes at claim time instead of poisoning the wave.
+    #[test]
+    fn declared_jobs_carry_the_capability_requirement() {
+        let jobs = declare_features(&pairs(&[("r", "d")]), "372", None, 8).unwrap();
+        assert!(jobs[0].requires.iter().any(|t| t == "feature-jobs"));
+        let pinned = declare_features(&pairs(&[("r", "d")]), "372", Some("2"), 8).unwrap();
+        assert!(pinned[0].requires.iter().any(|t| t == "feature-rev"));
+    }
+
+    /// Pinning the revision must change the job id — the whole reason the
+    /// kind carries one. Same pairs, same regime, different era.
+    #[test]
+    fn a_revision_pin_makes_a_different_wave() {
+        let p = pairs(&[("r", "d")]);
+        let a = declare_features(&p, "944", None, 8).unwrap();
+        let b = declare_features(&p, "944", Some("2"), 8).unwrap();
+        assert_ne!(
+            a[0].job_id(),
+            b[0].job_id(),
+            "a rev2 wave must not be able to read a rev1 ledger as done"
+        );
+    }
+
+    /// An empty regime is refused rather than producing a manifest whose
+    /// cells name no extraction.
+    #[test]
+    fn refuses_an_empty_regime() {
+        assert!(declare_features(&pairs(&[("r", "d")]), "  ", None, 8).is_err());
     }
 }

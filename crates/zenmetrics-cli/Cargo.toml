@@ -334,6 +334,28 @@ assemble = [
     "dep:arrow-schema",
 ]
 
+# `feature-jobs` advertises the JobKind::Feature executor arm as an executor
+# CAPABILITY (anti-wedge invariant 5). It adds no code of its own — the arm is
+# gated on `cpu-metrics` — and exists so the claim-time gate can tell a
+# Feature-capable image from one without the arm.
+#
+# It CANNOT be `cpu-metrics`: every CPU executor advertises that, which is the
+# exact under-claim that let an image without `avif-aom` claim 312 aom-rs cells
+# and burn all of them to Poison in 28 s on 2026-08-30. Feature jobs poison on
+# the FIRST failure too (a missing arm exits non-zero -> `encoder_panic` ->
+# DETERMINISTIC), so a stale image would not stall a Feature wave, it would
+# destroy it. This token is what makes a stale image claim nothing.
+feature-jobs = ["cpu-metrics"]
+
+# `feature-rev` asserts that THIS build's zensim carries the formula-revision
+# selector (`ssim_form::active_revision` / `ZENSIM_FORMULA_REV`). Without it the
+# executor REFUSES any manifest that pins a revision other than the shipped one,
+# rather than extracting at its own revision silently — the one failure mode a
+# recalculation wave cannot survive, because a mis-stamped table is undetectable
+# downstream. Enable it only on an image built against a zensim that has the
+# selector; it is a deliberate human pin, exactly like the `hdr` version gate.
+feature-rev = ["feature-jobs"]
+
 [dependencies]
 # Content-addressing for --emit-cells declare manifests (same version as
 # zenfleet-core so the workspace carries one copy).

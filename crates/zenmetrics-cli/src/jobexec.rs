@@ -1821,6 +1821,273 @@ fn diffmap_pair_to_blob(
     result
 }
 
+// ─── JobKind::Feature — the revision-scoped feature-extraction executor ──────
+//
+// Why this kind exists at all, when `ScoreFile` + a `zensim-foldapp2*` metric
+// name already emits feature rows: a metric NAME cannot carry a formula
+// revision. `zensim-foldapp2` under `ZENSIM_FORMULA_REV=1` and under `=2` are
+// different work with different output bytes, but they serialize to the
+// IDENTICAL `JobKind::ScoreFile` — so they collide on one content-addressed
+// `JobId` and the ledger calls a rev2 cell "already done" because a rev1 cell
+// exists. `JobKind::Feature { regime, revision }` puts the revision in the id.
+//
+// See docs/PLAN_REV2_RECALC_2026-09-06.md for the pre-registered contract.
+
+/// Map a declared regime token to a zensim extraction regime + its wire tag.
+/// Unknown tokens are REFUSED — never silently coerced to a default width,
+/// which would emit a wrong-width table that looks fine until a bake reads it.
+#[cfg(feature = "cpu-metrics")]
+fn feature_regime_for_token(
+    token: &str,
+) -> Result<(crate::metrics::ZensimFeatureRegime, &'static str), Box<dyn Error>> {
+    use crate::metrics::ZensimFeatureRegime as R;
+    Ok(match token.trim() {
+        "228" | "basic" => (R::Basic, "basic"),
+        "300" | "extended" => (R::Extended, "extended"),
+        "372" | "withiw" | "with-iw" | "v1-372" => (R::WithIw, "with-iw"),
+        "720" | "v2-ab" | "v2ab" => (R::V2Ab, "v2-ab"),
+        "924" | "folded720append" => (R::Folded720Append, "folded720append"),
+        "944" | "folded720append2" => (R::Folded720Append2, "folded720append2"),
+        "944carriers" | "folded720append2carriers" => {
+            (R::Folded720Append2Carriers, "folded720append2carriers")
+        }
+        "944pools" | "folded720append2pools" => (R::Folded720Append2Pools, "folded720append2pools"),
+        other => {
+            return Err(format!(
+                "feature: unknown regime {other:?} — known: 228/300/372/720/924/944/\
+                 944carriers/944pools (and their long names). Refusing rather than \
+                 defaulting to a width nobody asked for."
+            )
+            .into());
+        }
+    })
+}
+
+/// The formula revision this process will extract at, and the check that the
+/// job agrees with it.
+///
+/// `ZENSIM_FORMULA_REV` is read by zensim **once per process** into a
+/// `OnceLock`, and the worker's warm executor pool reuses one `--serve` child
+/// across many jobs (`feature` is warm-eligible BY DEFAULT — see
+/// `zenfleet_worker::warm_kinds_from_env`). So the revision cannot be a
+/// per-job setting: a child that has already resolved the variable physically
+/// cannot serve the other revision.
+///
+/// It is therefore a **launch-level pin**: the launcher/image exports
+/// `ZENSIM_FORMULA_REV`, and this function REFUSES any job that disagrees
+/// with the environment it is running in. A wave is single-revision by
+/// construction; two revisions are two waves, two runs, two ledgers.
+///
+/// (The executor deliberately does NOT set the variable itself. `zenmetrics`
+/// is `#![forbid(unsafe_code)]` and `std::env::set_var` is unsafe under the
+/// 2024 edition — but the design is better for it: a pin that lives in the
+/// launch is visible in `docker inspect`, survives a warm-child recycle, and
+/// cannot race the first zensim call.)
+const SHIPPED_FORMULA_REV: &str = "1";
+
+fn resolve_formula_revision(requested: Option<&str>) -> Result<String, Box<dyn Error>> {
+    let env_rev = std::env::var("ZENSIM_FORMULA_REV")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    // What this process will actually extract at: the environment when pinned,
+    // else the executor's shipped revision.
+    let effective = env_rev
+        .clone()
+        .unwrap_or_else(|| SHIPPED_FORMULA_REV.into());
+    // A build whose zensim has no revision selector cannot honour a pin. Fail
+    // LOUD — the alternative is a table stamped rev2 that was extracted at
+    // rev1, which is undetectable downstream.
+    #[cfg(not(feature = "feature-rev"))]
+    if effective != SHIPPED_FORMULA_REV {
+        return Err(format!(
+            "feature: ZENSIM_FORMULA_REV={effective:?} but this executor was built without the \
+             `feature-rev` cargo feature, so its zensim has no revision selector and would \
+             extract at revision {SHIPPED_FORMULA_REV} SILENTLY. Pin an executor image built \
+             against a zensim that carries ssim_form::active_revision."
+        )
+        .into());
+    }
+    match requested {
+        None => Ok(effective),
+        Some(want) if want.trim() == effective => Ok(effective),
+        Some(want) => Err(format!(
+            "feature: manifest pins zensim formula revision {:?}, but this executor process \
+             runs at revision {effective:?} (ZENSIM_FORMULA_REV={}). zensim reads that variable \
+             ONCE per process and `feature` jobs run on WARM reused children by default, so the \
+             revision is a LAUNCH-level pin, not a per-job one. Refusing — a mixed-revision \
+             table is exactly the defect this wave exists to remove. Launch a worker with \
+             ZENSIM_FORMULA_REV={:?} for this manifest.",
+            want.trim(),
+            env_rev.as_deref().unwrap_or("<unset>"),
+            want.trim()
+        )
+        .into()),
+    }
+}
+
+/// Resolve one distorted input to a readable path. ONE ordered rule, so every
+/// corpus in the recalculation manifest is declarable without a second
+/// pipeline (pairs-TSV paths, `s3://` URIs, content shas, tar members):
+///
+/// 1. an existing LOCAL file → used in place, no network, no temp;
+/// 2. `s3://…` → in-process GET to a temp file;
+/// 3. a 64-hex lowercase sha → the variant index (tar byte-range /
+///    direct-object / pre-extracted local dir);
+/// 4. otherwise → resolved relative to the corpus prefix, like the reference.
+///
+/// Returns `(path, owned)`; `owned` temps are deleted by the caller after
+/// decode, borrowed paths (local files, the shared source cache, a tar-shard
+/// extract dir) are NOT — deleting one would destroy a corpus file.
+fn resolve_feature_input(
+    token: &str,
+    ext: &str,
+    corpus_prefix: Option<&str>,
+) -> Result<(PathBuf, bool), Box<dyn Error>> {
+    let local = PathBuf::from(token);
+    if !token.starts_with("s3://") && local.is_file() {
+        return Ok((local, false));
+    }
+    if token.starts_with("s3://") {
+        return fetch_variant(token, ext);
+    }
+    let is_sha = token.len() == 64
+        && token
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+    if is_sha {
+        return fetch_variant(token, ext);
+    }
+    resolve_source(token, corpus_prefix).map(|p| (p, false))
+}
+
+/// Extract a zensim feature table chunk: decode the reference ONCE, then
+/// decode + extract every `inputs` entry against it.
+///
+/// **Output is JSON-lines, one row per pair**, in the shape
+/// `scripts/jobsys/writeback_scores.py` already dispatches on
+/// (`{"kind":"feature","image_path","encode_sha","regime","features":[…]}`),
+/// plus this kind's provenance columns. A columnar chunk was the first
+/// design and was REJECTED on reading: the worker stores stdout as opaque
+/// bytes so Parquet would have worked, but the entire harvest layer is
+/// JSONL-shaped, and a Parquet blob would need a parallel harvester — a
+/// second implementation of a thing that exists, which the no-duplication
+/// rule forbids. The Parquet conversion stays where it already lives, in
+/// `writeback_scores.py`.
+#[cfg(feature = "cpu-metrics")]
+fn run_feature_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<dyn Error>> {
+    let cell = &job["cell"];
+    let image_path = cell["image_path"]
+        .as_str()
+        .ok_or("feature: cell.image_path missing")?;
+    let regime_token = job["kind"]["regime"]
+        .as_str()
+        .ok_or("feature: kind.regime missing")?;
+    let (regime, regime_tag) = feature_regime_for_token(regime_token)?;
+    let n_features = regime.total_features();
+    let revision = resolve_formula_revision(job["kind"]["revision"].as_str())?;
+    let inputs: Vec<&str> = job["inputs"]
+        .as_array()
+        .ok_or("feature: inputs missing")?
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    if inputs.is_empty() {
+        return Err("feature: job has no inputs".into());
+    }
+    // The declared feature-set id rides in knob_tuple_json and is ECHOED, never
+    // re-derived here: `zensim::feature_set_id` is its owner, and a second
+    // derivation of the era token is exactly the "944 named seven feature sets"
+    // problem the naming directive exists to stop.
+    let knobs: Value = serde_json::from_str(cell["knob_tuple_json"].as_str().unwrap_or("{}"))
+        .unwrap_or(Value::Null);
+    let feature_set_id = knobs.get("feature_set_id").and_then(Value::as_str);
+    // Baked by the image build; `null` when the image did not record it.
+    let zensim_commit = std::env::var("ZEN_ZENSIM_BUILD_COMMIT").ok();
+    let ext = ext_for(cell["codec"].as_str().unwrap_or(""));
+
+    let src_path = resolve_source(image_path, corpus_prefix)?;
+    let reference = decode_image_to_rgb8(&src_path)?;
+
+    // The v1 regimes reuse a precomputed reference pyramid across this
+    // reference's inputs (bit-identical — `metrics::zensim::v2ab_ctx_matches_percall`);
+    // the folded/streaming regimes have no cached-ref path since zensim C5 and
+    // always run per-pair.
+    let folded = matches!(
+        regime,
+        crate::metrics::ZensimFeatureRegime::Folded720Append
+            | crate::metrics::ZensimFeatureRegime::Folded720Append2
+            | crate::metrics::ZensimFeatureRegime::Folded720Append2Carriers
+            | crate::metrics::ZensimFeatureRegime::Folded720Append2Pools
+    );
+    let ref_ctx = if folded {
+        None
+    } else {
+        crate::metrics::zensim::precompute_ref_ctx(&reference).ok()
+    };
+
+    let mut rows: Vec<String> = Vec::with_capacity(inputs.len());
+    for token in &inputs {
+        let mut o = Map::new();
+        o.insert("kind".into(), serde_json::json!("feature"));
+        o.insert("image_path".into(), serde_json::json!(image_path));
+        // `encode_sha` is the harvester's join key; for a pairs-table wave it
+        // is the distorted PATH, which is what the pairs table joins on too.
+        o.insert("encode_sha".into(), serde_json::json!(token));
+        o.insert("regime".into(), serde_json::json!(regime_tag));
+        o.insert("n_features".into(), serde_json::json!(n_features));
+        o.insert("formula_revision".into(), serde_json::json!(revision));
+        o.insert("feature_set_id".into(), serde_json::json!(feature_set_id));
+        o.insert(
+            "zensim_build_commit".into(),
+            serde_json::json!(zensim_commit),
+        );
+        let (var_path, owned) = match resolve_feature_input(token, ext, corpus_prefix) {
+            Ok(p) => p,
+            Err(e) => return Err(format!("feature: input {token}: {e}").into()),
+        };
+        let decoded = decode_image_to_rgb8(&var_path);
+        if owned {
+            let _ = std::fs::remove_file(&var_path);
+        }
+        // A feature table with a hole in it is worse than no table: a bake
+        // reading it cannot tell a failed row from a real one. Any decode or
+        // extraction failure fails the whole CHUNK, loudly, so the reconciler
+        // retries it rather than the ledger recording a partial success.
+        let distorted = decoded.map_err(|e| format!("feature: decode {token}: {e}"))?;
+        // The decoder era is a first-class confound, not a footnote: MEASURED
+        // 2026-09-04, re-decoding safesyn through current imazen codecs shifts
+        // shipped B's dial by mean -3.658 points against an extractor-era
+        // defect of -4.98/-5.86 — 73 % of the effect the whole wave is about.
+        // Recording WHICH decoder read the pixels is what makes two tables
+        // comparable at all.
+        o.insert(
+            "decoder".into(),
+            serde_json::json!(format!("zenmetrics-cli/{}", env!("CARGO_PKG_VERSION"))),
+        );
+        let feats = if folded {
+            crate::metrics::run_zensim_features(&reference, &distorted, regime)
+        } else {
+            ref_ctx.as_ref().map_or_else(
+                || crate::metrics::run_zensim_features(&reference, &distorted, regime),
+                |c| crate::metrics::zensim::extract_features_regime_with_ctx(c, &distorted, regime),
+            )
+        }
+        .map_err(|e| format!("feature: extract {token}: {e}"))?;
+        if feats.len() != n_features {
+            return Err(format!(
+                "feature: regime {regime_tag} produced {} features, expected {n_features} \
+                 (input {token}) — refusing to emit a short row",
+                feats.len()
+            )
+            .into());
+        }
+        o.insert("features".into(), serde_json::json!(feats));
+        rows.push(serde_json::to_string(&Value::Object(o))?);
+    }
+    Ok(rows.join("\n").into_bytes())
+}
+
 /// Do one job end-to-end: resolve+decode the source, encode the cell, and (for a metric job) score
 /// it. Returns the output BYTES — encode: the encoded image; metric: the one-line JSON score row.
 /// Shared by single-shot `run` and the warm `run_serve` loop, so both paths are byte-identical.
@@ -1833,6 +2100,23 @@ fn run_one_job(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<
     // efficient path that replaces per-(cell,metric) re-encoding. Handled separately and returns early.
     if kind == "score_file" {
         return run_score_file(job, corpus_prefix);
+    }
+    // Revision-scoped feature extraction (JobKind::Feature): decode the reference once,
+    // extract every input's feature vector against it, emit one JSONL row per pair.
+    // See docs/PLAN_REV2_RECALC_2026-09-06.md.
+    if kind == "feature" {
+        #[cfg(feature = "cpu-metrics")]
+        {
+            return run_feature_job(job, corpus_prefix);
+        }
+        #[cfg(not(feature = "cpu-metrics"))]
+        {
+            return Err(
+                "feature jobs need a build with --features cpu-metrics (the zensim extractor); \
+                 this executor was built without it"
+                    .into(),
+            );
+        }
     }
     // Per-pixel diffmap persistence (JobKind::Diffmap — HDR-corpus B2): decode the
     // reference + ONE persisted variant, compute the named metric's per-pixel map with

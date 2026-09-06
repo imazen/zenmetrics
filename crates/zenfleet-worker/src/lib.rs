@@ -3687,6 +3687,7 @@ mod tests {
         };
         let feat = JobKind::Feature {
             regime: "944".into(),
+            revision: None,
         };
         let diff = JobKind::Diffmap {
             metric: "ssim2".into(),

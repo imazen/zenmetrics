@@ -172,8 +172,40 @@ pub enum JobKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         hdr_transfer: Option<String>,
     },
+    /// Extract a zensim FEATURE table chunk for one reference and its
+    /// `inputs` (the distorted side). Output is a Parquet chunk, not JSON
+    /// rows — a 944-slot vector per pair does not belong on a JSON wire, and
+    /// every consumer of a feature table already reads Parquet.
+    ///
+    /// `regime` names the extraction width/shape the executor asks zensim for
+    /// (`"372"` / `"720"` / `"924"` / `"944"` and the pool variants; the
+    /// executor owns the mapping and refuses an unknown token).
     Feature {
         regime: String,
+        /// The zensim FORMULA REVISION this table is extracted at
+        /// (`zensim::ssim_form::FormulaRevision`, selected through
+        /// `ZENSIM_FORMULA_REV`). `None` = the executor's shipped revision.
+        ///
+        /// This field is why `Feature` needs its own kind at all rather than
+        /// riding `ScoreFile` + a `zensim-foldapp2*` metric name: revision 1
+        /// and revision 2 of the same regime on the same pixels are
+        /// **different work with different output bytes**, but they serialize
+        /// to the identical `ScoreFile` manifest — so they would collide on
+        /// one content-addressed [`crate::JobId`] and the ledger would call a
+        /// rev2 cell "already done" because a rev1 cell exists.
+        ///
+        /// **Job-id compatibility**: `#[serde(default, skip_serializing_if)]`
+        /// — a revision-less job serializes byte-identically to the
+        /// pre-revision schema, so no existing id moves; `Some(..)` is
+        /// serialized and therefore (correctly) yields a DIFFERENT id. Same
+        /// append-only serde contract as [`JobKind::Encode::hdr`].
+        ///
+        /// **Executor version gate**: an executor built before the revision
+        /// selector deserializes the manifest but would extract at its own
+        /// shipped revision silently. A revision-pinned manifest MUST pin an
+        /// executor image whose zensim carries the selector.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        revision: Option<String>,
     },
     Diffmap {
         metric: String,
@@ -299,7 +331,31 @@ impl JobKind {
                     add("hdr");
                 }
             }
-            JobKind::Feature { .. } | JobKind::Resample { .. } | JobKind::Bake { .. } => {}
+            // A Feature job runs the zensim extractor, which lives behind the
+            // executor's `feature-jobs` cargo feature. This token is NOT
+            // optional and NOT conservative-by-omission: `Feature`'s only
+            // other plausible token would be `cpu-metrics`, which EVERY CPU
+            // executor advertises — the exact under-claim that let an image
+            // without `avif-aom` claim 312 aom-rs cells and burn all of them
+            // to Poison in 28 s on 2026-08-30. An executor with no Feature
+            // arm exits non-zero, the worker classifies that `encoder_panic`
+            // (DETERMINISTIC), and the reconciler poisons on the FIRST
+            // failure — so a stale image does not merely stall a Feature
+            // wave, it destroys it. The token is what makes a stale image
+            // claim nothing.
+            JobKind::Feature { revision, .. } => {
+                add("feature-jobs");
+                // A revision-PINNED manifest additionally needs an executor
+                // whose zensim carries the formula-revision selector
+                // (`ZENSIM_FORMULA_REV`). Same shape as the `hdr` version
+                // gate: an older executor would deserialize the manifest and
+                // extract at its own shipped revision SILENTLY, which is the
+                // one failure a recalculation wave cannot survive.
+                if revision.is_some() {
+                    add("feature-rev");
+                }
+            }
+            JobKind::Resample { .. } | JobKind::Bake { .. } => {}
         }
         req
     }
@@ -481,6 +537,126 @@ impl JobKind {
 
 #[cfg(test)]
 mod tests {
+    // ── JobKind::Feature { revision } — the pre-registered G-EXEC.5 gate ──
+    // (docs/PLAN_REV2_RECALC_2026-09-06.md)
+
+    /// A revision-less Feature job must serialize BYTE-IDENTICALLY to the
+    /// pre-revision schema, so adding the field moves no existing
+    /// content-addressed id. Asserted against the literal wire text, not
+    /// against a round-trip (a round-trip passes even if the bytes changed).
+    #[test]
+    fn feature_without_revision_serializes_to_the_pre_revision_wire() {
+        let k = JobKind::Feature {
+            regime: "944".into(),
+            revision: None,
+        };
+        assert_eq!(
+            serde_json::to_string(&k).unwrap(),
+            r#"{"kind":"feature","regime":"944"}"#,
+            "skip_serializing_if must keep an unpinned Feature job's wire text \
+             identical to the schema that shipped before `revision` existed"
+        );
+    }
+
+    /// Pinning a revision MUST change the content-addressed id. This is the
+    /// entire reason `Feature` exists as its own kind rather than riding
+    /// `ScoreFile` + a metric name: rev1 and rev2 of the same regime on the
+    /// same pixels are different work with different output bytes, and if
+    /// they shared an id the ledger would call a rev2 cell "already done".
+    #[test]
+    fn feature_revision_changes_the_job_id() {
+        use crate::ids::JobId;
+        let inputs = [crate::content::sha256(b"variant")];
+        let unpinned = JobKind::Feature {
+            regime: "944".into(),
+            revision: None,
+        };
+        let rev1 = JobKind::Feature {
+            regime: "944".into(),
+            revision: Some("1".into()),
+        };
+        let rev2 = JobKind::Feature {
+            regime: "944".into(),
+            revision: Some("2".into()),
+        };
+        let id = |k: &JobKind| JobId::of(k, &inputs);
+        assert_ne!(id(&rev1), id(&rev2), "rev1 and rev2 must be different jobs");
+        assert_ne!(
+            id(&unpinned),
+            id(&rev2),
+            "an unpinned job must not collide with a pinned one"
+        );
+        // The regime still separates work at a fixed revision.
+        assert_ne!(
+            id(&rev2),
+            id(&JobKind::Feature {
+                regime: "372".into(),
+                revision: Some("2".into())
+            }),
+            "regime must still separate work"
+        );
+    }
+
+    /// The claim-time capability gate (anti-wedge invariant 5). A Feature job
+    /// must NOT be claimable by an executor that lacks the arm — the token
+    /// cannot be `cpu-metrics`, which every CPU executor advertises. This is
+    /// the 2026-08-30 aom-rs lesson applied before the incident rather than
+    /// after: a missing arm exits non-zero, the worker classifies that
+    /// `encoder_panic` (DETERMINISTIC), and the reconciler poisons on the
+    /// FIRST failure — so a stale image destroys a Feature wave rather than
+    /// merely stalling it.
+    #[test]
+    fn feature_requires_a_token_a_stale_image_does_not_have() {
+        let unpinned = JobKind::Feature {
+            regime: "944".into(),
+            revision: None,
+        }
+        .required_capabilities();
+        assert!(
+            unpinned.iter().any(|t| t == "feature-jobs"),
+            "every Feature job must require `feature-jobs`, got {unpinned:?}"
+        );
+        assert!(
+            !unpinned.iter().any(|t| t == "cpu-metrics"),
+            "`cpu-metrics` is advertised by EVERY cpu executor, so requiring it \
+             would not exclude a stale image — that is the under-claim that \
+             poisoned 312 aom-rs cells in 28 s"
+        );
+        // A revision-pinned manifest additionally needs the selector build.
+        let pinned = JobKind::Feature {
+            regime: "944".into(),
+            revision: Some("2".into()),
+        }
+        .required_capabilities();
+        assert!(pinned.iter().any(|t| t == "feature-jobs"));
+        assert!(
+            pinned.iter().any(|t| t == "feature-rev"),
+            "a revision-pinned job must also require `feature-rev`, else an older \
+             executor deserializes the manifest and extracts at its own revision \
+             silently — got {pinned:?}"
+        );
+        assert!(
+            !unpinned.iter().any(|t| t == "feature-rev"),
+            "an unpinned job must NOT demand the selector build, or every existing \
+             CPU image stops being usable for a plain extraction"
+        );
+    }
+
+    /// A pre-revision manifest on the wire must still deserialize (the field
+    /// is `#[serde(default)]`), and must land as `None` — not as some
+    /// stand-in that would change its id.
+    #[test]
+    fn pre_revision_feature_manifest_still_parses() {
+        let k: JobKind = serde_json::from_str(r#"{"kind":"feature","regime":"372"}"#).unwrap();
+        assert_eq!(
+            k,
+            JobKind::Feature {
+                regime: "372".into(),
+                revision: None
+            }
+        );
+    }
+
     #[test]
     fn diffmap_class_is_cpu_for_both_map_owners() {
         // Executor truth (2026-08-27): both in-tree per-pixel map owners are CPU

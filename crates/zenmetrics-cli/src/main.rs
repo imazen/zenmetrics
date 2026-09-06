@@ -2979,6 +2979,12 @@ fn print_capabilities() {
     cap!("gpu-wgpu");
     cap!("gpu-hip");
     cap!("gpu-cpu");
+    // JobKind::Feature executor arm. Advertised SEPARATELY from `cpu-metrics`
+    // (which every CPU executor has) so the claim-time gate can keep a stale
+    // image away from a Feature wave — see the Cargo.toml comment and the
+    // 2026-08-30 aom-rs poisoning incident.
+    cap!("feature-jobs");
+    cap!("feature-rev");
     cap!("jobexec");
     cap!("sweep");
     cap!("assemble");
