@@ -100,6 +100,12 @@ required-features = ["cubecl-types"]
 name = "f924_parity"
 required-features = ["cubecl-types"]
 
+# G-GPU.1's byte-dump instrument. Deliberately revision-agnostic so the SAME
+# source compiles on the pre-port tree — see the example's module docs.
+[[example]]
+name = "formula_rev_dump"
+required-features = ["cubecl-types"]
+
 [[test]]
 name = "it"
 path = "tests/it/main.rs"

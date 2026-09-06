@@ -68,6 +68,11 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::doc_lazy_continuation)]
 
+// The arithmetic-revision mirror (`ZENSIM_FORMULA_REV`). Public because
+// `Zensim::with_formula_revision` takes `FormulaRevision` — a test cannot
+// select a revision through the environment (`std::env::set_var` is `unsafe`
+// in edition 2024), so the rev2 parity gates need an API route.
+pub mod formula_rev;
 // `kernels` is reached by-path cross-crate (cvvdp-gpu/src/kernels/color.rs
 // shares the scalar reference) — not a supported per-crate API.
 #[doc(hidden)]
@@ -95,6 +100,10 @@ pub use memory_mode::{
 // Re-export the canonical default-weights array so callers can wire
 // custom params without rebuilding it themselves.
 pub use weights::WEIGHTS_PREVIEW_V0_2;
+
+// Which arithmetic revision the pipeline computes. See `formula_rev.rs` for
+// why this crate mirrors zensim's selection instead of calling it.
+pub use formula_rev::FormulaRevision;
 
 // Uniform opaque API (Phase 2). See `opaque.rs`.
 pub use opaque::{Backend, Score, ZensimOpaque, ZensimParams};
@@ -266,6 +275,32 @@ pub enum Error {
     /// strips and bailed out (zenmetrics#30). No features were produced;
     /// the instance (and its cached reference) is reusable.
     Cancelled(enough::StopReason),
+    /// A diffmap / CPU-scored entry point was called on a pipeline pinned to
+    /// an arithmetic revision that the CPU `zensim` in this process is NOT
+    /// computing.
+    ///
+    /// These paths are hybrids: the GPU produces the per-pixel map, the
+    /// canonical CPU `zensim` produces the scalar score (see
+    /// `docs/DIFFMAP_DIVERGENCES.md`). CPU `zensim` selects its revision from
+    /// the process-wide `ZENSIM_FORMULA_REV` and offers no per-instance
+    /// override, so a pipeline pinned with
+    /// [`Zensim::with_formula_revision`](crate::Zensim::with_formula_revision)
+    /// to a different revision would return a map and a score computed under
+    /// two different arithmetics. That is exactly the silent-fallback defect
+    /// `PLAN_REV2_WAVE_2026-09-06.md` G-GPU.3 forbids, so it is refused by
+    /// name instead.
+    ///
+    /// Fix: pin the process with `ZENSIM_FORMULA_REV`, so both sides agree,
+    /// and drop the per-instance override on these paths. The
+    /// feature-extraction entry points (`compute_features`,
+    /// `compute_with_reference`, …) are unaffected — they produce no CPU
+    /// score and honour the override freely.
+    FormulaRevisionMismatch {
+        /// What this pipeline was pinned to.
+        pipeline: FormulaRevision,
+        /// What CPU `zensim` in this process will compute.
+        cpu_process: FormulaRevision,
+    },
 }
 
 impl From<enough::StopReason> for Error {
@@ -283,6 +318,20 @@ impl std::fmt::Display for Error {
             ),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
             Error::Cancelled(reason) => write!(f, "cancelled between strips: {reason:?}"),
+            Error::FormulaRevisionMismatch {
+                pipeline,
+                cpu_process,
+            } => write!(
+                f,
+                "zensim-gpu: refusing a hybrid GPU-map / CPU-score call — this pipeline is \
+                 pinned to formula revision {} but CPU zensim in this process computes \
+                 revision {}. The map and the score would come from two different \
+                 arithmetics. Set ZENSIM_FORMULA_REV={} for the whole process instead of \
+                 using Zensim::with_formula_revision on a diffmap path.",
+                pipeline.as_str(),
+                cpu_process.as_str(),
+                pipeline.as_str()
+            ),
             Error::InvalidImageSize => write!(f, "image must be at least 8×8 pixels"),
             Error::ExtendedPlaneBudgetExceeded {
                 needed_bytes,

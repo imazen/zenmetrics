@@ -373,6 +373,18 @@ pub struct Zensim<R: Runtime> {
     /// callers don't pay the ref-XYB pyramid build per iter.
     diffmap_state: Option<DiffmapState>,
 
+    /// **Which arithmetic revision this pipeline computes.** Resolved ONCE
+    /// here at construction from [`crate::formula_rev::active_revision`] (a
+    /// `OnceLock`-backed read of `ZENSIM_FORMULA_REV`), never per launch and
+    /// never per pixel, and overridable through
+    /// [`Zensim::with_formula_revision`].
+    ///
+    /// Only the enum is stored, not a separate cached `u32`: the kernel
+    /// scalar is `formula_rev.luma_clamp()`, so there is exactly ONE place
+    /// the flag is derived and no way for a second field to fall out of sync
+    /// with the setter.
+    formula_rev: crate::formula_rev::FormulaRevision,
+
     // ───────── Extended / WithIw regime support ─────────
     regime: ZensimFeatureRegime,
     /// Per-scale per-channel mu1/mu2/ssq/s12 persist planes — laid out
@@ -830,6 +842,7 @@ impl<R: Runtime> Zensim<R> {
             finals_max,
             has_reference: false,
             diffmap_state: None,
+            formula_rev: crate::formula_rev::active_revision(),
             regime,
             persist_planes_ref,
             partials_ext_f64,
@@ -842,6 +855,42 @@ impl<R: Runtime> Zensim<R> {
     /// Which regime this pipeline was constructed for.
     pub fn regime(&self) -> ZensimFeatureRegime {
         self.regime
+    }
+
+    /// Which arithmetic revision this pipeline computes.
+    ///
+    /// Defaults to [`crate::formula_rev::active_revision`] — the process-wide
+    /// `ZENSIM_FORMULA_REV` read, which is `Rev1` unless pinned.
+    pub fn formula_revision(&self) -> crate::formula_rev::FormulaRevision {
+        self.formula_rev
+    }
+
+    /// Pin this pipeline to an arithmetic revision, overriding the
+    /// environment.
+    ///
+    /// Exists because a test cannot select a revision through the
+    /// environment: `std::env::set_var` is `unsafe` in edition 2024, and the
+    /// `OnceLock` in [`crate::formula_rev::active_revision`] latches the first
+    /// read for the whole process anyway — so a per-instance override is the
+    /// only way to run a revision-1 arm and a revision-2 arm in ONE test
+    /// binary and compare them. It is also what
+    /// `PLAN_REV2_WAVE_2026-09-06.md` G-GPU.2 needs: a run that actually
+    /// executed, on inputs where the ported arithmetic differs.
+    ///
+    /// Cheap and side-effect-free — the revision is a uniform passed to the
+    /// kernels at launch, so no buffer is resized and no cached reference is
+    /// invalidated. It does NOT re-score anything already computed.
+    #[must_use]
+    pub fn with_formula_revision(mut self, rev: crate::formula_rev::FormulaRevision) -> Self {
+        self.formula_rev = rev;
+        self
+    }
+
+    /// The `luma_clamp` kernel uniform for this pipeline's revision — the
+    /// ONE place the flag is derived from [`Self::formula_revision`].
+    #[inline]
+    fn luma_clamp(&self) -> u32 {
+        self.formula_rev.luma_clamp()
     }
 
     /// Debug-only: read back the persist-plane `mu1` at the given scale
@@ -1303,9 +1352,27 @@ impl<R: Runtime> Zensim<R> {
                 let inv_n = 1.0_f64 / (pad_w as f64 * h_dim as f64);
                 let var_src = sums[10] * inv_n;
                 let mad_src = sums[12] * inv_n;
+                // **F17 / `v1hfgain`.** The GAIN member is the one with an
+                // arm: revision 1 is `max(0, var_dst/var_src - 1)`, unbounded
+                // above (measured max 36,465.74 over 216,756 real pairs);
+                // revision 2's decided arm is `SaturatingExcess` = `g/(g+1)`
+                // (`zensim::hf_gain_form::HfGainForm::REV2_HFGAIN`). The two
+                // LOSS members divide the source term by a numerator the
+                // denominator bounds, so they are bounded [0, 1] by
+                // construction and have no arm — they are untouched here.
+                //
+                // The `> 1e-10` gate is a THRESHOLD, not a stabiliser, and
+                // stays exactly where it was on both revisions; so does the
+                // `.max(0.0)` floor, which is what makes revision 1 through
+                // `formula_rev::hf_energy_gain` bit-identical to the
+                // expression it replaced (gated by
+                // `formula_rev::tests::rev1_gain_is_bit_identical_to_the_expression_it_replaced`).
                 let (hf_energy_loss, hf_energy_gain) = if var_src > 1e-10 {
                     let r = sums[11] / sums[10];
-                    ((1.0 - r).max(0.0), (r - 1.0).max(0.0))
+                    (
+                        (1.0 - r).max(0.0),
+                        crate::formula_rev::hf_energy_gain(self.formula_rev, sums[10], sums[11]),
+                    )
                 } else {
                     (0.0, 0.0)
                 };
@@ -2052,6 +2119,7 @@ impl<R: Runtime> Zensim<R> {
                 s.partials_max_off as u32,
                 y_body_start,
                 y_body_end,
+                self.luma_clamp(),
             );
         }
     }
@@ -2112,6 +2180,7 @@ impl<R: Runtime> Zensim<R> {
                 pad_total as u32,
                 y_body_start,
                 y_body_end,
+                self.luma_clamp(),
             );
         }
     }
@@ -2175,6 +2244,7 @@ impl<R: Runtime> Zensim<R> {
                 do_iw,
                 y_body_start,
                 y_body_end,
+                self.luma_clamp(),
             );
         }
     }
@@ -2497,7 +2567,7 @@ impl<R: Runtime> Zensim<R> {
         let h = self.height as usize;
         let lut = srgb_lut_256();
 
-        self.ensure_diffmap_state();
+        self.ensure_diffmap_state()?;
         // Borrow state in a confined scope so we can call self.* helpers.
         {
             let state = self.diffmap_state.as_mut().expect("ensured");
@@ -2578,7 +2648,7 @@ impl<R: Runtime> Zensim<R> {
         let h = self.height as usize;
         let lut = srgb_lut_256();
 
-        self.ensure_diffmap_state();
+        self.ensure_diffmap_state()?;
         {
             let state = self.diffmap_state.as_mut().expect("ensured");
             if state.warm_ref.is_none() {
@@ -2681,7 +2751,7 @@ impl<R: Runtime> Zensim<R> {
         let w = self.width as usize;
         let h = self.height as usize;
 
-        self.ensure_diffmap_state();
+        self.ensure_diffmap_state()?;
         let stride = w;
         let state = self.diffmap_state.as_mut().expect("ensured");
         let pre = state
@@ -2732,7 +2802,7 @@ impl<R: Runtime> Zensim<R> {
 
         if !gpu_diffmap_enabled() {
             // Default: Phase 1 CPU score + CPU diffmap (zero regression).
-            self.ensure_diffmap_state();
+            self.ensure_diffmap_state()?;
             let stride = w;
             let state = self.diffmap_state.as_mut().expect("ensured");
             let pre = state
@@ -2797,7 +2867,7 @@ impl<R: Runtime> Zensim<R> {
         let w = self.width as usize;
         let h = self.height as usize;
 
-        self.ensure_diffmap_state();
+        self.ensure_diffmap_state()?;
         let stride = w;
         {
             let state = self.diffmap_state.as_mut().expect("ensured");
@@ -2840,7 +2910,7 @@ impl<R: Runtime> Zensim<R> {
         let w = self.width as usize;
         let h = self.height as usize;
 
-        self.ensure_diffmap_state();
+        self.ensure_diffmap_state()?;
         let stride = w;
         let state = self.diffmap_state.as_mut().expect("ensured");
         let pre = state.warm_ref.as_ref().ok_or(Error::NoCachedReference)?;
@@ -2877,7 +2947,7 @@ impl<R: Runtime> Zensim<R> {
 
         if !gpu_diffmap_enabled() {
             // Default: Phase 1 CPU score + CPU diffmap (zero regression).
-            self.ensure_diffmap_state();
+            self.ensure_diffmap_state()?;
             let stride = w;
             let state = self.diffmap_state.as_mut().expect("ensured");
             let pre = state.warm_ref.as_ref().ok_or(Error::NoCachedReference)?;
@@ -2930,7 +3000,26 @@ impl<R: Runtime> Zensim<R> {
     // identical `PROFILE_A` params (only the profile *name* string
     // differs). Upstream dropped the `PreviewV0_3` alias, so `A` is also
     // the only form that compiles against current zensim.
-    fn ensure_diffmap_state(&mut self) {
+    fn ensure_diffmap_state(&mut self) -> Result<()> {
+        // **G-GPU.3.** Every caller of this function is a HYBRID path: the
+        // scalar score comes from the canonical CPU `zensim`, the map (and on
+        // the opt-in Phase-1b route the per-pixel arithmetic) from the GPU.
+        // CPU `zensim` picks its revision from the process-wide
+        // `ZENSIM_FORMULA_REV` and exposes no per-instance override, so a
+        // pipeline pinned by `with_formula_revision` to a DIFFERENT revision
+        // would hand back a map and a score computed under two different
+        // arithmetics. Refuse by name rather than serve it.
+        //
+        // The feature-only entry points do not come through here and are
+        // deliberately unaffected — they emit no CPU-derived scalar, so the
+        // override is unambiguous there.
+        let cpu_process = crate::formula_rev::active_revision();
+        if self.formula_rev != cpu_process {
+            return Err(Error::FormulaRevisionMismatch {
+                pipeline: self.formula_rev,
+                cpu_process,
+            });
+        }
         if self.diffmap_state.is_none() {
             // `A` is deprecated upstream in favour of `B`, but switching would
             // change what this pipeline COMPUTES, not just how it is spelled —
@@ -2942,6 +3031,7 @@ impl<R: Runtime> Zensim<R> {
             let profile = ZensimProfile::A;
             self.diffmap_state = Some(DiffmapState::new(profile));
         }
+        Ok(())
     }
 
     /// Shared implementation for sRGB-byte diffmap paths: assumes the
@@ -3371,6 +3461,7 @@ impl<R: Runtime> Zensim<R> {
                     w[0],
                     w[1],
                     w[2],
+                    self.luma_clamp(),
                 );
             }
 

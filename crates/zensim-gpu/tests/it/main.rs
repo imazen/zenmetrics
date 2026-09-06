@@ -22,6 +22,9 @@ mod cpu_parity;
 #[cfg(feature = "cubecl-types")]
 mod diffmap_invariants;
 mod extended_parity;
+// The revision-2 port's own gates (PLAN_REV2_WAVE_2026-09-06 G-GPU.1/.2/.3).
+#[cfg(feature = "cubecl-types")]
+mod formula_rev_parity;
 mod memory_mode;
 #[cfg(feature = "cubecl-types")]
 mod odd_dim_pyramid_parity;

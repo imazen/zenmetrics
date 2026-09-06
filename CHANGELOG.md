@@ -13,6 +13,63 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zensim-gpu (the fourth hand-copy moves with revision 2, 2026-09-06)
+
+### Added
+
+- `zensim_gpu::formula_rev` — a MIRROR of `zensim::ssim_form`'s revision owner
+  (`ZENSIM_FORMULA_REV`, same two spellings, same `OnceLock`, same fallback to
+  revision 1). zensim's module is `pub(crate)` and cannot be called across the
+  repo boundary, so this crate is a **sanctioned gated mirror**: the CPU↔GPU
+  parity suite is what keeps it honest, not inspection. Carries
+  `FormulaRevision`, `active_revision()` and `hf_energy_gain()`.
+- `Zensim::formula_revision()` / `Zensim::with_formula_revision()` — a
+  per-instance override. Needed because `std::env::set_var` is `unsafe` in
+  edition 2024 and `active_revision()` latches once per process, so without it
+  no test could run a revision-1 arm and a revision-2 arm in one binary.
+- `Error::FormulaRevisionMismatch` — the diffmap / CPU-scored entry points
+  refuse (G-GPU.3) when the pipeline is pinned to a revision CPU `zensim` in
+  this process is not computing. Those paths are hybrids (GPU map, CPU scalar);
+  serving them would return a map and a score from two different arithmetics.
+  Feature-only entry points are deliberately unaffected.
+- `crates/zensim-gpu/tests/it/formula_rev_parity.rs` (4 gates) and
+  `examples/formula_rev_dump.rs` (the byte-dump instrument, deliberately
+  revision-agnostic so it compiles unchanged on the pre-port tree).
+- `scripts/zensim_gpu_rev2_gate.sh` — runs the whole parity suite at both
+  revisions and reports G-GPU.1/.2/.3 by name.
+
+### Changed
+
+- **F4 / `v1ssimcap`**: the per-pixel SSIM luminance term is
+  `max(0, 1 - D^2)` at revision 2, in all four v1 SSIM kernels
+  (`fused_features_kernel`, `fused_features_kernel_persist`,
+  `masked_iw_strip_kernel`, `masked_iw_kernel`) plus
+  `diffmap::per_scale_weighted_ssim_kernel` and its host-scalar reference. The
+  arm is `zensim::ssim_form::SsimLumaForm::REV2_LUMA`, decided by measurement
+  over 217,756 rows. Selected by an ordinary `u32` kernel uniform, resolved
+  once at construction — no `#[comptime]`, which this crate has never used.
+- **F17 / `v1hfgain`**: `hf_energy_gain` is `g/(g+1)` at revision 2
+  (`zensim::hf_gain_form::HfGainForm::REV2_HFGAIN`), in the host-side finalize.
+  Its two siblings are bounded by construction and are untouched.
+- `docs/public-api/zensim-gpu.{txt,internal.txt}` regenerated. The regen also
+  absorbs staleness that predates this change — MEASURED: the same regen on the
+  pre-port tree moves these two files by 41 and 66 lines and 17 other crates'
+  snapshots as well. Those 17 are left for a repo-wide regen rather than folded
+  in here.
+
+**MEASURED.** Revision 1 is byte-identical across the port: 29,700 `to_bits()`
+feature values over 3 sizes × 5 fixture pairs × 3 regimes × {cold, warm-ref} +
+strip mode + PU-HDR, pre-port binary vs post-port binary, `cmp` clean — with a
+negative control proving the pre-port binary is revision-blind. At revision 2,
+480 of those 29,700 move: 288 `hf_energy_gain` slots (F17, on every fixture)
+and 192 SSIM-derived slots (F4, on the PU-HDR fixtures ONLY — on 8-bit sRGB
+`Clamp` is bit-identical to revision 1, reproducing the CPU lane's zero-moved-
+cells result exactly). `ssim_max` goes 5.4275 → 1.0 there. The whole parity
+suite has the SAME 6-failure outcome at both revisions (all 6 pre-existing);
+the pre-port tree at revision 2 fails **17 more**, which is what gives the
+comparison teeth. F5 / `freecomp` is structurally absent — this crate's widest
+regime is 372 and it has no raw-moment route — pinned by a test.
+
 ## zenmetrics-cli + scripts/jobsys (rev2 LAN staging + BMP decode, 2026-09-06)
 
 ### Added

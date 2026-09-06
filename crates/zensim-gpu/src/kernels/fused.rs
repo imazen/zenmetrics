@@ -114,6 +114,13 @@ pub fn fused_features_kernel(
     // NOT accumulated into `a0..a16` / `peak0..peak2`.
     y_body_start: u32,
     y_body_end: u32,
+    // **F4 / `v1ssimcap` revision flag.** 0 = revision 1 (shipped,
+    // `num_m = 1 - D^2`, unbounded below); 1 = revision 2's decided arm
+    // `Clamp` (`max(0, 1 - D^2)`). Resolved ONCE at `Zensim::new` from
+    // `formula_rev::active_revision` and passed as an ordinary `u32` uniform —
+    // deliberately NOT `#[comptime]`, which this crate has never used and
+    // which cannot be validated without a GPU.
+    luma_clamp: u32,
 ) {
     let tx = UNIT_POS_X;
     let col_block = CUBE_POS_X;
@@ -287,7 +294,19 @@ pub fn fused_features_kernel(
         // SSIMULACRA2-style SSIM (no C1, uses `1 - (mu1-mu2)²`). FMA
         // fusion order matches CPU `zensim::fused::fused_vblur_ssim_inner_v4`.
         let mu_diff = mu1 - mu2;
-        let num_m = fma(mu_diff, -mu_diff, 1.0);
+        let num_m_raw = fma(mu_diff, -mu_diff, 1.0);
+        // **F4 / `v1ssimcap`** — revision 2 bounds the luminance term.
+        // `luma_clamp` is 0 (revision 1, `1 - D^2`, unbounded below) or 1
+        // (revision 2's decided arm `Clamp` = `max(0, 1 - D^2)`), resolved
+        // ONCE at `Zensim::new` and passed down as a plain uniform. Spelled as
+        // a branch on the flag, not as a branchless `max(x, -inf)`: revision 1
+        // must keep the untouched expression BIT-for-BIT, and a branchless
+        // trick would also change NaN behaviour.
+        let num_m = if luma_clamp == 1u32 {
+            f32::max(num_m_raw, 0.0)
+        } else {
+            num_m_raw
+        };
         let inner_ns = fma(-mu1, mu2, s12_v);
         let num_s = fma(2.0, inner_ns, C2);
         let inner_ds_inner = fma(-mu1, mu1, ssq);
@@ -517,6 +536,13 @@ pub fn fused_features_kernel_persist(
     // image strip's body, so we cannot gate persist writes here.
     y_body_start: u32,
     y_body_end: u32,
+    // **F4 / `v1ssimcap` revision flag.** 0 = revision 1 (shipped,
+    // `num_m = 1 - D^2`, unbounded below); 1 = revision 2's decided arm
+    // `Clamp` (`max(0, 1 - D^2)`). Resolved ONCE at `Zensim::new` from
+    // `formula_rev::active_revision` and passed as an ordinary `u32` uniform —
+    // deliberately NOT `#[comptime]`, which this crate has never used and
+    // which cannot be validated without a GPU.
+    luma_clamp: u32,
 ) {
     let tx = UNIT_POS_X;
     let col_block = CUBE_POS_X;
@@ -685,7 +711,19 @@ pub fn fused_features_kernel_persist(
         }
 
         let mu_diff = mu1 - mu2;
-        let num_m = fma(mu_diff, -mu_diff, 1.0);
+        let num_m_raw = fma(mu_diff, -mu_diff, 1.0);
+        // **F4 / `v1ssimcap`** — revision 2 bounds the luminance term.
+        // `luma_clamp` is 0 (revision 1, `1 - D^2`, unbounded below) or 1
+        // (revision 2's decided arm `Clamp` = `max(0, 1 - D^2)`), resolved
+        // ONCE at `Zensim::new` and passed down as a plain uniform. Spelled as
+        // a branch on the flag, not as a branchless `max(x, -inf)`: revision 1
+        // must keep the untouched expression BIT-for-BIT, and a branchless
+        // trick would also change NaN behaviour.
+        let num_m = if luma_clamp == 1u32 {
+            f32::max(num_m_raw, 0.0)
+        } else {
+            num_m_raw
+        };
         let inner_ns = fma(-mu1, mu2, s12_v);
         let num_s = fma(2.0, inner_ns, C2);
         let inner_ds_inner = fma(-mu1, mu1, ssq);

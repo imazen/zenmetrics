@@ -315,12 +315,42 @@ pub fn trained_multiscale_ssim_weights_default(
 /// fusion order exactly so the GPU kernel and the scalar reference
 /// produce bit-identical results at f32 precision when the inputs
 /// match.
+///
+/// **Pinned to revision 1.** The luminance term this evaluates is the
+/// shipped unbounded `1 - D^2`; a caller that needs the reference for a
+/// revision-2 kernel run must use
+/// [`per_pixel_ssim_error_scalar_rev`]. Kept at its original signature so
+/// the existing by-path cross-crate users keep compiling unchanged.
 #[must_use]
 pub fn per_pixel_ssim_error_scalar(mu1: f32, mu2: f32, ssq: f32, s12: f32) -> f32 {
+    per_pixel_ssim_error_scalar_rev(0, mu1, mu2, ssq, s12)
+}
+
+/// Revision-aware form of [`per_pixel_ssim_error_scalar`].
+///
+/// `luma_clamp` is the same `u32` uniform
+/// [`per_scale_weighted_ssim_kernel`] takes — 0 for revision 1's unbounded
+/// `1 - D^2`, 1 for revision 2's decided arm `Clamp` = `max(0, 1 - D^2)`
+/// (`zensim::ssim_form::SsimLumaForm::REV2_LUMA`). Spelled as a branch on
+/// the flag rather than a branchless `max`, so revision 1 keeps the
+/// original expression BIT-for-BIT.
+#[must_use]
+pub fn per_pixel_ssim_error_scalar_rev(
+    luma_clamp: u32,
+    mu1: f32,
+    mu2: f32,
+    ssq: f32,
+    s12: f32,
+) -> f32 {
     let c2: f32 = 0.0009;
     let mu_diff = mu1 - mu2;
     // num_m = 1 - mu_diff^2 (via FMA(mu_diff, -mu_diff, 1.0))
-    let num_m = mu_diff.mul_add(-mu_diff, 1.0);
+    let num_m_raw = mu_diff.mul_add(-mu_diff, 1.0);
+    let num_m = if luma_clamp == 1 {
+        num_m_raw.max(0.0)
+    } else {
+        num_m_raw
+    };
     let inner_ns = (-mu1).mul_add(mu2, s12);
     let num_s = 2.0_f32.mul_add(inner_ns, c2);
     let inner_ds_inner = (-mu1).mul_add(mu1, ssq);
@@ -394,6 +424,14 @@ pub fn per_scale_weighted_ssim_kernel(
     w_x: f32,
     w_y: f32,
     w_b: f32,
+    // **F4 / `v1ssimcap` revision flag** — see `fused_features_kernel`.
+    // 0 = revision 1 (`1 - D^2`), 1 = revision 2's `Clamp` arm.
+    //
+    // The CPU diffmap is NOT exempt from the revision: zensim's diffmap
+    // routes through `fused_vblur_features_ssim`, i.e. the same
+    // `ssim_form` owner the feature walk uses, so a GPU diffmap left at
+    // revision 1 would silently serve rev1 pixels to a rev2 caller.
+    luma_clamp: u32,
 ) {
     let idx = ABSOLUTE_POS;
     let total = (padded_w * height) as usize;
@@ -412,7 +450,12 @@ pub fn per_scale_weighted_ssim_kernel(
     let sq_x = ssq_all[idx];
     let s12_x = s12_all[idx];
     let mu_diff_x = m1_x - m2_x;
-    let num_m_x = fma(mu_diff_x, -mu_diff_x, one);
+    let num_m_raw_x = fma(mu_diff_x, -mu_diff_x, one);
+    let num_m_x = if luma_clamp == 1u32 {
+        f32::max(num_m_raw_x, zero)
+    } else {
+        num_m_raw_x
+    };
     let inner_ns_x = fma(-m1_x, m2_x, s12_x);
     let num_s_x = fma(two, inner_ns_x, c2);
     let inner_ds_x = fma(-m1_x, m1_x, sq_x);
@@ -426,7 +469,12 @@ pub fn per_scale_weighted_ssim_kernel(
     let sq_y = ssq_all[idx + pt];
     let s12_y = s12_all[idx + pt];
     let mu_diff_y = m1_y - m2_y;
-    let num_m_y = fma(mu_diff_y, -mu_diff_y, one);
+    let num_m_raw_y = fma(mu_diff_y, -mu_diff_y, one);
+    let num_m_y = if luma_clamp == 1u32 {
+        f32::max(num_m_raw_y, zero)
+    } else {
+        num_m_raw_y
+    };
     let inner_ns_y = fma(-m1_y, m2_y, s12_y);
     let num_s_y = fma(two, inner_ns_y, c2);
     let inner_ds_y = fma(-m1_y, m1_y, sq_y);
@@ -440,7 +488,12 @@ pub fn per_scale_weighted_ssim_kernel(
     let sq_b = ssq_all[idx + pt * 2];
     let s12_b = s12_all[idx + pt * 2];
     let mu_diff_b = m1_b - m2_b;
-    let num_m_b = fma(mu_diff_b, -mu_diff_b, one);
+    let num_m_raw_b = fma(mu_diff_b, -mu_diff_b, one);
+    let num_m_b = if luma_clamp == 1u32 {
+        f32::max(num_m_raw_b, zero)
+    } else {
+        num_m_raw_b
+    };
     let inner_ns_b = fma(-m1_b, m2_b, s12_b);
     let num_s_b = fma(two, inner_ns_b, c2);
     let inner_ds_b = fma(-m1_b, m1_b, sq_b);

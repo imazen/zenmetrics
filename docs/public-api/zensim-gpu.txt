@@ -6,32 +6,41 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zensim-gpu.txt 117 lines (supported surface) | zensim-gpu.features.txt 0 added (features: cpu,cubecl-types,cuda,fast-reduction,hip,pixels,wgpu) | zensim-gpu.internal.txt 327 lines (590 hidden + 0 excluded-feature)
+# files: zensim-gpu.txt 145 lines (supported surface) | zensim-gpu.features.txt 0 added (features: cpu,cubecl-types,cuda,fast-reduction,hip,pixels,wgpu) | zensim-gpu.internal.txt 372 lines (653 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                 2
-#   pub types (struct/enum/trait/alias)         9
-#   pub consts/statics                         17
-#   free functions                             13
-#   inherent methods                           33
-#   struct fields                              17
-#   enum variants                              21
+#   pub modules                                 3
+#   pub types (struct/enum/trait/alias)        13
+#   pub consts/statics                         23
+#   free functions                             19
+#   inherent methods                           37
+#   struct fields                              23
+#   enum variants                              27
 #   re-exports                                  3
-#   trait roster entries (type × trait)        23
-#   auto-trait-complete types                   5
+#   trait roster entries (type × trait)        35
+#   auto-trait-complete types                   7
 #   auto-trait exceptions                       1
 #
 # per-module pub lines:
-#   (root)                           94
-#   memory_mode                      21
+#   (root)                          117
+#   formula_rev                       5
+#   memory_mode                      26
 
-## items (110 lines)
+## items (136 lines)
 
 pub mod zensim_gpu
 pub use Backend
 pub use Score
 pub use Zensim
+pub mod formula_rev
+pub formula_rev::FormulaRevision::Rev1
+pub formula_rev::FormulaRevision::Rev2
+pub const fn formula_rev::FormulaRevision::as_str(self) -> &'static str [also: (root)]
+pub const fn formula_rev::FormulaRevision::luma_clamp(self) -> u32 [also: (root)]
+pub const fn formula_rev::FormulaRevision::saturating_hf_gain(self) -> bool [also: (root)]
+pub fn formula_rev::active_revision() -> formula_rev::FormulaRevision
+pub fn formula_rev::hf_energy_gain(formula_rev::FormulaRevision, f64, f64) -> f64
 pub mod memory_mode
 pub memory_mode::MemoryMode::Auto
 pub memory_mode::MemoryMode::Full
@@ -43,6 +52,8 @@ pub memory_mode::MemoryMode::Tile::w: u32
 pub memory_mode::ResolvedMode::Full
 pub memory_mode::ResolvedMode::Strip
 pub memory_mode::ResolvedMode::Strip::h_body: u32
+pub memory_mode::ScoreResourceEstimate::time_ms: f32
+pub memory_mode::ScoreResourceEstimate::vram_bytes: usize
 pub const memory_mode::CUBECL_OVERHEAD_BYTES: usize
 pub fn memory_mode::auto_strip_body_for(u32, u32, ZensimFeatureRegime, usize) -> u32
 pub fn memory_mode::estimate_strip_gpu_memory_bytes_with_regime(u32, u32, ZensimFeatureRegime) -> core::option::Option<usize>
@@ -50,18 +61,25 @@ pub fn memory_mode::live_vram_probe_bytes() -> core::option::Option<usize>
 pub fn memory_mode::reclaim_pooled_vram(zenmetrics_gpu_core::Backend)
 pub fn memory_mode::resolve_auto(u32, u32, ZensimFeatureRegime, usize) -> Result<memory_mode::ResolvedMode>
 pub enum Error
+pub Error::Cancelled(enough::reason::StopReason)
 pub Error::DimensionMismatch
 pub Error::DimensionMismatch::expected: usize
 pub Error::DimensionMismatch::got: usize
 pub Error::ExtendedPlaneBudgetExceeded
 pub Error::ExtendedPlaneBudgetExceeded::max_bytes: usize
 pub Error::ExtendedPlaneBudgetExceeded::needed_bytes: usize
+pub Error::FormulaRevisionMismatch
+pub Error::FormulaRevisionMismatch::cpu_process: formula_rev::FormulaRevision
+pub Error::FormulaRevisionMismatch::pipeline: formula_rev::FormulaRevision
 pub Error::InvalidImageSize
 pub Error::ModeUnsupported(&'static str)
 pub Error::NoCachedReference
 pub Error::TooBigForFull
 pub Error::TooBigForFull::cap: usize
 pub Error::TooBigForFull::needed: usize
+pub enum FormulaRevision [also: formula_rev]
+pub FormulaRevision::Rev1
+pub FormulaRevision::Rev2
 pub enum MemoryMode [also: memory_mode]
 pub MemoryMode::Auto
 pub MemoryMode::Full
@@ -82,19 +100,26 @@ pub const fn ZensimFeatureRegime::needs_extended_kernel(self) -> bool
 pub const fn ZensimFeatureRegime::needs_iw(self) -> bool
 pub const fn ZensimFeatureRegime::needs_masked(self) -> bool
 pub const fn ZensimFeatureRegime::total_features(self) -> usize
+pub struct ScoreResourceEstimate [also: memory_mode]
+pub ScoreResourceEstimate::time_ms: f32
+pub ScoreResourceEstimate::vram_bytes: usize
 pub struct ZensimOpaque
 pub fn ZensimOpaque::clear_reference(&mut self)
 pub fn ZensimOpaque::compute_features_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<[f64; 228]>
+pub fn ZensimOpaque::compute_features_pu_linear_nits(&mut self, [&[f32]; 3], [&[f32]; 3]) -> Result<alloc::vec::Vec<f64>>
 pub fn ZensimOpaque::compute_features_srgb_u8(&mut self, &[u8], &[u8]) -> Result<[f64; 228]>
 pub fn ZensimOpaque::compute_features_vec_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<alloc::vec::Vec<f64>>
 pub fn ZensimOpaque::compute_features_vec_srgb_u8(&mut self, &[u8], &[u8]) -> Result<alloc::vec::Vec<f64>>
 pub fn ZensimOpaque::compute_features_with_reference_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>) -> Result<alloc::vec::Vec<f64>>
 pub fn ZensimOpaque::compute_features_with_reference_srgb_u8(&mut self, &[u8]) -> Result<alloc::vec::Vec<f64>>
 pub fn ZensimOpaque::compute_pixels(&mut self, zenpixels::buffer::PixelSlice<'_>, zenpixels::buffer::PixelSlice<'_>) -> Result<zenmetrics_gpu_core::Score>
+pub fn ZensimOpaque::compute_pu_linear_nits_interleaved(&mut self, &[f32], &[f32]) -> Result<(zenmetrics_gpu_core::Score, alloc::vec::Vec<f64>)>
 pub fn ZensimOpaque::compute_srgb_u8(&mut self, &[u8], &[u8]) -> Result<zenmetrics_gpu_core::Score>
 pub fn ZensimOpaque::compute_srgb_u8_with_codec(&mut self, &[u8], &[u8], core::option::Option<&str>) -> Result<zenmetrics_gpu_core::Score>
 pub fn ZensimOpaque::compute_srgb_u8_with_features(&mut self, &[u8], &[u8]) -> Result<(zenmetrics_gpu_core::Score, alloc::vec::Vec<f64>)>
+pub fn ZensimOpaque::compute_srgb_u8_with_stop(&mut self, &[u8], &[u8], &dyn enough::Stop) -> Result<zenmetrics_gpu_core::Score>
 pub fn ZensimOpaque::compute_with_reference_srgb_u8(&mut self, &[u8]) -> Result<zenmetrics_gpu_core::Score>
+pub fn ZensimOpaque::compute_with_reference_srgb_u8_with_stop(&mut self, &[u8], &dyn enough::Stop) -> Result<zenmetrics_gpu_core::Score>
 pub fn ZensimOpaque::dims(&self) -> (u32, u32)
 pub fn ZensimOpaque::has_reference(&self) -> bool
 pub fn ZensimOpaque::new(zenmetrics_gpu_core::Backend, u32, u32, ZensimParams) -> Result<Self>
@@ -133,21 +158,25 @@ pub const TOTAL_FEATURES_EXTENDED: usize
 pub const TOTAL_FEATURES_WITH_IW: usize
 pub static WEIGHTS_PREVIEW_V0_2: [f64; 228]
 pub fn estimate_gpu_memory_bytes(u32, u32, ZensimFeatureRegime) -> usize [also: memory_mode]
+pub fn estimate_score_resources(u32, u32, ZensimFeatureRegime) -> memory_mode::ScoreResourceEstimate [also: memory_mode]
+pub fn estimate_score_time_ms(u32, u32) -> f32 [also: memory_mode]
 pub fn estimate_strip_gpu_memory_bytes(u32, u32) -> core::option::Option<usize> [also: memory_mode]
 pub fn score_from_features(&[f64], &[f64]) -> f64
 pub fn simd_padded_width(usize) -> usize
 pub fn vram_cap_bytes() -> usize [also: memory_mode]
 pub type Result<T> = core::result::Result<T, Error>
 
-## trait impls (5 types)
+## trait impls (7 types)
 
-Error: Clone, Debug, Display, Error
+Error: Clone, Debug, Display, Error, From<enough::reason::StopReason>
 ZensimFeatureRegime: Clone, Copy, Debug, Default, Eq, PartialEq
 ZensimParams: Clone, Debug, Default
+formula_rev::FormulaRevision: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
 memory_mode::MemoryMode: Clone, Copy, Debug, Eq, PartialEq
 memory_mode::ResolvedMode: Clone, Copy, Debug, Eq, PartialEq
+memory_mode::ScoreResourceEstimate: Clone, Copy, Debug, PartialEq
 
 ## auto traits
 
-5 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+7 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 ZensimOpaque: !RefUnwindSafe !Sync !UnwindSafe
