@@ -628,3 +628,38 @@ accumulator, no `GLOBAL_*` slots and no append kernel.
 not a count. The check that worked was run only at verification time — enumerate
 every occurrence on the LANDED tree and classify each as ported /
 deliberately-not / missed.
+
+## 7.12 Final wave inventory
+
+Five job sets, **all drained clean**, on four LAN boxes with no paid cloud:
+
+| job set | regime | rev | jobs | rows | boxes | wall |
+|---|---|--:|--:|--:|--:|---|
+| `rev2feat372-20260906` | 372 | 2 | 3,907 | 43,870 | 1 | ~2.5 min |
+| `rev2feat944-20260906` | 944 | 2 | 3,907 | 43,870 | 4 | ~3 min |
+| `rev1feat372-20260906` (CONTROL) | 372 | 1 | 3,907 | 43,870 | 2 | ~5 min |
+| `rev2safesyn372-20260906` | 372 | 2 | 7,407 | 196,086 | 4 | ~6 min |
+| `rev2safesyn944-20260906` | 944 | 2 | 7,407 | 196,086 | 4 | ~11 min |
+| **total** | | | **26,535** | **523,782** | | **~28 min** |
+
+Five roots on disk, all mirrored to `s3://zentrain/eval-roots/<name>/` and
+`tower:/mnt/user/coefficient/output/zensim-archive-2026-09-06/`, each with a
+`_MANIFEST.json` (`build_commit`, `feature_set_id`, `formula_revision`, decoder era
+per format, per-file sha256, row counts):
+
+* `2026-09-06-full-features-372-rev2` — 8 corpora, 43,870 rows
+* `2026-09-06-full-features-944-rev2` — 8 corpora, 43,870 rows
+* `2026-09-06-full-features-372-rev1-fleet` — the control, 43,870 rows
+* `2026-09-06-safesyn-rev2` — 196,086 × 375
+* `2026-09-06-safesyn-944-rev2` — 196,086 × 947, **1.05 GB**
+
+**Pixels staged and reusable on the LAN store**: `eval372-rev2-2026-09-06/`
+(124,742 objects, 25 GB) and `safesyn-rev2-2026-09-06/` (199,304 objects, 16.6 GB).
+
+**Not attempted, and why**: KADIS distorted (R2-only; needs scoped temp creds and a
+staging pass) and bigcodec (5.7 M rows, unstaged). Neither is compute-bound — one
+box did 43,870 rows in 2.5 minutes. **The harvester is the next limit, not the
+fleet**: `--feature-corpus` materialises every column as a Python list, so peak RSS
+is ~`rows × features × 32 B` — MEASURED at ~12 GB for 196,086 × 944, which is fine
+here and is NOT fine for bigcodec. A chunked `pq.ParquetWriter` is the fix and is
+named in the tool's own header rather than left to be discovered.

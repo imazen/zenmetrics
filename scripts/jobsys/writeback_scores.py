@@ -28,6 +28,13 @@ import pyarrow as pa, pyarrow.parquet as pq
 #       [--blob-dir DIR]   reuse an already-downloaded blob dir instead of fetching
 #       [--expect N]       fail loud unless exactly N rows are recovered
 #
+# ⚠ MEMORY: this mode materialises every column as a Python list before writing,
+# so peak RSS is roughly `rows x features x 32 B`. MEASURED: a 196,086-row x 944
+# table peaks near 12 GB. That is fine for an eval corpus or a training leg on a
+# 60 GB box and is NOT fine for bigcodec (5.7 M rows), which would need a chunked
+# writer (`pq.ParquetWriter` + row groups) that nothing has needed yet. Sized here
+# rather than discovered later.
+#
 # Row ORDER is the pairs file's order, which is what makes the output positionally
 # comparable with a stored root built by walking the same file. A pair the run did
 # not produce is a FAILURE, not a hole: the row would silently become a different
