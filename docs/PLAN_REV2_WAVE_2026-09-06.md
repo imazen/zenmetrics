@@ -681,3 +681,56 @@ registered root)` before going on to read the era correctly from the
 immediately below it resolves — but registering the paths there would make a
 flagless run self-describing, which is the whole point of that owner. A small
 additive change in zensim, left for the lane that owns that file.
+
+## 7.14 The fast-class arm at rev2 — INERT, and a method finding that outranks it
+
+**Result: revision 2 is inert on the fast-class model class.** k=3 (seeds
+4004/4005/4006), rev1-in-era → rev2-in-era, identical recipe and pack chain:
+
+| corpus | rev1 | rev2 | Δ | **seed spread** |
+|---|--:|--:|--:|--:|
+| CID22 | 0.88885 | 0.88854 | −0.00031 | **0.00600** |
+| KonJND | 0.48878 | 0.49097 | +0.00219 | **0.02712** |
+| AIC-3 | 0.79854 | 0.79625 | −0.00229 | **0.00745** |
+| CSIQ | 0.96051 | 0.95866 | −0.00185 | **0.00492** |
+| LIVE | 0.96188 | 0.96316 | +0.00128 | **0.00532** |
+| TID | 0.94881 | 0.95071 | +0.00190 | **0.00253** |
+| KADID *(train==val)* | 0.94212 | 0.94365 | +0.00153 | **0.00322** |
+
+**Every delta is smaller than the seed spread of the arm it is measured in.** It
+remains NOT SHIPPABLE at both revisions (contract 4/6 — C5 fails with all 400
+identity rows outside the band, identity dial 94.1999; A7r fails 5 of 5), and the
+one axis that moves gets **worse**: C6 goes 441 → 946 grid cells out-scoring a
+perfect copy. It stays an arm, not a candidate — where §4 already had it.
+
+### ⛔ The method finding: a single-seed paired bootstrap is confidently wrong about its own sign
+
+Seed-**matched** paired bootstraps (B = 2,000, seed 20260905, s4004 vs s4004 …) of
+the *same* rev1-vs-rev2 comparison:
+
+| seed | CID22 Δ | 95 % CI |
+|---|--:|---|
+| 4004 | **−0.00113** | [−0.00217, −0.00008] |
+| 4005 | **+0.00240** | [+0.00129, +0.00349] |
+| 4006 | **−0.00215** | [−0.00311, −0.00133] |
+
+**The sign flips across seeds and all three CIs exclude zero.** One experiment
+that, read at a single seed, would have reported a CI-excluding LOSS on two seeds
+and a CI-excluding WIN on the third. The mechanism: a paired bootstrap resamples
+**pairs**, so it cannot see **initialisation** variance — and on this architecture
+that is the larger term.
+
+**The converse is what makes this actionable rather than merely cautionary.** A
+**deterministic** fit with no seed — the convex lasso chain the ADD156 D lineage
+uses — has no initialisation term, so its paired-bootstrap CI *is* credible. That
+is exactly why the D chain's rev2 **CID22 −0.00456 [−0.00549, −0.00364] stands as a
+G-SHIP.1 failure** while this one does not. Registered in zensim
+`benchmarks/eval_annotations.json` as
+`single-seed-paired-bootstrap-cannot-see-init-variance-2026-09-06` (`f9c3643a`),
+with the rule: report a seeded class's rank delta as a k-seed mean beside its seed
+spread, and reserve single-arm bootstrap CIs for deterministic fits. **Not enforced
+in tooling.**
+
+**Free control noted in passing:** `bake_dial_refit pack` is deterministic — all
+three rev1 id100 bakes reproduced byte-identically across two independent
+invocations.
