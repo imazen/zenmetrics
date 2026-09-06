@@ -13,6 +13,32 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## zenmetrics-cli + scripts/jobsys (rev2 LAN staging + BMP decode, 2026-09-06)
+
+### Added
+
+- `zenmetrics-cli`'s `bmp` cargo feature: a BMP decode arm (`zenbitmaps::decode_bmp`
+  funnelled through every named `PixelLayout` to RGB8), fixing the rev2
+  recalculation's `live`-corpus G-BITEXACT blocker ("could not detect image
+  format" on LIVE's `.bmp` originals). 4 unit tests round-trip real BMP bytes
+  produced by `zenbitmaps`' own encoder. (`5be5da80`)
+- `scripts/jobsys/stage_eval372_corpora_lan.py` — stages the 8 re-extractable
+  372-eval corpora (43,870 rows, ~25 GB) to the LAN store
+  (`s3://codec-corpus/eval372-rev2-2026-09-06/`), with a per-corpus sha256
+  manifest and a rewritten `s3://`-path pairs TSV. (`5be5da80`)
+- `scripts/jobsys/verify_lan_stage_reachability.sh` — proves a staged corpus's
+  `s3://` pairs TSV produces bit-identical features to its local-path
+  original through the real `jobexec` executor, with no code change to the
+  fetch path. (`5be5da80`)
+
+### Fixed
+
+- `docs/PLAN_REV2_RECALC_2026-09-06.md` §7.2's row-order fix for `live`:
+  corrected from "needs a key-based join" to a stable sort of the pairs by
+  `basename(ref_path)`, which reproduces the stored table's exact row order
+  (verified on all 779 rows). G-BITEXACT re-run: 0 of 289,788 cells differ.
+  (`5be5da80`)
+
 ## zenfleet-worker + scripts/jobsys (TMPDIR discipline, 2026-09-05)
 
 ### Added
