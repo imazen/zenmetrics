@@ -772,12 +772,25 @@ identical to 9 dp. **Operationally: the corruption head does not need refitting 
 the revision flips.** That removes it as a blocker from any future rev2 attempt —
 worth more than any single number in the table above.
 
-### A pre-registered prediction, half falsified, amendment written before the numbers
+### A prediction that was WEAKENED before the fact, then half falsified anyway
 
-The lane predicted the logistic would gain more than the tree, because it is linear
-in a value the ±8 standardised clip destroys. **Relative claim HOLDS:** pAUC₅ moves
-**+0.54** for the logistic against **−0.05** for the tree, 11×. **Directional claim
-FAILS:** the logistic does not improve in the sense that matters — at T = 0.9 its
+*(Corrected at the lane's own insistence after the first draft of this section
+credited it with more than it claimed. The ordering is the point.)*
+
+The lane's **first** draft predicted that the logistic would gain and **the tree
+would be invariant**, because the logistic is linear in a value the ±8 standardised
+clip destroys. It **narrowed that to the RELATIVE claim alone — "the logistic gains
+more than the tree" — BEFORE seeing any number**, on the reasoning that the ±8 clip
+applies to the tree as well, so tree-invariance was not claimable a priori. The
+measurement then confirmed the narrowed version and falsified the other half.
+
+**A prediction weakened before the fact is a different object from one that was
+right**, and the record should not let the two blur: what survives here is a
+weakened claim, not a vindicated one — and it is the lane that insisted on saying
+so, unprompted, after the summary had already been written the flattering way.
+
+**Relative claim (the narrowed one) HOLDS:** pAUC₅ moves **+0.54** for the logistic
+against **−0.05** for the tree, 11×. **Directional claim FAILS:** the logistic does not improve in the sense that matters — at T = 0.9 its
 +4.92 pt of detection is bought with **+3.48 pt of ladder FP and +6.55 pt of
 near-lossless FP**, worse on every codec (webp near-lossless 12.77 % → 31.91 %, jxl
 47.62 % → 56.19 %). Bounding the feature moved where the linear threshold *lands*;
