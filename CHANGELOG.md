@@ -13,6 +13,51 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+## rev2 recalculation wave (2026-09-06)
+
+### Added
+
+- `zenfleet-ctl declare-features` waves at formula revision 2, executed on the LAN
+  fleet: **four new feature roots**, each with a `_MANIFEST.json` carrying
+  `build_commit`, `feature_set_id`, `formula_revision`, per-format decoder era,
+  per-file sha256 and row counts, mirrored to the LAN store and Tower — the 372
+  rev2 eval root, the 944 rev2 root (the first extraction at a width where F5 is
+  reachable), a rev1 CONTROL root that makes every comparison single-variable, and
+  the 196,086-row safesyn training leg (`ee82764a`, `60192b39`, `5ee98e79`).
+- `writeback_scores.py --feature-corpus <pairs.tsv> --run <id> --out <parquet>` —
+  the harvester's mode for a Feature run over an EVAL CORPUS, whose cells are the
+  rows of a pairs TSV rather than variants behind an `encode_sha` bridge. Same
+  JSONL→parquet step, so it lives in the one harvester; a pair with no feature row
+  is a hard failure rather than a hole (`8ad556fe`).
+- `lan_score_launch.sh` forwards `ZEN_FORMULA_REV` → `ZENSIM_FORMULA_REV` into the
+  worker container. The revision is a LAUNCH-level pin and `jobexec` refuses any
+  job whose manifest disagrees with its environment, so without this a rev2
+  manifest failed every cell on a box launched without it (`4d962950`).
+
+### Fixed
+
+- The staged konjnd pairs named the WRONG distorted file on 4 of 1,008 rows —
+  round-half-to-even where the stored root used round-half-up, so the rows whose
+  PJND is exactly `X.5` pointed one JND level off (feature deltas to 0.068). The
+  staged live pairs were in directory order rather than the stored table's stable
+  sort by `basename(ref_path)`. Both corrected; with the corrections both corpora
+  are bit-exact to the stored root at revision 1 (`8ad556fe`).
+
+### Found, registered, NOT fixed
+
+- **`powf` makes the extractor libc-dependent** on 144 of its 372 slots: the musl
+  and glibc builds of the same source differ by one ULP on ~0.024 % of cells, while
+  glibc 2.36 and 2.43 are bit-identical on 400,000 samples. The wave was unblocked
+  by building the fleet binary against the base image's own glibc; no arithmetic
+  was changed (`9f6f4b1e`).
+- **12.5 % of CID22 is decoded by a non-imazen decoder** in every 372 root before
+  this one — exactly its 536 `.jpg` rows. PRICED at **≤ 1e-4 CID22 SROCC** on all
+  three shipped SDR bakes: a provenance defect, not a ranking one (`5ee98e79`).
+- **The fleet's AVIF decoder is a different era from zensim's**, so a fleet-
+  extracted TRAINING leg does not transfer: 51.2 % of safesyn cells differ, and
+  `.avif` alone carries it (0.0217 on 99.3 % of rows, against ~1e-7 for jpg/jxl/
+  webp) (`ee82764a`).
+
 ## zensim-gpu (the fourth hand-copy moves with revision 2, 2026-09-06)
 
 ### Added
