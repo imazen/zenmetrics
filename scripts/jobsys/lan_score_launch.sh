@@ -22,6 +22,9 @@
 #        (the tower rule: e.g. ZEN_CPUSET=0-23 ZEN_CPU_SHARES=256 ZEN_MEMORY=24g — before 2026-08-30
 #        the remote read these but the ssh line never forwarded them, so tower launches were uncapped
 #        unless hand-run).
+#        ZEN_FORMULA_REV=1|2 -> the zensim formula revision this worker extracts at. A Feature
+#        manifest declared with --revision N is REFUSED by every executor whose environment
+#        disagrees, so a rev2 wave MUST set this or every cell fails. One wave, one revision.
 #        ZEN_TMPDIR_HOST_DIR -> override the host-side scratch dir bind-mounted at /scratch (TMPDIR
 #        discipline, 2026-09-05: every launch gets a disk-backed TMPDIR, never bare /tmp). Default
 #        auto-detects: /mnt/user/coefficient/scratch when the remote has an Unraid array mounted
@@ -97,6 +100,7 @@ CTR="zen-score-${ROLE}"
 # command — the 2026-08-26 `--gpus all` bug); GPU flags are rebuilt on the remote.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
+    ZM_FORMULA_REV="${ZEN_FORMULA_REV:-}" \
   ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_TMPDIR_HOST_DIR="${ZEN_TMPDIR_HOST_DIR:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
@@ -144,6 +148,15 @@ ENCP=(); [ -n "${ZM_ENC_PREFIX:-}" ] && ENCP=(-e "ZEN_ENCODES_PREFIX=$ZM_ENC_PRE
 [ -n "${ZM_PASS_TIMEOUT:-}" ] && ENCP+=(-e "ZEN_PASS_TIMEOUT=$ZM_PASS_TIMEOUT")
 [ -n "${ZM_CHUNK_WALL:-}" ] && ENCP+=(-e "ZEN_CHUNK_WALL_SEC=$ZM_CHUNK_WALL")
 [ -n "${ZM_CAPABILITY:-}" ] && ENCP+=(-e "ZEN_CAPABILITY=$ZM_CAPABILITY")
+# The zensim FORMULA REVISION is a LAUNCH-level pin, not a per-job setting: zensim reads
+# ZENSIM_FORMULA_REV once per process into a OnceLock, and the worker reuses one warm child
+# across jobs, so a child that has already resolved the variable cannot serve the other
+# revision. `jobexec`'s `resolve_formula_revision` REFUSES any Feature job whose manifest
+# pins a revision that disagrees with the environment it is running in (a mixed-revision
+# table is the exact defect revision 2 exists to remove), so without this passthrough a
+# rev2 manifest fails EVERY cell on a box launched without it -- loudly, but only after the
+# box is up. One wave, one revision, pinned here and visible in `docker inspect`.
+[ -n "${ZM_FORMULA_REV:-}" ] && ENCP+=(-e "ZENSIM_FORMULA_REV=$ZM_FORMULA_REV")
 ENCP+=(-e "ZEN_REQUIRE_SNAPSHOT=${ZM_REQ_SNAP}")   # strict by default for single-run queues; ZEN_REQUIRE_SNAPSHOT=0 opts out
 # Resource caps for shared boxes (tower rule: never an uncapped worker on the media server).
 CAPS=()
