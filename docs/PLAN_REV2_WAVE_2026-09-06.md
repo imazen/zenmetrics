@@ -734,3 +734,56 @@ in tooling.**
 **Free control noted in passing:** `bake_dial_refit pack` is deterministic — all
 three rev1 id100 bakes reproduced byte-identically across two independent
 invocations.
+
+## 7.15 G-SHIP.6 — the corruption head at rev2, and the one result that outlives this wave
+
+**Stated first, because it is what a reader needs:** the outcome that could have
+changed the install decision — a rev2 head materially better than the rev1 head,
+making the revision worth its rank cost — **did not happen.**
+
+Corpus gated before use: 117,276 rows, `ref_id` / `family` / `is_corruption` /
+`severity` / `region` / `kind` / `content_class` **positionally identical** to the
+rev1 twin, exactly the twelve F17 slots moved, the closed form `g/(g+1)`
+reproducing the extraction to **4.3e-8**, `d228` parity passing on the same folds.
+BLAS pinned at 4 threads and recorded (the head's bake is thread-dependent until
+that defect is fixed at its owner).
+
+| arm | T | detection rev1 → rev2 | ladder FP | near-lossless FP |
+|---|---|---|---|---|
+| logistic | 0.9 | 86.06 → **90.98** | 11.27 → **14.75** | 49.40 → **55.95** |
+| logistic | 0.95 | 77.44 → 76.67 | 6.81 → 7.27 | 35.71 → 37.20 |
+| **hgb** | 0.9 | 98.90 → **99.04** | **1.23 → 1.23** | **2.38 → 2.38** |
+| **hgb** | 0.95 | 97.91 → 97.66 | 0.36 → 0.31 | 2.08 → 1.79 |
+| hgb_drop8 | 0.9 | 97.77 → 97.32 | 0.46 → 0.31 | 2.08 → 1.79 |
+| hgb_drop8 | 0.95 | 96.52 → 97.18 | 0.31 → 0.31 | 1.79 → 1.79 |
+
+DEPLOY **`pass_q20`** (the headline column): logistic 91.07 → 95.98, **hgb 99.85 →
+99.85**, hgb_drop8 99.55 → 99.11; D dial alone 23.07 → 22.32. **`pass_q10` reads
+12.50 → 12.35 for every arm at every threshold on both eras** — the dial-alone
+value, exactly as §7.14's registered caveat predicts, because the q10 anchor's dial
+is −4.964 at rev1 and −6.128 at rev2, both below the floor. **Predicted before the
+run, then confirmed.**
+
+### ★ The tree is INVARIANT to the revision, to nine decimals
+
+At T = 0.9 the HGB head's ladder-FP delta is **exactly 0.000000000**, its
+near-lossless-FP delta is **exactly 0.000000000**, and all five per-codec cells are
+identical to 9 dp. **Operationally: the corruption head does not need refitting when
+the revision flips.** That removes it as a blocker from any future rev2 attempt —
+worth more than any single number in the table above.
+
+### A pre-registered prediction, half falsified, amendment written before the numbers
+
+The lane predicted the logistic would gain more than the tree, because it is linear
+in a value the ±8 standardised clip destroys. **Relative claim HOLDS:** pAUC₅ moves
+**+0.54** for the logistic against **−0.05** for the tree, 11×. **Directional claim
+FAILS:** the logistic does not improve in the sense that matters — at T = 0.9 its
++4.92 pt of detection is bought with **+3.48 pt of ladder FP and +6.55 pt of
+near-lossless FP**, worse on every codec (webp near-lossless 12.77 % → 31.91 %, jxl
+47.62 % → 56.19 %). Bounding the feature moved where the linear threshold *lands*;
+it did not make the head **separate** corruption from honest content any better, and
++0.54 on a 0–100 pAUC scale says so plainly.
+
+Also measured: the corruption corpus carries revision-1 `contrast_inc` up to
+**1.30e7** — higher than negrich's 1.22e7 — all of it pinned to that ±8 clip. F17's
+unboundedness is larger on this population than anywhere previously recorded.
