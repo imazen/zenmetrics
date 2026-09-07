@@ -56,7 +56,7 @@ reconcile with `ZEN_STORE=r2` to reach the R2-hosted jobs, without questioning i
 
 Resuming on SeaweedFS hit a second latent defect: every sf2-cpu cell failed as
 `encoder_panic` in ~35ms. Manual single-cell repro (jobexec + full stderr) showed
-`GET http://192.168.50.170:3900/... in 112µs — HTTP error: builder error`: the
+`GET http://<store-host>:3900/... in 112µs — HTTP error: builder error`: the
 `object_store` client REFUSES to build plain-http requests unless `allow_http` is
 set. Current source already fixes this in BOTH clients (worker s3io `55f8a339`,
 jobexec objstore `e7e04994`) — but the baked exec image `exec-zensim944-57b7b9ad`

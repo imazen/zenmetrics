@@ -55,7 +55,7 @@ DECLARE-time work, registered here, not resolved.
   paths, and asserts the feature vectors are bit-identical. Run against
   csiq, live (BMP), pipal, konjnd on 2026-09-06 — **0 cells differ** in every
   case.
-- **Cross-node read**: `r7900x` (192.168.50.27, idle at the time, no `zen*`
+- **Cross-node read**: `r7900x` (idle at the time, no `zen*`
   container running) fetched 3 randomly-picked referenced files (aic3,
   kadid, csiq) by their manifest sha256 over SSH + `aws s3 cp` against the
   LAN store — all 3 hashes matched exactly.

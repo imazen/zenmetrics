@@ -8,6 +8,13 @@ PXE server, per-OS worker setup) lives in the **private** repo
 Public docs and benchmarks refer to nodes only by neutral IDs:
 `node-2`, `node-3`, `tower`, `r7900x`, `mac`, `r5900xt`, `i265`.
 
+`scripts/jobsys/fleet_power.py` follows the same split: the sleep roster in the
+public script holds only the operational fields (node id, Nomad node name, G-P1 gate
+result, power mode), and reads each box's hardware/network identifiers at runtime from
+`zenmetrics/fleet/nodes.toml` in the private repo above — default path
+`~/work/zen/homefleet/zenmetrics/fleet/nodes.toml`, override with `HOMEFLEET_NODES`.
+Without that file the script still reports status but refuses `--apply` for every box.
+
 ## Standing rule (REVISED 2026-08-06): `node-2` is a permanent Ubuntu worker; `node-3` defaults to Windows
 
 **User directive, 2026-08-06 (supersedes the 2026-08-05 "both permanently Ubuntu" rule below

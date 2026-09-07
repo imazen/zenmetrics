@@ -176,7 +176,7 @@ assumed away:
 
 * Observe before load on **every** node (`docker ps` for a live `zen*` worker,
   `uptime`) — a slow box is a busy box.
-* Kids' PCs (node-2 / node-3) only when idle and only via the sanctioned
+* `node-2` / `node-3` only when idle and only via the sanctioned
   PXE flip; never left flipped.
 * Tower is **Docker-only**; nothing installed on the Unraid host.
 * Narrow cpusets leaving ≥8 cores free on tower; memory caps; low `cpu-shares`.

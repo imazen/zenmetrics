@@ -26,7 +26,9 @@ SAFETY (read before running --apply on anything real):
     HANDOFF-nomad-power-fleet.md's resolved sleep-roster note.
   - A box only appears in SLEEP_ROSTER after a recorded G-P1 round-trip
     (wol_roundtrip_test.sh, 3/3) — see each entry's `gate` field. A box with `gate=None`
-    is refused for --apply (status still reports it, clearly marked NOT GATED).
+    is refused for --apply (status still reports it, clearly marked NOT GATED). A box whose
+    identifiers are not loaded from the private node config is refused the same way — see
+    _load_node_identifiers() below.
   - Hysteresis state (last-action timestamps, per box) persists to the LAN store
     (`jobs/_fleet_power/state.json`) — not local disk — because this runs as a Nomad
     periodic job, which may land on a different box each invocation.
@@ -35,7 +37,7 @@ SAFETY (read before running --apply on anything real):
 
 Usage:
   fleet_power.py status [--run RUN ...]
-  fleet_power.py apply [--run RUN ...] [--live] [--nomad-addr http://192.168.50.44:4646]
+  fleet_power.py apply [--run RUN ...] [--live] [--nomad-addr URL]
 
 RUN defaults to the pools this file's OWN queue-depth check knows about (see RUNLISTS
 below) — override with --run for a specific fleetbench run once one is declared.
@@ -68,33 +70,32 @@ NEVER_SLEEP = {"dev", "tower", "r7900x", "wsl", "mac"}
 
 # gate: G-P1 round-trip result. None = never tested (refuse --apply). A float = the
 # measured wake round-trip seconds from the LAST passing 3/3 gate run (see wol_roundtrip_test.sh).
+# gate: G-P1 round-trip result. None = never tested (refuse --apply). A float = the
+# measured wake round-trip seconds from the LAST passing 3/3 gate run (see wol_roundtrip_test.sh).
+#
+# The hardware address and SSH destination of each box are NOT here: they live in the
+# private homefleet repo and are merged in at load time by _load_node_identifiers()
+# below. This dict holds only the operational half of the roster, which is what the
+# decision logic actually reasons about.
 SLEEP_ROSTER = {
     "i265": {
-        "mac": "60:cf:84:76:20:d2",
-        "ssh": "zen@192.168.50.140",
         "nomad_node_name": "i265",
         "gate": 8.0,  # PASSED 3/3, 2026-08-24: 8s, 8s, 8s -- see homefleet NODES.md
     },
     "r3500": {
-        "mac": "04:42:1a:09:52:0f",
-        "ssh": "zen@192.168.50.55",
         "nomad_node_name": "r3500",
         "gate": 7.0,  # PASSED 3/3, 2026-08-24: 7s, 7s, 7s -- see homefleet NODES.md
     },
     "r5900xt": {
-        "mac": "30:c5:99:ef:60:79",
-        "ssh": "zen@192.168.50.250",
         "nomad_node_name": "r5900xt",
         "gate": None,  # FAILED to even wake once, 2026-08-24 — see NODES.md. Do NOT set until re-tested.
     },
     "i134": {
-        "mac": "04:7c:16:b3:18:51",
-        "ssh": "zen@192.168.50.148",
         "nomad_node_name": "i134",
         "power_mode": "poweroff",  # S3 suspend-WoL FAILED 2026-08-24 (arm_wol.sh was skipped --
         # a process error, not a confirmed hardware verdict). User-directed pivot: use S5
         # (real power off/on) instead of chasing S3-arming on a PXE-netboot-every-boot machine --
-        # S5-WoL just worked with ZERO extra config via `fleet-pxe worker <mac>` the same
+        # S5-WoL just worked with ZERO extra config via `fleet-pxe worker <node>` the same
         # session S3 failed. Trade-off accepted: slower wake (full cold boot, tens of seconds+)
         # for a wake mechanism that doesn't depend on OS/driver state surviving a netboot cycle.
         "gate": None,  # Box is currently ASLEEP (stuck from the S3 attempt) and unreachable —
@@ -104,14 +105,66 @@ SLEEP_ROSTER = {
         # before setting this to a real number.
     },
     "r5600g": {
-        "mac": "04:7c:16:8a:b5:b7",
-        "ssh": "zen@192.168.50.193",
         "nomad_node_name": "r5600g",
         "power_mode": "poweroff",  # Same story and same S5 pivot as i134 above, same day.
         "gate": None,  # Same story as i134 above -- currently ASLEEP, unreachable, needs a
         # physical/keyboard nudge, then a poweroff/WoL round-trip gate before a real number.
     },
 }
+
+# ── Node identifiers: loaded from the private homefleet repo, never stored here ─────────
+# The public repo carries no hardware address, no SSH destination and no LAN address for
+# any household box. They come from a config file in the private homefleet checkout:
+#
+#     HOMEFLEET_NODES=/path/to/nodes.toml      (override)
+#     ~/work/zen/homefleet/zenmetrics/fleet/nodes.toml   (default)
+#
+# Shape:  nomad_addr = "..."      and      [nodes.<id>] mac = "..."  ssh = "..."
+#
+# A missing or incomplete file is FAIL-SAFE, matching this module's existing stance: the
+# roster still loads and `status` still reports, but a box with no identifiers is refused
+# for --apply exactly as an ungated box is. It never falls back to a guessed address.
+HOMEFLEET_NODES_DEFAULT = pathlib.Path.home() / "work" / "zen" / "homefleet" / "zenmetrics" / "fleet" / "nodes.toml"
+
+
+def homefleet_nodes_path() -> pathlib.Path:
+    return pathlib.Path(os.environ.get("HOMEFLEET_NODES") or HOMEFLEET_NODES_DEFAULT).expanduser()
+
+
+def _load_node_identifiers() -> dict:
+    """Merge mac/ssh from the private node config into SLEEP_ROSTER. Returns the file's
+    top-level table (so callers can also read `nomad_addr`). Warns once, never raises:
+    the caller decides what to refuse, and refuse_reason() below is that decision."""
+    path = homefleet_nodes_path()
+    try:
+        with open(path, "rb") as f:
+            cfg = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        print(f"fleet_power: WARNING no node identifiers ({path}: {e}). Every box will be "
+              f"refused for --apply. Clone the private homefleet repo or set HOMEFLEET_NODES.",
+              file=sys.stderr)
+        return {}
+    for name, ident in (cfg.get("nodes") or {}).items():
+        if name in SLEEP_ROSTER:
+            SLEEP_ROSTER[name].update({k: v for k, v in ident.items() if k in ("mac", "ssh")})
+    missing = sorted(n for n, b in SLEEP_ROSTER.items() if not b.get("ssh") or not b.get("mac"))
+    if missing:
+        print(f"fleet_power: WARNING {path} has no identifiers for: {', '.join(missing)} — "
+              f"those boxes are refused for --apply.", file=sys.stderr)
+    return cfg
+
+
+def refuse_reason(box: dict) -> str | None:
+    """Why --apply must not touch this box, or None if it may. Ungated and unidentified
+    are the same class of refusal: act only on a box we have both tested and can address."""
+    if box.get("gate") is None:
+        return "NOT GATED"
+    if not box.get("ssh") or not box.get("mac"):
+        return "NO IDENTIFIERS (private node config not loaded)"
+    return None
+
+
+NODE_CONFIG = _load_node_identifiers()
 
 # ── Hysteresis knobs (all overridable via env for tuning without a code edit) ───────────
 # Versioned settings file, not env vars (user directive 2026-08-25: "env vars are unreliable,
@@ -380,11 +433,13 @@ def cmd_status(args):
     print()
     print("Sleep roster:")
     for name, box in SLEEP_ROSTER.items():
-        up = is_reachable(box["ssh"])
+        up = is_reachable(box["ssh"]) if box.get("ssh") else None
         alloc_n = node_alloc_count(args.nomad_addr, box["nomad_node_name"]) if up else None
         gate = box["gate"]
         gate_str = f"PASS ({gate}s)" if gate is not None else "NOT GATED — refused for --apply"
-        print(f"  {name:10s} up={up!s:5s} allocs={alloc_n} gate={gate_str}")
+        refusal = refuse_reason(box)
+        suffix = "" if refusal is None else f"  [{refusal} — refused for --apply]"
+        print(f"  {name:10s} up={up!s:5s} allocs={alloc_n} gate={gate_str}{suffix}")
 
 
 def decide(name: str, box: dict, up: bool, alloc_n: int | None, total_gap: int, state: dict) -> str | None:
@@ -433,8 +488,9 @@ def cmd_apply(args):
     acted = []
     for name in wake_priority:
         box = SLEEP_ROSTER[name]
-        if box["gate"] is None:
-            continue  # refuse to touch an ungated box, per the module docstring
+        refusal = refuse_reason(box)
+        if refusal is not None:
+            continue  # refuse to touch an ungated or unaddressable box, per the module docstring
         up = is_reachable(box["ssh"])
         node_id = resolve_node_id(args.nomad_addr, box["nomad_node_name"]) if up else None
         alloc_n = node_alloc_count(args.nomad_addr, box["nomad_node_name"]) if up else None
@@ -471,7 +527,10 @@ def main():
     for name in ("status", "apply"):
         sp = sub.add_parser(name)
         sp.add_argument("--run", action="append", help="job-system run id to read queue depth from (repeatable)")
-        sp.add_argument("--nomad-addr", default=os.environ.get("NOMAD_ADDR", "http://192.168.50.44:4646"))
+        default_addr = os.environ.get("NOMAD_ADDR") or NODE_CONFIG.get("nomad_addr")
+        sp.add_argument("--nomad-addr", default=default_addr, required=default_addr is None,
+                        help="Nomad HTTP API endpoint. Defaults to $NOMAD_ADDR, then to "
+                             "nomad_addr in the private node config (see HOMEFLEET_NODES).")
         if name == "apply":
             sp.add_argument("--live", action="store_true", help="actually call WoL/suspend (default: dry-run)")
     args = p.parse_args()

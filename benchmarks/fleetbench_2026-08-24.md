@@ -41,7 +41,7 @@ rationale" below for the honest tradeoff this makes instead).
   making every gate run dominate the session. This is a fleet-mechanics-appropriate
   tradeoff, not a codec-calibration one; do not reuse this corpus for anything that
   bakes into a codec default or oracle threshold.
-- **Uploaded to the LAN store** (SeaweedFS, `http://192.168.50.170:3900`, the
+- **Uploaded to the LAN store** (SeaweedFS on `tower`, port 3900, the
   Nomad-migration's own storage plane — no R2 involved, per the ADR's "storage
   stays outside any scheduler" framing): `s3://zentrain/fleetbench-2026-08-24/sources/fleetbench-workload/`
   (153 objects, verified count match).

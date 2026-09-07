@@ -51,7 +51,7 @@ fi
 END=$((SECONDS + BUDGET*60))
 ssh_fail=0; plex_fail=0; write_fail=0; write_was_ok=0; prev_write=""; write_streak_fails=0
 last_gap=""; gap_same=0
-STORE_HOST=${ZEN_STORE_HOST:-192.168.50.170}; STORE_PORT=${ZEN_STORE_PORT:-3900}
+STORE_HOST=${ZEN_STORE_HOST:-tower}; STORE_PORT=${ZEN_STORE_PORT:-3900}
 probe_write() {
   # s3-independent minimal probe: can the store accept a write? Uses s5cmd if
   # creds are sourced, else falls back to a TCP connect check (reach-only).

@@ -25,7 +25,7 @@ ZEN_DOE_RUNS="avifdoe-svt-eradelta-a1-20260903=s3://codec-corpus/avif-doe-1024-2
               avifdoe-svt-eradelta-b1-20260903=s3://codec-corpus/avif-doe-1024-2026-09-01/ \
               avifdoe-svt-eradelta-c1-20260903=s3://codec-corpus/avif-subsample-2026-09-01/" \
   avifdoe_score_gapfill.sh
-lan_score_launch.sh lilith@192.168.50.27 avifdoe-svt-eradelta-sf-cpu-20260903 edsf cpu \
+lan_score_launch.sh lilith@r7900x avifdoe-svt-eradelta-sf-cpu-20260903 edsf cpu \
   ghcr.io/imazen/zenfleet-worker:exec-avifdoe-b6-6b3c41fe
 
 # 1. harvest (era-delta wave ONLY — never pooled with Stage-A rows)
