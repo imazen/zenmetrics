@@ -1254,14 +1254,14 @@ impl<R: Runtime> Zensim<R> {
         // Phase 3: ONE read for the basic finals; one more for masked +
         // IW finals when needed. cubecl serialises both reads behind
         // the reduction launches.
-        let f64_bytes = self
-            .client
-            .read_one(self.finals_f64.clone())
-            .expect("read finals_f64");
-        let max_bytes = self
-            .client
-            .read_one(self.finals_max.clone())
-            .expect("read finals_max");
+        let f64_bytes = self.client.read_one(self.finals_f64.clone()).map_err(|e| {
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
+        let max_bytes = self.client.read_one(self.finals_max.clone()).map_err(|e| {
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
         // Finals are now produced in f32 on-device (GPUs without f64, e.g. Metal,
         // can't carry f64 buffers). Widen to f64 here (lossless) so the host fold +
         // scoring math below stays in f64 exactly as before.
@@ -1277,7 +1277,10 @@ impl<R: Runtime> Zensim<R> {
             let ext_bytes = self
                 .client
                 .read_one(self.finals_ext_f64.clone())
-                .expect("read finals_ext_f64");
+                .map_err(|e| {
+                    zenmetrics_gpu_core::release_device_pool(&self.client);
+                    Error::ReadbackFailed(format!("{e:?}"))
+                })?;
             finals_ext_storage = f32::from_bytes(&ext_bytes)
                 .iter()
                 .map(|&x| x as f64)
@@ -1474,14 +1477,14 @@ impl<R: Runtime> Zensim<R> {
 
             // Read back per-(scale, ch, slot) finals — already
             // body-gated by the kernel.
-            let f64_bytes = self
-                .client
-                .read_one(self.finals_f64.clone())
-                .expect("read finals_f64");
-            let max_bytes = self
-                .client
-                .read_one(self.finals_max.clone())
-                .expect("read finals_max");
+            let f64_bytes = self.client.read_one(self.finals_f64.clone()).map_err(|e| {
+                zenmetrics_gpu_core::release_device_pool(&self.client);
+                Error::ReadbackFailed(format!("{e:?}"))
+            })?;
+            let max_bytes = self.client.read_one(self.finals_max.clone()).map_err(|e| {
+                zenmetrics_gpu_core::release_device_pool(&self.client);
+                Error::ReadbackFailed(format!("{e:?}"))
+            })?;
             // f32 on-device finals widened to f64 (lossless) for the host accumulate.
             let finals_f64: Vec<f64> = f32::from_bytes(&f64_bytes)
                 .iter()
@@ -1500,7 +1503,10 @@ impl<R: Runtime> Zensim<R> {
                 let ext_bytes = self
                     .client
                     .read_one(self.finals_ext_f64.clone())
-                    .expect("read finals_ext_f64");
+                    .map_err(|e| {
+                        zenmetrics_gpu_core::release_device_pool(&self.client);
+                        Error::ReadbackFailed(format!("{e:?}"))
+                    })?;
                 let finals_ext: Vec<f64> = f32::from_bytes(&ext_bytes)
                     .iter()
                     .map(|&x| x as f64)
@@ -3286,7 +3292,7 @@ impl<R: Runtime> Zensim<R> {
         &mut self,
         ref_planes: [&[f32]; 3],
         dist_planes: [&[f32]; 3],
-    ) -> Vec<f64> {
+    ) -> Result<Vec<f64>> {
         let rp = self.prep_planes(ref_planes[0], ref_planes[1], ref_planes[2]);
         let dp = self.prep_planes(dist_planes[0], dist_planes[1], dist_planes[2]);
         let (rr, rg, rb): (&[f32], &[f32], &[f32]) = match &rp {
@@ -3320,7 +3326,7 @@ impl<R: Runtime> Zensim<R> {
     /// body of [`Self::compute_with_reference_vec`], including its
     /// `needs_ext` branches, so it works in every regime — the canonical
     /// V0_3+ path (`with_profile` → WithIw) gets the full 372 block.
-    fn compute_features_from_built_xyb(&mut self) -> Vec<f64> {
+    fn compute_features_from_built_xyb(&mut self) -> Result<Vec<f64>> {
         let n_scales = self.scales.len();
         let needs_ext = self.regime.needs_extended_kernel();
 
@@ -3344,14 +3350,14 @@ impl<R: Runtime> Zensim<R> {
             self.launch_reduction_ext();
         }
 
-        let f64_bytes = self
-            .client
-            .read_one(self.finals_f64.clone())
-            .expect("read finals_f64");
-        let max_bytes = self
-            .client
-            .read_one(self.finals_max.clone())
-            .expect("read finals_max");
+        let f64_bytes = self.client.read_one(self.finals_f64.clone()).map_err(|e| {
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
+        let max_bytes = self.client.read_one(self.finals_max.clone()).map_err(|e| {
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
         // f32 on-device finals widened to f64 (lossless) for the host fold.
         let finals_f64_storage: Vec<f64> = f32::from_bytes(&f64_bytes)
             .iter()
@@ -3365,7 +3371,10 @@ impl<R: Runtime> Zensim<R> {
             let ext_bytes = self
                 .client
                 .read_one(self.finals_ext_f64.clone())
-                .expect("read finals_ext_f64");
+                .map_err(|e| {
+                    zenmetrics_gpu_core::release_device_pool(&self.client);
+                    Error::ReadbackFailed(format!("{e:?}"))
+                })?;
             finals_ext_storage = f32::from_bytes(&ext_bytes)
                 .iter()
                 .map(|&x| x as f64)
@@ -3383,12 +3392,12 @@ impl<R: Runtime> Zensim<R> {
             // exactly (see the fix note in `new_with_regime_strip_budget`).
             hs /= 2;
         }
-        self.pack_feature_vector(
+        Ok(self.pack_feature_vector(
             finals_f64,
             finals_max,
             finals_ext_f64,
             &scale_image_h[..n_scales],
-        )
+        ))
     }
 
     /// Run the GPU diffmap kernel chain on the per-scale persist planes
@@ -3412,7 +3421,7 @@ impl<R: Runtime> Zensim<R> {
         per_scale_w: &[[f32; 3]],
         scale_blend: &[f32],
         diffmap_out: &mut Vec<f32>,
-    ) {
+    ) -> Result<()> {
         let n_scales = self.scales.len();
         let width = self.width;
         let height = self.height;
@@ -3488,7 +3497,10 @@ impl<R: Runtime> Zensim<R> {
         if base_padded_w == width {
             // No pad columns — read the accumulator directly (its first
             // `width × height` slots are exactly the tight output).
-            let bytes = self.client.read_one(acc.clone()).expect("read acc");
+            let bytes = self.client.read_one(acc.clone()).map_err(|e| {
+                zenmetrics_gpu_core::release_device_pool(&self.client);
+                Error::ReadbackFailed(format!("{e:?}"))
+            })?;
             let data = f32::from_bytes(&bytes);
             diffmap_out.clear();
             diffmap_out.extend_from_slice(&data[..tight_n]);
@@ -3505,11 +3517,15 @@ impl<R: Runtime> Zensim<R> {
                     height,
                 );
             }
-            let bytes = self.client.read_one(out.clone()).expect("read out");
+            let bytes = self.client.read_one(out.clone()).map_err(|e| {
+                zenmetrics_gpu_core::release_device_pool(&self.client);
+                Error::ReadbackFailed(format!("{e:?}"))
+            })?;
             let data = f32::from_bytes(&bytes);
             diffmap_out.clear();
             diffmap_out.extend_from_slice(&data[..tight_n]);
         }
+        Ok(())
     }
 
     /// Lazily allocate the [`GpuDiffmapScratch`] (inner WithIw
@@ -3680,7 +3696,7 @@ impl<R: Runtime> Zensim<R> {
         scratch
             .inner
             .run_xyb_pyramid_linear(false, dist_planes[0], dist_planes[1], dist_planes[2]);
-        let _features = scratch.inner.compute_features_from_built_xyb();
+        let _features = scratch.inner.compute_features_from_built_xyb()?;
 
         {
             let inner = scratch.inner.as_ref();
@@ -3691,7 +3707,7 @@ impl<R: Runtime> Zensim<R> {
                 &scratch.per_scale_w,
                 &scratch.scale_blend,
                 diffmap_out,
-            );
+            )?;
         }
 
         let _ = (&scratch.ref_lin, &scratch.dist_lin, scratch.profile);

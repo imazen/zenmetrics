@@ -248,6 +248,10 @@ pub fn score_from_features(features: &[f64], weights: &[f64]) -> f64 {
 
 #[derive(Debug, Clone)]
 pub enum Error {
+    /// Reading a buffer back from the device failed — typically a device OOM.
+    /// Previously an `.expect()`, i.e. a panic no caller could handle
+    /// (imazen/zenmetrics#41).
+    ReadbackFailed(String),
     /// Buffer length doesn't match `width × height × 3`.
     DimensionMismatch { expected: usize, got: usize },
     /// `compute_with_reference` was called without a prior `set_reference`.
@@ -312,6 +316,9 @@ impl From<enough::StopReason> for Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Error::ReadbackFailed(e) => {
+                write!(f, "reading a buffer back from the device failed: {e}")
+            }
             Error::DimensionMismatch { expected, got } => write!(
                 f,
                 "dimension mismatch: expected {expected} bytes, got {got}"

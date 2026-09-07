@@ -1483,7 +1483,10 @@ impl<R: Runtime> Iwssim<R> {
                 NUM_SLOTS,
             );
 
-            let bytes = self.client.read_one(self.sums.clone()).expect("read sums");
+            let bytes = self.client.read_one(self.sums.clone()).map_err(|e| {
+                zenmetrics_gpu_core::release_device_pool(&self.client);
+                Error::ReadbackFailed(format!("{e:?}"))
+            })?;
             let sums = f32::from_bytes(&bytes);
             debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
             for s in 0..n_scales_iw {
@@ -1658,10 +1661,10 @@ impl<R: Runtime> Iwssim<R> {
             for s in 0..self.scales.len() {
                 let sc = &self.scales[s];
                 let n = (sc.h as usize) * (sc.w as usize);
-                let bytes = self
-                    .client
-                    .read_one(sc.lp_ref.clone())
-                    .expect("read lp_ref strip cache");
+                let bytes = self.client.read_one(sc.lp_ref.clone()).map_err(|e| {
+                    zenmetrics_gpu_core::release_device_pool(&self.client);
+                    Error::ReadbackFailed(format!("{e:?}"))
+                })?;
                 // `bytes.len()` is the underlying allocation size in
                 // bytes (cubecl's `read_one` returns the handle's full
                 // `size_in_used()`). The fresh-alloc reset above
@@ -1956,7 +1959,10 @@ impl<R: Runtime> Iwssim<R> {
                 NUM_SLOTS,
             );
 
-            let bytes = self.client.read_one(self.sums.clone()).expect("read sums");
+            let bytes = self.client.read_one(self.sums.clone()).map_err(|e| {
+                zenmetrics_gpu_core::release_device_pool(&self.client);
+                Error::ReadbackFailed(format!("{e:?}"))
+            })?;
             let sums = f32::from_bytes(&bytes);
             debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
             for s in 0..n_scales_iw {
@@ -2328,7 +2334,10 @@ impl<R: Runtime> Iwssim<R> {
                 NUM_SLOTS,
             );
 
-            let bytes = self.client.read_one(self.sums.clone()).expect("read sums");
+            let bytes = self.client.read_one(self.sums.clone()).map_err(|e| {
+                zenmetrics_gpu_core::release_device_pool(&self.client);
+                Error::ReadbackFailed(format!("{e:?}"))
+            })?;
             let sums = f32::from_bytes(&bytes);
             debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
             for s in 0..n_scales_iw {
@@ -2650,7 +2659,10 @@ impl<R: Runtime> Iwssim<R> {
 
         // 5. Read back and finish on host.
         let t = std::time::Instant::now();
-        let bytes = self.client.read_one(self.sums.clone()).expect("read sums");
+        let bytes = self.client.read_one(self.sums.clone()).map_err(|e| {
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
         let sums = f32::from_bytes(&bytes);
         debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
 

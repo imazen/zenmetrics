@@ -1235,7 +1235,7 @@ dependencies = [
 [[package]]
 name = "cubecl-common"
 version = "0.10.0"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "backtrace",
  "bytemuck",
@@ -1284,7 +1284,7 @@ dependencies = [
 [[package]]
 name = "cubecl-ir"
 version = "0.10.0"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "cubecl-common",
  "cubecl-macros-internal",
@@ -1305,7 +1305,7 @@ dependencies = [
 [[package]]
 name = "cubecl-macros"
 version = "0.10.0"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "cubecl-common",
  "darling 0.23.0",
@@ -1321,7 +1321,7 @@ dependencies = [
 [[package]]
 name = "cubecl-macros-internal"
 version = "0.10.0"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -1332,7 +1332,7 @@ dependencies = [
 [[package]]
 name = "cubecl-zspace"
 version = "0.10.0"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "derive-new",
  "serde",
@@ -6863,7 +6863,7 @@ dependencies = [
 [[package]]
 name = "zenforks-cubecl"
 version = "0.10.2"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "cubecl-ir",
  "half",
@@ -6878,7 +6878,7 @@ dependencies = [
 [[package]]
 name = "zenforks-cubecl-core"
 version = "0.10.2"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "bitflags",
  "bytemuck",
@@ -6904,7 +6904,7 @@ dependencies = [
 [[package]]
 name = "zenforks-cubecl-cpp"
 version = "0.10.2"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "bytemuck",
  "cubecl-common",
@@ -6920,7 +6920,7 @@ dependencies = [
 [[package]]
 name = "zenforks-cubecl-cpu"
 version = "0.10.2"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "bytemuck",
  "cubecl-common",
@@ -6941,7 +6941,7 @@ dependencies = [
 [[package]]
 name = "zenforks-cubecl-cuda"
 version = "0.10.2"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "bytemuck",
  "cubecl-common",
@@ -6958,7 +6958,7 @@ dependencies = [
 [[package]]
 name = "zenforks-cubecl-hip"
 version = "0.10.2"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "bytemuck",
  "cubecl-common",
@@ -6976,7 +6976,7 @@ dependencies = [
 [[package]]
 name = "zenforks-cubecl-opt"
 version = "0.10.2"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "cubecl-common",
  "cubecl-ir",
@@ -6993,7 +6993,7 @@ dependencies = [
 [[package]]
 name = "zenforks-cubecl-runtime"
 version = "0.10.2"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "ahash",
  "async-channel",
@@ -7022,7 +7022,7 @@ dependencies = [
 [[package]]
 name = "zenforks-cubecl-spirv"
 version = "0.10.2"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "bitflags",
  "cubecl-common",
@@ -7038,7 +7038,7 @@ dependencies = [
 [[package]]
 name = "zenforks-cubecl-std"
 version = "0.10.2"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "cubecl-common",
  "half",
@@ -7054,7 +7054,7 @@ dependencies = [
 [[package]]
 name = "zenforks-cubecl-wgpu"
 version = "0.10.2"
-source = "git+https://github.com/imazen/zenforks-cubecl?rev=92e4a157e160198490b484618896d8dad0313e2c#92e4a157e160198490b484618896d8dad0313e2c"
+source = "git+https://github.com/imazen/zenforks-cubecl?rev=5673aa28#5673aa28035af8d7a7d573b0941bd54a75eaeb25"
 dependencies = [
  "ash",
  "async-channel",

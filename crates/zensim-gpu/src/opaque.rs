@@ -232,7 +232,7 @@ trait ZensimInner: Send {
         &mut self,
         ref_planes: [&[f32]; 3],
         dist_planes: [&[f32]; 3],
-    ) -> Vec<f64>;
+    ) -> Result<Vec<f64>>;
     #[allow(clippy::too_many_arguments)]
     fn score_from_linear_planes_with_diffmap(
         &mut self,
@@ -352,7 +352,7 @@ where
         &mut self,
         ref_planes: [&[f32]; 3],
         dist_planes: [&[f32]; 3],
-    ) -> Vec<f64> {
+    ) -> Result<Vec<f64>> {
         Zensim::compute_features_pu_linear_nits(self, ref_planes, dist_planes)
     }
 
@@ -1199,9 +1199,8 @@ impl ZensimOpaque {
         let dr = self.pad_plane(dist_planes[0])?;
         let dg = self.pad_plane(dist_planes[1])?;
         let db = self.pad_plane(dist_planes[2])?;
-        Ok(self
-            .inner
-            .compute_features_pu_linear_nits([&rr, &rg, &rb], [&dr, &dg, &db]))
+        self.inner
+            .compute_features_pu_linear_nits([&rr, &rg, &rb], [&dr, &dg, &db])
     }
 
     /// **Integrated-PU21 HDR score + features** (imazen/zenmetrics#25): the

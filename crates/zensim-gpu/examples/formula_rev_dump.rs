@@ -234,7 +234,9 @@ fn main() {
             let client = Backend::client(&Default::default());
             let mut z = Zensim::<Backend>::new_with_regime(client, w as u32, h as u32, regime)
                 .expect("construct pu");
-            let feats = z.compute_features_pu_linear_nits([&lo, &lo, &lo], [&hi, &hi, &hi]);
+            let feats = z
+                .compute_features_pu_linear_nits([&lo, &lo, &lo], [&hi, &hi, &hi])
+                .expect("compute_features_pu_linear_nits");
             for (i, v) in feats.iter().enumerate() {
                 writeln!(f, "pu\t{w}x{h}\t{rname}\tf{i}\t{:016x}", v.to_bits()).unwrap();
             }

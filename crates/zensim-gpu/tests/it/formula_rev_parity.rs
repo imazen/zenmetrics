@@ -166,6 +166,7 @@ fn pu_features_at(
         .expect("construct pu")
         .with_formula_revision(rev);
     z.compute_features_pu_linear_nits([&lo, &lo, &lo], [&hi, &hi, &hi])
+        .expect("compute_features_pu_linear_nits")
 }
 
 // ───────────────────────── G-GPU.1, in-binary half ─────────────────────────
