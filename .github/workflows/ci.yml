@@ -247,6 +247,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: zenmetrics-${{ matrix.os }}
+      # `just test-tmpdir-discipline` below needs the `just` command-runner, which
+      # is NOT preinstalled on GitHub-hosted ubuntu-latest runners (unlike cargo/
+      # git). This was unreachable before the zenav1-aom/zenbitmaps manifest-load
+      # fix above — every job died before getting here — so it never surfaced
+      # until now: "just: command not found", exit 127. taiki-e/install-action
+      # fetches a prebuilt binary (no compile) for exactly this class of Rust CLI
+      # tool. ubuntu-only: the only matrix leg that runs a `just` recipe.
+      - uses: taiki-e/install-action@v2
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          tool: just
       - name: Run fleet-orchestration tests (pure-logic; no cloud, no GPU, no secrets)
         # The orchestration heart: reconcile/gap convergence + retry/poison, the
         # lease/claim exactly-once logic, idle + startup-failure detection, the
