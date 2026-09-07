@@ -84,6 +84,13 @@ fleet-check:
 fleet-check-strict:
     python3 scripts/ci/check_fleet_tools.py --strict
 
+# Same patterns scripts/safe_push.sh gates the outgoing diff with —
+# scripts/lib/hygiene_patterns.txt is their one owner. CI: ci.yml.
+# hygiene: address/identifier check over every tracked text file.
+hygiene-check:
+    python3 scripts/ci/check_hygiene.py --self-test
+    python3 scripts/ci/check_hygiene.py
+
 # TMPDIR discipline (ban RAM-backed tmp everywhere): unset/tmpfs TMPDIR must be
 # rejected loud at worker boot. Pure-logic shell test, no cloud/GPU/secrets.
 test-tmpdir-discipline:

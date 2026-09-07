@@ -26,6 +26,43 @@ If `jj git push --bookmark main` is rejected by the ruleset, you followed the
 global `main` example by reflex — re-point to `master`. Do not "fix" it by
 disabling the ruleset.
 
+### Push through `scripts/safe_push.sh` — a bare `jj git push` clobbers other lanes
+
+`jj bookmark set master -r @ && jj git push --bookmark master` is a
+**non-fast-forward push with no prompt and no warning** whenever `@` does not
+descend from `master@origin`: the bookmark moves SIDEWAYS and every commit only
+reachable from the old tip becomes unreachable. Nothing errors. MEASURED in the
+sibling repo on 2026-09-04 — nine commits from six lanes dropped in one
+afternoon (zensim's `benchmarks/push_clobber_2026-09-05.md`); the mechanism is
+jj's, not zensim's, so it applies here identically.
+
+`scripts/safe_push.sh` is a MIRROR of zensim's, defaulting to `master`:
+
+    fetch -> assert <bookmark>@origin is an ANCESTOR of the target
+          -> hygiene: address/identifier check on the outgoing diff
+          -> bookmark set -> push -> verify it landed
+
+**Exit 3** = not a fast-forward; it prints every commit the push would drop and
+does not touch the bookmark. **Exit 7** = the second gate, `hygiene:
+address/identifier check`, which scans the lines the push would ADD for the
+classes that must not enter a public repo (private-range addresses, hardware
+addresses, household framing). Neither gate has a bypass flag — the 2026-09-04
+incident is what an escape hatch on a guard is worth.
+
+Patterns have ONE owner, [`scripts/lib/hygiene_patterns.txt`](scripts/lib/hygiene_patterns.txt),
+shared with `scripts/ci/check_hygiene.py`, which runs the same classes over
+every tracked file in CI (`just hygiene-check`) so an INHERITED hit is found and
+not only a newly added one. Site-specific patterns (names, labels) are NOT in
+this repo: they load from `hygiene_patterns` in the private homefleet config
+(`HOMEFLEET_NODES`, default `~/work/zen/homefleet/zenmetrics/fleet/nodes.toml`),
+because a public pattern list that spelled out the values it protects would leak
+exactly what it exists to keep out.
+
+Self-tests, both with negative controls: `scripts/safe_push.sh --self-test`
+(6 cases — a sideways target REFUSED with the remote provably unmoved, and the
+canonical form of the same line ACCEPTED) and
+`python3 scripts/ci/check_hygiene.py --self-test` (16 assertions).
+
 ## ghcr package names — ONE per artifact (enforced)
 
 Before referencing or pushing any `ghcr.io/imazen/<name>` image: the canonical

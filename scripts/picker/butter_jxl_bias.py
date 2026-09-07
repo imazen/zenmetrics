@@ -178,8 +178,8 @@ def main():
         avg_rank = np.mean(ranks) if ranks else float("nan")
         print(f"butteraugli {metric}: jxl mean bias {jm:+.3f}  ⇒ sides with {side}"
               f"  | jxl avg raw rank {avg_rank:.2f}/4 (1=best/lowest)")
-    print(f"\ngraphs:\n  http://172.23.240.1:3300/picker-metric-investigation/butter_jxl_bias.png"
-          f"\n  http://172.23.240.1:3300/picker-metric-investigation/butter_jxl_rd.png")
+    print(f"\ngraphs:\n  http://localhost:3300/picker-metric-investigation/butter_jxl_bias.png"
+          f"\n  http://localhost:3300/picker-metric-investigation/butter_jxl_rd.png")
 
 
 if __name__ == "__main__":

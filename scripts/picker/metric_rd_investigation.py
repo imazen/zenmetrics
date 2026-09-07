@@ -52,5 +52,5 @@ for b in [48,55,62,70,78,85,90,95]:
     v={f: np.median(A.score_ssim2[(A.codec==f)&(A.score_zensim>=b)&(A.score_zensim<b+2)]) for f,_ in FAMS}
     over=v['avif']-np.mean([v['jxl'],v['webp']])
     print(f"{b:>7} {v['jpeg']:>6.1f} {v['webp']:>6.1f} {v['jxl']:>6.1f} {v['avif']:>6.1f} {over:>+10.2f}")
-print(f"\ngraphs: http://172.23.240.1:3300/picker-metric-investigation/rd_curves.png")
-print(f"        http://172.23.240.1:3300/picker-metric-investigation/metric_transfer.png")
+print(f"\ngraphs: http://localhost:3300/picker-metric-investigation/rd_curves.png")
+print(f"        http://localhost:3300/picker-metric-investigation/metric_transfer.png")

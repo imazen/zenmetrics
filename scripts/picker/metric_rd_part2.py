@@ -48,4 +48,4 @@ for t in [60,70,78,85]:
             if zwin==swin: ag+=1
             else: flips[f'{zwin}->{swin}']+=1
     print(f"{t:>7} {n:>6} {100*ag/max(n,1):>6.1f}%  {', '.join(f'{k}:{c}' for k,c in flips.most_common(4))}")
-print(f"\ngraph: http://172.23.240.1:3300/picker-metric-investigation/metric_bias.png")
+print(f"\ngraph: http://localhost:3300/picker-metric-investigation/metric_bias.png")

@@ -29,4 +29,4 @@ fig.suptitle('OUR data, ssim2→bpp Pareto: JXL wins decisively at HQ (matches C
              'coverage thins for jxl above ssim2~94 (swept only to q90) → avif "wins" there by artifact',fontsize=12)
 fig.savefig(f'{OUT}/hq_ssim2_pareto.png',dpi=110,bbox_inches='tight')
 print(f"saved {OUT}/hq_ssim2_pareto.png")
-print("http://172.23.240.1:3300/picker-metric-investigation/hq_ssim2_pareto.png")
+print("http://localhost:3300/picker-metric-investigation/hq_ssim2_pareto.png")

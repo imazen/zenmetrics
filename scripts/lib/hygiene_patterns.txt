@@ -1,0 +1,36 @@
+# NOTE: this file is kept in step with imazen/zensim's copy of the same name.
+# Two public repos cannot share one file, so they share the CONTENT and each
+# runs its own gates over it; a change to the classes belongs in both.
+# Address/identifier patterns — the ONE owner, read by both
+# scripts/safe_push.sh (outgoing diff, pre-push) and scripts/ci/check_hygiene.py
+# (tracked text files, run in CI). Format: <name><TAB><POSIX extended regex>.
+# Blank lines and lines starting with # are ignored.
+#
+# WHY. Global CLAUDE.md, "PRIVACY: family & home-network details NEVER go in
+# public repos": LAN addresses, hardware addresses and household framing do not
+# belong in a public repo, and the rule prescribes grepping the diff before a
+# push. Nothing enforced it, so a single documented example propagated a LAN
+# URL into a dozen files over two days before anyone looked.
+#
+# These patterns are deliberately GENERIC CLASSES, never specific values: a
+# public pattern list that spelled out the thing it is protecting would leak
+# exactly what it exists to keep out. Site-specific additions (names, labels)
+# live in the private homefleet config instead — see EXTRA_PATTERNS in
+# safe_push.sh / check_hygiene.py, which loads `hygiene_patterns` from
+# $HOMEFLEET_NODES (default ~/work/zen/homefleet/zenmetrics/fleet/nodes.toml).
+#
+# KNOWN LIMIT, stated rather than hidden: the 10/8 alternative also matches
+# a four-component dotted version (a Windows build number like 10.0.19045.1). The
+# three-component form used in practice does not, and that case is pinned by
+# the version/identifier-lookalike negative control in
+# scripts/ci/check_hygiene.py --self-test. Narrowing the range would trade a real class of
+# private address for that convenience; it has not been made.
+#
+# Matching a class is a REFUSAL, not a warning, and there is no bypass flag —
+# the 2026-09-04 clobber taught us what an escape hatch on a guard is worth.
+# The two legitimate resolutions are printed with every refusal: use the
+# documented canonical form (localhost, a neutral node id), or move the value
+# into the private repo and reference it from there.
+private-network-address	(^|[^0-9A-Za-z.])(192\.168\.[0-9]{1,3}\.[0-9]{1,3}|10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3})([^0-9A-Za-z.]|$)
+hardware-address	(^|[^0-9A-Za-z:])([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}([^0-9A-Za-z:]|$)
+household-framing	[Kk]ids['’]|[Cc]hild(ren)?['’]s (PC|box|machine|desktop)
