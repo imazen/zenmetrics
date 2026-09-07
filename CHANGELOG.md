@@ -76,7 +76,20 @@ Workspace conventions per the global rules:
   `cargo clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings`,
   the `cpu-metrics-tests` job's two test commands, and the `compile` job's
   ubuntu-only fleet-orchestration + vastai + TMPDIR-discipline tests all pass
-  clean on this fix. (3a42b4e3, 4c327481, e920c148)
+  clean on this fix. (3a42b4e3, 4c327481, e920c148) **Follow-up, same session:**
+  fixing the zenav1-aom gap let `cargo` proceed further into the dependency
+  graph and hit two more pre-existing gaps of the same two classes — a missing
+  clone (`zenmetrics-cli`'s `bmp` feature path-deps `zenbitmaps`, added in
+  5be5da80 with no CI clone) and a stale pin (the zensim pin predates
+  `zenmetrics-api`'s D14 arm requesting zensim's `candidate-profiles`
+  feature, a version-resolution failure rather than a missing path). Cloned
+  zenbitmaps (pinned to its CI-green main) and bumped zensim from ea7d493d to
+  5a4d5fa3 (a clean fast-forward, zensim CI-green). Found and verified via a
+  full CI reproduction — git worktrees of every pinned sibling at its exact
+  commit, laid out to match the runner's directory structure — rather than
+  another push-and-wait cycle; `cargo metadata --all-features`, `cargo fmt
+  --check`, the Lint job's exact clippy command, and the CLI release build
+  all pass clean against it. (51261bb3)
 
 ## rev2 recalculation wave (2026-09-06)
 
