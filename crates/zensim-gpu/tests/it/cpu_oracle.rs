@@ -109,8 +109,8 @@ fn cpu_oracle_engines_agree() {
         (48, 40),
     ];
     let buffered = ZensimCpu::new(ZensimProfile::latest());
-    let fold =
-        ZensimCpu::new(ZensimProfile::latest()).with_engine(zensim::fold_engine::ScoringEngine::Fold);
+    let fold = ZensimCpu::new(ZensimProfile::latest())
+        .with_engine(zensim::fold_engine::ScoringEngine::Fold);
     for &(w, h) in CELLS {
         let (rb, db) = pair(w, h);
         let (src, dst) = (to_pix(&rb), to_pix(&db));

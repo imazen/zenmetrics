@@ -147,7 +147,10 @@ fn cpu_umbrella_scores_a_runtime_selected_bake() {
         "with no override the umbrella must still be the shipped-default score \
          (byte-identical default behaviour)"
     );
-    assert_eq!(default_cached, direct_shipped, "cached-ref default behaviour");
+    assert_eq!(
+        default_cached, direct_shipped,
+        "cached-ref default behaviour"
+    );
 
     // Override installed ⇒ the umbrella scores the SELECTED bake.
     zensim_profile::set_default(bake);
@@ -168,7 +171,10 @@ fn cpu_umbrella_scores_a_runtime_selected_bake() {
     // …and clearing restores the default, so the override is not sticky.
     assert!(!zensim_profile::has_default_override());
     let (restored, _) = umbrella_score(w, h, &r, &d);
-    assert_eq!(restored, direct_shipped, "clear_default() must restore the default");
+    assert_eq!(
+        restored, direct_shipped,
+        "clear_default() must restore the default"
+    );
 }
 
 /// Re-resolving the same bake path reuses one runtime slot (the

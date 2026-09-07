@@ -95,6 +95,9 @@ mod error;
 pub mod hdr;
 mod memory_mode;
 mod metric;
+#[cfg(feature = "pixels")]
+mod pixels;
+mod session;
 /// Runtime selection of the **zensim scoring profile** — a named built-in or
 /// an arbitrary ZNPR bake loaded from disk — so the fleet metric path can
 /// score a candidate bake instead of only the hard-coded shipped default.
@@ -103,9 +106,6 @@ mod metric;
 /// `zensim::ZensimProfile::latest_preview()` unless an override is installed.
 #[cfg(any(feature = "zensim", feature = "cpu-zensim"))]
 pub mod zensim_profile;
-#[cfg(feature = "pixels")]
-mod pixels;
-mod session;
 
 #[cfg(feature = "cubecl-types")]
 pub mod context;

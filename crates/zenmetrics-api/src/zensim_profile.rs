@@ -188,7 +188,8 @@ pub fn builtin(name: &str) -> Option<::zensim::ZensimProfile> {
         "b-hdr" | "bhdr" => Some(P::BHdr),
         "latest" | "latest-preview" | "codec-target" | "default" => Some(P::latest_preview()),
         #[cfg(feature = "zensim-deprecated-profiles")]
-        "a" => {
+        "a" =>
+        {
             #[allow(deprecated)]
             Some(P::A)
         }
