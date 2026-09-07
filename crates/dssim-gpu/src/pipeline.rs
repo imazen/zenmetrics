@@ -242,6 +242,9 @@ struct StripConfig {
 /// image pairs of that resolution.
 pub struct Dssim<R: Runtime> {
     client: ComputeClient<R>,
+    /// Digest of the cached reference, for the silent-identical-claim guard.
+    /// Only consulted when a score already claims the images are identical.
+    ref_digest: Option<u64>,
     /// Sub-minimum reflect-pad plan: holds both the caller's logical
     /// extent (reported by `dimensions()` in whole-image mode) and the
     /// padded extent (`max(requested, MIN_PAD_DIM)` per axis) that all
@@ -352,6 +355,7 @@ impl<R: Runtime> Dssim<R> {
         let sums = client.create_from_slice(f32::as_bytes(&[0.0_f32; SUMS_LEN]));
 
         Ok(Self {
+            ref_digest: None,
             client,
             pad,
             n,
@@ -500,6 +504,7 @@ impl<R: Runtime> Dssim<R> {
         let sums = client.create_from_slice(f32::as_bytes(&[0.0_f32; SUMS_LEN]));
 
         Ok(Self {
+            ref_digest: None,
             client,
             // ≥MIN here (sub-min routed to `new`): no-op plan whose
             // logical = the image dims. Strip-mode `dimensions()` reads
@@ -612,6 +617,20 @@ impl<R: Runtime> Dssim<R> {
     /// pixel, `R | G<<8 | B<<16`, length `width × height`). The
     /// handle is expected to live on the same cubecl client that
     /// constructed this `Dssim<R>`.
+    /// Refuse a score that claims "identical images" for inputs that are not.
+    ///
+    /// DSSIM's identical-value is exactly `0.0`, and a real non-identical pair
+    /// cannot reach it. `same` is a closure so the input comparison only runs
+    /// on the degenerate path — nil cost on every normal score. Byte-identical
+    /// pairs (lossless corpora, common here) legitimately score 0.0 and are
+    /// unaffected.
+    fn guard_identical_claim(&self, score: f64, same: impl FnOnce() -> bool) -> Result<()> {
+        if score <= 0.0 && !same() {
+            return Err(Error::SilentIdenticalClaim { score });
+        }
+        Ok(())
+    }
+
     pub fn compute_handles(
         &mut self,
         ref_handle: &cubecl::server::Handle,
@@ -637,6 +656,17 @@ impl<R: Runtime> Dssim<R> {
     /// instance is reusable. Pass [`enough::Unstoppable`] for the
     /// uncancellable form (it inlines to nothing).
     pub fn compute_with_stop(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuDssimResult> {
+        let out = self.compute_with_stop_unguarded(ref_srgb, dist_srgb, stop)?;
+        self.guard_identical_claim(out.score, || ref_srgb == dist_srgb)?;
+        Ok(out)
+    }
+
+    fn compute_with_stop_unguarded(
         &mut self,
         ref_srgb: &[u8],
         dist_srgb: &[u8],
@@ -728,6 +758,8 @@ impl<R: Runtime> Dssim<R> {
     /// range from the cached full-image ref state into the strip
     /// buffers before running cross_blur + ssim_map per strip.
     pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
+        // Digest for the silent-identical-claim guard (see `guard_identical_claim`).
+        self.ref_digest = Some(zenmetrics_gpu_core::input_digest(ref_srgb));
         if self.strip_config.is_some() {
             return self.set_reference_full_for_strip(ref_srgb);
         }
@@ -976,6 +1008,7 @@ impl<R: Runtime> Dssim<R> {
 
     /// Drop any cached reference state.
     pub fn clear_reference(&mut self) {
+        self.ref_digest = None;
         self.has_reference = false;
         self.ref_full = None;
     }
@@ -1004,6 +1037,19 @@ impl<R: Runtime> Dssim<R> {
     /// cached reference is left intact. Pass [`enough::Unstoppable`]
     /// for the uncancellable form (it inlines to nothing).
     pub fn compute_with_reference_with_stop(
+        &mut self,
+        dist_srgb: &[u8],
+        stop: &dyn enough::Stop,
+    ) -> Result<GpuDssimResult> {
+        let out = self.compute_with_reference_with_stop_unguarded(dist_srgb, stop)?;
+        let ref_digest = self.ref_digest;
+        self.guard_identical_claim(out.score, || {
+            ref_digest == Some(zenmetrics_gpu_core::input_digest(dist_srgb))
+        })?;
+        Ok(out)
+    }
+
+    fn compute_with_reference_with_stop_unguarded(
         &mut self,
         dist_srgb: &[u8],
         stop: &dyn enough::Stop,
@@ -2083,4 +2129,41 @@ pub fn copy_rows_kernel(
 /// Verbatim from `dssim-cuda::ssim_to_dssim`.
 fn ssim_to_dssim(ssim: f64) -> f64 {
     1.0 / ssim.max(f64::EPSILON) - 1.0
+}
+
+#[cfg(test)]
+mod silent_identical_claim_tests {
+    //! The guard must fire ONLY for a wrong "identical" claim, never for a
+    //! genuinely identical pair — lossless corpora score exactly 0.0 and are
+    //! common here, so a false positive would reject real data.
+    //!
+    //! The guard logic is tested directly (no GPU needed); the end-to-end
+    //! behaviour is covered by the GPU suite.
+
+    fn fires(score: f64, same: bool) -> bool {
+        // Mirrors `Dssim::guard_identical_claim`.
+        score <= 0.0 && !same
+    }
+
+    #[test]
+    fn identical_inputs_scoring_zero_are_accepted() {
+        // The lossless case: 0.0 is the CORRECT answer here.
+        assert!(!fires(0.0, true));
+    }
+
+    #[test]
+    fn different_inputs_scoring_zero_are_rejected() {
+        // The measured bug: dssim returned 0.000000 for two different images
+        // after an upstream device OOM, exited 0, and printed it as a score.
+        assert!(fires(0.0, false));
+        // Negative is equally impossible for a real non-identical pair.
+        assert!(fires(-1.0e-9, false));
+    }
+
+    #[test]
+    fn ordinary_scores_are_untouched() {
+        assert!(!fires(0.5, false));
+        assert!(!fires(1.0e-6, false));
+        assert!(!fires(12.0, false));
+    }
 }

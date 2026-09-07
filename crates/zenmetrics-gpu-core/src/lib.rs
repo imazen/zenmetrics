@@ -81,6 +81,72 @@ pub fn release_device_pool<R: cubecl::Runtime>(client: &cubecl::client::ComputeC
     client.memory_cleanup();
 }
 
+/// Cheap non-cryptographic digest of an input buffer.
+///
+/// Used for exactly one question — "were these two inputs byte-identical?" —
+/// on the rare degenerate-score path, and for retaining that answer across a
+/// cached reference whose bytes the caller no longer holds. FNV-1a over
+/// 8-byte chunks: a single streaming pass, ~2-3 ms on a 12 MP RGB frame,
+/// negligible beside the pyramid build `set_reference` already does.
+///
+/// Not a security hash and not a content address — do not use it as either.
+pub fn input_digest(bytes: &[u8]) -> u64 {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x1000_0000_01b3;
+    let mut h = OFFSET ^ (bytes.len() as u64);
+    let (chunks, remainder) = bytes.as_chunks::<8>();
+    for c in chunks {
+        h = (h ^ u64::from_le_bytes(*c)).wrapping_mul(PRIME);
+    }
+    for &b in remainder {
+        h = (h ^ b as u64).wrapping_mul(PRIME);
+    }
+    h
+}
+
+/// Which direction of a metric's scale means "more similar".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScaleDirection {
+    /// Larger is more similar (ssim2 → 100, iwssim → 1, cvvdp → 10 JOD).
+    HigherIsBetter,
+    /// Smaller is more similar (dssim → 0, butteraugli → 0).
+    LowerIsBetter,
+}
+
+/// **A metric must never report "these images are identical" for inputs that
+/// are not byte-identical.** Returns `true` when it just did — i.e. the caller
+/// is holding a silent wrong result and must return an error instead.
+///
+/// Why this exists, measured: with a device OOM upstream, `dssim-gpu` returned
+/// **0.000000** — its exact identical-value — for two different synthetic
+/// images, exited 0, and printed it as a normal score. Nothing downstream can
+/// tell that from a real lossless cell. A dead reduction does NOT reliably
+/// leave an all-zero buffer either (dssim computes `1/ssim - 1`, so zeroed
+/// sums would give a huge number, not 0) — which is why this guards the
+/// OUTPUT rather than the accumulator.
+///
+/// No false positives by construction: a genuinely byte-identical pair is
+/// *supposed* to score the extremum, and this only fires when the digests
+/// differ. Lossless corpora — where every cell is identical and scores the
+/// extremum — are unaffected. That matters: they are common here, so a naive
+/// "perfect score is suspicious" check would reject real data.
+///
+/// Cost is nil on the normal path: the float comparison short-circuits, and
+/// the digest comparison only runs for a score that already claims identity.
+pub fn is_silent_identical_claim(
+    score: f64,
+    identical_value: f64,
+    direction: ScaleDirection,
+    ref_digest: u64,
+    dist_digest: u64,
+) -> bool {
+    let claims_identical = match direction {
+        ScaleDirection::HigherIsBetter => score >= identical_value,
+        ScaleDirection::LowerIsBetter => score <= identical_value,
+    };
+    claims_identical && ref_digest != dist_digest
+}
+
 /// Backend liveness validation (imazen/zenmetrics#37): proves a runtime can
 /// compile + dispatch a kernel before a metric trusts it. See the module docs.
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "cpu"))]

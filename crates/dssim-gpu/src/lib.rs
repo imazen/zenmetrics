@@ -129,6 +129,15 @@ pub enum Error {
     /// Image is smaller than 8×8 — the pyramid would collapse before
     /// reaching scale 0.
     InvalidImageSize,
+    /// The metric reported its **identical-images** value (DSSIM `0.0`) for
+    /// inputs that are not byte-identical — i.e. a silently wrong "these are
+    /// the same image" result. Refused rather than returned.
+    ///
+    /// MEASURED: with a device OOM upstream, dssim-gpu returned `0.000000`
+    /// for two different synthetic images, exited 0, and printed it as a
+    /// normal score. Nothing downstream can distinguish that from a real
+    /// lossless cell.
+    SilentIdenticalClaim { score: f64 },
     /// Reading the reduction sums buffer back from the device failed —
     /// typically a device OOM. Previously an `.expect()`, i.e. a panic no
     /// caller could handle; see imazen/zenmetrics#41.
@@ -161,6 +170,11 @@ impl std::fmt::Display for Error {
             ),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
             Error::InvalidImageSize => write!(f, "image must be at least 8×8 pixels"),
+            Error::SilentIdenticalClaim { score } => write!(
+                f,
+                "metric reported the identical-images value ({score}) for inputs that \
+                 are not byte-identical — refusing to return a silently wrong score"
+            ),
             Error::SumsReadbackFailed(e) => {
                 write!(f, "failed to read the reduction sums buffer back: {e}")
             }
