@@ -204,6 +204,20 @@ jobs:
           # OFF in every CI build below, but the path must exist.
           git clone --quiet https://github.com/imazen/zenflate.git ../zenflate
           git -C ../zenflate checkout 486e04ce7a75edbf5cbbaf50f6600f306243ec43
+          # zenmetrics-cli's `avif-aom` feature path-deps zenav1-aom, too
+          # (`../../../zenav1-aom/crates/{aom-bench,aom-sys-ref,aom-dsp}`, the
+          # pure-Rust libaom-port differential bench/oracle/DSP crates added in
+          # 2690d66e without this clone — the same "path must exist even though
+          # the feature is off" failure as zenflate above: "failed to load
+          # manifest for dependency `zenav1-aom-bench`" / "failed to read
+          # .../zenav1-aom/crates/aom-bench/Cargo.toml"). OFF in every CI build
+          # below, but cargo validates optional path-dep paths during workspace
+          # manifest load, so the path must exist. None of zenav1-aom's crates
+          # carry a path dep outside its own repo (verified against its
+          # workspace + per-crate manifests), so no further siblings cascade
+          # from this one. Pinned to a zenav1-aom main commit with green CI.
+          git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
+          git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -484,6 +498,20 @@ jobs:
           # OFF in every CI build below, but the path must exist.
           git clone --quiet https://github.com/imazen/zenflate.git ../zenflate
           git -C ../zenflate checkout 486e04ce7a75edbf5cbbaf50f6600f306243ec43
+          # zenmetrics-cli's `avif-aom` feature path-deps zenav1-aom, too
+          # (`../../../zenav1-aom/crates/{aom-bench,aom-sys-ref,aom-dsp}`, the
+          # pure-Rust libaom-port differential bench/oracle/DSP crates added in
+          # 2690d66e without this clone — the same "path must exist even though
+          # the feature is off" failure as zenflate above: "failed to load
+          # manifest for dependency `zenav1-aom-bench`" / "failed to read
+          # .../zenav1-aom/crates/aom-bench/Cargo.toml"). OFF in every CI build
+          # below, but cargo validates optional path-dep paths during workspace
+          # manifest load, so the path must exist. None of zenav1-aom's crates
+          # carry a path dep outside its own repo (verified against its
+          # workspace + per-crate manifests), so no further siblings cascade
+          # from this one. Pinned to a zenav1-aom main commit with green CI.
+          git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
+          git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -686,6 +714,20 @@ jobs:
           # OFF in every CI build below, but the path must exist.
           git clone --quiet https://github.com/imazen/zenflate.git ../zenflate
           git -C ../zenflate checkout 486e04ce7a75edbf5cbbaf50f6600f306243ec43
+          # zenmetrics-cli's `avif-aom` feature path-deps zenav1-aom, too
+          # (`../../../zenav1-aom/crates/{aom-bench,aom-sys-ref,aom-dsp}`, the
+          # pure-Rust libaom-port differential bench/oracle/DSP crates added in
+          # 2690d66e without this clone — the same "path must exist even though
+          # the feature is off" failure as zenflate above: "failed to load
+          # manifest for dependency `zenav1-aom-bench`" / "failed to read
+          # .../zenav1-aom/crates/aom-bench/Cargo.toml"). OFF in every CI build
+          # below, but cargo validates optional path-dep paths during workspace
+          # manifest load, so the path must exist. None of zenav1-aom's crates
+          # carry a path dep outside its own repo (verified against its
+          # workspace + per-crate manifests), so no further siblings cascade
+          # from this one. Pinned to a zenav1-aom main commit with green CI.
+          git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
+          git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -843,6 +885,20 @@ jobs:
           # OFF in every CI build below, but the path must exist.
           git clone --quiet https://github.com/imazen/zenflate.git ../zenflate
           git -C ../zenflate checkout 486e04ce7a75edbf5cbbaf50f6600f306243ec43
+          # zenmetrics-cli's `avif-aom` feature path-deps zenav1-aom, too
+          # (`../../../zenav1-aom/crates/{aom-bench,aom-sys-ref,aom-dsp}`, the
+          # pure-Rust libaom-port differential bench/oracle/DSP crates added in
+          # 2690d66e without this clone — the same "path must exist even though
+          # the feature is off" failure as zenflate above: "failed to load
+          # manifest for dependency `zenav1-aom-bench`" / "failed to read
+          # .../zenav1-aom/crates/aom-bench/Cargo.toml"). OFF in every CI build
+          # below, but cargo validates optional path-dep paths during workspace
+          # manifest load, so the path must exist. None of zenav1-aom's crates
+          # carry a path dep outside its own repo (verified against its
+          # workspace + per-crate manifests), so no further siblings cascade
+          # from this one. Pinned to a zenav1-aom main commit with green CI.
+          git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
+          git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -1008,6 +1064,20 @@ jobs:
           # OFF in every CI build below, but the path must exist.
           git clone --quiet https://github.com/imazen/zenflate.git ../zenflate
           git -C ../zenflate checkout 486e04ce7a75edbf5cbbaf50f6600f306243ec43
+          # zenmetrics-cli's `avif-aom` feature path-deps zenav1-aom, too
+          # (`../../../zenav1-aom/crates/{aom-bench,aom-sys-ref,aom-dsp}`, the
+          # pure-Rust libaom-port differential bench/oracle/DSP crates added in
+          # 2690d66e without this clone — the same "path must exist even though
+          # the feature is off" failure as zenflate above: "failed to load
+          # manifest for dependency `zenav1-aom-bench`" / "failed to read
+          # .../zenav1-aom/crates/aom-bench/Cargo.toml"). OFF in every CI build
+          # below, but cargo validates optional path-dep paths during workspace
+          # manifest load, so the path must exist. None of zenav1-aom's crates
+          # carry a path dep outside its own repo (verified against its
+          # workspace + per-crate manifests), so no further siblings cascade
+          # from this one. Pinned to a zenav1-aom main commit with green CI.
+          git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
+          git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
