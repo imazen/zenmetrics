@@ -48,6 +48,39 @@ pub enum Backend {
     Cpu,
 }
 
+/// Release pooled device memory back to the driver after a failed GPU compute.
+///
+/// **Every `*-gpu` metric crate must call this on its compute failure paths.**
+///
+/// cubecl's allocator keeps freed slices in a per-stream pool, so a compute that
+/// dies part-way — a device OOM on an oversized image — leaves the whole
+/// reservation parked in that pool even after the pipeline drops. MEASURED on a
+/// 6 GB card (ssim2, 8192x8192): the failed attempt left **6,261,084,160 bytes**
+/// reserved, and every later score in the same process then failed too,
+/// including a 1024x1024 needing 99 MB. One oversized cell poisoned the worker
+/// for every cell after it — the shape of an OOM storm.
+///
+/// After calling this, reserved drops to 0 and the next score succeeds normally
+/// (measured: 1024x1024 back to 10.4 ms on CUDA, 11.9 ms on Vulkan).
+///
+/// Safe on an unhealthy stream: the CUDA server runs `memory_cleanup` with
+/// `ignore: true, flush: false`, and the client submits it fire-and-forget
+/// rather than blocking.
+///
+/// # Do not call this while panicking
+/// The underlying `submit` takes the device-service mutex with `.lock().unwrap()`,
+/// so calling it during an unwind on a poisoned mutex would abort the process.
+/// Reclaim on the **error** path; convert panicking readbacks into errors rather
+/// than reclaiming from a `Drop` guard. See imazen/zenmetrics#41.
+pub fn release_device_pool<R: cubecl::Runtime>(client: &cubecl::client::ComputeClient<R>) {
+    debug_assert!(
+        !std::thread::panicking(),
+        "release_device_pool must not run during unwind: cubecl's submit path \
+         locks a mutex with unwrap(), which would abort"
+    );
+    client.memory_cleanup();
+}
+
 /// Backend liveness validation (imazen/zenmetrics#37): proves a runtime can
 /// compile + dispatch a kernel before a metric trusts it. See the module docs.
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "cpu"))]

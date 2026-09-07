@@ -2793,18 +2793,24 @@ impl<R: Runtime> Cvvdp<R> {
         let rg_handle = self.gauss_ref[0].planes[1].clone();
         let vy_handle = self.gauss_ref[0].planes[2].clone();
 
-        let a_bytes = self
-            .client
-            .read_one(a_handle)
-            .map_err(|_| Error::InvalidImageSize)?;
-        let rg_bytes = self
-            .client
-            .read_one(rg_handle)
-            .map_err(|_| Error::InvalidImageSize)?;
-        let vy_bytes = self
-            .client
-            .read_one(vy_handle)
-            .map_err(|_| Error::InvalidImageSize)?;
+        let a_bytes = self.client.read_one(a_handle).map_err(|e| {
+            // Reclaim the pool: the failed dispatch's reservation
+            // would otherwise starve every later score in this process.
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
+        let rg_bytes = self.client.read_one(rg_handle).map_err(|e| {
+            // Reclaim the pool: the failed dispatch's reservation
+            // would otherwise starve every later score in this process.
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
+        let vy_bytes = self.client.read_one(vy_handle).map_err(|e| {
+            // Reclaim the pool: the failed dispatch's reservation
+            // would otherwise starve every later score in this process.
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
 
         Ok([
             f32::from_bytes(&a_bytes).to_vec(),
@@ -3271,10 +3277,12 @@ impl<R: Runtime> Cvvdp<R> {
             let mut planes = [Vec::new(), Vec::new(), Vec::new()];
             for c in 0..N_CHANNELS {
                 let h = self.gauss_ref[k].planes[c].clone();
-                let bytes = self
-                    .client
-                    .read_one(h)
-                    .map_err(|_| Error::InvalidImageSize)?;
+                let bytes = self.client.read_one(h).map_err(|e| {
+                    // Reclaim the pool: the failed dispatch's reservation
+                    // would otherwise starve every later score in this process.
+                    zenmetrics_gpu_core::release_device_pool(&self.client);
+                    Error::ReadbackFailed(format!("{e:?}"))
+                })?;
                 planes[c] = f32::from_bytes(&bytes).to_vec();
             }
             out.push(planes);
@@ -3937,10 +3945,12 @@ impl<R: Runtime> Cvvdp<R> {
             let mut planes = [Vec::new(), Vec::new(), Vec::new()];
             for c in 0..N_CHANNELS {
                 let h = self.bands_ref[k].planes[c].clone();
-                let bytes = self
-                    .client
-                    .read_one(h)
-                    .map_err(|_| Error::InvalidImageSize)?;
+                let bytes = self.client.read_one(h).map_err(|e| {
+                    // Reclaim the pool: the failed dispatch's reservation
+                    // would otherwise starve every later score in this process.
+                    zenmetrics_gpu_core::release_device_pool(&self.client);
+                    Error::ReadbackFailed(format!("{e:?}"))
+                })?;
                 planes[c] = f32::from_bytes(&bytes).to_vec();
             }
             out.push(planes);
@@ -4025,10 +4035,12 @@ impl<R: Runtime> Cvvdp<R> {
         let last = n_levels - 1;
         for c in 0..N_CHANNELS {
             let g = self.gauss_ref[last].planes[c].clone();
-            let bytes = self
-                .client
-                .read_one(g)
-                .map_err(|_| Error::InvalidImageSize)?;
+            let bytes = self.client.read_one(g).map_err(|e| {
+                // Reclaim the pool: the failed dispatch's reservation
+                // would otherwise starve every later score in this process.
+                zenmetrics_gpu_core::release_device_pool(&self.client);
+                Error::ReadbackFailed(format!("{e:?}"))
+            })?;
             // Re-upload as bands_ref[last] so the read-back loop is
             // uniform across levels.
             self.bands_ref[last].planes[c] = self.client.create_from_slice(&bytes);
@@ -4231,10 +4243,12 @@ impl<R: Runtime> Cvvdp<R> {
             let mut planes = [Vec::new(), Vec::new(), Vec::new()];
             for c in 0..N_CHANNELS {
                 let h = self.bands_ref[k].planes[c].clone();
-                let bytes = self
-                    .client
-                    .read_one(h)
-                    .map_err(|_| Error::InvalidImageSize)?;
+                let bytes = self.client.read_one(h).map_err(|e| {
+                    // Reclaim the pool: the failed dispatch's reservation
+                    // would otherwise starve every later score in this process.
+                    zenmetrics_gpu_core::release_device_pool(&self.client);
+                    Error::ReadbackFailed(format!("{e:?}"))
+                })?;
                 planes[c] = f32::from_bytes(&bytes).to_vec();
             }
             bands_out.push(planes);
@@ -4256,10 +4270,12 @@ impl<R: Runtime> Cvvdp<R> {
         let mut log_l_bkg_out: Vec<Vec<f32>> = Vec::with_capacity(n_levels);
         for k in 0..n_levels.saturating_sub(1) {
             let log_h = self.weber_scratch[k].log_l_bkg.clone();
-            let bytes = self
-                .client
-                .read_one(log_h)
-                .map_err(|_| Error::InvalidImageSize)?;
+            let bytes = self.client.read_one(log_h).map_err(|e| {
+                // Reclaim the pool: the failed dispatch's reservation
+                // would otherwise starve every later score in this process.
+                zenmetrics_gpu_core::release_device_pool(&self.client);
+                Error::ReadbackFailed(format!("{e:?}"))
+            })?;
             log_l_bkg_out.push(f32::from_bytes(&bytes).to_vec());
         }
         log_l_bkg_out.push(vec![log_l_bkg_baseband; baseband_n]);
@@ -4467,10 +4483,12 @@ impl<R: Runtime> Cvvdp<R> {
 
             let mut planes = [Vec::new(), Vec::new(), Vec::new()];
             for (c, h) in [t_p_a_h, t_p_rg_h, t_p_vy_h].into_iter().enumerate() {
-                let bytes = self
-                    .client
-                    .read_one(h)
-                    .map_err(|_| Error::InvalidImageSize)?;
+                let bytes = self.client.read_one(h).map_err(|e| {
+                    // Reclaim the pool: the failed dispatch's reservation
+                    // would otherwise starve every later score in this process.
+                    zenmetrics_gpu_core::release_device_pool(&self.client);
+                    Error::ReadbackFailed(format!("{e:?}"))
+                })?;
                 // Take only this level's `n_px` prefix — the
                 // shared transient buffer is sized to base-level
                 // n0 and the kernel only wrote `n_px` elements at
@@ -4763,10 +4781,12 @@ impl<R: Runtime> Cvvdp<R> {
         let baseband_n = baseband_w * baseband_h;
 
         let gauss_a_last = self.gauss_ref[last].planes[0].clone();
-        let bytes_a = self
-            .client
-            .read_one(gauss_a_last)
-            .map_err(|_| Error::InvalidImageSize)?;
+        let bytes_a = self.client.read_one(gauss_a_last).map_err(|e| {
+            // Reclaim the pool: the failed dispatch's reservation
+            // would otherwise starve every later score in this process.
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
         let gauss_a_data: &[f32] = f32::from_bytes(&bytes_a);
         let l_bkg_sum: f32 = gauss_a_data.iter().map(|v| v.max(0.01)).sum();
         let l_bkg_mean = l_bkg_sum / baseband_n as f32;
@@ -7077,10 +7097,12 @@ impl<R: Runtime> Cvvdp<R> {
                 "DBandsScratch.d must be Some in compute_dkl_d_bands (Mode B was rejected above)",
             );
             for c in 0..N_CHANNELS {
-                let bytes = self
-                    .client
-                    .read_one(d_full[c].clone())
-                    .map_err(|_| Error::InvalidImageSize)?;
+                let bytes = self.client.read_one(d_full[c].clone()).map_err(|e| {
+                    // Reclaim the pool: the failed dispatch's reservation
+                    // would otherwise starve every later score in this process.
+                    zenmetrics_gpu_core::release_device_pool(&self.client);
+                    Error::ReadbackFailed(format!("{e:?}"))
+                })?;
                 planes[c] = f32::from_bytes(&bytes).to_vec();
             }
             d_bands.push(planes);
@@ -7545,10 +7567,12 @@ impl<R: Runtime> Cvvdp<R> {
                 "DBandsScratch.d must be Some in _host_pool_and_finalize_jod (Mode B rejected above)",
             );
             for c in 0..N_CHANNELS {
-                let bytes = self
-                    .client
-                    .read_one(d_full[c].clone())
-                    .map_err(|_| Error::InvalidImageSize)?;
+                let bytes = self.client.read_one(d_full[c].clone()).map_err(|e| {
+                    // Reclaim the pool: the failed dispatch's reservation
+                    // would otherwise starve every later score in this process.
+                    zenmetrics_gpu_core::release_device_pool(&self.client);
+                    Error::ReadbackFailed(format!("{e:?}"))
+                })?;
                 let d_vec: &[f32] = f32::from_bytes(&bytes);
                 debug_assert_eq!(d_vec.len(), n_px);
                 q[c] = lp_norm_mean(d_vec, BETA_SPATIAL);
@@ -8030,10 +8054,12 @@ impl<R: Runtime> Cvvdp<R> {
             }
         }
 
-        let bytes = self
-            .client
-            .read_one(self.partials_h.clone())
-            .map_err(|_| Error::InvalidImageSize)?;
+        let bytes = self.client.read_one(self.partials_h.clone()).map_err(|e| {
+            // Reclaim the pool: the failed dispatch's reservation
+            // would otherwise starve every later score in this process.
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
         let partials_data: &[f32] = f32::from_bytes(&bytes);
 
         let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
@@ -8199,10 +8225,12 @@ impl<R: Runtime> Cvvdp<R> {
         self.strip_dispatch_counter
             .fetch_add(outer_strip_iters, core::sync::atomic::Ordering::Relaxed);
 
-        let bytes = self
-            .client
-            .read_one(self.partials_h.clone())
-            .map_err(|_| Error::InvalidImageSize)?;
+        let bytes = self.client.read_one(self.partials_h.clone()).map_err(|e| {
+            // Reclaim the pool: the failed dispatch's reservation
+            // would otherwise starve every later score in this process.
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
         let partials_data: &[f32] = f32::from_bytes(&bytes);
 
         let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
@@ -8369,10 +8397,12 @@ impl<R: Runtime> Cvvdp<R> {
         }
 
         // Step 4: read back the per-pixel diffmap into the caller's Vec.
-        let bytes = self
-            .client
-            .read_one(out)
-            .map_err(|_| Error::InvalidImageSize)?;
+        let bytes = self.client.read_one(out).map_err(|e| {
+            // Reclaim the pool: the failed dispatch's reservation
+            // would otherwise starve every later score in this process.
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
         let data: &[f32] = f32::from_bytes(&bytes);
         debug_assert_eq!(data.len(), n0);
         diffmap_out.clear();
@@ -8541,10 +8571,12 @@ impl<R: Runtime> Cvvdp<R> {
             let mut planes = [Vec::new(), Vec::new(), Vec::new()];
             for c in 0..N_CHANNELS {
                 let h = self.bands_ref[k].planes[c].clone();
-                let bytes = self
-                    .client
-                    .read_one(h)
-                    .map_err(|_| Error::InvalidImageSize)?;
+                let bytes = self.client.read_one(h).map_err(|e| {
+                    // Reclaim the pool: the failed dispatch's reservation
+                    // would otherwise starve every later score in this process.
+                    zenmetrics_gpu_core::release_device_pool(&self.client);
+                    Error::ReadbackFailed(format!("{e:?}"))
+                })?;
                 planes[c] = f32::from_bytes(&bytes).to_vec();
             }
             out.push(planes);

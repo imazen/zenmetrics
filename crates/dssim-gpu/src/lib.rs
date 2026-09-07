@@ -129,6 +129,10 @@ pub enum Error {
     /// Image is smaller than 8×8 — the pyramid would collapse before
     /// reaching scale 0.
     InvalidImageSize,
+    /// Reading the reduction sums buffer back from the device failed —
+    /// typically a device OOM. Previously an `.expect()`, i.e. a panic no
+    /// caller could handle; see imazen/zenmetrics#41.
+    SumsReadbackFailed(String),
     /// The requested [`MemoryMode`](crate::MemoryMode) variant isn't
     /// implemented yet (e.g. `Tile {...}`).
     ModeUnsupported(&'static str),
@@ -157,6 +161,9 @@ impl std::fmt::Display for Error {
             ),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
             Error::InvalidImageSize => write!(f, "image must be at least 8×8 pixels"),
+            Error::SumsReadbackFailed(e) => {
+                write!(f, "failed to read the reduction sums buffer back: {e}")
+            }
             Error::ModeUnsupported(variant) => write!(
                 f,
                 "MemoryMode::{variant} is not yet implemented in dssim-gpu"

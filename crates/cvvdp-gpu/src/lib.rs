@@ -537,6 +537,13 @@ pub const PYCVVDP_REFERENCE_VERSION: &str = "v0.5.4";
 /// ```
 #[derive(Debug, Clone)]
 pub enum Error {
+    /// Reading a buffer back from the device failed — typically a device OOM.
+    ///
+    /// These sites previously mapped to `InvalidImageSize`, which is both
+    /// misleading to a human and unclassifiable as an OOM by the fleet
+    /// (imazen/zenmetrics#41): a VRAM exhaustion was reported as a bad image
+    /// dimension.
+    ReadbackFailed(String),
     /// Buffer length doesn't match `width × height × 3`.
     DimensionMismatch {
         /// Required buffer length: `width × height × 3` bytes.
@@ -609,6 +616,9 @@ impl std::fmt::Display for Error {
                 f,
                 "no warm GPU reference; call warm_reference first (or warm state was invalidated by an intervening REF dispatch)"
             ),
+            Error::ReadbackFailed(e) => {
+                write!(f, "reading a buffer back from the device failed: {e}")
+            }
             Error::InvalidImageSize => write!(
                 f,
                 "image too small for the configured pyramid, or GPU readback/dispatch failed (see the InvalidImageSize variant docs — cubecl's read errors aren't separable yet so both surface as this variant)"

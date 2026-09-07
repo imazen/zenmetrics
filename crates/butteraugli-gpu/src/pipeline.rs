@@ -2475,7 +2475,7 @@ impl<R: Runtime> Butteraugli<R> {
     }
 
     /// Read the current diffmap back to host memory.
-    pub fn copy_diffmap(&self) -> Vec<f32> {
+    pub fn copy_diffmap(&self) -> Result<Vec<f32>> {
         self.read_plane(&self.diffmap_buf)
     }
 
@@ -2500,7 +2500,12 @@ impl<R: Runtime> Butteraugli<R> {
         let bytes = self
             .client
             .read_one(self.diffmap_buf.clone())
-            .expect("read_one diffmap");
+            .map_err(|e| {
+                // Reclaim the pool: the failed dispatch's reservation would
+                // otherwise starve every later score in this process.
+                zenmetrics_gpu_core::release_device_pool(&self.client);
+                Error::ReadbackFailed(format!("{e:?}"))
+            })?;
         let src = f32::from_bytes(&bytes);
         if dst.len() < src.len() {
             return Err(Error::DimensionMismatch {
@@ -2542,36 +2547,39 @@ impl<R: Runtime> Butteraugli<R> {
         &self.mask
     }
 
-    fn read_plane(&self, h: &cubecl::server::Handle) -> Vec<f32> {
-        let bytes = self.client.read_one(h.clone()).expect("read_one plane");
-        f32::from_bytes(&bytes).to_vec()
+    fn read_plane(&self, h: &cubecl::server::Handle) -> Result<Vec<f32>> {
+        let bytes = self.client.read_one(h.clone()).map_err(|e| {
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::ReadbackFailed(format!("{e:?}"))
+        })?;
+        Ok(f32::from_bytes(&bytes).to_vec())
     }
 
     /// Debug: read the AC accumulator for one channel. Available after
     /// [`compute`].
-    pub fn debug_block_diff_ac(&self, ch: usize) -> Vec<f32> {
+    pub fn debug_block_diff_ac(&self, ch: usize) -> Result<Vec<f32>> {
         self.read_plane(&self.block_diff_ac[ch])
     }
 
     /// Debug: read the DC accumulator for one channel.
-    pub fn debug_block_diff_dc(&self, ch: usize) -> Vec<f32> {
+    pub fn debug_block_diff_dc(&self, ch: usize) -> Result<Vec<f32>> {
         self.read_plane(&self.block_diff_dc[ch])
     }
 
     /// Debug: read the fuzzy-erosion mask plane.
-    pub fn debug_mask(&self) -> Vec<f32> {
+    pub fn debug_mask(&self) -> Result<Vec<f32>> {
         self.read_plane(&self.mask)
     }
 
     /// Debug: read one of the LF (low-frequency, vals-space) planes for
     /// one of the two image sides.
-    pub fn debug_lf(&self, is_a: bool, ch: usize) -> Vec<f32> {
+    pub fn debug_lf(&self, is_a: bool, ch: usize) -> Result<Vec<f32>> {
         let f = if is_a { &self.freq_a } else { &self.freq_b };
         self.read_plane(&f[3][ch])
     }
 
     /// Debug: read the per-channel HF / UHF / MF / LF plane (k ∈ 0..=3).
-    pub fn debug_freq(&self, is_a: bool, k: usize, ch: usize) -> Vec<f32> {
+    pub fn debug_freq(&self, is_a: bool, k: usize, ch: usize) -> Result<Vec<f32>> {
         let f = if is_a { &self.freq_a } else { &self.freq_b };
         self.read_plane(&f[k][ch])
     }

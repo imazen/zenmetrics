@@ -687,7 +687,7 @@ impl<R: Runtime> Dssim<R> {
 
         // Read sums → compute mean_ssim per scale → re-launch
         // |ssim - avg| → second reduction → final score.
-        let sums_host = self.read_sums();
+        let sums_host = self.read_sums()?;
         for s in 0..self.scales.len() {
             let n_pix = self.scales[s].n as f64;
             let ssim_sum = sums_host[s * 2] as f64;
@@ -696,7 +696,7 @@ impl<R: Runtime> Dssim<R> {
             self.run_abs_diff_and_sum(s, avg as f32);
         }
         self.run_finalize();
-        let sums_host_pass2 = self.read_sums();
+        let sums_host_pass2 = self.read_sums()?;
 
         let mut weighted = 0.0_f64;
         let mut weight_sum = 0.0_f64;
@@ -1034,7 +1034,7 @@ impl<R: Runtime> Dssim<R> {
         }
         self.run_finalize();
 
-        let sums_host = self.read_sums();
+        let sums_host = self.read_sums()?;
         for s in 0..self.scales.len() {
             let n_pix = self.scales[s].n as f64;
             let ssim_sum = sums_host[s * 2] as f64;
@@ -1043,7 +1043,7 @@ impl<R: Runtime> Dssim<R> {
             self.run_abs_diff_and_sum(s, avg as f32);
         }
         self.run_finalize();
-        let sums_host_pass2 = self.read_sums();
+        let sums_host_pass2 = self.read_sums()?;
 
         let mut weighted = 0.0_f64;
         let mut weight_sum = 0.0_f64;
@@ -1121,7 +1121,7 @@ impl<R: Runtime> Dssim<R> {
             self.sum_ssim_body(&plan);
         }
         self.run_finalize();
-        let pass1_sums = self.read_sums();
+        let pass1_sums = self.read_sums()?;
 
         // Compute per-scale avg from full-image mean_ssim.
         let mut avg_per_scale = [0.0_f32; NUM_SCALES];
@@ -1150,7 +1150,7 @@ impl<R: Runtime> Dssim<R> {
             }
         }
         self.run_finalize();
-        let pass2_sums = self.read_sums();
+        let pass2_sums = self.read_sums()?;
 
         // Final score.
         let mut weighted = 0.0_f64;
@@ -1339,7 +1339,7 @@ impl<R: Runtime> Dssim<R> {
             self.sum_ssim_body(&plan);
         }
         self.run_finalize();
-        let pass1_sums = self.read_sums();
+        let pass1_sums = self.read_sums()?;
 
         // Compute per-scale avg from full-image mean_ssim.
         let mut avg_per_scale = [0.0_f32; NUM_SCALES];
@@ -1369,7 +1369,7 @@ impl<R: Runtime> Dssim<R> {
             }
         }
         self.run_finalize();
-        let pass2_sums = self.read_sums();
+        let pass2_sums = self.read_sums()?;
 
         // Final score.
         let mut weighted = 0.0_f64;
@@ -2026,12 +2026,14 @@ impl<R: Runtime> Dssim<R> {
             .create_from_slice(f32::as_bytes(&[0.0_f32; SUMS_LEN]));
     }
 
-    fn read_sums(&mut self) -> Vec<f32> {
-        let bytes = self
-            .client
-            .read_one(self.sums.clone())
-            .expect("read sums buffer");
-        f32::from_bytes(&bytes).to_vec()
+    fn read_sums(&mut self) -> Result<Vec<f32>> {
+        let bytes = self.client.read_one(self.sums.clone()).map_err(|e| {
+            // Reclaim first: the failed dispatch's reservation is still parked
+            // in the pool and would starve every later score in this process.
+            zenmetrics_gpu_core::release_device_pool(&self.client);
+            Error::SumsReadbackFailed(format!("{e:?}"))
+        })?;
+        Ok(f32::from_bytes(&bytes).to_vec())
     }
 }
 

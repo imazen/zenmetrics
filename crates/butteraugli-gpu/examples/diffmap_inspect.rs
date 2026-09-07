@@ -111,7 +111,7 @@ fn main() {
     // GPU
     let mut gpu = Butteraugli::<Backend>::new(client, width, height);
     let gres = gpu.compute(&ref_rgb, &dist_rgb).unwrap();
-    let gpu_dm = gpu.copy_diffmap();
+    let gpu_dm = gpu.copy_diffmap().expect("copy_diffmap");
 
     // Extract CPU diffmap (ImgVec is contiguous when produced by butteraugli)
     let cpu_flat: Vec<f32> = cpu_buf.to_vec();
@@ -184,23 +184,44 @@ fn main() {
         );
     };
     println!("\n--- GPU intermediate buffers ---");
-    print_at("mask", &gpu.debug_mask());
-    print_at("block_diff_ac[X]", &gpu.debug_block_diff_ac(0));
-    print_at("block_diff_ac[Y]", &gpu.debug_block_diff_ac(1));
-    print_at("block_diff_ac[B]", &gpu.debug_block_diff_ac(2));
-    print_at("block_diff_dc[X]", &gpu.debug_block_diff_dc(0));
-    print_at("block_diff_dc[Y]", &gpu.debug_block_diff_dc(1));
-    print_at("block_diff_dc[B]", &gpu.debug_block_diff_dc(2));
-    print_at("LF_a[X]", &gpu.debug_lf(true, 0));
-    print_at("LF_b[X]", &gpu.debug_lf(false, 0));
-    print_at("LF_a[Y]", &gpu.debug_lf(true, 1));
-    print_at("LF_b[Y]", &gpu.debug_lf(false, 1));
-    print_at("HF_a[Y]", &gpu.debug_freq(true, 1, 1));
-    print_at("HF_b[Y]", &gpu.debug_freq(false, 1, 1));
-    print_at("MF_a[Y]", &gpu.debug_freq(true, 2, 1));
-    print_at("MF_b[Y]", &gpu.debug_freq(false, 2, 1));
-    print_at("UHF_a[Y]", &gpu.debug_freq(true, 0, 1));
-    print_at("UHF_b[Y]", &gpu.debug_freq(false, 0, 1));
+    print_at("mask", &gpu.debug_mask().expect("debug_mask"));
+    print_at(
+        "block_diff_ac[X]",
+        &gpu.debug_block_diff_ac(0).expect("debug_block_diff_ac"),
+    );
+    print_at(
+        "block_diff_ac[Y]",
+        &gpu.debug_block_diff_ac(1).expect("debug_block_diff_ac"),
+    );
+    print_at(
+        "block_diff_ac[B]",
+        &gpu.debug_block_diff_ac(2).expect("debug_block_diff_ac"),
+    );
+    print_at(
+        "block_diff_dc[X]",
+        &gpu.debug_block_diff_dc(0).expect("debug_block_diff_dc"),
+    );
+    print_at(
+        "block_diff_dc[Y]",
+        &gpu.debug_block_diff_dc(1).expect("debug_block_diff_dc"),
+    );
+    print_at(
+        "block_diff_dc[B]",
+        &gpu.debug_block_diff_dc(2).expect("debug_block_diff_dc"),
+    );
+    print_at("LF_a[X]", &gpu.debug_lf(true, 0).expect("debug_lf"));
+    print_at("LF_b[X]", &gpu.debug_lf(false, 0).expect("debug_lf"));
+    print_at("LF_a[Y]", &gpu.debug_lf(true, 1).expect("debug_lf"));
+    print_at("LF_b[Y]", &gpu.debug_lf(false, 1).expect("debug_lf"));
+    print_at("HF_a[Y]", &gpu.debug_freq(true, 1, 1).expect("debug_freq"));
+    print_at("HF_b[Y]", &gpu.debug_freq(false, 1, 1).expect("debug_freq"));
+    print_at("MF_a[Y]", &gpu.debug_freq(true, 2, 1).expect("debug_freq"));
+    print_at("MF_b[Y]", &gpu.debug_freq(false, 2, 1).expect("debug_freq"));
+    print_at("UHF_a[Y]", &gpu.debug_freq(true, 0, 1).expect("debug_freq"));
+    print_at(
+        "UHF_b[Y]",
+        &gpu.debug_freq(false, 0, 1).expect("debug_freq"),
+    );
 
     // Sample 9 evenly-spaced pixels for ratio inspection
     println!("\n--- 9 sample pixels (cpu / gpu / ratio) ---");
