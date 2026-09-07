@@ -32,7 +32,7 @@ Workspace conventions per the global rules:
   (`MEDIA-HARD-DOWN`, `media=` in the heartbeat) and the URL became overridable via
   `ZEN_MEDIA_PROBE_URL`. Verified: all four touched `.rs` files are byte-identical
   outside comments, `fleet/handicaps.toml` parses to identical values,
-  `cargo test -p zenfleet-core` 135/135.
+  `cargo test -p zenfleet-core` 135/135. (fc8db4f9)
 
 - **`scripts/lib/hygiene_patterns.txt` registers a fourth class (host-descriptor) and
   keeps its vocabulary in the private config**, per the file's own standing rule that
@@ -44,7 +44,7 @@ Workspace conventions per the global rules:
   synthetic placeholder vocabulary: 2 positives, 4 word-boundary negative controls and
   1 "neutral description stays legal" control — the boundary is load-bearing, since
   unbounded forms of terms in this class matched 145, 296 and 22 lines of ordinary
-  text across the 2,043 tracked files here.
+  text across the 2,043 tracked files here. (fc8db4f9)
 
 ## rev2 recalculation wave (2026-09-06)
 
