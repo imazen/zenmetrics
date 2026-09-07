@@ -180,7 +180,7 @@ individually re-verified this pass.
 | Host | `/tmp` before | Action | `/tmp` after | Effective |
 |---|---|---|---|---|
 | `r7900x` | `tmpfs 15G` (systemd `tmp.mount`, static-loaded, no `/etc/fstab` entry) | `sudo systemctl mask tmp.mount` (no live job disturbed — a training process was running; mount left live, no reboot) | still `tmpfs 15G` live | **next reboot** (masked unit can no longer start) |
-| `tower` (Unraid host) | host rootfs is RAM-booted by design — out of scope, never changed | none (host untouched, per the Docker-only rule) | unchanged | n/a |
+| `tower` (host OS) | host rootfs is RAM-booted by design — out of scope, never changed | none (host untouched, per the Docker-only rule) | unchanged | n/a |
 | `tower` (`zen*` containers) | container `/tmp` is the overlay writable layer on `/var/lib/docker` (`btrfs` on a cache-pool loop device — disk-backed already, not RAM); no running `zen*` compute container had a `TMPDIR`/scratch mount at audit time | created `/mnt/user/coefficient/scratch` (array-backed) for launcher use; `lan_score_launch.sh` now bind-mounts it at `/scratch` + sets `TMPDIR=/scratch` on every future launch | disk-backed via bind mount | **next launch** of any `zen-score-*` container (no live compute worker was running to disturb — only `zen-lanstore`, a storage container, was up) |
 | any LAN node enrolled via `enroll_running_node.sh` (the always-on pool workers) | depends on the box's own `tmp.mount` default | `enroll_running_node.sh` now bind-mounts `$HOME/tmp/zfw-scratch` (override `ZEN_TMPDIR_HOST_DIR`) at `/scratch` + sets `TMPDIR=/scratch` in the systemd unit's `ExecStart` | disk-backed via bind mount | **next `enroll_running_node.sh` run** (re-enroll to pick it up; not retroactive to an already-running unit) |
 

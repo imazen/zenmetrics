@@ -27,7 +27,7 @@
 #        disagrees, so a rev2 wave MUST set this or every cell fails. One wave, one revision.
 #        ZEN_TMPDIR_HOST_DIR -> override the host-side scratch dir bind-mounted at /scratch (TMPDIR
 #        discipline, 2026-09-05: every launch gets a disk-backed TMPDIR, never bare /tmp). Default
-#        auto-detects: /mnt/user/coefficient/scratch when the remote has an Unraid array mounted
+#        auto-detects: /mnt/user/coefficient/scratch when the remote has a NAS array mounted
 #        (tower), else $HOME/tmp/zfw-scratch on the remote.
 #
 # Worker name = <hostname>-<role> (collision-proof). Container zen-score-<role>;
@@ -112,7 +112,7 @@ WORKER="$(hostname)-${ZM_ROLE}"
 
 # TMPDIR discipline (ban RAM-backed tmp everywhere, 2026-09-05): bind-mount a disk-backed
 # scratch dir at /scratch and export TMPDIR to it — fleet-entrypoint.sh's
-# check_tmpdir_discipline refuses to boot without this. Auto-detect an Unraid array (the
+# check_tmpdir_discipline refuses to boot without this. Auto-detect a NAS array (the
 # tower convention: /mnt/user/<share>/scratch, never the RAM-booted host root) vs a plain
 # box (this account's ~/tmp, per the workspace-wide "/tmp is banned, use ~/tmp" rule);
 # override with ZEN_TMPDIR_HOST_DIR for a box with its own convention.
@@ -172,7 +172,7 @@ sudo -n docker run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-fail
   -e ZEN_RUN="jobs/$ZM_JOBSET" \
   -e ZEN_MANIFEST_URI="s3://$ZM_BUCKET/jobs/$ZM_JOBSET/manifest.json" \
   -e ZEN_CONTROL_KEY="jobs/$ZM_JOBSET/control.json" \
-  "${REQ_GPU[@]}" -e ZEN_WORKER="$WORKER" -e ZEN_PROVIDER=basement \
+  "${REQ_GPU[@]}" -e ZEN_WORKER="$WORKER" -e ZEN_PROVIDER=lan \
   -e ZEN_MAX_MIN=1400 -e ZEN_IDLE_PASSES="${ZM_IDLE_PASSES:-8}" -e ZEN_CORE_OVERSUBSCRIBE="${ZM_OVERSUB:-2}" \
   -e ZEN_LONG_LIVED="${ZM_LONG_LIVED:-0}" \
   --entrypoint /usr/local/bin/fleet-entrypoint.sh "$ZM_IMG" >/dev/null

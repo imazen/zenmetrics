@@ -142,7 +142,7 @@ sudo loginctl enable-linger $USER     # REQUIRED on headless boxes
 - macOS uses Homebrew and needs `brew trust rjyo/moshi` first — modern Homebrew refuses
   untrusted third-party taps, and `brew install` fails with "Refusing to load formula ...
   from untrusted tap" if you skip it.
-- The tower is deliberately excluded: its Unraid host is stateless and RAM-booted, so a host
+- The tower is deliberately excluded: its host OS is stateless and RAM-booted, so a host
   install is both against the Docker-only rule and lost on reboot.
 
 **`~/bin`** — 12 local scripts that came across with `/home`, including `run-heavy`'s

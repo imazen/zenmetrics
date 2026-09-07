@@ -23,7 +23,7 @@
 //!
 //! A `metric` job is self-contained: it re-encodes the cell (deterministic) and scores
 //! (reference=source, distorted=encode). CPU metrics only (ssim2/butteraugli/zensim) — GPU metrics
-//! need a GPU build/tier. This keeps the basement + CPU burst tiers fully useful.
+//! need a GPU build/tier. This keeps the on-prem + CPU burst tiers fully useful.
 use crate::decode::{Rgb8Image, decode_image_to_rgb8};
 use crate::metrics::{GpuRuntime, MetricKind, run_metric};
 // The encode stack (re-encoding a cell for the `encode`/`metric` job kinds) needs the codec

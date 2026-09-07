@@ -238,7 +238,7 @@ now owned by the Rust worker. The three that remain:
 |---|---|---|
 | `onstart_unified.sh` | **omni mode** — execs `zenfleet-sweep worker --backend vastai --mode omni` (claim loop + in-process scoring, all metrics, one process) | ✅ canonical |
 | `onstart_feature_backfill.sh` | **feature-backfill mode** — `--mode feature-backfill` (zensim 300-feature parquets from cached variants, no re-encode) | ✅ canonical |
-| `onstart_orchestrator.sh` | local/basement orchestrator variant (same chunk-claim contract) | ✅ canonical |
+| `onstart_orchestrator.sh` | local/on-prem orchestrator variant (same chunk-claim contract) | ✅ canonical |
 
 ### Chunk workers (process one chunk = 100-200 rows)
 

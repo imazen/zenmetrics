@@ -39,7 +39,7 @@ for js in "$@"; do
     -e ZEN_RUN="jobs/$js" \
     -e ZEN_MANIFEST_URI="s3://${ZM_S3BUCKET:-zentrain}/jobs/$js/manifest.json" \
     -e ZEN_CONTROL_KEY="jobs/$js/control.json" \
-    "${REQ[@]}" -e ZEN_WORKER="$(hostname)-$role" -e ZEN_PROVIDER=basement \
+    "${REQ[@]}" -e ZEN_WORKER="$(hostname)-$role" -e ZEN_PROVIDER=lan \
     -e ZEN_MAX_MIN=1400 -e ZEN_IDLE_PASSES=8 -e ZEN_CORE_OVERSUBSCRIBE=2 \
     -e ZEN_PASS_TIMEOUT="${ZM_PASS_TIMEOUT:-1800}" \
     --entrypoint /usr/local/bin/fleet-entrypoint.sh "$ZM_IMG" >> "$LOG" 2>&1

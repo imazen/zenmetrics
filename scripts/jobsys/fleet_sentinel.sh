@@ -23,7 +23,7 @@
 #   13 TOWER-UNREACHABLE    ssh failed 3 consecutive ticks
 #   14 DRAIN-STALL          --runlist gap unchanged 4 ticks while store writable
 #   15 BUDGET-EXHAUSTED     watch window ended with no condition
-#   16 PLEX-HARD-DOWN       media server stopped answering (3 ticks)
+#   16 MEDIA-HARD-DOWN      co-tenant media service stopped answering (3 ticks)
 #   17 STORE-WRITE-DIED     write probe failing (3 ticks; with cycling: parked
 #                           AND still dead after 8 more ticks — abnormal outage)
 #   18 CYCLE-THRASH         >8 park/restart cycles this run — judgment needed
@@ -49,9 +49,13 @@ if [ -n "$CYCLE_SSH" ]; then
   echo "cycling: $CYCLE_CTR on $CYCLE_SSH initial state=$worker_state"
 fi
 END=$((SECONDS + BUDGET*60))
-ssh_fail=0; plex_fail=0; write_fail=0; write_was_ok=0; prev_write=""; write_streak_fails=0
+ssh_fail=0; media_fail=0; write_fail=0; write_was_ok=0; prev_write=""; write_streak_fails=0
 last_gap=""; gap_same=0
 STORE_HOST=${ZEN_STORE_HOST:-tower}; STORE_PORT=${ZEN_STORE_PORT:-3900}
+# Liveness of the CO-TENANT service that has priority on the shared host: the fleet
+# borrows that box, so this service going dark is a stop-everything condition, not a
+# fleet metric. The probe URL is site-specific — override per site.
+MEDIA_PROBE_URL=${ZEN_MEDIA_PROBE_URL:-http://localhost:32400/identity}
 probe_write() {
   # s3-independent minimal probe: can the store accept a write? Uses s5cmd if
   # creds are sourced, else falls back to a TCP connect check (reach-only).
@@ -73,9 +77,9 @@ while [ $SECONDS -lt $END ]; do
   fi
   ssh_fail=0
   MOVER=$(ssh -o ConnectTimeout=10 root@tower "pgrep -cx move 2>/dev/null" 2>/dev/null || echo "?")
-  PLEX=$(ssh -o ConnectTimeout=10 root@tower "curl -sm 6 -o /dev/null -w %{http_code} http://localhost:32400/identity" 2>/dev/null || echo 000)
-  if [ "$PLEX" != "200" ]; then plex_fail=$((plex_fail+1)); else plex_fail=0; fi
-  [ $plex_fail -ge 3 ] && { echo "CONDITION: PLEX-HARD-DOWN (http=$PLEX x3)"; exit 16; }
+  MEDIA=$(ssh -o ConnectTimeout=10 root@tower "curl -sm 6 -o /dev/null -w %{http_code} $MEDIA_PROBE_URL" 2>/dev/null || echo 000)
+  if [ "$MEDIA" != "200" ]; then media_fail=$((media_fail+1)); else media_fail=0; fi
+  [ $media_fail -ge 3 ] && { echo "CONDITION: MEDIA-HARD-DOWN (http=$MEDIA x3)"; exit 16; }
   if probe_write; then W=ok; write_was_ok=1; write_fail=0; else W=fail; write_fail=$((write_fail+1)); fi
   GAPTXT=""
   if [ -n "$RUNLIST" ] && [ "$W" = ok ]; then
@@ -89,7 +93,7 @@ while [ $SECONDS -lt $END ]; do
       [ $gap_same -ge 4 ] && { echo "CONDITION: DRAIN-STALL ($G unchanged x5 ticks, store writable)"; exit 14; }
     fi
   fi
-  echo "$TS avail=${AVAIL}G mover=$MOVER plex=$PLEX write=$W$GAPTXT"
+  echo "$TS avail=${AVAIL}G mover=$MOVER media=$MEDIA write=$W$GAPTXT"
   [ "$AVAIL" -ge "$GATE" ] && { echo "CONDITION: SPACE-GATE-MET (${AVAIL}G >= ${GATE}G) — run the relaunch runbook"; exit 10; }
   # TRANSITION-based signals (2026-08-27 fixes, both bitten live):
   #  - -eq 3 fired only on EXACTLY the third fail; a streak that passed that

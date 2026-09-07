@@ -7484,6 +7484,7 @@ dependencies = [
  "bytemuck",
  "enough",
  "imgref",
+ "libm",
  "linear-srgb",
  "magetypes",
  "rayon",

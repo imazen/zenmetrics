@@ -178,7 +178,7 @@ datasets, against 61 tar objects for 219 GiB carrying the same bytes.
 
 | target | size | used | free | note |
 |---|---|---|---|---|
-| `/mnt/user` (Unraid array, aggregate) | 35 T | 15 T | **21 T (60 % free)** | the 15 %-free floor is 5.25 T — never approached |
+| `/mnt/user` (NAS array, aggregate) | 35 T | 15 T | **21 T (60 % free)** | the 15 %-free floor is 5.25 T — never approached |
 | `/mnt/disk1` (array member) | 17 T | 7.2 T | 9.3 T | holds SeaweedFS `/data2` |
 | `/mnt/cache` (NVMe pool) | 1.9 T | 802 G | 1.1 T | holds SeaweedFS `/data` |
 
@@ -218,7 +218,7 @@ refused for *redundancy or absent consumers*, not space (§2).
 is the operational limit of this store.** Every transfer ran `nice -n19 ionice -c3`
 with bounded parallelism, and for the large-object lanes (3 rclone transfers × 4
 upload streams) the tower stayed healthy: load ≈10 on 32 threads, 81-90 % CPU
-idle, 3.5-6.5 % iowait, Plex and the *arr stack live throughout.
+idle, 3.5-6.5 % iowait, the household media stack live throughout.
 
 **The small-object lanes are a different animal.** Pushing `encodes/` objects at
 ~333 PUT/s (s5cmd, 96 upload workers) drove the tower to **load 30.7 with 48.9 %
@@ -274,12 +274,12 @@ than a 78-GiB-and-up pull across the WAN. That is both faster and free of R2
 egress. Anyone continuing this should ingest from `zen924/tars/` and
 `zen924/zjl2-encodes/` in place, not re-pull from R2.
 
-### An Unraid `mover` job has been running since 2026-08-26
+### An array `mover` job has been running since 2026-08-26
 
 `ps` on the tower: `/usr/local/sbin/mover start`, **started Wed Aug 26 17:19:50,
 elapsed 3 d 21 h** at the time of this measurement. It is draining
 `zen924/zjl2-encodes` from the cache pool to the array — **902,005 files already
-moved, 582,013 still on cache** — and Unraid's mover calls `fuser` on *every
+moved, 582,013 still on cache** — and the array mover calls `fuser` on *every
 file*, which is what the repeated short-lived `fuser` processes at 20-55 % CPU
 were.
 
@@ -457,7 +457,7 @@ large sequential transfer) are queued behind the same load gate.
 
 | deferred `encodes/` prefix | size | why, and what covers it meanwhile |
 |---|--:|---|
-| `zenjpeg_lossy/` | 43.13 GiB / 1,484,010 obj | the tower **already holds this exact corpus** as `zen924/zjl2-encodes` (§3b) and Unraid's mover is *still moving it*; a third copy written across the WAN would be the worst available option. `mandfix2-zenjpeg` tars are mirrored — but note this dataset has **no `variant_index.tsv` anywhere**, so an index would have to be built (`zenmetrics/scripts/jobsys/index_tar_byterange.py`) before the tar path works for it. |
+| `zenjpeg_lossy/` | 43.13 GiB / 1,484,010 obj | the tower **already holds this exact corpus** as `zen924/zjl2-encodes` (§3b) and the array mover is *still moving it*; a third copy written across the WAN would be the worst available option. `mandfix2-zenjpeg` tars are mirrored — but note this dataset has **no `variant_index.tsv` anywhere**, so an index would have to be built (`zenmetrics/scripts/jobsys/index_tar_byterange.py`) before the tar path works for it. |
 | `zenwebp_lossy/` | 22.53 GiB / 944,370 obj | small-object PUT rate is what took the store down; `mandfix2-zenwebp` tars + `bf-zwebp-t0..8` indexes cover the bytes |
 | `zenjxl_lossless/` | 54.41 GiB / 269,820 obj | same; `jxl-modular` tars + `bf-zjxlm-t0..9` indexes cover the bytes |
 | `zenpng_lossless/` | 12.75 GiB / 76,449 obj | **partial: 27,500 of 76,449 already on the LAN store**, resumes by diff; `mandfix2-zenpng` tars + `bf-zpng-t0..1` indexes cover the bytes |
@@ -476,7 +476,7 @@ The cheap path for all four, once the mover has drained:
    with zero WAN transfer and zero R2 egress.
 2. **Gate on tower load and keep upload concurrency low** — the measured ceiling
    is not SeaweedFS's accept rate (333 obj/s) but what this box sustains beside
-   Plex and a running mover.
+   the household media stack and a running mover.
 3. **Diff first, always.** Every lane here recomputed `(R2 keys − LAN keys)` and
    moved only the difference, so a resumed pass costs only what is genuinely
    missing. Use `aws s3 ls` for the LAN side of that diff, never `s5cmd ls` (§4).

@@ -178,6 +178,51 @@ def self_test() -> int:
     for line in negatives:
         check("negative control", classes(line) == [], f"{line!r} -> {classes(line)}")
 
+    # CLASS 4 (host-descriptor) is site-specific VOCABULARY held in the private
+    # config, so CI cannot see its terms. What CI can and must pin is the MECHANISM
+    # that carries them, and the word-boundary discipline that makes the class usable:
+    # measured 2026-09-06, the unbounded form of terms in this class matched 145, 296
+    # and 22 lines of ordinary text in this repo. A class that fires on "unified" gets
+    # deleted by the next session, so the boundary is the class.
+    import tempfile
+
+    placeholder = "zzhostdescriptorzz"  # stands in for a real term; carries no value
+    with tempfile.TemporaryDirectory() as td:
+        cfg = Path(td) / "nodes.toml"
+        cfg.write_text(
+            'hygiene_patterns = [\n'
+            f'  "(^|[^A-Za-z]){placeholder}([^A-Za-z]|$)",\n'
+            ']\n',
+            encoding="utf-8",
+        )
+        prev = os.environ.get("HOMEFLEET_NODES")
+        os.environ["HOMEFLEET_NODES"] = str(cfg)
+        try:
+            site = load_patterns()
+        finally:
+            if prev is None:
+                os.environ.pop("HOMEFLEET_NODES", None)
+            else:
+                os.environ["HOMEFLEET_NODES"] = prev
+
+    def site_classes(line: str) -> list[str]:
+        return [n for n, rx in site if rx.search(line) and re.fullmatch(r"private-\d+", n)]
+
+    check("site-specific vocabulary reaches the scanner",
+          any(re.fullmatch(r"private-\d+", n) for n, _ in site), str([n for n, _ in site]))
+    check("positive [host-descriptor, placeholder term]",
+          site_classes(f"the {placeholder} array is mounted at /mnt/user") != [], "")
+    check("positive [host-descriptor, mid-sentence + punctuation]",
+          site_classes(f"tier=({placeholder}), capped") != [], "")
+    # The boundary controls: a term EMBEDDED in a longer word is not the term. These
+    # are the shapes that produced 145/296/22 spurious hits before bounding.
+    for embedded in (f"pre{placeholder}", f"{placeholder}ing", f"un{placeholder}ed",
+                     f"corpus-{placeholder}ish_1024x1536.png"):
+        check("negative control [host-descriptor boundary]",
+              site_classes(embedded) == [], f"{embedded!r} -> {site_classes(embedded)}")
+    check("negative control [neutral host description stays legal]",
+          site_classes("household NAS box: 16C/32T, 62 GiB, Docker-only, media has priority") == [], "")
+
     # The public pattern file must describe CLASSES, never the values it
     # protects -- checked by feeding the file to its own patterns.
     self_hits = [(i, ln) for i, ln in enumerate(PATTERNS_FILE.read_text(encoding="utf-8").splitlines(), 1)
@@ -204,10 +249,16 @@ def main() -> int:
               "report a pass on an unrun check.", file=sys.stderr)
         return 1
 
+    # NB `private-network-address` is a PUBLIC class name that also starts with
+    # "private-" — count only the numbered entries the site-config loader emits.
+    n_private = sum(1 for n, _ in pats if re.fullmatch(r"private-\d+", n))
+    prov = (f"{len(pats)} pattern(s) ({n_private} site-specific)" if n_private else
+            f"{len(pats)} pattern(s), NO site-specific config loaded — the host-descriptor "
+            "class is UNCHECKED in this run (expected in CI; not a clean bill on a workstation)")
     hits = scan(pats, files)
     if not hits:
-        print(f"check_hygiene: {len(files)} tracked files checked against {len(pats)} "
-              "pattern(s), no address/identifier hits")
+        print(f"check_hygiene: {len(files)} tracked files checked against {prov}, "
+              "no address/identifier hits")
         return 0
 
     print("\nhygiene: address/identifier check\n")

@@ -44,7 +44,7 @@ impl Default for IdleThresholds {
     }
 }
 
-/// How bad. A paid box wasting money is `Critical`; a free/basement box just idling is `Warn`.
+/// How bad. A paid box wasting money is `Critical`; a free/on-prem box just idling is `Warn`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
@@ -171,7 +171,7 @@ pub fn detect_idle(
         }
 
         // 3) Producing ~nothing (throughput from existing jobs_done/uptime). Flags BOTH paid boxes
-        //    (money for no output) and free/basement ones (a dead or stuck worker). Warn-level
+        //    (money for no output) and free/on-prem ones (a dead or stuck worker). Warn-level
         //    because throughput is a soft signal (one very long job looks the same as idle); the
         //    `wasted_usd_per_hr` field carries the $ so a paid starved box still stands out.
         if r.jobs_per_hr() <= th.min_jobs_per_hr {

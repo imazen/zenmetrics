@@ -26,6 +26,26 @@
 # scripts/ci/check_hygiene.py --self-test. Narrowing the range would trade a real class of
 # private address for that convenience; it has not been made.
 #
+# CLASS 4, host-descriptor — REGISTERED HERE, VOCABULARY HELD PRIVATELY.
+# A public repo may say what a box IS (core count, RAM, "Docker-only", "co-tenant
+# services have priority", a neutral node id) but not which products, distribution or
+# room describe it. That class is pure SITE-SPECIFIC VOCABULARY — it has no generic
+# shape a value-free regex could match — so its terms live in `hygiene_patterns` in the
+# private config (below) and are loaded from there, exactly as the paragraph above
+# prescribes. Writing them out here would turn this file into a permanent index of the
+# words it exists to remove, which is the leak, not the guard. CI has no private config
+# and so enforces classes 1-3 only; `scripts/safe_push.sh` and a local
+# check_hygiene.py run enforce all four, and both print how many private patterns they
+# loaded so an unconfigured run cannot be mistaken for a clean one.
+#
+# WORD BOUNDARIES ARE LOAD-BEARING for that class, measured 2026-09-06 over 2,043
+# tracked files here: unbounded literals in it matched 145, 296 and 22 lines that were
+# ordinary English words, one vendor-agnostic adjective, and an image-corpus filename
+# respectively; bounded, all three fell to their genuine occurrences and the class
+# false-positives on nothing in the tree. `--self-test` pins that boundary behaviour
+# against a synthetic placeholder vocabulary, so the mechanism is checked in CI even
+# though the terms are not.
+#
 # Matching a class is a REFUSAL, not a warning, and there is no bypass flag —
 # the 2026-09-04 clobber taught us what an escape hatch on a guard is worth.
 # The two legitimate resolutions are printed with every refusal: use the

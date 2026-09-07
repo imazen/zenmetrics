@@ -391,8 +391,8 @@ TOPOLOGY, measured 2026-09-02 while B-6 was draining (observe before load):
   * r7900x  24 threads, load ~9   -- runs one B-6 encode worker; the natural
             home for t1ac once B-6 clears.
   * tower   32 threads, load ~11  -- ALSO runs a B-6 encode worker, ALONGSIDE
-            the household media stack (plex/sonarr/homeassistant/...). Never
-            launch uncapped here: ZEN_CPUSET=0-23 ZEN_CPU_SHARES=256
+            the household media/automation stack. Never launch uncapped
+            here: ZEN_CPUSET=0-23 ZEN_CPU_SHARES=256
             ZEN_MEMORY=24g leaves the household its 8 cores.
   * dev     32 threads, load ~33  -- SATURATED by the 5 score workers. Do NOT
             add an encode worker here; it is the box that scores.

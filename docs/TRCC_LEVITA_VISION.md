@@ -146,7 +146,7 @@ Themes TRCC baked: `~/.trcc-user/single-video/bofuri-30s/Theme.zt` **59 MB / 722
 frames**; `…/bofuri-1600x720/Theme.zt` **400 MB / 5763 frames**.
 
 Source clip: `/mnt/user/media/library/anime/BOFURI …/Season 01/… S01E01 …mkv` on the
-tower. Re-cut with the tower's docker ffmpeg (Unraid is Docker-only):
+tower. Re-cut with the tower's docker ffmpeg (the tower is Docker-only):
 
 ```bash
 docker run --rm -v "<dir>":/in:ro -v /mnt/user/coefficient/tmp:/out \

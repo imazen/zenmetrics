@@ -79,7 +79,7 @@ org packages against the manifest.
 
 ## Fleet monitoring — actively flag idle/wasted infrastructure (standing rule)
 
-Whenever a fleet is up (vast.ai / Hetzner / RunPod / Salad / basement), every box
+Whenever a fleet is up (vast.ai / Hetzner / RunPod / Salad / on-prem), every box
 costs money per hour. **Actively watch for idle/underutilized infrastructure the
 whole time it runs — do not launch-and-forget, and report waste without being asked.**
 

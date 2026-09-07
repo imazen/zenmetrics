@@ -2086,7 +2086,7 @@ pub fn exec_command_persistent(program: &str, job: &DesiredJob) -> Result<Vec<u8
 
 /// Choose the executor handler: the warm persistent child (one `--serve` process reused across jobs)
 /// when `persistent`, else the original one-process-per-job [`exec_command`]. Persistence is opt-in
-/// (via `ZEN_PERSISTENT_EXEC`) so non-GPU/basement tiers keep the simple one-shot path.
+/// (via `ZEN_PERSISTENT_EXEC`) so non-GPU/on-prem tiers keep the simple one-shot path.
 fn dispatch_exec(
     persistent: bool,
     program: &str,
@@ -2603,8 +2603,8 @@ fn default_chunk_params(chunk_wall_sec: f64) -> ChunkParams {
         // real starvation and abort — reproduced directly (see plan.rs's
         // with_fallible_alloc fix, landed the same day) on both this session's own
         // 112,800-job wsl run (pass 1 TIMED OUT after 1800s, no hint anywhere) and
-        // an independent 9+ hour run of a different manifest (hdrgrid-diffmap,
-        // "provider=basement") hitting the identical failure signature. 2 GiB is
+        // an independent 9+ hour run of a different manifest (hdrgrid-diffmap, on
+        // the on-prem LAN tier) hitting the identical failure signature. 2 GiB is
         // still a coarse, NOT-a-measurement fallback, not a real per-cell
         // estimator — the tracked follow-up (per DEFAULT_GPU_JOB_VRAM_BYTES's own
         // comment) is wiring each codec's real `estimate_encode_resources`/GPU
@@ -2997,7 +2997,7 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
     // Pick the blob store: R2 if configured, else local FS. execute_gap is generic over the store,
     // so each arm monomorphizes against the concrete type.
     // Persistent warm executor (one `--serve` child reused across this pass's jobs) when enabled —
-    // amortizes GPU init + kernel compilation; opt-in so non-GPU/basement tiers keep one-shot exec.
+    // amortizes GPU init + kernel compilation; opt-in so non-GPU/on-prem tiers keep one-shot exec.
     let persistent = std::env::var("ZEN_PERSISTENT_EXEC")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);

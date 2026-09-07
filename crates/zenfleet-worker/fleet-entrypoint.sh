@@ -10,7 +10,7 @@
 #   ZEN_BUCKET        — R2 bucket
 #   ZEN_RUN           — run prefix under the bucket (queue namespace)
 #   ZEN_MANIFEST_URI  — s3:// URI of the DesiredJob manifest to work
-#   ZEN_PROVIDER      — tier label for ledger rows (hetzner/vast/oracle/basement/local/…)
+#   ZEN_PROVIDER      — tier label for ledger rows (hetzner/vast/oracle/lan/local/…)
 #   ZEN_WORKER        — worker id (default: hostname)
 #   ZEN_EXEC          — executor program (default /bin/cat; a real box bakes its encoder/scorer)
 #   ZEN_SPEC_THRESHOLD_SECS — optional speculative-execution threshold (goal E)

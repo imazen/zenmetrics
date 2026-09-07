@@ -73,7 +73,7 @@ default = 1.00     # UNMEASURED — type-bench TODO
 [workers.tower]
 metric = 1.00      # MEASURED: sf-cpu ledger 2026-08-07 — 19,799 done = the CPU-metric fleet max
                    # (32T Threadripper, capped cpuset 0-23; beat every encode-derived seed)
-gpu_metric = 0.0   # basis: no NVIDIA GPU (Threadripper 2950X, Unraid; Docker-only CPU worker)
+gpu_metric = 0.0   # basis: no NVIDIA GPU (Threadripper 2950X; Docker-only CPU worker)
 [workers.tower.encode]
 zenavif = 0.67     # MEASURED: 90,402 / ~6.5 h = 13.9k/h (capped cpuset 24T, cpu-shares 256) — 0f9fa073
 default = 1.00     # UNMEASURED — type-bench TODO

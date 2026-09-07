@@ -178,7 +178,7 @@ assumed away:
   `uptime`) — a slow box is a busy box.
 * `node-2` / `node-3` only when idle and only via the sanctioned
   PXE flip; never left flipped.
-* Tower is **Docker-only**; nothing installed on the Unraid host.
+* Tower is **Docker-only**; nothing installed on the host OS.
 * Narrow cpusets leaving ≥8 cores free on tower; memory caps; low `cpu-shares`.
 * Local heavy work goes through `~/work/zen/scripts/run-heavy`.
 * **No paid cloud.** LAN + tower only.

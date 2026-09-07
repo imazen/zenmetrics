@@ -3,7 +3,7 @@
 R2 `zentrain` totals **1,811 GiB / ~7.6M objects** across 113 top-level prefixes
 (full table: sized by rclone, ~/tmp/zentrain_inventory.tsv archived below). Tower
 NVMe cache (SeaweedFS home) has only **454G free**, so full migration is
-structurally impossible on the cache; the Unraid array has ~22T free.
+structurally impossible on the cache; the NAS array has ~22T free.
 
 ## Top prefixes
 | size | objects | prefix |
@@ -42,7 +42,7 @@ structurally impossible on the cache; the Unraid array has ~22T free.
 ## Proposed tiers (user decision pending)
 1. **SeaweedFS (hot, ≤ ~200G)**: current-era canonical tables + eval grids + refs —
    the working set for training/eval on the LAN.
-2. **Unraid array (cold, ~1.1-1.4 TB)**: the artifact bulk (jxl-lossy, canonical
+2. **NAS array (cold, ~1.1-1.4 TB)**: the artifact bulk (jxl-lossy, canonical
    variants, kadis-700k-gpu PNGs, old jobs) — preserves rescore-from-links and the
    persist-everything contract without cloud cost; slow is fine for cold reads.
 3. **Drop candidates** (user-gated, after array copy verifies): May-era sweep-v*

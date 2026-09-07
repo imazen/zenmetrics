@@ -1,5 +1,5 @@
 //! Cost model (goals B & F): each worker self-reports its own rate in its heartbeat, so the
-//! dashboard sums `rate × uptime` with no per-provider billing-API integration — Oracle/basement
+//! dashboard sums `rate × uptime` with no per-provider billing-API integration — Oracle/on-prem
 //! report `0.0`, vast reports its `dph`, Hetzner its hourly. Cost-per-1000-jobs *per tier* is the
 //! measured number that says which tier is actually cheapest for the real workload. A budget breach
 //! drives stop-spend (auto-teardown of paid tiers).
@@ -20,7 +20,7 @@ pub struct WorkerReport {
     pub worker: String,
     pub provider: String,
     pub class: ResourceClass,
-    /// 0.0 for free tiers (Oracle always-free; basement amortized as power_kW × $/kWh if desired).
+    /// 0.0 for free tiers (Oracle always-free; on-prem amortized as power_kW × $/kWh if desired).
     pub rate_usd_per_hr: f64,
     pub uptime_secs: u64,
     pub jobs_done: u64,

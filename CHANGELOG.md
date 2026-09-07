@@ -13,6 +13,39 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+### Changed
+
+- **Persistent on-prem tier: naming consistency pass across docs, comments and one
+  launcher label.** Docs, code comments and operator help text describe the shared
+  host by neutral facts (core count, RAM, "Docker-only", "co-tenant services have
+  priority", a neutral node id) rather than site vocabulary; `docs/RUNNING_JOBS.md`
+  §6 keeps the generic tier contract and points at `imazen-private/homefleet`
+  (`zenmetrics/RUNNING_JOBS_ONPREM_TIER.md`) for this site's enrollment steps.
+  Behaviour is unchanged everywhere except one label: the tier's launchers now set
+  **`ZEN_PROVIDER=lan`** (matching `lan_score_launch.sh` / `_lan_gpu_seq_driver.sh`,
+  which already carried that word). Nothing compares the value in code —
+  `fleet-entrypoint.sh` only forwards it (`PROVIDER="${ZEN_PROVIDER:-fleet}"`) and no
+  handicap or dashboard key derives from it — but **ledger rows written before this
+  change carry the previous label**, so a query spanning the change must accept both.
+  `fleet_sentinel.sh`'s co-tenant liveness probe keeps its default URL, thresholds and
+  exit code 16 byte-for-byte; only its identifier tokens changed
+  (`MEDIA-HARD-DOWN`, `media=` in the heartbeat) and the URL became overridable via
+  `ZEN_MEDIA_PROBE_URL`. Verified: all four touched `.rs` files are byte-identical
+  outside comments, `fleet/handicaps.toml` parses to identical values,
+  `cargo test -p zenfleet-core` 135/135.
+
+- **`scripts/lib/hygiene_patterns.txt` registers a fourth class (host-descriptor) and
+  keeps its vocabulary in the private config**, per the file's own standing rule that
+  public patterns describe classes and never the values they protect — writing the
+  terms here would make this file a permanent index of the words it exists to remove.
+  `check_hygiene.py` now reports how many site-specific patterns it loaded, and says
+  loudly when none were (CI's case), so an unconfigured run cannot be mistaken for a
+  clean bill. `--self-test` gained mechanism coverage for the new class against a
+  synthetic placeholder vocabulary: 2 positives, 4 word-boundary negative controls and
+  1 "neutral description stays legal" control — the boundary is load-bearing, since
+  unbounded forms of terms in this class matched 145, 296 and 22 lines of ordinary
+  text across the 2,043 tracked files here.
+
 ## rev2 recalculation wave (2026-09-06)
 
 ### Added
@@ -158,7 +191,7 @@ regime is 372 and it has no raw-moment route — pinned by a test.
   missing-`findmnt` TMPDIR; written failing-first (fails against a stub that always returns
   success, passes against the real check).
 - `lan_score_launch.sh`: every launch now bind-mounts a disk-backed host dir at `/scratch` and
-  sets `TMPDIR=/scratch`, auto-detecting `/mnt/user/coefficient/scratch` on an Unraid box (tower)
+  sets `TMPDIR=/scratch`, auto-detecting `/mnt/user/coefficient/scratch` on a NAS box (tower)
   vs `$HOME/tmp/zfw-scratch` elsewhere; override via `ZEN_TMPDIR_HOST_DIR`.
 
 ### Fixed
@@ -1398,7 +1431,7 @@ All five are the Nomad-migration ADR's stated preconditions
 ## zenmetrics
 
 ### Added
-- `zensim-foldapp2` jobexec metric — folded+append2 streaming **944**-feature regime (SOTA-944 P1 bigcodec wave; zensim ≥ `d0616362`, `append2_block` ON / `append2_dst_activity` OFF per the P1.5 adjudication), driver-parity-tested incl. f0..f923 bitwise-identity vs the 924 regime; bf944 declare tooling (`declare_bf944.py` cloning the drained bf924 runs, hard-verifying the source metric) and the `_pool944` wave repoint (enroll/tower/snapshot/reconcile defaults, container `zen944-basement`, image tag `exec-zensim944-57b7b9ad`) (57b7b9ad)
+- `zensim-foldapp2` jobexec metric — folded+append2 streaming **944**-feature regime (SOTA-944 P1 bigcodec wave; zensim ≥ `d0616362`, `append2_block` ON / `append2_dst_activity` OFF per the P1.5 adjudication), driver-parity-tested incl. f0..f923 bitwise-identity vs the 924 regime; bf944 declare tooling (`declare_bf944.py` cloning the drained bf924 runs, hard-verifying the source metric) and the `_pool944` wave repoint (enroll/tower/snapshot/reconcile defaults, a dedicated on-prem container (name in the private fleet config), image tag `exec-zensim944-57b7b9ad`) (57b7b9ad)
 - bf924/W2/W3 close-out: kadis-924 rescore (699,999 + negrich 167,034, byte-equal targets), tbig_924_full (5,742,660 exact) + 21 views at match_rate 1.0000; pool_reconcile_report; zen-node-4 enrolled (SN850X serial-matched install)
 - `zensim-foldapp` jobexec metric — folded+append streaming 924-feature regime (zensim C5 `0b3d16b0`), driver-parity-tested; bf924 declare tooling (`declare_bf924.py`, 54 runs / 490,173 cells) and the `_pool924` wave (d02279d5, 2095f80b)
 - **PXE interactive console installer** — an unregistered box now offers a GRUB menu to pick its OS disk and confirm the wipe, so a new box can be provisioned at its own console without the dev box. Local boot stays the timeout-selected default, the confirm names the exact serial, and the tower re-validates that serial against the box's own inventory; managed boxes (node-2/node-3/i265) keep the instant chainload unless opted in with `fleet-pxe menu <mac>`. Console installs land credential-less (worker disabled + `NEEDS-CRED`) — finish with `enroll_running_node.sh --start <ip>`. Also fixes a `deploy.sh` race that could leave `zen-pxe-dnsmasq` down (all PXE dead) while reporting success (ce332e28)
@@ -1448,7 +1481,7 @@ All five are the Nomad-migration ADR's stated preconditions
 ### Added
 
 - **`tower/zen-mosh/` — tower terminal gateway** (mosh + tmux + herdr in a
-  Docker container, host root shells via nsenter; Unraid host untouched) and a
+  Docker container, host root shells via nsenter; the tower's host OS untouched) and a
   NODES.md "Remote terminals" section covering the 2026-07-26 mosh/tmux/herdr
   rollout across lianli/mac/tower/node-2 (node-2 completed same day on user
   override, via the zenadmin-reboot fallback; left booted into Ubuntu).
@@ -2070,7 +2103,7 @@ All five are the Nomad-migration ADR's stated preconditions
   back to `ZEN_BUCKET`) and fetches it with a separate read-only credential
   `ZEN_CORPUS_AWS_*` when set (`apply_corpus_creds`; R2 temp creds are
   single-bucket, so corpus-read + run-write genuinely needs two creds). Launchers
-  (`unraid_worker.sh`, `launch_fleet.sh`) mint the two scoped creds (RW
+  (the on-prem enrollment helper, `launch_fleet.sh`) mint the two scoped creds (RW
   `<run-bucket>/<run>/`, RO `codec-corpus/<prefix>/`) and wire
   `ZEN_CORPUS_BUCKET`/`ZEN_CORPUS_AWS_*` through every tier. The run bucket is
   **`zentrain`** (the training-pipeline bucket — all sweeps/backfills/features/
@@ -2902,7 +2935,7 @@ All five are the Nomad-migration ADR's stated preconditions
   bake the worker base + a prebuilt `zenmetrics` (with `jobexec`) + the `zenfleet-exec` shim, with
   image-level `ENV ZEN_EXEC=/usr/local/bin/zenfleet-exec` so a fleet box runs REAL encode/score jobs.
   Built + pushed (amd64; binary needs glibc ≤2.35, bookworm ships 2.36; runs in-image — verified real
-  zenjpeg encode + ssim2 score through the container). `launch_fleet.sh` + `unraid_worker.sh` now pass
+  zenjpeg encode + ssim2 score through the container). `launch_fleet.sh` + the on-prem helper now pass
   `ZEN_CORPUS_PREFIX` (so `jobexec` resolves `cell.image_path` from R2) and an overridable `ZEN_EXEC`;
   set `ZEN_WORKER_IMAGE=…/zenfleet-worker-exec:latest` + `ZEN_CORPUS_PREFIX=<prefix>` for real jobs.
   `docs/RUNNING_JOBS.md` updated. NOTE: the ghcr `zenfleet-worker-exec` package is **private** — make it
@@ -2966,11 +2999,11 @@ All five are the Nomad-migration ADR's stated preconditions
   `cvvdp_gpu` module unconditionally, so a CPU-only `sweep` build didn't compile; the cvvdp blocks are
   now gated (`#[cfg(feature = "gpu-cvvdp")]`) with a CPU-build early error, leaving the GPU build
   unchanged.
-- **Job system: `docs/RUNNING_JOBS.md` + Unraid basement-tier setup + executor-contract template**
-  (2026-05-30). Thorough end-to-end guide (mental model, executor contract, declare, fleet, Unraid
-  basement tier, monitor, results, teardown/GC, worked example, real-job checklist). New
-  `scripts/jobsys/unraid_worker.sh` mints a 7-day prefix-scoped R2 credential on the workstation and
-  prints a ready-to-paste `docker run` / Unraid "Add Container" config for the NAT'd basement box
+- **Job system: `docs/RUNNING_JOBS.md` + persistent on-prem tier setup + executor-contract template**
+  (2026-05-30). Thorough end-to-end guide (mental model, executor contract, declare, fleet, the
+  on-prem tier, monitor, results, teardown/GC, worked example, real-job checklist). New on-prem
+  enrollment helper mints a 7-day prefix-scoped R2 credential on the workstation and
+  prints a ready-to-paste `docker run` / NAS container-UI config for the NAT'd on-prem box
   (pull-based, no inbound ports, never the root key). New `scripts/jobsys/example_executor.py`
   documents + smoke-tests the `ZEN_EXEC` contract (stdin DesiredJob JSON → stdout output bytes →
   exit 0). Honest scope: orchestration is proven with the synthetic `/bin/cat` executor; a real

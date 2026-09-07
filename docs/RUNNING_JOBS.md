@@ -1,7 +1,7 @@
 # Running jobs on the zen job system
 
 A practical, end-to-end guide to declaring work, bringing up a heterogeneous fleet (including your
-**Unraid basement box**), running it, reading results, and tearing down. It is honest about what is
+**persistent on-prem box**), running it, reading results, and tearing down. It is honest about what is
 production-proven versus what you supply (the **executor** for real encode/score work).
 
 ---
@@ -10,7 +10,7 @@ production-proven versus what you supply (the **executor** for real encode/score
 
 ```
   you ──declare──▶  manifest (DesiredJob[])  ──▶  R2 lease-queue  ◀── workers claim & execute
-   (zenfleet-ctl)         ▲                          (one bucket)         (local / basement / burst)
+   (zenfleet-ctl)         ▲                          (one bucket)         (local / on-prem / burst)
                         │                               │                       │
                    coverage ◀── Parquet ledger ◀────────┴── content-addressed ──┘
                    (catalog)     (the truth)                blobs/<sha256>
@@ -24,7 +24,7 @@ production-proven versus what you supply (the **executor** for real encode/score
 - **The queue is an R2 conditional-write lease.** A worker claims a job by `PutObject` with
   `If-None-Match: *` on `claims/<job_id>` — exactly one worker wins, so no double execution.
 - **Workers are interchangeable and provider-agnostic.** Adding or removing a tier never touches job
-  logic. Workers are **pull-based**: outbound HTTPS to R2 only, so a NAT'd basement box is a
+  logic. Workers are **pull-based**: outbound HTTPS to R2 only, so a NAT'd on-prem box is a
   first-class tier with no inbound ports.
 
 ### Job kinds (`zenfleet_core::JobKind`)
@@ -343,46 +343,41 @@ weights finish within 1 epoch, idle 45 (−90%), completion 30 → 21 epochs.
 
 ---
 
-## 6. The Unraid basement tier  🏠
+## 6. The persistent on-prem tier
 
-Your Unraid box (basement, behind NAT) is the **persistent, outbound-only** tier. Because workers are
+An always-on box behind NAT is the **persistent, outbound-only** tier. Because workers are
 pull-based it needs **no inbound ports / port-forward / tunnel** — only outbound HTTPS to R2.
 
-**Step 1 — on the workstation**, mint a scoped credential and print the container command for a given
-run (never puts the root key on the Unraid box):
+**Shape of the enrollment**, in three steps:
 
-```bash
-bash ~/work/zen/homefleet/zenmetrics/scripts/jobsys/unraid_worker.sh <RUN> 7 cpu_heavy,cpu_light
-#                                      run  ttl_days  capability(optional)
-```
+1. **On the workstation**, mint a scoped credential and print the container command for a given run.
+   The root key never reaches the on-prem box: the helper mints a short-lived, prefix-scoped,
+   object-read-write R2 credential, uploads a shuffled manifest, and prints a ready-to-paste
+   `docker run` (plus the equivalent fields for a NAS appliance's container UI).
+2. **On the on-prem box**, run that container. `Repository:`
+   `ghcr.io/imazen/zenfleet-worker:latest`; `Network:` `bridge` (no published ports);
+   `Restart policy:` `No` — the worker drains its share of the run, then exits cleanly. (It is
+   *run-scoped*: it works one run's manifest and exits. To run another job, start it again with the
+   new run's variables. A persistent always-on daemon that auto-discovers new runs is a future
+   enhancement.) Variables are each `-e KEY=VALUE` the helper printed (`AWS_*`, `ZEN_R2_ENDPOINT`,
+   `ZEN_BUCKET`, `ZEN_RUN`, `ZEN_MANIFEST_URI`, `ZEN_PROVIDER=lan`, `ZEN_WORKER`, `ZEN_EXEC`,
+   `ZEN_CONTROL_KEY`, optional `ZEN_CAPABILITY`).
+3. **Verify from the workstation:** `bash scripts/jobsys/fleet watch <RUN>` — you'll see
+   `provider=lan` rows appear alongside the other tiers.
 
-It mints a 7-day, prefix-scoped, object-read-write R2 credential, uploads a shuffled
-`manifest-unraid.json`, and prints a ready-to-paste `docker run` plus the Unraid "Add Container"
-fields.
-
-**Step 2 — on the Unraid box**, either paste the `docker run` at a terminal, or in the Unraid GUI:
-**Docker → Add Container** →
-- **Repository:** `ghcr.io/imazen/zenfleet-worker:latest`
-- **Network:** `bridge` (no published ports)
-- **Restart policy:** `No` — the worker drains its share of the run, then exits cleanly. (It is
-  *run-scoped*: it works one run's manifest and exits. To run another job, start it again with the new
-  run's variables. A persistent always-on daemon that auto-discovers new runs is a future enhancement.)
-- **Variables:** add each `-e KEY=VALUE` the helper printed (`AWS_*`, `ZEN_R2_ENDPOINT`, `ZEN_BUCKET`,
-  `ZEN_RUN`, `ZEN_MANIFEST_URI`, `ZEN_PROVIDER=basement`, `ZEN_WORKER=unraid`, `ZEN_EXEC`,
-  `ZEN_CONTROL_KEY`, optional `ZEN_CAPABILITY`).
-
-**Step 3 — verify from the workstation:** `bash scripts/jobsys/fleet watch <RUN>` — you'll see
-`provider=basement` rows appear alongside the other tiers.
+> **The enrollment helper and this site's concrete steps live in the private `imazen-private/homefleet`
+> repo** (`zenmetrics/RUNNING_JOBS_ONPREM_TIER.md`), because they carry host-specific values. Nothing
+> about the job system needs them — any box that can run the container and reach R2 is this tier.
 
 **Persistent credential (optional):** to avoid re-minting weekly, create a long-lived R2 API token in
 the Cloudflare dashboard (R2 → Manage API Tokens → *Object Read & Write*, scoped to the bucket) and
 set `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` from it (drop `AWS_SESSION_TOKEN`). Still never the
 root key.
 
-**Real executor on Unraid:** the stock public image only carries the synthetic `/bin/cat` path. For
-real encode/score work, bake your executor into a worker image (FROM `ghcr.io/imazen/zenfleet-worker`,
-`COPY` your executor in), push it, and point `ZEN_WORKER_IMAGE` / the container's repository at it with
-`ZEN_EXEC=/path/to/executor`.
+**Real executor on the on-prem box:** the stock public image only carries the synthetic `/bin/cat`
+path. For real encode/score work, bake your executor into a worker image (FROM
+`ghcr.io/imazen/zenfleet-worker`, `COPY` your executor in), push it, and point `ZEN_WORKER_IMAGE` /
+the container's repository at it with `ZEN_EXEC=/path/to/executor`.
 
 ---
 
@@ -596,7 +591,7 @@ has teeth — validating `$TMPDIR` and then still writing to hardcoded `/tmp` wo
 
 **Launchers set it**: `lan_score_launch.sh` bind-mounts a disk-backed host dir at `/scratch` and
 exports `TMPDIR=/scratch` on every `docker run` — auto-detecting `/mnt/user/coefficient/scratch`
-on an Unraid box (tower) vs `$HOME/tmp/zfw-scratch` elsewhere, override with
+on a NAS box (tower) vs `$HOME/tmp/zfw-scratch` elsewhere, override with
 `ZEN_TMPDIR_HOST_DIR`. `enroll_running_node.sh`'s systemd-managed worker unit (private
 `homefleet` repo) does the same for the always-on LAN pool workers. A worker started by hand
 outside these launchers needs the same `-e TMPDIR=... -v host:container` — the entrypoint will
@@ -619,7 +614,7 @@ work.
 cargo build --release -p zenfleet-worker -p zenfleet-ctl
 bash scripts/jobsys/demo_e2e_r2.sh          # declare→gap 4→0, converge, coverage, blobs+ledger+lease
 bash scripts/jobsys/launch_fleet.sh 120 1 0 0 1   # 3 real providers concurrent (paid: Hetzner+Salad)
-bash ~/work/zen/homefleet/zenmetrics/scripts/jobsys/unraid_worker.sh <RUN>        # add the basement tier to that run
+bash <on-prem enrollment helper, imazen-private/homefleet> <RUN>   # add the on-prem tier to that run
 bash scripts/jobsys/fleet watch <RUN>          # watch DONE rows by provider
 bash scripts/jobsys/teardown_fleet.sh <RUN>       # tear it all down
 ```
@@ -641,9 +636,9 @@ bash scripts/jobsys/teardown_fleet.sh <RUN>       # tear it all down
 3. **Declare** the real spec (§4) — `items` of `(image_path, codec, q, knob_tuple_json, encode_sha)` ×
    `metrics` — and check coverage (`catalog`); enqueue only the gap.
 4. **Launch** with the real image: `ZEN_WORKER_IMAGE=ghcr.io/imazen/zenfleet-worker:exec` (or just let
-   `launch_fleet.sh` / `unraid_worker.sh` use `$ZEN_FLEET_IMAGE_CPU` from `fleet.env`) +
+   `launch_fleet.sh` / the on-prem helper use `$ZEN_FLEET_IMAGE_CPU` from `fleet.env`) +
    `ZEN_CORPUS_BUCKET=codec-corpus ZEN_CORPUS_PREFIX=<your corpus prefix>` on `launch_fleet.sh` (§5)
-   and `unraid_worker.sh` for the basement tier (§6). `ZEN_EXEC` defaults to the real executor.
+   and the on-prem helper for that tier (§6). `ZEN_EXEC` defaults to the real executor.
 5. **Monitor** (§7), **collect** scores/encodes from the ledger/blobs (§8), **tear down + GC** (§9).
 
 ## Planned: ~5-min chunking + async IO + resource bounds (user 2026-06-27)

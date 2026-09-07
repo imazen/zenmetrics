@@ -282,7 +282,7 @@ this note exists so a reader doesn't take the §3 number as tighter than it is.
 | host | role | capacity used | notes |
 |---|---|---|---|
 | **r7900x** (ex-"lianli" — see below) | primary CPU worker | 24 threads, uncapped | dedicated always-Ubuntu worker, `zen-worker` unit present but drained/stopped from the prior wave; `enroll_running_node.sh --start` reactivates it; `exec-zensim944hdr-03bdf64b` image already cached locally (verified: has `avif-svt`/`avif-aom` baked in, built after the 2026-08-30 campaign) |
-| **tower** | secondary CPU worker, CAPPED | `--cpuset-cpus` leaving ≥8 cores, `--cpu-shares=256`, `--memory=40g` | live household media server (Plex/sabnzbd/*arr stack all running, load 1.2–1.5 on a 32-thread box at observation time) — media has priority, never uncapped |
+| **tower** | secondary CPU worker, CAPPED | `--cpuset-cpus` leaving ≥8 cores, `--cpu-shares=256`, `--memory=40g` | live household media stack running (load 1.2–1.5 on a 32-thread box at observation time) — media has priority, never uncapped |
 | **local (wsl/dev box)** | tertiary CPU worker, MODEST cap | via `run-heavy`, explicitly capped well below full 28 cores | a sibling Claude session is concurrently doing unrelated zensim work on this same physical box (`.workongoing` claim: "Profile D no-tax refactor") — kept light to avoid contending with it |
 | node-2 / node-3 | **not used** | — | both observed reachable + idle (Ubuntu-booted, load ≤0.25) at check time, so not disqualified by the yank-rule protocol — but skipped anyway as a conservative call: r7900x + tower + local already give ~55–70 combined cores against a 19,200-cell/~175-CPU-h grid, and the task brief says skip on any doubt. Documented here rather than silently omitted. |
 

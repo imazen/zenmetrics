@@ -154,7 +154,7 @@ is content-addressed end to end:
   `PutObject` with `If-None-Match: *` on `claims/<job_id>`, so exactly one worker
   wins each job and there is no double execution.
 - **Workers are interchangeable and pull-based** (outbound HTTPS to R2 only), so a
-  NAT'd basement box is a first-class tier alongside vast.ai / Hetzner / cloud.
+  NAT'd on-prem box is a first-class tier alongside vast.ai / Hetzner / cloud.
 
 Job kinds (`zenfleet_core::JobKind`): `Encode` · `Metric` · `Feature` ·
 `Diffmap` · `Resample` · `Bake`, each carrying a resource class for capability
