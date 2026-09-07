@@ -554,6 +554,26 @@ impl<R: Runtime> Ssim2<R> {
         })
     }
 
+    /// Release pooled device memory back to the driver.
+    ///
+    /// cubecl's allocator keeps freed slices in a per-stream pool, so a compute
+    /// that dies part-way — a device OOM on an oversized image — leaves the
+    /// whole reservation parked in that pool even after this pipeline drops.
+    /// MEASURED on a 6 GB card: an 8192x8192 OOM left **6,261,084,160 bytes**
+    /// reserved, and every later score in the same process then failed too,
+    /// including a 1024x1024 that needs 99 MB. One oversized cell poisoned the
+    /// worker for every cell after it.
+    ///
+    /// `memory_cleanup` drops that to 0 and the next score succeeds normally.
+    /// It is called automatically on the failure paths below, so a failed cell
+    /// costs only itself; callers may also invoke it directly.
+    ///
+    /// Cheap and safe to call on an unhealthy stream: the CUDA server runs it
+    /// with `ignore: true, flush: false`.
+    pub fn release_device_pool(&self) {
+        self.client.memory_cleanup();
+    }
+
     pub fn dimensions(&self) -> (u32, u32) {
         // Caller-requested (logical) extent. For a sub-MIN_PAD_DIM
         // full-mode instance this differs from the padded
@@ -1486,10 +1506,10 @@ impl<R: Runtime> Ssim2<R> {
             }
 
             self.run_finalizer();
-            let bytes = self
-                .client
-                .read_one(self.sums.clone())
-                .map_err(|e| Error::SumsReadbackFailed(format!("{e:?}")))?;
+            let bytes = self.client.read_one(self.sums.clone()).map_err(|e| {
+                self.release_device_pool();
+                Error::SumsReadbackFailed(format!("{e:?}"))
+            })?;
             let raw = f32::from_bytes(&bytes);
             debug_assert_eq!(raw.len(), SUMS_LEN);
             for slot in 0..n_slots {
@@ -1828,10 +1848,10 @@ impl<R: Runtime> Ssim2<R> {
             // Stage-2 finalize → small sums buffer.
             self.run_finalizer();
             // Read sums back, accumulate.
-            let bytes = self
-                .client
-                .read_one(self.sums.clone())
-                .map_err(|e| Error::SumsReadbackFailed(format!("{e:?}")))?;
+            let bytes = self.client.read_one(self.sums.clone()).map_err(|e| {
+                self.release_device_pool();
+                Error::SumsReadbackFailed(format!("{e:?}"))
+            })?;
             let raw = f32::from_bytes(&bytes);
             debug_assert_eq!(raw.len(), SUMS_LEN);
             for slot in 0..n_slots {
@@ -1982,6 +2002,7 @@ impl<R: Runtime> Ssim2<R> {
         // accumulator means NO strip's kernels ran. Returning normally here
         // would yield the ~99.99 "identical images" score.
         if acc_sum.iter().all(|&x| x == 0.0) && acc_p4.iter().all(|&x| x == 0.0) {
+            self.release_device_pool();
             return Err(Error::ReductionDidNotRun);
         }
         let mut avg_ssim = vec![[0.0_f64; 6]; NUM_SCALES];
@@ -3060,10 +3081,10 @@ impl<R: Runtime> Ssim2<R> {
     /// score. Mirrors `ssimulacra2::Msssim::score` exactly (same WEIGHT
     /// table, same sigmoid).
     fn read_and_aggregate(&mut self) -> Result<f64> {
-        let bytes = self
-            .client
-            .read_one(self.sums.clone())
-            .map_err(|e| Error::SumsReadbackFailed(format!("{e:?}")))?;
+        let bytes = self.client.read_one(self.sums.clone()).map_err(|e| {
+            self.release_device_pool();
+            Error::SumsReadbackFailed(format!("{e:?}"))
+        })?;
         let raw = f32::from_bytes(&bytes);
         debug_assert_eq!(raw.len(), SUMS_LEN);
 
@@ -3080,6 +3101,10 @@ impl<R: Runtime> Ssim2<R> {
         // Without this, all-zero sums flow through the sigmoid below to ≈99.99
         // — "perfect quality" — and get written to a sidecar as if measured.
         if raw.iter().all(|&x| x == 0.0) {
+            // Reclaim before returning: the failed dispatch's reservation is
+            // still parked in the pool and would starve every later score in
+            // this process.
+            self.release_device_pool();
             return Err(Error::ReductionDidNotRun);
         }
 

@@ -208,7 +208,16 @@ fn wrap_fetch_err(context: &str, e: Box<dyn Error>) -> Box<dyn Error> {
 /// a false transient label would make a deterministic failure retry (bounded by the poison cap,
 /// but still wasted work).
 fn classify_msg(msg: &str) -> Option<&'static str> {
-    if msg.contains("CUDA_ERROR_OUT_OF_MEMORY") || msg.contains("OutOfMemory") {
+    if msg.contains("CUDA_ERROR_OUT_OF_MEMORY")
+        || msg.contains("OutOfMemory")
+        // cubecl's POOL-level exhaustion (`IoError::BufferTooBig`) renders as
+        // this and matches neither marker above, so a GPU-metric OOM used to
+        // fall through unclassified -> deterministic -> poisoned after the
+        // retry cap, instead of transient -> retried with a bigger memory hint.
+        // Unambiguous: BufferTooBig is only produced when an allocation
+        // exceeds what the device can give.
+        || msg.contains("can't allocate buffer of size")
+    {
         return Some("oom");
     }
     if msg.contains("No space left on device") || msg.contains("ENOSPC") {
@@ -2557,6 +2566,16 @@ mod tests {
         assert_eq!(
             classify_msg("write /scratch/v.tmp: No space left on device (os error 28)"),
             Some("disk_full")
+        );
+        // cubecl POOL exhaustion (`IoError::BufferTooBig`) — the GPU-metric OOM.
+        // It names neither CUDA_ERROR_OUT_OF_MEMORY nor OutOfMemory, so before
+        // this arm it fell through unclassified and the cell was poisoned as a
+        // deterministic failure instead of retried with a bigger memory hint.
+        assert_eq!(
+            classify_msg(
+                "SumsReadbackFailed(\"ServerUnhealthy { errors:                  [Io(can't allocate buffer of size: 1590116352)] }\")"
+            ),
+            Some("oom")
         );
         assert_eq!(classify_msg("unknown codec \"zenbmp\""), None);
         // An untyped error whose text carries a marker classifies via the scan.

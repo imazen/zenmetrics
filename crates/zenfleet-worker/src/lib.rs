@@ -1763,7 +1763,12 @@ fn class_from_stderr(stderr: &str) -> Option<ErrorClass> {
             return Some(c);
         }
     }
-    if stderr.contains("CUDA_ERROR_OUT_OF_MEMORY") || stderr.contains("OutOfMemory") {
+    if stderr.contains("CUDA_ERROR_OUT_OF_MEMORY")
+        || stderr.contains("OutOfMemory")
+        // cubecl pool exhaustion (`IoError::BufferTooBig`); see the matching
+        // arm in zenmetrics-cli's `classify_msg`.
+        || stderr.contains("can't allocate buffer of size")
+    {
         return Some(ErrorClass::Oom);
     }
     if stderr.contains("No space left on device") || stderr.contains("ENOSPC") {
@@ -3523,6 +3528,13 @@ mod tests {
         );
         // Garbled/unknown marker token is IGNORED (must not upgrade to transient)…
         assert_eq!(class_from_stderr("ZEN_ERROR_CLASS: banana"), None);
+        // cubecl pool exhaustion in captured stderr classifies as OOM too, so a
+        // GPU-metric OOM from an executor that printed no marker is still
+        // retried transiently rather than poisoned.
+        assert_eq!(
+            class_from_stderr("Io(can't allocate buffer of size: 1590116352)"),
+            Some(ErrorClass::Oom)
+        );
         // …but a raw CUDA marker elsewhere still classifies.
         assert_eq!(
             class_from_stderr(
