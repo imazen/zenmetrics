@@ -46,6 +46,38 @@ Workspace conventions per the global rules:
   unbounded forms of terms in this class matched 145, 296 and 22 lines of ordinary
   text across the 2,043 tracked files here. (fc8db4f9)
 
+### Fixed
+
+- **`CI` and `Fleet-tooling guard` were red on `master` since 2690d66e/d7982e9b —
+  both root-caused and fixed, plus a latent `cargo fmt` drift the manifest failure
+  had been hiding.** Three independent issues, none touching runtime behavior:
+  (1) `crates/zenmetrics-cli`'s `avif-aom` feature gained optional path deps on the
+  `zenav1-aom` sibling in 2690d66e, but no CI job clones that sibling, so `cargo`
+  failed to load the workspace manifest before running anything — every `CI` job
+  (compile/metal-tests/doctests/cpu-metrics-tests/lint) failed identically at
+  `failed to read .../zenav1-aom/crates/aom-bench/Cargo.toml`. Added the same
+  clone+checkout the zenflate/heic/ultrahdr/zenav1-svt entries already use, to all
+  5 job blocks, pinned to zenav1-aom's current CI-green main
+  (`a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190`); verified none of its 5 member
+  crates carry a path dep outside its own repo, so nothing else cascades.
+  (2) `scripts/jobsys/fleet_walltime.py` + `fleet_schedule_sim.py` (added in
+  d7982e9b, documented in `docs/RUNNING_JOBS.md`) were never added to
+  `fleet-tools.json`, so the fleet-tooling sprawl guard failed on them as
+  "new fleet script — sprawl". Registered both under a new `analyze` category
+  (offline post-hoc forensics/simulation — a different concern from
+  monitor/launch/teardown). (3) With the manifest fixed, `cargo fmt --check`
+  (the Lint job's own recipe) failed on 5 files under current stable
+  rustc/rustfmt 1.98.1 — a drift the broken manifest load had hidden from every
+  CI run since. Applied `cargo fmt` and hand-verified every hunk: a cfg-gated
+  match-arm brace, two `assert_eq!` line-wraps, one chained-call line-wrap, two
+  `mod`-declaration reorderings (semantically inert) — no logic, assertion,
+  value, or comment text changed; `cargo fmt --check` now passes clean. Verified
+  locally beyond the two failing gates: `cargo metadata`, the fleet-tools guard,
+  `cargo clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings`,
+  the `cpu-metrics-tests` job's two test commands, and the `compile` job's
+  ubuntu-only fleet-orchestration + vastai + TMPDIR-discipline tests all pass
+  clean on this fix. (3a42b4e3, 4c327481, e920c148)
+
 ## rev2 recalculation wave (2026-09-06)
 
 ### Added
