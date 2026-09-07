@@ -148,11 +148,24 @@ jobs:
           # request. The old upper bound (< 471ce401, whose `feature_v2.rs`
           # called `crate::attribution::*` behind `custom-profiles` and broke
           # `cargo build -p zenmetrics-cli --no-default-features --features
-          # cpu-metrics` with E0433) no longer applies: ea7d493d (zensim main,
-          # 2026-08-27) builds that exact feature set — verified locally with
-          # the zencodec 0.1.26 migration. When bumping, re-check that build.
+          # cpu-metrics` with E0433) no longer applies.
+          # Bumped from ea7d493d (2026-08-27) to 5a4d5fa3 (2026-09-06, zensim
+          # CI-green) because `zenmetrics-api`'s D14 arm (e4bb566b) requests
+          # zensim's `candidate-profiles` feature, which does not exist at
+          # ea7d493d — `cargo clippy --workspace --no-default-features
+          # --features wgpu,all-metrics` failed with "failed to select a
+          # version for `zensim`: ... does not have that feature" on EVERY
+          # job once the zenav1-aom/zenbitmaps manifest gaps below were fixed,
+          # which is what surfaced this pin as stale. ea7d493d is an ancestor
+          # of 5a4d5fa3 (clean forward bump, verified via merge-base). When
+          # bumping, re-check `cargo build -p zenmetrics-cli
+          # --no-default-features --features cpu-metrics --release` AND
+          # `cargo clippy --workspace --no-default-features --features
+          # wgpu,all-metrics -- -D warnings` — both verified locally against
+          # this exact pin via a full sibling-worktree CI reproduction before
+          # landing.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout ea7d493d735bc1dbc2ed87a0583e18fddd40f8db
+          git -C ../zensim checkout 5a4d5fa3c21386b93e232d4777d456dc64d6d12d
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -218,6 +231,18 @@ jobs:
           # from this one. Pinned to a zenav1-aom main commit with green CI.
           git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
           git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
+          # zenmetrics-cli's `bmp` feature path-deps zenbitmaps too
+          # (`../../../zenbitmaps`, PNM/PAM/PFM/BMP/farbfeld — added in
+          # 5be5da80's BMP decode arm without this clone, the same "path must
+          # exist even though the feature is off" failure as zenav1-aom/
+          # zenflate above: "failed to load manifest for dependency
+          # `zenbitmaps`" / "failed to read .../zenbitmaps/Cargo.toml"). OFF in
+          # every CI build below, but the path must exist. zenbitmaps' own
+          # zennode path dep is commented out (unpublished), so nothing
+          # cascades from this clone. Pinned to a zenbitmaps main commit with
+          # green CI.
+          git clone --quiet https://github.com/imazen/zenbitmaps.git ../zenbitmaps
+          git -C ../zenbitmaps checkout 32376ef8b4f6f765ff8b9964599ec2468683e77a
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -442,11 +467,24 @@ jobs:
           # request. The old upper bound (< 471ce401, whose `feature_v2.rs`
           # called `crate::attribution::*` behind `custom-profiles` and broke
           # `cargo build -p zenmetrics-cli --no-default-features --features
-          # cpu-metrics` with E0433) no longer applies: ea7d493d (zensim main,
-          # 2026-08-27) builds that exact feature set — verified locally with
-          # the zencodec 0.1.26 migration. When bumping, re-check that build.
+          # cpu-metrics` with E0433) no longer applies.
+          # Bumped from ea7d493d (2026-08-27) to 5a4d5fa3 (2026-09-06, zensim
+          # CI-green) because `zenmetrics-api`'s D14 arm (e4bb566b) requests
+          # zensim's `candidate-profiles` feature, which does not exist at
+          # ea7d493d — `cargo clippy --workspace --no-default-features
+          # --features wgpu,all-metrics` failed with "failed to select a
+          # version for `zensim`: ... does not have that feature" on EVERY
+          # job once the zenav1-aom/zenbitmaps manifest gaps below were fixed,
+          # which is what surfaced this pin as stale. ea7d493d is an ancestor
+          # of 5a4d5fa3 (clean forward bump, verified via merge-base). When
+          # bumping, re-check `cargo build -p zenmetrics-cli
+          # --no-default-features --features cpu-metrics --release` AND
+          # `cargo clippy --workspace --no-default-features --features
+          # wgpu,all-metrics -- -D warnings` — both verified locally against
+          # this exact pin via a full sibling-worktree CI reproduction before
+          # landing.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout ea7d493d735bc1dbc2ed87a0583e18fddd40f8db
+          git -C ../zensim checkout 5a4d5fa3c21386b93e232d4777d456dc64d6d12d
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -512,6 +550,18 @@ jobs:
           # from this one. Pinned to a zenav1-aom main commit with green CI.
           git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
           git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
+          # zenmetrics-cli's `bmp` feature path-deps zenbitmaps too
+          # (`../../../zenbitmaps`, PNM/PAM/PFM/BMP/farbfeld — added in
+          # 5be5da80's BMP decode arm without this clone, the same "path must
+          # exist even though the feature is off" failure as zenav1-aom/
+          # zenflate above: "failed to load manifest for dependency
+          # `zenbitmaps`" / "failed to read .../zenbitmaps/Cargo.toml"). OFF in
+          # every CI build below, but the path must exist. zenbitmaps' own
+          # zennode path dep is commented out (unpublished), so nothing
+          # cascades from this clone. Pinned to a zenbitmaps main commit with
+          # green CI.
+          git clone --quiet https://github.com/imazen/zenbitmaps.git ../zenbitmaps
+          git -C ../zenbitmaps checkout 32376ef8b4f6f765ff8b9964599ec2468683e77a
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -658,11 +708,24 @@ jobs:
           # request. The old upper bound (< 471ce401, whose `feature_v2.rs`
           # called `crate::attribution::*` behind `custom-profiles` and broke
           # `cargo build -p zenmetrics-cli --no-default-features --features
-          # cpu-metrics` with E0433) no longer applies: ea7d493d (zensim main,
-          # 2026-08-27) builds that exact feature set — verified locally with
-          # the zencodec 0.1.26 migration. When bumping, re-check that build.
+          # cpu-metrics` with E0433) no longer applies.
+          # Bumped from ea7d493d (2026-08-27) to 5a4d5fa3 (2026-09-06, zensim
+          # CI-green) because `zenmetrics-api`'s D14 arm (e4bb566b) requests
+          # zensim's `candidate-profiles` feature, which does not exist at
+          # ea7d493d — `cargo clippy --workspace --no-default-features
+          # --features wgpu,all-metrics` failed with "failed to select a
+          # version for `zensim`: ... does not have that feature" on EVERY
+          # job once the zenav1-aom/zenbitmaps manifest gaps below were fixed,
+          # which is what surfaced this pin as stale. ea7d493d is an ancestor
+          # of 5a4d5fa3 (clean forward bump, verified via merge-base). When
+          # bumping, re-check `cargo build -p zenmetrics-cli
+          # --no-default-features --features cpu-metrics --release` AND
+          # `cargo clippy --workspace --no-default-features --features
+          # wgpu,all-metrics -- -D warnings` — both verified locally against
+          # this exact pin via a full sibling-worktree CI reproduction before
+          # landing.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout ea7d493d735bc1dbc2ed87a0583e18fddd40f8db
+          git -C ../zensim checkout 5a4d5fa3c21386b93e232d4777d456dc64d6d12d
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -728,6 +791,18 @@ jobs:
           # from this one. Pinned to a zenav1-aom main commit with green CI.
           git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
           git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
+          # zenmetrics-cli's `bmp` feature path-deps zenbitmaps too
+          # (`../../../zenbitmaps`, PNM/PAM/PFM/BMP/farbfeld — added in
+          # 5be5da80's BMP decode arm without this clone, the same "path must
+          # exist even though the feature is off" failure as zenav1-aom/
+          # zenflate above: "failed to load manifest for dependency
+          # `zenbitmaps`" / "failed to read .../zenbitmaps/Cargo.toml"). OFF in
+          # every CI build below, but the path must exist. zenbitmaps' own
+          # zennode path dep is commented out (unpublished), so nothing
+          # cascades from this clone. Pinned to a zenbitmaps main commit with
+          # green CI.
+          git clone --quiet https://github.com/imazen/zenbitmaps.git ../zenbitmaps
+          git -C ../zenbitmaps checkout 32376ef8b4f6f765ff8b9964599ec2468683e77a
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -829,11 +904,24 @@ jobs:
           # request. The old upper bound (< 471ce401, whose `feature_v2.rs`
           # called `crate::attribution::*` behind `custom-profiles` and broke
           # `cargo build -p zenmetrics-cli --no-default-features --features
-          # cpu-metrics` with E0433) no longer applies: ea7d493d (zensim main,
-          # 2026-08-27) builds that exact feature set — verified locally with
-          # the zencodec 0.1.26 migration. When bumping, re-check that build.
+          # cpu-metrics` with E0433) no longer applies.
+          # Bumped from ea7d493d (2026-08-27) to 5a4d5fa3 (2026-09-06, zensim
+          # CI-green) because `zenmetrics-api`'s D14 arm (e4bb566b) requests
+          # zensim's `candidate-profiles` feature, which does not exist at
+          # ea7d493d — `cargo clippy --workspace --no-default-features
+          # --features wgpu,all-metrics` failed with "failed to select a
+          # version for `zensim`: ... does not have that feature" on EVERY
+          # job once the zenav1-aom/zenbitmaps manifest gaps below were fixed,
+          # which is what surfaced this pin as stale. ea7d493d is an ancestor
+          # of 5a4d5fa3 (clean forward bump, verified via merge-base). When
+          # bumping, re-check `cargo build -p zenmetrics-cli
+          # --no-default-features --features cpu-metrics --release` AND
+          # `cargo clippy --workspace --no-default-features --features
+          # wgpu,all-metrics -- -D warnings` — both verified locally against
+          # this exact pin via a full sibling-worktree CI reproduction before
+          # landing.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout ea7d493d735bc1dbc2ed87a0583e18fddd40f8db
+          git -C ../zensim checkout 5a4d5fa3c21386b93e232d4777d456dc64d6d12d
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -899,6 +987,18 @@ jobs:
           # from this one. Pinned to a zenav1-aom main commit with green CI.
           git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
           git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
+          # zenmetrics-cli's `bmp` feature path-deps zenbitmaps too
+          # (`../../../zenbitmaps`, PNM/PAM/PFM/BMP/farbfeld — added in
+          # 5be5da80's BMP decode arm without this clone, the same "path must
+          # exist even though the feature is off" failure as zenav1-aom/
+          # zenflate above: "failed to load manifest for dependency
+          # `zenbitmaps`" / "failed to read .../zenbitmaps/Cargo.toml"). OFF in
+          # every CI build below, but the path must exist. zenbitmaps' own
+          # zennode path dep is commented out (unpublished), so nothing
+          # cascades from this clone. Pinned to a zenbitmaps main commit with
+          # green CI.
+          git clone --quiet https://github.com/imazen/zenbitmaps.git ../zenbitmaps
+          git -C ../zenbitmaps checkout 32376ef8b4f6f765ff8b9964599ec2468683e77a
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -1008,11 +1108,24 @@ jobs:
           # request. The old upper bound (< 471ce401, whose `feature_v2.rs`
           # called `crate::attribution::*` behind `custom-profiles` and broke
           # `cargo build -p zenmetrics-cli --no-default-features --features
-          # cpu-metrics` with E0433) no longer applies: ea7d493d (zensim main,
-          # 2026-08-27) builds that exact feature set — verified locally with
-          # the zencodec 0.1.26 migration. When bumping, re-check that build.
+          # cpu-metrics` with E0433) no longer applies.
+          # Bumped from ea7d493d (2026-08-27) to 5a4d5fa3 (2026-09-06, zensim
+          # CI-green) because `zenmetrics-api`'s D14 arm (e4bb566b) requests
+          # zensim's `candidate-profiles` feature, which does not exist at
+          # ea7d493d — `cargo clippy --workspace --no-default-features
+          # --features wgpu,all-metrics` failed with "failed to select a
+          # version for `zensim`: ... does not have that feature" on EVERY
+          # job once the zenav1-aom/zenbitmaps manifest gaps below were fixed,
+          # which is what surfaced this pin as stale. ea7d493d is an ancestor
+          # of 5a4d5fa3 (clean forward bump, verified via merge-base). When
+          # bumping, re-check `cargo build -p zenmetrics-cli
+          # --no-default-features --features cpu-metrics --release` AND
+          # `cargo clippy --workspace --no-default-features --features
+          # wgpu,all-metrics -- -D warnings` — both verified locally against
+          # this exact pin via a full sibling-worktree CI reproduction before
+          # landing.
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout ea7d493d735bc1dbc2ed87a0583e18fddd40f8db
+          git -C ../zensim checkout 5a4d5fa3c21386b93e232d4777d456dc64d6d12d
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -1078,6 +1191,18 @@ jobs:
           # from this one. Pinned to a zenav1-aom main commit with green CI.
           git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
           git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
+          # zenmetrics-cli's `bmp` feature path-deps zenbitmaps too
+          # (`../../../zenbitmaps`, PNM/PAM/PFM/BMP/farbfeld — added in
+          # 5be5da80's BMP decode arm without this clone, the same "path must
+          # exist even though the feature is off" failure as zenav1-aom/
+          # zenflate above: "failed to load manifest for dependency
+          # `zenbitmaps`" / "failed to read .../zenbitmaps/Cargo.toml"). OFF in
+          # every CI build below, but the path must exist. zenbitmaps' own
+          # zennode path dep is commented out (unpublished), so nothing
+          # cascades from this clone. Pinned to a zenbitmaps main commit with
+          # green CI.
+          git clone --quiet https://github.com/imazen/zenbitmaps.git ../zenbitmaps
+          git -C ../zenbitmaps checkout 32376ef8b4f6f765ff8b9964599ec2468683e77a
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
