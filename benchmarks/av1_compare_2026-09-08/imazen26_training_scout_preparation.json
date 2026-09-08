@@ -49,7 +49,7 @@
   "smoke_run": "av1-training-scout-smoke-v2-20260908",
   "smoke_origin": "1002",
   "smoke_allocation": "e2fb666f-8e06-fc71-4676-681b1fe342d1",
-  "status": "corrected static executor: 7 lib and 5 binary tests passed; v2 smoke allocated, pending startup; population not launched",
+  "status": "smoke passed, 234 timed encodes and 42 exact SVT reconstructions; three-worker full population launched; not complete",
   "superseded_executor_sha256": "b0199023c45d841a4945ebc7f4b40dc62ccd4c364db6428fdd7f691e51acdc55",
   "executor_update": {
     "uri": "s3://zentrain/benchmarks/av1-compare/2026-09-08/training-scout/executor-native13-757a9943b9709ca8503a77eb004881df7b5621f4bdd97fc5019c92a9d3110d0f.tar.gz",
@@ -58,5 +58,20 @@
     "executor_sha256": "82ab0044e7243fe742edeb6b13bbf08d65e7b7f618df38d6e444b4c9c73256f1",
     "download_verified": true
   },
-  "first_smoke_failure": "native preset13 refused by comparator validator; no encoding completed; corrected in 8f163b5d"
+  "first_smoke_failure": "native preset13 refused by comparator validator; no encoding completed; corrected in 8f163b5d",
+  "smoke_verification": {
+    "cells": 78,
+    "executor_sha256": "82ab0044e7243fe742edeb6b13bbf08d65e7b7f618df38d6e444b4c9c73256f1",
+    "source_sha256": "17bcef7fefb44b63f32d01ff504ca005f82a891742fce096aa4cac0dc46fc5aa",
+    "timed_rows": 234,
+    "timing_cohort_sha256": "96143265ff29b825e2e3db2bd5dbe5212a2ada2ab5f7d587beb7f4fbbbfdc8c8",
+    "unique_obus": 62,
+    "verified_svt_cells": 42,
+    "artifact_uri": "s3://zentrain/jobs/av1-training-scout-smoke-v2-20260908/blobs/dc50ccec7dd91df51ed7f67c4797033b3152b23e314e18191e307fc4c2694a70"
+  },
+  "population_allocations": [
+    "2affaf37-df76-6b30-d265-ae1148a7ff62",
+    "35771854-7adc-ade8-e7e8-456d2f85f8f8",
+    "648fcb31-9c28-317f-9462-0ea91e3530f7"
+  ]
 }
