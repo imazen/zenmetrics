@@ -7,7 +7,7 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::Path,
 };
-use zenmetrics_av1_compare::{Backend, Config, verify_svt_reconstruction};
+use zenmetrics_av1_compare::{Backend, Config, inspect_svt_reconstruction};
 
 type Error = Box<dyn std::error::Error>;
 #[derive(Deserialize)]
@@ -96,9 +96,10 @@ pub(crate) fn saved(root: &Path, output_path: &Path) -> Result<usize, Error> {
         if sha(&obu) != row.output_sha256 {
             return Err("measured OBU hash mismatch".into());
         }
-        let result = verify_svt_reconstruction(cfg, &pixels, &obu);
+        let result = inspect_svt_reconstruction(cfg, &pixels, &obu);
         let record = serde_json::json!({
-            "protocol": "svt-measured-reconstruction-v1", "config": cfg,
+            "protocol": "svt-measured-reconstruction-v2", "config": cfg,
+            "restoration": result.as_ref().ok(),
             "source_sha256": row.source_sha256, "input_sha256": row.input_sha256,
             "output_sha256": row.output_sha256, "measured_binary_sha256": row.binary_sha256,
             "verifier_binary_sha256": verifier, "ok": result.is_ok(), "error": result.as_ref().err(),

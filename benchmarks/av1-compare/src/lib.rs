@@ -212,6 +212,25 @@ pub fn verify_svt_reconstruction(
     pixels: &[u8],
     expected: &[u8],
 ) -> Result<(), String> {
+    inspect_svt_reconstruction(cfg, pixels, expected).map(|_| ())
+}
+
+/// Untimed evidence from the same encode that reproduced the measured OBU.
+#[derive(Debug, Default, Serialize)]
+pub struct SvtRestorationEvidence {
+    /// None if restoration search was bypassed. A searched size is not
+    /// signaled when every plane selected RESTORE_NONE.
+    pub searched_unit_size: Option<usize>,
+    /// NONE=0, WIENER=1, SGR=2, SWITCHABLE=3.
+    pub frame_types: [u8; 3],
+    pub wiener_units: usize,
+}
+
+pub fn inspect_svt_reconstruction(
+    cfg: Config,
+    pixels: &[u8],
+    expected: &[u8],
+) -> Result<SvtRestorationEvidence, String> {
     cfg.validate(pixels)?;
     if !matches!(cfg.backend, Backend::Svt) {
         return Err("encoder reconstruction verification requires Rust SVT".into());
@@ -220,7 +239,9 @@ pub fn verify_svt_reconstruction(
     let bps = if cfg.bit_depth == 8 { 1 } else { 2 };
     let (y, uv) = pixels.split_at(yn * bps);
     let (u, v) = uv.split_at(cn * bps);
-    encode_svt(cfg, y, u, v, Some(expected)).map(|_| ())
+    let mut evidence = SvtRestorationEvidence::default();
+    encode_svt(cfg, y, u, v, Some(expected), Some(&mut evidence))?;
+    Ok(evidence)
 }
 
 fn crop_svt_recon<T: Copy + Into<u16>>(
@@ -255,6 +276,7 @@ fn encode_svt(
     u: &[u8],
     v: &[u8],
     expected_obu: Option<&[u8]>,
+    restoration_evidence: Option<&mut SvtRestorationEvidence>,
 ) -> Result<Vec<u8>, String> {
     let w = cfg.width as usize;
     use svtav1::encoder::{
@@ -345,6 +367,11 @@ fn encode_svt(
                 decoded.len()
             ));
         }
+    }
+    if let Some(evidence) = restoration_evidence {
+        evidence.searched_unit_size = p.last_lr_unit_size;
+        evidence.frame_types = p.last_lr_stats.0;
+        evidence.wiener_units = p.last_lr_stats.1;
     }
     Ok(obu)
 }
@@ -465,7 +492,7 @@ pub fn encode(cfg: Config, pixels: &[u8]) -> Result<Vec<u8>, String> {
             // SAFETY: successful C call owns out.len initialized bytes until Drop.
             Ok(unsafe { std::slice::from_raw_parts(out.data, out.len) }.to_vec())
         }
-        Backend::Svt => encode_svt(cfg, y, u, v, None),
+        Backend::Svt => encode_svt(cfg, y, u, v, None, None),
         Backend::Aom => {
             let mut k = aom_encode::key_frame::KeyFrameConfig::allintra_speed0(
                 w,
@@ -839,7 +866,9 @@ mod format_tests {
         cfg.zen_restoration_unit_search = true;
         let enhanced = encode(cfg, &raw).unwrap();
         assert_ne!(native, enhanced);
-        verify_svt_reconstruction(cfg, &raw, &enhanced).unwrap();
+        let evidence = inspect_svt_reconstruction(cfg, &raw, &enhanced).unwrap();
+        assert_eq!(evidence.searched_unit_size, Some(64));
+        assert_ne!(evidence.frame_types, [0; 3]);
         assert!(verify_svt_reconstruction(cfg, &raw, &native).is_err());
         let json = serde_json::to_string(&cfg).unwrap();
         let replay: Config = serde_json::from_str(&json).unwrap();
