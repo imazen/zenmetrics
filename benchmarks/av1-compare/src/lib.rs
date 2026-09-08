@@ -119,7 +119,7 @@ impl Config {
         }
         let (qmax, smax) = match self.backend {
             Backend::Rav1e => (255, 10),
-            Backend::CSvt => (63, 13),
+            Backend::CSvt | Backend::Svt => (63, 13),
             _ => (63, 9),
         };
         let smin = if matches!(self.backend, Backend::CSvt | Backend::Svt) {
@@ -637,6 +637,14 @@ mod tests {
             };
             let obu = encode(cfg, &pixels).unwrap_or_else(|e| panic!("{backend:?}: {e}"));
             check_decode(&obu, 64, 64).unwrap_or_else(|e| panic!("{backend:?}: {e}"));
+            if matches!(backend, Backend::CSvt | Backend::Svt) {
+                // Population scouting must reach the native fast-preset endpoint,
+                // not stop at the legacy AVIF wrapper's speed mapping.
+                let fastest = Config { speed: 13, ..cfg };
+                let obu = encode(fastest, &pixels).unwrap();
+                check_decode(&obu, 64, 64).unwrap();
+                assert!(Config { speed: 14, ..cfg }.validate_configuration().is_err());
+            }
         }
     }
     #[test]

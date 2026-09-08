@@ -49,5 +49,5 @@
   "smoke_run": "av1-training-scout-smoke-20260908",
   "smoke_origin": "1002",
   "smoke_allocation": "522bc62f-4c70-d932-0aa7-ad0a7aaede98",
-  "status": "inputs verified; full manifest declared; smoke allocated; population execution not launched"
+  "status": "smoke failed before encoding: comparator incorrectly rejected Rust SVT preset13; population not launched; validator correction rebuilding"
 }
