@@ -46,6 +46,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return fleet::execute(&json);
     }
     let req: Request = serde_json::from_str(&json)?;
+    if command.as_deref() == Some("prepare-input") {
+        req.config.validate_configuration()?;
+        let source = std::fs::read(&req.input)?;
+        let rgb = measure::decode_reference_sdr8(&source)?;
+        if rgb.dimensions() != (req.config.width, req.config.height) {
+            return Err("prepare-input requires an already sized reference PNG".into());
+        }
+        let pixels = pixels::prepare(rgb.as_raw(), req.config)?;
+        req.config.validate(&pixels)?;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&req.output)?
+            .write_all(&pixels)?;
+        println!(
+            "{}",
+            serde_json::json!({
+                "protocol": "av1-prepared-input-v1", "config": req.config,
+                "input_sha256": format!("{:x}", Sha256::digest(&pixels)),
+                "reference_png_sha256": format!("{:x}", Sha256::digest(&source)),
+                "bytes": pixels.len(),
+                "binary_sha256": format!("{:x}", Sha256::digest(std::fs::read(std::env::current_exe()?)?))
+            })
+        );
+        return Ok(());
+    }
     let pixels = std::fs::read(&req.input)?;
     req.config.validate(&pixels)?;
     if std::path::Path::new(&req.output).exists() {

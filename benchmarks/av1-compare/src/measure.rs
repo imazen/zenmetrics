@@ -47,7 +47,9 @@ fn sha(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-fn decode_reference_sdr8(source: &[u8]) -> Result<image::RgbImage, Box<dyn std::error::Error>> {
+pub(crate) fn decode_reference_sdr8(
+    source: &[u8],
+) -> Result<image::RgbImage, Box<dyn std::error::Error>> {
     let decoded = image::load_from_memory(source)?;
     let nonopaque = match &decoded {
         image::DynamicImage::ImageRgb8(_) | image::DynamicImage::ImageLuma8(_) => false,

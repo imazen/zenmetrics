@@ -34,7 +34,7 @@
   "jobs": 1078,
   "cells": 84084,
   "timed_encodes_planned": 252252,
-  "encodes_completed": 0,
+  "encodes_completed": 468,
   "manifest_sha256": "ee9fbc8bf4eeaff8becbe6160b7704e0c46b5cb791675a6811ba7f8f5b3ca5b9",
   "executor_sha256": "82ab0044e7243fe742edeb6b13bbf08d65e7b7f618df38d6e444b4c9c73256f1",
   "local_root": "/home/lilith/tmp/av1-training-scout-2026-09-08",
@@ -49,7 +49,7 @@
   "smoke_run": "av1-training-scout-smoke-v2-20260908",
   "smoke_origin": "1002",
   "smoke_allocation": "e2fb666f-8e06-fc71-4676-681b1fe342d1",
-  "status": "smoke passed, 234 timed encodes and 42 exact SVT reconstructions; three-worker full population launched; not complete",
+  "status": "population stopped: serial worker buffered ledger until end of pass; two complete artifacts verified, canonical ledger recovery pending; remote checkout inspection blocked by SSH authentication",
   "superseded_executor_sha256": "b0199023c45d841a4945ebc7f4b40dc62ccd4c364db6428fdd7f691e51acdc55",
   "executor_update": {
     "uri": "s3://zentrain/benchmarks/av1-compare/2026-09-08/training-scout/executor-native13-757a9943b9709ca8503a77eb004881df7b5621f4bdd97fc5019c92a9d3110d0f.tar.gz",
@@ -73,5 +73,32 @@
     "2affaf37-df76-6b30-d265-ae1148a7ff62",
     "35771854-7adc-ade8-e7e8-456d2f85f8f8",
     "648fcb31-9c28-317f-9462-0ea91e3530f7"
-  ]
+  ],
+  "population_verified_artifacts": [
+    {
+      "timed_rows": 234,
+      "cells": 78,
+      "verified_svt_cells": 42,
+      "unique_obus": 60,
+      "timing_cohort_sha256": "96143265ff29b825e2e3db2bd5dbe5212a2ada2ab5f7d587beb7f4fbbbfdc8c8",
+      "source_sha256": "95af4ec67508d17d1e350c5a2abad34f082fc0534584c68b2f1835a1bf6dd493",
+      "executor_sha256": "82ab0044e7243fe742edeb6b13bbf08d65e7b7f618df38d6e444b4c9c73256f1",
+      "artifact_uri": "s3://zentrain/jobs/av1-training-scout-v2-20260908/blobs/2c6eee64c352bc2e7e4095403dd57de97590ce868db1154d69dcc070e69277fb"
+    },
+    {
+      "timed_rows": 234,
+      "cells": 78,
+      "verified_svt_cells": 42,
+      "unique_obus": 63,
+      "timing_cohort_sha256": "d55c00b359635c15362144cc4249638b4d557241c5b9a1bcb1ab8b328365e28d",
+      "source_sha256": "9ca81aae1684933038facfa4d64b4485dac70c1ca7bc981a615ff8e4f8a5ed5f",
+      "executor_sha256": "82ab0044e7243fe742edeb6b13bbf08d65e7b7f618df38d6e444b4c9c73256f1",
+      "artifact_uri": "s3://zentrain/jobs/av1-training-scout-v2-20260908/blobs/a75d4c011db40b86bded96d30139d5f4508f4f26f70fa41f6dd91df4169ce7d9"
+    }
+  ],
+  "population_verified_distinct_inputs": 2,
+  "population_durable_ledger_objects": 0,
+  "population_allocation_status": "all three ClientStatus=complete, DesiredStatus=stop",
+  "population_status_evidence": "/home/lilith/tmp/av1-training-scout-2026-09-08/population-stopped-status.json",
+  "population_inventory_evidence": "/home/lilith/tmp/av1-training-scout-2026-09-08/population-object-inventory.json"
 }

@@ -13,6 +13,13 @@ photo sizes are 188×256 and 376×512; screenshot sizes 256×164 and 512×330.
 Input images are 8-bit SDR: high-depth arms preserve precision through RGB→YUV
 conversion; these are **not native HDR tests**.
 
+## Full training scout status
+
+[The population scout is stopped](IMAZEN26_SCOUT_STATUS.md), with two complete
+population artifacts verified and retained (468 timed encodes). Canonical ledger
+recovery and remote fleet checkout inspection are pending. The report includes
+bytes/bpp, quality and timing; population calibration is not complete.
+
 ## Canonical restoration-unit experiment
 
 [The completed restoration ablation](IMAZEN26_RESTORATION_UNITS.md) adds
