@@ -1,6 +1,6 @@
 # Canonical imazen-26: corrected intra-edge ablation
 
-2026-09-08, local static native-API comparison. **Keep intra-edge filtering
+2026-09-08, local native-API comparison. **Keep intra-edge filtering
 opt-in.** This pilot does not justify an automatic enhancement bundle. At
 matched quality the corrected experiment costs more bytes and time on both
 selected targets. The tiny high-quality photo gains warrant a bounded broader
@@ -81,6 +81,10 @@ The libaom/zenav1-aom screenshot RD difference remains a separate open audit.
  `f8581baed256acc7bd30f638b063b5a47a651be4c0d620ceb126de61c2bfefb6`.
  Reconstruction verifier SHA256:
  `b97d592f558b6bff353500b58f75334ef269fb0e01a9a4d1ecbf7a5219313b05`.
+ These two executables link the codec archives statically but depend on the
+ system libc/libm/libgcc and loader. They are not fully static executables.
+ The later `build-static.sh` result is a separate binary identity and does not
+ replace or relabel these measured rows.
  The verifier is a later harness build; its byte-replay requirement ties its
  checks to the exact original measured outputs without retiming them.
 
@@ -93,7 +97,7 @@ uses normative 8x8 group/tile availability. The apparent photo QP 20 gain in
 the old run did not survive the correctness fix. No tool or gate was disabled.
 
 Post-fix local correctness: 2626 workspace tests, 136 regression checks,
-36 off/on geometry/depth/QP encodes, and 6 static comparator tests passed.
+36 off/on geometry/depth/QP encodes, and 6 comparator tests passed.
 Refreshed C identity gates pass: 1,100/1,100 hybrid normal8, 1,100/1,100
 pristine normal8, and 320/320 pristine research cells (160 each at native8/10).
 These counts do not close the old real-image parity gaps or the broader

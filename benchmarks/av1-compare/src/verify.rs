@@ -32,12 +32,24 @@ fn valid_hash(hash: &str) -> bool {
 }
 
 pub fn run(req: Verification) -> Result<(), Error> {
-    let root = Path::new(&req.measurement_dir);
+    let checked = saved(Path::new(&req.measurement_dir), Path::new(&req.output))?;
+    if checked == 0 {
+        return Err("no Rust SVT cells were verified".into());
+    }
+    println!(
+        "{}",
+        serde_json::json!({"verified_svt_cells": checked, "output": req.output})
+    );
+    Ok(())
+}
+
+/// No stdout: fleet stdout is the artifact tar, never progress messages.
+pub(crate) fn saved(root: &Path, output_path: &Path) -> Result<usize, Error> {
     let rows = BufReader::new(fs::File::open(root.join("rows.jsonl"))?);
     let mut output = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(&req.output)?;
+        .open(output_path)?;
     let verifier = sha(&fs::read(std::env::current_exe()?)?);
     let mut seen = HashSet::new();
     let mut checked = 0;
@@ -97,12 +109,5 @@ pub fn run(req: Verification) -> Result<(), Error> {
         result?;
         checked += 1;
     }
-    if checked == 0 {
-        return Err("no Rust SVT cells were verified".into());
-    }
-    println!(
-        "{}",
-        serde_json::json!({"verified_svt_cells": checked, "output": req.output})
-    );
-    Ok(())
+    Ok(checked)
 }

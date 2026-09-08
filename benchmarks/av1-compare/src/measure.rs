@@ -62,6 +62,14 @@ fn score(a: &[u8], b: &[u8], w: u32, h: u32) -> Result<f64, Box<dyn std::error::
     )?)
 }
 pub fn run(req: Measurement, emit_rows: bool) -> Result<(), Box<dyn std::error::Error>> {
+    run_checked(req, emit_rows, crate::verify::saved)
+}
+
+fn run_checked(
+    req: Measurement,
+    emit_rows: bool,
+    verify: impl FnOnce(&Path, &Path) -> Result<usize, Box<dyn std::error::Error>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     if req.inputs.is_empty()
         || req.arms.is_empty()
         || req.max_edges.is_empty()
@@ -70,6 +78,7 @@ pub fn run(req: Measurement, emit_rows: bool) -> Result<(), Box<dyn std::error::
     {
         return Err("invalid measurement grid".into());
     }
+    let expects_svt = req.arms.iter().any(|a| matches!(a.backend, Backend::Svt));
     let out = Path::new(&req.output_dir);
     fs::create_dir(out)?;
     fs::create_dir(out.join("obu"))?;
@@ -136,7 +145,7 @@ pub fn run(req: Measurement, emit_rows: bool) -> Result<(), Box<dyn std::error::
                     }
                     let decoded = decode_planar(&obu, cfg)?;
                     let rgb = crate::pixels::rgb_from_samples(&decoded, cfg)?;
-                    let row = serde_json::json!({"protocol":"av1-api-planar-measure-v2","config":cfg,"round":round,
+                    let row = serde_json::json!({"protocol":"av1-api-planar-measure-v3","config":cfg,"round":round,
                         "source":Path::new(&input).file_name().unwrap().to_string_lossy(),"source_sha256":sha(&source),
                         "input_sha256":input_sha,"binary_sha256":binary_sha,"revision":cfg.revision(),"svt_reference":cfg.resolved_svt_reference(),
                         "output_sha256":output_sha,"bytes":obu.len(),"api_elapsed_ns":ns,
@@ -153,5 +162,83 @@ pub fn run(req: Measurement, emit_rows: bool) -> Result<(), Box<dyn std::error::
             }
         }
     }
+    // Replay only after every timed round, keeping verification work out of
+    // both the timer and the interleaved measurement order.
+    drop(rows);
+    let checked = verify(out, &out.join("reconstruction-verification.jsonl"))?;
+    if expects_svt && checked == 0 {
+        return Err("SVT measurement completed without a reconstruction witness".into());
+    }
+    fs::write(
+        out.join("validation.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "protocol": "av1-api-validation-v1", "complete": true,
+            "verified_svt_cells": checked, "svt_reconstruction_required": expects_svt,
+            "timing": "verification occurs after all timed rounds"
+        }))?,
+    )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn request(root: &Path, backend: &str) -> Measurement {
+        let source = root.join("correctness-only.png");
+        image::RgbImage::from_fn(64, 64, |x, y| {
+            image::Rgb([(x * 3) as u8, (y * 3) as u8, ((x + y) * 2) as u8])
+        })
+        .save(&source)
+        .unwrap();
+        serde_json::from_value(serde_json::json!({
+            "inputs": [source], "max_edges": [64], "repeats": 3,
+            "arms": [{"backend": backend, "speed": 9, "quantizer": 32}],
+            "output_dir": root.join("result")
+        }))
+        .unwrap()
+    }
+    #[test]
+    fn reconstruction_runs_after_all_timing_rounds_and_is_required_for_success() {
+        let tmp = tempfile::tempdir().unwrap();
+        run_checked(request(tmp.path(), "zenav1-svt"), false, |root, output| {
+            assert_eq!(
+                fs::read_to_string(root.join("rows.jsonl"))?.lines().count(),
+                3
+            );
+            assert!(!root.join("validation.json").exists());
+            crate::verify::saved(root, output)
+        })
+        .unwrap();
+        let validation: serde_json::Value =
+            serde_json::from_slice(&fs::read(tmp.path().join("result/validation.json")).unwrap())
+                .unwrap();
+        assert_eq!(validation["verified_svt_cells"], 1);
+        assert_eq!(validation["complete"], true);
+    }
+    #[test]
+    fn failed_verification_retains_rows_but_never_marks_complete() {
+        let tmp = tempfile::tempdir().unwrap();
+        let error = run_checked(request(tmp.path(), "zenav1-svt"), false, |root, _| {
+            assert_eq!(
+                fs::read_to_string(root.join("rows.jsonl"))?.lines().count(),
+                3
+            );
+            Err("injected reconstruction mismatch".into())
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("reconstruction mismatch"));
+        assert!(!tmp.path().join("result/validation.json").exists());
+        assert!(tmp.path().join("result/rows.jsonl").is_file());
+    }
+    #[test]
+    fn non_svt_measurement_records_reconstruction_as_not_applicable() {
+        let tmp = tempfile::tempdir().unwrap();
+        run(request(tmp.path(), "libaom"), false).unwrap();
+        let validation: serde_json::Value =
+            serde_json::from_slice(&fs::read(tmp.path().join("result/validation.json")).unwrap())
+                .unwrap();
+        assert_eq!(validation["verified_svt_cells"], 0);
+        assert_eq!(validation["svt_reconstruction_required"], false);
+        assert_eq!(validation["complete"], true);
+    }
 }

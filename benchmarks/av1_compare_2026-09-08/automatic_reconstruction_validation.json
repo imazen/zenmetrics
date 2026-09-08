@@ -1,0 +1,60 @@
+{
+  "protocol": "av1-api-planar-v3",
+  "scope": "correctness and executor integration; not RD calibration",
+  "binaries": {
+    "zenmetrics-av1-compare": {
+      "sha256": "ed5b18cb0ff518577b23597d8a30fb013910d27fc4f9c8532dd4fcabf2edcd20",
+      "file": "ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), static-pie linked, for GNU/Linux 3.2.0, BuildID[sha1]=231cd041cbc92a5ef3dbe78ab583729892bab4d8, with debug_info, not stripped",
+      "dynamic_needed": false
+    },
+    "zenfleet-worker": {
+      "sha256": "90d41af5b48517f923b29cda2752bceac237fdfb06f59fb578addfe26442325f",
+      "file": "ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), static-pie linked, for GNU/Linux 3.2.0, BuildID[sha1]=87f3c0085daf5a5a25f82a972ef3e94eacb7d07e, with debug_info, not stripped",
+      "dynamic_needed": false
+    },
+    "zenfleet-ctl": {
+      "sha256": "e553d2436f25b05651dcc069b38be145dc9547ba4d938d553aff97a7378e2fd2",
+      "file": "ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), static-pie linked, for GNU/Linux 3.2.0, BuildID[sha1]=12e6151d26ea3ac03c9ecbf7c038dcfb669ba7c5, with debug_info, not stripped",
+      "dynamic_needed": false
+    }
+  },
+  "tests": {
+    "lib": 6,
+    "binary": 4
+  },
+  "smokes": {
+    "photo": {
+      "binary_sha256": "ed5b18cb0ff518577b23597d8a30fb013910d27fc4f9c8532dd4fcabf2edcd20",
+      "source_sha256": "df355b76958e2482ed85ca92a354150586041ac3f2e4927509b0746b1d331754",
+      "measured_rows": 15,
+      "verified_svt_cells": 4,
+      "failure_blob_sha256": "7d8db6f064469cc6fac2685c06de64f30ec510e741bc1e1bac494531dc9b4bd0",
+      "complete": true
+    },
+    "screenshot": {
+      "binary_sha256": "ed5b18cb0ff518577b23597d8a30fb013910d27fc4f9c8532dd4fcabf2edcd20",
+      "source_sha256": "0381927ef0ea94f3b80ff6be121865da1c4c0f13b3faca859b8ba27825f4f824",
+      "measured_rows": 15,
+      "verified_svt_cells": 4,
+      "failure_blob_sha256": "13e92dd906cb090cf491147b8eebaeefd6aeab63c2853bfafcae6df011f07e1f",
+      "worker_catalog": [
+        {
+          "codec": "av1-compare",
+          "metric": "encode",
+          "total": 2,
+          "done": 1,
+          "poison": 0,
+          "gap": 1
+        }
+      ],
+      "complete": true
+    }
+  },
+  "s3_failure": {
+    "uri": "s3://zentrain/benchmarks/av1-compare/2026-09-08/automatic-reconstruction/failures/b6c09bc441e95b2eb670350cf62fc08b937dbde09616411aed5c3f343528f582",
+    "bytes": 18432,
+    "sha256": "b6c09bc441e95b2eb670350cf62fc08b937dbde09616411aed5c3f343528f582",
+    "download_verified": true,
+    "job_exit": 1
+  }
+}

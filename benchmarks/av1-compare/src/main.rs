@@ -21,7 +21,7 @@ struct Request {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let command = std::env::args().nth(1);
     if command.as_deref() == Some("capabilities") {
-        println!("av1-api-planar-v2");
+        println!("av1-api-planar-v3");
         return Ok(());
     }
     let mut json = String::new();
@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .write_all(&obu)?;
     println!(
         "{}",
-        serde_json::json!({"protocol":"av1-api-planar-v2", "config":req.config,
+        serde_json::json!({"protocol":"av1-api-planar-v3", "config":req.config,
         "revision": req.config.revision(), "svt_reference": req.config.resolved_svt_reference(), "binary_sha256":binary_sha, "input_sha256": source_sha,
         "output_sha256": format!("{:x}", Sha256::digest(&obu)), "bytes":obu.len(),
         "api_elapsed_ns":elapsed_ns, "timing_scope":"fresh-lifecycle-including-plane-preparation",
