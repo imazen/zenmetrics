@@ -132,6 +132,28 @@ See [the measured results](../av1_compare_2026-09-08/README.md).
 
 ## Validation
 
+`prepare-training.py CANONICAL OUTPUT [--hydrate]` prepares the pinned
+imazen-26 training population for the existing `declare` command. It checks
+the training manifest hash and canonical origin split, records the two missing
+SDR renders explicitly, and never downloads held-out sources. Hydration uses
+resumable per-source hash checkpoints; preserve its full stdout/stderr log.
+`declare-input.jsonl` is usable only after `hydration-complete.json` exists and
+all 1,082 available source records have been checked. PNG hashes identify the
+downloaded renders; the raw-source hashes are recorded separately.
+
+The initial scout specifies 78 settings per origin, three rounds, 512px SDR
+8-bit 420: six evenly spaced QP anchors, five native SVT effort anchors,
+separate intra-edge/restoration ablations at -1, and three speeds each for
+libaom and Rust AOM. This is 84,396 cells / 253,188 timed encodes before
+reconstruction replay. It is a population scout, not complete size/format
+calibration. Native HDR, alpha, lossless and rav1e remain explicit additional
+strata. Neither this plan nor the earlier two-source ablations establish a
+minimum representative set or justify automatic enhancement/routing choices.
+
+Pass the completed JSONL through this binary's `declare`, then use canonical
+zenfleet declaration, claims, execution and collection as above. The hydration
+tool is source ingestion only and does not launch or schedule encode workers.
+
 The native lossless matrix checks exact decoded samples for all 42 supported
 backend/depth/chroma combinations. Decode and validation tests cover all five
 backends, metadata mismatches, out-of-range samples and research-preset limits.
