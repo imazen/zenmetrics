@@ -1,0 +1,27 @@
+[package]
+name = "zenmetrics-av1-compare"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+svtav1 = { package = "zenav1-svt", path = "../../../zenav1-svt/rust/svtav1" }
+aom-encode = { package = "zenav1-aom-encode", path = "../../../zenav1-aom/crates/aom-encode" }
+zenrav1e = { path = "../../../zenrav1e" }
+
+[build-dependencies]
+cc = "1"
+
+[profile.release]
+debug = 1
+
+[patch.crates-io]
+# Match the consuming zenavif graph; dependency workspace patches do not propagate.
+archmage = { git = "https://github.com/imazen/archmage", rev = "cc24398c9a9fee0251722931e295da840730704d" }
+archmage-macros = { git = "https://github.com/imazen/archmage", rev = "cc24398c9a9fee0251722931e295da840730704d" }
+magetypes = { git = "https://github.com/imazen/archmage", rev = "cc24398c9a9fee0251722931e295da840730704d" }

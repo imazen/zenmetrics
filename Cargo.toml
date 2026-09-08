@@ -38,6 +38,8 @@ members = [
 # training-framework counterpart (burn 0.21 autodiff + custom
 # RankNet loss); also standalone, also kept out of the parent graph.
 exclude = [
+    # Lean, statically linked AV1 comparison executor; no GPU/corpus siblings.
+    "benchmarks/av1-compare",
     "crates/burn-conv-spike",
     "crates/burn-ranknet-spike",
     # `apidoc/` is the CI-free public-API snapshot runner: excluded so plain
