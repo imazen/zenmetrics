@@ -47,6 +47,23 @@ fn sha(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+fn decode_reference_sdr8(source: &[u8]) -> Result<image::RgbImage, Box<dyn std::error::Error>> {
+    let decoded = image::load_from_memory(source)?;
+    let nonopaque = match &decoded {
+        image::DynamicImage::ImageRgb8(_) | image::DynamicImage::ImageLuma8(_) => false,
+        image::DynamicImage::ImageRgba8(p) => p.as_raw().chunks_exact(4).any(|p| p[3] != 255),
+        image::DynamicImage::ImageLumaA8(p) => p.as_raw().chunks_exact(2).any(|p| p[1] != 255),
+        _ => return Err("measurement requires native 8-bit SDR input; high-depth/HDR source scoring is not implemented".into()),
+    };
+    if nonopaque {
+        return Err(
+            "measurement does not support transparent source pixels; refusing to discard alpha"
+                .into(),
+        );
+    }
+    Ok(decoded.to_rgb8())
+}
+
 /// Keep CPU/worker timing cohorts separate without publishing host identifiers.
 /// Captured once, outside the timed region. Binary and configuration identities
 /// remain separate row keys; neither is a substitute for hardware provenance.
@@ -121,7 +138,7 @@ fn run_checked(
     let binary_sha = sha(&fs::read(std::env::current_exe()?)?);
     for input in req.inputs {
         let source = fs::read(&input)?;
-        let original = image::load_from_memory(&source)?.to_rgb8();
+        let original = decode_reference_sdr8(&source)?;
         for edge in &req.max_edges {
             let ratio = f64::min(
                 1.0,
@@ -217,6 +234,35 @@ fn run_checked(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn source_precision_and_alpha_are_not_silently_discarded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("source.png");
+        let high = image::ImageBuffer::from_pixel(64, 64, image::Rgb([1u16, 1023, 65535]));
+        high.save(&source).unwrap();
+        assert!(
+            decode_reference_sdr8(&fs::read(&source).unwrap())
+                .unwrap_err()
+                .to_string()
+                .contains("native 8-bit SDR")
+        );
+        for alpha in [0, 128, 255] {
+            image::RgbaImage::from_pixel(64, 64, image::Rgba([17, 83, 211, alpha]))
+                .save(&source)
+                .unwrap();
+            let decoded = decode_reference_sdr8(&fs::read(&source).unwrap());
+            if alpha == 255 {
+                assert!(decoded.unwrap().pixels().all(|p| p.0 == [17, 83, 211]));
+            } else {
+                assert!(
+                    decoded
+                        .unwrap_err()
+                        .to_string()
+                        .contains("refusing to discard alpha")
+                );
+            }
+        }
+    }
     fn request(root: &Path, backend: &str) -> Measurement {
         let source = root.join("correctness-only.png");
         image::RgbImage::from_fn(64, 64, |x, y| {

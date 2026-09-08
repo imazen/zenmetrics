@@ -87,7 +87,10 @@ Standalone `verify-measurement` remains available for older saved measurements.
 
 All arms share BT.709 limited-range conversion. Conversion-only ceilings and
 codec-only scores accompany end-to-end scores. High-depth conversion of RGB8
-sources is not native HDR coverage. Repeated trials rotate arm order.
+sources is not native HDR coverage. High-depth sources and nonopaque alpha
+are rejected before conversion; this SDR measurement path must not discard
+source precision or transparency. Native HDR/alpha measurement remains a
+separate coverage gap. Repeated trials rotate arm order.
 Linux x86 measurement jobs record `timing-environment.json` with CPU model(s),
 OS/architecture and a hashed worker identity, and put its hash in each row.
 Analysis keeps these timing cohorts separate. Older rows remain explicitly
