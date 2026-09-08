@@ -23,8 +23,8 @@ zenfleet-core = { path = "../../crates/zenfleet-core" }
 zenfleet-ctl = { path = "../../crates/zenfleet-ctl" }
 zenfleet-worker = { path = "../../crates/zenfleet-worker" }
 zenfleet-ledger = { path = "../../crates/zenfleet-ledger" }
-arrow-array = "58.2.0"
-parquet = { version = "58.2.0", default-features = false, features = ["arrow", "zstd", "snap"] }
+arrow-array = "59.3.0"
+parquet = { version = "59.3.0", default-features = false, features = ["arrow", "zstd", "snap"] }
 clap = { version = "4", features = ["derive"] }
 tar = "0.4"
 tempfile = "3"

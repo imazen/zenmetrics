@@ -23,6 +23,6 @@ clap = { workspace = true }
 # "snappy" is deliberate here and ONLY here: pairs parquets come from many producers and
 # pyarrow's DEFAULT is snappy (bitten twice on 2026-08-27). The LEDGER contract stays
 # zstd-only in zenfleet-ledger — worker sidecars/snapshots must never be snappy.
-parquet = { version = "58.2.0", default-features = false, features = ["arrow", "zstd", "snap"] }
-arrow-array = "58.2.0"
-arrow-schema = "58.2.0"
+parquet = { version = "59.3.0", default-features = false, features = ["arrow", "zstd", "snap"] }
+arrow-array = "59.3.0"
+arrow-schema = "59.3.0"

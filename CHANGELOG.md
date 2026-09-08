@@ -13,6 +13,43 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+### Security
+
+- **arrow / parquet `58.x` -> `59.3.0` across every manifest and lockfile, which
+  drops the `thrift 0.17.0` transitive dependency entirely and closes
+  CVE-2026-43868** (Dependabot alerts #5 on the root `Cargo.lock` and #14 on
+  `benchmarks/av1-compare/Cargo.lock`). `thrift` had no fixed release reachable
+  from `parquet 58.x` — that line requires `thrift ^0.17` and the advisory is
+  fixed in `0.23.0` — so a lock-only bump could not resolve it; `parquet 59.3.0`
+  removes the dependency instead. Manifests touched: `zenfleet-ctl`,
+  `zenfleet-ledger`, `zenfleet-vastai`, `zenmetrics-cli` (dep + dev-dep) and
+  `benchmarks/av1-compare`. Verified on this host, not assumed: `cargo clippy
+  --workspace --no-default-features --features wgpu,all-metrics -- -D warnings`
+  clean; `cargo check` clean for `zenmetrics-cli --features cpu-metrics,sweep,png
+  --all-targets`, for `zenfleet-vastai`/`-ctl`/`-ledger --all-targets`, and for
+  `benchmarks/av1-compare --all-targets`; the CI fleet suite
+  (`-p zenfleet-core -p zenfleet-ledger -p zenfleet-worker -p zenfleet-ctl
+  -p zenfleet-cloud -p zenfleet-hetzner -p zenfleet-local -p zenfleet-dash
+  -p zenfleet-sim`) 100% green; and the parquet round-trip byte-stability tests
+  (`assemble::parquet_io::tests::parquet_round_trip_is_byte_stable`,
+  `test6_parquet_round_trip_byte_stable`, `sweep_writes_zensim_feature_parquet`,
+  `score_pairs_writes_zensim_feature_parquet_cpu`,
+  `score_pairs_hdr_writes_schema_v2_feature_parquet`) all pass, so the on-disk
+  sidecar format is unchanged by the bump.
+
+### Changed
+
+- **All five Cargo lockfiles refreshed** (`Cargo.lock`, `apidoc/`,
+  `benchmarks/av1-compare/`, `crates/burn-conv-spike/`,
+  `crates/burn-ranknet-spike/`): 176 registry crates advanced in the root lock
+  alone. This supersedes the two open Dependabot PRs — `quinn-proto` reaches
+  `0.11.17` in `crates/burn-ranknet-spike/Cargo.lock` (PR #35 asked for
+  `0.11.16`) and `postcss` was already at `8.5.26` in
+  `crates/zenfleet-dash/web/package-lock.json` (PR #39 asked for `8.5.25`).
+  The npm lockfile was NOT regenerated — this host has no node/npm toolchain —
+  but every direct dependency there is already resolved to a current
+  within-semver version.
+
 ### Changed
 
 - **Persistent on-prem tier: naming consistency pass across docs, comments and one
