@@ -338,6 +338,17 @@ pub enum Error {
     /// perfect quality" — a plausible, in-range, maximally-wrong value that
     /// silently poisons any sidecar it lands in. See imazen/zenmetrics#41.
     ReductionDidNotRun,
+    /// The metric reported its **identical-images** value (SSIMULACRA2 `100.0`)
+    /// for inputs that are not byte-identical — a silently wrong "these are the
+    /// same image" result. Refused rather than returned.
+    ///
+    /// Distinct from [`Error::ReductionDidNotRun`], which catches the specific
+    /// all-zero-sums signature. This catches the *claim* regardless of how it
+    /// was produced, so a corruption that does not zero the accumulator is
+    /// still caught. Byte-identical pairs — every cell of a lossless corpus —
+    /// legitimately score 100.0 and are unaffected, because this only fires
+    /// when the inputs actually differ.
+    SilentIdenticalClaim { score: f64 },
     /// The requested `width × height` (its packed-u32 upload byte count, or
     /// the batch multiple) does not fit in `usize` on this target
     /// (zenmetrics#30). Returned by `Ssim2::new` / `Ssim2Batch::new`
@@ -395,6 +406,11 @@ impl std::fmt::Display for Error {
                 write!(f, "failed to read the reduction sums buffer back: {e}")
             }
             Error::Cancelled(reason) => write!(f, "cancelled between strips: {reason:?}"),
+            Error::SilentIdenticalClaim { score } => write!(
+                f,
+                "metric reported the identical-images value ({score}) for inputs that \
+                 are not byte-identical — refusing to return a silently wrong score"
+            ),
             Error::ReductionDidNotRun => write!(
                 f,
                 "GPU reduction produced an all-zero sums buffer — the kernels did not run \

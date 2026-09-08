@@ -147,6 +147,32 @@ pub fn is_silent_identical_claim(
     claims_identical && ref_digest != dist_digest
 }
 
+/// Closure-based sibling of [`is_silent_identical_claim`], for callers that
+/// still hold both inputs and can compare them exactly.
+///
+/// Prefer this where the bytes are in hand: comparing the two slices is exact,
+/// where a digest match is only near-certain. Use the digest form on
+/// warm-reference paths, where the reference bytes are gone by scoring time and
+/// only the digest survives.
+///
+/// `same` is a closure so the comparison runs only on the degenerate path. The
+/// float test short-circuits first, so an ordinary score pays nothing.
+///
+/// Returns `true` when the caller is holding a silent wrong result: the score
+/// claims the images are identical, and they are not.
+pub fn is_identical_claim(
+    score: f64,
+    identical_value: f64,
+    direction: ScaleDirection,
+    same: impl FnOnce() -> bool,
+) -> bool {
+    let claims_identical = match direction {
+        ScaleDirection::HigherIsBetter => score >= identical_value,
+        ScaleDirection::LowerIsBetter => score <= identical_value,
+    };
+    claims_identical && !same()
+}
+
 /// Backend liveness validation (imazen/zenmetrics#37): proves a runtime can
 /// compile + dispatch a kernel before a metric trusts it. See the module docs.
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "cpu"))]
@@ -557,5 +583,106 @@ pub fn stream_reserved_bytes(backend: Backend, stream_value: u64) -> Option<u64>
             let _ = cubecl::future::block_on(client.sync());
             client.memory_usage().ok().map(|u| u.bytes_reserved)
         }
+    }
+}
+
+#[cfg(test)]
+mod identical_claim_tests {
+    //! One tested implementation of the guard predicate, shared by every metric
+    //! crate, rather than a copy per crate that could drift.
+    //!
+    //! The property that matters most is the absence of false positives: a
+    //! byte-identical pair *should* score the extremum, and lossless corpora —
+    //! where every cell is identical — are common here. A guard that rejected
+    //! those would throw away real data, which is worse than the bug it fixes.
+
+    use super::*;
+
+    /// The real metric constants, so a wrong threshold or direction in any
+    /// crate is caught here rather than in production.
+    const SSIM2: (f64, ScaleDirection) = (100.0, ScaleDirection::HigherIsBetter);
+    const IWSSIM: (f64, ScaleDirection) = (1.0, ScaleDirection::HigherIsBetter);
+    const CVVDP: (f64, ScaleDirection) = (10.0, ScaleDirection::HigherIsBetter);
+    const BUTTER: (f64, ScaleDirection) = (0.0, ScaleDirection::LowerIsBetter);
+    const DSSIM: (f64, ScaleDirection) = (0.0, ScaleDirection::LowerIsBetter);
+
+    #[test]
+    fn a_genuinely_identical_pair_is_never_rejected() {
+        for (identical, dir) in [SSIM2, IWSSIM, CVVDP, BUTTER, DSSIM] {
+            assert!(
+                !is_identical_claim(identical, identical, dir, || true),
+                "identical inputs scoring the extremum ({identical}, {dir:?}) must be accepted \
+                 -- this is every cell of a lossless corpus"
+            );
+        }
+    }
+
+    #[test]
+    fn the_extremum_claimed_for_differing_inputs_is_rejected() {
+        for (identical, dir) in [SSIM2, IWSSIM, CVVDP, BUTTER, DSSIM] {
+            assert!(
+                is_identical_claim(identical, identical, dir, || false),
+                "the extremum ({identical}, {dir:?}) claimed for inputs that differ is a \
+                 silently wrong result and must be refused"
+            );
+        }
+    }
+
+    /// A corrupted reduction can overshoot the extremum, not just land on it.
+    #[test]
+    fn overshooting_the_extremum_is_rejected_too() {
+        assert!(is_identical_claim(
+            100.5,
+            100.0,
+            ScaleDirection::HigherIsBetter,
+            || false
+        ));
+        assert!(is_identical_claim(
+            -1.0e-9,
+            0.0,
+            ScaleDirection::LowerIsBetter,
+            || false
+        ));
+    }
+
+    #[test]
+    fn ordinary_scores_are_untouched_either_way() {
+        // Nothing short of the extremum ever fires, whether inputs match or not.
+        for same in [true, false] {
+            assert!(!is_identical_claim(
+                87.3,
+                100.0,
+                ScaleDirection::HigherIsBetter,
+                || same
+            ));
+            assert!(!is_identical_claim(
+                0.42,
+                0.0,
+                ScaleDirection::LowerIsBetter,
+                || same
+            ));
+            assert!(!is_identical_claim(
+                9.1,
+                10.0,
+                ScaleDirection::HigherIsBetter,
+                || same
+            ));
+        }
+    }
+
+    /// The closure must not run when the score is ordinary -- that is what keeps
+    /// the guard free on the normal path.
+    #[test]
+    fn the_comparison_is_skipped_for_an_ordinary_score() {
+        let mut ran = false;
+        let fired = is_identical_claim(50.0, 100.0, ScaleDirection::HigherIsBetter, || {
+            ran = true;
+            false
+        });
+        assert!(!fired);
+        assert!(
+            !ran,
+            "the input comparison must not run for an ordinary score"
+        );
     }
 }

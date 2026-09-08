@@ -232,6 +232,15 @@ pub struct Ssim2<R: Runtime> {
     /// boundary. No-op at ≥8px.
     pad: zenmetrics_gpu_core::PadPlan,
 
+    /// Digest of the cached reference's sRGB bytes, for the
+    /// silent-identical-claim guard on the warm-reference path.
+    ///
+    /// The pair paths compare the two buffers directly (exact, and only on the
+    /// degenerate path). The warm-reference path cannot: the reference bytes
+    /// are gone by then, only device-side state remains. `None` whenever no
+    /// reference is cached.
+    ref_digest: Option<u64>,
+
     /// sRGB u8 staging — re-uploaded per call.
     src_u8_a: cubecl::server::Handle,
     src_u8_b: cubecl::server::Handle,
@@ -422,6 +431,7 @@ impl<R: Runtime> Ssim2<R> {
             client,
             xyb_flavor: XybFlavor::default(),
             n,
+            ref_digest: None,
             pad,
             src_u8_a,
             src_u8_b,
@@ -532,6 +542,7 @@ impl<R: Runtime> Ssim2<R> {
             client,
             xyb_flavor: XybFlavor::default(),
             n,
+            ref_digest: None,
             // ≥MIN here (sub-min routed to `new`): no-op plan whose
             // logical = the image dims, so `dimensions()` still reports them.
             pad: zenmetrics_gpu_core::PadPlan::to_min(image_w, image_h, MIN_PAD_DIM),
@@ -938,6 +949,33 @@ impl<R: Runtime> Ssim2<R> {
         })
     }
 
+    /// Refuse a score that claims "identical images" for inputs that are not.
+    ///
+    /// SSIMULACRA2's identical-value is `100.0` and a genuinely different pair
+    /// cannot reach it, so this has no false positives by construction: it only
+    /// fires when the score claims identity AND the inputs differ. Lossless
+    /// corpora, where every cell is byte-identical and legitimately scores
+    /// 100.0, are unaffected — which matters, because they are common here and
+    /// a naive "a perfect score is suspicious" check would reject real data.
+    ///
+    /// `same` is a closure so the input comparison runs only on the degenerate
+    /// path; the float test short-circuits first, so a normal score pays
+    /// nothing.
+    fn guard_identical_claim(&self, score: f64, same: impl FnOnce() -> bool) -> Result<()> {
+        if zenmetrics_gpu_core::is_identical_claim(
+            score,
+            Self::IDENTICAL_SCORE,
+            zenmetrics_gpu_core::ScaleDirection::HigherIsBetter,
+            same,
+        ) {
+            return Err(Error::SilentIdenticalClaim { score });
+        }
+        Ok(())
+    }
+
+    /// SSIMULACRA2's score for a byte-identical pair.
+    const IDENTICAL_SCORE: f64 = 100.0;
+
     fn compute_with_mode_inner(
         &mut self,
         mode: Ssim2Mode,
@@ -996,9 +1034,10 @@ impl<R: Runtime> Ssim2<R> {
         // Stage-2 finalizer folds partials → small (slot, sum, p4) buffer.
         self.run_finalizer();
 
-        Ok(GpuSsim2Result {
-            score: self.read_and_aggregate()?,
-        })
+        let score = self.read_and_aggregate()?;
+        self.guard_identical_claim(score, || ref_srgb == dist_srgb)?;
+
+        Ok(GpuSsim2Result { score })
     }
 
     /// Cache reference-side state for many comparisons against a fixed
@@ -1022,6 +1061,9 @@ impl<R: Runtime> Ssim2<R> {
             return self.set_reference_strip_mode(ref_srgb);
         }
         self.check_dims(ref_srgb)?;
+        // Digest for the silent-identical-claim guard: the warm-reference paths
+        // no longer have these bytes when they score.
+        self.ref_digest = Some(zenmetrics_gpu_core::input_digest(ref_srgb));
         self.upload_and_srgb_to_linear(true, ref_srgb);
         self.build_linear_pyramid(true);
         let mut blur_untransposed = true;
@@ -1068,6 +1110,12 @@ impl<R: Runtime> Ssim2<R> {
                 got: ref_srgb.len(),
             });
         }
+        // Must be recorded here too, not only in `set_reference`: that fn
+        // delegates here for strip mode BEFORE it takes a digest. Leaving this
+        // `None` would make the guard's `ref_digest == Some(..)` test false for
+        // every strip warm-reference call, firing on genuinely identical pairs
+        // -- rejecting exactly the lossless cells the guard is built not to touch.
+        self.ref_digest = Some(zenmetrics_gpu_core::input_digest(ref_srgb));
 
         // Build per-scale full-image dimensions.
         let mut dims = Vec::with_capacity(NUM_SCALES);
@@ -1409,9 +1457,13 @@ impl<R: Runtime> Ssim2<R> {
         }
         self.run_finalizer();
 
-        Ok(GpuSsim2Result {
-            score: self.read_and_aggregate()?,
-        })
+        let score = self.read_and_aggregate()?;
+        let ref_digest = self.ref_digest;
+        self.guard_identical_claim(score, || {
+            ref_digest == Some(zenmetrics_gpu_core::input_digest(dist_srgb))
+        })?;
+
+        Ok(GpuSsim2Result { score })
     }
 
     // ────────────────── strip processing (cached-ref mode E) ──────────────────
@@ -1519,9 +1571,13 @@ impl<R: Runtime> Ssim2<R> {
             body_start = body_end;
         }
 
-        Ok(GpuSsim2Result {
-            score: self.aggregate_from_accumulators(&acc_sum, &acc_p4, meta)?,
-        })
+        let score = self.aggregate_from_accumulators(&acc_sum, &acc_p4, meta)?;
+        let ref_digest = self.ref_digest;
+        self.guard_identical_claim(score, || {
+            ref_digest == Some(zenmetrics_gpu_core::input_digest(dist_srgb))
+        })?;
+
+        Ok(GpuSsim2Result { score })
     }
 
     /// Per-scale strip processing for mode E. Builds dist-side state
@@ -1867,9 +1923,10 @@ impl<R: Runtime> Ssim2<R> {
         // Final aggregation. Re-uses the same WEIGHT table /
         // sigmoid as `read_and_aggregate` but driven from the
         // host-side accumulators instead of the on-device sums buffer.
-        Ok(GpuSsim2Result {
-            score: self.aggregate_from_accumulators(&acc_sum, &acc_p4, meta)?,
-        })
+        let score = self.aggregate_from_accumulators(&acc_sum, &acc_p4, meta)?;
+        self.guard_identical_claim(score, || ref_srgb == dist_srgb)?;
+
+        Ok(GpuSsim2Result { score })
     }
 
     /// Upload `image_w × strip_h_active` rows starting at row
