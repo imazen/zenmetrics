@@ -150,7 +150,9 @@ calibration. Native HDR, alpha, lossless and rav1e remain explicit additional
 strata. Neither this plan nor the earlier two-source ablations establish a
 minimum representative set or justify automatic enhancement/routing choices.
 
-Pass the completed JSONL through this binary's `declare`, then use canonical
+Pass the completed JSONL through `declare-batches.py BINARY INPUTS > manifest.json`,
+which calls this binary's `declare` in batches within its 64KiB request bound.
+Require a zero exit code before using the output. Then use canonical
 zenfleet declaration, claims, execution and collection as above. The hydration
 tool is source ingestion only and does not launch or schedule encode workers.
 
