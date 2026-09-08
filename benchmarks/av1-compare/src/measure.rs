@@ -8,7 +8,7 @@ use zenmetrics_av1_compare::{Backend, Chroma, Config, decode_planar, encode};
 pub struct Arm {
     backend: Backend,
     quantizer: u32,
-    speed: u32,
+    speed: i32,
     #[serde(default = "eight")]
     bit_depth: u8,
     #[serde(default)]
@@ -43,7 +43,9 @@ fn sha(bytes: &[u8]) -> String {
 fn score(a: &[u8], b: &[u8], w: u32, h: u32) -> Result<f64, Box<dyn std::error::Error>> {
     let image = |p: &[u8]| {
         imgref::Img::new(
-            p.chunks_exact(3)
+            p.as_chunks::<3>()
+                .0
+                .iter()
                 .map(|p| [p[0], p[1], p[2]])
                 .collect::<Vec<_>>(),
             w as usize,
@@ -119,7 +121,7 @@ pub fn run(req: Measurement, emit_rows: bool) -> Result<(), Box<dyn std::error::
                     cfg.validate(pixels)?;
                     let input_sha = sha(pixels);
                     let start = Instant::now();
-                    let obu = encode(cfg, &pixels)?;
+                    let obu = encode(cfg, pixels)?;
                     let ns = start.elapsed().as_nanos();
                     let output_sha = sha(&obu);
                     let path = out.join("obu").join(format!("{output_sha}.obu"));
@@ -133,7 +135,7 @@ pub fn run(req: Measurement, emit_rows: bool) -> Result<(), Box<dyn std::error::
                         "input_sha256":input_sha,"binary_sha256":binary_sha,"revision":cfg.revision(),
                         "output_sha256":output_sha,"bytes":obu.len(),"api_elapsed_ns":ns,
                         "ssimulacra2":score(reference.as_raw(),&rgb,w,h)?,
-                        "ssimulacra2_codec_only":score(&converted,&rgb,w,h)?,"conversion_ceiling_ssimulacra2":ceiling,
+                        "ssimulacra2_codec_only":score(converted,&rgb,w,h)?,"conversion_ceiling_ssimulacra2":ceiling,
                         "matrix":"BT709 limited; same converter for every arm","decoder":"libaom",
                         "timing_scope":"fresh-lifecycle-including-plane-preparation"});
                     writeln!(rows, "{row}")?;

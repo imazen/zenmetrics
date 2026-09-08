@@ -1,0 +1,88 @@
+# AOM techniques worth testing in SVT
+
+Source audit dated 2026-09-08, against the exact sibling sources used by the
+comparison executable. These are candidate experiments, not demonstrated
+causes of AOM's RD results. No SVT coding tools or parity expectations were
+removed to obtain the measurements.
+
+The filled preset sweep already rejects a blanket premise that AOM compresses
+better. At SSIMULACRA2 70 on the 376x512 photo, zenav1-svt preset 1 estimates
+4,140 bytes / 352 ms; zenav1-aom's smallest tested point is preset 1 at
+4,224 bytes / 980 ms. On the 512x330 screenshot, SVT preset 0 estimates
+7,773 bytes / 1,805 ms versus AOM preset 0 at 7,874 bytes / 2,014 ms.
+These are bracketed quality estimates from three-round local measurements.
+The high-quality screenshot remains a useful AOM advantage witness.
+
+The C research-mode measurement is also complete: at score 80, preset -1
+estimates screenshot **10,831 B / 2,495 ms**, versus preset 0 **11,136 B /
+1,083 ms**. On the photo -1 is **10,608 B / 737 ms**, versus preset 0
+**10,509 B / 436 ms**. The -1 ladder changes several tools, so these are whole-mode
+results, not an isolated SGR attribution.
+
+## Priority and scope
+
+| Candidate | AOM behavior | Current SVT behavior | Experiment and acceptance evidence |
+|---|---|---|---|
+| Complete C research preset -1 first | Slow presets retain broader restoration/search options | Rust's unsigned preset carriers cannot express C's public -1 mode; the C header's -2/-3 entries are below this build's accepted minimum | Treat this as C feature coverage. Port the complete signed derivation chain, not a cast or alias of preset 0; validate configuration, search, signaling and decoder reconstruction against C |
+| Restoration-unit size search | Speed 0 searches 64..256; higher speeds select size using quality/resolution policy | Both C and Rust fix restoration units at 256 | Add an explicit still extension that searches 64/128/256 using actual signaling cost. Measure high-quality photo and mixed-detail cells; independently decode all unit-size/edge combinations |
+| Self-guided restoration at useful still efforts | Wiener/SGR/switchable competition with speed-dependent pruning; restoration is disabled at AOM speed 5+ | SGR is implemented for the video-key path, but all-intra presets 0+ use disabled SGR controls. C enables it at -1 | First measure/port -1. Then independently test a still override at selected normal presets. Reuse native-depth search, apply and signaling; do not merely set a header bit |
+| Content-adaptive directional pruning | Gradient orientation histogram narrows directional modes; threshold changes by speed | Slow still modes enumerate directions/angle deltas; faster modes use a coarse directional mask and existing staged candidate pruning | Test HOG or a cheaper orientation mask before expensive mode evaluation, with full-search winner retention recorded. Spend any saved time on broader useful candidates and compare at equal time |
+| Learned 8x8 transform-depth pruning | A small model can prune split/non-split after the largest transform evaluation, enabled at speed 6+ | Transform-depth search uses existing coefficient-count exits and transform-type SATD/rate gates; no equivalent learned depth predictor was found | Log exhaustive SVT depth winners first. Validate or retrain for SVT's cost model and residuals; AOM's thresholds/weights cannot be assumed transferable. Measure quality loss versus time saved |
+| Intra-edge filtering policy | The still sequence enables intra-edge filtering by default | SVT all-intra enables it only where its angular-search policy requests it (preset 5 in the normal ladder); video enables it throughout | Low-cost isolated ablation on directional texture/text. Prediction and sequence signaling must change together. Measure before deciding whether the different policy is beneficial |
+
+## Source locations checked
+
+Paths below are relative to their named sibling repository. Read the executed
+branches, not just their comments; several introductory port comments are stale.
+
+- **C SVT:** `Source/API/EbSvtAv1Enc.h` names MRS=-3, MRP=-2 and MR=-1;
+  `Source/API/EbConfigMacros.h` sets normal `MIN_ENC_PRESET=ENC_MR`;
+  `Source/Lib/Globals/enc_settings.c::svt_av1_verify_settings` enforces it.
+- **Rust SVT:** `rust/crates/svtav1-encoder/src/speed_config.rs::SpeedConfig`
+  and `rate_arm.rs::eff_enc_mode` use unsigned preset values. Full -1 support
+  requires auditing every derived ladder, including the frame and leaf paths.
+- **Restoration size:** SVT `restoration.rs` sets
+  `unit_size=RESTORATION_UNITSIZE_MAX` in the real search; C `pcs.c` sets the
+  same fixed size. AOM `speed_features.rs::lr_search_sf_allintra` derives
+  `min_lr_unit_size`/`max_lr_unit_size`, consumed by the real
+  `key_frame.rs::pick_filter_restoration` invocation.
+- **SGR:** SVT `pipeline.rs` supplies default-disabled `SgFilterCtrls` for
+  `ScArm::Allintra` and live derived controls for `ScArm::Video`;
+  C `enc_mode_config.c::svt_aom_get_sg_filter_level_allintra` enables it for
+  `enc_mode <= ENC_MR`. AOM's `lr_search_sf_allintra` supplies live SGR and
+  Wiener pruning controls; `key_frame.rs` clears restoration at speed 5+.
+- **Directional modes:** AOM `partition_pick.rs` calls
+  `prune_intra_mode_with_hog_y` with speed-dependent thresholds. SVT
+  `leaf_funnel/inject.rs` builds directions and angle deltas according to
+  `angular_level`; `leaf_funnel/nic.rs` supplies existing staged pruning.
+- **Transform depth:** AOM `tx_search.rs` wires `NnDepthPruneCtx` into the
+  largest-depth walk and calls `ml_predict_intra_tx_depth_prune` for its
+  supported 8x8 case. SVT `leaf_funnel/mds3.rs` uses
+  `txs_prev_depth_exit`; `leaf_funnel/txt.rs` already implements type groups,
+  SATD exits and rate gates.
+- **Intra edges:** AOM `key_frame.rs` sets `enable_intra_edge_filter=true`;
+  SVT `intra_arm.rs::intra_edge_filter` derives the all-intra/video policy,
+  shared between prediction and sequence signaling.
+
+## What the audit does not establish
+
+- Palette, IntraBC, CfL, RDOQ and staged winner selection already exist in
+  SVT's executed paths. Their presence in AOM is not a missing-feature finding.
+- Existing SVT scratch reuse also exists. Seeing allocations is not evidence
+  that another buffer-reuse patch will help; prior null/slower experiments
+  are documented beside `Mds3Scratch` and must not be forgotten.
+- AOM's speed-6+ depth predictor cannot explain its speed-0 compression
+  advantage. It is a speed technique to evaluate on its own merits.
+- Turning on a tool does not guarantee a perceptual improvement: these
+  searches optimize their encoder cost functions, while the reported curves
+  use full RGB SSIMULACRA2. Default SVT tuning in this run is its PSNR tune;
+  IQ/SSIM tuning needs its own measured arm.
+- Two resized sources cannot justify a production routing model or a
+  universal new default. Keep extensions explicit until broader held-out
+  images, bit depths and format combinations support the change.
+
+The preset-fill parity audit found 53 nonidentical C/Rust SVT outputs among
+168 paired cells (115 exact). The largest observed score delta was +0.608
+for Rust; the largest negative delta was -0.465. These witnesses are retained
+separately from optimization candidates. Successful decoding and good RD do
+not close a bit-exact translation gate.

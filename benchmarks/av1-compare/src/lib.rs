@@ -48,7 +48,7 @@ pub struct Config {
     pub height: u32,
     /// Native quantizer: 0..63 for AOM/SVT, 0..255 for zenrav1e.
     pub quantizer: u32,
-    pub speed: u32,
+    pub speed: i32,
     /// Requested threads (C SVT interprets this as lp). Rust AOM currently requires 1.
     pub threads: u32,
     #[serde(default = "eight")]
@@ -89,7 +89,12 @@ impl Config {
             Backend::CSvt => (63, 13),
             _ => (63, 9),
         };
-        if self.quantizer > qmax || self.speed > smax {
+        let smin = if matches!(self.backend, Backend::CSvt) {
+            -1
+        } else {
+            0
+        };
+        if self.quantizer > qmax || !(smin..=smax).contains(&self.speed) {
             return Err("native quantizer or preset out of range".into());
         }
         if matches!(self.backend, Backend::CSvt | Backend::Svt) {
@@ -129,7 +134,9 @@ impl Config {
         }
         if self.bit_depth > 8
             && pixels
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .any(|p| u16::from_le_bytes([p[0], p[1]]) >= (1 << self.bit_depth))
         {
             return Err("input sample exceeds coded bit depth".into());
@@ -157,7 +164,7 @@ unsafe extern "C" {
         w: u32,
         h: u32,
         q: u32,
-        speed: u32,
+        speed: i32,
         threads: u32,
         bd: u32,
         sx: u32,
@@ -173,7 +180,7 @@ unsafe extern "C" {
         w: u32,
         h: u32,
         q: u32,
-        speed: u32,
+        speed: i32,
         threads: u32,
         bd: u32,
         sx: u32,
@@ -210,7 +217,9 @@ pub fn encode(cfg: Config, pixels: &[u8]) -> Result<Vec<u8>, String> {
             if cfg.bit_depth == 8 {
                 p.iter().map(|&v| u16::from(v)).collect::<Vec<_>>()
             } else {
-                p.chunks_exact(2)
+                p.as_chunks::<2>()
+                    .0
+                    .iter()
                     .map(|p| u16::from_le_bytes([p[0], p[1]]))
                     .collect()
             }
@@ -306,7 +315,7 @@ pub fn encode(cfg: Config, pixels: &[u8]) -> Result<Vec<u8>, String> {
                 sy,
                 cfg.quantizer as i32,
             );
-            k.cpu_used = cfg.speed as i32;
+            k.cpu_used = cfg.speed;
             k.enable_restoration = true;
             k.sb_size_128 = cfg.sb128;
             let s = samples();
@@ -437,6 +446,34 @@ mod tests {
             };
             let obu = encode(cfg, &pixels).unwrap_or_else(|e| panic!("{backend:?}: {e}"));
             check_decode(&obu, 64, 64).unwrap_or_else(|e| panic!("{backend:?}: {e}"));
+        }
+    }
+    #[test]
+    fn c_research_preset_decodes_and_other_backends_refuse_it() {
+        let cfg = Config {
+            backend: Backend::CSvt,
+            width: 64,
+            height: 64,
+            quantizer: 25,
+            speed: -1,
+            threads: 1,
+            bit_depth: 8,
+            chroma: Chroma::Cs420,
+            tune: None,
+            scm: None,
+            sb128: false,
+        };
+        let pixels: Vec<u8> = (0..64 * 64 * 3 / 2)
+            .map(|i| ((i * 37 + i / 13 * 53) % 220 + 16) as u8)
+            .collect();
+        let obu = encode(cfg, &pixels).expect("C public research preset -1");
+        decode_planar(&obu, cfg).unwrap();
+        for backend in [Backend::Svt, Backend::Libaom, Backend::Aom, Backend::Rav1e] {
+            assert!(Config { backend, ..cfg }.validate_configuration().is_err());
+        }
+        // Enum entries -2/-3 exist, but this C build's public minimum is -1.
+        for speed in [-2, -3] {
+            assert!(Config { speed, ..cfg }.validate_configuration().is_err());
         }
     }
     #[test]
@@ -591,7 +628,7 @@ mod format_tests {
                     let samples = (0..y + 2 * c)
                         .map(|i| ((i * 37 + i / 13 * 19 + 7) % ((1usize << depth) - 1)) as u16)
                         .collect::<Vec<_>>();
-                    let packed:Vec<u8> = if depth == 8 {
+                    let packed: Vec<u8> = if depth == 8 {
                         samples.iter().map(|&v| v as u8).collect()
                     } else {
                         samples.iter().flat_map(|v| v.to_le_bytes()).collect()

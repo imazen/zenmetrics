@@ -41,22 +41,99 @@ while describing it as native speed. This was corrected to the raw pipeline
 calibration. V2 adds aligned C input copies and format support; keep its binary
 and protocol identities separate from V1.
 
-## Matched quality: 512-pixel sources, 8-bit 420, preset 6
+## Filled presets: equal time budgets at SSIMULACRA2 80
 
-Log-linear estimates at **SSIMULACRA2 80**, bracketed by measured quantizers:
+The 2026-09-08 follow-up completed **2,016 missing-preset encodes** plus
+**480 local high-quality encodes**. The four C/Rust SVT/AOM arms now cover every
+normal preset 0..9, including SVT 0/1/2, at maximum edge 512. Added QPs are
+5/8/10/15/20/25/30/35/40/45/50/55/60/63, with prior QP0 anchors at 3/6/9.
+The zenrav1e baseline remains presets 3/6/9. Three rounds per cell; all decoded
+and repeated byte-identically. The same local CPU and timing method were used.
+
+The table selects the smallest bracketed payload under each common budget,
+independently choosing each backend's preset. **AV1 payload bytes**, 8-bit 420:
+
+| Budget | SVT photo | AOM photo | SVT screenshot | AOM screenshot |
+|---|---:|---:|---:|---:|
+| 30 ms | 13,288 | 14,359 | 14,955 | 24,002 |
+| 100 ms | 12,357 | 13,012 | 13,222 | 14,028 |
+| 200 ms | 11,327 | 13,012 | 12,829 | 14,028 |
+| 500 ms | 10,821 | 11,097 | 12,008 | 11,927 |
+| 1,000 ms | 10,634 | 10,712 | 11,906 | 10,990 |
+| 2,000 ms | 10,634 | 10,609 | 11,136 | 10,990 |
+| 5,000 ms | 10,634 | 10,609 | 11,136 | 10,490 |
+
+SVT/AOM in this table mean **zenav1-svt / zenav1-aom**. The complete five-backend
+selection, actual estimated milliseconds, chosen presets and quantizer brackets
+are in [time_budgets_ssim2_80.tsv](time_budgets_ssim2_80.tsv). Presets are discrete:
+there is no interpolation across preset numbers. Budget cutoffs use estimated
+median time, not a guarantee of a runtime deadline.
+
+At the photo's slow end, Rust SVT preset 0 is **10,634 B / 680 ms**, essentially
+tying Rust AOM's smallest tested point, preset 2 at **10,609 B / 1,500 ms**.
+For the screenshot, Rust AOM preset 3 is **10,990 B / 602 ms**, versus Rust SVT
+preset 1 at **11,906 B / 701 ms** (AOM 7.7% smaller and 14% faster). The smallest
+normal-preset screenshot points are SVT p0 **11,136 B / 1,589 ms** and AOM p0
+**10,490 B / 2,295 ms** (AOM 5.8% smaller at 1.44x time).
+
+The C baselines retain practical value: screenshot libaom p0 estimates
+**10,490 B / 965 ms**, versus C SVT p0 **11,136 B / 1,084 ms**. The Rust AOM
+runtime gap to its C baseline is separate from an AOM-vs-SVT algorithm choice.
+
+**Supersedes the earlier coarse photo interpolation:** adding QP5/QP8 shrank
+large QP0-to-QP10 brackets. For example SVT p3 changed from 12,836 to 11,327 B
+at score 80; that is an estimate correction, not a new encoder improvement.
+The revised preset-6 slice is:
 
 | Backend | Photo bytes | Photo ms | Screenshot bytes | Screenshot ms |
 |---|---:|---:|---:|---:|
-| C SVT | 14,702 | 13.49 | 14,955 | 16.66 |
-| zenav1-svt | 14,708 | 20.23 | 14,955 | 24.29 |
-| libaom | 14,337 | 52.62 | 12,774 | 53.25 |
-| zenav1-aom | 13,826 | 86.69 | 14,028 | 77.17 |
+| C SVT | 13,565 | 13.40 | 14,955 | 16.66 |
+| zenav1-svt | 13,581 | 21.37 | 14,955 | 24.29 |
+| libaom | 13,469 | 51.55 | 12,774 | 53.25 |
+| zenav1-aom | 13,012 | 85.08 | 14,028 | 77.17 |
 | zenrav1e | 12,599 | 638.39 | 17,590 | 489.68 |
 
-At this point Rust AOM saves about 6% over Rust SVT at 3.2–4.3× the time.
-Zenrav1e saves 14% on the photo at about 32× the time; on the screenshot it
-uses both more bytes and more time. Preset numbers across encoder families
-are not equivalent effort, so this table is a slice, not the overall Pareto front.
+## C SVT research preset -1
+
+The signed benchmark adapter now measures C's public preset -1 and rejects
+negative presets for the Rust backends. This C build rejects -2/-3 despite
+those names being present in its header enum. A fresh test encodes/decodes -1
+and checks all these refusal boundaries.
+
+A further **120 real-source encodes** compared -1 and 0, three rounds per
+cell. All decoded and were deterministic; all 20 preset-0 control cells match
+the pre-change executable byte-for-byte. At SSIMULACRA2 80:
+
+| C SVT preset | Photo bytes | Photo ms | Screenshot bytes | Screenshot ms |
+|---|---:|---:|---:|---:|
+| -1 | 10,608 | 736.98 | 10,831 | 2,494.64 |
+| 0 | 10,509 | 435.90 | 11,136 | 1,082.68 |
+
+Research mode is 2.7% smaller on the screenshot at 2.3x time, but slightly
+larger and 1.7x slower on the photo. The unsigned Rust API's missing -1 is a
+coverage gap; it is not evidence that -1 should become the default. The full
+research ladder changes multiple tools, so this does not isolate SGR's gain.
+
+## Zenfleet supplement
+
+The canonical zenfleet worker completed **20/20 comparison jobs, 960 encodes**,
+three rounds each, on three Nomad-managed remote workers. QPs 0/2/5/8 were
+covered at every normal preset 0..9 for both sources and all four C/Rust
+SVT/AOM arms. Every persisted OBU was downloaded and SHA/length-verified.
+The worker capability setting was corrected after an initial launcher error
+(resource classes differ from executor capability tokens); no encoding jobs
+failed. All three successful allocations drained and exited.
+
+Storage: `s3://zentrain/jobs/av1-preset-fill-20260908/` contains the manifest,
+exact static executable/worker/corpus bundle, per-job output bundles, Parquet
+ledger and complete snapshot. **Remote timings are not pooled into the local
+budget table.** Each remote source/preset comparison shares one worker; worker
+identity is retained in the ledger. All 160 local QP5/QP8 overlapping cells (480 rounds) match the fleet
+outputs byte-for-byte across CPUs, independently of timing.
+
+See [AOM_ADOPTION.md](AOM_ADOPTION.md) for source-backed adoption candidates
+and the important distinction between missing C research-mode support,
+already-implemented tools, and possible SVT extensions.
 
 ## Direct high-fidelity format result
 
@@ -94,12 +171,34 @@ Some larger/10-bit SVT cells are not byte-identical to C despite identical
 lossless decoded planes; these need separate parity investigation. Do not infer
 universal byte identity from the six matching V1 pilot cells.
 
-## Evidence and remaining work
+## Evidence, validation and remaining work
 
-`pilot.tsv` contains the 30 V1 cells. Full V2 rows, 1,004-cell summaries,
-matched-quality brackets and encoded artifacts are retained as a run bundle;
-the storage pointer is added after upload. Commands and request grids are kept
-with that bundle. Do not use two sources or sparse high-depth QP brackets to
-fit a production optimality model. Fleet expansion, denser high-depth curves,
-additional perceptual metrics, explicit tune/SCM arms and larger image sizes
-are the next validation steps.
+The original pilot and V2 runs, the preset fill, local high-quality supplement,
+research/control run, all OBU files, request grids, analyses and validation logs
+are retained in:
+
+- `s3://zentrain/benchmarks/av1-compare/2026-09-08/evidence.tar`
+- SHA256: `47c7fae8466889c3ebf3fab6bb398735ab6e604d77d861ae5c4f5380e0a35dd6`
+- Artifact/build manifest: `s3://zentrain/benchmarks/av1-compare/2026-09-08/artifacts.json`
+- Fleet manifest/ledger/bundles: `s3://zentrain/jobs/av1-preset-fill-20260908/`
+
+The manifest distinguishes the exact fleet-measured executable from the final
+harness binary. Two needless-borrow Clippy cleanups followed the research run;
+the measured research `measure.rs` is retained separately, and measured binary
+hashes remain in every row. Do not relabel old rows with the final binary hash.
+
+This continuation completed **3,576 additional real-image encodes**: 2,016
+preset-fill + 480 local high-quality + 120 research/control + 960 remote.
+All repeats were deterministic and all emitted outputs decoded. Five benchmark
+library tests pass, including the 42-format native-lossless matrix, plus scoped
+library/benchmark-binary Clippy with warnings denied. Existing warnings in
+codec dependencies and their wider workspace gates remain separate. Budget
+selection was checked at exact boundaries, against dominated presets, and for
+refusal of incomplete rounds. New report files pass repository hygiene checks.
+
+`pilot.tsv` retains the historical 30 V1 cells. The dense normal-preset table
+supersedes the coarse photo estimates; it does not change the encoders.
+Do not use two sources or sparse high-depth brackets to fit production
+optimality. Denser high-depth curves, IQ/SCM arms, more perceptual metrics,
+larger images and held-out sources remain further validation work. C/Rust
+parity witnesses and Rust's missing research preset remain open.

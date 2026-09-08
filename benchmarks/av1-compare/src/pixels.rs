@@ -63,7 +63,9 @@ pub fn unpack(bytes: &[u8], depth: u8) -> Vec<u16> {
         bytes.iter().map(|&v| u16::from(v)).collect()
     } else {
         bytes
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|p| u16::from_le_bytes([p[0], p[1]]))
             .collect()
     }

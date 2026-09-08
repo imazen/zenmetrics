@@ -25,7 +25,7 @@ static int append(Output *o, const uint8_t *p, size_t n) {
 /* First comparison envelope: packed 8-bit I420, explicitly configured
  * quantizer and effort. No claim that equal quantizers imply equal quality. */
 int zm_libaom(const uint8_t *pixels, unsigned w, unsigned h,
-              unsigned q, unsigned speed, unsigned threads,
+              unsigned q, int speed, unsigned threads,
               unsigned bd, unsigned sx, unsigned sy, unsigned mono, int tune, int scm, unsigned sb128, Output *out) {
     aom_codec_ctx_t ctx;
     aom_codec_enc_cfg_t cfg;
@@ -84,7 +84,7 @@ done:
 }
 
 int zm_c_svt(const uint8_t *pixels, unsigned w, unsigned h,
-             unsigned q, unsigned speed, unsigned threads,
+             unsigned q, int speed, unsigned threads,
               unsigned bd, unsigned sx, unsigned sy, unsigned mono, int tune, int scm, unsigned sb128, Output *out) {
     if (mono || sx!=1 || sy!=1 || bd>10 || sb128) return -10;
     size_t frame_bytes=((size_t)w*h+(size_t)(w/2)*(h/2)*2)*(bd>8?2:1);

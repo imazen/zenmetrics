@@ -5,13 +5,23 @@ The C adapters use public encoder APIs and return owned OBU bytes through a
 checked Rust boundary. This is benchmark tooling, with no change to the
 production Rust codecs' zero-C dependency contract.
 
-The initial `av1-api-i420-v1` protocol accepts one packed, limited-range,
-8-bit I420 still, even dimensions 64..16384, and threads=1. For C SVT that
-means **lp1**, not a promise of exactly one OS thread. Quantizers and speeds
-are backend-native; equal numbers are not equal effort or achieved quality.
-AOM uses ALL_INTRA with explicit SB64; C otherwise retains library tool
-defaults, and Rust AOM enables restoration to match the C ALL_INTRA default.
-SVT uses still-picture CQP (AQ0). Unsupported formats are errors.
+The `av1-api-planar-v2` protocol accepts packed planar 8/10/12-bit
+420/422/444/mono according to each backend's validated capabilities. High-depth
+samples are little-endian u16. C SVT accepts 8/10-bit 420; Rust SVT also accepts
+mono. The three AOM/rav1e arms accept all twelve depth/chroma combinations.
+Dimensions are 64..16384 (C SVT requires even dimensions). Threads are 1..16;
+Rust AOM currently requires 1. For C SVT threads means **lp**, not a promise of
+exactly that many OS threads.
+
+Quantizers and speeds are backend-native; equal numbers are not equal effort
+or achieved quality. The signed preset field additionally supports C SVT's
+public research mode -1. Rust SVT does not expose negative presets. C enum
+entries -2/-3 are rejected by this reference build's public validator and by
+this adapter. No negative value is cast into a Rust unsigned preset.
+
+AOM uses ALL_INTRA with explicit SB64 (optional SB128). SVT uses still-picture
+CQP (AQ0), with optional tune and screen-content controls. Unsupported requests
+are errors before FFI. The defaults retain each library's coding-tool policy.
 
 C source is taken from the pinned sibling submodules, built separately under
 Cargo OUT_DIR with multithreading enabled, native tuning off and FP contraction
@@ -51,25 +61,37 @@ or quality calibration corpus. Real comparisons must use the registered
 CID22/CLIC/screen sources, repeated interleaved trials on the same worker,
 independent scores, and matched-quality comparisons.
 
-This executable does not schedule or partition fleet work. The zenmetrics
-planner, zenfleet declarations/claims/ledger and the existing Nomad worker
-lifecycle remain the owners. Its current stdin request is a local smoke API;
-a DesiredJob adapter and timing/artifact result persistence are still needed
-before declaring the distributed comparison campaign. Wider formats, explicit
-color signaling controls, encoder-only timing and multithread arms remain
-follow-up work, not advertised support.
+`measure` reads a JSON grid of `inputs`, `max_edges`, `arms`, `repeats` and
+`output_dir`; it scores full decoded RGB with fast-ssim2 and retains every OBU.
+All arms share BT.709 limited-range conversion. Conversion-only ceilings and
+codec-only scores accompany end-to-end scores. High-depth conversion of RGB8
+sources is not native HDR coverage. Repeated trials rotate arm order.
 
-## Local validation, 2026-09-08
+`declare` consumes canonical zenfleet EncodeDeclareItem JSONL for codec
+`av1-compare`, q=0. Each job bundles a source/size/settings comparison with
+interleaved repeats. `jobexec` consumes DesiredJob JSON and emits a tar containing
+rows, reference PNGs and encoded artifacts. It checks the source SHA and exact
+executable SHA. `capabilities` self-reports the required executor token; this
+is distinct from the worker's hardware resource-class `--capability` flag.
 
-- Release tests: both passed, including all five encoder arms decoded through
-  libaom and invalid-input refusal before FFI.
-- CLI smoke: all five arms emitted valid rows and independently decoded OBU
-  files; repeated output paths were refused.
-- Linux x86-64 executable: `file` reports static PIE; `readelf -d` lists no
-  `NEEDED` entries.
-- This crate's all-target Clippy passes with warnings denied. Existing warnings
-  in the SVT/AOM dependencies remain; this is not a claim that those workspaces'
-  broader gates pass.
-- New files pass the repository's shared hygiene patterns. No CI or fleet
-  campaign was started by these checks, and the smoke timings are not routing
-  calibration data.
+The executor does not schedule work. Zenfleet owns claims, retries, Parquet
+ledgers and content-addressed output storage; Nomad manages worker lifetimes.
+Set `ZEN_CORPUS_DIR` and a disk-backed `TMPDIR`. The 2026-09-08 remote supplement
+completed 20 jobs / 960 encodes through three Nomad-managed zenfleet workers.
+
+`analyze.py` produces measured cells and bracketed quality estimates.
+`time_budget.py` selects the smallest payload at each target quality under a
+common time budget across tested presets. Do not combine timings from different
+CPUs, interpolate preset numbers, or interpret estimated medians as deadlines.
+See [the measured results](../av1_compare_2026-09-08/README.md).
+
+## Validation
+
+The native lossless matrix checks exact decoded samples for all 42 supported
+backend/depth/chroma combinations. Decode and validation tests cover all five
+backends, metadata mismatches, out-of-range samples and research-preset limits.
+The local zenfleet smoke verifies real output bundles and ledger completion.
+
+The Linux x86-64 executable has been verified as static PIE with no dynamic
+`NEEDED` entries. Existing codec dependency warnings and their broader workspace
+gates are separate from checks of this benchmark crate. No CI has been launched.
