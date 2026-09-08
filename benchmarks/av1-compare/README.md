@@ -165,6 +165,14 @@ PNGs were checked and are opaque. See
 `../av1_compare_2026-09-08/imazen26_training_scout_preparation.json` for input
 verification and build identities; these preparation counts are not results.
 
+`verify-fleet-artifact.py ARTIFACT JOB_JSON` checks a completed single-size
+comparison tar against its declared job: exact source/build identities,
+declared arm and round coverage, deterministic payload hashes and sizes,
+timing cohort, reference dimensions, and matching successful SVT reconstruction
+witnesses. It does not re-encode. Check the downloaded artifact's SHA against
+the canonical blob key before invoking it. Population collection must retain
+the ledger and failures as well as successful results.
+
 The native lossless matrix checks exact decoded samples for all 42 supported
 backend/depth/chroma combinations. Decode and validation tests cover all five
 backends, metadata mismatches, out-of-range samples and research-preset limits.
