@@ -81,7 +81,8 @@ independent scores, and matched-quality comparisons.
 After all timed rounds, every unique Rust SVT cell is replayed: the input and
 measured OBU must match exactly, and every reconstructed sample must match the
 independent libaom decode. `reconstruction-verification.jsonl` records these
-checks. Only a successful check writes `validation.json` with `complete=true`;
+checks, including the searched restoration size (or None when bypassed) and
+per-plane restoration types. Only a successful check writes `validation.json` with `complete=true`;
 non-SVT-only grids explicitly record that reconstruction is not applicable.
 Standalone `verify-measurement` remains available for older saved measurements.
 

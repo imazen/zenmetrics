@@ -13,6 +13,15 @@ photo sizes are 188×256 and 376×512; screenshot sizes 256×164 and 512×330.
 Input images are 8-bit SDR: high-depth arms preserve precision through RGB→YUV
 conversion; these are **not native HDR tests**.
 
+## Canonical restoration-unit experiment
+
+[The completed restoration ablation](IMAZEN26_RESTORATION_UNITS.md) adds
+144 fleet encodes with automatic reconstruction verification. Legal smaller
+units are implemented and reachable, but the two changed photo cells became
+slightly larger and scored slightly lower. Screenshot restoration was bypassed.
+The experiment remains opt-in. The report includes bytes/bpp, perceptual scores,
+three-round timing, common-budget estimates and separate CPU provenance.
+
 ## Canonical imazen-26 research follow-up
 
 [The completed research baseline](IMAZEN26_RESEARCH_BASELINE.md) adds150 encodes
