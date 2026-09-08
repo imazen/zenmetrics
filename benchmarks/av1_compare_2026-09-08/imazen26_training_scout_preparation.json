@@ -35,8 +35,8 @@
   "cells": 84084,
   "timed_encodes_planned": 252252,
   "encodes_completed": 0,
-  "manifest_sha256": "78f225944c599323bb953f891d6437841f786674bf2d14518f9542b36caf0780",
-  "executor_sha256": "b0199023c45d841a4945ebc7f4b40dc62ccd4c364db6428fdd7f691e51acdc55",
+  "manifest_sha256": "ee9fbc8bf4eeaff8becbe6160b7704e0c46b5cb791675a6811ba7f8f5b3ca5b9",
+  "executor_sha256": "82ab0044e7243fe742edeb6b13bbf08d65e7b7f618df38d6e444b4c9c73256f1",
   "local_root": "/home/lilith/tmp/av1-training-scout-2026-09-08",
   "scope": "train only; 512px SDR 8-bit 420 scout",
   "artifact": {
@@ -45,9 +45,18 @@
     "bytes": 6069145600,
     "download_verified": true
   },
-  "population_manifest": "s3://zentrain/jobs/av1-training-scout-20260908/manifest.json",
-  "smoke_run": "av1-training-scout-smoke-20260908",
+  "population_manifest": "s3://zentrain/jobs/av1-training-scout-v2-20260908/manifest.json",
+  "smoke_run": "av1-training-scout-smoke-v2-20260908",
   "smoke_origin": "1002",
-  "smoke_allocation": "522bc62f-4c70-d932-0aa7-ad0a7aaede98",
-  "status": "smoke failed before encoding: comparator incorrectly rejected Rust SVT preset13; population not launched; validator correction rebuilding"
+  "smoke_allocation": "e2fb666f-8e06-fc71-4676-681b1fe342d1",
+  "status": "corrected static executor: 7 lib and 5 binary tests passed; v2 smoke allocated, pending startup; population not launched",
+  "superseded_executor_sha256": "b0199023c45d841a4945ebc7f4b40dc62ccd4c364db6428fdd7f691e51acdc55",
+  "executor_update": {
+    "uri": "s3://zentrain/benchmarks/av1-compare/2026-09-08/training-scout/executor-native13-757a9943b9709ca8503a77eb004881df7b5621f4bdd97fc5019c92a9d3110d0f.tar.gz",
+    "sha256": "757a9943b9709ca8503a77eb004881df7b5621f4bdd97fc5019c92a9d3110d0f",
+    "bytes": 54495563,
+    "executor_sha256": "82ab0044e7243fe742edeb6b13bbf08d65e7b7f618df38d6e444b4c9c73256f1",
+    "download_verified": true
+  },
+  "first_smoke_failure": "native preset13 refused by comparator validator; no encoding completed; corrected in 8f163b5d"
 }
