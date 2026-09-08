@@ -14,6 +14,11 @@ svtav1 = { package = "zenav1-svt", path = "../../../zenav1-svt/rust/svtav1" }
 aom-encode = { package = "zenav1-aom-encode", path = "../../../zenav1-aom/crates/aom-encode" }
 zenrav1e = { path = "../../../zenrav1e" }
 
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+yuv = "0.8.17"
+fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
+imgref = "1"
+
 [build-dependencies]
 cc = "1"
 

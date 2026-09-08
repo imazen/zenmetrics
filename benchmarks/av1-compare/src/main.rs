@@ -1,5 +1,6 @@
-//! One process, all five encoder implementations. Reads a request on stdin;
-//! emits one provenance/timing row after writing and independently checking OBU.
+mod measure;
+// One process, all five encoder implementations. Reads a request on stdin;
+// emits one provenance/timing row after writing and independently checking OBU.
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -19,6 +20,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::io::stdin().take(65537).read_to_string(&mut json)?;
     if json.len() > 65536 {
         return Err("request too large".into());
+    }
+    if std::env::args().nth(1).as_deref() == Some("measure") {
+        return measure::run(serde_json::from_str(&json)?);
     }
     let req: Request = serde_json::from_str(&json)?;
     let pixels = std::fs::read(&req.input)?;

@@ -53,7 +53,7 @@ impl Config {
         let (qmax, smin, smax) = match self.backend {
             Backend::Libaom | Backend::Aom => (63, 0, 9),
             Backend::CSvt => (63, 0, 13),
-            Backend::Svt => (63, 1, 10),
+            Backend::Svt => (63, 0, 9),
             Backend::Rav1e => (255, 0, 10),
         };
         if self.quantizer > qmax || !(smin..=smax).contains(&self.speed) {
@@ -151,19 +151,11 @@ pub fn encode(cfg: Config, pixels: &[u8]) -> Result<Vec<u8>, String> {
             Ok(unsafe { std::slice::from_raw_parts(out.data, out.len) }.to_vec())
         }
         Backend::Svt => {
-            // Invert this wrapper's documented integer QP mapping, then verify
-            // round-trip rather than silently compare a neighbouring quantizer.
-            let quality = 100.0 - cfg.quantizer as f32 * 99.0 / 63.0;
-            if svtav1::avif::AvifEncoder::quality_to_qp_static(quality) != cfg.quantizer as u8 {
-                return Err("SVT quality-to-QP round-trip failed".into());
-            }
-            svtav1::avif::AvifEncoder::new()
-                .with_quality(quality)
-                .with_speed(cfg.speed as u8)
-                .with_num_threads(Some(1))
-                .encode_yuv420(y, u, v, cfg.width, cfg.height, cfg.width)
-                .map(|o| o.data)
-                .map_err(|e| e.to_string())
+            use svtav1::encoder::{pipeline::EncodePipeline, rate_control::{RcConfig, RcMode}};
+            let rc = RcConfig { mode: RcMode::Cqp, qp: cfg.quantizer as u8, ..Default::default() };
+            let mut pipeline = EncodePipeline::new(cfg.width, cfg.height, cfg.speed as u8, rc, 0, 1)
+                .with_chroma_420(true).with_thread_count(1);
+            pipeline.try_encode_frame_420(y, u, v, w).map_err(|e| e.to_string())
         }
         Backend::Aom => {
             let mut k = aom_encode::key_frame::KeyFrameConfig::allintra_speed0(
@@ -306,5 +298,28 @@ mod tests {
         );
         assert!(encode(Config { threads: 2, ..cfg }, &vec![0; 6144]).is_err());
         assert!(check_decode(&[0xff; 16], 64, 64).is_err());
+    }
+}
+
+/// Copy independently decoded 8-bit limited-range I420 planes for scoring.
+pub fn decode_i420(obu: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
+    if !(64..=16384).contains(&width)
+        || !(64..=16384).contains(&height)
+        || !width.is_multiple_of(2)
+        || !height.is_multiple_of(2)
+    {
+        return Err("invalid decode dimensions".into());
+    }
+    let mut out = vec![0; width as usize * height as usize * 3 / 2];
+    unsafe extern "C" {
+        fn zm_decode_i420(p: *const u8, len: usize, w: u32, h: u32, dst: *mut u8) -> c_int;
+    }
+    // SAFETY: the shim verifies exact dimensions/format before writing this
+    // checked-size output. Both input and output live throughout the call.
+    let rc = unsafe { zm_decode_i420(obu.as_ptr(), obu.len(), width, height, out.as_mut_ptr()) };
+    if rc == 0 {
+        Ok(out)
+    } else {
+        Err(format!("decode I420 failed: {rc}"))
     }
 }

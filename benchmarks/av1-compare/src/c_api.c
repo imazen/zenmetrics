@@ -134,3 +134,33 @@ int zm_check_decode(const uint8_t *obu, size_t len, unsigned w, unsigned h) {
     aom_codec_destroy(&ctx);
     return rc;
 }
+
+/* Copy decoded I420 out before destroying the decoder. Pixel scoring never
+ * borrows a decoder-owned buffer after its lifetime. */
+int zm_decode_i420(const uint8_t *obu, size_t len, unsigned w, unsigned h, uint8_t *dst) {
+    aom_codec_ctx_t ctx;
+    aom_codec_dec_cfg_t cfg = {0}; cfg.threads = 1;
+    memset(&ctx, 0, sizeof(ctx));
+    if (aom_codec_dec_init(&ctx, aom_codec_av1_dx(), &cfg, 0)) return -1;
+    int rc = -2;
+    if (!aom_codec_decode(&ctx, obu, len, NULL)) {
+        aom_codec_iter_t it = NULL;
+        aom_image_t *img = aom_codec_get_frame(&ctx, &it);
+        if (img && img->d_w == w && img->d_h == h && img->bit_depth == 8 &&
+            img->x_chroma_shift == 1 && img->y_chroma_shift == 1 && img->range == AOM_CR_STUDIO_RANGE) {
+            rc = 0;
+            for (unsigned p=0; p<3; ++p) {
+                unsigned pw=p?w/2:w, ph=p?h/2:h;
+                for (unsigned y=0; y<ph; ++y) {
+                    const uint8_t *row=img->planes[p]+(size_t)y*img->stride[p];
+                    if (img->fmt & AOM_IMG_FMT_HIGHBITDEPTH) {
+                        for (unsigned x=0; x<pw; ++x) dst[x]=(uint8_t)((const uint16_t*)row)[x];
+                    } else memcpy(dst,row,pw);
+                    dst+=pw;
+                }
+            }
+            if (aom_codec_get_frame(&ctx, &it)) rc=-3;
+        }
+    }
+    aom_codec_destroy(&ctx); return rc;
+}
