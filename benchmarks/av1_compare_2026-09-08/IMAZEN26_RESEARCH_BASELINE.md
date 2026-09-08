@@ -109,3 +109,53 @@ these RD/time measurements. Raw profiles and reports are retained under
 
 Validation for the comparator change: all five library tests and scoped
 Clippy with `-D warnings` pass. SVT's updated regression suite passes133/133.
+
+## Batched mesh SAD follow-up
+
+Local SVT change `d78559a2` wires four-candidate SAD into the IntraBC exhaustive
+mesh, sharing source loads and using SIMD for width4. Candidate order, strict
+comparisons, MV costs and C's remainder behavior are unchanged. Independent
+pixel-sum tests exercise dispatch permutations, distinct strides and tight
+last rows. All2,619 workspace tests (including C IntraBC search differentials)
+and133/133 regression checks passed before this measurement.
+
+Three-round QP20 repeat, same two images, static API protocol and CPU cohort:
+
+| Origin | Backend/preset | Bytes | SSIM2 | Before ms | After ms |
+|---|---|---:|---:|---:|---:|
+|1000 photo|C SVT -1|27,421|71.675|2,189.8|2,193.9|
+|1000 photo|Rust SVT -1|27,421|71.675|3,160.1|3,146.3|
+|1000 photo|Rust SVT 0|26,684|70.571|1,753.3|1,752.5|
+|8100 screenshot|C SVT -1|14,292|84.101|2,503.8|2,503.1|
+|8100 screenshot|Rust SVT -1|14,292|84.101|13,528.4|6,105.9|
+|8100 screenshot|Rust SVT 0|14,380|83.848|1,737.1|1,669.7|
+
+All18 outputs match the corresponding earlier output hashes, including the
+unchanged C controls. This witness's research runtime drops55% (2.22× speedup);
+Rust still takes2.44× C time, so the remaining gap is not closed. The photo is
+essentially unchanged. Broader size/preset/architecture performance remains
+unmeasured for this optimization. Do not extrapolate the speedup to all images.
+Data: `~/tmp/av1-imazen26-sad4-2026-09-08/rows.jsonl`, with OBUs/references.
+This run precedes the user's subsequent migration from the Git-patched SIMD
+snapshot to the published archmage/magetypes0.9.29; that dependency change has
+its own validation gates.
+
+Follow-up binary SHA256: `009386b5986d4337957d9ac93f209d78f2147473a03bc46d31eaee468a07c1a0`.
+
+### Published archmage/magetypes0.9.29 validation
+
+Removed the temporary Git patches from SVT, its six standalone performance
+probes, zenavif and this comparator. All lockfiles resolve registry0.9.29 for
+archmage, archmage-macros and magetypes. Published-version checks pass:
+2,619 SVT workspace tests,133/133 byte-regression checks, five comparator tests,
+27 zenavif backend/roundtrip tests, and all-target checks for all six probes.
+
+The rebuilt static comparator repeats all18 QP20 encodes with unchanged output
+hashes. Screenshot Rust -1 median is**6,113.6ms**, C**2,506.7ms**, Rust0
+**1,671.8ms**. Photo Rust -1 is**3,152.5ms**, C**2,189.6ms**, Rust0**1,757.3ms**.
+Byte counts and SSIM2 remain exactly as in the table above. The batched-SAD
+speedup survives the published dependency migration; no RD regression observed
+in these cells. This is still a two-source performance witness.
+
+Data: `~/tmp/av1-imazen26-sad4-archmage029-2026-09-08/`.
+Binary SHA256: `1a65ccad0407dda48f8643cc23e09ae992237a35c1fed4257b83f6632981d9f2`.

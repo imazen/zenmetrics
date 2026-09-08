@@ -46,9 +46,3 @@ cc = "1"
 
 [profile.release]
 debug = 1
-
-[patch.crates-io]
-# Match the consuming zenavif graph; dependency workspace patches do not propagate.
-archmage = { git = "https://github.com/imazen/archmage", rev = "cc24398c9a9fee0251722931e295da840730704d" }
-archmage-macros = { git = "https://github.com/imazen/archmage", rev = "cc24398c9a9fee0251722931e295da840730704d" }
-magetypes = { git = "https://github.com/imazen/archmage", rev = "cc24398c9a9fee0251722931e295da840730704d" }
