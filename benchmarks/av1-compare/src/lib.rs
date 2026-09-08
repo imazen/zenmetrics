@@ -89,7 +89,7 @@ impl Config {
             Backend::CSvt => (63, 13),
             _ => (63, 9),
         };
-        let smin = if matches!(self.backend, Backend::CSvt) {
+        let smin = if matches!(self.backend, Backend::CSvt | Backend::Svt) {
             -1
         } else {
             0
@@ -273,13 +273,16 @@ pub fn encode(cfg: Config, pixels: &[u8]) -> Result<Vec<u8>, String> {
             use svtav1::encoder::{
                 pipeline::EncodePipeline,
                 rate_control::{RcConfig, RcMode},
+                speed_config::NativePreset,
             };
             let rc = RcConfig {
                 mode: RcMode::Cqp,
                 qp: cfg.quantizer as u8,
                 ..Default::default()
             };
-            let mut p = EncodePipeline::new(cfg.width, cfg.height, cfg.speed as u8, rc, 0, 1)
+            let preset = NativePreset::new(i8::try_from(cfg.speed).map_err(|e| e.to_string())?)
+                .ok_or("native SVT preset out of range")?;
+            let mut p = EncodePipeline::new_with_preset(cfg.width, cfg.height, preset, rc, 0, 1)
                 .with_chroma_420(cfg.chroma == Chroma::Cs420)
                 .with_thread_count(cfg.threads as usize)
                 .with_bit_depth(cfg.bit_depth);
@@ -449,7 +452,7 @@ mod tests {
         }
     }
     #[test]
-    fn c_research_preset_decodes_and_other_backends_refuse_it() {
+    fn both_svt_research_presets_match_and_other_backends_refuse_it() {
         let cfg = Config {
             backend: Backend::CSvt,
             width: 64,
@@ -466,14 +469,47 @@ mod tests {
         let pixels: Vec<u8> = (0..64 * 64 * 3 / 2)
             .map(|i| ((i * 37 + i / 13 * 53) % 220 + 16) as u8)
             .collect();
-        let obu = encode(cfg, &pixels).expect("C public research preset -1");
-        decode_planar(&obu, cfg).unwrap();
-        for backend in [Backend::Svt, Backend::Libaom, Backend::Aom, Backend::Rav1e] {
+        for bit_depth in [8, 10] {
+            let cfg = Config { bit_depth, ..cfg };
+            // Exercise native samples with nonzero low bits in the 10-bit case.
+            let input = if bit_depth == 8 {
+                pixels.clone()
+            } else {
+                pixels
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(i, &v)| (u16::from(v) * 4 + (i % 4) as u16).to_le_bytes())
+                    .collect()
+            };
+            let c = encode(cfg, &input).expect("C public research preset -1");
+            let rust = encode(
+                Config {
+                    backend: Backend::Svt,
+                    ..cfg
+                },
+                &input,
+            )
+            .expect("Rust native research preset -1");
+            decode_planar(&c, cfg).unwrap();
+            decode_planar(&rust, cfg).unwrap();
+            assert_eq!(c, rust, "research preset parity at {bit_depth} bits");
+        }
+        for backend in [Backend::Libaom, Backend::Aom, Backend::Rav1e] {
             assert!(Config { backend, ..cfg }.validate_configuration().is_err());
         }
         // Enum entries -2/-3 exist, but this C build's public minimum is -1.
-        for speed in [-2, -3] {
-            assert!(Config { speed, ..cfg }.validate_configuration().is_err());
+        for backend in [Backend::CSvt, Backend::Svt] {
+            for speed in [-2, -3] {
+                assert!(
+                    Config {
+                        backend,
+                        speed,
+                        ..cfg
+                    }
+                    .validate_configuration()
+                    .is_err()
+                );
+            }
         }
     }
     #[test]

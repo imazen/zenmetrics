@@ -13,6 +13,14 @@ photo sizes are 188×256 and 376×512; screenshot sizes 256×164 and 512×330.
 Input images are 8-bit SDR: high-depth arms preserve precision through RGB→YUV
 conversion; these are **not native HDR tests**.
 
+## Canonical imazen-26 research follow-up
+
+[The completed research baseline](IMAZEN26_RESEARCH_BASELINE.md) adds150 encodes
+on canonical training origins1000/8100. Rust SVT -1 matches C on10/10 distinct
+cells; all50 cells decode and repeat deterministically. It exposes a substantial
+Rust -1 screenshot timing gap and five libaom/Rust AOM screenshot differences.
+This is a baseline for broader scouting, not the requested minimum corpus set.
+
 ## Method
 
 - Static Linux x86-64 executable; Intel Core Ultra 7 265K, default CPU target,

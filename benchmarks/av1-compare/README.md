@@ -15,7 +15,8 @@ exactly that many OS threads.
 
 Quantizers and speeds are backend-native; equal numbers are not equal effort
 or achieved quality. The signed preset field additionally supports C SVT's
-public research mode -1. Rust SVT does not expose negative presets. C enum
+public research mode -1 in both C and Rust SVT. Rust uses its checked signed
+`NativePreset` and `new_with_preset` constructor. C enum
 entries -2/-3 are rejected by this reference build's public validator and by
 this adapter. No negative value is cast into a Rust unsigned preset.
 

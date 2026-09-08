@@ -23,9 +23,9 @@ results, not an isolated SGR attribution.
 
 | Candidate | AOM behavior | Current SVT behavior | Experiment and acceptance evidence |
 |---|---|---|---|
-| Complete C research preset -1 first | Slow presets retain broader restoration/search options | Rust's unsigned preset carriers cannot express C's public -1 mode; the C header's -2/-3 entries are below this build's accepted minimum | Treat this as C feature coverage. Port the complete signed derivation chain, not a cast or alias of preset 0; validate configuration, search, signaling and decoder reconstruction against C |
+| Complete C research preset -1 first | Slow presets retain broader restoration/search options | Signed -1 is now wired through the Rust pipeline, AVIF wrapper and comparator locally; targeted geometry/tile parity passes, broader parity remains open | Treat this as C feature coverage. Port the complete signed derivation chain, not a cast or alias of preset 0; validate configuration, search, signaling and decoder reconstruction against C |
 | Restoration-unit size search | Speed 0 searches 64..256; higher speeds select size using quality/resolution policy | Both C and Rust fix restoration units at 256 | Add an explicit still extension that searches 64/128/256 using actual signaling cost. Measure high-quality photo and mixed-detail cells; independently decode all unit-size/edge combinations |
-| Self-guided restoration at useful still efforts | Wiener/SGR/switchable competition with speed-dependent pruning; restoration is disabled at AOM speed 5+ | SGR is implemented for the video-key path, but all-intra presets 0+ use disabled SGR controls. C enables it at -1 | First measure/port -1. Then independently test a still override at selected normal presets. Reuse native-depth search, apply and signaling; do not merely set a header bit |
+| Self-guided restoration at useful still efforts | Wiener/SGR/switchable competition with speed-dependent pruning; restoration is disabled at AOM speed 5+ | SGR is wired for the video-key path and native research -1; normal all-intra presets 0+ disable it | First measure/port -1. Then independently test a still override at selected normal presets. Reuse native-depth search, apply and signaling; do not merely set a header bit |
 | Content-adaptive directional pruning | Gradient orientation histogram narrows directional modes; threshold changes by speed | Slow still modes enumerate directions/angle deltas; faster modes use a coarse directional mask and existing staged candidate pruning | Test HOG or a cheaper orientation mask before expensive mode evaluation, with full-search winner retention recorded. Spend any saved time on broader useful candidates and compare at equal time |
 | Learned 8x8 transform-depth pruning | A small model can prune split/non-split after the largest transform evaluation, enabled at speed 6+ | Transform-depth search uses existing coefficient-count exits and transform-type SATD/rate gates; no equivalent learned depth predictor was found | Log exhaustive SVT depth winners first. Validate or retrain for SVT's cost model and residuals; AOM's thresholds/weights cannot be assumed transferable. Measure quality loss versus time saved |
 | Intra-edge filtering policy | The still sequence enables intra-edge filtering by default | SVT all-intra enables it only where its angular-search policy requests it (preset 5 in the normal ladder); video enables it throughout | Low-cost isolated ablation on directional texture/text. Prediction and sequence signaling must change together. Measure before deciding whether the different policy is beneficial |
@@ -38,16 +38,18 @@ branches, not just their comments; several introductory port comments are stale.
 - **C SVT:** `Source/API/EbSvtAv1Enc.h` names MRS=-3, MRP=-2 and MR=-1;
   `Source/API/EbConfigMacros.h` sets normal `MIN_ENC_PRESET=ENC_MR`;
   `Source/Lib/Globals/enc_settings.c::svt_av1_verify_settings` enforces it.
-- **Rust SVT:** `rust/crates/svtav1-encoder/src/speed_config.rs::SpeedConfig`
-  and `rate_arm.rs::eff_enc_mode` use unsigned preset values. Full -1 support
-  requires auditing every derived ladder, including the frame and leaf paths.
+- **Rust SVT:** `rust/crates/svtav1-encoder/src/speed_config.rs::NativePreset`
+  now carries checked -1..13, and `SpeedConfig`/`rate_arm.rs::eff_enc_mode`
+  preserve signed values. The research port map in zenav1-svt records the
+  derivation, search and signaling fixes plus targeted validation evidence.
 - **Restoration size:** SVT `restoration.rs` sets
   `unit_size=RESTORATION_UNITSIZE_MAX` in the real search; C `pcs.c` sets the
   same fixed size. AOM `speed_features.rs::lr_search_sf_allintra` derives
   `min_lr_unit_size`/`max_lr_unit_size`, consumed by the real
   `key_frame.rs::pick_filter_restoration` invocation.
-- **SGR:** SVT `pipeline.rs` supplies default-disabled `SgFilterCtrls` for
-  `ScArm::Allintra` and live derived controls for `ScArm::Video`;
+- **SGR:** SVT `pipeline.rs` now supplies live research controls for
+  `ScArm::Allintra` at -1, disabled controls at normal still presets, and
+  live derived controls for `ScArm::Video`;
   C `enc_mode_config.c::svt_aom_get_sg_filter_level_allintra` enables it for
   `enc_mode <= ENC_MR`. AOM's `lr_search_sf_allintra` supplies live SGR and
   Wiener pruning controls; `key_frame.rs` clears restoration at speed 5+.
