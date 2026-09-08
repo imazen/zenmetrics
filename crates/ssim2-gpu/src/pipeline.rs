@@ -1459,8 +1459,13 @@ impl<R: Runtime> Ssim2<R> {
 
         let score = self.read_and_aggregate()?;
         let ref_digest = self.ref_digest;
-        self.guard_identical_claim(score, || {
-            ref_digest == Some(zenmetrics_gpu_core::input_digest(dist_srgb))
+        self.guard_identical_claim(score, || match ref_digest {
+            Some(d) => d == zenmetrics_gpu_core::input_digest(dist_srgb),
+            // No digest means we cannot show the inputs differ, so stay silent:
+            // the guard fires only on a claim it can disprove. Unreachable via
+            // today's setters (both take sRGB bytes), but it keeps a future
+            // plane-based setter from turning this into a false positive.
+            None => true,
         })?;
 
         Ok(GpuSsim2Result { score })
@@ -1573,8 +1578,13 @@ impl<R: Runtime> Ssim2<R> {
 
         let score = self.aggregate_from_accumulators(&acc_sum, &acc_p4, meta)?;
         let ref_digest = self.ref_digest;
-        self.guard_identical_claim(score, || {
-            ref_digest == Some(zenmetrics_gpu_core::input_digest(dist_srgb))
+        self.guard_identical_claim(score, || match ref_digest {
+            Some(d) => d == zenmetrics_gpu_core::input_digest(dist_srgb),
+            // No digest means we cannot show the inputs differ, so stay silent:
+            // the guard fires only on a claim it can disprove. Unreachable via
+            // today's setters (both take sRGB bytes), but it keeps a future
+            // plane-based setter from turning this into a false positive.
+            None => true,
         })?;
 
         Ok(GpuSsim2Result { score })

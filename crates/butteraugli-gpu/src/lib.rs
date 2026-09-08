@@ -138,6 +138,15 @@ pub enum Error {
     /// Previously an `.expect()`, i.e. a panic no caller could handle
     /// (imazen/zenmetrics#41).
     ReadbackFailed(String),
+    /// The metric reported its **identical-images** value (butteraugli max-norm
+    /// `0.0`) for inputs that are not byte-identical — a silently wrong "these
+    /// are the same image" result. Refused rather than returned.
+    ///
+    /// A max-norm of zero is the strongest possible claim this metric can make:
+    /// it says *no pixel differs at all*. Reaching it for inputs that do differ
+    /// means the comparison did not happen. Byte-identical pairs — every cell
+    /// of a lossless corpus — legitimately score 0.0 and are unaffected.
+    SilentIdenticalClaim { score: f64 },
     /// `compute*` was called with a buffer length that doesn't match
     /// the configured `width × height × 3` of the instance.
     DimensionMismatch { expected: usize, got: usize },
@@ -184,6 +193,11 @@ impl From<enough::StopReason> for Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Error::SilentIdenticalClaim { score } => write!(
+                f,
+                "metric reported the identical-images value ({score}) for inputs that \
+                 are not byte-identical — refusing to return a silently wrong score"
+            ),
             Error::ReadbackFailed(e) => {
                 write!(f, "reading a buffer back from the device failed: {e}")
             }

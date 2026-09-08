@@ -107,6 +107,11 @@ fn malta_norm(w_0gt1: f64, w_0lt1: f64, norm1: f64, use_lf: bool) -> (f32, f32, 
 /// comparisons at the same resolution.
 pub struct Butteraugli<R: Runtime> {
     client: ComputeClient<R>,
+    /// Digest of the cached reference's sRGB bytes, for the
+    /// silent-identical-claim guard on the warm-reference paths, which no
+    /// longer hold those bytes when they score. `None` when no reference is
+    /// cached.
+    ref_digest: Option<u64>,
     /// Width of the buffers and (for strip mode) of the image. For
     /// whole-image mode this equals the image width.
     width: u32,
@@ -392,6 +397,7 @@ impl<R: Runtime> Butteraugli<R> {
 
         Ok(Self {
             client,
+            ref_digest: None,
             width,
             height,
             n,
@@ -761,6 +767,37 @@ impl<R: Runtime> Butteraugli<R> {
     ///
     /// Returns [`Error::DimensionMismatch`] if either input length
     /// doesn't match `width × height × 3`.
+    /// Refuse a score that claims "identical images" for inputs that are not.
+    ///
+    /// A butteraugli max-norm of `0.0` is the strongest claim the metric makes:
+    /// *no pixel differs at all*. A pair that actually differs cannot reach it,
+    /// so this has no false positives by construction — it only fires when the
+    /// score claims identity AND the inputs differ. Byte-identical pairs, which
+    /// are every cell of a lossless corpus, legitimately score 0.0 and pass.
+    ///
+    /// `same` is a closure so the input comparison runs only on the degenerate
+    /// path; the float test short-circuits first.
+    fn guard_identical_claim(
+        &self,
+        r: &GpuButteraugliResult,
+        same: impl FnOnce() -> bool,
+    ) -> Result<()> {
+        if zenmetrics_gpu_core::is_identical_claim(
+            r.score as f64,
+            Self::IDENTICAL_SCORE,
+            zenmetrics_gpu_core::ScaleDirection::LowerIsBetter,
+            same,
+        ) {
+            return Err(Error::SilentIdenticalClaim {
+                score: r.score as f64,
+            });
+        }
+        Ok(())
+    }
+
+    /// Butteraugli's max-norm for a byte-identical pair.
+    const IDENTICAL_SCORE: f64 = 0.0;
+
     pub fn compute(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         self.compute_with_options(ref_srgb, dist_srgb, &ButteraugliParams::default())
     }
@@ -788,11 +825,9 @@ impl<R: Runtime> Butteraugli<R> {
         self.populate_linear_from_srgb(true, ref_srgb);
         self.populate_linear_from_srgb(false, dist_srgb);
         self.run_pipeline_from_linear(true, true);
-        Ok(reduction::reduce::<R>(
-            &self.client,
-            self.diffmap_buf.clone(),
-            self.n,
-        ))
+        let out = reduction::reduce::<R>(&self.client, self.diffmap_buf.clone(), self.n);
+        self.guard_identical_claim(&out, || ref_srgb == dist_srgb)?;
+        Ok(out)
     }
 
     /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
@@ -916,6 +951,9 @@ impl<R: Runtime> Butteraugli<R> {
         }
         validate_params(params)?;
         self.check_dims(ref_srgb)?;
+        // Digest for the silent-identical-claim guard: the warm-reference paths
+        // no longer hold these bytes when they score.
+        self.ref_digest = Some(zenmetrics_gpu_core::input_digest(ref_srgb));
         self.set_params_recursive(params);
         self.populate_linear_from_srgb(true, ref_srgb);
         if let Some(half) = self.half_res.as_deref() {
@@ -953,6 +991,10 @@ impl<R: Runtime> Butteraugli<R> {
                 got: ref_srgb.len(),
             });
         }
+        // Must be recorded here too, not only in `set_reference_with_options`:
+        // that fn delegates here for strip mode BEFORE taking a digest, and a
+        // missing digest would silence the guard on every strip warm-ref call.
+        self.ref_digest = Some(zenmetrics_gpu_core::input_digest(ref_srgb));
         // Lazy-allocate the whole-image sibling. Buffers are
         // (image_w × image_h × 50 planes × 4 B); for a 24 MP source
         // that's ~5 GB. The caller chose strip mode specifically
@@ -1052,6 +1094,13 @@ impl<R: Runtime> Butteraugli<R> {
         params: &ButteraugliParams,
     ) -> Result<()> {
         validate_params(params)?;
+        // This reference arrives as linear planes, so there are no sRGB bytes to
+        // digest. Clearing is what makes that safe: a digest left over from an
+        // earlier `set_reference` would be compared against the NEW reference's
+        // distorted input and report "differ" for a pair that matches, firing
+        // the guard on a correct score. `None` disables the guard for this
+        // reference instead, which is the honest state -- it cannot be checked.
+        self.ref_digest = None;
         self.set_params_recursive(params);
         // Install caller-supplied linear-RGB plane handles into lin_a.
         // The opsin / frequency / mask kernels will overwrite these
@@ -1191,11 +1240,17 @@ impl<R: Runtime> Butteraugli<R> {
         self.populate_linear_from_srgb(false, dist_srgb);
         // do_a=false: reference side is cached; do_b=true: distorted side needs computing.
         self.run_pipeline_from_linear(false, true);
-        Ok(reduction::reduce::<R>(
-            &self.client,
-            self.diffmap_buf.clone(),
-            self.n,
-        ))
+        let out = reduction::reduce::<R>(&self.client, self.diffmap_buf.clone(), self.n);
+        let ref_digest = self.ref_digest;
+        self.guard_identical_claim(&out, || match ref_digest {
+            Some(d) => d == zenmetrics_gpu_core::input_digest(dist_srgb),
+            // The reference was set from linear planes, so there are no sRGB
+            // bytes to digest and we cannot show the inputs differ. Report
+            // "same" to keep the guard silent: it must only fire on a claim it
+            // can actually disprove, never on the absence of evidence.
+            None => true,
+        })?;
+        Ok(out)
     }
 
     /// Mode E strip walker: dist walks in strips, ref-side state is
