@@ -12,9 +12,9 @@ rows=[json.loads(s) for s in Path(a.rows).read_text().splitlines() if s.strip()]
 out=Path(a.out);out.mkdir(parents=True,exist_ok=True)
 groups=collections.defaultdict(list)
 for r in rows:
- c=r['config'];key=(r['source'],c['width'],c['height'],c['backend'],c.get('bit_depth',8),c.get('chroma','420'),c['speed'],c['quantizer'],c['threads'],c.get('tune'),c.get('scm'),c.get('sb128',False),r.get('svt_reference') or c.get('svt_reference') or ('svt-hybrid-3115c0c1b23e860dfd75c94f6740e0298182dd13' if c['backend'] in ('zenav1-svt','c-svt-av1') else ''),c.get('zen_intra_edge_filter',False),r['binary_sha256'],r['source_sha256'],r['timing_scope'])
+ c=r['config'];key=(r['source'],c['width'],c['height'],c['backend'],c.get('bit_depth',8),c.get('chroma','420'),c['speed'],c['quantizer'],c['threads'],c.get('tune'),c.get('scm'),c.get('sb128',False),r.get('svt_reference') or c.get('svt_reference') or ('svt-hybrid-3115c0c1b23e860dfd75c94f6740e0298182dd13' if c['backend'] in ('zenav1-svt','c-svt-av1') else ''),c.get('zen_intra_edge_filter',False),c.get('zen_restoration_unit_search',False),r['binary_sha256'],r['source_sha256'],r['timing_scope'],r.get('timing_cohort_sha256','legacy-unrecorded'))
  groups[key].append(r)
-fields=['source','width','height','backend','depth','chroma','preset','q','threads','tune','scm','sb128','svt_reference','zen_intra_edge_filter','binary_sha256','source_sha256','timing_scope']
+fields=['source','width','height','backend','depth','chroma','preset','q','threads','tune','scm','sb128','svt_reference','zen_intra_edge_filter','zen_restoration_unit_search','binary_sha256','source_sha256','timing_scope','timing_cohort_sha256']
 cells=[]
 for key,rs in sorted(groups.items(),key=lambda x:str(x[0])):
  if len({r['output_sha256'] for r in rs})!=1:raise SystemExit(f'nondeterministic output: {key}')

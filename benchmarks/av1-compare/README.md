@@ -24,6 +24,14 @@ AOM uses ALL_INTRA with explicit SB64 (optional SB128). SVT uses still-picture
 CQP (AQ0), with optional tune and screen-content controls. Unsupported requests
 are errors before FFI. The defaults retain each library's coding-tool policy.
 
+Rust SVT experiments are explicit arm/config fields:
+`zen_intra_edge_filter` and `zen_restoration_unit_search` (both default false).
+Both require native -1 and 420. The restoration experiment searches legal
+256/128/64-pixel units with SVT filter/RD costs and frame signaling costs.
+Its selected size reaches the coded syntax and reconstruction. Analysis keeps
+each experimental setting in the cell identity; measured gains are required
+before choosing an automatic bundle. These fields are not C preset values.
+
 C source is taken from the pinned sibling submodules, built separately under
 Cargo OUT_DIR with multithreading enabled, native tuning off and FP contraction
 off. The differential oracles and their caches are untouched. The small nested
@@ -80,6 +88,11 @@ Standalone `verify-measurement` remains available for older saved measurements.
 All arms share BT.709 limited-range conversion. Conversion-only ceilings and
 codec-only scores accompany end-to-end scores. High-depth conversion of RGB8
 sources is not native HDR coverage. Repeated trials rotate arm order.
+Linux x86 measurement jobs record `timing-environment.json` with CPU model(s),
+OS/architecture and a hashed worker identity, and put its hash in each row.
+Analysis keeps these timing cohorts separate. Older rows remain explicitly
+`legacy-unrecorded` and require their external hardware provenance; they must
+not be pooled across hosts. A missing CPU/worker identity fails measurement.
 
 `declare` consumes canonical zenfleet EncodeDeclareItem JSONL for codec
 `av1-compare`, q=0. Each job bundles a source/size/settings comparison with

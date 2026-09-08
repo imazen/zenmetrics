@@ -19,7 +19,7 @@ def select(rows, budgets):
         "tune", "scm", "sb128", "target_ssim2",
     )
     provenance = (
-        "svt_reference", "zen_intra_edge_filter", "binary_sha256", "source_sha256", "timing_scope",
+        "svt_reference", "zen_intra_edge_filter", "zen_restoration_unit_search", "binary_sha256", "source_sha256", "timing_scope", "timing_cohort_sha256",
     )
     for row in rows:
         if int(row["rounds"]) < 3:

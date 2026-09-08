@@ -19,6 +19,7 @@ def main():
     parser.add_argument("binary", type=Path)
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--restoration-units", action="store_true")
     args = parser.parse_args()
     binary, source, output = (p.resolve() for p in (args.binary, args.source, args.output))
     output.mkdir()
@@ -32,6 +33,11 @@ def main():
              "bit_depth": depth, "svt_reference": reference,
              "zen_intra_edge_filter": edge}
             for depth in (8, 10) for edge in (False, True)]
+    if args.restoration_units:
+        arms.extend({"backend": "zenav1-svt", "speed": -1, "quantizer": 32,
+                     "bit_depth": depth, "svt_reference": reference,
+                     "zen_restoration_unit_search": True} for depth in (8, 10))
+    expected_witnesses = len(arms)
     arms.append({"backend": "libaom", "speed": 6, "quantizer": 32})
     item = {"image_path": source.name, "source_sha": hashlib.sha256(source.read_bytes()).hexdigest(),
             "codec": "av1-compare", "q": 0,
@@ -59,10 +65,12 @@ def main():
         validation = json.load(archive.extractfile("comparison/validation.json"))
         rows = [json.loads(line) for line in archive.extractfile("comparison/rows.jsonl")]
         witnesses = list(archive.extractfile("comparison/reconstruction-verification.jsonl"))
-        assert validation["complete"] and validation["verified_svt_cells"] == 4
+        assert validation["complete"] and validation["verified_svt_cells"] == expected_witnesses
         assert validation["svt_reconstruction_required"]
-        assert len(rows) == 15 and len(witnesses) == 4
+        assert len(rows) == len(arms) * 3 and len(witnesses) == expected_witnesses
+        hardware = archive.extractfile("comparison/timing-environment.json").read()
         for row in rows:
+            assert row["timing_cohort_sha256"] == hashlib.sha256(hardware).hexdigest()
             payload = archive.extractfile(f"comparison/obu/{row['output_sha256']}.obu").read()
             assert hashlib.sha256(payload).hexdigest() == row["output_sha256"]
 
@@ -126,6 +134,7 @@ def main():
     summary = {"binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                "source_sha256": item["source_sha"], "measured_rows": len(rows),
                "verified_svt_cells": len(witnesses), "failure_blob_sha256": saved[0].name,
+               "restoration_unit_search_tested": args.restoration_units,
                "worker_catalog": catalog, "complete": True}
     (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary), flush=True)

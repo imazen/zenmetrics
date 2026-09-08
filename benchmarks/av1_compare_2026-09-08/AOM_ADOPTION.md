@@ -24,7 +24,7 @@ results, not an isolated SGR attribution.
 | Candidate | AOM behavior | Current SVT behavior | Experiment and acceptance evidence |
 |---|---|---|---|
 | Complete C research preset -1 first | Slow presets retain broader restoration/search options | Signed -1 is now wired through the Rust pipeline, AVIF wrapper and comparator locally; targeted geometry/tile parity passes, broader parity remains open | Treat this as C feature coverage. Port the complete signed derivation chain, not a cast or alias of preset 0; validate configuration, search, signaling and decoder reconstruction against C |
-| Restoration-unit size search | Speed 0 searches 64..256; higher speeds select size using quality/resolution policy | Both C and Rust fix restoration units at 256 | Add an explicit still extension that searches 64/128/256 using actual signaling cost. Measure high-quality photo and mixed-detail cells; independently decode all unit-size/edge combinations |
+| Restoration-unit size search | Speed 0 searches 64..256; higher speeds select size using quality/resolution policy | C and the native Rust path fix units at 256; opt-in Rust search now evaluates legal 256/128/64 sizes | Implemented locally with SVT unit costs and frame signaling cost. Ten enabled native8/10 reconstruction cases pass, including odd/tile/SB128 boundaries. RD/time ablation pending |
 | Self-guided restoration at useful still efforts | Wiener/SGR/switchable competition with speed-dependent pruning; restoration is disabled at AOM speed 5+ | SGR is wired for the video-key path and native research -1; normal all-intra presets 0+ disable it | First measure/port -1. Then independently test a still override at selected normal presets. Reuse native-depth search, apply and signaling; do not merely set a header bit |
 | Content-adaptive directional pruning | Gradient orientation histogram narrows directional modes; threshold changes by speed | Slow still modes enumerate directions/angle deltas; faster modes use a coarse directional mask and existing staged candidate pruning | Test HOG or a cheaper orientation mask before expensive mode evaluation, with full-search winner retention recorded. Spend any saved time on broader useful candidates and compare at equal time |
 | Learned 8x8 transform-depth pruning | A small model can prune split/non-split after the largest transform evaluation, enabled at speed 6+ | Transform-depth search uses existing coefficient-count exits and transform-type SATD/rate gates; no equivalent learned depth predictor was found | Log exhaustive SVT depth winners first. Validate or retrain for SVT's cost model and residuals; AOM's thresholds/weights cannot be assumed transferable. Measure quality loss versus time saved |
@@ -42,9 +42,9 @@ branches, not just their comments; several introductory port comments are stale.
   now carries checked -1..13, and `SpeedConfig`/`rate_arm.rs::eff_enc_mode`
   preserve signed values. The research port map in zenav1-svt records the
   derivation, search and signaling fixes plus targeted validation evidence.
-- **Restoration size:** SVT `restoration.rs` sets
-  `unit_size=RESTORATION_UNITSIZE_MAX` in the real search; C `pcs.c` sets the
-  same fixed size. AOM `speed_features.rs::lr_search_sf_allintra` derives
+- **Restoration size:** SVT `restoration.rs` keeps 256-pixel units in the native
+  path; the explicit `AomRestorationUnitSearch` consumer now evaluates legal
+  smaller sizes. C `pcs.c` sets the fixed size. AOM `speed_features.rs::lr_search_sf_allintra` derives
   `min_lr_unit_size`/`max_lr_unit_size`, consumed by the real
   `key_frame.rs::pick_filter_restoration` invocation.
 - **SGR:** SVT `pipeline.rs` now supplies live research controls for

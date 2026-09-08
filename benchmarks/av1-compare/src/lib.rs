@@ -81,6 +81,8 @@ pub struct Config {
     pub svt_reference: Option<SvtSource>,
     #[serde(default)]
     pub zen_intra_edge_filter: bool,
+    #[serde(default)]
+    pub zen_restoration_unit_search: bool,
 }
 impl Config {
     /// Legacy requests used the hybrid source. Always resolve that identity in
@@ -155,12 +157,12 @@ impl Config {
                 return Err("pristine reference requires Rust SVT 420; linked C is hybrid".into());
             }
         }
-        if self.zen_intra_edge_filter
+        if (self.zen_intra_edge_filter || self.zen_restoration_unit_search)
             && (!matches!(self.backend, Backend::Svt)
                 || self.speed != -1
                 || self.chroma != Chroma::Cs420)
         {
-            return Err("AOM intra-edge experiment requires Rust SVT native -1 and 420".into());
+            return Err("Zen experiments require Rust SVT native -1 and 420".into());
         }
         if self.sb128 && !matches!(self.backend, Backend::Libaom | Backend::Aom) {
             return Err("explicit SB size is currently an AOM arm".into());
@@ -280,6 +282,11 @@ fn encode_svt(
         p.enhancements = p
             .enhancements
             .with(svtav1::avif::ZenEnhancement::AomIntraEdgeFilter);
+    }
+    if cfg.zen_restoration_unit_search {
+        p.enhancements = p
+            .enhancements
+            .with(svtav1::avif::ZenEnhancement::AomRestorationUnitSearch);
     }
     if let Some(tune) = cfg.tune {
         p.hdr.tune = tune;
@@ -599,6 +606,7 @@ mod tests {
                 sb128: false,
                 svt_reference: None,
                 zen_intra_edge_filter: false,
+                zen_restoration_unit_search: false,
             };
             let obu = encode(cfg, &pixels).unwrap_or_else(|e| panic!("{backend:?}: {e}"));
             check_decode(&obu, 64, 64).unwrap_or_else(|e| panic!("{backend:?}: {e}"));
@@ -620,6 +628,7 @@ mod tests {
             sb128: false,
             svt_reference: None,
             zen_intra_edge_filter: false,
+            zen_restoration_unit_search: false,
         };
         let pixels: Vec<u8> = (0..64 * 64 * 3 / 2)
             .map(|i| ((i * 37 + i / 13 * 53) % 220 + 16) as u8)
@@ -692,6 +701,7 @@ mod tests {
             sb128: false,
             svt_reference: None,
             zen_intra_edge_filter: false,
+            zen_restoration_unit_search: false,
         };
         assert!(encode(cfg, &[]).is_err());
         assert!(
@@ -801,8 +811,47 @@ mod format_tests {
             sb128: false,
             svt_reference: None,
             zen_intra_edge_filter: false,
+            zen_restoration_unit_search: false,
         }
     }
+    #[test]
+    fn restoration_unit_experiment_reaches_encode_and_exact_replay() {
+        let mut cfg = config(Backend::Svt, 8, Chroma::Cs420);
+        cfg.width = 192;
+        cfg.height = 160;
+        cfg.quantizer = 32;
+        cfg.speed = -1;
+        cfg.scm = Some(0);
+        cfg.svt_reference = Some(SvtSource::Mainline420);
+        let mut raw = Vec::new();
+        for (w, h, seed) in [(192usize, 160usize, 0usize), (96, 80, 23), (96, 80, 71)] {
+            raw.extend((0..w * h).map(|i| {
+                let (x, y) = (i % w, i / w);
+                let noise = if x > w / 2 {
+                    (x * 71 + y * 113 + x * y * 7 + seed) % 37
+                } else {
+                    0
+                };
+                (60 + (x * 3 + y * 2 + seed) % 128 + noise) as u8
+            }));
+        }
+        let native = encode(cfg, &raw).unwrap();
+        cfg.zen_restoration_unit_search = true;
+        let enhanced = encode(cfg, &raw).unwrap();
+        assert_ne!(native, enhanced);
+        verify_svt_reconstruction(cfg, &raw, &enhanced).unwrap();
+        assert!(verify_svt_reconstruction(cfg, &raw, &native).is_err());
+        let json = serde_json::to_string(&cfg).unwrap();
+        let replay: Config = serde_json::from_str(&json).unwrap();
+        assert!(replay.zen_restoration_unit_search);
+        assert_eq!(encode(replay, &raw).unwrap(), enhanced);
+        cfg.speed = 0;
+        assert!(cfg.validate_configuration().is_err());
+        cfg.speed = -1;
+        cfg.backend = Backend::CSvt;
+        assert!(cfg.validate_configuration().is_err());
+    }
+
     #[test]
     fn explicit_reference_and_intra_edge_are_encoded_and_recorded() {
         let raw = include_bytes!(
@@ -862,6 +911,7 @@ mod format_tests {
             Config {
                 backend: Backend::CSvt,
                 zen_intra_edge_filter: false,
+                zen_restoration_unit_search: false,
                 ..cfg
             }
             .validate_configuration()

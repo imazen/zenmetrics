@@ -25,6 +25,8 @@ pub struct Arm {
     svt_reference: Option<SvtSource>,
     #[serde(default)]
     zen_intra_edge_filter: bool,
+    #[serde(default)]
+    zen_restoration_unit_search: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -43,6 +45,32 @@ fn one() -> u32 {
 }
 fn sha(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+/// Keep CPU/worker timing cohorts separate without publishing host identifiers.
+/// Captured once, outside the timed region. Binary and configuration identities
+/// remain separate row keys; neither is a substitute for hardware provenance.
+fn timing_environment() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let worker =
+        std::env::var("ZEN_WORKER").or_else(|_| fs::read_to_string("/proc/sys/kernel/hostname"))?;
+    let cpuinfo = fs::read_to_string("/proc/cpuinfo")?;
+    let mut models: Vec<_> = cpuinfo
+        .lines()
+        .filter_map(|line| line.split_once(':'))
+        .filter(|(key, _)| key.trim() == "model name")
+        .map(|(_, value)| value.trim().to_owned())
+        .collect();
+    models.sort();
+    models.dedup();
+    if models.is_empty() || worker.trim().is_empty() {
+        return Err("measurement requires a CPU model and worker identity".into());
+    }
+    Ok(serde_json::json!({
+        "cpu_models": models,
+        "worker_identity_sha256": sha(worker.trim().as_bytes()),
+        "arch": std::env::consts::ARCH,
+        "os": std::env::consts::OS,
+    }))
 }
 fn score(a: &[u8], b: &[u8], w: u32, h: u32) -> Result<f64, Box<dyn std::error::Error>> {
     let image = |p: &[u8]| {
@@ -79,8 +107,12 @@ fn run_checked(
         return Err("invalid measurement grid".into());
     }
     let expects_svt = req.arms.iter().any(|a| matches!(a.backend, Backend::Svt));
+    let hardware = timing_environment()?;
+    let hardware_bytes = serde_json::to_vec(&hardware)?;
+    let timing_cohort = sha(&hardware_bytes);
     let out = Path::new(&req.output_dir);
     fs::create_dir(out)?;
+    fs::write(out.join("timing-environment.json"), hardware_bytes)?;
     fs::create_dir(out.join("obu"))?;
     let mut rows = fs::OpenOptions::new()
         .write(true)
@@ -116,6 +148,7 @@ fn run_checked(
                     sb128: arm.sb128,
                     svt_reference: arm.svt_reference,
                     zen_intra_edge_filter: arm.zen_intra_edge_filter,
+                    zen_restoration_unit_search: arm.zen_restoration_unit_search,
                 };
                 cfg.validate_configuration()?;
                 let pixels = crate::pixels::prepare(reference.as_raw(), cfg)?;
@@ -146,6 +179,7 @@ fn run_checked(
                     let decoded = decode_planar(&obu, cfg)?;
                     let rgb = crate::pixels::rgb_from_samples(&decoded, cfg)?;
                     let row = serde_json::json!({"protocol":"av1-api-planar-measure-v3","config":cfg,"round":round,
+                        "timing_cohort_sha256":timing_cohort,
                         "source":Path::new(&input).file_name().unwrap().to_string_lossy(),"source_sha256":sha(&source),
                         "input_sha256":input_sha,"binary_sha256":binary_sha,"revision":cfg.revision(),"svt_reference":cfg.resolved_svt_reference(),
                         "output_sha256":output_sha,"bytes":obu.len(),"api_elapsed_ns":ns,
