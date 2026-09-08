@@ -18,10 +18,13 @@ def select(rows, budgets):
         "source", "width", "height", "backend", "depth", "chroma", "threads",
         "tune", "scm", "sb128", "target_ssim2",
     )
+    provenance = (
+        "svt_reference", "zen_intra_edge_filter", "binary_sha256", "source_sha256", "timing_scope",
+    )
     for row in rows:
         if int(row["rounds"]) < 3:
             raise ValueError("time-budget comparisons require three completed rounds")
-        groups[tuple(row[k] for k in identity)].append(row)
+        groups[tuple(row[k] for k in identity) + tuple(row.get(k, "") for k in provenance)].append(row)
     for _, choices in sorted(groups.items()):
         for budget in budgets:
             eligible = [r for r in choices if float(r["estimated_ms"]) <= budget]

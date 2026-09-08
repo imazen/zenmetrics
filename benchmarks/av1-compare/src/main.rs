@@ -1,6 +1,7 @@
 mod fleet;
 mod measure;
 mod pixels;
+mod verify;
 // One process, all five encoder implementations. Reads a request on stdin;
 // emits one provenance/timing row after writing and independently checking OBU.
 use serde::Deserialize;
@@ -27,6 +28,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::io::stdin().take(65537).read_to_string(&mut json)?;
     if json.len() > 65536 {
         return Err("request too large".into());
+    }
+    if command.as_deref() == Some("verify-measurement") {
+        return verify::run(serde_json::from_str(&json)?);
     }
     if std::env::args().nth(1).as_deref() == Some("measure") {
         return measure::run(serde_json::from_str(&json)?, true);
@@ -64,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "{}",
         serde_json::json!({"protocol":"av1-api-planar-v2", "config":req.config,
-        "revision": req.config.revision(), "binary_sha256":binary_sha, "input_sha256": source_sha,
+        "revision": req.config.revision(), "svt_reference": req.config.resolved_svt_reference(), "binary_sha256":binary_sha, "input_sha256": source_sha,
         "output_sha256": format!("{:x}", Sha256::digest(&obu)), "bytes":obu.len(),
         "api_elapsed_ns":elapsed_ns, "timing_scope":"fresh-lifecycle-including-plane-preparation",
         "decode_checked":"libaom", "c_fp_contract":"off", "aom_sb_size":64})

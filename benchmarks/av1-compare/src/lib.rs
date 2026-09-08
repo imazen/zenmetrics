@@ -37,6 +37,22 @@ impl Chroma {
         }
     }
 }
+/// Reference used for SVT decisions, independent of the Rust build revision.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum SvtSource {
+    #[serde(rename = "svt-mainline-4.2.0-9292ec8e32bce26f781f277ec8739b53426c4300")]
+    Mainline420,
+    #[serde(rename = "svt-hybrid-3115c0c1b23e860dfd75c94f6740e0298182dd13")]
+    Hybrid3115,
+}
+impl SvtSource {
+    fn reference(self) -> svtav1::avif::SvtReference {
+        match self {
+            Self::Mainline420 => svtav1::avif::SvtReference::Mainline420,
+            Self::Hybrid3115 => svtav1::avif::SvtReference::Hybrid3115,
+        }
+    }
+}
 fn eight() -> u8 {
     8
 }
@@ -61,8 +77,23 @@ pub struct Config {
     pub scm: Option<u8>,
     #[serde(default)]
     pub sb128: bool,
+    #[serde(default)]
+    pub svt_reference: Option<SvtSource>,
+    #[serde(default)]
+    pub zen_intra_edge_filter: bool,
 }
 impl Config {
+    /// Legacy requests used the hybrid source. Always resolve that identity in
+    /// output records, including requests which omit the explicit selector.
+    pub fn resolved_svt_reference(&self) -> Option<&'static str> {
+        matches!(self.backend, Backend::CSvt | Backend::Svt).then(|| {
+            self.svt_reference
+                .unwrap_or(SvtSource::Hybrid3115)
+                .reference()
+                .id()
+        })
+    }
+
     pub fn plane_lengths(&self) -> (usize, usize) {
         let (sx, sy) = self.chroma.shifts();
         (
@@ -114,6 +145,23 @@ impl Config {
         if self.tune.is_some_and(|v| v > 4) || self.scm.is_some_and(|v| v > 2) {
             return Err("SVT tune/SCM outside supported range".into());
         }
+        if let Some(reference) = self.svt_reference {
+            if !matches!(self.backend, Backend::CSvt | Backend::Svt) {
+                return Err("SVT reference requires an SVT backend".into());
+            }
+            if reference == SvtSource::Mainline420
+                && (matches!(self.backend, Backend::CSvt) || self.chroma == Chroma::Mono)
+            {
+                return Err("pristine reference requires Rust SVT 420; linked C is hybrid".into());
+            }
+        }
+        if self.zen_intra_edge_filter
+            && (!matches!(self.backend, Backend::Svt)
+                || self.speed != -1
+                || self.chroma != Chroma::Cs420)
+        {
+            return Err("AOM intra-edge experiment requires Rust SVT native -1 and 420".into());
+        }
         if self.sb128 && !matches!(self.backend, Backend::Libaom | Backend::Aom) {
             return Err("explicit SB size is currently an AOM arm".into());
         }
@@ -153,6 +201,147 @@ impl Config {
         }
     }
 }
+
+/// Replay an SVT measurement outside its timed interval and verify the exact
+/// measured stream against the encoder's final reconstruction. Requiring the
+/// same bytes prevents a differently configured replay from passing the gate.
+pub fn verify_svt_reconstruction(
+    cfg: Config,
+    pixels: &[u8],
+    expected: &[u8],
+) -> Result<(), String> {
+    cfg.validate(pixels)?;
+    if !matches!(cfg.backend, Backend::Svt) {
+        return Err("encoder reconstruction verification requires Rust SVT".into());
+    }
+    let (yn, cn) = cfg.plane_lengths();
+    let bps = if cfg.bit_depth == 8 { 1 } else { 2 };
+    let (y, uv) = pixels.split_at(yn * bps);
+    let (u, v) = uv.split_at(cn * bps);
+    encode_svt(cfg, y, u, v, Some(expected)).map(|_| ())
+}
+
+fn crop_svt_recon<T: Copy + Into<u16>>(
+    planes: &(Vec<T>, Vec<T>, Vec<T>),
+    stride: usize,
+    cfg: Config,
+) -> Vec<u16> {
+    let mut result = Vec::new();
+    for (plane, data) in [&planes.0, &planes.1, &planes.2].into_iter().enumerate() {
+        if plane > 0 && cfg.chroma == Chroma::Mono {
+            break;
+        }
+        let shift = usize::from(plane > 0);
+        let width = (cfg.width as usize).div_ceil(1 << shift);
+        let height = (cfg.height as usize).div_ceil(1 << shift);
+        let stride = stride.div_ceil(1 << shift);
+        for row in 0..height {
+            result.extend(
+                data[row * stride..row * stride + width]
+                    .iter()
+                    .copied()
+                    .map(Into::into),
+            );
+        }
+    }
+    result
+}
+
+fn encode_svt(
+    cfg: Config,
+    y: &[u8],
+    u: &[u8],
+    v: &[u8],
+    expected_obu: Option<&[u8]>,
+) -> Result<Vec<u8>, String> {
+    let w = cfg.width as usize;
+    use svtav1::encoder::{
+        pipeline::EncodePipeline,
+        rate_control::{RcConfig, RcMode},
+        speed_config::NativePreset,
+    };
+    let rc = RcConfig {
+        mode: RcMode::Cqp,
+        qp: cfg.quantizer as u8,
+        ..Default::default()
+    };
+    let preset = NativePreset::new(i8::try_from(cfg.speed).map_err(|e| e.to_string())?)
+        .ok_or("native SVT preset out of range")?;
+    let mut p = EncodePipeline::new_with_preset(cfg.width, cfg.height, preset, rc, 0, 1)
+        .with_chroma_420(cfg.chroma == Chroma::Cs420)
+        .with_thread_count(cfg.threads as usize)
+        .with_bit_depth(cfg.bit_depth)
+        .with_recon_output(expected_obu.is_some());
+    p.reference = cfg
+        .svt_reference
+        .unwrap_or(SvtSource::Hybrid3115)
+        .reference();
+    if cfg.zen_intra_edge_filter {
+        p.enhancements = p
+            .enhancements
+            .with(svtav1::avif::ZenEnhancement::AomIntraEdgeFilter);
+    }
+    if let Some(tune) = cfg.tune {
+        p.hdr.tune = tune;
+    }
+    if let Some(scm) = cfg.scm {
+        p.hdr.screen_content_mode = Some(scm);
+    }
+    let r = if cfg.bit_depth == 8 {
+        if cfg.chroma == Chroma::Mono {
+            p.try_encode_frame(y, w)
+        } else {
+            p.try_encode_frame_420(y, u, v, w)
+        }
+    } else {
+        let s = [y, u, v].map(|p| {
+            p.as_chunks::<2>()
+                .0
+                .iter()
+                .map(|p| u16::from_le_bytes([p[0], p[1]]))
+                .collect::<Vec<_>>()
+        });
+        if cfg.chroma == Chroma::Mono {
+            p.try_encode_frame_hbd(&s[0], w)
+        } else {
+            p.try_encode_frame_420_hbd(&s[0], &s[1], &s[2], w)
+        }
+    };
+    let obu = r.map_err(|e| e.to_string())?;
+    if let Some(expected) = expected_obu {
+        if obu != expected {
+            return Err("reconstruction verification did not reproduce measured OBU bytes".into());
+        }
+        let recon = if cfg.bit_depth == 8 {
+            crop_svt_recon(
+                p.last_recon
+                    .as_ref()
+                    .ok_or("missing native8 reconstruction")?,
+                p.width as usize,
+                cfg,
+            )
+        } else {
+            crop_svt_recon(
+                p.last_recon10_final
+                    .as_ref()
+                    .ok_or("missing native10 reconstruction")?,
+                p.width as usize,
+                cfg,
+            )
+        };
+        let decoded = decode_planar(&obu, cfg)?;
+        if recon != decoded {
+            return Err(format!(
+                "encoder/decoder reconstruction mismatch: first sample {:?}, expected {} samples, decoded {}",
+                recon.iter().zip(&decoded).position(|(a, b)| a != b),
+                recon.len(),
+                decoded.len()
+            ));
+        }
+    }
+    Ok(obu)
+}
+
 #[repr(C)]
 struct COutput {
     data: *mut u8,
@@ -269,45 +458,7 @@ pub fn encode(cfg: Config, pixels: &[u8]) -> Result<Vec<u8>, String> {
             // SAFETY: successful C call owns out.len initialized bytes until Drop.
             Ok(unsafe { std::slice::from_raw_parts(out.data, out.len) }.to_vec())
         }
-        Backend::Svt => {
-            use svtav1::encoder::{
-                pipeline::EncodePipeline,
-                rate_control::{RcConfig, RcMode},
-                speed_config::NativePreset,
-            };
-            let rc = RcConfig {
-                mode: RcMode::Cqp,
-                qp: cfg.quantizer as u8,
-                ..Default::default()
-            };
-            let preset = NativePreset::new(i8::try_from(cfg.speed).map_err(|e| e.to_string())?)
-                .ok_or("native SVT preset out of range")?;
-            let mut p = EncodePipeline::new_with_preset(cfg.width, cfg.height, preset, rc, 0, 1)
-                .with_chroma_420(cfg.chroma == Chroma::Cs420)
-                .with_thread_count(cfg.threads as usize)
-                .with_bit_depth(cfg.bit_depth);
-            if let Some(tune) = cfg.tune {
-                p.hdr.tune = tune;
-            }
-            if let Some(scm) = cfg.scm {
-                p.hdr.screen_content_mode = Some(scm);
-            }
-            let r = if cfg.bit_depth == 8 {
-                if cfg.chroma == Chroma::Mono {
-                    p.try_encode_frame(y, w)
-                } else {
-                    p.try_encode_frame_420(y, u, v, w)
-                }
-            } else {
-                let s = samples();
-                if cfg.chroma == Chroma::Mono {
-                    p.try_encode_frame_hbd(&s[0], w)
-                } else {
-                    p.try_encode_frame_420_hbd(&s[0], &s[1], &s[2], w)
-                }
-            };
-            r.map_err(|e| e.to_string())
-        }
+        Backend::Svt => encode_svt(cfg, y, u, v, None),
         Backend::Aom => {
             let mut k = aom_encode::key_frame::KeyFrameConfig::allintra_speed0(
                 w,
@@ -446,6 +597,8 @@ mod tests {
                 tune: None,
                 scm: None,
                 sb128: false,
+                svt_reference: None,
+                zen_intra_edge_filter: false,
             };
             let obu = encode(cfg, &pixels).unwrap_or_else(|e| panic!("{backend:?}: {e}"));
             check_decode(&obu, 64, 64).unwrap_or_else(|e| panic!("{backend:?}: {e}"));
@@ -465,6 +618,8 @@ mod tests {
             tune: None,
             scm: None,
             sb128: false,
+            svt_reference: None,
+            zen_intra_edge_filter: false,
         };
         let pixels: Vec<u8> = (0..64 * 64 * 3 / 2)
             .map(|i| ((i * 37 + i / 13 * 53) % 220 + 16) as u8)
@@ -492,6 +647,15 @@ mod tests {
             .expect("Rust native research preset -1");
             decode_planar(&c, cfg).unwrap();
             decode_planar(&rust, cfg).unwrap();
+            verify_svt_reconstruction(
+                Config {
+                    backend: Backend::Svt,
+                    ..cfg
+                },
+                &input,
+                &rust,
+            )
+            .unwrap();
             assert_eq!(c, rust, "research preset parity at {bit_depth} bits");
         }
         for backend in [Backend::Libaom, Backend::Aom, Backend::Rav1e] {
@@ -526,6 +690,8 @@ mod tests {
             tune: None,
             scm: None,
             sb128: false,
+            svt_reference: None,
+            zen_intra_edge_filter: false,
         };
         assert!(encode(cfg, &[]).is_err());
         assert!(
@@ -633,7 +799,74 @@ mod format_tests {
             tune: None,
             scm: None,
             sb128: false,
+            svt_reference: None,
+            zen_intra_edge_filter: false,
         }
+    }
+    #[test]
+    fn explicit_reference_and_intra_edge_are_encoded_and_recorded() {
+        let raw = include_bytes!(
+            "../../../../zenav1-svt/rust/svtav1/tests/fixtures/reference_chroma/diag64-8.yuv"
+        );
+        let mut cfg = config(Backend::Svt, 8, Chroma::Cs420);
+        cfg.width = 64;
+        cfg.height = 64;
+        cfg.quantizer = 48;
+        cfg.speed = 0;
+        cfg.svt_reference = Some(SvtSource::Mainline420);
+        let pristine = encode(cfg, raw).unwrap();
+        assert_eq!(
+            pristine,
+            include_bytes!(
+                "../../../../zenav1-svt/rust/svtav1/tests/fixtures/reference_chroma/diag64-8-p0-mainline.obu"
+            )
+        );
+        let hybrid = encode(
+            Config {
+                svt_reference: Some(SvtSource::Hybrid3115),
+                ..cfg
+            },
+            raw,
+        )
+        .unwrap();
+        assert_ne!(pristine, hybrid);
+        cfg.speed = -1;
+        let native = encode(cfg, raw).unwrap();
+        cfg.zen_intra_edge_filter = true;
+        let enhanced = encode(cfg, raw).unwrap();
+        verify_svt_reconstruction(cfg, raw, &enhanced).unwrap();
+        assert!(verify_svt_reconstruction(cfg, raw, &native).is_err());
+        assert_ne!(
+            decode_planar(&native, cfg).unwrap(),
+            decode_planar(&enhanced, cfg).unwrap()
+        );
+        let replay: Config = serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
+        assert_eq!(
+            replay.resolved_svt_reference(),
+            cfg.resolved_svt_reference()
+        );
+        assert_eq!(encode(replay, raw).unwrap(), enhanced);
+        for backend in [Backend::CSvt, Backend::Libaom, Backend::Aom, Backend::Rav1e] {
+            assert!(Config { backend, ..cfg }.validate_configuration().is_err());
+        }
+        assert!(Config { speed: 0, ..cfg }.validate_configuration().is_err());
+        assert!(
+            Config {
+                chroma: Chroma::Mono,
+                ..cfg
+            }
+            .validate_configuration()
+            .is_err()
+        );
+        assert!(
+            Config {
+                backend: Backend::CSvt,
+                zen_intra_edge_filter: false,
+                ..cfg
+            }
+            .validate_configuration()
+            .is_err()
+        );
     }
     #[test]
     fn native_lossless_format_matrix() {
@@ -676,6 +909,9 @@ mod format_tests {
                         decoded == samples,
                         "lossless native-plane mismatch: {cfg:?}"
                     );
+                    if matches!(backend, Backend::Svt) {
+                        verify_svt_reconstruction(cfg, &packed, &obu).unwrap();
+                    }
                     count += 1;
                 }
             }

@@ -88,3 +88,30 @@ The preset-fill parity audit found 53 nonidentical C/Rust SVT outputs among
 for Rust; the largest negative delta was -0.465. These witnesses are retained
 separately from optimization candidates. Successful decoding and good RD do
 not close a bit-exact translation gate.
+
+## Intra-edge continuation implementation and correctness finding
+
+The opt-in `aom-intra-edge-filter-v1` experiment now reaches native SVT -1
+prediction and sequence signaling, with explicit mainline420/hybrid3115
+reference selection. Comparator request fields are `svt_reference` (the full
+pinned source ID) and `zen_intra_edge_filter`; legacy omitted references resolve
+to hybrid3115 and output rows record that resolution. The linked C SVT arm
+remains hybrid and rejects a request to label it mainline420. Serialization
+replay, refusal paths, and actual changed reference/decoded output are tested.
+Analysis keeps reference, enhancement, binary and source identities distinct.
+
+The initial120-encode,40-cell,three-round canonical photo/screenshot ablation
+completed and decoded, but is SUPERSEDED for policy selection: subsequently
+expanded native8/10 and tile/odd-size reconstruction gates exposed incorrect
+chroma smooth-neighbor ownership after4x4 luma splits. The correction preserves
+chroma-owner modes across luma-only children and selects the normative8x8-group
+neighbor. Source proof and before/after witnesses are in zenav1-svt's
+`rust/docs/research-preset-port-map.md` (Zen continuation section).
+
+Post-fix checks:2626 workspace tests,136 regression spotchecks,36 off/on
+geometry/depth/QP cases,6 static comparator tests all pass. Refreshed parity passes1,100 hybrid,1,100 pristine normal8 and320 pristine
+research cells. The corrected120-encode rerun is complete, with20 untimed
+exact reconstruction replays. See [corrected size/quality/time results](IMAZEN26_INTRA_EDGE.md):
+matched-quality payloads grow1.4%/1.7% at the selected photo/screenshot targets. The pre-fix run is retained at
+`~/tmp/av1-imazen26-intra-edge-2026-09-08` with a supersession note in provenance.
+The experiment remains off by default; no routing/calibrated-effort claim.

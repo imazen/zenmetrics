@@ -210,3 +210,10 @@ Do not use two sources or sparse high-depth brackets to fit production
 optimality. Denser high-depth curves, IQ/SCM arms, more perceptual metrics,
 larger images and held-out sources remain further validation work. C/Rust
 parity witnesses and Rust's missing research preset remain open.
+
+## Corrected intra-edge ablation
+
+[Completed canonical native-1 intra-edge experiment](IMAZEN26_INTRA_EDGE.md):
+120 encodes,40 deterministic cells,20 exact reconstruction replays. Filtering
+costs more size/time at the two bracketed quality targets; remains opt-in.
+The report supersedes the pre-fix run and preserves its correctness finding.

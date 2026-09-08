@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{fs, io::Write, path::Path, time::Instant};
-use zenmetrics_av1_compare::{Backend, Chroma, Config, decode_planar, encode};
+use zenmetrics_av1_compare::{Backend, Chroma, Config, SvtSource, decode_planar, encode};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -21,6 +21,10 @@ pub struct Arm {
     scm: Option<u8>,
     #[serde(default)]
     sb128: bool,
+    #[serde(default)]
+    svt_reference: Option<SvtSource>,
+    #[serde(default)]
+    zen_intra_edge_filter: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -101,6 +105,8 @@ pub fn run(req: Measurement, emit_rows: bool) -> Result<(), Box<dyn std::error::
                     tune: arm.tune,
                     scm: arm.scm,
                     sb128: arm.sb128,
+                    svt_reference: arm.svt_reference,
+                    zen_intra_edge_filter: arm.zen_intra_edge_filter,
                 };
                 cfg.validate_configuration()?;
                 let pixels = crate::pixels::prepare(reference.as_raw(), cfg)?;
@@ -132,7 +138,7 @@ pub fn run(req: Measurement, emit_rows: bool) -> Result<(), Box<dyn std::error::
                     let rgb = crate::pixels::rgb_from_samples(&decoded, cfg)?;
                     let row = serde_json::json!({"protocol":"av1-api-planar-measure-v2","config":cfg,"round":round,
                         "source":Path::new(&input).file_name().unwrap().to_string_lossy(),"source_sha256":sha(&source),
-                        "input_sha256":input_sha,"binary_sha256":binary_sha,"revision":cfg.revision(),
+                        "input_sha256":input_sha,"binary_sha256":binary_sha,"revision":cfg.revision(),"svt_reference":cfg.resolved_svt_reference(),
                         "output_sha256":output_sha,"bytes":obu.len(),"api_elapsed_ns":ns,
                         "ssimulacra2":score(reference.as_raw(),&rgb,w,h)?,
                         "ssimulacra2_codec_only":score(converted,&rgb,w,h)?,"conversion_ceiling_ssimulacra2":ceiling,
