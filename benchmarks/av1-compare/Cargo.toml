@@ -19,6 +19,28 @@ yuv = "0.8.17"
 fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
 imgref = "1"
 
+zenfleet-core = { path = "../../crates/zenfleet-core" }
+zenfleet-ctl = { path = "../../crates/zenfleet-ctl" }
+zenfleet-worker = { path = "../../crates/zenfleet-worker" }
+zenfleet-ledger = { path = "../../crates/zenfleet-ledger" }
+arrow-array = "58.2.0"
+parquet = { version = "58.2.0", default-features = false, features = ["arrow", "zstd", "snap"] }
+clap = { version = "4", features = ["derive"] }
+tar = "0.4"
+tempfile = "3"
+
+[[bin]]
+name = "zenfleet-worker"
+path = "../../crates/zenfleet-worker/src/bin/worker.rs"
+
+[[bin]]
+name = "zenfleet-ctl"
+path = "../../crates/zenfleet-ctl/src/bin/jobctl.rs"
+
+[[bin]]
+name = "zenmetrics-av1-compare"
+path = "src/main.rs"
+
 [build-dependencies]
 cc = "1"
 
