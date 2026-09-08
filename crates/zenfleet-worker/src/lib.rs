@@ -1768,6 +1768,11 @@ fn class_from_stderr(stderr: &str) -> Option<ErrorClass> {
         // cubecl pool exhaustion (`IoError::BufferTooBig`); see the matching
         // arm in zenmetrics-cli's `classify_msg`.
         || stderr.contains("can't allocate buffer of size")
+        // The device was full at this moment (`IoError::OutOfMemory`, added upstream
+        // to separate "never fits" from "untimely"). Distinct Display text from
+        // BufferTooBig above, and it does NOT contain the variant name, so the
+        // `OutOfMemory` arm does not cover it.
+        || stderr.contains("out of device memory")
     {
         return Some(ErrorClass::Oom);
     }
@@ -3533,6 +3538,12 @@ mod tests {
         // retried transiently rather than poisoned.
         assert_eq!(
             class_from_stderr("Io(can't allocate buffer of size: 1590116352)"),
+            Some(ErrorClass::Oom)
+        );
+        // The sibling variant: the device is full right now rather than the request
+        // being impossible. Its Display text shares no marker with anything above.
+        assert_eq!(
+            class_from_stderr("Io(out of device memory allocating 1590116352 bytes)"),
             Some(ErrorClass::Oom)
         );
         // …but a raw CUDA marker elsewhere still classifies.

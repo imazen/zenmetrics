@@ -1810,21 +1810,6 @@ dependencies = [
 [[package]]
 name = "fast-ssim2"
 version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8dcca2000fbfa5923eb54b5bedddadbe5f7c83f7ef65285ebe0ed10daa78d0f0"
-dependencies = [
- "archmage",
- "imgref",
- "magetypes",
- "num-traits",
- "thiserror",
- "yuvxyb 0.5.0",
- "yuvxyb-math",
-]
-
-[[package]]
-name = "fast-ssim2"
-version = "0.9.0"
 dependencies = [
  "archmage",
  "enough",
@@ -2253,9 +2238,6 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
-dependencies = [
- "foldhash 0.2.0",
-]
 
 [[package]]
 name = "hdrvdp"
@@ -3974,7 +3956,7 @@ checksum = "ca45419789ae5a7899559e9512e58ca889e41f04f1f2445e9f4b290ceccd1d08"
 [[package]]
 name = "rav1d-disjoint-mut"
 version = "0.3.1"
-source = "git+https://github.com/imazen/rav1d-safe?rev=e73811f5d4dad81b75195ca18554fd8a5df19515#e73811f5d4dad81b75195ca18554fd8a5df19515"
+source = "git+https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec#66f58fa6a64c689998721cc5cdb16a4698e26eec"
 dependencies = [
  "aligned",
  "aligned-vec",
@@ -3984,7 +3966,7 @@ dependencies = [
 [[package]]
 name = "rav1d-safe"
 version = "0.6.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=e73811f5d4dad81b75195ca18554fd8a5df19515#e73811f5d4dad81b75195ca18554fd8a5df19515"
+source = "git+https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec#66f58fa6a64c689998721cc5cdb16a4698e26eec"
 dependencies = [
  "aligned",
  "archmage",
@@ -6463,19 +6445,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zenanalyze"
-version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3be60ecfc3e482476ef068ff773b2c5b8d"
-dependencies = [
- "archmage",
- "garb",
- "linear-srgb",
- "magetypes",
- "zenpixels",
- "zenpixels-convert",
-]
-
-[[package]]
 name = "zenav1-aom-bench"
 version = "0.0.1"
 dependencies = [
@@ -6837,7 +6806,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "zenanalyze 0.2.0",
+ "zenanalyze",
  "zenfleet-cloud",
  "zenmetrics-cli",
 ]
@@ -7125,7 +7094,7 @@ dependencies = [
  "tinyvec",
  "ultrahdr-core 0.5.0",
  "whereat",
- "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
+ "zenanalyze",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
@@ -7278,7 +7247,7 @@ dependencies = [
  "cvvdp",
  "dssim-core",
  "enough",
- "fast-ssim2 0.9.0",
+ "fast-ssim2 0.8.2",
  "heic",
  "image",
  "imgref",
@@ -7580,7 +7549,7 @@ dependencies = [
  "byteorder-lite",
  "enough",
  "garb",
- "hashbrown 0.17.1",
+ "hashbrown 0.16.1",
  "libm",
  "linear-srgb",
  "magetypes",

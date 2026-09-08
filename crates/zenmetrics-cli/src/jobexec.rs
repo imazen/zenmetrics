@@ -217,6 +217,10 @@ fn classify_msg(msg: &str) -> Option<&'static str> {
         // Unambiguous: BufferTooBig is only produced when an allocation
         // exceeds what the device can give.
         || msg.contains("can't allocate buffer of size")
+        // `IoError::OutOfMemory` -- upstream split "the device is full right now"
+        // out of BufferTooBig ("can never fit"). Different Display text, and it
+        // does not contain the variant name either, so it needs its own arm.
+        || msg.contains("out of device memory")
     {
         return Some("oom");
     }
@@ -2578,6 +2582,11 @@ mod tests {
             Some("oom")
         );
         assert_eq!(classify_msg("unknown codec \"zenbmp\""), None);
+        // `IoError::OutOfMemory` Display text -- no shared marker with the arms above.
+        assert_eq!(
+            classify_msg("Io(out of device memory allocating 1590116352 bytes)"),
+            Some("oom")
+        );
         // An untyped error whose text carries a marker classifies via the scan.
         let plain: Box<dyn Error> = "ENOSPC while staging".to_string().into();
         assert_eq!(error_class_of(plain.as_ref()), Some("disk_full"));
