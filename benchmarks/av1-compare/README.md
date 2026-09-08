@@ -156,6 +156,15 @@ Require a zero exit code before using the output. Then use canonical
 zenfleet declaration, claims, execution and collection as above. The hydration
 tool is source ingestion only and does not launch or schedule encode workers.
 
+The completed 2026-09-08 hydration found four byte-identical origin pairs:
+8134/8136, 8210/8212, 8312/8314, and 8380/8382. Preserve all origin assignments,
+but declare each identical input/settings job once: zenfleet job identity is
+content-based and excludes the display filename. The resulting scout has
+1,078 distinct jobs, 84,084 cells and 252,252 timed encodes. All 35 indexed/RGBA
+PNGs were checked and are opaque. See
+`../av1_compare_2026-09-08/imazen26_training_scout_preparation.json` for input
+verification and build identities; these preparation counts are not results.
+
 The native lossless matrix checks exact decoded samples for all 42 supported
 backend/depth/chroma combinations. Decode and validation tests cover all five
 backends, metadata mismatches, out-of-range samples and research-preset limits.

@@ -1,0 +1,53 @@
+{
+  "canonical_commit": "187fbf338ce08e8e6654db7f04ddae58d5263da2",
+  "verified_sdr_origins": 1082,
+  "missing_sdr_origins": [
+    "1444",
+    "1458"
+  ],
+  "source_bytes": 5655169924,
+  "png_headers": {
+    "(8, 2)": 1027,
+    "(8, 3)": 22,
+    "(8, 6)": 13,
+    "(1, 0)": 20
+  },
+  "distinct_inputs": 1078,
+  "duplicate_origin_groups": [
+    [
+      "8134",
+      "8136"
+    ],
+    [
+      "8210",
+      "8212"
+    ],
+    [
+      "8312",
+      "8314"
+    ],
+    [
+      "8380",
+      "8382"
+    ]
+  ],
+  "jobs": 1078,
+  "cells": 84084,
+  "timed_encodes_planned": 252252,
+  "encodes_completed": 0,
+  "manifest_sha256": "78f225944c599323bb953f891d6437841f786674bf2d14518f9542b36caf0780",
+  "executor_sha256": "b0199023c45d841a4945ebc7f4b40dc62ccd4c364db6428fdd7f691e51acdc55",
+  "local_root": "/home/lilith/tmp/av1-training-scout-2026-09-08",
+  "scope": "train only; 512px SDR 8-bit 420 scout",
+  "artifact": {
+    "uri": "s3://zentrain/benchmarks/av1-compare/2026-09-08/training-scout/executor-corpus-95f36a168cbefcdf2c3ca1c5b990082c75d7f63547d2f66cb65002783437cbb3.tar",
+    "sha256": "95f36a168cbefcdf2c3ca1c5b990082c75d7f63547d2f66cb65002783437cbb3",
+    "bytes": 6069145600,
+    "download_verified": true
+  },
+  "population_manifest": "s3://zentrain/jobs/av1-training-scout-20260908/manifest.json",
+  "smoke_run": "av1-training-scout-smoke-20260908",
+  "smoke_origin": "1002",
+  "smoke_allocation": "522bc62f-4c70-d932-0aa7-ad0a7aaede98",
+  "status": "inputs verified; full manifest declared; smoke allocated; population execution not launched"
+}
