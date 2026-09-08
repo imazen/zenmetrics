@@ -86,7 +86,7 @@ zenfleet-hetzner = { version = "0.0.1", path = "crates/zenfleet-hetzner", defaul
 # Full fork strategy + upstream resync log: the ZENFORKS_README.md in
 # https://github.com/imazen/zenforks-cubecl.
 # 2026-08-28 resync: switched from the crates.io 0.10.1 publication to a
-# git rev pin on imazen/zenforks-cubecl main @ 88c40c57
+# git rev pin on imazen/zenforks-cubecl main @ 90842401
 # (crates version 0.10.2, deliberately NOT published — publishing is
 # user-gated). This picks up the fork commits made after the 0.10.1
 # publish wave: strict f64 handling on Metal (2509e67c / PR #2), the CPU
@@ -100,17 +100,17 @@ zenfleet-hetzner = { version = "0.0.1", path = "crates/zenfleet-hetzner", defaul
 # crates.io instead would put two distinct `cubecl_ir` crates in the graph
 # (same version, different source), and every `cubecl::ir::*` type
 # zenmetrics passes across that boundary would fail to unify.
-cubecl         = { package = "zenforks-cubecl",         git = "https://github.com/imazen/zenforks-cubecl", rev = "88c40c57c011180cc3405ef82eab5bb3f85ac6c6", default-features = false, features = ["std"] }
-cubecl-runtime = { package = "zenforks-cubecl-runtime", git = "https://github.com/imazen/zenforks-cubecl", rev = "88c40c57c011180cc3405ef82eab5bb3f85ac6c6", default-features = false }
-cubecl-core    = { package = "zenforks-cubecl-core",    git = "https://github.com/imazen/zenforks-cubecl", rev = "88c40c57c011180cc3405ef82eab5bb3f85ac6c6", default-features = false }
-cubecl-cuda    = { package = "zenforks-cubecl-cuda",    git = "https://github.com/imazen/zenforks-cubecl", rev = "88c40c57c011180cc3405ef82eab5bb3f85ac6c6", default-features = false }
-cubecl-cpu     = { package = "zenforks-cubecl-cpu",     git = "https://github.com/imazen/zenforks-cubecl", rev = "88c40c57c011180cc3405ef82eab5bb3f85ac6c6", default-features = false }
-cubecl-wgpu    = { package = "zenforks-cubecl-wgpu",    git = "https://github.com/imazen/zenforks-cubecl", rev = "88c40c57c011180cc3405ef82eab5bb3f85ac6c6", default-features = false }
-cubecl-hip     = { package = "zenforks-cubecl-hip",     git = "https://github.com/imazen/zenforks-cubecl", rev = "88c40c57c011180cc3405ef82eab5bb3f85ac6c6", default-features = false }
-cubecl-cpp     = { package = "zenforks-cubecl-cpp",     git = "https://github.com/imazen/zenforks-cubecl", rev = "88c40c57c011180cc3405ef82eab5bb3f85ac6c6", default-features = false }
+cubecl         = { package = "zenforks-cubecl",         git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false, features = ["std"] }
+cubecl-runtime = { package = "zenforks-cubecl-runtime", git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
+cubecl-core    = { package = "zenforks-cubecl-core",    git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
+cubecl-cuda    = { package = "zenforks-cubecl-cuda",    git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
+cubecl-cpu     = { package = "zenforks-cubecl-cpu",     git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
+cubecl-wgpu    = { package = "zenforks-cubecl-wgpu",    git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
+cubecl-hip     = { package = "zenforks-cubecl-hip",     git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
+cubecl-cpp     = { package = "zenforks-cubecl-cpp",     git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12", default-features = false }
 # Non-renamed leaves — same git source, see note above:
-cubecl-common  = { git = "https://github.com/imazen/zenforks-cubecl", rev = "88c40c57c011180cc3405ef82eab5bb3f85ac6c6" }
-cubecl-ir      = { git = "https://github.com/imazen/zenforks-cubecl", rev = "88c40c57c011180cc3405ef82eab5bb3f85ac6c6" }
+cubecl-common  = { git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12" }
+cubecl-ir      = { git = "https://github.com/imazen/zenforks-cubecl", rev = "9084240103f9104719f56bd27b8f9f614d5a1d12" }
 
 # CPU reference crates used by parity tests.
 butteraugli = { version = "0.9.4" }
