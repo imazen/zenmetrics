@@ -87,8 +87,30 @@ pub(crate) fn score(
 /// monolithic `sweep` the per-cell encode dominates, so it buys nothing there.)
 /// The amortized score is bit-identical to [`score`] — asserted by the
 /// `precomputed_matches_score` test — so it is a pure cost reduction.
+/// zensim's score for a byte-identical pair: the `identical_result` payload
+/// `mark_identical` installs (`zensim/src/metric.rs`), which
+/// `zensim::Zensim::compute` returns and `compute_with_ref` cannot. Pinned by
+/// `identical_score_matches_zensim_compute`, which reads it back out of
+/// `compute` rather than trusting this literal.
+const IDENTICAL_SCORE: f64 = 100.0;
+
 pub(crate) struct PrecomputedRef {
     inner: zensim::PrecomputedReference,
+    /// The reference's own RGB bytes plus dimensions, retained so
+    /// [`score_with_precomputed`] can answer "is this distorted image
+    /// byte-identical to the reference?" -- the one question
+    /// `zensim::PrecomputedReference` structurally cannot answer, because it
+    /// holds the XYB pyramid and not the source bytes (#51).
+    ///
+    /// Retained EXACTLY rather than as a hash. `zenmetrics-gpu-core` uses an
+    /// FNV-1a `input_digest` for the same purpose, but only because a cached
+    /// GPU reference genuinely cannot keep host bytes; here we can, so we do,
+    /// and a hash collision cannot fabricate a 100. The cost is `w*h*3` bytes
+    /// against a pyramid that already holds several scales of f32 XYB -- about
+    /// 6% on top of what this struct allocates anyway.
+    ref_rgb: Vec<u8>,
+    ref_w: u32,
+    ref_h: u32,
 }
 
 /// Build a [`PrecomputedRef`] from `reference`: convert to XYB and build the
@@ -105,17 +127,51 @@ pub(crate) fn precompute_ref(
     let inner = z
         .precompute_reference(&src)
         .map_err(|e| format!("zensim: precompute_reference: {e:?}"))?;
-    Ok(PrecomputedRef { inner })
+    Ok(PrecomputedRef {
+        inner,
+        ref_rgb: reference.pixels.clone(),
+        ref_w: reference.width,
+        ref_h: reference.height,
+    })
 }
 
 /// Score `distorted` against a [`PrecomputedRef`]. Bit-identical to [`score`]
-/// called with the original reference (see `precomputed_matches_score`) but
-/// skips rebuilding the reference's XYB pyramid.
+/// called with the original reference (see `precomputed_matches_score`, which
+/// covers the byte-identical pair as well as distorted ones) but skips
+/// rebuilding the reference's XYB pyramid.
+///
+/// # The byte-identical short-circuit (#51)
+///
+/// `zensim::Zensim::compute` -- what [`score`] calls -- carries zensim's
+/// byte-identical short-circuit: when the two inputs are equal it returns the
+/// `identical_result` payload (score 100, raw distance 0, all-zero features)
+/// via `mark_identical`, instead of the raw model output.
+/// `zensim::Zensim::compute_with_ref` takes a `PrecomputedReference` and so has
+/// no reference BYTES to compare against; the short-circuit structurally cannot
+/// fire there, and the raw model output comes back instead -- profile B emits
+/// ~96.2 on an identical pair, not 100.
+///
+/// That made `score-pairs` (which uses this path) disagree with `score` and
+/// `batch` (which use [`score`]) on every byte-identical pair -- i.e. on every
+/// lossless cell, where ref and distorted decode to the same pixels. We
+/// reproduce the short-circuit here so the three CLI paths agree.
+///
+/// Reproducing `compute`'s behaviour is deliberately the conservative
+/// direction: it leaves `score` / `batch` output unchanged (so no historical
+/// number moves) and brings `score-pairs` into line with them. Removing the
+/// short-circuit from `compute` instead would need an upstream zensim change
+/// AND would move long-standing output.
 pub(crate) fn score_with_precomputed(
     precomputed: &PrecomputedRef,
     distorted: &Rgb8Image,
 ) -> Result<f64, Box<dyn std::error::Error>> {
     use zensim::{PixelFormat, StridedBytes, Zensim};
+    if precomputed.ref_w == distorted.width
+        && precomputed.ref_h == distorted.height
+        && precomputed.ref_rgb == distorted.pixels
+    {
+        return Ok(IDENTICAL_SCORE);
+    }
     let z = Zensim::new(selected_profile()?);
     let w = distorted.width as usize;
     let h = distorted.height as usize;
@@ -858,10 +914,43 @@ mod tests {
     /// `score()` path — a perceptual metric the picker trains on is pixel-sacred.
     /// Build the ref ONCE, score many distinct distorted images (the score-pairs
     /// usage pattern), each must equal `score()` to the bit.
+    /// Pins [`IDENTICAL_SCORE`] to what `zensim::Zensim::compute` ACTUALLY
+    /// returns for a byte-identical pair, rather than trusting the literal.
+    /// If zensim ever changes its `identical_result` payload, this fails and
+    /// `score_with_precomputed`'s short-circuit gets corrected with it --
+    /// instead of silently drifting back into the #51 disagreement.
+    #[test]
+    fn identical_score_matches_zensim_compute() {
+        for (w, h) in [(96u32, 72u32), (64, 64), (200, 150)] {
+            let img = synth(7, w, h);
+            let via_compute = score(&img, &img).unwrap();
+            assert_eq!(
+                via_compute.to_bits(),
+                IDENTICAL_SCORE.to_bits(),
+                "zensim::compute's byte-identical payload is {via_compute} at {w}x{h}, \
+                 but IDENTICAL_SCORE is {IDENTICAL_SCORE}"
+            );
+        }
+    }
+
     #[test]
     fn precomputed_matches_score() {
         let reference = synth(1, 96, 72);
         let pre = precompute_ref(&reference).unwrap();
+        // #51: the byte-identical pair is the case this test used to miss entirely --
+        // every `d` below produces a DIFFERENT distorted image, so the divergence
+        // between `compute` (which short-circuits on byte-identity) and
+        // `compute_with_ref` (which structurally cannot) was never exercised.
+        {
+            let direct = score(&reference, &reference).unwrap();
+            let amortized = score_with_precomputed(&pre, &reference).unwrap();
+            assert_eq!(
+                direct.to_bits(),
+                amortized.to_bits(),
+                "precomputed-ref zensim score must be bit-identical to score() on a \
+                 BYTE-IDENTICAL pair: direct={direct} amortized={amortized}"
+            );
+        }
         for d in 0..5u32 {
             let distorted = synth(100 + d, 96, 72);
             let direct = score(&reference, &distorted).unwrap();

@@ -1432,6 +1432,115 @@ fn read_parquet_schema(path: &std::path::Path) -> (Vec<String>, i64) {
     (names, meta.file_metadata().num_rows())
 }
 
+/// Read one f64 column's values out of a parquet, in row order.
+#[cfg(feature = "sweep")]
+fn read_parquet_f64_col(path: &std::path::Path, col: &str) -> Vec<f64> {
+    use parquet::file::reader::FileReader;
+    use parquet::record::RowAccessor;
+    let file = std::fs::File::open(path).expect("open parquet");
+    let reader = parquet::file::reader::SerializedFileReader::new(file).expect("parquet reader");
+    let idx = {
+        let d = reader.metadata().file_metadata().schema_descr();
+        (0..d.num_columns())
+            .find(|i| d.column(*i).name() == col)
+            .unwrap_or_else(|| panic!("no column {col:?} in {path:?}"))
+    };
+    reader
+        .get_row_iter(None)
+        .expect("row iter")
+        .map(|r| r.expect("row").get_double(idx).expect("f64 column"))
+        .collect()
+}
+
+/// #51 regression gate, at the CLI level and in the issue's exact shape.
+///
+/// `score-pairs` scores CPU zensim through the cached-reference path
+/// (`precompute_ref` + `score_with_precomputed`), while `score` and `batch` go
+/// through `Zensim::compute`. `compute` carries zensim's byte-identical
+/// short-circuit; `compute_with_ref` has no reference BYTES and so structurally
+/// cannot fire it, and used to return the raw model output (~96.2 on profile B)
+/// where `score` returned exactly 100.
+///
+/// The staged pair set already contains a byte-identical row --
+/// `dist_identical_64.png` is pixel-for-pixel equal to `ref_64.png`, verified
+/// by decoding both -- so the bug was always reachable from
+/// `score_pairs_writes_zensim_feature_parquet_cpu`; that test just never
+/// asserted the VALUE. This one does, and cross-checks it against `score`
+/// rather than against a hardcoded 100, so the two paths are pinned to each
+/// other and not to a literal.
+#[cfg(feature = "sweep")]
+#[cfg(feature = "cpu-metrics")]
+#[test]
+fn score_pairs_agrees_with_score_on_a_byte_identical_pair() {
+    let staged = tempfile::tempdir().expect("tmp");
+    let (pairs_tsv, out_pq, _feat_pq) = stage_score_pairs_inputs(staged.path());
+    let dir = fixtures_dir();
+
+    let out = cli()
+        .args([
+            "score-pairs",
+            "--metric",
+            "zensim",
+            "--pairs-tsv",
+            pairs_tsv.to_str().unwrap(),
+            "--out-parquet",
+            out_pq.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run score-pairs");
+    assert!(
+        out.status.success(),
+        "score-pairs failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    // Row 1 = ref vs dist_noisy_64 (different), row 2 = ref vs
+    // dist_identical_64 (byte-identical pixels).
+    let vals = read_parquet_f64_col(&out_pq, "zensim");
+    assert_eq!(vals.len(), 2, "expected 2 score rows, got {vals:?}");
+
+    // What `score` -- the un-cached path -- reports for the same identical pair.
+    let ref_png = dir.join("ref_64.png");
+    let ident_png = dir.join("dist_identical_64.png");
+    let sc = cli()
+        .args([
+            "score",
+            "--metric",
+            "zensim",
+            "--reference",
+            ref_png.to_str().unwrap(),
+            "--distorted",
+            ident_png.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run score");
+    assert!(
+        sc.status.success(),
+        "score failed: {}",
+        String::from_utf8_lossy(&sc.stderr)
+    );
+    let sc_out = String::from_utf8_lossy(&sc.stdout);
+    let via_score: f64 = sc_out
+        .split_whitespace()
+        .find_map(|t| t.strip_prefix("zensim="))
+        .unwrap_or_else(|| panic!("no zensim= token in score output: {sc_out:?}"))
+        .parse()
+        .expect("parse zensim score");
+
+    assert!(
+        (vals[1] - via_score).abs() < 1e-9,
+        "score-pairs and score disagree on a BYTE-IDENTICAL pair (#51): \
+         score-pairs={} score={via_score}",
+        vals[1]
+    );
+    // And the non-identical row must be unaffected by the short-circuit.
+    assert!(
+        vals[0] < 99.0,
+        "the non-identical row should not be short-circuited, got {}",
+        vals[0]
+    );
+}
+
 /// `score-pairs --feature-output` with the CPU zensim metric must emit a
 /// feature parquet whose schema is byte-identical to `sweep
 /// --feature-output` (the SPLIT-fleet join contract): the four identity

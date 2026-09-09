@@ -39,6 +39,43 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **`score-pairs` disagreed with `score` / `batch` on every byte-identical zensim
+  pair — i.e. on every lossless cell (#51).** `score-pairs` scores CPU zensim
+  through the cached-reference path (`precompute_ref` + `score_with_precomputed`
+  -> `zensim::Zensim::compute_with_ref`), while `score` and `batch` go through
+  `Zensim::compute`. Only `compute` carries zensim's byte-identical
+  short-circuit (`mark_identical`'s `identical_result`: score 100, raw distance
+  0); `compute_with_ref` receives a `PrecomputedReference` and has no reference
+  BYTES to compare against, so the short-circuit structurally cannot fire and the
+  raw model output came back instead. Measured on the repo's own fixtures:
+  `score-pairs` returned **96.239** where `score` returned exactly **100**.
+  `PrecomputedRef` now retains the reference's RGB bytes and dimensions and
+  reproduces the short-circuit. Retained exactly rather than as a hash --
+  `zenmetrics-gpu-core` uses an FNV-1a `input_digest` for this only because a
+  cached GPU reference cannot keep host bytes; on CPU it can, so a collision
+  cannot fabricate a 100, at a cost of `w*h*3` bytes against a pyramid already
+  holding several scales of f32 XYB. Matching `compute` (rather than removing its
+  short-circuit) is the conservative direction: no historical `score` / `batch`
+  number moves.
+
+  **Why it survived so long: the parity tests never fed an identical pair.**
+  `precomputed_matches_score` used `synth(1, ..)` as reference against
+  `synth(100+d, ..)` distorted, so the one input class where the two paths differ
+  was never exercised — while four doc comments in `metrics/zensim.rs` asserted
+  bit-identity on their authority. Both gates added: the unit test now covers the
+  byte-identical pair first, and a new CLI-level test
+  (`score_pairs_agrees_with_score_on_a_byte_identical_pair`) reproduces the
+  issue's exact shape, cross-checking `score-pairs` against `score` rather than
+  against a literal. `IDENTICAL_SCORE` is itself pinned to what
+  `zensim::compute` actually returns by `identical_score_matches_zensim_compute`,
+  at three sizes, so an upstream change to the payload fails loudly instead of
+  silently restoring the disagreement. **Negative control run**: reverting only
+  the short-circuit makes the new CLI test fail with
+  `score-pairs=96.23914934421349 score=100`, so the gate provably catches the
+  defect it was written for.
+
+### Fixed
+
 - **22 GPU-crate examples across `butteraugli-gpu`, `cvvdp-gpu`, `dssim-gpu`,
   `iwssim-gpu`, `ssim2-gpu` and `zensim-gpu` broke any `--all-targets` build in a
   non-CUDA configuration.** Each hard-codes `cubecl::cuda::CudaRuntime` (or a
