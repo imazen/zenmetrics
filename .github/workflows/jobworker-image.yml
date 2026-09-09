@@ -73,6 +73,14 @@ jobs:
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.arch }}
           cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.arch }},mode=max
           provenance: false
+      # Public image -> a baked credential is a public leak. Scan the by-digest image;
+      # a finding fails this build job, so the merge job (needs: build) never creates a
+      # public tag for the leaking image.
+      - name: Scan for leaked secrets (gate before tagging)
+        uses: ./.github/actions/scan-image-secrets
+        with:
+          images: ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Export digest
         run: |
           mkdir -p /tmp/digests

@@ -1,0 +1,51 @@
+name: Scan image for leaked secrets
+description: >
+  Scan a container image for leaked credentials with trufflehog (verified secrets)
+  plus a curated high-signal grep over our config/script/cred files. Fails the step
+  on a finding. Single source of truth: scripts/ci/scan_image_secrets.sh.
+
+inputs:
+  images:
+    description: Space-separated image refs to scan (tag or @digest).
+    required: true
+  github-token:
+    description: Token used to log in to ghcr.io (avoids anonymous rate limits).
+    required: true
+  trufflehog-version:
+    description: Pinned trufflehog release.
+    required: false
+    default: v3.90.8
+  crane-version:
+    description: Pinned crane release.
+    required: false
+    default: v0.20.6
+
+runs:
+  using: composite
+  steps:
+    - name: Scan ${{ inputs.images }} for leaked secrets
+      shell: bash
+      env:
+        GHCR_TOKEN: ${{ inputs.github-token }}
+        IMAGES: ${{ inputs.images }}
+        THOG_VER: ${{ inputs.trufflehog-version }}
+        CRANE_VER: ${{ inputs.crane-version }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$HOME/.local/bin"
+        case "$(uname -m)" in
+          x86_64)        CARCH=x86_64 ;;
+          aarch64|arm64) CARCH=arm64  ;;
+          *) echo "unsupported arch $(uname -m)"; exit 2 ;;
+        esac
+        if ! command -v trufflehog >/dev/null; then
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
+            | sh -s -- -b "$HOME/.local/bin" "$THOG_VER"   # install.sh auto-detects arch
+        fi
+        if ! command -v crane >/dev/null; then
+          curl -sSfL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VER}/go-containerregistry_Linux_${CARCH}.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin" crane
+        fi
+        export PATH="$HOME/.local/bin:$PATH"
+        printf '%s' "$GHCR_TOKEN" | crane auth login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        bash "$GITHUB_WORKSPACE/scripts/ci/scan_image_secrets.sh" $IMAGES

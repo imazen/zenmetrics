@@ -1,0 +1,92 @@
+RAW IMAGE SECRET-SCAN OUTPUT — ghcr.io/imazen public container images
+Date: 2026-06-30  Host: lilith  Tools: trufflehog 3.95.7, crane 0.21.7
+Scope: most-recent + :latest + :kadis + last-week tags across all 12 public packages
+======================================================================
+
+### TRUFFLEHOG FILESYSTEM SCAN — per image (verified_secrets / unverified) ###
+
+image                                  verified  unverified  chunks  bytes       duration
+zenmetrics-sweep:kadis                 0         3           67476   1573095756  1m2.165517593s
+zenmetrics-sweep:v29-split-feat        0         3           22361   558782310   11.427542837s
+zenmetrics-sweep:v28                   0         3           22361   558785083   11.311410498s
+zenfleet-worker:latest                 0         0           19573   402574779   6.468252208s
+zenfleet-worker:exec                   0         0           19576   402469100   6.319002753s
+zenfleet-worker:base-x86-cuda          0         3           38240   908419517   12.986406958s
+zenfleet-worker-exec-gpu:latest        0         3           35778   868481425   11.166525028s
+zenfleet-worker-exec:latest            0         0           19540   401348749   5.317932355s
+zen-train:latest                       0         6           63982   1143683637  13.067885776s
+pycvvdp-scorer:0.5.4                   0         11          93702   1685577173  1m15.331560143s
+zen-metrics-sweep:v28                  0         3           22361   558785083   11.266469617s
+zen-metrics-sweep-salad:v6-visibility  0         3           22624   577860765   11.396717704s
+zen-metrics-sweep-hetzner:v2           0         0           0       0           403.655271ms
+zen-jobworker:latest                   0         0           19493   400164669   7.255142083s
+zen-jobworker-exec:latest              0         0           19496   400153803   6.639006229s
+zen-base:x86-cuda                      0         3           38240   908419462   12.857101104s
+zen-base:arm                           0         3           37205   874833213   12.722017941s
+
+(zen-metrics-sweep-hetzner:v2 re-scanned pinned to arm64 child digest: chunks=7394 verified=0 unverified=0)
+
+### EVERY UNVERIFIED FINDING — unique (Detector | Redacted | file) ###
+### ALL are placeholder/example URIs inside THIRD-PARTY deps — none imazen-authored ###
+
+      9 URI	http://username:********@localhost:8020	/usr/local/lib/python3.12/dist-packages/pyarrow/_s3fs.pyx
+      9 URI	http://username:********@host	/usr/local/lib/python3.12/dist-packages/pyarrow/include/arrow/filesystem/s3fs.h
+      8 URI	http://username:********@localhost:8020	/usr/local/lib/python3.12/dist-packages/pyarrow/_s3fs.cpython-312-x86_64-linux-gnu.so
+      1 URI	http://user:********@web.comTz	/opt/zentrain-venv/lib/python3.12/site-packages/pandas/tests/io/formats/style/__pycache__/test_html.cpython-312.pyc
+      1 URI	http://username:********@localhost:8020	/usr/local/lib/python3.12/dist-packages/pyarrow/_s3fs.cpython-312-aarch64-linux-gnu.so
+      1 URI	http://username:********@localhost:8020	/opt/zentrain-venv/lib/python3.12/site-packages/pyarrow/_s3fs.pyx
+      1 URI	http://username:********@localhost:8020	/opt/zentrain-venv/lib/python3.12/site-packages/pyarrow/_s3fs.cpython-312-x86_64-linux-gnu.so
+      1 URI	http://username:********@localhost:8020	/opt/conda/lib/python3.11/site-packages/pyarrow/_s3fs.pyx
+      1 URI	http://username:********@localhost:8020	/opt/conda/lib/python3.11/site-packages/pyarrow/_s3fs.cpython-311-x86_64-linux-gnu.so
+      1 URI	http://username:********@host	/opt/zentrain-venv/lib/python3.12/site-packages/pyarrow/include/arrow/filesystem/s3fs.h
+      1 URI	http://username:********@host	/opt/conda/lib/python3.11/site-packages/pyarrow/include/arrow/filesystem/s3fs.h
+      1 URI	http://userid:********@example.com:8080	/opt/conda/pkgs/boltons-24.0.0-pyhd8ed1ab_0/info/test/tests/test_urlutils.py
+      1 URI	https://username:********@host.com:80/path	/opt/zentrain-venv/lib/python3.12/site-packages/pip/_vendor/urllib3/util/url.py
+      1 URI	https://username:********@host.com:80/path	/opt/zentrain-venv/lib/python3.12/site-packages/pip/_vendor/urllib3/util/__pycache__/url.cpython-312.pyc
+      1 URI	https://username:********@host.com:80/path	/opt/conda/lib/python3.11/site-packages/urllib3/util/url.py
+      1 URI	https://username:********@host.com:80/path	/opt/conda/lib/python3.11/site-packages/urllib3/util/__pycache__/url.cpython-311.pyc
+      1 URI	https://foobar:********@minio.siteb.example.com/targetbucket	/usr/local/bin/mc
+      1 URI	http://jschmoe:********@www.bogus.net:8000/foo/bar	/opt/conda/lib/tcl8/8.6/http-2.9.8.tm
+      1 URI	http://joe:********@proxy.example.com	/opt/conda/lib/python3.11/site-packages/future/backports/urllib/request.py
+      1 URI	http://joe:********@proxy.example.com	/opt/conda/lib/python3.11/site-packages/future/backports/urllib/__pycache__/request.cpython-311.pyc
+      1 FTP	ftp://joe:********@proxy.example.com	/opt/conda/lib/python3.11/site-packages/future/backports/urllib/request.py
+      1 FTP	ftp://joe:********@proxy.example.com	/opt/conda/lib/python3.11/site-packages/future/backports/urllib/__pycache__/request.cpython-311.pyc
+
+### CONFIG ENV + BUILD-HISTORY SCAN (29 tags) ###
+Secret-shaped ENV values: NONE (only RUST_LOG=...vastai..., WORKDIR=...salad-sweep matched the name-regex; both benign)
+Full non-system ENV (deduped):
+    KADIS_DNCNN_WEIGHTS=/opt/weights/dncnn_gray_blind.pth
+    LD_PRELOAD=/usr/local/lib/cuda_dlsym_stub.so
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_NO_CACHE_DIR=1
+    PYCVVDP_VERSION=0.5.4
+    PYTORCH_VERSION=2.5.1
+    RUST_BACKTRACE=1
+    RUST_LOG=info,zen_cloud_vastai=info,zencloud_hetzner=info
+    SWEEP_GPU_RUNTIME=cpu
+    VENV=/opt/zentrain-venv
+    WORKDIR=/workspace/salad-sweep
+    WORKDIR=/workspace/sweep
+    WORKDIR=/workspace/train
+    ZEN_DISTORT_CMD=python3 -m kadis_distort.serve
+    ZEN_EXEC=/usr/local/bin/zenfleet-exec
+    ZEN_EXEC=/usr/local/bin/zen-jobexec
+    ZENMETRICS_CACHE_DIR=/root/.cache/zenmetrics
+
+Build-history lines (231 deduped) matching secret-shaped content: NONE
+
+### CREDENTIAL-FILE PRESENCE ([B]) ###
+Baked .aws/credentials, .env, .config/cloudflare, private keys: NONE
+Only public CA bundles found: awscli botocore cacert.pem, gnupg sks-keyservers.netCA.pem
+
+### IMAZEN SCRIPT CREDENTIAL HANDLING ([2]) ###
+All onstart/entrypoint/worker scripts reference creds ONLY as env-var NAMES
+(R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, ...).
+grep for hardcoded secret VALUES across all saved scripts: NONE.
+fleet-entrypoint.sh documents: 'AWS_* / R2_* — SCOPED temp R2 creds (never root)', injected by launcher.
+onstart_cvvdp_imazen.sh writes ~/.aws/credentials at RUNTIME from ${R2_*} env (not baked).
+
+### IMAZEN BINARY strings|grep ([A]) ###
+zenmetrics / zenfleet-sweep / zenfleet-vastai strings grep for credential VALUE formats
+(AKIA, hex:hex R2 pairs, BEGIN PRIVATE KEY, assigned long secrets): EMPTY.
+Only env-var NAMES (R2_*/AWS_*) compiled in (the binary reads them at runtime).
