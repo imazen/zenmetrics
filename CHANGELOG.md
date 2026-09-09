@@ -39,6 +39,47 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **`zenmetrics_gpu_core::identical_value` — each metric's byte-identical score and
+  scale direction, MEASURED rather than copied from a table (#52).** The guard
+  predicates need two facts per metric, and getting one wrong is not benign: a
+  guard that mis-fires rejects every lossless cell of a corpus. Measured on the
+  CPU ports (same scale as the GPU kernels), several sizes each. Two of the six
+  did not match the issue's table:
+  - **iwssim never reaches 1.0.** A real identical pair measures
+    `0.99999999602735024` / `0.99999999300813625` / `0.99999999464841383` at
+    256², 320×240 and 512² — always just below, from rounding in the pooling
+    (a different pair scores 0.047–0.075, so the margin is enormous). `1.0` is
+    therefore a safe *ceiling*, not an attainable value: no false positives,
+    still catches the degenerate exact-1.0 a dead reduction produces. Recorded
+    with `IWSSIM_MEASURED_SHORTFALL` and a test pinning the assumption, so
+    nobody "fixes" it by loosening the threshold and starts rejecting real data.
+  - **zensim has NO constant identical-value.** `Zensim::compute` returns 100.0
+    (the `mark_identical` short-circuit payload), while `compute_with_ref` —
+    which cannot short-circuit — returns the raw model output, and that is not
+    even constant across sizes: `96.2301182362` at 96×72 vs `96.2229590674` at
+    256². So a constant-keyed guard is structurally wrong for zensim-gpu: keyed
+    on 100.0 it never fires on the raw path, keyed on ~96.22 it fires on
+    legitimate data at other sizes. Documented rather than wired to a wrong
+    constant.
+  cvvdp confirmed exact (`10.00000000000000000` at both sizes tested). Four tests
+  exercise the REAL predicate against the REAL constants — unlike the existing
+  dssim-gpu precedent, which mirrors the logic in the test and so cannot catch a
+  wrong constant. No GPU required.
+
+- **`.github/dependabot.yml`** — the repo had none, so it received security alerts
+  (which need no config) but no scheduled version updates. That is how the
+  arrow/parquet line drifted far enough that CVE-2026-43868 needed a 58→59 major
+  bump rather than a lockfile refresh, and how PRs #35/#39 sat open past the
+  versions they proposed. Covers the root workspace, all four standalone
+  lockfiles (each has its own resolution graph — the root entry does not reach
+  them, which is why #35 was filed against `crates/burn-ranknet-spike`
+  separately), the npm dashboard, and GitHub Actions. Grouped so a week yields a
+  handful of reviewable PRs and lockstep families (arrow+parquet, react, radix)
+  move together; the sibling path-deps and `zenforks-cubecl` pins are ignored
+  because ci.yml's pin block drives those.
+
+### Added
+
 - **`jxl_encode_ms_probe` example + `benchmarks/jxl_encode_ms_parasite_2026-09-09.{md,tsv,meta}`
   — #34's `encode_ms` parasite localized to the `--plan` path.** The issue reported
   an additive ~31 s/MP term flattening a real 17-68x zenjxl effort span to ~0.9x,

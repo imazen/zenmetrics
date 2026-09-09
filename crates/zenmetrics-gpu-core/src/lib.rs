@@ -686,3 +686,146 @@ mod identical_claim_tests {
         );
     }
 }
+
+/// Per-metric byte-identical values and scale directions — **measured**, not
+/// copied from a table.
+///
+/// [`is_silent_identical_claim`] and [`is_identical_claim`] need two facts per
+/// metric: the score a byte-identical pair produces, and which direction of the
+/// scale means "more similar". zenmetrics#52 asks for those to be *confirmed by
+/// measurement*, because getting one wrong is not a benign error — a guard that
+/// fires on legitimate data rejects every lossless cell of a corpus.
+///
+/// Measured 2026-09-09 on the CPU ports (the GPU kernels implement the same
+/// scale), on synthetic pairs at several sizes:
+///
+/// | metric | byte-identical score | direction | exact? |
+/// |---|---|---|---|
+/// | dssim | `0.0` | lower-is-better | yes |
+/// | butteraugli | `0.0` | lower-is-better | yes |
+/// | ssim2 | `100.0` | higher-is-better | yes |
+/// | cvvdp | `10.0` JOD | higher-is-better | **yes** — `10.00000000000000000` at 256x256 and 320x240 |
+/// | iwssim | `1.0` | higher-is-better | **NO** — see below |
+/// | zensim | *none* | — | **no constant exists** — see below |
+///
+/// ## iwssim never actually reaches 1.0
+///
+/// Measured on `iwssim::Iwssim::score` with a pair against itself:
+/// `0.99999999602735024` (256x256), `0.99999999300813625` (320x240),
+/// `0.99999999464841383` (512x512) — always just below 1.0, from rounding in
+/// the pooling. A different pair scores 0.047-0.075 on the same fixtures, so
+/// the gap to any real score is enormous.
+///
+/// This makes [`IWSSIM`] a *safe* threshold rather than an attainable value:
+/// `score >= 1.0` cannot be produced by a legitimate identical pair, so the
+/// guard has no false positives, and it still catches the degenerate exact-1.0
+/// output that a dead reduction produces. The cost is that a corrupted score
+/// landing just *below* 1.0 slips through — accepted, and recorded here so
+/// nobody "fixes" it by loosening the threshold, which would start rejecting
+/// real lossless cells.
+///
+/// ## zensim has no constant identical-value — do not invent one
+///
+/// zensim's byte-identical answer depends on WHICH PATH produced it, and the
+/// raw model output is not even constant across sizes. Measured on profile B:
+///
+/// | path | 96x72 | 256x256 |
+/// |---|---|---|
+/// | `Zensim::compute` (has the `mark_identical` short-circuit) | `100.0` | `100.0` |
+/// | `Zensim::compute_with_ref` (cannot short-circuit — raw model output) | `96.2301182362` | `96.2229590674` |
+///
+/// So `100.0` is a short-circuit payload, not a property of the metric, and the
+/// raw value drifts with size (and with profile — see zenmetrics#51/#53). A
+/// constant-keyed guard is therefore **structurally wrong** for zensim: keyed
+/// on `100.0` it would never fire on the raw path, and keyed on `~96.22` it
+/// would fire on legitimate data at other sizes. zensim-gpu needs a different
+/// guard shape (compare against the raw identical output computed for THAT
+/// input's geometry, or guard the reduction rather than the output).
+pub mod identical_value {
+    use super::ScaleDirection;
+
+    /// dssim: `1/ssim - 1` with `ssim == 1`. Lower is better.
+    pub const DSSIM: (f64, ScaleDirection) = (0.0, ScaleDirection::LowerIsBetter);
+    /// butteraugli: zero distance. Lower is better.
+    pub const BUTTERAUGLI: (f64, ScaleDirection) = (0.0, ScaleDirection::LowerIsBetter);
+    /// SSIMULACRA2: exactly 100. Higher is better.
+    pub const SSIM2: (f64, ScaleDirection) = (100.0, ScaleDirection::HigherIsBetter);
+    /// ColorVideoVDP: exactly 10 JOD. Higher is better.
+    pub const CVVDP: (f64, ScaleDirection) = (10.0, ScaleDirection::HigherIsBetter);
+    /// IW-SSIM: 1.0 as an unattainable CEILING, not an attainable value — a
+    /// real identical pair measures `0.999999993..0.999999996`. See the module
+    /// docs before changing this.
+    pub const IWSSIM: (f64, ScaleDirection) = (1.0, ScaleDirection::HigherIsBetter);
+    /// The largest measured gap between a real identical iwssim score and
+    /// [`IWSSIM`]'s threshold, across 256x256 / 320x240 / 512x512.
+    pub const IWSSIM_MEASURED_SHORTFALL: f64 = 7.0e-9;
+}
+
+#[cfg(test)]
+mod identical_value_tests {
+    use super::identical_value as iv;
+    use super::{ScaleDirection, is_silent_identical_claim};
+
+    /// Exercises the REAL predicate against the REAL constants, rather than
+    /// mirroring the logic in the test (which cannot catch a wrong constant).
+    fn fires(metric: (f64, ScaleDirection), score: f64, same: bool) -> bool {
+        is_silent_identical_claim(score, metric.0, metric.1, 1, if same { 1 } else { 2 })
+    }
+
+    #[test]
+    fn a_genuinely_identical_pair_is_never_rejected() {
+        // The lossless case, for every metric: the extremum is the CORRECT
+        // answer and must pass. A false positive here rejects real data.
+        for m in [iv::DSSIM, iv::BUTTERAUGLI, iv::SSIM2, iv::CVVDP, iv::IWSSIM] {
+            assert!(
+                !fires(m, m.0, true),
+                "rejected a real identical pair at {m:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_measured_failure_is_caught_for_every_metric() {
+        // dssim-gpu's measured bug: the exact identical-value returned for
+        // inputs that differ, exit 0, printed as a normal score.
+        for m in [iv::DSSIM, iv::BUTTERAUGLI, iv::SSIM2, iv::CVVDP, iv::IWSSIM] {
+            assert!(
+                fires(m, m.0, false),
+                "missed a silent identical claim at {m:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_scores_are_untouched() {
+        assert!(!fires(iv::DSSIM, 0.5, false));
+        assert!(!fires(iv::BUTTERAUGLI, 1.7, false));
+        assert!(!fires(iv::SSIM2, 87.3, false));
+        assert!(!fires(iv::CVVDP, 4.72, false)); // measured, different pair
+        assert!(!fires(iv::IWSSIM, 0.075, false)); // measured, different pair
+    }
+
+    /// The iwssim shortfall is the whole reason its threshold is a ceiling.
+    /// If a future change makes a real identical pair reach 1.0 exactly, the
+    /// guard starts rejecting lossless cells — so pin the assumption.
+    #[test]
+    fn iwssim_real_identical_scores_stay_below_the_threshold() {
+        for measured in [
+            0.99999999602735024,
+            0.99999999300813625,
+            0.99999999464841383,
+        ] {
+            assert!(
+                measured < iv::IWSSIM.0,
+                "a measured identical iwssim score reached the guard threshold"
+            );
+            assert!(
+                iv::IWSSIM.0 - measured <= iv::IWSSIM_MEASURED_SHORTFALL,
+                "measured shortfall exceeds the recorded bound"
+            );
+            // And it must NOT be treated as a silent claim even though the
+            // inputs would differ -- it is below the threshold.
+            assert!(!fires(iv::IWSSIM, measured, false));
+        }
+    }
+}
