@@ -28,7 +28,7 @@ jobs:
   canonical-images:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: bash scripts/jobsys/check_canonical_images.sh
 
   # hygiene: address/identifier check. Global CLAUDE.md forbids household and
@@ -41,8 +41,8 @@ jobs:
     name: "hygiene: address/identifier check"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: python3 scripts/ci/check_hygiene.py --self-test
@@ -66,7 +66,7 @@ jobs:
           - macos-26-intel       # macos-x86_64 (newer image)
           - macos-latest         # macos-aarch64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
         # zenmetrics-cli's Cargo.toml has `zenjpeg = { path =
         # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
@@ -396,7 +396,7 @@ jobs:
       matrix:
         os: [macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
         # zenmetrics-cli's Cargo.toml has `zenjpeg = { path =
         # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
@@ -637,7 +637,7 @@ jobs:
     name: Doctests (macOS)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
         # zenmetrics-cli's Cargo.toml has `zenjpeg = { path =
         # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
@@ -833,7 +833,7 @@ jobs:
     name: CPU-metrics tests (zenmetrics-api)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
         # zenmetrics-cli's Cargo.toml has `zenjpeg = { path =
         # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
@@ -1037,7 +1037,7 @@ jobs:
     name: Lint (clippy + fmt)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
         # zenmetrics-cli's Cargo.toml has `zenjpeg = { path =
         # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
