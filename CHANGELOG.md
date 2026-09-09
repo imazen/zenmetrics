@@ -255,6 +255,21 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **All GitHub Actions bumped to their current majors** (31 `uses:` lines across 7
+  workflows): `actions/checkout` v4→v7, `actions/setup-python` v5→v7,
+  `actions/upload-artifact` v4→v7, `actions/download-artifact` v4→v8,
+  `docker/setup-buildx-action` v3→v4, `docker/login-action` v3→v4,
+  `docker/build-push-action` v5/v6→v7. Supersedes Dependabot #56, and additionally
+  unifies `docker/build-push-action`, which was inconsistently pinned at v5 in one
+  workflow and v6 in another. `taiki-e/install-action@v2` was already current.
+  Each target was confirmed against the action's releases API rather than assumed
+  (per the standing rule that documented versions are minimums, never ceilings),
+  every workflow re-validated as YAML, and the bump script refuses to move any
+  version backwards. Side benefit: this clears the `Node.js 20 is deprecated`
+  warning that `actions/checkout@v4` was emitting on every run. The artifact
+  fan-in in `jobworker-image.yml` uses the `pattern:` + `merge-multiple:` shape
+  introduced in v4 and still supported, so the v7/v8 bump does not change it.
+
 - **All five Cargo lockfiles refreshed** (`Cargo.lock`, `apidoc/`,
   `benchmarks/av1-compare/`, `crates/burn-conv-spike/`,
   `crates/burn-ranknet-spike/`): 176 registry crates advanced in the root lock

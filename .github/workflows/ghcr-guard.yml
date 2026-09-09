@@ -29,8 +29,8 @@ jobs:
     name: Canonical package names only
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Guard against new ghcr package names
@@ -46,8 +46,8 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Diff live ghcr.io/imazen packages vs manifest
