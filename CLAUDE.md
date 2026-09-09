@@ -515,14 +515,21 @@ packed-sRGB-u8 sweep shape and answers a different question.
   whole-image numbers. Do not quote them for an `Auto`-constructed instance
   without re-measuring under `MemoryMode::Full`.
 
-- **`zenmetrics-orchestrator --lib`: 2 tests fail on ANY macOS host — environment, not a
-  regression (confirmed 2026-08-28).** `tests::detect_cpu_returns_nonempty_brand` (lib.rs:938)
+- **`zenmetrics-orchestrator --lib`: host-capability tests fail on any host lacking the
+  hardware they assume — environment, not a regression (confirmed 2026-08-28 on macOS;
+  scope corrected 2026-09-09 after hitting it on Linux).** `tests::detect_cpu_returns_nonempty_brand` (lib.rs:938)
   asserts `detect_cpu().brand` is non-empty, and `detect_cpu` has no macOS/`sysctl` arm, so the
   brand comes back `""`. `tests::fresh_profile_is_not_stale_by_time` (lib.rs:893) builds a
   `fake_profile()` claiming an `NVIDIA GeForce RTX 5070` with `gpu.present = true`;
   `is_profile_stale` then calls the REAL `detect_gpu()`, which finds no NVIDIA card on a Mac and
   returns `true`. Both are pure host-capability assertions with no cross-platform arm — neither
-  touches the executor / chooser / adapter code. The other 78 pass. Do NOT chase these as a
+  touches the executor / chooser / adapter code. The other 78 pass.
+  **CORRECTION 2026-09-09: `fresh_profile_is_not_stale_by_time` is NOT macOS-specific.** It
+  fails on ANY host without the NVIDIA card `fake_profile()` claims — observed on `i265`
+  (Linux, Intel iGPU only): 50 passed / 1 failed, same assertion at `lib.rs:893`. The real
+  condition is "no NVIDIA GPU present", which covers most non-fleet dev boxes, not just Macs.
+  `detect_cpu_returns_nonempty_brand` DOES pass on Linux — that one is genuinely macOS-only,
+  since `detect_cpu` lacks a `sysctl` arm. So Linux shows 1 failure, macOS 2. Do NOT chase these as a
   regression from an orchestrator change; the fix (if anyone wants one) is a macOS branch in
   `detect_cpu` plus making `fresh_profile_is_not_stale_by_time` use a GPU-absent fake profile.
   Command: `cargo test -p zenmetrics-orchestrator --no-default-features

@@ -270,6 +270,23 @@ Workspace conventions per the global rules:
   fan-in in `jobworker-image.yml` uses the `pattern:` + `merge-multiple:` shape
   introduced in v4 and still supported, so the v7/v8 bump does not change it.
 
+- **Six Rust dependency families advanced past their leading-digit ceiling**, i.e.
+  bumps a lockfile refresh structurally cannot make: `dirs` 6→**7.0.0**,
+  `nalgebra` 0.33→**0.35.0**, `sha2` 0.10.9→**0.11.0** (7 manifests),
+  `sysinfo` 0.38.4→**0.39.6**, `tower-http` 0.6.11→**0.7.1**,
+  `yuvxyb` 0.5.0→**0.6.0**. Found by auditing all 53 distinct direct registry
+  deps against crates.io rather than by guessing; everything else was already at
+  its current leading digit.
+
+  The `sha2` bump is the one that mattered to verify: `zenfleet-core` hashes
+  **JobIds** with it, and a changed digest would silently break dedup, claims and
+  every ledger join. SHA-256 output is algorithm-fixed so only the API moved, and
+  `job::tests::scorefile_sdr_serialization_and_job_id_are_golden_stable` confirms
+  it — golden JobIds unchanged. Likewise `sysinfo` drives the orchestrator's host
+  detection, and `detect_cpu_returns_nonempty_brand` still passes on 0.39.6.
+  One `sha2 0.10.9` remains in the lock, reachable only transitively through
+  `zenforks-cubecl-cpu`'s LLVM bundler — not ours to move.
+
 - **All five Cargo lockfiles refreshed** (`Cargo.lock`, `apidoc/`,
   `benchmarks/av1-compare/`, `crates/burn-conv-spike/`,
   `crates/burn-ranknet-spike/`): 176 registry crates advanced in the root lock

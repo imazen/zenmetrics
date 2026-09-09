@@ -78,7 +78,7 @@ zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features =
 enough = "0.4.4"
 
 [build-dependencies]
-nalgebra = { version = "0.33", default-features = false, features = ["std"] }
+nalgebra = { version = "0.35.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 # Constructible `Stop` flag for the cancellation tests.
@@ -112,7 +112,7 @@ almost-enough = "0.4.4"
 # only from a local checkout where `~/work/coefficient/` and
 # `~/work/turbo-metrics/` (or `--archived-*` sibling) both resolve.
 ssimulacra2 = { workspace = true }
-yuvxyb = "0.5.0"
+yuvxyb = "0.6.0"
 bytemuck = { workspace = true }
 imgref = { workspace = true }
 rgb = { workspace = true }

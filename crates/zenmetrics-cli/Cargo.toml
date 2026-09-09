@@ -366,7 +366,7 @@ feature-rev = ["feature-jobs"]
 [dependencies]
 # Content-addressing for --emit-cells declare manifests (same version as
 # zenfleet-core so the workspace carries one copy).
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 # The fleet-plan aggregator (CellCost / InstanceRecommendation /
 # recommend_instance). Zero heavy deps — pulls nothing GPU/codec.
 zenfleet-core = { version = "0.0.1", path = "../zenfleet-core" }

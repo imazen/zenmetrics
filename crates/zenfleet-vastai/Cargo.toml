@@ -45,7 +45,7 @@ anyhow = "1.0.102"
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "fs", "process", "io-util", "signal", "sync", "time"], optional = true }
 tracing = { version = "0.1", default-features = false, features = ["std"], optional = true }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"], optional = true }
-sha2 = { version = "0.10", default-features = false, optional = true }
+sha2 = { version = "0.11.0", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, features = ["std"], optional = true }
 chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }
 
