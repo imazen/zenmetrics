@@ -23,6 +23,7 @@ pub mod control;
 pub mod cost;
 pub mod epoch;
 pub mod gc;
+pub mod gpu_util;
 pub mod idle;
 pub mod ids;
 pub mod job;

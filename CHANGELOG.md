@@ -39,6 +39,32 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **`zenfleet_core::gpu_util` — the ONE registered definition of "ideal" for a GPU
+  metric fleet box (#48, deliverable 2).** "GPU usage is bad" was
+  anecdotal-per-wave: dmon snippets in status docs with no shared target, so the
+  efficiency program (#45 warm exec, #47 shared sessions, #44 native SPIR-V) had
+  no way to state a before/after as a measurement rather than an impression.
+  `classify()` implements the issue's own definition: **compute-bound** (kernel
+  time dominates H2D + alloc by a configurable margin) **or** at a **quantified
+  upload floor** (bytes ÷ achievable bandwidth), reporting `floor_excess` — how
+  many times the structural floor the box is actually running at — as the number
+  to track, rather than `sm%`. Follows `zenfleet_core::idle`'s shape: one
+  canonical detector, thresholds in a struct, missing signals skipped rather than
+  guessed. Eight tests, including the 2026-08-07 measured baseline (H2D 54% of
+  CUDA API time, sm ~10%) asserted **not** ideal, pageable-vs-pinned staging
+  showing up as ~3.6× the floor, an at-the-floor upload-bound workload correctly
+  classified as ideal (it cannot do better), and a test pinning that `sm%` alone
+  never changes a verdict.
+
+  **Scope, deliberately:** this classifies already-extracted numbers and does NOT
+  parse `nsys` / `nvidia-smi dmon` output. Neither tool is present on this host
+  and there is no GPU here, so a parser would have been written against a
+  remembered format with no sample to check it — which is how a harness ends up
+  confidently reporting nonsense. The collection half, deliverables 1/3/4, and
+  the before/after rows all still need a real fleet box.
+
+### Added
+
 - **`zenmetrics_gpu_core::identical_value` — each metric's byte-identical score and
   scale direction, MEASURED rather than copied from a table (#52).** The guard
   predicates need two facts per metric, and getting one wrong is not benign: a
