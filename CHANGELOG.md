@@ -220,6 +220,41 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **Dashboard web dependencies updated, including TypeScript 5.9.3 -> 7.0.2 — which
+  needed two source fixes CI could never have caught.** `npm update` took every
+  in-range bump (react/react-dom 19.2.6 -> 19.3.0, the whole radix set,
+  tailwindcss + @tailwindcss/vite 4.3.1 -> 4.3.3, vite 8.0.16 -> 8.2.2,
+  @vitejs/plugin-react 6.0.2 -> 6.1.1, postcss 8.5.26 -> 8.5.28, @types/*), going
+  *further* than the three open Dependabot PRs proposed (they asked for react
+  19.2.8; the lock now carries 19.3.0), so #54/#55/#57 are superseded.
+
+  **TypeScript 7 broke the build twice and both were real, not cosmetic:**
+  - `TS5102: Option 'baseUrl' has been removed` — dropped from `tsconfig.json`
+    and `tsconfig.app.json`. Resolution is unchanged: `paths` was already written
+    tsconfig-relative (`./src/*`), which is exactly what TS7 resolves against
+    once `baseUrl` is gone, and Vite carries its own `@` alias for runtime.
+  - `TS2882: Cannot find module or type declarations for side-effect import of
+    '@/index.css'` — the project was missing the standard Vite scaffold file
+    `src/vite-env.d.ts` (`/// <reference types="vite/client" />`). Vite ships
+    `declare module '*.css' {}` in `vite/client.d.ts`; nothing referenced it. TS5
+    tolerated the gap, TS7 enforces it.
+
+  Also replaced `__dirname` with `import.meta.dirname` in `vite.config.ts`,
+  clearing a warning that becomes an error when Vite's native config loader
+  becomes the default.
+
+  **Why this needed doing by hand: NO CI JOB BUILDS THE DASHBOARD.** There is no
+  `setup-node`, no `npm`, nothing web-related in any workflow — so all three npm
+  Dependabot PRs would have shown green checks that say nothing about them, and
+  merging #57 would have shipped a broken `npm run build` straight into the
+  Railway image (whose Dockerfile does `npm ci && npm run build`). Verified here
+  instead, with node 22.20.0: clean `npm ci` from the committed lockfile, then
+  `npm run build` exits 0 with **zero warnings** — and emits byte-identical
+  bundles to the pre-TypeScript-7 build (`index-C8ZvdgTx.js`,
+  `index-DNmcWUnW.css`), so the toolchain migration changed no output.
+
+### Changed
+
 - **All five Cargo lockfiles refreshed** (`Cargo.lock`, `apidoc/`,
   `benchmarks/av1-compare/`, `crates/burn-conv-spike/`,
   `crates/burn-ranknet-spike/`): 176 registry crates advanced in the root lock
