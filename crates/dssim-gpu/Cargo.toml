@@ -84,7 +84,7 @@ required-features = ["cubecl-types"]
 
 [[example]]
 name = "bench_t4_warm"
-required-features = ["cubecl-types"]
+required-features = ["cubecl-types", "cuda"]
 
 [[example]]
 name = "end_to_end"

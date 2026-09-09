@@ -50,15 +50,15 @@ required-features = ["cubecl-types"]
 
 [[example]]
 name = "bench_profile"
-required-features = ["cubecl-types"]
+required-features = ["cubecl-types", "cuda"]
 
 [[example]]
 name = "bench_t4_warm"
-required-features = ["cubecl-types"]
+required-features = ["cubecl-types", "cuda"]
 
 [[example]]
 name = "parity_smoke"
-required-features = ["cubecl-types"]
+required-features = ["cubecl-types", "cuda"]
 
 [[example]]
 name = "bench_strip_vs_whole"

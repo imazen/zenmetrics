@@ -37,6 +37,26 @@ Workspace conventions per the global rules:
   `score_pairs_hdr_writes_schema_v2_feature_parquet`) all pass, so the on-disk
   sidecar format is unchanged by the bump.
 
+### Fixed
+
+- **22 GPU-crate examples across `butteraugli-gpu`, `cvvdp-gpu`, `dssim-gpu`,
+  `iwssim-gpu`, `ssim2-gpu` and `zensim-gpu` broke any `--all-targets` build in a
+  non-CUDA configuration.** Each hard-codes `cubecl::cuda::CudaRuntime` (or a
+  `#[cfg(feature = "cuda")]` `Backend` alias, or gates its whole body on `cuda`),
+  but declared `required-features = ["cubecl-types"]` or no `[[example]]` block at
+  all — and `cubecl-types` does not imply `cuda`. So `cargo check --workspace
+  --no-default-features --features wgpu,all-metrics --all-targets` failed with 22
+  errors: `E0432`/`E0433` unresolved import `cubecl::cuda` (16), `E0601` no `main`
+  function (5, bodies fully cuda-gated), and `E0425` unknown type `Backend` (1).
+  Each now declares `cuda` in its `required-features`, so cargo skips them when
+  the backend is absent instead of failing the build. Pre-existing — not a
+  regression from the arrow/parquet bump; found because that verification ran
+  `--all-targets`. CI never caught it because its wgpu job runs `clippy` without
+  `--all-targets` and its `--all-targets` job runs with `cuda` on, so no CI
+  configuration builds these examples without CUDA. Verified: `--all-targets`
+  `--keep-going` is now clean under `wgpu,all-metrics` (0 errors, was 22), and the
+  examples still build under `cuda,all-metrics`.
+
 ### Changed
 
 - **All five Cargo lockfiles refreshed** (`Cargo.lock`, `apidoc/`,

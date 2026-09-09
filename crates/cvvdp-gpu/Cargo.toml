@@ -70,7 +70,7 @@ harness = false
 # cubecl-types feature.
 [[example]]
 name = "bench_warm_ref"
-required-features = ["cubecl-types"]
+required-features = ["cubecl-types", "cuda"]
 
 [[example]]
 name = "cap_memory_estimate"
@@ -131,3 +131,7 @@ required-features = ["wgpu"]
 [[test]]
 name = "it"
 path = "tests/it/main.rs"
+
+[[example]]
+name = "mem_mode_b_vs_full"
+required-features = ["cuda"]

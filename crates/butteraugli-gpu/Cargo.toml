@@ -102,11 +102,11 @@ required-features = ["cubecl-types"]
 
 [[example]]
 name = "bench_t4_warm"
-required-features = ["cubecl-types"]
+required-features = ["cubecl-types", "cuda"]
 
 [[example]]
 name = "bench_warm_ref"
-required-features = ["cubecl-types"]
+required-features = ["cubecl-types", "cuda"]
 
 [[example]]
 name = "blur_parity"
@@ -163,3 +163,19 @@ required-features = ["cubecl-types", "cuda"]
 [[test]]
 name = "it"
 path = "tests/it/main.rs"
+
+[[example]]
+name = "bench_multires_strip_vs_whole_cuda"
+required-features = ["cuda"]
+
+[[example]]
+name = "bench_strip_wall_task158"
+required-features = ["cuda"]
+
+[[example]]
+name = "setref_timing"
+required-features = ["cuda"]
+
+[[example]]
+name = "vram_leak_check"
+required-features = ["cuda"]
