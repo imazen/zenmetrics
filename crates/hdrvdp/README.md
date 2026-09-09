@@ -14,12 +14,13 @@ measured against:
 | AIC-HDR2025 (HDR compression JND) | **0.936** | SSIMULACRA2 0.906 |
 | UPIQ (380 HDR compression pairs, JOD) | **0.812** | cvvdp faithful 0.758 |
 
-## Status — chunks 1–3 of 6: **it scores a pair, it is not yet validated**
+## Status — chunks 1–4a of 6, plus an optimisation pass: **it scores a pair, it is not yet validated**
 
 Landed in chunks (tracked in [imazen/zenmetrics#50]). `hdrvdp::hdrvdp()` now takes
 two images in absolute luminance and returns `Q_MOS` (0–100, 100 = best), the raw
-`Q`, and the per-pixel visibility maps `P_map` / `C_map`. 100 tests (98 unit +
-2 end-to-end on real corpus pixels) and **zero runtime dependencies** — the FFT,
+`Q`, and the per-pixel visibility maps `P_map` / `C_map`. 112 tests (98 unit +
+12 byte-exact output/FFT locks + 2 end-to-end on real corpus pixels) and **zero
+runtime dependencies** — the FFT,
 interpolation and quadrature are in-crate, so i686 / wasm / windows-arm builds
 carry nothing extra. The only dev-dependencies are an image decoder and the
 shared corpus, used by the end-to-end test and example.
@@ -38,7 +39,18 @@ shared corpus, used by the end-to-end test and example.
 | `S_map` → `P_map` / `P_det` / `C_max`, and `Q` → `Q_MOS` | `pool` |
 | the end-to-end entry point | `metric` |
 
-**Still open:** UPIQ validation (chunk 4), umbrella wiring as
+Since chunk 4a (`a11bcad4`, first end-to-end scores on real pixels) the crate
+has taken an optimisation pass — FFT plans with hoisted/shared twiddles and
+chirp, `corr_dn` reflect-pad-once with dense blocked correlation, `up_conv`
+pad-once with tap lists and 8-wide output blocking, `box3x3` interior fast path,
+`imresize` tap slicing, pair-shared MTF filter and a memoised LUT range
+(`5c156c2e`, `2447406a`, `1223a583`, `5cc2c63d`, `624615e8`, `2443d88c`). That
+pass is fenced by a byte-exact output lock taken **before** any of it
+(`f4a380e9`) plus an FFT lock extended to 2048-point transforms (`dec95f49`), so
+the optimisations are proven not to move a single output bit. A zenbench suite
+and the full perf record live in `benchmarks/` (`4cf99288`).
+
+**Still open:** UPIQ validation (the rest of chunk 4), umbrella wiring as
 `MetricKind::Hdrvdp` (chunk 5), and a CubeCL port gated against this `f64`
 reference (chunk 6).
 
@@ -46,9 +58,11 @@ reference (chunk 6).
 pipeline is complete and behaves like a luminance-aware metric — quality falls
 monotonically along a distortion ladder, the visibility map localises, and the
 same relative distortion is measurably less visible at ~0.04 cd/m² than at
-~80 cd/m² — but "behaves correctly" is not "matches the reference". Chunk 4
-measures UPIQ SROCC against the published **0.812** and records it in
-`benchmarks/`; until that lands, treat the output as a work in progress.
+~80 cd/m² — but "behaves correctly" is not "matches the reference". The
+remainder of chunk 4 measures UPIQ SROCC against the published **0.812** and
+records it in `benchmarks/`; until that lands, treat the output as a work in
+progress. The optimisation pass above changes speed only — it is bit-locked, so
+it neither advances nor undermines validation.
 
 ### Two things to know before reading a number
 
