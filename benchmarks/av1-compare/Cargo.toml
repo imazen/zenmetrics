@@ -9,7 +9,12 @@ publish = false
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
+sha2 = "0.11.0"
+# sha2 0.11 returns `Array`, which (unlike 0.10's `GenericArray`) does not
+# implement LowerHex, so `format!("{:x}", ..)` no longer compiles. hex::encode
+# produces the identical lowercase unseparated string — pinned by
+# `sha_matches_known_sha256_vector` in fleet.rs.
+hex = "0.4.3"
 svtav1 = { package = "zenav1-svt", path = "../../../zenav1-svt/rust/svtav1" }
 aom-encode = { package = "zenav1-aom-encode", path = "../../../zenav1-aom/crates/aom-encode" }
 zenrav1e = { path = "../../../zenrav1e" }

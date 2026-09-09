@@ -643,7 +643,11 @@ mod tests {
                 let fastest = Config { speed: 13, ..cfg };
                 let obu = encode(fastest, &pixels).unwrap();
                 check_decode(&obu, 64, 64).unwrap();
-                assert!(Config { speed: 14, ..cfg }.validate_configuration().is_err());
+                assert!(
+                    Config { speed: 14, ..cfg }
+                        .validate_configuration()
+                        .is_err()
+                );
             }
         }
     }

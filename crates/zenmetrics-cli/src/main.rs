@@ -1151,7 +1151,7 @@ fn cmd_sweep(
             let mut out = std::io::BufWriter::new(std::fs::File::create(cells_path)?);
             let mut emitted = 0usize;
             for src in &sources {
-                let sha = format!("{:x}", Sha256::digest(std::fs::read(src)?));
+                let sha = hex::encode(Sha256::digest(std::fs::read(src)?));
                 for (q, knobs) in &kept {
                     let item = serde_json::json!({
                         "image_path": match args.emit_cells_image_path {
@@ -1213,7 +1213,7 @@ fn cmd_sweep(
                 let mut out = std::io::BufWriter::new(std::fs::File::create(cells_path)?);
                 let mut emitted = 0usize;
                 for src in &sources {
-                    let sha = format!("{:x}", Sha256::digest(std::fs::read(src)?));
+                    let sha = hex::encode(Sha256::digest(std::fs::read(src)?));
                     for cell in &built.cells {
                         let item = serde_json::json!({
                             "image_path": match args.emit_cells_image_path {

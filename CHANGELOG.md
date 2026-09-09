@@ -287,6 +287,30 @@ Workspace conventions per the global rules:
   One `sha2 0.10.9` remains in the lock, reachable only transitively through
   `zenforks-cubecl-cpu`'s LLVM bundler — not ours to move.
 
+  **The 0.11 API change did bite, in a way the CI clippy gate could not see.**
+  sha2 0.11 returns `Array` where 0.10 returned `GenericArray`, and `Array` does
+  not implement `LowerHex` — so every `format!("{:x}", Sha256::digest(..))` stops
+  compiling. Six such sites existed: 5 in `zenmetrics-cli`
+  (`main.rs` ×2, `jobexec.rs`, `examples/avif_depth_verify.rs` ×2) and 1 family in
+  `benchmarks/av1-compare` (8 call sites across `main.rs`, `fleet.rs`,
+  `verify.rs`, `measure.rs`). **None is reachable from
+  `--features wgpu,all-metrics`**, which is the only clippy configuration CI runs,
+  so the workspace gate stayed green while `--features jobexec` and the
+  standalone `av1-compare` crate were broken. Found by building those
+  configurations explicitly.
+
+  All rewritten to `hex::encode(..)`, which emits the identical lowercase
+  unseparated 64-char string. That equality is load-bearing, not cosmetic: these
+  digests are **content addresses** — `jobexec`'s `src_cache_path` cache key (a
+  changed encoding orphans every cached source on the fleet) and the
+  `input_sha256` / `reference_png_sha256` / `output_sha256` / `binary_sha256`
+  fields the CLI and av1-compare emit into JSON and zenfleet declarations. Pinned
+  by two new tests
+  (`jobexec::tests::digest_hex_encoding_is_byte_identical_to_the_old_lowerhex`,
+  `fleet::sha_hex_tests::sha_matches_known_sha256_vectors`) asserting the
+  canonical SHA-256 vectors for `""` and `"abc"` — i.e. against the standard, not
+  against the old implementation.
+
 - **All five Cargo lockfiles refreshed** (`Cargo.lock`, `apidoc/`,
   `benchmarks/av1-compare/`, `crates/burn-conv-spike/`,
   `crates/burn-ranknet-spike/`): 176 registry crates advanced in the root lock

@@ -367,6 +367,12 @@ feature-rev = ["feature-jobs"]
 # Content-addressing for --emit-cells declare manifests (same version as
 # zenfleet-core so the workspace carries one copy).
 sha2 = "0.11.0"
+# sha2 0.11 returns `Array`, which (unlike 0.10's `GenericArray`) does not
+# implement LowerHex, so `format!("{:x}", Sha256::digest(..))` no longer compiles.
+# `hex::encode` emits the identical lowercase unseparated 64-char string, which
+# matters because these digests are content addresses (src_cache_path's cache key,
+# the emitted `sha256` provenance fields).
+hex = "0.4.3"
 # The fleet-plan aggregator (CellCost / InstanceRecommendation /
 # recommend_instance). Zero heavy deps — pulls nothing GPU/codec.
 zenfleet-core = { version = "0.0.1", path = "../zenfleet-core" }

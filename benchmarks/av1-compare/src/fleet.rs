@@ -9,7 +9,7 @@ use std::{
 use zenfleet_core::{DesiredJob, JobKind};
 type Error = Box<dyn std::error::Error>;
 fn sha(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    hex::encode(Sha256::digest(bytes))
 }
 fn binary_sha() -> Result<String, Error> {
     Ok(sha(&fs::read(std::env::current_exe()?)?))
@@ -197,5 +197,36 @@ mod tests {
             .collect();
         assert!(paths.contains(&Path::new("comparison-failure/failure.json").to_path_buf()));
         assert!(paths.contains(&Path::new("comparison-failure/rows.jsonl").to_path_buf()));
+    }
+}
+
+#[cfg(test)]
+mod sha_hex_tests {
+    use super::sha;
+
+    /// sha2 0.11 returns `Array`, which does not implement `LowerHex`, so the
+    /// old `format!("{:x}", ..)` had to become `hex::encode(..)`. These hashes
+    /// are CONTENT ADDRESSES — they land in `input_sha256` /
+    /// `reference_png_sha256` / `output_sha256` / `binary_sha256` in the emitted
+    /// JSON and in zenfleet job declarations — so the replacement must produce a
+    /// byte-identical string, not merely a valid one. Pinned against the
+    /// canonical SHA-256 vectors rather than against the old implementation.
+    #[test]
+    fn sha_matches_known_sha256_vectors() {
+        assert_eq!(
+            sha(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            sha(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        // lowercase, zero-padded, no separators, exactly 64 chars
+        let h = sha(b"zenmetrics");
+        assert_eq!(h.len(), 64);
+        assert!(
+            h.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        );
     }
 }

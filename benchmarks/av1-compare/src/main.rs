@@ -64,10 +64,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "{}",
             serde_json::json!({
                 "protocol": "av1-prepared-input-v1", "config": req.config,
-                "input_sha256": format!("{:x}", Sha256::digest(&pixels)),
-                "reference_png_sha256": format!("{:x}", Sha256::digest(&source)),
+                "input_sha256": hex::encode(Sha256::digest(&pixels)),
+                "reference_png_sha256": hex::encode(Sha256::digest(&source)),
                 "bytes": pixels.len(),
-                "binary_sha256": format!("{:x}", Sha256::digest(std::fs::read(std::env::current_exe()?)?))
+                "binary_sha256": hex::encode(Sha256::digest(std::fs::read(std::env::current_exe()?)?))
             })
         );
         return Ok(());
@@ -77,11 +77,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::path::Path::new(&req.output).exists() {
         return Err("output already exists".into());
     }
-    let source_sha = format!("{:x}", Sha256::digest(&pixels));
-    let binary_sha = format!(
-        "{:x}",
-        Sha256::digest(std::fs::read(std::env::current_exe()?)?)
-    );
+    let source_sha = hex::encode(Sha256::digest(&pixels));
+    let binary_sha = hex::encode(Sha256::digest(std::fs::read(std::env::current_exe()?)?));
     let start = Instant::now();
     let obu = encode(req.config, &pixels)?;
     let elapsed_ns = start.elapsed().as_nanos();
@@ -95,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "{}",
         serde_json::json!({"protocol":"av1-api-planar-v3", "config":req.config,
         "revision": req.config.revision(), "svt_reference": req.config.resolved_svt_reference(), "binary_sha256":binary_sha, "input_sha256": source_sha,
-        "output_sha256": format!("{:x}", Sha256::digest(&obu)), "bytes":obu.len(),
+        "output_sha256": hex::encode(Sha256::digest(&obu)), "bytes":obu.len(),
         "api_elapsed_ns":elapsed_ns, "timing_scope":"fresh-lifecycle-including-plane-preparation",
         "decode_checked":"libaom", "c_fp_contract":"off", "aom_sb_size":64})
     );

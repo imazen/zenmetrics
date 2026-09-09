@@ -295,7 +295,7 @@ static SRC_SEQ: AtomicU64 = AtomicU64::new(0);
 /// HDR decode path (`hdr::decode_to_nits`) dispatches on.
 fn src_cache_path(uri: &str) -> PathBuf {
     use sha2::{Digest, Sha256};
-    let key = format!("{:x}", Sha256::digest(uri.as_bytes()));
+    let key = hex::encode(Sha256::digest(uri.as_bytes()));
     let base = uri.rsplit('/').next().unwrap_or("src");
     std::env::temp_dir().join(format!("{SRC_CACHE_PREFIX}{}_{base}", &key[..32]))
 }
@@ -2394,6 +2394,37 @@ pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
+
+    /// sha2 0.11 dropped `LowerHex` on the digest type (it returns `Array`, not
+    /// 0.10's `GenericArray`), so every `format!("{:x}", Sha256::digest(..))`
+    /// became `hex::encode(..)`. These digests are CONTENT ADDRESSES — this
+    /// module's `src_cache_path` key, and the `sha256` provenance fields the CLI
+    /// emits — so the replacement had to be byte-identical, not merely valid.
+    /// Pinned against the canonical SHA-256 vectors rather than against the old
+    /// implementation, and against `src_cache_path`'s 32-char truncation, which
+    /// is what actually names the cache file.
+    #[test]
+    fn digest_hex_encoding_is_byte_identical_to_the_old_lowerhex() {
+        use sha2::{Digest, Sha256};
+        assert_eq!(
+            hex::encode(Sha256::digest(b"")),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            hex::encode(Sha256::digest(b"abc")),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        // The cache key is the first 32 chars of that string; a changed encoding
+        // would silently orphan every cached source on the fleet.
+        let key = hex::encode(Sha256::digest(b"s3://bucket/img.png"));
+        assert_eq!(key.len(), 64);
+        assert!(
+            key.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        );
+        assert_eq!(&key[..32], &key[..32].to_ascii_lowercase());
+    }
+
     use super::*;
 
     /// The bug a basename-only cache key would introduce, and the reason the key is the

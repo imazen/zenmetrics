@@ -7326,6 +7326,7 @@ dependencies = [
  "enough",
  "fast-ssim2 0.8.2",
  "heic",
+ "hex",
  "image",
  "imgref",
  "jxl-encoder",

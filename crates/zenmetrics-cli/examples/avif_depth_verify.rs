@@ -252,7 +252,7 @@ fn chroma_label(cfg: &zenavif_parse::AV1Config) -> String {
 fn verify_one(path: &Path, data: &[u8], expect: Option<u8>, control: Option<&str>) -> Row {
     let mut row = Row {
         path: path.display().to_string(),
-        sha256: format!("{:x}", Sha256::digest(data)),
+        sha256: hex::encode(Sha256::digest(data)),
         bytes: data.len() as u64,
         chroma: "-".into(),
         expect,
@@ -498,7 +498,7 @@ fn main() -> std::process::ExitCode {
     // The control blob is hashed once, not per input.
     let control_sha = match control_path.as_ref() {
         Some(p) => match fs::read(p) {
-            Ok(d) => Some(format!("{:x}", Sha256::digest(&d))),
+            Ok(d) => Some(hex::encode(Sha256::digest(&d))),
             Err(e) => {
                 eprintln!("avif_depth_verify: --control {p}: {e}");
                 return std::process::ExitCode::from(3);

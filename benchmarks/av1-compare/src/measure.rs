@@ -44,7 +44,7 @@ fn one() -> u32 {
     1
 }
 fn sha(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    hex::encode(Sha256::digest(bytes))
 }
 
 pub(crate) fn decode_reference_sdr8(
