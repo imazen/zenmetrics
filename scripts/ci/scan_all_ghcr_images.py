@@ -13,6 +13,25 @@ Selection (env SCAN_SCOPE):
   recent   (default) — newest N tags per package + any tag named latest/kadis/exec*/base*
   all                — every tagged digest under every package (slow; weekly sweep)
 
+Enumeration has two sources, in order:
+  1. the GitHub packages API (`/orgs/<org>/packages`), which also finds packages
+     nobody remembered to register; needs a token with `read:packages` AND org
+     access, and
+  2. `ghcr-packages.json` + `crane ls`, which needs neither.
+
+Actions' default `GITHUB_TOKEN` is a REPOSITORY-scoped installation token and
+cannot enumerate ORG-level packages at all -- it returns `HTTP 400 Invalid
+argument`, not a 403, and no `permissions:` block changes that (`packages: read`
+grants access to this repo's own packages, not org enumeration). So on a stock
+Actions run source 1 always fails and source 2 is what runs. Supply a PAT with
+`read:packages` as `GH_TOKEN` to get the wider enumeration.
+
+Source 2 is not merely a degraded fallback: `ghcr-packages.json` is the ENFORCED
+source of truth for package names (`just ghcr-check` fails any infra file
+referencing a package not listed there), so it is the same set the naming guard
+already polices, and it covers the grandfathered `deprecated` names too because
+those images are still public and still pullable.
+
 Env:
   ORG=imazen  SCAN_SCOPE=recent|all  RECENT_N=12  ONLY_PACKAGES=a,b  SCAN_NO_GREP=0
 Exit: 0 all clean · 1 leak found · 2 could not enumerate/scan (broken, not "clean").
@@ -56,13 +75,77 @@ def gh_json(path: str):
     return merged
 
 
-def list_packages() -> list[str]:
-    pkgs = [p["name"] for p in gh_json(f"/orgs/{ORG}/packages?package_type=container&per_page=100")]
-    return sorted(p for p in pkgs if not ONLY or p in ONLY)
+def manifest_packages() -> list[str]:
+    """Package names from `ghcr-packages.json` — canonical plus the grandfathered
+    `deprecated` splinters, which are still public and still pullable."""
+    mf = HERE.parent.parent / "ghcr-packages.json"
+    d = json.loads(mf.read_text())
+    names = [p["name"] for p in d.get("packages", [])]
+    names += [k for k in d.get("deprecated", {}) if not k.startswith("_")]
+    return sorted(set(names))
 
 
-def versions(pkg: str) -> list[dict]:
-    return gh_json(f"/orgs/{ORG}/packages/container/{pkg}/versions?per_page=100")
+def list_packages() -> tuple[list[str], str]:
+    """(packages, source). Prefers the API; falls back to the manifest."""
+    try:
+        pkgs = [
+            p["name"]
+            for p in gh_json(f"/orgs/{ORG}/packages?package_type=container&per_page=100")
+        ]
+        source = "github-api"
+    except subprocess.CalledProcessError as e:
+        err = (e.stderr or "").strip().replace("\n", " ")[:200]
+        print(
+            f"NOTE: org package enumeration unavailable ({err}); "
+            f"falling back to ghcr-packages.json + crane.\n"
+            f"      (Actions' GITHUB_TOKEN is repo-scoped and cannot list ORG packages. "
+            f"Supply a PAT with read:packages as GH_TOKEN for the wider sweep.)",
+            file=sys.stderr,
+        )
+        pkgs, source = manifest_packages(), "ghcr-packages.json"
+    return sorted(p for p in pkgs if not ONLY or p in ONLY), source
+
+
+def crane_versions(pkg: str) -> list[dict]:
+    """Version records shaped like the API's, built from `crane ls` + `crane digest`.
+
+    `crane` is already installed and authenticated by the workflow, and these
+    packages are public, so this needs no GitHub packages scope. Tags come back
+    newest-last from the registry, so reverse to match the API's newest-first
+    ordering that `pick_tags` relies on.
+    """
+    ref = f"ghcr.io/{ORG}/{pkg}"
+    out = subprocess.run(
+        ["crane", "ls", ref], capture_output=True, text=True, timeout=120, check=True
+    ).stdout
+    tags = [t for t in (line.strip() for line in out.splitlines()) if t]
+    tags.reverse()
+    # Resolve only the tags that could be selected, so a package with hundreds of
+    # tags does not cost hundreds of HEAD requests.
+    candidate = [
+        t
+        for i, t in enumerate(tags)
+        if SCOPE == "all" or i < RECENT_N or t in ALWAYS_TAGS
+    ]
+    vers: list[dict] = []
+    for tag in candidate:
+        if tag.startswith("buildcache"):
+            continue
+        try:
+            digest = subprocess.run(
+                ["crane", "digest", f"{ref}:{tag}"],
+                capture_output=True, text=True, timeout=120, check=True,
+            ).stdout.strip()
+        except subprocess.CalledProcessError:
+            continue  # tag vanished mid-run, or is a manifest crane won't resolve
+        vers.append({"name": digest, "metadata": {"container": {"tags": [tag]}}})
+    return vers
+
+
+def versions(pkg: str, source: str) -> list[dict]:
+    if source == "github-api":
+        return gh_json(f"/orgs/{ORG}/packages/container/{pkg}/versions?per_page=100")
+    return crane_versions(pkg)
 
 
 def pick_tags(pkg: str, vers: list[dict]) -> list[tuple[str, str]]:
@@ -89,21 +172,32 @@ def pick_tags(pkg: str, vers: list[dict]) -> list[tuple[str, str]]:
 def main() -> int:
     if shutil.which("gh") is None:
         print("FATAL: gh not on PATH", file=sys.stderr); return 2
+    if shutil.which("crane") is None:
+        print("FATAL: crane not on PATH", file=sys.stderr); return 2
     if not SCANNER.exists():
         print(f"FATAL: scanner missing: {SCANNER}", file=sys.stderr); return 2
     try:
-        pkgs = list_packages()
-    except subprocess.CalledProcessError as e:
-        print(f"FATAL: cannot list {ORG} packages (need read:packages + org access):\n{e.stderr}",
+        pkgs, source = list_packages()
+    except Exception as e:  # manifest unreadable / malformed JSON
+        print(f"FATAL: cannot enumerate {ORG} packages by any source: {e}",
               file=sys.stderr); return 2
 
     refs: list[str] = []
-    print(f"== ghcr.io/{ORG}: {len(pkgs)} container packages (scope={SCOPE}) ==")
+    print(f"== ghcr.io/{ORG}: {len(pkgs)} container packages "
+          f"(scope={SCOPE}, enumerated via {source}) ==")
     for pkg in pkgs:
         try:
-            vs = versions(pkg)
+            vs = versions(pkg, source)
         except subprocess.CalledProcessError as e:
-            print(f"  {pkg}: WARN cannot list versions: {e.stderr.strip()}", file=sys.stderr)
+            err = (e.stderr or "").strip()
+            # A name in the manifest's `deprecated` map may never have been
+            # created, or may not be public. Either way it is out of scope for a
+            # PUBLIC-image leak scan — say so quietly instead of emitting a
+            # permanent CI warning that trains people to ignore warnings.
+            if "DENIED" in err or "UNAUTHORIZED" in err or "NAME_UNKNOWN" in err:
+                print(f"  {pkg}: absent or not public — skipped")
+            else:
+                print(f"  {pkg}: WARN cannot list versions: {err}", file=sys.stderr)
             continue
         sel = pick_tags(pkg, vs)
         print(f"  {pkg}: {len(vs)} versions -> {len(sel)} unique-digest tags to scan")

@@ -132,6 +132,37 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **The `Image secret scan` workflow failed on its very first run and turned
+  `master` red — Actions' `GITHUB_TOKEN` cannot enumerate org packages at all.**
+  `scan_all_ghcr_images.py` listed packages via `/orgs/imazen/packages`, which
+  needs `read:packages` **with org access**. The default `GITHUB_TOKEN` is a
+  *repository-scoped* installation token, so that endpoint returns `HTTP 400
+  Invalid argument` — not a 403 — and no `permissions:` block changes it
+  (`packages: read` grants access to this repo's own packages, not org
+  enumeration). The script correctly exited **2** ("could not scan — do NOT treat
+  as clean") rather than reporting a false all-clear, so the fail-loud design
+  worked; it just could never succeed.
+
+  Enumeration now has two sources: the API when a token can use it, and
+  otherwise **`ghcr-packages.json` + `crane ls`**, which needs no GitHub packages
+  scope at all (the packages are public and `crane` is already installed and
+  authenticated by the workflow). That is not merely a degraded fallback —
+  `ghcr-packages.json` is the *enforced* source of truth for package names
+  (`just ghcr-check` fails any infra file referencing an unlisted package), so it
+  is the same set the naming guard already polices, and it covers the
+  grandfathered `deprecated` splinters because those images are still public.
+  A name that does not resolve is reported as "absent or not public — skipped"
+  rather than as a permanent CI warning.
+
+  **Verified against the real registry, not reasoned about:** with `crane`
+  installed locally and no packages scope on the token, the script enumerates 15
+  packages and selects **29 unique-digest images** to scan, exercising exactly the
+  fallback path CI will take. Supplying a PAT with `read:packages` as `GH_TOKEN`
+  restores the wider API enumeration, which also catches packages nobody
+  registered.
+
+### Fixed
+
 - **`score-pairs` disagreed with `score` / `batch` on every byte-identical zensim
   pair — i.e. on every lossless cell (#51).** `score-pairs` scores CPU zensim
   through the cached-reference path (`precompute_ref` + `score_with_precomputed`
