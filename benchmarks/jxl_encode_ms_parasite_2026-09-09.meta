@@ -1,0 +1,11 @@
+git_commit: 50494bce
+hostname: i265
+cpu: Intel(R) Core(TM) Ultra 7 265K
+threads_available: 20
+date_utc: 2026-09-09T21:30:55Z
+issue: https://github.com/imazen/zenmetrics/issues/34
+binary: cargo build --release -p zenmetrics-cli --no-default-features --features cpu-metrics,sweep,jxl,png
+knob_grid_cmd: zenmetrics sweep --codec zenjxl --sources <4 synth PNGs 64/256/512/1024> --q-grid 75 --knob-grid '{"effort":[1,5,9]}' --metric zensim --jobs 1
+plan_cmd:      zenmetrics sweep --codec zenjxl --sources <1024 synth PNG> --q-grid 75 --plan rd_core --plan-budget 12 --metric zensim --jobs 1
+probe:         cargo run --release -p zenmetrics-cli --features sweep,jxl,png --example jxl_encode_ms_probe
+note: sources are the probe's own deterministic synth (gradient + high-frequency term), NOT a named corpus -- this measures harness overhead attribution, not codec RD.

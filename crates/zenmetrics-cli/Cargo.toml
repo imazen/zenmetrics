@@ -569,3 +569,7 @@ required-features = ["sweep", "hdr-gainmap", "png"]
 [[example]]
 name = "avif_depth_verify"
 required-features = ["avif"]
+
+[[example]]
+name = "jxl_encode_ms_probe"
+required-features = ["sweep", "jxl", "png"]

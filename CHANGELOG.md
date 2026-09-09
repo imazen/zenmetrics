@@ -37,6 +37,32 @@ Workspace conventions per the global rules:
   `score_pairs_hdr_writes_schema_v2_feature_parquet`) all pass, so the on-disk
   sidecar format is unchanged by the bump.
 
+### Added
+
+- **`jxl_encode_ms_probe` example + `benchmarks/jxl_encode_ms_parasite_2026-09-09.{md,tsv,meta}`
+  — #34's `encode_ms` parasite localized to the `--plan` path.** The issue reported
+  an additive ~31 s/MP term flattening a real 17-68x zenjxl effort span to ~0.9x,
+  with the mechanism unidentified. Reproduced on current `master` and narrowed:
+  **`--knob-grid` is clean, `--plan` is not.** Same binary, encoder, image and
+  effort — 1 MP e5/e9 is 131 / 1499 ms via knob-grid (42x span, monotonic) and
+  14 247 / 14 169 ms via `--plan rd_core` (1.005x, flat). Four causes ruled out by
+  measurement rather than argument: not the encoder core (direct `jxl_encoder` at
+  `threads=1` spans 34x), not the zenjxl/zencodec wrapper (agrees with direct
+  within noise, byte-identical output), not encoder construction (0.000-0.002 ms),
+  not fleet concurrency (16-way contention multiplies 2.2-4.5x but preserves the
+  span), and not within-process accumulation (nine consecutive same-effort cells
+  show no index drift). `.with_threads(1)`, which the plan path pins per cell,
+  accounts for 3.1x and preserves the span — a contributor, not the parasite.
+  Within the plan the nine cells split bimodally and hold membership across all
+  three sizes: `vd-e5_libjxl_def` + `vd-e9_libjxl_def` are ~12x faster than the
+  other seven. That split is **not** explained by mode, strategy or effort —
+  `vd-e7_libjxl_def` differs from the two fast cells only in effort yet sits with
+  the slow group — so the writeup stops short of naming a line and records the
+  exact next step (diff the resolved `SweepVariant` for those two cell ids).
+  Consequence that holds regardless: zenjxl `encode_ms` from any plan-driven
+  sweep — including the canonical 2026-06-27 rollup — is contaminated; the
+  knob-grid column is trustworthy.
+
 ### Fixed
 
 - **`score-pairs` disagreed with `score` / `batch` on every byte-identical zensim
