@@ -55,3 +55,15 @@ audit lives at `imazen/zensim`'s
 ## License
 
 MIT OR Apache-2.0
+
+## September 14: scatter diagnostics admission
+
+Concrete callers: zensim's `bake_verdict` and `panel`, replacing geometric
+statistics in the gauntlet renderer and raw OLS/MAD tails in `outlier_gate.py`.
+Add `scatter::diagnose(predicted, target)` and its non-exhaustive result.
+This is an engineering diagnostic, not a new Mohammadi statistic or fitted
+model. Reject mismatched/nonfinite pairs; preserve raw score tails. Use a
+tie-invariant rank-to-target-quantile mapping (mean quantile over each tied
+prediction group), expose reference and prediction occupancy separately,
+and report zero-spread normalization as unavailable rather than divide by an
+arbitrary epsilon. Existing panel arithmetic and APIs remain unchanged.

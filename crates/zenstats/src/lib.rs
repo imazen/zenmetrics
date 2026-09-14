@@ -59,6 +59,7 @@
 //! migration note.
 
 pub mod panel;
+pub mod scatter;
 
 pub use panel::{
     Decision, DecisiveOutcome, LightPanel, PanelStats, ValAggregate, bootstrap_ci_delta,
