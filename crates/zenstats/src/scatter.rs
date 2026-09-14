@@ -120,10 +120,11 @@ pub fn diagnose(predicted: &[f64], target: &[f64]) -> Result<ScatterDiagnostics,
         while end < n && predicted[order[start]] == predicted[order[end]] {
             end += 1;
         }
-        let mean = targets[start..end]
-            .iter()
-            .map(|v| v / (end - start) as f64)
-            .sum::<f64>();
+        let mean = targets[start]
+            + targets[start..end]
+                .iter()
+                .map(|v| (v - targets[start]) / (end - start) as f64)
+                .sum::<f64>();
         for &i in &order[start..end] {
             mapped[i] = mean;
         }
@@ -234,6 +235,9 @@ mod tests {
         assert_eq!(a.outside_envelope, 0.0);
         let c = diagnose(&vec![1.0; 100], &vec![2.0; 100]).unwrap();
         assert!(c.shape_p99.is_none());
+        let decimal = diagnose(&[7.3; 100], &[7.3; 100]).unwrap();
+        assert_eq!(decimal.outside_envelope, 0.0);
+        assert!(decimal.mapped_prediction.iter().all(|v| *v == 7.3));
         assert!(diagnose(&target[..99], &target).is_err());
         let mut bad = target.clone();
         bad[5] = f64::NAN;
