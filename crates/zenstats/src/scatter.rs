@@ -32,6 +32,12 @@ pub struct ScatterDiagnostics {
     pub prediction_coverage: f64,
     /// Largest mapped-prediction bin share.
     pub prediction_clump: f64,
+    /// Coverage on 20 equal-width bins over the raw prediction min/max.
+    /// Unlike rank mapping, this preserves nonlinear compression of scores.
+    pub raw_coverage: f64,
+    /// Largest raw prediction-bin share. Inspect raw range and slope as well;
+    /// rescaling to min/max cannot reveal global affine compression.
+    pub raw_clump: f64,
     /// Fraction at the exact raw prediction minimum (not proof of a hard clamp).
     pub floor_mass: f64,
     /// Fraction at the exact raw prediction maximum.
@@ -167,6 +173,10 @@ pub fn diagnose(predicted: &[f64], target: &[f64]) -> Result<ScatterDiagnostics,
     let (raw_mad, raw_residual_p99, raw_residual_max) = residual_stats(&raw);
     let prediction_min = predicted[order[0]];
     let prediction_max = predicted[order[n - 1]];
+    if !(prediction_max - prediction_min).is_finite() {
+        return Err("scatter arithmetic overflow");
+    }
+    let (raw_coverage, raw_clump) = occupancy(predicted, prediction_min, prediction_max);
     Ok(ScatterDiagnostics {
         mapped_prediction: mapped,
         n,
@@ -183,6 +193,8 @@ pub fn diagnose(predicted: &[f64], target: &[f64]) -> Result<ScatterDiagnostics,
         target_clump,
         prediction_coverage,
         prediction_clump,
+        raw_coverage,
+        raw_clump,
         floor_mass: predicted.iter().filter(|&&v| v == prediction_min).count() as f64 / n as f64,
         ceiling_mass: predicted.iter().filter(|&&v| v == prediction_max).count() as f64 / n as f64,
         prediction_min,
@@ -226,6 +238,15 @@ mod tests {
         assert!(a.raw_residual_max > 900_000.0);
         let inverted: Vec<_> = target.iter().map(|v| -v).collect();
         assert!(diagnose(&inverted, &target).unwrap().shape_max.unwrap() > 1.0);
+    }
+    #[test]
+    fn raw_density_detects_compression_erased_by_rank_mapping() {
+        let target: Vec<_> = (0..1000).map(|v| v as f64 / 999.0).collect();
+        let pred: Vec<_> = target.iter().map(|v| v.powi(10)).collect();
+        let a = diagnose(&pred, &target).unwrap();
+        assert_eq!(a.shape_max, Some(0.0));
+        assert!(a.prediction_clump < 0.06);
+        assert!(a.raw_clump > 0.7);
     }
     #[test]
     fn perfect_constant_and_invalid_inputs_are_explicit() {

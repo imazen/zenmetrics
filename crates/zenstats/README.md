@@ -67,3 +67,9 @@ tie-invariant rank-to-target-quantile mapping (mean quantile over each tied
 prediction group), expose reference and prediction occupancy separately,
 and report zero-spread normalization as unavailable rather than divide by an
 arbitrary epsilon. Existing panel arithmetic and APIs remain unchanged.
+
+The same callers also need `raw_coverage` and `raw_clump` on
+`ScatterDiagnostics`: 20 equal-width bins over the raw prediction min/max, with
+the same 0.5% occupancy rule. Rank mapping can erase smooth output compression;
+these fields retain its density. Absolute range/slope must still be read beside
+them because affine normalization alone cannot detect global compression.
