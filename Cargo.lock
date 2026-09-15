@@ -1834,6 +1834,21 @@ dependencies = [
 [[package]]
 name = "fast-ssim2"
 version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8dcca2000fbfa5923eb54b5bedddadbe5f7c83f7ef65285ebe0ed10daa78d0f0"
+dependencies = [
+ "archmage",
+ "imgref",
+ "magetypes",
+ "num-traits",
+ "thiserror",
+ "yuvxyb 0.5.0",
+ "yuvxyb-math",
+]
+
+[[package]]
+name = "fast-ssim2"
+version = "0.9.0"
 dependencies = [
  "archmage",
  "enough",
@@ -2287,6 +2302,9 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+dependencies = [
+ "foldhash 0.2.0",
+]
 
 [[package]]
 name = "hdrvdp"
@@ -2841,7 +2859,7 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "archmage",
  "butteraugli",
@@ -2855,15 +2873,20 @@ dependencies = [
  "once_cell",
  "rayon",
  "rgb",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
  "thiserror",
  "whereat",
  "zenjxl-decoder 0.3.10",
+ "zenpixels-convert",
+ "zenpredict",
  "zensim 0.3.0",
 ]
 
 [[package]]
 name = "jxl-encoder-macros"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2872,7 +2895,7 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder-simd"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "archmage",
  "libm",
@@ -6545,6 +6568,7 @@ name = "zenav1-aom-dsp"
 version = "0.0.1"
 dependencies = [
  "archmage",
+ "enough",
  "magetypes",
 ]
 
@@ -6563,6 +6587,8 @@ version = "0.0.1"
 name = "zenav1-svt"
 version = "0.1.0"
 dependencies = [
+ "almost-enough",
+ "enough",
  "zenav1-svt-dsp 0.1.0",
  "zenav1-svt-encoder 0.1.0",
  "zenav1-svt-types 0.1.0",
@@ -6605,6 +6631,7 @@ dependencies = [
  "archmage",
  "enough",
  "magetypes",
+ "smallvec",
  "whereat",
  "zenav1-svt-dsp 0.1.0",
  "zenav1-svt-types 0.1.0",
@@ -6722,6 +6749,17 @@ dependencies = [
  "enough",
  "thiserror",
  "whereat",
+]
+
+[[package]]
+name = "zenblend"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d66daf1f95f9f3a3c7c4529ea1f993069e2691cc89a4f8b0f4002ced96179f68"
+dependencies = [
+ "archmage",
+ "magetypes",
+ "safe_unaligned_simd",
 ]
 
 [[package]]
@@ -7324,7 +7362,7 @@ dependencies = [
  "cvvdp",
  "dssim-core",
  "enough",
- "fast-ssim2 0.8.2",
+ "fast-ssim2 0.9.0",
  "heic",
  "hex",
  "image",
@@ -7539,6 +7577,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenresize"
+version = "0.3.1"
+source = "git+https://github.com/imazen/zenresize?rev=e3975fb9d6d6b7baa96038a0eb8e27febb37c012#e3975fb9d6d6b7baa96038a0eb8e27febb37c012"
+dependencies = [
+ "archmage",
+ "imgref",
+ "libm",
+ "linear-srgb",
+ "magetypes",
+ "rgb",
+ "safe_unaligned_simd",
+ "whereat",
+ "zenblend",
+ "zenpixels",
+]
+
+[[package]]
 name = "zensim"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7569,6 +7624,7 @@ dependencies = [
  "rgb",
  "thiserror",
  "zenpredict",
+ "zenresize",
 ]
 
 [[package]]
@@ -7627,7 +7683,7 @@ dependencies = [
  "byteorder-lite",
  "enough",
  "garb",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "libm",
  "linear-srgb",
  "magetypes",

@@ -721,6 +721,12 @@ struct ScorePairsArgs {
     #[cfg(feature = "hdr")]
     #[arg(long)]
     hdr: bool,
+    /// Convert declared PQ PNG/JXL primaries into unclipped linear BT.709 before
+    /// native float HDR feeding. CVVDP assumes a BT.709 display with reference-measured
+    /// peak; out-of-display-gamut values clip in that display model. No u8 fallback.
+    #[cfg(feature = "hdr")]
+    #[arg(long, requires = "hdr")]
+    hdr_common_primaries: bool,
     /// HDR→u8 transfer for the SDR-metric path: `pu-rescale` (default — PU21
     /// rescaled to fit u8 with no highlight clamp; best vs HDR MOS — ssim2
     /// 0.65 / dssim 0.66 SRCC; applies only to the u8-shell metrics — iwssim
@@ -1476,6 +1482,20 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     use parquet::basic::{Compression, ZstdLevel};
     use parquet::file::properties::WriterProperties;
 
+    #[cfg(feature = "hdr")]
+    if args.hdr_common_primaries && args.feature_output.is_some() {
+        return Err("--hdr-common-primaries does not admit legacy feature sidecars".into());
+    }
+    #[cfg(feature = "hdr")]
+    let decode_hdr = if args.hdr_common_primaries {
+        hdr::decode_to_common_nits
+    } else {
+        hdr::decode_to_nits
+    };
+    #[cfg(feature = "hdr")]
+    if args.hdr_common_primaries {
+        eprintln!("[score-pairs] HDR input contract: common-bt709-pq-native-v3");
+    }
     // Propagate `--allow-small-images` to the metric construction site
     // via a process-wide `OnceLock` flag set by the CLI. Read by
     // `resolve_default_params` in the metrics dispatcher; today only
@@ -1730,8 +1750,8 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             #[cfg(feature = "gpu-cvvdp")]
             if args.metric == crate::metrics::MetricKind::CvvdpGpu {
                 faithful_hdr_result = Some((|| {
-                    let r = hdr::decode_to_nits(&ref_path)?;
-                    let d = hdr::decode_to_nits(&dist_path)?;
+                    let r = decode_hdr(&ref_path)?;
+                    let d = decode_hdr(&dist_path)?;
                     if r.width != d.width || r.height != d.height {
                         return Err(format!(
                             "dimension mismatch: {} ({}x{}) vs {} ({}x{})",
@@ -1771,8 +1791,8 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
                 && args.metric == crate::metrics::MetricKind::ButteraugliGpu
             {
                 faithful_hdr_result = Some((|| {
-                    let r = hdr::decode_to_nits(&ref_path)?;
-                    let d = hdr::decode_to_nits(&dist_path)?;
+                    let r = decode_hdr(&ref_path)?;
+                    let d = decode_hdr(&dist_path)?;
                     if r.width != d.width || r.height != d.height {
                         return Err(format!(
                             "dimension mismatch: {} ({}x{}) vs {} ({}x{})",
@@ -1826,17 +1846,17 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             // not a routing one, and is deliberately not made here.
             if faithful_hdr_result.is_none()
                 && !(feature_writer.is_some() && metric_is_zensim)
-                && !matches!(
-                    args.metric,
-                    crate::metrics::MetricKind::Cvvdp | crate::metrics::MetricKind::Dssim
-                )
+                && args.metric != crate::metrics::MetricKind::Dssim
+                // Preserve the historical CVVDP shell unless the explicit v3
+                // native common-primary contract was requested.
+                && (args.hdr_common_primaries || args.metric != crate::metrics::MetricKind::Cvvdp)
             {
                 faithful_hdr_result = (|| {
-                    let r = match hdr::decode_to_nits(&ref_path) {
+                    let r = match decode_hdr(&ref_path) {
                         Ok(v) => v,
                         Err(e) => return Some(Err(e)),
                     };
-                    let d = match hdr::decode_to_nits(&dist_path) {
+                    let d = match decode_hdr(&dist_path) {
                         Ok(v) => v,
                         Err(e) => return Some(Err(e)),
                     };
@@ -1862,6 +1882,14 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         // other metric): decode to nits once and PU21/cvvdp-u8 encode per the
         // metric, mirroring `batch --hdr`'s `(reference, distorted)` block.
         // Decoded lazily only when an HDR u8 path is actually taken.
+        #[cfg(feature = "hdr")]
+        if args.hdr_common_primaries && faithful_hdr_result.is_none() {
+            return Err(
+                "--hdr-common-primaries requires a native float HDR metric; u8 fallback refused"
+                    .into(),
+            );
+        }
+
         // The reference's measured MaxCLL peak (cd/m²) for the HDR feature
         // sidecar's `ref_peak_nits` column — captured from the one decode
         // below so the sidecar never re-decodes the source.
@@ -1870,8 +1898,8 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         #[cfg(feature = "hdr")]
         let hdr_u8_pair: Option<DecodedRgb8Pair> = if hdr_mode && faithful_hdr_result.is_none() {
             Some((|| {
-                let r = hdr::decode_to_nits(&ref_path)?;
-                let d = hdr::decode_to_nits(&dist_path)?;
+                let r = decode_hdr(&ref_path)?;
+                let d = decode_hdr(&dist_path)?;
                 hdr_ref_peak_nits = Some(hdr::measured_display_peak_nits(&r));
                 // cvvdp (CPU and GPU) take peak-normalized sRGB; the rest go
                 // through the chosen `--hdr-transfer`.
@@ -1931,8 +1959,8 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             #[cfg(all(feature = "hdr", feature = "cpu-metrics"))]
             {
                 (|| -> Result<Vec<f64>, Box<dyn std::error::Error>> {
-                    let r = hdr::decode_to_nits(&ref_path)?;
-                    let d = hdr::decode_to_nits(&dist_path)?;
+                    let r = decode_hdr(&ref_path)?;
+                    let d = decode_hdr(&dist_path)?;
                     if r.width != d.width || r.height != d.height {
                         return Err(format!(
                             "dimension mismatch: {}x{} vs {}x{}",
@@ -2225,7 +2253,17 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     }
 
     let file = File::create(&args.out_parquet)?;
-    let props = WriterProperties::builder()
+    let props = WriterProperties::builder();
+    #[cfg(feature = "hdr")]
+    let props = if args.hdr_common_primaries {
+        props.set_key_value_metadata(Some(vec![parquet::file::metadata::KeyValue::new(
+            "zenmetrics.hdr_input_contract".into(),
+            Some("common-bt709-pq-native-v3".to_string()),
+        )]))
+    } else {
+        props
+    };
+    let props = props
         .set_compression(Compression::ZSTD(ZstdLevel::try_new(3)?))
         .build();
     let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
@@ -3139,5 +3177,39 @@ mod fail_on_bogus_tests {
     fn bogus_check_rejects_empty_column() {
         let scores: Vec<f64> = vec![];
         assert!(!bogus_check(MetricKind::IwssimGpu, &scores, &p()));
+    }
+}
+
+#[cfg(all(test, feature = "sweep", feature = "hdr"))]
+mod common_hdr_contract_tests {
+    use super::*;
+    #[test]
+    fn common_hdr_requires_explicit_hdr_and_refuses_legacy_features_before_input() {
+        let args = [
+            "zenmetrics",
+            "score-pairs",
+            "--metric",
+            "cvvdp",
+            "--pairs-tsv",
+            "does-not-exist.tsv",
+            "--out-parquet",
+            "unused.parquet",
+            "--hdr-common-primaries",
+        ];
+        assert!(Cli::try_parse_from(args).is_err());
+        let mut args = args.to_vec();
+        args.extend(["--hdr", "--feature-output", "unused-features.parquet"]);
+        let cli = Cli::try_parse_from(args).unwrap();
+        let Command::ScorePairs(args) = cli.command else {
+            panic!("wrong command")
+        };
+        let error = match cmd_score_pairs(args) {
+            Ok(_) => panic!("legacy feature contract admitted"),
+            Err(e) => e.to_string(),
+        };
+        assert!(
+            error.contains("does not admit legacy feature sidecars"),
+            "{error}"
+        );
     }
 }

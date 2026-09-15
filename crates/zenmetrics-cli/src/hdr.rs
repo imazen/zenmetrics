@@ -159,6 +159,58 @@ pub fn decode_to_nits(path: &Path) -> Result<NitsImage, Err> {
     }
 }
 
+/// Versioned metric ingress; legacy decode remains the codec transport contract.
+/// A preference for a JXL pixel descriptor does not perform color conversion.
+/// Only explicit PQ PNG/JXL inputs are admitted to this scoring contract.
+pub(crate) fn decode_to_common_nits(path: &Path) -> Result<NitsImage, Err> {
+    match path
+        .extension()
+        .and_then(|v| v.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        #[cfg(feature = "png")]
+        Some("png") => decode_pq_png_in_basis(path, true),
+        #[cfg(feature = "jxl")]
+        Some("jxl") => decode_pq_jxl_in_basis(path, true),
+        _ => Err("common-bt709-pq-native-v3 supports declared PQ PNG/JXL only".into()),
+    }
+}
+
+fn nits_to_common_primaries(image: NitsImage, cp: u8) -> Result<NitsImage, Err> {
+    use zenpixels::{ColorPrimaries, PixelDescriptor};
+    use zenpixels_convert::{RowConverter, policy::ConvertOptions};
+    let primaries = match cp {
+        1 => return Ok(image),
+        9 => ColorPrimaries::Bt2020,
+        12 => ColorPrimaries::DisplayP3,
+        _ => return Err(format!("unsupported HDR primaries {cp}; full CMS required").into()),
+    };
+    let options = ConvertOptions::permissive().with_clip_out_of_gamut(false);
+    let mut converter = RowConverter::new_explicit(
+        PixelDescriptor::RGBF32_LINEAR.with_primaries(primaries),
+        PixelDescriptor::RGBF32_LINEAR,
+        &options,
+    )?;
+    let mut rgb = vec![0.0f32; image.rgb.len()];
+    let width = image.width as usize;
+    for (src, dst) in image
+        .rgb
+        .chunks_exact(width * 3)
+        .zip(rgb.chunks_exact_mut(width * 3))
+    {
+        converter.convert_row(
+            bytemuck::cast_slice(src),
+            bytemuck::cast_slice_mut(dst),
+            image.width,
+        );
+    }
+    if !rgb.iter().all(|v| v.is_finite()) {
+        return Err("nonfinite HDR primary conversion".into());
+    }
+    Ok(NitsImage { rgb, ..image })
+}
+
 /// Decode an AVIF HDR variant (10-bit identity-matrix PQ, `nclx` transfer 16)
 /// to absolute nits — the decode-back path for `score-pairs --hdr` over
 /// avif-hdr datagen variants. Mirrors the sweep's
@@ -204,6 +256,11 @@ fn decode_pq_avif(_path: &Path) -> Result<NitsImage, Err> {
 /// encoding is refused, never approximated.
 #[cfg(feature = "jxl")]
 fn decode_pq_jxl(path: &Path) -> Result<NitsImage, Err> {
+    decode_pq_jxl_in_basis(path, false)
+}
+
+#[cfg(feature = "jxl")]
+fn decode_pq_jxl_in_basis(path: &Path, common: bool) -> Result<NitsImage, Err> {
     let data = std::fs::read(path)?;
     let output = zenjxl::decode(&data, None, &[]).map_err(|e| format!("zenjxl: {e}"))?;
     let cicp_is_pq = matches!(output.info.cicp, Some((_, 16, _, _)));
@@ -220,7 +277,19 @@ fn decode_pq_jxl(path: &Path) -> Result<NitsImage, Err> {
         )
         .into());
     }
-    pq_slice_to_nits(&output.pixels.as_slice())
+    let nits = pq_slice_to_nits(&output.pixels.as_slice())?;
+    if common {
+        let (cp, 16, 0, true) = output
+            .info
+            .cicp
+            .ok_or("common HDR input requires structured PQ CICP; ICC requires a CMS")?
+        else {
+            return Err("common HDR input requires full-range RGB PQ CICP".into());
+        };
+        nits_to_common_primaries(nits, cp)
+    } else {
+        Ok(nits)
+    }
 }
 
 #[cfg(not(feature = "jxl"))]
@@ -332,12 +401,29 @@ fn pq_slice_to_nits(s: &zenpixels::PixelSlice<'_>) -> Result<NitsImage, Err> {
 /// treating SDR code values as PQ would produce garbage nits.
 #[cfg(feature = "png")]
 fn decode_pq_png(path: &Path) -> Result<NitsImage, Err> {
+    decode_pq_png_in_basis(path, false)
+}
+
+#[cfg(feature = "png")]
+fn decode_pq_png_in_basis(path: &Path, common: bool) -> Result<NitsImage, Err> {
     let data = std::fs::read(path)?;
-    let (rgb16, width, height, cicp) = png_to_rgb16_pq(&data)?;
-    Ok(match cicp.transfer_characteristics {
+    let (rgb16, width, height, cicp) = png_to_rgb16_pq_in_basis(&data, common)?;
+    if common
+        && (cicp.matrix_coefficients != 0
+            || !cicp.full_range
+            || cicp.transfer_characteristics != 16)
+    {
+        return Err("common HDR scoring currently requires full-range RGB PQ PNG".into());
+    }
+    let nits = match cicp.transfer_characteristics {
         18 => rgb16_hlg_to_nits(&rgb16, width, height),
         _ => rgb16_pq_to_nits(&rgb16, width, height),
-    })
+    };
+    if common {
+        nits_to_common_primaries(nits, cicp.color_primaries)
+    } else {
+        Ok(nits)
+    }
 }
 
 #[cfg(not(feature = "png"))]
@@ -353,9 +439,25 @@ fn decode_pq_png(_path: &Path) -> Result<NitsImage, Err> {
 /// re-encodable as HDR input for codecs that take 16-bit + CICP.
 #[cfg(feature = "png")]
 pub(crate) fn png_to_rgb16_pq(data: &[u8]) -> Result<(Vec<u16>, u32, u32, zenpixels::Cicp), Err> {
+    png_to_rgb16_pq_in_basis(data, false)
+}
+
+#[cfg(feature = "png")]
+fn png_to_rgb16_pq_in_basis(
+    data: &[u8],
+    common: bool,
+) -> Result<(Vec<u16>, u32, u32, zenpixels::Cicp), Err> {
     use zenpng::{PngDecodeConfig, decode};
     let cancel: Box<dyn enough::Stop + Send + Sync> = Box::new(enough::Unstoppable);
     let output = decode(data, &PngDecodeConfig::default(), &*cancel)?;
+    if common
+        && (output.info.icc_profile.is_some()
+            || output.info.srgb_intent.is_some()
+            || output.info.source_gamma.is_some()
+            || output.info.chromaticities.is_some())
+    {
+        return Err("common HDR input refuses conflicting or ICC color metadata".into());
+    }
     let cicp = output.info.cicp.ok_or(
         "PNG carries no cICP chunk — not an HDR PQ PNG. \
          Score it through the SDR path instead (drop --hdr)",
@@ -1293,6 +1395,67 @@ pub fn score_hdr_zensim_with_features_per_score_pairs(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn common_hdr_primaries_preserve_absolute_light_and_out_of_gamut_values() {
+        let source = [1000.0f32, 0.0, 0.0, 50.0, 200.0, 500.0];
+        for cp in [1, 9, 12] {
+            let image = NitsImage {
+                rgb: source.to_vec(),
+                width: 2,
+                height: 1,
+            };
+            let actual = nits_to_common_primaries(image, cp).unwrap();
+            let matrix: [[f64; 3]; 3] = match cp {
+                1 => [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
+                9 => [
+                    [
+                        1.6604910021084345,
+                        -0.5876411387885495,
+                        -0.07284986331988493,
+                    ],
+                    [-0.12455047452159074, 1.13289989712596, -0.008349422604369],
+                    [
+                        -0.01815076335490532,
+                        -0.1005788980080074,
+                        1.1187296613629127,
+                    ],
+                ],
+                _ => [
+                    [1.22494017628056, -0.22494017628056, 0.],
+                    [-0.0420569547096898, 1.04205695470969, 0.],
+                    [-0.0196375545903344, -0.0786360455506324, 1.09827360014097],
+                ],
+            };
+            for (src, dst) in source.chunks_exact(3).zip(actual.rgb.chunks_exact(3)) {
+                for c in 0..3 {
+                    let expected: f64 = (0..3).map(|k| matrix[c][k] * f64::from(src[k])).sum();
+                    assert!(
+                        (f64::from(dst[c]) - expected).abs() < 0.0005,
+                        "cp{cp} c{c}: {} vs {expected}",
+                        dst[c]
+                    );
+                }
+            }
+            if cp == 1 {
+                assert_eq!(actual.rgb, source);
+            } else {
+                assert!(actual.rgb[0] > 1000. && actual.rgb[1] < 0. && actual.rgb[2] < 0.);
+            }
+        }
+        assert!(
+            nits_to_common_primaries(
+                NitsImage {
+                    rgb: vec![0.; 3],
+                    width: 1,
+                    height: 1
+                },
+                2
+            )
+            .is_err()
+        );
+        assert!(decode_to_common_nits(Path::new("undeclared.exr")).is_err());
+    }
 
     #[test]
     fn pu21_100_nits_near_256() {
