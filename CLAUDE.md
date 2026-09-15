@@ -1,5 +1,14 @@
 # zenmetrics CLAUDE.md
 
+## September 15: explicit common-primary native HDR scoring
+
+[Contract and validation](docs/HDR_COMMON_PRIMARIES_2026-09-15.md). Use
+`score-pairs --hdr --hdr-common-primaries` for the corrected declared-PQ
+BT.709/P3/BT.2020 metric ingress. Legacy flags retain their historical era.
+CPU CVVDP now has an explicit native route; the display is still BT.709.
+Do not relabel old 8-bit-shell outputs or feature sidecars as this contract.
+
+
 See global ~/.claude/CLAUDE.md for general instructions.
 
 ## Canonical branch is `master` — NEVER push `main` (enforced)

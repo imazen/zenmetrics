@@ -13,6 +13,12 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenmetrics-cli: versioned native common-primary HDR scoring via
+  `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
+  cICP, and route CPU CVVDP through its native HDR scorer. Refuse incompatible
+  feature sidecars and unsupported fallbacks. `1f5aa1c5`;
+  [contract and validation](docs/HDR_COMMON_PRIMARIES_2026-09-15.md).
+
 ### Security
 
 - **arrow / parquet `58.x` -> `59.3.0` across every manifest and lockfile, which
