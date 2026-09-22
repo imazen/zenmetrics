@@ -88,6 +88,11 @@ impl OrchestratorMetricSpec {
                 kind: ApiMetricKind::Iwssim,
                 prefer_cpu: false,
             },
+            // GMSD is orchestrator-ineligible (`metric_orchestrator_eligible`
+            // returns false), so every caller gates before reaching here.
+            CliMetricKind::Gmsd => {
+                unreachable!("gmsd has no orchestrator backend; callers gate on eligibility")
+            }
             CliMetricKind::Zensim => Self {
                 kind: ApiMetricKind::Zensim,
                 prefer_cpu: true,
@@ -224,6 +229,9 @@ impl std::error::Error for OrchestratorBuildError {}
 pub fn validate_cpu_variant_built_in(
     cli_kind: CliMetricKind,
 ) -> Result<(), OrchestratorBuildError> {
+    if cli_kind == CliMetricKind::Gmsd {
+        return Ok(());
+    }
     let spec = OrchestratorMetricSpec::from_cli(cli_kind);
     if !spec.prefer_cpu {
         return Ok(());

@@ -1361,6 +1361,8 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // CVVDP: JOD scale, [0, 10]; 10 = imperceptible (identical). Same
         // range for the CPU (`cvvdp`) and GPU (`cvvdp-gpu`) backends.
         MetricKind::Cvvdp | MetricKind::CvvdpGpu => Some((-0.5, 10.5, 10.0)),
+        // GMSD: std of a [0, 1] similarity map, so [0, ~0.5]; 0 = identical.
+        MetricKind::Gmsd => Some((-0.001, 0.6, 0.0)),
     }
 }
 

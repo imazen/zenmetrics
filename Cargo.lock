@@ -2201,6 +2201,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "gmsd"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "magetypes",
+ "rayon",
+ "serde",
+ "serde_json",
+ "zenpixels",
+ "zenpixels-convert",
+]
+
+[[package]]
 name = "gpu-allocator"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7363,6 +7376,7 @@ dependencies = [
  "dssim-core",
  "enough",
  "fast-ssim2 0.9.0",
+ "gmsd",
  "heic",
  "hex",
  "image",

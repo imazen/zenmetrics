@@ -136,6 +136,14 @@ pub enum MetricKind {
     /// return an error. Emits the CPU column name (`iwssim_cpu_imazen_v*`).
     #[value(name = "iwssim")]
     Iwssim,
+    /// GMSD (Gradient Magnitude Similarity Deviation, Xue et al. 2014) —
+    /// CPU implementation via the in-tree `gmsd` crate (a port of
+    /// libgmsd). Distance: 0 = identical, larger = worse; typical values
+    /// 0..0.35. Scored on BT.601 8-bit luma at half resolution, as the
+    /// reference does. Emits `gmsd_cpu_imazen_v*`. Not routed through the
+    /// umbrella or the orchestrator (CPU-only, no GPU twin).
+    #[value(name = "gmsd")]
+    Gmsd,
 }
 
 impl MetricKind {
@@ -153,6 +161,7 @@ impl MetricKind {
             MetricKind::Cvvdp,
             MetricKind::CvvdpGpu,
             MetricKind::Iwssim,
+            MetricKind::Gmsd,
         ]
     }
 
@@ -170,6 +179,7 @@ impl MetricKind {
             MetricKind::Cvvdp => "cvvdp",
             MetricKind::CvvdpGpu => "cvvdp-gpu",
             MetricKind::Iwssim => "iwssim",
+            MetricKind::Gmsd => "gmsd",
         }
     }
 
@@ -222,6 +232,7 @@ impl MetricKind {
             MetricKind::Cvvdp => CVVDP_CPU_COLUMNS,
             MetricKind::CvvdpGpu => CVVDP_GPU_COLUMNS,
             MetricKind::Iwssim => IWSSIM_CPU_COLUMNS,
+            MetricKind::Gmsd => GMSD_CPU_COLUMNS,
         }
     }
 }
@@ -268,6 +279,14 @@ const CVVDP_CPU_COLUMNS: &[&str] = &["cvvdp"];
 const IWSSIM_CPU_COLUMNS: &[&str] = &[zenmetrics_api::iwssim_cpu::IWSSIM_COLUMN_NAME];
 #[cfg(not(feature = "cpu-iwssim"))]
 const IWSSIM_CPU_COLUMNS: &[&str] = &["iwssim"];
+
+// Versioned **CPU** GMSD column name (`gmsd::GMSD_COLUMN_NAME`, default
+// `gmsd_cpu_imazen_v<MAJOR>_<MINOR>_<PATCH>`, overridable via
+// `GMSD_CPU_IMPL_TAG`). Without `cpu-gmsd` a bare `"gmsd"`.
+#[cfg(feature = "cpu-gmsd")]
+const GMSD_CPU_COLUMNS: &[&str] = &[gmsd::GMSD_COLUMN_NAME];
+#[cfg(not(feature = "cpu-gmsd"))]
+const GMSD_CPU_COLUMNS: &[&str] = &["gmsd"];
 
 /// CubeCL runtime selector for GPU metrics.
 ///
@@ -932,7 +951,34 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-iwssim"))]
         MetricKind::Iwssim => Err(disabled_msg("iwssim", "cpu-iwssim` (native SIMD CPU)")),
+
+        // GMSD: direct call into the in-tree crate (no umbrella, no GPU twin).
+        #[cfg(feature = "cpu-gmsd")]
+        MetricKind::Gmsd => Ok(vec![(
+            GMSD_CPU_COLUMNS[0],
+            run_cpu_gmsd(reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-gmsd"))]
+        MetricKind::Gmsd => Err(disabled_msg("gmsd", "cpu-gmsd")),
     }
+}
+
+/// GMSD of two decoded sRGB8 images (`gmsd::gmsd_rgb8`: BT.601 luma,
+/// half-resolution Prewitt GMS map, standard-deviation pooling).
+#[cfg(feature = "cpu-gmsd")]
+fn run_cpu_gmsd(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "gmsd: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    Ok(gmsd::gmsd_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?.gmsd)
 }
 
 #[allow(dead_code)]

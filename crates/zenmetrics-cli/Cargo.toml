@@ -149,6 +149,8 @@ cpu-metrics = [
     # license-compatible.
     "cpu-cvvdp",
     "cpu-iwssim",
+    # GMSD (in-tree `gmsd` crate, libgmsd port): CPU-only, called directly.
+    "cpu-gmsd",
     # All six native-CPU backends via the umbrella's Backend::Cpu (cpu_dispatch),
     # so run_gpu_via_umbrella's CPU failover works for ssim2/dssim/butter/zensim
     # too — and the auto ladder's CPU rung is the native SIMD path, NEVER
@@ -162,6 +164,7 @@ cpu-metrics = [
 # Backend::Cpu, …)` build the native `cpu_dispatch` scorer for that metric.
 cpu-cvvdp = ["dep:zenmetrics-api", "zenmetrics-api/cpu-cvvdp"]
 cpu-iwssim = ["dep:zenmetrics-api", "zenmetrics-api/cpu-iwssim"]
+cpu-gmsd = ["dep:gmsd"]
 
 # GPU bundle: pulls every GPU metric implementation via the umbrella.
 gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp", "gpu-iwssim", "gpu-zensim"]
@@ -525,6 +528,7 @@ zenmetrics-api = { workspace = true, optional = true, default-features = false }
 # resolve the CLI's own `use cvvdp::…` — the missing edge that made
 # hdr+png/jxl builds uncompilable (2026-07-12).
 cvvdp = { workspace = true, optional = true }
+gmsd = { workspace = true, optional = true, features = ["std"] }
 cubecl = { workspace = true, optional = true }
 
 # Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the
@@ -572,6 +576,10 @@ required-features = ["sweep", "hdr-gainmap", "png"]
 # §5): reads a stored blob's bit depth back by three independent routes (av1C box,
 # AV1 sequence header, decoder ImageInfo) and fails loud when they disagree or when
 # the depth is not the one requested. Exists for hazard H-BD-3.
+[[example]]
+name = "gmsd_parity_dump"
+required-features = ["cpu-gmsd", "png", "jpeg"]
+
 [[example]]
 name = "avif_depth_verify"
 required-features = ["avif"]
