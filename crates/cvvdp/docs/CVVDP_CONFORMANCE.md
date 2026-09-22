@@ -157,6 +157,24 @@ GPU floor cells below.
 `max |delta| = 0.028` driven entirely by the Finding-A iphone JPEG
 cells.)
 
+### Real-content check: AIC-4 crops (2026-09-22)
+
+Outside the matrix, the 300 JPEG AIC-4 sample crops (620×800 portrait, six
+codecs) were scored by this port and by reference pycvvdp 0.5.4 and 0.4.2
+(CPU torch), with the distorted image passed first. Port vs pycvvdp 0.5.4:
+`standard_4k` max |Δ| 0.00018 JOD, `standard_fhd` max 0.00023; 0 of 300 pairs
+over 1e-3 on either display. Two things this check caught that the matrix
+could not:
+
+- **The display, not the port, explained our gap to the AIC organisers.** They
+  run `standard_fhd` (37.84 pixels per degree); our comparator ran `standard_4k`.
+  CPU `cvvdp` in `zenmetrics batch|score-pairs` now takes `--display-model`.
+- **`scripts/sweep/pycvvdp_worker.py` passed `(ref, dist)` to pycvvdp's
+  `predict(test, reference)`.** That showed up as an apparent 0.016 JOD port
+  drift. The goldens here were always built in the correct order.
+
+Details: `benchmarks/cvvdp_aic_discrepancy_2026-09-22.md` (workspace root).
+
 ## Divergences
 
 The harness surfaced **two distinct findings**. Both are recorded in

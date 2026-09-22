@@ -24,6 +24,17 @@ consolidation; cvvdp now scores through the unified Rust worker (`onstart_unifie
 > "parquet sidecars or however we do it"
 > "enqueue this task so that a conpaction will not skip it, loop it"
 
+> **2026-09-22 caveat — `cvvdp_pycvvdp_v054` values from `pycvvdp_worker.py`
+> before that date have reference and test SWAPPED.** The worker called
+> `predict(ref, dist)`; pycvvdp's signature is `predict(test, reference)`.
+> Measured on 300 AIC-4 crops, the swap moves scores by up to 0.016–0.017 JOD
+> (mean 0.001–0.002). The swap dates from the worker's first commit
+> (`3c99f833`, 2026-05-15). The "mean |diff| 0.0245" note below came from
+> `dual_impl_chunk.sh`, which drives this worker, so it was measured against the
+> swapped reference; the "within 0.03 JOD" n=4 note does not record its
+> harness. Fixed together with `scripts/sweep/test_pycvvdp_worker.py`; see
+> `benchmarks/cvvdp_aic_discrepancy_2026-09-22.md`.
+
 ### Requirements
 
 1. **Compute CVVDP JOD scores** for every (ref, dist) pair zensim

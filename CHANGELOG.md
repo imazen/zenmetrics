@@ -19,6 +19,24 @@ Workspace conventions per the global rules:
   feature sidecars and unsupported fallbacks. `1f5aa1c5`;
   [contract and validation](docs/HDR_COMMON_PRIMARIES_2026-09-15.md).
 
+- zenmetrics-cli: `batch` / `score-pairs --metric cvvdp --display-model <name>`
+  now applies the named display (photometry + pixels per degree) to the CPU
+  port; before this it reached only `cvvdp-gpu`. `standard_fhd` is the JPEG AIC
+  CVVDP display (AIC-4 CTC v2.0) and reproduces the organisers' AIC-4 CVVDP
+  column to 0.0003 JOD (SROCC 0.9609 vs 0.8906 at the default `standard_4k`).
+  Default unchanged; non-default displays write
+  `cvvdp_cpu_imazen_v0_1_0_<display>`. `d71922bd`;
+  [measurements](benchmarks/cvvdp_aic_discrepancy_2026-09-22.md).
+
+### Fixed
+
+- `scripts/sweep/pycvvdp_worker.py` (the `pycvvdp-scorer` image) passed
+  `(ref, dist)` to pycvvdp's `predict(test, reference)`. Every
+  `cvvdp_pycvvdp_v054` value it wrote was scored with the pair swapped: up to
+  0.017 JOD, mean 0.001–0.002 on AIC-4. Same fix in three `cvvdp_goldens`
+  timing benches; conformance goldens were unaffected. Regression test
+  `scripts/sweep/test_pycvvdp_worker.py`. `27c69beb`.
+
 ### Security
 
 - **arrow / parquet `58.x` -> `59.3.0` across every manifest and lockfile, which
