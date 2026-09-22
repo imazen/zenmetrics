@@ -31,7 +31,7 @@ def bench_pycvvdp(ref_np, dist_np, device_str, n=N_ITERS):
     dist_t = torch.from_numpy(dist_np).to(dev).float() / 255.0
     metric = pycvvdp.cvvdp(display_name="standard_4k", device=dev)
     # warm-up
-    metric.predict(ref_t, dist_t, dim_order="HWC")
+    metric.predict(dist_t, ref_t, dim_order="HWC")
     if device_str == "cuda":
         torch.cuda.synchronize()
     ts = []
@@ -40,7 +40,7 @@ def bench_pycvvdp(ref_np, dist_np, device_str, n=N_ITERS):
         if device_str == "cuda":
             torch.cuda.synchronize()
         t0 = time.perf_counter()
-        jod, _ = metric.predict(ref_t, dist_t, dim_order="HWC")
+        jod, _ = metric.predict(dist_t, ref_t, dim_order="HWC")
         if device_str == "cuda":
             torch.cuda.synchronize()
         ts.append(time.perf_counter() - t0)

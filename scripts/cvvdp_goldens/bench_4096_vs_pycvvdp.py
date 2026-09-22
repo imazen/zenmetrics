@@ -38,14 +38,14 @@ def bench_pycvvdp(ref_np, dist_np, n=N_ITERS):
     ref_t = torch.from_numpy(ref_np).to(device).float() / 255.0
     dist_t = torch.from_numpy(dist_np).to(device).float() / 255.0
     metric = pycvvdp.cvvdp(display_name="standard_4k", device=device)
-    metric.predict(ref_t, dist_t, dim_order="HWC")
+    metric.predict(dist_t, ref_t, dim_order="HWC")
     torch.cuda.synchronize()
     ts = []
     last_jod = None
     for _ in range(n):
         torch.cuda.synchronize()
         t0 = time.perf_counter()
-        jod, _ = metric.predict(ref_t, dist_t, dim_order="HWC")
+        jod, _ = metric.predict(dist_t, ref_t, dim_order="HWC")
         torch.cuda.synchronize()
         ts.append(time.perf_counter() - t0)
         last_jod = float(jod)

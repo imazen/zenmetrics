@@ -67,8 +67,14 @@ def score_pair(metric, ref: np.ndarray, dist: np.ndarray) -> float:
         raise ValueError(
             f"shape mismatch: ref={ref.shape} dist={dist.shape}"
         )
-    # pycvvdp's still-image predict expects HxWx3 uint8 in [0, 255].
-    jod, _ = metric.predict(ref, dist, dim_order="HWC")
+    # pycvvdp's still-image predict expects HxWx3 uint8 in [0, 255], and
+    # its signature is `predict(test_cont, reference_cont, ...)`: the
+    # DISTORTED image comes FIRST. This worker called `predict(ref, dist)`
+    # until 2026-09-22, so every `cvvdp_pycvvdp_v054` value it produced
+    # before then scored the pair with reference and test swapped (up to
+    # 0.016 JOD on the AIC-4 crops; benchmarks/cvvdp_aic_discrepancy_2026-09-22.md).
+    # Pinned by scripts/sweep/test_pycvvdp_worker.py.
+    jod, _ = metric.predict(dist, ref, dim_order="HWC")
     return float(jod)
 
 
