@@ -61,6 +61,11 @@ pub mod butter_pnorm3;
     feature = "gpu-cvvdp"
 ))]
 pub(crate) mod cache;
+// Callers live in the `zenmetrics` bin (`batch` / `score-pairs`); the lib
+// target compiles this module without them.
+#[cfg(feature = "cpu-cvvdp")]
+#[allow(dead_code)]
+pub(crate) mod cvvdp_cpu;
 #[cfg(feature = "gpu-cvvdp")]
 pub mod cvvdp_gpu;
 
