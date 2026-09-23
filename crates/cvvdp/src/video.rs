@@ -1256,7 +1256,7 @@ pub fn video_filter_len(frames_per_second: f32) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::params::DisplayGeometry;
+    use crate::params::{DisplayGeometry, DisplayModel};
 
     fn synth_frame(w: usize, h: usize, t: usize, gain: f32) -> Vec<u8> {
         let mut f = vec![0u8; w * h * 3];
@@ -1306,48 +1306,60 @@ mod tests {
         // 16 frames > fl at 30 fps (9) so the ring wraps and slots
         // get recycled; symmetric adds the mirrored-index path.
         let (refs, dists) = synth_clip(w, h, 16);
-        let params = CvvdpParams::default();
         let geo = DisplayGeometry::STANDARD_4K;
 
-        for padding in [TempPadding::Replicate, TempPadding::Symmetric] {
-            let mut hi = VideoScorer::with_layout_and_padding(
-                w as u32,
-                h as u32,
-                30.0,
-                params,
-                geo,
-                FrameLayout::Interleaved,
-                padding,
-            )
-            .unwrap();
-            let mut lo = VideoScorer::with_options(
-                w as u32,
-                h as u32,
-                30.0,
-                params,
-                geo,
-                VideoScorerOptions {
-                    layout: FrameLayout::Interleaved,
-                    temp_padding: padding,
-                    low_memory: true,
-                },
-            )
-            .unwrap();
-            for (rf, df) in refs.iter().zip(dists.iter()) {
-                hi.push_frame(rf, df).unwrap();
-                lo.push_frame(rf, df).unwrap();
-            }
-            let hi_stats = hi.finish_with_stats().unwrap();
-            let lo_stats = lo.finish_with_stats().unwrap();
-            assert_eq!(
-                hi_stats.jod.to_bits(),
-                lo_stats.jod.to_bits(),
-                "low_memory changed the score ({padding:?})"
-            );
-            for (band_hi, band_lo) in hi_stats.q_per_ch.iter().zip(lo_stats.q_per_ch.iter()) {
-                for (ch_hi, ch_lo) in band_hi.iter().zip(band_lo.iter()) {
-                    for (v_hi, v_lo) in ch_hi.iter().zip(ch_lo.iter()) {
-                        assert_eq!(v_hi.to_bits(), v_lo.to_bits());
+        // u8 storage is the raw input code values, so the emit-time
+        // re-conversion is exact under every EOTF — sRGB and the HDR
+        // displays (PQ / HLG, BT.2020) alike.
+        for display in [
+            DisplayModel::default(),
+            DisplayModel::STANDARD_HDR_PQ,
+            DisplayModel::STANDARD_HDR_HLG,
+        ] {
+            let params = CvvdpParams {
+                display,
+                ..CvvdpParams::default()
+            };
+            for padding in [TempPadding::Replicate, TempPadding::Symmetric] {
+                let mut hi = VideoScorer::with_layout_and_padding(
+                    w as u32,
+                    h as u32,
+                    30.0,
+                    params,
+                    geo,
+                    FrameLayout::Interleaved,
+                    padding,
+                )
+                .unwrap();
+                let mut lo = VideoScorer::with_options(
+                    w as u32,
+                    h as u32,
+                    30.0,
+                    params,
+                    geo,
+                    VideoScorerOptions {
+                        layout: FrameLayout::Interleaved,
+                        temp_padding: padding,
+                        low_memory: true,
+                    },
+                )
+                .unwrap();
+                for (rf, df) in refs.iter().zip(dists.iter()) {
+                    hi.push_frame(rf, df).unwrap();
+                    lo.push_frame(rf, df).unwrap();
+                }
+                let hi_stats = hi.finish_with_stats().unwrap();
+                let lo_stats = lo.finish_with_stats().unwrap();
+                assert_eq!(
+                    hi_stats.jod.to_bits(),
+                    lo_stats.jod.to_bits(),
+                    "low_memory changed the score ({padding:?})"
+                );
+                for (band_hi, band_lo) in hi_stats.q_per_ch.iter().zip(lo_stats.q_per_ch.iter()) {
+                    for (ch_hi, ch_lo) in band_hi.iter().zip(band_lo.iter()) {
+                        for (v_hi, v_lo) in ch_hi.iter().zip(ch_lo.iter()) {
+                            assert_eq!(v_hi.to_bits(), v_lo.to_bits());
+                        }
                     }
                 }
             }
