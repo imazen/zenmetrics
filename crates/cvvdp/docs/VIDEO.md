@@ -234,37 +234,50 @@ three orders of magnitude below the acceptance tolerance.
 (`VideoScratch`: filtered planes, `WeberPyramidCache`s, output
 pyramids, sensitivity maps, masking intermediates) and reuses it for
 every emitted frame — the only per-frame heap traffic left is the
-small `Q_per_ch` row (n_levels × 4 floats). Compute runs on the same
-SIMD kernels as the still path (`weber_contrast_pyr_into`,
-`safe_pow_with_offset_into`, `compute_sensitivities_into`) plus a set
-of magetypes/archmage helpers written for the video hot loops:
-`vaxpy_into` (temporal FIR accumulation), `vmul2_scale2_into`
-(`band_mul·x·s·gain` in the scalar op order), `vabs_diff_into` /
-`vabs_diff_mul_into` / `vmin_abs_into` / `vscale_into` (masking),
-`vxcm_pool_clamp_4ch_into` (fused 4×4 cross-channel pool + soft
-clamp), and `vlp_norm_mean_p2` (`safe_pow_lp` p=2 spatial pooling —
-specialized to `BETA_SPATIAL == 2.0`, guarded by a debug assert).
-Under the default `parallel` feature the 8 pyramid builds
-(4 channels × 2 sides) run on rayon's pool; each owns a disjoint
-scratch slot, so results are deterministic regardless of scheduling.
+small `Q_per_ch` row (n_levels × 4 floats). Two structural
+deduplications keep the pyramid stage cheap: all four channels share
+one `gauss_l` background pyramid per side (every channel's `l_bkg`
+source is the same sustained-achromatic plane), and only the
+reference achromatic pyramid materializes `log_l_bkg` planes — the
+other seven run a `vweber_band_nolog_into` variant that skips the
+`log10` pass entirely. For channel 0 the image pyramid *is* the
+shared background pyramid, so its per-level expands run once.
+Compute runs on the same SIMD kernels as the still path
+(`safe_pow_with_offset_into`, `compute_sensitivities_into`) plus a
+set of magetypes/archmage helpers written for the video hot loops:
+`vscale2_into`/`vaxpy2_into` (dual-accumulator temporal FIR sharing
+the plane-0 window read between the sustained and transient achromatic
+channels), `vaxpy_into`/`vscale_into` (remaining FIR taps),
+`vmul2_scale2_pair_into` (paired test/reference CSF scaling),
+`vabs_diff_mul_lp2` (fused baseband |t−r|·s + p=2 norm in one pass),
+`vweber_band_nolog_into` (log-free Weber band), and
+`vxcm_pool_clamp_4ch_sqsum` (fused 4×4 cross-channel pool + soft
+clamp + p=2 accumulation inside `mult_mutual_band_4ch_into`, which
+returns the four pooled values directly and never materializes
+clamped-difference planes — `s_map`/`d` aliases are served by the
+`m_mm`/`t_p` scratch). Under the default `parallel` feature the 8
+band stages (4 channels × 2 sides) run on rayon's pool; each owns a
+disjoint scratch slot, so results are deterministic regardless of
+scheduling.
 
 Measured with `cargo run -p cvvdp --release --example video_sweep`
 (2026-09-23, this box; scalar = pre-SIMD port, same gates passing):
 
 | size × frames | scalar | SIMD + rayon |
 |---|---|---|
-| 256×256 ×12 | ~67 ms/frame | 6.18 ms/frame |
-| 256×256 ×24 | ~67 ms/frame | 6.64 ms/frame |
-| 512×512 ×12 | 279 ms/frame | 27.18 ms/frame |
-| 512×512 ×24 | ~279 ms/frame | 25.91 ms/frame |
-| 1280×720 ×12 | 986 ms/frame | 120.99 ms/frame |
-| 1280×720 ×24 | ~986 ms/frame | 110.80 ms/frame |
-| 1920×1080 ×12 | 2237 ms/frame | 289.60 ms/frame |
-| 1920×1080 ×24 | ~2237 ms/frame | 272.50 ms/frame |
+| 256×256 ×12 | ~67 ms/frame | 6.03 ms/frame |
+| 256×256 ×24 | ~67 ms/frame | 5.14 ms/frame |
+| 512×512 ×12 | 279 ms/frame | 25.05 ms/frame |
+| 512×512 ×24 | ~279 ms/frame | 23.55 ms/frame |
+| 1280×720 ×12 | 986 ms/frame | 104.23 ms/frame |
+| 1280×720 ×24 | ~986 ms/frame | 96.87 ms/frame |
+| 1920×1080 ×12 | 2237 ms/frame | 244.88 ms/frame |
+| 1920×1080 ×24 | ~2237 ms/frame | 231.45 ms/frame |
 
-~8.2× at 1080p vs the scalar port. Note `video_sweep` builds with
-`parallel`; a `--no-default-features` build takes the sequential
-fallback.
+~9.7× at 1080p vs the scalar port (committed data:
+[`benchmarks/cvvdp_cpu_video_sweep_2026-09-23.tsv`](../benchmarks/cvvdp_cpu_video_sweep_2026-09-23.tsv)).
+Note `video_sweep` builds with `parallel`; a `--no-default-features`
+build takes the sequential fallback.
 
 ### vs fast-ssim2 per frame
 
@@ -283,40 +296,43 @@ cost measured by the `gen` mode of the same binary.
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 41.5 | 31.5 | 43.8 | 33.3 | 161 MB | 42 MB |
-| 1280×720 | 159.3 | 118.8 | 167.9 | 129.2 | 557 MB | 141 MB |
-| 1920×1080 | 376.9 | 273.1 | 396.3 | 293.3 | 1250 MB | 311 MB |
+| 512² | 34.0 | 31.4 | 36.3 | 34.2 | 134 MB | 42 MB |
+| 1280×720 | 133.1 | 117.9 | 141.7 | 127.1 | 462 MB | 144 MB |
+| 1920×1080 | 313.6 | 271.7 | 333.8 | 292.5 | 1037 MB | 319 MB |
 
 **24-frame clip, 8 threads (`RAYON_NUM_THREADS=8`):**
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 26.0 | 31.3 | 66.7 | 33.8 | 160 MB | 42 MB |
-| 1280×720 | 112.4 | 120.0 | 339.2 | 138.8 | 557 MB | 141 MB |
-| 1920×1080 | 272.9 | 270.6 | 876.7 | 307.9 | 1253 MB | 311 MB |
+| 512² | 23.4 | 30.9 | 45.4 | 33.3 | 133 MB | 42 MB |
+| 1280×720 | 97.0 | 121.8 | 220.0 | 140.4 | 462 MB | 144 MB |
+| 1920×1080 | 230.2 | 271.9 | 532.1 | 308.8 | 1040 MB | 319 MB |
 
 Honest reading:
 
-- **At 8 threads cvvdp video is at parity or faster than
-  ssim2-per-frame wall** at every measured size (26.0 vs 31.3,
-  112.4 vs 120.0, 272.9 vs 270.6 ms/frame) — remarkable given it
-  computes 4 temporal channels, 2 pyramid decomps per channel per
-  frame, and 4-channel masking + pooling per output frame. At 1
-  thread it still costs ~1.3× ssim2-per-frame — the serial FIR /
-  masking / pooling stages dominate when the pyramid builds can't
-  spread across cores.
-- **Peak RSS ≈ 4× ssim2's** at every size. The streaming bound holds
-  (input frames are not retained — RSS is flat in `n_frames`), but
-  the bound is the *temporal window*: at 1080p/30 fps the filter is 9
-  taps, so the ring keeps 18 DKL frame sets (~24 MB each) plus 8
-  pyramid caches and scratch. Bounded ≠ small.
+- **At 8 threads cvvdp video is faster than ssim2-per-frame wall at
+  every measured size** (23.4 vs 30.9, 97.0 vs 121.8, 230.2 vs
+  271.9 ms/frame — −24%, −20%, −15%) — remarkable given it computes
+  4 temporal channels, 2 pyramid decomps per channel per frame, and
+  4-channel masking + pooling per output frame. At 1 thread it costs
+  ~1.08–1.15× ssim2-per-frame — the serial FIR / masking / pooling
+  stages dominate when the band stages can't spread across cores.
+- **Peak RSS ≈ 3.3× ssim2's** at every size (was ~4× before the
+  shared-`gauss_l` / no-`log_l_bkg` / scratch-aliasing work). The
+  streaming bound holds (input frames are not retained — RSS is flat
+  in `n_frames`), but the bound is the *temporal window*: at
+  1080p/30 fps the filter is 9 taps, so the ring keeps 18 DKL frame
+  sets (~24 MB each, ~450 MB total) plus the pyramid caches and
+  scratch. Bounded ≠ small — the remaining gap to ssim2 is almost
+  entirely that f32 ring.
 - **Thread scaling is real but shallow for cvvdp**: 1t→8t buys
-  ~1.3–1.6× (CPU/wall ≈ 2.4–3.0 effective threads) — only the
-  8-way pyramid `rayon::scope` parallelizes; FIR, masking and pooling
-  stay serial. ssim2-per-frame shows *no measurable scaling* at these
-  sizes (user+sys ≈ wall at 8t; its `rayon` feature parallelizes
-  only the gaussian-blur row pass, a negligible fraction), which is
-  why cvvdp pulls ahead once threads are available.
+  ~1.36–1.45× (CPU/wall ≈ 2.3 effective threads) — only the
+  8-way band-stage `rayon::scope` parallelizes; FIR, masking and
+  pooling stay serial. ssim2-per-frame shows *no measurable scaling*
+  at these sizes (user+sys ≈ wall at 8t; its `rayon` feature
+  parallelizes only the gaussian-blur row pass, a negligible
+  fraction), which is why cvvdp pulls ahead once threads are
+  available.
 - Scores are not comparable units (JOD 0–10 vs SSIMULACRA2's
   unbounded scale); the ssim2 arm exists to price the "just score
   frames" alternative, not to compare quality.

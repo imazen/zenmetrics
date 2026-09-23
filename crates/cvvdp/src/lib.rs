@@ -229,9 +229,8 @@ pub mod __simd_equiv_test_api {
         out_w: usize,
         out_h: usize,
         dst: &mut [f32],
-        z_h_scratch: &mut Vec<f32>,
     ) {
-        crate::simd_pyramid::expand_horizontal_pass(vscratch, sw, out_w, out_h, dst, z_h_scratch);
+        crate::simd_pyramid::expand_horizontal_pass(vscratch, sw, out_w, out_h, dst);
     }
 
     /// `out[i] = (xs[i] + offset)^p - offset_pow_p` (magetypes

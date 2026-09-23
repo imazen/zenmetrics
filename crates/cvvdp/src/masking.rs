@@ -22,7 +22,8 @@ use crate::kernels::masking::{
 };
 
 use crate::simd_math::{
-    safe_pow_with_offset_into, vabs_diff_into, vmin_abs_into, vscale_into, vxcm_pool_clamp_4ch_into,
+    safe_pow_with_offset_into, vabs_diff_into, vmin_abs_into, vscale_into,
+    vxcm_pool_clamp_4ch_sqsum,
 };
 use crate::simd_pyramid::gaussian_blur_sigma3_simd;
 
@@ -209,7 +210,7 @@ pub(crate) fn mult_mutual_band_into(
     }
 }
 
-/// `mult_mutual_band_4ch` writing into caller-owned scratch — the
+/// `mult_mutual_band_4ch` in place on the test planes — the
 /// 4-channel video variant (sustained A/RG/VY + transient A) of
 /// [`mult_mutual_band_into`]. Same structure, `MASK_Q_4` and the 4×4
 /// `XCM_4X4` matrix; identical math to
@@ -217,20 +218,25 @@ pub(crate) fn mult_mutual_band_into(
 /// reassociation noise (verified `matches_scalar_4ch_on_random`
 /// below and by the `video_parity` conformance gate).
 ///
-/// - `d` — output buffers (resized to `bw*bh`).
-/// - `m_mm` — scratch for `min(|T|, |R|)` then blurred mask inputs.
+/// `t_p_per_ch` is consumed: it feeds steps 1/4 as the test input,
+/// then its buffers hold the `safe_pow(|T−R|, p)` intermediates the
+/// fused pool+clamp+`lp_norm` kernel reduces into the returned
+/// per-channel `q_band`. The clamped-diff planes are never
+/// materialised (saves 4 full-band buffers and a write+read pass).
+///
+/// - `m_mm` — scratch for `min(|T|, |R|)` then blurred mask inputs,
+///   then `|T−R|` diffs.
 /// - `term` — scratch for `safe_pow(|M_mm|, q[ch])`.
 /// - `pu_scratch` — h-pass scratch for `gaussian_blur_sigma3_simd`.
 pub(crate) fn mult_mutual_band_4ch_into(
-    t_p_per_ch: &[Vec<f32>; 4],
+    t_p_per_ch: &mut [Vec<f32>; 4],
     r_p_per_ch: &[Vec<f32>; 4],
     bw: usize,
     bh: usize,
-    d: &mut [Vec<f32>; 4],
     m_mm: &mut [Vec<f32>; 4],
     term: &mut [Vec<f32>; 4],
     pu_scratch: &mut Vec<f32>,
-) {
+) -> [f32; 4] {
     let n = bw * bh;
     // Inputs are grow-only scratch — may carry a longer tail slice.
     debug_assert!(t_p_per_ch[0].len() >= n);
@@ -239,9 +245,6 @@ pub(crate) fn mult_mutual_band_4ch_into(
         // Grow-only: the shared Vecs keep their high-water length, so
         // `resize` would memset on every regrow — all buffers are fully
         // rewritten over `[..n]` each call anyway.
-        if d[c].len() < n {
-            d[c].resize(n, 0.0);
-        }
         if m_mm[c].len() < n {
             m_mm[c].resize(n, 0.0);
         }
@@ -284,27 +287,28 @@ pub(crate) fn mult_mutual_band_4ch_into(
         );
     }
 
-    // Step 4: pass 1 — diff[c] = |T−R| into the now-free m_mm buffers;
-    // pass 2 — pow into d_*; pass 3 — 4×4 cross-channel pool + clamp
-    // (fused SIMD kernel, same op order as the scalar loop).
+    // Step 4: pass 1 — diff[c] = |T−R| into the now-free m_mm buffers
+    // (the last read of t_p); pass 2 — pow into the consumed t_p
+    // buffers; pass 3 — fused 4×4 cross-channel pool + clamp + lp
+    // accumulation (same op order as the scalar loop, no diff plane).
     for c in 0..4 {
         vabs_diff_into(&mut m_mm[c][..n], &t_p_per_ch[c][..n], &r_p_per_ch[c][..n]);
     }
     let p = MASK_P;
     let eps_p = SAFE_EPS.powf(p);
     for c in 0..4 {
-        safe_pow_with_offset_into(&m_mm[c][..n], &mut d[c][..n], SAFE_EPS, p, eps_p);
+        safe_pow_with_offset_into(&m_mm[c][..n], &mut t_p_per_ch[c][..n], SAFE_EPS, p, eps_p);
     }
 
     let d_max_lin: f32 = 10.0_f32.powf(D_MAX);
-    let [d0, d1, d2, d3] = d;
     let [t0, t1, t2, t3] = term;
-    vxcm_pool_clamp_4ch_into(
-        &mut [&mut d0[..n], &mut d1[..n], &mut d2[..n], &mut d3[..n]],
+    let [p0, p1, p2, p3] = t_p_per_ch;
+    vxcm_pool_clamp_4ch_sqsum(
+        &[&p0[..n], &p1[..n], &p2[..n], &p3[..n]],
         &[&t0[..n], &t1[..n], &t2[..n], &t3[..n]],
         &XCM_4X4,
         d_max_lin,
-    );
+    )
 }
 
 #[cfg(test)]
@@ -347,31 +351,32 @@ mod tests {
             }
             let want = mult_mutual_band_4ch(&t, &r, bw, bh);
 
-            let mut d: [Vec<f32>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+            let mut t_in = t.clone();
             let mut m_mm: [Vec<f32>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
             let mut term: [Vec<f32>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
             let mut pu_scratch = Vec::new();
-            mult_mutual_band_4ch_into(
-                &t,
+            let got_q = mult_mutual_band_4ch_into(
+                &mut t_in,
                 &r,
                 bw,
                 bh,
-                &mut d,
                 &mut m_mm,
                 &mut term,
                 &mut pu_scratch,
             );
             for c in 0..4 {
-                for i in 0..n {
-                    let delta = (d[c][i] - want[c][i]).abs();
-                    // f32 noise dominated by the safe_pow arithmetic
-                    // reassociation — 1e-3 relative is comfortable.
-                    let tol = 1e-3_f32 * want[c][i].abs().max(1e-6);
-                    assert!(
-                        delta < tol,
-                        "case {bw}x{bh} ch {c} idx {i}: |Δ|={delta} tol={tol}"
-                    );
-                }
+                // The fused kernel returns the pooled lp_norm_mean
+                // (p=2) of the clamped diffs rather than the diff
+                // planes themselves — compare against the scalar
+                // diff → scalar-norm pipeline end to end.
+                let want_q = crate::kernels::pool::lp_norm_mean(&want[c], 2.0);
+                let delta = (got_q[c] - want_q).abs();
+                let tol = 1e-3_f32 * want_q.abs().max(1e-6);
+                assert!(
+                    delta < tol,
+                    "case {bw}x{bh} ch {c}: got={} want={want_q} |Δ|={delta} tol={tol}",
+                    got_q[c]
+                );
             }
         }
     }

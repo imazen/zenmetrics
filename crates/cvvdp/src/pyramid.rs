@@ -56,20 +56,27 @@ impl WeberPyramid {
     /// allocations measured at 40 MP into a single `Scratch::new`
     /// upfront cost.
     pub(crate) fn with_capacity(sw: usize, sh: usize, n_levels: usize) -> Self {
-        let mut bands = Vec::with_capacity(n_levels);
         let mut log_l_bkg = Vec::with_capacity(n_levels);
         let (mut w, mut h) = (sw, sh);
         for _ in 0..n_levels {
-            bands.push(Band {
-                w,
-                h,
-                data: vec![0.0_f32; w * h],
-            });
             log_l_bkg.push(vec![0.0_f32; w * h]);
             w = w.div_ceil(2);
             h = h.div_ceil(2);
         }
-        Self { bands, log_l_bkg }
+        Self {
+            bands: gauss_bands_with_capacity(sw, sh, n_levels),
+            log_l_bkg,
+        }
+    }
+
+    /// [`with_capacity`] without the `log_l_bkg` planes — for
+    /// pyramids that are only ever built with
+    /// `write_log_l_bkg = false` (7 of the 8 video pyramids).
+    pub(crate) fn with_capacity_nolog(sw: usize, sh: usize, n_levels: usize) -> Self {
+        Self {
+            bands: gauss_bands_with_capacity(sw, sh, n_levels),
+            log_l_bkg: Vec::new(),
+        }
     }
 
     /// Strip-shape pre-allocation for the K_SPLIT walker.
@@ -304,6 +311,25 @@ pub(crate) fn build_gauss_pyramid_into(
     }
 }
 
+/// Allocate the `n_levels`-Band vector shared by
+/// [`WeberPyramid::with_capacity`], [`WeberPyramidCache::with_capacity`]
+/// and the video path's shared `gauss_l` pyramids — one `w×h` f32
+/// band per level, halving each step.
+pub(crate) fn gauss_bands_with_capacity(sw: usize, sh: usize, n_levels: usize) -> Vec<Band> {
+    let mut bands = Vec::with_capacity(n_levels);
+    let (mut w, mut h) = (sw, sh);
+    for _ in 0..n_levels {
+        bands.push(Band {
+            w,
+            h,
+            data: vec![0.0_f32; w * h],
+        });
+        w = w.div_ceil(2);
+        h = h.div_ceil(2);
+    }
+    bands
+}
+
 /// Per-pyramid recycling cache: holds the two intermediate Gaussian
 /// pyramids (`gauss_img` + `gauss_l`) so successive calls reuse band
 /// Vec<f32> capacity. Owned by `Scratch`, one slot per channel
@@ -432,14 +458,13 @@ pub(crate) fn weber_contrast_pyr_into(
     cache: &mut WeberPyramidCache,
     out: &mut WeberPyramid,
 ) {
-    let n = n_levels;
-    debug_assert!(n >= 1);
+    debug_assert!(n_levels >= 1);
 
     build_gauss_pyramid_into(
         image_plane,
         sw,
         sh,
-        n,
+        n_levels,
         &mut cache.scratch,
         &mut cache.gauss_img,
     );
@@ -447,10 +472,38 @@ pub(crate) fn weber_contrast_pyr_into(
         l_bkg_plane,
         sw,
         sh,
-        n,
+        n_levels,
         &mut cache.scratch,
         &mut cache.gauss_l,
     );
+    let (gauss_img, gauss_l, scratch) = (&cache.gauss_img, &cache.gauss_l, &mut cache.scratch);
+    weber_bands_from_gauss(gauss_img, gauss_l, scratch, out, true);
+}
+
+/// Band stage of [`weber_contrast_pyr_into`] with caller-supplied
+/// Gaussian pyramids — the video path shares one `gauss_l` pyramid
+/// across channels (every channel divides by the same sustained-A
+/// `l_bkg` plane) and, for the achromatic channel, reuses it as
+/// `gauss_img` too (identical input → identical pyramid).
+///
+/// `write_log_l_bkg=false` skips the `log_l_bkg` output entirely
+/// (the fused `log10` + plane write): only the reference achromatic
+/// pyramid's `log_l_bkg` is ever consumed downstream, so the other
+/// seven video pyramids neither compute nor allocate it.
+pub(crate) fn weber_bands_from_gauss(
+    gauss_img: &[Band],
+    gauss_l: &[Band],
+    scratch: &mut PyramidScratch,
+    out: &mut WeberPyramid,
+    write_log_l_bkg: bool,
+) {
+    let n = gauss_img.len();
+    debug_assert!(n >= 1);
+    debug_assert_eq!(gauss_l.len(), n);
+    // Channel-0 callers pass the same pyramid for both inputs — the
+    // per-level `img` expand is then identical to the `l` expand, so
+    // do it once. `ptr::eq` on slices compares ptr+len.
+    let same_img_l = core::ptr::eq(gauss_img, gauss_l);
 
     // Grow / shrink `out` to exactly `n` bands; reuse existing Vec<f32>.
     while out.bands.len() < n {
@@ -459,15 +512,21 @@ pub(crate) fn weber_contrast_pyr_into(
             h: 0,
             data: Vec::new(),
         });
-        out.log_l_bkg.push(Vec::new());
     }
     out.bands.truncate(n);
-    out.log_l_bkg.truncate(n);
+    if write_log_l_bkg {
+        while out.log_l_bkg.len() < n {
+            out.log_l_bkg.push(Vec::new());
+        }
+        out.log_l_bkg.truncate(n);
+    } else {
+        out.log_l_bkg.clear();
+    }
 
     for k in 0..n {
         let is_baseband = k == n - 1;
-        let fine = &cache.gauss_img[k];
-        let l_fine = &cache.gauss_l[k];
+        let fine = &gauss_img[k];
+        let l_fine = &gauss_l[k];
         let n_px = fine.w * fine.h;
 
         out.bands[k].w = fine.w;
@@ -476,34 +535,33 @@ pub(crate) fn weber_contrast_pyr_into(
         // is already `n_px`, so steady-state frames skip the memset
         // entirely. Every element is overwritten below.
         out.bands[k].data.resize(n_px, 0.0);
-        out.log_l_bkg[k].resize(n_px, 0.0);
+        if write_log_l_bkg {
+            out.log_l_bkg[k].resize(n_px, 0.0);
+        }
 
         if is_baseband {
             let sum: f32 = l_fine.data.iter().map(|v| v.max(0.01)).sum();
             let l_bkg_mean = sum / l_fine.data.len() as f32;
-            let log_l = l_bkg_mean.log10();
             let band_data = &mut out.bands[k].data;
             for i in 0..n_px {
                 band_data[i] = fine.data[i] / l_bkg_mean;
             }
-            let log_band = &mut out.log_l_bkg[k];
-            for v in log_band.iter_mut() {
-                *v = log_l;
+            if write_log_l_bkg {
+                let log_l = l_bkg_mean.log10();
+                let log_band = &mut out.log_l_bkg[k];
+                for v in log_band.iter_mut() {
+                    *v = log_l;
+                }
             }
         } else {
             // expanded_l + img_expanded into per-band scratch.
-            // Reuse `cache.scratch.expanded` for `expanded_l`, plus a
-            // local Vec for `img_expanded` (still better than the
-            // pre-fix path because gausspyr_expand uses cache.scratch
-            // internally for its own intermediates).
-            cache.scratch.expanded.clear();
-            // expanded_l is the L_bkg expansion; img_expanded is the
-            // image-channel expansion. We need both simultaneously,
-            // so we use `cache.scratch.expanded` for one and
-            // `cache.scratch.gauss_tmp` for the other.
-            let coarse_l = &cache.gauss_l[k + 1];
-            let img_coarse = &cache.gauss_img[k + 1];
-            // Pre-extract coarse data so we can borrow cache.scratch mutably below
+            // Reuse `scratch.expanded` for `expanded_l`, plus
+            // `scratch.gauss_tmp` for `img_expanded` — we need both
+            // simultaneously, and gausspyr_expand uses scratch
+            // internally for its own intermediates.
+            let coarse_l = &gauss_l[k + 1];
+            let img_coarse = &gauss_img[k + 1];
+            // Pre-extract coarse data so we can borrow scratch mutably below
             // without aliasing.
             let coarse_l_data: &[f32] = &coarse_l.data;
             let coarse_l_w = coarse_l.w;
@@ -512,44 +570,61 @@ pub(crate) fn weber_contrast_pyr_into(
             let img_coarse_w = img_coarse.w;
             let img_coarse_h = img_coarse.h;
             // We can't simultaneously call gausspyr_expand with two
-            // different `dst` slots on the same `cache.scratch` —
-            // gausspyr_expand writes vscratch/z_v/z_h inside scratch.
+            // different `dst` slots on the same `scratch` —
+            // gausspyr_expand writes vscratch inside scratch.
             // So we call sequentially and stash one result in
-            // `cache.scratch.expanded` and the other in
-            // `cache.scratch.gauss_tmp`.
+            // `scratch.expanded` and the other in
+            // `scratch.gauss_tmp`.
             // Trick: temporarily swap out the gauss_tmp + expanded.
-            let mut expanded_l = core::mem::take(&mut cache.scratch.expanded);
+            let mut expanded_l = core::mem::take(&mut scratch.expanded);
             gausspyr_expand(
                 coarse_l_data,
                 coarse_l_w,
                 coarse_l_h,
                 fine.w,
                 fine.h,
-                &mut cache.scratch,
+                scratch,
                 &mut expanded_l,
             );
-            let mut img_expanded = core::mem::take(&mut cache.scratch.gauss_tmp);
-            gausspyr_expand(
-                img_coarse_data,
-                img_coarse_w,
-                img_coarse_h,
-                fine.w,
-                fine.h,
-                &mut cache.scratch,
-                &mut img_expanded,
-            );
+            let mut img_expanded = core::mem::take(&mut scratch.gauss_tmp);
+            if !same_img_l {
+                gausspyr_expand(
+                    img_coarse_data,
+                    img_coarse_w,
+                    img_coarse_h,
+                    fine.w,
+                    fine.h,
+                    scratch,
+                    &mut img_expanded,
+                );
+            }
             let fine_data: &[f32] = &fine.data;
             let n_px = fine_data.len();
-            crate::simd_math::vweber_band_into(
-                &mut out.bands[k].data,
-                &mut out.log_l_bkg[k],
-                fine_data,
-                &img_expanded[..n_px],
-                &expanded_l[..n_px],
-            );
+            // `gauss_img == gauss_l` → `expanded_l` IS the img expand.
+            let img_exp: &[f32] = if same_img_l {
+                &expanded_l[..n_px]
+            } else {
+                &img_expanded[..n_px]
+            };
+            if write_log_l_bkg {
+                crate::simd_math::vweber_band_into(
+                    &mut out.bands[k].data,
+                    &mut out.log_l_bkg[k],
+                    fine_data,
+                    img_exp,
+                    &expanded_l[..n_px],
+                );
+            } else {
+                crate::simd_math::vweber_band_nolog_into(
+                    &mut out.bands[k].data,
+                    fine_data,
+                    img_exp,
+                    &expanded_l[..n_px],
+                );
+            }
             // Return scratch.
-            cache.scratch.expanded = expanded_l;
-            cache.scratch.gauss_tmp = img_expanded;
+            scratch.expanded = expanded_l;
+            scratch.gauss_tmp = img_expanded;
         }
     }
 }

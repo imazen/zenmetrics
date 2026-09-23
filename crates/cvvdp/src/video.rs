@@ -58,9 +58,12 @@ use crate::kernels::pyramid::band_frequencies;
 use crate::kernels::temporal::{temporal_filter_len, temporal_filters};
 use crate::masking::mult_mutual_band_4ch_into;
 use crate::params::DisplayGeometry;
-use crate::pyramid::{WeberPyramid, WeberPyramidCache, weber_contrast_pyr_into};
+use crate::pyramid::{
+    Band, WeberPyramid, WeberPyramidCache, build_gauss_pyramid_into, gauss_bands_with_capacity,
+    weber_bands_from_gauss,
+};
 use crate::simd_math::{
-    vabs_diff_mul_into, vaxpy_into, vlp_norm_mean_p2, vmul2_scale2_into, vscale_into,
+    vabs_diff_mul_lp2, vaxpy_into, vaxpy2_into, vmul2_scale2_pair_into, vscale_into, vscale2_into,
 };
 use crate::{CvvdpParams, Error, Result};
 
@@ -175,22 +178,33 @@ struct VideoScratch {
     /// frame currently being emitted.
     filt_t: [Vec<f32>; 4],
     filt_r: [Vec<f32>; 4],
-    /// Pyramid caches (gauss planes + filter scratch) per channel
-    /// per side — reused across frames.
+    /// Shared sustained-A Gaussian pyramid per side — every channel
+    /// divides by the same `L_bkg` (`filt_*[0]`), so upstream's
+    /// per-channel `gauss_l` builds are four identical reductions;
+    /// channel 0's image pyramid is the same input again. One build
+    /// per side replaces 8.
+    gauss_l_t: Vec<Band>,
+    gauss_l_r: Vec<Band>,
+    /// Pyramid caches (gauss_img planes + filter scratch) per channel
+    /// per side — reused across frames. Channel 0 builds no
+    /// `gauss_img` (it reuses the shared pyramid); no cache builds a
+    /// `gauss_l` (the shared pyramids above replace all 8).
     cache_t: [WeberPyramidCache; 4],
     cache_r: [WeberPyramidCache; 4],
-    /// Output pyramids per channel per side.
+    /// Output pyramids per channel per side. Only `pyr_r[0]` keeps
+    /// `log_l_bkg` planes — the only ones read downstream (CSF
+    /// sensitivity is evaluated at the reference sustained-A
+    /// background).
     pyr_t: [WeberPyramid; 4],
     pyr_r: [WeberPyramid; 4],
-    /// CSF-weighted contrasts for the current band.
+    /// CSF-weighted contrasts for the current band — consumed in
+    /// place by `mult_mutual_band_4ch_into` (the clamped-diff planes
+    /// are never materialised).
     t_p: [Vec<f32>; 4],
     r_p: [Vec<f32>; 4],
-    /// Per-pixel sensitivity maps for the current band.
-    s_map: [Vec<f32>; 4],
-    /// Masked diffs / baseband diffs for the current band.
-    d: [Vec<f32>; 4],
-    /// Masking intermediates (`min(|T|,|R|)` → blurred → pow input,
-    /// then reused for `|T−R|`).
+    /// Per-pixel sensitivity maps for the current band — doubles as
+    /// the masking `m_mm` scratch (the maps are dead once `t_p`/`r_p`
+    /// are computed).
     m_mm: [Vec<f32>; 4],
     /// Masking intermediates (`safe_pow(|M_mm|, q)`).
     term: [Vec<f32>; 4],
@@ -200,17 +214,35 @@ struct VideoScratch {
 
 impl VideoScratch {
     fn new(w: usize, h: usize, n_levels: usize) -> Self {
+        // Channel 0's image pyramid IS the shared sustained-A pyramid
+        // (same input plane) — its cache never builds `gauss_img`;
+        // no cache ever builds `gauss_l`.
+        let video_cache = |img: bool| WeberPyramidCache {
+            gauss_img: if img {
+                gauss_bands_with_capacity(w, h, n_levels)
+            } else {
+                Vec::new()
+            },
+            gauss_l: Vec::new(),
+            scratch: crate::pyramid::PyramidScratch::default(),
+        };
         Self {
             filt_t: core::array::from_fn(|_| vec![0.0; w * h]),
             filt_r: core::array::from_fn(|_| vec![0.0; w * h]),
-            cache_t: core::array::from_fn(|_| WeberPyramidCache::with_capacity(w, h, n_levels)),
-            cache_r: core::array::from_fn(|_| WeberPyramidCache::with_capacity(w, h, n_levels)),
-            pyr_t: core::array::from_fn(|_| WeberPyramid::with_capacity(w, h, n_levels)),
-            pyr_r: core::array::from_fn(|_| WeberPyramid::with_capacity(w, h, n_levels)),
+            gauss_l_t: gauss_bands_with_capacity(w, h, n_levels),
+            gauss_l_r: gauss_bands_with_capacity(w, h, n_levels),
+            cache_t: core::array::from_fn(|c| video_cache(c != 0)),
+            cache_r: core::array::from_fn(|c| video_cache(c != 0)),
+            pyr_t: core::array::from_fn(|_| WeberPyramid::with_capacity_nolog(w, h, n_levels)),
+            pyr_r: core::array::from_fn(|c| {
+                if c == 0 {
+                    WeberPyramid::with_capacity(w, h, n_levels)
+                } else {
+                    WeberPyramid::with_capacity_nolog(w, h, n_levels)
+                }
+            }),
             t_p: core::array::from_fn(|_| Vec::new()),
             r_p: core::array::from_fn(|_| Vec::new()),
-            s_map: core::array::from_fn(|_| Vec::new()),
-            d: core::array::from_fn(|_| Vec::new()),
             m_mm: core::array::from_fn(|_| Vec::new()),
             term: core::array::from_fn(|_| Vec::new()),
             pu_scratch: Vec::new(),
@@ -629,43 +661,105 @@ impl VideoScorer {
         // identical result (`0 + a·b == a·b`, only a −0/+0 sign flip
         // which is numerically identical downstream), and it removes
         // the 8 full-plane memsets that used to precede the loop.
-        for k in 0..fl {
-            // Frame index at window slot k. s<0 resolves per
-            // `temp_padding`: replicate → frame 0 (always win[0] when
-            // s≤0); symmetric → mirrored/ping-pong index. The emission
-            // gate guarantees every resolved index is inside the ring.
-            let s = t as isize - (fl as isize - 1) + k as isize;
-            let fi = if s >= 0 {
-                s as usize
-            } else {
-                match self.padding {
-                    TempPadding::Replicate => 0,
-                    TempPadding::Symmetric => symmetric_frame_index(s, self.n_pushed.max(2)),
-                }
-            };
-            let widx = fi - w0;
-            for c in 0..4 {
-                let src_c = if c == 3 { 0 } else { c };
-                let tap = self.taps[c][fl - 1 - k];
-                if k == 0 {
-                    vscale_into(&mut sc.filt_t[c], &self.win_t[widx][src_c], tap);
-                    vscale_into(&mut sc.filt_r[c], &self.win_r[widx][src_c], tap);
+        {
+            // Channels 0 and 3 both FIR-filter the sustained-A plane
+            // (different taps) — dual-accumulate so the plane is read
+            // once per tap instead of twice.
+            let [ft0, ft1, ft2, ft3] = &mut sc.filt_t;
+            let [fr0, fr1, fr2, fr3] = &mut sc.filt_r;
+            for k in 0..fl {
+                // Frame index at window slot k. s<0 resolves per
+                // `temp_padding`: replicate → frame 0 (always win[0]
+                // when s≤0); symmetric → mirrored/ping-pong index. The
+                // emission gate guarantees every resolved index is
+                // inside the ring.
+                let s = t as isize - (fl as isize - 1) + k as isize;
+                let fi = if s >= 0 {
+                    s as usize
                 } else {
-                    vaxpy_into(&mut sc.filt_t[c], &self.win_t[widx][src_c], tap);
-                    vaxpy_into(&mut sc.filt_r[c], &self.win_r[widx][src_c], tap);
+                    match self.padding {
+                        TempPadding::Replicate => 0,
+                        TempPadding::Symmetric => symmetric_frame_index(s, self.n_pushed.max(2)),
+                    }
+                };
+                let widx = fi - w0;
+                let j = fl - 1 - k;
+                if k == 0 {
+                    vscale2_into(
+                        ft0,
+                        ft3,
+                        &self.win_t[widx][0],
+                        self.taps[0][j],
+                        self.taps[3][j],
+                    );
+                    vscale2_into(
+                        fr0,
+                        fr3,
+                        &self.win_r[widx][0],
+                        self.taps[0][j],
+                        self.taps[3][j],
+                    );
+                    vscale_into(ft1, &self.win_t[widx][1], self.taps[1][j]);
+                    vscale_into(ft2, &self.win_t[widx][2], self.taps[2][j]);
+                    vscale_into(fr1, &self.win_r[widx][1], self.taps[1][j]);
+                    vscale_into(fr2, &self.win_r[widx][2], self.taps[2][j]);
+                } else {
+                    vaxpy2_into(
+                        ft0,
+                        ft3,
+                        &self.win_t[widx][0],
+                        self.taps[0][j],
+                        self.taps[3][j],
+                    );
+                    vaxpy2_into(
+                        fr0,
+                        fr3,
+                        &self.win_r[widx][0],
+                        self.taps[0][j],
+                        self.taps[3][j],
+                    );
+                    vaxpy_into(ft1, &self.win_t[widx][1], self.taps[1][j]);
+                    vaxpy_into(ft2, &self.win_t[widx][2], self.taps[2][j]);
+                    vaxpy_into(fr1, &self.win_r[widx][1], self.taps[1][j]);
+                    vaxpy_into(fr2, &self.win_r[widx][2], self.taps[2][j]);
                 }
             }
         }
 
-        // Per-side weber pyramids via the SIMD/scratch path
-        // (`weber_contrast_pyr_into` — same math as
+        // Shared sustained-A Gaussian pyramids — every channel's
+        // l_bkg is the side's own filt[0], so upstream's per-channel
+        // gauss_l builds are four identical reductions; channel 0's
+        // gauss_img is the same input again. One build per side
+        // replaces 8 (identical math — same input, same kernel).
+        build_gauss_pyramid_into(
+            &sc.filt_t[0],
+            w,
+            h,
+            n_levels,
+            &mut sc.cache_t[0].scratch,
+            &mut sc.gauss_l_t,
+        );
+        build_gauss_pyramid_into(
+            &sc.filt_r[0],
+            w,
+            h,
+            n_levels,
+            &mut sc.cache_r[0].scratch,
+            &mut sc.gauss_l_r,
+        );
+
+        // Per-side weber band construction via the SIMD/scratch path
+        // (`weber_bands_from_gauss` — same math as
         // `weber_contrast_pyr_dec_scalar` to ~1e-5 FMA-order noise).
-        // L_bkg is always the side's own sustained-A filtered plane
-        // (upstream divides the interleaved tensor's even channels by
-        // L_bkg[0] = test sustained, odd by L_bkg[1] = ref sustained).
-        // The 8 builds (4 channels × 2 sides) are fully independent —
-        // each owns a disjoint cache+output slot — so under `parallel`
-        // they run on rayon's pool.
+        // Channel 0 consumes the shared pyramid as both gauss_img and
+        // gauss_l; channels 1–3 build only their own gauss_img against
+        // the shared l. Only the reference achromatic pyramid writes
+        // `log_l_bkg` — the only one read downstream. The 8 band
+        // stages are fully independent — each owns a disjoint
+        // cache+output slot — so under `parallel` they run on rayon's
+        // pool.
+        let gl_t: &[Band] = &sc.gauss_l_t;
+        let gl_r: &[Band] = &sc.gauss_l_r;
         #[cfg(feature = "parallel")]
         {
             rayon::scope(|s| {
@@ -677,14 +771,48 @@ impl VideoScorer {
                     .enumerate()
                 {
                     let ft = &sc.filt_t[c];
-                    let f0t = &sc.filt_t[0];
                     let fr = &sc.filt_r[c];
-                    let f0r = &sc.filt_r[0];
                     s.spawn(move |_| {
-                        weber_contrast_pyr_into(ft, f0t, w, h, n_levels, cache_t, pyr_t);
+                        if c == 0 {
+                            weber_bands_from_gauss(gl_t, gl_t, &mut cache_t.scratch, pyr_t, false);
+                        } else {
+                            build_gauss_pyramid_into(
+                                ft,
+                                w,
+                                h,
+                                n_levels,
+                                &mut cache_t.scratch,
+                                &mut cache_t.gauss_img,
+                            );
+                            weber_bands_from_gauss(
+                                &cache_t.gauss_img,
+                                gl_t,
+                                &mut cache_t.scratch,
+                                pyr_t,
+                                false,
+                            );
+                        }
                     });
                     s.spawn(move |_| {
-                        weber_contrast_pyr_into(fr, f0r, w, h, n_levels, cache_r, pyr_r);
+                        if c == 0 {
+                            weber_bands_from_gauss(gl_r, gl_r, &mut cache_r.scratch, pyr_r, true);
+                        } else {
+                            build_gauss_pyramid_into(
+                                fr,
+                                w,
+                                h,
+                                n_levels,
+                                &mut cache_r.scratch,
+                                &mut cache_r.gauss_img,
+                            );
+                            weber_bands_from_gauss(
+                                &cache_r.gauss_img,
+                                gl_r,
+                                &mut cache_r.scratch,
+                                pyr_r,
+                                false,
+                            );
+                        }
                     });
                 }
             });
@@ -692,24 +820,53 @@ impl VideoScorer {
         #[cfg(not(feature = "parallel"))]
         {
             for c in 0..4 {
-                weber_contrast_pyr_into(
-                    &sc.filt_t[c],
-                    &sc.filt_t[0],
-                    w,
-                    h,
-                    n_levels,
-                    &mut sc.cache_t[c],
-                    &mut sc.pyr_t[c],
-                );
-                weber_contrast_pyr_into(
-                    &sc.filt_r[c],
-                    &sc.filt_r[0],
-                    w,
-                    h,
-                    n_levels,
-                    &mut sc.cache_r[c],
-                    &mut sc.pyr_r[c],
-                );
+                if c == 0 {
+                    weber_bands_from_gauss(
+                        gl_t,
+                        gl_t,
+                        &mut sc.cache_t[0].scratch,
+                        &mut sc.pyr_t[0],
+                        false,
+                    );
+                    weber_bands_from_gauss(
+                        gl_r,
+                        gl_r,
+                        &mut sc.cache_r[0].scratch,
+                        &mut sc.pyr_r[0],
+                        true,
+                    );
+                } else {
+                    build_gauss_pyramid_into(
+                        &sc.filt_t[c],
+                        w,
+                        h,
+                        n_levels,
+                        &mut sc.cache_t[c].scratch,
+                        &mut sc.cache_t[c].gauss_img,
+                    );
+                    weber_bands_from_gauss(
+                        &sc.cache_t[c].gauss_img,
+                        gl_t,
+                        &mut sc.cache_t[c].scratch,
+                        &mut sc.pyr_t[c],
+                        false,
+                    );
+                    build_gauss_pyramid_into(
+                        &sc.filt_r[c],
+                        w,
+                        h,
+                        n_levels,
+                        &mut sc.cache_r[c].scratch,
+                        &mut sc.cache_r[c].gauss_img,
+                    );
+                    weber_bands_from_gauss(
+                        &sc.cache_r[c].gauss_img,
+                        gl_r,
+                        &mut sc.cache_r[c].scratch,
+                        &mut sc.pyr_r[c],
+                        false,
+                    );
+                }
             }
         }
 
@@ -738,25 +895,23 @@ impl VideoScorer {
                 precompute_logs_row(rho, CsfChannel::Vy),
                 precompute_logs_row_o5(rho),
             ];
+            // Sensitivity maps land in `m_mm` — the masking scratch
+            // isn't live until after `t_p`/`r_p` are computed, so the
+            // two share storage (saves 4 full-band planes).
             for c in 0..4 {
-                compute_sensitivities_into(&sc.pyr_r[0].log_l_bkg[k], &rows[c], &mut sc.s_map[c]);
+                compute_sensitivities_into(&sc.pyr_r[0].log_l_bkg[k], &rows[c], &mut sc.m_mm[c]);
             }
 
             if is_baseband {
-                // D = |T_f − R_f| · S — direct absolute difference on
-                // the contrast bands (no masking, no ch_gain).
+                // D = |T_f − R_f| · S pooled directly — the fused
+                // kernel never materialises the diff plane.
                 let mut q_band = [0.0_f32; 4];
                 for c in 0..4 {
-                    let t_data = &sc.pyr_t[c].bands[k].data;
-                    let r_data = &sc.pyr_r[c].bands[k].data;
-                    let s = &sc.s_map[c][..n_px_b];
-                    let d = &mut sc.d[c];
-                    // Grow-only: shared scratch, fully overwritten.
-                    if d.len() < n_px_b {
-                        d.resize(n_px_b, 0.0);
-                    }
-                    vabs_diff_mul_into(&mut d[..n_px_b], t_data, r_data, s);
-                    q_band[c] = vlp_norm_mean_p2(&d[..n_px_b]);
+                    q_band[c] = vabs_diff_mul_lp2(
+                        &sc.pyr_t[c].bands[k].data,
+                        &sc.pyr_r[c].bands[k].data,
+                        &sc.m_mm[c][..n_px_b],
+                    );
                 }
                 q_frame.push(q_band);
             } else {
@@ -764,7 +919,7 @@ impl VideoScorer {
                     let gain = CH_GAIN_4[c];
                     let t_data = &sc.pyr_t[c].bands[k].data;
                     let r_data = &sc.pyr_r[c].bands[k].data;
-                    let s = &sc.s_map[c][..n_px_b];
+                    let s = &sc.m_mm[c][..n_px_b];
                     let tp = &mut sc.t_p[c];
                     let rp = &mut sc.r_p[c];
                     if tp.len() < n_px_b {
@@ -773,25 +928,27 @@ impl VideoScorer {
                     if rp.len() < n_px_b {
                         rp.resize(n_px_b, 0.0);
                     }
-                    // `vmul2_scale2_into` computes ((x·a)·y)·b — the
-                    // scalar `band_mul * t * s * gain` op order.
-                    vmul2_scale2_into(&mut tp[..n_px_b], t_data, s, band_mul, gain);
-                    vmul2_scale2_into(&mut rp[..n_px_b], r_data, s, band_mul, gain);
+                    // `((x·a)·y)·b` — the scalar `band_mul * t * s *
+                    // gain` op order, both sides in one pass.
+                    vmul2_scale2_pair_into(
+                        &mut tp[..n_px_b],
+                        &mut rp[..n_px_b],
+                        t_data,
+                        r_data,
+                        s,
+                        band_mul,
+                        gain,
+                    );
                 }
-                mult_mutual_band_4ch_into(
-                    &sc.t_p,
+                let q_band = mult_mutual_band_4ch_into(
+                    &mut sc.t_p,
                     &sc.r_p,
                     bw,
                     bh,
-                    &mut sc.d,
                     &mut sc.m_mm,
                     &mut sc.term,
                     &mut sc.pu_scratch,
                 );
-                let mut q_band = [0.0_f32; 4];
-                for c in 0..4 {
-                    q_band[c] = vlp_norm_mean_p2(&sc.d[c][..n_px_b]);
-                }
                 q_frame.push(q_band);
             }
         }

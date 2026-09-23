@@ -965,8 +965,7 @@ fn pyramid_expand_horizontal_equiv() {
                 let vs = gen_values(&mut rng, sw * oh, dist);
                 let want = expand_h_scalar_ref(&vs, sw, ow, oh);
                 let mut got = vec![0.0_f32; ow * oh];
-                let mut z = Vec::new();
-                api::expand_horizontal_pass(&vs, sw, ow, oh, &mut got, &mut z);
+                api::expand_horizontal_pass(&vs, sw, ow, oh, &mut got);
                 for i in 0..want.len() {
                     env.observe(got[i], want[i]);
                 }
@@ -983,8 +982,7 @@ fn pyramid_expand_horizontal_equiv() {
             fill_adversarial(&mut vs, kind, sw, 1000.0);
             let want = expand_h_scalar_ref(&vs, sw, ow, oh);
             let mut got = vec![0.0_f32; ow * oh];
-            let mut z = Vec::new();
-            api::expand_horizontal_pass(&vs, sw, ow, oh, &mut got, &mut z);
+            api::expand_horizontal_pass(&vs, sw, ow, oh, &mut got);
             for i in 0..want.len() {
                 env.observe(got[i], want[i]);
             }

@@ -51,11 +51,22 @@ Workspace conventions per the global rules:
   `score-video` CLI: `ff723263`. Comparative benchmark vs
   fast-ssim2-per-frame (wall, user+sys CPU, peak RSS, 1t vs 8t) in
   `examples/video_vs_ssim2.rs` +
-  `benchmarks/video_vs_ssim2_2026-09-23.tsv`: at 8t cvvdp is at parity
-  or faster than ssim2-per-frame wall at every measured size
-  (26.0 vs 31.3 / 112.4 vs 120.0 / 272.9 vs 270.6 ms/frame at 512² /
-  720p / 1080p), ~1.3× slower at 1t; ~4× peak RSS (1080p: 1.25 GB vs
-  311 MB).
+  `benchmarks/video_vs_ssim2_2026-09-23.tsv`: at 8t cvvdp is faster
+  than ssim2-per-frame wall at every measured size
+  (23.4 vs 30.9 / 97.0 vs 121.8 / 230.2 vs 271.9 ms/frame at 512² /
+  720p / 1080p), ~1.1× slower at 1t; ~3.3× peak RSS (1080p: 1.04 GB
+  vs 319 MB). Subsequent fusion pass `e2a5e68a` + shared-pyramid
+  rework: one `gauss_l` background pyramid per side replaces four
+  identical builds, only the reference achromatic pyramid keeps
+  `log_l_bkg` planes (`vweber_band_nolog_into` elsewhere), band
+  scratch is aliased (`s_map`→`m_mm`, `d`→`t_p`), and fused kernels
+  cover the dual-accumulator FIR (`vscale2`/`vaxpy2`), paired CSF
+  scaling (`vmul2_scale2_pair_into`), baseband |t−r|·s + p=2 norm
+  (`vabs_diff_mul_lp2`), and masked-band pool+clamp+norm
+  (`vxcm_pool_clamp_4ch_sqsum` inside `mult_mutual_band_4ch_into`,
+  which now returns pooled values directly). Scores bit-identical;
+  1080p 8t 273→230 ms/frame, 1t 432→314 ms/frame, peak RSS
+  1.25→1.04 GB.
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
