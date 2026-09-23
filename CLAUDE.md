@@ -807,6 +807,20 @@ packed-sRGB-u8 sweep shape and answers a different question.
   ssim2-gpu one-process OOM below; workaround: run per-module/per-test
   processes. Lib + hdr unit tests and per-test runs are green.
 
+- **cvvdp-gpu `it` suite (`--features parity-goldens`) exhausts an 8 GB RTX 2080
+  when run as ONE process** (observed 2026-09-23 during the pycvvdp v0.5.7 pin
+  bump, 4bf7bdf8): 554 pass / 18 fail. One was the intended `version_matches` pin
+  (updated in that commit); the other 17 failed with `ReadbackFailed(ServerUnhealthy {
+  Io(can't allocate buffer of size: 31888384), Io(couldn't find resource for that
+  handle: Memory page 0 doesn't exist) … })`, cascading through `pipeline_score`,
+  `pyramid_kernel`, `state_machine_independence`, `strip_kernel_parity`,
+  `strip_mode_e_phase3`, `mode_b_walker_parity` and friends. The GPU was otherwise
+  idle (1 MiB used). **Every affected module passes in its own process** (123/123:
+  `cargo test -p cvvdp-gpu --release --features parity-goldens --test it --
+  <module>::`). Same family as the ssim2-gpu entry below. The bump touched no
+  cvvdp-gpu runtime code; that it is pre-existing is inferred from this, not
+  A/B-measured against the parent commit. Workaround: per-module processes.
+
 - **ssim2-gpu consolidated `it` suite OOMs the 12 GB RTX 5070 when run as
   ONE process** (observed 2026-06-10, pre-existing at 704b19dd — NOT from
   the PU21 commit de2ced69; identical 61-test failure set on both). The

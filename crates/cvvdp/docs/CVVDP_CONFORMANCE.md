@@ -1,4 +1,4 @@
-# CVVDP Conformance Matrix — cvvdp + cvvdp-gpu vs pycvvdp (v0.5.7 goldens; port pinned to v0.5.4)
+# CVVDP Conformance Matrix — cvvdp + cvvdp-gpu vs pycvvdp v0.5.7
 
 The authoritative "are our cvvdp impls correct?" gate. Every
 `(impl × display_model × situation)` cell is scored against the
@@ -339,7 +339,8 @@ conformance-v2 (current pin in `tests/common/mod.rs`):
 - Reference: pycvvdp v0.5.7 (PyPI `cvvdp` 0.5.7), torch 2.14.0+cpu.
   `build_conformance_goldens.py` now records the INSTALLED pycvvdp
   version as `reference_version`, plus the Rust port pin as
-  `port_pinned_version` (still v0.5.4). A display it cannot construct is
+  `port_pinned_version` (v0.5.4 when these goldens were built; the pin
+  moved to v0.5.7 in `4bf7bdf8`). A display it cannot construct is
   now fatal rather than a silently skipped null golden.
 - 403 cells, 0 pycvvdp errors. `conformance_goldens.json` sha256
   `1bac6f9af8f1eaa318fd35ee8d369be1979bd65e8e7ee8e430071eb0537afbf0`;

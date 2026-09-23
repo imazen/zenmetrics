@@ -31,11 +31,22 @@ Workspace conventions per the global rules:
 - cvvdp-conformance: conformance-v2 matrix. pycvvdp v0.5.7 goldens with 13
   displays, adding the `65inch_hdr_pq_*` and `lg_oled_2026_hdr_pq` presets that
   upstream now ships. cpu 403/403 and gpu 400/403 within 1e-3; shared cells agree
-  with the v0.5.4 goldens to 7.6e-6. **The goldens need an R2 upload before
-  push.** `15232ac2`.
+  with the v0.5.4 goldens to 7.6e-6. Goldens uploaded to R2
+  `cvvdp-goldens/conformance-v2/`. `15232ac2`, `9c1951a5`.
+
+- cvvdp / cvvdp-gpu: `PYCVVDP_REFERENCE_VERSION` v0.5.4 → **v0.5.7**, with
+  per-stage goldens regenerated (R2 `cvvdp-goldens/v2/`, v1 kept). The still-image
+  path is numerically unchanged: chroma-stage dumps are bit-identical, and the
+  corpus JODs are within 1.4e-6. The vendored `cvvdp_parameters.json` is now
+  v0.5.7's (it differs only in `version`). `4bf7bdf8`.
+- `pycvvdp-scorer:0.5.7` image (pushed). The worker's default column now
+  follows the installed pycvvdp (`cvvdp_pycvvdp_v057`); `fleet.env` points at
+  `:0.5.7`. `05ad070e`.
 
 ### Fixed
 
+- `build_goldens.py` / `bench_12mp_cuda.py` hard-coded the pycvvdp version they
+  recorded. `18b5f894`.
 - `build_conformance_goldens.py` labelled goldens with the Rust pin instead of
   the pycvvdp that produced them, and silently nulled displays it could not
   construct; the conformance test overwrote

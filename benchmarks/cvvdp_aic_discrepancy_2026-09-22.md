@@ -155,11 +155,15 @@ Done (see `crates/cvvdp/docs/CVVDP_CONFORMANCE.md`, "Results — conformance-v2"
   (`cvvdp_conformance_matrix_pycvvdp_v0.5.7.tsv`). A hard-coded `2026-05-26`
   made every run overwrite the May record.
 
-Not done: the port's `PYCVVDP_REFERENCE_VERSION` stays **v0.5.4**. It is
-lockstep-pinned to the per-stage R2 goldens (`cvvdp-gpu/tests/it/parity.rs`,
-`version_lockstep.rs`), so bumping it means regenerating and uploading those. That
-is justified by the numbers above, but it needs an upload. The same applies to the
-`pycvvdp-scorer` image and its `cvvdp_pycvvdp_v054` column.
+Follow-up, done 2026-09-23 on the user's go-ahead:
+
+- conformance-v2 goldens uploaded to R2, and the result matrix committed.
+- **`PYCVVDP_REFERENCE_VERSION` bumped to v0.5.7** (`4bf7bdf8`). Every golden was
+  regenerated with pycvvdp 0.5.7: the chroma-stage dumps are bit-identical, the
+  synth goldens are within 1.1e-5, and the R2 per-pair manifest (now `/v2/`) is
+  within 1.4e-6.
+- **`ghcr.io/imazen/pycvvdp-scorer:0.5.7`** built and pushed (`05ad070e`). It
+  carries the argument-order fix and writes `cvvdp_pycvvdp_v057`.
 
 ## 5. What changed
 
