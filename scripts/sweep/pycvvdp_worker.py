@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""pycvvdp v0.5.4 scoring worker.
+"""pycvvdp scoring worker (image pins pycvvdp 0.5.7).
 
 Consumes a TSV of (ref, dist) image pairs and writes a parquet
-sidecar with the `cvvdp_pycvvdp_v054` column per
+sidecar with a `cvvdp_pycvvdp_v<ver>` column (default derived from the
+installed pycvvdp, e.g. `cvvdp_pycvvdp_v057`) per
 `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md`.
 
 The TSV input format avoids depending on parquet for the upstream
@@ -27,10 +28,11 @@ Both must be the same dimensions; mismatched dims are an error.
 Output parquet schema:
 
     image_path:string  codec:string  q:int64  knob_tuple_json:string
-    cvvdp_pycvvdp_v054:float64
+    cvvdp_pycvvdp_v<ver>:float64
 
 Column-name override: pass `--score-col-name`. Defaults to
-`cvvdp_pycvvdp_v054`.
+`cvvdp_pycvvdp_v<major><minor><patch>` of the installed pycvvdp, so the
+column always names the reference that produced it.
 
 Usage:
 
@@ -39,7 +41,7 @@ Usage:
         --out-parquet out.parquet \\
         [--display-name standard_4k] \\
         [--batch-row-group 4096] \\
-        [--score-col-name cvvdp_pycvvdp_v054]
+        [--score-col-name cvvdp_pycvvdp_v057]
 """
 import argparse
 import csv
@@ -168,7 +170,8 @@ def cmd_score_pairs(args: argparse.Namespace) -> int:
         print("[pycvvdp-worker] no rows produced", file=sys.stderr)
         return 3
 
-    write_parquet(rows, str(out_path), args.score_col_name,
+    score_col = args.score_col_name or default_score_col_name()
+    write_parquet(rows, str(out_path), score_col,
                   args.batch_row_group)
 
     total = len(rows)
@@ -181,10 +184,28 @@ def cmd_score_pairs(args: argparse.Namespace) -> int:
     return 0
 
 
+def installed_pycvvdp_version() -> str:
+    """Version of the installed pycvvdp distribution (PyPI `cvvdp`; git
+    installs are named `pycvvdp`)."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    for dist in ("cvvdp", "pycvvdp"):
+        try:
+            return version(dist)
+        except PackageNotFoundError:
+            continue
+    raise RuntimeError("no cvvdp/pycvvdp distribution metadata found")
+
+
+def default_score_col_name() -> str:
+    """`cvvdp_pycvvdp_v057` for pycvvdp 0.5.7: the column names its reference."""
+    return "cvvdp_pycvvdp_v" + installed_pycvvdp_version().replace(".", "")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="pycvvdp-worker",
-        description="pycvvdp v0.5.4 scoring worker for parquet sidecars.",
+        description="pycvvdp scoring worker for parquet sidecars.",
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -198,9 +219,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Output parquet sidecar path.")
     sp.add_argument("--display-name", default="standard_4k",
                     help="pycvvdp display preset (default: standard_4k).")
-    sp.add_argument("--score-col-name", default="cvvdp_pycvvdp_v054",
-                    help="Column name for the JOD score. Default tracks "
-                         "the canonical pycvvdp v0.5.4 reference.")
+    sp.add_argument("--score-col-name", default=None,
+                    help="Column name for the JOD score. Default: "
+                         "cvvdp_pycvvdp_v<ver> of the installed pycvvdp "
+                         "(e.g. cvvdp_pycvvdp_v057).")
     sp.add_argument("--batch-row-group", type=int, default=65536,
                     help="Row group size for the output parquet.")
     sp.set_defaults(func=cmd_score_pairs)

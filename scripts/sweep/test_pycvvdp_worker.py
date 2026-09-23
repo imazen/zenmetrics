@@ -51,6 +51,17 @@ def test_score_pair_rejects_shape_mismatch():
     raise AssertionError("shape mismatch must raise")
 
 
+def test_default_column_names_the_installed_reference():
+    orig = W.installed_pycvvdp_version
+    try:
+        W.installed_pycvvdp_version = lambda: "0.5.7"
+        assert W.default_score_col_name() == "cvvdp_pycvvdp_v057"
+        W.installed_pycvvdp_version = lambda: "0.5.4"
+        assert W.default_score_col_name() == "cvvdp_pycvvdp_v054"
+    finally:
+        W.installed_pycvvdp_version = orig
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in list(globals().items()):

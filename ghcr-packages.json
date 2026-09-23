@@ -34,10 +34,10 @@
     {
       "name": "pycvvdp-scorer",
       "purpose": "pycvvdp (PyTorch) CVVDP reference scorer. Kept a SEPARATE package on purpose: it carries ~3 GB of torch, so it must not bloat the cold-start of the sweep image.",
-      "builds_from": "scripts/sweep/Dockerfile.pycvvdp (pytorch + CUDA + pycvvdp 0.5.4).",
+      "builds_from": "scripts/sweep/Dockerfile.pycvvdp (pytorch + CUDA + pycvvdp 0.5.7; 0.5.4 tag kept for history).",
       "tag_convention": [
         "latest            — current scorer",
-        "<pycvvdp-version> — e.g. 0.5.4, pinning the upstream pycvvdp release"
+        "<pycvvdp-version> — e.g. 0.5.7, pinning the upstream pycvvdp release"
       ]
     },
     {

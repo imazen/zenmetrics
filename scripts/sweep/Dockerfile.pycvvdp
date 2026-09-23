@@ -1,22 +1,22 @@
-# Dockerfile.pycvvdp — pycvvdp v0.5.4 scoring worker for vast.ai
+# Dockerfile.pycvvdp — pycvvdp v0.5.7 scoring worker for vast.ai
 #
 # Companion to `Dockerfile.sweep` (which bakes the zenmetrics binary).
 # This image is the canonical pycvvdp reference scorer — used to
-# produce the `cvvdp_pycvvdp_v054` column in parquet sidecars per
+# produce the `cvvdp_pycvvdp_v057` column in parquet sidecars per
 # `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md`.
 #
 # Build (from repo root):
 #   docker build -f scripts/sweep/Dockerfile.pycvvdp \
-#       -t ghcr.io/imazen/pycvvdp-scorer:0.5.4 .
+#       -t ghcr.io/imazen/pycvvdp-scorer:0.5.7 .
 #
 # Push (requires gh auth):
-#   docker push ghcr.io/imazen/pycvvdp-scorer:0.5.4
+#   docker push ghcr.io/imazen/pycvvdp-scorer:0.5.7
 #
 # Run locally on a CUDA box:
 #   docker run --rm --gpus all \
 #       -v /path/to/pairs.tsv:/work/pairs.tsv:ro \
 #       -v /path/to/out:/work/out \
-#       ghcr.io/imazen/pycvvdp-scorer:0.5.4 \
+#       ghcr.io/imazen/pycvvdp-scorer:0.5.7 \
 #       pycvvdp-worker score-pairs \
 #           --pairs-tsv /work/pairs.tsv \
 #           --out-parquet /work/out/sidecar.parquet
@@ -32,9 +32,10 @@
 FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
 
 # Pin the pycvvdp version explicitly to match the
-# `cvvdp_pycvvdp_v054` column tag. If this version changes, the
+# `cvvdp_pycvvdp_v<ver>` column tag (the worker derives the default
+# column name from the installed pycvvdp). If this version changes, the
 # column name must change in lockstep — see CVVDP_SIDECAR_SCHEMA.md.
-ARG PYCVVDP_VERSION=0.5.4
+ARG PYCVVDP_VERSION=0.5.7
 ENV PYCVVDP_VERSION=${PYCVVDP_VERSION}
 
 # Worker dependencies. Pillow / numpy come from the base image but
