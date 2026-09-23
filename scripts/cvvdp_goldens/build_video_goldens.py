@@ -102,6 +102,13 @@ def main() -> int:
         default=None,
         help="output JSON path (default: <situations_dir>/video_goldens.json)",
     )
+    ap.add_argument(
+        "--temp-padding",
+        choices=["replicate", "symmetric"],
+        default="replicate",
+        help="pycvvdp cvvdp() temp_padding arg; 'symmetric' writes "
+        "video_goldens_symmetric.json by default",
+    )
     args = ap.parse_args()
 
     sit_dir = Path(args.situations_dir)
@@ -109,7 +116,12 @@ def main() -> int:
     with manifest_path.open() as f:
         manifest = json.load(f)
 
-    out_path = Path(args.out) if args.out else sit_dir / "video_goldens.json"
+    if args.out:
+        out_path = Path(args.out)
+    elif args.temp_padding == "replicate":
+        out_path = sit_dir / "video_goldens.json"
+    else:
+        out_path = sit_dir / f"video_goldens_{args.temp_padding}.json"
 
     # Imported lazily so --help works without the dep installed.
     import pycvvdp  # noqa: F401
@@ -136,7 +148,12 @@ def main() -> int:
     metrics = {}
     for name in displays:
         try:
-            metrics[name] = pycvvdp.cvvdp(display_name=name, heatmap=None, quiet=True)
+            metrics[name] = pycvvdp.cvvdp(
+                display_name=name,
+                heatmap=None,
+                quiet=True,
+                temp_padding=args.temp_padding,
+            )
         except Exception as e:  # noqa: BLE001
             raise SystemExit(
                 f"display {name!r} failed to construct under pycvvdp {ref_version}: {e}"
@@ -186,7 +203,10 @@ def main() -> int:
                 "fps": fps,
                 "jod_ref": round(float(jod), 6),
             }
-            if s["name"] in DUMP_SITUATIONS and disp == DUMP_DISPLAY:
+            dump_sits = DUMP_SITUATIONS | (
+                {"vid_short_clip_odd"} if args.temp_padding == "symmetric" else set()
+            )
+            if s["name"] in dump_sits and disp == DUMP_DISPLAY:
                 q = stats["Q_per_ch"]  # torch [B=1, ch=4, F, bands]
                 stage_dumps[key] = {
                     "q_per_ch": [round(float(v), 6) for v in q.flatten().tolist()],
@@ -204,6 +224,7 @@ def main() -> int:
         "reference": "gfxdisp/ColorVideoVDP",
         "reference_version": ref_version,
         "port_pinned_version": port_pin,
+        "temp_padding": args.temp_padding,
         "generated_unix": int(time.time()),
         "video_manifest_sha256": sha256_file(manifest_path),
         "displays": displays,

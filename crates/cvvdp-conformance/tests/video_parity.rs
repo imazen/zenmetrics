@@ -24,6 +24,10 @@ use cvvdp::{CvvdpParams, VideoScorer};
 use cvvdp_conformance::{TOLERANCE_JOD, all_video_situations};
 
 const GOLDENS: &str = include_str!("../../../scripts/cvvdp_goldens/video_goldens.json");
+/// Same cells scored with `temp_padding="symmetric"` (built by the
+/// same script, `--temp-padding symmetric`).
+const GOLDENS_SYMMETRIC: &str =
+    include_str!("../../../scripts/cvvdp_goldens/video_goldens_symmetric.json");
 
 fn cell_params(display_name: &str) -> (CvvdpParams, DisplayGeometry) {
     let display = DisplayModel::by_name(display_name)
@@ -127,8 +131,90 @@ fn video_jod_parity_all_cells() {
 /// `stats` vs our `[frame][band][channel]` table.
 #[test]
 fn video_q_per_ch_stage_dumps() {
+    run_stage_dumps(GOLDENS, cvvdp::TempPadding::Replicate);
+}
+
+/// Same JOD gate under `temp_padding="symmetric"` — includes the
+/// `vid_short_clip_odd` (5 frames < fl=9) ping-pong path.
+#[test]
+fn video_jod_parity_symmetric() {
     let goldens: serde_json::Value =
-        serde_json::from_str(GOLDENS).expect("video_goldens.json must parse");
+        serde_json::from_str(GOLDENS_SYMMETRIC).expect("symmetric goldens must parse");
+    assert_eq!(
+        goldens["temp_padding"].as_str(),
+        Some("symmetric"),
+        "symmetric goldens file must record temp_padding"
+    );
+    let cells = goldens["cells"].as_object().expect("goldens .cells");
+    let ref_version = goldens["reference_version"].as_str().unwrap_or("unknown");
+
+    let situations = all_video_situations();
+    let mut max_delta = 0.0f64;
+    let mut sum_delta = 0.0f64;
+    let mut n = 0usize;
+    let mut failures: Vec<String> = Vec::new();
+
+    for s in &situations {
+        for (key, cell) in cells {
+            let (sit_name, disp) = key.split_once('|').expect("cell key <sit>|<disp>");
+            if sit_name != s.name {
+                continue;
+            }
+            let jod_ref = cell["jod_ref"].as_f64().expect("cell jod_ref");
+            let (params, geometry) = cell_params(disp);
+            let stats = cvvdp::score_video_with_stats(
+                &s.ref_frames,
+                &s.dist_frames,
+                s.width,
+                s.height,
+                s.fps,
+                params,
+                geometry,
+                cvvdp::FrameLayout::Interleaved,
+                cvvdp::TempPadding::Symmetric,
+            )
+            .unwrap_or_else(|e| panic!("score_video_with_stats symmetric {key}: {e:?}"));
+            assert_eq!(
+                stats.q_per_ch.len(),
+                s.ref_frames.len(),
+                "{key}: symmetric must emit N output rows"
+            );
+            let delta = (f64::from(stats.jod) - jod_ref).abs();
+            max_delta = max_delta.max(delta);
+            sum_delta += delta;
+            n += 1;
+            if delta > TOLERANCE_JOD {
+                failures.push(format!(
+                    "{key}: ref={jod_ref:.6} got={:.6} |delta|={delta:.6}",
+                    f64::from(stats.jod)
+                ));
+            }
+        }
+    }
+
+    eprintln!("=== cvvdp video parity, symmetric padding (pycvvdp {ref_version}) ===");
+    eprintln!(
+        "cells: {n}  max |Δ| = {max_delta:.6}  mean |Δ| = {:.6}",
+        sum_delta / n as f64
+    );
+    assert!(
+        failures.is_empty(),
+        "{} symmetric-padding cell(s) exceed {TOLERANCE_JOD:.0e} JOD:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+/// `Q_per_ch` stage dumps for the symmetric goldens (adds the
+/// `vid_short_clip_odd` ping-pong fixture).
+#[test]
+fn video_q_per_ch_stage_dumps_symmetric() {
+    run_stage_dumps(GOLDENS_SYMMETRIC, cvvdp::TempPadding::Symmetric);
+}
+
+fn run_stage_dumps(goldens_json: &str, padding: cvvdp::TempPadding) {
+    let goldens: serde_json::Value =
+        serde_json::from_str(goldens_json).expect("video goldens must parse");
     let dumps = goldens["stage_dumps"]
         .as_object()
         .expect("goldens .stage_dumps");
@@ -161,13 +247,26 @@ fn video_q_per_ch_stage_dumps() {
         assert_eq!(expected.len(), n_ch * n_f * n_b, "{key} dump length");
 
         let (params, geometry) = cell_params(disp);
-        let mut v = VideoScorer::new(s.width, s.height, s.fps, params, geometry)
-            .unwrap_or_else(|e| panic!("VideoScorer::new {key}: {e:?}"));
+        let mut v = VideoScorer::with_layout_and_padding(
+            s.width,
+            s.height,
+            s.fps,
+            params,
+            geometry,
+            cvvdp::FrameLayout::Interleaved,
+            padding,
+        )
+        .unwrap_or_else(|e| panic!("VideoScorer {key}: {e:?}"));
         for (rf, df) in s.ref_frames.iter().zip(s.dist_frames.iter()) {
             v.push_frame(rf, df)
                 .unwrap_or_else(|e| panic!("push {key}: {e:?}"));
         }
-        let q = v.q_per_ch_table();
+        // Symmetric defers emissions (the lookahead drain happens in
+        // `finish_with_stats`); replicate emits on every push, so the
+        // live `q_per_ch_table` is already complete.
+        let stats = v.finish_with_stats();
+        let stats = stats.unwrap_or_else(|e| panic!("finish {key}: {e:?}"));
+        let q = &stats.q_per_ch;
         assert_eq!(q.len(), n_f, "{key}: emitted frames");
         assert_eq!(q[0].len(), n_b, "{key}: bands");
 

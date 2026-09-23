@@ -81,6 +81,51 @@ pub enum FrameLayout {
     Planar,
 }
 
+/// How the temporal FIR resolves frame indices below 0 — pycvvdp's
+/// `temp_padding` constructor argument (v0.5.7 supports exactly these
+/// two; `"valid"` exists in the docstring but raises at runtime
+/// upstream).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TempPadding {
+    /// Frames before index 0 read frame 0 (upstream default).
+    #[default]
+    Replicate,
+    /// Frames before index 0 are mirrored: `frame[-k] = frame[k]`,
+    /// ping-ponging when the clip is shorter than the filter
+    /// (`_get_symmetric_frame_index` upstream). Output frame `t`
+    /// needs input frames up to index `fl−1−t`, so the first `fl−1`
+    /// outputs are deferred until enough frames have been pushed —
+    /// `push_frame` may emit zero or several rows per call. The frame
+    /// ring stays bounded by `fl` regardless.
+    Symmetric,
+}
+
+/// Positive frame index for a negative `fi` under
+/// [`TempPadding::Symmetric`] — verbatim port of pycvvdp
+/// `_get_symmetric_frame_index` (`frame[-1] → frame[1]`, ping-pong
+/// for `|fi| ≥ frame_count`).
+///
+/// `frame_count` must be the TOTAL clip length (upstream passes
+/// `N_frames`). Callers only invoke this when the resolution is
+/// already determined: during streaming, emission gating guarantees
+/// `|fi| ≤ frames_pushed − 1` (pure mirror, `frame_count`-
+/// independent); the deferred finish-time drain runs with
+/// `frame_count == N`.
+fn symmetric_frame_index(fi: isize, frame_count: usize) -> usize {
+    debug_assert!(fi < 0);
+    debug_assert!(frame_count >= 2);
+    let fc = frame_count as isize;
+    let a = fi.unsigned_abs() as isize;
+    let m = fc - 1;
+    // floor((a−1)/m) is exact on non-negative operands.
+    let is_even = ((a - 1) / m) % 2 == 0;
+    if is_even {
+        (((a - 1) % m) + 1) as usize
+    } else {
+        fi.rem_euclid(m) as usize
+    }
+}
+
 /// Result bundle for a scored clip — the Rust analog of the
 /// `(Q_jod, stats)` pair pycvvdp's `predict`/`predict_video_source`
 /// returns. `stats` carries `Q_per_ch`, `rho_band`,
@@ -228,6 +273,12 @@ pub struct VideoScorer {
     freqs: Vec<f32>,
     /// Byte layout `push_frame` expects (`dim_order` analog).
     layout: FrameLayout,
+    /// Temporal padding mode (`temp_padding` analog).
+    padding: TempPadding,
+    /// Next output frame index to emit — [`TempPadding::Symmetric`]
+    /// defers the first `fl−1` outputs until their lookahead frames
+    /// have been pushed; replicate emits on every push.
+    next_emit: usize,
     /// Frame rate the clip is scored at (kept for `VideoStats`).
     fps: f32,
     /// Reusable per-frame scratch (filtered planes, pyramid caches,
@@ -279,6 +330,37 @@ impl VideoScorer {
         geometry: DisplayGeometry,
         layout: FrameLayout,
     ) -> Result<Self> {
+        Self::with_layout_and_padding(
+            width,
+            height,
+            frames_per_second,
+            params,
+            geometry,
+            layout,
+            TempPadding::Replicate,
+        )
+    }
+
+    /// [`with_layout`](Self::with_layout) with an explicit
+    /// [`TempPadding`] — the analog of pycvvdp's `temp_padding`
+    /// constructor argument. [`TempPadding::Replicate`] matches
+    /// upstream's default; [`TempPadding::Symmetric`] mirrors frames
+    /// before index 0 (`frame[-k] → frame[k]`, ping-pong for clips
+    /// shorter than the filter).
+    ///
+    /// # Errors
+    ///
+    /// As [`new`](Self::new).
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_layout_and_padding(
+        width: u32,
+        height: u32,
+        frames_per_second: f32,
+        params: CvvdpParams,
+        geometry: DisplayGeometry,
+        layout: FrameLayout,
+        padding: TempPadding,
+    ) -> Result<Self> {
         if width < 8 || height < 8 {
             return Err(Error::InvalidImageSize { width, height });
         }
@@ -303,6 +385,8 @@ impl VideoScorer {
             q_per_ch: Vec::new(),
             freqs,
             layout,
+            padding,
+            next_emit: 0,
             fps: frames_per_second,
             scratch: VideoScratch::new(w, h, n_levels),
         })
@@ -360,13 +444,27 @@ impl VideoScorer {
 
         self.n_pushed += 1;
         if self.n_pushed == 2 {
-            // Confirmed a real video — release the still-path bytes
-            // and emit output frame 0 (deferred until now).
+            // Confirmed a real video — release the still-path bytes.
             self.first_frame = None;
-            self.emit_output_frame(0);
         }
-        if self.n_pushed >= 2 {
-            self.emit_output_frame(self.n_pushed - 1);
+        if self.n_pushed < 2 {
+            // One frame could still be a still — emit nothing yet.
+            return Ok(());
+        }
+        let fl = self.taps[0].len();
+        while self.next_emit < self.n_pushed {
+            let t = self.next_emit;
+            // Symmetric taps reach fl−1−t frames ahead of t; replicate
+            // reaches only backwards (emit as soon as t is pushed).
+            let need = match self.padding {
+                TempPadding::Replicate => t + 1,
+                TempPadding::Symmetric => (t + 1).max(fl.saturating_sub(t)),
+            };
+            if self.n_pushed < need {
+                break;
+            }
+            self.emit_output_frame(t);
+            self.next_emit += 1;
         }
         Ok(())
     }
@@ -423,7 +521,7 @@ impl VideoScorer {
     /// # Errors
     ///
     /// [`Error::NoFrames`] if no frames were pushed.
-    pub fn finish_with_stats(self) -> Result<VideoStats> {
+    pub fn finish_with_stats(mut self) -> Result<VideoStats> {
         if self.n_pushed == 0 {
             return Err(Error::NoFrames);
         }
@@ -470,6 +568,15 @@ impl VideoScorer {
                 n_frames: 1,
             });
         }
+        // Symmetric padding can leave outputs pending at end-of-clip
+        // (clips shorter than the filter never reach the lookahead
+        // threshold mid-stream — the ring holds all `N < fl` frames,
+        // so nothing was dropped).
+        while self.next_emit < self.n_pushed {
+            let t = self.next_emit;
+            self.emit_output_frame(t);
+            self.next_emit += 1;
+        }
         let jod = do_pooling_and_jod_video_4ch(&self.q_per_ch);
         Ok(VideoStats {
             jod,
@@ -512,11 +619,20 @@ impl VideoScorer {
             sc.filt_r[c].fill(0.0);
         }
         for k in 0..fl {
-            // Frame index at window slot k; s<0 → replicate frame 0
-            // (which is win[0] whenever s≤0, since the window only
-            // starts dropping frames once n_pushed > fl).
+            // Frame index at window slot k. s<0 resolves per
+            // `temp_padding`: replicate → frame 0 (always win[0] when
+            // s≤0); symmetric → mirrored/ping-pong index. The emission
+            // gate guarantees every resolved index is inside the ring.
             let s = t as isize - (fl as isize - 1) + k as isize;
-            let widx = (s.max(0) as usize) - w0;
+            let fi = if s >= 0 {
+                s as usize
+            } else {
+                match self.padding {
+                    TempPadding::Replicate => 0,
+                    TempPadding::Symmetric => symmetric_frame_index(s, self.n_pushed.max(2)),
+                }
+            };
+            let widx = fi - w0;
             for c in 0..4 {
                 let src_c = if c == 3 { 0 } else { c };
                 let tap = self.taps[c][fl - 1 - k];
@@ -714,9 +830,9 @@ pub fn score_video<F: AsRef<[u8]>>(
     v.finish()
 }
 
-/// [`score_video`] with an explicit frame [`FrameLayout`] — returns
-/// the JOD plus [`VideoStats`] (`q_per_ch`, `rho_band`, dimensions).
-/// This is the full analog of pycvvdp's
+/// [`score_video`] with an explicit frame [`FrameLayout`] and
+/// [`TempPadding`] — returns the JOD plus [`VideoStats`] (`q_per_ch`,
+/// `rho_band`, dimensions). This is the full analog of pycvvdp's
 /// `predict(test, reference, dim_order, frames_per_second)` →
 /// `(Q_jod, stats)`; call [`VideoStats::loss`] for `10 − JOD`.
 ///
@@ -727,7 +843,7 @@ pub fn score_video<F: AsRef<[u8]>>(
 /// # Examples
 ///
 /// ```
-/// use cvvdp::{CvvdpParams, DisplayGeometry, FrameLayout, score_video_with_stats};
+/// use cvvdp::{CvvdpParams, DisplayGeometry, FrameLayout, TempPadding, score_video_with_stats};
 ///
 /// let frames = vec![vec![128u8; 64 * 64 * 3]; 4];
 /// let stats = score_video_with_stats(
@@ -739,6 +855,7 @@ pub fn score_video<F: AsRef<[u8]>>(
 ///     CvvdpParams::default(),
 ///     DisplayGeometry::STANDARD_4K,
 ///     FrameLayout::Interleaved,
+///     TempPadding::Replicate,
 /// )?;
 /// assert!((stats.jod - 10.0).abs() < 1e-3);
 /// assert_eq!(stats.n_frames, 4);
@@ -755,9 +872,17 @@ pub fn score_video_with_stats<F: AsRef<[u8]>>(
     params: CvvdpParams,
     geometry: DisplayGeometry,
     layout: FrameLayout,
+    padding: TempPadding,
 ) -> Result<VideoStats> {
-    let mut v =
-        VideoScorer::with_layout(width, height, frames_per_second, params, geometry, layout)?;
+    let mut v = VideoScorer::with_layout_and_padding(
+        width,
+        height,
+        frames_per_second,
+        params,
+        geometry,
+        layout,
+        padding,
+    )?;
     let n = ref_frames.len().min(dist_frames.len());
     for i in 0..n {
         v.push_frame(ref_frames[i].as_ref(), dist_frames[i].as_ref())?;
@@ -976,6 +1101,7 @@ mod tests {
             params,
             geo,
             FrameLayout::Planar,
+            TempPadding::Replicate,
         )
         .unwrap();
 
@@ -1063,10 +1189,133 @@ mod tests {
             params,
             geo,
             FrameLayout::Planar,
+            TempPadding::Replicate,
         )
         .unwrap()
         .jod;
         assert_eq!(jod_i.to_bits(), jod_p.to_bits());
+    }
+
+    /// `symmetric_frame_index` vs the table generated from pycvvdp
+    /// v0.5.7 `_get_symmetric_frame_index(fi, fc)` for fi in −16..0.
+    #[test]
+    fn symmetric_index_matches_upstream_table() {
+        let cases: &[(usize, [usize; 16])] = &[
+            (5, [0, 1, 2, 3, 4, 3, 2, 1, 0, 1, 2, 3, 4, 3, 2, 1]),
+            (8, [2, 1, 0, 1, 2, 3, 4, 5, 6, 7, 6, 5, 4, 3, 2, 1]),
+            (9, [0, 1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1]),
+            (10, [2, 3, 4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 3, 2, 1]),
+            (20, [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]),
+        ];
+        for &(fc, ref want) in cases {
+            for (i, &w) in want.iter().enumerate() {
+                let fi = (i as isize) - 16;
+                assert_eq!(symmetric_frame_index(fi, fc), w, "fc={fc} fi={fi}");
+            }
+        }
+    }
+
+    /// On a static clip every padded index reads an identical frame,
+    /// so padding mode cannot change the result — bit-identical.
+    #[test]
+    fn symmetric_equals_replicate_on_static_clip() {
+        let (w, h) = (64usize, 64usize);
+        let frames: Vec<Vec<u8>> = (0..8).map(|_| synth_frame(w, h, 0, 1.0)).collect();
+        let params = CvvdpParams::default();
+        let geo = DisplayGeometry::STANDARD_4K;
+
+        let rep = score_video(&frames, &frames, w as u32, h as u32, 30.0, params, geo).unwrap();
+        let sym = score_video_with_stats(
+            &frames,
+            &frames,
+            w as u32,
+            h as u32,
+            30.0,
+            params,
+            geo,
+            FrameLayout::Interleaved,
+            TempPadding::Symmetric,
+        )
+        .unwrap()
+        .jod;
+        assert_eq!(rep.to_bits(), sym.to_bits());
+    }
+
+    /// Symmetric must emit exactly N output rows even when N < fl
+    /// (ping-pong path) — and score differently from replicate on a
+    /// genuinely moving clip.
+    #[test]
+    fn symmetric_emits_all_frames_and_moves_the_score() {
+        let (w, h) = (48usize, 40usize);
+        let (refs, dists) = synth_clip(w, h, 5); // 5 < fl(30fps)=9 → ping-pong
+        let params = CvvdpParams::default();
+        let geo = DisplayGeometry::STANDARD_4K;
+
+        let stats_sym = score_video_with_stats(
+            &refs,
+            &dists,
+            w as u32,
+            h as u32,
+            30.0,
+            params,
+            geo,
+            FrameLayout::Interleaved,
+            TempPadding::Symmetric,
+        )
+        .unwrap();
+        assert_eq!(stats_sym.q_per_ch.len(), 5, "all 5 outputs emitted");
+        assert_eq!(stats_sym.n_frames, 5);
+
+        let stats_rep = score_video_with_stats(
+            &refs,
+            &dists,
+            w as u32,
+            h as u32,
+            30.0,
+            params,
+            geo,
+            FrameLayout::Interleaved,
+            TempPadding::Replicate,
+        )
+        .unwrap();
+        // Padding changes the filtered planes on a moving clip —
+        // the JODs differ (not asserting direction, just that the
+        // mode is live).
+        assert_ne!(stats_sym.jod.to_bits(), stats_rep.jod.to_bits());
+    }
+
+    /// Streaming emission under symmetric defers the first `fl−1`
+    /// outputs until the lookahead exists — ring stays ≤ fl.
+    #[test]
+    fn symmetric_defers_then_catches_up() {
+        let (w, h) = (32usize, 32usize);
+        let fl = video_filter_len(30.0); // 9
+        let (refs, dists) = synth_clip(w, h, fl + 4);
+
+        let mut v = VideoScorer::with_layout_and_padding(
+            w as u32,
+            h as u32,
+            30.0,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+            FrameLayout::Interleaved,
+            TempPadding::Symmetric,
+        )
+        .unwrap();
+        for (i, (rf, df)) in refs.iter().zip(dists.iter()).enumerate() {
+            v.push_frame(rf, df).unwrap();
+            assert!(
+                v.q_per_ch.len() <= i + 1,
+                "emitted {} rows after {} pushes",
+                v.q_per_ch.len(),
+                i + 1
+            );
+            assert!(v.win_t.len() <= fl, "ring bounded by fl");
+        }
+        // After push fl−1 (0-based idx fl−1, n_pushed=fl) the backlog
+        // drains: all fl outputs emitted.
+        let stats = v.finish_with_stats().unwrap();
+        assert_eq!(stats.q_per_ch.len(), fl + 4);
     }
 
     #[test]
