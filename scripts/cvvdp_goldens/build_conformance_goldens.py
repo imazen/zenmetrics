@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Build pycvvdp v0.5.4 conformance goldens for the cvvdp-conformance
-matrix.
+Build pycvvdp conformance goldens for the cvvdp-conformance matrix
+(v0.5.4 for conformance-v1; v0.5.7 for conformance-v2, which adds the
+65inch_hdr_pq_* / lg_oled_2026_hdr_pq displays).
 
 Consumes the manifest emitted by:
 
@@ -9,8 +10,8 @@ Consumes the manifest emitted by:
 
 For every (situation, display) cell it loads the situation's
 ref.png + dist.png (the EXACT bytes the Rust harness scores) and runs
-the pinned pycvvdp v0.5.4 reference at that display model, recording
-the ground-truth JOD.
+the installed pycvvdp reference at that display model, recording the
+ground-truth JOD and the pycvvdp version that produced it.
 
 Output: <situations_dir>/conformance_goldens.json
 
@@ -57,6 +58,19 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def installed_pycvvdp_version() -> str:
+    """`v<version>` of the installed pycvvdp distribution (PyPI name `cvvdp`,
+    git installs name it `pycvvdp`)."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    for dist in ("cvvdp", "pycvvdp"):
+        try:
+            return "v" + version(dist)
+        except PackageNotFoundError:
+            continue
+    raise SystemExit("pycvvdp is importable but no cvvdp/pycvvdp distribution metadata found")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -82,7 +96,18 @@ def main() -> int:
     # Imported lazily so --help works without the dep installed.
     import pycvvdp  # noqa: F401
 
-    ref_version = manifest["reference_version"]
+    # Record the pycvvdp that ACTUALLY scored the cells. The manifest's
+    # reference_version is the Rust port's pin (cvvdp::PYCVVDP_REFERENCE_VERSION);
+    # it said nothing about the installed reference, so goldens built with a
+    # different pycvvdp used to be labelled with the pin anyway.
+    ref_version = installed_pycvvdp_version()
+    port_pin = manifest["reference_version"]
+    if ref_version != port_pin:
+        print(
+            f"NOTE: installed pycvvdp {ref_version} != port pin {port_pin}; "
+            f"goldens are labelled {ref_version}",
+            file=sys.stderr,
+        )
     situations = manifest["situations"]
     displays = manifest["displays"]
 
@@ -97,11 +122,16 @@ def main() -> int:
     metrics = {}
     for d in displays:
         name = d["upstream_name"]
+        # A display this pycvvdp does not know is FATAL. It used to become a
+        # null golden, which the Rust harness only WARNs about, so every cell
+        # for that display was silently skipped (e.g. the 65inch_hdr_pq_* /
+        # lg_oled_2026_hdr_pq presets need pycvvdp >= 0.5.7).
         try:
             metrics[name] = pycvvdp.cvvdp(display_name=name, heatmap=None)
         except Exception as e:  # noqa: BLE001
-            print(f"WARN: display {name} failed to construct: {e}", file=sys.stderr)
-            metrics[name] = None
+            raise SystemExit(
+                f"display {name!r} failed to construct under pycvvdp {ref_version}: {e}"
+            ) from e
 
     cells = {}
     t0 = time.time()
@@ -152,6 +182,7 @@ def main() -> int:
     golden = {
         "reference": "gfxdisp/ColorVideoVDP",
         "reference_version": ref_version,
+        "port_pinned_version": port_pin,
         "generated_unix": int(time.time()),
         "situations_manifest_sha256": sha256_file(manifest_path),
         "displays": displays,

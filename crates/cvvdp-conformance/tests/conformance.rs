@@ -19,7 +19,7 @@
 //!     --test conformance -- --nocapture
 //! ```
 //!
-//! Output: `benchmarks/cvvdp_conformance_matrix_<DATE>.tsv` with every
+//! Output: `benchmarks/cvvdp_conformance_matrix_pycvvdp_<ref version>.tsv` with every
 //! cell's `jod_ref / jod_cpu / jod_gpu` and the three deltas. Cells
 //! exceeding [`cvvdp_conformance::TOLERANCE_JOD`] are listed and, if
 //! not in the documented divergence allow-list, fail the test.
@@ -241,10 +241,14 @@ fn conformance_matrix() {
 }
 
 fn write_tsv(results: &[CellResult], ref_version: &str) {
-    let date = "2026-05-26";
+    // Named by the reference that produced the goldens, not by a date: the
+    // old hard-coded `2026-05-26` meant every run overwrote that historical
+    // record, whatever reference it was scored against.
     let bench_dir = repo_root().join("benchmarks");
     std::fs::create_dir_all(&bench_dir).expect("mkdir benchmarks");
-    let path = bench_dir.join(format!("cvvdp_conformance_matrix_{date}.tsv"));
+    let path = bench_dir.join(format!(
+        "cvvdp_conformance_matrix_pycvvdp_{ref_version}.tsv"
+    ));
     let mut f = std::fs::File::create(&path).expect("create tsv");
     writeln!(
         f,
