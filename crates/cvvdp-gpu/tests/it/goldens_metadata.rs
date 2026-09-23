@@ -59,14 +59,15 @@ const _: () = {
     );
     // Tick 586: pin GOLDEN_VERSION to its exact current value so a
     // version bump (e.g. to "v2") forces updating MANIFEST_URL's
-    // "/v1/" segment AND the runtime test fixtures in lockstep.
+    // "/v<N>/" segment AND the runtime test fixtures in lockstep.
+    // (v1 -> v2 on 2026-09-23: pycvvdp v0.5.4 -> v0.5.7 goldens.)
     // Without this pin, a refactor that bumps GOLDEN_VERSION but
     // forgets the URL would pass the "starts-with-v" check above
     // and the version-segment contains-check below (because both
     // would still report v1) — silently fetching the wrong manifest.
     assert!(
-        const_str::bytes_eq(gv, b"v1"),
-        "GOLDEN_VERSION pinned to current value 'v1'; bump in lockstep with MANIFEST_URL `/v1/` segment",
+        const_str::bytes_eq(gv, b"v2"),
+        "GOLDEN_VERSION pinned to current value 'v2'; bump in lockstep with MANIFEST_URL `/v2/` segment",
     );
 };
 
@@ -87,8 +88,8 @@ const _: () = assert!(
 // GOLDEN_VERSION bumps, this pin and the GOLDEN_VERSION value pin
 // both need updating in the same commit — by design.
 const _: () = assert!(
-    const_str::contains(MANIFEST_URL.as_bytes(), b"/v1/"),
-    "MANIFEST_URL must contain version path segment /v1/ (matches current GOLDEN_VERSION)",
+    const_str::contains(MANIFEST_URL.as_bytes(), b"/v2/"),
+    "MANIFEST_URL must contain version path segment /v2/ (matches current GOLDEN_VERSION)",
 );
 
 // Tick 580: per-byte lowercase-hex validation on MANIFEST_SHA256.

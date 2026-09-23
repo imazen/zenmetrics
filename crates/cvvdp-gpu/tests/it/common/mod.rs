@@ -1,7 +1,7 @@
 //! Fetch + cache helpers for cvvdp parity goldens.
 //!
 //! Goldens are produced by `scripts/cvvdp_goldens/build_goldens.py`
-//! running the pinned pycvvdp v0.5.4 reference, and uploaded to R2
+//! running the pinned pycvvdp reference (`PYCVVDP_REFERENCE_VERSION`), and uploaded to R2
 //! under `s3://coefficient/cvvdp-goldens/<version>/`. The same bucket
 //! is exposed publicly at `https://coefficient.r2.imazen.org/`, so
 //! tests fetch without credentials. Same pattern as zensim's
@@ -154,18 +154,19 @@ use sha2::{Digest, Sha256};
 /// Pin label for the current cvvdp golden set. Bump in lockstep with
 /// the R2 prefix and the pycvvdp version pin in
 /// `scripts/cvvdp_goldens/requirements.txt`.
-pub const GOLDEN_VERSION: &str = "v1";
+pub const GOLDEN_VERSION: &str = "v2";
 
 /// Public R2 URL for the manifest. The bucket is the same
 /// `s3://coefficient/` that the sweep infrastructure uses; its public
 /// mirror is configured at `coefficient.r2.imazen.org`.
-pub const MANIFEST_URL: &str = "https://coefficient.r2.imazen.org/cvvdp-goldens/v1/manifest.json";
+pub const MANIFEST_URL: &str = "https://coefficient.r2.imazen.org/cvvdp-goldens/v2/manifest.json";
 
 /// sha256 of the manifest, captured at upload time
-/// (`2026-05-14`, v0.5.4 reference, zenmetrics-corpus 256×256 q-grid).
+/// (`2026-09-23`, v0.5.7 reference, zenmetrics-corpus 256×256 q-grid;
+/// v1 = 2026-05-14 / v0.5.4 / `9b8638c4…`, still live, agrees to 1.4e-6 JOD).
 /// Bump alongside `GOLDEN_VERSION` when the goldens are regenerated.
 pub const MANIFEST_SHA256: &str =
-    "9b8638c4cee15b79240acd8116f54d417f2a641999ca0146567b1bea5aa594c5";
+    "7272e9d9d7b51525fc0a6401b992878ab4dfc316519ed2906bf404a82069636f";
 
 /// Per-crate cache-dir subdirectory name. Lives in `~/.cache/<this>/<GOLDEN_VERSION>/`
 /// (or `$XDG_CACHE_HOME/...` / `$TMPDIR/...` per the cache_dir() priority).

@@ -13,7 +13,9 @@ One Rust kernel source, runs on:
 
 Algorithmic parity target is the published
 [`ColorVideoVDP`](https://github.com/gfxdisp/ColorVideoVDP) Python
-reference **v0.5.4**, still-image code path only. Video / temporal
+reference **v0.5.7** (pinned 2026-09-23; v0.5.4 before that — the
+still-image code path is numerically identical between the two), still-image
+code path only. Video / temporal
 channels (sustained + transient) are intentionally out of scope for
 v0 — defer until still-mode parity is locked.
 
@@ -168,7 +170,7 @@ let geo = DisplayGeometry::by_name("standard_4k").unwrap();
 assert_eq!(geo.resolution_w, 3840);
 ```
 
-The registry mirrors every preset shipped in pycvvdp v0.5.4 main
+The registry mirrors every preset shipped in pycvvdp v0.5.7 main
 (`standard_4k`, `standard_hdr_pq`, `standard_hdr_hlg`,
 `standard_hdr_linear`, `standard_fhd`, `iphone_*`,
 `macbook_pro_16`, `lg_oled_*`, `65inch_hdr_pq_*`, …). See
@@ -391,8 +393,9 @@ ABANDONED" banner and `crates/burn-conv-spike/README.md`.
 
 ## Status
 
-Still-image score matches pycvvdp v0.5.4 within **0.005 JOD** across
-q=1–90 fixtures on the v1 R2 goldens manifest. The full pipeline —
+Still-image score matches pycvvdp v0.5.7 within **0.005 JOD** across
+q=1–90 fixtures on the v2 R2 goldens manifest (the v1 / v0.5.4 manifest
+agrees with v2 to 1.4e-6 JOD). The full pipeline —
 display model, DKL color, Weber pyramid, CSF, mult-mutual masking,
 3-stage Minkowski pool — runs on GPU; only the final pool fold
 and `met2jod` mapping happen host-side, on a ~144-byte partials

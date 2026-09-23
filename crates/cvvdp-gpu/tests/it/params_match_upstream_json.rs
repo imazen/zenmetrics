@@ -90,8 +90,14 @@ fn pool_constants_match_upstream() {
 fn version_matches() {
     let v: serde_json::Value = serde_json::from_str(UPSTREAM_JSON).unwrap();
     let upstream_ver = v["version"].as_str().unwrap();
+    // Tracks the reference pin instead of a literal: the vendored JSON
+    // must be the pinned release's. The value checks above are what prove
+    // the kernel consts still match it (v0.5.4 -> v0.5.7 changed only the
+    // `version` field of this file).
     assert_eq!(
-        upstream_ver, "0.5.4",
-        "vendored cvvdp_parameters.json version changed — update kernel consts"
+        upstream_ver,
+        &cvvdp_gpu::PYCVVDP_REFERENCE_VERSION[1..],
+        "vendored cvvdp_parameters.json version != PYCVVDP_REFERENCE_VERSION — \
+         re-vendor it and re-check the kernel consts"
     );
 }

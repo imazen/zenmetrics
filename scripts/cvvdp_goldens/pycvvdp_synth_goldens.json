@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "pycvvdp_version": "0.5.4",
+  "pycvvdp_version": "0.5.7",
   "display_name": "standard_4k",
   "pix_per_deg": 75.40244934516305,
   "fixtures": {
@@ -10,7 +10,7 @@
         4000
       ],
       "construction": "synth_pair_12mp",
-      "jod": 9.458027839660645
+      "jod": 9.458016395568848
     },
     "synth_73x91_odd": {
       "shape_hw": [

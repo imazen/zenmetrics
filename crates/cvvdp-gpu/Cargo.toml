@@ -18,7 +18,7 @@ cuda = ["cubecl/cuda", "cubecl-types", "zenmetrics-gpu-core/cuda"]
 wgpu = ["cubecl/wgpu", "cubecl-types", "zenmetrics-gpu-core/wgpu"]
 hip  = ["cubecl/hip",  "cubecl-types", "zenmetrics-gpu-core/hip"]
 cpu  = ["cubecl/cpu",  "cubecl-types", "zenmetrics-gpu-core/cpu"]
-# Enables integration tests that fetch the pycvvdp v0.5.4 goldens
+# Enables integration tests that fetch the pycvvdp v0.5.7 goldens (R2 /v2/)
 # from R2 and check Rust output against them. Off by default so
 # `cargo test` stays offline. The skip-via-feature is what avoids
 # the "silent runtime skip" anti-pattern: when this feature isn't

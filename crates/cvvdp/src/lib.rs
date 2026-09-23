@@ -55,7 +55,7 @@ pub use params::{CvvdpParams, DisplayGeometry, DisplayModel, PerfMode};
 /// reference version this implementation tracks for parity. Mirrors the
 /// const in `cvvdp-gpu` (which re-exports this); the canonical owner is
 /// the CPU crate per Phase 8c.1-B.
-pub const PYCVVDP_REFERENCE_VERSION: &str = "v0.5.4";
+pub const PYCVVDP_REFERENCE_VERSION: &str = "v0.5.7";
 
 /// Maximum pyramid depth supported by the kernel allocations.
 /// Pinned by `cvvdp-gpu/tests/lib_constants.rs::max_levels_cap_at_nine`.

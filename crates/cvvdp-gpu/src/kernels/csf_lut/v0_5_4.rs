@@ -1,4 +1,8 @@
 // Auto-generated from pycvvdp v0.5.4's csf_lut_weber_fixed_size.json.
+// That source file is byte-identical in pycvvdp v0.5.7 (sha256 df39c869...),
+// the current reference pin, so the table below is unchanged. The file and
+// module keep the v0_5_4 name because `kernels::csf::csf_lut_v0_5_4` is
+// public API.
 // Regenerate via scripts/cvvdp_goldens/.venv + the snippet in csf.rs.
 //
 // Extra precision past f32 representability is preserved verbatim from

@@ -1,5 +1,5 @@
 //! cvvdp conformance harness — validates BOTH `cvvdp` and
-//! `cvvdp-gpu` against the canonical pycvvdp v0.5.4 reference across a
+//! `cvvdp-gpu` against the canonical pycvvdp reference (v0.5.7 goldens) across a
 //! matrix of display models × content/distortion situations.
 //!
 //! This crate is the authoritative "are our cvvdp impls correct?"

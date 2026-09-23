@@ -47,7 +47,8 @@ convention as `score_zensim` / `score_butteraugli_*` etc.
 
 | column                          | producer                                | binary                  |
 |---------------------------------|-----------------------------------------|-------------------------|
-| `cvvdp_pycvvdp_v054`            | upstream pycvvdp v0.5.4 (CUDA PyTorch)  | `pycvvdp` from R2 image |
+| `cvvdp_pycvvdp_v057`            | upstream pycvvdp v0.5.7 (CUDA PyTorch)  | `ghcr.io/imazen/pycvvdp-scorer:0.5.7` |
+| `cvvdp_pycvvdp_v054`            | upstream pycvvdp v0.5.4 (CUDA PyTorch). **Values written before 2026-09-22 have reference and test swapped** (worker bug, up to 0.017 JOD). | `ghcr.io/imazen/pycvvdp-scorer:0.5.4` |
 | `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>` | this crate (`cvvdp-gpu`) host scalar / GPU path | `zenmetrics` binary |
 | `cvvdp_burn_v<MAJOR>_<MINOR>_<PATCH>`   | (abandoned tick 324; the Burn port was investigated and ruled out — see the "Status: ABANDONED" banner in `BURN_PORT_PLAN.md`. The tag stays reserved in case a future re-attempt wants to reuse it.) | n/a |
 
@@ -85,9 +86,9 @@ One sidecar parquet per `(implementation, source unified parquet)`
 pair. Examples:
 
 ```
-cvvdp_pycvvdp_v054_unified_v15rc_zenjpeg.parquet
+cvvdp_pycvvdp_v057_unified_v15rc_zenjpeg.parquet
 cvvdp_imazen_v0_0_1_unified_v15rc_zenjpeg.parquet
-cvvdp_pycvvdp_v054_unified_v12_zenavif.parquet
+cvvdp_pycvvdp_v057_unified_v12_zenavif.parquet
 cvvdp_imazen_v0_0_1_unified_v12_zenavif.parquet
 ```
 
@@ -111,10 +112,10 @@ parquets' manifest convention:
   "schema_version": 1,
   "generated_at": "<ISO-8601-UTC>",
   "implementations": {
-    "cvvdp_pycvvdp_v054": {
-      "binary": "pycvvdp 0.5.4",
+    "cvvdp_pycvvdp_v057": {
+      "binary": "pycvvdp 0.5.7",
       "git_commit": "<pycvvdp repo HEAD>",
-      "docker_image": "imazen/pycvvdp:0.5.4-cuda121",
+      "docker_image": "ghcr.io/imazen/pycvvdp-scorer:0.5.7",
       "machine": "<vast.ai instance id>"
     },
     "cvvdp_imazen_v0_0_1": {
@@ -176,7 +177,7 @@ unified = ds.dataset(
 )
 side_pycvvdp = ds.dataset(
     "/mnt/v/zen/zensim-training/2026-05-07/unified/cvvdp_sidecars/"
-    "cvvdp_pycvvdp_v054_unified_v15rc_zenjpeg.parquet"
+    "cvvdp_pycvvdp_v057_unified_v15rc_zenjpeg.parquet"
 )
 side_imazen = ds.dataset(
     "/mnt/v/zen/zensim-training/2026-05-07/unified/cvvdp_sidecars/"

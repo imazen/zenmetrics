@@ -1,7 +1,7 @@
 [package]
 name = "cvvdp-conformance"
 version = "0.0.1"
-description = "Conformance harness validating cvvdp + cvvdp-gpu against the pycvvdp v0.5.4 reference across a display × situation matrix"
+description = "Conformance harness validating cvvdp + cvvdp-gpu against the pycvvdp reference (v0.5.7 goldens) across a display × situation matrix"
 edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
@@ -18,7 +18,7 @@ publish = false
 # network or a GPU.
 default = []
 # Enables the full conformance matrix test: fetches the pycvvdp
-# v0.5.4 goldens from R2 and scores BOTH cvvdp and cvvdp-gpu
+# pycvvdp goldens (conformance-v2 = v0.5.7) from R2 and scores BOTH cvvdp and cvvdp-gpu
 # against them, writing the result TSV. Mirrors cvvdp-gpu's
 # `parity-goldens` feature so offline `cargo test` stays green and
 # the matrix runs explicitly. NOT the silent-runtime-skip

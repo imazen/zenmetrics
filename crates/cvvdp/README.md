@@ -1,14 +1,14 @@
 # cvvdp ![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenmetrics/cvvdp.yml?style=flat-square&label=CI) ![crates.io](https://img.shields.io/crates/v/cvvdp?style=flat-square) ![lib.rs](https://img.shields.io/crates/v/cvvdp?style=flat-square&label=lib.rs&color=blue) ![docs.rs](https://img.shields.io/docsrs/cvvdp?style=flat-square) ![License](https://img.shields.io/crates/l/cvvdp?style=flat-square)
 
 Pure-Rust CPU port of [ColorVideoVDP](https://github.com/gfxdisp/ColorVideoVDP)
-(still-image scoring). Built on top of the canonical pycvvdp v0.5.4
-algorithm, designed as a drop-in perceptual metric for the JPEG XL
+(still-image scoring). Built on top of the canonical pycvvdp v0.5.7
+algorithm (still-image path identical to v0.5.4), designed as a drop-in perceptual metric for the JPEG XL
 encoder's iterative quantization loop where the GPU backend's
 host-to-device upload latency exceeds CPU compute time.
 
 Companion to [`cvvdp-gpu`](../cvvdp-gpu/) — both crates produce
 scalar JOD values within `≤ 1e-3` of each other and of the pycvvdp
-v0.5.4 reference.
+v0.5.7 reference.
 
 ## What it does
 
@@ -50,7 +50,7 @@ let jod = scorer.score_with_diffmap(&ref_srgb, &dist_srgb, &mut diffmap)?;
 - Still-image scoring (no temporal channels).
 - DKLd65 opponent + Weber-contrast pyramid + castleCSF + mult-mutual
   masking + 3-stage Minkowski pool.
-- Matches pycvvdp v0.5.4 within `≤ 1e-3 JOD` on synthetic fixtures
+- Matches pycvvdp v0.5.7 (and v0.5.4) within `≤ 1e-3 JOD` on synthetic fixtures
   16² through 512² (gated by `tests/parity_against_host_scalar.rs`).
 
 ## Why a CPU port
@@ -87,6 +87,7 @@ Dual-licensed under either:
 
 ## Parity reference
 
-Pinned against [`pycvvdp v0.5.4`](https://github.com/gfxdisp/ColorVideoVDP/releases/tag/v0.5.4).
+Pinned against [`pycvvdp v0.5.7`](https://github.com/gfxdisp/ColorVideoVDP/releases/tag/v0.5.7)
+(v0.5.4 until 2026-09-23; the still-image code path is numerically identical).
 The pinned reference version constant is re-exported as
 `cvvdp::PYCVVDP_REFERENCE_VERSION`.

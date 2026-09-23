@@ -18,9 +18,24 @@ Tracking faithful-port progress against the Python reference
 
 ## Reference version pin
 
-`gfxdisp/ColorVideoVDP` **v0.5.4** (latest tag as of 2026-05-14).
-Driver script in `scripts/cvvdp_goldens/` runs `pycvvdp==0.5.4` to
-produce parity goldens.
+`gfxdisp/ColorVideoVDP` **v0.5.7** (bumped 2026-09-23 from v0.5.4, the
+latest tag as of 2026-05-14). Driver scripts in `scripts/cvvdp_goldens/`
+run `cvvdp==0.5.7` (`requirements.txt`) to produce parity goldens.
+
+The v0.5.4 → v0.5.7 bump changed no still-image number. The CSF / pyramid /
+interp / colour-space code and every CSF LUT are byte-identical between the
+two, and `cvvdp_parameters.json` differs only in `version`. Regenerated with
+v0.5.7: the six embedded chroma-stage dumps are bit-identical, the synth goldens
+move ≤ 1.1e-5 JOD (12 MP pair, GPU float), and the R2 per-pair manifest
+moves ≤ 1.4e-6 JOD. The conformance matrix (conformance-v2) passes against
+v0.5.7. See the workspace's `benchmarks/cvvdp_aic_discrepancy_2026-09-22.md` §4c.
+
+**Deviation from step 2 below, deliberately:** the LUT file and the
+`csf_lut_v0_5_4` module were NOT renamed. The module is public API
+(`cvvdp::kernels::csf::csf_lut_v0_5_4`), so renaming it is a breaking change,
+and the LUT source is byte-identical (sha256 `df39c869…`). Only the header
+comment was updated. Rename it at the next breaking release, or when the LUT
+actually changes.
 
 ### When bumping the reference version
 
@@ -51,15 +66,33 @@ Goldens under the new `/v2/` prefix get re-captured by re-running
 `scripts/cvvdp_goldens/build_goldens.py` against the bumped
 pycvvdp.
 
-The cvvdp parameter JSON gets vendored into
-`crates/cvvdp-gpu/data/cvvdp_v0.5.4.json` once the script lands (small
-~5 KB file, safe to commit) and loaded through `params::CvvdpParams`.
+The cvvdp parameter JSON is vendored verbatim as
+`crates/{cvvdp,cvvdp-gpu}/data/cvvdp_parameters.json` (a byte-copy of
+v0.5.7's since 2026-09-23). The still-image constants are baked into
+`kernels::{pool,masking,csf}` as `const`s; the JSON is provenance.
 
-## Out of scope (v0)
+## Out of scope
 
-- Video / temporal channels (sustained + transient).
+- **Video / temporal channels.** Not implemented in `cvvdp` or `cvvdp-gpu`;
+  every entry point takes one frame. Measured 2026-09-23 against pycvvdp
+  v0.5.7 (`cvvdp_metric.py`), a video port would need all of the following:
+  - temporal filtering (`get_temporal_filters(fps)`: FFT-designed sustained
+    and transient kernels from `sigma_tf` / `beta_tf`), with a sliding window
+    of `filter_len` frames and first-frame padding (`replicate`, the default
+    again in v0.5.7, or `symmetric`);
+  - the 4th, **transient achromatic** channel through the whole chain: CSF at
+    `omega = 5` (the `o5_c1` LUT, not vendored), `mask_q[3]`, the full 4×4
+    `xcm_weights`, `ch_gain` and `baseband_weight[3]`;
+  - pooling over frames (`beta_t = 2`, a normalised p-norm across time) and
+    `t_int = 1.0` in place of the still-image `image_int` correction;
+  - fps handling and block-of-frames memory management.
+  None of this changes the still-image path, which pycvvdp itself
+  special-cases (`is_image`).
 - Foveation / gaze maps.
-- HDR display models — sRGB-std only for the initial parity pass.
+
+(Removed 2026-09-23: "HDR display models — sRGB-std only". PQ / HLG /
+linear BT.2020 displays are ported and pass the conformance matrix,
+including the four v0.5.7 HDR PQ presets.)
 
 ## Open questions
 

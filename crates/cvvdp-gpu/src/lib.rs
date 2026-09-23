@@ -33,10 +33,11 @@
 //! ## Scope: still images, JOD score
 //!
 //! Targets bit-stable parity with the published `ColorVideoVDP` Python
-//! reference (gfxdisp/ColorVideoVDP **v0.5.4**) for the **still-image**
-//! code path. Video / temporal channels (sustained + transient) are
-//! intentionally out of scope for v0; defer until still-mode parity is
-//! locked.
+//! reference (gfxdisp/ColorVideoVDP **v0.5.7**; v0.5.4 until 2026-09-23,
+//! numerically identical on this path) for the **still-image** code
+//! path. Video / temporal channels (sustained + transient) are not
+//! implemented; see `docs/PORT_STATUS.md` "Out of scope" for what a
+//! video port would need.
 //!
 //! ## Algorithm shape
 //!
@@ -482,10 +483,11 @@ pub const CVVDP_COLUMN_NAME: &str = match option_env!("CVVDP_IMPL_TAG") {
 /// - `docs/CHROMA_DRIFT_INVESTIGATION.md` (tick-200-era bug-hunt log)
 /// - `docs/BURN_PORT_PLAN.md` (abandoned tick 324)
 ///
-/// Separately, `tests/it/common/mod.rs` has `GOLDEN_VERSION = "v1"`,
+/// Separately, `tests/it/common/mod.rs` has `GOLDEN_VERSION = "v2"`,
 /// which is the **R2 bucket prefix** version (a different version
-/// space from this const). Goldens under `/v1/` were captured
-/// against pycvvdp v0.5.4. Both bumps are needed when the goldens
+/// space from this const). Goldens under `/v2/` were captured
+/// against pycvvdp v0.5.7 (`/v1/`, still live, against v0.5.4; the
+/// two agree to 1.4e-6 JOD). Both bumps are needed when the goldens
 /// are regenerated — see `docs/PORT_STATUS.md#reference-version-pin`
 /// for the full procedure.
 ///
@@ -504,7 +506,7 @@ pub const CVVDP_COLUMN_NAME: &str = match option_env!("CVVDP_IMPL_TAG") {
 /// // that `scripts/cvvdp_goldens/requirements.txt` matches.
 /// assert!(PYCVVDP_REFERENCE_VERSION[1..].split('.').all(|s| s.parse::<u32>().is_ok()));
 /// ```
-pub const PYCVVDP_REFERENCE_VERSION: &str = "v0.5.4";
+pub const PYCVVDP_REFERENCE_VERSION: &str = "v0.5.7";
 
 /// Failure modes for `Cvvdp::*` methods. Implements
 /// `std::error::Error` so callers can use `?` against
