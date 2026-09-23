@@ -146,21 +146,51 @@ Rounding (to stay under the 30 KB commit cap):
 ## Measured parity
 
 Release-mode `cargo test -p cvvdp-conformance --test video_parity`
-(2026-09-23, this tree):
+(2026-09-23, this tree, SIMD path):
 
 - **End-to-end JOD, all 44 cells** (11 situations × 4 displays):
-  max |Δ| = **0.000002**, mean |Δ| = 0.000001 — ~500× inside the
+  max |Δ| = **0.000003**, mean |Δ| = 0.000001 — ~300× inside the
   1e-3 gate. Per-display max |Δ|: `standard_4k` 1e-6, `standard_fhd`
-  1e-6, `standard_hdr_pq` 2e-6, `standard_phone` 1e-6.
+  2e-6, `standard_hdr_pq` 3e-6, `standard_phone` 1e-6.
 - **`Q_per_ch` stage dumps** (diagnostic gate):
-  `vid_flicker_24|standard_4k` max |Δ| 5.1e-5 / mean 1e-6 (n=384);
-  `vid_temporal_noise_30|standard_4k` max |Δ| 9.0e-5 / mean 4e-6
+  `vid_flicker_24|standard_4k` max |Δ| 5.2e-5 / mean 1e-6 (n=384);
+  `vid_temporal_noise_30|standard_4k` max |Δ| 9.6e-5 / mean 4e-6
   (n=240).
 - **Temporal taps** (V1 unit gate, vs dumped torch taps at fps
   24/30/60): max |Δ| ≤ 7e-8, under the 1e-6 requirement.
 - **4-channel masking** (V2 unit pin vs `apply_masking_model`):
-  bit-exact f32 on the 8×8 synthetic band.
+  bit-exact f32 on the 8×8 synthetic band; the SIMD
+  `mult_mutual_band_4ch_into` path is within 1e-3 relative of the
+  scalar pin across sizes 4×4–64×64.
 
 Residual ~1e-6 JOD deltas are f32 accumulation-order noise
 (pycvvdp computes in torch f32 with its own reduction order); they are
 three orders of magnitude below the acceptance tolerance.
+
+## Performance
+
+`VideoScorer` allocates all per-frame scratch once in `new()`
+(`VideoScratch`: filtered planes, `WeberPyramidCache`s, output
+pyramids, sensitivity maps, masking intermediates) and reuses it for
+every emitted frame — the only per-frame heap traffic left is the
+small `Q_per_ch` row (n_levels × 4 floats). Compute runs on the same SIMD kernels as the still path:
+`weber_contrast_pyr_into` (magetypes/archmage dispatched
+reduce/expand/PU-blur), `safe_pow_with_offset_into`, and
+`compute_sensitivities_into`. Under the default `parallel` feature the
+8 pyramid builds (4 channels × 2 sides) run on rayon's pool; each owns
+a disjoint scratch slot, so results are deterministic regardless of
+scheduling.
+
+Measured with `cargo run -p cvvdp --release --example video_sweep`
+(2026-09-23, this box; scalar = pre-SIMD port, same gates passing):
+
+| size × frames | scalar | SIMD + rayon |
+|---|---|---|
+| 256×256 ×12 | ~67 ms/frame | 8.40 ms/frame |
+| 512×512 ×12 | 279 ms/frame | 37.44 ms/frame |
+| 1280×720 ×12 | 986 ms/frame | 153.96 ms/frame |
+| 1920×1080 ×12 | 2237 ms/frame | 370.54 ms/frame |
+| 1920×1080 ×24 | 2237 ms/frame | 357.44 ms/frame |
+
+~6× at 1080p. Note `video_sweep` builds with `parallel`; a
+`--no-default-features` build takes the sequential fallback.

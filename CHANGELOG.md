@@ -23,10 +23,15 @@ Workspace conventions per the global rules:
   frame pooling (`beta_t = 2`, `t_int = 1.0`, no `image_int`).
   `N_frames == 1` routes through the still path, bit-identical to
   `Cvvdp::score`. Parity vs pycvvdp v0.5.7 on the conformance corpus:
-  max |Δ| = 2e-6 JOD over 44 cells (11 situations × 4 displays,
-  24/30/60 fps). Design + rounding policy in
-  `crates/cvvdp/docs/VIDEO.md`. `1dc4a6dd`, `3ffc5960`, `22c667d6`,
-  `c71f517e` (+ lint cleanup `81680624`).
+  max |Δ| = 3e-6 JOD over 44 cells (11 situations × 4 displays,
+  24/30/60 fps). Per-frame compute runs on the still path's SIMD
+  kernels (magetypes/archmage) with `VideoScratch` buffer reuse and
+  rayon parallelism across the 8 pyramid builds under `parallel`;
+  ~6× at 1080p vs the scalar port (370 vs 2237 ms/frame). Design,
+  rounding policy, and benchmarks in `crates/cvvdp/docs/VIDEO.md`;
+  timing harness in `examples/video_sweep.rs`. `1dc4a6dd`,
+  `3ffc5960`, `22c667d6`, `c71f517e`, `5025b991`, `338a3a17`
+  (+ lint cleanup `81680624`).
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
