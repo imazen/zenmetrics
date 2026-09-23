@@ -1,4 +1,4 @@
-# CVVDP Conformance Matrix — cvvdp + cvvdp-gpu vs pycvvdp v0.5.4
+# CVVDP Conformance Matrix — cvvdp + cvvdp-gpu vs pycvvdp (v0.5.7 goldens; port pinned to v0.5.4)
 
 The authoritative "are our cvvdp impls correct?" gate. Every
 `(impl × display_model × situation)` cell is scored against the
@@ -16,10 +16,15 @@ distortion space.
 
 - **Harness**: `crates/cvvdp-conformance/` (depends on BOTH cvvdp
   and cvvdp-gpu; tests them as black boxes via the public API).
-- **Result TSV**: `benchmarks/cvvdp_conformance_matrix_2026-05-26.tsv`.
-- **Goldens**: pycvvdp v0.5.4, R2
+- **Goldens (current pin, conformance-v2, 2026-09-22)**: pycvvdp v0.5.7,
+  13 displays, R2 `s3://coefficient/cvvdp-goldens/conformance-v2/`. **Not
+  yet uploaded**: local copy + result TSV in
+  `/mnt/v/output/zenmetrics/cvvdp-goldens/conformance-v2/`. Until the
+  upload, run with `CVVDP_CONFORMANCE_GOLDENS=<that dir>/conformance_goldens.json`.
+- **Goldens (conformance-v1, 2026-05-26)**: pycvvdp v0.5.4, 9 displays, R2
   `s3://coefficient/cvvdp-goldens/conformance-v1/` (public mirror
-  `https://coefficient.r2.imazen.org/cvvdp-goldens/conformance-v1/`).
+  `https://coefficient.r2.imazen.org/cvvdp-goldens/conformance-v1/`);
+  result TSV `benchmarks/cvvdp_conformance_matrix_2026-05-26.tsv`.
 
 ## Dimensions
 
@@ -31,7 +36,7 @@ distortion space.
 | `cvvdp_cpu` | `cvvdp::Cvvdp` (this workspace) | under test |
 | `cvvdp_gpu` | `cvvdp_gpu::Cvvdp<CudaRuntime>` (this workspace) | under test |
 
-### Display models (9 — acceptance gate requires ≥ 8)
+### Display models (13 — acceptance gate requires ≥ 8)
 
 Every display is an **upstream pycvvdp display name** that ALSO
 resolves in our `DisplayModel::by_name` / `DisplayGeometry::by_name`
@@ -51,12 +56,18 @@ geometric display model.
 | `standard_hdr_hlg` | HLG / **BT.2020** | 1500 | 10 | HLG EOTF + wide-gamut |
 | `standard_hdr_linear_dark` | linear / BT.709 | 1500 | 0 | dim-ambient, dark-adapted |
 | `htc_vive_pro` | sRGB / BT.709 | 133 | 0 | VR HMD (fov-diagonal geometry) |
+| `65inch_hdr_pq_1Knit` | PQ / BT.2020 | 1000 | 5 | 65" OLED at 1.98 m (conformance-v2) |
+| `65inch_hdr_pq_2Knit` | PQ / BT.2020 | 2000 | 5 | as above (conformance-v2) |
+| `65inch_hdr_pq_4knit` | PQ / BT.2020 | 4000 | 5 | as above (conformance-v2) |
+| `lg_oled_2026_hdr_pq` | PQ / BT.2020 | 3000 | 5 | LG G6, `min_luminance` black, inches distance (conformance-v2) |
 
-Imazen-only presets (`modern_oled_phone_indoor`, `65inch_hdr_pq_*`,
-`lg_oled_2026_hdr_pq`) are **excluded** from the conformance matrix:
-pycvvdp can't generate a reference golden for a display name it
-doesn't know. They remain pinned for self-consistency in
-`cvvdp-gpu/tests` (`presets.rs`).
+The last four were imazen-only presets until pycvvdp **v0.5.7** shipped
+them upstream with values identical to our vendored
+`display_models.json`. Their goldens therefore need pycvvdp ≥ 0.5.7
+(conformance-v2). `modern_oled_phone_indoor` is still imazen-only
+(`display_models_imazen.json`) and **excluded**: pycvvdp can't generate a
+golden for a display name it doesn't know. It stays pinned for
+self-consistency in `cvvdp-gpu/tests` (`presets.rs`).
 
 No upstream preset uses Display-P3 primaries — the wide-gamut presets
 are all BT.2020, which is the broader gamut. The P3-primaries code
@@ -82,7 +93,8 @@ always present, so the matrix exceeds the ≥ 15 gate on any host.
 
 ### Matrix size
 
-31 situations × 9 displays = **279 cells per impl** (acceptance gate
+31 situations × 13 displays = **403 cells per impl** (conformance-v2;
+v1 was 31 × 9 = 279) (acceptance gate
 requires ≥ 120).
 
 ## Methodology
@@ -126,7 +138,29 @@ some displays). The synth fixtures already pin tighter (`1e-4`–`5e-3`)
 elsewhere; the matrix's `1e-3` is the cross-display/cross-content
 gate.
 
-## Results (2026-05-26, pycvvdp v0.5.4, RTX 5070; post-Finding-A fix)
+## Results — conformance-v2 (2026-09-22, pycvvdp v0.5.7, RTX 2080)
+
+Goldens: pycvvdp **v0.5.7** on CPU torch 2.14.0, 31 situations × 13
+displays = 403 cells. Impls run on this workspace's CPU port and on
+cvvdp-gpu over CUDA (RTX 2080).
+
+- **cpu within 1e-3: 403 / 403** (max `|delta_cpu|` = 0.000877)
+- **gpu within 1e-3: 400 / 403** (max `|delta_gpu|` = 0.001390). The 3
+  misses are exactly the documented Finding-B cells below.
+- The four new HDR PQ displays pass all 31 situations on both impls:
+  max Δcpu 0.00045 / 0.00048 / 0.00061 / 0.00049 and max Δgpu 0.00074 /
+  0.00077 / 0.00084 / 0.00082 (1K / 2K / 4K / LG 2026).
+- **v0.5.4 → v0.5.7 is still-image neutral.** On the 279 cells shared
+  with v1, the v1 goldens (v0.5.4, CUDA torch) and v2 goldens (v0.5.7,
+  CPU torch) agree to max 7.6e-6 JOD. The v0.5.7 source diff has no
+  still-image numeric change: CSF LUTs, colour spaces, pyramid,
+  interpolation and CSF code are byte-identical, and `cvvdp_metric.py`
+  only refactors the video path, adds `temp_padding="symmetric"`, and
+  removes a dead masking branch.
+- Result TSV (47 KB, kept out of git per the 30 KB rule):
+  `/mnt/v/output/zenmetrics/cvvdp-goldens/conformance-v2/cvvdp_conformance_matrix_pycvvdp_v0.5.7.tsv`.
+
+## Results — conformance-v1 (2026-05-26, pycvvdp v0.5.4, RTX 5070; post-Finding-A fix)
 
 - **cpu within 1e-3: 279 / 279** (max `|delta_cpu|` = 0.000877)
 - **gpu within 1e-3: 276 / 279** (max `|delta_gpu|` = 0.001390)
@@ -300,6 +334,23 @@ runtime-skip — the skip decision is at the feature/caller level, per
 the workspace test discipline).
 
 ## Provenance
+
+conformance-v2 (current pin in `tests/common/mod.rs`):
+
+- Reference: pycvvdp v0.5.7 (PyPI `cvvdp` 0.5.7), torch 2.14.0+cpu.
+  `build_conformance_goldens.py` now records the INSTALLED pycvvdp
+  version as `reference_version`, plus the Rust port pin as
+  `port_pinned_version` (still v0.5.4). A display it cannot construct is
+  now fatal rather than a silently skipped null golden.
+- 403 cells, 0 pycvvdp errors. `conformance_goldens.json` sha256
+  `1bac6f9af8f1eaa318fd35ee8d369be1979bd65e8e7ee8e430071eb0537afbf0`;
+  situation manifest sha256
+  `6ca5765f4bcfc2f1c935d742ee030ec405a71aa64f791832b2223e8a33ac4336`.
+- Local copy: `/mnt/v/output/zenmetrics/cvvdp-goldens/conformance-v2/`.
+  **Must be uploaded to `s3://coefficient/cvvdp-goldens/conformance-v2/`
+  before the default (non-override) run can fetch it.**
+
+conformance-v1:
 
 - Reference: pycvvdp v0.5.4 (pip pkg `cvvdp` 0.5.4, import `pycvvdp`),
   torch 2.10.0+cu128, CUDA available.

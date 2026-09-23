@@ -119,6 +119,48 @@ Still-image scores are bit-identical across 0.5.4, 0.5.7-replicate and
 0.5.7-symmetric, so the padding default does not affect this port, which is
 still-image only. Video scoring is not ported and not checked here.
 
+### 4c. Full 0.5.4 → 0.5.7 source review, and what we did about it
+
+`diff -r` of the two installed packages:
+
+| file | change | affects our still-image port? |
+|---|---|---|
+| `csf.py`, `lpyr_dec.py`, `interp.py`, `color_spaces.json`, every `csf_lut_*.json` | **unchanged** | — |
+| `cvvdp_parameters.json` | `version` string only | no |
+| `cvvdp_metric.py` | video path refactored into `read_block_of_frames`; `temp_padding="symmetric"` added; pre-filtered (SPEM) video bypass; MPS device default; image buffer `torch.empty` → `torch.zeros` (all 6 channels are written anyway); dead masking branch (`smooth_clamp_cont` / `fvvdp_ch_gain`, unused under `masking_model: mult-mutual`) removed; distogram export gains a batch axis | no |
+| `display_model.py`, `utils.py`, `vq_metric.py` | exceptions → `vq_exception`; `get_best_device`; config-file extension check | no |
+| `video_source.py` | a debug-only mean-luminance log skipped for `RGB2020pq`; batch-singleton shape check | no |
+| `video_source_file.py` | ffmpeg/YUV video decode: BT.601 → BT.709 YUV matrix, 4:2:2 support, frame counting | no; we take RGB, not YUV video |
+| `run_cvvdp.py` | CLI: `--device auto`, `--count-frames`, `--temp-padding {replicate,symmetric,valid}`, `--temp-resample <fps>` | no |
+| `display_models.json` | **adds `65inch_hdr_pq_{1Knit,2Knit,4knit}` and `lg_oled_2026_hdr_pq`** | our vendored copies (`cvvdp`, `cvvdp-gpu`) are already identical to 0.5.7's |
+
+So nothing needs porting for still images. The one thing 0.5.7 unlocks is
+**conformance coverage**: those four HDR presets used to be imazen-only and
+excluded from the matrix, because pycvvdp could not produce a golden for them.
+
+Done (see `crates/cvvdp/docs/CVVDP_CONFORMANCE.md`, "Results — conformance-v2"):
+
+- The four presets are added to the matrix (13 displays × 31 situations = 403
+  cells). Goldens are built with pycvvdp 0.5.7.
+- **CPU 403/403 within 1e-3** (max 0.000877). **GPU 400/403** (max 0.00139); the
+  3 misses are the already-documented Finding-B cells. The new HDR presets pass
+  every cell on both impls (max Δ 0.00061 CPU, 0.00084 GPU).
+- On the 279 cells shared with v1, the v1 (0.5.4) and v2 (0.5.7) goldens agree to
+  **7.6e-6 JOD**.
+- `build_conformance_goldens.py` now records the installed pycvvdp version (it
+  used to copy the Rust pin, so 0.5.7 goldens would have been labelled v0.5.4).
+  A display it cannot construct is now fatal; it used to become a null golden
+  that the harness silently skipped.
+- The matrix TSV is named by reference version
+  (`cvvdp_conformance_matrix_pycvvdp_v0.5.7.tsv`). A hard-coded `2026-05-26`
+  made every run overwrite the May record.
+
+Not done: the port's `PYCVVDP_REFERENCE_VERSION` stays **v0.5.4**. It is
+lockstep-pinned to the per-stage R2 goldens (`cvvdp-gpu/tests/it/parity.rs`,
+`version_lockstep.rs`), so bumping it means regenerating and uploading those. That
+is justified by the numbers above, but it needs an upload. The same applies to the
+`pycvvdp-scorer` image and its `cvvdp_pycvvdp_v054` column.
+
 ## 5. What changed
 
 - `zenmetrics batch` / `score-pairs --metric cvvdp --display-model <name>`: the

@@ -2,7 +2,7 @@
 //!
 //! Mirrors `cvvdp-gpu/tests/common/mod.rs` — goldens live in the same
 //! public R2 bucket (`coefficient.r2.imazen.org`) under the
-//! `cvvdp-goldens/conformance-v1/` prefix and are fetched without
+//! `cvvdp-goldens/conformance-v<N>/` prefix and are fetched without
 //! credentials. A local override (`CVVDP_CONFORMANCE_GOLDENS` env var
 //! pointing at a `conformance_goldens.json`) short-circuits the fetch
 //! for development against freshly-built goldens.
@@ -17,15 +17,20 @@ use std::path::PathBuf;
 use sha2::{Digest, Sha256};
 
 /// Golden-set version pin. Bump in lockstep with the R2 prefix.
-pub const GOLDEN_VERSION: &str = "conformance-v1";
+pub const GOLDEN_VERSION: &str = "conformance-v2";
 
 /// Public R2 URL for the conformance goldens JSON.
 pub const GOLDENS_URL: &str =
-    "https://coefficient.r2.imazen.org/cvvdp-goldens/conformance-v1/conformance_goldens.json";
+    "https://coefficient.r2.imazen.org/cvvdp-goldens/conformance-v2/conformance_goldens.json";
 
 /// sha256 of `conformance_goldens.json` captured at upload time.
 /// Bump alongside `GOLDEN_VERSION` when goldens are regenerated.
-pub const GOLDENS_SHA256: &str = "8f7d69dc6b98272b8425c2245cf7878e5b397878f8717056715f65bd606940bc";
+///
+/// conformance-v2 (2026-09-22): pycvvdp v0.5.7, 31 situations x 13 displays
+/// (adds 65inch_hdr_pq_{1Knit,2Knit,4knit} + lg_oled_2026_hdr_pq). The 279
+/// cells shared with v1 (pycvvdp v0.5.4) agree to 7.6e-6 JOD. Local copy:
+/// /mnt/v/output/zenmetrics/cvvdp-goldens/conformance-v2/. v1 stays live.
+pub const GOLDENS_SHA256: &str = "1bac6f9af8f1eaa318fd35ee8d369be1979bd65e8e7ee8e430071eb0537afbf0";
 
 const CACHE_DIR_SUBDIR: &str = "zenmetrics-cvvdp-conformance-goldens";
 
