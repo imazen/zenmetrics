@@ -13,6 +13,18 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
+  IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
+  Score + half-resolution GMS map, strided f32 input, zenpixels `PixelSlice`
+  input (`pixels`), rayon bands bit-identical at any thread count (`parallel`),
+  archmage/magetypes `#[arcane]` tier entries with `#[rite]` row helpers
+  (v3/neon/wasm128/scalar, each tier bit-identical to scalar). Parity: GMS map
+  bit-identical to libgmsd on 64/64 real pairs, score within 4e-13 relative
+  (`benchmarks/gmsd_parity_2026-09-22.md`). `53a49715`
+- zenmetrics-cli: `--metric gmsd` (feature `cpu-gmsd`, in `cpu-metrics`),
+  column `gmsd_cpu_imazen_v0_1_0`; CPU-only, not orchestrator-eligible.
+  Example `gmsd_parity_dump` (the Rust half of the parity harness). `53a49715`
+
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
   cICP, and route CPU CVVDP through its native HDR scorer. Refuse incompatible
