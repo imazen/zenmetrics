@@ -130,8 +130,10 @@ mod simd_pyramid;
 pub(crate) mod strip;
 #[allow(dead_code)] // wired in by chunks 1-6 (strip-major dispatcher)
 pub(crate) mod strip_kernels;
+mod video;
 
 pub use pipeline::Cvvdp;
+pub use video::{VideoScorer, score_video, video_filter_len};
 
 /// TEST-ONLY re-exports of the `pub(crate)` SIMD kernel entry points.
 ///
@@ -261,7 +263,7 @@ pub mod __simd_equiv_test_api {
     }
 }
 
-/// Failure modes for `Cvvdp::*`.
+/// Failure modes for `Cvvdp::*` and `VideoScorer::*`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     /// Buffer length doesn't match `width × height × 3`.
@@ -289,6 +291,10 @@ pub enum Error {
         /// Height passed.
         height: u32,
     },
+    /// Video frame rate must be finite and > 0.
+    InvalidFps,
+    /// `VideoScorer::finish` called with zero frames pushed.
+    NoFrames,
 }
 
 impl core::fmt::Display for Error {
@@ -309,6 +315,10 @@ impl core::fmt::Display for Error {
                 f,
                 "image too small for cvvdp pyramid: {width}×{height} (need min dim ≥ 8)"
             ),
+            Error::InvalidFps => {
+                write!(f, "invalid frames_per_second (need finite > 0)")
+            }
+            Error::NoFrames => write!(f, "no frames pushed to VideoScorer"),
         }
     }
 }

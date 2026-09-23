@@ -177,6 +177,23 @@ impl Cvvdp {
         })
     }
 
+    /// Create a streaming video scorer — `width × height` sRGB-8
+    /// frames at `frames_per_second` Hz under `params` + `geometry`.
+    /// Equivalent to [`crate::VideoScorer::new`]; see `docs/VIDEO.md`.
+    ///
+    /// # Errors
+    ///
+    /// As [`crate::VideoScorer::new`].
+    pub fn video(
+        width: u32,
+        height: u32,
+        frames_per_second: f32,
+        params: CvvdpParams,
+        geometry: DisplayGeometry,
+    ) -> Result<crate::VideoScorer> {
+        crate::VideoScorer::new(width, height, frames_per_second, params, geometry)
+    }
+
     /// Construct a scorer configured for strip mode at a given
     /// `h_body`. Pre-allocates the scratch in strip shape (saving
     /// ~80% of the persistent weber pyramid + cache footprint at

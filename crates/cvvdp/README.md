@@ -1,7 +1,7 @@
 # cvvdp ![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenmetrics/cvvdp.yml?style=flat-square&label=CI) ![crates.io](https://img.shields.io/crates/v/cvvdp?style=flat-square) ![lib.rs](https://img.shields.io/crates/v/cvvdp?style=flat-square&label=lib.rs&color=blue) ![docs.rs](https://img.shields.io/docsrs/cvvdp?style=flat-square) ![License](https://img.shields.io/crates/l/cvvdp?style=flat-square)
 
 Pure-Rust CPU port of [ColorVideoVDP](https://github.com/gfxdisp/ColorVideoVDP)
-(still-image scoring). Built on top of the canonical pycvvdp v0.5.7
+(still-image and video scoring). Built on top of the canonical pycvvdp v0.5.7
 algorithm (still-image path identical to v0.5.4), designed as a drop-in perceptual metric for the JPEG XL
 encoder's iterative quantization loop where the GPU backend's
 host-to-device upload latency exceeds CPU compute time.
@@ -45,13 +45,38 @@ let jod = scorer.score_with_diffmap(&ref_srgb, &dist_srgb, &mut diffmap)?;
 // on the distorted region.
 ```
 
+Video scoring (streaming; holds only the temporal-filter window of
+frames, not the whole clip):
+
+```rust
+use cvvdp::{DisplayGeometry, VideoScorer};
+
+let mut v = VideoScorer::new(1920, 1080, 30.0, CvvdpParams::default(),
+                           DisplayGeometry::STANDARD_FHD)?;
+for (ref_frame, dist_frame) in ref_frames.iter().zip(dist_frames.iter()) {
+    v.push_frame(ref_frame, dist_frame)?;   // &[u8] sRGB-8, w*h*3 each
+}
+let jod = v.finish()?;
+```
+
+A whole-clip convenience `cvvdp::score_video(&ref_frames,
+&dist_frames, w, h, fps, params, geometry)` wraps the same
+push/finish loop. A 1-frame clip routes through the still path,
+bit-identical to `Cvvdp::score`. See `docs/VIDEO.md` for the port
+design and measured parity.
+
 ## Scope
 
-- Still-image scoring (no temporal channels).
+- Still-image and video scoring (temporal channels, transient
+  achromatic channel, causal `replicate` padding — pycvvdp's
+  defaults).
 - DKLd65 opponent + Weber-contrast pyramid + castleCSF + mult-mutual
-  masking + 3-stage Minkowski pool.
-- Matches pycvvdp v0.5.7 (and v0.5.4) within `≤ 1e-3 JOD` on synthetic fixtures
-  16² through 512² (gated by `tests/parity_against_host_scalar.rs`).
+  masking + Minkowski pooling (spatial β=2, per-band/channel β=4,
+  frames β=2 for video).
+- Matches pycvvdp v0.5.7 within `≤ 1e-3 JOD`: stills on synthetic
+  fixtures 16²–512² (`tests/parity_against_host_scalar.rs`); video on
+  44 cells (11 situations × 4 displays) at 24/30/60 fps
+  (`cvvdp-conformance::video_parity`, measured max |Δ| = 2e-6 JOD).
 
 ## Why a CPU port
 
