@@ -310,7 +310,9 @@ fn gms_row(
 /// One plane view: `data[y * stride + x]`, `x < width`, `y < height`.
 #[derive(Clone, Copy)]
 pub struct Plane<'a> {
+    /// Samples, rows `stride` apart.
     pub data: &'a [f32],
+    /// Row pitch in samples.
     pub stride: usize,
 }
 
@@ -329,17 +331,27 @@ pub enum Source<'a> {
     /// Gray f32 plane on the 0..255 scale.
     Gray(Plane<'a>),
     /// Packed RGB triplets, rows `stride` bytes apart.
-    Rgb8 { data: &'a [u8], stride: usize },
+    Rgb8 {
+        /// RGB bytes.
+        data: &'a [u8],
+        /// Row pitch in bytes.
+        stride: usize,
+    },
 }
 
 /// One band of output rows `[y0, y1)` of the half-resolution GMS grid.
 pub struct Band<'a> {
+    /// Reference image rows.
     pub reference: Source<'a>,
+    /// Distorted image rows.
     pub distorted: Source<'a>,
     /// Half-resolution width and height (`width / 2`, `height / 2`).
     pub w2: usize,
+    /// Half-resolution height.
     pub h2: usize,
+    /// First output row of the band.
     pub y0: usize,
+    /// One past the last output row of the band.
     pub y1: usize,
 }
 
@@ -445,6 +457,7 @@ macro_rules! band_body {
 
 #[cfg(target_arch = "x86_64")]
 #[archmage::arcane]
+/// The `v3` tier of one band (map rows `step` apart, per-row pooling sums).
 pub fn gmsd_band_v3(
     token: archmage::X64V3Token,
     band: &Band<'_>,
@@ -466,6 +479,7 @@ pub fn gmsd_band_v3(
 
 #[cfg(target_arch = "aarch64")]
 #[archmage::arcane]
+/// The `neon` tier of one band (map rows `step` apart, per-row pooling sums).
 pub fn gmsd_band_neon(
     token: archmage::NeonToken,
     band: &Band<'_>,
@@ -487,6 +501,7 @@ pub fn gmsd_band_neon(
 
 #[cfg(target_arch = "wasm32")]
 #[archmage::arcane]
+/// The `wasm128` tier of one band (map rows `step` apart, per-row pooling sums).
 pub fn gmsd_band_wasm128(
     token: archmage::Wasm128Token,
     band: &Band<'_>,
@@ -506,6 +521,7 @@ pub fn gmsd_band_wasm128(
     )
 }
 
+/// The `scalar` tier of one band (map rows `step` apart, per-row pooling sums).
 pub fn gmsd_band_scalar(
     token: archmage::ScalarToken,
     band: &Band<'_>,
