@@ -32,9 +32,11 @@
 
 pub mod displays;
 pub mod situations;
+pub mod video_situations;
 
 pub use displays::{ConformanceDisplay, conformance_displays};
 pub use situations::{Situation, SituationClass, all_situations};
+pub use video_situations::{VideoClass, VideoSituation, all_video_situations};
 
 /// The pinned pycvvdp reference version this conformance matrix
 /// validates against. Sourced transitively from the cvvdp crates.

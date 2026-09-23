@@ -50,6 +50,12 @@ name = "emit_situations"
 # Pure CPU — emits the situation corpus PNGs + manifest for the
 # pycvvdp golden builder. No GPU / goldens feature needed.
 
+[[bin]]
+name = "emit_video_situations"
+# Pure CPU — emits the video situation corpus PNG frames + manifest
+# for the pycvvdp video golden builder. No GPU / goldens feature
+# needed.
+
 # The full conformance matrix test only compiles when the
 # `conformance-goldens` feature is on (it needs a GPU runtime + the
 # R2 golden fetch). Off by default so `cargo test -p cvvdp-conformance`
