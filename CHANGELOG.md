@@ -43,7 +43,7 @@ Workspace conventions per the global rules:
   dedicated magetypes kernels for the video hot loops (FIR axpy,
   masking min/abs/pow, cross-channel pool+clamp, p=2 pooling), and
   rayon parallelism across the 8 pyramid builds under `parallel`;
-  ~6.9× at 1080p vs the scalar port (325 vs 2237 ms/frame). Design,
+  ~8.2× at 1080p vs the scalar port (273 vs 2237 ms/frame). Design,
   rounding policy, and benchmarks in `crates/cvvdp/docs/VIDEO.md`;
   timing harness in `examples/video_sweep.rs`. `1dc4a6dd`,
   `3ffc5960`, `22c667d6`, `c71f517e`, `5025b991`, `338a3a17`,
@@ -51,9 +51,11 @@ Workspace conventions per the global rules:
   `score-video` CLI: `ff723263`. Comparative benchmark vs
   fast-ssim2-per-frame (wall, user+sys CPU, peak RSS, 1t vs 8t) in
   `examples/video_vs_ssim2.rs` +
-  `benchmarks/video_vs_ssim2_2026-09-23.tsv`: ~1.2–1.6× ssim2 wall,
-  ~4× peak RSS (1080p/8t: 325 ms/f, 1.3 GB), cvvdp scales ~1.3× to
-  8 threads while ssim2-per-frame stays single-threaded.
+  `benchmarks/video_vs_ssim2_2026-09-23.tsv`: at 8t cvvdp is at parity
+  or faster than ssim2-per-frame wall at every measured size
+  (26.0 vs 31.3 / 112.4 vs 120.0 / 272.9 vs 270.6 ms/frame at 512² /
+  720p / 1080p), ~1.3× slower at 1t; ~4× peak RSS (1080p: 1.25 GB vs
+  311 MB).
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual

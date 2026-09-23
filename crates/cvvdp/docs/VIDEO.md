@@ -253,16 +253,16 @@ Measured with `cargo run -p cvvdp --release --example video_sweep`
 
 | size × frames | scalar | SIMD + rayon |
 |---|---|---|
-| 256×256 ×12 | ~67 ms/frame | 6.90 ms/frame |
-| 256×256 ×24 | ~67 ms/frame | 6.88 ms/frame |
-| 512×512 ×12 | 279 ms/frame | 31.04 ms/frame |
-| 512×512 ×24 | ~279 ms/frame | 29.41 ms/frame |
-| 1280×720 ×12 | 986 ms/frame | 134.73 ms/frame |
-| 1280×720 ×24 | ~986 ms/frame | 124.94 ms/frame |
-| 1920×1080 ×12 | 2237 ms/frame | 331.28 ms/frame |
-| 1920×1080 ×24 | ~2237 ms/frame | 324.60 ms/frame |
+| 256×256 ×12 | ~67 ms/frame | 6.18 ms/frame |
+| 256×256 ×24 | ~67 ms/frame | 6.64 ms/frame |
+| 512×512 ×12 | 279 ms/frame | 27.18 ms/frame |
+| 512×512 ×24 | ~279 ms/frame | 25.91 ms/frame |
+| 1280×720 ×12 | 986 ms/frame | 120.99 ms/frame |
+| 1280×720 ×24 | ~986 ms/frame | 110.80 ms/frame |
+| 1920×1080 ×12 | 2237 ms/frame | 289.60 ms/frame |
+| 1920×1080 ×24 | ~2237 ms/frame | 272.50 ms/frame |
 
-~6.9× at 1080p vs the scalar port. Note `video_sweep` builds with
+~8.2× at 1080p vs the scalar port. Note `video_sweep` builds with
 `parallel`; a `--no-default-features` build takes the sequential
 fallback.
 
@@ -283,37 +283,40 @@ cost measured by the `gen` mode of the same binary.
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 48.1 | 32.0 | 50.8 | 33.8 | 166 MB | 42 MB |
-| 1280×720 | 185.1 | 118.5 | 194.2 | 128.8 | 573 MB | 144 MB |
-| 1920×1080 | 432.4 | 269.3 | 452.1 | 290.0 | 1285 MB | 319 MB |
+| 512² | 41.5 | 31.5 | 43.8 | 33.3 | 161 MB | 42 MB |
+| 1280×720 | 159.3 | 118.8 | 167.9 | 129.2 | 557 MB | 141 MB |
+| 1920×1080 | 376.9 | 273.1 | 396.3 | 293.3 | 1250 MB | 311 MB |
 
 **24-frame clip, 8 threads (`RAYON_NUM_THREADS=8`):**
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 37.0 | 30.8 | 90.8 | 33.3 | 165 MB | 42 MB |
-| 1280×720 | 130.3 | 119.3 | 408.3 | 139.2 | 572 MB | 144 MB |
-| 1920×1080 | 324.9 | 273.1 | 1083.8 | 309.6 | 1284 MB | 319 MB |
+| 512² | 26.0 | 31.3 | 66.7 | 33.8 | 160 MB | 42 MB |
+| 1280×720 | 112.4 | 120.0 | 339.2 | 138.8 | 557 MB | 141 MB |
+| 1920×1080 | 272.9 | 270.6 | 876.7 | 307.9 | 1253 MB | 311 MB |
 
 Honest reading:
 
-- cvvdp video costs **~1.2×–1.6× ssim2-per-frame wall** depending on
-  threads and size — reasonable for what it computes (4 temporal
-  channels, 2 pyramid decomps per channel per frame, 4-channel
-  masking + pooling) but it is *not* cheap: this is a ~100–300 MB and
-  ~30–430 ms/frame metric, not a ~40 MB / ~30 ms/frame one.
+- **At 8 threads cvvdp video is at parity or faster than
+  ssim2-per-frame wall** at every measured size (26.0 vs 31.3,
+  112.4 vs 120.0, 272.9 vs 270.6 ms/frame) — remarkable given it
+  computes 4 temporal channels, 2 pyramid decomps per channel per
+  frame, and 4-channel masking + pooling per output frame. At 1
+  thread it still costs ~1.3× ssim2-per-frame — the serial FIR /
+  masking / pooling stages dominate when the pyramid builds can't
+  spread across cores.
 - **Peak RSS ≈ 4× ssim2's** at every size. The streaming bound holds
   (input frames are not retained — RSS is flat in `n_frames`), but
   the bound is the *temporal window*: at 1080p/30 fps the filter is 9
   taps, so the ring keeps 18 DKL frame sets (~24 MB each) plus 8
   pyramid caches and scratch. Bounded ≠ small.
 - **Thread scaling is real but shallow for cvvdp**: 1t→8t buys
-  ~1.24–1.32× (CPU/wall ≈ 2.6–3.2 effective threads) — only the
+  ~1.3–1.6× (CPU/wall ≈ 2.4–3.0 effective threads) — only the
   8-way pyramid `rayon::scope` parallelizes; FIR, masking and pooling
   stay serial. ssim2-per-frame shows *no measurable scaling* at these
   sizes (user+sys ≈ wall at 8t; its `rayon` feature parallelizes
-  only the gaussian-blur row pass, a negligible fraction), so
-  cvvdp's relative gap narrows with threads.
+  only the gaussian-blur row pass, a negligible fraction), which is
+  why cvvdp pulls ahead once threads are available.
 - Scores are not comparable units (JOD 0–10 vs SSIMULACRA2's
   unbounded scale); the ssim2 arm exists to price the "just score
   frames" alternative, not to compare quality.

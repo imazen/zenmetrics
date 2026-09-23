@@ -132,8 +132,6 @@ impl WeberPyramid {
 #[allow(dead_code)]
 pub(crate) struct PyramidScratch {
     pub vscratch: Vec<f32>,
-    pub z_v: Vec<f32>,
-    pub z_h: Vec<f32>,
     pub expanded: Vec<f32>,
     pub gauss_tmp: Vec<f32>,
 }
@@ -153,14 +151,16 @@ pub(crate) fn gausspyr_reduce(
 ) -> (usize, usize) {
     let dw = sw.div_ceil(2);
     let dh = sh.div_ceil(2);
-    dst.clear();
     dst.resize(dw * dh, 0.0);
     let k = GAUSS5;
 
     // Vertical pass: zero-pad rows above/below, conv stride 2.
-    scratch.vscratch.clear();
-    scratch.vscratch.resize(sw * dh, 0.0);
-    let vscratch = &mut scratch.vscratch;
+    // Grow-only scratch: shared across levels, so `resize` would
+    // memset on every regrow — the SIMD pass overwrites every entry.
+    if scratch.vscratch.len() < sw * dh {
+        scratch.vscratch.resize(sw * dh, 0.0);
+    }
+    let vscratch = &mut scratch.vscratch[..sw * dh];
 
     // SIMD inner pass — covers all rows uniformly. Note: the SIMD pass
     // overwrites every entry of `vscratch` so the zero-fill above is
@@ -237,23 +237,27 @@ pub(crate) fn gausspyr_expand(
     debug_assert!(out_w >= 2 * sw - 1 && out_w <= 2 * sw);
     debug_assert!(out_h >= 2 * sh - 1 && out_h <= 2 * sh);
 
-    // Vertical pass: SIMD inner sweep, builds per-column zero-inserted
-    // buffer in-flight (no separate `z_v` scratch from the caller).
-    scratch.vscratch.clear();
-    scratch.vscratch.resize(sw * out_h, 0.0);
-    crate::simd_pyramid::expand_vertical_pass(src, sw, sh, out_h, &mut scratch.vscratch);
+    // Vertical pass: SIMD inner sweep, reads source rows directly via
+    // the zero-insertion index map (no z buffer at all). Grow-only
+    // scratch: the shared Vec keeps its high-water length between
+    // levels/frames, so `resize` would memset on every regrow.
+    if scratch.vscratch.len() < sw * out_h {
+        scratch.vscratch.resize(sw * out_h, 0.0);
+    }
+    let vscratch = &mut scratch.vscratch[..sw * out_h];
+    crate::simd_pyramid::expand_vertical_pass(src, sw, sh, out_h, vscratch);
 
-    // Horizontal pass: SIMD inner sweep, re-uses caller's `z_h` scratch
-    // (resized inside).
-    dst.clear();
-    dst.resize(out_w * out_h, 0.0);
+    // Horizontal pass: SIMD inner sweep, same index-map trick (no
+    // `z_h` scratch needed anymore).
+    if dst.len() < out_w * out_h {
+        dst.resize(out_w * out_h, 0.0);
+    }
     crate::simd_pyramid::expand_horizontal_pass(
-        &scratch.vscratch,
+        vscratch,
         sw,
         out_w,
         out_h,
-        dst,
-        &mut scratch.z_h,
+        &mut dst[..out_w * out_h],
     );
 }
 
@@ -468,9 +472,10 @@ pub(crate) fn weber_contrast_pyr_into(
 
         out.bands[k].w = fine.w;
         out.bands[k].h = fine.h;
-        out.bands[k].data.clear();
+        // `resize` alone (no `clear()` first): a no-op when the buffer
+        // is already `n_px`, so steady-state frames skip the memset
+        // entirely. Every element is overwritten below.
         out.bands[k].data.resize(n_px, 0.0);
-        out.log_l_bkg[k].clear();
         out.log_l_bkg[k].resize(n_px, 0.0);
 
         if is_baseband {
@@ -534,15 +539,14 @@ pub(crate) fn weber_contrast_pyr_into(
                 &mut img_expanded,
             );
             let fine_data: &[f32] = &fine.data;
-            let band_data = &mut out.bands[k].data;
-            let log_band = &mut out.log_l_bkg[k];
-            for i in 0..n_px {
-                let l_bkg = expanded_l[i].max(0.01);
-                let layer = fine_data[i] - img_expanded[i];
-                let c = (layer / l_bkg).clamp(-1000.0, 1000.0);
-                band_data[i] = c;
-                log_band[i] = l_bkg.log10();
-            }
+            let n_px = fine_data.len();
+            crate::simd_math::vweber_band_into(
+                &mut out.bands[k].data,
+                &mut out.log_l_bkg[k],
+                fine_data,
+                &img_expanded[..n_px],
+                &expanded_l[..n_px],
+            );
             // Return scratch.
             cache.scratch.expanded = expanded_l;
             cache.scratch.gauss_tmp = img_expanded;

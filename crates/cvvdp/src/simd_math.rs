@@ -151,6 +151,60 @@ fn vpow_kernel<T: F32x8Convert>(token: T, xs: &[f32], out: &mut [f32], p: f32) {
     }
 }
 
+/// Weber-contrast band fill (pyramid non-baseband levels):
+/// `band[i] = clamp((fine[i] - img_exp[i]) / l, -1000, 1000)`,
+/// `log[i] = log10(l)`, where `l = max(expanded_l[i], 0.01)`.
+/// Replaces a scalar loop whose per-pixel `log10f` dominated the
+/// video profile; the vector `ln * LOG10_E` differs from `log10f` by
+/// ~1 ulp, far below the 1e-3 JOD gate.
+#[inline]
+fn vweber_band_kernel<T: F32x8Convert>(
+    token: T,
+    band: &mut [f32],
+    log: &mut [f32],
+    fine: &[f32],
+    img_exp: &[f32],
+    exp_l: &[f32],
+) {
+    debug_assert_eq!(band.len(), log.len());
+    debug_assert_eq!(band.len(), fine.len());
+    debug_assert_eq!(band.len(), img_exp.len());
+    debug_assert_eq!(band.len(), exp_l.len());
+    type F32x8<T> = GenericF32x8<T>;
+    let floor_v = F32x8::<T>::splat(token, 0.01);
+    let log10e = F32x8::<T>::splat(token, core::f32::consts::LOG10_E);
+    let hi = F32x8::<T>::splat(token, 1000.0);
+    let lo = F32x8::<T>::splat(token, -1000.0);
+    let (b_chunks, b_tail) = F32x8::<T>::partition_slice_mut(token, band);
+    let (l_chunks, l_tail) = F32x8::<T>::partition_slice_mut(token, log);
+    let (f_chunks, f_tail) = F32x8::<T>::partition_slice(token, fine);
+    let (e_chunks, e_tail) = F32x8::<T>::partition_slice(token, img_exp);
+    let (x_chunks, x_tail) = F32x8::<T>::partition_slice(token, exp_l);
+    for ((((b, lg), f), e), x) in b_chunks
+        .iter_mut()
+        .zip(l_chunks.iter_mut())
+        .zip(f_chunks.iter())
+        .zip(e_chunks.iter())
+        .zip(x_chunks.iter())
+    {
+        let l = F32x8::<T>::load(token, x).max(floor_v);
+        let c = (F32x8::<T>::load(token, f) - F32x8::<T>::load(token, e)) / l;
+        c.min(hi).max(lo).store(b);
+        (l.ln_midp_unchecked() * log10e).store(lg);
+    }
+    for ((((b, lg), f), e), x) in b_tail
+        .iter_mut()
+        .zip(l_tail.iter_mut())
+        .zip(f_tail.iter())
+        .zip(e_tail.iter())
+        .zip(x_tail.iter())
+    {
+        let l = x.max(0.01);
+        *b = ((f - e) / l).clamp(-1000.0, 1000.0);
+        *lg = l.log10();
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Elementwise arithmetic kernels (video path — temporal FIR, masking glue,
 // spatial pooling). Same conventions as the transcendental kernels above:
@@ -497,6 +551,17 @@ pub(crate) fn vlp_norm_mean_p2_scalar(token: ScalarToken, xs: &[f32]) -> f32 {
     vlp_norm_mean_p2_kernel(token, xs)
 }
 
+pub(crate) fn vweber_band_into_scalar(
+    token: ScalarToken,
+    band: &mut [f32],
+    log: &mut [f32],
+    fine: &[f32],
+    img_exp: &[f32],
+    exp_l: &[f32],
+) {
+    vweber_band_kernel(token, band, log, fine, img_exp, exp_l);
+}
+
 // x86 / AVX2 + FMA tier — `_v3` suffix matches `X64V3Token`.
 #[cfg(target_arch = "x86_64")]
 mod x86_v3 {
@@ -582,6 +647,18 @@ mod x86_v3 {
         d_max: f32,
     ) {
         vxcm_pool_clamp_4ch_kernel(token, d, t, w, d_max);
+    }
+
+    #[archmage::arcane]
+    pub(crate) fn vweber_band_into_v3(
+        token: X64V3Token,
+        band: &mut [f32],
+        log: &mut [f32],
+        fine: &[f32],
+        img_exp: &[f32],
+        exp_l: &[f32],
+    ) {
+        vweber_band_kernel(token, band, log, fine, img_exp, exp_l);
     }
 
     #[archmage::arcane]
@@ -678,6 +755,18 @@ mod arm_neon {
         d_max: f32,
     ) {
         vxcm_pool_clamp_4ch_kernel(token, d, t, w, d_max);
+    }
+
+    #[archmage::arcane]
+    pub(crate) fn vweber_band_into_neon(
+        token: NeonToken,
+        band: &mut [f32],
+        log: &mut [f32],
+        fine: &[f32],
+        img_exp: &[f32],
+        exp_l: &[f32],
+    ) {
+        vweber_band_kernel(token, band, log, fine, img_exp, exp_l);
     }
 
     #[archmage::arcane]
@@ -784,6 +873,18 @@ mod wasm_128 {
         d_max: f32,
     ) {
         vxcm_pool_clamp_4ch_kernel(token, d, t, w, d_max);
+    }
+
+    #[archmage::arcane]
+    pub(crate) fn vweber_band_into_wasm128(
+        token: Wasm128Token,
+        band: &mut [f32],
+        log: &mut [f32],
+        fine: &[f32],
+        img_exp: &[f32],
+        exp_l: &[f32],
+    ) {
+        vweber_band_kernel(token, band, log, fine, img_exp, exp_l);
     }
 
     #[archmage::arcane]
@@ -927,6 +1028,23 @@ pub(crate) fn vxcm_pool_clamp_4ch_into(
     d_max: f32,
 ) {
     archmage::incant!(vxcm_pool_clamp_4ch_into(d, t, w, d_max))
+}
+
+/// `band[i] = clamp((fine[i] − img_exp[i]) / max(exp_l[i], 0.01), ±1000)`
+/// and `log[i] = log10(max(exp_l[i], 0.01))` — the Weber-contrast
+/// non-baseband fill, fused so `expanded_l` is loaded once.
+pub(crate) fn vweber_band_into(
+    band: &mut [f32],
+    log: &mut [f32],
+    fine: &[f32],
+    img_exp: &[f32],
+    exp_l: &[f32],
+) {
+    assert_eq!(band.len(), log.len());
+    assert_eq!(band.len(), fine.len());
+    assert_eq!(band.len(), img_exp.len());
+    assert_eq!(band.len(), exp_l.len());
+    archmage::incant!(vweber_band_into(band, log, fine, img_exp, exp_l))
 }
 
 /// `lp_norm_mean(xs, 2.0)` — vectorised `safe_pow_lp` accumulation.

@@ -116,20 +116,22 @@ fn reduce_v_inner(
 
         for cg in 0..n_groups {
             let col = cg * 16;
-            let load = |row: Option<usize>| -> f32x16 {
-                match row {
-                    Some(base) => {
-                        let arr: [f32; 16] = src[base + col..base + col + 16].try_into().unwrap();
-                        f32x16::from_array(token, arr)
-                    }
-                    None => f32x16::zero(token),
+            let ld = |base: usize| -> f32x16 {
+                let arr: [f32; 16] = src[base + col..base + col + 16].try_into().unwrap();
+                f32x16::from_array(token, arr)
+            };
+            // Interior rows have all five taps in bounds — one match
+            // per column-group instead of per-tap Option handling.
+            let (v0, v1, v2, v3v, v4) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
+                (Some(b0), Some(b1), Some(b2), Some(b3), Some(b4)) => {
+                    (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
+                }
+                _ => {
+                    let z = f32x16::zero(token);
+                    let or = |row: Option<usize>| row.map_or(z, &ld);
+                    (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
                 }
             };
-            let v0 = load(r_m2);
-            let v1 = load(r_m1);
-            let v2 = load(r_0);
-            let v3v = load(r_p1);
-            let v4 = load(r_p2);
             let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
             let arr = acc.to_array();
             vscratch[out_base + col..out_base + col + 16].copy_from_slice(&arr);
@@ -188,20 +190,20 @@ fn reduce_v_inner(
 
         for cg in 0..n_groups {
             let col = cg * 8;
-            let load = |row: Option<usize>| -> f32x8 {
-                match row {
-                    Some(base) => {
-                        let arr: [f32; 8] = src[base + col..base + col + 8].try_into().unwrap();
-                        f32x8::from_array(token, arr)
-                    }
-                    None => f32x8::zero(token),
+            let ld = |base: usize| -> f32x8 {
+                let arr: [f32; 8] = src[base + col..base + col + 8].try_into().unwrap();
+                f32x8::from_array(token, arr)
+            };
+            let (v0, v1, v2, v3v, v4) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
+                (Some(b0), Some(b1), Some(b2), Some(b3), Some(b4)) => {
+                    (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
+                }
+                _ => {
+                    let z = f32x8::zero(token);
+                    let or = |row: Option<usize>| row.map_or(z, &ld);
+                    (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
                 }
             };
-            let v0 = load(r_m2);
-            let v1 = load(r_m1);
-            let v2 = load(r_0);
-            let v3v = load(r_p1);
-            let v4 = load(r_p2);
             let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
             let arr = acc.to_array();
             vscratch[out_base + col..out_base + col + 8].copy_from_slice(&arr);
@@ -288,27 +290,36 @@ fn reduce_h_inner(
         let c_p1 = col_at(1);
         let c_p2 = col_at(2);
 
+        // Interior columns have all five taps in bounds — hoist the
+        // Option check out of the per-lane row loop.
+        let interior = [c_m2, c_m1, c_0, c_p1, c_p2].iter().all(Option::is_some);
+        let cols: [usize; 5] =
+            core::array::from_fn(|i| [c_m2, c_m1, c_0, c_p1, c_p2][i].unwrap_or(0));
+
         for rg in 0..n_row_groups {
             let row_base = rg * 16;
-            let mut arr_m2 = [0.0f32; 16];
-            let mut arr_m1 = [0.0f32; 16];
-            let mut arr_0 = [0.0f32; 16];
-            let mut arr_p1 = [0.0f32; 16];
-            let mut arr_p2 = [0.0f32; 16];
-            for r in 0..16 {
-                let dy = row_base + r;
-                let row_off = dy * sw;
-                arr_m2[r] = c_m2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                arr_m1[r] = c_m1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                arr_0[r] = c_0.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                arr_p1[r] = c_p1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                arr_p2[r] = c_p2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+            let mut arrs: [[f32; 16]; 5] = [[0.0; 16]; 5];
+            if interior {
+                for (j, &cc) in cols.iter().enumerate() {
+                    for r in 0..16 {
+                        arrs[j][r] = vscratch[(row_base + r) * sw + cc];
+                    }
+                }
+            } else {
+                for r in 0..16 {
+                    let row_off = (row_base + r) * sw;
+                    arrs[0][r] = c_m2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                    arrs[1][r] = c_m1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                    arrs[2][r] = c_0.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                    arrs[3][r] = c_p1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                    arrs[4][r] = c_p2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                }
             }
-            let v0 = f32x16::from_array(token, arr_m2);
-            let v1 = f32x16::from_array(token, arr_m1);
-            let v2 = f32x16::from_array(token, arr_0);
-            let v3v = f32x16::from_array(token, arr_p1);
-            let v4 = f32x16::from_array(token, arr_p2);
+            let v0 = f32x16::from_array(token, arrs[0]);
+            let v1 = f32x16::from_array(token, arrs[1]);
+            let v2 = f32x16::from_array(token, arrs[2]);
+            let v3v = f32x16::from_array(token, arrs[3]);
+            let v4 = f32x16::from_array(token, arrs[4]);
             let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
             let res = acc.to_array();
             for r in 0..16 {
@@ -363,27 +374,34 @@ fn reduce_h_inner(
         let c_p1 = col_at(1);
         let c_p2 = col_at(2);
 
+        let interior = [c_m2, c_m1, c_0, c_p1, c_p2].iter().all(Option::is_some);
+        let cols: [usize; 5] =
+            core::array::from_fn(|i| [c_m2, c_m1, c_0, c_p1, c_p2][i].unwrap_or(0));
+
         for rg in 0..n_row_groups {
             let row_base = rg * 8;
-            let mut arr_m2 = [0.0f32; 8];
-            let mut arr_m1 = [0.0f32; 8];
-            let mut arr_0 = [0.0f32; 8];
-            let mut arr_p1 = [0.0f32; 8];
-            let mut arr_p2 = [0.0f32; 8];
-            for r in 0..8 {
-                let dy = row_base + r;
-                let row_off = dy * sw;
-                arr_m2[r] = c_m2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                arr_m1[r] = c_m1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                arr_0[r] = c_0.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                arr_p1[r] = c_p1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                arr_p2[r] = c_p2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+            let mut arrs: [[f32; 8]; 5] = [[0.0; 8]; 5];
+            if interior {
+                for (j, &cc) in cols.iter().enumerate() {
+                    for r in 0..8 {
+                        arrs[j][r] = vscratch[(row_base + r) * sw + cc];
+                    }
+                }
+            } else {
+                for r in 0..8 {
+                    let row_off = (row_base + r) * sw;
+                    arrs[0][r] = c_m2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                    arrs[1][r] = c_m1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                    arrs[2][r] = c_0.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                    arrs[3][r] = c_p1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                    arrs[4][r] = c_p2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                }
             }
-            let v0 = f32x8::from_array(token, arr_m2);
-            let v1 = f32x8::from_array(token, arr_m1);
-            let v2 = f32x8::from_array(token, arr_0);
-            let v3v = f32x8::from_array(token, arr_p1);
-            let v4 = f32x8::from_array(token, arr_p2);
+            let v0 = f32x8::from_array(token, arrs[0]);
+            let v1 = f32x8::from_array(token, arrs[1]);
+            let v2 = f32x8::from_array(token, arrs[2]);
+            let v3v = f32x8::from_array(token, arrs[3]);
+            let v4 = f32x8::from_array(token, arrs[4]);
             let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
             let res = acc.to_array();
             for r in 0..8 {
@@ -455,65 +473,48 @@ fn expand_v_inner(
     let dk3 = f32x16::splat(token, 2.0 * k[3]);
     let dk4 = f32x16::splat(token, 2.0 * k[4]);
 
-    let z_len_v = out_h + 4;
     let odd_h = out_h & 1;
     let back_idx_v = out_h + 2 + odd_h;
-
-    let mut z_group = alloc::vec![0.0f32; 16 * z_len_v];
+    // `z[p]` is nonzero only at even `p <= 2*sh` (p/2−1, saturating at
+    // the edges) and at `back_idx_v` — read src rows directly instead
+    // of materializing the zero-inserted column.
+    let z_row = |p: usize| -> Option<usize> {
+        if p == back_idx_v {
+            Some(sh - 1)
+        } else if p & 1 == 0 && p <= 2 * sh {
+            Some((p / 2).saturating_sub(1).min(sh - 1))
+        } else {
+            None
+        }
+    };
+    let dk = [dk0, dk1, dk2, dk3, dk4];
     let n_groups = sw / 16;
 
     for cg in 0..n_groups {
         let col_base = cg * 16;
-        // Clear (need fresh zeros for the zero-insertion holes).
-        for v in z_group.iter_mut() {
-            *v = 0.0;
-        }
-        // Layout: z_group[y * 16 + r] = z_v_for_column(col_base + r)[y]
-        for r in 0..16 {
-            z_group[r] = src[col_base + r];
-        }
-        for ky in 0..sh {
-            let y_z = 2 + 2 * ky;
-            let src_off = ky * sw + col_base;
-            for r in 0..16 {
-                z_group[y_z * 16 + r] = src[src_off + r];
-            }
-        }
-        let back_off = (sh - 1) * sw + col_base;
-        for r in 0..16 {
-            z_group[back_idx_v * 16 + r] = src[back_off + r];
-        }
-        // Conv sweep.
         for y in 0..out_h {
-            let base = y * 16;
-            let v0 = f32x16::from_array(token, z_group[base..base + 16].try_into().unwrap());
-            let v1 = f32x16::from_array(token, z_group[base + 16..base + 32].try_into().unwrap());
-            let v2 = f32x16::from_array(token, z_group[base + 32..base + 48].try_into().unwrap());
-            let v3v = f32x16::from_array(token, z_group[base + 48..base + 64].try_into().unwrap());
-            let v4 = f32x16::from_array(token, z_group[base + 64..base + 80].try_into().unwrap());
-            let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4 * dk4;
+            let mut acc = f32x16::splat(token, 0.0);
+            for (j, dkj) in dk.iter().enumerate() {
+                if let Some(r) = z_row(y + j) {
+                    let off = r * sw + col_base;
+                    let v = f32x16::from_array(token, src[off..off + 16].try_into().unwrap());
+                    acc = v * *dkj + acc;
+                }
+            }
             let arr = acc.to_array();
             vscratch[y * sw + col_base..y * sw + col_base + 16].copy_from_slice(&arr);
         }
     }
 
     // Scalar tail columns.
-    let mut z_v = alloc::vec![0.0f32; z_len_v];
     for x in n_groups * 16..sw {
-        for v in z_v.iter_mut() {
-            *v = 0.0;
-        }
-        z_v[0] = src[x];
-        for ky in 0..sh {
-            z_v[2 + 2 * ky] = src[ky * sw + x];
-        }
-        z_v[back_idx_v] = src[(sh - 1) * sw + x];
         for y in 0..out_h {
-            let sum = k[0] * z_v[y]
-                + k[1] * z_v[y + 1]
-                + k[2] * z_v[y + 2]
-                + k[3] * z_v[y + 3]
-                + k[4] * z_v[y + 4];
+            let mut sum = 0.0f32;
+            for (j, kj) in k.iter().enumerate() {
+                if let Some(r) = z_row(y + j) {
+                    sum += kj * src[r * sw + x];
+                }
+            }
             vscratch[y * sw + x] = 2.0 * sum;
         }
     }
@@ -535,61 +536,44 @@ fn expand_v_inner(
     let dk3 = f32x8::splat(token, 2.0 * k[3]);
     let dk4 = f32x8::splat(token, 2.0 * k[4]);
 
-    let z_len_v = out_h + 4;
     let odd_h = out_h & 1;
     let back_idx_v = out_h + 2 + odd_h;
-
-    let mut z_group = alloc::vec![0.0f32; 8 * z_len_v];
+    let z_row = |p: usize| -> Option<usize> {
+        if p == back_idx_v {
+            Some(sh - 1)
+        } else if p & 1 == 0 && p <= 2 * sh {
+            Some((p / 2).saturating_sub(1).min(sh - 1))
+        } else {
+            None
+        }
+    };
+    let dk = [dk0, dk1, dk2, dk3, dk4];
     let n_groups = sw / 8;
 
     for cg in 0..n_groups {
         let col_base = cg * 8;
-        for v in z_group.iter_mut() {
-            *v = 0.0;
-        }
-        for r in 0..8 {
-            z_group[r] = src[col_base + r];
-        }
-        for ky in 0..sh {
-            let y_z = 2 + 2 * ky;
-            let src_off = ky * sw + col_base;
-            for r in 0..8 {
-                z_group[y_z * 8 + r] = src[src_off + r];
-            }
-        }
-        let back_off = (sh - 1) * sw + col_base;
-        for r in 0..8 {
-            z_group[back_idx_v * 8 + r] = src[back_off + r];
-        }
         for y in 0..out_h {
-            let base = y * 8;
-            let v0 = f32x8::from_array(token, z_group[base..base + 8].try_into().unwrap());
-            let v1 = f32x8::from_array(token, z_group[base + 8..base + 16].try_into().unwrap());
-            let v2 = f32x8::from_array(token, z_group[base + 16..base + 24].try_into().unwrap());
-            let v3v = f32x8::from_array(token, z_group[base + 24..base + 32].try_into().unwrap());
-            let v4 = f32x8::from_array(token, z_group[base + 32..base + 40].try_into().unwrap());
-            let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4 * dk4;
+            let mut acc = f32x8::splat(token, 0.0);
+            for (j, dkj) in dk.iter().enumerate() {
+                if let Some(r) = z_row(y + j) {
+                    let off = r * sw + col_base;
+                    let v = f32x8::from_array(token, src[off..off + 8].try_into().unwrap());
+                    acc = v * *dkj + acc;
+                }
+            }
             let arr = acc.to_array();
             vscratch[y * sw + col_base..y * sw + col_base + 8].copy_from_slice(&arr);
         }
     }
 
-    let mut z_v = alloc::vec![0.0f32; z_len_v];
     for x in n_groups * 8..sw {
-        for v in z_v.iter_mut() {
-            *v = 0.0;
-        }
-        z_v[0] = src[x];
-        for ky in 0..sh {
-            z_v[2 + 2 * ky] = src[ky * sw + x];
-        }
-        z_v[back_idx_v] = src[(sh - 1) * sw + x];
         for y in 0..out_h {
-            let sum = k[0] * z_v[y]
-                + k[1] * z_v[y + 1]
-                + k[2] * z_v[y + 2]
-                + k[3] * z_v[y + 3]
-                + k[4] * z_v[y + 4];
+            let mut sum = 0.0f32;
+            for (j, kj) in k.iter().enumerate() {
+                if let Some(r) = z_row(y + j) {
+                    sum += kj * src[r * sw + x];
+                }
+            }
             vscratch[y * sw + x] = 2.0 * sum;
         }
     }
@@ -636,7 +620,6 @@ fn expand_h_inner(
     out_w: usize,
     out_h: usize,
     dst: &mut [f32],
-    z_h_scratch: &mut Vec<f32>,
 ) {
     let k = GAUSS5;
     let dk0 = f32x16::splat(token, 2.0 * k[0]);
@@ -645,35 +628,55 @@ fn expand_h_inner(
     let dk3 = f32x16::splat(token, 2.0 * k[3]);
     let dk4 = f32x16::splat(token, 2.0 * k[4]);
 
-    let z_len_h = out_w + 4;
     let odd_w = out_w & 1;
     let back_idx_h = out_w + 2 + odd_w;
-    z_h_scratch.clear();
-    z_h_scratch.resize(z_len_h, 0.0);
-    let z_h = z_h_scratch.as_mut_slice();
+    // `z_h[p]` is nonzero only at even `p <= back_idx_h`; the source
+    // column is `(p/2).saturating_sub(1).min(sw-1)` (p=0 → col 0,
+    // p=back_idx_h → col sw−1 — the clamps land exactly on the mirror
+    // semantics). Per tap j only lanes with l+j even are nonzero and
+    // their source columns are contiguous, so fill by stride-2 lanes
+    // instead of per-lane Option matching.
+    let zv_of = |row_off: usize, p: usize| -> f32 {
+        if p & 1 == 0 && p <= back_idx_h {
+            vscratch[row_off + (p / 2).saturating_sub(1).min(sw - 1)]
+        } else {
+            0.0
+        }
+    };
 
     for y in 0..out_h {
-        for v in z_h.iter_mut() {
-            *v = 0.0;
-        }
         let row_off = y * sw;
-        z_h[0] = vscratch[row_off];
-        for kx in 0..sw {
-            z_h[2 + 2 * kx] = vscratch[row_off + kx];
-        }
-        z_h[back_idx_h] = vscratch[row_off + sw - 1];
 
         let n_groups = out_w / 16;
         for cg in 0..n_groups {
             let x_base = cg * 16;
             let mut arrs: [[f32; 16]; 5] = [[0.0; 16]; 5];
-            for r in 0..16 {
-                let x = x_base + r;
-                arrs[0][r] = z_h[x];
-                arrs[1][r] = z_h[x + 1];
-                arrs[2][r] = z_h[x + 2];
-                arrs[3][r] = z_h[x + 3];
-                arrs[4][r] = z_h[x + 4];
+            // Interior groups need no edge logic at all: the five taps
+            // draw from three contiguous 8-wide windows of the source
+            // row — lanes 2i get {A,B,C} on taps {0,2,4}, lanes 2i+1
+            // get {B,C} on taps {1,3} (odd-position holes stay zero).
+            let cbase = x_base / 2;
+            if x_base >= 2 && cbase + 8 < sw {
+                for i in 0..8 {
+                    let a = vscratch[row_off + cbase - 1 + i];
+                    let b = vscratch[row_off + cbase + i];
+                    let c = vscratch[row_off + cbase + 1 + i];
+                    arrs[0][2 * i] = a;
+                    arrs[2][2 * i] = b;
+                    arrs[4][2 * i] = c;
+                    arrs[1][2 * i + 1] = b;
+                    arrs[3][2 * i + 1] = c;
+                }
+            } else {
+                for (j, arr) in arrs.iter_mut().enumerate() {
+                    for i in 0..8 {
+                        let l = (j & 1) + 2 * i;
+                        let p = x_base + l + j;
+                        if p <= back_idx_h {
+                            arr[l] = vscratch[row_off + (p / 2).saturating_sub(1).min(sw - 1)];
+                        }
+                    }
+                }
             }
             let v0 = f32x16::from_array(token, arrs[0]);
             let v1 = f32x16::from_array(token, arrs[1]);
@@ -686,11 +689,11 @@ fn expand_h_inner(
         }
 
         for x in n_groups * 16..out_w {
-            let sum = k[0] * z_h[x]
-                + k[1] * z_h[x + 1]
-                + k[2] * z_h[x + 2]
-                + k[3] * z_h[x + 3]
-                + k[4] * z_h[x + 4];
+            let sum = k[0] * zv_of(row_off, x)
+                + k[1] * zv_of(row_off, x + 1)
+                + k[2] * zv_of(row_off, x + 2)
+                + k[3] * zv_of(row_off, x + 3)
+                + k[4] * zv_of(row_off, x + 4);
             dst[y * out_w + x] = 2.0 * sum;
         }
     }
@@ -704,7 +707,6 @@ fn expand_h_inner(
     out_w: usize,
     out_h: usize,
     dst: &mut [f32],
-    z_h_scratch: &mut Vec<f32>,
 ) {
     let k = GAUSS5;
     let dk0 = f32x8::splat(token, 2.0 * k[0]);
@@ -713,35 +715,45 @@ fn expand_h_inner(
     let dk3 = f32x8::splat(token, 2.0 * k[3]);
     let dk4 = f32x8::splat(token, 2.0 * k[4]);
 
-    let z_len_h = out_w + 4;
     let odd_w = out_w & 1;
     let back_idx_h = out_w + 2 + odd_w;
-    z_h_scratch.clear();
-    z_h_scratch.resize(z_len_h, 0.0);
-    let z_h = z_h_scratch.as_mut_slice();
+    let zv_of = |row_off: usize, p: usize| -> f32 {
+        if p & 1 == 0 && p <= back_idx_h {
+            vscratch[row_off + (p / 2).saturating_sub(1).min(sw - 1)]
+        } else {
+            0.0
+        }
+    };
 
     for y in 0..out_h {
-        for v in z_h.iter_mut() {
-            *v = 0.0;
-        }
         let row_off = y * sw;
-        z_h[0] = vscratch[row_off];
-        for kx in 0..sw {
-            z_h[2 + 2 * kx] = vscratch[row_off + kx];
-        }
-        z_h[back_idx_h] = vscratch[row_off + sw - 1];
 
         let n_groups = out_w / 8;
         for cg in 0..n_groups {
             let x_base = cg * 8;
             let mut arrs: [[f32; 8]; 5] = [[0.0; 8]; 5];
-            for r in 0..8 {
-                let x = x_base + r;
-                arrs[0][r] = z_h[x];
-                arrs[1][r] = z_h[x + 1];
-                arrs[2][r] = z_h[x + 2];
-                arrs[3][r] = z_h[x + 3];
-                arrs[4][r] = z_h[x + 4];
+            let cbase = x_base / 2;
+            if x_base >= 2 && cbase + 4 < sw {
+                for i in 0..4 {
+                    let a = vscratch[row_off + cbase - 1 + i];
+                    let b = vscratch[row_off + cbase + i];
+                    let c = vscratch[row_off + cbase + 1 + i];
+                    arrs[0][2 * i] = a;
+                    arrs[2][2 * i] = b;
+                    arrs[4][2 * i] = c;
+                    arrs[1][2 * i + 1] = b;
+                    arrs[3][2 * i + 1] = c;
+                }
+            } else {
+                for (j, arr) in arrs.iter_mut().enumerate() {
+                    for i in 0..4 {
+                        let l = (j & 1) + 2 * i;
+                        let p = x_base + l + j;
+                        if p <= back_idx_h {
+                            arr[l] = vscratch[row_off + (p / 2).saturating_sub(1).min(sw - 1)];
+                        }
+                    }
+                }
             }
             let v0 = f32x8::from_array(token, arrs[0]);
             let v1 = f32x8::from_array(token, arrs[1]);
@@ -754,11 +766,11 @@ fn expand_h_inner(
         }
 
         for x in n_groups * 8..out_w {
-            let sum = k[0] * z_h[x]
-                + k[1] * z_h[x + 1]
-                + k[2] * z_h[x + 2]
-                + k[3] * z_h[x + 3]
-                + k[4] * z_h[x + 4];
+            let sum = k[0] * zv_of(row_off, x)
+                + k[1] * zv_of(row_off, x + 1)
+                + k[2] * zv_of(row_off, x + 2)
+                + k[3] * zv_of(row_off, x + 3)
+                + k[4] * zv_of(row_off, x + 4);
             dst[y * out_w + x] = 2.0 * sum;
         }
     }
@@ -772,11 +784,10 @@ pub(crate) fn expand_horizontal_pass(
     out_w: usize,
     out_h: usize,
     dst: &mut [f32],
-    z_h_scratch: &mut Vec<f32>,
 ) {
     debug_assert_eq!(dst.len(), out_w * out_h);
     archmage::incant!(
-        expand_h_inner(vscratch, sw, out_w, out_h, dst, z_h_scratch),
+        expand_h_inner(vscratch, sw, out_w, out_h, dst),
         [v4x, v4, v3, neon, wasm128, scalar]
     );
 }
@@ -1238,12 +1249,16 @@ pub(crate) fn gaussian_blur_sigma3_simd(
 ) {
     debug_assert_eq!(src.len(), w * h);
     let n = w * h;
-    h_pass.clear();
-    h_pass.resize(n, 0.0);
-    dst.clear();
-    dst.resize(n, 0.0);
-    pu_blur_horizontal_pass(src, w, h, h_pass.as_mut_slice());
-    pu_blur_vertical_pass(h_pass.as_slice(), w, h, dst.as_mut_slice());
+    // Grow-only: h_pass/dst are shared scratch — a truncate+regrow
+    // would memset every call, and both passes overwrite fully anyway.
+    if h_pass.len() < n {
+        h_pass.resize(n, 0.0);
+    }
+    if dst.len() < n {
+        dst.resize(n, 0.0);
+    }
+    pu_blur_horizontal_pass(src, w, h, &mut h_pass[..n]);
+    pu_blur_vertical_pass(&h_pass[..n], w, h, &mut dst[..n]);
 }
 
 // ============================================================================
@@ -1479,8 +1494,7 @@ mod tests {
             let vs = rng_seq(0xcafebabe ^ ((sw as u32) << 16) ^ (ow as u32), sw * oh);
             let want = expand_h_scalar_ref(&vs, sw, ow, oh);
             let mut got = alloc::vec![0.0_f32; ow * oh];
-            let mut z = Vec::new();
-            expand_horizontal_pass(&vs, sw, ow, oh, &mut got, &mut z);
+            expand_horizontal_pass(&vs, sw, ow, oh, &mut got);
             for i in 0..want.len() {
                 assert!(
                     (want[i] - got[i]).abs() < 1e-5,

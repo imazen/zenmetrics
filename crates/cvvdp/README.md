@@ -69,8 +69,9 @@ A 1-frame clip routes through the still path, bit-identical to
 `Cvvdp::score`. See `docs/VIDEO.md` for the port
 design, measured parity, and benchmarks — including the
 fast-ssim2-per-frame comparison (wall, user+sys CPU, peak RSS, 1t vs
-8t; ~325 ms/frame at 1080p/8t, ~1.3 GB peak RSS — the streaming bound
-is the temporal-filter window, not a small footprint).
+8t; ~273 ms/frame at 1080p/8t — at parity with ssim2 per-frame —
+~1.3 GB peak RSS; the streaming bound is the temporal-filter window,
+not a small footprint).
 
 ## Scope
 

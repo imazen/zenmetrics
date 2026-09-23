@@ -136,15 +136,12 @@ pub(crate) fn compute_sensitivities_into(
     out: &mut Vec<f32>,
 ) {
     let n = log_l_bkg.len();
-    // Grow without zero-fill so the writes below land on resident
-    // pages without touching every byte first.
-    out.clear();
-    out.reserve(n);
-    // SAFETY-equivalent in safe Rust: we resize to n then overwrite
-    // every element below. The intermediate zero-fill is the only
-    // cost; that's a memset and stays inside one cache line per 64 B,
-    // negligible vs the per-pixel compute.
-    out.resize(n, 0.0);
+    // Grow-only: `out` is shared scratch across bands, so `resize`
+    // would memset on every regrow — every element of `[..n]` is
+    // overwritten by the tile-fused pass below regardless.
+    if out.len() < n {
+        out.resize(n, 0.0);
+    }
 
     let correction_times_ln_10 = LOG_SENSITIVITY_CORRECTION * core::f32::consts::LN_10;
     let ln_10 = core::f32::consts::LN_10;

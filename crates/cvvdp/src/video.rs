@@ -59,7 +59,9 @@ use crate::kernels::temporal::{temporal_filter_len, temporal_filters};
 use crate::masking::mult_mutual_band_4ch_into;
 use crate::params::DisplayGeometry;
 use crate::pyramid::{WeberPyramid, WeberPyramidCache, weber_contrast_pyr_into};
-use crate::simd_math::{vabs_diff_mul_into, vaxpy_into, vlp_norm_mean_p2, vmul2_scale2_into};
+use crate::simd_math::{
+    vabs_diff_mul_into, vaxpy_into, vlp_norm_mean_p2, vmul2_scale2_into, vscale_into,
+};
 use crate::{CvvdpParams, Error, Result};
 
 /// One side's DKL planes for one frame: `[A, RG, VY]`.
@@ -279,6 +281,10 @@ pub struct VideoScorer {
     /// defers the first `fl−1` outputs until their lookahead frames
     /// have been pushed; replicate emits on every push.
     next_emit: usize,
+    /// Evicted ring slots' plane buffers, kept for reuse by the next
+    /// `push_frame` — avoids a fresh 3-plane alloc + zero-fill per
+    /// frame (the planes are `w*h` f32, the same size every frame).
+    spare_planes: Vec<FramePlanes>,
     /// Frame rate the clip is scored at (kept for `VideoStats`).
     fps: f32,
     /// Reusable per-frame scratch (filtered planes, pyramid caches,
@@ -387,6 +393,7 @@ impl VideoScorer {
             layout,
             padding,
             next_emit: 0,
+            spare_planes: Vec::new(),
             fps: frames_per_second,
             scratch: VideoScratch::new(w, h, n_levels),
         })
@@ -418,8 +425,8 @@ impl VideoScorer {
             self.first_frame = Some((ref_srgb.to_vec(), dist_srgb.to_vec()));
         }
 
-        let mut t: FramePlanes = [Vec::new(), Vec::new(), Vec::new()];
-        let mut r: FramePlanes = [Vec::new(), Vec::new(), Vec::new()];
+        let mut t = self.spare_planes.pop().unwrap_or_default();
+        let mut r = self.spare_planes.pop().unwrap_or_default();
         let display = self.params.display;
         let (w, h) = (self.width, self.height);
         let [r0, r1, r2] = &mut r;
@@ -438,8 +445,12 @@ impl VideoScorer {
         self.win_t.push_back(t);
         self.win_r.push_back(r);
         if self.win_t.len() > fl {
-            self.win_t.pop_front();
-            self.win_r.pop_front();
+            if let Some(old) = self.win_t.pop_front() {
+                self.spare_planes.push(old);
+            }
+            if let Some(old) = self.win_r.pop_front() {
+                self.spare_planes.push(old);
+            }
         }
 
         self.n_pushed += 1;
@@ -613,11 +624,11 @@ impl VideoScorer {
         // Tap-major loop in window-slot order k = 0..fl (oldest →
         // newest) — each output element sees the identical sequence
         // of adds as the reference scalar loop; `vaxpy_into` keeps the
-        // non-fused mul+add order per element.
-        for c in 0..4 {
-            sc.filt_t[c].fill(0.0);
-            sc.filt_r[c].fill(0.0);
-        }
+        // non-fused mul+add order per element. The first tap is an
+        // overwrite (`vscale_into`) instead of a `fill(0)` + add —
+        // identical result (`0 + a·b == a·b`, only a −0/+0 sign flip
+        // which is numerically identical downstream), and it removes
+        // the 8 full-plane memsets that used to precede the loop.
         for k in 0..fl {
             // Frame index at window slot k. s<0 resolves per
             // `temp_padding`: replicate → frame 0 (always win[0] when
@@ -636,8 +647,13 @@ impl VideoScorer {
             for c in 0..4 {
                 let src_c = if c == 3 { 0 } else { c };
                 let tap = self.taps[c][fl - 1 - k];
-                vaxpy_into(&mut sc.filt_t[c], &self.win_t[widx][src_c], tap);
-                vaxpy_into(&mut sc.filt_r[c], &self.win_r[widx][src_c], tap);
+                if k == 0 {
+                    vscale_into(&mut sc.filt_t[c], &self.win_t[widx][src_c], tap);
+                    vscale_into(&mut sc.filt_r[c], &self.win_r[widx][src_c], tap);
+                } else {
+                    vaxpy_into(&mut sc.filt_t[c], &self.win_t[widx][src_c], tap);
+                    vaxpy_into(&mut sc.filt_r[c], &self.win_r[widx][src_c], tap);
+                }
             }
         }
 
@@ -733,12 +749,14 @@ impl VideoScorer {
                 for c in 0..4 {
                     let t_data = &sc.pyr_t[c].bands[k].data;
                     let r_data = &sc.pyr_r[c].bands[k].data;
-                    let s = &sc.s_map[c];
+                    let s = &sc.s_map[c][..n_px_b];
                     let d = &mut sc.d[c];
-                    d.clear();
-                    d.resize(n_px_b, 0.0);
-                    vabs_diff_mul_into(d, t_data, r_data, s);
-                    q_band[c] = vlp_norm_mean_p2(d);
+                    // Grow-only: shared scratch, fully overwritten.
+                    if d.len() < n_px_b {
+                        d.resize(n_px_b, 0.0);
+                    }
+                    vabs_diff_mul_into(&mut d[..n_px_b], t_data, r_data, s);
+                    q_band[c] = vlp_norm_mean_p2(&d[..n_px_b]);
                 }
                 q_frame.push(q_band);
             } else {
@@ -746,17 +764,19 @@ impl VideoScorer {
                     let gain = CH_GAIN_4[c];
                     let t_data = &sc.pyr_t[c].bands[k].data;
                     let r_data = &sc.pyr_r[c].bands[k].data;
-                    let s = &sc.s_map[c];
+                    let s = &sc.s_map[c][..n_px_b];
                     let tp = &mut sc.t_p[c];
                     let rp = &mut sc.r_p[c];
-                    tp.clear();
-                    tp.resize(n_px_b, 0.0);
-                    rp.clear();
-                    rp.resize(n_px_b, 0.0);
+                    if tp.len() < n_px_b {
+                        tp.resize(n_px_b, 0.0);
+                    }
+                    if rp.len() < n_px_b {
+                        rp.resize(n_px_b, 0.0);
+                    }
                     // `vmul2_scale2_into` computes ((x·a)·y)·b — the
                     // scalar `band_mul * t * s * gain` op order.
-                    vmul2_scale2_into(tp, t_data, s, band_mul, gain);
-                    vmul2_scale2_into(rp, r_data, s, band_mul, gain);
+                    vmul2_scale2_into(&mut tp[..n_px_b], t_data, s, band_mul, gain);
+                    vmul2_scale2_into(&mut rp[..n_px_b], r_data, s, band_mul, gain);
                 }
                 mult_mutual_band_4ch_into(
                     &sc.t_p,
@@ -770,7 +790,7 @@ impl VideoScorer {
                 );
                 let mut q_band = [0.0_f32; 4];
                 for c in 0..4 {
-                    q_band[c] = vlp_norm_mean_p2(&sc.d[c]);
+                    q_band[c] = vlp_norm_mean_p2(&sc.d[c][..n_px_b]);
                 }
                 q_frame.push(q_band);
             }

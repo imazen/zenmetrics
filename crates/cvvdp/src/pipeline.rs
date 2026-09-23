@@ -431,10 +431,6 @@ impl Cvvdp {
                     .scratch
                     .vscratch
                     .shrink_to_fit();
-                self.scratch.weber_cache_ref[c].scratch.z_v.clear();
-                self.scratch.weber_cache_ref[c].scratch.z_v.shrink_to_fit();
-                self.scratch.weber_cache_ref[c].scratch.z_h.clear();
-                self.scratch.weber_cache_ref[c].scratch.z_h.shrink_to_fit();
             }
 
             // 6. Build deep weber bands for ref (needed for fold_bands_deep_only).
@@ -931,19 +927,11 @@ impl Cvvdp {
                 .scratch
                 .vscratch
                 .shrink_to_fit();
-            self.scratch.weber_cache_ref[c].scratch.z_v.clear();
-            self.scratch.weber_cache_ref[c].scratch.z_v.shrink_to_fit();
-            self.scratch.weber_cache_ref[c].scratch.z_h.clear();
-            self.scratch.weber_cache_ref[c].scratch.z_h.shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
             self.scratch.weber_cache_dist[c]
                 .scratch
                 .vscratch
                 .shrink_to_fit();
-            self.scratch.weber_cache_dist[c].scratch.z_v.clear();
-            self.scratch.weber_cache_dist[c].scratch.z_v.shrink_to_fit();
-            self.scratch.weber_cache_dist[c].scratch.z_h.clear();
-            self.scratch.weber_cache_dist[c].scratch.z_h.shrink_to_fit();
         }
 
         // Step 1c: release the unused gauss_l buffers from cache_*[1..3].
@@ -1223,10 +1211,6 @@ impl Cvvdp {
                 .scratch
                 .vscratch
                 .shrink_to_fit();
-            self.scratch.weber_cache_dist[c].scratch.z_v.clear();
-            self.scratch.weber_cache_dist[c].scratch.z_v.shrink_to_fit();
-            self.scratch.weber_cache_dist[c].scratch.z_h.clear();
-            self.scratch.weber_cache_dist[c].scratch.z_h.shrink_to_fit();
         }
         // Drop unused gauss_l buffers from cache_dist[1..3] and cache_dist[0]'s level 0.
         for c in 1..3 {

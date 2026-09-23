@@ -61,23 +61,16 @@ pub(crate) fn mult_mutual_band_into(
     let n = bw * bh;
     debug_assert_eq!(t_p_per_ch[0].len(), n);
 
-    d_a.clear();
+    // `resize` alone (no `clear()` first): a no-op once the buffer
+    // holds `n` — every element is overwritten by the kernels below.
     d_a.resize(n, 0.0);
-    d_rg.clear();
     d_rg.resize(n, 0.0);
-    d_vy.clear();
     d_vy.resize(n, 0.0);
-    m_mm_a.clear();
     m_mm_a.resize(n, 0.0);
-    m_mm_rg.clear();
     m_mm_rg.resize(n, 0.0);
-    m_mm_vy.clear();
     m_mm_vy.resize(n, 0.0);
-    term_a.clear();
     term_a.resize(n, 0.0);
-    term_rg.clear();
     term_rg.resize(n, 0.0);
-    term_vy.clear();
     term_vy.resize(n, 0.0);
 
     // Step 1: M_mm_raw = min(|T|, |R|).
@@ -239,20 +232,27 @@ pub(crate) fn mult_mutual_band_4ch_into(
     pu_scratch: &mut Vec<f32>,
 ) {
     let n = bw * bh;
-    debug_assert_eq!(t_p_per_ch[0].len(), n);
+    // Inputs are grow-only scratch — may carry a longer tail slice.
+    debug_assert!(t_p_per_ch[0].len() >= n);
 
     for c in 0..4 {
-        d[c].clear();
-        d[c].resize(n, 0.0);
-        m_mm[c].clear();
-        m_mm[c].resize(n, 0.0);
-        term[c].clear();
-        term[c].resize(n, 0.0);
+        // Grow-only: the shared Vecs keep their high-water length, so
+        // `resize` would memset on every regrow — all buffers are fully
+        // rewritten over `[..n]` each call anyway.
+        if d[c].len() < n {
+            d[c].resize(n, 0.0);
+        }
+        if m_mm[c].len() < n {
+            m_mm[c].resize(n, 0.0);
+        }
+        if term[c].len() < n {
+            term[c].resize(n, 0.0);
+        }
     }
 
     // Step 1: M_mm_raw = min(|T|, |R|).
     for c in 0..4 {
-        vmin_abs_into(&mut m_mm[c], &t_p_per_ch[c], &r_p_per_ch[c]);
+        vmin_abs_into(&mut m_mm[c][..n], &t_p_per_ch[c][..n], &r_p_per_ch[c][..n]);
     }
 
     // Step 2: phase_uncertainty per channel (σ=3 blur above
@@ -260,12 +260,12 @@ pub(crate) fn mult_mutual_band_4ch_into(
     let mask_c_lin: f32 = 10.0_f32.powf(MASK_C);
     if bw > PU_PADSIZE && bh > PU_PADSIZE {
         for c in 0..4 {
-            gaussian_blur_sigma3_simd(&m_mm[c], bw, bh, pu_scratch, &mut term[c]);
-            vscale_into(&mut m_mm[c], &term[c], mask_c_lin);
+            gaussian_blur_sigma3_simd(&m_mm[c][..n], bw, bh, pu_scratch, &mut term[c]);
+            vscale_into(&mut m_mm[c][..n], &term[c][..n], mask_c_lin);
         }
     } else {
         for c in 0..4 {
-            for v in m_mm[c].iter_mut() {
+            for v in m_mm[c][..n].iter_mut() {
                 *v *= mask_c_lin;
             }
         }
@@ -276,8 +276,8 @@ pub(crate) fn mult_mutual_band_4ch_into(
     for c in 0..4 {
         let q = MASK_Q_4[c];
         safe_pow_with_offset_into(
-            &m_mm[c],
-            term[c].as_mut_slice(),
+            &m_mm[c][..n],
+            &mut term[c][..n],
             SAFE_EPS,
             q,
             SAFE_EPS.powf(q),
@@ -288,25 +288,20 @@ pub(crate) fn mult_mutual_band_4ch_into(
     // pass 2 — pow into d_*; pass 3 — 4×4 cross-channel pool + clamp
     // (fused SIMD kernel, same op order as the scalar loop).
     for c in 0..4 {
-        vabs_diff_into(&mut m_mm[c], &t_p_per_ch[c], &r_p_per_ch[c]);
+        vabs_diff_into(&mut m_mm[c][..n], &t_p_per_ch[c][..n], &r_p_per_ch[c][..n]);
     }
     let p = MASK_P;
     let eps_p = SAFE_EPS.powf(p);
     for c in 0..4 {
-        safe_pow_with_offset_into(&m_mm[c], d[c].as_mut_slice(), SAFE_EPS, p, eps_p);
+        safe_pow_with_offset_into(&m_mm[c][..n], &mut d[c][..n], SAFE_EPS, p, eps_p);
     }
 
     let d_max_lin: f32 = 10.0_f32.powf(D_MAX);
     let [d0, d1, d2, d3] = d;
     let [t0, t1, t2, t3] = term;
     vxcm_pool_clamp_4ch_into(
-        &mut [
-            d0.as_mut_slice(),
-            d1.as_mut_slice(),
-            d2.as_mut_slice(),
-            d3.as_mut_slice(),
-        ],
-        &[t0.as_slice(), t1.as_slice(), t2.as_slice(), t3.as_slice()],
+        &mut [&mut d0[..n], &mut d1[..n], &mut d2[..n], &mut d3[..n]],
+        &[&t0[..n], &t1[..n], &t2[..n], &t3[..n]],
         &XCM_4X4,
         d_max_lin,
     );
