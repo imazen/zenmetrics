@@ -17,7 +17,9 @@
 
 use alloc::vec::Vec;
 
-use crate::kernels::masking::{D_MAX, MASK_C, MASK_P, MASK_Q, PU_PADSIZE, XCM_3X3};
+use crate::kernels::masking::{
+    D_MAX, MASK_C, MASK_P, MASK_Q, MASK_Q_4, PU_PADSIZE, XCM_3X3, XCM_4X4,
+};
 
 use crate::simd_math::safe_pow_with_offset_into;
 use crate::simd_pyramid::gaussian_blur_sigma3_simd;
@@ -212,10 +214,173 @@ pub(crate) fn mult_mutual_band_into(
     }
 }
 
+/// `mult_mutual_band_4ch` writing into caller-owned scratch — the
+/// 4-channel video variant (sustained A/RG/VY + transient A) of
+/// [`mult_mutual_band_into`]. Same structure, `MASK_Q_4` and the 4×4
+/// `XCM_4X4` matrix; identical math to
+/// [`crate::kernels::masking::mult_mutual_band_4ch`] up to SIMD
+/// reassociation noise (verified `matches_scalar_4ch_on_random`
+/// below and by the `video_parity` conformance gate).
+///
+/// - `d` — output buffers (resized to `bw*bh`).
+/// - `m_mm` — scratch for `min(|T|, |R|)` then blurred mask inputs.
+/// - `term` — scratch for `safe_pow(|M_mm|, q[ch])`.
+/// - `pu_scratch` — h-pass scratch for `gaussian_blur_sigma3_simd`.
+pub(crate) fn mult_mutual_band_4ch_into(
+    t_p_per_ch: &[Vec<f32>; 4],
+    r_p_per_ch: &[Vec<f32>; 4],
+    bw: usize,
+    bh: usize,
+    d: &mut [Vec<f32>; 4],
+    m_mm: &mut [Vec<f32>; 4],
+    term: &mut [Vec<f32>; 4],
+    pu_scratch: &mut Vec<f32>,
+) {
+    let n = bw * bh;
+    debug_assert_eq!(t_p_per_ch[0].len(), n);
+
+    for c in 0..4 {
+        d[c].clear();
+        d[c].resize(n, 0.0);
+        m_mm[c].clear();
+        m_mm[c].resize(n, 0.0);
+        term[c].clear();
+        term[c].resize(n, 0.0);
+    }
+
+    // Step 1: M_mm_raw = min(|T|, |R|).
+    for c in 0..4 {
+        for i in 0..n {
+            m_mm[c][i] = t_p_per_ch[c][i].abs().min(r_p_per_ch[c][i].abs());
+        }
+    }
+
+    // Step 2: phase_uncertainty per channel (σ=3 blur above
+    // PU_PADSIZE, then × mask_c_lin) — same as the 3-channel path.
+    let mask_c_lin: f32 = 10.0_f32.powf(MASK_C);
+    if bw > PU_PADSIZE && bh > PU_PADSIZE {
+        for c in 0..4 {
+            gaussian_blur_sigma3_simd(&m_mm[c], bw, bh, pu_scratch, &mut term[c]);
+            for i in 0..n {
+                m_mm[c][i] = term[c][i] * mask_c_lin;
+            }
+        }
+    } else {
+        for c in 0..4 {
+            for v in m_mm[c].iter_mut() {
+                *v *= mask_c_lin;
+            }
+        }
+    }
+
+    // Step 3: term[ch] = safe_pow(|M_mm[ch]|, q[ch]) via the SIMD pow
+    // kernel (inputs non-negative after Step 2).
+    for c in 0..4 {
+        let q = MASK_Q_4[c];
+        safe_pow_with_offset_into(
+            &m_mm[c],
+            term[c].as_mut_slice(),
+            SAFE_EPS,
+            q,
+            SAFE_EPS.powf(q),
+        );
+    }
+
+    // Step 4: pass 1 — diff[c] = |T−R| into the now-free m_mm buffers;
+    // pass 2 — pow into d_*; pass 3 — 4×4 cross-channel pool + clamp.
+    for c in 0..4 {
+        for i in 0..n {
+            m_mm[c][i] = (t_p_per_ch[c][i] - r_p_per_ch[c][i]).abs();
+        }
+    }
+    let p = MASK_P;
+    let eps_p = SAFE_EPS.powf(p);
+    for c in 0..4 {
+        safe_pow_with_offset_into(&m_mm[c], d[c].as_mut_slice(), SAFE_EPS, p, eps_p);
+    }
+
+    let d_max_lin: f32 = 10.0_f32.powf(D_MAX);
+    for i in 0..n {
+        let t = [term[0][i], term[1][i], term[2][i], term[3][i]];
+        for cc in 0..4 {
+            let m = XCM_4X4[0][cc] * t[0]
+                + XCM_4X4[1][cc] * t[1]
+                + XCM_4X4[2][cc] * t[2]
+                + XCM_4X4[3][cc] * t[3];
+            let du = d[cc][i] / (1.0 + m);
+            d[cc][i] = d_max_lin * du / (d_max_lin + du);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kernels::masking::mult_mutual_band;
+    use crate::kernels::masking::{mult_mutual_band, mult_mutual_band_4ch};
+
+    #[test]
+    fn matches_scalar_4ch_on_random() {
+        // Sweep several sizes spanning the PU_PADSIZE branch boundary.
+        let cases: &[(usize, usize)] =
+            &[(4, 4), (6, 6), (7, 7), (8, 8), (12, 16), (32, 32), (64, 64)];
+        for &(bw, bh) in cases {
+            let n = bw * bh;
+            let mut s = 0xabcdef01_u32;
+            let mut prng = || {
+                s = s.wrapping_mul(1664525).wrapping_add(1013904223);
+                (s >> 16) as f32 / 65536.0 - 0.5
+            };
+            let mut t: [Vec<f32>; 4] = [
+                (0..n).map(|_| prng()).collect(),
+                (0..n).map(|_| prng()).collect(),
+                (0..n).map(|_| prng()).collect(),
+                (0..n).map(|_| prng()).collect(),
+            ];
+            let mut r: [Vec<f32>; 4] = [
+                (0..n).map(|_| prng()).collect(),
+                (0..n).map(|_| prng()).collect(),
+                (0..n).map(|_| prng()).collect(),
+                (0..n).map(|_| prng()).collect(),
+            ];
+            // Typical CSF×CH_GAIN factors (~10..100).
+            for c in 0..4 {
+                for v in &mut t[c] {
+                    *v *= 20.0 + 10.0 * c as f32;
+                }
+                for v in &mut r[c] {
+                    *v *= 20.0 + 10.0 * c as f32;
+                }
+            }
+            let want = mult_mutual_band_4ch(&t, &r, bw, bh);
+
+            let mut d: [Vec<f32>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+            let mut m_mm: [Vec<f32>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+            let mut term: [Vec<f32>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+            let mut pu_scratch = Vec::new();
+            mult_mutual_band_4ch_into(
+                &t,
+                &r,
+                bw,
+                bh,
+                &mut d,
+                &mut m_mm,
+                &mut term,
+                &mut pu_scratch,
+            );
+            for c in 0..4 {
+                for i in 0..n {
+                    let delta = (d[c][i] - want[c][i]).abs();
+                    // f32 noise dominated by the safe_pow arithmetic
+                    // reassociation — 1e-3 relative is comfortable.
+                    let tol = 1e-3_f32 * want[c][i].abs().max(1e-6);
+                    assert!(
+                        delta < tol,
+                        "case {bw}x{bh} ch {c} idx {i}: |Δ|={delta} tol={tol}"
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn matches_upstream_on_random() {

@@ -48,18 +48,73 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::color::srgb_to_dkl_planar;
+use crate::csf::compute_sensitivities_into;
 use crate::kernels::csf::{
-    CSF_BASEBAND_RHO, CsfChannel, sensitivity_corrected_scalar, sensitivity_corrected_scalar_o5,
+    CSF_BASEBAND_RHO, CsfChannel, precompute_logs_row, precompute_logs_row_o5,
 };
-use crate::kernels::masking::{CH_GAIN_4, mult_mutual_band_4ch};
+use crate::kernels::masking::CH_GAIN_4;
 use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_video_4ch, lp_norm_mean};
-use crate::kernels::pyramid::{WeberPyramid, band_frequencies, weber_contrast_pyr_dec_scalar};
+use crate::kernels::pyramid::band_frequencies;
 use crate::kernels::temporal::{temporal_filter_len, temporal_filters};
+use crate::masking::mult_mutual_band_4ch_into;
 use crate::params::DisplayGeometry;
+use crate::pyramid::{WeberPyramid, WeberPyramidCache, weber_contrast_pyr_into};
 use crate::{CvvdpParams, Error, Result};
 
 /// One side's DKL planes for one frame: `[A, RG, VY]`.
 type FramePlanes = [Vec<f32>; 3];
+
+/// Per-frame reusable scratch — allocated once in
+/// [`VideoScorer::new`] and grown lazily to the largest band, so
+/// `push_frame` is allocation-free in steady state. Mirrors the
+/// still path's `Scratch` approach.
+struct VideoScratch {
+    /// Filtered test/ref planes `[sust-A, RG, VY, trans-A]` for the
+    /// frame currently being emitted.
+    filt_t: [Vec<f32>; 4],
+    filt_r: [Vec<f32>; 4],
+    /// Pyramid caches (gauss planes + filter scratch) per channel
+    /// per side — reused across frames.
+    cache_t: [WeberPyramidCache; 4],
+    cache_r: [WeberPyramidCache; 4],
+    /// Output pyramids per channel per side.
+    pyr_t: [WeberPyramid; 4],
+    pyr_r: [WeberPyramid; 4],
+    /// CSF-weighted contrasts for the current band.
+    t_p: [Vec<f32>; 4],
+    r_p: [Vec<f32>; 4],
+    /// Per-pixel sensitivity maps for the current band.
+    s_map: [Vec<f32>; 4],
+    /// Masked diffs / baseband diffs for the current band.
+    d: [Vec<f32>; 4],
+    /// Masking intermediates (`min(|T|,|R|)` → blurred → pow input,
+    /// then reused for `|T−R|`).
+    m_mm: [Vec<f32>; 4],
+    /// Masking intermediates (`safe_pow(|M_mm|, q)`).
+    term: [Vec<f32>; 4],
+    /// PU-blur horizontal-pass scratch.
+    pu_scratch: Vec<f32>,
+}
+
+impl VideoScratch {
+    fn new(w: usize, h: usize, n_levels: usize) -> Self {
+        Self {
+            filt_t: core::array::from_fn(|_| vec![0.0; w * h]),
+            filt_r: core::array::from_fn(|_| vec![0.0; w * h]),
+            cache_t: core::array::from_fn(|_| WeberPyramidCache::with_capacity(w, h, n_levels)),
+            cache_r: core::array::from_fn(|_| WeberPyramidCache::with_capacity(w, h, n_levels)),
+            pyr_t: core::array::from_fn(|_| WeberPyramid::with_capacity(w, h, n_levels)),
+            pyr_r: core::array::from_fn(|_| WeberPyramid::with_capacity(w, h, n_levels)),
+            t_p: core::array::from_fn(|_| Vec::new()),
+            r_p: core::array::from_fn(|_| Vec::new()),
+            s_map: core::array::from_fn(|_| Vec::new()),
+            d: core::array::from_fn(|_| Vec::new()),
+            m_mm: core::array::from_fn(|_| Vec::new()),
+            term: core::array::from_fn(|_| Vec::new()),
+            pu_scratch: Vec::new(),
+        }
+    }
+}
 
 /// Streaming cvvdp video scorer (sRGB-8 frames in, JOD out).
 ///
@@ -116,6 +171,10 @@ pub struct VideoScorer {
     /// Per-band spatial frequencies (cy/deg); last entry's band uses
     /// `CSF_BASEBAND_RHO` instead.
     freqs: Vec<f32>,
+    /// Reusable per-frame scratch (filtered planes, pyramid caches,
+    /// band buffers) — allocated in `new`, so `push_frame` does no
+    /// large allocations in steady state.
+    scratch: VideoScratch,
 }
 
 impl VideoScorer {
@@ -145,6 +204,7 @@ impl VideoScorer {
         let h = height as usize;
         let ppd = geometry.pixels_per_degree();
         let freqs = band_frequencies(ppd, w, h);
+        let n_levels = freqs.len();
         Ok(Self {
             width: w,
             height: h,
@@ -157,6 +217,7 @@ impl VideoScorer {
             first_frame: None,
             q_per_ch: Vec::new(),
             freqs,
+            scratch: VideoScratch::new(w, h, n_levels),
         })
     }
 
@@ -277,57 +338,103 @@ impl VideoScorer {
     fn emit_output_frame(&mut self, t: usize) {
         let fl = self.taps[0].len();
         let w0 = self.win_base();
-        let n_px = self.width * self.height;
+        let (w, h) = (self.width, self.height);
+        let n_levels = self.freqs.len();
+        let sc = &mut self.scratch;
 
         // FIR per channel: out[c] = Σ_j taps[c][j] · in[src_c][t−j].
-        // Accumulate in window-slot order k = 0..fl (oldest → newest),
-        // which is upstream's `sum(dim=-3)` order with flipped taps.
-        let mut filt_t: [Vec<f32>; 4] = [
-            vec![0.0; n_px],
-            vec![0.0; n_px],
-            vec![0.0; n_px],
-            vec![0.0; n_px],
-        ];
-        let mut filt_r = filt_t.clone();
+        // Tap-major loop in window-slot order k = 0..fl (oldest →
+        // newest) — each output element sees the identical sequence
+        // of adds as the reference scalar loop, so results are
+        // bit-identical; the `zip` form vectorises cleanly.
         for c in 0..4 {
-            let src_c = if c == 3 { 0 } else { c };
-            for k in 0..fl {
+            sc.filt_t[c].fill(0.0);
+            sc.filt_r[c].fill(0.0);
+        }
+        for k in 0..fl {
+            // Frame index at window slot k; s<0 → replicate frame 0
+            // (which is win[0] whenever s≤0, since the window only
+            // starts dropping frames once n_pushed > fl).
+            let s = t as isize - (fl as isize - 1) + k as isize;
+            let widx = (s.max(0) as usize) - w0;
+            for c in 0..4 {
+                let src_c = if c == 3 { 0 } else { c };
                 let tap = self.taps[c][fl - 1 - k];
-                // Frame index at window slot k; s<0 → replicate frame 0
-                // (which is win[0] whenever s≤0, since the window only
-                // starts dropping frames once n_pushed > fl).
-                let s = t as isize - (fl as isize - 1) + k as isize;
-                let widx = (s.max(0) as usize) - w0;
                 let wt = &self.win_t[widx][src_c];
                 let wr = &self.win_r[widx][src_c];
-                for px in 0..n_px {
-                    filt_t[c][px] += tap * wt[px];
-                    filt_r[c][px] += tap * wr[px];
+                for (a, &v) in sc.filt_t[c].iter_mut().zip(wt.iter()) {
+                    *a += tap * v;
+                }
+                for (a, &v) in sc.filt_r[c].iter_mut().zip(wr.iter()) {
+                    *a += tap * v;
                 }
             }
         }
 
-        // Per-side weber pyramids. L_bkg is always the side's own
-        // sustained-A filtered plane (upstream divides the interleaved
-        // tensor's even channels by L_bkg[0] = test sustained, odd by
-        // L_bkg[1] = ref sustained).
-        let n_levels = self.freqs.len();
-        let t_pyr: [WeberPyramid; 4] = core::array::from_fn(|c| {
-            weber_contrast_pyr_dec_scalar(&filt_t[c], &filt_t[0], self.width, self.height, n_levels)
-        });
-        let r_pyr: [WeberPyramid; 4] = core::array::from_fn(|c| {
-            weber_contrast_pyr_dec_scalar(&filt_r[c], &filt_r[0], self.width, self.height, n_levels)
-        });
+        // Per-side weber pyramids via the SIMD/scratch path
+        // (`weber_contrast_pyr_into` — same math as
+        // `weber_contrast_pyr_dec_scalar` to ~1e-5 FMA-order noise).
+        // L_bkg is always the side's own sustained-A filtered plane
+        // (upstream divides the interleaved tensor's even channels by
+        // L_bkg[0] = test sustained, odd by L_bkg[1] = ref sustained).
+        // The 8 builds (4 channels × 2 sides) are fully independent —
+        // each owns a disjoint cache+output slot — so under `parallel`
+        // they run on rayon's pool.
+        #[cfg(feature = "parallel")]
+        {
+            rayon::scope(|s| {
+                for (c, ((cache_t, pyr_t), (cache_r, pyr_r))) in sc
+                    .cache_t
+                    .iter_mut()
+                    .zip(sc.pyr_t.iter_mut())
+                    .zip(sc.cache_r.iter_mut().zip(sc.pyr_r.iter_mut()))
+                    .enumerate()
+                {
+                    let ft = &sc.filt_t[c];
+                    let f0t = &sc.filt_t[0];
+                    let fr = &sc.filt_r[c];
+                    let f0r = &sc.filt_r[0];
+                    s.spawn(move |_| {
+                        weber_contrast_pyr_into(ft, f0t, w, h, n_levels, cache_t, pyr_t);
+                    });
+                    s.spawn(move |_| {
+                        weber_contrast_pyr_into(fr, f0r, w, h, n_levels, cache_r, pyr_r);
+                    });
+                }
+            });
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            for c in 0..4 {
+                weber_contrast_pyr_into(
+                    &sc.filt_t[c],
+                    &sc.filt_t[0],
+                    w,
+                    h,
+                    n_levels,
+                    &mut sc.cache_t[c],
+                    &mut sc.pyr_t[c],
+                );
+                weber_contrast_pyr_into(
+                    &sc.filt_r[c],
+                    &sc.filt_r[0],
+                    w,
+                    h,
+                    n_levels,
+                    &mut sc.cache_r[c],
+                    &mut sc.pyr_r[c],
+                );
+            }
+        }
 
-        let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
         let mut q_frame: Vec<[f32; 4]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
             let is_first = k == 0;
             let is_baseband = k == n_levels - 1;
             let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
 
-            let bw = t_pyr[0].bands[k].w;
-            let bh = t_pyr[0].bands[k].h;
+            let bw = sc.pyr_t[0].bands[k].w;
+            let bh = sc.pyr_t[0].bands[k].h;
             let n_px_b = bw * bh;
             let rho = if is_baseband {
                 CSF_BASEBAND_RHO
@@ -336,58 +443,66 @@ impl VideoScorer {
             };
             // Sensitivity is always evaluated at the REFERENCE
             // sustained-A background (`logL_bkg[...,1:2]` upstream).
-            let log_l_bkg_band = &r_pyr[0].log_l_bkg[k];
+            // Four per-pixel maps: o0_c1/c2/c3 sustained + o5_c1
+            // transient — vectorised `compute_sensitivities_into`
+            // (exp of LUT-interp + folded correction).
+            let rows = [
+                precompute_logs_row(rho, CsfChannel::A),
+                precompute_logs_row(rho, CsfChannel::Rg),
+                precompute_logs_row(rho, CsfChannel::Vy),
+                precompute_logs_row_o5(rho),
+            ];
+            for c in 0..4 {
+                compute_sensitivities_into(&sc.pyr_r[0].log_l_bkg[k], &rows[c], &mut sc.s_map[c]);
+            }
 
             if is_baseband {
                 // D = |T_f − R_f| · S — direct absolute difference on
                 // the contrast bands (no masking, no ch_gain).
                 let mut q_band = [0.0_f32; 4];
-                for (c, q) in q_band.iter_mut().enumerate() {
-                    let t_data = &t_pyr[c].bands[k].data;
-                    let r_data = &r_pyr[c].bands[k].data;
-                    let mut d = Vec::with_capacity(n_px_b);
+                for c in 0..4 {
+                    let t_data = &sc.pyr_t[c].bands[k].data;
+                    let r_data = &sc.pyr_r[c].bands[k].data;
+                    let s = &sc.s_map[c];
+                    let d = &mut sc.d[c];
+                    d.clear();
+                    d.reserve(n_px_b);
                     for i in 0..n_px_b {
-                        let log_l = log_l_bkg_band[i];
-                        let s = if c < 3 {
-                            sensitivity_corrected_scalar(rho, log_l, channels[c])
-                        } else {
-                            sensitivity_corrected_scalar_o5(rho, log_l)
-                        };
-                        d.push((t_data[i] - r_data[i]).abs() * s);
+                        d.push((t_data[i] - r_data[i]).abs() * s[i]);
                     }
-                    *q = lp_norm_mean(&d, BETA_SPATIAL);
+                    q_band[c] = lp_norm_mean(d, BETA_SPATIAL);
                 }
                 q_frame.push(q_band);
             } else {
-                let mut t_p: [Vec<f32>; 4] = [
-                    vec![0.0; n_px_b],
-                    vec![0.0; n_px_b],
-                    vec![0.0; n_px_b],
-                    vec![0.0; n_px_b],
-                ];
-                let mut r_p: [Vec<f32>; 4] = [
-                    vec![0.0; n_px_b],
-                    vec![0.0; n_px_b],
-                    vec![0.0; n_px_b],
-                    vec![0.0; n_px_b],
-                ];
-                for i in 0..n_px_b {
-                    let log_l = log_l_bkg_band[i];
-                    let s = [
-                        sensitivity_corrected_scalar(rho, log_l, channels[0]),
-                        sensitivity_corrected_scalar(rho, log_l, channels[1]),
-                        sensitivity_corrected_scalar(rho, log_l, channels[2]),
-                        sensitivity_corrected_scalar_o5(rho, log_l),
-                    ];
-                    for c in 0..4 {
-                        t_p[c][i] = band_mul * t_pyr[c].bands[k].data[i] * s[c] * CH_GAIN_4[c];
-                        r_p[c][i] = band_mul * r_pyr[c].bands[k].data[i] * s[c] * CH_GAIN_4[c];
+                for c in 0..4 {
+                    let gain = CH_GAIN_4[c];
+                    let t_data = &sc.pyr_t[c].bands[k].data;
+                    let r_data = &sc.pyr_r[c].bands[k].data;
+                    let s = &sc.s_map[c];
+                    let tp = &mut sc.t_p[c];
+                    let rp = &mut sc.r_p[c];
+                    tp.clear();
+                    tp.resize(n_px_b, 0.0);
+                    rp.clear();
+                    rp.resize(n_px_b, 0.0);
+                    for i in 0..n_px_b {
+                        tp[i] = band_mul * t_data[i] * s[i] * gain;
+                        rp[i] = band_mul * r_data[i] * s[i] * gain;
                     }
                 }
-                let d = mult_mutual_band_4ch(&t_p, &r_p, bw, bh);
+                mult_mutual_band_4ch_into(
+                    &sc.t_p,
+                    &sc.r_p,
+                    bw,
+                    bh,
+                    &mut sc.d,
+                    &mut sc.m_mm,
+                    &mut sc.term,
+                    &mut sc.pu_scratch,
+                );
                 let mut q_band = [0.0_f32; 4];
                 for c in 0..4 {
-                    q_band[c] = lp_norm_mean(&d[c], BETA_SPATIAL);
+                    q_band[c] = lp_norm_mean(&sc.d[c], BETA_SPATIAL);
                 }
                 q_frame.push(q_band);
             }
