@@ -13,6 +13,21 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- cvvdp: video scoring on the CPU path — `VideoScorer` (streaming
+  `push_frame`/`finish`, holds only the temporal-filter window) plus
+  `score_video` whole-clip convenience and `Cvvdp::video`. Ports
+  pycvvdp v0.5.7's video path: causal temporal FIRs
+  (`get_temporal_filters`, `replicate` padding), the transient
+  achromatic channel through the `o5_c1` CSF LUT, 4-channel
+  mult-mutual masking (4×4 `xcm_weights`, `baseband_weight[3]`), and
+  frame pooling (`beta_t = 2`, `t_int = 1.0`, no `image_int`).
+  `N_frames == 1` routes through the still path, bit-identical to
+  `Cvvdp::score`. Parity vs pycvvdp v0.5.7 on the conformance corpus:
+  max |Δ| = 2e-6 JOD over 44 cells (11 situations × 4 displays,
+  24/30/60 fps). Design + rounding policy in
+  `crates/cvvdp/docs/VIDEO.md`. `1dc4a6dd`, `3ffc5960`, `22c667d6`,
+  `c71f517e` (+ lint cleanup `81680624`).
+
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
   cICP, and route CPU CVVDP through its native HDR scorer. Refuse incompatible

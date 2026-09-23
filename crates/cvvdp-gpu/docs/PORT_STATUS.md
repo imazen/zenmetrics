@@ -73,21 +73,21 @@ v0.5.7's since 2026-09-23). The still-image constants are baked into
 
 ## Out of scope
 
-- **Video / temporal channels.** Not implemented in `cvvdp` or `cvvdp-gpu`;
-  every entry point takes one frame. Measured 2026-09-23 against pycvvdp
-  v0.5.7 (`cvvdp_metric.py`), a video port would need all of the following:
-  - temporal filtering (`get_temporal_filters(fps)`: FFT-designed sustained
-    and transient kernels from `sigma_tf` / `beta_tf`), with a sliding window
-    of `filter_len` frames and first-frame padding (`replicate`, the default
-    again in v0.5.7, or `symmetric`);
-  - the 4th, **transient achromatic** channel through the whole chain: CSF at
-    `omega = 5` (the `o5_c1` LUT, not vendored), `mask_q[3]`, the full 4×4
-    `xcm_weights`, `ch_gain` and `baseband_weight[3]`;
-  - pooling over frames (`beta_t = 2`, a normalised p-norm across time) and
-    `t_int = 1.0` in place of the still-image `image_int` correction;
-  - fps handling and block-of-frames memory management.
-  None of this changes the still-image path, which pycvvdp itself
-  special-cases (`is_image`).
+- **Video / temporal channels — ported in `cvvdp` (CPU) only.** As of
+  2026-09-23 the CPU crate ships `VideoScorer` / `score_video`
+  (`crates/cvvdp/src/video.rs`, design in `crates/cvvdp/docs/VIDEO.md`):
+  causal temporal filtering (`get_temporal_filters`, `replicate`
+  padding), the transient achromatic channel through `o5_c1` CSF, 4×4
+  `xcm_weights` masking and `baseband_weight[3]`, and frame pooling
+  (`beta_t = 2`, `t_int = 1.0`, no `image_int`). Bounded memory: only
+  the filter-length window of frames is held. `N_frames == 1` routes
+  through the still path, bit-identical to `Cvvdp::score`. Measured
+  parity vs pycvvdp v0.5.7: max |Δ| = 2e-6 JOD over 44 cells
+  (11 situations × 4 displays, 24/30/60 fps). Not yet ported to
+  `cvvdp-gpu`; `temp_padding = "symmetric"`/`"valid"` and the
+  `hp_trans`/`grad_trans` filter branches remain unported. The
+  still-image path is unchanged (`is_image` special case, as
+  upstream).
 - Foveation / gaze maps.
 
 (Removed 2026-09-23: "HDR display models — sRGB-std only". PQ / HLG /
