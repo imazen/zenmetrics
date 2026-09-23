@@ -61,8 +61,12 @@ let jod = v.finish()?;
 
 A whole-clip convenience `cvvdp::score_video(&ref_frames,
 &dist_frames, w, h, fps, params, geometry)` wraps the same
-push/finish loop. A 1-frame clip routes through the still path,
-bit-identical to `Cvvdp::score`. See `docs/VIDEO.md` for the port
+push/finish loop. `cvvdp::score_video_with_stats` additionally
+accepts a `FrameLayout` (`Interleaved`/`Planar`, the `dim_order`
+analog) and returns `VideoStats` — the `(Q_jod, stats)` pair
+pycvvdp's `predict` returns, including `loss()` = `10 − JOD`.
+A 1-frame clip routes through the still path, bit-identical to
+`Cvvdp::score`. See `docs/VIDEO.md` for the port
 design and measured parity.
 
 ## Scope
@@ -76,7 +80,7 @@ design and measured parity.
 - Matches pycvvdp v0.5.7 within `≤ 1e-3 JOD`: stills on synthetic
   fixtures 16²–512² (`tests/parity_against_host_scalar.rs`); video on
   44 cells (11 situations × 4 displays) at 24/30/60 fps
-  (`cvvdp-conformance::video_parity`, measured max |Δ| = 2e-6 JOD).
+  (`cvvdp-conformance::video_parity`, measured max |Δ| = 3e-6 JOD).
 
 ## Why a CPU port
 
