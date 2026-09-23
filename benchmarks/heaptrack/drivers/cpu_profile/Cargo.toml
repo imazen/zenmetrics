@@ -47,7 +47,7 @@ butteraugli  = { path = "../../../../../../butteraugli/butteraugli" }
 # GMSD (in-tree port of libgmsd). `parallel` = rayon bands, as the CLI and the
 # zensim speed arm run it; RAYON_NUM_THREADS sets the band concurrency, which
 # is what scales its scratch (per-band ring rows + gray scratch rows).
-gmsd         = { path = "../../../../crates/gmsd", default-features = false, features = ["std", "parallel"] }
+gmsd         = { path = "../../../../crates/gmsd", default-features = false, features = ["std", "parallel", "avx512"] }
 imgref       = "1"
 rgb          = "0.8"
 # Phase 9.Y: zero-copy reinterpret of interleaved sRGB-u8 byte buffers as

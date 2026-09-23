@@ -528,7 +528,7 @@ zenmetrics-api = { workspace = true, optional = true, default-features = false }
 # resolve the CLI's own `use cvvdp::…` — the missing edge that made
 # hdr+png/jxl builds uncompilable (2026-07-12).
 cvvdp = { workspace = true, optional = true }
-gmsd = { workspace = true, optional = true, features = ["std"] }
+gmsd = { workspace = true, optional = true, features = ["std", "avx512"] }
 cubecl = { workspace = true, optional = true }
 
 # Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the
