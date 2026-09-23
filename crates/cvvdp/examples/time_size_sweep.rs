@@ -50,9 +50,9 @@ fn make_image(w: u32, h: u32, class: &str, seed: u32) -> Vec<u8> {
             }
         }
         "photo" => {
-            for i in 0..n * 3 {
+            for v in out.iter_mut().take(n * 3) {
                 s = s.wrapping_mul(1664525).wrapping_add(1013904223);
-                out[i] = (s >> 16) as u8;
+                *v = (s >> 16) as u8;
             }
         }
         "screenshot" => {

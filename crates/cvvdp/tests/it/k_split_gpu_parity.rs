@@ -27,7 +27,7 @@ fn synth_pair(w: u32, h: u32, seed: u64) -> (Vec<u8>, Vec<u8>) {
         s_d ^= s_d >> 7;
         s_d ^= s_d << 17;
         let mixed = (r[i] as u16) * 230 + ((s_d as u8) as u16) * 25;
-        d[i] = ((mixed / 256) as u8).min(255);
+        d[i] = (mixed / 256) as u8;
     }
     (r, d)
 }

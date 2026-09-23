@@ -54,7 +54,7 @@ fn synth_pair(w: u32, h: u32, seed: u64) -> (Vec<u8>, Vec<u8>) {
         s_d ^= s_d >> 7;
         s_d ^= s_d << 17;
         let mixed = (r[i] as u16) * 230 + ((s_d as u8) as u16) * 25;
-        d[i] = ((mixed / 256) as u8).min(255);
+        d[i] = (mixed / 256) as u8;
     }
     (r, d)
 }
@@ -75,7 +75,7 @@ const SEEDS: [u64; 18] = [
     0x9999_8888_7777_6666,
     0xc0ff_eeee_cafe_d00d,
     0xfade_face_b00b_5005,
-    0x0badf00d_dead_beef,
+    0x0bad_f00d_dead_beef,
     0x6996_9669_6996_9669,
     0x3141_5926_5358_9793,
     0x2718_2818_2845_9045,
@@ -157,9 +157,10 @@ fn check_new_strip_cell(seed: u64, w: u32, h: u32, h_body: u32) {
     );
 }
 
-/// Parity for the strip-mode warm path: Cvvdp::new_strip + warm_reference
-/// + score_with_warm_ref_strip. Validates that the cached ref gauss +
-/// per-strip dispatch produces bit-identical JOD vs full-mode warm path.
+/// Parity for the strip-mode warm path (Cvvdp::new_strip +
+/// warm_reference + score_with_warm_ref_strip). Validates that the
+/// cached ref gauss + per-strip dispatch produces bit-identical JOD
+/// vs full-mode warm path.
 fn check_new_strip_warm_cell(seed: u64, w: u32, h: u32, h_body: u32) {
     let (r, d) = synth_pair(w, h, seed);
     let mut s_full = Cvvdp::new(w, h, CvvdpParams::default()).unwrap();

@@ -24,14 +24,14 @@ fn synth_pair(w: u32, h: u32, seed: u64) -> (Vec<u8>, Vec<u8>) {
         s_dis ^= s_dis >> 7;
         s_dis ^= s_dis << 17;
         let mixed = (ref_buf[i] as u16) * 230 + ((s_dis as u8) as u16) * 25;
-        dist_buf[i] = ((mixed / 256) as u8).min(255);
+        dist_buf[i] = (mixed / 256) as u8;
     }
     (ref_buf, dist_buf)
 }
 
 #[test]
 fn score_strip_matches_score_when_stubbed() {
-    let (ref_buf, dist_buf) = synth_pair(256, 256, 0xc0_ffee_12_34);
+    let (ref_buf, dist_buf) = synth_pair(256, 256, 0x00c0_ffee_1234);
     let mut s_full = Cvvdp::new(256, 256, CvvdpParams::default()).unwrap();
     let mut s_strip = Cvvdp::new(256, 256, CvvdpParams::default()).unwrap();
     let full = s_full.score(&ref_buf, &dist_buf).unwrap();
@@ -59,7 +59,7 @@ fn score_with_warm_ref_strip_matches_warm_when_stubbed() {
 
 #[test]
 fn warm_ref_strip_errors_without_warm() {
-    let (_, dist_buf) = synth_pair(256, 256, 0xc0_ffee_12_34);
+    let (_, dist_buf) = synth_pair(256, 256, 0x00c0_ffee_1234);
     let mut s = Cvvdp::new(256, 256, CvvdpParams::default()).unwrap();
     assert!(
         s.score_with_warm_ref_strip(&dist_buf, 128).is_err(),

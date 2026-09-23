@@ -302,7 +302,10 @@ pub fn all_video_situations() -> Vec<VideoSituation> {
     {
         let (w, h) = (64usize, 64usize);
         let base = base_frame(w, h);
-        for (fps, n, name) in [(24.0f32, 16usize, "vid_flicker_24"), (60.0, 24, "vid_flicker_60")] {
+        for (fps, n, name) in [
+            (24.0f32, 16usize, "vid_flicker_24"),
+            (60.0, 24, "vid_flicker_60"),
+        ] {
             let mut ref_frames = Vec::with_capacity(n);
             let mut dist_frames = Vec::with_capacity(n);
             for f in 0..n {
@@ -517,10 +520,7 @@ mod tests {
 
     #[test]
     fn video_situation_names_unique() {
-        let mut names: Vec<&str> = all_video_situations()
-            .iter()
-            .map(|s| s.name)
-            .collect();
+        let mut names: Vec<&str> = all_video_situations().iter().map(|s| s.name).collect();
         let n = names.len();
         names.sort_unstable();
         names.dedup();
