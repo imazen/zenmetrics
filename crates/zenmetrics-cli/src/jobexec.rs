@@ -144,6 +144,19 @@ fn zensim_regime_for_metric(
     }
 }
 
+/// Parse the display-selecting CVVDP metric string `cvvdp@<display>`
+/// (ScoreFile / Metric jobs, cvvdp-safesyn lane 2026-09-23). Returns
+/// `Some(display)` only for `cvvdp@<nonempty>`. Plain `cvvdp` is NOT matched —
+/// it keeps the umbrella `run_metric` path (the `standard_4k` default,
+/// byte-identical column and score), so every existing content-addressed job
+/// id and ledger row stays valid. The display rides inside the metric string —
+/// no `JobKind` schema change; the additive-compatibility precedent of
+/// `JobKind::ScoreFile::hdr`, one level down. Job identity still covers the
+/// display because `metrics` is hashed into the JobId.
+fn cvvdp_display_of(metric: &str) -> Option<&str> {
+    metric.strip_prefix("cvvdp@").filter(|d| !d.is_empty())
+}
+
 /// Score `(reference, distorted)` with `metric`, returning all `(column, value)` pairs run_metric
 /// yields (butteraugli yields max-norm + 3-norm; most yield one).
 fn score(
@@ -152,6 +165,32 @@ fn score(
     distorted: &Rgb8Image,
 ) -> Result<Vec<(&'static str, f64)>, Box<dyn Error>> {
     run_metric(metric_kind(metric)?, reference, distorted, GpuRuntime::Auto)
+}
+
+/// Emit the metric-row payload for one `cvvdp@<display>` arm: the scorer's
+/// display-suffixed column (`<cpu cvvdp column>_<display>`; `standard_4k`
+/// resolves to the same parameters as the default and keeps the plain column,
+/// so a `cvvdp@standard_4k` row is byte-identical to a `cvvdp` row). A
+/// non-default display can therefore never be joined or averaged into the
+/// default's ledger column.
+#[cfg(feature = "cpu-cvvdp")]
+fn cvvdp_display_payload(
+    metric: &str,
+    scorer: &mut crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer,
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Value {
+    match scorer.score(reference, distorted) {
+        Ok(v) => {
+            let col = scorer.column_name(MetricKind::Cvvdp.column_names()[0]);
+            serde_json::json!({
+                "metric": metric,
+                "score": v,
+                "scores": { col: v },
+            })
+        }
+        Err(e) => serde_json::json!({ "metric": metric, "error": e.to_string() }),
+    }
 }
 
 /// A CLASSIFIED executor failure — `class` is the snake_case `ErrorClass` string the fleet worker
@@ -931,6 +970,16 @@ fn all_error_guard(rows: &[String]) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Merge the `ZEN_JOBEXEC_PIXEL_HASH` pixel-binding stamps into a metric-row
+/// payload (`reference_pixels_sha256` / `distorted_pixels_sha256`, flat RGB8
+/// buffer sha256). No-op unless both hashes are present.
+fn add_pixel_hashes(m: &mut Map<String, Value>, ref_sha: Option<&str>, dist_sha: Option<&str>) {
+    if let (Some(r), Some(d)) = (ref_sha, dist_sha) {
+        m.insert("reference_pixels_sha256".into(), serde_json::json!(r));
+        m.insert("distorted_pixels_sha256".into(), serde_json::json!(d));
+    }
+}
+
 fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, Box<dyn Error>> {
     let cell = &job["cell"];
     let image_path = cell["image_path"]
@@ -952,6 +1001,40 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         .iter()
         .filter_map(Value::as_str)
         .collect();
+
+    // `cvvdp@<display>` arms (SDR only): resolve one cached CPU scorer per named
+    // display BEFORE the reference decode, so an unknown preset — a manifest
+    // defect, deterministic — fails the job outright instead of emitting a
+    // per-variant error-row storm. On an `hdr:true` job `cvvdp@` is refused
+    // outright too: the HDR arm scores in absolute-nit space where these
+    // u8/sRGB display presets do not apply (and a mixed job must not emit
+    // partial error rows that a harvest could read as scored cells).
+    #[cfg(feature = "cpu-cvvdp")]
+    let mut cvvdp_scorers: std::collections::HashMap<
+        &str,
+        crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer,
+    > = {
+        let mut map = std::collections::HashMap::new();
+        for m in &metrics {
+            let Some(display) = cvvdp_display_of(m) else {
+                continue;
+            };
+            if job["kind"]["hdr"].as_bool().unwrap_or(false) {
+                return Err(format!(
+                    "score_file hdr:true: `cvvdp@<display>` selection is SDR-only \
+                     (the HDR arm scores in nit space); got metric {m:?}"
+                )
+                .into());
+            }
+            if let std::collections::hash_map::Entry::Vacant(e) = map.entry(display) {
+                e.insert(
+                    crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::by_name(display)
+                        .map_err(|err| format!("score_file: {err}"))?,
+                );
+            }
+        }
+        map
+    };
 
     // HDR persisted-pairs corpora (JobKind::ScoreFile { hdr: true, .. }): decode the
     // reference and every variant to absolute nits and apply the per-metric HDR
@@ -986,6 +1069,19 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
     let src_path = resolve_source(image_path, corpus_prefix)?;
     let reference = decode_image_to_rgb8(&src_path)?;
 
+    // `ZEN_JOBEXEC_PIXEL_HASH=1`: stamp every emitted metric row with the
+    // sha256 of the exact decoded RGB8 buffers (flat `w*h*3` bytes) — the
+    // binding the SafeSyn lane's fleet smoke checks against the 2026-09-14
+    // verified cache's `{reference,distorted}_pixels_sha256` audit fields.
+    // Off by default: hashing is redundant work a normal run does not need.
+    // (Rows emitted inside `warmref_score_eligible` — CUDA builds only — do
+    // not carry the stamp; the fleet executor for this feature is CPU-only.)
+    let pixel_hash = std::env::var("ZEN_JOBEXEC_PIXEL_HASH")
+        .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+        .unwrap_or(false);
+    use sha2::Digest as _;
+    let ref_px_sha256 = pixel_hash.then(|| hex::encode(sha2::Sha256::digest(&reference.pixels)));
+
     // Precompute the zensim v1 reference pyramid ONCE for this source — every variant
     // in a ScoreFile chunk shares this reference, so the v1 block reuses the pyramid
     // instead of rebuilding it per variant (bit-identical; see
@@ -1015,6 +1111,19 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         }
         Ok(serde_json::to_string(&Value::Object(o))?)
     };
+
+    // Per-variant row builder: `mk_row` plus the pixel-binding stamps for the
+    // CURRENT decoded variant. Used at every per-variant emission site once the
+    // variant has decoded (fetch/decode error rows keep plain `mk_row` — there
+    // is no distorted buffer to stamp). No-op stamp when `pixel_hash` is off.
+    let mk_row_px =
+        |sha: &str, extra: Value, dist_sha: Option<&str>| -> Result<String, Box<dyn Error>> {
+            let mut extra = extra;
+            if let Value::Object(ref mut m) = extra {
+                add_pixel_hashes(m, ref_px_sha256.as_deref(), dist_sha);
+            }
+            mk_row(sha, extra)
+        };
 
     // PART 2 — warm-reference batch path (orchestrator-cuda builds). DEFAULT ON since 2026-08-08
     // (#46): the real-GPU A/B measured 1.60× wall with scores identical to 9.5e-7 and that number
@@ -1073,6 +1182,8 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
             // unconditional butter arm would emit every butteraugli row TWICE on this
             // default-ON path.
             for (sha, distorted) in &decoded {
+                let dist_px_sha256 =
+                    pixel_hash.then(|| hex::encode(sha2::Sha256::digest(&distorted.pixels)));
                 for metric in &metrics {
                     #[cfg(feature = "cpu-metrics")]
                     if is_zensim_feature_metric(metric) {
@@ -1114,13 +1225,46 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                                 fo.insert("encode_sha".into(), serde_json::json!(sha));
                                 fo.insert("regime".into(), serde_json::json!(regime_tag));
                                 fo.insert("features".into(), serde_json::json!(feats));
+                                add_pixel_hashes(
+                                    &mut fo,
+                                    ref_px_sha256.as_deref(),
+                                    dist_px_sha256.as_deref(),
+                                );
                                 rows.push(serde_json::to_string(&Value::Object(fo))?);
                             }
-                            Err(e) => rows.push(mk_row(
+                            Err(e) => rows.push(mk_row_px(
                                 sha,
                                 serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                                dist_px_sha256.as_deref(),
                             )?),
                         }
+                        continue;
+                    }
+                    // `cvvdp@<display>`: never orchestrator-eligible (`metric_kind`
+                    // refuses the string), so it always lands here — the
+                    // display-named CPU scorer over the SAME decoded buffer.
+                    // The scorer map was built before the reference decode, so a
+                    // validated display is guaranteed present.
+                    #[cfg(feature = "cpu-cvvdp")]
+                    if let Some(display) = cvvdp_display_of(metric) {
+                        let scorer = cvvdp_scorers
+                            .get_mut(display)
+                            .expect("cvvdp@ displays are resolved before decode");
+                        let payload = cvvdp_display_payload(metric, scorer, &reference, distorted);
+                        rows.push(mk_row_px(sha, payload, dist_px_sha256.as_deref())?);
+                        continue;
+                    }
+                    #[cfg(not(feature = "cpu-cvvdp"))]
+                    if cvvdp_display_of(metric).is_some() {
+                        rows.push(mk_row_px(
+                            sha,
+                            serde_json::json!({
+                                "metric": metric,
+                                "error": "`cvvdp@<display>` needs an executor built \
+                                          with the cpu-cvvdp cargo feature",
+                            }),
+                            dist_px_sha256.as_deref(),
+                        )?);
                         continue;
                     }
                     // butteraugli / butteraugli-gpu (and any non-eligible, non-zensim metric):
@@ -1137,18 +1281,20 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                                 for (n, v) in &pairs {
                                     scores.insert((*n).to_string(), serde_json::json!(v));
                                 }
-                                rows.push(mk_row(
+                                rows.push(mk_row_px(
                                     sha,
                                     serde_json::json!({
                                         "metric": metric,
                                         "score": pairs.first().map(|(_, v)| *v),
                                         "scores": scores,
                                     }),
+                                    dist_px_sha256.as_deref(),
                                 )?);
                             }
-                            Err(e) => rows.push(mk_row(
+                            Err(e) => rows.push(mk_row_px(
                                 sha,
                                 serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                                dist_px_sha256.as_deref(),
                             )?),
                         }
                     }
@@ -1189,6 +1335,8 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         if owned {
             let _ = std::fs::remove_file(&var_path);
         }
+        let dist_px_sha256 =
+            pixel_hash.then(|| hex::encode(sha2::Sha256::digest(&distorted.pixels)));
         for metric in &metrics {
             // zensim(-gpu) yields the 720-feature v2-ab vector from the SAME decode.
             // FEATURES ONLY (no score) — emit just the feature row. Gated on
@@ -1222,13 +1370,45 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                         fo.insert("encode_sha".into(), serde_json::json!(sha));
                         fo.insert("regime".into(), serde_json::json!(regime_tag));
                         fo.insert("features".into(), serde_json::json!(feats));
+                        add_pixel_hashes(
+                            &mut fo,
+                            ref_px_sha256.as_deref(),
+                            dist_px_sha256.as_deref(),
+                        );
                         rows.push(serde_json::to_string(&Value::Object(fo))?);
                     }
-                    Err(e) => rows.push(mk_row(
+                    Err(e) => rows.push(mk_row_px(
                         sha,
                         serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                        dist_px_sha256.as_deref(),
                     )?),
                 }
+                continue;
+            }
+            // `cvvdp@<display>`: the display-named CPU scorer (resolved before
+            // the reference decode, so a validated display is always present).
+            // Scored here, never through `score()` — `metric_kind` refuses the
+            // `cvvdp@` string so the umbrella path cannot see it.
+            #[cfg(feature = "cpu-cvvdp")]
+            if let Some(display) = cvvdp_display_of(metric) {
+                let scorer = cvvdp_scorers
+                    .get_mut(display)
+                    .expect("cvvdp@ displays are resolved before decode");
+                let payload = cvvdp_display_payload(metric, scorer, &reference, &distorted);
+                rows.push(mk_row_px(sha, payload, dist_px_sha256.as_deref())?);
+                continue;
+            }
+            #[cfg(not(feature = "cpu-cvvdp"))]
+            if cvvdp_display_of(metric).is_some() {
+                rows.push(mk_row_px(
+                    sha,
+                    serde_json::json!({
+                        "metric": metric,
+                        "error": "`cvvdp@<display>` needs an executor built \
+                                  with the cpu-cvvdp cargo feature",
+                    }),
+                    dist_px_sha256.as_deref(),
+                )?);
                 continue;
             }
             match score(metric, &reference, &distorted) {
@@ -1237,18 +1417,20 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                     for (n, v) in &pairs {
                         scores.insert((*n).to_string(), serde_json::json!(v));
                     }
-                    rows.push(mk_row(
+                    rows.push(mk_row_px(
                         sha,
                         serde_json::json!({
                             "metric": metric,
                             "score": pairs.first().map(|(_, v)| *v),
                             "scores": scores,
                         }),
+                        dist_px_sha256.as_deref(),
                     )?);
                 }
-                Err(e) => rows.push(mk_row(
+                Err(e) => rows.push(mk_row_px(
                     sha,
                     serde_json::json!({ "metric": metric, "error": e.to_string() }),
+                    dist_px_sha256.as_deref(),
                 )?),
             }
         }
@@ -2258,6 +2440,39 @@ fn run_encode_or_metric_job(
                     Err(e) => return Err(format!("zensim feature extraction: {e}").into()),
                 }
             }
+            // `cvvdp@<display>`: same display-named CPU arm as ScoreFile — the
+            // scorer resolves the preset (unknown display = deterministic job
+            // error, a manifest defect) and emits the `_<display>` column.
+            #[cfg(feature = "cpu-cvvdp")]
+            if let Some(display) = cvvdp_display_of(metric) {
+                let mut scorer = crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::by_name(display)
+                    .map_err(|e| format!("metric job: {e}"))?;
+                let v = scorer
+                    .score(&reference, &distorted)
+                    .map_err(|e| format!("metric job {metric}: {e}"))?;
+                let col = scorer.column_name(MetricKind::Cvvdp.column_names()[0]);
+                let row = serde_json::json!({
+                    "kind": "metric",
+                    "metric": metric,
+                    "image_path": image_path,
+                    "codec": codec_name,
+                    "q": cell["q"],
+                    "knob_tuple_json": knob_json,
+                    "score": v,
+                    "scores": { col: v },
+                    "encoded_bytes": encoded.bytes.len(),
+                    "encode_ms": encoded.encode_ms,
+                });
+                return Ok(serde_json::to_string(&row)?.into_bytes());
+            }
+            #[cfg(not(feature = "cpu-cvvdp"))]
+            if cvvdp_display_of(metric).is_some() {
+                return Err(format!(
+                    "metric job {metric}: `cvvdp@<display>` needs a build with the \
+                     cpu-cvvdp cargo feature"
+                )
+                .into());
+            }
             let pairs = score(metric, &reference, &distorted)?;
             let mut scores = Map::new();
             for (name, value) in &pairs {
@@ -2394,6 +2609,36 @@ pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
+
+    /// `cvvdp@<display>` parsing: ONLY the exact `cvvdp@<nonempty>` shape
+    /// selects a display. Plain `cvvdp` and every other metric string fall
+    /// through to the umbrella/`metric_kind` path unchanged — that is what
+    /// keeps existing job ids and ledger rows valid.
+    #[test]
+    fn cvvdp_display_of_parses_only_the_at_form() {
+        assert_eq!(cvvdp_display_of("cvvdp@standard_fhd"), Some("standard_fhd"));
+        assert_eq!(
+            cvvdp_display_of("cvvdp@modern_oled_phone_indoor"),
+            Some("modern_oled_phone_indoor")
+        );
+        for m in [
+            "cvvdp",
+            "cvvdp@",
+            "cvvdp-gpu",
+            "cvvdp_gpu",
+            "ssim2",
+            "butteraugli",
+            "zensim-foldapp2",
+        ] {
+            assert_eq!(cvvdp_display_of(m), None, "{m}");
+        }
+        // A display string may contain anything non-empty — preset VALIDITY is
+        // the scorer's job (`by_name`), not the parser's.
+        assert_eq!(cvvdp_display_of("cvvdp@bogus"), Some("bogus"));
+        // Display-named strings stay CPU-routed (`metric_runtime` keys on the
+        // -gpu/_gpu suffix, which `cvvdp@<display>` never carries).
+        assert_eq!(metric_runtime("cvvdp@standard_fhd"), "cpu");
+    }
 
     /// sha2 0.11 dropped `LowerHex` on the digest type (it returns `Array`, not
     /// 0.10's `GenericArray`), so every `format!("{:x}", Sha256::digest(..))`
@@ -2962,5 +3207,123 @@ mod all_error_guard_tests {
         ];
         assert!(all_error_guard(&mixed).is_ok());
         assert!(all_error_guard(&[]).is_ok());
+    }
+}
+
+/// `cvvdp@<display>` arm tests: per-display output columns, `standard_4k`
+/// byte-identity with the plain `cvvdp` path, and unknown-display refusal.
+/// Everything the arm touches lives behind `cpu-cvvdp`, so the module-level
+/// cfg makes a featureless build skip these rather than fail to compile.
+#[cfg(all(test, feature = "cpu-cvvdp"))]
+mod cvvdp_display_tests {
+    use super::*;
+    use crate::decode::Rgb8Image;
+
+    fn pair(w: u32, h: u32) -> (Rgb8Image, Rgb8Image) {
+        let n = (w * h * 3) as usize;
+        let reference: Vec<u8> = (0..n).map(|i| ((i * 37 + i / 7) % 251) as u8).collect();
+        let distorted: Vec<u8> = reference
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| if i % 11 == 0 { v.saturating_add(9) } else { v })
+            .collect();
+        (
+            Rgb8Image {
+                pixels: reference,
+                width: w,
+                height: h,
+            },
+            Rgb8Image {
+                pixels: distorted,
+                width: w,
+                height: h,
+            },
+        )
+    }
+
+    /// `cvvdp@standard_4k` must emit the SAME column with the SAME score bits
+    /// as plain `cvvdp` — naming the default display can never move a ledger
+    /// value. (The `metric` field itself differs — `cvvdp@standard_4k` — and
+    /// must: the JobId hashes it, and a display-named string is a different
+    /// declared arm.)
+    #[test]
+    fn cvvdp_at_standard_4k_matches_the_plain_cvvdp_row() {
+        let (r, d) = pair(96, 80);
+        let plain = score("cvvdp", &r, &d).expect("plain cvvdp scores");
+        let (plain_col, plain_v) = plain[0];
+
+        let mut scorer =
+            crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::by_name("standard_4k").unwrap();
+        let payload = cvvdp_display_payload("cvvdp@standard_4k", &mut scorer, &r, &d);
+        assert_eq!(payload["metric"], "cvvdp@standard_4k");
+        let scores = payload["scores"].as_object().expect("scores map");
+        assert_eq!(scores.len(), 1, "{payload}");
+        let (col, v) = scores.iter().next().unwrap();
+        assert_eq!(col.as_str(), plain_col, "column must stay the plain one");
+        assert_eq!(
+            v.as_f64().unwrap().to_bits(),
+            plain_v.to_bits(),
+            "standard_4k must reproduce the default score bit-for-bit"
+        );
+        assert_eq!(
+            payload["score"].as_f64().unwrap().to_bits(),
+            plain_v.to_bits()
+        );
+    }
+
+    /// A non-default display lands in its own `_<display>` column — never the
+    /// plain one — and the FHD geometry actually moves the score.
+    #[test]
+    fn cvvdp_at_standard_fhd_emits_the_display_column() {
+        let (r, d) = pair(96, 80);
+        let mut fhd =
+            crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::by_name("standard_fhd").unwrap();
+        let payload = cvvdp_display_payload("cvvdp@standard_fhd", &mut fhd, &r, &d);
+        let scores = payload["scores"].as_object().expect("scores map");
+        let col = format!("{}_standard_fhd", MetricKind::Cvvdp.column_names()[0]);
+        assert!(
+            scores.contains_key(&col),
+            "expected column {col}, got {payload}"
+        );
+        assert!(!scores.contains_key(MetricKind::Cvvdp.column_names()[0]));
+        let v = scores[&col].as_f64().unwrap();
+        let plain = score("cvvdp", &r, &d).expect("plain cvvdp scores")[0].1;
+        assert!(
+            (v - plain).abs() > 1e-3,
+            "fhd geometry should move the score: {v} vs {plain}"
+        );
+    }
+
+    /// An unknown display is refused at scorer resolution — the ScoreFile arm
+    /// resolves every `cvvdp@` name before the reference decode, so the job
+    /// fails deterministically rather than emitting error rows.
+    #[test]
+    fn cvvdp_at_unknown_display_is_refused() {
+        assert!(
+            crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::by_name(
+                cvvdp_display_of("cvvdp@no_such_display").unwrap()
+            )
+            .is_err()
+        );
+    }
+
+    /// The whole `run_score_file` arm must fail on an unknown `cvvdp@` display
+    /// BEFORE touching the filesystem or emitting any row — a manifest defect
+    /// is a job error, not a per-variant error-row storm. The bogus paths and
+    /// inputs below are never reached: scorer resolution precedes them.
+    #[test]
+    fn run_score_file_refuses_unknown_display_before_any_row() {
+        let job = serde_json::json!({
+            "cell": {"image_path": "/nonexistent/ref.png", "codec": "zenjpeg"},
+            "kind": {"metrics": ["ssim2", "cvvdp@no_such_display"]},
+            "inputs": ["sha-a", "sha-b"],
+        });
+        let err = run_score_file(&job, None)
+            .expect_err("unknown cvvdp@ display must fail the job outright");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("no_such_display") || msg.contains("cvvdp"),
+            "error should name the bad metric, got: {msg}"
+        );
     }
 }

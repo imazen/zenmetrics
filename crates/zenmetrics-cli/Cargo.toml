@@ -50,7 +50,10 @@ png = ["dep:zenpng", "zenpng/quantize", "zenpng/imagequant"]
 # magetypes >= 0.9 compatibility and adds the `__expert` knob bundle.
 jpeg = ["dep:zenjpeg", "zenjpeg/zencodec"]
 webp = ["dep:zenwebp"]
-avif = ["dep:zenavif", "dep:zenavif-parse"]
+# `dep:zencodec`: decode_avif routes through zenavif's zencodec `Decode` impl
+# (the extractor's path — CICP-tagged buffer, not raw decode_full). zencodec
+# is a non-optional dep of zenavif itself, so this only re-exposes its types.
+avif = ["dep:zenavif", "dep:zenavif-parse", "dep:zencodec"]
 # `avif-svt`: the zenavif `backend: "svt-rs"` sweep knob — routes the SDR AVIF
 # encode through zenavif's own Av1Backend::SvtRs (the pure-Rust zenav1-svt port,
 # muxed in-crate by zenavif-serialize). Opt-in: it pulls the whole zenav1-svt

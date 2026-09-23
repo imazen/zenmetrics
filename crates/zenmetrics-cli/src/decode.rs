@@ -233,6 +233,33 @@ fn hdr_transfer_name(transfer_characteristics: u8) -> Option<&'static str> {
 
 #[cfg(feature = "avif")]
 fn decode_avif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    // Decode-route opt-in. The default arm is the raw `ManagedAvifDecoder`
+    // funnel — the pre-lane behaviour every zenmetrics command has always
+    // used, and the more exact of the two routes (REVIEW_AVIF_DECODE measured
+    // the tagged route rounding 0.16 % of Rgb16→RGB8 values one code low).
+    //
+    // `ZEN_JOBEXEC_AVIF_DECODE=zencodec` selects the zencodec `Decode`
+    // contract instead — the entry the SafeSyn/native-integrity extractor
+    // used, and therefore the only route whose pixels bind to the Sept-14
+    // `safesyn-train` audit hashes. It exists solely so executor images
+    // purpose-built for that cache can opt in via a baked `ENV`; emitted
+    // rows carry `ZEN_JOBEXEC_PIXEL_HASH` stamps so the route actually taken
+    // is auditable per row. Any other non-empty value is a misconfiguration
+    // and fails loudly rather than silently picking a route.
+    match std::env::var("ZEN_JOBEXEC_AVIF_DECODE").as_deref() {
+        Err(_) | Ok("") => decode_avif_default(data),
+        Ok("zencodec") => decode_avif_zencodec(data),
+        Ok(other) => Err(format!(
+            "ZEN_JOBEXEC_AVIF_DECODE={other:?} is not a known AVIF decode route \
+             (known: \"zencodec\"; unset or empty selects the default \
+             decode_full route)"
+        )
+        .into()),
+    }
+}
+
+#[cfg(feature = "avif")]
+fn decode_avif_default(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
     // Single-threaded decode (threads(1)): rav1d-safe's default multi-threaded
     // frame decode (n_threads=0=auto) races on the frame buffer under the sweep's
     // rayon parallelism — DisjointMut overlap panic / deadlock (imazen/rav1d-safe#15).
@@ -282,6 +309,69 @@ fn decode_avif(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
         .into());
     }
     pixel_buffer_to_rgb8(&pixels)
+}
+
+#[cfg(feature = "avif")]
+fn decode_avif_zencodec(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    use std::borrow::Cow;
+    use zencodec::decode::{Decode as _, DecodeJob as _, DecoderConfig as _};
+
+    // Decode through zenavif's zencodec `Decode` contract — the same entry the
+    // SafeSyn/native-integrity extractor used (zensim-bench
+    // `examples/shared/zen_decode.rs`, `zc_decode!` arm). Raw
+    // `ManagedAvifDecoder::decode_full` returns a PixelBuffer whose descriptor
+    // lacks the CICP tag, so `RowConverter` treats the conversion as a byte
+    // passthrough; the zencodec path tags the buffer via `set_cicp_on_pixels`
+    // + `attach_source_color_context` + `negotiate_format`, and the tagged
+    // descriptor changes the Rgb16→RGB8_SRGB conversion for >8-bit AVIFs.
+    // Measured 2026-09-23 on safesyn `zenavif-s5-e6/q5.avif`:
+    //   decode_full funnel → RGB8 sha256 4881d856…  (drifted; ssim2 Δ≈8e-5)
+    //   zencodec   funnel → RGB8 sha256 93016b1b… == SAFESYN_VERIFIED audit hash
+    //
+    // Single-threaded decode (with_threads(1)): rav1d-safe's default
+    // multi-threaded frame decode (n_threads=0=auto) races on the frame buffer
+    // under the sweep's rayon parallelism — DisjointMut overlap panic /
+    // deadlock (imazen/rav1d-safe#15). One thread per decode removes the
+    // internal race; cross-decode parallelism is safe because each decode owns
+    // its decoder/frame. Verified pixel-identical to threads(0) on the safesyn
+    // AVIF family (2026-09-23 probe: t0/t1/t4 all hash 93016b1b).
+    let out = zenavif::AvifDecoderConfig::new()
+        .with_threads(1)
+        .job()
+        .decoder(Cow::Borrowed(data), &[])
+        .map_err(|e| format!("zenavif: {e}"))?
+        .decode()
+        .map_err(|e| format!("zenavif: {e}"))?;
+    // HDR tripwire — the AVIF twin of the PNG cICP refusal above. An AVIF whose
+    // `colr`/`nclx` box (or, absent one, whose AV1 sequence header) signals PQ or
+    // HLG carries absolute-luminance code values. The RGB8 funnel below would
+    // narrow them to 8 bits and relabel them sRGB, producing scores that look
+    // plausible and mean nothing, with no error anywhere — the
+    // imazen/zenmetrics#25 failure class.
+    //
+    // The zencodec `ImageInfo.cicp` is populated by `convert_native_info` from
+    // the same native `transfer_characteristics` code the old path read, so the
+    // refusal semantics are unchanged. HDR-aware callers route through
+    // `hdr::decode_to_nits` (`--hdr` on score / score-pairs / sweep), which
+    // preserves all 10 bits into f32 cd/m².
+    let tc = out
+        .info()
+        .source_color
+        .cicp
+        .map(|c| c.transfer_characteristics)
+        .unwrap_or(0);
+    if let Some(name) = hdr_transfer_name(tc) {
+        return Err(format!(
+            "AVIF signals an HDR transfer via CICP (transfer={}, {}) at {}-bit: \
+             refusing to crush it through the 8-bit SDR decode path — score it \
+             with --hdr instead",
+            tc,
+            name,
+            out.info().source_color.bit_depth.unwrap_or_default(),
+        )
+        .into());
+    }
+    pixel_buffer_to_rgb8(&out.into_buffer())
 }
 
 #[cfg(not(feature = "avif"))]

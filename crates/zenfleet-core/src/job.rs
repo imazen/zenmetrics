@@ -1123,4 +1123,38 @@ mod tests {
         assert_eq!(k.profile().class, ResourceClass::Gpu);
         assert_eq!(k.profile().group_by, GroupBy::SourceSha);
     }
+
+    /// `cvvdp@<display>` (the display-selecting metric string, cvvdp-safesyn
+    /// lane 2026-09-23) rides INSIDE the metrics list — no schema field — so a
+    /// plain-`cvvdp` job keeps its golden id (asserted above) while a
+    /// display-named string is different work with a different
+    /// content-addressed id. Routing is unchanged: `cvvdp@x` is CPU-native
+    /// (CpuHeavy, no `gpu-*` capability claim) exactly like `cvvdp`.
+    #[test]
+    fn cvvdp_display_metric_string_is_distinct_work_and_cpu_routed() {
+        use crate::content::sha256;
+        use crate::ids::JobId;
+        let mk = |m: &str| JobKind::ScoreFile {
+            metrics: vec![m.into()],
+            hdr: false,
+            hdr_transfer: None,
+        };
+        let inputs = [sha256(b"v")];
+        assert_ne!(
+            JobId::of(&mk("cvvdp"), &inputs),
+            JobId::of(&mk("cvvdp@standard_fhd"), &inputs),
+            "a named display is different work — it must not claim the plain-cvvdp id"
+        );
+        let disp = mk("cvvdp@standard_fhd");
+        assert_eq!(disp.profile().class, ResourceClass::CpuHeavy);
+        assert!(
+            disp.required_capabilities().is_empty(),
+            "cvvdp@<display> is CPU-native; it must not claim a gpu-* capability"
+        );
+        // `cvvdp@-gpu` would be a nonsense name; the suffix check sees the
+        // `-gpu` tail and classes it Gpu — pin that so nobody "fixes" the
+        // heuristic into treating `cvvdp@` strings as always-CPU.
+        assert_eq!(mk("cvvdp@-gpu").profile().class, ResourceClass::Gpu);
+        assert_eq!(disp.profile().group_by, GroupBy::SourceSha);
+    }
 }
