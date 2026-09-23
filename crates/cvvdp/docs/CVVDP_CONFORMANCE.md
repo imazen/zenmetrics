@@ -17,10 +17,10 @@ distortion space.
 - **Harness**: `crates/cvvdp-conformance/` (depends on BOTH cvvdp
   and cvvdp-gpu; tests them as black boxes via the public API).
 - **Goldens (current pin, conformance-v2, 2026-09-22)**: pycvvdp v0.5.7,
-  13 displays, R2 `s3://coefficient/cvvdp-goldens/conformance-v2/`. **Not
-  yet uploaded**: local copy + result TSV in
-  `/mnt/v/output/zenmetrics/cvvdp-goldens/conformance-v2/`. Until the
-  upload, run with `CVVDP_CONFORMANCE_GOLDENS=<that dir>/conformance_goldens.json`.
+  13 displays, R2 `s3://coefficient/cvvdp-goldens/conformance-v2/` (public
+  mirror `https://coefficient.r2.imazen.org/cvvdp-goldens/conformance-v2/`,
+  uploaded 2026-09-23; local copy `/mnt/v/output/zenmetrics/cvvdp-goldens/conformance-v2/`);
+  result TSV `benchmarks/cvvdp_conformance_matrix_pycvvdp_v0.5.7.tsv`.
 - **Goldens (conformance-v1, 2026-05-26)**: pycvvdp v0.5.4, 9 displays, R2
   `s3://coefficient/cvvdp-goldens/conformance-v1/` (public mirror
   `https://coefficient.r2.imazen.org/cvvdp-goldens/conformance-v1/`);
@@ -157,8 +157,7 @@ cvvdp-gpu over CUDA (RTX 2080).
   interpolation and CSF code are byte-identical, and `cvvdp_metric.py`
   only refactors the video path, adds `temp_padding="symmetric"`, and
   removes a dead masking branch.
-- Result TSV (47 KB, kept out of git per the 30 KB rule):
-  `/mnt/v/output/zenmetrics/cvvdp-goldens/conformance-v2/cvvdp_conformance_matrix_pycvvdp_v0.5.7.tsv`.
+- Result TSV: `benchmarks/cvvdp_conformance_matrix_pycvvdp_v0.5.7.tsv`.
 
 ## Results — conformance-v1 (2026-05-26, pycvvdp v0.5.4, RTX 5070; post-Finding-A fix)
 
@@ -346,9 +345,9 @@ conformance-v2 (current pin in `tests/common/mod.rs`):
   `1bac6f9af8f1eaa318fd35ee8d369be1979bd65e8e7ee8e430071eb0537afbf0`;
   situation manifest sha256
   `6ca5765f4bcfc2f1c935d742ee030ec405a71aa64f791832b2223e8a33ac4336`.
-- Local copy: `/mnt/v/output/zenmetrics/cvvdp-goldens/conformance-v2/`.
-  **Must be uploaded to `s3://coefficient/cvvdp-goldens/conformance-v2/`
-  before the default (non-override) run can fetch it.**
+- Uploaded 2026-09-23 to `s3://coefficient/cvvdp-goldens/conformance-v2/`
+  (goldens JSON + manifest + `images/`); the public URL serves the pinned sha.
+  Local copy: `/mnt/v/output/zenmetrics/cvvdp-goldens/conformance-v2/`.
 
 conformance-v1:
 
