@@ -134,8 +134,8 @@ mod video;
 
 pub use pipeline::Cvvdp;
 pub use video::{
-    FrameLayout, TempPadding, VideoScorer, VideoStats, score_video, score_video_with_stats,
-    video_filter_len,
+    FrameLayout, TempPadding, VideoScorer, VideoScorerOptions, VideoStats, score_video,
+    score_video_with_stats, video_filter_len,
 };
 
 /// TEST-ONLY re-exports of the `pub(crate)` SIMD kernel entry points.

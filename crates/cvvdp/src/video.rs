@@ -105,6 +105,27 @@ pub enum TempPadding {
     Symmetric,
 }
 
+/// Construction knobs for [`VideoScorer`] beyond the pycvvdp surface
+/// — bundled so [`VideoScorer::with_options`] stays readable instead
+/// of growing a fourth positional-argument variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct VideoScorerOptions {
+    /// Frame byte layout `push_frame` expects (pycvvdp `dim_order`
+    /// analog).
+    pub layout: FrameLayout,
+    /// Temporal padding (pycvvdp `temp_padding` analog).
+    pub temp_padding: TempPadding,
+    /// Store the temporal-filter window as raw sRGB-8 bytes instead of
+    /// f32 DKL planes — a 4× smaller ring (at 1080p/30 fps ~450 MB →
+    /// ~113 MB), paid for by re-running the sRGB→DKL conversion per
+    /// window slot per emitted frame (~+10–20 % CPU depending on the
+    /// clip). Lossless: the conversion is a deterministic LUT+matrix
+    /// of the stored bytes, so scores are **bit-identical** to the
+    /// f32-window path. No upstream analog — an implementation knob,
+    /// not a scoring semantic.
+    pub low_memory: bool,
+}
+
 /// Positive frame index for a negative `fi` under
 /// [`TempPadding::Symmetric`] — verbatim port of pycvvdp
 /// `_get_symmetric_frame_index` (`frame[-1] → frame[1]`, ping-pong
@@ -210,10 +231,14 @@ struct VideoScratch {
     term: [Vec<f32>; 4],
     /// PU-blur horizontal-pass scratch.
     pu_scratch: Vec<f32>,
+    /// `low_memory` emit scratch — the current window slot's DKL
+    /// planes. One slot converts at a time (test side's taps, then
+    /// reference side's), so three planes suffice for both.
+    win_dkl: FramePlanes,
 }
 
 impl VideoScratch {
-    fn new(w: usize, h: usize, n_levels: usize) -> Self {
+    fn new(w: usize, h: usize, n_levels: usize, low_memory: bool) -> Self {
         // Channel 0's image pyramid IS the shared sustained-A pyramid
         // (same input plane) — its cache never builds `gauss_img`;
         // no cache ever builds `gauss_l`.
@@ -246,6 +271,11 @@ impl VideoScratch {
             m_mm: core::array::from_fn(|_| Vec::new()),
             term: core::array::from_fn(|_| Vec::new()),
             pu_scratch: Vec::new(),
+            win_dkl: if low_memory {
+                core::array::from_fn(|_| vec![0.0; w * h])
+            } else {
+                core::array::from_fn(|_| Vec::new())
+            },
         }
     }
 }
@@ -292,10 +322,19 @@ pub struct VideoScorer {
     /// Frames pushed so far.
     n_pushed: usize,
     /// Sliding window of the last `taps[0].len()` frames (DKL planes),
-    /// test side. Oldest at front.
+    /// test side. Oldest at front. Empty when `low_memory` is on —
+    /// `win8_t` holds the raw sRGB bytes instead.
     win_t: VecDeque<FramePlanes>,
     /// Same for the reference side.
     win_r: VecDeque<FramePlanes>,
+    /// `low_memory` window — raw sRGB bytes in `layout` order (4×
+    /// smaller than DKL planes), re-converted at emit.
+    win8_t: VecDeque<Vec<u8>>,
+    /// Same for the reference side.
+    win8_r: VecDeque<Vec<u8>>,
+    /// Whether the window stores u8 sRGB (`win8_*`) or f32 DKL
+    /// (`win_*`) — [`VideoScorerOptions::low_memory`].
+    low_memory: bool,
     /// Raw bytes of frame 0, kept only until a second frame is pushed
     /// so a one-frame clip can take the still path untouched.
     first_frame: Option<(Vec<u8>, Vec<u8>)>,
@@ -317,6 +356,8 @@ pub struct VideoScorer {
     /// `push_frame` — avoids a fresh 3-plane alloc + zero-fill per
     /// frame (the planes are `w*h` f32, the same size every frame).
     spare_planes: Vec<FramePlanes>,
+    /// Same recycling for evicted `low_memory` u8 buffers.
+    spare8: Vec<Vec<u8>>,
     /// Frame rate the clip is scored at (kept for `VideoStats`).
     fps: f32,
     /// Reusable per-frame scratch (filtered planes, pyramid caches,
@@ -399,6 +440,35 @@ impl VideoScorer {
         layout: FrameLayout,
         padding: TempPadding,
     ) -> Result<Self> {
+        Self::with_options(
+            width,
+            height,
+            frames_per_second,
+            params,
+            geometry,
+            VideoScorerOptions {
+                layout,
+                temp_padding: padding,
+                low_memory: false,
+            },
+        )
+    }
+
+    /// [`with_layout_and_padding`](Self::with_layout_and_padding)
+    /// with the full [`VideoScorerOptions`] bundle — currently the
+    /// only added knob is `low_memory` (u8 window).
+    ///
+    /// # Errors
+    ///
+    /// As [`new`](Self::new).
+    pub fn with_options(
+        width: u32,
+        height: u32,
+        frames_per_second: f32,
+        params: CvvdpParams,
+        geometry: DisplayGeometry,
+        options: VideoScorerOptions,
+    ) -> Result<Self> {
         if width < 8 || height < 8 {
             return Err(Error::InvalidImageSize { width, height });
         }
@@ -410,6 +480,9 @@ impl VideoScorer {
         let ppd = geometry.pixels_per_degree();
         let freqs = band_frequencies(ppd, w, h);
         let n_levels = freqs.len();
+        let layout = options.layout;
+        let padding = options.temp_padding;
+        let low_memory = options.low_memory;
         Ok(Self {
             width: w,
             height: h,
@@ -419,6 +492,9 @@ impl VideoScorer {
             n_pushed: 0,
             win_t: VecDeque::new(),
             win_r: VecDeque::new(),
+            win8_t: VecDeque::new(),
+            win8_r: VecDeque::new(),
+            low_memory,
             first_frame: None,
             q_per_ch: Vec::new(),
             freqs,
@@ -426,8 +502,9 @@ impl VideoScorer {
             padding,
             next_emit: 0,
             spare_planes: Vec::new(),
+            spare8: Vec::new(),
             fps: frames_per_second,
-            scratch: VideoScratch::new(w, h, n_levels),
+            scratch: VideoScratch::new(w, h, n_levels, low_memory),
         })
     }
 
@@ -457,31 +534,52 @@ impl VideoScorer {
             self.first_frame = Some((ref_srgb.to_vec(), dist_srgb.to_vec()));
         }
 
-        let mut t = self.spare_planes.pop().unwrap_or_default();
-        let mut r = self.spare_planes.pop().unwrap_or_default();
-        let display = self.params.display;
-        let (w, h) = (self.width, self.height);
-        let [r0, r1, r2] = &mut r;
-        let [t0, t1, t2] = &mut t;
-        match self.layout {
-            FrameLayout::Interleaved => {
-                srgb_to_dkl_planar(ref_srgb, w, h, display, r0, r1, r2);
-                srgb_to_dkl_planar(dist_srgb, w, h, display, t0, t1, t2);
-            }
-            FrameLayout::Planar => {
-                srgb_planar_to_dkl_planar(ref_srgb, w, h, display, r0, r1, r2);
-                srgb_planar_to_dkl_planar(dist_srgb, w, h, display, t0, t1, t2);
-            }
-        }
         let fl = self.taps[0].len();
-        self.win_t.push_back(t);
-        self.win_r.push_back(r);
-        if self.win_t.len() > fl {
-            if let Some(old) = self.win_t.pop_front() {
-                self.spare_planes.push(old);
+        if self.low_memory {
+            // u8 window — keep the raw sRGB bytes; the sRGB→DKL
+            // conversion runs at emit time instead of now.
+            let mut t8 = self.spare8.pop().unwrap_or_default();
+            let mut r8 = self.spare8.pop().unwrap_or_default();
+            t8.clear();
+            t8.extend_from_slice(dist_srgb);
+            r8.clear();
+            r8.extend_from_slice(ref_srgb);
+            self.win8_t.push_back(t8);
+            self.win8_r.push_back(r8);
+            if self.win8_t.len() > fl {
+                if let Some(old) = self.win8_t.pop_front() {
+                    self.spare8.push(old);
+                }
+                if let Some(old) = self.win8_r.pop_front() {
+                    self.spare8.push(old);
+                }
             }
-            if let Some(old) = self.win_r.pop_front() {
-                self.spare_planes.push(old);
+        } else {
+            let mut t = self.spare_planes.pop().unwrap_or_default();
+            let mut r = self.spare_planes.pop().unwrap_or_default();
+            let display = self.params.display;
+            let (w, h) = (self.width, self.height);
+            let [r0, r1, r2] = &mut r;
+            let [t0, t1, t2] = &mut t;
+            match self.layout {
+                FrameLayout::Interleaved => {
+                    srgb_to_dkl_planar(ref_srgb, w, h, display, r0, r1, r2);
+                    srgb_to_dkl_planar(dist_srgb, w, h, display, t0, t1, t2);
+                }
+                FrameLayout::Planar => {
+                    srgb_planar_to_dkl_planar(ref_srgb, w, h, display, r0, r1, r2);
+                    srgb_planar_to_dkl_planar(dist_srgb, w, h, display, t0, t1, t2);
+                }
+            }
+            self.win_t.push_back(t);
+            self.win_r.push_back(r);
+            if self.win_t.len() > fl {
+                if let Some(old) = self.win_t.pop_front() {
+                    self.spare_planes.push(old);
+                }
+                if let Some(old) = self.win_r.pop_front() {
+                    self.spare_planes.push(old);
+                }
             }
         }
 
@@ -635,7 +733,12 @@ impl VideoScorer {
     /// Absolute index of `win_*[0]` — frames before it have scrolled
     /// out of the ring buffer.
     fn win_base(&self) -> usize {
-        self.n_pushed - self.win_t.len()
+        let len = if self.low_memory {
+            self.win8_t.len()
+        } else {
+            self.win_t.len()
+        };
+        self.n_pushed - len
     }
 
     /// Compute output frame `t`'s filtered planes + per-band pooled
@@ -667,61 +770,124 @@ impl VideoScorer {
             // once per tap instead of twice.
             let [ft0, ft1, ft2, ft3] = &mut sc.filt_t;
             let [fr0, fr1, fr2, fr3] = &mut sc.filt_r;
-            for k in 0..fl {
-                // Frame index at window slot k. s<0 resolves per
-                // `temp_padding`: replicate → frame 0 (always win[0]
-                // when s≤0); symmetric → mirrored/ping-pong index. The
-                // emission gate guarantees every resolved index is
-                // inside the ring.
-                let s = t as isize - (fl as isize - 1) + k as isize;
-                let fi = if s >= 0 {
-                    s as usize
-                } else {
-                    match self.padding {
-                        TempPadding::Replicate => 0,
-                        TempPadding::Symmetric => symmetric_frame_index(s, self.n_pushed.max(2)),
+            // `win_*[widx][c]` for the current tap k — a plain slice
+            // read in the f32 path; in `low_memory` mode the u8 slot
+            // is converted into `sc.win_dkl` first (deterministic
+            // LUT+matrix → identical values, identical score).
+            macro_rules! fir_tap {
+                ($k:expr) => {{
+                    let s = t as isize - (fl as isize - 1) + $k as isize;
+                    let fi = if s >= 0 {
+                        s as usize
+                    } else {
+                        match self.padding {
+                            TempPadding::Replicate => 0,
+                            TempPadding::Symmetric => {
+                                symmetric_frame_index(s, self.n_pushed.max(2))
+                            }
+                        }
+                    };
+                    fi - w0
+                }};
+            }
+            if self.low_memory {
+                let display = self.params.display;
+                let [d0, d1, d2] = &mut sc.win_dkl;
+                // Test side, then reference — each side's accumulation
+                // order is the same k-ascending sequence as the f32
+                // path, so `filt_*` come out bit-identical.
+                for k in 0..fl {
+                    let widx = fir_tap!(k);
+                    let src = &self.win8_t[widx];
+                    match self.layout {
+                        FrameLayout::Interleaved => {
+                            srgb_to_dkl_planar(src, w, h, display, d0, d1, d2)
+                        }
+                        FrameLayout::Planar => {
+                            srgb_planar_to_dkl_planar(src, w, h, display, d0, d1, d2)
+                        }
                     }
-                };
-                let widx = fi - w0;
-                let j = fl - 1 - k;
-                if k == 0 {
-                    vscale2_into(
-                        ft0,
-                        ft3,
-                        &self.win_t[widx][0],
-                        self.taps[0][j],
-                        self.taps[3][j],
-                    );
-                    vscale2_into(
-                        fr0,
-                        fr3,
-                        &self.win_r[widx][0],
-                        self.taps[0][j],
-                        self.taps[3][j],
-                    );
-                    vscale_into(ft1, &self.win_t[widx][1], self.taps[1][j]);
-                    vscale_into(ft2, &self.win_t[widx][2], self.taps[2][j]);
-                    vscale_into(fr1, &self.win_r[widx][1], self.taps[1][j]);
-                    vscale_into(fr2, &self.win_r[widx][2], self.taps[2][j]);
-                } else {
-                    vaxpy2_into(
-                        ft0,
-                        ft3,
-                        &self.win_t[widx][0],
-                        self.taps[0][j],
-                        self.taps[3][j],
-                    );
-                    vaxpy2_into(
-                        fr0,
-                        fr3,
-                        &self.win_r[widx][0],
-                        self.taps[0][j],
-                        self.taps[3][j],
-                    );
-                    vaxpy_into(ft1, &self.win_t[widx][1], self.taps[1][j]);
-                    vaxpy_into(ft2, &self.win_t[widx][2], self.taps[2][j]);
-                    vaxpy_into(fr1, &self.win_r[widx][1], self.taps[1][j]);
-                    vaxpy_into(fr2, &self.win_r[widx][2], self.taps[2][j]);
+                    let j = fl - 1 - k;
+                    if k == 0 {
+                        vscale2_into(ft0, ft3, d0, self.taps[0][j], self.taps[3][j]);
+                        vscale_into(ft1, d1, self.taps[1][j]);
+                        vscale_into(ft2, d2, self.taps[2][j]);
+                    } else {
+                        vaxpy2_into(ft0, ft3, d0, self.taps[0][j], self.taps[3][j]);
+                        vaxpy_into(ft1, d1, self.taps[1][j]);
+                        vaxpy_into(ft2, d2, self.taps[2][j]);
+                    }
+                }
+                for k in 0..fl {
+                    let widx = fir_tap!(k);
+                    let src = &self.win8_r[widx];
+                    match self.layout {
+                        FrameLayout::Interleaved => {
+                            srgb_to_dkl_planar(src, w, h, display, d0, d1, d2)
+                        }
+                        FrameLayout::Planar => {
+                            srgb_planar_to_dkl_planar(src, w, h, display, d0, d1, d2)
+                        }
+                    }
+                    let j = fl - 1 - k;
+                    if k == 0 {
+                        vscale2_into(fr0, fr3, d0, self.taps[0][j], self.taps[3][j]);
+                        vscale_into(fr1, d1, self.taps[1][j]);
+                        vscale_into(fr2, d2, self.taps[2][j]);
+                    } else {
+                        vaxpy2_into(fr0, fr3, d0, self.taps[0][j], self.taps[3][j]);
+                        vaxpy_into(fr1, d1, self.taps[1][j]);
+                        vaxpy_into(fr2, d2, self.taps[2][j]);
+                    }
+                }
+            } else {
+                for k in 0..fl {
+                    // Frame index at window slot k. s<0 resolves per
+                    // `temp_padding`: replicate → frame 0 (always win[0]
+                    // when s≤0); symmetric → mirrored/ping-pong index.
+                    // The emission gate guarantees every resolved index
+                    // is inside the ring.
+                    let widx = fir_tap!(k);
+                    let j = fl - 1 - k;
+                    if k == 0 {
+                        vscale2_into(
+                            ft0,
+                            ft3,
+                            &self.win_t[widx][0],
+                            self.taps[0][j],
+                            self.taps[3][j],
+                        );
+                        vscale2_into(
+                            fr0,
+                            fr3,
+                            &self.win_r[widx][0],
+                            self.taps[0][j],
+                            self.taps[3][j],
+                        );
+                        vscale_into(ft1, &self.win_t[widx][1], self.taps[1][j]);
+                        vscale_into(ft2, &self.win_t[widx][2], self.taps[2][j]);
+                        vscale_into(fr1, &self.win_r[widx][1], self.taps[1][j]);
+                        vscale_into(fr2, &self.win_r[widx][2], self.taps[2][j]);
+                    } else {
+                        vaxpy2_into(
+                            ft0,
+                            ft3,
+                            &self.win_t[widx][0],
+                            self.taps[0][j],
+                            self.taps[3][j],
+                        );
+                        vaxpy2_into(
+                            fr0,
+                            fr3,
+                            &self.win_r[widx][0],
+                            self.taps[0][j],
+                            self.taps[3][j],
+                        );
+                        vaxpy_into(ft1, &self.win_t[widx][1], self.taps[1][j]);
+                        vaxpy_into(ft2, &self.win_t[widx][2], self.taps[2][j]);
+                        vaxpy_into(fr1, &self.win_r[widx][1], self.taps[1][j]);
+                        vaxpy_into(fr2, &self.win_r[widx][2], self.taps[2][j]);
+                    }
                 }
             }
         }
@@ -1132,6 +1298,60 @@ mod tests {
         let streamed = v.finish().unwrap();
 
         assert_eq!(whole.to_bits(), streamed.to_bits());
+    }
+
+    #[test]
+    fn low_memory_matches_f32_window_bit_for_bit() {
+        let (w, h) = (64usize, 64usize);
+        // 16 frames > fl at 30 fps (9) so the ring wraps and slots
+        // get recycled; symmetric adds the mirrored-index path.
+        let (refs, dists) = synth_clip(w, h, 16);
+        let params = CvvdpParams::default();
+        let geo = DisplayGeometry::STANDARD_4K;
+
+        for padding in [TempPadding::Replicate, TempPadding::Symmetric] {
+            let mut hi = VideoScorer::with_layout_and_padding(
+                w as u32,
+                h as u32,
+                30.0,
+                params,
+                geo,
+                FrameLayout::Interleaved,
+                padding,
+            )
+            .unwrap();
+            let mut lo = VideoScorer::with_options(
+                w as u32,
+                h as u32,
+                30.0,
+                params,
+                geo,
+                VideoScorerOptions {
+                    layout: FrameLayout::Interleaved,
+                    temp_padding: padding,
+                    low_memory: true,
+                },
+            )
+            .unwrap();
+            for (rf, df) in refs.iter().zip(dists.iter()) {
+                hi.push_frame(rf, df).unwrap();
+                lo.push_frame(rf, df).unwrap();
+            }
+            let hi_stats = hi.finish_with_stats().unwrap();
+            let lo_stats = lo.finish_with_stats().unwrap();
+            assert_eq!(
+                hi_stats.jod.to_bits(),
+                lo_stats.jod.to_bits(),
+                "low_memory changed the score ({padding:?})"
+            );
+            for (band_hi, band_lo) in hi_stats.q_per_ch.iter().zip(lo_stats.q_per_ch.iter()) {
+                for (ch_hi, ch_lo) in band_hi.iter().zip(band_lo.iter()) {
+                    for (v_hi, v_lo) in ch_hi.iter().zip(ch_lo.iter()) {
+                        assert_eq!(v_hi.to_bits(), v_lo.to_bits());
+                    }
+                }
+            }
+        }
     }
 
     #[test]

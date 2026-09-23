@@ -66,7 +66,12 @@ Workspace conventions per the global rules:
   (`vxcm_pool_clamp_4ch_sqsum` inside `mult_mutual_band_4ch_into`,
   which now returns pooled values directly). Scores bit-identical;
   1080p 8t 273→230 ms/frame, 1t 432→314 ms/frame, peak RSS
-  1.25→1.04 GB.
+  1.25→1.04 GB. `VideoScorerOptions::low_memory` (via
+  `VideoScorer::with_options` / `Cvvdp::video_with_options` /
+  `score-video --low-memory`) stores the temporal window as u8 sRGB
+  instead of f32 DKL — 1080p peak RSS 1.04 GB→0.70 GB (−33 %, within
+  2.2× of ssim2) for +1–6 % wall; bit-identical scores since the
+  stored bytes are the lossless input to the emit-time conversion.
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual

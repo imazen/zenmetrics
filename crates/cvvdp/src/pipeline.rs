@@ -211,6 +211,31 @@ impl Cvvdp {
         crate::VideoScorer::with_layout(width, height, frames_per_second, params, geometry, layout)
     }
 
+    /// [`video`](Self::video) with the full
+    /// [`crate::VideoScorerOptions`] bundle (layout, temporal
+    /// padding, `low_memory` u8 window).
+    ///
+    /// # Errors
+    ///
+    /// As [`crate::VideoScorer::new`].
+    pub fn video_with_options(
+        width: u32,
+        height: u32,
+        frames_per_second: f32,
+        params: CvvdpParams,
+        geometry: DisplayGeometry,
+        options: crate::VideoScorerOptions,
+    ) -> Result<crate::VideoScorer> {
+        crate::VideoScorer::with_options(
+            width,
+            height,
+            frames_per_second,
+            params,
+            geometry,
+            options,
+        )
+    }
+
     /// Construct a scorer configured for strip mode at a given
     /// `h_body`. Pre-allocates the scratch in strip shape (saving
     /// ~80% of the persistent weber pyramid + cache footprint at

@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 use clap::{Parser, ValueEnum};
 use zenmetrics_api::cvvdp_cpu::{
     CvvdpParams, DisplayGeometry, DisplayModel, FrameLayout, TempPadding, VideoScorer,
+    VideoScorerOptions,
 };
 
 use crate::decode::decode_image_to_rgb8;
@@ -62,6 +63,12 @@ pub(crate) struct ScoreVideoArgs {
     /// `q_per_ch`, `rho_band`) — JSON output only.
     #[arg(long)]
     stats: bool,
+    /// Store the temporal window as u8 sRGB instead of f32 DKL — a 4×
+    /// smaller ring (e.g. ~450→113 MB at 1080p/30 fps) at the cost of
+    /// re-converting window slots on each emit (~+10–20 % CPU). Scores
+    /// are bit-identical to the default path.
+    #[arg(long)]
+    low_memory: bool,
 }
 
 /// clap `ValueEnum` mirror of [`TempPadding`] (kept crate-local so the
@@ -159,14 +166,17 @@ pub(crate) fn run(args: &ScoreVideoArgs) -> Result<(), Box<dyn std::error::Error
         let v = match scorer.as_mut() {
             Some(v) => v,
             None => {
-                let v = VideoScorer::with_layout_and_padding(
+                let v = VideoScorer::with_options(
                     r.width,
                     r.height,
                     args.fps,
                     params,
                     geometry,
-                    FrameLayout::Interleaved,
-                    args.temp_padding.into(),
+                    VideoScorerOptions {
+                        layout: FrameLayout::Interleaved,
+                        temp_padding: args.temp_padding.into(),
+                        low_memory: args.low_memory,
+                    },
                 )
                 .map_err(|e| format!("score-video: VideoScorer: {e}"))?;
                 scorer.insert(v)

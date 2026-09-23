@@ -65,13 +65,16 @@ push/finish loop. `cvvdp::score_video_with_stats` additionally
 accepts a `FrameLayout` (`Interleaved`/`Planar`, the `dim_order`
 analog) and returns `VideoStats` — the `(Q_jod, stats)` pair
 pycvvdp's `predict` returns, including `loss()` = `10 − JOD`.
+`VideoScorer::with_options` takes `VideoScorerOptions`
+(`layout`, `temp_padding`, `low_memory` — a u8 ring window that cuts
+peak RSS by ~⅓ at 1080p for a few percent CPU; scores bit-identical).
 A 1-frame clip routes through the still path, bit-identical to
 `Cvvdp::score`. See `docs/VIDEO.md` for the port
 design, measured parity, and benchmarks — including the
 fast-ssim2-per-frame comparison (wall, user+sys CPU, peak RSS, 1t vs
-8t; ~273 ms/frame at 1080p/8t — at parity with ssim2 per-frame —
-~1.3 GB peak RSS; the streaming bound is the temporal-filter window,
-not a small footprint).
+8t; ~230 ms/frame at 1080p/8t — faster than ssim2 per-frame —
+~1.0 GB peak RSS, ~0.7 GB with `low_memory`; the streaming bound is
+the temporal-filter window, not a small footprint).
 
 ## Scope
 

@@ -38,7 +38,11 @@ Because the FIR is causal, output frame `t` depends only on frames
 of at most `N` frames per side (`3` planes each — the transient channel
 reuses plane 0) plus the running `Q_per_ch` table
 (`N_frames × n_bands × 4` f32 — a few KB). Per-frame memory is bounded
-by the filter length, not the clip length.
+by the filter length, not the clip length. With
+`VideoScorerOptions::low_memory` the ring stores the raw sRGB-8 bytes
+instead of f32 DKL planes (4× smaller — ~450 MB → ~113 MB per side at
+1080p/30 fps) and re-converts each slot at emit; the LUT+matrix
+conversion is deterministic, so scores are bit-identical.
 
 ### Per-frame processing
 
@@ -124,6 +128,7 @@ pycvvdp entry points:
 | `stats['rho_band']` | `VideoStats::rho_band` / `VideoScorer::band_frequencies()` |
 | `stats['frames_per_second'/'width'/'height'/'N_frames']` | same-named `VideoStats` fields |
 | `temp_padding="replicate"` / `"symmetric"` | `TempPadding::{Replicate,Symmetric}` via `VideoScorer::with_layout_and_padding` / `score_video_with_stats` |
+| — (no upstream analog; memory knob) | `VideoScorerOptions::low_memory` via `VideoScorer::with_options` / `Cvvdp::video_with_options` — u8 ring window, bit-identical scores |
 
 `VideoStats::q_per_ch` rows hold the spatially-pooled per-band masked
 differences before temporal/channel pooling — the same quantity
@@ -160,12 +165,14 @@ default) scores two directories of frames:
 zenmetrics score-video \
     --reference-dir ref/ --distorted-dir dist/ --fps 30 \
     [--display-model standard_4k] [--temp-padding replicate|symmetric] \
-    [--output plain|tsv|json] [--stats]
+    [--output plain|tsv|json] [--stats] [--low-memory]
 ```
 
 Frames pair up by lexicographic filename order (zero-pad frame
 numbers). Decode streams frame-by-frame into the scorer — memory
 stays bounded by the temporal window, never the whole clip.
+`--low-memory` switches the ring to the u8-window mode described
+above (scores unchanged).
 
 New `Error` variants: `InvalidFps`, `NoFrames`, `AlreadyFinished` is
 avoided by `finish(self)` consuming the scorer. (`Error` gains two
@@ -325,6 +332,14 @@ Honest reading:
   sets (~24 MB each, ~450 MB total) plus the pyramid caches and
   scratch. Bounded ≠ small — the remaining gap to ssim2 is almost
   entirely that f32 ring.
+- **`low_memory` closes most of the RSS gap**: the `cvvdp-lm` arm of
+  the same binary (u8 ring) measured 1080p peak RSS **699 MB vs
+  1040 MB (−33 %)** — within 2.2× of ssim2 — for +1.1 % wall at 1t
+  and +5.5 % at 8t (the emit-time sRGB→DKL re-conversion is serial
+  while the band stages parallelize). At 512² the re-conversion cost
+  is in the noise (±0.4 %). JOD output is bit-identical — same TSV
+  scores — because the stored bytes are the lossless source of the
+  LUT+matrix conversion.
 - **Thread scaling is real but shallow for cvvdp**: 1t→8t buys
   ~1.36–1.45× (CPU/wall ≈ 2.3 effective threads) — only the
   8-way band-stage `rayon::scope` parallelizes; FIR, masking and

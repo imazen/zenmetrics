@@ -101,7 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 5 {
         eprintln!(
-            "usage: {} <cvvdp|ssim2|gen> <w> <h> <n_frames> [fps=30] [reps=3]",
+            "usage: {} <cvvdp|cvvdp-lm|ssim2|gen> <w> <h> <n_frames> [fps=30] [reps=3]",
             args[0]
         );
         std::process::exit(2);
@@ -125,15 +125,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 acc as f64
             }
-            "cvvdp" => {
-                let mut v = VideoScorer::new(
-                    w,
-                    h,
-                    fps,
-                    CvvdpParams::default(),
-                    DisplayGeometry::STANDARD_4K,
-                )
-                .unwrap();
+            "cvvdp" | "cvvdp-lm" => {
+                let mut v = if metric == "cvvdp-lm" {
+                    VideoScorer::with_options(
+                        w,
+                        h,
+                        fps,
+                        CvvdpParams::default(),
+                        DisplayGeometry::STANDARD_4K,
+                        cvvdp::VideoScorerOptions {
+                            low_memory: true,
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap()
+                } else {
+                    VideoScorer::new(
+                        w,
+                        h,
+                        fps,
+                        CvvdpParams::default(),
+                        DisplayGeometry::STANDARD_4K,
+                    )
+                    .unwrap()
+                };
                 for t in 0..n {
                     let rf = make_frame(w, h, t, 1234);
                     let df = distort_frame(&rf, t, 9876);
