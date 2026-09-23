@@ -28,8 +28,18 @@ Workspace conventions per the global rules:
   `cvvdp_cpu_imazen_v0_1_0_<display>`. `d71922bd`;
   [measurements](benchmarks/cvvdp_aic_discrepancy_2026-09-22.md).
 
+- cvvdp-conformance: conformance-v2 matrix. pycvvdp v0.5.7 goldens with 13
+  displays, adding the `65inch_hdr_pq_*` and `lg_oled_2026_hdr_pq` presets that
+  upstream now ships. cpu 403/403 and gpu 400/403 within 1e-3; shared cells agree
+  with the v0.5.4 goldens to 7.6e-6. **The goldens need an R2 upload before
+  push.** `15232ac2`.
+
 ### Fixed
 
+- `build_conformance_goldens.py` labelled goldens with the Rust pin instead of
+  the pycvvdp that produced them, and silently nulled displays it could not
+  construct; the conformance test overwrote
+  `benchmarks/cvvdp_conformance_matrix_2026-05-26.tsv` on every run. `d8cbb0dc`.
 - `scripts/sweep/pycvvdp_worker.py` (the `pycvvdp-scorer` image) passed
   `(ref, dist)` to pycvvdp's `predict(test, reference)`. Every
   `cvvdp_pycvvdp_v054` value it wrote was scored with the pair swapped: up to
