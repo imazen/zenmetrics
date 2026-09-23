@@ -123,6 +123,7 @@ pycvvdp entry points:
 | `stats['Q_per_ch']` `[F,C,B]` | `VideoStats::q_per_ch` `[frame][band][ch]` (ch = A, RG, VY, transient) |
 | `stats['rho_band']` | `VideoStats::rho_band` / `VideoScorer::band_frequencies()` |
 | `stats['frames_per_second'/'width'/'height'/'N_frames']` | same-named `VideoStats` fields |
+| `temp_padding="replicate"` / `"symmetric"` | `TempPadding::{Replicate,Symmetric}` via `VideoScorer::with_layout_and_padding` / `score_video_with_stats` |
 
 `VideoStats::q_per_ch` rows hold the spatially-pooled per-band masked
 differences before temporal/channel pooling — the same quantity
@@ -130,10 +131,41 @@ pycvvdp stores in `stats['Q_per_ch']` (transient channel slot is
 `f32::NAN` for a one-frame clip, matching upstream image mode which
 has no transient channel).
 
+### `temp_padding="symmetric"`
+
+Upstream's only other padding mode (`"valid"` is listed in its
+docstring but raises `RuntimeError`). Frame `t`'s filtered output is
+`Σ_j F[j]·frame[t−j]`; symmetric maps `frame[-k] → frame[k]` with a
+ping-pong wrap for clips shorter than the filter
+(`_get_symmetric_frame_index`). Because output `t` needs input frames
+up to index `fl−1−t`, `VideoScorer` defers the first `fl−1` outputs
+until enough lookahead frames have been pushed (`push_frame` emits
+zero or several rows per call; the ring stays bounded by `fl`
+frames). Clips with `N < fl` emit everything at `finish()`. Parity:
+44 cells, max |Δ| = 3e-6 JOD, including the `vid_short_clip_odd`
+(5 < fl=9) ping-pong fixture
+(`scripts/cvvdp_goldens/video_goldens_symmetric.json`).
+
 Deliberately not exposed (see "Not ported"): file/codec video
 sources (`video_source_file*`, YUV readers), GPU paths, heatmap
-outputs, foveation, `temp_resample`, non-default `temp_padding`,
-alternate `temp_filter` branches, ML/PSNR metrics.
+outputs, foveation, `temp_resample`, alternate `temp_filter`
+branches, ML/PSNR metrics.
+
+### CLI
+
+`zenmetrics score-video` (zenmetrics-cli, `cpu-cvvdp` feature — on by
+default) scores two directories of frames:
+
+```bash
+zenmetrics score-video \
+    --reference-dir ref/ --distorted-dir dist/ --fps 30 \
+    [--display-model standard_4k] [--temp-padding replicate|symmetric] \
+    [--output plain|tsv|json] [--stats]
+```
+
+Frames pair up by lexicographic filename order (zero-pad frame
+numbers). Decode streams frame-by-frame into the scorer — memory
+stays bounded by the temporal window, never the whole clip.
 
 New `Error` variants: `InvalidFps`, `NoFrames`, `AlreadyFinished` is
 avoided by `finish(self)` consuming the scorer. (`Error` gains two
@@ -162,7 +194,9 @@ Rounding (to stay under the 30 KB commit cap):
 
 ## Not ported (follow-ups)
 
-- `temp_padding="symmetric"`/`"valid"` — only `replicate` (the default).
+- `temp_padding="valid"` — upstream lists it in the docstring but the
+  implementation raises `RuntimeError`; `replicate` (default) and
+  `symmetric` are both ported.
 - `temp_filter` alternates `hp_trans`/`grad_trans` — only the default
   Gaussian band-pass branch.
 - `temp_resample` (non-native fps resampling of `Q_per_ch`).

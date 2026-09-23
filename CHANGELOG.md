@@ -25,13 +25,20 @@ Workspace conventions per the global rules:
   `Cvvdp::score`. The pycvvdp entry-point surface is covered by
   `score_video_with_stats` → `VideoStats` (`predict`'s
   `(Q_jod, stats)` pair: `jod`, `q_per_ch`, `rho_band`, fps/size/
-  `n_frames`), `VideoStats::loss()` (`10 − JOD`), and
+  `n_frames`), `VideoStats::loss()` (`10 − JOD`),
   `FrameLayout::{Interleaved, Planar}` via `VideoScorer::with_layout`
-  / `Cvvdp::video_with_layout` (the `dim_order` analog; codec/file
-  readers, GPU, heatmaps, foveation stay out of scope). Parity vs
+  / `Cvvdp::video_with_layout` (the `dim_order` analog), and
+  `TempPadding::{Replicate, Symmetric}` via
+  `VideoScorer::with_layout_and_padding` (the `temp_padding` analog —
+  symmetric defers the first `fl−1` outputs for lookahead and
+  ping-pongs on `N < fl` clips; codec/file readers, GPU, heatmaps,
+  foveation stay out of scope). `zenmetrics-cli` gains a
+  `score-video` subcommand (frame directories → streaming JOD,
+  `cpu-cvvdp` feature). Parity vs
   pycvvdp v0.5.7 on the conformance corpus:
-  max |Δ| = 3e-6 JOD over 44 cells (11 situations × 4 displays,
-  24/30/60 fps). Per-frame compute runs on the still path's SIMD
+  max |Δ| = 3e-6 JOD over 44 cells per padding mode (11 situations ×
+  4 displays, 24/30/60 fps, replicate + symmetric). Per-frame compute
+  runs on the still path's SIMD
   kernels (magetypes/archmage) with `VideoScratch` buffer reuse,
   dedicated magetypes kernels for the video hot loops (FIR axpy,
   masking min/abs/pow, cross-channel pool+clamp, p=2 pooling), and
@@ -40,7 +47,8 @@ Workspace conventions per the global rules:
   rounding policy, and benchmarks in `crates/cvvdp/docs/VIDEO.md`;
   timing harness in `examples/video_sweep.rs`. `1dc4a6dd`,
   `3ffc5960`, `22c667d6`, `c71f517e`, `5025b991`, `338a3a17`,
-  `af90f028` (+ lint cleanup `81680624`).
+  `af90f028`, `3eff4238` (+ lint cleanup `81680624`).
+  `score-video` CLI: `ff723263`.
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
