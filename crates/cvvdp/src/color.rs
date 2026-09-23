@@ -41,6 +41,52 @@ pub(crate) fn srgb_to_dkl_planar(
 ) {
     let n = width * height;
     debug_assert_eq!(src.len(), n * 3);
+    srgb8_to_dkl_planar_inner(
+        n,
+        display,
+        |i| (src[i * 3], src[i * 3 + 1], src[i * 3 + 2]),
+        out_a,
+        out_rg,
+        out_vy,
+    );
+}
+
+/// Planar-source variant: `src` is the R plane followed by G then B,
+/// each `width × height` bytes (pycvvdp `dim_order="…CHW"` analog).
+/// Produces bit-identical DKL planes to [`srgb_to_dkl_planar`] on the
+/// equivalent interleaved input — same LUTs, same op order.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn srgb_planar_to_dkl_planar(
+    src: &[u8],
+    width: usize,
+    height: usize,
+    display: DisplayModel,
+    out_a: &mut Vec<f32>,
+    out_rg: &mut Vec<f32>,
+    out_vy: &mut Vec<f32>,
+) {
+    let n = width * height;
+    debug_assert_eq!(src.len(), n * 3);
+    srgb8_to_dkl_planar_inner(
+        n,
+        display,
+        |i| (src[i], src[n + i], src[2 * n + i]),
+        out_a,
+        out_rg,
+        out_vy,
+    );
+}
+
+/// Shared sRGB-8 → DKL planar conversion. `fetch(i)` returns the
+/// `(r, g, b)` bytes for output pixel `i`.
+fn srgb8_to_dkl_planar_inner(
+    n: usize,
+    display: DisplayModel,
+    fetch: impl Fn(usize) -> (u8, u8, u8),
+    out_a: &mut Vec<f32>,
+    out_rg: &mut Vec<f32>,
+    out_vy: &mut Vec<f32>,
+) {
     out_a.resize(n, 0.0);
     out_rg.resize(n, 0.0);
     out_vy.resize(n, 0.0);
@@ -54,12 +100,10 @@ pub(crate) fn srgb_to_dkl_planar(
         let s = display.y_peak - display.y_black;
         let bias = display.y_black + display.y_refl;
         for i in 0..n {
-            let r = src[i * 3] as usize;
-            let g = src[i * 3 + 1] as usize;
-            let b = src[i * 3 + 2] as usize;
-            let lin_r = SRGB8_TO_LINEAR_LUT[r];
-            let lin_g = SRGB8_TO_LINEAR_LUT[g];
-            let lin_b = SRGB8_TO_LINEAR_LUT[b];
+            let (r, g, b) = fetch(i);
+            let lin_r = SRGB8_TO_LINEAR_LUT[r as usize];
+            let lin_g = SRGB8_TO_LINEAR_LUT[g as usize];
+            let lin_b = SRGB8_TO_LINEAR_LUT[b as usize];
             let lr = s * lin_r + bias;
             let lg = s * lin_g + bias;
             let lb = s * lin_b + bias;
@@ -71,8 +115,8 @@ pub(crate) fn srgb_to_dkl_planar(
         // Dispatch path — honors arbitrary EOTF + primaries. HLG
         // needs per-RGB-triple OOTF, hence the per-pixel call.
         for i in 0..n {
-            let (a, rg, vy) =
-                display_byte_to_dkl_scalar(src[i * 3], src[i * 3 + 1], src[i * 3 + 2], display);
+            let (r, g, b) = fetch(i);
+            let (a, rg, vy) = display_byte_to_dkl_scalar(r, g, b, display);
             out_a[i] = a;
             out_rg[i] = rg;
             out_vy[i] = vy;

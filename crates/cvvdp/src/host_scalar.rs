@@ -68,6 +68,25 @@ pub fn predict_jod_still_3ch_capped(
     ppd: f32,
     cap_levels: Option<usize>,
 ) -> f32 {
+    let (q_per_ch, _freqs) =
+        still_3ch_q_per_ch(ref_srgb, dist_srgb, width, height, display, ppd, cap_levels);
+    do_pooling_and_jod_still_3ch(&q_per_ch)
+}
+
+/// The still-image pipeline up to its per-band `Q_per_ch` table plus
+/// the band frequencies — the JOD is `do_pooling_and_jod_still_3ch`
+/// on the table. Exposed crate-internally so the video scorer's
+/// single-frame stats can report the same per-band diagnostic that
+/// pycvvdp's `stats['Q_per_ch']` carries for images.
+pub(crate) fn still_3ch_q_per_ch(
+    ref_srgb: &[u8],
+    dist_srgb: &[u8],
+    width: usize,
+    height: usize,
+    display: DisplayModel,
+    ppd: f32,
+    cap_levels: Option<usize>,
+) -> (Vec<[f32; 3]>, Vec<f32>) {
     assert_eq!(ref_srgb.len(), width * height * 3);
     assert_eq!(dist_srgb.len(), width * height * 3);
 
@@ -209,5 +228,5 @@ pub fn predict_jod_still_3ch_capped(
         q_per_ch.push(q_band);
     }
 
-    do_pooling_and_jod_still_3ch(&q_per_ch)
+    (q_per_ch, freqs)
 }

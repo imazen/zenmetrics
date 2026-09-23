@@ -133,7 +133,9 @@ pub(crate) mod strip_kernels;
 mod video;
 
 pub use pipeline::Cvvdp;
-pub use video::{VideoScorer, score_video, video_filter_len};
+pub use video::{
+    FrameLayout, VideoScorer, VideoStats, score_video, score_video_with_stats, video_filter_len,
+};
 
 /// TEST-ONLY re-exports of the `pub(crate)` SIMD kernel entry points.
 ///

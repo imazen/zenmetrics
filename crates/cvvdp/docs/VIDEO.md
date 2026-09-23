@@ -108,6 +108,33 @@ convenience `score_video(ref_frames, dist_frames, w, h, fps, params,
 geometry)` wraps the same push/finish loop — streaming and whole-clip
 are the same code path, so they are bit-identical by construction.
 
+### pycvvdp API mapping
+
+The crate surface covers the byte-slice analogs of the official
+pycvvdp entry points:
+
+| pycvvdp | cvvdp |
+|---|---|
+| `predict(test, ref, dim_order, fps)` → `(Q_jod, stats)` | `score_video_with_stats(...)` → `VideoStats` |
+| `predict` JOD only | `score_video(...)` / `VideoScorer::finish()` |
+| `loss(test, ref, ...)` → `10 − JOD` | `VideoStats::loss()` |
+| `predict_video_source(vid_source)` streaming | `VideoScorer::push_frame` × N → `finish()` |
+| `dim_order="…HWC"` / `"…CHW"` | `FrameLayout::Interleaved` / `Planar` via `VideoScorer::with_layout`, `Cvvdp::video_with_layout`, `score_video_with_stats` |
+| `stats['Q_per_ch']` `[F,C,B]` | `VideoStats::q_per_ch` `[frame][band][ch]` (ch = A, RG, VY, transient) |
+| `stats['rho_band']` | `VideoStats::rho_band` / `VideoScorer::band_frequencies()` |
+| `stats['frames_per_second'/'width'/'height'/'N_frames']` | same-named `VideoStats` fields |
+
+`VideoStats::q_per_ch` rows hold the spatially-pooled per-band masked
+differences before temporal/channel pooling — the same quantity
+pycvvdp stores in `stats['Q_per_ch']` (transient channel slot is
+`f32::NAN` for a one-frame clip, matching upstream image mode which
+has no transient channel).
+
+Deliberately not exposed (see "Not ported"): file/codec video
+sources (`video_source_file*`, YUV readers), GPU paths, heatmap
+outputs, foveation, `temp_resample`, non-default `temp_padding`,
+alternate `temp_filter` branches, ML/PSNR metrics.
+
 New `Error` variants: `InvalidFps`, `NoFrames`, `AlreadyFinished` is
 avoided by `finish(self)` consuming the scorer. (`Error` gains two
 variants — additive for callers that already match non-exhaustively;
@@ -173,24 +200,34 @@ three orders of magnitude below the acceptance tolerance.
 (`VideoScratch`: filtered planes, `WeberPyramidCache`s, output
 pyramids, sensitivity maps, masking intermediates) and reuses it for
 every emitted frame — the only per-frame heap traffic left is the
-small `Q_per_ch` row (n_levels × 4 floats). Compute runs on the same SIMD kernels as the still path:
-`weber_contrast_pyr_into` (magetypes/archmage dispatched
-reduce/expand/PU-blur), `safe_pow_with_offset_into`, and
-`compute_sensitivities_into`. Under the default `parallel` feature the
-8 pyramid builds (4 channels × 2 sides) run on rayon's pool; each owns
-a disjoint scratch slot, so results are deterministic regardless of
-scheduling.
+small `Q_per_ch` row (n_levels × 4 floats). Compute runs on the same
+SIMD kernels as the still path (`weber_contrast_pyr_into`,
+`safe_pow_with_offset_into`, `compute_sensitivities_into`) plus a set
+of magetypes/archmage helpers written for the video hot loops:
+`vaxpy_into` (temporal FIR accumulation), `vmul2_scale2_into`
+(`band_mul·x·s·gain` in the scalar op order), `vabs_diff_into` /
+`vabs_diff_mul_into` / `vmin_abs_into` / `vscale_into` (masking),
+`vxcm_pool_clamp_4ch_into` (fused 4×4 cross-channel pool + soft
+clamp), and `vlp_norm_mean_p2` (`safe_pow_lp` p=2 spatial pooling —
+specialized to `BETA_SPATIAL == 2.0`, guarded by a debug assert).
+Under the default `parallel` feature the 8 pyramid builds
+(4 channels × 2 sides) run on rayon's pool; each owns a disjoint
+scratch slot, so results are deterministic regardless of scheduling.
 
 Measured with `cargo run -p cvvdp --release --example video_sweep`
 (2026-09-23, this box; scalar = pre-SIMD port, same gates passing):
 
 | size × frames | scalar | SIMD + rayon |
 |---|---|---|
-| 256×256 ×12 | ~67 ms/frame | 8.40 ms/frame |
-| 512×512 ×12 | 279 ms/frame | 37.44 ms/frame |
-| 1280×720 ×12 | 986 ms/frame | 153.96 ms/frame |
-| 1920×1080 ×12 | 2237 ms/frame | 370.54 ms/frame |
-| 1920×1080 ×24 | 2237 ms/frame | 357.44 ms/frame |
+| 256×256 ×12 | ~67 ms/frame | 6.90 ms/frame |
+| 256×256 ×24 | ~67 ms/frame | 6.88 ms/frame |
+| 512×512 ×12 | 279 ms/frame | 31.04 ms/frame |
+| 512×512 ×24 | ~279 ms/frame | 29.41 ms/frame |
+| 1280×720 ×12 | 986 ms/frame | 134.73 ms/frame |
+| 1280×720 ×24 | ~986 ms/frame | 124.94 ms/frame |
+| 1920×1080 ×12 | 2237 ms/frame | 331.28 ms/frame |
+| 1920×1080 ×24 | ~2237 ms/frame | 324.60 ms/frame |
 
-~6× at 1080p. Note `video_sweep` builds with `parallel`; a
-`--no-default-features` build takes the sequential fallback.
+~6.9× at 1080p vs the scalar port. Note `video_sweep` builds with
+`parallel`; a `--no-default-features` build takes the sequential
+fallback.

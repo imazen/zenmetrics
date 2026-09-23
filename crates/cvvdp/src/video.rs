@@ -47,22 +47,77 @@ use alloc::collections::VecDeque;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::color::srgb_to_dkl_planar;
+use crate::color::{srgb_planar_to_dkl_planar, srgb_to_dkl_planar};
 use crate::csf::compute_sensitivities_into;
 use crate::kernels::csf::{
     CSF_BASEBAND_RHO, CsfChannel, precompute_logs_row, precompute_logs_row_o5,
 };
 use crate::kernels::masking::CH_GAIN_4;
-use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_video_4ch, lp_norm_mean};
+use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_video_4ch};
 use crate::kernels::pyramid::band_frequencies;
 use crate::kernels::temporal::{temporal_filter_len, temporal_filters};
 use crate::masking::mult_mutual_band_4ch_into;
 use crate::params::DisplayGeometry;
 use crate::pyramid::{WeberPyramid, WeberPyramidCache, weber_contrast_pyr_into};
+use crate::simd_math::{vabs_diff_mul_into, vaxpy_into, vlp_norm_mean_p2, vmul2_scale2_into};
 use crate::{CvvdpParams, Error, Result};
 
 /// One side's DKL planes for one frame: `[A, RG, VY]`.
 type FramePlanes = [Vec<f32>; 3];
+
+/// Memory layout of the sRGB-8 frames accepted by [`VideoScorer`] —
+/// the Rust analog of pycvvdp's `dim_order` argument, restricted to
+/// the two layouts a byte-slice API can express (`"HWC"` /
+/// `"CHW"` per frame).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FrameLayout {
+    /// `width × height × 3` interleaved bytes (`RGBRGB…`) per frame.
+    /// This is the layout `Cvvdp::score` and `score_video` use.
+    #[default]
+    Interleaved,
+    /// Three concatenated `width × height` planes per frame: all R
+    /// bytes, then all G, then all B. Natural for surfaces decoded
+    /// to planar RGB.
+    Planar,
+}
+
+/// Result bundle for a scored clip — the Rust analog of the
+/// `(Q_jod, stats)` pair pycvvdp's `predict`/`predict_video_source`
+/// returns. `stats` carries `Q_per_ch`, `rho_band`,
+/// `frames_per_second`, `width`, `height`, `N_frames`; pycvvdp's
+/// optional `heatmap` entry is not ported (see `docs/VIDEO.md`).
+#[derive(Debug, Clone)]
+pub struct VideoStats {
+    /// Final pooled quality in JOD — identical to
+    /// [`VideoScorer::finish`]'s return value.
+    pub jod: f32,
+    /// Per-frame, per-band, per-channel spatially-pooled masked
+    /// differences, layout `[frame][band][channel]`, channel order
+    /// sustained A, RG, VY, transient A; last band = baseband. For a
+    /// single-frame (still-path) score the transient channel entry
+    /// is `f32::NAN` — upstream image mode has no transient channel.
+    pub q_per_ch: Vec<Vec<[f32; 4]>>,
+    /// Spatial frequency of each pyramid band in cycles/degree
+    /// (`rho_band` upstream). Length = number of pyramid bands.
+    pub rho_band: Vec<f32>,
+    /// Frame rate the clip was scored at.
+    pub frames_per_second: f32,
+    /// Frame width in pixels.
+    pub width: u32,
+    /// Frame height in pixels.
+    pub height: u32,
+    /// Number of frames scored.
+    pub n_frames: usize,
+}
+
+impl VideoStats {
+    /// pycvvdp's `loss()` — `10 - JOD`, a minimisable distortion
+    /// objective.
+    #[must_use]
+    pub fn loss(&self) -> f32 {
+        10.0 - self.jod
+    }
+}
 
 /// Per-frame reusable scratch — allocated once in
 /// [`VideoScorer::new`] and grown lazily to the largest band, so
@@ -171,6 +226,10 @@ pub struct VideoScorer {
     /// Per-band spatial frequencies (cy/deg); last entry's band uses
     /// `CSF_BASEBAND_RHO` instead.
     freqs: Vec<f32>,
+    /// Byte layout `push_frame` expects (`dim_order` analog).
+    layout: FrameLayout,
+    /// Frame rate the clip is scored at (kept for `VideoStats`).
+    fps: f32,
     /// Reusable per-frame scratch (filtered planes, pyramid caches,
     /// band buffers) — allocated in `new`, so `push_frame` does no
     /// large allocations in steady state.
@@ -193,6 +252,32 @@ impl VideoScorer {
         frames_per_second: f32,
         params: CvvdpParams,
         geometry: DisplayGeometry,
+    ) -> Result<Self> {
+        Self::with_layout(
+            width,
+            height,
+            frames_per_second,
+            params,
+            geometry,
+            FrameLayout::Interleaved,
+        )
+    }
+
+    /// [`new`](Self::new) with an explicit frame byte layout — the
+    /// analog of pycvvdp's `dim_order` argument on `predict`.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::InvalidImageSize`] if `min(width, height) < 8`.
+    /// - [`Error::InvalidFps`] if `frames_per_second` is not finite
+    ///   and > 0.
+    pub fn with_layout(
+        width: u32,
+        height: u32,
+        frames_per_second: f32,
+        params: CvvdpParams,
+        geometry: DisplayGeometry,
+        layout: FrameLayout,
     ) -> Result<Self> {
         if width < 8 || height < 8 {
             return Err(Error::InvalidImageSize { width, height });
@@ -217,6 +302,8 @@ impl VideoScorer {
             first_frame: None,
             q_per_ch: Vec::new(),
             freqs,
+            layout,
+            fps: frames_per_second,
             scratch: VideoScratch::new(w, h, n_levels),
         })
     }
@@ -225,7 +312,8 @@ impl VideoScorer {
     /// **Reference first** — matching `Cvvdp::score(ref, dist)`,
     /// opposite of pycvvdp's `predict(test, reference)`.
     ///
-    /// Each frame must be `width × height × 3` bytes row-major.
+    /// Each frame must be `width × height × 3` bytes in the
+    /// [`FrameLayout`] the scorer was built with.
     ///
     /// # Errors
     ///
@@ -249,10 +337,19 @@ impl VideoScorer {
         let mut t: FramePlanes = [Vec::new(), Vec::new(), Vec::new()];
         let mut r: FramePlanes = [Vec::new(), Vec::new(), Vec::new()];
         let display = self.params.display;
+        let (w, h) = (self.width, self.height);
         let [r0, r1, r2] = &mut r;
-        srgb_to_dkl_planar(ref_srgb, self.width, self.height, display, r0, r1, r2);
         let [t0, t1, t2] = &mut t;
-        srgb_to_dkl_planar(dist_srgb, self.width, self.height, display, t0, t1, t2);
+        match self.layout {
+            FrameLayout::Interleaved => {
+                srgb_to_dkl_planar(ref_srgb, w, h, display, r0, r1, r2);
+                srgb_to_dkl_planar(dist_srgb, w, h, display, t0, t1, t2);
+            }
+            FrameLayout::Planar => {
+                srgb_planar_to_dkl_planar(ref_srgb, w, h, display, r0, r1, r2);
+                srgb_planar_to_dkl_planar(dist_srgb, w, h, display, t0, t1, t2);
+            }
+        }
         let fl = self.taps[0].len();
         self.win_t.push_back(t);
         self.win_r.push_back(r);
@@ -295,6 +392,13 @@ impl VideoScorer {
         &self.q_per_ch
     }
 
+    /// Per-band spatial frequencies in cycles/degree — pycvvdp's
+    /// `stats['rho_band']`. Length = number of pyramid bands.
+    #[must_use]
+    pub fn band_frequencies(&self) -> &[f32] {
+        &self.freqs
+    }
+
     /// Finish the clip and return the JOD score.
     ///
     /// A one-frame clip is scored by the still-image path
@@ -305,11 +409,42 @@ impl VideoScorer {
     ///
     /// [`Error::NoFrames`] if no frames were pushed.
     pub fn finish(self) -> Result<f32> {
+        Ok(self.finish_with_stats()?.jod)
+    }
+
+    /// Finish the clip and return the JOD plus the stats bundle —
+    /// the analog of pycvvdp `predict`'s `(Q_jod, stats)` return.
+    ///
+    /// For a one-frame clip `jod` comes from [`crate::Cvvdp::score`]
+    /// (bit-identical); `q_per_ch` is the scalar reference path's
+    /// per-band table (a diagnostic — it may differ from the strip
+    /// pipeline's internals by ~1 ulp).
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoFrames`] if no frames were pushed.
+    pub fn finish_with_stats(self) -> Result<VideoStats> {
         if self.n_pushed == 0 {
             return Err(Error::NoFrames);
         }
         if self.n_pushed == 1 {
             let (r, d) = self.first_frame.expect("frame 0 bytes retained");
+            // Still path expects interleaved bytes — shuffle planar
+            // input back to interleaved first.
+            let (r_i, d_i) = match self.layout {
+                FrameLayout::Interleaved => (r, d),
+                FrameLayout::Planar => (planar_to_interleaved(&r), planar_to_interleaved(&d)),
+            };
+            let ppd = self.geometry.pixels_per_degree();
+            let (q3, freqs) = crate::host_scalar::still_3ch_q_per_ch(
+                &r_i,
+                &d_i,
+                self.width,
+                self.height,
+                self.params.display,
+                ppd,
+                None,
+            );
             // Route through the public still path so a 1-frame clip
             // is bit-identical to `Cvvdp::score` on the same pair
             // (pycvvdp does the same: is_image skips temporal
@@ -320,9 +455,31 @@ impl VideoScorer {
                 self.params,
                 self.geometry,
             )?;
-            return still.score(&r, &d);
+            let jod = still.score(&r_i, &d_i)?;
+            return Ok(VideoStats {
+                jod,
+                q_per_ch: vec![
+                    q3.iter()
+                        .map(|&[a, rg, vy]| [a, rg, vy, f32::NAN])
+                        .collect(),
+                ],
+                rho_band: freqs,
+                frames_per_second: self.fps,
+                width: self.width as u32,
+                height: self.height as u32,
+                n_frames: 1,
+            });
         }
-        Ok(do_pooling_and_jod_video_4ch(&self.q_per_ch))
+        let jod = do_pooling_and_jod_video_4ch(&self.q_per_ch);
+        Ok(VideoStats {
+            jod,
+            q_per_ch: self.q_per_ch,
+            rho_band: self.freqs,
+            frames_per_second: self.fps,
+            width: self.width as u32,
+            height: self.height as u32,
+            n_frames: self.n_pushed,
+        })
     }
 
     /// Absolute index of `win_*[0]` — frames before it have scrolled
@@ -336,6 +493,9 @@ impl VideoScorer {
     /// `t−fl+1 ..= t` (replicate-extended below 0), all already in the
     /// window.
     fn emit_output_frame(&mut self, t: usize) {
+        // `vlp_norm_mean_p2` is specialised to p=2 — BETA_SPATIAL is
+        // the only exponent the video path uses.
+        debug_assert_eq!(BETA_SPATIAL, 2.0);
         let fl = self.taps[0].len();
         let w0 = self.win_base();
         let (w, h) = (self.width, self.height);
@@ -345,8 +505,8 @@ impl VideoScorer {
         // FIR per channel: out[c] = Σ_j taps[c][j] · in[src_c][t−j].
         // Tap-major loop in window-slot order k = 0..fl (oldest →
         // newest) — each output element sees the identical sequence
-        // of adds as the reference scalar loop, so results are
-        // bit-identical; the `zip` form vectorises cleanly.
+        // of adds as the reference scalar loop; `vaxpy_into` keeps the
+        // non-fused mul+add order per element.
         for c in 0..4 {
             sc.filt_t[c].fill(0.0);
             sc.filt_r[c].fill(0.0);
@@ -360,14 +520,8 @@ impl VideoScorer {
             for c in 0..4 {
                 let src_c = if c == 3 { 0 } else { c };
                 let tap = self.taps[c][fl - 1 - k];
-                let wt = &self.win_t[widx][src_c];
-                let wr = &self.win_r[widx][src_c];
-                for (a, &v) in sc.filt_t[c].iter_mut().zip(wt.iter()) {
-                    *a += tap * v;
-                }
-                for (a, &v) in sc.filt_r[c].iter_mut().zip(wr.iter()) {
-                    *a += tap * v;
-                }
+                vaxpy_into(&mut sc.filt_t[c], &self.win_t[widx][src_c], tap);
+                vaxpy_into(&mut sc.filt_r[c], &self.win_r[widx][src_c], tap);
             }
         }
 
@@ -466,11 +620,9 @@ impl VideoScorer {
                     let s = &sc.s_map[c];
                     let d = &mut sc.d[c];
                     d.clear();
-                    d.reserve(n_px_b);
-                    for i in 0..n_px_b {
-                        d.push((t_data[i] - r_data[i]).abs() * s[i]);
-                    }
-                    q_band[c] = lp_norm_mean(d, BETA_SPATIAL);
+                    d.resize(n_px_b, 0.0);
+                    vabs_diff_mul_into(d, t_data, r_data, s);
+                    q_band[c] = vlp_norm_mean_p2(d);
                 }
                 q_frame.push(q_band);
             } else {
@@ -485,10 +637,10 @@ impl VideoScorer {
                     tp.resize(n_px_b, 0.0);
                     rp.clear();
                     rp.resize(n_px_b, 0.0);
-                    for i in 0..n_px_b {
-                        tp[i] = band_mul * t_data[i] * s[i] * gain;
-                        rp[i] = band_mul * r_data[i] * s[i] * gain;
-                    }
+                    // `vmul2_scale2_into` computes ((x·a)·y)·b — the
+                    // scalar `band_mul * t * s * gain` op order.
+                    vmul2_scale2_into(tp, t_data, s, band_mul, gain);
+                    vmul2_scale2_into(rp, r_data, s, band_mul, gain);
                 }
                 mult_mutual_band_4ch_into(
                     &sc.t_p,
@@ -502,7 +654,7 @@ impl VideoScorer {
                 );
                 let mut q_band = [0.0_f32; 4];
                 for c in 0..4 {
-                    q_band[c] = lp_norm_mean(&sc.d[c], BETA_SPATIAL);
+                    q_band[c] = vlp_norm_mean_p2(&sc.d[c]);
                 }
                 q_frame.push(q_band);
             }
@@ -560,6 +712,69 @@ pub fn score_video<F: AsRef<[u8]>>(
         v.push_frame(ref_frames[i].as_ref(), dist_frames[i].as_ref())?;
     }
     v.finish()
+}
+
+/// [`score_video`] with an explicit frame [`FrameLayout`] — returns
+/// the JOD plus [`VideoStats`] (`q_per_ch`, `rho_band`, dimensions).
+/// This is the full analog of pycvvdp's
+/// `predict(test, reference, dim_order, frames_per_second)` →
+/// `(Q_jod, stats)`; call [`VideoStats::loss`] for `10 − JOD`.
+///
+/// # Errors
+///
+/// As [`score_video`].
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp::{CvvdpParams, DisplayGeometry, FrameLayout, score_video_with_stats};
+///
+/// let frames = vec![vec![128u8; 64 * 64 * 3]; 4];
+/// let stats = score_video_with_stats(
+///     &frames,
+///     &frames,
+///     64,
+///     64,
+///     30.0,
+///     CvvdpParams::default(),
+///     DisplayGeometry::STANDARD_4K,
+///     FrameLayout::Interleaved,
+/// )?;
+/// assert!((stats.jod - 10.0).abs() < 1e-3);
+/// assert_eq!(stats.n_frames, 4);
+/// assert_eq!(stats.q_per_ch.len(), 4);
+/// # Ok::<(), cvvdp::Error>(())
+/// ```
+#[allow(clippy::too_many_arguments)]
+pub fn score_video_with_stats<F: AsRef<[u8]>>(
+    ref_frames: &[F],
+    dist_frames: &[F],
+    width: u32,
+    height: u32,
+    frames_per_second: f32,
+    params: CvvdpParams,
+    geometry: DisplayGeometry,
+    layout: FrameLayout,
+) -> Result<VideoStats> {
+    let mut v =
+        VideoScorer::with_layout(width, height, frames_per_second, params, geometry, layout)?;
+    let n = ref_frames.len().min(dist_frames.len());
+    for i in 0..n {
+        v.push_frame(ref_frames[i].as_ref(), dist_frames[i].as_ref())?;
+    }
+    v.finish_with_stats()
+}
+
+/// `R‖G‖B` planar bytes → `RGBRGB…` interleaved (single frame).
+fn planar_to_interleaved(planar: &[u8]) -> Vec<u8> {
+    let n = planar.len() / 3;
+    let mut out = Vec::with_capacity(planar.len());
+    for i in 0..n {
+        out.push(planar[i]);
+        out.push(planar[n + i]);
+        out.push(planar[2 * n + i]);
+    }
+    out
 }
 
 /// Temporal filter length at `fps` — exposed for capacity planning
@@ -727,6 +942,147 @@ mod tests {
         assert!(matches!(
             VideoScorer::new(4, 64, 30.0, params, geo),
             Err(Error::InvalidImageSize { .. })
+        ));
+    }
+
+    fn interleaved_to_planar(frame: &[u8]) -> Vec<u8> {
+        let n = frame.len() / 3;
+        let mut out = vec![0u8; frame.len()];
+        for i in 0..n {
+            out[i] = frame[3 * i];
+            out[n + i] = frame[3 * i + 1];
+            out[2 * n + i] = frame[3 * i + 2];
+        }
+        out
+    }
+
+    #[test]
+    fn planar_layout_matches_interleaved() {
+        let (w, h) = (64usize, 64usize);
+        let (refs, dists) = synth_clip(w, h, 6);
+        let params = CvvdpParams::default();
+        let geo = DisplayGeometry::STANDARD_4K;
+
+        let jod_i = score_video(&refs, &dists, w as u32, h as u32, 30.0, params, geo).unwrap();
+
+        let refs_p: Vec<Vec<u8>> = refs.iter().map(|f| interleaved_to_planar(f)).collect();
+        let dists_p: Vec<Vec<u8>> = dists.iter().map(|f| interleaved_to_planar(f)).collect();
+        let stats_p = score_video_with_stats(
+            &refs_p,
+            &dists_p,
+            w as u32,
+            h as u32,
+            30.0,
+            params,
+            geo,
+            FrameLayout::Planar,
+        )
+        .unwrap();
+
+        // Same per-pixel DKL values → bit-identical downstream math.
+        assert_eq!(jod_i.to_bits(), stats_p.jod.to_bits());
+    }
+
+    #[test]
+    fn stats_bundle_reports_pycvvdp_fields() {
+        let (w, h) = (64usize, 64usize);
+        let (refs, dists) = synth_clip(w, h, 4);
+        let params = CvvdpParams::default();
+        let geo = DisplayGeometry::STANDARD_4K;
+
+        let mut v = VideoScorer::new(w as u32, h as u32, 30.0, params, geo).unwrap();
+        for (rf, df) in refs.iter().zip(dists.iter()) {
+            v.push_frame(rf, df).unwrap();
+        }
+        let n_bands = v.band_frequencies().len();
+        let stats = v.finish_with_stats().unwrap();
+
+        assert!(stats.jod.is_finite());
+        assert_eq!(stats.n_frames, 4);
+        assert_eq!(stats.width, w as u32);
+        assert_eq!(stats.height, h as u32);
+        assert_eq!(stats.frames_per_second, 30.0);
+        assert_eq!(stats.q_per_ch.len(), 4);
+        assert!(stats.q_per_ch.iter().all(|row| row.len() == n_bands));
+        assert_eq!(stats.rho_band.len(), n_bands);
+        assert_eq!(stats.loss(), 10.0 - stats.jod);
+    }
+
+    #[test]
+    fn single_frame_stats_mark_transient_nan() {
+        let (w, h) = (48usize, 40usize);
+        let r = synth_frame(w, h, 0, 1.0);
+        let d = synth_frame(w, h, 0, 1.2);
+
+        let mut v = VideoScorer::new(
+            w as u32,
+            h as u32,
+            30.0,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+        )
+        .unwrap();
+        v.push_frame(&r, &d).unwrap();
+        let stats = v.finish_with_stats().unwrap();
+
+        assert_eq!(stats.n_frames, 1);
+        assert_eq!(stats.q_per_ch.len(), 1);
+        // Still-path table: 3 real channels + NaN transient slot.
+        for band in &stats.q_per_ch[0] {
+            assert!(band[0].is_finite() && band[1].is_finite() && band[2].is_finite());
+            assert!(band[3].is_nan());
+        }
+        // JOD remains bit-identical to `Cvvdp::score`.
+        let mut still = crate::Cvvdp::with_geometry(
+            w as u32,
+            h as u32,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+        )
+        .unwrap();
+        assert_eq!(stats.jod.to_bits(), still.score(&r, &d).unwrap().to_bits());
+    }
+
+    #[test]
+    fn planar_single_frame_scores_like_interleaved() {
+        let (w, h) = (48usize, 40usize);
+        let r = synth_frame(w, h, 0, 1.0);
+        let d = synth_frame(w, h, 0, 1.2);
+        let rp = interleaved_to_planar(&r);
+        let dp = interleaved_to_planar(&d);
+        let params = CvvdpParams::default();
+        let geo = DisplayGeometry::STANDARD_4K;
+
+        let jod_i = score_video(&[r], &[d], w as u32, h as u32, 30.0, params, geo).unwrap();
+        let jod_p = score_video_with_stats(
+            &[rp],
+            &[dp],
+            w as u32,
+            h as u32,
+            30.0,
+            params,
+            geo,
+            FrameLayout::Planar,
+        )
+        .unwrap()
+        .jod;
+        assert_eq!(jod_i.to_bits(), jod_p.to_bits());
+    }
+
+    #[test]
+    fn bad_planar_length_errors() {
+        let mut v = VideoScorer::with_layout(
+            64,
+            64,
+            30.0,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+            FrameLayout::Planar,
+        )
+        .unwrap();
+        assert!(matches!(
+            v.push_frame(&[0u8; 100], &[0u8; 100]),
+            Err(Error::DimensionMismatch { .. })
         ));
     }
 

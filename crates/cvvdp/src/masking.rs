@@ -21,7 +21,9 @@ use crate::kernels::masking::{
     D_MAX, MASK_C, MASK_P, MASK_Q, MASK_Q_4, PU_PADSIZE, XCM_3X3, XCM_4X4,
 };
 
-use crate::simd_math::safe_pow_with_offset_into;
+use crate::simd_math::{
+    safe_pow_with_offset_into, vabs_diff_into, vmin_abs_into, vscale_into, vxcm_pool_clamp_4ch_into,
+};
 use crate::simd_pyramid::gaussian_blur_sigma3_simd;
 
 const SAFE_EPS: f32 = 1e-5;
@@ -250,9 +252,7 @@ pub(crate) fn mult_mutual_band_4ch_into(
 
     // Step 1: M_mm_raw = min(|T|, |R|).
     for c in 0..4 {
-        for i in 0..n {
-            m_mm[c][i] = t_p_per_ch[c][i].abs().min(r_p_per_ch[c][i].abs());
-        }
+        vmin_abs_into(&mut m_mm[c], &t_p_per_ch[c], &r_p_per_ch[c]);
     }
 
     // Step 2: phase_uncertainty per channel (σ=3 blur above
@@ -261,9 +261,7 @@ pub(crate) fn mult_mutual_band_4ch_into(
     if bw > PU_PADSIZE && bh > PU_PADSIZE {
         for c in 0..4 {
             gaussian_blur_sigma3_simd(&m_mm[c], bw, bh, pu_scratch, &mut term[c]);
-            for i in 0..n {
-                m_mm[c][i] = term[c][i] * mask_c_lin;
-            }
+            vscale_into(&mut m_mm[c], &term[c], mask_c_lin);
         }
     } else {
         for c in 0..4 {
@@ -287,11 +285,10 @@ pub(crate) fn mult_mutual_band_4ch_into(
     }
 
     // Step 4: pass 1 — diff[c] = |T−R| into the now-free m_mm buffers;
-    // pass 2 — pow into d_*; pass 3 — 4×4 cross-channel pool + clamp.
+    // pass 2 — pow into d_*; pass 3 — 4×4 cross-channel pool + clamp
+    // (fused SIMD kernel, same op order as the scalar loop).
     for c in 0..4 {
-        for i in 0..n {
-            m_mm[c][i] = (t_p_per_ch[c][i] - r_p_per_ch[c][i]).abs();
-        }
+        vabs_diff_into(&mut m_mm[c], &t_p_per_ch[c], &r_p_per_ch[c]);
     }
     let p = MASK_P;
     let eps_p = SAFE_EPS.powf(p);
@@ -300,17 +297,19 @@ pub(crate) fn mult_mutual_band_4ch_into(
     }
 
     let d_max_lin: f32 = 10.0_f32.powf(D_MAX);
-    for i in 0..n {
-        let t = [term[0][i], term[1][i], term[2][i], term[3][i]];
-        for cc in 0..4 {
-            let m = XCM_4X4[0][cc] * t[0]
-                + XCM_4X4[1][cc] * t[1]
-                + XCM_4X4[2][cc] * t[2]
-                + XCM_4X4[3][cc] * t[3];
-            let du = d[cc][i] / (1.0 + m);
-            d[cc][i] = d_max_lin * du / (d_max_lin + du);
-        }
-    }
+    let [d0, d1, d2, d3] = d;
+    let [t0, t1, t2, t3] = term;
+    vxcm_pool_clamp_4ch_into(
+        &mut [
+            d0.as_mut_slice(),
+            d1.as_mut_slice(),
+            d2.as_mut_slice(),
+            d3.as_mut_slice(),
+        ],
+        &[t0.as_slice(), t1.as_slice(), t2.as_slice(), t3.as_slice()],
+        &XCM_4X4,
+        d_max_lin,
+    );
 }
 
 #[cfg(test)]
