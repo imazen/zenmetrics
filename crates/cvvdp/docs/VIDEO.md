@@ -265,3 +265,55 @@ Measured with `cargo run -p cvvdp --release --example video_sweep`
 ~6.9× at 1080p vs the scalar port. Note `video_sweep` builds with
 `parallel`; a `--no-default-features` build takes the sequential
 fallback.
+
+### vs fast-ssim2 per frame
+
+The natural still-metric baseline for video scoring is fast-ssim2
+(SSIMULACRA2) applied to each frame pair and averaged. Measured with
+`cargo run -p cvvdp --release --example video_vs_ssim2 -- <cvvdp|ssim2>
+<W> <H> <N>` (2026-09-23, this box, release, no
+`-C target-cpu=native`; same deterministic clip both paths; frames
+synthesized lazily inside the timed loop so peak RSS reflects the
+metric's own working set; committed data:
+[`benchmarks/video_vs_ssim2_2026-09-23.tsv`](../benchmarks/video_vs_ssim2_2026-09-23.tsv)).
+`ms/frame` is `(wall − gen)/24`; gen is the shared frame-synthesis
+cost measured by the `gen` mode of the same binary.
+
+**24-frame clip, 1 thread (`RAYON_NUM_THREADS=1`):**
+
+| size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
+|---|---|---|---|---|---|---|
+| 512² | 48.1 | 32.0 | 50.8 | 33.8 | 166 MB | 42 MB |
+| 1280×720 | 185.1 | 118.5 | 194.2 | 128.8 | 573 MB | 144 MB |
+| 1920×1080 | 432.4 | 269.3 | 452.1 | 290.0 | 1285 MB | 319 MB |
+
+**24-frame clip, 8 threads (`RAYON_NUM_THREADS=8`):**
+
+| size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
+|---|---|---|---|---|---|---|
+| 512² | 37.0 | 30.8 | 90.8 | 33.3 | 165 MB | 42 MB |
+| 1280×720 | 130.3 | 119.3 | 408.3 | 139.2 | 572 MB | 144 MB |
+| 1920×1080 | 324.9 | 273.1 | 1083.8 | 309.6 | 1284 MB | 319 MB |
+
+Honest reading:
+
+- cvvdp video costs **~1.2×–1.6× ssim2-per-frame wall** depending on
+  threads and size — reasonable for what it computes (4 temporal
+  channels, 2 pyramid decomps per channel per frame, 4-channel
+  masking + pooling) but it is *not* cheap: this is a ~100–300 MB and
+  ~30–430 ms/frame metric, not a ~40 MB / ~30 ms/frame one.
+- **Peak RSS ≈ 4× ssim2's** at every size. The streaming bound holds
+  (input frames are not retained — RSS is flat in `n_frames`), but
+  the bound is the *temporal window*: at 1080p/30 fps the filter is 9
+  taps, so the ring keeps 18 DKL frame sets (~24 MB each) plus 8
+  pyramid caches and scratch. Bounded ≠ small.
+- **Thread scaling is real but shallow for cvvdp**: 1t→8t buys
+  ~1.24–1.32× (CPU/wall ≈ 2.6–3.2 effective threads) — only the
+  8-way pyramid `rayon::scope` parallelizes; FIR, masking and pooling
+  stay serial. ssim2-per-frame shows *no measurable scaling* at these
+  sizes (user+sys ≈ wall at 8t; its `rayon` feature parallelizes
+  only the gaussian-blur row pass, a negligible fraction), so
+  cvvdp's relative gap narrows with threads.
+- Scores are not comparable units (JOD 0–10 vs SSIMULACRA2's
+  unbounded scale); the ssim2 arm exists to price the "just score
+  frames" alternative, not to compare quality.

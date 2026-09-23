@@ -78,6 +78,14 @@ archmage = { version = "0.9.28", features = ["testable_dispatch"] }
 zenmetrics-corpus = { workspace = true }
 # Used to decode the corpus PNG + JPEGs.
 image = { workspace = true, features = ["png", "jpeg"] }
+# examples/video_vs_ssim2.rs — cvvdp video vs fast-ssim2 per-frame
+# comparison (wall/user CPU/peak RSS, 1t vs 8t). `rayon` gives the
+# still baseline the same thread pool; `imgref` is the zero-copy
+# sRGB-8 input path. Resolved through the workspace [patch] to the
+# sibling checkout; crates.io 0.8.2 satisfies it publicly.
+fast-ssim2 = { version = "0.8.2", features = ["imgref", "rayon"] }
+imgref = { workspace = true }
+bytemuck = { workspace = true }
 
 [[test]]
 name = "it"

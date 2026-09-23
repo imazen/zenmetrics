@@ -67,7 +67,10 @@ analog) and returns `VideoStats` — the `(Q_jod, stats)` pair
 pycvvdp's `predict` returns, including `loss()` = `10 − JOD`.
 A 1-frame clip routes through the still path, bit-identical to
 `Cvvdp::score`. See `docs/VIDEO.md` for the port
-design and measured parity.
+design, measured parity, and benchmarks — including the
+fast-ssim2-per-frame comparison (wall, user+sys CPU, peak RSS, 1t vs
+8t; ~325 ms/frame at 1080p/8t, ~1.3 GB peak RSS — the streaming bound
+is the temporal-filter window, not a small footprint).
 
 ## Scope
 

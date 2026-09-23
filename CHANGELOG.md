@@ -48,7 +48,12 @@ Workspace conventions per the global rules:
   timing harness in `examples/video_sweep.rs`. `1dc4a6dd`,
   `3ffc5960`, `22c667d6`, `c71f517e`, `5025b991`, `338a3a17`,
   `af90f028`, `3eff4238` (+ lint cleanup `81680624`).
-  `score-video` CLI: `ff723263`.
+  `score-video` CLI: `ff723263`. Comparative benchmark vs
+  fast-ssim2-per-frame (wall, user+sys CPU, peak RSS, 1t vs 8t) in
+  `examples/video_vs_ssim2.rs` +
+  `benchmarks/video_vs_ssim2_2026-09-23.tsv`: ~1.2–1.6× ssim2 wall,
+  ~4× peak RSS (1080p/8t: 325 ms/f, 1.3 GB), cvvdp scales ~1.3× to
+  8 threads while ssim2-per-frame stays single-threaded.
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
