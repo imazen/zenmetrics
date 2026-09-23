@@ -15,3 +15,4 @@ mod simd_equivalence;
 mod strip_parity;
 mod strip_stub;
 mod upstream_parity_extended;
+mod video_masking_4ch;

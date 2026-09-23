@@ -75,6 +75,28 @@ pub const XCM_3X3: [[f32; 3]; 3] = [
     [14.041_055, 0.498_209_6, 0.697_756_55],
 ];
 
+/// Per-channel gain for the VIDEO 4-channel pipeline —
+/// `[1, 1.45, 1, 1]` (transient gain = 1). pycvvdp v0.5.7's
+/// `apply_masking_model` "mult-mutual" branch, `ch_gain` literal.
+pub const CH_GAIN_4: [f32; 4] = [1.0, 1.45, 1.0, 1.0];
+
+/// `mask_q[0..4]` for the video 4-channel pipeline — the fourth entry
+/// scales the transient channel's mask term.
+pub const MASK_Q_4: [f32; 4] = [1.302_622_7, 2.888_590_8, 3.680_771_3, 3.588_787_3];
+
+/// Cross-channel masking 4×4 matrix — `2^xcm_weights` from pycvvdp
+/// v0.5.7's `cvvdp_parameters.json`, reshaped row-major `(4,4)` and
+/// applied as `M[cc] = Σ_k C[k]·XCM_4X4[k][cc]`. The top-left 3×3
+/// differs slightly from [`XCM_3X3`] — upstream recalibrated the
+/// weights between v0.5.4 and v0.5.7; the still path keeps its
+/// pinned matrix, the video path uses this one verbatim.
+pub const XCM_4X4: [[f32; 4]; 4] = [
+    [8.769_089_5e-1, 1.604_034_4e-2, 5.012_43e-2, 2.620_368e-1],
+    [5.919_845, 1.269_33, 1.518_115_6e-1, 7.085_578e-1],
+    [1.404_356_4e1, 4.982_112_2e-1, 6.976_921e-1, 6.757_845e-1],
+    [7.521_460_7e-3, 2.168_512_2e-2, 8.773_876e-2, 2.351_984e-1],
+];
+
 /// cvvdp's `safe_pow(x, p) = (x + eps)^p - eps^p`, with `eps = 1e-5`.
 ///
 /// # Examples
@@ -335,6 +357,102 @@ pub fn mult_mutual_pixel(t_p: [f32; 3], r_p: [f32; 3]) -> [f32; 3] {
         let diff = (t_p[cc] - r_p[cc]).abs();
         let d_u = safe_pow(diff, MASK_P) / (1.0 + m[cc]);
         d[cc] = clamp_diff_soft(d_u);
+    }
+    d
+}
+
+/// Cross-channel mask pooling at one pixel, 4-channel video variant.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp::kernels::masking::{XCM_4X4, mask_pool_pixel_4};
+///
+/// assert_eq!(mask_pool_pixel_4([0.0; 4]), [0.0; 4]);
+///
+/// let r0 = mask_pool_pixel_4([1.0, 0.0, 0.0, 0.0]);
+/// assert_eq!(r0, XCM_4X4[0]);
+/// ```
+#[inline]
+#[must_use]
+pub fn mask_pool_pixel_4(term: [f32; 4]) -> [f32; 4] {
+    let mut out = [0.0_f32; 4];
+    for (cc, o) in out.iter_mut().enumerate() {
+        *o = XCM_4X4[0][cc] * term[0]
+            + XCM_4X4[1][cc] * term[1]
+            + XCM_4X4[2][cc] * term[2]
+            + XCM_4X4[3][cc] * term[3];
+    }
+    out
+}
+
+/// Full-band masking for the cvvdp "mult-mutual" model, 4-channel
+/// video variant. Identical structure to [`mult_mutual_band`] —
+/// `M_mm = phase_uncertainty(min(|T_p|, |R_p|))` per channel,
+/// `M = mask_pool(safe_pow(|M_mm|, q))`,
+/// `D = clamp_diffs(safe_pow(|T_p-R_p|, p) / (1+M))` — but with the
+/// 4-entry `mask_q` and 4×4 `xcm_weights` of pycvvdp v0.5.7's video
+/// path (transient channel included in both axes of the pool).
+#[must_use]
+pub fn mult_mutual_band_4ch(
+    t_p_per_ch: &[Vec<f32>; 4],
+    r_p_per_ch: &[Vec<f32>; 4],
+    w: usize,
+    h: usize,
+) -> [Vec<f32>; 4] {
+    let n = w * h;
+    debug_assert_eq!(t_p_per_ch[0].len(), n);
+
+    let m_mm_raw: [Vec<f32>; 4] = [
+        (0..n)
+            .map(|i| t_p_per_ch[0][i].abs().min(r_p_per_ch[0][i].abs()))
+            .collect(),
+        (0..n)
+            .map(|i| t_p_per_ch[1][i].abs().min(r_p_per_ch[1][i].abs()))
+            .collect(),
+        (0..n)
+            .map(|i| t_p_per_ch[2][i].abs().min(r_p_per_ch[2][i].abs()))
+            .collect(),
+        (0..n)
+            .map(|i| t_p_per_ch[3][i].abs().min(r_p_per_ch[3][i].abs()))
+            .collect(),
+    ];
+
+    let m_mm: [Vec<f32>; 4] = [
+        phase_uncertainty_band(&m_mm_raw[0], w, h),
+        phase_uncertainty_band(&m_mm_raw[1], w, h),
+        phase_uncertainty_band(&m_mm_raw[2], w, h),
+        phase_uncertainty_band(&m_mm_raw[3], w, h),
+    ];
+
+    let term: [Vec<f32>; 4] = [
+        m_mm[0]
+            .iter()
+            .map(|v| safe_pow(v.abs(), MASK_Q_4[0]))
+            .collect(),
+        m_mm[1]
+            .iter()
+            .map(|v| safe_pow(v.abs(), MASK_Q_4[1]))
+            .collect(),
+        m_mm[2]
+            .iter()
+            .map(|v| safe_pow(v.abs(), MASK_Q_4[2]))
+            .collect(),
+        m_mm[3]
+            .iter()
+            .map(|v| safe_pow(v.abs(), MASK_Q_4[3]))
+            .collect(),
+    ];
+
+    let mut d: [Vec<f32>; 4] = [vec![0.0; n], vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    for i in 0..n {
+        let term_i = [term[0][i], term[1][i], term[2][i], term[3][i]];
+        let m_pool = mask_pool_pixel_4(term_i);
+        for (cc, d_cc) in d.iter_mut().enumerate() {
+            let diff = (t_p_per_ch[cc][i] - r_p_per_ch[cc][i]).abs();
+            let d_u = safe_pow(diff, MASK_P) / (1.0 + m_pool[cc]);
+            d_cc[i] = clamp_diff_soft(d_u);
+        }
     }
     d
 }

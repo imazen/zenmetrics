@@ -11,8 +11,22 @@ pub mod csf_lut_v0_5_4 {
 }
 
 pub use csf_lut_v0_5_4::{
-    GE_SIGMA, LOG_L_BKG_AXIS, LOG_RHO_AXIS, LOG_S_O0_C1, LOG_S_O0_C2, LOG_S_O0_C3,
+    GE_SIGMA, LOG_L_BKG_AXIS, LOG_RHO_AXIS, LOG_S_O0_C1, LOG_S_O0_C2, LOG_S_O0_C3, LOG_S_O5_C1,
 };
+
+// Regeneration snippet for the LUT include (run under the pycvvdp
+// reference venv; writes the four tables in the layout below):
+//
+//   import json
+//   d = json.load(open(
+//       ".../pycvvdp/vvdp_data/csf_lut_weber_fixed_size.json"))
+//   for name in ("o0_c1", "o0_c2", "o0_c3", "o5_c1"):
+//       rows = d[name]                      # 32 x 32 nested list
+//       for row in rows:
+//           print(", ".join(f"{v:.10e}_f32" for v in row) + ",")
+//
+// `omega` = [0, 5] selects the sustained (o0) vs transient (o5)
+// table set; `o5_*` exists only for the achromatic channel (c1).
 
 /// cvvdp v0.5.4's `sensitivity_correction` parameter (dB).
 ///
@@ -187,6 +201,91 @@ pub fn sensitivity_corrected_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) ->
     let s = sensitivity_scalar(rho, log_l_bkg, cc);
     let correction = 10.0_f32.powf(SENSITIVITY_CORRECTION_DB / 20.0);
     s * correction
+}
+
+/// Host-scalar CSF sensitivity for the video *transient* achromatic
+/// channel (omega = 5 Hz — `o5_c1` LUT, `cch = 0`).
+///
+/// Mirrors `sensitivity_scalar` but on the transient table; the
+/// sensitivity correction is applied by the caller the same way.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp::kernels::csf::sensitivity_scalar_o5;
+///
+/// let s = sensitivity_scalar_o5(4.0, 2.0);
+/// assert!(s > 0.0 && s.is_finite());
+///
+/// // The transient (omega=5) achromatic channel is less sensitive
+/// // at high spatial frequencies than the sustained one at low
+/// // luminance... but it is finite and positive everywhere.
+/// let s2 = sensitivity_scalar_o5(30.0, 0.0);
+/// assert!(s2 > 0.0);
+/// ```
+#[must_use]
+pub fn sensitivity_scalar_o5(rho: f32, log_l_bkg: f32) -> f32 {
+    let log_rho_q = rho.max(1e-6).log10();
+
+    let mut logs_row = [0.0_f32; N_L_BKG];
+    for l_idx in 0..N_L_BKG {
+        let row = &LOG_S_O5_C1[l_idx * N_RHO..(l_idx + 1) * N_RHO];
+        logs_row[l_idx] = interp1_rho_extrap(&LOG_RHO_AXIS, row, log_rho_q);
+    }
+
+    let log_s = interp1_uniform(&LOG_L_BKG_AXIS, &logs_row, log_l_bkg);
+
+    10.0_f32.powf(log_s)
+}
+
+/// Sensitivity with cvvdp's published correction applied, transient
+/// channel (`o5_c1`).
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp::kernels::csf::{
+///     sensitivity_corrected_scalar_o5, sensitivity_scalar_o5,
+///     SENSITIVITY_CORRECTION_DB,
+/// };
+///
+/// let factor = 10.0_f32.powf(SENSITIVITY_CORRECTION_DB / 20.0);
+/// let s = sensitivity_corrected_scalar_o5(4.0, 2.0);
+/// let s_unc = sensitivity_scalar_o5(4.0, 2.0);
+/// assert!((s / s_unc - factor).abs() < 1e-5);
+/// ```
+#[must_use]
+pub fn sensitivity_corrected_scalar_o5(rho: f32, log_l_bkg: f32) -> f32 {
+    sensitivity_scalar_o5(rho, log_l_bkg) * 10.0_f32.powf(SENSITIVITY_CORRECTION_DB / 20.0)
+}
+
+/// Precompute the `logs_row` 32-entry array for the transient
+/// channel (`o5_c1`) at `rho`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp::kernels::csf::{
+///     precompute_logs_row_o5, sensitivity_scalar_o5, LOG_L_BKG_AXIS,
+///     N_L_BKG,
+/// };
+///
+/// let row = precompute_logs_row_o5(4.0);
+/// assert_eq!(row.len(), N_L_BKG);
+/// for (i, &log_s) in row.iter().enumerate() {
+///     let s_direct = sensitivity_scalar_o5(4.0, LOG_L_BKG_AXIS[i]);
+///     assert!((log_s - s_direct.log10()).abs() < 1e-5);
+/// }
+/// ```
+#[must_use]
+pub fn precompute_logs_row_o5(rho: f32) -> [f32; N_L_BKG] {
+    let log_rho_q = rho.max(1e-6).log10();
+    let mut row = [0.0_f32; N_L_BKG];
+    for l_idx in 0..N_L_BKG {
+        let r = &LOG_S_O5_C1[l_idx * N_RHO..(l_idx + 1) * N_RHO];
+        row[l_idx] = interp1_rho_extrap(&LOG_RHO_AXIS, r, log_rho_q);
+    }
+    row
 }
 
 /// Precompute the `logs_row` 32-entry array for a given `(rho, cc)` pair.
