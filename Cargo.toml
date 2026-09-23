@@ -272,6 +272,12 @@ codegen-units = 1
 # re-collects with the post-W44 RD curves rather than reusing
 # the pre-W44 cached sidecars.
 [patch.crates-io]
+# Temporary until zenpixels-convert >=0.2.17 publishes; then bump the
+# minimum and drop these patches. The 0.2.16 registry release predates the
+# exact U16->U8 narrowing fix on zenpixels main. Keep both crates from the
+# same source commit so PixelDescriptor types remain unified.
+zenpixels = { path = "../zenpixels--rgb16-round/zenpixels" }
+zenpixels-convert = { path = "../zenpixels--rgb16-round/zenpixels-convert" }
 # zenpixels / zenpixels-convert: previously git-rev-pinned (e890b671, 0.2.15)
 # because ultrahdr-core needed an unpublished ^0.2.15. DROPPED 2026-07-27:
 # 0.2.16 is on crates.io and the zenpng sibling now requires
