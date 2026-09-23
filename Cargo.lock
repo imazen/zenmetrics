@@ -1124,6 +1124,7 @@ dependencies = [
  "cvvdp",
  "dssim-core",
  "fast-ssim2 0.8.2",
+ "gmsd",
  "imgref",
  "iwssim",
  "rgb",

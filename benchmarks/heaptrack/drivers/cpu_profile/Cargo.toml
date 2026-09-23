@@ -44,6 +44,10 @@ fast-ssim2   = { version = "0.8.1", features = ["imgref"] }
 # stub), and dssim-core's parallelism is what we profile anyway.
 dssim-core   = { workspace = true }
 butteraugli  = { path = "../../../../../../butteraugli/butteraugli" }
+# GMSD (in-tree port of libgmsd). `parallel` = rayon bands, as the CLI and the
+# zensim speed arm run it; RAYON_NUM_THREADS sets the band concurrency, which
+# is what scales its scratch (per-band ring rows + gray scratch rows).
+gmsd         = { path = "../../../../crates/gmsd", default-features = false, features = ["std", "parallel"] }
 imgref       = "1"
 rgb          = "0.8"
 # Phase 9.Y: zero-copy reinterpret of interleaved sRGB-u8 byte buffers as

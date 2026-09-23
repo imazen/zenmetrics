@@ -7,7 +7,7 @@
 //! Invocation:
 //!   cpu-profile <metric> <mode> <width> <height>
 //!
-//! `<metric>` ∈ { cvvdp ssim2 dssim butter iwssim zensim }
+//! `<metric>` ∈ { cvvdp ssim2 dssim butter iwssim zensim gmsd }
 //! `<mode>`   ∈ { full warm_ref strip warm_ref_strip }
 //! `<width>`/`<height>` in pixels.
 //!
@@ -466,11 +466,41 @@ fn run_zensim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
 // Main
 // ---------------------------------------------------------------------------
 
+/// GMSD. `full` = `gmsd_rgb8` (sRGB8 rows converted to gray inside each
+/// band; no full-size gray planes, no map). `map` = the heaviest caller
+/// shape: two packed gray planes (`rgb8_to_gray`) + `gmsd_with_map` writing
+/// the full half-resolution GMS map. No warm-reference or strip API exists.
+fn run_gmsd(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, String> {
+    let (w, h) = (w as usize, h as usize);
+    match mode {
+        "full" => gmsd::gmsd_rgb8(r, d, w, h, w * 3)
+            .map(|s| s.gmsd)
+            .map_err(|e| e.to_string()),
+        "map" => {
+            let mut gr = vec![0.0f32; w * h];
+            let mut gd = vec![0.0f32; w * h];
+            gmsd::rgb8_to_gray(r, w, h, w * 3, &mut gr).map_err(|e| e.to_string())?;
+            gmsd::rgb8_to_gray(d, w, h, w * 3, &mut gd).map_err(|e| e.to_string())?;
+            let (mw, mh) = gmsd::map_dims(w, h);
+            let mut map = vec![0.0f32; mw * mh];
+            let s = gmsd::gmsd_with_map(
+                gmsd::GrayImage::packed(&gr, w, h).map_err(|e| e.to_string())?,
+                gmsd::GrayImage::packed(&gd, w, h).map_err(|e| e.to_string())?,
+                &mut map,
+            )
+            .map_err(|e| e.to_string())?;
+            std::hint::black_box(&map);
+            Ok(s.gmsd)
+        }
+        _ => Err(format!("GAP:gmsd:{mode}")),
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     if args.len() != 5 {
         eprintln!(
-            "usage: cpu-profile <metric> <mode> <width> <height>\n  metrics: cvvdp ssim2 dssim butter iwssim zensim\n  modes:   full warm_ref strip warm_ref_strip\n  zensim-only amortized modes: full_n<N> warm_ref_n<N> (e.g. warm_ref_n10)"
+            "usage: cpu-profile <metric> <mode> <width> <height>\n  metrics: cvvdp ssim2 dssim butter iwssim zensim gmsd\n  modes:   full warm_ref strip warm_ref_strip\n  zensim-only amortized modes: full_n<N> warm_ref_n<N> (e.g. warm_ref_n10)"
         );
         return ExitCode::from(64);
     }
@@ -491,6 +521,7 @@ fn main() -> ExitCode {
         "butter" => run_butter(mode, w, h, &r, &d),
         "iwssim" => run_iwssim(mode, w, h, &r, &d),
         "zensim" => run_zensim(mode, w, h, &r, &d),
+        "gmsd" => run_gmsd(mode, w, h, &r, &d),
         _ => {
             eprintln!("unknown metric: {metric}");
             return ExitCode::from(64);
