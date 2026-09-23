@@ -352,6 +352,83 @@ fn rgb8_gray_simd_matches_scalar_formula() {
     }
 }
 
+/// EXHAUSTIVE proof for the integer luma used by the Rgb8 fast path.
+///
+/// With `s = 299·r + 587·g + 114·b` the fast path emits
+/// `q = floor((s + 499) / 1000)` and flags the pixel iff `s % 1000 == 500`;
+/// flagged pixels are recomputed with the f64 `gray_px` formula. This test
+/// proves the non-tautological half of the contract: for every one of the
+/// 2^24 triplets with `s % 1000 != 500`, `(s + 499) / 1000` equals
+/// `gray_px` bit-for-bit — so a flagged lane is the ONLY place the integer
+/// value can differ from the f64 one. (Boundary triplets *do* differ, by
+/// exactly 1, in both directions — which is why they are flagged.)
+///
+/// It also proves the two SIMD-side equivalences over the whole reachable
+/// `s` range `[0, 255000]`: `trunc((s + 499)·0.001f32)` == `(s + 499)/1000`
+/// (integer division, done as `cvttps` in SIMD), and the flag
+/// `s - 1000·q == 500` ⟺ `s % 1000 == 500`.
+#[test]
+fn integer_luma_exact_off_boundary_exhaustive() {
+    // Quotient + flag equivalences over the full reachable range of s.
+    for s in 0u32..=255_000 {
+        let q = ((s + 499) as f32 * 0.001) as i32; // cvttps2dq truncation
+        assert_eq!(q, ((s + 499) / 1000) as i32, "s={s}");
+        assert_eq!(s as i32 - 1000 * q == 500, s % 1000 == 500, "s={s}");
+    }
+    // All 2^24 triplets: off the boundary the integer value IS gray_px.
+    for r in 0..=255u32 {
+        for g in 0..=255u32 {
+            for b in 0..=255u32 {
+                let s = 299 * r + 587 * g + 114 * b;
+                if s % 1000 == 500 {
+                    continue;
+                }
+                let int = ((s + 499) / 1000) as i64;
+                let exact = kernel::gray_px(r as u8, g as u8, b as u8);
+                assert_eq!(int as f32, exact, "({r},{g},{b}) s={s}");
+            }
+        }
+    }
+}
+
+/// The fused Rgb8 path sums the four integer luma values of a 2×2 block as
+/// integers and multiplies by 0.25 once. For integer-valued samples in
+/// 0..=255 every partial sum of `((0.25·a + 0.25·b) + 0.25·c) + 0.25·e` is a
+/// multiple of 0.25 no larger than 255, hence exactly representable in f32,
+/// so the libgmsd-order float expression equals `(a + b + c + e)·0.25`
+/// bit-for-bit — the i32 sum ≤ 1020 is exact, its f32 convert is exact
+/// (< 2^24), and the multiply is exact (a multiple of 0.25).
+#[test]
+fn integer_quad_average_equals_float_order() {
+    let check = |a: u32, b: u32, c: u32, e: u32| {
+        let fl = kernel::ds_px(a as f32, b as f32, c as f32, e as f32);
+        let int = (a + b + c + e) as f32 * 0.25;
+        assert_eq!(fl.to_bits(), int.to_bits(), "{a} {b} {c} {e}");
+    };
+    let edges = [0u32, 1, 2, 127, 128, 253, 254, 255];
+    for &a in &edges {
+        for &b in &edges {
+            for &c in &edges {
+                for &e in &edges {
+                    check(a, b, c, e);
+                }
+            }
+        }
+    }
+    let mut s = 0x9E3779B9u32;
+    for _ in 0..(1 << 20) {
+        s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let a = (s >> 24) & 0xFF;
+        s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let b = (s >> 24) & 0xFF;
+        s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let c = (s >> 24) & 0xFF;
+        s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let e = (s >> 24) & 0xFF;
+        check(a, b, c, e);
+    }
+}
+
 /// `gmsd_rgb8`'s fused path (gray rows converted inside the bands, never
 /// materialised) is bit-identical to converting whole planes first, packed
 /// and strided, with and without the parallel feature's banding.

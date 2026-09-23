@@ -100,48 +100,154 @@ pub(crate) fn floor_nonneg(v: f64) -> f64 {
     v as i64 as f64
 }
 
-// One row of sRGB8 → gray, 4 pixels per `f64x4`: the same f64 operations in
-// the same order as `gray_px` (no FMA; `floor` is exact), so every tier is
-// bit-identical to the scalar pixel function. Shared by the `#[rite]` row
-// helper (inside a band) and the `#[arcane]` whole-plane converter.
-macro_rules! gray_row_body {
-    ($token:ident, $rgb:ident, $out:ident) => {{
+// ---------------------------------------------------------------------
+// sRGB8 → gray, integer path.
+//
+// `gray_px` rounds `(0.299·R + 0.587·G) + 0.114·B` in f64. With the integer
+// `S = 299·R + 587·G + 114·B` (≤ 255000), `(S + 499) / 1000` equals
+// `gray_px` for every triplet EXCEPT the boundary ones `S ≡ 500 (mod 1000)`,
+// where the f64 sum lands a few ulps either side of the half-integer and
+// either result occurs — proved exhaustively over all 2^24 triplets
+// (`tests::integer_luma_exact_off_boundary_exhaustive`). The vectors flag
+// exactly those pixels (`S − 1000·q == 500`); flagged lanes are recomputed
+// with the f64 formula, so the path is exact by construction + proof.
+//
+// The quotient uses an f32 detour because SIMD has no integer divide:
+// `trunc((S + 499)·0.001f32) == (S + 499)/1000` for every reachable S —
+// `S + 499 ≤ 255499` is exact in f32 and the product's error stays far
+// below the 1/1000 distance to the nearest integer boundary (also proved
+// exhaustively in the test).
+
+/// One group of packed-pixel u32 words (low byte R, then G, B) → base gray
+/// `q` and the boundary `flag` as integer vectors of the tier's width.
+macro_rules! gray_int_vec {
+    ($token:ident, $I32:ident, $F32:ident, $w:expr) => {{
+        let w = $w;
+        let m255 = $I32::splat($token, 0xFF);
+        let r = w & m255;
+        let g = w.shr_logical_const::<8>() & m255;
+        let b = w.shr_logical_const::<16>() & m255;
+        let s = r * 299 + g * 587 + b * 114;
+        let q = ((s + 499).to_f32() * $F32::splat($token, 0.001)).to_i32();
+        let flag = (s - q * 1000).simd_eq($I32::splat($token, 500));
+        (q, flag)
+    }};
+}
+
+/// Whole-image sRGB8 → gray body: `$LANES` pixels per iteration, integer
+/// luma + boundary fixup. `$rgb`/`$out` are one row (out.len() pixels).
+macro_rules! gray_row_int_body {
+    ($token:ident, $I32:ident, $F32:ident, $LANES:literal, $rgb:ident, $out:ident) => {{
         let n = $out.len();
         let rgb = &$rgb[..3 * n];
-        let cr = f64x4::splat($token, 0.299);
-        let cg = f64x4::splat($token, 0.587);
-        let cb = f64x4::splat($token, 0.114);
-        let half = f64x4::splat($token, 0.5);
-        let chunks = n / 4;
+        // A pixel's unaligned u32 word covers bytes 3x..3x+4; that stays
+        // inside the row slice for x <= n − 2, so the last pixel goes to the
+        // scalar tail (`gray_px` — the same result by definition).
+        let nvec = n.saturating_sub(1);
+        let chunks = nvec / $LANES;
         for i in 0..chunks {
-            let p: &[u8; 12] = rgb[12 * i..12 * i + 12].try_into().unwrap();
-            let r = f64x4::from_array($token, [p[0] as f64, p[3] as f64, p[6] as f64, p[9] as f64]);
-            let g = f64x4::from_array(
+            let x0 = $LANES * i;
+            let w = $I32::from_array(
                 $token,
-                [p[1] as f64, p[4] as f64, p[7] as f64, p[10] as f64],
+                core::array::from_fn(|k| {
+                    u32::from_le_bytes(rgb[3 * (x0 + k)..3 * (x0 + k) + 4].try_into().unwrap())
+                        as i32
+                }),
             );
-            let b = f64x4::from_array(
-                $token,
-                [p[2] as f64, p[5] as f64, p[8] as f64, p[11] as f64],
-            );
-            let q = ((cr * r + cg * g) + cb * b + half).floor().to_array();
-            let o: &mut [f32; 4] = (&mut $out[4 * i..4 * i + 4]).try_into().unwrap();
-            *o = [q[0] as f32, q[1] as f32, q[2] as f32, q[3] as f32];
+            let (q, flag) = gray_int_vec!($token, $I32, $F32, w);
+            q.to_f32()
+                .store((&mut $out[x0..x0 + $LANES]).try_into().unwrap());
+            if flag.any_true() {
+                let mut m = flag.bitmask();
+                while m != 0 {
+                    let k = m.trailing_zeros() as usize;
+                    m &= m - 1;
+                    let p = 3 * (x0 + k);
+                    $out[x0 + k] = gray_px(rgb[p], rgb[p + 1], rgb[p + 2]);
+                }
+            }
         }
-        for x in chunks * 4..n {
+        for x in chunks * $LANES..n {
             $out[x] = gray_px(rgb[3 * x], rgb[3 * x + 1], rgb[3 * x + 2]);
         }
     }};
 }
 
-/// sRGB8 → gray for one row (`rgb` holds at least `3 · out.len()` bytes).
-#[magetypes(rite, define(f64x4), v3, neon, wasm128, scalar)]
-fn gray_row(token: Token, rgb: &[u8], out: &mut [f32]) {
-    gray_row_body!(token, rgb, out)
+/// Fused body: two sRGB8 rows → one half-resolution f32 row. The four luma
+/// values of each 2×2 block are integers 0..=255, so the i32 block sum
+/// (≤ 1020) is exact, its f32 convert is exact, and `(a+b+c+e)·0.25` equals
+/// the libgmsd-order `((0.25·a + 0.25·b) + 0.25·c) + 0.25·e` bit-for-bit:
+/// every partial sum there is a multiple of 0.25 ≤ 255, exactly
+/// representable (proved in `integer_quad_average_equals_float_order`).
+macro_rules! rgb8_pair_half_row_body {
+    ($token:ident, $I32:ident, $F32:ident, $LANES:literal, $rgb0:ident, $rgb1:ident, $out:ident) => {{
+        let w2 = $out.len();
+        let rgb0 = &$rgb0[..6 * w2];
+        let rgb1 = &$rgb1[..6 * w2];
+        // Output x reads u32 words at byte offsets 6x and 6x+3 — in-slice
+        // for x <= w2 − 2; the last output goes to the scalar tail.
+        let nvec = w2.saturating_sub(1);
+        let chunks = nvec / $LANES;
+        let quarter = $F32::splat($token, 0.25);
+        for i in 0..chunks {
+            let x0 = $LANES * i;
+            macro_rules! wv {
+                ($row:ident, $off:literal) => {
+                    $I32::from_array(
+                        $token,
+                        core::array::from_fn(|k| {
+                            u32::from_le_bytes(
+                                $row[6 * (x0 + k) + $off..6 * (x0 + k) + $off + 4]
+                                    .try_into()
+                                    .unwrap(),
+                            ) as i32
+                        }),
+                    )
+                };
+            }
+            let (qe0, fe0) = gray_int_vec!($token, $I32, $F32, wv!(rgb0, 0));
+            let (qo0, fo0) = gray_int_vec!($token, $I32, $F32, wv!(rgb0, 3));
+            let (qe1, fe1) = gray_int_vec!($token, $I32, $F32, wv!(rgb1, 0));
+            let (qo1, fo1) = gray_int_vec!($token, $I32, $F32, wv!(rgb1, 3));
+            let flag = (fe0 | fo0) | (fe1 | fo1);
+            let sum = ((qe0 + qo0) + qe1) + qo1; // integer: order irrelevant
+            (sum.to_f32() * quarter).store((&mut $out[x0..x0 + $LANES]).try_into().unwrap());
+            if flag.any_true() {
+                let mut m = flag.bitmask();
+                while m != 0 {
+                    let k = m.trailing_zeros() as usize;
+                    m &= m - 1;
+                    let p = 6 * (x0 + k);
+                    $out[x0 + k] = ds_px(
+                        gray_px(rgb0[p], rgb0[p + 1], rgb0[p + 2]),
+                        gray_px(rgb0[p + 3], rgb0[p + 4], rgb0[p + 5]),
+                        gray_px(rgb1[p], rgb1[p + 1], rgb1[p + 2]),
+                        gray_px(rgb1[p + 3], rgb1[p + 4], rgb1[p + 5]),
+                    );
+                }
+            }
+        }
+        for x in chunks * $LANES..w2 {
+            let p = 6 * x;
+            $out[x] = ds_px(
+                gray_px(rgb0[p], rgb0[p + 1], rgb0[p + 2]),
+                gray_px(rgb0[p + 3], rgb0[p + 4], rgb0[p + 5]),
+                gray_px(rgb1[p], rgb1[p + 1], rgb1[p + 2]),
+                gray_px(rgb1[p + 3], rgb1[p + 4], rgb1[p + 5]),
+            );
+        }
+    }};
 }
 
-/// sRGB8 → gray for a whole strided image into a packed plane.
-#[magetypes(define(f64x4), v3, neon, wasm128, scalar)]
+/// Fused two-row sRGB8 → half-resolution gray (`rgb` rows hold at least
+/// `6 · out.len()` bytes).
+#[magetypes(rite, define(i32x8, f32x8), v3, neon, wasm128, scalar)]
+fn rgb8_pair_half_row(token: Token, rgb0: &[u8], rgb1: &[u8], out: &mut [f32]) {
+    rgb8_pair_half_row_body!(token, i32x8, f32x8, 8, rgb0, rgb1, out)
+}
+
+/// sRGB8 → gray for a whole strided image into a packed plane (integer path).
+#[magetypes(define(i32x8, f32x8), v3, neon, wasm128, scalar)]
 fn gray_plane(
     token: Token,
     rgb: &[u8],
@@ -153,7 +259,7 @@ fn gray_plane(
     for y in 0..height {
         let row = &rgb[y * stride..y * stride + 3 * width];
         let dst = &mut out[y * width..(y + 1) * width];
-        gray_row_body!(token, row, dst)
+        gray_row_int_body!(token, i32x8, f32x8, 8, row, dst)
     }
 }
 
@@ -367,39 +473,11 @@ pub(crate) fn padded_pitch(w2: usize) -> usize {
 // region. The body is shared through a macro because it names the
 // tier-suffixed helpers.
 macro_rules! band_body {
-    ($token:ident, $band:ident, $map:ident, $step:ident, $sums:ident, $ds:ident, $gms:ident, $gray:ident) => {{
+    ($token:ident, $band:ident, $map:ident, $step:ident, $sums:ident, $ds:ident, $gms:ident, $pair:ident) => {{
         let w2 = $band.w2;
         let h2 = $band.h2;
         let pitch = padded_pitch(w2);
         let in_w = 2 * w2;
-        // Gray scratch rows for an sRGB8 source (two input rows per image).
-        let scratch = |src: &Source<'_>| match src {
-            Source::Rgb8 { .. } => in_w,
-            Source::Gray(_) => 0,
-        };
-        let (mut sr0, mut sr1) = (
-            alloc::vec![0.0f32; scratch(&$band.reference)],
-            alloc::vec![0.0f32; scratch(&$band.reference)],
-        );
-        let (mut sd0, mut sd1) = (
-            alloc::vec![0.0f32; scratch(&$band.distorted)],
-            alloc::vec![0.0f32; scratch(&$band.distorted)],
-        );
-        // Input rows 2y and 2y+1 as gray f32 (converted in place for Rgb8).
-        macro_rules! rows {
-            ($src:expr, $y:expr, $s0:ident, $s1:ident) => {{
-                match $src {
-                    Source::Gray(p) => (p.row(2 * $y, in_w), p.row(2 * $y + 1, in_w)),
-                    Source::Rgb8 { data, stride } => {
-                        let a = 2 * $y * stride;
-                        let b = (2 * $y + 1) * stride;
-                        $gray($token, &data[a..a + 3 * in_w], &mut $s0[..]);
-                        $gray($token, &data[b..b + 3 * in_w], &mut $s1[..]);
-                        (&$s0[..], &$s1[..])
-                    }
-                }
-            }};
-        }
         // ring[slot] holds padded half-res row `yd` at slot (yd + 1) % 3.
         let mut ring_r = [
             alloc::vec![0.0f32; pitch],
@@ -423,10 +501,28 @@ macro_rules! band_body {
                 dr.fill(0.0);
             } else {
                 let y = yd as usize;
-                let (a, b) = rows!($band.reference, y, sr0, sr1);
-                $ds($token, a, b, rr);
-                let (a, b) = rows!($band.distorted, y, sd0, sd1);
-                $ds($token, a, b, dr);
+                macro_rules! fill_one {
+                    ($src:expr, $dst:ident) => {
+                        match $src {
+                            Source::Gray(p) => {
+                                $ds($token, p.row(2 * y, in_w), p.row(2 * y + 1, in_w), $dst);
+                            }
+                            // sRGB8 → half-res in one fused integer pass:
+                            // no full-size gray scratch rows at all.
+                            Source::Rgb8 { data, stride } => {
+                                let a = 2 * y * stride;
+                                $pair(
+                                    $token,
+                                    &data[a..a + 3 * in_w],
+                                    &data[a + stride..a + stride + 3 * in_w],
+                                    $dst,
+                                );
+                            }
+                        }
+                    };
+                }
+                fill_one!($band.reference, rr);
+                fill_one!($band.distorted, dr);
             }
             }};
         }
@@ -473,7 +569,7 @@ pub fn gmsd_band_v3(
         sums,
         downsample_row_v3,
         gms_row_v3,
-        gray_row_v3
+        rgb8_pair_half_row_v3
     )
 }
 
@@ -495,7 +591,7 @@ pub fn gmsd_band_neon(
         sums,
         downsample_row_neon,
         gms_row_neon,
-        gray_row_neon
+        rgb8_pair_half_row_neon
     )
 }
 
@@ -517,7 +613,7 @@ pub fn gmsd_band_wasm128(
         sums,
         downsample_row_wasm128,
         gms_row_wasm128,
-        gray_row_wasm128
+        rgb8_pair_half_row_wasm128
     )
 }
 
@@ -537,7 +633,7 @@ pub fn gmsd_band_scalar(
         sums,
         downsample_row_scalar,
         gms_row_scalar,
-        gray_row_scalar
+        rgb8_pair_half_row_scalar
     )
 }
 
