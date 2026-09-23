@@ -230,6 +230,20 @@ pub fn rgb8_to_gray(
     stride_bytes: usize,
     out: &mut [f32],
 ) -> Result<()> {
+    check_rgb8(rgb, width, height, stride_bytes)?;
+    if out.len() < width * height {
+        return Err(Error::BufferTooSmall {
+            expected: width * height,
+            got: out.len(),
+        });
+    }
+    // SIMD rows (`kernel::gray_row_body!`), bit-identical to the scalar
+    // `kernel::gray_px` on every tier.
+    kernel::rgb8_to_gray_plane(rgb, width, height, stride_bytes, out);
+    Ok(())
+}
+
+fn check_rgb8(rgb: &[u8], width: usize, height: usize, stride_bytes: usize) -> Result<()> {
     let row_bytes = width * 3;
     if stride_bytes < row_bytes {
         return Err(Error::StrideTooSmall {
@@ -248,29 +262,7 @@ pub fn rgb8_to_gray(
             got: rgb.len(),
         });
     }
-    if out.len() < width * height {
-        return Err(Error::BufferTooSmall {
-            expected: width * height,
-            got: out.len(),
-        });
-    }
-    for y in 0..height {
-        let src = &rgb[y * stride_bytes..y * stride_bytes + row_bytes];
-        let dst = &mut out[y * width..(y + 1) * width];
-        for (px, o) in src.as_chunks::<3>().0.iter().zip(dst.iter_mut()) {
-            let v = 0.299 * px[0] as f64 + 0.587 * px[1] as f64 + 0.114 * px[2] as f64;
-            // f64::round is std-only; values are non-negative so floor(v+0.5)
-            // is C's round() (half away from zero).
-            *o = floor_f64(v + 0.5) as f32;
-        }
-    }
     Ok(())
-}
-
-#[inline(always)]
-fn floor_f64(v: f64) -> f64 {
-    let t = v as i64 as f64;
-    if t > v { t - 1.0 } else { t }
 }
 
 /// GMSD of two sRGB8 images through [`rgb8_to_gray`].
@@ -281,13 +273,22 @@ pub fn gmsd_rgb8(
     height: usize,
     stride_bytes: usize,
 ) -> Result<GmsdScore> {
-    let mut r = alloc::vec![0.0f32; width * height];
-    let mut d = alloc::vec![0.0f32; width * height];
-    rgb8_to_gray(reference, width, height, stride_bytes, &mut r)?;
-    rgb8_to_gray(distorted, width, height, stride_bytes, &mut d)?;
-    gmsd(
-        GrayImage::packed(&r, width, height)?,
-        GrayImage::packed(&d, width, height)?,
+    check_rgb8(reference, width, height, stride_bytes)?;
+    check_rgb8(distorted, width, height, stride_bytes)?;
+    // Converted to gray row by row inside each band: no full-size gray
+    // planes, and the conversion runs in the band's tier and thread.
+    run_sources(
+        kernel::Source::Rgb8 {
+            data: reference,
+            stride: stride_bytes,
+        },
+        kernel::Source::Rgb8 {
+            data: distorted,
+            stride: stride_bytes,
+        },
+        width,
+        height,
+        None,
     )
 }
 
@@ -353,23 +354,34 @@ fn run(
             distorted: (distorted.width, distorted.height),
         });
     }
-    let (w2, h2) = map_dims(reference.width, reference.height);
+    fn plane<'a>(g: &GrayImage<'a>) -> kernel::Source<'a> {
+        kernel::Source::Gray(kernel::Plane {
+            data: g.data,
+            stride: g.stride,
+        })
+    }
+    run_sources(
+        plane(&reference),
+        plane(&distorted),
+        reference.width,
+        reference.height,
+        map,
+    )
+}
+
+fn run_sources(
+    r: kernel::Source<'_>,
+    d: kernel::Source<'_>,
+    width: usize,
+    height: usize,
+    map: Option<&mut [f32]>,
+) -> Result<GmsdScore> {
+    let (w2, h2) = map_dims(width, height);
     let n = w2 * h2;
     if n < 2 {
-        return Err(Error::TooSmall {
-            width: reference.width,
-            height: reference.height,
-        });
+        return Err(Error::TooSmall { width, height });
     }
     let mut sums: Vec<(f64, f64)> = alloc::vec![(0.0, 0.0); h2];
-    let r = kernel::Plane {
-        data: reference.data,
-        stride: reference.stride,
-    };
-    let d = kernel::Plane {
-        data: distorted.data,
-        stride: distorted.stride,
-    };
     let band_of = |i: usize| kernel::Band {
         reference: r,
         distorted: d,
@@ -475,7 +487,7 @@ pub mod dev {
     pub use crate::kernel::gmsd_band_scalar;
     #[cfg(target_arch = "x86_64")]
     pub use crate::kernel::gmsd_band_v3;
-    pub use crate::kernel::{Band, Plane};
+    pub use crate::kernel::{Band, Plane, Source};
 }
 
 #[cfg(test)]

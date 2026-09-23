@@ -164,14 +164,14 @@ fn every_tier_matches_scalar_bitwise() {
     let b = distort(&a, w, h);
     let (w2, h2) = map_dims(w, h);
     let band = kernel::Band {
-        reference: kernel::Plane {
+        reference: kernel::Source::Gray(kernel::Plane {
             data: &a,
             stride: w,
-        },
-        distorted: kernel::Plane {
+        }),
+        distorted: kernel::Source::Gray(kernel::Plane {
             data: &b,
             stride: w,
-        },
+        }),
         w2,
         h2,
         y0: 0,
@@ -308,4 +308,78 @@ fn pixels_rgb8_equals_rgb8_entry() {
         gmsd_pixels(&pa, &pb).unwrap(),
         gmsd_rgb8(&ra, &rb, w, h, w * 3).unwrap()
     );
+}
+
+/// sRGB8 fixtures: the libgmsd-luma of `img`'s levels spread over three
+/// channels, with a strided layout.
+fn rgb_fixture(w: usize, h: usize, seed: u32, stride: usize) -> Vec<u8> {
+    let g = img(w, h, seed);
+    let mut out = vec![7u8; stride * h];
+    for y in 0..h {
+        for x in 0..w {
+            let v = g[y * w + x] as u8;
+            let o = y * stride + 3 * x;
+            out[o] = v;
+            out[o + 1] = v.wrapping_mul(3).wrapping_add(x as u8);
+            out[o + 2] = 255 - v;
+        }
+    }
+    out
+}
+
+/// The SIMD sRGB8 → gray conversion equals the scalar libgmsd formula on
+/// every byte triplet it can see (all 2^24 would take too long in debug:
+/// a dense lattice plus the full 0..=255 diagonal and edges).
+#[test]
+fn rgb8_gray_simd_matches_scalar_formula() {
+    let mut rgb = Vec::new();
+    for r in (0..=255u32).step_by(3) {
+        for g in (0..=255u32).step_by(5) {
+            for b in (0..=255u32).step_by(7) {
+                rgb.extend_from_slice(&[r as u8, g as u8, b as u8]);
+            }
+        }
+    }
+    for v in 0..=255u8 {
+        rgb.extend_from_slice(&[v, v, v, v, 0, 0, 0, v, 0, 0, 0, v, 255, v, 0]);
+    }
+    let n = rgb.len() / 3;
+    let mut out = vec![0.0f32; n];
+    rgb8_to_gray(&rgb, n, 1, n * 3, &mut out).unwrap();
+    for (i, px) in rgb.chunks(3).enumerate() {
+        let want = kernel::gray_px(px[0], px[1], px[2]);
+        assert_eq!(out[i].to_bits(), want.to_bits(), "pixel {i} {px:?}");
+    }
+}
+
+/// `gmsd_rgb8`'s fused path (gray rows converted inside the bands, never
+/// materialised) is bit-identical to converting whole planes first, packed
+/// and strided, with and without the parallel feature's banding.
+#[test]
+fn fused_rgb8_equals_convert_then_score() {
+    for &(w, h) in SIZES
+        .iter()
+        .chain([(300usize, 2 * BAND_ROWS * 2 + 11)].iter())
+    {
+        for stride in [w * 3, w * 3 + 5] {
+            let a = rgb_fixture(w, h, 21, stride);
+            let mut b = rgb_fixture(w, h, 22, stride);
+            for (i, v) in b.iter_mut().enumerate() {
+                if i % 11 == 0 {
+                    *v = v.wrapping_add(19);
+                }
+            }
+            let fused = gmsd_rgb8(&a, &b, w, h, stride).unwrap();
+            let mut ga = vec![0.0f32; w * h];
+            let mut gb = vec![0.0f32; w * h];
+            rgb8_to_gray(&a, w, h, stride, &mut ga).unwrap();
+            rgb8_to_gray(&b, w, h, stride, &mut gb).unwrap();
+            let planes = gmsd(
+                GrayImage::packed(&ga, w, h).unwrap(),
+                GrayImage::packed(&gb, w, h).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(fused, planes, "{w}x{h} stride {stride}");
+        }
+    }
 }

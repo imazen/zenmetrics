@@ -85,6 +85,92 @@ pub(crate) fn gms_px(g1: f32, g2: f32) -> f32 {
     ((g1 * 2.0) * g2 + GMS_C) / ((g1 * g1 + g2 * g2) + GMS_C)
 }
 
+/// Scalar sRGB8 → gray of one pixel exactly as libgmsd's command-line tool:
+/// `((0.299·R + 0.587·G) + 0.114·B)` in f64, then `floor(v + 0.5)` (C
+/// `round`, half away from zero, for these non-negative values).
+#[inline(always)]
+pub(crate) fn gray_px(r: u8, g: u8, b: u8) -> f32 {
+    let v = 0.299 * r as f64 + 0.587 * g as f64 + 0.114 * b as f64;
+    floor_nonneg(v + 0.5) as f32
+}
+
+/// `floor` for non-negative finite values without `std` (truncation).
+#[inline(always)]
+pub(crate) fn floor_nonneg(v: f64) -> f64 {
+    v as i64 as f64
+}
+
+// One row of sRGB8 → gray, 4 pixels per `f64x4`: the same f64 operations in
+// the same order as `gray_px` (no FMA; `floor` is exact), so every tier is
+// bit-identical to the scalar pixel function. Shared by the `#[rite]` row
+// helper (inside a band) and the `#[arcane]` whole-plane converter.
+macro_rules! gray_row_body {
+    ($token:ident, $rgb:ident, $out:ident) => {{
+        let n = $out.len();
+        let rgb = &$rgb[..3 * n];
+        let cr = f64x4::splat($token, 0.299);
+        let cg = f64x4::splat($token, 0.587);
+        let cb = f64x4::splat($token, 0.114);
+        let half = f64x4::splat($token, 0.5);
+        let chunks = n / 4;
+        for i in 0..chunks {
+            let p: &[u8; 12] = rgb[12 * i..12 * i + 12].try_into().unwrap();
+            let r = f64x4::from_array($token, [p[0] as f64, p[3] as f64, p[6] as f64, p[9] as f64]);
+            let g = f64x4::from_array(
+                $token,
+                [p[1] as f64, p[4] as f64, p[7] as f64, p[10] as f64],
+            );
+            let b = f64x4::from_array(
+                $token,
+                [p[2] as f64, p[5] as f64, p[8] as f64, p[11] as f64],
+            );
+            let q = ((cr * r + cg * g) + cb * b + half).floor().to_array();
+            let o: &mut [f32; 4] = (&mut $out[4 * i..4 * i + 4]).try_into().unwrap();
+            *o = [q[0] as f32, q[1] as f32, q[2] as f32, q[3] as f32];
+        }
+        for x in chunks * 4..n {
+            $out[x] = gray_px(rgb[3 * x], rgb[3 * x + 1], rgb[3 * x + 2]);
+        }
+    }};
+}
+
+/// sRGB8 → gray for one row (`rgb` holds at least `3 · out.len()` bytes).
+#[magetypes(rite, define(f64x4), v3, neon, wasm128, scalar)]
+fn gray_row(token: Token, rgb: &[u8], out: &mut [f32]) {
+    gray_row_body!(token, rgb, out)
+}
+
+/// sRGB8 → gray for a whole strided image into a packed plane.
+#[magetypes(define(f64x4), v3, neon, wasm128, scalar)]
+fn gray_plane(
+    token: Token,
+    rgb: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+    out: &mut [f32],
+) {
+    for y in 0..height {
+        let row = &rgb[y * stride..y * stride + 3 * width];
+        let dst = &mut out[y * width..(y + 1) * width];
+        gray_row_body!(token, row, dst)
+    }
+}
+
+/// Runtime-dispatched whole-image sRGB8 → gray.
+pub(crate) fn rgb8_to_gray_plane(
+    rgb: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+    out: &mut [f32],
+) {
+    archmage::incant!(
+        gray_plane(rgb, width, height, stride, out),
+        [v3, neon, wasm128, scalar]
+    );
+}
+
 /// 2×2 average + decimation of one output row.
 ///
 /// `r0`/`r1` are input rows `2y` and `2y+1` (at least `2 · out.len()`
@@ -235,10 +321,21 @@ impl<'a> Plane<'a> {
     }
 }
 
+/// Where a band reads its input rows from: an f32 gray plane, or sRGB8
+/// pixels converted to gray row by row inside the band (so the RGB entry
+/// never materialises full-size gray planes and converts in parallel).
+#[derive(Clone, Copy)]
+pub enum Source<'a> {
+    /// Gray f32 plane on the 0..255 scale.
+    Gray(Plane<'a>),
+    /// Packed RGB triplets, rows `stride` bytes apart.
+    Rgb8 { data: &'a [u8], stride: usize },
+}
+
 /// One band of output rows `[y0, y1)` of the half-resolution GMS grid.
 pub struct Band<'a> {
-    pub reference: Plane<'a>,
-    pub distorted: Plane<'a>,
+    pub reference: Source<'a>,
+    pub distorted: Source<'a>,
     /// Half-resolution width and height (`width / 2`, `height / 2`).
     pub w2: usize,
     pub h2: usize,
@@ -258,11 +355,39 @@ pub(crate) fn padded_pitch(w2: usize) -> usize {
 // region. The body is shared through a macro because it names the
 // tier-suffixed helpers.
 macro_rules! band_body {
-    ($token:ident, $band:ident, $map:ident, $step:ident, $sums:ident, $ds:ident, $gms:ident) => {{
+    ($token:ident, $band:ident, $map:ident, $step:ident, $sums:ident, $ds:ident, $gms:ident, $gray:ident) => {{
         let w2 = $band.w2;
         let h2 = $band.h2;
         let pitch = padded_pitch(w2);
         let in_w = 2 * w2;
+        // Gray scratch rows for an sRGB8 source (two input rows per image).
+        let scratch = |src: &Source<'_>| match src {
+            Source::Rgb8 { .. } => in_w,
+            Source::Gray(_) => 0,
+        };
+        let (mut sr0, mut sr1) = (
+            alloc::vec![0.0f32; scratch(&$band.reference)],
+            alloc::vec![0.0f32; scratch(&$band.reference)],
+        );
+        let (mut sd0, mut sd1) = (
+            alloc::vec![0.0f32; scratch(&$band.distorted)],
+            alloc::vec![0.0f32; scratch(&$band.distorted)],
+        );
+        // Input rows 2y and 2y+1 as gray f32 (converted in place for Rgb8).
+        macro_rules! rows {
+            ($src:expr, $y:expr, $s0:ident, $s1:ident) => {{
+                match $src {
+                    Source::Gray(p) => (p.row(2 * $y, in_w), p.row(2 * $y + 1, in_w)),
+                    Source::Rgb8 { data, stride } => {
+                        let a = 2 * $y * stride;
+                        let b = (2 * $y + 1) * stride;
+                        $gray($token, &data[a..a + 3 * in_w], &mut $s0[..]);
+                        $gray($token, &data[b..b + 3 * in_w], &mut $s1[..]);
+                        (&$s0[..], &$s1[..])
+                    }
+                }
+            }};
+        }
         // ring[slot] holds padded half-res row `yd` at slot (yd + 1) % 3.
         let mut ring_r = [
             alloc::vec![0.0f32; pitch],
@@ -286,18 +411,10 @@ macro_rules! band_body {
                 dr.fill(0.0);
             } else {
                 let y = yd as usize;
-                $ds(
-                    $token,
-                    $band.reference.row(2 * y, in_w),
-                    $band.reference.row(2 * y + 1, in_w),
-                    rr,
-                );
-                $ds(
-                    $token,
-                    $band.distorted.row(2 * y, in_w),
-                    $band.distorted.row(2 * y + 1, in_w),
-                    dr,
-                );
+                let (a, b) = rows!($band.reference, y, sr0, sr1);
+                $ds($token, a, b, rr);
+                let (a, b) = rows!($band.distorted, y, sd0, sd1);
+                $ds($token, a, b, dr);
             }
             }};
         }
@@ -335,7 +452,16 @@ pub fn gmsd_band_v3(
     step: usize,
     sums: &mut [(f64, f64)],
 ) {
-    band_body!(token, band, map, step, sums, downsample_row_v3, gms_row_v3)
+    band_body!(
+        token,
+        band,
+        map,
+        step,
+        sums,
+        downsample_row_v3,
+        gms_row_v3,
+        gray_row_v3
+    )
 }
 
 #[cfg(target_arch = "aarch64")]
@@ -354,7 +480,8 @@ pub fn gmsd_band_neon(
         step,
         sums,
         downsample_row_neon,
-        gms_row_neon
+        gms_row_neon,
+        gray_row_neon
     )
 }
 
@@ -374,7 +501,8 @@ pub fn gmsd_band_wasm128(
         step,
         sums,
         downsample_row_wasm128,
-        gms_row_wasm128
+        gms_row_wasm128,
+        gray_row_wasm128
     )
 }
 
@@ -392,7 +520,8 @@ pub fn gmsd_band_scalar(
         step,
         sums,
         downsample_row_scalar,
-        gms_row_scalar
+        gms_row_scalar,
+        gray_row_scalar
     )
 }
 
