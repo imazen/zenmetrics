@@ -31,6 +31,9 @@ _dev = ["archmage/testable_dispatch"]
 # zenpixels input: score any `PixelSlice` (any depth / layout / transfer that
 # zenpixels-convert can bring to sRGB RGB8), converted row by row.
 pixels = ["std", "dep:zenpixels", "dep:zenpixels-convert"]
+# Opt-in AVX-512 `v4` tier (16-wide), like crates/iwssim: enables the
+# archmage/magetypes AVX-512 support the tier is built on.
+avx512 = ["archmage/avx512", "magetypes/avx512"]
 
 [dependencies]
 archmage = { workspace = true }

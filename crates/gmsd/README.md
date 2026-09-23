@@ -68,17 +68,25 @@ on odd input; `GMSD.m` instead keeps an extra half-zero-padded sample.)
 
 ## SIMD
 
-One `#[arcane]` entry per tier (`v3` AVX2, `neon`, `wasm128`, `scalar`) through
-archmage; the per-row helpers (sRGB8 → gray; 2×2 decimation; gradient + GMS +
-pooling sums) are magetypes `#[rite]` variants of the same tier, inlined into
-it. Every tier is bit-identical to the scalar tier (tested).
+One `#[arcane]` entry per tier (`v4` AVX-512 behind crate feature `avx512`,
+`v3` AVX2, `neon`, `wasm128`, `scalar`) through archmage; the per-row helpers
+(sRGB8 → gray + 2×2 decimation; gradient + GMS + pooling sums) are magetypes
+`#[rite]` variants of the same tier, inlined into it. Every tier is
+bit-identical to the scalar tier (tested).
 
-`gmsd_rgb8` never materialises full-size gray planes: each band converts only
-the input rows it reads, in its own tier and thread. The conversion had been
-the dominant cost — at 1024², 3.6 ms of a 5.3 ms call against 0.68 ms for the
-GMS kernel (`examples/split_timing.rs`) — and fusing it took the call to
-1.6 ms at 1 thread and 0.41 ms at 8. Published speed numbers come from
-zensim's `ssim2_speed_bar` owner, not from that diagnostic.
+The sRGB8 conversion is integer SIMD: for `S = 299·R + 587·G + 114·B`,
+`(S + 499) / 1000` equals `round(0.299·R + 0.587·G + 0.114·B)` everywhere
+except `S ≡ 500 (mod 1000)`, where the f64 sum lands either side of the
+half-integer — those rare lanes are recomputed in f64, so the result is
+bit-identical to libgmsd (proved exhaustively over all 2^24 triplets). The
+2×2 decimation then sums the four integer luma values and multiplies by 0.25
+once — bit-identical to libgmsd's ordered f32 chain because every partial sum
+is a multiple of 0.25 ≤ 255.
+
+`gmsd_rgb8` never materialises full-size gray planes: each band converts and
+decimates only the input rows it reads, in one fused pass, in its own tier
+and thread. Published speed numbers come from zensim's `ssim2_speed_bar`
+owner, not from `examples/split_timing.rs` diagnostics.
 
 ## License
 

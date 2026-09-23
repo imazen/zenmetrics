@@ -191,6 +191,14 @@ fn every_tier_matches_scalar_bitwise() {
             // Row sums: same f64 lane grouping in both tiers.
             assert_eq!(s, s_s);
         }
+        #[cfg(feature = "avx512")]
+        if let Some(t) = archmage::X64V4Token::summon() {
+            let mut m = vec![0.0f32; w2 * h2];
+            let mut s = vec![(0.0, 0.0); h2];
+            kernel::gmsd_band_v4(t, &band, &mut m, w2, &mut s);
+            assert!(m.iter().zip(&m_s).all(|(x, y)| x.to_bits() == y.to_bits()));
+            assert_eq!(s, s_s);
+        }
     }
     #[cfg(target_arch = "aarch64")]
     {
@@ -199,6 +207,64 @@ fn every_tier_matches_scalar_bitwise() {
             let mut m = vec![0.0f32; w2 * h2];
             let mut s = vec![(0.0, 0.0); h2];
             kernel::gmsd_band_neon(t, &band, &mut m, w2, &mut s);
+            assert!(m.iter().zip(&m_s).all(|(x, y)| x.to_bits() == y.to_bits()));
+            assert_eq!(s, s_s);
+        }
+    }
+}
+
+/// The fused sRGB8 band path (integer luma + decimation) is bit-identical
+/// across tiers — same maps and row sums as the scalar tier.
+#[test]
+fn rgb8_tiers_match_scalar_bitwise() {
+    // Packed RGB8 bytes; w*3 stride, no padding.
+    let (w, h) = (198, 138);
+    let mut st = 0x9E3779B9u64;
+    let mut rgb = |n: usize| {
+        (0..n)
+            .map(|_| {
+                st = st
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                (st >> 33) as u8
+            })
+            .collect::<Vec<u8>>()
+    };
+    let a = rgb(w * h * 3);
+    let b = rgb(w * h * 3);
+    let (w2, h2) = map_dims(w, h);
+    let band = kernel::Band {
+        reference: kernel::Source::Rgb8 {
+            data: &a,
+            stride: 3 * w,
+        },
+        distorted: kernel::Source::Rgb8 {
+            data: &b,
+            stride: 3 * w,
+        },
+        w2,
+        h2,
+        y0: 0,
+        y1: h2,
+    };
+    let mut m_s = vec![0.0f32; w2 * h2];
+    let mut s_s = vec![(0.0, 0.0); h2];
+    kernel::gmsd_band_scalar(archmage::ScalarToken, &band, &mut m_s, w2, &mut s_s);
+    #[cfg(target_arch = "x86_64")]
+    {
+        use archmage::SimdToken;
+        if let Some(t) = archmage::X64V3Token::summon() {
+            let mut m = vec![0.0f32; w2 * h2];
+            let mut s = vec![(0.0, 0.0); h2];
+            kernel::gmsd_band_v3(t, &band, &mut m, w2, &mut s);
+            assert!(m.iter().zip(&m_s).all(|(x, y)| x.to_bits() == y.to_bits()));
+            assert_eq!(s, s_s);
+        }
+        #[cfg(feature = "avx512")]
+        if let Some(t) = archmage::X64V4Token::summon() {
+            let mut m = vec![0.0f32; w2 * h2];
+            let mut s = vec![(0.0, 0.0); h2];
+            kernel::gmsd_band_v4(t, &band, &mut m, w2, &mut s);
             assert!(m.iter().zip(&m_s).all(|(x, y)| x.to_bits() == y.to_bits()));
             assert_eq!(s, s_s);
         }

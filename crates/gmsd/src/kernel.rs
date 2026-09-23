@@ -239,13 +239,6 @@ macro_rules! rgb8_pair_half_row_body {
     }};
 }
 
-/// Fused two-row sRGB8 → half-resolution gray (`rgb` rows hold at least
-/// `6 · out.len()` bytes).
-#[magetypes(rite, define(i32x8, f32x8), v3, neon, wasm128, scalar)]
-fn rgb8_pair_half_row(token: Token, rgb0: &[u8], rgb1: &[u8], out: &mut [f32]) {
-    rgb8_pair_half_row_body!(token, i32x8, f32x8, 8, rgb0, rgb1, out)
-}
-
 /// sRGB8 → gray for a whole strided image into a packed plane (integer path).
 #[magetypes(define(i32x8, f32x8), v3, neon, wasm128, scalar)]
 fn gray_plane(
@@ -263,6 +256,24 @@ fn gray_plane(
     }
 }
 
+/// 16-wide `gray_plane` for the AVX-512 `v4` tier (crate feature `avx512`).
+/// Emits `gray_plane_v4`, which `incant!` picks up by name.
+#[magetypes(define(i32x16, f32x16), v4, -scalar)]
+fn gray_plane(
+    token: Token,
+    rgb: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+    out: &mut [f32],
+) {
+    for y in 0..height {
+        let row = &rgb[y * stride..y * stride + 3 * width];
+        let dst = &mut out[y * width..(y + 1) * width];
+        gray_row_int_body!(token, i32x16, f32x16, 16, row, dst)
+    }
+}
+
 /// Runtime-dispatched whole-image sRGB8 → gray.
 pub(crate) fn rgb8_to_gray_plane(
     rgb: &[u8],
@@ -273,88 +284,72 @@ pub(crate) fn rgb8_to_gray_plane(
 ) {
     archmage::incant!(
         gray_plane(rgb, width, height, stride, out),
-        [v3, neon, wasm128, scalar]
+        [v4, v3, neon, wasm128, scalar]
     );
 }
 
-/// 2×2 average + decimation of one output row.
+/// 2×2 average + decimation of one output row, `$LANES` lanes per step.
 ///
 /// `r0`/`r1` are input rows `2y` and `2y+1` (at least `2 · out.len()`
 /// samples each); `out[x]` receives the average of the block at column `2x`.
-#[magetypes(rite, define(f32x8), v3, neon, wasm128, scalar)]
-fn downsample_row(token: Token, r0: &[f32], r1: &[f32], out: &mut [f32]) {
-    let n = out.len();
-    let r0 = &r0[..2 * n];
-    let r1 = &r1[..2 * n];
-    let q = f32x8::splat(token, 0.25);
-    let chunks = n / 8;
-    for i in 0..chunks {
-        // Fixed-size windows: one range check each, none inside.
-        let a: &[f32; 16] = r0[16 * i..16 * i + 16].try_into().unwrap();
-        let b: &[f32; 16] = r1[16 * i..16 * i + 16].try_into().unwrap();
-        let ae = f32x8::from_array(token, core::array::from_fn(|k| a[2 * k]));
-        let ao = f32x8::from_array(token, core::array::from_fn(|k| a[2 * k + 1]));
-        let be = f32x8::from_array(token, core::array::from_fn(|k| b[2 * k]));
-        let bo = f32x8::from_array(token, core::array::from_fn(|k| b[2 * k + 1]));
-        let v = ((q * ae + q * ao) + q * be) + q * bo;
-        let o: &mut [f32; 8] = (&mut out[8 * i..8 * i + 8]).try_into().unwrap();
-        v.store(o);
-    }
-    for x in chunks * 8..n {
-        out[x] = ds_px(r0[2 * x], r0[2 * x + 1], r1[2 * x], r1[2 * x + 1]);
-    }
+/// Every output is an independent per-lane f32 chain, so all widths are
+/// bit-identical.
+macro_rules! downsample_row_body {
+    ($token:ident, $F32:ident, $LANES:literal, $r0:ident, $r1:ident, $out:ident) => {{
+        let n = $out.len();
+        let r0 = &$r0[..2 * n];
+        let r1 = &$r1[..2 * n];
+        let q = $F32::splat($token, 0.25);
+        let chunks = n / $LANES;
+        for i in 0..chunks {
+            // Fixed-size windows: one range check each, none inside.
+            let a: &[f32; 2 * $LANES] = r0[2 * $LANES * i..2 * $LANES * i + 2 * $LANES]
+                .try_into()
+                .unwrap();
+            let b: &[f32; 2 * $LANES] = r1[2 * $LANES * i..2 * $LANES * i + 2 * $LANES]
+                .try_into()
+                .unwrap();
+            let ae = $F32::from_array($token, core::array::from_fn(|k| a[2 * k]));
+            let ao = $F32::from_array($token, core::array::from_fn(|k| a[2 * k + 1]));
+            let be = $F32::from_array($token, core::array::from_fn(|k| b[2 * k]));
+            let bo = $F32::from_array($token, core::array::from_fn(|k| b[2 * k + 1]));
+            let v = ((q * ae + q * ao) + q * be) + q * bo;
+            v.store(
+                (&mut $out[$LANES * i..$LANES * i + $LANES])
+                    .try_into()
+                    .unwrap(),
+            );
+        }
+        for x in chunks * $LANES..n {
+            $out[x] = ds_px(r0[2 * x], r0[2 * x + 1], r1[2 * x], r1[2 * x + 1]);
+        }
+    }};
 }
 
-/// Gradient magnitude + GMS for one output row, plus its f64 pooling sums.
-///
-/// `ru/rm/rd` (reference) and `du/dm/dd` (distorted) are the three padded
-/// half-resolution rows y−1, y, y+1: sample x lives at index x+1, indices 0
-/// and `w+1` are zero, and each slice has at least `w + 10` entries so the
-/// last vector's shifted loads stay in bounds. Writes `q` to `map[..w]` and
-/// returns `(Σ(1−q), Σ(1−q)²)` over the row.
-#[magetypes(rite, define(f32x8, f64x4), v3, neon, wasm128, scalar)]
-fn gms_row(
-    token: Token,
-    ru: &[f32],
-    rm: &[f32],
-    rd: &[f32],
-    du: &[f32],
-    dm: &[f32],
-    dd: &[f32],
-    map: &mut [f32],
-) -> (f64, f64) {
-    let w = map.len();
-    // Exact-length re-slices: with `len == w + 10` and `8·i + 8 <= w`, LLVM
-    // proves every 10-wide window below in bounds, so the hot loop carries
-    // no per-iteration checks (measured in the disassembly).
-    let (ru, rm, rd) = (&ru[..w + 10], &rm[..w + 10], &rd[..w + 10]);
-    let (du, dm, dd) = (&du[..w + 10], &dm[..w + 10], &dd[..w + 10]);
-    let t = f32x8::splat(token, PREWITT_T);
-    let tn = f32x8::splat(token, -PREWITT_T);
-    let two = f32x8::splat(token, 2.0);
-    let c = f32x8::splat(token, GMS_C);
-    let one64 = f64x4::splat(token, 1.0);
-    let mut s1a = f64x4::zero(token);
-    let mut s1b = f64x4::zero(token);
-    let mut s2a = f64x4::zero(token);
-    let mut s2b = f64x4::zero(token);
-    let chunks = w / 8;
-    for i in 0..chunks {
-        let x = 8 * i;
-        // Ten-wide windows: shifts 0, 1, 2 of eight lanes each.
-        let wru: &[f32; 10] = ru[x..x + 10].try_into().unwrap();
-        let wrm: &[f32; 10] = rm[x..x + 10].try_into().unwrap();
-        let wrd: &[f32; 10] = rd[x..x + 10].try_into().unwrap();
-        let wdu: &[f32; 10] = du[x..x + 10].try_into().unwrap();
-        let wdm: &[f32; 10] = dm[x..x + 10].try_into().unwrap();
-        let wdd: &[f32; 10] = dd[x..x + 10].try_into().unwrap();
+/// Prewitt gradient magnitude + GMS for `$W` lanes starting at `$x` —
+/// the `q` vector, not yet stored. Shared by every width: each lane runs
+/// the same independent f32 chain, so all widths are bit-identical.
+macro_rules! gms_chunk {
+    ($token:ident, $FV:ident, $W:literal, $x:expr, $ru:ident, $rm:ident, $rd:ident, $du:ident, $dm:ident, $dd:ident) => {{
+        let x: usize = $x;
+        let t = $FV::splat($token, PREWITT_T);
+        let tn = $FV::splat($token, -PREWITT_T);
+        let two = $FV::splat($token, 2.0);
+        let c = $FV::splat($token, GMS_C);
         // A macro, not a closure: closures do not reliably inherit the
         // enclosing `#[target_feature]` region.
         macro_rules! ld {
             ($win:ident, $s:literal) => {
-                f32x8::from_array(token, core::array::from_fn(|k| $win[k + $s]))
+                $FV::from_array($token, core::array::from_fn(|k| $win[k + $s]))
             };
         }
+        // ($W + 2)-wide windows: shifts 0, 1, 2 of $W lanes each.
+        let wru: &[f32; $W + 2] = $ru[x..x + $W + 2].try_into().unwrap();
+        let wrm: &[f32; $W + 2] = $rm[x..x + $W + 2].try_into().unwrap();
+        let wrd: &[f32; $W + 2] = $rd[x..x + $W + 2].try_into().unwrap();
+        let wdu: &[f32; $W + 2] = $du[x..x + $W + 2].try_into().unwrap();
+        let wdm: &[f32; $W + 2] = $dm[x..x + $W + 2].try_into().unwrap();
+        let wdd: &[f32; $W + 2] = $dd[x..x + $W + 2].try_into().unwrap();
 
         let (u0, u1, u2) = (ld!(wru, 0), ld!(wru, 1), ld!(wru, 2));
         let (m0, m2) = (ld!(wrm, 0), ld!(wrm, 2));
@@ -371,46 +366,137 @@ fn gms_row(
         let g2 = (hx * hx + hy * hy).sqrt();
 
         // Real division, not `recip()`: libgmsd divides.
-        let q = ((g1 * two) * g2 + c) / ((g1 * g1 + g2 * g2) + c);
-        let o: &mut [f32; 8] = (&mut map[x..x + 8]).try_into().unwrap();
-        q.store(o);
+        ((g1 * two) * g2 + c) / ((g1 * g1 + g2 * g2) + c)
+    }};
+}
 
-        let qa = q.to_array();
-        let lo = one64
-            - f64x4::from_array(
-                token,
-                [qa[0] as f64, qa[1] as f64, qa[2] as f64, qa[3] as f64],
+/// Gradient magnitude + GMS for one output row, plus its f64 pooling sums.
+///
+/// `ru/rm/rd` (reference) and `du/dm/dd` (distorted) are the three padded
+/// half-resolution rows y−1, y, y+1: sample x lives at index x+1, indices 0
+/// and `w+1` are zero, and each slice has at least `w + 10` entries so the
+/// last vector's shifted loads stay in bounds. Writes `q` to `map[..w]` and
+/// returns `(Σ(1−q), Σ(1−q)²)` over the row.
+///
+/// `$LANES` is the main-loop width (8 for the established tiers, 16 for
+/// `v4`). The f64 pooling keeps a fixed lane grouping on plain scalar
+/// arrays — independent of compute width and of any vector reduction
+/// order — so every tier's row sums are bit-identical (a backend
+/// `reduce_add` is not order-stable across tiers: v3 halves then
+/// horizontal-adds, scalar accumulates sequentially).
+macro_rules! gms_row_body {
+    ($token:ident, $F32:ident, $LANES:literal, $ru:ident, $rm:ident, $rd:ident, $du:ident, $dm:ident, $dd:ident, $map:ident) => {{
+        let w = $map.len();
+        // Exact-length re-slices: with `len == w + 10` and `x + $LANES <= w`,
+        // LLVM proves every ($LANES + 2)-wide window in bounds, so the hot
+        // loop carries no per-iteration checks (measured in the disassembly).
+        let (ru, rm, rd) = (&$ru[..w + 10], &$rm[..w + 10], &$rd[..w + 10]);
+        let (du, dm, dd) = (&$du[..w + 10], &$dm[..w + 10], &$dd[..w + 10]);
+        // Pooling accumulators: acc[0..4] / acc[4..8] are the old s1a/s1b
+        // (or s2a/s2b) lanes. Per-lane scalar adds are the same ops the
+        // f64x4 grouping did elementwise, so the scalar tier's results are
+        // unchanged bit-for-bit.
+        let mut acc1 = [0.0f64; 8];
+        let mut acc2 = [0.0f64; 8];
+        // One 8-lane pooling step, fixed order.
+        macro_rules! acc8 {
+            ($qa:ident, $g:expr) => {{
+                let g: usize = $g;
+                for j in 0..4 {
+                    let lo = 1.0 - $qa[g + j] as f64;
+                    let hi = 1.0 - $qa[g + 4 + j] as f64;
+                    acc1[j] += lo;
+                    acc1[4 + j] += hi;
+                    acc2[j] += lo * lo;
+                    acc2[4 + j] += hi * hi;
+                }
+            }};
+        }
+        let mut x = 0usize;
+        while x + $LANES <= w {
+            let q = gms_chunk!($token, $F32, $LANES, x, ru, rm, rd, du, dm, dd);
+            q.store((&mut $map[x..x + $LANES]).try_into().unwrap());
+            let qa = q.to_array();
+            for g in (0..$LANES).step_by(8) {
+                acc8!(qa, g);
+            }
+            x += $LANES;
+        }
+        // A 16-wide main loop can leave a full 8-block unprocessed; 8-wide
+        // tiers never enter this loop (their leftover is < 8).
+        while x + 8 <= w {
+            let q = gms_chunk!($token, f32x8, 8, x, ru, rm, rd, du, dm, dd);
+            q.store((&mut $map[x..x + 8]).try_into().unwrap());
+            let qa = q.to_array();
+            acc8!(qa, 0);
+            x += 8;
+        }
+        // Same order as the old `(s1a + s1b).reduce_add()` on the scalar
+        // backend: pairwise lane add, then sequential sum.
+        let t1 = [
+            acc1[0] + acc1[4],
+            acc1[1] + acc1[5],
+            acc1[2] + acc1[6],
+            acc1[3] + acc1[7],
+        ];
+        let t2 = [
+            acc2[0] + acc2[4],
+            acc2[1] + acc2[5],
+            acc2[2] + acc2[6],
+            acc2[3] + acc2[7],
+        ];
+        let mut s1 = t1[0] + t1[1] + t1[2] + t1[3];
+        let mut s2 = t2[0] + t2[1] + t2[2] + t2[3];
+        while x < w {
+            let g1 = grad_px(
+                [ru[x], ru[x + 1], ru[x + 2]],
+                [rm[x], rm[x + 1], rm[x + 2]],
+                [rd[x], rd[x + 1], rd[x + 2]],
             );
-        let hi = one64
-            - f64x4::from_array(
-                token,
-                [qa[4] as f64, qa[5] as f64, qa[6] as f64, qa[7] as f64],
+            let g2 = grad_px(
+                [du[x], du[x + 1], du[x + 2]],
+                [dm[x], dm[x + 1], dm[x + 2]],
+                [dd[x], dd[x + 1], dd[x + 2]],
             );
-        s1a += lo;
-        s1b += hi;
-        s2a += lo * lo;
-        s2b += hi * hi;
-    }
-    let mut s1 = (s1a + s1b).reduce_add();
-    let mut s2 = (s2a + s2b).reduce_add();
-    for x in chunks * 8..w {
-        let g1 = grad_px(
-            [ru[x], ru[x + 1], ru[x + 2]],
-            [rm[x], rm[x + 1], rm[x + 2]],
-            [rd[x], rd[x + 1], rd[x + 2]],
-        );
-        let g2 = grad_px(
-            [du[x], du[x + 1], du[x + 2]],
-            [dm[x], dm[x + 1], dm[x + 2]],
-            [dd[x], dd[x + 1], dd[x + 2]],
-        );
-        let q = gms_px(g1, g2);
-        map[x] = q;
-        let e = 1.0 - q as f64;
-        s1 += e;
-        s2 += e * e;
-    }
-    (s1, s2)
+            let q = gms_px(g1, g2);
+            $map[x] = q;
+            let e = 1.0 - q as f64;
+            s1 += e;
+            s2 += e * e;
+            x += 1;
+        }
+        (s1, s2)
+    }};
+}
+
+/// 8-wide GMS row for `v3`/`neon`/`wasm128`/`scalar`.
+#[magetypes(rite, define(f32x8), v3, neon, wasm128, scalar)]
+fn gms_row(
+    token: Token,
+    ru: &[f32],
+    rm: &[f32],
+    rd: &[f32],
+    du: &[f32],
+    dm: &[f32],
+    dd: &[f32],
+    map: &mut [f32],
+) -> (f64, f64) {
+    gms_row_body!(token, f32x8, 8, ru, rm, rd, du, dm, dd, map)
+}
+
+/// 16-wide GMS row for the AVX-512 `v4` tier (crate feature `avx512`).
+#[magetypes(rite, define(f32x16, f32x8), v4, -scalar)]
+fn gms_row16(
+    token: Token,
+    ru: &[f32],
+    rm: &[f32],
+    rd: &[f32],
+    du: &[f32],
+    dm: &[f32],
+    dd: &[f32],
+    map: &mut [f32],
+) -> (f64, f64) {
+    gms_row_body!(token, f32x16, 16, ru, rm, rd, du, dm, dd, map)
 }
 
 /// One plane view: `data[y * stride + x]`, `x < width`, `y < height`.
@@ -468,12 +554,14 @@ pub(crate) fn padded_pitch(w2: usize) -> usize {
     w2 + 10
 }
 
-// One `#[arcane]` entry per tier; the per-row helpers above are `#[rite]`
-// variants of the same tier, so they inline into this one target-feature
-// region. The body is shared through a macro because it names the
-// tier-suffixed helpers.
+// One `#[arcane]` entry per tier; the per-row work is the shared body
+// macros expanded inside this target-feature region, so no out-of-line
+// call remains per row. `$FV`/`$IV` are the tier's f32/i32 vector type
+// names, `$LANES` its width, `$gms` the tier-suffixed GMS row helper.
 macro_rules! band_body {
-    ($token:ident, $band:ident, $map:ident, $step:ident, $sums:ident, $ds:ident, $gms:ident, $pair:ident) => {{
+    ($token:ident, $band:ident, $map:ident, $step:ident, $sums:ident, $FV:ty, $IV:ty, $LANES:literal, $gms:ident) => {{
+        type V = $FV;
+        type I = $IV;
         let w2 = $band.w2;
         let h2 = $band.h2;
         let pitch = padded_pitch(w2);
@@ -505,17 +593,18 @@ macro_rules! band_body {
                     ($src:expr, $dst:ident) => {
                         match $src {
                             Source::Gray(p) => {
-                                $ds($token, p.row(2 * y, in_w), p.row(2 * y + 1, in_w), $dst);
+                                let r0 = p.row(2 * y, in_w);
+                                let r1 = p.row(2 * y + 1, in_w);
+                                downsample_row_body!($token, V, $LANES, r0, r1, $dst);
                             }
                             // sRGB8 → half-res in one fused integer pass:
                             // no full-size gray scratch rows at all.
                             Source::Rgb8 { data, stride } => {
                                 let a = 2 * y * stride;
-                                $pair(
-                                    $token,
-                                    &data[a..a + 3 * in_w],
-                                    &data[a + stride..a + stride + 3 * in_w],
-                                    $dst,
+                                let rgb0 = &data[a..a + 3 * in_w];
+                                let rgb1 = &data[a + stride..a + stride + 3 * in_w];
+                                rgb8_pair_half_row_body!(
+                                    $token, I, V, $LANES, rgb0, rgb1, $dst
                                 );
                             }
                         }
@@ -567,9 +656,34 @@ pub fn gmsd_band_v3(
         map,
         step,
         sums,
-        downsample_row_v3,
-        gms_row_v3,
-        rgb8_pair_half_row_v3
+        magetypes::simd::generic::f32x8<archmage::X64V3Token>,
+        magetypes::simd::generic::i32x8<archmage::X64V3Token>,
+        8,
+        gms_row_v3
+    )
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[archmage::arcane]
+/// The AVX-512 `v4` tier of one band (16-wide; map rows `step` apart,
+/// per-row pooling sums).
+pub fn gmsd_band_v4(
+    token: archmage::X64V4Token,
+    band: &Band<'_>,
+    map: &mut [f32],
+    step: usize,
+    sums: &mut [(f64, f64)],
+) {
+    band_body!(
+        token,
+        band,
+        map,
+        step,
+        sums,
+        magetypes::simd::generic::f32x16<archmage::X64V4Token>,
+        magetypes::simd::generic::i32x16<archmage::X64V4Token>,
+        16,
+        gms_row16_v4
     )
 }
 
@@ -589,9 +703,10 @@ pub fn gmsd_band_neon(
         map,
         step,
         sums,
-        downsample_row_neon,
-        gms_row_neon,
-        rgb8_pair_half_row_neon
+        magetypes::simd::generic::f32x8<archmage::NeonToken>,
+        magetypes::simd::generic::i32x8<archmage::NeonToken>,
+        8,
+        gms_row_neon
     )
 }
 
@@ -611,9 +726,10 @@ pub fn gmsd_band_wasm128(
         map,
         step,
         sums,
-        downsample_row_wasm128,
-        gms_row_wasm128,
-        rgb8_pair_half_row_wasm128
+        magetypes::simd::generic::f32x8<archmage::Wasm128Token>,
+        magetypes::simd::generic::i32x8<archmage::Wasm128Token>,
+        8,
+        gms_row_wasm128
     )
 }
 
@@ -631,9 +747,10 @@ pub fn gmsd_band_scalar(
         map,
         step,
         sums,
-        downsample_row_scalar,
-        gms_row_scalar,
-        rgb8_pair_half_row_scalar
+        magetypes::simd::generic::f32x8<archmage::ScalarToken>,
+        magetypes::simd::generic::i32x8<archmage::ScalarToken>,
+        8,
+        gms_row_scalar
     )
 }
 
@@ -641,7 +758,7 @@ pub fn gmsd_band_scalar(
 pub(crate) fn gmsd_band(band: &Band<'_>, map: &mut [f32], step: usize, sums: &mut [(f64, f64)]) {
     archmage::incant!(
         gmsd_band(band, map, step, sums),
-        [v3, neon, wasm128, scalar]
+        [v4, v3, neon, wasm128, scalar]
     );
 }
 

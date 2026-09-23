@@ -28,6 +28,11 @@ Workspace conventions per the global rules:
   formula) and fused into the bands for `gmsd_rgb8` — no full-size gray
   planes, conversion parallel with the kernel. 1024²: 5.35 → 1.63 ms (1
   thread), 4.75 → 0.41 ms (8 threads). `c59cb81e`
+- gmsd: sRGB8 conversion + 2×2 decimation moved to integer SIMD (i32 lanes
+  with an exact `S ≡ 500 (mod 1000)` f64 boundary fixup, proved over all
+  2^24 RGB8 triplets); opt-in `avx512` feature adds a 16-wide `v4` tier.
+  Bit-identical to libgmsd still: 64/64 maps. 1024² `gmsd_rgb8` 1.57 →
+  0.99 ms (1 thread), 0.20 → 0.13 ms (8 threads). `212603c6`
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
