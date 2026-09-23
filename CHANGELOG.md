@@ -22,16 +22,25 @@ Workspace conventions per the global rules:
   mult-mutual masking (4×4 `xcm_weights`, `baseband_weight[3]`), and
   frame pooling (`beta_t = 2`, `t_int = 1.0`, no `image_int`).
   `N_frames == 1` routes through the still path, bit-identical to
-  `Cvvdp::score`. Parity vs pycvvdp v0.5.7 on the conformance corpus:
+  `Cvvdp::score`. The pycvvdp entry-point surface is covered by
+  `score_video_with_stats` → `VideoStats` (`predict`'s
+  `(Q_jod, stats)` pair: `jod`, `q_per_ch`, `rho_band`, fps/size/
+  `n_frames`), `VideoStats::loss()` (`10 − JOD`), and
+  `FrameLayout::{Interleaved, Planar}` via `VideoScorer::with_layout`
+  / `Cvvdp::video_with_layout` (the `dim_order` analog; codec/file
+  readers, GPU, heatmaps, foveation stay out of scope). Parity vs
+  pycvvdp v0.5.7 on the conformance corpus:
   max |Δ| = 3e-6 JOD over 44 cells (11 situations × 4 displays,
   24/30/60 fps). Per-frame compute runs on the still path's SIMD
-  kernels (magetypes/archmage) with `VideoScratch` buffer reuse and
+  kernels (magetypes/archmage) with `VideoScratch` buffer reuse,
+  dedicated magetypes kernels for the video hot loops (FIR axpy,
+  masking min/abs/pow, cross-channel pool+clamp, p=2 pooling), and
   rayon parallelism across the 8 pyramid builds under `parallel`;
-  ~6× at 1080p vs the scalar port (370 vs 2237 ms/frame). Design,
+  ~6.9× at 1080p vs the scalar port (325 vs 2237 ms/frame). Design,
   rounding policy, and benchmarks in `crates/cvvdp/docs/VIDEO.md`;
   timing harness in `examples/video_sweep.rs`. `1dc4a6dd`,
-  `3ffc5960`, `22c667d6`, `c71f517e`, `5025b991`, `338a3a17`
-  (+ lint cleanup `81680624`).
+  `3ffc5960`, `22c667d6`, `c71f517e`, `5025b991`, `338a3a17`,
+  `af90f028` (+ lint cleanup `81680624`).
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
