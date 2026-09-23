@@ -1385,11 +1385,15 @@ version = "0.0.1"
 dependencies = [
  "cvvdp",
  "cvvdp-gpu",
+ "enough",
  "image",
+ "imgref",
+ "rgb",
  "serde_json",
  "sha2 0.11.0",
  "ureq",
  "zenforks-cubecl",
+ "zenpng 0.2.0 (git+https://github.com/imazen/zenpng?branch=main)",
 ]
 
 [[package]]
@@ -7341,7 +7345,7 @@ dependencies = [
  "zenmetrics-orchestrator",
  "zenpixels",
  "zenpixels-convert",
- "zenpng",
+ "zenpng 0.2.0",
  "zensim 0.3.0",
  "zentiff",
  "zenwebp",
@@ -7430,6 +7434,30 @@ dependencies = [
  "bytemuck",
  "enough",
  "imagequant",
+ "imgref",
+ "linear-srgb",
+ "magetypes",
+ "memchr",
+ "rgb",
+ "safe_unaligned_simd",
+ "thiserror",
+ "whereat",
+ "zencodec",
+ "zenflate 0.3.6",
+ "zenpixels",
+ "zenpixels-convert",
+ "zenquant",
+]
+
+[[package]]
+name = "zenpng"
+version = "0.2.0"
+source = "git+https://github.com/imazen/zenpng?branch=main#cfccd88f77cce5836c25bb70534fa49e4a5cd3c0"
+dependencies = [
+ "almost-enough",
+ "archmage",
+ "bytemuck",
+ "enough",
  "imgref",
  "linear-srgb",
  "magetypes",

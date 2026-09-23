@@ -498,6 +498,279 @@ pub fn all_video_situations() -> Vec<VideoSituation> {
     out
 }
 
+// ---------------------------------------------------------------------------
+// u16 video situations — display-encoded `v / 65535` clips exercising the
+// >8-bit input path (`push_frame_u16` / `score_video_u16`). Content is
+// generated so that sample values are NOT multiples of 257: the low bits
+// carry real information, matching how pycvvdp's `video_source_array`
+// treats uint16 input (÷65535 → display-encoded [0,1] → display EOTF).
+// ---------------------------------------------------------------------------
+
+/// One conformance video situation at u16 sample depth.
+#[derive(Clone)]
+pub struct VideoSituation16 {
+    /// Stable identifier — used as the manifest key.
+    pub name: &'static str,
+    /// Content/distortion class for grouping in reports.
+    pub class: VideoClass,
+    /// Frame width in pixels.
+    pub width: u32,
+    /// Frame height in pixels.
+    pub height: u32,
+    /// Frame rate in Hz.
+    pub fps: f32,
+    /// Reference RGB u16 frames, `width*height*3` interleaved.
+    pub ref_frames: Vec<Vec<u16>>,
+    /// Distorted RGB u16 frames, same layout.
+    pub dist_frames: Vec<Vec<u16>>,
+}
+
+/// u16 base pixel — same construction as [`base_px`] but at 16-bit
+/// depth with a deliberately non-257-aligned low byte so the low 8
+/// bits carry real information.
+fn base_px16(x: usize, y: usize, w: usize, h: usize) -> [u16; 3] {
+    // Diagonal luma ramp ~[20500, 51300] + woven texture, then a
+    // deterministic low-byte dither so almost no sample is a clean
+    // 8-bit multiple.
+    let ramp = 20500 + ((x * 23000 / w.max(1)) as i32) + ((y * 7700 / h.max(1)) as i32);
+    let weave = (((x * 7 + y * 13) % 31) as i32 - 15) * 130;
+    let dither = ((x * 31 + y * 17) % 251) as i32 - 125;
+    let luma = (ramp + weave / 3 + dither).clamp(6000, 62000);
+    let cr = (((x * 5 + y * 3) % 23) as i32 - 11) * 257;
+    let cb = (((x * 3 + y * 5) % 19) as i32 - 9) * 257;
+    [
+        (luma + cr).clamp(0, 65535) as u16,
+        luma.clamp(0, 65535) as u16,
+        (luma + cb).clamp(0, 65535) as u16,
+    ]
+}
+
+fn base_frame16(w: usize, h: usize) -> Vec<u16> {
+    let mut b = vec![0u16; w * h * 3];
+    for y in 0..h {
+        for x in 0..w {
+            let i = (y * w + x) * 3;
+            b[i..i + 3].copy_from_slice(&base_px16(x, y, w, h));
+        }
+    }
+    b
+}
+
+/// Deterministic iid field at u16 amplitude — same SplitMix64 stream
+/// as [`frame_noise`] but in u16 code units.
+fn frame_noise16(w: usize, h: usize, amp: i32, seed: u64) -> Vec<i32> {
+    let mut state = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    let mut next = || {
+        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    };
+    (0..w * h * 3)
+        .map(|_| (next() % ((2 * amp + 1) as u64)) as i32 - amp)
+        .collect()
+}
+
+fn add_field16(frame: &[u16], field: &[i32]) -> Vec<u16> {
+    frame
+        .iter()
+        .zip(field.iter())
+        .map(|(&v, &d)| (i32::from(v) + d).clamp(0, 65535) as u16)
+        .collect()
+}
+
+fn gain_frame16(frame: &[u16], gain: f32) -> Vec<u16> {
+    frame
+        .iter()
+        .map(|&v| {
+            (32768.0 + (f32::from(v) - 32768.0) * gain)
+                .round()
+                .clamp(0.0, 65535.0) as u16
+        })
+        .collect()
+}
+
+fn edge_frame16(w: usize, h: usize, edge: i32) -> Vec<u16> {
+    let mut b = vec![0u16; w * h * 3];
+    for y in 0..h {
+        for x in 0..w {
+            let v = if (x as i32) < edge {
+                15400u16
+            } else {
+                48800u16
+            };
+            let vv = (i32::from(v) + (((y * 3) % 11) as i32 - 5) * 137).clamp(0, 65535) as u16;
+            let i = (y * w + x) * 3;
+            b[i] = vv;
+            b[i + 1] = vv;
+            b[i + 2] = vv;
+        }
+    }
+    b
+}
+
+fn scroll_x16(frame: &[u16], w: usize, h: usize, dx: i32) -> Vec<u16> {
+    let mut out = vec![0u16; frame.len()];
+    for y in 0..h {
+        for x in 0..w {
+            let sx = ((x as i32 - dx).rem_euclid(w as i32)) as usize;
+            let i = (y * w + x) * 3;
+            let s = (y * w + sx) * 3;
+            out[i..i + 3].copy_from_slice(&frame[s..s + 3]);
+        }
+    }
+    out
+}
+
+/// Build the u16 conformance corpus. Values are display-encoded
+/// (`v/65535`) so they exercise the same EOTF path as pycvvdp's
+/// uint16 array input; under `standard_hdr_pq`/`standard_hdr_hlg`
+/// displays the upper range decodes to real HDR luminances.
+#[must_use]
+pub fn all_video_situations_u16() -> Vec<VideoSituation16> {
+    let mut out = Vec::new();
+
+    let mk = |name: &'static str,
+              class: VideoClass,
+              w: u32,
+              h: u32,
+              fps: f32,
+              ref_frames: Vec<Vec<u16>>,
+              dist_frames: Vec<Vec<u16>>|
+     -> VideoSituation16 {
+        let n = (w * h * 3) as usize;
+        assert_eq!(ref_frames.len(), dist_frames.len(), "{name} frame count");
+        for (k, f) in ref_frames.iter().enumerate() {
+            assert_eq!(f.len(), n, "{name} ref[{k}] len");
+        }
+        for (k, f) in dist_frames.iter().enumerate() {
+            assert_eq!(f.len(), n, "{name} dist[{k}] len");
+        }
+        VideoSituation16 {
+            name,
+            class,
+            width: w,
+            height: h,
+            fps,
+            ref_frames,
+            dist_frames,
+        }
+    };
+
+    // --- Static: identical frames; dist = static noise field. ---
+    {
+        let (w, h) = (64usize, 64usize);
+        let base = base_frame16(w, h);
+        let n = 12;
+        let ref_frames = vec![base.clone(); n];
+        let dfield = frame_noise16(w, h, 3600, 0xD157);
+        let dist = add_field16(&base, &dfield);
+        let dist_frames = vec![dist; n];
+        out.push(mk(
+            "vid16_static_texture_64",
+            VideoClass::Static,
+            64,
+            64,
+            30.0,
+            ref_frames,
+            dist_frames,
+        ));
+    }
+
+    // --- Global flicker at 60 fps (filter len 17). ---
+    {
+        let (w, h) = (64usize, 64usize);
+        let base = base_frame16(w, h);
+        let (fps, n) = (60.0f32, 24usize);
+        let mut ref_frames = Vec::with_capacity(n);
+        let mut dist_frames = Vec::with_capacity(n);
+        for f in 0..n {
+            let phase = f as f32 * 3.0 / fps * core::f32::consts::TAU;
+            let g_ref = 1.0 + 0.14 * phase.sin();
+            let g_dist = 1.0 + 0.10 * (phase + 0.6).sin();
+            ref_frames.push(gain_frame16(&base, g_ref));
+            dist_frames.push(gain_frame16(&base, g_dist));
+        }
+        out.push(mk(
+            "vid16_flicker_60",
+            VideoClass::GlobalFlicker,
+            64,
+            64,
+            fps,
+            ref_frames,
+            dist_frames,
+        ));
+    }
+
+    // --- Motion: scrolling u16 edge; dist lags 1px. ---
+    {
+        let (w, h) = (96usize, 80usize);
+        let n = 12;
+        let mut ref_frames = Vec::with_capacity(n);
+        let mut dist_frames = Vec::with_capacity(n);
+        for f in 0..n {
+            ref_frames.push(edge_frame16(w, h, 8 + 2 * f as i32));
+            dist_frames.push(edge_frame16(w, h, 8 + f as i32));
+        }
+        out.push(mk(
+            "vid16_edge_scroll_30",
+            VideoClass::Motion,
+            96,
+            80,
+            30.0,
+            ref_frames,
+            dist_frames,
+        ));
+    }
+
+    // --- Temporal noise on a scrolling u16 texture (odd size, N<fl). ---
+    {
+        let (w, h) = (73usize, 85usize);
+        let base = base_frame16(w, h);
+        let n = 5;
+        let ref_frames = (0..n).map(|f| scroll_x16(&base, w, h, f as i32)).collect();
+        let mut dist_frames = Vec::with_capacity(n);
+        for f in 0..n {
+            let src = scroll_x16(&base, w, h, f as i32);
+            dist_frames.push(add_field16(
+                &src,
+                &frame_noise16(w, h, 2100, 0x0DD + f as u64),
+            ));
+        }
+        out.push(mk(
+            "vid16_short_clip_odd",
+            VideoClass::TemporalNoise,
+            73,
+            85,
+            30.0,
+            ref_frames,
+            dist_frames,
+        ));
+    }
+
+    // --- Identical ref/dist: JOD must be 10. ---
+    {
+        let (w, h) = (64usize, 64usize);
+        let base = base_frame16(w, h);
+        let n = 8;
+        let frames = (0..n)
+            .map(|f| gain_frame16(&base, 1.0 + 0.1 * (f as f32 * 0.7).sin()))
+            .collect::<Vec<_>>();
+        out.push(mk(
+            "vid16_identical_30",
+            VideoClass::Identical,
+            64,
+            64,
+            30.0,
+            frames.clone(),
+            frames,
+        ));
+    }
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

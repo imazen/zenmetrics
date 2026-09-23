@@ -15,7 +15,8 @@
 use alloc::vec::Vec;
 
 use crate::kernels::color::{
-    SRGB8_TO_LINEAR_LUT, display_byte_to_dkl_scalar, display_linear_rgb_to_dkl_scalar,
+    SRGB8_TO_LINEAR_LUT, display_byte_to_dkl_scalar, display_encoded_to_dkl_scalar,
+    display_linear_rgb_to_dkl_scalar,
 };
 use crate::params::{DisplayModel, Eotf, Primaries};
 
@@ -121,6 +122,139 @@ fn srgb8_to_dkl_planar_inner(
             out_rg[i] = rg;
             out_vy[i] = vy;
         }
+    }
+}
+
+/// Display-encoded u16 packed (`RGBRGB…`, `v/65535` normalized) →
+/// DKL planar (A, RG, VY). The >8-bit input analog of
+/// [`srgb_to_dkl_planar`]; matches pycvvdp `video_source_array`
+/// uint16 handling.
+pub(crate) fn u16_to_dkl_planar(
+    src: &[u16],
+    width: usize,
+    height: usize,
+    display: DisplayModel,
+    out_a: &mut Vec<f32>,
+    out_rg: &mut Vec<f32>,
+    out_vy: &mut Vec<f32>,
+) {
+    let n = width * height;
+    debug_assert_eq!(src.len(), n * 3);
+    display_encoded_to_dkl_planar_inner(
+        n,
+        display,
+        |i| {
+            (
+                src[i * 3] as f32 / 65535.0,
+                src[i * 3 + 1] as f32 / 65535.0,
+                src[i * 3 + 2] as f32 / 65535.0,
+            )
+        },
+        out_a,
+        out_rg,
+        out_vy,
+    );
+}
+
+/// Planar-u16 variant (`R…G…B…` planes of `width × height` u16).
+/// Produces the same DKL planes as [`u16_to_dkl_planar`] on the
+/// equivalent interleaved input.
+pub(crate) fn u16_planar_to_dkl_planar(
+    src: &[u16],
+    width: usize,
+    height: usize,
+    display: DisplayModel,
+    out_a: &mut Vec<f32>,
+    out_rg: &mut Vec<f32>,
+    out_vy: &mut Vec<f32>,
+) {
+    let n = width * height;
+    debug_assert_eq!(src.len(), n * 3);
+    display_encoded_to_dkl_planar_inner(
+        n,
+        display,
+        |i| {
+            (
+                src[i] as f32 / 65535.0,
+                src[n + i] as f32 / 65535.0,
+                src[2 * n + i] as f32 / 65535.0,
+            )
+        },
+        out_a,
+        out_rg,
+        out_vy,
+    );
+}
+
+/// Display-encoded f32 packed (`RGBRGB…`, values already in the
+/// display-encoded domain — `[0,1]` for relative EOTFs, cd/m² for
+/// `Eotf::Linear`) → DKL planar. Matches pycvvdp
+/// `video_source_array` float32 handling.
+pub(crate) fn f32_to_dkl_planar(
+    src: &[f32],
+    width: usize,
+    height: usize,
+    display: DisplayModel,
+    out_a: &mut Vec<f32>,
+    out_rg: &mut Vec<f32>,
+    out_vy: &mut Vec<f32>,
+) {
+    let n = width * height;
+    debug_assert_eq!(src.len(), n * 3);
+    display_encoded_to_dkl_planar_inner(
+        n,
+        display,
+        |i| (src[i * 3], src[i * 3 + 1], src[i * 3 + 2]),
+        out_a,
+        out_rg,
+        out_vy,
+    );
+}
+
+/// Planar-f32 variant (`R…G…B…` planes of `width × height` f32).
+pub(crate) fn f32_planar_to_dkl_planar(
+    src: &[f32],
+    width: usize,
+    height: usize,
+    display: DisplayModel,
+    out_a: &mut Vec<f32>,
+    out_rg: &mut Vec<f32>,
+    out_vy: &mut Vec<f32>,
+) {
+    let n = width * height;
+    debug_assert_eq!(src.len(), n * 3);
+    display_encoded_to_dkl_planar_inner(
+        n,
+        display,
+        |i| (src[i], src[n + i], src[2 * n + i]),
+        out_a,
+        out_rg,
+        out_vy,
+    );
+}
+
+/// Shared display-encoded → DKL planar conversion. `fetch(i)` returns
+/// the `(r, g, b)` display-encoded values for output pixel `i`. Every
+/// pixel routes through [`display_encoded_to_dkl_scalar`] — the HLG
+/// OOTF needs the whole triple, so there is no LUT fast path.
+fn display_encoded_to_dkl_planar_inner(
+    n: usize,
+    display: DisplayModel,
+    fetch: impl Fn(usize) -> (f32, f32, f32),
+    out_a: &mut Vec<f32>,
+    out_rg: &mut Vec<f32>,
+    out_vy: &mut Vec<f32>,
+) {
+    out_a.resize(n, 0.0);
+    out_rg.resize(n, 0.0);
+    out_vy.resize(n, 0.0);
+
+    for i in 0..n {
+        let (r, g, b) = fetch(i);
+        let (a, rg, vy) = display_encoded_to_dkl_scalar(r, g, b, display);
+        out_a[i] = a;
+        out_rg[i] = rg;
+        out_vy[i] = vy;
     }
 }
 

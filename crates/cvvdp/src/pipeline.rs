@@ -9,7 +9,9 @@
 
 use alloc::vec::Vec;
 
-use crate::color::{linear_planes_to_dkl_planar, srgb_to_dkl_planar};
+use crate::color::{
+    f32_to_dkl_planar, linear_planes_to_dkl_planar, srgb_to_dkl_planar, u16_to_dkl_planar,
+};
 use crate::diffmap::{DiffmapAccum, accumulate_band_diffmap, finalize_diffmap};
 use crate::pool::{
     BASEBAND_W, BETA_BAND, BETA_CH, BETA_SPATIAL, IMAGE_INT, PER_CH_W,
@@ -348,6 +350,53 @@ impl Cvvdp {
         Ok(jod)
     }
 
+    /// One-shot score: display-encoded u16 REF + DIST (interleaved
+    /// `RGBRGB…`, `v/65535` normalized), returns JOD ∈ `[0, 10]`.
+    ///
+    /// The >8-bit input analog of [`Cvvdp::score`] — for 10/12-bit
+    /// content left-justified in u16 (e.g. PQ10 = `code << 6`) the
+    /// low bits contribute real precision; matches pycvvdp
+    /// `video_source_array` uint16 handling. Interpreted under the
+    /// configured display's EOTF + primaries (e.g.
+    /// `standard_hdr_pq` for HDR10 content).
+    pub fn score_u16(&mut self, ref_u16: &[u16], dist_u16: &[u16]) -> Result<f32> {
+        self.check_buf_len(ref_u16)?;
+        self.check_buf_len(dist_u16)?;
+        self.warm_active = false;
+        if ref_u16 == dist_u16 {
+            return Ok(10.0);
+        }
+        let display = self.params.display;
+        let (ra, rrg, rvy, da, drg, dvy) = scratch_dkl_planes(&mut self.scratch);
+        u16_to_dkl_planar(ref_u16, self.width, self.height, display, ra, rrg, rvy);
+        u16_to_dkl_planar(dist_u16, self.width, self.height, display, da, drg, dvy);
+        let (jod, _) = self.score_internal(false)?;
+        Ok(jod)
+    }
+
+    /// One-shot score: display-encoded f32 REF + DIST (interleaved
+    /// `RGBRGB…`), returns JOD ∈ `[0, 10]`.
+    ///
+    /// Values are display-encoded code values — `[0,1]` for relative
+    /// EOTFs (sRGB, PQ, HLG, gamma, BT.1886), cd/m² for
+    /// `Eotf::Linear` — matching pycvvdp `video_source_array`
+    /// float32 handling. For already-linear-light planes use
+    /// [`Cvvdp::score_from_linear_planes`].
+    pub fn score_f32(&mut self, ref_f32: &[f32], dist_f32: &[f32]) -> Result<f32> {
+        self.check_buf_len(ref_f32)?;
+        self.check_buf_len(dist_f32)?;
+        self.warm_active = false;
+        if ref_f32 == dist_f32 {
+            return Ok(10.0);
+        }
+        let display = self.params.display;
+        let (ra, rrg, rvy, da, drg, dvy) = scratch_dkl_planes(&mut self.scratch);
+        f32_to_dkl_planar(ref_f32, self.width, self.height, display, ra, rrg, rvy);
+        f32_to_dkl_planar(dist_f32, self.width, self.height, display, da, drg, dvy);
+        let (jod, _) = self.score_internal(false)?;
+        Ok(jod)
+    }
+
     /// Cache the reference's DKL planes + Weber pyramid so subsequent
     /// `score_with_warm_ref` calls skip the half of the pipeline that
     /// only depends on the reference.
@@ -670,6 +719,11 @@ impl Cvvdp {
     // --- internal helpers ---
 
     fn check_srgb(&self, buf: &[u8]) -> Result<()> {
+        self.check_buf_len(buf)
+    }
+
+    /// Interleaved-RGB element count (`w*h*3`) for any sample type.
+    fn check_buf_len<T>(&self, buf: &[T]) -> Result<()> {
         let need = self.width * self.height * 3;
         if buf.len() == need {
             Ok(())

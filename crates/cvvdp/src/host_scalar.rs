@@ -114,6 +114,24 @@ pub(crate) fn still_3ch_q_per_ch(
         dis_planes[2][i] = vy;
     }
 
+    still_3ch_q_per_ch_dkl(&ref_planes, &dis_planes, width, height, ppd, cap_levels)
+}
+
+/// [`still_3ch_q_per_ch`] on already-converted DKL planes — the
+/// u16/f32-input single-frame stats path (the caller converts with
+/// the matching `*_to_dkl_planar`).
+pub(crate) fn still_3ch_q_per_ch_dkl(
+    ref_planes: &[Vec<f32>; 3],
+    dis_planes: &[Vec<f32>; 3],
+    width: usize,
+    height: usize,
+    ppd: f32,
+    cap_levels: Option<usize>,
+) -> (Vec<[f32; 3]>, Vec<f32>) {
+    let n = width * height;
+    debug_assert_eq!(ref_planes[0].len(), n);
+    debug_assert_eq!(dis_planes[0].len(), n);
+
     let natural_n_levels = band_frequencies(ppd, width, height).len();
     let n_levels_query = match cap_levels {
         Some(cap) if cap >= 1 => cap.min(natural_n_levels),

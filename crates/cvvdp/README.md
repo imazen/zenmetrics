@@ -66,8 +66,20 @@ accepts a `FrameLayout` (`Interleaved`/`Planar`, the `dim_order`
 analog) and returns `VideoStats` — the `(Q_jod, stats)` pair
 pycvvdp's `predict` returns, including `loss()` = `10 − JOD`.
 `VideoScorer::with_options` takes `VideoScorerOptions`
-(`layout`, `temp_padding`, `low_memory` — a u8 ring window that cuts
-peak RSS by ~⅓ at 1080p for a few percent CPU; scores bit-identical).
+(`layout`, `temp_padding`, `low_memory` — a source-sample ring window
+that cuts peak RSS by ~⅓ at 1080p for a few percent CPU; scores
+bit-identical).
+
+Stills and video accept three display-encoded sample types, matching
+pycvvdp's `video_source_array` dtypes: `u8` (`v/255`), `u16`
+(`v/65535` — `score_u16`, `push_frame_u16`, `score_video_u16`) and
+`f32` (`[0,1]` as-is — `score_f32`, `push_frame_f32`,
+`score_video_f32`). Under an HDR display model the u16/f32 path is
+genuine nit-domain scoring, not an 8-bit upscale — verified on a
+committed real HDR10/PQ clip (`video_parity` u16 cells: max
+|Δ| = 2e-6 JOD video, 1.2e-5 stills vs pycvvdp v0.5.7). Mixing
+sample types within one scorer errors (`Error::MixedSampleTypes`).
+
 A 1-frame clip routes through the still path, bit-identical to
 `Cvvdp::score`. See `docs/VIDEO.md` for the port
 design, measured parity, and benchmarks — including the

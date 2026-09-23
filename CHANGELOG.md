@@ -73,6 +73,23 @@ Workspace conventions per the global rules:
   2.2× of ssim2) for +1–6 % wall; bit-identical scores since the
   stored bytes are the lossless input to the emit-time conversion.
 
+- cvvdp: high-bit-depth display-encoded input — `u16` (`v/65535`) and
+  `f32` (`[0,1]` as-is; cd/m² for `Eotf::Linear`) for stills
+  (`Cvvdp::score_u16`/`score_f32`) and video (`push_frame_u16`/
+  `push_frame_f32`, `score_video_u16`/`score_video_f32` +
+  `_with_stats`), both `Interleaved` and `Planar` layouts, matching
+  pycvvdp `video_source_array`'s uint16/float handling. All display
+  EOTFs evaluate analytically (u8 keeps its LUT); HLG applies the
+  per-RGB-triple OOTF. `low_memory` stores source samples natively in
+  the ring. Mixed sample types within a scorer →
+  `Error::MixedSampleTypes`. Parity vs pycvvdp v0.5.7 on the u16
+  corpus (incl. a committed real HDR10/PQ clip —
+  `cvvdp-conformance/data/hdr10_sky_192x108`, JonaNorman/HDRSample
+  `hdr-pq-sky` 192×108 crop, ~1 000-nit peak, 100 % low-bit usage):
+  16 video cells max |Δ| = 2e-6 JOD, 16 still cells max |Δ| = 1.2e-5.
+  Conformance decodes PNG16 via zenpng (git main); the `image` dep is
+  now JPEG-only for `jpeg_roundtrip` golden stability.
+
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
   cICP, and route CPU CVVDP through its native HDR scorer. Refuse incompatible

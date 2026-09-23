@@ -135,6 +135,7 @@ mod video;
 pub use pipeline::Cvvdp;
 pub use video::{
     FrameLayout, TempPadding, VideoScorer, VideoScorerOptions, VideoStats, score_video,
+    score_video_f32, score_video_f32_with_stats, score_video_u16, score_video_u16_with_stats,
     score_video_with_stats, video_filter_len,
 };
 
@@ -297,6 +298,10 @@ pub enum Error {
     InvalidFps,
     /// `VideoScorer::finish` called with zero frames pushed.
     NoFrames,
+    /// A `VideoScorer` accepts u8, u16, or f32 frames — but only one
+    /// sample type per scorer instance (set by the first `push_*`
+    /// call).
+    MixedSampleTypes,
 }
 
 impl core::fmt::Display for Error {
@@ -321,6 +326,10 @@ impl core::fmt::Display for Error {
                 write!(f, "invalid frames_per_second (need finite > 0)")
             }
             Error::NoFrames => write!(f, "no frames pushed to VideoScorer"),
+            Error::MixedSampleTypes => write!(
+                f,
+                "frame sample type differs from the first pushed frame's (one of u8/u16/f32 per VideoScorer)"
+            ),
         }
     }
 }

@@ -19,13 +19,31 @@ use std::fs;
 use std::path::PathBuf;
 
 use cvvdp_conformance::{PYCVVDP_REFERENCE_VERSION, all_situations, conformance_displays};
+use enough::Unstoppable;
+use imgref::ImgVec;
+use rgb::Rgb;
 
-fn save_png(path: &PathBuf, rgb: &[u8], w: u32, h: u32) {
-    use image::{ImageBuffer, Rgb};
-    let img: ImageBuffer<Rgb<u8>, _> =
-        ImageBuffer::from_raw(w, h, rgb.to_vec()).expect("rgb buffer");
-    img.save(path)
-        .unwrap_or_else(|e| panic!("save {}: {e}", path.display()));
+fn save_png(path: &PathBuf, rgb8: &[u8], w: u32, h: u32) {
+    let pixels: Vec<Rgb<u8>> = rgb8
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|c| Rgb {
+            r: c[0],
+            g: c[1],
+            b: c[2],
+        })
+        .collect();
+    let img = ImgVec::new(pixels, w as usize, h as usize);
+    let bytes = zenpng::encode_rgb8(
+        img.as_ref(),
+        None,
+        &zenpng::EncodeConfig::default(),
+        &Unstoppable,
+        &Unstoppable,
+    )
+    .unwrap_or_else(|e| panic!("encode {}: {e}", path.display()));
+    fs::write(path, bytes).unwrap_or_else(|e| panic!("write {}: {e}", path.display()));
 }
 
 fn main() {

@@ -34,7 +34,23 @@ wgpu = ["cvvdp-gpu/wgpu", "cvvdp-gpu/cubecl-types", "dep:cubecl"]
 cvvdp = { workspace = true }
 cvvdp-gpu = { workspace = true, default-features = false, features = ["pixels"] }
 serde_json = { workspace = true }
-image = { workspace = true, features = ["png", "jpeg"] }
+# `image` remains ONLY for `jpeg_roundtrip` in situations.rs: the
+# still goldens were built with its JPEG codec's output baked in, so
+# swapping to zenjpeg would silently invalidate the R2 still-parity
+# baseline. All PNG work (8-bit + 16-bit) uses zenpng below.
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+# zenpng at github main per repo policy ("github main versions of zen
+# crates"). This bypasses the root [patch.crates-io] zenpng→../zenpng
+# path pin (patches only rewrite crates-io deps) intentionally: the
+# patch keeps `n` on the local checkout while this crate tracks main.
+zenpng = { git = "https://github.com/imazen/zenpng", branch = "main" }
+# `enough` must come from crates.io, NOT git main: zenpng's own
+# manifest requests crates-io `enough`, and a second-source copy
+# would make `enough::Stop` a different trait — `&Unstoppable` would
+# no longer satisfy `&dyn Stop`. The version req mirrors zenpng's.
+enough = "0.4.2"
+imgref = { workspace = true }
+rgb = { workspace = true }
 cubecl = { workspace = true, optional = true }
 # Only built when `conformance-goldens` is on. Cargo can't make
 # dev-deps optional, so the golden-fetch deps live here as opt-in

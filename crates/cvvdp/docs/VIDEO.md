@@ -39,9 +39,10 @@ of at most `N` frames per side (`3` planes each — the transient channel
 reuses plane 0) plus the running `Q_per_ch` table
 (`N_frames × n_bands × 4` f32 — a few KB). Per-frame memory is bounded
 by the filter length, not the clip length. With
-`VideoScorerOptions::low_memory` the ring stores the raw sRGB-8 bytes
-instead of f32 DKL planes (4× smaller — ~450 MB → ~113 MB per side at
-1080p/30 fps) and re-converts each slot at emit; the LUT+matrix
+`VideoScorerOptions::low_memory` the ring stores the raw source
+samples (u8/u16/f32 — whichever `push_frame*` variant fed the scorer)
+instead of f32 DKL planes (4× smaller for u8 — ~450 MB → ~113 MB per
+side at 1080p/30 fps) and re-converts each slot at emit; the
 conversion is deterministic, so scores are bit-identical.
 
 ### Per-frame processing
@@ -86,10 +87,11 @@ Per band `k` (`n_bands` total, last = baseband):
 pycvvdp routes `N_frames == 1` through the still-image path
 (`is_image`, `temp_ch = 1`, `image_int` applied). `VideoScorer` does
 the same: until a **second** frame is pushed, the first frame's raw
-sRGB-8 bytes are retained (one frame of bytes — bounded) and the video
-pipeline is not run at all. `finish()` on a 1-frame clip calls
-`predict_jod_still_3ch` — bit-identical to `Cvvdp::score` on the same
-pair. The stored bytes are dropped when frame 2 arrives.
+source samples are retained (one frame — bounded) and the video
+pipeline is not run at all. `finish()` on a 1-frame clip calls the
+still path for the pushed sample type — bit-identical to
+`Cvvdp::score`/`score_u16`/`score_f32` on the same pair. The stored
+samples are dropped when frame 2 arrives.
 
 ## Public API
 
@@ -112,6 +114,45 @@ convenience `score_video(ref_frames, dist_frames, w, h, fps, params,
 geometry)` wraps the same push/finish loop — streaming and whole-clip
 are the same code path, so they are bit-identical by construction.
 
+### Input sample types — `u8` / `u16` / `f32`
+
+All three `push_frame*` variants feed the same display-encoded
+contract that pycvvdp's `video_source_array._get_frame` applies:
+
+| sample | normalization | pycvvdp analog |
+|---|---|---|
+| `&[u8]` | `v / 255` | `uint8` clip |
+| `&[u16]` | `v / 65535` | `uint16` clip |
+| `&[f32]` | used as-is | `float32`/`float16` clip |
+
+The normalized value is **display-encoded** under the configured
+`DisplayModel`'s EOTF — `[0,1]` for sRGB, PQ, HLG, gamma and BT.1886
+display models, absolute cd/m² for `Eotf::Linear`. So a real 10-bit
+HDR10/PQ master (e.g. BT.2020 + SMPTE 2084 code values unpacked to
+`u16`) scored under `standard_hdr_pq` gets genuine nit-domain
+processing — the u16 path is not an 8-bit upscale.
+
+```rust
+v.push_frame_u16(&ref16, &dist16)?;  // display-encoded, /65535
+v.push_frame_f32(&ref32, &dist32)?;  // display-encoded [0,1]
+```
+
+`score_video_u16`/`score_video_f32` (+ `_with_stats`) are the
+whole-clip equivalents; `Cvvdp::score_u16`/`score_f32` are the still
+counterparts. Both layouts (`Interleaved` RGBRGB…, `Planar` R…G…B…)
+are supported for all three types. Mixing sample types within one
+scorer is rejected with `Error::MixedSampleTypes` — the temporal ring
+is typed by the first push.
+
+u16/f32 conversion evaluates `Eotf::forward` analytically per sample
+(the u8 path keeps its LUT for speed; both land on the same curve).
+Parity vs pycvvdp v0.5.7 (`scripts/cvvdp_goldens/video_goldens_u16.json`):
+16 video cells max |Δ| = **2e-6 JOD**, 16 still cells max |Δ| =
+**1.2e-5** — including `vid16_hdr10_sky_real`, a committed RGB16-PNG
+crop of real HDR10 content (JonaNorman/HDRSample `hdr-pq-sky`,
+BT.2020/PQ, ~1 000 nits peak in crop, 100 % low-bit usage; distorted =
+8-bit roundtrip banding).
+
 ### pycvvdp API mapping
 
 The crate surface covers the byte-slice analogs of the official
@@ -123,12 +164,13 @@ pycvvdp entry points:
 | `predict` JOD only | `score_video(...)` / `VideoScorer::finish()` |
 | `loss(test, ref, ...)` → `10 − JOD` | `VideoStats::loss()` |
 | `predict_video_source(vid_source)` streaming | `VideoScorer::push_frame` × N → `finish()` |
+| `video_source_array` `uint8`/`uint16`/`float` dtypes | `push_frame`/`push_frame_u16`/`push_frame_f32`, `score_video*` variants; `Cvvdp::score`/`score_u16`/`score_f32` for stills |
 | `dim_order="…HWC"` / `"…CHW"` | `FrameLayout::Interleaved` / `Planar` via `VideoScorer::with_layout`, `Cvvdp::video_with_layout`, `score_video_with_stats` |
 | `stats['Q_per_ch']` `[F,C,B]` | `VideoStats::q_per_ch` `[frame][band][ch]` (ch = A, RG, VY, transient) |
 | `stats['rho_band']` | `VideoStats::rho_band` / `VideoScorer::band_frequencies()` |
 | `stats['frames_per_second'/'width'/'height'/'N_frames']` | same-named `VideoStats` fields |
 | `temp_padding="replicate"` / `"symmetric"` | `TempPadding::{Replicate,Symmetric}` via `VideoScorer::with_layout_and_padding` / `score_video_with_stats` |
-| — (no upstream analog; memory knob) | `VideoScorerOptions::low_memory` via `VideoScorer::with_options` / `Cvvdp::video_with_options` — u8 ring window, bit-identical scores |
+| — (no upstream analog; memory knob) | `VideoScorerOptions::low_memory` via `VideoScorer::with_options` / `Cvvdp::video_with_options` — source-sample ring window, bit-identical scores |
 
 `VideoStats::q_per_ch` rows hold the spatially-pooled per-band masked
 differences before temporal/channel pooling — the same quantity

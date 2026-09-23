@@ -324,25 +324,28 @@ fn jpeg_roundtrip(reference: &[u8], w: u32, h: u32, q: u8) -> Vec<u8> {
 /// the corpus image is not present on this host (so the harness
 /// degrades to synthetic-only without a hard failure).
 fn load_corpus_crop(path: &PathBuf, w: u32, h: u32) -> Option<Vec<u8>> {
-    let img = image::ImageReader::open(path)
-        .ok()?
-        .decode()
-        .ok()?
-        .to_rgb8();
-    let (iw, ih) = (img.width(), img.height());
+    let data = std::fs::read(path).ok()?;
+    let out = zenpng::decode(
+        &data,
+        &zenpng::PngDecodeConfig::default(),
+        &enough::Unstoppable,
+    )
+    .ok()?;
+    let img = out.pixels.try_as_imgref::<rgb::Rgb<u8>>()?;
+    let (iw, ih) = (img.width() as u32, img.height() as u32);
     if iw < w || ih < h {
         return None;
     }
-    let ox = (iw - w) / 2;
-    let oy = (ih - h) / 2;
+    let (ox, oy) = ((iw - w) / 2, (ih - h) / 2);
+    let (buf, stride) = (img.buf(), img.stride());
     let mut out = vec![0u8; (w * h * 3) as usize];
-    for y in 0..h {
-        for x in 0..w {
-            let p = img.get_pixel(ox + x, oy + y);
-            let i = ((y * w + x) * 3) as usize;
-            out[i] = p[0];
-            out[i + 1] = p[1];
-            out[i + 2] = p[2];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let p = buf[(oy as usize + y) * stride + ox as usize + x];
+            let i = (y * w as usize + x) * 3;
+            out[i] = p.r;
+            out[i + 1] = p.g;
+            out[i + 2] = p.b;
         }
     }
     Some(out)

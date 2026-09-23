@@ -47,7 +47,10 @@ use alloc::collections::VecDeque;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::color::{srgb_planar_to_dkl_planar, srgb_to_dkl_planar};
+use crate::color::{
+    f32_planar_to_dkl_planar, f32_to_dkl_planar, srgb_planar_to_dkl_planar, srgb_to_dkl_planar,
+    u16_planar_to_dkl_planar, u16_to_dkl_planar,
+};
 use crate::csf::compute_sensitivities_into;
 use crate::kernels::csf::{
     CSF_BASEBAND_RHO, CsfChannel, precompute_logs_row, precompute_logs_row_o5,
@@ -280,6 +283,158 @@ impl VideoScratch {
     }
 }
 
+/// Sample type of pushed frames — fixed by the first `push_*` call
+/// (mixing is rejected with [`Error::MixedSampleTypes`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SampleKind {
+    U8,
+    U16,
+    F32,
+}
+
+/// Raw source code values kept in `low_memory` windows (and for the
+/// 1-frame still-path route) — re-converted to DKL at emit, bit-
+/// identical to converting at push.
+#[derive(Clone)]
+enum SourceFrame {
+    U8(Vec<u8>),
+    U16(Vec<u16>),
+    F32(Vec<f32>),
+}
+
+impl SourceFrame {
+    /// Convert the stored code values to DKL planes honoring
+    /// `layout` — identical values to what the push-time conversion
+    /// produces.
+    fn to_dkl(
+        &self,
+        layout: FrameLayout,
+        display: crate::params::DisplayModel,
+        out: &mut FramePlanes,
+        w: usize,
+        h: usize,
+    ) {
+        let [p0, p1, p2] = out.each_mut();
+        match (self, layout) {
+            (SourceFrame::U8(s), FrameLayout::Interleaved) => {
+                srgb_to_dkl_planar(s, w, h, display, p0, p1, p2)
+            }
+            (SourceFrame::U8(s), FrameLayout::Planar) => {
+                srgb_planar_to_dkl_planar(s, w, h, display, p0, p1, p2)
+            }
+            (SourceFrame::U16(s), FrameLayout::Interleaved) => {
+                u16_to_dkl_planar(s, w, h, display, p0, p1, p2)
+            }
+            (SourceFrame::U16(s), FrameLayout::Planar) => {
+                u16_planar_to_dkl_planar(s, w, h, display, p0, p1, p2)
+            }
+            (SourceFrame::F32(s), FrameLayout::Interleaved) => {
+                f32_to_dkl_planar(s, w, h, display, p0, p1, p2)
+            }
+            (SourceFrame::F32(s), FrameLayout::Planar) => {
+                f32_planar_to_dkl_planar(s, w, h, display, p0, p1, p2)
+            }
+        }
+    }
+}
+
+/// Per-sample-type behavior for `push_impl` — kind tag, ring wrap,
+/// buffer recovery, and the source→DKL conversion dispatch.
+trait SourceSample: Copy + PartialEq {
+    const KIND: SampleKind;
+    fn wrap(v: Vec<Self>) -> SourceFrame;
+    fn unwrap(frame: SourceFrame) -> Option<Vec<Self>>;
+    fn convert_to_dkl(
+        src: &[Self],
+        layout: FrameLayout,
+        display: crate::params::DisplayModel,
+        out: &mut FramePlanes,
+        w: usize,
+        h: usize,
+    );
+}
+
+impl SourceSample for u8 {
+    const KIND: SampleKind = SampleKind::U8;
+    fn wrap(v: Vec<u8>) -> SourceFrame {
+        SourceFrame::U8(v)
+    }
+    fn unwrap(frame: SourceFrame) -> Option<Vec<u8>> {
+        match frame {
+            SourceFrame::U8(v) => Some(v),
+            _ => None,
+        }
+    }
+    fn convert_to_dkl(
+        src: &[u8],
+        layout: FrameLayout,
+        display: crate::params::DisplayModel,
+        out: &mut FramePlanes,
+        w: usize,
+        h: usize,
+    ) {
+        let [p0, p1, p2] = out.each_mut();
+        match layout {
+            FrameLayout::Interleaved => srgb_to_dkl_planar(src, w, h, display, p0, p1, p2),
+            FrameLayout::Planar => srgb_planar_to_dkl_planar(src, w, h, display, p0, p1, p2),
+        }
+    }
+}
+
+impl SourceSample for u16 {
+    const KIND: SampleKind = SampleKind::U16;
+    fn wrap(v: Vec<u16>) -> SourceFrame {
+        SourceFrame::U16(v)
+    }
+    fn unwrap(frame: SourceFrame) -> Option<Vec<u16>> {
+        match frame {
+            SourceFrame::U16(v) => Some(v),
+            _ => None,
+        }
+    }
+    fn convert_to_dkl(
+        src: &[u16],
+        layout: FrameLayout,
+        display: crate::params::DisplayModel,
+        out: &mut FramePlanes,
+        w: usize,
+        h: usize,
+    ) {
+        let [p0, p1, p2] = out.each_mut();
+        match layout {
+            FrameLayout::Interleaved => u16_to_dkl_planar(src, w, h, display, p0, p1, p2),
+            FrameLayout::Planar => u16_planar_to_dkl_planar(src, w, h, display, p0, p1, p2),
+        }
+    }
+}
+
+impl SourceSample for f32 {
+    const KIND: SampleKind = SampleKind::F32;
+    fn wrap(v: Vec<f32>) -> SourceFrame {
+        SourceFrame::F32(v)
+    }
+    fn unwrap(frame: SourceFrame) -> Option<Vec<f32>> {
+        match frame {
+            SourceFrame::F32(v) => Some(v),
+            _ => None,
+        }
+    }
+    fn convert_to_dkl(
+        src: &[f32],
+        layout: FrameLayout,
+        display: crate::params::DisplayModel,
+        out: &mut FramePlanes,
+        w: usize,
+        h: usize,
+    ) {
+        let [p0, p1, p2] = out.each_mut();
+        match layout {
+            FrameLayout::Interleaved => f32_to_dkl_planar(src, w, h, display, p0, p1, p2),
+            FrameLayout::Planar => f32_planar_to_dkl_planar(src, w, h, display, p0, p1, p2),
+        }
+    }
+}
+
 /// Streaming cvvdp video scorer (sRGB-8 frames in, JOD out).
 ///
 /// Construct once per clip with [`VideoScorer::new`] (or
@@ -323,21 +478,25 @@ pub struct VideoScorer {
     n_pushed: usize,
     /// Sliding window of the last `taps[0].len()` frames (DKL planes),
     /// test side. Oldest at front. Empty when `low_memory` is on —
-    /// `win8_t` holds the raw sRGB bytes instead.
+    /// `winsrc_t` holds the raw source code values instead.
     win_t: VecDeque<FramePlanes>,
     /// Same for the reference side.
     win_r: VecDeque<FramePlanes>,
-    /// `low_memory` window — raw sRGB bytes in `layout` order (4×
-    /// smaller than DKL planes), re-converted at emit.
-    win8_t: VecDeque<Vec<u8>>,
+    /// `low_memory` window — raw source samples in `layout` order
+    /// (u8: 4×, u16: 2×, f32: 1.33× smaller than DKL planes),
+    /// re-converted at emit.
+    winsrc_t: VecDeque<SourceFrame>,
     /// Same for the reference side.
-    win8_r: VecDeque<Vec<u8>>,
-    /// Whether the window stores u8 sRGB (`win8_*`) or f32 DKL
-    /// (`win_*`) — [`VideoScorerOptions::low_memory`].
+    winsrc_r: VecDeque<SourceFrame>,
+    /// Whether the window stores source samples (`winsrc_*`) or f32
+    /// DKL (`win_*`) — [`VideoScorerOptions::low_memory`].
     low_memory: bool,
-    /// Raw bytes of frame 0, kept only until a second frame is pushed
-    /// so a one-frame clip can take the still path untouched.
-    first_frame: Option<(Vec<u8>, Vec<u8>)>,
+    /// Sample type accepted by `push_*` — set by the first push;
+    /// later pushes of a different type are rejected.
+    input_kind: Option<SampleKind>,
+    /// Raw samples of frame 0, kept only until a second frame is
+    /// pushed so a one-frame clip can take the still path untouched.
+    first_frame: Option<(SourceFrame, SourceFrame)>,
     /// `q_per_ch[frame][band][channel]` — spatially-pooled masked
     /// differences, accumulated per emitted output frame.
     q_per_ch: Vec<Vec<[f32; 4]>>,
@@ -356,8 +515,9 @@ pub struct VideoScorer {
     /// `push_frame` — avoids a fresh 3-plane alloc + zero-fill per
     /// frame (the planes are `w*h` f32, the same size every frame).
     spare_planes: Vec<FramePlanes>,
-    /// Same recycling for evicted `low_memory` u8 buffers.
-    spare8: Vec<Vec<u8>>,
+    /// Same recycling for evicted `low_memory` source buffers
+    /// (variant always matches `input_kind`).
+    spare_src: Vec<SourceFrame>,
     /// Frame rate the clip is scored at (kept for `VideoStats`).
     fps: f32,
     /// Reusable per-frame scratch (filtered planes, pyramid caches,
@@ -492,9 +652,10 @@ impl VideoScorer {
             n_pushed: 0,
             win_t: VecDeque::new(),
             win_r: VecDeque::new(),
-            win8_t: VecDeque::new(),
-            win8_r: VecDeque::new(),
+            winsrc_t: VecDeque::new(),
+            winsrc_r: VecDeque::new(),
             low_memory,
+            input_kind: None,
             first_frame: None,
             q_per_ch: Vec::new(),
             freqs,
@@ -502,7 +663,7 @@ impl VideoScorer {
             padding,
             next_emit: 0,
             spare_planes: Vec::new(),
-            spare8: Vec::new(),
+            spare_src: Vec::new(),
             fps: frames_per_second,
             scratch: VideoScratch::new(w, h, n_levels, low_memory),
         })
@@ -519,58 +680,81 @@ impl VideoScorer {
     ///
     /// [`Error::DimensionMismatch`] on a wrong-size frame.
     pub fn push_frame(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<()> {
-        let n_bytes = self.width * self.height * 3;
-        if ref_srgb.len() != n_bytes || dist_srgb.len() != n_bytes {
+        self.push_impl(ref_srgb, dist_srgb)
+    }
+
+    /// [`push_frame`](Self::push_frame) for display-encoded u16
+    /// frames (`v/65535` normalized) — the >8-bit input path matching
+    /// pycvvdp `video_source_array` uint16 handling. For 10/12-bit
+    /// content left-justified in u16 (PQ10 = `code << 6`) the low
+    /// bits carry real precision.
+    ///
+    /// # Errors
+    ///
+    /// As [`push_frame`](Self::push_frame); also
+    /// [`Error::MixedSampleTypes`] if the scorer already took a
+    /// different sample type.
+    pub fn push_frame_u16(&mut self, ref_u16: &[u16], dist_u16: &[u16]) -> Result<()> {
+        self.push_impl(ref_u16, dist_u16)
+    }
+
+    /// [`push_frame`](Self::push_frame) for display-encoded f32
+    /// frames (`[0,1]` for relative EOTFs; cd/m² for
+    /// `Eotf::Linear`) — matching pycvvdp `video_source_array`
+    /// float32 handling.
+    ///
+    /// # Errors
+    ///
+    /// As [`push_frame_u16`](Self::push_frame_u16).
+    pub fn push_frame_f32(&mut self, ref_f32: &[f32], dist_f32: &[f32]) -> Result<()> {
+        self.push_impl(ref_f32, dist_f32)
+    }
+
+    /// Shared push path for all sample types.
+    fn push_impl<T: SourceSample>(&mut self, ref_src: &[T], dist_src: &[T]) -> Result<()> {
+        let n_elems = self.width * self.height * 3;
+        if ref_src.len() != n_elems || dist_src.len() != n_elems {
             return Err(Error::DimensionMismatch {
-                expected: n_bytes,
-                got: ref_srgb.len().max(dist_srgb.len()),
+                expected: n_elems,
+                got: ref_src.len().max(dist_src.len()),
             });
+        }
+        match self.input_kind {
+            None => self.input_kind = Some(T::KIND),
+            Some(k) if k == T::KIND => {}
+            Some(_) => return Err(Error::MixedSampleTypes),
         }
 
         if self.n_pushed == 0 {
             // Might still be a 1-frame clip → still path; keep the
-            // raw bytes so `finish` can score them exactly like
+            // raw samples so `finish` can score them exactly like
             // `predict_jod_still_3ch` (no video processing at all).
-            self.first_frame = Some((ref_srgb.to_vec(), dist_srgb.to_vec()));
+            self.first_frame = Some((T::wrap(ref_src.to_vec()), T::wrap(dist_src.to_vec())));
         }
 
         let fl = self.taps[0].len();
         if self.low_memory {
-            // u8 window — keep the raw sRGB bytes; the sRGB→DKL
-            // conversion runs at emit time instead of now.
-            let mut t8 = self.spare8.pop().unwrap_or_default();
-            let mut r8 = self.spare8.pop().unwrap_or_default();
-            t8.clear();
-            t8.extend_from_slice(dist_srgb);
-            r8.clear();
-            r8.extend_from_slice(ref_srgb);
-            self.win8_t.push_back(t8);
-            self.win8_r.push_back(r8);
-            if self.win8_t.len() > fl {
-                if let Some(old) = self.win8_t.pop_front() {
-                    self.spare8.push(old);
+            // Source-sample window — keep the raw code values; the
+            // →DKL conversion runs at emit time instead of now.
+            let t8 = self.take_spare_src(dist_src);
+            let r8 = self.take_spare_src(ref_src);
+            self.winsrc_t.push_back(t8);
+            self.winsrc_r.push_back(r8);
+            if self.winsrc_t.len() > fl {
+                if let Some(old) = self.winsrc_t.pop_front() {
+                    self.spare_src.push(old);
                 }
-                if let Some(old) = self.win8_r.pop_front() {
-                    self.spare8.push(old);
+                if let Some(old) = self.winsrc_r.pop_front() {
+                    self.spare_src.push(old);
                 }
             }
         } else {
             let mut t = self.spare_planes.pop().unwrap_or_default();
             let mut r = self.spare_planes.pop().unwrap_or_default();
-            let display = self.params.display;
-            let (w, h) = (self.width, self.height);
-            let [r0, r1, r2] = &mut r;
-            let [t0, t1, t2] = &mut t;
-            match self.layout {
-                FrameLayout::Interleaved => {
-                    srgb_to_dkl_planar(ref_srgb, w, h, display, r0, r1, r2);
-                    srgb_to_dkl_planar(dist_srgb, w, h, display, t0, t1, t2);
-                }
-                FrameLayout::Planar => {
-                    srgb_planar_to_dkl_planar(ref_srgb, w, h, display, r0, r1, r2);
-                    srgb_planar_to_dkl_planar(dist_srgb, w, h, display, t0, t1, t2);
-                }
-            }
+            let (display, layout, w, h) =
+                (self.params.display, self.layout, self.width, self.height);
+            T::convert_to_dkl(ref_src, layout, display, &mut r, w, h);
+            T::convert_to_dkl(dist_src, layout, display, &mut t, w, h);
             self.win_t.push_back(t);
             self.win_r.push_back(r);
             if self.win_t.len() > fl {
@@ -667,34 +851,39 @@ impl VideoScorer {
             return Err(Error::NoFrames);
         }
         if self.n_pushed == 1 {
-            let (r, d) = self.first_frame.expect("frame 0 bytes retained");
-            // Still path expects interleaved bytes — shuffle planar
-            // input back to interleaved first.
-            let (r_i, d_i) = match self.layout {
-                FrameLayout::Interleaved => (r, d),
-                FrameLayout::Planar => (planar_to_interleaved(&r), planar_to_interleaved(&d)),
-            };
+            let (r, d) = self.first_frame.expect("frame 0 samples retained");
+            let (w, h) = (self.width, self.height);
+            let display = self.params.display;
             let ppd = self.geometry.pixels_per_degree();
-            let (q3, freqs) = crate::host_scalar::still_3ch_q_per_ch(
-                &r_i,
-                &d_i,
-                self.width,
-                self.height,
-                self.params.display,
-                ppd,
-                None,
-            );
             // Route through the public still path so a 1-frame clip
-            // is bit-identical to `Cvvdp::score` on the same pair
-            // (pycvvdp does the same: is_image skips temporal
-            // filtering entirely).
-            let mut still = crate::Cvvdp::with_geometry(
-                self.width as u32,
-                self.height as u32,
-                self.params,
-                self.geometry,
-            )?;
-            let jod = still.score(&r_i, &d_i)?;
+            // is bit-identical to the matching `Cvvdp::score*` call on
+            // the same pair (pycvvdp does the same: is_image skips
+            // temporal filtering entirely). The still scorers expect
+            // interleaved samples — shuffle planar input first.
+            let mut still =
+                crate::Cvvdp::with_geometry(w as u32, h as u32, self.params, self.geometry)?;
+            let mut rp: [Vec<f32>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+            let mut dp: [Vec<f32>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+            let jod = match (&r, &d) {
+                (SourceFrame::U8(ru), SourceFrame::U8(du)) => {
+                    let (r_i, d_i) = interleaved_u8(ru, du, self.layout);
+                    still.score(&r_i, &d_i)?
+                }
+                (SourceFrame::U16(ru), SourceFrame::U16(du)) => {
+                    let (r_i, d_i) = interleaved_u16(ru, du, self.layout);
+                    still.score_u16(&r_i, &d_i)?
+                }
+                (SourceFrame::F32(ru), SourceFrame::F32(du)) => {
+                    let (r_i, d_i) = interleaved_f32(ru, du, self.layout);
+                    still.score_f32(&r_i, &d_i)?
+                }
+                _ => return Err(Error::MixedSampleTypes),
+            };
+            // q_per_ch via the DKL-planes scalar path — converts
+            // straight from the stored samples honoring layout.
+            r.to_dkl(self.layout, display, &mut rp, w, h);
+            d.to_dkl(self.layout, display, &mut dp, w, h);
+            let (q3, freqs) = crate::host_scalar::still_3ch_q_per_ch_dkl(&rp, &dp, w, h, ppd, None);
             return Ok(VideoStats {
                 jod,
                 q_per_ch: vec![
@@ -734,11 +923,20 @@ impl VideoScorer {
     /// out of the ring buffer.
     fn win_base(&self) -> usize {
         let len = if self.low_memory {
-            self.win8_t.len()
+            self.winsrc_t.len()
         } else {
             self.win_t.len()
         };
         self.n_pushed - len
+    }
+
+    /// Recover a spare source buffer of `T`'s variant (or allocate)
+    /// and fill it from `src`.
+    fn take_spare_src<T: SourceSample>(&mut self, src: &[T]) -> SourceFrame {
+        let mut v = self.spare_src.pop().and_then(T::unwrap).unwrap_or_default();
+        v.clear();
+        v.extend_from_slice(src);
+        T::wrap(v)
     }
 
     /// Compute output frame `t`'s filtered planes + per-band pooled
@@ -792,21 +990,14 @@ impl VideoScorer {
             }
             if self.low_memory {
                 let display = self.params.display;
-                let [d0, d1, d2] = &mut sc.win_dkl;
+                let layout = self.layout;
                 // Test side, then reference — each side's accumulation
                 // order is the same k-ascending sequence as the f32
                 // path, so `filt_*` come out bit-identical.
                 for k in 0..fl {
                     let widx = fir_tap!(k);
-                    let src = &self.win8_t[widx];
-                    match self.layout {
-                        FrameLayout::Interleaved => {
-                            srgb_to_dkl_planar(src, w, h, display, d0, d1, d2)
-                        }
-                        FrameLayout::Planar => {
-                            srgb_planar_to_dkl_planar(src, w, h, display, d0, d1, d2)
-                        }
-                    }
+                    self.winsrc_t[widx].to_dkl(layout, display, &mut sc.win_dkl, w, h);
+                    let [d0, d1, d2] = &sc.win_dkl;
                     let j = fl - 1 - k;
                     if k == 0 {
                         vscale2_into(ft0, ft3, d0, self.taps[0][j], self.taps[3][j]);
@@ -820,15 +1011,8 @@ impl VideoScorer {
                 }
                 for k in 0..fl {
                     let widx = fir_tap!(k);
-                    let src = &self.win8_r[widx];
-                    match self.layout {
-                        FrameLayout::Interleaved => {
-                            srgb_to_dkl_planar(src, w, h, display, d0, d1, d2)
-                        }
-                        FrameLayout::Planar => {
-                            srgb_planar_to_dkl_planar(src, w, h, display, d0, d1, d2)
-                        }
-                    }
+                    self.winsrc_r[widx].to_dkl(layout, display, &mut sc.win_dkl, w, h);
+                    let [d0, d1, d2] = &sc.win_dkl;
                     let j = fl - 1 - k;
                     if k == 0 {
                         vscale2_into(fr0, fr3, d0, self.taps[0][j], self.taps[3][j]);
@@ -1233,8 +1417,122 @@ pub fn score_video_with_stats<F: AsRef<[u8]>>(
     v.finish_with_stats()
 }
 
-/// `R‖G‖B` planar bytes → `RGBRGB…` interleaved (single frame).
-fn planar_to_interleaved(planar: &[u8]) -> Vec<u8> {
+/// [`score_video`] for display-encoded u16 clips (`v/65535`
+/// normalized) — the >8-bit path matching pycvvdp
+/// `video_source_array` uint16 handling.
+///
+/// # Errors
+///
+/// As [`score_video`].
+pub fn score_video_u16<F: AsRef<[u16]>>(
+    ref_frames: &[F],
+    dist_frames: &[F],
+    width: u32,
+    height: u32,
+    frames_per_second: f32,
+    params: CvvdpParams,
+    geometry: DisplayGeometry,
+) -> Result<f32> {
+    let mut v = VideoScorer::new(width, height, frames_per_second, params, geometry)?;
+    let n = ref_frames.len().min(dist_frames.len());
+    for i in 0..n {
+        v.push_frame_u16(ref_frames[i].as_ref(), dist_frames[i].as_ref())?;
+    }
+    v.finish()
+}
+
+/// [`score_video_with_stats`] for display-encoded u16 clips.
+///
+/// # Errors
+///
+/// As [`score_video`].
+#[allow(clippy::too_many_arguments)]
+pub fn score_video_u16_with_stats<F: AsRef<[u16]>>(
+    ref_frames: &[F],
+    dist_frames: &[F],
+    width: u32,
+    height: u32,
+    frames_per_second: f32,
+    params: CvvdpParams,
+    geometry: DisplayGeometry,
+    layout: FrameLayout,
+    padding: TempPadding,
+) -> Result<VideoStats> {
+    let mut v = VideoScorer::with_layout_and_padding(
+        width,
+        height,
+        frames_per_second,
+        params,
+        geometry,
+        layout,
+        padding,
+    )?;
+    let n = ref_frames.len().min(dist_frames.len());
+    for i in 0..n {
+        v.push_frame_u16(ref_frames[i].as_ref(), dist_frames[i].as_ref())?;
+    }
+    v.finish_with_stats()
+}
+
+/// [`score_video`] for display-encoded f32 clips (`[0,1]` for
+/// relative EOTFs; cd/m² for `Eotf::Linear`) — matching pycvvdp
+/// `video_source_array` float32 handling.
+///
+/// # Errors
+///
+/// As [`score_video`].
+pub fn score_video_f32<F: AsRef<[f32]>>(
+    ref_frames: &[F],
+    dist_frames: &[F],
+    width: u32,
+    height: u32,
+    frames_per_second: f32,
+    params: CvvdpParams,
+    geometry: DisplayGeometry,
+) -> Result<f32> {
+    let mut v = VideoScorer::new(width, height, frames_per_second, params, geometry)?;
+    let n = ref_frames.len().min(dist_frames.len());
+    for i in 0..n {
+        v.push_frame_f32(ref_frames[i].as_ref(), dist_frames[i].as_ref())?;
+    }
+    v.finish()
+}
+
+/// [`score_video_with_stats`] for display-encoded f32 clips.
+///
+/// # Errors
+///
+/// As [`score_video`].
+#[allow(clippy::too_many_arguments)]
+pub fn score_video_f32_with_stats<F: AsRef<[f32]>>(
+    ref_frames: &[F],
+    dist_frames: &[F],
+    width: u32,
+    height: u32,
+    frames_per_second: f32,
+    params: CvvdpParams,
+    geometry: DisplayGeometry,
+    layout: FrameLayout,
+    padding: TempPadding,
+) -> Result<VideoStats> {
+    let mut v = VideoScorer::with_layout_and_padding(
+        width,
+        height,
+        frames_per_second,
+        params,
+        geometry,
+        layout,
+        padding,
+    )?;
+    let n = ref_frames.len().min(dist_frames.len());
+    for i in 0..n {
+        v.push_frame_f32(ref_frames[i].as_ref(), dist_frames[i].as_ref())?;
+    }
+    v.finish_with_stats()
+}
+
+/// `R‖G‖B` planar samples → `RGBRGB…` interleaved (single frame).
+fn planar_to_interleaved<T: Copy>(planar: &[T]) -> Vec<T> {
     let n = planar.len() / 3;
     let mut out = Vec::with_capacity(planar.len());
     for i in 0..n {
@@ -1243,6 +1541,29 @@ fn planar_to_interleaved(planar: &[u8]) -> Vec<u8> {
         out.push(planar[2 * n + i]);
     }
     out
+}
+
+/// Still-path input prep: return `(ref, dist)` interleaved — pass
+/// through for [`FrameLayout::Interleaved`], shuffle for `Planar`.
+fn interleaved_u8(r: &[u8], d: &[u8], layout: FrameLayout) -> (Vec<u8>, Vec<u8>) {
+    match layout {
+        FrameLayout::Interleaved => (r.to_vec(), d.to_vec()),
+        FrameLayout::Planar => (planar_to_interleaved(r), planar_to_interleaved(d)),
+    }
+}
+
+fn interleaved_u16(r: &[u16], d: &[u16], layout: FrameLayout) -> (Vec<u16>, Vec<u16>) {
+    match layout {
+        FrameLayout::Interleaved => (r.to_vec(), d.to_vec()),
+        FrameLayout::Planar => (planar_to_interleaved(r), planar_to_interleaved(d)),
+    }
+}
+
+fn interleaved_f32(r: &[f32], d: &[f32], layout: FrameLayout) -> (Vec<f32>, Vec<f32>) {
+    match layout {
+        FrameLayout::Interleaved => (r.to_vec(), d.to_vec()),
+        FrameLayout::Planar => (planar_to_interleaved(r), planar_to_interleaved(d)),
+    }
 }
 
 /// Temporal filter length at `fps` — exposed for capacity planning
@@ -1362,6 +1683,73 @@ mod tests {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// Same bit-identical guarantee for the u16/f32 windows — the
+    /// emit-time `SourceFrame::to_dkl` runs the same conversion the
+    /// f32-window path runs at push time.
+    #[test]
+    fn low_memory_matches_u16_f32_windows_bit_for_bit() {
+        let (w, h) = (64usize, 64usize);
+        let (refs8, dists8) = synth_clip(w, h, 16);
+        // u16 with meaningful low bits (not u8<<8), f32 = same /255.
+        let to_u16 = |f: &[u8]| -> Vec<u16> {
+            f.iter()
+                .enumerate()
+                .map(|(i, &v)| (u16::from(v) * 257).saturating_add((i % 251) as u16))
+                .collect()
+        };
+        let to_f32 = |f: &[u8]| -> Vec<f32> { f.iter().map(|&v| f32::from(v) / 255.0).collect() };
+        let refs16: Vec<Vec<u16>> = refs8.iter().map(|f| to_u16(f)).collect();
+        let dists16: Vec<Vec<u16>> = dists8.iter().map(|f| to_u16(f)).collect();
+        let refs32: Vec<Vec<f32>> = refs8.iter().map(|f| to_f32(f)).collect();
+        let dists32: Vec<Vec<f32>> = dists8.iter().map(|f| to_f32(f)).collect();
+        let geo = DisplayGeometry::STANDARD_4K;
+
+        for display in [DisplayModel::default(), DisplayModel::STANDARD_HDR_PQ] {
+            let params = CvvdpParams {
+                display,
+                ..CvvdpParams::default()
+            };
+            for padding in [TempPadding::Replicate, TempPadding::Symmetric] {
+                let opts = |low_memory| VideoScorerOptions {
+                    layout: FrameLayout::Interleaved,
+                    temp_padding: padding,
+                    low_memory,
+                };
+                let mut hi =
+                    VideoScorer::with_options(w as u32, h as u32, 30.0, params, geo, opts(false))
+                        .unwrap();
+                let mut lo =
+                    VideoScorer::with_options(w as u32, h as u32, 30.0, params, geo, opts(true))
+                        .unwrap();
+                for (rf, df) in refs16.iter().zip(dists16.iter()) {
+                    hi.push_frame_u16(rf, df).unwrap();
+                    lo.push_frame_u16(rf, df).unwrap();
+                }
+                assert_eq!(
+                    hi.finish_with_stats().unwrap().jod.to_bits(),
+                    lo.finish_with_stats().unwrap().jod.to_bits(),
+                    "u16 low_memory changed the score ({padding:?})"
+                );
+
+                let mut hi =
+                    VideoScorer::with_options(w as u32, h as u32, 30.0, params, geo, opts(false))
+                        .unwrap();
+                let mut lo =
+                    VideoScorer::with_options(w as u32, h as u32, 30.0, params, geo, opts(true))
+                        .unwrap();
+                for (rf, df) in refs32.iter().zip(dists32.iter()) {
+                    hi.push_frame_f32(rf, df).unwrap();
+                    lo.push_frame_f32(rf, df).unwrap();
+                }
+                assert_eq!(
+                    hi.finish_with_stats().unwrap().jod.to_bits(),
+                    lo.finish_with_stats().unwrap().jod.to_bits(),
+                    "f32 low_memory changed the score ({padding:?})"
+                );
             }
         }
     }

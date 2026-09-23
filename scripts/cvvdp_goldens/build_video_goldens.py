@@ -52,10 +52,16 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+# pypng is vendored for RGB16 reads (PIL cannot decode RGB48 PNGs).
+sys.path.insert(0, str(Path(__file__).parent / "vendor"))
+
 # Situations whose per-stage intermediates get dumped (keep small —
 # these go into the committed JSON).
 DUMP_SITUATIONS = {"vid_flicker_24", "vid_temporal_noise_30"}
 DUMP_DISPLAY = "standard_4k"
+
+# Repo root, for resolving `repo_relative` real-clip dirs.
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def sha256_file(path: Path) -> str:
@@ -91,6 +97,30 @@ def load_clip(dir_path: Path) -> np.ndarray:
     )
 
 
+def load_clip16(dir_path: Path) -> np.ndarray:
+    """Load RGB16 PNG frames into a uint16 [F, H, W, C] array.
+
+    pycvvdp's `video_source_array` divides uint16 by 65535, so the
+    raw PNG sample values are exactly what gets scored.
+    """
+    import png
+
+    frames = sorted(dir_path.glob("f*.png"))
+    if not frames:
+        raise SystemExit(f"no f*.png frames in {dir_path}")
+    planes = []
+    for p in frames:
+        r = png.Reader(str(p))
+        w, h, rows, info = r.read()
+        if info["bitdepth"] != 16 or info["planes"] != 3:
+            raise SystemExit(f"{p}: expected RGB16 PNG, got {info}")
+        # pypng yields array('H') rows — already host-order u16
+        # samples, NOT bytes. np.frombuffer here would byte-swap.
+        a = np.vstack([np.asarray(row, dtype=np.uint16) for row in rows])
+        planes.append(a.reshape(h, w, 3))
+    return np.stack(planes, axis=0)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -109,15 +139,26 @@ def main() -> int:
         help="pycvvdp cvvdp() temp_padding arg; 'symmetric' writes "
         "video_goldens_symmetric.json by default",
     )
+    ap.add_argument(
+        "--u16",
+        action="store_true",
+        help="16-bit corpus: reads video_manifest_u16.json + RGB16 "
+        "PNG frames (situations + real_clips), adds still_cells for "
+        "the frame-0 pairs, writes video_goldens_u16.json",
+    )
     args = ap.parse_args()
 
     sit_dir = Path(args.situations_dir)
-    manifest_path = sit_dir / "video_manifest.json"
+    manifest_path = sit_dir / (
+        "video_manifest_u16.json" if args.u16 else "video_manifest.json"
+    )
     with manifest_path.open() as f:
         manifest = json.load(f)
 
     if args.out:
         out_path = Path(args.out)
+    elif args.u16:
+        out_path = sit_dir / "video_goldens_u16.json"
     elif args.temp_padding == "replicate":
         out_path = sit_dir / "video_goldens.json"
     else:
@@ -138,15 +179,28 @@ def main() -> int:
         )
     situations = manifest["situations"]
     displays = manifest["displays"]  # list of upstream_name strings
+    real_clips = manifest.get("real_clips", [])
+    for rc in real_clips:
+        if rc.get("repo_relative"):
+            rc["ref_dir"] = str(REPO_ROOT / rc["ref_dir"])
+            rc["dist_dir"] = str(REPO_ROOT / rc["dist_dir"])
+    entries = situations + real_clips
+
+    # Union of every display any entry scores under (real clips may
+    # restrict to a subset via their own "displays" list).
+    all_displays = sorted(
+        {d for s in entries for d in s.get("displays", displays)}
+    )
+    n_cells = sum(len(s.get("displays", displays)) for s in entries)
 
     print(
-        f"scoring {len(situations)} video situations x {len(displays)} displays "
-        f"= {len(situations) * len(displays)} cells with pycvvdp {ref_version}",
+        f"scoring {len(entries)} video situations x {len(all_displays)} displays "
+        f"= {n_cells} cells with pycvvdp {ref_version}",
         file=sys.stderr,
     )
 
     metrics = {}
-    for name in displays:
+    for name in all_displays:
         try:
             metrics[name] = pycvvdp.cvvdp(
                 display_name=name,
@@ -174,18 +228,26 @@ def main() -> int:
         }
 
     cells = {}
+    still_cells = {}
     stage_dumps = {}
     t0 = time.time()
     n_done = 0
-    n_total = len(situations) * len(displays)
-    for s in situations:
-        ref_clip = load_clip(sit_dir / s["ref_dir"])
-        dist_clip = load_clip(sit_dir / s["dist_dir"])
+    n_total = n_cells
+    load = load_clip16 if args.u16 else load_clip
+    for s in entries:
+        ref_dir = Path(s["ref_dir"])
+        dist_dir = Path(s["dist_dir"])
+        if not ref_dir.is_absolute():
+            ref_dir = sit_dir / ref_dir
+        if not dist_dir.is_absolute():
+            dist_dir = sit_dir / dist_dir
+        ref_clip = load(ref_dir)
+        dist_clip = load(dist_dir)
         assert ref_clip.shape[0] == s["n_frames"], s["name"]
         assert ref_clip.shape[1] == s["height"], s["name"]
         assert ref_clip.shape[2] == s["width"], s["name"]
         fps = float(s["fps"])
-        for disp in displays:
+        for disp in s.get("displays", displays):
             key = f"{s['name']}|{disp}"
             metric = metrics[disp]
             # pycvvdp.predict signature: (test, reference, dim_order,
@@ -203,6 +265,20 @@ def main() -> int:
                 "fps": fps,
                 "jod_ref": round(float(jod), 6),
             }
+            if args.u16:
+                # Still parity cell: frame-0 pair through the image
+                # path (dim_order="HWC" → is_image). Exercises
+                # score_u16/score_f32 against the same input dtype.
+                jod_still, _ = metric.predict(
+                    dist_clip[0], ref_clip[0], dim_order="HWC"
+                )
+                still_cells[key] = {
+                    "situation": s["name"],
+                    "display": disp,
+                    "width": s["width"],
+                    "height": s["height"],
+                    "jod_ref": round(float(jod_still), 6),
+                }
             dump_sits = DUMP_SITUATIONS | (
                 {"vid_short_clip_odd"} if args.temp_padding == "symmetric" else set()
             )
@@ -225,14 +301,17 @@ def main() -> int:
         "reference_version": ref_version,
         "port_pinned_version": port_pin,
         "temp_padding": args.temp_padding,
+        "bit_depth": 16 if args.u16 else 8,
         "generated_unix": int(time.time()),
         "video_manifest_sha256": sha256_file(manifest_path),
-        "displays": displays,
+        "displays": all_displays,
         "n_situations": len(situations),
-        "n_displays": len(displays),
+        "n_real_clips": len(real_clips),
+        "n_displays": len(all_displays),
         "n_cells": len(cells),
         "temporal_filters": temporal_filters,
         "cells": cells,
+        "still_cells": still_cells,
         "stage_dumps": stage_dumps,
     }
 

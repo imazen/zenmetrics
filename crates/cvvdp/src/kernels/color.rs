@@ -154,12 +154,74 @@ pub fn display_byte_to_dkl_scalar(
         )
     };
 
+    apply_hlg_ootf(&mut lr, &mut lg, &mut lb, display);
+    linear_rgb_to_dkl(lr, lg, lb, display)
+}
+
+/// Display-aware host-side scalar reference for display-encoded
+/// sub-byte-precision inputs — the u16 (`v = code / 65535`) and f32
+/// (`v` already display-encoded) analogs of
+/// [`display_byte_to_dkl_scalar`], matching pycvvdp
+/// `video_source_array`'s uint16/float32 normalization.
+///
+/// Unlike the byte path, the sRGB EOTF is evaluated analytically
+/// ([`crate::params::srgb_eotf_scalar`]) rather than through the
+/// 256-entry LUT — matching upstream, which has no LUT.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp::kernels::color::{display_byte_to_dkl_scalar, display_encoded_to_dkl_scalar};
+/// use cvvdp::params::DisplayModel;
+///
+/// let d = DisplayModel::STANDARD_HDR_PQ;
+/// // u16 mid-gray on a PQ display resolves to a mid-luminance A channel.
+/// let (a, _, _) = display_encoded_to_dkl_scalar(0.5, 0.5, 0.5, d);
+/// assert!(a > 50.0 && a < 1000.0);
+///
+/// // u8-input parity: display_encoded(v/255) ≈ display_byte(v) for PQ.
+/// let (a8, rg8, vy8) = display_byte_to_dkl_scalar(128, 128, 128, d);
+/// let (af, rgf, vyf) =
+///     display_encoded_to_dkl_scalar(128.0 / 255.0, 128.0 / 255.0, 128.0 / 255.0, d);
+/// assert!((a8 - af).abs() < 1e-4);
+/// ```
+#[inline]
+#[must_use]
+pub fn display_encoded_to_dkl_scalar(
+    vr: f32,
+    vg: f32,
+    vb: f32,
+    display: crate::params::DisplayModel,
+) -> (f32, f32, f32) {
+    let (mut lr, mut lg, mut lb) = (
+        display
+            .eotf
+            .forward(vr, display.y_peak, display.y_black, display.y_refl),
+        display
+            .eotf
+            .forward(vg, display.y_peak, display.y_black, display.y_refl),
+        display
+            .eotf
+            .forward(vb, display.y_peak, display.y_black, display.y_refl),
+    );
+
+    apply_hlg_ootf(&mut lr, &mut lg, &mut lb, display);
+    linear_rgb_to_dkl(lr, lg, lb, display)
+}
+
+/// HLG per-RGB-triple system OOTF (`Y_s^(gamma-1)` factor). Shared
+/// tail of the byte and display-encoded scalar paths; no-op for any
+/// other EOTF. Operates on the post-inverse-EOTF channel values.
+#[inline]
+fn apply_hlg_ootf(lr: &mut f32, lg: &mut f32, lb: &mut f32, display: crate::params::DisplayModel) {
+    use crate::params::Eotf;
+
     if matches!(display.eotf, Eotf::Hlg) {
         let s = display.y_peak - display.y_black;
         let bias = display.y_black + display.y_refl;
-        let inv_r = if s > 0.0 { (lr - bias) / s } else { 0.0 };
-        let inv_g = if s > 0.0 { (lg - bias) / s } else { 0.0 };
-        let inv_b = if s > 0.0 { (lb - bias) / s } else { 0.0 };
+        let inv_r = if s > 0.0 { (*lr - bias) / s } else { 0.0 };
+        let inv_g = if s > 0.0 { (*lg - bias) / s } else { 0.0 };
+        let inv_b = if s > 0.0 { (*lb - bias) / s } else { 0.0 };
         let y_s = 0.262_7 * inv_r + 0.678_0 * inv_g + 0.059_3 * inv_b;
         let gamma = crate::params::hlg_system_gamma(display.y_peak, display.e_ambient_lux);
         let factor = if y_s > 0.0 {
@@ -167,11 +229,21 @@ pub fn display_byte_to_dkl_scalar(
         } else {
             0.0
         };
-        lr = s * (inv_r * factor) + bias;
-        lg = s * (inv_g * factor) + bias;
-        lb = s * (inv_b * factor) + bias;
+        *lr = s * (inv_r * factor) + bias;
+        *lg = s * (inv_g * factor) + bias;
+        *lb = s * (inv_b * factor) + bias;
     }
+}
 
+/// Display-primaries linear-RGB → (A, RG, VY) matrix multiply. Shared
+/// tail of the byte and display-encoded scalar paths.
+#[inline]
+fn linear_rgb_to_dkl(
+    lr: f32,
+    lg: f32,
+    lb: f32,
+    display: crate::params::DisplayModel,
+) -> (f32, f32, f32) {
     let m = display.primaries.linear_rgb_to_dkl();
     let a = m[0][0] * lr + m[0][1] * lg + m[0][2] * lb;
     let rg = m[1][0] * lr + m[1][1] * lg + m[1][2] * lb;
