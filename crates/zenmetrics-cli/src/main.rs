@@ -43,6 +43,8 @@ type DecodedRgb8Sides = (
     Result<decode::Rgb8Image, Box<dyn std::error::Error>>,
 );
 mod output;
+#[cfg(feature = "cpu-cvvdp")]
+mod score_video;
 #[cfg(feature = "cpu-metrics")]
 mod size_invariance;
 
@@ -188,6 +190,12 @@ struct Cli {
 enum Command {
     /// Score a single (reference, distorted) image pair.
     Score(ScoreArgs),
+    /// Score a (reference, distorted) VIDEO pair with cvvdp's temporal
+    /// path — two directories of frames (`f0000.png`, `f0001.png`, …)
+    /// streamed through `cvvdp::VideoScorer`. Requires
+    /// `--features cpu-cvvdp` (on in the default build).
+    #[cfg(feature = "cpu-cvvdp")]
+    ScoreVideo(score_video::ScoreVideoArgs),
     /// Run a metric over a TSV of image pairs.
     Batch(BatchArgs),
     /// Score every (reference, variant) pair across multiple metrics in
@@ -875,6 +883,14 @@ fn main() -> ExitCode {
             #[cfg(feature = "orchestrator")]
             &orchestrator_opts,
         ) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        #[cfg(feature = "cpu-cvvdp")]
+        Command::ScoreVideo(args) => match score_video::run(&args) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");

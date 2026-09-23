@@ -62,6 +62,12 @@ pub mod compare;
 #[allow(dead_code)]
 pub mod decode;
 
+/// `score-video` subcommand — cvvdp video scoring over frame
+/// directories (see the module docs). Gated on `cpu-cvvdp`.
+#[cfg(feature = "cpu-cvvdp")]
+#[allow(dead_code)]
+pub mod score_video;
+
 /// HDR decode + per-metric feeding front-end (PQ-PNG / EXR / gain-map
 /// sources → absolute nits). The sweep's `--hdr` mode (`sweep::hdr`)
 /// builds on this, so the lib compiles it when the `hdr` feature is on.
