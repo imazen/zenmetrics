@@ -16,3 +16,5 @@ pub mod diffmap;
 pub mod masking;
 pub mod pool;
 pub mod pyramid;
+#[allow(dead_code)] // wired in by the video pipeline (VIDEO.md)
+pub(crate) mod temporal;
