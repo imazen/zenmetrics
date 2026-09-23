@@ -24,6 +24,10 @@ Workspace conventions per the global rules:
 - zenmetrics-cli: `--metric gmsd` (feature `cpu-gmsd`, in `cpu-metrics`),
   column `gmsd_cpu_imazen_v0_1_0`; CPU-only, not orchestrator-eligible.
   Example `gmsd_parity_dump` (the Rust half of the parity harness). `53a49715`
+- gmsd: sRGB8 → gray is SIMD (`f64x4`, bit-identical to the scalar libgmsd
+  formula) and fused into the bands for `gmsd_rgb8` — no full-size gray
+  planes, conversion parallel with the kernel. 1024²: 5.35 → 1.63 ms (1
+  thread), 4.75 → 0.41 ms (8 threads). `c59cb81e`
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual

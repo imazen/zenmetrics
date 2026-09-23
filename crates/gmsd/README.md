@@ -69,9 +69,16 @@ on odd input; `GMSD.m` instead keeps an extra half-zero-padded sample.)
 ## SIMD
 
 One `#[arcane]` entry per tier (`v3` AVX2, `neon`, `wasm128`, `scalar`) through
-archmage; the per-row helpers (2×2 decimation; gradient + GMS + pooling sums)
-are magetypes `#[rite]` variants of the same tier, inlined into it. Every tier
-is bit-identical to the scalar tier (tested).
+archmage; the per-row helpers (sRGB8 → gray; 2×2 decimation; gradient + GMS +
+pooling sums) are magetypes `#[rite]` variants of the same tier, inlined into
+it. Every tier is bit-identical to the scalar tier (tested).
+
+`gmsd_rgb8` never materialises full-size gray planes: each band converts only
+the input rows it reads, in its own tier and thread. The conversion had been
+the dominant cost — at 1024², 3.6 ms of a 5.3 ms call against 0.68 ms for the
+GMS kernel (`examples/split_timing.rs`) — and fusing it took the call to
+1.6 ms at 1 thread and 0.41 ms at 8. Published speed numbers come from
+zensim's `ssim2_speed_bar` owner, not from that diagnostic.
 
 ## License
 

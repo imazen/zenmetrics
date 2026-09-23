@@ -24,6 +24,11 @@ FMA (`src/kernel.rs` header); the score is expected within f64 rounding
 (≤ 1e-12 relative), because the port pools in one pass with a shifted f64
 accumulator where libgmsd runs a two-pass mean/variance. Both held.
 
+**Re-checked after `c59cb81e`** (SIMD sRGB8→gray fused into the bands): same
+64 pairs, maps still 64/64 bit-identical, score deltas unchanged; the
+zensim-lane GMSD scores on 3,561 KADID/KonFiG pairs re-computed bit-identical
+to the pre-change scalar conversion.
+
 ## Why the score is not bit-identical
 
 libgmsd computes `mean = Σq / n` then `Σ (q − mean)² / (n − 1)` in f64,
@@ -70,7 +75,10 @@ row** (vectorised with `ymm` shuffles internally). The only other calls in
 the entry are the ring-buffer allocations and edge-row `memset`s. A first
 build also carried six per-iteration bounds-check branches from the
 ten-wide window slicing; they were hoisted by re-slicing each padded row to
-its exact length (`src/kernel.rs::gms_row`).
+its exact length (`src/kernel.rs::gms_row`). After `c59cb81e` the sRGB8→gray row helper `gray_row_v3` is inlined into
+the same entry (no symbol of its own; the entry's `ymm` count rose to 702)
+and the standalone plane converter `__arcane_gray_plane_v3` is 4-wide f64
+(`vcvtdq2pd` → `vmulpd`/`vaddpd` → `vroundpd` → `vcvtpd2ps`).
 
 ## Reproduce
 
