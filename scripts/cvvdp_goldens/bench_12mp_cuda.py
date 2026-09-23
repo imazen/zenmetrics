@@ -14,7 +14,7 @@ Run from the repo root:
     uv pip install --python .venv/bin/python \\
         torch --index-url https://download.pytorch.org/whl/cu124
     uv pip install --python .venv/bin/python \\
-        'cvvdp==0.5.4' 'pillow>=10' 'numpy>=1.26'
+        -r requirements.txt
     .venv/bin/python bench_12mp_cuda.py
 
 Writes `pycvvdp_synth_goldens.json` in the script directory.
@@ -367,6 +367,20 @@ def synth_pair_odd_dim(w=73, h=91):
     return ref, dist
 
 
+
+def installed_pycvvdp_version() -> str:
+    """Version of the installed pycvvdp distribution (PyPI name `cvvdp`, git
+    installs name it `pycvvdp`). Recorded in the goldens instead of a
+    hard-coded pin, so goldens always say which reference produced them."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    for dist in ("cvvdp", "pycvvdp"):
+        try:
+            return version(dist)
+        except PackageNotFoundError:
+            continue
+    raise SystemExit("pycvvdp is importable but no cvvdp/pycvvdp distribution metadata found")
+
 def main():
     print(f"torch: {torch.__version__}")
     print(f"cuda available: {torch.cuda.is_available()}")
@@ -532,7 +546,7 @@ def main():
     # in the tolerance comparison).
     manifest = {
         "schema_version": 1,
-        "pycvvdp_version": "0.5.4",
+        "pycvvdp_version": installed_pycvvdp_version(),
         "display_name": "standard_4k",
         "pix_per_deg": float(metric.pix_per_deg) if hasattr(metric, "pix_per_deg") else None,
         "fixtures": {

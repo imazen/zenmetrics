@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Build per-stage golden tensors and final JOD scores from the pinned
-ColorVideoVDP Python reference (v0.5.4), for cvvdp-gpu's parity tests.
+ColorVideoVDP Python reference (the installed pycvvdp; pinned in
+requirements.txt), for cvvdp-gpu's parity tests.
 
 Run once locally, upload outputs to R2 via `upload_to_r2.sh`. The
 Rust tests fetch the artifacts on first run and cache them locally.
@@ -58,6 +59,20 @@ def write_f32(path: Path, arr: np.ndarray) -> dict:
     }
 
 
+
+def installed_pycvvdp_version() -> str:
+    """Version of the installed pycvvdp distribution (PyPI name `cvvdp`, git
+    installs name it `pycvvdp`). Recorded in the goldens instead of a
+    hard-coded pin, so goldens always say which reference produced them."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    for dist in ("cvvdp", "pycvvdp"):
+        try:
+            return version(dist)
+        except PackageNotFoundError:
+            continue
+    raise SystemExit("pycvvdp is importable but no cvvdp/pycvvdp distribution metadata found")
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--pairs", required=True)
@@ -84,7 +99,7 @@ def main() -> int:
     metric = cvvdp(display_name=args.display, heatmap=None)
     manifest: dict = {
         "reference": "gfxdisp/ColorVideoVDP",
-        "reference_version": "v0.5.4",
+        "reference_version": "v" + installed_pycvvdp_version(),
         "display_model": args.display,
         "pairs": {},
     }
