@@ -32,3 +32,17 @@ column); the metric's own share is `peak_heap − inputs`.
 
 Not measured: peers at 64²/256² and at 1 thread; strip / warm-reference modes (GMSD has
 neither — its full mode already streams).
+
+## Re-measured 2026-09-23 after the integer + AVX-512 path (`051b37af`, `8fc65d91`, `ce18b182`)
+
+Raw rows: [`gmsd_peak_v2_2026-09-23.tsv`](gmsd_peak_v2_2026-09-23.tsv); same driver, `gmsd` built with
+`avx512` (v4 tier live on this host). The fused path no longer keeps gray scratch rows at all
+(sRGB8 → half-resolution in one integer pass):
+
+| size | GMSD `full` 1T | GMSD `full` 8T | GMSD `map` 1T |
+|---|---|---|---|
+| 1 MP | 0.11 MB | 0.24 MB | 9.5 MB |
+| 16 MP | 0.18 MB | 0.64 MB | 151 MB |
+| 40 MP | 0.23 MB | 0.97 MB | 361 MB |
+
+(Peers were not re-run; their rows above are unchanged code.)

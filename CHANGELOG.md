@@ -32,7 +32,12 @@ Workspace conventions per the global rules:
   with an exact `S ≡ 500 (mod 1000)` f64 boundary fixup, proved over all
   2^24 RGB8 triplets); opt-in `avx512` feature adds a 16-wide `v4` tier.
   Bit-identical to libgmsd still: 64/64 maps. 1024² `gmsd_rgb8` 1.57 →
-  0.99 ms (1 thread), 0.20 → 0.13 ms (8 threads). `212603c6`
+  0.99 ms (1 thread), 0.20 → 0.13 ms (8 threads). `051b37af` (Devin SWE-2)
+- gmsd: AVX-512 `v4` tier (feature `avx512`, enabled by zenmetrics-cli and
+  cpu-profile) and tier-order-stable f64 pooling (AVX2 row sums could differ
+  from scalar by ~1 ulp through a pairwise `reduce_add`; scores moved ≤ 6e-16,
+  ranks unchanged). zensim speed owner, 1024²: 0.83 ms (1 thread), 0.24 ms
+  (8 threads). `8fc65d91` (Devin SWE-2), `ce18b182`
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
