@@ -48,6 +48,8 @@ pub enum ModelVariant {
 }
 
 impl ModelVariant {
+    pub const V1_NEG: Self = Self::Standard1080p;
+
     pub fn built_in_name(&self) -> &'static str {
         match self {
             ModelVariant::Standard1080p => "vmaf_v1.0.16_3d0h",

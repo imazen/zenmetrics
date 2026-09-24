@@ -1050,3 +1050,38 @@ fn streaming_rejects_invalid_frame_without_advancing() {
     assert_eq!(got.len(), 1);
     assert_eq!(got[0].score.to_bits(), expected[0].score.to_bits());
 }
+
+#[test]
+fn explicit_v1_neg_alias_matches_official_v1_model() {
+    let reference = frame(0, 8, false);
+    let distorted = banded_frame(0, 8, true);
+    let reference = [yuv(&reference)];
+    let distorted = [yuv(&distorted)];
+    let official = score_v1_420(
+        &reference,
+        &distorted,
+        WIDTH,
+        HEIGHT,
+        8,
+        ModelVariant::Standard1080p,
+    )
+    .unwrap();
+    let neg = score_v1_420(
+        &reference,
+        &distorted,
+        WIDTH,
+        HEIGHT,
+        8,
+        ModelVariant::V1_NEG,
+    )
+    .unwrap();
+    assert_eq!(
+        ModelVariant::V1_NEG.built_in_name(),
+        ModelVariant::Standard1080p.built_in_name()
+    );
+    assert_eq!(neg[0].score.to_bits(), official[0].score.to_bits());
+    assert_eq!(
+        neg[0].features.adm3.to_bits(),
+        official[0].features.adm3.to_bits()
+    );
+}
