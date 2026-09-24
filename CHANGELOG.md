@@ -119,7 +119,7 @@ Workspace conventions per the global rules:
   8t/1t): a u8-source ring + fused u8→DKL FIR was built, measured,
   and reverted — per-emit reconversion runs ~9× per frame and
   regressed both wall and CPU, confirming emit-time conversion
-  cannot be amortised without storing the planes.
+  cannot be amortised without storing the planes. `14b789cc`.
 
 - cvvdp: high-bit-depth display-encoded input — `u16` (`v/65535`) and
   `f32` (`[0,1]` as-is; cd/m² for `Eotf::Linear`) for stills
