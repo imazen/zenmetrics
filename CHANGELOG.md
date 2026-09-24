@@ -299,7 +299,7 @@ Workspace conventions per the global rules:
   exact-narrowing main commit e56f626b until zenpixels-convert 0.2.17 or
   newer publishes; the lockfile retains current master entries and the required
   lz4_flex 0.13.1 to 0.14.0 transitive update.
-  `ef69b77c`, `7c61c32e`, `5fc1331e`.
+  `6c7b2566`, `8345502f`, `6071c69e`.
 
 - cvvdp: video scoring on the CPU path — `VideoScorer` (streaming
   `push_frame`/`finish`, holds only the temporal-filter window) plus
