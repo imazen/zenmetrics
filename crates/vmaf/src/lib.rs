@@ -4,6 +4,7 @@ mod adm;
 mod cambi;
 mod score;
 mod speed;
+mod v0;
 
 pub use adm::adm3_v1_from_luma;
 pub use cambi::cambi_v1_from_luma;
@@ -12,6 +13,7 @@ pub use score::{
     score_v1_420,
 };
 pub use speed::speed_v1_chroma_420;
+pub use v0::{VmafV0Features, VmafV0Model, VmafV0Variant};
 
 use std::error::Error as StdError;
 use std::fmt;
@@ -109,9 +111,9 @@ const FEATURE_NAMES: [&str; 4] = [
 const SPEED_CHROMA: usize = 1;
 const ADM3: usize = 2;
 
-struct SupportVector {
+struct SupportVector<const N: usize> {
     alpha: f64,
-    features: [f64; 4],
+    features: [f64; N],
 }
 
 pub struct VmafModel {
@@ -119,7 +121,7 @@ pub struct VmafModel {
     intercepts: [f64; 5],
     gamma: f64,
     rho: f64,
-    support_vectors: Vec<SupportVector>,
+    support_vectors: Vec<SupportVector<4>>,
     chroma_correction_parameter: Option<f64>,
     score_transform: Option<[f64; 3]>,
     score_clip: [f64; 2],
@@ -160,7 +162,7 @@ impl VmafModel {
             .get("model")
             .and_then(|v| v.as_str())
             .ok_or(Error::InvalidModel("missing svm model text"))?;
-        let (gamma, rho, support_vectors) = parse_svm(svm_text)?;
+        let (gamma, rho, support_vectors) = parse_svm::<4>(svm_text)?;
 
         let chroma_correction_parameter = model_dict
             .get("chroma_correction_parameter")
@@ -289,7 +291,7 @@ impl VmafModel {
     }
 }
 
-fn get_f64_array<const N: usize>(
+pub(crate) fn get_f64_array<const N: usize>(
     model_dict: &serde_json::Value,
     key: &str,
 ) -> Result<[f64; N], Error> {
@@ -312,7 +314,7 @@ fn get_f64_array<const N: usize>(
     Ok(out)
 }
 
-fn parse_svm(text: &str) -> Result<(f64, f64, Vec<SupportVector>), Error> {
+fn parse_svm<const N: usize>(text: &str) -> Result<(f64, f64, Vec<SupportVector<N>>), Error> {
     let mut gamma = None;
     let mut rho = None;
     let mut total_sv = None;
@@ -333,8 +335,8 @@ fn parse_svm(text: &str) -> Result<(f64, f64, Vec<SupportVector>), Error> {
                 .and_then(|t| t.parse::<f64>().ok())
                 .filter(|v| v.is_finite())
                 .ok_or(Error::InvalidModel("bad SV coefficient"))?;
-            let mut features = [0.0f64; 4];
-            let mut seen = [false; 4];
+            let mut features = [0.0f64; N];
+            let mut seen = [false; N];
             for token in parts {
                 let (idx, val) = token
                     .split_once(':')
@@ -343,7 +345,7 @@ fn parse_svm(text: &str) -> Result<(f64, f64, Vec<SupportVector>), Error> {
                     .parse()
                     .ok()
                     .ok_or(Error::InvalidModel("bad SV index"))?;
-                if !(1..=4).contains(&idx) {
+                if !(1..=N).contains(&idx) {
                     return Err(Error::InvalidModel("SV index out of range"));
                 }
                 if seen[idx - 1] {

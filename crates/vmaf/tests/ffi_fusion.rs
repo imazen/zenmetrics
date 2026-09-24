@@ -6,9 +6,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(feature = "parallel")]
 use vmaf::VmafV1Scorer;
 use vmaf::{
-    ModelVariant, PoolingMethod, VmafFeatures, VmafModel, VmafV1Stream, Yuv420Frame,
-    adm3_v1_from_luma, cambi_v1_from_luma, motion3_from_luma, pool_v1_scores, score_v1_420,
-    speed_v1_chroma_420,
+    ModelVariant, PoolingMethod, VmafFeatures, VmafModel, VmafV0Features, VmafV0Model,
+    VmafV0Variant, VmafV1Stream, Yuv420Frame, adm3_v1_from_luma, cambi_v1_from_luma,
+    motion3_from_luma, pool_v1_scores, score_v1_420, speed_v1_chroma_420,
 };
 use vmaf_head_sys::*;
 
@@ -1083,5 +1083,160 @@ fn explicit_v1_neg_alias_matches_official_v1_model() {
     assert_eq!(
         neg[0].features.adm3.to_bits(),
         official[0].features.adm3.to_bits()
+    );
+}
+
+fn oracle_v0(
+    name: &str,
+    bit_depth: u32,
+    distorted: bool,
+    make_frame: fn(usize, u32, bool) -> Frame,
+) -> Vec<([f64; 6], f64)> {
+    let session = Session::new(name);
+    for index in 0..3 {
+        let reference = make_frame(index, bit_depth, false);
+        let distortion = make_frame(index, bit_depth, distorted);
+        let mut reference = picture(&reference, bit_depth, WIDTH, HEIGHT);
+        let mut distortion = picture(&distortion, bit_depth, WIDTH, HEIGHT);
+        let rc = unsafe {
+            vmaf_read_pictures(
+                session.context,
+                &mut reference,
+                &mut distortion,
+                index as u32,
+            )
+        };
+        if rc != 0 {
+            unsafe {
+                vmaf_picture_unref(&mut reference);
+                vmaf_picture_unref(&mut distortion);
+            }
+        }
+        assert_eq!(rc, 0, "{name}: vmaf_read_pictures failed at {index}: {rc}");
+    }
+    assert_eq!(
+        unsafe { vmaf_read_pictures(session.context, ptr::null_mut(), ptr::null_mut(), 0) },
+        0
+    );
+    let trace = std::env::temp_dir().join(format!(
+        "zenmetrics-vmaf-v0-{}-{}.json",
+        std::process::id(),
+        TRACE_ID.fetch_add(1, Ordering::Relaxed)
+    ));
+    let trace_path = CString::new(trace.to_str().unwrap()).unwrap();
+    assert_eq!(
+        unsafe {
+            vmaf_write_output(
+                session.context,
+                trace_path.as_ptr(),
+                VmafOutputFormat_VMAF_OUTPUT_FORMAT_JSON,
+            )
+        },
+        0
+    );
+    let json: serde_json::Value = serde_json::from_slice(&std::fs::read(&trace).unwrap()).unwrap();
+    std::fs::remove_file(&trace).unwrap();
+    let frames = json["frames"].as_array().unwrap();
+    assert_eq!(frames.len(), 3);
+    let names = [
+        ("integer_adm2", "VMAF_integer_feature_adm2_score"),
+        ("integer_motion2", "VMAF_integer_feature_motion2_score"),
+        (
+            "integer_vif_scale0",
+            "VMAF_integer_feature_vif_scale0_score",
+        ),
+        (
+            "integer_vif_scale1",
+            "VMAF_integer_feature_vif_scale1_score",
+        ),
+        (
+            "integer_vif_scale2",
+            "VMAF_integer_feature_vif_scale2_score",
+        ),
+        (
+            "integer_vif_scale3",
+            "VMAF_integer_feature_vif_scale3_score",
+        ),
+    ];
+    frames
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            assert_eq!(item["frameNum"].as_u64(), Some(index as u64));
+            let keys = item["metrics"].as_object().unwrap();
+            let features = std::array::from_fn(|i| {
+                exact_feature(session.context, keys, index, names[i].0, names[i].1)
+            });
+            let mut score = f64::NAN;
+            assert_eq!(
+                unsafe {
+                    vmaf_score_at_index(session.context, session.model, &mut score, index as u32)
+                },
+                0
+            );
+            assert!(score.is_finite());
+            (features, score)
+        })
+        .collect()
+}
+
+#[test]
+fn v0_oracle_exercises_neg_gain_on_sharpening() {
+    let original = oracle_v0("vmaf_v0.6.1", 8, true, sharpened_frame);
+    let neg = oracle_v0("vmaf_v0.6.1neg", 8, true, sharpened_frame);
+    assert!(original.iter().zip(&neg).any(|((a, _), (b, _))| {
+        (a[0] - b[0]).abs() > 1e-5
+            || a[2..]
+                .iter()
+                .zip(&b[2..])
+                .any(|(x, y)| (x - y).abs() > 1e-5)
+    }));
+}
+
+#[test]
+fn v0_fusion_matches_v321_for_both_depths_and_neg() {
+    for variant in [
+        VmafV0Variant::Standard,
+        VmafV0Variant::StandardNeg,
+        VmafV0Variant::FourK,
+        VmafV0Variant::FourKNeg,
+    ] {
+        let model = VmafV0Model::new(variant).unwrap();
+        for bit_depth in [8, 10] {
+            for distorted in [false, true] {
+                for (index, (features, expected)) in oracle_v0(
+                    variant.built_in_name(),
+                    bit_depth,
+                    distorted,
+                    sharpened_frame,
+                )
+                .into_iter()
+                .enumerate()
+                {
+                    let actual = model
+                        .predict(VmafV0Features {
+                            adm2: features[0],
+                            motion2: features[1],
+                            vif_scales: [features[2], features[3], features[4], features[5]],
+                        })
+                        .unwrap();
+                    assert!(
+                        (actual - expected).abs() <= 1e-5,
+                        "{variant:?}, {bit_depth} bit, distorted={distorted}, frame={index}: \
+                         features={features:?}, pure Rust={actual}, libvmaf={expected}"
+                    );
+                }
+            }
+        }
+    }
+    let model = VmafV0Model::new(VmafV0Variant::Standard).unwrap();
+    assert!(
+        model
+            .predict(VmafV0Features {
+                adm2: f64::NAN,
+                motion2: 0.0,
+                vif_scales: [0.0; 4]
+            })
+            .is_err()
     );
 }
