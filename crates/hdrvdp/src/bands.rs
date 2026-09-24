@@ -129,6 +129,16 @@ impl BandPyramid {
 /// back in for the second image.
 #[must_use]
 pub fn decompose(pathway: &Pathway, par: &Params, bb_padvalue: Option<f64>) -> (BandPyramid, f64) {
+    let mut bp = decompose_build(pathway);
+    let pad = finalize_baseband(&mut bp, pathway, par, bb_padvalue);
+    (bp, pad)
+}
+
+/// The pyramid half of [`decompose`] — build the `sp3` steerable pyramid and
+/// move its planes into the `[1, 4×H, 1]` band list. Split out so the two
+/// images' builds can run in parallel before the base-band filter couples
+/// them through `bb_padvalue` (see [`crate::metric`]).
+pub(crate) fn decompose_build(pathway: &Pathway) -> BandPyramid {
     let pyr: SteerablePyramid = build(&pathway.achromatic, pathway.width, pathway.height, None);
     let levels = pyr.height_levels();
 
@@ -146,18 +156,33 @@ pub fn decompose(pathway: &Pathway, par: &Params, bb_padvalue: Option<f64>) -> (
             .iter()
             .all(|p| p.len() == ORIENTATIONS)
     );
+    BandPyramid {
+        bands,
+        width: pathway.width,
+        height: pathway.height,
+    }
+}
 
-    // Base-band CSF filter, at the mean adapting luminance (means stay f64 —
-    // they are reductions).
+/// The base-band CSF half of [`decompose`]: filter the low-pass band at the
+/// mean adapting luminance, using `bb_padvalue` for the FFT pad (the
+/// reference passes `None` → its own base-band mean, which is returned for
+/// the caller to hand to the test image).
+pub(crate) fn finalize_baseband(
+    bp: &mut BandPyramid,
+    pathway: &Pathway,
+    par: &Params,
+    bb_padvalue: Option<f64>,
+) -> f64 {
+    // Means stay f64 — they are reductions.
     let l_mean =
         pathway.l_adapt.iter().map(|v| *v as f64).sum::<f64>() / pathway.l_adapt.len() as f64;
-    let last = bands.len() - 1;
-    let bb = &bands[last][0];
+    let last = bp.bands.len() - 1;
+    let bb = &bp.bands[last][0];
     let pad = bb_padvalue.unwrap_or_else(|| {
         bb.data.iter().map(|v| *v as f64).sum::<f64>() / bb.data.len().max(1) as f64
     });
 
-    let band_freq_last = 2f64.powi(-((bands.len() - 1) as i32)) * par.pix_per_deg / 2.0;
+    let band_freq_last = 2f64.powi(-((bp.bands.len() - 1) as i32)) * par.pix_per_deg / 2.0;
     let (pw, ph) = (bb.width * 2, bb.height * 2);
     // `band_freq(end)·2·√2` — upstream's own comment: "I wish to know why
     // sqrt(2) works better, as it should be 2".
@@ -166,17 +191,9 @@ pub fn decompose(pathway: &Pathway, par: &Params, bb_padvalue: Option<f64>) -> (
         .into_iter()
         .map(|rho| ncsf(rho, l_mean, par) as f32)
         .collect();
-    let filtered = conv_fft_real(&bb.data, bb.width, bb.height, &csf_bb, pw, ph, pad as f32);
-    bands[last][0].data = filtered;
-
-    (
-        BandPyramid {
-            bands,
-            width: pathway.width,
-            height: pathway.height,
-        },
-        pad,
-    )
+    bp.bands[last][0].data =
+        conv_fft_real(&bb.data, bb.width, bb.height, &csf_bb, pw, ph, pad as f32);
+    pad
 }
 
 #[cfg(test)]

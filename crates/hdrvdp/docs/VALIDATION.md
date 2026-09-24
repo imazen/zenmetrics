@@ -33,6 +33,12 @@ noise — per-plane drift is 1e-9…1e-4 with no systematic bias — and are
 orders of magnitude below the JND resolution the metric resolves.
 Diagnostic stage-isolation (`--diag`, per-plane `D` comparison) remains
 the tool for distinguishing float noise from an algorithmic regression.
+The same test covers the `magetypes` SIMD kernels and the `parallel`
+feature: `cargo test -p hdrvdp --release --features parallel` exercises
+the batched-FFT / `pow_midp` / rayon paths against these goldens —
+parallel partitions are structural, so results are bit-identical to the
+sequential build (including `score() == hdrvdp().q` exactly), and SIMD
+tier differences stay inside the tolerances above.
 
 `res.Q` is far tighter than `P_map` because the border pixels of the
 reconstructed `S_map` (the documented `reflect1`-vs-`EXPAND`

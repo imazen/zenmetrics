@@ -188,6 +188,35 @@ impl Photoreceptor {
         )
     }
 
+    /// [`Self::cone32`] over a whole plane — SIMD `log10` + LUT gather via
+    /// [`crate::simd_kernels::lut_plane`]. `out.len() == lum.len()`.
+    pub fn cone32_plane(&self, lum: &[f32], out: &mut [f32]) {
+        crate::simd_kernels::lut_plane(
+            lum,
+            &self.jnd_cone32,
+            self.log_lum[0] as f32,
+            (1.0 / self.step()) as f32,
+            self.lum_min as f32,
+            self.lum_max as f32,
+            true,
+            out,
+        );
+    }
+
+    /// [`Self::rod32`] over a whole plane — see [`Self::cone32_plane`].
+    pub fn rod32_plane(&self, lum: &[f32], out: &mut [f32]) {
+        crate::simd_kernels::lut_plane(
+            lum,
+            &self.jnd_rod32,
+            self.log_lum[0] as f32,
+            (1.0 / self.step()) as f32,
+            self.lum_min as f32,
+            self.lum_max as f32,
+            true,
+            out,
+        );
+    }
+
     /// The raw cone table (JND units) and its `log10`-luminance grid.
     #[must_use]
     pub fn cone_table(&self) -> (&[f64], &[f64]) {

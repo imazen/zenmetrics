@@ -233,6 +233,30 @@ Workspace conventions per the global rules:
   1.28 s, `score()` 1.02 s (was 1.85 s before the pass). `fc9304ee`
   (score()), `e962983e`.
 
+- hdrvdp: **SIMD + `parallel` pass — `score()` ~10× vs the scalar-f64
+  start**. `magetypes`/`archmage` `f32x8` kernels (runtime dispatch,
+  scalar fallback) for the masked transducer + psychometric reshape
+  (`pow_midp` lanes), masked squared-error reduction, LUT/`log10`
+  lookups (photoreceptor + uniform-grid CSF), and a batched SoA
+  `f32x8` FFT whose transposes fuse `conj`, the real filter multiply
+  and `conj·(1/n)` so `conv_fft_real` never touches the buffer outside
+  a transform pass. The optical-MTF filter is built from its first
+  quadrant only (the lattice is mirror-symmetric — bit-identical, 4×
+  fewer `exp` evals). New opt-in `parallel` feature (rayon)
+  parallelises the per-image pathways and pyramid builds (joined at
+  the shared base-band pad), per-level orientations, `corr_dn` rows,
+  `up_conv` contributions, FFT row/column passes and masking planes —
+  all partitions structural so results are bit-identical at any thread
+  count, including `score() == hdrvdp().q` exactly. `decompose` splits
+  into `decompose_build` + `finalize_baseband` internally to expose
+  the parallelism (public `decompose` unchanged). `F32x8Convert` midp
+  transcendentals exist only at `v3`/`neon`/`wasm128`/`scalar` tiers,
+  so the midp kernels carry explicit tier lists — dispatch falls back
+  cleanly on AVX-512-only hosts. 1024² probe, release: `score()`
+  1.02 s → 519 ms serial / **184 ms** under `parallel`; full result
+  ~780 ms / ~330 ms. `--all-features` clippy-clean; 100 tests pass
+  under both feature sets.
+
 - **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
   IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
   Score + half-resolution GMS map, strided f32 input, zenpixels `PixelSlice`

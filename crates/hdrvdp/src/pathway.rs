@@ -34,7 +34,7 @@
 //!    each other's mean.
 
 use crate::csf::mtf;
-use crate::fft::{conv_fft_real, cycles_per_degree_grid};
+use crate::fft::conv_fft_real;
 use crate::params::Params;
 use crate::photoreceptor::Photoreceptor;
 
@@ -99,10 +99,29 @@ pub fn visual_pathway(
 pub(crate) fn mtf_filter_for(width: usize, height: usize, par: &Params) -> Option<Vec<f32>> {
     let (pad_w, pad_h) = (width * 2, height * 2);
     par.do_mtf.then(|| {
-        cycles_per_degree_grid(pad_w, pad_h, par.pix_per_deg)
-            .into_iter()
-            .map(|rho| mtf(rho, par) as f32)
-            .collect()
+        // `rho(y,x)` depends only on |fx[x]| and |fy[y]|, and each axis is
+        // mirror-symmetric (|f[k]| = |f[n−k]|), so only the first quadrant is
+        // evaluated — ¼ of the `exp` calls, bit-identical since the mirrored
+        // bins carry the same |f| and `mtf` is a pure function of `rho`. All
+        // quadrant bins sit on the positive half of the axis, so the bin
+        // frequency is just `k/n · ppd`.
+        let (hw, hh) = (pad_w / 2 + 1, pad_h / 2 + 1);
+        let quad: Vec<f32> = crate::par::collect_indexed(hw * hh, |j| {
+            let (y, x) = (j / hw, j % hw);
+            let fx = x as f64 / pad_w as f64 * par.pix_per_deg;
+            let fy = y as f64 / pad_h as f64 * par.pix_per_deg;
+            mtf((fx * fx + fy * fy).sqrt(), par) as f32
+        });
+        // Mirror into the full lattice, one row per task.
+        let rows = crate::par::collect_indexed(pad_h, |y| {
+            let yr = y.min(pad_h - y);
+            let mut row = vec![0.0f32; pad_w];
+            for (x, v) in row.iter_mut().enumerate() {
+                *v = quad[yr * hw + x.min(pad_w - x)];
+            }
+            row
+        });
+        rows.concat()
     })
 }
 
@@ -184,9 +203,12 @@ pub(crate) fn visual_pathway_with_filter(
         .collect();
 
     // ── 4. Photoreceptor non-linearity ───────────────────────────────────
-    let p_l: Vec<f32> = r_lmsr[0].iter().map(|&v| pn.cone32(v)).collect();
-    let p_m: Vec<f32> = r_lmsr[1].iter().map(|&v| pn.cone32(v)).collect();
-    let p_r: Vec<f32> = r_lmsr[3].iter().map(|&v| pn.rod32(v)).collect();
+    let mut p_l = vec![0.0f32; n];
+    let mut p_m = vec![0.0f32; n];
+    let mut p_r = vec![0.0f32; n];
+    pn.cone32_plane(&r_lmsr[0], &mut p_l);
+    pn.cone32_plane(&r_lmsr[1], &mut p_m);
+    pn.rod32_plane(&r_lmsr[3], &mut p_r);
 
     // ── 5. DC removal, cone and rod pathways separately ──────────────────
     let mut cones: Vec<f32> = p_l.iter().zip(&p_m).map(|(a, b)| a + b).collect();

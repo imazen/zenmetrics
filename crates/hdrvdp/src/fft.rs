@@ -238,6 +238,79 @@ impl Plan {
     }
 }
 
+/// Batched radix-2 FFT: **eight** independent length-`n` transforms at once,
+/// held as struct-of-arrays planes `re8`/`im8` of length `n·8` where element
+/// `k` of transform `j` lives at `[k·8 + j]`.
+///
+/// Every butterfly is then a full `f32x8` lane operation — the batch lane is
+/// the vector lane — so no shuffles are needed anywhere (an AoS layout would
+/// need pair-swaps magetypes doesn't expose), and *every* stage vectorizes
+/// including the small ones that would be strided in a per-row SIMD scheme.
+/// `fft2` uses this for the column pass (8 columns per block, a layout the
+/// old blocked transpose already produced) and for the row pass (8 rows per
+/// block, transposed in and out). Bit-reversal swaps whole 8-lane rows.
+///
+/// Twiddles are splat per butterfly — cheap, and identical across lanes.
+#[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
+fn fft_batch8_inner(
+    token: Token,
+    re8: &mut [f32],
+    im8: &mut [f32],
+    n: usize,
+    stages: &[Vec<Complex>],
+) {
+    debug_assert_eq!(re8.len(), n * 8);
+    debug_assert_eq!(im8.len(), n * 8);
+
+    // Bit-reversal permutation on 8-lane blocks.
+    let bits = n.trailing_zeros();
+    for i in 0..n {
+        let j = (i as u32).reverse_bits() >> (32 - bits);
+        let j = j as usize;
+        if j > i {
+            let a = f32x8::load(token, (&re8[i * 8..i * 8 + 8]).try_into().unwrap());
+            let b = f32x8::load(token, (&re8[j * 8..j * 8 + 8]).try_into().unwrap());
+            b.store((&mut re8[i * 8..i * 8 + 8]).try_into().unwrap());
+            a.store((&mut re8[j * 8..j * 8 + 8]).try_into().unwrap());
+            let a = f32x8::load(token, (&im8[i * 8..i * 8 + 8]).try_into().unwrap());
+            let b = f32x8::load(token, (&im8[j * 8..j * 8 + 8]).try_into().unwrap());
+            b.store((&mut im8[i * 8..i * 8 + 8]).try_into().unwrap());
+            a.store((&mut im8[j * 8..j * 8 + 8]).try_into().unwrap());
+        }
+    }
+
+    for tw in stages {
+        let half = tw.len();
+        let len = half * 2;
+        for start in (0..n).step_by(len) {
+            for (k, &w) in tw.iter().enumerate() {
+                let a = (start + k) * 8;
+                let b = (start + k + half) * 8;
+                let wre = f32x8::splat(token, w.re);
+                let wim = f32x8::splat(token, w.im);
+                let ure = f32x8::load(token, (&re8[a..a + 8]).try_into().unwrap());
+                let uim = f32x8::load(token, (&im8[a..a + 8]).try_into().unwrap());
+                let vre = f32x8::load(token, (&re8[b..b + 8]).try_into().unwrap());
+                let vim = f32x8::load(token, (&im8[b..b + 8]).try_into().unwrap());
+                let tre = vre * wre - vim * wim;
+                let tim = vre * wim + vim * wre;
+                (ure + tre).store((&mut re8[a..a + 8]).try_into().unwrap());
+                (uim + tim).store((&mut im8[a..a + 8]).try_into().unwrap());
+                (ure - tre).store((&mut re8[b..b + 8]).try_into().unwrap());
+                (uim - tim).store((&mut im8[b..b + 8]).try_into().unwrap());
+            }
+        }
+    }
+}
+
+/// [`fft_batch8_inner`] with runtime tier dispatch.
+fn fft_batch8(re8: &mut [f32], im8: &mut [f32], n: usize, stages: &[Vec<Complex>]) {
+    archmage::incant!(
+        fft_batch8_inner(re8, im8, n, stages),
+        [v4x, v4, v3, neon, wasm128, scalar]
+    );
+}
+
 /// Iterative radix-2 with precomputed per-stage twiddles.
 fn fft_radix2_planned(buf: &mut [Complex], stages: &[Vec<Complex>]) {
     let n = buf.len();
@@ -293,21 +366,231 @@ pub fn fft2(buf: &mut [Complex], width: usize, height: usize) {
 /// same-size transforms (or a forward + inverse pair) build them once.
 fn fft2_planned(buf: &mut [Complex], width: usize, height: usize, wplan: &Plan, hplan: &Plan) {
     debug_assert_eq!(buf.len(), width * height);
-    for row in buf.chunks_exact_mut(width) {
-        wplan.run(row);
-    }
+    fft2_rows_planned(buf, width, height, wplan);
     fft2_cols_planned(buf, width, height, hplan);
+}
+
+/// The row half of [`fft2_planned`]: batched eight rows per block through
+/// [`fft_batch8`] when the row plan is radix-2 (each 8-row block is
+/// transposed into the SoA batch layout, transformed, and written back —
+/// the block fits L2, so the extra pass is in-cache). Non-power-of-two
+/// plans keep the scalar per-row path (Bluestein sizes are rare and small).
+fn fft2_rows_planned(buf: &mut [Complex], width: usize, height: usize, wplan: &Plan) {
+    fft2_rows_conj_mul(buf, width, height, wplan, None, false);
+}
+
+/// [`fft2_rows_planned`] with an optional `conj` and a real filter multiply
+/// fused into the transpose **in**: with `conj` set it loads
+/// `(re·f, −im·f)` (with `f = 1` when `filter` is `None`), i.e.
+/// `conj(buf·f)` — exactly what an `ifft2` whose input was just
+/// pointwise-filtered needs, without a separate pass over the buffer.
+fn fft2_rows_conj_mul(
+    buf: &mut [Complex],
+    width: usize,
+    height: usize,
+    wplan: &Plan,
+    filter: Option<&[f32]>,
+    conj: bool,
+) {
+    if let PlanKind::Radix2 { stages } = &wplan.kind {
+        const RB: usize = 8;
+        // Row blocks are disjoint slices of `buf`, so under `parallel` each
+        // block's transpose+transform+writeback is an independent task.
+        #[cfg(feature = "parallel")]
+        if height >= 4 * RB {
+            use rayon::prelude::*;
+            buf.par_chunks_mut(width * RB)
+                .enumerate()
+                .map_init(
+                    || (vec![0.0f32; width * RB], vec![0.0f32; width * RB]),
+                    |(re8, im8), (ci, chunk)| {
+                        let nb = chunk.len() / width;
+                        for x in 0..width {
+                            for j in 0..nb {
+                                let i = j * width + x;
+                                let v = chunk[i];
+                                let f = filter.map_or(1.0, |f| f[(ci * RB + j) * width + x]);
+                                let im = if conj { -v.im } else { v.im };
+                                re8[x * RB + j] = v.re * f;
+                                im8[x * RB + j] = im * f;
+                            }
+                            for j in nb..RB {
+                                re8[x * RB + j] = 0.0;
+                                im8[x * RB + j] = 0.0;
+                            }
+                        }
+                        fft_batch8(re8, im8, width, stages);
+                        for x in 0..width {
+                            for j in 0..nb {
+                                chunk[j * width + x] =
+                                    Complex::new(re8[x * RB + j], im8[x * RB + j]);
+                            }
+                        }
+                    },
+                )
+                .for_each(|()| ());
+            return;
+        }
+        let mut re8 = vec![0.0f32; width * RB];
+        let mut im8 = vec![0.0f32; width * RB];
+        let mut y = 0usize;
+        while y < height {
+            let nb = RB.min(height - y);
+            for x in 0..width {
+                for j in 0..nb {
+                    let i = (y + j) * width + x;
+                    let v = buf[i];
+                    let f = filter.map_or(1.0, |f| f[i]);
+                    let im = if conj { -v.im } else { v.im };
+                    re8[x * RB + j] = v.re * f;
+                    im8[x * RB + j] = im * f;
+                }
+                for j in nb..RB {
+                    re8[x * RB + j] = 0.0;
+                    im8[x * RB + j] = 0.0;
+                }
+            }
+            fft_batch8(&mut re8, &mut im8, width, stages);
+            for x in 0..width {
+                for j in 0..nb {
+                    buf[(y + j) * width + x] = Complex::new(re8[x * RB + j], im8[x * RB + j]);
+                }
+            }
+            y += nb;
+        }
+    } else {
+        if conj || filter.is_some() {
+            for (i, v) in buf.iter_mut().enumerate() {
+                let f = filter.map_or(1.0, |f| f[i]);
+                let im = if conj { -v.im } else { v.im };
+                *v = Complex::new(v.re * f, im * f);
+            }
+        }
+        for row in buf.chunks_exact_mut(width) {
+            wplan.run(row);
+        }
+    }
 }
 
 /// The column half of [`fft2_planned`], split out so [`conv_fft_real`] can run
 /// a smarter row pass first.
 ///
-/// Columns go in blocks of 8: one Complex is 8 bytes, so 8 adjacent columns
-/// span a whole cache line per touched row instead of using 1/8th of it. Each
-/// column still gets the identical 1-D transform — columns are independent, so
-/// the grouping cannot change a single bit.
+/// Radix-2 plans go through [`fft_batch8`] on the SoA batch layout — the
+/// transpose writes column `j` into lane `j` (`re8[y·8+j]`/`im8[y·8+j]`), so
+/// the whole transform is lane ops on contiguous vectors. Non-power-of-two
+/// plans keep the blocked scalar path (8 adjacent columns per block = one
+/// cache line per touched row, as before).
 fn fft2_cols_planned(buf: &mut [Complex], width: usize, height: usize, hplan: &Plan) {
+    fft2_cols_conj_scale(buf, width, height, hplan, None);
+}
+
+/// [`fft2_cols_planned`] with `conj·scale` fused into the transpose **out**:
+/// with `scale` set it stores `(re·s, −im·s)`, which is `ifft2`'s trailing
+/// `conj·(1/n)` — fused so it doesn't take its own pass over the buffer.
+fn fft2_cols_conj_scale(
+    buf: &mut [Complex],
+    width: usize,
+    height: usize,
+    hplan: &Plan,
+    scale: Option<f32>,
+) {
     const CB: usize = 8;
+    if let PlanKind::Radix2 { stages } = &hplan.kind {
+        // Column stripes are disjoint writes but strided — not sliceable —
+        // so the parallel path goes through a block-major SoA buffer in
+        // bounded super-blocks (64 blocks = 512 columns ≈ 16 MB at 2048²):
+        // gather (parallel over (block,row) cells), transform (parallel over
+        // blocks), scatter (parallel over rows, fusing `conj·scale`).
+        #[cfg(feature = "parallel")]
+        if width >= 4 * CB && height >= 4 * CB {
+            use rayon::prelude::*;
+            const SB: usize = 64; // blocks per super-block
+            let mut x0 = 0usize;
+            while x0 < width {
+                let nb_cols = (SB * CB).min(width - x0);
+                let nblocks = nb_cols.div_ceil(CB);
+                let mut re_all = vec![0.0f32; nblocks * height * CB];
+                let mut im_all = vec![0.0f32; nblocks * height * CB];
+                {
+                    let ro: &[Complex] = buf;
+                    re_all
+                        .par_chunks_mut(CB)
+                        .zip(im_all.par_chunks_mut(CB))
+                        .enumerate()
+                        .for_each(|(j, (rc, ic))| {
+                            let (b, y) = (j / height, j % height);
+                            for (l, (rc, ic)) in rc.iter_mut().zip(ic.iter_mut()).enumerate() {
+                                let x = x0 + b * CB + l;
+                                if x < width {
+                                    let v = ro[y * width + x];
+                                    *rc = v.re;
+                                    *ic = v.im;
+                                }
+                            }
+                        });
+                }
+                re_all
+                    .par_chunks_mut(height * CB)
+                    .zip(im_all.par_chunks_mut(height * CB))
+                    .for_each(|(rc, ic)| fft_batch8(rc, ic, height, stages));
+                let s = scale.unwrap_or(1.0);
+                let negate = scale.is_some();
+                buf.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
+                    for b in 0..nblocks {
+                        let base = (b * height + y) * CB;
+                        for l in 0..CB {
+                            let x = x0 + b * CB + l;
+                            if x < width {
+                                let (re, im) = (re_all[base + l], im_all[base + l]);
+                                row[x] =
+                                    Complex::new(re * s, if negate { -im * s } else { im * s });
+                            }
+                        }
+                    }
+                });
+                x0 += nb_cols;
+            }
+            return;
+        }
+        let mut re8 = vec![0.0f32; height * CB];
+        let mut im8 = vec![0.0f32; height * CB];
+        let mut x = 0usize;
+        while x < width {
+            let nb = CB.min(width - x);
+            for y in 0..height {
+                for j in 0..nb {
+                    let v = buf[y * width + x + j];
+                    re8[y * CB + j] = v.re;
+                    im8[y * CB + j] = v.im;
+                }
+                for j in nb..CB {
+                    re8[y * CB + j] = 0.0;
+                    im8[y * CB + j] = 0.0;
+                }
+            }
+            fft_batch8(&mut re8, &mut im8, height, stages);
+            match scale {
+                Some(s) => {
+                    for y in 0..height {
+                        for j in 0..nb {
+                            buf[y * width + x + j] =
+                                Complex::new(re8[y * CB + j] * s, -im8[y * CB + j] * s);
+                        }
+                    }
+                }
+                None => {
+                    for y in 0..height {
+                        for j in 0..nb {
+                            buf[y * width + x + j] = Complex::new(re8[y * CB + j], im8[y * CB + j]);
+                        }
+                    }
+                }
+            }
+            x += nb;
+        }
+        return;
+    }
+
     let mut cols = vec![Complex::default(); height * CB];
     let mut x = 0usize;
     while x < width {
@@ -329,6 +612,13 @@ fn fft2_cols_planned(buf: &mut [Complex], width: usize, height: usize, hplan: &P
         }
         x += nb;
     }
+    // The trailing `conj·scale` applies to the TRANSFORMED data — on the
+    // scalar fallback it stays a separate final pass.
+    if let Some(s) = scale {
+        for v in buf.iter_mut() {
+            *v = Complex::new(v.re, -v.im).scale(s);
+        }
+    }
 }
 
 /// Inverse 2D DFT (normalised by `1/(width·height)`), in place.
@@ -338,17 +628,19 @@ pub fn ifft2(buf: &mut [Complex], width: usize, height: usize) {
 }
 
 /// [`ifft2`] with the plans supplied — same conjugate–forward–conjugate
-/// construction, same normalisation.
+/// construction, same normalisation. The leading `conj` rides the row
+/// transpose-in and `conj·(1/n)` rides the column transpose-out, so the
+/// radix-2 path never touches the buffer outside a transform pass.
 fn ifft2_planned(buf: &mut [Complex], width: usize, height: usize, wplan: &Plan, hplan: &Plan) {
     debug_assert_eq!(buf.len(), width * height);
-    for v in buf.iter_mut() {
-        *v = v.conj();
-    }
-    fft2_planned(buf, width, height, wplan, hplan);
-    let s = 1.0 / (width * height) as f32;
-    for v in buf.iter_mut() {
-        *v = v.conj().scale(s);
-    }
+    fft2_rows_conj_mul(buf, width, height, wplan, None, true);
+    fft2_cols_conj_scale(
+        buf,
+        width,
+        height,
+        hplan,
+        Some(1.0 / (width * height) as f32),
+    );
 }
 
 /// Radial spatial frequency, in cycles per degree, for every bin of a
@@ -443,10 +735,8 @@ pub fn conv_fft_real(
     // image (`height..pad_h`) is the same all-`pad_value` row, and a DFT is a
     // deterministic function of its input — so those rows' transforms are
     // identical. Transform one and copy it into the rest, then run the column
-    // pass as usual.
-    for row in buf[..height * pad_w].chunks_exact_mut(pad_w) {
-        wplan.run(row);
-    }
+    // pass as usual. Image rows go through the batched `fft_batch8` path.
+    fft2_rows_planned(&mut buf[..height * pad_w], pad_w, height, &wplan);
     if height < pad_h {
         let (first, rest) = buf[height * pad_w..].split_at_mut(pad_w);
         wplan.run(first);
@@ -456,10 +746,17 @@ pub fn conv_fft_real(
     }
     fft2_cols_planned(&mut buf, pad_w, pad_h, &hplan);
 
-    for (b, f) in buf.iter_mut().zip(filter) {
-        *b = b.scale(*f);
-    }
-    ifft2_planned(&mut buf, pad_w, pad_h, &wplan, &hplan);
+    // The filter multiply, the leading `conj`, and the trailing
+    // `conj·(1/n)` all ride the batched transposes — no separate buffer
+    // passes between the forward and inverse transforms.
+    fft2_rows_conj_mul(&mut buf, pad_w, pad_h, &wplan, Some(filter), true);
+    fft2_cols_conj_scale(
+        &mut buf,
+        pad_w,
+        pad_h,
+        &hplan,
+        Some(1.0 / (pad_w * pad_h) as f32),
+    );
 
     let mut out = Vec::with_capacity(width * height);
     for y in 0..height {

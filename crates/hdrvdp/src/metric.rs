@@ -30,7 +30,7 @@
 //! with the distortion — upstream changed the surround handling in 2.1.3 for
 //! exactly this reason ("avoids false detection at the image border").
 
-use crate::bands::decompose;
+use crate::bands;
 use crate::display::{ColorEncoding, looks_relative, to_nits};
 use crate::masking::{self, diff_mask};
 use crate::params::Params;
@@ -203,29 +203,42 @@ fn prepare(
     // once and share it across the pair (bit-identical to per-image builds —
     // the filter is a deterministic function of (w, h, par)).
     let mtf_filter = mtf_filter_for(width, height, par);
-    let path_ref = visual_pathway_with_filter(
-        &ref_nits,
-        width,
-        height,
-        &pn,
-        &lmsr,
-        &surround,
-        mtf_filter.as_deref(),
-    );
-    let path_test = visual_pathway_with_filter(
-        &test_nits,
-        width,
-        height,
-        &pn,
-        &lmsr,
-        &surround,
-        mtf_filter.as_deref(),
+    // The two pathways are independent — and so are the pyramid builds —
+    // so under `parallel` they run as pairs. The base-band CSF filter stays
+    // sequential because the test image must reuse the reference's pad value.
+    let (path_ref, path_test) = crate::par::join2(
+        || {
+            visual_pathway_with_filter(
+                &ref_nits,
+                width,
+                height,
+                &pn,
+                &lmsr,
+                &surround,
+                mtf_filter.as_deref(),
+            )
+        },
+        || {
+            visual_pathway_with_filter(
+                &test_nits,
+                width,
+                height,
+                &pn,
+                &lmsr,
+                &surround,
+                mtf_filter.as_deref(),
+            )
+        },
     );
     drop(mtf_filter);
 
+    let (mut bands_ref, mut bands_test) = crate::par::join2(
+        || bands::decompose_build(&path_ref),
+        || bands::decompose_build(&path_test),
+    );
     // Reference first, so its base-band pad value can be reused.
-    let (bands_ref, pad) = decompose(&path_ref, par, None);
-    let (bands_test, _) = decompose(&path_test, par, Some(pad));
+    let pad = bands::finalize_baseband(&mut bands_ref, &path_ref, par, None);
+    bands::finalize_baseband(&mut bands_test, &path_test, par, Some(pad));
 
     let l_adapt: Vec<f32> = path_ref
         .l_adapt

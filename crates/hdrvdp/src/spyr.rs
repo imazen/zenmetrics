@@ -211,10 +211,10 @@ pub fn corr_dn(
         }
     }
 
-    const BLK: usize = 8;
-    for oy in 0..out_h {
-        let win_row = oy * step;
-        let out_row = &mut out[oy * out_w..(oy + 1) * out_w];
+    // Output rows are independent given `padded` — under `parallel` each
+    // row is a task; otherwise the same body runs serially in row order.
+    let row = |win_row: usize, out_row: &mut [f32]| {
+        const BLK: usize = 8;
         let mut ox = 0usize;
         while ox + BLK <= out_w {
             let mut acc = [0.0f32; BLK];
@@ -256,6 +256,21 @@ pub fn corr_dn(
             out_row[ox] = acc;
             ox += 1;
         }
+    };
+    #[cfg(feature = "parallel")]
+    if out_h >= 8 {
+        use rayon::prelude::*;
+        out.par_chunks_mut(out_w)
+            .enumerate()
+            .for_each(|(oy, out_row)| row(oy * step, out_row));
+    } else {
+        for (oy, out_row) in out.chunks_exact_mut(out_w).enumerate() {
+            row(oy * step, out_row);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for (oy, out_row) in out.chunks_exact_mut(out_w).enumerate() {
+        row(oy * step, out_row);
     }
     Band {
         width: out_w,
@@ -442,15 +457,25 @@ pub fn build(
         "build: cannot build {ht} levels on a {width}×{height} image (max {max_ht})"
     );
 
-    let high_pass = corr_dn(image, width, height, &hi0, 15, 1);
-    let mut current = corr_dn(image, width, height, &lo0, 9, 1);
+    let (high_pass, mut current) = crate::par::join2(
+        || corr_dn(image, width, height, &hi0, 15, 1),
+        || corr_dn(image, width, height, &lo0, 9, 1),
+    );
 
     let mut out_levels: Vec<[Band; ORIENTATIONS]> = Vec::with_capacity(ht);
     for _ in 0..ht {
-        let bands: Vec<Band> = bfilts
-            .iter()
-            .map(|f| corr_dn(&current.data, current.width, current.height, f, 9, 1))
-            .collect();
+        // The four orientation corrs share `current` read-only — independent
+        // tasks under `parallel`, sequential in the same order otherwise.
+        let bands: Vec<Band> = crate::par::collect_indexed(ORIENTATIONS, |o| {
+            corr_dn(
+                &current.data,
+                current.width,
+                current.height,
+                &bfilts[o],
+                9,
+                1,
+            )
+        });
         let bands: [Band; ORIENTATIONS] = bands
             .try_into()
             .unwrap_or_else(|_| unreachable!("BFILTS has ORIENTATIONS entries"));
@@ -479,14 +504,28 @@ pub fn reconstruct(pyr: &SteerablePyramid) -> Band {
     let lo = flat(&LOFILT);
     let bfilts: Vec<Vec<f32>> = BFILTS.iter().map(flat).collect();
 
-    // Walk coarse → fine, rebuilding each level's low-pass input.
+    // Walk coarse → fine, rebuilding each level's low-pass input. The five
+    // `up_conv` contributions are independent — computed into separate
+    // buffers (in parallel under `parallel`) and folded in the original
+    // order, so the f32 additions happen in the same sequence either way.
     let mut acc = pyr.low_pass.clone();
     for level in pyr.levels.iter().rev() {
         let (w, h) = (level[0].width, level[0].height);
+        let parts = crate::par::collect_indexed(1 + ORIENTATIONS, |k| {
+            let mut part = vec![0.0; w * h];
+            if k == 0 {
+                up_conv(&acc, &lo, 17, 2, w, h, &mut part);
+            } else {
+                up_conv(&level[k - 1], &bfilts[k - 1], 9, 1, w, h, &mut part);
+            }
+            part
+        });
+        // Fold in the original accumulation order: lo, then orientations.
         let mut res = vec![0.0; w * h];
-        up_conv(&acc, &lo, 17, 2, w, h, &mut res);
-        for (band, f) in level.iter().zip(&bfilts) {
-            up_conv(band, f, 9, 1, w, h, &mut res);
+        for part in &parts {
+            for (r, p) in res.iter_mut().zip(part) {
+                *r += *p;
+            }
         }
         acc = Band {
             width: w,

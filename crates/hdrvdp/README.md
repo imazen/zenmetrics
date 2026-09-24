@@ -21,12 +21,21 @@ Landed in chunks (tracked in [imazen/zenmetrics#50]). `hdrvdp::hdrvdp()` now tak
 two images in absolute luminance and returns the official `res.Q` (100 =
 identical), the removed-upstream `Q_MOS` (see below), and the per-pixel
 visibility maps `P_map` / `C_map`; `hdrvdp::score()` returns `res.Q` alone and
-skips the visibility-map reconstruction (~20% cheaper for sweep workloads).
-100 tests and **zero
-runtime dependencies** — the FFT,
-interpolation and quadrature are in-crate, so i686 / wasm / windows-arm builds
-carry nothing extra. The only dev-dependencies are an image decoder and the
-shared corpus, used by the end-to-end test and example.
+skips the visibility-map reconstruction (~40% cheaper for sweep workloads).
+Runtime dependencies are `archmage`/`magetypes` for the SIMD kernels (runtime
+dispatch — `scalar`/`wasm128`/`neon`/`v3`/`v4x` tiers keep i686 / wasm /
+windows-arm portable) plus an opt-in `parallel` feature (rayon) that
+parallelises the per-image pipelines, per-level orientations, FFT row/column
+passes and masking planes — deterministic at any thread count.
+
+Measured at 1024×1024 (`stage_probe`, luminance, 32-core box):
+
+| path | default | `parallel` |
+|---|---:|---:|
+| `hdrvdp()` (full `HdrVdpResult`) | ~780 ms | ~330 ms |
+| `score()` (`res.Q` only) | ~520 ms | ~185 ms |
+
+From a scalar-f64 1.85 s/pair at the same size — ~10× on the score path.
 
 | stage | module |
 |---|---|
@@ -63,12 +72,16 @@ pass was fenced by a byte-exact output lock taken **before** any of it
 (`f4a380e9`) plus an FFT lock extended to 2048-point transforms (`dec95f49`); a
 second pass moved planes/intermediates to `f32` for fleet throughput — the
 official-golden tolerance test is now the correctness gate and the bit lock was
-retired. A zenbench suite
+retired. A third pass added the `magetypes` SIMD kernels (masked transducer +
+psychometric reshape, squared-error reduction, LUT/log10 lookups, a batched
+SoA `f32x8` FFT with `conj`/filter/scale fused into its transposes), the
+mirror-symmetric MTF filter build, and the opt-in `parallel` feature. A
+zenbench suite
 and the full perf record live in `benchmarks/` (`4cf99288`).
 
-**Still open:** UPIQ SROCC validation (the rest of chunk 4), umbrella wiring as
-`MetricKind::Hdrvdp` (chunk 5), and a CubeCL port gated against this CPU
-implementation (chunk 6).
+**Still open:** UPIQ SROCC validation (the rest of chunk 4) and umbrella
+wiring as `MetricKind::Hdrvdp` (chunk 5). GPU is not currently planned — the
+`parallel` CPU path is the fleet-sweep answer.
 
 ### Three things to know before reading a number
 

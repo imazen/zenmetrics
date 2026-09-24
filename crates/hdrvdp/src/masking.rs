@@ -35,7 +35,7 @@
 
 use crate::bands::BandPyramid;
 use crate::csf::ncsf;
-use crate::interp::{clamp, clamp32, interp1_linear, interp1_linear32};
+use crate::interp::{clamp, clamp32, interp1_linear};
 use crate::params::Params;
 use crate::resize::imresize32;
 use crate::spyr::Band;
@@ -244,21 +244,41 @@ fn run_impl(
     let k_xn = 10f64.powf(par.mask_xn) as f32;
 
     let mut d_bands = want_d_bands.then(|| test.zeros_like());
-    let mut quality_terms = Vec::with_capacity(total_planes);
+
+    // Plane order is band-major — the same order `quality_terms` is returned
+    // in — so every parallel phase collects by index and the result cannot
+    // depend on scheduling (see `crate::par`).
+    let plane_index: Vec<(usize, usize)> = (0..b_count)
+        .flat_map(|b| (0..test.orientations(b)).map(move |o| (b, o)))
+        .collect();
+    debug_assert_eq!(plane_index.len(), total_planes);
 
     // Mutual masking per (band, orientation), computed once: the loop reads
     // each band's own, its neighbours', and the sum across orientations.
-    let mm: Vec<Vec<Band>> = (0..b_count)
-        .map(|b| {
-            (0..test.orientations(b))
-                .map(|o| mutual_masking(test.band(b, o), reference.band(b, o)))
-                .collect()
-        })
-        .collect();
+    let mm_flat = crate::par::collect_indexed(plane_index.len(), |j| {
+        let (b, o) = plane_index[j];
+        mutual_masking(test.band(b, o), reference.band(b, o))
+    });
+    let mut mm: Vec<Vec<Band>> = Vec::with_capacity(b_count);
+    {
+        let mut it = mm_flat.into_iter();
+        for b in 0..b_count {
+            mm.push(it.by_ref().take(test.orientations(b)).collect());
+        }
+        debug_assert!(it.next().is_none());
+    }
 
-    for b in 0..b_count {
+    // Per-band shared inputs — the cross-orientation total, the CSF plane,
+    // the resized diff-mask, and the band's quality weight.
+    struct BandCtx {
+        mask_xo_total: Vec<f32>,
+        csf_b: Vec<f32>,
+        diff_mask_b: Vec<f32>,
+        w_f: f64,
+        band_norm: f32,
+    }
+    let ctxs: Vec<BandCtx> = crate::par::collect_indexed(b_count, |b| {
         let (bw, bh) = (test.band(b, 0).width, test.band(b, 0).height);
-        let band_norm = 2f32.powi(b as i32);
 
         // Cross-orientation masking: total activity in this band.
         let mut mask_xo_total = vec![0.0f32; bw * bh];
@@ -269,93 +289,112 @@ fn run_impl(
         }
 
         // Per-pixel contrast sensitivity at this band's frequency, from the
-        // local adapting luminance resampled onto the band grid.
+        // local adapting luminance resampled onto the band grid. The grid is
+        // uniform in log10 by construction, so the direct-index LUT path is
+        // equivalent to a binary search on the stored grid (±1ULP cell edges).
         let log_la_rs = imresize32(&log_la, w, h, bw, bh);
-        let csf_b: Vec<f32> = log_la_rs
-            .iter()
-            .map(|l| {
-                let l = clamp32(*l, csf_log_la[0], csf_log_la[CSF_LUT_N - 1]);
-                interp1_linear32(&csf_log_la, &csf[b], l)
-            })
-            .collect();
+        let mut csf_b = vec![0.0f32; bw * bh];
+        crate::simd_kernels::lut_plane(
+            &log_la_rs,
+            &csf[b],
+            csf_log_la[0],
+            (CSF_LUT_N - 1) as f32 / (csf_log_la[CSF_LUT_N - 1] - csf_log_la[0]),
+            csf_log_la[0],
+            csf_log_la[CSF_LUT_N - 1],
+            false,
+            &mut csf_b,
+        );
 
         // Quality weight for this band's frequency (scalar — stays f64).
         let f_b = clamp(band_freq[b], qf[0], qf[qf.len() - 1]);
         let w_f = interp1_linear(&qf, &qw, f_b);
         let diff_mask_b = imresize32(diff_mask, w, h, bw, bh);
+        BandCtx {
+            mask_xo_total,
+            csf_b,
+            diff_mask_b,
+            w_f,
+            band_norm: 2f32.powi(b as i32),
+        }
+    });
 
-        for o in 0..test.orientations(b) {
-            let t = test.band(b, o);
-            let r = reference.band(b, o);
-            let self_mask = &mm[b][o];
+    // Per-plane jobs: cross-band masking resize, the transducer, the quality
+    // reduction, and (for the full path) the psychometric reshape — all
+    // independent given `mm` and the band contexts.
+    let jobs: Vec<(f64, Option<Vec<f32>>)> = crate::par::collect_indexed(plane_index.len(), |j| {
+        let (b, o) = plane_index[j];
+        let ctx = &ctxs[b];
+        let (bw, bh) = (test.band(b, o).width, test.band(b, o).height);
+        let t = test.band(b, o);
+        let r = reference.band(b, o);
+        let self_mask = &mm[b][o];
 
-            // Cross-neighbouring-band masking, resampled onto this grid.
-            let mut mask_xn = vec![0.0f32; bw * bh];
-            if b > 0 {
-                let src = &mm[b - 1][o.min(mm[b - 1].len() - 1)];
-                let rs = imresize32(&src.data, src.width, src.height, bw, bh);
-                for (a, v) in mask_xn.iter_mut().zip(&rs) {
-                    *a += v.max(0.0) / (band_norm / 2.0);
-                }
+        // Cross-neighbouring-band masking, resampled onto this grid.
+        let mut mask_xn = vec![0.0f32; bw * bh];
+        if b > 0 {
+            let src = &mm[b - 1][o.min(mm[b - 1].len() - 1)];
+            let rs = imresize32(&src.data, src.width, src.height, bw, bh);
+            for (a, v) in mask_xn.iter_mut().zip(&rs) {
+                *a += v.max(0.0) / (ctx.band_norm / 2.0);
             }
-            if b + 2 < b_count {
-                let src = &mm[b + 1][o.min(mm[b + 1].len() - 1)];
-                let rs = imresize32(&src.data, src.width, src.height, bw, bh);
-                for (a, v) in mask_xn.iter_mut().zip(&rs) {
-                    *a += v.max(0.0) / (band_norm * 2.0);
-                }
+        }
+        if b + 2 < b_count {
+            let src = &mm[b + 1][o.min(mm[b + 1].len() - 1)];
+            let rs = imresize32(&src.data, src.width, src.height, bw, bh);
+            for (a, v) in mask_xn.iter_mut().zip(&rs) {
+                *a += v.max(0.0) / (ctx.band_norm * 2.0);
             }
+        }
 
-            let mut d = vec![0.0f32; bw * bh];
-            for i in 0..bw * bh {
-                let band_diff = t.data[i] - r.data[i];
-                let ex_diff = sign_pow(band_diff / band_norm, p) * band_norm;
+        // The base band carries no CSF weighting; it was already
+        // CSF-filtered during decomposition.
+        let mut d = vec![0.0f32; bw * bh];
+        crate::simd_kernels::transducer_plane(
+            &t.data,
+            &r.data,
+            if b == b_count - 1 {
+                None
+            } else {
+                Some(&ctx.csf_b)
+            },
+            &self_mask.data,
+            &ctx.mask_xo_total,
+            &mask_xn,
+            ctx.band_norm,
+            p,
+            q,
+            k_self,
+            k_xo,
+            k_xn,
+            par.do_masking,
+            &mut d,
+        );
 
-                // The base band carries no CSF weighting; it was already
-                // CSF-filtered during decomposition.
-                let n_ncsf = if b == b_count - 1 {
-                    1.0
-                } else {
-                    1.0 / csf_b[i]
-                };
+        // Quality term, from `D` *before* the psychometric reshaping —
+        // upstream's `(log(msre+eps) − log(eps)) · w_f`, summed into `Q`
+        // (res.Q = 100 − Q). No plane-count normalisation. The sum itself
+        // is a reduction, so it accumulates in f64 over the f32 plane.
+        let msre =
+            (crate::simd_kernels::masked_sq_sum(&d, &ctx.diff_mask_b)).sqrt() / (bw * bh) as f64;
+        let qt = ((msre + 1e-12).ln() - 1e-12f64.ln()) * ctx.w_f;
 
-                d[i] = if par.do_masking {
-                    let sm = self_mask.data[i];
-                    let xo = (mask_xo_total[i] - sm).max(0.0);
-                    let n_mask = band_norm
-                        * (k_self * (sm / n_ncsf / band_norm).powf(q)
-                            + k_xo * (xo / n_ncsf / band_norm).powf(q)
-                            + k_xn * (mask_xn[i] / n_ncsf).powf(q));
-                    ex_diff / (n_ncsf.powf(2.0 * p) + n_mask * n_mask).sqrt()
-                } else {
-                    ex_diff / n_ncsf.powf(p)
-                };
-            }
+        // Reshape by the psychometric slope for the visibility pooling.
+        let db = if want_d_bands {
+            let mut v = vec![0.0f32; bw * bh];
+            crate::simd_kernels::sign_pow_reshape(&d, ctx.band_norm, pf, &mut v);
+            Some(v)
+        } else {
+            None
+        };
+        (qt, db)
+    });
 
-            // Quality term, from `D` *before* the psychometric reshaping —
-            // upstream's `(log(msre+eps) − log(eps)) · w_f`, summed into `Q`
-            // (res.Q = 100 − Q). No plane-count normalisation. The sum itself
-            // is a reduction, so it accumulates in f64 over the f32 plane.
-            let msre = {
-                let s: f64 = d
-                    .iter()
-                    .zip(&diff_mask_b)
-                    .map(|(v, m)| {
-                        let vm = *v * *m;
-                        f64::from(vm) * f64::from(vm)
-                    })
-                    .sum();
-                s.sqrt() / (bw * bh) as f64
-            };
-            quality_terms.push(((msre + 1e-12).ln() - 1e-12f64.ln()) * w_f);
-
-            // Reshape by the psychometric slope for the visibility pooling.
-            if let Some(db) = d_bands.as_mut() {
-                let out = db.band_mut(b, o);
-                for (dst, v) in out.data.iter_mut().zip(&d) {
-                    *dst = sign_pow(v / band_norm, pf) * band_norm;
-                }
-            }
+    let mut quality_terms = Vec::with_capacity(total_planes);
+    for (j, (qt, db_plane)) in jobs.into_iter().enumerate() {
+        quality_terms.push(qt);
+        if let Some(db) = d_bands.as_mut() {
+            let (b, o) = plane_index[j];
+            db.band_mut(b, o).data = db_plane.unwrap();
         }
     }
 

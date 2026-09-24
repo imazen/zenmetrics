@@ -33,7 +33,6 @@
 //! | end-to-end entry point | [`metric`] | ✅ |
 //! | UPIQ validation (SROCC vs the published 0.812) | — | ⏳ chunk 4 |
 //! | umbrella wiring (`MetricKind::Hdrvdp`) | — | ⏳ chunk 5 |
-//! | CubeCL GPU port | — | ⏳ chunk 6 |
 //!
 //! **Validated against official HDR-VDP-2.2.2** (Octave 11.1, 24 synthetic
 //! luminance cases): `P_det` agrees to 1.4e-5, `C_max` to 1.0e-4 relative,
@@ -41,9 +40,14 @@
 //! quantisation noise, far below the JND resolution the metric resolves
 //! (the earlier `f64` pipeline agreed to ~1e-11 before the fleet-throughput
 //! precision switch). [`score`] skips the visibility-map reconstruction
-//! entirely for sweep workloads that only need `res.Q`. See
-//! `docs/VALIDATION.md` for provenance, tolerances, and the upstream Octave
-//! bug the reference run had to work around.
+//! entirely for sweep workloads that only need `res.Q`. Hot loops run
+//! `magetypes` `f32x8` kernels behind `archmage` runtime dispatch; the
+//! opt-in `parallel` feature (rayon) parallelises the per-image pipelines,
+//! pyramid orientations, FFT passes and masking planes deterministically.
+//! At 1024×1024 `score()` runs ~0.5 s serial / ~0.19 s under `parallel`
+//! (from a scalar-f64 1.85 s). See `docs/VALIDATION.md` for provenance,
+//! tolerances, and the upstream Octave bug the reference run had to work
+//! around.
 //!
 //! One boundary caveat is carried openly rather than papered over: the
 //! pyramid's *synthesis* boundary rule is principled and self-consistent but
@@ -72,11 +76,13 @@ pub mod fft;
 pub mod interp;
 pub mod masking;
 pub mod metric;
+mod par;
 pub mod params;
 pub mod pathway;
 pub mod photoreceptor;
 pub mod pool;
 pub mod resize;
+mod simd_kernels;
 pub mod sp3_filters;
 pub mod spectral;
 pub mod spyr;
