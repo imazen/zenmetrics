@@ -1,0 +1,635 @@
+{
+  "build_commit": "9f36f88b8a23e645bd791c1193842d950eccf4be",
+  "build_meta_sha256": "59c460ccd6e3f06ddf34f0f704b1a5448b6fd2811d3cb0e5b271c873c423dc00",
+  "descriptive": {
+    "examples": [
+      {
+        "abs_delta": 2.2286477088928223,
+        "family": "zenwebp-default-m4",
+        "jod_4k": 7.343917369842529,
+        "jod_fhd_24": 9.572565078735352,
+        "row_id": 194861
+      },
+      {
+        "abs_delta": 1.778052806854248,
+        "family": "zenjpeg-420-xyb-e2",
+        "jod_4k": 3.841599464416504,
+        "jod_fhd_24": 5.619652271270752,
+        "row_id": 12673
+      },
+      {
+        "abs_delta": 1.667375087738037,
+        "family": "zenwebp-default-m4",
+        "jod_4k": 6.835216045379639,
+        "jod_fhd_24": 8.502591133117676,
+        "row_id": 183565
+      },
+      {
+        "abs_delta": 1.4480366706848145,
+        "family": "zenjpeg-420-xyb-e2",
+        "jod_4k": 2.9197282791137695,
+        "jod_fhd_24": 4.367764949798584,
+        "row_id": 35758
+      },
+      {
+        "abs_delta": 1.4241724014282227,
+        "family": "zenwebp-default-m4",
+        "jod_4k": 7.725830078125,
+        "jod_fhd_24": 9.150002479553223,
+        "row_id": 194862
+      },
+      {
+        "abs_delta": 1.3744621276855469,
+        "family": "zenwebp-default-m4",
+        "jod_4k": 8.037768363952637,
+        "jod_fhd_24": 9.412230491638184,
+        "row_id": 183564
+      },
+      {
+        "abs_delta": 1.3659782409667969,
+        "family": "zenjpeg-420-xyb-e2",
+        "jod_4k": 4.231393337249756,
+        "jod_fhd_24": 5.597371578216553,
+        "row_id": 106918
+      },
+      {
+        "abs_delta": 1.3500981330871582,
+        "family": "zenjpeg-420-xyb-e2",
+        "jod_4k": 5.223876476287842,
+        "jod_fhd_24": 6.573974609375,
+        "row_id": 9696
+      },
+      {
+        "abs_delta": 1.277092456817627,
+        "family": "zenjpeg-420-xyb-e2",
+        "jod_4k": 5.2220282554626465,
+        "jod_fhd_24": 6.499120712280273,
+        "row_id": 147172
+      },
+      {
+        "abs_delta": 1.2729997634887695,
+        "family": "zenavif-s5-e6",
+        "jod_4k": 8.641900062561035,
+        "jod_fhd_24": 7.368900299072266,
+        "row_id": 25209
+      },
+      {
+        "abs_delta": 1.2577533721923828,
+        "family": "zenavif-s5-e6",
+        "jod_4k": 8.65442943572998,
+        "jod_fhd_24": 7.396676063537598,
+        "row_id": 25271
+      },
+      {
+        "abs_delta": 1.2573490142822266,
+        "family": "zenavif-s5-e6",
+        "jod_4k": 8.597603797912598,
+        "jod_fhd_24": 7.340254783630371,
+        "row_id": 25208
+      },
+      {
+        "abs_delta": 1.256418228149414,
+        "family": "zenjpeg-420-xyb-e2",
+        "jod_4k": 5.4427008628845215,
+        "jod_fhd_24": 6.6991190910339355,
+        "row_id": 36403
+      },
+      {
+        "abs_delta": 1.240325927734375,
+        "family": "zenavif-s5-e6",
+        "jod_4k": 8.692628860473633,
+        "jod_fhd_24": 7.452302932739258,
+        "row_id": 25210
+      },
+      {
+        "abs_delta": 1.235513687133789,
+        "family": "zenwebp-default-m4",
+        "jod_4k": 8.316268920898438,
+        "jod_fhd_24": 9.551782608032227,
+        "row_id": 194860
+      },
+      {
+        "abs_delta": 1.2229933738708496,
+        "family": "zenavif-s5-e6",
+        "jod_4k": 8.707841873168945,
+        "jod_fhd_24": 7.484848499298096,
+        "row_id": 25272
+      },
+      {
+        "abs_delta": 1.218092918395996,
+        "family": "zenjpeg-420-xyb-e2",
+        "jod_4k": 4.663115978240967,
+        "jod_fhd_24": 5.881208896636963,
+        "row_id": 147171
+      },
+      {
+        "abs_delta": 1.2180166244506836,
+        "family": "zenjxl-e7",
+        "jod_4k": 8.62639331817627,
+        "jod_fhd_24": 7.408376693725586,
+        "row_id": 47620
+      },
+      {
+        "abs_delta": 1.2142324447631836,
+        "family": "zenavif-s5-e6",
+        "jod_4k": 8.50526237487793,
+        "jod_fhd_24": 7.291029930114746,
+        "row_id": 25207
+      },
+      {
+        "abs_delta": 1.206258773803711,
+        "family": "zenjxl-e7",
+        "jod_4k": 8.64853572845459,
+        "jod_fhd_24": 7.442276954650879,
+        "row_id": 47621
+      }
+    ],
+    "results": {
+      "band/oracle_ge_m10/cvvdp_jod_sdr_fhd_24": {
+        "label": "band/oracle_ge_m10/cvvdp_jod_sdr_fhd_24",
+        "n": 187487,
+        "n_dropped": 0,
+        "srocc": 0.9785875294142687,
+        "srocc_signed": 0.9785875294142687
+      },
+      "band/oracle_ge_m10/cvvdp_jod_standard_4k": {
+        "label": "band/oracle_ge_m10/cvvdp_jod_standard_4k",
+        "n": 187487,
+        "n_dropped": 0,
+        "srocc": 0.9823215063449598,
+        "srocc_signed": 0.9823215063449598
+      },
+      "band/oracle_ge_m10/cvvdp_jod_standard_fhd": {
+        "label": "band/oracle_ge_m10/cvvdp_jod_standard_fhd",
+        "n": 187487,
+        "n_dropped": 0,
+        "srocc": 0.9767081369303767,
+        "srocc_signed": 0.9767081369303767
+      },
+      "band/oracle_ge_m10/ssim2_fresh": {
+        "label": "band/oracle_ge_m10/ssim2_fresh",
+        "n": 187487,
+        "n_dropped": 0,
+        "srocc": 0.9996326372098568,
+        "srocc_signed": 0.9996326372098568
+      },
+      "band/oracle_lt_m50/cvvdp_jod_sdr_fhd_24": {
+        "label": "band/oracle_lt_m50/cvvdp_jod_sdr_fhd_24",
+        "n": 2020,
+        "n_dropped": 0,
+        "srocc": 0.48918489901113915,
+        "srocc_signed": 0.48918489901113915
+      },
+      "band/oracle_lt_m50/cvvdp_jod_standard_4k": {
+        "label": "band/oracle_lt_m50/cvvdp_jod_standard_4k",
+        "n": 2020,
+        "n_dropped": 0,
+        "srocc": 0.6647377284369096,
+        "srocc_signed": 0.6647377284369096
+      },
+      "band/oracle_lt_m50/cvvdp_jod_standard_fhd": {
+        "label": "band/oracle_lt_m50/cvvdp_jod_standard_fhd",
+        "n": 2020,
+        "n_dropped": 0,
+        "srocc": 0.47384903163918163,
+        "srocc_signed": 0.47384903163918163
+      },
+      "band/oracle_lt_m50/ssim2_fresh": {
+        "label": "band/oracle_lt_m50/ssim2_fresh",
+        "n": 2020,
+        "n_dropped": 0,
+        "srocc": 0.999424952858243,
+        "srocc_signed": 0.999424952858243
+      },
+      "band/oracle_m25_to_m10/cvvdp_jod_sdr_fhd_24": {
+        "label": "band/oracle_m25_to_m10/cvvdp_jod_sdr_fhd_24",
+        "n": 3444,
+        "n_dropped": 0,
+        "srocc": 0.28121994225941255,
+        "srocc_signed": 0.28121994225941255
+      },
+      "band/oracle_m25_to_m10/cvvdp_jod_standard_4k": {
+        "label": "band/oracle_m25_to_m10/cvvdp_jod_standard_4k",
+        "n": 3444,
+        "n_dropped": 0,
+        "srocc": 0.3971339381645219,
+        "srocc_signed": 0.3971339381645219
+      },
+      "band/oracle_m25_to_m10/cvvdp_jod_standard_fhd": {
+        "label": "band/oracle_m25_to_m10/cvvdp_jod_standard_fhd",
+        "n": 3444,
+        "n_dropped": 0,
+        "srocc": 0.30219591937723916,
+        "srocc_signed": 0.30219591937723916
+      },
+      "band/oracle_m25_to_m10/ssim2_fresh": {
+        "label": "band/oracle_m25_to_m10/ssim2_fresh",
+        "n": 3444,
+        "n_dropped": 0,
+        "srocc": 0.999165752816497,
+        "srocc_signed": 0.999165752816497
+      },
+      "band/oracle_m50_to_m25/cvvdp_jod_sdr_fhd_24": {
+        "label": "band/oracle_m50_to_m25/cvvdp_jod_sdr_fhd_24",
+        "n": 3135,
+        "n_dropped": 0,
+        "srocc": 0.3238964271225777,
+        "srocc_signed": 0.3238964271225777
+      },
+      "band/oracle_m50_to_m25/cvvdp_jod_standard_4k": {
+        "label": "band/oracle_m50_to_m25/cvvdp_jod_standard_4k",
+        "n": 3135,
+        "n_dropped": 0,
+        "srocc": 0.5186903796507588,
+        "srocc_signed": 0.5186903796507588
+      },
+      "band/oracle_m50_to_m25/cvvdp_jod_standard_fhd": {
+        "label": "band/oracle_m50_to_m25/cvvdp_jod_standard_fhd",
+        "n": 3135,
+        "n_dropped": 0,
+        "srocc": 0.29522385476030066,
+        "srocc_signed": 0.29522385476030066
+      },
+      "band/oracle_m50_to_m25/ssim2_fresh": {
+        "label": "band/oracle_m50_to_m25/ssim2_fresh",
+        "n": 3135,
+        "n_dropped": 0,
+        "srocc": 0.9999504791107382,
+        "srocc_signed": 0.9999504791107382
+      },
+      "family/mozjpeg-rs-420-e4/cvvdp_jod_sdr_fhd_24": {
+        "label": "family/mozjpeg-rs-420-e4/cvvdp_jod_sdr_fhd_24",
+        "n": 43673,
+        "n_dropped": 0,
+        "srocc": 0.9855505831688415,
+        "srocc_signed": 0.9855505831688415
+      },
+      "family/mozjpeg-rs-420-e4/cvvdp_jod_standard_4k": {
+        "label": "family/mozjpeg-rs-420-e4/cvvdp_jod_standard_4k",
+        "n": 43673,
+        "n_dropped": 0,
+        "srocc": 0.988821699839783,
+        "srocc_signed": 0.988821699839783
+      },
+      "family/mozjpeg-rs-420-e4/cvvdp_jod_standard_fhd": {
+        "label": "family/mozjpeg-rs-420-e4/cvvdp_jod_standard_fhd",
+        "n": 43673,
+        "n_dropped": 0,
+        "srocc": 0.9835554765217513,
+        "srocc_signed": 0.9835554765217513
+      },
+      "family/mozjpeg-rs-420-e4/ssim2_fresh": {
+        "label": "family/mozjpeg-rs-420-e4/ssim2_fresh",
+        "n": 43673,
+        "n_dropped": 0,
+        "srocc": 0.9999630108989468,
+        "srocc_signed": 0.9999630108989468
+      },
+      "family/zenavif-s5-e6/cvvdp_jod_sdr_fhd_24": {
+        "label": "family/zenavif-s5-e6/cvvdp_jod_sdr_fhd_24",
+        "n": 34001,
+        "n_dropped": 0,
+        "srocc": 0.9905415831084237,
+        "srocc_signed": 0.9905415831084237
+      },
+      "family/zenavif-s5-e6/cvvdp_jod_standard_4k": {
+        "label": "family/zenavif-s5-e6/cvvdp_jod_standard_4k",
+        "n": 34001,
+        "n_dropped": 0,
+        "srocc": 0.9923968638772006,
+        "srocc_signed": 0.9923968638772006
+      },
+      "family/zenavif-s5-e6/cvvdp_jod_standard_fhd": {
+        "label": "family/zenavif-s5-e6/cvvdp_jod_standard_fhd",
+        "n": 34001,
+        "n_dropped": 0,
+        "srocc": 0.9895072009320987,
+        "srocc_signed": 0.9895072009320987
+      },
+      "family/zenavif-s5-e6/ssim2_fresh": {
+        "label": "family/zenavif-s5-e6/ssim2_fresh",
+        "n": 34001,
+        "n_dropped": 0,
+        "srocc": 0.9995354804447741,
+        "srocc_signed": 0.9995354804447741
+      },
+      "family/zenjpeg-420-e2/cvvdp_jod_sdr_fhd_24": {
+        "label": "family/zenjpeg-420-e2/cvvdp_jod_sdr_fhd_24",
+        "n": 39213,
+        "n_dropped": 0,
+        "srocc": 0.9704844399879803,
+        "srocc_signed": 0.9704844399879803
+      },
+      "family/zenjpeg-420-e2/cvvdp_jod_standard_4k": {
+        "label": "family/zenjpeg-420-e2/cvvdp_jod_standard_4k",
+        "n": 39213,
+        "n_dropped": 0,
+        "srocc": 0.9812091316769473,
+        "srocc_signed": 0.9812091316769473
+      },
+      "family/zenjpeg-420-e2/cvvdp_jod_standard_fhd": {
+        "label": "family/zenjpeg-420-e2/cvvdp_jod_standard_fhd",
+        "n": 39213,
+        "n_dropped": 0,
+        "srocc": 0.9652365958024446,
+        "srocc_signed": 0.9652365958024446
+      },
+      "family/zenjpeg-420-e2/ssim2_fresh": {
+        "label": "family/zenjpeg-420-e2/ssim2_fresh",
+        "n": 39213,
+        "n_dropped": 0,
+        "srocc": 0.9998916461266073,
+        "srocc_signed": 0.9998916461266073
+      },
+      "family/zenjpeg-420-xyb-e2/cvvdp_jod_sdr_fhd_24": {
+        "label": "family/zenjpeg-420-xyb-e2/cvvdp_jod_sdr_fhd_24",
+        "n": 28182,
+        "n_dropped": 0,
+        "srocc": 0.9697712270505672,
+        "srocc_signed": 0.9697712270505672
+      },
+      "family/zenjpeg-420-xyb-e2/cvvdp_jod_standard_4k": {
+        "label": "family/zenjpeg-420-xyb-e2/cvvdp_jod_standard_4k",
+        "n": 28182,
+        "n_dropped": 0,
+        "srocc": 0.9779673005108678,
+        "srocc_signed": 0.9779673005108678
+      },
+      "family/zenjpeg-420-xyb-e2/cvvdp_jod_standard_fhd": {
+        "label": "family/zenjpeg-420-xyb-e2/cvvdp_jod_standard_fhd",
+        "n": 28182,
+        "n_dropped": 0,
+        "srocc": 0.968547171237829,
+        "srocc_signed": 0.968547171237829
+      },
+      "family/zenjpeg-420-xyb-e2/ssim2_fresh": {
+        "label": "family/zenjpeg-420-xyb-e2/ssim2_fresh",
+        "n": 28182,
+        "n_dropped": 0,
+        "srocc": 0.9990976447351628,
+        "srocc_signed": 0.9990976447351628
+      },
+      "family/zenjxl-e7/cvvdp_jod_sdr_fhd_24": {
+        "label": "family/zenjxl-e7/cvvdp_jod_sdr_fhd_24",
+        "n": 26362,
+        "n_dropped": 0,
+        "srocc": 0.9845683402868487,
+        "srocc_signed": 0.9845683402868487
+      },
+      "family/zenjxl-e7/cvvdp_jod_standard_4k": {
+        "label": "family/zenjxl-e7/cvvdp_jod_standard_4k",
+        "n": 26362,
+        "n_dropped": 0,
+        "srocc": 0.9882939271205038,
+        "srocc_signed": 0.9882939271205038
+      },
+      "family/zenjxl-e7/cvvdp_jod_standard_fhd": {
+        "label": "family/zenjxl-e7/cvvdp_jod_standard_fhd",
+        "n": 26362,
+        "n_dropped": 0,
+        "srocc": 0.984226937883232,
+        "srocc_signed": 0.984226937883232
+      },
+      "family/zenjxl-e7/ssim2_fresh": {
+        "label": "family/zenjxl-e7/ssim2_fresh",
+        "n": 26362,
+        "n_dropped": 0,
+        "srocc": 0.9998644644178334,
+        "srocc_signed": 0.9998644644178334
+      },
+      "family/zenwebp-default-m4/cvvdp_jod_sdr_fhd_24": {
+        "label": "family/zenwebp-default-m4/cvvdp_jod_sdr_fhd_24",
+        "n": 24655,
+        "n_dropped": 0,
+        "srocc": 0.9491695934244084,
+        "srocc_signed": 0.9491695934244084
+      },
+      "family/zenwebp-default-m4/cvvdp_jod_standard_4k": {
+        "label": "family/zenwebp-default-m4/cvvdp_jod_standard_4k",
+        "n": 24655,
+        "n_dropped": 0,
+        "srocc": 0.9412960763097954,
+        "srocc_signed": 0.9412960763097954
+      },
+      "family/zenwebp-default-m4/cvvdp_jod_standard_fhd": {
+        "label": "family/zenwebp-default-m4/cvvdp_jod_standard_fhd",
+        "n": 24655,
+        "n_dropped": 0,
+        "srocc": 0.9504817103158644,
+        "srocc_signed": 0.9504817103158644
+      },
+      "family/zenwebp-default-m4/ssim2_fresh": {
+        "label": "family/zenwebp-default-m4/ssim2_fresh",
+        "n": 24655,
+        "n_dropped": 0,
+        "srocc": 0.9999875947777281,
+        "srocc_signed": 0.9999875947777281
+      },
+      "overall/cvvdp_jod_sdr_fhd_24": {
+        "label": "overall/cvvdp_jod_sdr_fhd_24",
+        "n": 196086,
+        "n_dropped": 0,
+        "srocc": 0.9811472786770311,
+        "srocc_signed": 0.9811472786770311
+      },
+      "overall/cvvdp_jod_standard_4k": {
+        "label": "overall/cvvdp_jod_standard_4k",
+        "n": 196086,
+        "n_dropped": 0,
+        "srocc": 0.9844790276673833,
+        "srocc_signed": 0.9844790276673833
+      },
+      "overall/cvvdp_jod_standard_fhd": {
+        "label": "overall/cvvdp_jod_standard_fhd",
+        "n": 196086,
+        "n_dropped": 0,
+        "srocc": 0.9794730541281256,
+        "srocc_signed": 0.9794730541281256
+      },
+      "overall/ssim2_fresh": {
+        "label": "overall/ssim2_fresh",
+        "n": 196086,
+        "n_dropped": 0,
+        "srocc": 0.9996788731238616,
+        "srocc_signed": 0.9996788731238616
+      },
+      "overall_vs_stored_s2/cvvdp_jod_sdr_fhd_24": {
+        "label": "overall_vs_stored_s2/cvvdp_jod_sdr_fhd_24",
+        "n": 196086,
+        "n_dropped": 0,
+        "srocc": 0.9814332178017948,
+        "srocc_signed": 0.9814332178017948
+      },
+      "overall_vs_stored_s2/cvvdp_jod_standard_4k": {
+        "label": "overall_vs_stored_s2/cvvdp_jod_standard_4k",
+        "n": 196086,
+        "n_dropped": 0,
+        "srocc": 0.9849720204980573,
+        "srocc_signed": 0.9849720204980573
+      },
+      "overall_vs_stored_s2/cvvdp_jod_standard_fhd": {
+        "label": "overall_vs_stored_s2/cvvdp_jod_standard_fhd",
+        "n": 196086,
+        "n_dropped": 0,
+        "srocc": 0.979772675560322,
+        "srocc_signed": 0.979772675560322
+      },
+      "overall_vs_stored_s2/ssim2_fresh": {
+        "label": "overall_vs_stored_s2/ssim2_fresh",
+        "n": 196086,
+        "n_dropped": 0,
+        "srocc": 1.0,
+        "srocc_signed": 1.0
+      }
+    },
+    "rows": 196086,
+    "stat_owner": "zen_stats.panel_batch_indexed",
+    "target_role": "TRAIN metric labels only"
+  },
+  "independent_scores": {
+    "groups": {
+      "ALL/ALL": {
+        "max_abs_delta": 2.1316282072803006e-14,
+        "nonexact": 70,
+        "rows": 196086
+      },
+      "mozjpeg-rs-420-e4/r3500": {
+        "max_abs_delta": 2.1316282072803006e-14,
+        "nonexact": 7,
+        "rows": 14574
+      },
+      "mozjpeg-rs-420-e4/r5600g": {
+        "max_abs_delta": 1.7763568394002505e-14,
+        "nonexact": 1,
+        "rows": 9546
+      },
+      "mozjpeg-rs-420-e4/tower": {
+        "max_abs_delta": 2.1316282072803006e-14,
+        "nonexact": 8,
+        "rows": 19553
+      },
+      "zenavif-s5-e6/r3500": {
+        "max_abs_delta": 1.7763568394002505e-14,
+        "nonexact": 3,
+        "rows": 11467
+      },
+      "zenavif-s5-e6/r5600g": {
+        "max_abs_delta": 0.0,
+        "nonexact": 0,
+        "rows": 7650
+      },
+      "zenavif-s5-e6/tower": {
+        "max_abs_delta": 1.7763568394002505e-14,
+        "nonexact": 8,
+        "rows": 14884
+      },
+      "zenjpeg-420-e2/r3500": {
+        "max_abs_delta": 1.7763568394002505e-14,
+        "nonexact": 6,
+        "rows": 13249
+      },
+      "zenjpeg-420-e2/r5600g": {
+        "max_abs_delta": 7.105427357601002e-15,
+        "nonexact": 2,
+        "rows": 8606
+      },
+      "zenjpeg-420-e2/tower": {
+        "max_abs_delta": 1.4210854715202004e-14,
+        "nonexact": 11,
+        "rows": 17358
+      },
+      "zenjpeg-420-xyb-e2/r3500": {
+        "max_abs_delta": 7.105427357601002e-15,
+        "nonexact": 1,
+        "rows": 9601
+      },
+      "zenjpeg-420-xyb-e2/r5600g": {
+        "max_abs_delta": 1.7763568394002505e-14,
+        "nonexact": 1,
+        "rows": 6224
+      },
+      "zenjpeg-420-xyb-e2/tower": {
+        "max_abs_delta": 1.4210854715202004e-14,
+        "nonexact": 2,
+        "rows": 12357
+      },
+      "zenjxl-e7/r3500": {
+        "max_abs_delta": 1.7763568394002505e-14,
+        "nonexact": 4,
+        "rows": 8783
+      },
+      "zenjxl-e7/r5600g": {
+        "max_abs_delta": 7.105427357601002e-15,
+        "nonexact": 2,
+        "rows": 5921
+      },
+      "zenjxl-e7/tower": {
+        "max_abs_delta": 1.4210854715202004e-14,
+        "nonexact": 3,
+        "rows": 11658
+      },
+      "zenwebp-default-m4/r3500": {
+        "max_abs_delta": 1.7763568394002505e-14,
+        "nonexact": 3,
+        "rows": 8134
+      },
+      "zenwebp-default-m4/r5600g": {
+        "max_abs_delta": 1.4210854715202004e-14,
+        "nonexact": 3,
+        "rows": 5561
+      },
+      "zenwebp-default-m4/tower": {
+        "max_abs_delta": 1.4210854715202004e-14,
+        "nonexact": 5,
+        "rows": 10960
+      }
+    },
+    "raw_sidecar_mismatch": 0,
+    "sept14_4k_audit_rows": 0,
+    "sept14_4k_cache_columns": [],
+    "unique_row_ids_checked": 196086,
+    "unknown_tier_blobs": 0,
+    "unmatched_raw_rows": 0
+  },
+  "manifest_sha256": "38ca9707f6347f2f633d8f17dcfd9254b8d8d2b3a43812120ab11aa0bc02057f",
+  "pairs": 196086,
+  "role": "TRAIN metric labels only; descriptive comparison, no fitting or selection",
+  "run": "cvvdp-safesyn-20260923",
+  "score_rows": 784344,
+  "sidecar_bytes": 8576062,
+  "sidecar_sha256": "775bdb8f95dbb3d116faaa646ec8dcafbb0810bc11dc30264997641e28701bc9",
+  "store": {
+    "blob_objects": 3218,
+    "failed_or_not_done": [],
+    "ledger_jobs": 3218,
+    "ledger_rows": 3222,
+    "manifest_jobs": 3218,
+    "missing_blob": [],
+    "missing_ledger": [],
+    "status": {
+      "done": 3218
+    },
+    "tier": {
+      "r3500": 1080,
+      "r5600g": 709,
+      "tower": 1429
+    },
+    "unexpected_ledger": []
+  },
+  "teardown": {
+    "r3500": {
+      "action": "docker rm -f zen-score-cvvdp succeeded",
+      "container": "absent"
+    },
+    "r5600g": {
+      "action": "docker rm -f zen-score-cvvdp attempted three times",
+      "blocker": "SSH had no route or timed out; ping failed from dev and tower; OS state left to coordinator",
+      "container": "unconfirmed"
+    },
+    "recorded_utc": "2026-09-24T04:22:52.495621+00:00",
+    "tower": {
+      "action": "docker rm -f zen-score-cvvdp succeeded",
+      "container": "absent"
+    }
+  }
+}

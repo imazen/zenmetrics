@@ -1,0 +1,328 @@
+{
+ "lane": "cvvdp-safesyn",
+ "brief": "CVVDP_SAFESYN_brief.md Part 2 + CVVDP_SAFESYN_FLEET_addendum.md",
+ "created_utc": "2026-09-24T04:17:47.637516+00:00",
+ "run": "cvvdp-safesyn-20260923",
+ "bucket": "zentrain",
+ "build_commit": "9f36f88b8a23e645bd791c1193842d950eccf4be",
+ "ledger_prefix": "s3://zentrain/jobs/cvvdp-safesyn-20260923/",
+ "rows": 196086,
+ "blob_count": 3218,
+ "error_rows": 0,
+ "duplicate_rows": 0,
+ "sidecar_sha256": "775bdb8f95dbb3d116faaa646ec8dcafbb0810bc11dc30264997641e28701bc9",
+ "metrics": {
+  "cvvdp@standard_fhd": "cvvdp_jod_standard_fhd",
+  "cvvdp@sdr_fhd_24": "cvvdp_jod_sdr_fhd_24",
+  "cvvdp": "cvvdp_jod_standard_4k",
+  "ssim2": "ssim2_fresh"
+ },
+ "display_models": {
+  "cvvdp_jod_standard_4k": "standard_4k (default; 75.4 px/deg \u2014 the historical teacher geometry)",
+  "cvvdp_jod_standard_fhd": "standard_fhd (37.84 px/deg, 200 nits SDR)",
+  "cvvdp_jod_sdr_fhd_24": "sdr_fhd_24 (37.84 px/deg, 100 nits SDR \u2014 E2b-selected)",
+  "ssim2_fresh": "fast-ssim2, same decoded buffers (binding control)"
+ },
+ "build": {
+  "zenmetrics_commit": "9f36f88b8a23e645bd791c1193842d950eccf4be",
+  "zenmetrics_base": "b02812aeb257ca116aedd011888eecc8d6c73035",
+  "bookmark": "quarantine/devin/cvvdp-safesyn",
+  "features": "jobexec,png,jpeg,webp,avif,jxl,cpu-metrics,hdr (musl, no-default-features)",
+  "musl_zenmetrics_sha256": "77cc76d9af234b1381fa92ad7b1537a65d26ea058f7ac2a2839a49ecec3d38b4",
+  "musl_worker_sha256": "719bf12692bb5036769b88fcefbd9855d6c3f5bbd3bcf8684ccfbd10dd76d6c4",
+  "executor_image": "ghcr.io/imazen/zenfleet-worker:exec-cvvdp-safesyn-9f36f88b",
+  "executor_image_digest": "sha256:d110a3a79d98f06ade7c7dae3920c47b71c10362c959bd852341f6c5ff046050"
+ },
+ "path_dep_provenance": {
+  "butteraugli": {
+   "version": "0.9.4",
+   "manifest_dir": "/home/lilith/work/butteraugli/butteraugli",
+   "repo": "/home/lilith/work/butteraugli",
+   "head_commit": "aac925f6e8aaad7e9ddbceecaa514b23f7b419a4",
+   "dirty_diff_sha256": "351ef93eb9730a53245f52dcd1188f21ed85f7b497efb8f43f0af87e1b29e734",
+   "dirty": true
+  },
+  "fast-ssim2": {
+   "version": "0.9.0",
+   "manifest_dir": "/home/lilith/work/zen/fast-ssim2/fast-ssim2",
+   "repo": "/home/lilith/work/zen/fast-ssim2",
+   "head_commit": "d4ad4fa10d048b8c9c30e1fd5ca9d4aaf8264ce8",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false
+  },
+  "heic": {
+   "version": "0.2.0",
+   "manifest_dir": "/home/lilith/work/zen/heic",
+   "repo": "/home/lilith/work/zen/heic",
+   "head_commit": "c45113e442c485bb9b4ea37ad53e4d8e82132205",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false
+  },
+  "heic-core": {
+   "version": "0.2.0",
+   "manifest_dir": "/home/lilith/work/zen/heic/heic-core",
+   "repo": "/home/lilith/work/zen/heic",
+   "head_commit": "c45113e442c485bb9b4ea37ad53e4d8e82132205",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false
+  },
+  "jxl-encoder": {
+   "version": "0.4.0",
+   "manifest_dir": "/home/lilith/work/zen/jxl-encoder/jxl-encoder",
+   "repo": "/home/lilith/work/zen/jxl-encoder",
+   "head_commit": "d0f601d816d484609abf927065211024f3f6f84a",
+   "dirty_diff_sha256": "ddb3fb29e9fbdad23c88f34d80cd8348c97ae6c105cecd6632f166be81e64550",
+   "dirty": true
+  },
+  "jxl-encoder-macros": {
+   "version": "0.4.0",
+   "manifest_dir": "/home/lilith/work/zen/jxl-encoder/jxl-encoder-macros",
+   "repo": "/home/lilith/work/zen/jxl-encoder",
+   "head_commit": "d0f601d816d484609abf927065211024f3f6f84a",
+   "dirty_diff_sha256": "ddb3fb29e9fbdad23c88f34d80cd8348c97ae6c105cecd6632f166be81e64550",
+   "dirty": true
+  },
+  "jxl-encoder-simd": {
+   "version": "0.4.0",
+   "manifest_dir": "/home/lilith/work/zen/jxl-encoder/jxl-encoder-simd",
+   "repo": "/home/lilith/work/zen/jxl-encoder",
+   "head_commit": "d0f601d816d484609abf927065211024f3f6f84a",
+   "dirty_diff_sha256": "ddb3fb29e9fbdad23c88f34d80cd8348c97ae6c105cecd6632f166be81e64550",
+   "dirty": true
+  },
+  "ultrahdr-core": {
+   "version": "0.6.0",
+   "manifest_dir": "/home/lilith/work/zen/ultrahdr/ultrahdr-core",
+   "repo": "/home/lilith/work/zen/ultrahdr",
+   "head_commit": "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false
+  },
+  "ultrahdr-rs": {
+   "version": "0.4.1",
+   "manifest_dir": "/home/lilith/work/zen/ultrahdr/ultrahdr-rs",
+   "repo": "/home/lilith/work/zen/ultrahdr",
+   "head_commit": "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false
+  },
+  "zenanalyze": {
+   "version": "0.2.0",
+   "manifest_dir": "/home/lilith/work/zen/zenanalyze",
+   "repo": "/home/lilith/work/zen/zenanalyze",
+   "head_commit": "b102fa5f3480f0c3911fa85a8a6ad23c64936f18",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false
+  },
+  "zenavif": {
+   "version": "0.2.0",
+   "manifest_dir": "/home/lilith/work/zen/zenavif",
+   "repo": "/home/lilith/work/zen/zenavif",
+   "head_commit": "a7c56be9e77dc708f379eeaa288ab607f6d3f6e1",
+   "dirty_diff_sha256": "6f444d556431ebd3a34de2b1ac95a7374d558665374e4f966c9a4f36a4873ec3",
+   "dirty": true
+  },
+  "zenavif-parse": {
+   "version": "0.7.0",
+   "manifest_dir": "/home/lilith/work/zen/zenavif/zenavif-parse",
+   "repo": "/home/lilith/work/zen/zenavif",
+   "head_commit": "a7c56be9e77dc708f379eeaa288ab607f6d3f6e1",
+   "dirty_diff_sha256": "6f444d556431ebd3a34de2b1ac95a7374d558665374e4f966c9a4f36a4873ec3",
+   "dirty": true
+  },
+  "zenflate": {
+   "version": "0.4.0",
+   "manifest_dir": "/home/lilith/work/zen/zenflate",
+   "repo": "/home/lilith/work/zen/zenflate",
+   "head_commit": "3d597d4b59d33843391aa9454096b1007e799d55",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false
+  },
+  "zenjpeg": {
+   "version": "0.9.0",
+   "manifest_dir": "/home/lilith/work/zen/zenjpeg/zenjpeg",
+   "repo": "/home/lilith/work/zen/zenjpeg",
+   "head_commit": "8f703a6eeaad080045aa4c1b3713a25df2e15529",
+   "dirty_diff_sha256": "af6ff549c5c7944d7841ab5fe801358692a89daac62f843c3ae788abbfeba883",
+   "dirty": true
+  },
+  "zenjxl": {
+   "version": "0.3.0",
+   "manifest_dir": "/home/lilith/work/zen/zenjxl",
+   "repo": "/home/lilith/work/zen/zenjxl",
+   "head_commit": "4a2c021b4589b5d0465006c48568f6b520128525",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false
+  },
+  "zenpng": {
+   "version": "0.2.0",
+   "manifest_dir": "/home/lilith/work/zen/zenpng",
+   "repo": "/home/lilith/work/zen/zenpng",
+   "head_commit": "cfccd88f77cce5836c25bb70534fa49e4a5cd3c0",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false
+  },
+  "zensim": {
+   "version": "0.3.0",
+   "manifest_dir": "/home/lilith/work/zen/zensim/zensim",
+   "repo": "/home/lilith/work/zen/zensim",
+   "head_commit": "353e6bcc969d2400d0ef102d35d503562c737c42",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false
+  },
+  "zenwebp": {
+   "version": "0.5.0",
+   "manifest_dir": "/home/lilith/work/zen/zenwebp",
+   "repo": "/home/lilith/work/zen/zenwebp",
+   "head_commit": "8aa8a7858b97da88f0ba7d9027f8b6108d999196",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false
+  },
+  "zenyuv": {
+   "version": "0.1.3",
+   "manifest_dir": "/home/lilith/work/zen/zenjpeg/zenyuv",
+   "repo": "/home/lilith/work/zen/zenjpeg",
+   "head_commit": "8f703a6eeaad080045aa4c1b3713a25df2e15529",
+   "dirty_diff_sha256": "af6ff549c5c7944d7841ab5fe801358692a89daac62f843c3ae788abbfeba883",
+   "dirty": true
+  }
+ },
+ "path_dep_repos": {
+  "/home/lilith/work/butteraugli": {
+   "repo": "/home/lilith/work/butteraugli",
+   "head_commit": "aac925f6e8aaad7e9ddbceecaa514b23f7b419a4",
+   "dirty_diff_sha256": "351ef93eb9730a53245f52dcd1188f21ed85f7b497efb8f43f0af87e1b29e734",
+   "dirty": true,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/fast-ssim2": {
+   "repo": "/home/lilith/work/zen/fast-ssim2",
+   "head_commit": "d4ad4fa10d048b8c9c30e1fd5ca9d4aaf8264ce8",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/heic": {
+   "repo": "/home/lilith/work/zen/heic",
+   "head_commit": "c45113e442c485bb9b4ea37ad53e4d8e82132205",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/jxl-encoder": {
+   "repo": "/home/lilith/work/zen/jxl-encoder",
+   "head_commit": "d0f601d816d484609abf927065211024f3f6f84a",
+   "dirty_diff_sha256": "ddb3fb29e9fbdad23c88f34d80cd8348c97ae6c105cecd6632f166be81e64550",
+   "dirty": true,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/ultrahdr": {
+   "repo": "/home/lilith/work/zen/ultrahdr",
+   "head_commit": "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/zenanalyze": {
+   "repo": "/home/lilith/work/zen/zenanalyze",
+   "head_commit": "b102fa5f3480f0c3911fa85a8a6ad23c64936f18",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/zenavif": {
+   "repo": "/home/lilith/work/zen/zenavif",
+   "head_commit": "a7c56be9e77dc708f379eeaa288ab607f6d3f6e1",
+   "dirty_diff_sha256": "6f444d556431ebd3a34de2b1ac95a7374d558665374e4f966c9a4f36a4873ec3",
+   "dirty": true,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/zenflate": {
+   "repo": "/home/lilith/work/zen/zenflate",
+   "head_commit": "3d597d4b59d33843391aa9454096b1007e799d55",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/zenjpeg": {
+   "repo": "/home/lilith/work/zen/zenjpeg",
+   "head_commit": "8f703a6eeaad080045aa4c1b3713a25df2e15529",
+   "dirty_diff_sha256": "af6ff549c5c7944d7841ab5fe801358692a89daac62f843c3ae788abbfeba883",
+   "dirty": true,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/zenjxl": {
+   "repo": "/home/lilith/work/zen/zenjxl",
+   "head_commit": "4a2c021b4589b5d0465006c48568f6b520128525",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/zenpng": {
+   "repo": "/home/lilith/work/zen/zenpng",
+   "head_commit": "cfccd88f77cce5836c25bb70534fa49e4a5cd3c0",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/zensim": {
+   "repo": "/home/lilith/work/zen/zensim",
+   "head_commit": "353e6bcc969d2400d0ef102d35d503562c737c42",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false,
+   "untracked_files": 0
+  },
+  "/home/lilith/work/zen/zenwebp": {
+   "repo": "/home/lilith/work/zen/zenwebp",
+   "head_commit": "8aa8a7858b97da88f0ba7d9027f8b6108d999196",
+   "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty": false,
+   "untracked_files": 0
+  }
+ },
+ "zensim_linked_commit": "353e6bcc969d2400d0ef102d35d503562c737c42",
+ "decode_route_env": {
+  "ZEN_JOBEXEC_AVIF_DECODE": "zencodec",
+  "ZEN_JOBEXEC_PIXEL_HASH": "1",
+  "note": "baked as ENV in the executor image; the route opt-in is not in the JobId \u2014 per-row pixel-hash stamps are the proof"
+ },
+ "decoder_identities": {
+  "zenavif": "0.2.0 (path)",
+  "zenavif-parse": "0.7.0 (path)",
+  "rav1d-safe": "e73811f5",
+  "zencodec": "0.1.26",
+  "zenpixels-convert": "0.2.16",
+  "zenjpeg": "0.9.0 (path)",
+  "zenwebp": "0.5.0 (path)",
+  "zenjxl": "0.3.0 (path)",
+  "zenpng": "0.2.0 (path)",
+  "fast-ssim2": "0.9.0 (path)",
+  "avif_route": "zencodec Decode contract (CICP-tagged) under ZEN_JOBEXEC_AVIF_DECODE=zencodec \u2014 matches the 2026-09-14 admission extraction; default route unchanged for every other caller."
+ },
+ "inputs": {
+  "pairs_tsv": "/var/tmp/zensim-validation-2026-09-14/baseline-recovery/safesyn-train-pairs.tsv",
+  "pairs_tsv_sha256": "5a53976070a5e21b2bb7fe0d05f58b510b93e141dd9207dd3e2cd337fd15cd3b",
+  "pairs_parquet": "/var/tmp/cvvdp-safesyn/safesyn_pairs_uri.parquet",
+  "pairs_parquet_sha256": "baa8c53f08898e57b70eff6685ff77c9c651a6f352f0b990dc27a32725a79e85",
+  "blob_prefix": "s3://codec-corpus/safesyn-rev2-2026-09-06/",
+  "audit_jsonl": "/var/tmp/zensim-validation-2026-09-14/baseline-recovery/safesyn-train-audit.jsonl",
+  "audit_jsonl_sha256": "a6766a5aa973c73c3e9c8d0e94a86bb1034bde691a6e21a7f4b2a7ef96064b22",
+  "declared_manifest": "/var/tmp/cvvdp-safesyn/safesyn_manifest4.json",
+  "declared_manifest_sha256": "9a1e1eb93df76a8c143038d9db59babee337e7f0f76322adf679dbfa21d61a49"
+ },
+ "completeness": {
+  "expected_rows": 196086,
+  "row_id_unique": true,
+  "metric_columns_nonnull": [
+   "cvvdp_jod_standard_fhd",
+   "cvvdp_jod_sdr_fhd_24",
+   "cvvdp_jod_standard_4k",
+   "ssim2_fresh"
+  ],
+  "pixel_hash_rows_checked": 784344,
+  "pixel_hash_missing_stamps": 0,
+  "pixel_hash_audit_mismatches": 0,
+  "duplicate_disagreements": 0,
+  "unknown_metric_rows": 0
+ }
+}
