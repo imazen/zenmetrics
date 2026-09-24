@@ -622,11 +622,11 @@
       "container": "absent"
     },
     "r5600g": {
-      "action": "docker rm -f zen-score-cvvdp attempted three times",
+      "action": "docker rm -f zen-score-cvvdp attempted four times",
       "blocker": "SSH had no route or timed out; ping failed from dev and tower; OS state left to coordinator",
       "container": "unconfirmed"
     },
-    "recorded_utc": "2026-09-24T04:22:52.495621+00:00",
+    "recorded_utc": "2026-09-24T04:38:03.678298+00:00",
     "tower": {
       "action": "docker rm -f zen-score-cvvdp succeeded",
       "container": "absent"

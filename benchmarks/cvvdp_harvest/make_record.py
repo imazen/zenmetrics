@@ -110,7 +110,7 @@ def main():
         "", "Full row-key examples and all 48 canonical statistic results are in the adjacent JSON record. No scoring was rerun for this harvest.",
         "", "## Worker teardown", "",
         "- `zen-score-cvvdp` removed and confirmed absent on r3500 and tower.",
-        "- r5600g removal is unconfirmed: SSH had no route or timed out on three attempts; ping failed from dev and tower. The coordinator retains the host OS decision. No other host state was changed.", "",
+        "- r5600g removal is unconfirmed: SSH had no route or timed out on four attempts; ping failed from dev and tower. The coordinator retains the host OS decision. No other host state was changed.", "",
     ]
     md_path = DEST / (STEM + ".md")
     md_path.write_text("\n".join(lines))

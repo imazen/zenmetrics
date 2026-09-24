@@ -86,4 +86,4 @@ Full row-key examples and all 48 canonical statistic results are in the adjacent
 ## Worker teardown
 
 - `zen-score-cvvdp` removed and confirmed absent on r3500 and tower.
-- r5600g removal is unconfirmed: SSH had no route or timed out on three attempts; ping failed from dev and tower. The coordinator retains the host OS decision. No other host state was changed.
+- r5600g removal is unconfirmed: SSH had no route or timed out on four attempts; ping failed from dev and tower. The coordinator retains the host OS decision. No other host state was changed.
