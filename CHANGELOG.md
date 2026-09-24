@@ -137,7 +137,7 @@ Workspace conventions per the global rules:
   vs fcvvdp's 752 MB (`low_memory` 530 MB now undercuts both).
   fcvvdp's JOD diverges from pycvvdp on the corpus (×2 non-baseband
   contrast scale, renormalized blur borders, worker-count-dependent
-  norm) — timing comparable, scores not.
+  norm) — timing comparable, scores not. `2f3e051c`.
 
 - cvvdp: high-bit-depth display-encoded input — `u16` (`v/65535`) and
   `f32` (`[0,1]` as-is; cd/m² for `Eotf::Linear`) for stills
