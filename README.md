@@ -83,6 +83,54 @@ CPU ladder and the umbrella's `Backend::Cpu` dispatch route to:
 | [`iwssim`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim) | IW-SSIM (CPU reference + SIMD) | `[0, 1]`, 1.0 = identical | self (pure-Rust port) |
 | [`cvvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp) | ColorVideoVDP (still + video, CPU) | JOD ~3–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.7 |
 | [`hdrvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/hdrvdp) | HDR-VDP 2.2.2 (CPU-only, absolute nits) | JOD ~0–100 (`res.Q`), higher better | official HDR-VDP 2.2.2 (Mantiuk et al.) |
+| [`vmaf`](https://github.com/imazen/zenmetrics/tree/master/crates/vmaf) | VMAF v1.0.16 (CPU, planar YUV420 8/10-bit) | 0–100, higher better; standard/HFR variants | Netflix libvmaf 3.2.1 (FFI oracle in tests) |
+
+The `vmaf` crate scores planar SDR YUV420 frames directly, including CAMBI,
+chroma SpEED, integer ADM3, motion3, model fusion and temporal pooling. Its
+eight official v1.0.16 models already set the no-enhancement-gain limits
+associated with **NEG**; there is no separate upstream v1-NEG model family.
+The production crate does not link libvmaf: `vmaf-head-sys = 0.2.0` is pinned
+as a test/benchmark-only oracle, and it already vendors libvmaf 3.2.1. This
+API is not yet part of `zenmetrics --metric` or the orchestrator; it requires
+decoded planar YUV420 8/10-bit input (not packed RGB, HDR, or 12/16-bit).
+`VmafV1Scorer` retains the parsed model across batches. `VmafV1Stream` accepts
+one pair at a time, keeps at most two recent reference luma frames for motion,
+and emits delayed scores once lookahead is available; call `finish()` to emit
+the final frame. With `--features parallel`, `VmafV1Scorer::with_threads(n)`
+uses a dedicated, explicitly bounded worker pool for independent frames
+without changing per-frame arithmetic.
+
+```rust
+use vmaf::{ModelVariant, PoolingMethod, Yuv420Frame, pool_v1_scores, score_v1_420};
+
+let frames = score_v1_420(
+    &[Yuv420Frame { y: &reference_y, u: &reference_u, v: &reference_v }],
+    &[Yuv420Frame { y: &distorted_y, u: &distorted_u, v: &distorted_v }],
+    width, height, 8, ModelVariant::Standard1080p,
+)?;
+let scores: Vec<_> = frames.iter().map(|frame| frame.score).collect();
+let mean = pool_v1_scores(&scores, PoolingMethod::Mean)?;
+```
+
+Run `cargo test -p vmaf --test ffi_fusion` for feature-, score-, and
+pooling-level parity against libvmaf. On a Ryzen 9 5900XT, the
+`cargo bench -p vmaf --bench backends` cold two-frame 1280×720 phone-model
+fixture (three measured rounds, median milliseconds/frame) measured 34.299
+for pure-Rust scalar, 12.325 for libvmaf CPU auto-dispatch, and 27.142 for
+libvmaf forced scalar. Use `cargo bench -p vmaf --bench backends -- --stages`
+to profile the Rust feature stages. These are local measurements, not a claimed
+SIMD win for the Rust implementation. `--features simd` provides a
+parity-tested `magetypes` integer ADM3 DWT
+kernel, but a paired scalar/SIMD run on this Ryzen showed no end-to-end speedup
+(roughly 34 ms/frame in either configuration), so it is not enabled by default.
+For the reused two-frame scorer, the `--parallel` benchmark mode
+(`cargo bench -p vmaf --features parallel --bench backends -- --parallel`)
+measured 43.172 ms/frame with one thread, 26.371 with two, and 27.246 with
+four (only two frames are available to work on). These steady-state thread
+timings are not directly comparable to the
+cold-start libvmaf results above. ORT does not fit the official LIBSVM RBF
+models, and no VMAF GPU backend was implemented or measured on the local
+GTX 1050 (2 GiB).
 
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate

@@ -11,6 +11,7 @@ members = [
     "crates/iwssim",
     "crates/iwssim-gpu",
     "crates/ssim2-gpu",
+    "crates/vmaf",
     "crates/zenfleet-cloud",
     "crates/zenfleet-local",
     "crates/zenfleet-vastai",
