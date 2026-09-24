@@ -81,9 +81,14 @@ image = { workspace = true, features = ["png", "jpeg"] }
 # examples/video_vs_ssim2.rs — cvvdp video vs fast-ssim2 per-frame
 # comparison (wall/user CPU/peak RSS, 1t vs 8t). `rayon` gives the
 # still baseline the same thread pool; `imgref` is the zero-copy
-# sRGB-8 input path. Resolved through the workspace [patch] to the
-# sibling checkout; crates.io 0.8.2 satisfies it publicly.
-fast-ssim2 = { version = "0.8.2", features = ["imgref", "rayon"] }
+# sRGB-8 input path. Direct path dep on the sibling checkout (same
+# convention as zenmetrics-cli): a version-req-only dep silently
+# resolved crates.io 0.8.2 while the workspace [patch] pointed at
+# this checkout, because [patch] applies only when the patched
+# package version satisfies the requirement — the 2026-09-23 bench
+# measured a stale build. `version` stays so publish-rewrite and the
+# version-match failure mode both stay loud.
+fast-ssim2 = { version = "0.9", path = "../../../fast-ssim2/fast-ssim2", features = ["imgref", "rayon"] }
 imgref = { workspace = true }
 bytemuck = { workspace = true }
 

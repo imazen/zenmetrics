@@ -333,11 +333,14 @@ build takes the sequential fallback.
 The natural still-metric baseline for video scoring is fast-ssim2
 (SSIMULACRA2) applied to each frame pair and averaged. Measured with
 `cargo run -p cvvdp --release --example video_vs_ssim2 -- <cvvdp|ssim2>
-<W> <H> <N>` (2026-09-23, this box, release, no
-`-C target-cpu=native`; same deterministic clip both paths; frames
-synthesized lazily inside the timed loop so peak RSS reflects the
-metric's own working set; committed data:
-[`benchmarks/video_vs_ssim2_2026-09-23.tsv`](../benchmarks/video_vs_ssim2_2026-09-23.tsv)).
+<W> <H> <N>` (2026-09-24, this box, release, no
+`-C target-cpu=native`; fast-ssim2 is the sibling checkout at
+v0.9.0-15-gf011259 via a direct path dev-dep — the 2026-09-23 run
+silently measured crates.io 0.8.2 because the workspace [patch] only
+applies on version match, see the `.meta`; same deterministic clip
+both paths; frames synthesized lazily inside the timed loop so peak
+RSS reflects the metric's own working set; committed data:
+[`benchmarks/video_vs_ssim2_2026-09-24.tsv`](../benchmarks/video_vs_ssim2_2026-09-24.tsv)).
 `ms/frame` is `(wall − gen)/24`; gen is the shared frame-synthesis
 cost measured by the `gen` mode of the same binary.
 
@@ -345,51 +348,50 @@ cost measured by the `gen` mode of the same binary.
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 34.0 | 31.4 | 36.3 | 34.2 | 134 MB | 42 MB |
-| 1280×720 | 133.1 | 117.9 | 141.7 | 127.1 | 462 MB | 144 MB |
-| 1920×1080 | 313.6 | 271.7 | 333.8 | 292.5 | 1037 MB | 319 MB |
+| 512² | 32.4 | 18.8 | 35.0 | 21.7 | 134 MB | 30 MB |
+| 1280×720 | 129.0 | 82.6 | 137.9 | 90.8 | 463 MB | 98 MB |
+| 1920×1080 | 311.8 | 178.8 | 331.7 | 198.3 | 1037 MB | 218 MB |
 
 **24-frame clip, 8 threads (`RAYON_NUM_THREADS=8`):**
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 23.4 | 30.9 | 45.4 | 33.3 | 133 MB | 42 MB |
-| 1280×720 | 97.0 | 121.8 | 220.0 | 140.4 | 462 MB | 144 MB |
-| 1920×1080 | 230.2 | 271.9 | 532.1 | 308.8 | 1040 MB | 319 MB |
+| 512² | 22.7 | 13.4 | 45.4 | 29.2 | 133 MB | 30 MB |
+| 1280×720 | 96.1 | 63.1 | 221.7 | 121.7 | 461 MB | 98 MB |
+| 1920×1080 | 229.6 | 130.0 | 530.0 | 297.5 | 1040 MB | 218 MB |
 
 Honest reading:
 
-- **At 8 threads cvvdp video is faster than ssim2-per-frame wall at
-  every measured size** (23.4 vs 30.9, 97.0 vs 121.8, 230.2 vs
-  271.9 ms/frame — −24%, −20%, −15%) — remarkable given it computes
-  4 temporal channels, 2 pyramid decomps per channel per frame, and
-  4-channel masking + pooling per output frame. At 1 thread it costs
-  ~1.08–1.15× ssim2-per-frame — the serial FIR / masking / pooling
-  stages dominate when the band stages can't spread across cores.
-- **Peak RSS ≈ 3.3× ssim2's** at every size (was ~4× before the
-  shared-`gauss_l` / no-`log_l_bkg` / scratch-aliasing work). The
+- **fast-ssim2 0.9.0 leads cvvdp at every measured size and thread
+  count** (~1.5–1.8× wall: 22.7/96.1/229.6 vs 13.4/63.1/130.0
+  ms/frame at 8t; 32.4/129.0/311.8 vs 18.8/82.6/178.8 at 1t). The
+  0.9.0 work — fused linear→xyb→positive→planar conversion, jpegli
+  cube-root + horizontal-Gaussian kernels, rayon vertical-blur/XYB/
+  ssim_map passes — made it ~1.4–2.3× faster than the 0.8.2 build
+  the earlier TSV measured (1080p 8t: 271.9→130.0 ms/frame), which
+  flips the comparison: against 0.8.2 cvvdp led at 8t (230.2 vs
+  271.9). cvvdp still computes strictly more per frame — 4 temporal
+  channels, 2 pyramid decomps per channel, 4-channel masking +
+  pooling per output frame.
+- **Peak RSS gap widened to ~4.5–4.8× ssim2's** — 0.9.0's lazy-plane
+  and dropped-scratch work cut its 1080p footprint 319→218 MB. The
   streaming bound holds (input frames are not retained — RSS is flat
   in `n_frames`), but the bound is the *temporal window*: at
   1080p/30 fps the filter is 9 taps, so the ring keeps 18 DKL frame
   sets (~24 MB each, ~450 MB total) plus the pyramid caches and
-  scratch. Bounded ≠ small — the remaining gap to ssim2 is almost
-  entirely that f32 ring.
-- **`low_memory` closes most of the RSS gap**: the `cvvdp-lm` arm of
-  the same binary (u8 ring) measured 1080p peak RSS **699 MB vs
-  1040 MB (−33 %)** — within 2.2× of ssim2 — for +1.1 % wall at 1t
-  and +5.5 % at 8t (the emit-time sRGB→DKL re-conversion is serial
-  while the band stages parallelize). At 512² the re-conversion cost
-  is in the noise (±0.4 %). JOD output is bit-identical — same TSV
-  scores — because the stored bytes are the lossless source of the
-  LUT+matrix conversion.
-- **Thread scaling is real but shallow for cvvdp**: 1t→8t buys
-  ~1.36–1.45× (CPU/wall ≈ 2.3 effective threads) — only the
-  8-way band-stage `rayon::scope` parallelizes; FIR, masking and
-  pooling stay serial. ssim2-per-frame shows *no measurable scaling*
-  at these sizes (user+sys ≈ wall at 8t; its `rayon` feature
-  parallelizes only the gaussian-blur row pass, a negligible
-  fraction), which is why cvvdp pulls ahead once threads are
-  available.
+  scratch. Bounded ≠ small.
+- **`low_memory` still closes most of the RSS gap**: the `cvvdp-lm`
+  arm of the same binary (u8 ring) measured 1080p peak RSS **705 MB
+  vs 1040 MB (−32 %)** — within 3.2× of ssim2 — for −2 % to +7 %
+  wall across the matrix (rep-level noise dominates below 1080p; at
+  1080p the emit-time re-conversion costs +3.4 % at 1t / +5.9 % at
+  8t). JOD output is bit-identical — same TSV scores — because the
+  stored bytes are the lossless source of the LUT+matrix conversion.
+- **Both metrics now scale ~1.3–1.4× at 1t→8t**: ssim2 0.9.0
+  parallelizes its vertical blur, XYB and ssim_map passes (its 0.8.2
+  build showed no measurable scaling); cvvdp parallelizes only the
+  8-way band-stage `rayon::scope` — FIR, masking and pooling stay
+  serial.
 - Scores are not comparable units (JOD 0–10 vs SSIMULACRA2's
   unbounded scale); the ssim2 arm exists to price the "just score
   frames" alternative, not to compare quality.

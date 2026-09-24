@@ -50,12 +50,23 @@ Workspace conventions per the global rules:
   `af90f028`, `3eff4238` (+ lint cleanup `81680624`).
   `score-video` CLI: `ff723263`. Comparative benchmark vs
   fast-ssim2-per-frame (wall, user+sys CPU, peak RSS, 1t vs 8t) in
-  `examples/video_vs_ssim2.rs` +
-  `benchmarks/video_vs_ssim2_2026-09-23.tsv`: at 8t cvvdp is faster
-  than ssim2-per-frame wall at every measured size
+  `examples/video_vs_ssim2.rs`. Against crates.io fast-ssim2 0.8.2
+  (`benchmarks/video_vs_ssim2_2026-09-23.tsv`) cvvdp was faster than
+  ssim2-per-frame wall at every measured size at 8t
   (23.4 vs 30.9 / 97.0 vs 121.8 / 230.2 vs 271.9 ms/frame at 512² /
   720p / 1080p), ~1.1× slower at 1t; ~3.3× peak RSS (1080p: 1.04 GB
-  vs 319 MB). Subsequent fusion pass `e2a5e68a` + shared-pyramid
+  vs 319 MB). Re-benched 2026-09-24 against fast-ssim2 0.9.0
+  (`benchmarks/video_vs_ssim2_2026-09-24.tsv`; sibling main
+  `f011259` — fused linear→xyb→positive→planar conversion, jpegli
+  cube-root/Gaussian kernels, rayon vertical-blur/XYB/ssim_map
+  passes): ssim2 is ~1.4–2.3× faster than 0.8.2 and now leads cvvdp
+  ~1.5–1.8× at every size × threads (8t: 22.7 vs 13.4 / 96.1 vs
+  63.1 / 229.6 vs 130.0 ms/frame), 1080p peak RSS 218 MB vs 1.04 GB
+  (705 MB `low_memory`, ~3.2×). The bench dev-dep now paths directly
+  at the sibling checkout — the version-req dep silently resolved
+  registry 0.8.2 while the workspace [patch] pointed at the 0.9.0
+  sibling (patches apply only on version match). Subsequent fusion
+  pass `e2a5e68a` + shared-pyramid
   rework: one `gauss_l` background pyramid per side replaces four
   identical builds, only the reference achromatic pyramid keeps
   `log_l_bkg` planes (`vweber_band_nolog_into` elsewhere), band
@@ -70,8 +81,9 @@ Workspace conventions per the global rules:
   `VideoScorer::with_options` / `Cvvdp::video_with_options` /
   `score-video --low-memory`) stores the temporal window as u8 sRGB
   instead of f32 DKL — 1080p peak RSS 1.04 GB→0.70 GB (−33 %, within
-  2.2× of ssim2) for +1–6 % wall; bit-identical scores since the
-  stored bytes are the lossless input to the emit-time conversion.
+  3.2× of ssim2 0.9.0's 218 MB) for −2 % to +7 % wall; bit-identical
+  scores since the stored bytes are the lossless input to the
+  emit-time conversion.
 
 - cvvdp: high-bit-depth display-encoded input — `u16` (`v/65535`) and
   `f32` (`[0,1]` as-is; cd/m² for `Eotf::Linear`) for stills

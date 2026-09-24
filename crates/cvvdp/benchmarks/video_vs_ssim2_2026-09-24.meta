@@ -1,0 +1,45 @@
+# cvvdp video vs fast-ssim2 per-frame — re-bench against fast-ssim2 0.9.0
+#
+# Re-run of the 2026-09-23 comparison after fast-ssim2 main got faster
+# (user report). THE 2026-09-23 TSV MEASURED CRATES.IO fast-ssim2 0.8.2 —
+# the cvvdp dev-dep declared `version = "0.8.2"` and the workspace
+# [patch.crates-io] path entry silently did NOT apply because the sibling
+# checkout had moved to 0.9.0 (path patches only apply when the patched
+# package version satisfies the requirement). This file's `ssim2` rows
+# are the sibling checkout at v0.9.0-15-gf011259 (`main` @ f011259,
+# "perf(memory): drop mul scratch + eager scale-0 downscale + lazy
+# planes"); cvvdp's dev-dep now paths directly at the sibling (same
+# convention as zenmetrics-cli) so the resolver can't silently pick a
+# registry build again.
+#
+# fast-ssim2 changes since the 0.8.2 rows (d989014..f011259 on main):
+# fused linear->xyb->positive->planar conversion, dropped `mul` scratch,
+# eager scale-0 downscale, lazy pyramid planes, jpegli cube root +
+# horizontal Gaussian, rayon: parallel vertical blur (width-governed
+# column bands), parallel XYB/mul/ssim_map, adaptive scheduling via
+# Tuning.
+#
+# Host:        lilith (water-cooled AMD Ryzen 9 7950X, 49 GiB RAM)
+# Kernel:      Linux 7.0.0-31-generic
+# Rust:        rustc 1.98.1 (48a229cea 2026-09-01)
+# Build:       cargo build -p cvvdp --release --example video_vs_ssim2
+#              (workspace target/, release profile, no target-cpu=native)
+# Repo:        zenmetrics @ 68dd4cd7 (master@origin) + dev-dep path edit
+# fast-ssim2:  ../fast-ssim2/fast-ssim2 @ f011259 (v0.9.0-15-gf011259)
+#
+# Corpus:      deterministic synthetic clip generated inside the harness —
+#              same frames for both metrics; `gen` rows measure synthesis
+#              cost alone (ms/frame claims subtract it: (wall-gen)/24).
+#              24 frames @ 30 fps, median of 3 reps.
+#
+# Replay (per cell — metric in {gen,ssim2,cvvdp,cvvdp-lm}):
+#   RAYON_NUM_THREADS=<1|8> target/release/examples/video_vs_ssim2 \
+#       <metric> <W> <H> 24 30 3
+#
+# Headline deltas vs the 2026-09-23 file (1080p, 8t, wall-gen)/24:
+#   ssim2  0.8.2: 271.9 ms/f  ->  0.9.0: 130.0 ms/f  (~2.1x faster)
+#   cvvdp        : 230.2 ms/f  ->         229.6 ms/f  (unchanged, as
+#                                                 expected — same code)
+#   ssim2 1080p peak RSS: 319 MB -> 218 MB (lazy planes / dropped scratch)
+#   => ssim2 0.9.0 now leads cvvdp ~1.5-1.8x wall at every size x threads;
+#      cvvdp ~4.8x its RSS (3.2x with low_memory).
