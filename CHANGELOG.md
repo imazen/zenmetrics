@@ -88,7 +88,7 @@ Workspace conventions per the global rules:
   `hdr-pq-sky` 192×108 crop, ~1 000-nit peak, 100 % low-bit usage):
   16 video cells max |Δ| = 2e-6 JOD, 16 still cells max |Δ| = 1.2e-5.
   Conformance decodes PNG16 via zenpng (git main); the `image` dep is
-  now JPEG-only for `jpeg_roundtrip` golden stability.
+  now JPEG-only for `jpeg_roundtrip` golden stability. `3ba525b3`.
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
