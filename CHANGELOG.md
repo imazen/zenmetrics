@@ -13,6 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenmetrics-cli sweep: per-plane chroma knobs for research stimuli (`5fa9f73a`) — zenjpeg `chroma_distance_scales` / `plane_tables` / `allow_16bit_quant_tables`; zenavif `chroma_q` on `backend=svt-rs`; new `--codec zenjpegai` (`jpegai` feature, `ZENJPEGAI_MODELS`) with `model_id` / `beta_displacement_log`, plus JPEG AI decode; cvvdp CPU `--display-model squintly_n1` (94.26 ppd) / `squintly_m2` (47.13 ppd).
 - cvvdp: video scoring on the CPU path — `VideoScorer` (streaming
   `push_frame`/`finish`, holds only the temporal-filter window) plus
   `score_video` whole-clip convenience and `Cvvdp::video`. Ports
