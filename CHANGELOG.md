@@ -295,8 +295,10 @@ Workspace conventions per the global rules:
 - zenmetrics-cli: carry buffered AVIF CICP sRGB signalling to the RGB8
   converter for transfer 13 with BT.709 primaries; retain existing code-value
   behavior for other SDR transfer codes. Add native-sample exactness gates for
-  AVIF10, PNG16, JXL16 and TIFF16. Temporarily patch zenpixels-convert source
-  until 0.2.17 or newer publishes. `39aef27f`, `4ca3c6a7`.
+  AVIF10, PNG16, JXL16 and TIFF16. Temporarily pin both zenpixels crates to
+  exact-narrowing main commit e56f626b until zenpixels-convert 0.2.17 or
+  newer publishes; the unrelated local lockfile drift was removed.
+  `39aef27f`, `4ca3c6a7`, `aecf7952`.
 
 - cvvdp: video scoring on the CPU path — `VideoScorer` (streaming
   `push_frame`/`finish`, holds only the temporal-filter window) plus
