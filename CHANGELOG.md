@@ -255,7 +255,7 @@ Workspace conventions per the global rules:
   cleanly on AVX-512-only hosts. 1024² probe, release: `score()`
   1.02 s → 519 ms serial / **184 ms** under `parallel`; full result
   ~780 ms / ~330 ms. `--all-features` clippy-clean; 100 tests pass
-  under both feature sets.
+  under both feature sets. `379e508e`.
 
 - **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
   IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
