@@ -21,6 +21,7 @@
 
 use alloc::vec::Vec;
 
+#[cfg(test)]
 use crate::filters::{BINOM5, BINOM5_LEN, BINOM5_RADIUS};
 
 /// One Laplacian pyramid level.
@@ -62,6 +63,7 @@ pub(crate) fn reflect1(i: i32, n: i32) -> i32 {
 /// `corr_dn` along the horizontal axis: correlate with `binom5`, then
 /// decimate by 2. Input `(h, in_w)` → output `(h, out_w)` with
 /// `out_w = ceil(in_w / 2)`.
+#[cfg(test)]
 pub(crate) fn corr_dn_horizontal(
     src: &[f32],
     h: usize,
@@ -91,6 +93,7 @@ pub(crate) fn corr_dn_horizontal(
 /// `corr_dn` along the vertical axis: correlate with `binom5`, then
 /// decimate by 2. Input `(in_h, w)` → output `(out_h, w)` with
 /// `out_h = ceil(in_h / 2)`.
+#[cfg(test)]
 pub(crate) fn corr_dn_vertical(src: &[f32], in_h: usize, w: usize, out_h: usize, dst: &mut [f32]) {
     debug_assert_eq!(src.len(), in_h * w);
     debug_assert_eq!(dst.len(), out_h * w);
@@ -120,6 +123,7 @@ pub(crate) fn corr_dn_vertical(src: &[f32], in_h: usize, w: usize, out_h: usize,
 /// return `(active, sx)` where `active = true` indicates a real source
 /// sample at `src[sx]` (vs an inserted zero).
 #[inline]
+#[cfg(test)]
 fn reflect_expanded(i: i32, in_axis: i32) -> (bool, usize) {
     let two_n = 2 * in_axis;
     let mut q = i;
@@ -143,6 +147,7 @@ fn reflect_expanded(i: i32, in_axis: i32) -> (bool, usize) {
 /// `up_conv` along horizontal: zero-insert × 2, then correlate with
 /// `binom5`. Output `(h, out_w)` where `out_w` is typically `2*in_w`
 /// or `2*in_w - 1`.
+#[cfg(test)]
 pub(crate) fn up_conv_horizontal(
     src: &[f32],
     h: usize,
@@ -172,6 +177,7 @@ pub(crate) fn up_conv_horizontal(
 }
 
 /// `up_conv` along vertical: zero-insert × 2 then correlate.
+#[cfg(test)]
 pub(crate) fn up_conv_vertical(src: &[f32], in_h: usize, w: usize, out_h: usize, dst: &mut [f32]) {
     debug_assert_eq!(src.len(), in_h * w);
     debug_assert_eq!(dst.len(), out_h * w);
@@ -235,10 +241,10 @@ pub(crate) fn build_laplacian_pyramid(
         let (w_nxt, h_nxt) = dims[s + 1];
         // Horizontal pass: (h_cur, w_cur) → (h_cur, w_nxt).
         let mut scratch = alloc::vec![0.0_f32; h_cur * w_nxt];
-        corr_dn_horizontal(&g_levels[s], h_cur, w_cur, w_nxt, &mut scratch);
+        crate::simd_kernels::corr_dn_h(&g_levels[s], h_cur, w_cur, w_nxt, &mut scratch);
         // Vertical pass: (h_cur, w_nxt) → (h_nxt, w_nxt).
         let mut g_nxt = alloc::vec![0.0_f32; h_nxt * w_nxt];
-        corr_dn_vertical(&scratch, h_cur, w_nxt, h_nxt, &mut g_nxt);
+        crate::simd_kernels::corr_dn_v(&scratch, h_cur, w_nxt, h_nxt, &mut g_nxt);
         g_levels.push(g_nxt);
     }
 
@@ -255,10 +261,10 @@ pub(crate) fn build_laplacian_pyramid(
             // Expand g[s+1] → (h_cur, w_cur).
             //   Horizontal: (h_nxt, w_nxt) → (h_nxt, w_cur).
             let mut h_scratch = alloc::vec![0.0_f32; h_nxt * w_cur];
-            up_conv_horizontal(&g_levels[s + 1], h_nxt, w_nxt, w_cur, &mut h_scratch);
+            crate::simd_kernels::up_conv_h(&g_levels[s + 1], h_nxt, w_nxt, w_cur, &mut h_scratch);
             //   Vertical: (h_nxt, w_cur) → (h_cur, w_cur).
             let mut expanded = alloc::vec![0.0_f32; h_cur * w_cur];
-            up_conv_vertical(&h_scratch, h_nxt, w_cur, h_cur, &mut expanded);
+            crate::simd_kernels::up_conv_v(&h_scratch, h_nxt, w_cur, h_cur, &mut expanded);
             // LP[s] = G[s] − expand(G[s+1]).
             let mut lp = alloc::vec![0.0_f32; h_cur * w_cur];
             for i in 0..(h_cur * w_cur) {
@@ -304,48 +310,71 @@ pub(crate) fn imenlarge2(
 ) -> Vec<f32> {
     assert_eq!(src.len(), src_w * src_h);
 
-    // Stage 1: bilinear to (4M-3, 4N-3).
+    // Stage 1 is a bilinear upsample to `t1` (4M-3 × 4N-3) — but it is
+    // never materialized: `imu[y][x] = t2[2y][2x]` reads t2 only on its
+    // even grid, which touches only `t1[2y-1][2x-1]` interior cells
+    // plus a thin ring of t1 border cells. `t1_at` evaluates a single
+    // t1 cell straight from `src` (same exact-quarter formula as
+    // `bilinear_upsample`), so `imu` needs ~4·src work instead of the
+    // ~16·src a materialized t1 costs — bit-identical, no 16×
+    // intermediate.
     let t1_h = 4 * src_h - 3;
     let t1_w = 4 * src_w - 3;
-    let t1 = bilinear_upsample(src, src_w, src_h, t1_w, t1_h);
 
-    // Stage 2: pad by 1 around to (4M-1, 4N-1) via linear extrap.
+    // Degenerate inputs (t1 with <2 rows or cols) can't run the fused
+    // border formulas — fall back to the materialized-t2 path, which
+    // reads zero-padded cells for out-of-range rows.
+    if t1_h < 2 || t1_w < 2 {
+        return imenlarge2_small(src, src_w, src_h, dst_w, dst_h);
+    }
+
     let t2_h = t1_h + 2;
     let t2_w = t1_w + 2;
-    let mut t2 = alloc::vec![0.0_f32; t2_h * t2_w];
-    // Inner copy.
-    for y in 0..t1_h {
-        let src_row = &t1[y * t1_w..(y + 1) * t1_w];
-        let dst_row = &mut t2[(y + 1) * t2_w + 1..(y + 1) * t2_w + 1 + t1_w];
-        dst_row.copy_from_slice(src_row);
-    }
-    // Linear extrap rows.
-    for x in 0..t2_w {
-        // Skip corners during row extrap; corners get set when we do
-        // the column extrap below using the just-filled interior.
-        if x == 0 || x == t2_w - 1 {
-            continue;
-        }
-        t2[0 * t2_w + x] = 2.0 * t2[t2_w + x] - t2[2 * t2_w + x];
-        t2[(t2_h - 1) * t2_w + x] = 2.0 * t2[(t2_h - 2) * t2_w + x] - t2[(t2_h - 3) * t2_w + x];
-    }
-    // Linear extrap cols.
-    for y in 0..t2_h {
-        t2[y * t2_w] = 2.0 * t2[y * t2_w + 1] - t2[y * t2_w + 2];
-        t2[y * t2_w + (t2_w - 1)] = 2.0 * t2[y * t2_w + (t2_w - 2)] - t2[y * t2_w + (t2_w - 3)];
-    }
-
-    // Stage 3: take `::2, ::2` slice of t2 → shape (ceil(t2_h/2), ceil(t2_w/2)).
-    // The Python `t2[:, :, ::2, ::2]` keeps indices 0, 2, 4, ... up to t2_h-1.
-    // Numpy ceil-div: `(t2_h + 1) / 2`.
     let imu_h = t2_h.div_ceil(2);
     let imu_w = t2_w.div_ceil(2);
     let mut imu = alloc::vec![0.0_f32; imu_h * imu_w];
-    for y in 0..imu_h {
-        for x in 0..imu_w {
-            imu[y * imu_w + x] = t2[(2 * y) * t2_w + (2 * x)];
+
+    let t1_at = |dy: usize, dx: usize| -> f32 { t1_cell(src, src_w, src_h, dy, dx) };
+
+    crate::par::map_rows(&mut imu, imu_w, |y0, band| {
+        let band_rows = band.len() / imu_w;
+        for r in 0..band_rows {
+            let y = y0 + r;
+            let row = &mut band[r * imu_w..(r + 1) * imu_w];
+            if y == 0 || y == imu_h - 1 {
+                // Border row: imu[y][x] = 2·t1[ya][2x-1] − t1[yb][2x-1]
+                // (top: ya=0,yb=1; bottom: ya=t1_h-1,yb=t1_h-2).
+                let (ya, yb) = if y == 0 {
+                    (0usize, 1usize)
+                } else {
+                    (t1_h - 1, t1_h - 2)
+                };
+                for x in 1..imu_w - 1 {
+                    row[x] = 2.0 * t1_at(ya, 2 * x - 1) - t1_at(yb, 2 * x - 1);
+                }
+            } else {
+                // Interior: imu[y][x] = t1[2y-1][2x-1].
+                let ty = 2 * y - 1;
+                for x in 1..imu_w - 1 {
+                    row[x] = t1_at(ty, 2 * x - 1);
+                }
+                // Border cols: imu[y][0] = 2·t1[ty][0] − t1[ty][1],
+                // mirrored on the right.
+                row[0] = 2.0 * t1_at(ty, 0) - t1_at(ty, 1);
+                row[imu_w - 1] = 2.0 * t1_at(ty, t1_w - 1) - t1_at(ty, t1_w - 2);
+            }
         }
-    }
+    });
+    // Corners: t2 corner = 2·(adjacent extrap cell) − (next extrap
+    // cell), where each extrap cell is itself `2·edge − inner` on t1.
+    imu[0] = 2.0 * (2.0 * t1_at(0, 0) - t1_at(1, 0)) - (2.0 * t1_at(0, 1) - t1_at(1, 1));
+    imu[imu_w - 1] = 2.0 * (2.0 * t1_at(0, t1_w - 1) - t1_at(1, t1_w - 1))
+        - (2.0 * t1_at(0, t1_w - 2) - t1_at(1, t1_w - 2));
+    let bot = (imu_h - 1) * imu_w;
+    let (ya, yb) = (t1_h - 1, t1_h - 2);
+    imu[bot] = 2.0 * (2.0 * t1_at(ya, 0) - t1_at(yb, 0)) - (2.0 * t1_at(ya, 1) - t1_at(yb, 1));
+    imu[bot + imu_w - 1] = 2.0 * (2.0 * t1_at(ya, t1_w - 1) - t1_at(yb, t1_w - 1))
+        - (2.0 * t1_at(ya, t1_w - 2) - t1_at(yb, t1_w - 2));
 
     // Crop to caller's requested dst dims (`auxp[0:Nsy, 0:Nsx]`).
     if dst_w == imu_w && dst_h == imu_h {
@@ -363,13 +392,90 @@ pub(crate) fn imenlarge2(
     }
 }
 
-/// Bilinear upsample — used inside [`imenlarge2`].
-///
-/// Matches PyTorch's `F.upsample(..., mode='bilinear')` with
-/// `align_corners=True` (the default in older PyTorch versions, which
-/// is what the reference uses). With `align_corners=True`, sample
-/// positions are mapped via `x_src = x_dst * (W_src - 1) / (W_dst - 1)`.
-fn bilinear_upsample(src: &[f32], sw: usize, sh: usize, dw: usize, dh: usize) -> Vec<f32> {
+/// One cell of `imenlarge2`'s stage-1 bilinear plane `t1`
+/// (`4·sh−3 × 4·sw−3`), evaluated directly from `src`. Same math as
+/// [`bilinear_upsample`]'s per-cell body on the exact quarter grid —
+/// `(dy, dx)` are t1 coordinates.
+#[inline]
+fn t1_cell(src: &[f32], sw: usize, sh: usize, dy: usize, dx: usize) -> f32 {
+    const WX: [f32; 4] = [0.0, 0.25, 0.5, 0.75];
+    let y0 = dy >> 2;
+    let y1 = (y0 + 1).min(sh - 1);
+    let wy = WX[dy & 3];
+    let x0 = dx >> 2;
+    let x1 = (x0 + 1).min(sw - 1);
+    let wx = WX[dx & 3];
+    let (ra, rb) = (y0 * sw, y1 * sw);
+    let v00 = src[ra + x0];
+    let v01 = src[ra + x1];
+    let v10 = src[rb + x0];
+    let v11 = src[rb + x1];
+    let v0 = v00 + wx * (v01 - v00);
+    let v1 = v10 + wx * (v11 - v10);
+    v0 + wy * (v1 - v0)
+}
+
+/// `imenlarge2` fallback for degenerate `t1` shapes (< 2 rows or cols)
+/// — materializes `t2` exactly as the reference does, including the
+/// zero-initialized cells that out-of-range extrapolation reads.
+fn imenlarge2_small(
+    src: &[f32],
+    src_w: usize,
+    src_h: usize,
+    dst_w: usize,
+    dst_h: usize,
+) -> Vec<f32> {
+    let t1_h = 4 * src_h - 3;
+    let t1_w = 4 * src_w - 3;
+    let t1 = bilinear_upsample_general(src, src_w, src_h, t1_w, t1_h);
+
+    let t2_h = t1_h + 2;
+    let t2_w = t1_w + 2;
+    let mut t2 = alloc::vec![0.0_f32; t2_h * t2_w];
+    for y in 0..t1_h {
+        let src_row = &t1[y * t1_w..(y + 1) * t1_w];
+        let dst_row = &mut t2[(y + 1) * t2_w + 1..(y + 1) * t2_w + 1 + t1_w];
+        dst_row.copy_from_slice(src_row);
+    }
+    for x in 0..t2_w {
+        if x == 0 || x == t2_w - 1 {
+            continue;
+        }
+        t2[x] = 2.0 * t2[t2_w + x] - t2[2 * t2_w + x];
+        t2[(t2_h - 1) * t2_w + x] = 2.0 * t2[(t2_h - 2) * t2_w + x] - t2[(t2_h - 3) * t2_w + x];
+    }
+    for y in 0..t2_h {
+        t2[y * t2_w] = 2.0 * t2[y * t2_w + 1] - t2[y * t2_w + 2];
+        t2[y * t2_w + (t2_w - 1)] = 2.0 * t2[y * t2_w + (t2_w - 2)] - t2[y * t2_w + (t2_w - 3)];
+    }
+
+    let imu_h = t2_h.div_ceil(2);
+    let imu_w = t2_w.div_ceil(2);
+    let mut imu = alloc::vec![0.0_f32; imu_h * imu_w];
+    for y in 0..imu_h {
+        for x in 0..imu_w {
+            imu[y * imu_w + x] = t2[(2 * y) * t2_w + (2 * x)];
+        }
+    }
+    if dst_w == imu_w && dst_h == imu_h {
+        imu
+    } else {
+        let mut out = alloc::vec![0.0_f32; dst_w * dst_h];
+        let copy_h = dst_h.min(imu_h);
+        let copy_w = dst_w.min(imu_w);
+        for y in 0..copy_h {
+            let src_row = &imu[y * imu_w..y * imu_w + copy_w];
+            let dst_row = &mut out[y * dst_w..y * dst_w + copy_w];
+            dst_row.copy_from_slice(src_row);
+        }
+        out
+    }
+}
+
+/// General `align_corners=True` bilinear — retained for
+/// [`imenlarge2_small`]'s degenerate shapes where the quarter-grid
+/// shortcut doesn't apply.
+fn bilinear_upsample_general(src: &[f32], sw: usize, sh: usize, dw: usize, dh: usize) -> Vec<f32> {
     let mut out = alloc::vec![0.0_f32; dh * dw];
     let sx_scale = (sw - 1) as f32 / (dw - 1) as f32;
     let sy_scale = (sh - 1) as f32 / (dh - 1) as f32;
@@ -457,5 +563,75 @@ mod tests {
         // monotone within a row.
         // ...nothing further; precise checks live in the pipeline test.
         let _ = out;
+    }
+
+    /// SIMD pyramid kernels must match the scalar oracle bit-for-bit
+    /// on the interior (all kernels add the same tap sequence per
+    /// output; `mul_add` contraction is the only permitted drift).
+    #[test]
+    fn simd_kernels_match_scalar_oracles() {
+        // Exercise odd/even dims and boundary reflects.
+        for &(w, h) in &[(17usize, 13usize), (32usize, 16usize), (9usize, 9usize)] {
+            let src: Vec<f32> = (0..w * h)
+                .map(|i| ((i * 31 % 67) as f32 - 33.0) / 9.0)
+                .collect();
+            let (ow, oh) = (w.div_ceil(2), h.div_ceil(2));
+            let close = |a: &[f32], b: &[f32], ctx: &str| {
+                assert_eq!(a.len(), b.len(), "{ctx} len");
+                for (i, (&x, &y)) in a.iter().zip(b.iter()).enumerate() {
+                    let tol = 1e-6 * x.abs().max(1.0);
+                    assert!((x - y).abs() <= tol, "{ctx}[{i}]: {x} vs {y}");
+                }
+            };
+            // corr_dn_h
+            let mut a = alloc::vec![0.0; h * ow];
+            let mut b = alloc::vec![0.0; h * ow];
+            corr_dn_horizontal(&src, h, w, ow, &mut a);
+            crate::simd_kernels::corr_dn_h(&src, h, w, ow, &mut b);
+            close(&a, &b, "corr_dn_h");
+            // corr_dn_v
+            let mut a = alloc::vec![0.0; oh * w];
+            let mut b = alloc::vec![0.0; oh * w];
+            corr_dn_vertical(&src, h, w, oh, &mut a);
+            crate::simd_kernels::corr_dn_v(&src, h, w, oh, &mut b);
+            close(&a, &b, "corr_dn_v");
+            // up_conv_h — both out_w parities.
+            for out_w in [2 * w - 1, 2 * w] {
+                let mut a = alloc::vec![0.0; h * out_w];
+                let mut b = alloc::vec![0.0; h * out_w];
+                up_conv_horizontal(&src, h, w, out_w, &mut a);
+                crate::simd_kernels::up_conv_h(&src, h, w, out_w, &mut b);
+                close(&a, &b, "up_conv_h");
+            }
+            // up_conv_v — both out_h parities.
+            for out_h in [2 * h - 1, 2 * h] {
+                let mut a = alloc::vec![0.0; out_h * w];
+                let mut b = alloc::vec![0.0; out_h * w];
+                up_conv_vertical(&src, h, w, out_h, &mut a);
+                crate::simd_kernels::up_conv_v(&src, h, w, out_h, &mut b);
+                close(&a, &b, "up_conv_v");
+            }
+        }
+    }
+
+    /// The fused stage-2+3 `imenlarge2` must equal the materialized-t2
+    /// reference path bit-for-bit (same arithmetic, no intermediates).
+    #[test]
+    fn imenlarge2_fused_matches_materialized() {
+        for &(w, h) in &[(4usize, 4usize), (9, 7), (16, 16), (33, 21), (5, 64)] {
+            let src: Vec<f32> = (0..w * h)
+                .map(|i| ((i * 43 % 71) as f32 - 35.0) / 8.0)
+                .collect();
+            // dst = full imu shape AND a crop (as callers request).
+            let (fw, fh) = (2 * w, 2 * h);
+            for &(dw, dh) in &[(fw, fh), (w, h), (fw - 1, fh - 1)] {
+                let a = imenlarge2(&src, w, h, dw, dh);
+                let b = imenlarge2_small(&src, w, h, dw, dh);
+                assert_eq!(
+                    a, b,
+                    "imenlarge2 fused != materialized {w}x{h} -> {dw}x{dh}"
+                );
+            }
+        }
     }
 }

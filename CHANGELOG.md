@@ -156,6 +156,37 @@ Workspace conventions per the global rules:
   Conformance decodes PNG16 via zenpng (git main); the `image` dep is
   now JPEG-only for `jpeg_roundtrip` golden stability. `3ba525b3`.
 
+- iwssim: IW-weights path optimization (serial ~3.7×, plus
+  deterministic `parallel`). The `nexp × N` neighborhood matrix `Y`
+  (~40 MB/scale at 1 MP) is never materialized anywhere — full or
+  strip: `C_u = YᵀY/nexp` accumulates directly from image stencils
+  (`weights::gram_accumulate`; f64x4 lanes in
+  `simd_kernels::gram_rows_inner`, bit-identical to the
+  materialized-Y column scan per `gram_matches_materialized_y`), and
+  the per-pixel quadratic form `ss = (Y·Cᵤ⁻¹) ⊙ Y / N` runs as a
+  dense stencil (`quad_form_rows`, f32x8 over output columns) instead
+  of through `Y`. Box statistics + gain correction fused into
+  `box_gain_rows` — `g`/`vv` straight from the slabs; the five
+  `box3_same` passes and the mean/σ²/xy planes are gone. Pyramid
+  `corr_dn`/`up_conv` ported to magetypes kernels (contiguous-load
+  strategies, no gathers); `imenlarge2` computes its output straight
+  from `src` — the 16× bilinear intermediate `t1` is never built
+  (only the odd-grid cells `imu` consumes are evaluated), still
+  bit-identical vs the materialized-t2 oracle. `compute_infow`'s
+  per-pixel `log2`/`pow` vectorized via `F32x8Convert`
+  (`infow_map_into`; v3/neon/wasm128/scalar — AVX-512 tokens lack the
+  backend). The previously inert `parallel` feature now bands every
+  hot kernel deterministically (`par` module — band boundaries are a
+  pure function of plane length, never `RAYON_NUM_THREADS`; reduce
+  kernels fold band partials in band order, so scores are identical
+  at any thread count). Score movement vs the pre-change build is
+  ~7e-5 on the probe corpus — SIMD transcendental/reassociation
+  drift inside the crate's 1e-4 parity band; all scalar-oracle and
+  strip↔full parity tests hold (39 tests, both feature configs).
+  1024×1024 synthetic probe, release: full 407→111 ms serial,
+  68 ms at 8 threads; strip (512-row) ~570→189 ms serial,
+  145 ms at 8t; peak RSS 136→98 MB. `<hash>`.
+
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
   cICP, and route CPU CVVDP through its native HDR scorer. Refuse incompatible

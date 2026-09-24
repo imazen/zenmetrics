@@ -18,9 +18,9 @@
 //!   1. Build the per-strip Laplacian pyramid (`build_laplacian_pyramid`)
 //!      from the strip's gray pixels (body + halo).
 //!   2. For each scale s ∈ 0..NUM_SCALES-1 with IW enabled:
-//!      - Build the per-scale Y matrix on the strip's body rows only
-//!        (no halo) — see [`build_y_matrix_body`].
-//!      - Accumulate `Y^T·Y` (a `big_n × big_n` f64 matrix) into a
+//!      - Accumulate the neighborhood Gram `Y^T·Y` directly from the
+//!        strip's body rows via `weights::gram_accumulate` (the Y
+//!        matrix itself is never materialized) into a
 //!        per-scale shared accumulator. Track `nexp_total[s]` so the
 //!        final `C_u = sum(Y^T·Y) / nexp_total`.
 //!   3. For the top scale (s == NUM_SCALES-1):
@@ -123,7 +123,7 @@
 
 use alloc::vec::Vec;
 
-use crate::eig::{EigResult, cov_from_neighborhood, decompose_and_invert};
+use crate::eig::{EigResult, decompose_and_invert};
 use crate::params::IwssimParams;
 use crate::pipeline::WarmState;
 use crate::pyramid::{PyrLevel, build_laplacian_pyramid, imenlarge2, pyramid_dims};
@@ -262,89 +262,6 @@ fn slice_rows(src: &[f32], w: usize, start: usize, end: usize) -> Vec<f32> {
     out
 }
 
-/// Build the `Y` matrix from the strip's body rows only at scale s,
-/// matching the full-image's `build_y_matrix` semantics for those
-/// pixels.
-///
-/// The neighborhood is `block_h × block_w` (3×3 default); for body
-/// rows the neighborhood reads `±Lx, ±Ly` rows/cols from the strip's
-/// `imgo` slab. As long as the strip's halo at scale s covers at
-/// least `Ly` rows above body and below body, every neighborhood
-/// read is in-bounds.
-///
-/// Output is rows of length `big_n` for each pixel in the body's
-/// valid region at scale s.
-fn build_y_matrix_body(
-    img: &[f32],
-    parent: Option<&[f32]>,
-    strip_h_at_s: usize,
-    w_at_s: usize,
-    body_in_strip: (usize, usize),
-    block_h: usize,
-    block_w: usize,
-) -> (Vec<f32>, usize, usize, usize) {
-    let lx = (block_w - 1) / 2;
-    let ly = (block_h - 1) / 2;
-
-    // Valid region in strip-local coords is rows [ly, strip_h - ly),
-    // cols [lx, w - lx). For the body, we want strip-local rows
-    // [body_in_strip.0, body_in_strip.1) — but must intersect with
-    // valid region. Body rows must be at strip rows >= ly AND
-    // < strip_h - ly to allow the neighborhood read.
-    let (body_start_s, body_end_s) = body_in_strip;
-    debug_assert!(
-        body_start_s >= ly,
-        "strip halo at scale s ({} top_halo at scale s) too small for ly={} (body_start_s={})",
-        body_start_s,
-        ly,
-        body_start_s
-    );
-    debug_assert!(
-        body_end_s + ly <= strip_h_at_s,
-        "strip bottom halo at scale s too small for ly={} (body_end_s={}, strip_h_at_s={})",
-        ly,
-        body_end_s,
-        strip_h_at_s
-    );
-
-    // Rows produced in output Y: each "row" of Y corresponds to one
-    // output pixel in the body's valid region.
-    let nblv = body_end_s - body_start_s;
-    let nblh = w_at_s - block_w + 1;
-    let nexp = nblv * nblh;
-    let big_n = block_h * block_w + parent.is_some() as usize;
-    let mut y = alloc::vec![0.0_f32; nexp * big_n];
-
-    let mut col = 0;
-    for ny in -(ly as i32)..=(ly as i32) {
-        for nx in -(lx as i32)..=(lx as i32) {
-            for r in 0..nblv {
-                for c in 0..nblh {
-                    // Body row in strip-local coords:
-                    let yy_strip = body_start_s + r;
-                    // Add neighborhood offset:
-                    let yy = (yy_strip as i32 + ny) as usize;
-                    let xx = (c + lx) as i32 + nx;
-                    let row_index = r * nblh + c;
-                    y[row_index * big_n + col] = img[yy * w_at_s + (xx as usize)];
-                }
-            }
-            col += 1;
-        }
-    }
-    if let Some(parent_band) = parent {
-        for r in 0..nblv {
-            for c in 0..nblh {
-                let yy = body_start_s + r;
-                let xx = c + lx;
-                let row_index = r * nblh + c;
-                y[row_index * big_n + col] = parent_band[yy * w_at_s + xx];
-            }
-        }
-    }
-    (y, nexp, nblv, nblh)
-}
-
 /// Compute the cropped `(g, vv, ss)` arrays for the strip's body rows
 /// only, then evaluate `infow + Σ(cs·iw)` and `Σ(iw)` into the
 /// per-scale accumulator.
@@ -394,40 +311,44 @@ fn fold_iw_for_strip_scale(
         body_end_s,
     );
 
-    // 2. Build Y matrix on body's valid region.
-    let (y_matrix, nexp_body, nblv, nblh) = build_y_matrix_body(
-        lp_ref,
-        parent_band,
-        strip_h_at_s,
-        w_at_s,
-        body_in_strip,
-        block_h,
-        block_w,
+    // 2. Quadratic-form stencil on body's valid region — the Y matrix
+    //    is never materialized; `quad_form_rows` reads the strip's
+    //    `lp_ref` slab directly at body-centered offsets. The reads
+    //    span ±ly/±lx around each body pixel — the same halo provision
+    //    the old materialized-Y builder required.
+    let ly = (block_h - 1) / 2;
+    debug_assert!(
+        body_start_s >= ly,
+        "strip halo at scale s ({} top_halo) too small for ly={ly} (body_start_s={body_start_s})",
+        body_start_s
     );
+    debug_assert!(
+        body_end_s + ly <= strip_h_at_s,
+        "strip bottom halo at scale s too small for ly={ly} (body_end_s={body_end_s}, strip_h_at_s={strip_h_at_s})"
+    );
+    let nblv = body_end_s - body_start_s;
+    let nblh = w_at_s - block_w + 1;
+    let nexp_body = nblv * nblh;
     let big_n = block_h * block_w + parent_band.is_some() as usize;
+    let taps = crate::weights::tap_offsets(block_h, block_w);
+    let lx = (block_w - 1) / 2;
 
     // 3. Compute ss = (Y · C_u_inv) ⊙ Y / N at each body pixel.
     let c_u_inv = eig.c_u_inv_slice();
     debug_assert_eq!(c_u_inv.len(), big_n * big_n);
-    let n_f = big_n as f32;
     let mut ss_pix = alloc::vec![0.0_f32; nexp_body];
-    for row in 0..nexp_body {
-        let y_row = &y_matrix[row * big_n..(row + 1) * big_n];
-        let mut acc = 0.0_f32;
-        for i in 0..big_n {
-            let yi = y_row[i];
-            if yi == 0.0 {
-                continue;
-            }
-            let cinv_row = &c_u_inv[i * big_n..(i + 1) * big_n];
-            let mut inner = 0.0_f32;
-            for j in 0..big_n {
-                inner += cinv_row[j] * y_row[j];
-            }
-            acc += yi * inner;
-        }
-        ss_pix[row] = acc / n_f;
-    }
+    crate::simd_kernels::quad_form_rows(
+        lp_ref,
+        parent_band,
+        w_at_s,
+        body_start_s,
+        lx,
+        nblv,
+        nblh,
+        &taps,
+        c_u_inv,
+        &mut ss_pix,
+    );
 
     // g/vv covers strip rows [body_start_s..body_end_s), shape
     // (body_h, w_at_s) = (nblv, w_at_s). Crop columns by lx for
@@ -506,11 +427,11 @@ fn fold_iw_for_strip_scale(
     accum.sum_iw += sum_iw;
 }
 
-/// Box stats + gain correction on the strip's `body_start_s..body_end_s`
-/// rows. Returns `(g, vv)` over those body rows.
-///
-/// Reads ±1 row halo (`body_start_s - 1 ... body_end_s + 1`) of `lp_ref`,
-/// `lp_dis`, etc. — caller's strip MUST have ≥1 row halo at scale s.
+/// Compute the strip body rows of the IW gain fields `(g, vv)` —
+/// thin wrapper over `simd_kernels::box_gain_rows`, which performs the
+/// fused 3×3 box statistics + gain correction in a single pass. The
+/// strip's halo at scale s must include rows `body_start_s-1` and
+/// `body_end_s` (the kernel reads ±1 around each body row).
 fn box_stats_and_gain_body(
     lp_ref: &[f32],
     lp_dis: &[f32],
@@ -520,77 +441,18 @@ fn box_stats_and_gain_body(
     body_end_s: usize,
 ) -> (Vec<f32>, Vec<f32>) {
     let body_h = body_end_s - body_start_s;
-    let n = body_h * w;
-    let inv9 = 1.0_f32 / 9.0;
-
-    // For each body row r in [body_start_s, body_end_s), compute box
-    // stats reading rows [r-1, r, r+1] of the strip. The strip's halo
-    // at scale s must include row body_start_s-1 and body_end_s.
-    let mut mean_x = alloc::vec![0.0_f32; n];
-    let mut mean_y = alloc::vec![0.0_f32; n];
-    let mut e_xx = alloc::vec![0.0_f32; n];
-    let mut e_yy = alloc::vec![0.0_f32; n];
-    let mut e_xy = alloc::vec![0.0_f32; n];
-
-    for r in 0..body_h {
-        let yy = body_start_s + r;
-        for x in 0..w {
-            let mut mx = 0.0_f32;
-            let mut my = 0.0_f32;
-            let mut sxx = 0.0_f32;
-            let mut syy = 0.0_f32;
-            let mut sxy = 0.0_f32;
-            for dy in -1..=1i32 {
-                let sy = yy as i32 + dy;
-                if sy < 0 || sy >= strip_h as i32 {
-                    continue;
-                }
-                for dx in -1..=1i32 {
-                    let sx = x as i32 + dx;
-                    if sx < 0 || sx >= w as i32 {
-                        continue;
-                    }
-                    let idx = sy as usize * w + sx as usize;
-                    let xv = lp_ref[idx];
-                    let yv = lp_dis[idx];
-                    mx += xv;
-                    my += yv;
-                    sxx += xv * xv;
-                    syy += yv * yv;
-                    sxy += xv * yv;
-                }
-            }
-            let out_idx = r * w + x;
-            mean_x[out_idx] = mx * inv9;
-            mean_y[out_idx] = my * inv9;
-            e_xx[out_idx] = sxx * inv9;
-            e_yy[out_idx] = syy * inv9;
-            e_xy[out_idx] = sxy * inv9;
-        }
-    }
-
-    let tol = 1.0e-15_f32;
-    let mut g = alloc::vec![0.0_f32; n];
-    let mut vv = alloc::vec![0.0_f32; n];
-    for i in 0..n {
-        let mx = mean_x[i];
-        let my = mean_y[i];
-        let cov_i = e_xy[i] - mx * my;
-        let ssx_i = (e_xx[i] - mx * mx).max(0.0);
-        let ssy_i = (e_yy[i] - my * my).max(0.0);
-        let mut g_i = cov_i / (ssx_i + tol);
-        let mut vv_i = ssy_i - g_i * cov_i;
-        if ssx_i < tol {
-            g_i = 0.0;
-            vv_i = ssy_i;
-        }
-        if ssy_i < tol {
-            g_i = 0.0;
-            vv_i = 0.0;
-        }
-        g[i] = g_i;
-        vv[i] = vv_i;
-    }
+    let mut g = alloc::vec![0.0_f32; body_h * w];
+    let mut vv = alloc::vec![0.0_f32; body_h * w];
+    crate::simd_kernels::box_gain_rows(
+        lp_ref,
+        lp_dis,
+        strip_h,
+        w,
+        body_start_s,
+        body_h,
+        &mut g,
+        &mut vv,
+    );
     (g, vv)
 }
 
@@ -608,29 +470,16 @@ fn compute_infow_inline(
     let n = g.len();
     debug_assert_eq!(vv.len(), n);
     debug_assert_eq!(ss.len(), n);
-    let s2 = sigma_nsq;
-    let s4 = s2 * s2;
     let mut infow = alloc::vec![0.0_f32; n];
-    let tol = 1.0e-15_f32;
-    for i in 0..n {
-        let g_i = g[i];
-        let vv_i = vv[i];
-        let ss_i = ss[i];
-        let mut acc = 0.0_f32;
-        let one_plus_g2 = 1.0 + g_i * g_i;
-        let common_num = (vv_i + one_plus_g2 * s2) * ss_i;
-        let inv_s4 = 1.0 / s4;
-        let sn2_vv = s2 * vv_i;
-        for &lam in lambdas {
-            let arg = (common_num * lam + sn2_vv) * inv_s4;
-            acc += (1.0 + arg).log2();
-        }
-        if acc >= tol {
-            infow[i] = acc;
-        } else {
-            infow[i] = 0.0;
-        }
-    }
+    crate::simd_kernels::infow_map(
+        g,
+        vv,
+        ss,
+        lambdas,
+        sigma_nsq,
+        crate::weights::TOL,
+        &mut infow,
+    );
     infow
 }
 
@@ -828,34 +677,26 @@ pub(crate) fn score_strip_internal(
                     None
                 };
 
-                let (y_strip, nexp_strip, _, _) = build_y_matrix_body(
-                    &lp_ref_v[s],
-                    parent_band.as_deref(),
-                    strip_h_at_s,
-                    w_s,
-                    body_in_strip_s,
-                    block_h,
-                    block_w,
-                );
-
-                // Accumulate Y^T · Y into scale_accums[s].yty (n*n)
-                // — symmetric, store both halves.
+                // Accumulate Y^T · Y into scale_accums[s].yty — the
+                // stencil form computes the identical per-(i,j) sums
+                // without materializing the strip's Y matrix (upper
+                // triangle only; `gram_mirror` at eig time).
                 let acc = &mut scale_accums[s];
                 debug_assert_eq!(acc.yty.len(), big_n * big_n);
-                for i in 0..big_n {
-                    for j in i..big_n {
-                        let mut sum = 0.0_f64;
-                        for k in 0..nexp_strip {
-                            let a = y_strip[k * big_n + i] as f64;
-                            let b = y_strip[k * big_n + j] as f64;
-                            sum += a * b;
-                        }
-                        acc.yty[i * big_n + j] += sum;
-                        if i != j {
-                            acc.yty[j * big_n + i] += sum;
-                        }
-                    }
-                }
+                let taps = crate::weights::tap_offsets(block_h, block_w);
+                let lx = (block_w - 1) / 2;
+                let (body_s0, body_s1) = body_in_strip_s;
+                let nexp_strip = crate::weights::gram_accumulate(
+                    &lp_ref_v[s],
+                    parent_band.as_deref(),
+                    w_s,
+                    body_s0,
+                    lx,
+                    body_s1 - body_s0,
+                    w_s - block_w + 1,
+                    &taps,
+                    &mut acc.yty,
+                );
                 acc.nexp_total += nexp_strip;
             }
         }
@@ -907,11 +748,14 @@ pub(crate) fn score_strip_internal(
                 continue;
             }
             let big_n = big_n_at(s);
-            // C_u = sum(Y^T·Y) / nexp_total
+            // C_u = sum(Y^T·Y) / nexp_total — the strip accumulators
+            // carry the upper triangle only; mirror before scaling.
+            let mut yty_mirrored = acc.yty.clone();
+            crate::weights::gram_mirror(&mut yty_mirrored, big_n);
             let mut cu = alloc::vec![0.0_f64; big_n * big_n];
             let inv_n = 1.0 / acc.nexp_total as f64;
             for k in 0..big_n * big_n {
-                cu[k] = acc.yty[k] * inv_n;
+                cu[k] = yty_mirrored[k] * inv_n;
             }
             let eig = decompose_and_invert(&cu, big_n);
             eigs[s] = Some(eig);
@@ -1267,21 +1111,33 @@ pub(crate) fn score_with_warm_ref_strip_internal(
             } else {
                 None
             };
-            // Build the full Y matrix for the reference at this
-            // scale. This is the same Y the full-image `compute_iw_maps`
-            // path produces — same `cov_from_neighborhood` input.
-            // Memory cost: ~`nblv * nblh * big_n * 4` bytes ≈ 380 MB
-            // at scale 0 of 40 MP; freed after this loop.
-            let (y_full, nexp, _, _) = build_y_matrix_full(
+            // C_u from the full reference directly — `gram_accumulate`
+            // produces the same sums `cov_from_neighborhood(Y)` did,
+            // without the ~`nblv·nblh·big_n·4` B (≈380 MB at scale 0
+            // of 40 MP) Y matrix this used to materialize.
+            let taps = crate::weights::tap_offsets(block_h, block_w);
+            let ly = (block_h - 1) / 2;
+            let lx = (block_w - 1) / 2;
+            let nblv = h_s - block_h + 1;
+            let nblh = w_s - block_w + 1;
+            let mut gram = alloc::vec![0.0_f64; big_n * big_n];
+            let nexp = crate::weights::gram_accumulate(
                 &warm.lp_ref[s],
                 parent_band.as_deref(),
-                h_s,
                 w_s,
-                block_h,
-                block_w,
+                ly,
+                lx,
+                nblv,
+                nblh,
+                &taps,
+                &mut gram,
             );
-            let cu = cov_from_neighborhood(&y_full, nexp, big_n);
-            let eig = decompose_and_invert(&cu, big_n);
+            crate::weights::gram_mirror(&mut gram, big_n);
+            let nexp_f = nexp as f64;
+            for v in &mut gram {
+                *v /= nexp_f;
+            }
+            let eig = decompose_and_invert(&gram, big_n);
             warm.eigs[s] = Some(eig);
         }
     }
@@ -1515,52 +1371,6 @@ pub(crate) fn score_with_warm_ref_strip_internal(
         score,
         per_scale: wmcs,
     })
-}
-
-/// Build the FULL Y matrix for `compute_iw_maps`-style covariance
-/// — equivalent to `crate::weights::build_y_matrix` but visible to
-/// the strip module. Used by `score_with_warm_ref_strip_internal`
-/// to lazily eig-decompose the warm reference once per scale.
-fn build_y_matrix_full(
-    img: &[f32],
-    parent: Option<&[f32]>,
-    h: usize,
-    w: usize,
-    block_h: usize,
-    block_w: usize,
-) -> (Vec<f32>, usize, usize, usize) {
-    let lx = (block_w - 1) / 2;
-    let ly = (block_h - 1) / 2;
-    let nblv = h - block_h + 1;
-    let nblh = w - block_w + 1;
-    let nexp = nblv * nblh;
-    let big_n = block_h * block_w + parent.is_some() as usize;
-    let mut y = alloc::vec![0.0_f32; nexp * big_n];
-    let mut col = 0;
-    for ny in -(ly as i32)..=(ly as i32) {
-        for nx in -(lx as i32)..=(lx as i32) {
-            for r in 0..nblv {
-                for c in 0..nblh {
-                    let yy = (r + ly) as i32 + ny;
-                    let xx = (c + lx) as i32 + nx;
-                    let row_index = r * nblh + c;
-                    y[row_index * big_n + col] = img[(yy as usize) * w + (xx as usize)];
-                }
-            }
-            col += 1;
-        }
-    }
-    if let Some(parent_band) = parent {
-        for r in 0..nblv {
-            for c in 0..nblh {
-                let yy = r + ly;
-                let xx = c + lx;
-                let row_index = r * nblh + c;
-                y[row_index * big_n + col] = parent_band[yy * w + xx];
-            }
-        }
-    }
-    (y, nexp, nblv, nblh)
 }
 
 // Force the Error / CsStats imports to stay used even when feature

@@ -42,12 +42,21 @@
 //!
 //! magetypes-dispatched (`#[magetypes(_v4x, v4, v3, neon, wasm128)]`):
 //!
-//! - `binom5` separable blur (pyramid build + expand).
+//! - `binom5` 5-tap correlate/expand (pyramid `corr_dn`/`up_conv`).
 //! - `gaussian_11x11` separable blur (SSIM stats).
-//! - `box_3x3` separable blur (IW weight map first-pass stats).
+//! - Fused 3×3 box stats + gain correction (`box_gain_rows` → `g`/`vv`
+//!   directly, no intermediate mean/σ planes).
+//! - IW quadratic form as a dense stencil on the image
+//!   (`quad_form_rows` — no `nexp × N` Y matrix).
+//! - Gram accumulation `YᵀY` in f64x4 (`gram_rows_inner`).
+//! - `compute_infow` (`log2`/`pow` via `F32x8Convert` tiers).
 //! - Per-pixel reductions for `cs`, `l`, weighted sums.
 //!
 //! Scalar fallback covers every kernel; SIMD is an optimization on top.
+//! With the `parallel` feature every hot kernel additionally bands its
+//! rows/samples deterministically (`par` module): band boundaries are a
+//! pure function of the plane length — scores are bit-identical at any
+//! `RAYON_NUM_THREADS`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
@@ -69,6 +78,7 @@ use alloc::vec::Vec;
 
 mod eig;
 mod filters;
+mod par;
 mod params;
 mod pipeline;
 mod pyramid;

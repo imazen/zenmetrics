@@ -6,6 +6,7 @@
 //! us free atomic-tolerance parity vs the GPU path. (Same Jacobi
 //! sweep, same PSD-cleaning rescale, same `EIG_FLOOR` regularization.)
 
+#[cfg(test)]
 use alloc::vec::Vec;
 
 /// Symmetric Jacobi eigendecomposition. Converges quadratically once
@@ -189,6 +190,11 @@ pub(crate) fn decompose_and_invert(c_u: &[f64], n: usize) -> EigResult {
 ///
 /// `nexp = nblv * nblh`. The accumulation runs in `f64` to match the
 /// Python's `torch.mm(Yᵀ, Y) / nexp` precision.
+///
+/// Test-only retained oracle: production paths use
+/// [`crate::weights::gram_accumulate`], which computes the identical
+/// sums from the image directly without materializing `Y`.
+#[cfg(test)]
 pub(crate) fn cov_from_neighborhood(y: &[f32], nexp: usize, big_n: usize) -> Vec<f64> {
     assert_eq!(y.len(), nexp * big_n);
     let mut c = alloc::vec![0.0_f64; big_n * big_n];

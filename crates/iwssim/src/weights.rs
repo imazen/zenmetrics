@@ -28,13 +28,197 @@
 
 use alloc::vec::Vec;
 
-use crate::eig::{cov_from_neighborhood, decompose_and_invert};
+use crate::eig::decompose_and_invert;
 use crate::params::IwssimParams;
 use crate::pyramid::imenlarge2;
 
 /// Tolerance below which `ss_x` / `ss_y` count as zero — matches the
 /// Python reference (`tol = 1e-15`).
-const TOL: f32 = 1.0e-15;
+pub(crate) const TOL: f32 = 1.0e-15;
+
+/// Neighborhood taps in the Python reference's column order:
+/// `ny` in `-Ly..=Ly` outer, `nx` in `-Lx..=Lx` inner. For `blSz=3`
+/// this is the 3×3 block; an optional parent column (index
+/// `taps.len()`) reads `parent` at the center position instead of an
+/// `img` offset — handled by the callers, not this list.
+pub(crate) fn tap_offsets(block_h: usize, block_w: usize) -> Vec<(i32, i32)> {
+    let ly = (block_h - 1) / 2;
+    let lx = (block_w - 1) / 2;
+    let mut v = Vec::with_capacity(block_h * block_w);
+    for ny in -(ly as i32)..=(ly as i32) {
+        for nx in -(lx as i32)..=(lx as i32) {
+            v.push((ny, nx));
+        }
+    }
+    v
+}
+
+/// Accumulate the neighborhood Gram matrix `Σ_p y yᵀ` over an image
+/// region directly — the `Yᵀ·Y` of [`crate::eig::cov_from_neighborhood`]
+/// without materializing `Y`.
+///
+/// Region semantics: output pixel `(r, c)` has its neighborhood
+/// *center* at image coordinate `(row0 + r, col0 + c)`; tap `(dy, dx)`
+/// reads `img[(row0 + r + dy)·stride + col0 + c + dx]`. The optional
+/// parent column (last Gram row/col) reads `parent[center]`.
+///
+/// `gram` is `big_n²` (`big_n = taps.len() + parent.is_some()`),
+/// caller-initialized — accumulate-into so the strip path can fold
+/// per-strip contributions across calls. Every `gram[i][j]`
+/// accumulator receives the same product sequence in the same order
+/// as `cov_from_neighborhood`'s per-(i,j) column scan, so its values
+/// are bit-identical to building `Y` and scanning columns. Returns
+/// the number of pixels accumulated (the `nexp` divisor).
+///
+/// Only the **upper triangle** is written; call [`gram_mirror`] once
+/// accumulation is complete to fill the lower half (the strip path
+/// mirrors after all strips have folded in).
+pub(crate) fn gram_accumulate(
+    img: &[f32],
+    parent: Option<&[f32]>,
+    stride: usize,
+    row0: usize,
+    col0: usize,
+    nrows: usize,
+    ncols: usize,
+    taps: &[(i32, i32)],
+    gram: &mut [f64],
+) -> usize {
+    let nb = taps.len();
+    let big_n = nb + parent.is_some() as usize;
+    debug_assert_eq!(gram.len(), big_n * big_n);
+    debug_assert!(big_n <= 16);
+    // Band rows above the parallel threshold: each band accumulates
+    // its own Gram and the partials merge in band order — the result
+    // is deterministic at any thread count (re-associated vs a flat
+    // accumulation, ulp-level drift only). Single-band images take
+    // the direct path bit-identically.
+    let n = nrows * ncols;
+    let nb_bands = crate::par::n_bands(n);
+    if nb_bands == 1 {
+        gram_accumulate_rows(img, parent, stride, row0, col0, nrows, ncols, taps, gram);
+        return n;
+    }
+    let sz = nrows.div_ceil(nb_bands);
+    let parts = crate::par::collect_bands(nb_bands, |b| {
+        let lo = b * sz;
+        let hi = (lo + sz).min(nrows);
+        let mut g_b = alloc::vec![0.0_f64; big_n * big_n];
+        if lo < hi {
+            gram_accumulate_rows(
+                img,
+                parent,
+                stride,
+                row0 + lo,
+                col0,
+                hi - lo,
+                ncols,
+                taps,
+                &mut g_b,
+            );
+        }
+        g_b
+    });
+    for p in &parts {
+        for (g, &v) in gram.iter_mut().zip(p.iter()) {
+            *g += v;
+        }
+    }
+    n
+}
+
+/// Serial inner of [`gram_accumulate`] over one row range — dispatches
+/// to the f64x4 kernel (upper-triangle outer product; `gram_mirror`
+/// fills the lower half). The kernel's `a*y+g` lanes keep the scalar
+/// two-rounding mul-then-add semantics — bit-identical element order.
+fn gram_accumulate_rows(
+    img: &[f32],
+    parent: Option<&[f32]>,
+    stride: usize,
+    row0: usize,
+    col0: usize,
+    nrows: usize,
+    ncols: usize,
+    taps: &[(i32, i32)],
+    gram: &mut [f64],
+) {
+    let nb = taps.len();
+    let big_n = nb + parent.is_some() as usize;
+    debug_assert_eq!(gram.len(), big_n * big_n);
+    debug_assert!(big_n <= 16);
+    archmage::incant!(
+        crate::simd_kernels::gram_rows_inner(
+            img, parent, stride, row0, col0, nrows, ncols, taps, gram
+        ),
+        [v3, neon, wasm128, scalar]
+    );
+}
+
+/// Fill `gram`'s lower triangle from its upper triangle in place.
+pub(crate) fn gram_mirror(gram: &mut [f64], big_n: usize) {
+    debug_assert_eq!(gram.len(), big_n * big_n);
+    for i in 0..big_n {
+        for j in (i + 1)..big_n {
+            gram[j * big_n + i] = gram[i * big_n + j];
+        }
+    }
+}
+
+/// Per-pixel quadratic form `ss = (Y·Cᵤ_inv) ⊙ Y / N` evaluated as a
+/// dense stencil directly on `img` — identical math to iterating rows
+/// of a materialized `Y`, without the `nexp × big_n` intermediate.
+///
+/// Region/parameter semantics match [`gram_accumulate`]. `out` gets
+/// `nrows × ncols` values in row order; `cinv` is `big_n²` row-major.
+///
+/// Test-only retained oracle: production paths use the dispatched
+/// [`crate::simd_kernels::quad_form_rows`].
+#[cfg(test)]
+pub(crate) fn quad_form_into(
+    img: &[f32],
+    parent: Option<&[f32]>,
+    stride: usize,
+    row0: usize,
+    col0: usize,
+    nrows: usize,
+    ncols: usize,
+    taps: &[(i32, i32)],
+    cinv: &[f32],
+    out: &mut [f32],
+) {
+    let nb = taps.len();
+    let big_n = nb + parent.is_some() as usize;
+    debug_assert_eq!(cinv.len(), big_n * big_n);
+    debug_assert_eq!(out.len(), nrows * ncols);
+    debug_assert!(big_n <= 16);
+    let n_f = big_n as f32;
+    for r in 0..nrows {
+        let row_c = row0 + r;
+        for c in 0..ncols {
+            let col_c = col0 + c;
+            let mut yv = [0.0_f32; 16];
+            for (k, &(dy, dx)) in taps.iter().enumerate() {
+                yv[k] = img[((row_c as i32 + dy) as usize) * stride + (col_c as i32 + dx) as usize];
+            }
+            if let Some(p) = parent {
+                yv[nb] = p[row_c * stride + col_c];
+            }
+            // Same nested structure as the Y-row loop. The original
+            // skips `yi == 0`; `yi·inner` contributes ±0 in that case
+            // so dropping the branch changes no result bits.
+            let mut acc = 0.0_f32;
+            for i in 0..big_n {
+                let cinv_row = &cinv[i * big_n..(i + 1) * big_n];
+                let mut inner = 0.0_f32;
+                for j in 0..big_n {
+                    inner += cinv_row[j] * yv[j];
+                }
+                acc += yv[i] * inner;
+            }
+            out[r * ncols + c] = acc / n_f;
+        }
+    }
+}
 
 /// Per-scale info-content weight map.
 pub(crate) struct IwMap {
@@ -44,189 +228,6 @@ pub(crate) struct IwMap {
     pub w: usize,
     /// Per-pixel information weight, length `h * w`.
     pub infow: Vec<f32>,
-}
-
-/// 3×3 mean filter ('same'-padding, zero outside).
-///
-/// Matches `F.conv2d(x, ones(3,3)/9, padding=1)`. Output shape equals
-/// input shape; samples outside the image contribute zero to the sum.
-fn box3_same(src: &[f32], h: usize, w: usize, dst: &mut [f32]) {
-    debug_assert_eq!(src.len(), h * w);
-    debug_assert_eq!(dst.len(), h * w);
-    let inv9 = 1.0_f32 / 9.0;
-    for y in 0..h {
-        for x in 0..w {
-            let mut acc = 0.0_f32;
-            for dy in -1..=1i32 {
-                let sy = y as i32 + dy;
-                if sy < 0 || sy >= h as i32 {
-                    continue;
-                }
-                for dx in -1..=1i32 {
-                    let sx = x as i32 + dx;
-                    if sx < 0 || sx >= w as i32 {
-                        continue;
-                    }
-                    acc += src[sy as usize * w + sx as usize];
-                }
-            }
-            dst[y * w + x] = acc * inv9;
-        }
-    }
-}
-
-/// Compute per-pixel 3×3 box statistics for `(x, y)`. Mirrors the
-/// Python reference's first block in `info_content_weight_map`.
-struct BoxStats {
-    /// `mean_x`. Length `h*w`.
-    mean_x: Vec<f32>,
-    /// `mean_y`. Length `h*w`.
-    mean_y: Vec<f32>,
-    /// `cov_xy = E[xy] − mean_x · mean_y`. Length `h*w`.
-    cov_xy: Vec<f32>,
-    /// `ss_x = E[x²] − mean_x²`, clamped at 0. Length `h*w`.
-    ss_x: Vec<f32>,
-    /// `ss_y = E[y²] − mean_y²`, clamped at 0. Length `h*w`.
-    ss_y: Vec<f32>,
-}
-
-fn box_stats_3x3(x: &[f32], y: &[f32], h: usize, w: usize) -> BoxStats {
-    let n = h * w;
-    let mut mean_x = alloc::vec![0.0_f32; n];
-    let mut mean_y = alloc::vec![0.0_f32; n];
-    box3_same(x, h, w, &mut mean_x);
-    box3_same(y, h, w, &mut mean_y);
-
-    // Compute element-wise products.
-    let mut xx = alloc::vec![0.0_f32; n];
-    let mut yy = alloc::vec![0.0_f32; n];
-    let mut xy = alloc::vec![0.0_f32; n];
-    for i in 0..n {
-        xx[i] = x[i] * x[i];
-        yy[i] = y[i] * y[i];
-        xy[i] = x[i] * y[i];
-    }
-
-    let mut e_xx = alloc::vec![0.0_f32; n];
-    let mut e_yy = alloc::vec![0.0_f32; n];
-    let mut e_xy = alloc::vec![0.0_f32; n];
-    box3_same(&xx, h, w, &mut e_xx);
-    box3_same(&yy, h, w, &mut e_yy);
-    box3_same(&xy, h, w, &mut e_xy);
-
-    let mut cov_xy = alloc::vec![0.0_f32; n];
-    let mut ss_x = alloc::vec![0.0_f32; n];
-    let mut ss_y = alloc::vec![0.0_f32; n];
-    for i in 0..n {
-        cov_xy[i] = e_xy[i] - mean_x[i] * mean_y[i];
-        ss_x[i] = (e_xx[i] - mean_x[i] * mean_x[i]).max(0.0);
-        ss_y[i] = (e_yy[i] - mean_y[i] * mean_y[i]).max(0.0);
-    }
-
-    BoxStats {
-        mean_x,
-        mean_y,
-        cov_xy,
-        ss_x,
-        ss_y,
-    }
-}
-
-/// Apply the reference's gain-factor correction. Modifies `ss_x`, `g`,
-/// `vv` in place using the per-pixel thresholds.
-fn gain_correction(stats: &mut BoxStats, g: &mut [f32], vv: &mut [f32]) {
-    let n = stats.ss_x.len();
-    for i in 0..n {
-        let ssx_i = stats.ss_x[i];
-        let ssy_i = stats.ss_y[i];
-        let cov_i = stats.cov_xy[i];
-        // Initial values (pre-correction).
-        let mut g_i = cov_i / (ssx_i + TOL);
-        let mut vv_i = ssy_i - g_i * cov_i;
-        // ss_x < tol → g=0, vv=ss_y, ss_x=0
-        let mut ssx_corrected = ssx_i;
-        if ssx_i < TOL {
-            g_i = 0.0;
-            vv_i = ssy_i;
-            ssx_corrected = 0.0;
-        }
-        // ss_y < tol → g=0, vv=0 (applied AFTER the ssx<tol block in
-        // the Python reference, so order matters when both thresholds
-        // trigger).
-        if ssy_i < TOL {
-            g_i = 0.0;
-            vv_i = 0.0;
-        }
-        stats.ss_x[i] = ssx_corrected;
-        g[i] = g_i;
-        vv[i] = vv_i;
-    }
-}
-
-/// Build the neighborhood matrix `Y`. Output shape `(nexp, big_n)`
-/// in row-major order. `nexp = nblv * nblh`, `big_n = block_h * block_w
-/// + parent`.
-///
-/// The Python reference uses `torch.roll` + a hand-coded shift loop.
-/// Equivalently: for each pixel `(yy, xx)` in the valid region
-/// `[Ly..Ly+nblv, Lx..Lx+nblh]`, collect the `block_h × block_w`
-/// neighborhood centered at `(yy, xx)`. Iteration order over `(ny, nx)`
-/// must match the Python's `(-Ly..Ly+1, -Lx..Lx+1)` so the column
-/// indices in `Y` match what `Cᵤ` is computed on.
-fn build_y_matrix(
-    img: &[f32],
-    parent: Option<&[f32]>,
-    h: usize,
-    w: usize,
-    block_h: usize,
-    block_w: usize,
-) -> (Vec<f32>, usize, usize, usize) {
-    let lx = (block_w - 1) / 2;
-    let ly = (block_h - 1) / 2;
-    let nblv = h - block_h + 1;
-    let nblh = w - block_w + 1;
-    let nexp = nblv * nblh;
-    let big_n = block_h * block_w + parent.is_some() as usize;
-    let mut y = alloc::vec![0.0_f32; nexp * big_n];
-    // The Python double-loop order is:
-    //   for ny in -Ly..=Ly:
-    //       for nx in -Lx..=Lx:
-    //           col = next index; Y[:, col] = roll(img, ny=0, nx=1)[Ly:Ly+nblv, Lx:Lx+nblh].flatten()
-    // Equivalently: at output pixel (yy, xx) in [Ly..Ly+nblv, Lx..Lx+nblh],
-    //               Y[(yy-Ly)*nblh + (xx-Lx), col] = img[yy + ny, xx + nx].
-    //
-    // i.e. each column is one neighborhood offset; rows iterate over
-    // the valid region in flatten() order (row-major).
-    let mut col = 0;
-    for ny in -(ly as i32)..=(ly as i32) {
-        for nx in -(lx as i32)..=(lx as i32) {
-            for r in 0..nblv {
-                for c in 0..nblh {
-                    let yy = (r + ly) as i32 + ny;
-                    let xx = (c + lx) as i32 + nx;
-                    // yy, xx are guaranteed in [0..h) and [0..w) for
-                    // all (r, c, ny, nx) in this iteration — the
-                    // valid region is [Ly..Ly+nblv, Lx..Lx+nblh] and
-                    // ny/nx ∈ [-Ly..Ly]/[-Lx..Lx].
-                    let row_index = r * nblh + c;
-                    y[row_index * big_n + col] = img[(yy as usize) * w + (xx as usize)];
-                }
-            }
-            col += 1;
-        }
-    }
-    if let Some(parent_band) = parent {
-        // Parent column: just the cropped center patch.
-        for r in 0..nblv {
-            for c in 0..nblh {
-                let yy = r + ly;
-                let xx = c + lx;
-                let row_index = r * nblh + c;
-                y[row_index * big_n + col] = parent_band[yy * w + xx];
-            }
-        }
-    }
-    (y, nexp, nblv, nblh)
 }
 
 /// Compute `infow` from cropped `(g, vv, ss)` slabs + eigendecomposition.
@@ -241,29 +242,8 @@ fn compute_infow(g: &[f32], vv: &[f32], ss: &[f32], lambdas: &[f32], sigma_nsq: 
     let n = g.len();
     debug_assert_eq!(vv.len(), n);
     debug_assert_eq!(ss.len(), n);
-    let s2 = sigma_nsq;
-    let s4 = s2 * s2;
     let mut infow = alloc::vec![0.0_f32; n];
-    for i in 0..n {
-        let g_i = g[i];
-        let vv_i = vv[i];
-        let ss_i = ss[i];
-        let mut acc = 0.0_f32;
-        let one_plus_g2 = 1.0 + g_i * g_i;
-        let common_num = (vv_i + one_plus_g2 * s2) * ss_i;
-        let inv_s4 = 1.0 / s4;
-        let sn2_vv = s2 * vv_i;
-        for &lam in lambdas {
-            let arg = (common_num * lam + sn2_vv) * inv_s4;
-            acc += (1.0 + arg).log2();
-        }
-        // Clamp at 0 (the upstream sets `infow[infow < tol] = 0`).
-        if acc >= TOL {
-            infow[i] = acc;
-        } else {
-            infow[i] = 0.0;
-        }
-    }
+    crate::simd_kernels::infow_map(g, vv, ss, lambdas, sigma_nsq, TOL, &mut infow);
     infow
 }
 
@@ -290,13 +270,13 @@ pub(crate) fn compute_iw_maps(
         let imgo = &lp_ref[s];
         let imgd = &lp_dis[s];
 
-        // 1. 3×3 box statistics with 'same' padding.
-        let mut stats = box_stats_3x3(imgo, imgd, h, w);
-        let _ = stats.mean_x.len(); // mean_x / mean_y not used downstream
-        let _ = stats.mean_y.len();
+        // 1. 3×3 box statistics + gain correction, fused into a single
+        //    pass (`box_gain_rows`) — no mean/E[·] intermediates are
+        //    materialized. Zero-pad 'same' borders, then `g`, `vv`
+        //    cropped to the valid region below.
         let mut g = alloc::vec![0.0_f32; h * w];
         let mut vv = alloc::vec![0.0_f32; h * w];
-        gain_correction(&mut stats, &mut g, &mut vv);
+        crate::simd_kernels::box_gain_rows(imgo, imgd, h, w, 0, h, &mut g, &mut vv);
 
         // 2. Build the parent band (if enabled and scale < Nsc-1).
         let prnt = parent_enabled && s < nsc - 2;
@@ -309,42 +289,55 @@ pub(crate) fn compute_iw_maps(
             None
         };
 
-        // 3. Build Y matrix in the valid region.
-        let (y_matrix, nexp, nblv, nblh) =
-            build_y_matrix(imgo, parent_band.as_deref(), h, w, block_h, block_w);
+        // 3. Neighborhood taps + valid region (no materialized Y —
+        //    the Gram and quadratic form read `imgo` as a stencil).
+        let taps = tap_offsets(block_h, block_w);
+        let ly = (block_h - 1) / 2;
+        let lx = (block_w - 1) / 2;
+        let nblv = h - block_h + 1;
+        let nblh = w - block_w + 1;
+        let nexp = nblv * nblh;
         let big_n = block_h * block_w + prnt as usize;
 
-        // 4. Cᵤ + eigendecomposition.
-        let cu = cov_from_neighborhood(&y_matrix, nexp, big_n);
-        let eig = decompose_and_invert(&cu, big_n);
+        // 4. Cᵤ = Σ_p y yᵀ / nexp + eigendecomposition — bit-identical
+        //    to the old `cov_from_neighborhood(Y)` path.
+        let mut gram = alloc::vec![0.0_f64; big_n * big_n];
+        gram_accumulate(
+            imgo,
+            parent_band.as_deref(),
+            w,
+            ly,
+            lx,
+            nblv,
+            nblh,
+            &taps,
+            &mut gram,
+        );
+        gram_mirror(&mut gram, big_n);
+        let nexp_f = nexp as f64;
+        for v in &mut gram {
+            *v /= nexp_f;
+        }
+        let eig = decompose_and_invert(&gram, big_n);
         let lambdas = eig.lambdas();
         let c_u_inv = eig.c_u_inv_slice();
 
-        // 5. Per-pixel quadratic form: ss = (Y · Cᵤ_inv) ⊙ Y / N. Then
-        //    sum across the N neighborhood entries → scalar per pixel.
-        //    Match Python: `(Y @ C_u_inv) * Y / N`, sum axis=1.
-        let n_f = big_n as f32;
+        // 5. Per-pixel quadratic form: ss = (Y · Cᵤ_inv) ⊙ Y / N as a
+        //    dense stencil on `imgo` — same sums, no Y. SIMD via
+        //    `quad_form_rows` (8-wide over output columns).
         let mut ss_pix = alloc::vec![0.0_f32; nexp];
-        for row in 0..nexp {
-            let y_row = &y_matrix[row * big_n..(row + 1) * big_n];
-            // First compute (Y · C_u_inv)[col] = Σ_k Y[row,k] · C_u_inv[k,col].
-            // Then dot with Y[row, col] and sum across col.
-            // Equivalent inner-product form: Σ_{i,j} Y_i · C_inv[i,j] · Y_j / N.
-            let mut acc = 0.0_f32;
-            for i in 0..big_n {
-                let yi = y_row[i];
-                if yi == 0.0 {
-                    continue;
-                }
-                let cinv_row = &c_u_inv[i * big_n..(i + 1) * big_n];
-                let mut inner = 0.0_f32;
-                for j in 0..big_n {
-                    inner += cinv_row[j] * y_row[j];
-                }
-                acc += yi * inner;
-            }
-            ss_pix[row] = acc / n_f;
-        }
+        crate::simd_kernels::quad_form_rows(
+            imgo,
+            parent_band.as_deref(),
+            w,
+            ly,
+            lx,
+            nblv,
+            nblh,
+            &taps,
+            c_u_inv,
+            &mut ss_pix,
+        );
 
         // 6. Crop g, vv to (nblv, nblh).
         let ly = (block_h - 1) / 2;
@@ -369,4 +362,191 @@ pub(crate) fn compute_iw_maps(
         });
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Materialize the Y neighborhood matrix the pre-stencil path
+    /// built — kept here as the ground truth for `gram_accumulate`
+    /// and the quad-form kernels.
+    fn build_y_oracle(
+        img: &[f32],
+        parent: Option<&[f32]>,
+        stride: usize,
+        row0: usize,
+        col0: usize,
+        nrows: usize,
+        ncols: usize,
+        taps: &[(i32, i32)],
+    ) -> (Vec<f32>, usize) {
+        let nb = taps.len();
+        let big_n = nb + parent.is_some() as usize;
+        let mut y = alloc::vec![0.0_f32; nrows * ncols * big_n];
+        for r in 0..nrows {
+            for c in 0..ncols {
+                let row_c = row0 + r;
+                let col_c = col0 + c;
+                let base = (r * ncols + c) * big_n;
+                for (k, &(dy, dx)) in taps.iter().enumerate() {
+                    y[base + k] =
+                        img[((row_c as i32 + dy) as usize) * stride + (col_c as i32 + dx) as usize];
+                }
+                if let Some(p) = parent {
+                    y[base + nb] = p[row_c * stride + col_c];
+                }
+            }
+        }
+        (y, big_n)
+    }
+
+    /// `gram_accumulate` + `gram_mirror` + `/nexp` must equal
+    /// `cov_from_neighborhood(Y)` **bit-identically** — the helpers
+    /// preserve the reference per-(i,j) accumulation order.
+    #[test]
+    fn gram_matches_materialized_covariance() {
+        let (h, w) = (12usize, 10usize);
+        let img: Vec<f32> = (0..h * w)
+            .map(|i| ((i * 37 % 101) as f32 - 50.0) / 13.0)
+            .collect();
+        let parent: Vec<f32> = (0..h * w).map(|i| ((i * 53 % 89) as f32) / 31.0).collect();
+        let (block_h, block_w) = (3usize, 3usize);
+        let taps = tap_offsets(block_h, block_w);
+        let (ly, lx) = (1usize, 1usize);
+        let (nrows, ncols) = (h - block_h + 1, w - block_w + 1);
+        let nexp = nrows * ncols;
+
+        for parent in [None, Some(parent.as_slice())] {
+            let (y, big_n) = build_y_oracle(&img, parent, w, ly, lx, nrows, ncols, &taps);
+            let oracle = crate::eig::cov_from_neighborhood(&y, nexp, big_n);
+
+            let mut gram = alloc::vec![0.0_f64; big_n * big_n];
+            let got_nexp = gram_accumulate(&img, parent, w, ly, lx, nrows, ncols, &taps, &mut gram);
+            assert_eq!(got_nexp, nexp);
+            gram_mirror(&mut gram, big_n);
+            for v in &mut gram {
+                *v /= nexp as f64;
+            }
+            assert_eq!(gram, oracle, "gram != cov_from_neighborhood(Y)");
+        }
+    }
+
+    /// The dispatched `quad_form_rows` must match the scalar
+    /// `quad_form_into` oracle within FMA tolerance (the SIMD kernel
+    /// contracts `a*b+c` into `mul_add` — last-bit drift allowed).
+    #[test]
+    fn quad_form_rows_matches_scalar_oracle() {
+        let (h, w) = (17usize, 13usize);
+        let img: Vec<f32> = (0..h * w)
+            .map(|i| ((i * 41 % 97) as f32 - 48.0) / 11.0)
+            .collect();
+        let parent: Vec<f32> = (0..h * w).map(|i| ((i * 29 % 83) as f32) / 37.0).collect();
+        let (block_h, block_w) = (3usize, 3usize);
+        let taps = tap_offsets(block_h, block_w);
+        let (ly, lx) = (1usize, 1usize);
+        let (nrows, ncols) = (h - block_h + 1, w - block_w + 1);
+        let nexp = nrows * ncols;
+
+        for parent in [None, Some(parent.as_slice())] {
+            let big_n = 9 + parent.is_some() as usize;
+            // Non-symmetric, non-integer cinv to exercise all lanes.
+            let cinv: Vec<f32> = (0..big_n * big_n)
+                .map(|i| ((i * 17 % 43) as f32 - 21.0) / 7.0)
+                .collect();
+
+            let mut scalar = alloc::vec![0.0_f32; nexp];
+            quad_form_into(
+                &img,
+                parent,
+                w,
+                ly,
+                lx,
+                nrows,
+                ncols,
+                &taps,
+                &cinv,
+                &mut scalar,
+            );
+            let mut simd = alloc::vec![0.0_f32; nexp];
+            crate::simd_kernels::quad_form_rows(
+                &img, parent, w, ly, lx, nrows, ncols, &taps, &cinv, &mut simd,
+            );
+            for (k, (&a, &b)) in scalar.iter().zip(simd.iter()).enumerate() {
+                let tol = 1e-5 * a.abs().max(1.0);
+                assert!(
+                    (a - b).abs() <= tol,
+                    "quad_form mismatch at {k}: scalar={a} simd={b}"
+                );
+            }
+        }
+    }
+
+    /// Above `par::PAR_MIN_SAMPLES` the Gram accumulates per-band
+    /// partials merged in band order — deterministic, but re-associated
+    /// vs the flat scan, so the oracle comparison gets a reassociation
+    /// tolerance instead of bit-equality.
+    #[test]
+    fn gram_banded_matches_oracle() {
+        let (h, w) = (420usize, 400usize);
+        let img: Vec<f32> = (0..h * w)
+            .map(|i| ((i * 37 % 101) as f32 - 50.0) / 13.0)
+            .collect();
+        let (block_h, block_w) = (3usize, 3usize);
+        let taps = tap_offsets(block_h, block_w);
+        let (nrows, ncols) = (h - block_h + 1, w - block_w + 1);
+        assert!(nrows * ncols > crate::par::PAR_MIN_SAMPLES);
+
+        let (y, big_n) = build_y_oracle(&img, None, w, 1, 1, nrows, ncols, &taps);
+        let oracle = crate::eig::cov_from_neighborhood(&y, nrows * ncols, big_n);
+
+        let mut gram = alloc::vec![0.0_f64; big_n * big_n];
+        gram_accumulate(&img, None, w, 1, 1, nrows, ncols, &taps, &mut gram);
+        gram_mirror(&mut gram, big_n);
+        for v in &mut gram {
+            *v /= (nrows * ncols) as f64;
+        }
+        for (k, (&a, &b)) in gram.iter().zip(oracle.iter()).enumerate() {
+            let tol = 1e-10 * a.abs().max(1.0);
+            assert!((a - b).abs() <= tol, "banded gram[{k}]: {a} vs oracle {b}");
+        }
+    }
+
+    /// `weighted_sum_pair`'s banded fold must be bit-identical to
+    /// splitting the input at the same boundaries and folding in order
+    /// (determinism), and within f32-lane-accumulation noise of a
+    /// strict f64 reference.
+    #[test]
+    fn weighted_sum_pair_banded() {
+        let n = crate::par::PAR_MIN_SAMPLES + 40_000;
+        let cs: Vec<f32> = (0..n).map(|i| ((i * 13 % 89) as f32) / 97.0).collect();
+        let iw: Vec<f32> = (0..n).map(|i| ((i * 29 % 61) as f32) / 43.0).collect();
+        let (a0, a1) = crate::simd_kernels::weighted_sum_pair(&cs, &iw);
+
+        // Manual split at the same band boundaries — bit-identical.
+        let nb = crate::par::n_bands(n);
+        let sz = n.div_ceil(nb);
+        let (mut m0, mut m1) = (0.0_f64, 0.0_f64);
+        for b in 0..nb {
+            let lo = b * sz;
+            let hi = (lo + sz).min(n);
+            if lo >= hi {
+                continue;
+            }
+            let (p0, p1) = crate::simd_kernels::weighted_sum_pair(&cs[lo..hi], &iw[lo..hi]);
+            m0 += p0;
+            m1 += p1;
+        }
+        assert_eq!(a0, m0);
+        assert_eq!(a1, m1);
+
+        // Strict f64 reference — f32-lane noise bound.
+        let (mut e0, mut e1) = (0.0_f64, 0.0_f64);
+        for i in 0..n {
+            e0 += (cs[i] as f64) * (iw[i] as f64);
+            e1 += iw[i] as f64;
+        }
+        assert!((a0 - e0).abs() <= 1e-4 * e0.abs().max(1.0), "{a0} vs {e0}");
+        assert!((a1 - e1).abs() <= 1e-4 * e1.abs().max(1.0), "{a1} vs {e1}");
+    }
 }
