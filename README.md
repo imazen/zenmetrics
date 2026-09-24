@@ -48,16 +48,19 @@ zenmetrics compare \
   --output tsv
 ```
 
-In the default build, `--metric` accepts the CPU metrics `ssim2`, `dssim`,
-`butteraugli`, and `zensim`; `cvvdp` and `iwssim` need their CPU features
-(`--features orchestrator,orchestrator-cpu-cvvdp` / `orchestrator-cpu-iwssim`),
-and the GPU variants (`ssim2-gpu`, `dssim-gpu`, `butteraugli-gpu`, `iwssim-gpu`,
-`zensim-gpu`, `cvvdp` via `gpu-cvvdp`) need `--features gpu-<metric>`. Run
-`zenmetrics list-metrics` to print exactly what your build enabled and which
-require a GPU. Other subcommands: `batch` (a TSV of pairs), `sweep` (drive a
-codec across a quality × knob grid and score every variant into a Pareto TSV),
-`score-pairs` / `assemble` (parquet sidecars + training corpora), `fleet-plan`
-(size a sweep's fleet), and `jobexec` (the job-system executor — see below).
+In the default build, `--metric` accepts every CPU metric — `ssim2`, `dssim`,
+`butteraugli`, `zensim`, `cvvdp`, `iwssim`, `gmsd`, and `hdrvdp` (HDR-only:
+absolute-luminance input — feed it via `batch --hdr` / `sweep --hdr`, not
+sRGB pairs). The GPU variants (`ssim2-gpu`, `dssim-gpu`, `butteraugli-gpu`,
+`iwssim-gpu`, `zensim-gpu`, `cvvdp-gpu`) need `--features gpu-<metric>`, and
+the `--use-orchestrator` execution path needs its own `orchestrator-cpu-*`
+feature per metric. Run `zenmetrics list-metrics` to print exactly what your
+build enabled and which require a GPU. Other subcommands: `batch` (a TSV of
+pairs), `sweep` (drive a codec across a quality × knob grid and score every
+variant into a Pareto TSV), `score-video` (cvvdp video scoring over two
+frame directories), `score-pairs` / `assemble` (parquet sidecars + training
+corpora), `fleet-plan` (size a sweep's fleet), and `jobexec` (the job-system
+executor — see below).
 
 For scoring **many** pairs in one process (sweeps, picker training, RD curves),
 call [`zenmetrics-orchestrator`](https://github.com/imazen/zenmetrics/blob/master/crates/zenmetrics-orchestrator/README.md)
@@ -76,9 +79,9 @@ CPU ladder and the umbrella's `Backend::Cpu` dispatch route to:
 | [`dssim-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/dssim-gpu) | DSSIM | distance, 0 = identical | [`dssim-core`](https://crates.io/crates/dssim-core) 3.5 |
 | [`iwssim-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim-gpu) | IW-SSIM (Wang & Li 2011) | `[0, 1]`, 1.0 = identical | [`iwssim`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim) (in-tree CPU port) |
 | [`zensim-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/zensim-gpu) | zensim feature extractor | 228-feature vector + scalar score 0–100 | [`zensim`](https://github.com/imazen/zensim) 0.3.0 |
-| [`cvvdp-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp-gpu) | ColorVideoVDP (still-image, GPU) | JOD ~3–10, higher better | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.4 |
+| [`cvvdp-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp-gpu) | ColorVideoVDP (still-image, GPU) | JOD ~3–10, higher better | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.7 |
 | [`iwssim`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim) | IW-SSIM (CPU reference + SIMD) | `[0, 1]`, 1.0 = identical | self (pure-Rust port) |
-| [`cvvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp) | ColorVideoVDP (still-image, CPU) | JOD ~3–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.4 |
+| [`cvvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp) | ColorVideoVDP (still + video, CPU) | JOD ~3–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.7 |
 | [`hdrvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/hdrvdp) | HDR-VDP 2.2.2 (CPU-only, absolute nits) | JOD ~0–100 (`res.Q`), higher better | official HDR-VDP 2.2.2 (Mantiuk et al.) |
 
 The metric each GPU crate computes is bit-comparable to its cited reference. The
