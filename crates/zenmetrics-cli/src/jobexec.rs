@@ -66,6 +66,7 @@ fn codec_from_name(name: &str) -> Result<CodecKind, Box<dyn Error>> {
         "zenwebp" => CodecKind::Zenwebp,
         "zenavif" => CodecKind::Zenavif,
         "zenjxl" => CodecKind::Zenjxl,
+        "zenjpegai" => CodecKind::Zenjpegai,
         other => return Err(format!("unknown codec {other:?}").into()),
     })
 }
@@ -80,6 +81,7 @@ fn ext_for(name: &str) -> &'static str {
         // the decode-back (`decode_to_nits` / image decode by ext).
         "zenavif" | "zenav1-svt" => "avif",
         "zenjxl" => "jxl",
+        "zenjpegai" => "jpegai",
         // Ultra HDR JPEG (HDR-corpus B4): a normal JPEG container.
         "jpeg-gainmap" => "jpg",
         _ => "bin",

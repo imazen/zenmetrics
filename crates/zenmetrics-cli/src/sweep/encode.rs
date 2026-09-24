@@ -53,6 +53,25 @@
 //! `progressive_mode` also accepts `"smallest"` / `"smallest_search"`
 //! (zenjpeg's exact entropy-stage minimizers).
 //!
+//! Per-plane quantization (decorrelated-plane research stimuli, 2026-09-24):
+//! `chroma_distance_scales` (`[cb, cr]`, each 0.1..=5.0, refused outside —
+//! `[X, B]` under `xyb`), `plane_tables` (`{"m": [y, cb, cr], "chroma_mask":
+//! "all"|"lf"|"hf"}`: exact Annex K tables times per-plane multipliers,
+//! 0..=256, `m = 0` = all-ones; 16-bit DQT; `q` does not move them) and
+//! `allow_16bit_quant_tables` (bool). The two table policies refuse each
+//! other and `chroma_distance_scale` / `quant_source` / `chroma_quality`.
+//!
+//! ## zenavif per-plane chroma (2026-09-24)
+//! `chroma_q` (`[u, v]` qindex deltas, each -64..=63) on `backend=svt-rs`
+//! only (`avif-svt`): zenavif `SvtParams::chroma_q` -> zenav1-svt's
+//! `ChromaQOverride`. Part of the cell identity (zenavif fingerprint).
+//!
+//! ## zenjpegai (`jpegai` feature, 2026-09-24)
+//! `model_id` (0..=3) and `beta_displacement_log` (`[luma, chroma]`, each in
+//! the encoder's -1069..=702, lower = coarser). `q` is ignored. Needs
+//! `ZENJPEGAI_MODELS` pointing at the upstream checkpoints (not
+//! redistributed); a missing directory is a loud error.
+//!
 //! **Plan-driven zenjpeg sweeps** (`--plan rd_core|modes_full`
 //! [`--plan-budget N`]) bypass the JSON knob grid entirely: cells come
 //! from `zenjpeg::encode::sweep` (curated provenance-stamped axes,
@@ -110,6 +129,10 @@ pub enum CodecKind {
     Zengif,
     /// `zentiff` lossless TIFF encoder (plan-only sweeps).
     Zentiff,
+    /// `zenjpegai` JPEG AI (learned) encoder; `--features jpegai` and
+    /// `ZENJPEGAI_MODELS`. `q` is ignored: rate is `model_id` plus
+    /// `beta_displacement_log`.
+    Zenjpegai,
 }
 
 impl CodecKind {
@@ -122,6 +145,7 @@ impl CodecKind {
             CodecKind::Zenjxl => "zenjxl",
             CodecKind::Zengif => "zengif",
             CodecKind::Zentiff => "zentiff",
+            CodecKind::Zenjpegai => "zenjpegai",
         }
     }
 }
@@ -174,6 +198,10 @@ const JPEG_KNOBS: &[&str] = &[
     "chroma_quality",
     "optimization",
     "trellis",
+    // Per-plane quantization (decorrelated-plane research stimuli).
+    "chroma_distance_scales",
+    "plane_tables",
+    "allow_16bit_quant_tables",
     // Tombstone: recognized so encode_jpeg can emit the migration error
     // pointing at "trellis" (HybridConfig was removed from zenjpeg).
     "hybrid",
@@ -204,6 +232,9 @@ const AVIF_KNOBS: &[&str] = &[
     "partition_range",
     "lrf",
     "fast_deblock",
+    // Per-plane chroma delta-q `[u, v]` (svt-rs only; zenavif
+    // `SvtParams::chroma_q` -> zenav1-svt `ChromaQOverride`).
+    "chroma_q",
 ];
 const JXL_KNOBS: &[&str] = &[
     "distance",
@@ -228,6 +259,10 @@ const JXL_KNOBS: &[&str] = &[
 // where cells come from the codec's own planner; they have no JSON
 // `--knob-grid` vocabulary, so their recognized-knob set is empty and
 // the JSON `encode()` dispatch routes them to a plan-only error.
+// JPEG AI: `model_id` (0..=3, the trained rate point) and
+// `beta_displacement_log` `[luma, chroma]` (each in the encoder's
+// -1069..=702, lower = coarser) — the per-component quantizer shift.
+const JPEGAI_KNOBS: &[&str] = &["model_id", "beta_displacement_log"];
 const GIF_KNOBS: &[&str] = &[];
 const TIFF_KNOBS: &[&str] = &[];
 
@@ -242,6 +277,7 @@ impl CodecKind {
             CodecKind::Zenjxl => JXL_KNOBS,
             CodecKind::Zengif => GIF_KNOBS,
             CodecKind::Zentiff => TIFF_KNOBS,
+            CodecKind::Zenjpegai => JPEGAI_KNOBS,
         }
     }
 }
@@ -285,6 +321,7 @@ pub fn encode(
         CodecKind::Zenwebp => encode_webp(source, q, knobs),
         CodecKind::Zenavif => encode_avif(source, q, knobs),
         CodecKind::Zenjxl => encode_jxl(source, q, knobs),
+        CodecKind::Zenjpegai => encode_jpegai(source, q, knobs),
         // gif/tiff are plan-only: their cells come from the codec's own
         // sweep planner (`--plan`), never from a `--knob-grid` product.
         CodecKind::Zengif | CodecKind::Zentiff => Err(format!(
@@ -464,6 +501,133 @@ fn encode_png(
 /// `coupling_scale` is the old "hybrid" coupling; zenjpeg's curated
 /// sweep steps clamp it via `coupling_max_adjustment` (unclamped
 /// coupling is a validated quality-destruction mode on high-AQ content).
+/// A two-element JSON array of numbers, e.g. `[1.0, 2.5]`.
+#[cfg(all(feature = "sweep", feature = "jpeg"))]
+fn parse_f64_pair(v: &Value, name: &str) -> Result<[f64; 2], Box<dyn Error>> {
+    match v.as_array().map(Vec::as_slice) {
+        Some([a, b]) => match (a.as_f64(), b.as_f64()) {
+            (Some(a), Some(b)) if a.is_finite() && b.is_finite() => Ok([a, b]),
+            _ => Err(format!("zenjpeg {name} entries must be finite numbers; got {v}").into()),
+        },
+        _ => Err(format!("zenjpeg {name} must be a two-element array; got {v}").into()),
+    }
+}
+
+/// Which chroma coefficients a `plane_tables` cell coarsens.
+#[cfg(all(feature = "sweep", feature = "jpeg"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ChromaMask {
+    /// Every coefficient.
+    All,
+    /// Low frequencies only: row + col <= 2 (zigzag positions 0..=5).
+    Lf,
+    /// High frequencies only: row + col > 2 (zigzag positions 6..=63).
+    Hf,
+}
+
+/// The `plane_tables` knob: exact per-plane quantization tables for
+/// decorrelated-plane research stimuli.
+///
+/// `{"m": [y, cb, cr], "chroma_mask": "all" | "lf" | "hf"}` (mask optional,
+/// default `"all"`). Each plane's table is the JPEG Annex K base matrix
+/// (luma for Y, chroma for Cb and Cr) times its multiplier `m`, rounded and
+/// clamped to 1..=32767, written verbatim (`ScalingParams::Exact`, 16-bit
+/// DQT allowed). `m = 0` is the all-ones (finest) table: the plane is left
+/// as close to lossless as JPEG allows. With a mask, chroma coefficients
+/// outside it use step 1. Quality `q` does not move the tables (they are
+/// exact); the knob tuple is the cell's quantization identity.
+#[cfg(all(feature = "sweep", feature = "jpeg"))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PlaneTables {
+    m: [f64; 3],
+    mask: ChromaMask,
+}
+
+#[cfg(all(feature = "sweep", feature = "jpeg"))]
+impl PlaneTables {
+    /// Largest multiplier accepted: Annex K's biggest base entry (121) times
+    /// this stays under the 16-bit DQT ceiling, so no entry clamps.
+    const MAX_M: f64 = 256.0;
+
+    fn from_knob(v: &Value) -> Result<Self, Box<dyn Error>> {
+        let obj = v
+            .as_object()
+            .ok_or_else(|| format!("zenjpeg plane_tables must be an object; got {v}"))?;
+        for k in obj.keys() {
+            if k != "m" && k != "chroma_mask" {
+                return Err(format!(
+                    "zenjpeg plane_tables: unknown field {k:?} (expected m, chroma_mask)"
+                )
+                .into());
+            }
+        }
+        let m = match obj.get("m").and_then(Value::as_array).map(Vec::as_slice) {
+            Some([y, cb, cr]) => {
+                let mut out = [0f64; 3];
+                for (o, x) in out.iter_mut().zip([y, cb, cr]) {
+                    let f = x
+                        .as_f64()
+                        .filter(|f| f.is_finite() && (0.0..=Self::MAX_M).contains(f))
+                        .ok_or_else(|| {
+                            format!(
+                                "zenjpeg plane_tables.m entries must be numbers in 0..={}; \
+                                 got {x}",
+                                Self::MAX_M
+                            )
+                        })?;
+                    *o = f;
+                }
+                out
+            }
+            _ => {
+                return Err(format!(
+                    "zenjpeg plane_tables.m must be [y, cb, cr]; got {:?}",
+                    obj.get("m")
+                )
+                .into());
+            }
+        };
+        let mask = match obj.get("chroma_mask").map(|x| x.as_str()) {
+            None | Some(Some("all")) => ChromaMask::All,
+            Some(Some("lf")) => ChromaMask::Lf,
+            Some(Some("hf")) => ChromaMask::Hf,
+            Some(other) => {
+                return Err(format!(
+                    "zenjpeg plane_tables.chroma_mask must be all|lf|hf; got {other:?}"
+                )
+                .into());
+            }
+        };
+        Ok(Self { m, mask })
+    }
+
+    fn build(&self) -> Box<zenjpeg::encode::tuning::EncodingTables> {
+        use zenjpeg::encoder::{MozjpegTables, QuantTablePreset};
+        // Quality 50 is libjpeg's 100% scale: the Annex K matrices verbatim.
+        let mut t = MozjpegTables::generate_ex(50, QuantTablePreset::JpegAnnexK, false);
+        let planes = [&mut t.quant.c0, &mut t.quant.c1, &mut t.quant.c2];
+        for (ci, plane) in planes.into_iter().enumerate() {
+            let m = self.m[ci];
+            for (i, q) in plane.iter_mut().enumerate() {
+                // Row-major coefficient order (zenjpeg `EncodingTables`).
+                let (row, col) = (i / 8, i % 8);
+                let in_mask = ci == 0
+                    || match self.mask {
+                        ChromaMask::All => true,
+                        ChromaMask::Lf => row + col <= 2,
+                        ChromaMask::Hf => row + col > 2,
+                    };
+                *q = if m == 0.0 || !in_mask {
+                    1.0
+                } else {
+                    (f64::from(*q) * m).round().clamp(1.0, 32767.0) as f32
+                };
+            }
+        }
+        t
+    }
+}
+
 #[cfg(all(feature = "sweep", feature = "jpeg"))]
 fn parse_trellis_knob(
     v: &Value,
@@ -538,6 +702,68 @@ fn parse_trellis_knob(
         }
         other => Err(format!("zenjpeg trellis must be a bool or an object; got {other}").into()),
     }
+}
+
+/// JPEG AI encode through a process-wide `zenjpegai::Encoder` (it caches
+/// loaded checkpoints per `(model, operating point)`). `q` is ignored.
+#[cfg(all(feature = "sweep", feature = "jpegai"))]
+fn encode_jpegai(
+    source: &Rgb8Image,
+    _q: f64,
+    knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Box<dyn Error>> {
+    static ENC: std::sync::OnceLock<zenjpegai::Encoder> = std::sync::OnceLock::new();
+    let mut params = zenjpegai::EncodeParams::default();
+    if let Some(v) = knobs.get("model_id") {
+        let m = v
+            .as_u64()
+            .filter(|m| *m <= 3)
+            .ok_or_else(|| format!("zenjpegai model_id must be an integer in 0..=3; got {v}"))?;
+        params.model_id = m as u8;
+    }
+    if let Some(v) = knobs.get("beta_displacement_log") {
+        let (lo, hi) = zenjpegai::encoder::BDL_RANGE;
+        let range = i64::from(lo)..=i64::from(hi);
+        let pair = match v.as_array().map(Vec::as_slice) {
+            Some([a, b]) => (a.as_i64(), b.as_i64()),
+            _ => (None, None),
+        };
+        match pair {
+            (Some(a), Some(b)) if range.contains(&a) && range.contains(&b) => {
+                params.beta_displacement_log = [a as i32, b as i32];
+            }
+            _ => {
+                return Err(format!(
+                    "zenjpegai beta_displacement_log must be [luma, chroma] integers in \
+                     {lo}..={hi}; got {v}"
+                )
+                .into());
+            }
+        }
+    }
+    let dir = crate::decode::jpegai_models_dir()?;
+    let enc = ENC.get_or_init(|| zenjpegai::Encoder::new(dir));
+    let img = zenjpegai::RgbImage {
+        width: source.width as usize,
+        height: source.height as usize,
+        bit_depth: 8,
+        data: source.pixels.iter().map(|&b| u16::from(b)).collect(),
+    };
+    let start = Instant::now();
+    let bytes = enc
+        .encode(img, params)
+        .map_err(|e| format!("zenjpegai encode failed: {e}"))?;
+    let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
+    Ok(EncodedCell { bytes, encode_ms })
+}
+
+#[cfg(not(all(feature = "sweep", feature = "jpegai")))]
+fn encode_jpegai(
+    _source: &Rgb8Image,
+    _q: f64,
+    _knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Box<dyn Error>> {
+    Err("zenjpegai encode needs `--features sweep,jpegai` (and ZENJPEGAI_MODELS)".into())
 }
 
 #[cfg(all(feature = "sweep", feature = "jpeg"))]
@@ -773,6 +999,72 @@ fn encode_jpeg(
              coupling_scale != 0 is the old hybrid coupling). Plan-driven \
              sweeps (--plan) cover the curated trellis/coupling steps."
             .into());
+    }
+
+    // ── Per-plane quantization (research stimuli) ───────────────────────
+    // Two mutually exclusive table policies, each refusing the other
+    // table-selection knobs so a cell can never carry two contradictory
+    // policies in its label while encoding only one of them.
+    let table_knobs = ["chroma_distance_scale", "quant_source", "chroma_quality"];
+    if let Some(v) = knobs.get("chroma_distance_scales") {
+        if knobs.contains_key("plane_tables") || table_knobs.iter().any(|k| knobs.contains_key(*k))
+        {
+            return Err(
+                "zenjpeg chroma_distance_scales conflicts with plane_tables / \
+                 chroma_distance_scale / quant_source / chroma_quality: declare one table \
+                 policy per cell"
+                    .into(),
+            );
+        }
+        let [cb, cr] = parse_f64_pair(v, "chroma_distance_scales")?;
+        // zenjpeg clamps to [0.1, 5.0] silently; refuse instead so the cell
+        // label is the value actually encoded.
+        for x in [cb, cr] {
+            if !(0.1..=5.0).contains(&x) {
+                return Err(format!(
+                    "zenjpeg chroma_distance_scales entries must be in 0.1..=5.0 \
+                     (zenjpeg would clamp silently); got [{cb}, {cr}]"
+                )
+                .into());
+            }
+        }
+        // [Cb, Cr] in YCbCr, [X, B] in XYB (zenjpeg plan.rs resolve_quality).
+        params.quant_table_config = Some(zenjpeg::encoder::QuantTableConfig::Jpegli {
+            chroma_distance_scales: [cb as f32, cr as f32],
+        });
+        any_internal = true;
+    }
+    if let Some(v) = knobs.get("plane_tables") {
+        if table_knobs.iter().any(|k| knobs.contains_key(*k)) {
+            return Err(
+                "zenjpeg plane_tables conflicts with chroma_distance_scale / \
+                 quant_source / chroma_quality: declare one table policy per cell"
+                    .into(),
+            );
+        }
+        if knobs.get("xyb").and_then(Value::as_bool) == Some(true) {
+            return Err("zenjpeg plane_tables is YCbCr-only (Annex K shapes); use \
+                 chroma_distance_scales for per-channel XYB control"
+                .into());
+        }
+        let spec = PlaneTables::from_knob(v)?;
+        params.quant_table_config = Some(zenjpeg::encoder::QuantTableConfig::Custom(spec.build()));
+        params.allow_16bit_quant_tables = Some(true);
+        any_internal = true;
+    }
+    if let Some(b) = knobs
+        .get("allow_16bit_quant_tables")
+        .and_then(Value::as_bool)
+    {
+        if knobs.contains_key("plane_tables") && !b {
+            return Err(
+                "zenjpeg plane_tables needs 16-bit quant tables (steps above 255); \
+                 allow_16bit_quant_tables=false contradicts it"
+                    .into(),
+            );
+        }
+        params.allow_16bit_quant_tables = Some(b);
+        any_internal = true;
     }
 
     // ── XYB color mode ──────────────────────────────────────────────────
@@ -1196,6 +1488,42 @@ pub(crate) fn avif_config_from_knobs(
         }
         if any {
             cfg = cfg.with_internal_params(params);
+        }
+    }
+
+    // Per-plane chroma delta-q `[u, v]` (qindex units, each -64..=63,
+    // positive = coarser). svt-rs only: zenavif refuses it elsewhere, and we
+    // refuse first so the message names the knob. Not silently clamped:
+    // the label must be the value encoded.
+    if let Some(v) = knobs.get("chroma_q") {
+        if knobs.get("backend").and_then(Value::as_str) != Some("svt-rs") {
+            return Err("zenavif chroma_q is implemented by backend=svt-rs only".into());
+        }
+        let pair = match v.as_array().map(Vec::as_slice) {
+            Some([u, w]) => (u.as_i64(), w.as_i64()),
+            _ => (None, None),
+        };
+        let (u, w) = match pair {
+            (Some(u), Some(w)) if (-64..=63).contains(&u) && (-64..=63).contains(&w) => {
+                (u as i8, w as i8)
+            }
+            _ => {
+                return Err(format!(
+                    "zenavif chroma_q must be [u, v] integers in -64..=63; got {v}"
+                )
+                .into());
+            }
+        };
+        #[cfg(feature = "avif-svt")]
+        {
+            let mut p = zenavif::expert::SvtParams::default();
+            p.chroma_q = Some((u, w));
+            cfg = cfg.with_svt_params(p);
+        }
+        #[cfg(not(feature = "avif-svt"))]
+        {
+            let _ = (u, w);
+            return Err("zenavif chroma_q needs the `avif-svt` feature".into());
         }
     }
 
@@ -1779,6 +2107,116 @@ pub(crate) fn bytemuck_cast_rgb(bytes: &[u8]) -> &[rgb::Rgb<u8>] {
 #[cfg(all(test, feature = "sweep", feature = "jpeg"))]
 mod jpeg_knob_tests {
     use super::*;
+
+    /// Every DQT table in a JPEG: (table id, values in zigzag order).
+    fn dqt_tables(jpg: &[u8]) -> Vec<(u8, Vec<u16>)> {
+        let mut out = Vec::new();
+        let mut i = 2;
+        while i + 4 <= jpg.len() && jpg[i] == 0xFF {
+            let marker = jpg[i + 1];
+            let len = u16::from_be_bytes([jpg[i + 2], jpg[i + 3]]) as usize;
+            if marker == 0xDB {
+                let (mut p, end) = (i + 4, i + 2 + len);
+                while p < end {
+                    let (pq, tq) = (jpg[p] >> 4, jpg[p] & 15);
+                    p += 1;
+                    let mut v = Vec::with_capacity(64);
+                    for _ in 0..64 {
+                        if pq == 1 {
+                            v.push(u16::from_be_bytes([jpg[p], jpg[p + 1]]));
+                            p += 2;
+                        } else {
+                            v.push(u16::from(jpg[p]));
+                            p += 1;
+                        }
+                    }
+                    out.push((tq, v));
+                }
+            }
+            if marker == 0xDA {
+                break;
+            }
+            i += 2 + len;
+        }
+        out
+    }
+
+    fn knobs_of(v: serde_json::Value) -> Map<String, Value> {
+        v.as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn plane_tables_write_the_requested_dqt() {
+        // Y = Annex K luma x1, Cb all-ones, Cr = Annex K chroma x4.
+        let knobs = knobs_of(serde_json::json!({
+            "subsampling": "444",
+            "plane_tables": {"m": [1.0, 0.0, 4.0]}
+        }));
+        let cell = encode_jpeg(&tiny_image(), 75.0, &knobs).unwrap();
+        let t = dqt_tables(&cell.bytes);
+        let dcs: Vec<u16> = t.iter().map(|(_, v)| v[0]).collect();
+        assert!(dcs.contains(&16), "Annex K luma DC 16 missing: {dcs:?}");
+        assert!(
+            dcs.contains(&68),
+            "Annex K chroma DC 17 x 4 missing: {dcs:?}"
+        );
+        assert!(
+            t.iter().any(|(_, v)| v.iter().all(|&q| q == 1)),
+            "an all-ones (m = 0) table must be written: {dcs:?}"
+        );
+    }
+
+    #[test]
+    fn plane_tables_lf_mask_coarsens_only_zigzag_0_to_5() {
+        let knobs = knobs_of(serde_json::json!({
+            "subsampling": "444",
+            "plane_tables": {"m": [0.0, 8.0, 8.0], "chroma_mask": "lf"}
+        }));
+        let cell = encode_jpeg(&tiny_image(), 75.0, &knobs).unwrap();
+        let chroma = dqt_tables(&cell.bytes)
+            .into_iter()
+            .find(|(_, v)| v[0] == 17 * 8)
+            .expect("a chroma table with DC 136");
+        assert!(chroma.1[..6].iter().all(|&q| q > 1), "{:?}", chroma.1);
+        assert!(chroma.1[6..].iter().all(|&q| q == 1), "{:?}", chroma.1);
+    }
+
+    #[test]
+    fn chroma_distance_scales_move_bytes_and_refuse_clamping() {
+        let enc = |v: serde_json::Value| {
+            encode_jpeg(
+                &tiny_image(),
+                75.0,
+                &knobs_of(serde_json::json!({
+                    "subsampling": "444", "chroma_distance_scales": v
+                })),
+            )
+        };
+        let a = enc(serde_json::json!([1.0, 2.0])).unwrap();
+        let b = enc(serde_json::json!([2.0, 1.0])).unwrap();
+        assert_ne!(a.bytes, b.bytes, "[1,2] and [2,1] must be distinct encodes");
+        assert!(
+            enc(serde_json::json!([9.0, 1.0])).is_err(),
+            "9.0 would clamp silently"
+        );
+    }
+
+    #[test]
+    fn table_policies_conflict_loudly() {
+        for v in [
+            serde_json::json!({"plane_tables": {"m": [1, 1, 1]}, "chroma_distance_scale": 2.0}),
+            serde_json::json!({"plane_tables": {"m": [1, 1, 1]}, "chroma_distance_scales": [1.0, 1.0]}),
+            serde_json::json!({"plane_tables": {"m": [1, 1, 1]}, "xyb": true}),
+            serde_json::json!({"plane_tables": {"m": [1, 1, 1]}, "allow_16bit_quant_tables": false}),
+            serde_json::json!({"plane_tables": {"m": [1, -1, 1]}}),
+            serde_json::json!({"plane_tables": {"m": [1, 1, 1], "mask": "lf"}}),
+        ] {
+            assert!(
+                encode_jpeg(&tiny_image(), 75.0, &knobs_of(v.clone())).is_err(),
+                "{v}"
+            );
+        }
+    }
 
     fn tiny_image() -> Rgb8Image {
         // Deterministic noise: a solid color has no AC coefficients, so

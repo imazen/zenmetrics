@@ -117,6 +117,42 @@ mod tests {
             .collect()
     }
 
+    /// `chroma_q` changes the chroma quantizers, so svt-rs cells that differ
+    /// only there must never share an identity (zenavif's fingerprint hashes
+    /// it since 4d999037); and it is refused off svt-rs, never ignored.
+    #[cfg(all(feature = "sweep", feature = "avif", feature = "avif-svt"))]
+    #[test]
+    fn avif_chroma_q_cells_never_dedup_together() {
+        let id = |cq: Option<Value>| {
+            let mut k = knobs(&[
+                ("backend", Value::from("svt-rs")),
+                ("speed", Value::from(6)),
+            ]);
+            if let Some(cq) = cq {
+                k.insert("chroma_q".into(), cq);
+            }
+            knob_cell_identity(CodecKind::Zenavif, 60.0, &k).unwrap()
+        };
+        let ids = [
+            id(None),
+            id(Some(serde_json::json!([48, 0]))),
+            id(Some(serde_json::json!([0, 48]))),
+            id(Some(serde_json::json!([-32, -32]))),
+        ];
+        for i in 0..ids.len() {
+            for j in i + 1..ids.len() {
+                assert_ne!(ids[i], ids[j], "chroma_q cells {i} and {j} collided");
+            }
+        }
+        let zenravif = knobs(&[("chroma_q", serde_json::json!([48, 0]))]);
+        assert!(knob_cell_identity(CodecKind::Zenavif, 60.0, &zenravif).is_err());
+        let wide = knobs(&[
+            ("backend", Value::from("svt-rs")),
+            ("chroma_q", serde_json::json!([100, 0])),
+        ]);
+        assert!(knob_cell_identity(CodecKind::Zenavif, 60.0, &wide).is_err());
+    }
+
     /// The exact alias class the live AVIF subsample sweep was burning CPU on:
     /// 21 svt-rs + 7 aom-rs identical-`output_sha` groups in its ledger, every
     /// one of them `{98, 100}` at a fixed speed.

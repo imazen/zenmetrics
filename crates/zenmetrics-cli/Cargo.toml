@@ -59,6 +59,12 @@ avif = ["dep:zenavif", "dep:zenavif-parse", "dep:zencodec"]
 # muxed in-crate by zenavif-serialize). Opt-in: it pulls the whole zenav1-svt
 # encoder into the graph; a wave that never sets `backend` need not compile it.
 avif-svt = ["avif", "zenavif/encode-svt-rs"]
+# `jpegai`: the `--codec zenjpegai` sweep arm + JPEG AI decode (magic FF 80 FF 82).
+# Opt-in: the learned codec is a heavy build and needs the upstream JPEG AI
+# checkpoints at run time (`ZENJPEGAI_MODELS=<dir with VM_common/, VM_bop/, ...>`;
+# not redistributed — zenjpegai README "Model weights"). Knobs `model_id` and
+# `beta_displacement_log` [luma, chroma] drive per-component quantization.
+jpegai = ["dep:zenjpegai"]
 # `avif-aom`: the zenavif `backend: "aom-rs"` sweep knob — the pure-Rust
 # zenav1-aom ALLINTRA encoder port, exercised on EVERY cell and byte-verified
 # against the pinned C libaom v3.14.1 oracle (aom-sys-ref, cmake-built by its
@@ -404,6 +410,10 @@ rayon = "1"
 # (the speed6 branch that lacked both is no longer the ../zenavif checkout).
 zenpng       = { path = "../../../zenpng",                                     optional = true }
 zenjpeg      = { path = "../../../zenjpeg/zenjpeg",        default-features = false, optional = true }
+# JPEG AI (learned codec) — pinned git rev so CI resolves it without a sibling
+# checkout (crates.io-only deps, no submodules). Bump the rev to pick up
+# upstream movement.
+zenjpegai    = { git = "https://github.com/imazen/zenjpegai", rev = "9b0b052beefbf571ba3c4b5ca53aeb333c508b6d", optional = true }
 zenwebp      = { path = "../../../zenwebp",                                    optional = true }
 zenavif      = { path = "../../../zenavif",                                    optional = true }
 # zenavif-parse: the container parser, taken from zenavif's OWN workspace member

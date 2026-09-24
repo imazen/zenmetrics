@@ -1574,6 +1574,7 @@ fn save_encoded_variant(
         CodecKind::Zenjxl => "jxl",
         CodecKind::Zengif => "gif",
         CodecKind::Zentiff => "tiff",
+        CodecKind::Zenjpegai => "jpegai",
     };
     save_encoded_variant_named(dir, src_path, codec.name(), ext, q, knob_json, bytes)
 }
@@ -1617,6 +1618,7 @@ fn decode_encoded_bytes(bytes: &[u8], codec: CodecKind) -> Result<Rgb8Image, Box
         CodecKind::Zenjxl => ".jxl",
         CodecKind::Zengif => ".gif",
         CodecKind::Zentiff => ".tiff",
+        CodecKind::Zenjpegai => ".jpegai",
     };
     let tmp = tempfile::Builder::new()
         .prefix("zenmetrics-sweep-")

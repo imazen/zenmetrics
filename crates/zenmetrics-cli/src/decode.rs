@@ -56,6 +56,8 @@ pub enum ImageFormat {
     Gif,
     Tiff,
     Bmp,
+    /// JPEG AI codestream (`FF 80 FF 82`: SOC then PIH; no container).
+    JpegAi,
 }
 
 fn sniff_format(data: &[u8], path: &Path) -> Option<ImageFormat> {
@@ -64,6 +66,9 @@ fn sniff_format(data: &[u8], path: &Path) -> Option<ImageFormat> {
     }
     if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
         return Some(ImageFormat::Jpeg);
+    }
+    if data.starts_with(&[0xFF, 0x80, 0xFF, 0x82]) {
+        return Some(ImageFormat::JpegAi);
     }
     if data.len() >= 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WEBP" {
         return Some(ImageFormat::Webp);
@@ -116,6 +121,7 @@ fn sniff_format(data: &[u8], path: &Path) -> Option<ImageFormat> {
             "gif" => Some(ImageFormat::Gif),
             "tif" | "tiff" => Some(ImageFormat::Tiff),
             "bmp" => Some(ImageFormat::Bmp),
+            "jpegai" | "jai" => Some(ImageFormat::JpegAi),
             _ => None,
         },
         None => None,
@@ -136,7 +142,57 @@ fn decode_bytes_to_rgb8(
         ImageFormat::Gif => decode_gif(data),
         ImageFormat::Tiff => decode_tiff(data),
         ImageFormat::Bmp => decode_bmp(data),
+        ImageFormat::JpegAi => decode_jpegai(data),
     }
+}
+
+/// Directory holding the upstream JPEG AI checkpoints (`VM_common/`,
+/// `VM_bop/`, ...), from `ZENJPEGAI_MODELS`. The weights are not
+/// redistributed, so a missing directory is a loud error, never a skip.
+#[cfg(feature = "jpegai")]
+pub(crate) fn jpegai_models_dir() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let dir = std::env::var_os("ZENJPEGAI_MODELS").ok_or(
+        "JPEG AI needs ZENJPEGAI_MODELS=<dir with the upstream checkpoints: VM_common/, \
+         VM_bop/, ...>; they are not redistributed (zenjpegai README, \"Model weights\")",
+    )?;
+    let dir = std::path::PathBuf::from(dir);
+    if !dir.join("VM_common").is_dir() {
+        return Err(format!(
+            "ZENJPEGAI_MODELS={} has no VM_common/ checkpoint directory",
+            dir.display()
+        )
+        .into());
+    }
+    Ok(dir)
+}
+
+/// JPEG AI decode through a process-wide `zenjpegai::Decoder` (it caches
+/// loaded checkpoints; building one per call would reload ~1 GB each time).
+#[cfg(feature = "jpegai")]
+fn decode_jpegai(data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    static DEC: std::sync::OnceLock<zenjpegai::Decoder> = std::sync::OnceLock::new();
+    let dir = jpegai_models_dir()?;
+    let dec = DEC.get_or_init(|| zenjpegai::Decoder::new(dir));
+    let img = dec
+        .decode(data)
+        .map_err(|e| format!("zenjpegai decode failed: {e}"))?;
+    if img.bit_depth != 8 {
+        return Err(format!(
+            "zenjpegai decoded a {}-bit picture; the SDR RGB8 path takes 8-bit only",
+            img.bit_depth
+        )
+        .into());
+    }
+    Ok(Rgb8Image {
+        pixels: img.data.iter().map(|&v| v.min(255) as u8).collect(),
+        width: u32::try_from(img.width)?,
+        height: u32::try_from(img.height)?,
+    })
+}
+
+#[cfg(not(feature = "jpegai"))]
+fn decode_jpegai(_data: &[u8]) -> Result<Rgb8Image, Box<dyn std::error::Error>> {
+    Err("JPEG AI decode needs the `jpegai` feature".into())
 }
 
 #[cfg(feature = "png")]

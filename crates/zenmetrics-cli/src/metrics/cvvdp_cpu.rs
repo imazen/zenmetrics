@@ -31,6 +31,26 @@ use crate::decode::Rgb8Image;
 /// Display preset that reproduces the default (umbrella) CPU cvvdp scores.
 pub(crate) const DEFAULT_DISPLAY: &str = "standard_4k";
 
+/// Viewing geometries for the Squintly chroma study that upstream's
+/// `display_models.json` does not carry: an iPhone-class 6.1" 1170x2532 panel
+/// (~457 ppi) held at 30 cm (`squintly_n1`, the fixed-1x "normal" block,
+/// ~94 ppd), and the same panel under 2x integer zoom (`squintly_m2`, ~47
+/// ppd). Zoom makes each source pixel cover 2x2 display pixels, which halves
+/// source pixels per degree; that is modelled as half the viewing distance.
+fn study_geometry(name: &str) -> Option<DisplayGeometry> {
+    let at = |distance_m: f32| DisplayGeometry {
+        resolution_w: 1170,
+        resolution_h: 2532,
+        distance_m,
+        diagonal_inches: 6.1,
+    };
+    match name {
+        "squintly_n1" => Some(at(0.30)),
+        "squintly_m2" => Some(at(0.15)),
+        _ => None,
+    }
+}
+
 /// A CPU cvvdp scorer bound to one named display preset.
 pub(crate) struct CpuCvvdpDisplayScorer {
     name: String,
@@ -45,6 +65,18 @@ impl CpuCvvdpDisplayScorer {
     /// Both photometry and geometry are required: a preset without a
     /// resolution (FOV-only) cannot produce pixels per degree here.
     pub(crate) fn by_name(name: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        if let Some(geometry) = study_geometry(name) {
+            // Study presets are geometry-only additions; photometry is the
+            // upstream `standard_phone` (500 cd/m², 250 lux ambient).
+            let display = DisplayModel::by_name("standard_phone")
+                .ok_or("vendored display_models.json lost its standard_phone preset")?;
+            return Ok(Self {
+                name: name.to_string(),
+                display,
+                geometry,
+                cached: None,
+            });
+        }
         let display = DisplayModel::by_name(name).ok_or_else(|| {
             format!(
                 "unknown --display-model preset {name:?}; see cvvdp's vendored \
@@ -119,6 +151,27 @@ impl CpuCvvdpDisplayScorer {
 
 #[cfg(test)]
 mod tests {
+
+    /// The study geometries resolve, keep their own column suffix, and derive
+    /// the pixels-per-degree the design registers (N1 ~94, M2 half of it).
+    #[test]
+    fn squintly_study_geometries_resolve_with_the_registered_ppd() {
+        let n1 = super::study_geometry("squintly_n1")
+            .unwrap()
+            .pixels_per_degree();
+        let m2 = super::study_geometry("squintly_m2")
+            .unwrap()
+            .pixels_per_degree();
+        assert!((90.0..98.0).contains(&n1), "N1 ppd {n1}");
+        assert!((45.0..49.0).contains(&m2), "M2 ppd {m2}");
+        assert!(
+            (n1 / m2 - 2.0).abs() < 0.05,
+            "M2 must be ~half of N1: {n1} vs {m2}"
+        );
+        assert!(super::CpuCvvdpDisplayScorer::by_name("squintly_n1").is_ok());
+        assert!(super::CpuCvvdpDisplayScorer::by_name("squintly_m2").is_ok());
+    }
+
     use super::*;
 
     fn pair(w: u32, h: u32) -> (Rgb8Image, Rgb8Image) {
