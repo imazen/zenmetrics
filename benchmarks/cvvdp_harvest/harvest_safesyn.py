@@ -258,8 +258,14 @@ def main():
                 "pairs_tsv": PAIRS,
                 "pairs_tsv_sha256": sha256_file(PAIRS),
                 "pairs_parquet": "/var/tmp/cvvdp-safesyn/safesyn_pairs_uri.parquet",
+                "pairs_parquet_sha256": sha256_file(
+                    "/var/tmp/cvvdp-safesyn/safesyn_pairs_uri.parquet"),
                 "blob_prefix": S3_PREFIX,
                 "audit_jsonl": AUDIT_FOR_PROVENANCE,
+                "audit_jsonl_sha256": sha256_file(AUDIT),
+                "declared_manifest": "/var/tmp/cvvdp-safesyn/safesyn_manifest4.json",
+                "declared_manifest_sha256": sha256_file(
+                    "/var/tmp/cvvdp-safesyn/safesyn_manifest4.json"),
             },
             "completeness": {
                 "expected_rows": 196086,
