@@ -97,7 +97,8 @@ against libvmaf, including ADM2/VIF no-enhancement-gain limits.
 The production crate does not link libvmaf: `vmaf-head-sys = 0.2.0` is pinned
 as a test/benchmark-only oracle, and it already vendors libvmaf 3.2.1. This
 API is not yet part of `zenmetrics --metric` or the orchestrator; it requires
-decoded planar YUV420 8/10-bit input (not packed RGB, HDR, or 12/16-bit).
+decoded planar YUV420 8/10-bit input of at least 34×34 pixels (not packed
+RGB, HDR, or 12/16-bit).
 `VmafV1Scorer` retains the parsed model across batches. `VmafV1Stream` accepts
 one pair at a time, keeps at most two recent reference luma frames for motion,
 and emits delayed scores once lookahead is available; call `finish()` to emit

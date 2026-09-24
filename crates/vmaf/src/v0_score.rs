@@ -1,3 +1,4 @@
+use crate::adm::ADM_MIN_DIM;
 use crate::{
     Error, PoolingMethod, VmafV0Features, VmafV0Model, VmafV0Variant, Yuv420Frame,
     adm2_v0_from_luma, motion_sad, motion2_v0_from_luma, pool_v1_scores, vif_v0_from_luma,
@@ -13,7 +14,11 @@ fn validate_dimensions(width: usize, height: usize, bit_depth: u8) -> Result<usi
     if !matches!(bit_depth, 8 | 10) {
         return Err(Error::InvalidInput("unsupported bit depth"));
     }
-    if width < 17 || height < 17 || !width.is_multiple_of(2) || !height.is_multiple_of(2) {
+    if width < ADM_MIN_DIM
+        || height < ADM_MIN_DIM
+        || !width.is_multiple_of(2)
+        || !height.is_multiple_of(2)
+    {
         return Err(Error::InvalidInput("invalid YUV420 dimensions"));
     }
     width

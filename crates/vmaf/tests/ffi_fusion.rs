@@ -1586,6 +1586,43 @@ fn v0_rejects_invalid_frames_without_advancing_stream() {
     assert!(score_v0_420(&[], &[], WIDTH, HEIGHT, 8, VmafV0Variant::Standard).is_err());
 }
 
+#[test]
+fn small_adm_frames_are_rejected_without_panicking() {
+    for (width, height) in [(18, 18), (32, 64), (64, 32)] {
+        let luma = vec![128u16; width * height];
+        let chroma = vec![128u16; width * height / 4];
+        let frame = Yuv420Frame {
+            y: &luma,
+            u: &chroma,
+            v: &chroma,
+        };
+        assert!(
+            adm3_v1_from_luma(&luma, &luma, width, height, 8, ModelVariant::Standard1080p).is_err()
+        );
+        assert!(
+            score_v0_420(
+                &[frame],
+                &[frame],
+                width,
+                height,
+                8,
+                VmafV0Variant::Standard
+            )
+            .is_err()
+        );
+        assert!(VmafV0Stream::new(width, height, 8, VmafV0Variant::Standard).is_err());
+        assert!(VmafV1Stream::new(width, height, 8, ModelVariant::Standard1080p).is_err());
+    }
+    let luma = vec![128u16; 34 * 34];
+    let chroma = vec![128u16; 17 * 17];
+    let frame = Yuv420Frame {
+        y: &luma,
+        u: &chroma,
+        v: &chroma,
+    };
+    assert!(score_v0_420(&[frame], &[frame], 34, 34, 8, VmafV0Variant::Standard).is_ok());
+}
+
 #[cfg(feature = "parallel")]
 #[test]
 fn v0_parallel_preserves_serial_features_and_order() {

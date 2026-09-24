@@ -3,6 +3,7 @@ use crate::{Error, ModelVariant, VmafV0Variant};
 use archmage::magetypes;
 
 const ADM_BORDER_FACTOR: f64 = 0.1;
+pub(crate) const ADM_MIN_DIM: usize = 33;
 const DLM_WEIGHT: f64 = 0.7;
 const ENHN_GAIN_LIMIT: f64 = 1.0;
 const NOISE_WEIGHT: f64 = 0.02;
@@ -1113,7 +1114,7 @@ fn compute_adm(
     if !matches!(bit_depth, 8 | 10) {
         return Err(Error::InvalidInput("unsupported bit depth"));
     }
-    if width < 17 || height < 17 {
+    if width < ADM_MIN_DIM || height < ADM_MIN_DIM {
         return Err(Error::InvalidInput("dimensions too small"));
     }
     let npix = width

@@ -1,3 +1,4 @@
+use crate::adm::ADM_MIN_DIM;
 use crate::{
     Error, MOTION_MAX_VAL, ModelVariant, VmafFeatures, VmafModel, adm3_v1_from_luma,
     cambi_v1_from_luma, motion_sad, motion3_from_luma, speed_v1_chroma_420,
@@ -196,7 +197,11 @@ impl VmafV1Stream {
         if !matches!(bit_depth, 8 | 10) {
             return Err(Error::InvalidInput("unsupported bit depth"));
         }
-        if width < 5 || height < 5 || !width.is_multiple_of(2) || !height.is_multiple_of(2) {
+        if width < ADM_MIN_DIM
+            || height < ADM_MIN_DIM
+            || !width.is_multiple_of(2)
+            || !height.is_multiple_of(2)
+        {
             return Err(Error::InvalidInput("invalid YUV420 dimensions"));
         }
         width
