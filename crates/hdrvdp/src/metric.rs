@@ -112,6 +112,73 @@ pub fn hdrvdp(
     encoding: ColorEncoding,
     par: &Params,
 ) -> Result<HdrVdpResult> {
+    let p = prepare(test, reference, width, height, encoding, par)?;
+    let m = masking::run(&p.bands_test, &p.bands_ref, &p.l_adapt, &p.diff_mask, par);
+    let Visibility {
+        p_map,
+        p_det,
+        c_map,
+        c_max,
+        ..
+    } = visibility(&m.d_bands, par);
+
+    // Upstream: `res.Q = 100 − Q`; the removed `res.Q_MOS` was the logistic
+    // applied to the raw `Q` accumulator, not to `res.Q`.
+    let q_raw = quality_correlate(&m.quality_terms);
+    Ok(HdrVdpResult {
+        p_map,
+        p_det,
+        c_map,
+        c_max,
+        q: 100.0 - q_raw,
+        q_mos: quality_mos(q_raw, par),
+        width,
+        height,
+        input_looks_relative: p.input_looks_relative,
+    })
+}
+
+/// Score a pair of images, returning only the official `res.Q` correlate.
+///
+/// Identical to [`hdrvdp`] except that the visibility reconstruction
+/// (`P_map`/`P_det`/`C_max`) is never computed — `res.Q` depends only on the
+/// per-plane quality terms, so sweep-style callers that only need the scalar
+/// score skip the inverse pyramid and spatial pooling entirely.
+///
+/// # Errors
+/// Same conditions as [`hdrvdp`].
+pub fn score(
+    test: &[f64],
+    reference: &[f64],
+    width: usize,
+    height: usize,
+    encoding: ColorEncoding,
+    par: &Params,
+) -> Result<f64> {
+    let p = prepare(test, reference, width, height, encoding, par)?;
+    let terms = masking::run_terms(&p.bands_test, &p.bands_ref, &p.l_adapt, &p.diff_mask, par);
+    Ok(100.0 - quality_correlate(&terms))
+}
+
+// Everything `hdrvdp()` and [`score`] share: display model → visual pathway
+// → band decomposition → adapting maps. Returns the two band pyramids plus
+// the `l_adapt`/`diff_mask` planes masking consumes.
+struct Prepared {
+    bands_test: crate::bands::BandPyramid,
+    bands_ref: crate::bands::BandPyramid,
+    l_adapt: Vec<f64>,
+    diff_mask: Vec<f64>,
+    input_looks_relative: bool,
+}
+
+fn prepare(
+    test: &[f64],
+    reference: &[f64],
+    width: usize,
+    height: usize,
+    encoding: ColorEncoding,
+    par: &Params,
+) -> Result<Prepared> {
     if !(par.pix_per_deg.is_finite() && par.pix_per_deg > 0.0) {
         return Err(Error::InvalidResolution(par.pix_per_deg));
     }
@@ -168,27 +235,11 @@ pub fn hdrvdp(
         .collect();
     let dm = diff_mask(&test_nits, &ref_nits, channels);
 
-    let m = masking::run(&bands_test, &bands_ref, &l_adapt, &dm, par);
-    let Visibility {
-        p_map,
-        p_det,
-        c_map,
-        c_max,
-        ..
-    } = visibility(&m.d_bands, par);
-
-    // Upstream: `res.Q = 100 − Q`; the removed `res.Q_MOS` was the logistic
-    // applied to the raw `Q` accumulator, not to `res.Q`.
-    let q_raw = quality_correlate(&m.quality_terms);
-    Ok(HdrVdpResult {
-        p_map,
-        p_det,
-        c_map,
-        c_max,
-        q: 100.0 - q_raw,
-        q_mos: quality_mos(q_raw, par),
-        width,
-        height,
+    Ok(Prepared {
+        bands_test,
+        bands_ref,
+        l_adapt,
+        diff_mask: dm,
         input_looks_relative: looks_relative(&ref_nits, channels, encoding),
     })
 }

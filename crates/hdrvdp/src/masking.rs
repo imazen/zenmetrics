@@ -176,6 +176,34 @@ pub fn run(
     diff_mask: &[f64],
     par: &Params,
 ) -> Masking {
+    let (d_bands, quality_terms) = run_impl(test, reference, l_adapt, diff_mask, par, true);
+    Masking {
+        d_bands: d_bands.unwrap(),
+        quality_terms,
+    }
+}
+
+/// Score-only variant: the per-plane quality terms without materialising the
+/// reshaped `d_bands` (which only feed [`crate::pool::visibility`]).
+#[must_use]
+pub fn run_terms(
+    test: &BandPyramid,
+    reference: &BandPyramid,
+    l_adapt: &[f64],
+    diff_mask: &[f64],
+    par: &Params,
+) -> Vec<f64> {
+    run_impl(test, reference, l_adapt, diff_mask, par, false).1
+}
+
+fn run_impl(
+    test: &BandPyramid,
+    reference: &BandPyramid,
+    l_adapt: &[f64],
+    diff_mask: &[f64],
+    par: &Params,
+    want_d_bands: bool,
+) -> (Option<BandPyramid>, Vec<f64>) {
     assert_eq!(test.count(), reference.count(), "band count mismatch");
     let (w, h) = (test.width, test.height);
     assert_eq!(l_adapt.len(), w * h, "l_adapt does not match the image");
@@ -213,7 +241,7 @@ pub fn run(
     let k_xo = 10f64.powf(par.mask_xo);
     let k_xn = 10f64.powf(par.mask_xn);
 
-    let mut d_bands = test.zeros_like();
+    let mut d_bands = want_d_bands.then(|| test.zeros_like());
     let mut quality_terms = Vec::with_capacity(total_planes);
 
     // Mutual masking per (band, orientation), computed once: the loop reads
@@ -316,17 +344,16 @@ pub fn run(
             quality_terms.push(((msre + 1e-12).ln() - 1e-12f64.ln()) * w_f);
 
             // Reshape by the psychometric slope for the visibility pooling.
-            let out = d_bands.band_mut(b, o);
-            for (dst, v) in out.data.iter_mut().zip(&d) {
-                *dst = sign_pow(v / band_norm, pf) * band_norm;
+            if let Some(db) = d_bands.as_mut() {
+                let out = db.band_mut(b, o);
+                for (dst, v) in out.data.iter_mut().zip(&d) {
+                    *dst = sign_pow(v / band_norm, pf) * band_norm;
+                }
             }
         }
     }
 
-    Masking {
-        d_bands,
-        quality_terms,
-    }
+    (d_bands, quality_terms)
 }
 
 /// Per-pixel "actually different" flag over an interleaved pair, as `1.0` /
