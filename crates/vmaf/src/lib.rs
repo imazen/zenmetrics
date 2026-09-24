@@ -6,7 +6,7 @@ mod score;
 mod speed;
 mod v0;
 
-pub use adm::adm3_v1_from_luma;
+pub use adm::{adm2_v0_from_luma, adm3_v1_from_luma};
 pub use cambi::cambi_v1_from_luma;
 pub use score::{
     PoolingMethod, VmafFrameResult, VmafV1Scorer, VmafV1Stream, Yuv420Frame, pool_v1_scores,

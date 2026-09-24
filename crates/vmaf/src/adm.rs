@@ -1,4 +1,4 @@
-use crate::{Error, ModelVariant};
+use crate::{Error, ModelVariant, VmafV0Variant};
 #[cfg(feature = "simd")]
 use archmage::magetypes;
 
@@ -26,6 +26,29 @@ const BLENDED_CSF_2160_3H: [[f32; 4]; 2] = [
     [0.00226, 0.01183, 0.025026, 0.04295],
     [0.000479, 0.004302, 0.011778, 0.023918],
 ];
+const WATSON97_CSF_1080_3H: [[f32; 4]; 2] = [
+    [
+        f32::from_bits(0x3c8e63ba),
+        f32::from_bits(0x3d030286),
+        f32::from_bits(0x3d31a788),
+        f32::from_bits(0x3d3b140b),
+    ],
+    [
+        f32::from_bits(0x3bc106aa),
+        f32::from_bits(0x3c6a46a3),
+        f32::from_bits(0x3cc7dc06),
+        f32::from_bits(0x3d0041c9),
+    ],
+];
+
+struct AdmSettings {
+    factors: &'static [[f32; 4]; 2],
+    enhn_gain_limit: f64,
+    noise_weight: f64,
+    watson_fixed: bool,
+    norm_view_dist: f64,
+    ref_display_height: usize,
+}
 
 fn csf_table(variant: ModelVariant) -> &'static [[f32; 4]; 2] {
     match variant {
@@ -35,8 +58,8 @@ fn csf_table(variant: ModelVariant) -> &'static [[f32; 4]; 2] {
     }
 }
 
-fn rfactor(variant: ModelVariant, scale: usize) -> [f32; 3] {
-    let t = csf_table(variant);
+fn rfactor(settings: &AdmSettings, scale: usize) -> [f32; 3] {
+    let t = settings.factors;
     [t[0][scale], t[0][scale], t[1][scale]]
 }
 
@@ -405,6 +428,7 @@ fn adm_decouple(
     h: usize,
     stride: usize,
     div: &[i32; 65537],
+    enhn_gain_limit: f64,
 ) {
     let cos_1deg_sq = (std::f64::consts::PI / 180.0).cos().powi(2);
     let (left, top, right, bottom) = border_region(w, h, 1);
@@ -455,22 +479,22 @@ fn adm_decouple(
             let rst_d_f = (kd as f32 / 32768.0) * (od as f32 / 64.0);
 
             if angle_flag && rst_h_f > 0.0 {
-                rst_h = ((rst_h as f64 * ENHN_GAIN_LIMIT).min(th as f64)) as i16;
+                rst_h = ((rst_h as f64 * enhn_gain_limit).min(th as f64)) as i16;
             }
             if angle_flag && rst_h_f < 0.0 {
-                rst_h = ((rst_h as f64 * ENHN_GAIN_LIMIT).max(th as f64)) as i16;
+                rst_h = ((rst_h as f64 * enhn_gain_limit).max(th as f64)) as i16;
             }
             if angle_flag && rst_v_f > 0.0 {
-                rst_v = ((rst_v as f64 * ENHN_GAIN_LIMIT).min(tv as f64)) as i16;
+                rst_v = ((rst_v as f64 * enhn_gain_limit).min(tv as f64)) as i16;
             }
             if angle_flag && rst_v_f < 0.0 {
-                rst_v = ((rst_v as f64 * ENHN_GAIN_LIMIT).max(tv as f64)) as i16;
+                rst_v = ((rst_v as f64 * enhn_gain_limit).max(tv as f64)) as i16;
             }
             if angle_flag && rst_d_f > 0.0 {
-                rst_d = ((rst_d as f64 * ENHN_GAIN_LIMIT).min(td as f64)) as i16;
+                rst_d = ((rst_d as f64 * enhn_gain_limit).min(td as f64)) as i16;
             }
             if angle_flag && rst_d_f < 0.0 {
-                rst_d = ((rst_d as f64 * ENHN_GAIN_LIMIT).max(td as f64)) as i16;
+                rst_d = ((rst_d as f64 * enhn_gain_limit).max(td as f64)) as i16;
             }
 
             r.h[idx] = rst_h;
@@ -498,6 +522,7 @@ fn adm_decouple_s123(
     h: usize,
     stride: usize,
     div: &[i32; 65537],
+    enhn_gain_limit: f64,
 ) {
     let cos_1deg_sq = (std::f64::consts::PI / 180.0).cos().powi(2);
     let (left, top, right, bottom) = border_region(w, h, 1);
@@ -550,22 +575,22 @@ fn adm_decouple_s123(
             let rst_d_f = (kd as f32 / 32768.0) * (od as f32 / 64.0);
 
             if angle_flag && rst_h_f > 0.0 {
-                rst_h = ((rst_h as f64 * ENHN_GAIN_LIMIT).min(th as f64)) as i32;
+                rst_h = ((rst_h as f64 * enhn_gain_limit).min(th as f64)) as i32;
             }
             if angle_flag && rst_h_f < 0.0 {
-                rst_h = ((rst_h as f64 * ENHN_GAIN_LIMIT).max(th as f64)) as i32;
+                rst_h = ((rst_h as f64 * enhn_gain_limit).max(th as f64)) as i32;
             }
             if angle_flag && rst_v_f > 0.0 {
-                rst_v = ((rst_v as f64 * ENHN_GAIN_LIMIT).min(tv as f64)) as i32;
+                rst_v = ((rst_v as f64 * enhn_gain_limit).min(tv as f64)) as i32;
             }
             if angle_flag && rst_v_f < 0.0 {
-                rst_v = ((rst_v as f64 * ENHN_GAIN_LIMIT).max(tv as f64)) as i32;
+                rst_v = ((rst_v as f64 * enhn_gain_limit).max(tv as f64)) as i32;
             }
             if angle_flag && rst_d_f > 0.0 {
-                rst_d = ((rst_d as f64 * ENHN_GAIN_LIMIT).min(td as f64)) as i32;
+                rst_d = ((rst_d as f64 * enhn_gain_limit).min(td as f64)) as i32;
             }
             if angle_flag && rst_d_f < 0.0 {
-                rst_d = ((rst_d as f64 * ENHN_GAIN_LIMIT).max(td as f64)) as i32;
+                rst_d = ((rst_d as f64 * enhn_gain_limit).max(td as f64)) as i32;
             }
 
             r.h[idx] = rst_h;
@@ -586,12 +611,17 @@ fn adm_csf_i16(
     h: usize,
     stride: usize,
     rf: [f32; 3],
+    watson_fixed: bool,
 ) {
-    let i_rfactor = [
-        (rf[0] as f64 * 2f64.powi(21)) as u16,
-        (rf[1] as f64 * 2f64.powi(21)) as u16,
-        (rf[2] as f64 * 2f64.powi(23)) as u16,
-    ];
+    let i_rfactor = if watson_fixed {
+        [36453, 36453, 49417]
+    } else {
+        [
+            (rf[0] as f64 * 2f64.powi(21)) as u16,
+            (rf[1] as f64 * 2f64.powi(21)) as u16,
+            (rf[2] as f64 * 2f64.powi(23)) as u16,
+        ]
+    };
     let i_shifts = [15u32, 15, 17];
     let i_shiftsadd = [16384i32, 16384, 65535];
     let fix_one_by_30 = 4369i32;
@@ -649,7 +679,14 @@ fn adm_csf_i32(
     }
 }
 
-fn adm_csf_den_scale(src: &BandI16, w: usize, h: usize, stride: usize, rf: [f32; 3]) -> f32 {
+fn adm_csf_den_scale(
+    src: &BandI16,
+    w: usize,
+    h: usize,
+    stride: usize,
+    rf: [f32; 3],
+    noise_weight: f64,
+) -> f32 {
     let (left, top, right, bottom) = border_region_inner(w, h);
     let mut accum_h = 0u64;
     let mut accum_v = 0u64;
@@ -680,7 +717,7 @@ fn adm_csf_den_scale(src: &BandI16, w: usize, h: usize, stride: usize, rf: [f32;
     let csf_h = accum_h as f64 / shift_csf * (rf[0] as f64).powi(3);
     let csf_v = accum_v as f64 / shift_csf * (rf[1] as f64).powi(3);
     let csf_d = accum_d as f64 / shift_csf * (rf[2] as f64).powi(3);
-    let powf_add = (((bottom - top) * (right - left)) as f64 * NOISE_WEIGHT) as f32;
+    let powf_add = (((bottom - top) * (right - left)) as f64 * noise_weight) as f32;
     let powf_add = powf_add.powf(1.0 / 3.0);
     (csf_h as f32).powf(1.0 / 3.0)
         + powf_add
@@ -697,6 +734,7 @@ fn adm_csf_den_s123(
     h: usize,
     stride: usize,
     rf: [f32; 3],
+    noise_weight: f64,
 ) -> f32 {
     let shift_sq = [31u32, 30, 31];
     let accum_convert_float = [32i32, 27, 23];
@@ -725,7 +763,7 @@ fn adm_csf_den_s123(
     let csf_h = accums[0] as f64 / shift_csf * (rf[0] as f64).powi(3);
     let csf_v = accums[1] as f64 / shift_csf * (rf[1] as f64).powi(3);
     let csf_d = accums[2] as f64 / shift_csf * (rf[2] as f64).powi(3);
-    let powf_add = (((bottom - top) * (right - left)) as f64 * NOISE_WEIGHT) as f32;
+    let powf_add = (((bottom - top) * (right - left)) as f64 * noise_weight) as f32;
     let powf_add = powf_add.powf(1.0 / 3.0);
     (csf_h as f32).powf(1.0 / 3.0)
         + powf_add
@@ -760,12 +798,17 @@ fn adm_cm_i16(
     stride: usize,
     rf: [f32; 3],
     noise_weight: f64,
+    watson_fixed: bool,
 ) -> f32 {
-    let i_rfactor = [
-        (rf[0] as f64 * 2f64.powi(21)) as u16 as i32,
-        (rf[1] as f64 * 2f64.powi(21)) as u16 as i32,
-        (rf[2] as f64 * 2f64.powi(23)) as u16 as i32,
-    ];
+    let i_rfactor = if watson_fixed {
+        [36453, 36453, 49417]
+    } else {
+        [
+            (rf[0] as f64 * 2f64.powi(21)) as u16 as i32,
+            (rf[1] as f64 * 2f64.powi(21)) as u16 as i32,
+            (rf[2] as f64 * 2f64.powi(23)) as u16 as i32,
+        ]
+    };
     let shift_xsub = [10i32, 10, 12];
     let shift_xsq = [29u32, 29, 30];
     let add_shift_xsq = [1i64 << 28, 1i64 << 28, 1i64 << 29];
@@ -1059,14 +1102,14 @@ fn adm_dwt2_s123_combined(
     }
 }
 
-pub fn adm3_v1_from_luma(
+fn compute_adm(
     reference_y: &[u16],
     distorted_y: &[u16],
     width: usize,
     height: usize,
     bit_depth: u8,
-    variant: ModelVariant,
-) -> Result<f64, Error> {
+    settings: &AdmSettings,
+) -> Result<(f64, f64), Error> {
     if !matches!(bit_depth, 8 | 10) {
         return Err(Error::InvalidInput("unsupported bit depth"));
     }
@@ -1087,13 +1130,7 @@ pub fn adm3_v1_from_luma(
     {
         return Err(Error::InvalidInput("sample exceeds bit depth"));
     }
-    let (norm_view_dist, ref_display_height) = match variant {
-        ModelVariant::Standard1080p | ModelVariant::HfrStandard1080p => (3.0f64, 1080),
-        ModelVariant::Phone | ModelVariant::HfrPhone => (5.0, 1080),
-        ModelVariant::Default4k | ModelVariant::HfrDefault4k => (1.5, 2160),
-        ModelVariant::Consumer4k | ModelVariant::HfrConsumer4k => (3.0, 2160),
-    };
-    if norm_view_dist * (ref_display_height as f64) < 3.0 * 1080.0 {
+    if settings.norm_view_dist * (settings.ref_display_height as f64) < 3.0 * 1080.0 {
         return Err(Error::InvalidInput("viewing distance unsupported"));
     }
 
@@ -1112,6 +1149,7 @@ pub fn adm3_v1_from_luma(
 
     for scale in 0..4usize {
         let (ind_y, ind_x) = dwt2_indices(w, h);
+        let rf = rfactor(settings, scale);
         let (num_scale, den_scale, aim_num_scale);
         if scale == 0 {
             let mut ref_b = BandI16 {
@@ -1170,8 +1208,18 @@ pub fn adm3_v1_from_luma(
             };
             w = w.div_ceil(2);
             h = h.div_ceil(2);
-            adm_decouple(&ref_b, &dis_b, &mut r, &mut a, w, h, buf_stride, div);
-            den_scale = adm_csf_den_scale(&ref_b, w, h, buf_stride, rfactor(variant, 0));
+            adm_decouple(
+                &ref_b,
+                &dis_b,
+                &mut r,
+                &mut a,
+                w,
+                h,
+                buf_stride,
+                div,
+                settings.enhn_gain_limit,
+            );
+            den_scale = adm_csf_den_scale(&ref_b, w, h, buf_stride, rf, settings.noise_weight);
             let mut csf_a = BandI16 {
                 a: Vec::new(),
                 h: vec![0; band_elems],
@@ -1191,7 +1239,8 @@ pub fn adm3_v1_from_luma(
                 w,
                 h,
                 buf_stride,
-                rfactor(variant, 0),
+                rf,
+                settings.watson_fixed,
             );
             num_scale = adm_cm_i16(
                 &r,
@@ -1200,8 +1249,9 @@ pub fn adm3_v1_from_luma(
                 w,
                 h,
                 buf_stride,
-                rfactor(variant, 0),
-                NOISE_WEIGHT,
+                rf,
+                settings.noise_weight,
+                settings.watson_fixed,
             );
             adm_csf_i16(
                 &r,
@@ -1210,7 +1260,8 @@ pub fn adm3_v1_from_luma(
                 w,
                 h,
                 buf_stride,
-                rfactor(variant, 0),
+                rf,
+                settings.watson_fixed,
             );
             aim_num_scale = adm_cm_i16(
                 &a,
@@ -1219,8 +1270,9 @@ pub fn adm3_v1_from_luma(
                 w,
                 h,
                 buf_stride,
-                rfactor(variant, 0),
+                rf,
                 0.0,
+                settings.watson_fixed,
             );
         } else {
             let mut ref_b = BandI32 {
@@ -1265,8 +1317,19 @@ pub fn adm3_v1_from_luma(
             };
             w = w.div_ceil(2);
             h = h.div_ceil(2);
-            adm_decouple_s123(&ref_b, &dis_b, &mut r, &mut a, w, h, buf_stride, div);
-            den_scale = adm_csf_den_s123(&ref_b, scale, w, h, buf_stride, rfactor(variant, scale));
+            adm_decouple_s123(
+                &ref_b,
+                &dis_b,
+                &mut r,
+                &mut a,
+                w,
+                h,
+                buf_stride,
+                div,
+                settings.enhn_gain_limit,
+            );
+            den_scale =
+                adm_csf_den_s123(&ref_b, scale, w, h, buf_stride, rf, settings.noise_weight);
             let mut csf_a = BandI32 {
                 a: Vec::new(),
                 h: vec![0; band_elems],
@@ -1279,15 +1342,7 @@ pub fn adm3_v1_from_luma(
                 v: vec![0; band_elems],
                 d: vec![0; band_elems],
             };
-            adm_csf_i32(
-                &a,
-                &mut csf_a,
-                &mut csf_f,
-                w,
-                h,
-                buf_stride,
-                rfactor(variant, scale),
-            );
+            adm_csf_i32(&a, &mut csf_a, &mut csf_f, w, h, buf_stride, rf);
             num_scale = adm_cm_i32(
                 &r,
                 &csf_f,
@@ -1296,29 +1351,11 @@ pub fn adm3_v1_from_luma(
                 w,
                 h,
                 buf_stride,
-                rfactor(variant, scale),
-                NOISE_WEIGHT,
+                rf,
+                settings.noise_weight,
             );
-            adm_csf_i32(
-                &r,
-                &mut csf_f,
-                &mut csf_a,
-                w,
-                h,
-                buf_stride,
-                rfactor(variant, scale),
-            );
-            aim_num_scale = adm_cm_i32(
-                &a,
-                &csf_a,
-                &csf_f,
-                scale,
-                w,
-                h,
-                buf_stride,
-                rfactor(variant, scale),
-                0.0,
-            );
+            adm_csf_i32(&r, &mut csf_f, &mut csf_a, w, h, buf_stride, rf);
+            aim_num_scale = adm_cm_i32(&a, &csf_a, &csf_f, scale, w, h, buf_stride, rf, 0.0);
         }
         num += num_scale as f64;
         den += den_scale as f64;
@@ -1332,7 +1369,71 @@ pub fn adm3_v1_from_luma(
     } else {
         (num / den, aim_num / den)
     };
-    Ok((score * DLM_WEIGHT + (1.0 - score_aim) * (1.0 - DLM_WEIGHT)).max(MIN_VAL))
+    Ok((score, score_aim))
+}
+
+pub fn adm3_v1_from_luma(
+    reference_y: &[u16],
+    distorted_y: &[u16],
+    width: usize,
+    height: usize,
+    bit_depth: u8,
+    variant: ModelVariant,
+) -> Result<f64, Error> {
+    let (norm_view_dist, ref_display_height) = match variant {
+        ModelVariant::Standard1080p | ModelVariant::HfrStandard1080p => (3.0f64, 1080),
+        ModelVariant::Phone | ModelVariant::HfrPhone => (5.0, 1080),
+        ModelVariant::Default4k | ModelVariant::HfrDefault4k => (1.5, 2160),
+        ModelVariant::Consumer4k | ModelVariant::HfrConsumer4k => (3.0, 2160),
+    };
+    let settings = AdmSettings {
+        factors: csf_table(variant),
+        enhn_gain_limit: ENHN_GAIN_LIMIT,
+        noise_weight: NOISE_WEIGHT,
+        watson_fixed: false,
+        norm_view_dist,
+        ref_display_height,
+    };
+    let (score, aim) = compute_adm(
+        reference_y,
+        distorted_y,
+        width,
+        height,
+        bit_depth,
+        &settings,
+    )?;
+    Ok((score * DLM_WEIGHT + (1.0 - aim) * (1.0 - DLM_WEIGHT)).max(MIN_VAL))
+}
+
+pub fn adm2_v0_from_luma(
+    reference_y: &[u16],
+    distorted_y: &[u16],
+    width: usize,
+    height: usize,
+    bit_depth: u8,
+    variant: VmafV0Variant,
+) -> Result<f64, Error> {
+    let settings = AdmSettings {
+        factors: &WATSON97_CSF_1080_3H,
+        enhn_gain_limit: if variant.no_enhancement_gain() {
+            1.0
+        } else {
+            100.0
+        },
+        noise_weight: 0.03125,
+        watson_fixed: true,
+        norm_view_dist: 3.0,
+        ref_display_height: 1080,
+    };
+    compute_adm(
+        reference_y,
+        distorted_y,
+        width,
+        height,
+        bit_depth,
+        &settings,
+    )
+    .map(|(score, _)| score)
 }
 
 #[cfg(all(test, feature = "simd"))]

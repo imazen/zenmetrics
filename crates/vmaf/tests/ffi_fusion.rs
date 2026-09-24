@@ -7,8 +7,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use vmaf::VmafV1Scorer;
 use vmaf::{
     ModelVariant, PoolingMethod, VmafFeatures, VmafModel, VmafV0Features, VmafV0Model,
-    VmafV0Variant, VmafV1Stream, Yuv420Frame, adm3_v1_from_luma, cambi_v1_from_luma,
-    motion2_v0_from_luma, motion3_from_luma, pool_v1_scores, score_v1_420, speed_v1_chroma_420,
+    VmafV0Variant, VmafV1Stream, Yuv420Frame, adm2_v0_from_luma, adm3_v1_from_luma,
+    cambi_v1_from_luma, motion2_v0_from_luma, motion3_from_luma, pool_v1_scores, score_v1_420,
+    speed_v1_chroma_420,
 };
 use vmaf_head_sys::*;
 
@@ -1261,4 +1262,52 @@ fn v0_motion2_matches_v321_for_both_depths_and_neg() {
         }
     }
     assert!(motion2_v0_from_luma(&[&[]], usize::MAX, 8, 8).is_err());
+}
+
+#[test]
+fn v0_adm2_matches_v321_for_watson97_gain_and_neg() {
+    let original = oracle_v0("vmaf_v0.6.1", 8, true, sharpened_frame);
+    let neg = oracle_v0("vmaf_v0.6.1neg", 8, true, sharpened_frame);
+    assert!(
+        original
+            .iter()
+            .zip(&neg)
+            .any(|((a, _), (b, _))| (a[0] - b[0]).abs() > 1e-6)
+    );
+    for variant in [
+        VmafV0Variant::Standard,
+        VmafV0Variant::StandardNeg,
+        VmafV0Variant::FourK,
+        VmafV0Variant::FourKNeg,
+    ] {
+        for bit_depth in [8, 10] {
+            for distorted in [false, true] {
+                let expected = oracle_v0(
+                    variant.built_in_name(),
+                    bit_depth,
+                    distorted,
+                    sharpened_frame,
+                );
+                for (index, (features, _)) in expected.into_iter().enumerate() {
+                    let reference = sharpened_frame(index, bit_depth, false);
+                    let distortion = sharpened_frame(index, bit_depth, distorted);
+                    let actual = adm2_v0_from_luma(
+                        &reference.planes[0],
+                        &distortion.planes[0],
+                        WIDTH,
+                        HEIGHT,
+                        bit_depth as u8,
+                        variant,
+                    )
+                    .unwrap();
+                    assert!(
+                        (actual - features[0]).abs() <= 1e-4,
+                        "{variant:?}, {bit_depth} bit, distorted={distorted}, frame={index}: \
+                         pure Rust={actual}, libvmaf={}",
+                        features[0]
+                    );
+                }
+            }
+        }
+    }
 }
