@@ -419,6 +419,7 @@ fn parse_svm<const N: usize>(text: &str) -> Result<(f64, f64, Vec<SupportVector<
 
 const MOTION_FILTER: [i64; 5] = [3571, 16004, 26386, 16004, 3571];
 pub(crate) const MOTION_MAX_VAL: f64 = 18.0;
+const MOTION_V0_MAX_VAL: f64 = 10000.0;
 
 fn mirror(idx: isize, size: usize) -> usize {
     let size = size as isize;
@@ -467,12 +468,13 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
     sad
 }
 
-pub fn motion3_from_luma(
+fn motion_raw_from_luma(
     frames: &[&[u16]],
     width: usize,
     height: usize,
     bit_depth: u8,
     hfr: bool,
+    max_val: f64,
 ) -> Result<Vec<f64>, Error> {
     if !matches!(bit_depth, 8 | 10 | 12 | 16) {
         return Err(Error::InvalidInput("unsupported bit depth"));
@@ -500,15 +502,47 @@ pub fn motion3_from_luma(
         }
     }
 
+    let min_idx: usize = if hfr { 2 } else { 1 };
+    let mut raw = vec![0.0f64; frames.len()];
+    for i in min_idx..frames.len() {
+        let sad = motion_sad(frames[i - min_idx], frames[i], width, height, bit_depth);
+        raw[i] = ((sad as f64) / 256.0 / (width * height) as f64).min(max_val);
+    }
+    Ok(raw)
+}
+
+pub fn motion2_v0_from_luma(
+    frames: &[&[u16]],
+    width: usize,
+    height: usize,
+    bit_depth: u8,
+) -> Result<Vec<f64>, Error> {
+    if !matches!(bit_depth, 8 | 10) {
+        return Err(Error::InvalidInput("unsupported bit depth"));
+    }
+    let raw = motion_raw_from_luma(frames, width, height, bit_depth, false, MOTION_V0_MAX_VAL)?;
+    let mut out = vec![0.0; frames.len()];
+    for i in 1..frames.len() {
+        out[i] = if i + 1 == frames.len() {
+            raw[i]
+        } else {
+            raw[i].min(raw[i + 1])
+        };
+    }
+    Ok(out)
+}
+
+pub fn motion3_from_luma(
+    frames: &[&[u16]],
+    width: usize,
+    height: usize,
+    bit_depth: u8,
+    hfr: bool,
+) -> Result<Vec<f64>, Error> {
+    let raw = motion_raw_from_luma(frames, width, height, bit_depth, hfr, MOTION_MAX_VAL)?;
     let n = frames.len();
     let min_idx: usize = if hfr { 2 } else { 1 };
     let stride: usize = if hfr { 2 } else { 1 };
-
-    let mut raw = vec![0.0f64; n];
-    for i in min_idx..n {
-        let sad = motion_sad(frames[i - min_idx], frames[i], width, height, bit_depth);
-        raw[i] = ((sad as f64) / 256.0 / (width * height) as f64).min(MOTION_MAX_VAL);
-    }
 
     let stamp = if n > min_idx { raw[min_idx] } else { 0.0 };
     let mut out = vec![0.0f64; n];

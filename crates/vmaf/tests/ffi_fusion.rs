@@ -8,7 +8,7 @@ use vmaf::VmafV1Scorer;
 use vmaf::{
     ModelVariant, PoolingMethod, VmafFeatures, VmafModel, VmafV0Features, VmafV0Model,
     VmafV0Variant, VmafV1Stream, Yuv420Frame, adm3_v1_from_luma, cambi_v1_from_luma,
-    motion3_from_luma, pool_v1_scores, score_v1_420, speed_v1_chroma_420,
+    motion2_v0_from_luma, motion3_from_luma, pool_v1_scores, score_v1_420, speed_v1_chroma_420,
 };
 use vmaf_head_sys::*;
 
@@ -1239,4 +1239,26 @@ fn v0_fusion_matches_v321_for_both_depths_and_neg() {
             })
             .is_err()
     );
+}
+
+#[test]
+fn v0_motion2_matches_v321_for_both_depths_and_neg() {
+    for name in ["vmaf_v0.6.1", "vmaf_v0.6.1neg"] {
+        for bit_depth in [8, 10] {
+            let expected = oracle_v0(name, bit_depth, true, frame);
+            let owned: Vec<_> = (0..3)
+                .map(|index| frame(index, bit_depth, false).planes[0].clone())
+                .collect();
+            let frames: Vec<&[u16]> = owned.iter().map(Vec::as_slice).collect();
+            let actual = motion2_v0_from_luma(&frames, WIDTH, HEIGHT, bit_depth as u8).unwrap();
+            for (index, (&ours, &(features, _))) in actual.iter().zip(&expected).enumerate() {
+                assert!(
+                    (ours - features[1]).abs() <= 1e-8,
+                    "{name}, {bit_depth} bit, frame {index}: Rust {ours}, libvmaf {}",
+                    features[1]
+                );
+            }
+        }
+    }
+    assert!(motion2_v0_from_luma(&[&[]], usize::MAX, 8, 8).is_err());
 }
