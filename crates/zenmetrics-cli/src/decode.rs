@@ -797,7 +797,11 @@ mod tests {
         let mut decoder = zenavif::ManagedAvifDecoder::new(MONO_10B_AVIF, &cfg).unwrap();
         let (native, info) = decoder.decode_full(&enough::Unstoppable).unwrap();
         assert_eq!(info.bit_depth, 10);
-        let slice = native.as_slice();
+        // This vector has no colr box; stamp sRGB to exercise the same
+        // converter descriptor that the separate nclx=13 ingress test checks.
+        let desc = native.descriptor().with_transfer(TransferFunction::Srgb);
+        let tagged = native.with_descriptor(desc);
+        let slice = tagged.as_slice();
         assert_eq!(slice.descriptor().channel_type(), ChannelType::U16);
         let channels = slice.descriptor().layout().channels();
         assert!(matches!(
@@ -805,6 +809,11 @@ mod tests {
             ChannelLayout::Gray | ChannelLayout::Rgb
         ));
         let got = decode_avif(MONO_10B_AVIF).unwrap();
+        let tagged_rgb8 = pixel_buffer_to_rgb8(&tagged).unwrap();
+        assert_eq!(
+            tagged_rgb8.pixels, got.pixels,
+            "sRGB tagging changed 10-bit code values"
+        );
         let src = slice.as_strided_bytes();
         let mut bad = 0usize;
         for y in 0..slice.rows() as usize {
