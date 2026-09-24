@@ -83,7 +83,7 @@ CPU ladder and the umbrella's `Backend::Cpu` dispatch route to:
 | [`iwssim`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim) | IW-SSIM (CPU reference + SIMD) | `[0, 1]`, 1.0 = identical | self (pure-Rust port) |
 | [`cvvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp) | ColorVideoVDP (still + video, CPU) | JOD ~3–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.7 |
 | [`hdrvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/hdrvdp) | HDR-VDP 2.2.2 (CPU-only, absolute nits) | JOD ~0–100 (`res.Q`), higher better | official HDR-VDP 2.2.2 (Mantiuk et al.) |
-| [`vmaf`](https://github.com/imazen/zenmetrics/tree/master/crates/vmaf) | VMAF v1.0.16 (CPU, planar YUV420 8/10-bit) | 0–100, higher better; standard/HFR variants | Netflix libvmaf 3.2.1 (FFI oracle in tests) |
+| [`vmaf`](https://github.com/imazen/zenmetrics/tree/master/crates/vmaf) | VMAF v0.6.1 and v1.0.16 (CPU, planar YUV420 8/10-bit) | 0–100, higher better; v0/NEG/4K and v1 standard/HFR variants | Netflix libvmaf 3.2.1 (FFI oracle in tests) |
 
 The `vmaf` crate scores planar SDR YUV420 frames directly, including CAMBI,
 chroma SpEED, integer ADM3, motion3, model fusion and temporal pooling. Its
@@ -91,10 +91,9 @@ eight official v1.0.16 models already set the no-enhancement-gain limits
 associated with **NEG**; there is no separate upstream v1-NEG model family.
 `ModelVariant::V1_NEG` explicitly names the standard v1 model with those
 existing NEG settings. The four embedded v0.6.1 standard/4K and NEG models
-currently support oracle-checked six-feature fusion through `VmafV0Model`;
-standalone v0 motion2, ADM2, and all four integer VIF scales also pass
-libvmaf feature-level checks, including the ADM2/VIF no-enhancement-gain
-limits. The combined v0 pixel-to-score path is not yet implemented.
+use separate ADM2, motion2 and four-scale integer VIF features; their
+feature, fusion, frame-score, streaming, and pooling paths are checked
+against libvmaf, including ADM2/VIF no-enhancement-gain limits.
 The production crate does not link libvmaf: `vmaf-head-sys = 0.2.0` is pinned
 as a test/benchmark-only oracle, and it already vendors libvmaf 3.2.1. This
 API is not yet part of `zenmetrics --metric` or the orchestrator; it requires
@@ -105,6 +104,12 @@ and emits delayed scores once lookahead is available; call `finish()` to emit
 the final frame. With `--features parallel`, `VmafV1Scorer::with_threads(n)`
 uses a dedicated, explicitly bounded worker pool for independent frames
 without changing per-frame arithmetic.
+For legacy models, `score_v0_420` accepts `VmafV0Variant::{Standard,
+StandardNeg, FourK, FourKNeg}` and returns per-frame `VmafV0Features` and
+scores. `VmafV0Scorer` reuses its parsed model, offers the same bounded
+`with_threads(n)` feature, and `VmafV0Stream` retains one recent reference
+luma frame while delaying output for motion2 lookahead. `pool_v0_scores`
+accepts the same pooling methods as `pool_v1_scores`.
 
 ```rust
 use vmaf::{ModelVariant, PoolingMethod, Yuv420Frame, pool_v1_scores, score_v1_420};

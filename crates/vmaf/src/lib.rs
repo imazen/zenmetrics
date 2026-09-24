@@ -5,6 +5,7 @@ mod cambi;
 mod score;
 mod speed;
 mod v0;
+mod v0_score;
 mod vif;
 
 pub use adm::{adm2_v0_from_luma, adm3_v1_from_luma};
@@ -15,6 +16,7 @@ pub use score::{
 };
 pub use speed::speed_v1_chroma_420;
 pub use v0::{VmafV0Features, VmafV0Model, VmafV0Variant};
+pub use v0_score::{VmafV0FrameResult, VmafV0Scorer, VmafV0Stream, pool_v0_scores, score_v0_420};
 pub use vif::vif_v0_from_luma;
 
 use std::error::Error as StdError;

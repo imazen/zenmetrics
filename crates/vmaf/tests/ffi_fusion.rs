@@ -7,9 +7,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use vmaf::VmafV1Scorer;
 use vmaf::{
     ModelVariant, PoolingMethod, VmafFeatures, VmafModel, VmafV0Features, VmafV0Model,
-    VmafV0Variant, VmafV1Stream, Yuv420Frame, adm2_v0_from_luma, adm3_v1_from_luma,
-    cambi_v1_from_luma, motion2_v0_from_luma, motion3_from_luma, pool_v1_scores, score_v1_420,
-    speed_v1_chroma_420, vif_v0_from_luma,
+    VmafV0Stream, VmafV0Variant, VmafV1Stream, Yuv420Frame, adm2_v0_from_luma, adm3_v1_from_luma,
+    cambi_v1_from_luma, motion2_v0_from_luma, motion3_from_luma, pool_v0_scores, pool_v1_scores,
+    score_v0_420, score_v1_420, speed_v1_chroma_420, vif_v0_from_luma,
 };
 use vmaf_head_sys::*;
 
@@ -1359,4 +1359,277 @@ fn v0_vif_scales_match_v321_for_both_depths_and_neg() {
             }
         }
     }
+}
+
+#[test]
+fn full_v0_pixel_scores_match_v321() {
+    for variant in [
+        VmafV0Variant::Standard,
+        VmafV0Variant::StandardNeg,
+        VmafV0Variant::FourK,
+        VmafV0Variant::FourKNeg,
+    ] {
+        for bit_depth in [8, 10] {
+            for distorted in [false, true] {
+                let expected = oracle_v0(
+                    variant.built_in_name(),
+                    bit_depth,
+                    distorted,
+                    sharpened_frame,
+                );
+                let reference: Vec<_> = (0..3)
+                    .map(|i| sharpened_frame(i, bit_depth, false))
+                    .collect();
+                let distortion: Vec<_> = (0..3)
+                    .map(|i| sharpened_frame(i, bit_depth, distorted))
+                    .collect();
+                let actual = score_v0_420(
+                    &reference.iter().map(yuv).collect::<Vec<_>>(),
+                    &distortion.iter().map(yuv).collect::<Vec<_>>(),
+                    WIDTH,
+                    HEIGHT,
+                    bit_depth as u8,
+                    variant,
+                )
+                .unwrap();
+                for (index, (ours, (features, oracle))) in
+                    actual.iter().zip(expected.iter()).enumerate()
+                {
+                    for (name, ours, oracle, tolerance) in [
+                        ("adm2", ours.features.adm2, features[0], 1e-4),
+                        ("motion2", ours.features.motion2, features[1], 1e-8),
+                        ("vif0", ours.features.vif_scales[0], features[2], 1e-4),
+                        ("vif1", ours.features.vif_scales[1], features[3], 1e-4),
+                        ("vif2", ours.features.vif_scales[2], features[4], 1e-4),
+                        ("vif3", ours.features.vif_scales[3], features[5], 1e-4),
+                        ("score", ours.score, *oracle, 0.02),
+                    ] {
+                        assert!(
+                            (ours - oracle).abs() <= tolerance,
+                            "{variant:?}, {bit_depth} bit, distorted={distorted}, \
+                             frame={index}, {name}: Rust {ours}, libvmaf {oracle}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn v0_stream_matches_batch_through_motion_lookahead() {
+    for variant in [VmafV0Variant::StandardNeg, VmafV0Variant::FourK] {
+        for bit_depth in [8, 10] {
+            let reference: Vec<_> = (0..3).map(|i| frame(i, bit_depth, false)).collect();
+            let distortion: Vec<_> = (0..3).map(|i| frame(i, bit_depth, true)).collect();
+            let ref_frames: Vec<_> = reference.iter().map(yuv).collect();
+            let dis_frames: Vec<_> = distortion.iter().map(yuv).collect();
+            for count in [1, 2, 3] {
+                let expected = score_v0_420(
+                    &ref_frames[..count],
+                    &dis_frames[..count],
+                    WIDTH,
+                    HEIGHT,
+                    bit_depth as u8,
+                    variant,
+                )
+                .unwrap();
+                let mut stream =
+                    VmafV0Stream::new(WIDTH, HEIGHT, bit_depth as u8, variant).unwrap();
+                let mut actual = Vec::new();
+                for i in 0..count {
+                    actual.extend(stream.push(ref_frames[i], dis_frames[i]).unwrap());
+                    assert!(actual.len() <= i);
+                }
+                actual.extend(stream.finish().unwrap());
+                assert_eq!(actual.len(), count);
+                for (i, (got, want)) in actual.iter().zip(expected.iter()).enumerate() {
+                    for (name, got, want) in [
+                        ("adm2", got.features.adm2, want.features.adm2),
+                        ("motion2", got.features.motion2, want.features.motion2),
+                        (
+                            "vif0",
+                            got.features.vif_scales[0],
+                            want.features.vif_scales[0],
+                        ),
+                        (
+                            "vif1",
+                            got.features.vif_scales[1],
+                            want.features.vif_scales[1],
+                        ),
+                        (
+                            "vif2",
+                            got.features.vif_scales[2],
+                            want.features.vif_scales[2],
+                        ),
+                        (
+                            "vif3",
+                            got.features.vif_scales[3],
+                            want.features.vif_scales[3],
+                        ),
+                        ("score", got.score, want.score),
+                    ] {
+                        assert_eq!(
+                            got.to_bits(),
+                            want.to_bits(),
+                            "{variant:?}, {bit_depth} bit, {count} frames, index {i}, {name}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        VmafV0Stream::new(WIDTH, HEIGHT, 8, VmafV0Variant::Standard)
+            .unwrap()
+            .finish()
+            .is_err()
+    );
+}
+
+#[test]
+fn v0_pooling_matches_v321() {
+    for variant in [VmafV0Variant::StandardNeg, VmafV0Variant::FourK] {
+        let session = Session::new(variant.built_in_name());
+        for index in 0..3 {
+            let mut reference = picture(&frame(index, 8, false), 8, WIDTH, HEIGHT);
+            let mut distorted = picture(&frame(index, 8, true), 8, WIDTH, HEIGHT);
+            assert_eq!(
+                unsafe {
+                    vmaf_read_pictures(
+                        session.context,
+                        &mut reference,
+                        &mut distorted,
+                        index as u32,
+                    )
+                },
+                0
+            );
+        }
+        assert_eq!(
+            unsafe { vmaf_read_pictures(session.context, ptr::null_mut(), ptr::null_mut(), 0) },
+            0
+        );
+        let scores: Vec<_> = (0..3)
+            .map(|index| {
+                let mut value = f64::NAN;
+                assert_eq!(
+                    unsafe {
+                        vmaf_score_at_index(session.context, session.model, &mut value, index)
+                    },
+                    0
+                );
+                value
+            })
+            .collect();
+        for (method, c_method) in [
+            (PoolingMethod::Mean, VmafPoolingMethod_VMAF_POOL_METHOD_MEAN),
+            (PoolingMethod::Min, VmafPoolingMethod_VMAF_POOL_METHOD_MIN),
+            (PoolingMethod::Max, VmafPoolingMethod_VMAF_POOL_METHOD_MAX),
+            (
+                PoolingMethod::HarmonicMean,
+                VmafPoolingMethod_VMAF_POOL_METHOD_HARMONIC_MEAN,
+            ),
+        ] {
+            let mut oracle = f64::NAN;
+            assert_eq!(
+                unsafe {
+                    vmaf_score_pooled(session.context, session.model, c_method, &mut oracle, 0, 2)
+                },
+                0
+            );
+            let actual = pool_v0_scores(&scores, method).unwrap();
+            assert!(
+                (actual - oracle).abs() <= 1e-8,
+                "{variant:?}, {method:?}: Rust {actual}, libvmaf {oracle}"
+            );
+        }
+    }
+}
+
+#[test]
+fn v0_rejects_invalid_frames_without_advancing_stream() {
+    let reference = frame(0, 8, false);
+    let distorted = frame(0, 8, true);
+    let ref_frame = yuv(&reference);
+    let dis_frame = yuv(&distorted);
+    let bad = Yuv420Frame {
+        y: &distorted.planes[0],
+        u: &[],
+        v: &distorted.planes[2],
+    };
+    assert!(
+        score_v0_420(
+            &[ref_frame],
+            &[bad],
+            WIDTH,
+            HEIGHT,
+            8,
+            VmafV0Variant::Standard,
+        )
+        .is_err()
+    );
+    let mut stream = VmafV0Stream::new(WIDTH, HEIGHT, 8, VmafV0Variant::Standard).unwrap();
+    assert!(stream.push(ref_frame, bad).is_err());
+    assert!(stream.push(ref_frame, dis_frame).unwrap().is_empty());
+    let got = stream.finish().unwrap();
+    let expected = score_v0_420(
+        &[ref_frame],
+        &[dis_frame],
+        WIDTH,
+        HEIGHT,
+        8,
+        VmafV0Variant::Standard,
+    )
+    .unwrap();
+    assert_eq!(got[0].score.to_bits(), expected[0].score.to_bits());
+    assert!(score_v0_420(&[], &[], WIDTH, HEIGHT, 8, VmafV0Variant::Standard).is_err());
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn v0_parallel_preserves_serial_features_and_order() {
+    use vmaf::VmafV0Scorer;
+    let available = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    let reference: Vec<_> = (0..3).map(|i| frame(i, 10, false)).collect();
+    let distorted: Vec<_> = (0..3).map(|i| frame(i, 10, true)).collect();
+    let ref_frames: Vec<_> = reference.iter().map(yuv).collect();
+    let dis_frames: Vec<_> = distorted.iter().map(yuv).collect();
+    let serial = score_v0_420(
+        &ref_frames,
+        &dis_frames,
+        WIDTH,
+        HEIGHT,
+        10,
+        VmafV0Variant::StandardNeg,
+    )
+    .unwrap();
+    for threads in [1, 2, 4].into_iter().filter(|&n| n <= available) {
+        let scorer = VmafV0Scorer::new(WIDTH, HEIGHT, 10, VmafV0Variant::StandardNeg)
+            .unwrap()
+            .with_threads(threads)
+            .unwrap();
+        for (want, got) in serial
+            .iter()
+            .zip(scorer.score(&ref_frames, &dis_frames).unwrap())
+        {
+            assert_eq!(want.score.to_bits(), got.score.to_bits());
+            assert_eq!(want.features.adm2.to_bits(), got.features.adm2.to_bits());
+            assert_eq!(
+                want.features.motion2.to_bits(),
+                got.features.motion2.to_bits()
+            );
+            for (a, b) in want.features.vif_scales.iter().zip(got.features.vif_scales) {
+                assert_eq!(a.to_bits(), b.to_bits());
+            }
+        }
+    }
+    assert!(
+        VmafV0Scorer::new(WIDTH, HEIGHT, 10, VmafV0Variant::StandardNeg)
+            .unwrap()
+            .with_threads(0)
+            .is_err()
+    );
 }

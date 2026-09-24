@@ -1,7 +1,7 @@
 [package]
 name = "vmaf"
 version = "0.1.0"
-description = "Pure-Rust VMAF v1.0.16 YUV420 scorer matching Netflix libvmaf v3.2.1"
+description = "Pure-Rust VMAF v0.6.1 and v1.0.16 YUV420 scorers matching Netflix libvmaf v3.2.1"
 edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
