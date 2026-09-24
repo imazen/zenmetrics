@@ -302,7 +302,9 @@ pub fn run(
                 };
             }
 
-            // Quality term, from `D` *before* the psychometric reshaping.
+            // Quality term, from `D` *before* the psychometric reshaping —
+            // upstream's `(log(msre+eps) − log(eps)) · w_f`, summed into `Q`
+            // (res.Q = 100 − Q). No plane-count normalisation.
             let msre = {
                 let s: f64 = d
                     .iter()
@@ -311,7 +313,7 @@ pub fn run(
                     .sum();
                 s.sqrt() / (bw * bh) as f64
             };
-            quality_terms.push((msre + 1e-12).ln() * w_f / total_planes as f64);
+            quality_terms.push(((msre + 1e-12).ln() - 1e-12f64.ln()) * w_f);
 
             // Reshape by the psychometric slope for the visibility pooling.
             let out = d_bands.band_mut(b, o);
@@ -555,10 +557,10 @@ mod tests {
         assert_eq!(planes, planes2);
         // 64×64 → 2 oriented levels → 1 + 2·4 + 1 = 10 planes.
         assert_eq!(planes, 10);
-        // `Q` is a sum of logs of small numbers, so it is negative and RISES
-        // (toward zero) as the distortion grows — that is the direction the
-        // 2.2 logistic expects.
-        assert!(q_small < 0.0 && q_big < 0.0, "{q_small} / {q_big}");
+        // Each term is (log(msre+ε) − log ε)·w_f ≥ 0 — zero for an identical
+        // pair — so the accumulated `Q` is non-negative and RISES as the
+        // distortion grows; `res.Q = 100 − Q` falls.
+        assert!(q_small >= 0.0 && q_big >= 0.0, "{q_small} / {q_big}");
         assert!(
             q_big > q_small,
             "Q should rise with distortion: {q_small} → {q_big}"

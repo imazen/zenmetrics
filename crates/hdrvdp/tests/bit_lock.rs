@@ -1286,7 +1286,7 @@ mod reference {
                         .sum();
                     s.sqrt() / (bw * bh) as f64
                 };
-                quality_terms.push((msre + 1e-12).ln() * w_f / total_planes as f64);
+                quality_terms.push(((msre + 1e-12).ln() - 1e-12f64.ln()) * w_f);
 
                 let out = d_bands.band_mut(b, o);
                 for (dst, v) in out.data.iter_mut().zip(&d) {
@@ -1438,14 +1438,14 @@ mod reference {
         let m = masking_run(&bands_test, &bands_ref, &l_adapt, &dm, par);
         let vis = visibility(&m.d_bands, par);
 
-        let q = quality_correlate(&m.quality_terms);
+        let q_raw = quality_correlate(&m.quality_terms);
         Ok(HdrVdpResult {
             p_map: vis.p_map,
             p_det: vis.p_det,
             c_map: vis.c_map,
             c_max: vis.c_max,
-            q,
-            q_mos: quality_mos(q, par),
+            q: 100.0 - q_raw,
+            q_mos: quality_mos(q_raw, par),
             width,
             height,
             input_looks_relative: looks_relative(&ref_nits, channels, encoding),
@@ -2192,10 +2192,10 @@ fn lock_end_to_end() {
             want.p_det
         );
         assert!(
-            want.q_mos < 99.99,
-            "{}: fixture scored as identical (q_mos = {}) — lock is vacuous",
+            want.q < 99.9,
+            "{}: fixture scored as identical (res.Q = {}) — lock is vacuous",
             c.name,
-            want.q_mos
+            want.q
         );
     }
 }

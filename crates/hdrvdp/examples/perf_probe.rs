@@ -86,9 +86,9 @@ fn main() {
                 .chain([r.q, r.q_mos, r.p_det, r.c_max]),
         );
         println!(
-            "rep {rep}: {side}x{side} in {:.3} s  q_mos={:.6}  digest={digest:#018x}",
+            "rep {rep}: {side}x{side} in {:.3} s  res_q={:.6}  digest={digest:#018x}",
             dt.as_secs_f64(),
-            r.q_mos
+            r.q
         );
     }
 }

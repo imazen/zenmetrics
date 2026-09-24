@@ -26,9 +26,10 @@
 //!   `P_map = 1 − exp(log(0.5)·C)` turns that into a probability, so `C = 1`
 //!   gives exactly 0.5 — a coin flip, which is what "threshold" means.
 //!   `P_det` is the worst pixel.
-//! * **Quality** — `Q` is a weighted sum of per-band log energies, so it is
-//!   negative and rises toward 0 as distortion grows. `Q_MOS` maps it onto
-//!   0–100 with **100 = best**, via a logistic that is *decreasing* in `Q`.
+//! * **Quality** — upstream accumulates `Q = Σ (log(msre+ε) − log ε) · w_f`
+//!   over all pyramid planes and publishes `res.Q = 100 − Q` (**100 =
+//!   identical**). The `Q_MOS` logistic on the raw `Q` was removed upstream
+//!   in 2.2.1 as unreliable; it is retained here for parity research.
 
 use crate::bands::BandPyramid;
 use crate::params::Params;
@@ -122,18 +123,19 @@ pub fn visibility(d_bands: &BandPyramid, par: &Params) -> Visibility {
     }
 }
 
-/// The raw quality correlate `Q` — the sum of the per-plane terms the masking
-/// loop produced. Negative, rising toward 0 as distortion grows.
+/// The raw quality accumulator `Q` — the sum of the per-plane
+/// `(log(msre+ε) − log ε) · w_f` terms the masking loop produced. Positive and
+/// *rising* as distortion grows; `res.Q = 100 − Q` is what upstream publishes.
 #[must_use]
 pub fn quality_correlate(terms: &[f64]) -> f64 {
     terms.iter().sum()
 }
 
-/// Map `Q` onto the 0–100 mean-opinion-score scale, **100 = best**.
-///
-/// `Q_MOS = 100 / (1 + exp(q₁·(Q + q₂)))` with the 2.2 constants
-/// `q₁ = 3.455`, `q₂ = 0.8886`. The logistic is decreasing in `Q`, so the
-/// rising `Q` of a worse image maps to a falling score.
+/// The `Q_MOS` logistic, applied to the **raw** accumulator `Q` (not `res.Q`):
+/// `Q_MOS = 100 / (1 + exp(q₁·(Q + q₂)))` with the 2.2 constants `q₁ = 3.455`,
+/// `q₂ = 0.8886`. HDR-VDP-2.2.1 removed this output as unreliable — it sits
+/// at ≈4.4 for identical pairs and saturates toward 0 for anything visibly
+/// distorted. Retained for parity research; callers should prefer `res.Q`.
 #[must_use]
 #[inline]
 pub fn quality_mos(q: f64, par: &Params) -> f64 {

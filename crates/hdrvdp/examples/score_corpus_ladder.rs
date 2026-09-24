@@ -67,7 +67,7 @@ fn main() {
     println!("# source: zenmetrics-corpus source.png, {w}×{h}");
     println!("# pix_per_deg: {ppd:.3} (24in 1920x1200 at 0.5m)");
     println!("# sdr = srgb-display model (99/1 cd/m2); hdr = same content at a 1000 cd/m2 peak");
-    println!("jpeg_q\tsdr_q_mos\tsdr_p_det\tsdr_c_max\thdr_q_mos\thdr_p_det\thdr_c_max");
+    println!("jpeg_q\tsdr_res_q\tsdr_p_det\tsdr_c_max\thdr_res_q\thdr_p_det\thdr_c_max");
 
     for q in [1u32, 5, 20, 45, 70, 90] {
         let (test, tw, th) = load_rgb(&zenmetrics_corpus::jpeg_at_quality(q));
@@ -89,7 +89,7 @@ fn main() {
 
         println!(
             "{q}\t{:.4}\t{:.6}\t{:.4}\t{:.4}\t{:.6}\t{:.4}",
-            sdr.q_mos, sdr.p_det, sdr.c_max, hdr.q_mos, hdr.p_det, hdr.c_max
+            sdr.q, sdr.p_det, sdr.c_max, hdr.q, hdr.p_det, hdr.c_max
         );
     }
 }

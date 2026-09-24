@@ -15,7 +15,8 @@
 //!
 //! This crate is being landed in chunks (see imazen/zenmetrics#50). **The
 //! metric now scores a pair end to end** — [`hdrvdp`] takes two images in
-//! absolute luminance and returns `Q_MOS`, `Q`, and the visibility maps.
+//! absolute luminance and returns official `res.Q`, `Q_MOS`, and the
+//! visibility maps.
 //!
 //! | stage | module | status |
 //! |---|---|---|
@@ -28,24 +29,22 @@
 //! | steerable-pyramid decomposition | [`spyr`] + [`bands`] | ✅ |
 //! | contrast masking + per-band `D` | [`masking`] | ✅ |
 //! | probability pooling, `P_det` / `P_map` | [`pool`] | ✅ |
-//! | quality correlate `Q` / `Q_MOS` | [`pool`] | ✅ |
+//! | quality correlate `res.Q` (+ removed `Q_MOS`) | [`pool`] | ✅ |
 //! | end-to-end entry point | [`metric`] | ✅ |
 //! | UPIQ validation (SROCC vs the published 0.812) | — | ⏳ chunk 4 |
 //! | umbrella wiring (`MetricKind::Hdrvdp`) | — | ⏳ chunk 5 |
 //! | CubeCL GPU port | — | ⏳ chunk 6 |
 //!
+//! **Validated against official HDR-VDP-2.2.2** (Octave 11.1, 24 synthetic
+//! luminance cases): `P_det` agrees to 5.3e-14, `C_max` to 3.9e-12 relative,
+//! `P_map` to 3.9e-11 absolute, and `res.Q` to 9.9e-7. See
+//! `docs/VALIDATION.md` for provenance, tolerances, and the upstream Octave
+//! bug the reference run had to work around.
+//!
 //! One boundary caveat is carried openly rather than papered over: the
 //! pyramid's *synthesis* boundary rule is principled and self-consistent but
 //! has not been compared against upstream's C implementation. It affects only
-//! the visibility map's border pixels, never `Q` / `Q_MOS`. See [`spyr`].
-//!
-//! **The score is not yet validated.** The pipeline is complete and its
-//! behaviour is unit-tested (quality falls monotonically along a distortion
-//! ladder, the visibility map localises, the same relative distortion is less
-//! visible in near-darkness than at photopic levels), but no number out of
-//! this crate should be published as an HDR-VDP-2 score until chunk 4
-//! measures UPIQ SROCC against the reference implementation's 0.812 and
-//! records it in `benchmarks/`.
+//! the visibility map's border pixels, never `res.Q`. See [`spyr`].
 //!
 //! ## Units
 //!

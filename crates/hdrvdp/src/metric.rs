@@ -53,9 +53,17 @@ pub struct HdrVdpResult {
     pub c_map: Vec<f64>,
     /// The largest value in [`Self::c_map`].
     pub c_max: f64,
-    /// The raw quality correlate. Negative; rises toward 0 as distortion grows.
+    /// Official `res.Q` — the quality correlate HDR-VDP-2.2.2 publishes.
+    /// **100 = identical**, lower = worse; may go negative for heavy
+    /// distortion. This is `100 − Q` where `Q` is upstream's accumulated
+    /// `Σ (log(msre+ε) − log ε) · w_f` over all pyramid planes.
     pub q: f64,
-    /// The mean-opinion-score correlate on 0–100, **100 = best**.
+    /// The `Q_MOS` logistic HDR-VDP **removed in 2.2.1** as unreliable
+    /// (see upstream `ChangeLog.txt`), computed exactly as upstream's
+    /// commented-out line does: `100/(1+exp(q₁·(Q_raw+q₂)))` on the *raw*
+    /// accumulator `Q_raw = 100 − q`. Nearly saturated — ≈4.4 on identical
+    /// pairs, ≈0 on anything visibly distorted — which is precisely why
+    /// upstream removed it. Kept for research parity only; prefer [`Self::q`].
     pub q_mos: f64,
     /// Image width.
     pub width: usize,
@@ -169,14 +177,16 @@ pub fn hdrvdp(
         ..
     } = visibility(&m.d_bands, par);
 
-    let q = quality_correlate(&m.quality_terms);
+    // Upstream: `res.Q = 100 − Q`; the removed `res.Q_MOS` was the logistic
+    // applied to the raw `Q` accumulator, not to `res.Q`.
+    let q_raw = quality_correlate(&m.quality_terms);
     Ok(HdrVdpResult {
         p_map,
         p_det,
         c_map,
         c_max,
-        q,
-        q_mos: quality_mos(q, par),
+        q: 100.0 - q_raw,
+        q_mos: quality_mos(q_raw, par),
         width,
         height,
         input_looks_relative: looks_relative(&ref_nits, channels, encoding),
@@ -217,16 +227,16 @@ mod tests {
         assert!(r.p_det < 1e-9, "P_det = {} on an identical pair", r.p_det);
         assert!(r.c_max < 1e-9, "C_max = {}", r.c_max);
         assert_eq!(r.visible_fraction(), 0.0);
-        // Every band's msre is 0, so every quality term is log(0 + 1e-12)·w/n.
-        // That epsilon is finite, so `Q_MOS` for an identical pair lands just
-        // *short* of 100 — a known upstream property, not a port defect: the
-        // 2.1.2 ChangeLog says the updated epsilons "prevent NaN due to log of
-        // 0, but also cause Q_MOS to be relatively low for two identical
-        // images". Measured here: 99.9998.
-        assert!(r.q < 0.0, "Q = {}", r.q);
+        // Every band's msre is 0, so every quality term is
+        // (log(0+ε) − log ε)·w_f = 0 → res.Q = 100 exactly.
+        assert_eq!(r.q, 100.0, "res.Q = {} on an identical pair", r.q);
+        // `q_mos` is the logistic upstream removed in 2.2.1: on Q_raw = 0 it
+        // lands at 100/(1+exp(3.455·0.8886)) ≈ 4.4 — the "relatively low for
+        // identical images" behaviour the 2.1.2 ChangeLog describes and part
+        // of why upstream dropped it.
         assert!(
-            r.q_mos > 99.99 && r.q_mos < 100.0,
-            "Q_MOS = {} on an identical pair",
+            (4.0..5.0).contains(&r.q_mos),
+            "removed-Q_MOS = {} on an identical pair",
             r.q_mos
         );
         assert!(!r.input_looks_relative);
@@ -239,7 +249,7 @@ mod tests {
         let (w, h) = (96usize, 72usize);
         let reference = hdr_reference(w, h);
         let pi = core::f64::consts::PI;
-        let mut last_mos = f64::INFINITY;
+        let mut last_q = f64::INFINITY;
         let mut last_pdet = f64::NEG_INFINITY;
         for step in 0..5 {
             let amp = 0.002 * 3f64.powi(step);
@@ -253,10 +263,10 @@ mod tests {
                 .collect();
             let r = hdrvdp(&test, &reference, w, h, ColorEncoding::Luminance, &par()).unwrap();
             assert!(
-                r.q_mos < last_mos,
-                "Q_MOS should fall as distortion grows: {} then {} at amp {amp}",
-                last_mos,
-                r.q_mos
+                r.q < last_q,
+                "res.Q should fall as distortion grows: {} then {} at amp {amp}",
+                last_q,
+                r.q
             );
             assert!(
                 r.p_det > last_pdet,
@@ -264,9 +274,10 @@ mod tests {
                 last_pdet,
                 r.p_det
             );
+            assert!(r.q.is_finite() && r.q <= 100.0);
             assert!((0.0..=100.0).contains(&r.q_mos));
             assert!((0.0..=1.0).contains(&r.p_det));
-            last_mos = r.q_mos;
+            last_q = r.q;
             last_pdet = r.p_det;
         }
         // The strongest rung must actually be visible somewhere.
