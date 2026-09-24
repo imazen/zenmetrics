@@ -1124,6 +1124,7 @@ dependencies = [
  "cvvdp",
  "dssim-core",
  "fast-ssim2 0.8.2",
+ "gmsd",
  "imgref",
  "iwssim",
  "rgb",
@@ -2206,6 +2207,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c4ee00b289aba7a9e5306d57c2d05499b2e5dc427f84ac708bd2c090212cf3e"
 dependencies = [
  "gl_generator",
+]
+
+[[package]]
+name = "gmsd"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "magetypes",
+ "rayon",
+ "serde",
+ "serde_json",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -7325,6 +7339,7 @@ dependencies = [
  "dssim-core",
  "enough",
  "fast-ssim2 0.9.0",
+ "gmsd",
  "heic",
  "hex",
  "image",

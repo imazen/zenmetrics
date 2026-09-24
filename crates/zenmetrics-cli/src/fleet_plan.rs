@@ -244,6 +244,7 @@ fn metric_score_estimate(
         | MetricKind::Dssim
         | MetricKind::Zensim
         | MetricKind::Iwssim
+        | MetricKind::Gmsd
         | MetricKind::Cvvdp => Err(format!(
             "metric '{metric:?}' is a CPU metric — fleet-plan models GPU score \
              cost; pass a -gpu metric (e.g. ssim2-gpu, cvvdp-gpu, zensim-gpu)"

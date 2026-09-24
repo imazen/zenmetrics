@@ -1,0 +1,48 @@
+[package]
+name = "gmsd"
+version = "0.1.0"
+description = "Pure-Rust CPU port of GMSD (Xue, Zhang, Mou & Bovik 2014) from libgmsd, with magetypes SIMD"
+readme = "README.md"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+# The port of libgmsd (MIT, Copyright (c) 2018 Tom Clunie) keeps that notice in
+# `LICENSE-libgmsd` and in the header of `src/kernel.rs`.
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+# archmage::incant! checks `cfg(feature = "avx512")` internally even when no
+# AVX-512 tier is listed (same allow as crates/iwssim and crates/cvvdp).
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("avx512"))'] }
+
+[features]
+default = ["std"]
+# Use the standard library. Off -> core + alloc only.
+std = []
+# Rayon band parallelism. Results are bit-identical at every thread count:
+# per-row partial sums are combined in row order regardless of banding.
+parallel = ["std", "dep:rayon"]
+# Dev-only: exposes the per-tier kernel entry points so the SIMD tiers can be
+# compared against the scalar tier in tests and disassembled. Not API.
+_dev = ["archmage/testable_dispatch"]
+# zenpixels input: score any `PixelSlice` (any depth / layout / transfer that
+# zenpixels-convert can bring to sRGB RGB8), converted row by row.
+pixels = ["std", "dep:zenpixels", "dep:zenpixels-convert"]
+# Opt-in AVX-512 `v4` tier (16-wide), like crates/iwssim: enables the
+# archmage/magetypes AVX-512 support the tier is built on.
+avx512 = ["archmage/avx512", "magetypes/avx512"]
+
+[dependencies]
+archmage = { workspace = true }
+magetypes = { workspace = true }
+rayon = { version = "1.10", optional = true }
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
+zenpixels-convert = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
+
+[dev-dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1"
+zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"] }

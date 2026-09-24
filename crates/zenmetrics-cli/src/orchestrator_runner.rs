@@ -162,6 +162,7 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::Zensim => "zensim",
         CliMetricKind::ZensimGpu => "zensim_gpu",
         CliMetricKind::Iwssim => "iwssim",
+        CliMetricKind::Gmsd => "gmsd",
         CliMetricKind::Cvvdp => "cvvdp",
         CliMetricKind::CvvdpGpu => "cvvdp",
         CliMetricKind::Butteraugli => "butteraugli_max",
@@ -246,6 +247,8 @@ pub fn rekey_orchestrator_columns(
         // it here explicitly (rather than falling into the empty arm
         // below) so future readers see the contract.
         CliMetricKind::Iwssim => Vec::new(),
+        // Never reaches the orchestrator (`metric_orchestrator_eligible`).
+        CliMetricKind::Gmsd => Vec::new(),
         CliMetricKind::Cvvdp
         | CliMetricKind::CvvdpGpu
         | CliMetricKind::Ssim2Gpu
@@ -344,8 +347,10 @@ pub fn rekey_orchestrator_columns(
 ///   versioned column tag from `Score::metric_version`, then
 ///   `executor::build_output_columns` keys it under
 ///   `cvvdp_gpu::CVVDP_COLUMN_NAME`.
-pub fn metric_orchestrator_eligible(_kind: CliMetricKind) -> bool {
-    true
+pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
+    // GMSD has no umbrella/orchestrator backend: it is scored by the
+    // direct CPU path in `metrics::run_metric`.
+    !matches!(kind, CliMetricKind::Gmsd)
 }
 
 /// Build the orchestrator at the start of a CLI command. Wraps the

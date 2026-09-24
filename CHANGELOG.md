@@ -213,6 +213,32 @@ Workspace conventions per the global rules:
   optimized == reference port, while the golden test proves port ==
   official. `747b4d3e`.
 
+- **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
+  IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
+  Score + half-resolution GMS map, strided f32 input, zenpixels `PixelSlice`
+  input (`pixels`), rayon bands bit-identical at any thread count (`parallel`),
+  archmage/magetypes `#[arcane]` tier entries with `#[rite]` row helpers
+  (v3/neon/wasm128/scalar, each tier bit-identical to scalar). Parity: GMS map
+  bit-identical to libgmsd on 64/64 real pairs, score within 4e-13 relative
+  (`benchmarks/gmsd_parity_2026-09-22.md`). `53a49715`
+- zenmetrics-cli: `--metric gmsd` (feature `cpu-gmsd`, in `cpu-metrics`),
+  column `gmsd_cpu_imazen_v0_1_0`; CPU-only, not orchestrator-eligible.
+  Example `gmsd_parity_dump` (the Rust half of the parity harness). `53a49715`
+- gmsd: sRGB8 → gray is SIMD (`f64x4`, bit-identical to the scalar libgmsd
+  formula) and fused into the bands for `gmsd_rgb8` — no full-size gray
+  planes, conversion parallel with the kernel. 1024²: 5.35 → 1.63 ms (1
+  thread), 4.75 → 0.41 ms (8 threads). `c59cb81e`
+- gmsd: sRGB8 conversion + 2×2 decimation moved to integer SIMD (i32 lanes
+  with an exact `S ≡ 500 (mod 1000)` f64 boundary fixup, proved over all
+  2^24 RGB8 triplets); opt-in `avx512` feature adds a 16-wide `v4` tier.
+  Bit-identical to libgmsd still: 64/64 maps. 1024² `gmsd_rgb8` 1.57 →
+  0.99 ms (1 thread), 0.20 → 0.13 ms (8 threads). `051b37af` (Devin SWE-2)
+- gmsd: AVX-512 `v4` tier (feature `avx512`, enabled by zenmetrics-cli and
+  cpu-profile) and tier-order-stable f64 pooling (AVX2 row sums could differ
+  from scalar by ~1 ulp through a pairwise `reduce_add`; scores moved ≤ 6e-16,
+  ranks unchanged). zensim speed owner, 1024²: 0.83 ms (1 thread), 0.24 ms
+  (8 threads). `8fc65d91` (Devin SWE-2), `ce18b182`
+
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
   cICP, and route CPU CVVDP through its native HDR scorer. Refuse incompatible
