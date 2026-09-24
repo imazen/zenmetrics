@@ -87,3 +87,17 @@ Full row-key examples and all 48 canonical statistic results are in the adjacent
 
 - `zen-score-cvvdp` removed and confirmed absent on r3500 and tower.
 - r5600g removal is unconfirmed: SSH had no route or timed out on four attempts; ping failed from dev and tower. The coordinator retains the host OS decision. No other host state was changed.
+
+## Landing note (coordinator, 2026-09-24)
+
+The published sidecar (sha256 `775bdb8f…`) was produced by, and reproduces bit for bit on, the frozen build `9f36f88b`
+recorded in its manifest. That build is the only provenance for these values.
+
+This stack was rebased onto master `b50cde1f`. The fresh binary scores the reviewed 24-pair smoke set with **95 of 96**
+metric cells bitwise equal to the sidecar and **0 of 96** pixel-stamp mismatches. The one exception is
+`zenjxl-e7/q80.jxl` `cvvdp@standard_fhd`: 9.734886169433594 against 9.73488712310791, one f32 ULP. The intervening
+master CVVDP performance commits (`863a6af1`, deterministic dimension-governed banding and a fused N-tap FIR, and
+`2f3e051c`, pyramid-internal banding) change the f32 summation order.
+
+Rescoring these pairs on later builds is a new CVVDP era and must not be mixed into this table. The rebased stack
+passes `cargo test -p zenmetrics-cli --release` (108 passed, 0 failed; `avif_hdr_tripwire` 5/5).
