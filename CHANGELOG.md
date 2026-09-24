@@ -297,8 +297,9 @@ Workspace conventions per the global rules:
   behavior for other SDR transfer codes. Add native-sample exactness gates for
   AVIF10, PNG16, JXL16 and TIFF16. Temporarily pin both zenpixels crates to
   exact-narrowing main commit e56f626b until zenpixels-convert 0.2.17 or
-  newer publishes; the unrelated local lockfile drift was removed.
-  `39aef27f`, `4ca3c6a7`, `aecf7952`.
+  newer publishes; the lockfile retains current master entries and the required
+  lz4_flex 0.13.1 to 0.14.0 transitive update.
+  `ef69b77c`, `7c61c32e`, `5fc1331e`.
 
 - cvvdp: video scoring on the CPU path — `VideoScorer` (streaming
   `push_frame`/`finish`, holds only the temporal-filter window) plus
