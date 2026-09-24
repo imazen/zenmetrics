@@ -211,7 +211,7 @@ Workspace conventions per the global rules:
   in-tree gate (1.3 s, 24 cases); `tests/bit_lock.rs`'s verbatim
   reference copy was updated to the same formula — it still proves
   optimized == reference port, while the golden test proves port ==
-  official.
+  official. `747b4d3e`.
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
