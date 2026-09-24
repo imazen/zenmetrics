@@ -92,9 +92,9 @@ associated with **NEG**; there is no separate upstream v1-NEG model family.
 `ModelVariant::V1_NEG` explicitly names the standard v1 model with those
 existing NEG settings. The four embedded v0.6.1 standard/4K and NEG models
 currently support oracle-checked six-feature fusion through `VmafV0Model`;
-standalone v0 motion2 and ADM2 also pass libvmaf feature-level checks,
-including the ADM2 no-enhancement-gain limit. V0 VIF and the combined
-pixel-to-score path are not yet implemented.
+standalone v0 motion2, ADM2, and all four integer VIF scales also pass
+libvmaf feature-level checks, including the ADM2/VIF no-enhancement-gain
+limits. The combined v0 pixel-to-score path is not yet implemented.
 The production crate does not link libvmaf: `vmaf-head-sys = 0.2.0` is pinned
 as a test/benchmark-only oracle, and it already vendors libvmaf 3.2.1. This
 API is not yet part of `zenmetrics --metric` or the orchestrator; it requires
