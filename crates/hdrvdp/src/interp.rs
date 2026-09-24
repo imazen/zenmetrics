@@ -44,6 +44,40 @@ pub fn interp1_linear(xs: &[f64], ys: &[f64], x: f64) -> f64 {
     ys[i] + t * (ys[i + 1] - ys[i])
 }
 
+/// [`clamp`] on `f32` — same `NaN → lo` semantics.
+#[must_use]
+#[inline]
+pub fn clamp32(x: f32, lo: f32, hi: f32) -> f32 {
+    if x.is_nan() || x < lo {
+        lo
+    } else if x > hi {
+        hi
+    } else {
+        x
+    }
+}
+
+/// [`interp1_linear`] on `f32` grids — the per-pixel path (CSF lookups in the
+/// masking loop), where the table is built once in `f64` and cast down.
+#[must_use]
+pub fn interp1_linear32(xs: &[f32], ys: &[f32], x: f32) -> f32 {
+    debug_assert_eq!(xs.len(), ys.len());
+    debug_assert!(xs.len() >= 2);
+    if x <= xs[0] {
+        return ys[0];
+    }
+    let n = xs.len();
+    if x >= xs[n - 1] {
+        return ys[n - 1];
+    }
+    let i = match xs.binary_search_by(|probe| probe.partial_cmp(&x).expect("finite grid")) {
+        Ok(i) => return ys[i],
+        Err(i) => i - 1,
+    };
+    let t = (x - xs[i]) / (xs[i + 1] - xs[i]);
+    ys[i] + t * (ys[i + 1] - ys[i])
+}
+
 /// Look `x` up in a LUT sampled on a uniform grid starting at `x0` with step
 /// `dx`, linearly interpolating and clamping at both ends.
 ///

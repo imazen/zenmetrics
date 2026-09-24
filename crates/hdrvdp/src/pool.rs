@@ -39,12 +39,12 @@ use crate::spyr::{Band, ORIENTATIONS, SteerablePyramid, reconstruct};
 #[derive(Debug, Clone)]
 pub struct Visibility {
     /// Per-pixel probability that a human notices the difference, `[0, 1]`.
-    pub p_map: Vec<f64>,
+    pub p_map: Vec<f32>,
     /// The largest value in [`Self::p_map`].
     pub p_det: f64,
     /// Per-pixel difference magnitude in normalised detection units
     /// (1 = at threshold).
-    pub c_map: Vec<f64>,
+    pub c_map: Vec<f32>,
     /// The largest value in [`Self::c_map`].
     pub c_max: f64,
     /// Map width.
@@ -88,7 +88,7 @@ pub fn to_steerable(bp: &BandPyramid) -> SteerablePyramid {
 pub fn visibility(d_bands: &BandPyramid, par: &Params) -> Visibility {
     let pyr = to_steerable(d_bands);
     let rec = reconstruct(&pyr);
-    let mut s_map: Vec<f64> = rec.data.iter().map(|v| v.abs()).collect();
+    let mut s_map: Vec<f32> = rec.data.iter().map(|v| v.abs()).collect();
 
     if par.do_spatial_pooling {
         // Upstream: `S_map = sum(S_map)/(max(S_map)+eps) · S_map`.
@@ -100,18 +100,21 @@ pub fn visibility(d_bands: &BandPyramid, par: &Params) -> Visibility {
         // "1" nominally means "at threshold", and why `P_det` saturates to 1
         // for any distortion of real extent. `P_map`'s spatial *shape* is
         // unchanged (it is a uniform rescale), so the map still localises.
-        let sum: f64 = s_map.iter().sum();
-        let max = s_map.iter().fold(0.0f64, |a, b| a.max(*b));
-        let k = sum / (max + 1e-12);
+        //
+        // `sum` and `max` are reductions → f64; the scale factor is applied
+        // to the f32 plane.
+        let sum: f64 = s_map.iter().map(|v| *v as f64).sum();
+        let max = s_map.iter().map(|v| *v as f64).fold(0.0f64, f64::max);
+        let k = (sum / (max + 1e-12)) as f32;
         for v in &mut s_map {
             *v *= k;
         }
     }
 
-    let ln_half = 0.5f64.ln();
-    let p_map: Vec<f64> = s_map.iter().map(|c| 1.0 - (ln_half * c).exp()).collect();
-    let p_det = p_map.iter().fold(0.0f64, |a, b| a.max(*b));
-    let c_max = s_map.iter().fold(0.0f64, |a, b| a.max(*b));
+    let ln_half = 0.5f32.ln();
+    let p_map: Vec<f32> = s_map.iter().map(|c| 1.0 - (ln_half * c).exp()).collect();
+    let p_det = p_map.iter().map(|v| *v as f64).fold(0.0f64, f64::max);
+    let c_max = s_map.iter().map(|v| *v as f64).fold(0.0f64, f64::max);
 
     Visibility {
         p_map,
@@ -200,7 +203,7 @@ mod tests {
         // spurious detection from the pooling or the reconstruction.
         let (w, h) = (64usize, 48usize);
         let par = Params::new(30.0);
-        let im = vec![0.0; w * h];
+        let im = vec![0.0f32; w * h];
         let pyr = crate::spyr::build(&im, w, h, None);
         let bp = BandPyramid {
             bands: core::iter::once(vec![pyr.high_pass.clone()])
@@ -220,7 +223,7 @@ mod tests {
     #[test]
     fn to_steerable_round_trips_the_band_list() {
         let (w, h) = (64usize, 48usize);
-        let im: Vec<f64> = (0..w * h).map(|i| (i as f64 * 0.21).sin()).collect();
+        let im: Vec<f32> = (0..w * h).map(|i| (i as f32 * 0.21).sin()).collect();
         let pyr = crate::spyr::build(&im, w, h, None);
         let bp = BandPyramid {
             bands: core::iter::once(vec![pyr.high_pass.clone()])
@@ -250,7 +253,7 @@ mod tests {
         // of 400 and concluding "400× threshold" is reading the wrong quantity.
         let (w, h) = (64usize, 64usize);
         let mut par = Params::new(30.0);
-        let zero = crate::spyr::build(&vec![0.0; w * h], w, h, None);
+        let zero = crate::spyr::build(&vec![0.0f32; w * h], w, h, None);
         let mut bp = BandPyramid {
             bands: core::iter::once(vec![zero.high_pass.clone()])
                 .chain(zero.levels.iter().map(|l| l.to_vec()))
@@ -265,13 +268,13 @@ mod tests {
 
         par.do_spatial_pooling = false;
         let raw = visibility(&bp, &par);
-        let raw_sum: f64 = raw.c_map.iter().sum();
+        let raw_sum: f64 = raw.c_map.iter().map(|v| *v as f64).sum();
         let raw_max = raw.c_max;
 
         par.do_spatial_pooling = true;
         let pooled = visibility(&bp, &par);
         assert!(
-            (pooled.c_max - raw_sum).abs() < 1e-9 * raw_sum,
+            (pooled.c_max - raw_sum).abs() < 1e-5 * raw_sum,
             "pooled C_max {} should equal the un-pooled sum {raw_sum}",
             pooled.c_max
         );
@@ -281,7 +284,7 @@ mod tests {
         );
         // The map's SHAPE is untouched — pooling is a uniform rescale, so the
         // argmax does not move and P_map still localises.
-        let arg = |v: &[f64]| {
+        let arg = |v: &[f32]| {
             v.iter()
                 .enumerate()
                 .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())

@@ -60,13 +60,14 @@ fn cases() -> Vec<Golden> {
         .collect()
 }
 
-/// Tolerances: the measured worst-case deltas across the corpus are
-/// |ΔP_det| = 5.3e-14, rel |ΔC_max| = 3.9e-12, |ΔP_map| = 3.9e-11,
-/// |Δres.Q| = 9.9e-7 (VALIDATION.md). Bounds below carry ~3–10× headroom.
-const TOL_PDET: f64 = 1e-12;
-const TOL_CMAX_REL: f64 = 1e-9;
-const TOL_PMAP: f64 = 1e-9;
-const TOL_Q: f64 = 1e-5;
+/// Tolerances (f32 pipeline): measured worst-case deltas vs the official
+/// goldens after the f64→f32 conversion are |ΔP_det| = 1.4e-5,
+/// rel |ΔC_max| = 1.0e-4, |ΔP_map| = 1.7e-2, |Δres.Q| = 7.8e-4
+/// (VALIDATION.md). Bounds below carry ~3–7× headroom.
+const TOL_PDET: f64 = 1e-4;
+const TOL_CMAX_REL: f64 = 5e-4;
+const TOL_PMAP: f64 = 5e-2;
+const TOL_Q: f64 = 5e-3;
 
 #[test]
 fn all_cases_match_official_hdrvdp_2_2_2() {
@@ -93,7 +94,7 @@ fn all_cases_match_official_hdrvdp_2_2_2() {
             .p_map
             .iter()
             .zip(&pmap_want)
-            .map(|(a, b)| (a - b).abs())
+            .map(|(a, b)| (f64::from(*a) - b).abs())
             .fold(0.0, f64::max);
         assert!(pmap_d <= TOL_PMAP, "{}: P_map max|Δ| = {pmap_d:e}", g.case);
         assert!(

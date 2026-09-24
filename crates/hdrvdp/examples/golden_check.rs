@@ -79,7 +79,7 @@ fn diag_reconstruct(dir: &Path) {
         .collect();
     let (h, w) = dims[0];
     let band = |i: usize| Band {
-        data: planes[i].clone(),
+        data: planes[i].iter().map(|v| *v as f32).collect(),
         width: dims[i].1,
         height: dims[i].0,
     };
@@ -105,9 +105,9 @@ fn diag_reconstruct(dir: &Path) {
         .data
         .iter()
         .zip(&pre)
-        .map(|(a, b)| (a.abs() - b).abs())
+        .map(|(a, b)| (f64::from(a.abs()) - b).abs())
         .fold(0.0, f64::max);
-    let sum_r: f64 = rec.data.iter().map(|v| v.abs()).sum();
+    let sum_r: f64 = rec.data.iter().map(|v| f64::from(v.abs())).sum();
     let sum_pre: f64 = pre.iter().sum();
     println!(
         "reconstruct(upstream D_bands): |rec| Σ={sum_r:.6e} upstream |S_map_pre| Σ={sum_pre:.6e} max|Δ|={maxd:.3e}"
@@ -135,7 +135,7 @@ fn diag_pipeline(dir: &Path) {
     let path_test = visual_pathway(&test_nits, w, h, &par, &pn, &lmsr, &surround);
     let (bands_ref, pad) = decompose(&path_ref, &par, None);
     let (bands_test, _) = decompose(&path_test, &par, Some(pad));
-    let l_adapt: Vec<f64> = path_ref
+    let l_adapt: Vec<f32> = path_ref
         .l_adapt
         .iter()
         .zip(&path_test.l_adapt)
@@ -158,11 +158,11 @@ fn diag_pipeline(dir: &Path) {
             off += uh * uw;
             let rband = m.d_bands.band(b, o);
             let us: f64 = up.iter().map(|v| v.abs()).sum();
-            let rs: f64 = rband.data.iter().map(|v| v.abs()).sum();
+            let rs: f64 = rband.data.iter().map(|v| f64::from(v.abs())).sum();
             let md = if up.len() == rband.data.len() {
                 up.iter()
                     .zip(&rband.data)
-                    .map(|(a, b)| (a - b).abs())
+                    .map(|(a, b)| (a - f64::from(*b)).abs())
                     .fold(0.0, f64::max)
             } else {
                 f64::NAN
@@ -176,18 +176,10 @@ fn diag_pipeline(dir: &Path) {
     }
 
     // Reconstruct official `res.Q = 100 − Σ(ln(msre+ε)−ln ε)·w_f` from Rust's
-    // quality_terms (term_i = ln(msre+ε)·w_f/N → upstream term = N·term − ln(ε)·w_f).
-    let band_freq = bands_test.frequencies(par.pix_per_deg);
-    let qf: Vec<f64> = par.quality_band_freq.iter().rev().copied().collect();
-    let qw: Vec<f64> = par.quality_band_w.iter().rev().copied().collect();
-    let mut ti = 0usize;
+    // quality_terms — which already ARE the per-plane upstream terms.
     let mut q_raw = 0.0f64;
-    for (b, &f_b) in band_freq.iter().enumerate().take(m.d_bands.count()) {
-        let w_f = hdrvdp::interp::interp1_linear(&qf, &qw, f_b.clamp(qf[0], qf[qf.len() - 1]));
-        for _ in 0..m.d_bands.orientations(b) {
-            q_raw += m.quality_terms[ti] * m.quality_terms.len() as f64 - 1e-12f64.ln() * w_f;
-            ti += 1;
-        }
+    for &t in &m.quality_terms {
+        q_raw += t;
     }
     println!(
         "official res.Q reconstructed from rust quality_terms: {:.6} (golden noise p30 = 76.27267)",
@@ -201,9 +193,9 @@ fn diag_pipeline(dir: &Path) {
         .c_map
         .iter()
         .zip(&smap_up)
-        .map(|(a, b)| (a - b).abs())
+        .map(|(a, b)| (f64::from(*a) - b).abs())
         .fold(0.0, f64::max);
-    let sr: f64 = v.c_map.iter().sum();
+    let sr: f64 = v.c_map.iter().map(|v| f64::from(*v)).sum();
     let su: f64 = smap_up.iter().sum();
     println!(
         "rust visibility on rust d_bands: Σc_map={sr:.6e} (pooled={:.6e}) vs upstream Σ={su:.6e} maxΔ={md:.3e}",
@@ -282,7 +274,7 @@ fn main() {
             .p_map
             .iter()
             .zip(&pmap_ref)
-            .map(|(a, b)| (a - b).abs())
+            .map(|(a, b)| (f64::from(*a) - b).abs())
             .fold(0.0, f64::max);
         let cmax_rel = (res.c_max - r.c_max).abs() / r.c_max.max(1e-30);
         worst_pdet = worst_pdet.max((res.p_det - r.p_det).abs());

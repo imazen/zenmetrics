@@ -34,7 +34,7 @@
 //! Cones and rods get separate curves, and the two pathways are DC-removed
 //! separately before being summed into the achromatic response.
 
-use crate::interp::{clamp, cumtrapz, interp1_linear, point_op};
+use crate::interp::{clamp, clamp32, cumtrapz, interp1_linear, point_op};
 use crate::params::Params;
 
 /// Number of samples in the JND lookup table (upstream: `logspace(-5,5,2048)`).
@@ -53,6 +53,10 @@ pub struct Photoreceptor {
     jnd_cone: Vec<f64>,
     /// Rod response in JND units, already scaled by `sensitivity_correction`.
     jnd_rod: Vec<f64>,
+    /// `f32` copies of the two tables — the per-pixel hot path
+    /// ([`Self::cone32`]/[`Self::rod32`]) reads these.
+    jnd_cone32: Vec<f32>,
+    jnd_rod32: Vec<f32>,
     /// `10^log_lum[0]`, memoised: [`Self::cone`] / [`Self::rod`] clamp against
     /// the table range per *pixel*, and recomputing `powf` there was a
     /// measurable slice of the whole metric. Same expression, computed once.
@@ -111,6 +115,8 @@ impl Photoreceptor {
         let lum_min = 10f64.powf(log_lum[0]);
         let lum_max = 10f64.powf(log_lum[log_lum.len() - 1]);
         Self {
+            jnd_cone32: jnd_cone.iter().map(|v| *v as f32).collect(),
+            jnd_rod32: jnd_rod.iter().map(|v| *v as f32).collect(),
             log_lum,
             jnd_cone,
             jnd_rod,
@@ -154,6 +160,34 @@ impl Photoreceptor {
         point_op(&self.jnd_rod, self.log_lum[0], self.step(), l)
     }
 
+    /// [`Self::cone`], `f32` in/out — the per-pixel hot path. The uniform-grid
+    /// lookup is a single `log10` plus a two-tap lerp over the `f32` table.
+    /// NaN input clamps low, same as [`Self::cone`].
+    #[must_use]
+    #[inline]
+    pub fn cone32(&self, lum: f32) -> f32 {
+        let l = clamp32(lum, self.lum_min as f32, self.lum_max as f32).log10();
+        point_op32(
+            &self.jnd_cone32,
+            self.log_lum[0] as f32,
+            self.step() as f32,
+            l,
+        )
+    }
+
+    /// [`Self::rod`], `f32` in/out — see [`Self::cone32`].
+    #[must_use]
+    #[inline]
+    pub fn rod32(&self, lum: f32) -> f32 {
+        let l = clamp32(lum, self.lum_min as f32, self.lum_max as f32).log10();
+        point_op32(
+            &self.jnd_rod32,
+            self.log_lum[0] as f32,
+            self.step() as f32,
+            l,
+        )
+    }
+
     /// The raw cone table (JND units) and its `log10`-luminance grid.
     #[must_use]
     pub fn cone_table(&self) -> (&[f64], &[f64]) {
@@ -165,6 +199,23 @@ impl Photoreceptor {
     pub fn rod_table(&self) -> (&[f64], &[f64]) {
         (&self.log_lum, &self.jnd_rod)
     }
+}
+
+/// `f32` twin of [`point_op`]: NaN lands on the low end via the same
+/// `partial_cmp` guard.
+#[inline]
+fn point_op32(lut: &[f32], x0: f32, dx: f32, x: f32) -> f32 {
+    let pos = (x - x0) / dx;
+    if !matches!(pos.partial_cmp(&0.0), Some(core::cmp::Ordering::Greater)) {
+        return lut[0];
+    }
+    let last = lut.len() - 1;
+    if pos >= last as f32 {
+        return lut[last];
+    }
+    let i = pos as usize;
+    let t = pos - i as f32;
+    lut[i] + t * (lut[i + 1] - lut[i])
 }
 
 /// `jnd(l) = ∫ S(10^l) · ln(10) dl`, cumulative from the first sample.

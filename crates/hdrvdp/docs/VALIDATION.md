@@ -16,18 +16,28 @@ distortions `identical`, `noise` (σ=4), `blur` (7×7 gauss σ=1.2), `dark`
 
 ## Measured parity (worst case over all 24 cases)
 
-| output | tolerance achieved |
-|---|---:|
-| `P_det` | 5.3e-14 absolute |
-| `C_max` | 3.9e-12 relative |
-| `P_map` | 3.9e-11 absolute |
-| `res.Q` (`HdrVdpResult::q`) | 9.9e-7 absolute |
-| per-plane `D` bands | ~1e-16 max abs |
+Current pipeline — `f32` planes/intermediates with `f64` reductions
+(fleet-throughput re-baseline, 2026-09-25):
 
-The `res.Q` delta is dominated by the border pixels of the reconstructed
-`S_map` (the documented `reflect1`-vs-`EXPAND` synthesis-edge gap, which
-shifts `msre` slightly in the lowest-weight planes); the visibility maps
-themselves agree to ~4e-11.
+| output | measured delta | test tolerance |
+|---|---:|---:|
+| `P_det` | 1.4e-5 absolute | 1e-4 |
+| `C_max` | 1.0e-4 relative | 5e-4 |
+| `P_map` | 1.7e-2 absolute | 5e-2 |
+| `res.Q` (`HdrVdpResult::q`) | 7.8e-4 absolute | 5e-3 |
+
+The pre-conversion `f64` pipeline (superseded; kept for provenance)
+achieved `P_det` 5.3e-14, `C_max` 3.9e-12 rel, `P_map` 3.9e-11, `res.Q`
+9.9e-7, per-band `D` ~1e-16. The f32 deltas are diffuse quantisation
+noise — per-plane drift is 1e-9…1e-4 with no systematic bias — and are
+orders of magnitude below the JND resolution the metric resolves.
+Diagnostic stage-isolation (`--diag`, per-plane `D` comparison) remains
+the tool for distinguishing float noise from an algorithmic regression.
+
+`res.Q` is far tighter than `P_map` because the border pixels of the
+reconstructed `S_map` (the documented `reflect1`-vs-`EXPAND`
+synthesis-edge gap) sit in the lowest-weight planes and `res.Q` is a
+weighted reduction, while `P_map` exposes every pixel.
 
 ## Running the check
 
@@ -79,9 +89,12 @@ tolerances above.
 ## What this does and does not prove
 
 - **Does**: the full pathway → pyramid → masking → pooling pipeline is a
-  numerically faithful port of official 2.2.2 on the cases above.
-  `tests/bit_lock.rs` continues to fence the *optimized* code against a
-  frozen verbatim copy of this port.
+  numerically faithful port of official 2.2.2 on the cases above. This
+  test is the crate's correctness gate — the earlier `bit_lock.rs`
+  self-lock (optimized vs frozen f64 copy) was retired when the pipeline
+  moved to f32; self-consistency against official output was always the
+  property that mattered, and tolerance-vs-golden is the honest form of
+  it once the gate itself is no longer bit-exact.
 - **Does not**: luminance-encoding coverage only; display encodings
   (`sRGB-display`, `rgb-bt.709`, `XYZ`, `luma-display`) are exercised by
   unit tests but not by these goldens. And UPIQ SROCC vs the published

@@ -62,7 +62,7 @@ pub struct Band {
     /// Band height in samples.
     pub height: usize,
     /// Row-major coefficients, `width · height` of them.
-    pub data: Vec<f64>,
+    pub data: Vec<f32>,
 }
 
 impl Band {
@@ -162,10 +162,10 @@ pub fn reflect1(i: isize, n: usize) -> usize {
 /// The filter origin is its centre, `fs/2`.
 #[must_use]
 pub fn corr_dn(
-    image: &[f64],
+    image: &[f32],
     width: usize,
     height: usize,
-    filter: &[f64],
+    filter: &[f32],
     fs: usize,
     step: usize,
 ) -> Band {
@@ -178,9 +178,9 @@ pub fn corr_dn(
     let c = (fs / 2) as isize;
     let mut out = vec![0.0; out_w * out_h];
 
-    // ── Performance shape; the arithmetic is bit-identical to the direct
+    // ── Performance shape; the arithmetic is identical to the direct
     // gather `acc += filter[ky·fs+kx] · image[reflect1(oy·step+ky−c),
-    // reflect1(ox·step+kx−c)]` in ky-major tap order (see tests/bit_lock.rs).
+    // reflect1(ox·step+kx−c)]` in ky-major tap order.
     //
     // The direct form pays two `reflect1`s (mod + branches) per tap — 26 % of
     // the whole metric under profiling. Instead the `reflect1` extension is
@@ -194,7 +194,7 @@ pub fn corr_dn(
     let pad_w = (out_w - 1) * step + fs;
     let pad_h = (out_h - 1) * step + fs;
     let cu = fs / 2;
-    let mut padded = vec![0.0f64; pad_w * pad_h];
+    let mut padded = vec![0.0f32; pad_w * pad_h];
     for (iy, prow) in padded.chunks_exact_mut(pad_w).enumerate() {
         let sy = reflect1(iy as isize - c, height);
         let srow = &image[sy * width..sy * width + width];
@@ -217,14 +217,14 @@ pub fn corr_dn(
         let out_row = &mut out[oy * out_w..(oy + 1) * out_w];
         let mut ox = 0usize;
         while ox + BLK <= out_w {
-            let mut acc = [0.0f64; BLK];
+            let mut acc = [0.0f32; BLK];
             let x0 = ox * step;
             for ky in 0..fs {
                 let prow = &padded[(win_row + ky) * pad_w..(win_row + ky + 1) * pad_w];
                 let frow = &filter[ky * fs..ky * fs + fs];
                 if step == 1 {
                     for (kx, &w) in frow.iter().enumerate() {
-                        let s: &[f64; BLK] = prow[x0 + kx..x0 + kx + BLK]
+                        let s: &[f32; BLK] = prow[x0 + kx..x0 + kx + BLK]
                             .try_into()
                             .expect("BLK-sized window");
                         for (a, v) in acc.iter_mut().zip(s) {
@@ -289,12 +289,12 @@ pub fn corr_dn(
 /// which pins this to the infinite-domain operation exactly, borders included.
 pub fn up_conv(
     band: &Band,
-    filter: &[f64],
+    filter: &[f32],
     fs: usize,
     step: usize,
     out_width: usize,
     out_height: usize,
-    res: &mut [f64],
+    res: &mut [f32],
 ) {
     assert_eq!(filter.len(), fs * fs, "up_conv: filter size mismatch");
     assert_eq!(
@@ -311,7 +311,7 @@ pub fn up_conv(
     let c = (fs / 2) as isize;
     // Sample the zero-upsampled band at an output-grid position, reflecting
     // out-of-range positions about the edges.
-    let sample = |y: isize, x: isize| -> f64 {
+    let sample = |y: isize, x: isize| -> f32 {
         let y = reflect1(y, out_height);
         let x = reflect1(x, out_width);
         if !y.is_multiple_of(step) || !x.is_multiple_of(step) {
@@ -339,7 +339,7 @@ pub fn up_conv(
     let pad_w = out_width + fs - 1;
     let pad_h = out_height + fs - 1;
     let off = (fs - 1) as isize - c;
-    let mut padded = vec![0.0f64; pad_w * pad_h];
+    let mut padded = vec![0.0f32; pad_w * pad_h];
     for (iy, prow) in padded.chunks_exact_mut(pad_w).enumerate() {
         let y = iy as isize - off;
         // Hoisted row half of `sample`: a row that lands between band rows is
@@ -361,7 +361,7 @@ pub fn up_conv(
 
     // Non-zero taps in the original iteration order (ky-major, kx within);
     // the `w == 0.0` filter mirrors the original `continue`.
-    let mut taps: Vec<(f64, usize, usize)> = Vec::with_capacity(fs * fs);
+    let mut taps: Vec<(f32, usize, usize)> = Vec::with_capacity(fs * fs);
     for ky in 0..fs {
         for (kx, &w) in filter[ky * fs..ky * fs + fs].iter().enumerate() {
             if w == 0.0 {
@@ -378,10 +378,10 @@ pub fn up_conv(
         let out_row = py * out_width;
         let mut px = 0usize;
         while px + BLK <= out_width {
-            let mut acc = [0.0f64; BLK];
+            let mut acc = [0.0f32; BLK];
             for &(w, dy, dx) in &taps {
                 let base = (py + dy) * pad_w + px + dx;
-                let s: &[f64; BLK] = padded[base..base + BLK]
+                let s: &[f32; BLK] = padded[base..base + BLK]
                     .try_into()
                     .expect("BLK-sized window");
                 for (a, v) in acc.iter_mut().zip(s) {
@@ -410,8 +410,8 @@ pub fn up_conv(
     });
 }
 
-fn flat<const N: usize>(f: &[[f64; N]; N]) -> Vec<f64> {
-    f.iter().flat_map(|r| r.iter().copied()).collect()
+fn flat<const N: usize>(f: &[[f64; N]; N]) -> Vec<f32> {
+    f.iter().flat_map(|r| r.iter().map(|v| *v as f32)).collect()
 }
 
 /// Build a steerable pyramid over a row-major image.
@@ -424,7 +424,7 @@ fn flat<const N: usize>(f: &[[f64; N]; N]) -> Vec<f64> {
 /// [`max_pyr_height`].
 #[must_use]
 pub fn build(
-    image: &[f64],
+    image: &[f32],
     width: usize,
     height: usize,
     levels: Option<usize>,
@@ -433,7 +433,7 @@ pub fn build(
     let lo0 = flat(&LO0FILT);
     let hi0 = flat(&HI0FILT);
     let lo = flat(&LOFILT);
-    let bfilts: Vec<Vec<f64>> = BFILTS.iter().map(flat).collect();
+    let bfilts: Vec<Vec<f32>> = BFILTS.iter().map(flat).collect();
 
     let max_ht = max_pyr_height(width, height, 17);
     let ht = levels.unwrap_or(max_ht);
@@ -477,7 +477,7 @@ pub fn reconstruct(pyr: &SteerablePyramid) -> Band {
     let lo0 = flat(&LO0FILT);
     let hi0 = flat(&HI0FILT);
     let lo = flat(&LOFILT);
-    let bfilts: Vec<Vec<f64>> = BFILTS.iter().map(flat).collect();
+    let bfilts: Vec<Vec<f32>> = BFILTS.iter().map(flat).collect();
 
     // Walk coarse → fine, rebuilding each level's low-pass input.
     let mut acc = pyr.low_pass.clone();
@@ -510,11 +510,11 @@ pub fn reconstruct(pyr: &SteerablePyramid) -> Band {
 mod tests {
     use super::*;
 
-    fn ramp_plus_texture(w: usize, h: usize) -> Vec<f64> {
+    fn ramp_plus_texture(w: usize, h: usize) -> Vec<f32> {
         (0..w * h)
             .map(|i| {
-                let (x, y) = ((i % w) as f64, (i / w) as f64);
-                0.3 * x / w as f64
+                let (x, y) = ((i % w) as f32, (i / w) as f32);
+                0.3 * x / w as f32
                     + 0.2 * (y * 0.7).sin()
                     + 0.1 * ((x * 1.9).cos() * (y * 0.3).sin())
             })
@@ -557,7 +557,7 @@ mod tests {
     fn corr_dn_with_a_delta_filter_is_the_identity() {
         let (w, h) = (7usize, 5usize);
         let im = ramp_plus_texture(w, h);
-        let mut f = vec![0.0; 81];
+        let mut f = vec![0.0f32; 81];
         f[4 * 9 + 4] = 1.0; // centre tap of a 9×9
         let out = corr_dn(&im, w, h, &f, 9, 1);
         assert_eq!((out.width, out.height), (w, h));
@@ -568,7 +568,7 @@ mod tests {
 
     #[test]
     fn corr_dn_decimates_to_ceil_half() {
-        let mut f = vec![0.0; 81];
+        let mut f = vec![0.0f32; 81];
         f[4 * 9 + 4] = 1.0;
         for (w, h) in [(8usize, 8usize), (9, 7), (1, 1), (5, 12)] {
             let im = ramp_plus_texture(w, h);
@@ -604,13 +604,13 @@ mod tests {
             // Zero out the coefficients whose footprint touches an edge, so
             // both sides of the inner product only see interior arithmetic.
             let margin = fs; // generous: fs/2 would do
-            let y: Vec<f64> = (0..cd.data.len())
+            let y: Vec<f32> = (0..cd.data.len())
                 .map(|i| {
                     let (bx, by) = (i % cd.width, i / cd.width);
                     let (px, py) = (bx * step, by * step);
                     let inside = px >= margin && py >= margin && px + margin < w && py + margin < h;
                     if inside {
-                        ((i as f64) * 0.913).sin()
+                        ((i as f32) * 0.913).sin()
                     } else {
                         0.0
                     }
@@ -621,13 +621,22 @@ mod tests {
                 height: cd.height,
                 data: y.clone(),
             };
-            let mut back = vec![0.0; w * h];
+            let mut back = vec![0.0f32; w * h];
             up_conv(&yb, &filt, fs, step, w, h, &mut back);
 
-            let lhs: f64 = cd.data.iter().zip(&y).map(|(a, b)| a * b).sum();
-            let rhs: f64 = x.iter().zip(&back).map(|(a, b)| a * b).sum();
+            let lhs: f64 = cd
+                .data
+                .iter()
+                .zip(&y)
+                .map(|(a, b)| (*a as f64) * (*b as f64))
+                .sum();
+            let rhs: f64 = x
+                .iter()
+                .zip(&back)
+                .map(|(a, b)| (*a as f64) * (*b as f64))
+                .sum();
             assert!(
-                (lhs - rhs).abs() < 1e-12 * lhs.abs().max(1.0),
+                (lhs - rhs).abs() < 1e-5 * lhs.abs().max(1.0),
                 "interior transpose broken at {w}×{h} step {step} fs {fs}: {lhs} vs {rhs}"
             );
         }
@@ -643,17 +652,17 @@ mod tests {
         // makes it principled rather than arbitrary, and it is exactly the
         // property a scatter-style adjoint fails.
         let n = 48usize;
-        let small: Vec<f64> = (0..n * n)
+        let small: Vec<f32> = (0..n * n)
             .map(|i| {
-                let (x, y) = ((i % n) as f64, (i / n) as f64);
-                let pi = core::f64::consts::PI;
-                (pi * 8.0 * x / (n - 1) as f64).cos() * (pi * 6.0 * y / (n - 1) as f64).cos()
+                let (x, y) = ((i % n) as f32, (i / n) as f32);
+                let pi = core::f32::consts::PI;
+                (pi * 8.0 * x / (n - 1) as f32).cos() * (pi * 6.0 * y / (n - 1) as f32).cos()
             })
             .collect();
         let f = flat(&LOFILT);
 
         let lo = corr_dn(&small, n, n, &f, 17, 2);
-        let mut finite = vec![0.0; n * n];
+        let mut finite = vec![0.0f32; n * n];
         up_conv(&lo, &f, 17, 2, n, n, &mut finite);
 
         // Three periods of the reflect1 extension, so the middle one is
@@ -663,14 +672,14 @@ mod tests {
         let big = 3 * period;
         let off = period;
         let ext = |p: isize| reflect1(p - off as isize, n);
-        let bigim: Vec<f64> = (0..big * big)
+        let bigim: Vec<f32> = (0..big * big)
             .map(|i| {
                 let (x, y) = ((i % big) as isize, (i / big) as isize);
                 small[ext(y) * n + ext(x)]
             })
             .collect();
         let blo = corr_dn(&bigim, big, big, &f, 17, 2);
-        let mut infinite = vec![0.0; big * big];
+        let mut infinite = vec![0.0f32; big * big];
         up_conv(&blo, &f, 17, 2, big, big, &mut infinite);
 
         // Analysis must agree exactly, bit for bit.
@@ -685,9 +694,9 @@ mod tests {
         let worst = (0..n)
             .flat_map(|y| (0..n).map(move |x| (x, y)))
             .map(|(x, y)| (finite[y * n + x] - infinite[(off + y) * big + (off + x)]).abs())
-            .fold(0.0f64, f64::max);
+            .fold(0.0f32, f32::max);
         assert!(
-            worst < 1e-12,
+            worst < 1e-4,
             "synthesis diverges from the infinite extension by {worst}"
         );
     }
@@ -698,11 +707,11 @@ mod tests {
         let b = Band {
             width: 4,
             height: 4,
-            data: (0..16).map(|i| i as f64).collect(),
+            data: (0..16).map(|i| i as f32).collect(),
         };
-        let mut a = vec![0.0; 16];
+        let mut a = vec![0.0f32; 16];
         up_conv(&b, &f, 9, 1, 4, 4, &mut a);
-        let mut twice = vec![0.0; 16];
+        let mut twice = vec![0.0f32; 16];
         up_conv(&b, &f, 9, 1, 4, 4, &mut twice);
         up_conv(&b, &f, 9, 1, 4, 4, &mut twice);
         for (x, y) in a.iter().zip(&twice) {
@@ -775,10 +784,10 @@ mod tests {
         // This test states that measured behaviour so a future change that
         // makes it *worse* is caught, without pretending the pyramid is exact.
         let (w, h) = (256usize, 256usize);
-        let pi = core::f64::consts::PI;
-        let im: Vec<f64> = (0..w * h)
+        let pi = core::f32::consts::PI;
+        let im: Vec<f32> = (0..w * h)
             .map(|i| {
-                let (x, y) = ((i % w) as f64, (i / w) as f64);
+                let (x, y) = ((i % w) as f32, (i / w) as f32);
                 (2.0 * pi * x / 64.0).sin() * (2.0 * pi * y / 64.0).cos()
             })
             .collect();
@@ -789,7 +798,7 @@ mod tests {
             assert_eq!((rec.width, rec.height), (w, h));
             (margin..h - margin)
                 .flat_map(|y| (margin..w - margin).map(move |x| y * w + x))
-                .map(|i| (im[i] - rec.data[i]).abs())
+                .map(|i| f64::from((im[i] - rec.data[i]).abs()))
                 .fold(0.0f64, f64::max)
         };
         let (e0, e2, e4) = (interior_err(0), interior_err(2), interior_err(4));
@@ -821,11 +830,11 @@ mod tests {
         // accumulated in the band loop and never calls `reconstruct` —
         // so the UPIQ validation target is unaffected.
         let (w, h) = (64usize, 48usize);
-        let pi = core::f64::consts::PI;
-        let im: Vec<f64> = (0..w * h)
+        let pi = core::f32::consts::PI;
+        let im: Vec<f32> = (0..w * h)
             .map(|i| {
-                let (x, y) = ((i % w) as f64, (i / w) as f64);
-                (pi * 8.0 * x / (w - 1) as f64).cos() * (pi * 6.0 * y / (h - 1) as f64).cos()
+                let (x, y) = ((i % w) as f32, (i / w) as f32);
+                (pi * 8.0 * x / (w - 1) as f32).cos() * (pi * 6.0 * y / (h - 1) as f32).cos()
             })
             .collect();
         let pyr = build(&im, w, h, None);
@@ -834,12 +843,12 @@ mod tests {
         let interior = (m..h - m)
             .flat_map(|y| (m..w - m).map(move |x| y * w + x))
             .map(|i| (im[i] - rec.data[i]).abs())
-            .fold(0.0f64, f64::max);
+            .fold(0.0f32, f32::max);
         let overall = im
             .iter()
             .zip(&rec.data)
             .map(|(a, b)| (a - b).abs())
-            .fold(0.0f64, f64::max);
+            .fold(0.0f32, f32::max);
         assert!(interior < 0.05, "interior error {interior} regressed");
         assert!(
             overall > interior,
@@ -860,17 +869,22 @@ mod tests {
         // column-major reshape were transposed, this test flips.
         let (w, h) = (64usize, 64usize);
         let energy = |grating_along_x: bool| -> [f64; ORIENTATIONS] {
-            let im: Vec<f64> = (0..w * h)
+            let im: Vec<f32> = (0..w * h)
                 .map(|i| {
-                    let (x, y) = ((i % w) as f64, (i / w) as f64);
+                    let (x, y) = ((i % w) as f32, (i / w) as f32);
                     let t = if grating_along_x { x } else { y };
-                    (2.0 * core::f64::consts::PI * t / 8.0).sin()
+                    (2.0 * core::f32::consts::PI * t / 8.0).sin()
                 })
                 .collect();
             let pyr = build(&im, w, h, None);
             let mut e = [0.0; ORIENTATIONS];
             for (o, b) in pyr.levels[0].iter().enumerate() {
-                e[o] = b.data.iter().map(|v| v * v).sum::<f64>().sqrt();
+                e[o] = b
+                    .data
+                    .iter()
+                    .map(|v| (*v as f64) * (*v as f64))
+                    .sum::<f64>()
+                    .sqrt();
             }
             e
         };
@@ -901,13 +915,13 @@ mod tests {
         // the high-pass. The oriented filters are antisymmetric and cancel to
         // machine precision.
         let (w, h) = (48usize, 48usize);
-        let level = 3.25f64;
+        let level = 3.25f32;
         let pyr = build(&vec![level; w * h], w, h, None);
         for lv in &pyr.levels {
             for b in lv {
                 for v in &b.data {
                     assert!(
-                        v.abs() < 1e-12 * level,
+                        v.abs() < 1e-5 * level,
                         "flat image produced band energy {v}"
                     );
                 }

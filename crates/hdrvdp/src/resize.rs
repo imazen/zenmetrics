@@ -176,6 +176,84 @@ pub fn imresize(
     out
 }
 
+/// [`imresize`] on `f32` planes — identical algorithm and weights, with the
+/// taps still accumulated in `f64` (the resample is a reduction, and `f64`
+/// accumulators are the pipeline's precision boundary). Only the storage and
+/// the return value are `f32`.
+///
+/// # Panics
+/// Same conditions as [`imresize`].
+#[must_use]
+pub fn imresize32(
+    image: &[f32],
+    width: usize,
+    height: usize,
+    out_width: usize,
+    out_height: usize,
+) -> Vec<f32> {
+    assert_eq!(
+        image.len(),
+        width * height,
+        "imresize32: image size mismatch"
+    );
+    assert!(width > 0 && height > 0 && out_width > 0 && out_height > 0);
+    if (width, height) == (out_width, out_height) {
+        return image.to_vec();
+    }
+
+    let hc = contributions(width, out_width);
+    let mut tmp = vec![0.0f32; out_width * height];
+    for (row, src) in tmp
+        .chunks_exact_mut(out_width)
+        .zip(image.chunks_exact(width))
+    {
+        for (x, o) in row.iter_mut().enumerate() {
+            let base = x * hc.taps;
+            let wr = &hc.weights[base..base + hc.taps];
+            let ir = &hc.indices[base..base + hc.taps];
+            let mut acc = 0.0f64;
+            for (w, &i) in wr.iter().zip(ir) {
+                acc += w * f64::from(src[i]);
+            }
+            *o = acc as f32;
+        }
+    }
+
+    let vc = contributions(height, out_height);
+    let mut out = vec![0.0f32; out_width * out_height];
+    const BLK: usize = 8;
+    for (y, orow) in out.chunks_exact_mut(out_width).enumerate() {
+        let base = y * vc.taps;
+        let wr = &vc.weights[base..base + vc.taps];
+        let ir = &vc.indices[base..base + vc.taps];
+        let mut x = 0usize;
+        while x + BLK <= out_width {
+            let mut acc = [0.0f64; BLK];
+            for (w, &i) in wr.iter().zip(ir) {
+                let s: &[f32; BLK] = tmp[i * out_width + x..i * out_width + x + BLK]
+                    .try_into()
+                    .expect("BLK-sized window");
+                for (a, v) in acc.iter_mut().zip(s) {
+                    *a += w * f64::from(*v);
+                }
+            }
+            for (o, a) in orow[x..x + BLK].iter_mut().zip(acc) {
+                *o = a as f32;
+            }
+            x += BLK;
+        }
+        while x < out_width {
+            let mut acc = 0.0f64;
+            for (w, &i) in wr.iter().zip(ir) {
+                acc += w * f64::from(tmp[i * out_width + x]);
+            }
+            orow[x] = acc as f32;
+            x += 1;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

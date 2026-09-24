@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-//! HDR-VDP-2.2 — a pure-Rust `f64` CPU reference port.
+//! HDR-VDP-2.2 — a pure-Rust CPU port, `f32` planes with `f64` reductions.
 //!
 //! HDR-VDP-2 (Mantiuk, Kim, Rempel & Heidrich, SIGGRAPH 2011; quality
 //! recalibrated by Narwaria et al. 2015 as 2.2) predicts **visibility** — the
@@ -36,8 +36,12 @@
 //! | CubeCL GPU port | — | ⏳ chunk 6 |
 //!
 //! **Validated against official HDR-VDP-2.2.2** (Octave 11.1, 24 synthetic
-//! luminance cases): `P_det` agrees to 5.3e-14, `C_max` to 3.9e-12 relative,
-//! `P_map` to 3.9e-11 absolute, and `res.Q` to 9.9e-7. See
+//! luminance cases): `P_det` agrees to 1.4e-5, `C_max` to 1.0e-4 relative,
+//! `P_map` to 1.7e-2 absolute, and `res.Q` to 7.8e-4 — diffuse `f32`
+//! quantisation noise, far below the JND resolution the metric resolves
+//! (the earlier `f64` pipeline agreed to ~1e-11 before the fleet-throughput
+//! precision switch). [`score`] skips the visibility-map reconstruction
+//! entirely for sweep workloads that only need `res.Q`. See
 //! `docs/VALIDATION.md` for provenance, tolerances, and the upstream Octave
 //! bug the reference run had to work around.
 //!

@@ -213,6 +213,26 @@ Workspace conventions per the global rules:
   optimized == reference port, while the golden test proves port ==
   official. `747b4d3e`.
 
+- hdrvdp: **fleet-throughput pass — `f32` planes + `score()` entry**
+  (**breaking**: `HdrVdpResult::p_map`/`c_map` and `Band::data` are now
+  `Vec<f32>`; `to_nits`/`imresize`-class helpers return `f32`). Every
+  plane and intermediate (nits, pathway outputs, pyramid bands, masking
+  terms, visibility maps, resizes) stores `f32`; scalar parameters,
+  lookup-table construction, frequency grids, quality weights, and all
+  reductions/accumulators stay `f64`, as do all public scalar results.
+  New `hdrvdp::score()` returns official `res.Q` alone — shares the
+  pipeline but skips `d_bands` storage and the whole `visibility()`
+  reconstruction/pooling stage, bit-equal `res.Q` to `hdrvdp().q`.
+  `tests/bit_lock.rs` (the optimized-vs-frozen-f64 self-lock) is
+  **retired** — the official-golden tolerance test is now the
+  correctness gate, re-baselined to measured f32 drift (worst over 24
+  cases: `P_det` 1.4e-5, `C_max` 1.0e-4 rel, `P_map` 1.7e-2, `res.Q`
+  7.8e-4 — diffuse quantisation noise, orders of magnitude below the
+  JND resolution; tolerances set with several× headroom, see
+  `docs/VALIDATION.md`). 1024² probe, release: full result 1.85 →
+  1.28 s, `score()` 1.02 s (was 1.85 s before the pass). `fc9304ee`
+  (score()), `<hash>`.
+
 - **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
   IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
   Score + half-resolution GMS map, strided f32 input, zenpixels `PixelSlice`

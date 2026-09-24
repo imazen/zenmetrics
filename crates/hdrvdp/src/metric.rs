@@ -1,4 +1,4 @@
-//! The end-to-end metric: an image pair in, `Q_MOS` and a visibility map out.
+//! The end-to-end metric: an image pair in, `res.Q` and a visibility map out.
 //!
 //! Ported from `hdrvdp.m` (MATLAB `hdrvdp-2.2.x`).
 //!
@@ -44,13 +44,13 @@ use crate::{Error, Result};
 #[derive(Debug, Clone)]
 pub struct HdrVdpResult {
     /// Per-pixel probability of detecting the difference, `[0, 1]`, row-major.
-    pub p_map: Vec<f64>,
+    pub p_map: Vec<f32>,
     /// The largest value in [`Self::p_map`] — "is this difference visible
     /// anywhere?"
     pub p_det: f64,
     /// Per-pixel difference magnitude in normalised detection units
     /// (1 = at threshold), row-major.
-    pub c_map: Vec<f64>,
+    pub c_map: Vec<f32>,
     /// The largest value in [`Self::c_map`].
     pub c_max: f64,
     /// Official `res.Q` — the quality correlate HDR-VDP-2.2.2 publishes.
@@ -166,8 +166,8 @@ pub fn score(
 struct Prepared {
     bands_test: crate::bands::BandPyramid,
     bands_ref: crate::bands::BandPyramid,
-    l_adapt: Vec<f64>,
-    diff_mask: Vec<f64>,
+    l_adapt: Vec<f32>,
+    diff_mask: Vec<f32>,
     input_looks_relative: bool,
 }
 
@@ -227,7 +227,7 @@ fn prepare(
     let (bands_ref, pad) = decompose(&path_ref, par, None);
     let (bands_test, _) = decompose(&path_test, par, Some(pad));
 
-    let l_adapt: Vec<f64> = path_ref
+    let l_adapt: Vec<f32> = path_ref
         .l_adapt
         .iter()
         .zip(&path_test.l_adapt)
@@ -356,7 +356,7 @@ mod tests {
             let mut n = 0usize;
             for y in 0..h {
                 for x in xs.clone() {
-                    acc += r.p_map[y * w + x];
+                    acc += f64::from(r.p_map[y * w + x]);
                     n += 1;
                 }
             }

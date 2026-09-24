@@ -114,7 +114,7 @@ fn main() {
         acc[5] += t.elapsed().as_secs_f64();
 
         let t = Instant::now();
-        let l_adapt: Vec<f64> = path_ref
+        let l_adapt: Vec<f32> = path_ref
             .l_adapt
             .iter()
             .zip(&path_test.l_adapt)

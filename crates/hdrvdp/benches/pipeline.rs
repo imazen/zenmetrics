@@ -70,13 +70,19 @@ fn bench_kernels(suite: &mut Suite) {
     suite.group("corr_dn/256x256", move |g| {
         g.throughput(Throughput::Elements((SIDE * SIDE) as u64));
         g.bench("bfilt_9x9_step1", move |b| {
-            let im = hdr_field(SIDE, SIDE, 0xbead);
-            let f: Vec<f64> = BFILTS[0].iter().flatten().copied().collect();
+            let im: Vec<f32> = hdr_field(SIDE, SIDE, 0xbead)
+                .into_iter()
+                .map(|v| v as f32)
+                .collect();
+            let f: Vec<f32> = BFILTS[0].iter().flatten().map(|v| *v as f32).collect();
             b.iter(move || hdrvdp::spyr::corr_dn(&im, SIDE, SIDE, &f, 9, 1))
         });
         g.bench("lofilt_17x17_step2", move |b| {
-            let im = hdr_field(SIDE, SIDE, 0xbead);
-            let f: Vec<f64> = LOFILT.iter().flatten().copied().collect();
+            let im: Vec<f32> = hdr_field(SIDE, SIDE, 0xbead)
+                .into_iter()
+                .map(|v| v as f32)
+                .collect();
+            let f: Vec<f32> = LOFILT.iter().flatten().map(|v| *v as f32).collect();
             b.iter(move || hdrvdp::spyr::corr_dn(&im, SIDE, SIDE, &f, 17, 2))
         });
     });
@@ -84,11 +90,14 @@ fn bench_kernels(suite: &mut Suite) {
     suite.group("up_conv/256x256", move |g| {
         g.throughput(Throughput::Elements((SIDE * SIDE) as u64));
         g.bench("bfilt_9x9_step1", move |b| {
-            let im = hdr_field(SIDE, SIDE, 0xbead);
-            let f: Vec<f64> = BFILTS[0].iter().flatten().copied().collect();
+            let im: Vec<f32> = hdr_field(SIDE, SIDE, 0xbead)
+                .into_iter()
+                .map(|v| v as f32)
+                .collect();
+            let f: Vec<f32> = BFILTS[0].iter().flatten().map(|v| *v as f32).collect();
             let band: Band = hdrvdp::spyr::corr_dn(&im, SIDE, SIDE, &f, 9, 1);
             b.iter(move || {
-                let mut res = vec![0.0; SIDE * SIDE];
+                let mut res = vec![0.0f32; SIDE * SIDE];
                 hdrvdp::spyr::up_conv(&band, &f, 9, 1, SIDE, SIDE, &mut res);
                 res
             })
@@ -102,7 +111,7 @@ fn bench_kernels(suite: &mut Suite) {
         g.bench("fft2_complex", move |b| {
             let src: Vec<hdrvdp::fft::Complex> = hdr_field(512, 512, 9)
                 .into_iter()
-                .map(|v| hdrvdp::fft::Complex::new(v, 0.0))
+                .map(|v| hdrvdp::fft::Complex::new(v as f32, 0.0))
                 .collect();
             b.with_input(move || src.clone()).run(|mut buf| {
                 hdrvdp::fft::fft2(&mut buf, 512, 512);
@@ -114,8 +123,11 @@ fn bench_kernels(suite: &mut Suite) {
     suite.group("imresize/512->181", move |g| {
         g.throughput(Throughput::Elements((512 * 512) as u64));
         g.bench("downscale", move |b| {
-            let src = hdr_field(512, 512, 11);
-            b.iter(move || hdrvdp::resize::imresize(&src, 512, 512, 181, 181))
+            let src: Vec<f32> = hdr_field(512, 512, 11)
+                .into_iter()
+                .map(|v| v as f32)
+                .collect();
+            b.iter(move || hdrvdp::resize::imresize32(&src, 512, 512, 181, 181))
         });
     });
 }

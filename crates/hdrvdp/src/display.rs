@@ -114,7 +114,9 @@ pub fn xyz_to_rgb(xyz: [f64; 3]) -> [f64; 3] {
 }
 
 /// Apply `encoding` to an interleaved image, producing interleaved absolute
-/// luminance in cd/m² with the same channel count.
+/// luminance in cd/m² with the same channel count, as `f32` — the plane
+/// precision the whole pipeline runs at (display-model maths is still done
+/// in `f64` per pixel and cast down).
 ///
 /// `pixels.len()` must equal `width · height · encoding.channels()`.
 ///
@@ -127,7 +129,7 @@ pub fn to_nits(
     width: usize,
     height: usize,
     encoding: ColorEncoding,
-) -> Result<Vec<f64>, Error> {
+) -> Result<Vec<f32>, Error> {
     let ch = encoding.channels();
     let want = width
         .checked_mul(height)
@@ -140,25 +142,32 @@ pub fn to_nits(
         });
     }
 
-    let out: Vec<f64> = match encoding {
-        ColorEncoding::Luminance | ColorEncoding::RgbBt709 => pixels.to_vec(),
+    let out: Vec<f32> = match encoding {
+        ColorEncoding::Luminance | ColorEncoding::RgbBt709 => {
+            pixels.iter().map(|&v| v as f32).collect()
+        }
         ColorEncoding::LumaDisplay => pixels
             .iter()
-            .map(|&v| display_model(v, SDR_GAMMA, SDR_PEAK_NITS, SDR_BLACK_NITS))
+            .map(|&v| display_model(v, SDR_GAMMA, SDR_PEAK_NITS, SDR_BLACK_NITS) as f32)
             .collect(),
-        ColorEncoding::SrgbDisplay => pixels.iter().map(|&v| display_model_srgb(v)).collect(),
+        ColorEncoding::SrgbDisplay => pixels
+            .iter()
+            .map(|&v| display_model_srgb(v) as f32)
+            .collect(),
         ColorEncoding::Xyz => {
             let mut o = Vec::with_capacity(pixels.len());
             let (triples, _) = pixels.as_chunks::<3>();
             for p in triples {
-                o.extend_from_slice(&xyz_to_rgb([p[0], p[1], p[2]]));
+                for v in xyz_to_rgb([p[0], p[1], p[2]]) {
+                    o.push(v as f32);
+                }
             }
             o
         }
     };
 
     if let Some(bad) = out.iter().find(|v| !v.is_finite()) {
-        return Err(Error::ImpossibleValues(*bad));
+        return Err(Error::ImpossibleValues(f64::from(*bad)));
     }
     Ok(out)
 }
@@ -170,18 +179,18 @@ pub fn to_nits(
 /// Only meaningful for encodings where [`ColorEncoding::expects_absolute_input`]
 /// is true. Upstream checks the green channel for 3-channel input.
 #[must_use]
-pub fn looks_relative(nits: &[f64], channels: usize, encoding: ColorEncoding) -> bool {
+pub fn looks_relative(nits: &[f32], channels: usize, encoding: ColorEncoding) -> bool {
     if !encoding.expects_absolute_input() {
         return false;
     }
-    let probe: f64 = if channels == 3 {
+    let probe: f32 = if channels == 3 {
         nits.as_chunks::<3>()
             .0
             .iter()
             .map(|p| p[1])
-            .fold(f64::MIN, f64::max)
+            .fold(f32::MIN, f32::max)
     } else {
-        nits.iter().copied().fold(f64::MIN, f64::max)
+        nits.iter().copied().fold(f32::MIN, f32::max)
     };
     probe <= 1.0
 }
@@ -247,7 +256,7 @@ mod tests {
     fn to_nits_passes_absolute_encodings_through_unchanged() {
         let px = [0.5, 12.0, 3000.0, 1e-4];
         let got = to_nits(&px, 2, 2, ColorEncoding::Luminance).unwrap();
-        assert_eq!(got, px.to_vec());
+        assert_eq!(got, px.iter().map(|v| *v as f32).collect::<Vec<_>>());
     }
 
     #[test]

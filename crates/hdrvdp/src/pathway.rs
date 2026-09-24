@@ -47,9 +47,9 @@ pub const MAX_NITS: f64 = 1e10;
 #[derive(Debug, Clone)]
 pub struct Pathway {
     /// Achromatic photoreceptor response, DC-removed, row-major `h × w`.
-    pub achromatic: Vec<f64>,
+    pub achromatic: Vec<f32>,
     /// Per-pixel adapting luminance in cd/m² (`L + M`), row-major `h × w`.
-    pub l_adapt: Vec<f64>,
+    pub l_adapt: Vec<f32>,
     /// Image width in pixels.
     pub width: usize,
     /// Image height in pixels.
@@ -68,7 +68,7 @@ pub struct Pathway {
 /// matrix's channel count.
 #[must_use]
 pub fn visual_pathway(
-    nits: &[f64],
+    nits: &[f32],
     width: usize,
     height: usize,
     par: &Params,
@@ -94,12 +94,14 @@ pub fn visual_pathway(
 /// The filter depends only on the geometry and `par`, never on the pixels, so
 /// the metric computes it once and shares it across the reference and test
 /// images instead of rebuilding it (a full grid of `exp` calls) per image.
-pub(crate) fn mtf_filter_for(width: usize, height: usize, par: &Params) -> Option<Vec<f64>> {
+/// Evaluated in `f64` and cast down — the stored response is `f32` like every
+/// other plane.
+pub(crate) fn mtf_filter_for(width: usize, height: usize, par: &Params) -> Option<Vec<f32>> {
     let (pad_w, pad_h) = (width * 2, height * 2);
     par.do_mtf.then(|| {
         cycles_per_degree_grid(pad_w, pad_h, par.pix_per_deg)
             .into_iter()
-            .map(|rho| mtf(rho, par))
+            .map(|rho| mtf(rho, par) as f32)
             .collect()
     })
 }
@@ -109,13 +111,13 @@ pub(crate) fn mtf_filter_for(width: usize, height: usize, par: &Params) -> Optio
 /// the pathway body ever read from `Params`, so the parameters stay outside.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn visual_pathway_with_filter(
-    nits: &[f64],
+    nits: &[f32],
     width: usize,
     height: usize,
     pn: &Photoreceptor,
     lmsr: &[[f64; 4]],
     surround: &[f64],
-    mtf_filter: Option<&[f64]>,
+    mtf_filter: Option<&[f32]>,
 ) -> Pathway {
     let channels = lmsr.len();
     assert_eq!(
@@ -129,17 +131,27 @@ pub(crate) fn visual_pathway_with_filter(
         "visual_pathway: need one surround value per channel"
     );
     let n = width * height;
+    let min_nits = MIN_NITS as f32;
+    let max_nits = MAX_NITS as f32;
 
     // ── 1. Optical transfer function ─────────────────────────────────────
     let (pad_w, pad_h) = (width * 2, height * 2);
 
-    let mut optical: Vec<Vec<f64>> = Vec::with_capacity(channels);
+    let mut optical: Vec<Vec<f32>> = Vec::with_capacity(channels);
     for c in 0..channels {
-        let plane: Vec<f64> = (0..n).map(|i| nits[i * channels + c]).collect();
+        let plane: Vec<f32> = (0..n).map(|i| nits[i * channels + c]).collect();
         let filtered = match mtf_filter {
-            Some(f) => conv_fft_real(&plane, width, height, f, pad_w, pad_h, surround[c])
+            Some(f) => conv_fft_real(&plane, width, height, f, pad_w, pad_h, surround[c] as f32)
                 .into_iter()
-                .map(|v| crate::interp::clamp(v, MIN_NITS, MAX_NITS))
+                .map(|v| {
+                    if v.is_nan() || v < min_nits {
+                        min_nits
+                    } else if v > max_nits {
+                        max_nits
+                    } else {
+                        v
+                    }
+                })
                 .collect(),
             None => plane,
         };
@@ -149,10 +161,15 @@ pub(crate) fn visual_pathway_with_filter(
     // ── 2. Photoreceptor spectral sensitivity ────────────────────────────
     // R[k][i] for k in {L, M, S, R}; S is computed for completeness and then
     // dropped, exactly as upstream does.
-    let mut r_lmsr = [vec![0.0; n], vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    let mut r_lmsr = [
+        vec![0.0f32; n],
+        vec![0.0f32; n],
+        vec![0.0f32; n],
+        vec![0.0f32; n],
+    ];
     for (c, plane) in optical.iter().enumerate() {
         for (k, out) in r_lmsr.iter_mut().enumerate() {
-            let m = lmsr[c][k];
+            let m = lmsr[c][k] as f32;
             for (o, v) in out.iter_mut().zip(plane) {
                 *o += m * v;
             }
@@ -160,24 +177,24 @@ pub(crate) fn visual_pathway_with_filter(
     }
 
     // ── 3. Adapting luminance ────────────────────────────────────────────
-    let l_adapt: Vec<f64> = r_lmsr[0]
+    let l_adapt: Vec<f32> = r_lmsr[0]
         .iter()
         .zip(&r_lmsr[1])
         .map(|(l, m)| l + m)
         .collect();
 
     // ── 4. Photoreceptor non-linearity ───────────────────────────────────
-    let p_l: Vec<f64> = r_lmsr[0].iter().map(|&v| pn.cone(v)).collect();
-    let p_m: Vec<f64> = r_lmsr[1].iter().map(|&v| pn.cone(v)).collect();
-    let p_r: Vec<f64> = r_lmsr[3].iter().map(|&v| pn.rod(v)).collect();
+    let p_l: Vec<f32> = r_lmsr[0].iter().map(|&v| pn.cone32(v)).collect();
+    let p_m: Vec<f32> = r_lmsr[1].iter().map(|&v| pn.cone32(v)).collect();
+    let p_r: Vec<f32> = r_lmsr[3].iter().map(|&v| pn.rod32(v)).collect();
 
     // ── 5. DC removal, cone and rod pathways separately ──────────────────
-    let mut cones: Vec<f64> = p_l.iter().zip(&p_m).map(|(a, b)| a + b).collect();
+    let mut cones: Vec<f32> = p_l.iter().zip(&p_m).map(|(a, b)| a + b).collect();
     remove_mean(&mut cones);
     let mut rods = p_r;
     remove_mean(&mut rods);
 
-    let achromatic: Vec<f64> = cones.iter().zip(&rods).map(|(a, b)| a + b).collect();
+    let achromatic: Vec<f32> = cones.iter().zip(&rods).map(|(a, b)| a + b).collect();
 
     Pathway {
         achromatic,
@@ -194,7 +211,7 @@ pub(crate) fn visual_pathway_with_filter(
 /// non-positive samples are skipped (they cannot contribute a finite log), and
 /// a channel with no positive sample falls back to [`MIN_NITS`].
 #[must_use]
-pub fn surround_per_channel(nits: &[f64], channels: usize, configured: Option<f64>) -> Vec<f64> {
+pub fn surround_per_channel(nits: &[f32], channels: usize, configured: Option<f64>) -> Vec<f64> {
     if let Some(v) = configured {
         return vec![v; channels];
     }
@@ -204,7 +221,7 @@ pub fn surround_per_channel(nits: &[f64], channels: usize, configured: Option<f6
             let mut count = 0usize;
             for p in nits.chunks_exact(channels) {
                 if p[c] > 0.0 {
-                    sum += p[c].ln();
+                    sum += f64::from(p[c]).ln();
                     count += 1;
                 }
             }
@@ -217,11 +234,13 @@ pub fn surround_per_channel(nits: &[f64], channels: usize, configured: Option<f6
         .collect()
 }
 
-fn remove_mean(v: &mut [f64]) {
+fn remove_mean(v: &mut [f32]) {
     if v.is_empty() {
         return;
     }
-    let mean = v.iter().sum::<f64>() / v.len() as f64;
+    // The mean is a reduction over the whole plane — accumulate in f64, apply
+    // in f32.
+    let mean = (v.iter().map(|x| *x as f64).sum::<f64>() / v.len() as f64) as f32;
     for x in v.iter_mut() {
         *x -= mean;
     }
@@ -251,18 +270,20 @@ mod tests {
         // zero — at every adaptation level. This also pins that the MTF has
         // unit DC gain: any gain error would show up as a non-zero constant
         // before the mean is subtracted, and as an `l_adapt` shift after.
+        // (f32 pipeline: the bound is f32 noise on the JND-space response, not
+        // exact zero.)
         let (par, pn, lmsr) = fixture(3);
         let (w, h) = (16usize, 12usize);
         for &y in &[0.05f64, 5.0, 500.0] {
-            let nits = vec![y; w * h * 3];
+            let nits = vec![y as f32; w * h * 3];
             let out = visual_pathway(&nits, w, h, &par, &pn, &lmsr, &[y; 3]);
             for v in &out.achromatic {
-                assert!(v.abs() < 1e-9, "flat field at {y} cd/m² gave {v}");
+                assert!(v.abs() < 1e-3, "flat field at {y} cd/m² gave {v}");
             }
             let a0 = out.l_adapt[0];
             assert!(a0 > 0.0);
             for v in &out.l_adapt {
-                assert!((v - a0).abs() < 1e-9 * a0.max(1.0));
+                assert!((v - a0).abs() < 1e-5 * a0.max(1.0));
             }
         }
     }
@@ -281,7 +302,7 @@ mod tests {
         // difference between them is pure border artefact.
         let (par, pn, lmsr) = fixture(1);
         let (w, h) = (16usize, 16usize);
-        let nits = vec![100.0; w * h];
+        let nits = vec![100.0f32; w * h];
         let out = visual_pathway(&nits, w, h, &par, &pn, &lmsr, &[1e-5]);
         let corner = out.achromatic[0];
         let centre = out.achromatic[(h / 2) * w + w / 2];
@@ -299,12 +320,13 @@ mod tests {
     fn achromatic_response_is_mean_free() {
         let (par, pn, lmsr) = fixture(3);
         let (w, h) = (13usize, 9usize);
-        let nits: Vec<f64> = (0..w * h * 3)
-            .map(|i| 1.0 + 200.0 * ((i as f64) * 0.11).sin().abs())
+        let nits: Vec<f32> = (0..w * h * 3)
+            .map(|i| 1.0 + 200.0 * ((i as f32) * 0.11).sin().abs())
             .collect();
         let out = visual_pathway(&nits, w, h, &par, &pn, &lmsr, &[1e-5; 3]);
-        let mean = out.achromatic.iter().sum::<f64>() / out.achromatic.len() as f64;
-        assert!(mean.abs() < 1e-9, "mean = {mean}");
+        let mean =
+            out.achromatic.iter().map(|v| *v as f64).sum::<f64>() / out.achromatic.len() as f64;
+        assert!(mean.abs() < 1e-3, "mean = {mean}");
     }
 
     #[test]
@@ -318,14 +340,18 @@ mod tests {
         // and not the border falloff's (see `a_dark_surround_bleeds_into_a_
         // flat_field`).
         let energy = |amp: f64| -> f64 {
-            let nits: Vec<f64> = (0..w * h)
+            let nits: Vec<f32> = (0..w * h)
                 .map(|i| {
-                    let x = (i % w) as f64;
-                    100.0 * (1.0 + amp * (2.0 * core::f64::consts::PI * x / 8.0).sin())
+                    let x = (i % w) as f32;
+                    100.0 * (1.0 + amp as f32 * (2.0 * core::f32::consts::PI * x / 8.0).sin())
                 })
                 .collect();
             let out = visual_pathway(&nits, w, h, &par, &pn, &lmsr, &[100.0]);
-            out.achromatic.iter().map(|v| v * v).sum::<f64>().sqrt()
+            out.achromatic
+                .iter()
+                .map(|v| (*v as f64) * (*v as f64))
+                .sum::<f64>()
+                .sqrt()
         };
         let e_small = energy(0.01);
         let e_big = energy(0.20);
@@ -347,14 +373,18 @@ mod tests {
         // samples sin(πx) = 0 at every integer x, i.e. it is invisible to the
         // sampler before the optics ever see it.
         let energy = |par: &Params, period_px: f64| -> f64 {
-            let nits: Vec<f64> = (0..w * h)
+            let nits: Vec<f32> = (0..w * h)
                 .map(|i| {
-                    let x = (i % w) as f64;
-                    100.0 * (1.0 + 0.1 * (2.0 * core::f64::consts::PI * x / period_px).sin())
+                    let x = (i % w) as f32;
+                    100.0 * (1.0 + 0.1 * (2.0 * core::f32::consts::PI * x / period_px as f32).sin())
                 })
                 .collect();
             let out = visual_pathway(&nits, w, h, par, &pn, &lmsr, &[100.0]);
-            out.achromatic.iter().map(|v| v * v).sum::<f64>().sqrt()
+            out.achromatic
+                .iter()
+                .map(|v| (*v as f64) * (*v as f64))
+                .sum::<f64>()
+                .sqrt()
         };
         let coarse_on = energy(&par, 32.0);
         let fine_on = energy(&par, 4.0);
@@ -390,7 +420,7 @@ mod tests {
         // lookup, which would otherwise index off the end of the table.
         let (par, pn, lmsr) = fixture(1);
         let (w, h) = (8usize, 8usize);
-        let mut nits = vec![1e-30; w * h];
+        let mut nits = vec![1e-30f32; w * h];
         nits[0] = 1e20;
         let out = visual_pathway(&nits, w, h, &par, &pn, &lmsr, &[1e-5]);
         assert!(out.achromatic.iter().all(|v| v.is_finite()));

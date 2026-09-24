@@ -81,8 +81,8 @@ fn main() {
         let digest = fnv1a(
             r.p_map
                 .iter()
-                .copied()
-                .chain(r.c_map.iter().copied())
+                .map(|v| f64::from(*v))
+                .chain(r.c_map.iter().map(|v| f64::from(*v)))
                 .chain([r.q, r.q_mos, r.p_det, r.c_max]),
         );
         println!(

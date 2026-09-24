@@ -35,9 +35,9 @@
 
 use crate::bands::BandPyramid;
 use crate::csf::ncsf;
-use crate::interp::{clamp, interp1_linear};
+use crate::interp::{clamp, clamp32, interp1_linear, interp1_linear32};
 use crate::params::Params;
-use crate::resize::imresize;
+use crate::resize::imresize32;
 use crate::spyr::Band;
 
 /// Number of samples in the adapting-luminance CSF lookup
@@ -46,13 +46,13 @@ const CSF_LUT_N: usize = 256;
 
 /// Relative difference above which a pixel counts as "actually different" for
 /// the quality pooling (upstream's `diff_mask` threshold, 0.1 %).
-pub const DIFF_MASK_THRESHOLD: f64 = 0.001;
+pub const DIFF_MASK_THRESHOLD: f32 = 0.001;
 
 /// `sign(x) · |x|^e` — upstream's `sign_pow`, the odd-symmetric power that
 /// keeps the transducer's polarity.
 #[must_use]
 #[inline]
-pub fn sign_pow(x: f64, e: f64) -> f64 {
+pub fn sign_pow(x: f32, e: f32) -> f32 {
     x.signum() * x.abs().powf(e)
 }
 
@@ -69,7 +69,7 @@ pub fn mutual_masking(test: &Band, reference: &Band) -> Band {
         (reference.width, reference.height)
     );
     let (w, h) = (test.width, test.height);
-    let m: Vec<f64> = test
+    let m: Vec<f32> = test
         .data
         .iter()
         .zip(&reference.data)
@@ -87,12 +87,11 @@ pub fn mutual_masking(test: &Band, reference: &Band) -> Band {
 ///
 /// Interior pixels take a branch-free path that performs the identical nine
 /// additions in the identical `(dy, dx)` row-major order (starting from the
-/// same `0.0` accumulator), so it is bit-identical to the bounds-checked loop,
-/// which still handles the borders.
-fn box3x3(src: &[f64], w: usize, h: usize) -> Vec<f64> {
+/// same `0.0` accumulator).
+fn box3x3(src: &[f32], w: usize, h: usize) -> Vec<f32> {
     let mut out = vec![0.0; w * h];
 
-    let border = |out: &mut Vec<f64>, y: usize, xs: core::ops::Range<usize>| {
+    let border = |out: &mut Vec<f32>, y: usize, xs: core::ops::Range<usize>| {
         for x in xs {
             let mut acc = 0.0;
             for dy in -1isize..=1 {
@@ -172,8 +171,8 @@ pub struct Masking {
 pub fn run(
     test: &BandPyramid,
     reference: &BandPyramid,
-    l_adapt: &[f64],
-    diff_mask: &[f64],
+    l_adapt: &[f32],
+    diff_mask: &[f32],
     par: &Params,
 ) -> Masking {
     let (d_bands, quality_terms) = run_impl(test, reference, l_adapt, diff_mask, par, true);
@@ -189,8 +188,8 @@ pub fn run(
 pub fn run_terms(
     test: &BandPyramid,
     reference: &BandPyramid,
-    l_adapt: &[f64],
-    diff_mask: &[f64],
+    l_adapt: &[f32],
+    diff_mask: &[f32],
     par: &Params,
 ) -> Vec<f64> {
     run_impl(test, reference, l_adapt, diff_mask, par, false).1
@@ -199,8 +198,8 @@ pub fn run_terms(
 fn run_impl(
     test: &BandPyramid,
     reference: &BandPyramid,
-    l_adapt: &[f64],
-    diff_mask: &[f64],
+    l_adapt: &[f32],
+    diff_mask: &[f32],
     par: &Params,
     want_d_bands: bool,
 ) -> (Option<BandPyramid>, Vec<f64>) {
@@ -213,20 +212,23 @@ fn run_impl(
     let total_planes = test.total_planes();
     let band_freq = test.frequencies(par.pix_per_deg);
 
-    // Adapting-luminance axis for the per-band CSF lookup.
+    // Adapting-luminance axis for the per-band CSF lookup. The axis is built
+    // in f64 (scalar table) and cast down once; the per-pixel lookups run f32.
     let csf_la: Vec<f64> = (0..CSF_LUT_N)
         .map(|i| 10f64.powf(-5.0 + 10.0 * i as f64 / (CSF_LUT_N - 1) as f64))
         .collect();
-    let csf_log_la: Vec<f64> = csf_la.iter().map(|v| v.log10()).collect();
+    let csf_log_la: Vec<f32> = csf_la.iter().map(|v| v.log10() as f32).collect();
     // CSF[b][i] = nCSF(band_freq[b], csf_la[i]).
-    let csf: Vec<Vec<f64>> = band_freq
+    let csf: Vec<Vec<f32>> = band_freq
         .iter()
-        .map(|f| csf_la.iter().map(|la| ncsf(*f, *la, par)).collect())
+        .map(|f| csf_la.iter().map(|la| ncsf(*f, *la, par) as f32).collect())
         .collect();
+    let la_lo = csf_la[0] as f32;
+    let la_hi = csf_la[CSF_LUT_N - 1] as f32;
 
-    let log_la: Vec<f64> = l_adapt
+    let log_la: Vec<f32> = l_adapt
         .iter()
-        .map(|v| clamp(*v, csf_la[0], csf_la[CSF_LUT_N - 1]).log10())
+        .map(|v| clamp32(*v, la_lo, la_hi).log10())
         .collect();
 
     // Quality weights are tabulated on a DECREASING frequency axis; reverse
@@ -234,12 +236,12 @@ fn run_impl(
     let qf: Vec<f64> = par.quality_band_freq.iter().rev().copied().collect();
     let qw: Vec<f64> = par.quality_band_w.iter().rev().copied().collect();
 
-    let p = par.transducer_p();
-    let q = par.transducer_q();
-    let pf = par.transducer_pf();
-    let k_self = 10f64.powf(par.mask_self);
-    let k_xo = 10f64.powf(par.mask_xo);
-    let k_xn = 10f64.powf(par.mask_xn);
+    let p = par.transducer_p() as f32;
+    let q = par.transducer_q() as f32;
+    let pf = par.transducer_pf() as f32;
+    let k_self = 10f64.powf(par.mask_self) as f32;
+    let k_xo = 10f64.powf(par.mask_xo) as f32;
+    let k_xn = 10f64.powf(par.mask_xn) as f32;
 
     let mut d_bands = want_d_bands.then(|| test.zeros_like());
     let mut quality_terms = Vec::with_capacity(total_planes);
@@ -256,10 +258,10 @@ fn run_impl(
 
     for b in 0..b_count {
         let (bw, bh) = (test.band(b, 0).width, test.band(b, 0).height);
-        let band_norm = 2f64.powi(b as i32);
+        let band_norm = 2f32.powi(b as i32);
 
         // Cross-orientation masking: total activity in this band.
-        let mut mask_xo_total = vec![0.0; bw * bh];
+        let mut mask_xo_total = vec![0.0f32; bw * bh];
         for plane in &mm[b] {
             for (a, v) in mask_xo_total.iter_mut().zip(&plane.data) {
                 *a += v;
@@ -268,19 +270,19 @@ fn run_impl(
 
         // Per-pixel contrast sensitivity at this band's frequency, from the
         // local adapting luminance resampled onto the band grid.
-        let log_la_rs = imresize(&log_la, w, h, bw, bh);
-        let csf_b: Vec<f64> = log_la_rs
+        let log_la_rs = imresize32(&log_la, w, h, bw, bh);
+        let csf_b: Vec<f32> = log_la_rs
             .iter()
             .map(|l| {
-                let l = clamp(*l, csf_log_la[0], csf_log_la[CSF_LUT_N - 1]);
-                interp1_linear(&csf_log_la, &csf[b], l)
+                let l = clamp32(*l, csf_log_la[0], csf_log_la[CSF_LUT_N - 1]);
+                interp1_linear32(&csf_log_la, &csf[b], l)
             })
             .collect();
 
-        // Quality weight for this band's frequency.
+        // Quality weight for this band's frequency (scalar — stays f64).
         let f_b = clamp(band_freq[b], qf[0], qf[qf.len() - 1]);
         let w_f = interp1_linear(&qf, &qw, f_b);
-        let diff_mask_b = imresize(diff_mask, w, h, bw, bh);
+        let diff_mask_b = imresize32(diff_mask, w, h, bw, bh);
 
         for o in 0..test.orientations(b) {
             let t = test.band(b, o);
@@ -288,23 +290,23 @@ fn run_impl(
             let self_mask = &mm[b][o];
 
             // Cross-neighbouring-band masking, resampled onto this grid.
-            let mut mask_xn = vec![0.0; bw * bh];
+            let mut mask_xn = vec![0.0f32; bw * bh];
             if b > 0 {
                 let src = &mm[b - 1][o.min(mm[b - 1].len() - 1)];
-                let rs = imresize(&src.data, src.width, src.height, bw, bh);
+                let rs = imresize32(&src.data, src.width, src.height, bw, bh);
                 for (a, v) in mask_xn.iter_mut().zip(&rs) {
                     *a += v.max(0.0) / (band_norm / 2.0);
                 }
             }
             if b + 2 < b_count {
                 let src = &mm[b + 1][o.min(mm[b + 1].len() - 1)];
-                let rs = imresize(&src.data, src.width, src.height, bw, bh);
+                let rs = imresize32(&src.data, src.width, src.height, bw, bh);
                 for (a, v) in mask_xn.iter_mut().zip(&rs) {
                     *a += v.max(0.0) / (band_norm * 2.0);
                 }
             }
 
-            let mut d = vec![0.0; bw * bh];
+            let mut d = vec![0.0f32; bw * bh];
             for i in 0..bw * bh {
                 let band_diff = t.data[i] - r.data[i];
                 let ex_diff = sign_pow(band_diff / band_norm, p) * band_norm;
@@ -332,12 +334,16 @@ fn run_impl(
 
             // Quality term, from `D` *before* the psychometric reshaping —
             // upstream's `(log(msre+eps) − log(eps)) · w_f`, summed into `Q`
-            // (res.Q = 100 − Q). No plane-count normalisation.
+            // (res.Q = 100 − Q). No plane-count normalisation. The sum itself
+            // is a reduction, so it accumulates in f64 over the f32 plane.
             let msre = {
                 let s: f64 = d
                     .iter()
                     .zip(&diff_mask_b)
-                    .map(|(v, m)| (v * m) * (v * m))
+                    .map(|(v, m)| {
+                        let vm = *v * *m;
+                        f64::from(vm) * f64::from(vm)
+                    })
                     .sum();
                 s.sqrt() / (bw * bh) as f64
             };
@@ -365,7 +371,7 @@ fn run_impl(
 /// is the intended behaviour for absolute-luminance input where 0 cd/m² is
 /// already clamped away.
 #[must_use]
-pub fn diff_mask(test: &[f64], reference: &[f64], channels: usize) -> Vec<f64> {
+pub fn diff_mask(test: &[f32], reference: &[f32], channels: usize) -> Vec<f32> {
     assert_eq!(test.len(), reference.len());
     assert!(channels >= 1);
     test.chunks(channels)
@@ -375,7 +381,7 @@ pub fn diff_mask(test: &[f64], reference: &[f64], channels: usize) -> Vec<f64> {
                 .iter()
                 .zip(r)
                 .any(|(a, b)| ((a - b) / b).abs() > DIFF_MASK_THRESHOLD);
-            f64::from(any)
+            f32::from(any)
         })
         .collect()
 }
@@ -389,39 +395,39 @@ mod tests {
     use crate::photoreceptor::Photoreceptor;
     use crate::spectral::{DisplaySpectra, emission_spectra, lmsr_matrix};
 
-    fn pathway_of(im: &[f64], w: usize, h: usize, par: &Params) -> Pathway {
+    fn pathway_of(im: &[f32], w: usize, h: usize, par: &Params) -> Pathway {
         let pn = Photoreceptor::new(par);
         let lmsr = lmsr_matrix(&emission_spectra(DisplaySpectra::D65, 1));
-        let mean = im.iter().sum::<f64>() / im.len() as f64;
+        let mean = im.iter().map(|v| *v as f64).sum::<f64>() / im.len() as f64;
         visual_pathway(im, w, h, par, &pn, &lmsr, &[mean])
     }
 
     /// A textured reference plus an optional additive perturbation.
-    fn pair(w: usize, h: usize, amp: f64, busy: f64) -> (Vec<f64>, Vec<f64>) {
-        let pi = core::f64::consts::PI;
-        let reference: Vec<f64> = (0..w * h)
+    fn pair(w: usize, h: usize, amp: f32, busy: f32) -> (Vec<f32>, Vec<f32>) {
+        let pi = core::f32::consts::PI;
+        let reference: Vec<f32> = (0..w * h)
             .map(|i| {
-                let (x, y) = ((i % w) as f64, (i / w) as f64);
+                let (x, y) = ((i % w) as f32, (i / w) as f32);
                 100.0 * (1.0 + busy * (2.0 * pi * x / 6.0).sin() * (2.0 * pi * y / 6.0).cos())
             })
             .collect();
-        let test: Vec<f64> = reference
+        let test: Vec<f32> = reference
             .iter()
             .enumerate()
             .map(|(i, v)| {
-                let (x, y) = ((i % w) as f64, (i / w) as f64);
+                let (x, y) = ((i % w) as f32, (i / w) as f32);
                 v + 100.0 * amp * (2.0 * pi * x / 5.0).sin() * (2.0 * pi * y / 7.0).sin()
             })
             .collect();
         (reference, test)
     }
 
-    fn run_pair(reference: &[f64], test: &[f64], w: usize, h: usize, par: &Params) -> Masking {
+    fn run_pair(reference: &[f32], test: &[f32], w: usize, h: usize, par: &Params) -> Masking {
         let pr = pathway_of(reference, w, h, par);
         let pt = pathway_of(test, w, h, par);
         let (br, pad) = decompose(&pr, par, None);
         let (bt, _) = decompose(&pt, par, Some(pad));
-        let l_adapt: Vec<f64> = pr
+        let l_adapt: Vec<f32> = pr
             .l_adapt
             .iter()
             .zip(&pt.l_adapt)
@@ -433,11 +439,11 @@ mod tests {
 
     #[test]
     fn sign_pow_is_odd_and_preserves_polarity() {
-        assert!((sign_pow(8.0, 1.0 / 3.0) - 2.0).abs() < 1e-12);
-        assert!((sign_pow(-8.0, 1.0 / 3.0) + 2.0).abs() < 1e-12);
+        assert!((sign_pow(8.0, 1.0 / 3.0) - 2.0).abs() < 1e-6);
+        assert!((sign_pow(-8.0, 1.0 / 3.0) + 2.0).abs() < 1e-6);
         assert_eq!(sign_pow(0.0, 3.0), 0.0);
         for x in [-3.0, -0.4, 0.4, 3.0] {
-            assert!((sign_pow(x, 2.0) + sign_pow(-x, 2.0)).abs() < 1e-12);
+            assert!((sign_pow(x, 2.0) + sign_pow(-x, 2.0)).abs() < 1e-6);
         }
     }
 
@@ -447,39 +453,39 @@ mod tests {
         let a = Band {
             width: 3,
             height: 3,
-            data: vec![10.0; 9],
+            data: vec![10.0f32; 9],
         };
         let b = Band {
             width: 3,
             height: 3,
-            data: vec![0.0; 9],
+            data: vec![0.0f32; 9],
         };
         let m = mutual_masking(&a, &b);
         assert!(m.data.iter().all(|v| *v == 0.0));
         // Present in both → survives, and the 3×3 box preserves a flat field
         // in the interior while attenuating it at the border (conv2 'same').
         let m = mutual_masking(&a, &a);
-        assert!((m.data[4] - 10.0).abs() < 1e-12, "centre {}", m.data[4]);
+        assert!((m.data[4] - 10.0).abs() < 1e-6, "centre {}", m.data[4]);
         assert!(m.data[0] < 10.0, "corner should see zero-padding");
         // Sign is discarded: masking is about magnitude.
         let neg = Band {
             width: 3,
             height: 3,
-            data: vec![-10.0; 9],
+            data: vec![-10.0f32; 9],
         };
         assert_eq!(mutual_masking(&a, &neg).data, m.data);
     }
 
     #[test]
     fn diff_mask_flags_only_relative_changes_past_the_threshold() {
-        let r = [100.0, 100.0, 100.0];
-        let t = [100.0, 100.05, 101.0]; // 0 %, 0.05 %, 1 %
+        let r = [100.0f32, 100.0, 100.0];
+        let t = [100.0f32, 100.05, 101.0]; // 0 %, 0.05 %, 1 %
         let m = diff_mask(&t, &r, 1);
-        assert_eq!(m, vec![0.0, 0.0, 1.0]);
+        assert_eq!(m, vec![0.0f32, 0.0, 1.0]);
         // Multi-channel: any channel over the threshold flags the pixel.
-        let r3 = [100.0, 100.0, 100.0];
-        let t3 = [100.0, 100.0, 101.0];
-        assert_eq!(diff_mask(&t3, &r3, 3), vec![1.0]);
+        let r3 = [100.0f32, 100.0, 100.0];
+        let t3 = [100.0f32, 100.0, 101.0];
+        assert_eq!(diff_mask(&t3, &r3, 3), vec![1.0f32]);
     }
 
     #[test]
@@ -491,7 +497,7 @@ mod tests {
         for b in 0..m.d_bands.count() {
             for o in 0..m.d_bands.orientations(b) {
                 for v in &m.d_bands.band(b, o).data {
-                    assert!(v.abs() < 1e-12, "identical pair gave D = {v}");
+                    assert!(v.abs() < 1e-6, "identical pair gave D = {v}");
                 }
             }
         }
@@ -504,12 +510,19 @@ mod tests {
     fn a_bigger_distortion_produces_a_bigger_difference_signal() {
         let par = Params::new(30.0);
         let (w, h) = (64usize, 64usize);
-        let energy = |amp: f64| -> f64 {
+        let energy = |amp: f32| -> f64 {
             let (r, t) = pair(w, h, amp, 0.2);
             let m = run_pair(&r, &t, w, h, &par);
             (0..m.d_bands.count())
                 .flat_map(|b| (0..m.d_bands.orientations(b)).map(move |o| (b, o)))
-                .map(|(b, o)| m.d_bands.band(b, o).data.iter().map(|v| v * v).sum::<f64>())
+                .map(|(b, o)| {
+                    m.d_bands
+                        .band(b, o)
+                        .data
+                        .iter()
+                        .map(|v| (*v as f64) * (*v as f64))
+                        .sum::<f64>()
+                })
                 .sum::<f64>()
                 .sqrt()
         };
@@ -527,12 +540,19 @@ mod tests {
         // visible on a busy background than on a smooth one.
         let par = Params::new(30.0);
         let (w, h) = (64usize, 64usize);
-        let energy = |busy: f64| -> f64 {
+        let energy = |busy: f32| -> f64 {
             let (r, t) = pair(w, h, 0.05, busy);
             let m = run_pair(&r, &t, w, h, &par);
             (0..m.d_bands.count())
                 .flat_map(|b| (0..m.d_bands.orientations(b)).map(move |o| (b, o)))
-                .map(|(b, o)| m.d_bands.band(b, o).data.iter().map(|v| v * v).sum::<f64>())
+                .map(|(b, o)| {
+                    m.d_bands
+                        .band(b, o)
+                        .data
+                        .iter()
+                        .map(|v| (*v as f64) * (*v as f64))
+                        .sum::<f64>()
+                })
                 .sum::<f64>()
                 .sqrt()
         };
@@ -553,7 +573,14 @@ mod tests {
             let m = run_pair(&r, &t, w, h, par);
             (0..m.d_bands.count())
                 .flat_map(|b| (0..m.d_bands.orientations(b)).map(move |o| (b, o)))
-                .map(|(b, o)| m.d_bands.band(b, o).data.iter().map(|v| v * v).sum::<f64>())
+                .map(|(b, o)| {
+                    m.d_bands
+                        .band(b, o)
+                        .data
+                        .iter()
+                        .map(|v| (*v as f64) * (*v as f64))
+                        .sum::<f64>()
+                })
                 .sum::<f64>()
                 .sqrt()
         };
@@ -571,7 +598,7 @@ mod tests {
     fn quality_terms_are_one_per_plane_and_rise_with_distortion() {
         let par = Params::new(30.0);
         let (w, h) = (64usize, 64usize);
-        let sum_q = |amp: f64| -> (f64, usize) {
+        let sum_q = |amp: f32| -> (f64, usize) {
             let (r, t) = pair(w, h, amp, 0.2);
             let m = run_pair(&r, &t, w, h, &par);
             (
