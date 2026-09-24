@@ -824,6 +824,11 @@ pub(crate) fn to_umbrella_kind(
         // The unsuffixed `iwssim` is likewise the native CPU port.
         #[cfg(feature = "cpu-iwssim")]
         C::Iwssim => Some(U::Iwssim),
+        // `hdrvdp` is CPU-only (no `-gpu` twin): the umbrella's `Backend::Cpu`
+        // HDR path — `HdrScorer` → `Metric::new_cpu_hdr` → the `Hdrvdp`
+        // `cpu_dispatch` variant fed absolute nits (`IntegratedPuNits`).
+        #[cfg(feature = "cpu-hdrvdp")]
+        C::Hdrvdp => Some(U::Hdrvdp),
         // GPU metric variants → the umbrella GPU path (gated on the gpu-* feature).
         #[cfg(feature = "gpu-cvvdp")]
         C::CvvdpGpu => Some(U::Cvvdp),

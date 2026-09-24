@@ -320,6 +320,11 @@ impl CpuAdapter {
             MetricKind::Butter => construct_butter(width, height, params),
             MetricKind::Zensim => construct_zensim(width, height, params),
             MetricKind::Iwssim => construct_iwssim(width, height, params),
+            // hdrvdp is absolute-nits-only — this adapter's compute surface
+            // is sRGB8-shaped end to end, so it can never score here. The
+            // umbrella's `Backend::Cpu` dispatch (`cpu_dispatch::Hdrvdp`)
+            // is the native-CPU route for it.
+            MetricKind::Hdrvdp => Err(CpuAdapterError::Unavailable(MetricKind::Hdrvdp)),
         }?;
         Ok(Self {
             metric,

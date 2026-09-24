@@ -280,6 +280,12 @@ fn backends_for_kind(kind: MetricKind) -> &'static [Backend] {
                 &[Backend::GpuFull, Backend::GpuStrip]
             }
         }
+        // hdrvdp: no GPU twin, and the executor's CPU leaf (cpu_adapter)
+        // can't feed it (sRGB8-only, hdrvdp is absolute-nits) — nothing
+        // to bench through this harness. Its perf record lives in
+        // hdrvdp's own benchmarks (score() ~519ms serial / ~184ms
+        // `parallel` at 1024²).
+        MetricKind::Hdrvdp => &[],
     }
 }
 
@@ -440,6 +446,7 @@ fn metric_kind_tag(kind: MetricKind) -> &'static str {
         MetricKind::Dssim => "dssim",
         MetricKind::Iwssim => "iwssim",
         MetricKind::Zensim => "zensim",
+        MetricKind::Hdrvdp => "hdrvdp",
     }
 }
 

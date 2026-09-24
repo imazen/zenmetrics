@@ -277,6 +277,31 @@ Workspace conventions per the global rules:
   golden tests remain the synthetic-parity gate and this is the
   real-corpus gate — distinct measurements, both green. `7eadfddd`.
 
+- hdrvdp: `DEFAULT_PIX_PER_DEG` (= 30, the measured UPIQ protocol) and
+  `HDRVDP_COLUMN_NAME` (`hdrvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`,
+  `HDRVDP_IMPL_TAG`-overridable) constants for downstream wiring.
+
+- **hdrvdp wired into the umbrella stack** (feature `cpu-hdrvdp`, in
+  `cpu-metrics`). `zenmetrics-api`: `MetricKind::Hdrvdp` (tag
+  `"hdrvdp"`), `MetricParams::Hdrvdp(Box<hdrvdp::Params>)`,
+  `try_default_for` fills `Params::new(DEFAULT_PIX_PER_DEG)` (never
+  `Params::default()` — its `pix_per_deg` is NaN), `hdrvdp_cpu`
+  re-export, and a native `cpu_dispatch` state. Feeding:
+  `hdr_feeding(Hdrvdp) = IntegratedPuNits` — the absolute-luminance
+  interleaved linear-RGB f32 transport IS HDR-VDP's native input, not a
+  PU21 surrogate; scored as `ColorEncoding::RgbBt709` with luminance
+  derived internally (the UPIQ-validated convention). `sRGB8` and
+  display-relative linear-plane entries fail loudly pointing at the
+  nits path rather than misreading code values as cd/m². No
+  warm-reference arm (the crate's prepared state is internal).
+  `zenmetrics-cli`: `--metric hdrvdp` (CPU-only, `hdrvdp_imazen_v*`
+  column), the `--hdr` sweep path reaches it through `HdrScorer` →
+  `Backend::Cpu` → `Metric::new_cpu_hdr`; orchestrator-ineligible like
+  `gmsd` (the executor's leaves are sRGB8-shaped). Verified
+  `tests/it/cpu_hdrvdp_pu.rs`: umbrella score bit-equal to direct
+  `hdrvdp::score`, custom ppd threads through, default ppd = 30,
+  short-buffer and wrong-feeding errors explicit.
+
 - **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
   IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
   Score + half-resolution GMS map, strided f32 input, zenpixels `PixelSlice`

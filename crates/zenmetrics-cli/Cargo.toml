@@ -150,7 +150,7 @@ cpu-metrics = [
     # cvvdp + iwssim have no external CPU crate — their native SIMD CPU ports
     # live in-tree (crates/cvvdp, crates/iwssim) behind the umbrella's
     # `zenmetrics-api/cpu-*` features. Wiring them here means EVERY build that
-    # has `cpu-metrics` (the default) can score all six on CPU — so the
+    # has `cpu-metrics` (the default) can score every metric on CPU — so the
     # GPU→native-CPU failover in `run_metric` always has a CPU path to land on.
     # This is the fix for "cvvdp/iwssim appear GPU-only" (see
     # docs/METRIC_DISPATCH_CONSOLIDATION.md). NOTE: pulls AGPL-3.0-or-later
@@ -158,9 +158,12 @@ cpu-metrics = [
     # license-compatible.
     "cpu-cvvdp",
     "cpu-iwssim",
+    # HDR-VDP 2.2.2 (in-tree `hdrvdp` crate): CPU-only, no GPU twin — routed
+    # through the umbrella's Backend::Cpu HDR path (absolute-nits feeding).
+    "cpu-hdrvdp",
     # GMSD (in-tree `gmsd` crate, libgmsd port): CPU-only, called directly.
     "cpu-gmsd",
-    # All six native-CPU backends via the umbrella's Backend::Cpu (cpu_dispatch),
+    # All native-CPU backends via the umbrella's Backend::Cpu (cpu_dispatch),
     # so run_gpu_via_umbrella's CPU failover works for ssim2/dssim/butter/zensim
     # too — and the auto ladder's CPU rung is the native SIMD path, NEVER
     # cubecl-cpu (project rule: cubecl-cpu is never dispatched). C2.
@@ -173,6 +176,7 @@ cpu-metrics = [
 # Backend::Cpu, …)` build the native `cpu_dispatch` scorer for that metric.
 cpu-cvvdp = ["dep:zenmetrics-api", "zenmetrics-api/cpu-cvvdp"]
 cpu-iwssim = ["dep:zenmetrics-api", "zenmetrics-api/cpu-iwssim"]
+cpu-hdrvdp = ["dep:zenmetrics-api", "zenmetrics-api/cpu-hdrvdp"]
 cpu-gmsd = ["dep:gmsd"]
 
 # GPU bundle: pulls every GPU metric implementation via the umbrella.

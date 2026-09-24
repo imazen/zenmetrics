@@ -163,6 +163,9 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::ZensimGpu => "zensim_gpu",
         CliMetricKind::Iwssim => "iwssim",
         CliMetricKind::Gmsd => "gmsd",
+        // Never reached — orchestrator-ineligible — but the match is
+        // exhaustive over the CLI kind enum.
+        CliMetricKind::Hdrvdp => "hdrvdp",
         CliMetricKind::Cvvdp => "cvvdp",
         CliMetricKind::CvvdpGpu => "cvvdp",
         CliMetricKind::Butteraugli => "butteraugli_max",
@@ -248,7 +251,7 @@ pub fn rekey_orchestrator_columns(
         // below) so future readers see the contract.
         CliMetricKind::Iwssim => Vec::new(),
         // Never reaches the orchestrator (`metric_orchestrator_eligible`).
-        CliMetricKind::Gmsd => Vec::new(),
+        CliMetricKind::Gmsd | CliMetricKind::Hdrvdp => Vec::new(),
         CliMetricKind::Cvvdp
         | CliMetricKind::CvvdpGpu
         | CliMetricKind::Ssim2Gpu
@@ -272,7 +275,11 @@ pub fn rekey_orchestrator_columns(
 /// Decide whether a given CLI metric kind can flow through the
 /// orchestrator path.
 ///
-/// **Every metric kind is eligible as of 2026-08-28.** Butteraugli was
+/// **Ineligible:** `Gmsd` (no umbrella/orchestrator backend — direct
+/// `gmsd` crate call) and `Hdrvdp` (absolute-nits-only; every
+/// orchestrator leaf is sRGB8-shaped and there is no GPU twin — the
+/// `hdr::HdrScorer` path serves it instead). Every other metric kind
+/// is eligible as of 2026-08-28. Butteraugli was
 /// the last holdout; the history and the accepted tolerance are below
 /// because the reason it was excluded is easy to re-derive wrongly.
 ///
@@ -336,7 +343,7 @@ pub fn rekey_orchestrator_columns(
 ///   `orchestrator_glue.rs`), and `chooser::cpu_wins_oneshot_max_pixels`
 ///   returns `u64::MAX` for butter, so an `ExecContext::OneShot` task
 ///   prefers CPU at any size when `cpu-butter` is compiled in. That is
-///   true of all ten eligible metric kinds, not butter specifically.
+///   true of the other eligible metric kinds, not butter specifically.
 ///   Measured envelope for butter on the same corpus: CPU
 ///   `butteraugli_strip(256)` vs CPU whole ≤ 9.4e-8, but GPU-whole vs
 ///   CPU-whole is median 2.02e-4 / p95 2.37e-4 / **max 1.29e-2** — far
@@ -349,8 +356,12 @@ pub fn rekey_orchestrator_columns(
 ///   `cvvdp_gpu::CVVDP_COLUMN_NAME`.
 pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
     // GMSD has no umbrella/orchestrator backend: it is scored by the
-    // direct CPU path in `metrics::run_metric`.
-    !matches!(kind, CliMetricKind::Gmsd)
+    // direct CPU path in `metrics::run_metric`. HDR-VDP is the same
+    // shape of ineligible: the orchestrator's leaves are all
+    // sRGB8-shaped (cpu_adapter) or GPU backends hdrvdp doesn't have —
+    // its nits feeding only exists through `hdr::HdrScorer`, which the
+    // `score --hdr` / `sweep --hdr` paths reach directly.
+    !matches!(kind, CliMetricKind::Gmsd | CliMetricKind::Hdrvdp)
 }
 
 /// Build the orchestrator at the start of a CLI command. Wraps the

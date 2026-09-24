@@ -93,6 +93,12 @@ impl OrchestratorMetricSpec {
             CliMetricKind::Gmsd => {
                 unreachable!("gmsd has no orchestrator backend; callers gate on eligibility")
             }
+            // HDR-VDP likewise: the executor's leaves are sRGB8-shaped
+            // (cpu_adapter) or GPU backends hdrvdp doesn't have — the
+            // `HdrScorer` nits path serves it instead.
+            CliMetricKind::Hdrvdp => {
+                unreachable!("hdrvdp has no orchestrator backend; callers gate on eligibility")
+            }
             CliMetricKind::Zensim => Self {
                 kind: ApiMetricKind::Zensim,
                 prefer_cpu: true,
@@ -269,6 +275,12 @@ pub fn validate_cpu_variant_built_in(
             "orchestrator-cpu-iwssim",
             cfg!(feature = "orchestrator-cpu-iwssim"),
         ),
+        // hdrvdp is orchestrator-ineligible (no sRGB8-capable leaf and no
+        // GPU twin) — `metric_orchestrator_eligible` gates callers before
+        // a spec can carry it. Defensive arm: if that ever changes, the
+        // feature-check reports it unavailable rather than silently
+        // passing a phantom feature name.
+        ApiMetricKind::Hdrvdp => ("hdrvdp", "orchestrator-cpu-hdrvdp", false),
     };
     if enabled {
         Ok(())

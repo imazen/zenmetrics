@@ -114,8 +114,10 @@ cpu-butter = ["dep:butteraugli", "dep:imgref", "dep:rgb", "dep:bytemuck"]
 # of a dependency is not a public-API addition here.
 cpu-zensim = ["dep:zensim", "dep:bytemuck", "zensim?/custom-profiles", "zensim-deprecated-profiles", "zensim-candidate-profiles"]
 cpu-iwssim = ["dep:iwssim", "iwssim/std"]
+# hdrvdp is std-only (no no_std split) and CPU-only by design — no GPU twin.
+cpu-hdrvdp = ["dep:hdrvdp"]
 # Umbrella: every optimized native-CPU metric (parallels `all-metrics`).
-cpu-metrics = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim", "cpu-iwssim"]
+cpu-metrics = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim", "cpu-iwssim", "cpu-hdrvdp"]
 
 # Encoded-file front door (`score_encoded`): decode PNG/JPEG `&[u8]` to RGB8
 # internally (task #159 phase 4c). Default-on so the front door is always
@@ -183,6 +185,7 @@ dssim-core  = { workspace = true, optional = true }
 butteraugli = { workspace = true, optional = true }
 zensim      = { workspace = true, optional = true }
 iwssim      = { workspace = true, optional = true }
+hdrvdp      = { workspace = true, optional = true }
 imgref      = { workspace = true, optional = true }
 rgb         = { workspace = true, optional = true }
 bytemuck    = { workspace = true, optional = true }

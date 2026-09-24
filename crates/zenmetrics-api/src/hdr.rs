@@ -368,6 +368,13 @@ pub fn hdr_feeding(metric: crate::MetricKind, backend: crate::Backend) -> HdrFee
         // bake; no backend routes it any more (the `backend` argument is
         // kept so a future backend-specific feeding stays a one-line change).
         M::Zensim => HdrFeeding::IntegratedPuNits,
+        // hdrvdp — same absolute-nits interleaved transport, but no PU21
+        // surrogate is involved: absolute luminance in cd/m² is the metric's
+        // *native* input (`ColorEncoding::RgbBt709`; its own photoreceptor/
+        // CSF stack does the adaptation the SSIM-family approximates with
+        // PU21). CPU-only kind — the measured UPIQ feeding
+        // (benchmarks/hdrvdp_upiq_2026-09-24.md).
+        M::Hdrvdp => HdrFeeding::IntegratedPuNits,
         // iwssim, BOTH classes — the CPU pipeline (`score_gray`) and the GPU
         // pipeline (`compute_gray`) are gray-f32-native, so float PU(luma)
         // routes everywhere. The u8 shell measured 0.628 vs 0.808 float on
@@ -733,7 +740,8 @@ fn build_hdr_metric(
         feature = "cpu-dssim",
         feature = "cpu-butter",
         feature = "cpu-zensim",
-        feature = "cpu-iwssim"
+        feature = "cpu-iwssim",
+        feature = "cpu-hdrvdp"
     ))]
     if backend.resolve() == crate::Backend::Cpu {
         return crate::Metric::new_cpu_hdr(kind, width, height, peak_nits);
@@ -888,6 +896,9 @@ mod tests {
             // f32-gray-native, and the u8 shell measured 0.628 vs 0.808
             // float on UPIQ HDR (benchmarks addendum 2).
             assert_eq!(hdr_feeding(M::Iwssim, b), PuLumaGrayF32);
+            // hdrvdp: absolute nits is its native input — same transport as
+            // the SSIM family's integrated-PU feeding, no surrogate.
+            assert_eq!(hdr_feeding(M::Hdrvdp, b), IntegratedPuNits);
         }
     }
 
@@ -915,6 +926,7 @@ mod tests {
             M::Dssim,
             M::Iwssim,
             M::Zensim,
+            M::Hdrvdp,
         ] {
             for b in [B::Cpu, B::Cuda, B::Wgpu, B::Hip, B::CubeclCpu] {
                 assert!(

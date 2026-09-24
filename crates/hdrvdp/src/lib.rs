@@ -97,6 +97,29 @@ pub use photoreceptor::Photoreceptor;
 pub use pool::Visibility;
 pub use spyr::{Band, SteerablePyramid};
 
+/// The canonical HDR-VDP visual resolution (pixels per degree) used when
+/// no display geometry is known: upstream's conventional value and the
+/// constant the released UPIQ `HDRVDP2_2` column was generated at
+/// (measured 2026-09-24 — `benchmarks/hdrvdp_upiq_2026-09-24.md`).
+/// `Params::new` still takes `pix_per_deg` explicitly; this is the
+/// default callers should reach for when geometry is unspecified.
+pub const DEFAULT_PIX_PER_DEG: f64 = 30.0;
+
+/// Stable column-name identifier for sweep sidecars:
+/// `hdrvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>` (overridable at build time via
+/// `HDRVDP_IMPL_TAG`).
+pub const HDRVDP_COLUMN_NAME: &str = match option_env!("HDRVDP_IMPL_TAG") {
+    Some(t) => t,
+    None => concat!(
+        "hdrvdp_imazen_v",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_PATCH"),
+    ),
+};
+
 /// Errors this crate can return.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]

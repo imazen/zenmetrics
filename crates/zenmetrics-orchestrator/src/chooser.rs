@@ -105,6 +105,10 @@ pub(crate) fn cpu_wins_oneshot_max_pixels(metric: MetricKind) -> u64 {
         MetricKind::Dssim => 2048 * 2048,
         // CPU faster one-shot through 1024² (1 MP); GPU faster at 2048².
         MetricKind::Iwssim => 1024 * 1024,
+        // hdrvdp has no GPU twin — CPU trivially wins at every size (the
+        // `cpu_feature_enabled_for` gate below still reports it unavailable
+        // through THIS crate's sRGB8-shaped adapter).
+        MetricKind::Hdrvdp => u64::MAX,
     }
 }
 
@@ -330,6 +334,10 @@ pub(crate) fn supported_backends(metric: MetricKind) -> &'static [Backend] {
         MetricKind::Butter | MetricKind::Ssim2 | MetricKind::Dssim | MetricKind::Iwssim => {
             &[Backend::GpuFull, Backend::GpuStrip, Backend::Cpu]
         }
+        // hdrvdp is CPU-only (no GPU twin): the native route is the
+        // umbrella's `Backend::Cpu` dispatch, not this crate's sRGB8
+        // adapter — `cpu_feature_enabled_for` reports that honestly.
+        MetricKind::Hdrvdp => &[Backend::Cpu],
     }
 }
 
@@ -346,6 +354,10 @@ fn cpu_feature_enabled_for(metric: MetricKind) -> bool {
         MetricKind::Butter => cfg!(feature = "cpu-butter"),
         MetricKind::Zensim => cfg!(feature = "cpu-zensim"),
         MetricKind::Iwssim => cfg!(feature = "cpu-iwssim"),
+        // The cpu_adapter's sRGB8 compute surface cannot feed hdrvdp
+        // (absolute nits only), so there is deliberately no `cpu-hdrvdp`
+        // feature here — the umbrella `Backend::Cpu` dispatch serves it.
+        MetricKind::Hdrvdp => false,
     }
 }
 

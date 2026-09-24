@@ -72,6 +72,7 @@
         feature = "cpu-dssim",
         feature = "cpu-iwssim",
         feature = "cpu-zensim",
+        feature = "cpu-hdrvdp",
     )),
     allow(unused_variables, unused_imports, dead_code, unreachable_code)
 )]
@@ -84,7 +85,8 @@ mod capability;
     feature = "cpu-dssim",
     feature = "cpu-butter",
     feature = "cpu-zensim",
-    feature = "cpu-iwssim"
+    feature = "cpu-iwssim",
+    feature = "cpu-hdrvdp"
 ))]
 mod cpu_dispatch;
 mod error;
@@ -215,6 +217,13 @@ pub use zensim_gpu as zensim;
 // never the local `pub use zensim_gpu as zensim` re-export above.
 #[cfg(any(feature = "zensim", feature = "cpu-zensim"))]
 pub use ::zensim as zensim_cpu;
+
+/// Re-export of the in-tree native-CPU `hdrvdp` crate (when the
+/// `cpu-hdrvdp` feature is enabled) so callers can reach its public
+/// constants (e.g. `HDRVDP_COLUMN_NAME`, `DEFAULT_PIX_PER_DEG`) without a
+/// direct crate dep. hdrvdp has no GPU twin — this is the only re-export.
+#[cfg(feature = "cpu-hdrvdp")]
+pub use ::hdrvdp as hdrvdp_cpu;
 
 /// Result alias for the umbrella API. Most calls return this directly.
 pub type Result<T> = core::result::Result<T, Error>;

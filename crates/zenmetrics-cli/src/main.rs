@@ -3183,6 +3183,7 @@ fn print_capabilities() {
     cap!("cpu-metrics");
     cap!("cpu-cvvdp");
     cap!("cpu-iwssim");
+    cap!("cpu-hdrvdp");
     cap!("gpu-butteraugli");
     cap!("gpu-ssim2");
     cap!("gpu-dssim");

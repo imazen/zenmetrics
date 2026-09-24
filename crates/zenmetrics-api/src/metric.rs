@@ -155,6 +155,11 @@ pub enum MetricKind {
     /// Zensim (228-feature perceptual extractor + trained weights) —
     /// `zensim-gpu`.
     Zensim,
+    /// HDR-VDP 2.2.2 — `hdrvdp` (native CPU only, no `-gpu` twin).
+    /// Range: 0..100 on the JOD scale (100 = identical). Consumes
+    /// absolute-luminance input via the HDR front-end; sRGB8 input
+    /// is rejected.
+    Hdrvdp,
 }
 
 impl MetricKind {
@@ -167,6 +172,7 @@ impl MetricKind {
             MetricKind::Dssim => "dssim",
             MetricKind::Iwssim => "iwssim",
             MetricKind::Zensim => "zensim",
+            MetricKind::Hdrvdp => "hdrvdp",
         }
     }
 
@@ -180,6 +186,7 @@ impl MetricKind {
             MetricKind::Dssim => "Dssim",
             MetricKind::Iwssim => "Iwssim",
             MetricKind::Zensim => "Zensim",
+            MetricKind::Hdrvdp => "Hdrvdp",
         }
     }
 }
@@ -371,6 +378,11 @@ pub enum MetricParams {
     /// `params` entirely (constructs from `ZensimProfile::latest_preview()`).
     #[cfg(all(feature = "cpu-zensim", not(feature = "zensim")))]
     Zensim(()),
+    /// [`hdrvdp::Params`] passthrough — the native CPU scorer reads the
+    /// payload directly (unlike the cpu-placeholder arms above, which
+    /// carry `()` because their `-gpu` param type is absent).
+    #[cfg(feature = "cpu-hdrvdp")]
+    Hdrvdp(Box<hdrvdp::Params>),
 }
 
 impl MetricParams {
@@ -387,6 +399,8 @@ impl MetricParams {
             MetricParams::Dssim(_) => MetricKind::Dssim,
             #[cfg(any(feature = "iwssim", feature = "cpu-iwssim"))]
             MetricParams::Iwssim(_) => MetricKind::Iwssim,
+            #[cfg(feature = "cpu-hdrvdp")]
+            MetricParams::Hdrvdp(_) => MetricKind::Hdrvdp,
             #[cfg(any(feature = "zensim", feature = "cpu-zensim"))]
             MetricParams::Zensim(_) => MetricKind::Zensim,
             #[cfg(not(any(
@@ -401,6 +415,7 @@ impl MetricParams {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -471,6 +486,10 @@ impl MetricParams {
             MetricKind::Zensim => Ok(Self::Zensim(zensim_gpu::ZensimParams::default_weights())),
             #[cfg(all(feature = "cpu-zensim", not(feature = "zensim")))]
             MetricKind::Zensim => Ok(Self::Zensim(())),
+            #[cfg(feature = "cpu-hdrvdp")]
+            MetricKind::Hdrvdp => Ok(Self::Hdrvdp(Box::new(hdrvdp::Params::new(
+                hdrvdp::DEFAULT_PIX_PER_DEG,
+            )))),
             #[allow(unreachable_patterns)]
             other => Err(Error::MetricNotEnabled { kind: other.tag() }),
         }
@@ -526,7 +545,8 @@ pub enum MetricInner {
         feature = "cpu-dssim",
         feature = "cpu-butter",
         feature = "cpu-zensim",
-        feature = "cpu-iwssim"
+        feature = "cpu-iwssim",
+        feature = "cpu-hdrvdp"
     ))]
     // Second field is the cached reference (packed sRGB8) for the warm
     // path: `set_reference` stores it, `compute_with_cached_reference`
@@ -625,7 +645,8 @@ impl Metric {
         feature = "cpu-dssim",
         feature = "cpu-butter",
         feature = "cpu-zensim",
-        feature = "cpu-iwssim"
+        feature = "cpu-iwssim",
+        feature = "cpu-hdrvdp"
     ))]
     pub fn new_cpu_hdr(kind: MetricKind, width: u32, height: u32, peak_nits: f32) -> Result<Self> {
         crate::cpu_dispatch::CpuMetricState::new_hdr(kind, width, height, peak_nits)
@@ -727,7 +748,8 @@ impl Metric {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             {
                 if matches!(self.inner, MetricInner::Cpu(..)) {
@@ -742,7 +764,8 @@ impl Metric {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             )))]
             {
                 Backend::Cuda
@@ -861,7 +884,8 @@ impl MetricInner {
             feature = "cpu-dssim",
             feature = "cpu-butter",
             feature = "cpu-zensim",
-            feature = "cpu-iwssim"
+            feature = "cpu-iwssim",
+            feature = "cpu-hdrvdp"
         ))]
         if backend.resolve() == Backend::Cpu {
             return crate::cpu_dispatch::CpuMetricState::new(kind, width, height, &params)
@@ -1004,7 +1028,8 @@ impl MetricInner {
             feature = "cpu-dssim",
             feature = "cpu-butter",
             feature = "cpu-zensim",
-            feature = "cpu-iwssim"
+            feature = "cpu-iwssim",
+            feature = "cpu-hdrvdp"
         ))]
         if backend.resolve() == Backend::Cpu {
             return crate::cpu_dispatch::CpuMetricState::new(kind, width, height, &params)
@@ -1119,7 +1144,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(s, _) => s.kind(),
             #[cfg(feature = "cvvdp")]
@@ -1146,6 +1172,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -1165,7 +1192,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(s, _) => s.dims(),
             #[cfg(feature = "cvvdp")]
@@ -1192,6 +1220,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -1212,7 +1241,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(s, _) => s.compute_srgb_u8(r, d),
             #[cfg(feature = "cvvdp")]
@@ -1281,6 +1311,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -1313,7 +1344,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(s, _) => {
                 stop.check()?;
@@ -1361,6 +1393,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -1394,7 +1427,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(s, _) => {
                 let (score, pnorm3) = s.compute_srgb_u8_multi(r, d)?;
@@ -1478,6 +1512,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -1532,13 +1567,20 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
-            MetricInner::Cpu(..) => Err(Error::Metric {
+            MetricInner::Cpu(s, _) => Err(Error::Metric {
                 kind: "cpu",
-                message: "CPU backend has no linear-planes HDR path; feed via \
-                          compute_srgb_u8(to_sdr_u8(..)) per hdr_feeding()"
-                    .to_string(),
+                message: if s.kind() == MetricKind::Hdrvdp {
+                    "HDR-VDP consumes absolute nits, not display-relative \
+                     linear planes — feed via compute_pu_nits_interleaved(_multi)"
+                        .to_string()
+                } else {
+                    "CPU backend has no linear-planes HDR path; feed via \
+                     compute_srgb_u8(to_sdr_u8(..)) per hdr_feeding()"
+                        .to_string()
+                },
             }),
             #[cfg(feature = "cvvdp")]
             MetricInner::Cvvdp(m) => m
@@ -1586,6 +1628,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -1624,13 +1667,20 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
-            MetricInner::Cpu(..) => Err(Error::Metric {
+            MetricInner::Cpu(s, _) => Err(Error::Metric {
                 kind: "cpu",
-                message: "CPU backend has no linear-planes HDR path; feed via \
-                          compute_srgb_u8(to_sdr_u8(..)) per hdr_feeding()"
-                    .to_string(),
+                message: if s.kind() == MetricKind::Hdrvdp {
+                    "HDR-VDP consumes absolute nits, not display-relative \
+                     linear planes — feed via compute_pu_nits_interleaved(_multi)"
+                        .to_string()
+                } else {
+                    "CPU backend has no linear-planes HDR path; feed via \
+                     compute_srgb_u8(to_sdr_u8(..)) per hdr_feeding()"
+                        .to_string()
+                },
             }),
             #[cfg(feature = "cvvdp")]
             MetricInner::Cvvdp(m) => m
@@ -1695,6 +1745,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -1725,7 +1776,8 @@ impl MetricInner {
             feature = "cpu-dssim",
             feature = "cpu-butter",
             feature = "cpu-zensim",
-            feature = "cpu-iwssim"
+            feature = "cpu-iwssim",
+            feature = "cpu-hdrvdp"
         ))]
         if let MetricInner::Cpu(s, _) = self {
             return s
@@ -1754,7 +1806,8 @@ impl MetricInner {
             feature = "cpu-dssim",
             feature = "cpu-butter",
             feature = "cpu-zensim",
-            feature = "cpu-iwssim"
+            feature = "cpu-iwssim",
+            feature = "cpu-hdrvdp"
         ))]
         if let MetricInner::Cpu(s, _) = self {
             let (score, pnorm3) = s.compute_from_linear_interleaved(ref_rgb, dis_rgb)?;
@@ -1846,7 +1899,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(state, _) => state
                 .compute_pu_nits_interleaved(ref_nits, dis_nits)
@@ -1887,6 +1941,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -1941,7 +1996,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(state, _) => state
                 .compute_pu_luma_gray(ref_gray, dis_gray)
@@ -1968,6 +2024,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -2060,7 +2117,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(..) => Err(Error::Metric {
                 kind: "cpu",
@@ -2102,7 +2160,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(..) => Err(Error::Metric {
                 kind: "cpu",
@@ -2185,7 +2244,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(s, _) => {
                 // Optimized-CPU path (task #159 phase 3): convert both
@@ -2317,7 +2377,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(s, _) => {
                 // True precompute warm path (2026-06-27): build the reference
@@ -2369,6 +2430,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -2394,7 +2456,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(s, _) => {
                 // True precompute warm path (2026-06-27): score against the
@@ -2463,6 +2526,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -2489,7 +2553,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(s, _) => {
                 stop.check()?;
@@ -2537,6 +2602,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -2558,7 +2624,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(s, _) => s.clear_reference(),
             // cvvdp's set_reference_srgb_u8 overwrites prior state — no
@@ -2589,6 +2656,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(
@@ -2615,7 +2683,8 @@ impl MetricInner {
                 feature = "cpu-dssim",
                 feature = "cpu-butter",
                 feature = "cpu-zensim",
-                feature = "cpu-iwssim"
+                feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp"
             ))]
             MetricInner::Cpu(s, _) => s.has_reference(),
             #[cfg(feature = "iwssim")]
@@ -2648,6 +2717,7 @@ impl MetricInner {
                 feature = "cpu-ssim2",
                 feature = "cpu-dssim",
                 feature = "cpu-iwssim",
+                feature = "cpu-hdrvdp",
                 feature = "cpu-zensim",
             )))]
             _ => unreachable!(

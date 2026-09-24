@@ -149,6 +149,18 @@ pub enum MetricKind {
     /// umbrella or the orchestrator (CPU-only, no GPU twin).
     #[value(name = "gmsd")]
     Gmsd,
+    /// HDR-VDP 2.2.2 (JOD scale 0–100, 100 = identical) — CPU implementation
+    /// via the in-tree `hdrvdp` crate (native SIMD port of the official
+    /// HDR-VDP-2.2.2; dispatched through `zenmetrics_api::cpu_dispatch` /
+    /// `Backend::Cpu`). **HDR-only input**: consumes absolute luminance in
+    /// cd/m² (the `IntegratedPuNits` feeding — interleaved linear-RGB nits,
+    /// `ColorEncoding::RgbBt709` inside), so plain sRGB8 pairs error with a
+    /// "feed absolute nits" message — use `score-pairs --hdr` / `sweep --hdr`
+    /// (or the umbrella `Metric` + `compute_pu_nits_interleaved_multi`).
+    /// Viewing geometry defaults to `DEFAULT_PIX_PER_DEG` (30 — the measured
+    /// UPIQ protocol). Emits `hdrvdp_imazen_v*`. No GPU twin.
+    #[value(name = "hdrvdp")]
+    Hdrvdp,
 }
 
 impl MetricKind {
@@ -167,6 +179,7 @@ impl MetricKind {
             MetricKind::CvvdpGpu,
             MetricKind::Iwssim,
             MetricKind::Gmsd,
+            MetricKind::Hdrvdp,
         ]
     }
 
@@ -185,6 +198,7 @@ impl MetricKind {
             MetricKind::CvvdpGpu => "cvvdp-gpu",
             MetricKind::Iwssim => "iwssim",
             MetricKind::Gmsd => "gmsd",
+            MetricKind::Hdrvdp => "hdrvdp",
         }
     }
 
@@ -238,6 +252,7 @@ impl MetricKind {
             MetricKind::CvvdpGpu => CVVDP_GPU_COLUMNS,
             MetricKind::Iwssim => IWSSIM_CPU_COLUMNS,
             MetricKind::Gmsd => GMSD_CPU_COLUMNS,
+            MetricKind::Hdrvdp => HDRVDP_CPU_COLUMNS,
         }
     }
 }
@@ -292,6 +307,15 @@ const IWSSIM_CPU_COLUMNS: &[&str] = &["iwssim"];
 const GMSD_CPU_COLUMNS: &[&str] = &[gmsd::GMSD_COLUMN_NAME];
 #[cfg(not(feature = "cpu-gmsd"))]
 const GMSD_CPU_COLUMNS: &[&str] = &["gmsd"];
+
+// Versioned **CPU** HDR-VDP column name (`hdrvdp::HDRVDP_COLUMN_NAME`, default
+// `hdrvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`, overridable via `HDRVDP_IMPL_TAG` —
+// no `_cpu_` infix because there is no GPU twin to collide with). Without
+// `cpu-hdrvdp` a bare `"hdrvdp"`.
+#[cfg(feature = "cpu-hdrvdp")]
+const HDRVDP_CPU_COLUMNS: &[&str] = &[zenmetrics_api::hdrvdp_cpu::HDRVDP_COLUMN_NAME];
+#[cfg(not(feature = "cpu-hdrvdp"))]
+const HDRVDP_CPU_COLUMNS: &[&str] = &["hdrvdp"];
 
 /// CubeCL runtime selector for GPU metrics.
 ///
@@ -549,7 +573,8 @@ fn allow_small_images() -> bool {
     feature = "gpu-zensim",
     feature = "gpu-cvvdp",
     feature = "cpu-cvvdp",
-    feature = "cpu-iwssim"
+    feature = "cpu-iwssim",
+    feature = "cpu-hdrvdp"
 ))]
 pub(crate) fn resolve_default_params(
     kind: zenmetrics_api::MetricKind,
@@ -698,7 +723,7 @@ fn run_gpu_via_umbrella(
 /// the sole path in a CPU-only build. Wired by the `cpu-cvvdp` / `cpu-iwssim`
 /// features (pulled into the default `cpu-metrics` bundle). See
 /// docs/METRIC_DISPATCH_CONSOLIDATION.md.
-#[cfg(any(feature = "cpu-cvvdp", feature = "cpu-iwssim"))]
+#[cfg(any(feature = "cpu-cvvdp", feature = "cpu-iwssim", feature = "cpu-hdrvdp"))]
 pub(crate) fn run_cpu_native_via_umbrella(
     umbrella_kind: zenmetrics_api::MetricKind,
     reference: &Rgb8Image,
@@ -965,6 +990,18 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-gmsd"))]
         MetricKind::Gmsd => Err(disabled_msg("gmsd", "cpu-gmsd")),
+
+        // HDR-VDP: umbrella native-CPU path (same `run_cpu_native_via_umbrella`
+        // as the other unsuffixed metrics). The Cpu dispatch's `compute_srgb_u8`
+        // arm returns a loud "feed absolute nits" error — sRGB pairs are not a
+        // valid HDR-VDP feeding; the `--hdr` sweep/score path is the real one.
+        #[cfg(feature = "cpu-hdrvdp")]
+        MetricKind::Hdrvdp => Ok(vec![(
+            HDRVDP_CPU_COLUMNS[0],
+            run_cpu_native_via_umbrella(zenmetrics_api::MetricKind::Hdrvdp, reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-hdrvdp"))]
+        MetricKind::Hdrvdp => Err(disabled_msg("hdrvdp", "cpu-hdrvdp` (native SIMD CPU)")),
     }
 }
 

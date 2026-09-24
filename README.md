@@ -66,8 +66,8 @@ zenfleet job system. Both are covered below.
 
 ## Metric crates
 
-Six GPU metric crates plus the two in-tree CPU reference crates the orchestrator's
-CPU ladder dispatches to:
+Six GPU metric crates plus the in-tree CPU reference crates the orchestrator's
+CPU ladder and the umbrella's `Backend::Cpu` dispatch route to:
 
 | Crate | Metric | Range / shape | Parity reference |
 |---|---|---|---|
@@ -79,6 +79,7 @@ CPU ladder dispatches to:
 | [`cvvdp-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp-gpu) | ColorVideoVDP (still-image, GPU) | JOD ~3–10, higher better | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.4 |
 | [`iwssim`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim) | IW-SSIM (CPU reference + SIMD) | `[0, 1]`, 1.0 = identical | self (pure-Rust port) |
 | [`cvvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp) | ColorVideoVDP (still-image, CPU) | JOD ~3–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.4 |
+| [`hdrvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/hdrvdp) | HDR-VDP 2.2.2 (CPU-only, absolute nits) | JOD ~0–100 (`res.Q`), higher better | official HDR-VDP 2.2.2 (Mantiuk et al.) |
 
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate

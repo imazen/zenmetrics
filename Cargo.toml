@@ -64,6 +64,7 @@ cvvdp = { version = "0.1.0", path = "crates/cvvdp", default-features = false }
 cvvdp-gpu = { version = "0.0.1", path = "crates/cvvdp-gpu", default-features = false }
 dssim-gpu = { version = "0.0.1", path = "crates/dssim-gpu", default-features = false }
 gmsd = { version = "0.1.0", path = "crates/gmsd", default-features = false }
+hdrvdp = { version = "0.0.1", path = "crates/hdrvdp", default-features = false }
 iwssim = { version = "0.1.0", path = "crates/iwssim", default-features = false }
 iwssim-gpu = { version = "0.0.1", path = "crates/iwssim-gpu", default-features = false }
 ssim2-gpu = { version = "0.0.1", path = "crates/ssim2-gpu", default-features = false }
