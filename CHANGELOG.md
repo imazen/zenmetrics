@@ -274,7 +274,7 @@ Workspace conventions per the global rules:
   0.8117 on the same join — clears the published 0.812 bar.
   `scripts/hdr/upiq_hdrvdp_report.py` is the analysis tool; the
   golden tests remain the synthetic-parity gate and this is the
-  real-corpus gate — distinct measurements, both green.
+  real-corpus gate — distinct measurements, both green. `7eadfddd`.
 
 - **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
   IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
