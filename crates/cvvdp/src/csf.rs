@@ -178,6 +178,51 @@ pub(crate) fn compute_sensitivities_slice(
     }
 }
 
+/// Four-channel variant of [`compute_sensitivities_slice`]: the video
+/// path evaluates four sensitivity maps over the same `log_l_bkg`
+/// plane, so the bracket arithmetic (`off`, `lo_idx`, `frac`) and the
+/// `log_l` load are shared — one pass instead of four. Per-channel
+/// math is identical to the single-channel path (same lerp order,
+/// same tile exp) → bit-identical outputs.
+#[inline]
+pub(crate) fn compute_sensitivities4_slice(
+    log_l: &[f32],
+    rows: &[&[f32; N_L_BKG]; 4],
+    out: [&mut [f32]; 4],
+) {
+    let n = log_l.len();
+    debug_assert!(out.iter().all(|o| o.len() == n));
+
+    let correction_times_ln_10 = LOG_SENSITIVITY_CORRECTION * core::f32::consts::LN_10;
+    let ln_10 = core::f32::consts::LN_10;
+
+    let mut tile_log = [[0.0_f32; TILE]; 4];
+    let mut tile_out = [[0.0_f32; TILE]; 4];
+
+    let mut i = 0;
+    while i < n {
+        let end = core::cmp::min(i + TILE, n);
+        let m = end - i;
+        for (j, &ll) in log_l[i..end].iter().enumerate() {
+            let off_raw = (ll - CSF_L_BKG_AXIS_MIN) * CSF_L_BKG_INV_STEP;
+            let off_lo = off_raw.clamp(0.0, CSF_L_BKG_MAX_IDX);
+            let lo_idx_f = off_lo.floor();
+            let frac = off_lo - lo_idx_f;
+            let lo_idx = lo_idx_f as usize;
+            for c in 0..4 {
+                let lo = rows[c][lo_idx];
+                let hi = rows[c][lo_idx + 1];
+                tile_log[c][j] = (lo + frac * (hi - lo)) * ln_10 + correction_times_ln_10;
+            }
+        }
+        for c in 0..4 {
+            vexp_into(&tile_log[c][..m], &mut tile_out[c][..m]);
+            out[c][i..end].copy_from_slice(&tile_out[c][..m]);
+        }
+        i = end;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

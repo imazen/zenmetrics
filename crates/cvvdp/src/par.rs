@@ -90,7 +90,7 @@ pub(crate) fn map_rows(dst: &mut [f32], w: usize, f: impl Fn(usize, &mut [f32]) 
         let n = dst.len();
         let nb = n_bands(n);
         if nb > 1 {
-            debug_assert!(w > 0 && n % w == 0);
+            debug_assert!(w > 0 && n.is_multiple_of(w));
             let rows = (n / w).div_ceil(nb);
             use rayon::prelude::*;
             dst.par_chunks_mut(rows * w)
@@ -265,6 +265,34 @@ pub(crate) fn map2_base(
     f(0, d0, d1);
 }
 
+/// `f(base, d0_band, d1_band, d2_band, d3_band)` — four dsts sharing
+/// the same base (the four-channel sensitivity maps).
+#[inline]
+pub(crate) fn map4_base(
+    d0: &mut [f32],
+    d1: &mut [f32],
+    d2: &mut [f32],
+    d3: &mut [f32],
+    f: impl Fn(usize, &mut [f32], &mut [f32], &mut [f32], &mut [f32]) + Send + Sync,
+) {
+    #[cfg(feature = "parallel")]
+    {
+        let n = d0.len();
+        let sz = band_size(n);
+        if sz < n {
+            use rayon::prelude::*;
+            d0.par_chunks_mut(sz)
+                .zip(d1.par_chunks_mut(sz))
+                .zip(d2.par_chunks_mut(sz))
+                .zip(d3.par_chunks_mut(sz))
+                .enumerate()
+                .for_each(|(b, (((a, c), e), g))| f(b * sz, a, c, e, g));
+            return;
+        }
+    }
+    f(0, d0, d1, d2, d3);
+}
+
 /// Row-aligned bands over three outputs: `f(y0, b0, b1, b2)` — for
 /// strided-source converts (padded-row linear planes) that index
 /// source rows absolutely.
@@ -281,7 +309,7 @@ pub(crate) fn map3_rows(
         let n = d0.len();
         let nb = n_bands(n);
         if nb > 1 {
-            debug_assert!(w > 0 && n % w == 0);
+            debug_assert!(w > 0 && n.is_multiple_of(w));
             let rows = (n / w).div_ceil(nb);
             use rayon::prelude::*;
             d0.par_chunks_mut(rows * w)

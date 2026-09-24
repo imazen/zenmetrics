@@ -271,6 +271,41 @@ fn vabs_diff_kernel<T: F32x8Convert>(token: T, out: &mut [f32], x: &[f32], y: &[
     }
 }
 
+/// `out[i] = (|x[i] − y[i]| + offset)^p − offset_pow_p` — the
+/// `vabs_diff` + `safe_pow_with_offset` pair fused into one pass
+/// (the |diff| plane is never materialised). Same per-element op
+/// order as the two-pass chain → bit-identical.
+#[inline]
+fn vabs_diff_pow_kernel<T: F32x8Convert>(
+    token: T,
+    out: &mut [f32],
+    x: &[f32],
+    y: &[f32],
+    offset: f32,
+    p: f32,
+    offset_pow_p: f32,
+) {
+    debug_assert_eq!(out.len(), x.len());
+    debug_assert_eq!(x.len(), y.len());
+    type F32x8<T> = GenericF32x8<T>;
+    let offset_v = F32x8::<T>::splat(token, offset);
+    let offset_pow_p_v = F32x8::<T>::splat(token, offset_pow_p);
+    let (o_chunks, o_tail) = F32x8::<T>::partition_slice_mut(token, out);
+    let (x_chunks, x_tail) = F32x8::<T>::partition_slice(token, x);
+    let (y_chunks, y_tail) = F32x8::<T>::partition_slice(token, y);
+    for ((o_chunk, x_chunk), y_chunk) in o_chunks
+        .iter_mut()
+        .zip(x_chunks.iter())
+        .zip(y_chunks.iter())
+    {
+        let d = (F32x8::<T>::load(token, x_chunk) - F32x8::<T>::load(token, y_chunk)).abs();
+        ((d + offset_v).pow_midp_unchecked(p) - offset_pow_p_v).store(o_chunk);
+    }
+    for ((oi, xi), yi) in o_tail.iter_mut().zip(x_tail.iter()).zip(y_tail.iter()) {
+        *oi = ((*xi - *yi).abs() + offset).powf(p) - offset_pow_p;
+    }
+}
+
 /// `out[i] = min(|x[i]|, |y[i]|)` — the mutual-mask raw term.
 #[inline]
 fn vmin_abs_kernel<T: F32x8Convert>(token: T, out: &mut [f32], x: &[f32], y: &[f32]) {
@@ -427,7 +462,7 @@ fn vfir_into_kernel<T: F32x8Convert>(
         let mut acc = F32x8::<T>::load(token, srcs[0][b..b + 8].try_into().unwrap()) * c0;
         for (s, &c) in srcs[1..].iter().zip(coeffs[1..].iter()) {
             let v = F32x8::<T>::load(token, s[b..b + 8].try_into().unwrap());
-            acc = acc + v * F32x8::<T>::splat(token, c);
+            acc += v * F32x8::<T>::splat(token, c);
         }
         acc.store(dc);
         i += 8;
@@ -478,8 +513,8 @@ fn vfir2_into_kernel<T: F32x8Convert>(
             .zip(coeffs1[1..].iter())
         {
             let v = F32x8::<T>::load(token, s[b..b + 8].try_into().unwrap());
-            acc0 = acc0 + v * F32x8::<T>::splat(token, c0k);
-            acc1 = acc1 + v * F32x8::<T>::splat(token, c1k);
+            acc0 += v * F32x8::<T>::splat(token, c0k);
+            acc1 += v * F32x8::<T>::splat(token, c1k);
         }
         acc0.store(o0);
         acc1.store(o1);
@@ -817,6 +852,19 @@ pub(crate) fn vfir2_into_scalar(
     vfir2_into_kernel(token, d0, d1, srcs, coeffs0, coeffs1, off)
 }
 
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn vabs_diff_pow_scalar(
+    token: ScalarToken,
+    out: &mut [f32],
+    x: &[f32],
+    y: &[f32],
+    offset: f32,
+    p: f32,
+    offset_pow_p: f32,
+) {
+    vabs_diff_pow_kernel(token, out, x, y, offset, p, offset_pow_p)
+}
+
 pub(crate) fn vabs_diff_mul_lp2_sum_scalar(
     token: ScalarToken,
     t: &[f32],
@@ -985,6 +1033,20 @@ mod x86_v3 {
         vabs_diff_mul_lp2_sum_kernel(token, t, r, s)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    #[archmage::arcane]
+    pub(crate) fn vabs_diff_pow_v3(
+        token: X64V3Token,
+        out: &mut [f32],
+        x: &[f32],
+        y: &[f32],
+        offset: f32,
+        p: f32,
+        offset_pow_p: f32,
+    ) {
+        vabs_diff_pow_kernel(token, out, x, y, offset, p, offset_pow_p)
+    }
+
     #[archmage::arcane]
     pub(crate) fn vxcm_pool_clamp_4ch_sqsum_partial_v3(
         token: X64V3Token,
@@ -1147,6 +1209,20 @@ mod arm_neon {
         s: &[f32],
     ) -> f32 {
         vabs_diff_mul_lp2_sum_kernel(token, t, r, s)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[archmage::arcane]
+    pub(crate) fn vabs_diff_pow_neon(
+        token: NeonToken,
+        out: &mut [f32],
+        x: &[f32],
+        y: &[f32],
+        offset: f32,
+        p: f32,
+        offset_pow_p: f32,
+    ) {
+        vabs_diff_pow_kernel(token, out, x, y, offset, p, offset_pow_p)
     }
 
     #[archmage::arcane]
@@ -1321,6 +1397,20 @@ mod wasm_128 {
         s: &[f32],
     ) -> f32 {
         vabs_diff_mul_lp2_sum_kernel(token, t, r, s)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[archmage::arcane]
+    pub(crate) fn vabs_diff_pow_wasm128(
+        token: Wasm128Token,
+        out: &mut [f32],
+        x: &[f32],
+        y: &[f32],
+        offset: f32,
+        p: f32,
+        offset_pow_p: f32,
+    ) {
+        vabs_diff_pow_kernel(token, out, x, y, offset, p, offset_pow_p)
     }
 
     #[archmage::arcane]
@@ -1545,6 +1635,20 @@ pub(crate) fn vabs_diff_mul_lp2_sum(t: &[f32], r: &[f32], s: &[f32]) -> f32 {
     debug_assert_eq!(t.len(), r.len());
     debug_assert_eq!(t.len(), s.len());
     archmage::incant!(vabs_diff_mul_lp2_sum(t, r, s))
+}
+
+/// `out[i] = (|x[i] − y[i]| + offset)^p − offset_pow_p` — the
+/// `vabs_diff` + `safe_pow_with_offset` pair fused into one pass.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn vabs_diff_pow_into(
+    out: &mut [f32],
+    x: &[f32],
+    y: &[f32],
+    offset: f32,
+    p: f32,
+    offset_pow_p: f32,
+) {
+    archmage::incant!(vabs_diff_pow(out, x, y, offset, p, offset_pow_p))
 }
 
 /// Per-channel raw `Σ u²` for the 4-channel cross-channel pool +

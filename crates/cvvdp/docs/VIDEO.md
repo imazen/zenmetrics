@@ -363,53 +363,61 @@ cost measured by the `gen` mode of the same binary.
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 39.4 | 24.6 | 39.2 | 25.0 | 134 MB | 30 MB |
-| 1280×720 | 143.3 | 81.4 | 143.3 | 82.5 | 461 MB | 98 MB |
-| 1920×1080 | 281.4 | 181.4 | 281.7 | 180.8 | 1037 MB | 217 MB |
+| 512² | 26.6 | 19.4 | 26.7 | 19.6 | 118 MB | 30 MB |
+| 1280×720 | 94.9 | 81.4 | 95.8 | 81.7 | 405 MB | 96 MB |
+| 1920×1080 | 213.0 | 186.6 | 212.5 | 186.7 | 908 MB | 213 MB |
 
 **24-frame clip, 8 threads (`RAYON_NUM_THREADS=8`):**
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 23.0 | 22.4 | 82.9 | 42.9 | 134 MB | 30 MB |
-| 1280×720 | 65.8 | 62.7 | 377.5 | 113.3 | 464 MB | 99 MB |
-| 1920×1080 | 160.1 | 134.7 | 935.4 | 282.9 | 1056 MB | 217 MB |
+| 512² | 20.6 | 15.1 | 68.3 | 28.3 | 123 MB | 30 MB |
+| 1280×720 | 56.3 | 63.7 | 298.8 | 110.8 | 421 MB | 96 MB |
+| 1920×1080 | 135.4 | 144.2 | 763.8 | 290.8 | 932 MB | 214 MB |
 
 Honest reading:
 
-- **8t is now at parity up to 720p and within ~1.2× at 1080p** —
-  23.0/65.8/160.1 vs ssim2's 22.4/62.7/134.7 ms/frame (was 1.7–1.9×
-  behind). The gains came from two lessons ported from fast-ssim2
-  0.9.0's playbook: (a) *dimension-governed banding* — every
-  elementwise stage (FIR accumulate, DKL convert, per-level
-  sensitivities/masking/pool, σ3 blur) now runs in bands whose
-  boundaries depend only on plane size, so single- and
-  multi-threaded runs execute the identical partition; (b)
-  *traffic fusion* — the temporal FIR is one fused pass per output
-  channel (`vfir`/`vfir2`), ~3× less plane traffic than the per-tap
-  axpy chain, which mattered more than threading because the stage
-  is memory-bound (57.6→24.6 ms/f at 1080p 8t, and 56.4→28.5 at
-  1t). Scores are unchanged — the TSV `score` column is identical
-  to pre-banding runs at the printed precision.
-- **Serial (1t) still trails ~1.6× at 1080p** — 281.4 vs 181.4.
-  cvvdp computes strictly more per frame (4 temporal channels, 8
-  pyramid decomps, 4-channel masking + pooling per output); at 8t
-  the parallel stages are bandwidth-bound, which is why the gap
-  closes faster than CPU scaling alone.
-- **Peak RSS is ~4.8× ssim2's** (1056 vs 217 MB at 1080p). The
+- **8t wall is at parity everywhere ≥720p** — 56.3/135.4 vs ssim2's
+  63.7/144.2 ms/frame (ssim2 run-to-run spread at 1080p is
+  ~131–144). ssim2 still leads at 512² (15.1 vs 20.6) where
+  cvvdp's four-channel constant dominates small planes. This was
+  1.7–1.9× behind before the parallel+traffic passes.
+- **Serial CPU is within ~1.14–1.17× of ssim2** (212.5 vs 186.7
+  ms/f at 1080p; 95.8 vs 81.7 at 720p; 1.36× at 512²). cvvdp still
+  computes strictly more per frame — 4 temporal channels, 8
+  pyramid decomps, 4-channel masking + pooling — the gap is
+  inherent work, not overhead.
+- **8t user+sys remains ~2.6× ssim2's** (763.8 vs 290.8 ms/f at
+  1080p). The parallel stages are bandwidth-bound: contention
+  stalls inflate per-frame CPU even when wall time matches.
+  Reducing plane traffic is what moves this number, not more
+  threads.
+- **Peak RSS is ~4.4× ssim2's** (932 vs 214 MB at 1080p). The
   streaming bound holds (input frames are not retained — RSS is
   flat in `n_frames`), but the bound is the *temporal window*: at
   1080p/30 fps the filter is 9 taps, so the ring keeps 18 DKL frame
   sets (~24 MB each, ~450 MB total) plus pyramid caches and
   scratch. Bounded ≠ small.
-- **`low_memory` still cuts 1080p RSS ~34 % (723 vs 1056 MB, ~3.3×
-  of ssim2)** and is JOD-bit-identical — but the fused FIR widened
-  its CPU cost: the emit path re-converts up to `2×fl` source
-  frames per emit (per-tap `to_dkl` + accumulate), so at 1080p it
-  now costs +16 % at 8t / +34 % at 1t over the default mode
-  (previously ±7 %, when the default FIR was equally serial).
-  It remains the right knob when the ~700 MB bound matters more
-  than wall time.
+- **`low_memory` cuts 1080p RSS ~36 % (600 vs 932 MB, ~2.8× of
+  ssim2)** and is JOD-bit-identical — but it is now purely a
+  memory knob: the emit path re-converts each source frame up to
+  `2×fl` times during its ring lifetime (per-tap `to_dkl` +
+  accumulate), and that conversion work cannot be amortised
+  without storing the planes — which is what the default mode is.
+  At 1080p it costs +29 % wall at 8t / +46 % at 1t. Use it when
+  the ~600 MB bound matters more than time.
+- What landed after the first parallel pass (all bit-identical —
+  TSV `score` column unchanged at 1e-6): FIR→band-0 writes killed
+  the `filt` staging planes and their copies (~128 MB/frame of
+  traffic); shared sustained-A expands cut 24 redundant
+  `gausspyr_expand` calls per side to 6
+  (`weber_bands_from_gauss_lexp`); the four CSF sensitivity maps
+  share one pass over `log_l_bkg` (index math + load amortised);
+  masking's `|T−R|` + `safe_pow` is one fused pass. A u8-source
+  ring + fused u8→DKL FIR was built, measured, and reverted: the
+  per-emit reconversion cost ~9× per frame and regressed both wall
+  and CPU — the `low_memory` structure only pays when its ring is
+  also the *storage* win, not when conversion must be repeated.
 - cvvdp's `parallel` feature gates all of this — band helpers run
   the same decomposition sequentially when it's off (`--no-default-
   features --features std` builds clean). Planes below

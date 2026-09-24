@@ -29,12 +29,27 @@
 # k-ascending sequence → bit-identical. low_memory keeps the per-tap
 # chain (its source planes are materialised one slot at a time).
 #
+# Second pass on the same file (later on 2026-09-24): four more
+# traffic cuts on top of the banding — all bit-identical:
+#   - FIR writes straight into each channel's Gaussian band-0 slot;
+#     the `filt` staging planes and the band-0 copies are gone
+#     (~128 MB of copy traffic per 1080p frame, −64 MB RSS).
+#   - Shared sustained-A expands: every channel divides by the same
+#     `l_bkg` pyramid, so `expand(gauss_l[k+1])` is now computed once
+#     per level per side (`weber_bands_from_gauss_lexp`) instead of
+#     once per channel — 24 identical expands per side → 6.
+#   - Four-channel CSF sensitivity fusion (`compute_sensitivities4_
+#     slice`): one pass shares the log_l load + LUT bracket math
+#     across all four channel maps.
+#   - Masking `|T−R|` + `safe_pow` fused into one pass
+#     (`vabs_diff_pow_into`); the raw-diff plane is gone.
+#
 # Host:        lilith (water-cooled AMD Ryzen 9 7950X, 49 GiB RAM)
 # Kernel:      Linux 7.0.0-31-generic
 # Rust:        rustc 1.98.1 (48a229cea 2026-09-01)
 # Build:       cargo build -p cvvdp --release --example video_vs_ssim2
 #              (workspace target/, release profile, no target-cpu=native)
-# Repo:        zenmetrics @ 86ff8870 (master@origin) + this change
+# Repo:        zenmetrics @ 4d4e0bef (master@origin) + this change
 # fast-ssim2:  ../fast-ssim2/fast-ssim2 @ f011259 (v0.9.0-15-gf011259)
 #
 # Corpus:      deterministic synthetic clip generated inside the harness —
@@ -46,12 +61,15 @@
 #   RAYON_NUM_THREADS=<1|8> target/release/examples/video_vs_ssim2 \
 #       <metric> <W> <H> 24 30 3
 #
-# Headline deltas vs the 2026-09-24 file (1080p, (wall-gen)/24):
-#   cvvdp 1t: 311.8 -> 281.4 ms/f   (fused FIR helps serial too)
-#   cvvdp 8t: 229.6 -> 160.1 ms/f   (-30%)
-#   cvvdp-lm 8t: 244.4 -> 186.2 ms/f
-#   ssim2 8t (unchanged): ~134.7 ms/f
-#   => cvvdp is now ~1.03x / 1.05x / 1.19x of ssim2's wall at
-#      512^2 / 720p / 1080p (8t) — was ~1.7-1.9x behind. Serial 1t is
-#      ~1.55x at 1080p (bands+levels dominate the remaining gap; both
-#      are already parallel at 8t and near memory-bandwidth limits).
+# Headline deltas vs the 2026-09-24 first pass (1080p, (wall-gen)/24):
+#   cvvdp 1t: 281.4 -> 213.0 ms/f   (CPU 281.7 -> 212.5, -24%)
+#   cvvdp 8t: 160.1 -> 135.4 ms/f   (CPU 935.4 -> 763.8, -18%)
+#   cvvdp-lm 8t: 186.2 -> 174.1 ms/f
+#   ssim2 8t (this run): 144.2 ms/f (runs range 130.6-144.2)
+#   => cvvdp 8t wall is now AT ssim2 parity at 720p/1080p (56.3 vs
+#      63.7; 135.4 vs 144.2); ssim2 still leads at 512^2 (15.1 vs
+#      20.6 — cvvdp's 4-channel constant dominates small planes).
+#   => Serial CPU is within ~1.14x of ssim2 at 1080p (212.5 vs
+#      186.7). 8t user+sys is ~2.6x (763.8 vs 290.8): cvvdp computes
+#      strictly more per frame and the parallel stages are
+#      bandwidth-bound, so contention inflates CPU per frame.

@@ -100,7 +100,26 @@ Workspace conventions per the global rules:
   0.9.0's wall at 512²/720p/1080p; 1t 311.8→281.4 (~1.55×). Scores
   unchanged at printed precision; `low_memory` now costs +16 % at
   8t / +34 % at 1t at 1080p (per-tap re-conversion vs the fused
-  path) while cutting RSS ~34 %. `863a6af1`.
+  path) while cutting RSS ~34 %. `863a6af1`. Same-day second
+  pass — four more plane-traffic cuts, all bit-identical: the
+  temporal FIR writes straight into each channel's Gaussian band-0
+  slot (`filt` staging planes + band-0 copies gone, ~128 MB/frame);
+  shared sustained-A expands compute `expand(gauss_l[k+1])` once
+  per level per side (`weber_bands_from_gauss_lexp`) instead of
+  once per channel (24 identical expands → 6); the four CSF
+  sensitivity maps share one pass over `log_l_bkg`
+  (`compute_sensitivities4_slice`); masking's `|T−R|`+`safe_pow`
+  fuses into one pass (`vabs_diff_pow_into`). Re-benched
+  (`video_vs_ssim2_par_2026-09-24.tsv` second revision): 1080p
+  8t wall 160.1→135.4 ms/f — now at parity with ssim2 ≥720p
+  (ssim2 8t 63.7/144.2); serial CPU 281.7→212.5 ms/f (−24 %,
+  ~1.14× ssim2); 8t user+sys 935→764 ms/f (~2.6× ssim2 —
+  bandwidth-bound contention); 1080p RSS 1056→932 MB. `low_memory`
+  is now purely a memory knob (−36 % RSS, +29 %/+46 % wall at
+  8t/1t): a u8-source ring + fused u8→DKL FIR was built, measured,
+  and reverted — per-emit reconversion runs ~9× per frame and
+  regressed both wall and CPU, confirming emit-time conversion
+  cannot be amortised without storing the planes.
 
 - cvvdp: high-bit-depth display-encoded input — `u16` (`v/65535`) and
   `f32` (`[0,1]` as-is; cd/m² for `Eotf::Linear`) for stills

@@ -311,6 +311,42 @@ pub(crate) fn build_gauss_pyramid_into(
     }
 }
 
+/// Reduce-only continuation of [`build_gauss_pyramid_into`] for
+/// callers that have already filled `out[0]` — the video path writes
+/// the temporal-FIR output straight into the band-0 slots, skipping
+/// the `filt` staging planes and the band-0 copy entirely (~128 MB
+/// of plane traffic per 1080p frame). `out[0]` must carry a valid
+/// `(w, h, data)` triple; bands 1..n are produced exactly as the
+/// full build does (identical reduce calls → identical values).
+pub(crate) fn build_gauss_pyramid_below(
+    n: usize,
+    scratch: &mut PyramidScratch,
+    out: &mut Vec<Band>,
+) {
+    debug_assert!(n >= 1);
+    while out.len() < n {
+        out.push(Band {
+            w: 0,
+            h: 0,
+            data: Vec::new(),
+        });
+    }
+    out.truncate(n);
+    let mut w = out[0].w;
+    let mut h = out[0].h;
+    debug_assert!(w > 0 && h > 0 && out[0].data.len() == w * h);
+    for k in 0..n - 1 {
+        let (lhs, rhs) = out.split_at_mut(k + 1);
+        let prev = &lhs[k];
+        let next_band = &mut rhs[0];
+        let (nw, nh) = gausspyr_reduce(&prev.data, w, h, scratch, &mut next_band.data);
+        next_band.w = nw;
+        next_band.h = nh;
+        w = nw;
+        h = nh;
+    }
+}
+
 /// Allocate the `n_levels`-Band vector shared by
 /// [`WeberPyramid::with_capacity`], [`WeberPyramidCache::with_capacity`]
 /// and the video path's shared `gauss_l` pyramids — one `w×h` f32
@@ -625,6 +661,125 @@ pub(crate) fn weber_bands_from_gauss(
             // Return scratch.
             scratch.expanded = expanded_l;
             scratch.gauss_tmp = img_expanded;
+        }
+    }
+}
+
+/// Shared-`l` variant of [`weber_bands_from_gauss`]: `l_exp[k]` is the
+/// caller-precomputed expand of `gauss_l[k + 1]` at `gauss_l[k]`'s
+/// shape. The video path divides every channel by the same
+/// sustained-A `l_bkg` pyramid, so upstream's per-channel
+/// `expanded_l` builds are four identical reductions — one set of
+/// expands per side replaces 24 (identical math — same input, same
+/// kernel). `gauss_l` is still read for the baseband `l_bkg_mean`
+/// and `same_img_l` detection. When `gauss_img` and `gauss_l` are
+/// the same pyramid (channel 0), `img_exp` is `l_exp[k]` and no
+/// expand runs at all.
+pub(crate) fn weber_bands_from_gauss_lexp(
+    gauss_img: &[Band],
+    gauss_l: &[Band],
+    l_exp: &[Vec<f32>],
+    scratch: &mut PyramidScratch,
+    out: &mut WeberPyramid,
+    write_log_l_bkg: bool,
+) {
+    let n = gauss_img.len();
+    debug_assert!(n >= 1);
+    debug_assert_eq!(gauss_l.len(), n);
+    debug_assert_eq!(l_exp.len(), n - 1);
+    let same_img_l = core::ptr::eq(gauss_img, gauss_l);
+
+    while out.bands.len() < n {
+        out.bands.push(Band {
+            w: 0,
+            h: 0,
+            data: Vec::new(),
+        });
+    }
+    out.bands.truncate(n);
+    if write_log_l_bkg {
+        while out.log_l_bkg.len() < n {
+            out.log_l_bkg.push(Vec::new());
+        }
+        out.log_l_bkg.truncate(n);
+    } else {
+        out.log_l_bkg.clear();
+    }
+
+    for k in 0..n {
+        let is_baseband = k == n - 1;
+        let fine = &gauss_img[k];
+        let l_fine = &gauss_l[k];
+        let n_px = fine.w * fine.h;
+
+        out.bands[k].w = fine.w;
+        out.bands[k].h = fine.h;
+        out.bands[k].data.resize(n_px, 0.0);
+        if write_log_l_bkg {
+            out.log_l_bkg[k].resize(n_px, 0.0);
+        }
+
+        if is_baseband {
+            let sum: f32 = l_fine.data.iter().map(|v| v.max(0.01)).sum();
+            let l_bkg_mean = sum / l_fine.data.len() as f32;
+            let band_data = &mut out.bands[k].data;
+            for i in 0..n_px {
+                band_data[i] = fine.data[i] / l_bkg_mean;
+            }
+            if write_log_l_bkg {
+                let log_l = l_bkg_mean.log10();
+                let log_band = &mut out.log_l_bkg[k];
+                for v in log_band.iter_mut() {
+                    *v = log_l;
+                }
+            }
+        } else {
+            let expanded_l = &l_exp[k];
+            debug_assert_eq!(expanded_l.len(), n_px);
+            let fine_data: &[f32] = &fine.data;
+            // `gauss_img == gauss_l` → `expanded_l` IS the img expand
+            // and no expand runs; otherwise expand into the taken-out
+            // `gauss_tmp` (returned to scratch after the vweber call,
+            // same dance as `weber_bands_from_gauss`).
+            let img_expanded = if same_img_l {
+                None
+            } else {
+                let img_coarse = &gauss_img[k + 1];
+                let mut e = core::mem::take(&mut scratch.gauss_tmp);
+                gausspyr_expand(
+                    &img_coarse.data,
+                    img_coarse.w,
+                    img_coarse.h,
+                    fine.w,
+                    fine.h,
+                    scratch,
+                    &mut e,
+                );
+                Some(e)
+            };
+            let img_exp: &[f32] = match &img_expanded {
+                Some(e) => &e[..n_px],
+                None => &expanded_l[..n_px],
+            };
+            if write_log_l_bkg {
+                crate::simd_math::vweber_band_into(
+                    &mut out.bands[k].data,
+                    &mut out.log_l_bkg[k],
+                    fine_data,
+                    img_exp,
+                    &expanded_l[..n_px],
+                );
+            } else {
+                crate::simd_math::vweber_band_nolog_into(
+                    &mut out.bands[k].data,
+                    fine_data,
+                    img_exp,
+                    &expanded_l[..n_px],
+                );
+            }
+            if let Some(e) = img_expanded {
+                scratch.gauss_tmp = e;
+            }
         }
     }
 }
