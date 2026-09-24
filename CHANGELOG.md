@@ -292,6 +292,12 @@ Workspace conventions per the global rules:
   default on) — direct-crate calls like `gmsd`; orchestrator-ineligible
   (two-column output, no GPU twin).
 - zenmetrics-cli sweep: per-plane chroma knobs for research stimuli (`5fa9f73a`) — zenjpeg `chroma_distance_scales` / `plane_tables` / `allow_16bit_quant_tables`; zenavif `chroma_q` on `backend=svt-rs`; new `--codec zenjpegai` (`jpegai` feature, `ZENJPEGAI_MODELS`) with `model_id` / `beta_displacement_log`, plus JPEG AI decode; cvvdp CPU `--display-model squintly_n1` (94.26 ppd) / `squintly_m2` (47.13 ppd).
+- zenmetrics-cli: carry buffered AVIF CICP sRGB signalling to the RGB8
+  converter for transfer 13 with BT.709 primaries; retain existing code-value
+  behavior for other SDR transfer codes. Add native-sample exactness gates for
+  AVIF10, PNG16, JXL16 and TIFF16. Temporarily patch zenpixels-convert source
+  until 0.2.17 or newer publishes. `39aef27f`.
+
 - cvvdp: video scoring on the CPU path — `VideoScorer` (streaming
   `push_frame`/`finish`, holds only the temporal-filter window) plus
   `score_video` whole-clip convenience and `Cvvdp::video`. Ports
