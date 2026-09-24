@@ -44,6 +44,15 @@
 #   - Masking `|T−R|` + `safe_pow` fused into one pass
 #     (`vabs_diff_pow_into`); the raw-diff plane is gone.
 #
+# Third pass (same day, after the fcvvdp comparison — see
+# video_vs_fcvvdp_2026-09-24.*): the pyramid passes (reduce/expand
+# V+H) and vweber bands now split their own output rows internally,
+# and the emit's channel walk is serial over the banded kernels —
+# the 8-way channel×side scope (uneven task tail) is gone. The walk
+# shares two PyramidScratch sets instead of eight per-cache
+# scratches (−66 MB RSS at 1080p; cvvdp-lm also benefits,
+# 614→531 MB). All bit-identical — only scheduling moved.
+#
 # Host:        lilith (water-cooled AMD Ryzen 9 7950X, 49 GiB RAM)
 # Kernel:      Linux 7.0.0-31-generic
 # Rust:        rustc 1.98.1 (48a229cea 2026-09-01)
@@ -62,14 +71,14 @@
 #       <metric> <W> <H> 24 30 3
 #
 # Headline deltas vs the 2026-09-24 first pass (1080p, (wall-gen)/24):
-#   cvvdp 1t: 281.4 -> 213.0 ms/f   (CPU 281.7 -> 212.5, -24%)
-#   cvvdp 8t: 160.1 -> 135.4 ms/f   (CPU 935.4 -> 763.8, -18%)
-#   cvvdp-lm 8t: 186.2 -> 174.1 ms/f
+#   cvvdp 1t: 281.4 -> 213.0 ms/f   (CPU 281.7 -> 211.9, -25%)
+#   cvvdp 8t: 160.1 -> 129.6 ms/f   (CPU 935.4 -> 793.3, -15%)
+#   cvvdp-lm 8t: 186.2 -> 164.7 ms/f
 #   ssim2 8t (this run): 144.2 ms/f (runs range 130.6-144.2)
-#   => cvvdp 8t wall is now AT ssim2 parity at 720p/1080p (56.3 vs
-#      63.7; 135.4 vs 144.2); ssim2 still leads at 512^2 (15.1 vs
-#      20.6 — cvvdp's 4-channel constant dominates small planes).
-#   => Serial CPU is within ~1.14x of ssim2 at 1080p (212.5 vs
-#      186.7). 8t user+sys is ~2.6x (763.8 vs 290.8): cvvdp computes
+#   => cvvdp 8t wall now BEATS ssim2 at 720p/1080p (53.8 vs 63.7;
+#      129.6 vs 144.2); ssim2 still leads at 512^2 (15.1 vs 19.7 —
+#      cvvdp's 4-channel constant dominates small planes).
+#   => Serial CPU is within ~1.14x of ssim2 at 1080p (211.9 vs
+#      186.7). 8t user+sys is ~2.7x (793.3 vs 290.8): cvvdp computes
 #      strictly more per frame and the parallel stages are
 #      bandwidth-bound, so contention inflates CPU per frame.

@@ -363,49 +363,50 @@ cost measured by the `gen` mode of the same binary.
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 26.6 | 19.4 | 26.7 | 19.6 | 118 MB | 30 MB |
-| 1280×720 | 94.9 | 81.4 | 95.8 | 81.7 | 405 MB | 96 MB |
-| 1920×1080 | 213.0 | 186.6 | 212.5 | 186.7 | 908 MB | 213 MB |
+| 512² | 26.6 | 19.4 | 27.5 | 19.6 | 111 MB | 30 MB |
+| 1280×720 | 93.8 | 81.4 | 94.6 | 81.7 | 381 MB | 96 MB |
+| 1920×1080 | 213.0 | 186.6 | 211.9 | 186.7 | 852 MB | 213 MB |
 
 **24-frame clip, 8 threads (`RAYON_NUM_THREADS=8`):**
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 20.6 | 15.1 | 68.3 | 28.3 | 123 MB | 30 MB |
-| 1280×720 | 56.3 | 63.7 | 298.8 | 110.8 | 421 MB | 96 MB |
-| 1920×1080 | 135.4 | 144.2 | 763.8 | 290.8 | 932 MB | 214 MB |
+| 512² | 19.7 | 15.1 | 64.2 | 28.3 | 111 MB | 30 MB |
+| 1280×720 | 53.8 | 63.7 | 296.7 | 110.8 | 382 MB | 96 MB |
+| 1920×1080 | 129.6 | 144.2 | 793.3 | 290.8 | 866 MB | 214 MB |
 
 Honest reading:
 
-- **8t wall is at parity everywhere ≥720p** — 56.3/135.4 vs ssim2's
+- **8t wall is at parity everywhere ≥720p** — 53.8/129.6 vs ssim2's
   63.7/144.2 ms/frame (ssim2 run-to-run spread at 1080p is
-  ~131–144). ssim2 still leads at 512² (15.1 vs 20.6) where
+  ~131–144). ssim2 still leads at 512² (15.1 vs 19.7) where
   cvvdp's four-channel constant dominates small planes. This was
   1.7–1.9× behind before the parallel+traffic passes.
-- **Serial CPU is within ~1.14–1.17× of ssim2** (212.5 vs 186.7
-  ms/f at 1080p; 95.8 vs 81.7 at 720p; 1.36× at 512²). cvvdp still
+- **Serial CPU is within ~1.13–1.16× of ssim2** (211.9 vs 186.7
+  ms/f at 1080p; 94.6 vs 81.7 at 720p; 1.4× at 512²). cvvdp still
   computes strictly more per frame — 4 temporal channels, 8
   pyramid decomps, 4-channel masking + pooling — the gap is
   inherent work, not overhead.
-- **8t user+sys remains ~2.6× ssim2's** (763.8 vs 290.8 ms/f at
+- **8t user+sys remains ~2.7× ssim2's** (793.3 vs 290.8 ms/f at
   1080p). The parallel stages are bandwidth-bound: contention
   stalls inflate per-frame CPU even when wall time matches.
   Reducing plane traffic is what moves this number, not more
   threads.
-- **Peak RSS is ~4.4× ssim2's** (932 vs 214 MB at 1080p). The
-  streaming bound holds (input frames are not retained — RSS is
-  flat in `n_frames`), but the bound is the *temporal window*: at
-  1080p/30 fps the filter is 9 taps, so the ring keeps 18 DKL frame
-  sets (~24 MB each, ~450 MB total) plus pyramid caches and
-  scratch. Bounded ≠ small.
-- **`low_memory` cuts 1080p RSS ~36 % (600 vs 932 MB, ~2.8× of
+- **Peak RSS is ~4× ssim2's** (866 vs 214 MB at 1080p — was 4.4×
+  before the shared-scratch rework). The streaming bound holds
+  (input frames are not retained — RSS is flat in `n_frames`), but
+  the bound is the *temporal window*: at 1080p/30 fps the filter
+  is 9 taps, so the ring keeps 18 DKL frame sets (~24 MB each,
+  ~450 MB total) plus pyramid outputs and scratch. Bounded ≠
+  small.
+- **`low_memory` cuts 1080p RSS ~39 % (530 vs 866 MB, ~2.5× of
   ssim2)** and is JOD-bit-identical — but it is now purely a
   memory knob: the emit path re-converts each source frame up to
   `2×fl` times during its ring lifetime (per-tap `to_dkl` +
   accumulate), and that conversion work cannot be amortised
   without storing the planes — which is what the default mode is.
-  At 1080p it costs +29 % wall at 8t / +46 % at 1t. Use it when
-  the ~600 MB bound matters more than time.
+  At 1080p it costs +27 % wall at 8t / +45 % at 1t. Use it when
+  the ~530 MB bound matters more than time.
 - What landed after the first parallel pass (all bit-identical —
   TSV `score` column unchanged at 1e-6): FIR→band-0 writes killed
   the `filt` staging planes and their copies (~128 MB/frame of
@@ -418,6 +419,13 @@ Honest reading:
   per-emit reconversion cost ~9× per frame and regressed both wall
   and CPU — the `low_memory` structure only pays when its ring is
   also the *storage* win, not when conversion must be repeated.
+- What landed after the fcvvdp comparison (below): the pyramid
+  passes (`reduce`/`expand` V+H) and `vweber` bands now split their
+  own output rows across the pool instead of spawning 8 uneven
+  channel×side tasks, and the serial channel walk shares two
+  pyramid scratches instead of eight — −66 MB RSS at 1080p,
+  −6 ms/frame wall at 8t, bit-identical (the kernels were already
+  row-band-friendly; only the scheduling moved).
 - cvvdp's `parallel` feature gates all of this — band helpers run
   the same decomposition sequentially when it's off (`--no-default-
   features --features std` builds clean). Planes below
@@ -427,3 +435,61 @@ Honest reading:
 - Scores are not comparable units (JOD 0–10 vs SSIMULACRA2's
   unbounded scale); the ssim2 arm exists to price the "just score
   frames" alternative, not to compare quality.
+
+### vs fcvvdp (halidecx/fcvvdp)
+
+fcvvdp is a C re-implementation of the same metric (pthread pool,
+AVX2 kernels, Zig CLI + ffmpeg-filter target). Compared through its
+C API (`cvvdp_process_frame`) from `benchmarks/bench_fcvvdp.c` — an
+in-memory harness mirroring `video_vs_ssim2` verbatim: identical
+deterministic clip, median-of-3, no codec or I/O inside the timed
+loop on either side; `ms/frame` is `(wall − gen)/24` with each
+binary's own `gen` baseline. Committed data:
+[`benchmarks/video_vs_fcvvdp_2026-09-24.tsv`](../benchmarks/video_vs_fcvvdp_2026-09-24.tsv).
+
+**24-frame clip, metric-only:**
+
+| size | thr | cvvdp ms/f | fcvvdp ms/f | fcvvdp+LUT ms/f | cvvdp CPU ms/f | fcvvdp+LUT CPU ms/f | cvvdp RSS | fcvvdp RSS |
+|---|---|---|---|---|---|---|---|---|
+| 512² | 1 | 26.6 | 47.8 | 39.9 | 27.5 | 40.4 | 111 MB | 98 MB |
+| 512² | 8 | 19.7 | 28.6 | 19.8 | 64.2 | 104.2 | 111 MB | 97 MB |
+| 1280×720 | 1 | 93.8 | 161.8 | 136.4 | 94.6 | 137.1 | 381 MB | 339 MB |
+| 1280×720 | 8 | 53.8 | 88.0 | 64.2 | 296.7 | 343.3 | 382 MB | 338 MB |
+| 1920×1080 | 1 | 213.0 | 359.9 | 308.5 | 211.9 | 308.8 | 852 MB | 753 MB |
+| 1920×1080 | 8 | 129.6 | 198.5 | 140.8 | 793.3 | 788.3 | 866 MB | 752 MB |
+
+`fcvvdp+LUT` = stock fcvvdp patched with a 256-entry sRGB→linear LUT
+in `cvvdp_load_image` — its scalar `powf` decode was ~15–30 % of the
+whole pipeline (u8 has only 256 values; we already LUT). Output
+bit-identical.
+
+Honest reading:
+
+- **cvvdp is ~1.45× faster serial at every size**, even against the
+  LUT patch — the residual gap is their remaining scalar
+  transcendentals (`powf`/`log10f` in CSF weighting and masked_diff)
+  vs our vector kernels.
+- **8t is parity-to-win for cvvdp** (129.6 vs 140.8 at 1080p,
+  53.8 vs 64.2 at 720p, tie 19.7/19.8 at 512²). Their 8t/1t
+  scaling (~2.2×) beats ours (~1.64×) — they band inside every
+  kernel with a serial channel loop, the structure this comparison
+  prompted us to adopt; what remains is their finer grain
+  (1024–2048-element chunks vs our ~64k bands) and lower base work.
+- **RSS is their only remaining win at 1080p** — 752 vs 866 MB
+  (was 752 vs 932 before the shared-scratch rework). Their whole
+  pyramid walk reuses one shared buffer set across all 8
+  channel-sides; `low_memory` (530 MB) already undercuts both.
+- **Scores diverge, deliberately**: fcvvdp's non-baseband contrast
+  carries `contrast_scale = 2.0`, its masking blur renormalizes
+  border weights instead of reflecting, and its norm partition
+  depends on worker count. Same clip: fcvvdp reports −1.06/−2.27/
+  +1.53 JOD where cvvdp reports 5.17/4.16/3.23 (pycvvdp-faithful,
+  3e-6 parity). The timing comparison stands — same stage count,
+  same plane sizes — but JOD values are not interchangeable.
+- What we adopted from them: pyramid-internal row banding (the
+  8-way scope became a serial channel walk over banded kernels)
+  and the shared pyramid scratch set. What we deliberately did
+  not: the fully-fused scalar masked-diff pass (register pressure
+  made our attempt 3× slower; their scalar `powf` version is
+  slower still), weight-renormalized blur borders, and the ×2
+  non-baseband contrast scale — all three change the score.

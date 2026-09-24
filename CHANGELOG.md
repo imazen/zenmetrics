@@ -120,6 +120,24 @@ Workspace conventions per the global rules:
   and reverted — per-emit reconversion runs ~9× per frame and
   regressed both wall and CPU, confirming emit-time conversion
   cannot be amortised without storing the planes. `14b789cc`.
+  Same-day comparison vs halidecx/fcvvdp v0.4.0 (C re-implementation;
+  in-memory harness `benchmarks/bench_fcvvdp.c`, identical synthetic
+  clip, codec/I/O excluded — data
+  `benchmarks/video_vs_fcvvdp_2026-09-24.tsv`): cvvdp was ~1.45×
+  faster serial and faster at 8t ≥720p (129.6 vs 198.5 ms/f at
+  1080p); their scalar `powf` sRGB decode alone was ~15–30 % of
+  their pipeline (a 256-entry LUT patch closes to 140.8). Two
+  structural lessons adopted, both bit-identical: pyramid ops
+  (reduce/expand/weber) now band their own output rows internally
+  and the emit's channel walk is serial over banded kernels (was an
+  8-way channel×side scope with an uneven tail — fcvvdp's
+  serial-loop + parallel-inside structure); and the walk shares two
+  `PyramidScratch` sets instead of eight per-cache scratches
+  (−66 MB RSS at 1080p). 1080p 8t 135.4→129.6 ms/f; RSS 932→866 MB
+  vs fcvvdp's 752 MB (`low_memory` 530 MB now undercuts both).
+  fcvvdp's JOD diverges from pycvvdp on the corpus (×2 non-baseband
+  contrast scale, renormalized blur borders, worker-count-dependent
+  norm) — timing comparable, scores not.
 
 - cvvdp: high-bit-depth display-encoded input — `u16` (`v/65535`) and
   `f32` (`[0,1]` as-is; cd/m² for `Eotf::Linear`) for stills

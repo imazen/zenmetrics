@@ -643,19 +643,21 @@ pub(crate) fn weber_bands_from_gauss(
                 &img_expanded[..n_px]
             };
             if write_log_l_bkg {
-                crate::simd_math::vweber_band_into(
+                crate::par::map2_3(
                     &mut out.bands[k].data,
                     &mut out.log_l_bkg[k],
                     fine_data,
                     img_exp,
                     &expanded_l[..n_px],
+                    crate::simd_math::vweber_band_into,
                 );
             } else {
-                crate::simd_math::vweber_band_nolog_into(
+                crate::par::map1_3(
                     &mut out.bands[k].data,
                     fine_data,
                     img_exp,
                     &expanded_l[..n_px],
+                    crate::simd_math::vweber_band_nolog_into,
                 );
             }
             // Return scratch.
@@ -762,19 +764,21 @@ pub(crate) fn weber_bands_from_gauss_lexp(
                 None => &expanded_l[..n_px],
             };
             if write_log_l_bkg {
-                crate::simd_math::vweber_band_into(
+                crate::par::map2_3(
                     &mut out.bands[k].data,
                     &mut out.log_l_bkg[k],
                     fine_data,
                     img_exp,
                     &expanded_l[..n_px],
+                    crate::simd_math::vweber_band_into,
                 );
             } else {
-                crate::simd_math::vweber_band_nolog_into(
+                crate::par::map1_3(
                     &mut out.bands[k].data,
                     fine_data,
                     img_exp,
                     &expanded_l[..n_px],
+                    crate::simd_math::vweber_band_nolog_into,
                 );
             }
             if let Some(e) = img_expanded {

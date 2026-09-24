@@ -1,0 +1,71 @@
+# cvvdp video vs fcvvdp per-frame — same-clip, metric-only comparison
+#
+# fcvvdp (https://github.com/halidecx/fcvvdp, v0.4.0) is a C re-
+# implementation of CVVDP: same pipeline shape (temporal FIR → DKL →
+# 4 channels → Gaussian pyramid → weber contrast → CSF → masking →
+# pooling), pthread task pool, AVX2 kernels, Zig CLI. Compared here
+# via its C API (`cvvdp_process_frame`) driven by `bench_fcvvdp.c` —
+# an in-memory harness mirroring `examples/video_vs_ssim2.rs`
+# verbatim: identical deterministic clip (bit-identical frames,
+# same LCG), same median-of-3 methodology, same /proc jiffies +
+# VmHWM columns. NO codec or file I/O sits inside the timed loop on
+# either side — frames are synthesized in-memory; the `gen-*` rows
+# measure that synthesis alone per harness, so
+# `ms/frame = (wall − gen)/24` is metric-compute only.
+#
+# `fcvvdp-lut` rows = stock fcvvdp with a 256-entry sRGB→linear LUT
+# patched into `cvvdp_load_image` (its scalar `powf` decode was
+# ~15–30 % of the whole pipeline; output bit-identical).
+#
+# Score caveat: fcvvdp's JOD diverges from pycvvdp on this clip —
+# its non-baseband contrast carries `contrast_scale = 2.0`
+# (cvvdp.c `cvvdp_process_pyramid_threaded`), the masking blur
+# renormalizes weights at borders instead of reflecting, the 1000
+# clamp is one-sided, and masking pow has no eps offset. zenmetrics'
+# cvvdp matches pycvvdp v0.5.7 to 3e-6; fcvvdp reports −1.06/−2.27/
+# +1.53 JOD where cvvdp reports 5.17/4.16/3.23 on the same frames.
+# The timing comparison still stands — the pipelines execute the
+# same stage count on the same plane sizes.
+#
+# Host:        lilith (water-cooled AMD Ryzen 9 7950X, 49 GiB RAM)
+# Kernel:      Linux 7.0.0-31-generic
+# Rust:        rustc 1.98.1; fcvvdp via zig cc -O3 -ffast-math
+#              -std=c23 (zig 0.16.0, clang codegen — same flags as
+#              upstream build.zig)
+# Repo:        zenmetrics @ ac2a8561+ (master@origin + this change)
+# fcvvdp:      sibling checkout @ main (halidecx/fcvvdp)
+#
+# Replay:
+#   RAYON_NUM_THREADS=<1|8> target/release/examples/video_vs_ssim2 \
+#       cvvdp <W> <H> 24 30 3
+#   zig cc -O3 -ffast-math -std=c23 -I src -I . -o bench_fcvvdp \
+#       benchmarks/bench_fcvvdp.c src/cvvdp.c src/cvvdp_c.c \
+#       src/cvvdp_avx2.c -lpthread -lm     # inside fcvvdp checkout
+#   ./bench_fcvvdp fcvvdp <W> <H> 24 30 3 <1|8>
+#
+# Headline (metric-only ms/frame, (wall−gen)/24):
+#   size    thr  cvvdp    fcvvdp   fcvvdp-lut   ratio (cvvdp/lut)
+#   512²    1t    26.6     47.8      39.9          0.67
+#   512²    8t    19.7     28.6      19.8          1.00
+#   720p    1t    93.8    161.8     136.4          0.69
+#   720p    8t    53.8     88.0      64.2          0.84
+#   1080p   1t   213.0    359.9     308.5          0.69
+#   1080p   8t   129.6    198.5     140.8          0.92
+#
+#   → cvvdp is ~1.45× faster serial everywhere; 8t wins ≥720p and
+#     ties at 512² even after fcvvdp's LUT patch. Peak RSS at 1080p:
+#     cvvdp 866 MB vs fcvvdp 752 MB; cvvdp-lm 530 MB — below both.
+#   → The cvvdp numbers above reflect the fcvvdp-inspired rework
+#     this comparison validated: pyramid ops band their own output
+#     rows internally (was: 8 unequal channel×side scope tasks) and
+#     the serial channel walk shares two pyramid scratches instead
+#     of eight (was: ~120 MB of per-cache scratch at 1080p).
+#   → fcvvdp 8t/1t wall scaling ~2.2× vs cvvdp ~1.64×: its
+#     `cvvdp_parallel_for` bands INSIDE each kernel (grain 1024–
+#     2048 el, serial channel loop) — the structure adopted here.
+#   → fcvvdp scores are thread-count-dependent (norm partials
+#     partition by worker_count); cvvdp's dim-governed bands are
+#     bit-identical at any thread count.
+#   → fcvvdp's masked_diff fuses |t−r|^P, mask^Q, xcm, clamp, sqsum
+#     into ONE scalar pass — measured slower than our vector split
+#     (their scalar powf dominates); not adopted.

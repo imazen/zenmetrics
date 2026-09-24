@@ -236,12 +236,23 @@ struct VideoScratch {
     /// with 6. `l_exp[k]` is sized at level `k`'s (fine) dims.
     l_exp_t: Vec<Vec<f32>>,
     l_exp_r: Vec<Vec<f32>>,
-    /// Pyramid caches (gauss_img planes + filter scratch) per channel
-    /// per side — reused across frames. Channel 0 builds no
-    /// `gauss_img` (it reuses the shared pyramid); no cache builds a
-    /// `gauss_l` (the shared pyramids above replace all 8).
+    /// Pyramid caches (gauss_img band-0 planes — the FIR output
+    /// slots) per channel per side — reused across frames. Channel 0
+    /// builds no `gauss_img` (it reuses the shared pyramid); no
+    /// cache builds a `gauss_l` (the shared pyramids above replace
+    /// all 8). The caches' own `scratch` fields stay empty in the
+    /// video path: pyramid ops run serially over the two shared
+    /// scratches below instead of one per cache (the 8-way channel
+    /// scope that needed disjoint scratches is gone — fcvvdp's
+    /// single-shared-working-set structure).
     cache_t: [WeberPyramidCache; 4],
     cache_r: [WeberPyramidCache; 4],
+    /// Shared pyramid scratch for the test/reference sides — two
+    /// slots so the `join2` pairs (gauss_l builds, `l_exp` fills)
+    /// still run both sides concurrently; the serial channel walk
+    /// uses `pyr_scr_t`/`pyr_scr_r` for its t/r calls.
+    pyr_scr_t: crate::pyramid::PyramidScratch,
+    pyr_scr_r: crate::pyramid::PyramidScratch,
     /// Output pyramids per channel per side. Only `pyr_r[0]` keeps
     /// `log_l_bkg` planes — the only ones read downstream (CSF
     /// sensitivity is evaluated at the reference sustained-A
@@ -308,6 +319,8 @@ impl VideoScratch {
             },
             cache_t: core::array::from_fn(|c| video_cache(c != 0)),
             cache_r: core::array::from_fn(|c| video_cache(c != 0)),
+            pyr_scr_t: crate::pyramid::PyramidScratch::default(),
+            pyr_scr_r: crate::pyramid::PyramidScratch::default(),
             pyr_t: core::array::from_fn(|_| WeberPyramid::with_capacity_nolog(w, h, n_levels)),
             pyr_r: core::array::from_fn(|c| {
                 if c == 0 {
@@ -1146,18 +1159,17 @@ impl VideoScorer {
         // gauss_img is the same input again. One build per side
         // replaces 8 (identical math — same input, same kernel).
         crate::par::join2(
-            || build_gauss_pyramid_below(n_levels, &mut sc.cache_t[0].scratch, &mut sc.gauss_l_t),
-            || build_gauss_pyramid_below(n_levels, &mut sc.cache_r[0].scratch, &mut sc.gauss_l_r),
+            || build_gauss_pyramid_below(n_levels, &mut sc.pyr_scr_t, &mut sc.gauss_l_t),
+            || build_gauss_pyramid_below(n_levels, &mut sc.pyr_scr_r, &mut sc.gauss_l_r),
         );
 
         // Shared sustained-A expands — every channel's weber level
         // consumes `expand(gauss_l[k+1])`; one set per side replaces
         // upstream's 24 identical expands (the two sides run under
-        // join2; scratches are the channel-0 slots, unused until the
-        // band scope below).
+        // join2 on the two shared scratches).
         crate::par::join2(
-            || fill_l_expands(&sc.gauss_l_t, &mut sc.l_exp_t, &mut sc.cache_t[0].scratch),
-            || fill_l_expands(&sc.gauss_l_r, &mut sc.l_exp_r, &mut sc.cache_r[0].scratch),
+            || fill_l_expands(&sc.gauss_l_t, &mut sc.l_exp_t, &mut sc.pyr_scr_t),
+            || fill_l_expands(&sc.gauss_l_r, &mut sc.l_exp_r, &mut sc.pyr_scr_r),
         );
         // Per-side weber band construction via the SIMD/scratch path
         // (`weber_bands_from_gauss` — same math as
@@ -1165,127 +1177,61 @@ impl VideoScorer {
         // Channel 0 consumes the shared pyramid as both gauss_img and
         // gauss_l; channels 1–3 build only their own gauss_img against
         // the shared l. Only the reference achromatic pyramid writes
-        // `log_l_bkg` — the only one read downstream. The 8 band
-        // stages are fully independent — each owns a disjoint
-        // cache+output slot — so under `parallel` they run on rayon's
-        // pool.
+        // `log_l_bkg` — the only one read downstream. The loop is
+        // serial — every op inside (reduce/expand/weber) bands its
+        // own output rows across the pool under `parallel`, which
+        // keeps utilization uniform without the uneven-task tail of
+        // an 8-way channel scope (fcvvdp uses the same structure:
+        // serial channel walk, parallel inside each kernel call).
         let gl_t: &[Band] = &sc.gauss_l_t;
         let gl_r: &[Band] = &sc.gauss_l_r;
         let le_t: &[Vec<f32>] = &sc.l_exp_t;
         let le_r: &[Vec<f32>] = &sc.l_exp_r;
-        #[cfg(feature = "parallel")]
-        {
-            rayon::scope(|s| {
-                for (c, ((cache_t, pyr_t), (cache_r, pyr_r))) in sc
-                    .cache_t
-                    .iter_mut()
-                    .zip(sc.pyr_t.iter_mut())
-                    .zip(sc.cache_r.iter_mut().zip(sc.pyr_r.iter_mut()))
-                    .enumerate()
-                {
-                    s.spawn(move |_| {
-                        if c == 0 {
-                            weber_bands_from_gauss_lexp(
-                                gl_t,
-                                gl_t,
-                                le_t,
-                                &mut cache_t.scratch,
-                                pyr_t,
-                                false,
-                            );
-                        } else {
-                            build_gauss_pyramid_below(
-                                n_levels,
-                                &mut cache_t.scratch,
-                                &mut cache_t.gauss_img,
-                            );
-                            weber_bands_from_gauss_lexp(
-                                &cache_t.gauss_img,
-                                gl_t,
-                                le_t,
-                                &mut cache_t.scratch,
-                                pyr_t,
-                                false,
-                            );
-                        }
-                    });
-                    s.spawn(move |_| {
-                        if c == 0 {
-                            weber_bands_from_gauss_lexp(
-                                gl_r,
-                                gl_r,
-                                le_r,
-                                &mut cache_r.scratch,
-                                pyr_r,
-                                true,
-                            );
-                        } else {
-                            build_gauss_pyramid_below(
-                                n_levels,
-                                &mut cache_r.scratch,
-                                &mut cache_r.gauss_img,
-                            );
-                            weber_bands_from_gauss_lexp(
-                                &cache_r.gauss_img,
-                                gl_r,
-                                le_r,
-                                &mut cache_r.scratch,
-                                pyr_r,
-                                false,
-                            );
-                        }
-                    });
-                }
-            });
-        }
-        #[cfg(not(feature = "parallel"))]
-        {
-            for c in 0..4 {
-                if c == 0 {
-                    weber_bands_from_gauss_lexp(
-                        gl_t,
-                        gl_t,
-                        le_t,
-                        &mut sc.cache_t[0].scratch,
-                        &mut sc.pyr_t[0],
-                        false,
-                    );
-                    weber_bands_from_gauss_lexp(
-                        gl_r,
-                        gl_r,
-                        le_r,
-                        &mut sc.cache_r[0].scratch,
-                        &mut sc.pyr_r[0],
-                        true,
-                    );
-                } else {
-                    build_gauss_pyramid_below(
-                        n_levels,
-                        &mut sc.cache_t[c].scratch,
-                        &mut sc.cache_t[c].gauss_img,
-                    );
-                    weber_bands_from_gauss_lexp(
-                        &sc.cache_t[c].gauss_img,
-                        gl_t,
-                        le_t,
-                        &mut sc.cache_t[c].scratch,
-                        &mut sc.pyr_t[c],
-                        false,
-                    );
-                    build_gauss_pyramid_below(
-                        n_levels,
-                        &mut sc.cache_r[c].scratch,
-                        &mut sc.cache_r[c].gauss_img,
-                    );
-                    weber_bands_from_gauss_lexp(
-                        &sc.cache_r[c].gauss_img,
-                        gl_r,
-                        le_r,
-                        &mut sc.cache_r[c].scratch,
-                        &mut sc.pyr_r[c],
-                        false,
-                    );
-                }
+        for c in 0..4 {
+            if c == 0 {
+                weber_bands_from_gauss_lexp(
+                    gl_t,
+                    gl_t,
+                    le_t,
+                    &mut sc.pyr_scr_t,
+                    &mut sc.pyr_t[0],
+                    false,
+                );
+                weber_bands_from_gauss_lexp(
+                    gl_r,
+                    gl_r,
+                    le_r,
+                    &mut sc.pyr_scr_r,
+                    &mut sc.pyr_r[0],
+                    true,
+                );
+            } else {
+                build_gauss_pyramid_below(
+                    n_levels,
+                    &mut sc.pyr_scr_t,
+                    &mut sc.cache_t[c].gauss_img,
+                );
+                weber_bands_from_gauss_lexp(
+                    &sc.cache_t[c].gauss_img,
+                    gl_t,
+                    le_t,
+                    &mut sc.pyr_scr_t,
+                    &mut sc.pyr_t[c],
+                    false,
+                );
+                build_gauss_pyramid_below(
+                    n_levels,
+                    &mut sc.pyr_scr_r,
+                    &mut sc.cache_r[c].gauss_img,
+                );
+                weber_bands_from_gauss_lexp(
+                    &sc.cache_r[c].gauss_img,
+                    gl_r,
+                    le_r,
+                    &mut sc.pyr_scr_r,
+                    &mut sc.pyr_r[c],
+                    false,
+                );
             }
         }
 

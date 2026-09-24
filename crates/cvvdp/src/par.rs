@@ -120,6 +120,31 @@ pub(crate) fn map1(dst: &mut [f32], src: &[f32], f: impl Fn(&mut [f32], &[f32]) 
     f(dst, src);
 }
 
+/// `f(dst_band, s0_band, s1_band, s2_band)` over aligned bands.
+#[inline]
+pub(crate) fn map1_3(
+    dst: &mut [f32],
+    s0: &[f32],
+    s1: &[f32],
+    s2: &[f32],
+    f: impl Fn(&mut [f32], &[f32], &[f32], &[f32]) + Send + Sync,
+) {
+    #[cfg(feature = "parallel")]
+    {
+        let n = dst.len();
+        let sz = band_size(n);
+        if sz < n {
+            dst.par_chunks_mut(sz)
+                .zip(s0.par_chunks(sz))
+                .zip(s1.par_chunks(sz))
+                .zip(s2.par_chunks(sz))
+                .for_each(|(((d, a), b), c)| f(d, a, b, c));
+            return;
+        }
+    }
+    f(dst, s0, s1, s2);
+}
+
 /// `f(dst_band, s0_band, s1_band)` over aligned bands.
 #[inline]
 pub(crate) fn map1_2(

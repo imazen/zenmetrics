@@ -94,64 +94,68 @@ fn reduce_v_inner(
     let k3 = f32x16::splat(token, k[3]);
     let k4 = f32x16::splat(token, k[4]);
 
+    debug_assert_eq!(vscratch.len(), sw * dh);
     let n_groups = sw / 16;
-    for dy in 0..dh {
-        let cy = 2 * dy as isize;
-        // Bounds check on row offsets is uniform across the row → one branch
-        // per dy, not per column.
-        let row_at = |off: isize| -> Option<usize> {
-            let r = cy + off;
-            if r < 0 || r >= sh as isize {
-                None
-            } else {
-                Some(r as usize * sw)
+    crate::par::map_rows(vscratch, sw, |y0, vscratch| {
+        let band_h = vscratch.len() / sw;
+        for dy_l in 0..band_h {
+            let cy = 2 * (y0 + dy_l) as isize;
+            // Bounds check on row offsets is uniform across the row → one branch
+            // per dy, not per column.
+            let row_at = |off: isize| -> Option<usize> {
+                let r = cy + off;
+                if r < 0 || r >= sh as isize {
+                    None
+                } else {
+                    Some(r as usize * sw)
+                }
+            };
+            let r_m2 = row_at(-2);
+            let r_m1 = row_at(-1);
+            let r_0 = row_at(0);
+            let r_p1 = row_at(1);
+            let r_p2 = row_at(2);
+            let out_base = dy_l * sw;
+
+            for cg in 0..n_groups {
+                let col = cg * 16;
+                let ld = |base: usize| -> f32x16 {
+                    let arr: [f32; 16] = src[base + col..base + col + 16].try_into().unwrap();
+                    f32x16::from_array(token, arr)
+                };
+                // Interior rows have all five taps in bounds — one match
+                // per column-group instead of per-tap Option handling.
+                let (v0, v1, v2, v3v, v4) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
+                    (Some(b0), Some(b1), Some(b2), Some(b3), Some(b4)) => {
+                        (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
+                    }
+                    _ => {
+                        let z = f32x16::zero(token);
+                        let or = |row: Option<usize>| row.map_or(z, &ld);
+                        (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
+                    }
+                };
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
+                let arr = acc.to_array();
+                vscratch[out_base + col..out_base + col + 16].copy_from_slice(&arr);
             }
-        };
-        let r_m2 = row_at(-2);
-        let r_m1 = row_at(-1);
-        let r_0 = row_at(0);
-        let r_p1 = row_at(1);
-        let r_p2 = row_at(2);
-        let out_base = dy * sw;
 
-        for cg in 0..n_groups {
-            let col = cg * 16;
-            let ld = |base: usize| -> f32x16 {
-                let arr: [f32; 16] = src[base + col..base + col + 16].try_into().unwrap();
-                f32x16::from_array(token, arr)
-            };
-            // Interior rows have all five taps in bounds — one match
-            // per column-group instead of per-tap Option handling.
-            let (v0, v1, v2, v3v, v4) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
-                (Some(b0), Some(b1), Some(b2), Some(b3), Some(b4)) => {
-                    (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
-                }
-                _ => {
-                    let z = f32x16::zero(token);
-                    let or = |row: Option<usize>| row.map_or(z, &ld);
-                    (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
-                }
-            };
-            let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
-            let arr = acc.to_array();
-            vscratch[out_base + col..out_base + col + 16].copy_from_slice(&arr);
+            // Scalar tail (< 16 columns).
+            for x in n_groups * 16..sw {
+                let read = |row: Option<usize>| -> f32 {
+                    match row {
+                        Some(base) => src[base + x],
+                        None => 0.0,
+                    }
+                };
+                vscratch[out_base + x] = k[0] * read(r_m2)
+                    + k[1] * read(r_m1)
+                    + k[2] * read(r_0)
+                    + k[3] * read(r_p1)
+                    + k[4] * read(r_p2);
+            }
         }
-
-        // Scalar tail (< 16 columns).
-        for x in n_groups * 16..sw {
-            let read = |row: Option<usize>| -> f32 {
-                match row {
-                    Some(base) => src[base + x],
-                    None => 0.0,
-                }
-            };
-            vscratch[out_base + x] = k[0] * read(r_m2)
-                + k[1] * read(r_m1)
-                + k[2] * read(r_0)
-                + k[3] * read(r_p1)
-                + k[4] * read(r_p2);
-        }
-    }
+    });
 }
 
 #[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
@@ -170,59 +174,63 @@ fn reduce_v_inner(
     let k3 = f32x8::splat(token, k[3]);
     let k4 = f32x8::splat(token, k[4]);
 
+    debug_assert_eq!(vscratch.len(), sw * dh);
     let n_groups = sw / 8;
-    for dy in 0..dh {
-        let cy = 2 * dy as isize;
-        let row_at = |off: isize| -> Option<usize> {
-            let r = cy + off;
-            if r < 0 || r >= sh as isize {
-                None
-            } else {
-                Some(r as usize * sw)
+    crate::par::map_rows(vscratch, sw, |y0, vscratch| {
+        let band_h = vscratch.len() / sw;
+        for dy_l in 0..band_h {
+            let cy = 2 * (y0 + dy_l) as isize;
+            let row_at = |off: isize| -> Option<usize> {
+                let r = cy + off;
+                if r < 0 || r >= sh as isize {
+                    None
+                } else {
+                    Some(r as usize * sw)
+                }
+            };
+            let r_m2 = row_at(-2);
+            let r_m1 = row_at(-1);
+            let r_0 = row_at(0);
+            let r_p1 = row_at(1);
+            let r_p2 = row_at(2);
+            let out_base = dy_l * sw;
+
+            for cg in 0..n_groups {
+                let col = cg * 8;
+                let ld = |base: usize| -> f32x8 {
+                    let arr: [f32; 8] = src[base + col..base + col + 8].try_into().unwrap();
+                    f32x8::from_array(token, arr)
+                };
+                let (v0, v1, v2, v3v, v4) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
+                    (Some(b0), Some(b1), Some(b2), Some(b3), Some(b4)) => {
+                        (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
+                    }
+                    _ => {
+                        let z = f32x8::zero(token);
+                        let or = |row: Option<usize>| row.map_or(z, &ld);
+                        (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
+                    }
+                };
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
+                let arr = acc.to_array();
+                vscratch[out_base + col..out_base + col + 8].copy_from_slice(&arr);
             }
-        };
-        let r_m2 = row_at(-2);
-        let r_m1 = row_at(-1);
-        let r_0 = row_at(0);
-        let r_p1 = row_at(1);
-        let r_p2 = row_at(2);
-        let out_base = dy * sw;
 
-        for cg in 0..n_groups {
-            let col = cg * 8;
-            let ld = |base: usize| -> f32x8 {
-                let arr: [f32; 8] = src[base + col..base + col + 8].try_into().unwrap();
-                f32x8::from_array(token, arr)
-            };
-            let (v0, v1, v2, v3v, v4) = match (r_m2, r_m1, r_0, r_p1, r_p2) {
-                (Some(b0), Some(b1), Some(b2), Some(b3), Some(b4)) => {
-                    (ld(b0), ld(b1), ld(b2), ld(b3), ld(b4))
-                }
-                _ => {
-                    let z = f32x8::zero(token);
-                    let or = |row: Option<usize>| row.map_or(z, &ld);
-                    (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
-                }
-            };
-            let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
-            let arr = acc.to_array();
-            vscratch[out_base + col..out_base + col + 8].copy_from_slice(&arr);
+            for x in n_groups * 8..sw {
+                let read = |row: Option<usize>| -> f32 {
+                    match row {
+                        Some(base) => src[base + x],
+                        None => 0.0,
+                    }
+                };
+                vscratch[out_base + x] = k[0] * read(r_m2)
+                    + k[1] * read(r_m1)
+                    + k[2] * read(r_0)
+                    + k[3] * read(r_p1)
+                    + k[4] * read(r_p2);
+            }
         }
-
-        for x in n_groups * 8..sw {
-            let read = |row: Option<usize>| -> f32 {
-                match row {
-                    Some(base) => src[base + x],
-                    None => 0.0,
-                }
-            };
-            vscratch[out_base + x] = k[0] * read(r_m2)
-                + k[1] * read(r_m1)
-                + k[2] * read(r_0)
-                + k[3] * read(r_p1)
-                + k[4] * read(r_p2);
-        }
-    }
+    });
 }
 
 /// Vertical pass of `gausspyr_reduce`: writes the `sw × dh` scratch
@@ -273,72 +281,76 @@ fn reduce_h_inner(
     let k3 = f32x16::splat(token, k[3]);
     let k4 = f32x16::splat(token, k[4]);
 
-    let n_row_groups = dh / 16;
-    for dx in 0..dw {
-        let cx = 2 * dx as isize;
-        let col_at = |off: isize| -> Option<usize> {
-            let c = cx + off;
-            if c < 0 || c >= sw as isize {
-                None
-            } else {
-                Some(c as usize)
-            }
-        };
-        let c_m2 = col_at(-2);
-        let c_m1 = col_at(-1);
-        let c_0 = col_at(0);
-        let c_p1 = col_at(1);
-        let c_p2 = col_at(2);
+    debug_assert_eq!(dst.len(), dw * dh);
+    crate::par::map_rows(dst, dw, |y0, dst| {
+        let band_dh = dst.len() / dw;
+        let n_row_groups = band_dh / 16;
+        for dx in 0..dw {
+            let cx = 2 * dx as isize;
+            let col_at = |off: isize| -> Option<usize> {
+                let c = cx + off;
+                if c < 0 || c >= sw as isize {
+                    None
+                } else {
+                    Some(c as usize)
+                }
+            };
+            let c_m2 = col_at(-2);
+            let c_m1 = col_at(-1);
+            let c_0 = col_at(0);
+            let c_p1 = col_at(1);
+            let c_p2 = col_at(2);
 
-        // Interior columns have all five taps in bounds — hoist the
-        // Option check out of the per-lane row loop.
-        let interior = [c_m2, c_m1, c_0, c_p1, c_p2].iter().all(Option::is_some);
-        let cols: [usize; 5] =
-            core::array::from_fn(|i| [c_m2, c_m1, c_0, c_p1, c_p2][i].unwrap_or(0));
+            // Interior columns have all five taps in bounds — hoist the
+            // Option check out of the per-lane row loop.
+            let interior = [c_m2, c_m1, c_0, c_p1, c_p2].iter().all(Option::is_some);
+            let cols: [usize; 5] =
+                core::array::from_fn(|i| [c_m2, c_m1, c_0, c_p1, c_p2][i].unwrap_or(0));
 
-        for rg in 0..n_row_groups {
-            let row_base = rg * 16;
-            let mut arrs: [[f32; 16]; 5] = [[0.0; 16]; 5];
-            if interior {
-                for (j, &cc) in cols.iter().enumerate() {
+            for rg in 0..n_row_groups {
+                let row_base = rg * 16;
+                let mut arrs: [[f32; 16]; 5] = [[0.0; 16]; 5];
+                if interior {
+                    for (j, &cc) in cols.iter().enumerate() {
+                        for r in 0..16 {
+                            arrs[j][r] = vscratch[(y0 + row_base + r) * sw + cc];
+                        }
+                    }
+                } else {
                     for r in 0..16 {
-                        arrs[j][r] = vscratch[(row_base + r) * sw + cc];
+                        let row_off = (y0 + row_base + r) * sw;
+                        arrs[0][r] = c_m2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                        arrs[1][r] = c_m1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                        arrs[2][r] = c_0.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                        arrs[3][r] = c_p1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                        arrs[4][r] = c_p2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
                     }
                 }
-            } else {
+                let v0 = f32x16::from_array(token, arrs[0]);
+                let v1 = f32x16::from_array(token, arrs[1]);
+                let v2 = f32x16::from_array(token, arrs[2]);
+                let v3v = f32x16::from_array(token, arrs[3]);
+                let v4 = f32x16::from_array(token, arrs[4]);
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
+                let res = acc.to_array();
                 for r in 0..16 {
-                    let row_off = (row_base + r) * sw;
-                    arrs[0][r] = c_m2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                    arrs[1][r] = c_m1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                    arrs[2][r] = c_0.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                    arrs[3][r] = c_p1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                    arrs[4][r] = c_p2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                    dst[(row_base + r) * dw + dx] = res[r];
                 }
             }
-            let v0 = f32x16::from_array(token, arrs[0]);
-            let v1 = f32x16::from_array(token, arrs[1]);
-            let v2 = f32x16::from_array(token, arrs[2]);
-            let v3v = f32x16::from_array(token, arrs[3]);
-            let v4 = f32x16::from_array(token, arrs[4]);
-            let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
-            let res = acc.to_array();
-            for r in 0..16 {
-                dst[(row_base + r) * dw + dx] = res[r];
+
+            // Scalar tail rows (< 16 rows).
+            for dy in n_row_groups * 16..band_dh {
+                let row_off = (y0 + dy) * sw;
+                let read =
+                    |c: Option<usize>| -> f32 { c.map(|c| vscratch[row_off + c]).unwrap_or(0.0) };
+                dst[dy * dw + dx] = k[0] * read(c_m2)
+                    + k[1] * read(c_m1)
+                    + k[2] * read(c_0)
+                    + k[3] * read(c_p1)
+                    + k[4] * read(c_p2);
             }
         }
-
-        // Scalar tail rows (< 16 rows).
-        for dy in n_row_groups * 16..dh {
-            let row_off = dy * sw;
-            let read =
-                |c: Option<usize>| -> f32 { c.map(|c| vscratch[row_off + c]).unwrap_or(0.0) };
-            dst[dy * dw + dx] = k[0] * read(c_m2)
-                + k[1] * read(c_m1)
-                + k[2] * read(c_0)
-                + k[3] * read(c_p1)
-                + k[4] * read(c_p2);
-        }
-    }
+    });
 }
 
 #[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
@@ -357,69 +369,73 @@ fn reduce_h_inner(
     let k3 = f32x8::splat(token, k[3]);
     let k4 = f32x8::splat(token, k[4]);
 
-    let n_row_groups = dh / 8;
-    for dx in 0..dw {
-        let cx = 2 * dx as isize;
-        let col_at = |off: isize| -> Option<usize> {
-            let c = cx + off;
-            if c < 0 || c >= sw as isize {
-                None
-            } else {
-                Some(c as usize)
-            }
-        };
-        let c_m2 = col_at(-2);
-        let c_m1 = col_at(-1);
-        let c_0 = col_at(0);
-        let c_p1 = col_at(1);
-        let c_p2 = col_at(2);
+    debug_assert_eq!(dst.len(), dw * dh);
+    crate::par::map_rows(dst, dw, |y0, dst| {
+        let band_dh = dst.len() / dw;
+        let n_row_groups = band_dh / 8;
+        for dx in 0..dw {
+            let cx = 2 * dx as isize;
+            let col_at = |off: isize| -> Option<usize> {
+                let c = cx + off;
+                if c < 0 || c >= sw as isize {
+                    None
+                } else {
+                    Some(c as usize)
+                }
+            };
+            let c_m2 = col_at(-2);
+            let c_m1 = col_at(-1);
+            let c_0 = col_at(0);
+            let c_p1 = col_at(1);
+            let c_p2 = col_at(2);
 
-        let interior = [c_m2, c_m1, c_0, c_p1, c_p2].iter().all(Option::is_some);
-        let cols: [usize; 5] =
-            core::array::from_fn(|i| [c_m2, c_m1, c_0, c_p1, c_p2][i].unwrap_or(0));
+            let interior = [c_m2, c_m1, c_0, c_p1, c_p2].iter().all(Option::is_some);
+            let cols: [usize; 5] =
+                core::array::from_fn(|i| [c_m2, c_m1, c_0, c_p1, c_p2][i].unwrap_or(0));
 
-        for rg in 0..n_row_groups {
-            let row_base = rg * 8;
-            let mut arrs: [[f32; 8]; 5] = [[0.0; 8]; 5];
-            if interior {
-                for (j, &cc) in cols.iter().enumerate() {
+            for rg in 0..n_row_groups {
+                let row_base = rg * 8;
+                let mut arrs: [[f32; 8]; 5] = [[0.0; 8]; 5];
+                if interior {
+                    for (j, &cc) in cols.iter().enumerate() {
+                        for r in 0..8 {
+                            arrs[j][r] = vscratch[(y0 + row_base + r) * sw + cc];
+                        }
+                    }
+                } else {
                     for r in 0..8 {
-                        arrs[j][r] = vscratch[(row_base + r) * sw + cc];
+                        let row_off = (y0 + row_base + r) * sw;
+                        arrs[0][r] = c_m2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                        arrs[1][r] = c_m1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                        arrs[2][r] = c_0.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                        arrs[3][r] = c_p1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                        arrs[4][r] = c_p2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
                     }
                 }
-            } else {
+                let v0 = f32x8::from_array(token, arrs[0]);
+                let v1 = f32x8::from_array(token, arrs[1]);
+                let v2 = f32x8::from_array(token, arrs[2]);
+                let v3v = f32x8::from_array(token, arrs[3]);
+                let v4 = f32x8::from_array(token, arrs[4]);
+                let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
+                let res = acc.to_array();
                 for r in 0..8 {
-                    let row_off = (row_base + r) * sw;
-                    arrs[0][r] = c_m2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                    arrs[1][r] = c_m1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                    arrs[2][r] = c_0.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                    arrs[3][r] = c_p1.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
-                    arrs[4][r] = c_p2.map(|c| vscratch[row_off + c]).unwrap_or(0.0);
+                    dst[(row_base + r) * dw + dx] = res[r];
                 }
             }
-            let v0 = f32x8::from_array(token, arrs[0]);
-            let v1 = f32x8::from_array(token, arrs[1]);
-            let v2 = f32x8::from_array(token, arrs[2]);
-            let v3v = f32x8::from_array(token, arrs[3]);
-            let v4 = f32x8::from_array(token, arrs[4]);
-            let acc = v0 * k0 + v1 * k1 + v2 * k2 + v3v * k3 + v4 * k4;
-            let res = acc.to_array();
-            for r in 0..8 {
-                dst[(row_base + r) * dw + dx] = res[r];
+
+            for dy in n_row_groups * 8..band_dh {
+                let row_off = (y0 + dy) * sw;
+                let read =
+                    |c: Option<usize>| -> f32 { c.map(|c| vscratch[row_off + c]).unwrap_or(0.0) };
+                dst[dy * dw + dx] = k[0] * read(c_m2)
+                    + k[1] * read(c_m1)
+                    + k[2] * read(c_0)
+                    + k[3] * read(c_p1)
+                    + k[4] * read(c_p2);
             }
         }
-
-        for dy in n_row_groups * 8..dh {
-            let row_off = dy * sw;
-            let read =
-                |c: Option<usize>| -> f32 { c.map(|c| vscratch[row_off + c]).unwrap_or(0.0) };
-            dst[dy * dw + dx] = k[0] * read(c_m2)
-                + k[1] * read(c_m1)
-                + k[2] * read(c_0)
-                + k[3] * read(c_p1)
-                + k[4] * read(c_p2);
-        }
-    }
+    });
 }
 
 /// Horizontal pass of `gausspyr_reduce`: reads `sw × dh` scratch,
@@ -490,34 +506,40 @@ fn expand_v_inner(
     let dk = [dk0, dk1, dk2, dk3, dk4];
     let n_groups = sw / 16;
 
-    for cg in 0..n_groups {
-        let col_base = cg * 16;
-        for y in 0..out_h {
-            let mut acc = f32x16::splat(token, 0.0);
-            for (j, dkj) in dk.iter().enumerate() {
-                if let Some(r) = z_row(y + j) {
-                    let off = r * sw + col_base;
-                    let v = f32x16::from_array(token, src[off..off + 16].try_into().unwrap());
-                    acc = v * *dkj + acc;
+    debug_assert_eq!(vscratch.len(), sw * out_h);
+    crate::par::map_rows(vscratch, sw, |y0, vscratch| {
+        let band_h = vscratch.len() / sw;
+        for cg in 0..n_groups {
+            let col_base = cg * 16;
+            for y_l in 0..band_h {
+                let y = y0 + y_l;
+                let mut acc = f32x16::splat(token, 0.0);
+                for (j, dkj) in dk.iter().enumerate() {
+                    if let Some(r) = z_row(y + j) {
+                        let off = r * sw + col_base;
+                        let v = f32x16::from_array(token, src[off..off + 16].try_into().unwrap());
+                        acc = v * *dkj + acc;
+                    }
                 }
+                let arr = acc.to_array();
+                vscratch[y_l * sw + col_base..y_l * sw + col_base + 16].copy_from_slice(&arr);
             }
-            let arr = acc.to_array();
-            vscratch[y * sw + col_base..y * sw + col_base + 16].copy_from_slice(&arr);
         }
-    }
 
-    // Scalar tail columns.
-    for x in n_groups * 16..sw {
-        for y in 0..out_h {
-            let mut sum = 0.0f32;
-            for (j, kj) in k.iter().enumerate() {
-                if let Some(r) = z_row(y + j) {
-                    sum += kj * src[r * sw + x];
+        // Scalar tail columns.
+        for x in n_groups * 16..sw {
+            for y_l in 0..band_h {
+                let y = y0 + y_l;
+                let mut sum = 0.0f32;
+                for (j, kj) in k.iter().enumerate() {
+                    if let Some(r) = z_row(y + j) {
+                        sum += kj * src[r * sw + x];
+                    }
                 }
+                vscratch[y_l * sw + x] = 2.0 * sum;
             }
-            vscratch[y * sw + x] = 2.0 * sum;
         }
-    }
+    });
 }
 
 #[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
@@ -550,33 +572,39 @@ fn expand_v_inner(
     let dk = [dk0, dk1, dk2, dk3, dk4];
     let n_groups = sw / 8;
 
-    for cg in 0..n_groups {
-        let col_base = cg * 8;
-        for y in 0..out_h {
-            let mut acc = f32x8::splat(token, 0.0);
-            for (j, dkj) in dk.iter().enumerate() {
-                if let Some(r) = z_row(y + j) {
-                    let off = r * sw + col_base;
-                    let v = f32x8::from_array(token, src[off..off + 8].try_into().unwrap());
-                    acc = v * *dkj + acc;
+    debug_assert_eq!(vscratch.len(), sw * out_h);
+    crate::par::map_rows(vscratch, sw, |y0, vscratch| {
+        let band_h = vscratch.len() / sw;
+        for cg in 0..n_groups {
+            let col_base = cg * 8;
+            for y_l in 0..band_h {
+                let y = y0 + y_l;
+                let mut acc = f32x8::splat(token, 0.0);
+                for (j, dkj) in dk.iter().enumerate() {
+                    if let Some(r) = z_row(y + j) {
+                        let off = r * sw + col_base;
+                        let v = f32x8::from_array(token, src[off..off + 8].try_into().unwrap());
+                        acc = v * *dkj + acc;
+                    }
                 }
+                let arr = acc.to_array();
+                vscratch[y_l * sw + col_base..y_l * sw + col_base + 8].copy_from_slice(&arr);
             }
-            let arr = acc.to_array();
-            vscratch[y * sw + col_base..y * sw + col_base + 8].copy_from_slice(&arr);
         }
-    }
 
-    for x in n_groups * 8..sw {
-        for y in 0..out_h {
-            let mut sum = 0.0f32;
-            for (j, kj) in k.iter().enumerate() {
-                if let Some(r) = z_row(y + j) {
-                    sum += kj * src[r * sw + x];
+        for x in n_groups * 8..sw {
+            for y_l in 0..band_h {
+                let y = y0 + y_l;
+                let mut sum = 0.0f32;
+                for (j, kj) in k.iter().enumerate() {
+                    if let Some(r) = z_row(y + j) {
+                        sum += kj * src[r * sw + x];
+                    }
                 }
+                vscratch[y_l * sw + x] = 2.0 * sum;
             }
-            vscratch[y * sw + x] = 2.0 * sum;
         }
-    }
+    });
 }
 
 /// Vertical pass of `gausspyr_expand`: writes `sw × out_h` vscratch
@@ -644,59 +672,63 @@ fn expand_h_inner(
         }
     };
 
-    for y in 0..out_h {
-        let row_off = y * sw;
+    debug_assert_eq!(dst.len(), out_w * out_h);
+    crate::par::map_rows(dst, out_w, |y0, dst| {
+        let band_h = dst.len() / out_w;
+        for y_l in 0..band_h {
+            let row_off = (y0 + y_l) * sw;
 
-        let n_groups = out_w / 16;
-        for cg in 0..n_groups {
-            let x_base = cg * 16;
-            let mut arrs: [[f32; 16]; 5] = [[0.0; 16]; 5];
-            // Interior groups need no edge logic at all: the five taps
-            // draw from three contiguous 8-wide windows of the source
-            // row — lanes 2i get {A,B,C} on taps {0,2,4}, lanes 2i+1
-            // get {B,C} on taps {1,3} (odd-position holes stay zero).
-            let cbase = x_base / 2;
-            if x_base >= 2 && cbase + 8 < sw {
-                for i in 0..8 {
-                    let a = vscratch[row_off + cbase - 1 + i];
-                    let b = vscratch[row_off + cbase + i];
-                    let c = vscratch[row_off + cbase + 1 + i];
-                    arrs[0][2 * i] = a;
-                    arrs[2][2 * i] = b;
-                    arrs[4][2 * i] = c;
-                    arrs[1][2 * i + 1] = b;
-                    arrs[3][2 * i + 1] = c;
-                }
-            } else {
-                for (j, arr) in arrs.iter_mut().enumerate() {
+            let n_groups = out_w / 16;
+            for cg in 0..n_groups {
+                let x_base = cg * 16;
+                let mut arrs: [[f32; 16]; 5] = [[0.0; 16]; 5];
+                // Interior groups need no edge logic at all: the five taps
+                // draw from three contiguous 8-wide windows of the source
+                // row — lanes 2i get {A,B,C} on taps {0,2,4}, lanes 2i+1
+                // get {B,C} on taps {1,3} (odd-position holes stay zero).
+                let cbase = x_base / 2;
+                if x_base >= 2 && cbase + 8 < sw {
                     for i in 0..8 {
-                        let l = (j & 1) + 2 * i;
-                        let p = x_base + l + j;
-                        if p <= back_idx_h {
-                            arr[l] = vscratch[row_off + (p / 2).saturating_sub(1).min(sw - 1)];
+                        let a = vscratch[row_off + cbase - 1 + i];
+                        let b = vscratch[row_off + cbase + i];
+                        let c = vscratch[row_off + cbase + 1 + i];
+                        arrs[0][2 * i] = a;
+                        arrs[2][2 * i] = b;
+                        arrs[4][2 * i] = c;
+                        arrs[1][2 * i + 1] = b;
+                        arrs[3][2 * i + 1] = c;
+                    }
+                } else {
+                    for (j, arr) in arrs.iter_mut().enumerate() {
+                        for i in 0..8 {
+                            let l = (j & 1) + 2 * i;
+                            let p = x_base + l + j;
+                            if p <= back_idx_h {
+                                arr[l] = vscratch[row_off + (p / 2).saturating_sub(1).min(sw - 1)];
+                            }
                         }
                     }
                 }
+                let v0 = f32x16::from_array(token, arrs[0]);
+                let v1 = f32x16::from_array(token, arrs[1]);
+                let v2 = f32x16::from_array(token, arrs[2]);
+                let v3v = f32x16::from_array(token, arrs[3]);
+                let v4 = f32x16::from_array(token, arrs[4]);
+                let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4 * dk4;
+                let arr = acc.to_array();
+                dst[y_l * out_w + x_base..y_l * out_w + x_base + 16].copy_from_slice(&arr);
             }
-            let v0 = f32x16::from_array(token, arrs[0]);
-            let v1 = f32x16::from_array(token, arrs[1]);
-            let v2 = f32x16::from_array(token, arrs[2]);
-            let v3v = f32x16::from_array(token, arrs[3]);
-            let v4 = f32x16::from_array(token, arrs[4]);
-            let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4 * dk4;
-            let arr = acc.to_array();
-            dst[y * out_w + x_base..y * out_w + x_base + 16].copy_from_slice(&arr);
-        }
 
-        for x in n_groups * 16..out_w {
-            let sum = k[0] * zv_of(row_off, x)
-                + k[1] * zv_of(row_off, x + 1)
-                + k[2] * zv_of(row_off, x + 2)
-                + k[3] * zv_of(row_off, x + 3)
-                + k[4] * zv_of(row_off, x + 4);
-            dst[y * out_w + x] = 2.0 * sum;
+            for x in n_groups * 16..out_w {
+                let sum = k[0] * zv_of(row_off, x)
+                    + k[1] * zv_of(row_off, x + 1)
+                    + k[2] * zv_of(row_off, x + 2)
+                    + k[3] * zv_of(row_off, x + 3)
+                    + k[4] * zv_of(row_off, x + 4);
+                dst[y_l * out_w + x] = 2.0 * sum;
+            }
         }
-    }
+    });
 }
 
 #[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
@@ -725,55 +757,59 @@ fn expand_h_inner(
         }
     };
 
-    for y in 0..out_h {
-        let row_off = y * sw;
+    debug_assert_eq!(dst.len(), out_w * out_h);
+    crate::par::map_rows(dst, out_w, |y0, dst| {
+        let band_h = dst.len() / out_w;
+        for y_l in 0..band_h {
+            let row_off = (y0 + y_l) * sw;
 
-        let n_groups = out_w / 8;
-        for cg in 0..n_groups {
-            let x_base = cg * 8;
-            let mut arrs: [[f32; 8]; 5] = [[0.0; 8]; 5];
-            let cbase = x_base / 2;
-            if x_base >= 2 && cbase + 4 < sw {
-                for i in 0..4 {
-                    let a = vscratch[row_off + cbase - 1 + i];
-                    let b = vscratch[row_off + cbase + i];
-                    let c = vscratch[row_off + cbase + 1 + i];
-                    arrs[0][2 * i] = a;
-                    arrs[2][2 * i] = b;
-                    arrs[4][2 * i] = c;
-                    arrs[1][2 * i + 1] = b;
-                    arrs[3][2 * i + 1] = c;
-                }
-            } else {
-                for (j, arr) in arrs.iter_mut().enumerate() {
+            let n_groups = out_w / 8;
+            for cg in 0..n_groups {
+                let x_base = cg * 8;
+                let mut arrs: [[f32; 8]; 5] = [[0.0; 8]; 5];
+                let cbase = x_base / 2;
+                if x_base >= 2 && cbase + 4 < sw {
                     for i in 0..4 {
-                        let l = (j & 1) + 2 * i;
-                        let p = x_base + l + j;
-                        if p <= back_idx_h {
-                            arr[l] = vscratch[row_off + (p / 2).saturating_sub(1).min(sw - 1)];
+                        let a = vscratch[row_off + cbase - 1 + i];
+                        let b = vscratch[row_off + cbase + i];
+                        let c = vscratch[row_off + cbase + 1 + i];
+                        arrs[0][2 * i] = a;
+                        arrs[2][2 * i] = b;
+                        arrs[4][2 * i] = c;
+                        arrs[1][2 * i + 1] = b;
+                        arrs[3][2 * i + 1] = c;
+                    }
+                } else {
+                    for (j, arr) in arrs.iter_mut().enumerate() {
+                        for i in 0..4 {
+                            let l = (j & 1) + 2 * i;
+                            let p = x_base + l + j;
+                            if p <= back_idx_h {
+                                arr[l] = vscratch[row_off + (p / 2).saturating_sub(1).min(sw - 1)];
+                            }
                         }
                     }
                 }
+                let v0 = f32x8::from_array(token, arrs[0]);
+                let v1 = f32x8::from_array(token, arrs[1]);
+                let v2 = f32x8::from_array(token, arrs[2]);
+                let v3v = f32x8::from_array(token, arrs[3]);
+                let v4 = f32x8::from_array(token, arrs[4]);
+                let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4 * dk4;
+                let arr = acc.to_array();
+                dst[y_l * out_w + x_base..y_l * out_w + x_base + 8].copy_from_slice(&arr);
             }
-            let v0 = f32x8::from_array(token, arrs[0]);
-            let v1 = f32x8::from_array(token, arrs[1]);
-            let v2 = f32x8::from_array(token, arrs[2]);
-            let v3v = f32x8::from_array(token, arrs[3]);
-            let v4 = f32x8::from_array(token, arrs[4]);
-            let acc = v0 * dk0 + v1 * dk1 + v2 * dk2 + v3v * dk3 + v4 * dk4;
-            let arr = acc.to_array();
-            dst[y * out_w + x_base..y * out_w + x_base + 8].copy_from_slice(&arr);
-        }
 
-        for x in n_groups * 8..out_w {
-            let sum = k[0] * zv_of(row_off, x)
-                + k[1] * zv_of(row_off, x + 1)
-                + k[2] * zv_of(row_off, x + 2)
-                + k[3] * zv_of(row_off, x + 3)
-                + k[4] * zv_of(row_off, x + 4);
-            dst[y * out_w + x] = 2.0 * sum;
+            for x in n_groups * 8..out_w {
+                let sum = k[0] * zv_of(row_off, x)
+                    + k[1] * zv_of(row_off, x + 1)
+                    + k[2] * zv_of(row_off, x + 2)
+                    + k[3] * zv_of(row_off, x + 3)
+                    + k[4] * zv_of(row_off, x + 4);
+                dst[y_l * out_w + x] = 2.0 * sum;
+            }
         }
-    }
+    });
 }
 
 /// Horizontal pass of `gausspyr_expand`: reads `sw × out_h` vscratch,
