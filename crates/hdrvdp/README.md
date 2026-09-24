@@ -90,9 +90,13 @@ mirror-symmetric MTF filter build, and the opt-in `parallel` feature. A
 zenbench suite
 and the full perf record live in `benchmarks/` (`4cf99288`).
 
-**Still open:** umbrella wiring as `MetricKind::Hdrvdp` (chunk 5). GPU is
-not currently planned — the `parallel` CPU path is the fleet-sweep
-answer.
+**Done (2026-09-24):** umbrella wiring landed as `MetricKind::Hdrvdp`
+(feature `cpu-hdrvdp`, in `cpu-metrics`) — `zenmetrics-api`
+`cpu_dispatch` scores absolute-nits interleaved linear-RGB via
+`ColorEncoding::RgbBt709` at `DEFAULT_PIX_PER_DEG`, and the CLI's
+`--hdr` sweep/batch path reaches it through `HdrScorer` →
+`Backend::Cpu` (`32244668`). GPU is not currently planned — the
+`parallel` CPU path is the fleet-sweep answer.
 
 ### Three things to know before reading a number
 
