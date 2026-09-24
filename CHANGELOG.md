@@ -280,6 +280,7 @@ Workspace conventions per the global rules:
 - hdrvdp: `DEFAULT_PIX_PER_DEG` (= 30, the measured UPIQ protocol) and
   `HDRVDP_COLUMN_NAME` (`hdrvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`,
   `HDRVDP_IMPL_TAG`-overridable) constants for downstream wiring.
+  `32244668`
 
 - **hdrvdp wired into the umbrella stack** (feature `cpu-hdrvdp`, in
   `cpu-metrics`). `zenmetrics-api`: `MetricKind::Hdrvdp` (tag
@@ -300,7 +301,7 @@ Workspace conventions per the global rules:
   `gmsd` (the executor's leaves are sRGB8-shaped). Verified
   `tests/it/cpu_hdrvdp_pu.rs`: umbrella score bit-equal to direct
   `hdrvdp::score`, custom ppd threads through, default ppd = 30,
-  short-buffer and wrong-feeding errors explicit.
+  short-buffer and wrong-feeding errors explicit. `32244668`
 
 - **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
   IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
