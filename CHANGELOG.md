@@ -296,7 +296,7 @@ Workspace conventions per the global rules:
   converter for transfer 13 with BT.709 primaries; retain existing code-value
   behavior for other SDR transfer codes. Add native-sample exactness gates for
   AVIF10, PNG16, JXL16 and TIFF16. Temporarily patch zenpixels-convert source
-  until 0.2.17 or newer publishes. `39aef27f`.
+  until 0.2.17 or newer publishes. `39aef27f`, `4ca3c6a7`.
 
 - cvvdp: video scoring on the CPU path — `VideoScorer` (streaming
   `push_frame`/`finish`, holds only the temporal-filter window) plus
