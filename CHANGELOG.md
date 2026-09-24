@@ -257,6 +257,25 @@ Workspace conventions per the global rules:
   ~780 ms / ~330 ms. `--all-features` clippy-clean; 100 tests pass
   under both feature sets. `379e508e`.
 
+- hdrvdp: **UPIQ real-corpus validation — chunk 4 closed**
+  (`benchmarks/hdrvdp_upiq_2026-09-24.{tsv,md}`). All 380 HDR
+  conditions scored via the new `examples/upiq_score.rs` (std-thread
+  worker pool over `condition_id`, joined to JOD and the dataset's
+  official `HDRVDP2_2` column; `image`-crate EXR decode is dev-dep
+  tooling only). Measured reproduction protocol: `luminance`
+  encoding (BT.709 Y of absolute-RGB EXR), full resolution, **fixed
+  `pix_per_deg = 30`** — NOT the subjective CSV's `pix_per_deg`
+  column, which lands ~12 points low; image downsampling, scaled-CSV
+  ppd, `rgb-bt.709` feeding, and `surround_l` variants falsified en
+  route. Ours vs official `HDRVDP2_2`: **SROCC 0.9962 / PLCC 0.9984**,
+  delta +0.046±0.363 (korshunov essentially exact, median |delta|
+  0.013; narwaria residual concentrates in the `n-i07` reference
+  family). Ours vs JOD **SROCC 0.8203** vs the official column's
+  0.8117 on the same join — clears the published 0.812 bar.
+  `scripts/hdr/upiq_hdrvdp_report.py` is the analysis tool; the
+  golden tests remain the synthetic-parity gate and this is the
+  real-corpus gate — distinct measurements, both green.
+
 - **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
   IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
   Score + half-resolution GMS map, strided f32 input, zenpixels `PixelSlice`

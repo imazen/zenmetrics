@@ -31,7 +31,7 @@
 //! | probability pooling, `P_det` / `P_map` | [`pool`] | ✅ |
 //! | quality correlate `res.Q` (+ removed `Q_MOS`) | [`pool`] | ✅ |
 //! | end-to-end entry point | [`metric`] | ✅ |
-//! | UPIQ validation (SROCC vs the published 0.812) | — | ⏳ chunk 4 |
+//! | UPIQ validation (SROCC vs the published 0.812) | — | ✅ chunk 4: 0.8203 vs JOD, 0.9962 vs official scores |
 //! | umbrella wiring (`MetricKind::Hdrvdp`) | — | ⏳ chunk 5 |
 //!
 //! **Validated against official HDR-VDP-2.2.2** (Octave 11.1, 24 synthetic

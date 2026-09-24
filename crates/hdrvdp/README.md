@@ -13,9 +13,9 @@ measured against:
 | dataset | HDR-VDP-2 | best in this workspace |
 |---|--:|--:|
 | AIC-HDR2025 (HDR compression JND) | **0.936** | SSIMULACRA2 0.906 |
-| UPIQ (380 HDR compression pairs, JOD) | **0.812** | cvvdp faithful 0.758 |
+| UPIQ (380 HDR compression pairs, JOD) | **0.812** | this crate **0.820** |
 
-## Status — chunks 1–4a of 6, plus an optimisation pass: **scores and validated against official 2.2.2**
+## Status — chunks 1–4 of 6, plus an optimisation pass: **scores, validated against official 2.2.2 and on UPIQ**
 
 Landed in chunks (tracked in [imazen/zenmetrics#50]). `hdrvdp::hdrvdp()` now takes
 two images in absolute luminance and returns the official `res.Q` (100 =
@@ -60,7 +60,18 @@ far below the metric's JND resolution (the earlier `f64` build agreed to
 ~1e-11 / `res.Q` 9.9e-7 before the precision switch).
 See [`docs/VALIDATION.md`](docs/VALIDATION.md) for the corpus, the tolerances,
 and the upstream Octave `is_mex` bug the reference run had to work around.
-UPIQ SROCC validation (chunk 4) remains open.
+
+**UPIQ real-corpus validation (2026-09-24, chunk 4):** all 380 HDR pairs
+(`upiq_score` example, `luminance` encoding, full resolution, fixed
+`pix_per_deg=30` — the protocol that reproduces the released score
+column; the subjective CSV's own `pix_per_deg` lands ~12 points low).
+Ours vs the official per-condition `HDRVDP2_2` column: **SROCC 0.9962 /
+PLCC 0.9984**, delta +0.046±0.363 — korshunov is essentially exact
+(median |delta| 0.013); the narwaria residual concentrates in one `n-i07`
+reference family (~+2, a presumed upstream protocol detail). Ours vs JOD:
+**SROCC 0.8203** vs the official column's 0.8117 on the same join —
+clears the published 0.812 bar. Full record:
+[`benchmarks/hdrvdp_upiq_2026-09-24.md`](../../benchmarks/hdrvdp_upiq_2026-09-24.md).
 
 Since chunk 4a (`a11bcad4`, first end-to-end scores on real pixels) the crate
 has taken an optimisation pass — FFT plans with hoisted/shared twiddles and
@@ -79,9 +90,9 @@ mirror-symmetric MTF filter build, and the opt-in `parallel` feature. A
 zenbench suite
 and the full perf record live in `benchmarks/` (`4cf99288`).
 
-**Still open:** UPIQ SROCC validation (the rest of chunk 4) and umbrella
-wiring as `MetricKind::Hdrvdp` (chunk 5). GPU is not currently planned — the
-`parallel` CPU path is the fleet-sweep answer.
+**Still open:** umbrella wiring as `MetricKind::Hdrvdp` (chunk 5). GPU is
+not currently planned — the `parallel` CPU path is the fleet-sweep
+answer.
 
 ### Three things to know before reading a number
 

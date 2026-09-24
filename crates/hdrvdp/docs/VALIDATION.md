@@ -103,6 +103,11 @@ tolerances above.
   it once the gate itself is no longer bit-exact.
 - **Does not**: luminance-encoding coverage only; display encodings
   (`sRGB-display`, `rgb-bt.709`, `XYZ`, `luma-display`) are exercised by
-  unit tests but not by these goldens. And UPIQ SROCC vs the published
-  0.812 (chunk 4) is a separate, still-open measurement — golden parity is
-  implementation parity, not subjective-score validation.
+  unit tests but not by these goldens.
+- **UPIQ (chunk 4) — closed 2026-09-24**: the real-corpus counterpart.
+  All 380 HDR pairs, `luminance` encoding, full resolution, fixed
+  `pix_per_deg=30` (the protocol that reproduces the released score
+  column): ours vs official `HDRVDP2_2` SROCC **0.9962** / delta
+  +0.046±0.363; ours vs JOD SROCC **0.8203** (official column: 0.8117,
+  published 0.812). See
+  [`benchmarks/hdrvdp_upiq_2026-09-24.md`](../../../benchmarks/hdrvdp_upiq_2026-09-24.md).

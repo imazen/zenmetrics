@@ -32,7 +32,7 @@ rayon = { version = "1.10", optional = true }
 [dev-dependencies]
 # Decoding the real corpus images for the end-to-end ladder example. Dev-only:
 # the library itself stays dependency-free.
-image = { workspace = true, features = ["png", "jpeg"] }
+image = { workspace = true, features = ["png", "jpeg", "exr"] }
 zenmetrics-corpus = { path = "../zenmetrics-corpus" }
 # Interleaved benchmarking with paired statistics (workspace standard).
 zenbench = "0.1.7"
