@@ -185,7 +185,7 @@ Workspace conventions per the global rules:
   strip↔full parity tests hold (39 tests, both feature configs).
   1024×1024 synthetic probe, release: full 407→111 ms serial,
   68 ms at 8 threads; strip (512-row) ~570→189 ms serial,
-  145 ms at 8t; peak RSS 136→98 MB. `<hash>`.
+  145 ms at 8t; peak RSS 136→98 MB. `48546593`.
 
 - zenmetrics-cli: versioned native common-primary HDR scoring via
   `score-pairs --hdr --hdr-common-primaries`; preserve PQ precision, use actual
