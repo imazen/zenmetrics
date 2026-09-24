@@ -231,7 +231,7 @@ Workspace conventions per the global rules:
   JND resolution; tolerances set with several× headroom, see
   `docs/VALIDATION.md`). 1024² probe, release: full result 1.85 →
   1.28 s, `score()` 1.02 s (was 1.85 s before the pass). `fc9304ee`
-  (score()), `<hash>`.
+  (score()), `e962983e`.
 
 - **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
   IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
