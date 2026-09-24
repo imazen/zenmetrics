@@ -142,6 +142,20 @@ pub(crate) fn compute_sensitivities_into(
     if out.len() < n {
         out.resize(n, 0.0);
     }
+    compute_sensitivities_slice(log_l_bkg, logs_row, &mut out[..n]);
+}
+
+/// Slice-taking variant of [`compute_sensitivities_into`] — writes
+/// `out[..] == log_l_bkg[..]` (caller's band slice when plane-banded).
+/// Per-element output is pure elementwise, so banding is bit-identical.
+#[inline]
+pub(crate) fn compute_sensitivities_slice(
+    log_l_bkg: &[f32],
+    logs_row: &[f32; N_L_BKG],
+    out: &mut [f32],
+) {
+    let n = log_l_bkg.len();
+    debug_assert_eq!(out.len(), n);
 
     let correction_times_ln_10 = LOG_SENSITIVITY_CORRECTION * core::f32::consts::LN_10;
     let ln_10 = core::f32::consts::LN_10;

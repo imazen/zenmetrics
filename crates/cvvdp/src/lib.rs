@@ -99,6 +99,7 @@ mod color;
 mod csf;
 pub mod diffmap;
 mod masking;
+mod par;
 mod pipeline;
 mod pool;
 mod pyramid;

@@ -83,7 +83,7 @@ pub(crate) fn srgb_planar_to_dkl_planar(
 fn srgb8_to_dkl_planar_inner(
     n: usize,
     display: DisplayModel,
-    fetch: impl Fn(usize) -> (u8, u8, u8),
+    fetch: impl Fn(usize) -> (u8, u8, u8) + Sync,
     out_a: &mut Vec<f32>,
     out_rg: &mut Vec<f32>,
     out_vy: &mut Vec<f32>,
@@ -100,28 +100,42 @@ fn srgb8_to_dkl_planar_inner(
         let m = display.primaries.linear_rgb_to_dkl();
         let s = display.y_peak - display.y_black;
         let bias = display.y_black + display.y_refl;
-        for i in 0..n {
-            let (r, g, b) = fetch(i);
-            let lin_r = SRGB8_TO_LINEAR_LUT[r as usize];
-            let lin_g = SRGB8_TO_LINEAR_LUT[g as usize];
-            let lin_b = SRGB8_TO_LINEAR_LUT[b as usize];
-            let lr = s * lin_r + bias;
-            let lg = s * lin_g + bias;
-            let lb = s * lin_b + bias;
-            out_a[i] = m[0][0] * lr + m[0][1] * lg + m[0][2] * lb;
-            out_rg[i] = m[1][0] * lr + m[1][1] * lg + m[1][2] * lb;
-            out_vy[i] = m[2][0] * lr + m[2][1] * lg + m[2][2] * lb;
-        }
+        crate::par::map3_base(
+            &mut out_a[..n],
+            &mut out_rg[..n],
+            &mut out_vy[..n],
+            |base, oa, org, ovy| {
+                for i in 0..oa.len() {
+                    let (r, g, b) = fetch(base + i);
+                    let lin_r = SRGB8_TO_LINEAR_LUT[r as usize];
+                    let lin_g = SRGB8_TO_LINEAR_LUT[g as usize];
+                    let lin_b = SRGB8_TO_LINEAR_LUT[b as usize];
+                    let lr = s * lin_r + bias;
+                    let lg = s * lin_g + bias;
+                    let lb = s * lin_b + bias;
+                    oa[i] = m[0][0] * lr + m[0][1] * lg + m[0][2] * lb;
+                    org[i] = m[1][0] * lr + m[1][1] * lg + m[1][2] * lb;
+                    ovy[i] = m[2][0] * lr + m[2][1] * lg + m[2][2] * lb;
+                }
+            },
+        );
     } else {
         // Dispatch path — honors arbitrary EOTF + primaries. HLG
         // needs per-RGB-triple OOTF, hence the per-pixel call.
-        for i in 0..n {
-            let (r, g, b) = fetch(i);
-            let (a, rg, vy) = display_byte_to_dkl_scalar(r, g, b, display);
-            out_a[i] = a;
-            out_rg[i] = rg;
-            out_vy[i] = vy;
-        }
+        crate::par::map3_base(
+            &mut out_a[..n],
+            &mut out_rg[..n],
+            &mut out_vy[..n],
+            |base, oa, org, ovy| {
+                for i in 0..oa.len() {
+                    let (r, g, b) = fetch(base + i);
+                    let (a, rg, vy) = display_byte_to_dkl_scalar(r, g, b, display);
+                    oa[i] = a;
+                    org[i] = rg;
+                    ovy[i] = vy;
+                }
+            },
+        );
     }
 }
 
@@ -240,7 +254,7 @@ pub(crate) fn f32_planar_to_dkl_planar(
 fn display_encoded_to_dkl_planar_inner(
     n: usize,
     display: DisplayModel,
-    fetch: impl Fn(usize) -> (f32, f32, f32),
+    fetch: impl Fn(usize) -> (f32, f32, f32) + Sync,
     out_a: &mut Vec<f32>,
     out_rg: &mut Vec<f32>,
     out_vy: &mut Vec<f32>,
@@ -249,13 +263,20 @@ fn display_encoded_to_dkl_planar_inner(
     out_rg.resize(n, 0.0);
     out_vy.resize(n, 0.0);
 
-    for i in 0..n {
-        let (r, g, b) = fetch(i);
-        let (a, rg, vy) = display_encoded_to_dkl_scalar(r, g, b, display);
-        out_a[i] = a;
-        out_rg[i] = rg;
-        out_vy[i] = vy;
-    }
+    crate::par::map3_base(
+        &mut out_a[..n],
+        &mut out_rg[..n],
+        &mut out_vy[..n],
+        |base, oa, org, ovy| {
+            for i in 0..oa.len() {
+                let (r, g, b) = fetch(base + i);
+                let (a, rg, vy) = display_encoded_to_dkl_scalar(r, g, b, display);
+                oa[i] = a;
+                org[i] = rg;
+                ovy[i] = vy;
+            }
+        },
+    );
 }
 
 /// Linear-f32 RGB planes (display-relative `[0, 1]`) → DKL planar
@@ -309,37 +330,56 @@ pub(crate) fn linear_planes_to_dkl_planar(
         let m = display.primaries.linear_rgb_to_dkl();
         let s = display.y_peak - display.y_black;
         let bias = display.y_black + display.y_refl;
-        for y in 0..height {
-            let src_row = y * padded_width;
-            let dst_row = y * width;
-            for x in 0..width {
-                let lin_r = r[src_row + x];
-                let lin_g = g[src_row + x];
-                let lin_b = b[src_row + x];
-                let lr = s * lin_r + bias;
-                let lg = s * lin_g + bias;
-                let lb = s * lin_b + bias;
-                let i = dst_row + x;
-                out_a[i] = m[0][0] * lr + m[0][1] * lg + m[0][2] * lb;
-                out_rg[i] = m[1][0] * lr + m[1][1] * lg + m[1][2] * lb;
-                out_vy[i] = m[2][0] * lr + m[2][1] * lg + m[2][2] * lb;
-            }
-        }
+        crate::par::map3_rows(
+            &mut out_a[..n],
+            &mut out_rg[..n],
+            &mut out_vy[..n],
+            width,
+            |y0, oa, org, ovy| {
+                let rows = oa.len() / width;
+                for yl in 0..rows {
+                    let src_row = (y0 + yl) * padded_width;
+                    let dst_row = yl * width;
+                    for x in 0..width {
+                        let lin_r = r[src_row + x];
+                        let lin_g = g[src_row + x];
+                        let lin_b = b[src_row + x];
+                        let lr = s * lin_r + bias;
+                        let lg = s * lin_g + bias;
+                        let lb = s * lin_b + bias;
+                        let i = dst_row + x;
+                        oa[i] = m[0][0] * lr + m[0][1] * lg + m[0][2] * lb;
+                        org[i] = m[1][0] * lr + m[1][1] * lg + m[1][2] * lb;
+                        ovy[i] = m[2][0] * lr + m[2][1] * lg + m[2][2] * lb;
+                    }
+                }
+            },
+        );
     } else {
-        for y in 0..height {
-            let src_row = y * padded_width;
-            let dst_row = y * width;
-            for x in 0..width {
-                let lin_r = r[src_row + x];
-                let lin_g = g[src_row + x];
-                let lin_b = b[src_row + x];
-                let (a, rg, vy) = display_linear_rgb_to_dkl_scalar(lin_r, lin_g, lin_b, display);
-                let i = dst_row + x;
-                out_a[i] = a;
-                out_rg[i] = rg;
-                out_vy[i] = vy;
-            }
-        }
+        crate::par::map3_rows(
+            &mut out_a[..n],
+            &mut out_rg[..n],
+            &mut out_vy[..n],
+            width,
+            |y0, oa, org, ovy| {
+                let rows = oa.len() / width;
+                for yl in 0..rows {
+                    let src_row = (y0 + yl) * padded_width;
+                    let dst_row = yl * width;
+                    for x in 0..width {
+                        let lin_r = r[src_row + x];
+                        let lin_g = g[src_row + x];
+                        let lin_b = b[src_row + x];
+                        let (a, rg, vy) =
+                            display_linear_rgb_to_dkl_scalar(lin_r, lin_g, lin_b, display);
+                        let i = dst_row + x;
+                        oa[i] = a;
+                        org[i] = rg;
+                        ovy[i] = vy;
+                    }
+                }
+            },
+        );
     }
 }
 

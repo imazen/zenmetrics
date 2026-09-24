@@ -23,7 +23,7 @@ use crate::kernels::masking::{
 
 use crate::simd_math::{
     safe_pow_with_offset_into, vabs_diff_into, vmin_abs_into, vscale_into,
-    vxcm_pool_clamp_4ch_sqsum,
+    vxcm_pool_clamp_4ch_sqsum_partial, xcm4_finish,
 };
 use crate::simd_pyramid::gaussian_blur_sigma3_simd;
 
@@ -74,18 +74,25 @@ pub(crate) fn mult_mutual_band_into(
     term_rg.resize(n, 0.0);
     term_vy.resize(n, 0.0);
 
-    // Step 1: M_mm_raw = min(|T|, |R|).
-    for i in 0..n {
-        let ta = t_p_per_ch[0][i].abs();
-        let ra = r_p_per_ch[0][i].abs();
-        m_mm_a[i] = ta.min(ra);
-        let trg = t_p_per_ch[1][i].abs();
-        let rrg = r_p_per_ch[1][i].abs();
-        m_mm_rg[i] = trg.min(rrg);
-        let tvy = t_p_per_ch[2][i].abs();
-        let rvy = r_p_per_ch[2][i].abs();
-        m_mm_vy[i] = tvy.min(rvy);
-    }
+    // Step 1: M_mm_raw = min(|T|, |R|) — row-banded elementwise.
+    crate::par::map1_2(
+        &mut m_mm_a[..n],
+        &t_p_per_ch[0][..n],
+        &r_p_per_ch[0][..n],
+        |o, x, y| vmin_abs_into(o, x, y),
+    );
+    crate::par::map1_2(
+        &mut m_mm_rg[..n],
+        &t_p_per_ch[1][..n],
+        &r_p_per_ch[1][..n],
+        |o, x, y| vmin_abs_into(o, x, y),
+    );
+    crate::par::map1_2(
+        &mut m_mm_vy[..n],
+        &t_p_per_ch[2][..n],
+        &r_p_per_ch[2][..n],
+        |o, x, y| vmin_abs_into(o, x, y),
+    );
 
     // Step 2: phase_uncertainty per channel.
     let mask_c_lin: f32 = 10.0_f32.powf(MASK_C);
@@ -96,19 +103,20 @@ pub(crate) fn mult_mutual_band_into(
         // internally). We thread `pu_scratch` as the h-pass scratch
         // (shared across the 3 channels — resized to n inside the
         // SIMD entry) and write blur output into the free `term_*`
-        // buffers, which aren't consumed until Step 3 below.
+        // buffers, which aren't consumed until Step 3 below. The
+        // blur's two passes are row-banded internally.
         gaussian_blur_sigma3_simd(m_mm_a, bw, bh, pu_scratch, term_a);
-        for i in 0..n {
-            m_mm_a[i] = term_a[i] * mask_c_lin;
-        }
+        crate::par::map1(&mut m_mm_a[..n], &term_a[..n], |o, s| {
+            vscale_into(o, s, mask_c_lin)
+        });
         gaussian_blur_sigma3_simd(m_mm_rg, bw, bh, pu_scratch, term_rg);
-        for i in 0..n {
-            m_mm_rg[i] = term_rg[i] * mask_c_lin;
-        }
+        crate::par::map1(&mut m_mm_rg[..n], &term_rg[..n], |o, s| {
+            vscale_into(o, s, mask_c_lin)
+        });
         gaussian_blur_sigma3_simd(m_mm_vy, bw, bh, pu_scratch, term_vy);
-        for i in 0..n {
-            m_mm_vy[i] = term_vy[i] * mask_c_lin;
-        }
+        crate::par::map1(&mut m_mm_vy[..n], &term_vy[..n], |o, s| {
+            vscale_into(o, s, mask_c_lin)
+        });
     } else {
         for i in 0..n {
             m_mm_a[i] *= mask_c_lin;
@@ -131,9 +139,15 @@ pub(crate) fn mult_mutual_band_into(
     let eps_qa = SAFE_EPS.powf(q_a);
     let eps_qrg = SAFE_EPS.powf(q_rg);
     let eps_qvy = SAFE_EPS.powf(q_vy);
-    safe_pow_with_offset_into(m_mm_a, term_a.as_mut_slice(), SAFE_EPS, q_a, eps_qa);
-    safe_pow_with_offset_into(m_mm_rg, term_rg.as_mut_slice(), SAFE_EPS, q_rg, eps_qrg);
-    safe_pow_with_offset_into(m_mm_vy, term_vy.as_mut_slice(), SAFE_EPS, q_vy, eps_qvy);
+    crate::par::map1(&mut term_a[..n], &m_mm_a[..n], |o, s| {
+        safe_pow_with_offset_into(s, o, SAFE_EPS, q_a, eps_qa)
+    });
+    crate::par::map1(&mut term_rg[..n], &m_mm_rg[..n], |o, s| {
+        safe_pow_with_offset_into(s, o, SAFE_EPS, q_rg, eps_qrg)
+    });
+    crate::par::map1(&mut term_vy[..n], &m_mm_vy[..n], |o, s| {
+        safe_pow_with_offset_into(s, o, SAFE_EPS, q_vy, eps_qvy)
+    });
 
     // Step 4: cross-channel pool + masked diff.
     //
@@ -174,40 +188,60 @@ pub(crate) fn mult_mutual_band_into(
     let rvy = &r_p_per_ch[2];
 
     // Pass 1: diff[c] = |T[c] - R[c]| → m_mm_* (free scratch).
-    for i in 0..n {
-        m_mm_a[i] = (ta[i] - ra[i]).abs();
-        m_mm_rg[i] = (trg[i] - rrg[i]).abs();
-        m_mm_vy[i] = (tvy[i] - rvy[i]).abs();
-    }
+    crate::par::map1_2(&mut m_mm_a[..n], &ta[..n], &ra[..n], |o, x, y| {
+        vabs_diff_into(o, x, y)
+    });
+    crate::par::map1_2(&mut m_mm_rg[..n], &trg[..n], &rrg[..n], |o, x, y| {
+        vabs_diff_into(o, x, y)
+    });
+    crate::par::map1_2(&mut m_mm_vy[..n], &tvy[..n], &rvy[..n], |o, x, y| {
+        vabs_diff_into(o, x, y)
+    });
 
     // Pass 2: pow[c] = (diff[c] + eps)^p - eps^p → d_* (vectorized).
-    safe_pow_with_offset_into(m_mm_a, d_a.as_mut_slice(), SAFE_EPS, p, eps_p);
-    safe_pow_with_offset_into(m_mm_rg, d_rg.as_mut_slice(), SAFE_EPS, p, eps_p);
-    safe_pow_with_offset_into(m_mm_vy, d_vy.as_mut_slice(), SAFE_EPS, p, eps_p);
+    crate::par::map1(&mut d_a[..n], &m_mm_a[..n], |o, s| {
+        safe_pow_with_offset_into(s, o, SAFE_EPS, p, eps_p)
+    });
+    crate::par::map1(&mut d_rg[..n], &m_mm_rg[..n], |o, s| {
+        safe_pow_with_offset_into(s, o, SAFE_EPS, p, eps_p)
+    });
+    crate::par::map1(&mut d_vy[..n], &m_mm_vy[..n], |o, s| {
+        safe_pow_with_offset_into(s, o, SAFE_EPS, p, eps_p)
+    });
 
     // Pass 3: cross-channel pool + soft clamp, scalar (auto-vectorizes —
-    // no transcendentals left).
-    for i in 0..n {
-        let t0 = term_a[i];
-        let t1 = term_rg[i];
-        let t2 = term_vy[i];
-        let m0 = xcm00 * t0 + xcm10 * t1 + xcm20 * t2;
-        let m1 = xcm01 * t0 + xcm11 * t1 + xcm21 * t2;
-        let m2 = xcm02 * t0 + xcm12 * t1 + xcm22 * t2;
+    // no transcendentals left). Banded: `d_*` bands hold their own pow
+    // inputs and are overwritten with the clamped result; `term_*`
+    // reads stay absolute via the band base index.
+    crate::par::map3_base(
+        &mut d_a[..n],
+        &mut d_rg[..n],
+        &mut d_vy[..n],
+        |base, oa, org, ovy| {
+            for i in 0..oa.len() {
+                let j = base + i;
+                let t0 = term_a[j];
+                let t1 = term_rg[j];
+                let t2 = term_vy[j];
+                let m0 = xcm00 * t0 + xcm10 * t1 + xcm20 * t2;
+                let m1 = xcm01 * t0 + xcm11 * t1 + xcm21 * t2;
+                let m2 = xcm02 * t0 + xcm12 * t1 + xcm22 * t2;
 
-        let pow0 = d_a[i];
-        let pow1 = d_rg[i];
-        let pow2 = d_vy[i];
+                let pow0 = oa[i];
+                let pow1 = org[i];
+                let pow2 = ovy[i];
 
-        let du0 = pow0 / (1.0 + m0);
-        let du1 = pow1 / (1.0 + m1);
-        let du2 = pow2 / (1.0 + m2);
+                let du0 = pow0 / (1.0 + m0);
+                let du1 = pow1 / (1.0 + m1);
+                let du2 = pow2 / (1.0 + m2);
 
-        // clamp_diff_soft: D_MAX_LIN * d / (D_MAX_LIN + d).
-        d_a[i] = d_max_lin * du0 / (d_max_lin + du0);
-        d_rg[i] = d_max_lin * du1 / (d_max_lin + du1);
-        d_vy[i] = d_max_lin * du2 / (d_max_lin + du2);
-    }
+                // clamp_diff_soft: D_MAX_LIN * d / (D_MAX_LIN + d).
+                oa[i] = d_max_lin * du0 / (d_max_lin + du0);
+                org[i] = d_max_lin * du1 / (d_max_lin + du1);
+                ovy[i] = d_max_lin * du2 / (d_max_lin + du2);
+            }
+        },
+    );
 }
 
 /// `mult_mutual_band_4ch` in place on the test planes — the
@@ -253,18 +287,26 @@ pub(crate) fn mult_mutual_band_4ch_into(
         }
     }
 
-    // Step 1: M_mm_raw = min(|T|, |R|).
+    // Step 1: M_mm_raw = min(|T|, |R|) — row-banded elementwise.
     for c in 0..4 {
-        vmin_abs_into(&mut m_mm[c][..n], &t_p_per_ch[c][..n], &r_p_per_ch[c][..n]);
+        crate::par::map1_2(
+            &mut m_mm[c][..n],
+            &t_p_per_ch[c][..n],
+            &r_p_per_ch[c][..n],
+            |o, x, y| vmin_abs_into(o, x, y),
+        );
     }
 
     // Step 2: phase_uncertainty per channel (σ=3 blur above
     // PU_PADSIZE, then × mask_c_lin) — same as the 3-channel path.
+    // The blur's two passes are row-banded internally.
     let mask_c_lin: f32 = 10.0_f32.powf(MASK_C);
     if bw > PU_PADSIZE && bh > PU_PADSIZE {
         for c in 0..4 {
             gaussian_blur_sigma3_simd(&m_mm[c][..n], bw, bh, pu_scratch, &mut term[c]);
-            vscale_into(&mut m_mm[c][..n], &term[c][..n], mask_c_lin);
+            crate::par::map1(&mut m_mm[c][..n], &term[c][..n], |o, s| {
+                vscale_into(o, s, mask_c_lin)
+            });
         }
     } else {
         for c in 0..4 {
@@ -278,13 +320,10 @@ pub(crate) fn mult_mutual_band_4ch_into(
     // kernel (inputs non-negative after Step 2).
     for c in 0..4 {
         let q = MASK_Q_4[c];
-        safe_pow_with_offset_into(
-            &m_mm[c][..n],
-            &mut term[c][..n],
-            SAFE_EPS,
-            q,
-            SAFE_EPS.powf(q),
-        );
+        let eps_q = SAFE_EPS.powf(q);
+        crate::par::map1(&mut term[c][..n], &m_mm[c][..n], |o, s| {
+            safe_pow_with_offset_into(s, o, SAFE_EPS, q, eps_q)
+        });
     }
 
     // Step 4: pass 1 — diff[c] = |T−R| into the now-free m_mm buffers
@@ -292,23 +331,30 @@ pub(crate) fn mult_mutual_band_4ch_into(
     // buffers; pass 3 — fused 4×4 cross-channel pool + clamp + lp
     // accumulation (same op order as the scalar loop, no diff plane).
     for c in 0..4 {
-        vabs_diff_into(&mut m_mm[c][..n], &t_p_per_ch[c][..n], &r_p_per_ch[c][..n]);
+        crate::par::map1_2(
+            &mut m_mm[c][..n],
+            &t_p_per_ch[c][..n],
+            &r_p_per_ch[c][..n],
+            |o, x, y| vabs_diff_into(o, x, y),
+        );
     }
     let p = MASK_P;
     let eps_p = SAFE_EPS.powf(p);
     for c in 0..4 {
-        safe_pow_with_offset_into(&m_mm[c][..n], &mut t_p_per_ch[c][..n], SAFE_EPS, p, eps_p);
+        crate::par::map1(&mut t_p_per_ch[c][..n], &m_mm[c][..n], |o, s| {
+            safe_pow_with_offset_into(s, o, SAFE_EPS, p, eps_p)
+        });
     }
 
     let d_max_lin: f32 = 10.0_f32.powf(D_MAX);
     let [t0, t1, t2, t3] = term;
     let [p0, p1, p2, p3] = t_p_per_ch;
-    vxcm_pool_clamp_4ch_sqsum(
-        &[&p0[..n], &p1[..n], &p2[..n], &p3[..n]],
-        &[&t0[..n], &t1[..n], &t2[..n], &t3[..n]],
-        &XCM_4X4,
-        d_max_lin,
-    )
+    let d_refs: [&[f32]; 4] = [&p0[..n], &p1[..n], &p2[..n], &p3[..n]];
+    let t_refs: [&[f32]; 4] = [&t0[..n], &t1[..n], &t2[..n], &t3[..n]];
+    let sums = crate::par::reduce8_4(&d_refs, &t_refs, |db, tb| {
+        vxcm_pool_clamp_4ch_sqsum_partial(db, tb, &XCM_4X4, d_max_lin)
+    });
+    xcm4_finish(sums, n)
 }
 
 #[cfg(test)]

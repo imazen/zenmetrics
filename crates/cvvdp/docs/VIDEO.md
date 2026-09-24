@@ -294,39 +294,56 @@ shared background pyramid, so its per-level expands run once.
 Compute runs on the same SIMD kernels as the still path
 (`safe_pow_with_offset_into`, `compute_sensitivities_into`) plus a
 set of magetypes/archmage helpers written for the video hot loops:
-`vscale2_into`/`vaxpy2_into` (dual-accumulator temporal FIR sharing
-the plane-0 window read between the sustained and transient achromatic
-channels), `vaxpy_into`/`vscale_into` (remaining FIR taps),
+`vfir_into`/`vfir2_into` (fused N-tap temporal FIR — one pass over
+all window-slot planes per output channel; `vfir2` shares the
+plane-0 loads between the sustained and transient achromatic
+channels; `low_memory` keeps the per-tap `vscale2`/`vaxpy2` chain
+since its source planes materialize one slot at a time),
 `vmul2_scale2_pair_into` (paired test/reference CSF scaling),
-`vabs_diff_mul_lp2` (fused baseband |t−r|·s + p=2 norm in one pass),
-`vweber_band_nolog_into` (log-free Weber band), and
-`vxcm_pool_clamp_4ch_sqsum` (fused 4×4 cross-channel pool + soft
-clamp + p=2 accumulation inside `mult_mutual_band_4ch_into`, which
-returns the four pooled values directly and never materializes
-clamped-difference planes — `s_map`/`d` aliases are served by the
-`m_mm`/`t_p` scratch). Under the default `parallel` feature the 8
-band stages (4 channels × 2 sides) run on rayon's pool; each owns a
-disjoint scratch slot, so results are deterministic regardless of
-scheduling.
+`vabs_diff_mul_lp2_sum` + `lp2_finish` (fused baseband |t−r|·s +
+p=2 norm in one pass, split into raw partial + normalize for banded
+reduction), `vweber_band_nolog_into` (log-free Weber band), and
+`vxcm_pool_clamp_4ch_sqsum_partial` + `xcm4_finish` (fused 4×4
+cross-channel pool + soft clamp + p=2 accumulation inside
+`mult_mutual_band_4ch_into`, which returns the four pooled values
+directly and never materializes clamped-difference planes —
+`s_map`/`d` aliases are served by the `m_mm`/`t_p` scratch).
+
+Under the default `parallel` feature nearly every stage runs in
+deterministic bands (`src/par.rs`): band boundaries are a pure
+function of plane length — never of `RAYON_NUM_THREADS` — so
+single- and multi-threaded runs execute the identical partition.
+Elementwise maps are bit-identical by construction; the two
+reductions fold per-band partials in fixed band order. The σ=3
+masking blur bands both separable passes by rows (the vertical
+pass reads its halo from the full horizontal-pass plane by
+absolute row index), the DKL converts band the same way, the two
+shared `gauss_l` builds run under `rayon::join`, and the 8 band
+stages (4 channels × 2 sides) run on rayon's pool over disjoint
+scratch slots. Planes below `PAR_MIN_SAMPLES = 1<<17` stay serial —
+dispatch overhead dominates below ~128k samples.
 
 Measured with `cargo run -p cvvdp --release --example video_sweep`
-(2026-09-23, this box; scalar = pre-SIMD port, same gates passing):
+(2026-09-24, this box; scalar = pre-SIMD port, same gates passing):
 
 | size × frames | scalar | SIMD + rayon |
 |---|---|---|
 | 256×256 ×12 | ~67 ms/frame | 6.03 ms/frame |
-| 256×256 ×24 | ~67 ms/frame | 5.14 ms/frame |
-| 512×512 ×12 | 279 ms/frame | 25.05 ms/frame |
-| 512×512 ×24 | ~279 ms/frame | 23.55 ms/frame |
-| 1280×720 ×12 | 986 ms/frame | 104.23 ms/frame |
-| 1280×720 ×24 | ~986 ms/frame | 96.87 ms/frame |
-| 1920×1080 ×12 | 2237 ms/frame | 244.88 ms/frame |
-| 1920×1080 ×24 | ~2237 ms/frame | 231.45 ms/frame |
+| 256×256 ×24 | ~67 ms/frame | 5.18 ms/frame |
+| 512×512 ×12 | 279 ms/frame | 23.22 ms/frame |
+| 512×512 ×24 | ~279 ms/frame | 20.93 ms/frame |
+| 1280×720 ×12 | 986 ms/frame | 69.51 ms/frame |
+| 1280×720 ×24 | ~986 ms/frame | 67.58 ms/frame |
+| 1920×1080 ×12 | 2237 ms/frame | 162.64 ms/frame |
+| 1920×1080 ×24 | ~2237 ms/frame | 154.28 ms/frame |
 
-~9.7× at 1080p vs the scalar port (committed data:
-[`benchmarks/cvvdp_cpu_video_sweep_2026-09-23.tsv`](../benchmarks/cvvdp_cpu_video_sweep_2026-09-23.tsv)).
+~14.5× at 1080p vs the scalar port (committed data:
+[`benchmarks/cvvdp_cpu_video_sweep_2026-09-24.tsv`](../benchmarks/cvvdp_cpu_video_sweep_2026-09-24.tsv);
+pre-banding 2026-09-23 numbers — 231 ms/f at 1080p — in
+[`..._2026-09-23.tsv`](../benchmarks/cvvdp_cpu_video_sweep_2026-09-23.tsv)).
 Note `video_sweep` builds with `parallel`; a `--no-default-features`
-build takes the sequential fallback.
+build takes the sequential fallback. The 256² rows sit under
+`PAR_MIN_SAMPLES` — unchanged by design.
 
 ### vs fast-ssim2 per frame
 
@@ -335,12 +352,10 @@ The natural still-metric baseline for video scoring is fast-ssim2
 `cargo run -p cvvdp --release --example video_vs_ssim2 -- <cvvdp|ssim2>
 <W> <H> <N>` (2026-09-24, this box, release, no
 `-C target-cpu=native`; fast-ssim2 is the sibling checkout at
-v0.9.0-15-gf011259 via a direct path dev-dep — the 2026-09-23 run
-silently measured crates.io 0.8.2 because the workspace [patch] only
-applies on version match, see the `.meta`; same deterministic clip
+v0.9.0-15-gf011259 via a direct path dev-dep; same deterministic clip
 both paths; frames synthesized lazily inside the timed loop so peak
 RSS reflects the metric's own working set; committed data:
-[`benchmarks/video_vs_ssim2_2026-09-24.tsv`](../benchmarks/video_vs_ssim2_2026-09-24.tsv)).
+[`benchmarks/video_vs_ssim2_par_2026-09-24.tsv`](../benchmarks/video_vs_ssim2_par_2026-09-24.tsv)).
 `ms/frame` is `(wall − gen)/24`; gen is the shared frame-synthesis
 cost measured by the `gen` mode of the same binary.
 
@@ -348,50 +363,59 @@ cost measured by the `gen` mode of the same binary.
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 32.4 | 18.8 | 35.0 | 21.7 | 134 MB | 30 MB |
-| 1280×720 | 129.0 | 82.6 | 137.9 | 90.8 | 463 MB | 98 MB |
-| 1920×1080 | 311.8 | 178.8 | 331.7 | 198.3 | 1037 MB | 218 MB |
+| 512² | 39.4 | 24.6 | 39.2 | 25.0 | 134 MB | 30 MB |
+| 1280×720 | 143.3 | 81.4 | 143.3 | 82.5 | 461 MB | 98 MB |
+| 1920×1080 | 281.4 | 181.4 | 281.7 | 180.8 | 1037 MB | 217 MB |
 
 **24-frame clip, 8 threads (`RAYON_NUM_THREADS=8`):**
 
 | size | cvvdp ms/frame | ssim2 ms/frame | cvvdp user+sys ms/f | ssim2 user+sys ms/f | cvvdp peak RSS | ssim2 peak RSS |
 |---|---|---|---|---|---|---|
-| 512² | 22.7 | 13.4 | 45.4 | 29.2 | 133 MB | 30 MB |
-| 1280×720 | 96.1 | 63.1 | 221.7 | 121.7 | 461 MB | 98 MB |
-| 1920×1080 | 229.6 | 130.0 | 530.0 | 297.5 | 1040 MB | 218 MB |
+| 512² | 23.0 | 22.4 | 82.9 | 42.9 | 134 MB | 30 MB |
+| 1280×720 | 65.8 | 62.7 | 377.5 | 113.3 | 464 MB | 99 MB |
+| 1920×1080 | 160.1 | 134.7 | 935.4 | 282.9 | 1056 MB | 217 MB |
 
 Honest reading:
 
-- **fast-ssim2 0.9.0 leads cvvdp at every measured size and thread
-  count** (~1.5–1.8× wall: 22.7/96.1/229.6 vs 13.4/63.1/130.0
-  ms/frame at 8t; 32.4/129.0/311.8 vs 18.8/82.6/178.8 at 1t). The
-  0.9.0 work — fused linear→xyb→positive→planar conversion, jpegli
-  cube-root + horizontal-Gaussian kernels, rayon vertical-blur/XYB/
-  ssim_map passes — made it ~1.4–2.3× faster than the 0.8.2 build
-  the earlier TSV measured (1080p 8t: 271.9→130.0 ms/frame), which
-  flips the comparison: against 0.8.2 cvvdp led at 8t (230.2 vs
-  271.9). cvvdp still computes strictly more per frame — 4 temporal
-  channels, 2 pyramid decomps per channel, 4-channel masking +
-  pooling per output frame.
-- **Peak RSS gap widened to ~4.5–4.8× ssim2's** — 0.9.0's lazy-plane
-  and dropped-scratch work cut its 1080p footprint 319→218 MB. The
-  streaming bound holds (input frames are not retained — RSS is flat
-  in `n_frames`), but the bound is the *temporal window*: at
+- **8t is now at parity up to 720p and within ~1.2× at 1080p** —
+  23.0/65.8/160.1 vs ssim2's 22.4/62.7/134.7 ms/frame (was 1.7–1.9×
+  behind). The gains came from two lessons ported from fast-ssim2
+  0.9.0's playbook: (a) *dimension-governed banding* — every
+  elementwise stage (FIR accumulate, DKL convert, per-level
+  sensitivities/masking/pool, σ3 blur) now runs in bands whose
+  boundaries depend only on plane size, so single- and
+  multi-threaded runs execute the identical partition; (b)
+  *traffic fusion* — the temporal FIR is one fused pass per output
+  channel (`vfir`/`vfir2`), ~3× less plane traffic than the per-tap
+  axpy chain, which mattered more than threading because the stage
+  is memory-bound (57.6→24.6 ms/f at 1080p 8t, and 56.4→28.5 at
+  1t). Scores are unchanged — the TSV `score` column is identical
+  to pre-banding runs at the printed precision.
+- **Serial (1t) still trails ~1.6× at 1080p** — 281.4 vs 181.4.
+  cvvdp computes strictly more per frame (4 temporal channels, 8
+  pyramid decomps, 4-channel masking + pooling per output); at 8t
+  the parallel stages are bandwidth-bound, which is why the gap
+  closes faster than CPU scaling alone.
+- **Peak RSS is ~4.8× ssim2's** (1056 vs 217 MB at 1080p). The
+  streaming bound holds (input frames are not retained — RSS is
+  flat in `n_frames`), but the bound is the *temporal window*: at
   1080p/30 fps the filter is 9 taps, so the ring keeps 18 DKL frame
-  sets (~24 MB each, ~450 MB total) plus the pyramid caches and
+  sets (~24 MB each, ~450 MB total) plus pyramid caches and
   scratch. Bounded ≠ small.
-- **`low_memory` still closes most of the RSS gap**: the `cvvdp-lm`
-  arm of the same binary (u8 ring) measured 1080p peak RSS **705 MB
-  vs 1040 MB (−32 %)** — within 3.2× of ssim2 — for −2 % to +7 %
-  wall across the matrix (rep-level noise dominates below 1080p; at
-  1080p the emit-time re-conversion costs +3.4 % at 1t / +5.9 % at
-  8t). JOD output is bit-identical — same TSV scores — because the
-  stored bytes are the lossless source of the LUT+matrix conversion.
-- **Both metrics now scale ~1.3–1.4× at 1t→8t**: ssim2 0.9.0
-  parallelizes its vertical blur, XYB and ssim_map passes (its 0.8.2
-  build showed no measurable scaling); cvvdp parallelizes only the
-  8-way band-stage `rayon::scope` — FIR, masking and pooling stay
-  serial.
+- **`low_memory` still cuts 1080p RSS ~34 % (723 vs 1056 MB, ~3.3×
+  of ssim2)** and is JOD-bit-identical — but the fused FIR widened
+  its CPU cost: the emit path re-converts up to `2×fl` source
+  frames per emit (per-tap `to_dkl` + accumulate), so at 1080p it
+  now costs +16 % at 8t / +34 % at 1t over the default mode
+  (previously ±7 %, when the default FIR was equally serial).
+  It remains the right knob when the ~700 MB bound matters more
+  than wall time.
+- cvvdp's `parallel` feature gates all of this — band helpers run
+  the same decomposition sequentially when it's off (`--no-default-
+  features --features std` builds clean). Planes below
+  `PAR_MIN_SAMPLES = 1<<17` stay serial regardless of pool size —
+  dispatch overhead dominates below ~128k samples (ssim2's Tuning
+  measured the same cliff at 1<<18).
 - Scores are not comparable units (JOD 0–10 vs SSIMULACRA2's
   unbounded scale); the ssim2 arm exists to price the "just score
   frames" alternative, not to compare quality.

@@ -51,7 +51,7 @@ use crate::color::{
     f32_planar_to_dkl_planar, f32_to_dkl_planar, srgb_planar_to_dkl_planar, srgb_to_dkl_planar,
     u16_planar_to_dkl_planar, u16_to_dkl_planar,
 };
-use crate::csf::compute_sensitivities_into;
+use crate::csf::compute_sensitivities_slice;
 use crate::kernels::csf::{
     CSF_BASEBAND_RHO, CsfChannel, precompute_logs_row, precompute_logs_row_o5,
 };
@@ -66,7 +66,8 @@ use crate::pyramid::{
     weber_bands_from_gauss,
 };
 use crate::simd_math::{
-    vabs_diff_mul_lp2, vaxpy_into, vaxpy2_into, vmul2_scale2_pair_into, vscale_into, vscale2_into,
+    lp2_finish, vabs_diff_mul_lp2_sum, vaxpy_into, vaxpy2_into, vfir_into, vfir2_into,
+    vmul2_scale2_pair_into, vscale_into, vscale2_into,
 };
 use crate::{CvvdpParams, Error, Result};
 
@@ -954,18 +955,18 @@ impl VideoScorer {
         let sc = &mut self.scratch;
 
         // FIR per channel: out[c] = Σ_j taps[c][j] · in[src_c][t−j].
-        // Tap-major loop in window-slot order k = 0..fl (oldest →
-        // newest) — each output element sees the identical sequence
-        // of adds as the reference scalar loop; `vaxpy_into` keeps the
-        // non-fused mul+add order per element. The first tap is an
-        // overwrite (`vscale_into`) instead of a `fill(0)` + add —
-        // identical result (`0 + a·b == a·b`, only a −0/+0 sign flip
-        // which is numerically identical downstream), and it removes
-        // the 8 full-plane memsets that used to precede the loop.
+        // Both paths below keep window-slot order k = 0..fl (oldest →
+        // newest), so each output element sees the identical sequence
+        // of adds as the reference scalar loop. `low_memory` runs a
+        // tap-major `vscale`-first-tap + `vaxpy` chain (its source
+        // planes don't exist until `to_dkl` makes one per slot); the
+        // f32 path fuses all taps into one `vfir`/`vfir2` pass per
+        // output channel — same per-element add order, ~3× less
+        // plane traffic since every source plane is read once.
         {
             // Channels 0 and 3 both FIR-filter the sustained-A plane
-            // (different taps) — dual-accumulate so the plane is read
-            // once per tap instead of twice.
+            // (different taps) — dual-accumulate so the source loads
+            // are shared between the two outputs.
             let [ft0, ft1, ft2, ft3] = &mut sc.filt_t;
             let [fr0, fr1, fr2, fr3] = &mut sc.filt_r;
             // `win_*[widx][c]` for the current tap k — a plain slice
@@ -999,14 +1000,20 @@ impl VideoScorer {
                     self.winsrc_t[widx].to_dkl(layout, display, &mut sc.win_dkl, w, h);
                     let [d0, d1, d2] = &sc.win_dkl;
                     let j = fl - 1 - k;
+                    let (a0, a1, a2, a3) = (
+                        self.taps[0][j],
+                        self.taps[1][j],
+                        self.taps[2][j],
+                        self.taps[3][j],
+                    );
                     if k == 0 {
-                        vscale2_into(ft0, ft3, d0, self.taps[0][j], self.taps[3][j]);
-                        vscale_into(ft1, d1, self.taps[1][j]);
-                        vscale_into(ft2, d2, self.taps[2][j]);
+                        crate::par::map2_1(ft0, ft3, d0, |a, b, s| vscale2_into(a, b, s, a0, a3));
+                        crate::par::map1(ft1, d1, |o, s| vscale_into(o, s, a1));
+                        crate::par::map1(ft2, d2, |o, s| vscale_into(o, s, a2));
                     } else {
-                        vaxpy2_into(ft0, ft3, d0, self.taps[0][j], self.taps[3][j]);
-                        vaxpy_into(ft1, d1, self.taps[1][j]);
-                        vaxpy_into(ft2, d2, self.taps[2][j]);
+                        crate::par::map2_1(ft0, ft3, d0, |a, b, s| vaxpy2_into(a, b, s, a0, a3));
+                        crate::par::map1(ft1, d1, |o, s| vaxpy_into(o, s, a1));
+                        crate::par::map1(ft2, d2, |o, s| vaxpy_into(o, s, a2));
                     }
                 }
                 for k in 0..fl {
@@ -1014,65 +1021,58 @@ impl VideoScorer {
                     self.winsrc_r[widx].to_dkl(layout, display, &mut sc.win_dkl, w, h);
                     let [d0, d1, d2] = &sc.win_dkl;
                     let j = fl - 1 - k;
+                    let (a0, a1, a2, a3) = (
+                        self.taps[0][j],
+                        self.taps[1][j],
+                        self.taps[2][j],
+                        self.taps[3][j],
+                    );
                     if k == 0 {
-                        vscale2_into(fr0, fr3, d0, self.taps[0][j], self.taps[3][j]);
-                        vscale_into(fr1, d1, self.taps[1][j]);
-                        vscale_into(fr2, d2, self.taps[2][j]);
+                        crate::par::map2_1(fr0, fr3, d0, |a, b, s| vscale2_into(a, b, s, a0, a3));
+                        crate::par::map1(fr1, d1, |o, s| vscale_into(o, s, a1));
+                        crate::par::map1(fr2, d2, |o, s| vscale_into(o, s, a2));
                     } else {
-                        vaxpy2_into(fr0, fr3, d0, self.taps[0][j], self.taps[3][j]);
-                        vaxpy_into(fr1, d1, self.taps[1][j]);
-                        vaxpy_into(fr2, d2, self.taps[2][j]);
+                        crate::par::map2_1(fr0, fr3, d0, |a, b, s| vaxpy2_into(a, b, s, a0, a3));
+                        crate::par::map1(fr1, d1, |o, s| vaxpy_into(o, s, a1));
+                        crate::par::map1(fr2, d2, |o, s| vaxpy_into(o, s, a2));
                     }
                 }
             } else {
+                // Fused N-tap FIR: each output channel is one pass
+                // over all `fl` window-slot planes — every source
+                // plane is read once per output element instead of
+                // once per tap (~3× less plane traffic; the stage is
+                // memory-bound so this matters more than threading).
+                // Sources are gathered in slot order k = 0..fl (the
+                // same `fir_tap!` resolution as the low-memory loop,
+                // so replicate/symmetric padding see identical
+                // planes); coeffs are `taps[c][fl-1-k]` — preserving
+                // the per-element k-ascending add order →
+                // bit-identical to the unfused chain.
+                let mut src_t: [Vec<&[f32]>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+                let mut src_r: [Vec<&[f32]>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+                let mut c0 = Vec::with_capacity(fl);
+                let mut c1 = Vec::with_capacity(fl);
+                let mut c2 = Vec::with_capacity(fl);
+                let mut c3 = Vec::with_capacity(fl);
                 for k in 0..fl {
-                    // Frame index at window slot k. s<0 resolves per
-                    // `temp_padding`: replicate → frame 0 (always win[0]
-                    // when s≤0); symmetric → mirrored/ping-pong index.
-                    // The emission gate guarantees every resolved index
-                    // is inside the ring.
                     let widx = fir_tap!(k);
-                    let j = fl - 1 - k;
-                    if k == 0 {
-                        vscale2_into(
-                            ft0,
-                            ft3,
-                            &self.win_t[widx][0],
-                            self.taps[0][j],
-                            self.taps[3][j],
-                        );
-                        vscale2_into(
-                            fr0,
-                            fr3,
-                            &self.win_r[widx][0],
-                            self.taps[0][j],
-                            self.taps[3][j],
-                        );
-                        vscale_into(ft1, &self.win_t[widx][1], self.taps[1][j]);
-                        vscale_into(ft2, &self.win_t[widx][2], self.taps[2][j]);
-                        vscale_into(fr1, &self.win_r[widx][1], self.taps[1][j]);
-                        vscale_into(fr2, &self.win_r[widx][2], self.taps[2][j]);
-                    } else {
-                        vaxpy2_into(
-                            ft0,
-                            ft3,
-                            &self.win_t[widx][0],
-                            self.taps[0][j],
-                            self.taps[3][j],
-                        );
-                        vaxpy2_into(
-                            fr0,
-                            fr3,
-                            &self.win_r[widx][0],
-                            self.taps[0][j],
-                            self.taps[3][j],
-                        );
-                        vaxpy_into(ft1, &self.win_t[widx][1], self.taps[1][j]);
-                        vaxpy_into(ft2, &self.win_t[widx][2], self.taps[2][j]);
-                        vaxpy_into(fr1, &self.win_r[widx][1], self.taps[1][j]);
-                        vaxpy_into(fr2, &self.win_r[widx][2], self.taps[2][j]);
+                    for c in 0..3 {
+                        src_t[c].push(&self.win_t[widx][c]);
+                        src_r[c].push(&self.win_r[widx][c]);
                     }
+                    let j = fl - 1 - k;
+                    c0.push(self.taps[0][j]);
+                    c1.push(self.taps[1][j]);
+                    c2.push(self.taps[2][j]);
+                    c3.push(self.taps[3][j]);
                 }
+                crate::par::map2_base(ft0, ft3, |b, a, d| vfir2_into(a, d, &src_t[0], &c0, &c3, b));
+                crate::par::map_base(ft1, |b, o| vfir_into(o, &src_t[1], &c1, b));
+                crate::par::map_base(ft2, |b, o| vfir_into(o, &src_t[2], &c2, b));
+                crate::par::map2_base(fr0, fr3, |b, a, d| vfir2_into(a, d, &src_r[0], &c0, &c3, b));
+                crate::par::map_base(fr1, |b, o| vfir_into(o, &src_r[1], &c1, b));
+                crate::par::map_base(fr2, |b, o| vfir_into(o, &src_r[2], &c2, b));
             }
         }
 
@@ -1081,21 +1081,27 @@ impl VideoScorer {
         // gauss_l builds are four identical reductions; channel 0's
         // gauss_img is the same input again. One build per side
         // replaces 8 (identical math — same input, same kernel).
-        build_gauss_pyramid_into(
-            &sc.filt_t[0],
-            w,
-            h,
-            n_levels,
-            &mut sc.cache_t[0].scratch,
-            &mut sc.gauss_l_t,
-        );
-        build_gauss_pyramid_into(
-            &sc.filt_r[0],
-            w,
-            h,
-            n_levels,
-            &mut sc.cache_r[0].scratch,
-            &mut sc.gauss_l_r,
+        crate::par::join2(
+            || {
+                build_gauss_pyramid_into(
+                    &sc.filt_t[0],
+                    w,
+                    h,
+                    n_levels,
+                    &mut sc.cache_t[0].scratch,
+                    &mut sc.gauss_l_t,
+                )
+            },
+            || {
+                build_gauss_pyramid_into(
+                    &sc.filt_r[0],
+                    w,
+                    h,
+                    n_levels,
+                    &mut sc.cache_r[0].scratch,
+                    &mut sc.gauss_l_r,
+                )
+            },
         );
 
         // Per-side weber band construction via the SIMD/scratch path
@@ -1247,21 +1253,32 @@ impl VideoScorer {
             ];
             // Sensitivity maps land in `m_mm` — the masking scratch
             // isn't live until after `t_p`/`r_p` are computed, so the
-            // two share storage (saves 4 full-band planes).
+            // two share storage (saves 4 full-band planes). Each fill
+            // is row-banded (elementwise → bit-identical).
             for c in 0..4 {
-                compute_sensitivities_into(&sc.pyr_r[0].log_l_bkg[k], &rows[c], &mut sc.m_mm[c]);
+                if sc.m_mm[c].len() < n_px_b {
+                    sc.m_mm[c].resize(n_px_b, 0.0);
+                }
+                let log_l = &sc.pyr_r[0].log_l_bkg[k];
+                let row = &rows[c];
+                crate::par::map1(&mut sc.m_mm[c][..n_px_b], log_l, |o, l| {
+                    compute_sensitivities_slice(l, row, o)
+                });
             }
 
             if is_baseband {
                 // D = |T_f − R_f| · S pooled directly — the fused
-                // kernel never materialises the diff plane.
+                // kernel never materialises the diff plane. Banded
+                // partials fold in band order (deterministic).
                 let mut q_band = [0.0_f32; 4];
                 for c in 0..4 {
-                    q_band[c] = vabs_diff_mul_lp2(
+                    let sum = crate::par::reduce3(
                         &sc.pyr_t[c].bands[k].data,
                         &sc.pyr_r[c].bands[k].data,
                         &sc.m_mm[c][..n_px_b],
+                        |tb, rb, sb| vabs_diff_mul_lp2_sum(tb, rb, sb),
                     );
+                    q_band[c] = lp2_finish(sum, n_px_b);
                 }
                 q_frame.push(q_band);
             } else {
@@ -1280,14 +1297,13 @@ impl VideoScorer {
                     }
                     // `((x·a)·y)·b` — the scalar `band_mul * t * s *
                     // gain` op order, both sides in one pass.
-                    vmul2_scale2_pair_into(
+                    crate::par::map2_3(
                         &mut tp[..n_px_b],
                         &mut rp[..n_px_b],
                         t_data,
                         r_data,
                         s,
-                        band_mul,
-                        gain,
+                        |a, b, x, y, z| vmul2_scale2_pair_into(a, b, x, y, z, band_mul, gain),
                     );
                 }
                 let q_band = mult_mutual_band_4ch_into(

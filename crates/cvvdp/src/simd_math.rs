@@ -401,6 +401,107 @@ fn vaxpy2_kernel<T: F32x8Convert>(
     }
 }
 
+/// `dst[i] = Σ_k coeffs[k]·srcs[k][off + i]` — the temporal FIR as a
+/// single fused pass: every source plane is read once per output
+/// element instead of once per `vaxpy` tap call (~3× less plane
+/// traffic). The per-element add sequence is `c0·s0` then
+/// `acc + ck·sk` in ascending k — the identical order the
+/// `vscale`-first-tap + `vaxpy` chain produces, so results are
+/// bit-identical to the unfused loop.
+#[inline]
+fn vfir_into_kernel<T: F32x8Convert>(
+    token: T,
+    dst: &mut [f32],
+    srcs: &[&[f32]],
+    coeffs: &[f32],
+    off: usize,
+) {
+    debug_assert_eq!(srcs.len(), coeffs.len());
+    debug_assert!(!srcs.is_empty());
+    type F32x8<T> = GenericF32x8<T>;
+    let (d_chunks, d_tail) = F32x8::<T>::partition_slice_mut(token, dst);
+    let c0 = F32x8::<T>::splat(token, coeffs[0]);
+    let mut i = 0usize;
+    for dc in d_chunks.iter_mut() {
+        let b = off + i;
+        let mut acc = F32x8::<T>::load(token, srcs[0][b..b + 8].try_into().unwrap()) * c0;
+        for (s, &c) in srcs[1..].iter().zip(coeffs[1..].iter()) {
+            let v = F32x8::<T>::load(token, s[b..b + 8].try_into().unwrap());
+            acc = acc + v * F32x8::<T>::splat(token, c);
+        }
+        acc.store(dc);
+        i += 8;
+    }
+    for (j, d) in d_tail.iter_mut().enumerate() {
+        let b = off + i + j;
+        let mut acc = srcs[0][b] * coeffs[0];
+        for (s, &c) in srcs[1..].iter().zip(coeffs[1..].iter()) {
+            acc += s[b] * c;
+        }
+        *d = acc;
+    }
+}
+
+/// Two fused FIR outputs over the same source planes —
+/// `d0[i] = Σ_k c0[k]·srcs[k][off+i]`, `d1[i] = Σ_k c1[k]·srcs[k][off+i]`.
+/// Channel 0 and channel 3 both filter the sustained-A plane with
+/// different taps; sharing the loads halves the source traffic
+/// again. Per-element add order matches the unfused tap chain.
+#[inline]
+fn vfir2_into_kernel<T: F32x8Convert>(
+    token: T,
+    d0: &mut [f32],
+    d1: &mut [f32],
+    srcs: &[&[f32]],
+    coeffs0: &[f32],
+    coeffs1: &[f32],
+    off: usize,
+) {
+    debug_assert_eq!(d0.len(), d1.len());
+    debug_assert_eq!(srcs.len(), coeffs0.len());
+    debug_assert_eq!(srcs.len(), coeffs1.len());
+    debug_assert!(!srcs.is_empty());
+    type F32x8<T> = GenericF32x8<T>;
+    let (d0c, d0t) = F32x8::<T>::partition_slice_mut(token, d0);
+    let (d1c, d1t) = F32x8::<T>::partition_slice_mut(token, d1);
+    let ca0 = F32x8::<T>::splat(token, coeffs0[0]);
+    let cb0 = F32x8::<T>::splat(token, coeffs1[0]);
+    let mut i = 0usize;
+    for (o0, o1) in d0c.iter_mut().zip(d1c.iter_mut()) {
+        let b = off + i;
+        let v0 = F32x8::<T>::load(token, srcs[0][b..b + 8].try_into().unwrap());
+        let mut acc0 = v0 * ca0;
+        let mut acc1 = v0 * cb0;
+        for ((s, &c0k), &c1k) in srcs[1..]
+            .iter()
+            .zip(coeffs0[1..].iter())
+            .zip(coeffs1[1..].iter())
+        {
+            let v = F32x8::<T>::load(token, s[b..b + 8].try_into().unwrap());
+            acc0 = acc0 + v * F32x8::<T>::splat(token, c0k);
+            acc1 = acc1 + v * F32x8::<T>::splat(token, c1k);
+        }
+        acc0.store(o0);
+        acc1.store(o1);
+        i += 8;
+    }
+    for (j, (o0, o1)) in d0t.iter_mut().zip(d1t.iter_mut()).enumerate() {
+        let b = off + i + j;
+        let mut acc0 = srcs[0][b] * coeffs0[0];
+        let mut acc1 = srcs[0][b] * coeffs1[0];
+        for ((s, &c0k), &c1k) in srcs[1..]
+            .iter()
+            .zip(coeffs0[1..].iter())
+            .zip(coeffs1[1..].iter())
+        {
+            acc0 += s[b] * c0k;
+            acc1 += s[b] * c1k;
+        }
+        *o0 = acc0;
+        *o1 = acc1;
+    }
+}
+
 /// `o1[i] = ((x1[i]·a)·w[i])·b`, `o2[i] = ((x2[i]·a)·w[i])·b` — the
 /// `vmul2_scale2` pair for test and reference CSF weighting in one
 /// pass (the sensitivity map `w` is loaded once).
@@ -455,7 +556,7 @@ fn vmul2_scale2_pair_kernel<T: F32x8Convert>(
 /// `vabs_diff_mul_into` then `vlp_norm_mean_p2`, minus the
 /// intermediate plane write+read. Returns the final scalar.
 #[inline]
-fn vabs_diff_mul_lp2_kernel<T: F32x8Convert>(token: T, t: &[f32], r: &[f32], s: &[f32]) -> f32 {
+fn vabs_diff_mul_lp2_sum_kernel<T: F32x8Convert>(token: T, t: &[f32], r: &[f32], s: &[f32]) -> f32 {
     const LP_SAFE_EPS: f32 = 1e-5;
     let n = t.len();
     debug_assert_eq!(r.len(), n);
@@ -482,6 +583,14 @@ fn vabs_diff_mul_lp2_kernel<T: F32x8Convert>(token: T, t: &[f32], r: &[f32], s: 
         let u = d.abs() + LP_SAFE_EPS;
         sum += u * u - LP_SAFE_EPS * LP_SAFE_EPS;
     }
+    sum
+}
+
+/// Shared `(mean + eps)^0.5 − eps^0.5` tail for the `*_lp2` reduce
+/// kernels — applied once to the (possibly band-folded) total sum.
+#[inline]
+pub(crate) fn lp2_finish(sum: f32, n: usize) -> f32 {
+    const LP_SAFE_EPS: f32 = 1e-5;
     let mean = sum / n as f32;
     (mean + LP_SAFE_EPS).powf(0.5) - LP_SAFE_EPS.powf(0.5)
 }
@@ -491,7 +600,7 @@ fn vabs_diff_mul_lp2_kernel<T: F32x8Convert>(token: T, t: &[f32], r: &[f32], s: 
 /// `lp_norm_mean_p2` sum per channel in the identical chunk/lane
 /// order, returning the four final norms.
 #[inline]
-fn vxcm_pool_clamp_4ch_sqsum_kernel<T: F32x8Convert>(
+fn vxcm_pool_clamp_4ch_sqsum_partial_kernel<T: F32x8Convert>(
     token: T,
     d: &[&[f32]; 4],
     t: &[&[f32]; 4],
@@ -562,6 +671,15 @@ fn vxcm_pool_clamp_4ch_sqsum_kernel<T: F32x8Convert>(
             sums[cc] += u * u - LP_SAFE_EPS * LP_SAFE_EPS;
         }
     }
+    sums
+}
+
+/// Shared `powf(0.5)` normalisation tail for
+/// [`vxcm_pool_clamp_4ch_sqsum_partial`] — applied once to the
+/// (possibly band-folded) per-channel sums.
+#[inline]
+pub(crate) fn xcm4_finish(sums: [f32; 4], n: usize) -> [f32; 4] {
+    const LP_SAFE_EPS: f32 = 1e-5;
     let nf = n as f32;
     [
         (sums[0] / nf + LP_SAFE_EPS).powf(0.5) - LP_SAFE_EPS.powf(0.5),
@@ -676,18 +794,46 @@ pub(crate) fn vmul2_scale2_pair_into_scalar(
     vmul2_scale2_pair_kernel(token, o1, o2, x1, x2, w, a, b);
 }
 
-pub(crate) fn vabs_diff_mul_lp2_scalar(token: ScalarToken, t: &[f32], r: &[f32], s: &[f32]) -> f32 {
-    vabs_diff_mul_lp2_kernel(token, t, r, s)
+pub(crate) fn vfir_into_scalar(
+    token: ScalarToken,
+    dst: &mut [f32],
+    srcs: &[&[f32]],
+    coeffs: &[f32],
+    off: usize,
+) {
+    vfir_into_kernel(token, dst, srcs, coeffs, off)
 }
 
-pub(crate) fn vxcm_pool_clamp_4ch_sqsum_scalar(
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn vfir2_into_scalar(
+    token: ScalarToken,
+    d0: &mut [f32],
+    d1: &mut [f32],
+    srcs: &[&[f32]],
+    coeffs0: &[f32],
+    coeffs1: &[f32],
+    off: usize,
+) {
+    vfir2_into_kernel(token, d0, d1, srcs, coeffs0, coeffs1, off)
+}
+
+pub(crate) fn vabs_diff_mul_lp2_sum_scalar(
+    token: ScalarToken,
+    t: &[f32],
+    r: &[f32],
+    s: &[f32],
+) -> f32 {
+    vabs_diff_mul_lp2_sum_kernel(token, t, r, s)
+}
+
+pub(crate) fn vxcm_pool_clamp_4ch_sqsum_partial_scalar(
     token: ScalarToken,
     d: &[&[f32]; 4],
     t: &[&[f32]; 4],
     w: &[[f32; 4]; 4],
     d_max: f32,
 ) -> [f32; 4] {
-    vxcm_pool_clamp_4ch_sqsum_kernel(token, d, t, w, d_max)
+    vxcm_pool_clamp_4ch_sqsum_partial_kernel(token, d, t, w, d_max)
 }
 
 // x86 / AVX2 + FMA tier — `_v3` suffix matches `X64V3Token`.
@@ -805,19 +951,49 @@ mod x86_v3 {
     }
 
     #[archmage::arcane]
-    pub(crate) fn vabs_diff_mul_lp2_v3(token: X64V3Token, t: &[f32], r: &[f32], s: &[f32]) -> f32 {
-        vabs_diff_mul_lp2_kernel(token, t, r, s)
+    pub(crate) fn vfir_into_v3(
+        token: X64V3Token,
+        dst: &mut [f32],
+        srcs: &[&[f32]],
+        coeffs: &[f32],
+        off: usize,
+    ) {
+        vfir_into_kernel(token, dst, srcs, coeffs, off)
     }
 
     #[archmage::arcane]
-    pub(crate) fn vxcm_pool_clamp_4ch_sqsum_v3(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn vfir2_into_v3(
+        token: X64V3Token,
+        d0: &mut [f32],
+        d1: &mut [f32],
+        srcs: &[&[f32]],
+        coeffs0: &[f32],
+        coeffs1: &[f32],
+        off: usize,
+    ) {
+        vfir2_into_kernel(token, d0, d1, srcs, coeffs0, coeffs1, off)
+    }
+
+    #[archmage::arcane]
+    pub(crate) fn vabs_diff_mul_lp2_sum_v3(
+        token: X64V3Token,
+        t: &[f32],
+        r: &[f32],
+        s: &[f32],
+    ) -> f32 {
+        vabs_diff_mul_lp2_sum_kernel(token, t, r, s)
+    }
+
+    #[archmage::arcane]
+    pub(crate) fn vxcm_pool_clamp_4ch_sqsum_partial_v3(
         token: X64V3Token,
         d: &[&[f32]; 4],
         t: &[&[f32]; 4],
         w: &[[f32; 4]; 4],
         d_max: f32,
     ) -> [f32; 4] {
-        vxcm_pool_clamp_4ch_sqsum_kernel(token, d, t, w, d_max)
+        vxcm_pool_clamp_4ch_sqsum_partial_kernel(token, d, t, w, d_max)
     }
 }
 #[cfg(target_arch = "x86_64")]
@@ -939,19 +1115,49 @@ mod arm_neon {
     }
 
     #[archmage::arcane]
-    pub(crate) fn vabs_diff_mul_lp2_neon(token: NeonToken, t: &[f32], r: &[f32], s: &[f32]) -> f32 {
-        vabs_diff_mul_lp2_kernel(token, t, r, s)
+    pub(crate) fn vfir_into_neon(
+        token: NeonToken,
+        dst: &mut [f32],
+        srcs: &[&[f32]],
+        coeffs: &[f32],
+        off: usize,
+    ) {
+        vfir_into_kernel(token, dst, srcs, coeffs, off)
     }
 
     #[archmage::arcane]
-    pub(crate) fn vxcm_pool_clamp_4ch_sqsum_neon(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn vfir2_into_neon(
+        token: NeonToken,
+        d0: &mut [f32],
+        d1: &mut [f32],
+        srcs: &[&[f32]],
+        coeffs0: &[f32],
+        coeffs1: &[f32],
+        off: usize,
+    ) {
+        vfir2_into_kernel(token, d0, d1, srcs, coeffs0, coeffs1, off)
+    }
+
+    #[archmage::arcane]
+    pub(crate) fn vabs_diff_mul_lp2_sum_neon(
+        token: NeonToken,
+        t: &[f32],
+        r: &[f32],
+        s: &[f32],
+    ) -> f32 {
+        vabs_diff_mul_lp2_sum_kernel(token, t, r, s)
+    }
+
+    #[archmage::arcane]
+    pub(crate) fn vxcm_pool_clamp_4ch_sqsum_partial_neon(
         token: NeonToken,
         d: &[&[f32]; 4],
         t: &[&[f32]; 4],
         w: &[[f32; 4]; 4],
         d_max: f32,
     ) -> [f32; 4] {
-        vxcm_pool_clamp_4ch_sqsum_kernel(token, d, t, w, d_max)
+        vxcm_pool_clamp_4ch_sqsum_partial_kernel(token, d, t, w, d_max)
     }
 }
 #[cfg(target_arch = "aarch64")]
@@ -1083,24 +1289,49 @@ mod wasm_128 {
     }
 
     #[archmage::arcane]
-    pub(crate) fn vabs_diff_mul_lp2_wasm128(
+    pub(crate) fn vfir_into_wasm128(
+        token: Wasm128Token,
+        dst: &mut [f32],
+        srcs: &[&[f32]],
+        coeffs: &[f32],
+        off: usize,
+    ) {
+        vfir_into_kernel(token, dst, srcs, coeffs, off)
+    }
+
+    #[archmage::arcane]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn vfir2_into_wasm128(
+        token: Wasm128Token,
+        d0: &mut [f32],
+        d1: &mut [f32],
+        srcs: &[&[f32]],
+        coeffs0: &[f32],
+        coeffs1: &[f32],
+        off: usize,
+    ) {
+        vfir2_into_kernel(token, d0, d1, srcs, coeffs0, coeffs1, off)
+    }
+
+    #[archmage::arcane]
+    pub(crate) fn vabs_diff_mul_lp2_sum_wasm128(
         token: Wasm128Token,
         t: &[f32],
         r: &[f32],
         s: &[f32],
     ) -> f32 {
-        vabs_diff_mul_lp2_kernel(token, t, r, s)
+        vabs_diff_mul_lp2_sum_kernel(token, t, r, s)
     }
 
     #[archmage::arcane]
-    pub(crate) fn vxcm_pool_clamp_4ch_sqsum_wasm128(
+    pub(crate) fn vxcm_pool_clamp_4ch_sqsum_partial_wasm128(
         token: Wasm128Token,
         d: &[&[f32]; 4],
         t: &[&[f32]; 4],
         w: &[[f32; 4]; 4],
         d_max: f32,
     ) -> [f32; 4] {
-        vxcm_pool_clamp_4ch_sqsum_kernel(token, d, t, w, d_max)
+        vxcm_pool_clamp_4ch_sqsum_partial_kernel(token, d, t, w, d_max)
     }
 }
 #[cfg(target_arch = "wasm32")]
@@ -1260,6 +1491,33 @@ pub(crate) fn vaxpy2_into(d1: &mut [f32], d2: &mut [f32], src: &[f32], a1: f32, 
     archmage::incant!(vaxpy2_into(d1, d2, src, a1, a2))
 }
 
+/// `dst[i] = Σ_k coeffs[k]·srcs[k][off+i]` — fused N-tap temporal
+/// FIR, one pass over all source planes. Band callers pass the
+/// band's start index in `off`.
+#[inline]
+pub(crate) fn vfir_into(dst: &mut [f32], srcs: &[&[f32]], coeffs: &[f32], off: usize) {
+    debug_assert_eq!(srcs.len(), coeffs.len());
+    archmage::incant!(vfir_into(dst, srcs, coeffs, off))
+}
+
+/// `d0[i] = Σ_k coeffs0[k]·srcs[k][off+i]`,
+/// `d1[i] = Σ_k coeffs1[k]·srcs[k][off+i]` — paired fused FIR.
+#[allow(clippy::too_many_arguments)]
+#[inline]
+pub(crate) fn vfir2_into(
+    d0: &mut [f32],
+    d1: &mut [f32],
+    srcs: &[&[f32]],
+    coeffs0: &[f32],
+    coeffs1: &[f32],
+    off: usize,
+) {
+    debug_assert_eq!(d0.len(), d1.len());
+    debug_assert_eq!(srcs.len(), coeffs0.len());
+    debug_assert_eq!(srcs.len(), coeffs1.len());
+    archmage::incant!(vfir2_into(d0, d1, srcs, coeffs0, coeffs1, off))
+}
+
 /// `o1[i] = ((x1[i]·a)·w[i])·b`, `o2[i] = ((x2[i]·a)·w[i])·b` — the
 /// test/reference CSF-weight pair in one pass.
 #[allow(clippy::too_many_arguments)]
@@ -1279,27 +1537,28 @@ pub(crate) fn vmul2_scale2_pair_into(
     archmage::incant!(vmul2_scale2_pair_into(o1, o2, x1, x2, w, a, b))
 }
 
-/// `lp_norm_mean(|t−r|·s, 2.0)` — the video baseband pooled
-/// difference, fused (no intermediate plane).
+/// Raw `Σ u²` for `lp_norm_mean(|t−r|·s, 2.0)` — the video baseband
+/// pooled difference, fused (no intermediate plane). Apply
+/// [`lp2_finish`] to the folded total for the final norm.
 #[inline]
-pub(crate) fn vabs_diff_mul_lp2(t: &[f32], r: &[f32], s: &[f32]) -> f32 {
+pub(crate) fn vabs_diff_mul_lp2_sum(t: &[f32], r: &[f32], s: &[f32]) -> f32 {
     debug_assert_eq!(t.len(), r.len());
     debug_assert_eq!(t.len(), s.len());
-    archmage::incant!(vabs_diff_mul_lp2(t, r, s))
+    archmage::incant!(vabs_diff_mul_lp2_sum(t, r, s))
 }
 
-/// 4-channel cross-channel pool + soft clamp + `lp_norm_mean_p2`,
-/// fully fused: `d` holds the `safe_pow(|T−R|, p)` planes, `t` the
-/// `safe_pow(|M_mm|, q)` terms; returns the four pooled norms without
-/// materialising the clamped-diff planes.
+/// Per-channel raw `Σ u²` for the 4-channel cross-channel pool +
+/// soft clamp + `lp_norm_mean_p2`, fully fused: `d` holds the
+/// `safe_pow(|T−R|, p)` planes, `t` the `safe_pow(|M_mm|, q)` terms.
+/// Apply [`xcm4_finish`] to the folded per-channel totals.
 #[inline]
-pub(crate) fn vxcm_pool_clamp_4ch_sqsum(
+pub(crate) fn vxcm_pool_clamp_4ch_sqsum_partial(
     d: &[&[f32]; 4],
     t: &[&[f32]; 4],
     w: &[[f32; 4]; 4],
     d_max: f32,
 ) -> [f32; 4] {
-    archmage::incant!(vxcm_pool_clamp_4ch_sqsum(d, t, w, d_max))
+    archmage::incant!(vxcm_pool_clamp_4ch_sqsum_partial(d, t, w, d_max))
 }
 
 #[cfg(test)]

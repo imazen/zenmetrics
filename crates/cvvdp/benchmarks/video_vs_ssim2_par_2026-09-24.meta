@@ -1,0 +1,57 @@
+# cvvdp video vs fast-ssim2 per-frame — deterministic-band parallelism
+#
+# Re-run of the 2026-09-24 comparison after cvvdp's video pipeline gained
+# dimension-governed plane banding (`src/par.rs`, modelled on fast-ssim2's
+# `Tuning`): band boundaries are a pure function of plane length — never
+# of RAYON_NUM_THREADS — so ST and MT execute the identical partition.
+# Elementwise maps are bit-identical by construction; reduce kernels fold
+# per-band partials in fixed band order (deterministic; ulp-level
+# re-association vs the old flat accumulation, inside the 1e-3 JOD
+# parity gate — scores in this file are identical to the pre-banding
+# runs at the printed 1e-6 precision).
+#
+# Banded under feature `parallel` (default-on):
+#   - emit: all per-level elementwise ops (sensitivities, weber scaling,
+#     masking min/pow/diff chains) + raw-partial reductions (lp2, xcm4)
+#   - masking: σ=3 13-tap separable blur (row bands both passes; V-pass
+#     reads the full H-pass plane by absolute row for its halo)
+#   - convert: DKL conversion (u8/u16/f32, interleaved+planar)
+#   - gauss_l: both shared pyramid builds under rayon::join
+#   - PAR_MIN_SAMPLES = 1<<17 — smaller planes stay serial (dispatch
+#     overhead dominates below ~128k samples; ssim2 uses 1<<18).
+#
+# FIR additionally switched to a FUSED N-tap kernel (`vfir_into`/
+# `vfir2_into` in simd_math): each output channel is one pass over all
+# fl window-slot planes — every source plane read once per output
+# element (~3x less plane traffic than the per-tap vscale+vaxpy chain;
+# the stage is memory-bound, so this beat threading — 57.6 -> 24.6 ms/f
+# @1080p 8t, and 56.4 -> 28.5 at 1t). Per-element add order is the same
+# k-ascending sequence → bit-identical. low_memory keeps the per-tap
+# chain (its source planes are materialised one slot at a time).
+#
+# Host:        lilith (water-cooled AMD Ryzen 9 7950X, 49 GiB RAM)
+# Kernel:      Linux 7.0.0-31-generic
+# Rust:        rustc 1.98.1 (48a229cea 2026-09-01)
+# Build:       cargo build -p cvvdp --release --example video_vs_ssim2
+#              (workspace target/, release profile, no target-cpu=native)
+# Repo:        zenmetrics @ 86ff8870 (master@origin) + this change
+# fast-ssim2:  ../fast-ssim2/fast-ssim2 @ f011259 (v0.9.0-15-gf011259)
+#
+# Corpus:      deterministic synthetic clip generated inside the harness —
+#              same frames for both metrics; `gen` rows measure synthesis
+#              cost alone (ms/frame claims subtract it: (wall-gen)/24).
+#              24 frames @ 30 fps, median of 3 reps.
+#
+# Replay (per cell — metric in {gen,ssim2,cvvdp,cvvdp-lm}):
+#   RAYON_NUM_THREADS=<1|8> target/release/examples/video_vs_ssim2 \
+#       <metric> <W> <H> 24 30 3
+#
+# Headline deltas vs the 2026-09-24 file (1080p, (wall-gen)/24):
+#   cvvdp 1t: 311.8 -> 281.4 ms/f   (fused FIR helps serial too)
+#   cvvdp 8t: 229.6 -> 160.1 ms/f   (-30%)
+#   cvvdp-lm 8t: 244.4 -> 186.2 ms/f
+#   ssim2 8t (unchanged): ~134.7 ms/f
+#   => cvvdp is now ~1.03x / 1.05x / 1.19x of ssim2's wall at
+#      512^2 / 720p / 1080p (8t) — was ~1.7-1.9x behind. Serial 1t is
+#      ~1.55x at 1080p (bands+levels dominate the remaining gap; both
+#      are already parallel at 8t and near memory-bandwidth limits).

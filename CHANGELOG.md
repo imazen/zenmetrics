@@ -83,7 +83,24 @@ Workspace conventions per the global rules:
   instead of f32 DKL — 1080p peak RSS 1.04 GB→0.70 GB (−33 %, within
   3.2× of ssim2 0.9.0's 218 MB) for −2 % to +7 % wall; bit-identical
   scores since the stored bytes are the lossless input to the
-  emit-time conversion.
+  emit-time conversion. Deterministic dimension-governed parallelism
+  (`src/par.rs`, modelled on fast-ssim2's `Tuning`): band boundaries
+  are a pure function of plane length — never `RAYON_NUM_THREADS` —
+  so ST/MT run the identical partition. Banded under `parallel`:
+  FIR accumulate, DKL convert (u8/u16/f32), per-level sensitivities/
+  masking/pool with fixed-order partial folding, σ3 blur (row
+  bands, full-plane halo reads), shared `gauss_l` builds via
+  `rayon::join`; `PAR_MIN_SAMPLES = 1<<17` keeps small planes
+  serial. The FIR itself switched to fused N-tap kernels
+  (`vfir_into`/`vfir2_into` — every source plane read once per
+  output element, ~3× less traffic than the per-tap axpy chain;
+  memory-bound stage, same per-element add order → bit-identical).
+  Re-benched same-day (`benchmarks/video_vs_ssim2_par_2026-09-24.tsv`):
+  1080p 8t 229.6→160.1 ms/frame — now ~1.03×/1.05×/1.19× of ssim2
+  0.9.0's wall at 512²/720p/1080p; 1t 311.8→281.4 (~1.55×). Scores
+  unchanged at printed precision; `low_memory` now costs +16 % at
+  8t / +34 % at 1t at 1080p (per-tap re-conversion vs the fused
+  path) while cutting RSS ~34 %.
 
 - cvvdp: high-bit-depth display-encoded input — `u16` (`v/65535`) and
   `f32` (`[0,1]` as-is; cd/m² for `Eotf::Linear`) for stills
