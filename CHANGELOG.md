@@ -100,7 +100,7 @@ Workspace conventions per the global rules:
   0.9.0's wall at 512²/720p/1080p; 1t 311.8→281.4 (~1.55×). Scores
   unchanged at printed precision; `low_memory` now costs +16 % at
   8t / +34 % at 1t at 1080p (per-tap re-conversion vs the fused
-  path) while cutting RSS ~34 %.
+  path) while cutting RSS ~34 %. `863a6af1`.
 
 - cvvdp: high-bit-depth display-encoded input — `u16` (`v/65535`) and
   `f32` (`[0,1]` as-is; cd/m² for `Eotf::Linear`) for stills
