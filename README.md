@@ -143,6 +143,19 @@ cold-start libvmaf results above. ORT does not fit the official LIBSVM RBF
 models, and no VMAF GPU backend was implemented or measured on the local
 GTX 1050 (2 GiB).
 
+For v0.6.1 on the same local 1280×720, two-frame 8-bit fixture, run
+`cargo bench -p vmaf --bench backends -- --v0` or `--v0-neg`. Median
+milliseconds/frame across three measured rounds were **111.415** Rust scalar,
+**21.907** libvmaf CPU auto-dispatch, and **82.456** libvmaf forced scalar
+for v0; v0-NEG measured **110.970**, **22.676**, and **82.618** respectively.
+`--v0 --stages` measured **91.561 ms/frame** for Rust four-scale VIF alone,
+versus **19.474** for ADM2 and **2.913** for motion2. With `--features simd`,
+v0-NEG took **111.670 ms/frame** in Rust (no measured win); with
+`--features parallel -- --v0-neg --parallel`, the reused fixed-pool scorer
+measured **119.863**, **66.057**, and **65.960 ms/frame** with one, two, and
+four workers on the two-frame fixture. The reused-pool figures exclude model
+setup and are not directly comparable to the cold-start backend figures.
+
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate
 ([`fast-ssim2`](https://crates.io/crates/fast-ssim2) 0.8.1,
