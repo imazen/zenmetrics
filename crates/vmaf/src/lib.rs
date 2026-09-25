@@ -22,8 +22,30 @@ pub use vif::vif_v0_from_luma;
 use std::error::Error as StdError;
 use std::fmt;
 
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+use archmage::intrinsics::x86_64::*;
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+use archmage::{SimdToken, X64V3Token, arcane, rite};
 #[cfg(feature = "simd")]
 use archmage::{autoversion, magetypes};
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[inline(always)]
+fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
+    s.try_into().unwrap()
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[inline(always)]
+fn a8m<T, const N: usize>(s: &mut [T]) -> &mut [T; N] {
+    s.try_into().unwrap()
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[inline(always)]
+fn v3_token() -> Option<X64V3Token> {
+    X64V3Token::summon()
+}
 
 #[derive(Debug)]
 pub enum Error {
@@ -468,6 +490,193 @@ fn motion_vertical_simd(
     out[8..16].copy_from_slice(&yh.to_array());
 }
 
+/// Direct port of `motion_score_pipeline_8_avx2`'s phase-1 (vertical diff +
+/// 5-tap convolution) for 8-bit planes: epi16 differences and mullo/mulhi
+/// epi16 + unpack_epi16 products, `+128 >> 8` rounding, permute2x128 lane
+/// reorder. Processes 16 columns per call; our u16 input holds values <= 255
+/// so the direct u16 load equals C's `cvtepu8_epi16`.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn motion_vertical8_v3(
+    _token: X64V3Token,
+    prev_rows: &[&[u16]; 5],
+    cur_rows: &[&[u16]; 5],
+    out: &mut [i32; 16],
+) {
+    let f = [
+        _mm256_set1_epi16(3571),
+        _mm256_set1_epi16(16004),
+        _mm256_set1_epi16(26386),
+        _mm256_set1_epi16(16004),
+        _mm256_set1_epi16(3571),
+    ];
+    let round8 = _mm256_set1_epi32(1 << 7);
+    let mut acc_lo = _mm256_setzero_si256();
+    let mut acc_hi = _mm256_setzero_si256();
+    for k in 0..5 {
+        let d = _mm256_sub_epi16(
+            _mm256_loadu_si256(a8::<u16, 16>(&prev_rows[k][..16])),
+            _mm256_loadu_si256(a8::<u16, 16>(&cur_rows[k][..16])),
+        );
+        let lo = _mm256_mullo_epi16(d, f[k]);
+        let hi = _mm256_mulhi_epi16(d, f[k]);
+        acc_lo = _mm256_add_epi32(acc_lo, _mm256_unpacklo_epi16(lo, hi));
+        acc_hi = _mm256_add_epi32(acc_hi, _mm256_unpackhi_epi16(lo, hi));
+    }
+    acc_lo = _mm256_srai_epi32(_mm256_add_epi32(acc_lo, round8), 8);
+    acc_hi = _mm256_srai_epi32(_mm256_add_epi32(acc_hi, round8), 8);
+    _mm256_storeu_si256(
+        a8m::<i32, 8>(&mut out[..8]),
+        _mm256_permute2x128_si256(acc_lo, acc_hi, 0x20),
+    );
+    _mm256_storeu_si256(
+        a8m::<i32, 8>(&mut out[8..16]),
+        _mm256_permute2x128_si256(acc_lo, acc_hi, 0x31),
+    );
+}
+
+/// Direct port of `motion_score_pipeline_16_avx2`'s phase-1: epi32
+/// differences, mullo_epi32 products (each fits i32 for bpc <= 16), i64
+/// accumulation via cvtepi32_epi64, `+round >> bpc` via srlv_epi64 (the low
+/// 32 bits identical to arithmetic shift for bpc < 32), permutevar pack.
+/// Processes 8 columns per call and is exact for any bpc <= 16.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn motion_vertical16_v3(
+    _token: X64V3Token,
+    prev_rows: &[&[u16]; 5],
+    cur_rows: &[&[u16]; 5],
+    bpc: u32,
+    out: &mut [i32; 8],
+) {
+    let g = [
+        _mm256_set1_epi32(3571),
+        _mm256_set1_epi32(16004),
+        _mm256_set1_epi32(26386),
+        _mm256_set1_epi32(16004),
+        _mm256_set1_epi32(3571),
+    ];
+    let round64 = _mm256_set1_epi64x(1i64 << (bpc - 1));
+    let bpc_vec = _mm256_set1_epi64x(bpc as i64);
+    let perm_idx = _mm256_setr_epi32(0, 2, 4, 6, 0, 0, 0, 0);
+    let mut prod = [_mm256_setzero_si256(); 5];
+    for k in 0..5 {
+        let d = _mm256_sub_epi32(
+            _mm256_cvtepu16_epi32(_mm_loadu_si128(a8::<u16, 8>(&prev_rows[k][..8]))),
+            _mm256_cvtepu16_epi32(_mm_loadu_si128(a8::<u16, 8>(&cur_rows[k][..8]))),
+        );
+        prod[k] = _mm256_mullo_epi32(d, g[k]);
+    }
+    let mut acc_lo = _mm256_cvtepi32_epi64(_mm256_castsi256_si128(prod[0]));
+    for p in prod.iter().take(5).skip(1) {
+        acc_lo = _mm256_add_epi64(acc_lo, _mm256_cvtepi32_epi64(_mm256_castsi256_si128(*p)));
+    }
+    let mut acc_hi = _mm256_cvtepi32_epi64(_mm256_extracti128_si256(prod[0], 1));
+    for p in prod.iter().take(5).skip(1) {
+        acc_hi = _mm256_add_epi64(
+            acc_hi,
+            _mm256_cvtepi32_epi64(_mm256_extracti128_si256(*p, 1)),
+        );
+    }
+    acc_lo = _mm256_srlv_epi64(_mm256_add_epi64(acc_lo, round64), bpc_vec);
+    acc_hi = _mm256_srlv_epi64(_mm256_add_epi64(acc_hi, round64), bpc_vec);
+    let res_lo = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(acc_lo, perm_idx));
+    let res_hi = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(acc_hi, perm_idx));
+    _mm256_storeu_si256(
+        out,
+        _mm256_inserti128_si256(_mm256_castsi128_si256(res_lo), res_hi, 1),
+    );
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[rite]
+fn srai_epi64_16(_token: X64V3Token, v: __m256i) -> __m256i {
+    let lo = _mm256_srli_epi64(v, 16);
+    let hi = _mm256_srai_epi32(v, 16);
+    _mm256_blend_epi32(lo, hi, 0xAA)
+}
+
+/// Direct port of `x_conv_row_sad_avx2`: horizontal 5-tap convolution of the
+/// i32 y_row with i64-pair accumulation, srai_epi64_16 rounding, permutevar
+/// pack, abs_epi32, and a per-lane SAD sum reduced at the end. Edge columns
+/// use the scalar mirror path exactly as in C.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn motion_xsad_v3(_token: X64V3Token, y_row: &[i32], w: usize) -> u64 {
+    let g0 = _mm256_set1_epi32(3571);
+    let g1 = _mm256_set1_epi32(16004);
+    let g2 = _mm256_set1_epi32(26386);
+    let round64 = _mm256_set1_epi64x(1 << 15);
+    let perm_idx = _mm256_setr_epi32(0, 2, 4, 6, 0, 0, 0, 0);
+
+    let mut row_sad = 0u64;
+    let mut j = 0usize;
+    while j < 2 && j < w {
+        let mut accum = 0i64;
+        for (k, &coef) in MOTION_FILTER.iter().enumerate() {
+            let col = mirror(j as isize - 2 + k as isize, w);
+            accum += coef * y_row[col] as i64;
+        }
+        let val = ((accum + (1 << 15)) >> 16) as i32;
+        row_sad += val.unsigned_abs() as u64;
+        j += 1;
+    }
+
+    let mut sad_acc = _mm256_setzero_si256();
+    while j + 10 <= w {
+        let y0 = _mm256_loadu_si256(a8::<i32, 8>(&y_row[j - 2..j + 6]));
+        let y1 = _mm256_loadu_si256(a8::<i32, 8>(&y_row[j - 1..j + 7]));
+        let y2 = _mm256_loadu_si256(a8::<i32, 8>(&y_row[j..j + 8]));
+        let y3 = _mm256_loadu_si256(a8::<i32, 8>(&y_row[j + 1..j + 9]));
+        let y4 = _mm256_loadu_si256(a8::<i32, 8>(&y_row[j + 2..j + 10]));
+        let p0 = _mm256_mullo_epi32(y0, g0);
+        let p1 = _mm256_mullo_epi32(y1, g1);
+        let p2 = _mm256_mullo_epi32(y2, g2);
+        let p3 = _mm256_mullo_epi32(y3, g1);
+        let p4 = _mm256_mullo_epi32(y4, g0);
+        let s04 = _mm256_add_epi32(p0, p4);
+        let s13 = _mm256_add_epi32(p1, p3);
+        let mut acc_lo = _mm256_cvtepi32_epi64(_mm256_castsi256_si128(s04));
+        acc_lo = _mm256_add_epi64(acc_lo, _mm256_cvtepi32_epi64(_mm256_castsi256_si128(s13)));
+        acc_lo = _mm256_add_epi64(acc_lo, _mm256_cvtepi32_epi64(_mm256_castsi256_si128(p2)));
+        let mut acc_hi = _mm256_cvtepi32_epi64(_mm256_extracti128_si256(s04, 1));
+        acc_hi = _mm256_add_epi64(
+            acc_hi,
+            _mm256_cvtepi32_epi64(_mm256_extracti128_si256(s13, 1)),
+        );
+        acc_hi = _mm256_add_epi64(
+            acc_hi,
+            _mm256_cvtepi32_epi64(_mm256_extracti128_si256(p2, 1)),
+        );
+        acc_lo = srai_epi64_16(_token, _mm256_add_epi64(acc_lo, round64));
+        acc_hi = srai_epi64_16(_token, _mm256_add_epi64(acc_hi, round64));
+        let res_lo = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(acc_lo, perm_idx));
+        let res_hi = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(acc_hi, perm_idx));
+        let result = _mm256_inserti128_si256(_mm256_castsi128_si256(res_lo), res_hi, 1);
+        sad_acc = _mm256_add_epi32(sad_acc, _mm256_abs_epi32(result));
+        j += 8;
+    }
+
+    let lo128 = _mm256_castsi256_si128(sad_acc);
+    let hi128 = _mm256_extracti128_si256(sad_acc, 1);
+    let mut sum128 = _mm_add_epi32(lo128, hi128);
+    sum128 = _mm_add_epi32(sum128, _mm_shuffle_epi32(sum128, 0b01001110));
+    sum128 = _mm_add_epi32(sum128, _mm_shuffle_epi32(sum128, 0b00010001));
+    row_sad += (_mm_cvtsi128_si32(sum128) as u32) as u64;
+
+    while j < w {
+        let mut accum = 0i64;
+        for (k, &coef) in MOTION_FILTER.iter().enumerate() {
+            let col = mirror(j as isize - 2 + k as isize, w);
+            accum += coef * y_row[col] as i64;
+        }
+        let val = ((accum + (1 << 15)) >> 16) as i32;
+        row_sad += val.unsigned_abs() as u64;
+        j += 1;
+    }
+    row_sad
+}
+
 #[cfg_attr(feature = "simd", autoversion)]
 fn motion_horizontal_row(y_row: &[i32], width: usize) -> u64 {
     let x_round: i64 = 1 << 15;
@@ -510,37 +719,67 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
         let mut any_nonzero: i32 = 0;
         let mut j = 0usize;
         #[cfg(feature = "simd")]
-        if bpc < 16 && (2..height.saturating_sub(2)).contains(&i) {
-            while j + 16 <= width {
-                let prev_rows = [
+        if (2..height.saturating_sub(2)).contains(&i) {
+            let prev_rows = |j: usize| {
+                [
                     &prev[(i - 2) * width + j..],
                     &prev[(i - 1) * width + j..],
                     &prev[i * width + j..],
                     &prev[(i + 1) * width + j..],
                     &prev[(i + 2) * width + j..],
-                ];
-                let cur_rows = [
+                ]
+            };
+            let cur_rows = |j: usize| {
+                [
                     &cur[(i - 2) * width + j..],
                     &cur[(i - 1) * width + j..],
                     &cur[i * width + j..],
                     &cur[(i + 1) * width + j..],
                     &cur[(i + 2) * width + j..],
-                ];
-                let mut out = [0i32; 16];
-                archmage::incant!(
-                    motion_vertical_simd(
-                        &prev_rows,
-                        &cur_rows,
-                        &MOTION_FILTER,
-                        y_round as i32,
-                        bpc as u32,
-                        &mut out
-                    ),
-                    [v3, neon, wasm128, scalar]
-                );
-                y_row[j..j + 16].copy_from_slice(&out);
-                any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
-                j += 16;
+                ]
+            };
+            #[cfg(target_arch = "x86_64")]
+            if bpc == 8
+                && let Some(token) = v3_token()
+            {
+                while j + 16 <= width {
+                    let mut out = [0i32; 16];
+                    motion_vertical8_v3(token, &prev_rows(j), &cur_rows(j), &mut out);
+                    y_row[j..j + 16].copy_from_slice(&out);
+                    any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
+                    j += 16;
+                }
+            }
+            #[cfg(target_arch = "x86_64")]
+            if bpc == 16
+                && let Some(token) = v3_token()
+            {
+                while j + 8 <= width {
+                    let mut out = [0i32; 8];
+                    motion_vertical16_v3(token, &prev_rows(j), &cur_rows(j), 16, &mut out);
+                    y_row[j..j + 8].copy_from_slice(&out);
+                    any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
+                    j += 8;
+                }
+            }
+            if bpc < 16 && j == 0 {
+                while j + 16 <= width {
+                    let mut out = [0i32; 16];
+                    archmage::incant!(
+                        motion_vertical_simd(
+                            &prev_rows(j),
+                            &cur_rows(j),
+                            &MOTION_FILTER,
+                            y_round as i32,
+                            bpc as u32,
+                            &mut out
+                        ),
+                        [v3, neon, wasm128, scalar]
+                    );
+                    y_row[j..j + 16].copy_from_slice(&out);
+                    any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
+                    j += 16;
+                }
             }
         }
         while j < width {
@@ -557,7 +796,16 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
         if any_nonzero == 0 {
             continue;
         }
-        sad += motion_horizontal_row(&y_row, width);
+        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        if let Some(token) = v3_token() {
+            sad += motion_xsad_v3(token, &y_row, width);
+        } else {
+            sad += motion_horizontal_row(&y_row, width);
+        }
+        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        {
+            sad += motion_horizontal_row(&y_row, width);
+        }
     }
     sad
 }
@@ -719,7 +967,7 @@ mod tests {
             (47, 20),
             (64, 8),
         ] {
-            for bpc in [8u8, 10] {
+            for bpc in [8u8, 10, 12, 16] {
                 let max = (1u32 << bpc) - 1;
                 let n = width * height;
                 let prev: Vec<u16> = (0..n)
