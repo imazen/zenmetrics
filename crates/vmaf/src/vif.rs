@@ -201,8 +201,18 @@ fn vif_vertical_u8_simd(
         let mut ref_dis_lo = u32x8::zero(token);
         let mut ref_dis_hi = u32x8::zero(token);
         let weight = u32x8::splat(token, filter[8] as u32);
-        let center_ref = u16x16::from_slice(token, &reference[row_offsets[8] + col..]);
-        let center_dis = u16x16::from_slice(token, &distorted[row_offsets[8] + col..]);
+        let center_ref = u16x16::load(
+            token,
+            reference[row_offsets[8] + col..row_offsets[8] + col + 16]
+                .try_into()
+                .unwrap(),
+        );
+        let center_dis = u16x16::load(
+            token,
+            distorted[row_offsets[8] + col..row_offsets[8] + col + 16]
+                .try_into()
+                .unwrap(),
+        );
         let ref_lo = center_ref.widen_low();
         let ref_hi = center_ref.widen_high();
         let dis_lo = center_dis.widen_low();
@@ -219,10 +229,30 @@ fn vif_vertical_u8_simd(
         ref_dis_hi += ref_hi * weight * dis_hi;
         for offset in 1..=8usize {
             let weight = u32x8::splat(token, filter[8 - offset] as u32);
-            let left_ref = u16x16::from_slice(token, &reference[row_offsets[8 - offset] + col..]);
-            let right_ref = u16x16::from_slice(token, &reference[row_offsets[8 + offset] + col..]);
-            let left_dis = u16x16::from_slice(token, &distorted[row_offsets[8 - offset] + col..]);
-            let right_dis = u16x16::from_slice(token, &distorted[row_offsets[8 + offset] + col..]);
+            let left_ref = u16x16::load(
+                token,
+                reference[row_offsets[8 - offset] + col..row_offsets[8 - offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let right_ref = u16x16::load(
+                token,
+                reference[row_offsets[8 + offset] + col..row_offsets[8 + offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let left_dis = u16x16::load(
+                token,
+                distorted[row_offsets[8 - offset] + col..row_offsets[8 - offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let right_dis = u16x16::load(
+                token,
+                distorted[row_offsets[8 + offset] + col..row_offsets[8 + offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
             let lref_lo = left_ref.widen_low();
             let lref_hi = left_ref.widen_high();
             let rref_lo = right_ref.widen_low();
@@ -309,8 +339,18 @@ fn vif_vertical_u10_simd(
         let mut ref_dis_lo8 = u32x8::zero(token);
         let mut ref_dis_hi8 = u32x8::zero(token);
         let weight = u32x8::splat(token, filter[8] as u32);
-        let center_ref = u16x16::from_slice(token, &reference[row_offsets[8] + col..]);
-        let center_dis = u16x16::from_slice(token, &distorted[row_offsets[8] + col..]);
+        let center_ref = u16x16::load(
+            token,
+            reference[row_offsets[8] + col..row_offsets[8] + col + 16]
+                .try_into()
+                .unwrap(),
+        );
+        let center_dis = u16x16::load(
+            token,
+            distorted[row_offsets[8] + col..row_offsets[8] + col + 16]
+                .try_into()
+                .unwrap(),
+        );
         let crlo = center_ref.widen_low();
         let crhi = center_ref.widen_high();
         let cdlo = center_dis.widen_low();
@@ -339,10 +379,30 @@ fn vif_vertical_u10_simd(
         ref_dis_hi8 += weight * prod_rd_hi.shr_logical_uniform(16);
         for offset in 1..=8usize {
             let weight = u32x8::splat(token, filter[8 - offset] as u32);
-            let left_ref = u16x16::from_slice(token, &reference[row_offsets[8 - offset] + col..]);
-            let right_ref = u16x16::from_slice(token, &reference[row_offsets[8 + offset] + col..]);
-            let left_dis = u16x16::from_slice(token, &distorted[row_offsets[8 - offset] + col..]);
-            let right_dis = u16x16::from_slice(token, &distorted[row_offsets[8 + offset] + col..]);
+            let left_ref = u16x16::load(
+                token,
+                reference[row_offsets[8 - offset] + col..row_offsets[8 - offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let right_ref = u16x16::load(
+                token,
+                reference[row_offsets[8 + offset] + col..row_offsets[8 + offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let left_dis = u16x16::load(
+                token,
+                distorted[row_offsets[8 - offset] + col..row_offsets[8 - offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let right_dis = u16x16::load(
+                token,
+                distorted[row_offsets[8 + offset] + col..row_offsets[8 + offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
             let lrlo = left_ref.widen_low();
             let lrhi = left_ref.widen_high();
             let rrlo = right_ref.widen_low();
@@ -467,8 +527,18 @@ fn vif_vertical_hiscale_simd(
         let mut ref_dis_l_hi8 = u32x8::zero(token);
         let mut ref_dis_r_hi8 = u32x8::zero(token);
         let weight = u32x8::splat(token, filter[half] as u32);
-        let center_ref = u16x16::from_slice(token, &reference[row_offsets[half] + col..]);
-        let center_dis = u16x16::from_slice(token, &distorted[row_offsets[half] + col..]);
+        let center_ref = u16x16::load(
+            token,
+            reference[row_offsets[half] + col..row_offsets[half] + col + 16]
+                .try_into()
+                .unwrap(),
+        );
+        let center_dis = u16x16::load(
+            token,
+            distorted[row_offsets[half] + col..row_offsets[half] + col + 16]
+                .try_into()
+                .unwrap(),
+        );
         let crlo = center_ref.widen_low();
         let crhi = center_ref.widen_high();
         let cdlo = center_dis.widen_low();
@@ -497,14 +567,30 @@ fn vif_vertical_hiscale_simd(
         ref_dis_l_hi8 += weight * prod_rd_hi.shr_logical_uniform(16);
         for offset in 1..=half {
             let weight = u32x8::splat(token, filter[half - offset] as u32);
-            let left_ref =
-                u16x16::from_slice(token, &reference[row_offsets[half - offset] + col..]);
-            let right_ref =
-                u16x16::from_slice(token, &reference[row_offsets[half + offset] + col..]);
-            let left_dis =
-                u16x16::from_slice(token, &distorted[row_offsets[half - offset] + col..]);
-            let right_dis =
-                u16x16::from_slice(token, &distorted[row_offsets[half + offset] + col..]);
+            let left_ref = u16x16::load(
+                token,
+                reference[row_offsets[half - offset] + col..row_offsets[half - offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let right_ref = u16x16::load(
+                token,
+                reference[row_offsets[half + offset] + col..row_offsets[half + offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let left_dis = u16x16::load(
+                token,
+                distorted[row_offsets[half - offset] + col..row_offsets[half - offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let right_dis = u16x16::load(
+                token,
+                distorted[row_offsets[half + offset] + col..row_offsets[half + offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
             let lrlo = left_ref.widen_low();
             let lrhi = left_ref.widen_high();
             let rrlo = right_ref.widen_low();
@@ -655,28 +741,78 @@ fn vif_horizontal_sums(
     let mut ref_dis_hi8 = u32x8::zero(token);
     for (tap, &w) in filter.iter().enumerate() {
         let weight = u32x8::splat(token, w as u32);
-        let rlo = u32x8::from_slice(token, &vertical_ref_mean[col + tap..]);
-        let rhi = u32x8::from_slice(token, &vertical_ref_mean[col + 8 + tap..]);
-        let dlo = u32x8::from_slice(token, &vertical_dis_mean[col + tap..]);
-        let dhi = u32x8::from_slice(token, &vertical_dis_mean[col + 8 + tap..]);
+        let rlo = u32x8::load(
+            token,
+            vertical_ref_mean[col + tap..col + tap + 8]
+                .try_into()
+                .unwrap(),
+        );
+        let rhi = u32x8::load(
+            token,
+            vertical_ref_mean[col + 8 + tap..col + 8 + tap + 8]
+                .try_into()
+                .unwrap(),
+        );
+        let dlo = u32x8::load(
+            token,
+            vertical_dis_mean[col + tap..col + tap + 8]
+                .try_into()
+                .unwrap(),
+        );
+        let dhi = u32x8::load(
+            token,
+            vertical_dis_mean[col + 8 + tap..col + 8 + tap + 8]
+                .try_into()
+                .unwrap(),
+        );
         ref_mean_lo += weight * rlo;
         ref_mean_hi += weight * rhi;
         dis_mean_lo += weight * dlo;
         dis_mean_hi += weight * dhi;
-        let sq_lo = u32x8::from_slice(token, &vertical_ref_sq[col + tap..]);
-        let sq_hi = u32x8::from_slice(token, &vertical_ref_sq[col + 8 + tap..]);
+        let sq_lo = u32x8::load(
+            token,
+            vertical_ref_sq[col + tap..col + tap + 8]
+                .try_into()
+                .unwrap(),
+        );
+        let sq_hi = u32x8::load(
+            token,
+            vertical_ref_sq[col + 8 + tap..col + 8 + tap + 8]
+                .try_into()
+                .unwrap(),
+        );
         ref_sq_lo16 += weight * (sq_lo & mask16);
         ref_sq_hi16 += weight * sq_lo.shr_logical_uniform(16);
         ref_sq_lo8 += weight * (sq_hi & mask16);
         ref_sq_hi8 += weight * sq_hi.shr_logical_uniform(16);
-        let ds_lo = u32x8::from_slice(token, &vertical_dis_sq[col + tap..]);
-        let ds_hi = u32x8::from_slice(token, &vertical_dis_sq[col + 8 + tap..]);
+        let ds_lo = u32x8::load(
+            token,
+            vertical_dis_sq[col + tap..col + tap + 8]
+                .try_into()
+                .unwrap(),
+        );
+        let ds_hi = u32x8::load(
+            token,
+            vertical_dis_sq[col + 8 + tap..col + 8 + tap + 8]
+                .try_into()
+                .unwrap(),
+        );
         dis_sq_lo16 += weight * (ds_lo & mask16);
         dis_sq_hi16 += weight * ds_lo.shr_logical_uniform(16);
         dis_sq_lo8 += weight * (ds_hi & mask16);
         dis_sq_hi8 += weight * ds_hi.shr_logical_uniform(16);
-        let rd_lo = u32x8::from_slice(token, &vertical_ref_dis[col + tap..]);
-        let rd_hi = u32x8::from_slice(token, &vertical_ref_dis[col + 8 + tap..]);
+        let rd_lo = u32x8::load(
+            token,
+            vertical_ref_dis[col + tap..col + tap + 8]
+                .try_into()
+                .unwrap(),
+        );
+        let rd_hi = u32x8::load(
+            token,
+            vertical_ref_dis[col + 8 + tap..col + 8 + tap + 8]
+                .try_into()
+                .unwrap(),
+        );
         ref_dis_lo16 += weight * (rd_lo & mask16);
         ref_dis_hi16 += weight * rd_lo.shr_logical_uniform(16);
         ref_dis_lo8 += weight * (rd_hi & mask16);
@@ -748,22 +884,48 @@ fn vif_subsample_vertical_simd(
         let mut dis_lo = u32x8::zero(token);
         let mut dis_hi = u32x8::zero(token);
         let weight = u32x8::splat(token, filter[half] as u32);
-        let center_ref = u16x16::from_slice(token, &reference[row_offsets[half] + col..]);
-        let center_dis = u16x16::from_slice(token, &distorted[row_offsets[half] + col..]);
+        let center_ref = u16x16::load(
+            token,
+            reference[row_offsets[half] + col..row_offsets[half] + col + 16]
+                .try_into()
+                .unwrap(),
+        );
+        let center_dis = u16x16::load(
+            token,
+            distorted[row_offsets[half] + col..row_offsets[half] + col + 16]
+                .try_into()
+                .unwrap(),
+        );
         ref_lo += weight * center_ref.widen_low();
         ref_hi += weight * center_ref.widen_high();
         dis_lo += weight * center_dis.widen_low();
         dis_hi += weight * center_dis.widen_high();
         for offset in 1..=half {
             let weight = u32x8::splat(token, filter[half - offset] as u32);
-            let left_ref =
-                u16x16::from_slice(token, &reference[row_offsets[half - offset] + col..]);
-            let right_ref =
-                u16x16::from_slice(token, &reference[row_offsets[half + offset] + col..]);
-            let left_dis =
-                u16x16::from_slice(token, &distorted[row_offsets[half - offset] + col..]);
-            let right_dis =
-                u16x16::from_slice(token, &distorted[row_offsets[half + offset] + col..]);
+            let left_ref = u16x16::load(
+                token,
+                reference[row_offsets[half - offset] + col..row_offsets[half - offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let right_ref = u16x16::load(
+                token,
+                reference[row_offsets[half + offset] + col..row_offsets[half + offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let left_dis = u16x16::load(
+                token,
+                distorted[row_offsets[half - offset] + col..row_offsets[half - offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
+            let right_dis = u16x16::load(
+                token,
+                distorted[row_offsets[half + offset] + col..row_offsets[half + offset] + col + 16]
+                    .try_into()
+                    .unwrap(),
+            );
             ref_lo += weight * (left_ref.widen_low() + right_ref.widen_low());
             ref_hi += weight * (left_ref.widen_high() + right_ref.widen_high());
             dis_lo += weight * (left_dis.widen_low() + right_dis.widen_low());
@@ -800,10 +962,34 @@ fn vif_subsample_horizontal_simd(
     let mut dis_hi = u32x8::zero(token);
     for (tap, &w) in filter.iter().enumerate() {
         let weight = u32x8::splat(token, w as u32);
-        ref_lo += weight * u32x8::from_slice(token, &vertical_reference[col + tap..]);
-        ref_hi += weight * u32x8::from_slice(token, &vertical_reference[col + 8 + tap..]);
-        dis_lo += weight * u32x8::from_slice(token, &vertical_distorted[col + tap..]);
-        dis_hi += weight * u32x8::from_slice(token, &vertical_distorted[col + 8 + tap..]);
+        ref_lo += weight
+            * u32x8::load(
+                token,
+                vertical_reference[col + tap..col + tap + 8]
+                    .try_into()
+                    .unwrap(),
+            );
+        ref_hi += weight
+            * u32x8::load(
+                token,
+                vertical_reference[col + 8 + tap..col + 8 + tap + 8]
+                    .try_into()
+                    .unwrap(),
+            );
+        dis_lo += weight
+            * u32x8::load(
+                token,
+                vertical_distorted[col + tap..col + tap + 8]
+                    .try_into()
+                    .unwrap(),
+            );
+        dis_hi += weight
+            * u32x8::load(
+                token,
+                vertical_distorted[col + 8 + tap..col + 8 + tap + 8]
+                    .try_into()
+                    .unwrap(),
+            );
     }
     let rounding = u32x8::splat(token, 32768);
     let ref_lo = (ref_lo + rounding).shr_logical_uniform(16).to_array();

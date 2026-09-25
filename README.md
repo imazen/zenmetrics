@@ -203,8 +203,11 @@ evaluates the stride-1 convolution at 16 positions per chunk and keeps
 the 8 even lanes, avoiding any deinterleave. A paired `--v0 --stages`
 run then measured 24.338 ms/frame for four-scale VIF (versus 28.947
 with only the statistics passes vectorized), and the Callgrind harness
-dropped to 16.60M instructions (8-bit) and 17.80M (10-bit). Only the v1
-feature path remains scalar.
+dropped to 16.60M instructions (8-bit) and 17.80M (10-bit). The SIMD
+loads use single-check `load`/`try_into` slicing rather than two-check
+`from_slice`, which cut the fixed harness to 15.38M instructions
+(8-bit) and 16.70M (10-bit) and the paired stage run to 22.782
+ms/frame. Only the v1 feature path remains scalar.
 
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate
