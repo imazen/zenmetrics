@@ -74,7 +74,9 @@ zenfleet job system. Both are covered below.
 Six GPU metric crates plus the in-tree CPU reference crates the orchestrator's
 CPU ladder and the umbrella's `Backend::Cpu` dispatch route to. The ledger of
 every known deviation from each cited reference lives in
-[DIVERGENCES.md](DIVERGENCES.md).
+[DIVERGENCES.md](DIVERGENCES.md); papers, implementation provenance, validation
+oracles, and the tolerances we gate (incl. the JPEG AIC-4 reproduction matrix)
+live in [docs/METRIC_PROVENANCE.md](docs/METRIC_PROVENANCE.md).
 
 | Crate | Metric | Range / shape | Parity reference |
 |---|---|---|---|

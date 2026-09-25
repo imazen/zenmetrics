@@ -3,7 +3,10 @@
 One row-set per metric, across every implementation version we track. This is
 the **index** — each entry cites the crate-level doc that carries the detail.
 When a new port lands or a reference version moves, update the ledger in the
-same change.
+same change. Companion ledger: `docs/METRIC_PROVENANCE.md` records *which*
+reference each metric was produced from (paper + impl + version), the
+provenance class (wrapper / reimplementation / clean-room / in-house), the
+oracle, and the validation tolerances we gate.
 
 Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 

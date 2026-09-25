@@ -22,6 +22,16 @@ Workspace conventions per the global rules:
   against the AIC-4 published `IW-SSIM`/`MS-SSIM` columns (Δ 3e-5 /
   4.8e-5). `LumaIngress` + `studio601_gray` + `luma_ingress_pair` +
   `MetricKind::is_luma_only` in `zenmetrics-cli::metrics`.
+- docs (`HASH_TBD`): new `docs/METRIC_PROVENANCE.md` — per-metric citation
+  ledger (paper + reference impl + version), provenance classes (third-
+  party crate / sibling crate / reference reimplementation / clean-room /
+  in-house — not everything is a "port"), input + output conventions,
+  oracle + gated tolerance per metric, the tolerance policy (golden parity
+  vs dataset reproduction vs internal parity vs ingress-variant shift), and
+  the measured JPEG AIC-4 reproduction matrix with the identified-but-
+  unimplemented columns (Daala `dump_psnrhvs`, wavelet `vifvec`, libvmaf
+  `float_ssim`, HDR-VDP-3, `mDCT-PSNR`). AIC probes committed:
+  `crates/vmaf/examples/aic_probe.rs`, `crates/vif/examples/aic_vif.rs`.
 - docs (`8b041762`): new root `DIVERGENCES.md` — a workspace-level ledger
   of every known deviation from each metric's cited reference
   implementation and version (DIVERGES / RESOLVED / ORACLE-ARTIFACT /
