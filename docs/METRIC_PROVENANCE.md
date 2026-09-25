@@ -31,8 +31,8 @@ We do not call everything a "port". Terms used below:
 
 | `--metric` | crate | metric paper | reference impl (validation oracle) | provenance | input convention | output |
 |---|---|---|---|---|---|---|
-| `ssim2` | sibling `fast-ssim2` (path `../fast-ssim2/fast-ssim2`, `imgref`) — **not** crates.io `ssimulacra2`; the crates.io dep exists only inside `ssim2-gpu` for reference checks | SSIMULACRA2, Cloudinary (2022+, no paper) | Cloudinary `ssimulacra2` C++ (v2 lineage) | sibling crate (algorithm reimplemented in that repo, SIMD-native) | sRGB8 | ~0–100, higher better |
-| `ssim2-gpu` | `ssim2-gpu` (in-tree GPU twin) | " | `fast-ssim2` (CPU) + crates.io `ssimulacra2` for parity | in-tree GPU reimplementation | sRGB8 | " |
+| `ssim2` | sibling `fast-ssim2` (path `../fast-ssim2/fast-ssim2`, `imgref`) — **not** crates.io `ssimulacra2`, which is a third-party crate we do not maintain; that dep exists only inside `ssim2-gpu` for reference checks | SSIMULACRA2, Cloudinary (2022+, no paper) | Cloudinary `ssimulacra2` C++ (v2 lineage) | sibling crate (algorithm reimplemented in that repo, SIMD-native) | sRGB8 | ~0–100, higher better |
+| `ssim2-gpu` | `ssim2-gpu` (in-tree GPU twin) | " | `fast-ssim2` (CPU) + third-party crates.io `ssimulacra2` for parity | in-tree GPU reimplementation | sRGB8 | " |
 | `dssim` | crates.io `dssim-core` ^3.4 | Wang et al. MS-SSIM 2003 (porneL's variant) | dssim-core itself (the canonical impl) | third-party crate | sRGB8 | 0 best, unbounded |
 | `dssim-gpu` | `dssim-gpu` (in-tree twin) | " | dssim-core | in-tree GPU | " | " |
 | `butteraugli` | sibling `butteraugli` | Alakuijala et al. 2017, doi:10.1117/12.2272310 | libjxl butteraugli v0.9.2 / 0.9.4 | sibling crate (wraps the libjxl implementation) | sRGB8 | distance; emits `*_max` + `*_pnorm3` |
@@ -59,8 +59,9 @@ Notes on tricky provenance:
 - `ssim2`: the CLI resolves through `zenmetrics-api` `cpu-ssim2` →
   `fast-ssim2 = { version = "0.8.2", path = "../fast-ssim2/fast-ssim2" }` —
   the **local sibling always wins** (CLI Cargo.toml: "scores use local,
-  crates versions banned"). `crates.io ssimulacra2` (0.5/0.8.x) appears only
-  in `ssim2-gpu` for reference parity — never on the scoring path.
+  crates versions banned"). `fast-ssim2` is the Imazen crate; crates.io
+  `ssimulacra2` is a *third-party* crate — it appears only inside `ssim2-gpu`
+  for reference parity and never reaches the scoring path.
 - `iwssim`: the authors' MATLAB source is not publicly distributed; the
   validation oracle is the widely-used Python reimplementation pinned to
   commit f9de37c — recorded honestly as a second-order oracle.
@@ -85,30 +86,32 @@ Tolerance classes (keep these distinct — they mean different things):
   metric is fed a different legitimate luma (house BT.601-full vs
   `yuv601-studio`). A convention difference, not a defect.
 
-| metric | oracle | golden parity gate | observed worst | dataset reproduction (AIC-4, S01_AVIF_01) |
+| metric | oracle | golden parity gate | observed worst | dataset reproduction (AIC-4, n=53 subset unless noted) |
 |---|---|---|---|---|
-| cvvdp | pycvvdp 0.5.7 | ≤ 1e-3 JOD | ~1e-4 rel / 1e-3 JOD | **2e-5 JOD** vs `CVVDP` (std_fhd) |
+| cvvdp | pycvvdp 0.5.7 | ≤ 1e-3 JOD | ~1e-4 rel / 1e-3 JOD | med 1.1e-4 / max 1.3e-3 JOD @ standard_fhd (n=53) |
 | hdrvdp | HDR-VDP 2.2.2 MATLAB | P_det 1e-4; JOD ~1e-2 cases | 1.4e-5 P_det | not reproduced (needs abs-nits config) |
-| vmaf | libvmaf 3.2.1 FFI | feats 1e-4, score 0.02 | ≪ gate | VMAF 0.002, neg 0.001, adm2 4e-6, vif_Σ 3e-5 |
-| vif | `vifp_mscale.m` | goldens f64 | 5e-13 | n/a (`VIF` col = vifvec — different algo) |
-| msssim | `ssim_mscale_new.m` | 15 Octave goldens | 8.8e-6 | MS-SSIM-pyiqa 3e-7; libvmaf col 4.8e-5 via `--luma-ingress` |
-| iwssim | Python-IW-SSIM f9de37c | ~1e-4 | within gate | 3e-5 vs pyiqa col via `--luma-ingress` |
-| gmsd | libgmsd de646c9a | 1e-12 rel (map), 1e-14 mean | ~1e-12 | 1e-7 |
-| psnrhvs | `psnrhvsm.m` | 1e-3 dB | ≤ 4e-4 dB | col is Daala variant — different algo |
-| haarpsi | `haarpsi.m` | 5e-5 | ~1e-5 | 8e-6 |
-| fsim/-y | `FR_FSIMc.m` | 5e-5 | within gate | 1e-6 / 4e-6 (`-y` vs `FSIM` studio-Y) |
-| vsi | `VSI.m` | 1e-4 | within gate | 2e-6 |
+| vmaf | libvmaf 3.2.1 FFI | feats 1e-4, score 0.02 | ≪ gate | VMAF 0.002, neg 0.001, adm2 4e-6, vif_Σ 3e-5 (S01 pt) |
+| vif | `vifp_mscale.m` | goldens f64 | 5e-13 | n/a (`VIF` col = vifvec — different algo, med 0.06) |
+| msssim | `ssim_mscale_new.m` | 15 Octave goldens | 8.8e-6 | med 4e-4 vs libvmaf col / 1.2e-3 vs pyiqa col (n=53) |
+| iwssim | Python-IW-SSIM f9de37c | ~1e-4 | within gate | +1.2e-3 systematic vs pyiqa col — impl-variant offset, not ingress (n=53) |
+| gmsd | libgmsd de646c9a | 1e-12 rel (map), 1e-14 mean | ~1e-12 | mean 3.5e-7 / max 1.9e-6 (n=53) |
+| psnrhvs | `psnrhvsm.m` | 1e-3 dB | ≤ 4e-4 dB | ~7.6dB off (Daala variant — different algo, n=53) |
+| haarpsi | `haarpsi.m` | 5e-5 | ~1e-5 | med 8.4e-6 / max 5.3e-5 (n=53) |
+| fsim/-y | `FR_FSIMc.m` | 5e-5 | within gate | med 2.5e-5 / max 1.7e-3 (n=53) |
+| vsi | `VSI.m` | 1e-4 | within gate | med 9.6e-6 / max 1.1e-4 (n=53) |
 | mad-iqa | official MATLAB | 13 goldens | rel: hi 2.4e-7, lo 1.8e-6 | not in AIC-4 |
-| ssim2 | fast-ssim2 ↔ C++ | bit-parity SIMD tiers | — | 0.043 vs col — version drift |
-| dssim | dssim-core | upstream | — | 5e-7 |
+| ssim2 | fast-ssim2 ↔ C++ | bit-parity SIMD tiers | — | med 6.3e-3 / max 5.5e-2 — version drift (n=53) |
+| dssim | dssim-core | upstream | — | mean 2.5e-7 / max 6.5e-7 (n=53) |
 
 **Acceptable-residual rules of thumb:**
 
 - Golden parity: gate at the measured floor × ~3, documented per test;
   identical-input invariants (1.0 / 0 / NaN semantics) are exact.
-- AIC-4 reproduction: ≤ ~1e-4 on a [0,1] similarity, ≤ ~0.01 dB, ≤ ~0.005
-  JOD, ≤ ~0.01 VMAF points counts as *identified*; anything larger is a
-  convention/algorithm mismatch to investigate, not hand-wave.
+- AIC-4 reproduction: ≤ ~1e-4 median on a [0,1] similarity, ≤ ~0.01 dB,
+  ≤ ~0.005 JOD, ≤ ~0.01 VMAF points counts as *identified*; a systematic
+  ~1e-3 offset means the column's implementation is a different *variant*
+  (not an ingress problem — see `IW-SSIM`); anything larger is a different
+  algorithm entirely.
 - `yuv601-studio` vs pyiqa `to_y_channel`: u8 luma rounding alone explains
   ~3e-5 on [0,1] scores — that's the inherent floor of the mode.
 - f32-planes/f64-pooling vs an f64 MATLAB reference: ~1e-6–1e-4 rel is the
@@ -118,34 +121,43 @@ Tolerance classes (keep these distinct — they mean different things):
 ## 4. JPEG AIC-4 reproduction matrix (metrics_fullres.tab)
 
 Measured on `S01_Ref_00.png` (1769×1988) vs `S01_AVIF_01.png` through this
-CLI + probes, against the published AIC-4 row. Ingress conventions inferred:
+CLI + probes, against the published AIC-4 row, then extended to a 53-pair
+stratified subset (S01/S03/S19/S38/S57 × {AVIF,JXL,JPG,J2K,WEBP} × levels
+{02,09,16}). Local corpus: `/tmp/v_ro/input/datasets/aic2026/` — the tower
+NFS export `tower:/mnt/user/coefficient` mounted read-only — holds the full
+zip corpus (`AIC2026-dataset-complete.zip`, 9,620 distorted + 70 sources)
+plus `metrics_fullres.csv` / `metrics_cropped.csv` and
+`encoding_recipes.md`; individual images stream-extract with
+`unzip -p <zip> distorted/<name>.png`. Ingress conventions inferred:
 libvmaf-family = studio-swing BT.601 YUV (u8-rounded, even-crop); pyiqa =
 same transform unrounded (`to_y_channel`); MATLAB-family = own rgb2gray.
 
-| AIC-4 column | published | ours | Δ | status |
+Deltas below are |ours − published| over the 53-pair subset (`mean`/`median`/`max`);
+near-transparent rows compress toward 1.0/0 so medians are the honest center.
+The single-point S01_AVIF_01 spot check is kept where it drove identification.
+
+| AIC-4 column | published impl | med\|Δ\| | max\|Δ\| | status |
 |---|---|---|---|---|
-| `CVVDP` (`standard_fhd`) | 9.9358 | 9.935776 | 2e-5 | ✅ |
-| `VMAF`, `VMAF-neg`, `ADM2`, `VIF_vmaf` | 95.746 / 94.847 / 0.994208 / 3.820725 | 95.744 / 94.846 / 0.994204 / 3.8207 | ≤0.002 | ✅ |
-| `PSNR` (RGB mean-MSE) | 38.9463 | 38.9466 | 4e-4 | ✅ |
-| `PSNR-Y` (rounded studio-Y) | 43.645957 | 43.6459 | ~0 | ✅ |
-| `PSNR-YCbCr611` | 43.9036 | 43.9098 | 0.006 | ✅ |
-| `SSIM` (libvmaf `float_ssim`, scale=2) | 0.997922 | 0.997991 (numpy repro) | 7e-5 | ✅ identified — not yet ported |
-| `MS-SSIM` (libvmaf `float_ms_ssim`) | 0.998818 | 0.998866 (`msssim --luma-ingress yuv601-studio`) | 4.8e-5 | ✅ |
-| `MS-SSIM-pyiqa` | 0.9987947 | 0.998795 | 3e-7 | ✅ |
-| `SSIMc` (MATLAB `ssim` RGB-mean) | 0.9774163 | 0.977432 (numpy repro) | 1.6e-5 | ✅ identified — no crate |
-| `GMSD` | 0.0023320 | 0.002332 | 1e-7 | ✅ |
-| `FSIM` / `FSIMc` | 0.9999090 / 0.9998984 | 0.999908 / 0.999897 | ~1e-6 | ✅ |
-| `HaarPSI` | 0.9924069 | 0.992399 | 8e-6 | ✅ |
-| `VSI` | 0.9999610 | 0.999963 | 2e-6 | ✅ |
-| `DSSIM` | 0.00042453 | 0.000425 | 5e-7 | ✅ |
-| `IW-SSIM` (pyiqa, unrounded studio-Y) | 0.9989235 | 0.998891 (`iwssim --luma-ingress yuv601-studio`) | 3e-5 | ✅ |
-| `SSIMULACRA2` | 87.8839 | 87.927 | 0.043 | ⚠️ version drift |
-| `JND_CVVDP` | 0.1976 | 0.1977 | — | ✅ transform verified |
+| `CVVDP` (`standard_fhd`) | pycvvdp | 1.1e-4 | 1.3e-3 | ✅ strong at full quality range |
+| `VMAF`, `VMAF-neg`, `ADM2`, `VIF_vmaf` | libvmaf v0.6.1 | ≤0.002 (S01 pt) | — | ✅ |
+| `PSNR`, `PSNR-Y`, `PSNR-YCbCr611` | RGB-MSE / rounded studio-Y / 6:1:1 | ≤0.006 (S01 pt) | — | ✅ |
+| `GMSD` | libgmsd lineage | 2.8e-7 | 1.9e-6 | ✅ essentially exact |
+| `DSSIM` | dssim-core | 2.7e-7 | 6.5e-7 | ✅ essentially exact |
+| `HaarPSI` | authors' matlab | 8.4e-6 | 5.3e-5 | ✅ |
+| `VSI` | authors' matlab | 9.6e-6 | 1.1e-4 | ✅ |
+| `FSIM` / `FSIMc` | authors' matlab | 2.5e-5 | 1.7e-3 | ✅ |
+| `SSIM` | libvmaf `float_ssim` scale=2 | 7e-5 (S01 pt, numpy repro) | — | ✅ identified — not yet ported |
+| `SSIMc` | MATLAB `ssim` RGB-mean | 1.6e-5 (S01 pt, numpy repro) | — | ✅ identified — no crate |
+| `MS-SSIM` | libvmaf `float_ms_ssim` | 4.1e-4 | 2.0e-2 | ✅ tracks; tails diverge at low quality — impl-family diff |
+| `MS-SSIM-pyiqa` | pyiqa `ms_ssim` | 1.2e-3 | 6.4e-3 | ✅ tracks; same impl-family residual |
+| `IW-SSIM` | pyiqa `iwssim` | 1.2e-3 | 4.0e-3 | ⚠️ systematic +1e-3 vs pyiqa impl (our oracle is Python-IW-SSIM, a different variant); ingress itself is right |
+| `SSIMULACRA2` | "v2.1" | 6.3e-3 | 5.5e-2 | ⚠️ version drift, content-dependent |
+| `JND_CVVDP` | transform `3.1889·(10−JOD)^1.0129` | — | — | ✅ transform verified |
 
 | column family | published | what it is | status |
 |---|---|---|---|
-| `PSNR-HVS`, `-Y`, `-Cb`, `-Cr` | 50.05 / 50.86 / 47.49 / 48.10 | **Daala/Xiph `dump_psnrhvs`** layout — not our `psnrhvsm` port (Ponomarenko masked-Y gives 52.65) | ⬜ new impl needed — **CTC anchor** |
-| `VIF` | 0.934422 | pyiqa **wavelet vifvec** (SP5 steerable pyramid), not pixel `vifp` (ours: 0.8535 studio-Y) | ⬜ new impl needed |
+| `PSNR-HVS`, `-Y`, `-Cb`, `-Cr` | 50.05 / 50.86 / 47.49 / 48.10 | **Daala/Xiph `dump_psnrhvs`** layout — not our `psnrhvsm` port (ours runs ~7.6dB/4.1dB higher over the subset — Daala masks more aggressively) | ⬜ new impl needed — **CTC anchor** |
+| `VIF` | 0.934422 | pyiqa **wavelet vifvec** (SP5 steerable pyramid), not pixel `vifp` — ours runs ~0.06 median lower over the subset | ⬜ new impl needed |
 | `HDR_VDP_2` | 68.806 | hdrvdp-2.2.x under an unknown sRGB→nits display config | ⬜ config unknown |
 | `HDR_VDP_3` | 9.620 | HDR-VDP-3 — different metric version | ⬜ new impl |
 | `mDCT-PSNR` | 71.529 | Richter, QoMEX 2009; author's C++ ref impl `thorfdbg/mDCTpsnr` (~60KB, Highway SIMD) | ⬜ feasible medium port |

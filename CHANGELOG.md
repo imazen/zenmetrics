@@ -32,6 +32,17 @@ Workspace conventions per the global rules:
   unimplemented columns (Daala `dump_psnrhvs`, wavelet `vifvec`, libvmaf
   `float_ssim`, HDR-VDP-3, `mDCT-PSNR`). AIC probes committed:
   `crates/vmaf/examples/aic_probe.rs`, `crates/vif/examples/aic_vif.rs`.
+- docs (`HASH_TBD`): `docs/METRIC_PROVENANCE.md` updated — the AIC-4
+  reproduction matrix now reports med/max deltas over a 53-pair stratified
+  subset (S01/S03/S19/S38/S57 × AVIF/JXL/JPG/J2K/WEBP × levels 02/09/16)
+  stream-extracted from the tower NFS corpus at
+  `/tmp/v_ro/input/datasets/aic2026/` (full zip set + metrics CSVs). The
+  scale-up refined three identifications: `IW-SSIM` has a +1.2e-3
+  systematic offset vs pyiqa (implementation-variant, not ingress),
+  `MS-SSIM` tracks both the libvmaf and pyiqa columns within ~4e-4 median
+  with low-quality tails, and `SSIMULACRA2` drift is content-dependent
+  (med 6.3e-3). Clarified that crates.io `ssimulacra2` is a third-party
+  crate — `fast-ssim2` is the Imazen sibling.
 - docs (`8b041762`): new root `DIVERGENCES.md` — a workspace-level ledger
   of every known deviation from each metric's cited reference
   implementation and version (DIVERGES / RESOLVED / ORACLE-ARTIFACT /
