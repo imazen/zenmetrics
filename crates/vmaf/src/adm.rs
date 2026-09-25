@@ -8,6 +8,7 @@ use archmage::X64V4Token;
 #[cfg(feature = "simd")]
 use archmage::{autoversion, magetypes};
 
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
 fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
     s.try_into().unwrap()
 }
@@ -2338,6 +2339,8 @@ fn adm_decouple_s123(
             };
             j_end_v3
         };
+        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        let j_start = left as usize;
         for j in j_start..(right as usize) {
             let idx = i as usize * stride + j as usize;
             let oh = ref_b.h[idx];

@@ -4367,6 +4367,11 @@ fn adjust_window_size(window_size: usize, w: usize, h: usize, speedup: bool) -> 
 
 #[cfg_attr(feature = "simd", autoversion)]
 fn anti_dithering_filter(data: &mut [u16], width: usize, height: usize) {
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    if let Some(token) = v3_token() {
+        anti_dithering_rows_v3(token, data, width, height);
+        return;
+    }
     for i in 0..height - 1 {
         for j in 0..width - 1 {
             data[i * width + j] = (data[i * width + j]
@@ -4381,6 +4386,52 @@ fn anti_dithering_filter(data: &mut [u16], width: usize, height: usize) {
     let i = height - 1;
     for j in 0..width - 1 {
         data[i * width + j] = (data[i * width + j] + data[i * width + j + 1]) >> 1;
+    }
+}
+
+/// Vector port of the scalar filter. In-place safety: a 16-lane block loads
+/// all taps before storing, and a position is consumed only by its own and
+/// the left-neighbour windows — both read before the block that writes it.
+/// u16 lane sums can't overflow (bit_depth < 10 ⇒ values ≤ 1023, sum ≤ 4092).
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn anti_dithering_rows_v3(
+    _token: X64V3Token,
+    data: &mut [u16],
+    width: usize,
+    height: usize,
+) {
+    for i in 0..height - 1 {
+        let (ra, rb) = data.split_at_mut((i + 1) * width);
+        let a = &mut ra[i * width..i * width + width];
+        let b = &rb[..width];
+        let mut j = 0usize;
+        while j + 16 <= width - 1 {
+            let s = _mm256_add_epi16(
+                _mm256_add_epi16(
+                    _mm256_loadu_si256(a8::<u16, 16>(&a[j..j + 16])),
+                    _mm256_loadu_si256(a8::<u16, 16>(&a[j + 1..j + 17])),
+                ),
+                _mm256_add_epi16(
+                    _mm256_loadu_si256(a8::<u16, 16>(&b[j..j + 16])),
+                    _mm256_loadu_si256(a8::<u16, 16>(&b[j + 1..j + 17])),
+                ),
+            );
+            _mm256_storeu_si256(
+                a8m::<u16, 16>(&mut a[j..j + 16]),
+                _mm256_srli_epi16::<2>(s),
+            );
+            j += 16;
+        }
+        while j < width - 1 {
+            a[j] = (a[j] + a[j + 1] + b[j] + b[j + 1]) >> 2;
+            j += 1;
+        }
+        a[width - 1] = (a[width - 1] + b[width - 1]) >> 1;
+    }
+    let a = &mut data[(height - 1) * width..];
+    for j in 0..width - 1 {
+        a[j] = (a[j] + a[j + 1]) >> 1;
     }
 }
 
@@ -4611,7 +4662,264 @@ fn get_mask_index(input_width: usize, input_height: usize, filter_size: usize) -
     (((filter_size * filter_size) as i32 + 3 * (ceil_log2(shifted_wh) - 11) - 1) >> 1) as u32
 }
 
-#[cfg_attr(feature = "simd", autoversion)]
+/// Per-row "zero-derivative" flags: 1 where a pixel equals its right and
+/// bottom neighbours (edges count as equal — last column/row are always 1).
+/// Matches `get_derivative_data_for_row_avx2`.
+fn derivative_row(
+    image: &[u16],
+    stride: usize,
+    deriv: &mut [u16],
+    row: usize,
+    width: usize,
+    height: usize,
+) {
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    if let Some(token) = v3_token() {
+        derivative_row_v3(token, image, stride, deriv, row, width, height);
+        return;
+    }
+    let top = &image[row * stride..row * stride + width];
+    if row == height - 1 {
+        for j in 0..width - 1 {
+            deriv[j] = (top[j] == top[j + 1]) as u16;
+        }
+        deriv[width - 1] = 1;
+    } else {
+        let bot = &image[(row + 1) * stride..(row + 1) * stride + width];
+        for j in 0..width - 1 {
+            deriv[j] = (top[j] == top[j + 1] && top[j] == bot[j]) as u16;
+        }
+        deriv[width - 1] = (top[width - 1] == bot[width - 1]) as u16;
+    }
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn derivative_row_v3(
+    _token: X64V3Token,
+    image: &[u16],
+    stride: usize,
+    deriv: &mut [u16],
+    row: usize,
+    width: usize,
+    height: usize,
+) {
+    let ones = _mm256_set1_epi16(1);
+    let top = &image[row * stride..];
+    if row == height - 1 {
+        let mut col = 0usize;
+        while col + 15 < width - 1 {
+            let v1 = _mm256_loadu_si256(a8::<u16, 16>(&top[col..col + 16]));
+            let v2 = _mm256_loadu_si256(a8::<u16, 16>(&top[col + 1..col + 17]));
+            _mm256_storeu_si256(
+                a8m::<u16, 16>(&mut deriv[col..col + 16]),
+                _mm256_and_si256(ones, _mm256_cmpeq_epi16(v1, v2)),
+            );
+            col += 16;
+        }
+        while col < width - 1 {
+            deriv[col] = (top[col] == top[col + 1]) as u16;
+            col += 1;
+        }
+        deriv[width - 1] = 1;
+    } else {
+        let bot = &image[(row + 1) * stride..];
+        let mut col = 0usize;
+        while col + 15 < width - 1 {
+            let hv = _mm256_and_si256(
+                ones,
+                _mm256_cmpeq_epi16(
+                    _mm256_loadu_si256(a8::<u16, 16>(&top[col..col + 16])),
+                    _mm256_loadu_si256(a8::<u16, 16>(&top[col + 1..col + 17])),
+                ),
+            );
+            let vv = _mm256_and_si256(
+                ones,
+                _mm256_cmpeq_epi16(
+                    _mm256_loadu_si256(a8::<u16, 16>(&top[col..col + 16])),
+                    _mm256_loadu_si256(a8::<u16, 16>(&bot[col..col + 16])),
+                ),
+            );
+            _mm256_storeu_si256(
+                a8m::<u16, 16>(&mut deriv[col..col + 16]),
+                _mm256_and_si256(hv, vv),
+            );
+            col += 16;
+        }
+        while col < width - 1 {
+            deriv[col] = (top[col] == top[col + 1] && top[col] == bot[col]) as u16;
+            col += 1;
+        }
+        deriv[width - 1] = (top[width - 1] == bot[width - 1]) as u16;
+    }
+}
+
+/// Rolling 2D prefix sum: `dp_curr[pad+1+j] = dp_prev[pad+1+j] + Σ_{k≤j}
+/// deriv[k]` for j < width+pad (the trailing `pad` columns repeat the final
+/// prefix, which is the right-edge clamp). `actual_width` < width freezes the
+/// row at `dp_prev` (bottom-edge clamp). Matches `compute_dp_row_avx2`.
+fn compute_dp_row(
+    dp_curr: &mut [u32],
+    dp_prev: &[u32],
+    deriv: &[u16],
+    width: usize,
+    pad: usize,
+    actual_width: usize,
+) {
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    if let Some(token) = v3_token() {
+        compute_dp_row_v3(token, dp_curr, dp_prev, deriv, width, pad, actual_width);
+        return;
+    }
+    compute_dp_row_scalar(dp_curr, dp_prev, deriv, width, pad, actual_width);
+}
+
+fn compute_dp_row_scalar(
+    dp_curr: &mut [u32],
+    dp_prev: &[u32],
+    deriv: &[u16],
+    width: usize,
+    pad: usize,
+    actual_width: usize,
+) {
+    let dp_offset = pad + 1;
+    let mut prefix = 0u32;
+    for j in 0..actual_width {
+        prefix = prefix.wrapping_add(deriv[j] as u32);
+        dp_curr[dp_offset + j] = dp_prev[dp_offset + j].wrapping_add(prefix);
+    }
+    for j in actual_width..width + pad {
+        dp_curr[dp_offset + j] = dp_prev[dp_offset + j].wrapping_add(prefix);
+    }
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn compute_dp_row_v3(
+    _token: X64V3Token,
+    dp_curr: &mut [u32],
+    dp_prev: &[u32],
+    deriv: &[u16],
+    width: usize,
+    pad: usize,
+    actual_width: usize,
+) {
+    let dp_offset = pad + 1;
+    let mut carry = _mm256_setzero_si256();
+    let mut j = 0usize;
+    while j + 8 <= actual_width {
+        let d = _mm256_cvtepu16_epi32(_mm_loadu_si128(a8::<u16, 8>(&deriv[j..j + 8])));
+        // Inclusive 8-lane prefix scan: shift-add inside each 128-bit half,
+        // then broadcast the low half's total into the high half.
+        let mut x = _mm256_add_epi32(d, _mm256_bslli_epi128::<4>(d));
+        x = _mm256_add_epi32(x, _mm256_bslli_epi128::<8>(x));
+        let low_dup = _mm256_permute2x128_si256(x, x, 0x00);
+        let low_total = _mm256_shuffle_epi32::<0xFF>(low_dup);
+        x = _mm256_add_epi32(x, _mm256_blend_epi32::<0xF0>(_mm256_setzero_si256(), low_total));
+        let scan = _mm256_add_epi32(x, carry);
+        let prev = _mm256_loadu_si256(a8::<u32, 8>(&dp_prev[dp_offset + j..dp_offset + j + 8]));
+        _mm256_storeu_si256(
+            a8m::<u32, 8>(&mut dp_curr[dp_offset + j..dp_offset + j + 8]),
+            _mm256_add_epi32(prev, scan),
+        );
+        carry = _mm256_permutevar8x32_epi32(scan, _mm256_set1_epi32(7));
+        j += 8;
+    }
+    let mut prefix = _mm256_extract_epi32::<0>(carry) as u32;
+    while j < actual_width {
+        prefix = prefix.wrapping_add(deriv[j] as u32);
+        dp_curr[dp_offset + j] = dp_prev[dp_offset + j].wrapping_add(prefix);
+        j += 1;
+    }
+    while j < width + pad {
+        dp_curr[dp_offset + j] = dp_prev[dp_offset + j].wrapping_add(prefix);
+        j += 1;
+    }
+}
+
+/// mask[j] = dp_bottom[j+2p+1] + dp_top[j] - dp_bottom[j] - dp_top[j+2p+1]
+/// > mask_index — the window sum read straight out of the two dp rows.
+/// Matches `compute_mask_row_avx2`.
+fn compute_mask_row(
+    mask_row: &mut [u16],
+    dp_bottom: &[u32],
+    dp_top: &[u32],
+    width: usize,
+    pad: usize,
+    mask_index: u32,
+) {
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    if let Some(token) = v3_token() {
+        compute_mask_row_v3(token, mask_row, dp_bottom, dp_top, width, pad, mask_index);
+        return;
+    }
+    let delta = 2 * pad + 1;
+    for j in 0..width {
+        let result = dp_bottom[j + delta]
+            .wrapping_add(dp_top[j])
+            .wrapping_sub(dp_bottom[j])
+            .wrapping_sub(dp_top[j + delta]);
+        mask_row[j] = (result > mask_index) as u16;
+    }
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn compute_mask_row_v3(
+    _token: X64V3Token,
+    mask_row: &mut [u16],
+    dp_bottom: &[u32],
+    dp_top: &[u32],
+    width: usize,
+    pad: usize,
+    mask_index: u32,
+) {
+    let delta = 2 * pad + 1;
+    let midx = _mm256_set1_epi32(mask_index as i32);
+    let one = _mm256_set1_epi32(1);
+    let mut j = 0usize;
+    while j + 8 <= width {
+        let bd = _mm256_loadu_si256(a8::<u32, 8>(&dp_bottom[j + delta..j + delta + 8]));
+        let t = _mm256_loadu_si256(a8::<u32, 8>(&dp_top[j..j + 8]));
+        let b = _mm256_loadu_si256(a8::<u32, 8>(&dp_bottom[j..j + 8]));
+        let td = _mm256_loadu_si256(a8::<u32, 8>(&dp_top[j + delta..j + delta + 8]));
+        let result = _mm256_sub_epi32(_mm256_add_epi32(bd, t), _mm256_add_epi32(b, td));
+        let v = _mm256_and_si256(_mm256_cmpgt_epi32(result, midx), one);
+        let packed = _mm_packus_epi32(
+            _mm256_castsi256_si128(v),
+            _mm256_extracti128_si256::<1>(v),
+        );
+        _mm_storeu_si128(a8m::<u16, 8>(&mut mask_row[j..j + 8]), packed);
+        j += 8;
+    }
+    while j < width {
+        let result = dp_bottom[j + delta]
+            .wrapping_add(dp_top[j])
+            .wrapping_sub(dp_bottom[j])
+            .wrapping_sub(dp_top[j + delta]);
+        mask_row[j] = (result > mask_index) as u16;
+        j += 1;
+    }
+}
+
+/// Disjoint mutable/immutable pair of dp rows.
+fn dp_pair(dp: &mut [u32], dw: usize, curr: usize, prev: usize) -> (&mut [u32], &[u32]) {
+    debug_assert_ne!(curr, prev);
+    let (lo, hi) = if curr < prev { (curr, prev) } else { (prev, curr) };
+    let (front, back) = dp.split_at_mut(hi * dw);
+    let lo_row = &mut front[lo * dw..(lo + 1) * dw];
+    let hi_row = &mut back[..dw];
+    if curr < prev {
+        (lo_row, hi_row)
+    } else {
+        (hi_row, lo_row)
+    }
+}
+
+/// C's rolling-dp mask: `dp` keeps only `2*pad+2` rows of a width+pad padded
+/// 2D prefix sum (~40 KB, L1-resident) instead of a full-frame SAT, and each
+/// output row reads just the top/bottom pair of dp rows. The zero-initialised
+/// rows and `actual_width` clamps reproduce the SAT's border semantics.
 fn get_spatial_mask(
     image: &[u16],
     mask: &mut [u16],
@@ -4620,47 +4928,56 @@ fn get_spatial_mask(
 ) -> Result<(), Error> {
     let pad = MASK_FILTER_SIZE / 2;
     let mask_index = get_mask_index(width, height, MASK_FILTER_SIZE);
-
-    let sat_w = width
-        .checked_add(1)
-        .ok_or(Error::InvalidInput("dimension overflow"))?;
-    let sat_h = height
-        .checked_add(1)
-        .ok_or(Error::InvalidInput("dimension overflow"))?;
-    // Pooled: interior lanes are write-before-read, but the first row and
-    // column act as the zero boundary for the prefix sums — re-zero them.
-    let mut sat = pool::take_u32(
-        sat_w
-            .checked_mul(sat_h)
+    let dp_width = width + 2 * pad + 1;
+    let dp_height = 2 * pad + 2;
+    let mut dp = pool::take_u32(
+        dp_width
+            .checked_mul(dp_height)
             .ok_or(Error::InvalidInput("dimension overflow"))?,
     );
-    sat[..sat_w].fill(0);
-    for r in 0..sat_h {
-        sat[r * sat_w] = 0;
-    }
-    for i in 0..height {
-        let mut row_sum = 0u32;
-        for j in 0..width {
-            let horizontal = j == width - 1 || image[i * width + j] == image[i * width + j + 1];
-            let vertical = i == height - 1 || image[i * width + j] == image[(i + 1) * width + j];
-            row_sum += (horizontal && vertical) as u32;
-            sat[(i + 1) * sat_w + (j + 1)] = sat[i * sat_w + (j + 1)] + row_sum;
+    dp.fill(0);
+    let mut deriv = pool::take_u16(width);
+
+    // Seed rows pad+1..2*pad+1 with deriv rows 0..pad-1; row pad stays zero
+    // (the above-image clamp) and rows 0..pad never get written.
+    for i in 0..pad {
+        let deriv_valid = i < height;
+        if deriv_valid {
+            derivative_row(image, width, &mut deriv, i, width, height);
         }
+        let curr = i + pad + 1;
+        let (cur, prev) = dp_pair(&mut dp, dp_width, curr, curr - 1);
+        compute_dp_row(cur, prev, &deriv, width, pad, if deriv_valid { width } else { 0 });
     }
 
-    for i in 0..height {
-        let r_lo = i.saturating_sub(pad);
-        let r_hi = (i + pad).min(height - 1);
-        for j in 0..width {
-            let c_lo = j.saturating_sub(pad);
-            let c_hi = (j + pad).min(width - 1);
-            let sum = sat[(r_hi + 1) * sat_w + (c_hi + 1)] + sat[r_lo * sat_w + c_lo]
-                - sat[(r_hi + 1) * sat_w + c_lo]
-                - sat[r_lo * sat_w + (c_hi + 1)];
-            mask[i * width + j] = (sum > mask_index) as u16;
+    let mut prev_row = dp_height - 2;
+    let mut curr_row = dp_height - 1;
+    let mut bottom = (pad + 1 + pad) % dp_height;
+    let mut top = (pad + 1 + dp_height - pad - 1) % dp_height;
+    for i in pad..height + pad {
+        let deriv_valid = i < height;
+        if deriv_valid {
+            derivative_row(image, width, &mut deriv, i, width, height);
         }
+        {
+            let (cur, prev) = dp_pair(&mut dp, dp_width, curr_row, prev_row);
+            compute_dp_row(cur, prev, &deriv, width, pad, if deriv_valid { width } else { 0 });
+        }
+        prev_row = curr_row;
+        curr_row = (curr_row + 1) % dp_height;
+        compute_mask_row(
+            &mut mask[(i - pad) * width..(i - pad) * width + width],
+            &dp[bottom * dp_width..(bottom + 1) * dp_width],
+            &dp[top * dp_width..(top + 1) * dp_width],
+            width,
+            pad,
+            mask_index,
+        );
+        bottom = (bottom + 1) % dp_height;
+        top = (top + 1) % dp_height;
     }
-    pool::give_u32(sat);
+    pool::give_u32(dp);
+    pool::give_u16(deriv);
     Ok(())
 }
 
@@ -5044,7 +5361,6 @@ pub fn cambi_v1_from_luma(
     if bit_depth < 10 {
         anti_dithering_filter(&mut image, width, height);
     }
-
     let num_diffs: usize = 1 << MAX_LOG_CONTRAST;
     let mut tvi_for_diff = [0u16; 32];
     for (d, slot) in tvi_for_diff.iter_mut().enumerate().take(num_diffs) {

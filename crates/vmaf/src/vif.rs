@@ -100,7 +100,31 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
         for (tap, slot) in row_offsets.iter_mut().take(filter.len()).enumerate() {
             *slot = mirror(row as isize + tap as isize - half, height) * width;
         }
+        #[allow(unused_mut)]
+        let mut processed = 0;
+        #[cfg(all(feature = "avx512", feature = "simd", target_arch = "x86_64"))]
+        if bit_depth == 8 && scale == 0 {
+            // Scale-0 8-bit planes hold v ≤ 255 — the i16 madd-pair kernel is
+            // exact; higher-scale planes reach ~65280 and stay on v3.
+            if let Some(token) = v4_token() {
+                processed = vif_subsample_vertical_v4(
+                    token,
+                    &image.reference,
+                    &image.distorted,
+                    &row_offsets,
+                    width,
+                    filter,
+                    shift,
+                    round,
+                    &mut vertical_reference,
+                    &mut vertical_distorted,
+                );
+            }
+        }
         let processed = {
+            if processed > 0 {
+                processed
+            } else {
             #[cfg(feature = "simd")]
             {
                 #[cfg(target_arch = "x86_64")]
@@ -154,6 +178,7 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
             #[cfg(not(feature = "simd"))]
             {
                 0
+            }
             }
         };
         for col in processed..width {
@@ -1026,6 +1051,96 @@ fn vif_subsample_vertical_simd(
 /// `vif_subsample_rd_8_avx2` case as well: loading the u16 plane directly is
 /// equivalent to `cvtepu8_epi16` for 8-bit inputs, and the `(shift, round)`
 /// parameters reproduce both rounding tables. Processes 16 columns per
+/// `vif_subsample_rd_8_avx512` vertical port: 32 u16 lanes/iter with the
+/// filter folded into tap *pairs* — `madd(unpacklo(v_t, v_t+1), f_pair)` adds
+/// both taps' products in one op. Only safe when inputs fit i16 (8-bit scale-0
+/// guarantees v ≤ 255; scale≥1 planes reach ~65280 and must use the u16 path).
+/// Odd `fwidth` is padded with a zero coefficient against a safe mirrored row.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn vif_subsample_vertical_v4(
+    _token: X64V4Token,
+    reference: &[u16],
+    distorted: &[u16],
+    row_offsets: &[usize],
+    width: usize,
+    filter: &[u16],
+    shift: u32,
+    round: u32,
+    vertical_reference: &mut [u32],
+    vertical_distorted: &mut [u32],
+) -> usize {
+    let half = filter.len() / 2;
+    let n = width >> 5;
+    let addnum = _mm512_set1_epi32(round as i32);
+    let shift_xmm = _mm_cvtsi32_si128(shift as i32);
+    let perm_lo = _mm512_set_epi64(11, 10, 3, 2, 9, 8, 1, 0);
+    let perm_hi = _mm512_set_epi64(15, 14, 7, 6, 13, 12, 5, 4);
+    // Padded pair coefficients: f_pair[t/2] = f[t] | f[t+1]<<16 (zero when the
+    // partner tap doesn't exist — its row is read but multiplied by 0).
+    let npairs = filter.len().div_ceil(2);
+    let mut fpairs = [0i32; 9];
+    for (pi, slot) in fpairs.iter_mut().enumerate().take(npairs) {
+        let lo = filter[2 * pi] as i32;
+        let hi = if 2 * pi + 1 < filter.len() {
+            filter[2 * pi + 1] as i32
+        } else {
+            0
+        };
+        *slot = lo | (hi << 16);
+    }
+    for chunk in 0..n {
+        let j = chunk * 32;
+        let mut accumr_lo = _mm512_setzero_si512();
+        let mut accumr_hi = _mm512_setzero_si512();
+        let mut accumd_lo = _mm512_setzero_si512();
+        let mut accumd_hi = _mm512_setzero_si512();
+        for (pi, &fc) in fpairs.iter().enumerate().take(npairs) {
+            let fp = _mm512_set1_epi32(fc);
+            let off0 = row_offsets[2 * pi];
+            let off1 = row_offsets[(2 * pi + 1).min(row_offsets.len() - 1)];
+            let r0 = _mm512_loadu_si512(a8::<u16, 32>(&reference[off0 + j..off0 + j + 32]));
+            let r1 = _mm512_loadu_si512(a8::<u16, 32>(&reference[off1 + j..off1 + j + 32]));
+            let d0 = _mm512_loadu_si512(a8::<u16, 32>(&distorted[off0 + j..off0 + j + 32]));
+            let d1 = _mm512_loadu_si512(a8::<u16, 32>(&distorted[off1 + j..off1 + j + 32]));
+            accumr_lo = _mm512_add_epi32(
+                accumr_lo,
+                _mm512_madd_epi16(_mm512_unpacklo_epi16(r0, r1), fp),
+            );
+            accumr_hi = _mm512_add_epi32(
+                accumr_hi,
+                _mm512_madd_epi16(_mm512_unpackhi_epi16(r0, r1), fp),
+            );
+            accumd_lo = _mm512_add_epi32(
+                accumd_lo,
+                _mm512_madd_epi16(_mm512_unpacklo_epi16(d0, d1), fp),
+            );
+            accumd_hi = _mm512_add_epi32(
+                accumd_hi,
+                _mm512_madd_epi16(_mm512_unpackhi_epi16(d0, d1), fp),
+            );
+        }
+        macro_rules! store_out {
+            ($dst:expr, $lo:expr, $hi:expr) => {
+                let lo = _mm512_srl_epi32(_mm512_add_epi32($lo, addnum), shift_xmm);
+                let hi = _mm512_srl_epi32(_mm512_add_epi32($hi, addnum), shift_xmm);
+                _mm512_storeu_si512(
+                    a8m::<u32, 16>(&mut $dst[half + j..half + j + 16]),
+                    _mm512_permutex2var_epi64(lo, perm_lo, hi),
+                );
+                _mm512_storeu_si512(
+                    a8m::<u32, 16>(&mut $dst[half + j + 16..half + j + 32]),
+                    _mm512_permutex2var_epi64(lo, perm_hi, hi),
+                );
+            };
+        }
+        store_out!(vertical_reference, accumr_lo, accumr_hi);
+        store_out!(vertical_distorted, accumd_lo, accumd_hi);
+    }
+    n * 32
+}
+
 /// iteration, writes the convolved row at `half + j` in the padded buffers.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
@@ -1271,6 +1386,211 @@ fn vif_shuffle_save(_token: X64V3Token, addr: &mut [u32; 16], x: __m256i, y: __m
     let right = _mm256_permute2x128_si256(x, y, 0x31);
     _mm256_storeu_si256(a8m::<u32, 8>(&mut addr[..8]), left);
     _mm256_storeu_si256(a8m::<u32, 8>(&mut addr[8..16]), right);
+}
+
+/// Port of libvmaf's `vif_statistic_8_avx512` vertical pass: 32 u16 lanes per
+/// iteration (our planes are u16, not C's u8), tap *pairs* folded into one
+/// `madd_epi16` each — symmetric sums `f0*(r0+r16)+f1*(r1+r15)` via unpacked
+/// pair vectors, and squares via `madd(v,v)` which emits both taps' squares in
+/// a single op. Requires `half` even (FILTERS[0] ⇒ 8) and bit_depth == 8 so
+/// pair sums ≤ 510 fit i16 and sq products fit i32.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn vif_stat8_vertical_v4(
+    _token: X64V4Token,
+    reference: &[u16],
+    distorted: &[u16],
+    row_offsets: &[usize; 17],
+    filt: &[u16],
+    half: usize,
+    width: usize,
+    tmp_mu1: &mut [u32],
+    tmp_mu2: &mut [u32],
+    tmp_ref: &mut [u32],
+    tmp_dis: &mut [u32],
+    tmp_ref_dis: &mut [u32],
+) {
+    let fwidth = 2 * half + 1;
+    let n32 = width & !31;
+    let zero = _mm512_setzero_si512();
+    let round = _mm512_set1_epi32(128);
+    let perm_lo = _mm512_set_epi64(11, 10, 3, 2, 9, 8, 1, 0);
+    let perm_hi = _mm512_set_epi64(15, 14, 7, 6, 13, 12, 5, 4);
+
+    for j in (0..n32).step_by(32) {
+        let f0 = _mm512_set1_epi32(filt[half] as i32);
+        let r0 = _mm512_loadu_si512(a8::<u16, 32>(
+            &reference[row_offsets[half] + j..row_offsets[half] + j + 32],
+        ));
+        let d0 = _mm512_loadu_si512(a8::<u16, 32>(
+            &distorted[row_offsets[half] + j..row_offsets[half] + j + 32],
+        ));
+        let r0_lo = _mm512_unpacklo_epi16(r0, zero);
+        let r0_hi = _mm512_unpackhi_epi16(r0, zero);
+        let d0_lo = _mm512_unpacklo_epi16(d0, zero);
+        let d0_hi = _mm512_unpackhi_epi16(d0, zero);
+
+        let mut mu1_lo = _mm512_mullo_epi32(r0_lo, f0);
+        let mut mu1_hi = _mm512_mullo_epi32(r0_hi, f0);
+        let mut mu2_lo = _mm512_mullo_epi32(d0_lo, f0);
+        let mut mu2_hi = _mm512_mullo_epi32(d0_hi, f0);
+        let mut ref_lo = _mm512_mullo_epi32(f0, _mm512_mullo_epi32(r0_lo, r0_lo));
+        let mut ref_hi = _mm512_mullo_epi32(f0, _mm512_mullo_epi32(r0_hi, r0_hi));
+        let mut dis_lo = _mm512_mullo_epi32(f0, _mm512_mullo_epi32(d0_lo, d0_lo));
+        let mut dis_hi = _mm512_mullo_epi32(f0, _mm512_mullo_epi32(d0_hi, d0_hi));
+        let mut rd_lo = _mm512_mullo_epi32(f0, _mm512_mullo_epi32(r0_lo, d0_lo));
+        let mut rd_hi = _mm512_mullo_epi32(f0, _mm512_mullo_epi32(r0_hi, d0_hi));
+
+        for tap in (0..half).step_by(2) {
+            let f0v = _mm512_set1_epi32(filt[tap] as i32);
+            let f1v = _mm512_set1_epi32(filt[tap + 1] as i32);
+            let f01 = _mm512_set1_epi32(
+                (filt[tap] as i32) | ((filt[tap + 1] as i32) << 16),
+            );
+            let lo0 = row_offsets[tap];
+            let hi0 = row_offsets[fwidth - 1 - tap];
+            let lo1 = row_offsets[tap + 1];
+            let hi1 = row_offsets[fwidth - 2 - tap];
+            let r0 = _mm512_loadu_si512(a8::<u16, 32>(&reference[lo0 + j..lo0 + j + 32]));
+            let r16 = _mm512_loadu_si512(a8::<u16, 32>(&reference[hi0 + j..hi0 + j + 32]));
+            let r1 = _mm512_loadu_si512(a8::<u16, 32>(&reference[lo1 + j..lo1 + j + 32]));
+            let r15 = _mm512_loadu_si512(a8::<u16, 32>(&reference[hi1 + j..hi1 + j + 32]));
+            let d0 = _mm512_loadu_si512(a8::<u16, 32>(&distorted[lo0 + j..lo0 + j + 32]));
+            let d16 = _mm512_loadu_si512(a8::<u16, 32>(&distorted[hi0 + j..hi0 + j + 32]));
+            let d1 = _mm512_loadu_si512(a8::<u16, 32>(&distorted[lo1 + j..lo1 + j + 32]));
+            let d15 = _mm512_loadu_si512(a8::<u16, 32>(&distorted[hi1 + j..hi1 + j + 32]));
+
+            let r0p16 = _mm512_add_epi16(r0, r16);
+            let r1p15 = _mm512_add_epi16(r1, r15);
+            let d0p16 = _mm512_add_epi16(d0, d16);
+            let d1p15 = _mm512_add_epi16(d1, d15);
+
+            mu1_lo = _mm512_add_epi32(
+                mu1_lo,
+                _mm512_madd_epi16(_mm512_unpacklo_epi16(r0p16, r1p15), f01),
+            );
+            mu1_hi = _mm512_add_epi32(
+                mu1_hi,
+                _mm512_madd_epi16(_mm512_unpackhi_epi16(r0p16, r1p15), f01),
+            );
+            mu2_lo = _mm512_add_epi32(
+                mu2_lo,
+                _mm512_madd_epi16(_mm512_unpacklo_epi16(d0p16, d1p15), f01),
+            );
+            mu2_hi = _mm512_add_epi32(
+                mu2_hi,
+                _mm512_madd_epi16(_mm512_unpackhi_epi16(d0p16, d1p15), f01),
+            );
+
+            let rr_lo = _mm512_unpacklo_epi16(r0, r16);
+            let rr_hi = _mm512_unpackhi_epi16(r0, r16);
+            let rr1_lo = _mm512_unpacklo_epi16(r1, r15);
+            let rr1_hi = _mm512_unpackhi_epi16(r1, r15);
+            let dd_lo = _mm512_unpacklo_epi16(d0, d16);
+            let dd_hi = _mm512_unpackhi_epi16(d0, d16);
+            let dd1_lo = _mm512_unpacklo_epi16(d1, d15);
+            let dd1_hi = _mm512_unpackhi_epi16(d1, d15);
+
+            ref_lo = _mm512_add_epi32(
+                ref_lo,
+                _mm512_mullo_epi32(_mm512_madd_epi16(rr_lo, rr_lo), f0v),
+            );
+            ref_hi = _mm512_add_epi32(
+                ref_hi,
+                _mm512_mullo_epi32(_mm512_madd_epi16(rr_hi, rr_hi), f0v),
+            );
+            dis_lo = _mm512_add_epi32(
+                dis_lo,
+                _mm512_mullo_epi32(_mm512_madd_epi16(dd_lo, dd_lo), f0v),
+            );
+            dis_hi = _mm512_add_epi32(
+                dis_hi,
+                _mm512_mullo_epi32(_mm512_madd_epi16(dd_hi, dd_hi), f0v),
+            );
+            rd_lo = _mm512_add_epi32(
+                rd_lo,
+                _mm512_mullo_epi32(_mm512_madd_epi16(dd_lo, rr_lo), f0v),
+            );
+            rd_hi = _mm512_add_epi32(
+                rd_hi,
+                _mm512_mullo_epi32(_mm512_madd_epi16(dd_hi, rr_hi), f0v),
+            );
+            ref_lo = _mm512_add_epi32(
+                ref_lo,
+                _mm512_mullo_epi32(_mm512_madd_epi16(rr1_lo, rr1_lo), f1v),
+            );
+            ref_hi = _mm512_add_epi32(
+                ref_hi,
+                _mm512_mullo_epi32(_mm512_madd_epi16(rr1_hi, rr1_hi), f1v),
+            );
+            dis_lo = _mm512_add_epi32(
+                dis_lo,
+                _mm512_mullo_epi32(_mm512_madd_epi16(dd1_lo, dd1_lo), f1v),
+            );
+            dis_hi = _mm512_add_epi32(
+                dis_hi,
+                _mm512_mullo_epi32(_mm512_madd_epi16(dd1_hi, dd1_hi), f1v),
+            );
+            rd_lo = _mm512_add_epi32(
+                rd_lo,
+                _mm512_mullo_epi32(_mm512_madd_epi16(dd1_lo, rr1_lo), f1v),
+            );
+            rd_hi = _mm512_add_epi32(
+                rd_hi,
+                _mm512_mullo_epi32(_mm512_madd_epi16(dd1_hi, rr1_hi), f1v),
+            );
+        }
+
+        mu1_lo = _mm512_srli_epi32::<8>(_mm512_add_epi32(mu1_lo, round));
+        mu1_hi = _mm512_srli_epi32::<8>(_mm512_add_epi32(mu1_hi, round));
+        mu2_lo = _mm512_srli_epi32::<8>(_mm512_add_epi32(mu2_lo, round));
+        mu2_hi = _mm512_srli_epi32::<8>(_mm512_add_epi32(mu2_hi, round));
+
+        macro_rules! store2 {
+            ($dst:expr, $lo:expr, $hi:expr) => {
+                let t = $lo;
+                _mm512_storeu_si512(
+                    a8m::<u32, 16>(&mut $dst[half + j..half + j + 16]),
+                    _mm512_permutex2var_epi64(t, perm_lo, $hi),
+                );
+                _mm512_storeu_si512(
+                    a8m::<u32, 16>(&mut $dst[half + j + 16..half + j + 32]),
+                    _mm512_permutex2var_epi64(t, perm_hi, $hi),
+                );
+            };
+        }
+        store2!(tmp_mu1, mu1_lo, mu1_hi);
+        store2!(tmp_mu2, mu2_lo, mu2_hi);
+        store2!(tmp_ref, ref_lo, ref_hi);
+        store2!(tmp_dis, dis_lo, dis_hi);
+        store2!(tmp_ref_dis, rd_lo, rd_hi);
+    }
+
+    for j in n32..width {
+        let mut accum_mu1 = 0u32;
+        let mut accum_mu2 = 0u32;
+        let mut accum_ref = 0u64;
+        let mut accum_dis = 0u64;
+        let mut accum_rd = 0u64;
+        for (fi, &fcoeff) in filt.iter().enumerate().take(fwidth) {
+            let off = row_offsets[fi];
+            let ref_v = reference[off + j] as u32;
+            let dis_v = distorted[off + j] as u32;
+            let wref = fcoeff as u32 * ref_v;
+            let wdis = fcoeff as u32 * dis_v;
+            accum_mu1 = accum_mu1.wrapping_add(wref);
+            accum_mu2 = accum_mu2.wrapping_add(wdis);
+            accum_ref += wref as u64 * ref_v as u64;
+            accum_dis += wdis as u64 * dis_v as u64;
+            accum_rd += wref as u64 * dis_v as u64;
+        }
+        tmp_mu1[half + j] = (accum_mu1 + 128) >> 8;
+        tmp_mu2[half + j] = (accum_mu2 + 128) >> 8;
+        tmp_ref[half + j] = accum_ref as u32;
+        tmp_dis[half + j] = accum_dis as u32;
+        tmp_ref_dis[half + j] = accum_rd as u32;
+    }
 }
 
 /// Faithful port of libvmaf's `vif_statistic_8_avx2` vertical pass for one row:
@@ -2823,9 +3143,9 @@ macro_rules! vif_statistic_finalize_v4 {
 /// it expands inside the caller's `#[arcane]` body (see `gather_log_u16_v4`).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
 macro_rules! vif_stat_fsq_v4 {
-    ($w:expr, $farr64:expr, $fwidth:expr, $rounder16:expr, $mask2:expr) => {{
+    ($w:expr, $fqv:expr, $fwidth:expr, $rounder16:expr, $mask2:expr) => {{
         let w: &[u32; 33] = $w;
-        let farr64: &[i64; 17] = $farr64;
+        let fqv: &[__m512i; 17] = $fqv;
         let fwidth: usize = $fwidth;
         let rounder16 = $rounder16;
         let mask2 = $mask2;
@@ -2833,7 +3153,7 @@ macro_rules! vif_stat_fsq_v4 {
         let mut acc_hi = acc_lo;
         let _ = rounder16;
         for k in 0..fwidth.min(17) {
-            let fq = _mm512_set1_epi64(farr64[k]);
+            let fq = fqv[k];
             let s0 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&w[k..k + 8])));
             let s1 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&w[k + 8..k + 16])));
             acc_lo = _mm512_add_epi64(acc_lo, _mm512_mul_epu32(s0, fq));
@@ -2883,13 +3203,20 @@ fn vif_stat_horizontal_v4(
     let (num_log, den_log, num_non_log_out, den_non_log_out) = accums;
 
     // Padded filter arrays: index by k < fwidth ≤ 17 — provably in bounds.
-    let mut farr32 = [0i32; 17];
-    let mut farr64 = [0i64; 17];
+    let mut fqv32 = [_mm512_setzero_si512(); 17];
+    let mut fqv64 = [_mm512_setzero_si512(); 17];
     for (k, &c) in filt.iter().enumerate() {
-        farr32[k] = c as i32;
-        farr64[k] = c as i64;
+        fqv32[k] = _mm512_set1_epi32(c as i32);
+        fqv64[k] = _mm512_set1_epi64(c as i64);
     }
     assert!(fwidth <= 17 && half <= 8);
+    // For j <= n16-16 the window [j, j+33) fits: j+33 <= n16+17 <= padded.
+    // Hoisting the fact once lets LLVM drop the five per-iter checks.
+    assert!(n16 + 17 <= tmp_mu1.len());
+    assert!(n16 + 17 <= tmp_mu2.len());
+    assert!(n16 + 17 <= tmp_ref.len());
+    assert!(n16 + 17 <= tmp_dis.len());
+    assert!(n16 + 17 <= tmp_ref_dis.len());
 
     for j in (0..n16).step_by(16) {
         // 33-wide windows per block: every tap index k..k+16 is provably in
@@ -2904,7 +3231,7 @@ fn vif_stat_horizontal_v4(
         // the i64 lanes, identical to the AVX2 path (sums stay < 2^32 per
         // half). The filter is symmetric, so the straight convolution over
         // k ∈ [0,fwidth) is bit-identical to the paired l/r form.
-        let fq = _mm512_set1_epi32(farr32[half]);
+        let fq = fqv32[half];
         let mut mu1 = _mm512_mullo_epi32(
             _mm512_loadu_si512(a8::<u32, 16>(&w_mu1[half..half + 16])),
             fq,
@@ -2917,7 +3244,7 @@ fn vif_stat_horizontal_v4(
             if k == half {
                 continue;
             }
-            let fq = _mm512_set1_epi32(farr32[k]);
+            let fq = fqv32[k];
             mu1 = _mm512_add_epi64(
                 mu1,
                 _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&w_mu1[k..k + 16])), fq),
@@ -2971,18 +3298,18 @@ fn vif_stat_horizontal_v4(
         // filtered ref²/dis²/ref·dis (u32 lanes widened to i64 accumulators,
         // srli 16, even-lane merge via mask2), minus the matching mu term.
         let xx = _mm512_sub_epi32(
-            vif_stat_fsq_v4!(w_ref, &farr64, fwidth, rounder16, mask2),
+            vif_stat_fsq_v4!(w_ref, &fqv64, fwidth, rounder16, mask2),
             mu1sq,
         );
         let yy = _mm512_max_epi32(
             _mm512_sub_epi32(
-                vif_stat_fsq_v4!(w_dis, &farr64, fwidth, rounder16, mask2),
+                vif_stat_fsq_v4!(w_dis, &fqv64, fwidth, rounder16, mask2),
                 mu2sq,
             ),
             zero,
         );
         let xy = _mm512_sub_epi32(
-            vif_stat_fsq_v4!(w_rd, &farr64, fwidth, rounder16, mask2),
+            vif_stat_fsq_v4!(w_rd, &fqv64, fwidth, rounder16, mask2),
             mu1mu2,
         );
         vif_statistic_finalize_v4!(
@@ -3127,8 +3454,28 @@ fn statistics(
                 }
             }
         }
+        #[cfg(all(feature = "avx512", feature = "simd", target_arch = "x86_64"))]
+        if bit_depth == 8 && scale == 0 && half % 2 == 0 {
+            if let Some(token) = v4_token() {
+                vif_stat8_vertical_v4(
+                    token,
+                    &image.reference,
+                    &image.distorted,
+                    &row_offsets,
+                    filter,
+                    half as usize,
+                    width,
+                    &mut vertical_ref_mean,
+                    &mut vertical_dis_mean,
+                    &mut vertical_ref_sq,
+                    &mut vertical_dis_sq,
+                    &mut vertical_ref_dis,
+                );
+                processed = width;
+            }
+        }
         #[cfg(feature = "simd")]
-        if bit_depth == 8 && scale == 0 {
+        if bit_depth == 8 && scale == 0 && processed < width {
             #[cfg(target_arch = "x86_64")]
             let avx2 = if let Some(token) = x64v3 {
                 vif_stat8_vertical_v3(
