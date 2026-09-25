@@ -213,6 +213,25 @@ the accumulators — so `vif_pixel_finalize` no longer reconstructs u64
 sums per pixel; the Callgrind harness dropped to 14.92M (8-bit) and
 16.23M (10-bit). Only the v1 feature path remains scalar.
 
+The ADM pipeline has the same optimization treatment, measured on a fixed
+192×128 8-bit Callgrind harness (single `adm2_v0_from_luma` call). From a
+12.56M-instruction baseline, hoisting the scale-1–3 `BandI32` buffers and
+ping-ponging the inter-scale i4 decimation inputs instead of cloning them
+dropped the count to 11.56M. Precomputing the contrast-mask 3×3 window as
+per-row column sums — replacing per-pixel `dy`/`dx` filter-loop index math in
+the interior while keeping the scalar mirrored-edge path — dropped it to
+9.05M (`adm_cm_i16` 2.36M→1.15M, `adm_cm_i32` 1.79M→0.48M). The DWT2
+horizontal pass is SIMD-enabled: it evaluates the stride-1 convolution at 16
+consecutive positions per chunk over sign-extended `i16x16`→`i32x8` lanes and
+keeps the 8 even lanes as stride-2 outputs, with scalar first/last edge taps
+and tails; its approximation-band output is written directly into the i4
+decimation inputs as i32, removing a whole-band copy pass and the `BandI16.a`
+field. That dropped the harness to 8.29M instructions, and a 10-iteration
+1280×720 `adm2_v0_from_luma` run measured 16.88 ms/frame versus 18.23 after
+the contrast-mask change and 19.47 in the original stage profile. The ADM
+decouple pass (gathered div-table lookups plus per-pixel f64 angle tests)
+remains scalar, as do `adm_csf` and the higher-scale `dwt2_s123` filter.
+
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate
 ([`fast-ssim2`](https://crates.io/crates/fast-ssim2) 0.8.1,

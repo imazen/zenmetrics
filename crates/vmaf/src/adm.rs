@@ -144,7 +144,6 @@ fn dwt2_indices(w: usize, h: usize) -> (Vec<[i32; 4]>, Vec<[i32; 4]>) {
 
 #[derive(Default)]
 struct BandI16 {
-    a: Vec<i16>,
     h: Vec<i16>,
     v: Vec<i16>,
     d: Vec<i16>,
@@ -287,6 +286,7 @@ fn adm_dwt2_scalar(
     bit_depth: u8,
     ind_y: &[[i32; 4]],
     ind_x: &[[i32; 4]],
+    a_out: &mut [i32],
 ) {
     adm_dwt2_core(
         src,
@@ -297,7 +297,9 @@ fn adm_dwt2_scalar(
         bit_depth,
         ind_y,
         ind_x,
+        a_out,
         dwt2_vertical_scalar,
+        dwt2_horizontal_scalar,
     );
 }
 
@@ -311,6 +313,7 @@ fn adm_dwt2(
     bit_depth: u8,
     ind_y: &[[i32; 4]],
     ind_x: &[[i32; 4]],
+    a_out: &mut [i32],
 ) {
     #[cfg(feature = "simd")]
     adm_dwt2_core(
@@ -322,12 +325,14 @@ fn adm_dwt2(
         bit_depth,
         ind_y,
         ind_x,
+        a_out,
         |src, src_stride, w, bit_depth, indices, tmplo, tmphi| {
             archmage::incant!(
                 dwt2_vertical_simd(src, src_stride, w, bit_depth, indices, tmplo, tmphi),
                 [v3, neon, wasm128, scalar]
             );
         },
+        dwt2_horizontal_row,
     );
     #[cfg(not(feature = "simd"))]
     adm_dwt2_core(
@@ -339,8 +344,164 @@ fn adm_dwt2(
         bit_depth,
         ind_y,
         ind_x,
+        a_out,
         dwt2_vertical_scalar,
+        dwt2_horizontal_scalar,
     );
+}
+
+fn dwt2_horizontal_at(
+    tmplo: &[i16],
+    tmphi: &[i16],
+    ix: [i32; 4],
+    i: usize,
+    j: usize,
+    dst_stride: usize,
+    dst: &mut BandI16,
+    a_row: &mut [i32],
+) {
+    let (j0, j1, j2, j3) = (
+        ix[0] as usize,
+        ix[1] as usize,
+        ix[2] as usize,
+        ix[3] as usize,
+    );
+    let s = [tmplo[j0], tmplo[j1], tmplo[j2], tmplo[j3]];
+    let mut accum = 0i32;
+    for k in 0..4 {
+        accum += DWT2_LO[k] as i32 * s[k] as i32;
+    }
+    a_row[j] = ((accum + 32768) >> 16) as i16 as i32;
+    let mut accum = 0i32;
+    for k in 0..4 {
+        accum += DWT2_HI[k] as i32 * s[k] as i32;
+    }
+    dst.v[i * dst_stride + j] = ((accum + 32768) >> 16) as i16;
+    let s = [tmphi[j0], tmphi[j1], tmphi[j2], tmphi[j3]];
+    let mut accum = 0i32;
+    for k in 0..4 {
+        accum += DWT2_LO[k] as i32 * s[k] as i32;
+    }
+    dst.h[i * dst_stride + j] = ((accum + 32768) >> 16) as i16;
+    let mut accum = 0i32;
+    for k in 0..4 {
+        accum += DWT2_HI[k] as i32 * s[k] as i32;
+    }
+    dst.d[i * dst_stride + j] = ((accum + 32768) >> 16) as i16;
+}
+
+fn dwt2_horizontal_scalar(
+    tmplo: &[i16],
+    tmphi: &[i16],
+    ind_x: &[[i32; 4]],
+    i: usize,
+    _w: usize,
+    dst_stride: usize,
+    dst: &mut BandI16,
+    a_out: &mut [i32],
+) {
+    let a_row = &mut a_out[i * dst_stride..i * dst_stride + ind_x.len()];
+    for (j, &ix) in ind_x.iter().enumerate() {
+        dwt2_horizontal_at(tmplo, tmphi, ix, i, j, dst_stride, dst, a_row);
+    }
+}
+
+#[cfg(feature = "simd")]
+fn dwt2_horizontal_row(
+    tmplo: &[i16],
+    tmphi: &[i16],
+    ind_x: &[[i32; 4]],
+    i: usize,
+    w: usize,
+    dst_stride: usize,
+    dst: &mut BandI16,
+    a_out: &mut [i32],
+) {
+    let w_half = ind_x.len();
+    if w_half < 11 {
+        dwt2_horizontal_scalar(tmplo, tmphi, ind_x, i, w, dst_stride, dst, a_out);
+        return;
+    }
+    let a_row = &mut a_out[i * dst_stride..i * dst_stride + w_half];
+    dwt2_horizontal_at(tmplo, tmphi, ind_x[0], i, 0, dst_stride, dst, a_row);
+    let mut j = 1;
+    while j + 8 <= w_half - 2 {
+        let mut out = [[0i16; 8]; 4];
+        archmage::incant!(
+            dwt2_horizontal_simd(tmplo, tmphi, 2 * j - 1, &mut out),
+            [v3, neon, wasm128, scalar]
+        );
+        let row = i * dst_stride + j;
+        let mut a8 = [0i32; 8];
+        for k in 0..8 {
+            a8[k] = out[0][k] as i32;
+        }
+        a_row[j..j + 8].copy_from_slice(&a8);
+        dst.v[row..row + 8].copy_from_slice(&out[1]);
+        dst.h[row..row + 8].copy_from_slice(&out[2]);
+        dst.d[row..row + 8].copy_from_slice(&out[3]);
+        j += 8;
+    }
+    while j < w_half {
+        dwt2_horizontal_at(tmplo, tmphi, ind_x[j], i, j, dst_stride, dst, a_row);
+        j += 1;
+    }
+}
+
+#[cfg(feature = "simd")]
+#[magetypes(define(i16x16, i32x8), v3, neon, wasm128, scalar)]
+fn dwt2_horizontal_simd(
+    token: Token,
+    tmplo: &[i16],
+    tmphi: &[i16],
+    base: usize,
+    out: &mut [[i16; 8]; 4],
+) {
+    let mut acc_a_lo = i32x8::zero(token);
+    let mut acc_a_hi = i32x8::zero(token);
+    let mut acc_v_lo = i32x8::zero(token);
+    let mut acc_v_hi = i32x8::zero(token);
+    let mut acc_h_lo = i32x8::zero(token);
+    let mut acc_h_hi = i32x8::zero(token);
+    let mut acc_d_lo = i32x8::zero(token);
+    let mut acc_d_hi = i32x8::zero(token);
+    for t in 0..4 {
+        let wl = i32x8::splat(token, DWT2_LO[t] as i32);
+        let wh = i32x8::splat(token, DWT2_HI[t] as i32);
+        let lt = i16x16::load(token, tmplo[base + t..base + t + 16].try_into().unwrap());
+        let ht = i16x16::load(token, tmphi[base + t..base + t + 16].try_into().unwrap());
+        let ltl = lt.widen_low();
+        let lth = lt.widen_high();
+        let htl = ht.widen_low();
+        let hth = ht.widen_high();
+        acc_a_lo += wl * ltl;
+        acc_a_hi += wl * lth;
+        acc_v_lo += wh * ltl;
+        acc_v_hi += wh * lth;
+        acc_h_lo += wl * htl;
+        acc_h_hi += wl * hth;
+        acc_d_lo += wh * htl;
+        acc_d_hi += wh * hth;
+    }
+    let add = i32x8::splat(token, 32768);
+    let a_lo = (acc_a_lo + add).shr_arithmetic_uniform(16).to_array();
+    let a_hi = (acc_a_hi + add).shr_arithmetic_uniform(16).to_array();
+    let v_lo = (acc_v_lo + add).shr_arithmetic_uniform(16).to_array();
+    let v_hi = (acc_v_hi + add).shr_arithmetic_uniform(16).to_array();
+    let h_lo = (acc_h_lo + add).shr_arithmetic_uniform(16).to_array();
+    let h_hi = (acc_h_hi + add).shr_arithmetic_uniform(16).to_array();
+    let d_lo = (acc_d_lo + add).shr_arithmetic_uniform(16).to_array();
+    let d_hi = (acc_d_hi + add).shr_arithmetic_uniform(16).to_array();
+    for (band, lane) in [a_lo, v_lo, h_lo, d_lo].into_iter().enumerate() {
+        for k in 0..4 {
+            out[band][k] = lane[2 * k] as i16;
+        }
+    }
+    for (band, lane) in [a_hi, v_hi, h_hi, d_hi].into_iter().enumerate() {
+        for k in 0..4 {
+            out[band][4 + k] = lane[2 * k] as i16;
+        }
+    }
 }
 
 fn adm_dwt2_core(
@@ -352,44 +513,15 @@ fn adm_dwt2_core(
     bit_depth: u8,
     ind_y: &[[i32; 4]],
     ind_x: &[[i32; 4]],
+    a_out: &mut [i32],
     vertical: impl Fn(&[u16], usize, usize, u8, [i32; 4], &mut [i16], &mut [i16]),
+    horizontal: impl Fn(&[i16], &[i16], &[[i32; 4]], usize, usize, usize, &mut BandI16, &mut [i32]),
 ) {
-    let shift_hp = 16;
-    let add_shift_hp = 32768i32;
     let mut tmplo = vec![0i16; w];
     let mut tmphi = vec![0i16; w];
     for (i, iy) in ind_y.iter().enumerate() {
         vertical(src, src_stride, w, bit_depth, *iy, &mut tmplo, &mut tmphi);
-        for (j, ix) in ind_x.iter().enumerate() {
-            let (j0, j1, j2, j3) = (
-                ix[0] as usize,
-                ix[1] as usize,
-                ix[2] as usize,
-                ix[3] as usize,
-            );
-            let s = [tmplo[j0], tmplo[j1], tmplo[j2], tmplo[j3]];
-            let mut accum = 0i32;
-            for k in 0..4 {
-                accum += DWT2_LO[k] as i32 * s[k] as i32;
-            }
-            dst.a[i * dst_stride + j] = ((accum + add_shift_hp) >> shift_hp) as i16;
-            let mut accum = 0i32;
-            for k in 0..4 {
-                accum += DWT2_HI[k] as i32 * s[k] as i32;
-            }
-            dst.v[i * dst_stride + j] = ((accum + add_shift_hp) >> shift_hp) as i16;
-            let s = [tmphi[j0], tmphi[j1], tmphi[j2], tmphi[j3]];
-            let mut accum = 0i32;
-            for k in 0..4 {
-                accum += DWT2_LO[k] as i32 * s[k] as i32;
-            }
-            dst.h[i * dst_stride + j] = ((accum + add_shift_hp) >> shift_hp) as i16;
-            let mut accum = 0i32;
-            for k in 0..4 {
-                accum += DWT2_HI[k] as i32 * s[k] as i32;
-            }
-            dst.d[i * dst_stride + j] = ((accum + add_shift_hp) >> shift_hp) as i16;
-        }
+        horizontal(&tmplo, &tmphi, ind_x, i, w, dst_stride, dst, a_out);
     }
 }
 
@@ -1276,17 +1408,17 @@ fn compute_adm(
         let (num_scale, den_scale, aim_num_scale);
         if scale == 0 {
             let mut ref_b = BandI16 {
-                a: vec![0; band_elems],
                 h: vec![0; band_elems],
                 v: vec![0; band_elems],
                 d: vec![0; band_elems],
             };
             let mut dis_b = BandI16 {
-                a: vec![0; band_elems],
                 h: vec![0; band_elems],
                 v: vec![0; band_elems],
                 d: vec![0; band_elems],
             };
+            i4_ref_scale = vec![0i32; band_elems];
+            i4_dis_scale = vec![0i32; band_elems];
             adm_dwt2(
                 reference_y,
                 width,
@@ -1297,6 +1429,7 @@ fn compute_adm(
                 bit_depth,
                 &ind_y,
                 &ind_x,
+                &mut i4_ref_scale,
             );
             adm_dwt2(
                 distorted_y,
@@ -1308,23 +1441,14 @@ fn compute_adm(
                 bit_depth,
                 &ind_y,
                 &ind_x,
+                &mut i4_dis_scale,
             );
-            i4_ref_scale = vec![0i32; band_elems];
-            i4_dis_scale = vec![0i32; band_elems];
-            for i in 0..h.div_ceil(2) {
-                for j in 0..w.div_ceil(2) {
-                    i4_ref_scale[i * buf_stride + j] = ref_b.a[i * buf_stride + j] as i32;
-                    i4_dis_scale[i * buf_stride + j] = dis_b.a[i * buf_stride + j] as i32;
-                }
-            }
             let mut r = BandI16 {
-                a: Vec::new(),
                 h: vec![0; band_elems],
                 v: vec![0; band_elems],
                 d: vec![0; band_elems],
             };
             let mut a = BandI16 {
-                a: Vec::new(),
                 h: vec![0; band_elems],
                 v: vec![0; band_elems],
                 d: vec![0; band_elems],
@@ -1344,13 +1468,11 @@ fn compute_adm(
             );
             den_scale = adm_csf_den_scale(&ref_b, w, h, buf_stride, rf, settings.noise_weight);
             let mut csf_a = BandI16 {
-                a: Vec::new(),
                 h: vec![0; band_elems],
                 v: vec![0; band_elems],
                 d: vec![0; band_elems],
             };
             let mut csf_f = BandI16 {
-                a: Vec::new(),
                 h: vec![0; band_elems],
                 v: vec![0; band_elems],
                 d: vec![0; band_elems],
@@ -1539,13 +1661,14 @@ fn simd_dwt2_matches_scalar_for_edges_tails_and_bit_depths() {
             let dst_stride = w.div_ceil(2);
             let len = dst_stride * h.div_ceil(2);
             let make_band = || BandI16 {
-                a: vec![0; len],
                 h: vec![0; len],
                 v: vec![0; len],
                 d: vec![0; len],
             };
             let mut scalar = make_band();
             let mut simd = make_band();
+            let mut scalar_a = vec![0i32; len];
+            let mut simd_a = vec![0i32; len];
             adm_dwt2_scalar(
                 &src,
                 w,
@@ -1556,11 +1679,21 @@ fn simd_dwt2_matches_scalar_for_edges_tails_and_bit_depths() {
                 bit_depth,
                 &ind_y,
                 &ind_x,
+                &mut scalar_a,
             );
             adm_dwt2(
-                &src, w, &mut simd, w, h, dst_stride, bit_depth, &ind_y, &ind_x,
+                &src,
+                w,
+                &mut simd,
+                w,
+                h,
+                dst_stride,
+                bit_depth,
+                &ind_y,
+                &ind_x,
+                &mut simd_a,
             );
-            assert_eq!(scalar.a, simd.a, "{w}x{h}, {bit_depth} bit, band a");
+            assert_eq!(scalar_a, simd_a, "{w}x{h}, {bit_depth} bit, band a");
             assert_eq!(scalar.h, simd.h, "{w}x{h}, {bit_depth} bit, band h");
             assert_eq!(scalar.v, simd.v, "{w}x{h}, {bit_depth} bit, band v");
             assert_eq!(scalar.d, simd.d, "{w}x{h}, {bit_depth} bit, band d");
