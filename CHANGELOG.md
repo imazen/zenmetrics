@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- haarpsi (hash TBD): new in-tree CPU port of HaarPSI (Reisenhofer et
+- haarpsi (`e935a65e`): new in-tree CPU port of HaarPSI (Reisenhofer et
   al., Signal Processing: Image Communication 61, 2018) — pure-Rust,
   `archmage`/`magetypes` padded-plane stencil SIMD with bit-identical
   scalar/v3/v4 tiers, fixed lane-grouped f64 pooling, `libm`
