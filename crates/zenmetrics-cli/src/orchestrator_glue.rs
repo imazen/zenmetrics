@@ -122,6 +122,9 @@ impl OrchestratorMetricSpec {
             CliMetricKind::Vif => {
                 unreachable!("vif has no orchestrator backend; callers gate on eligibility")
             }
+            CliMetricKind::Mad => {
+                unreachable!("mad has no orchestrator backend; callers gate on eligibility")
+            }
             CliMetricKind::Zensim => Self {
                 kind: ApiMetricKind::Zensim,
                 prefer_cpu: true,
@@ -270,6 +273,7 @@ pub fn validate_cpu_variant_built_in(
             | CliMetricKind::Vsi
             | CliMetricKind::Msssim
             | CliMetricKind::Vif
+            | CliMetricKind::Mad
     ) {
         return Ok(());
     }

@@ -181,6 +181,10 @@ cpu-metrics = [
     # VIFp (in-tree `vif` crate, port of the authors' `vifp_mscale.m`):
     # CPU-only, called directly.
     "cpu-vif",
+    # MAD (in-tree `mad-iqa` crate, port of the authors'
+    # `hi_index.m`/`lo_index.m` + `ical_std`/`ical_stat` C-mex):
+    # CPU-only, called directly.
+    "cpu-mad",
     # All native-CPU backends via the umbrella's Backend::Cpu (cpu_dispatch),
     # so run_gpu_via_umbrella's CPU failover works for ssim2/dssim/butter/zensim
     # too — and the auto ladder's CPU rung is the native SIMD path, NEVER
@@ -202,6 +206,7 @@ cpu-fsim = ["dep:fsim"]
 cpu-vsi = ["dep:vsi"]
 cpu-msssim = ["dep:msssim"]
 cpu-vif = ["dep:vif"]
+cpu-mad = ["dep:mad-iqa"]
 
 # GPU bundle: pulls every GPU metric implementation via the umbrella.
 gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp", "gpu-iwssim", "gpu-zensim"]
@@ -576,6 +581,7 @@ fsim = { workspace = true, optional = true, features = ["std", "avx512"] }
 vsi = { workspace = true, optional = true, features = ["std", "avx512"] }
 msssim = { workspace = true, optional = true, features = ["std", "avx512"] }
 vif = { workspace = true, optional = true, features = ["std", "avx512"] }
+mad-iqa = { workspace = true, optional = true, features = ["std", "avx512"] }
 cubecl = { workspace = true, optional = true }
 
 # Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the

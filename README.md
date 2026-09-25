@@ -50,7 +50,8 @@ zenmetrics compare \
 
 In the default build, `--metric` accepts every CPU metric — `ssim2`, `dssim`,
 `butteraugli`, `zensim`, `cvvdp`, `iwssim`, `gmsd`, `psnrhvs`, `psnrhvs-y`,
-`haarpsi`, `haarpsi-y`, `fsim`, `fsim-y`, `vsi`, `msssim`, `vif`, and
+`haarpsi`, `haarpsi-y`, `fsim`, `fsim-y`, `vsi`, `msssim`, `vif`,
+`mad`, and
 `hdrvdp` (HDR-only: absolute-luminance input — feed it via `batch --hdr` /
 `sweep --hdr`, not sRGB pairs). The GPU variants (`ssim2-gpu`, `dssim-gpu`, `butteraugli-gpu`,
 `iwssim-gpu`, `zensim-gpu`, `cvvdp-gpu`) need `--features gpu-<metric>`, and
@@ -91,6 +92,7 @@ CPU ladder and the umbrella's `Backend::Cpu` dispatch route to:
 | [`vsi`](https://github.com/imazen/zenmetrics/tree/master/crates/vsi) | VSI (CPU, RGB) | similarity 0–1, 1 = identical; NaN on flat inputs | authors' `VSI.m` (Octave goldens) |
 | [`msssim`](https://github.com/imazen/zenmetrics/tree/master/crates/msssim) | MS-SSIM (CPU, luma) | similarity ~0–1, 1 = identical (constant too) | authors' `msssim.m` (Octave goldens) |
 | [`vif`](https://github.com/imazen/zenmetrics/tree/master/crates/vif) | VIFp (CPU, luma) | information ratio ≥ 0, ~1 = identical; can exceed 1; NaN on flat references | authors' `vifp_mscale.m` (Octave goldens) |
+| [`mad-iqa`](https://github.com/imazen/zenmetrics/tree/master/crates/mad-iqa) | MAD (CPU, luma) — emits `mad`, `mad_hi`, `mad_lo` | distance ≥ 0, 0 = identical; NaN on `min(w,h) < 34` | authors' `hi_index.m`/`lo_index.m` + `ical_std`/`ical_stat` C-mex (Octave goldens) |
 | [`vmaf`](https://github.com/imazen/zenmetrics/tree/master/crates/vmaf) | VMAF v0.6.1 and v1.0.16 (CPU, planar YUV420 8/10-bit) | 0–100, higher better; v0/NEG/4K and v1 standard/HFR variants | Netflix libvmaf 3.2.1 (FFI oracle in tests) |
 
 The `vmaf` crate scores planar SDR YUV420 frames directly, including CAMBI,

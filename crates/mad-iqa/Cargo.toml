@@ -1,0 +1,38 @@
+[package]
+name = "mad-iqa"
+version = "0.1.0"
+description = "Pure-Rust CPU port of MAD (Larson & Chandler, JEI 19:1, 2010), most-apparent-distortion dual-strategy metric with a vendored self-contained FFT"
+readme = "README.md"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+# archmage::incant! checks `cfg(feature = "avx512")` internally even when no
+# AVX-512 tier is listed (same allow as crates/iwssim, crates/gmsd).
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("avx512"))'] }
+
+[features]
+default = ["std"]
+# Use the standard library. Off -> core + alloc only.
+std = []
+# Rayon parallelism across the reference/distorted work pairs (the CSF
+# filters, the per-image Gabor banks, the block-stat maps). Results are
+# bit-identical at every thread count: each branch writes its own output
+# plane and the pool keeps a fixed raster order.
+parallel = ["std", "dep:rayon"]
+# Dev-only: exposes the per-tier score entry points so the SIMD tiers can be
+# compared against the scalar tier in tests and disassembled. Not API.
+_dev = ["archmage/testable_dispatch"]
+# Opt-in AVX-512 `v4` tier (8-wide f64), like crates/vif.
+avx512 = ["archmage/avx512", "magetypes/avx512"]
+
+[dependencies]
+archmage = { workspace = true }
+libm = "0.2.16"
+magetypes = { workspace = true }
+rayon = { version = "1.10", optional = true }

@@ -230,6 +230,16 @@ pub enum MetricKind {
     /// through the umbrella or the orchestrator.
     #[value(name = "vif")]
     Vif,
+    /// MAD — Most Apparent Distortion (in-tree `mad-iqa` crate, port
+    /// of the authors' `hi_index.m`/`lo_index.m` + `ical_std`/
+    /// `ical_stat` C-mex): DISTANCE score ≥ 0, 0 = identical,
+    /// unbounded above; `min(w,h) < 34` yields NaN (the reference's
+    /// `mp(17:end-17)` edge kill leaves nothing to pool). Emits
+    /// `mad_imazen_v*` plus `mad_hi_imazen_v*` / `mad_lo_imazen_v*`
+    /// (the two strategy indices). CPU-only — not routed through the
+    /// umbrella or the orchestrator.
+    #[value(name = "mad")]
+    Mad,
 }
 
 impl MetricKind {
@@ -258,6 +268,7 @@ impl MetricKind {
             MetricKind::Vsi,
             MetricKind::Msssim,
             MetricKind::Vif,
+            MetricKind::Mad,
         ]
     }
 
@@ -286,6 +297,7 @@ impl MetricKind {
             MetricKind::Vsi => "vsi",
             MetricKind::Msssim => "msssim",
             MetricKind::Vif => "vif",
+            MetricKind::Mad => "mad",
         }
     }
 
@@ -349,6 +361,7 @@ impl MetricKind {
             MetricKind::Vsi => VSI_CPU_COLUMNS,
             MetricKind::Msssim => MSSSIM_CPU_COLUMNS,
             MetricKind::Vif => VIF_CPU_COLUMNS,
+            MetricKind::Mad => MAD_CPU_COLUMNS,
         }
     }
 }
@@ -482,6 +495,16 @@ const MSSSIM_CPU_COLUMNS: &[&str] = &["msssim"];
 const VIF_CPU_COLUMNS: &[&str] = &[vif::VIF_COLUMN_NAME];
 #[cfg(not(feature = "cpu-vif"))]
 const VIF_CPU_COLUMNS: &[&str] = &["vif"];
+
+// MAD emits three columns: the blend plus the two strategy indices.
+#[cfg(feature = "cpu-mad")]
+const MAD_CPU_COLUMNS: &[&str] = &[
+    mad_iqa::MAD_COLUMN_NAME,
+    mad_iqa::MAD_HI_COLUMN_NAME,
+    mad_iqa::MAD_LO_COLUMN_NAME,
+];
+#[cfg(not(feature = "cpu-mad"))]
+const MAD_CPU_COLUMNS: &[&str] = &["mad", "mad_hi", "mad_lo"];
 
 /// CubeCL runtime selector for GPU metrics.
 ///
@@ -1225,6 +1248,10 @@ pub fn run_metric(
         MetricKind::Vif => run_cpu_vif(reference, distorted),
         #[cfg(not(feature = "cpu-vif"))]
         MetricKind::Vif => Err(disabled_msg("vif", "cpu-vif")),
+        #[cfg(feature = "cpu-mad")]
+        MetricKind::Mad => run_cpu_mad(reference, distorted),
+        #[cfg(not(feature = "cpu-mad"))]
+        MetricKind::Mad => Err(disabled_msg("mad", "cpu-mad")),
     }
 }
 
@@ -1423,6 +1450,27 @@ fn run_cpu_vif(
     let (w, h) = (reference.width as usize, reference.height as usize);
     let s = vif::vif_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
     Ok(vec![(VIF_CPU_COLUMNS[0], s)])
+}
+
+#[cfg(feature = "cpu-mad")]
+fn run_cpu_mad(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "mad: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let s = mad_iqa::mad_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
+    Ok(vec![
+        (MAD_CPU_COLUMNS[0], s.mad),
+        (MAD_CPU_COLUMNS[1], s.hi),
+        (MAD_CPU_COLUMNS[2], s.lo),
+    ])
 }
 
 #[allow(dead_code)]

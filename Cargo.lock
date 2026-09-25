@@ -3176,6 +3176,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ef0d4ed8669f8f8826eb00dc878084aa8f253506c4fd5e8f58f5bce72ddb97e"
 
 [[package]]
+name = "mad-iqa"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "libm",
+ "magetypes",
+ "rayon",
+]
+
+[[package]]
 name = "magetypes"
 version = "0.9.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7443,6 +7453,7 @@ dependencies = [
  "image",
  "imgref",
  "jxl-encoder",
+ "mad-iqa",
  "msssim",
  "object_store",
  "parquet",

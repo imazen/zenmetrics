@@ -13,6 +13,21 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- mad-iqa (`<hash>`): new in-tree CPU port of MAD — Most Apparent
+  Distortion (Larson & Chandler, JEI 19(1), 2010), ported to the
+  authors' `hi_index.m`/`lo_index.m` (STMAD_2011 release archived in
+  Netflix/vmaf) with `ical_std`/`ical_stat` C-mex semantics. HI:
+  luminance transform, Mannos–Sakrison CSF in the DFT domain, blocky
+  stride-4 16×16 stats + 8×8 min-pooled reference std, contrast-
+  threshold mask × 16×16 local MSE, ×10. LO: 5×4 Kovesi log-Gabor
+  bank (vendored FFT), per-subband std/skew/kurt maps, scale weights
+  [0.5 0.75 1 5 6]/13.25. Blend `HI^sig·LO^(1−sig)`. `mad_plane_f32`,
+  `mad_rgb8` (unrounded `rgb2gray` luma) → `MadScore{hi,lo,mad}`.
+  Verified on 13 Octave goldens (worst rel deltas hi 2.4e-7,
+  lo 1.8e-6, mad 1.3e-6); identical/constant → 0; `min(w,h) < 34`
+  → NaN (reference edge kill). Bit-identical across SIMD tiers.
+  Wired into `zenmetrics-cli` behind `cpu-mad` as `mad` →
+  `mad_imazen_v*` + `mad_hi/mad_lo_imazen_v*`; orchestrator-ineligible.
 - vif (`8acff821`): new in-tree CPU port of VIFp — pixel-domain
   Visual Information Fidelity (Sheikh & Bovik, IEEE TIP 15(2), 2006),
   ported to the authors' multiscale scalar-GSM release

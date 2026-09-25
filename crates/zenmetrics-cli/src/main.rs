@@ -1415,6 +1415,11 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // information — reported values reach ~2–3). Flat references
         // yield NaN (denominator 0), matching the reference.
         MetricKind::Vif => Some((-0.001, 10.0, 1.0)),
+        // MAD: DISTANCE ≥ 0, 0 = identical, unbounded above (the
+        // JEI geometric blend of the hi/lo strategy indices; hi
+        // alone reaches ~1e5 on synthetic textures). Sweep means on
+        // real corpora land in the tens–hundreds.
+        MetricKind::Mad => Some((-0.001, 1_000_000.0, 0.0)),
     }
 }
 

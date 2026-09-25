@@ -175,6 +175,7 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::Vsi => "vsi",
         CliMetricKind::Msssim => "msssim",
         CliMetricKind::Vif => "vif",
+        CliMetricKind::Mad => "mad",
         CliMetricKind::Cvvdp => "cvvdp",
         CliMetricKind::CvvdpGpu => "cvvdp",
         CliMetricKind::Butteraugli => "butteraugli_max",
@@ -270,7 +271,8 @@ pub fn rekey_orchestrator_columns(
         | CliMetricKind::FsimY
         | CliMetricKind::Vsi
         | CliMetricKind::Msssim
-        | CliMetricKind::Vif => Vec::new(),
+        | CliMetricKind::Vif
+        | CliMetricKind::Mad => Vec::new(),
         CliMetricKind::Cvvdp
         | CliMetricKind::CvvdpGpu
         | CliMetricKind::Ssim2Gpu
@@ -388,7 +390,9 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
     // FSIM / FSIM-Y too (`fsim` emits two columns). VSI likewise
     // (RGB-only, single column, no GPU twin). MS-SSIM likewise
     // (luma-only, single column, no GPU twin). VIFp likewise
-    // (luma-only, single column, no GPU twin).
+    // (luma-only, single column, no GPU twin). MAD likewise (three
+    // columns — the blend plus the hi/lo strategy indices — and no
+    // GPU twin).
     !matches!(
         kind,
         CliMetricKind::Gmsd
@@ -402,6 +406,7 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Vsi
             | CliMetricKind::Msssim
             | CliMetricKind::Vif
+            | CliMetricKind::Mad
     )
 }
 
