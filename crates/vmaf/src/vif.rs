@@ -1,5 +1,9 @@
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+use archmage::intrinsics::x86_64::*;
 #[cfg(feature = "simd")]
 use archmage::magetypes;
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+use archmage::{SimdToken, X64V3Token, arcane, rite};
 use std::borrow::Cow;
 use std::sync::OnceLock;
 
@@ -59,6 +63,17 @@ fn pad_reflected(row: &mut [u32], width: usize, half: usize) {
         row[half - offset - 1] = row[half + offset + 1];
         row[half + width + offset] = row[half + width - offset - 2];
     }
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[inline(always)]
+fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
+    s.try_into().unwrap()
+}
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[inline(always)]
+fn a8m<T, const N: usize>(s: &mut [T]) -> &mut [T; N] {
+    s.try_into().unwrap()
 }
 
 fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<'a> {
@@ -1008,6 +1023,592 @@ fn vif_subsample_horizontal_simd(
     (out_ref, out_dis)
 }
 
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[rite]
+fn vif_mul2(_token: X64V3Token, r0: __m256i, f: __m256i) -> (__m256i, __m256i) {
+    let zero = _mm256_setzero_si256();
+    (
+        _mm256_madd_epi16(_mm256_unpacklo_epi16(r0, zero), f),
+        _mm256_madd_epi16(_mm256_unpackhi_epi16(r0, zero), f),
+    )
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[rite]
+fn vif_mul2_acc(
+    _token: X64V3Token,
+    acc: (__m256i, __m256i),
+    r0: __m256i,
+    r1: __m256i,
+    f: __m256i,
+) -> (__m256i, __m256i) {
+    (
+        _mm256_add_epi32(acc.0, _mm256_madd_epi16(_mm256_unpacklo_epi16(r0, r1), f)),
+        _mm256_add_epi32(acc.1, _mm256_madd_epi16(_mm256_unpackhi_epi16(r0, r1), f)),
+    )
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[rite]
+fn vif_mul3(_token: X64V3Token, r0: __m256i, r1: __m256i, f: __m256i) -> (__m256i, __m256i) {
+    let mul = _mm256_mullo_epi16(r0, r1);
+    let lo = _mm256_mullo_epi16(mul, f);
+    let hi = _mm256_mulhi_epu16(mul, f);
+    (_mm256_unpacklo_epi16(lo, hi), _mm256_unpackhi_epi16(lo, hi))
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[rite]
+fn vif_mul3_acc(
+    _token: X64V3Token,
+    acc: (__m256i, __m256i),
+    r0: __m256i,
+    r1: __m256i,
+    f: __m256i,
+) -> (__m256i, __m256i) {
+    let mul = _mm256_mullo_epi16(r0, r1);
+    let lo = _mm256_mullo_epi16(mul, f);
+    let hi = _mm256_mulhi_epu16(mul, f);
+    (
+        _mm256_add_epi32(acc.0, _mm256_unpacklo_epi16(lo, hi)),
+        _mm256_add_epi32(acc.1, _mm256_unpackhi_epi16(lo, hi)),
+    )
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[rite]
+fn vif_shuffle_save(_token: X64V3Token, addr: &mut [u32; 16], x: __m256i, y: __m256i) {
+    let left = _mm256_permute2x128_si256(x, y, 0x20);
+    let right = _mm256_permute2x128_si256(x, y, 0x31);
+    _mm256_storeu_si256(a8m::<u32, 8>(&mut addr[..8]), left);
+    _mm256_storeu_si256(a8m::<u32, 8>(&mut addr[8..16]), right);
+}
+
+/// Faithful port of libvmaf's `vif_statistic_8_avx2` vertical pass for one row:
+/// fills the five padded tmp arrays for all `width` columns.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn vif_stat8_vertical_v3(
+    token: X64V3Token,
+    reference: &[u16],
+    distorted: &[u16],
+    row_offsets: &[usize; 17],
+    filt: &[u16],
+    half: usize,
+    width: usize,
+    tmp_mu1: &mut [u32],
+    tmp_mu2: &mut [u32],
+    tmp_ref: &mut [u32],
+    tmp_dis: &mut [u32],
+    tmp_ref_dis: &mut [u32],
+) {
+    let fwidth = 2 * half + 1;
+    let n16 = width & !15;
+    for j in (0..n16).step_by(16) {
+        let f0 = _mm256_set1_epi16(filt[half] as i16);
+        let r0 = _mm256_loadu_si256(a8::<u16, 16>(
+            &reference[row_offsets[half] + j..row_offsets[half] + j + 16],
+        ));
+        let d0 = _mm256_loadu_si256(a8::<u16, 16>(
+            &distorted[row_offsets[half] + j..row_offsets[half] + j + 16],
+        ));
+
+        let mut mu1 = vif_mul2(token, r0, f0);
+        let mut mu2 = vif_mul2(token, d0, f0);
+        let mut acc_ref = vif_mul3(token, r0, r0, f0);
+        let mut acc_dis = vif_mul3(token, d0, d0, f0);
+        let mut acc_rd = vif_mul3(token, d0, r0, f0);
+
+        for tap in 0..half {
+            let f0 = _mm256_set1_epi16(filt[tap] as i16);
+            let lo = row_offsets[tap];
+            let hi = row_offsets[fwidth - 1 - tap];
+            let r0 = _mm256_loadu_si256(a8::<u16, 16>(&reference[lo + j..lo + j + 16]));
+            let r1 = _mm256_loadu_si256(a8::<u16, 16>(&reference[hi + j..hi + j + 16]));
+            let d0 = _mm256_loadu_si256(a8::<u16, 16>(&distorted[lo + j..lo + j + 16]));
+            let d1 = _mm256_loadu_si256(a8::<u16, 16>(&distorted[hi + j..hi + j + 16]));
+
+            mu1 = vif_mul2_acc(token, mu1, r0, r1, f0);
+            mu2 = vif_mul2_acc(token, mu2, d0, d1, f0);
+            acc_ref = vif_mul3_acc(token, acc_ref, r0, r0, f0);
+            acc_ref = vif_mul3_acc(token, acc_ref, r1, r1, f0);
+            acc_dis = vif_mul3_acc(token, acc_dis, d0, d0, f0);
+            acc_dis = vif_mul3_acc(token, acc_dis, d1, d1, f0);
+            acc_rd = vif_mul3_acc(token, acc_rd, d0, r0, f0);
+            acc_rd = vif_mul3_acc(token, acc_rd, d1, r1, f0);
+        }
+
+        let x = _mm256_set1_epi32(128);
+        mu1.0 = _mm256_srli_epi32(_mm256_add_epi32(mu1.0, x), 8);
+        mu1.1 = _mm256_srli_epi32(_mm256_add_epi32(mu1.1, x), 8);
+        mu2.0 = _mm256_srli_epi32(_mm256_add_epi32(mu2.0, x), 8);
+        mu2.1 = _mm256_srli_epi32(_mm256_add_epi32(mu2.1, x), 8);
+
+        vif_shuffle_save(
+            token,
+            a8m::<u32, 16>(&mut tmp_mu1[half + j..half + j + 16]),
+            mu1.0,
+            mu1.1,
+        );
+        vif_shuffle_save(
+            token,
+            a8m::<u32, 16>(&mut tmp_mu2[half + j..half + j + 16]),
+            mu2.0,
+            mu2.1,
+        );
+        vif_shuffle_save(
+            token,
+            a8m::<u32, 16>(&mut tmp_ref[half + j..half + j + 16]),
+            acc_ref.0,
+            acc_ref.1,
+        );
+        vif_shuffle_save(
+            token,
+            a8m::<u32, 16>(&mut tmp_dis[half + j..half + j + 16]),
+            acc_dis.0,
+            acc_dis.1,
+        );
+        vif_shuffle_save(
+            token,
+            a8m::<u32, 16>(&mut tmp_ref_dis[half + j..half + j + 16]),
+            acc_rd.0,
+            acc_rd.1,
+        );
+    }
+
+    for j in n16..width {
+        let mut accum_mu1 = 0u32;
+        let mut accum_mu2 = 0u32;
+        let mut accum_ref = 0u64;
+        let mut accum_dis = 0u64;
+        let mut accum_rd = 0u64;
+        for (fi, &fcoeff) in filt.iter().enumerate().take(fwidth) {
+            let off = row_offsets[fi];
+            let ref_v = reference[off + j] as u32;
+            let dis_v = distorted[off + j] as u32;
+            let wref = fcoeff as u32 * ref_v;
+            let wdis = fcoeff as u32 * dis_v;
+            accum_mu1 = accum_mu1.wrapping_add(wref);
+            accum_mu2 = accum_mu2.wrapping_add(wdis);
+            accum_ref += wref as u64 * ref_v as u64;
+            accum_dis += wdis as u64 * dis_v as u64;
+            accum_rd += wref as u64 * dis_v as u64;
+        }
+        tmp_mu1[half + j] = (accum_mu1 + 128) >> 8;
+        tmp_mu2[half + j] = (accum_mu2 + 128) >> 8;
+        tmp_ref[half + j] = accum_ref as u32;
+        tmp_dis[half + j] = accum_dis as u32;
+        tmp_ref_dis[half + j] = accum_rd as u32;
+    }
+}
+
+/// Faithful port of libvmaf's `vif_statistic_8_avx2` horizontal pass for one row:
+/// consumes the padded tmp arrays and accumulates num/den for 16-column blocks.
+/// Returns the number of columns processed (a multiple of 16).
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn vif_stat8_horizontal_v3(
+    token: X64V3Token,
+    tmp_mu1: &[u32],
+    tmp_mu2: &[u32],
+    tmp_ref: &[u32],
+    tmp_dis: &[u32],
+    tmp_ref_dis: &[u32],
+    filt: &[u16],
+    half: usize,
+    width: usize,
+    table: &[u16; 65536],
+    gain_limit: f64,
+    accums: (&mut i64, &mut i64, &mut i64, &mut i64),
+) -> usize {
+    let _ = token;
+    let fwidth = 2 * half + 1;
+    let n16 = width & !15;
+    let mut xx = [0u32; 16];
+    let mut yy = [0u32; 16];
+    let mut xy = [0u32; 16];
+    let (num_log, den_log, num_non_log, den_non_log) = accums;
+
+    for j in (0..n16).step_by(16) {
+        // mu1 horizontal sum (epi32 products accumulated pairwise in epi64 lanes)
+        let fq = _mm256_set1_epi32(filt[half] as i32);
+        let mut mu1_lo = _mm256_mullo_epi32(
+            _mm256_loadu_si256(a8::<u32, 8>(&tmp_mu1[half + j..half + j + 8])),
+            fq,
+        );
+        let mut mu1_hi = _mm256_mullo_epi32(
+            _mm256_loadu_si256(a8::<u32, 8>(&tmp_mu1[half + j + 8..half + j + 16])),
+            fq,
+        );
+        for (fj, &coeff) in filt.iter().enumerate().take(half) {
+            let fq = _mm256_set1_epi32(coeff as i32);
+            let l = j + fj;
+            let r = j + fwidth - 1 - fj;
+            mu1_lo = _mm256_add_epi64(
+                mu1_lo,
+                _mm256_mullo_epi32(_mm256_loadu_si256(a8::<u32, 8>(&tmp_mu1[l..l + 8])), fq),
+            );
+            mu1_hi = _mm256_add_epi64(
+                mu1_hi,
+                _mm256_mullo_epi32(
+                    _mm256_loadu_si256(a8::<u32, 8>(&tmp_mu1[l + 8..l + 16])),
+                    fq,
+                ),
+            );
+            mu1_lo = _mm256_add_epi64(
+                mu1_lo,
+                _mm256_mullo_epi32(_mm256_loadu_si256(a8::<u32, 8>(&tmp_mu1[r..r + 8])), fq),
+            );
+            mu1_hi = _mm256_add_epi64(
+                mu1_hi,
+                _mm256_mullo_epi32(
+                    _mm256_loadu_si256(a8::<u32, 8>(&tmp_mu1[r + 8..r + 16])),
+                    fq,
+                ),
+            );
+        }
+
+        let zero = _mm256_setzero_si256();
+        let round32 = _mm256_set1_epi64x(0x80000000);
+        let acc0_lo = _mm256_mul_epu32(
+            _mm256_unpacklo_epi32(mu1_lo, zero),
+            _mm256_unpacklo_epi32(mu1_lo, zero),
+        );
+        let acc0_lo = _mm256_srli_epi64(_mm256_add_epi64(acc0_lo, round32), 32);
+        let acc0_hi = _mm256_mul_epu32(
+            _mm256_unpackhi_epi32(mu1_lo, zero),
+            _mm256_unpackhi_epi32(mu1_lo, zero),
+        );
+        let acc0_hi = _mm256_srli_epi64(_mm256_add_epi64(acc0_hi, round32), 32);
+        let acc1_lo = _mm256_mul_epu32(
+            _mm256_unpacklo_epi32(mu1_hi, zero),
+            _mm256_unpacklo_epi32(mu1_hi, zero),
+        );
+        let acc1_lo = _mm256_srli_epi64(_mm256_add_epi64(acc1_lo, round32), 32);
+        let acc1_hi = _mm256_mul_epu32(
+            _mm256_unpackhi_epi32(mu1_hi, zero),
+            _mm256_unpackhi_epi32(mu1_hi, zero),
+        );
+        let acc1_hi = _mm256_srli_epi64(_mm256_add_epi64(acc1_hi, round32), 32);
+        let mu1sq_lo = _mm256_blend_epi32(acc0_lo, _mm256_slli_si256(acc0_hi, 4), 0xAA);
+        let mu1sq_hi = _mm256_blend_epi32(acc1_lo, _mm256_slli_si256(acc1_hi, 4), 0xAA);
+
+        // mu2 horizontal sum + mu1mu2/mu2sq products
+        let fq = _mm256_set1_epi32(filt[half] as i32);
+        let mut acc0 = _mm256_mullo_epi32(
+            _mm256_loadu_si256(a8::<u32, 8>(&tmp_mu2[half + j..half + j + 8])),
+            fq,
+        );
+        let mut acc1 = _mm256_mullo_epi32(
+            _mm256_loadu_si256(a8::<u32, 8>(&tmp_mu2[half + j + 8..half + j + 16])),
+            fq,
+        );
+        for (fj, &coeff) in filt.iter().enumerate().take(half) {
+            let fq = _mm256_set1_epi32(coeff as i32);
+            let l = j + fj;
+            let r = j + fwidth - 1 - fj;
+            acc0 = _mm256_add_epi64(
+                acc0,
+                _mm256_mullo_epi32(_mm256_loadu_si256(a8::<u32, 8>(&tmp_mu2[l..l + 8])), fq),
+            );
+            acc1 = _mm256_add_epi64(
+                acc1,
+                _mm256_mullo_epi32(
+                    _mm256_loadu_si256(a8::<u32, 8>(&tmp_mu2[l + 8..l + 16])),
+                    fq,
+                ),
+            );
+            acc0 = _mm256_add_epi64(
+                acc0,
+                _mm256_mullo_epi32(_mm256_loadu_si256(a8::<u32, 8>(&tmp_mu2[r..r + 8])), fq),
+            );
+            acc1 = _mm256_add_epi64(
+                acc1,
+                _mm256_mullo_epi32(
+                    _mm256_loadu_si256(a8::<u32, 8>(&tmp_mu2[r + 8..r + 16])),
+                    fq,
+                ),
+            );
+        }
+
+        let mut acc0_lo = _mm256_unpacklo_epi32(acc0, zero);
+        let mut acc0_hi = _mm256_unpackhi_epi32(acc0, zero);
+        let mut mu1lo_lo = _mm256_unpacklo_epi32(mu1_lo, zero);
+        let mut mu1lo_hi = _mm256_unpackhi_epi32(mu1_lo, zero);
+        let mut mu1hi_lo = _mm256_unpacklo_epi32(mu1_hi, zero);
+        let mut mu1hi_hi = _mm256_unpackhi_epi32(mu1_hi, zero);
+
+        mu1lo_lo = _mm256_srli_epi64(
+            _mm256_add_epi64(_mm256_mul_epu32(mu1lo_lo, acc0_lo), round32),
+            32,
+        );
+        mu1lo_hi = _mm256_srli_epi64(
+            _mm256_add_epi64(_mm256_mul_epu32(mu1lo_hi, acc0_hi), round32),
+            32,
+        );
+        acc0_lo = _mm256_srli_epi64(
+            _mm256_add_epi64(_mm256_mul_epu32(acc0_lo, acc0_lo), round32),
+            32,
+        );
+        acc0_hi = _mm256_srli_epi64(
+            _mm256_add_epi64(_mm256_mul_epu32(acc0_hi, acc0_hi), round32),
+            32,
+        );
+
+        let mut acc1_lo = _mm256_unpacklo_epi32(acc1, zero);
+        let mut acc1_hi = _mm256_unpackhi_epi32(acc1, zero);
+        mu1hi_lo = _mm256_srli_epi64(
+            _mm256_add_epi64(_mm256_mul_epu32(mu1hi_lo, acc1_lo), round32),
+            32,
+        );
+        mu1hi_hi = _mm256_srli_epi64(
+            _mm256_add_epi64(_mm256_mul_epu32(mu1hi_hi, acc1_hi), round32),
+            32,
+        );
+        acc1_lo = _mm256_srli_epi64(
+            _mm256_add_epi64(_mm256_mul_epu32(acc1_lo, acc1_lo), round32),
+            32,
+        );
+        acc1_hi = _mm256_srli_epi64(
+            _mm256_add_epi64(_mm256_mul_epu32(acc1_hi, acc1_hi), round32),
+            32,
+        );
+
+        let mu2sq_lo = _mm256_blend_epi32(acc0_lo, _mm256_slli_si256(acc0_hi, 4), 0xAA);
+        let mu2sq_hi = _mm256_blend_epi32(acc1_lo, _mm256_slli_si256(acc1_hi, 4), 0xAA);
+        let mu1mu2_lo = _mm256_blend_epi32(mu1lo_lo, _mm256_slli_si256(mu1lo_hi, 4), 0xAA);
+        let mu1mu2_hi = _mm256_blend_epi32(mu1hi_lo, _mm256_slli_si256(mu1hi_hi, 4), 0xAA);
+
+        // filtered ref^2 - mu1^2
+        {
+            let rounder = _mm256_set1_epi64x(0x8000);
+            let fq = _mm256_set1_epi64x(filt[half] as i64);
+            let m0 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref[half + j..half + j + 8]));
+            let m1 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref[half + j + 8..half + j + 16]));
+            let mut acc0 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpacklo_epi32(m0, zero), fq),
+            );
+            let mut acc1 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpackhi_epi32(m0, zero), fq),
+            );
+            let mut acc2 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpacklo_epi32(m1, zero), fq),
+            );
+            let mut acc3 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpackhi_epi32(m1, zero), fq),
+            );
+            for (fj, &coeff) in filt.iter().enumerate().take(half) {
+                let fq = _mm256_set1_epi64x(coeff as i64);
+                let l = j + fj;
+                let r = j + fwidth - 1 - fj;
+                let m0 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref[l..l + 8]));
+                let m1 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref[l + 8..l + 16]));
+                let m2 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref[r..r + 8]));
+                let m3 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref[r + 8..r + 16]));
+                acc0 =
+                    _mm256_add_epi64(acc0, _mm256_mul_epu32(_mm256_unpacklo_epi32(m0, zero), fq));
+                acc1 =
+                    _mm256_add_epi64(acc1, _mm256_mul_epu32(_mm256_unpackhi_epi32(m0, zero), fq));
+                acc2 =
+                    _mm256_add_epi64(acc2, _mm256_mul_epu32(_mm256_unpacklo_epi32(m1, zero), fq));
+                acc3 =
+                    _mm256_add_epi64(acc3, _mm256_mul_epu32(_mm256_unpackhi_epi32(m1, zero), fq));
+                acc0 =
+                    _mm256_add_epi64(acc0, _mm256_mul_epu32(_mm256_unpacklo_epi32(m2, zero), fq));
+                acc1 =
+                    _mm256_add_epi64(acc1, _mm256_mul_epu32(_mm256_unpackhi_epi32(m2, zero), fq));
+                acc2 =
+                    _mm256_add_epi64(acc2, _mm256_mul_epu32(_mm256_unpacklo_epi32(m3, zero), fq));
+                acc3 =
+                    _mm256_add_epi64(acc3, _mm256_mul_epu32(_mm256_unpackhi_epi32(m3, zero), fq));
+            }
+            acc0 = _mm256_srli_epi64(acc0, 16);
+            acc1 = _mm256_srli_epi64(acc1, 16);
+            acc2 = _mm256_srli_epi64(acc2, 16);
+            acc3 = _mm256_srli_epi64(acc3, 16);
+            acc0 = _mm256_blend_epi32(acc0, _mm256_slli_si256(acc1, 4), 0xAA);
+            acc1 = _mm256_blend_epi32(acc2, _mm256_slli_si256(acc3, 4), 0xAA);
+            acc0 = _mm256_sub_epi32(acc0, mu1sq_lo);
+            acc1 = _mm256_sub_epi32(acc1, mu1sq_hi);
+            acc0 = _mm256_shuffle_epi32(acc0, 0xD8);
+            acc1 = _mm256_shuffle_epi32(acc1, 0xD8);
+            _mm256_storeu_si256(a8m::<u32, 8>(&mut xx[..8]), acc0);
+            _mm256_storeu_si256(a8m::<u32, 8>(&mut xx[8..16]), acc1);
+        }
+
+        // filtered dis^2 - mu2^2
+        {
+            let rounder = _mm256_set1_epi64x(0x8000);
+            let fq = _mm256_set1_epi64x(filt[half] as i64);
+            let m0 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_dis[half + j..half + j + 8]));
+            let m1 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_dis[half + j + 8..half + j + 16]));
+            let mut acc0 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpacklo_epi32(m0, zero), fq),
+            );
+            let mut acc1 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpackhi_epi32(m0, zero), fq),
+            );
+            let mut acc2 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpacklo_epi32(m1, zero), fq),
+            );
+            let mut acc3 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpackhi_epi32(m1, zero), fq),
+            );
+            for (fj, &coeff) in filt.iter().enumerate().take(half) {
+                let fq = _mm256_set1_epi64x(coeff as i64);
+                let l = j + fj;
+                let r = j + fwidth - 1 - fj;
+                let m0 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_dis[l..l + 8]));
+                let m1 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_dis[l + 8..l + 16]));
+                let m2 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_dis[r..r + 8]));
+                let m3 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_dis[r + 8..r + 16]));
+                acc0 =
+                    _mm256_add_epi64(acc0, _mm256_mul_epu32(_mm256_unpacklo_epi32(m0, zero), fq));
+                acc1 =
+                    _mm256_add_epi64(acc1, _mm256_mul_epu32(_mm256_unpackhi_epi32(m0, zero), fq));
+                acc2 =
+                    _mm256_add_epi64(acc2, _mm256_mul_epu32(_mm256_unpacklo_epi32(m1, zero), fq));
+                acc3 =
+                    _mm256_add_epi64(acc3, _mm256_mul_epu32(_mm256_unpackhi_epi32(m1, zero), fq));
+                acc0 =
+                    _mm256_add_epi64(acc0, _mm256_mul_epu32(_mm256_unpacklo_epi32(m2, zero), fq));
+                acc1 =
+                    _mm256_add_epi64(acc1, _mm256_mul_epu32(_mm256_unpackhi_epi32(m2, zero), fq));
+                acc2 =
+                    _mm256_add_epi64(acc2, _mm256_mul_epu32(_mm256_unpacklo_epi32(m3, zero), fq));
+                acc3 =
+                    _mm256_add_epi64(acc3, _mm256_mul_epu32(_mm256_unpackhi_epi32(m3, zero), fq));
+            }
+            acc0 = _mm256_srli_epi64(acc0, 16);
+            acc1 = _mm256_srli_epi64(acc1, 16);
+            acc2 = _mm256_srli_epi64(acc2, 16);
+            acc3 = _mm256_srli_epi64(acc3, 16);
+            acc0 = _mm256_blend_epi32(acc0, _mm256_slli_si256(acc1, 4), 0xAA);
+            acc1 = _mm256_blend_epi32(acc2, _mm256_slli_si256(acc3, 4), 0xAA);
+            acc0 = _mm256_sub_epi32(acc0, mu2sq_lo);
+            acc1 = _mm256_sub_epi32(acc1, mu2sq_hi);
+            acc0 = _mm256_shuffle_epi32(acc0, 0xD8);
+            acc1 = _mm256_shuffle_epi32(acc1, 0xD8);
+            _mm256_storeu_si256(a8m::<u32, 8>(&mut yy[..8]), _mm256_max_epi32(acc0, zero));
+            _mm256_storeu_si256(a8m::<u32, 8>(&mut yy[8..16]), _mm256_max_epi32(acc1, zero));
+        }
+
+        // filtered ref*dis - mu1*mu2
+        {
+            let rounder = _mm256_set1_epi64x(0x8000);
+            let fq = _mm256_set1_epi64x(filt[half] as i64);
+            let m0 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref_dis[half + j..half + j + 8]));
+            let m1 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref_dis[half + j + 8..half + j + 16]));
+            let mut acc0 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpacklo_epi32(m0, zero), fq),
+            );
+            let mut acc1 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpackhi_epi32(m0, zero), fq),
+            );
+            let mut acc2 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpacklo_epi32(m1, zero), fq),
+            );
+            let mut acc3 = _mm256_add_epi64(
+                rounder,
+                _mm256_mul_epu32(_mm256_unpackhi_epi32(m1, zero), fq),
+            );
+            for (fj, &coeff) in filt.iter().enumerate().take(half) {
+                let fq = _mm256_set1_epi64x(coeff as i64);
+                let l = j + fj;
+                let r = j + fwidth - 1 - fj;
+                let m0 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref_dis[l..l + 8]));
+                let m1 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref_dis[l + 8..l + 16]));
+                let m2 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref_dis[r..r + 8]));
+                let m3 = _mm256_loadu_si256(a8::<u32, 8>(&tmp_ref_dis[r + 8..r + 16]));
+                acc0 =
+                    _mm256_add_epi64(acc0, _mm256_mul_epu32(_mm256_unpacklo_epi32(m0, zero), fq));
+                acc1 =
+                    _mm256_add_epi64(acc1, _mm256_mul_epu32(_mm256_unpackhi_epi32(m0, zero), fq));
+                acc2 =
+                    _mm256_add_epi64(acc2, _mm256_mul_epu32(_mm256_unpacklo_epi32(m1, zero), fq));
+                acc3 =
+                    _mm256_add_epi64(acc3, _mm256_mul_epu32(_mm256_unpackhi_epi32(m1, zero), fq));
+                acc0 =
+                    _mm256_add_epi64(acc0, _mm256_mul_epu32(_mm256_unpacklo_epi32(m2, zero), fq));
+                acc1 =
+                    _mm256_add_epi64(acc1, _mm256_mul_epu32(_mm256_unpackhi_epi32(m2, zero), fq));
+                acc2 =
+                    _mm256_add_epi64(acc2, _mm256_mul_epu32(_mm256_unpacklo_epi32(m3, zero), fq));
+                acc3 =
+                    _mm256_add_epi64(acc3, _mm256_mul_epu32(_mm256_unpackhi_epi32(m3, zero), fq));
+            }
+            acc0 = _mm256_srli_epi64(acc0, 16);
+            acc1 = _mm256_srli_epi64(acc1, 16);
+            acc2 = _mm256_srli_epi64(acc2, 16);
+            acc3 = _mm256_srli_epi64(acc3, 16);
+            acc0 = _mm256_blend_epi32(acc0, _mm256_slli_si256(acc1, 4), 0xAA);
+            acc1 = _mm256_blend_epi32(acc2, _mm256_slli_si256(acc3, 4), 0xAA);
+            acc0 = _mm256_sub_epi32(acc0, mu1mu2_lo);
+            acc1 = _mm256_sub_epi32(acc1, mu1mu2_hi);
+            acc0 = _mm256_shuffle_epi32(acc0, 0xD8);
+            acc1 = _mm256_shuffle_epi32(acc1, 0xD8);
+            _mm256_storeu_si256(a8m::<u32, 8>(&mut xy[..8]), acc0);
+            _mm256_storeu_si256(a8m::<u32, 8>(&mut xy[8..16]), acc1);
+        }
+
+        for b in 0..16 {
+            vif_finalize_sigma(
+                table,
+                gain_limit,
+                xx[b] as i32,
+                yy[b] as i32,
+                xy[b] as i32,
+                &mut *num_log,
+                &mut *den_log,
+                &mut *num_non_log,
+                &mut *den_non_log,
+            );
+        }
+    }
+    n16
+}
+
+#[inline(always)]
+fn vif_finalize_sigma(
+    table: &[u16; 65536],
+    gain_limit: f64,
+    sigma_ref: i32,
+    sigma_dis: i32,
+    sigma_ref_dis: i32,
+    num_log: &mut i64,
+    den_log: &mut i64,
+    num_non_log: &mut i64,
+    den_non_log: &mut i64,
+) {
+    let sigma_dis = sigma_dis.max(0);
+    if sigma_ref >= SIGMA_NSQ {
+        *den_log += (log2_32(table, (SIGMA_NSQ + sigma_ref) as u32) - 2048 * 17) as i64;
+        if sigma_ref_dis > 0 && sigma_dis > 0 {
+            let gain = sigma_ref_dis as f64 / (sigma_ref as f64 + 65536.0 * 1.0e-10);
+            let residual = (sigma_dis as f64 - gain * sigma_ref_dis as f64) as i32;
+            let residual = residual.max(0) as u32;
+            let gain = gain.min(gain_limit);
+            let first = residual + SIGMA_NSQ as u32;
+            let second = (gain * gain * sigma_ref as f64) as i64 + first as i64;
+            *num_log += (log2_64(table, second as u64) - log2_64(table, first as u64)) as i64;
+        }
+    } else {
+        *num_non_log += sigma_dis as i64;
+        *den_non_log += 1;
+    }
+}
+
 fn vif_pixel_finalize(
     table: &[u16; 65536],
     gain_limit: f64,
@@ -1027,23 +1628,32 @@ fn vif_pixel_finalize(
     let sigma_ref = ref_sq_shifted.wrapping_sub(ref_mean_sq) as i32;
     let sigma_dis = dis_sq_shifted.wrapping_sub(dis_mean_sq) as i32;
     let sigma_ref_dis = ref_dis_shifted.wrapping_sub(mean_product) as i32;
-    let sigma_dis = sigma_dis.max(0);
-    if sigma_ref >= SIGMA_NSQ {
-        *den_log += (log2_32(table, (SIGMA_NSQ + sigma_ref) as u32) - 2048 * 17) as i64;
-        if sigma_ref_dis > 0 && sigma_dis > 0 {
-            let gain = sigma_ref_dis as f64 / (sigma_ref as f64 + 65536.0 * 1.0e-10);
-            let residual = (sigma_dis as f64 - gain * sigma_ref_dis as f64) as i32;
-            let residual = residual.max(0) as u32;
-            let gain = gain.min(gain_limit);
-            let first = residual + SIGMA_NSQ as u32;
-            let second = (gain * gain * sigma_ref as f64) as i64 + first as i64;
-            *num_log += (log2_64(table, second as u64) - log2_64(table, first as u64)) as i64;
-        }
-    } else {
-        *num_non_log += sigma_dis as i64;
-        *den_non_log += 1;
-    }
+    vif_finalize_sigma(
+        table,
+        gain_limit,
+        sigma_ref,
+        sigma_dis,
+        sigma_ref_dis,
+        num_log,
+        den_log,
+        num_non_log,
+        den_non_log,
+    );
 }
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[inline(always)]
+fn v3_token() -> Option<X64V3Token> {
+    #[cfg(test)]
+    if V3_DISABLED_FOR_TEST.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    X64V3Token::summon()
+}
+
+#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+static V3_DISABLED_FOR_TEST: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 fn statistics(
     image: &VifImage<'_>,
@@ -1077,6 +1687,8 @@ fn statistics(
     let mut den_log = 0i64;
     let mut num_non_log = 0i64;
     let mut den_non_log = 0i64;
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    let x64v3 = v3_token();
     for row in 0..height {
         let mut row_offsets = [0usize; 17];
         for (tap, slot) in row_offsets.iter_mut().take(filter.len()).enumerate() {
@@ -1121,20 +1733,45 @@ fn statistics(
         }
         #[cfg(feature = "simd")]
         if bit_depth == 8 && scale == 0 {
-            processed = archmage::incant!(
-                vif_vertical_u8_simd(
+            #[cfg(target_arch = "x86_64")]
+            let avx2 = if let Some(token) = x64v3 {
+                vif_stat8_vertical_v3(
+                    token,
                     &image.reference,
                     &image.distorted,
                     &row_offsets,
+                    filter,
+                    half as usize,
                     width,
                     &mut vertical_ref_mean,
                     &mut vertical_dis_mean,
                     &mut vertical_ref_sq,
                     &mut vertical_dis_sq,
-                    &mut vertical_ref_dis
-                ),
-                [v3, neon, wasm128, scalar]
-            );
+                    &mut vertical_ref_dis,
+                );
+                processed = width;
+                true
+            } else {
+                false
+            };
+            #[cfg(not(target_arch = "x86_64"))]
+            let avx2 = false;
+            if !avx2 {
+                processed = archmage::incant!(
+                    vif_vertical_u8_simd(
+                        &image.reference,
+                        &image.distorted,
+                        &row_offsets,
+                        width,
+                        &mut vertical_ref_mean,
+                        &mut vertical_dis_mean,
+                        &mut vertical_ref_sq,
+                        &mut vertical_dis_sq,
+                        &mut vertical_ref_dis
+                    ),
+                    [v3, neon, wasm128, scalar]
+                );
+            }
         }
         for col in processed..width {
             let center = half as usize;
@@ -1186,35 +1823,62 @@ fn statistics(
         #[allow(unused_mut)]
         let mut hcol = 0;
         #[cfg(feature = "simd")]
-        while hcol + 16 <= width {
-            let (ref_means, dis_means, ref_sqs, dis_sqs, ref_diss) = archmage::incant!(
-                vif_horizontal_sums(
+        {
+            #[cfg(target_arch = "x86_64")]
+            if bit_depth == 8
+                && scale == 0
+                && let Some(token) = x64v3
+            {
+                hcol = vif_stat8_horizontal_v3(
+                    token,
                     &vertical_ref_mean,
                     &vertical_dis_mean,
                     &vertical_ref_sq,
                     &vertical_dis_sq,
                     &vertical_ref_dis,
                     filter,
-                    hcol
-                ),
-                [v3, neon, wasm128, scalar]
-            );
-            for lane in 0..16 {
-                vif_pixel_finalize(
+                    half as usize,
+                    width,
                     table,
                     gain_limit,
-                    ref_means[lane],
-                    dis_means[lane],
-                    ref_sqs[lane],
-                    dis_sqs[lane],
-                    ref_diss[lane],
-                    &mut num_log,
-                    &mut den_log,
-                    &mut num_non_log,
-                    &mut den_non_log,
+                    (
+                        &mut num_log,
+                        &mut den_log,
+                        &mut num_non_log,
+                        &mut den_non_log,
+                    ),
                 );
             }
-            hcol += 16;
+            while hcol + 16 <= width {
+                let (ref_means, dis_means, ref_sqs, dis_sqs, ref_diss) = archmage::incant!(
+                    vif_horizontal_sums(
+                        &vertical_ref_mean,
+                        &vertical_dis_mean,
+                        &vertical_ref_sq,
+                        &vertical_dis_sq,
+                        &vertical_ref_dis,
+                        filter,
+                        hcol
+                    ),
+                    [v3, neon, wasm128, scalar]
+                );
+                for lane in 0..16 {
+                    vif_pixel_finalize(
+                        table,
+                        gain_limit,
+                        ref_means[lane],
+                        dis_means[lane],
+                        ref_sqs[lane],
+                        dis_sqs[lane],
+                        ref_diss[lane],
+                        &mut num_log,
+                        &mut den_log,
+                        &mut num_non_log,
+                        &mut den_non_log,
+                    );
+                }
+                hcol += 16;
+            }
         }
         for col in hcol..width {
             let center = col + half as usize;
@@ -1869,6 +2533,67 @@ mod tests {
                 )
                 .unwrap();
                 assert!(scores.iter().all(|score| score.is_finite() && *score > 0.0));
+            }
+        }
+    }
+
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    #[test]
+    fn v3_stat8_matches_simd_fallback_at_odd_widths() {
+        for (width, height) in [
+            (16, 17),
+            (17, 17),
+            (31, 9),
+            (33, 17),
+            (47, 33),
+            (64, 9),
+            (19, 9),
+        ] {
+            for case in 0..3 {
+                let reference: Vec<u16> = (0..height)
+                    .flat_map(|y| {
+                        (0..width).map(move |x| {
+                            (match case {
+                                0 => (x * 37 + y * 61 + x * y * 5) % 256,
+                                1 => 255,
+                                _ => ((x * 211 + y * 149 + 17) % 251) + (x % 3),
+                            }) as u16
+                        })
+                    })
+                    .collect();
+                let distorted: Vec<u16> = (0..height)
+                    .flat_map(|y| {
+                        (0..width).map(move |x| {
+                            (match case {
+                                0 => (x * 23 + y * 41 + 9) % 256,
+                                1 => {
+                                    if (x + y) % 2 == 0 {
+                                        255
+                                    } else {
+                                        0
+                                    }
+                                }
+                                _ => (x * 157 + y * 89 + 31) % 256,
+                            }) as u16
+                        })
+                    })
+                    .collect();
+                let image = VifImage {
+                    reference: Cow::Borrowed(reference.as_slice()),
+                    distorted: Cow::Borrowed(distorted.as_slice()),
+                    width,
+                    height,
+                };
+                let table = log_table();
+                V3_DISABLED_FOR_TEST.store(true, std::sync::atomic::Ordering::Relaxed);
+                let fallback = statistics(&image, 8, 0, 100.0, table);
+                V3_DISABLED_FOR_TEST.store(false, std::sync::atomic::Ordering::Relaxed);
+                let avx2 = statistics(&image, 8, 0, 100.0, table);
+                assert_eq!(
+                    (fallback.0.to_bits(), fallback.1.to_bits()),
+                    (avx2.0.to_bits(), avx2.1.to_bits()),
+                    "width={width} height={height} case={case}"
+                );
             }
         }
     }

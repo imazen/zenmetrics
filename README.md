@@ -268,6 +268,24 @@ reference, a scalar build with `target-cpu=native` measured ~87 ms/frame
 on v0 — autovectorization alone without the hand-SIMD kernels recovers
 almost none of the VIF statistics cost (75.8 → 72.7).
 
+The 8-bit scale-0 VIF statistics path is also available as a direct
+AVX2 intrinsic port of libvmaf's `vif_statistic_8_avx2`, taken when an
+`X64V3Token` is present (falling back to the magetypes path otherwise):
+`#[arcane]` functions using `archmage::intrinsics` safe unaligned
+loads/stores (`_mm256_loadu_si256`/`_mm256_storeu_si256` on array
+references) with `mullo_epi32`+`add_epi64` pair-packed mean
+accumulation, real `mul_epu32` 64-bit lanes for the square terms,
+`unpacklo`/`unpackhi`/`blend_epi32`/`shuffle_epi32` lane choreography,
+and the shared scalar `vif_finalize_sigma` for the per-pixel log
+finalize — matching libvmaf's structure intrinsic-for-intrinsic. A
+paired `--v0 --stages` run measured vif4 at 18.79 ms/frame versus
+22.32 with the magetypes path, and end-to-end v0 at 31.0 ms/frame
+versus 36.2 before the port (libvmaf CPU auto-dispatch ~22.2 on the
+same run, so the remaining gap is ~1.4×). A tier-parity unit test
+covers odd widths (17/19/31/33/47), 16-multiples, edge-dominated
+heights, and textured/uniform/dithered content — sizes the 640×360
+oracle fixture's exact 16-division never exercises.
+
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate
 ([`fast-ssim2`](https://crates.io/crates/fast-ssim2) 0.8.1,
