@@ -32,7 +32,7 @@ Workspace conventions per the global rules:
   unimplemented columns (Daala `dump_psnrhvs`, wavelet `vifvec`, libvmaf
   `float_ssim`, HDR-VDP-3, `mDCT-PSNR`). AIC probes committed:
   `crates/vmaf/examples/aic_probe.rs`, `crates/vif/examples/aic_vif.rs`.
-- docs (`HASH_TBD`): `docs/METRIC_PROVENANCE.md` updated — the AIC-4
+- docs (`7e94e01e`): `docs/METRIC_PROVENANCE.md` updated — the AIC-4
   reproduction matrix now reports med/max deltas over a 53-pair stratified
   subset (S01/S03/S19/S38/S57 × AVIF/JXL/JPG/J2K/WEBP × levels 02/09/16)
   stream-extracted from the tower NFS corpus at
