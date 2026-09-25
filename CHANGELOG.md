@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- msssim (HASH): new in-tree CPU port of MS-SSIM (Wang, Simoncelli &
+- msssim (`aee81d19`): new in-tree CPU port of MS-SSIM (Wang, Simoncelli &
   Bovik, IEEE Asilomar 2003) — pure-Rust, `archmage`/`magetypes` SIMD
   with bit-identical scalar/v3/v4 tiers and fixed-order f64 pooling.
   Ports the authors' `msssim.m` + `ssim_index_new.m`: 11×11 separable
