@@ -14,8 +14,8 @@ cases = {
   4 4 64 64   "g4_identical";
   3 1 32 32   "g3_vs_g1_32";
   2 1 37 41   "g2_vs_g1_37x41";
-  1 2 300 260 "g1_vs_g2_300x260";   % F=2 (min 260 > 255)
-  1 4 520 400 "g1_vs_g4_520x400";   % F=2 even-kernel path
+  1 2 300 260 "g1_vs_g2_300x260";   % F=1 (round(260/256)=1)
+  1 4 520 400 "g1_vs_g4_520x400";   % F=2 even-kernel path (round(400/256)=2)
 };
 
 for i = 1:rows(cases)

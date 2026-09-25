@@ -25,8 +25,8 @@ const SIGMA_D: f32 = 145.0;
 const SIGMA_C: f32 = 0.001;
 
 /// `F = max(1, round(min(w,h) / 256))` — MATLAB `round` (half away
-/// from zero), single shot. **Not** FSIM's recursive `floor` — VSI
-/// reaches F=2 at min-dim 384.
+/// from zero), single shot — the identical rule `FR_FSIMc.m` uses.
+/// VSI reaches F=2 at min-dim 384.
 pub(crate) fn decimation_factor(w: usize, h: usize) -> usize {
     let f = libm::round(w.min(h) as f64 / 256.0) as usize;
     f.max(1)

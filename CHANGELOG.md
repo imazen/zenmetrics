@@ -13,6 +13,13 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- docs (`<hash>`): new root `DIVERGENCES.md` — a workspace-level ledger
+  of every known deviation from each metric's cited reference
+  implementation and version (DIVERGES / RESOLVED / ORACLE-ARTIFACT /
+  EXTENSION / OUT-OF-SCOPE tags, per-crate records citing the crate docs
+  that carry the detail, and the cross-cutting house conventions:
+  unrounded luma, per-crate precision policy, SIMD bit-parity, preserved
+  degenerate-input semantics).
 - mad-iqa (`2383f9ae`): new in-tree CPU port of MAD — Most Apparent
   Distortion (Larson & Chandler, JEI 19(1), 2010), ported to the
   authors' `hi_index.m`/`lo_index.m` (STMAD_2011 release archived in

@@ -9,9 +9,9 @@ TIP 20(8), 2011) and validated against it under GNU Octave.
 - `fsim_rgb8` — returns `Scores { fsim, fsimc }`: FSIM on the luma
   plane plus the FSIMc chroma term (YIQ, same matrix as the reference).
 
-Pipeline, matching the reference: optional 2× box-filter subsampling
-when min dimension > 256 (factor F = max(1, floor(min/256)), applied
-recursively), Scharr gradients, `phasecong2`-style log-Gabor
+Pipeline, matching the reference: optional box-filter subsampling
+(factor F = max(1, round(min/256)), single shot — F=2 from min-dim
+384), Scharr gradients, `phasecong2`-style log-Gabor
 phase-congruency maps (4 scales × 6 orientations, 2D-FFT filterbank),
 PC + gradient similarity maps weighted by `max(PC1, PC2)`, FSIMc chroma
 term `|ISim·QSim|^0.03`. Constant inputs return `NaN`, as the

@@ -25,8 +25,8 @@
 //!    `M = 0.30R + 0.04G − 0.35B`, `N = 0.34R − 0.60G + 0.17B`.
 //! 3. Single-shot subsample `F = max(1, round(min(w,h)/256))` —
 //!    `conv2(fspecial('average',F),'same')` + decimation on L, M, N and
-//!    both saliency maps (note: `round`, unlike FSIM's recursive
-//!    `floor`, so F=2 already at min-dim 384).
+//!    both saliency maps (`round`, single shot — the same rule
+//!    `FR_FSIMc.m` uses — so F=2 already at min-dim 384).
 //! 4. Scharr gradient magnitudes on L; similarity maps with constants
 //!    `C_VS=1.27`, `C_GM=386`, `C_chrom=130`; quality map
 //!    `gradSim^0.4 · VSSim · real((ISim·QSim)^0.02)` pooled against
