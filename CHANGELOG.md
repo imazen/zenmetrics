@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- metrics (`TBD`): three AIC-4-matched variants closing the two largest
+- metrics (`9128d118`): three AIC-4-matched variants closing the two largest
   JND-ranked gaps. `msssim` gains a `libvmaf` module — reference
   reimplementation of libvmaf `float_ssim`/`float_ms_ssim` @ f85a8536
   (tdistler-iqa decimate `round(min/256)` + 11×11 Gaussian + zli l·c·s;
