@@ -4683,43 +4683,50 @@ fn filter_mode_kernel_neon(
 ) {
     let mut curr_line = 0usize;
     for i in 0..height {
-        buffer[curr_line * width] = data[i * stride];
+        let row = &data[i * stride..i * stride + width];
+        buffer[curr_line * width] = row[0];
+        // three shifted windows, chunked into fixed 8-wide steps: provable
+        // lengths let the loads/stores skip bounds checks.
+        let ra = &row[..width - 2];
+        let rb = &row[1..width - 1];
+        let rc = &row[2..];
+        let (ra, rb, rc) = (ra.chunks_exact(8), rb.chunks_exact(8), rc.chunks_exact(8));
+        let buf_row = &mut buffer[curr_line * width..curr_line * width + width];
         let mut j = 1usize;
-        while j + 8 < width - 1 {
-            let a = vld1q_u16(a8::<u16, 8>(&data[i * stride + j - 1..i * stride + j + 7]));
-            let b = vld1q_u16(a8::<u16, 8>(&data[i * stride + j..i * stride + j + 8]));
-            let c = vld1q_u16(a8::<u16, 8>(&data[i * stride + j + 1..i * stride + j + 9]));
-            vst1q_u16(
-                a8m::<u16, 8>(&mut buffer[curr_line * width + j..curr_line * width + j + 8]),
-                mode3_neon(_token, a, b, c),
-            );
+        for (((a, b), c), out) in ra
+            .zip(rb)
+            .zip(rc)
+            .zip(buf_row[1..width - 1].chunks_exact_mut(8))
+        {
+            let a = vld1q_u16(a8::<u16, 8>(a));
+            let b = vld1q_u16(a8::<u16, 8>(b));
+            let c = vld1q_u16(a8::<u16, 8>(c));
+            vst1q_u16(a8m::<u16, 8>(out), mode3_neon(_token, a, b, c));
             j += 8;
         }
         while j < width - 1 {
-            buffer[curr_line * width + j] = mode3(
-                data[i * stride + j - 1],
-                data[i * stride + j],
-                data[i * stride + j + 1],
-            );
+            buffer[curr_line * width + j] = mode3(row[j - 1], row[j], row[j + 1]);
             j += 1;
         }
-        buffer[curr_line * width + width - 1] = data[i * stride + width - 1];
+        buffer[curr_line * width + width - 1] = row[width - 1];
 
         if i > 1 {
+            let (ba, bb, bc) = (
+                buffer[..width].chunks_exact(8),
+                buffer[width..2 * width].chunks_exact(8),
+                buffer[2 * width..3 * width].chunks_exact(8),
+            );
             let mut j2 = 0usize;
-            while j2 + 8 <= width {
-                let a = vld1q_u16(a8::<u16, 8>(&buffer[j2..j2 + 8]));
-                let b = vld1q_u16(a8::<u16, 8>(&buffer[width + j2..width + j2 + 8]));
-                let c = vld1q_u16(a8::<u16, 8>(&buffer[2 * width + j2..2 * width + j2 + 8]));
-                vst1q_u16(
-                    a8m::<u16, 8>(&mut data[(i - 1) * stride + j2..(i - 1) * stride + j2 + 8]),
-                    mode3_neon(_token, a, b, c),
-                );
+            let dst = &mut data[(i - 1) * stride..(i - 1) * stride + width];
+            for (((a, b), c), out) in ba.zip(bb).zip(bc).zip(dst.chunks_exact_mut(8)) {
+                let a = vld1q_u16(a8::<u16, 8>(a));
+                let b = vld1q_u16(a8::<u16, 8>(b));
+                let c = vld1q_u16(a8::<u16, 8>(c));
+                vst1q_u16(a8m::<u16, 8>(out), mode3_neon(_token, a, b, c));
                 j2 += 8;
             }
             while j2 < width {
-                data[(i - 1) * stride + j2] =
-                    mode3(buffer[j2], buffer[width + j2], buffer[2 * width + j2]);
+                dst[j2] = mode3(buffer[j2], buffer[width + j2], buffer[2 * width + j2]);
                 j2 += 1;
             }
         }
@@ -4809,39 +4816,68 @@ fn get_spatial_mask(
 ) -> Result<(), Error> {
     let pad = MASK_FILTER_SIZE / 2;
     let mask_index = get_mask_index(width, height, MASK_FILTER_SIZE);
+    let win = 2 * pad + 1;
 
-    let sat_w = width
-        .checked_add(1)
-        .ok_or(Error::InvalidInput("dimension overflow"))?;
-    let sat_h = height
-        .checked_add(1)
-        .ok_or(Error::InvalidInput("dimension overflow"))?;
-    let mut sat = vec![
-        0u32;
-        sat_w
-            .checked_mul(sat_h)
-            .ok_or(Error::InvalidInput("dimension overflow"))?
-    ];
-    for i in 0..height {
-        let mut row_sum = 0u32;
-        for j in 0..width {
-            let horizontal = j == width - 1 || image[i * width + j] == image[i * width + j + 1];
-            let vertical = i == height - 1 || image[i * width + j] == image[(i + 1) * width + j];
-            row_sum += (horizontal && vertical) as u32;
-            sat[(i + 1) * sat_w + (j + 1)] = sat[i * sat_w + (j + 1)] + row_sum;
-        }
+    // Sliding-window box sum instead of a full integral image: a ring of
+    // per-row horizontal window sums plus one vertical accumulator. The sums
+    // are exact integers and edge windows are truncated (zero padding), so
+    // results match the SAT formulation bit for bit while touching ~win*width
+    // bytes of state instead of a (width+1)*(height+1) u32 buffer.
+    let mut ring = vec![0u32; win * width];
+    // per-row flat flags, zero-padded by `pad` columns on each side (plus one
+    // spare slot so the sliding recurrence's dead update stays in bounds)
+    let mut flat = vec![0u32; width + 2 * pad + 1];
+    let mut vsum = vec![0u32; width];
+
+    macro_rules! hsum_row {
+        ($i:expr) => {{
+            let i = $i;
+            let cur = &image[i * width..i * width + width];
+            let nxt: &[u16] = if i + 1 < height {
+                &image[(i + 1) * width..(i + 1) * width + width]
+            } else {
+                cur
+            };
+            for j in 0..width {
+                let horizontal = j == width - 1 || cur[j] == cur[j + 1];
+                let vertical = i == height - 1 || cur[j] == nxt[j];
+                flat[pad + j] = (horizontal && vertical) as u32;
+            }
+            let row = &mut ring[(i % win) * width..(i % win) * width + width];
+            let mut acc: u32 = flat[..win.min(width + 2 * pad)].iter().sum();
+            for j in 0..width {
+                row[j] = acc;
+                acc += flat[j + win] - flat[j];
+            }
+        }};
     }
 
+    for i in 0..=pad.min(height - 1) {
+        hsum_row!(i);
+        let row = &ring[(i % win) * width..(i % win) * width + width];
+        for (a, &b) in vsum.iter_mut().zip(row) {
+            *a += b;
+        }
+    }
     for i in 0..height {
-        let r_lo = i.saturating_sub(pad);
-        let r_hi = (i + pad).min(height - 1);
+        if i > 0 {
+            if i + pad < height {
+                hsum_row!(i + pad);
+                let row = &ring[((i + pad) % win) * width..((i + pad) % win) * width + width];
+                for (a, &b) in vsum.iter_mut().zip(row) {
+                    *a += b;
+                }
+            }
+            if i > pad {
+                let row =
+                    &ring[((i - pad - 1) % win) * width..((i - pad - 1) % win) * width + width];
+                for (a, &b) in vsum.iter_mut().zip(row) {
+                    *a -= b;
+                }
+            }
+        }
         for j in 0..width {
-            let c_lo = j.saturating_sub(pad);
-            let c_hi = (j + pad).min(width - 1);
-            let sum = sat[(r_hi + 1) * sat_w + (c_hi + 1)] + sat[r_lo * sat_w + c_lo]
-                - sat[(r_hi + 1) * sat_w + c_lo]
-                - sat[r_lo * sat_w + (c_hi + 1)];
-            mask[i * width + j] = (sum > mask_index) as u16;
+            mask[i * width + j] = (vsum[j] > mask_index) as u16;
         }
     }
     Ok(())
@@ -5427,6 +5463,38 @@ mod tests {
             .unwrap();
 
             assert_eq!(ca, cb, "c_values {w}x{h} window {win}");
+        }
+    }
+
+    #[test]
+    fn spatial_mask_matches_direct_window() {
+        // Direct O(n * win^2) reference for the sliding-window implementation:
+        // mask[i][j] = (count of horizontally-and-vertically-equal neighbors
+        // in the clamped window) > get_mask_index(...).
+        let pad = MASK_FILTER_SIZE / 2;
+        for &(w, h) in &[(17usize, 9usize), (31, 13), (40, 21), (129, 37)] {
+            let image = textured(w, h, 5);
+            let flat = |i: usize, j: usize| -> u32 {
+                let horiz = j == w - 1 || image[i * w + j] == image[i * w + j + 1];
+                let vert = i == h - 1 || image[i * w + j] == image[(i + 1) * w + j];
+                (horiz && vert) as u32
+            };
+            let mask_index = get_mask_index(w, h, MASK_FILTER_SIZE);
+            let mut expected = vec![0u16; w * h];
+            for i in 0..h {
+                for j in 0..w {
+                    let mut sum = 0u32;
+                    for r in i.saturating_sub(pad)..=(i + pad).min(h - 1) {
+                        for c in j.saturating_sub(pad)..=(j + pad).min(w - 1) {
+                            sum += flat(r, c);
+                        }
+                    }
+                    expected[i * w + j] = (sum > mask_index) as u16;
+                }
+            }
+            let mut mask = vec![0u16; w * h];
+            get_spatial_mask(&image, &mut mask, w, h).unwrap();
+            assert_eq!(mask, expected, "spatial mask {w}x{h}");
         }
     }
 }
