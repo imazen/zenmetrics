@@ -1,6 +1,26 @@
 use crate::{Error, ModelVariant, VmafV0Variant};
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+use archmage::{SimdToken, X64V3Token, arcane};
 #[cfg(feature = "simd")]
 use archmage::{autoversion, magetypes};
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[inline(always)]
+fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
+    s.try_into().unwrap()
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[inline(always)]
+fn a8m<T, const N: usize>(s: &mut [T]) -> &mut [T; N] {
+    s.try_into().unwrap()
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[inline(always)]
+fn v3_token() -> Option<X64V3Token> {
+    X64V3Token::summon()
+}
 
 const ADM_BORDER_FACTOR: f64 = 0.1;
 pub(crate) const ADM_MIN_DIM: usize = 33;
@@ -327,6 +347,11 @@ fn adm_dwt2(
         ind_x,
         a_out,
         |src, src_stride, w, bit_depth, indices, tmplo, tmphi| {
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            if let Some(token) = v3_token() {
+                dwt2_vertical_v3(token, src, src_stride, w, bit_depth, indices, tmplo, tmphi);
+                return;
+            }
             archmage::incant!(
                 dwt2_vertical_simd(src, src_stride, w, bit_depth, indices, tmplo, tmphi),
                 [v3, neon, wasm128, scalar]
@@ -424,6 +449,21 @@ fn dwt2_horizontal_row(
     }
     let a_row = &mut a_out[i * dst_stride..i * dst_stride + w_half];
     dwt2_horizontal_at(tmplo, tmphi, ind_x[0], i, 0, dst_stride, dst, a_row);
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    if let Some(token) = v3_token() {
+        let mut j = 1;
+        // Every output below w_half - 2 uses consecutive (non-reflected)
+        // indices, so the 16-output madd kernel applies.
+        while j + 16 <= w_half - 2 {
+            dwt2_horizontal_16_v3(token, tmplo, tmphi, i, j, dst_stride, dst, a_row);
+            j += 16;
+        }
+        while j < w_half {
+            dwt2_horizontal_at(tmplo, tmphi, ind_x[j], i, j, dst_stride, dst, a_row);
+            j += 1;
+        }
+        return;
+    }
     let mut j = 1;
     while j + 8 <= w_half - 2 {
         let mut out = [[0i16; 8]; 4];
@@ -502,6 +542,193 @@ fn dwt2_horizontal_simd(
             out[band][4 + k] = lane[2 * k] as i16;
         }
     }
+}
+
+/// Direct port of `adm_dwt2_8_avx2`'s vertical pass, adapted to u16 loads
+/// (libvmaf's `_16` variant keeps the vertical pass scalar; our source is u16
+/// for all depths). unpack_epi16 pairs (s0,s1)/(s2,s3) so madd_epi16 computes
+/// the 4-tap convolution in i32 lanes; `srl`+blend_epi16(0xAA)+packus_epi32
+/// reproduces the scalar `(x + add) >> shift` then-truncate-to-i16 exactly.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn dwt2_vertical_v3(
+    _token: X64V3Token,
+    src: &[u16],
+    src_stride: usize,
+    w: usize,
+    bit_depth: u8,
+    indices: [i32; 4],
+    tmplo: &mut [i16],
+    tmphi: &mut [i16],
+) {
+    let shift_vp = bit_depth as i32;
+    let add_shift_vp = 1i32 << (bit_depth - 1);
+    let lo_sum_const = _mm256_set1_epi32(DWT2_LO_SUM * add_shift_vp);
+    let hi_sum_const = _mm256_set1_epi32(DWT2_HI_SUM * add_shift_vp);
+    let fl0 = _mm256_set1_epi32(((DWT2_LO[1] as i32) << 16) | (DWT2_LO[0] as u16 as i32));
+    let fl1 = _mm256_set1_epi32(((DWT2_LO[3] as i32) << 16) | (DWT2_LO[2] as u16 as i32));
+    let fh0 = _mm256_set1_epi32(((DWT2_HI[1] as i32) << 16) | (DWT2_HI[0] as u16 as i32));
+    let fh1 = _mm256_set1_epi32(((DWT2_HI[3] as i32) << 16) | (DWT2_HI[2] as u16 as i32));
+    let add_vp = _mm256_set1_epi32(add_shift_vp);
+    let pad0 = _mm256_setzero_si256();
+    let shift_v = _mm_cvtsi32_si128(shift_vp);
+    let r = [
+        indices[0] as usize * src_stride,
+        indices[1] as usize * src_stride,
+        indices[2] as usize * src_stride,
+        indices[3] as usize * src_stride,
+    ];
+    let mut j = 0usize;
+    while j + 16 <= w {
+        let s0 = _mm256_loadu_si256(a8::<u16, 16>(&src[r[0] + j..r[0] + j + 16]));
+        let s1 = _mm256_loadu_si256(a8::<u16, 16>(&src[r[1] + j..r[1] + j + 16]));
+        let s2 = _mm256_loadu_si256(a8::<u16, 16>(&src[r[2] + j..r[2] + j + 16]));
+        let s3 = _mm256_loadu_si256(a8::<u16, 16>(&src[r[3] + j..r[3] + j + 16]));
+
+        let s0lo = _mm256_unpacklo_epi16(s0, s1);
+        let s0hi = _mm256_unpackhi_epi16(s0, s1);
+        let s1lo = _mm256_unpacklo_epi16(s2, s3);
+        let s1hi = _mm256_unpackhi_epi16(s2, s3);
+
+        let mut acc_lo =
+            _mm256_add_epi32(_mm256_madd_epi16(s0lo, fl0), _mm256_madd_epi16(s1lo, fl1));
+        let mut acc_hi =
+            _mm256_add_epi32(_mm256_madd_epi16(s0hi, fl0), _mm256_madd_epi16(s1hi, fl1));
+        acc_lo = _mm256_sub_epi32(acc_lo, lo_sum_const);
+        acc_hi = _mm256_sub_epi32(acc_hi, lo_sum_const);
+        acc_lo = _mm256_srl_epi32(_mm256_add_epi32(acc_lo, add_vp), shift_v);
+        acc_hi = _mm256_srl_epi32(_mm256_add_epi32(acc_hi, add_vp), shift_v);
+        acc_lo = _mm256_blend_epi16(acc_lo, pad0, 0xAA);
+        acc_hi = _mm256_blend_epi16(acc_hi, pad0, 0xAA);
+        _mm256_storeu_si256(
+            a8m::<i16, 16>(&mut tmplo[j..j + 16]),
+            _mm256_packus_epi32(acc_lo, acc_hi),
+        );
+
+        let mut acc_lo =
+            _mm256_add_epi32(_mm256_madd_epi16(s0lo, fh0), _mm256_madd_epi16(s1lo, fh1));
+        let mut acc_hi =
+            _mm256_add_epi32(_mm256_madd_epi16(s0hi, fh0), _mm256_madd_epi16(s1hi, fh1));
+        acc_lo = _mm256_sub_epi32(acc_lo, hi_sum_const);
+        acc_hi = _mm256_sub_epi32(acc_hi, hi_sum_const);
+        acc_lo = _mm256_srl_epi32(_mm256_add_epi32(acc_lo, add_vp), shift_v);
+        acc_hi = _mm256_srl_epi32(_mm256_add_epi32(acc_hi, add_vp), shift_v);
+        acc_lo = _mm256_blend_epi16(acc_lo, pad0, 0xAA);
+        acc_hi = _mm256_blend_epi16(acc_hi, pad0, 0xAA);
+        _mm256_storeu_si256(
+            a8m::<i16, 16>(&mut tmphi[j..j + 16]),
+            _mm256_packus_epi32(acc_lo, acc_hi),
+        );
+        j += 16;
+    }
+    while j < w {
+        let s = [
+            src[r[0] + j] as i32,
+            src[r[1] + j] as i32,
+            src[r[2] + j] as i32,
+            src[r[3] + j] as i32,
+        ];
+        let mut accum = 0i32;
+        for k in 0..4 {
+            accum += DWT2_LO[k] as i32 * s[k];
+        }
+        accum -= DWT2_LO_SUM * add_shift_vp;
+        tmplo[j] = ((accum + add_shift_vp) >> shift_vp) as i16;
+        let mut accum = 0i32;
+        for k in 0..4 {
+            accum += DWT2_HI[k] as i32 * s[k];
+        }
+        accum -= DWT2_HI_SUM * add_shift_vp;
+        tmphi[j] = ((accum + add_shift_vp) >> shift_vp) as i16;
+        j += 1;
+    }
+}
+
+/// Direct port of `adm_dwt2_16_avx2`'s horizontal pass: 16 outputs per
+/// iteration, four interleaved 16-wide loads at offsets 2j-1/2j+1/2j+15/2j+17
+/// feeding madd_epi16 pair-products. Callers must guarantee every output in
+/// [j, j+16) uses non-reflected indices (j + 16 <= w_half - 2).
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn dwt2_horizontal_16_v3(
+    _token: X64V3Token,
+    tmplo: &[i16],
+    tmphi: &[i16],
+    i: usize,
+    j: usize,
+    dst_stride: usize,
+    dst: &mut BandI16,
+    a_row: &mut [i32],
+) {
+    let f01_lo = _mm256_set1_epi32(((DWT2_LO[1] as i32) << 16) | (DWT2_LO[0] as u16 as i32));
+    let f23_lo = _mm256_set1_epi32(((DWT2_LO[3] as i32) << 16) | (DWT2_LO[2] as u16 as i32));
+    let f01_hi = _mm256_set1_epi32(((DWT2_HI[1] as i32) << 16) | (DWT2_HI[0] as u16 as i32));
+    let f23_hi = _mm256_set1_epi32(((DWT2_HI[3] as i32) << 16) | (DWT2_HI[2] as u16 as i32));
+    let add_hp = _mm256_set1_epi32(32768);
+    let (j0, j2, j16, j18) = (2 * j - 1, 2 * j + 1, 2 * j + 15, 2 * j + 17);
+
+    let s0 = _mm256_loadu_si256(a8::<i16, 16>(&tmplo[j0..j0 + 16]));
+    let s2 = _mm256_loadu_si256(a8::<i16, 16>(&tmplo[j2..j2 + 16]));
+    let s0_32 = _mm256_loadu_si256(a8::<i16, 16>(&tmplo[j16..j16 + 16]));
+    let s2_32 = _mm256_loadu_si256(a8::<i16, 16>(&tmplo[j18..j18 + 16]));
+
+    let mut acc_lo = _mm256_add_epi32(_mm256_madd_epi16(s0, f01_lo), _mm256_madd_epi16(s2, f23_lo));
+    let mut acc_hi = _mm256_add_epi32(
+        _mm256_madd_epi16(s0_32, f01_lo),
+        _mm256_madd_epi16(s2_32, f23_lo),
+    );
+    acc_lo = _mm256_srai_epi32(_mm256_add_epi32(acc_lo, add_hp), 16);
+    acc_hi = _mm256_srai_epi32(_mm256_add_epi32(acc_hi, add_hp), 16);
+    let packed = _mm256_permute4x64_epi64(_mm256_packs_epi32(acc_lo, acc_hi), 0xD8);
+    let mut a16 = [0i16; 16];
+    _mm256_storeu_si256(&mut a16, packed);
+    for k in 0..16 {
+        a_row[j + k] = a16[k] as i32;
+    }
+
+    let mut acc_lo = _mm256_add_epi32(_mm256_madd_epi16(s0, f01_hi), _mm256_madd_epi16(s2, f23_hi));
+    let mut acc_hi = _mm256_add_epi32(
+        _mm256_madd_epi16(s0_32, f01_hi),
+        _mm256_madd_epi16(s2_32, f23_hi),
+    );
+    acc_lo = _mm256_srai_epi32(_mm256_add_epi32(acc_lo, add_hp), 16);
+    acc_hi = _mm256_srai_epi32(_mm256_add_epi32(acc_hi, add_hp), 16);
+    let row = i * dst_stride + j;
+    _mm256_storeu_si256(
+        a8m::<i16, 16>(&mut dst.v[row..row + 16]),
+        _mm256_permute4x64_epi64(_mm256_packs_epi32(acc_lo, acc_hi), 0xD8),
+    );
+
+    let s0 = _mm256_loadu_si256(a8::<i16, 16>(&tmphi[j0..j0 + 16]));
+    let s2 = _mm256_loadu_si256(a8::<i16, 16>(&tmphi[j2..j2 + 16]));
+    let s0_32 = _mm256_loadu_si256(a8::<i16, 16>(&tmphi[j16..j16 + 16]));
+    let s2_32 = _mm256_loadu_si256(a8::<i16, 16>(&tmphi[j18..j18 + 16]));
+
+    let mut acc_lo = _mm256_add_epi32(_mm256_madd_epi16(s0, f01_lo), _mm256_madd_epi16(s2, f23_lo));
+    let mut acc_hi = _mm256_add_epi32(
+        _mm256_madd_epi16(s0_32, f01_lo),
+        _mm256_madd_epi16(s2_32, f23_lo),
+    );
+    acc_lo = _mm256_srai_epi32(_mm256_add_epi32(acc_lo, add_hp), 16);
+    acc_hi = _mm256_srai_epi32(_mm256_add_epi32(acc_hi, add_hp), 16);
+    _mm256_storeu_si256(
+        a8m::<i16, 16>(&mut dst.h[row..row + 16]),
+        _mm256_permute4x64_epi64(_mm256_packs_epi32(acc_lo, acc_hi), 0xD8),
+    );
+
+    let mut acc_lo = _mm256_add_epi32(_mm256_madd_epi16(s0, f01_hi), _mm256_madd_epi16(s2, f23_hi));
+    let mut acc_hi = _mm256_add_epi32(
+        _mm256_madd_epi16(s0_32, f01_hi),
+        _mm256_madd_epi16(s2_32, f23_hi),
+    );
+    acc_lo = _mm256_srai_epi32(_mm256_add_epi32(acc_lo, add_hp), 16);
+    acc_hi = _mm256_srai_epi32(_mm256_add_epi32(acc_hi, add_hp), 16);
+    _mm256_storeu_si256(
+        a8m::<i16, 16>(&mut dst.d[row..row + 16]),
+        _mm256_permute4x64_epi64(_mm256_packs_epi32(acc_lo, acc_hi), 0xD8),
+    );
 }
 
 fn adm_dwt2_core(
