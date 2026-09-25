@@ -1,4 +1,4 @@
-use crate::{Error, ModelVariant, VmafV0Variant};
+use crate::{Error, ModelVariant, VmafV0Variant, pool};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
@@ -8,8 +8,6 @@ use archmage::X64V4Token;
 #[cfg(feature = "simd")]
 use archmage::{autoversion, magetypes};
 
-#[cfg(all(feature = "simd", target_arch = "x86_64"))]
-#[inline(always)]
 fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
     s.try_into().unwrap()
 }
@@ -196,6 +194,23 @@ struct BandI32 {
     v: Vec<i32>,
     d: Vec<i32>,
 }
+
+impl Drop for BandI16 {
+    fn drop(&mut self) {
+        pool::give_i16(std::mem::take(&mut self.h));
+        pool::give_i16(std::mem::take(&mut self.v));
+        pool::give_i16(std::mem::take(&mut self.d));
+    }
+}
+
+impl Drop for BandI32 {
+    fn drop(&mut self) {
+        pool::give_i32(std::mem::take(&mut self.h));
+        pool::give_i32(std::mem::take(&mut self.v));
+        pool::give_i32(std::mem::take(&mut self.d));
+    }
+}
+
 
 #[cfg(any(test, not(feature = "simd")))]
 fn dwt2_vertical_scalar(
@@ -815,35 +830,65 @@ fn adm_decouple(
     let (left, top, right, bottom) = border_region(w, h, 1);
     for i in top..bottom {
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-        let j_start = if let Some(token) = v3_token() {
-            adm_decouple_row_v3(
-                token,
-                &ref_b.h,
-                &ref_b.v,
-                &ref_b.d,
-                &dis_b.h,
-                &dis_b.v,
-                &dis_b.d,
-                &mut r.h,
-                &mut r.v,
-                &mut r.d,
-                &mut a.h,
-                &mut a.v,
-                &mut a.d,
-                i as usize,
-                stride,
-                left as usize,
-                right as usize,
-                div,
-                enhn_gain_limit,
-            );
-            left + ((right - left) / 8) * 8
-        } else {
-            left
-        };
+        let j_start = {
+            #[cfg(feature = "avx512")]
+            let j_mid = if let Some(token) = v4_token() {
+                adm_decouple_row_v4(
+                    token,
+                    &ref_b.h,
+                    &ref_b.v,
+                    &ref_b.d,
+                    &dis_b.h,
+                    &dis_b.v,
+                    &dis_b.d,
+                    &mut r.h,
+                    &mut r.v,
+                    &mut r.d,
+                    &mut a.h,
+                    &mut a.v,
+                    &mut a.d,
+                    i as usize,
+                    stride,
+                    left as usize,
+                    right as usize,
+                    div,
+                    enhn_gain_limit,
+                )
+            } else {
+                left as usize
+            };
+            #[cfg(not(feature = "avx512"))]
+            let j_mid = left as usize;
+            if let Some(token) = v3_token() {
+                adm_decouple_row_v3(
+                    token,
+                    &ref_b.h,
+                    &ref_b.v,
+                    &ref_b.d,
+                    &dis_b.h,
+                    &dis_b.v,
+                    &dis_b.d,
+                    &mut r.h,
+                    &mut r.v,
+                    &mut r.d,
+                    &mut a.h,
+                    &mut a.v,
+                    &mut a.d,
+                    i as usize,
+                    stride,
+                    j_mid,
+                    right as usize,
+                    div,
+                    enhn_gain_limit,
+                );
+                (j_mid + ((right as usize - j_mid) / 8) * 8) as i32
+            } else {
+                j_mid as i32
+            }
+        } as usize;
         #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
-        let j_start = left;
-        for j in j_start..right {
+        let j_start = left as usize;
+        for j in j_start..right as usize {
             let idx = i as usize * stride + j as usize;
             let oh = ref_b.h[idx] as i64;
             let ov = ref_b.v[idx] as i64;
@@ -936,14 +981,14 @@ fn gather_i32_v3(_token: X64V3Token, table: &[i32], idx: __m256i) -> __m256i {
     let mut a = [0i32; 8];
     _mm256_storeu_si256(a8m::<i32, 8>(&mut a), idx);
     _mm256_setr_epi32(
-        table[a[0] as usize],
-        table[a[1] as usize],
-        table[a[2] as usize],
-        table[a[3] as usize],
-        table[a[4] as usize],
-        table[a[5] as usize],
-        table[a[6] as usize],
-        table[a[7] as usize],
+        table[(a[0] & 0xffff) as usize],
+        table[(a[1] & 0xffff) as usize],
+        table[(a[2] & 0xffff) as usize],
+        table[(a[3] & 0xffff) as usize],
+        table[(a[4] & 0xffff) as usize],
+        table[(a[5] & 0xffff) as usize],
+        table[(a[6] & 0xffff) as usize],
+        table[(a[7] & 0xffff) as usize],
     )
 }
 
@@ -1224,6 +1269,271 @@ fn adm_decouple_row_v3(
         );
         j += 8;
     }
+}
+
+/// AVX-512 port of `adm_decouple_avx512`'s row loop — 16 i16 columns widened
+/// to i32 lanes per iteration. madd_epi16 computes the three magnitude
+/// products, the angle check runs as vector compares (identical f32→f64
+/// semantics to the scalar `as f32 as f64 / 4096.0`), and the div-table lookup
+/// stays a bounds-masked scalar gather (hardware gathers are `unsafe` under
+/// `forbid(unsafe_code)`). The i32→i16 pack uses `permutexvar_epi16`
+/// truncation — matching the scalar `as i16` and C's AVX-512 path.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn adm_decouple_row_v4(
+    _token: X64V4Token,
+    ref_h: &[i16],
+    ref_v: &[i16],
+    ref_d: &[i16],
+    dis_h: &[i16],
+    dis_v: &[i16],
+    dis_d: &[i16],
+    r_h: &mut [i16],
+    r_v: &mut [i16],
+    r_d: &mut [i16],
+    a_h: &mut [i16],
+    a_v: &mut [i16],
+    a_d: &mut [i16],
+    row: usize,
+    stride: usize,
+    j_start: usize,
+    j_end: usize,
+    div: &[i32; 65537],
+    enhn_gain_limit: f64,
+) -> usize {
+    let cos_1deg_sq = (std::f64::consts::PI / 180.0).cos().powi(2);
+    let base = row * stride;
+    let zero = _mm512_setzero_si512();
+    let zero_ps = _mm512_setzero_ps();
+    let const_32768 = _mm512_set1_epi32(32768);
+    let const_16384_64 = _mm512_set1_epi64(16384);
+    let const_16384_32 = _mm512_set1_epi32(16384);
+    let lo16 = _mm512_set1_epi32(0xFFFF);
+    let lo32_64 = _mm512_set1_epi64(0xFFFFFFFF);
+    let inv_32768 = _mm512_set1_ps(1.0 / 32768.0);
+    let inv_4096 = _mm512_set1_ps(1.0 / 4096.0);
+    let inv_64 = _mm512_set1_ps(1.0 / 64.0);
+    let gain_d = _mm512_set1_pd(enhn_gain_limit);
+    let cos_sq_pd = _mm512_set1_pd(cos_1deg_sq);
+    // Even i16 lanes → low halves of each i32 lane (truncating i32→i16 pack).
+    let pack16 = _mm512_set_epi16(
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30, 28, 26, 24, 22, 20, 18,
+        16, 14, 12, 10, 8, 6, 4, 2, 0,
+    );
+
+    let mut j = j_start;
+    while j + 16 <= j_end {
+        let idx = base + j;
+        let oh = _mm512_cvtepi16_epi32(_mm256_loadu_si256(a8::<i16, 16>(&ref_h[idx..idx + 16])));
+        let ov = _mm512_cvtepi16_epi32(_mm256_loadu_si256(a8::<i16, 16>(&ref_v[idx..idx + 16])));
+        let od = _mm512_cvtepi16_epi32(_mm256_loadu_si256(a8::<i16, 16>(&ref_d[idx..idx + 16])));
+        let th = _mm512_cvtepi16_epi32(_mm256_loadu_si256(a8::<i16, 16>(&dis_h[idx..idx + 16])));
+        let tv = _mm512_cvtepi16_epi32(_mm256_loadu_si256(a8::<i16, 16>(&dis_v[idx..idx + 16])));
+        let td = _mm512_cvtepi16_epi32(_mm256_loadu_si256(a8::<i16, 16>(&dis_d[idx..idx + 16])));
+
+        let oh_ov = _mm512_or_si512(_mm512_and_si512(oh, lo16), _mm512_slli_epi32(ov, 16));
+        let th_tv = _mm512_or_si512(_mm512_and_si512(th, lo16), _mm512_slli_epi32(tv, 16));
+        let o_mag_sq = _mm512_madd_epi16(oh_ov, oh_ov);
+        let ot_dp = _mm512_madd_epi16(oh_ov, th_tv);
+        let t_mag_sq = _mm512_madd_epi16(th_tv, th_tv);
+
+        // angle_flag: ((dp/4096) >= 0) && (dp^2 >= cos^2 * oms * tms), all in
+        // f32→f64 like the scalar path. `* inv_4096` in f32 is exact (power of
+        // two), then cvtps_pd widens exactly.
+        let dp_ps = _mm512_mul_ps(inv_4096, _mm512_cvtepi32_ps(ot_dp));
+        let oms_ps = _mm512_mul_ps(inv_4096, _mm512_cvtepi32_ps(o_mag_sq));
+        let tms_ps = _mm512_mul_ps(inv_4096, _mm512_cvtepi32_ps(t_mag_sq));
+        let gt0 = _mm512_cmp_ps_mask::<_CMP_GE_OQ>(dp_ps, zero_ps);
+        let dp_lo = _mm512_cvtps_pd(_mm512_castps512_ps256(dp_ps));
+        let dp_hi = _mm512_cvtps_pd(_mm512_extractf32x8_ps::<1>(dp_ps));
+        let om_lo = _mm512_cvtps_pd(_mm512_castps512_ps256(oms_ps));
+        let om_hi = _mm512_cvtps_pd(_mm512_extractf32x8_ps::<1>(oms_ps));
+        let tm_lo = _mm512_cvtps_pd(_mm512_castps512_ps256(tms_ps));
+        let tm_hi = _mm512_cvtps_pd(_mm512_extractf32x8_ps::<1>(tms_ps));
+        let m_lo = _mm512_cmp_pd_mask::<_CMP_GE_OQ>(
+            _mm512_mul_pd(dp_lo, dp_lo),
+            _mm512_mul_pd(_mm512_mul_pd(om_lo, tm_lo), cos_sq_pd),
+        );
+        let m_hi = _mm512_cmp_pd_mask::<_CMP_GE_OQ>(
+            _mm512_mul_pd(dp_hi, dp_hi),
+            _mm512_mul_pd(_mm512_mul_pd(om_hi, tm_hi), cos_sq_pd),
+        );
+        let angle_flag = gt0 & (m_lo as u16 | ((m_hi as u16) << 8));
+
+        // div gather: indices = o + 32768 ∈ [0, 65535]; the &0xffff mask is a
+        // no-op that lets LLVM skip per-lane bounds checks.
+        macro_rules! div_gather {
+            ($v:expr) => {{
+                let idx = _mm512_add_epi32($v, const_32768);
+                let mut a = [0i32; 16];
+                _mm512_storeu_si512(a8m::<i32, 16>(&mut a), idx);
+                _mm512_setr_epi32(
+                    div[(a[0] & 0xffff) as usize],
+                    div[(a[1] & 0xffff) as usize],
+                    div[(a[2] & 0xffff) as usize],
+                    div[(a[3] & 0xffff) as usize],
+                    div[(a[4] & 0xffff) as usize],
+                    div[(a[5] & 0xffff) as usize],
+                    div[(a[6] & 0xffff) as usize],
+                    div[(a[7] & 0xffff) as usize],
+                    div[(a[8] & 0xffff) as usize],
+                    div[(a[9] & 0xffff) as usize],
+                    div[(a[10] & 0xffff) as usize],
+                    div[(a[11] & 0xffff) as usize],
+                    div[(a[12] & 0xffff) as usize],
+                    div[(a[13] & 0xffff) as usize],
+                    div[(a[14] & 0xffff) as usize],
+                    div[(a[15] & 0xffff) as usize],
+                )
+            }};
+        }
+        let oh_div = div_gather!(oh);
+        let ov_div = div_gather!(ov);
+        let od_div = div_gather!(od);
+
+        // tmp_k = ((div[o] * t) + 16384) >> 15 per 32-bit lane, computed in
+        // the i64 lane pairs and merged back.
+        macro_rules! tmp_k {
+            ($o_div:expr, $t:expr, $o:expr) => {{
+                let lo = _mm512_srai_epi64(
+                    _mm512_add_epi64(_mm512_mul_epi32($o_div, $t), const_16384_64),
+                    15,
+                );
+                let hi = _mm512_srai_epi64(
+                    _mm512_add_epi64(
+                        _mm512_mul_epi32(
+                            _mm512_srli_epi64($o_div, 32),
+                            _mm512_srli_epi64($t, 32),
+                        ),
+                        const_16384_64,
+                    ),
+                    15,
+                );
+                let mut k = _mm512_or_si512(
+                    _mm512_and_si512(lo, lo32_64),
+                    _mm512_slli_epi64(hi, 32),
+                );
+                k = _mm512_mask_blend_epi32(
+                    _mm512_cmpeq_epi32_mask($o, zero),
+                    k,
+                    const_32768,
+                );
+                _mm512_min_epi32(_mm512_max_epi32(k, zero), const_32768)
+            }};
+        }
+        let tmp_kh = tmp_k!(oh_div, th, oh);
+        let tmp_kv = tmp_k!(ov_div, tv, ov);
+        let tmp_kd = tmp_k!(od_div, td, od);
+
+        let mut rst_h = _mm512_srai_epi32(
+            _mm512_add_epi32(_mm512_mullo_epi32(tmp_kh, oh), const_16384_32),
+            15,
+        );
+        let mut rst_v = _mm512_srai_epi32(
+            _mm512_add_epi32(_mm512_mullo_epi32(tmp_kv, ov), const_16384_32),
+            15,
+        );
+        let mut rst_d = _mm512_srai_epi32(
+            _mm512_add_epi32(_mm512_mullo_epi32(tmp_kd, od), const_16384_32),
+            15,
+        );
+
+        let rst_h_f = _mm512_mul_ps(
+            _mm512_mul_ps(inv_32768, _mm512_cvtepi32_ps(tmp_kh)),
+            _mm512_mul_ps(inv_64, _mm512_cvtepi32_ps(oh)),
+        );
+        let rst_v_f = _mm512_mul_ps(
+            _mm512_mul_ps(inv_32768, _mm512_cvtepi32_ps(tmp_kv)),
+            _mm512_mul_ps(inv_64, _mm512_cvtepi32_ps(ov)),
+        );
+        let rst_d_f = _mm512_mul_ps(
+            _mm512_mul_ps(inv_32768, _mm512_cvtepi32_ps(tmp_kd)),
+            _mm512_mul_ps(inv_64, _mm512_cvtepi32_ps(od)),
+        );
+
+        let gt0_h = _mm512_cmp_ps_mask::<_CMP_GT_OS>(rst_h_f, zero_ps);
+        let lt0_h = _mm512_cmp_ps_mask::<_CMP_LT_OS>(rst_h_f, zero_ps);
+        let gt0_v = _mm512_cmp_ps_mask::<_CMP_GT_OS>(rst_v_f, zero_ps);
+        let lt0_v = _mm512_cmp_ps_mask::<_CMP_LT_OS>(rst_v_f, zero_ps);
+        let gt0_d = _mm512_cmp_ps_mask::<_CMP_GT_OS>(rst_d_f, zero_ps);
+        let lt0_d = _mm512_cmp_ps_mask::<_CMP_LT_OS>(rst_d_f, zero_ps);
+
+        // gain in f64, cvtpd_epi32 rounds to nearest like C's AVX-512 and v3.
+        macro_rules! gain_sel {
+            ($rst:expr, $t:expr, $gt0:expr, $lt0:expr) => {{
+                let g_lo = _mm512_mul_pd(
+                    _mm512_cvtepi32_pd(_mm512_castsi512_si256($rst)),
+                    gain_d,
+                );
+                let g_hi = _mm512_mul_pd(
+                    _mm512_cvtepi32_pd(_mm512_extracti32x8_epi32::<1>($rst)),
+                    gain_d,
+                );
+                let gain = _mm512_inserti32x8::<1>(
+                    _mm512_castsi256_si512(_mm512_cvtpd_epi32(g_lo)),
+                    _mm512_cvtpd_epi32(g_hi),
+                );
+                let min = _mm512_mask_blend_epi32(
+                    $gt0,
+                    zero,
+                    _mm512_min_epi32(gain, $t),
+                );
+                let max = _mm512_mask_blend_epi32(
+                    $lt0,
+                    zero,
+                    _mm512_max_epi32(gain, $t),
+                );
+                _mm512_mask_blend_epi32($gt0 | $lt0, $rst, _mm512_or_si512(min, max))
+            }};
+        }
+        rst_h = _mm512_mask_blend_epi32(
+            angle_flag,
+            rst_h,
+            gain_sel!(rst_h, th, gt0_h, lt0_h),
+        );
+        rst_v = _mm512_mask_blend_epi32(
+            angle_flag,
+            rst_v,
+            gain_sel!(rst_v, tv, gt0_v, lt0_v),
+        );
+        rst_d = _mm512_mask_blend_epi32(
+            angle_flag,
+            rst_d,
+            gain_sel!(rst_d, td, gt0_d, lt0_d),
+        );
+
+        let ah = _mm512_sub_epi32(th, rst_h);
+        let av = _mm512_sub_epi32(tv, rst_v);
+        let ad = _mm512_sub_epi32(td, rst_d);
+
+        _mm256_storeu_si256(
+            a8m::<i16, 16>(&mut r_h[idx..idx + 16]),
+            _mm512_castsi512_si256(_mm512_permutexvar_epi16(pack16, rst_h)),
+        );
+        _mm256_storeu_si256(
+            a8m::<i16, 16>(&mut r_v[idx..idx + 16]),
+            _mm512_castsi512_si256(_mm512_permutexvar_epi16(pack16, rst_v)),
+        );
+        _mm256_storeu_si256(
+            a8m::<i16, 16>(&mut r_d[idx..idx + 16]),
+            _mm512_castsi512_si256(_mm512_permutexvar_epi16(pack16, rst_d)),
+        );
+        _mm256_storeu_si256(
+            a8m::<i16, 16>(&mut a_h[idx..idx + 16]),
+            _mm512_castsi512_si256(_mm512_permutexvar_epi16(pack16, ah)),
+        );
+        _mm256_storeu_si256(
+            a8m::<i16, 16>(&mut a_v[idx..idx + 16]),
+            _mm512_castsi512_si256(_mm512_permutexvar_epi16(pack16, av)),
+        );
+        _mm256_storeu_si256(
+            a8m::<i16, 16>(&mut a_d[idx..idx + 16]),
+            _mm512_castsi512_si256(_mm512_permutexvar_epi16(pack16, ad)),
+        );
+        j += 16;
+    }
+    j
 }
 
 #[inline(always)]
@@ -1666,6 +1976,295 @@ fn adm_decouple_s123_row_v3(
     }
 }
 
+/// AVX-512 port of `adm_decouple_s123_avx512`'s row loop — 16 i32 columns per
+/// iteration. Where the C keeps `calc_angle` and the div-table gather scalar,
+/// this vectorizes `angle_flag` with `vcvtqq2ps`/`vcvtps2pd` + mask compares
+/// (identical IEEE semantics) and keeps the gather as bounds-checked scalar
+/// loads (gathers are `unsafe` under `forbid(unsafe_code)`). The gain bound
+/// uses `_mm512_cvttpd_epi64` (truncation) to match the scalar `as i64`/v3
+/// path rather than C's `_mm512_cvtpd_epi64` round-to-nearest.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn adm_decouple_s123_row_v4(
+    token: X64V4Token,
+    ref_h: &[i32],
+    ref_v: &[i32],
+    ref_d: &[i32],
+    dis_h: &[i32],
+    dis_v: &[i32],
+    dis_d: &[i32],
+    r_h: &mut [i32],
+    r_v: &mut [i32],
+    r_d: &mut [i32],
+    a_h: &mut [i32],
+    a_v: &mut [i32],
+    a_d: &mut [i32],
+    row: usize,
+    stride: usize,
+    j_start: usize,
+    j_end: usize,
+    div: &[i32; 65537],
+    enhn_gain_limit: f64,
+) -> usize {
+    let _ = token;
+    let cos_1deg_sq = (std::f64::consts::PI / 180.0).cos().powi(2);
+    let base = row * stride;
+    let zero = _mm512_setzero_si512();
+    let const_0_pd = _mm512_set1_pd(0.0);
+    let const_1_epi32 = _mm512_set1_epi32(1);
+    let const_n1_epi32 = _mm512_set1_epi32(-1);
+    let const_14_epi32 = _mm512_set1_epi32(14);
+    let const_15_epi32 = _mm512_set1_epi32(15);
+    let const_17_epi32 = _mm512_set1_epi32(17);
+    let const_16384_epi64 = _mm512_set1_epi64(16384);
+    let const_32768_epi32 = _mm512_set1_epi32(32768);
+    let const_32768_epi64 = _mm512_set1_epi64(32768);
+    let const_4096_pd = _mm512_set1_pd(4096.0);
+    let cos_sq_pd = _mm512_set1_pd(cos_1deg_sq);
+    let inv_32768_f = _mm512_set1_ps(1.0 / 32768.0);
+    let inv_64_f = _mm512_set1_ps(1.0 / 64.0);
+    let gain_pd = _mm512_set1_pd(enhn_gain_limit);
+
+    let lo64 = |v: __m512i| _mm512_cvtepi32_epi64(_mm512_castsi512_si256(v));
+    let hi64 = |v: __m512i| _mm512_cvtepi32_epi64(_mm512_extracti64x4_epi64::<1>(v));
+    let hi256 = |v: __m512i| _mm512_extracti64x4_epi64::<1>(v);
+
+    let angle_mask = |dp: __m512i, oms: __m512i, tms: __m512i| -> __mmask8 {
+        let dp_f = _mm512_div_pd(_mm512_cvtps_pd(_mm512_cvtepi64_ps(dp)), const_4096_pd);
+        let oms_f = _mm512_div_pd(_mm512_cvtps_pd(_mm512_cvtepi64_ps(oms)), const_4096_pd);
+        let tms_f = _mm512_div_pd(_mm512_cvtps_pd(_mm512_cvtepi64_ps(tms)), const_4096_pd);
+        let m_pos = _mm512_cmp_pd_mask::<_CMP_GE_OQ>(dp_f, const_0_pd);
+        let m_rhs = _mm512_cmp_pd_mask::<_CMP_GE_OQ>(
+            _mm512_mul_pd(dp_f, dp_f),
+            _mm512_mul_pd(_mm512_mul_pd(cos_sq_pd, oms_f), tms_f),
+        );
+        m_pos & m_rhs
+    };
+
+    let mut j = j_start;
+    while j + 16 <= j_end {
+        let idx = base + j;
+        let oh = _mm512_loadu_si512(a8::<i32, 16>(&ref_h[idx..idx + 16]));
+        let ov = _mm512_loadu_si512(a8::<i32, 16>(&ref_v[idx..idx + 16]));
+        let od = _mm512_loadu_si512(a8::<i32, 16>(&ref_d[idx..idx + 16]));
+        let th = _mm512_loadu_si512(a8::<i32, 16>(&dis_h[idx..idx + 16]));
+        let tv = _mm512_loadu_si512(a8::<i32, 16>(&dis_v[idx..idx + 16]));
+        let td = _mm512_loadu_si512(a8::<i32, 16>(&dis_d[idx..idx + 16]));
+
+        let oh_lo = lo64(oh); let oh_hi = hi64(oh);
+        let ov_lo = lo64(ov); let ov_hi = hi64(ov);
+        let od_lo = lo64(od); let od_hi = hi64(od);
+        let th_lo = lo64(th); let th_hi = hi64(th);
+        let tv_lo = lo64(tv); let tv_hi = hi64(tv);
+        let td_lo = lo64(td); let td_hi = hi64(td);
+
+        let dp_lo = _mm512_add_epi64(_mm512_mul_epi32(oh_lo, th_lo), _mm512_mul_epi32(ov_lo, tv_lo));
+        let dp_hi = _mm512_add_epi64(_mm512_mul_epi32(oh_hi, th_hi), _mm512_mul_epi32(ov_hi, tv_hi));
+        let oms_lo = _mm512_add_epi64(_mm512_mul_epi32(oh_lo, oh_lo), _mm512_mul_epi32(ov_lo, ov_lo));
+        let oms_hi = _mm512_add_epi64(_mm512_mul_epi32(oh_hi, oh_hi), _mm512_mul_epi32(ov_hi, ov_hi));
+        let tms_lo = _mm512_add_epi64(_mm512_mul_epi32(th_lo, th_lo), _mm512_mul_epi32(tv_lo, tv_lo));
+        let tms_hi = _mm512_add_epi64(_mm512_mul_epi32(th_hi, th_hi), _mm512_mul_epi32(tv_hi, tv_hi));
+
+        let angle_lo = angle_mask(dp_lo, oms_lo, tms_lo);
+        let angle_hi = angle_mask(dp_hi, oms_hi, tms_hi);
+
+        let abs_oh = _mm512_abs_epi32(oh);
+        let abs_ov = _mm512_abs_epi32(ov);
+        let abs_od = _mm512_abs_epi32(od);
+        let kh_sign = _mm512_mask_blend_epi32(_mm512_cmplt_epi32_mask(oh, zero), const_1_epi32, const_n1_epi32);
+        let kv_sign = _mm512_mask_blend_epi32(_mm512_cmplt_epi32_mask(ov, zero), const_1_epi32, const_n1_epi32);
+        let kd_sign = _mm512_mask_blend_epi32(_mm512_cmplt_epi32_mask(od, zero), const_1_epi32, const_n1_epi32);
+
+        let best15 = |abs: __m512i| -> (__m512i, __m512i) {
+            let shift = _mm512_sub_epi32(const_17_epi32, _mm512_lzcnt_epi32(abs));
+            let msb = _mm512_srlv_epi32(
+                _mm512_add_epi32(
+                    abs,
+                    _mm512_sllv_epi32(const_1_epi32, _mm512_sub_epi32(shift, const_1_epi32)),
+                ),
+                shift,
+            );
+            let m = _mm512_cmplt_epi32_mask(abs, const_32768_epi32);
+            (
+                _mm512_mask_blend_epi32(m, msb, abs),
+                _mm512_maskz_mov_epi32(!m, shift),
+            )
+        };
+        let (kh_msb, kh_shift) = best15(abs_oh);
+        let (kv_msb, kv_shift) = best15(abs_ov);
+        let (kd_msb, kd_shift) = best15(abs_od);
+
+        let mut tmp_k = [_mm512_setzero_si512(); 6];
+        for (k, (msb, t_lo, t_hi, sign, o_lo, o_hi, shift)) in [
+            (kh_msb, th_lo, th_hi, kh_sign, oh_lo, oh_hi, kh_shift),
+            (kv_msb, tv_lo, tv_hi, kv_sign, ov_lo, ov_hi, kv_shift),
+            (kd_msb, td_lo, td_hi, kd_sign, od_lo, od_hi, kd_shift),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let div_idx = _mm512_add_epi32(msb, const_32768_epi32);
+            let mut idx_arr = [0i32; 16];
+            _mm512_storeu_si512(a8m::<i32, 16>(&mut idx_arr), div_idx);
+            let mut div_g_arr = [0i32; 16];
+            for (g, &ix) in div_g_arr.iter_mut().zip(idx_arr.iter()) {
+                *g = div[(ix & 0xffff) as usize];
+            }
+            let div_g = _mm512_loadu_si512(a8::<i32, 16>(&div_g_arr));
+            let one_shift =
+                _mm512_sllv_epi32(const_1_epi32, _mm512_add_epi32(const_14_epi32, shift));
+            let fifteen = _mm512_add_epi32(const_15_epi32, shift);
+
+            let cond_lo = _mm512_mul_epi32(
+                _mm512_cvtepi32_epi64(_mm512_castsi512_si256(div_g)),
+                _mm512_mul_epi32(t_lo, _mm512_cvtepi32_epi64(_mm512_castsi512_si256(sign))),
+            );
+            let cond_lo = _mm512_srav_epi64(
+                _mm512_add_epi64(
+                    cond_lo,
+                    _mm512_cvtepi32_epi64(_mm512_castsi512_si256(one_shift)),
+                ),
+                _mm512_cvtepi32_epi64(_mm512_castsi512_si256(fifteen)),
+            );
+            tmp_k[k] = _mm512_mask_blend_epi64(
+                _mm512_cmpeq_epi64_mask(o_lo, zero),
+                cond_lo,
+                const_32768_epi64,
+            );
+
+            let cond_hi = _mm512_mul_epi32(
+                _mm512_cvtepi32_epi64(hi256(div_g)),
+                _mm512_mul_epi32(t_hi, _mm512_cvtepi32_epi64(hi256(sign))),
+            );
+            let cond_hi = _mm512_srav_epi64(
+                _mm512_add_epi64(cond_hi, _mm512_cvtepi32_epi64(hi256(one_shift))),
+                _mm512_cvtepi32_epi64(hi256(fifteen)),
+            );
+            tmp_k[k + 3] = _mm512_mask_blend_epi64(
+                _mm512_cmpeq_epi64_mask(o_hi, zero),
+                cond_hi,
+                const_32768_epi64,
+            );
+        }
+
+        let clamp = |t: __m512i| -> __m512i {
+            let c = _mm512_mask_blend_epi64(
+                _mm512_cmpgt_epi64_mask(t, const_32768_epi64),
+                t,
+                const_32768_epi64,
+            );
+            _mm512_mask_blend_epi64(_mm512_cmpgt_epi64_mask(zero, c), c, zero)
+        };
+        let (kh_lo, kh_hi) = (clamp(tmp_k[0]), clamp(tmp_k[3]));
+        let (kv_lo, kv_hi) = (clamp(tmp_k[1]), clamp(tmp_k[4]));
+        let (kd_lo, kd_hi) = (clamp(tmp_k[2]), clamp(tmp_k[5]));
+
+        let pack = |lo: __m512i, hi: __m512i| -> __m512i {
+            _mm512_inserti32x8::<1>(
+                _mm512_castsi256_si512(_mm512_cvtepi64_epi32(lo)),
+                _mm512_cvtepi64_epi32(hi),
+            )
+        };
+        let mut rst_h_lo = _mm512_srli_epi64(
+            _mm512_add_epi64(_mm512_mul_epi32(kh_lo, oh_lo), const_16384_epi64), 15);
+        let mut rst_h_hi = _mm512_srli_epi64(
+            _mm512_add_epi64(_mm512_mul_epi32(kh_hi, oh_hi), const_16384_epi64), 15);
+        let mut rst_v_lo = _mm512_srli_epi64(
+            _mm512_add_epi64(_mm512_mul_epi32(kv_lo, ov_lo), const_16384_epi64), 15);
+        let mut rst_v_hi = _mm512_srli_epi64(
+            _mm512_add_epi64(_mm512_mul_epi32(kv_hi, ov_hi), const_16384_epi64), 15);
+        let mut rst_d_lo = _mm512_srli_epi64(
+            _mm512_add_epi64(_mm512_mul_epi32(kd_lo, od_lo), const_16384_epi64), 15);
+        let mut rst_d_hi = _mm512_srli_epi64(
+            _mm512_add_epi64(_mm512_mul_epi32(kd_hi, od_hi), const_16384_epi64), 15);
+        let mut rst_h32 = pack(rst_h_lo, rst_h_hi);
+        let mut rst_v32 = pack(rst_v_lo, rst_v_hi);
+        let mut rst_d32 = pack(rst_d_lo, rst_d_hi);
+
+        let kh_f = _mm512_insertf32x8::<1>(
+            _mm512_castps256_ps512(_mm512_cvtepi64_ps(kh_lo)),
+            _mm512_cvtepi64_ps(kh_hi),
+        );
+        let kv_f = _mm512_insertf32x8::<1>(
+            _mm512_castps256_ps512(_mm512_cvtepi64_ps(kv_lo)),
+            _mm512_cvtepi64_ps(kv_hi),
+        );
+        let kd_f = _mm512_insertf32x8::<1>(
+            _mm512_castps256_ps512(_mm512_cvtepi64_ps(kd_lo)),
+            _mm512_cvtepi64_ps(kd_hi),
+        );
+        let rst_h_f = _mm512_mul_ps(
+            _mm512_mul_ps(kh_f, inv_32768_f),
+            _mm512_mul_ps(_mm512_cvtepi32_ps(oh), inv_64_f),
+        );
+        let rst_v_f = _mm512_mul_ps(
+            _mm512_mul_ps(kv_f, inv_32768_f),
+            _mm512_mul_ps(_mm512_cvtepi32_ps(ov), inv_64_f),
+        );
+        let rst_d_f = _mm512_mul_ps(
+            _mm512_mul_ps(kd_f, inv_32768_f),
+            _mm512_mul_ps(_mm512_cvtepi32_ps(od), inv_64_f),
+        );
+
+        macro_rules! apply_gain {
+            ($rst_lo:ident, $rst_hi:ident, $rst32:ident, $t_lo:ident, $t_hi:ident, $rst_f:ident) => {{
+                let g_lo = _mm512_cvttpd_epi64(_mm512_mul_pd(
+                    _mm512_cvtepi32_pd(_mm512_castsi512_si256($rst32)),
+                    gain_pd,
+                ));
+                let g_hi = _mm512_cvttpd_epi64(_mm512_mul_pd(
+                    _mm512_cvtepi32_pd(_mm512_extracti32x8_epi32::<1>($rst32)),
+                    gain_pd,
+                ));
+                let min_lo = _mm512_mask_blend_epi64(
+                    _mm512_cmpgt_epi64_mask($t_lo, g_lo),
+                    $t_lo,
+                    g_lo,
+                );
+                let min_hi = _mm512_mask_blend_epi64(
+                    _mm512_cmpgt_epi64_mask($t_hi, g_hi),
+                    $t_hi,
+                    g_hi,
+                );
+                let max_lo = _mm512_mask_blend_epi64(
+                    _mm512_cmpgt_epi64_mask(g_lo, $t_lo),
+                    $t_lo,
+                    g_lo,
+                );
+                let max_hi = _mm512_mask_blend_epi64(
+                    _mm512_cmpgt_epi64_mask(g_hi, $t_hi),
+                    $t_hi,
+                    g_hi,
+                );
+                let f_lo = _mm512_cvtps_pd(_mm512_castps512_ps256($rst_f));
+                let f_hi = _mm512_cvtps_pd(_mm512_extractf32x8_ps::<1>($rst_f));
+                let mask_gt_lo = angle_lo & _mm512_cmp_pd_mask::<_CMP_GT_OS>(f_lo, const_0_pd);
+                let mask_gt_hi = angle_hi & _mm512_cmp_pd_mask::<_CMP_GT_OS>(f_hi, const_0_pd);
+                let mask_lt_lo = angle_lo & _mm512_cmp_pd_mask::<_CMP_LT_OS>(f_lo, const_0_pd);
+                let mask_lt_hi = angle_hi & _mm512_cmp_pd_mask::<_CMP_LT_OS>(f_hi, const_0_pd);
+                $rst_lo = _mm512_mask_blend_epi64(mask_gt_lo, $rst_lo, min_lo);
+                $rst_hi = _mm512_mask_blend_epi64(mask_gt_hi, $rst_hi, min_hi);
+                $rst_lo = _mm512_mask_blend_epi64(mask_lt_lo, $rst_lo, max_lo);
+                $rst_hi = _mm512_mask_blend_epi64(mask_lt_hi, $rst_hi, max_hi);
+                $rst32 = pack($rst_lo, $rst_hi);
+            }};
+        }
+        apply_gain!(rst_h_lo, rst_h_hi, rst_h32, th_lo, th_hi, rst_h_f);
+        apply_gain!(rst_v_lo, rst_v_hi, rst_v32, tv_lo, tv_hi, rst_v_f);
+        apply_gain!(rst_d_lo, rst_d_hi, rst_d32, td_lo, td_hi, rst_d_f);
+
+        _mm512_storeu_si512(a8m::<i32, 16>(&mut r_h[idx..idx + 16]), rst_h32);
+        _mm512_storeu_si512(a8m::<i32, 16>(&mut r_v[idx..idx + 16]), rst_v32);
+        _mm512_storeu_si512(a8m::<i32, 16>(&mut r_d[idx..idx + 16]), rst_d32);
+        _mm512_storeu_si512(a8m::<i32, 16>(&mut a_h[idx..idx + 16]), _mm512_sub_epi32(th, rst_h32));
+        _mm512_storeu_si512(a8m::<i32, 16>(&mut a_v[idx..idx + 16]), _mm512_sub_epi32(tv, rst_v32));
+        _mm512_storeu_si512(a8m::<i32, 16>(&mut a_d[idx..idx + 16]), _mm512_sub_epi32(td, rst_d32));
+        j += 16;
+    }
+    j
+}
+
 #[cfg_attr(feature = "simd", autoversion)]
 fn adm_decouple_s123(
     ref_b: &BandI32,
@@ -1682,31 +2281,62 @@ fn adm_decouple_s123(
     let (left, top, right, bottom) = border_region(w, h, 1);
     for i in top..bottom {
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-        let j_start = if let Some(token) = v3_token() {
-            adm_decouple_s123_row_v3(
-                token,
-                &ref_b.h,
-                &ref_b.v,
-                &ref_b.d,
-                &dis_b.h,
-                &dis_b.v,
-                &dis_b.d,
-                &mut r.h,
-                &mut r.v,
-                &mut r.d,
-                &mut a.h,
-                &mut a.v,
-                &mut a.d,
-                i as usize,
-                stride,
-                left as usize,
-                right as usize,
-                div,
-                enhn_gain_limit,
-            );
-            left as usize + ((right as usize - left as usize) / 8) * 8
-        } else {
-            left as usize
+        let j_start = {
+            #[cfg(feature = "avx512")]
+            let j_mid = if let Some(token) = v4_token() {
+                adm_decouple_s123_row_v4(
+                    token,
+                    &ref_b.h,
+                    &ref_b.v,
+                    &ref_b.d,
+                    &dis_b.h,
+                    &dis_b.v,
+                    &dis_b.d,
+                    &mut r.h,
+                    &mut r.v,
+                    &mut r.d,
+                    &mut a.h,
+                    &mut a.v,
+                    &mut a.d,
+                    i as usize,
+                    stride,
+                    left as usize,
+                    right as usize,
+                    div,
+                    enhn_gain_limit,
+                )
+            } else {
+                left as usize
+            };
+            #[cfg(not(feature = "avx512"))]
+            let j_mid = left as usize;
+            let j_end_v3 = if let Some(token) = v3_token() {
+                adm_decouple_s123_row_v3(
+                    token,
+                    &ref_b.h,
+                    &ref_b.v,
+                    &ref_b.d,
+                    &dis_b.h,
+                    &dis_b.v,
+                    &dis_b.d,
+                    &mut r.h,
+                    &mut r.v,
+                    &mut r.d,
+                    &mut a.h,
+                    &mut a.v,
+                    &mut a.d,
+                    i as usize,
+                    stride,
+                    j_mid,
+                    right as usize,
+                    div,
+                    enhn_gain_limit,
+                );
+                j_mid + ((right as usize - j_mid) / 8) * 8
+            } else {
+                j_mid
+            };
+            j_end_v3
         };
         for j in j_start..(right as usize) {
             let idx = i as usize * stride + j as usize;
@@ -2604,6 +3234,83 @@ fn i4_adm_cm_row_v3(
     (inner, j)
 }
 
+/// Port of `i4_adm_cm_avx512`'s interior row loop: 8 i64 lanes per
+/// iteration using native `abs_epi64`/`srai_epi64`/`mul_epi32` — replacing the
+/// ~10-instruction emulated sequences in the v3 kernel (C's version measured
+/// ~2.7x faster than its AVX2 on Zen4).
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn i4_adm_cm_row_v4(
+    _token: X64V4Token,
+    win: &[i32],
+    ang_rows: &[&[i32]; 3],
+    flt_rows: &[&[i32]; 3],
+    src_rows: &[&[i32]; 3],
+    rfactor: [u32; 3],
+    add_bef_shift_dst: i64,
+    add_bef_shift_flt: i64,
+    add_shift_sq: i64,
+    add_shift_cub: i64,
+    shift_cub: u32,
+) -> ([i64; 3], usize) {
+    let i4_15 = _mm512_set1_epi64(I4_ONE_BY_15);
+    let add_dst = _mm512_set1_epi64(add_bef_shift_dst);
+    let add_flt = _mm512_set1_epi64(add_bef_shift_flt);
+    let add_sq = _mm512_set1_epi64(add_shift_sq);
+    let add_cub = _mm512_set1_epi64(add_shift_cub);
+    let zero = _mm512_setzero_si512();
+    let shift_v = _mm_cvtsi32_si128(shift_cub as i32);
+
+    let mut acc = [_mm512_setzero_si512(); 3];
+    let mut j = 0usize;
+    while j + 8 <= win.len() {
+        let mut thr = _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8::<i32, 8>(&win[j..j + 8])));
+        for t in 0..3 {
+            let ang = _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8::<i32, 8>(
+                &ang_rows[t][j..j + 8],
+            )));
+            let comp = _mm512_srai_epi64::<32>(_mm512_add_epi64(
+                _mm512_mul_epi32(_mm512_abs_epi64(ang), i4_15),
+                add_flt,
+            ));
+            let flt = _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8::<i32, 8>(
+                &flt_rows[t][j..j + 8],
+            )));
+            thr = _mm512_add_epi64(thr, _mm512_sub_epi64(comp, flt));
+        }
+        for t in 0..3 {
+            let src = _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8::<i32, 8>(
+                &src_rows[t][j..j + 8],
+            )));
+            let rf = _mm512_set1_epi64(rfactor[t] as i64);
+            let xf = _mm512_srai_epi64::<28>(_mm512_add_epi64(
+                _mm512_mul_epi32(src, rf),
+                add_dst,
+            ));
+            let mut x = _mm512_sub_epi64(_mm512_abs_epi64(xf), thr);
+            x = _mm512_max_epi64(x, zero);
+            let xsq = _mm512_srai_epi64::<30>(_mm512_add_epi64(
+                _mm512_mul_epi32(x, x),
+                add_sq,
+            ));
+            let val = _mm512_srl_epi64(
+                _mm512_add_epi64(_mm512_mul_epi32(xsq, x), add_cub),
+                shift_v,
+            );
+            acc[t] = _mm512_add_epi64(acc[t], val);
+        }
+        j += 8;
+    }
+    let mut inner = [0i64; 3];
+    for t in 0..3 {
+        let mut v = [0i64; 8];
+        _mm512_storeu_si512(a8m::<i64, 8>(&mut v), acc[t]);
+        inner[t] = v.iter().sum();
+    }
+    (inner, j)
+}
+
 #[cfg(feature = "simd")]
 #[magetypes(define(i16x16, i32x8), v3, neon, wasm128, scalar)]
 fn adm_cm_i16_front(
@@ -2704,24 +3411,16 @@ fn adm_cm_i32(
                 let r0 = &band[(i - 1) * stride..];
                 let r1 = &band[i * stride..];
                 let r2 = &band[(i + 1) * stride..];
-                for (((o, &a), &b), &c) in cs[j0 - 1..=j1]
-                    .iter_mut()
-                    .zip(&r0[j0 - 1..=j1])
-                    .zip(&r1[j0 - 1..=j1])
-                    .zip(&r2[j0 - 1..=j1])
-                {
-                    *o = a + b + c;
+                // plain indexed loop — vectorizes cleanly (unlike the
+                // zip-iterator form).
+                for k in j0 - 1..=j1 {
+                    cs[k] = r0[k] + r1[k] + r2[k];
                 }
             }
             win[..len].fill(0);
             for cs in &cs_bands {
-                for (((o, &a), &b), &c) in win[..len]
-                    .iter_mut()
-                    .zip(&cs[j0 - 1..j1 - 1])
-                    .zip(&cs[j0..j1])
-                    .zip(&cs[j0 + 1..=j1])
-                {
-                    *o += a + b + c;
+                for (off, wv) in win[..len].iter_mut().enumerate() {
+                    *wv += cs[j0 - 1 + off] + cs[j0 + off] + cs[j0 + 1 + off];
                 }
             }
             let row = i * stride + j0;
@@ -2745,9 +3444,9 @@ fn adm_cm_i32(
             let mut jj = 0usize;
             #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
             let jj = 0usize;
-            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-            if let Some(token) = v3_token() {
-                let (vec_inner, done) = i4_adm_cm_row_v3(
+            #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+            if let Some(token) = v4_token() {
+                let (vec_inner, done) = i4_adm_cm_row_v4(
                     token,
                     &win[..len],
                     &ang_rows,
@@ -2759,11 +3458,33 @@ fn adm_cm_i32(
                     add_shift_sq,
                     add_shift_cub,
                     shift_cub,
+                    );
+                    for t in 0..3 {
+                        inner[t] += vec_inner[t];
+                    }
+                    jj = done;
+            }
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            if jj == 0 {
+                if let Some(token) = v3_token() {
+                    let (vec_inner, done) = i4_adm_cm_row_v3(
+                        token,
+                    &win[..len],
+                    &ang_rows,
+                    &flt_rows,
+                    &src_rows,
+                    rfactor,
+                    add_bef_shift_dst,
+                    add_bef_shift_flt,
+                    add_shift_sq,
+                    add_shift_cub,
+                    shift_cub,
                 );
-                for t in 0..3 {
-                    inner[t] += vec_inner[t];
+                    for t in 0..3 {
+                        inner[t] += vec_inner[t];
+                    }
+                    jj = done;
                 }
-                jj = done;
             }
             for (off, &wv) in win[jj..len].iter().enumerate() {
                 let jj = jj + off;
@@ -3436,15 +4157,15 @@ fn compute_adm(
     let mut h = height;
     let mut i4_ref_scale: Vec<i32> = Vec::new();
     let mut i4_dis_scale: Vec<i32> = Vec::new();
-    let mut i4_ref_next = vec![0i32; band_elems];
-    let mut i4_dis_next = vec![0i32; band_elems];
+    let mut i4_ref_next = pool::take_i32(band_elems);
+    let mut i4_dis_next = pool::take_i32(band_elems);
     // Reused across scales 1-3: every element read in an iteration is
     // written earlier in that same iteration, so stale contents never
     // leak into results.
     let new_i32_band = || BandI32 {
-        h: vec![0; band_elems],
-        v: vec![0; band_elems],
-        d: vec![0; band_elems],
+        h: pool::take_i32(band_elems),
+        v: pool::take_i32(band_elems),
+        d: pool::take_i32(band_elems),
     };
     let mut ref_b32 = new_i32_band();
     let mut dis_b32 = new_i32_band();
@@ -3459,17 +4180,17 @@ fn compute_adm(
         let (num_scale, den_scale, aim_num_scale);
         if scale == 0 {
             let mut ref_b = BandI16 {
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
+                h: pool::take_i16(band_elems),
+                v: pool::take_i16(band_elems),
+                d: pool::take_i16(band_elems),
             };
             let mut dis_b = BandI16 {
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
+                h: pool::take_i16(band_elems),
+                v: pool::take_i16(band_elems),
+                d: pool::take_i16(band_elems),
             };
-            i4_ref_scale = vec![0i32; band_elems];
-            i4_dis_scale = vec![0i32; band_elems];
+            i4_ref_scale = pool::take_i32(band_elems);
+            i4_dis_scale = pool::take_i32(band_elems);
             adm_dwt2(
                 reference_y,
                 width,
@@ -3495,14 +4216,14 @@ fn compute_adm(
                 &mut i4_dis_scale,
             );
             let mut r = BandI16 {
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
+                h: pool::take_i16(band_elems),
+                v: pool::take_i16(band_elems),
+                d: pool::take_i16(band_elems),
             };
             let mut a = BandI16 {
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
+                h: pool::take_i16(band_elems),
+                v: pool::take_i16(band_elems),
+                d: pool::take_i16(band_elems),
             };
             w = w.div_ceil(2);
             h = h.div_ceil(2);
@@ -3519,14 +4240,14 @@ fn compute_adm(
             );
             den_scale = adm_csf_den_scale(&ref_b, w, h, buf_stride, rf, settings.noise_weight);
             let mut csf_a = BandI16 {
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
+                h: pool::take_i16(band_elems),
+                v: pool::take_i16(band_elems),
+                d: pool::take_i16(band_elems),
             };
             let mut csf_f = BandI16 {
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
+                h: pool::take_i16(band_elems),
+                v: pool::take_i16(band_elems),
+                d: pool::take_i16(band_elems),
             };
             adm_csf_i16(
                 &a,
@@ -3624,6 +4345,10 @@ fn compute_adm(
         aim_num += aim_num_scale as f64;
     }
 
+    pool::give_i32(i4_ref_scale);
+    pool::give_i32(i4_dis_scale);
+    pool::give_i32(i4_ref_next);
+    pool::give_i32(i4_dis_next);
     num = if num < numden_limit { 0.0 } else { num };
     den = if den < numden_limit { 0.0 } else { den };
     let (score, score_aim) = if den == 0.0 {
@@ -4218,3 +4943,45 @@ fn simd_csf_den_s123_matches_scalar_for_tails_and_edges() {
     }
 }
 
+
+/// Release-mode row-level timing probe: `cargo test --release -p vmaf
+/// --features simd,avx512 adm_row_timing -- --ignored --nocapture`
+#[cfg(all(test, feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[test]
+#[ignore]
+fn adm_decouple_s123_row_timing() {
+    let div = div_lookup();
+    let (w, h) = (320usize, 180usize);
+    let n = w * h;
+    let mut x = 0x9E3779B97F4A7C15u64;
+    let mut rng = move || { x ^= x << 13; x ^= x >> 7; x ^= x << 17; (x % 200001) as i32 - 100000 };
+    let mut f = |rng: &mut dyn FnMut() -> i32| BandI32 {
+        h: (0..n).map(|_| rng()).collect(),
+        v: (0..n).map(|_| rng()).collect(),
+        d: (0..n).map(|_| rng()).collect(),
+    };
+    let ref_b = f(&mut rng); let dis_b = f(&mut rng);
+    let mut r = BandI32 { h: vec![0; n], v: vec![0; n], d: vec![0; n] };
+    let mut a = BandI32 { h: vec![0; n], v: vec![0; n], d: vec![0; n] };
+    let (left, top, right, bottom) = border_region(w, h, 1);
+    eprintln!("border l={left} t={top} r={right} b={bottom}");
+    let t3 = v3_token().unwrap();
+    let t4 = X64V4Token::summon().unwrap();
+    for _ in 0..3 {
+        let t = std::time::Instant::now();
+        for i in top..bottom {
+            adm_decouple_s123_row_v3(t3, &ref_b.h, &ref_b.v, &ref_b.d, &dis_b.h, &dis_b.v, &dis_b.d,
+                &mut r.h, &mut r.v, &mut r.d, &mut a.h, &mut a.v, &mut a.d,
+                i as usize, w, left as usize, right as usize, div, 1.0);
+        }
+        let e3 = t.elapsed();
+        let t = std::time::Instant::now();
+        for i in top..bottom {
+            adm_decouple_s123_row_v4(t4, &ref_b.h, &ref_b.v, &ref_b.d, &dis_b.h, &dis_b.v, &dis_b.d,
+                &mut r.h, &mut r.v, &mut r.d, &mut a.h, &mut a.v, &mut a.d,
+                i as usize, w, left as usize, right as usize, div, 1.0);
+        }
+        let e4 = t.elapsed();
+        eprintln!("v3 {:?}  v4 {:?}  ratio {:.3}", e3, e4, e4.as_secs_f64()/e3.as_secs_f64());
+    }
+}

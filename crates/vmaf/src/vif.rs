@@ -10,6 +10,7 @@ use std::borrow::Cow;
 use std::sync::OnceLock;
 
 use crate::{Error, VmafV0Variant};
+use crate::pool;
 
 const FILTERS: [&[u16]; 4] = [
     &[
@@ -83,10 +84,10 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
     let half = (filter.len() / 2) as isize;
     let (width, height) = (image.width, image.height);
     let (out_width, out_height) = (width / 2, height / 2);
-    let mut out_reference = vec![0; out_width * out_height];
-    let mut out_distorted = vec![0; out_width * out_height];
-    let mut vertical_reference = vec![0u32; width + 2 * half as usize];
-    let mut vertical_distorted = vec![0u32; width + 2 * half as usize];
+    let mut out_reference = pool::take_u16(out_width * out_height);
+    let mut out_distorted = pool::take_u16(out_width * out_height);
+    let mut vertical_reference = pool::take_u32(width + 2 * half as usize);
+    let mut vertical_distorted = pool::take_u32(width + 2 * half as usize);
     let (shift, round) = if bit_depth == 8 && scale == 0 {
         (8, 128)
     } else if scale == 0 {
@@ -235,6 +236,8 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
             out_distorted[slot] = ((dis_sum + 32768) >> 16) as u16;
         }
     }
+    pool::give_u32(vertical_reference);
+    pool::give_u32(vertical_distorted);
     VifImage {
         reference: Cow::Owned(out_reference),
         distorted: Cow::Owned(out_distorted),
@@ -2690,45 +2693,51 @@ fn v4_token() -> Option<X64V4Token> {
 /// Lane gather into the u16 log table: identical to C's
 /// `i32gather_epi64(..., log2_table, 2) & 0xffff` but bounds-checked — indices
 /// are already in `[32768, 65536)` by construction (mantissa after srlv).
+/// Scalar-index gather of 8 table entries whose indices sit in the low u32 of
+/// each i64 lane — expands inline (a `#[rite]` fn can't force-inline through
+/// `#[target_feature]` on stable, and per-iteration calls marshal zmm results
+/// through the stack).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[rite]
-fn gather_log_u16_v4(_token: X64V4Token, table: &[u16; 65536], idx: __m512i) -> __m512i {
-    let mut a = [0i64; 8];
-    _mm512_storeu_si512(a8m::<i64, 8>(&mut a), idx);
-    _mm512_setr_epi64(
-        table[a[0] as u32 as usize] as i64,
-        table[a[1] as u32 as usize] as i64,
-        table[a[2] as u32 as usize] as i64,
-        table[a[3] as u32 as usize] as i64,
-        table[a[4] as u32 as usize] as i64,
-        table[a[5] as u32 as usize] as i64,
-        table[a[6] as u32 as usize] as i64,
-        table[a[7] as u32 as usize] as i64,
-    )
+macro_rules! gather_log_u16_v4 {
+    ($table:expr, $idx:expr) => {{
+        let idx = $idx;
+        let mut a = [0i64; 8];
+        _mm512_storeu_si512(a8m::<i64, 8>(&mut a), idx);
+        // Mantissa indices are always < 65536 by construction; the &0xffff
+        // mask is a no-op that makes LLVM prove it (no bounds checks).
+        _mm512_setr_epi64(
+            $table[(a[0] & 0xffff) as usize] as i64,
+            $table[(a[1] & 0xffff) as usize] as i64,
+            $table[(a[2] & 0xffff) as usize] as i64,
+            $table[(a[3] & 0xffff) as usize] as i64,
+            $table[(a[4] & 0xffff) as usize] as i64,
+            $table[(a[5] & 0xffff) as usize] as i64,
+            $table[(a[6] & 0xffff) as usize] as i64,
+            $table[(a[7] & 0xffff) as usize] as i64,
+        )
+    }};
 }
 
 /// Vectorized port of libvmaf's `vif_statistic_avx512`: the per-16-block
 /// finalize for `vif_statistic_8`. Matches `vif_finalize_sigma` bit-for-bit —
 /// same log2 table approximation (k = 48 - lzcnt, `v >> k` mantissa index,
-/// `2048*k` exponent), same truncating f64 divides, same masks.
+/// `2048*k` exponent), same truncating f64 divides, same masks. A macro so it
+/// expands inside the caller's `#[arcane]` body (see `gather_log_u16_v4`).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-#[allow(clippy::too_many_arguments)]
-fn vif_statistic_finalize_v4(
-    token: X64V4Token,
-    xx: __m512i,
-    xy: __m512i,
-    yy: __m512i,
-    table: &[u16; 65536],
-    gain_limit: f64,
-    num_log: &mut __m512i,
-    den_log: &mut __m512i,
-    num_non_log: &mut __m512i,
-    den_non_log: &mut __m512i,
-) {
-    const SIGMA_NSQ_I64: i64 = 65536 << 1;
-    let eps = 65536.0 * 1.0e-10;
-    for iter in 0..2 {
+macro_rules! vif_statistic_finalize_v4 {
+    ($xx:expr, $xy:expr, $yy:expr, $table:expr, $gain_limit:expr, $num_log:expr, $den_log:expr, $num_non_log:expr, $den_non_log:expr) => {{
+        let xx = $xx;
+        let xy = $xy;
+        let yy = $yy;
+        let table: &[u16; 65536] = $table;
+        let gain_limit: f64 = $gain_limit;
+        let num_log: &mut __m512i = $num_log;
+        let den_log: &mut __m512i = $den_log;
+        let num_non_log: &mut __m512i = $num_non_log;
+        let den_non_log: &mut __m512i = $den_non_log;
+        const SIGMA_NSQ_I64: i64 = 65536 << 1;
+        let eps = 65536.0 * 1.0e-10;
+        for iter in 0..2 {
         // Each pass consumes 8 i32 lanes; the second takes the high half.
         let take = |v: __m512i| -> __m256i {
             if iter == 0 {
@@ -2747,7 +2756,7 @@ fn vif_statistic_finalize_v4(
         let stage1 = _mm512_add_epi64(msigma1, _mm512_set1_epi64(SIGMA_NSQ_I64));
         let mnorm = _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(stage1));
         let mant = _mm512_srlv_epi64(stage1, mnorm);
-        let mut mden_val = gather_log_u16_v4(token, table, mant);
+        let mut mden_val = gather_log_u16_v4!(table, mant);
         mden_val = _mm512_add_epi64(mden_val, _mm512_slli_epi64(mnorm, 11));
         mden_val = _mm512_sub_epi64(mden_val, _mm512_set1_epi64(2048 * 17));
 
@@ -2771,7 +2780,7 @@ fn vif_statistic_finalize_v4(
         let numer1 = _mm512_add_epi64(msv_sq, _mm512_set1_epi64(SIGMA_NSQ_I64));
         let numer1_lz = _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(numer1));
         let numer1_log = _mm512_add_epi64(
-            gather_log_u16_v4(token, table, _mm512_srlv_epi64(numer1, numer1_lz)),
+            gather_log_u16_v4!(table, _mm512_srlv_epi64(numer1, numer1_lz)),
             _mm512_slli_epi64(numer1_lz, 11),
         );
 
@@ -2783,7 +2792,7 @@ fn vif_statistic_finalize_v4(
         let numer1_tmp_lz =
             _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(numer1_tmp));
         let numer1_tmp_log = _mm512_add_epi64(
-            gather_log_u16_v4(token, table, _mm512_srlv_epi64(numer1_tmp, numer1_tmp_lz)),
+            gather_log_u16_v4!(table, _mm512_srlv_epi64(numer1_tmp, numer1_tmp_lz)),
             _mm512_slli_epi64(numer1_tmp_lz, 11),
         );
 
@@ -2803,46 +2812,37 @@ fn vif_statistic_finalize_v4(
             *den_non_log,
             _mm512_set1_epi64(1),
         );
-    }
+        }
+    }};
 }
 
 /// `vif_stat_horizontal_v4` filtered-square accumulator: `sum_t filt[t] *
 /// tmp[..]` over the symmetric fwidth window, widened through cvtepu32_epi64
 /// and accumulated in two i64×8 halves, then `(acc + 0x8000) >> 16` merged to
-/// 16 u32 lanes via mask2. Mirrors C's `refsq/dissq/refdis` blocks.
+/// 16 u32 lanes via mask2. Mirrors C's `refsq/dissq/refdis` blocks. A macro so
+/// it expands inside the caller's `#[arcane]` body (see `gather_log_u16_v4`).
 #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-#[arcane(import_intrinsics)]
-fn vif_stat_fsq_v4(
-    _token: X64V4Token,
-    tmp: &[u32],
-    filt: &[u16],
-    half: usize,
-    fwidth: usize,
-    j: usize,
-    rounder16: __m512i,
-    mask2: __m512i,
-) -> __m512i {
-    let fq = _mm512_set1_epi64(filt[half] as i64);
-    let s0 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[half + j..half + j + 8])));
-    let s1 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[half + j + 8..half + j + 16])));
-    let mut acc_lo = _mm512_add_epi64(rounder16, _mm512_mul_epu32(s0, fq));
-    let mut acc_hi = _mm512_add_epi64(rounder16, _mm512_mul_epu32(s1, fq));
-    for (fj, &coeff) in filt.iter().enumerate().take(half) {
-        let fq = _mm512_set1_epi64(coeff as i64);
-        let l = j + fj;
-        let r = j + fwidth - 1 - fj;
-        let l0 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[l..l + 8])));
-        let l1 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[l + 8..l + 16])));
-        let r0 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[r..r + 8])));
-        let r1 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[r + 8..r + 16])));
-        acc_lo = _mm512_add_epi64(acc_lo, _mm512_mul_epu32(l0, fq));
-        acc_hi = _mm512_add_epi64(acc_hi, _mm512_mul_epu32(l1, fq));
-        acc_lo = _mm512_add_epi64(acc_lo, _mm512_mul_epu32(r0, fq));
-        acc_hi = _mm512_add_epi64(acc_hi, _mm512_mul_epu32(r1, fq));
-    }
-    let acc_lo = _mm512_srli_epi64(acc_lo, 16);
-    let acc_hi = _mm512_srli_epi64(acc_hi, 16);
-    _mm512_permutex2var_epi32(acc_lo, mask2, acc_hi)
+macro_rules! vif_stat_fsq_v4 {
+    ($w:expr, $farr64:expr, $fwidth:expr, $rounder16:expr, $mask2:expr) => {{
+        let w: &[u32; 33] = $w;
+        let farr64: &[i64; 17] = $farr64;
+        let fwidth: usize = $fwidth;
+        let rounder16 = $rounder16;
+        let mask2 = $mask2;
+        let mut acc_lo = _mm512_set1_epi64(0x8000);
+        let mut acc_hi = acc_lo;
+        let _ = rounder16;
+        for k in 0..fwidth.min(17) {
+            let fq = _mm512_set1_epi64(farr64[k]);
+            let s0 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&w[k..k + 8])));
+            let s1 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&w[k + 8..k + 16])));
+            acc_lo = _mm512_add_epi64(acc_lo, _mm512_mul_epu32(s0, fq));
+            acc_hi = _mm512_add_epi64(acc_hi, _mm512_mul_epu32(s1, fq));
+        }
+        let acc_lo = _mm512_srli_epi64(acc_lo, 16);
+        let acc_hi = _mm512_srli_epi64(acc_hi, 16);
+        _mm512_permutex2var_epi32(acc_lo, mask2, acc_hi)
+    }};
 }
 
 /// AVX-512 port of `vif_statistic_8_avx512`'s horizontal pass for one row:
@@ -2856,7 +2856,7 @@ fn vif_stat_fsq_v4(
 #[arcane(import_intrinsics)]
 #[allow(clippy::too_many_arguments)]
 fn vif_stat_horizontal_v4(
-    token: X64V4Token,
+    _token: X64V4Token,
     tmp_mu1: &[u32],
     tmp_mu2: &[u32],
     tmp_ref: &[u32],
@@ -2882,37 +2882,49 @@ fn vif_stat_horizontal_v4(
     let mut m_den_non_log = _mm512_setzero_si512();
     let (num_log, den_log, num_non_log_out, den_non_log_out) = accums;
 
+    // Padded filter arrays: index by k < fwidth ≤ 17 — provably in bounds.
+    let mut farr32 = [0i32; 17];
+    let mut farr64 = [0i64; 17];
+    for (k, &c) in filt.iter().enumerate() {
+        farr32[k] = c as i32;
+        farr64[k] = c as i64;
+    }
+    assert!(fwidth <= 17 && half <= 8);
+
     for j in (0..n16).step_by(16) {
-        // mu1 horizontal sum — i32 products accumulate pairwise inside the
-        // i64 lanes, identical to the AVX2 path (sums stay < 2^32 per half).
-        let fq = _mm512_set1_epi32(filt[half] as i32);
+        // 33-wide windows per block: every tap index k..k+16 is provably in
+        // bounds, so the inner loops carry no bounds checks.
+        let w_mu1: &[u32; 33] = tmp_mu1[j..j + 33].try_into().unwrap();
+        let w_mu2: &[u32; 33] = tmp_mu2[j..j + 33].try_into().unwrap();
+        let w_ref: &[u32; 33] = tmp_ref[j..j + 33].try_into().unwrap();
+        let w_dis: &[u32; 33] = tmp_dis[j..j + 33].try_into().unwrap();
+        let w_rd: &[u32; 33] = tmp_ref_dis[j..j + 33].try_into().unwrap();
+
+        // mu1/mu2 horizontal sums — i32 products accumulate pairwise inside
+        // the i64 lanes, identical to the AVX2 path (sums stay < 2^32 per
+        // half). The filter is symmetric, so the straight convolution over
+        // k ∈ [0,fwidth) is bit-identical to the paired l/r form.
+        let fq = _mm512_set1_epi32(farr32[half]);
         let mut mu1 = _mm512_mullo_epi32(
-            _mm512_loadu_si512(a8::<u32, 16>(&tmp_mu1[half + j..half + j + 16])),
+            _mm512_loadu_si512(a8::<u32, 16>(&w_mu1[half..half + 16])),
             fq,
         );
         let mut mu2 = _mm512_mullo_epi32(
-            _mm512_loadu_si512(a8::<u32, 16>(&tmp_mu2[half + j..half + j + 16])),
+            _mm512_loadu_si512(a8::<u32, 16>(&w_mu2[half..half + 16])),
             fq,
         );
-        for (fj, &coeff) in filt.iter().enumerate().take(half) {
-            let fq = _mm512_set1_epi32(coeff as i32);
-            let l = j + fj;
-            let r = j + fwidth - 1 - fj;
+        for k in 0..fwidth.min(17) {
+            if k == half {
+                continue;
+            }
+            let fq = _mm512_set1_epi32(farr32[k]);
             mu1 = _mm512_add_epi64(
                 mu1,
-                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&tmp_mu1[l..l + 16])), fq),
-            );
-            mu1 = _mm512_add_epi64(
-                mu1,
-                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&tmp_mu1[r..r + 16])), fq),
+                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&w_mu1[k..k + 16])), fq),
             );
             mu2 = _mm512_add_epi64(
                 mu2,
-                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&tmp_mu2[l..l + 16])), fq),
-            );
-            mu2 = _mm512_add_epi64(
-                mu2,
-                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&tmp_mu2[r..r + 16])), fq),
+                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&w_mu2[k..k + 16])), fq),
             );
         }
 
@@ -2959,22 +2971,21 @@ fn vif_stat_horizontal_v4(
         // filtered ref²/dis²/ref·dis (u32 lanes widened to i64 accumulators,
         // srli 16, even-lane merge via mask2), minus the matching mu term.
         let xx = _mm512_sub_epi32(
-            vif_stat_fsq_v4(token, tmp_ref, filt, half, fwidth, j, rounder16, mask2),
+            vif_stat_fsq_v4!(w_ref, &farr64, fwidth, rounder16, mask2),
             mu1sq,
         );
         let yy = _mm512_max_epi32(
             _mm512_sub_epi32(
-                vif_stat_fsq_v4(token, tmp_dis, filt, half, fwidth, j, rounder16, mask2),
+                vif_stat_fsq_v4!(w_dis, &farr64, fwidth, rounder16, mask2),
                 mu2sq,
             ),
             zero,
         );
         let xy = _mm512_sub_epi32(
-            vif_stat_fsq_v4(token, tmp_ref_dis, filt, half, fwidth, j, rounder16, mask2),
+            vif_stat_fsq_v4!(w_rd, &farr64, fwidth, rounder16, mask2),
             mu1mu2,
         );
-        vif_statistic_finalize_v4(
-            token,
+        vif_statistic_finalize_v4!(
             xx,
             xy,
             yy,
@@ -2983,7 +2994,7 @@ fn vif_stat_horizontal_v4(
             &mut m_num_log,
             &mut m_den_log,
             &mut m_num_non_log,
-            &mut m_den_non_log,
+            &mut m_den_non_log
         );
     }
     *num_log += _mm512_reduce_add_epi64(m_num_log);
@@ -3029,12 +3040,15 @@ fn statistics(
     } else {
         (16, 32768, 16, 32768)
     };
-    let padded = width + 2 * half as usize;
-    let mut vertical_ref_mean = vec![0u32; padded];
-    let mut vertical_dis_mean = vec![0u32; padded];
-    let mut vertical_ref_sq = vec![0u32; padded];
-    let mut vertical_dis_sq = vec![0u32; padded];
-    let mut vertical_ref_dis = vec![0u32; padded];
+    // +17 tail: the v4 horizontal reads a fixed [u32;33] window per 16-col
+    // block so every tap index is compile-time provable (no per-load bounds
+    // checks); indices past `padded` are read but never used.
+    let padded = width + 2 * half as usize + 17;
+    let mut vertical_ref_mean = pool::take_u32(padded);
+    let mut vertical_dis_mean = pool::take_u32(padded);
+    let mut vertical_ref_sq = pool::take_u32(padded);
+    let mut vertical_dis_sq = pool::take_u32(padded);
+    let mut vertical_ref_dis = pool::take_u32(padded);
     let mut num_log = 0i64;
     let mut den_log = 0i64;
     let mut num_non_log = 0i64;
@@ -3379,6 +3393,11 @@ fn statistics(
     let num = (num_log as f64 / 2048.0
         + (den_non_log as f64 - num_non_log as f64 / 16384.0 / 65025.0)) as f32;
     let den = (den_log as f64 / 2048.0 + den_non_log as f64) as f32;
+    pool::give_u32(vertical_ref_mean);
+    pool::give_u32(vertical_dis_mean);
+    pool::give_u32(vertical_ref_sq);
+    pool::give_u32(vertical_dis_sq);
+    pool::give_u32(vertical_ref_dis);
     (num, den)
 }
 
@@ -3428,8 +3447,21 @@ pub fn vif_v0_from_luma(
         let (num, den) = statistics(&image, bit_depth, scale, limit, table);
         *score = (num / den) as f64;
         if scale != 3 {
-            image = subsample(&image, bit_depth, scale);
+            let next = subsample(&image, bit_depth, scale);
+            if let Cow::Owned(v) = image.reference {
+                pool::give_u16(v);
+            }
+            if let Cow::Owned(v) = image.distorted {
+                pool::give_u16(v);
+            }
+            image = next;
         }
+    }
+    if let Cow::Owned(v) = image.reference {
+        pool::give_u16(v);
+    }
+    if let Cow::Owned(v) = image.distorted {
+        pool::give_u16(v);
     }
     Ok(scores)
 }

@@ -1,4 +1,5 @@
 use crate::{Error, ModelVariant};
+use crate::pool;
 #[cfg(feature = "simd")]
 use archmage::autoversion;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
@@ -1100,7 +1101,10 @@ fn bilinear_scale(
 #[cfg_attr(feature = "simd", autoversion)]
 fn filter_and_downscale(dim: &Dims, prescale: f64, frame_buffer: &mut [f32], stride_px: usize) {
     let frame_size = stride_px * dim.alloc_height;
-    let mut tmp = vec![0.0f32; 2 * frame_size];
+    // Pooled: every lane read is written earlier in this call (filter1d
+    // writes `curr_scale`; `tmpbuf` is written by copy_from_slice before
+    // use and untouched when prescale == 1).
+    let mut tmp = pool::take_f32(2 * frame_size);
     let (curr_scale, tmpbuf) = tmp.split_at_mut(frame_size);
 
     if (prescale - 1.0).abs() >= 1.0e-3 {
@@ -1157,6 +1161,7 @@ fn filter_and_downscale(dim: &Dims, prescale: f64, frame_buffer: &mut [f32], str
         downscaled_h,
         stride_px,
     );
+    pool::give_f32(tmp);
 }
 
 fn channel_score(
@@ -1170,8 +1175,14 @@ fn channel_score(
 ) -> (f32, bool) {
     let stride_px = dim.alloc_width;
     let npix = stride_px * dim.alloc_height;
-    let mut ref_buf = vec![0.0f32; npix];
-    let mut dis_buf = vec![0.0f32; npix];
+    let mut ref_buf = pool::take_f32(npix);
+    let mut dis_buf = pool::take_f32(npix);
+    // The row writes below only cover `ch` rows of `cw` columns; when the
+    // allocation is larger (prescale > 1) the padding lanes would be stale.
+    if stride_px != cw || dim.alloc_height != ch {
+        ref_buf.fill(0.0);
+        dis_buf.fill(0.0);
+    }
     let (scaler, offset): (f32, f32) = match bit_depth {
         10 => (4.0, -128.0),
         12 => (16.0, -128.0),
@@ -1195,6 +1206,8 @@ fn channel_score(
     } else {
         get_speed_score(dim, &ref_r, &dis_r)
     };
+    pool::give_f32(ref_buf);
+    pool::give_f32(dis_buf);
     (score, ref_r.singular || dis_r.singular)
 }
 

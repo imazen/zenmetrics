@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::{Error, pool};
 #[cfg(feature = "simd")]
 use archmage::autoversion;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
@@ -4627,12 +4627,17 @@ fn get_spatial_mask(
     let sat_h = height
         .checked_add(1)
         .ok_or(Error::InvalidInput("dimension overflow"))?;
-    let mut sat = vec![
-        0u32;
+    // Pooled: interior lanes are write-before-read, but the first row and
+    // column act as the zero boundary for the prefix sums — re-zero them.
+    let mut sat = pool::take_u32(
         sat_w
             .checked_mul(sat_h)
-            .ok_or(Error::InvalidInput("dimension overflow"))?
-    ];
+            .ok_or(Error::InvalidInput("dimension overflow"))?,
+    );
+    sat[..sat_w].fill(0);
+    for r in 0..sat_h {
+        sat[r * sat_w] = 0;
+    }
     for i in 0..height {
         let mut row_sum = 0u32;
         for j in 0..width {
@@ -4655,6 +4660,7 @@ fn get_spatial_mask(
             mask[i * width + j] = (sum > mask_index) as u16;
         }
     }
+    pool::give_u32(sat);
     Ok(())
 }
 
@@ -4886,12 +4892,14 @@ fn calculate_c_values(
 ) -> Result<(), Error> {
     let pad = window_size / 2;
     let v_band_offset_val = v_band_base + num_diffs as u16;
-    let mut histograms_acc = vec![
-        0u16;
+    // Pooled but zeroed on take: accumulated via += so contents must
+    // start at zero.
+    let mut histograms_acc = pool::take_u16(
         (v_band_size as usize)
             .checked_mul(width)
-            .ok_or(Error::InvalidInput("dimension overflow"))?
-    ];
+            .ok_or(Error::InvalidInput("dimension overflow"))?,
+    );
+    histograms_acc.fill(0);
     c_values[..width * height].fill(0.0);
 
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
@@ -4969,6 +4977,7 @@ fn calculate_c_values(
             }
         }
     }
+    pool::give_u16(histograms_acc);
     Ok(())
 }
 
@@ -5017,7 +5026,7 @@ pub fn cambi_v1_from_luma(
         return Err(Error::InvalidInput("window size too large"));
     }
 
-    let mut image = vec![0u16; npix];
+    let mut image = pool::take_u16(npix);
     if bit_depth < 10 {
         let shift = 10 - bit_depth;
         for (o, &v) in image.iter_mut().zip(dist_y.iter()) {
@@ -5051,16 +5060,15 @@ pub fn cambi_v1_from_luma(
     };
     let v_band_size: u16 = tvi_for_diff[num_diffs - 1] + 1 - v_band_base;
 
-    let mut mask = vec![0u16; npix];
+    let mut mask = pool::take_u16(npix);
     get_spatial_mask(&image, &mut mask, width, height)?;
 
-    let mut c_values = vec![0f32; npix];
-    let mut filter_buffer = vec![
-        0u16;
+    let mut c_values = pool::take_f32(npix);
+    let mut filter_buffer = pool::take_u16(
         width
             .checked_mul(3)
-            .ok_or(Error::InvalidInput("dimension overflow"))?
-    ];
+            .ok_or(Error::InvalidInput("dimension overflow"))?,
+    );
     let mut scores_per_scale = [0.0f64; NUM_SCALES];
 
     let mut scaled_width = width;
@@ -5105,6 +5113,10 @@ pub fn cambi_v1_from_luma(
     }
     score /= pixels_in_window;
 
+    pool::give_u16(image);
+    pool::give_u16(mask);
+    pool::give_f32(c_values);
+    pool::give_u16(filter_buffer);
     Ok(score.min(CAMBI_MAX_VAL))
 }
 

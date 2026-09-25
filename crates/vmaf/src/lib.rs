@@ -2,6 +2,7 @@
 
 mod adm;
 mod cambi;
+mod pool;
 mod score;
 mod speed;
 mod v0;
