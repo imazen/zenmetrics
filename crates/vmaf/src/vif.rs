@@ -100,8 +100,10 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
         let processed = {
             #[cfg(feature = "simd")]
             {
-                archmage::incant!(
-                    vif_subsample_vertical_simd(
+                #[cfg(target_arch = "x86_64")]
+                if let Some(token) = v3_token() {
+                    vif_subsample_vertical_v3(
+                        token,
                         &image.reference,
                         &image.distorted,
                         &row_offsets,
@@ -110,10 +112,41 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
                         shift,
                         round,
                         &mut vertical_reference,
-                        &mut vertical_distorted
-                    ),
-                    [v3, neon, wasm128, scalar]
-                )
+                        &mut vertical_distorted,
+                    )
+                } else {
+                    archmage::incant!(
+                        vif_subsample_vertical_simd(
+                            &image.reference,
+                            &image.distorted,
+                            &row_offsets,
+                            width,
+                            filter,
+                            shift,
+                            round,
+                            &mut vertical_reference,
+                            &mut vertical_distorted
+                        ),
+                        [v3, neon, wasm128, scalar]
+                    )
+                }
+                #[cfg(not(target_arch = "x86_64"))]
+                {
+                    archmage::incant!(
+                        vif_subsample_vertical_simd(
+                            &image.reference,
+                            &image.distorted,
+                            &row_offsets,
+                            width,
+                            filter,
+                            shift,
+                            round,
+                            &mut vertical_reference,
+                            &mut vertical_distorted
+                        ),
+                        [v3, neon, wasm128, scalar]
+                    )
+                }
             }
             #[cfg(not(feature = "simd"))]
             {
@@ -149,6 +182,27 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
         let mut hcol = 0usize;
         #[cfg(feature = "simd")]
         while hcol + 16 <= width {
+            #[cfg(target_arch = "x86_64")]
+            let (out_ref, out_dis) = if let Some(token) = v3_token() {
+                vif_subsample_horizontal_v3(
+                    token,
+                    &vertical_reference,
+                    &vertical_distorted,
+                    filter,
+                    hcol,
+                )
+            } else {
+                archmage::incant!(
+                    vif_subsample_horizontal_simd(
+                        &vertical_reference,
+                        &vertical_distorted,
+                        filter,
+                        hcol
+                    ),
+                    [v3, neon, wasm128, scalar]
+                )
+            };
+            #[cfg(not(target_arch = "x86_64"))]
             let (out_ref, out_dis) = archmage::incant!(
                 vif_subsample_horizontal_simd(
                     &vertical_reference,
@@ -961,6 +1015,136 @@ fn vif_subsample_vertical_simd(
         }
     }
     chunks * 16
+}
+
+/// Direct port of `vif_subsample_rd_16_avx2`'s vertical pass, covering the
+/// `vif_subsample_rd_8_avx2` case as well: loading the u16 plane directly is
+/// equivalent to `cvtepu8_epi16` for 8-bit inputs, and the `(shift, round)`
+/// parameters reproduce both rounding tables. Processes 16 columns per
+/// iteration, writes the convolved row at `half + j` in the padded buffers.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn vif_subsample_vertical_v3(
+    _token: X64V3Token,
+    reference: &[u16],
+    distorted: &[u16],
+    row_offsets: &[usize],
+    width: usize,
+    filter: &[u16],
+    shift: u32,
+    round: u32,
+    vertical_reference: &mut [u32],
+    vertical_distorted: &mut [u32],
+) -> usize {
+    let half = filter.len() / 2;
+    let n = width >> 4;
+    let addnum = _mm256_set1_epi32(round as i32);
+    let shift_xmm = _mm_cvtsi32_si128(shift as i32);
+    for chunk in 0..n {
+        let j = chunk * 16;
+        let mut accumr_lo = _mm256_setzero_si256();
+        let mut accumr_hi = _mm256_setzero_si256();
+        let mut accumd_lo = _mm256_setzero_si256();
+        let mut accumd_hi = _mm256_setzero_si256();
+        for (tap, &fc) in filter.iter().enumerate() {
+            let f1 = _mm256_set1_epi16(fc as i16);
+            let off = row_offsets[tap] + j;
+            let ref1 = _mm256_loadu_si256(a8::<u16, 16>(&reference[off..off + 16]));
+            let dis1 = _mm256_loadu_si256(a8::<u16, 16>(&distorted[off..off + 16]));
+            let rlo = _mm256_mullo_epi16(ref1, f1);
+            let rhi = _mm256_mulhi_epu16(ref1, f1);
+            accumr_lo = _mm256_add_epi32(accumr_lo, _mm256_unpacklo_epi16(rlo, rhi));
+            accumr_hi = _mm256_add_epi32(accumr_hi, _mm256_unpackhi_epi16(rlo, rhi));
+            let dlo = _mm256_mullo_epi16(dis1, f1);
+            let dhi = _mm256_mulhi_epu16(dis1, f1);
+            accumd_lo = _mm256_add_epi32(accumd_lo, _mm256_unpacklo_epi16(dlo, dhi));
+            accumd_hi = _mm256_add_epi32(accumd_hi, _mm256_unpackhi_epi16(dlo, dhi));
+        }
+        accumr_lo = _mm256_srl_epi32(_mm256_add_epi32(accumr_lo, addnum), shift_xmm);
+        accumr_hi = _mm256_srl_epi32(_mm256_add_epi32(accumr_hi, addnum), shift_xmm);
+        accumd_lo = _mm256_srl_epi32(_mm256_add_epi32(accumd_lo, addnum), shift_xmm);
+        accumd_hi = _mm256_srl_epi32(_mm256_add_epi32(accumd_hi, addnum), shift_xmm);
+        _mm256_storeu_si256(
+            a8m::<u32, 8>(&mut vertical_reference[half + j..half + j + 8]),
+            _mm256_permute2x128_si256(accumr_lo, accumr_hi, 0x20),
+        );
+        _mm256_storeu_si256(
+            a8m::<u32, 8>(&mut vertical_reference[half + j + 8..half + j + 16]),
+            _mm256_permute2x128_si256(accumr_lo, accumr_hi, 0x31),
+        );
+        _mm256_storeu_si256(
+            a8m::<u32, 8>(&mut vertical_distorted[half + j..half + j + 8]),
+            _mm256_permute2x128_si256(accumd_lo, accumd_hi, 0x20),
+        );
+        _mm256_storeu_si256(
+            a8m::<u32, 8>(&mut vertical_distorted[half + j + 8..half + j + 16]),
+            _mm256_permute2x128_si256(accumd_lo, accumd_hi, 0x31),
+        );
+    }
+    n * 16
+}
+
+/// Direct port of the `vif_subsample_rd_*_avx2` horizontal passes. The
+/// vertical buffers hold u32 columns whose high u16 half is always zero, so
+/// the mullo/mulhi_epi16 + unpack products land each column's 32-bit product
+/// in an even epi32 lane — the rd_8 `packus`/`permutevar8x32`/`packus`
+/// sequence then extracts the even-column (decimated) results. Produces 8
+/// decimated u16 outputs per call, covering input columns `col..col + 16`
+/// at even positions, matching `vif_subsample_horizontal_simd`.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn vif_subsample_horizontal_v3(
+    _token: X64V3Token,
+    vertical_reference: &[u32],
+    vertical_distorted: &[u32],
+    filter: &[u16],
+    col: usize,
+) -> ([u16; 8], [u16; 8]) {
+    let mask1 = _mm256_set_epi32(6, 4, 2, 0, 6, 4, 2, 0);
+    let addnum = _mm256_set1_epi32(32768);
+    let mut ref_parts = [_mm_setzero_si128(); 2];
+    let mut dis_parts = [_mm_setzero_si128(); 2];
+    for (part, j) in [col, col + 8].iter().enumerate() {
+        let j = *j;
+        let mut accumrlo = _mm256_setzero_si256();
+        let mut accumrhi = _mm256_setzero_si256();
+        let mut accumdlo = _mm256_setzero_si256();
+        let mut accumdhi = _mm256_setzero_si256();
+        for (tap, &fc) in filter.iter().enumerate() {
+            let fcoeff = _mm256_set1_epi16(fc as i16);
+            let idx = j + tap;
+            let refconvol = _mm256_loadu_si256(a8::<u32, 8>(&vertical_reference[idx..idx + 8]));
+            let rlo = _mm256_mullo_epi16(refconvol, fcoeff);
+            let rhi = _mm256_mulhi_epu16(refconvol, fcoeff);
+            accumrlo = _mm256_add_epi32(accumrlo, _mm256_unpacklo_epi16(rlo, rhi));
+            accumrhi = _mm256_add_epi32(accumrhi, _mm256_unpackhi_epi16(rlo, rhi));
+            let disconvol = _mm256_loadu_si256(a8::<u32, 8>(&vertical_distorted[idx..idx + 8]));
+            let dlo = _mm256_mullo_epi16(disconvol, fcoeff);
+            let dhi = _mm256_mulhi_epu16(disconvol, fcoeff);
+            accumdlo = _mm256_add_epi32(accumdlo, _mm256_unpacklo_epi16(dlo, dhi));
+            accumdhi = _mm256_add_epi32(accumdhi, _mm256_unpackhi_epi16(dlo, dhi));
+        }
+        accumrlo = _mm256_srli_epi32(_mm256_add_epi32(accumrlo, addnum), 16);
+        accumrhi = _mm256_srli_epi32(_mm256_add_epi32(accumrhi, addnum), 16);
+        accumdlo = _mm256_srli_epi32(_mm256_add_epi32(accumdlo, addnum), 16);
+        accumdhi = _mm256_srli_epi32(_mm256_add_epi32(accumdhi, addnum), 16);
+        let result_r = _mm256_packus_epi32(
+            _mm256_permutevar8x32_epi32(_mm256_packus_epi32(accumrlo, accumrhi), mask1),
+            _mm256_permutevar8x32_epi32(_mm256_packus_epi32(accumrlo, accumrhi), mask1),
+        );
+        let result_d = _mm256_packus_epi32(
+            _mm256_permutevar8x32_epi32(_mm256_packus_epi32(accumdlo, accumdhi), mask1),
+            _mm256_permutevar8x32_epi32(_mm256_packus_epi32(accumdlo, accumdhi), mask1),
+        );
+        ref_parts[part] = _mm256_castsi256_si128(result_r);
+        dis_parts[part] = _mm256_castsi256_si128(result_d);
+    }
+    let mut out_ref = [0u16; 8];
+    let mut out_dis = [0u16; 8];
+    _mm_storeu_si128(&mut out_ref, _mm_unpacklo_epi64(ref_parts[0], ref_parts[1]));
+    _mm_storeu_si128(&mut out_dis, _mm_unpacklo_epi64(dis_parts[0], dis_parts[1]));
+    (out_ref, out_dis)
 }
 
 #[cfg(feature = "simd")]
@@ -3557,6 +3741,77 @@ mod tests {
                         assert_eq!(
                             (fallback.0.to_bits(), fallback.1.to_bits()),
                             (avx2.0.to_bits(), avx2.1.to_bits()),
+                            "bpc={bit_depth} scale={scale} width={width} height={height} case={case}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    #[test]
+    fn v3_subsample_matches_simd_fallback_at_odd_widths() {
+        // subsample() handles the scale transitions 0->1 (9-tap), 1->2 (5-tap),
+        // 2->3 (3-tap) at every bit depth. Heights start at 2*half+1 (smallest
+        // legal mirror radius for each filter).
+        for (bit_depth, scale) in [(8, 0), (8, 1), (8, 2), (10, 0), (10, 1), (10, 2)] {
+            let half = FILTERS[scale + 1].len() / 2;
+            let max_val = 1usize << bit_depth;
+            for width in [16, 17, 31, 33, 47, 64, 19] {
+                for height in [4 * half + 2, 18, 34] {
+                    for case in 0..3 {
+                        let reference: Vec<u16> = (0..height)
+                            .flat_map(|y| {
+                                (0..width).map(move |x| {
+                                    (match case {
+                                        0 => (x * 37 + y * 61 + x * y * 5) % max_val,
+                                        1 => max_val - 1,
+                                        _ => ((x * 211 + y * 149 + 17) % (max_val - 5)) + (x % 3),
+                                    }) as u16
+                                })
+                            })
+                            .collect();
+                        let distorted: Vec<u16> = (0..height)
+                            .flat_map(|y| {
+                                (0..width).map(move |x| {
+                                    (match case {
+                                        0 => (x * 23 + y * 41 + 9) % max_val,
+                                        1 => {
+                                            if (x + y) % 2 == 0 {
+                                                max_val - 1
+                                            } else {
+                                                0
+                                            }
+                                        }
+                                        _ => (x * 157 + y * 89 + 31) % max_val,
+                                    }) as u16
+                                })
+                            })
+                            .collect();
+                        let image = VifImage {
+                            reference: Cow::Borrowed(reference.as_slice()),
+                            distorted: Cow::Borrowed(distorted.as_slice()),
+                            width,
+                            height,
+                        };
+                        V3_DISABLED_FOR_TEST.store(true, std::sync::atomic::Ordering::Relaxed);
+                        let fallback = subsample(&image, bit_depth, scale);
+                        V3_DISABLED_FOR_TEST.store(false, std::sync::atomic::Ordering::Relaxed);
+                        let avx2 = subsample(&image, bit_depth, scale);
+                        assert_eq!(
+                            (
+                                fallback.width,
+                                fallback.height,
+                                fallback.reference.as_ref(),
+                                fallback.distorted.as_ref()
+                            ),
+                            (
+                                avx2.width,
+                                avx2.height,
+                                avx2.reference.as_ref(),
+                                avx2.distorted.as_ref()
+                            ),
                             "bpc={bit_depth} scale={scale} width={width} height={height} case={case}"
                         );
                     }
