@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- cli (`HASH_TBD`): `--luma-ingress {house|yuv601-studio}` on `score` and
+- cli (`aa12030c`): `--luma-ingress {house|yuv601-studio}` on `score` and
   `batch`. `yuv601-studio` feeds luma-only metrics (gmsd, psnrhvs-y,
   haarpsi-y, fsim-y, msssim, vif, mad, iwssim) the libvmaf/JPEG AIC YUV420
   luma plane — studio-swing BT.601 `Y = round(16 + (65.481R + 128.553G +
@@ -22,7 +22,7 @@ Workspace conventions per the global rules:
   against the AIC-4 published `IW-SSIM`/`MS-SSIM` columns (Δ 3e-5 /
   4.8e-5). `LumaIngress` + `studio601_gray` + `luma_ingress_pair` +
   `MetricKind::is_luma_only` in `zenmetrics-cli::metrics`.
-- docs (`HASH_TBD`): new `docs/METRIC_PROVENANCE.md` — per-metric citation
+- docs (`ce6ce56c`): new `docs/METRIC_PROVENANCE.md` — per-metric citation
   ledger (paper + reference impl + version), provenance classes (third-
   party crate / sibling crate / reference reimplementation / clean-room /
   in-house — not everything is a "port"), input + output conventions,
