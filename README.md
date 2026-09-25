@@ -194,7 +194,14 @@ enabled, the fixed Callgrind harness dropped to 19.64M instructions
 1.389 ms/call versus 0.903. The emitted v3 code uses ymm `vmovdqu`
 loads with `vpmulld`/`vpaddd` accumulation, matching libvmaf's contiguous
 AVX2 structure while substituting lo16/hi16 u32 accumulation for its
-`vpmuludq` 64-bit widening (unavailable in magetypes). Only the v1
+`vpmuludq` 64-bit widening (unavailable in magetypes). The inter-scale
+decimation filter is SIMD-enabled as well: its vertical pass vectorizes
+like the statistics filters (means only), and its horizontal pass
+evaluates the stride-1 convolution at 16 positions per chunk and keeps
+the 8 even lanes, avoiding any deinterleave. A paired `--v0 --stages`
+run then measured 24.338 ms/frame for four-scale VIF (versus 28.947
+with only the statistics passes vectorized), and the Callgrind harness
+dropped to 16.60M instructions (8-bit) and 17.80M (10-bit). Only the v1
 feature path remains scalar.
 
 The metric each GPU crate computes is bit-comparable to its cited reference. The

@@ -70,12 +70,42 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
     let mut out_distorted = vec![0; out_width * out_height];
     let mut vertical_reference = vec![0u32; width + 2 * half as usize];
     let mut vertical_distorted = vec![0u32; width + 2 * half as usize];
+    let (shift, round) = if bit_depth == 8 && scale == 0 {
+        (8, 128)
+    } else if scale == 0 {
+        (bit_depth as u32, 1u32 << (bit_depth - 1))
+    } else {
+        (16, 32768)
+    };
     for row in (0..height / 2 * 2).step_by(2) {
         let mut row_offsets = [0usize; 9];
         for (tap, slot) in row_offsets.iter_mut().take(filter.len()).enumerate() {
             *slot = mirror(row as isize + tap as isize - half, height) * width;
         }
-        for col in 0..width {
+        let processed = {
+            #[cfg(feature = "simd")]
+            {
+                archmage::incant!(
+                    vif_subsample_vertical_simd(
+                        &image.reference,
+                        &image.distorted,
+                        &row_offsets,
+                        width,
+                        filter,
+                        shift,
+                        round,
+                        &mut vertical_reference,
+                        &mut vertical_distorted
+                    ),
+                    [v3, neon, wasm128, scalar]
+                )
+            }
+            #[cfg(not(feature = "simd"))]
+            {
+                0
+            }
+        };
+        for col in processed..width {
             let center = half as usize;
             let mut ref_sum =
                 filter[center] as u32 * image.reference[row_offsets[center] + col] as u32;
@@ -92,8 +122,6 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
                 vertical_reference[col + half as usize] = (ref_sum + 128) >> 8;
                 vertical_distorted[col + half as usize] = (dis_sum + 128) >> 8;
             } else {
-                let shift = if scale == 0 { bit_depth } else { 16 };
-                let round = 1u32 << (shift - 1);
                 vertical_reference[col + half as usize] =
                     ((ref_sum + round) >> shift) as u16 as u32;
                 vertical_distorted[col + half as usize] =
@@ -102,7 +130,25 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
         }
         pad_reflected(&mut vertical_reference, width, half as usize);
         pad_reflected(&mut vertical_distorted, width, half as usize);
-        for col in (0..width / 2 * 2).step_by(2) {
+        #[allow(unused_mut)]
+        let mut hcol = 0usize;
+        #[cfg(feature = "simd")]
+        while hcol + 16 <= width {
+            let (out_ref, out_dis) = archmage::incant!(
+                vif_subsample_horizontal_simd(
+                    &vertical_reference,
+                    &vertical_distorted,
+                    filter,
+                    hcol
+                ),
+                [v3, neon, wasm128, scalar]
+            );
+            let slot = (row / 2) * out_width + hcol / 2;
+            out_reference[slot..slot + 8].copy_from_slice(&out_ref);
+            out_distorted[slot..slot + 8].copy_from_slice(&out_dis);
+            hcol += 16;
+        }
+        for col in (hcol..width / 2 * 2).step_by(2) {
             let center = col + half as usize;
             let mut ref_sum = filter[half as usize] as u32 * vertical_reference[center];
             let mut dis_sum = filter[half as usize] as u32 * vertical_distorted[center];
@@ -676,6 +722,103 @@ fn vif_horizontal_sums(
         dis_sq_out,
         ref_dis_out,
     )
+}
+
+#[cfg(feature = "simd")]
+#[magetypes(define(u16x16, u32x8), v3, neon, wasm128, scalar)]
+fn vif_subsample_vertical_simd(
+    token: Token,
+    reference: &[u16],
+    distorted: &[u16],
+    row_offsets: &[usize],
+    width: usize,
+    filter: &[u16],
+    shift: u32,
+    round: u32,
+    vertical_reference: &mut [u32],
+    vertical_distorted: &mut [u32],
+) -> usize {
+    let half = filter.len() / 2;
+    let chunks = width / 16;
+    let rounding = u32x8::splat(token, round);
+    for chunk in 0..chunks {
+        let col = chunk * 16;
+        let mut ref_lo = u32x8::zero(token);
+        let mut ref_hi = u32x8::zero(token);
+        let mut dis_lo = u32x8::zero(token);
+        let mut dis_hi = u32x8::zero(token);
+        let weight = u32x8::splat(token, filter[half] as u32);
+        let center_ref = u16x16::from_slice(token, &reference[row_offsets[half] + col..]);
+        let center_dis = u16x16::from_slice(token, &distorted[row_offsets[half] + col..]);
+        ref_lo += weight * center_ref.widen_low();
+        ref_hi += weight * center_ref.widen_high();
+        dis_lo += weight * center_dis.widen_low();
+        dis_hi += weight * center_dis.widen_high();
+        for offset in 1..=half {
+            let weight = u32x8::splat(token, filter[half - offset] as u32);
+            let left_ref =
+                u16x16::from_slice(token, &reference[row_offsets[half - offset] + col..]);
+            let right_ref =
+                u16x16::from_slice(token, &reference[row_offsets[half + offset] + col..]);
+            let left_dis =
+                u16x16::from_slice(token, &distorted[row_offsets[half - offset] + col..]);
+            let right_dis =
+                u16x16::from_slice(token, &distorted[row_offsets[half + offset] + col..]);
+            ref_lo += weight * (left_ref.widen_low() + right_ref.widen_low());
+            ref_hi += weight * (left_ref.widen_high() + right_ref.widen_high());
+            dis_lo += weight * (left_dis.widen_low() + right_dis.widen_low());
+            dis_hi += weight * (left_dis.widen_high() + right_dis.widen_high());
+        }
+        let ref_lo_out = (ref_lo + rounding).shr_logical_uniform(shift).to_array();
+        let ref_hi_out = (ref_hi + rounding).shr_logical_uniform(shift).to_array();
+        let dis_lo_out = (dis_lo + rounding).shr_logical_uniform(shift).to_array();
+        let dis_hi_out = (dis_hi + rounding).shr_logical_uniform(shift).to_array();
+        for lane in 0..8 {
+            vertical_reference[col + half + lane] = ref_lo_out[lane];
+            vertical_distorted[col + half + lane] = dis_lo_out[lane];
+        }
+        for lane in 0..8 {
+            vertical_reference[col + half + 8 + lane] = ref_hi_out[lane];
+            vertical_distorted[col + half + 8 + lane] = dis_hi_out[lane];
+        }
+    }
+    chunks * 16
+}
+
+#[cfg(feature = "simd")]
+#[magetypes(define(u32x8), v3, neon, wasm128, scalar)]
+fn vif_subsample_horizontal_simd(
+    token: Token,
+    vertical_reference: &[u32],
+    vertical_distorted: &[u32],
+    filter: &[u16],
+    col: usize,
+) -> ([u16; 8], [u16; 8]) {
+    let mut ref_lo = u32x8::zero(token);
+    let mut ref_hi = u32x8::zero(token);
+    let mut dis_lo = u32x8::zero(token);
+    let mut dis_hi = u32x8::zero(token);
+    for (tap, &w) in filter.iter().enumerate() {
+        let weight = u32x8::splat(token, w as u32);
+        ref_lo += weight * u32x8::from_slice(token, &vertical_reference[col + tap..]);
+        ref_hi += weight * u32x8::from_slice(token, &vertical_reference[col + 8 + tap..]);
+        dis_lo += weight * u32x8::from_slice(token, &vertical_distorted[col + tap..]);
+        dis_hi += weight * u32x8::from_slice(token, &vertical_distorted[col + 8 + tap..]);
+    }
+    let rounding = u32x8::splat(token, 32768);
+    let ref_lo = (ref_lo + rounding).shr_logical_uniform(16).to_array();
+    let ref_hi = (ref_hi + rounding).shr_logical_uniform(16).to_array();
+    let dis_lo = (dis_lo + rounding).shr_logical_uniform(16).to_array();
+    let dis_hi = (dis_hi + rounding).shr_logical_uniform(16).to_array();
+    let mut out_ref = [0u16; 8];
+    let mut out_dis = [0u16; 8];
+    for lane in 0..4 {
+        out_ref[lane] = ref_lo[2 * lane] as u16;
+        out_ref[4 + lane] = ref_hi[2 * lane] as u16;
+        out_dis[lane] = dis_lo[2 * lane] as u16;
+        out_dis[4 + lane] = dis_hi[2 * lane] as u16;
+    }
+    (out_ref, out_dis)
 }
 
 fn vif_pixel_finalize(
