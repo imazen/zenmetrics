@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- **BREAKING (uncommitted — add hash on commit): SDR cvvdp has no default
+- **BREAKING (`ffb05237`): SDR cvvdp has no default
   display in zenmetrics-api or the CLI; every caller names one, and SDR
   cvvdp columns name it.** The `cvvdp` / `cvvdp-gpu` crates keep their
   `standard_4k` defaults (matching upstream ColorVideoVDP and every
