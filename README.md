@@ -49,7 +49,8 @@ zenmetrics compare \
 ```
 
 In the default build, `--metric` accepts every CPU metric — `ssim2`, `dssim`,
-`butteraugli`, `zensim`, `cvvdp`, `iwssim`, `gmsd`, `psnrhvs`, `psnrhvs-y`, and
+`butteraugli`, `zensim`, `cvvdp`, `iwssim`, `gmsd`, `psnrhvs`, `psnrhvs-y`,
+`haarpsi`, `haarpsi-y`, and
 `hdrvdp` (HDR-only: absolute-luminance input — feed it via `batch --hdr` /
 `sweep --hdr`, not sRGB pairs). The GPU variants (`ssim2-gpu`, `dssim-gpu`, `butteraugli-gpu`,
 `iwssim-gpu`, `zensim-gpu`, `cvvdp-gpu`) need `--features gpu-<metric>`, and
@@ -85,6 +86,7 @@ CPU ladder and the umbrella's `Backend::Cpu` dispatch route to:
 | [`hdrvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/hdrvdp) | HDR-VDP 2.2.2 (CPU-only, absolute nits) | JOD ~0–100 (`res.Q`), higher better | official HDR-VDP 2.2.2 (Mantiuk et al.) |
 | [`gmsd`](https://github.com/imazen/zenmetrics/tree/master/crates/gmsd) | GMSD (Xue et al. 2014, CPU) | distance ~0–0.35, 0 = identical | libgmsd (Ponomarenko group) |
 | [`psnrhvs`](https://github.com/imazen/zenmetrics/tree/master/crates/psnrhvs) | PSNR-HVS / PSNR-HVS-M / PSNR-HVS-Y (CPU) | dB, higher better; 100000 = identical | authors' `psnrhvsm.m` (Octave goldens) |
+| [`haarpsi`](https://github.com/imazen/zenmetrics/tree/master/crates/haarpsi) | HaarPSI / HaarPSI-Y (CPU) | similarity ~0–1, 1 = identical; NaN on zero-weight inputs | authors' MIT `HaarPSI.m` (Octave goldens) |
 | [`vmaf`](https://github.com/imazen/zenmetrics/tree/master/crates/vmaf) | VMAF v0.6.1 and v1.0.16 (CPU, planar YUV420 8/10-bit) | 0–100, higher better; v0/NEG/4K and v1 standard/HFR variants | Netflix libvmaf 3.2.1 (FFI oracle in tests) |
 
 The `vmaf` crate scores planar SDR YUV420 frames directly, including CAMBI,

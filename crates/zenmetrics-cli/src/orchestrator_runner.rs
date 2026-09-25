@@ -168,6 +168,8 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::Hdrvdp => "hdrvdp",
         CliMetricKind::Psnrhvs => "psnrhvs",
         CliMetricKind::PsnrhvsY => "psnrhvs_y",
+        CliMetricKind::Haarpsi => "haarpsi",
+        CliMetricKind::HaarpsiY => "haarpsi_y",
         CliMetricKind::Cvvdp => "cvvdp",
         CliMetricKind::CvvdpGpu => "cvvdp",
         CliMetricKind::Butteraugli => "butteraugli_max",
@@ -256,7 +258,9 @@ pub fn rekey_orchestrator_columns(
         CliMetricKind::Gmsd
         | CliMetricKind::Hdrvdp
         | CliMetricKind::Psnrhvs
-        | CliMetricKind::PsnrhvsY => Vec::new(),
+        | CliMetricKind::PsnrhvsY
+        | CliMetricKind::Haarpsi
+        | CliMetricKind::HaarpsiY => Vec::new(),
         CliMetricKind::Cvvdp
         | CliMetricKind::CvvdpGpu
         | CliMetricKind::Ssim2Gpu
@@ -370,12 +374,15 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
     // `score --hdr` / `sweep --hdr` paths reach directly. PSNR-HVS and
     // PSNR-HVS-Y are likewise direct-crate CPU metrics (each emits two
     // score columns the orchestrator's one-column leaves can't carry).
+    // HaarPSI / HaarPSI-Y are direct-crate CPU metrics of the same kind.
     !matches!(
         kind,
         CliMetricKind::Gmsd
             | CliMetricKind::Hdrvdp
             | CliMetricKind::Psnrhvs
             | CliMetricKind::PsnrhvsY
+            | CliMetricKind::Haarpsi
+            | CliMetricKind::HaarpsiY
     )
 }
 

@@ -13,6 +13,22 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- haarpsi (hash TBD): new in-tree CPU port of HaarPSI (Reisenhofer et
+  al., Signal Processing: Image Communication 61, 2018) — pure-Rust,
+  `archmage`/`magetypes` padded-plane stencil SIMD with bit-identical
+  scalar/v3/v4 tiers, fixed lane-grouped f64 pooling, `libm`
+  logistic. Ports the authors' MIT-licensed `HaarPSI.m` verbatim:
+  YIQ color conversion, optional `conv2(ones(2,2)/4,'same')` +
+  decimation preprocessing (the even-kernel `same` anchor, verified
+  against Octave), three-scale Haar similarity (C=30), scale-3 max
+  weights, logistic pooling (α=4.2) with NaN on zero-weight inputs.
+  `haarpsi_plane_f32`/`_opts`, `haarpsi_rgb8`, `haarpsi_luma8`.
+  Verified on 16 Octave golden rows (`validation/`, reference +
+  license vendored): sub/nosub × odd sizes × constant/degenerate ×
+  RGB × luma, all within 5e-5. Wired into `zenmetrics-cli` as
+  `haarpsi` (`haarpsi_imazen_v*`, YIQ path) and `haarpsi-y`
+  (`haarpsiy_imazen_v*`, luma path) behind `cpu-haarpsi` (in
+  `cpu-metrics`, default on) — orchestrator-ineligible (no GPU twin).
 - psnrhvs (`f3217e04`): new in-tree CPU port of PSNR-HVS / PSNR-HVS-M
   (Egiazarian et al. VPQM-06 CSF weighting + Ponomarenko et al. VPQM-07
   between-coefficient DCT masking) — pure-Rust, `archmage`/`magetypes`

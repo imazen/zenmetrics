@@ -1392,6 +1392,11 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // exactly on 100000 (the reference's "indistinguishable" value).
         // A real sweep mean sits ~10..60 dB.
         MetricKind::Psnrhvs | MetricKind::PsnrhvsY => Some((-1.0, 100001.0, 100000.0)),
+        // HaarPSI / -Y: similarity on ~[0, 1]; 1 = identical (the
+        // logistic inverse can land an epsilon above 1.0, and a
+        // degenerate zero-weight pair yields NaN — NaN comparisons fail
+        // every bound check, which is the reference's own behavior).
+        MetricKind::Haarpsi | MetricKind::HaarpsiY => Some((-0.001, 1.01, 1.0)),
     }
 }
 

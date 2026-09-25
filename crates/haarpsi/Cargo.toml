@@ -1,0 +1,37 @@
+[package]
+name = "haarpsi"
+version = "0.1.0"
+description = "Pure-Rust CPU port of HaarPSI (Reisenhofer et al., Signal Processing: Image Communication 61, 2018), with magetypes SIMD"
+readme = "README.md"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+# archmage::incant! checks `cfg(feature = "avx512")` internally even when no
+# AVX-512 tier is listed (same allow as crates/iwssim, crates/gmsd).
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("avx512"))'] }
+
+[features]
+default = ["std"]
+# Use the standard library. Off -> core + alloc only.
+std = []
+# Rayon row parallelism inside the conv passes. Results are bit-identical at
+# every thread count: each pass reads one finished plane and writes disjoint
+# rows of the next, and the f64 pooling keeps a fixed lane-grouping order.
+parallel = ["std", "dep:rayon"]
+# Dev-only: exposes the per-tier score entry points so the SIMD tiers can be
+# compared against the scalar tier in tests and disassembled. Not API.
+_dev = ["archmage/testable_dispatch"]
+# Opt-in AVX-512 `v4` tier (16-wide f32), like crates/gmsd and crates/psnrhvs.
+avx512 = ["archmage/avx512", "magetypes/avx512"]
+
+[dependencies]
+archmage = { workspace = true }
+libm = "0.2.16"
+magetypes = { workspace = true }
+rayon = { version = "1.10", optional = true }

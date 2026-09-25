@@ -103,6 +103,10 @@ impl OrchestratorMetricSpec {
             CliMetricKind::Psnrhvs | CliMetricKind::PsnrhvsY => {
                 unreachable!("psnrhvs has no orchestrator backend; callers gate on eligibility")
             }
+            // HaarPSI / -Y: same direct-crate shape.
+            CliMetricKind::Haarpsi | CliMetricKind::HaarpsiY => {
+                unreachable!("haarpsi has no orchestrator backend; callers gate on eligibility")
+            }
             CliMetricKind::Zensim => Self {
                 kind: ApiMetricKind::Zensim,
                 prefer_cpu: true,
@@ -241,7 +245,11 @@ pub fn validate_cpu_variant_built_in(
 ) -> Result<(), OrchestratorBuildError> {
     if matches!(
         cli_kind,
-        CliMetricKind::Gmsd | CliMetricKind::Psnrhvs | CliMetricKind::PsnrhvsY
+        CliMetricKind::Gmsd
+            | CliMetricKind::Psnrhvs
+            | CliMetricKind::PsnrhvsY
+            | CliMetricKind::Haarpsi
+            | CliMetricKind::HaarpsiY
     ) {
         return Ok(());
     }

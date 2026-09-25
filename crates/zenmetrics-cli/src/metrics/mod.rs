@@ -177,6 +177,20 @@ pub enum MetricKind {
     /// Emits `psnrhvsy_imazen_v*` and `psnrhvsym_imazen_v*`.
     #[value(name = "psnrhvs-y")]
     PsnrhvsY,
+    /// HaarPSI (Reisenhofer et al., Signal Processing: Image
+    /// Communication 61, 2018) — CPU implementation via the in-tree
+    /// `haarpsi` crate (a port of the authors' MIT-licensed
+    /// `HaarPSI.m`). Similarity on ~[0, 1]: 1 = identical (degenerate
+    /// zero-weight inputs return NaN, like the reference). Scored on the
+    /// sRGB pair through the reference's YIQ color path with the default
+    /// subsampled preprocessing. Emits `haarpsi_imazen_v*`. Not routed
+    /// through the umbrella or the orchestrator (CPU-only, no GPU twin).
+    #[value(name = "haarpsi")]
+    Haarpsi,
+    /// HaarPSI on unrounded BT.601 luma only (the grayscale path — no
+    /// I/Q color similarity). Emits `haarpsiy_imazen_v*`.
+    #[value(name = "haarpsi-y")]
+    HaarpsiY,
 }
 
 impl MetricKind {
@@ -198,6 +212,8 @@ impl MetricKind {
             MetricKind::Hdrvdp,
             MetricKind::Psnrhvs,
             MetricKind::PsnrhvsY,
+            MetricKind::Haarpsi,
+            MetricKind::HaarpsiY,
         ]
     }
 
@@ -219,6 +235,8 @@ impl MetricKind {
             MetricKind::Hdrvdp => "hdrvdp",
             MetricKind::Psnrhvs => "psnrhvs",
             MetricKind::PsnrhvsY => "psnrhvs-y",
+            MetricKind::Haarpsi => "haarpsi",
+            MetricKind::HaarpsiY => "haarpsi-y",
         }
     }
 
@@ -275,6 +293,8 @@ impl MetricKind {
             MetricKind::Hdrvdp => HDRVDP_CPU_COLUMNS,
             MetricKind::Psnrhvs => PSNRHVS_CPU_COLUMNS,
             MetricKind::PsnrhvsY => PSNRHVSY_CPU_COLUMNS,
+            MetricKind::Haarpsi => HAARPSI_CPU_COLUMNS,
+            MetricKind::HaarpsiY => HAARPSIY_CPU_COLUMNS,
         }
     }
 }
@@ -355,6 +375,21 @@ const PSNRHVSY_CPU_COLUMNS: &[&str] = &[
 ];
 #[cfg(not(feature = "cpu-psnrhvs"))]
 const PSNRHVSY_CPU_COLUMNS: &[&str] = &["psnrhvs_y", "psnrhvsym"];
+
+// Versioned **CPU** HaarPSI column name (`haarpsi::HAARPSI_COLUMN_NAME`,
+// default `haarpsi_imazen_v<MAJOR>_<MINOR>_<PATCH>`, overridable via
+// `HAARPSI_IMPL_TAG`). No `_cpu_` infix — no GPU twin. Without
+// `cpu-haarpsi` a bare `"haarpsi"`.
+#[cfg(feature = "cpu-haarpsi")]
+const HAARPSI_CPU_COLUMNS: &[&str] = &[haarpsi::HAARPSI_COLUMN_NAME];
+#[cfg(not(feature = "cpu-haarpsi"))]
+const HAARPSI_CPU_COLUMNS: &[&str] = &["haarpsi"];
+
+// Versioned **CPU** HaarPSI-Y (luma) column name.
+#[cfg(feature = "cpu-haarpsi")]
+const HAARPSIY_CPU_COLUMNS: &[&str] = &[haarpsi::HAARPSIY_COLUMN_NAME];
+#[cfg(not(feature = "cpu-haarpsi"))]
+const HAARPSIY_CPU_COLUMNS: &[&str] = &["haarpsi_y"];
 
 /// CubeCL runtime selector for GPU metrics.
 ///
@@ -1054,6 +1089,19 @@ pub fn run_metric(
         MetricKind::PsnrhvsY => run_cpu_psnrhvs_y(reference, distorted),
         #[cfg(not(feature = "cpu-psnrhvs"))]
         MetricKind::PsnrhvsY => Err(disabled_msg("psnrhvs-y", "cpu-psnrhvs")),
+
+        // HaarPSI: direct call into the in-tree crate (no umbrella, no
+        // GPU twin — same shape as GMSD). `haarpsi` scores through the
+        // YIQ color path; `haarpsi-y` is the luma-only variant.
+        #[cfg(feature = "cpu-haarpsi")]
+        MetricKind::Haarpsi => run_cpu_haarpsi(reference, distorted),
+        #[cfg(not(feature = "cpu-haarpsi"))]
+        MetricKind::Haarpsi => Err(disabled_msg("haarpsi", "cpu-haarpsi")),
+
+        #[cfg(feature = "cpu-haarpsi")]
+        MetricKind::HaarpsiY => run_cpu_haarpsi_y(reference, distorted),
+        #[cfg(not(feature = "cpu-haarpsi"))]
+        MetricKind::HaarpsiY => Err(disabled_msg("haarpsi-y", "cpu-haarpsi")),
     }
 }
 
@@ -1116,6 +1164,44 @@ fn run_cpu_psnrhvs_y(
         (PSNRHVSY_CPU_COLUMNS[0], s.psnr_hvs),
         (PSNRHVSY_CPU_COLUMNS[1], s.psnr_hvs_m),
     ])
+}
+
+/// HaarPSI of two decoded sRGB8 images (`haarpsi::haarpsi_rgb8`: YIQ
+/// color path, subsampled preprocessing).
+#[cfg(feature = "cpu-haarpsi")]
+fn run_cpu_haarpsi(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "haarpsi: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let s = haarpsi::haarpsi_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
+    Ok(vec![(HAARPSI_CPU_COLUMNS[0], s)])
+}
+
+/// HaarPSI of two decoded sRGB8 images on unrounded BT.601 luma
+/// (`haarpsi::haarpsi_luma8`: grayscale path, no color channel).
+#[cfg(feature = "cpu-haarpsi")]
+fn run_cpu_haarpsi_y(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "haarpsi-y: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let s = haarpsi::haarpsi_luma8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
+    Ok(vec![(HAARPSIY_CPU_COLUMNS[0], s)])
 }
 
 #[allow(dead_code)]

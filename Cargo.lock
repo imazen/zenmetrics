@@ -2284,6 +2284,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "haarpsi"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "libm",
+ "magetypes",
+ "rayon",
+]
+
+[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7386,6 +7396,7 @@ dependencies = [
  "enough",
  "fast-ssim2 0.9.0",
  "gmsd",
+ "haarpsi",
  "heic",
  "hex",
  "image",
