@@ -32,6 +32,22 @@ Both are power-law-vs-score-ceiling curves of the form
 `JND = a · max(0, b − x)^c` (score-decreasing metrics) or
 `JND = a · max(0, x)^c` (score-increasing / distance metrics).
 
+**Cross-check of the pasted fitted maps against the data (2026-09-25):**
+they agree with the `JND_*` columns on *family and ceiling* (`b`: 93≈92.9,
+97≈96) but disagree on midrange amplitude — median |pasted − JND_col| is
+0.57–0.86 JND (SSIMULACRA2/VMAF-neg; up to 12.8 at the extrapolated tail,
+e.g. at SSIMULACRA2 x=62 the paste gives 1.36 vs the column's 2.26).
+Against the canonical ladder `JND_CVVDP`, the `JND_*` columns are actually
+*closer* than the pasted maps are (med 0.35 vs 0.54) — i.e. the paste is a
+weaker/different-target fit, not a better one. Likely causes: fit on the
+5,768-image public split under "Simple"/no-clamp settings, against
+Curve-recon ground truth rather than the published column target. Treat the
+pasted table as a leaderboard-view approximation; the `JND_*` columns are
+the dataset's pinned record and the safer normalization to gate on. Our
+deltas are reported under both anyway — since |f(ours) − f(published)| uses
+the same f on both sides, the remap uncertainty mostly cancels and the
+conclusions are identical either way.
+
 ## The JND anchor: CVVDP
 
 Distortion levels were selected by CVVDP, so `JND_CVVDP` is the dataset's
