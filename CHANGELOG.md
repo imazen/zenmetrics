@@ -13,6 +13,23 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- vif (`COMMIT_HASH_TODO`): new in-tree CPU port of VIFp — pixel-domain
+  Visual Information Fidelity (Sheikh & Bovik, IEEE TIP 15(2), 2006),
+  ported to the authors' multiscale scalar-GSM release
+  `vifp_mscale.m`. Four scales of rank-1 separable Gaussian
+  `filter2 'valid'` statistics (N = 17, 9, 5, 3, σ = N/5), the
+  reference's exact GSM masking chain, `filter2 + 1:2:end` decimation
+  between scales, `log10` information sums, `vifp = num/den`. Runs
+  `f64` end-to-end (`f64x4`/`f64x8` SIMD lanes) — the reference's
+  `1e-10` masks sit ~4 orders above f64's noise floor and would be
+  defeated by f32's `E[x²]−μ²` cancellation residual; f64 reproduces
+  the mask decisions exactly, including `NaN` on flat references,
+  `min(w,h) < 17`, and `0.0` on constant-distorted. `vif_plane_f32`,
+  `vif_rgb8` (unrounded `rgb2gray` luma). Verified on 17 Octave
+  golden rows (`validation/`) — worst delta ~5e-13. Wired into
+  `zenmetrics-cli` behind `cpu-vif` as `vif` → `vif_imazen_v*`;
+  orchestrator-ineligible (no umbrella/GPU backend).
+
 - msssim (`aee81d19`): new in-tree CPU port of MS-SSIM (Wang, Simoncelli &
   Bovik, IEEE Asilomar 2003) — pure-Rust, `archmage`/`magetypes` SIMD
   with bit-identical scalar/v3/v4 tiers and fixed-order f64 pooling.

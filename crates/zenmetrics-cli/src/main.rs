@@ -1410,6 +1410,11 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // real-part convention (matching the reference's `prod`);
         // |score| ≤ ~1 in that regime, so -1 covers it.
         MetricKind::Msssim => Some((-1.001, 1.001, 1.0)),
+        // VIFp: information ratio ≥ 0, ~1 = identical; unbounded
+        // above in principle (enhancement can add apparent
+        // information — reported values reach ~2–3). Flat references
+        // yield NaN (denominator 0), matching the reference.
+        MetricKind::Vif => Some((-0.001, 10.0, 1.0)),
     }
 }
 

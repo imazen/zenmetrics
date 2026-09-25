@@ -222,6 +222,14 @@ pub enum MetricKind {
     /// umbrella or the orchestrator (CPU-only, no GPU twin).
     #[value(name = "msssim")]
     Msssim,
+    /// VIFp (pixel-domain Visual Information Fidelity, in-tree `vif`
+    /// crate, port of the authors' `vifp_mscale.m`): ratio score
+    /// ≥ 0, ~1 = identical; can exceed 1 on enhanced inputs; flat
+    /// references yield NaN (denominator = 0 — matching the
+    /// reference). Emits `vif_imazen_v*`. CPU-only — not routed
+    /// through the umbrella or the orchestrator.
+    #[value(name = "vif")]
+    Vif,
 }
 
 impl MetricKind {
@@ -249,6 +257,7 @@ impl MetricKind {
             MetricKind::FsimY,
             MetricKind::Vsi,
             MetricKind::Msssim,
+            MetricKind::Vif,
         ]
     }
 
@@ -276,6 +285,7 @@ impl MetricKind {
             MetricKind::FsimY => "fsim-y",
             MetricKind::Vsi => "vsi",
             MetricKind::Msssim => "msssim",
+            MetricKind::Vif => "vif",
         }
     }
 
@@ -338,6 +348,7 @@ impl MetricKind {
             MetricKind::FsimY => FSIMY_CPU_COLUMNS,
             MetricKind::Vsi => VSI_CPU_COLUMNS,
             MetricKind::Msssim => MSSSIM_CPU_COLUMNS,
+            MetricKind::Vif => VIF_CPU_COLUMNS,
         }
     }
 }
@@ -466,6 +477,11 @@ const VSI_CPU_COLUMNS: &[&str] = &["vsi"];
 const MSSSIM_CPU_COLUMNS: &[&str] = &[msssim::MSSSIM_COLUMN_NAME];
 #[cfg(not(feature = "cpu-msssim"))]
 const MSSSIM_CPU_COLUMNS: &[&str] = &["msssim"];
+
+#[cfg(feature = "cpu-vif")]
+const VIF_CPU_COLUMNS: &[&str] = &[vif::VIF_COLUMN_NAME];
+#[cfg(not(feature = "cpu-vif"))]
+const VIF_CPU_COLUMNS: &[&str] = &["vif"];
 
 /// CubeCL runtime selector for GPU metrics.
 ///
@@ -1205,6 +1221,10 @@ pub fn run_metric(
         MetricKind::Msssim => run_cpu_msssim(reference, distorted),
         #[cfg(not(feature = "cpu-msssim"))]
         MetricKind::Msssim => Err(disabled_msg("msssim", "cpu-msssim")),
+        #[cfg(feature = "cpu-vif")]
+        MetricKind::Vif => run_cpu_vif(reference, distorted),
+        #[cfg(not(feature = "cpu-vif"))]
+        MetricKind::Vif => Err(disabled_msg("vif", "cpu-vif")),
     }
 }
 
@@ -1386,6 +1406,23 @@ fn run_cpu_msssim(
     let (w, h) = (reference.width as usize, reference.height as usize);
     let s = msssim::msssim_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
     Ok(vec![(MSSSIM_CPU_COLUMNS[0], s)])
+}
+
+#[cfg(feature = "cpu-vif")]
+fn run_cpu_vif(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "vif: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let s = vif::vif_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
+    Ok(vec![(VIF_CPU_COLUMNS[0], s)])
 }
 
 #[allow(dead_code)]
