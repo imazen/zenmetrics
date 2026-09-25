@@ -11,6 +11,20 @@ Do not relabel old 8-bit-shell outputs or feature sidecars as this contract.
 
 See global ~/.claude/CLAUDE.md for general instructions.
 
+## VMAF CPU optimization discipline
+
+For future pure-Rust VMAF performance work, inspect generated code with
+`cargo-show-asm` (or equivalent disassembly) before claiming SIMD or
+autovectorization. Shape hot loops around contiguous data and predictable
+bounds; separate interior work from border handling where useful, without
+changing fixed-point rounding or overflow behavior. Use representative PGO
+evidence to justify inlining, cold-path, branch, or layout annotations rather
+than applying them speculatively. Measure scratch allocations and reuse,
+cache locality, access strides, memory traffic, tiling/chunk sizes, and
+threading overhead. Reprofile before choosing a bottleneck, then gate changes
+on libvmaf feature/frame/NEG parity and scalar, SIMD, and threaded
+end-to-end benchmarks; retain only measured improvements.
+
 ## Canonical branch is `master` — NEVER push `main` (enforced)
 
 This repo's one true branch is **`master`** (the GitHub default; the only branch
