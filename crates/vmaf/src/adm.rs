@@ -1788,9 +1788,9 @@ fn adm_csf_i16(
         [36453, 36453, 49417]
     } else {
         [
-            (rf[0] as f64 * 2f64.powi(21)) as u16,
-            (rf[1] as f64 * 2f64.powi(21)) as u16,
-            (rf[2] as f64 * 2f64.powi(23)) as u16,
+            (rf[0] as f64 * 2f64.powi(21)) as u64 as u16,
+            (rf[1] as f64 * 2f64.powi(21)) as u64 as u16,
+            (rf[2] as f64 * 2f64.powi(23)) as u64 as u16,
         ]
     };
     let i_shifts = [15u32, 15, 17];
@@ -1886,9 +1886,9 @@ fn adm_csf_i32(
     rf: [f32; 3],
 ) {
     let i_rfactor = [
-        (rf[0] as f64 * 2f64.powi(32)) as u32,
-        (rf[1] as f64 * 2f64.powi(32)) as u32,
-        (rf[2] as f64 * 2f64.powi(32)) as u32,
+        (rf[0] as f64 * 2f64.powi(32)) as u64 as u32,
+        (rf[1] as f64 * 2f64.powi(32)) as u64 as u32,
+        (rf[2] as f64 * 2f64.powi(32)) as u64 as u32,
     ];
     let fix_one_by_30 = 143165577i64;
     let add_dst = 1i64 << 27;
@@ -2038,9 +2038,9 @@ fn adm_cm_i16(
         [36453, 36453, 49417]
     } else {
         [
-            (rf[0] as f64 * 2f64.powi(21)) as u16 as i32,
-            (rf[1] as f64 * 2f64.powi(21)) as u16 as i32,
-            (rf[2] as f64 * 2f64.powi(23)) as u16 as i32,
+            (rf[0] as f64 * 2f64.powi(21)) as u64 as u16 as i32,
+            (rf[1] as f64 * 2f64.powi(21)) as u64 as u16 as i32,
+            (rf[2] as f64 * 2f64.powi(23)) as u64 as u16 as i32,
         ]
     };
     let shift_xsub = [10i32, 10, 12];
@@ -2149,11 +2149,30 @@ fn adm_cm_i16(
                     ),
                     [v3, neon, wasm128, scalar]
                 );
-                for ((&x0, &x1), &x2) in xbuf[0].iter().zip(&xbuf[1]).zip(&xbuf[2]) {
-                    for (t, x) in [x0, x1, x2].into_iter().enumerate() {
-                        let x = x as i64;
-                        let x_sq = (((x * x) + add_shift_xsq[t]) >> shift_xsq[t]) as i32;
-                        inner[t] += ((x_sq as i64 * x) + add_shift_xcub[t]) >> shift_xcub[t];
+                #[cfg(target_arch = "x86_64")]
+                let mut used_v3 = false;
+                #[cfg(target_arch = "x86_64")]
+                if let Some(token) = v3_token() {
+                    cm_accum16_v3(
+                        token,
+                        &xbuf,
+                        add_shift_xsq,
+                        shift_xsq,
+                        add_shift_xcub,
+                        shift_xcub,
+                        &mut inner,
+                    );
+                    used_v3 = true;
+                }
+                #[cfg(not(target_arch = "x86_64"))]
+                let used_v3 = false;
+                if !used_v3 {
+                    for ((&x0, &x1), &x2) in xbuf[0].iter().zip(&xbuf[1]).zip(&xbuf[2]) {
+                        for (t, x) in [x0, x1, x2].into_iter().enumerate() {
+                            let x = x as i64;
+                            let x_sq = (((x * x) + add_shift_xsq[t]) >> shift_xsq[t]) as i32;
+                            inner[t] += ((x_sq as i64 * x) + add_shift_xcub[t]) >> shift_xcub[t];
+                        }
                     }
                 }
                 jj += 16;
@@ -2232,6 +2251,159 @@ fn adm_cm_i16(
         + powf_add
 }
 
+/// Direct port of `ADM_CM_ACCUM_ROUND_avx256`'s i64 accumulation chain:
+/// x_sq = (x*x + add) >> sq on real 64-bit lanes, then (x_sq*x + add2) >> cub.
+/// x already has the abs/sub/max front half applied (see adm_cm_i16_front).
+/// mul_epi32 uses only the low 32 bits of each operand, so the i32-wrapping
+/// of x_sq matches the scalar `as i32` cast exactly. Returns (lo, hi) qword
+/// accumulators covering x lanes {0,2,4,6} and {1,3,5,7}.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[rite]
+fn cm_accum_v3(
+    _token: X64V3Token,
+    x: __m256i,
+    add_sq: i64,
+    sq: u32,
+    add_cub: i64,
+    cub: u32,
+) -> (__m256i, __m256i) {
+    let x_odd = _mm256_srli_epi64(x, 32);
+    let sq_cnt = _mm_cvtsi32_si128(sq as i32);
+    let cub_cnt = _mm_cvtsi32_si128(cub as i32);
+    let xsq_lo = _mm256_srl_epi64(
+        _mm256_add_epi64(_mm256_mul_epi32(x, x), _mm256_set1_epi64x(add_sq)),
+        sq_cnt,
+    );
+    let xsq_hi = _mm256_srl_epi64(
+        _mm256_add_epi64(_mm256_mul_epi32(x_odd, x_odd), _mm256_set1_epi64x(add_sq)),
+        sq_cnt,
+    );
+    let cub_lo = _mm256_srl_epi64(
+        _mm256_add_epi64(_mm256_mul_epi32(xsq_lo, x), _mm256_set1_epi64x(add_cub)),
+        cub_cnt,
+    );
+    let cub_hi = _mm256_srl_epi64(
+        _mm256_add_epi64(_mm256_mul_epi32(xsq_hi, x_odd), _mm256_set1_epi64x(add_cub)),
+        cub_cnt,
+    );
+    (cub_lo, cub_hi)
+}
+
+/// 16-wide driver for `cm_accum_v3` over the xbuf produced by
+/// `adm_cm_i16_front`; reduces both qword accumulators into `inner`.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn cm_accum16_v3(
+    token: X64V3Token,
+    xbuf: &[[i32; 16]; 3],
+    add_shift_xsq: [i64; 3],
+    shift_xsq: [u32; 3],
+    add_shift_xcub: [i64; 3],
+    shift_xcub: [u32; 3],
+    inner: &mut [i64; 3],
+) {
+    for t in 0..3 {
+        let mut acc_lo = _mm256_setzero_si256();
+        let mut acc_hi = _mm256_setzero_si256();
+        for xc in xbuf[t].chunks_exact(8) {
+            let x = _mm256_loadu_si256(a8::<i32, 8>(xc));
+            let (lo, hi) = cm_accum_v3(
+                token,
+                x,
+                add_shift_xsq[t],
+                shift_xsq[t],
+                add_shift_xcub[t],
+                shift_xcub[t],
+            );
+            acc_lo = _mm256_add_epi64(acc_lo, lo);
+            acc_hi = _mm256_add_epi64(acc_hi, hi);
+        }
+        let mut lo = [0i64; 4];
+        let mut hi = [0i64; 4];
+        _mm256_storeu_si256(a8m::<i64, 4>(&mut lo), acc_lo);
+        _mm256_storeu_si256(a8m::<i64, 4>(&mut hi), acc_hi);
+        inner[t] += lo.iter().sum::<i64>() + hi.iter().sum::<i64>();
+    }
+}
+
+/// Direct port of `i4_adm_cm_avx2`'s interior row kernel. Unlike C's 2-pixel
+/// sliding-window thresh, our win[] colsum row supplies thr for all lanes, so
+/// each i64 quad processes 4 pixels. The signed-shift emulation
+/// (srli + msb-mask on negative lanes) and mul_epi32(-1) absolute value
+/// mirror I4_ADM_CM_THRESH_S_I_J_avx256 / I4_ADM_CM_ACCUM_ROUND_avx256.
+/// Returns the per-band row contribution and the count of pixels processed.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn i4_adm_cm_row_v3(
+    _token: X64V3Token,
+    win: &[i32],
+    ang_rows: &[&[i32]; 3],
+    flt_rows: &[&[i32]; 3],
+    src_rows: &[&[i32]; 3],
+    rfactor: [u32; 3],
+    add_bef_shift_dst: i64,
+    add_bef_shift_flt: i64,
+    add_shift_sq: i64,
+    add_shift_cub: i64,
+    shift_cub: u32,
+) -> ([i64; 3], usize) {
+    let i4_15 = _mm256_set1_epi64x(I4_ONE_BY_15);
+    let neg1 = _mm256_set1_epi32(-1);
+    let add_dst = _mm256_set1_epi64x(add_bef_shift_dst);
+    let add_flt = _mm256_set1_epi64x(add_bef_shift_flt);
+    let add_sq = _mm256_set1_epi64x(add_shift_sq);
+    let add_cub = _mm256_set1_epi64x(add_shift_cub);
+    let mask_dst = _mm256_set1_epi64x(0xFFFFFFF000000000u64 as i64);
+    let mask_flt = _mm256_set1_epi64x(0xFFFFFFFF00000000u64 as i64);
+    let zero = _mm256_setzero_si256();
+
+    let mut acc = [_mm256_setzero_si256(); 3];
+    let mut j = 0usize;
+    while j + 4 <= win.len() {
+        // thr = win[j] + sum_t(comp(ang_t[j]) - flt_t[j]), i64 lanes.
+        let mut thr = _mm256_cvtepi32_epi64(_mm_loadu_si128(a8::<i32, 4>(&win[j..j + 4])));
+        for t in 0..3 {
+            let ang = _mm256_cvtepi32_epi64(_mm_loadu_si128(a8::<i32, 4>(&ang_rows[t][j..j + 4])));
+            let ltz = _mm256_cmpgt_epi64(zero, ang);
+            let a_us = _mm256_and_si256(_mm256_mul_epi32(ang, neg1), ltz);
+            let a_abs = _mm256_or_si256(_mm256_andnot_si256(ltz, ang), a_us);
+            let comp = _mm256_add_epi64(_mm256_mul_epi32(a_abs, i4_15), add_flt);
+            let sgn = _mm256_and_si256(mask_flt, _mm256_cmpgt_epi64(zero, comp));
+            let comp = _mm256_or_si256(_mm256_srli_epi64(comp, 32), sgn);
+            let flt = _mm256_cvtepi32_epi64(_mm_loadu_si128(a8::<i32, 4>(&flt_rows[t][j..j + 4])));
+            thr = _mm256_add_epi64(thr, _mm256_sub_epi64(comp, flt));
+        }
+        for t in 0..3 {
+            let src = _mm256_cvtepi32_epi64(_mm_loadu_si128(a8::<i32, 4>(&src_rows[t][j..j + 4])));
+            let rf = _mm256_set1_epi32(rfactor[t] as i32);
+            let xf = _mm256_add_epi64(_mm256_mul_epi32(src, rf), add_dst);
+            let sgn = _mm256_and_si256(mask_dst, _mm256_cmpgt_epi64(zero, xf));
+            let xf = _mm256_or_si256(_mm256_srli_epi64(xf, 28), sgn);
+            // abs on i64 lanes then thr subtract (shift_sub = 0), clamp > 0.
+            let ltz = _mm256_cmpgt_epi64(zero, xf);
+            let x_us = _mm256_and_si256(_mm256_mul_epi32(xf, neg1), ltz);
+            let x_abs = _mm256_or_si256(_mm256_andnot_si256(ltz, xf), x_us);
+            let mut x = _mm256_sub_epi64(x_abs, thr);
+            x = _mm256_and_si256(x, _mm256_cmpgt_epi64(x, zero));
+            let xsq = _mm256_srli_epi64(_mm256_add_epi64(_mm256_mul_epi32(x, x), add_sq), 30);
+            let val = _mm256_srl_epi64(
+                _mm256_add_epi64(_mm256_mul_epi32(xsq, x), add_cub),
+                _mm_cvtsi32_si128(shift_cub as i32),
+            );
+            acc[t] = _mm256_add_epi64(acc[t], val);
+        }
+        j += 4;
+    }
+    let mut inner = [0i64; 3];
+    for t in 0..3 {
+        let mut v = [0i64; 4];
+        _mm256_storeu_si256(a8m::<i64, 4>(&mut v), acc[t]);
+        inner[t] = v.iter().sum();
+    }
+    (inner, j)
+}
+
 #[cfg(feature = "simd")]
 #[magetypes(define(i16x16, i32x8), v3, neon, wasm128, scalar)]
 fn adm_cm_i16_front(
@@ -2291,9 +2463,9 @@ fn adm_cm_i32(
     noise_weight: f64,
 ) -> f32 {
     let rfactor = [
-        (rf[0] as f64 * 2f64.powi(32)) as u32,
-        (rf[1] as f64 * 2f64.powi(32)) as u32,
-        (rf[2] as f64 * 2f64.powi(32)) as u32,
+        (rf[0] as f64 * 2f64.powi(32)) as u64 as u32,
+        (rf[1] as f64 * 2f64.powi(32)) as u64 as u32,
+        (rf[2] as f64 * 2f64.powi(32)) as u64 as u32,
     ];
     let add_bef_shift_dst = 1i64 << 27;
     let add_bef_shift_flt = -(1i64 << 31);
@@ -2369,7 +2541,32 @@ fn adm_cm_i32(
                 &src_b[2][row..row + len],
             ];
             let mut inner = [0i64; 3];
-            for (jj, &wv) in win[..len].iter().enumerate() {
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            let mut jj = 0usize;
+            #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+            let jj = 0usize;
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            if let Some(token) = v3_token() {
+                let (vec_inner, done) = i4_adm_cm_row_v3(
+                    token,
+                    &win[..len],
+                    &ang_rows,
+                    &flt_rows,
+                    &src_rows,
+                    rfactor,
+                    add_bef_shift_dst,
+                    add_bef_shift_flt,
+                    add_shift_sq,
+                    add_shift_cub,
+                    shift_cub,
+                );
+                for t in 0..3 {
+                    inner[t] += vec_inner[t];
+                }
+                jj = done;
+            }
+            for (off, &wv) in win[jj..len].iter().enumerate() {
+                let jj = jj + off;
                 let mut thr = wv;
                 for t in 0..3 {
                     thr += ((I4_ONE_BY_15 * (ang_rows[t][jj] as i64).abs() + add_bef_shift_flt)
@@ -3014,6 +3211,90 @@ fn simd_decouple_matches_scalar_for_tails_zeros_and_gains() {
             ] {
                 assert_eq!(s, v, "{w}x{h} gain={gain} band {name}");
             }
+        }
+    }
+}
+
+/// `cm_accum16_v3` must bit-match the scalar x_sq/x_cub chain on every lane.
+/// |v| <= 16000 keeps x_sq < 2^31 so scalar's i32 wrap and the AVX2 path
+/// agree — the same bound the decouple parity test uses.
+#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[test]
+fn simd_cm_i16_matches_scalar_for_tails_and_edges() {
+    use std::sync::atomic::Ordering;
+    for (w, h) in [(44, 13), (57, 21), (33, 33), (101, 17), (67, 9)] {
+        let n = w * h;
+        let mut x = 0x9E3779B97F4A7C15u64;
+        let mut rng = move || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            (x % 32001) as i32 - 16000
+        };
+        let make_band = |rng: &mut dyn FnMut() -> i32| BandI16 {
+            h: (0..n).map(|_| rng() as i16).collect(),
+            v: (0..n).map(|_| rng() as i16).collect(),
+            d: (0..n).map(|_| rng() as i16).collect(),
+        };
+        let src = make_band(&mut rng);
+        let csf_f = make_band(&mut rng);
+        let csf_a = make_band(&mut rng);
+        let run = |force: bool| {
+            FORCE_SCALAR.store(force, Ordering::Relaxed);
+            let v = adm_cm_i16(&src, &csf_f, &csf_a, w, h, w, [1.0; 3], 0.0, true);
+            FORCE_SCALAR.store(false, Ordering::Relaxed);
+            v
+        };
+        let s = run(true);
+        let v = run(false);
+        assert_eq!(s.to_bits(), v.to_bits(), "{w}x{h}");
+    }
+}
+
+/// `i4_adm_cm_row_v3` must bit-match the scalar thr/x/accum chain. src bounded
+/// to +-2^20 keeps x_full in i32 range and x_sq positive, where libvmaf's own
+/// scalar/AVX2 paths agree. rf fractions keep rfactor < 2^31 (mul_epi32 sign).
+#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[test]
+fn simd_cm_i32_matches_scalar_for_tails_and_edges() {
+    use std::sync::atomic::Ordering;
+    for scale in 1..=3usize {
+        for (w, h) in [(44, 13), (57, 21), (33, 33), (101, 17), (67, 9)] {
+            let n = w * h;
+            let mut x = 0x9E3779B97F4A7C15u64;
+            let mut rng = move || {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                (x % 2097153) as i32 - 1048576
+            };
+            let make_band = |rng: &mut dyn FnMut() -> i32| BandI32 {
+                h: (0..n).map(|_| rng()).collect(),
+                v: (0..n).map(|_| rng()).collect(),
+                d: (0..n).map(|_| rng()).collect(),
+            };
+            let src = make_band(&mut rng);
+            let csf_f = make_band(&mut rng);
+            let csf_a = make_band(&mut rng);
+            let run = |force: bool| {
+                FORCE_SCALAR.store(force, Ordering::Relaxed);
+                let v = adm_cm_i32(
+                    &src,
+                    &csf_f,
+                    &csf_a,
+                    scale,
+                    w,
+                    h,
+                    w,
+                    [17.25, 9.4, 63.125],
+                    0.0,
+                );
+                FORCE_SCALAR.store(false, Ordering::Relaxed);
+                v
+            };
+            let s = run(true);
+            let v = run(false);
+            assert_eq!(s.to_bits(), v.to_bits(), "scale={scale} {w}x{h}");
         }
     }
 }
