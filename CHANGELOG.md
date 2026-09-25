@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- docs (`HASH_TBD`): new `docs/AIC2026_METRICS_AND_FITTING.md` — the AIC-4
+- docs (`dc0ccf2e`): new `docs/AIC2026_METRICS_AND_FITTING.md` — the AIC-4
   JND remapping record. Documents the two distinct JND objects (the 7
   precomputed `JND_*` CSV display columns vs the benchmark fitting-tool's
   91-metric power-law maps), records the authoritative fitted mappings
