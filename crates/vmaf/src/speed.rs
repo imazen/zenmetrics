@@ -1,6 +1,8 @@
 use crate::{Error, ModelVariant};
 #[cfg(feature = "simd")]
 use archmage::autoversion;
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+use archmage::{X64V3Token, arcane};
 
 const BLOCK_SIZE: usize = 5;
 const NUM_SCALES: u32 = 4;
@@ -477,6 +479,84 @@ fn compute_mean(
     result / (dim.submatrix_width * dim.submatrix_height) as f32
 }
 
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[inline(always)]
+fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
+    s.try_into().unwrap()
+}
+
+/// Direct port of `compute_cov_kernel_avx2`: f32 -> f64 widening, two
+/// parallel f64 accumulator chains hiding FMA latency, 8-wide then 4-wide
+/// then scalar per row. Returns the unnormalized sum (caller divides).
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn compute_covariance_v3(
+    _token: X64V3Token,
+    data: &[f32],
+    mean_x: f64,
+    mean_y: f64,
+    stride_px: usize,
+    srx: usize,
+    scx: usize,
+    sry: usize,
+    scy: usize,
+    sub_w: usize,
+    sub_h: usize,
+) -> f64 {
+    let mut acc0 = _mm256_setzero_pd();
+    let mut acc1 = _mm256_setzero_pd();
+    let mx = _mm256_set1_pd(mean_x);
+    let my = _mm256_set1_pd(mean_y);
+    let mut scalar_tail = 0.0f64;
+    for i in 0..sub_h {
+        let xb = (srx + i) * stride_px + scx;
+        let yb = (sry + i) * stride_px + scy;
+        let mut j = 0usize;
+        while j + 8 <= sub_w {
+            let cx0 = _mm256_sub_pd(
+                _mm256_cvtps_pd(_mm_loadu_ps(a8(&data[xb + j..xb + j + 4]))),
+                mx,
+            );
+            let cx1 = _mm256_sub_pd(
+                _mm256_cvtps_pd(_mm_loadu_ps(a8(&data[xb + j + 4..xb + j + 8]))),
+                mx,
+            );
+            let cy0 = _mm256_sub_pd(
+                _mm256_cvtps_pd(_mm_loadu_ps(a8(&data[yb + j..yb + j + 4]))),
+                my,
+            );
+            let cy1 = _mm256_sub_pd(
+                _mm256_cvtps_pd(_mm_loadu_ps(a8(&data[yb + j + 4..yb + j + 8]))),
+                my,
+            );
+            acc0 = _mm256_fmadd_pd(cx0, cy0, acc0);
+            acc1 = _mm256_fmadd_pd(cx1, cy1, acc1);
+            j += 8;
+        }
+        while j + 4 <= sub_w {
+            let cx = _mm256_sub_pd(
+                _mm256_cvtps_pd(_mm_loadu_ps(a8(&data[xb + j..xb + j + 4]))),
+                mx,
+            );
+            let cy = _mm256_sub_pd(
+                _mm256_cvtps_pd(_mm_loadu_ps(a8(&data[yb + j..yb + j + 4]))),
+                my,
+            );
+            acc0 = _mm256_fmadd_pd(cx, cy, acc0);
+            j += 4;
+        }
+        while j < sub_w {
+            scalar_tail += (data[xb + j] as f64 - mean_x) * (data[yb + j] as f64 - mean_y);
+            j += 1;
+        }
+    }
+    let acc = _mm256_add_pd(acc0, acc1);
+    let mut tmp = [0.0f64; 4];
+    _mm256_storeu_pd(&mut tmp, acc);
+    tmp[0] + tmp[1] + tmp[2] + tmp[3] + scalar_tail
+}
+
 fn compute_covariance(
     dim: &Dims,
     data: &[f32],
@@ -489,6 +569,23 @@ fn compute_covariance(
 ) -> f32 {
     let mean_x = means[srx * dim.block_size + scx] as f64;
     let mean_y = means[sry * dim.block_size + scy] as f64;
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    if let Some(token) = <X64V3Token as archmage::SimdToken>::summon() {
+        let result = compute_covariance_v3(
+            token,
+            data,
+            mean_x,
+            mean_y,
+            stride_px,
+            srx,
+            scx,
+            sry,
+            scy,
+            dim.submatrix_width,
+            dim.submatrix_height,
+        );
+        return (result / (dim.submatrix_width * dim.submatrix_height) as f64) as f32;
+    }
     let mut result = 0.0f64;
     for i in 0..dim.submatrix_height {
         for j in 0..dim.submatrix_width {
@@ -956,4 +1053,59 @@ pub fn speed_v1_chroma_420(
     };
 
     Ok((score_uv.min(SPEED_MAX_VAL)) as f64)
+}
+
+#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+mod tests {
+    use super::*;
+
+    /// Scalar reference of the covariance kernel (two-rounding mul+add),
+    /// compared against the FMA intrinsic within tight relative tolerance —
+    /// FMA is single-rounding so bit-exact equality is not expected.
+    fn cov_scalar(
+        data: &[f32],
+        mean_x: f64,
+        mean_y: f64,
+        stride: usize,
+        srx: usize,
+        scx: usize,
+        sry: usize,
+        scy: usize,
+        w: usize,
+        h: usize,
+    ) -> f64 {
+        let mut result = 0.0f64;
+        for i in 0..h {
+            for j in 0..w {
+                result += (data[(srx + i) * stride + scx + j] as f64 - mean_x)
+                    * (data[(sry + i) * stride + scy + j] as f64 - mean_y);
+            }
+        }
+        result
+    }
+
+    #[test]
+    fn v3_covariance_matches_scalar() {
+        let Some(token) = <X64V3Token as archmage::SimdToken>::summon() else {
+            return;
+        };
+        let stride = 64usize;
+        let data: Vec<f32> = (0..stride * 40)
+            .map(|i| ((i * 37 + (i / stride) * 11) % 997) as f32 * 0.125 - 60.0)
+            .collect();
+        for (w, h) in [(8usize, 4usize), (9, 5), (13, 7), (16, 8), (21, 9), (5, 11)] {
+            for (srx, scx, sry, scy) in [(0usize, 0usize, 1usize, 2usize), (2, 3, 4, 0)] {
+                let mx = 12.5f64;
+                let my = -7.25f64;
+                let avx2 =
+                    compute_covariance_v3(token, &data, mx, my, stride, srx, scx, sry, scy, w, h);
+                let scalar = cov_scalar(&data, mx, my, stride, srx, scx, sry, scy, w, h);
+                let denom = scalar.abs().max(1.0);
+                assert!(
+                    (avx2 - scalar).abs() / denom <= 1e-12,
+                    "w={w} h={h}: avx2={avx2} scalar={scalar}"
+                );
+            }
+        }
+    }
 }
