@@ -13,6 +13,23 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- mdctpsnr (`43d2723e`): new in-tree CPU crate `crates/mdctpsnr` —
+  reference reimplementation of Thomas Richter's mDCT-PSNR
+  (`thorfdbg/mDCTpsnr`, zlib license retained), the metric published in
+  the JPEG AIC-4 `mDCT-PSNR` column. Linear BT.601 YCbCr ingress, sliding
+  mean-windowed 8×8 AAN DCT, 5×5 separable visibility masking, Ahumada
+  `exp(−err^3.5)` detection pooling, extended DC lowpass. Parity target is
+  the *compiled* reference (GCC `-O3 -ffast-math` AVX2 + glibc libmvec):
+  reproduces its reassociated reduction trees, FMA contraction, `rcpps`+NR
+  mask division, and libmvec `_ZGVdN8vv_powf`/`_ZGVdN8v_expf` vector calls
+  — including the 8-lane strided pooling accumulator whose `rem ≥ 4` tail
+  guard cost ~11 dB on `w13 % 8 == 3` widths until decoded from the
+  disassembly. Goldens cover all eight `(W−13) % 8` residue classes at
+  ≤ ~4e-6 dB; AIC-4 `mDCT-PSNR` column reproduces at med 4.0e-7 /
+  max 1.13e-5 dB (n=53). CLI `--metric mdctpsnr` behind `cpu-mdctpsnr`
+  (default on), column `mdctpsnr_imazen_v0_1_0`. Ledgers updated:
+  `DIVERGENCES.md`, `docs/METRIC_PROVENANCE.md`,
+  `docs/AIC2026_METRICS_AND_FITTING.md`, `README.md`.
 - metrics (`9128d118`): three AIC-4-matched variants closing the two largest
   JND-ranked gaps. `msssim` gains a `libvmaf` module — reference
   reimplementation of libvmaf `float_ssim`/`float_ms_ssim` @ f85a8536
