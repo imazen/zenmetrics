@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- fsim (TBD): new in-tree CPU port of FSIM / FSIMc (Zhang, Zhang, Mou
+- fsim (`75829f8e`): new in-tree CPU port of FSIM / FSIMc (Zhang, Zhang, Mou
   & Zhang, IEEE TIP 20(8), 2011) — pure-Rust, `archmage`/`magetypes`
   SIMD with bit-identical scalar/v3/v4 tiers and fixed-order f64
   pooling. Ports the authors' `FR_FSIMc.m`: recursive box-subsample
