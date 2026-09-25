@@ -166,6 +166,8 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         // Never reached — orchestrator-ineligible — but the match is
         // exhaustive over the CLI kind enum.
         CliMetricKind::Hdrvdp => "hdrvdp",
+        CliMetricKind::Psnrhvs => "psnrhvs",
+        CliMetricKind::PsnrhvsY => "psnrhvs_y",
         CliMetricKind::Cvvdp => "cvvdp",
         CliMetricKind::CvvdpGpu => "cvvdp",
         CliMetricKind::Butteraugli => "butteraugli_max",
@@ -251,7 +253,10 @@ pub fn rekey_orchestrator_columns(
         // below) so future readers see the contract.
         CliMetricKind::Iwssim => Vec::new(),
         // Never reaches the orchestrator (`metric_orchestrator_eligible`).
-        CliMetricKind::Gmsd | CliMetricKind::Hdrvdp => Vec::new(),
+        CliMetricKind::Gmsd
+        | CliMetricKind::Hdrvdp
+        | CliMetricKind::Psnrhvs
+        | CliMetricKind::PsnrhvsY => Vec::new(),
         CliMetricKind::Cvvdp
         | CliMetricKind::CvvdpGpu
         | CliMetricKind::Ssim2Gpu
@@ -276,10 +281,12 @@ pub fn rekey_orchestrator_columns(
 /// orchestrator path.
 ///
 /// **Ineligible:** `Gmsd` (no umbrella/orchestrator backend — direct
-/// `gmsd` crate call) and `Hdrvdp` (absolute-nits-only; every
+/// `gmsd` crate call), `Hdrvdp` (absolute-nits-only; every
 /// orchestrator leaf is sRGB8-shaped and there is no GPU twin — the
-/// `hdr::HdrScorer` path serves it instead). Every other metric kind
-/// is eligible as of 2026-08-28. Butteraugli was
+/// `hdr::HdrScorer` path serves it instead), and `Psnrhvs`/`PsnrhvsY`
+/// (direct `psnrhvs` crate calls; each emits two score columns the
+/// orchestrator's single-column leaves can't carry). Every other
+/// metric kind is eligible as of 2026-08-28. Butteraugli was
 /// the last holdout; the history and the accepted tolerance are below
 /// because the reason it was excluded is easy to re-derive wrongly.
 ///
@@ -360,8 +367,16 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
     // shape of ineligible: the orchestrator's leaves are all
     // sRGB8-shaped (cpu_adapter) or GPU backends hdrvdp doesn't have —
     // its nits feeding only exists through `hdr::HdrScorer`, which the
-    // `score --hdr` / `sweep --hdr` paths reach directly.
-    !matches!(kind, CliMetricKind::Gmsd | CliMetricKind::Hdrvdp)
+    // `score --hdr` / `sweep --hdr` paths reach directly. PSNR-HVS and
+    // PSNR-HVS-Y are likewise direct-crate CPU metrics (each emits two
+    // score columns the orchestrator's one-column leaves can't carry).
+    !matches!(
+        kind,
+        CliMetricKind::Gmsd
+            | CliMetricKind::Hdrvdp
+            | CliMetricKind::Psnrhvs
+            | CliMetricKind::PsnrhvsY
+    )
 }
 
 /// Build the orchestrator at the start of a CLI command. Wraps the

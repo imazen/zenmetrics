@@ -13,6 +13,21 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- psnrhvs: new in-tree CPU port of PSNR-HVS / PSNR-HVS-M (Egiazarian
+  et al. VPQM-06 CSF weighting + Ponomarenko et al. VPQM-07
+  between-coefficient DCT masking) — pure-Rust, `archmage`/`magetypes`
+  block-SoA SIMD with bit-identical scalar/v3/v4 tiers and `libm`
+  finalization; `psnrhvs_plane_f32` (strided f32 planes,
+  `psnrhvs_plane_f32_step` for the reference's `wstep`),
+  `psnrhvs_rgb8` (per-channel mean), `psnrhvs_luma8` (BT.601).
+  Verified against the authors' `psnrhvsm.m` under GNU Octave:
+  15 golden rows (plane + per-channel + luma, `validation/`) within
+  1e-3 dB, identical pairs land exactly on 100000. Wired into
+  `zenmetrics-cli` as `psnrhvs` (emits `psnrhvs_imazen_v*` +
+  `psnrhvsm_imazen_v*`) and `psnrhvs-y` (`psnrhvsy_imazen_v*` +
+  `psnrhvsym_imazen_v*`) behind `cpu-psnrhvs` (in `cpu-metrics`,
+  default on) — direct-crate calls like `gmsd`; orchestrator-ineligible
+  (two-column output, no GPU twin).
 - zenmetrics-cli sweep: per-plane chroma knobs for research stimuli (`5fa9f73a`) — zenjpeg `chroma_distance_scales` / `plane_tables` / `allow_16bit_quant_tables`; zenavif `chroma_q` on `backend=svt-rs`; new `--codec zenjpegai` (`jpegai` feature, `ZENJPEGAI_MODELS`) with `model_id` / `beta_displacement_log`, plus JPEG AI decode; cvvdp CPU `--display-model squintly_n1` (94.26 ppd) / `squintly_m2` (47.13 ppd).
 - cvvdp: video scoring on the CPU path — `VideoScorer` (streaming
   `push_frame`/`finish`, holds only the temporal-filter window) plus

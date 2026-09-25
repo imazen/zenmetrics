@@ -163,6 +163,9 @@ cpu-metrics = [
     "cpu-hdrvdp",
     # GMSD (in-tree `gmsd` crate, libgmsd port): CPU-only, called directly.
     "cpu-gmsd",
+    # PSNR-HVS / PSNR-HVS-M / PSNR-HVS-Y (in-tree `psnrhvs` crate,
+    # Ponomarenko reference port): CPU-only, called directly.
+    "cpu-psnrhvs",
     # All native-CPU backends via the umbrella's Backend::Cpu (cpu_dispatch),
     # so run_gpu_via_umbrella's CPU failover works for ssim2/dssim/butter/zensim
     # too — and the auto ladder's CPU rung is the native SIMD path, NEVER
@@ -178,6 +181,7 @@ cpu-cvvdp = ["dep:zenmetrics-api", "zenmetrics-api/cpu-cvvdp"]
 cpu-iwssim = ["dep:zenmetrics-api", "zenmetrics-api/cpu-iwssim"]
 cpu-hdrvdp = ["dep:zenmetrics-api", "zenmetrics-api/cpu-hdrvdp"]
 cpu-gmsd = ["dep:gmsd"]
+cpu-psnrhvs = ["dep:psnrhvs"]
 
 # GPU bundle: pulls every GPU metric implementation via the umbrella.
 gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp", "gpu-iwssim", "gpu-zensim"]
@@ -546,6 +550,7 @@ zenmetrics-api = { workspace = true, optional = true, default-features = false }
 # hdr+png/jxl builds uncompilable (2026-07-12).
 cvvdp = { workspace = true, optional = true }
 gmsd = { workspace = true, optional = true, features = ["std", "avx512"] }
+psnrhvs = { workspace = true, optional = true, features = ["std", "avx512"] }
 cubecl = { workspace = true, optional = true }
 
 # Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the

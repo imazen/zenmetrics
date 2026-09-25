@@ -10,7 +10,9 @@ members = [
     "crates/hdrvdp",
     "crates/iwssim",
     "crates/iwssim-gpu",
+    "crates/psnrhvs",
     "crates/ssim2-gpu",
+
     "crates/vmaf",
     "crates/zenfleet-cloud",
     "crates/zenfleet-local",
@@ -68,6 +70,7 @@ gmsd = { version = "0.1.0", path = "crates/gmsd", default-features = false }
 hdrvdp = { version = "0.0.1", path = "crates/hdrvdp", default-features = false }
 iwssim = { version = "0.1.0", path = "crates/iwssim", default-features = false }
 iwssim-gpu = { version = "0.0.1", path = "crates/iwssim-gpu", default-features = false }
+psnrhvs = { version = "0.1.0", path = "crates/psnrhvs", default-features = false }
 ssim2-gpu = { version = "0.0.1", path = "crates/ssim2-gpu", default-features = false }
 zensim-gpu = { version = "0.0.1", path = "crates/zensim-gpu", default-features = false }
 zenmetrics-api = { version = "0.0.1", path = "crates/zenmetrics-api", default-features = false }

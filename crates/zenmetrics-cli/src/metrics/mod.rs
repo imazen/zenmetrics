@@ -161,6 +161,22 @@ pub enum MetricKind {
     /// UPIQ protocol). Emits `hdrvdp_imazen_v*`. No GPU twin.
     #[value(name = "hdrvdp")]
     Hdrvdp,
+    /// PSNR-HVS / PSNR-HVS-M (Egiazarian et al. VPQM-06, Ponomarenko et al.
+    /// VPQM-07) — CPU implementation via the in-tree `psnrhvs` crate (a port
+    /// of the authors' `psnrhvsm.m`). PSNR-like: dB scale, higher = better,
+    /// `100000` = identical/visually indistinguishable. Scored per sRGB
+    /// channel on the 0–255 scale and averaged (the multi-plane convention
+    /// codec harnesses report). Emits both `psnrhvs_imazen_v*` and
+    /// `psnrhvsm_imazen_v*` — the masked score is a byproduct of the same
+    /// pass. Not routed through the umbrella or the orchestrator (CPU-only,
+    /// no GPU twin).
+    #[value(name = "psnrhvs")]
+    Psnrhvs,
+    /// PSNR-HVS-Y — the same metric on BT.601 luma only (the codec-benchmark
+    /// staple; comparable to `psnr_hvs_y` in Daala/AV1-style reports).
+    /// Emits `psnrhvsy_imazen_v*` and `psnrhvsym_imazen_v*`.
+    #[value(name = "psnrhvs-y")]
+    PsnrhvsY,
 }
 
 impl MetricKind {
@@ -180,6 +196,8 @@ impl MetricKind {
             MetricKind::Iwssim,
             MetricKind::Gmsd,
             MetricKind::Hdrvdp,
+            MetricKind::Psnrhvs,
+            MetricKind::PsnrhvsY,
         ]
     }
 
@@ -199,6 +217,8 @@ impl MetricKind {
             MetricKind::Iwssim => "iwssim",
             MetricKind::Gmsd => "gmsd",
             MetricKind::Hdrvdp => "hdrvdp",
+            MetricKind::Psnrhvs => "psnrhvs",
+            MetricKind::PsnrhvsY => "psnrhvs-y",
         }
     }
 
@@ -253,6 +273,8 @@ impl MetricKind {
             MetricKind::Iwssim => IWSSIM_CPU_COLUMNS,
             MetricKind::Gmsd => GMSD_CPU_COLUMNS,
             MetricKind::Hdrvdp => HDRVDP_CPU_COLUMNS,
+            MetricKind::Psnrhvs => PSNRHVS_CPU_COLUMNS,
+            MetricKind::PsnrhvsY => PSNRHVSY_CPU_COLUMNS,
         }
     }
 }
@@ -316,6 +338,23 @@ const GMSD_CPU_COLUMNS: &[&str] = &["gmsd"];
 const HDRVDP_CPU_COLUMNS: &[&str] = &[zenmetrics_api::hdrvdp_cpu::HDRVDP_COLUMN_NAME];
 #[cfg(not(feature = "cpu-hdrvdp"))]
 const HDRVDP_CPU_COLUMNS: &[&str] = &["hdrvdp"];
+
+// Versioned **CPU** PSNR-HVS column names (`psnrhvs::PSNRHVS_COLUMN_NAME` +
+// `PSNRHVSM_COLUMN_NAME`; the masked score rides along from the same pass).
+// No `_cpu_` infix — no GPU twin. Without `cpu-psnrhvs` bare names.
+#[cfg(feature = "cpu-psnrhvs")]
+const PSNRHVS_CPU_COLUMNS: &[&str] = &[psnrhvs::PSNRHVS_COLUMN_NAME, psnrhvs::PSNRHVSM_COLUMN_NAME];
+#[cfg(not(feature = "cpu-psnrhvs"))]
+const PSNRHVS_CPU_COLUMNS: &[&str] = &["psnrhvs", "psnrhvsm"];
+
+// Versioned **CPU** PSNR-HVS-Y (luma) column names.
+#[cfg(feature = "cpu-psnrhvs")]
+const PSNRHVSY_CPU_COLUMNS: &[&str] = &[
+    psnrhvs::PSNRHVSY_COLUMN_NAME,
+    psnrhvs::PSNRHVSYM_COLUMN_NAME,
+];
+#[cfg(not(feature = "cpu-psnrhvs"))]
+const PSNRHVSY_CPU_COLUMNS: &[&str] = &["psnrhvs_y", "psnrhvsym"];
 
 /// CubeCL runtime selector for GPU metrics.
 ///
@@ -1002,6 +1041,19 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-hdrvdp"))]
         MetricKind::Hdrvdp => Err(disabled_msg("hdrvdp", "cpu-hdrvdp` (native SIMD CPU)")),
+
+        // PSNR-HVS: direct call into the in-tree crate (no umbrella, no
+        // GPU twin — same shape as GMSD). Both the plain and masked
+        // scores come out of one pass, so one call emits both columns.
+        #[cfg(feature = "cpu-psnrhvs")]
+        MetricKind::Psnrhvs => run_cpu_psnrhvs(reference, distorted),
+        #[cfg(not(feature = "cpu-psnrhvs"))]
+        MetricKind::Psnrhvs => Err(disabled_msg("psnrhvs", "cpu-psnrhvs")),
+
+        #[cfg(feature = "cpu-psnrhvs")]
+        MetricKind::PsnrhvsY => run_cpu_psnrhvs_y(reference, distorted),
+        #[cfg(not(feature = "cpu-psnrhvs"))]
+        MetricKind::PsnrhvsY => Err(disabled_msg("psnrhvs-y", "cpu-psnrhvs")),
     }
 }
 
@@ -1021,6 +1073,49 @@ fn run_cpu_gmsd(
     }
     let (w, h) = (reference.width as usize, reference.height as usize);
     Ok(gmsd::gmsd_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?.gmsd)
+}
+
+/// PSNR-HVS / PSNR-HVS-M of two decoded sRGB8 images — each channel
+/// scored as a 0..255 plane, scores averaged across channels.
+#[cfg(feature = "cpu-psnrhvs")]
+fn run_cpu_psnrhvs(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "psnrhvs: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let s = psnrhvs::psnrhvs_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
+    Ok(vec![
+        (PSNRHVS_CPU_COLUMNS[0], s.psnr_hvs),
+        (PSNRHVS_CPU_COLUMNS[1], s.psnr_hvs_m),
+    ])
+}
+
+/// PSNR-HVS-Y of two decoded sRGB8 images on BT.601 luma.
+#[cfg(feature = "cpu-psnrhvs")]
+fn run_cpu_psnrhvs_y(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "psnrhvs-y: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let s = psnrhvs::psnrhvs_luma8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
+    Ok(vec![
+        (PSNRHVSY_CPU_COLUMNS[0], s.psnr_hvs),
+        (PSNRHVSY_CPU_COLUMNS[1], s.psnr_hvs_m),
+    ])
 }
 
 #[allow(dead_code)]

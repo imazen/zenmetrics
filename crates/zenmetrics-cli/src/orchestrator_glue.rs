@@ -99,6 +99,10 @@ impl OrchestratorMetricSpec {
             CliMetricKind::Hdrvdp => {
                 unreachable!("hdrvdp has no orchestrator backend; callers gate on eligibility")
             }
+            // PSNR-HVS / -Y: direct-crate CPU metrics (gmsd shape).
+            CliMetricKind::Psnrhvs | CliMetricKind::PsnrhvsY => {
+                unreachable!("psnrhvs has no orchestrator backend; callers gate on eligibility")
+            }
             CliMetricKind::Zensim => Self {
                 kind: ApiMetricKind::Zensim,
                 prefer_cpu: true,
@@ -235,7 +239,10 @@ impl std::error::Error for OrchestratorBuildError {}
 pub fn validate_cpu_variant_built_in(
     cli_kind: CliMetricKind,
 ) -> Result<(), OrchestratorBuildError> {
-    if cli_kind == CliMetricKind::Gmsd {
+    if matches!(
+        cli_kind,
+        CliMetricKind::Gmsd | CliMetricKind::Psnrhvs | CliMetricKind::PsnrhvsY
+    ) {
         return Ok(());
     }
     let spec = OrchestratorMetricSpec::from_cli(cli_kind);

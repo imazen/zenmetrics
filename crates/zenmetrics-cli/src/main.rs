@@ -1385,6 +1385,13 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Cvvdp | MetricKind::CvvdpGpu => Some((-0.5, 10.5, 10.0)),
         // GMSD: std of a [0, 1] similarity map, so [0, ~0.5]; 0 = identical.
         MetricKind::Gmsd => Some((-0.001, 0.6, 0.0)),
+        // HDR-VDP: JOD scale [0, 100]; 100 = identical (the crate's
+        // scaled Q_JOD output).
+        MetricKind::Hdrvdp => Some((-1.0, 101.0, 100.0)),
+        // PSNR-HVS / -M / -Y: dB scale, higher = better; identical lands
+        // exactly on 100000 (the reference's "indistinguishable" value).
+        // A real sweep mean sits ~10..60 dB.
+        MetricKind::Psnrhvs | MetricKind::PsnrhvsY => Some((-1.0, 100001.0, 100000.0)),
     }
 }
 

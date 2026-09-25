@@ -1,0 +1,13 @@
+g1_64 = gen(1,64,64);  g2_64 = gen(2,64,64);
+rung('g1_vs_g1p7',   g1_64, mod(g1_64+7,256));
+rung('g1_vs_g2',     g1_64, g2_64);
+rung('g2_vs_g2p3',   g2_64, mod(g2_64+3,256));
+rung('g3_24x16',     gen(3,24,16), mod(gen(3,24,16)+15,256));
+rung('g4_100x52',    gen(4,100,52), mod(gen(4,100,52)+5,256));
+rung('g1_8x8',       gen(1,8,8), mod(gen(1,8,8)+30,256));
+rung('identical',    g1_64, g1_64);
+rung('g1_step4',     g1_64, mod(g1_64+7,256), 4);
+c5 = gen(5,64,64); d5 = c5; d5(1:8,1:8) = gen(2,8,8);
+rung('const_patch',  c5, d5);
+rung('g2_dcshift',   g2_64, mod(g2_64+10,256));
+rung('g1_clamp15',   g1_64, min(g1_64+15,255));
