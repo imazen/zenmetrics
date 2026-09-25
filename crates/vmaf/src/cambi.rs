@@ -1,18 +1,22 @@
 use crate::Error;
 #[cfg(feature = "simd")]
 use archmage::autoversion;
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+use archmage::intrinsics::aarch64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+use archmage::{NeonToken, SimdToken, arcane, rite};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{SimdToken, X64V3Token, arcane, rite};
 
-#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
 #[inline(always)]
 fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
     s.try_into().unwrap()
 }
 
-#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
 #[inline(always)]
 fn a8m<T, const N: usize>(s: &mut [T]) -> &mut [T; N] {
     s.try_into().unwrap()
@@ -28,7 +32,21 @@ fn v3_token() -> Option<X64V3Token> {
     X64V3Token::summon()
 }
 
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[inline(always)]
+fn neon_token() -> Option<NeonToken> {
+    #[cfg(test)]
+    if FORCE_SCALAR.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    NeonToken::summon()
+}
+
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 static FORCE_SCALAR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 const NUM_SCALES: usize = 5;
@@ -4365,8 +4383,52 @@ fn adjust_window_size(window_size: usize, w: usize, h: usize, speedup: bool) -> 
     ws | 1
 }
 
+/// NEON port of `anti_dithering_filter`'s 2x2 mean. The scalar body's
+/// in-place overlapping windows defeat autovectorization (LLVM can't prove
+/// the write doesn't alias the +1-element reads); block writes stay strictly
+/// below the next block's reads, so the u16-wrapping adds are exact.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+fn anti_dithering_rows_neon(_token: NeonToken, data: &mut [u16], width: usize, height: usize) {
+    for i in 0..height - 1 {
+        let row = i * width;
+        let nrow = (i + 1) * width;
+        let mut j = 0usize;
+        while j + 8 <= width - 1 {
+            let a = vld1q_u16(a8::<u16, 8>(&data[row + j..row + j + 8]));
+            let b = vld1q_u16(a8::<u16, 8>(&data[row + j + 1..row + j + 9]));
+            let c = vld1q_u16(a8::<u16, 8>(&data[nrow + j..nrow + j + 8]));
+            let d = vld1q_u16(a8::<u16, 8>(&data[nrow + j + 1..nrow + j + 9]));
+            let s = vaddq_u16(vaddq_u16(a, b), vaddq_u16(c, d));
+            vst1q_u16(
+                a8m::<u16, 8>(&mut data[row + j..row + j + 8]),
+                vshrq_n_u16(s, 2),
+            );
+            j += 8;
+        }
+        while j < width - 1 {
+            data[row + j] = (data[row + j]
+                .wrapping_add(data[row + j + 1])
+                .wrapping_add(data[nrow + j])
+                .wrapping_add(data[nrow + j + 1]))
+                >> 2;
+            j += 1;
+        }
+        data[row + width - 1] = (data[row + width - 1].wrapping_add(data[nrow + width - 1])) >> 1;
+    }
+}
+
 #[cfg_attr(feature = "simd", autoversion)]
 fn anti_dithering_filter(data: &mut [u16], width: usize, height: usize) {
+    #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+    if let Some(token) = neon_token() {
+        anti_dithering_rows_neon(token, data, width, height);
+        let i = height - 1;
+        for j in 0..width - 1 {
+            data[i * width + j] = (data[i * width + j].wrapping_add(data[i * width + j + 1])) >> 1;
+        }
+        return;
+    }
     for i in 0..height - 1 {
         for j in 0..width - 1 {
             data[i * width + j] = (data[i * width + j]
@@ -4389,6 +4451,11 @@ fn decimate(data: &mut [u16], stride: usize, width: usize, height: usize) {
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     if let Some(token) = v3_token() {
         decimate_rows_v3(token, data, stride, width, height);
+        return;
+    }
+    #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+    if let Some(token) = neon_token() {
+        decimate_rows_neon(token, data, stride, width, height);
         return;
     }
     for i in 0..height {
@@ -4543,6 +4610,123 @@ fn filter_mode_kernel(
     }
 }
 
+/// NEON port of `decimate_rows_v3`: in-place even-element extraction via
+/// `vld2q_u16` deinterleave — the even half of each pair of registers is the
+/// packed result, no mask+packus+permute needed. Same in-place safety:
+/// reads stay ahead of writes.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+fn decimate_rows_neon(
+    _token: NeonToken,
+    data: &mut [u16],
+    stride: usize,
+    width: usize,
+    height: usize,
+) {
+    for i in 0..height {
+        let src_base = 2 * i * stride;
+        let dst_base = i * stride;
+        // Same bound as the AVX2 row loop: the 32-element source window can
+        // extend one element past the row end on odd widths.
+        let src_avail = data.len() - src_base;
+        let mut j = 0usize;
+        while j + 16 <= width && 2 * j + 32 <= src_avail {
+            let p0 = vld2q_u16(a8::<u16, 16>(
+                &data[src_base + 2 * j..src_base + 2 * j + 16],
+            ));
+            let p1 = vld2q_u16(a8::<u16, 16>(
+                &data[src_base + 2 * j + 16..src_base + 2 * j + 32],
+            ));
+            vst1q_u16(
+                a8m::<u16, 8>(&mut data[dst_base + j..dst_base + j + 8]),
+                p0.0,
+            );
+            vst1q_u16(
+                a8m::<u16, 8>(&mut data[dst_base + j + 8..dst_base + j + 16]),
+                p1.0,
+            );
+            j += 16;
+        }
+        while j < width {
+            data[dst_base + j] = data[src_base + 2 * j];
+            j += 1;
+        }
+    }
+}
+
+/// NEON port of `mode3_v3`: duplicate among (a,b,c) else unsigned min.
+/// `vbslq_u16` is `blendv_epi8`; `vceqq_u16` emits all-ones lanes.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[rite]
+fn mode3_neon(_token: NeonToken, a: uint16x8_t, b: uint16x8_t, c: uint16x8_t) -> uint16x8_t {
+    let ab_eq = vceqq_u16(a, b);
+    let ac_eq = vceqq_u16(a, c);
+    let bc_eq = vceqq_u16(b, c);
+    let a_dup = vorrq_u16(ab_eq, ac_eq);
+    let min_abc = vminq_u16(vminq_u16(a, b), c);
+    let res = vbslq_u16(bc_eq, b, min_abc);
+    vbslq_u16(a_dup, a, res)
+}
+
+/// NEON port of `filter_mode_kernel`: horizontal mode-3 into a three-row
+/// ring buffer, then vertical mode-3 writing row i-1 once three rows are
+/// buffered. 8 lanes per step instead of AVX2's 16.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+fn filter_mode_kernel_neon(
+    _token: NeonToken,
+    data: &mut [u16],
+    stride: usize,
+    width: usize,
+    height: usize,
+    buffer: &mut [u16],
+) {
+    let mut curr_line = 0usize;
+    for i in 0..height {
+        buffer[curr_line * width] = data[i * stride];
+        let mut j = 1usize;
+        while j + 8 < width - 1 {
+            let a = vld1q_u16(a8::<u16, 8>(&data[i * stride + j - 1..i * stride + j + 7]));
+            let b = vld1q_u16(a8::<u16, 8>(&data[i * stride + j..i * stride + j + 8]));
+            let c = vld1q_u16(a8::<u16, 8>(&data[i * stride + j + 1..i * stride + j + 9]));
+            vst1q_u16(
+                a8m::<u16, 8>(&mut buffer[curr_line * width + j..curr_line * width + j + 8]),
+                mode3_neon(_token, a, b, c),
+            );
+            j += 8;
+        }
+        while j < width - 1 {
+            buffer[curr_line * width + j] = mode3(
+                data[i * stride + j - 1],
+                data[i * stride + j],
+                data[i * stride + j + 1],
+            );
+            j += 1;
+        }
+        buffer[curr_line * width + width - 1] = data[i * stride + width - 1];
+
+        if i > 1 {
+            let mut j2 = 0usize;
+            while j2 + 8 <= width {
+                let a = vld1q_u16(a8::<u16, 8>(&buffer[j2..j2 + 8]));
+                let b = vld1q_u16(a8::<u16, 8>(&buffer[width + j2..width + j2 + 8]));
+                let c = vld1q_u16(a8::<u16, 8>(&buffer[2 * width + j2..2 * width + j2 + 8]));
+                vst1q_u16(
+                    a8m::<u16, 8>(&mut data[(i - 1) * stride + j2..(i - 1) * stride + j2 + 8]),
+                    mode3_neon(_token, a, b, c),
+                );
+                j2 += 8;
+            }
+            while j2 < width {
+                data[(i - 1) * stride + j2] =
+                    mode3(buffer[j2], buffer[width + j2], buffer[2 * width + j2]);
+                j2 += 1;
+            }
+        }
+        curr_line = if curr_line + 1 == 3 { 0 } else { curr_line + 1 };
+    }
+}
+
 /// Direct port of `cambi_increment_range_avx2` / `cambi_decrement_range_avx2`:
 /// ±1 epi16 add/sub over a contiguous range, 16 lanes at a time.
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
@@ -4569,6 +4753,11 @@ fn filter_mode(data: &mut [u16], stride: usize, width: usize, height: usize, buf
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     if let Some(token) = v3_token() {
         filter_mode_kernel(token, data, stride, width, height, buffer);
+        return;
+    }
+    #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+    if let Some(token) = neon_token() {
+        filter_mode_kernel_neon(token, data, stride, width, height, buffer);
         return;
     }
     let mut curr_line = 0usize;
@@ -5108,10 +5297,24 @@ pub fn cambi_v1_from_luma(
     Ok(score.min(CAMBI_MAX_VAL))
 }
 
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 mod tests {
     use super::*;
     use std::sync::atomic::Ordering;
+
+    #[cfg(target_arch = "x86_64")]
+    fn tier_available() -> bool {
+        X64V3Token::summon().is_some()
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    fn tier_available() -> bool {
+        NeonToken::summon().is_some()
+    }
 
     fn textured(w: usize, h: usize, salt: usize) -> Vec<u16> {
         (0..w * h)
@@ -5121,7 +5324,7 @@ mod tests {
 
     #[test]
     fn v3_decimate_and_filter_mode_match_fallback() {
-        if X64V3Token::summon().is_none() {
+        if !tier_available() {
             return;
         }
         for &(w, h) in &[
@@ -5157,7 +5360,7 @@ mod tests {
 
     #[test]
     fn v3_c_values_match_fallback() {
-        if X64V3Token::summon().is_none() {
+        if !tier_available() {
             return;
         }
         let num_diffs: usize = 1 << MAX_LOG_CONTRAST;

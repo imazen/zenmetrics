@@ -1,18 +1,22 @@
 use crate::{Error, ModelVariant, VmafV0Variant};
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+use archmage::intrinsics::aarch64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+use archmage::{NeonToken, SimdToken, arcane, rite};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{SimdToken, X64V3Token, arcane, rite};
 #[cfg(feature = "simd")]
 use archmage::{autoversion, magetypes};
 
-#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
 #[inline(always)]
 fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
     s.try_into().unwrap()
 }
 
-#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
 #[inline(always)]
 fn a8m<T, const N: usize>(s: &mut [T]) -> &mut [T; N] {
     s.try_into().unwrap()
@@ -28,7 +32,21 @@ fn v3_token() -> Option<X64V3Token> {
     X64V3Token::summon()
 }
 
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[inline(always)]
+fn neon_token() -> Option<NeonToken> {
+    #[cfg(test)]
+    if FORCE_SCALAR.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    NeonToken::summon()
+}
+
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 static FORCE_SCALAR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 const ADM_BORDER_FACTOR: f64 = 0.1;
@@ -802,34 +820,62 @@ fn adm_decouple(
     let cos_1deg_sq = (std::f64::consts::PI / 180.0).cos().powi(2);
     let (left, top, right, bottom) = border_region(w, h, 1);
     for i in top..bottom {
-        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-        let j_start = if let Some(token) = v3_token() {
-            adm_decouple_row_v3(
-                token,
-                &ref_b.h,
-                &ref_b.v,
-                &ref_b.d,
-                &dis_b.h,
-                &dis_b.v,
-                &dis_b.d,
-                &mut r.h,
-                &mut r.v,
-                &mut r.d,
-                &mut a.h,
-                &mut a.v,
-                &mut a.d,
-                i as usize,
-                stride,
-                left as usize,
-                right as usize,
-                div,
-                enhn_gain_limit,
-            );
-            left + ((right - left) / 8) * 8
-        } else {
-            left
+        #[cfg(feature = "simd")]
+        let j_start = {
+            let mut js = left;
+            #[cfg(target_arch = "x86_64")]
+            if let Some(token) = v3_token() {
+                adm_decouple_row_v3(
+                    token,
+                    &ref_b.h,
+                    &ref_b.v,
+                    &ref_b.d,
+                    &dis_b.h,
+                    &dis_b.v,
+                    &dis_b.d,
+                    &mut r.h,
+                    &mut r.v,
+                    &mut r.d,
+                    &mut a.h,
+                    &mut a.v,
+                    &mut a.d,
+                    i as usize,
+                    stride,
+                    left as usize,
+                    right as usize,
+                    div,
+                    enhn_gain_limit,
+                );
+                js = left + ((right - left) / 8) * 8;
+            }
+            #[cfg(target_arch = "aarch64")]
+            if let Some(token) = neon_token() {
+                adm_decouple_row_neon(
+                    token,
+                    &ref_b.h,
+                    &ref_b.v,
+                    &ref_b.d,
+                    &dis_b.h,
+                    &dis_b.v,
+                    &dis_b.d,
+                    &mut r.h,
+                    &mut r.v,
+                    &mut r.d,
+                    &mut a.h,
+                    &mut a.v,
+                    &mut a.d,
+                    i as usize,
+                    stride,
+                    left as usize,
+                    right as usize,
+                    div,
+                    enhn_gain_limit,
+                );
+                js = left + ((right - left) / 4) * 4;
+            }
+            js
         };
-        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        #[cfg(not(feature = "simd"))]
         let j_start = left;
         for j in j_start..right {
             let idx = i as usize * stride + j as usize;
@@ -1211,6 +1257,240 @@ fn adm_decouple_row_v3(
             _mm256_castsi256_si128(pad),
         );
         j += 8;
+    }
+}
+
+/// Safe lane-gather on an i32 table (see cambi's gather_u16_v3).
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[rite]
+fn gather_i32_neon(_token: NeonToken, table: &[i32], idx: int32x4_t) -> int32x4_t {
+    let mut a = [0i32; 4];
+    vst1q_s32(a8m::<i32, 4>(&mut a), idx);
+    vld1q_s32(a8::<i32, 4>(&[
+        table[a[0] as usize],
+        table[a[1] as usize],
+        table[a[2] as usize],
+        table[a[3] as usize],
+    ]))
+}
+
+/// NEON port of `adm_decouple_row_v3`, 4 lanes per iteration. The
+/// `madd_epi16` dot-products (oh*th + ov*tv etc.) are `vpadalq_s16` on
+/// `vzip`-interleaved i16 pairs — matching the i32 lane results for i16
+/// inputs. `vshrq_n_s64` is a true arithmetic >>15 (the srli+mask trick the
+/// AVX2 needs). i32->i16 saturating pack = `vqmovn_s32`, matching
+/// `packs_epi32`.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn adm_decouple_row_neon(
+    _token: NeonToken,
+    ref_h: &[i16],
+    ref_v: &[i16],
+    ref_d: &[i16],
+    dis_h: &[i16],
+    dis_v: &[i16],
+    dis_d: &[i16],
+    r_h: &mut [i16],
+    r_v: &mut [i16],
+    r_d: &mut [i16],
+    a_h: &mut [i16],
+    a_v: &mut [i16],
+    a_d: &mut [i16],
+    row: usize,
+    stride: usize,
+    j_start: usize,
+    j_end: usize,
+    div: &[i32; 65537],
+    enhn_gain_limit: f64,
+) {
+    let cos_1deg_sq = (std::f64::consts::PI / 180.0).cos().powi(2);
+    let base = row * stride;
+    let const_32768 = vdupq_n_s32(32768);
+    let const_16384_64 = vdupq_n_s64(16384);
+    let const_16384_32 = vdupq_n_s32(16384);
+    let inv_32768 = vdupq_n_f32(1.0 / 32768.0);
+    let inv_64 = vdupq_n_f32(1.0 / 64.0);
+    let gain_d = vdupq_n_f64(enhn_gain_limit);
+    let zero = vdupq_n_s32(0);
+    let zero_ps = vdupq_n_f32(0.0);
+
+    let mut j = j_start;
+    while j + 4 <= j_end {
+        let idx = base + j;
+        let oh16 = vld1_s16(a8::<i16, 4>(&ref_h[idx..idx + 4]));
+        let ov16 = vld1_s16(a8::<i16, 4>(&ref_v[idx..idx + 4]));
+        let od16 = vld1_s16(a8::<i16, 4>(&ref_d[idx..idx + 4]));
+        let th16 = vld1_s16(a8::<i16, 4>(&dis_h[idx..idx + 4]));
+        let tv16 = vld1_s16(a8::<i16, 4>(&dis_v[idx..idx + 4]));
+        let td16 = vld1_s16(a8::<i16, 4>(&dis_d[idx..idx + 4]));
+        let oh = vmovl_s16(oh16);
+        let ov = vmovl_s16(ov16);
+        let od = vmovl_s16(od16);
+        let th = vmovl_s16(th16);
+        let tv = vmovl_s16(tv16);
+        let td = vmovl_s16(td16);
+
+        // oh*th + ov*tv style dot products on widened i32 lanes (i16 inputs
+        // keep products in i32 range, same as madd_epi16).
+        let o_mag_sq = vaddq_s32(vmulq_s32(oh, oh), vmulq_s32(ov, ov));
+        let ot_dp = vaddq_s32(vmulq_s32(oh, th), vmulq_s32(ov, tv));
+        let t_mag_sq = vaddq_s32(vmulq_s32(th, th), vmulq_s32(tv, tv));
+
+        // angle_flag is an f64 comparison — extract lanes like the AVX2 port.
+        let mut dp_arr = [0i32; 4];
+        let mut oms_arr = [0i32; 4];
+        let mut tms_arr = [0i32; 4];
+        vst1q_s32(a8m::<i32, 4>(&mut dp_arr), ot_dp);
+        vst1q_s32(a8m::<i32, 4>(&mut oms_arr), o_mag_sq);
+        vst1q_s32(a8m::<i32, 4>(&mut tms_arr), t_mag_sq);
+        let mut angle_flag = [0i32; 4];
+        for lane in 0..4 {
+            let dp_f = dp_arr[lane] as f32 as f64 / 4096.0;
+            angle_flag[lane] = if dp_f >= 0.0
+                && dp_f * dp_f
+                    >= cos_1deg_sq
+                        * (oms_arr[lane] as f32 as f64 / 4096.0)
+                        * (tms_arr[lane] as f32 as f64 / 4096.0)
+            {
+                -1
+            } else {
+                0
+            };
+        }
+        let angle_mask = vld1q_s32(a8::<i32, 4>(&angle_flag));
+
+        let oh_div = gather_i32_neon(_token, &div[..], vaddq_s32(oh, const_32768));
+        let ov_div = gather_i32_neon(_token, &div[..], vaddq_s32(ov, const_32768));
+        let od_div = gather_i32_neon(_token, &div[..], vaddq_s32(od, const_32768));
+
+        // (div[o] * t + 16384) >> 15 on i64 lanes, then low-32 repack.
+        let pack_i64 = |lo: int64x2_t, hi: int64x2_t| {
+            vuzp1q_s32(vreinterpretq_s32_s64(lo), vreinterpretq_s32_s64(hi))
+        };
+        let kh_lo = vshrq_n_s64(
+            vaddq_s64(
+                vmull_s32(vget_low_s32(oh_div), vget_low_s32(th)),
+                const_16384_64,
+            ),
+            15,
+        );
+        let kh_hi = vshrq_n_s64(
+            vaddq_s64(
+                vmull_s32(vget_high_s32(oh_div), vget_high_s32(th)),
+                const_16384_64,
+            ),
+            15,
+        );
+        let kv_lo = vshrq_n_s64(
+            vaddq_s64(
+                vmull_s32(vget_low_s32(ov_div), vget_low_s32(tv)),
+                const_16384_64,
+            ),
+            15,
+        );
+        let kv_hi = vshrq_n_s64(
+            vaddq_s64(
+                vmull_s32(vget_high_s32(ov_div), vget_high_s32(tv)),
+                const_16384_64,
+            ),
+            15,
+        );
+        let kd_lo = vshrq_n_s64(
+            vaddq_s64(
+                vmull_s32(vget_low_s32(od_div), vget_low_s32(td)),
+                const_16384_64,
+            ),
+            15,
+        );
+        let kd_hi = vshrq_n_s64(
+            vaddq_s64(
+                vmull_s32(vget_high_s32(od_div), vget_high_s32(td)),
+                const_16384_64,
+            ),
+            15,
+        );
+        let mut tmp_kh = pack_i64(kh_lo, kh_hi);
+        let mut tmp_kv = pack_i64(kv_lo, kv_hi);
+        let mut tmp_kd = pack_i64(kd_lo, kd_hi);
+
+        // o == 0 -> 32768; clamp to [0, 32768].
+        tmp_kh = vbslq_s32(vceqq_s32(oh, zero), const_32768, tmp_kh);
+        tmp_kv = vbslq_s32(vceqq_s32(ov, zero), const_32768, tmp_kv);
+        tmp_kd = vbslq_s32(vceqq_s32(od, zero), const_32768, tmp_kd);
+        tmp_kh = vminq_s32(vmaxq_s32(tmp_kh, zero), const_32768);
+        tmp_kv = vminq_s32(vmaxq_s32(tmp_kv, zero), const_32768);
+        tmp_kd = vminq_s32(vmaxq_s32(tmp_kd, zero), const_32768);
+
+        let mut rst_h = vshrq_n_s32(vaddq_s32(vmulq_s32(tmp_kh, oh), const_16384_32), 15);
+        let mut rst_v = vshrq_n_s32(vaddq_s32(vmulq_s32(tmp_kv, ov), const_16384_32), 15);
+        let mut rst_d = vshrq_n_s32(vaddq_s32(vmulq_s32(tmp_kd, od), const_16384_32), 15);
+
+        let rst_h_f = vmulq_f32(
+            vmulq_f32(inv_32768, vcvtq_f32_s32(tmp_kh)),
+            vmulq_f32(inv_64, vcvtq_f32_s32(oh)),
+        );
+        let rst_v_f = vmulq_f32(
+            vmulq_f32(inv_32768, vcvtq_f32_s32(tmp_kv)),
+            vmulq_f32(inv_64, vcvtq_f32_s32(ov)),
+        );
+        let rst_d_f = vmulq_f32(
+            vmulq_f32(inv_32768, vcvtq_f32_s32(tmp_kd)),
+            vmulq_f32(inv_64, vcvtq_f32_s32(od)),
+        );
+
+        let gt0_h = vcgtq_f32(rst_h_f, zero_ps);
+        let lt0_h = vcltq_f32(rst_h_f, zero_ps);
+        let gt0_v = vcgtq_f32(rst_v_f, zero_ps);
+        let lt0_v = vcltq_f32(rst_v_f, zero_ps);
+        let gt0_d = vcgtq_f32(rst_d_f, zero_ps);
+        let lt0_d = vcltq_f32(rst_d_f, zero_ps);
+        let angle_um = vreinterpretq_u32_s32(angle_mask);
+        let mask_h = vandq_u32(vorrq_u32(gt0_h, lt0_h), angle_um);
+        let mask_v = vandq_u32(vorrq_u32(gt0_v, lt0_v), angle_um);
+        let mask_d = vandq_u32(vorrq_u32(gt0_d, lt0_d), angle_um);
+
+        // gain = (i32)truncate(rst * gain_limit) per half, like cvtpd_epi32.
+        let gain_i32 = |rst: int32x4_t| -> int32x4_t {
+            let g_lo = vmulq_f64(vcvtq_f64_s64(vmovl_s32(vget_low_s32(rst))), gain_d);
+            let g_hi = vmulq_f64(vcvtq_f64_s64(vmovl_s32(vget_high_s32(rst))), gain_d);
+            vcombine_s32(
+                vmovn_s64(vcvtq_s64_f64(g_lo)),
+                vmovn_s64(vcvtq_s64_f64(g_hi)),
+            )
+        };
+        let rst_h_gain = gain_i32(rst_h);
+        let rst_v_gain = gain_i32(rst_v);
+        let rst_d_gain = gain_i32(rst_d);
+
+        let h_sel = vorrq_s32(
+            vandq_s32(vminq_s32(rst_h_gain, th), vreinterpretq_s32_u32(gt0_h)),
+            vandq_s32(vmaxq_s32(rst_h_gain, th), vreinterpretq_s32_u32(lt0_h)),
+        );
+        let v_sel = vorrq_s32(
+            vandq_s32(vminq_s32(rst_v_gain, tv), vreinterpretq_s32_u32(gt0_v)),
+            vandq_s32(vmaxq_s32(rst_v_gain, tv), vreinterpretq_s32_u32(lt0_v)),
+        );
+        let d_sel = vorrq_s32(
+            vandq_s32(vminq_s32(rst_d_gain, td), vreinterpretq_s32_u32(gt0_d)),
+            vandq_s32(vmaxq_s32(rst_d_gain, td), vreinterpretq_s32_u32(lt0_d)),
+        );
+
+        rst_h = vbslq_s32(mask_h, h_sel, rst_h);
+        rst_v = vbslq_s32(mask_v, v_sel, rst_v);
+        rst_d = vbslq_s32(mask_d, d_sel, rst_d);
+
+        let ah = vsubq_s32(th, rst_h);
+        let av = vsubq_s32(tv, rst_v);
+        let ad = vsubq_s32(td, rst_d);
+
+        vst1_s16(a8m::<i16, 4>(&mut r_h[idx..idx + 4]), vqmovn_s32(rst_h));
+        vst1_s16(a8m::<i16, 4>(&mut r_v[idx..idx + 4]), vqmovn_s32(rst_v));
+        vst1_s16(a8m::<i16, 4>(&mut r_d[idx..idx + 4]), vqmovn_s32(rst_d));
+        vst1_s16(a8m::<i16, 4>(&mut a_h[idx..idx + 4]), vqmovn_s32(ah));
+        vst1_s16(a8m::<i16, 4>(&mut a_v[idx..idx + 4]), vqmovn_s32(av));
+        vst1_s16(a8m::<i16, 4>(&mut a_d[idx..idx + 4]), vqmovn_s32(ad));
+        j += 4;
     }
 }
 
@@ -1654,6 +1934,322 @@ fn adm_decouple_s123_row_v3(
     }
 }
 
+/// NEON port of `adm_decouple_s123_row_v3`, 4 lanes per iteration. i64 lanes
+/// are native int64x2 pairs: `vshlq_s64` replaces `sra_epi64`'s srlv+signmask,
+/// `vcgtq_s64`/`vceqq_s64`/`vbslq_s64` the cmpgt/blend sequences, and
+/// `vcvtq_s64_f64` the per-lane f64->i64 extraction (`as i64` semantics:
+/// truncate-toward-zero with saturation). The get_best15_from32 / angle_flag
+/// extractions stay scalar exactly as in the AVX2 port.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn adm_decouple_s123_row_neon(
+    _token: NeonToken,
+    ref_h: &[i32],
+    ref_v: &[i32],
+    ref_d: &[i32],
+    dis_h: &[i32],
+    dis_v: &[i32],
+    dis_d: &[i32],
+    r_h: &mut [i32],
+    r_v: &mut [i32],
+    r_d: &mut [i32],
+    a_h: &mut [i32],
+    a_v: &mut [i32],
+    a_d: &mut [i32],
+    row: usize,
+    stride: usize,
+    j_start: usize,
+    j_end: usize,
+    div: &[i32; 65537],
+    enhn_gain_limit: f64,
+) {
+    let cos_1deg_sq = (std::f64::consts::PI / 180.0).cos().powi(2);
+    let base = row * stride;
+    let const_0_pd = vdupq_n_f64(0.0);
+    let const_16384 = vdupq_n_s64(16384);
+    let const_32768_32 = vdupq_n_s32(32768);
+    let const_32768_64 = vdupq_n_s64(32768);
+    let inv_32768_f = vdupq_n_f32(1.0 / 32768.0);
+    let inv_64_f = vdupq_n_f32(1.0 / 64.0);
+    let gain_d = vdupq_n_f64(enhn_gain_limit);
+    let zero64 = vdupq_n_s64(0);
+
+    // i64x2 helpers for the lo/hi halves of an i32x4.
+    let wl = |v: int32x4_t| vmovl_s32(vget_low_s32(v));
+    let wh = |v: int32x4_t| vmovl_s32(vget_high_s32(v));
+    // mul_epi32 equivalent: low-32-of-i64-lane signed product.
+    let mul32 = |a: int64x2_t, b: int64x2_t| vmull_s32(vmovn_s64(a), vmovn_s64(b));
+    let pack32 = |lo: int64x2_t, hi: int64x2_t| {
+        vuzp1q_s32(vreinterpretq_s32_s64(lo), vreinterpretq_s32_s64(hi))
+    };
+
+    let mut j = j_start;
+    while j + 4 <= j_end {
+        let idx = base + j;
+        let oh32 = vld1q_s32(a8::<i32, 4>(&ref_h[idx..idx + 4]));
+        let ov32 = vld1q_s32(a8::<i32, 4>(&ref_v[idx..idx + 4]));
+        let od32 = vld1q_s32(a8::<i32, 4>(&ref_d[idx..idx + 4]));
+        let th32 = vld1q_s32(a8::<i32, 4>(&dis_h[idx..idx + 4]));
+        let tv32 = vld1q_s32(a8::<i32, 4>(&dis_v[idx..idx + 4]));
+        let td32 = vld1q_s32(a8::<i32, 4>(&dis_d[idx..idx + 4]));
+        let (oh_lo, oh_hi) = (wl(oh32), wh(oh32));
+        let (ov_lo, ov_hi) = (wl(ov32), wh(ov32));
+        let (od_lo, od_hi) = (wl(od32), wh(od32));
+        let (th_lo, th_hi) = (wl(th32), wh(th32));
+        let (tv_lo, tv_hi) = (wl(tv32), wh(tv32));
+        let (td_lo, td_hi) = (wl(td32), wh(td32));
+
+        let dp_lo = vaddq_s64(mul32(oh_lo, th_lo), mul32(ov_lo, tv_lo));
+        let dp_hi = vaddq_s64(mul32(oh_hi, th_hi), mul32(ov_hi, tv_hi));
+        let oms_lo = vaddq_s64(mul32(oh_lo, oh_lo), mul32(ov_lo, ov_lo));
+        let oms_hi = vaddq_s64(mul32(oh_hi, oh_hi), mul32(ov_hi, ov_hi));
+        let tms_lo = vaddq_s64(mul32(th_lo, th_lo), mul32(tv_lo, tv_lo));
+        let tms_hi = vaddq_s64(mul32(th_hi, th_hi), mul32(tv_hi, tv_hi));
+
+        let mut dp_arr = [0i64; 4];
+        let mut oms_arr = [0i64; 4];
+        let mut tms_arr = [0i64; 4];
+        vst1q_s64(a8m::<i64, 2>(&mut dp_arr[0..2]), dp_lo);
+        vst1q_s64(a8m::<i64, 2>(&mut dp_arr[2..4]), dp_hi);
+        vst1q_s64(a8m::<i64, 2>(&mut oms_arr[0..2]), oms_lo);
+        vst1q_s64(a8m::<i64, 2>(&mut oms_arr[2..4]), oms_hi);
+        vst1q_s64(a8m::<i64, 2>(&mut tms_arr[0..2]), tms_lo);
+        vst1q_s64(a8m::<i64, 2>(&mut tms_arr[2..4]), tms_hi);
+        let mut angle_flag = [0i64; 4];
+        for lane in 0..4 {
+            let dp_f = dp_arr[lane] as f32 as f64 / 4096.0;
+            angle_flag[lane] = (dp_f >= 0.0
+                && dp_f * dp_f
+                    >= cos_1deg_sq
+                        * (oms_arr[lane] as f32 as f64 / 4096.0)
+                        * (tms_arr[lane] as f32 as f64 / 4096.0))
+                as i64;
+        }
+        let angle_nz_lo = veorq_u64(
+            vceqq_s64(vld1q_s64(a8::<i64, 2>(&angle_flag[0..2])), zero64),
+            vdupq_n_u64(u64::MAX),
+        );
+        let angle_nz_hi = veorq_u64(
+            vceqq_s64(vld1q_s64(a8::<i64, 2>(&angle_flag[2..4])), zero64),
+            vdupq_n_u64(u64::MAX),
+        );
+
+        let abs_oh = vabsq_s32(oh32);
+        let abs_ov = vabsq_s32(ov32);
+        let abs_od = vabsq_s32(od32);
+        // sign = o < 0 ? -1 : 1
+        let kh_sign = vbslq_s32(
+            vcltq_s32(oh32, vdupq_n_s32(0)),
+            vdupq_n_s32(-1),
+            vdupq_n_s32(1),
+        );
+        let kv_sign = vbslq_s32(
+            vcltq_s32(ov32, vdupq_n_s32(0)),
+            vdupq_n_s32(-1),
+            vdupq_n_s32(1),
+        );
+        let kd_sign = vbslq_s32(
+            vcltq_s32(od32, vdupq_n_s32(0)),
+            vdupq_n_s32(-1),
+            vdupq_n_s32(1),
+        );
+
+        let mut abs_h = [0i32; 4];
+        let mut abs_v = [0i32; 4];
+        let mut abs_d = [0i32; 4];
+        vst1q_s32(a8m::<i32, 4>(&mut abs_h), abs_oh);
+        vst1q_s32(a8m::<i32, 4>(&mut abs_v), abs_ov);
+        vst1q_s32(a8m::<i32, 4>(&mut abs_d), abs_od);
+        let mut kh_msb = [0i32; 4];
+        let mut kh_sh = [0i32; 4];
+        let mut kv_msb = [0i32; 4];
+        let mut kv_sh = [0i32; 4];
+        let mut kd_msb = [0i32; 4];
+        let mut kd_sh = [0i32; 4];
+        for lane in 0..4 {
+            if abs_h[lane] >= 32768 {
+                let (m, s) = get_best15_from32(abs_h[lane] as u32);
+                (kh_msb[lane], kh_sh[lane]) = (m as i32, s);
+            }
+            if abs_v[lane] >= 32768 {
+                let (m, s) = get_best15_from32(abs_v[lane] as u32);
+                (kv_msb[lane], kv_sh[lane]) = (m as i32, s);
+            }
+            if abs_d[lane] >= 32768 {
+                let (m, s) = get_best15_from32(abs_d[lane] as u32);
+                (kd_msb[lane], kd_sh[lane]) = (m as i32, s);
+            }
+        }
+        // abs < 32768 -> use abs directly, shift 0; else msb/shift.
+        let mask_kh = vcltq_s32(abs_oh, const_32768_32);
+        let mask_kv = vcltq_s32(abs_ov, const_32768_32);
+        let mask_kd = vcltq_s32(abs_od, const_32768_32);
+        let kh_msb_v = vbslq_s32(mask_kh, abs_oh, vld1q_s32(a8::<i32, 4>(&kh_msb)));
+        let kv_msb_v = vbslq_s32(mask_kv, abs_ov, vld1q_s32(a8::<i32, 4>(&kv_msb)));
+        let kd_msb_v = vbslq_s32(mask_kd, abs_od, vld1q_s32(a8::<i32, 4>(&kd_msb)));
+        let kh_shift = vbslq_s32(mask_kh, vdupq_n_s32(0), vld1q_s32(a8::<i32, 4>(&kh_sh)));
+        let kv_shift = vbslq_s32(mask_kv, vdupq_n_s32(0), vld1q_s32(a8::<i32, 4>(&kv_sh)));
+        let kd_shift = vbslq_s32(mask_kd, vdupq_n_s32(0), vld1q_s32(a8::<i32, 4>(&kd_sh)));
+
+        // tmp_k = (div[msb+32768] * t * sign + (1<<(14+shift))) >> (15+shift);
+        // o == 0 lanes take 32768. Six i64x2 results: [h,v,d] x [lo,hi].
+        let mut tmp_k = [vdupq_n_s64(0); 6];
+        for (k, (div_idx, t_lo, t_hi, sign, o_lo, o_hi, shift)) in [
+            (
+                vaddq_s32(kh_msb_v, const_32768_32),
+                th_lo,
+                th_hi,
+                kh_sign,
+                oh_lo,
+                oh_hi,
+                kh_shift,
+            ),
+            (
+                vaddq_s32(kv_msb_v, const_32768_32),
+                tv_lo,
+                tv_hi,
+                kv_sign,
+                ov_lo,
+                ov_hi,
+                kv_shift,
+            ),
+            (
+                vaddq_s32(kd_msb_v, const_32768_32),
+                td_lo,
+                td_hi,
+                kd_sign,
+                od_lo,
+                od_hi,
+                kd_shift,
+            ),
+        ]
+        .iter()
+        .enumerate()
+        {
+            let div_g = gather_i32_neon(_token, &div[..], *div_idx);
+            for (half, (t, o, sg, dg)) in [
+                (
+                    0usize,
+                    (*t_lo, *o_lo, vget_low_s32(*sign), vget_low_s32(div_g)),
+                ),
+                (
+                    1,
+                    (*t_hi, *o_hi, vget_high_s32(*sign), vget_high_s32(div_g)),
+                ),
+            ] {
+                let sh32 = if half == 0 {
+                    vget_low_s32(*shift)
+                } else {
+                    vget_high_s32(*shift)
+                };
+                // cond = div * (t * sign); add = 1<<(14+shift); >> (15+shift)
+                let t_sign = vmull_s32(vmovn_s64(t), sg);
+                let cond = vmull_s32(dg, vmovn_s64(t_sign));
+                let shn = vmovl_s32(sh32);
+                let add = vshlq_s64(vdupq_n_s64(1), vaddq_s64(shn, vdupq_n_s64(14)));
+                let shn15 = vnegq_s64(vaddq_s64(shn, vdupq_n_s64(15)));
+                let res = vshlq_s64(vaddq_s64(cond, add), shn15);
+                let is0 = vceqq_s64(o, zero64);
+                tmp_k[k * 2 + half] = vbslq_s64(is0, const_32768_64, res);
+            }
+        }
+
+        // clamp to [0, 32768] on i64 lanes.
+        let clamp = |t: int64x2_t| {
+            let t = vbslq_s64(vcgtq_s64(t, const_32768_64), const_32768_64, t);
+            vbslq_s64(vcltq_s64(t, zero64), zero64, t)
+        };
+        let kh_lo = clamp(tmp_k[0]);
+        let kh_hi = clamp(tmp_k[1]);
+        let kv_lo = clamp(tmp_k[2]);
+        let kv_hi = clamp(tmp_k[3]);
+        let kd_lo = clamp(tmp_k[4]);
+        let kd_hi = clamp(tmp_k[5]);
+
+        // rst = (k*o + 16384) >> 15, low-32 packed.
+        let mut rst_h32 = pack32(
+            vshrq_n_s64(vaddq_s64(mul32(kh_lo, oh_lo), const_16384), 15),
+            vshrq_n_s64(vaddq_s64(mul32(kh_hi, oh_hi), const_16384), 15),
+        );
+        let mut rst_v32 = pack32(
+            vshrq_n_s64(vaddq_s64(mul32(kv_lo, ov_lo), const_16384), 15),
+            vshrq_n_s64(vaddq_s64(mul32(kv_hi, ov_hi), const_16384), 15),
+        );
+        let mut rst_d32 = pack32(
+            vshrq_n_s64(vaddq_s64(mul32(kd_lo, od_lo), const_16384), 15),
+            vshrq_n_s64(vaddq_s64(mul32(kd_hi, od_hi), const_16384), 15),
+        );
+        let (mut rst_h_lo, mut rst_h_hi) = (wl(rst_h32), wh(rst_h32));
+        let (mut rst_v_lo, mut rst_v_hi) = (wl(rst_v32), wh(rst_v32));
+        let (mut rst_d_lo, mut rst_d_hi) = (wl(rst_d32), wh(rst_d32));
+
+        let kh_f = vcvtq_f32_s32(pack32(kh_lo, kh_hi));
+        let kv_f = vcvtq_f32_s32(pack32(kv_lo, kv_hi));
+        let kd_f = vcvtq_f32_s32(pack32(kd_lo, kd_hi));
+        let rst_h_f = vmulq_f32(
+            vmulq_f32(kh_f, inv_32768_f),
+            vmulq_f32(vcvtq_f32_s32(oh32), inv_64_f),
+        );
+        let rst_v_f = vmulq_f32(
+            vmulq_f32(kv_f, inv_32768_f),
+            vmulq_f32(vcvtq_f32_s32(ov32), inv_64_f),
+        );
+        let rst_d_f = vmulq_f32(
+            vmulq_f32(kd_f, inv_32768_f),
+            vmulq_f32(vcvtq_f32_s32(od32), inv_64_f),
+        );
+
+        macro_rules! apply_gain_neon {
+            ($rst_lo:ident, $rst_hi:ident, $rst32:ident, $t_lo:ident, $t_hi:ident, $rst_f:ident) => {{
+                let g_lo = vcvtq_s64_f64(vmulq_f64(
+                    vcvtq_f64_s64(vmovl_s32(vget_low_s32($rst32))),
+                    gain_d,
+                ));
+                let g_hi = vcvtq_s64_f64(vmulq_f64(
+                    vcvtq_f64_s64(vmovl_s32(vget_high_s32($rst32))),
+                    gain_d,
+                ));
+                let min_lo = vbslq_s64(vcgtq_s64($t_lo, g_lo), g_lo, $t_lo);
+                let min_hi = vbslq_s64(vcgtq_s64($t_hi, g_hi), g_hi, $t_hi);
+                let max_lo = vbslq_s64(vcgtq_s64(g_lo, $t_lo), g_lo, $t_lo);
+                let max_hi = vbslq_s64(vcgtq_s64(g_hi, $t_hi), g_hi, $t_hi);
+                let f_lo = vcvt_f64_f32(vget_low_f32($rst_f));
+                let f_hi = vcvt_f64_f32(vget_high_f32($rst_f));
+                let mask_gt_lo = vandq_u64(angle_nz_lo, vcgtq_f64(f_lo, const_0_pd));
+                let mask_gt_hi = vandq_u64(angle_nz_hi, vcgtq_f64(f_hi, const_0_pd));
+                let mask_lt_lo = vandq_u64(angle_nz_lo, vcltq_f64(f_lo, const_0_pd));
+                let mask_lt_hi = vandq_u64(angle_nz_hi, vcltq_f64(f_hi, const_0_pd));
+                $rst_lo = vbslq_s64(mask_gt_lo, min_lo, $rst_lo);
+                $rst_hi = vbslq_s64(mask_gt_hi, min_hi, $rst_hi);
+                $rst_lo = vbslq_s64(mask_lt_lo, max_lo, $rst_lo);
+                $rst_hi = vbslq_s64(mask_lt_hi, max_hi, $rst_hi);
+                $rst32 = pack32($rst_lo, $rst_hi);
+            }};
+        }
+        apply_gain_neon!(rst_h_lo, rst_h_hi, rst_h32, th_lo, th_hi, rst_h_f);
+        apply_gain_neon!(rst_v_lo, rst_v_hi, rst_v32, tv_lo, tv_hi, rst_v_f);
+        apply_gain_neon!(rst_d_lo, rst_d_hi, rst_d32, td_lo, td_hi, rst_d_f);
+
+        vst1q_s32(a8m::<i32, 4>(&mut r_h[idx..idx + 4]), rst_h32);
+        vst1q_s32(a8m::<i32, 4>(&mut r_v[idx..idx + 4]), rst_v32);
+        vst1q_s32(a8m::<i32, 4>(&mut r_d[idx..idx + 4]), rst_d32);
+        vst1q_s32(
+            a8m::<i32, 4>(&mut a_h[idx..idx + 4]),
+            vsubq_s32(th32, rst_h32),
+        );
+        vst1q_s32(
+            a8m::<i32, 4>(&mut a_v[idx..idx + 4]),
+            vsubq_s32(tv32, rst_v32),
+        );
+        vst1q_s32(
+            a8m::<i32, 4>(&mut a_d[idx..idx + 4]),
+            vsubq_s32(td32, rst_d32),
+        );
+        j += 4;
+    }
+}
+
 #[cfg_attr(feature = "simd", autoversion)]
 fn adm_decouple_s123(
     ref_b: &BandI32,
@@ -1669,34 +2265,62 @@ fn adm_decouple_s123(
     let cos_1deg_sq = (std::f64::consts::PI / 180.0).cos().powi(2);
     let (left, top, right, bottom) = border_region(w, h, 1);
     for i in top..bottom {
-        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-        let j_start = if let Some(token) = v3_token() {
-            adm_decouple_s123_row_v3(
-                token,
-                &ref_b.h,
-                &ref_b.v,
-                &ref_b.d,
-                &dis_b.h,
-                &dis_b.v,
-                &dis_b.d,
-                &mut r.h,
-                &mut r.v,
-                &mut r.d,
-                &mut a.h,
-                &mut a.v,
-                &mut a.d,
-                i as usize,
-                stride,
-                left as usize,
-                right as usize,
-                div,
-                enhn_gain_limit,
-            );
-            left + ((right - left) / 8) * 8
-        } else {
-            left
+        #[cfg(feature = "simd")]
+        let j_start = {
+            let mut js = left;
+            #[cfg(target_arch = "x86_64")]
+            if let Some(token) = v3_token() {
+                adm_decouple_s123_row_v3(
+                    token,
+                    &ref_b.h,
+                    &ref_b.v,
+                    &ref_b.d,
+                    &dis_b.h,
+                    &dis_b.v,
+                    &dis_b.d,
+                    &mut r.h,
+                    &mut r.v,
+                    &mut r.d,
+                    &mut a.h,
+                    &mut a.v,
+                    &mut a.d,
+                    i as usize,
+                    stride,
+                    left as usize,
+                    right as usize,
+                    div,
+                    enhn_gain_limit,
+                );
+                js = left + ((right - left) / 8) * 8;
+            }
+            #[cfg(target_arch = "aarch64")]
+            if let Some(token) = neon_token() {
+                adm_decouple_s123_row_neon(
+                    token,
+                    &ref_b.h,
+                    &ref_b.v,
+                    &ref_b.d,
+                    &dis_b.h,
+                    &dis_b.v,
+                    &dis_b.d,
+                    &mut r.h,
+                    &mut r.v,
+                    &mut r.d,
+                    &mut a.h,
+                    &mut a.v,
+                    &mut a.d,
+                    i as usize,
+                    stride,
+                    left as usize,
+                    right as usize,
+                    div,
+                    enhn_gain_limit,
+                );
+                js = left + ((right - left) / 4) * 4;
+            }
+            js
         };
-        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        #[cfg(not(feature = "simd"))]
         let j_start = left;
         for j in j_start..right {
             let idx = i as usize * stride + j as usize;
@@ -1942,6 +2566,75 @@ fn csf_den_s123_row_v3(
     (lanes.iter().fold(0u64, |s, &x| s.wrapping_add(x as u64)), j)
 }
 
+/// NEON port of `csf_den_scale_row_v3`: u64 cubes of |i16| rows. `v` fits
+/// u16 so v^2 fits u32 — `vmull_u32` twice per pair, `vmovn_u64` recovering
+/// the (always exact) low 32 bits of the square for the second multiply.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+fn csf_den_scale_row_neon(_token: NeonToken, src: &[i16]) -> (u64, usize) {
+    let mut acc0 = vdupq_n_u64(0);
+    let mut acc1 = vdupq_n_u64(0);
+    let mut j = 0usize;
+    while j + 8 <= src.len() {
+        let a = vreinterpretq_u16_s16(vabsq_s16(vld1q_s16(a8(&src[j..j + 8]))));
+        let x0 = vmovl_u16(vget_low_u16(a));
+        let x1 = vmovl_u16(vget_high_u16(a));
+        let sq0 = vmull_u32(vget_low_u32(x0), vget_low_u32(x0));
+        let sq1 = vmull_u32(vget_high_u32(x0), vget_high_u32(x0));
+        let sq2 = vmull_u32(vget_low_u32(x1), vget_low_u32(x1));
+        let sq3 = vmull_u32(vget_high_u32(x1), vget_high_u32(x1));
+        acc0 = vaddq_u64(acc0, vmull_u32(vmovn_u64(sq0), vget_low_u32(x0)));
+        acc1 = vaddq_u64(acc1, vmull_u32(vmovn_u64(sq1), vget_high_u32(x0)));
+        acc0 = vaddq_u64(acc0, vmull_u32(vmovn_u64(sq2), vget_low_u32(x1)));
+        acc1 = vaddq_u64(acc1, vmull_u32(vmovn_u64(sq3), vget_high_u32(x1)));
+        j += 8;
+    }
+    let acc = vaddq_u64(acc0, acc1);
+    let mut lanes = [0u64; 2];
+    vst1q_u64(a8m(&mut lanes), acc);
+    (lanes.iter().fold(0u64, |s, &x| s.wrapping_add(x)), j)
+}
+
+/// NEON port of `csf_den_s123_row_v3`: `vmull_u32` on the unsigned |i32|
+/// halves reproduces `mul_epu32` (low-32-of-i64-lane multiply) exactly.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+fn csf_den_s123_row_neon(
+    _token: NeonToken,
+    src: &[i32],
+    add_sq: i64,
+    shift_sq: i32,
+    add_cub: i64,
+    shift_cub: i32,
+) -> (u64, usize) {
+    let add_sq_v = vdupq_n_u64(add_sq as u64);
+    let add_cub_v = vdupq_n_u64(add_cub as u64);
+    let sh_sq = vdupq_n_s64(-(shift_sq as i64));
+    let sh_cub = vdupq_n_s64(-(shift_cub as i64));
+    let mut acc = vdupq_n_u64(0);
+    let mut j = 0usize;
+    while j + 4 <= src.len() {
+        let x = vreinterpretq_u32_s32(vabsq_s32(vld1q_s32(a8(&src[j..j + 4]))));
+        let x_lo = vget_low_u32(x);
+        let x_hi = vget_high_u32(x);
+        let sq_lo = vshlq_u64(vaddq_u64(vmull_u32(x_lo, x_lo), add_sq_v), sh_sq);
+        let sq_hi = vshlq_u64(vaddq_u64(vmull_u32(x_hi, x_hi), add_sq_v), sh_sq);
+        let cu_lo = vshlq_u64(
+            vaddq_u64(vmull_u32(vmovn_u64(sq_lo), x_lo), add_cub_v),
+            sh_cub,
+        );
+        let cu_hi = vshlq_u64(
+            vaddq_u64(vmull_u32(vmovn_u64(sq_hi), x_hi), add_cub_v),
+            sh_cub,
+        );
+        acc = vaddq_u64(acc, vaddq_u64(cu_lo, cu_hi));
+        j += 4;
+    }
+    let mut lanes = [0u64; 2];
+    vst1q_u64(a8m(&mut lanes), acc);
+    (lanes.iter().fold(0u64, |s, &x| s.wrapping_add(x)), j)
+}
+
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 #[arcane]
 fn adm_csf_i16_v3(
@@ -2016,6 +2709,44 @@ fn i4_adm_csf_v3(
     _mm256_storeu_si256(a8m(&mut flt[..]), fpacked);
 }
 
+/// NEON port of `i4_adm_csf_v3`, 4 i32 lanes per call instead of 8:
+/// `vmull_s32` covers the i64 products, and the i64x2 pairs' low halves
+/// repack into i32 lanes with `vuzp1q_s32` — which makes srli vs srai
+/// indistinguishable (both place the same source bits in lanes 0..31).
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+fn i4_adm_csf_neon(
+    _token: NeonToken,
+    src: &[i32; 4],
+    rfactor: i32,
+    add_dst: i64,
+    add_flt: i64,
+    dst: &mut [i32; 4],
+    flt: &mut [i32; 4],
+) {
+    const FIX_ONE_BY_30: i32 = 143165577;
+    let s = vld1q_s32(a8(&src[..]));
+    let rf = vdup_n_s32(rfactor);
+    let add_dst_v = vdupq_n_s64(add_dst);
+    let add_flt_v = vdupq_n_s64(add_flt);
+    let lo = vaddq_s64(vmull_s32(vget_low_s32(s), rf), add_dst_v);
+    let hi = vaddq_s64(vmull_s32(vget_high_s32(s), rf), add_dst_v);
+    let d = vuzp1q_s32(
+        vreinterpretq_s32_s64(vshrq_n_s64(lo, 28)),
+        vreinterpretq_s32_s64(vshrq_n_s64(hi, 28)),
+    );
+    vst1q_s32(a8m(&mut dst[..]), d);
+    let a = vabsq_s32(d);
+    let fix = vdup_n_s32(FIX_ONE_BY_30);
+    let flo = vaddq_s64(vmull_s32(vget_low_s32(a), fix), add_flt_v);
+    let fhi = vaddq_s64(vmull_s32(vget_high_s32(a), fix), add_flt_v);
+    let f = vuzp1q_s32(
+        vreinterpretq_s32_s64(vshrq_n_s64(flo, 32)),
+        vreinterpretq_s32_s64(vshrq_n_s64(fhi, 32)),
+    );
+    vst1q_s32(a8m(&mut flt[..]), f);
+}
+
 #[cfg_attr(feature = "simd", autoversion)]
 fn adm_csf_i32(
     src: &BandI32,
@@ -2059,6 +2790,22 @@ fn adm_csf_i32(
                     j += 8;
                 }
             }
+            #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+            if let Some(t) = neon_token() {
+                while j + 4 <= right {
+                    let idx = i as usize * stride + j as usize;
+                    i4_adm_csf_neon(
+                        t,
+                        a8(&src_p[idx..idx + 4]),
+                        rf as i32,
+                        add_dst,
+                        add_flt,
+                        a8m(&mut dst_p[idx..idx + 4]),
+                        a8m(&mut flt_p[idx..idx + 4]),
+                    );
+                    j += 4;
+                }
+            }
             while j < right {
                 let idx = i as usize * stride + j as usize;
                 let dst_val = ((rf as i64 * src_p[idx] as i64 + add_dst) >> 28) as i32;
@@ -2100,14 +2847,21 @@ fn adm_csf_den_scale(
             let row = &bands[band_idx]
                 [i as usize * stride + left as usize..i as usize * stride + right as usize];
             let mut inner = 0u64;
-            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            #[cfg(feature = "simd")]
+            #[allow(unused_mut)]
             let mut done = 0usize;
-            #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+            #[cfg(not(feature = "simd"))]
             let done = 0usize;
             #[cfg(all(feature = "simd", target_arch = "x86_64"))]
             if let Some(t) = v3_token() {
                 let (sum, d) = csf_den_scale_row_v3(t, row);
                 inner = sum;
+                done = d;
+            }
+            #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+            if let Some(t) = neon_token() {
+                let (sum, d) = csf_den_scale_row_neon(t, row);
+                inner += sum;
                 done = d;
             }
             for &px in &row[done..] {
@@ -2156,9 +2910,10 @@ fn adm_csf_den_s123(
             let row = &bands[band_idx]
                 [i as usize * stride + left as usize..i as usize * stride + right as usize];
             let mut inner = 0u64;
-            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            #[cfg(feature = "simd")]
+            #[allow(unused_mut)]
             let mut done = 0usize;
-            #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+            #[cfg(not(feature = "simd"))]
             let done = 0usize;
             #[cfg(all(feature = "simd", target_arch = "x86_64"))]
             if let Some(t) = v3_token() {
@@ -2171,6 +2926,19 @@ fn adm_csf_den_s123(
                     shift_cub as i32,
                 );
                 inner = sum;
+                done = d;
+            }
+            #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+            if let Some(t) = neon_token() {
+                let (sum, d) = csf_den_s123_row_neon(
+                    t,
+                    row,
+                    add_shift_sq[scale - 1] as i64,
+                    shift_sq[scale - 1] as i32,
+                    add_shift_cub as i64,
+                    shift_cub as i32,
+                );
+                inner += sum;
                 done = d;
             }
             for &px in &row[done..] {
@@ -2339,8 +3107,8 @@ fn adm_cm_i16(
                     ),
                     [v3, neon, wasm128, scalar]
                 );
-                #[cfg(target_arch = "x86_64")]
-                let mut used_v3 = false;
+                #[allow(unused_mut)]
+                let mut used_simd = false;
                 #[cfg(target_arch = "x86_64")]
                 if let Some(token) = v3_token() {
                     cm_accum16_v3(
@@ -2352,11 +3120,22 @@ fn adm_cm_i16(
                         shift_xcub,
                         &mut inner,
                     );
-                    used_v3 = true;
+                    used_simd = true;
                 }
-                #[cfg(not(target_arch = "x86_64"))]
-                let used_v3 = false;
-                if !used_v3 {
+                #[cfg(target_arch = "aarch64")]
+                if let Some(token) = neon_token() {
+                    cm_accum16_neon(
+                        token,
+                        &xbuf,
+                        add_shift_xsq,
+                        shift_xsq,
+                        add_shift_xcub,
+                        shift_xcub,
+                        &mut inner,
+                    );
+                    used_simd = true;
+                }
+                if !used_simd {
                     for ((&x0, &x1), &x2) in xbuf[0].iter().zip(&xbuf[1]).zip(&xbuf[2]) {
                         for (t, x) in [x0, x1, x2].into_iter().enumerate() {
                             let x = x as i64;
@@ -2594,6 +3373,152 @@ fn i4_adm_cm_row_v3(
     (inner, j)
 }
 
+/// NEON port of `cm_accum_v3`: x is already abs/sub/max-clamped so `vmull_s32`
+/// sees non-negative i32 lanes; the variable i64 shifts are native
+/// `vshlq_s64` (negative count = arithmetic right shift, matching `>>`).
+/// Returns the (lo, hi) i64x2 accumulators for lanes {0,1} and {2,3}.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[rite]
+fn cm_accum_neon(
+    _token: NeonToken,
+    x: int32x4_t,
+    add_sq: i64,
+    sq: u32,
+    add_cub: i64,
+    cub: u32,
+) -> (int64x2_t, int64x2_t) {
+    let x_lo = vget_low_s32(x);
+    let x_hi = vget_high_s32(x);
+    let sh_sq = vdupq_n_s64(-(sq as i64));
+    let sh_cub = vdupq_n_s64(-(cub as i64));
+    let xsq_lo = vshlq_s64(vaddq_s64(vmull_s32(x_lo, x_lo), vdupq_n_s64(add_sq)), sh_sq);
+    let xsq_hi = vshlq_s64(vaddq_s64(vmull_s32(x_hi, x_hi), vdupq_n_s64(add_sq)), sh_sq);
+    let cub_lo = vshlq_s64(
+        vaddq_s64(vmull_s32(vmovn_s64(xsq_lo), x_lo), vdupq_n_s64(add_cub)),
+        sh_cub,
+    );
+    let cub_hi = vshlq_s64(
+        vaddq_s64(vmull_s32(vmovn_s64(xsq_hi), x_hi), vdupq_n_s64(add_cub)),
+        sh_cub,
+    );
+    (cub_lo, cub_hi)
+}
+
+/// NEON port of `cm_accum16_v3`: 4-wide `cm_accum_neon` over `xbuf`,
+/// reducing both i64x2 accumulators into `inner`.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+fn cm_accum16_neon(
+    token: NeonToken,
+    xbuf: &[[i32; 16]; 3],
+    add_shift_xsq: [i64; 3],
+    shift_xsq: [u32; 3],
+    add_shift_xcub: [i64; 3],
+    shift_xcub: [u32; 3],
+    inner: &mut [i64; 3],
+) {
+    for t in 0..3 {
+        let mut acc_lo = vdupq_n_s64(0);
+        let mut acc_hi = vdupq_n_s64(0);
+        for xc in xbuf[t].chunks_exact(4) {
+            let x = vld1q_s32(a8(&xc[..4]));
+            let (lo, hi) = cm_accum_neon(
+                token,
+                x,
+                add_shift_xsq[t],
+                shift_xsq[t],
+                add_shift_xcub[t],
+                shift_xcub[t],
+            );
+            acc_lo = vaddq_s64(acc_lo, lo);
+            acc_hi = vaddq_s64(acc_hi, hi);
+        }
+        let mut v = [0i64; 4];
+        vst1q_s64(a8m(&mut v[..2]), acc_lo);
+        vst1q_s64(a8m(&mut v[2..]), acc_hi);
+        inner[t] += v.iter().sum::<i64>();
+    }
+}
+
+/// NEON port of `i4_adm_cm_row_v3`: i64 lanes as pairs of i64x2. AArch64 has
+/// native `vabsq_s64`/`vcgtq_s64`/`vcltq_s64`/`vshlq_s64` for the abs, compare
+/// and arithmetic-shift steps AVX2 emulates with mul_epi32(-1)/masks/srli.
+/// Returns the per-band row contribution and the count of pixels processed.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn i4_adm_cm_row_neon(
+    _token: NeonToken,
+    win: &[i32],
+    ang_rows: &[&[i32]; 3],
+    flt_rows: &[&[i32]; 3],
+    src_rows: &[&[i32]; 3],
+    rfactor: [u32; 3],
+    add_bef_shift_dst: i64,
+    add_bef_shift_flt: i64,
+    add_shift_sq: i64,
+    add_shift_cub: i64,
+    shift_cub: u32,
+) -> ([i64; 3], usize) {
+    let i4_15 = vdup_n_s32(I4_ONE_BY_15 as i32);
+    let add_dst = vdupq_n_s64(add_bef_shift_dst);
+    let add_flt = vdupq_n_s64(add_bef_shift_flt);
+    let add_sq = vdupq_n_s64(add_shift_sq);
+    let add_cub = vdupq_n_s64(add_shift_cub);
+    let sh_cub = vdupq_n_s64(-(shift_cub as i64));
+    let zero = vdupq_n_s64(0);
+
+    let mut acc = [vdupq_n_s64(0), vdupq_n_s64(0), vdupq_n_s64(0)];
+    let mut j = 0usize;
+    while j + 4 <= win.len() {
+        // thr = win[j] + sum_t(comp(ang_t[j]) - flt_t[j]), i64 lanes.
+        let w32 = vld1q_s32(a8(&win[j..j + 4]));
+        let mut thr_lo = vmovl_s32(vget_low_s32(w32));
+        let mut thr_hi = vmovl_s32(vget_high_s32(w32));
+        for t in 0..3 {
+            let a32 = vld1q_s32(a8(&ang_rows[t][j..j + 4]));
+            // |ang| as i64 lanes: ang is i32-valued so low-32 vabs matches.
+            let aa32 = vabsq_s32(a32);
+            let aa_lo = vget_low_s32(aa32);
+            let aa_hi = vget_high_s32(aa32);
+            let comp_lo = vshrq_n_s64(vaddq_s64(vmull_s32(aa_lo, i4_15), add_flt), 32);
+            let comp_hi = vshrq_n_s64(vaddq_s64(vmull_s32(aa_hi, i4_15), add_flt), 32);
+            let f32_ = vld1q_s32(a8(&flt_rows[t][j..j + 4]));
+            thr_lo = vaddq_s64(thr_lo, vsubq_s64(comp_lo, vmovl_s32(vget_low_s32(f32_))));
+            thr_hi = vaddq_s64(thr_hi, vsubq_s64(comp_hi, vmovl_s32(vget_high_s32(f32_))));
+        }
+        for t in 0..3 {
+            let s32 = vld1q_s32(a8(&src_rows[t][j..j + 4]));
+            let rf = vdup_n_s32(rfactor[t] as i32);
+            let xf_lo = vshrq_n_s64(vaddq_s64(vmull_s32(vget_low_s32(s32), rf), add_dst), 28);
+            let xf_hi = vshrq_n_s64(vaddq_s64(vmull_s32(vget_high_s32(s32), rf), add_dst), 28);
+            // |xf| then x = max(xf_abs - thr, 0) on i64 lanes.
+            let xa_lo = vabsq_s64(xf_lo);
+            let xa_hi = vabsq_s64(xf_hi);
+            let mut x_lo = vsubq_s64(xa_lo, thr_lo);
+            let mut x_hi = vsubq_s64(xa_hi, thr_hi);
+            x_lo = vandq_s64(x_lo, vreinterpretq_s64_u64(vcgtq_s64(x_lo, zero)));
+            x_hi = vandq_s64(x_hi, vreinterpretq_s64_u64(vcgtq_s64(x_hi, zero)));
+            // x >= 0 here, so the vmovn_s64 low halves hold its i32 value.
+            let xl = vmovn_s64(x_lo);
+            let xh = vmovn_s64(x_hi);
+            let xsq_lo = vshrq_n_s64(vaddq_s64(vmull_s32(xl, xl), add_sq), 30);
+            let xsq_hi = vshrq_n_s64(vaddq_s64(vmull_s32(xh, xh), add_sq), 30);
+            let val_lo = vshlq_s64(vaddq_s64(vmull_s32(vmovn_s64(xsq_lo), xl), add_cub), sh_cub);
+            let val_hi = vshlq_s64(vaddq_s64(vmull_s32(vmovn_s64(xsq_hi), xh), add_cub), sh_cub);
+            acc[t] = vaddq_s64(acc[t], vaddq_s64(val_lo, val_hi));
+        }
+        j += 4;
+    }
+    let mut inner = [0i64; 3];
+    for t in 0..3 {
+        let mut v = [0i64; 2];
+        vst1q_s64(a8m(&mut v), acc[t]);
+        inner[t] = v.iter().sum();
+    }
+    (inner, j)
+}
+
 #[cfg(feature = "simd")]
 #[magetypes(define(i16x16, i32x8), v3, neon, wasm128, scalar)]
 fn adm_cm_i16_front(
@@ -2731,13 +3656,34 @@ fn adm_cm_i32(
                 &src_b[2][row..row + len],
             ];
             let mut inner = [0i64; 3];
-            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            #[cfg(feature = "simd")]
+            #[allow(unused_mut)]
             let mut jj = 0usize;
-            #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+            #[cfg(not(feature = "simd"))]
             let jj = 0usize;
             #[cfg(all(feature = "simd", target_arch = "x86_64"))]
             if let Some(token) = v3_token() {
                 let (vec_inner, done) = i4_adm_cm_row_v3(
+                    token,
+                    &win[..len],
+                    &ang_rows,
+                    &flt_rows,
+                    &src_rows,
+                    rfactor,
+                    add_bef_shift_dst,
+                    add_bef_shift_flt,
+                    add_shift_sq,
+                    add_shift_cub,
+                    shift_cub,
+                );
+                for t in 0..3 {
+                    inner[t] += vec_inner[t];
+                }
+                jj = done;
+            }
+            #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+            if let Some(token) = neon_token() {
+                let (vec_inner, done) = i4_adm_cm_row_neon(
                     token,
                     &win[..len],
                     &ang_rows,
@@ -2922,6 +3868,98 @@ fn dwt2_s123_hrow_v3(
     }
 }
 
+/// NEON port of `dwt2_s123_vrow_v3`: `vmlal_s32` is the i32 x i32 -> i64 MAC
+/// that `mul_epi32` provides on AVX2, and `vshlq_s64` with a negative count
+/// is a native arithmetic right shift — no srli+sign-mask emulation needed.
+/// The i64 -> i32 even-lane pack (`permutevar8x32(0,2,4,6)`) is `vuzp1q_s32`.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn dwt2_s123_vrow_neon(
+    _token: NeonToken,
+    s0: &[i32; 4],
+    s1: &[i32; 4],
+    s2: &[i32; 4],
+    s3: &[i32; 4],
+    flo: &[i64; 4],
+    fhi: &[i64; 4],
+    add: i64,
+    shift: i32,
+    lo_out: &mut [i32; 4],
+    hi_out: &mut [i32; 4],
+) {
+    let taps = [
+        vld1q_s32(a8(&s0[..])),
+        vld1q_s32(a8(&s1[..])),
+        vld1q_s32(a8(&s2[..])),
+        vld1q_s32(a8(&s3[..])),
+    ];
+    let add_v = vdupq_n_s64(add);
+    let sh = vdupq_n_s64(-(shift as i64));
+    for (out, f) in [(lo_out, flo), (hi_out, fhi)] {
+        let mut acc_lo = vdupq_n_s64(0);
+        let mut acc_hi = vdupq_n_s64(0);
+        for (t, &fk) in taps.iter().zip(f.iter()) {
+            let c = vdup_n_s32(fk as i32);
+            acc_lo = vmlal_s32(acc_lo, vget_low_s32(*t), c);
+            acc_hi = vmlal_s32(acc_hi, vget_high_s32(*t), c);
+        }
+        let v_lo = vshlq_s64(vaddq_s64(acc_lo, add_v), sh);
+        let v_hi = vshlq_s64(vaddq_s64(acc_hi, add_v), sh);
+        let p = vuzp1q_s32(vreinterpretq_s32_s64(v_lo), vreinterpretq_s32_s64(v_hi));
+        vst1q_s32(a8m(&mut out[..]), p);
+    }
+}
+
+/// NEON port of `dwt2_s123_hrow_v3`: the unaligned 8-wide i32 loads are
+/// deinterleaved by `vld2q_s32`, whose even half is exactly the lanes
+/// `mul_epi32` consumed on AVX2.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn dwt2_s123_hrow_neon(
+    _token: NeonToken,
+    lo: &[i32],
+    hi: &[i32],
+    j0: usize,
+    j1: usize,
+    j2: usize,
+    j3: usize,
+    flo: &[i64; 4],
+    fhi: &[i64; 4],
+    add: i64,
+    shift: i32,
+    a_out: &mut [i32; 4],
+    v_out: &mut [i32; 4],
+    h_out: &mut [i32; 4],
+    d_out: &mut [i32; 4],
+) {
+    let add_v = vdupq_n_s64(add);
+    let sh = vdupq_n_s64(-(shift as i64));
+    for (buf, out_a, out_b, fa, fb) in [(lo, a_out, v_out, flo, fhi), (hi, h_out, d_out, flo, fhi)]
+    {
+        let taps = [
+            vld2q_s32(a8(&buf[j0..j0 + 8])).0,
+            vld2q_s32(a8(&buf[j1..j1 + 8])).0,
+            vld2q_s32(a8(&buf[j2..j2 + 8])).0,
+            vld2q_s32(a8(&buf[j3..j3 + 8])).0,
+        ];
+        for (out, f) in [(out_a, fa), (out_b, fb)] {
+            let mut acc_lo = vdupq_n_s64(0);
+            let mut acc_hi = vdupq_n_s64(0);
+            for (t, &fk) in taps.iter().zip(f.iter()) {
+                let c = vdup_n_s32(fk as i32);
+                acc_lo = vmlal_s32(acc_lo, vget_low_s32(*t), c);
+                acc_hi = vmlal_s32(acc_hi, vget_high_s32(*t), c);
+            }
+            let v_lo = vshlq_s64(vaddq_s64(acc_lo, add_v), sh);
+            let v_hi = vshlq_s64(vaddq_s64(acc_hi, add_v), sh);
+            let p = vuzp1q_s32(vreinterpretq_s32_s64(v_lo), vreinterpretq_s32_s64(v_hi));
+            vst1q_s32(a8m(&mut out[..]), p);
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn dwt2_s123_hscalar(
     tmplo: &[i32],
@@ -2990,14 +4028,14 @@ fn adm_dwt2_s123_combined(
     let mask_vp = (-1i64).checked_shl(64 - shift_vp).unwrap_or(0);
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     let mask_hp = (-1i64).checked_shl(64 - shift_hp).unwrap_or(0);
-    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    #[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
     let flo: [i64; 4] = [
         DWT2_LO[0] as i64,
         DWT2_LO[1] as i64,
         DWT2_LO[2] as i64,
         DWT2_LO[3] as i64,
     ];
-    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    #[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
     let fhi: [i64; 4] = [
         DWT2_HI[0] as i64,
         DWT2_HI[1] as i64,
@@ -3011,9 +4049,10 @@ fn adm_dwt2_s123_combined(
     let mut tmplo_dis = vec![0i32; w + 8];
     let mut tmphi_dis = vec![0i32; w + 8];
     for i in 0..h.div_ceil(2) {
-        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        #[cfg(feature = "simd")]
+        #[allow(unused_mut)]
         let mut j = 0usize;
-        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        #[cfg(not(feature = "simd"))]
         let j = 0usize;
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
         if let Some(t) = v3_token() {
@@ -3042,6 +4081,38 @@ fn adm_dwt2_s123_combined(
                     &fhi,
                     add_vp,
                     mask_vp,
+                    shift_vp as i32,
+                    a8m(&mut tmplo_dis[j..j + 4]),
+                    a8m(&mut tmphi_dis[j..j + 4]),
+                );
+                j += 4;
+            }
+        }
+        #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+        if let Some(t) = neon_token() {
+            while j + 4 <= w {
+                dwt2_s123_vrow_neon(
+                    t,
+                    a8(&i4_ref_scale[ind_y[i][0] as usize * ref_stride + j..][..4]),
+                    a8(&i4_ref_scale[ind_y[i][1] as usize * ref_stride + j..][..4]),
+                    a8(&i4_ref_scale[ind_y[i][2] as usize * ref_stride + j..][..4]),
+                    a8(&i4_ref_scale[ind_y[i][3] as usize * ref_stride + j..][..4]),
+                    &flo,
+                    &fhi,
+                    add_vp,
+                    shift_vp as i32,
+                    a8m(&mut tmplo_ref[j..j + 4]),
+                    a8m(&mut tmphi_ref[j..j + 4]),
+                );
+                dwt2_s123_vrow_neon(
+                    t,
+                    a8(&i4_dis_scale[ind_y[i][0] as usize * dis_stride + j..][..4]),
+                    a8(&i4_dis_scale[ind_y[i][1] as usize * dis_stride + j..][..4]),
+                    a8(&i4_dis_scale[ind_y[i][2] as usize * dis_stride + j..][..4]),
+                    a8(&i4_dis_scale[ind_y[i][3] as usize * dis_stride + j..][..4]),
+                    &flo,
+                    &fhi,
+                    add_vp,
                     shift_vp as i32,
                     a8m(&mut tmplo_dis[j..j + 4]),
                     a8m(&mut tmphi_dis[j..j + 4]),
@@ -3092,9 +4163,10 @@ fn adm_dwt2_s123_combined(
                 out,
             );
         }
-        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        #[cfg(feature = "simd")]
+        #[allow(unused_mut)]
         let mut j = 1usize;
-        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        #[cfg(not(feature = "simd"))]
         let j = 1usize;
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
         if let Some(t) = v3_token() {
@@ -3140,6 +4212,57 @@ fn adm_dwt2_s123_combined(
                     &fhi,
                     add_hp,
                     mask_hp,
+                    shift_hp as i32,
+                    a8m(&mut a_dis_out[idx..idx + 4]),
+                    a8m(&mut dis_out.v[idx..idx + 4]),
+                    a8m(&mut dis_out.h[idx..idx + 4]),
+                    a8m(&mut dis_out.d[idx..idx + 4]),
+                );
+                j += 4;
+            }
+        }
+        #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+        if let Some(t) = neon_token() {
+            // Same interior-only bound as the AVX2 path: the deinterleaving
+            // vld2q load spans 8 i32 per tap and needs ind_x[k][j+q] =
+            // ind_x[k][j]+2q, which the last two reflected entries break.
+            while j + 4 <= ind_x.len().saturating_sub(2) {
+                let ix = ind_x[j];
+                let (j0, j1, j2, j3) = (
+                    ix[0] as usize,
+                    ix[1] as usize,
+                    ix[2] as usize,
+                    ix[3] as usize,
+                );
+                let idx = i * dst_stride + j;
+                dwt2_s123_hrow_neon(
+                    t,
+                    &tmplo_ref,
+                    &tmphi_ref,
+                    j0,
+                    j1,
+                    j2,
+                    j3,
+                    &flo,
+                    &fhi,
+                    add_hp,
+                    shift_hp as i32,
+                    a8m(&mut a_ref_out[idx..idx + 4]),
+                    a8m(&mut ref_out.v[idx..idx + 4]),
+                    a8m(&mut ref_out.h[idx..idx + 4]),
+                    a8m(&mut ref_out.d[idx..idx + 4]),
+                );
+                dwt2_s123_hrow_neon(
+                    t,
+                    &tmplo_dis,
+                    &tmphi_dis,
+                    j0,
+                    j1,
+                    j2,
+                    j3,
+                    &flo,
+                    &fhi,
+                    add_hp,
                     shift_hp as i32,
                     a8m(&mut a_dis_out[idx..idx + 4]),
                     a8m(&mut dis_out.v[idx..idx + 4]),
@@ -3523,7 +4646,11 @@ fn simd_dwt2_matches_scalar_for_edges_tails_and_bit_depths() {
 
 /// `adm_decouple_s123_row_v3` must bit-match the scalar loop on every interior
 /// pixel, including the get_best15_from32 branch (|v| >= 32768) and zero refs.
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn simd_decouple_s123_matches_scalar_for_tails_zeros_and_gains() {
     use std::sync::atomic::Ordering;
@@ -3586,7 +4713,11 @@ fn simd_decouple_s123_matches_scalar_for_tails_zeros_and_gains() {
 /// pixel. Realistic DWT2 magnitudes (|v| <= 16000) keep th - rst in i16 range
 /// so scalar truncation and packs_epi32 saturation agree — the same bound
 /// libvmaf's own scalar/AVX2 paths rely on.
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn simd_decouple_matches_scalar_for_tails_zeros_and_gains() {
     use std::sync::atomic::Ordering;
@@ -3650,7 +4781,11 @@ fn simd_decouple_matches_scalar_for_tails_zeros_and_gains() {
 /// `cm_accum16_v3` must bit-match the scalar x_sq/x_cub chain on every lane.
 /// |v| <= 16000 keeps x_sq < 2^31 so scalar's i32 wrap and the AVX2 path
 /// agree — the same bound the decouple parity test uses.
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn simd_cm_i16_matches_scalar_for_tails_and_edges() {
     use std::sync::atomic::Ordering;
@@ -3686,7 +4821,11 @@ fn simd_cm_i16_matches_scalar_for_tails_and_edges() {
 /// `i4_adm_cm_row_v3` must bit-match the scalar thr/x/accum chain. src bounded
 /// to +-2^20 keeps x_full in i32 range and x_sq positive, where libvmaf's own
 /// scalar/AVX2 paths agree. rf fractions keep rfactor < 2^31 (mul_epi32 sign).
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn simd_cm_i32_matches_scalar_for_tails_and_edges() {
     use std::sync::atomic::Ordering;
@@ -3734,7 +4873,11 @@ fn simd_cm_i32_matches_scalar_for_tails_and_edges() {
 /// `dwt2_s123_vrow_v3`/`dwt2_s123_hrow_v3` must bit-match the scalar 4-tap
 /// fixed-point DWT on every band. |src| <= 2^24 keeps accum products inside
 /// 64-s bits so the C masked-shift trick equals the scalar arithmetic shift.
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn simd_dwt2_s123_matches_scalar_for_tails_and_edges() {
     use std::sync::atomic::Ordering;
@@ -3807,7 +4950,11 @@ fn simd_dwt2_s123_matches_scalar_for_tails_and_edges() {
 /// `adm_csf_i16_v3` must bit-match the scalar fixed-point chain. |src| <= 16000
 /// keeps |dst_val| < 29400 and flt < 32768, so packs_epi32 saturation and
 /// scalar i16 truncation agree — the same bound libvmaf's own paths rely on.
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn simd_csf_i16_matches_scalar_for_tails_and_edges() {
     use std::sync::atomic::Ordering;
@@ -3869,7 +5016,11 @@ fn simd_csf_i16_matches_scalar_for_tails_and_edges() {
 /// `i4_adm_csf_v3` must bit-match the scalar fixed-point chain (srli+msb-mask
 /// arithmetic >>28, -2^31 flt add, low-32 pack) for all lane values. rf < 0.5
 /// keeps rfactor < 2^31 so mul_epi32 signed semantics match scalar's u32.
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn simd_csf_i32_matches_scalar_for_tails_and_edges() {
     use std::sync::atomic::Ordering;
@@ -3921,7 +5072,11 @@ fn simd_csf_i32_matches_scalar_for_tails_and_edges() {
 
 /// `csf_den_scale_row_v3` must bit-match the scalar h^3 accumulation —
 /// mul_epu32 on cvtepu32 lanes is exact for |v| <= 32768.
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn simd_csf_den_scale_matches_scalar_for_tails_and_edges() {
     use std::sync::atomic::Ordering;
@@ -3954,7 +5109,11 @@ fn simd_csf_den_scale_matches_scalar_for_tails_and_edges() {
 
 /// `csf_den_s123_row_v3` must bit-match the scalar shifted cubic chain —
 /// mul_epu32 products stay < 2^32 on the squared operand for all i32 inputs.
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 #[test]
 fn simd_csf_den_s123_matches_scalar_for_tails_and_edges() {
     use std::sync::atomic::Ordering;

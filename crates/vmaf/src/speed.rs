@@ -1,6 +1,8 @@
 use crate::{Error, ModelVariant};
 #[cfg(feature = "simd")]
 use archmage::autoversion;
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+use archmage::{NeonToken, arcane};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{X64V3Token, arcane};
 
@@ -479,18 +481,19 @@ fn compute_mean(
     result / (dim.submatrix_width * dim.submatrix_height) as f32
 }
 
-#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
 #[inline(always)]
 fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
     s.try_into().unwrap()
 }
 
-#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
+#[inline(always)]
 fn a8m<T, const N: usize>(s: &mut [T]) -> &mut [T; N] {
     s.try_into().unwrap()
 }
 
-#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(feature = "simd", any(target_arch = "x86_64", target_arch = "aarch64")))]
 static FORCE_SCALAR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
@@ -499,6 +502,14 @@ fn v3_token() -> Option<X64V3Token> {
         return None;
     }
     <X64V3Token as archmage::SimdToken>::summon()
+}
+
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+fn neon_token() -> Option<NeonToken> {
+    if FORCE_SCALAR.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    <NeonToken as archmage::SimdToken>::summon()
 }
 
 /// Direct port of `convolution_f32_avx_s_1d_v_scanline`: 8-wide vertical
@@ -545,6 +556,121 @@ fn vif_filter1d_hrow_v3(
         }
         _mm256_storeu_ps(a8m(&mut dst[j + radius..j + radius + 8]), sum);
     }
+}
+
+/// NEON port of `vif_filter1d_vrow_v3`: 8-wide vertical convolution as two
+/// f32x4 halves. Separate mul+add keeps the scalar loop's two-rounding
+/// arithmetic bit-exact (an FMA would be single-rounding).
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+fn vif_filter1d_vrow_neon(
+    _token: NeonToken,
+    f: &[f32],
+    src: &[f32],
+    stride_px: usize,
+    tmp: &mut [f32],
+    wfloor8: usize,
+) {
+    for j in (0..wfloor8).step_by(8) {
+        let mut sum0 = vdupq_n_f32(0.0);
+        let mut sum1 = vdupq_n_f32(0.0);
+        for (k, &fk) in f.iter().enumerate() {
+            let w = vdupq_n_f32(fk);
+            let g0 = vld1q_f32(a8(&src[k * stride_px + j..k * stride_px + j + 4]));
+            let g1 = vld1q_f32(a8(&src[k * stride_px + j + 4..k * stride_px + j + 8]));
+            sum0 = vaddq_f32(sum0, vmulq_f32(w, g0));
+            sum1 = vaddq_f32(sum1, vmulq_f32(w, g1));
+        }
+        vst1q_f32(a8m(&mut tmp[j..j + 4]), sum0);
+        vst1q_f32(a8m(&mut tmp[j + 4..j + 8]), sum1);
+    }
+}
+
+/// NEON port of `vif_filter1d_hrow_v3`: `dst[j + radius] = sum_k f[k] *
+/// tmp[j + k]` over `0..j_end`, two f32x4 halves, mul+add (see vrow note).
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+fn vif_filter1d_hrow_neon(
+    _token: NeonToken,
+    f: &[f32],
+    tmp: &[f32],
+    dst: &mut [f32],
+    radius: usize,
+    j_end: usize,
+) {
+    for j in (0..j_end).step_by(8) {
+        let mut sum0 = vdupq_n_f32(0.0);
+        let mut sum1 = vdupq_n_f32(0.0);
+        for (k, &fk) in f.iter().enumerate() {
+            let w = vdupq_n_f32(fk);
+            let g0 = vld1q_f32(a8(&tmp[j + k..j + k + 4]));
+            let g1 = vld1q_f32(a8(&tmp[j + k + 4..j + k + 8]));
+            sum0 = vaddq_f32(sum0, vmulq_f32(w, g0));
+            sum1 = vaddq_f32(sum1, vmulq_f32(w, g1));
+        }
+        vst1q_f32(a8m(&mut dst[j + radius..j + radius + 4]), sum0);
+        vst1q_f32(a8m(&mut dst[j + radius + 4..j + radius + 8]), sum1);
+    }
+}
+
+/// NEON port of `compute_covariance_v3`: same two-chain f64 accumulator
+/// structure, two f64x2 lanes per chain step (4 f64 lanes per iteration vs
+/// AVX2's 8, then 2-wide and scalar tails). FMA rounding matches.
+#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn compute_covariance_neon(
+    _token: NeonToken,
+    data: &[f32],
+    mean_x: f64,
+    mean_y: f64,
+    stride_px: usize,
+    srx: usize,
+    scx: usize,
+    sry: usize,
+    scy: usize,
+    sub_w: usize,
+    sub_h: usize,
+) -> f64 {
+    let mut acc0 = vdupq_n_f64(0.0);
+    let mut acc1 = vdupq_n_f64(0.0);
+    let mx = vdupq_n_f64(mean_x);
+    let my = vdupq_n_f64(mean_y);
+    let mut scalar_tail = 0.0f64;
+    for i in 0..sub_h {
+        let xb = (srx + i) * stride_px + scx;
+        let yb = (sry + i) * stride_px + scy;
+        let mut j = 0usize;
+        while j + 4 <= sub_w {
+            let cx0 = vsubq_f64(vcvt_f64_f32(vld1_f32(a8(&data[xb + j..xb + j + 2]))), mx);
+            let cx1 = vsubq_f64(
+                vcvt_f64_f32(vld1_f32(a8(&data[xb + j + 2..xb + j + 4]))),
+                mx,
+            );
+            let cy0 = vsubq_f64(vcvt_f64_f32(vld1_f32(a8(&data[yb + j..yb + j + 2]))), my);
+            let cy1 = vsubq_f64(
+                vcvt_f64_f32(vld1_f32(a8(&data[yb + j + 2..yb + j + 4]))),
+                my,
+            );
+            acc0 = vfmaq_f64(acc0, cx0, cy0);
+            acc1 = vfmaq_f64(acc1, cx1, cy1);
+            j += 4;
+        }
+        while j + 2 <= sub_w {
+            let cx = vsubq_f64(vcvt_f64_f32(vld1_f32(a8(&data[xb + j..xb + j + 2]))), mx);
+            let cy = vsubq_f64(vcvt_f64_f32(vld1_f32(a8(&data[yb + j..yb + j + 2]))), my);
+            acc0 = vfmaq_f64(acc0, cx, cy);
+            j += 2;
+        }
+        while j < sub_w {
+            scalar_tail += (data[xb + j] as f64 - mean_x) * (data[yb + j] as f64 - mean_y);
+            j += 1;
+        }
+    }
+    let acc = vaddq_f64(acc0, acc1);
+    let mut tmp = [0.0f64; 2];
+    vst1q_f64(a8m(&mut tmp), acc);
+    tmp[0] + tmp[1] + scalar_tail
 }
 
 /// Direct port of `compute_cov_kernel_avx2`: f32 -> f64 widening, two
@@ -634,6 +760,23 @@ fn compute_covariance(
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     if let Some(token) = <X64V3Token as archmage::SimdToken>::summon() {
         let result = compute_covariance_v3(
+            token,
+            data,
+            mean_x,
+            mean_y,
+            stride_px,
+            srx,
+            scx,
+            sry,
+            scy,
+            dim.submatrix_width,
+            dim.submatrix_height,
+        );
+        return (result / (dim.submatrix_width * dim.submatrix_height) as f64) as f32;
+    }
+    #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+    if let Some(token) = neon_token() {
+        let result = compute_covariance_neon(
             token,
             data,
             mean_x,
@@ -876,9 +1019,10 @@ fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, str
     // headroom libvmaf's ceil(w, 8)-strided tmp provides.
     let mut tmp = vec![0.0f32; w + 2 * radius];
     for i in 0..h {
-        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        #[cfg(feature = "simd")]
+        #[allow(unused_mut)]
         let mut j = 0usize;
-        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        #[cfg(not(feature = "simd"))]
         let j = 0usize;
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
         if i >= radius && i + radius < h {
@@ -886,6 +1030,22 @@ fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, str
                 let wfloor8 = w / 8 * 8;
                 let base = (i - radius) * stride_px;
                 vif_filter1d_vrow_v3(
+                    t,
+                    f,
+                    &src[base..base + (fwidth - 1) * stride_px + wfloor8],
+                    stride_px,
+                    &mut tmp,
+                    wfloor8,
+                );
+                j = wfloor8;
+            }
+        }
+        #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+        if i >= radius && i + radius < h {
+            if let Some(t) = neon_token() {
+                let wfloor8 = w / 8 * 8;
+                let base = (i - radius) * stride_px;
+                vif_filter1d_vrow_neon(
                     t,
                     f,
                     &src[base..base + (fwidth - 1) * stride_px + wfloor8],
@@ -912,14 +1072,28 @@ fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, str
             }
             dst[i * stride_px + j] = accum;
         }
-        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        #[cfg(feature = "simd")]
+        #[allow(unused_mut)]
         let mut jj = 0usize;
-        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        #[cfg(not(feature = "simd"))]
         let jj = 0usize;
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
         if let Some(t) = v3_token() {
             let j_end = w.saturating_sub(radius) / 8 * 8;
             vif_filter1d_hrow_v3(
+                t,
+                f,
+                &tmp,
+                &mut dst[i * stride_px..i * stride_px + w],
+                radius,
+                j_end,
+            );
+            jj = j_end;
+        }
+        #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+        if let Some(t) = neon_token() {
+            let j_end = w.saturating_sub(radius) / 8 * 8;
+            vif_filter1d_hrow_neon(
                 t,
                 f,
                 &tmp,
@@ -1166,7 +1340,11 @@ pub fn speed_v1_chroma_420(
     Ok((score_uv.min(SPEED_MAX_VAL)) as f64)
 }
 
-#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[cfg(all(
+    test,
+    feature = "simd",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 mod tests {
     use super::*;
 
@@ -1195,6 +1373,7 @@ mod tests {
         result
     }
 
+    #[cfg(target_arch = "x86_64")]
     #[test]
     fn v3_covariance_matches_scalar() {
         let Some(token) = <X64V3Token as archmage::SimdToken>::summon() else {
@@ -1220,14 +1399,44 @@ mod tests {
         }
     }
 
+    #[cfg(all(feature = "simd", target_arch = "aarch64"))]
+    #[test]
+    fn neon_covariance_matches_scalar() {
+        let Some(token) = <NeonToken as archmage::SimdToken>::summon() else {
+            return;
+        };
+        let stride = 64usize;
+        let data: Vec<f32> = (0..stride * 40)
+            .map(|i| ((i * 37 + (i / stride) * 11) % 997) as f32 * 0.125 - 60.0)
+            .collect();
+        for (w, h) in [(8usize, 4usize), (9, 5), (13, 7), (16, 8), (21, 9), (5, 11)] {
+            for (srx, scx, sry, scy) in [(0usize, 0usize, 1usize, 2usize), (2, 3, 4, 0)] {
+                let mx = 12.5f64;
+                let my = -7.25f64;
+                let neon =
+                    compute_covariance_neon(token, &data, mx, my, stride, srx, scx, sry, scy, w, h);
+                let scalar = cov_scalar(&data, mx, my, stride, srx, scx, sry, scy, w, h);
+                let denom = scalar.abs().max(1.0);
+                assert!(
+                    (neon - scalar).abs() / denom <= 1e-12,
+                    "w={w} h={h}: neon={neon} scalar={scalar}"
+                );
+            }
+        }
+    }
+
     /// `vif_filter1d_vrow_v3`/`vif_filter1d_hrow_v3` (AVX mul+add, no FMA)
-    /// must bit-match the scalar mirrored-edge separable filter. Runs the
-    /// whole `vif_filter1d` with and without v3 so dispatch coverage equals
-    /// production.
-    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    /// and the `_neon` ports must bit-match the scalar mirrored-edge
+    /// separable filter. Runs the whole `vif_filter1d` with and without the
+    /// vector tier so dispatch coverage equals production.
     #[test]
     fn simd_vif_filter1d_matches_scalar_for_tails_and_edges() {
+        #[cfg(target_arch = "x86_64")]
         if <X64V3Token as archmage::SimdToken>::summon().is_none() {
+            return;
+        }
+        #[cfg(target_arch = "aarch64")]
+        if <NeonToken as archmage::SimdToken>::summon().is_none() {
             return;
         }
         use std::sync::atomic::Ordering;
