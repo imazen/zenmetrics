@@ -1076,7 +1076,45 @@ fn adm_cm_i16(
                 &src_b[2][row..row + len],
             ];
             let mut inner = [0i64; 3];
-            for (jj, &wv) in win[..len].iter().enumerate() {
+            let mut jj = 0;
+            #[cfg(feature = "simd")]
+            while jj + 16 <= len {
+                let mut xbuf = [[0i32; 16]; 3];
+                archmage::incant!(
+                    adm_cm_i16_front(
+                        &win[jj..jj + 16],
+                        &[
+                            &ang_rows[0][jj..jj + 16],
+                            &ang_rows[1][jj..jj + 16],
+                            &ang_rows[2][jj..jj + 16],
+                        ],
+                        &[
+                            &flt_rows[0][jj..jj + 16],
+                            &flt_rows[1][jj..jj + 16],
+                            &flt_rows[2][jj..jj + 16],
+                        ],
+                        &[
+                            &src_rows[0][jj..jj + 16],
+                            &src_rows[1][jj..jj + 16],
+                            &src_rows[2][jj..jj + 16],
+                        ],
+                        i_rfactor,
+                        shift_xsub,
+                        &mut xbuf
+                    ),
+                    [v3, neon, wasm128, scalar]
+                );
+                for ((&x0, &x1), &x2) in xbuf[0].iter().zip(&xbuf[1]).zip(&xbuf[2]) {
+                    for (t, x) in [x0, x1, x2].into_iter().enumerate() {
+                        let x = x as i64;
+                        let x_sq = (((x * x) + add_shift_xsq[t]) >> shift_xsq[t]) as i32;
+                        inner[t] += ((x_sq as i64 * x) + add_shift_xcub[t]) >> shift_xcub[t];
+                    }
+                }
+                jj += 16;
+            }
+            for jj in jj..len {
+                let wv = win[jj];
                 let mut thr = wv;
                 for t in 0..3 {
                     thr += (((ONE_BY_15 * (ang_rows[t][jj] as i32).abs()) + 2048) >> 12) as i16
@@ -1147,6 +1185,52 @@ fn adm_cm_i16(
         + powf_add
         + (f_accum[2] as f32).powf(1.0 / 3.0)
         + powf_add
+}
+
+#[cfg(feature = "simd")]
+#[magetypes(define(i16x16, i32x8), v3, neon, wasm128, scalar)]
+fn adm_cm_i16_front(
+    token: Token,
+    win: &[i32],
+    ang: &[&[i16]; 3],
+    flt: &[&[i16]; 3],
+    src: &[&[i16]; 3],
+    i_rfactor: [i32; 3],
+    shift_xsub: [i32; 3],
+    x_out: &mut [[i32; 16]; 3],
+) {
+    let mut thr_l = i32x8::load(token, win[..8].try_into().unwrap());
+    let mut thr_h = i32x8::load(token, win[8..16].try_into().unwrap());
+    let c15 = i32x8::splat(token, ONE_BY_15);
+    let a2048 = i32x8::splat(token, 2048);
+    for t in 0..3 {
+        let a = i16x16::load(token, ang[t][..16].try_into().unwrap());
+        let f = i16x16::load(token, flt[t][..16].try_into().unwrap());
+        let (al, ah) = (a.widen_low(), a.widen_high());
+        let (fl, fh) = (f.widen_low(), f.widen_high());
+        let cl = (c15 * al.abs() + a2048)
+            .shr_arithmetic_uniform(12)
+            .shl_uniform(16)
+            .shr_arithmetic_uniform(16);
+        let ch = (c15 * ah.abs() + a2048)
+            .shr_arithmetic_uniform(12)
+            .shl_uniform(16)
+            .shr_arithmetic_uniform(16);
+        thr_l += cl - fl;
+        thr_h += ch - fh;
+    }
+    for t in 0..3 {
+        let s = i16x16::load(token, src[t][..16].try_into().unwrap());
+        let (sl, sh) = (s.widen_low(), s.widen_high());
+        let rf = i32x8::splat(token, i_rfactor[t]);
+        let sub = shift_xsub[t] as u32;
+        let xl = (rf * sl).abs() - thr_l.shl_uniform(sub);
+        let xh = (rf * sh).abs() - thr_h.shl_uniform(sub);
+        let xl = xl.max(i32x8::zero(token));
+        let xh = xh.max(i32x8::zero(token));
+        x_out[t][..8].copy_from_slice(&xl.to_array());
+        x_out[t][8..16].copy_from_slice(&xh.to_array());
+    }
 }
 
 fn adm_cm_i32(
