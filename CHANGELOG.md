@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- mad-iqa (`<hash>`): new in-tree CPU port of MAD — Most Apparent
+- mad-iqa (`2383f9ae`): new in-tree CPU port of MAD — Most Apparent
   Distortion (Larson & Chandler, JEI 19(1), 2010), ported to the
   authors' `hi_index.m`/`lo_index.m` (STMAD_2011 release archived in
   Netflix/vmaf) with `ical_std`/`ical_stat` C-mex semantics. HI:
