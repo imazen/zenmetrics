@@ -162,11 +162,17 @@ v0-NEG took **111.670 ms/frame** in Rust (no measured win); with
 measured **119.863**, **66.057**, and **65.960 ms/frame** with one, two, and
 four workers on the two-frame fixture. The reused-pool figures exclude model
 setup and are not directly comparable to the cold-start backend figures.
-After the 2026-09-25 VIF optimization, one targeted rerun of
+After the initial 2026-09-25 scalar VIF optimization, one targeted rerun of
 `cargo bench -p vmaf --bench backends -- --v0 --stages` on the same fixture
 measured 74.473 ms/frame for four-scale VIF, versus 91.561 above.
-The machine was busy and these runs were not paired; no new end-to-end or
-SIMD speedup is claimed.
+Those runs were not paired and did not measure an end-to-end or SIMD speedup.
+After adding opt-in SIMD for the 8-bit scale-0 VIF vertical filter, sequential
+`--v0 --stages` runs measured 76.380 ms/frame without `--features simd` and
+47.139 with it; `--v0-neg` measured 96.943 and 68.647 ms/frame respectively.
+With `--features simd,parallel -- --v0-neg --parallel`, the reused scorer
+measured 76.623, 44.937, and 44.820 ms/frame at one, two, and four workers.
+These measurements used the same two-frame fixture on a busy machine; the
+10-bit VIF path and the v1 feature path remain unchanged by this SIMD kernel.
 
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate
