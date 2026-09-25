@@ -708,7 +708,7 @@ fn vif_vertical_hiscale_simd(
 }
 
 #[cfg(feature = "simd")]
-type VifHorizontalSums = ([u32; 16], [u32; 16], [u64; 16], [u64; 16], [u64; 16]);
+type VifHorizontalSums = ([u32; 16], [u32; 16], [u32; 16], [u32; 16], [u32; 16]);
 
 #[cfg(feature = "simd")]
 #[magetypes(define(u32x8), v3, neon, wasm128, scalar)]
@@ -820,36 +820,37 @@ fn vif_horizontal_sums(
     }
     let mut ref_mean_out = [0u32; 16];
     let mut dis_mean_out = [0u32; 16];
-    let mut ref_sq_out = [0u64; 16];
-    let mut dis_sq_out = [0u64; 16];
-    let mut ref_dis_out = [0u64; 16];
+    let mut ref_sq_out = [0u32; 16];
+    let mut dis_sq_out = [0u32; 16];
+    let mut ref_dis_out = [0u32; 16];
     let mean_lo = ref_mean_lo.to_array();
     let mean_hi = ref_mean_hi.to_array();
     let dmean_lo = dis_mean_lo.to_array();
     let dmean_hi = dis_mean_hi.to_array();
-    let sq_lo16 = ref_sq_lo16.to_array();
+    let rounding = u32x8::splat(token, 32768);
+    let sq_lo16 = (ref_sq_lo16 + rounding).shr_logical_uniform(16).to_array();
     let sq_hi16 = ref_sq_hi16.to_array();
-    let sq_lo8 = ref_sq_lo8.to_array();
+    let sq_lo8 = (ref_sq_lo8 + rounding).shr_logical_uniform(16).to_array();
     let sq_hi8 = ref_sq_hi8.to_array();
-    let dsq_lo16 = dis_sq_lo16.to_array();
+    let dsq_lo16 = (dis_sq_lo16 + rounding).shr_logical_uniform(16).to_array();
     let dsq_hi16 = dis_sq_hi16.to_array();
-    let dsq_lo8 = dis_sq_lo8.to_array();
+    let dsq_lo8 = (dis_sq_lo8 + rounding).shr_logical_uniform(16).to_array();
     let dsq_hi8 = dis_sq_hi8.to_array();
-    let rd_lo16 = ref_dis_lo16.to_array();
+    let rd_lo16 = (ref_dis_lo16 + rounding).shr_logical_uniform(16).to_array();
     let rd_hi16 = ref_dis_hi16.to_array();
-    let rd_lo8 = ref_dis_lo8.to_array();
+    let rd_lo8 = (ref_dis_lo8 + rounding).shr_logical_uniform(16).to_array();
     let rd_hi8 = ref_dis_hi8.to_array();
     for lane in 0..8 {
         ref_mean_out[lane] = mean_lo[lane];
         ref_mean_out[8 + lane] = mean_hi[lane];
         dis_mean_out[lane] = dmean_lo[lane];
         dis_mean_out[8 + lane] = dmean_hi[lane];
-        ref_sq_out[lane] = sq_lo16[lane] as u64 + ((sq_hi16[lane] as u64) << 16);
-        ref_sq_out[8 + lane] = sq_lo8[lane] as u64 + ((sq_hi8[lane] as u64) << 16);
-        dis_sq_out[lane] = dsq_lo16[lane] as u64 + ((dsq_hi16[lane] as u64) << 16);
-        dis_sq_out[8 + lane] = dsq_lo8[lane] as u64 + ((dsq_hi8[lane] as u64) << 16);
-        ref_dis_out[lane] = rd_lo16[lane] as u64 + ((rd_hi16[lane] as u64) << 16);
-        ref_dis_out[8 + lane] = rd_lo8[lane] as u64 + ((rd_hi8[lane] as u64) << 16);
+        ref_sq_out[lane] = sq_lo16[lane] + sq_hi16[lane];
+        ref_sq_out[8 + lane] = sq_lo8[lane] + sq_hi8[lane];
+        dis_sq_out[lane] = dsq_lo16[lane] + dsq_hi16[lane];
+        dis_sq_out[8 + lane] = dsq_lo8[lane] + dsq_hi8[lane];
+        ref_dis_out[lane] = rd_lo16[lane] + rd_hi16[lane];
+        ref_dis_out[8 + lane] = rd_lo8[lane] + rd_hi8[lane];
     }
     (
         ref_mean_out,
@@ -1012,9 +1013,9 @@ fn vif_pixel_finalize(
     gain_limit: f64,
     ref_mean: u32,
     dis_mean: u32,
-    ref_sq: u64,
-    dis_sq: u64,
-    ref_dis: u64,
+    ref_sq_shifted: u32,
+    dis_sq_shifted: u32,
+    ref_dis_shifted: u32,
     num_log: &mut i64,
     den_log: &mut i64,
     num_non_log: &mut i64,
@@ -1023,9 +1024,9 @@ fn vif_pixel_finalize(
     let ref_mean_sq = ((ref_mean as u64 * ref_mean as u64 + 2147483648) >> 32) as u32;
     let dis_mean_sq = ((dis_mean as u64 * dis_mean as u64 + 2147483648) >> 32) as u32;
     let mean_product = ((ref_mean as u64 * dis_mean as u64 + 2147483648) >> 32) as u32;
-    let sigma_ref = (((ref_sq + 32768) >> 16) as u32).wrapping_sub(ref_mean_sq) as i32;
-    let sigma_dis = (((dis_sq + 32768) >> 16) as u32).wrapping_sub(dis_mean_sq) as i32;
-    let sigma_ref_dis = (((ref_dis + 32768) >> 16) as u32).wrapping_sub(mean_product) as i32;
+    let sigma_ref = ref_sq_shifted.wrapping_sub(ref_mean_sq) as i32;
+    let sigma_dis = dis_sq_shifted.wrapping_sub(dis_mean_sq) as i32;
+    let sigma_ref_dis = ref_dis_shifted.wrapping_sub(mean_product) as i32;
     let sigma_dis = sigma_dis.max(0);
     if sigma_ref >= SIGMA_NSQ {
         *den_log += (log2_32(table, (SIGMA_NSQ + sigma_ref) as u32) - 2048 * 17) as i64;
@@ -1241,9 +1242,9 @@ fn statistics(
                 gain_limit,
                 ref_mean,
                 dis_mean,
-                ref_sq,
-                dis_sq,
-                ref_dis,
+                ((ref_sq + 32768) >> 16) as u32,
+                ((dis_sq + 32768) >> 16) as u32,
+                ((ref_dis + 32768) >> 16) as u32,
                 &mut num_log,
                 &mut den_log,
                 &mut num_non_log,

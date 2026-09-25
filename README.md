@@ -207,7 +207,11 @@ dropped to 16.60M instructions (8-bit) and 17.80M (10-bit). The SIMD
 loads use single-check `load`/`try_into` slicing rather than two-check
 `from_slice`, which cut the fixed harness to 15.38M instructions
 (8-bit) and 16.70M (10-bit) and the paired stage run to 22.782
-ms/frame. Only the v1 feature path remains scalar.
+ms/frame. The horizontal helper also returns the `(sum + 32768) >> 16`
+sigma inputs as u32 — computed as `hi + ((lo + 32768) >> 16)` inside
+the accumulators — so `vif_pixel_finalize` no longer reconstructs u64
+sums per pixel; the Callgrind harness dropped to 14.92M (8-bit) and
+16.23M (10-bit). Only the v1 feature path remains scalar.
 
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate
