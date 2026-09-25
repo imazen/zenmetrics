@@ -646,3 +646,72 @@ pub fn motion3_from_luma(
     }
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn motion_sad_scalar(prev: &[u16], cur: &[u16], width: usize, height: usize, bpc: u8) -> u64 {
+        let y_round: i64 = 1 << (bpc - 1);
+        let x_round: i64 = 1 << 15;
+        let mut y_row = vec![0i32; width];
+        let mut sad: u64 = 0;
+        for i in 0..height {
+            let mut any_nonzero: i32 = 0;
+            for j in 0..width {
+                let mut accum: i64 = 0;
+                for (k, &coef) in MOTION_FILTER.iter().enumerate() {
+                    let row = mirror(i as isize - 2 + k as isize, height);
+                    let diff = prev[row * width + j] as i64 - cur[row * width + j] as i64;
+                    accum += coef * diff;
+                }
+                y_row[j] = ((accum + y_round) >> bpc) as i32;
+                any_nonzero |= y_row[j];
+            }
+            if any_nonzero == 0 {
+                continue;
+            }
+            let mut row_sad: u64 = 0;
+            for j in 0..width {
+                let mut accum: i64 = 0;
+                for (k, &coef) in MOTION_FILTER.iter().enumerate() {
+                    let col = mirror(j as isize - 2 + k as isize, width);
+                    accum += coef * y_row[col] as i64;
+                }
+                let val = ((accum + x_round) >> 16) as i32;
+                row_sad += val.unsigned_abs() as u64;
+            }
+            sad += row_sad;
+        }
+        sad
+    }
+
+    #[test]
+    fn motion_sad_matches_scalar_across_widths_and_depths() {
+        for (width, height) in [
+            (7usize, 3usize),
+            (16, 5),
+            (17, 9),
+            (31, 12),
+            (33, 33),
+            (47, 20),
+            (64, 8),
+        ] {
+            for bpc in [8u8, 10] {
+                let max = (1u32 << bpc) - 1;
+                let n = width * height;
+                let prev: Vec<u16> = (0..n)
+                    .map(|i| ((i * 37 + width) % (max as usize + 1)) as u16)
+                    .collect();
+                let cur: Vec<u16> = (0..n)
+                    .map(|i| ((i * 53 + height + i / width) % (max as usize + 1)) as u16)
+                    .collect();
+                assert_eq!(
+                    motion_sad(&prev, &cur, width, height, bpc),
+                    motion_sad_scalar(&prev, &cur, width, height, bpc),
+                    "width={width} height={height} bpc={bpc}"
+                );
+            }
+        }
+    }
+}
