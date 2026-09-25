@@ -152,6 +152,13 @@ non-anchor metrics with no official map).
 | `psnrhvs-daala` | `PSNR-HVS` | B | 0.0002 | 0.0032 | **implemented** — FFI-verified Daala port on studio-601 YUV444 (raw med 1.1e-3 / max 4.5e-2 dB) |
 | `SSIM` | — | — | — | — | superseded — see `ssim-libvmaf` row |
 
+The `ssim-libvmaf`/`msssim-libvmaf`/`psnrhvs-daala` rows are measured as
+`|f(ours) − f(theirs)|` under the reconstructed `JND_*` remap — the remap
+is applied to both scores so its own fit error cancels (the published
+`JND_MS-SSIM` cell itself deviates from the power-law fit by ~0.13 JND at
+x≈0.97). Measuring those rows against `JND_pub` instead would report
+med ~0.004 / max ~0.13 — remap misfit, not implementation error.
+
 Reading: raw-score deltas that looked alarming are often immaterial in JND
 (SSIMULACRA2's 6.3e-3 drift → ≤0.004 JND), while modest raw deltas on steep
 curve regions blow up (MS-SSIM 0.02 raw → 2.64 JND at J2K-16). JND space is
