@@ -7,6 +7,14 @@
 # cpu-metrics-tests). Kept here verbatim so `just test-cpu` reproduces CI.
 CPU_FEATURES := "all-metrics,cpu-metrics,wgpu,pixels,encoded"
 
+# gmsd MDSI author-score gate (116 pairs). The caller decides whether it runs:
+# GMSD_MDSI_GATE=require runs it and needs GMSD_MDSI_TARGETS=<path to the
+# target table>; GMSD_MDSI_GATE=skip skips it, and the recipes below echo that
+# (libtest reports a skipped gate as `ok`, so the recipe says so).
+# The default here is `skip`; CI or a release run must set `require`.
+GMSD_MDSI_GATE := env_var_or_default("GMSD_MDSI_GATE", "skip")
+GMSD_MDSI_TARGETS := env_var_or_default("GMSD_MDSI_TARGETS", "")
+
 # List recipes.
 default:
     @just --list
@@ -95,3 +103,15 @@ hygiene-check:
 # rejected loud at worker boot. Pure-logic shell test, no cloud/GPU/secrets.
 test-tmpdir-discipline:
     bash crates/zenfleet-worker/tests/tmpdir_discipline_test.sh
+
+# gmsd crate tests (all tiers the host has, banded parallelism). The MDSI
+# author-score gate follows GMSD_MDSI_GATE / GMSD_MDSI_TARGETS above.
+test-gmsd:
+    @if [ "{{GMSD_MDSI_GATE}}" = "skip" ]; then echo 'MDSI author-score gate: SKIPPED (GMSD_MDSI_GATE=skip)'; fi
+    GMSD_MDSI_GATE={{GMSD_MDSI_GATE}} GMSD_MDSI_TARGETS={{GMSD_MDSI_TARGETS}} \
+        cargo test -p gmsd --release --features parallel
+
+# The MDSI author-score gate on its own: fails unless GMSD_MDSI_TARGETS names the table.
+test-gmsd-mdsi-gate:
+    GMSD_MDSI_GATE=require GMSD_MDSI_TARGETS={{GMSD_MDSI_TARGETS}} \
+        cargo test -p gmsd --release --features parallel -- author_score_gate

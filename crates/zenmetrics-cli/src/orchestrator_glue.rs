@@ -90,8 +90,11 @@ impl OrchestratorMetricSpec {
             },
             // GMSD is orchestrator-ineligible (`metric_orchestrator_eligible`
             // returns false), so every caller gates before reaching here.
-            CliMetricKind::Gmsd => {
-                unreachable!("gmsd has no orchestrator backend; callers gate on eligibility")
+            CliMetricKind::Gmsd
+            | CliMetricKind::Mdsi
+            | CliMetricKind::MsGmsd
+            | CliMetricKind::MsGmsdc => {
+                unreachable!("metric has no orchestrator backend; callers gate on eligibility")
             }
             // HDR-VDP likewise: the executor's leaves are sRGB8-shaped
             // (cpu_adapter) or GPU backends hdrvdp doesn't have — the
@@ -264,6 +267,9 @@ pub fn validate_cpu_variant_built_in(
     if matches!(
         cli_kind,
         CliMetricKind::Gmsd
+            | CliMetricKind::Mdsi
+            | CliMetricKind::MsGmsd
+            | CliMetricKind::MsGmsdc
             | CliMetricKind::Psnrhvs
             | CliMetricKind::PsnrhvsY
             | CliMetricKind::Haarpsi

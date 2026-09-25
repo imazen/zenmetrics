@@ -176,6 +176,9 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::Msssim => "msssim",
         CliMetricKind::Vif => "vif",
         CliMetricKind::Mad => "mad",
+        CliMetricKind::Mdsi => "mdsi",
+        CliMetricKind::MsGmsd => "ms-gmsd",
+        CliMetricKind::MsGmsdc => "ms-gmsdc",
         CliMetricKind::Cvvdp => "cvvdp",
         CliMetricKind::CvvdpGpu => "cvvdp",
         CliMetricKind::Butteraugli => "butteraugli_max",
@@ -262,6 +265,9 @@ pub fn rekey_orchestrator_columns(
         CliMetricKind::Iwssim => Vec::new(),
         // Never reaches the orchestrator (`metric_orchestrator_eligible`).
         CliMetricKind::Gmsd
+        | CliMetricKind::Mdsi
+        | CliMetricKind::MsGmsd
+        | CliMetricKind::MsGmsdc
         | CliMetricKind::Hdrvdp
         | CliMetricKind::Psnrhvs
         | CliMetricKind::PsnrhvsY
@@ -379,7 +385,9 @@ pub fn rekey_orchestrator_columns(
 ///   `cvvdp_gpu::CVVDP_COLUMN_NAME`.
 pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
     // GMSD has no umbrella/orchestrator backend: it is scored by the
-    // direct CPU path in `metrics::run_metric`. HDR-VDP is the same
+    // direct CPU path in `metrics::run_metric`. MDSI, MS-GMSD and MS-GMSDc are
+    // the same shape (gmsd-crate CPU metrics with no umbrella/orchestrator
+    // backend). HDR-VDP is the same
     // shape of ineligible: the orchestrator's leaves are all
     // sRGB8-shaped (cpu_adapter) or GPU backends hdrvdp doesn't have —
     // its nits feeding only exists through `hdr::HdrScorer`, which the
@@ -396,6 +404,9 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
     !matches!(
         kind,
         CliMetricKind::Gmsd
+            | CliMetricKind::Mdsi
+            | CliMetricKind::MsGmsd
+            | CliMetricKind::MsGmsdc
             | CliMetricKind::Hdrvdp
             | CliMetricKind::Psnrhvs
             | CliMetricKind::PsnrhvsY

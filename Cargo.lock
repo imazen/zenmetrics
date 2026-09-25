@@ -2224,10 +2224,12 @@ name = "gmsd"
 version = "0.1.0"
 dependencies = [
  "archmage",
+ "libm",
  "magetypes",
  "rayon",
  "serde",
  "serde_json",
+ "zenbench",
  "zenpixels",
  "zenpixels-convert",
 ]

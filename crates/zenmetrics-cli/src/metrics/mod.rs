@@ -149,6 +149,16 @@ pub enum MetricKind {
     /// umbrella or the orchestrator (CPU-only, no GPU twin).
     #[value(name = "gmsd")]
     Gmsd,
+    /// MDSI default summation model (Nafchi et al. 2016), CPU, f64 L/H/M.
+    /// Distance: smaller is better. Uses the `cpu-gmsd` build feature.
+    #[value(name = "mdsi")]
+    Mdsi,
+    /// Paper-derived four-scale masked GMSD, with declared numerical conventions.
+    #[value(name = "ms-gmsd")]
+    MsGmsd,
+    /// Paper-derived colour MS-GMSDc; not author-software parity.
+    #[value(name = "ms-gmsdc")]
+    MsGmsdc,
     /// HDR-VDP 2.2.2 (JOD scale 0–100, 100 = identical) — CPU implementation
     /// via the in-tree `hdrvdp` crate (native SIMD port of the official
     /// HDR-VDP-2.2.2; dispatched through `zenmetrics_api::cpu_dispatch` /
@@ -291,6 +301,9 @@ impl MetricKind {
             MetricKind::CvvdpGpu,
             MetricKind::Iwssim,
             MetricKind::Gmsd,
+            MetricKind::Mdsi,
+            MetricKind::MsGmsd,
+            MetricKind::MsGmsdc,
             MetricKind::Hdrvdp,
             MetricKind::Psnrhvs,
             MetricKind::PsnrhvsY,
@@ -323,6 +336,9 @@ impl MetricKind {
             MetricKind::CvvdpGpu => "cvvdp-gpu",
             MetricKind::Iwssim => "iwssim",
             MetricKind::Gmsd => "gmsd",
+            MetricKind::Mdsi => "mdsi",
+            MetricKind::MsGmsd => "ms-gmsd",
+            MetricKind::MsGmsdc => "ms-gmsdc",
             MetricKind::Hdrvdp => "hdrvdp",
             MetricKind::Psnrhvs => "psnrhvs",
             MetricKind::PsnrhvsY => "psnrhvs-y",
@@ -390,6 +406,9 @@ impl MetricKind {
             MetricKind::CvvdpGpu => CVVDP_GPU_COLUMNS,
             MetricKind::Iwssim => IWSSIM_CPU_COLUMNS,
             MetricKind::Gmsd => GMSD_CPU_COLUMNS,
+            MetricKind::Mdsi => MDSI_CPU_COLUMNS,
+            MetricKind::MsGmsd => &["ms_gmsd_paper_cpu_imazen_v0_1_0"],
+            MetricKind::MsGmsdc => &["ms_gmsdc_paper_cpu_imazen_v0_1_0"],
             MetricKind::Hdrvdp => HDRVDP_CPU_COLUMNS,
             MetricKind::Psnrhvs => PSNRHVS_CPU_COLUMNS,
             MetricKind::PsnrhvsY => PSNRHVSY_CPU_COLUMNS,
@@ -613,6 +632,11 @@ const IWSSIM_CPU_COLUMNS: &[&str] = &["iwssim"];
 const GMSD_CPU_COLUMNS: &[&str] = &[gmsd::GMSD_COLUMN_NAME];
 #[cfg(not(feature = "cpu-gmsd"))]
 const GMSD_CPU_COLUMNS: &[&str] = &["gmsd"];
+
+#[cfg(feature = "cpu-gmsd")]
+const MDSI_CPU_COLUMNS: &[&str] = &["mdsi_cpu_imazen_v0_1_0"];
+#[cfg(not(feature = "cpu-gmsd"))]
+const MDSI_CPU_COLUMNS: &[&str] = &["mdsi"];
 
 // Versioned **CPU** HDR-VDP column name (`hdrvdp::HDRVDP_COLUMN_NAME`, default
 // `hdrvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`, overridable via `HDRVDP_IMPL_TAG` —
@@ -1387,6 +1411,34 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-gmsd"))]
         MetricKind::Gmsd => Err(disabled_msg("gmsd", "cpu-gmsd")),
+        #[cfg(feature = "cpu-gmsd")]
+        MetricKind::Mdsi => {
+            if reference.width != distorted.width || reference.height != distorted.height {
+                return Err("mdsi: reference and distorted dimensions differ".into());
+            }
+            let (w, h) = (reference.width as usize, reference.height as usize);
+            Ok(vec![(
+                MDSI_CPU_COLUMNS[0],
+                gmsd::mdsi_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?,
+            )])
+        }
+        #[cfg(not(feature = "cpu-gmsd"))]
+        MetricKind::Mdsi => Err(disabled_msg("mdsi", "cpu-gmsd")),
+        #[cfg(feature = "cpu-gmsd")]
+        MetricKind::MsGmsd | MetricKind::MsGmsdc => {
+            if reference.width != distorted.width || reference.height != distorted.height {
+                return Err("ms-gmsd: reference and distorted dimensions differ".into());
+            }
+            let (w, h) = (reference.width as usize, reference.height as usize);
+            let value = if kind == MetricKind::MsGmsd {
+                gmsd::ms_gmsd_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?
+            } else {
+                gmsd::ms_gmsdc_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?
+            };
+            Ok(vec![(kind.column_names()[0], value)])
+        }
+        #[cfg(not(feature = "cpu-gmsd"))]
+        MetricKind::MsGmsd | MetricKind::MsGmsdc => Err(disabled_msg("ms-gmsd", "cpu-gmsd")),
 
         // HDR-VDP: umbrella native-CPU path (same `run_cpu_native_via_umbrella`
         // as the other unsuffixed metrics). The Cpu dispatch's `compute_srgb_u8`

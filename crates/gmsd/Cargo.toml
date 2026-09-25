@@ -38,11 +38,30 @@ avx512 = ["archmage/avx512", "magetypes/avx512"]
 [dependencies]
 archmage = { workspace = true }
 magetypes = { workspace = true }
+libm = { version = "0.2.16", default-features = false }
 rayon = { version = "1.10", optional = true }
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
+# Lane checks pin an external raw-round snapshot via a per-command patch.
+zenbench = { version = "0.1.9", default-features = false }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"] }
+
+[[example]]
+name = "mdsi_oracle"
+required-features = ["std"]
+
+[[example]]
+name = "chroma_speed"
+required-features = ["parallel"]
+
+[[example]]
+name = "colour_score"
+required-features = ["std"]
+
+[[example]]
+name = "mdsi_vs_reference"
+required-features = ["parallel"]
