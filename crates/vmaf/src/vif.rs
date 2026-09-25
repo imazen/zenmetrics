@@ -4,6 +4,8 @@ use archmage::intrinsics::x86_64::*;
 use archmage::magetypes;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{SimdToken, X64V3Token, arcane, rite};
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+use archmage::X64V4Token;
 use std::borrow::Cow;
 use std::sync::OnceLock;
 
@@ -2675,6 +2677,322 @@ fn vif_pixel_finalize(
     );
 }
 
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[inline(always)]
+fn v4_token() -> Option<X64V4Token> {
+    #[cfg(test)]
+    if V3_DISABLED_FOR_TEST.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    X64V4Token::summon()
+}
+
+/// Lane gather into the u16 log table: identical to C's
+/// `i32gather_epi64(..., log2_table, 2) & 0xffff` but bounds-checked — indices
+/// are already in `[32768, 65536)` by construction (mantissa after srlv).
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[rite]
+fn gather_log_u16_v4(_token: X64V4Token, table: &[u16; 65536], idx: __m512i) -> __m512i {
+    let mut a = [0i64; 8];
+    _mm512_storeu_si512(a8m::<i64, 8>(&mut a), idx);
+    _mm512_setr_epi64(
+        table[a[0] as u32 as usize] as i64,
+        table[a[1] as u32 as usize] as i64,
+        table[a[2] as u32 as usize] as i64,
+        table[a[3] as u32 as usize] as i64,
+        table[a[4] as u32 as usize] as i64,
+        table[a[5] as u32 as usize] as i64,
+        table[a[6] as u32 as usize] as i64,
+        table[a[7] as u32 as usize] as i64,
+    )
+}
+
+/// Vectorized port of libvmaf's `vif_statistic_avx512`: the per-16-block
+/// finalize for `vif_statistic_8`. Matches `vif_finalize_sigma` bit-for-bit —
+/// same log2 table approximation (k = 48 - lzcnt, `v >> k` mantissa index,
+/// `2048*k` exponent), same truncating f64 divides, same masks.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn vif_statistic_finalize_v4(
+    token: X64V4Token,
+    xx: __m512i,
+    xy: __m512i,
+    yy: __m512i,
+    table: &[u16; 65536],
+    gain_limit: f64,
+    num_log: &mut __m512i,
+    den_log: &mut __m512i,
+    num_non_log: &mut __m512i,
+    den_non_log: &mut __m512i,
+) {
+    const SIGMA_NSQ_I64: i64 = 65536 << 1;
+    let eps = 65536.0 * 1.0e-10;
+    for iter in 0..2 {
+        // Each pass consumes 8 i32 lanes; the second takes the high half.
+        let take = |v: __m512i| -> __m256i {
+            if iter == 0 {
+                _mm512_castsi512_si256(v)
+            } else {
+                _mm512_extracti64x4_epi64(v, 1)
+            }
+        };
+        let msigma1 = _mm512_cvtepi32_epi64(take(xx));
+        let msigma2 = _mm512_cvtepi32_epi64(take(yy));
+        let msigma12 = _mm512_cvtepi32_epi64(take(xy));
+        let msigma2 = _mm512_max_epi64(msigma2, _mm512_setzero_si512());
+        let msigma12 = _mm512_max_epi64(msigma12, _mm512_setzero_si512());
+
+        // den = log2(sigma1 + sigma_nsq) - 2048*17
+        let stage1 = _mm512_add_epi64(msigma1, _mm512_set1_epi64(SIGMA_NSQ_I64));
+        let mnorm = _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(stage1));
+        let mant = _mm512_srlv_epi64(stage1, mnorm);
+        let mut mden_val = gather_log_u16_v4(token, table, mant);
+        mden_val = _mm512_add_epi64(mden_val, _mm512_slli_epi64(mnorm, 11));
+        mden_val = _mm512_sub_epi64(mden_val, _mm512_set1_epi64(2048 * 17));
+
+        let sigma1_small = _mm512_cmpgt_epi64_mask(_mm512_set1_epi64(SIGMA_NSQ_I64), msigma1);
+        let sigma2_pos = _mm512_cmpgt_epi64_mask(msigma2, _mm512_setzero_si512());
+        let sigma12_pos = _mm512_cmpgt_epi64_mask(msigma12, _mm512_setzero_si512());
+
+        let msigma1_d = _mm512_cvtepu64_pd(msigma1);
+        let mut mg = _mm512_div_pd(
+            _mm512_cvtepu64_pd(msigma12),
+            _mm512_add_pd(msigma1_d, _mm512_set1_pd(eps)),
+        );
+        let mut msv_sq = _mm512_cvttpd_epi64(_mm512_sub_pd(
+            _mm512_cvtepi64_pd(msigma2),
+            _mm512_mul_pd(mg, _mm512_cvtepi64_pd(msigma12)),
+        ));
+        msv_sq = _mm512_max_epi64(msv_sq, _mm512_setzero_si512());
+        mg = _mm512_min_pd(mg, _mm512_set1_pd(gain_limit));
+
+        // log2(residual + sigma_nsq)
+        let numer1 = _mm512_add_epi64(msv_sq, _mm512_set1_epi64(SIGMA_NSQ_I64));
+        let numer1_lz = _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(numer1));
+        let numer1_log = _mm512_add_epi64(
+            gather_log_u16_v4(token, table, _mm512_srlv_epi64(numer1, numer1_lz)),
+            _mm512_slli_epi64(numer1_lz, 11),
+        );
+
+        // log2(residual + sigma_nsq + trunc(gain^2 * sigma1))
+        let numer1_tmp = _mm512_add_epi64(
+            numer1,
+            _mm512_cvttpd_epi64(_mm512_mul_pd(_mm512_mul_pd(mg, mg), msigma1_d)),
+        );
+        let numer1_tmp_lz =
+            _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(numer1_tmp));
+        let numer1_tmp_log = _mm512_add_epi64(
+            gather_log_u16_v4(token, table, _mm512_srlv_epi64(numer1_tmp, numer1_tmp_lz)),
+            _mm512_slli_epi64(numer1_tmp_lz, 11),
+        );
+
+        let mnum_val = _mm512_sub_epi64(numer1_tmp_log, numer1_log);
+        *num_log = _mm512_mask_add_epi64(
+            *num_log,
+            (!sigma1_small) & sigma12_pos & sigma2_pos,
+            *num_log,
+            mnum_val,
+        );
+        *den_log = _mm512_mask_add_epi64(*den_log, !sigma1_small, *den_log, mden_val);
+        *num_non_log =
+            _mm512_mask_add_epi64(*num_non_log, sigma1_small, *num_non_log, msigma2);
+        *den_non_log = _mm512_mask_add_epi64(
+            *den_non_log,
+            sigma1_small,
+            *den_non_log,
+            _mm512_set1_epi64(1),
+        );
+    }
+}
+
+/// `vif_stat_horizontal_v4` filtered-square accumulator: `sum_t filt[t] *
+/// tmp[..]` over the symmetric fwidth window, widened through cvtepu32_epi64
+/// and accumulated in two i64×8 halves, then `(acc + 0x8000) >> 16` merged to
+/// 16 u32 lanes via mask2. Mirrors C's `refsq/dissq/refdis` blocks.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn vif_stat_fsq_v4(
+    _token: X64V4Token,
+    tmp: &[u32],
+    filt: &[u16],
+    half: usize,
+    fwidth: usize,
+    j: usize,
+    rounder16: __m512i,
+    mask2: __m512i,
+) -> __m512i {
+    let fq = _mm512_set1_epi64(filt[half] as i64);
+    let s0 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[half + j..half + j + 8])));
+    let s1 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[half + j + 8..half + j + 16])));
+    let mut acc_lo = _mm512_add_epi64(rounder16, _mm512_mul_epu32(s0, fq));
+    let mut acc_hi = _mm512_add_epi64(rounder16, _mm512_mul_epu32(s1, fq));
+    for (fj, &coeff) in filt.iter().enumerate().take(half) {
+        let fq = _mm512_set1_epi64(coeff as i64);
+        let l = j + fj;
+        let r = j + fwidth - 1 - fj;
+        let l0 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[l..l + 8])));
+        let l1 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[l + 8..l + 16])));
+        let r0 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[r..r + 8])));
+        let r1 = _mm512_cvtepu32_epi64(_mm256_loadu_si256(a8::<u32, 8>(&tmp[r + 8..r + 16])));
+        acc_lo = _mm512_add_epi64(acc_lo, _mm512_mul_epu32(l0, fq));
+        acc_hi = _mm512_add_epi64(acc_hi, _mm512_mul_epu32(l1, fq));
+        acc_lo = _mm512_add_epi64(acc_lo, _mm512_mul_epu32(r0, fq));
+        acc_hi = _mm512_add_epi64(acc_hi, _mm512_mul_epu32(r1, fq));
+    }
+    let acc_lo = _mm512_srli_epi64(acc_lo, 16);
+    let acc_hi = _mm512_srli_epi64(acc_hi, 16);
+    _mm512_permutex2var_epi32(acc_lo, mask2, acc_hi)
+}
+
+/// AVX-512 port of `vif_statistic_8_avx512`'s horizontal pass for one row:
+/// same 16-column block shape as the `_v3` kernels but zmm throughout, with
+/// the per-block finalize vectorized (lzcnt + table gather + f64 divide)
+/// instead of scalar `vif_finalize_sigma` calls. The horizontal math is
+/// identical between the 8- and 16-bit v3 kernels (u32 tmp lanes either way),
+/// so this one kernel serves both `vif_stat8` and `vif_stat16` rows. Returns
+/// columns processed (a multiple of 16).
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn vif_stat_horizontal_v4(
+    token: X64V4Token,
+    tmp_mu1: &[u32],
+    tmp_mu2: &[u32],
+    tmp_ref: &[u32],
+    tmp_dis: &[u32],
+    tmp_ref_dis: &[u32],
+    filt: &[u16],
+    half: usize,
+    width: usize,
+    table: &[u16; 65536],
+    gain_limit: f64,
+    accums: (&mut i64, &mut i64, &mut i64, &mut i64),
+) -> usize {
+    let fwidth = 2 * half + 1;
+    let n16 = width & !15;
+    let zero = _mm512_setzero_si512();
+    let round32 = _mm512_set1_epi64(0x80000000);
+    let rounder16 = _mm512_set1_epi64(0x8000);
+    let mask5 = _mm512_set_epi32(30, 28, 14, 12, 26, 24, 10, 8, 22, 20, 6, 4, 18, 16, 2, 0);
+    let mask2 = _mm512_set_epi32(30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 0);
+    let mut m_num_log = _mm512_setzero_si512();
+    let mut m_den_log = _mm512_setzero_si512();
+    let mut m_num_non_log = _mm512_setzero_si512();
+    let mut m_den_non_log = _mm512_setzero_si512();
+    let (num_log, den_log, num_non_log_out, den_non_log_out) = accums;
+
+    for j in (0..n16).step_by(16) {
+        // mu1 horizontal sum — i32 products accumulate pairwise inside the
+        // i64 lanes, identical to the AVX2 path (sums stay < 2^32 per half).
+        let fq = _mm512_set1_epi32(filt[half] as i32);
+        let mut mu1 = _mm512_mullo_epi32(
+            _mm512_loadu_si512(a8::<u32, 16>(&tmp_mu1[half + j..half + j + 16])),
+            fq,
+        );
+        let mut mu2 = _mm512_mullo_epi32(
+            _mm512_loadu_si512(a8::<u32, 16>(&tmp_mu2[half + j..half + j + 16])),
+            fq,
+        );
+        for (fj, &coeff) in filt.iter().enumerate().take(half) {
+            let fq = _mm512_set1_epi32(coeff as i32);
+            let l = j + fj;
+            let r = j + fwidth - 1 - fj;
+            mu1 = _mm512_add_epi64(
+                mu1,
+                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&tmp_mu1[l..l + 16])), fq),
+            );
+            mu1 = _mm512_add_epi64(
+                mu1,
+                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&tmp_mu1[r..r + 16])), fq),
+            );
+            mu2 = _mm512_add_epi64(
+                mu2,
+                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&tmp_mu2[l..l + 16])), fq),
+            );
+            mu2 = _mm512_add_epi64(
+                mu2,
+                _mm512_mullo_epi32(_mm512_loadu_si512(a8::<u32, 16>(&tmp_mu2[r..r + 16])), fq),
+            );
+        }
+
+        // mu1sq / mu2sq / mu1mu2: widen each i32 pair to i64, square/multiply,
+        // round-shift back, then even-lane merge via permutex2var (mask5).
+        let mu1_lo = _mm512_unpacklo_epi32(mu1, zero);
+        let mu1_hi = _mm512_unpackhi_epi32(mu1, zero);
+        let mu1sq = {
+            let lo = _mm512_srli_epi64(
+                _mm512_add_epi64(_mm512_mul_epu32(mu1_lo, mu1_lo), round32),
+                32,
+            );
+            let hi = _mm512_srli_epi64(
+                _mm512_add_epi64(_mm512_mul_epu32(mu1_hi, mu1_hi), round32),
+                32,
+            );
+            _mm512_permutex2var_epi32(lo, mask5, hi)
+        };
+        let mu2_lo = _mm512_unpacklo_epi32(mu2, zero);
+        let mu2_hi = _mm512_unpackhi_epi32(mu2, zero);
+        let mu1mu2 = {
+            let lo = _mm512_srli_epi64(
+                _mm512_add_epi64(_mm512_mul_epu32(mu1_lo, mu2_lo), round32),
+                32,
+            );
+            let hi = _mm512_srli_epi64(
+                _mm512_add_epi64(_mm512_mul_epu32(mu1_hi, mu2_hi), round32),
+                32,
+            );
+            _mm512_permutex2var_epi32(lo, mask5, hi)
+        };
+        let mu2sq = {
+            let lo = _mm512_srli_epi64(
+                _mm512_add_epi64(_mm512_mul_epu32(mu2_lo, mu2_lo), round32),
+                32,
+            );
+            let hi = _mm512_srli_epi64(
+                _mm512_add_epi64(_mm512_mul_epu32(mu2_hi, mu2_hi), round32),
+                32,
+            );
+            _mm512_permutex2var_epi32(lo, mask5, hi)
+        };
+
+        // filtered ref²/dis²/ref·dis (u32 lanes widened to i64 accumulators,
+        // srli 16, even-lane merge via mask2), minus the matching mu term.
+        let xx = _mm512_sub_epi32(
+            vif_stat_fsq_v4(token, tmp_ref, filt, half, fwidth, j, rounder16, mask2),
+            mu1sq,
+        );
+        let yy = _mm512_max_epi32(
+            _mm512_sub_epi32(
+                vif_stat_fsq_v4(token, tmp_dis, filt, half, fwidth, j, rounder16, mask2),
+                mu2sq,
+            ),
+            zero,
+        );
+        let xy = _mm512_sub_epi32(
+            vif_stat_fsq_v4(token, tmp_ref_dis, filt, half, fwidth, j, rounder16, mask2),
+            mu1mu2,
+        );
+        vif_statistic_finalize_v4(
+            token,
+            xx,
+            xy,
+            yy,
+            table,
+            gain_limit,
+            &mut m_num_log,
+            &mut m_den_log,
+            &mut m_num_non_log,
+            &mut m_den_non_log,
+        );
+    }
+    *num_log += _mm512_reduce_add_epi64(m_num_log);
+    *den_log += _mm512_reduce_add_epi64(m_den_log);
+    *num_non_log_out += _mm512_reduce_add_epi64(m_num_non_log);
+    *den_non_log_out += _mm512_reduce_add_epi64(m_den_non_log);
+    n16
+}
+
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 #[inline(always)]
 fn v3_token() -> Option<X64V3Token> {
@@ -2888,8 +3206,34 @@ fn statistics(
         let mut hcol = 0;
         #[cfg(feature = "simd")]
         {
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(all(feature = "avx512", target_arch = "x86_64"))]
             if bit_depth == 8
+                && scale == 0
+                && let Some(token) = v4_token()
+            {
+                hcol = vif_stat_horizontal_v4(
+                    token,
+                    &vertical_ref_mean,
+                    &vertical_dis_mean,
+                    &vertical_ref_sq,
+                    &vertical_dis_sq,
+                    &vertical_ref_dis,
+                    filter,
+                    half as usize,
+                    width,
+                    table,
+                    gain_limit,
+                    (
+                        &mut num_log,
+                        &mut den_log,
+                        &mut num_non_log,
+                        &mut den_non_log,
+                    ),
+                );
+            }
+            #[cfg(target_arch = "x86_64")]
+            if hcol == 0
+                && bit_depth == 8
                 && scale == 0
                 && let Some(token) = x64v3
             {
@@ -2913,8 +3257,36 @@ fn statistics(
                     ),
                 );
             }
+            #[cfg(all(feature = "avx512", target_arch = "x86_64"))]
+            if hcol == 0
+                && !(bit_depth == 8 && scale == 0)
+                && let Some(token) = v4_token()
+            {
+                // Same horizontal math as the 8-bit path; the v4 kernel is
+                // width/bit-depth agnostic on the u32 tmp planes.
+                hcol = vif_stat_horizontal_v4(
+                    token,
+                    &vertical_ref_mean,
+                    &vertical_dis_mean,
+                    &vertical_ref_sq,
+                    &vertical_dis_sq,
+                    &vertical_ref_dis,
+                    filter,
+                    half as usize,
+                    width,
+                    table,
+                    gain_limit,
+                    (
+                        &mut num_log,
+                        &mut den_log,
+                        &mut num_non_log,
+                        &mut den_non_log,
+                    ),
+                );
+            }
             #[cfg(target_arch = "x86_64")]
-            if !(bit_depth == 8 && scale == 0)
+            if hcol == 0
+                && !(bit_depth == 8 && scale == 0)
                 && let Some(token) = x64v3
             {
                 hcol = vif_stat16_horizontal_v3(

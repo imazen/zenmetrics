@@ -23,6 +23,14 @@ vmaf-head-sys = "=0.2.0"
 name = "backends"
 harness = false
 
+# archmage::incant! checks `cfg(feature = "avx512")` internally even when no
+# AVX-512 tier is listed (same allow as crates/iwssim, crates/gmsd).
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("avx512"))'] }
+
 [features]
 parallel = ["dep:rayon"]
 simd = ["dep:archmage", "dep:magetypes"]
+# Opt-in AVX-512 `v4` tier for the intrinsic-ported kernels (same shape as
+# crates/vif, crates/gmsd, crates/psnrhvs).
+avx512 = ["simd", "archmage/avx512", "magetypes/avx512"]

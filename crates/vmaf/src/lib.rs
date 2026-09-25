@@ -26,6 +26,8 @@ use std::fmt;
 use archmage::intrinsics::x86_64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{SimdToken, X64V3Token, arcane, rite};
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+use archmage::X64V4Token;
 #[cfg(feature = "simd")]
 use archmage::{autoversion, magetypes};
 
@@ -45,6 +47,12 @@ fn a8m<T, const N: usize>(s: &mut [T]) -> &mut [T; N] {
 #[inline(always)]
 fn v3_token() -> Option<X64V3Token> {
     X64V3Token::summon()
+}
+
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[inline(always)]
+fn v4_token() -> Option<X64V4Token> {
+    X64V4Token::summon()
 }
 
 #[derive(Debug)]
@@ -588,6 +596,111 @@ fn motion_vertical16_v3(
     );
 }
 
+/// Direct port of `motion_score_pipeline_8_avx512`'s phase-1 for 8-bit
+/// planes: epi16 differences of 32 columns per call (u16 loads stand in for
+/// C's `cvtepu8_epi16`), mullo/mulhi_epi16 + unpack_epi16 products,
+/// `+128 >> 8`, then the four-way `permute2x128` reorder before storing.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn motion_vertical8_v4(
+    _token: X64V4Token,
+    prev_rows: &[&[u16]; 5],
+    cur_rows: &[&[u16]; 5],
+    out: &mut [i32; 32],
+) {
+    let f = [
+        _mm512_set1_epi16(3571),
+        _mm512_set1_epi16(16004),
+        _mm512_set1_epi16(26386),
+        _mm512_set1_epi16(16004),
+        _mm512_set1_epi16(3571),
+    ];
+    let round8 = _mm512_set1_epi32(1 << 7);
+    let mut acc_lo = _mm512_setzero_si512();
+    let mut acc_hi = _mm512_setzero_si512();
+    for k in 0..5 {
+        let d = _mm512_sub_epi16(
+            _mm512_loadu_si512(a8::<u16, 32>(&prev_rows[k][..32])),
+            _mm512_loadu_si512(a8::<u16, 32>(&cur_rows[k][..32])),
+        );
+        let lo = _mm512_mullo_epi16(d, f[k]);
+        let hi = _mm512_mulhi_epi16(d, f[k]);
+        acc_lo = _mm512_add_epi32(acc_lo, _mm512_unpacklo_epi16(lo, hi));
+        acc_hi = _mm512_add_epi32(acc_hi, _mm512_unpackhi_epi16(lo, hi));
+    }
+    acc_lo = _mm512_srai_epi32(_mm512_add_epi32(acc_lo, round8), 8);
+    acc_hi = _mm512_srai_epi32(_mm512_add_epi32(acc_hi, round8), 8);
+    let lo_lo = _mm512_castsi512_si256(acc_lo);
+    let lo_hi = _mm512_extracti64x4_epi64(acc_lo, 1);
+    let hi_lo = _mm512_castsi512_si256(acc_hi);
+    let hi_hi = _mm512_extracti64x4_epi64(acc_hi, 1);
+    _mm256_storeu_si256(
+        a8m::<i32, 8>(&mut out[..8]),
+        _mm256_permute2x128_si256(lo_lo, hi_lo, 0x20),
+    );
+    _mm256_storeu_si256(
+        a8m::<i32, 8>(&mut out[8..16]),
+        _mm256_permute2x128_si256(lo_lo, hi_lo, 0x31),
+    );
+    _mm256_storeu_si256(
+        a8m::<i32, 8>(&mut out[16..24]),
+        _mm256_permute2x128_si256(lo_hi, hi_hi, 0x20),
+    );
+    _mm256_storeu_si256(
+        a8m::<i32, 8>(&mut out[24..32]),
+        _mm256_permute2x128_si256(lo_hi, hi_hi, 0x31),
+    );
+}
+
+/// Direct port of `motion_score_pipeline_16_avx512`'s phase-1: epi32
+/// differences over 16 columns per call, mullo_epi32 products, i64
+/// accumulation, and native `srav_epi64` rounding (AVX-512F has the
+/// variable i64 shift AVX2 lacked). Exact for any bpc <= 16.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn motion_vertical16_v4(
+    _token: X64V4Token,
+    prev_rows: &[&[u16]; 5],
+    cur_rows: &[&[u16]; 5],
+    bpc: u32,
+    out: &mut [i32; 16],
+) {
+    let g = [
+        _mm512_set1_epi32(3571),
+        _mm512_set1_epi32(16004),
+        _mm512_set1_epi32(26386),
+        _mm512_set1_epi32(16004),
+        _mm512_set1_epi32(3571),
+    ];
+    let round64 = _mm512_set1_epi64(1i64 << (bpc - 1));
+    let bpc_vec = _mm512_set1_epi64(bpc as i64);
+    let mut prod = [_mm512_setzero_si512(); 5];
+    for k in 0..5 {
+        let d = _mm512_sub_epi32(
+            _mm512_cvtepu16_epi32(_mm256_loadu_si256(a8::<u16, 16>(&prev_rows[k][..16]))),
+            _mm512_cvtepu16_epi32(_mm256_loadu_si256(a8::<u16, 16>(&cur_rows[k][..16]))),
+        );
+        prod[k] = _mm512_mullo_epi32(d, g[k]);
+    }
+    let mut acc_lo = _mm512_cvtepi32_epi64(_mm512_castsi512_si256(prod[0]));
+    let mut acc_hi = _mm512_cvtepi32_epi64(_mm512_extracti64x4_epi64(prod[0], 1));
+    for p in prod.iter().take(5).skip(1) {
+        acc_lo = _mm512_add_epi64(acc_lo, _mm512_cvtepi32_epi64(_mm512_castsi512_si256(*p)));
+        acc_hi = _mm512_add_epi64(
+            acc_hi,
+            _mm512_cvtepi32_epi64(_mm512_extracti64x4_epi64(*p, 1)),
+        );
+    }
+    acc_lo = _mm512_srav_epi64(_mm512_add_epi64(acc_lo, round64), bpc_vec);
+    acc_hi = _mm512_srav_epi64(_mm512_add_epi64(acc_hi, round64), bpc_vec);
+    let res_lo = _mm512_cvtsepi64_epi32(acc_lo);
+    let res_hi = _mm512_cvtsepi64_epi32(acc_hi);
+    _mm512_storeu_si512(
+        a8m::<i32, 16>(out),
+        _mm512_inserti64x4(_mm512_castsi256_si512(res_lo), res_hi, 1),
+    );
+}
+
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 #[rite]
 fn srai_epi64_16(_token: X64V3Token, v: __m256i) -> __m256i {
@@ -677,6 +790,82 @@ fn motion_xsad_v3(_token: X64V3Token, y_row: &[i32], w: usize) -> u64 {
     row_sad
 }
 
+/// Direct port of `x_conv_row_sad_avx512`: the same horizontal 5-tap
+/// convolution + abs + SAD as `_v3`, widened to 16 i32 lanes. AVX-512 gives
+/// the two ops AVX2 had to emulate: native `srai_epi64` rounding and
+/// `cvtsepi64_epi32` narrowing, plus a single-instruction epi32 reduction.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn motion_xsad_v4(_token: X64V4Token, y_row: &[i32], w: usize) -> u64 {
+    let g0 = _mm512_set1_epi32(3571);
+    let g1 = _mm512_set1_epi32(16004);
+    let g2 = _mm512_set1_epi32(26386);
+    let round64 = _mm512_set1_epi64(1 << 15);
+
+    let mut row_sad = 0u64;
+    let mut j = 0usize;
+    while j < 2 && j < w {
+        let mut accum = 0i64;
+        for (k, &coef) in MOTION_FILTER.iter().enumerate() {
+            let col = mirror(j as isize - 2 + k as isize, w);
+            accum += coef * y_row[col] as i64;
+        }
+        let val = ((accum + (1 << 15)) >> 16) as i32;
+        row_sad += val.unsigned_abs() as u64;
+        j += 1;
+    }
+
+    let mut sad_acc = _mm512_setzero_si512();
+    // Reads y_row[j-2 ..= j+17], so the vector loop needs j+18 <= w.
+    while j + 18 <= w {
+        let y0 = _mm512_loadu_si512(a8::<i32, 16>(&y_row[j - 2..j + 14]));
+        let y1 = _mm512_loadu_si512(a8::<i32, 16>(&y_row[j - 1..j + 15]));
+        let y2 = _mm512_loadu_si512(a8::<i32, 16>(&y_row[j..j + 16]));
+        let y3 = _mm512_loadu_si512(a8::<i32, 16>(&y_row[j + 1..j + 17]));
+        let y4 = _mm512_loadu_si512(a8::<i32, 16>(&y_row[j + 2..j + 18]));
+        let p0 = _mm512_mullo_epi32(y0, g0);
+        let p1 = _mm512_mullo_epi32(y1, g1);
+        let p2 = _mm512_mullo_epi32(y2, g2);
+        let p3 = _mm512_mullo_epi32(y3, g1);
+        let p4 = _mm512_mullo_epi32(y4, g0);
+        let s04 = _mm512_add_epi32(p0, p4);
+        let s13 = _mm512_add_epi32(p1, p3);
+        let mut acc_lo = _mm512_cvtepi32_epi64(_mm512_castsi512_si256(s04));
+        acc_lo = _mm512_add_epi64(acc_lo, _mm512_cvtepi32_epi64(_mm512_castsi512_si256(s13)));
+        acc_lo = _mm512_add_epi64(acc_lo, _mm512_cvtepi32_epi64(_mm512_castsi512_si256(p2)));
+        let mut acc_hi = _mm512_cvtepi32_epi64(_mm512_extracti64x4_epi64(s04, 1));
+        acc_hi = _mm512_add_epi64(
+            acc_hi,
+            _mm512_cvtepi32_epi64(_mm512_extracti64x4_epi64(s13, 1)),
+        );
+        acc_hi = _mm512_add_epi64(
+            acc_hi,
+            _mm512_cvtepi32_epi64(_mm512_extracti64x4_epi64(p2, 1)),
+        );
+        acc_lo = _mm512_srai_epi64(_mm512_add_epi64(acc_lo, round64), 16);
+        acc_hi = _mm512_srai_epi64(_mm512_add_epi64(acc_hi, round64), 16);
+        let res_lo = _mm512_cvtsepi64_epi32(acc_lo);
+        let res_hi = _mm512_cvtsepi64_epi32(acc_hi);
+        let result = _mm512_inserti64x4(_mm512_castsi256_si512(res_lo), res_hi, 1);
+        sad_acc = _mm512_add_epi32(sad_acc, _mm512_abs_epi32(result));
+        j += 16;
+    }
+
+    row_sad += (_mm512_reduce_add_epi32(sad_acc) as u32) as u64;
+
+    while j < w {
+        let mut accum = 0i64;
+        for (k, &coef) in MOTION_FILTER.iter().enumerate() {
+            let col = mirror(j as isize - 2 + k as isize, w);
+            accum += coef * y_row[col] as i64;
+        }
+        let val = ((accum + (1 << 15)) >> 16) as i32;
+        row_sad += val.unsigned_abs() as u64;
+        j += 1;
+    }
+    row_sad
+}
+
 #[cfg_attr(feature = "simd", autoversion)]
 fn motion_horizontal_row(y_row: &[i32], width: usize) -> u64 {
     let x_round: i64 = 1 << 15;
@@ -738,6 +927,18 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
                     &cur[(i + 2) * width + j..],
                 ]
             };
+            #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+            if bpc == 8
+                && let Some(token) = v4_token()
+            {
+                while j + 32 <= width {
+                    let mut out = [0i32; 32];
+                    motion_vertical8_v4(token, &prev_rows(j), &cur_rows(j), &mut out);
+                    y_row[j..j + 32].copy_from_slice(&out);
+                    any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
+                    j += 32;
+                }
+            }
             #[cfg(target_arch = "x86_64")]
             if bpc == 8
                 && let Some(token) = v3_token()
@@ -745,6 +946,18 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
                 while j + 16 <= width {
                     let mut out = [0i32; 16];
                     motion_vertical8_v3(token, &prev_rows(j), &cur_rows(j), &mut out);
+                    y_row[j..j + 16].copy_from_slice(&out);
+                    any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
+                    j += 16;
+                }
+            }
+            #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+            if bpc == 16
+                && let Some(token) = v4_token()
+            {
+                while j + 16 <= width {
+                    let mut out = [0i32; 16];
+                    motion_vertical16_v4(token, &prev_rows(j), &cur_rows(j), 16, &mut out);
                     y_row[j..j + 16].copy_from_slice(&out);
                     any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
                     j += 16;
@@ -796,7 +1009,15 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
         if any_nonzero == 0 {
             continue;
         }
-        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+        if let Some(token) = v4_token() {
+            sad += motion_xsad_v4(token, &y_row, width);
+        } else if let Some(token) = v3_token() {
+            sad += motion_xsad_v3(token, &y_row, width);
+        } else {
+            sad += motion_horizontal_row(&y_row, width);
+        }
+        #[cfg(all(feature = "simd", not(feature = "avx512"), target_arch = "x86_64"))]
         if let Some(token) = v3_token() {
             sad += motion_xsad_v3(token, &y_row, width);
         } else {

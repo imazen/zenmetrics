@@ -3,6 +3,8 @@ use crate::{Error, ModelVariant, VmafV0Variant};
 use archmage::intrinsics::x86_64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{SimdToken, X64V3Token, arcane, rite};
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+use archmage::X64V4Token;
 #[cfg(feature = "simd")]
 use archmage::{autoversion, magetypes};
 
@@ -26,6 +28,16 @@ fn v3_token() -> Option<X64V3Token> {
         return None;
     }
     X64V3Token::summon()
+}
+
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[inline(always)]
+fn v4_token() -> Option<X64V4Token> {
+    #[cfg(test)]
+    if FORCE_SCALAR.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    X64V4Token::summon()
 }
 
 #[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
@@ -1692,13 +1704,11 @@ fn adm_decouple_s123(
                 div,
                 enhn_gain_limit,
             );
-            left + ((right - left) / 8) * 8
+            left as usize + ((right as usize - left as usize) / 8) * 8
         } else {
-            left
+            left as usize
         };
-        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
-        let j_start = left;
-        for j in j_start..right {
+        for j in j_start..(right as usize) {
             let idx = i as usize * stride + j as usize;
             let oh = ref_b.h[idx];
             let ov = ref_b.v[idx];
@@ -2922,6 +2932,145 @@ fn dwt2_s123_hrow_v3(
     }
 }
 
+/// AVX-512 port of `adm_dwt2_s123_combined_avx512`'s vertical row: 8 columns
+/// per call (8×i64 lanes), native `srai_epi64` rounding — the AVX2 port's
+/// `srl | (and mask)` emulation is exact on this value range, and AVX-512F
+/// has the real instruction.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn dwt2_s123_vrow_v4<const SHIFT: u32>(
+    _token: X64V4Token,
+    s0: &[i32; 8],
+    s1: &[i32; 8],
+    s2: &[i32; 8],
+    s3: &[i32; 8],
+    flo: &[i64; 4],
+    fhi: &[i64; 4],
+    add: i64,
+    lo_out: &mut [i32; 8],
+    hi_out: &mut [i32; 8],
+) {
+    let taps = [
+        _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8(&s0[..]))),
+        _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8(&s1[..]))),
+        _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8(&s2[..]))),
+        _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8(&s3[..]))),
+    ];
+    let add_v = _mm512_set1_epi64(add);
+    for (out, f) in [(lo_out, flo), (hi_out, fhi)] {
+        let mut acc = _mm512_setzero_si512();
+        for (t, &fk) in taps.iter().zip(f.iter()) {
+            acc = _mm512_add_epi64(acc, _mm512_mul_epi32(*t, _mm512_set1_epi64(fk)));
+        }
+        acc = _mm512_srai_epi64::<SHIFT>(_mm512_add_epi64(acc, add_v));
+        _mm256_storeu_si256(a8m(&mut out[..]), _mm512_cvtepi64_epi32(acc));
+    }
+}
+
+/// Runtime-shift shim: `srai_epi64`'s count is an instruction immediate, so
+/// the three reachable shifts ({0,16} vertical / {15,16} horizontal) pick a
+/// monomorphized body.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[inline]
+#[allow(clippy::too_many_arguments)]
+fn dwt2_s123_vrow_v4_dyn(
+    token: X64V4Token,
+    s0: &[i32; 8],
+    s1: &[i32; 8],
+    s2: &[i32; 8],
+    s3: &[i32; 8],
+    flo: &[i64; 4],
+    fhi: &[i64; 4],
+    add: i64,
+    shift: u32,
+    lo_out: &mut [i32; 8],
+    hi_out: &mut [i32; 8],
+) {
+    match shift {
+        0 => dwt2_s123_vrow_v4::<0>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
+        15 => dwt2_s123_vrow_v4::<15>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
+        _ => dwt2_s123_vrow_v4::<16>(token, s0, s1, s2, s3, flo, fhi, add, lo_out, hi_out),
+    }
+}
+
+/// AVX-512 port of `adm_dwt2_s123_combined_avx512`'s horizontal pass: each
+/// unaligned 16-wide load at tmplo[jk] feeds `mul_epi32`'s even lanes, yielding
+/// outputs j..j+7 where ind_x[k][j+q] = ind_x[k][j]+2q (interior only). Same
+/// convention as `_v3` — the tmp buffers carry +16 i32 slack.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn dwt2_s123_hrow_v4<const SHIFT: u32>(
+    _token: X64V4Token,
+    lo: &[i32],
+    hi: &[i32],
+    j0: usize,
+    j1: usize,
+    j2: usize,
+    j3: usize,
+    flo: &[i64; 4],
+    fhi: &[i64; 4],
+    add: i64,
+    a_out: &mut [i32; 8],
+    v_out: &mut [i32; 8],
+    h_out: &mut [i32; 8],
+    d_out: &mut [i32; 8],
+) {
+    let add_v = _mm512_set1_epi64(add);
+    for (buf, out_a, out_b, fa, fb) in [(lo, a_out, v_out, flo, fhi), (hi, h_out, d_out, flo, fhi)]
+    {
+        let taps = [
+            _mm512_loadu_si512(a8(&buf[j0..j0 + 16])),
+            _mm512_loadu_si512(a8(&buf[j1..j1 + 16])),
+            _mm512_loadu_si512(a8(&buf[j2..j2 + 16])),
+            _mm512_loadu_si512(a8(&buf[j3..j3 + 16])),
+        ];
+        for (out, f) in [(out_a, fa), (out_b, fb)] {
+            let mut acc = _mm512_setzero_si512();
+            for (t, &fk) in taps.iter().zip(f.iter()) {
+                acc = _mm512_add_epi64(acc, _mm512_mul_epi32(*t, _mm512_set1_epi64(fk)));
+            }
+            acc = _mm512_srai_epi64::<SHIFT>(_mm512_add_epi64(acc, add_v));
+            _mm256_storeu_si256(a8m(&mut out[..]), _mm512_cvtepi64_epi32(acc));
+        }
+    }
+}
+
+/// Runtime-shift shim for `dwt2_s123_hrow_v4` — see `dwt2_s123_vrow_v4_dyn`.
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[inline]
+#[allow(clippy::too_many_arguments)]
+fn dwt2_s123_hrow_v4_dyn(
+    token: X64V4Token,
+    lo: &[i32],
+    hi: &[i32],
+    j0: usize,
+    j1: usize,
+    j2: usize,
+    j3: usize,
+    flo: &[i64; 4],
+    fhi: &[i64; 4],
+    add: i64,
+    shift: u32,
+    a_out: &mut [i32; 8],
+    v_out: &mut [i32; 8],
+    h_out: &mut [i32; 8],
+    d_out: &mut [i32; 8],
+) {
+    match shift {
+        0 => dwt2_s123_hrow_v4::<0>(
+            token, lo, hi, j0, j1, j2, j3, flo, fhi, add, a_out, v_out, h_out, d_out,
+        ),
+        15 => dwt2_s123_hrow_v4::<15>(
+            token, lo, hi, j0, j1, j2, j3, flo, fhi, add, a_out, v_out, h_out, d_out,
+        ),
+        _ => dwt2_s123_hrow_v4::<16>(
+            token, lo, hi, j0, j1, j2, j3, flo, fhi, add, a_out, v_out, h_out, d_out,
+        ),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn dwt2_s123_hscalar(
     tmplo: &[i32],
@@ -3004,17 +3153,50 @@ fn adm_dwt2_s123_combined(
         DWT2_HI[2] as i64,
         DWT2_HI[3] as i64,
     ];
-    // +8 slack: the AVX2 horizontal loads 8 i32 per tap and discards the odd
-    // lanes — the same slack libvmaf's tmp_ref buffer effectively has.
-    let mut tmplo_ref = vec![0i32; w + 8];
-    let mut tmphi_ref = vec![0i32; w + 8];
-    let mut tmplo_dis = vec![0i32; w + 8];
-    let mut tmphi_dis = vec![0i32; w + 8];
+    // +16 slack: the AVX-512 horizontal loads 16 i32 per tap and discards the
+    // odd lanes (the AVX2 path needs +8) — the same slack libvmaf's tmp_ref
+    // buffer effectively has.
+    let mut tmplo_ref = vec![0i32; w + 16];
+    let mut tmphi_ref = vec![0i32; w + 16];
+    let mut tmplo_dis = vec![0i32; w + 16];
+    let mut tmphi_dis = vec![0i32; w + 16];
     for i in 0..h.div_ceil(2) {
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
         let mut j = 0usize;
         #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
         let j = 0usize;
+        #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+        if let Some(t) = v4_token() {
+            while j + 8 <= w {
+                dwt2_s123_vrow_v4_dyn(
+                    t,
+                    a8(&i4_ref_scale[ind_y[i][0] as usize * ref_stride + j..][..8]),
+                    a8(&i4_ref_scale[ind_y[i][1] as usize * ref_stride + j..][..8]),
+                    a8(&i4_ref_scale[ind_y[i][2] as usize * ref_stride + j..][..8]),
+                    a8(&i4_ref_scale[ind_y[i][3] as usize * ref_stride + j..][..8]),
+                    &flo,
+                    &fhi,
+                    add_vp,
+                    shift_vp,
+                    a8m(&mut tmplo_ref[j..j + 8]),
+                    a8m(&mut tmphi_ref[j..j + 8]),
+                );
+                dwt2_s123_vrow_v4_dyn(
+                    t,
+                    a8(&i4_dis_scale[ind_y[i][0] as usize * dis_stride + j..][..8]),
+                    a8(&i4_dis_scale[ind_y[i][1] as usize * dis_stride + j..][..8]),
+                    a8(&i4_dis_scale[ind_y[i][2] as usize * dis_stride + j..][..8]),
+                    a8(&i4_dis_scale[ind_y[i][3] as usize * dis_stride + j..][..8]),
+                    &flo,
+                    &fhi,
+                    add_vp,
+                    shift_vp,
+                    a8m(&mut tmplo_dis[j..j + 8]),
+                    a8m(&mut tmphi_dis[j..j + 8]),
+                );
+                j += 8;
+            }
+        }
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
         if let Some(t) = v3_token() {
             while j + 4 <= w {
@@ -3096,6 +3278,55 @@ fn adm_dwt2_s123_combined(
         let mut j = 1usize;
         #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
         let j = 1usize;
+        #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+        if let Some(t) = v4_token() {
+            // Same interior-only bound as the AVX2 loop, 8 outputs per call.
+            while j + 8 <= ind_x.len().saturating_sub(2) {
+                let ix = ind_x[j];
+                let (j0, j1, j2, j3) = (
+                    ix[0] as usize,
+                    ix[1] as usize,
+                    ix[2] as usize,
+                    ix[3] as usize,
+                );
+                let idx = i * dst_stride + j;
+                dwt2_s123_hrow_v4_dyn(
+                    t,
+                    &tmplo_ref,
+                    &tmphi_ref,
+                    j0,
+                    j1,
+                    j2,
+                    j3,
+                    &flo,
+                    &fhi,
+                    add_hp,
+                    shift_hp,
+                    a8m(&mut a_ref_out[idx..idx + 8]),
+                    a8m(&mut ref_out.v[idx..idx + 8]),
+                    a8m(&mut ref_out.h[idx..idx + 8]),
+                    a8m(&mut ref_out.d[idx..idx + 8]),
+                );
+                dwt2_s123_hrow_v4_dyn(
+                    t,
+                    &tmplo_dis,
+                    &tmphi_dis,
+                    j0,
+                    j1,
+                    j2,
+                    j3,
+                    &flo,
+                    &fhi,
+                    add_hp,
+                    shift_hp,
+                    a8m(&mut a_dis_out[idx..idx + 8]),
+                    a8m(&mut dis_out.v[idx..idx + 8]),
+                    a8m(&mut dis_out.h[idx..idx + 8]),
+                    a8m(&mut dis_out.d[idx..idx + 8]),
+                );
+                j += 8;
+            }
+        }
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
         if let Some(t) = v3_token() {
             // Interior chunks only: ind_x[k][j+q] = ind_x[k][j]+2q fails inside
@@ -3986,3 +4217,4 @@ fn simd_csf_den_s123_matches_scalar_for_tails_and_edges() {
         }
     }
 }
+

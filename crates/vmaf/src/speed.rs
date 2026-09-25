@@ -3,6 +3,8 @@ use crate::{Error, ModelVariant};
 use archmage::autoversion;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{X64V3Token, arcane};
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+use archmage::X64V4Token;
 
 const BLOCK_SIZE: usize = 5;
 const NUM_SCALES: u32 = 4;
@@ -501,6 +503,14 @@ fn v3_token() -> Option<X64V3Token> {
     <X64V3Token as archmage::SimdToken>::summon()
 }
 
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+fn v4_token() -> Option<X64V4Token> {
+    if FORCE_SCALAR.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    <X64V4Token as archmage::SimdToken>::summon()
+}
+
 /// Direct port of `convolution_f32_avx_s_1d_v_scanline`: 8-wide vertical
 /// convolution, `tmp[j] = sum_k f[k] * src[k*stride + j]` over `0..wfloor8`.
 /// `src` starts at the first tap row (caller offsets by `i - radius`).
@@ -619,6 +629,75 @@ fn compute_covariance_v3(
     tmp[0] + tmp[1] + tmp[2] + tmp[3] + scalar_tail
 }
 
+/// Direct port of `compute_cov_kernel_avx512`: same f32 -> f64 widening and
+/// two parallel f64x8 FMA chains as `_v3`, at 16 then 8 then scalar per row.
+/// Returns the unnormalized sum (caller divides).
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+#[allow(clippy::too_many_arguments)]
+fn compute_covariance_v4(
+    _token: X64V4Token,
+    data: &[f32],
+    mean_x: f64,
+    mean_y: f64,
+    stride_px: usize,
+    srx: usize,
+    scx: usize,
+    sry: usize,
+    scy: usize,
+    sub_w: usize,
+    sub_h: usize,
+) -> f64 {
+    let mut acc0 = _mm512_setzero_pd();
+    let mut acc1 = _mm512_setzero_pd();
+    let mx = _mm512_set1_pd(mean_x);
+    let my = _mm512_set1_pd(mean_y);
+    let mut scalar_tail = 0.0f64;
+    for i in 0..sub_h {
+        let xb = (srx + i) * stride_px + scx;
+        let yb = (sry + i) * stride_px + scy;
+        let mut j = 0usize;
+        while j + 16 <= sub_w {
+            let cx0 = _mm512_sub_pd(
+                _mm512_cvtps_pd(_mm256_loadu_ps(a8(&data[xb + j..xb + j + 8]))),
+                mx,
+            );
+            let cx1 = _mm512_sub_pd(
+                _mm512_cvtps_pd(_mm256_loadu_ps(a8(&data[xb + j + 8..xb + j + 16]))),
+                mx,
+            );
+            let cy0 = _mm512_sub_pd(
+                _mm512_cvtps_pd(_mm256_loadu_ps(a8(&data[yb + j..yb + j + 8]))),
+                my,
+            );
+            let cy1 = _mm512_sub_pd(
+                _mm512_cvtps_pd(_mm256_loadu_ps(a8(&data[yb + j + 8..yb + j + 16]))),
+                my,
+            );
+            acc0 = _mm512_fmadd_pd(cx0, cy0, acc0);
+            acc1 = _mm512_fmadd_pd(cx1, cy1, acc1);
+            j += 16;
+        }
+        while j + 8 <= sub_w {
+            let cx = _mm512_sub_pd(
+                _mm512_cvtps_pd(_mm256_loadu_ps(a8(&data[xb + j..xb + j + 8]))),
+                mx,
+            );
+            let cy = _mm512_sub_pd(
+                _mm512_cvtps_pd(_mm256_loadu_ps(a8(&data[yb + j..yb + j + 8]))),
+                my,
+            );
+            acc0 = _mm512_fmadd_pd(cx, cy, acc0);
+            j += 8;
+        }
+        while j < sub_w {
+            scalar_tail += (data[xb + j] as f64 - mean_x) * (data[yb + j] as f64 - mean_y);
+            j += 1;
+        }
+    }
+    _mm512_reduce_add_pd(_mm512_add_pd(acc0, acc1)) + scalar_tail
+}
+
 fn compute_covariance(
     dim: &Dims,
     data: &[f32],
@@ -631,6 +710,23 @@ fn compute_covariance(
 ) -> f32 {
     let mean_x = means[srx * dim.block_size + scx] as f64;
     let mean_y = means[sry * dim.block_size + scy] as f64;
+    #[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+    if let Some(token) = v4_token() {
+        let result = compute_covariance_v4(
+            token,
+            data,
+            mean_x,
+            mean_y,
+            stride_px,
+            srx,
+            scx,
+            sry,
+            scy,
+            dim.submatrix_width,
+            dim.submatrix_height,
+        );
+        return (result / (dim.submatrix_width * dim.submatrix_height) as f64) as f32;
+    }
     #[cfg(all(feature = "simd", target_arch = "x86_64"))]
     if let Some(token) = <X64V3Token as archmage::SimdToken>::summon() {
         let result = compute_covariance_v3(
