@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- vsi (HASH): new in-tree CPU port of VSI (Zhang, Shen & Li, IEEE TIP
+- vsi (`284bbe72`): new in-tree CPU port of VSI (Zhang, Shen & Li, IEEE TIP
   23(10), 2014) — pure-Rust, `archmage`/`magetypes` SIMD with
   bit-identical scalar/v3/v4 tiers and fixed-order f64 pooling. Ports
   the authors' `VSI.m`: SDSP saliency (antialiased bilinear
