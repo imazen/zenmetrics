@@ -485,6 +485,68 @@ fn a8<T, const N: usize>(s: &[T]) -> &[T; N] {
     s.try_into().unwrap()
 }
 
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+fn a8m<T, const N: usize>(s: &mut [T]) -> &mut [T; N] {
+    s.try_into().unwrap()
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+static FORCE_SCALAR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+fn v3_token() -> Option<X64V3Token> {
+    if FORCE_SCALAR.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    <X64V3Token as archmage::SimdToken>::summon()
+}
+
+/// Direct port of `convolution_f32_avx_s_1d_v_scanline`: 8-wide vertical
+/// convolution, `tmp[j] = sum_k f[k] * src[k*stride + j]` over `0..wfloor8`.
+/// `src` starts at the first tap row (caller offsets by `i - radius`).
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn vif_filter1d_vrow_v3(
+    _token: X64V3Token,
+    f: &[f32],
+    src: &[f32],
+    stride_px: usize,
+    tmp: &mut [f32],
+    wfloor8: usize,
+) {
+    for j in (0..wfloor8).step_by(8) {
+        let mut sum = _mm256_setzero_ps();
+        for (k, &fk) in f.iter().enumerate() {
+            let g = _mm256_loadu_ps(a8(&src[k * stride_px + j..k * stride_px + j + 8]));
+            sum = _mm256_add_ps(sum, _mm256_mul_ps(_mm256_set1_ps(fk), g));
+        }
+        _mm256_storeu_ps(a8m(&mut tmp[j..j + 8]), sum);
+    }
+}
+
+/// Direct port of `convolution_f32_avx_s_1d_h_scanline`: 8-wide horizontal
+/// convolution, `dst[j + radius] = sum_k f[k] * tmp[j + k]` over `0..j_end`.
+/// The loads reach `j_end + 2*radius - 2`; `tmp` must have that much slack.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane(import_intrinsics)]
+fn vif_filter1d_hrow_v3(
+    _token: X64V3Token,
+    f: &[f32],
+    tmp: &[f32],
+    dst: &mut [f32],
+    radius: usize,
+    j_end: usize,
+) {
+    for j in (0..j_end).step_by(8) {
+        let mut sum = _mm256_setzero_ps();
+        for (k, &fk) in f.iter().enumerate() {
+            let g = _mm256_loadu_ps(a8(&tmp[j + k..j + k + 8]));
+            sum = _mm256_add_ps(sum, _mm256_mul_ps(_mm256_set1_ps(fk), g));
+        }
+        _mm256_storeu_ps(a8m(&mut dst[j + radius..j + radius + 8]), sum);
+    }
+}
+
 /// Direct port of `compute_cov_kernel_avx2`: f32 -> f64 widening, two
 /// parallel f64 accumulator chains hiding FMA latency, 8-wide then 4-wide
 /// then scalar per row. Returns the unnormalized sum (caller divides).
@@ -808,21 +870,70 @@ fn mirror_i32(idx: i32, size: usize) -> usize {
 #[cfg_attr(feature = "simd", autoversion)]
 fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, stride_px: usize) {
     let fwidth = f.len();
-    let mut tmp = vec![0.0f32; w];
+    let radius = fwidth / 2;
+    // +2*radius slack: the AVX2 horizontal scanline's 8-wide loads reach
+    // tmp[j + fwidth + 6] with j up to floorn(w - radius, 8) - 8, the same
+    // headroom libvmaf's ceil(w, 8)-strided tmp provides.
+    let mut tmp = vec![0.0f32; w + 2 * radius];
     for i in 0..h {
-        for j in 0..w {
+        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        let mut j = 0usize;
+        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        let j = 0usize;
+        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        if i >= radius && i + radius < h {
+            if let Some(t) = v3_token() {
+                let wfloor8 = w / 8 * 8;
+                let base = (i - radius) * stride_px;
+                vif_filter1d_vrow_v3(
+                    t,
+                    f,
+                    &src[base..base + (fwidth - 1) * stride_px + wfloor8],
+                    stride_px,
+                    &mut tmp,
+                    wfloor8,
+                );
+                j = wfloor8;
+            }
+        }
+        for j in j..w {
             let mut accum = 0.0f32;
             for (fi, &fc) in f.iter().enumerate() {
-                let ii = mirror_i32(i as i32 - (fwidth / 2) as i32 + fi as i32, h);
+                let ii = mirror_i32(i as i32 - radius as i32 + fi as i32, h);
                 accum += fc * src[ii * stride_px + j];
             }
             tmp[j] = accum;
         }
-        for j in 0..w {
+        for j in 0..radius.min(w) {
             let mut accum = 0.0f32;
             for (fj, &fc) in f.iter().enumerate() {
-                let jj = mirror_i32(j as i32 - (fwidth / 2) as i32 + fj as i32, w);
+                let jj = mirror_i32(j as i32 - radius as i32 + fj as i32, w);
                 accum += fc * tmp[jj];
+            }
+            dst[i * stride_px + j] = accum;
+        }
+        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        let mut jj = 0usize;
+        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        let jj = 0usize;
+        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        if let Some(t) = v3_token() {
+            let j_end = w.saturating_sub(radius) / 8 * 8;
+            vif_filter1d_hrow_v3(
+                t,
+                f,
+                &tmp,
+                &mut dst[i * stride_px..i * stride_px + w],
+                radius,
+                j_end,
+            );
+            jj = j_end;
+        }
+        for j in jj.max(radius.min(w))..w {
+            let mut accum = 0.0f32;
+            for (fj, &fc) in f.iter().enumerate() {
+                let jm = mirror_i32(j as i32 - radius as i32 + fj as i32, w);
+                accum += fc * tmp[jm];
             }
             dst[i * stride_px + j] = accum;
         }
@@ -1105,6 +1216,51 @@ mod tests {
                     (avx2 - scalar).abs() / denom <= 1e-12,
                     "w={w} h={h}: avx2={avx2} scalar={scalar}"
                 );
+            }
+        }
+    }
+
+    /// `vif_filter1d_vrow_v3`/`vif_filter1d_hrow_v3` (AVX mul+add, no FMA)
+    /// must bit-match the scalar mirrored-edge separable filter. Runs the
+    /// whole `vif_filter1d` with and without v3 so dispatch coverage equals
+    /// production.
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    #[test]
+    fn simd_vif_filter1d_matches_scalar_for_tails_and_edges() {
+        if <X64V3Token as archmage::SimdToken>::summon().is_none() {
+            return;
+        }
+        use std::sync::atomic::Ordering;
+        let run = |f: &[f32], w: usize, h: usize, stride: usize, scalar: bool| {
+            FORCE_SCALAR.store(scalar, Ordering::Relaxed);
+            let src: Vec<f32> = (0..stride * h)
+                .map(|i| ((i * 7919 + (i / stride) * 313) % 1021) as f32 * 0.5 - 255.0)
+                .collect();
+            let mut dst = vec![0f32; stride * h];
+            vif_filter1d(f, &src, &mut dst, w, h, stride);
+            FORCE_SCALAR.store(false, Ordering::Relaxed);
+            dst
+        };
+        // fwidth 5/9 are the SpEED antialias/downscale filter sizes; 3 covers
+        // an odd-small radius; 1 is the degenerate no-op tap.
+        for fwidth in [1usize, 3, 5, 9] {
+            let f: Vec<f32> = gaussian_kernel(fwidth, fwidth as f32 / 5.0 + 0.25);
+            for (w, h, stride) in [
+                (8usize, 4usize, 8usize),
+                (9, 5, 9),
+                (17, 11, 20),
+                (21, 3, 21),
+                (40, 40, 40),
+                (34, 7, 40),
+                (33, 33, 33),
+                (16, 2, 16),
+            ] {
+                if f.len() / 2 >= w.min(h) {
+                    continue;
+                }
+                let s = run(&f, w, h, stride, true);
+                let v = run(&f, w, h, stride, false);
+                assert_eq!(s, v, "fwidth={fwidth} {w}x{h} stride={stride}");
             }
         }
     }
