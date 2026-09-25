@@ -1397,6 +1397,10 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // degenerate zero-weight pair yields NaN — NaN comparisons fail
         // every bound check, which is the reference's own behavior).
         MetricKind::Haarpsi | MetricKind::HaarpsiY => Some((-0.001, 1.01, 1.0)),
+        // FSIM / FSIMc / FSIM-Y: similarity on [0, 1]; 1 = identical.
+        // Constant inputs degenerate the phase-congruency maps to 0/0,
+        // so a degenerate pair yields NaN — matching the reference.
+        MetricKind::Fsim | MetricKind::FsimY => Some((-0.001, 1.001, 1.0)),
     }
 }
 

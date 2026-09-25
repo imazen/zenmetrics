@@ -170,6 +170,8 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::PsnrhvsY => "psnrhvs_y",
         CliMetricKind::Haarpsi => "haarpsi",
         CliMetricKind::HaarpsiY => "haarpsi_y",
+        CliMetricKind::Fsim => "fsim",
+        CliMetricKind::FsimY => "fsim_y",
         CliMetricKind::Cvvdp => "cvvdp",
         CliMetricKind::CvvdpGpu => "cvvdp",
         CliMetricKind::Butteraugli => "butteraugli_max",
@@ -260,7 +262,9 @@ pub fn rekey_orchestrator_columns(
         | CliMetricKind::Psnrhvs
         | CliMetricKind::PsnrhvsY
         | CliMetricKind::Haarpsi
-        | CliMetricKind::HaarpsiY => Vec::new(),
+        | CliMetricKind::HaarpsiY
+        | CliMetricKind::Fsim
+        | CliMetricKind::FsimY => Vec::new(),
         CliMetricKind::Cvvdp
         | CliMetricKind::CvvdpGpu
         | CliMetricKind::Ssim2Gpu
@@ -375,6 +379,7 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
     // PSNR-HVS-Y are likewise direct-crate CPU metrics (each emits two
     // score columns the orchestrator's one-column leaves can't carry).
     // HaarPSI / HaarPSI-Y are direct-crate CPU metrics of the same kind.
+    // FSIM / FSIM-Y too (`fsim` emits two columns).
     !matches!(
         kind,
         CliMetricKind::Gmsd
@@ -383,6 +388,8 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::PsnrhvsY
             | CliMetricKind::Haarpsi
             | CliMetricKind::HaarpsiY
+            | CliMetricKind::Fsim
+            | CliMetricKind::FsimY
     )
 }
 

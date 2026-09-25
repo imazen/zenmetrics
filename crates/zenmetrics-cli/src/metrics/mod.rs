@@ -191,6 +191,20 @@ pub enum MetricKind {
     /// I/Q color similarity). Emits `haarpsiy_imazen_v*`.
     #[value(name = "haarpsi-y")]
     HaarpsiY,
+    /// FSIM / FSIMc (Zhang et al., IEEE TIP 20(8), 2011) — CPU
+    /// implementation via the in-tree `fsim` crate (a port of the
+    /// authors' `FR_FSIMc.m`: log-Gabor phase-congruency + Scharr
+    /// gradient similarity, I/Q chroma term). Similarity on ~[0, 1]:
+    /// 1 = identical (degenerate constant inputs return NaN, like the
+    /// reference). One call emits both `fsim_imazen_v*` and
+    /// `fsimc_imazen_v*`. Not routed through the umbrella or the
+    /// orchestrator (CPU-only, no GPU twin).
+    #[value(name = "fsim")]
+    Fsim,
+    /// FSIM on unrounded BT.601 luma only (the grayscale path — no I/Q
+    /// chroma term). Emits `fsimy_imazen_v*`.
+    #[value(name = "fsim-y")]
+    FsimY,
 }
 
 impl MetricKind {
@@ -214,6 +228,8 @@ impl MetricKind {
             MetricKind::PsnrhvsY,
             MetricKind::Haarpsi,
             MetricKind::HaarpsiY,
+            MetricKind::Fsim,
+            MetricKind::FsimY,
         ]
     }
 
@@ -237,6 +253,8 @@ impl MetricKind {
             MetricKind::PsnrhvsY => "psnrhvs-y",
             MetricKind::Haarpsi => "haarpsi",
             MetricKind::HaarpsiY => "haarpsi-y",
+            MetricKind::Fsim => "fsim",
+            MetricKind::FsimY => "fsim-y",
         }
     }
 
@@ -295,6 +313,8 @@ impl MetricKind {
             MetricKind::PsnrhvsY => PSNRHVSY_CPU_COLUMNS,
             MetricKind::Haarpsi => HAARPSI_CPU_COLUMNS,
             MetricKind::HaarpsiY => HAARPSIY_CPU_COLUMNS,
+            MetricKind::Fsim => FSIM_CPU_COLUMNS,
+            MetricKind::FsimY => FSIMY_CPU_COLUMNS,
         }
     }
 }
@@ -390,6 +410,23 @@ const HAARPSI_CPU_COLUMNS: &[&str] = &["haarpsi"];
 const HAARPSIY_CPU_COLUMNS: &[&str] = &[haarpsi::HAARPSIY_COLUMN_NAME];
 #[cfg(not(feature = "cpu-haarpsi"))]
 const HAARPSIY_CPU_COLUMNS: &[&str] = &["haarpsi_y"];
+
+// Versioned **CPU** FSIM + FSIMc column names
+// (`fsim::FSIM_COLUMN_NAME` / `fsim::FSIMC_COLUMN_NAME`, defaults
+// `fsim_imazen_v<…>` / `fsimc_imazen_v<…>`, overridable via
+// `FSIM_IMPL_TAG` / `FSIMC_IMPL_TAG`). One kernel pass produces both
+// scores, so the `fsim` metric emits two columns. No `_cpu_` infix —
+// no GPU twin. Without `cpu-fsim` bare `"fsim"`/`"fsimc"`.
+#[cfg(feature = "cpu-fsim")]
+const FSIM_CPU_COLUMNS: &[&str] = &[fsim::FSIM_COLUMN_NAME, fsim::FSIMC_COLUMN_NAME];
+#[cfg(not(feature = "cpu-fsim"))]
+const FSIM_CPU_COLUMNS: &[&str] = &["fsim", "fsimc"];
+
+// Versioned **CPU** FSIM-Y (luma) column name.
+#[cfg(feature = "cpu-fsim")]
+const FSIMY_CPU_COLUMNS: &[&str] = &[fsim::FSIMY_COLUMN_NAME];
+#[cfg(not(feature = "cpu-fsim"))]
+const FSIMY_CPU_COLUMNS: &[&str] = &["fsim_y"];
 
 /// CubeCL runtime selector for GPU metrics.
 ///
@@ -1102,6 +1139,20 @@ pub fn run_metric(
         MetricKind::HaarpsiY => run_cpu_haarpsi_y(reference, distorted),
         #[cfg(not(feature = "cpu-haarpsi"))]
         MetricKind::HaarpsiY => Err(disabled_msg("haarpsi-y", "cpu-haarpsi")),
+
+        // FSIM/FSIMc: direct call into the in-tree crate (no umbrella,
+        // no GPU twin — same shape as GMSD). `fsim` emits both the
+        // grayscale and color scores from one pass; `fsim-y` is the
+        // luma-only variant.
+        #[cfg(feature = "cpu-fsim")]
+        MetricKind::Fsim => run_cpu_fsim(reference, distorted),
+        #[cfg(not(feature = "cpu-fsim"))]
+        MetricKind::Fsim => Err(disabled_msg("fsim", "cpu-fsim")),
+
+        #[cfg(feature = "cpu-fsim")]
+        MetricKind::FsimY => run_cpu_fsim_y(reference, distorted),
+        #[cfg(not(feature = "cpu-fsim"))]
+        MetricKind::FsimY => Err(disabled_msg("fsim-y", "cpu-fsim")),
     }
 }
 
@@ -1202,6 +1253,48 @@ fn run_cpu_haarpsi_y(
     let (w, h) = (reference.width as usize, reference.height as usize);
     let s = haarpsi::haarpsi_luma8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
     Ok(vec![(HAARPSIY_CPU_COLUMNS[0], s)])
+}
+
+/// FSIM/FSIMc of two decoded sRGB8 images (`fsim::fsim_rgb8`:
+/// log-Gabor phase-congruency + Scharr gradient similarity on luma,
+/// I/Q chroma term — one pass emits both columns).
+#[cfg(feature = "cpu-fsim")]
+fn run_cpu_fsim(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "fsim: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let s = fsim::fsim_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
+    Ok(vec![
+        (FSIM_CPU_COLUMNS[0], s.fsim),
+        (FSIM_CPU_COLUMNS[1], s.fsimc),
+    ])
+}
+
+/// FSIM of two decoded sRGB8 images on unrounded BT.601 luma
+/// (`fsim::fsim_luma8`: grayscale path, no chroma term).
+#[cfg(feature = "cpu-fsim")]
+fn run_cpu_fsim_y(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "fsim-y: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let s = fsim::fsim_luma8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
+    Ok(vec![(FSIMY_CPU_COLUMNS[0], s)])
 }
 
 #[allow(dead_code)]

@@ -107,6 +107,10 @@ impl OrchestratorMetricSpec {
             CliMetricKind::Haarpsi | CliMetricKind::HaarpsiY => {
                 unreachable!("haarpsi has no orchestrator backend; callers gate on eligibility")
             }
+            // FSIM / FSIM-Y: same direct-crate shape.
+            CliMetricKind::Fsim | CliMetricKind::FsimY => {
+                unreachable!("fsim has no orchestrator backend; callers gate on eligibility")
+            }
             CliMetricKind::Zensim => Self {
                 kind: ApiMetricKind::Zensim,
                 prefer_cpu: true,
@@ -250,6 +254,8 @@ pub fn validate_cpu_variant_built_in(
             | CliMetricKind::PsnrhvsY
             | CliMetricKind::Haarpsi
             | CliMetricKind::HaarpsiY
+            | CliMetricKind::Fsim
+            | CliMetricKind::FsimY
     ) {
         return Ok(());
     }

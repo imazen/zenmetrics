@@ -7,6 +7,7 @@ members = [
     "crates/cvvdp-gpu",
     "crates/dssim-gpu",
     "crates/gmsd",
+    "crates/fsim",
     "crates/haarpsi",
     "crates/hdrvdp",
     "crates/iwssim",
@@ -67,6 +68,7 @@ butteraugli-gpu = { version = "0.0.1", path = "crates/butteraugli-gpu", default-
 cvvdp = { version = "0.1.0", path = "crates/cvvdp", default-features = false }
 cvvdp-gpu = { version = "0.0.1", path = "crates/cvvdp-gpu", default-features = false }
 dssim-gpu = { version = "0.0.1", path = "crates/dssim-gpu", default-features = false }
+fsim = { version = "0.1.0", path = "crates/fsim", default-features = false }
 gmsd = { version = "0.1.0", path = "crates/gmsd", default-features = false }
 haarpsi = { version = "0.1.0", path = "crates/haarpsi", default-features = false }
 hdrvdp = { version = "0.0.1", path = "crates/hdrvdp", default-features = false }

@@ -13,6 +13,23 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- fsim (TBD): new in-tree CPU port of FSIM / FSIMc (Zhang, Zhang, Mou
+  & Zhang, IEEE TIP 20(8), 2011) — pure-Rust, `archmage`/`magetypes`
+  SIMD with bit-identical scalar/v3/v4 tiers and fixed-order f64
+  pooling. Ports the authors' `FR_FSIMc.m`: recursive box-subsample
+  (F = max(1, floor(min/256))), Scharr gradients, `phasecong2`-style
+  log-Gabor phase-congruency (4 scales × 6 orientations) via a
+  self-contained radix-2/Bluestein 2D FFT vendored from `hdrvdp`,
+  PC×gradient similarity weighted by `max(PC1,PC2)` (NaN-propagating,
+  so constant inputs return NaN like the reference), FSIMc chroma
+  term `|ISim·QSim|^0.03` on YIQ planes. `fsim_plane_f32`,
+  `fsim_rgb8` (Scores{fsim,fsimc}), `fsim_luma8`. Verified on 18
+  Octave golden rows (`validation/`): grayscale/RGB/luma, even/odd
+  dims, subsampled sizes, identical/degenerate — worst delta ~5e-8.
+  Wired into `zenmetrics-cli` as `fsim` (emits `fsim_imazen_v*` +
+  `fsimc_imazen_v*` in one pass) and `fsim-y` (`fsimy_imazen_v*`,
+  luma path) behind `cpu-fsim` (in `cpu-metrics`, default on) —
+  orchestrator-ineligible (two-column output, no GPU twin).
 - haarpsi (`e935a65e`): new in-tree CPU port of HaarPSI (Reisenhofer et
   al., Signal Processing: Image Communication 61, 2018) — pure-Rust,
   `archmage`/`magetypes` padded-plane stencil SIMD with bit-identical

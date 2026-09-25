@@ -169,6 +169,9 @@ cpu-metrics = [
     # HaarPSI / HaarPSI-Y (in-tree `haarpsi` crate, port of the authors'
     # MIT `HaarPSI.m`): CPU-only, called directly.
     "cpu-haarpsi",
+    # FSIM / FSIMc / FSIM-Y (in-tree `fsim` crate, port of the authors'
+    # `FR_FSIMc.m`): CPU-only, called directly.
+    "cpu-fsim",
     # All native-CPU backends via the umbrella's Backend::Cpu (cpu_dispatch),
     # so run_gpu_via_umbrella's CPU failover works for ssim2/dssim/butter/zensim
     # too — and the auto ladder's CPU rung is the native SIMD path, NEVER
@@ -186,6 +189,7 @@ cpu-hdrvdp = ["dep:zenmetrics-api", "zenmetrics-api/cpu-hdrvdp"]
 cpu-gmsd = ["dep:gmsd"]
 cpu-psnrhvs = ["dep:psnrhvs"]
 cpu-haarpsi = ["dep:haarpsi"]
+cpu-fsim = ["dep:fsim"]
 
 # GPU bundle: pulls every GPU metric implementation via the umbrella.
 gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp", "gpu-iwssim", "gpu-zensim"]
@@ -556,6 +560,7 @@ cvvdp = { workspace = true, optional = true }
 gmsd = { workspace = true, optional = true, features = ["std", "avx512"] }
 psnrhvs = { workspace = true, optional = true, features = ["std", "avx512"] }
 haarpsi = { workspace = true, optional = true, features = ["std", "avx512"] }
+fsim = { workspace = true, optional = true, features = ["std", "avx512"] }
 cubecl = { workspace = true, optional = true }
 
 # Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the
