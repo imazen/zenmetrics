@@ -5812,6 +5812,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
+name = "vsi"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "libm",
+ "magetypes",
+ "rayon",
+]
+
+[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7425,6 +7435,7 @@ dependencies = [
  "tokio",
  "ultrahdr-core 0.6.0",
  "ultrahdr-rs",
+ "vsi",
  "zenav1-aom-bench",
  "zenav1-aom-dsp",
  "zenav1-aom-sys-ref",

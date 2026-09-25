@@ -1401,6 +1401,10 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // Constant inputs degenerate the phase-congruency maps to 0/0,
         // so a degenerate pair yields NaN — matching the reference.
         MetricKind::Fsim | MetricKind::FsimY => Some((-0.001, 1.001, 1.0)),
+        // VSI: similarity on [0, 1]; 1 = identical. Flat inputs
+        // degenerate the saliency normalisation to 0/0 → NaN, matching
+        // the reference.
+        MetricKind::Vsi => Some((-0.001, 1.001, 1.0)),
     }
 }
 

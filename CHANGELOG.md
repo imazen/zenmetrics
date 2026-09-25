@@ -13,6 +13,23 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- vsi (HASH): new in-tree CPU port of VSI (Zhang, Shen & Li, IEEE TIP
+  23(10), 2014) — pure-Rust, `archmage`/`magetypes` SIMD with
+  bit-identical scalar/v3/v4 tiers and fixed-order f64 pooling. Ports
+  the authors' `VSI.m`: SDSP saliency (antialiased bilinear
+  `imresize` to 256² — a bit-exact `conv_interp_vec` port verified
+  against Octave — D50 CIE-Lab, single-scale log-Gabor via a
+  self-contained radix-2/Bluestein 2D FFT vendored from `hdrvdp`,
+  centre + warm-colour priors, `mat2gray`), opponent L/M/N channels,
+  `conv2`-average decimation at F = max(1, round(min/256)), Scharr
+  gradients, and `gradSim^0.4·VSSim·real((ISim·QSim)^0.02)` pooled by
+  `max(SM1,SM2)` (NaN-propagating → flat inputs return NaN like the
+  reference). `vsi_rgb8`. Verified on 14 Octave golden rows
+  (`validation/`): even/odd dims, F=1 and F=2 regimes, identical,
+  degenerate, replicated gray — all within 1e-4. Wired into
+  `zenmetrics-cli` as `vsi` (`vsi_imazen_v*`), behind `cpu-vsi` in the
+  default `cpu-metrics` group; orchestrator-ineligible like gmsd/fsim.
+
 - fsim (`75829f8e`): new in-tree CPU port of FSIM / FSIMc (Zhang, Zhang, Mou
   & Zhang, IEEE TIP 20(8), 2011) — pure-Rust, `archmage`/`magetypes`
   SIMD with bit-identical scalar/v3/v4 tiers and fixed-order f64

@@ -8,6 +8,7 @@ members = [
     "crates/dssim-gpu",
     "crates/gmsd",
     "crates/fsim",
+    "crates/vsi",
     "crates/haarpsi",
     "crates/hdrvdp",
     "crates/iwssim",
@@ -76,6 +77,7 @@ iwssim = { version = "0.1.0", path = "crates/iwssim", default-features = false }
 iwssim-gpu = { version = "0.0.1", path = "crates/iwssim-gpu", default-features = false }
 psnrhvs = { version = "0.1.0", path = "crates/psnrhvs", default-features = false }
 ssim2-gpu = { version = "0.0.1", path = "crates/ssim2-gpu", default-features = false }
+vsi = { version = "0.1.0", path = "crates/vsi", default-features = false }
 zensim-gpu = { version = "0.0.1", path = "crates/zensim-gpu", default-features = false }
 zenmetrics-api = { version = "0.0.1", path = "crates/zenmetrics-api", default-features = false }
 zenmetrics-corpus = { version = "0.1.0", path = "crates/zenmetrics-corpus", default-features = false }
