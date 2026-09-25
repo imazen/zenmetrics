@@ -142,12 +142,15 @@ non-anchor metrics with no official map).
 | `fsim` | `FSIM` | C | 0.017 | 0.27 | acceptable |
 | `dssim` | `DSSIM` | C | 0.0001 | 0.0004 | exact |
 | `iwssim` (studio-Y) | `IW-SSIM` | C | 0.077 | 0.68 | pyiqa-variant gap, visible in JND |
-| `msssim` (studio-Y) | `MS-SSIM` | B | 0.067 | **2.64** | libvmaf `float_ms_ssim` needed |
+| `msssim` (studio-Y) | `MS-SSIM` | B | 0.067 | **2.64** | MATLAB-variant gap — superseded by `msssim-libvmaf` |
+| `ssim-libvmaf` | `SSIM` | B | 0.00004 | 0.0007 | **implemented** — FFI-verified libvmaf port (raw med 1.0e-6 / max 1.8e-5) |
+| `msssim-libvmaf` | `MS-SSIM` | B | 0.0001 | 0.0022 | **implemented** — FFI-verified libvmaf port (raw med 1.0e-6 / max 1.6e-5) |
 | `vif` (studio-Y) | `VIF` | C | 0.26 | **5.85** | wavelet `vifvec` needed |
-| `psnrhvs` (Ponomarenko-Y) | `PSNR-HVS-Y` | A | 1.90 | **6.38** | wrong algorithm family |
+| `psnrhvs` (Ponomarenko-Y) | `PSNR-HVS-Y` | A | 1.90 | **6.38** | wrong algorithm family — superseded by `psnrhvs-daala` |
 | `psnrhvs` | `PSNR-HVS` | B | 1.82 | 3.63 | wrong algorithm family |
 | `psnrhvsm` | `PSNR-HVS` | B | 0.83 | 2.60 | closer but still wrong family |
-| `SSIM` | — | — | — | — | not implemented (libvmaf `float_ssim` scale=2) |
+| `psnrhvs-daala` | `PSNR-HVS` | B | 0.0002 | 0.0032 | **implemented** — FFI-verified Daala port on studio-601 YUV444 (raw med 1.1e-3 / max 4.5e-2 dB) |
+| `SSIM` | — | — | — | — | superseded — see `ssim-libvmaf` row |
 
 Reading: raw-score deltas that looked alarming are often immaterial in JND
 (SSIMULACRA2's 6.3e-3 drift → ≤0.004 JND), while modest raw deltas on steep
@@ -164,12 +167,18 @@ the right prioritization axis.
 
 ## Priority queue (JND-ranked)
 
-1. **Daala/Xiph `dump_psnrhvs`** → `PSNR-HVS`(+`-Y/-Cb/-Cr`). CTC anchor;
-   1.9–6.4 JND error under every normalization. Largest gap by far.
-2. **libvmaf `float_ms_ssim` + `float_ssim`** → `MS-SSIM`, `SSIM` anchors.
-   Our MATLAB-authors `msssim` hits 2.64 JND on the steep part of the curve;
-   `SSIM` has no implementation at all. Both are small ports (decimate +
-   zli l·c·s / libvmaf scale-2 recipe already identified).
+~~1. **Daala/Xiph `dump_psnrhvs`** → `PSNR-HVS`(+`-Y/-Cb/-Cr`).~~ **DONE** —
+   `psnrhvs-daala` (`crates/psnrhvs/src/daala.rs`): integer bin-DCT
+   FFI-verified vs vendored libvmaf (≤2e-4 dB). Dataset reproduction on
+   studio-601 **YUV444** chroma (the AIC-4 convention — identified via the
+   `-Cb`/`-Cr` columns): combined med 1.1e-3 dB / max 4.5e-2 ≈ ≤0.003 JND.
+   Parity gotcha: `od_bin_fdct8x8` order is column-DCT→transpose→column-DCT;
+   row-first gives ~1.3% higher MSE (0.06 dB).
+~~2. **libvmaf `float_ms_ssim` + `float_ssim`** → `MS-SSIM`, `SSIM` anchors.~~
+   **DONE** — `ssim-libvmaf` / `msssim-libvmaf`
+   (`crates/msssim/src/libvmaf.rs`, FFI-verified incl. 10-bit hbd scaling
+   and `round(min_dim/256)` auto-decimate). Studio-601 Y ingress: raw med
+   1.0e-6 / max 1.8e-5 ≈ ≤0.002 JND on both columns.
 3. **Wavelet `vifvec`** → `VIF` column (pyiqa SP5 steerable-pyramid VIF).
    5.9 JND-equivalent worst case; our `vif` is pixel-domain `vifp`.
 4. **pyiqa `iwssim` variant** → 0.68 JND-eq worst; systematic +1.2e-3 raw.
@@ -192,11 +201,11 @@ implementations. Qualify ours by reference + variant, not just metric name:
 | `PSNR` | RGB mean-MSE PSNR | — | computable; no dedicated CLI metric |
 | `PSNR-Y` | PSNR on `round(16+(65.481R+128.553G+24.966B)/255)` (JPEG studio-601) | `--luma-ingress yuv601-studio` + PSNR | exact convention identified |
 | `PSNR-YCbCr611` | 6:1:1 YCbCr composite PSNR | — | identified |
-| `PSNR-HVS`, `-Y`, `-Cb`, `-Cr` | **Daala/Xiph `dump_psnrhvs`** (7×7 CSF-weighted, per-plane + combined) | `psnrhvs`, `psnrhvsm` | ours = Ponomarenko PSNR-HVS/PSNR-HVS-M — **different algorithm family** |
-| `SSIM` | libvmaf `float_ssim`, scale=2 (half-res decimation, Gaussian σ1.5, zli l·c·s) | — | not implemented |
+| `PSNR-HVS`, `-Y`, `-Cb`, `-Cr` | **Daala/Xiph `dump_psnrhvs`** (7×7 CSF-weighted, per-plane + combined) | `psnrhvs-daala` | ✅ FFI-verified port — studio-601 YUV444 chroma; `psnrhvs`/`psnrhvsm` remain the Ponomarenko MATLAB variant (**different algorithm family**) |
+| `SSIM` | libvmaf `float_ssim` (auto-scale `round(min_dim/256)` box decimate, 11×11 Gaussian, zli l·c·s, L=255) | `ssim-libvmaf` | ✅ FFI-verified port |
 | `SSIM-pyiqa` | pyiqa SSIM | — | third variant |
 | `SSIMc` | MATLAB `ssim()` per-RGB-channel mean | — | computable |
-| `MS-SSIM` | libvmaf `float_ms_ssim` | `msssim` | ours = Wang et al. MATLAB-authors variant |
+| `MS-SSIM` | libvmaf `float_ms_ssim` | `msssim-libvmaf` | ✅ FFI-verified port; `msssim` remains the Wang-MATLAB variant |
 | `MS-SSIM-pyiqa` | pyiqa ms_ssim (matched by ours to 3e-7 on one point) | `msssim` via `yuv601-studio` | variants differ at low quality |
 | `VIF` | **pyiqa `vif` = wavelet `vifvec`** (SP5 steerable pyramid) | `vif` | ours = pixel-domain `vifp_mscale` — **different algorithm family** |
 | `VIF_vmaf` | libvmaf `vif` feature, Σ4 scales | `vmaf` crate `vif_scales` | matches |

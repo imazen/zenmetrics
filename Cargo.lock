@@ -3332,7 +3332,9 @@ dependencies = [
  "archmage",
  "libm",
  "magetypes",
+ "psnrhvs",
  "rayon",
+ "vmaf-head-sys",
 ]
 
 [[package]]

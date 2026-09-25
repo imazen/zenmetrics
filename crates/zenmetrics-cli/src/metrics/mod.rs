@@ -240,6 +240,39 @@ pub enum MetricKind {
     /// umbrella or the orchestrator.
     #[value(name = "mad")]
     Mad,
+    /// SSIM — the libvmaf `float_ssim` feature (Wang et al. 2004 as
+    /// implemented by Z. Li / Netflix iqa: `round(min_dim/256)` box
+    /// decimation, 11×11 Gaussian, zli l·c·s pooling, L=255) via
+    /// `msssim::float_ssim`, FFI-verified against vendored libvmaf
+    /// f85a8536. Scored on the studio-swing BT.601 luma plane a YUV420
+    /// pipeline delivers to libvmaf
+    /// (`Y = round(16 + (65.481R + 128.553G + 24.966B)/255)`), NOT the
+    /// MATLAB `rgb2gray` luma `msssim`/`ssim` metrics use. This is the
+    /// metric behind the JPEG AIC-4 `SSIM` column. `--luma-ingress`
+    /// does not apply: the variant always builds its own studio-601 Y.
+    #[value(name = "ssim-libvmaf")]
+    SsimLibvmaf,
+    /// MS-SSIM — the libvmaf `float_ms_ssim` feature (five-scale 9/7
+    /// low-pass pyramid, 11×11 Gaussian, β/γ weights 0.0448/0.2856/
+    /// 0.3001/0.2363/0.1333 with α=l only at the coarsest scale) via
+    /// `msssim::float_ms_ssim`, FFI-verified against vendored libvmaf
+    /// f85a8536. Same studio-601 luma ingress as `ssim-libvmaf`; the
+    /// JPEG AIC-4 `MS-SSIM` column. NOT the Wang-MATLAB `msssim`
+    /// variant (different pyramid, luma, and window handling).
+    #[value(name = "msssim-libvmaf")]
+    MsssimLibvmaf,
+    /// PSNR-HVS — the Daala/libvmaf `dump_psnrhvs` feature (integer
+    /// bin-DCT 8×8 blocks at step 7, CSF-masked error with variance-
+    /// ratio masking, `0.8·Y + 0.1·(Cb + Cr)` combined) via
+    /// `psnrhvs::daala`, FFI-verified against vendored libvmaf f85a8536.
+    /// Input planes are studio-swing BT.601 Y + full-resolution Cb/Cr
+    /// (YUV444 — the convention the JPEG AIC-4 `PSNR-HVS`/
+    /// `PSNR-HVS-{Y,Cb,Cr}` columns reproduce under). NOT the Ponomarenko
+    /// `psnrhvs` metric (floating DCT, different CSF + masking —
+    /// ~7.6 dB stricter scoring). Emits four columns:
+    /// `psnrhvs_daala_{y,cb,cr}` + combined `psnrhvs_daala`.
+    #[value(name = "psnrhvs-daala")]
+    PsnrhvsDaala,
 }
 
 impl MetricKind {
@@ -269,6 +302,9 @@ impl MetricKind {
             MetricKind::Msssim,
             MetricKind::Vif,
             MetricKind::Mad,
+            MetricKind::SsimLibvmaf,
+            MetricKind::MsssimLibvmaf,
+            MetricKind::PsnrhvsDaala,
         ]
     }
 
@@ -298,6 +334,9 @@ impl MetricKind {
             MetricKind::Msssim => "msssim",
             MetricKind::Vif => "vif",
             MetricKind::Mad => "mad",
+            MetricKind::SsimLibvmaf => "ssim-libvmaf",
+            MetricKind::MsssimLibvmaf => "msssim-libvmaf",
+            MetricKind::PsnrhvsDaala => "psnrhvs-daala",
         }
     }
 
@@ -362,6 +401,9 @@ impl MetricKind {
             MetricKind::Msssim => MSSSIM_CPU_COLUMNS,
             MetricKind::Vif => VIF_CPU_COLUMNS,
             MetricKind::Mad => MAD_CPU_COLUMNS,
+            MetricKind::SsimLibvmaf => SSIM_LIBVMAF_CPU_COLUMNS,
+            MetricKind::MsssimLibvmaf => MSSSIM_LIBVMAF_CPU_COLUMNS,
+            MetricKind::PsnrhvsDaala => PSNRHVS_DAALA_CPU_COLUMNS,
         }
     }
 
@@ -371,7 +413,11 @@ impl MetricKind {
     /// (FSIMc chroma), vsi (SDSP colour saliency), haarpsi / psnrhvs
     /// (per-channel), dssim / ssim2 / butteraugli / zensim (native colour),
     /// cvvdp / hdrvdp (display-modelled), every GPU twin — return false and
-    /// are always scored on the decoded RGB.
+    /// are always scored on the decoded RGB. The libvmaf-feature variants
+    /// (`ssim-libvmaf`, `msssim-libvmaf`, `psnrhvs-daala`) also return
+    /// false: they build their own studio-601 planes internally —
+    /// applying the studio-601 ingress a second time would not be
+    /// idempotent (the swing is affine, not a convex combination).
     pub fn is_luma_only(self) -> bool {
         matches!(
             self,
@@ -442,6 +488,60 @@ pub fn studio601_gray(img: &Rgb8Image) -> Rgb8Image {
         width: w as u32,
         height: h as u32,
     }
+}
+
+/// The `Y = round(16 + (65.481R + 128.553G + 24.966B)/255)` studio-swing
+/// BT.601 luma plane of `img` as a packed u8 buffer at full resolution
+/// (no crop — the libvmaf SSIM features consume the Y plane at native
+/// size). Same per-pixel formula as [`studio601_gray`].
+#[cfg(feature = "cpu-msssim")]
+fn studio601_y_plane(img: &Rgb8Image) -> Vec<u8> {
+    let (w, h) = (img.width as usize, img.height as usize);
+    let mut y = Vec::with_capacity(w * h);
+    for px in img.pixels.chunks_exact(3) {
+        y.push(
+            (16.0
+                + (65.481 * px[0] as f32 + 128.553 * px[1] as f32 + 24.966 * px[2] as f32) / 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8,
+        );
+    }
+    y
+}
+
+/// Studio-swing BT.601 YUV444 planes of `img` at full resolution — `Y`,
+/// `Cb`, `Cr` all `w`×`h`:
+/// `Y  = round(16 + (65.481R + 128.553G + 24.966B)/255)`,
+/// `Cb = round(128 + (−37.797R − 74.203G + 112B)/255)`,
+/// `Cr = round(128 + (112R − 93.786G − 18.214B)/255)`.
+/// These are the planes the JPEG AIC-4 pipeline hands libvmaf's
+/// `psnr_hvs` (its `PSNR-HVS-Cb/Cr` columns reproduce to ≤0.03 dB on
+/// full-res chroma — see `docs/METRIC_PROVENANCE.md`).
+#[cfg(feature = "cpu-psnrhvs")]
+fn studio601_yuv444(img: &Rgb8Image) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    let n = (img.width * img.height) as usize;
+    let mut y = Vec::with_capacity(n);
+    let mut cb = Vec::with_capacity(n);
+    let mut cr = Vec::with_capacity(n);
+    for px in img.pixels.chunks_exact(3) {
+        let (r, g, b) = (px[0] as f32, px[1] as f32, px[2] as f32);
+        y.push(
+            (16.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8,
+        );
+        cb.push(
+            (128.0 + (-37.797 * r - 74.203 * g + 112.0 * b) / 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8,
+        );
+        cr.push(
+            (128.0 + (112.0 * r - 93.786 * g - 18.214 * b) / 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8,
+        );
+    }
+    (y, cb, cr)
 }
 
 /// Substitute [`studio601_gray`] images when `ingress` applies to `kind`
@@ -592,6 +692,17 @@ const MSSSIM_CPU_COLUMNS: &[&str] = &["msssim"];
 const VIF_CPU_COLUMNS: &[&str] = &[vif::VIF_COLUMN_NAME];
 #[cfg(not(feature = "cpu-vif"))]
 const VIF_CPU_COLUMNS: &[&str] = &["vif"];
+
+// libvmaf-feature columns — fixed names (they are the vendored libvmaf
+// feature names, not versioned `*_imazen_v*` identifiers).
+const SSIM_LIBVMAF_CPU_COLUMNS: &[&str] = &["ssim_libvmaf"];
+const MSSSIM_LIBVMAF_CPU_COLUMNS: &[&str] = &["msssim_libvmaf"];
+const PSNRHVS_DAALA_CPU_COLUMNS: &[&str] = &[
+    "psnrhvs_daala_y",
+    "psnrhvs_daala_cb",
+    "psnrhvs_daala_cr",
+    "psnrhvs_daala",
+];
 
 // MAD emits three columns: the blend plus the two strategy indices.
 #[cfg(feature = "cpu-mad")]
@@ -1349,6 +1460,21 @@ pub fn run_metric(
         MetricKind::Mad => run_cpu_mad(reference, distorted),
         #[cfg(not(feature = "cpu-mad"))]
         MetricKind::Mad => Err(disabled_msg("mad", "cpu-mad")),
+
+        #[cfg(feature = "cpu-msssim")]
+        MetricKind::SsimLibvmaf => run_cpu_ssim_libvmaf(reference, distorted),
+        #[cfg(not(feature = "cpu-msssim"))]
+        MetricKind::SsimLibvmaf => Err(disabled_msg("ssim-libvmaf", "cpu-msssim")),
+
+        #[cfg(feature = "cpu-msssim")]
+        MetricKind::MsssimLibvmaf => run_cpu_msssim_libvmaf(reference, distorted),
+        #[cfg(not(feature = "cpu-msssim"))]
+        MetricKind::MsssimLibvmaf => Err(disabled_msg("msssim-libvmaf", "cpu-msssim")),
+
+        #[cfg(feature = "cpu-psnrhvs")]
+        MetricKind::PsnrhvsDaala => run_cpu_psnrhvs_daala(reference, distorted),
+        #[cfg(not(feature = "cpu-psnrhvs"))]
+        MetricKind::PsnrhvsDaala => Err(disabled_msg("psnrhvs-daala", "cpu-psnrhvs")),
     }
 }
 
@@ -1567,6 +1693,85 @@ fn run_cpu_mad(
         (MAD_CPU_COLUMNS[0], s.mad),
         (MAD_CPU_COLUMNS[1], s.hi),
         (MAD_CPU_COLUMNS[2], s.lo),
+    ])
+}
+
+/// libvmaf `float_ssim` of two decoded sRGB8 images on the studio-601
+/// luma plane (`msssim::float_ssim`, FFI-verified vs vendored libvmaf
+/// f85a8536 — the JPEG AIC-4 `SSIM` column's implementation).
+#[cfg(feature = "cpu-msssim")]
+fn run_cpu_ssim_libvmaf(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "ssim-libvmaf: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let yr = studio601_y_plane(reference);
+    let yd = studio601_y_plane(distorted);
+    let yr16: Vec<u16> = yr.iter().map(|&v| v as u16).collect();
+    let yd16: Vec<u16> = yd.iter().map(|&v| v as u16).collect();
+    let s = msssim::float_ssim(&yr16, &yd16, w, h, w, 8)?;
+    Ok(vec![(SSIM_LIBVMAF_CPU_COLUMNS[0], s)])
+}
+
+/// libvmaf `float_ms_ssim` of two decoded sRGB8 images on the studio-601
+/// luma plane (`msssim::float_ms_ssim`, FFI-verified — the JPEG AIC-4
+/// `MS-SSIM` column's implementation, distinct from `msssim`).
+#[cfg(feature = "cpu-msssim")]
+fn run_cpu_msssim_libvmaf(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "msssim-libvmaf: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let yr = studio601_y_plane(reference);
+    let yd = studio601_y_plane(distorted);
+    let yr16: Vec<u16> = yr.iter().map(|&v| v as u16).collect();
+    let yd16: Vec<u16> = yd.iter().map(|&v| v as u16).collect();
+    let s = msssim::float_ms_ssim(&yr16, &yd16, w, h, w, 8)?;
+    Ok(vec![(MSSSIM_LIBVMAF_CPU_COLUMNS[0], s)])
+}
+
+/// Daala/libvmaf `psnr_hvs` of two decoded sRGB8 images on studio-601
+/// YUV444 planes (`psnrhvs::daala`, FFI-verified — the JPEG AIC-4
+/// `PSNR-HVS` column's implementation and convention: full-res chroma).
+/// Emits `psnrhvs_daala_{y,cb,cr}` plus the combined `psnrhvs_daala`.
+#[cfg(feature = "cpu-psnrhvs")]
+fn run_cpu_psnrhvs_daala(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "psnrhvs-daala: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    if reference.width.min(reference.height) < 8 {
+        return Err("psnrhvs-daala: min(w,h) must be ≥ 8 (8×8 block DCT)".into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let (ry, rcb, rcr) = studio601_yuv444(reference);
+    let (dy, dcb, dcr) = studio601_yuv444(distorted);
+    let s = psnrhvs::daala::psnr_hvs_daala_yuv444(&ry, &dy, &rcb, &dcb, &rcr, &dcr, w, h, w, w);
+    Ok(vec![
+        (PSNRHVS_DAALA_CPU_COLUMNS[0], s.psnr_hvs_y),
+        (PSNRHVS_DAALA_CPU_COLUMNS[1], s.psnr_hvs_cb),
+        (PSNRHVS_DAALA_CPU_COLUMNS[2], s.psnr_hvs_cr),
+        (PSNRHVS_DAALA_CPU_COLUMNS[3], s.psnr_hvs),
     ])
 }
 
@@ -2061,5 +2266,46 @@ mod tests {
         assert!(!MetricKind::Iwssim.requires_gpu());
         assert_eq!(MetricKind::IwssimGpu.backend(), "GPU");
         assert!(MetricKind::IwssimGpu.requires_gpu());
+    }
+
+    /// The libvmaf-feature variants carry qualified names (they are NOT
+    /// the Wang/Ponomarenko implementations the unqualified metrics
+    /// bind), emit fixed non-versioned columns, and exempt themselves
+    /// from `--luma-ingress` because they build their own studio-601
+    /// planes — a second studio swing is not idempotent.
+    #[test]
+    fn libvmaf_variants_qualified_names_columns_ingress() {
+        assert_eq!(MetricKind::SsimLibvmaf.name(), "ssim-libvmaf");
+        assert_eq!(MetricKind::MsssimLibvmaf.name(), "msssim-libvmaf");
+        assert_eq!(MetricKind::PsnrhvsDaala.name(), "psnrhvs-daala");
+
+        assert_eq!(MetricKind::SsimLibvmaf.column_names(), &["ssim_libvmaf"]);
+        assert_eq!(
+            MetricKind::MsssimLibvmaf.column_names(),
+            &["msssim_libvmaf"]
+        );
+        assert_eq!(
+            MetricKind::PsnrhvsDaala.column_names(),
+            &[
+                "psnrhvs_daala_y",
+                "psnrhvs_daala_cb",
+                "psnrhvs_daala_cr",
+                "psnrhvs_daala"
+            ]
+        );
+
+        for k in [
+            MetricKind::SsimLibvmaf,
+            MetricKind::MsssimLibvmaf,
+            MetricKind::PsnrhvsDaala,
+        ] {
+            assert!(
+                !k.is_luma_only(),
+                "{} does its own studio-601 ingress",
+                k.name()
+            );
+            assert_eq!(k.backend(), "CPU");
+            assert!(!k.requires_gpu());
+        }
     }
 }

@@ -13,6 +13,27 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- metrics (`TBD`): three AIC-4-matched variants closing the two largest
+  JND-ranked gaps. `msssim` gains a `libvmaf` module — reference
+  reimplementation of libvmaf `float_ssim`/`float_ms_ssim` @ f85a8536
+  (tdistler-iqa decimate `round(min/256)` + 11×11 Gaussian + zli l·c·s;
+  5-level 9/7-LPF pyramid, weights 0.0448/0.2856/0.3001/0.2363/0.1333;
+  bpc>8 input scaled ÷(1<<(bpc−8)) exactly like `picture_copy`). FFI
+  parity vs the real vendored libvmaf ≤2e-4 (8-bit, 10-bit, identical,
+  YUV420+444 PSNR-HVS) in `crates/msssim/tests/ffi_libvmaf.rs`.
+  `psnrhvs` gains a `daala` module — Daala/Xiph `dump_psnrhvs`
+  (integer bin-DCT 8×8, column-first `od_bin_fdct8x8`, CSF tables +
+  variance-ratio masking, `-10·log10` on 0.8Y+0.1Cb+0.1Cr MSE) with
+  YUV420 and YUV444 entry points. CLI metrics `ssim-libvmaf`,
+  `msssim-libvmaf`, `psnrhvs-daala` build studio-601 luma/chroma
+  internally (rounded u8 planes — the references' contract);
+  `psnrhvs-daala` uses full-resolution YUV444 chroma, the AIC-4
+  convention identified via the published `-Cb`/`-Cr` columns. AIC-4
+  53-pair reproduction vs published columns: `SSIM` med 1.0e-6 /
+  max 1.8e-5, `MS-SSIM` med 1.0e-6 / max 1.6e-5, `PSNR-HVS` med
+  1.1e-3 dB / max 4.5e-2 — all ≤0.003 JND. Divergence records + the
+  bin-DCT column-order gotcha in `DIVERGENCES.md`; provenance rows in
+  `docs/METRIC_PROVENANCE.md` and `docs/AIC2026_METRICS_AND_FITTING.md`.
 - docs (`dc0ccf2e`): new `docs/AIC2026_METRICS_AND_FITTING.md` — the AIC-4
   JND remapping record. Documents the two distinct JND objects (the 7
   precomputed `JND_*` CSV display columns vs the benchmark fitting-tool's

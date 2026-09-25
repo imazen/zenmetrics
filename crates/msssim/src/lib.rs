@@ -50,6 +50,11 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 mod kernel;
+mod libvmaf;
+
+pub use libvmaf::{float_ms_ssim, float_ssim};
+#[doc(hidden)]
+pub use libvmaf::{float_ms_ssim_scales, float_ssim_lcs};
 
 #[cfg(feature = "_dev")]
 #[doc(hidden)]
