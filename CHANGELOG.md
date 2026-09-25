@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- vif (`COMMIT_HASH_TODO`): new in-tree CPU port of VIFp — pixel-domain
+- vif (`8acff821`): new in-tree CPU port of VIFp — pixel-domain
   Visual Information Fidelity (Sheikh & Bovik, IEEE TIP 15(2), 2006),
   ported to the authors' multiscale scalar-GSM release
   `vifp_mscale.m`. Four scales of rank-1 separable Gaussian
