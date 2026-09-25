@@ -176,6 +176,9 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::Msssim => "msssim",
         CliMetricKind::Vif => "vif",
         CliMetricKind::Mad => "mad",
+        CliMetricKind::SsimLibvmaf => "ssim_libvmaf",
+        CliMetricKind::MsssimLibvmaf => "msssim_libvmaf",
+        CliMetricKind::PsnrhvsDaala => "psnrhvs_daala",
         CliMetricKind::Mdsi => "mdsi",
         CliMetricKind::MsGmsd => "ms-gmsd",
         CliMetricKind::MsGmsdc => "ms-gmsdc",
@@ -278,7 +281,10 @@ pub fn rekey_orchestrator_columns(
         | CliMetricKind::Vsi
         | CliMetricKind::Msssim
         | CliMetricKind::Vif
-        | CliMetricKind::Mad => Vec::new(),
+        | CliMetricKind::Mad
+        | CliMetricKind::SsimLibvmaf
+        | CliMetricKind::MsssimLibvmaf
+        | CliMetricKind::PsnrhvsDaala => Vec::new(),
         CliMetricKind::Cvvdp
         | CliMetricKind::CvvdpGpu
         | CliMetricKind::Ssim2Gpu
@@ -418,6 +424,9 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Msssim
             | CliMetricKind::Vif
             | CliMetricKind::Mad
+            | CliMetricKind::SsimLibvmaf
+            | CliMetricKind::MsssimLibvmaf
+            | CliMetricKind::PsnrhvsDaala
     )
 }
 

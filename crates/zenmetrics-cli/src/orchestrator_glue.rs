@@ -128,6 +128,14 @@ impl OrchestratorMetricSpec {
             CliMetricKind::Mad => {
                 unreachable!("mad has no orchestrator backend; callers gate on eligibility")
             }
+            // libvmaf SSIM / MS-SSIM and Daala PSNR-HVS: same direct-crate shape.
+            CliMetricKind::SsimLibvmaf
+            | CliMetricKind::MsssimLibvmaf
+            | CliMetricKind::PsnrhvsDaala => {
+                unreachable!(
+                    "libvmaf/daala variants have no orchestrator backend; callers gate on eligibility"
+                )
+            }
             CliMetricKind::Zensim => Self {
                 kind: ApiMetricKind::Zensim,
                 prefer_cpu: true,
@@ -280,6 +288,9 @@ pub fn validate_cpu_variant_built_in(
             | CliMetricKind::Msssim
             | CliMetricKind::Vif
             | CliMetricKind::Mad
+            | CliMetricKind::SsimLibvmaf
+            | CliMetricKind::MsssimLibvmaf
+            | CliMetricKind::PsnrhvsDaala
     ) {
         return Ok(());
     }
