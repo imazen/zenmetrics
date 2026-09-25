@@ -2827,6 +2827,142 @@ fn adm_cm_i32(
         + powf_add
 }
 
+/// Vertical pass of `adm_dwt2_s123_combined_avx2`: 4 i32 cols per iteration,
+/// cvtepi32_epi64 + mul_epi32 per tap, +add, then the C masked-shift
+/// (srli | v & (-1<<s)) which equals an arithmetic shift while |accum| < 2^(64-s)
+/// — the same bound libvmaf's AVX2 relies on. Packed via permutevar8x32(0,2,4,6).
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn dwt2_s123_vrow_v3(
+    _token: X64V3Token,
+    s0: &[i32; 4],
+    s1: &[i32; 4],
+    s2: &[i32; 4],
+    s3: &[i32; 4],
+    flo: &[i64; 4],
+    fhi: &[i64; 4],
+    add: i64,
+    mask_msb: i64,
+    shift: i32,
+    lo_out: &mut [i32; 4],
+    hi_out: &mut [i32; 4],
+) {
+    let taps = [
+        _mm256_cvtepi32_epi64(_mm_loadu_si128(a8(&s0[..]))),
+        _mm256_cvtepi32_epi64(_mm_loadu_si128(a8(&s1[..]))),
+        _mm256_cvtepi32_epi64(_mm_loadu_si128(a8(&s2[..]))),
+        _mm256_cvtepi32_epi64(_mm_loadu_si128(a8(&s3[..]))),
+    ];
+    let add_v = _mm256_set1_epi64x(add);
+    let mask_v = _mm256_set1_epi64x(mask_msb);
+    let cnt = _mm_cvtsi32_si128(shift);
+    for (out, f) in [(lo_out, flo), (hi_out, fhi)] {
+        let mut acc = _mm256_setzero_si256();
+        for (t, &fk) in taps.iter().zip(f.iter()) {
+            acc = _mm256_add_epi64(acc, _mm256_mul_epi32(*t, _mm256_set1_epi64x(fk)));
+        }
+        acc = _mm256_add_epi64(acc, add_v);
+        let v = _mm256_or_si256(_mm256_srl_epi64(acc, cnt), _mm256_and_si256(acc, mask_v));
+        let p = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(
+            v,
+            _mm256_setr_epi32(0, 2, 4, 6, 0, 0, 0, 0),
+        ));
+        _mm_storeu_si128(a8m(&mut out[..]), p);
+    }
+}
+
+/// Horizontal pass of `adm_dwt2_s123_combined_avx2`: each unaligned 8-wide load
+/// at tmplo[jk] feeds mul_epi32's even-offset lanes, producing outputs j..j+3
+/// when ind_x[k][j+q] = ind_x[k][j]+2q (interior rows only). The caller pads
+/// tmp buffers by 8 so the load stays in bounds; slack lanes are discarded.
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn dwt2_s123_hrow_v3(
+    _token: X64V3Token,
+    lo: &[i32],
+    hi: &[i32],
+    j0: usize,
+    j1: usize,
+    j2: usize,
+    j3: usize,
+    flo: &[i64; 4],
+    fhi: &[i64; 4],
+    add: i64,
+    mask_msb: i64,
+    shift: i32,
+    a_out: &mut [i32; 4],
+    v_out: &mut [i32; 4],
+    h_out: &mut [i32; 4],
+    d_out: &mut [i32; 4],
+) {
+    let add_v = _mm256_set1_epi64x(add);
+    let mask_v = _mm256_set1_epi64x(mask_msb);
+    let cnt = _mm_cvtsi32_si128(shift);
+    let idx = _mm256_setr_epi32(0, 2, 4, 6, 0, 0, 0, 0);
+    for (buf, out_a, out_b, fa, fb) in [(lo, a_out, v_out, flo, fhi), (hi, h_out, d_out, flo, fhi)]
+    {
+        let taps = [
+            _mm256_loadu_si256(a8(&buf[j0..j0 + 8])),
+            _mm256_loadu_si256(a8(&buf[j1..j1 + 8])),
+            _mm256_loadu_si256(a8(&buf[j2..j2 + 8])),
+            _mm256_loadu_si256(a8(&buf[j3..j3 + 8])),
+        ];
+        for (out, f) in [(out_a, fa), (out_b, fb)] {
+            let mut acc = _mm256_setzero_si256();
+            for (t, &fk) in taps.iter().zip(f.iter()) {
+                acc = _mm256_add_epi64(acc, _mm256_mul_epi32(*t, _mm256_set1_epi64x(fk)));
+            }
+            acc = _mm256_add_epi64(acc, add_v);
+            let v = _mm256_or_si256(_mm256_srl_epi64(acc, cnt), _mm256_and_si256(acc, mask_v));
+            let p = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(v, idx));
+            _mm_storeu_si128(a8m(&mut out[..]), p);
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn dwt2_s123_hscalar(
+    tmplo: &[i32],
+    tmphi: &[i32],
+    ix: [i32; 4],
+    idx: usize,
+    add_hp: i64,
+    shift_hp: u32,
+    a_out: &mut [i32],
+    out: &mut BandI32,
+) {
+    let (j0, j1, j2, j3) = (
+        ix[0] as usize,
+        ix[1] as usize,
+        ix[2] as usize,
+        ix[3] as usize,
+    );
+    let s = [tmplo[j0], tmplo[j1], tmplo[j2], tmplo[j3]];
+    let mut acc = 0i64;
+    for k in 0..4 {
+        acc += DWT2_LO[k] as i64 * s[k] as i64;
+    }
+    a_out[idx] = ((acc + add_hp) >> shift_hp) as i32;
+    let mut acc = 0i64;
+    for k in 0..4 {
+        acc += DWT2_HI[k] as i64 * s[k] as i64;
+    }
+    out.v[idx] = ((acc + add_hp) >> shift_hp) as i32;
+    let s = [tmphi[j0], tmphi[j1], tmphi[j2], tmphi[j3]];
+    let mut acc = 0i64;
+    for k in 0..4 {
+        acc += DWT2_LO[k] as i64 * s[k] as i64;
+    }
+    out.h[idx] = ((acc + add_hp) >> shift_hp) as i32;
+    let mut acc = 0i64;
+    for k in 0..4 {
+        acc += DWT2_HI[k] as i64 * s[k] as i64;
+    }
+    out.d[idx] = ((acc + add_hp) >> shift_hp) as i32;
+}
+
 #[cfg_attr(feature = "simd", autoversion)]
 fn adm_dwt2_s123_combined(
     i4_ref_scale: &[i32],
@@ -2848,12 +2984,72 @@ fn adm_dwt2_s123_combined(
     let add_hp = [16384i64, 32768, 16384][scale - 1];
     let shift_vp = [0u32, 16, 16][scale - 1];
     let shift_hp = [15u32, 16, 15][scale - 1];
-    let mut tmplo_ref = vec![0i32; w];
-    let mut tmphi_ref = vec![0i32; w];
-    let mut tmplo_dis = vec![0i32; w];
-    let mut tmphi_dis = vec![0i32; w];
+    // C mask: andnot(srli(-1, s), FF) = only the top s bits — restoring the
+    // sign-extension region after srli, not all bits >= s.
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    let mask_vp = (-1i64).checked_shl(64 - shift_vp).unwrap_or(0);
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    let mask_hp = (-1i64).checked_shl(64 - shift_hp).unwrap_or(0);
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    let flo: [i64; 4] = [
+        DWT2_LO[0] as i64,
+        DWT2_LO[1] as i64,
+        DWT2_LO[2] as i64,
+        DWT2_LO[3] as i64,
+    ];
+    #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+    let fhi: [i64; 4] = [
+        DWT2_HI[0] as i64,
+        DWT2_HI[1] as i64,
+        DWT2_HI[2] as i64,
+        DWT2_HI[3] as i64,
+    ];
+    // +8 slack: the AVX2 horizontal loads 8 i32 per tap and discards the odd
+    // lanes — the same slack libvmaf's tmp_ref buffer effectively has.
+    let mut tmplo_ref = vec![0i32; w + 8];
+    let mut tmphi_ref = vec![0i32; w + 8];
+    let mut tmplo_dis = vec![0i32; w + 8];
+    let mut tmphi_dis = vec![0i32; w + 8];
     for i in 0..h.div_ceil(2) {
-        for j in 0..w {
+        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        let mut j = 0usize;
+        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        let j = 0usize;
+        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        if let Some(t) = v3_token() {
+            while j + 4 <= w {
+                dwt2_s123_vrow_v3(
+                    t,
+                    a8(&i4_ref_scale[ind_y[i][0] as usize * ref_stride + j..][..4]),
+                    a8(&i4_ref_scale[ind_y[i][1] as usize * ref_stride + j..][..4]),
+                    a8(&i4_ref_scale[ind_y[i][2] as usize * ref_stride + j..][..4]),
+                    a8(&i4_ref_scale[ind_y[i][3] as usize * ref_stride + j..][..4]),
+                    &flo,
+                    &fhi,
+                    add_vp,
+                    mask_vp,
+                    shift_vp as i32,
+                    a8m(&mut tmplo_ref[j..j + 4]),
+                    a8m(&mut tmphi_ref[j..j + 4]),
+                );
+                dwt2_s123_vrow_v3(
+                    t,
+                    a8(&i4_dis_scale[ind_y[i][0] as usize * dis_stride + j..][..4]),
+                    a8(&i4_dis_scale[ind_y[i][1] as usize * dis_stride + j..][..4]),
+                    a8(&i4_dis_scale[ind_y[i][2] as usize * dis_stride + j..][..4]),
+                    a8(&i4_dis_scale[ind_y[i][3] as usize * dis_stride + j..][..4]),
+                    &flo,
+                    &fhi,
+                    add_vp,
+                    mask_vp,
+                    shift_vp as i32,
+                    a8m(&mut tmplo_dis[j..j + 4]),
+                    a8m(&mut tmphi_dis[j..j + 4]),
+                );
+                j += 4;
+            }
+        }
+        for j in j..w {
             let mut acc = 0i64;
             for k in 0..4 {
                 acc +=
@@ -2880,40 +3076,86 @@ fn adm_dwt2_s123_combined(
             }
             tmphi_dis[j] = ((acc + add_vp) >> shift_vp) as i32;
         }
-        for (j, ix) in ind_x.iter().enumerate() {
-            let (j0, j1, j2, j3) = (
-                ix[0] as usize,
-                ix[1] as usize,
-                ix[2] as usize,
-                ix[3] as usize,
+        // j == 0 is always scalar (edge taps), matching libvmaf's structure.
+        for (lo, hi, out, a_out) in [
+            (&tmplo_ref, &tmphi_ref, &mut *ref_out, &mut *a_ref_out),
+            (&tmplo_dis, &tmphi_dis, &mut *dis_out, &mut *a_dis_out),
+        ] {
+            dwt2_s123_hscalar(
+                lo,
+                hi,
+                ind_x[0],
+                i * dst_stride,
+                add_hp,
+                shift_hp,
+                a_out,
+                out,
             );
+        }
+        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        let mut j = 1usize;
+        #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+        let j = 1usize;
+        #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+        if let Some(t) = v3_token() {
+            // Interior chunks only: ind_x[k][j+q] = ind_x[k][j]+2q fails inside
+            // the last two (edge-reflected) entries, so stop 2 short — the C
+            // AVX2 reads those anyway (out-of-bounds slack); we scalar them.
+            while j + 4 <= ind_x.len().saturating_sub(2) {
+                let ix = ind_x[j];
+                let (j0, j1, j2, j3) = (
+                    ix[0] as usize,
+                    ix[1] as usize,
+                    ix[2] as usize,
+                    ix[3] as usize,
+                );
+                let idx = i * dst_stride + j;
+                dwt2_s123_hrow_v3(
+                    t,
+                    &tmplo_ref,
+                    &tmphi_ref,
+                    j0,
+                    j1,
+                    j2,
+                    j3,
+                    &flo,
+                    &fhi,
+                    add_hp,
+                    mask_hp,
+                    shift_hp as i32,
+                    a8m(&mut a_ref_out[idx..idx + 4]),
+                    a8m(&mut ref_out.v[idx..idx + 4]),
+                    a8m(&mut ref_out.h[idx..idx + 4]),
+                    a8m(&mut ref_out.d[idx..idx + 4]),
+                );
+                dwt2_s123_hrow_v3(
+                    t,
+                    &tmplo_dis,
+                    &tmphi_dis,
+                    j0,
+                    j1,
+                    j2,
+                    j3,
+                    &flo,
+                    &fhi,
+                    add_hp,
+                    mask_hp,
+                    shift_hp as i32,
+                    a8m(&mut a_dis_out[idx..idx + 4]),
+                    a8m(&mut dis_out.v[idx..idx + 4]),
+                    a8m(&mut dis_out.h[idx..idx + 4]),
+                    a8m(&mut dis_out.d[idx..idx + 4]),
+                );
+                j += 4;
+            }
+        }
+        for (j, ix) in ind_x.iter().enumerate().skip(j) {
             let idx = i * dst_stride + j;
             for (lo, hi, out, a_out) in [
                 (&tmplo_ref, &tmphi_ref, &mut *ref_out, &mut *a_ref_out),
                 (&tmplo_dis, &tmphi_dis, &mut *dis_out, &mut *a_dis_out),
             ] {
-                let s = [lo[j0], lo[j1], lo[j2], lo[j3]];
-                let mut acc = 0i64;
-                for k in 0..4 {
-                    acc += DWT2_LO[k] as i64 * s[k] as i64;
-                }
-                a_out[idx] = ((acc + add_hp) >> shift_hp) as i32;
-                let mut acc = 0i64;
-                for k in 0..4 {
-                    acc += DWT2_HI[k] as i64 * s[k] as i64;
-                }
-                out.v[idx] = ((acc + add_hp) >> shift_hp) as i32;
-                let s = [hi[j0], hi[j1], hi[j2], hi[j3]];
-                let mut acc = 0i64;
-                for k in 0..4 {
-                    acc += DWT2_LO[k] as i64 * s[k] as i64;
-                }
-                out.h[idx] = ((acc + add_hp) >> shift_hp) as i32;
-                let mut acc = 0i64;
-                for k in 0..4 {
-                    acc += DWT2_HI[k] as i64 * s[k] as i64;
-                }
-                out.d[idx] = ((acc + add_hp) >> shift_hp) as i32;
+                dwt2_s123_hscalar(lo, hi, *ix, idx, add_hp, shift_hp, a_out, out);
             }
         }
     }
@@ -3485,6 +3727,79 @@ fn simd_cm_i32_matches_scalar_for_tails_and_edges() {
             let s = run(true);
             let v = run(false);
             assert_eq!(s.to_bits(), v.to_bits(), "scale={scale} {w}x{h}");
+        }
+    }
+}
+
+/// `dwt2_s123_vrow_v3`/`dwt2_s123_hrow_v3` must bit-match the scalar 4-tap
+/// fixed-point DWT on every band. |src| <= 2^24 keeps accum products inside
+/// 64-s bits so the C masked-shift trick equals the scalar arithmetic shift.
+#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[test]
+fn simd_dwt2_s123_matches_scalar_for_tails_and_edges() {
+    use std::sync::atomic::Ordering;
+    for scale in 1..=3usize {
+        for (w, h) in [(44, 13), (57, 21), (33, 33), (101, 17), (67, 9), (34, 12)] {
+            let n = w * h;
+            let mut x = 0x9E3779B97F4A7C15u64;
+            let mut rng = move || {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                (x % 33554432) as i32 - 16777216
+            };
+            let src_ref: Vec<i32> = (0..n).map(|_| rng()).collect();
+            let src_dis: Vec<i32> = (0..n).map(|_| rng()).collect();
+            let (ind_y, ind_x) = dwt2_indices(w, h);
+            let w_half = w.div_ceil(2);
+            let h_half = h.div_ceil(2);
+            let run = |force: bool| {
+                FORCE_SCALAR.store(force, Ordering::Relaxed);
+                let mut ref_out = BandI32 {
+                    h: vec![0; w_half * h_half],
+                    v: vec![0; w_half * h_half],
+                    d: vec![0; w_half * h_half],
+                };
+                let mut dis_out = BandI32 {
+                    h: vec![0; w_half * h_half],
+                    v: vec![0; w_half * h_half],
+                    d: vec![0; w_half * h_half],
+                };
+                let mut a_ref = vec![0i32; w_half * h_half];
+                let mut a_dis = vec![0i32; w_half * h_half];
+                adm_dwt2_s123_combined(
+                    &src_ref,
+                    &src_dis,
+                    w,
+                    w,
+                    &mut ref_out,
+                    &mut dis_out,
+                    &mut a_ref,
+                    &mut a_dis,
+                    w,
+                    h,
+                    w_half,
+                    scale,
+                    &ind_y,
+                    &ind_x,
+                );
+                FORCE_SCALAR.store(false, Ordering::Relaxed);
+                (ref_out, dis_out, a_ref, a_dis)
+            };
+            let (rs, ds, ars, ads) = run(true);
+            let (rv, dv, arv, adv) = run(false);
+            for (name, s, v) in [
+                ("ref.a", &ars, &arv),
+                ("ref.v", &rs.v, &rv.v),
+                ("ref.h", &rs.h, &rv.h),
+                ("ref.d", &rs.d, &rv.d),
+                ("dis.a", &ads, &adv),
+                ("dis.v", &ds.v, &dv.v),
+                ("dis.h", &ds.h, &dv.h),
+                ("dis.d", &ds.d, &dv.d),
+            ] {
+                assert_eq!(s, v, "scale={scale} {w}x{h} band {name}");
+            }
         }
     }
 }
