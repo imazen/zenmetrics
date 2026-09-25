@@ -13,8 +13,8 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- psnrhvs: new in-tree CPU port of PSNR-HVS / PSNR-HVS-M (Egiazarian
-  et al. VPQM-06 CSF weighting + Ponomarenko et al. VPQM-07
+- psnrhvs (`f3217e04`): new in-tree CPU port of PSNR-HVS / PSNR-HVS-M
+  (Egiazarian et al. VPQM-06 CSF weighting + Ponomarenko et al. VPQM-07
   between-coefficient DCT masking) — pure-Rust, `archmage`/`magetypes`
   block-SoA SIMD with bit-identical scalar/v3/v4 tiers and `libm`
   finalization; `psnrhvs_plane_f32` (strided f32 planes,
