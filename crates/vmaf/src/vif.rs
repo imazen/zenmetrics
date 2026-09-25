@@ -227,6 +227,150 @@ fn vif_vertical_u8_simd(
     chunks * 16
 }
 
+#[cfg(feature = "simd")]
+#[magetypes(define(u16x16, u32x8), v3, neon, wasm128, scalar)]
+fn vif_vertical_u10_simd(
+    token: Token,
+    reference: &[u16],
+    distorted: &[u16],
+    row_offsets: &[usize; 17],
+    width: usize,
+    vertical_ref_mean: &mut [u32],
+    vertical_dis_mean: &mut [u32],
+    vertical_ref_sq: &mut [u32],
+    vertical_dis_sq: &mut [u32],
+    vertical_ref_dis: &mut [u32],
+) -> usize {
+    let filter = FILTERS[0];
+    let chunks = width / 16;
+    let mask16 = u32x8::splat(token, 0xffff);
+    for chunk in 0..chunks {
+        let col = chunk * 16;
+        let mut ref_mean_lo = u32x8::zero(token);
+        let mut ref_mean_hi = u32x8::zero(token);
+        let mut dis_mean_lo = u32x8::zero(token);
+        let mut dis_mean_hi = u32x8::zero(token);
+        let mut ref_sq_lo16 = u32x8::zero(token);
+        let mut ref_sq_hi16 = u32x8::zero(token);
+        let mut ref_sq_lo8 = u32x8::zero(token);
+        let mut ref_sq_hi8 = u32x8::zero(token);
+        let mut dis_sq_lo16 = u32x8::zero(token);
+        let mut dis_sq_hi16 = u32x8::zero(token);
+        let mut dis_sq_lo8 = u32x8::zero(token);
+        let mut dis_sq_hi8 = u32x8::zero(token);
+        let mut ref_dis_lo16 = u32x8::zero(token);
+        let mut ref_dis_hi16 = u32x8::zero(token);
+        let mut ref_dis_lo8 = u32x8::zero(token);
+        let mut ref_dis_hi8 = u32x8::zero(token);
+        let weight = u32x8::splat(token, filter[8] as u32);
+        let center_ref = u16x16::from_slice(token, &reference[row_offsets[8] + col..]);
+        let center_dis = u16x16::from_slice(token, &distorted[row_offsets[8] + col..]);
+        let crlo = center_ref.widen_low();
+        let crhi = center_ref.widen_high();
+        let cdlo = center_dis.widen_low();
+        let cdhi = center_dis.widen_high();
+        ref_mean_lo += weight * crlo;
+        ref_mean_hi += weight * crhi;
+        dis_mean_lo += weight * cdlo;
+        dis_mean_hi += weight * cdhi;
+        let prod_sq_lo = crlo * crlo;
+        let prod_sq_hi = crhi * crhi;
+        ref_sq_lo16 += weight * (prod_sq_lo & mask16);
+        ref_sq_hi16 += weight * prod_sq_lo.shr_logical_uniform(16);
+        ref_sq_lo8 += weight * (prod_sq_hi & mask16);
+        ref_sq_hi8 += weight * prod_sq_hi.shr_logical_uniform(16);
+        let prod_dsq_lo = cdlo * cdlo;
+        let prod_dsq_hi = cdhi * cdhi;
+        dis_sq_lo16 += weight * (prod_dsq_lo & mask16);
+        dis_sq_hi16 += weight * prod_dsq_lo.shr_logical_uniform(16);
+        dis_sq_lo8 += weight * (prod_dsq_hi & mask16);
+        dis_sq_hi8 += weight * prod_dsq_hi.shr_logical_uniform(16);
+        let prod_rd_lo = crlo * cdlo;
+        let prod_rd_hi = crhi * cdhi;
+        ref_dis_lo16 += weight * (prod_rd_lo & mask16);
+        ref_dis_hi16 += weight * prod_rd_lo.shr_logical_uniform(16);
+        ref_dis_lo8 += weight * (prod_rd_hi & mask16);
+        ref_dis_hi8 += weight * prod_rd_hi.shr_logical_uniform(16);
+        for offset in 1..=8usize {
+            let weight = u32x8::splat(token, filter[8 - offset] as u32);
+            let left_ref = u16x16::from_slice(token, &reference[row_offsets[8 - offset] + col..]);
+            let right_ref = u16x16::from_slice(token, &reference[row_offsets[8 + offset] + col..]);
+            let left_dis = u16x16::from_slice(token, &distorted[row_offsets[8 - offset] + col..]);
+            let right_dis = u16x16::from_slice(token, &distorted[row_offsets[8 + offset] + col..]);
+            let lrlo = left_ref.widen_low();
+            let lrhi = left_ref.widen_high();
+            let rrlo = right_ref.widen_low();
+            let rrhi = right_ref.widen_high();
+            let ldlo = left_dis.widen_low();
+            let ldhi = left_dis.widen_high();
+            let rdlo = right_dis.widen_low();
+            let rdhi = right_dis.widen_high();
+            ref_mean_lo += weight * (lrlo + rrlo);
+            ref_mean_hi += weight * (lrhi + rrhi);
+            dis_mean_lo += weight * (ldlo + rdlo);
+            dis_mean_hi += weight * (ldhi + rdhi);
+            let prod_sq_lo = lrlo * lrlo + rrlo * rrlo;
+            let prod_sq_hi = lrhi * lrhi + rrhi * rrhi;
+            ref_sq_lo16 += weight * (prod_sq_lo & mask16);
+            ref_sq_hi16 += weight * prod_sq_lo.shr_logical_uniform(16);
+            ref_sq_lo8 += weight * (prod_sq_hi & mask16);
+            ref_sq_hi8 += weight * prod_sq_hi.shr_logical_uniform(16);
+            let prod_dsq_lo = ldlo * ldlo + rdlo * rdlo;
+            let prod_dsq_hi = ldhi * ldhi + rdhi * rdhi;
+            dis_sq_lo16 += weight * (prod_dsq_lo & mask16);
+            dis_sq_hi16 += weight * prod_dsq_lo.shr_logical_uniform(16);
+            dis_sq_lo8 += weight * (prod_dsq_hi & mask16);
+            dis_sq_hi8 += weight * prod_dsq_hi.shr_logical_uniform(16);
+            let prod_rd_lo = lrlo * ldlo + rrlo * rdlo;
+            let prod_rd_hi = lrhi * ldhi + rrhi * rdhi;
+            ref_dis_lo16 += weight * (prod_rd_lo & mask16);
+            ref_dis_hi16 += weight * prod_rd_lo.shr_logical_uniform(16);
+            ref_dis_lo8 += weight * (prod_rd_hi & mask16);
+            ref_dis_hi8 += weight * prod_rd_hi.shr_logical_uniform(16);
+        }
+        let rounding = u32x8::splat(token, 512);
+        let mean_lo_out = (ref_mean_lo + rounding).shr_logical_uniform(10).to_array();
+        let mean_hi_out = (ref_mean_hi + rounding).shr_logical_uniform(10).to_array();
+        let dis_lo_out = (dis_mean_lo + rounding).shr_logical_uniform(10).to_array();
+        let dis_hi_out = (dis_mean_hi + rounding).shr_logical_uniform(10).to_array();
+        let sq_lo16 = ref_sq_lo16.to_array();
+        let sq_hi16 = ref_sq_hi16.to_array();
+        let sq_lo8 = ref_sq_lo8.to_array();
+        let sq_hi8 = ref_sq_hi8.to_array();
+        let dsq_lo16 = dis_sq_lo16.to_array();
+        let dsq_hi16 = dis_sq_hi16.to_array();
+        let dsq_lo8 = dis_sq_lo8.to_array();
+        let dsq_hi8 = dis_sq_hi8.to_array();
+        let rd_lo16 = ref_dis_lo16.to_array();
+        let rd_hi16 = ref_dis_hi16.to_array();
+        let rd_lo8 = ref_dis_lo8.to_array();
+        let rd_hi8 = ref_dis_hi8.to_array();
+        for lane in 0..8 {
+            let slot = col + 8 + lane;
+            vertical_ref_mean[slot] = mean_lo_out[lane] as u16 as u32;
+            vertical_dis_mean[slot] = dis_lo_out[lane] as u16 as u32;
+            let sq = sq_lo16[lane] as u64 + ((sq_hi16[lane] as u64) << 16);
+            vertical_ref_sq[slot] = ((sq + 8) >> 4) as u32;
+            let dsq = dsq_lo16[lane] as u64 + ((dsq_hi16[lane] as u64) << 16);
+            vertical_dis_sq[slot] = ((dsq + 8) >> 4) as u32;
+            let rd = rd_lo16[lane] as u64 + ((rd_hi16[lane] as u64) << 16);
+            vertical_ref_dis[slot] = ((rd + 8) >> 4) as u32;
+        }
+        for lane in 0..8 {
+            let slot = col + 16 + lane;
+            vertical_ref_mean[slot] = mean_hi_out[lane] as u16 as u32;
+            vertical_dis_mean[slot] = dis_hi_out[lane] as u16 as u32;
+            let sq = sq_lo8[lane] as u64 + ((sq_hi8[lane] as u64) << 16);
+            vertical_ref_sq[slot] = ((sq + 8) >> 4) as u32;
+            let dsq = dsq_lo8[lane] as u64 + ((dsq_hi8[lane] as u64) << 16);
+            vertical_dis_sq[slot] = ((dsq + 8) >> 4) as u32;
+            let rd = rd_lo8[lane] as u64 + ((rd_hi8[lane] as u64) << 16);
+            vertical_ref_dis[slot] = ((rd + 8) >> 4) as u32;
+        }
+    }
+    chunks * 16
+}
+
 fn statistics(
     image: &VifImage<'_>,
     bit_depth: u8,
@@ -266,6 +410,23 @@ fn statistics(
         }
         #[allow(unused_mut)]
         let mut processed = 0;
+        #[cfg(feature = "simd")]
+        if bit_depth == 10 && scale == 0 {
+            processed = archmage::incant!(
+                vif_vertical_u10_simd(
+                    &image.reference,
+                    &image.distorted,
+                    &row_offsets,
+                    width,
+                    &mut vertical_ref_mean,
+                    &mut vertical_dis_mean,
+                    &mut vertical_ref_sq,
+                    &mut vertical_dis_sq,
+                    &mut vertical_ref_dis
+                ),
+                [v3, neon, wasm128, scalar]
+            );
+        }
         #[cfg(feature = "simd")]
         if bit_depth == 8 && scale == 0 {
             processed = archmage::incant!(
@@ -478,6 +639,174 @@ mod tests {
             buffers[2][slot] = ref_sq;
             buffers[3][slot] = dis_sq;
             buffers[4][slot] = ref_dis;
+        }
+    }
+
+    #[cfg(feature = "simd")]
+    fn scalar_vertical_u10(
+        reference: &[u16],
+        distorted: &[u16],
+        row_offsets: &[usize; 17],
+        buffers: &mut [Vec<u32>; 5],
+        from: usize,
+        to: usize,
+    ) {
+        let filter = FILTERS[0];
+        for col in from..to {
+            let weight = filter[8] as u32;
+            let ref_value = reference[row_offsets[8] + col] as u32;
+            let dis_value = distorted[row_offsets[8] + col] as u32;
+            let mut ref_mean = weight * ref_value;
+            let mut dis_mean = weight * dis_value;
+            let mut ref_sq = ref_mean as u64 * ref_value as u64;
+            let mut dis_sq = dis_mean as u64 * dis_value as u64;
+            let mut ref_dis = ref_mean as u64 * dis_value as u64;
+            for offset in 1..=8usize {
+                let weight = filter[8 - offset] as u32;
+                let left = row_offsets[8 - offset] + col;
+                let right = row_offsets[8 + offset] + col;
+                let left_ref = reference[left] as u32;
+                let right_ref = reference[right] as u32;
+                let left_dis = distorted[left] as u32;
+                let right_dis = distorted[right] as u32;
+                ref_mean += weight * (left_ref + right_ref);
+                dis_mean += weight * (left_dis + right_dis);
+                ref_sq += weight as u64
+                    * (left_ref as u64 * left_ref as u64 + right_ref as u64 * right_ref as u64);
+                dis_sq += weight as u64
+                    * (left_dis as u64 * left_dis as u64 + right_dis as u64 * right_dis as u64);
+                ref_dis += weight as u64
+                    * (left_ref as u64 * left_dis as u64 + right_ref as u64 * right_dis as u64);
+            }
+            let slot = col + 8;
+            buffers[0][slot] = ((ref_mean as u64 + 512) >> 10) as u16 as u32;
+            buffers[1][slot] = ((dis_mean as u64 + 512) >> 10) as u16 as u32;
+            buffers[2][slot] = ((ref_sq + 8) >> 4) as u32;
+            buffers[3][slot] = ((dis_sq + 8) >> 4) as u32;
+            buffers[4][slot] = ((ref_dis + 8) >> 4) as u32;
+        }
+    }
+
+    #[cfg(feature = "simd")]
+    #[test]
+    fn simd_vertical_u10_matches_scalar_formula() {
+        for (width, height) in [
+            (17, 17),
+            (31, 17),
+            (32, 17),
+            (33, 17),
+            (17, 33),
+            (31, 33),
+            (32, 33),
+            (33, 33),
+        ] {
+            for case in 0..3 {
+                let reference: Vec<u16> = (0..height)
+                    .flat_map(|y| {
+                        (0..width).map(move |x| {
+                            (match case {
+                                0 => (x * 37 + y * 61 + x * y * 5) % 1024,
+                                1 => 1023,
+                                _ => (x * 211 + y * 149 + 17) % 1024,
+                            }) as u16
+                        })
+                    })
+                    .collect();
+                let distorted: Vec<u16> = (0..height)
+                    .flat_map(|y| {
+                        (0..width).map(move |x| {
+                            (match case {
+                                0 => (x * 23 + y * 41 + 9) % 1024,
+                                1 => {
+                                    if (x + y) % 2 == 0 {
+                                        1023
+                                    } else {
+                                        0
+                                    }
+                                }
+                                _ => (x * 157 + y * 89 + 31) % 1024,
+                            }) as u16
+                        })
+                    })
+                    .collect();
+                for row in [0usize, 1, 8, height - 1] {
+                    let mut row_offsets = [0usize; 17];
+                    for (tap, slot) in row_offsets.iter_mut().enumerate() {
+                        *slot = mirror(row as isize + tap as isize - 8, height) * width;
+                    }
+                    let mut expected: [Vec<u32>; 5] = [
+                        vec![0; width + 16],
+                        vec![0; width + 16],
+                        vec![0; width + 16],
+                        vec![0; width + 16],
+                        vec![0; width + 16],
+                    ];
+                    scalar_vertical_u10(
+                        &reference,
+                        &distorted,
+                        &row_offsets,
+                        &mut expected,
+                        0,
+                        width,
+                    );
+                    for scalar_tier in [false, true] {
+                        let mut actual: [Vec<u32>; 5] = [
+                            vec![0; width + 16],
+                            vec![0; width + 16],
+                            vec![0; width + 16],
+                            vec![0; width + 16],
+                            vec![0; width + 16],
+                        ];
+                        let [rm, dm, rsq, dsq, rd] = actual.each_mut();
+                        let processed = if scalar_tier {
+                            vif_vertical_u10_simd_scalar(
+                                archmage::ScalarToken,
+                                &reference,
+                                &distorted,
+                                &row_offsets,
+                                width,
+                                rm,
+                                dm,
+                                rsq,
+                                dsq,
+                                rd,
+                            )
+                        } else {
+                            archmage::incant!(
+                                vif_vertical_u10_simd(
+                                    &reference,
+                                    &distorted,
+                                    &row_offsets,
+                                    width,
+                                    rm,
+                                    dm,
+                                    rsq,
+                                    dsq,
+                                    rd
+                                ),
+                                [v3, neon, wasm128, scalar]
+                            )
+                        };
+                        assert_eq!(processed, width / 16 * 16);
+                        scalar_vertical_u10(
+                            &reference,
+                            &distorted,
+                            &row_offsets,
+                            &mut actual,
+                            processed,
+                            width,
+                        );
+                        for (band, (expected, actual)) in
+                            expected.iter().zip(actual.iter()).enumerate()
+                        {
+                            assert_eq!(
+                                expected, actual,
+                                "{width}x{height}, case {case}, row {row}, scalar_tier {scalar_tier}, buffer {band}"
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 
