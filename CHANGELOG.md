@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- docs (`<hash>`): new root `DIVERGENCES.md` — a workspace-level ledger
+- docs (`8b041762`): new root `DIVERGENCES.md` — a workspace-level ledger
   of every known deviation from each metric's cited reference
   implementation and version (DIVERGES / RESOLVED / ORACLE-ARTIFACT /
   EXTENSION / OUT-OF-SCOPE tags, per-crate records citing the crate docs
