@@ -3316,6 +3316,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "msssim"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "libm",
+ "magetypes",
+ "rayon",
+]
+
+[[package]]
 name = "naga"
 version = "29.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7423,6 +7433,7 @@ dependencies = [
  "image",
  "imgref",
  "jxl-encoder",
+ "msssim",
  "object_store",
  "parquet",
  "psnrhvs",

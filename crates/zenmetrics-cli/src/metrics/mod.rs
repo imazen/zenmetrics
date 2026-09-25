@@ -214,6 +214,14 @@ pub enum MetricKind {
     /// umbrella or the orchestrator (CPU-only, no GPU twin).
     #[value(name = "vsi")]
     Vsi,
+    /// MS-SSIM — multi-scale SSIM, CPU-only in-tree `msssim` crate
+    /// (port of the authors' `msssim.m`: 5-level Gaussian-pyramid
+    /// SSIM, weighted geometric mean of per-level means). Similarity
+    /// on ~[0, 1]: 1 = identical (constant inputs also score 1.0 —
+    /// no NaN). Emits `msssim_imazen_v*`. Not routed through the
+    /// umbrella or the orchestrator (CPU-only, no GPU twin).
+    #[value(name = "msssim")]
+    Msssim,
 }
 
 impl MetricKind {
@@ -240,6 +248,7 @@ impl MetricKind {
             MetricKind::Fsim,
             MetricKind::FsimY,
             MetricKind::Vsi,
+            MetricKind::Msssim,
         ]
     }
 
@@ -266,6 +275,7 @@ impl MetricKind {
             MetricKind::Fsim => "fsim",
             MetricKind::FsimY => "fsim-y",
             MetricKind::Vsi => "vsi",
+            MetricKind::Msssim => "msssim",
         }
     }
 
@@ -327,6 +337,7 @@ impl MetricKind {
             MetricKind::Fsim => FSIM_CPU_COLUMNS,
             MetricKind::FsimY => FSIMY_CPU_COLUMNS,
             MetricKind::Vsi => VSI_CPU_COLUMNS,
+            MetricKind::Msssim => MSSSIM_CPU_COLUMNS,
         }
     }
 }
@@ -447,6 +458,14 @@ const FSIMY_CPU_COLUMNS: &[&str] = &["fsim_y"];
 const VSI_CPU_COLUMNS: &[&str] = &[vsi::VSI_COLUMN_NAME];
 #[cfg(not(feature = "cpu-vsi"))]
 const VSI_CPU_COLUMNS: &[&str] = &["vsi"];
+
+// Versioned **CPU** MS-SSIM column name (`msssim::MSSSIM_COLUMN_NAME`,
+// default `msssim_imazen_v<…>`, overridable via `MSSSIM_IMPL_TAG`).
+// Without `cpu-msssim` bare `"msssim"`.
+#[cfg(feature = "cpu-msssim")]
+const MSSSIM_CPU_COLUMNS: &[&str] = &[msssim::MSSSIM_COLUMN_NAME];
+#[cfg(not(feature = "cpu-msssim"))]
+const MSSSIM_CPU_COLUMNS: &[&str] = &["msssim"];
 
 /// CubeCL runtime selector for GPU metrics.
 ///
@@ -1180,6 +1199,12 @@ pub fn run_metric(
         MetricKind::Vsi => run_cpu_vsi(reference, distorted),
         #[cfg(not(feature = "cpu-vsi"))]
         MetricKind::Vsi => Err(disabled_msg("vsi", "cpu-vsi")),
+
+        // MS-SSIM: same direct-crate shape.
+        #[cfg(feature = "cpu-msssim")]
+        MetricKind::Msssim => run_cpu_msssim(reference, distorted),
+        #[cfg(not(feature = "cpu-msssim"))]
+        MetricKind::Msssim => Err(disabled_msg("msssim", "cpu-msssim")),
     }
 }
 
@@ -1342,6 +1367,25 @@ fn run_cpu_vsi(
     let (w, h) = (reference.width as usize, reference.height as usize);
     let s = vsi::vsi_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
     Ok(vec![(VSI_CPU_COLUMNS[0], s)])
+}
+
+/// MS-SSIM of two decoded sRGB8 images (`msssim::msssim_rgb8`: 5-level
+/// Gaussian-pyramid SSIM on unrounded `rgb2gray` luma).
+#[cfg(feature = "cpu-msssim")]
+fn run_cpu_msssim(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "msssim: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let s = msssim::msssim_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
+    Ok(vec![(MSSSIM_CPU_COLUMNS[0], s)])
 }
 
 #[allow(dead_code)]

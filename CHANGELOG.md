@@ -13,6 +13,25 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- msssim (HASH): new in-tree CPU port of MS-SSIM (Wang, Simoncelli &
+  Bovik, IEEE Asilomar 2003) — pure-Rust, `archmage`/`magetypes` SIMD
+  with bit-identical scalar/v3/v4 tiers and fixed-order f64 pooling.
+  Ports the authors' `msssim.m` + `ssim_index_new.m`: 11×11 separable
+  Gaussian `filter2 'valid'` statistics per level, forward 2×2
+  `imfilter 'symmetric'/'same'` decimation between levels, canonical
+  `[0.0448 0.2856 0.3001 0.2363 0.1333]` weights over
+  `prod(mcs^w)·mssim^w`. Auto-selects `level = min(5,
+  floor(log2(min/11))+1)` — identical to the reference called with
+  `(level, weight(1:level))`; `min < 11` errors like the reference's
+  `-Inf`. Negative means reproduce the reference's complex-power
+  semantics (score = real part of the product). `msssim_plane_f32`,
+  `msssim_rgb8` (unrounded `rgb2gray` luma). Verified on 15 Octave
+  golden rows (`validation/`): levels 1–5, even/odd dims, identical,
+  constant, negative-mean, RGB — worst delta ~8.8e-6. Wired into
+  `zenmetrics-cli` as `msssim` (`msssim_imazen_v*`), behind
+  `cpu-msssim` in the default `cpu-metrics` group;
+  orchestrator-ineligible like gmsd/fsim/vsi.
+
 - vsi (`284bbe72`): new in-tree CPU port of VSI (Zhang, Shen & Li, IEEE TIP
   23(10), 2014) — pure-Rust, `archmage`/`magetypes` SIMD with
   bit-identical scalar/v3/v4 tiers and fixed-order f64 pooling. Ports
