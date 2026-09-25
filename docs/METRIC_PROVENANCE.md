@@ -54,6 +54,7 @@ We do not call everything a "port". Terms used below:
 | `fsim` / `fsim-y` | in-tree `crates/fsim` | Zhang et al., IEEE TIP 20(8) 2011, doi:10.1109/TIP.2011.2109730 | authors' `FR_FSIMc.m` | reference reimplementation | sRGB8 (FSIMc chroma terms) / luma (`-y`) | [0,1] |
 | `vsi` | in-tree `crates/vsi` | Zhang et al., IEEE TIP 23(10) 2014 | authors' `VSI.m` | reference reimplementation | sRGB8 (SDSP colour saliency) | [0,1] |
 | `mad` | in-tree `crates/mad-iqa` | Larson & Chandler, JEI 19(1) 2010 | official MATLAB release (larschandler.com) | reference reimplementation | sRGB8 → luma | distance; emits `mad`, `mad_hi`, `mad_lo` |
+| `mdctpsnr` | in-tree `crates/mdctpsnr` | Richter, "An Autoregressive Multi-DCT Domain Image Quality Metric", QoMEX 2009 (authored impl) | author's official C++ `thorfdbg/mDCTpsnr` (zlib-style license), built GCC `-O3 -ffast-math` AVX2 + glibc libmvec | reference reimplementation — parity target is the **compiled** binary's op order (reassociations/FMA/rcp-NR/libmvec decoded from disassembly), not the source's apparent semantics | sRGB8 → linear → BT.601 YCbCr | dB, higher better; `+inf` identical |
 | `zensim` | sibling `zensim` crate | — | — | **in-house** (ML-trained; not a reproduction target) | sRGB8 | 0–100 |
 | `zensim-gpu` | `zensim-gpu` twin | — | — | in-house | " | " |
 
@@ -106,6 +107,7 @@ Tolerance classes (keep these distinct — they mean different things):
 | fsim/-y | `FR_FSIMc.m` | 5e-5 | within gate | med 2.5e-5 / max 1.7e-3 (n=53) |
 | vsi | `VSI.m` | 1e-4 | within gate | med 9.6e-6 / max 1.1e-4 (n=53) |
 | mad-iqa | official MATLAB | 13 goldens | rel: hi 2.4e-7, lo 1.8e-6 | not in AIC-4 |
+| mdctpsnr | built `dctpsnr` binary (GCC `-O3 -ffast-math`, glibc 2.43, AVX2) | ≤ 2e-4 dB on x86_64+GNU goldens (64×48 + all 8 `(w−13)%8` classes), 1e-2 off-platform | ≤ ~4e-6 dB | med 4.0e-7 / max 1.13e-5 dB vs `mDCT-PSNR` col (n=53) |
 | ssim2 | fast-ssim2 ↔ C++ | bit-parity SIMD tiers | — | med 6.3e-3 / max 5.5e-2 — version drift (n=53) |
 | dssim | dssim-core | upstream | — | mean 2.5e-7 / max 6.5e-7 (n=53) |
 
@@ -166,7 +168,7 @@ The single-point S01_AVIF_01 spot check is kept where it drove identification.
 | `VIF` | 0.934422 | pyiqa **wavelet vifvec** (SP5 steerable pyramid), not pixel `vifp` — ours runs ~0.06 median lower over the subset | ⬜ new impl needed |
 | `HDR_VDP_2` | 68.806 | hdrvdp-2.2.x under an unknown sRGB→nits display config | ⬜ config unknown |
 | `HDR_VDP_3` | 9.620 | HDR-VDP-3 — different metric version | ⬜ new impl |
-| `mDCT-PSNR` | 71.529 | Richter, QoMEX 2009; author's C++ ref impl `thorfdbg/mDCTpsnr` (~60KB, Highway SIMD) | ⬜ feasible medium port |
+| `mDCT-PSNR` | 71.529 | Richter, QoMEX 2009; author's C++ ref impl `thorfdbg/mDCTpsnr` | ✅ implemented — `mdctpsnr` (compiled-binary parity: med 4.0e-7 / max 1.13e-5 dB over n=53; see DIVERGENCES for the codegen-order details) |
 | `CW-SSIM`, `NLPD`, `CIEDE2000`, `FLIP` | — | pyiqa / colour / HDR metrics | ⬜ |
 | `DISTS`, `LPIPS`×4, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ`×2, `AHIQ`, `STLPIPS`×2 | — | torch models | ⬜ out of scope (no torch) |
 | `proposal-*` (Butteraugli, DVIFM, mDCTPSNR) | — | AIC-4 **submitted** metrics — not public impls | ⬜ unreproducible by design |
@@ -228,8 +230,14 @@ column is being targeted.
 3. **`vifvec`** (wavelet VIF) — new port for the `VIF` column; 5.9
    JND-equivalent worst case.
 4. **pyiqa `iwssim` variant** — 0.68 JND-eq worst; systematic +1.2e-3.
-5. **`mDCT-PSNR`** — author's official C++ impl exists (`thorfdbg/mDCTpsnr`);
-   DCT-domain masking + pooling, moderate scope; license check first.
+~~5. **`mDCT-PSNR`**~~ — ✅ **DONE** (`mdctpsnr`): port of
+   `thorfdbg/mDCTpsnr` (zlib-style license). The catch that made it a
+   "medium" port: bit-parity required reproducing the **compiled** binary's
+   codegen — GCC `-ffast-math` reassociations, FMA contraction, `rcpps`+NR
+   instead of division, libmvec `_ZGVdN8vv_powf`/`_ZGVdN8v_expf` vector
+   calls, and the 8-lane strided pooling accumulator (whose `rem ≥ 4`
+   tail guard cost ~11 dB on `w13 % 8 == 3` widths until decoded). AIC-4
+   `mDCT-PSNR` column: med 4.0e-7 / max 1.13e-5 dB over n=53.
 6. **HDR-VDP-3** + the AIC HDR_VDP_2 display config.
 7. `CW-SSIM`, `NLPD`, `CIEDE2000`, `FLIP` — later.
 

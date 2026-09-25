@@ -1,0 +1,20 @@
+[package]
+name = "mdctpsnr"
+version = "0.1.0"
+description = "Pure-Rust CPU port of mDCT-PSNR (Thomas Richter / University of Stuttgart masked-DCT perceptual metric)"
+readme = "README.md"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[features]
+default = ["std"]
+# Use the standard library. Off -> core + alloc only.
+std = []
+
+[dependencies]
+libm = "0.2.16"

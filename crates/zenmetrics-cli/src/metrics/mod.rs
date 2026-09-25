@@ -283,6 +283,17 @@ pub enum MetricKind {
     /// `psnrhvs_daala_{y,cb,cr}` + combined `psnrhvs_daala`.
     #[value(name = "psnrhvs-daala")]
     PsnrhvsDaala,
+    /// mDCT-PSNR (masked-DCT PSNR, Thomas Richter / University of
+    /// Stuttgart — the JPEG AIC-4 `mDCT-PSNR` column) — CPU
+    /// implementation via the in-tree `mdctpsnr` crate, a port of the
+    /// reference `dctpsnr` binary verified to ~1e-5 dB on the AIC-4
+    /// 53-pair subset. PSNR-like: dB scale, higher = better, `+inf` =
+    /// identical. Scored on the decoded sRGB pair through the
+    /// reference's linear-BT.601 YCbCr + sliding-8×8-DCT masking
+    /// pipeline. Emits `mdctpsnr_imazen_v*`. Not routed through the
+    /// umbrella or the orchestrator (CPU-only, no GPU twin).
+    #[value(name = "mdctpsnr")]
+    Mdctpsnr,
 }
 
 impl MetricKind {
@@ -318,6 +329,7 @@ impl MetricKind {
             MetricKind::SsimLibvmaf,
             MetricKind::MsssimLibvmaf,
             MetricKind::PsnrhvsDaala,
+            MetricKind::Mdctpsnr,
         ]
     }
 
@@ -353,6 +365,7 @@ impl MetricKind {
             MetricKind::SsimLibvmaf => "ssim-libvmaf",
             MetricKind::MsssimLibvmaf => "msssim-libvmaf",
             MetricKind::PsnrhvsDaala => "psnrhvs-daala",
+            MetricKind::Mdctpsnr => "mdctpsnr",
         }
     }
 
@@ -423,6 +436,7 @@ impl MetricKind {
             MetricKind::SsimLibvmaf => SSIM_LIBVMAF_CPU_COLUMNS,
             MetricKind::MsssimLibvmaf => MSSSIM_LIBVMAF_CPU_COLUMNS,
             MetricKind::PsnrhvsDaala => PSNRHVS_DAALA_CPU_COLUMNS,
+            MetricKind::Mdctpsnr => MDCTPSNR_CPU_COLUMNS,
         }
     }
 
@@ -737,6 +751,16 @@ const MAD_CPU_COLUMNS: &[&str] = &[
 ];
 #[cfg(not(feature = "cpu-mad"))]
 const MAD_CPU_COLUMNS: &[&str] = &["mad", "mad_hi", "mad_lo"];
+
+// Versioned **CPU** mDCT-PSNR column name
+// (`mdctpsnr::MDCTPSNR_COLUMN_NAME`, default
+// `mdctpsnr_imazen_v<MAJOR>_<MINOR>_<PATCH>`, overridable via
+// `MDCTPSNR_IMPL_TAG`). No `_cpu_` infix — no GPU twin. Without
+// `cpu-mdctpsnr` a bare `"mdctpsnr"`.
+#[cfg(feature = "cpu-mdctpsnr")]
+const MDCTPSNR_CPU_COLUMNS: &[&str] = &[mdctpsnr::MDCTPSNR_COLUMN_NAME];
+#[cfg(not(feature = "cpu-mdctpsnr"))]
+const MDCTPSNR_CPU_COLUMNS: &[&str] = &["mdctpsnr"];
 
 /// CubeCL runtime selector for GPU metrics.
 ///
@@ -1527,6 +1551,16 @@ pub fn run_metric(
         MetricKind::PsnrhvsDaala => run_cpu_psnrhvs_daala(reference, distorted),
         #[cfg(not(feature = "cpu-psnrhvs"))]
         MetricKind::PsnrhvsDaala => Err(disabled_msg("psnrhvs-daala", "cpu-psnrhvs")),
+
+        // mDCT-PSNR: direct call into the in-tree crate (no umbrella, no
+        // GPU twin — same shape as GMSD/MAD).
+        #[cfg(feature = "cpu-mdctpsnr")]
+        MetricKind::Mdctpsnr => Ok(vec![(
+            MDCTPSNR_CPU_COLUMNS[0],
+            run_cpu_mdctpsnr(reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-mdctpsnr"))]
+        MetricKind::Mdctpsnr => Err(disabled_msg("mdctpsnr", "cpu-mdctpsnr")),
     }
 }
 
@@ -1825,6 +1859,25 @@ fn run_cpu_psnrhvs_daala(
         (PSNRHVS_DAALA_CPU_COLUMNS[2], s.psnr_hvs_cr),
         (PSNRHVS_DAALA_CPU_COLUMNS[3], s.psnr_hvs),
     ])
+}
+
+/// mDCT-PSNR of two decoded sRGB8 images (`mdctpsnr::mdct_psnr_srgb8` —
+/// linear BT.601 YCbCr ingress, sliding 8×8 masked-DCT bands, Ahumada
+/// detection pooling). dB scale; `+inf` = identical.
+#[cfg(feature = "cpu-mdctpsnr")]
+fn run_cpu_mdctpsnr(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "mdctpsnr: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    Ok(mdctpsnr::mdct_psnr_srgb8(&reference.pixels, &distorted.pixels, w, h)? as f64)
 }
 
 #[allow(dead_code)]

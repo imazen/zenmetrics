@@ -189,9 +189,13 @@ the right prioritization axis.
 3. **Wavelet `vifvec`** → `VIF` column (pyiqa SP5 steerable-pyramid VIF).
    5.9 JND-equivalent worst case; our `vif` is pixel-domain `vifp`.
 4. **pyiqa `iwssim` variant** → 0.68 JND-eq worst; systematic +1.2e-3 raw.
-5. **`mDCT-PSNR`** → new coverage (Richter QoMEX 2009; official C++ ref
-   `thorfdbg/mDCTpsnr`, ~60KB). CSV has `mDCT-PSNR` column to validate
-   against; medium effort, not a discrepancy fix.
+~~5. **`mDCT-PSNR`** → new coverage (Richter QoMEX 2009; official C++ ref
+   `thorfdbg/mDCTpsnr`).~~ **DONE** — `crates/mdctpsnr`, CLI `mdctpsnr`.
+   Reproduces the *compiled* reference (GCC `-O3 -ffast-math` + AVX2 +
+   glibc libmvec) to med 4.0e-7 / max 1.13e-5 dB vs the published column
+   over the 53-pair subset — essentially exact; see `DIVERGENCES.md` for
+   the codegen-order details (reassociated reductions, `rcpps`+NR mask
+   division, libmvec `powf`/`expf`).
 6. HDR-VDP-2 ingress config + HDR-VDP-3 → `HDR_VDP_2`/`HDR_VDP_3` columns.
 
 Explicitly deprioritized by JND evidence: SSIMULACRA2 version drift
@@ -229,7 +233,7 @@ implementations. Qualify ours by reference + variant, not just metric name:
 | `proposal-mDCTPSNR`, `proposal-DVIFM*` | AIC-4 submissions | — | cannot reproduce |
 | `HDR_VDP_2` | HDR-VDP-2.x, display config TBD | `hdrvdp` | needs absolute-nits ingress config |
 | `HDR_VDP_3` | HDR-VDP-3 | — | different metric version, unimplemented |
-| `mDCT-PSNR` | Richter QoMEX-2009 mDCT-PSNR | — | official C++ ref exists (`thorfdbg/mDCTpsnr`) |
+| `mDCT-PSNR` | Richter QoMEX-2009 mDCT-PSNR | `mdctpsnr` | ✅ port of official C++ ref (`thorfdbg/mDCTpsnr`); med 4.0e-7 / max 1.13e-5 dB vs column |
 | `CW-SSIM`, `NLPD`, `MSSWD`, `FLIP`, `CIEDE2000` | conventional metrics | — | unimplemented |
 | `DISTS`, `LPIPS×2`, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ×2`, `AHIQ`, `STLPIPS×2` | deep metrics (torch) | — | out of scope for pure-Rust |
 

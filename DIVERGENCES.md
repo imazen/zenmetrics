@@ -38,6 +38,7 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 | `msssim` (libvmaf module) | libvmaf **`float_ssim`/`float_ms_ssim`** @ **f85a8536** (vendored via `vmaf-head-sys 0.2.0`, test-only) | libvmaf FFI oracle in `tests/ffi_libvmaf.rs` | asserted ≤ 2e-4; observed ≪ gate (8-bit, 10-bit, identical) |
 | `vif` | authors' **`vifp_mscale.m`** (pixel-domain release) | Octave goldens, `validation/` | ≤ ~5e-13 over 17 rows |
 | `mad-iqa` | Larson & Chandler **`hi_index.m`/`lo_index.m`** + `ical_std.c`/`ical_stat.c` (STMAD_2011, archived in Netflix/vmaf); JEI 2010 combine | Octave `.m` shims of the C-mex + official `.m` drivers | hi 2.4e-7, lo 1.8e-6, mad 1.3e-6 rel over 13 rows |
+| `mdctpsnr` | **`thorfdbg/mDCTpsnr`** (Thomas Richter / U. Stuttgart; zlib-style license), compiled GCC `-O3 -ffast-math` + AVX2 + glibc 2.43 libmvec on x86_64 | the built `dctpsnr` binary + published AIC-4 `mDCT-PSNR` column | ~4e-6 dB on synthetic goldens incl. all `(w−13)%8` classes; AIC-4 53-pair max ~1.13e-5 dB (see entry) |
 | `ssim2` (CPU) | external **`fast-ssim2`** crate (sibling repo; C++ SSIMULACRA2 parity) | fast-ssim2's own parity suite | owned by fast-ssim2 repo |
 | `ssim2-gpu` | published **`ssimulacra2` 0.5** crate | CPU-reference parity tests | FIR path ~5e-5 vs IIR — see entry |
 | `butteraugli` (CPU) | external **`butteraugli`** crate 0.9.4 (imazen fork, path dep) | the crate itself | external — not ported here |
@@ -349,6 +350,53 @@ Deep doc: `crates/mad-iqa/validation/README.md`.
   `MAD_index` mex could reveal a different constant.
 - `min(w,h) < 34` → NaN via reference edge-trim (cross-cutting #4);
   symmetric padding uses edge-doubling `idx(−k)=k−1`, `idx(N+k)=N−1−k`.
+
+### `mdctpsnr` — vs `thorfdbg/mDCTpsnr` (compiled reference)
+
+Deep doc: crate `src/lib.rs` header; goldens in the crate test suite.
+
+The parity target is **the compiled binary's behavior**, not the source's
+apparent semantics — under `-O3 -ffast-math` GCC reassociates, contracts
+to FMA, vectorizes "scalar" libm calls into libmvec, and replaces division
+with `vrcpps` + Newton refinement. Every deviation below was found by
+disassembly + bitwise trace, fixed, and is recorded so a re-port doesn't
+rediscover them.
+
+- **RESOLVED** — `MeasureInBand` association: compiled order is
+  `err = (|r−d|·visbase)·max(mask_r,mask_d)` and
+  `p = (err·√err)·err²`, not the source's apparent
+  `|r−d|·(vis·max)` / `err³·√err`.
+- **RESOLVED** — pooling `error += 1−e` is not sequential: GCC emits an
+  8-lane strided f32 accumulator, fold `acc[j]+acc[j+4]`, collapse
+  `(x0+x2)+(x1+x3)`, a 4-wide tail block **iff `rem ≥ 4`**, scalar
+  remainder after. `w13 % 8 == 3` widths were ~11 dB off before this was
+  reproduced exactly (the 4-wide block does *not* run for `rem == 3` —
+  no out-of-bounds slack lane is ever read).
+- **RESOLVED** — vertical column-sum tree reassociated to
+  `((r0+r7)+(r5+r6))+((r1+r2)+(r3+r4))`; AAN DCT passes reassociated and
+  FMA-contracted differently in pass 1 vs pass 2 (decoded form in
+  `aan_1d`); mask conv contracted to
+  `fma(m2,p[i+2], fma(m0,p[i]+p[i+4], m1·(p[i+1]+p[i+3])))`; mask division
+  is `rcpps`+NR with a fused denominator; DC fixup is
+  `fma(m11,0.25,(m01+m10)·0.5)`; lowpass k-loop is a fused pair-tree;
+  `slh = vis·NormLo·NormHi` is shared for both LH and HL blocks.
+- **RESOLVED** — libmvec: GCC vectorized the "scalar" `powf`/`cosf`/`expf`
+  loops into `_ZGVdN8vv_powf`, `_ZGVbN4v_cosf`, `_ZGVdN8v_expf`. We call the
+  real `_ZGVdN8vv_powf`/`_ZGVdN8v_expf` via `asm!` (gated
+  `x86_64+linux+gnu`) and pin the 5 kernel taps + post-filter taps to the
+  reference's exact bits (vec-`cosf` differs from scalar `cosf` ~1ulp on
+  2 of 5 taps). Scalar fallbacks elsewhere drift ~1ulp/step.
+- **DIVERGES** — residual ~1.7e-5 in the diagnostic f64 `error64` sum (a
+  few hundred 1-ulp errorline values across 3.4M positions); the f32
+  `error` used for the score converged to ≤ ~4e-6 dB. Not user-visible.
+- **DIVERGES** — platform scope: the parity claim is x86_64 GNU/Linux +
+  AVX2 + glibc libmvec. Other platforms run the same algorithm with
+  scalar libm (still bit-stable, but not bit-identical to the reference
+  binary; test tolerance widens to 1e-2 off-platform).
+- **EXTENSION** — stride-agnostic packed-RGB8 API, `Err` on dim mismatch /
+  undersize instead of the reference's unchecked UB.
+- **OUT-OF-SCOPE** — the reference's ifdef'd-out paths (saliency,
+  `WEIGHT_MSE`/`DELTA_E`, `NO_BASE_VISIBILITY`) are not compiled.
 
 ### `ssim2` (CPU) — external `fast-ssim2`
 
