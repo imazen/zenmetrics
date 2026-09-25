@@ -181,8 +181,19 @@ for VIF scales 1–3 are SIMD-enabled as well: a paired `--v0 --stages` run
 measured 47.248 ms/frame for four-scale VIF with scale-0 SIMD alone versus
 45.879 with all-scale vertical SIMD, and a fixed 192×128 Callgrind harness
 dropped from 29.27M to 27.46M instructions (8-bit) and 29.90M to 28.72M
-(10-bit). The horizontal statistics pass and the v1 feature path remain
-scalar.
+(10-bit). The horizontal statistics pass is SIMD-enabled too: it loads the
+padded scratch with unaligned 16-column vectors, accumulates per-tap
+weighted sums split into low/high 16-bit lanes (each strictly below 2^32,
+so exact for all u32 inputs), and shares one scalar finalize with the
+column tail. A paired `--v0 --stages` run measured 47.979 ms/frame for
+four-scale VIF with vertical-only SIMD versus 28.947 with horizontal SIMD
+enabled, the fixed Callgrind harness dropped to 19.64M instructions
+(8-bit) and 20.89M (10-bit), and the tiny 10-bit fixture measured
+1.389 ms/call versus 0.903. The emitted v3 code uses ymm `vmovdqu`
+loads with `vpmulld`/`vpaddd` accumulation, matching libvmaf's contiguous
+AVX2 structure while substituting lo16/hi16 u32 accumulation for its
+`vpmuludq` 64-bit widening (unavailable in magetypes). Only the v1
+feature path remains scalar.
 
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate

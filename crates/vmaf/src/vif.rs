@@ -575,6 +575,146 @@ fn vif_vertical_hiscale_simd(
     chunks * 16
 }
 
+#[cfg(feature = "simd")]
+type VifHorizontalSums = ([u32; 16], [u32; 16], [u64; 16], [u64; 16], [u64; 16]);
+
+#[cfg(feature = "simd")]
+#[magetypes(define(u32x8), v3, neon, wasm128, scalar)]
+fn vif_horizontal_sums(
+    token: Token,
+    vertical_ref_mean: &[u32],
+    vertical_dis_mean: &[u32],
+    vertical_ref_sq: &[u32],
+    vertical_dis_sq: &[u32],
+    vertical_ref_dis: &[u32],
+    filter: &[u16],
+    col: usize,
+) -> VifHorizontalSums {
+    let mask16 = u32x8::splat(token, 0xffff);
+    let mut ref_mean_lo = u32x8::zero(token);
+    let mut ref_mean_hi = u32x8::zero(token);
+    let mut dis_mean_lo = u32x8::zero(token);
+    let mut dis_mean_hi = u32x8::zero(token);
+    let mut ref_sq_lo16 = u32x8::zero(token);
+    let mut ref_sq_hi16 = u32x8::zero(token);
+    let mut ref_sq_lo8 = u32x8::zero(token);
+    let mut ref_sq_hi8 = u32x8::zero(token);
+    let mut dis_sq_lo16 = u32x8::zero(token);
+    let mut dis_sq_hi16 = u32x8::zero(token);
+    let mut dis_sq_lo8 = u32x8::zero(token);
+    let mut dis_sq_hi8 = u32x8::zero(token);
+    let mut ref_dis_lo16 = u32x8::zero(token);
+    let mut ref_dis_hi16 = u32x8::zero(token);
+    let mut ref_dis_lo8 = u32x8::zero(token);
+    let mut ref_dis_hi8 = u32x8::zero(token);
+    for (tap, &w) in filter.iter().enumerate() {
+        let weight = u32x8::splat(token, w as u32);
+        let rlo = u32x8::from_slice(token, &vertical_ref_mean[col + tap..]);
+        let rhi = u32x8::from_slice(token, &vertical_ref_mean[col + 8 + tap..]);
+        let dlo = u32x8::from_slice(token, &vertical_dis_mean[col + tap..]);
+        let dhi = u32x8::from_slice(token, &vertical_dis_mean[col + 8 + tap..]);
+        ref_mean_lo += weight * rlo;
+        ref_mean_hi += weight * rhi;
+        dis_mean_lo += weight * dlo;
+        dis_mean_hi += weight * dhi;
+        let sq_lo = u32x8::from_slice(token, &vertical_ref_sq[col + tap..]);
+        let sq_hi = u32x8::from_slice(token, &vertical_ref_sq[col + 8 + tap..]);
+        ref_sq_lo16 += weight * (sq_lo & mask16);
+        ref_sq_hi16 += weight * sq_lo.shr_logical_uniform(16);
+        ref_sq_lo8 += weight * (sq_hi & mask16);
+        ref_sq_hi8 += weight * sq_hi.shr_logical_uniform(16);
+        let ds_lo = u32x8::from_slice(token, &vertical_dis_sq[col + tap..]);
+        let ds_hi = u32x8::from_slice(token, &vertical_dis_sq[col + 8 + tap..]);
+        dis_sq_lo16 += weight * (ds_lo & mask16);
+        dis_sq_hi16 += weight * ds_lo.shr_logical_uniform(16);
+        dis_sq_lo8 += weight * (ds_hi & mask16);
+        dis_sq_hi8 += weight * ds_hi.shr_logical_uniform(16);
+        let rd_lo = u32x8::from_slice(token, &vertical_ref_dis[col + tap..]);
+        let rd_hi = u32x8::from_slice(token, &vertical_ref_dis[col + 8 + tap..]);
+        ref_dis_lo16 += weight * (rd_lo & mask16);
+        ref_dis_hi16 += weight * rd_lo.shr_logical_uniform(16);
+        ref_dis_lo8 += weight * (rd_hi & mask16);
+        ref_dis_hi8 += weight * rd_hi.shr_logical_uniform(16);
+    }
+    let mut ref_mean_out = [0u32; 16];
+    let mut dis_mean_out = [0u32; 16];
+    let mut ref_sq_out = [0u64; 16];
+    let mut dis_sq_out = [0u64; 16];
+    let mut ref_dis_out = [0u64; 16];
+    let mean_lo = ref_mean_lo.to_array();
+    let mean_hi = ref_mean_hi.to_array();
+    let dmean_lo = dis_mean_lo.to_array();
+    let dmean_hi = dis_mean_hi.to_array();
+    let sq_lo16 = ref_sq_lo16.to_array();
+    let sq_hi16 = ref_sq_hi16.to_array();
+    let sq_lo8 = ref_sq_lo8.to_array();
+    let sq_hi8 = ref_sq_hi8.to_array();
+    let dsq_lo16 = dis_sq_lo16.to_array();
+    let dsq_hi16 = dis_sq_hi16.to_array();
+    let dsq_lo8 = dis_sq_lo8.to_array();
+    let dsq_hi8 = dis_sq_hi8.to_array();
+    let rd_lo16 = ref_dis_lo16.to_array();
+    let rd_hi16 = ref_dis_hi16.to_array();
+    let rd_lo8 = ref_dis_lo8.to_array();
+    let rd_hi8 = ref_dis_hi8.to_array();
+    for lane in 0..8 {
+        ref_mean_out[lane] = mean_lo[lane];
+        ref_mean_out[8 + lane] = mean_hi[lane];
+        dis_mean_out[lane] = dmean_lo[lane];
+        dis_mean_out[8 + lane] = dmean_hi[lane];
+        ref_sq_out[lane] = sq_lo16[lane] as u64 + ((sq_hi16[lane] as u64) << 16);
+        ref_sq_out[8 + lane] = sq_lo8[lane] as u64 + ((sq_hi8[lane] as u64) << 16);
+        dis_sq_out[lane] = dsq_lo16[lane] as u64 + ((dsq_hi16[lane] as u64) << 16);
+        dis_sq_out[8 + lane] = dsq_lo8[lane] as u64 + ((dsq_hi8[lane] as u64) << 16);
+        ref_dis_out[lane] = rd_lo16[lane] as u64 + ((rd_hi16[lane] as u64) << 16);
+        ref_dis_out[8 + lane] = rd_lo8[lane] as u64 + ((rd_hi8[lane] as u64) << 16);
+    }
+    (
+        ref_mean_out,
+        dis_mean_out,
+        ref_sq_out,
+        dis_sq_out,
+        ref_dis_out,
+    )
+}
+
+fn vif_pixel_finalize(
+    table: &[u16; 65536],
+    gain_limit: f64,
+    ref_mean: u32,
+    dis_mean: u32,
+    ref_sq: u64,
+    dis_sq: u64,
+    ref_dis: u64,
+    num_log: &mut i64,
+    den_log: &mut i64,
+    num_non_log: &mut i64,
+    den_non_log: &mut i64,
+) {
+    let ref_mean_sq = ((ref_mean as u64 * ref_mean as u64 + 2147483648) >> 32) as u32;
+    let dis_mean_sq = ((dis_mean as u64 * dis_mean as u64 + 2147483648) >> 32) as u32;
+    let mean_product = ((ref_mean as u64 * dis_mean as u64 + 2147483648) >> 32) as u32;
+    let sigma_ref = (((ref_sq + 32768) >> 16) as u32).wrapping_sub(ref_mean_sq) as i32;
+    let sigma_dis = (((dis_sq + 32768) >> 16) as u32).wrapping_sub(dis_mean_sq) as i32;
+    let sigma_ref_dis = (((ref_dis + 32768) >> 16) as u32).wrapping_sub(mean_product) as i32;
+    let sigma_dis = sigma_dis.max(0);
+    if sigma_ref >= SIGMA_NSQ {
+        *den_log += (log2_32(table, (SIGMA_NSQ + sigma_ref) as u32) - 2048 * 17) as i64;
+        if sigma_ref_dis > 0 && sigma_dis > 0 {
+            let gain = sigma_ref_dis as f64 / (sigma_ref as f64 + 65536.0 * 1.0e-10);
+            let residual = (sigma_dis as f64 - gain * sigma_ref_dis as f64) as i32;
+            let residual = residual.max(0) as u32;
+            let gain = gain.min(gain_limit);
+            let first = residual + SIGMA_NSQ as u32;
+            let second = (gain * gain * sigma_ref as f64) as i64 + first as i64;
+            *num_log += (log2_64(table, second as u64) - log2_64(table, first as u64)) as i64;
+        }
+    } else {
+        *num_non_log += sigma_dis as i64;
+        *den_non_log += 1;
+    }
+}
+
 fn statistics(
     image: &VifImage<'_>,
     bit_depth: u8,
@@ -713,7 +853,40 @@ fn statistics(
         ] {
             pad_reflected(scratch, width, half as usize);
         }
-        for col in 0..width {
+        #[allow(unused_mut)]
+        let mut hcol = 0;
+        #[cfg(feature = "simd")]
+        while hcol + 16 <= width {
+            let (ref_means, dis_means, ref_sqs, dis_sqs, ref_diss) = archmage::incant!(
+                vif_horizontal_sums(
+                    &vertical_ref_mean,
+                    &vertical_dis_mean,
+                    &vertical_ref_sq,
+                    &vertical_dis_sq,
+                    &vertical_ref_dis,
+                    filter,
+                    hcol
+                ),
+                [v3, neon, wasm128, scalar]
+            );
+            for lane in 0..16 {
+                vif_pixel_finalize(
+                    table,
+                    gain_limit,
+                    ref_means[lane],
+                    dis_means[lane],
+                    ref_sqs[lane],
+                    dis_sqs[lane],
+                    ref_diss[lane],
+                    &mut num_log,
+                    &mut den_log,
+                    &mut num_non_log,
+                    &mut den_non_log,
+                );
+            }
+            hcol += 16;
+        }
+        for col in hcol..width {
             let center = col + half as usize;
             let weight = filter[half as usize] as u32;
             let mut ref_mean = weight * vertical_ref_mean[center];
@@ -734,30 +907,19 @@ fn statistics(
                 ref_dis += weight as u64
                     * (vertical_ref_dis[left] as u64 + vertical_ref_dis[right] as u64);
             }
-            let ref_mean_sq = ((ref_mean as u64 * ref_mean as u64 + 2147483648) >> 32) as u32;
-            let dis_mean_sq = ((dis_mean as u64 * dis_mean as u64 + 2147483648) >> 32) as u32;
-            let mean_product = ((ref_mean as u64 * dis_mean as u64 + 2147483648) >> 32) as u32;
-            let sigma_ref = (((ref_sq + 32768) >> 16) as u32).wrapping_sub(ref_mean_sq) as i32;
-            let sigma_dis = (((dis_sq + 32768) >> 16) as u32).wrapping_sub(dis_mean_sq) as i32;
-            let sigma_ref_dis =
-                (((ref_dis + 32768) >> 16) as u32).wrapping_sub(mean_product) as i32;
-            let sigma_dis = sigma_dis.max(0);
-            if sigma_ref >= SIGMA_NSQ {
-                den_log += (log2_32(table, (SIGMA_NSQ + sigma_ref) as u32) - 2048 * 17) as i64;
-                if sigma_ref_dis > 0 && sigma_dis > 0 {
-                    let gain = sigma_ref_dis as f64 / (sigma_ref as f64 + 65536.0 * 1.0e-10);
-                    let residual = (sigma_dis as f64 - gain * sigma_ref_dis as f64) as i32;
-                    let residual = residual.max(0) as u32;
-                    let gain = gain.min(gain_limit);
-                    let first = residual + SIGMA_NSQ as u32;
-                    let second = (gain * gain * sigma_ref as f64) as i64 + first as i64;
-                    num_log +=
-                        (log2_64(table, second as u64) - log2_64(table, first as u64)) as i64;
-                }
-            } else {
-                num_non_log += sigma_dis as i64;
-                den_non_log += 1;
-            }
+            vif_pixel_finalize(
+                table,
+                gain_limit,
+                ref_mean,
+                dis_mean,
+                ref_sq,
+                dis_sq,
+                ref_dis,
+                &mut num_log,
+                &mut den_log,
+                &mut num_non_log,
+                &mut den_non_log,
+            );
         }
     }
     let num = (num_log as f64 / 2048.0
