@@ -13,6 +13,15 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- cli (`HASH_TBD`): `--luma-ingress {house|yuv601-studio}` on `score` and
+  `batch`. `yuv601-studio` feeds luma-only metrics (gmsd, psnrhvs-y,
+  haarpsi-y, fsim-y, msssim, vif, mad, iwssim) the libvmaf/JPEG AIC YUV420
+  luma plane — studio-swing BT.601 `Y = round(16 + (65.481R + 128.553G +
+  24.966B)/255)`, broadcast gray, even-cropped — instead of each metric's
+  house luma. Colour metrics ignore it; `--hdr` forces `house`. Verified
+  against the AIC-4 published `IW-SSIM`/`MS-SSIM` columns (Δ 3e-5 /
+  4.8e-5). `LumaIngress` + `studio601_gray` + `luma_ingress_pair` +
+  `MetricKind::is_luma_only` in `zenmetrics-cli::metrics`.
 - docs (`8b041762`): new root `DIVERGENCES.md` — a workspace-level ledger
   of every known deviation from each metric's cited reference
   implementation and version (DIVERGES / RESOLVED / ORACLE-ARTIFACT /

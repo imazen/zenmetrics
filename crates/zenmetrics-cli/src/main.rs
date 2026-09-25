@@ -299,6 +299,14 @@ struct ScoreArgs {
     #[cfg(feature = "hdr")]
     #[arg(long, value_enum, default_value = "pu-rescale")]
     hdr_transfer: crate::hdr::HdrTransfer,
+    /// Luminance ingress for luma-only metrics (gmsd, psnrhvs-y, haarpsi-y,
+    /// fsim-y, msssim, vif, mad, iwssim). `house` (default) = each metric's own
+    /// documented RGB→luma. `yuv601-studio` = the libvmaf/JPEG AIC YUV420
+    /// luma plane (studio-swing BT.601, u8-rounded, even-cropped), broadcast
+    /// to gray — reproduces the published AIC-4 luma columns. Colour metrics
+    /// ignore this flag. SDR path only.
+    #[arg(long, value_enum, default_value = "house")]
+    luma_ingress: crate::metrics::LumaIngress,
 }
 
 #[derive(Parser, Debug)]
@@ -364,6 +372,14 @@ struct BatchArgs {
     #[cfg(feature = "hdr")]
     #[arg(long, value_enum, default_value = "pu-rescale")]
     hdr_transfer: crate::hdr::HdrTransfer,
+    /// Luminance ingress for luma-only metrics (gmsd, psnrhvs-y, haarpsi-y,
+    /// fsim-y, msssim, vif, mad, iwssim). `house` (default) = each metric's own
+    /// documented RGB→luma. `yuv601-studio` = the libvmaf/JPEG AIC YUV420
+    /// luma plane (studio-swing BT.601, u8-rounded, even-cropped), broadcast
+    /// to gray — reproduces the published AIC-4 luma columns. Colour metrics
+    /// ignore this flag. SDR path only.
+    #[arg(long, value_enum, default_value = "house")]
+    luma_ingress: crate::metrics::LumaIngress,
 }
 
 #[derive(Parser, Debug)]
@@ -2668,7 +2684,14 @@ fn cmd_score(
         print_score(args.output, args.metric, &scores);
         return Ok(());
     }
-    let scores = run_metric(args.metric, &reference, &distorted, args.gpu_runtime)?;
+    let (r_ing, d_ing) =
+        metrics::luma_ingress_pair(args.metric, args.luma_ingress, &reference, &distorted);
+    let scores = run_metric(
+        args.metric,
+        r_ing.as_ref().unwrap_or(&reference),
+        d_ing.as_ref().unwrap_or(&distorted),
+        args.gpu_runtime,
+    )?;
     print_score(args.output, args.metric, &scores);
     Ok(())
 }
@@ -2987,7 +3010,21 @@ fn cmd_batch(
         #[cfg(not(feature = "gpu-cvvdp"))]
         let scored_via_cvvdp = false;
         if !scored_via_cvvdp {
-            let scores = run_metric(args.metric, &reference, &distorted, args.gpu_runtime)?;
+            // `--luma-ingress` is an SDR-path flag — HDR rows are already
+            // nits→PU21 encoded and a second studio-Y relabel would be wrong.
+            let ingress = if hdr_mode {
+                metrics::LumaIngress::House
+            } else {
+                args.luma_ingress
+            };
+            let (r_ing, d_ing) =
+                metrics::luma_ingress_pair(args.metric, ingress, &reference, &distorted);
+            let scores = run_metric(
+                args.metric,
+                r_ing.as_ref().unwrap_or(&*reference),
+                d_ing.as_ref().unwrap_or(&distorted),
+                args.gpu_runtime,
+            )?;
             for (_, value) in &scores {
                 row.push(format!("{value:.6}"));
             }

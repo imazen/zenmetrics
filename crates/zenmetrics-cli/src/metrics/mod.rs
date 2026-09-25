@@ -364,6 +364,103 @@ impl MetricKind {
             MetricKind::Mad => MAD_CPU_COLUMNS,
         }
     }
+
+    /// Metrics that consume only a luminance plane (their house RGB→luma
+    /// extraction is the whole colour path) and are therefore eligible for
+    /// [`LumaIngress::Yuv601Studio`] substitution. Colour metrics — fsim
+    /// (FSIMc chroma), vsi (SDSP colour saliency), haarpsi / psnrhvs
+    /// (per-channel), dssim / ssim2 / butteraugli / zensim (native colour),
+    /// cvvdp / hdrvdp (display-modelled), every GPU twin — return false and
+    /// are always scored on the decoded RGB.
+    pub fn is_luma_only(self) -> bool {
+        matches!(
+            self,
+            MetricKind::Gmsd
+                | MetricKind::PsnrhvsY
+                | MetricKind::HaarpsiY
+                | MetricKind::FsimY
+                | MetricKind::Msssim
+                | MetricKind::Vif
+                | MetricKind::Mad
+                | MetricKind::Iwssim
+        )
+    }
+}
+
+/// Luminance-ingress convention for the luma-only metric family —
+/// `--luma-ingress` on `score` / `batch`. Only metrics where
+/// [`MetricKind::is_luma_only`] is true consume it; everything else runs on
+/// the decoded sRGB regardless (see its doc).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
+pub enum LumaIngress {
+    /// Each metric's own documented luma extraction — the historical
+    /// behaviour and the default.
+    #[default]
+    #[value(name = "house")]
+    House,
+    /// Studio-swing BT.601 luma — the ffmpeg / libvmaf YUV420 `Y` plane,
+    /// `Y = round(16 + (65.481·R + 128.553·G + 24.966·B)/255)` per pixel,
+    /// broadcast to a gray RGB image and even-cropped (the YUV420 constraint
+    /// the pipeline it mimics runs). pyiqa's `to_y_channel` is the same
+    /// transform unrounded and uncropped, so scores land within ~u8-rounding
+    /// and an edge-row of that family too. This is the ingress the JPEG AIC-4
+    /// published `SSIM`/`MS-SSIM`/`VMAF`/`VIF` luma columns were computed
+    /// with — see `docs/METRIC_PROVENANCE.md`.
+    #[value(name = "yuv601-studio")]
+    Yuv601Studio,
+}
+
+/// Build the `Y = round(16 + (65.481·R + 128.553·G + 24.966·B)/255)`
+/// (ITU-R BT.601 studio swing — the JPEG/JFIF and libvmaf YUV420 luma) of
+/// `img`, broadcast to a gray RGB8 image even-cropped to `w & !1 × h & !1`.
+/// The coefficients are the JPEG 6B / MPEG / libvmaf fixed-point weights in
+/// float form; per-pixel u8 rounding matches the ffmpeg/libvmaf conversion.
+///
+/// The callers' luma-only metrics then re-derive luma of (y, y, y) — every
+/// house luma extraction is a convex combination, so it returns `y` (within
+/// ±1 LSB of its own rounding), i.e. the metric's formula is unchanged; only
+/// the ingress plane differs.
+pub fn studio601_gray(img: &Rgb8Image) -> Rgb8Image {
+    let w = (img.width & !1) as usize;
+    let h = (img.height & !1) as usize;
+    let src_w = img.width as usize;
+    let mut pixels = Vec::with_capacity(w * h * 3);
+    for y in 0..h {
+        let row = &img.pixels[y * src_w * 3..y * src_w * 3 + w * 3];
+        // `slice::as_chunks` is still unstable; `chunks_exact(3)` stays.
+        #[allow(clippy::chunks_exact_to_as_chunks)]
+        for px in row.chunks_exact(3) {
+            let yv = (16.0
+                + (65.481 * px[0] as f32 + 128.553 * px[1] as f32 + 24.966 * px[2] as f32) / 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8;
+            pixels.extend_from_slice(&[yv, yv, yv]);
+        }
+    }
+    Rgb8Image {
+        pixels,
+        width: w as u32,
+        height: h as u32,
+    }
+}
+
+/// Substitute [`studio601_gray`] images when `ingress` applies to `kind`
+/// (i.e. `ingress == Yuv601Studio` and [`MetricKind::is_luma_only`]).
+/// Returns `None` for an image that should be used as decoded.
+pub fn luma_ingress_pair(
+    kind: MetricKind,
+    ingress: LumaIngress,
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> (Option<Rgb8Image>, Option<Rgb8Image>) {
+    if ingress == LumaIngress::Yuv601Studio && kind.is_luma_only() {
+        (
+            Some(studio601_gray(reference)),
+            Some(studio601_gray(distorted)),
+        )
+    } else {
+        (None, None)
+    }
 }
 
 // Versioned **GPU** cvvdp column name (used by `MetricKind::CvvdpGpu`).
@@ -1705,6 +1802,98 @@ mod tests {
         // And the live function returns whichever matches the cached flag.
         let live = auto_order();
         assert_eq!(live, if require_gpu() { GPU_ONLY } else { WITH_CPU });
+    }
+
+    /// `studio601_gray` — the libvmaf/JPEG AIC studio-swing BT.601 luma.
+    /// Primary luma values are the classic colour-bar numbers (R=81, G=145,
+    /// B=41, white=235, black=16); odd dims even-crop.
+    #[test]
+    fn studio601_gray_primaries_and_crop() {
+        // 3x3: one pixel each of white, black, R / G, B, mid-gray.
+        let mut px = Vec::new();
+        px.extend_from_slice(&[255, 255, 255]); // white
+        px.extend_from_slice(&[0, 0, 0]); // black
+        px.extend_from_slice(&[255, 0, 0]); // R
+        px.extend_from_slice(&[0, 255, 0]); // G
+        px.extend_from_slice(&[0, 0, 255]); // B
+        px.extend_from_slice(&[128, 128, 128]); // mid gray
+        px.extend_from_slice(&[10, 20, 30]);
+        px.extend_from_slice(&[200, 100, 50]);
+        px.extend_from_slice(&[1, 2, 3]);
+        let img = Rgb8Image {
+            pixels: px,
+            width: 3,
+            height: 3,
+        };
+        let g = studio601_gray(&img);
+        // 3x3 even-crops to 2x2 — the YUV420 constraint this plane mimics.
+        assert_eq!((g.width, g.height), (2, 2));
+        let y_of = |i: usize| g.pixels[i * 3];
+        // Output is the top-left 2x2 of the source: row0 = [white, black],
+        // row1 = [G, B] (R / mid-gray were the cropped-away column/row).
+        assert_eq!(y_of(0), 235); // white: 16 + 219
+        assert_eq!(y_of(1), 16); // black: 16
+        assert_eq!(y_of(2), 145); // G: 16 + 128.553
+        assert_eq!(y_of(3), 41); // B: 16 + 24.966
+        // Broadcast: every channel carries the same Y.
+        for px in g.pixels.chunks_exact(3) {
+            assert!(px[0] == px[1] && px[1] == px[2]);
+        }
+    }
+
+    /// `studio601_gray` on a full 2x2 — B and mid-gray landings.
+    #[test]
+    fn studio601_gray_blue_and_midgray() {
+        let mut px = Vec::new();
+        px.extend_from_slice(&[0, 0, 255]); // B
+        px.extend_from_slice(&[128, 128, 128]); // mid gray
+        px.extend_from_slice(&[255, 255, 0]);
+        px.extend_from_slice(&[0, 255, 255]);
+        let img = Rgb8Image {
+            pixels: px,
+            width: 2,
+            height: 2,
+        };
+        let g = studio601_gray(&img);
+        assert_eq!((g.width, g.height), (2, 2));
+        assert_eq!(g.pixels[0], 41); // B: 16 + 24.966
+        assert_eq!(g.pixels[3], 126); // mid gray: 16 + 219*128/255 = 125.867 → 126
+    }
+
+    /// `luma_ingress_pair` substitutes only for luma-only kinds under
+    /// `yuv601-studio`; colour metrics and `house` pass through untouched.
+    #[test]
+    fn luma_ingress_scoping() {
+        let img = || Rgb8Image {
+            pixels: vec![255u8, 0, 0, 0, 255, 0, 0, 0, 255, 10, 20, 30],
+            width: 2,
+            height: 2,
+        };
+        let (r, d) = (img(), img());
+        // Luma-only + studio → substituted.
+        for k in [
+            MetricKind::Gmsd,
+            MetricKind::Msssim,
+            MetricKind::Vif,
+            MetricKind::Iwssim,
+        ] {
+            let (rs, ds) = luma_ingress_pair(k, LumaIngress::Yuv601Studio, &r, &d);
+            assert!(rs.is_some() && ds.is_some(), "{k:?} should substitute");
+        }
+        // Colour metric + studio → untouched; luma metric + house → untouched.
+        for (k, ing) in [
+            (MetricKind::Fsim, LumaIngress::Yuv601Studio),
+            (MetricKind::Vsi, LumaIngress::Yuv601Studio),
+            (MetricKind::Ssim2, LumaIngress::Yuv601Studio),
+            (MetricKind::Cvvdp, LumaIngress::Yuv601Studio),
+            (MetricKind::Gmsd, LumaIngress::House),
+        ] {
+            let (rs, ds) = luma_ingress_pair(k, ing, &r, &d);
+            assert!(
+                rs.is_none() && ds.is_none(),
+                "{k:?}/{ing:?} must NOT substitute"
+            );
+        }
     }
 
     /// Regression guard for docs/METRIC_DISPATCH_CONSOLIDATION.md (C1): in ANY
