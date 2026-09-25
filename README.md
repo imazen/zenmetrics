@@ -239,6 +239,16 @@ higher-scale `dwt2_s123` filter — those need 64-bit lane products
 (libvmaf's AVX2 uses `vpmuldq`; magetypes has no widening 32×32→64
 multiply, so a safe port would need 16-bit limb arithmetic).
 
+The motion metric's vertical 5-tap pass is SIMD-enabled for `bpc < 16`:
+each 16-pixel chunk loads `u16x16` rows, widens to `i32x8` lanes, and
+accumulates the signed filter differences in i32 — exact because samples
+below 2^15 keep every 5-tap sum under 2^31. Mirrored-edge rows and the
+width tail keep the scalar path; the horizontal pass stays scalar (its
+±4.1e9 accumulation needs signed lanes wider than 32 bits). A 10-iteration
+1280×720 `motion2` harness dropped from 1.53G to 1.27G Callgrind
+instructions (−17%) and paired wall runs measured roughly 5.30 → 4.98
+ms/frame.
+
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate
 ([`fast-ssim2`](https://crates.io/crates/fast-ssim2) 0.8.1,

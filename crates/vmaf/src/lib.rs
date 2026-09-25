@@ -22,6 +22,9 @@ pub use vif::vif_v0_from_luma;
 use std::error::Error as StdError;
 use std::fmt;
 
+#[cfg(feature = "simd")]
+use archmage::magetypes;
+
 #[derive(Debug)]
 pub enum Error {
     InvalidModel(&'static str),
@@ -436,6 +439,35 @@ fn mirror(idx: isize, size: usize) -> usize {
     }
 }
 
+#[cfg(feature = "simd")]
+#[magetypes(define(u16x16, u32x8, i32x8), v3, neon, wasm128, scalar)]
+fn motion_vertical_simd(
+    token: Token,
+    prev_rows: &[&[u16]; 5],
+    cur_rows: &[&[u16]; 5],
+    coef: &[i64; 5],
+    y_round: i32,
+    bpc: u32,
+    out: &mut [i32; 16],
+) {
+    let mut acc_l = i32x8::zero(token);
+    let mut acc_h = i32x8::zero(token);
+    for k in 0..5 {
+        let p = u16x16::load(token, prev_rows[k][..16].try_into().unwrap());
+        let c = u16x16::load(token, cur_rows[k][..16].try_into().unwrap());
+        let dl = p.widen_low().bitcast_i32x8() - c.widen_low().bitcast_i32x8();
+        let dh = p.widen_high().bitcast_i32x8() - c.widen_high().bitcast_i32x8();
+        let w = i32x8::splat(token, coef[k] as i32);
+        acc_l += w * dl;
+        acc_h += w * dh;
+    }
+    let rnd = i32x8::splat(token, y_round);
+    let yl = (acc_l + rnd).shr_arithmetic_uniform(bpc);
+    let yh = (acc_h + rnd).shr_arithmetic_uniform(bpc);
+    out[..8].copy_from_slice(&yl.to_array());
+    out[8..16].copy_from_slice(&yh.to_array());
+}
+
 pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize, bpc: u8) -> u64 {
     let y_round: i64 = 1 << (bpc - 1);
     let x_round: i64 = 1 << 15;
@@ -444,7 +476,42 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
 
     for i in 0..height {
         let mut any_nonzero: i32 = 0;
-        for j in 0..width {
+        let mut j = 0usize;
+        #[cfg(feature = "simd")]
+        if bpc < 16 && (2..height.saturating_sub(2)).contains(&i) {
+            while j + 16 <= width {
+                let prev_rows = [
+                    &prev[(i - 2) * width + j..],
+                    &prev[(i - 1) * width + j..],
+                    &prev[i * width + j..],
+                    &prev[(i + 1) * width + j..],
+                    &prev[(i + 2) * width + j..],
+                ];
+                let cur_rows = [
+                    &cur[(i - 2) * width + j..],
+                    &cur[(i - 1) * width + j..],
+                    &cur[i * width + j..],
+                    &cur[(i + 1) * width + j..],
+                    &cur[(i + 2) * width + j..],
+                ];
+                let mut out = [0i32; 16];
+                archmage::incant!(
+                    motion_vertical_simd(
+                        &prev_rows,
+                        &cur_rows,
+                        &MOTION_FILTER,
+                        y_round as i32,
+                        bpc as u32,
+                        &mut out
+                    ),
+                    [v3, neon, wasm128, scalar]
+                );
+                y_row[j..j + 16].copy_from_slice(&out);
+                any_nonzero |= out.iter().fold(0i32, |a, &b| a | b);
+                j += 16;
+            }
+        }
+        while j < width {
             let mut accum: i64 = 0;
             for (k, &coef) in MOTION_FILTER.iter().enumerate() {
                 let row = mirror(i as isize - 2 + k as isize, height);
@@ -453,6 +520,7 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
             }
             y_row[j] = ((accum + y_round) >> bpc) as i32;
             any_nonzero |= y_row[j];
+            j += 1;
         }
         if any_nonzero == 0 {
             continue;
