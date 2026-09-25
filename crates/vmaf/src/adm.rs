@@ -152,7 +152,6 @@ struct BandI16 {
 
 #[derive(Default)]
 struct BandI32 {
-    a: Vec<i32>,
     h: Vec<i32>,
     v: Vec<i32>,
     d: Vec<i32>,
@@ -834,44 +833,73 @@ fn adm_cm_i16(
     let i1 = bottom.min(h as i32);
     let j0 = left.max(0);
     let j1 = right.min(w as i32);
-    if i0 >= 1 && j0 >= 1 && i1 < h as i32 && j1 < w as i32 {
+    if i0 >= 1 && j0 >= 1 && i1 < h as i32 && j1 < w as i32 && j0 < j1 {
+        let (j0, j1) = (j0 as usize, j1 as usize);
+        let len = j1 - j0;
+        let mut cs = vec![0i32; 3 * (w + 2)];
+        let mut win = vec![0i32; w];
+        let (cs_a, cs_vd) = cs.split_at_mut(w + 2);
+        let (cs_v, cs_d) = cs_vd.split_at_mut(w + 2);
+        let mut cs_bands = [cs_a, cs_v, cs_d];
         for i in i0..i1 {
-            let mut inner = [0i64; 3];
-            let mut window_sum = 0i32;
-            for flt_band in &flt {
-                for dy in -1i32..=1 {
-                    let yy = (i + dy) as usize * stride;
-                    for dx in -1i32..=1 {
-                        window_sum += flt_band[yy + (j0 + dx) as usize] as i32;
-                    }
+            let i = i as usize;
+            for (band, cs) in flt.iter().zip(cs_bands.iter_mut()) {
+                let r0 = &band[(i - 1) * stride..];
+                let r1 = &band[i * stride..];
+                let r2 = &band[(i + 1) * stride..];
+                for (((o, &a), &b), &c) in cs[j0 - 1..=j1]
+                    .iter_mut()
+                    .zip(&r0[j0 - 1..=j1])
+                    .zip(&r1[j0 - 1..=j1])
+                    .zip(&r2[j0 - 1..=j1])
+                {
+                    *o = a as i32 + b as i32 + c as i32;
                 }
             }
-            for j in j0..j1 {
-                let idx = i as usize * stride + j as usize;
-                let mut thr = window_sum;
+            win[..len].fill(0);
+            for cs in &cs_bands {
+                for (((o, &a), &b), &c) in win[..len]
+                    .iter_mut()
+                    .zip(&cs[j0 - 1..j1 - 1])
+                    .zip(&cs[j0..j1])
+                    .zip(&cs[j0 + 1..=j1])
+                {
+                    *o += a + b + c;
+                }
+            }
+            let row = i * stride + j0;
+            let ang_rows = [
+                &angles[0][row..row + len],
+                &angles[1][row..row + len],
+                &angles[2][row..row + len],
+            ];
+            let flt_rows = [
+                &flt[0][row..row + len],
+                &flt[1][row..row + len],
+                &flt[2][row..row + len],
+            ];
+            let src_rows = [
+                &src_b[0][row..row + len],
+                &src_b[1][row..row + len],
+                &src_b[2][row..row + len],
+            ];
+            let mut inner = [0i64; 3];
+            for (jj, &wv) in win[..len].iter().enumerate() {
+                let mut thr = wv;
                 for t in 0..3 {
-                    thr += (((ONE_BY_15 * (angles[t][idx] as i32).abs()) + 2048) >> 12) as i16
+                    thr += (((ONE_BY_15 * (ang_rows[t][jj] as i32).abs()) + 2048) >> 12) as i16
                         as i32
-                        - flt[t][idx] as i32;
+                        - flt_rows[t][jj] as i32;
                 }
                 for t in 0..3 {
                     let mut x =
-                        (src_b[t][idx] as i32 * i_rfactor[t]).abs() - (thr << shift_xsub[t]);
+                        (src_rows[t][jj] as i32 * i_rfactor[t]).abs() - (thr << shift_xsub[t]);
                     if x < 0 {
                         x = 0;
                     }
                     let x_sq = (((x as i64 * x as i64) + add_shift_xsq[t]) >> shift_xsq[t]) as i32;
                     let val = ((x_sq as i64 * x as i64) + add_shift_xcub[t]) >> shift_xcub[t];
                     inner[t] += val;
-                }
-                if j + 1 < j1 {
-                    for flt_band in &flt {
-                        for dy in -1i32..=1 {
-                            let yy = (i + dy) as usize * stride;
-                            window_sum += flt_band[yy + (j + 2) as usize] as i32
-                                - flt_band[yy + (j - 1) as usize] as i32;
-                        }
-                    }
                 }
             }
             for t in 0..3 {
@@ -968,40 +996,116 @@ fn adm_cm_i32(
     let i1 = bottom.min(h as i32);
     let j0 = left.max(0);
     let j1 = right.min(w as i32);
-    for i in i0..i1 {
-        let mut inner = [0i64; 3];
-        for j in j0..j1 {
-            let idx = i as usize * stride + j as usize;
-            let mut thr = 0i32;
+    if i0 >= 1 && j0 >= 1 && i1 < h as i32 && j1 < w as i32 && j0 < j1 {
+        let (j0, j1) = (j0 as usize, j1 as usize);
+        let len = j1 - j0;
+        let mut cs = vec![0i32; 3 * (w + 2)];
+        let mut win = vec![0i32; w];
+        let (cs_a, cs_vd) = cs.split_at_mut(w + 2);
+        let (cs_v, cs_d) = cs_vd.split_at_mut(w + 2);
+        let mut cs_bands = [cs_a, cs_v, cs_d];
+        for i in i0..i1 {
+            let i = i as usize;
+            for (band, cs) in flt.iter().zip(cs_bands.iter_mut()) {
+                let r0 = &band[(i - 1) * stride..];
+                let r1 = &band[i * stride..];
+                let r2 = &band[(i + 1) * stride..];
+                for (((o, &a), &b), &c) in cs[j0 - 1..=j1]
+                    .iter_mut()
+                    .zip(&r0[j0 - 1..=j1])
+                    .zip(&r1[j0 - 1..=j1])
+                    .zip(&r2[j0 - 1..=j1])
+                {
+                    *o = a + b + c;
+                }
+            }
+            win[..len].fill(0);
+            for cs in &cs_bands {
+                for (((o, &a), &b), &c) in win[..len]
+                    .iter_mut()
+                    .zip(&cs[j0 - 1..j1 - 1])
+                    .zip(&cs[j0..j1])
+                    .zip(&cs[j0 + 1..=j1])
+                {
+                    *o += a + b + c;
+                }
+            }
+            let row = i * stride + j0;
+            let ang_rows = [
+                &angles[0][row..row + len],
+                &angles[1][row..row + len],
+                &angles[2][row..row + len],
+            ];
+            let flt_rows = [
+                &flt[0][row..row + len],
+                &flt[1][row..row + len],
+                &flt[2][row..row + len],
+            ];
+            let src_rows = [
+                &src_b[0][row..row + len],
+                &src_b[1][row..row + len],
+                &src_b[2][row..row + len],
+            ];
+            let mut inner = [0i64; 3];
+            for (jj, &wv) in win[..len].iter().enumerate() {
+                let mut thr = wv;
+                for t in 0..3 {
+                    thr += ((I4_ONE_BY_15 * (ang_rows[t][jj] as i64).abs() + add_bef_shift_flt)
+                        >> shift_flt) as i32
+                        - flt_rows[t][jj];
+                }
+                for t in 0..3 {
+                    let x_full = ((src_rows[t][jj] as i64 * rfactor[t] as i64 + add_bef_shift_dst)
+                        >> 28) as i32;
+                    let mut x = x_full.abs() - thr;
+                    if x < 0 {
+                        x = 0;
+                    }
+                    let x_sq = (((x as i64 * x as i64) + add_shift_sq) >> shift_sq) as i32;
+                    let val = ((x_sq as i64 * x as i64) + add_shift_cub) >> shift_cub;
+                    inner[t] += val;
+                }
+            }
             for t in 0..3 {
-                for dy in -1i32..=1 {
-                    for dx in -1i32..=1 {
-                        let yy = edge_y(i + dy, h);
-                        let xx = edge_x(j + dx, w);
-                        if dy == 0 && dx == 0 {
-                            thr += ((I4_ONE_BY_15 * (angles[t][idx] as i64).abs()
-                                + add_bef_shift_flt)
-                                >> shift_flt) as i32;
-                        } else {
-                            thr += flt[t][yy * stride + xx];
+                accum[t] += (inner[t] + add_shift_inner_accum) >> shift_inner_accum;
+            }
+        }
+    } else {
+        for i in i0..i1 {
+            let mut inner = [0i64; 3];
+            for j in j0..j1 {
+                let idx = i as usize * stride + j as usize;
+                let mut thr = 0i32;
+                for t in 0..3 {
+                    for dy in -1i32..=1 {
+                        for dx in -1i32..=1 {
+                            let yy = edge_y(i + dy, h);
+                            let xx = edge_x(j + dx, w);
+                            if dy == 0 && dx == 0 {
+                                thr += ((I4_ONE_BY_15 * (angles[t][idx] as i64).abs()
+                                    + add_bef_shift_flt)
+                                    >> shift_flt) as i32;
+                            } else {
+                                thr += flt[t][yy * stride + xx];
+                            }
                         }
                     }
                 }
+                for t in 0..3 {
+                    let x_full = ((src_b[t][idx] as i64 * rfactor[t] as i64 + add_bef_shift_dst)
+                        >> 28) as i32;
+                    let mut x = x_full.abs() - thr;
+                    if x < 0 {
+                        x = 0;
+                    }
+                    let x_sq = (((x as i64 * x as i64) + add_shift_sq) >> shift_sq) as i32;
+                    let val = ((x_sq as i64 * x as i64) + add_shift_cub) >> shift_cub;
+                    inner[t] += val;
+                }
             }
             for t in 0..3 {
-                let x_full =
-                    ((src_b[t][idx] as i64 * rfactor[t] as i64 + add_bef_shift_dst) >> 28) as i32;
-                let mut x = x_full.abs() - thr;
-                if x < 0 {
-                    x = 0;
-                }
-                let x_sq = (((x as i64 * x as i64) + add_shift_sq) >> shift_sq) as i32;
-                let val = ((x_sq as i64 * x as i64) + add_shift_cub) >> shift_cub;
-                inner[t] += val;
+                accum[t] += (inner[t] + add_shift_inner_accum) >> shift_inner_accum;
             }
-        }
-        for t in 0..3 {
-            accum[t] += (inner[t] + add_shift_inner_accum) >> shift_inner_accum;
         }
     }
     let powf_add = (((bottom - top) * (right - left)) as f64 * noise_weight) as f32;
@@ -1154,22 +1258,17 @@ fn compute_adm(
     // Reused across scales 1-3: every element read in an iteration is
     // written earlier in that same iteration, so stale contents never
     // leak into results.
-    let new_i32_band = |with_a: bool| BandI32 {
-        a: if with_a {
-            vec![0; band_elems]
-        } else {
-            Vec::new()
-        },
+    let new_i32_band = || BandI32 {
         h: vec![0; band_elems],
         v: vec![0; band_elems],
         d: vec![0; band_elems],
     };
-    let mut ref_b32 = new_i32_band(false);
-    let mut dis_b32 = new_i32_band(false);
-    let mut r32 = new_i32_band(false);
-    let mut a32 = new_i32_band(false);
-    let mut csf_a32 = new_i32_band(false);
-    let mut csf_f32 = new_i32_band(false);
+    let mut ref_b32 = new_i32_band();
+    let mut dis_b32 = new_i32_band();
+    let mut r32 = new_i32_band();
+    let mut a32 = new_i32_band();
+    let mut csf_a32 = new_i32_band();
+    let mut csf_f32 = new_i32_band();
 
     for scale in 0..4usize {
         let (ind_y, ind_x) = dwt2_indices(w, h);
