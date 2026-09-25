@@ -765,14 +765,74 @@ fn adm_csf_i16(
             _ => (&src.d, &mut dst.d, &mut flt.d),
         };
         for i in top..bottom {
-            for j in left..right {
+            let mut j = left;
+            #[cfg(feature = "simd")]
+            while j + 16 <= right {
+                let idx = i as usize * stride + j as usize;
+                let mut d16 = [0i16; 16];
+                let mut f16 = [0i16; 16];
+                archmage::incant!(
+                    adm_csf_i16_simd(
+                        &src_p[idx..idx + 16],
+                        i_rfactor[theta] as i32,
+                        i_shiftsadd[theta],
+                        i_shifts[theta],
+                        &mut d16,
+                        &mut f16
+                    ),
+                    [v3, neon, wasm128, scalar]
+                );
+                dst_p[idx..idx + 16].copy_from_slice(&d16);
+                flt_p[idx..idx + 16].copy_from_slice(&f16);
+                j += 16;
+            }
+            while j < right {
                 let idx = i as usize * stride + j as usize;
                 let dst_val = i_rfactor[theta] as i32 * src_p[idx] as i32;
                 let v = ((dst_val + i_shiftsadd[theta]) >> i_shifts[theta]) as i16;
                 dst_p[idx] = v;
                 flt_p[idx] = (((fix_one_by_30 * (v as i32).abs()) + 2048) >> 12) as i16;
+                j += 1;
             }
         }
+    }
+}
+
+#[cfg(feature = "simd")]
+#[magetypes(define(i16x16, i32x8), v3, neon, wasm128, scalar)]
+fn adm_csf_i16_simd(
+    token: Token,
+    src: &[i16],
+    rfactor: i32,
+    shiftsadd: i32,
+    shift: u32,
+    dst: &mut [i16; 16],
+    flt: &mut [i16; 16],
+) {
+    let s = i16x16::load(token, src[..16].try_into().unwrap());
+    let sl = s.widen_low();
+    let sh = s.widen_high();
+    let rf = i32x8::splat(token, rfactor);
+    let add = i32x8::splat(token, shiftsadd);
+    let c4369 = i32x8::splat(token, 4369);
+    let a2048 = i32x8::splat(token, 2048);
+    let vtl = (rf * sl + add)
+        .shr_arithmetic_uniform(shift)
+        .shl_uniform(16)
+        .shr_arithmetic_uniform(16);
+    let vth = (rf * sh + add)
+        .shr_arithmetic_uniform(shift)
+        .shl_uniform(16)
+        .shr_arithmetic_uniform(16);
+    let fl = (c4369 * vtl.abs() + a2048).shr_arithmetic_uniform(12);
+    let fh = (c4369 * vth.abs() + a2048).shr_arithmetic_uniform(12);
+    let (dla, dha) = (vtl.to_array(), vth.to_array());
+    let (fla, fha) = (fl.to_array(), fh.to_array());
+    for k in 0..8 {
+        dst[k] = dla[k] as i16;
+        dst[8 + k] = dha[k] as i16;
+        flt[k] = fla[k] as i16;
+        flt[8 + k] = fha[k] as i16;
     }
 }
 
