@@ -148,10 +148,10 @@ The single-point S01_AVIF_01 spot check is kept where it drove identification.
 | `FSIM` / `FSIMc` | authors' matlab | 2.5e-5 | 1.7e-3 | ✅ |
 | `SSIM` | libvmaf `float_ssim` scale=2 | 7e-5 (S01 pt, numpy repro) | — | ✅ identified — not yet ported |
 | `SSIMc` | MATLAB `ssim` RGB-mean | 1.6e-5 (S01 pt, numpy repro) | — | ✅ identified — no crate |
-| `MS-SSIM` | libvmaf `float_ms_ssim` | 4.1e-4 | 2.0e-2 | ✅ tracks; tails diverge at low quality — impl-family diff |
+| `MS-SSIM` | libvmaf `float_ms_ssim` | 4.1e-4 | 2.0e-2 | ⚠️ tracks overall but low-quality tails hit 2.64 JND — needs libvmaf `float_ms_ssim` impl (§4.1) |
 | `MS-SSIM-pyiqa` | pyiqa `ms_ssim` | 1.2e-3 | 6.4e-3 | ✅ tracks; same impl-family residual |
-| `IW-SSIM` | pyiqa `iwssim` | 1.2e-3 | 4.0e-3 | ⚠️ systematic +1e-3 vs pyiqa impl (our oracle is Python-IW-SSIM, a different variant); ingress itself is right |
-| `SSIMULACRA2` | "v2.1" | 6.3e-3 | 5.5e-2 | ⚠️ version drift, content-dependent |
+| `IW-SSIM` | pyiqa `iwssim` | 1.2e-3 | 4.0e-3 | ⚠️ systematic +1e-3 vs pyiqa impl (our oracle is Python-IW-SSIM, a different variant); 0.68 JND-eq worst (§4.1) |
+| `SSIMULACRA2` | "v2.1" | 6.3e-3 | 5.5e-2 | ✅ drift immaterial in JND (≤0.004 — §4.1) |
 | `JND_CVVDP` | transform `3.1889·(10−JOD)^1.0129` | — | — | ✅ transform verified |
 
 | column family | published | what it is | status |
@@ -165,6 +165,26 @@ The single-point S01_AVIF_01 spot check is kept where it drove identification.
 | `DISTS`, `LPIPS`×4, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ`×2, `AHIQ`, `STLPIPS`×2 | — | torch models | ⬜ out of scope (no torch) |
 | `proposal-*` (Butteraugli, DVIFM, mDCTPSNR) | — | AIC-4 **submitted** metrics — not public impls | ⬜ unreproducible by design |
 
+### 4.1 JND-normalized deltas
+
+The dataset carries fitted `metric → JND` remappings (the 7 `JND_*` display
+columns plus the benchmark fitting-tool's 91-metric power-law maps —
+`a·(b−x)^c`). `docs/AIC2026_METRICS_AND_FITTING.md` records both mapping
+families verbatim, our reconstructed `JND_*` coefficients, and the full
+JND-normalized delta table. Headline findings on the same 53 pairs:
+
+- Reproduction-grade in JND (med ≤0.01, max ≤0.05): GMSD, DSSIM, HaarPSI,
+  CVVDP@`standard_fhd`, VMAF-neg, PSNR-Y, **SSIMULACRA2** — its 6.3e-3 raw
+  drift is immaterial once remapped (≤0.004 JND); the version-drift worry
+  was overblown.
+- Acceptable (max ≤0.5 JND): VSI, FSIM, FSIMc.
+- Gaps: MS-SSIM tail hits 2.64 JND (steep-curve region — libvmaf
+  `float_ms_ssim` needed, not our MATLAB variant), PSNR-HVS 0.8–6.4 JND
+  (wrong algorithm family — Daala needed), VIF 5.9 JND-equivalent
+  (`vifvec`), IW-SSIM 0.68 JND-eq (pyiqa variant).
+
+Priority order in §6 is JND-ranked.
+
 ## 5. `--luma-ingress yuv601-studio`
 
 Shared ingress added for the libvmaf/pyiqa-luma column family:
@@ -177,18 +197,22 @@ metrics (gmsd, haarpsi, fsim, vsi) match the published columns *better* on
 their house luma and should stay on `house` unless a specific libvmaf-style
 column is being targeted.
 
-## 6. Gaps & candidate work (priority order)
+## 6. Gaps & candidate work (JND-ranked priority order)
 
 1. **Daala `dump_psnrhvs`** — the published `PSNR-HVS` family is a CTC
-   anchor (drives `JND_PSNR-HVS`); verify against the -Y/-Cb/-Cr triple,
-   add alongside (not replacing) `psnrhvs`.
+   anchor (drives `JND_PSNR-HVS`); our Ponomarenko variant is 1.9 med /
+   6.4 max JND off. Verify against the -Y/-Cb/-Cr triple, add alongside
+   (not replacing) `psnrhvs`.
 2. **libvmaf `float_ssim` / `float_ms_ssim`** (with `scale`) in `crates/vmaf`
-   — anchors `SSIM`/`MS-SSIM`; small (tdistler iqa decimate + l·c·s).
-3. **`vifvec`** (wavelet VIF) — new port for the `VIF` column.
-4. **`mDCT-PSNR`** — author's official C++ impl exists; DCT-domain masking +
-   pooling, moderate scope; license check first.
-5. **HDR-VDP-3** + the AIC HDR_VDP_2 display config.
-6. `CW-SSIM`, `NLPD`, `CIEDE2000`, `FLIP` — later.
+   — anchors `SSIM`/`MS-SSIM`; our `msssim` tail hits 2.64 JND and `SSIM`
+   is unimplemented. Small ports (tdistler iqa decimate + l·c·s).
+3. **`vifvec`** (wavelet VIF) — new port for the `VIF` column; 5.9
+   JND-equivalent worst case.
+4. **pyiqa `iwssim` variant** — 0.68 JND-eq worst; systematic +1.2e-3.
+5. **`mDCT-PSNR`** — author's official C++ impl exists (`thorfdbg/mDCTpsnr`);
+   DCT-domain masking + pooling, moderate scope; license check first.
+6. **HDR-VDP-3** + the AIC HDR_VDP_2 display config.
+7. `CW-SSIM`, `NLPD`, `CIEDE2000`, `FLIP` — later.
 
 Validation probes used for this matrix live at
 `crates/vmaf/examples/aic_probe.rs` (studio-Y YUV420 → `VmafV0Scorer`) and

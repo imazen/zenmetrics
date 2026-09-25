@@ -76,7 +76,10 @@ CPU ladder and the umbrella's `Backend::Cpu` dispatch route to. The ledger of
 every known deviation from each cited reference lives in
 [DIVERGENCES.md](DIVERGENCES.md); papers, implementation provenance, validation
 oracles, and the tolerances we gate (incl. the JPEG AIC-4 reproduction matrix)
-live in [docs/METRIC_PROVENANCE.md](docs/METRIC_PROVENANCE.md).
+live in [docs/METRIC_PROVENANCE.md](docs/METRIC_PROVENANCE.md); the AIC-4
+JND remappings, JND-normalized tolerances, and the metric naming/qualification
+ledger live in
+[docs/AIC2026_METRICS_AND_FITTING.md](docs/AIC2026_METRICS_AND_FITTING.md).
 
 | Crate | Metric | Range / shape | Parity reference |
 |---|---|---|---|

@@ -13,6 +13,21 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- docs (`HASH_TBD`): new `docs/AIC2026_METRICS_AND_FITTING.md` — the AIC-4
+  JND remapping record. Documents the two distinct JND objects (the 7
+  precomputed `JND_*` CSV display columns vs the benchmark fitting-tool's
+  91-metric power-law maps), records the authoritative fitted mappings
+  verbatim plus the `JND_*` coefficients reconstructed from 9,618 rows,
+  and reports our errors JND-normalized over the 53-pair subset:
+  reproduction-grade for GMSD/HaarPSI/CVVDP/VMAF-neg/PSNR-Y/SSIMULACRA2
+  (≤0.05 JND), acceptable for VSI/FSIM/FSIMc, and the real gaps —
+  Daala `dump_psnrhvs` (1.9–6.4 JND), libvmaf `float_ms_ssim` (2.64 JND
+  tail), wavelet `vifvec` (5.9 JND-eq), pyiqa `iwssim` (0.68 JND-eq).
+  Includes the naming/qualification ledger distinguishing
+  same-named-but-different implementations (Ponomarenko vs Daala
+  PSNR-HVS, pixel `vifp` vs wavelet `vifvec`, MATLAB vs libvmaf vs
+  pyiqa MS-SSIM). `docs/METRIC_PROVENANCE.md` gains §4.1 (JND-normalized
+  deltas + JND-tier tolerance policy) and JND-ranked priorities.
 - cli (`aa12030c`): `--luma-ingress {house|yuv601-studio}` on `score` and
   `batch`. `yuv601-studio` feeds luma-only metrics (gmsd, psnrhvs-y,
   haarpsi-y, fsim-y, msssim, vif, mad, iwssim) the libvmaf/JPEG AIC YUV420
