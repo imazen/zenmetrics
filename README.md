@@ -228,9 +228,16 @@ and tails; its approximation-band output is written directly into the i4
 decimation inputs as i32, removing a whole-band copy pass and the `BandI16.a`
 field. That dropped the harness to 8.29M instructions, and a 10-iteration
 1280×720 `adm2_v0_from_luma` run measured 16.88 ms/frame versus 18.23 after
-the contrast-mask change and 19.47 in the original stage profile. The ADM
-decouple pass (gathered div-table lookups plus per-pixel f64 angle tests)
-remains scalar, as do `adm_csf` and the higher-scale `dwt2_s123` filter.
+the contrast-mask change and 19.47 in the original stage profile. The
+contrast-sensitivity `adm_csf_i16` map (pure i32 math) and the
+`adm_cm_i16` interior threshold/x front half (all i32 ops; the two
+per-pixel i64 products stay scalar per lane) are SIMD-enabled as well,
+dropping the harness to 7.84M instructions and `adm_cm_i16` to 0.67M.
+The ADM decouple pass (gathered div-table lookups plus per-pixel f64
+angle tests) remains scalar, as do `adm_cm_i32`, `adm_csf_i32`, and the
+higher-scale `dwt2_s123` filter — those need 64-bit lane products
+(libvmaf's AVX2 uses `vpmuldq`; magetypes has no widening 32×32→64
+multiply, so a safe port would need 16-bit limb arithmetic).
 
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate
