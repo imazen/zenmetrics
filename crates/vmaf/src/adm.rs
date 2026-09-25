@@ -1805,6 +1805,22 @@ fn adm_csf_i16(
         };
         for i in top..bottom {
             let mut j = left;
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            if let Some(t) = v3_token() {
+                while j + 8 <= right {
+                    let idx = i as usize * stride + j as usize;
+                    adm_csf_i16_v3(
+                        t,
+                        a8(&src_p[idx..idx + 8]),
+                        i_rfactor[theta] as i32,
+                        i_shiftsadd[theta],
+                        i_shifts[theta] as i32,
+                        a8m(&mut dst_p[idx..idx + 8]),
+                        a8m(&mut flt_p[idx..idx + 8]),
+                    );
+                    j += 8;
+                }
+            }
             #[cfg(feature = "simd")]
             while j + 16 <= right {
                 let idx = i as usize * stride + j as usize;
@@ -1875,6 +1891,131 @@ fn adm_csf_i16_simd(
     }
 }
 
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane]
+fn csf_den_scale_row_v3(_token: X64V3Token, src: &[i16]) -> (u64, usize) {
+    let mut acc_lo = _mm256_setzero_si256();
+    let mut acc_hi = _mm256_setzero_si256();
+    let mut j = 0usize;
+    while j + 8 <= src.len() {
+        let x = _mm256_cvtepu16_epi32(_mm_abs_epi16(_mm_loadu_si128(a8(&src[j..j + 8]))));
+        let x_sq = _mm256_mullo_epi32(x, x);
+        acc_lo = _mm256_add_epi64(acc_lo, _mm256_mul_epu32(x_sq, x));
+        acc_hi = _mm256_add_epi64(
+            acc_hi,
+            _mm256_mul_epu32(_mm256_srli_epi64(x_sq, 32), _mm256_srli_epi64(x, 32)),
+        );
+        j += 8;
+    }
+    let acc = _mm256_add_epi64(acc_lo, acc_hi);
+    let mut lanes = [0i64; 4];
+    _mm256_storeu_si256(a8m(&mut lanes), acc);
+    (lanes.iter().fold(0u64, |s, &x| s.wrapping_add(x as u64)), j)
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn csf_den_s123_row_v3(
+    _token: X64V3Token,
+    src: &[i32],
+    add_sq: i64,
+    shift_sq: i32,
+    add_cub: i64,
+    shift_cub: i32,
+) -> (u64, usize) {
+    let add_sq_v = _mm256_set1_epi64x(add_sq);
+    let add_cub_v = _mm256_set1_epi64x(add_cub);
+    let sh_sq = _mm_cvtsi32_si128(shift_sq);
+    let sh_cub = _mm_cvtsi32_si128(shift_cub);
+    let mut acc = _mm256_setzero_si256();
+    let mut j = 0usize;
+    while j + 4 <= src.len() {
+        let x = _mm256_cvtepu32_epi64(_mm_abs_epi32(_mm_loadu_si128(a8(&src[j..j + 4]))));
+        let sq = _mm256_srl_epi64(_mm256_add_epi64(_mm256_mul_epu32(x, x), add_sq_v), sh_sq);
+        let cu = _mm256_srl_epi64(_mm256_add_epi64(_mm256_mul_epu32(sq, x), add_cub_v), sh_cub);
+        acc = _mm256_add_epi64(acc, cu);
+        j += 4;
+    }
+    let mut lanes = [0i64; 4];
+    _mm256_storeu_si256(a8m(&mut lanes), acc);
+    (lanes.iter().fold(0u64, |s, &x| s.wrapping_add(x as u64)), j)
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane]
+fn adm_csf_i16_v3(
+    _token: X64V3Token,
+    src: &[i16; 8],
+    rfactor: i32,
+    shiftsadd: i32,
+    shift: i32,
+    dst: &mut [i16; 8],
+    flt: &mut [i16; 8],
+) {
+    const FIX_ONE_BY_30: i32 = 4369;
+    let s = _mm256_cvtepi16_epi32(_mm_loadu_si128(a8(&src[..])));
+    let rf = _mm256_set1_epi32(rfactor);
+    let v = _mm256_sra_epi32(
+        _mm256_add_epi32(_mm256_mullo_epi32(s, rf), _mm256_set1_epi32(shiftsadd)),
+        _mm_cvtsi32_si128(shift),
+    );
+    let dst16 = _mm256_castsi256_si128(_mm256_permute4x64_epi64(
+        _mm256_packs_epi32(v, _mm256_setzero_si256()),
+        0x8,
+    ));
+    _mm_storeu_si128(a8m(&mut dst[..]), dst16);
+    let f = _mm256_srai_epi32(
+        _mm256_add_epi32(
+            _mm256_mullo_epi32(_mm256_set1_epi32(FIX_ONE_BY_30), _mm256_abs_epi32(v)),
+            _mm256_set1_epi32(2048),
+        ),
+        12,
+    );
+    let f16 = _mm256_castsi256_si128(_mm256_permute4x64_epi64(
+        _mm256_packs_epi32(f, _mm256_setzero_si256()),
+        0x8,
+    ));
+    _mm_storeu_si128(a8m(&mut flt[..]), f16);
+}
+
+#[cfg(all(feature = "simd", target_arch = "x86_64"))]
+#[arcane]
+#[allow(clippy::too_many_arguments)]
+fn i4_adm_csf_v3(
+    _token: X64V3Token,
+    src: &[i32; 8],
+    rfactor: i32,
+    add_dst: i64,
+    add_flt: i64,
+    dst: &mut [i32; 8],
+    flt: &mut [i32; 8],
+) {
+    const FIX_ONE_BY_30: i32 = 143165577;
+    let mask_msb = _mm256_set1_epi64x(0xFFFFFFF000000000u64 as i64);
+    let mask_lo32 = _mm256_set1_epi64x(0x00000000FFFFFFFF);
+    let s = _mm256_loadu_si256(a8(&src[..]));
+    let rf = _mm256_set1_epi32(rfactor);
+    let add_dst_v = _mm256_set1_epi64x(add_dst);
+    let add_flt_v = _mm256_set1_epi64x(add_flt);
+    let mut lo = _mm256_mul_epi32(s, rf);
+    let mut hi = _mm256_mul_epi32(_mm256_srli_epi64(s, 32), rf);
+    lo = _mm256_add_epi64(lo, add_dst_v);
+    lo = _mm256_or_si256(_mm256_srli_epi64(lo, 28), _mm256_and_si256(lo, mask_msb));
+    hi = _mm256_add_epi64(hi, add_dst_v);
+    hi = _mm256_or_si256(_mm256_srli_epi64(hi, 28), _mm256_and_si256(hi, mask_msb));
+    let packed = _mm256_or_si256(_mm256_and_si256(lo, mask_lo32), _mm256_slli_epi64(hi, 32));
+    _mm256_storeu_si256(a8m(&mut dst[..]), packed);
+    let a = _mm256_abs_epi32(packed);
+    let fix_v = _mm256_set1_epi32(FIX_ONE_BY_30);
+    let mut flo = _mm256_mul_epi32(fix_v, a);
+    let mut fhi = _mm256_mul_epi32(fix_v, _mm256_srli_epi64(a, 32));
+    flo = _mm256_srli_epi64(_mm256_add_epi64(flo, add_flt_v), 32);
+    fhi = _mm256_srli_epi64(_mm256_add_epi64(fhi, add_flt_v), 32);
+    let fpacked = _mm256_or_si256(_mm256_and_si256(flo, mask_lo32), _mm256_slli_epi64(fhi, 32));
+    _mm256_storeu_si256(a8m(&mut flt[..]), fpacked);
+}
+
 #[cfg_attr(feature = "simd", autoversion)]
 fn adm_csf_i32(
     src: &BandI32,
@@ -1901,11 +2042,29 @@ fn adm_csf_i32(
             _ => (&src.d, &mut dst.d, &mut flt.d),
         };
         for i in top..bottom {
-            for j in left..right {
+            let mut j = left;
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            if let Some(t) = v3_token() {
+                while j + 8 <= right {
+                    let idx = i as usize * stride + j as usize;
+                    i4_adm_csf_v3(
+                        t,
+                        a8(&src_p[idx..idx + 8]),
+                        rf as i32,
+                        add_dst,
+                        add_flt,
+                        a8m(&mut dst_p[idx..idx + 8]),
+                        a8m(&mut flt_p[idx..idx + 8]),
+                    );
+                    j += 8;
+                }
+            }
+            while j < right {
                 let idx = i as usize * stride + j as usize;
                 let dst_val = ((rf as i64 * src_p[idx] as i64 + add_dst) >> 28) as i32;
                 dst_p[idx] = dst_val;
                 flt_p[idx] = ((fix_one_by_30 * (dst_val as i64).abs() + add_flt) >> 32) as i32;
+                j += 1;
             }
         }
     }
@@ -1938,9 +2097,21 @@ fn adm_csf_den_scale(
     let accums = [&mut accum_h, &mut accum_v, &mut accum_d];
     for band_idx in 0..3 {
         for i in top..bottom {
+            let row = &bands[band_idx]
+                [i as usize * stride + left as usize..i as usize * stride + right as usize];
             let mut inner = 0u64;
-            for j in left..right {
-                let v = bands[band_idx][i as usize * stride + j as usize].unsigned_abs() as u64;
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            let mut done = 0usize;
+            #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+            let done = 0usize;
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            if let Some(t) = v3_token() {
+                let (sum, d) = csf_den_scale_row_v3(t, row);
+                inner = sum;
+                done = d;
+            }
+            for &px in &row[done..] {
+                let v = px.unsigned_abs() as u64;
                 inner += v * v * v;
             }
             *accums[band_idx] += (inner + add_shift_accum) >> shift_accum;
@@ -1982,9 +2153,28 @@ fn adm_csf_den_s123(
     let bands = [&src.h, &src.v, &src.d];
     for band_idx in 0..3 {
         for i in top..bottom {
+            let row = &bands[band_idx]
+                [i as usize * stride + left as usize..i as usize * stride + right as usize];
             let mut inner = 0u64;
-            for j in left..right {
-                let v = bands[band_idx][i as usize * stride + j as usize].unsigned_abs() as u64;
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            let mut done = 0usize;
+            #[cfg(not(all(feature = "simd", target_arch = "x86_64")))]
+            let done = 0usize;
+            #[cfg(all(feature = "simd", target_arch = "x86_64"))]
+            if let Some(t) = v3_token() {
+                let (sum, d) = csf_den_s123_row_v3(
+                    t,
+                    row,
+                    add_shift_sq[scale - 1] as i64,
+                    shift_sq[scale - 1] as i32,
+                    add_shift_cub as i64,
+                    shift_cub as i32,
+                );
+                inner = sum;
+                done = d;
+            }
+            for &px in &row[done..] {
+                let v = px.unsigned_abs() as u64;
                 inner += (((v * v + add_shift_sq[scale - 1]) >> shift_sq[scale - 1]) * v
                     + add_shift_cub)
                     >> shift_cub;
@@ -3289,6 +3479,189 @@ fn simd_cm_i32_matches_scalar_for_tails_and_edges() {
                     [17.25, 9.4, 63.125],
                     0.0,
                 );
+                FORCE_SCALAR.store(false, Ordering::Relaxed);
+                v
+            };
+            let s = run(true);
+            let v = run(false);
+            assert_eq!(s.to_bits(), v.to_bits(), "scale={scale} {w}x{h}");
+        }
+    }
+}
+
+/// `adm_csf_i16_v3` must bit-match the scalar fixed-point chain. |src| <= 16000
+/// keeps |dst_val| < 29400 and flt < 32768, so packs_epi32 saturation and
+/// scalar i16 truncation agree — the same bound libvmaf's own paths rely on.
+#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[test]
+fn simd_csf_i16_matches_scalar_for_tails_and_edges() {
+    use std::sync::atomic::Ordering;
+    for (w, h) in [(44, 13), (57, 21), (33, 33), (101, 17), (67, 9)] {
+        let n = w * h;
+        let mut x = 0x9E3779B97F4A7C15u64;
+        let mut rng = move || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            (x % 32001) as i32 - 16000
+        };
+        let make_band = |rng: &mut dyn FnMut() -> i32| BandI16 {
+            h: (0..n).map(|_| rng() as i16).collect(),
+            v: (0..n).map(|_| rng() as i16).collect(),
+            d: (0..n).map(|_| rng() as i16).collect(),
+        };
+        let src = make_band(&mut rng);
+        let run = |force: bool| {
+            FORCE_SCALAR.store(force, Ordering::Relaxed);
+            let mut dst = BandI16 {
+                h: vec![0; n],
+                v: vec![0; n],
+                d: vec![0; n],
+            };
+            let mut flt = BandI16 {
+                h: vec![0; n],
+                v: vec![0; n],
+                d: vec![0; n],
+            };
+            adm_csf_i16(
+                &src,
+                &mut dst,
+                &mut flt,
+                w,
+                h,
+                w,
+                [0.0174, 0.0174, 0.0059],
+                true,
+            );
+            FORCE_SCALAR.store(false, Ordering::Relaxed);
+            (dst, flt)
+        };
+        let (ds, fs) = run(true);
+        let (dv, fv) = run(false);
+        for (name, s, v) in [
+            ("dst.h", &ds.h, &dv.h),
+            ("dst.v", &ds.v, &dv.v),
+            ("dst.d", &ds.d, &dv.d),
+            ("flt.h", &fs.h, &fv.h),
+            ("flt.v", &fs.v, &fv.v),
+            ("flt.d", &fs.d, &fv.d),
+        ] {
+            assert_eq!(s, v, "{w}x{h} band {name}");
+        }
+    }
+}
+
+/// `i4_adm_csf_v3` must bit-match the scalar fixed-point chain (srli+msb-mask
+/// arithmetic >>28, -2^31 flt add, low-32 pack) for all lane values. rf < 0.5
+/// keeps rfactor < 2^31 so mul_epi32 signed semantics match scalar's u32.
+#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[test]
+fn simd_csf_i32_matches_scalar_for_tails_and_edges() {
+    use std::sync::atomic::Ordering;
+    for (w, h) in [(44, 13), (57, 21), (33, 33), (101, 17), (67, 9)] {
+        let n = w * h;
+        let mut x = 0x9E3779B97F4A7C15u64;
+        let mut rng = move || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            (x % 2097153) as i32 - 1048576
+        };
+        let make_band = |rng: &mut dyn FnMut() -> i32| BandI32 {
+            h: (0..n).map(|_| rng()).collect(),
+            v: (0..n).map(|_| rng()).collect(),
+            d: (0..n).map(|_| rng()).collect(),
+        };
+        let src = make_band(&mut rng);
+        let run = |force: bool| {
+            FORCE_SCALAR.store(force, Ordering::Relaxed);
+            let mut dst = BandI32 {
+                h: vec![0; n],
+                v: vec![0; n],
+                d: vec![0; n],
+            };
+            let mut flt = BandI32 {
+                h: vec![0; n],
+                v: vec![0; n],
+                d: vec![0; n],
+            };
+            adm_csf_i32(&src, &mut dst, &mut flt, w, h, w, [0.25, 0.3, 0.45]);
+            FORCE_SCALAR.store(false, Ordering::Relaxed);
+            (dst, flt)
+        };
+        let (ds, fs) = run(true);
+        let (dv, fv) = run(false);
+        for (name, s, v) in [
+            ("dst.h", &ds.h, &dv.h),
+            ("dst.v", &ds.v, &dv.v),
+            ("dst.d", &ds.d, &dv.d),
+            ("flt.h", &fs.h, &fv.h),
+            ("flt.v", &fs.v, &fv.v),
+            ("flt.d", &fs.d, &fv.d),
+        ] {
+            assert_eq!(s, v, "{w}x{h} band {name}");
+        }
+    }
+}
+
+/// `csf_den_scale_row_v3` must bit-match the scalar h^3 accumulation —
+/// mul_epu32 on cvtepu32 lanes is exact for |v| <= 32768.
+#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[test]
+fn simd_csf_den_scale_matches_scalar_for_tails_and_edges() {
+    use std::sync::atomic::Ordering;
+    for (w, h) in [(44, 13), (57, 21), (33, 33), (101, 17), (67, 9)] {
+        let n = w * h;
+        let mut x = 0x9E3779B97F4A7C15u64;
+        let mut rng = move || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            (x % 65536) as i32 - 32768
+        };
+        let make_band = |rng: &mut dyn FnMut() -> i32| BandI16 {
+            h: (0..n).map(|_| rng() as i16).collect(),
+            v: (0..n).map(|_| rng() as i16).collect(),
+            d: (0..n).map(|_| rng() as i16).collect(),
+        };
+        let src = make_band(&mut rng);
+        let run = |force: bool| {
+            FORCE_SCALAR.store(force, Ordering::Relaxed);
+            let v = adm_csf_den_scale(&src, w, h, w, [0.0174, 0.0174, 0.0059], 0.02);
+            FORCE_SCALAR.store(false, Ordering::Relaxed);
+            v
+        };
+        let s = run(true);
+        let v = run(false);
+        assert_eq!(s.to_bits(), v.to_bits(), "{w}x{h}");
+    }
+}
+
+/// `csf_den_s123_row_v3` must bit-match the scalar shifted cubic chain —
+/// mul_epu32 products stay < 2^32 on the squared operand for all i32 inputs.
+#[cfg(all(test, feature = "simd", target_arch = "x86_64"))]
+#[test]
+fn simd_csf_den_s123_matches_scalar_for_tails_and_edges() {
+    use std::sync::atomic::Ordering;
+    for scale in 1..=3usize {
+        for (w, h) in [(44, 13), (57, 21), (33, 33), (101, 17), (67, 9)] {
+            let n = w * h;
+            let mut x = 0x9E3779B97F4A7C15u64;
+            let mut rng = move || {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                (x % 16777216) as i32 - 8388608
+            };
+            let make_band = |rng: &mut dyn FnMut() -> i32| BandI32 {
+                h: (0..n).map(|_| rng()).collect(),
+                v: (0..n).map(|_| rng()).collect(),
+                d: (0..n).map(|_| rng()).collect(),
+            };
+            let src = make_band(&mut rng);
+            let run = |force: bool| {
+                FORCE_SCALAR.store(force, Ordering::Relaxed);
+                let v = adm_csf_den_s123(&src, scale, w, h, w, [0.0174, 0.0174, 0.0059], 0.02);
                 FORCE_SCALAR.store(false, Ordering::Relaxed);
                 v
             };
