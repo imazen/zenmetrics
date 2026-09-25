@@ -6,7 +6,7 @@
 //! Side (a) below is `cmd_score_pairs --hdr`'s per-metric feeding, hand-composed from
 //! the SAME primitives its HDR blocks call, line-for-line (main.rs: the
 //! `hdr_u8_pair` construction — `to_cvvdp_rgb8` for the cvvdp kinds, `to_sdr_rgb8`
-//! otherwise — then `run_metric` via `score_one_pair_maybe_hdr`; zensim features via
+//! otherwise — then `run_metric_hdr_u8` via `score_one_pair_maybe_hdr`; zensim features via
 //! `run_zensim_with_features`). Composing the primitives rather than invoking
 //! `cmd_score_pairs` itself keeps this test buildable without the `sweep` feature
 //! (score-pairs is `sweep`-gated; the feature was unbuildable during the sibling-codec
@@ -28,7 +28,8 @@ use zenmetrics_cli::hdr::{
     score_hdr_zensim_with_features_per_score_pairs, to_cvvdp_rgb8, to_sdr_rgb8,
 };
 use zenmetrics_cli::metrics::{
-    GpuRuntime, MetricKind, ZensimFeatureRegime, run_metric, run_zensim_with_features,
+    GpuRuntime, MetricKind, ZensimFeatureRegime, run_metric, run_metric_hdr_u8,
+    run_zensim_with_features,
 };
 
 /// Deterministic synthetic HDR image: a luminance gradient spanning shadow
@@ -112,7 +113,7 @@ fn score_pairs_side(metric: MetricKind, r: &NitsImage, d: &NitsImage) -> Vec<(&'
     } else {
         (to_sdr_rgb8(r, TRANSFER), to_sdr_rgb8(d, TRANSFER))
     };
-    run_metric(metric, &ru8, &du8, GpuRuntime::Auto)
+    run_metric_hdr_u8(metric, &ru8, &du8, GpuRuntime::Auto)
         .unwrap_or_else(|e| panic!("score-pairs-side {metric:?}: {e}"))
 }
 

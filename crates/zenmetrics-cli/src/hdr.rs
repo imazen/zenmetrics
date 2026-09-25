@@ -1238,11 +1238,13 @@ pub fn score_hdr_pair_per_score_pairs(
         // normal dispatch — score-pairs' hdr_u8_pair construction for the
         // cvvdp kinds. Reference-anchored so a variant's brightness error
         // cannot be renormalized away by its own peak.
+        // `run_metric_hdr_u8` keeps the shell's historical `standard_4k`
+        // display, named explicitly (the SDR default is `standard_fhd`).
         M::Cvvdp => {
             let peak = measured_cvvdp_u8_peak(reference.nits());
             let r = reference.cvvdp_u8_at(peak);
             let d = distorted.cvvdp_u8_at(peak);
-            crate::metrics::run_metric(metric, &r, &d, scorers.runtime)
+            crate::metrics::run_metric_hdr_u8(metric, &r, &d, scorers.runtime)
         }
         // Everything else — ssim2(-gpu), iwssim(-gpu), CPU butteraugli, plain
         // zensim(-gpu): the umbrella's VALIDATED f32 feeding (`hdr_feeding` —
@@ -1270,7 +1272,7 @@ pub fn score_hdr_pair_per_score_pairs(
             scorers.runtime,
         ) {
             Some(rows) => rows,
-            None => crate::metrics::run_metric(
+            None => crate::metrics::run_metric_hdr_u8(
                 metric,
                 reference.sdr_u8(),
                 distorted.sdr_u8(),

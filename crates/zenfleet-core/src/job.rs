@@ -448,7 +448,16 @@ fn encode_cost(codec: &str) -> (ResourceClass, Regenerability) {
 /// Neither bug touched job identity or the ledger: `ResourceClass` isn't part of `JobKind`'s
 /// serialization or `JobId::of`'s hash, only runtime routing and handicap-weight selection.
 pub(crate) fn is_gpu_metric_name(name: &str) -> bool {
+    let name = metric_base_name(name);
     name.ends_with("-gpu") || name.ends_with("_gpu")
+}
+
+/// The metric part of a `<metric>@<display>` selection (e.g.
+/// `cvvdp-gpu@standard_4k` → `cvvdp-gpu`). zenmetrics cvvdp has no default
+/// display, so SDR cvvdp jobs always carry one; routing keys on the metric,
+/// never the display. Names without `@` are returned unchanged.
+fn metric_base_name(name: &str) -> &str {
+    name.split_once('@').map_or(name, |(base, _)| base)
 }
 
 /// Route a metric job by name: GPU-suffixed names need a GPU-capable worker; everything else
@@ -476,7 +485,7 @@ fn diffmap_class(metric: &str) -> ResourceClass {
 /// `cpu-metrics`/`hdr` carries the CPU cvvdp) is a cli-crate detail this crate must not guess.
 /// Only the known GPU metric bases map; unknown names return `None` (under-claim, never guess).
 fn metric_capability(metric: &str) -> Option<String> {
-    let m = metric.to_ascii_lowercase();
+    let m = metric_base_name(metric).to_ascii_lowercase();
     let base = m.strip_suffix("-gpu").or_else(|| m.strip_suffix("_gpu"))?;
     for known in ["butteraugli", "ssim2", "dssim", "iwssim", "zensim", "cvvdp"] {
         if base == known || base.ends_with(known) {
@@ -721,6 +730,21 @@ mod tests {
         }
         .profile();
         assert_eq!(gpu_underscore.class, ResourceClass::Gpu);
+    }
+
+    #[test]
+    fn display_selected_metrics_route_by_their_metric_part() {
+        assert!(is_gpu_metric_name("cvvdp-gpu@standard_4k"));
+        assert!(!is_gpu_metric_name("cvvdp@standard_4k"));
+        assert_eq!(
+            metric_capability("cvvdp-gpu@standard_fhd").as_deref(),
+            Some("gpu-cvvdp")
+        );
+        assert_eq!(metric_capability("cvvdp@standard_fhd"), None);
+        assert!(matches!(
+            metric_class("cvvdp-gpu@standard_4k"),
+            ResourceClass::Gpu
+        ));
     }
 
     #[test]
@@ -1151,10 +1175,13 @@ mod tests {
             disp.required_capabilities().is_empty(),
             "cvvdp@<display> is CPU-native; it must not claim a gpu-* capability"
         );
-        // `cvvdp@-gpu` would be a nonsense name; the suffix check sees the
-        // `-gpu` tail and classes it Gpu — pin that so nobody "fixes" the
-        // heuristic into treating `cvvdp@` strings as always-CPU.
-        assert_eq!(mk("cvvdp@-gpu").profile().class, ResourceClass::Gpu);
+        // Routing keys on the metric part before `@`, never the display:
+        // `cvvdp-gpu@<display>` is GPU work needing `gpu-cvvdp`, while a
+        // display that merely ends in `-gpu` does not make CPU cvvdp GPU work.
+        let gpu = mk("cvvdp-gpu@standard_fhd");
+        assert_eq!(gpu.profile().class, ResourceClass::Gpu);
+        assert!(!gpu.required_capabilities().is_empty());
+        assert_eq!(mk("cvvdp@-gpu").profile().class, ResourceClass::CpuHeavy);
         assert_eq!(disp.profile().group_by, GroupBy::SourceSha);
     }
 }

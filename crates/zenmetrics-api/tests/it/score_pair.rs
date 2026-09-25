@@ -3,7 +3,7 @@
 //! result). CUDA-gated (+ default cvvdp); NO GRACEFUL SKIPS.
 #![cfg(all(feature = "cuda", feature = "cvvdp"))]
 
-use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams, score_pair};
+use zenmetrics_api::{Backend, Metric, MetricKind, score_pair};
 
 #[test]
 fn score_pair_matches_manual_new_compute() {
@@ -33,7 +33,7 @@ fn score_pair_matches_manual_new_compute() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Cvvdp),
+        crate::params_for(MetricKind::Cvvdp),
     )
     .expect("Metric::new");
     let manual = m.compute_srgb_u8(&r, &d).expect("compute_srgb_u8");

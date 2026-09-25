@@ -754,12 +754,22 @@ fn build_hdr_metric(
                 y_peak: peak_nits,
                 ..DisplayModel::STANDARD_HDR_LINEAR
             };
+            // The HDR target: linear-light photometry at the measured peak,
+            // with the historical STANDARD_4K viewing geometry named
+            // explicitly. A custom display (not a preset); the HDR routes
+            // write display-less columns, so its slug only labels it here.
+            let hdr_target = crate::cvvdp::params::CustomDisplay::new(
+                "hdr_target",
+                display,
+                crate::cvvdp::params::DisplayGeometry::STANDARD_4K,
+            )
+            .expect("static slug is valid and not a preset name");
             crate::Metric::new(
                 kind,
                 backend,
                 width,
                 height,
-                crate::MetricParams::cvvdp_with_display(display),
+                crate::MetricParams::cvvdp(hdr_target),
             )
         }
         #[cfg(feature = "butter")]

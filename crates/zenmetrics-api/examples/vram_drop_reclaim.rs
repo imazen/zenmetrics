@@ -44,7 +44,7 @@
 use std::process::Command;
 use std::time::Duration;
 
-use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind, MetricParams, reclaim_pooled_vram};
+use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind, reclaim_pooled_vram};
 
 fn nvidia_smi_used_mib() -> Option<u64> {
     let out = Command::new("nvidia-smi")
@@ -106,7 +106,7 @@ fn construct_score_drop(
     settle_ms: u64,
     reads: u32,
 ) -> (f64, u64) {
-    let params = MetricParams::default_for(kind);
+    let params = params_for(kind);
     let mut m = Metric::new_with_memory_mode(kind, Backend::Cuda, w, h, params, MemoryMode::Full)
         .expect("construct");
     let score = m.compute_srgb_u8(r, d).expect("score").value;
@@ -170,7 +170,7 @@ fn drop_reclaim(cfg: &Cfg) {
         baseline,
     );
 
-    let params = MetricParams::default_for(kind);
+    let params = params_for(kind);
     let mut m = Metric::new_with_memory_mode(kind, Backend::Cuda, w, h, params, MemoryMode::Full)
         .expect("construct");
     let score = m.compute_srgb_u8(&r, &d).expect("score").value;
@@ -292,7 +292,7 @@ fn warm_loop(cfg: &Cfg, n: usize) {
         "\n== warm_loop ({}, {w}x{h}, n={n}) baseline={baseline} MiB ==",
         kind.tag()
     );
-    let params = MetricParams::default_for(kind);
+    let params = params_for(kind);
     let mut m = Metric::new_with_memory_mode(kind, Backend::Cuda, w, h, params, MemoryMode::Full)
         .expect("construct");
     // Warm the reference once (cvvdp warm-ref path).
@@ -435,4 +435,24 @@ fn main() {
         "\n# done{}",
         tsv.map(|p| format!(" — TSV at {p}")).unwrap_or_default()
     );
+}
+
+/// Parameters for `kind`. cvvdp has no default display in the umbrella, so
+/// this names the `standard_4k` preset explicitly.
+#[allow(dead_code)]
+fn try_params_for(
+    kind: zenmetrics_api::MetricKind,
+) -> zenmetrics_api::Result<zenmetrics_api::MetricParams> {
+    #[cfg(feature = "cvvdp")]
+    if kind == zenmetrics_api::MetricKind::Cvvdp {
+        return Ok(zenmetrics_api::MetricParams::cvvdp(
+            zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+        ));
+    }
+    zenmetrics_api::MetricParams::try_default_for(kind)
+}
+
+#[allow(dead_code)]
+fn params_for(kind: zenmetrics_api::MetricKind) -> zenmetrics_api::MetricParams {
+    try_params_for(kind).unwrap_or_else(|e| panic!("{e}"))
 }

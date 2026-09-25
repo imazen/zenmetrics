@@ -121,6 +121,11 @@ pub(crate) struct MetricCache {
     /// [`crate::metrics::cvvdp_gpu::CvvdpBatchScorer`].
     #[cfg(feature = "gpu-butteraugli")]
     butter: Option<butter::ButterBatchScorer>,
+    /// GPU cvvdp at a named display (there is no default display): one
+    /// typed scorer, rebuilt when the display changes. Scored through
+    /// [`Self::run_metric_cached_display`].
+    #[cfg(feature = "gpu-cvvdp")]
+    cvvdp: Option<(crate::metrics::CvvdpDisplay, crate::metrics::CvvdpScorer)>,
 }
 
 #[cfg(any(
@@ -190,6 +195,8 @@ impl MetricCache {
             umbrella: HashMap::new(),
             #[cfg(feature = "gpu-butteraugli")]
             butter: None,
+            #[cfg(feature = "gpu-cvvdp")]
+            cvvdp: None,
         }
     }
 
@@ -275,6 +282,35 @@ impl MetricCache {
     ///
     /// CPU metrics are NOT routed through this cache — they have no
     /// device-pool pressure and the umbrella does not handle them.
+    /// [`Self::run_metric_cached`] with the cvvdp display selection:
+    /// `cvvdp-gpu` scores through a cached per-display typed scorer (and
+    /// requires `display`); every other kind is exactly
+    /// [`Self::run_metric_cached`].
+    pub(crate) fn run_metric_cached_display(
+        &mut self,
+        kind: MetricKind,
+        reference: &Rgb8Image,
+        distorted: &Rgb8Image,
+        display: Option<&crate::metrics::CvvdpDisplay>,
+    ) -> Result<Vec<(&'static str, f64)>, Box<dyn Error>> {
+        #[cfg(feature = "gpu-cvvdp")]
+        if kind == MetricKind::CvvdpGpu {
+            let display = display.ok_or_else(|| crate::metrics::display_required_msg(kind))?;
+            if !matches!(&self.cvvdp, Some((d, _)) if d == display) {
+                self.cvvdp = None;
+                self.cvvdp = Some((
+                    display.clone(),
+                    crate::metrics::CvvdpScorer::new(kind, display, self.gpu_runtime)?,
+                ));
+            }
+            let (_, scorer) = self.cvvdp.as_mut().expect("built above");
+            let v = scorer.score(reference, distorted)?;
+            return Ok(vec![(scorer.column(), v)]);
+        }
+        let _ = display;
+        self.run_metric_cached(kind, reference, distorted)
+    }
+
     pub(crate) fn run_metric_cached(
         &mut self,
         kind: MetricKind,
@@ -313,15 +349,9 @@ impl MetricCache {
             // The unsuffixed `Cvvdp`/`Iwssim` are now the native-CPU ports
             // and have no device-pool pressure — they fall through to the
             // `_` arm below (uncached `run_metric` → `Backend::Cpu`).
-            #[cfg(feature = "gpu-cvvdp")]
-            MetricKind::CvvdpGpu => self
-                .compute_umbrella(
-                    zenmetrics_api::MetricKind::Cvvdp,
-                    reference,
-                    distorted,
-                    None,
-                )
-                .map(|v| vec![(zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME, v)]),
+            // `cvvdp-gpu` has no default display: it scores through
+            // `run_metric_cached_display`, never here.
+            MetricKind::CvvdpGpu => Err(crate::metrics::display_required_msg(kind).into()),
             #[cfg(feature = "gpu-zensim")]
             MetricKind::ZensimGpu => {
                 // Sub-64px images are reflect(mirror)-padded to the 64px

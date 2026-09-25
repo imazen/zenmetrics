@@ -197,7 +197,7 @@ static ALLOCATOR: SlotAllocator = SlotAllocator::new();
 ///     MetricKind::Cvvdp,
 ///     256,
 ///     256,
-///     MetricParams::default_for(MetricKind::Cvvdp),
+///     MetricParams::cvvdp(zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k),
 /// )?;
 /// m.set_reference_srgb_u8(&vec![128u8; 256 * 256 * 3])?;
 /// let s = m.score_with_warm_ref(&vec![100u8; 256 * 256 * 3])?;
@@ -479,7 +479,7 @@ impl Drop for MetricSession {
 /// let ctx = MetricSession::acquire(Backend::Cuda).unwrap();
 /// let m = ctx.metric(
 ///     MetricKind::Cvvdp, 64, 64,
-///     MetricParams::default_for(MetricKind::Cvvdp),
+///     MetricParams::cvvdp(zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k),
 /// ).unwrap();
 /// drop(ctx);          // session gone...
 /// let _ = m.dims();   // ...but `m` still borrows it → E0505: cannot move out of `ctx`
@@ -495,7 +495,7 @@ impl Drop for MetricSession {
 ///     let ctx = MetricSession::acquire(Backend::Cuda).unwrap();
 ///     ctx.metric(
 ///         MetricKind::Cvvdp, 64, 64,
-///         MetricParams::default_for(MetricKind::Cvvdp),
+///         MetricParams::cvvdp(zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k),
 ///     ).unwrap() // E0515: returns a value referencing local `ctx`
 /// }
 /// ```
@@ -754,8 +754,8 @@ fn build_session_scorer(
                 stream_value,
                 width,
                 height,
-                p,
-                cvvdp_gpu::params::DisplayGeometry::STANDARD_4K,
+                p.params(),
+                p.geometry(),
                 mode.into(),
             )
             .map_err(|e| Error::Metric {

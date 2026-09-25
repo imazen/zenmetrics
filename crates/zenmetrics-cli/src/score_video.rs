@@ -18,8 +18,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, ValueEnum};
 use zenmetrics_api::cvvdp_cpu::{
-    CvvdpParams, DisplayGeometry, DisplayModel, FrameLayout, TempPadding, VideoScorer,
-    VideoScorerOptions,
+    CvvdpParams, FrameLayout, TempPadding, VideoScorer, VideoScorerOptions,
 };
 
 use crate::decode::decode_image_to_rgb8;
@@ -42,11 +41,11 @@ pub(crate) struct ScoreVideoArgs {
     #[arg(long)]
     fps: f32,
     /// Display preset name from cvvdp's vendored `display_models.json`
-    /// (photometry AND geometry), e.g. `standard_4k` (default),
-    /// `standard_fhd` (the AIC-4 CTC anchor), `standard_phone`,
-    /// `standard_hdr_pq`.
-    #[arg(long, default_value = "standard_4k")]
-    display_model: String,
+    /// (photometry AND geometry). Required — cvvdp has no default display.
+    /// e.g. `standard_4k` (upstream's default), `standard_fhd` (the AIC-4 CTC
+    /// anchor), `standard_phone`, `standard_hdr_pq`.
+    #[arg(long, value_parser = crate::metrics::display::display_value_parser())]
+    display_model: crate::metrics::CvvdpDisplay,
     /// Temporal padding for the filter's left edge — pycvvdp's
     /// `temp_padding`. `replicate` (default) copies frame 0 backwards;
     /// `symmetric` mirrors (`frame[-k] = frame[k]`, ping-pong on clips
@@ -119,19 +118,8 @@ pub(crate) fn run(args: &ScoreVideoArgs) -> Result<(), Box<dyn std::error::Error
     if !args.fps.is_finite() || args.fps <= 0.0 {
         return Err(format!("score-video: --fps must be > 0 (got {})", args.fps).into());
     }
-    let display = DisplayModel::by_name(&args.display_model).ok_or_else(|| {
-        format!(
-            "score-video: unknown --display-model {:?}; see cvvdp's vendored \
-             display_models.json (e.g. standard_4k, standard_fhd, standard_phone)",
-            args.display_model
-        )
-    })?;
-    let geometry = DisplayGeometry::by_name(&args.display_model).ok_or_else(|| {
-        format!(
-            "score-video: --display-model {:?} has photometry but no geometry",
-            args.display_model
-        )
-    })?;
+    let display = args.display_model.model();
+    let geometry = args.display_model.geometry();
 
     let ref_frames = frame_list(&args.reference_dir, "reference")?;
     let dist_frames = frame_list(&args.distorted_dir, "distorted")?;
@@ -219,7 +207,7 @@ pub(crate) fn run(args: &ScoreVideoArgs) -> Result<(), Box<dyn std::error::Error
                     "jod": stats.jod,
                     "loss": stats.loss(),
                 },
-                "display_model": args.display_model,
+                "display_model": args.display_model.slug(),
                 "frames_per_second": stats.frames_per_second,
                 "width": stats.width,
                 "height": stats.height,

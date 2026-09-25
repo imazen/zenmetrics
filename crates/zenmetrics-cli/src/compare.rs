@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::decode::{Rgb8Image, decode_image_to_rgb8};
-use crate::metrics::{GpuRuntime, MetricKind, run_metric};
+use crate::metrics::{GpuRuntime, MetricKind, run_metric_display};
 use crate::output::{CompareRow, OutputFormat, render_compare};
 
 /// Outcome of a `compare` run: the structured rows plus a flag indicating
@@ -42,6 +42,7 @@ pub fn run_compare(
     variants: &[PathBuf],
     metrics: &[MetricKind],
     gpu_runtime: GpuRuntime,
+    display: Option<&crate::metrics::CvvdpDisplay>,
     _jobs: usize,
 ) -> CompareReport {
     // Decode each unique path exactly once. Errors are stored too — a
@@ -71,7 +72,15 @@ pub fn run_compare(
             let mut scores: Vec<Result<Vec<(&'static str, f64)>, String>> =
                 Vec::with_capacity(metrics.len());
             for &metric in metrics {
-                let result = score_one(ref_img, var_img, reference, variant, metric, gpu_runtime);
+                let result = score_one(
+                    ref_img,
+                    var_img,
+                    reference,
+                    variant,
+                    metric,
+                    gpu_runtime,
+                    display,
+                );
                 if let Err(ref reason) = result {
                     had_failures = true;
                     eprintln!(
@@ -105,6 +114,7 @@ fn score_one(
     var_path: &Path,
     metric: MetricKind,
     gpu_runtime: GpuRuntime,
+    display: Option<&crate::metrics::CvvdpDisplay>,
 ) -> Result<Vec<(&'static str, f64)>, String> {
     let r = ref_img.as_ref().map_err(|e| e.clone())?;
     let d = var_img.as_ref().map_err(|e| e.clone())?;
@@ -119,7 +129,7 @@ fn score_one(
             d.height,
         ));
     }
-    run_metric(metric, r, d, gpu_runtime).map_err(|e| e.to_string())
+    run_metric_display(metric, r, d, gpu_runtime, display).map_err(|e| e.to_string())
 }
 
 /// Render the report and stream it to stdout in the chosen format.
@@ -127,10 +137,11 @@ pub fn print_report(
     format: OutputFormat,
     metrics: &[MetricKind],
     report: &CompareReport,
+    display: Option<&crate::metrics::CvvdpDisplay>,
 ) -> std::io::Result<()> {
     let stdout = std::io::stdout();
     let mut handle = stdout.lock();
-    render_compare(&mut handle, format, metrics, &report.rows)
+    render_compare(&mut handle, format, metrics, &report.rows, display)
 }
 
 /// Canonicalise the path so two spellings of the same file (e.g. `./a.png`

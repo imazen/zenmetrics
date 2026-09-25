@@ -21,7 +21,7 @@
 //! compilation units (same pattern as `tests/it/backend_resolve.rs`).
 #![cfg(all(feature = "ssim2", feature = "cuda"))]
 
-use zenmetrics_api::{Backend, Error, MemoryMode, Metric, MetricKind, MetricParams, MetricSession};
+use zenmetrics_api::{Backend, Error, MemoryMode, Metric, MetricKind, MetricSession};
 
 /// Force every backend's liveness validation to fail for this process.
 /// Idempotent (always the same value), so concurrent `#[test]` threads in
@@ -65,7 +65,7 @@ fn issue_37_repro_shape_errs_at_construction() {
         Backend::Cuda,
         512,
         512,
-        MetricParams::default_for(MetricKind::Ssim2),
+        params_for(MetricKind::Ssim2),
         MemoryMode::Full,
     );
     expect_backend_unavailable(res, "new_with_memory_mode(Ssim2, Cuda, 512x512, Full)");
@@ -91,7 +91,7 @@ fn all_enabled_metrics_err_on_broken_explicit_cuda() {
         // Metrics not compiled into this build can't even construct their
         // params (feature-conditional coverage, decided at build time, not
         // a runtime data skip); the enabled ones must all hard-error.
-        let Ok(params) = MetricParams::try_default_for(kind) else {
+        let Ok(params) = try_params_for(kind) else {
             continue;
         };
         expect_backend_unavailable(
@@ -130,12 +130,7 @@ fn session_metric_construction_errs_on_broken_explicit_cuda() {
     force_backend_init_failure();
     let session = MetricSession::acquire(Backend::Cuda)
         .expect("acquire only claims a slot; the runtime probe belongs to construction");
-    let res = session.metric(
-        MetricKind::Ssim2,
-        64,
-        64,
-        MetricParams::default_for(MetricKind::Ssim2),
-    );
+    let res = session.metric(MetricKind::Ssim2, 64, 64, params_for(MetricKind::Ssim2));
     match res {
         Ok(_) => {
             panic!("session.metric constructed a scorer on a force-failed explicit GPU backend")
@@ -156,7 +151,7 @@ fn backend_unavailable_display_names_the_contract() {
         Backend::Cuda,
         32,
         32,
-        MetricParams::default_for(MetricKind::Ssim2),
+        params_for(MetricKind::Ssim2),
     ) {
         Err(e) => e,
         Ok(_) => panic!("forced validation failure must error"),
@@ -167,4 +162,24 @@ fn backend_unavailable_display_names_the_contract() {
         msg.contains("never fall back"),
         "message must state the explicit-no-fallback contract: {msg}"
     );
+}
+
+/// Parameters for `kind`. cvvdp has no default display in the umbrella, so
+/// this names the `standard_4k` preset explicitly.
+#[allow(dead_code)]
+fn try_params_for(
+    kind: zenmetrics_api::MetricKind,
+) -> zenmetrics_api::Result<zenmetrics_api::MetricParams> {
+    #[cfg(feature = "cvvdp")]
+    if kind == zenmetrics_api::MetricKind::Cvvdp {
+        return Ok(zenmetrics_api::MetricParams::cvvdp(
+            zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+        ));
+    }
+    zenmetrics_api::MetricParams::try_default_for(kind)
+}
+
+#[allow(dead_code)]
+fn params_for(kind: zenmetrics_api::MetricKind) -> zenmetrics_api::MetricParams {
+    try_params_for(kind).unwrap_or_else(|e| panic!("{e}"))
 }

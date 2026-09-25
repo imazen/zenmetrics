@@ -5,7 +5,7 @@
 //! umbrella to a per-crate typed API. CUDA-gated; NO GRACEFUL SKIPS.
 #![cfg(all(feature = "cuda", feature = "butter", feature = "zensim"))]
 
-use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind};
 
 fn pair(w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
     let n = (w * h * 3) as usize;
@@ -29,7 +29,7 @@ fn butter_multi_returns_max_and_pnorm3_and_matches_single() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Butter),
+        crate::params_for(MetricKind::Butter),
     )
     .expect("Metric::new butter");
 
@@ -89,7 +89,7 @@ fn butter_linear_planes_multi_returns_max_and_pnorm3() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Butter),
+        crate::params_for(MetricKind::Butter),
         MemoryMode::Full,
     )
     .expect("Metric::new_with_memory_mode butter Full");
@@ -138,7 +138,7 @@ fn butter_interleaved_multi_matches_planar() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Butter),
+        crate::params_for(MetricKind::Butter),
         MemoryMode::Full,
     )
     .expect("Metric::new_with_memory_mode butter Full");
@@ -183,7 +183,7 @@ fn butter_linear_planes_rejects_strip_mode() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Butter),
+        crate::params_for(MetricKind::Butter),
         MemoryMode::Strip { h_body: None },
     )
     .expect("Metric::new_with_memory_mode butter Strip");
@@ -203,7 +203,7 @@ fn zensim_multi_returns_score_plus_feature_vector() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Zensim),
+        crate::params_for(MetricKind::Zensim),
     )
     .expect("Metric::new zensim");
 

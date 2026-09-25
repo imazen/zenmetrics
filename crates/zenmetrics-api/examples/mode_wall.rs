@@ -289,7 +289,7 @@ fn time_oneoff_umbrella(
 ) -> (Vec<f64>, f64) {
     let r = synth_srgb(w, h, 0x0A11_0001);
     let d = synth_srgb(w, h, 0x0A11_0002);
-    let params = MetricParams::try_default_for(kind).expect("params");
+    let params = try_params_for(kind).expect("params");
     // Warmup: one full construct+score (loads kernels, fills pool), synced.
     {
         let mut m = Metric::new_with_memory_mode(kind, Backend::Cuda, w, h, params.clone(), mode)
@@ -324,7 +324,7 @@ fn time_warm_umbrella(
     reps: usize,
 ) -> (Vec<f64>, f64) {
     let r = synth_srgb(w, h, 0x0B22_0001);
-    let params = MetricParams::try_default_for(kind).expect("params");
+    let params = try_params_for(kind).expect("params");
     let mut m = Metric::new_with_memory_mode(kind, Backend::Cuda, w, h, params, mode)
         .expect("construct warm");
     m.set_reference_srgb_u8(&r).expect("set_reference");
@@ -751,7 +751,7 @@ fn run_parity(size: u32) {
                 Backend::Cuda,
                 w,
                 h,
-                MetricParams::try_default_for(kind).unwrap(),
+                try_params_for(kind).unwrap(),
                 MemoryMode::Full,
             )
             .unwrap();
@@ -769,7 +769,7 @@ fn run_parity(size: u32) {
                     Backend::Cuda,
                     w,
                     h,
-                    MetricParams::try_default_for(kind).unwrap(),
+                    try_params_for(kind).unwrap(),
                     MemoryMode::Strip {
                         h_body: Some(STRIP_H_BODY),
                     },
@@ -790,7 +790,7 @@ fn run_parity(size: u32) {
                     Backend::Cuda,
                     w,
                     h,
-                    MetricParams::try_default_for(kind).unwrap(),
+                    try_params_for(kind).unwrap(),
                     MemoryMode::Strip {
                         h_body: Some(STRIP_H_BODY),
                     },
@@ -933,4 +933,24 @@ fn main() {
     }
 
     eprintln!("# done");
+}
+
+/// Parameters for `kind`. cvvdp has no default display in the umbrella, so
+/// this names the `standard_4k` preset explicitly.
+#[allow(dead_code)]
+fn try_params_for(
+    kind: zenmetrics_api::MetricKind,
+) -> zenmetrics_api::Result<zenmetrics_api::MetricParams> {
+    #[cfg(feature = "cvvdp")]
+    if kind == zenmetrics_api::MetricKind::Cvvdp {
+        return Ok(zenmetrics_api::MetricParams::cvvdp(
+            zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+        ));
+    }
+    zenmetrics_api::MetricParams::try_default_for(kind)
+}
+
+#[allow(dead_code)]
+fn params_for(kind: zenmetrics_api::MetricKind) -> zenmetrics_api::MetricParams {
+    try_params_for(kind).unwrap_or_else(|e| panic!("{e}"))
 }

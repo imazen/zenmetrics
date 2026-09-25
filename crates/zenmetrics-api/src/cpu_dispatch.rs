@@ -152,7 +152,7 @@ impl CpuMetricState {
                 // struct the umbrella wraps in `MetricParams::Cvvdp` — no
                 // translation needed (see cpu_adapter::construct_cvvdp).
                 let p = match params {
-                    MetricParams::Cvvdp(p) => *p,
+                    MetricParams::Cvvdp(p) => p.clone(),
                     _ => {
                         return Err(Error::Metric {
                             kind: "cvvdp",
@@ -160,10 +160,11 @@ impl CpuMetricState {
                         });
                     }
                 };
-                let inner = cvvdp::Cvvdp::new(width, height, p).map_err(|e| Error::Metric {
-                    kind: "cvvdp",
-                    message: format!("cvvdp::Cvvdp::new: {e}"),
-                })?;
+                let inner = cvvdp::Cvvdp::with_geometry(width, height, p.params(), p.geometry())
+                    .map_err(|e| Error::Metric {
+                        kind: "cvvdp",
+                        message: format!("cvvdp::Cvvdp::with_geometry: {e}"),
+                    })?;
                 Ok(CpuMetricState::Cvvdp {
                     inner: Box::new(inner),
                     width,
@@ -317,11 +318,18 @@ impl CpuMetricState {
                     },
                     ..cvvdp::CvvdpParams::default()
                 };
-                let inner =
-                    cvvdp::Cvvdp::new(width, height, params).map_err(|e| Error::Metric {
-                        kind: "cvvdp",
-                        message: format!("cvvdp::Cvvdp::new: {e}"),
-                    })?;
+                // HDR keeps the historical STANDARD_4K viewing geometry,
+                // named explicitly (the SDR default is STANDARD_FHD).
+                let inner = cvvdp::Cvvdp::with_geometry(
+                    width,
+                    height,
+                    params,
+                    cvvdp::DisplayGeometry::STANDARD_4K,
+                )
+                .map_err(|e| Error::Metric {
+                    kind: "cvvdp",
+                    message: format!("cvvdp::Cvvdp::with_geometry: {e}"),
+                })?;
                 Ok(CpuMetricState::Cvvdp {
                     inner: Box::new(inner),
                     width,

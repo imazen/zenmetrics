@@ -41,7 +41,7 @@
 
 use std::time::Instant;
 
-use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind};
 
 /// Deterministic LCG sRGB bytes. Distinct `seed` => distinct content, so a
 /// cached reference is never fed the same bytes twice and zensim-gpu's
@@ -112,7 +112,7 @@ fn probe(
     rows: &mut Vec<Row>,
 ) {
     eprintln!("[probe] {tag} {mode_tag} {w}x{h} reps={reps}");
-    let params = match MetricParams::try_default_for(kind) {
+    let params = match try_params_for(kind) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("[probe] {tag}: params unavailable: {e} — SKIP");
@@ -288,4 +288,24 @@ fn main() {
     }
 
     emit(&rows);
+}
+
+/// Parameters for `kind`. cvvdp has no default display in the umbrella, so
+/// this names the `standard_4k` preset explicitly.
+#[allow(dead_code)]
+fn try_params_for(
+    kind: zenmetrics_api::MetricKind,
+) -> zenmetrics_api::Result<zenmetrics_api::MetricParams> {
+    #[cfg(feature = "cvvdp")]
+    if kind == zenmetrics_api::MetricKind::Cvvdp {
+        return Ok(zenmetrics_api::MetricParams::cvvdp(
+            zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+        ));
+    }
+    zenmetrics_api::MetricParams::try_default_for(kind)
+}
+
+#[allow(dead_code)]
+fn params_for(kind: zenmetrics_api::MetricKind) -> zenmetrics_api::MetricParams {
+    try_params_for(kind).unwrap_or_else(|e| panic!("{e}"))
 }

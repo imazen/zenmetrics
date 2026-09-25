@@ -52,8 +52,10 @@ use crate::metrics::{GpuRuntime, auto_order, runtime_label};
 /// arm's length has higher PPD + higher peak luminance than a 4K
 /// desktop monitor, so artifacts are differently visible).
 ///
-/// The default is `STANDARD_4K` (200 cd/m², 75.4 PPD), matching every
-/// historical CLI score and the v1 R2 parity goldens.
+/// There is no default: cvvdp scoring always names its display
+/// ([`DisplayTarget::by_name`], or [`DisplayTarget::hdr`] for the HDR
+/// target). `standard_4k` (200 cd/m², 75.4 PPD) reproduces every historical
+/// zenmetrics score; `standard_fhd` (37.84 PPD) is the JPEG AIC display.
 #[derive(Debug, Clone, Copy)]
 pub struct DisplayTarget {
     /// Photometric model — peak/black luminance, ambient, EOTF.
@@ -62,41 +64,13 @@ pub struct DisplayTarget {
     pub geometry: cvvdp::params::DisplayGeometry,
 }
 
-impl Default for DisplayTarget {
-    fn default() -> Self {
-        Self {
-            display: cvvdp::params::DisplayModel::STANDARD_4K,
-            geometry: cvvdp::params::DisplayGeometry::STANDARD_4K,
-        }
-    }
-}
-
 impl DisplayTarget {
-    /// Resolve a `DisplayTarget` from a preset name (as found in the
-    /// vendored `display_models.json`, e.g. `"standard_4k"`,
-    /// `"iphone_14_pro"`, `"standard_phone"`). Both the photometry
-    /// and the geometry are loaded for the same name via
-    /// [`cvvdp::params::DisplayModel::by_name`] /
-    /// [`cvvdp::params::DisplayGeometry::by_name`].
-    ///
-    /// Returns `Err` listing the available preset names when `name`
-    /// is unknown, or when the named preset has photometry but no
-    /// geometry (FOV-only presets without resolution).
-    pub fn by_name(name: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let display = cvvdp::params::DisplayModel::by_name(name).ok_or_else(|| {
-            format!(
-                "unknown --display-model preset {name:?}; \
-                 see `display_models.json` for valid names \
-                 (e.g. standard_4k, iphone_14_pro, standard_phone)"
-            )
-        })?;
-        let geometry = cvvdp::params::DisplayGeometry::by_name(name).ok_or_else(|| {
-            format!(
-                "--display-model preset {name:?} has photometry but no \
-                 geometry (resolution); cvvdp scoring needs both"
-            )
-        })?;
-        Ok(Self { display, geometry })
+    /// The target for a selected display — its photometry AND geometry.
+    pub fn from_display(display: &crate::metrics::display::CvvdpDisplay) -> Self {
+        Self {
+            display: display.model(),
+            geometry: display.geometry(),
+        }
     }
 
     /// An HDR display target for the faithful linear-planes HDR path: a
@@ -104,7 +78,7 @@ impl DisplayTarget {
     /// skips the EOTF — input is already linear-light) and BT.709 primaries
     /// (the same color treatment as the sRGB SDR path, so the HDR win is
     /// isolated to luminance range; wide-gamut primaries are a follow-up).
-    /// Geometry is `STANDARD_4K`, matching the default viewing conditions.
+    /// Geometry is `STANDARD_4K`, the historical HDR target, named explicitly.
     /// Pair with `crate::hdr::to_cvvdp_linear_planes` (which normalizes nits to
     /// `peak_nits`). `peak_nits` should equal `crate::hdr::HDR_DISPLAY_PEAK_NITS`.
     pub fn hdr(peak_nits: f32) -> Self {
@@ -188,22 +162,17 @@ pub struct CvvdpBatchScorerCpuState<R: Runtime> {
 }
 
 impl CvvdpBatchScorer {
-    /// Construct a scorer for the given runtime. Auto resolves to
-    /// the first available runtime (Cuda → Wgpu → Hip → Cpu) at
-    /// construction time, NOT per-call. If the chosen runtime
-    /// fails on the first `score` call, the caller should rebuild
-    /// the scorer with an explicit fallback runtime — silent
-    /// per-call fall-through is the bug the cache fixes.
-    pub fn new(runtime: GpuRuntime) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::new_with_target(runtime, DisplayTarget::default())
-    }
-
     /// Construct a scorer for the given runtime AND a specific
     /// [`DisplayTarget`] (photometry + geometry). The target is baked
     /// into every `Cvvdp` instance this scorer caches — both the
     /// CSF-LUT PPD (from `target.geometry`) and the color-stage
-    /// photometry (from `target.display`). `new` is the back-compat
-    /// `STANDARD_4K` shorthand.
+    /// photometry (from `target.display`). There is no default target.
+    ///
+    /// Auto resolves to the first available runtime (Cuda → Wgpu → Hip →
+    /// Cpu) at construction time, NOT per-call. If the chosen runtime
+    /// fails on the first `score` call, the caller should rebuild the
+    /// scorer with an explicit fallback runtime — silent per-call
+    /// fall-through is the bug the cache fixes.
     pub fn new_with_target(
         runtime: GpuRuntime,
         target: DisplayTarget,
@@ -584,7 +553,11 @@ fn probe_runtime_operational(rt: GpuRuntime) -> Result<(), String> {
     // 16×16, not 1×1: cvvdp's pyramid requires min dim >= 8, so a 1×1 probe
     // fails on geometry before it ever reaches the backend check and would
     // report every runtime as dead.
-    let params = zenmetrics_api::MetricParams::Cvvdp(Default::default());
+    // A liveness probe, not a score: any named display works; cvvdp has no
+    // default, so name one.
+    let params = zenmetrics_api::MetricParams::cvvdp(
+        zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+    );
     let outcome = match zenmetrics_api::Metric::new(
         zenmetrics_api::MetricKind::Cvvdp,
         backend,

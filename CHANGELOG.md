@@ -13,6 +13,35 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- **BREAKING (uncommitted — add hash on commit): SDR cvvdp has no default
+  display in zenmetrics-api or the CLI; every caller names one, and SDR
+  cvvdp columns name it.** The `cvvdp` / `cvvdp-gpu` crates keep their
+  `standard_4k` defaults (matching upstream ColorVideoVDP and every
+  historical score). Above them:
+  - **API:** `MetricParams::Cvvdp` now carries a `CvvdpConfig` (photometry AND
+    viewing geometry), built with `MetricParams::cvvdp("<preset>")` or
+    `MetricParams::cvvdp_with(display, geometry)`;
+    `MetricParams::try_default_for(Cvvdp)` returns the new
+    `Error::DisplayRequired` (`default_for` panics).
+    `MetricParams::cvvdp_with_display` (photometry only, implicit geometry)
+    is removed. The orchestrator refuses cvvdp tasks without params; its
+    capability bench names `standard_4k`.
+  - **CLI:** `score`, `batch`, `score-pairs`, `compare`, `sweep` and
+    `score-video` refuse SDR cvvdp / cvvdp-gpu without `--display-model`.
+    Jobs use `cvvdp@<display>` or the new `cvvdp-gpu@<display>`. Plain
+    `cvvdp` / `cvvdp-gpu` SDR ScoreFile, Metric and diffmap jobs fail before
+    any decode. zenfleet routes `<metric>@<display>` by the metric part.
+  - **Columns:** SDR cvvdp columns are `<impl column>_<display>` (e.g.
+    `cvvdp_cpu_imazen_v0_1_0_standard_4k`), including GPU `--display-model`
+    runs (previously written to the plain column) and orchestrator-routed
+    cvvdp. Display-less cvvdp columns in existing sidecars are
+    pre-2026-09-25 `standard_4k` scores.
+  - **HDR is unchanged and needs no `--display-model`** (which it refuses):
+    every HDR cvvdp route keeps its historical 4K geometry, now named
+    explicitly, under its display-less column.
+  - Verified old vs new CLI: `--display-model standard_4k` reproduces the
+    old default bit-for-bit, and HDR output is identical.
+
 - docs (`dc0ccf2e`): new `docs/AIC2026_METRICS_AND_FITTING.md` — the AIC-4
   JND remapping record. Documents the two distinct JND objects (the 7
   precomputed `JND_*` CSV display columns vs the benchmark fitting-tool's

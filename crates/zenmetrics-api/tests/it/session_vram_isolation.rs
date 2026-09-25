@@ -21,7 +21,7 @@
 
 #![cfg(all(feature = "cuda", feature = "cvvdp"))]
 
-use zenmetrics_api::{Backend, MetricKind, MetricParams, MetricSession};
+use zenmetrics_api::{Backend, MetricKind, MetricSession};
 
 // Large enough that the cvvdp working set reserves a clearly-nonzero,
 // multi-page pool — so the "freed to ~0" assertion is unambiguous and
@@ -63,7 +63,7 @@ fn two_sessions_drop_one_frees_only_its_pool() {
             MetricKind::Cvvdp,
             W,
             H,
-            MetricParams::default_for(MetricKind::Cvvdp),
+            crate::params_for(MetricKind::Cvvdp),
         )
         .expect("A.metric(Cvvdp)");
     let score_a = m_a.score(&r, &d).expect("A score");
@@ -87,7 +87,7 @@ fn two_sessions_drop_one_frees_only_its_pool() {
             MetricKind::Cvvdp,
             W,
             H,
-            MetricParams::default_for(MetricKind::Cvvdp),
+            crate::params_for(MetricKind::Cvvdp),
         )
         .expect("B.metric(Cvvdp)");
     let score_b = m_b.score(&r, &d).expect("B score");

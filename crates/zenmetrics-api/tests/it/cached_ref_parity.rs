@@ -17,7 +17,7 @@
 
 #![cfg(feature = "cuda")]
 
-use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind};
 
 const W: u32 = 256;
 const H: u32 = 256;
@@ -55,7 +55,7 @@ fn cached_ref_memory_mode(_kind: MetricKind) -> MemoryMode {
 /// a single pair. Bit-identical isn't a structural guarantee for
 /// those; tight numeric agreement is.
 fn assert_cached_ref_matches_one_shot(kind: MetricKind, tol: f64) {
-    let params = MetricParams::default_for(kind);
+    let params = crate::params_for(kind);
     let mode = cached_ref_memory_mode(kind);
     let (r, d) = make_pair(7919, 2147483647);
 
@@ -119,7 +119,7 @@ fn assert_cached_ref_matches_one_shot(kind: MetricKind, tol: f64) {
 /// vary slightly when reference state persists across calls) pass
 /// a small absolute tolerance.
 fn assert_cached_ref_n_distortions(kind: MetricKind, n: usize, tol: f64) {
-    let params = MetricParams::default_for(kind);
+    let params = crate::params_for(kind);
     let mode = cached_ref_memory_mode(kind);
     let (r, _) = make_pair(7919, 2147483647);
 
@@ -212,7 +212,7 @@ fn cached_ref_cvvdp_n_distortions() {
 #[cfg(feature = "cvvdp")]
 #[test]
 fn cached_ref_cvvdp_strip_n_distortions() {
-    let params = MetricParams::default_for(MetricKind::Cvvdp);
+    let params = crate::params_for(MetricKind::Cvvdp);
     let n_dists = 3usize;
     let (r, _) = make_pair(7919, 2147483647);
     let dists: Vec<Vec<u8>> = (0..n_dists)
@@ -315,9 +315,9 @@ fn cached_ref_zensim_n_distortions() {
 #[cfg(feature = "zensim")]
 #[test]
 fn cached_ref_zensim_strip_n_distortions() {
-    use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind, MetricParams};
+    use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind};
 
-    let params = MetricParams::default_for(MetricKind::Zensim);
+    let params = crate::params_for(MetricKind::Zensim);
     let n_dists = 3usize;
     let (r, _) = make_pair(7919, 2147483647);
     let dists: Vec<Vec<u8>> = (0..n_dists)
@@ -402,7 +402,7 @@ fn cached_ref_iwssim_n_distortions() {
 #[cfg(feature = "iwssim")]
 #[test]
 fn cached_ref_iwssim_has_cached_reference_roundtrip() {
-    let params = MetricParams::default_for(MetricKind::Iwssim);
+    let params = crate::params_for(MetricKind::Iwssim);
     let mut m = Metric::new(MetricKind::Iwssim, Backend::Cuda, W, H, params).unwrap();
     assert!(!m.has_reference());
     let (r, _) = make_pair(7919, 2147483647);
@@ -456,7 +456,7 @@ fn cached_ref_dssim_n_distortions() {
 #[cfg(feature = "butter")]
 #[test]
 fn cached_ref_butter_has_cached_reference_roundtrip() {
-    let params = MetricParams::default_for(MetricKind::Butter);
+    let params = crate::params_for(MetricKind::Butter);
     // butter is strip-preferred at 256x256. With Mode E (task #45)
     // the strip-mode instance accepts set_reference by allocating a
     // whole-image cache sibling — the umbrella roundtrip works
@@ -473,7 +473,7 @@ fn cached_ref_butter_has_cached_reference_roundtrip() {
 #[cfg(feature = "ssim2")]
 #[test]
 fn cached_ref_ssim2_has_cached_reference_roundtrip() {
-    let params = MetricParams::default_for(MetricKind::Ssim2);
+    let params = crate::params_for(MetricKind::Ssim2);
     let mut m = Metric::new(MetricKind::Ssim2, Backend::Cuda, W, H, params).unwrap();
     assert!(!m.has_reference());
     let (r, _) = make_pair(7919, 2147483647);
@@ -486,7 +486,7 @@ fn cached_ref_ssim2_has_cached_reference_roundtrip() {
 #[cfg(feature = "dssim")]
 #[test]
 fn cached_ref_dssim_has_cached_reference_roundtrip() {
-    let params = MetricParams::default_for(MetricKind::Dssim);
+    let params = crate::params_for(MetricKind::Dssim);
     let mut m = Metric::new(MetricKind::Dssim, Backend::Cuda, W, H, params).unwrap();
     assert!(!m.has_reference());
     let (r, _) = make_pair(7919, 2147483647);
@@ -590,7 +590,7 @@ fn zz_cached_ref_ssim2_strip_n_distortions_24mp() {
     const W4K: u32 = 4096;
     const H4K: u32 = 4096;
 
-    let params = MetricParams::default_for(MetricKind::Ssim2);
+    let params = crate::params_for(MetricKind::Ssim2);
     let n_dists = 3usize;
     let (r, _) = make_synthetic_pair_4k(2);
     let dists: Vec<Vec<u8>> = (0..n_dists as u8)
@@ -684,7 +684,7 @@ fn zz_cached_ref_ssim2_strip_n_distortions_24mp() {
 #[cfg(feature = "dssim")]
 #[test]
 fn cached_ref_dssim_strip_n_distortions_24mp() {
-    use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind, MetricParams};
+    use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind};
 
     const WL: u32 = 4096;
     const HL: u32 = 4096;
@@ -702,7 +702,7 @@ fn cached_ref_dssim_strip_n_distortions_24mp() {
         (r, d)
     }
 
-    let params = MetricParams::default_for(MetricKind::Dssim);
+    let params = crate::params_for(MetricKind::Dssim);
     let n_dists = 3usize;
     let (r, _) = make_large_pair(7919, 2147483647);
     let dists: Vec<Vec<u8>> = (0..n_dists)
@@ -805,7 +805,7 @@ fn cached_ref_butter_strip_n_distortions_1mp() {
         })
         .collect();
 
-    let params = MetricParams::default_for(MetricKind::Butter);
+    let params = crate::params_for(MetricKind::Butter);
 
     // Auto-resolved (likely Strip at 1MP — butter is strip-preferred).
     let mut m = Metric::new_with_memory_mode(

@@ -146,17 +146,36 @@ fn zensim_regime_for_metric(
     }
 }
 
-/// Parse the display-selecting CVVDP metric string `cvvdp@<display>`
-/// (ScoreFile / Metric jobs, cvvdp-safesyn lane 2026-09-23). Returns
-/// `Some(display)` only for `cvvdp@<nonempty>`. Plain `cvvdp` is NOT matched —
-/// it keeps the umbrella `run_metric` path (the `standard_4k` default,
-/// byte-identical column and score), so every existing content-addressed job
-/// id and ledger row stays valid. The display rides inside the metric string —
-/// no `JobKind` schema change; the additive-compatibility precedent of
-/// `JobKind::ScoreFile::hdr`, one level down. Job identity still covers the
-/// display because `metrics` is hashed into the JobId.
-fn cvvdp_display_of(metric: &str) -> Option<&str> {
-    metric.strip_prefix("cvvdp@").filter(|d| !d.is_empty())
+/// Parse a display-selecting cvvdp metric string: `cvvdp@<display>` (the
+/// CPU port) or `cvvdp-gpu@<display>` (the GPU pipeline). Returns the kind
+/// and display only for a non-empty display. cvvdp has no default display,
+/// so this is the ONLY way an SDR job scores cvvdp — plain `cvvdp` /
+/// `cvvdp-gpu` are refused (see [`refuse_display_less_cvvdp`]). The display
+/// rides inside the metric string, so no `JobKind` schema change is needed
+/// and the JobId (which hashes `metrics`) covers it.
+fn cvvdp_selection(metric: &str) -> Option<(MetricKind, &str)> {
+    let (base, display) = metric.split_once('@')?;
+    if display.is_empty() {
+        return None;
+    }
+    match base {
+        "cvvdp" => Some((MetricKind::Cvvdp, display)),
+        "cvvdp-gpu" => Some((MetricKind::CvvdpGpu, display)),
+        _ => None,
+    }
+}
+
+/// Refuse an SDR job metric that asks for cvvdp without a display. A
+/// deterministic manifest defect: the job fails before any decode.
+fn refuse_display_less_cvvdp(metric: &str, ctx: &str) -> Result<(), Box<dyn Error>> {
+    match metric {
+        "cvvdp" | "cvvdp-gpu" => Err(format!(
+            "{ctx}: {}",
+            crate::metrics::display_required_msg(metric_kind(metric)?)
+        )
+        .into()),
+        _ => Ok(()),
+    }
 }
 
 /// Score `(reference, distorted)` with `metric`, returning all `(column, value)` pairs run_metric
@@ -169,22 +188,19 @@ fn score(
     run_metric(metric_kind(metric)?, reference, distorted, GpuRuntime::Auto)
 }
 
-/// Emit the metric-row payload for one `cvvdp@<display>` arm: the scorer's
-/// display-suffixed column (`<cpu cvvdp column>_<display>`; `standard_4k`
-/// resolves to the same parameters as the default and keeps the plain column,
-/// so a `cvvdp@standard_4k` row is byte-identical to a `cvvdp` row). A
-/// non-default display can therefore never be joined or averaged into the
-/// default's ledger column.
-#[cfg(feature = "cpu-cvvdp")]
+/// Emit the metric-row payload for one `cvvdp@<display>` /
+/// `cvvdp-gpu@<display>` arm: the scorer's display-named column
+/// (`<impl column>_<display>`). Every SDR cvvdp column names its display,
+/// so no two displays can ever be joined or averaged into one ledger column.
 fn cvvdp_display_payload(
     metric: &str,
-    scorer: &mut crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer,
+    scorer: &mut crate::metrics::CvvdpScorer,
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
 ) -> Value {
     match scorer.score(reference, distorted) {
         Ok(v) => {
-            let col = scorer.column_name(MetricKind::Cvvdp.column_names()[0]);
+            let col = scorer.column();
             serde_json::json!({
                 "metric": metric,
                 "score": v,
@@ -871,7 +887,7 @@ fn warmref_score_eligible(
                 dist_data: TaskData::Srgb8(dist.pixels.clone()),
                 width: w.max(dist.width),
                 height: h.max(dist.height),
-                metric: crate::orchestrator_glue::OrchestratorMetricSpec::from_cli(cli_kind).kind,
+                metric: crate::orchestrator_glue::OrchestratorMetricSpec::from_cli(cli_kind)?.kind,
                 params: None,
                 ref_hash: 0,
             });
@@ -900,7 +916,7 @@ fn warmref_score_eligible(
                 if res.output_columns.is_empty() {
                     scores.insert(m.replace('-', "_"), serde_json::json!(score.value));
                 } else if let Some(k) = cli_kind {
-                    for (col, val) in rekey_orchestrator_columns(k, &res.output_columns) {
+                    for (col, val) in rekey_orchestrator_columns(k, &res.output_columns, None) {
                         scores.insert(col, serde_json::json!(val));
                     }
                 } else {
@@ -944,8 +960,8 @@ fn cli_kind_from_metric_kind(k: MetricKind) -> Option<crate::metrics::MetricKind
 /// PART 2: with `ZEN_SCOREFILE_WARMREF=1` (and an orchestrator-cuda build), the orchestrator-eligible
 /// metrics are scored via one warm-reference `run_all` batch (ref uploaded once per source, not per
 /// variant — the fix for the 54% H2D / ~10% GPU util); zensim-with-features stays on the inline
-/// path, and so does any metric `metric_orchestrator_eligible` rejects (as of 2026-08-28 that is
-/// none — butteraugli joined the batch). Default OFF = byte-identical one-shot behaviour.
+/// path, and so does any metric `metric_orchestrator_eligible` rejects.
+/// Default OFF = byte-identical one-shot behaviour.
 /// All-error guard (2026-08-27, the hdrgrid lesson): a ScoreFile job whose
 /// EVERY row is an error row means the executor ENVIRONMENT is broken (bad
 /// image vintage, non-operational GPU, missing build feature) — completing it
@@ -1004,39 +1020,41 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
         .filter_map(Value::as_str)
         .collect();
 
-    // `cvvdp@<display>` arms (SDR only): resolve one cached CPU scorer per named
-    // display BEFORE the reference decode, so an unknown preset — a manifest
-    // defect, deterministic — fails the job outright instead of emitting a
-    // per-variant error-row storm. On an `hdr:true` job `cvvdp@` is refused
-    // outright too: the HDR arm scores in absolute-nit space where these
+    // `cvvdp@<display>` / `cvvdp-gpu@<display>` arms (SDR only): resolve one
+    // cached scorer per metric string BEFORE the reference decode, so an
+    // unknown preset — a manifest defect, deterministic — fails the job
+    // outright instead of emitting a per-variant error-row storm. Plain
+    // `cvvdp` / `cvvdp-gpu` (no display) are refused the same way on SDR jobs:
+    // there is no default display. On an `hdr:true` job the `@` form is
+    // refused outright: the HDR arm scores in absolute-nit space where these
     // u8/sRGB display presets do not apply (and a mixed job must not emit
     // partial error rows that a harvest could read as scored cells).
-    #[cfg(feature = "cpu-cvvdp")]
-    let mut cvvdp_scorers: std::collections::HashMap<
-        &str,
-        crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer,
-    > = {
-        let mut map = std::collections::HashMap::new();
-        for m in &metrics {
-            let Some(display) = cvvdp_display_of(m) else {
-                continue;
-            };
-            if job["kind"]["hdr"].as_bool().unwrap_or(false) {
-                return Err(format!(
-                    "score_file hdr:true: `cvvdp@<display>` selection is SDR-only \
-                     (the HDR arm scores in nit space); got metric {m:?}"
-                )
-                .into());
-            }
-            if let std::collections::hash_map::Entry::Vacant(e) = map.entry(display) {
-                e.insert(
-                    crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::by_name(display)
-                        .map_err(|err| format!("score_file: {err}"))?,
-                );
-            }
+    let hdr_job = job["kind"]["hdr"].as_bool().unwrap_or(false);
+    let mut cvvdp_scorers: std::collections::HashMap<&str, crate::metrics::CvvdpScorer> =
+        std::collections::HashMap::new();
+    for m in &metrics {
+        if !hdr_job {
+            refuse_display_less_cvvdp(m, "score_file")?;
         }
-        map
-    };
+        let Some((kind, display)) = cvvdp_selection(m) else {
+            continue;
+        };
+        if hdr_job {
+            return Err(format!(
+                "score_file hdr:true: `cvvdp@<display>` selection is SDR-only \
+                 (the HDR arm scores in nit space); got metric {m:?}"
+            )
+            .into());
+        }
+        if let std::collections::hash_map::Entry::Vacant(e) = cvvdp_scorers.entry(m) {
+            let display = crate::metrics::display::parse_display(display)
+                .map_err(|err| format!("score_file {m}: {err}"))?;
+            e.insert(
+                crate::metrics::CvvdpScorer::new(kind, &display, GpuRuntime::Auto)
+                    .map_err(|err| format!("score_file {m}: {err}"))?,
+            );
+        }
+    }
 
     // HDR persisted-pairs corpora (JobKind::ScoreFile { hdr: true, .. }): decode the
     // reference and every variant to absolute nits and apply the per-metric HDR
@@ -1177,12 +1195,9 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
             rows.extend(warmref_score_eligible(
                 image_path, codec_name, &reference, &decoded, &metrics,
             )?);
-            // Whatever `warmref_score_eligible` did NOT score, inline over the SAME decoded
-            // buffers so no variant is decoded twice. Since 2026-08-28 butteraugli IS
-            // orchestrator-eligible (zenmetrics#47 item 4), so the butter arm below MUST be
-            // gated on the same predicate `warmref_score_eligible` filters with — an
-            // unconditional butter arm would emit every butteraugli row TWICE on this
-            // default-ON path.
+            // Score non-eligible metrics inline over the same decoded buffers.
+            // Use the same predicate as `warmref_score_eligible` so each metric
+            // emits exactly one row.
             for (sha, distorted) in &decoded {
                 let dist_px_sha256 =
                     pixel_hash.then(|| hex::encode(sha2::Sha256::digest(&distorted.pixels)));
@@ -1242,40 +1257,23 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                         }
                         continue;
                     }
-                    // `cvvdp@<display>`: never orchestrator-eligible (`metric_kind`
-                    // refuses the string), so it always lands here — the
-                    // display-named CPU scorer over the SAME decoded buffer.
-                    // The scorer map was built before the reference decode, so a
-                    // validated display is guaranteed present.
-                    #[cfg(feature = "cpu-cvvdp")]
-                    if let Some(display) = cvvdp_display_of(metric) {
-                        let scorer = cvvdp_scorers
-                            .get_mut(display)
-                            .expect("cvvdp@ displays are resolved before decode");
+                    // `cvvdp@<display>` / `cvvdp-gpu@<display>`: never
+                    // orchestrator-eligible (`metric_kind` refuses the string), so
+                    // it always lands here — the display-named scorer over the
+                    // SAME decoded buffer. The scorer map was built before the
+                    // reference decode, so a validated display is guaranteed present.
+                    if let Some(scorer) = cvvdp_scorers.get_mut(*metric) {
                         let payload = cvvdp_display_payload(metric, scorer, &reference, distorted);
                         rows.push(mk_row_px(sha, payload, dist_px_sha256.as_deref())?);
                         continue;
                     }
-                    #[cfg(not(feature = "cpu-cvvdp"))]
-                    if cvvdp_display_of(metric).is_some() {
-                        rows.push(mk_row_px(
-                            sha,
-                            serde_json::json!({
-                                "metric": metric,
-                                "error": "`cvvdp@<display>` needs an executor built \
-                                          with the cpu-cvvdp cargo feature",
-                            }),
-                            dist_px_sha256.as_deref(),
-                        )?);
-                        continue;
-                    }
-                    // butteraugli / butteraugli-gpu (and any non-eligible, non-zensim metric):
-                    // one-shot — but ONLY when the warm-ref batch above skipped it.
-                    if (*metric == "butteraugli" || *metric == "butteraugli-gpu")
-                        && !metric_kind(metric)
-                            .ok()
-                            .and_then(cli_kind_from_metric_kind)
-                            .is_some_and(crate::orchestrator_runner::metric_orchestrator_eligible)
+                    // One-shot scoring for metrics the warm-ref batch skipped
+                    // (butteraugli, the direct-CPU kinds — nlpd/ssim/vmaf/… —
+                    // anything the orchestrator doesn't serve).
+                    if !metric_kind(metric)
+                        .ok()
+                        .and_then(cli_kind_from_metric_kind)
+                        .is_some_and(crate::orchestrator_runner::metric_orchestrator_eligible)
                     {
                         match score(metric, &reference, distorted) {
                             Ok(pairs) => {
@@ -1387,30 +1385,14 @@ fn run_score_file(job: &Value, corpus_prefix: Option<&str>) -> Result<Vec<u8>, B
                 }
                 continue;
             }
-            // `cvvdp@<display>`: the display-named CPU scorer (resolved before
-            // the reference decode, so a validated display is always present).
-            // Scored here, never through `score()` — `metric_kind` refuses the
-            // `cvvdp@` string so the umbrella path cannot see it.
-            #[cfg(feature = "cpu-cvvdp")]
-            if let Some(display) = cvvdp_display_of(metric) {
-                let scorer = cvvdp_scorers
-                    .get_mut(display)
-                    .expect("cvvdp@ displays are resolved before decode");
+            // `cvvdp@<display>` / `cvvdp-gpu@<display>`: the display-named
+            // scorer (resolved before the reference decode, so a validated
+            // display is always present). Scored here, never through `score()`
+            // — `metric_kind` refuses the `@` string so the umbrella path
+            // cannot see it.
+            if let Some(scorer) = cvvdp_scorers.get_mut(*metric) {
                 let payload = cvvdp_display_payload(metric, scorer, &reference, &distorted);
                 rows.push(mk_row_px(sha, payload, dist_px_sha256.as_deref())?);
-                continue;
-            }
-            #[cfg(not(feature = "cpu-cvvdp"))]
-            if cvvdp_display_of(metric).is_some() {
-                rows.push(mk_row_px(
-                    sha,
-                    serde_json::json!({
-                        "metric": metric,
-                        "error": "`cvvdp@<display>` needs an executor built \
-                                  with the cpu-cvvdp cargo feature",
-                    }),
-                    dist_px_sha256.as_deref(),
-                )?);
                 continue;
             }
             match score(metric, &reference, &distorted) {
@@ -1758,7 +1740,11 @@ fn score_hdr_decoded_variant(
 /// names are CPU-native per docs/METRIC_DISPATCH_CONSOLIDATION.md — so the
 /// name + compiled backend IS the runtime.
 fn metric_runtime(metric: &str) -> &'static str {
-    let m = metric.to_ascii_lowercase();
+    // A `<metric>@<display>` selection routes by its metric part.
+    let m = metric
+        .split_once('@')
+        .map_or(metric, |(base, _)| base)
+        .to_ascii_lowercase();
     if m.ends_with("-gpu") || m.ends_with("_gpu") {
         if cfg!(feature = "gpu-cuda") {
             "gpu-cuda"
@@ -1868,8 +1854,29 @@ fn diffmap_pair_to_blob(
     src_path: &std::path::Path,
     var_path: &std::path::Path,
 ) -> Result<Vec<u8>, Box<dyn Error>> {
+    // cvvdp maps: SDR names its display (`cvvdp@<display>`, no default);
+    // HDR keeps plain `cvvdp` (its display is the measured-peak HDR target).
+    let cvvdp_sdr_display = match cvvdp_selection(metric) {
+        Some((MetricKind::Cvvdp, display)) if !hdr => Some(display),
+        Some(_) => {
+            return Err(format!(
+                "diffmap: {metric:?} — display-named cvvdp maps are SDR-only and use the \
+                 CPU port (`cvvdp@<display>`)"
+            )
+            .into());
+        }
+        None => None,
+    };
+    if metric == "cvvdp" && !hdr {
+        return Err(format!(
+            "diffmap: {}",
+            crate::metrics::display_required_msg(MetricKind::Cvvdp)
+        )
+        .into());
+    }
     match metric {
         "butteraugli" | "cvvdp" => {}
+        _ if cvvdp_sdr_display.is_some() => {}
         "ssim2" | "ssim2-gpu" => {
             return Err(
                 "diffmap: ssim2 has no per-pixel map API in-tree — recorded \
@@ -1952,8 +1959,15 @@ fn diffmap_pair_to_blob(
                         },
                         ..cvvdp::CvvdpParams::default()
                     };
-                    let mut scorer = cvvdp::Cvvdp::new(w, h, params)
-                        .map_err(|e| format!("cvvdp::Cvvdp::new: {e}"))?;
+                    // HDR keeps the historical STANDARD_4K geometry, named
+                    // explicitly (the SDR default is STANDARD_FHD).
+                    let mut scorer = cvvdp::Cvvdp::with_geometry(
+                        w,
+                        h,
+                        params,
+                        cvvdp::DisplayGeometry::STANDARD_4K,
+                    )
+                    .map_err(|e| format!("cvvdp::Cvvdp::with_geometry: {e}"))?;
                     let (rr, rg, rb) = crate::hdr::to_cvvdp_linear_planes(&reference, peak);
                     let (dr, dg, db) = crate::hdr::to_cvvdp_linear_planes(&distorted, peak);
                     let mut dm = Vec::new();
@@ -1968,10 +1982,10 @@ fn diffmap_pair_to_blob(
             }
         })()
     } else {
-        // SDR: rgb8 pair, the metric crates' default display assumptions —
-        // matching the SDR scoring paths (butteraugli sRGB 80 cd/m² default,
-        // cvvdp default params). Registered for the avifgen appendix Z §Z.6.3
-        // follow-up declare.
+        // SDR: rgb8 pair — butteraugli at its sRGB 80 cd/m² default; cvvdp at
+        // the job's named display (`cvvdp@<display>`, photometry AND
+        // geometry — there is no default), matching the SDR scoring paths.
+        // Registered for the avifgen appendix Z §Z.6.3 follow-up declare.
         (|| {
             let reference = decode_image_to_rgb8(src_path)?;
             let distorted = decode_image_to_rgb8(var_path)?;
@@ -2002,9 +2016,16 @@ fn diffmap_pair_to_blob(
                 "butteraugli" => Err("diffmap: butteraugli map needs --features cpu-metrics \
                      (the CPU reference crate)"
                     .into()),
-                "cvvdp" => {
-                    let mut scorer = cvvdp::Cvvdp::new(w, h, cvvdp::CvvdpParams::default())
-                        .map_err(|e| format!("cvvdp::Cvvdp::new: {e}"))?;
+                _ if cvvdp_sdr_display.is_some() => {
+                    let display = cvvdp_sdr_display.expect("guarded");
+                    let display = crate::metrics::display::parse_display(display)
+                        .map_err(|e| format!("diffmap: {e}"))?;
+                    let params = cvvdp::CvvdpParams {
+                        display: display.model(),
+                        ..cvvdp::CvvdpParams::default()
+                    };
+                    let mut scorer = cvvdp::Cvvdp::with_geometry(w, h, params, display.geometry())
+                        .map_err(|e| format!("cvvdp::Cvvdp::with_geometry: {e}"))?;
                     let mut dm = Vec::new();
                     scorer
                         .score_with_diffmap(&reference.pixels, &distorted.pixels, &mut dm)
@@ -2442,17 +2463,21 @@ fn run_encode_or_metric_job(
                     Err(e) => return Err(format!("zensim feature extraction: {e}").into()),
                 }
             }
-            // `cvvdp@<display>`: same display-named CPU arm as ScoreFile — the
-            // scorer resolves the preset (unknown display = deterministic job
-            // error, a manifest defect) and emits the `_<display>` column.
-            #[cfg(feature = "cpu-cvvdp")]
-            if let Some(display) = cvvdp_display_of(metric) {
-                let mut scorer = crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::by_name(display)
-                    .map_err(|e| format!("metric job: {e}"))?;
+            // `cvvdp@<display>` / `cvvdp-gpu@<display>`: same display-named arm
+            // as ScoreFile — the scorer resolves the preset (unknown display =
+            // deterministic job error, a manifest defect) and emits the
+            // `_<display>` column. Plain `cvvdp` / `cvvdp-gpu` are refused.
+            refuse_display_less_cvvdp(metric, "metric job")?;
+            if let Some((cvvdp_kind, display)) = cvvdp_selection(metric) {
+                let display = crate::metrics::display::parse_display(display)
+                    .map_err(|e| format!("metric job {metric}: {e}"))?;
+                let mut scorer =
+                    crate::metrics::CvvdpScorer::new(cvvdp_kind, &display, GpuRuntime::Auto)
+                        .map_err(|e| format!("metric job {metric}: {e}"))?;
                 let v = scorer
                     .score(&reference, &distorted)
                     .map_err(|e| format!("metric job {metric}: {e}"))?;
-                let col = scorer.column_name(MetricKind::Cvvdp.column_names()[0]);
+                let col = scorer.column();
                 let row = serde_json::json!({
                     "kind": "metric",
                     "metric": metric,
@@ -2466,14 +2491,6 @@ fn run_encode_or_metric_job(
                     "encode_ms": encoded.encode_ms,
                 });
                 return Ok(serde_json::to_string(&row)?.into_bytes());
-            }
-            #[cfg(not(feature = "cpu-cvvdp"))]
-            if cvvdp_display_of(metric).is_some() {
-                return Err(format!(
-                    "metric job {metric}: `cvvdp@<display>` needs a build with the \
-                     cpu-cvvdp cargo feature"
-                )
-                .into());
             }
             let pairs = score(metric, &reference, &distorted)?;
             let mut scores = Map::new();
@@ -2612,34 +2629,51 @@ pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
 
-    /// `cvvdp@<display>` parsing: ONLY the exact `cvvdp@<nonempty>` shape
-    /// selects a display. Plain `cvvdp` and every other metric string fall
-    /// through to the umbrella/`metric_kind` path unchanged — that is what
-    /// keeps existing job ids and ledger rows valid.
+    /// `cvvdp@<display>` / `cvvdp-gpu@<display>` parsing: ONLY those exact
+    /// shapes with a non-empty display select a display. Everything else —
+    /// including plain `cvvdp` / `cvvdp-gpu`, which are refused on SDR jobs —
+    /// is not a selection.
     #[test]
-    fn cvvdp_display_of_parses_only_the_at_form() {
-        assert_eq!(cvvdp_display_of("cvvdp@standard_fhd"), Some("standard_fhd"));
+    fn cvvdp_selection_parses_only_the_at_forms() {
         assert_eq!(
-            cvvdp_display_of("cvvdp@modern_oled_phone_indoor"),
-            Some("modern_oled_phone_indoor")
+            cvvdp_selection("cvvdp@standard_fhd"),
+            Some((MetricKind::Cvvdp, "standard_fhd"))
+        );
+        assert_eq!(
+            cvvdp_selection("cvvdp-gpu@standard_4k"),
+            Some((MetricKind::CvvdpGpu, "standard_4k"))
+        );
+        assert_eq!(
+            cvvdp_selection("cvvdp@modern_oled_phone_indoor"),
+            Some((MetricKind::Cvvdp, "modern_oled_phone_indoor"))
         );
         for m in [
             "cvvdp",
             "cvvdp@",
             "cvvdp-gpu",
-            "cvvdp_gpu",
+            "cvvdp-gpu@",
+            "cvvdp_gpu@standard_4k",
+            "ssim2@standard_4k",
             "ssim2",
             "butteraugli",
             "zensim-foldapp2",
         ] {
-            assert_eq!(cvvdp_display_of(m), None, "{m}");
+            assert_eq!(cvvdp_selection(m), None, "{m}");
         }
         // A display string may contain anything non-empty — preset VALIDITY is
         // the scorer's job (`by_name`), not the parser's.
-        assert_eq!(cvvdp_display_of("cvvdp@bogus"), Some("bogus"));
-        // Display-named strings stay CPU-routed (`metric_runtime` keys on the
-        // -gpu/_gpu suffix, which `cvvdp@<display>` never carries).
+        assert_eq!(
+            cvvdp_selection("cvvdp@bogus"),
+            Some((MetricKind::Cvvdp, "bogus"))
+        );
+        // Runtime routing keys on the metric part, not the display.
         assert_eq!(metric_runtime("cvvdp@standard_fhd"), "cpu");
+        assert_ne!(metric_runtime("cvvdp-gpu@standard_4k"), "cpu");
+        // Plain cvvdp names no display: refused, not defaulted.
+        assert!(refuse_display_less_cvvdp("cvvdp", "t").is_err());
+        assert!(refuse_display_less_cvvdp("cvvdp-gpu", "t").is_err());
+        assert!(refuse_display_less_cvvdp("cvvdp@standard_4k", "t").is_ok());
+        assert!(refuse_display_less_cvvdp("ssim2", "t").is_ok());
     }
 
     /// sha2 0.11 dropped `LowerHex` on the digest type (it returns `Array`, not
@@ -3212,10 +3246,11 @@ mod all_error_guard_tests {
     }
 }
 
-/// `cvvdp@<display>` arm tests: per-display output columns, `standard_4k`
-/// byte-identity with the plain `cvvdp` path, and unknown-display refusal.
-/// Everything the arm touches lives behind `cpu-cvvdp`, so the module-level
-/// cfg makes a featureless build skip these rather than fail to compile.
+/// `cvvdp@<display>` arm tests: display-named output columns, `standard_4k`
+/// byte-identity with historical (cvvdp-crate-default) scores, plain-`cvvdp`
+/// refusal, and unknown-display refusal. Everything the arm scores lives
+/// behind `cpu-cvvdp`, so the module-level cfg makes a featureless build skip
+/// these rather than fail to compile.
 #[cfg(all(test, feature = "cpu-cvvdp"))]
 mod cvvdp_display_tests {
     use super::*;
@@ -3243,57 +3278,113 @@ mod cvvdp_display_tests {
         )
     }
 
-    /// `cvvdp@standard_4k` must emit the SAME column with the SAME score bits
-    /// as plain `cvvdp` — naming the default display can never move a ledger
-    /// value. (The `metric` field itself differs — `cvvdp@standard_4k` — and
-    /// must: the JobId hashes it, and a display-named string is a different
-    /// declared arm.)
-    #[test]
-    fn cvvdp_at_standard_4k_matches_the_plain_cvvdp_row() {
-        let (r, d) = pair(96, 80);
-        let plain = score("cvvdp", &r, &d).expect("plain cvvdp scores");
-        let (plain_col, plain_v) = plain[0];
+    fn scorer(metric: &str) -> crate::metrics::CvvdpScorer {
+        let (kind, display) = cvvdp_selection(metric).unwrap();
+        let display = crate::metrics::display::parse_display(display).unwrap();
+        crate::metrics::CvvdpScorer::new(kind, &display, GpuRuntime::Auto).unwrap()
+    }
 
-        let mut scorer =
-            crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::by_name("standard_4k").unwrap();
-        let payload = cvvdp_display_payload("cvvdp@standard_4k", &mut scorer, &r, &d);
+    /// `cvvdp@standard_4k` reproduces the cvvdp crate's own default — every
+    /// historical `cvvdp` score — bit-for-bit, in the `_standard_4k` column.
+    #[test]
+    fn cvvdp_at_standard_4k_matches_historical_scores() {
+        let (r, d) = pair(96, 80);
+        let payload = cvvdp_display_payload(
+            "cvvdp@standard_4k",
+            &mut scorer("cvvdp@standard_4k"),
+            &r,
+            &d,
+        );
         assert_eq!(payload["metric"], "cvvdp@standard_4k");
         let scores = payload["scores"].as_object().expect("scores map");
         assert_eq!(scores.len(), 1, "{payload}");
         let (col, v) = scores.iter().next().unwrap();
-        assert_eq!(col.as_str(), plain_col, "column must stay the plain one");
+        let base = MetricKind::Cvvdp.column_names()[0];
+        assert_eq!(col.as_str(), format!("{base}_standard_4k"));
+        let historical = zenmetrics_api::cvvdp_cpu::Cvvdp::new(
+            96,
+            80,
+            zenmetrics_api::cvvdp_cpu::CvvdpParams::default(),
+        )
+        .unwrap()
+        .score(&r.pixels, &d.pixels)
+        .unwrap();
         assert_eq!(
             v.as_f64().unwrap().to_bits(),
-            plain_v.to_bits(),
-            "standard_4k must reproduce the default score bit-for-bit"
-        );
-        assert_eq!(
-            payload["score"].as_f64().unwrap().to_bits(),
-            plain_v.to_bits()
+            f64::from(historical).to_bits(),
+            "standard_4k must reproduce the historical default bit-for-bit"
         );
     }
 
-    /// A non-default display lands in its own `_<display>` column — never the
-    /// plain one — and the FHD geometry actually moves the score.
+    /// Another display lands in its own `_<display>` column — never a
+    /// display-less one — and the FHD geometry actually moves the score.
     #[test]
-    fn cvvdp_at_standard_fhd_emits_the_display_column() {
+    fn cvvdp_at_standard_fhd_emits_its_own_column() {
         let (r, d) = pair(96, 80);
-        let mut fhd =
-            crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::by_name("standard_fhd").unwrap();
-        let payload = cvvdp_display_payload("cvvdp@standard_fhd", &mut fhd, &r, &d);
-        let scores = payload["scores"].as_object().expect("scores map");
-        let col = format!("{}_standard_fhd", MetricKind::Cvvdp.column_names()[0]);
+        let fhd = cvvdp_display_payload(
+            "cvvdp@standard_fhd",
+            &mut scorer("cvvdp@standard_fhd"),
+            &r,
+            &d,
+        );
+        let s4k = cvvdp_display_payload(
+            "cvvdp@standard_4k",
+            &mut scorer("cvvdp@standard_4k"),
+            &r,
+            &d,
+        );
+        let base = MetricKind::Cvvdp.column_names()[0];
+        let col = format!("{base}_standard_fhd");
+        let scores = fhd["scores"].as_object().expect("scores map");
         assert!(
             scores.contains_key(&col),
-            "expected column {col}, got {payload}"
+            "expected column {col}, got {fhd}"
         );
-        assert!(!scores.contains_key(MetricKind::Cvvdp.column_names()[0]));
-        let v = scores[&col].as_f64().unwrap();
-        let plain = score("cvvdp", &r, &d).expect("plain cvvdp scores")[0].1;
+        assert!(!scores.contains_key(base), "no display-less SDR column");
+        let (v_fhd, v_4k) = (
+            fhd["score"].as_f64().unwrap(),
+            s4k["score"].as_f64().unwrap(),
+        );
         assert!(
-            (v - plain).abs() > 1e-3,
-            "fhd geometry should move the score: {v} vs {plain}"
+            (v_fhd - v_4k).abs() > 1e-3,
+            "fhd geometry should move the score: {v_fhd} vs {v_4k}"
         );
+    }
+
+    /// SDR diffmaps name their cvvdp display too: plain `cvvdp` is refused
+    /// before any decode (HDR keeps plain `cvvdp` — its measured-peak target),
+    /// and `cvvdp-gpu@…` is refused (maps come from the CPU port).
+    #[cfg(feature = "hdr")]
+    #[test]
+    fn sdr_diffmap_requires_a_cvvdp_display() {
+        let (a, b) = (
+            std::path::Path::new("/nonexistent/a.png"),
+            std::path::Path::new("/nonexistent/b.png"),
+        );
+        let err = diffmap_pair_to_blob("cvvdp", false, a, b).unwrap_err();
+        assert!(err.to_string().contains("display"), "{err}");
+        let err = diffmap_pair_to_blob("cvvdp-gpu@standard_4k", false, a, b).unwrap_err();
+        assert!(err.to_string().contains("SDR-only"), "{err}");
+        let err = diffmap_pair_to_blob("cvvdp@standard_4k", true, a, b).unwrap_err();
+        assert!(err.to_string().contains("SDR-only"), "{err}");
+        // A named SDR display passes validation and fails only at the decode.
+        let err = diffmap_pair_to_blob("cvvdp@standard_4k", false, a, b).unwrap_err();
+        assert!(!err.to_string().contains("display"), "{err}");
+    }
+
+    /// Plain `cvvdp` names no display and is refused — not defaulted — both
+    /// by the one-shot scorer and by a whole ScoreFile job, before any row.
+    #[test]
+    fn plain_cvvdp_is_refused() {
+        let (r, d) = pair(96, 80);
+        assert!(score("cvvdp", &r, &d).is_err());
+        let job = serde_json::json!({
+            "cell": {"image_path": "/nonexistent/ref.png", "codec": "zenjpeg"},
+            "kind": {"metrics": ["ssim2", "cvvdp"]},
+            "inputs": ["sha-a"],
+        });
+        let err = run_score_file(&job, None).expect_err("plain cvvdp must fail the job");
+        assert!(err.to_string().contains("display"), "{err}");
     }
 
     /// An unknown display is refused at scorer resolution — the ScoreFile arm
@@ -3302,8 +3393,8 @@ mod cvvdp_display_tests {
     #[test]
     fn cvvdp_at_unknown_display_is_refused() {
         assert!(
-            crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::by_name(
-                cvvdp_display_of("cvvdp@no_such_display").unwrap()
+            crate::metrics::display::parse_display(
+                cvvdp_selection("cvvdp@no_such_display").unwrap().1
             )
             .is_err()
         );

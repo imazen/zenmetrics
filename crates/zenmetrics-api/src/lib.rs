@@ -119,6 +119,8 @@ pub mod context;
 pub use enough;
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
+#[cfg(feature = "cvvdp")]
+pub use metric::CvvdpConfig;
 #[doc(hidden)]
 pub use metric::MetricInner;
 /// Encoded-file (PNG/JPEG) score front door (task #159 phase 4c); requires `encoded`.

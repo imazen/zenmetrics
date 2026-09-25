@@ -17,9 +17,7 @@
 
 #![cfg(all(feature = "cuda", feature = "cvvdp"))]
 
-use zenmetrics_api::{
-    Backend, Error, MAX_SESSIONS_PER_BACKEND, MetricKind, MetricParams, MetricSession,
-};
+use zenmetrics_api::{Backend, Error, MAX_SESSIONS_PER_BACKEND, MetricKind, MetricSession};
 
 const W: u32 = 256;
 const H: u32 = 256;
@@ -44,7 +42,7 @@ fn owned_into_metric_respects_cap_and_recycles() {
             MetricKind::Cvvdp,
             W,
             H,
-            MetricParams::default_for(MetricKind::Cvvdp),
+            crate::params_for(MetricKind::Cvvdp),
         )
         .expect("into_metric");
     // One slot left. Take it with a bare session so we're exactly at cap.
@@ -78,7 +76,7 @@ fn owned_into_metric_respects_cap_and_recycles() {
             MetricKind::Cvvdp,
             W,
             H,
-            MetricParams::default_for(MetricKind::Cvvdp),
+            crate::params_for(MetricKind::Cvvdp),
         )
         .expect("into_metric 2");
     assert_eq!(
@@ -100,7 +98,7 @@ fn owned_into_metric_respects_cap_and_recycles() {
             MetricKind::Cvvdp,
             W,
             H,
-            MetricParams::default_for(MetricKind::Cvvdp),
+            crate::params_for(MetricKind::Cvvdp),
         )
         .expect("into_metric leak");
     assert_eq!(MetricSession::live_count(backend), MAX_SESSIONS_PER_BACKEND);

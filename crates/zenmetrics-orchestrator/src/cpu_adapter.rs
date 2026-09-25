@@ -294,6 +294,7 @@ impl CpuAdapter {
     /// the CPU CLI variant.
     #[allow(dead_code)] // only called when feature = "cuda" is on (via executor.rs)
     pub fn last_extras(&self) -> std::collections::BTreeMap<String, f64> {
+        #[allow(unused_mut)] // mutated only under `cpu-butter`
         let mut out = std::collections::BTreeMap::new();
         #[cfg(feature = "cpu-butter")]
         if let CpuAdapterState::Butter(s) = &self.state
@@ -1016,9 +1017,9 @@ fn construct_cvvdp(
     height: u32,
     params: &MetricParams,
 ) -> Result<CpuAdapterState, CpuAdapterError> {
-    // cvvdp re-exports CvvdpParams from cvvdp-gpu, and the umbrella
-    // wraps the *same* struct in MetricParams::Cvvdp. So we can lift
-    // the params without an extra translation table.
+    // cvvdp re-exports CvvdpParams from cvvdp-gpu, and the umbrella's
+    // `CvvdpConfig` carries that struct plus the selected geometry, so
+    // both lift without a translation table.
     let p = match params {
         MetricParams::Cvvdp(p) => p.clone(),
         _ => {
@@ -1027,8 +1028,8 @@ fn construct_cvvdp(
             )));
         }
     };
-    let c =
-        cvvdp::Cvvdp::new(width, height, p).map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
+    let c = cvvdp::Cvvdp::with_geometry(width, height, p.params(), p.geometry())
+        .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
     Ok(CpuAdapterState::Cvvdp(Box::new(c)))
 }
 
@@ -1754,7 +1755,7 @@ mod tests {
     #[test]
     #[cfg(feature = "cpu-cvvdp")]
     fn cvvdp_strip_stub_returns_same_as_full() {
-        let params = MetricParams::try_default_for(MetricKind::Cvvdp).unwrap();
+        let params = MetricParams::cvvdp(zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k);
         let mut adapter = CpuAdapter::new(MetricKind::Cvvdp, 256, 256, &params)
             .expect("cpu-cvvdp adapter constructs");
         assert!(

@@ -1245,6 +1245,7 @@ pub(crate) mod tests {
             distort_jobs: 1,
             distort_label: None,
             metrics: vec![],
+            cvvdp_display: None,
             gpu_runtime: GpuRuntime::Auto,
             output: std::path::PathBuf::from("/tmp/x.tsv"),
             feature_output: None,

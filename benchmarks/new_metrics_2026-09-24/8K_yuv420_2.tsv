@@ -1,0 +1,5 @@
+size_label	metric	mode	cold_or_warm	w	h	mean_ns	mean_ms	n_rounds	score
+8K	yuv420	lat	na	7680	4320	198113568.1	198.1136	50	40
+8K	yuv420	par1	na	7680	4320	197875909.3	197.8759	50	40
+8K	yuv420	par4	na	7680	4320	53085902.3	53.0859	50	40
+8K	yuv420	par8	na	7680	4320	29337063.7	29.3371	50	40

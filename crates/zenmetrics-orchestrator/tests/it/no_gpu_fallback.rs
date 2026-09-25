@@ -274,7 +274,9 @@ fn run_single_lands_on_cpu_when_gpu_absent_cvvdp() {
     let (r, d) = synth(256);
     let profile = cpu_only_profile_at(256 * 256);
     let (mut orch, _td) = no_gpu_orch_with(MetricKind::Cvvdp, profile);
-    let params = zenmetrics_api::MetricParams::try_default_for(MetricKind::Cvvdp).unwrap();
+    let params = zenmetrics_api::MetricParams::cvvdp(
+        zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+    );
     let task = Task {
         task_id: 1001,
         ref_data: TaskData::Srgb8(r),

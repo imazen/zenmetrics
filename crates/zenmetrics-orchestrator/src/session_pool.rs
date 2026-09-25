@@ -370,7 +370,10 @@ impl WarmSessionPool {
             metric,
             width,
             height,
-            metric_params_or_default(metric, params),
+            match metric_params_or_default(metric, params) {
+                Ok(p) => p,
+                Err(e) => return Err(PoolScoreErr::Other(e.to_string())),
+            },
             MemoryMode::Auto,
         ) {
             Ok(m) => m,
@@ -480,10 +483,14 @@ impl WarmSessionPool {
 
 /// Resolve `params` to a concrete `MetricParams` (defaulting per-kind)
 /// for the owned-metric constructor, which takes a non-`Option` value.
-fn metric_params_or_default(kind: MetricKind, params: &Option<MetricParams>) -> MetricParams {
+/// Errors for cvvdp without params: it has no default display.
+fn metric_params_or_default(
+    kind: MetricKind,
+    params: &Option<MetricParams>,
+) -> zenmetrics_api::Result<MetricParams> {
     match params {
-        Some(p) => p.clone(),
-        None => MetricParams::default_for(kind),
+        Some(p) => Ok(p.clone()),
+        None => MetricParams::try_default_for(kind),
     }
 }
 
@@ -562,7 +569,9 @@ mod tests {
 
     #[test]
     fn warm_key_distinguishes_ref_and_params() {
-        let p = Some(MetricParams::default_for(MetricKind::Cvvdp));
+        let p = Some(MetricParams::cvvdp(
+            zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+        ));
         let k1 = WarmKey::new(MetricKind::Cvvdp, 256, 256, &p, 0xAAAA);
         let k2 = WarmKey::new(MetricKind::Cvvdp, 256, 256, &p, 0xBBBB);
         assert_ne!(k1, k2, "distinct ref_hash → distinct key");

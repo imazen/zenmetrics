@@ -5,7 +5,7 @@
 //! the per-crate `CvvdpBatchScorer`). CUDA-gated; NO GRACEFUL SKIPS.
 #![cfg(all(feature = "cuda", feature = "cvvdp"))]
 
-use zenmetrics_api::cvvdp::params::DisplayModel;
+use zenmetrics_api::cvvdp::params::{CustomDisplay, DisplayGeometry, DisplayModel};
 use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
 
 #[test]
@@ -21,16 +21,16 @@ fn cvvdp_display_model_threads_through_umbrella() {
         .map(|(i, b)| b.wrapping_add(((i * 40503) & 0x1f) as u8))
         .collect();
 
-    // Default = SDR reference display (STANDARD_4K, y_peak 200).
+    // SDR reference display, named explicitly (STANDARD_4K, y_peak 200).
     let sdr_jod = {
         let mut m = Metric::new(
             MetricKind::Cvvdp,
             Backend::Cuda,
             w,
             h,
-            MetricParams::default_for(MetricKind::Cvvdp),
+            crate::params_for(MetricKind::Cvvdp),
         )
-        .expect("Metric::new cvvdp default");
+        .expect("Metric::new cvvdp standard_4k");
         m.compute_srgb_u8(&r, &d).expect("compute sdr").value
     };
 
@@ -45,7 +45,10 @@ fn cvvdp_display_model_threads_through_umbrella() {
             Backend::Cuda,
             w,
             h,
-            MetricParams::cvvdp_with_display(hdr),
+            MetricParams::cvvdp(
+                CustomDisplay::new("hdr_1000_nits", hdr, DisplayGeometry::STANDARD_4K)
+                    .expect("valid custom display"),
+            ),
         )
         .expect("Metric::new cvvdp HDR display");
         m.compute_srgb_u8(&r, &d).expect("compute hdr").value

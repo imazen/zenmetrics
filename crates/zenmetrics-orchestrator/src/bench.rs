@@ -803,7 +803,7 @@ fn construct_metric(
 
     match backend {
         Backend::GpuFull => {
-            let params = match MetricParams::try_default_for(kind) {
+            let params = match bench_params(kind) {
                 Ok(p) => p,
                 Err(_) => return ConstructOutcome::NoMetric,
             };
@@ -820,7 +820,7 @@ fn construct_metric(
             }
         }
         Backend::GpuStrip => {
-            let params = match MetricParams::try_default_for(kind) {
+            let params = match bench_params(kind) {
                 Ok(p) => p,
                 Err(_) => return ConstructOutcome::NoMetric,
             };
@@ -846,7 +846,7 @@ fn construct_metric(
             // Phase 6: CPU bench cell. Build the adapter via the same
             // factory the executor uses so production cells = bench
             // cells, byte-identical dispatch.
-            let params = match MetricParams::try_default_for(kind) {
+            let params = match bench_params(kind) {
                 Ok(p) => p,
                 Err(_) => return ConstructOutcome::NoMetric,
             };
@@ -883,6 +883,19 @@ fn classify_construct_err(e: zenmetrics_api::Error) -> ConstructOutcome {
     } else {
         ConstructOutcome::OtherErr(msg)
     }
+}
+
+#[cfg(feature = "bench")]
+/// Bench parameters for `kind`. cvvdp has no default display in the
+/// umbrella; the capability bench names `standard_4k` explicitly (the
+/// geometry the chooser's cvvdp profile has always been measured at).
+fn bench_params(kind: MetricKind) -> zenmetrics_api::Result<MetricParams> {
+    if kind == MetricKind::Cvvdp {
+        return Ok(MetricParams::cvvdp(
+            zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+        ));
+    }
+    MetricParams::try_default_for(kind)
 }
 
 #[cfg(feature = "bench")]

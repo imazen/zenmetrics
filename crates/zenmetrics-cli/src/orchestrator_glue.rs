@@ -51,8 +51,8 @@ impl OrchestratorMetricSpec {
     /// Map a CLI variant → orchestrator spec. Returns the full bridge
     /// metadata the caller needs; the caller can fan out one
     /// orchestrator [`Task`] per spec.
-    pub fn from_cli(kind: CliMetricKind) -> Self {
-        match kind {
+    pub fn from_cli(kind: CliMetricKind) -> Result<Self, OrchestratorBuildError> {
+        let spec = match kind {
             CliMetricKind::Ssim2 => Self {
                 kind: ApiMetricKind::Ssim2,
                 prefer_cpu: true,
@@ -142,7 +142,9 @@ impl OrchestratorMetricSpec {
                 kind: ApiMetricKind::Cvvdp,
                 prefer_cpu: false,
             },
-        }
+            other => return Err(OrchestratorBuildError::UnsupportedMetric(other.name())),
+        };
+        Ok(spec)
     }
 }
 
@@ -224,6 +226,8 @@ impl OrchestratorRuntimeOpts {
 /// Errors raised when building or driving the orchestrator from the CLI.
 #[derive(Debug)]
 pub enum OrchestratorBuildError {
+    /// This metric has no orchestrator backend; use the direct CLI scorer.
+    UnsupportedMetric(&'static str),
     /// Capability cache I/O or persistence failure.
     Cache(OrchestratorCacheError),
     /// Caller asked for a CPU variant that this build doesn't include
@@ -240,6 +244,10 @@ pub enum OrchestratorBuildError {
 impl std::fmt::Display for OrchestratorBuildError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            OrchestratorBuildError::UnsupportedMetric(metric) => write!(
+                f,
+                "metric '{metric}' is not available through the orchestrator; run without --use-orchestrator"
+            ),
             OrchestratorBuildError::Cache(e) => write!(f, "orchestrator cache: {e}"),
             OrchestratorBuildError::CpuVariantUnavailable {
                 metric,
@@ -277,7 +285,7 @@ pub fn validate_cpu_variant_built_in(
     ) {
         return Ok(());
     }
-    let spec = OrchestratorMetricSpec::from_cli(cli_kind);
+    let spec = OrchestratorMetricSpec::from_cli(cli_kind)?;
     if !spec.prefer_cpu {
         return Ok(());
     }
@@ -373,17 +381,53 @@ mod tests {
     #[test]
     fn metric_spec_maps_cpu_and_gpu_variants() {
         // Spot-check CPU/GPU pairing for each metric.
-        assert!(OrchestratorMetricSpec::from_cli(CliMetricKind::Ssim2).prefer_cpu);
-        assert!(!OrchestratorMetricSpec::from_cli(CliMetricKind::Ssim2Gpu).prefer_cpu);
-        assert!(OrchestratorMetricSpec::from_cli(CliMetricKind::Zensim).prefer_cpu);
-        assert!(!OrchestratorMetricSpec::from_cli(CliMetricKind::ZensimGpu).prefer_cpu);
+        assert!(
+            OrchestratorMetricSpec::from_cli(CliMetricKind::Ssim2)
+                .unwrap()
+                .prefer_cpu
+        );
+        assert!(
+            !OrchestratorMetricSpec::from_cli(CliMetricKind::Ssim2Gpu)
+                .unwrap()
+                .prefer_cpu
+        );
+        assert!(
+            OrchestratorMetricSpec::from_cli(CliMetricKind::Zensim)
+                .unwrap()
+                .prefer_cpu
+        );
+        assert!(
+            !OrchestratorMetricSpec::from_cli(CliMetricKind::ZensimGpu)
+                .unwrap()
+                .prefer_cpu
+        );
         // Unsuffixed cvvdp / iwssim are now the CPU variants (native ports),
         // matching the ssim2/dssim/zensim convention; the `-gpu` siblings
         // keep the default GPU-first chooser behaviour.
-        assert!(OrchestratorMetricSpec::from_cli(CliMetricKind::Cvvdp).prefer_cpu);
-        assert!(!OrchestratorMetricSpec::from_cli(CliMetricKind::CvvdpGpu).prefer_cpu);
-        assert!(OrchestratorMetricSpec::from_cli(CliMetricKind::Iwssim).prefer_cpu);
-        assert!(!OrchestratorMetricSpec::from_cli(CliMetricKind::IwssimGpu).prefer_cpu);
+        assert!(
+            OrchestratorMetricSpec::from_cli(CliMetricKind::Cvvdp)
+                .unwrap()
+                .prefer_cpu
+        );
+        assert!(
+            !OrchestratorMetricSpec::from_cli(CliMetricKind::CvvdpGpu)
+                .unwrap()
+                .prefer_cpu
+        );
+        assert!(
+            OrchestratorMetricSpec::from_cli(CliMetricKind::Iwssim)
+                .unwrap()
+                .prefer_cpu
+        );
+        assert!(
+            !OrchestratorMetricSpec::from_cli(CliMetricKind::IwssimGpu)
+                .unwrap()
+                .prefer_cpu
+        );
+        assert!(matches!(
+            OrchestratorMetricSpec::from_cli(CliMetricKind::Nlpd),
+            Err(OrchestratorBuildError::UnsupportedMetric("nlpd"))
+        ));
     }
 
     #[test]

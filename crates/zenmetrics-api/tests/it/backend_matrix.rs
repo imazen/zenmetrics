@@ -48,6 +48,7 @@ fn discrimination_floor(kind: MetricKind) -> f64 {
         MetricKind::Butter => 0.1,
         MetricKind::Iwssim => 0.1,
         MetricKind::Zensim => 1e-4,
+        MetricKind::Hdrvdp => 0.5,
     }
 }
 
@@ -88,7 +89,7 @@ fn dist_img(w: u32, h: u32) -> Vec<u8> {
 
 /// Construct + score a `(reference, distorted)` pair on `backend`.
 fn score_pair(kind: MetricKind, backend: Backend, w: u32, h: u32, r: &[u8], d: &[u8]) -> f64 {
-    let mut m = Metric::new(kind, backend, w, h, MetricParams::default_for(kind))
+    let mut m = Metric::new(kind, backend, w, h, crate::params_for(kind))
         .unwrap_or_else(|e| panic!("{kind:?} on {backend:?} at {w}x{h} must construct: {e}"));
     m.compute_srgb_u8(r, d)
         .unwrap_or_else(|e| panic!("{kind:?} on {backend:?} at {w}x{h} must score: {e}"))
@@ -219,6 +220,7 @@ fn cpu_vs_cuda_parity() {
             MetricKind::Butter => 4.0,
             MetricKind::Iwssim => 0.15,
             MetricKind::Zensim => 0.05,
+            MetricKind::Hdrvdp => 0.05,
         }
     }
     eprintln!("METRIC      SIZE     cpu_ident  cpu_dist   gpu_ident  gpu_dist   |Δident|  |Δdist|");

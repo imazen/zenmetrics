@@ -96,7 +96,9 @@ pub struct Task {
     pub height: u32,
     /// Which metric to compute.
     pub metric: MetricKind,
-    /// Per-metric parameters. `None` → [`MetricParams::default_for(metric)`].
+    /// Per-metric parameters. `None` →
+    /// [`MetricParams::try_default_for(metric)`] — an error for cvvdp,
+    /// which has no default display.
     pub params: Option<MetricParams>,
     /// Phase 7.6 sort key. Set to `0` (the default) at construction; the
     /// orchestrator populates this with `xxhash3_64(ref_bytes)` (or the
@@ -674,25 +676,30 @@ fn construct_cvvdp_strip_pair(
     height: u32,
     params: Option<MetricParams>,
 ) -> ConstructOutcome {
-    use zenmetrics_api::cvvdp::{CvvdpOpaque, CvvdpParams, MemoryMode as CvvdpMode};
-    // Extract the cvvdp params if the caller supplied them; otherwise
-    // default. We MUST NOT panic on a variant mismatch — surface it as
+    use zenmetrics_api::cvvdp::{CvvdpOpaque, MemoryMode as CvvdpMode};
+    // cvvdp needs an explicitly selected display (there is no default).
+    // We MUST NOT panic on a missing/mismatched variant — surface it as
     // an Other error so the ladder advances cleanly.
-    let p: CvvdpParams = match params {
+    let p = match params {
         Some(MetricParams::Cvvdp(p)) => p,
         Some(_) => {
             return ConstructOutcome::Other(
                 "MetricParams variant != Cvvdp for cvvdp StripPair construction".to_string(),
             );
         }
-        None => CvvdpParams::default(),
+        None => {
+            return ConstructOutcome::Other(
+                zenmetrics_api::Error::DisplayRequired { kind: "cvvdp" }.to_string(),
+            );
+        }
     };
     let mode = CvvdpMode::StripPair { h_body: Some(256) };
-    match CvvdpOpaque::new_with_memory_mode(
+    match CvvdpOpaque::new_with_geometry_and_memory_mode(
         zenmetrics_api::cvvdp::Backend::Cuda,
         width,
         height,
-        p,
+        p.params(),
+        p.geometry(),
         mode,
     ) {
         Ok(c) => ConstructOutcome::Ok(ExecMetric::CvvdpStripPair(Box::new(c))),

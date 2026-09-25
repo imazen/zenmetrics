@@ -18,7 +18,7 @@
 //! NO GRACEFUL SKIPS — requires a real CUDA GPU; fails loudly without one.
 #![cfg(all(feature = "cuda", feature = "ssim2"))]
 
-use zenmetrics_api::{Backend, MetricKind, MetricParams, MetricSession};
+use zenmetrics_api::{Backend, MetricKind, MetricSession};
 
 const W: u32 = 1024;
 const H: u32 = 1024;
@@ -52,7 +52,7 @@ fn dropping_ssim2_session_reclaims_its_pool() {
             MetricKind::Ssim2,
             W,
             H,
-            MetricParams::default_for(MetricKind::Ssim2),
+            crate::params_for(MetricKind::Ssim2),
         )
         .expect("metric(Ssim2)");
     let s = m.score(&r, &d).expect("ssim2 score");

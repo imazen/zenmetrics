@@ -269,6 +269,14 @@ struct ScoreArgs {
     /// Metric to evaluate.
     #[arg(long, value_enum)]
     metric: MetricKind,
+    /// Display preset for cvvdp / cvvdp-gpu — photometry AND viewing
+    /// geometry, from cvvdp's vendored `display_models.json` (e.g.
+    /// `standard_4k`, `standard_fhd`, `standard_phone`). REQUIRED for SDR
+    /// cvvdp: there is no default. The score column names the display
+    /// (`<impl column>_<display>`). Not accepted with `--hdr` (the HDR route
+    /// uses the reference-peak HDR target). Other metrics ignore it.
+    #[arg(long, value_parser = crate::metrics::display::display_value_parser())]
+    display_model: Option<crate::metrics::CvvdpDisplay>,
     /// Reference image path.
     #[arg(long)]
     reference: PathBuf,
@@ -328,16 +336,16 @@ struct BatchArgs {
     /// conditions — photometry (peak/black luminance, ambient) AND
     /// geometry (resolution/distance → pixels-per-degree). Valid names
     /// come from cvvdp's vendored `display_models.json`, e.g.
-    /// `standard_4k` (default), `standard_fhd`, `iphone_14_pro`,
+    /// `standard_fhd` (default), `standard_4k`, `iphone_14_pro`,
     /// `iphone_14_pro_hdr`, `standard_phone`, `ipad_pro_12_9`,
-    /// `macbook_pro_16`. Default `standard_4k` reproduces every historical
-    /// CVVDP score. `standard_fhd` (37.84 pixels/degree) is the display the
-    /// JPEG AIC evaluation uses for its CVVDP anchor (AIC-4 CTC v2.0,
-    /// `cvvdp -d standard_fhd`). For CPU `cvvdp` a non-default display is
-    /// written to its own column, `<cpu column>_<display>`; SDR only.
+    /// `macbook_pro_16`. The default `standard_fhd` (37.84 pixels/degree) is
+    /// the display the JPEG AIC evaluation uses for its CVVDP anchor (AIC-4
+    /// CTC v2.0, `cvvdp -d standard_fhd`). SDR cvvdp scores always land in
+    /// `<impl column>_<display>`; display-less cvvdp columns predate
+    /// 2026-09-25 and hold `standard_4k` scores. SDR only.
     /// Other metrics ignore this flag.
-    #[arg(long)]
-    display_model: Option<String>,
+    #[arg(long, value_parser = crate::metrics::display::display_value_parser())]
+    display_model: Option<crate::metrics::CvvdpDisplay>,
     /// Number of CPU jobs (CPU metrics only). GPU metrics always serialize
     /// through one CubeCL stream.
     #[arg(long, default_value = "1")]
@@ -407,6 +415,11 @@ struct CompareArgs {
     /// Reserved for CPU parallelism. Currently serial — see `batch`.
     #[arg(long, default_value = "1")]
     jobs: usize,
+    /// Display preset for cvvdp / cvvdp-gpu (e.g. `standard_4k`,
+    /// `standard_fhd`). REQUIRED when a cvvdp metric is requested — there is
+    /// no default. Its columns name the display. Other metrics ignore it.
+    #[arg(long, value_parser = crate::metrics::display::display_value_parser())]
+    display_model: Option<crate::metrics::CvvdpDisplay>,
 }
 
 #[cfg(feature = "sweep")]
@@ -504,6 +517,12 @@ struct SweepArgs {
     /// metric. Defaults to `zensim` if omitted.
     #[arg(long = "metric", value_enum, action = ArgAction::Append)]
     metrics: Vec<MetricKind>,
+    /// Display preset for cvvdp / cvvdp-gpu (e.g. `standard_4k`,
+    /// `standard_fhd`). REQUIRED when a cvvdp metric is scored on an SDR
+    /// sweep — there is no default. Its `score_*` column names the display.
+    /// Not used by `--hdr` sweeps (their display is the HDR target).
+    #[arg(long, value_parser = crate::metrics::display::display_value_parser())]
+    display_model: Option<crate::metrics::CvvdpDisplay>,
     /// Encode and time every cell but score NOTHING: the emitted TSV carries
     /// `encoded_bytes` + `encode_ms` and no `score_*` column.
     ///
@@ -690,11 +709,11 @@ struct ScorePairsArgs {
     gpu_runtime: GpuRuntime,
     /// Display-model preset name (cvvdp / cvvdp-gpu); see `batch --help`.
     /// Selects viewing-condition photometry + geometry (PPD).
-    /// Default `standard_4k`. e.g. `standard_fhd` (the JPEG AIC CVVDP
-    /// display), `iphone_14_pro`, `standard_phone`. CPU `cvvdp` writes a
-    /// non-default display to `<cpu column>_<display>`.
-    #[arg(long)]
-    display_model: Option<String>,
+    /// Default `standard_fhd` (the JPEG AIC CVVDP display); e.g.
+    /// `standard_4k`, `iphone_14_pro`, `standard_phone`. SDR cvvdp scores
+    /// always land in `<impl column>_<display>`.
+    #[arg(long, value_parser = crate::metrics::display::display_value_parser())]
+    display_model: Option<crate::metrics::CvvdpDisplay>,
     /// Allow sub-176-pixel images for IW-SSIM via reflect-pad adaptive
     /// mode. Default `false` rejects small inputs (stock IW-SSIM
     /// requires `min(W, H) ≥ 176` per the 5-level pyramid + 11×11 valid
@@ -1300,6 +1319,14 @@ fn cmd_sweep(
     let hdr = args.hdr;
     #[cfg(not(feature = "hdr"))]
     let hdr = false;
+    require_display_model(&metrics, args.display_model.as_ref(), hdr, "sweep")?;
+    if hdr && args.display_model.is_some() && metrics.iter().any(|m| m.needs_display()) {
+        return Err(
+            "sweep: --display-model is SDR-only; the --hdr cvvdp route uses the \
+                    reference-peak HDR target"
+                .into(),
+        );
+    }
     #[cfg(all(feature = "hdr", feature = "orchestrator"))]
     if hdr && use_orchestrator {
         return Err(
@@ -1323,6 +1350,7 @@ fn cmd_sweep(
         distort_jobs: args.distort_jobs,
         distort_label: args.distort_label,
         metrics,
+        cvvdp_display: args.display_model,
         gpu_runtime: args.gpu_runtime,
         output: args.output,
         feature_output: args.feature_output,
@@ -1436,6 +1464,13 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // alone reaches ~1e5 on synthetic textures). Sweep means on
         // real corpora land in the tens–hundreds.
         MetricKind::Mad => Some((-0.001, 1_000_000.0, 0.0)),
+        MetricKind::Vmaf | MetricKind::VmafNeg | MetricKind::Vmaf4k | MetricKind::VmafV1 => {
+            Some((-0.5, 100.5, 100.0))
+        }
+        MetricKind::Ssim | MetricKind::SsimLibvmaf | MetricKind::MsSsimLibvmaf => {
+            Some((-0.5, 1.5, 1.0))
+        }
+        MetricKind::Nlpd | MetricKind::Psnr | MetricKind::PsnrY | MetricKind::PsnrYLibvmaf => None,
     }
 }
 
@@ -1604,9 +1639,9 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     // CVVDP_SIDECAR_SCHEMA.md layout — readers indexing by literal
     // column name still work; readers expecting "one score column" are
     // updated to enumerate `column_names()` instead.
-    // CPU cvvdp with an explicit `--display-model` scores through its own
-    // display-aware scorer into a display-named column (see
-    // `metrics::cvvdp_cpu`); without the flag the umbrella path is unchanged.
+    // CPU cvvdp scores through the named `--display-model` preset (see
+    // `metrics::cvvdp_cpu`); SDR cvvdp without it is refused — there is no
+    // default. The column names the display (`output_metric_columns`).
     #[cfg(all(feature = "cpu-cvvdp", feature = "hdr"))]
     let score_pairs_hdr = args.hdr;
     #[cfg(all(feature = "cpu-cvvdp", not(feature = "hdr")))]
@@ -1614,30 +1649,21 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     #[cfg(feature = "cpu-cvvdp")]
     let mut cpu_cvvdp_scorer = cpu_cvvdp_display_scorer(
         args.metric,
-        args.display_model.as_deref(),
+        args.display_model.as_ref(),
         score_pairs_hdr,
         "score-pairs",
     )?;
-    let metric_cols: Vec<String> = {
-        #[cfg(feature = "cpu-cvvdp")]
-        if let Some(s) = cpu_cvvdp_scorer.as_ref() {
-            vec![s.column_name(args.metric.column_names()[0])]
-        } else {
-            args.metric
-                .column_names()
-                .iter()
-                .map(|c| (*c).to_string())
-                .collect()
-        }
-        #[cfg(not(feature = "cpu-cvvdp"))]
-        {
-            args.metric
-                .column_names()
-                .iter()
-                .map(|c| (*c).to_string())
-                .collect()
-        }
-    };
+    require_display_model(
+        &[args.metric],
+        args.display_model.as_ref(),
+        score_pairs_hdr_mode(&args),
+        "score-pairs",
+    )?;
+    let metric_cols: Vec<String> = output_metric_columns(
+        args.metric,
+        args.display_model.as_ref(),
+        score_pairs_hdr_mode(&args),
+    );
     if metric_cols.is_empty() {
         return Err(format!(
             "score-pairs: metric {} has no declared column_names() — \
@@ -1698,10 +1724,11 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         #[cfg(not(feature = "hdr"))]
         let hdr_target = false;
         if !hdr_target {
-            let target = match args.display_model.as_deref() {
-                Some(name) => crate::metrics::cvvdp_gpu::DisplayTarget::by_name(name)?,
-                None => crate::metrics::cvvdp_gpu::DisplayTarget::default(),
-            };
+            let name = args
+                .display_model
+                .as_ref()
+                .ok_or_else(|| crate::metrics::display_required_msg(args.metric))?;
+            let target = crate::metrics::cvvdp_gpu::DisplayTarget::from_display(name);
             cvvdp_scorer = Some(
                 crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(
                     args.gpu_runtime,
@@ -2567,7 +2594,6 @@ fn score_one_pair_maybe_hdr(
     hdr_pair: Option<DecodedRgb8Pair>,
     ref_cache: &mut Option<CachedRef>,
 ) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
-    use crate::metrics::run_metric;
     match hdr_pair {
         Some(Ok((reference, distorted))) => {
             if reference.width != distorted.width || reference.height != distorted.height {
@@ -2582,7 +2608,8 @@ fn score_one_pair_maybe_hdr(
                 )
                 .into());
             }
-            let scores = run_metric(metric, &reference, &distorted, gpu_runtime)?;
+            let scores =
+                crate::metrics::run_metric_hdr_u8(metric, &reference, &distorted, gpu_runtime)?;
             if scores.is_empty() {
                 return Err("metric returned zero scores".into());
             }
@@ -2602,6 +2629,14 @@ fn cmd_score(
     // the faithful native linear-planes path (no u8 clamp); the SDR kernels get
     // PU21→sRGB8. Short-circuits the SDR decode + orchestrator routing — both
     // assume sRGB8 inputs.
+    #[cfg(feature = "hdr")]
+    if args.hdr && args.display_model.is_some() && args.metric.needs_display() {
+        return Err(
+            "score: --display-model is SDR-only; the --hdr cvvdp route uses the \
+                    reference-peak HDR target"
+                .into(),
+        );
+    }
     #[cfg(feature = "hdr")]
     if args.hdr {
         let r = hdr::decode_to_nits(&args.reference)?;
@@ -2642,10 +2677,11 @@ fn cmd_score(
                 hdr::to_sdr_rgb8(&d, args.hdr_transfer),
             )
         };
-        let scores = run_metric(args.metric, &rr, &dd, args.gpu_runtime)?;
+        let scores = metrics::run_metric_hdr_u8(args.metric, &rr, &dd, args.gpu_runtime)?;
         print_score(args.output, args.metric, &scores);
         return Ok(());
     }
+    require_display_model(&[args.metric], args.display_model.as_ref(), false, "score")?;
     let reference = decode::decode_image_to_rgb8(&args.reference)?;
     let distorted = decode::decode_image_to_rgb8(&args.distorted)?;
     if reference.width != distorted.width || reference.height != distorted.height {
@@ -2667,6 +2703,7 @@ fn cmd_score(
             args.metric,
             &reference,
             &distorted,
+            args.display_model.as_ref(),
         )?;
         // Re-emit as (name, value) tuples in the same shape as
         // `run_metric` so `print_score` doesn't branch. The
@@ -2686,11 +2723,12 @@ fn cmd_score(
     }
     let (r_ing, d_ing) =
         metrics::luma_ingress_pair(args.metric, args.luma_ingress, &reference, &distorted);
-    let scores = run_metric(
+    let scores = metrics::run_metric_display(
         args.metric,
         r_ing.as_ref().unwrap_or(&reference),
         d_ing.as_ref().unwrap_or(&distorted),
         args.gpu_runtime,
+        args.display_model.as_ref(),
     )?;
     print_score(args.output, args.metric, &scores);
     Ok(())
@@ -2727,37 +2765,28 @@ fn cmd_batch(
     let mut wtr = csv::WriterBuilder::new()
         .delimiter(b'\t')
         .from_path(&args.output)?;
-    // CPU cvvdp with an explicit `--display-model`: the named preset's
-    // photometry AND geometry (pixels per degree), scored into a column that
-    // names the display unless it is the default `standard_4k`. Without the
-    // flag, `--metric cvvdp` keeps the umbrella path (standard_4k) unchanged.
+    // CPU cvvdp scores through the named `--display-model` preset's
+    // photometry AND geometry (pixels per degree); SDR cvvdp without it is
+    // refused (`require_display_model` — there is no default). The column
+    // names the display (`output_metric_columns`).
     #[cfg(feature = "cpu-cvvdp")]
     let mut cpu_cvvdp_scorer = cpu_cvvdp_display_scorer(
         args.metric,
-        args.display_model.as_deref(),
+        args.display_model.as_ref(),
         batch_hdr_mode(&args),
         "batch",
     )?;
-    let metric_cols: Vec<String> = {
-        #[cfg(feature = "cpu-cvvdp")]
-        if let Some(s) = cpu_cvvdp_scorer.as_ref() {
-            vec![s.column_name(args.metric.column_names()[0])]
-        } else {
-            args.metric
-                .column_names()
-                .iter()
-                .map(|c| (*c).to_string())
-                .collect()
-        }
-        #[cfg(not(feature = "cpu-cvvdp"))]
-        {
-            args.metric
-                .column_names()
-                .iter()
-                .map(|c| (*c).to_string())
-                .collect()
-        }
-    };
+    require_display_model(
+        &[args.metric],
+        args.display_model.as_ref(),
+        batch_hdr_mode(&args),
+        "batch",
+    )?;
+    let metric_cols: Vec<String> = output_metric_columns(
+        args.metric,
+        args.display_model.as_ref(),
+        batch_hdr_mode(&args),
+    );
     let mut new_headers: Vec<String> = headers.iter().map(String::from).collect();
     new_headers.extend(metric_cols.iter().cloned());
     wtr.write_record(&new_headers)?;
@@ -2777,9 +2806,9 @@ fn cmd_batch(
     // (a) the expensive `Cvvdp::new` instance survives across pairs of
     // matching dims, and (b) the `--display-model` viewing conditions
     // (photometry + geometry/PPD) actually flow into scoring. The
-    // generic `run_metric` umbrella path is fixed to STANDARD_4K and
-    // cannot honour --display-model, so it is bypassed for cvvdp-gpu. The
-    // unsuffixed `cvvdp` (native-CPU port) uses the umbrella CPU path.
+    // generic `run_metric` path refuses cvvdp (no default display), so it
+    // is bypassed for cvvdp-gpu. The unsuffixed `cvvdp` (native-CPU port)
+    // scores through `cpu_cvvdp_display_scorer`.
     #[cfg(feature = "gpu-cvvdp")]
     let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
     // HDR: the display target is per-REFERENCE (the ref's MEASURED peak,
@@ -2793,10 +2822,11 @@ fn cmd_batch(
         #[cfg(not(feature = "hdr"))]
         let hdr_target = false;
         if !hdr_target {
-            let target = match args.display_model.as_deref() {
-                Some(name) => crate::metrics::cvvdp_gpu::DisplayTarget::by_name(name)?,
-                None => crate::metrics::cvvdp_gpu::DisplayTarget::default(),
-            };
+            let name = args
+                .display_model
+                .as_ref()
+                .ok_or_else(|| crate::metrics::display_required_msg(args.metric))?;
+            let target = crate::metrics::cvvdp_gpu::DisplayTarget::from_display(name);
             cvvdp_scorer = Some(
                 crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(
                     args.gpu_runtime,
@@ -3019,7 +3049,12 @@ fn cmd_batch(
             };
             let (r_ing, d_ing) =
                 metrics::luma_ingress_pair(args.metric, ingress, &reference, &distorted);
-            let scores = run_metric(
+            let score_fn = if hdr_mode {
+                metrics::run_metric_hdr_u8
+            } else {
+                run_metric
+            };
+            let scores = score_fn(
                 args.metric,
                 r_ing.as_ref().unwrap_or(&*reference),
                 d_ing.as_ref().unwrap_or(&distorted),
@@ -3041,8 +3076,55 @@ fn display_model_applies(metric: crate::metrics::MetricKind) -> bool {
         || (metric == crate::metrics::MetricKind::Cvvdp && cfg!(feature = "cpu-cvvdp"))
 }
 
+/// Output score columns for `batch` / `score-pairs`. SDR cvvdp columns
+/// name the selected display (`<impl column>_<display>`,
+/// [`metrics::MetricKind::columns_for`]); HDR rows keep the display-less
+/// form, since the HDR display is the reference-peak target, not a preset.
+fn output_metric_columns(
+    metric: crate::metrics::MetricKind,
+    display_model: Option<&crate::metrics::CvvdpDisplay>,
+    hdr: bool,
+) -> Vec<String> {
+    let display = if hdr { None } else { display_model };
+    metric
+        .columns_for(display)
+        .iter()
+        .map(|c| (*c).to_string())
+        .collect()
+}
+
+/// Refuse SDR cvvdp without `--display-model`: zenmetrics has no default
+/// cvvdp display. HDR scoring is exempt (its display is the HDR target).
+fn require_display_model(
+    metrics: &[crate::metrics::MetricKind],
+    display_model: Option<&crate::metrics::CvvdpDisplay>,
+    hdr: bool,
+    ctx: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if hdr || display_model.is_some() {
+        return Ok(());
+    }
+    match metrics.iter().find(|m| m.needs_display()) {
+        Some(m) => Err(format!("{ctx}: {}", crate::metrics::display_required_msg(*m)).into()),
+        None => Ok(()),
+    }
+}
+
+/// `score-pairs --hdr` when the `hdr` feature is compiled, else always false.
+#[cfg(feature = "sweep")]
+fn score_pairs_hdr_mode(args: &ScorePairsArgs) -> bool {
+    #[cfg(feature = "hdr")]
+    {
+        args.hdr
+    }
+    #[cfg(not(feature = "hdr"))]
+    {
+        let _ = args;
+        false
+    }
+}
+
 /// `batch --hdr` when the `hdr` feature is compiled, else always false.
-#[cfg(feature = "cpu-cvvdp")]
 fn batch_hdr_mode(args: &BatchArgs) -> bool {
     #[cfg(feature = "hdr")]
     {
@@ -3057,13 +3139,13 @@ fn batch_hdr_mode(args: &BatchArgs) -> bool {
 
 /// The CPU cvvdp scorer for an explicit `--display-model`, or `None` when
 /// the metric is not CPU `cvvdp` or no display was named (the default
-/// umbrella path, `standard_4k`, then runs unchanged). `--hdr` is refused:
+/// umbrella path, `standard_fhd`, then runs). `--hdr` is refused:
 /// the HDR CPU cvvdp route keeps its reference-peak display contract, and a
 /// named SDR preset on top of it would silently mean something else.
 #[cfg(feature = "cpu-cvvdp")]
 fn cpu_cvvdp_display_scorer(
     metric: crate::metrics::MetricKind,
-    display_model: Option<&str>,
+    display_model: Option<&crate::metrics::CvvdpDisplay>,
     hdr: bool,
     ctx: &str,
 ) -> Result<Option<crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer>, Box<dyn std::error::Error>> {
@@ -3077,7 +3159,7 @@ fn cpu_cvvdp_display_scorer(
         )
         .into());
     }
-    let scorer = crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::by_name(name)?;
+    let scorer = crate::metrics::cvvdp_cpu::CpuCvvdpDisplayScorer::new(name.clone());
     eprintln!(
         "[{ctx}] cvvdp (cpu) display {name}: {:.3} pixels/degree",
         scorer.pixels_per_degree()
@@ -3154,6 +3236,7 @@ fn cmd_compare(
     if args.metrics.is_empty() {
         return Err("at least one --metric is required".into());
     }
+    require_display_model(&args.metrics, args.display_model.as_ref(), false, "compare")?;
     // Phase 7 additive: warm the orchestrator's capability cache so the
     // machine profile is up-to-date for subsequent (sweep, batch)
     // workloads. The per-pair comparison loop still flows through
@@ -3171,9 +3254,15 @@ fn cmd_compare(
         &args.variants,
         &args.metrics,
         args.gpu_runtime,
+        args.display_model.as_ref(),
         args.jobs,
     );
-    print_report(args.output, &args.metrics, &report)?;
+    print_report(
+        args.output,
+        &args.metrics,
+        &report,
+        args.display_model.as_ref(),
+    )?;
     Ok(!report.had_failures)
 }
 

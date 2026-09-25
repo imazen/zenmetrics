@@ -269,6 +269,10 @@ pub struct SweepConfig {
     /// KADIS-700k compatibility (rows keep the codec name when unset).
     pub distort_label: Option<String>,
     pub metrics: Vec<MetricKind>,
+    /// cvvdp display preset (`--display-model`) — REQUIRED for SDR cvvdp /
+    /// cvvdp-gpu cells, since cvvdp has no default display; names the
+    /// `score_*` column. Unused by HDR sweeps.
+    pub cvvdp_display: Option<crate::metrics::CvvdpDisplay>,
     pub gpu_runtime: GpuRuntime,
     pub output: PathBuf,
     /// When set, every cell that runs the [`MetricKind::Zensim`] (CPU)
@@ -398,6 +402,7 @@ fn score_via_orchestrator(
     cli_metric: MetricKind,
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
+    cvvdp_display: Option<&crate::metrics::CvvdpDisplay>,
 ) -> Result<Vec<(&'static str, f64)>, Box<dyn Error>> {
     if reference.width != distorted.width || reference.height != distorted.height {
         return Err(format!(
@@ -422,7 +427,11 @@ fn score_via_orchestrator(
     let rows = {
         let mut g = orch.lock().expect("orchestrator handle poisoned");
         crate::orchestrator_runner::orchestrator_score_one(
-            &mut g, cli_metric, reference, distorted,
+            &mut g,
+            cli_metric,
+            reference,
+            distorted,
+            cvvdp_display,
         )?
     };
     Ok(rows
@@ -608,7 +617,7 @@ pub fn run_sweep(
     let mut wtr = csv::WriterBuilder::new()
         .delimiter(b'\t')
         .from_path(&cfg.output)?;
-    write_header(&mut wtr, &cfg.metrics, cfg.hdr)?;
+    write_header(&mut wtr, &cfg.metrics, cfg.hdr, cfg.cvvdp_display.as_ref())?;
 
     let zensim_in_metrics = cfg.metrics.contains(&MetricKind::Zensim);
     let zensim_gpu_in_metrics = cfg.metrics.contains(&MetricKind::ZensimGpu);
@@ -1351,13 +1360,20 @@ fn compute_cell(
                     metric,
                     source,
                     &decoded,
+                    cfg.cvvdp_display.as_ref(),
                 )
             }
             #[cfg(not(feature = "orchestrator"))]
             {
                 // Unreachable — use_orch_for_cell is `false` when
                 // the feature is off.
-                run_metric(metric, source, &decoded, cfg.gpu_runtime)
+                crate::metrics::run_metric_display(
+                    metric,
+                    source,
+                    &decoded,
+                    cfg.gpu_runtime,
+                    cfg.cvvdp_display.as_ref(),
+                )
             }
         } else if metric == MetricKind::ZensimGpu && want_features_gpu {
             // GPU zensim with feature emit — go through the cache
@@ -1381,7 +1397,13 @@ fn compute_cell(
             }
             #[cfg(not(feature = "gpu-zensim"))]
             {
-                run_metric(metric, source, &decoded, cfg.gpu_runtime)
+                crate::metrics::run_metric_display(
+                    metric,
+                    source,
+                    &decoded,
+                    cfg.gpu_runtime,
+                    cfg.cvvdp_display.as_ref(),
+                )
             }
         } else if !metric.requires_gpu() {
             // CPU metrics (zensim / ssim2 / butteraugli / dssim)
@@ -1401,7 +1423,13 @@ fn compute_cell(
             // so the cache buys nothing — take the uncached path with
             // NO global lock. This is the documented contract:
             // "CPU metrics are NOT routed through this cache."
-            run_metric(metric, source, &decoded, cfg.gpu_runtime)
+            crate::metrics::run_metric_display(
+                metric,
+                source,
+                &decoded,
+                cfg.gpu_runtime,
+                cfg.cvvdp_display.as_ref(),
+            )
         } else {
             // GPU metrics route through the cache so warm cubecl
             // instances are reused across cells (device-pool pressure).
@@ -1415,7 +1443,12 @@ fn compute_cell(
             ))]
             {
                 let mut cache = MetricCache::lock_global(gpu_runtime_for_cache);
-                cache.run_metric_cached(metric, source, &decoded)
+                cache.run_metric_cached_display(
+                    metric,
+                    source,
+                    &decoded,
+                    cfg.cvvdp_display.as_ref(),
+                )
             }
             #[cfg(not(any(
                 feature = "gpu-butteraugli",
@@ -1426,7 +1459,13 @@ fn compute_cell(
                 feature = "gpu-cvvdp"
             )))]
             {
-                run_metric(metric, source, &decoded, cfg.gpu_runtime)
+                crate::metrics::run_metric_display(
+                    metric,
+                    source,
+                    &decoded,
+                    cfg.gpu_runtime,
+                    cfg.cvvdp_display.as_ref(),
+                )
             }
         };
         match result {
@@ -1975,6 +2014,7 @@ fn write_header(
     wtr: &mut csv::Writer<std::fs::File>,
     metrics: &[MetricKind],
     hdr: bool,
+    cvvdp_display: Option<&crate::metrics::CvvdpDisplay>,
 ) -> Result<(), Box<dyn Error>> {
     let mut headers: Vec<String> = vec![
         "image_path".to_string(),
@@ -1991,8 +2031,11 @@ fn write_header(
     // two — `butteraugli_max{,_gpu}` + `butteraugli_pnorm3{,_gpu}`. The
     // sweep TSV prefixes every score column with `score_` to disambiguate
     // from later columns the harness may add (per-cell timings, etc.).
+    // SDR cvvdp columns name their display (`columns_for`); HDR rows keep
+    // the display-less form (the HDR target is not a named preset).
+    let display = if hdr { None } else { cvvdp_display };
     for m in metrics {
-        for col in m.column_names() {
+        for col in m.columns_for(display) {
             headers.push(format!("score_{col}"));
         }
     }

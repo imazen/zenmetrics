@@ -326,9 +326,11 @@ pub(crate) fn ensure_params_match(kind: MetricKind, params: &MetricParams) -> Re
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum MetricParams {
-    /// [`cvvdp_gpu::CvvdpParams`] passthrough.
+    /// cvvdp with an explicitly selected display — see [`CvvdpConfig`].
+    /// There is no default: build it with [`MetricParams::cvvdp`] or
+    /// [`MetricParams::cvvdp_with`].
     #[cfg(feature = "cvvdp")]
-    Cvvdp(cvvdp_gpu::CvvdpParams),
+    Cvvdp(CvvdpConfig),
     /// [`butteraugli_gpu::ButteraugliParams`] passthrough.
     #[cfg(feature = "butter")]
     Butter(butteraugli_gpu::ButteraugliParams),
@@ -385,6 +387,48 @@ pub enum MetricParams {
     Hdrvdp(Box<hdrvdp::Params>),
 }
 
+/// cvvdp parameters bound to an explicitly selected display
+/// ([`CvvdpDisplay`](crate::cvvdp::params::CvvdpDisplay): an official preset
+/// or a custom photometry + geometry). cvvdp is display-aware, and the
+/// umbrella deliberately has no default display —
+/// [`MetricParams::try_default_for`] returns [`Error::DisplayRequired`] for
+/// cvvdp. Build it with [`MetricParams::cvvdp`].
+#[cfg(feature = "cvvdp")]
+#[derive(Debug, Clone)]
+pub struct CvvdpConfig {
+    display: cvvdp_gpu::params::CvvdpDisplay,
+    params: cvvdp_gpu::CvvdpParams,
+}
+
+#[cfg(feature = "cvvdp")]
+impl CvvdpConfig {
+    /// Bind cvvdp to `display` (its photometry becomes `params.display`,
+    /// its geometry sets pixels per degree).
+    pub fn new(display: impl Into<cvvdp_gpu::params::CvvdpDisplay>) -> Self {
+        let display = display.into();
+        let params = cvvdp_gpu::CvvdpParams {
+            display: display.model(),
+            ..Default::default()
+        };
+        Self { display, params }
+    }
+
+    /// The selected display.
+    pub fn display(&self) -> &cvvdp_gpu::params::CvvdpDisplay {
+        &self.display
+    }
+
+    /// The cvvdp parameters (`display` = the selected photometry).
+    pub fn params(&self) -> cvvdp_gpu::CvvdpParams {
+        self.params
+    }
+
+    /// The selected viewing geometry.
+    pub fn geometry(&self) -> cvvdp_gpu::params::DisplayGeometry {
+        self.display.geometry()
+    }
+}
+
 impl MetricParams {
     /// The [`MetricKind`] this parameter bundle belongs to.
     pub fn kind(&self) -> MetricKind {
@@ -434,30 +478,19 @@ impl MetricParams {
         Self::try_default_for(kind).unwrap_or_else(|e| panic!("{e}"))
     }
 
-    /// cvvdp params with a custom photometric display
-    /// ([`cvvdp::params::DisplayModel`](crate::cvvdp::params::DisplayModel))
-    /// — e.g. an HDR display peak. cvvdp is **display-aware** (a different
-    /// peak luminance yields a different JOD), so this is how you target an
-    /// HDR display *through the umbrella* without dropping to a per-crate
-    /// scorer:
+    /// cvvdp at `display` — an official preset or a custom photometry +
+    /// geometry. cvvdp is **display-aware** (peak luminance and pixels per
+    /// degree both move the JOD), and there is no default display:
     ///
     /// ```ignore
     /// use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
-    /// use zenmetrics_api::cvvdp::params::DisplayModel;
-    /// let hdr = DisplayModel { y_peak: 1000.0, ..DisplayModel::STANDARD_HDR_LINEAR };
+    /// use zenmetrics_api::cvvdp::params::DisplayPreset;
     /// let m = Metric::new(MetricKind::Cvvdp, Backend::Cuda, w, h,
-    ///                     MetricParams::cvvdp_with_display(hdr))?;
+    ///                     MetricParams::cvvdp(DisplayPreset::StandardFhd))?;
     /// ```
-    ///
-    /// (Only the photometry is set here; the viewing geometry stays the
-    /// `STANDARD_4K` default — use [`Metric::new`] with a geometry-bearing
-    /// path if you also need a non-standard PPD.)
     #[cfg(feature = "cvvdp")]
-    pub fn cvvdp_with_display(display: cvvdp_gpu::params::DisplayModel) -> Self {
-        Self::Cvvdp(cvvdp_gpu::CvvdpParams {
-            display,
-            ..Default::default()
-        })
+    pub fn cvvdp(display: impl Into<cvvdp_gpu::params::CvvdpDisplay>) -> Self {
+        Self::Cvvdp(CvvdpConfig::new(display))
     }
 
     /// Fallible counterpart of [`Self::default_for`] — returns
@@ -467,7 +500,8 @@ impl MetricParams {
     pub fn try_default_for(kind: MetricKind) -> Result<Self> {
         match kind {
             #[cfg(feature = "cvvdp")]
-            MetricKind::Cvvdp => Ok(Self::Cvvdp(cvvdp_gpu::CvvdpParams::default())),
+            // No default viewing condition: the caller must pick a display.
+            MetricKind::Cvvdp => Err(Error::DisplayRequired { kind: "cvvdp" }),
             #[cfg(feature = "butter")]
             MetricKind::Butter => Ok(Self::Butter(butteraugli_gpu::ButteraugliParams::default())),
             #[cfg(all(feature = "cpu-butter", not(feature = "butter")))]
@@ -903,12 +937,18 @@ impl MetricInner {
                     _ => return Err(crate::metric::params_mismatch("cvvdp", "Cvvdp")),
                 };
                 let b = cvvdp_backend(backend)?;
-                cvvdp_gpu::CvvdpOpaque::new(b, width, height, p)
-                    .map(MetricInner::Cvvdp)
-                    .map_err(|e| Error::Metric {
-                        kind: "cvvdp",
-                        message: e.to_string(),
-                    })
+                cvvdp_gpu::CvvdpOpaque::new_with_geometry(
+                    b,
+                    width,
+                    height,
+                    p.params(),
+                    p.geometry(),
+                )
+                .map(MetricInner::Cvvdp)
+                .map_err(|e| Error::Metric {
+                    kind: "cvvdp",
+                    message: e.to_string(),
+                })
             }
             #[cfg(feature = "butter")]
             MetricKind::Butter => {
@@ -1047,12 +1087,19 @@ impl MetricInner {
                     _ => return Err(crate::metric::params_mismatch("cvvdp", "Cvvdp")),
                 };
                 let b = cvvdp_backend(backend)?;
-                cvvdp_gpu::CvvdpOpaque::new_with_memory_mode(b, width, height, p, mode.into())
-                    .map(MetricInner::Cvvdp)
-                    .map_err(|e| Error::Metric {
-                        kind: "cvvdp",
-                        message: e.to_string(),
-                    })
+                cvvdp_gpu::CvvdpOpaque::new_with_geometry_and_memory_mode(
+                    b,
+                    width,
+                    height,
+                    p.params(),
+                    p.geometry(),
+                    mode.into(),
+                )
+                .map(MetricInner::Cvvdp)
+                .map_err(|e| Error::Metric {
+                    kind: "cvvdp",
+                    message: e.to_string(),
+                })
             }
             #[cfg(feature = "butter")]
             MetricKind::Butter => {
@@ -3415,6 +3462,35 @@ mod tests {
     //! Pure-logic coverage for [`resolve_memory_mode`] (task #159 phase 4d).
     //! No backend/feature needed — exercises the coarse rule table directly.
     use super::*;
+
+    /// cvvdp has no default display: the umbrella refuses to invent one,
+    /// and a named preset carries both photometry and geometry.
+    #[cfg(feature = "cvvdp")]
+    #[test]
+    fn cvvdp_params_require_an_explicit_display() {
+        use cvvdp_gpu::params::DisplayPreset;
+        assert!(matches!(
+            MetricParams::try_default_for(MetricKind::Cvvdp),
+            Err(Error::DisplayRequired { kind: "cvvdp" })
+        ));
+        let MetricParams::Cvvdp(fhd) = MetricParams::cvvdp(DisplayPreset::StandardFhd) else {
+            unreachable!()
+        };
+        assert_eq!(fhd.display().slug(), "standard_fhd");
+        let fhd_ppd = fhd.geometry().pixels_per_degree();
+        assert!((fhd_ppd - 37.8425).abs() < 1e-3, "{fhd_ppd}");
+        let MetricParams::Cvvdp(s4k) = MetricParams::cvvdp(DisplayPreset::Standard4k) else {
+            unreachable!()
+        };
+        assert_eq!(
+            s4k.params().display,
+            cvvdp_gpu::params::DisplayModel::STANDARD_4K
+        );
+        assert_eq!(
+            s4k.geometry(),
+            cvvdp_gpu::params::DisplayGeometry::STANDARD_4K
+        );
+    }
 
     #[test]
     fn scores_single_and_accessors() {

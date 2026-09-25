@@ -12,7 +12,7 @@
 ))]
 
 use zenmetrics_api::hdr::{HDR_PEAK_NITS, HdrScorer};
-use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, Metric, MetricKind};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 fn gradient_u8(w: u32, h: u32, seed: u32) -> Vec<u8> {
@@ -72,7 +72,7 @@ fn base_metric_compute_pixels_sdr_matches_native() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Ssim2),
+        crate::params_for(MetricKind::Ssim2),
     )
     .expect("ssim2");
     let native = m.compute_srgb_u8(&ref_u8, &dis_u8).expect("native").value;
@@ -110,7 +110,7 @@ fn base_metric_compute_pixels_multi_hdr_matches_scorer() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Ssim2),
+        crate::params_for(MetricKind::Ssim2),
     )
     .expect("ssim2")
     .with_display_peak(HDR_PEAK_NITS);
@@ -155,7 +155,7 @@ fn base_metric_hdr_score_depends_on_display_peak() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Ssim2),
+        crate::params_for(MetricKind::Ssim2),
     )
     .expect("ssim2 lo")
     .with_display_peak(100.0);
@@ -164,7 +164,7 @@ fn base_metric_hdr_score_depends_on_display_peak() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Ssim2),
+        crate::params_for(MetricKind::Ssim2),
     )
     .expect("ssim2 hi")
     .with_display_peak(4000.0);
@@ -206,7 +206,7 @@ fn base_metric_hdr_dssim_refused_iwssim_parity() {
             Backend::Cuda,
             w,
             h,
-            MetricParams::default_for(MetricKind::Dssim),
+            crate::params_for(MetricKind::Dssim),
         )
         .expect("dssim new")
         .with_display_peak(HDR_PEAK_NITS);
@@ -221,7 +221,7 @@ fn base_metric_hdr_dssim_refused_iwssim_parity() {
     }
 
     for kind in [MetricKind::Iwssim] {
-        let mut m = Metric::new(kind, Backend::Cuda, w, h, MetricParams::default_for(kind))
+        let mut m = Metric::new(kind, Backend::Cuda, w, h, crate::params_for(kind))
             .unwrap_or_else(|e| panic!("{kind:?} new: {e:?}"))
             .with_display_peak(HDR_PEAK_NITS);
         let via_metric = m

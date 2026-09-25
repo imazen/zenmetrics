@@ -146,7 +146,13 @@ fn construct_umbrella(
     w: u32,
     h: u32,
 ) -> Result<BenchMetric, zenmetrics_api::Error> {
-    let params = MetricParams::try_default_for(kind)?;
+    // cvvdp has no default display; the bench names `standard_4k` (the
+    // geometry the chooser's cvvdp profile has always been measured at).
+    let params = if kind == MetricKind::Cvvdp {
+        MetricParams::cvvdp(zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k)
+    } else {
+        MetricParams::try_default_for(kind)?
+    };
     let m = Metric::new_with_memory_mode(kind, ApiBackend::Cuda, w, h, params, mode)?;
     Ok(BenchMetric::Umbrella(Box::new(m)))
 }

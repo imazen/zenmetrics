@@ -65,7 +65,7 @@ pub fn print_score(format: OutputFormat, kind: MetricKind, scores: &[(&'static s
 ///
 /// Each metric may contribute multiple columns (butteraugli emits two), so
 /// `scores[i]` is itself a `Vec<(column_name, value)>` parallel to
-/// `metrics_order[i].column_names()`. When a metric fails the whole entry
+/// `metrics_order[i].columns_for(display)`. When a metric fails the whole entry
 /// is `Err` — we don't track per-column success because the metric backend
 /// is what fails, not individual aggregations.
 pub struct CompareRow {
@@ -77,16 +77,19 @@ pub struct CompareRow {
 }
 
 /// Render the full result set of a `compare` invocation to `w`.
+/// `display` is the cvvdp display selection; cvvdp columns name it
+/// ([`MetricKind::columns_for`]).
 pub fn render_compare(
     w: &mut dyn Write,
     format: OutputFormat,
     metrics_order: &[MetricKind],
     rows: &[CompareRow],
+    display: Option<&crate::metrics::CvvdpDisplay>,
 ) -> io::Result<()> {
     match format {
-        OutputFormat::Plain => render_compare_plain(w, metrics_order, rows),
-        OutputFormat::Json => render_compare_json(w, metrics_order, rows),
-        OutputFormat::Tsv => render_compare_tsv(w, metrics_order, rows),
+        OutputFormat::Plain => render_compare_plain(w, metrics_order, rows, display),
+        OutputFormat::Json => render_compare_json(w, metrics_order, rows, display),
+        OutputFormat::Tsv => render_compare_tsv(w, metrics_order, rows, display),
     }
 }
 
@@ -94,13 +97,14 @@ fn render_compare_plain(
     w: &mut dyn Write,
     metrics_order: &[MetricKind],
     rows: &[CompareRow],
+    display: Option<&crate::metrics::CvvdpDisplay>,
 ) -> io::Result<()> {
     // Width of the longest column name, for alignment of the score column.
     // We use column_names rather than metric names so butteraugli's two
     // columns line up.
     let name_width = metrics_order
         .iter()
-        .flat_map(|m| m.column_names().iter().copied())
+        .flat_map(|m| m.columns_for(display).iter().copied())
         .map(str::len)
         .max()
         .unwrap_or(0);
@@ -120,7 +124,7 @@ fn render_compare_plain(
                     // Print an error line per column the metric would have
                     // produced, so callers diff'ing TSV-shaped output still
                     // see one entry per column they expected.
-                    for col in m.column_names() {
+                    for col in m.columns_for(display) {
                         writeln!(w, "  {col:<name_width$}  ERROR: {reason}")?;
                     }
                 }
@@ -134,6 +138,7 @@ fn render_compare_json(
     w: &mut dyn Write,
     metrics_order: &[MetricKind],
     rows: &[CompareRow],
+    display: Option<&crate::metrics::CvvdpDisplay>,
 ) -> io::Result<()> {
     let metric_names: Vec<&str> = metrics_order.iter().map(|m| m.name()).collect();
     let results: Vec<serde_json::Value> = rows
@@ -145,7 +150,10 @@ fn render_compare_json(
             // `scores.butteraugli_max` and `scores.butteraugli_pnorm3`
             // independently. Failed metrics produce nulls for every
             // column the metric would have emitted.
-            let total_cols: usize = metrics_order.iter().map(|m| m.column_names().len()).sum();
+            let total_cols: usize = metrics_order
+                .iter()
+                .map(|m| m.columns_for(display).len())
+                .sum();
             let mut scores = serde_json::Map::with_capacity(total_cols);
             for (m, score) in metrics_order.iter().zip(row.scores.iter()) {
                 match score {
@@ -155,7 +163,7 @@ fn render_compare_json(
                         }
                     }
                     Err(_) => {
-                        for col in m.column_names() {
+                        for col in m.columns_for(display) {
                             scores.insert((*col).to_string(), serde_json::Value::Null);
                         }
                     }
@@ -184,6 +192,7 @@ fn render_compare_tsv(
     w: &mut dyn Write,
     metrics_order: &[MetricKind],
     rows: &[CompareRow],
+    display: Option<&crate::metrics::CvvdpDisplay>,
 ) -> io::Result<()> {
     // Header: reference, variant, then one column per (metric × emitted
     // column). Single-metric butteraugli expands to two columns; everything
@@ -192,7 +201,7 @@ fn render_compare_tsv(
     // prefix).
     write!(w, "reference\tvariant")?;
     for m in metrics_order {
-        for col in m.column_names() {
+        for col in m.columns_for(display) {
             write!(w, "\t{col}")?;
         }
     }
@@ -211,7 +220,7 @@ fn render_compare_tsv(
                 // NaN on success (we explicitly reject non-finite scores).
                 // Emit one NaN per column the metric would have produced.
                 Err(_) => {
-                    for _ in m.column_names() {
+                    for _ in m.columns_for(display) {
                         write!(w, "\tNaN")?;
                     }
                 }

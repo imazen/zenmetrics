@@ -10,7 +10,7 @@
 
 #![cfg(any(feature = "cuda", feature = "wgpu"))]
 
-use zenmetrics_api::{Backend, MetricKind, MetricParams, MetricSession};
+use zenmetrics_api::{Backend, MetricKind, MetricSession};
 
 const W: u32 = 512;
 const H: u32 = 512;
@@ -66,7 +66,7 @@ fn warm_ref_ladder_keeps_the_session_pool_flat() {
         let ctx = MetricSession::acquire(BACKEND).unwrap_or_else(|e| panic!("{kind:?}: {e}"));
         let stream = ctx.__stream_value();
         let mut m = ctx
-            .into_metric(kind, W, H, MetricParams::default_for(kind))
+            .into_metric(kind, W, H, crate::params_for(kind))
             .unwrap_or_else(|e| panic!("{kind:?}: into_metric: {e}"));
         m.set_reference_srgb_u8(&r)
             .unwrap_or_else(|e| panic!("{kind:?}: set_reference: {e}"));

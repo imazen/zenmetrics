@@ -11,7 +11,7 @@
 
 #![cfg(feature = "cuda")]
 
-use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, Metric, MetricKind};
 
 /// Test image dims chosen to clear every metric's minimum:
 /// - cvvdp / dssim accept >= 8×8
@@ -35,7 +35,7 @@ fn identity_inputs() -> (Vec<u8>, Vec<u8>) {
 }
 
 fn score_identity(kind: MetricKind) -> zenmetrics_api::Score {
-    let params = MetricParams::default_for(kind);
+    let params = crate::params_for(kind);
     let mut m = Metric::new(kind, Backend::Cuda, W, H, params)
         .unwrap_or_else(|e| panic!("Metric::new({kind:?}, Cuda, {W}x{H}) failed: {e}"));
     assert_eq!(m.kind(), kind, "kind() must roundtrip");
@@ -79,7 +79,7 @@ fn distorted_inputs() -> (Vec<u8>, Vec<u8>) {
 
 #[allow(dead_code)]
 fn score_distorted(kind: MetricKind) -> zenmetrics_api::Score {
-    let params = MetricParams::default_for(kind);
+    let params = crate::params_for(kind);
     let mut m = Metric::new(kind, Backend::Cuda, W, H, params)
         .unwrap_or_else(|e| panic!("Metric::new({kind:?}, Cuda, {W}x{H}) failed: {e}"));
     let (r, d) = distorted_inputs();
@@ -215,7 +215,7 @@ fn dispatch_iwssim() {
         Backend::Cuda,
         W,
         H,
-        MetricParams::default_for(MetricKind::Iwssim),
+        crate::params_for(MetricKind::Iwssim),
     )
     .expect("Metric::new(Iwssim) failed");
     let s2 = m
@@ -231,7 +231,7 @@ fn dispatch_iwssim() {
 #[cfg(feature = "zensim")]
 #[test]
 fn dispatch_zensim() {
-    // The umbrella's `MetricParams::default_for(Zensim)` carries the
+    // The umbrella's `crate::params_for(Zensim)` carries the
     // canonical `ZensimProfile::PreviewV0_3` (alias `A`) profile and
     // routes the score through
     // `zensim::score_features_with_profile_and_codec` (post task #71
@@ -280,7 +280,7 @@ fn dispatch_zensim() {
 #[test]
 fn kind_roundtrip() {
     for kind in enabled_metrics() {
-        let params = MetricParams::default_for(kind);
+        let params = crate::params_for(kind);
         let m = Metric::new(kind, Backend::Cuda, W, H, params)
             .unwrap_or_else(|e| panic!("Metric::new({kind:?}) failed: {e}"));
         assert_eq!(m.kind(), kind);
@@ -322,7 +322,7 @@ fn reclaim_and_release_preserve_scores() {
         // score must equal the baseline (reclaim must not corrupt pool
         // state for the next allocation).
         {
-            let params = MetricParams::default_for(kind);
+            let params = crate::params_for(kind);
             let mut m = Metric::new(kind, Backend::Cuda, W, H, params)
                 .unwrap_or_else(|e| panic!("Metric::new({kind:?}) failed: {e}"));
             let _ = m

@@ -26,7 +26,7 @@
 
 #![cfg(all(feature = "cuda", feature = "cvvdp"))]
 
-use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams, MetricSession};
+use zenmetrics_api::{Backend, Metric, MetricKind, MetricSession};
 
 /// cvvdp `Atomic<f32>` reduction-order noise band (measured ~1e-6 on
 /// this box, bounded at 1e-5 with margin). Applies to BOTH the one-shot
@@ -66,7 +66,7 @@ fn session_score_matches_owned_cvvdp() {
             Backend::Cuda,
             W,
             H,
-            MetricParams::default_for(MetricKind::Cvvdp),
+            crate::params_for(MetricKind::Cvvdp),
         )
         .expect("owned Metric::new(Cvvdp) failed");
         m.compute_srgb_u8(&r, &d).expect("owned score failed")
@@ -80,7 +80,7 @@ fn session_score_matches_owned_cvvdp() {
                 MetricKind::Cvvdp,
                 W,
                 H,
-                MetricParams::default_for(MetricKind::Cvvdp),
+                crate::params_for(MetricKind::Cvvdp),
             )
             .expect("ctx.metric(Cvvdp) failed");
         sm.score(&r, &d).expect("session score failed")
@@ -121,7 +121,7 @@ fn session_warm_ref_matches_owned_cvvdp() {
             Backend::Cuda,
             W,
             H,
-            MetricParams::default_for(MetricKind::Cvvdp),
+            crate::params_for(MetricKind::Cvvdp),
         )
         .expect("owned Metric::new(Cvvdp) failed");
         m.set_reference_srgb_u8(&r).expect("owned set_reference");
@@ -136,7 +136,7 @@ fn session_warm_ref_matches_owned_cvvdp() {
                 MetricKind::Cvvdp,
                 W,
                 H,
-                MetricParams::default_for(MetricKind::Cvvdp),
+                crate::params_for(MetricKind::Cvvdp),
             )
             .expect("ctx.metric(Cvvdp) failed");
         sm.set_reference_srgb_u8(&r).expect("session set_reference");
@@ -171,7 +171,7 @@ fn session_score_matches_owned_ssim2() {
             Backend::Cuda,
             W,
             H,
-            MetricParams::default_for(MetricKind::Ssim2),
+            crate::params_for(MetricKind::Ssim2),
         )
         .expect("owned Metric::new(Ssim2) failed");
         m.compute_srgb_u8(&r, &d).expect("owned ssim2 score")
@@ -184,7 +184,7 @@ fn session_score_matches_owned_ssim2() {
                 MetricKind::Ssim2,
                 W,
                 H,
-                MetricParams::default_for(MetricKind::Ssim2),
+                crate::params_for(MetricKind::Ssim2),
             )
             .expect("ctx.metric(Ssim2) failed");
         sm.score(&r, &d).expect("session ssim2 score")
@@ -237,7 +237,7 @@ fn session_parity_all_wired_metrics() {
 
     for &(kind, abs_tol, rel_tol) in cases {
         let owned = {
-            let mut m = Metric::new(kind, Backend::Cuda, W, H, MetricParams::default_for(kind))
+            let mut m = Metric::new(kind, Backend::Cuda, W, H, crate::params_for(kind))
                 .unwrap_or_else(|e| panic!("owned Metric::new({kind:?}) failed: {e}"));
             m.compute_srgb_u8(&r, &d)
                 .unwrap_or_else(|e| panic!("owned {kind:?} score failed: {e}"))
@@ -245,7 +245,7 @@ fn session_parity_all_wired_metrics() {
         let session = {
             let ctx = MetricSession::acquire(Backend::Cuda).expect("acquire session");
             let mut sm = ctx
-                .metric(kind, W, H, MetricParams::default_for(kind))
+                .metric(kind, W, H, crate::params_for(kind))
                 .unwrap_or_else(|e| {
                     panic!("ctx.metric({kind:?}) failed — metric is enabled but not wired into MetricSession: {e}")
                 });

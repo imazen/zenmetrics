@@ -166,7 +166,9 @@ fn poison_gpu_at(profile: &mut MetricProfile, size_px: u64) {
 #[test]
 fn cvvdp_cpu_constructs_and_computes_256() {
     let (r, d) = synth(256);
-    let params = zenmetrics_api::MetricParams::try_default_for(MetricKind::Cvvdp).unwrap();
+    let params = zenmetrics_api::MetricParams::cvvdp(
+        zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+    );
     // CpuAdapter is `pub(crate)`. We reach it via the executor path by
     // forcing the chooser to land on Cpu — same code, integration-test
     // surface.

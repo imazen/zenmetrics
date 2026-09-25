@@ -17,6 +17,7 @@ members = [
     "crates/iwssim",
     "crates/iwssim-gpu",
     "crates/psnrhvs",
+    "crates/nlpd",
     "crates/ssim2-gpu",
 
     "crates/vmaf",
@@ -84,6 +85,7 @@ vsi = { version = "0.1.0", path = "crates/vsi", default-features = false }
 mad-iqa = { version = "0.1.0", path = "crates/mad-iqa", default-features = false }
 msssim = { version = "0.1.0", path = "crates/msssim", default-features = false }
 vif = { version = "0.1.0", path = "crates/vif", default-features = false }
+vmaf = { version = "0.1.0", path = "crates/vmaf", default-features = false }
 zensim-gpu = { version = "0.0.1", path = "crates/zensim-gpu", default-features = false }
 zenmetrics-api = { version = "0.0.1", path = "crates/zenmetrics-api", default-features = false }
 zenmetrics-corpus = { version = "0.1.0", path = "crates/zenmetrics-corpus", default-features = false }

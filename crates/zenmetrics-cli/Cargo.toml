@@ -127,6 +127,8 @@ hdr-svt = ["hdr", "sweep", "dep:zenav1-svt", "dep:zenavif-serialize"]
 
 # CPU metric feature flags
 cpu-metrics = [
+    "dep:nlpd",
+    "dep:tempfile",
     "dep:butteraugli",
     "dep:zensim",
     # zensim v2 CPU extraction: `training` exposes `compute_zensim_with_config`
@@ -185,6 +187,9 @@ cpu-metrics = [
     # `hi_index.m`/`lo_index.m` + `ical_std`/`ical_stat` C-mex):
     # CPU-only, called directly.
     "cpu-mad",
+    # VMAF v0.6.1 / neg / 4k / v1.0.16 (in-tree `vmaf` crate, pure-Rust
+    # libvmaf v3.2.1 match): CPU-only, called directly.
+    "cpu-vmaf",
     # All native-CPU backends via the umbrella's Backend::Cpu (cpu_dispatch),
     # so run_gpu_via_umbrella's CPU failover works for ssim2/dssim/butter/zensim
     # too — and the auto ladder's CPU rung is the native SIMD path, NEVER
@@ -207,6 +212,7 @@ cpu-vsi = ["dep:vsi"]
 cpu-msssim = ["dep:msssim"]
 cpu-vif = ["dep:vif"]
 cpu-mad = ["dep:mad-iqa"]
+cpu-vmaf = ["dep:vmaf"]
 
 # GPU bundle: pulls every GPU metric implementation via the umbrella.
 gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp", "gpu-iwssim", "gpu-zensim"]
@@ -535,6 +541,7 @@ zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["hdr-experimenta
 enough = "0.4.4"
 
 # CPU metrics
+nlpd = { path = "../nlpd", optional = true }
 butteraugli = { version = "0.9.2", optional = true }
 # Pure-Rust gzip for the Diffmap executor's PFM blob compression (B2).
 zenflate = { version = "0.4.0", path = "../../../zenflate", optional = true }
@@ -582,6 +589,7 @@ vsi = { workspace = true, optional = true, features = ["std", "avx512"] }
 msssim = { workspace = true, optional = true, features = ["std", "avx512"] }
 vif = { workspace = true, optional = true, features = ["std", "avx512"] }
 mad-iqa = { workspace = true, optional = true, features = ["std", "avx512"] }
+vmaf = { workspace = true, optional = true, features = ["simd"] }
 cubecl = { workspace = true, optional = true }
 
 # Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the

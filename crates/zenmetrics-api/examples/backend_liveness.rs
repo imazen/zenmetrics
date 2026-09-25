@@ -18,7 +18,7 @@
 //! Exit code 1 = the #37 bug: construction+compute "succeeded" on a
 //! non-operational backend (score would be garbage).
 
-use zenmetrics_api::{Backend, Error, MemoryMode, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, Error, MemoryMode, Metric, MetricKind};
 
 fn main() {
     let (w, h) = (512u32, 512u32);
@@ -41,7 +41,7 @@ fn main() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Ssim2),
+        params_for(MetricKind::Ssim2),
         MemoryMode::Full,
     ) {
         Err(Error::BackendUnavailable { backend, reason }) => {
@@ -76,4 +76,24 @@ fn main() {
             }
         },
     }
+}
+
+/// Parameters for `kind`. cvvdp has no default display in the umbrella, so
+/// this names the `standard_4k` preset explicitly.
+#[allow(dead_code)]
+fn try_params_for(
+    kind: zenmetrics_api::MetricKind,
+) -> zenmetrics_api::Result<zenmetrics_api::MetricParams> {
+    #[cfg(feature = "cvvdp")]
+    if kind == zenmetrics_api::MetricKind::Cvvdp {
+        return Ok(zenmetrics_api::MetricParams::cvvdp(
+            zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+        ));
+    }
+    zenmetrics_api::MetricParams::try_default_for(kind)
+}
+
+#[allow(dead_code)]
+fn params_for(kind: zenmetrics_api::MetricKind) -> zenmetrics_api::MetricParams {
+    try_params_for(kind).unwrap_or_else(|e| panic!("{e}"))
 }

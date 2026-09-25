@@ -44,7 +44,7 @@ fn hdr_pair(w: u32, h: u32) -> (Vec<f32>, Vec<f32>) {
 
 /// The umbrella's GPU-zensim HDR score is **bit-equal** to calling the
 /// opaque's `compute_pu_linear_nits_interleaved` directly with the umbrella's
-/// default params (`MetricParams::default_for(Zensim)`), and the features
+/// default params (`crate::params_for(Zensim)`), and the features
 /// come through — proving the routing reaches the integrated PU entry and
 /// adds nothing on top. Before #25 closed this row the umbrella scored a
 /// PU-u8 shell through the SDR bake instead.
@@ -68,7 +68,7 @@ fn gpu_zensim_pu_matches_direct_opaque_call_and_exposes_features() {
     );
     assert!(umbrella.features.iter().all(|f| f.is_finite()));
 
-    let MetricParams::Zensim(params) = MetricParams::default_for(MetricKind::Zensim) else {
+    let MetricParams::Zensim(params) = crate::params_for(MetricKind::Zensim) else {
         panic!("default_for(Zensim) must be MetricParams::Zensim");
     };
     let mut direct =

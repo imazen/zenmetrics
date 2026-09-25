@@ -162,7 +162,7 @@ fn run_child(metric_tag: &str, regime: &str, w: u32, h: u32) {
 
     // Build params (with zensim regime when relevant).
     let params: MetricParams = {
-        let base = match MetricParams::try_default_for(kind) {
+        let base = match try_params_for(kind) {
             Ok(p) => p,
             Err(e) => {
                 println!("CHILD_ERR params:{e}");
@@ -560,4 +560,24 @@ fn main() {
         }
     }
     driver(&out_path, only_metric.as_deref(), max_side);
+}
+
+/// Parameters for `kind`. cvvdp has no default display in the umbrella, so
+/// this names the `standard_4k` preset explicitly.
+#[allow(dead_code)]
+fn try_params_for(
+    kind: zenmetrics_api::MetricKind,
+) -> zenmetrics_api::Result<zenmetrics_api::MetricParams> {
+    #[cfg(feature = "cvvdp")]
+    if kind == zenmetrics_api::MetricKind::Cvvdp {
+        return Ok(zenmetrics_api::MetricParams::cvvdp(
+            zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+        ));
+    }
+    zenmetrics_api::MetricParams::try_default_for(kind)
+}
+
+#[allow(dead_code)]
+fn params_for(kind: zenmetrics_api::MetricKind) -> zenmetrics_api::MetricParams {
+    try_params_for(kind).unwrap_or_else(|e| panic!("{e}"))
 }

@@ -41,6 +41,12 @@
 use clap::ValueEnum;
 
 use crate::decode::Rgb8Image;
+pub mod display;
+pub use display::CvvdpDisplay;
+#[cfg(feature = "cpu-metrics")]
+mod classical;
+#[cfg(feature = "cpu-metrics")]
+pub mod vmaf;
 
 // ssim2 / dssim / butteraugli one-shot CPU scoring now routes through the
 // single `zenmetrics-api::cpu_dispatch` umbrella path (`run_metric` +
@@ -74,6 +80,39 @@ pub mod cvvdp_gpu;
 // (`sweep::hdr::HDR_SCORERS`) by CLI metric kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum)]
 pub enum MetricKind {
+    /// VMAF v0.6.1 (in-tree pure-Rust `vmaf` crate, libvmaf v3.2.1 match).
+    #[value(name = "vmaf")]
+    Vmaf,
+    /// VMAF v0.6.1neg, with enhancement gain disabled (in-tree `vmaf` crate).
+    #[value(name = "vmaf-neg")]
+    VmafNeg,
+    /// VMAF v0.6.1 4K model (in-tree `vmaf` crate).
+    #[value(name = "vmaf-4k")]
+    Vmaf4k,
+    /// VMAF v1.0.16 3d0h model (in-tree `vmaf` crate).
+    #[value(name = "vmaf-v1")]
+    VmafV1,
+    /// SSIM on YUV420 luma, extracted by libvmaf.
+    #[value(name = "ssim-libvmaf")]
+    SsimLibvmaf,
+    /// MS-SSIM on YUV420 luma, extracted by libvmaf.
+    #[value(name = "ms-ssim-libvmaf")]
+    MsSsimLibvmaf,
+    /// PSNR-Y on limited-range YUV420, extracted by libvmaf.
+    #[value(name = "psnr-y-libvmaf")]
+    PsnrYLibvmaf,
+    /// Peak signal-to-noise ratio on encoded RGB8, in decibels.
+    #[value(name = "psnr")]
+    Psnr,
+    /// Peak signal-to-noise ratio on full-range BT.709 luma.
+    #[value(name = "psnr-y")]
+    PsnrY,
+    /// Single-scale structural similarity.
+    #[value(name = "ssim")]
+    Ssim,
+    /// Normalized Laplacian Pyramid Distance; lower is better.
+    #[value(name = "nlpd")]
+    Nlpd,
     /// SSIMULACRA2 — CPU implementation via the `ssimulacra2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -245,6 +284,17 @@ pub enum MetricKind {
 impl MetricKind {
     pub fn all() -> &'static [MetricKind] {
         &[
+            MetricKind::Vmaf,
+            MetricKind::VmafNeg,
+            MetricKind::Vmaf4k,
+            MetricKind::VmafV1,
+            MetricKind::SsimLibvmaf,
+            MetricKind::MsSsimLibvmaf,
+            MetricKind::PsnrYLibvmaf,
+            MetricKind::Psnr,
+            MetricKind::PsnrY,
+            MetricKind::Ssim,
+            MetricKind::Nlpd,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -274,6 +324,17 @@ impl MetricKind {
 
     pub fn name(self) -> &'static str {
         match self {
+            MetricKind::Vmaf => "vmaf",
+            MetricKind::VmafNeg => "vmaf-neg",
+            MetricKind::Vmaf4k => "vmaf-4k",
+            MetricKind::VmafV1 => "vmaf-v1",
+            MetricKind::SsimLibvmaf => "ssim-libvmaf",
+            MetricKind::MsSsimLibvmaf => "ms-ssim-libvmaf",
+            MetricKind::PsnrYLibvmaf => "psnr-y-libvmaf",
+            MetricKind::Psnr => "psnr",
+            MetricKind::PsnrY => "psnr-y",
+            MetricKind::Ssim => "ssim",
+            MetricKind::Nlpd => "nlpd",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -328,6 +389,30 @@ impl MetricKind {
         )
     }
 
+    /// Output columns for this metric scored at `display`. cvvdp names its
+    /// display in SDR output — `<impl column>_<display>`, e.g.
+    /// `cvvdp_cpu_imazen_v0_1_0_standard_4k` — because cvvdp has no default
+    /// display; `display = None` gives the display-less
+    /// [`Self::column_names`] form, which only the HDR routes write (their
+    /// display is the reference-peak HDR target, and `hdr_mode` qualifies
+    /// the row). Display-less SDR cvvdp columns in existing sidecars predate
+    /// 2026-09-25 and hold `standard_4k` scores. Every other metric ignores
+    /// `display`.
+    pub fn columns_for(self, display: Option<&CvvdpDisplay>) -> &'static [&'static str] {
+        match (self, display) {
+            (MetricKind::Cvvdp | MetricKind::CvvdpGpu, Some(d)) => {
+                intern_display_column(self.column_names()[0], d.slug())
+            }
+            _ => self.column_names(),
+        }
+    }
+
+    /// Whether this metric needs a display selection (`--display-model`)
+    /// for SDR scoring.
+    pub fn needs_display(self) -> bool {
+        matches!(self, MetricKind::Cvvdp | MetricKind::CvvdpGpu)
+    }
+
     /// Static list of TSV / parquet column suffixes emitted by this metric,
     /// in the order [`run_metric`] produces them. For most metrics this is a
     /// single column matching [`MetricKind::name`] with `-` rewritten to
@@ -338,6 +423,17 @@ impl MetricKind {
     /// entry returned here.
     pub fn column_names(self) -> &'static [&'static str] {
         match self {
+            MetricKind::Vmaf => &["vmaf"],
+            MetricKind::VmafNeg => &["vmaf_neg"],
+            MetricKind::Vmaf4k => &["vmaf_4k"],
+            MetricKind::VmafV1 => &["vmaf_v1"],
+            MetricKind::SsimLibvmaf => &["ssim_libvmaf"],
+            MetricKind::MsSsimLibvmaf => &["ms_ssim_libvmaf"],
+            MetricKind::PsnrYLibvmaf => &["psnr_y_libvmaf"],
+            MetricKind::Psnr => &["psnr"],
+            MetricKind::PsnrY => &["psnr_y"],
+            MetricKind::Ssim => &["ssim"],
+            MetricKind::Nlpd => &["nlpd"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -347,8 +443,8 @@ impl MetricKind {
             MetricKind::IwssimGpu => &["iwssim_gpu"],
             MetricKind::Zensim => &["zensim"],
             MetricKind::ZensimGpu => &["zensim_gpu"],
-            MetricKind::Cvvdp => CVVDP_CPU_COLUMNS,
-            MetricKind::CvvdpGpu => CVVDP_GPU_COLUMNS,
+            MetricKind::Cvvdp => &[CVVDP_CPU_BASE],
+            MetricKind::CvvdpGpu => &[CVVDP_GPU_BASE],
             MetricKind::Iwssim => IWSSIM_CPU_COLUMNS,
             MetricKind::Gmsd => GMSD_CPU_COLUMNS,
             MetricKind::Hdrvdp => HDRVDP_CPU_COLUMNS,
@@ -478,9 +574,9 @@ pub fn luma_ingress_pair(
 // column would collide on join. See the PINNED TASK section in the
 // repo-root `CLAUDE.md`.
 #[cfg(feature = "gpu-cvvdp")]
-const CVVDP_GPU_COLUMNS: &[&str] = &[zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME];
+const CVVDP_GPU_BASE: &str = zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME;
 #[cfg(not(feature = "gpu-cvvdp"))]
-const CVVDP_GPU_COLUMNS: &[&str] = &["cvvdp_gpu"];
+const CVVDP_GPU_BASE: &str = "cvvdp_gpu";
 
 // Versioned **CPU** cvvdp column name (used by `MetricKind::Cvvdp`, the
 // unsuffixed default). With the `cpu-cvvdp` feature enabled, pulls from
@@ -490,9 +586,39 @@ const CVVDP_GPU_COLUMNS: &[&str] = &["cvvdp_gpu"];
 // GPU column so CPU and GPU cvvdp scores never collide in a joined
 // sidecar. Without the feature, falls back to a bare `"cvvdp"`.
 #[cfg(feature = "cpu-cvvdp")]
-const CVVDP_CPU_COLUMNS: &[&str] = &[zenmetrics_api::cvvdp_cpu::CVVDP_COLUMN_NAME];
+const CVVDP_CPU_BASE: &str = zenmetrics_api::cvvdp_cpu::CVVDP_COLUMN_NAME;
 #[cfg(not(feature = "cpu-cvvdp"))]
-const CVVDP_CPU_COLUMNS: &[&str] = &["cvvdp"];
+const CVVDP_CPU_BASE: &str = "cvvdp";
+
+/// Refusal for a cvvdp SDR score without a display. There is no default:
+/// the caller names one (`--display-model`, `cvvdp@<display>`).
+pub fn display_required_msg(kind: MetricKind) -> String {
+    format!(
+        "metric '{}' needs an explicit display: pass --display-model <name> \
+         (e.g. standard_4k, standard_fhd; jobs use `{}@<name>`) — there is no default",
+        kind.name(),
+        kind.name()
+    )
+}
+
+/// `<base>_<display>` as a `&'static` single-column slice. Interned so the
+/// many `&'static [&'static str]` column consumers (sweep headers, output
+/// tables) can take display-named cvvdp columns; the set is bounded by the
+/// number of distinct displays a process uses.
+fn intern_display_column(base: &'static str, display: &str) -> &'static [&'static str] {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    type Interned = HashMap<(&'static str, String), &'static [&'static str]>;
+    static TABLE: OnceLock<Mutex<Interned>> = OnceLock::new();
+    let mut table = TABLE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    table.entry((base, display.to_string())).or_insert_with(|| {
+        let col: &'static str = Box::leak(format!("{base}_{display}").into_boxed_str());
+        Box::leak(Box::new([col]))
+    })
+}
 
 // Versioned **CPU** iwssim column name (used by `MetricKind::Iwssim`, the
 // unsuffixed default) — mirrors the cpu-cvvdp pattern. With the
@@ -1081,6 +1207,135 @@ pub(crate) fn run_cpu_butter_both_via_umbrella(
     Ok((max, pnorm3))
 }
 
+/// A cvvdp scorer bound to one named display — the CPU port (`cvvdp`) or
+/// the GPU pipeline (`cvvdp-gpu`). Caches its instance across same-sized
+/// pairs. This is the only SDR cvvdp scoring route: there is no default
+/// display.
+pub(crate) enum CvvdpScorer {
+    /// Native CPU port.
+    #[cfg(feature = "cpu-cvvdp")]
+    Cpu(cvvdp_cpu::CpuCvvdpDisplayScorer),
+    /// GPU pipeline.
+    #[cfg(feature = "gpu-cvvdp")]
+    Gpu {
+        /// The cached GPU scorer.
+        scorer: Box<cvvdp_gpu::CvvdpBatchScorer>,
+        /// Output column (`<gpu impl column>_<display>`).
+        column: &'static str,
+    },
+}
+
+impl CvvdpScorer {
+    /// Build a scorer for `kind` (`Cvvdp` or `CvvdpGpu`) at the named
+    /// upstream display preset. Errors for any other kind, an unknown
+    /// preset, or a backend this build lacks.
+    pub(crate) fn new(
+        kind: MetricKind,
+        display: &CvvdpDisplay,
+        gpu_runtime: GpuRuntime,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let _ = (display, gpu_runtime);
+        match kind {
+            #[cfg(feature = "cpu-cvvdp")]
+            MetricKind::Cvvdp => Ok(Self::Cpu(cvvdp_cpu::CpuCvvdpDisplayScorer::new(
+                display.clone(),
+            ))),
+            #[cfg(not(feature = "cpu-cvvdp"))]
+            MetricKind::Cvvdp => Err(disabled_msg("cvvdp", "cpu-cvvdp` (native SIMD CPU)")),
+            #[cfg(feature = "gpu-cvvdp")]
+            MetricKind::CvvdpGpu => Ok(Self::Gpu {
+                scorer: Box::new(cvvdp_gpu::CvvdpBatchScorer::new_with_target(
+                    gpu_runtime,
+                    cvvdp_gpu::DisplayTarget::from_display(display),
+                )?),
+                column: kind.columns_for(Some(display))[0],
+            }),
+            #[cfg(not(feature = "gpu-cvvdp"))]
+            MetricKind::CvvdpGpu => Err(disabled_msg("cvvdp-gpu", "gpu-cvvdp")),
+            other => Err(format!("{} is not a cvvdp metric", other.name()).into()),
+        }
+    }
+
+    /// The display-named output column.
+    pub(crate) fn column(&self) -> &'static str {
+        match *self {
+            #[cfg(feature = "cpu-cvvdp")]
+            Self::Cpu(ref s) => s.column(),
+            #[cfg(feature = "gpu-cvvdp")]
+            Self::Gpu { column, .. } => column,
+        }
+    }
+
+    /// Score one sRGB8 pair (JOD, 10 = identical).
+    pub(crate) fn score(
+        &mut self,
+        reference: &Rgb8Image,
+        distorted: &Rgb8Image,
+    ) -> Result<f64, Box<dyn std::error::Error>> {
+        let _ = (reference, distorted);
+        match *self {
+            #[cfg(feature = "cpu-cvvdp")]
+            Self::Cpu(ref mut s) => s.score(reference, distorted),
+            #[cfg(feature = "gpu-cvvdp")]
+            Self::Gpu { ref mut scorer, .. } => scorer.score(reference, distorted),
+        }
+    }
+}
+
+/// [`run_metric`] with the cvvdp display selection. cvvdp (CPU `cvvdp`,
+/// GPU `cvvdp-gpu`) REQUIRES `display` — a named upstream preset
+/// (photometry AND geometry) — and reports `<impl column>_<display>`
+/// ([`MetricKind::columns_for`]); there is no default. Every other metric
+/// ignores `display` and is exactly [`run_metric`]. Builds a fresh cvvdp
+/// scorer per call; loops should hold a [`CvvdpScorer`].
+pub fn run_metric_display(
+    kind: MetricKind,
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+    gpu_runtime: GpuRuntime,
+    display: Option<&CvvdpDisplay>,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if !kind.needs_display() {
+        return run_metric(kind, reference, distorted, gpu_runtime);
+    }
+    let display = display.ok_or_else(|| display_required_msg(kind))?;
+    let mut scorer = CvvdpScorer::new(kind, display, gpu_runtime)?;
+    let v = scorer.score(reference, distorted)?;
+    Ok(vec![(scorer.column(), v)])
+}
+
+/// [`run_metric`] for the HDR **u8 shell** (reference-peak-normalized
+/// sRGB8 for cvvdp, PU21 sRGB8 for the rest). cvvdp keeps its historical
+/// `standard_4k` display here, named explicitly (cvvdp has no default), and
+/// reports the display-less [`MetricKind::column_names`] column the HDR
+/// routes have always written; every other metric is exactly [`run_metric`].
+pub fn run_metric_hdr_u8(
+    kind: MetricKind,
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+    gpu_runtime: GpuRuntime,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    match kind {
+        #[cfg(feature = "cpu-cvvdp")]
+        MetricKind::Cvvdp => {
+            let v =
+                cvvdp_cpu::CpuCvvdpDisplayScorer::new(display::DisplayPreset::Standard4k.into())
+                    .score(reference, distorted)?;
+            Ok(vec![(kind.column_names()[0], v)])
+        }
+        #[cfg(feature = "gpu-cvvdp")]
+        MetricKind::CvvdpGpu => {
+            let v = cvvdp_gpu::CvvdpBatchScorer::new_with_target(
+                gpu_runtime,
+                cvvdp_gpu::DisplayTarget::from_display(&display::DisplayPreset::Standard4k.into()),
+            )?
+            .score(reference, distorted)?;
+            Ok(vec![(kind.column_names()[0], v)])
+        }
+        _ => run_metric(kind, reference, distorted, gpu_runtime),
+    }
+}
+
 /// Run `kind` on a `(reference, distorted)` RGB8 pair. GPU metrics route
 /// `gpu_runtime` through the CubeCL backend; CPU metrics ignore it.
 ///
@@ -1130,6 +1385,88 @@ pub fn run_metric(
     gpu_runtime: GpuRuntime,
 ) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
     match kind {
+        #[cfg(feature = "cpu-vmaf")]
+        MetricKind::Vmaf => Ok(vec![(
+            "vmaf",
+            vmaf::score(reference, distorted, vmaf::Model::V061)?,
+        )]),
+        #[cfg(not(feature = "cpu-vmaf"))]
+        MetricKind::Vmaf => Err(disabled_msg("vmaf", "cpu-vmaf")),
+        #[cfg(feature = "cpu-vmaf")]
+        MetricKind::VmafNeg => Ok(vec![(
+            "vmaf_neg",
+            vmaf::score(reference, distorted, vmaf::Model::V061Neg)?,
+        )]),
+        #[cfg(not(feature = "cpu-vmaf"))]
+        MetricKind::VmafNeg => Err(disabled_msg("vmaf-neg", "cpu-vmaf")),
+        #[cfg(feature = "cpu-vmaf")]
+        MetricKind::Vmaf4k => Ok(vec![(
+            "vmaf_4k",
+            vmaf::score(reference, distorted, vmaf::Model::V061FourK)?,
+        )]),
+        #[cfg(not(feature = "cpu-vmaf"))]
+        MetricKind::Vmaf4k => Err(disabled_msg("vmaf-4k", "cpu-vmaf")),
+        #[cfg(feature = "cpu-vmaf")]
+        MetricKind::VmafV1 => Ok(vec![(
+            "vmaf_v1",
+            vmaf::score(reference, distorted, vmaf::Model::V1)?,
+        )]),
+        #[cfg(not(feature = "cpu-vmaf"))]
+        MetricKind::VmafV1 => Err(disabled_msg("vmaf-v1", "cpu-vmaf")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::SsimLibvmaf => Ok(vec![(
+            "ssim_libvmaf",
+            vmaf::feature(reference, distorted, "float_ssim", "float_ssim")?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::SsimLibvmaf => Err(disabled_msg("ssim-libvmaf", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::MsSsimLibvmaf => Ok(vec![(
+            "ms_ssim_libvmaf",
+            vmaf::feature(reference, distorted, "float_ms_ssim", "float_ms_ssim")?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::MsSsimLibvmaf => Err(disabled_msg("ms-ssim-libvmaf", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::PsnrYLibvmaf => Ok(vec![(
+            "psnr_y_libvmaf",
+            vmaf::feature(reference, distorted, "psnr", "psnr_y")?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::PsnrYLibvmaf => Err(disabled_msg("psnr-y-libvmaf", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::Psnr => Ok(vec![(
+            "psnr",
+            classical::score(classical::Kind::Psnr, reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::Psnr => Err(disabled_msg("psnr", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::PsnrY => Ok(vec![(
+            "psnr_y",
+            classical::score(classical::Kind::PsnrY, reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::PsnrY => Err(disabled_msg("psnr-y", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::Ssim => Ok(vec![(
+            "ssim",
+            classical::score(classical::Kind::Ssim, reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::Ssim => Err(disabled_msg("ssim", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::Nlpd => Ok(vec![(
+            "nlpd",
+            nlpd::score_rgb_u8(
+                &reference.pixels,
+                &distorted.pixels,
+                reference.width as usize,
+                reference.height as usize,
+            )?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::Nlpd => Err(disabled_msg("nlpd", "cpu-metrics")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",
@@ -1232,30 +1569,15 @@ pub fn run_metric(
         // `ssim2`/`dssim`/`zensim` unsuffixed=CPU convention). Pure CPU
         // path — no GPU fallback; the GPU backend is `cvvdp-gpu`. Errors
         // clearly when `cpu-cvvdp` isn't compiled.
-        #[cfg(feature = "cpu-cvvdp")]
-        MetricKind::Cvvdp => Ok(vec![(
-            CVVDP_CPU_COLUMNS[0],
-            run_cpu_native_via_umbrella(zenmetrics_api::MetricKind::Cvvdp, reference, distorted)?,
-        )]),
-        #[cfg(not(feature = "cpu-cvvdp"))]
-        MetricKind::Cvvdp => Err(disabled_msg("cvvdp", "cpu-cvvdp` (native SIMD CPU)")),
+        // cvvdp has no default display: SDR scoring goes through
+        // `run_metric_display` (a named display), HDR through
+        // `run_metric_hdr_u8` / the faithful HDR routes.
+        MetricKind::Cvvdp | MetricKind::CvvdpGpu => Err(display_required_msg(kind).into()),
 
         // `cvvdp-gpu` = the GPU implementation (the prior `cvvdp`
         // behaviour). Pure GPU path through the umbrella; the
         // `score-pairs` typed `CvvdpBatchScorer` path also keys on this
         // variant. Errors clearly when `gpu-cvvdp` isn't compiled.
-        #[cfg(feature = "gpu-cvvdp")]
-        MetricKind::CvvdpGpu => Ok(vec![(
-            CVVDP_GPU_COLUMNS[0],
-            run_gpu_via_umbrella(
-                zenmetrics_api::MetricKind::Cvvdp,
-                reference,
-                distorted,
-                gpu_runtime,
-            )?,
-        )]),
-        #[cfg(not(feature = "gpu-cvvdp"))]
-        MetricKind::CvvdpGpu => Err(disabled_msg("cvvdp-gpu", "gpu-cvvdp")),
 
         // Unsuffixed iwssim = the native SIMD CPU port. Pure CPU path —
         // the GPU backend is `iwssim-gpu`. Errors when `cpu-iwssim`
@@ -1916,9 +2238,25 @@ mod tests {
     fn cvvdp_scores_on_native_cpu_in_cpu_build() {
         let r = synth_rgb8(176, 176, 128);
         let d = synth_rgb8(176, 176, 116);
-        let out = run_metric(MetricKind::Cvvdp, &r, &d, GpuRuntime::Auto)
-            .expect("cvvdp must score on native CPU when cpu-cvvdp is compiled (no GPU required)");
+        // No default display: plain `run_metric` refuses cvvdp …
+        let err = run_metric(MetricKind::Cvvdp, &r, &d, GpuRuntime::Auto)
+            .expect_err("cvvdp has no default display");
+        assert!(err.to_string().contains("--display-model"), "{err}");
+        assert!(run_metric_display(MetricKind::Cvvdp, &r, &d, GpuRuntime::Auto, None).is_err());
+        // … and a named display scores on native CPU (no GPU required).
+        let out = run_metric_display(
+            MetricKind::Cvvdp,
+            &r,
+            &d,
+            GpuRuntime::Auto,
+            Some(&display::DisplayPreset::Standard4k.into()),
+        )
+        .expect("cvvdp must score on native CPU when cpu-cvvdp is compiled (no GPU required)");
         assert_eq!(out.len(), 1);
+        assert_eq!(
+            out[0].0,
+            format!("{}_standard_4k", MetricKind::Cvvdp.column_names()[0])
+        );
         assert!(
             out[0].1.is_finite(),
             "cvvdp native-CPU score must be finite, got {}",
@@ -1990,7 +2328,7 @@ mod tests {
             assert!(
                 cols[0].starts_with("cvvdp_imazen_v")
                     || std::env::var("CVVDP_IMPL_TAG")
-                        .map(|t| cols[0] == t)
+                        .map(|t| cols[0].starts_with(&t))
                         .unwrap_or(false),
                 "expected cvvdp-gpu column to start with cvvdp_imazen_v or match \
                  CVVDP_IMPL_TAG override, got {:?}",
@@ -2001,6 +2339,11 @@ mod tests {
         {
             assert_eq!(cols[0], "cvvdp_gpu");
         }
+        // SDR output names the display on top of the implementation tag.
+        assert_eq!(
+            MetricKind::CvvdpGpu.columns_for(Some(&display::DisplayPreset::Standard4k.into()))[0],
+            format!("{}_standard_4k", cols[0])
+        );
     }
 
     #[test]
@@ -2015,7 +2358,7 @@ mod tests {
             assert!(
                 cols[0].starts_with("cvvdp_cpu_imazen_v")
                     || std::env::var("CVVDP_CPU_IMPL_TAG")
-                        .map(|t| cols[0] == t)
+                        .map(|t| cols[0].starts_with(&t))
                         .unwrap_or(false),
                 "expected cvvdp (CPU) column to start with cvvdp_cpu_imazen_v or \
                  match CVVDP_CPU_IMPL_TAG override, got {:?}",
@@ -2026,6 +2369,16 @@ mod tests {
         {
             assert_eq!(cols[0], "cvvdp");
         }
+        // SDR output names the display; HDR (`None`) keeps the base.
+        assert_eq!(
+            MetricKind::Cvvdp.columns_for(Some(&display::DisplayPreset::StandardFhd.into()))[0],
+            format!("{}_standard_fhd", cols[0])
+        );
+        assert_eq!(MetricKind::Cvvdp.columns_for(None), cols);
+        assert_eq!(
+            MetricKind::Ssim2.columns_for(Some(&display::DisplayPreset::StandardFhd.into())),
+            MetricKind::Ssim2.column_names()
+        );
         // In any build where BOTH backends are compiled, the columns must
         // differ — that is the whole point of the CPU/GPU split.
         #[cfg(all(feature = "cpu-cvvdp", feature = "gpu-cvvdp"))]

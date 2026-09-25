@@ -74,7 +74,7 @@ fn upload_once_five_metrics() {
     ];
 
     for &kind in metrics {
-        let params = MetricParams::default_for(kind);
+        let params = crate::params_for(kind);
         // butter at 256×256 with Auto picks Strip mode (butter is
         // strip-preferred). Strip-mode butter rejects compute_handles
         // — the single-resolution strip walker is pair-only. Force
@@ -103,17 +103,11 @@ fn upload_once_five_metrics() {
         // Bit-identical-or-close check vs. compute_srgb_u8 on the same
         // bytes. We build a fresh scorer for the byte path so neither
         // run's state can contaminate the other.
-        let mut m_bytes = Metric::new_with_memory_mode(
-            kind,
-            Backend::Cuda,
-            W,
-            H,
-            MetricParams::default_for(kind),
-            mode,
-        )
-        .unwrap_or_else(|e| {
-            panic!("Metric::new_with_memory_mode bytes-path({kind:?}) failed: {e}")
-        });
+        let mut m_bytes =
+            Metric::new_with_memory_mode(kind, Backend::Cuda, W, H, crate::params_for(kind), mode)
+                .unwrap_or_else(|e| {
+                    panic!("Metric::new_with_memory_mode bytes-path({kind:?}) failed: {e}")
+                });
         let s_bytes = m_bytes
             .compute_srgb_u8(&r, &d)
             .unwrap_or_else(|e| panic!("compute_srgb_u8({kind:?}) failed: {e}"));

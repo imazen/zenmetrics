@@ -18,6 +18,14 @@ pub enum Error {
         /// Short metric tag (`"cvvdp"`, `"ssim2"`, …).
         kind: &'static str,
     },
+    /// A display-aware metric (cvvdp) was requested without selecting a
+    /// display. The umbrella has no default viewing condition: callers
+    /// name one ([`crate::MetricParams::cvvdp`] /
+    /// [`crate::MetricParams::cvvdp_with`]).
+    DisplayRequired {
+        /// Short metric tag (`"cvvdp"`).
+        kind: &'static str,
+    },
     /// Underlying metric crate returned a failure. The wrapped string
     /// is the metric crate's `Display` for its own error.
     Metric {
@@ -87,6 +95,11 @@ impl fmt::Display for Error {
             Error::MetricNotEnabled { kind } => write!(
                 f,
                 "metric '{kind}' is not enabled in this build of zenmetrics-api (enable the matching Cargo feature)"
+            ),
+            Error::DisplayRequired { kind } => write!(
+                f,
+                "metric '{kind}' needs an explicit display (e.g. standard_4k, standard_fhd); \
+                 there is no default"
             ),
             Error::Metric { kind, message } => write!(f, "{kind}: {message}"),
             Error::BackendNotEnabled { backend } => write!(

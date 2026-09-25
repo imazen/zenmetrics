@@ -4,7 +4,7 @@
 
 #![cfg(all(feature = "pixels", feature = "cuda"))]
 
-use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, Metric, MetricKind};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 const W: u32 = 256;
@@ -31,7 +31,7 @@ fn run_pixels(kind: MetricKind) -> zenmetrics_api::Score {
     let d_slice =
         PixelSlice::new(&d_bytes, W, H, row_bytes, descriptor).expect("dist slice construction");
 
-    let params = MetricParams::default_for(kind);
+    let params = crate::params_for(kind);
     let mut m = Metric::new(kind, Backend::Cuda, W, H, params)
         .unwrap_or_else(|e| panic!("Metric::new({kind:?}) failed: {e}"));
     m.compute_pixels(r_slice, d_slice)

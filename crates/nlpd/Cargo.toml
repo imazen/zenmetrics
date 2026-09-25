@@ -1,0 +1,26 @@
+[package]
+name = "nlpd"
+version = "0.1.0"
+description = "Normalized Laplacian Pyramid Distance for full-reference image quality"
+edition.workspace = true
+rust-version.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+publish = false
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("avx512"))'] }
+
+[features]
+default = []
+avx512 = ["archmage/avx512", "magetypes/avx512"]
+
+[dependencies]
+archmage = { workspace = true }
+magetypes = { workspace = true }
+
+[dev-dependencies]
+iai-callgrind = "0.16"
+
+[[bench]]
+name = "nlpd"
+harness = false

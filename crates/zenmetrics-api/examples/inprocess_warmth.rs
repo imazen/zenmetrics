@@ -129,8 +129,8 @@ fn metric_kind_from_tag(s: &str) -> Option<MetricKind> {
 }
 
 fn build_metric(kind: MetricKind, w: u32, h: u32) -> Metric {
-    let params: MetricParams = MetricParams::try_default_for(kind)
-        .unwrap_or_else(|e| panic!("params for {}: {e}", kind.tag()));
+    let params: MetricParams =
+        try_params_for(kind).unwrap_or_else(|e| panic!("params for {}: {e}", kind.tag()));
     Metric::new(kind, Backend::Cuda, w, h, params)
         .unwrap_or_else(|e| panic!("Metric::new {}: {e}", kind.tag()))
 }
@@ -565,4 +565,24 @@ fn main() {
          orchestrates the full matrix."
     );
     std::process::exit(1);
+}
+
+/// Parameters for `kind`. cvvdp has no default display in the umbrella, so
+/// this names the `standard_4k` preset explicitly.
+#[allow(dead_code)]
+fn try_params_for(
+    kind: zenmetrics_api::MetricKind,
+) -> zenmetrics_api::Result<zenmetrics_api::MetricParams> {
+    #[cfg(feature = "cvvdp")]
+    if kind == zenmetrics_api::MetricKind::Cvvdp {
+        return Ok(zenmetrics_api::MetricParams::cvvdp(
+            zenmetrics_api::cvvdp::params::DisplayPreset::Standard4k,
+        ));
+    }
+    zenmetrics_api::MetricParams::try_default_for(kind)
+}
+
+#[allow(dead_code)]
+fn params_for(kind: zenmetrics_api::MetricKind) -> zenmetrics_api::MetricParams {
+    try_params_for(kind).unwrap_or_else(|e| panic!("{e}"))
 }

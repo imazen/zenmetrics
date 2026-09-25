@@ -126,7 +126,7 @@ fn cpu_hdrvdp_custom_ppd_threads_through() {
 /// misfeeding buffers.
 #[test]
 fn cpu_hdrvdp_default_ppd_and_input_validation() {
-    let params = MetricParams::try_default_for(MetricKind::Hdrvdp)
+    let params = crate::try_params_for(MetricKind::Hdrvdp)
         .expect("cpu-hdrvdp enabled => try_default_for Ok");
     let MetricParams::Hdrvdp(p) = params else {
         panic!("try_default_for(Hdrvdp) returned a different variant");
@@ -140,7 +140,7 @@ fn cpu_hdrvdp_default_ppd_and_input_validation() {
         Backend::Cpu,
         w,
         h,
-        MetricParams::default_for(MetricKind::Hdrvdp),
+        crate::params_for(MetricKind::Hdrvdp),
     )
     .expect("Metric::new hdrvdp on Backend::Cpu");
 
@@ -174,7 +174,7 @@ fn cpu_hdrvdp_srgb8_is_a_loud_error() {
         Backend::Cpu,
         w,
         h,
-        MetricParams::default_for(MetricKind::Hdrvdp),
+        crate::params_for(MetricKind::Hdrvdp),
     )
     .expect("Metric::new hdrvdp on Backend::Cpu");
     let err = m

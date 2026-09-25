@@ -81,10 +81,19 @@ pub fn orchestrator_score_one(
     cli_kind: CliMetricKind,
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
+    display: Option<&crate::metrics::CvvdpDisplay>,
 ) -> Result<Vec<OrchestratorScoreRow>, Box<dyn std::error::Error>> {
     use zenmetrics_orchestrator::{Task, TaskData};
 
-    let spec = OrchestratorMetricSpec::from_cli(cli_kind);
+    let spec = OrchestratorMetricSpec::from_cli(cli_kind)?;
+    // cvvdp has no default display: the task carries the caller's named
+    // preset (photometry AND geometry) instead of `params: None`.
+    let params = if cli_kind.needs_display() {
+        let display = display.ok_or_else(|| crate::metrics::display_required_msg(cli_kind))?;
+        Some(zenmetrics_api::MetricParams::cvvdp(display.clone()))
+    } else {
+        None
+    };
     let width = reference.width;
     let height = reference.height;
 
@@ -96,7 +105,7 @@ pub fn orchestrator_score_one(
         width,
         height,
         metric: spec.kind,
-        params: None,
+        params,
         ref_hash: 0,
     };
 
@@ -114,11 +123,16 @@ pub fn orchestrator_score_one(
             // primary-column-name mapping.
             let rows: Vec<OrchestratorScoreRow> = if result.output_columns.is_empty() {
                 vec![OrchestratorScoreRow {
-                    column: cli_metric_to_column_name(cli_kind).to_string(),
+                    column: match display {
+                        Some(_) if cli_kind.needs_display() => {
+                            cli_kind.columns_for(display)[0].to_string()
+                        }
+                        _ => cli_metric_to_column_name(cli_kind).to_string(),
+                    },
                     value: score.value,
                 }]
             } else {
-                rekey_orchestrator_columns(cli_kind, &result.output_columns)
+                rekey_orchestrator_columns(cli_kind, &result.output_columns, display)
                     .into_iter()
                     .map(|(column, value)| OrchestratorScoreRow { column, value })
                     .collect()
@@ -143,6 +157,7 @@ pub fn orchestrator_score_one(
     _cli_kind: CliMetricKind,
     _reference: &Rgb8Image,
     _distorted: &Rgb8Image,
+    _display: Option<&crate::metrics::CvvdpDisplay>,
 ) -> Result<Vec<OrchestratorScoreRow>, Box<dyn std::error::Error>> {
     Err("orchestrator-driven scoring requires the `orchestrator-cuda` feature".into())
 }
@@ -176,10 +191,12 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::Msssim => "msssim",
         CliMetricKind::Vif => "vif",
         CliMetricKind::Mad => "mad",
-        CliMetricKind::Cvvdp => "cvvdp",
-        CliMetricKind::CvvdpGpu => "cvvdp",
+        // cvvdp's display-less base; the scoring path rekeys to the
+        // display-named column (`rekey_orchestrator_columns`).
+        CliMetricKind::Cvvdp | CliMetricKind::CvvdpGpu => kind.column_names()[0],
         CliMetricKind::Butteraugli => "butteraugli_max",
         CliMetricKind::ButteraugliGpu => "butteraugli_max_gpu",
+        other => other.column_names()[0],
     }
 }
 
@@ -202,6 +219,7 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
 pub fn rekey_orchestrator_columns(
     cli_kind: CliMetricKind,
     columns: &std::collections::BTreeMap<String, f64>,
+    display: Option<&crate::metrics::CvvdpDisplay>,
 ) -> Vec<(String, f64)> {
     // Phase 7.7.1: the orchestrator's `executor::build_output_columns`
     // emits the *versioned* iwssim column name (e.g.
@@ -273,12 +291,22 @@ pub fn rekey_orchestrator_columns(
         | CliMetricKind::Msssim
         | CliMetricKind::Vif
         | CliMetricKind::Mad => Vec::new(),
-        CliMetricKind::Cvvdp
-        | CliMetricKind::CvvdpGpu
-        | CliMetricKind::Ssim2Gpu
+        // cvvdp: the orchestrator emits one display-less versioned key
+        // (`cvvdp_imazen_v…`) for whatever display the task carried, so
+        // re-key it to the CLI's display-named column. A display-less SDR
+        // cvvdp column holds pre-2026-09-25 `standard_4k` scores and must
+        // never receive a score from a caller-selected display.
+        CliMetricKind::Cvvdp | CliMetricKind::CvvdpGpu => columns
+            .keys()
+            .filter(|k| k.starts_with("cvvdp"))
+            .map(|k| (k.clone(), cli_kind.columns_for(display)[0].to_string()))
+            .collect(),
+        CliMetricKind::Ssim2Gpu
         | CliMetricKind::DssimGpu
         | CliMetricKind::ZensimGpu
         | CliMetricKind::ButteraugliGpu => Vec::new(),
+        // New CPU/libvmaf metrics are rejected by `from_cli` before reaching here.
+        _ => Vec::new(),
     };
     columns
         .iter()
@@ -392,7 +420,9 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
     // (luma-only, single column, no GPU twin). VIFp likewise
     // (luma-only, single column, no GPU twin). MAD likewise (three
     // columns — the blend plus the hi/lo strategy indices — and no
-    // GPU twin).
+    // GPU twin). The `run_metric` direct-CPU kinds (nlpd, the classical
+    // SSIM/PSNR set, VMAF and the libvmaf feature adapter) are likewise
+    // one-shot only.
     !matches!(
         kind,
         CliMetricKind::Gmsd
@@ -407,6 +437,17 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::Msssim
             | CliMetricKind::Vif
             | CliMetricKind::Mad
+            | CliMetricKind::Vmaf
+            | CliMetricKind::VmafNeg
+            | CliMetricKind::Vmaf4k
+            | CliMetricKind::VmafV1
+            | CliMetricKind::SsimLibvmaf
+            | CliMetricKind::MsSsimLibvmaf
+            | CliMetricKind::PsnrYLibvmaf
+            | CliMetricKind::Psnr
+            | CliMetricKind::PsnrY
+            | CliMetricKind::Ssim
+            | CliMetricKind::Nlpd
     )
 }
 
@@ -597,19 +638,20 @@ mod tests {
         // `Ssim2Gpu` variant should pass it through unchanged.
         let mut cols = BTreeMap::new();
         cols.insert("ssim2_gpu".to_string(), 95.5_f64);
-        let gpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::Ssim2Gpu, &cols);
+        let gpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::Ssim2Gpu, &cols, None);
         assert_eq!(gpu_rekeyed, vec![("ssim2_gpu".to_string(), 95.5)]);
 
         // CPU variant of ssim2 (CLI `Ssim2`) strips the _gpu suffix
         // to match what the legacy `MetricCache` would emit.
-        let cpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::Ssim2, &cols);
+        let cpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::Ssim2, &cols, None);
         assert_eq!(cpu_rekeyed, vec![("ssim2".to_string(), 95.5)]);
 
         // Butter GPU keeps two columns (max + pnorm3) as-is.
         let mut butter_cols = BTreeMap::new();
         butter_cols.insert("butteraugli_max_gpu".to_string(), 1.5_f64);
         butter_cols.insert("butteraugli_pnorm3_gpu".to_string(), 2.5_f64);
-        let butter_gpu = rekey_orchestrator_columns(CliMetricKind::ButteraugliGpu, &butter_cols);
+        let butter_gpu =
+            rekey_orchestrator_columns(CliMetricKind::ButteraugliGpu, &butter_cols, None);
         // BTreeMap iteration is sorted by key — max before pnorm3
         // alphabetically.
         assert_eq!(
@@ -621,7 +663,7 @@ mod tests {
         );
 
         // Butter CPU strips _gpu from both columns.
-        let butter_cpu = rekey_orchestrator_columns(CliMetricKind::Butteraugli, &butter_cols);
+        let butter_cpu = rekey_orchestrator_columns(CliMetricKind::Butteraugli, &butter_cols, None);
         assert_eq!(
             butter_cpu,
             vec![
@@ -630,11 +672,19 @@ mod tests {
             ]
         );
 
-        // Cvvdp uses a versioned column; no rename ever.
+        // Cvvdp: the display-less versioned key becomes the CLI's
+        // display-named column for the display the task carried.
         let mut cvvdp_cols = BTreeMap::new();
         cvvdp_cols.insert("cvvdp_imazen_v0_0_1".to_string(), 9.2_f64);
-        let cvvdp = rekey_orchestrator_columns(CliMetricKind::Cvvdp, &cvvdp_cols);
-        assert_eq!(cvvdp, vec![("cvvdp_imazen_v0_0_1".to_string(), 9.2)]);
+        for kind in [CliMetricKind::Cvvdp, CliMetricKind::CvvdpGpu] {
+            let cvvdp = rekey_orchestrator_columns(
+                kind,
+                &cvvdp_cols,
+                Some(&crate::metrics::display::DisplayPreset::Standard4k.into()),
+            );
+            let want = format!("{}_standard_4k", kind.column_names()[0]);
+            assert_eq!(cvvdp, vec![(want, 9.2)]);
+        }
     }
 
     /// Phase 7.7.1: iwssim's versioned column gets re-keyed back to the
@@ -655,7 +705,7 @@ mod tests {
         let mut cols = BTreeMap::new();
         cols.insert(versioned.clone(), 0.952_f64);
 
-        let gpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::IwssimGpu, &cols);
+        let gpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::IwssimGpu, &cols, None);
         assert_eq!(
             gpu_rekeyed,
             vec![("iwssim_gpu".to_string(), 0.952)],
@@ -666,7 +716,7 @@ mod tests {
         // CLI's matching arm ALSO emits the versioned name, so
         // there's nothing to re-key. See the inline comment in
         // `rekey_orchestrator_columns` for the source-of-truth path.
-        let cpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::Iwssim, &cols);
+        let cpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::Iwssim, &cols, None);
         assert_eq!(
             cpu_rekeyed,
             vec![(versioned.clone(), 0.952)],
@@ -675,7 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn every_metric_kind_is_orchestrator_eligible() {
+    fn existing_orchestrator_metrics_are_eligible_and_new_metrics_fall_back() {
         // Butteraugli was the last holdout (Phase 7.7.1 reverted it
         // when `ButteraugliOpaque`'s Auto resolver still dropped to a
         // single-resolution walker, ~14-30 % off multires — see
@@ -702,5 +752,8 @@ mod tests {
         assert!(metric_orchestrator_eligible(CliMetricKind::IwssimGpu));
         assert!(metric_orchestrator_eligible(CliMetricKind::Zensim));
         assert!(metric_orchestrator_eligible(CliMetricKind::ZensimGpu));
+        assert!(!metric_orchestrator_eligible(CliMetricKind::Nlpd));
+        assert!(!metric_orchestrator_eligible(CliMetricKind::VmafNeg));
+        assert!(!metric_orchestrator_eligible(CliMetricKind::Ssim));
     }
 }

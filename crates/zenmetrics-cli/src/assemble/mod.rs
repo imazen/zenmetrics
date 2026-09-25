@@ -180,7 +180,12 @@ const OMNI_PASSTHROUGH: &[&str] = &[
     "score_ssim2_gpu",
     "score_butteraugli_max_gpu",
     "score_butteraugli_pnorm3_gpu",
+    // Display-less = pre-2026-09-25 `standard_4k` scores; newer SDR
+    // sidecars name the display (there is no default). Distinct columns,
+    // never merged.
     "score_cvvdp_imazen_v0_0_1",
+    "score_cvvdp_imazen_v0_0_1_standard_4k",
+    "score_cvvdp_imazen_v0_0_1_standard_fhd",
     "score_dssim_gpu",
     "score_iwssim_gpu",
     "run_id",

@@ -28,7 +28,7 @@ fn ssim2_cpu(w: u32, h: u32) -> Metric {
         Backend::Cpu,
         w,
         h,
-        MetricParams::default_for(MetricKind::Ssim2),
+        crate::params_for(MetricKind::Ssim2),
     )
     .expect("Backend::Cpu ssim2 must construct when cpu-ssim2 is built")
 }
@@ -40,7 +40,7 @@ fn cvvdp_cpu(w: u32, h: u32) -> Metric {
         Backend::Cpu,
         w,
         h,
-        MetricParams::default_for(MetricKind::Cvvdp),
+        crate::params_for(MetricKind::Cvvdp),
     )
     .expect("Backend::Cpu cvvdp must construct when cpu-cvvdp is built")
 }
@@ -52,7 +52,7 @@ fn iwssim_cpu(w: u32, h: u32) -> Metric {
         Backend::Cpu,
         w,
         h,
-        MetricParams::default_for(MetricKind::Iwssim),
+        crate::params_for(MetricKind::Iwssim),
     )
     .expect("Backend::Cpu iwssim must construct when cpu-iwssim is built")
 }
@@ -64,7 +64,7 @@ fn zensim_cpu(w: u32, h: u32) -> Metric {
         Backend::Cpu,
         w,
         h,
-        MetricParams::default_for(MetricKind::Zensim),
+        crate::params_for(MetricKind::Zensim),
     )
     .expect("Backend::Cpu zensim must construct when cpu-zensim is built")
 }
@@ -76,7 +76,7 @@ fn dssim_cpu(w: u32, h: u32) -> Metric {
         Backend::Cpu,
         w,
         h,
-        MetricParams::default_for(MetricKind::Dssim),
+        crate::params_for(MetricKind::Dssim),
     )
     .expect("Backend::Cpu dssim must construct when cpu-dssim is built")
 }
@@ -88,7 +88,7 @@ fn butter_cpu(w: u32, h: u32) -> Metric {
         Backend::Cpu,
         w,
         h,
-        MetricParams::default_for(MetricKind::Butter),
+        crate::params_for(MetricKind::Butter),
     )
     .expect("Backend::Cpu butter must construct when cpu-butter is built")
 }
@@ -117,10 +117,10 @@ fn cpu_compute_pixels_matches_srgb_u8_rgb8() {
     for kind in [MetricKind::Ssim2, MetricKind::Cvvdp] {
         let r = PixelSlice::new(&ref_bytes, w, h, row, desc).expect("ref slice");
         let d = PixelSlice::new(&dist_bytes, w, h, row, desc).expect("dist slice");
-        let mut mp = Metric::new(kind, Backend::Cpu, w, h, MetricParams::default_for(kind))
+        let mut mp = Metric::new(kind, Backend::Cpu, w, h, crate::params_for(kind))
             .expect("Backend::Cpu metric");
         let via_pixels = mp.compute_pixels(r, d).expect("compute_pixels");
-        let mut mb = Metric::new(kind, Backend::Cpu, w, h, MetricParams::default_for(kind))
+        let mut mb = Metric::new(kind, Backend::Cpu, w, h, crate::params_for(kind))
             .expect("Backend::Cpu metric");
         let via_bytes = mb
             .compute_srgb_u8(&ref_bytes, &dist_bytes)

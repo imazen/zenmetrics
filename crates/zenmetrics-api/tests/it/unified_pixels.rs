@@ -12,7 +12,7 @@
 ))]
 
 use zenmetrics_api::hdr::{HDR_PEAK_NITS, HdrScorer};
-use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 fn gradient_u8(w: u32, h: u32, seed: u32) -> Vec<u8> {
@@ -60,7 +60,7 @@ fn sdr_srgb8_slice_matches_native_compute_srgb_u8() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Butter),
+        crate::params_for(MetricKind::Butter),
         MemoryMode::Full,
     )
     .expect("native");
@@ -151,7 +151,7 @@ fn ssim2_srgb8_native_and_hdr_integrated_pu() {
         Backend::Cuda,
         w,
         h,
-        MetricParams::default_for(MetricKind::Ssim2),
+        crate::params_for(MetricKind::Ssim2),
     )
     .expect("native ssim2");
     let native_sdr = native

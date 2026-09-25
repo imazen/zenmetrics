@@ -6,7 +6,7 @@
 //! usable, and are bit-identical to the plain entries under `Unstoppable`.
 
 use almost_enough::Stopper;
-use zenmetrics_api::{Backend, Error, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, Error, Metric, MetricKind};
 
 const W: u32 = 256;
 const H: u32 = 256;
@@ -60,7 +60,7 @@ const GPU_BACKEND: Backend = Backend::Wgpu;
 fn gpu_one_shot_pre_cancelled_stop_is_error_cancelled_for_every_metric() {
     let (r, d) = make_pair();
     for kind in gpu_kinds() {
-        let mut m = Metric::new(kind, GPU_BACKEND, W, H, MetricParams::default_for(kind))
+        let mut m = Metric::new(kind, GPU_BACKEND, W, H, crate::params_for(kind))
             .unwrap_or_else(|e| panic!("{kind:?}: new: {e}"));
         let err = m
             .compute_srgb_u8_with_stop(&r, &d, &cancelled())
@@ -93,7 +93,7 @@ fn gpu_one_shot_pre_cancelled_stop_is_error_cancelled_for_every_metric() {
 fn gpu_cached_reference_pre_cancelled_stop_keeps_the_reference() {
     let (r, d) = make_pair();
     for kind in gpu_kinds() {
-        let mut m = Metric::new(kind, GPU_BACKEND, W, H, MetricParams::default_for(kind))
+        let mut m = Metric::new(kind, GPU_BACKEND, W, H, crate::params_for(kind))
             .unwrap_or_else(|e| panic!("{kind:?}: new: {e}"));
         m.set_reference_srgb_u8(&r)
             .unwrap_or_else(|e| panic!("{kind:?}: set_reference: {e}"));
@@ -129,7 +129,7 @@ fn gpu_compute_pixels_with_stop_routes_the_sdr_path() {
     let rs = || PixelSlice::new(&r, W, H, row_bytes, PixelDescriptor::RGB8_SRGB).expect("ref");
     let ds = || PixelSlice::new(&d, W, H, row_bytes, PixelDescriptor::RGB8_SRGB).expect("dis");
     for kind in gpu_kinds() {
-        let mut m = Metric::new(kind, GPU_BACKEND, W, H, MetricParams::default_for(kind))
+        let mut m = Metric::new(kind, GPU_BACKEND, W, H, crate::params_for(kind))
             .unwrap_or_else(|e| panic!("{kind:?}: new: {e}"));
         let err = m
             .compute_pixels_with_stop(rs(), ds(), &cancelled())
@@ -176,7 +176,7 @@ fn cpu_dispatch_with_stop_polls_once_and_is_bit_identical_otherwise() {
     #[cfg(feature = "cpu-iwssim")]
     kinds.push(MetricKind::Iwssim);
     for kind in kinds {
-        let mut m = Metric::new(kind, Backend::Cpu, W, H, MetricParams::default_for(kind))
+        let mut m = Metric::new(kind, Backend::Cpu, W, H, crate::params_for(kind))
             .unwrap_or_else(|e| panic!("{kind:?}: new: {e}"));
         let err = m
             .compute_srgb_u8_with_stop(&r, &d, &cancelled())

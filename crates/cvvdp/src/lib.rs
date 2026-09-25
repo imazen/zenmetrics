@@ -46,6 +46,7 @@ extern crate alloc;
 // Phase 8c.1-B: params + presets + the JOD reference version live in
 // this crate (CPU) as the canonical owner. cvvdp-gpu re-exports them
 // to preserve existing `cvvdp_gpu::params::*` callsites.
+pub mod display;
 pub mod params;
 pub mod presets;
 

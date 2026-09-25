@@ -24,9 +24,7 @@
 
 #![cfg(all(feature = "cuda", feature = "cvvdp"))]
 
-use zenmetrics_api::{
-    Backend, Metric, MetricKind, MetricParams, MetricSession, OwnedSessionMetric,
-};
+use zenmetrics_api::{Backend, Metric, MetricKind, MetricSession, OwnedSessionMetric};
 
 const W: u32 = 256;
 const H: u32 = 256;
@@ -58,7 +56,7 @@ fn parity_for(kind: MetricKind, abs_tol: f64, rel_tol: f64) {
 
     // (1) plain owned Metric on the shared default stream.
     let plain = {
-        let mut m = Metric::new(kind, Backend::Cuda, W, H, MetricParams::default_for(kind))
+        let mut m = Metric::new(kind, Backend::Cuda, W, H, crate::params_for(kind))
             .unwrap_or_else(|e| panic!("plain Metric::new({kind:?}) failed: {e}"));
         m.compute_srgb_u8(&r, &d)
             .unwrap_or_else(|e| panic!("plain {kind:?} score failed: {e}"))
@@ -68,7 +66,7 @@ fn parity_for(kind: MetricKind, abs_tol: f64, rel_tol: f64) {
     let borrowed = {
         let ctx = MetricSession::acquire(Backend::Cuda).expect("acquire (borrowed)");
         let mut sm = ctx
-            .metric(kind, W, H, MetricParams::default_for(kind))
+            .metric(kind, W, H, crate::params_for(kind))
             .unwrap_or_else(|e| panic!("ctx.metric({kind:?}) failed: {e}"));
         sm.score(&r, &d)
             .unwrap_or_else(|e| panic!("borrowed {kind:?} score failed: {e}"))
@@ -78,7 +76,7 @@ fn parity_for(kind: MetricKind, abs_tol: f64, rel_tol: f64) {
     let owned = {
         let ctx = MetricSession::acquire(Backend::Cuda).expect("acquire (owned)");
         let mut om: OwnedSessionMetric = ctx
-            .into_metric(kind, W, H, MetricParams::default_for(kind))
+            .into_metric(kind, W, H, crate::params_for(kind))
             .unwrap_or_else(|e| panic!("ctx.into_metric({kind:?}) failed: {e}"));
         assert_eq!(om.kind(), kind, "owned metric kind mismatch");
         assert_eq!(om.dims(), (W, H), "owned metric dims mismatch");
@@ -125,7 +123,7 @@ fn owned_warm_ref_matches_plain_cvvdp() {
     let kind = MetricKind::Cvvdp;
 
     let plain = {
-        let mut m = Metric::new(kind, Backend::Cuda, W, H, MetricParams::default_for(kind))
+        let mut m = Metric::new(kind, Backend::Cuda, W, H, crate::params_for(kind))
             .expect("plain Metric::new(Cvvdp)");
         m.set_reference_srgb_u8(&r).expect("plain set_reference");
         m.compute_with_reference_srgb_u8(&d)
@@ -134,7 +132,7 @@ fn owned_warm_ref_matches_plain_cvvdp() {
     let owned = {
         let ctx = MetricSession::acquire(Backend::Cuda).expect("acquire owned");
         let mut om = ctx
-            .into_metric(kind, W, H, MetricParams::default_for(kind))
+            .into_metric(kind, W, H, crate::params_for(kind))
             .expect("into_metric(Cvvdp)");
         om.set_reference_srgb_u8(&r).expect("owned set_reference");
         assert!(om.has_reference(), "owned must report cached ref");
@@ -185,7 +183,7 @@ fn owned_drop_one_frees_only_its_pool() {
             MetricKind::Cvvdp,
             WW,
             HH,
-            MetricParams::default_for(MetricKind::Cvvdp),
+            crate::params_for(MetricKind::Cvvdp),
         )
         .expect("A.into_metric");
     let stream_a = a.__stream_value();
@@ -202,7 +200,7 @@ fn owned_drop_one_frees_only_its_pool() {
             MetricKind::Cvvdp,
             WW,
             HH,
-            MetricParams::default_for(MetricKind::Cvvdp),
+            crate::params_for(MetricKind::Cvvdp),
         )
         .expect("B.into_metric");
     let stream_b = b.__stream_value();

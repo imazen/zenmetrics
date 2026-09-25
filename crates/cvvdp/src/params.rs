@@ -16,6 +16,10 @@
 //! All fields are stored as f32 — cvvdp's published parameters are
 //! single-precision; matching the Python reference's `.float()` calls.
 
+/// Typed viewing conditions ([`crate::display`]), re-exported so the
+/// `cvvdp_gpu::params::*` glob re-export reaches them too.
+pub use crate::display::{CustomDisplay, CvvdpDisplay, DisplayError, DisplayPreset};
+
 /// Electro-optical transfer function — how display-encoded pixel
 /// values map to relative-linear or absolute luminance before the
 /// peak/black/ambient scaling step.
@@ -345,7 +349,7 @@ impl Primaries {
 /// let hdr400 = DisplayModel { y_peak: 400.0, ..d };
 /// assert!(hdr400.y_peak > d.y_peak);
 /// ```
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DisplayModel {
     /// Peak display luminance in cd/m².
     pub y_peak: f32,
@@ -771,7 +775,7 @@ impl Default for DisplayModel {
 /// // Smaller display at closer distance → higher PPD than 4K.
 /// assert!(phone.pixels_per_degree() > g.pixels_per_degree());
 /// ```
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DisplayGeometry {
     /// Display width in pixels.
     pub resolution_w: u32,
