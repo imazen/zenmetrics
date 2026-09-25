@@ -23,6 +23,10 @@ vmaf-head-sys = "=0.2.0"
 name = "backends"
 harness = false
 
+[[bench]]
+name = "arm_stages"
+harness = false
+
 [features]
 parallel = ["dep:rayon"]
 simd = ["dep:archmage", "dep:magetypes"]
