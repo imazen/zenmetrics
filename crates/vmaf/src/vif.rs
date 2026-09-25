@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::OnceLock;
 
 use crate::{Error, VmafV0Variant};
@@ -13,9 +14,9 @@ const FILTERS: [&[u16]; 4] = [
 ];
 const SIGMA_NSQ: i32 = 131072;
 
-struct VifImage {
-    reference: Vec<u16>,
-    distorted: Vec<u16>,
+struct VifImage<'a> {
+    reference: Cow<'a, [u16]>,
+    distorted: Cow<'a, [u16]>,
     width: usize,
     height: usize,
 }
@@ -51,57 +52,80 @@ fn log2_64(table: &[u16; 65536], value: u64) -> i32 {
     table[(value >> k) as usize] as i32 + 2048 * k
 }
 
-fn subsample(image: &VifImage, bit_depth: u8, scale: usize) -> VifImage {
+fn pad_reflected(row: &mut [u32], width: usize, half: usize) {
+    for offset in 0..half {
+        row[half - offset - 1] = row[half + offset + 1];
+        row[half + width + offset] = row[half + width - offset - 2];
+    }
+}
+
+fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<'a> {
     let filter = FILTERS[scale + 1];
     let half = (filter.len() / 2) as isize;
     let (width, height) = (image.width, image.height);
-    let mut output = VifImage {
-        reference: vec![0; (width / 2) * (height / 2)],
-        distorted: vec![0; (width / 2) * (height / 2)],
-        width: width / 2,
-        height: height / 2,
-    };
-    let mut vertical_reference = vec![0u32; width];
-    let mut vertical_distorted = vec![0u32; width];
-    for row in (0..height).step_by(2) {
+    let (out_width, out_height) = (width / 2, height / 2);
+    let mut out_reference = vec![0; out_width * out_height];
+    let mut out_distorted = vec![0; out_width * out_height];
+    let mut vertical_reference = vec![0u32; width + 2 * half as usize];
+    let mut vertical_distorted = vec![0u32; width + 2 * half as usize];
+    for row in (0..height / 2 * 2).step_by(2) {
+        let mut row_offsets = [0usize; 9];
+        for (tap, slot) in row_offsets.iter_mut().take(filter.len()).enumerate() {
+            *slot = mirror(row as isize + tap as isize - half, height) * width;
+        }
         for col in 0..width {
-            let mut ref_sum = 0u32;
-            let mut dis_sum = 0u32;
-            for (tap, &weight) in filter.iter().enumerate() {
-                let y = mirror(row as isize + tap as isize - half, height);
-                ref_sum += weight as u32 * image.reference[y * width + col] as u32;
-                dis_sum += weight as u32 * image.distorted[y * width + col] as u32;
+            let center = half as usize;
+            let mut ref_sum =
+                filter[center] as u32 * image.reference[row_offsets[center] + col] as u32;
+            let mut dis_sum =
+                filter[center] as u32 * image.distorted[row_offsets[center] + col] as u32;
+            for offset in 1..=center {
+                let weight = filter[center - offset] as u32;
+                let left = row_offsets[center - offset] + col;
+                let right = row_offsets[center + offset] + col;
+                ref_sum += weight * (image.reference[left] as u32 + image.reference[right] as u32);
+                dis_sum += weight * (image.distorted[left] as u32 + image.distorted[right] as u32);
             }
             if bit_depth == 8 && scale == 0 {
-                vertical_reference[col] = (ref_sum + 128) >> 8;
-                vertical_distorted[col] = (dis_sum + 128) >> 8;
+                vertical_reference[col + half as usize] = (ref_sum + 128) >> 8;
+                vertical_distorted[col + half as usize] = (dis_sum + 128) >> 8;
             } else {
                 let shift = if scale == 0 { bit_depth } else { 16 };
                 let round = 1u32 << (shift - 1);
-                vertical_reference[col] = ((ref_sum + round) >> shift) as u16 as u32;
-                vertical_distorted[col] = ((dis_sum + round) >> shift) as u16 as u32;
+                vertical_reference[col + half as usize] =
+                    ((ref_sum + round) >> shift) as u16 as u32;
+                vertical_distorted[col + half as usize] =
+                    ((dis_sum + round) >> shift) as u16 as u32;
             }
         }
-        for col in (0..width).step_by(2) {
-            let mut ref_sum = 0u32;
-            let mut dis_sum = 0u32;
-            for (tap, &weight) in filter.iter().enumerate() {
-                let x = mirror(col as isize + tap as isize - half, width);
-                ref_sum += weight as u32 * vertical_reference[x];
-                dis_sum += weight as u32 * vertical_distorted[x];
+        pad_reflected(&mut vertical_reference, width, half as usize);
+        pad_reflected(&mut vertical_distorted, width, half as usize);
+        for col in (0..width / 2 * 2).step_by(2) {
+            let center = col + half as usize;
+            let mut ref_sum = filter[half as usize] as u32 * vertical_reference[center];
+            let mut dis_sum = filter[half as usize] as u32 * vertical_distorted[center];
+            for offset in 1..=half as usize {
+                let weight = filter[half as usize - offset] as u32;
+                ref_sum += weight
+                    * (vertical_reference[center - offset] + vertical_reference[center + offset]);
+                dis_sum += weight
+                    * (vertical_distorted[center - offset] + vertical_distorted[center + offset]);
             }
-            let slot = (row / 2) * output.width + col / 2;
-            if row / 2 < output.height && col / 2 < output.width {
-                output.reference[slot] = ((ref_sum + 32768) >> 16) as u16;
-                output.distorted[slot] = ((dis_sum + 32768) >> 16) as u16;
-            }
+            let slot = (row / 2) * out_width + col / 2;
+            out_reference[slot] = ((ref_sum + 32768) >> 16) as u16;
+            out_distorted[slot] = ((dis_sum + 32768) >> 16) as u16;
         }
     }
-    output
+    VifImage {
+        reference: Cow::Owned(out_reference),
+        distorted: Cow::Owned(out_distorted),
+        width: out_width,
+        height: out_height,
+    }
 }
 
 fn statistics(
-    image: &VifImage,
+    image: &VifImage<'_>,
     bit_depth: u8,
     scale: usize,
     gain_limit: f64,
@@ -122,53 +146,88 @@ fn statistics(
     } else {
         (16, 32768, 16, 32768)
     };
-    let mut vertical_ref_mean = vec![0u32; width];
-    let mut vertical_dis_mean = vec![0u32; width];
-    let mut vertical_ref_sq = vec![0u32; width];
-    let mut vertical_dis_sq = vec![0u32; width];
-    let mut vertical_ref_dis = vec![0u32; width];
+    let padded = width + 2 * half as usize;
+    let mut vertical_ref_mean = vec![0u32; padded];
+    let mut vertical_dis_mean = vec![0u32; padded];
+    let mut vertical_ref_sq = vec![0u32; padded];
+    let mut vertical_dis_sq = vec![0u32; padded];
+    let mut vertical_ref_dis = vec![0u32; padded];
     let mut num_log = 0i64;
     let mut den_log = 0i64;
     let mut num_non_log = 0i64;
     let mut den_non_log = 0i64;
     for row in 0..height {
-        for col in 0..width {
-            let mut ref_mean = 0u32;
-            let mut dis_mean = 0u32;
-            let mut ref_sq = 0u64;
-            let mut dis_sq = 0u64;
-            let mut ref_dis = 0u64;
-            for (tap, &weight) in filter.iter().enumerate() {
-                let y = mirror(row as isize + tap as isize - half, height);
-                let ref_value = image.reference[y * width + col] as u32;
-                let dis_value = image.distorted[y * width + col] as u32;
-                let weighted_ref = weight as u32 * ref_value;
-                let weighted_dis = weight as u32 * dis_value;
-                ref_mean += weighted_ref;
-                dis_mean += weighted_dis;
-                ref_sq += weighted_ref as u64 * ref_value as u64;
-                dis_sq += weighted_dis as u64 * dis_value as u64;
-                ref_dis += weighted_ref as u64 * dis_value as u64;
-            }
-            vertical_ref_mean[col] = ((ref_mean as u64 + round_mean) >> shift_mean) as u16 as u32;
-            vertical_dis_mean[col] = ((dis_mean as u64 + round_mean) >> shift_mean) as u16 as u32;
-            vertical_ref_sq[col] = ((ref_sq + round_square) >> shift_square) as u32;
-            vertical_dis_sq[col] = ((dis_sq + round_square) >> shift_square) as u32;
-            vertical_ref_dis[col] = ((ref_dis + round_square) >> shift_square) as u32;
+        let mut row_offsets = [0usize; 17];
+        for (tap, slot) in row_offsets.iter_mut().take(filter.len()).enumerate() {
+            *slot = mirror(row as isize + tap as isize - half, height) * width;
         }
         for col in 0..width {
-            let mut ref_mean = 0u32;
-            let mut dis_mean = 0u32;
-            let mut ref_sq = 0u64;
-            let mut dis_sq = 0u64;
-            let mut ref_dis = 0u64;
-            for (tap, &weight) in filter.iter().enumerate() {
-                let x = mirror(col as isize + tap as isize - half, width);
-                ref_mean += weight as u32 * vertical_ref_mean[x];
-                dis_mean += weight as u32 * vertical_dis_mean[x];
-                ref_sq += weight as u64 * vertical_ref_sq[x] as u64;
-                dis_sq += weight as u64 * vertical_dis_sq[x] as u64;
-                ref_dis += weight as u64 * vertical_ref_dis[x] as u64;
+            let center = half as usize;
+            let ref_value = image.reference[row_offsets[center] + col] as u32;
+            let dis_value = image.distorted[row_offsets[center] + col] as u32;
+            let weight = filter[center] as u32;
+            let mut ref_mean = weight * ref_value;
+            let mut dis_mean = weight * dis_value;
+            let mut ref_sq = ref_mean as u64 * ref_value as u64;
+            let mut dis_sq = dis_mean as u64 * dis_value as u64;
+            let mut ref_dis = ref_mean as u64 * dis_value as u64;
+            for offset in 1..=center {
+                let weight = filter[center - offset] as u32;
+                let left = row_offsets[center - offset] + col;
+                let right = row_offsets[center + offset] + col;
+                let left_ref = image.reference[left] as u32;
+                let right_ref = image.reference[right] as u32;
+                let left_dis = image.distorted[left] as u32;
+                let right_dis = image.distorted[right] as u32;
+                let ref_value = left_ref + right_ref;
+                let dis_value = left_dis + right_dis;
+                let weighted_ref = weight * ref_value;
+                let weighted_dis = weight * dis_value;
+                ref_mean += weighted_ref;
+                dis_mean += weighted_dis;
+                ref_sq += weight as u64
+                    * (left_ref as u64 * left_ref as u64 + right_ref as u64 * right_ref as u64);
+                dis_sq += weight as u64
+                    * (left_dis as u64 * left_dis as u64 + right_dis as u64 * right_dis as u64);
+                ref_dis += weight as u64
+                    * (left_ref as u64 * left_dis as u64 + right_ref as u64 * right_dis as u64);
+            }
+            let slot = col + half as usize;
+            vertical_ref_mean[slot] = ((ref_mean as u64 + round_mean) >> shift_mean) as u16 as u32;
+            vertical_dis_mean[slot] = ((dis_mean as u64 + round_mean) >> shift_mean) as u16 as u32;
+            vertical_ref_sq[slot] = ((ref_sq + round_square) >> shift_square) as u32;
+            vertical_dis_sq[slot] = ((dis_sq + round_square) >> shift_square) as u32;
+            vertical_ref_dis[slot] = ((ref_dis + round_square) >> shift_square) as u32;
+        }
+        for scratch in [
+            &mut vertical_ref_mean,
+            &mut vertical_dis_mean,
+            &mut vertical_ref_sq,
+            &mut vertical_dis_sq,
+            &mut vertical_ref_dis,
+        ] {
+            pad_reflected(scratch, width, half as usize);
+        }
+        for col in 0..width {
+            let center = col + half as usize;
+            let weight = filter[half as usize] as u32;
+            let mut ref_mean = weight * vertical_ref_mean[center];
+            let mut dis_mean = weight * vertical_dis_mean[center];
+            let mut ref_sq = weight as u64 * vertical_ref_sq[center] as u64;
+            let mut dis_sq = weight as u64 * vertical_dis_sq[center] as u64;
+            let mut ref_dis = weight as u64 * vertical_ref_dis[center] as u64;
+            for offset in 1..=half as usize {
+                let weight = filter[half as usize - offset] as u32;
+                let left = center - offset;
+                let right = center + offset;
+                ref_mean += weight * (vertical_ref_mean[left] + vertical_ref_mean[right]);
+                dis_mean += weight * (vertical_dis_mean[left] + vertical_dis_mean[right]);
+                ref_sq +=
+                    weight as u64 * (vertical_ref_sq[left] as u64 + vertical_ref_sq[right] as u64);
+                dis_sq +=
+                    weight as u64 * (vertical_dis_sq[left] as u64 + vertical_dis_sq[right] as u64);
+                ref_dis += weight as u64
+                    * (vertical_ref_dis[left] as u64 + vertical_ref_dis[right] as u64);
             }
             let ref_mean_sq = ((ref_mean as u64 * ref_mean as u64 + 2147483648) >> 32) as u32;
             let dis_mean_sq = ((dis_mean as u64 * dis_mean as u64 + 2147483648) >> 32) as u32;
@@ -232,8 +291,8 @@ pub fn vif_v0_from_luma(
         return Err(Error::InvalidInput("sample exceeds bit depth"));
     }
     let mut image = VifImage {
-        reference: reference_y.to_vec(),
-        distorted: distorted_y.to_vec(),
+        reference: Cow::Borrowed(reference_y),
+        distorted: Cow::Borrowed(distorted_y),
         width,
         height,
     };
@@ -252,4 +311,54 @@ pub fn vif_v0_from_luma(
         }
     }
     Ok(scores)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reflected_padding_matches_border_indices() {
+        assert!(
+            FILTERS
+                .iter()
+                .all(|filter| filter.iter().eq(filter.iter().rev()))
+        );
+        for (width, half) in [(2, 1), (4, 2), (8, 4), (17, 8)] {
+            let mut padded = vec![0u32; width + 2 * half];
+            for col in 0..width {
+                padded[col + half] = (col * 41 + 7) as u32;
+            }
+            pad_reflected(&mut padded, width, half);
+            for col in 0..width {
+                for tap in 0..=2 * half {
+                    assert_eq!(
+                        padded[col + tap],
+                        padded[half + mirror(col as isize + tap as isize - half as isize, width)]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn odd_frame_dimensions_remain_supported() {
+        for (width, height) in [(17, 17), (35, 33)] {
+            for bit_depth in [8, 10] {
+                let reference: Vec<_> = (0..width * height)
+                    .map(|index| ((index * 41 + index / width * 7) % (1 << bit_depth)) as u16)
+                    .collect();
+                let scores = vif_v0_from_luma(
+                    &reference,
+                    &reference,
+                    width,
+                    height,
+                    bit_depth,
+                    VmafV0Variant::Standard,
+                )
+                .unwrap();
+                assert!(scores.iter().all(|score| score.is_finite() && *score > 0.0));
+            }
+        }
+    }
 }
