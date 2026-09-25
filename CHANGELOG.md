@@ -492,6 +492,16 @@ Workspace conventions per the global rules:
   `hdrvdp::score`, custom ppd threads through, default ppd = 30,
   short-buffer and wrong-feeding errors explicit. `32244668`
 
+- gmsd / zenmetrics-cli: quarantined paper-derived MS-GMSD and MS-GMSDc
+  entries and independent NumPy qualification harness. No author-software
+  equivalence is claimed; parity is to an independent NumPy transcription of the
+  paper's equations. `03cf564f`.
+- gmsd / zenmetrics-cli: `mdsi_rgb8` and `--metric mdsi` for score/score-pairs.
+  Written from the paper alone (clean room) and validated against scores from
+  the authors' reference software on 116 pairs (relative difference at most
+  1e-9, wrong constant fails 109/116). Exact-integer box average, tiered f64x8
+  similarity maps; bit-identical to the straight-line equations at every tier and
+  thread count. `03cf564f`.
 - **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
   IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
   Score + half-resolution GMS map, strided f32 input, zenpixels `PixelSlice`
