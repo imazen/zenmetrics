@@ -176,8 +176,13 @@ With `--features simd,parallel -- --v0-neg --parallel`, the reused scorer
 measured 76.623, 44.937, and 44.820 ms/frame at one, two, and four workers.
 These measurements used the same two-frame fixture on a busy machine; the
 10-bit scale-0 VIF vertical filter is also SIMD-enabled and bitwise-validated,
-but no 10-bit full-frame CPU benchmark is recorded here. Higher VIF scales
-and the v1 feature path remain unchanged by these SIMD kernels.
+but no 10-bit full-frame CPU benchmark is recorded here. The vertical filters
+for VIF scales 1–3 are SIMD-enabled as well: a paired `--v0 --stages` run
+measured 47.248 ms/frame for four-scale VIF with scale-0 SIMD alone versus
+45.879 with all-scale vertical SIMD, and a fixed 192×128 Callgrind harness
+dropped from 29.27M to 27.46M instructions (8-bit) and 29.90M to 28.72M
+(10-bit). The horizontal statistics pass and the v1 feature path remain
+scalar.
 
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate
