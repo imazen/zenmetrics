@@ -1021,6 +1021,8 @@ fn adm_dwt2_s123_combined(
     dis_stride: usize,
     ref_out: &mut BandI32,
     dis_out: &mut BandI32,
+    a_ref_out: &mut [i32],
+    a_dis_out: &mut [i32],
     w: usize,
     h: usize,
     dst_stride: usize,
@@ -1072,16 +1074,16 @@ fn adm_dwt2_s123_combined(
                 ix[3] as usize,
             );
             let idx = i * dst_stride + j;
-            for (lo, hi, out) in [
-                (&tmplo_ref, &tmphi_ref, &mut *ref_out),
-                (&tmplo_dis, &tmphi_dis, &mut *dis_out),
+            for (lo, hi, out, a_out) in [
+                (&tmplo_ref, &tmphi_ref, &mut *ref_out, &mut *a_ref_out),
+                (&tmplo_dis, &tmphi_dis, &mut *dis_out, &mut *a_dis_out),
             ] {
                 let s = [lo[j0], lo[j1], lo[j2], lo[j3]];
                 let mut acc = 0i64;
                 for k in 0..4 {
                     acc += DWT2_LO[k] as i64 * s[k] as i64;
                 }
-                out.a[idx] = ((acc + add_hp) >> shift_hp) as i32;
+                a_out[idx] = ((acc + add_hp) >> shift_hp) as i32;
                 let mut acc = 0i64;
                 for k in 0..4 {
                     acc += DWT2_HI[k] as i64 * s[k] as i64;
@@ -1147,6 +1149,27 @@ fn compute_adm(
     let mut h = height;
     let mut i4_ref_scale: Vec<i32> = Vec::new();
     let mut i4_dis_scale: Vec<i32> = Vec::new();
+    let mut i4_ref_next = vec![0i32; band_elems];
+    let mut i4_dis_next = vec![0i32; band_elems];
+    // Reused across scales 1-3: every element read in an iteration is
+    // written earlier in that same iteration, so stale contents never
+    // leak into results.
+    let new_i32_band = |with_a: bool| BandI32 {
+        a: if with_a {
+            vec![0; band_elems]
+        } else {
+            Vec::new()
+        },
+        h: vec![0; band_elems],
+        v: vec![0; band_elems],
+        d: vec![0; band_elems],
+    };
+    let mut ref_b32 = new_i32_band(false);
+    let mut dis_b32 = new_i32_band(false);
+    let mut r32 = new_i32_band(false);
+    let mut a32 = new_i32_band(false);
+    let mut csf_a32 = new_i32_band(false);
+    let mut csf_f32 = new_i32_band(false);
 
     for scale in 0..4usize {
         let (ind_y, ind_x) = dwt2_indices(w, h);
@@ -1276,25 +1299,15 @@ fn compute_adm(
                 settings.watson_fixed,
             );
         } else {
-            let mut ref_b = BandI32 {
-                a: vec![0; band_elems],
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
-            };
-            let mut dis_b = BandI32 {
-                a: vec![0; band_elems],
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
-            };
             adm_dwt2_s123_combined(
                 &i4_ref_scale,
                 &i4_dis_scale,
                 buf_stride,
                 buf_stride,
-                &mut ref_b,
-                &mut dis_b,
+                &mut ref_b32,
+                &mut dis_b32,
+                &mut i4_ref_next,
+                &mut i4_dis_next,
                 w,
                 h,
                 buf_stride,
@@ -1302,27 +1315,15 @@ fn compute_adm(
                 &ind_y,
                 &ind_x,
             );
-            i4_ref_scale = ref_b.a.clone();
-            i4_dis_scale = dis_b.a.clone();
-            let mut r = BandI32 {
-                a: Vec::new(),
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
-            };
-            let mut a = BandI32 {
-                a: Vec::new(),
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
-            };
+            std::mem::swap(&mut i4_ref_scale, &mut i4_ref_next);
+            std::mem::swap(&mut i4_dis_scale, &mut i4_dis_next);
             w = w.div_ceil(2);
             h = h.div_ceil(2);
             adm_decouple_s123(
-                &ref_b,
-                &dis_b,
-                &mut r,
-                &mut a,
+                &ref_b32,
+                &dis_b32,
+                &mut r32,
+                &mut a32,
                 w,
                 h,
                 buf_stride,
@@ -1330,24 +1331,12 @@ fn compute_adm(
                 settings.enhn_gain_limit,
             );
             den_scale =
-                adm_csf_den_s123(&ref_b, scale, w, h, buf_stride, rf, settings.noise_weight);
-            let mut csf_a = BandI32 {
-                a: Vec::new(),
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
-            };
-            let mut csf_f = BandI32 {
-                a: Vec::new(),
-                h: vec![0; band_elems],
-                v: vec![0; band_elems],
-                d: vec![0; band_elems],
-            };
-            adm_csf_i32(&a, &mut csf_a, &mut csf_f, w, h, buf_stride, rf);
+                adm_csf_den_s123(&ref_b32, scale, w, h, buf_stride, rf, settings.noise_weight);
+            adm_csf_i32(&a32, &mut csf_a32, &mut csf_f32, w, h, buf_stride, rf);
             num_scale = adm_cm_i32(
-                &r,
-                &csf_f,
-                &csf_a,
+                &r32,
+                &csf_f32,
+                &csf_a32,
                 scale,
                 w,
                 h,
@@ -1355,8 +1344,8 @@ fn compute_adm(
                 rf,
                 settings.noise_weight,
             );
-            adm_csf_i32(&r, &mut csf_f, &mut csf_a, w, h, buf_stride, rf);
-            aim_num_scale = adm_cm_i32(&a, &csf_a, &csf_f, scale, w, h, buf_stride, rf, 0.0);
+            adm_csf_i32(&r32, &mut csf_f32, &mut csf_a32, w, h, buf_stride, rf);
+            aim_num_scale = adm_cm_i32(&a32, &csf_a32, &csf_f32, scale, w, h, buf_stride, rf, 0.0);
         }
         num += num_scale as f64;
         den += den_scale as f64;
