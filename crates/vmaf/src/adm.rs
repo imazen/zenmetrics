@@ -1,6 +1,6 @@
 use crate::{Error, ModelVariant, VmafV0Variant};
 #[cfg(feature = "simd")]
-use archmage::magetypes;
+use archmage::{autoversion, magetypes};
 
 const ADM_BORDER_FACTOR: f64 = 0.1;
 pub(crate) const ADM_MIN_DIM: usize = 33;
@@ -551,6 +551,7 @@ fn border_region_inner(w: usize, h: usize) -> (i32, i32, i32, i32) {
     (left, top, w as i32 - left, h as i32 - top)
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn adm_decouple(
     ref_b: &BandI16,
     dis_b: &BandI16,
@@ -639,12 +640,14 @@ fn adm_decouple(
     }
 }
 
+#[inline(always)]
 fn get_best15_from32(temp: u32) -> (u16, i32) {
     let k = 17 - temp.leading_zeros() as i32;
     let v = ((temp as u64 + (1u64 << (k - 1))) >> k) as u16;
     (v, k)
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn adm_decouple_s123(
     ref_b: &BandI32,
     dis_b: &BandI32,
@@ -836,6 +839,7 @@ fn adm_csf_i16_simd(
     }
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn adm_csf_i32(
     src: &BandI32,
     dst: &mut BandI32,
@@ -871,6 +875,7 @@ fn adm_csf_i32(
     }
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn adm_csf_den_scale(
     src: &BandI16,
     w: usize,
@@ -919,6 +924,7 @@ fn adm_csf_den_scale(
         + powf_add
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn adm_csf_den_s123(
     src: &BandI32,
     scale: usize,
@@ -1076,7 +1082,10 @@ fn adm_cm_i16(
                 &src_b[2][row..row + len],
             ];
             let mut inner = [0i64; 3];
-            let mut jj = 0;
+            #[cfg(feature = "simd")]
+            let mut jj = 0usize;
+            #[cfg(not(feature = "simd"))]
+            let jj = 0usize;
             #[cfg(feature = "simd")]
             while jj + 16 <= len {
                 let mut xbuf = [[0i32; 16]; 3];
@@ -1233,6 +1242,7 @@ fn adm_cm_i16_front(
     }
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn adm_cm_i32(
     src: &BandI32,
     csf_f: &BandI32,
@@ -1394,6 +1404,7 @@ fn adm_cm_i32(
         + powf_add
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn adm_dwt2_s123_combined(
     i4_ref_scale: &[i32],
     i4_dis_scale: &[i32],

@@ -243,11 +243,30 @@ The motion metric's vertical 5-tap pass is SIMD-enabled for `bpc < 16`:
 each 16-pixel chunk loads `u16x16` rows, widens to `i32x8` lanes, and
 accumulates the signed filter differences in i32 — exact because samples
 below 2^15 keep every 5-tap sum under 2^31. Mirrored-edge rows and the
-width tail keep the scalar path; the horizontal pass stays scalar (its
-±4.1e9 accumulation needs signed lanes wider than 32 bits). A 10-iteration
-1280×720 `motion2` harness dropped from 1.53G to 1.27G Callgrind
-instructions (−17%) and paired wall runs measured roughly 5.30 → 4.98
-ms/frame.
+width tail keep the scalar path. The horizontal pass is extracted into
+`motion_horizontal_row` and `#[autoversion]`-ed — its interior (2 ≤ j <
+width-2) is an affine 5-tap convolution whose ±4.1e9 accumulation LLVM
+vectorizes with 64-bit lanes; only the four mirrored-edge columns per row
+stay scalar. Together these dropped `motion2` from ~5.3 to **0.69**
+ms/frame on the 720p stage fixture, with a dedicated scalar-parity unit
+test covering odd widths, edge-dominated heights, and both bit depths.
+
+The remaining scalar paths use `#[autoversion]` (runtime-tier dispatch
+compiling the same scalar body under v3/neon/wasm128 target features):
+ADM decouple/decouple_s123, `adm_cm_i32`, `adm_csf_i32`,
+`adm_csf_den_scale`/`_s123`, `dwt2_s123`, and the SpEED f32 passes
+(`vif_filter1d`, `vif_dec16`, `bilinear_scale`, `filter_and_downscale`,
+`subtract_image`, `update_entropy`, `compute_independent_term`) plus
+CAMBI's mask/decimate/c-value loops. LLVM synthesizes the 64-bit lane
+products magetypes lacks, so these cover most of the "needs limb math"
+list above. On the 720p `--stages` fixture this dropped ADM2 16.85 →
+14.63, ADM3 16.43 → 13.91, CAMBI 9.46 → 8.64, and SpEED 6.34 → 6.01
+ms/frame; end-to-end medians moved to **36.21** (v0) and **26.29** (v1)
+versus libvmaf CPU auto-dispatch at ~21.8 and ~12.1 respectively on the
+same runs (libvmaf's own figures fluctuate ±20% on this machine). For
+reference, a scalar build with `target-cpu=native` measured ~87 ms/frame
+on v0 — autovectorization alone without the hand-SIMD kernels recovers
+almost none of the VIF statistics cost (75.8 → 72.7).
 
 The metric each GPU crate computes is bit-comparable to its cited reference. The
 CPU side of each metric comes from an external reference crate

@@ -1,4 +1,6 @@
 use crate::Error;
+#[cfg(feature = "simd")]
+use archmage::autoversion;
 
 const NUM_SCALES: usize = 5;
 const SCALE_WEIGHTS: [i32; NUM_SCALES] = [16, 8, 4, 2, 1];
@@ -105,6 +107,7 @@ fn adjust_window_size(window_size: usize, w: usize, h: usize, speedup: bool) -> 
     ws | 1
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn anti_dithering_filter(data: &mut [u16], width: usize, height: usize) {
     for i in 0..height - 1 {
         for j in 0..width - 1 {
@@ -123,6 +126,7 @@ fn anti_dithering_filter(data: &mut [u16], width: usize, height: usize) {
     }
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn decimate(data: &mut [u16], stride: usize, width: usize, height: usize) {
     for i in 0..height {
         for j in 0..width {
@@ -151,6 +155,7 @@ fn mode3(a: u16, b: u16, c: u16) -> u16 {
     min3(a, b, c)
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn filter_mode(data: &mut [u16], stride: usize, width: usize, height: usize, buffer: &mut [u16]) {
     let mut curr_line = 0usize;
     for i in 0..height {
@@ -192,6 +197,7 @@ fn get_mask_index(input_width: usize, input_height: usize, filter_size: usize) -
     (((filter_size * filter_size) as i32 + 3 * (ceil_log2(shifted_wh) - 11) - 1) >> 1) as u32
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn get_spatial_mask(
     image: &[u16],
     mask: &mut [u16],
@@ -286,6 +292,7 @@ fn c_value_pixel(
     c_value
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn calculate_c_values(
     image: &[u16],
     mask: &[u16],

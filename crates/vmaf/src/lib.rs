@@ -23,7 +23,7 @@ use std::error::Error as StdError;
 use std::fmt;
 
 #[cfg(feature = "simd")]
-use archmage::magetypes;
+use archmage::{autoversion, magetypes};
 
 #[derive(Debug)]
 pub enum Error {
@@ -468,9 +468,41 @@ fn motion_vertical_simd(
     out[8..16].copy_from_slice(&yh.to_array());
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
+fn motion_horizontal_row(y_row: &[i32], width: usize) -> u64 {
+    let x_round: i64 = 1 << 15;
+    let mut row_sad: u64 = 0;
+    for j in 0..2.min(width) {
+        let mut accum: i64 = 0;
+        for (k, &coef) in MOTION_FILTER.iter().enumerate() {
+            let col = mirror(j as isize - 2 + k as isize, width);
+            accum += coef * y_row[col] as i64;
+        }
+        let val = ((accum + x_round) >> 16) as i32;
+        row_sad += val.unsigned_abs() as u64;
+    }
+    for j in 2..width.saturating_sub(2) {
+        let mut accum: i64 = 0;
+        for (k, &coef) in MOTION_FILTER.iter().enumerate() {
+            accum += coef * y_row[j - 2 + k] as i64;
+        }
+        let val = ((accum + x_round) >> 16) as i32;
+        row_sad += val.unsigned_abs() as u64;
+    }
+    for j in width.saturating_sub(2).max(2.min(width))..width {
+        let mut accum: i64 = 0;
+        for (k, &coef) in MOTION_FILTER.iter().enumerate() {
+            let col = mirror(j as isize - 2 + k as isize, width);
+            accum += coef * y_row[col] as i64;
+        }
+        let val = ((accum + x_round) >> 16) as i32;
+        row_sad += val.unsigned_abs() as u64;
+    }
+    row_sad
+}
+
 pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize, bpc: u8) -> u64 {
     let y_round: i64 = 1 << (bpc - 1);
-    let x_round: i64 = 1 << 15;
     let mut y_row = vec![0i32; width];
     let mut sad: u64 = 0;
 
@@ -525,17 +557,7 @@ pub(crate) fn motion_sad(prev: &[u16], cur: &[u16], width: usize, height: usize,
         if any_nonzero == 0 {
             continue;
         }
-        let mut row_sad: u64 = 0;
-        for j in 0..width {
-            let mut accum: i64 = 0;
-            for (k, &coef) in MOTION_FILTER.iter().enumerate() {
-                let col = mirror(j as isize - 2 + k as isize, width);
-                accum += coef * y_row[col] as i64;
-            }
-            let val = ((accum + x_round) >> 16) as i32;
-            row_sad += val.unsigned_abs() as u64;
-        }
-        sad += row_sad;
+        sad += motion_horizontal_row(&y_row, width);
     }
     sad
 }

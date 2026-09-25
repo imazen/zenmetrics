@@ -1,4 +1,6 @@
 use crate::{Error, ModelVariant};
+#[cfg(feature = "simd")]
+use archmage::autoversion;
 
 const BLOCK_SIZE: usize = 5;
 const NUM_SCALES: u32 = 4;
@@ -529,6 +531,7 @@ fn compute_covariance_matrix(
     }
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn compute_independent_term(
     dim: &Dims,
     data: &[f32],
@@ -553,6 +556,7 @@ fn compute_independent_term(
     }
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn update_entropy(dim: &Dims, entropy: &mut [f32], s: &[f32], l: f32, sigma_nn: f32) {
     for i in 0..dim.num_blocks_vertical {
         for j in 0..dim.num_blocks_horizontal {
@@ -653,6 +657,7 @@ fn get_speed_score(dim: &Dims, ref_r: &EstResult, dis_r: &EstResult) -> f32 {
     score / dim.num_blocks as f32
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn subtract_image(im1: &mut [f32], im2: &[f32], w: usize, h: usize, stride_px: usize) {
     for i in 0..h {
         for j in 0..w {
@@ -703,6 +708,7 @@ fn mirror_i32(idx: i32, size: usize) -> usize {
     }
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, stride_px: usize) {
     let fwidth = f.len();
     let mut tmp = vec![0.0f32; w];
@@ -726,6 +732,7 @@ fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, str
     }
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn vif_dec16(src: &[f32], dst: &mut [f32], w: usize, h: usize, stride_px: usize) {
     for i in 0..h / 16 {
         for j in 0..w / 16 {
@@ -744,6 +751,7 @@ fn mirror_f32(i: f32, left: f32, right: f32) -> f32 {
     }
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn bilinear_scale(
     src: &[f32],
     dst: &mut [f32],
@@ -785,6 +793,7 @@ fn bilinear_scale(
     }
 }
 
+#[cfg_attr(feature = "simd", autoversion)]
 fn filter_and_downscale(dim: &Dims, prescale: f64, frame_buffer: &mut [f32], stride_px: usize) {
     let frame_size = stride_px * dim.alloc_height;
     let mut tmp = vec![0.0f32; 2 * frame_size];
