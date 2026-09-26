@@ -7,13 +7,12 @@
 //! still Full-mode for Phase 2 — Phase 3 will shrink it to a
 //! per-strip working set. These tests pin the **JOD-preservation
 //! contract**: strip-mode `compute_with_warm_ref` must produce JOD
-//! values that match Full-mode `compute_with_warm_ref` within the
-//! documented Atomic<f32> reduction-order noise band.
+//! values that match Full-mode `compute_with_warm_ref`.
 //!
-//! Tolerance: `1e-4` absolute JOD. cvvdp's
-//! `compute_dkl_jod_is_deterministic_across_repeated_calls` test
-//! (in `pipeline_score.rs`) shows the per-call drift band sits well
-//! below this tolerance on CUDA.
+//! Tolerance: `1e-4` absolute JOD. The pool itself is partition-
+//! independent (fixed-order row reduction, 2026-09-26), so the
+//! tolerance only absorbs differences in how the strip walkers compute
+//! the D planes.
 //!
 //! These tests skip when no compatible cubecl runtime is enabled.
 
@@ -158,6 +157,81 @@ fn mode_e_matches_full_n_distortions_64x64() {
         assert!(
             diff <= PARITY_TOL_JOD,
             "Mode E parity broken at shift={shift}: full = {jod_full}, strip = {jod_strip}, |diff| = {diff}"
+        );
+    }
+}
+
+/// The zenmetrics-api `cancel.rs` pair generalised to any size: two
+/// unrelated byte patterns, so every band carries a large D (JOD ≈ 2–5).
+fn noise_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
+    let n = w * h * 3;
+    let r = (0..n)
+        .map(|i| ((i as u64).wrapping_mul(7919) & 0xFF) as u8)
+        .collect();
+    let d = (0..n)
+        .map(|i| ((i as u64).wrapping_mul(2_147_483_647) & 0xFF) as u8)
+        .collect();
+    (r, d)
+}
+
+/// Mode E at a non-power-of-two size with several strips per band.
+/// 1000×750 gives odd level dims (… 125×94, 63×47 …), and h_body = 128
+/// walks 6 strips at level 0. Before the fix, wgpu (Vulkan) scored the
+/// noise pair 4.6037 here against Full 5.0083, while CUDA matched Full
+/// bit for bit (2026-09-26, `examples/pool_determinism.rs`).
+#[test]
+fn mode_e_matches_full_1000x750_h_body_128() {
+    let (w, h) = (1000_u32, 750_u32);
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let pairs = [
+        ("noise", noise_pair(w as usize, h as usize)),
+        (
+            "offset",
+            synth_pair_with_offset_dist(w as usize, h as usize),
+        ),
+    ];
+    for (name, (r, d)) in pairs {
+        let mut full = Cvvdp::<Backend>::new(
+            Backend::client(&Default::default()),
+            w,
+            h,
+            CvvdpParams::PLACEHOLDER,
+        )
+        .expect("Cvvdp::new full");
+        full.warm_reference(&r).expect("warm_reference full");
+        let jod_full = full
+            .compute_dkl_jod_with_warm_ref(&d, ppd)
+            .expect("warm-ref full");
+
+        let mut strip = Cvvdp::<Backend>::new_strip(
+            Backend::client(&Default::default()),
+            w,
+            h,
+            128,
+            CvvdpParams::PLACEHOLDER,
+        )
+        .expect("Cvvdp::new_strip");
+        strip.warm_reference(&r).expect("warm_reference strip");
+        strip.reset_strip_dispatch_counter();
+        let jod_strip = strip
+            .compute_dkl_jod_with_warm_ref(&d, ppd)
+            .expect("warm-ref strip");
+        let n_dispatches = strip.strip_dispatch_counter();
+
+        let diff = (jod_full - jod_strip).abs();
+        eprintln!(
+            "Mode E 1000x750 h_body=128 [{name}]: Full {jod_full:.6}, Mode E {jod_strip:.6}, \
+             |diff| {diff:.3e}, strip dispatches {n_dispatches}"
+        );
+        assert!(
+            diff <= PARITY_TOL_JOD,
+            "Mode E parity broken at 1000x750 h_body=128 [{name}]: full = {jod_full}, \
+             strip = {jod_strip}, |diff| = {diff}"
+        );
+        // ceil(750 / 128) = 6 pool strips at level 0 alone.
+        assert!(
+            n_dispatches >= 6,
+            "[{name}] Mode E should walk >= 6 strips at 1000x750 h_body=128; got {n_dispatches}"
         );
     }
 }
