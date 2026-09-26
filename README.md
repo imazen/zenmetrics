@@ -54,7 +54,9 @@ In the default build, `--metric` accepts every CPU metric — `ssim2`, `dssim`,
 `ssim-libvmaf`, `msssim-libvmaf`, `vif`, `vifvec`, `iwssim-piq`,
 `mad`, `mdctpsnr`, and
 `hdrvdp` (HDR-only: absolute-luminance input — feed it via `batch --hdr` /
-`sweep --hdr`, not sRGB pairs). The GPU variants (`ssim2-gpu`, `dssim-gpu`, `butteraugli-gpu`,
+`sweep --hdr`, not sRGB pairs) and `hdrvdp3` (HDR-VDP-3.0.7 — same
+absolute-nits feeding, plus mandatory explicit viewing conditions:
+`--hdrvdp3-ppd` is required, with `--hdrvdp3-task/-input/-emission/-age/-surround`). The GPU variants (`ssim2-gpu`, `dssim-gpu`, `butteraugli-gpu`,
 `iwssim-gpu`, `zensim-gpu`, `cvvdp-gpu`) need `--features gpu-<metric>`, and
 the `--use-orchestrator` execution path needs its own `orchestrator-cpu-*`
 feature per metric. Run `zenmetrics list-metrics` to print exactly what your
@@ -92,7 +94,7 @@ ledger live in
 | [`cvvdp-gpu`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp-gpu) | ColorVideoVDP (still-image, GPU) | JOD ~3–10, higher better | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.7 |
 | [`iwssim`](https://github.com/imazen/zenmetrics/tree/master/crates/iwssim) | IW-SSIM (CPU reference + SIMD) | `[0, 1]`, 1.0 = identical | self (pure-Rust port) |
 | [`cvvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/cvvdp) | ColorVideoVDP (still + video, CPU) | JOD ~3–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.7 |
-| [`hdrvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/hdrvdp) | HDR-VDP 2.2.2 (CPU-only, absolute nits) | JOD ~0–100 (`res.Q`), higher better | official HDR-VDP 2.2.2 (Mantiuk et al.) |
+| [`hdrvdp`](https://github.com/imazen/zenmetrics/tree/master/crates/hdrvdp) | HDR-VDP 2.2.2 (CPU-only, absolute nits) + **HDR-VDP-3.0.7** (`v3` module; CLI `hdrvdp3` — explicit viewing conditions required: `--hdrvdp3-ppd` mandatory) | v2: `res.Q` ~0–100, higher better; v3: `q_jod` 0–10 (10 = identical) | official HDR-VDP 2.2.2 + 3.0.7 MATLAB (Mantiuk et al.) + jpeg-ai-qaf `VDP3/` port — v3 goldens ≤1.6e-13, bit-equal to MATLAB 3.0.7 |
 | [`gmsd`](https://github.com/imazen/zenmetrics/tree/master/crates/gmsd) | GMSD (Xue et al. 2014, CPU) | distance ~0–0.35, 0 = identical | libgmsd (Ponomarenko group) |
 | [`psnrhvs`](https://github.com/imazen/zenmetrics/tree/master/crates/psnrhvs) | PSNR-HVS / PSNR-HVS-M / PSNR-HVS-Y (CPU) | dB, higher better; 100000 = identical | authors' `psnrhvsm.m` (Octave goldens) |
 | [`haarpsi`](https://github.com/imazen/zenmetrics/tree/master/crates/haarpsi) | HaarPSI / HaarPSI-Y (CPU) | similarity ~0–1, 1 = identical; NaN on zero-weight inputs | authors' MIT `HaarPSI.m` (Octave goldens) |

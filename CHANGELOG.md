@@ -13,6 +13,30 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- hdrvdp `v3` + zenmetrics-cli `hdrvdp3` (`6ca179b8`): new
+  `hdrvdp::v3` module — a pure-Rust `f64` reimplementation of
+  **HDR-VDP-3.0.7** (the display-adaptive revision), built against the
+  jpeg-ai-qaf `VDP3/` numpy port @ `0628a6b` and verified bit-faithful to
+  the official MATLAB 3.0.7 release (Octave run of the original
+  `hdrvdp3.m` on AIC-4 pairs: 9.696845/8.517431/9.645288 — identical to
+  Rust at print precision). 21-case golden corpus
+  (`tests/vdp3_goldens`, `tests/reference_vdp3.rs`) covers every input
+  encoding, task, emission, surround and option flag at worst |ΔQ_JOD|
+  = 1.6e-13, plus staged-intermediate asserts and Err-not-panic error
+  paths. Viewing conditions are **explicit required parameters** —
+  `v3::ViewingConditions::pix_per_deg` has no default (unlike v2's
+  `DEFAULT_PIX_PER_DEG = 30`), beside `Task`, `InputEncoding`
+  (rgb-bt709/bt2020/native/xyz/luminance), `Emission` (presets or custom
+  spectra), `Surround` and observer age; `v3::Options` exposes the
+  upstream flag surface (`do_pixel_threshold`, `si_gauss`, …). Output is
+  `q_jod` on [0,10] (`Q_JOD` upstream) — distinct from v2's `res.Q`
+  [0,100]. CLI `--metric hdrvdp3` under `--hdr` routes
+  `HdrFeeding::IntegratedPuNits` absolute nits through a dedicated
+  params-carrying path (`MetricParams::Hdrvdp3`); `--hdrvdp3-ppd` is
+  mandatory and sRGB8 scoring errors loudly. Orchestrator-ineligible by
+  design (no sRGB8 leaf, no GPU twin). The published AIC-4 `HDR_VDP_3`
+  column is **not** reproduced — exhaustive protocol probes show a
+  different upstream run config; recorded in DIVERGENCES.md.
 - zenmetrics-cli (`45a6e9bf`): the PSNR-Y family now enumerates the
   luma conventions common in the literature, all in-tree (the exec-based
   libvmaf aux extraction is gone — `29eb904a`): `psnr-y` (BT.709

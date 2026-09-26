@@ -40,6 +40,7 @@ We do not call everything a "port". Terms used below:
 | `cvvdp` | in-tree `crates/cvvdp` | Mantiuk et al., ColorVideoVDP, ACM SIGGRAPH 2024 | `pycvvdp` **v0.5.7** (PyPI) | reference reimplementation (native SIMD CPU) | sRGB8 + display preset (default `standard_4k`) | JOD 0–10 |
 | `cvvdp-gpu` | `cvvdp-gpu` twin | " | pycvvdp v0.5.7 + CPU twin | in-tree GPU | " | " |
 | `hdrvdp` | in-tree `crates/hdrvdp` | Mantiuk et al., HDR-VDP-2, ACM TOG 30(4) 2011 | official HDR-VDP **2.2.2** MATLAB release (ISC-licensed) | reference reimplementation | absolute luminance cd/m² + display params — **not** sRGB8 | JOD / P_det / Q |
+| `hdrvdp3` | in-tree `crates/hdrvdp` (`v3` module) | same HDR-VDP lineage — Mantiuk et al., ACM TOG 30(4) 2011, doi:10.1145/2010324.1964935 (v3 is the display-adaptive revision; upstream asks to cite the 2011 paper + version number) | official HDR-VDP **3.0.7** MATLAB release + jpeg-ai-qaf `VDP3/` numpy port @ `0628a6b` (verified equal — see DIVERGENCES) | reference reimplementation (f64 end-to-end) | absolute luminance cd/m², **explicit required viewing conditions** — ppd, task, encoding (rgb-bt709/bt2020/native/xyz/luminance), emission, surround, observer age | `q_jod` 0–10 (10 = identical) + P_map |
 | `vmaf` (lib only) | in-tree `crates/vmaf` | Li et al., Netflix VMAF, 2016 | libvmaf **3.2.1** via FFI oracle | reference reimplementation | YUV420 planes (studio-swing ingress); v0 models luma-only | VMAF 0–100 + features (adm2, motion2, vif×4) |
 | `vif` | in-tree `crates/vif` | Sheikh & Bovik, IEEE TIP 15(2) 2006 | authors' `vifp_mscale.m` (MATLAB) | reference reimplementation (f64 pipeline) | sRGB8 → MATLAB-weights gray | [0,∞), 1 ≈ identical |
 | `vifvec` | in-tree `crates/vif` (`vifvec` module) | Sheikh & Bovik, IEEE TIP 15(2) 2006 — **the original vector-GSM formulation, a different algorithm from `vifp`** | authors' `vifvec.m` + matlabPyrTools `sp5Filters`/`buildSpyr`/`corrDn`/`vifsub_est_M`/`ind2wtree` — the implementation behind pyiqa/`IQA_pytorch` `VIFs` and the AIC-4 `VIF` column | reference reimplementation (f64, row-major-transcribed SP5 filters) | sRGB8 → u8-rounded `round(0.299R+0.587G+0.114B)` gray (cv2/MATLAB convention); `vifvec_plane_f64` for raw planes | [0,∞), 1 = identical |
@@ -96,6 +97,7 @@ Tolerance classes (keep these distinct — they mean different things):
 |---|---|---|---|---|
 | cvvdp | pycvvdp 0.5.7 | ≤ 1e-3 JOD | ~1e-4 rel / 1e-3 JOD | med 1.1e-4 / max 1.3e-3 JOD @ standard_fhd (n=53) |
 | hdrvdp | HDR-VDP 2.2.2 MATLAB | P_det 1e-4; JOD ~1e-2 cases | 1.4e-5 P_det | not reproduced (needs abs-nits config) |
+| hdrvdp3 | HDR-VDP-3.0.7 MATLAB + jpeg-ai-qaf `VDP3/` port | 21-case golden corpus | 1.6e-13 JOD worst |Q_JOD| | published `HDR_VDP_3` col NOT reproduced — we match MATLAB 3.0.7 exactly (3 pairs bit-equal at print precision); the column is an unrecovered run config — see DIVERGENCES |
 | vmaf | libvmaf 3.2.1 FFI | feats 1e-4, score 0.02 | ≪ gate | VMAF 0.002, neg 0.001, adm2 4e-6, vif_Σ 3e-5 (S01 pt) |
 | vif | `vifp_mscale.m` | goldens f64 | 5e-13 | n/a (`VIF` col = vifvec — different algo, med 0.06) |
 | vifvec | `vifvec.m` via Octave | 10 goldens < 1e-9 | within gate | med 1.9e-6 / max 6.3e-6 vs `VIF` col (n=54) |
@@ -170,8 +172,8 @@ The single-point S01_AVIF_01 spot check is kept where it drove identification.
 |---|---|---|---|
 | `PSNR-HVS`, `-Y`, `-Cb`, `-Cr` | 50.05 / 50.86 / 47.49 / 48.10 | **Daala/Xiph `dump_psnrhvs`** — implemented as `psnrhvs-daala` (FFI-verified); on studio-601 **YUV444** chroma: combined med 1.1e-3 / max 4.5e-2 dB, Y med 1.3e-3 / max 8.6e-3 dB | ✅ implemented |
 | `VIF` | 0.934422 | `IQA_pytorch.VIFs` / `vifvec.m` family (SP5 steerable pyramid vecGSM) on u8-rounded Y — NOT pixel `vifp` | ✅ implemented — `vifvec` (Octave goldens < 1e-9; published column: med 1.9e-6 / max 6.3e-6 (n=54)) |
-| `HDR_VDP_2` | 68.806 | hdrvdp-2.2.x under an unknown sRGB→nits display config | ⬜ config unknown |
-| `HDR_VDP_3` | 9.620 | HDR-VDP-3.0.7 torch port in jpeg-ai-qaf `VDP3/` (mirror `/home/lilith/tmp/jpeg-ai-qaf-hdrvdp3` @ `0628a6b`) | ⬜ new impl — sources synced |
+| `HDR_VDP_2` | 68.806 | hdrvdp-2.2.x under an unknown sRGB→nits display config | ⬜ config unknown — misses our 2.2.2-validated v2 at ppd 30 *and* 64.05 (±5.7), so the published run used a different config than either default |
+| `HDR_VDP_3` | 9.620 | HDR-VDP-3.0.7 lineage; the jpeg-ai-qaf `VDP3/` numpy port (mirror `/home/lilith/tmp/jpeg-ai-qaf-hdrvdp3` @ `0628a6b`) is confirmed **bit-faithful** to MATLAB 3.0.7 | ⚠️ implemented — `hdrvdp3` — but column **unreproduced**: under the stated harness ingress we get 9.6968/8.5174/9.6453 = MATLAB 3.0.7 exactly, while published reads 9.3392/7.5986/9.3527. Full probe sweep (ppd 28–64, task, EOTF, reflectance, swap, bsc) leaves distortion-proportional residuals → different impl revision/config upstream. See DIVERGENCES |
 | `mDCT-PSNR` | 71.529 | Richter, QoMEX 2009; author's C++ ref impl `thorfdbg/mDCTpsnr` | ✅ implemented — `mdctpsnr` (compiled-binary parity: med 4.0e-7 / max 1.13e-5 dB over n=53; see DIVERGENCES for the codegen-order details) |
 | `CW-SSIM`, `NLPD`, `CIEDE2000`, `FLIP` | — | pyiqa / colour / HDR metrics | ⬜ |
 | `DISTS`, `LPIPS`×4, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ`×2, `AHIQ`, `STLPIPS`×2 | — | torch models | ⬜ out of scope (no torch) |
@@ -249,7 +251,19 @@ column is being targeted.
    calls, and the 8-lane strided pooling accumulator (whose `rem ≥ 4`
    tail guard cost ~11 dB on `w13 % 8 == 3` widths until decoded). AIC-4
    `mDCT-PSNR` column: med 4.0e-7 / max 1.13e-5 dB over n=53.
-6. **HDR-VDP-3** + the AIC HDR_VDP_2 display config.
+~~6. **HDR-VDP-3**~~ — ✅ **DONE** (`hdrvdp3`, `crates/hdrvdp/src/v3/`):
+   clean Rust reimplementation of the jpeg-ai-qaf `VDP3/` numpy port,
+   verified bit-faithful to **official MATLAB HDR-VDP-3.0.7** (Octave run,
+   3 AIC-4 pairs identical at print precision; 21-case golden corpus ≤
+   1.6e-13 JOD). Viewing conditions are explicit required parameters —
+   `pix_per_deg` has no default (CLI `--hdrvdp3-ppd` is mandatory), plus
+   task/input-encoding/emission/surround/observer-age. Absolute-luminance
+   interleaved nits only (`IntegratedPuNits`); no sRGB8 path. The
+   published `HDR_VDP_3` column itself remains unreproduced — exhaustive
+   protocol probes show it came from a different run config than the
+   shipped code's stated defaults; recorded in DIVERGENCES rather than
+   fitted to. The AIC `HDR_VDP_2` display config is likewise still
+   unknown (v2 validated vs official 2.2.2 regardless).
 7. `CW-SSIM`, `NLPD`, `CIEDE2000`, `FLIP` — later.
 
 Validation probes used for this matrix live at
