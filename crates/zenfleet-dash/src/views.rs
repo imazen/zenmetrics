@@ -23,6 +23,12 @@ pub fn kind_label(k: &JobKind) -> String {
         JobKind::Diffmap { metric, .. } => format!("diffmap:{metric}"),
         JobKind::Resample { kernel, .. } => format!("resample:{kernel}"),
         JobKind::Bake { view } => format!("bake:{view}"),
+        JobKind::FitCell { argv, .. } => {
+            format!(
+                "fit_cell:{}",
+                argv.first().map(String::as_str).unwrap_or("?")
+            )
+        }
     }
 }
 
@@ -425,6 +431,21 @@ pub fn storage(blobs: &[BlobIndexEntry]) -> Vec<TierStorage> {
 mod tests {
     use super::*;
     use zenfleet_core::{CellId, ErrorClass, JobId, Regenerability, ResourceClass, sha256};
+
+    #[test]
+    fn kind_label_names_fit_cells_by_their_script() {
+        let fit = |argv: Vec<String>| JobKind::FitCell {
+            program_sha: "p".into(),
+            data_sha: "d".into(),
+            argv_sha: "a".into(),
+            argv,
+        };
+        assert_eq!(
+            kind_label(&fit(vec!["mlp_probe.py".into(), "--rep".into()])),
+            "fit_cell:mlp_probe.py"
+        );
+        assert_eq!(kind_label(&fit(vec![])), "fit_cell:?");
+    }
 
     fn row(kind: JobKind, codec: &str, status: JobStatus, err: Option<ErrorClass>) -> LedgerRow {
         let input = sha256(codec.as_bytes());
