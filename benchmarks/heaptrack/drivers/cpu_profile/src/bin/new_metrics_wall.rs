@@ -9,13 +9,12 @@
 //!   psnr       (native, metrics/classical.rs)
 //!   psnr-y     (native, metrics/classical.rs)
 //!   ssim       (native, metrics/classical.rs — scalar f64 Gaussian 11-tap)
-//!   yuv420     (the libvmaf adapter's RGB→YUV420 + file-write half;
-//!               `metrics/vmaf.rs::write_yuv420`. The `vmaf` subprocess
-//!               itself is external software and is NOT timed here.)
+//!   yuv420     (the VMAF adapter's RGB→YUV420 + file-write half;
+//!               `metrics/vmaf.rs::write_yuv420`)
 //!
 //! All metric cells go through the REAL `zenmetrics_cli::metrics::run_metric`
 //! dispatch (yuv420 calls `vmaf::write_yuv420` directly — the conversion is
-//! the in-process cost; the spawned `vmaf` binary is not ours).
+//! the in-process cost).
 //!
 //! Modes per metric:
 //!   `lat`   — serial single-score per iter. mean_* = per-pair cost.

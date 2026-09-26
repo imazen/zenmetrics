@@ -1,13 +1,13 @@
 //! VMAF scoring. The model scores (v0.6.1, v0.6.1neg, 4k v0.6.1,
 //! v1.0.16 3d0h) run in-process through the in-tree `vmaf` crate, a
-//! pure-Rust match of libvmaf v3.2.1. The auxiliary libvmaf feature
-//! extractors (`float_ssim`, `float_ms_ssim`, `psnr`) have no in-tree
-//! port, so they still shell out to the libvmaf `vmaf` executable;
-//! `ZENMETRICS_VMAF_BIN` can point to a non-PATH build.
+//! pure-Rust match of libvmaf v3.2.1. The former libvmaf aux-feature
+//! extractors are replaced by in-tree ports (`msssim`'s libvmaf module
+//! covers `float_ssim`/`float_ms_ssim`; `psnr`/`psnr-y` are the
+//! `classical` metrics) — nothing here shells out to a `vmaf` binary.
 //! Input is converted from encoded sRGB to 8-bit BT.709 limited-range YUV420.
 
 use crate::decode::Rgb8Image;
-use std::{fs::File, io::Write, process::Command};
+use std::{fs::File, io::Write};
 
 #[derive(Clone, Copy)]
 pub enum Model {
@@ -63,56 +63,6 @@ pub fn score(
     }
 }
 
-/// Extract a single auxiliary libvmaf feature for AIC2026-style parity.
-/// Requires the libvmaf `vmaf` executable.
-pub fn feature(
-    r: &Rgb8Image,
-    d: &Rgb8Image,
-    feature: &'static str,
-    key: &'static str,
-) -> Result<f64, Box<dyn std::error::Error>> {
-    check_dims(r, d)?;
-    let dir = tempfile::tempdir()?;
-    let rp = dir.path().join("reference.yuv");
-    let dp = dir.path().join("distorted.yuv");
-    let out = dir.path().join("score.json");
-    write_yuv420(&rp, r)?;
-    write_yuv420(&dp, d)?;
-    let program = std::env::var_os("ZENMETRICS_VMAF_BIN").unwrap_or_else(|| "vmaf".into());
-    let run = Command::new(program)
-        .arg("--reference")
-        .arg(&rp)
-        .arg("--distorted")
-        .arg(&dp)
-        .arg("--width")
-        .arg(r.width.to_string())
-        .arg("--height")
-        .arg(r.height.to_string())
-        .arg("--pixel_format")
-        .arg("420")
-        .arg("--bitdepth")
-        .arg("8")
-        .arg("--model")
-        .arg("version=vmaf_v0.6.1")
-        .arg("--feature")
-        .arg(feature)
-        .arg("--output")
-        .arg(&out)
-        .arg("--json")
-        .arg("--quiet")
-        .output()
-        .map_err(|e| format!("cannot run libvmaf tool (set ZENMETRICS_VMAF_BIN): {e}"))?;
-    if !run.status.success() {
-        return Err(format!("libvmaf failed: {}", String::from_utf8_lossy(&run.stderr)).into());
-    }
-    let report: serde_json::Value = serde_json::from_slice(&std::fs::read(&out)?)?;
-    let score = report["pooled_metrics"][key]["mean"]
-        .as_f64()
-        .or_else(|| report["frames"][0]["metrics"][key].as_f64())
-        .ok_or_else(|| format!("libvmaf JSON lacks {key} score"))?;
-    Ok(score)
-}
-
 fn check_dims(r: &Rgb8Image, d: &Rgb8Image) -> Result<(), Box<dyn std::error::Error>> {
     if r.width != d.width
         || r.height != d.height
@@ -129,8 +79,7 @@ fn check_dims(r: &Rgb8Image, d: &Rgb8Image) -> Result<(), Box<dyn std::error::Er
 /// Write `image` as a single-frame 8-bit BT.709 limited-range YUV420
 /// plane file (the libvmaf `--pixel_format 420` input layout: Y plane,
 /// then Cb, then Cr). `pub` so benchmarks/heaptrack drivers can time the
-/// RGB→YUV conversion + serialization half of the adapter without a
-/// libvmaf binary present.
+/// RGB→YUV420 conversion + serialization side of the adapter.
 pub fn write_yuv420(
     path: &std::path::Path,
     image: &Rgb8Image,
@@ -221,21 +170,6 @@ mod tests {
                 dist < same,
                 "distorted {dist} should score below identical {same}"
             );
-        }
-    }
-
-    #[test]
-    fn libvmaf_features_smoke_when_configured() {
-        if std::env::var_os("ZENMETRICS_VMAF_BIN").is_none() {
-            return;
-        }
-        let (r, d) = pair();
-        for (name, key) in [
-            ("float_ssim", "float_ssim"),
-            ("float_ms_ssim", "float_ms_ssim"),
-            ("psnr", "psnr_y"),
-        ] {
-            assert!(feature(&r, &d, name, key).unwrap().is_finite());
         }
     }
 }

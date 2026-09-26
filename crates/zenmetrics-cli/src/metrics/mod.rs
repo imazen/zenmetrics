@@ -92,9 +92,6 @@ pub enum MetricKind {
     /// VMAF v1.0.16 3d0h model (in-tree `vmaf` crate).
     #[value(name = "vmaf-v1")]
     VmafV1,
-    /// PSNR-Y on limited-range YUV420, extracted by libvmaf.
-    #[value(name = "psnr-y-libvmaf")]
-    PsnrYLibvmaf,
     /// Peak signal-to-noise ratio on encoded RGB8, in decibels.
     #[value(name = "psnr")]
     Psnr,
@@ -336,7 +333,6 @@ impl MetricKind {
             MetricKind::VmafNeg,
             MetricKind::Vmaf4k,
             MetricKind::VmafV1,
-            MetricKind::PsnrYLibvmaf,
             MetricKind::Psnr,
             MetricKind::PsnrY,
             MetricKind::Ssim,
@@ -381,7 +377,6 @@ impl MetricKind {
             MetricKind::VmafNeg => "vmaf-neg",
             MetricKind::Vmaf4k => "vmaf-4k",
             MetricKind::VmafV1 => "vmaf-v1",
-            MetricKind::PsnrYLibvmaf => "psnr-y-libvmaf",
             MetricKind::Psnr => "psnr",
             MetricKind::PsnrY => "psnr-y",
             MetricKind::Ssim => "ssim",
@@ -485,7 +480,6 @@ impl MetricKind {
             MetricKind::VmafNeg => &["vmaf_neg"],
             MetricKind::Vmaf4k => &["vmaf_4k"],
             MetricKind::VmafV1 => &["vmaf_v1"],
-            MetricKind::PsnrYLibvmaf => &["psnr_y_libvmaf"],
             MetricKind::Psnr => &["psnr"],
             MetricKind::PsnrY => &["psnr_y"],
             MetricKind::Ssim => &["ssim"],
@@ -1560,13 +1554,6 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-vmaf"))]
         MetricKind::VmafV1 => Err(disabled_msg("vmaf-v1", "cpu-vmaf")),
-        #[cfg(feature = "cpu-metrics")]
-        MetricKind::PsnrYLibvmaf => Ok(vec![(
-            "psnr_y_libvmaf",
-            vmaf::feature(reference, distorted, "psnr", "psnr_y")?,
-        )]),
-        #[cfg(not(feature = "cpu-metrics"))]
-        MetricKind::PsnrYLibvmaf => Err(disabled_msg("psnr-y-libvmaf", "cpu-metrics")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Psnr => Ok(vec![(
             "psnr",

@@ -1474,7 +1474,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Ssim | MetricKind::SsimLibvmaf | MetricKind::MsssimLibvmaf => {
             Some((-0.5, 1.5, 1.0))
         }
-        MetricKind::Nlpd | MetricKind::Psnr | MetricKind::PsnrY | MetricKind::PsnrYLibvmaf => None,
+        MetricKind::Nlpd | MetricKind::Psnr | MetricKind::PsnrY => None,
     }
 }
 
