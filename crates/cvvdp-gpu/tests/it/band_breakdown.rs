@@ -71,8 +71,9 @@ fn full_mode_breakdown_matches_score_and_refinalizes() {
 
 #[test]
 fn strip_pair_mode_breakdown_matches_score() {
-    // Single-strip Mode B (the multi-strip walker is a known Metal
-    // failure — see CLAUDE.md Known Bugs); exercises the strip pool path.
+    // Single-strip Mode B; exercises the strip pool path. The multi-strip
+    // walker has its own suites (`mode_b_walker_parity`,
+    // `strip_mode_b_csf_halo_parity`).
     let (r, d) = synth_pair_with_offset_dist(64, 64);
     let client = Backend::client(&Default::default());
     let mut c = Cvvdp::<Backend>::new_strip_pair(

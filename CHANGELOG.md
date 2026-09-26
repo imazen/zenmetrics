@@ -13,6 +13,19 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- cvvdp-gpu (`c4bfe0fd`, `86449118`): **fix multi-strip Mode B (`StripPair`) on wgpu.** The
+  DKL, Gaussian-pyramid, Weber and CSF strip walkers bound per-strip sub-views at byte offsets
+  that are not multiples of `min_storage_buffer_offset_alignment`; wgpu rejected those
+  dispatches on its device thread and the call failed with `ReadbackFailed(... CallError)`.
+  They now bind 256-byte-aligned bases and pass the leftover elements to crate-private
+  `*_shifted_kernel`s, as the masking walker already did. wgpu (Vulkan, RTX 2080):
+  `mode_b_walker_parity` 8/8 (was 4/8), `strip_mode_b_csf_halo_parity` 5/5 (was 1/5), Strip
+  equals Full bit for bit on the probe pairs at h_body 128. CUDA output byte-identical.
+  `cancel::strip_pair_mode_polls_per_strip` now runs on every backend. Not run on Metal.
+- cvvdp-gpu: **known defect, not fixed: on wgpu a dispatch that fails on cubecl's device
+  thread can still yield a score** (one misaligned dispatch in `compute_dkl_jod_from_handles`
+  returns `Ok(9.263138)`; the valid call scores 1.9945726). The panic is caught and only logged
+  by zenforks-cubecl's task runner, so the fix belongs in the fork. See CLAUDE.md Known Bugs.
 - cvvdp-gpu (`f29a8371`, test `445aa175`): **fix wgpu Mode E (`MemoryMode::Strip`) scoring
   1000×750 as 4.60 JOD where Full scores 5.01.** The masking strip walker bound row-window
   sub-views at byte offsets that were not multiples of wgpu's
@@ -21,8 +34,8 @@ Workspace conventions per the global rules:
   256-byte boundaries and new crate-private `*_shifted_kernel`s add the leftover elements to
   their indices; the public kernels keep their signatures. wgpu Mode E now equals Full bit for
   bit on the probe pairs (noise 5.008305, mild 9.961642 at 1000×750). CUDA output is
-  byte-identical to before. Multi-strip Mode B still fails on wgpu: its DKL / gauss / Weber /
-  CSF strip walkers have the same misaligned sub-views.
+  byte-identical to before. Multi-strip Mode B's DKL / gauss / Weber / CSF strip walkers had
+  the same misaligned sub-views; fixed in `c4bfe0fd` (above).
 - cvvdp-gpu (`dae41c5b`): wgpu regression tests above the 65 535-workgroup dispatch limit
   (2048×2048, 3000×2000; Full, Mode E and Mode B with window-sized strips, plus a wgpu-vs-CUDA
   check within 1e-4 JOD). With the grid fold removed they fail with JOD 10.000000.

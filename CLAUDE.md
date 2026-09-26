@@ -638,57 +638,36 @@ packed-sRGB-u8 sweep shape and answers a different question.
   un-gating that module would need its cross-backend tolerance re-derived on evidence (a
   tolerance change needs user sign-off; do NOT just widen it).
 
-- **cvvdp-gpu multi-strip Mode B (`StripPair`) walker on macOS/Metal — ROOT-CAUSED
-  2026-08-28. The cause is an UNALIGNED STORAGE-BUFFER BINDING OFFSET, and the fix is
-  caller-side in cvvdp-gpu (not yet made).** The walker slices row-strips out of its planes
-  with `Handle::offset_start(byte_off)` (`pipeline.rs:2926-2929, 3469, 3612-3613, 3662, 3698,
-  3795-3803`), where `byte_off = strip_row × level_width × 4`. Metal requires every storage
-  binding to start on a multiple of `min_storage_buffer_offset_alignment`, which is **256** on
-  this device (measured — `min_uniform_buffer_offset_alignment` is also 256). An image
-  pyramid's narrow levels have a row stride BELOW 256 bytes, so those strip offsets are not
-  256-aligned: the observed failing offsets are 8-, 48- and 64-aligned (e.g. 3138368 = 256·12259
-  + 64, 3139632 = 256·12264 + 48, 5109256 = 256·19958 + 8). CUDA and HIP have no such
-  requirement, which is exactly why this is Metal-only — **the walker's offsets are wrong on
-  every backend; only Metal enforces it.**
-
-  `wgpu` raises this in `Device::create_bind_group`, which runs on a `DSD-*` device-service
-  thread, so it arrived as a panic no `Result` on the caller's thread could see — surfacing as
-  the misleading `zenforks-cubecl-runtime/src/client.rs: called Result::unwrap() on an Err
-  value: CallError`. **Fixed on the cubecl side** in imazen/zenforks-cubecl `f528c4b5`: the
-  wgpu backend now validates each binding offset and reports the offset, the required
-  alignment, and the fact that cubecl's own allocations are always aligned so an unaligned one
-  came from a caller-built `offset_start` sub-view. Same commit also corrects the pool
-  alignment to `max(min_uniform, min_storage)` — it previously used the uniform limit alone
-  for pools created with `BufferUsages::STORAGE`. That makes the failure honest and
-  actionable; **it does not make the walker work.**
-
-  **The remaining fix is in cvvdp-gpu**: round `byte_off` DOWN to a multiple of 256 and pass
-  the leftover element offset to the kernel as a scalar (or pad each pyramid level's row
-  stride up to a multiple of 64 elements). Both are real design changes across the strip
-  kernels and need the Mode B parity tests as the gate — do NOT weaken those tolerances.
-
-  Original symptom record: `cargo test -p cvvdp-gpu --no-default-features --features wgpu
-  --test it mode_b_walker_parity::` fails `mode_b_walker_jod_matches_full_at_128`,
-  `_at_1024`, `_at_1024_h_body_256` and `mode_b_walker_dispatches_n_strips_at_1024` with a
-  `DSD-*` device-thread panic at `wgpu-29.0.3/src/backend/wgpu_core.rs:1277` surfacing as
-  `zenforks-cubecl-runtime-0.10.1/src/client.rs:105: called Result::unwrap() on an Err value:
-  CallError`. Any geometry that yields ≥ 2 strips at level 0 (e.g. 256×256 / h_body 64,
-  128×128 / h_body 32) hits it; the single-strip 64×64 / h_body 512 case
-  (`strip_mode_b_parity::mode_b_score_matches_full_64x64`) passes. Full mode and Mode E
-  (warm ref) are fine on Metal. cvvdp-gpu is already omitted from CI's Metal matrix (the
-  `Atomic<f32>` pool-kernel note in ci.yml), so CI never sees this either way; the #30
-  `tests/it/cancel.rs::strip_pair_mode_polls_per_strip` test is `cuda`-gated for this reason.
-  **Not Metal-only (2026-09-26):** Vulkan on the RTX 2080 dev host
-  (`min_storage_buffer_offset_alignment` = 32) panics the same way — `cubecl-wgpu: storage
-  buffer binding 1 starts at offset 1311688 which is not a multiple of … (32)` — for
-  `new_strip_pair(256, 256, h_body = 128)`; single-strip Mode B (h_body ≥ height) runs.
-  **Partly fixed (2026-09-26, `f29a8371`):** the masking strip walker
-  (`_run_band_masking_strip_s_for_level`, shared with Mode E) now rounds every sub-view offset
-  down to 256 bytes (`aligned_split`) and launches `*_shifted_kernel` variants that add the
-  leftover elements to their indices. The multi-strip Mode B tests still fail on wgpu
-  (`mode_b_walker_parity` ×4, `strip_mode_b_csf_halo_parity` ×4, measured after the fix):
-  the DKL, gauss, Weber and CSF strip walkers still pass misaligned `offset_start` sub-views
-  (48 sites in `pipeline.rs`). The same mechanism fixes them; not done yet.
+- **cvvdp-gpu on wgpu: a dispatch that fails on cubecl's device thread can still yield a
+  score — FOUND 2026-09-26, NOT fixed; the fix belongs in imazen/zenforks-cubecl.** Kernel
+  launches are fire-and-forget tasks on the `DSD-*` device-service thread, and the task runner
+  runs each one under `catch_unwind` and only `log::warn!`s a panic
+  (`cubecl-common/src/device/handle/channel.rs:465` and `:479` at the pinned rev 9084240). So
+  any dispatch that panics there is dropped with nothing reaching the caller: the fork's own
+  binding-alignment `assert!` (`cubecl-wgpu/src/compute/stream.rs:564`), or a wgpu validation
+  error, which wgpu's default uncaptured-error handler turns into a panic (cubecl-wgpu installs
+  no handler). cubecl-wgpu does have a stream error sink (`stream.errors`, reported by
+  `flush`/`sync`), but the panic never writes it, and `read_resources` flushes with
+  `ignore: true` anyway. Whether a CVVDP call then errors is luck: it does only if a LATER
+  blocking task fails too. Pre-fix multi-strip Mode B got `ReadbackFailed(... CallError)`; a
+  single dispatch with a 4-byte-offset binding in `compute_dkl_jod_from_handles` returns
+  `Ok(9.263138)` where the valid call scores 1.9945726 (the regression test
+  `tests/it/failed_dispatch.rs`, `wgpu_failed_dispatch_returns_an_error_not_a_score`, is held
+  off master until the fork fix lands so the wgpu suite stays green). Not checked on CUDA,
+  whose launches cannot hit these two wgpu-only rejections. Proposed fork fix: (i) the
+  alignment check and a new per-axis workgroup-count check push a `ServerError` into the
+  stream's error sink and skip the dispatch instead of panicking; (ii) `read_resources`
+  returns and drains the pending sink errors, so the readback that ends every CVVDP call
+  fails (every cvvdp-gpu `read_one` already maps its error to `Error::ReadbackFailed`);
+  (iii) an uncaptured-error handler that records wgpu validation errors into the same sink;
+  (iv) backstop: the task runner counts caught panics and the next read/flush/sync on that
+  device returns an error. **Where it lands needs a decision:** the fork's `main` (b7e9ab99)
+  was rebased onto upstream 5b37ec40 and no longer contains 9084240, so it is either a
+  branch off 9084240 or `main` plus a zenmetrics pin bump across that rebase. On `main` the
+  same swallow is at `channel.rs:692`/`:706` and `check_binding_alignment` still panics
+  (`stream.rs:122`). Until then: **on wgpu, a `cubecl-wgpu:` message or a `panicked at` line
+  from a `DSD-*` thread in stderr means that process's scores are suspect**, even when every
+  call returned Ok.
 
 - **zensim-gpu `it` suite on macOS/Metal (wgpu): 2 deterministic failures, pre-existing
   (verified 2026-08-27 — identical values on baseline b07a0485 before that day's commits, in
@@ -880,6 +859,22 @@ packed-sRGB-u8 sweep shape and answers a different question.
   macos-Metal job (8 GB unified) may hit the same wall.
 
 ### Resolved
+
+- **cvvdp-gpu multi-strip Mode B (`StripPair`) failed on wgpu (Metal and Vulkan) — FIXED
+  2026-09-26 (`c4bfe0fd`).** Root-caused on Metal 2026-08-28: the DKL, Gaussian-pyramid, Weber
+  and CSF strip walkers sliced row-strips with `Handle::offset_start(byte_off)`,
+  `byte_off = strip_row × level_width × 4`, which is not a multiple of
+  `min_storage_buffer_offset_alignment` (256 on Metal, 32 on the RTX 2080's Vulkan) once a
+  pyramid level's row stride drops below it. CUDA and HIP have no such requirement, so the
+  offsets were wrong everywhere and only wgpu enforced it. cubecl-wgpu (`f528c4b5`) rejects
+  such a binding with a panic on the device thread; the call failed with
+  `ReadbackFailed(... CallError)`. Fix: every walker binds at `aligned_split`'s 256-byte base
+  and launches a `*_shifted_kernel` twin that adds the leftover elements to its indices (the
+  masking walker got the same treatment in `f29a8371`). After, on Vulkan:
+  `mode_b_walker_parity` 8/8, `strip_mode_b_csf_halo_parity` 5/5, 0 device-thread panics,
+  Strip == Full bit for bit at 256², 1024² and 1000×750; CUDA probe output byte-identical.
+  `cancel::strip_pair_mode_polls_per_strip` is no longer cuda-gated (`86449118`). **Not run on
+  Metal**, and cvvdp-gpu is still omitted from CI's Metal matrix.
 
 - **cvvdp-gpu Mode E (`MemoryMode::Strip`) on wgpu scored 1000×750 far from Full — FIXED
   2026-09-26 (`f29a8371`, test `445aa175`).** Root cause: the masking strip walker bound row-window

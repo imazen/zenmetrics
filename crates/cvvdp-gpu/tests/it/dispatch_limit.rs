@@ -10,9 +10,10 @@
 //!
 //! The strip cases use `h_body = 2048`, so each strip window covers the
 //! whole 3000×2000 band (93 750 workgroups) and the strip walkers'
-//! launches cross the limit too. Multi-strip Mode B is not covered here:
-//! it still panics on wgpu for unrelated reasons (unaligned sub-views
-//! outside the masking walker; see CLAUDE.md Known Bugs).
+//! launches cross the limit too. Multi-strip Mode B is not covered at
+//! these sizes; `mode_b_walker_parity` and `strip_mode_b_csf_halo_parity`
+//! cover it (it failed on wgpu until 2026-09-26 for an unrelated reason,
+//! unaligned sub-views; see CLAUDE.md Resolved).
 
 #![cfg(feature = "wgpu")]
 

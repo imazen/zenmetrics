@@ -293,10 +293,11 @@ jobs:
       # pool (pool_band_3ch_lds_kernel, Atomic<f32>::fetch_add) collapsed
       # Metal scores to the default JOD value. Since 2026-09-26 the pool
       # (pool_rows_3ch_kernel + pool_rows_finalize_kernel) uses no float
-      # atomics, but it has not been run on Metal, and the multi-strip
-      # Mode B tests fail there on unaligned offset_start bindings (CLAUDE.md
-      # Known Bugs). The lib.rs module-doc directs Metal users to
-      # compute_dkl_jod_host_pool, which pools on the host.
+      # atomics, but it has not been run on Metal. The multi-strip Mode B
+      # walkers' unaligned offset_start bindings were fixed 2026-09-26
+      # (verified on Vulkan, not on Metal; CLAUDE.md Resolved). The lib.rs
+      # module-doc directs Metal users to compute_dkl_jod_host_pool, which
+      # pools on the host.
 
   # Compile-only doctest pass — catches the doc examples in lib.rs that
   # reference `WgpuRuntime` etc. CUDA-only environments would skip these,
