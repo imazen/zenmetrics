@@ -1269,6 +1269,10 @@ pub(crate) fn build_output_columns(
         MetricKind::Hdrvdp => {
             out.insert("hdrvdp".to_string(), score.value);
         }
+        // HDR-VDP-3: same CPU-only, chooser-ineligible status as v2.
+        MetricKind::Hdrvdp3 => {
+            out.insert("hdrvdp3".to_string(), score.value);
+        }
     }
     // Merge metric-specific extras. Extras keys take precedence on
     // collision so a future per-metric extra can override the primary

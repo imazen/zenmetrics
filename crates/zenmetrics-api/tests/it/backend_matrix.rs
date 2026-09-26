@@ -223,6 +223,8 @@ fn cpu_vs_cuda_parity() {
             MetricKind::Iwssim => 0.15,
             MetricKind::Zensim => 0.05,
             MetricKind::Hdrvdp => 0.05,
+            // No CUDA twin and not in `all_kinds()`; the arm exists for exhaustiveness.
+            MetricKind::Hdrvdp3 => 0.05,
         }
     }
     eprintln!("METRIC      SIZE     cpu_ident  cpu_dist   gpu_ident  gpu_dist   |Δident|  |Δdist|");
