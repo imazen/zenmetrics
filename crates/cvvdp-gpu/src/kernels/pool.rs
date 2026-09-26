@@ -343,6 +343,197 @@ pub fn pool_band_3ch_lds_kernel(
     }
 }
 
+/// Lane count of the fixed reduction tree used by
+/// [`pool_rows_3ch_kernel`] and [`pool_rows_finalize_kernel`]. Both
+/// kernels must be launched with `CubeDim::new_1d(POOL_ROW_LANES)`;
+/// the value is part of the reduction's definition (see
+/// [`pool_rows_3ch_kernel`]), not a tuning knob.
+pub const POOL_ROW_LANES: u32 = 256;
+const POOL_ROW_LANES_USIZE: usize = 256;
+
+/// Deterministic per-row spatial pool, pass 1 of 2 (production path).
+///
+/// One workgroup of [`POOL_ROW_LANES`] threads reduces one band row
+/// of each of the three channels to a single f32 and stores it (a
+/// plain store, no atomics) at `row_partials[dst_* + row]`.
+///
+/// **Summation order.** For a row of width `w`, lane `t` first sums
+/// the per-pixel contributions at `x = t, t + 256, t + 512, …` in
+/// ascending `x`, then the 256 lane sums are combined by the fixed
+/// pointer-jumping tree (stride 128 → 1). The order depends only on
+/// `x` and `w`, never on scheduling, so a row's partial is a pure
+/// function of that row's pixels.
+///
+/// **Why per row.** Every caller cuts bands on row boundaries (Full
+/// mode dispatches whole bands; the Mode B and Mode E strip walkers
+/// dispatch row ranges). Because a row is never split, every strip
+/// geometry writes the same row partials as a single whole-band
+/// dispatch, and the pooled band score is independent of the strip
+/// partition, the memory mode, and the dispatch count.
+///
+/// The per-pixel contribution is unchanged from the atomic kernels:
+/// `(|x| + 1e-5)^β − 1e-5^β`.
+///
+/// **Launch** (see `pool_rows_cube_count` in `pipeline.rs`):
+///
+/// ```text
+/// cube_dim   = CubeDim::new_1d(POOL_ROW_LANES)
+/// cube_count = (gx, rows.div_ceil(gx), 1)   // row = CUBE_POS_Y·gx + CUBE_POS_X
+/// n_iter     = width.div_ceil(POOL_ROW_LANES)
+/// ```
+///
+/// Row `r` of the dispatch (`0 ≤ r < rows`) reads source elements
+/// `(src_row0 + r) · width + x` and writes `row_partials[dst_c + r]`.
+/// Every loop bound before the barriers is a kernel scalar, so the
+/// barriers sit in uniform control flow; out-of-range lanes and rows
+/// contribute an exact `0.0` through a select rather than an early
+/// exit.
+#[cube(launch)]
+pub fn pool_rows_3ch_kernel(
+    band_diff_a: &Array<f32>,
+    band_diff_rg: &Array<f32>,
+    band_diff_vy: &Array<f32>,
+    row_partials: &mut Array<f32>,
+    beta: f32,
+    width: u32,
+    rows: u32,
+    src_row0: u32,
+    dst_a: u32,
+    dst_rg: u32,
+    dst_vy: u32,
+    n_iter: u32,
+) {
+    let tx = UNIT_POS_X;
+    let row = CUBE_POS_Y * CUBE_COUNT_X + CUBE_POS_X;
+    let row_ok = row < rows;
+    // Rows past `rows` (grid padding) read row 0 of the dispatch and
+    // mask the result, keeping every load in bounds.
+    let row_c = if row_ok { row } else { u32::new(0) };
+    let base = ((src_row0 + row_c) as usize) * (width as usize);
+
+    let eps = f32::new(1e-5_f32);
+    let eps_pow_beta = f32::powf(eps, beta);
+
+    let mut acc_a = f32::new(0.0_f32);
+    let mut acc_rg = f32::new(0.0_f32);
+    let mut acc_vy = f32::new(0.0_f32);
+    for i in 0..n_iter {
+        let x = tx + i * POOL_ROW_LANES;
+        let ok = row_ok && x < width;
+        let x_c = if ok { x } else { u32::new(0) };
+        let idx = base + (x_c as usize);
+
+        let v_a = band_diff_a[idx];
+        let abs_a = if v_a < f32::new(0.0_f32) { -v_a } else { v_a };
+        let c_a = f32::powf(abs_a + eps, beta) - eps_pow_beta;
+        acc_a += if ok { c_a } else { f32::new(0.0_f32) };
+
+        let v_rg = band_diff_rg[idx];
+        let abs_rg = if v_rg < f32::new(0.0_f32) {
+            -v_rg
+        } else {
+            v_rg
+        };
+        let c_rg = f32::powf(abs_rg + eps, beta) - eps_pow_beta;
+        acc_rg += if ok { c_rg } else { f32::new(0.0_f32) };
+
+        let v_vy = band_diff_vy[idx];
+        let abs_vy = if v_vy < f32::new(0.0_f32) {
+            -v_vy
+        } else {
+            v_vy
+        };
+        let c_vy = f32::powf(abs_vy + eps, beta) - eps_pow_beta;
+        acc_vy += if ok { c_vy } else { f32::new(0.0_f32) };
+    }
+
+    let mut lds_a = SharedMemory::<f32>::new(POOL_ROW_LANES_USIZE);
+    let mut lds_rg = SharedMemory::<f32>::new(POOL_ROW_LANES_USIZE);
+    let mut lds_vy = SharedMemory::<f32>::new(POOL_ROW_LANES_USIZE);
+    let tx_us = tx as usize;
+    lds_a[tx_us] = acc_a;
+    lds_rg[tx_us] = acc_rg;
+    lds_vy[tx_us] = acc_vy;
+    sync_cube();
+
+    // Fixed tree: stride 128 → 64 → … → 1, lane t adds lane t+stride.
+    let mut stride: u32 = 128u32;
+    while stride > 0u32 {
+        if tx < stride {
+            let other = (tx + stride) as usize;
+            lds_a[tx_us] = lds_a[tx_us] + lds_a[other];
+            lds_rg[tx_us] = lds_rg[tx_us] + lds_rg[other];
+            lds_vy[tx_us] = lds_vy[tx_us] + lds_vy[other];
+        }
+        sync_cube();
+        stride /= 2u32;
+    }
+
+    if tx == 0u32 && row_ok {
+        row_partials[(dst_a + row) as usize] = lds_a[0];
+        row_partials[(dst_rg + row) as usize] = lds_rg[0];
+        row_partials[(dst_vy + row) as usize] = lds_vy[0];
+    }
+}
+
+/// Deterministic per-row spatial pool, pass 2 of 2: sums each
+/// (band, channel) slot's row partials into `partials[slot]`.
+///
+/// One workgroup of [`POOL_ROW_LANES`] threads per slot
+/// (`slot = CUBE_POS_X`, launch `CubeCount(n_slots, 1, 1)`). Slot
+/// `s` owns `slot_meta[2s + 1]` consecutive row partials starting at
+/// `row_partials[slot_meta[2s]]`. Lane `t` sums rows `t, t + 256, …`
+/// in ascending order, then the fixed tree used by
+/// [`pool_rows_3ch_kernel`] combines the lanes and lane 0 stores the
+/// slot's sum. `n_iter` must be at least `max_rows.div_ceil(256)`
+/// over all slots; extra iterations add an exact `0.0`.
+///
+/// Together with [`pool_rows_3ch_kernel`] this defines the value
+/// every pooled `partials[slot]` takes: a fixed two-level
+/// (row, then band) reduction whose order depends only on the band's
+/// width, height and pixel values. [`pool_band_finalize`] folds it to
+/// the band score exactly as it folded the old atomic partial.
+#[cube(launch)]
+pub fn pool_rows_finalize_kernel(
+    row_partials: &Array<f32>,
+    slot_meta: &Array<u32>,
+    partials: &mut Array<f32>,
+    n_iter: u32,
+) {
+    let tx = UNIT_POS_X;
+    let slot = CUBE_POS_X as usize;
+    let offset = slot_meta[2 * slot];
+    let count = slot_meta[2 * slot + 1];
+
+    let mut acc = f32::new(0.0_f32);
+    for i in 0..n_iter {
+        let y = tx + i * POOL_ROW_LANES;
+        let ok = y < count;
+        let y_c = if ok { y } else { u32::new(0) };
+        let v = row_partials[(offset + y_c) as usize];
+        acc += if ok { v } else { f32::new(0.0_f32) };
+    }
+
+    let mut lds = SharedMemory::<f32>::new(POOL_ROW_LANES_USIZE);
+    let tx_us = tx as usize;
+    lds[tx_us] = acc;
+    sync_cube();
+
+    let mut stride: u32 = 128u32;
+    while stride > 0u32 {
+        if tx < stride {
+            let other = (tx + stride) as usize;
+            lds[tx_us] = lds[tx_us] + lds[other];
+        }
+        sync_cube();
+        stride /= 2u32;
+    }
+
+    if tx == 0u32 {
+        partials[slot] = lds[0];
+    }
+}
+
 /// Write the same `value` to every slot of `dest`. Used by the
 /// baseband CSF path in `_dispatch_d_bands_into_scratch` to fill
 /// `baseband_log_l_bkg` from the host-computed scalar

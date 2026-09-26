@@ -41,10 +41,12 @@
 //!      band dimension is ≤ `PU_PADSIZE`.
 //!    - Baseband: `masking::diff_abs_3ch_kernel` writes
 //!      `|T_p_dis - T_p_ref|` (cvvdp's baseband bypass).
-//! 6. Per-band Minkowski accumulation
-//!    (`pool::pool_band_3ch_kernel`, fused 3-channel launch per
-//!    level) → per-band f32 partials (one `f32` per (level,
-//!    channel) in a shared GPU buffer).
+//! 6. Per-band Minkowski accumulation, deterministic two-pass:
+//!    `pool::pool_rows_3ch_kernel` reduces every band row to one f32
+//!    in a fixed tree, then `pool::pool_rows_finalize_kernel` sums
+//!    each (level, channel)'s rows in a fixed order → per-band f32
+//!    partials (one `f32` per (level, channel) in a shared GPU
+//!    buffer). No float atomics: the same inputs give the same bits.
 //! 7. Host-side fold: read back the `n_levels × 3` partials Vec,
 //!    `pool_band_finalize` per (level, channel), then the 3-stage
 //!    Minkowski pool + `pool::met2jod` piecewise.
@@ -113,9 +115,9 @@ use crate::kernels::masking::{
     pu_blur_v_3ch_scaled_strip_aware_kernel,
 };
 use crate::kernels::pool::{
-    BASEBAND_W, BETA_CH, BETA_SPATIAL, PER_CH_W, POOL_LDS_BLOCK_DIM, copy_f32_kernel,
-    do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean, pool_band_3ch_kernel,
-    pool_band_3ch_lds_kernel, pool_band_3ch_offset_kernel, pool_band_finalize,
+    BASEBAND_W, BETA_CH, BETA_SPATIAL, PER_CH_W, POOL_ROW_LANES, copy_f32_kernel,
+    do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean, pool_band_finalize,
+    pool_rows_3ch_kernel, pool_rows_finalize_kernel,
 };
 use crate::kernels::pyramid::{
     DOWNSCALE_TILED_BLOCK_DIM, band_frequencies, baseband_divide_3ch_kernel,
@@ -273,6 +275,34 @@ impl DBandsTransient {
 
 fn alloc_zeros_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
     client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]))
+}
+
+/// `[offset, count]` pairs into the row-partials buffer, one per
+/// (level, channel) slot in `k · N_CHANNELS + c` order. Level `k`
+/// occupies `N_CHANNELS · bh_k` consecutive entries starting at
+/// `N_CHANNELS · Σ_{j<k} bh_j`, channel-major. This is the layout
+/// [`Cvvdp::pool_row_base`] and [`pool_rows_finalize_kernel`] share.
+fn pool_slot_meta(level_heights: &[usize]) -> Vec<u32> {
+    let mut meta = Vec::with_capacity(2 * N_CHANNELS * level_heights.len());
+    let mut base = 0_usize;
+    for &bh in level_heights {
+        for c in 0..N_CHANNELS {
+            meta.push((base + c * bh) as u32);
+            meta.push(bh as u32);
+        }
+        base += N_CHANNELS * bh;
+    }
+    meta
+}
+
+/// Grid for [`pool_rows_3ch_kernel`]: one workgroup per row, folded
+/// into 2-D so no axis exceeds the 65 535-workgroup dispatch limit.
+/// The kernel recovers `row = CUBE_POS_Y · CUBE_COUNT_X + CUBE_POS_X`
+/// and masks the padding rows of the last grid line.
+fn pool_rows_cube_count(rows: usize) -> CubeCount {
+    const MAX_X: usize = 32_768;
+    let gx = rows.clamp(1, MAX_X);
+    CubeCount::Static(gx as u32, rows.div_ceil(gx).max(1) as u32, 1)
 }
 
 /// Per-channel CSF gain for a pyramid level. Non-baseband bands get
@@ -997,14 +1027,28 @@ pub struct Cvvdp<R: Runtime> {
     /// alloc + upload with a single GPU launch.
     baseband_log_l_bkg: cubecl::server::Handle,
 
-    /// Pre-allocated `n_levels × N_CHANNELS` partials buffer that
-    /// `pool_band_3ch_kernel` accumulates into via `Atomic<f32>::fetch_add`.
-    /// `_pool_and_finalize_jod` zero-fills via `fill_f32_kernel` per call
-    /// (one tiny launch, ~144 bytes worth at MAX_LEVELS=9) instead of
-    /// allocating a fresh GPU buffer + uploading host zeros every JOD
-    /// call. Tick 227: replaces the per-call `create_from_slice` host
-    /// alloc + GPU upload.
+    /// Pre-allocated `n_levels × N_CHANNELS` partials buffer, one f32
+    /// per (level, channel): the pooled `Σ safe_pow(|D|, β)` that
+    /// `pool_band_finalize` folds on the host. Written in full by
+    /// [`pool_rows_finalize_kernel`] on every pool, so it needs no
+    /// zero-fill. Tick 227 made it persistent (no per-call upload).
     partials_h: cubecl::server::Handle,
+
+    /// Per-row pool partials: one f32 per (level, channel, row),
+    /// written by [`pool_rows_3ch_kernel`] and summed in a fixed order
+    /// by [`pool_rows_finalize_kernel`]. Level `k` channel `c` row `y`
+    /// lives at `pool_row_base(k) + c · bh_k + y`. Zero-filled at the
+    /// start of every pool so a row no dispatch reached reads as 0,
+    /// never as a previous call's value.
+    pool_rows_h: cubecl::server::Handle,
+
+    /// Element count of `pool_rows_h` (`3 · Σ_k bh_k`).
+    pool_rows_len: usize,
+
+    /// `[offset, count]` into `pool_rows_h` for each (level, channel)
+    /// slot, `2 · n_levels · N_CHANNELS` u32s, uploaded once at
+    /// construction for [`pool_rows_finalize_kernel`].
+    pool_slot_meta_h: cubecl::server::Handle,
 
     /// Pre-built clones of `weber_scratch[k].log_l_bkg` and
     /// `weber_scratch[k].log_l_bkg_dis` handles, one per non-baseband
@@ -1075,10 +1119,11 @@ pub struct Cvvdp<R: Runtime> {
     /// Phase 3 (task #79): only the pool stage of the band loop is
     /// strip-aware at this point. The dist weber pyramid + CSF +
     /// masking still run full-image; the strip walker partitions the
-    /// per-band `d_scratch[k].d[c]` pixel range and dispatches the
-    /// `pool_band_3ch_offset_kernel` per slab. Atomic-add into
-    /// `partials_h` is associative across slabs, so the JOD scalar is
-    /// bit-exact against Full-mode `_pool_and_finalize_jod`. The
+    /// per-band `d_scratch[k].d[c]` row range and dispatches the
+    /// row pool (`pool_rows_3ch_kernel`) per slab. Slabs are whole
+    /// rows and each row's partial is summed in a fixed order, so the
+    /// pooled value is bit-identical to Full-mode
+    /// `_pool_and_finalize_jod` over the same D planes. The
     /// architectural foundation generalises to strip-aware CSF +
     /// masking (when the kernels are ported to logical-image
     /// reflection).
@@ -2360,11 +2405,18 @@ impl<R: Runtime> Cvvdp<R> {
         let baseband_n = baseband_w * baseband_h;
         let baseband_log_l_bkg = alloc_zeros_f32(&client, baseband_n);
 
-        // Persistent `n_levels * N_CHANNELS` atomic-pool partials buffer
-        // — reused across every `_pool_and_finalize_jod` call. Zero-fill
-        // happens per call via `fill_f32_kernel`; the per-call
+        // Persistent `n_levels * N_CHANNELS` pool partials buffer —
+        // reused across every `_pool_and_finalize_jod` call; the per-call
         // `create_from_slice` host alloc + upload is eliminated (tick 227).
         let partials_h = alloc_zeros_f32(&client, (n_levels as usize) * N_CHANNELS);
+
+        // Row-partials buffer + slot table for the deterministic
+        // two-pass pool (`pool_rows_3ch_kernel` → `pool_rows_finalize_kernel`).
+        let level_heights: Vec<usize> = gauss_ref.iter().map(|l| l.h as usize).collect();
+        let pool_rows_len = N_CHANNELS * level_heights.iter().sum::<usize>();
+        let pool_rows_h = alloc_zeros_f32(&client, pool_rows_len);
+        let pool_slot_meta_h =
+            client.create_from_slice(u32::as_bytes(&pool_slot_meta(&level_heights)));
 
         // Persistent `Vec<Handle>` slices for the per-non-baseband
         // log_l_bkg destinations. _dispatch_*_weber_pyramid_only used
@@ -2427,6 +2479,9 @@ impl<R: Runtime> Cvvdp<R> {
             weber_scratch,
             baseband_log_l_bkg,
             partials_h,
+            pool_rows_h,
+            pool_rows_len,
+            pool_slot_meta_h,
             log_l_bkg_ref_dests,
             log_l_bkg_dis_dests,
             logs_row,
@@ -2696,6 +2751,99 @@ impl<R: Runtime> Cvvdp<R> {
         let bw = self.gauss_ref[k].w as usize;
         let bh = self.gauss_ref[k].h as usize;
         (bw, bh, bw * bh)
+    }
+
+    /// First `pool_rows_h` index of level `k` (layout in [`pool_slot_meta`]).
+    fn pool_row_base(&self, k: usize) -> usize {
+        N_CHANNELS
+            * self.gauss_ref[..k]
+                .iter()
+                .map(|l| l.h as usize)
+                .sum::<usize>()
+    }
+
+    /// Zero `pool_rows_h` ahead of a pool. Every row of every level is
+    /// written by exactly one [`Self::_dispatch_pool_rows`] per call,
+    /// so this only matters if a future walker skips a row: the row
+    /// then contributes 0 (as it would have to the old atomic pool)
+    /// instead of the previous call's value.
+    fn _zero_pool_rows(&self) {
+        unsafe {
+            fill_f32_kernel::launch::<R>(
+                &self.client,
+                CubeCount::Static((self.pool_rows_len as u32).div_ceil(64), 1, 1),
+                CubeDim::new_1d(64),
+                ArrayArg::from_raw_parts(self.pool_rows_h.clone(), self.pool_rows_len),
+                0.0,
+                self.pool_rows_len as u32,
+            );
+        }
+    }
+
+    /// Pool `rows` consecutive rows of level `k`'s three D planes into
+    /// their row partials (pass 1 of the deterministic pool).
+    ///
+    /// `d[c]` has `d_len` elements laid out at the level's width; the
+    /// dispatch reads rows `src_row0 .. src_row0 + rows` of it, and
+    /// those are band rows `band_row0 .. band_row0 + rows`. Full mode
+    /// passes a whole band (`src_row0 = band_row0 = 0`), the Mode E
+    /// strip pool a row range of the full plane
+    /// (`src_row0 = band_row0`), and the Mode B walker a strip buffer
+    /// that starts at the strip's body (`src_row0 = 0`).
+    fn _dispatch_pool_rows(
+        &self,
+        k: usize,
+        d: &[cubecl::server::Handle; 3],
+        d_len: usize,
+        rows: usize,
+        src_row0: usize,
+        band_row0: usize,
+    ) {
+        let (bw, bh, _) = self.level_dims(k);
+        debug_assert!(rows > 0 && band_row0 + rows <= bh, "pool rows out of band");
+        debug_assert!(
+            (src_row0 + rows) * bw <= d_len,
+            "pool rows out of source plane"
+        );
+        let base = self.pool_row_base(k) + band_row0;
+        unsafe {
+            pool_rows_3ch_kernel::launch::<R>(
+                &self.client,
+                pool_rows_cube_count(rows),
+                CubeDim::new_1d(POOL_ROW_LANES),
+                ArrayArg::from_raw_parts(d[0].clone(), d_len),
+                ArrayArg::from_raw_parts(d[1].clone(), d_len),
+                ArrayArg::from_raw_parts(d[2].clone(), d_len),
+                ArrayArg::from_raw_parts(self.pool_rows_h.clone(), self.pool_rows_len),
+                BETA_SPATIAL,
+                bw as u32,
+                rows as u32,
+                src_row0 as u32,
+                base as u32,
+                (base + bh) as u32,
+                (base + 2 * bh) as u32,
+                (bw as u32).div_ceil(POOL_ROW_LANES),
+            );
+        }
+    }
+
+    /// Sum each (level, channel) slot's row partials into `partials_h`
+    /// in a fixed order (pass 2 of the deterministic pool). One launch
+    /// for all slots.
+    fn _finalize_pool_rows(&self) {
+        let n_slots = self.n_levels as usize * N_CHANNELS;
+        let max_rows = self.gauss_ref.iter().map(|l| l.h).max().unwrap_or(1);
+        unsafe {
+            pool_rows_finalize_kernel::launch::<R>(
+                &self.client,
+                CubeCount::Static(n_slots as u32, 1, 1),
+                CubeDim::new_1d(POOL_ROW_LANES),
+                ArrayArg::from_raw_parts(self.pool_rows_h.clone(), self.pool_rows_len),
+                ArrayArg::from_raw_parts(self.pool_slot_meta_h.clone(), 2 * n_slots),
+                ArrayArg::from_raw_parts(self.partials_h.clone(), n_slots),
+                max_rows.div_ceil(POOL_ROW_LANES),
+            );
+        }
     }
 
     /// Debug-only sanity check that the caller-passed `ppd` matches
@@ -4529,8 +4677,9 @@ impl<R: Runtime> Cvvdp<R> {
     /// the host-side `Vec<[Vec<f32>; 3]>` snapshot use
     /// [`Cvvdp::compute_dkl_d_bands`]; callers that pool on GPU
     /// (`Cvvdp::compute_dkl_jod`) read straight from the resident
-    /// handles via `pool_band_3ch_kernel` (one fused 3-channel
-    /// launch per band).
+    /// handles via the fixed-order row pool (`pool_rows_3ch_kernel`,
+    /// one fused 3-channel launch per band, then one
+    /// `pool_rows_finalize_kernel` launch).
     /// REF-side weber pyramid only. Dispatches color +
     /// `_dispatch_weber_pyramid_gpu` writing into `bands_ref` and
     /// `weber_scratch[k].log_l_bkg`. Returns the scalar baseband
@@ -4969,14 +5118,14 @@ impl<R: Runtime> Cvvdp<R> {
         let pu_scale = 10.0_f32.powf(MASK_C);
 
         // Path A Phase 1d (2026-05-26): in Mode B (StripMode::Pair),
-        // non-baseband bands dispatch the pool kernel inline (per
-        // strip in the strip walker, or once per band on the no-blur
-        // fallback). The atomic-adds accumulate into `partials_h`,
-        // which must be zero before any band writes. Zero it once
-        // here; the post-band-loop pool finalize then only needs to
-        // dispatch over the baseband (which still uses full `d`).
-        // Mode E and Mode Full continue to zero in
-        // `_pool_and_finalize_jod*` per their own dispatches.
+        // non-baseband bands dispatch the row pool inline (per strip
+        // in the strip walker, or once per band on the no-blur
+        // fallback), writing their rows of `pool_rows_h`. Zero it once
+        // here, before any band writes; the post-band-loop pool then
+        // only needs to dispatch over the baseband (which still uses
+        // full `d`) and run the fixed-order finalize. Mode E and Mode
+        // Full zero in `_pool_and_finalize_jod*` per their own
+        // dispatches.
         let mode_b_outer = matches!(
             self.strip_config,
             Some(StripConfig {
@@ -4985,17 +5134,7 @@ impl<R: Runtime> Cvvdp<R> {
             }),
         );
         if mode_b_outer {
-            let n_partials = n_levels * N_CHANNELS;
-            unsafe {
-                fill_f32_kernel::launch::<R>(
-                    &self.client,
-                    CubeCount::Static((n_partials as u32).div_ceil(64), 1, 1),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
-                    0.0,
-                    n_partials as u32,
-                );
-            }
+            self._zero_pool_rows();
         }
 
         // Mode E (StripMode::CachedRef) reads REF-side band data + REF
@@ -5503,33 +5642,9 @@ impl<R: Runtime> Cvvdp<R> {
                 // Mode B's only non-strip-walker path is the small-
                 // band no_blur branch (use_blur=false). In that case
                 // d_strip was sized at n_px so the kernel above wrote
-                // n_px elements; we now atomic-add the whole band's
-                // contribution into partials_h[k * 3 .. + 3].
+                // the whole band; pool all `bh` rows of it now.
                 if mode_b && !use_blur {
-                    let partial_idx_a = (k * N_CHANNELS) as u32;
-                    let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
-                    let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
-                    unsafe {
-                        pool_band_3ch_offset_kernel::launch::<R>(
-                            &self.client,
-                            count.clone(),
-                            cube_dim,
-                            ArrayArg::from_raw_parts(d_h[0].clone(), n_px),
-                            ArrayArg::from_raw_parts(d_h[1].clone(), n_px),
-                            ArrayArg::from_raw_parts(d_h[2].clone(), n_px),
-                            ArrayArg::from_raw_parts(
-                                self.partials_h.clone(),
-                                (self.n_levels as usize) * N_CHANNELS,
-                            ),
-                            BETA_SPATIAL,
-                            partial_idx_a,
-                            partial_idx_rg,
-                            partial_idx_vy,
-                            0_u32,
-                            n_px as u32,
-                            n_px as u32,
-                        );
-                    }
+                    self._dispatch_pool_rows(k, &d_h, n_px, bh, 0, 0);
                 }
                 let _ = d_h; // non-baseband result lives in d_scratch[k].d[c]
             }
@@ -5590,10 +5705,10 @@ impl<R: Runtime> Cvvdp<R> {
     ///      read pattern is identical to today's where each strip's
     ///      masking ran after ALL strips' CSF at level k.
     ///   3. mult_mutual writes only body rows of d_strip[k]; the
-    ///      inline pool dispatch reads body rows and atomic-adds into
-    ///      partials_h. Atomic-f32 reduction order can vary across
-    ///      strips but the values at each global row are identical
-    ///      to the level-major-outer dispatch.
+    ///      inline pool dispatch reduces those body rows into their
+    ///      row partials. Each row's partial depends only on that
+    ///      row, so the pooled value is the same as the
+    ///      level-major-outer dispatch's.
     ///
     /// **Memory cost.** k_split full-image DBandsTransients alive
     /// simultaneously. At 4096² h_body=256 that's 5 transients
@@ -6706,7 +6821,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// 2. pu_blur_h_3ch_strip_aware over halo-padded window of m_raw.
     /// 3. pu_blur_v_3ch_scaled_strip_aware over halo-padded window of m_mid.
     /// 4. mult_mutual_3ch_with_blurred over body rows.
-    /// 5. (Mode B only) pool_band_3ch_offset_kernel over body rows.
+    /// 5. (Mode B only) row pool (`pool_rows_3ch_kernel`) over body rows.
     ///
     /// **JOD invariant.** The helper is the inner-loop body extracted
     /// verbatim; consecutive calls with `s = 0, 1, 2, ...` produce
@@ -6966,12 +7081,11 @@ impl<R: Runtime> Cvvdp<R> {
             .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
 
         // Stage 5 (Mode B only): inline pool dispatch over this
-        // strip's d (which lives in `d_strip` at offset 0). The
-        // pool kernel atomic-adds into `self.partials_h[k *
-        // N_CHANNELS + c]`; subsequent strips of this band (and
-        // every other band) accumulate into the same partials
-        // entries, so the final `partials_h` matches the
-        // post-band-loop pool result by atomic associativity.
+        // strip's d (which lives in `d_strip` at offset 0). The row
+        // pool writes this strip's body rows of `pool_rows_h`; the
+        // other strips write the other rows, and the post-band-loop
+        // finalize sums them in a fixed order, so the result equals a
+        // whole-band pool of the same D rows bit for bit.
         //
         // Mode E keeps the full-d post-band-loop pool path
         // (`_pool_and_finalize_jod_strip`); only Mode B interleaves
@@ -6979,30 +7093,8 @@ impl<R: Runtime> Cvvdp<R> {
         // buffer that the next strip iteration is about to
         // overwrite.
         if mode_b {
-            let partial_idx_a = (k * N_CHANNELS) as u32;
-            let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
-            let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
-            unsafe {
-                pool_band_3ch_offset_kernel::launch::<R>(
-                    &self.client,
-                    count_body.clone(),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(d_h[0].clone(), n_strip_body),
-                    ArrayArg::from_raw_parts(d_h[1].clone(), n_strip_body),
-                    ArrayArg::from_raw_parts(d_h[2].clone(), n_strip_body),
-                    ArrayArg::from_raw_parts(
-                        self.partials_h.clone(),
-                        (self.n_levels as usize) * N_CHANNELS,
-                    ),
-                    BETA_SPATIAL,
-                    partial_idx_a,
-                    partial_idx_rg,
-                    partial_idx_vy,
-                    0_u32,
-                    n_strip_body as u32,
-                    n_strip_body as u32,
-                );
-            }
+            // d_strip row 0 is band row `body_offset_y`.
+            self._dispatch_pool_rows(k, d_h, n_strip_body, body_h, 0, body_offset_y);
             self.strip_dispatch_counter
                 .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         }
@@ -7120,9 +7212,10 @@ impl<R: Runtime> Cvvdp<R> {
     ///      → mult-mutual masking (GPU, fused min_abs + pu_blur 3ch +
     ///        mult_mutual_3ch_with_blurred per level — baseband uses
     ///        diff_abs_3ch)
-    ///      → spatial pool (GPU, pool_band_3ch_kernel — one fused
-    ///        3-channel launch per band, atomic-f32 accumulation
-    ///        into a partials Vec)
+    ///      → spatial pool (GPU, pool_rows_3ch_kernel — one fused
+    ///        3-channel launch per band, one partial per row — then
+    ///        one pool_rows_finalize_kernel launch summing the rows in
+    ///        a fixed order into a partials Vec)
     ///      → 3-stage Minkowski fold + met2jod (host scalar — operates
     ///        on the `n_levels × N_CHANNELS` partials Vec, ~144 bytes
     ///        total, sub-microsecond regardless of image size).
@@ -7152,29 +7245,24 @@ impl<R: Runtime> Cvvdp<R> {
     /// - `shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus`
     ///   (GPU vs pycvvdp v1 R2 manifest, ≤ 0.005 JOD)
     /// - `compute_dkl_jod_host_pool_matches_compute_dkl_jod` (GPU
-    ///   atomic pool vs host pool, 0.000000 diff)
+    ///   pool vs host pool)
     ///
     /// # Backend support
     ///
-    /// This method dispatches `pool_band_3ch_kernel`, which uses
-    /// `Atomic<f32>::fetch_add`. The two known traps:
+    /// The pool is deterministic: the same inputs on the same device
+    /// give bit-identical JOD on every call (no float atomics since
+    /// 2026-09-26; see `pool_rows_3ch_kernel`). Verified on CUDA and
+    /// Vulkan. Two traps belonged to the old `Atomic<f32>::fetch_add`
+    /// pool and have not been re-tested with the new kernels:
     ///
-    /// - **`cubecl-cpu` (0.10.x): the kernel panics at launch** with
-    ///   "not yet implemented: This type is not implemented yet.
-    ///   `atomic<f32>`". The panic is NOT surfaced as
-    ///   [`Error::InvalidImageSize`] — it unwinds through the
-    ///   caller. Use [`Cvvdp::compute_dkl_jod_host_pool`] on
-    ///   `cubecl-cpu` instead; it reads D bands back and folds
-    ///   on host (same JOD output at f32 precision).
-    /// - **Metal (via `cubecl-wgpu`): the kernel succeeds but
-    ///   silently no-ops** on the `Atomic<f32>::fetch_add`,
-    ///   producing all-zero partials and thus JOD = 10 (the
-    ///   identity-pair value) regardless of input. Use
-    ///   [`Cvvdp::compute_dkl_jod_host_pool`] there too.
-    ///
-    /// CUDA, Vulkan, DX12, and HIP backends support
-    /// `Atomic<f32>::fetch_add` correctly and produce the
-    /// canonical JOD.
+    /// - **`cubecl-cpu` (0.10.x)** panicked at launch on
+    ///   `atomic<f32>`. Keep using [`Cvvdp::compute_dkl_jod_host_pool`]
+    ///   there; it reads D bands back and folds on host (same JOD at
+    ///   f32 precision).
+    /// - **Metal (via `cubecl-wgpu`)** silently no-oped the float
+    ///   add (JOD = 10 for every input).
+    /// [`Cvvdp::compute_dkl_jod_host_pool`] is the verified route on
+    /// both until someone runs this path there.
     ///
     /// # Examples
     ///
@@ -7253,8 +7341,8 @@ impl<R: Runtime> Cvvdp<R> {
         // every level (baseband included since tick 94's
         // diff_abs_3ch_kernel) and does no host read-back.
         //
-        // The JOD path then pools via `pool_band_3ch_kernel` on each
-        // resident D handle, accumulating into an `n_levels ×
+        // The JOD path then pools each resident D handle with the
+        // fixed-order row pool into an `n_levels ×
         // N_CHANNELS` partials buffer that's the only data read back
         // to host. `compute_dkl_d_bands` (the parity-test helper)
         // adds a per-band readback on top, paying ~432 MB of
@@ -7262,10 +7350,10 @@ impl<R: Runtime> Cvvdp<R> {
         self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, stop)?;
         // Mode B (StripPair) and Mode E (CachedRef via warm_ref) route
         // the pool stage through the strip-aware walker that
-        // partitions each band's per-pixel pool into row-strips and
-        // dispatches `pool_band_3ch_offset_kernel` per slab. Atomic
-        // adds are associative across slabs, so JOD is bit-exact
-        // against `_pool_and_finalize_jod`. The strip dispatch
+        // partitions each band into row-strips and dispatches the row
+        // pool per slab. Row partials don't depend on the partition,
+        // so the pool is bit-exact against `_pool_and_finalize_jod`
+        // over the same D planes. The strip dispatch
         // counter increments by one per (level, strip) so tests can
         // verify the walker actually partitioned.
         if self.strip_config.is_some() {
@@ -7365,12 +7453,12 @@ impl<R: Runtime> Cvvdp<R> {
     }
 
     /// Portable-backend variant of [`Cvvdp::compute_dkl_jod`] that
-    /// avoids the GPU `Atomic<f32>::fetch_add` trap.
+    /// pools on the host.
     ///
     /// Same JOD result, but uses a host-side spatial pool instead
-    /// of `pool_band_3ch_kernel`. That GPU kernel uses
-    /// `Atomic<f32>::fetch_add`, which `cubecl-cpu` panics on and
-    /// Metal silently no-ops; this variant reads D bands back via
+    /// of the GPU row pool. The GPU pool used to rely on
+    /// `Atomic<f32>::fetch_add`, which `cubecl-cpu` panicked on and
+    /// Metal silently no-oped; this variant reads D bands back via
     /// [`Cvvdp::compute_dkl_d_bands`] and pools them with the
     /// host-scalar `lp_norm_mean`, so it runs on every cubecl
     /// runtime — including `cubecl-cpu` and Metal-via-`cubecl-wgpu`.
@@ -7381,13 +7469,13 @@ impl<R: Runtime> Cvvdp<R> {
     /// few-microsecond kernel time. **Use this on `cubecl-cpu` and
     /// Metal**; for CUDA / Vulkan / DX12 / HIP runtimes prefer
     /// [`Cvvdp::compute_dkl_jod`], which keeps everything GPU-
-    /// resident and produces canonical JOD via the working
-    /// atomic-reduction path. See the "Backend support" section
-    /// on [`Cvvdp::compute_dkl_jod`] for the full atomic-f32 story.
+    /// resident. See the "Backend support" section on
+    /// [`Cvvdp::compute_dkl_jod`].
     ///
-    /// Output matches `compute_dkl_jod` to f32 noise on all backends
-    /// where both run (the GPU pool's atomic reduction and the host
-    /// `lp_norm_mean` compute the same `safe_pow`-form Minkowski norm).
+    /// Output matches `compute_dkl_jod` to f32 rounding on all
+    /// backends where both run (the GPU row pool and the host
+    /// `lp_norm_mean` compute the same `safe_pow`-form Minkowski norm
+    /// in different summation orders).
     ///
     /// `ppd` is silently ignored — see [`Cvvdp::compute_dkl_jod`].
     /// Pass it consistent with the construction-time geometry; debug
@@ -7441,13 +7529,12 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Same algorithm and same JOD output as
     /// [`Cvvdp::compute_dkl_jod_with_warm_ref`] but pools the per-band
-    /// D values on the host instead of via the GPU atomic kernel —
+    /// D values on the host instead of via the GPU row pool —
     /// runs on every cubecl runtime, including `cubecl-cpu` and
     /// Metal-via-`cubecl-wgpu`. Useful for batch CPU/Metal scoring
-    /// (one warm REF, many DIST candidates) where the GPU pool path
-    /// panics or silently no-ops. See the "Backend support" section
-    /// on [`Cvvdp::compute_dkl_jod`] for the underlying
-    /// `Atomic<f32>::fetch_add` trap.
+    /// (one warm REF, many DIST candidates) where the old atomic GPU
+    /// pool panicked or silently no-oped. See the "Backend support"
+    /// section on [`Cvvdp::compute_dkl_jod`].
     ///
     /// Same `Error::NoWarmReference` semantics as the GPU warm-ref
     /// variant: requires a prior [`Cvvdp::warm_reference`] call, and
@@ -7888,13 +7975,11 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// # Backend support
     ///
-    /// Dispatches `pool_band_3ch_kernel` like
-    /// [`Cvvdp::compute_dkl_jod`]; same constraints. `cubecl-cpu`
-    /// callers must use
-    /// [`Cvvdp::compute_dkl_jod_host_pool_with_warm_ref`] instead;
-    /// Metal callers should too. See the "Backend support"
-    /// section on [`Cvvdp::compute_dkl_jod`] for the full
-    /// `Atomic<f32>::fetch_add` story.
+    /// Uses the same GPU pool as [`Cvvdp::compute_dkl_jod`]; same
+    /// constraints. `cubecl-cpu` and Metal callers should use
+    /// [`Cvvdp::compute_dkl_jod_host_pool_with_warm_ref`] until the
+    /// new pool is verified there. See the "Backend support" section
+    /// on [`Cvvdp::compute_dkl_jod`].
     pub fn compute_dkl_jod_with_warm_ref(&mut self, dist_srgb: &[u8], ppd: f32) -> Result<f32> {
         self.compute_dkl_jod_with_warm_ref_with_stop(dist_srgb, ppd, &enough::Unstoppable)
     }
@@ -7941,11 +8026,10 @@ impl<R: Runtime> Cvvdp<R> {
         self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband, stop)?;
         // Mode B (StripPair) and Mode E (CachedRef) both route the
         // per-band pool through the strip-aware walker that partitions
-        // each band's per-pixel pool into row-strips and dispatches
-        // `pool_band_3ch_offset_kernel` per slab. Atomic-adds across
-        // slabs are associative so JOD is bit-identical to Full mode
-        // (within the same per-call ordering noise band as Full's own
-        // repeated calls). The masking chain in Mode E now also runs
+        // each band into row-strips and dispatches the row pool per
+        // slab; row partials don't depend on the partition, so the
+        // pool of a given D plane is bit-identical to Full mode's.
+        // The masking chain in Mode E now also runs
         // through the strip-aware walker (`_run_band_masking_strip_walker`)
         // — same dispatch shape as Mode B with the REF source pulled
         // from `ref_full_state`.
@@ -7973,86 +8057,26 @@ impl<R: Runtime> Cvvdp<R> {
     /// `do_pooling_and_jod_still_3ch`.
     fn _pool_q_per_ch(&mut self) -> Result<Vec<[f32; N_CHANNELS]>> {
         let n_levels = self.n_levels as usize;
-        let n_partials = n_levels * N_CHANNELS;
-        let cube_dim = CubeDim::new_1d(64);
 
-        // Zero the persistent partials buffer before atomic-add
-        // accumulation. One tiny GPU launch replaces the per-call
-        // host alloc + create_from_slice upload (tick 227).
-        unsafe {
-            fill_f32_kernel::launch::<R>(
-                &self.client,
-                CubeCount::Static((n_partials as u32).div_ceil(64), 1, 1),
-                cube_dim,
-                ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
-                0.0,
-                n_partials as u32,
-            );
-        }
-
-        // T1.C + T4.K (2026-05-16): per-size pool dispatch. The
-        // LDS-reduction kernel (`pool_band_3ch_lds_kernel`, 256-thread
-        // workgroup, pointer-jumping reduce, 1 atomic per workgroup
-        // per channel) wins at large bands by cutting atomic traffic
-        // ~255×; at tiny bands (≤ ~16 K pixels) its 8-sync overhead
-        // exceeds the per-pixel-atomic cost. POOL_LDS_MIN_PIXELS sets
-        // the crossover; benched on RTX 5070 (256² regressed under
-        // unconditional LDS; 1 MP and 12 MP win cleanly).
-        const POOL_LDS_MIN_PIXELS: usize = 16_384;
-        let pool_lds_cube_dim = CubeDim::new_1d(POOL_LDS_BLOCK_DIM);
-        let pool_atomic_cube_dim = CubeDim::new_1d(64);
+        // Deterministic two-pass pool (replaces the Atomic<f32>
+        // fetch_add kernels, whose summation order was whatever the
+        // scheduler did): each band row reduces to one partial in a
+        // fixed tree, then each (level, channel) slot sums its rows in
+        // a fixed order into `partials_h`. See `pool_rows_3ch_kernel`.
+        self._zero_pool_rows();
         for k in 0..n_levels {
-            let (_, _, n_px) = self.level_dims(k);
+            let (_, bh, n_px) = self.level_dims(k);
             // Full / CachedRef modes own a `Some(d)` at every level —
             // this method is never called from Mode B's hot path
             // (`compute_dkl_jod` routes Mode B to `_pool_and_finalize_jod_strip`).
             let d_full = self.d_scratch[k].d.as_ref().expect(
                 "DBandsScratch.d must be Some in _pool_and_finalize_jod (Full / CachedRef)",
             );
-            let d_a = d_full[0].clone();
-            let d_rg = d_full[1].clone();
-            let d_vy = d_full[2].clone();
-            let partial_idx_a = (k * N_CHANNELS) as u32;
-            let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
-            let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
-            if n_px >= POOL_LDS_MIN_PIXELS {
-                let count = CubeCount::Static((n_px as u32).div_ceil(POOL_LDS_BLOCK_DIM), 1, 1);
-                unsafe {
-                    pool_band_3ch_lds_kernel::launch::<R>(
-                        &self.client,
-                        count.clone(),
-                        pool_lds_cube_dim,
-                        ArrayArg::from_raw_parts(d_a, n_px),
-                        ArrayArg::from_raw_parts(d_rg, n_px),
-                        ArrayArg::from_raw_parts(d_vy, n_px),
-                        ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
-                        BETA_SPATIAL,
-                        partial_idx_a,
-                        partial_idx_rg,
-                        partial_idx_vy,
-                        n_px as u32,
-                    );
-                }
-            } else {
-                let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
-                unsafe {
-                    pool_band_3ch_kernel::launch::<R>(
-                        &self.client,
-                        count.clone(),
-                        pool_atomic_cube_dim,
-                        ArrayArg::from_raw_parts(d_a, n_px),
-                        ArrayArg::from_raw_parts(d_rg, n_px),
-                        ArrayArg::from_raw_parts(d_vy, n_px),
-                        ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
-                        BETA_SPATIAL,
-                        partial_idx_a,
-                        partial_idx_rg,
-                        partial_idx_vy,
-                        n_px as u32,
-                    );
-                }
-            }
+            let d: [cubecl::server::Handle; 3] =
+                [d_full[0].clone(), d_full[1].clone(), d_full[2].clone()];
+            self._dispatch_pool_rows(k, &d, n_px, bh, 0, 0);
         }
+        self._finalize_pool_rows();
 
         let bytes = self.client.read_one(self.partials_h.clone()).map_err(|e| {
             // Reclaim the pool: the failed dispatch's reservation
@@ -8077,15 +8101,12 @@ impl<R: Runtime> Cvvdp<R> {
 
     /// Mode E Phase 3 strip-aware variant of [`Self::_pool_and_finalize_jod`].
     ///
-    /// Partitions each band's per-pixel pool into `n_strips` row-strips
-    /// and dispatches [`pool_band_3ch_offset_kernel`] per strip. The
-    /// atomic-add into `partials_h` is associative across strips, so
-    /// the final `partials_h[k * N_CHANNELS + c]` value equals the
-    /// single-shot pool dispatch result to f32 atomic-ordering noise
-    /// (which is the same drift band Full mode already produces
-    /// across repeated calls — see
-    /// `compute_dkl_jod_is_deterministic_across_repeated_calls` in
-    /// `tests/pipeline_score.rs`).
+    /// Partitions each band into `n_strips` row-strips and dispatches
+    /// the row pool ([`pool_rows_3ch_kernel`]) per strip, then the
+    /// fixed-order finalize. Strips are whole rows and each row's
+    /// partial depends only on that row, so the final
+    /// `partials_h[k * N_CHANNELS + c]` is bit-identical to the
+    /// single-dispatch Full-mode pool of the same D plane.
     ///
     /// Per-band strip count is computed from `strip_config.h_body` at
     /// the band's resolution: a band of height `bh` is partitioned
@@ -8111,11 +8132,9 @@ impl<R: Runtime> Cvvdp<R> {
 
     /// Strip-walker sibling of [`Self::_pool_q_per_ch`] (Mode B / Mode
     /// E): the same per-(level, channel) band scores, pooled slab by
-    /// slab through `pool_band_3ch_offset_kernel`.
+    /// slab through the row pool.
     fn _pool_q_per_ch_strip(&mut self) -> Result<Vec<[f32; N_CHANNELS]>> {
         let n_levels = self.n_levels as usize;
-        let n_partials = n_levels * N_CHANNELS;
-        let cube_dim = CubeDim::new_1d(64);
 
         // Strip body height at scale 0. Mode E's strip_config is
         // guaranteed Some(_) by the caller; the unwrap-equivalent is
@@ -8128,27 +8147,15 @@ impl<R: Runtime> Cvvdp<R> {
         let strip_h_body = cfg.h_body as usize;
         let mode_b = cfg.mode == StripMode::Pair;
 
-        // Mode E: zero partials_h here (the post-band-loop pool owns
-        // the accumulation).
-        // Mode B: partials_h was zeroed at the top of
-        // `_run_d_bands_band_loop` and the non-baseband pool was
-        // dispatched inline by the strip walker / no-blur fallback.
-        // Re-zeroing here would wipe the accumulated partials —
-        // skip the fill in Mode B.
+        // Mode E: zero the row partials here (the post-band-loop pool
+        // owns every row).
+        // Mode B: the row partials were zeroed at the top of
+        // `_run_d_bands_band_loop` and the non-baseband rows were
+        // pooled inline by the strip walker / no-blur fallback.
+        // Re-zeroing here would wipe them — skip the fill in Mode B.
         if !mode_b {
-            unsafe {
-                fill_f32_kernel::launch::<R>(
-                    &self.client,
-                    CubeCount::Static((n_partials as u32).div_ceil(64), 1, 1),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
-                    0.0,
-                    n_partials as u32,
-                );
-            }
+            self._zero_pool_rows();
         }
-
-        let pool_atomic_cube_dim = CubeDim::new_1d(64);
 
         // Track per-iteration strip count. We dispatch the offset
         // kernel once per (level, strip); the outer loop iterates
@@ -8158,7 +8165,7 @@ impl<R: Runtime> Cvvdp<R> {
         let mut outer_strip_iters: u32 = 0;
 
         for k in 0..n_levels {
-            let (bw, bh, n_px) = self.level_dims(k);
+            let (_, bh, n_px) = self.level_dims(k);
             let is_baseband = k == n_levels - 1;
 
             // Mode B's non-baseband bands were already pooled inline
@@ -8177,12 +8184,8 @@ impl<R: Runtime> Cvvdp<R> {
                 "DBandsScratch.d must be Some for any pool dispatch in _pool_and_finalize_jod_strip \
                  (Mode B non-baseband levels are skipped via the inline pool above)",
             );
-            let d_a = d_full[0].clone();
-            let d_rg = d_full[1].clone();
-            let d_vy = d_full[2].clone();
-            let partial_idx_a = (k * N_CHANNELS) as u32;
-            let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
-            let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
+            let d: [cubecl::server::Handle; 3] =
+                [d_full[0].clone(), d_full[1].clone(), d_full[2].clone()];
 
             // Per-band strip body height: scale 0 strip body halved
             // to match the band's resolution. Bands whose body
@@ -8197,30 +8200,13 @@ impl<R: Runtime> Cvvdp<R> {
             for s in 0..n_strips_band {
                 let row_start = s * strip_h_at_band;
                 let row_count = (bh - row_start).min(strip_h_at_band);
-                let start_offset = row_start * bw;
-                let slab_n = row_count * bw;
-                let count = CubeCount::Static((slab_n as u32).div_ceil(64), 1, 1);
-                unsafe {
-                    pool_band_3ch_offset_kernel::launch::<R>(
-                        &self.client,
-                        count,
-                        pool_atomic_cube_dim,
-                        ArrayArg::from_raw_parts(d_a.clone(), n_px),
-                        ArrayArg::from_raw_parts(d_rg.clone(), n_px),
-                        ArrayArg::from_raw_parts(d_vy.clone(), n_px),
-                        ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
-                        BETA_SPATIAL,
-                        partial_idx_a,
-                        partial_idx_rg,
-                        partial_idx_vy,
-                        start_offset as u32,
-                        slab_n as u32,
-                        n_px as u32,
-                    );
-                }
+                // Row range of the full plane: the row partials it
+                // writes are the ones a whole-band dispatch would.
+                self._dispatch_pool_rows(k, &d, n_px, row_count, row_start, row_start);
                 outer_strip_iters += 1;
             }
         }
+        self._finalize_pool_rows();
 
         self.strip_dispatch_counter
             .fetch_add(outer_strip_iters, core::sync::atomic::Ordering::Relaxed);
@@ -8611,8 +8597,8 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Score a 64×64 byte-identical pair on the CUDA backend (max JOD = 10).
     /// `no_run` because docs.rs has no GPU; the call shape compiles against
-    /// every cubecl backend with a working atomic-f32 pool (cuda, wgpu,
-    /// hip — see [`Cvvdp::compute_dkl_jod_host_pool`] for the cpu runtime):
+    /// every cubecl GPU backend (cuda, wgpu, hip — see
+    /// [`Cvvdp::compute_dkl_jod_host_pool`] for the cpu runtime):
     ///
     /// ```ignore
     /// use cvvdp_gpu::Cvvdp;

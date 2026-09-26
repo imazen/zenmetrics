@@ -66,6 +66,11 @@ zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features =
 name = "score"
 harness = false
 
+# Old (Atomic<f32>) vs new (fixed-order) spatial pool, interleaved.
+[[bench]]
+name = "pool_reduction"
+harness = false
+
 # Examples + tests consuming the typed Cvvdp<R> require the
 # cubecl-types feature.
 [[example]]

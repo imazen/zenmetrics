@@ -11,10 +11,10 @@
 //!   **JOD-preserving**: the reference-side state stays at full
 //!   image resolution on device (so per-band masking has the
 //!   correct neighbour pixels at every level); the dist side walks
-//!   the image in vertical strips. Per-band atomic-pool sums are
-//!   associative across strips, so the final JOD equals Full-mode
-//!   JOD within the documented Atomic<f32> reduction-order noise
-//!   band.
+//!   the image in vertical strips. Per-band pool sums are formed per
+//!   row in a fixed order, so the strip partition does not change
+//!   them: the final JOD differs from Full-mode JOD only where the D
+//!   planes themselves differ.
 //! - **StripPair { h_body }** — **Mode B** (one-shot pair stripwise).
 //!   Both ref AND dist sides walk through strips together, no ref
 //!   cache. Peak memory ≈ 2 × per-strip working set (REF gauss/weber

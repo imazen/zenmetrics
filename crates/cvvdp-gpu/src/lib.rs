@@ -5,30 +5,32 @@
 //! - **CUDA** (NVIDIA) via the cubecl CUDA runtime
 //! - **WGPU/Vulkan** (cross-platform) via the cubecl wgpu runtime
 //! - **WGPU/DX12** (Windows) via the cubecl wgpu runtime
-//! - **WGPU/Metal** — **NOT SUPPORTED on the production pool path**.
-//!   `pool_band_3ch_lds_kernel` (the workgroup-LDS pool used by
-//!   `compute_dkl_jod`) commits per-workgroup sums via
-//!   `Atomic<f32>::fetch_add`, which cubecl-wgpu's Metal backend
-//!   silently no-ops — every reduction returns zero and the JOD
-//!   score collapses to the default (10.0 for identical, ~10.0 for
-//!   different). Root cause + upstream patch:
-//!   [`crates/zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md`].
-//!   `compute_dkl_jod_host_pool` (the host-pool fallback used for
-//!   cubecl-cpu, see below) works on Metal because it reads D bands
-//!   back to host before pooling. Use that path for Metal
-//!   deployments until the upstream fix lands and the workspace
-//!   cubecl pin bumps to a fork rev with `feat/metal-atomic-fix`.
+//! - **WGPU/Metal** — the production pool used to commit its sums
+//!   via `Atomic<f32>::fetch_add`, which cubecl-wgpu's Metal backend
+//!   silently no-oped (every reduction zero, JOD ≈ 10). Root cause +
+//!   upstream patch: [`crates/zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md`].
+//!   Since 2026-09-26 the pool (`pool_rows_3ch_kernel` +
+//!   `pool_rows_finalize_kernel`) uses no float atomics, only shared
+//!   memory, barriers and plain stores, so that cause is gone — but
+//!   the new path has **not been re-run on Metal**.
+//!   `compute_dkl_jod_host_pool` (reads D bands back and pools on the
+//!   host) remains the Metal-verified route until it has.
 //! - **HIP** (AMD ROCm) when the `hip` feature is enabled
 //! - **CPU** via the cubecl CPU runtime — supported through
 //!   [`Cvvdp::compute_dkl_jod_host_pool`] (tick 208), which reads
 //!   D bands back to host and pools with the host-scalar
-//!   `lp_norm_mean` instead of the GPU `pool_band_3ch_kernel`
-//!   (which uses `Atomic<f32>::fetch_add`, unsupported by
-//!   cubecl-cpu). For CUDA / wgpu-Vulkan / wgpu-DX12 prefer
-//!   [`Cvvdp::compute_dkl_jod`] — it keeps the spatial reduction
-//!   on-device and skips the per-band readback. **Metal users
-//!   must use `compute_dkl_jod_host_pool` until the upstream fix
-//!   lands** — see the Metal note above.
+//!   `lp_norm_mean`. (The old atomic pool panicked on cubecl-cpu; the
+//!   atomic-free pool has not been tried there.) For CUDA /
+//!   wgpu-Vulkan / wgpu-DX12 prefer [`Cvvdp::compute_dkl_jod`] — it
+//!   keeps the spatial reduction on-device and skips the per-band
+//!   readback.
+//!
+//! **Determinism.** The GPU pool sums in a fixed order (per row, then
+//! per band), so repeated calls on the same device return
+//! bit-identical scores, and Full / Mode E / Mode B pool identical D
+//! planes to identical partials. Before 2026-09-26 the atomic pool's
+//! order depended on scheduling and scores varied in the low bits
+//! (~1e-6 relative) from call to call.
 //!
 //! ## Scope: still images, JOD score
 //!
@@ -134,8 +136,7 @@
 //! manifest q-levels match pycvvdp at ≤ 0.005 JOD. For the
 //! host-scalar reference (slower but doesn't need a working GPU
 //! pool), use [`host_scalar::predict_jod_still_3ch`] directly; for
-//! the cpu cubecl runtime (no atomic f32), use
-//! [`Cvvdp::compute_dkl_jod_host_pool`].
+//! the cpu cubecl runtime, use [`Cvvdp::compute_dkl_jod_host_pool`].
 //!
 //! ## Debug tracing env vars
 //!
@@ -266,7 +267,7 @@ pub const N_CHANNELS: usize = 3;
 /// `cvvdp_parameters.json`. Install with [`Cvvdp::set_masking_calibration`].
 ///
 /// Only the masking stage is runtime-loadable so far: the pooling betas are
-/// already runtime kernel arguments (`pool_band_3ch_kernel(.., beta)`), the
+/// already runtime kernel arguments (`pool_rows_3ch_kernel(.., beta, ..)`), the
 /// color/EOTF/primaries scalars are runtime (display dispatch), the CSF LUT
 /// is an uploaded buffer; the host-side band/channel Minkowski + `met2jod`
 /// finalizer (`do_pooling_and_jod_still_3ch`) and the XCM 3×3 still read
