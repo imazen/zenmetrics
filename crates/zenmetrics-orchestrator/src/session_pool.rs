@@ -522,6 +522,9 @@ fn estimate_entry_mib(metric: MetricKind, width: u32, height: u32) -> usize {
             // Largest regime → most conservative budget.
             zenmetrics_api::zensim::ZensimFeatureRegime::WithIw,
         ),
+        // CPU-only metric: no device footprint (the max(1) floor below
+        // still counts it as one entry).
+        MetricKind::Hdrvdp => 0,
     };
     // Round up to MiB, floor of 1 so a tiny image still counts as one
     // entry against the budget.

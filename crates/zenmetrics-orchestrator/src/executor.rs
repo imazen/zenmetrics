@@ -1263,6 +1263,12 @@ pub(crate) fn build_output_columns(
         MetricKind::Zensim => {
             out.insert("zensim_gpu".to_string(), score.value);
         }
+        // HDR-VDP is CPU-only with no GPU twin: the chooser never routes it
+        // through the orchestrator (`chooser.rs` marks it ineligible), so
+        // this arm exists for exhaustiveness and maps to the plain column.
+        MetricKind::Hdrvdp => {
+            out.insert("hdrvdp".to_string(), score.value);
+        }
     }
     // Merge metric-specific extras. Extras keys take precedence on
     // collision so a future per-metric extra can override the primary
