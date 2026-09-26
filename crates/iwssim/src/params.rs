@@ -3,6 +3,30 @@
 //! Mirrors the Python reference's `config.py` defaults so a vanilla
 //! `Iwssim::new` reproduces the upstream's score-for-score behavior.
 
+/// Luma extraction convention for [`Iwssim::score`] — how packed
+/// sRGB-u8 input becomes the gray plane the pyramid runs on.
+///
+/// The two conventions exist because the two reference
+/// implementations differ upstream:
+///
+/// - Python-IW-SSIM's `utils.rgb2gray` **rounds** to integers:
+///   `np.round(0.2989·R + 0.5870·G + 0.1140·B)`.
+/// - piq's `information_weighted_ssim` feeds `rgb2yiq(x)[:, :1]` —
+///   **unrounded** `0.299·R + 0.587·G + 0.114·B` on the 0–255 scale
+///   (the convention the JPEG AIC-4 `IW-SSIM` column was published
+///   under — verified 2026-09-25 vs `metrics_fullres.csv`,
+///   med|Δ| = 3.9e-6 over the 54-pair CLI subset).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LumaConvention {
+    /// `round(0.2989·R + 0.5870·G + 0.1140·B)` — Python-IW-SSIM
+    /// `utils.rgb2gray`. The default, matching the crate's oracle.
+    #[default]
+    Bt601Rounded,
+    /// `0.299·R + 0.587·G + 0.114·B` unrounded f32 — piq `rgb2yiq`
+    /// channel 0 on the 0–255 scale.
+    YiqUnrounded,
+}
+
 /// Knobs surfaced from the Python reference's `config.py`.
 ///
 /// Defaults match the upstream `cfg`:
@@ -39,6 +63,12 @@ pub struct IwssimParams {
     /// Accept sub-176-px inputs by tiling up to the minimum dim. Default
     /// is `false` — return [`crate::Error::InvalidImageSize`].
     pub allow_small: bool,
+    /// Luma extraction for [`crate::Iwssim::score`] — see
+    /// [`LumaConvention`]. Default [`LumaConvention::Bt601Rounded`]
+    /// (the Python reference's `rgb2gray`). [`LumaConvention::YiqUnrounded`]
+    /// reproduces the piq / MATLAB-on-float-luma convention the AIC-4
+    /// `IW-SSIM` column used.
+    pub luma: LumaConvention,
 }
 
 impl Default for IwssimParams {
@@ -50,6 +80,7 @@ impl Default for IwssimParams {
             parent: true,
             sigma_nsq: 0.4,
             allow_small: false,
+            luma: LumaConvention::default(),
         }
     }
 }
@@ -65,6 +96,7 @@ impl IwssimParams {
             parent: true,
             sigma_nsq: 0.4,
             allow_small: false,
+            luma: LumaConvention::Bt601Rounded,
         }
     }
 
@@ -72,6 +104,18 @@ impl IwssimParams {
     pub const fn allow_small(allow: bool) -> Self {
         let mut p = Self::new();
         p.allow_small = allow;
+        p
+    }
+
+    /// The piq / MATLAB-column convention: same algorithm knobs, but
+    /// the RGB→luma ingress is unrounded `0.299/0.587/0.114` (piq's
+    /// `rgb2yiq` channel 0) instead of the Python reference's rounded
+    /// BT.601. This is the variant the JPEG AIC-4 `IW-SSIM` column
+    /// was computed under (verified 2026-09-25: med|Δ| = 3.9e-6 vs
+    /// `metrics_fullres.csv` on the 54-pair CLI subset).
+    pub const fn piq_luma() -> Self {
+        let mut p = Self::new();
+        p.luma = LumaConvention::YiqUnrounded;
         p
     }
 

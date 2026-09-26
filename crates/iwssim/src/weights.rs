@@ -251,12 +251,13 @@ fn compute_infow(g: &[f32], vv: &[f32], ss: &[f32], lambdas: &[f32], sigma_nsq: 
 /// [`IwMap`] per finer scale (i.e. `Nsc - 1` entries; index `s-1`
 /// holds the map for scale `s`).
 ///
-/// `lp` is the per-scale Laplacian band; `g` is the per-scale Gaussian
-/// (needed for the parent band via `imenlarge2`).
+/// `lp` is the per-scale Laplacian band; the parent band is the next
+/// Laplacian level (`lp[s+1]`, upsampled via `imenlarge2`) — matching
+/// both upstream references (`pyrBand(pyro, pind, nband+1)` in MATLAB,
+/// `imgopr[scale+1]` in Python-IW-SSIM).
 pub(crate) fn compute_iw_maps(
     lp_ref: &[Vec<f32>],
     lp_dis: &[Vec<f32>],
-    g_ref: &[Vec<f32>],
     dims: &[(usize, usize)],
     params: &IwssimParams,
 ) -> Vec<IwMap> {
@@ -281,9 +282,12 @@ pub(crate) fn compute_iw_maps(
         // 2. Build the parent band (if enabled and scale < Nsc-1).
         let prnt = parent_enabled && s < nsc - 2;
         let parent_band: Option<Vec<f32>> = if prnt {
-            // imenlarge2(g_ref[s+1]) → (~2W, ~2H) then crop to (h, w).
+            // imenlarge2(lp_ref[s+1]) → (~2W, ~2H) then crop to (h, w).
+            // Both MATLAB (`pyrBand(pyro, pind, nband+1)`) and
+            // Python-IW-SSIM (`pyr_coeffs[(scale,0)]`) use the next
+            // LAPLACIAN band as the GSM parent — not the Gaussian.
             let (w_nxt, h_nxt) = dims[s + 1];
-            let big = imenlarge2(&g_ref[s + 1], w_nxt, h_nxt, w, h);
+            let big = imenlarge2(&lp_ref[s + 1], w_nxt, h_nxt, w, h);
             Some(big)
         } else {
             None

@@ -33,6 +33,24 @@ canonical entry — float gray planes in 0..255 scale, `width × height`
 samples. Minimum dimension 176 (5-level pyramid + 11×11 valid blur);
 `allow_small` tiles smaller inputs up to the floor.
 
+The RGB→gray conversion is selectable via `IwssimParams::luma`
+(`LumaConvention`):
+
+- `Bt601Rounded` (default) — `round(0.2989R+0.5870G+0.1140B)`, the
+  reference's `utils.rgb2gray` exactly.
+- `YiqUnrounded` — `0.299R+0.587G+0.114B` with no rounding, the piq /
+  jpeg-ai-qaf `rgb2yiq`-channel-0 convention. `IwssimParams::piq_luma()`
+  selects it; this is the ingress the JPEG AIC-4 `IW-SSIM` column was
+  computed under (CLI `--metric iwssim-piq`, column
+  `iwssim_piq_imazen_v*`; med |Δ| 3.9e-6 / max 2.6e-5 vs
+  `metrics_fullres.tab`, n=54).
+
+Both conventions share one pipeline: the IW weighting uses the next
+**Laplacian** pyramid level as the GSM parent band
+(`pyrBand(pyro, pind, nband+1)` in the MATLAB release,
+`imgopr[scale+1]` in Python-IW-SSIM and jpeg-ai-qaf's
+`IW_SSIM_PyTorch.py`).
+
 The float gray entry matters for HDR: feeding `PU21(bt709-luma)·255/PU21(peak)`
 as **floats** (no u8 round-trip) scored SROCC 0.808 (IW) / 0.812 (MS-SSIM)
 on the UPIQ HDR subset vs 0.628 through a u8 shell — see

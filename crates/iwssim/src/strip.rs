@@ -66,7 +66,7 @@
 //! |---|---|---|
 //! | binom5 LP build cascade (scale 0 → s)   | radius 2 per level | 2·(2^s + ... + 1) ≤ 2·(2^Nsc - 1) = 62 |
 //! | 11×11 gauss valid blur at scale s       | radius 5           | 5·2^s ≤ 80 (s=4) |
-//! | imenlarge2(g_ref[s+1]) at scale (s+1)  | ~4 src pixels       | 8·2^s ≤ 128 (s=4) |
+//! | imenlarge2(lp_ref[s+1]) at scale (s+1)  | ~4 src pixels       | 8·2^s ≤ 128 (s=4) |
 //! | 3×3 box stats on lp / cs                 | radius 1           | 1·2^s ≤ 16 (s=4) |
 //!
 //! Total worst-case: 62 + 80 + 128 + 16 = 286 ≤ 320 rows. We round to
@@ -596,8 +596,8 @@ pub(crate) fn score_strip_internal(
         // Per-strip Laplacian pyramid.
         let ref_levels = build_laplacian_pyramid(&ref_strip, work_w, strip_h, NUM_SCALES);
         let dis_levels = build_laplacian_pyramid(&dis_strip, work_w, strip_h, NUM_SCALES);
-        let (lp_ref_v, g_ref_v) = split_levels(&ref_levels);
-        let (lp_dis_v, _) = split_levels(&dis_levels);
+        let lp_ref_v = split_levels(&ref_levels);
+        let lp_dis_v = split_levels(&dis_levels);
 
         // For each IW scale, accumulate Y^T·Y.
         if params.iw_flag {
@@ -667,7 +667,7 @@ pub(crate) fn score_strip_internal(
                     let (w_nxt, _) = dims[s + 1];
                     let (_, h_nxt_strip) = dims_s_strip[s + 1];
                     Some(imenlarge2(
-                        &g_ref_v[s + 1],
+                        &lp_ref_v[s + 1],
                         w_nxt,
                         h_nxt_strip,
                         w_s,
@@ -772,8 +772,8 @@ pub(crate) fn score_strip_internal(
 
             let ref_levels = build_laplacian_pyramid(&ref_strip, work_w, strip_h, NUM_SCALES);
             let dis_levels = build_laplacian_pyramid(&dis_strip, work_w, strip_h, NUM_SCALES);
-            let (lp_ref_v, g_ref_v) = split_levels(&ref_levels);
-            let (lp_dis_v, _) = split_levels(&dis_levels);
+            let lp_ref_v = split_levels(&ref_levels);
+            let lp_dis_v = split_levels(&dis_levels);
 
             for s in 0..NUM_SCALES - 1 {
                 let Some(eig) = eigs[s].as_ref() else {
@@ -908,13 +908,15 @@ pub(crate) fn score_strip_internal(
                 let cs_pass2 = cs_body;
 
                 // Build parent_band at scale s using the strip's
-                // g_ref at scale s+1.
+                // lp_ref at scale s+1 (next LAPLACIAN band — matches
+                // MATLAB `pyrBand(pyro,pind,nband+1)` and Python
+                // `pyr_coeffs[(scale,0)]`; NOT the Gaussian).
                 let parent_enabled_at = parent_enabled && s < NUM_SCALES - 2;
                 let parent_band: Option<Vec<f32>> = if parent_enabled_at {
                     let (w_nxt, _) = dims[s + 1];
                     let (_, h_nxt_strip) = dims_s_strip[s + 1];
                     Some(imenlarge2(
-                        &g_ref_v[s + 1],
+                        &lp_ref_v[s + 1],
                         w_nxt,
                         h_nxt_strip,
                         w_s,
@@ -968,8 +970,8 @@ pub(crate) fn score_strip_internal(
             let dis_strip = slice_rows(dis_work, work_w, sg.strip_start, sg.strip_end);
             let ref_levels = build_laplacian_pyramid(&ref_strip, work_w, strip_h, NUM_SCALES);
             let dis_levels = build_laplacian_pyramid(&dis_strip, work_w, strip_h, NUM_SCALES);
-            let (lp_ref_v, _) = split_levels(&ref_levels);
-            let (lp_dis_v, _) = split_levels(&dis_levels);
+            let lp_ref_v = split_levels(&ref_levels);
+            let lp_dis_v = split_levels(&dis_levels);
             for s in 0..NUM_SCALES - 1 {
                 let (w_s, _) = dims[s];
                 let dims_s_strip = pyramid_dims(work_w, strip_h, NUM_SCALES);
@@ -1034,14 +1036,8 @@ pub(crate) fn score_strip_internal(
 }
 
 /// Split borrow of `levels` into `(lp_vec, g_vec)`.
-fn split_levels(levels: &[PyrLevel]) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
-    let mut lp = Vec::with_capacity(levels.len());
-    let mut g = Vec::with_capacity(levels.len());
-    for level in levels {
-        lp.push(level.lp.clone());
-        g.push(level.g.clone());
-    }
-    (lp, g)
+fn split_levels(levels: &[PyrLevel]) -> Vec<Vec<f32>> {
+    levels.iter().map(|level| level.lp.clone()).collect()
 }
 
 /// Score in strip mode against a warm reference. The warm state
@@ -1104,10 +1100,11 @@ pub(crate) fn score_with_warm_ref_strip_internal(
             let (w_s, h_s) = dims[s];
             let big_n = big_n_at(s);
             let parent_enabled_at = parent_enabled && s < NUM_SCALES - 2;
-            // Build the parent_band from g_ref[s+1] if enabled.
+            // Build the parent_band from the next LAPLACIAN band
+            // (upstream: `pyrBand(pyro, pind, nband+1)`).
             let parent_band: Option<Vec<f32>> = if parent_enabled_at {
                 let (w_nxt, h_nxt) = dims[s + 1];
-                Some(imenlarge2(&warm.g_ref[s + 1], w_nxt, h_nxt, w_s, h_s))
+                Some(imenlarge2(&warm.lp_ref[s + 1], w_nxt, h_nxt, w_s, h_s))
             } else {
                 None
             };
@@ -1169,7 +1166,7 @@ pub(crate) fn score_with_warm_ref_strip_internal(
             buf
         };
         let dis_levels = build_laplacian_pyramid(&dis_strip, work_w, strip_h, NUM_SCALES);
-        let (lp_dis_v, _) = split_levels(&dis_levels);
+        let lp_dis_v = split_levels(&dis_levels);
 
         for s in 0..NUM_SCALES - 1 {
             if !params.iw_flag {
@@ -1254,38 +1251,29 @@ pub(crate) fn score_with_warm_ref_strip_internal(
             let parent_enabled_at = parent_enabled && s < NUM_SCALES - 2;
             let parent_band: Option<Vec<f32>> = if parent_enabled_at {
                 let (w_nxt, _) = dims[s + 1];
-                // For the warm path we have the ref's full-image
-                // Gaussian. We could slice it to the strip's range,
-                // but parent_band is computed via imenlarge2 over
-                // the WHOLE g_ref[s+1] — equivalent to the full-image
-                // path. The result is a (w_s, image_h_at_s)
-                // full-image parent_band; we slice the strip-rows
-                // out of it.
-                //
-                // For Phase 9.Z.A simplicity, just slice g_ref[s+1]
-                // to the strip rows + halo at scale s+1 and run
-                // imenlarge2 on that strip. The strip's parent_band
-                // at scale s = imenlarge2(strip_g_ref[s+1]). Memory
-                // bounded.
+                // Slice the NEXT LAPLACIAN band `lp_ref[s+1]` to the
+                // strip's rows (plus the halo already carried by `sg`)
+                // and run imenlarge2 on that strip — memory-bounded.
+                // Upstream parent = `pyrBand(pyro, pind, nband+1)`, a
+                // Laplacian band, not the Gaussian.
                 let (_, h_nxt_strip) = dims_s_strip[s + 1];
                 let strip_start_at_s1 = sg.strip_start.div_ceil(1 << (s + 1));
                 let strip_end_at_s1 = (sg.strip_end + ((1 << (s + 1)) - 1)) >> (s + 1);
-                // Use the full-image warm.g_ref[s+1] slice at
-                // strip rows.
                 let h_actual = strip_end_at_s1 - strip_start_at_s1;
                 let n = h_actual * w_nxt;
-                let mut g_ref_strip_at_s1 = alloc::vec![0.0_f32; n];
+                let mut lp_ref_strip_at_s1 = alloc::vec![0.0_f32; n];
                 let src_start = strip_start_at_s1 * w_nxt;
-                if src_start + n <= warm.g_ref[s + 1].len() {
-                    g_ref_strip_at_s1.copy_from_slice(&warm.g_ref[s + 1][src_start..src_start + n]);
+                if src_start + n <= warm.lp_ref[s + 1].len() {
+                    lp_ref_strip_at_s1
+                        .copy_from_slice(&warm.lp_ref[s + 1][src_start..src_start + n]);
                 } else {
                     // Strip extends past image; fall back to full
                     // image (should not happen in practice).
-                    g_ref_strip_at_s1.copy_from_slice(&warm.g_ref[s + 1]);
+                    lp_ref_strip_at_s1.copy_from_slice(&warm.lp_ref[s + 1]);
                 }
                 let _ = h_nxt_strip;
                 Some(imenlarge2(
-                    &g_ref_strip_at_s1,
+                    &lp_ref_strip_at_s1,
                     w_nxt,
                     h_actual,
                     w_s,

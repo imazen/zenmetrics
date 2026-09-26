@@ -92,7 +92,7 @@ mod ssim;
 mod strip;
 mod weights;
 
-pub use params::IwssimParams;
+pub use params::{IwssimParams, LumaConvention};
 pub use pipeline::Iwssim;
 pub use strip::{STRIP_BODY_DEFAULT, STRIP_BODY_MIN, STRIP_HALO_ROWS};
 
@@ -119,6 +119,25 @@ pub const IWSSIM_COLUMN_NAME: &str = match option_env!("IWSSIM_CPU_IMPL_TAG") {
     Some(t) => t,
     None => concat!(
         "iwssim_cpu_imazen_v",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_PATCH"),
+    ),
+};
+
+/// Column-name identifier for the **piq-ingress** variant
+/// ([`IwssimParams::piq_luma`] — unrounded `0.299/0.587/0.114` luma,
+/// the convention the JPEG AIC-4 `IW-SSIM` column was published
+/// under). Kept distinct from [`IWSSIM_COLUMN_NAME`]: same algorithm,
+/// different ingress — the scores differ at the `1e-4` level and a
+/// shared column name would silently mix two conventions in joined
+/// sidecars.
+pub const IWSSIM_PIQ_COLUMN_NAME: &str = match option_env!("IWSSIM_PIQ_IMPL_TAG") {
+    Some(t) => t,
+    None => concat!(
+        "iwssim_piq_imazen_v",
         env!("CARGO_PKG_VERSION_MAJOR"),
         "_",
         env!("CARGO_PKG_VERSION_MINOR"),
@@ -186,6 +205,38 @@ impl std::error::Error for Error {}
 
 /// `Result<T, iwssim::Error>` — crate-wide fallible return type.
 pub type Result<T> = core::result::Result<T, Error>;
+
+/// Dispatching RGB → gray converter honoring the configured
+/// [`params::LumaConvention`]. Shared by every RGB entry point
+/// (`score`, `score_strip`, `warm_reference`, …).
+#[inline]
+pub(crate) fn rgb_u8_to_gray(luma: params::LumaConvention, rgb: &[u8], out: &mut [f32]) {
+    match luma {
+        params::LumaConvention::Bt601Rounded => rgb_u8_to_gray_bt601(rgb, out),
+        params::LumaConvention::YiqUnrounded => rgb_u8_to_gray_yiq(rgb, out),
+    }
+}
+
+/// Convert sRGB-u8 RGB → YIQ luma grayscale (single channel f32,
+/// **unrounded**): `y = 0.299·R + 0.587·G + 0.114·B`.
+///
+/// Matches piq's `rgb2yiq` channel 0 on a 0–255 input — the ingress
+/// convention the JPEG AIC-4 `IW-SSIM` column was published under.
+/// Used when [`params::LumaConvention::YiqUnrounded`] is selected.
+///
+/// `rgb` is `width * height * 3` bytes packed `R0,G0,B0, R1,G1,B1, ...`.
+/// `out` is `width * height` f32s.
+///
+/// # Panics
+///
+/// Panics if `rgb.len() != out.len() * 3`.
+#[inline]
+pub fn rgb_u8_to_gray_yiq(rgb: &[u8], out: &mut [f32]) {
+    assert_eq!(rgb.len(), out.len() * 3, "rgb len mismatch");
+    for (px, o) in rgb.as_chunks::<3>().0.iter().zip(out.iter_mut()) {
+        *o = 0.299 * px[0] as f32 + 0.587 * px[1] as f32 + 0.114 * px[2] as f32;
+    }
+}
 
 /// Convert sRGB-u8 RGB → BT.601 rounded grayscale (single channel f32).
 ///

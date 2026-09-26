@@ -33,8 +33,6 @@ pub(crate) struct PyrLevel {
     /// Height of this level (`= ceil(parent_height / 2)`).
     #[allow(dead_code)] // retained for future diagnostic inspection
     pub h: usize,
-    /// Gaussian band at this scale (the lowpass for the level below).
-    pub g: Vec<f32>,
     /// Laplacian band at this scale: `LP_j = G_j - expand(G_{j+1})`.
     /// At the coarsest scale, `lp == g` (the residual lowpass).
     pub lp: Vec<f32>,
@@ -252,7 +250,7 @@ pub(crate) fn build_laplacian_pyramid(
     let mut levels: Vec<PyrLevel> = Vec::with_capacity(n_levels);
     for s in 0..n_levels {
         let (w_cur, h_cur) = dims[s];
-        let g = g_levels[s].clone();
+        let g = &g_levels[s];
         let lp = if s == n_levels - 1 {
             // Residual lowpass.
             g.clone()
@@ -275,7 +273,6 @@ pub(crate) fn build_laplacian_pyramid(
         levels.push(PyrLevel {
             w: w_cur,
             h: h_cur,
-            g,
             lp,
         });
     }
@@ -548,8 +545,18 @@ mod tests {
         }
         let levels = build_laplacian_pyramid(&img, w, h, 3);
         assert_eq!(levels.len(), 3);
-        // Residual lowpass at top scale equals the Gaussian there.
-        assert_eq!(levels[2].lp, levels[2].g);
+        // Residual lowpass at top scale equals the Gaussian there —
+        // recomputed independently via the corr_dn kernels.
+        let dims = pyramid_dims(w, h, 3);
+        let mut s1 = alloc::vec![0.0_f32; h * dims[1].0];
+        crate::simd_kernels::corr_dn_h(&img, h, w, dims[1].0, &mut s1);
+        let mut g1 = alloc::vec![0.0_f32; dims[1].0 * dims[1].1];
+        crate::simd_kernels::corr_dn_v(&s1, h, dims[1].0, dims[1].1, &mut g1);
+        let mut s2 = alloc::vec![0.0_f32; dims[1].1 * dims[2].0];
+        crate::simd_kernels::corr_dn_h(&g1, dims[1].1, dims[1].0, dims[2].0, &mut s2);
+        let mut g2 = alloc::vec![0.0_f32; dims[2].0 * dims[2].1];
+        crate::simd_kernels::corr_dn_v(&s2, dims[1].1, dims[2].0, dims[2].1, &mut g2);
+        assert_eq!(levels[2].lp, g2);
     }
 
     #[test]

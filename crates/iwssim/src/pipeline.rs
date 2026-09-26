@@ -7,7 +7,7 @@ use crate::params::IwssimParams;
 use crate::pyramid::{PyrLevel, build_laplacian_pyramid, pyramid_dims};
 use crate::ssim::compute_cs;
 use crate::weights::compute_iw_maps;
-use crate::{Error, IwssimScore, MIN_NATIVE_DIM, NUM_SCALES, Result, rgb_u8_to_gray_bt601};
+use crate::{Error, IwssimScore, MIN_NATIVE_DIM, NUM_SCALES, Result, rgb_u8_to_gray};
 
 /// Persistent per-call scratch buffers, allocated once at
 /// [`Iwssim::new`] and reused across calls.
@@ -78,8 +78,6 @@ pub struct Iwssim {
 pub(crate) struct WarmState {
     /// Reference Laplacian bands (one per scale, finest first).
     pub(crate) lp_ref: Vec<Vec<f32>>,
-    /// Reference Gaussian bands (one per scale).
-    pub(crate) g_ref: Vec<Vec<f32>>,
     /// Per-scale eigendecomposition (one per IW scale; index s holds
     /// the result for scale s ∈ 0..NUM_SCALES-1). `None` indicates
     /// either an empty scale or a build before the strip path was
@@ -149,8 +147,8 @@ impl Iwssim {
         // pad_gray_into routes into scratch.ref_work / scratch.dis_work,
         // also reused.  At 40 MP these two changes save 4 × 160 MB =
         // 640 MB of per-call allocator churn.
-        rgb_u8_to_gray_bt601(ref_rgb, &mut self.scratch.ref_gray);
-        rgb_u8_to_gray_bt601(dis_rgb, &mut self.scratch.dis_gray);
+        rgb_u8_to_gray(self.params.luma, ref_rgb, &mut self.scratch.ref_gray);
+        rgb_u8_to_gray(self.params.luma, dis_rgb, &mut self.scratch.dis_gray);
         self.score_gray_internal()
     }
 
@@ -224,7 +222,7 @@ impl Iwssim {
         }
         // Phase 9.YA Part 1: write into scratch.ref_gray instead of
         // allocating a fresh `vec![0.0; w*h]` (saves 160 MB at 40 MP).
-        rgb_u8_to_gray_bt601(ref_rgb, &mut self.scratch.ref_gray);
+        rgb_u8_to_gray(self.params.luma, ref_rgb, &mut self.scratch.ref_gray);
         self.warm_reference_gray_internal()
     }
 
@@ -256,13 +254,9 @@ impl Iwssim {
         );
         let levels =
             build_laplacian_pyramid(&self.scratch.ref_work, self.work_w, self.work_h, NUM_SCALES);
-        let (lp_ref, g_ref) = split_levels(levels);
+        let lp_ref = split_levels(levels);
         let eigs = (0..NUM_SCALES - 1).map(|_| None).collect();
-        self.warm = Some(WarmState {
-            lp_ref,
-            g_ref,
-            eigs,
-        });
+        self.warm = Some(WarmState { lp_ref, eigs });
         Ok(())
     }
 
@@ -277,7 +271,7 @@ impl Iwssim {
         }
         // Phase 9.YA Part 1: write into scratch.dis_gray instead of
         // allocating a fresh `vec![0.0; w*h]` (saves 160 MB at 40 MP).
-        rgb_u8_to_gray_bt601(dis_rgb, &mut self.scratch.dis_gray);
+        rgb_u8_to_gray(self.params.luma, dis_rgb, &mut self.scratch.dis_gray);
         self.score_with_warm_ref_gray_internal()
     }
 
@@ -312,7 +306,7 @@ impl Iwssim {
     /// # Memory profile
     ///
     /// Per-strip peak: `(body + 2·halo) × work_w × 4 × ~3` (lp_ref +
-    /// lp_dis + g_ref staged across 5 pyramid scales). At 40 MP
+    /// lp_dis staged across 5 pyramid scales). At 40 MP
     /// (6500×6500) with `strip_height=512` and 320-row halo: roughly
     /// `(512+640) × 6500 × 4 × 5 ≈ 150 MB` per strip vs 5.9 GB Full.
     ///
@@ -340,8 +334,8 @@ impl Iwssim {
                 got: dis_rgb.len(),
             });
         }
-        crate::rgb_u8_to_gray_bt601(ref_rgb, &mut self.scratch.ref_gray);
-        crate::rgb_u8_to_gray_bt601(dis_rgb, &mut self.scratch.dis_gray);
+        rgb_u8_to_gray(self.params.luma, ref_rgb, &mut self.scratch.ref_gray);
+        rgb_u8_to_gray(self.params.luma, dis_rgb, &mut self.scratch.dis_gray);
         self.score_strip_gray_internal(strip_height)
     }
 
@@ -426,7 +420,7 @@ impl Iwssim {
                 got: dis_rgb.len(),
             });
         }
-        crate::rgb_u8_to_gray_bt601(dis_rgb, &mut self.scratch.dis_gray);
+        rgb_u8_to_gray(self.params.luma, dis_rgb, &mut self.scratch.dis_gray);
         self.score_with_warm_ref_strip_gray_internal(strip_height)
     }
 
@@ -486,11 +480,10 @@ impl Iwssim {
         let warm = self.warm.as_ref().ok_or(Error::NoWarmReference)?;
         let dis_levels =
             build_laplacian_pyramid(&self.scratch.dis_work, self.work_w, self.work_h, NUM_SCALES);
-        let (lp_dis, _g_dis) = split_levels(dis_levels);
+        let lp_dis = split_levels(dis_levels);
         score_with_split(
             &warm.lp_ref,
             &lp_dis,
-            &warm.g_ref,
             self.work_w,
             self.work_h,
             &self.params,
@@ -534,14 +527,8 @@ impl Iwssim {
     }
 }
 
-fn split_levels(levels: Vec<PyrLevel>) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
-    let mut lp = Vec::with_capacity(levels.len());
-    let mut g = Vec::with_capacity(levels.len());
-    for level in levels {
-        lp.push(level.lp);
-        g.push(level.g);
-    }
-    (lp, g)
+fn split_levels(levels: Vec<PyrLevel>) -> Vec<Vec<f32>> {
+    levels.into_iter().map(|level| level.lp).collect()
 }
 
 /// Core one-shot scoring path — used when the reference state isn't
@@ -555,9 +542,9 @@ fn score_from_gray(
 ) -> Result<IwssimScore> {
     let ref_levels = build_laplacian_pyramid(ref_gray, work_w, work_h, NUM_SCALES);
     let dis_levels = build_laplacian_pyramid(dis_gray, work_w, work_h, NUM_SCALES);
-    let (lp_ref, g_ref) = split_levels(ref_levels);
-    let (lp_dis, _g_dis) = split_levels(dis_levels);
-    score_with_split(&lp_ref, &lp_dis, &g_ref, work_w, work_h, params)
+    let lp_ref = split_levels(ref_levels);
+    let lp_dis = split_levels(dis_levels);
+    score_with_split(&lp_ref, &lp_dis, work_w, work_h, params)
 }
 
 /// Shared back-end that consumes already-split pyramid bands and
@@ -566,7 +553,6 @@ fn score_from_gray(
 fn score_with_split(
     lp_ref: &[Vec<f32>],
     lp_dis: &[Vec<f32>],
-    g_ref: &[Vec<f32>],
     work_w: usize,
     work_h: usize,
     params: &IwssimParams,
@@ -584,7 +570,7 @@ fn score_with_split(
 
     // Compute IW weight maps for finer scales (1..Nsc-1).
     let iw_maps = if params.iw_flag {
-        compute_iw_maps(lp_ref, lp_dis, g_ref, &dims, params)
+        compute_iw_maps(lp_ref, lp_dis, &dims, params)
     } else {
         Vec::new()
     };
