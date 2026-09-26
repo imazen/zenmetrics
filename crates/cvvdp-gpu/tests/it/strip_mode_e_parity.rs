@@ -19,7 +19,7 @@
 #![cfg(feature = "cubecl-types")]
 
 use crate::common;
-use common::{Backend, synth_pair_ref, synth_pair_with_offset_dist};
+use common::{Backend, noise_pair, synth_pair_ref, synth_pair_with_offset_dist};
 
 use cubecl::Runtime;
 use cvvdp_gpu::{Cvvdp, CvvdpParams, MemoryMode, memory_mode::STRIP_H_BODY_DEFAULT};
@@ -159,19 +159,6 @@ fn mode_e_matches_full_n_distortions_64x64() {
             "Mode E parity broken at shift={shift}: full = {jod_full}, strip = {jod_strip}, |diff| = {diff}"
         );
     }
-}
-
-/// The zenmetrics-api `cancel.rs` pair generalised to any size: two
-/// unrelated byte patterns, so every band carries a large D (JOD ≈ 2–5).
-fn noise_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
-    let n = w * h * 3;
-    let r = (0..n)
-        .map(|i| ((i as u64).wrapping_mul(7919) & 0xFF) as u8)
-        .collect();
-    let d = (0..n)
-        .map(|i| ((i as u64).wrapping_mul(2_147_483_647) & 0xFF) as u8)
-        .collect();
-    (r, d)
 }
 
 /// Mode E at a non-power-of-two size with several strips per band.

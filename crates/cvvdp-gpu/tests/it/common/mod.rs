@@ -635,6 +635,19 @@ pub fn apply_offset_dist(ref_bytes: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+/// The zenmetrics-api `cancel.rs` pair at any size: two unrelated byte
+/// patterns, so every band carries a large D (JOD ≈ 2–5 at 256²–4096²).
+pub fn noise_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
+    let n = w * h * 3;
+    let r = (0..n)
+        .map(|i| ((i as u64).wrapping_mul(7919) & 0xFF) as u8)
+        .collect();
+    let d = (0..n)
+        .map(|i| ((i as u64).wrapping_mul(2_147_483_647) & 0xFF) as u8)
+        .collect();
+    (r, d)
+}
+
 /// Convenience: `(ref, dist)` pair from `synth_pair_ref` + the
 /// canonical offset dist. Most call sites that want both halves
 /// use this; sites that already hold a ref buffer use

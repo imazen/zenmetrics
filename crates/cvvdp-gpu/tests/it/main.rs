@@ -40,6 +40,7 @@ mod csf_scalar;
 mod diffmap_dispatch;
 #[cfg(feature = "cubecl-types")]
 mod diffmap_invariants;
+mod dispatch_limit;
 #[cfg(feature = "cubecl-types")]
 mod display_geometry;
 #[cfg(feature = "cubecl-types")]
