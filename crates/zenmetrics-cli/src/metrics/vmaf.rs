@@ -172,4 +172,28 @@ mod tests {
             );
         }
     }
+
+    /// `psnr-y-libvmaf` must equal PSNR on the Y plane `to_yuv420`
+    /// writes — that plane is exactly what the removed exec adapter fed
+    /// libvmaf's `psnr` aux feature.
+    #[test]
+    fn psnr_y_libvmaf_matches_adapter_y_plane() {
+        let (r, d) = pair();
+        let (ry, _, _) = to_yuv420(&r).unwrap();
+        let (dy, _, _) = to_yuv420(&d).unwrap();
+        let mse = ry
+            .iter()
+            .zip(&dy)
+            .map(|(&a, &b)| {
+                let dl = f64::from(a) - f64::from(b);
+                dl * dl
+            })
+            .sum::<f64>()
+            / ry.len() as f64;
+        let expect = 10.0 * (255.0f64 * 255.0 / mse).log10();
+        let got =
+            crate::metrics::classical::score(crate::metrics::classical::Kind::PsnrYLibvmaf, &r, &d)
+                .unwrap();
+        assert_eq!(got, expect);
+    }
 }

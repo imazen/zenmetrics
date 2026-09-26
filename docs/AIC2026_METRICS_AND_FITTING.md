@@ -210,7 +210,7 @@ implementations. Qualify ours by reference + variant, not just metric name:
 | AIC-4 column | Actual implementation (identified) | Ours | Qualification |
 |---|---|---|---|
 | `PSNR` | RGB mean-MSE PSNR | — | computable; no dedicated CLI metric |
-| `PSNR-Y` | PSNR on `round(16+(65.481R+128.553G+24.966B)/255)` (JPEG studio-601) | `--luma-ingress yuv601-studio` + PSNR | exact convention identified |
+| `PSNR-Y` | PSNR on `round(16+(65.481R+128.553G+24.966B)/255)` (JPEG studio-601) | `psnr-y-studio601` (or `--luma-ingress yuv601-studio` + `psnr-y`) | exact convention identified |
 | `PSNR-YCbCr611` | 6:1:1 YCbCr composite PSNR | — | identified |
 | `PSNR-HVS`, `-Y`, `-Cb`, `-Cr` | **Daala/Xiph `dump_psnrhvs`** (7×7 CSF-weighted, per-plane + combined) | `psnrhvs-daala` | ✅ FFI-verified port — studio-601 YUV444 chroma; `psnrhvs`/`psnrhvsm` remain the Ponomarenko MATLAB variant (**different algorithm family**) |
 | `SSIM` | libvmaf `float_ssim` (auto-scale `round(min_dim/256)` box decimate, 11×11 Gaussian, zli l·c·s, L=255) | `ssim-libvmaf` | ✅ FFI-verified port |

@@ -98,6 +98,25 @@ pub enum MetricKind {
     /// Peak signal-to-noise ratio on full-range BT.709 luma.
     #[value(name = "psnr-y")]
     PsnrY,
+    /// PSNR-Y on full-range BT.601 luma (the MATLAB `rgb2gray` weights
+    /// 0.299/0.587/0.114) — the most common "PSNR-Y" convention in the
+    /// literature; NOT the same numbers as `psnr-y` (BT.709).
+    #[value(name = "psnr-y601")]
+    PsnrY601,
+    /// PSNR-Y on studio-swing BT.601 luma — `round(16 + (65.481R +
+    /// 128.553G + 24.966B)/255)` per-pixel u8 — the JPEG/JFIF YUV420 `Y`
+    /// convention and the JPEG AIC-4 `PSNR-Y` column (the same plane
+    /// `ssim-libvmaf`/`msssim-libvmaf`/`psnrhvs-daala` build internally;
+    /// equal to `--metric psnr-y --luma-ingress yuv601-studio`).
+    #[value(name = "psnr-y-studio601")]
+    PsnrYStudio601,
+    /// PSNR-Y on studio-swing BT.709 luma — `round(16 + 219·L709)` with
+    /// `L709 = (0.2126R + 0.7152G + 0.0722B)/255` — the Y-plane
+    /// convention the CLI feeds the in-tree `vmaf` crate, i.e. what
+    /// libvmaf's `psnr` aux feature reported under the removed exec
+    /// adapter.
+    #[value(name = "psnr-y-libvmaf")]
+    PsnrYLibvmaf,
     /// Single-scale structural similarity.
     #[value(name = "ssim")]
     Ssim,
@@ -335,6 +354,9 @@ impl MetricKind {
             MetricKind::VmafV1,
             MetricKind::Psnr,
             MetricKind::PsnrY,
+            MetricKind::PsnrY601,
+            MetricKind::PsnrYStudio601,
+            MetricKind::PsnrYLibvmaf,
             MetricKind::Ssim,
             MetricKind::Nlpd,
             MetricKind::Ssim2,
@@ -379,6 +401,9 @@ impl MetricKind {
             MetricKind::VmafV1 => "vmaf-v1",
             MetricKind::Psnr => "psnr",
             MetricKind::PsnrY => "psnr-y",
+            MetricKind::PsnrY601 => "psnr-y601",
+            MetricKind::PsnrYStudio601 => "psnr-y-studio601",
+            MetricKind::PsnrYLibvmaf => "psnr-y-libvmaf",
             MetricKind::Ssim => "ssim",
             MetricKind::Nlpd => "nlpd",
             MetricKind::Ssim2 => "ssim2",
@@ -482,6 +507,9 @@ impl MetricKind {
             MetricKind::VmafV1 => &["vmaf_v1"],
             MetricKind::Psnr => &["psnr"],
             MetricKind::PsnrY => &["psnr_y"],
+            MetricKind::PsnrY601 => &["psnr_y601"],
+            MetricKind::PsnrYStudio601 => &["psnr_y_studio601"],
+            MetricKind::PsnrYLibvmaf => &["psnr_y_libvmaf"],
             MetricKind::Ssim => &["ssim"],
             MetricKind::Nlpd => &["nlpd"],
             MetricKind::Ssim2 => &["ssim2"],
@@ -528,11 +556,16 @@ impl MetricKind {
     /// (`ssim-libvmaf`, `msssim-libvmaf`, `psnrhvs-daala`) also return
     /// false: they build their own studio-601 planes internally —
     /// applying the studio-601 ingress a second time would not be
-    /// idempotent (the swing is affine, not a convex combination).
+    /// idempotent (the swing is affine, not a convex combination). The
+    /// fixed-convention PSNR-Y variants (`psnr-y-studio601`,
+    /// `psnr-y-libvmaf`) are excluded for the same reason; the
+    /// house-luma ones (`psnr-y`, `psnr-y601`) accept the ingress.
     pub fn is_luma_only(self) -> bool {
         matches!(
             self,
             MetricKind::Gmsd
+                | MetricKind::PsnrY
+                | MetricKind::PsnrY601
                 | MetricKind::PsnrhvsY
                 | MetricKind::HaarpsiY
                 | MetricKind::FsimY
@@ -1569,6 +1602,27 @@ pub fn run_metric(
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::PsnrY => Err(disabled_msg("psnr-y", "cpu-metrics")),
         #[cfg(feature = "cpu-metrics")]
+        MetricKind::PsnrY601 => Ok(vec![(
+            "psnr_y601",
+            classical::score(classical::Kind::PsnrY601, reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::PsnrY601 => Err(disabled_msg("psnr-y601", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::PsnrYStudio601 => Ok(vec![(
+            "psnr_y_studio601",
+            classical::score(classical::Kind::PsnrYStudio601, reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::PsnrYStudio601 => Err(disabled_msg("psnr-y-studio601", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::PsnrYLibvmaf => Ok(vec![(
+            "psnr_y_libvmaf",
+            classical::score(classical::Kind::PsnrYLibvmaf, reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::PsnrYLibvmaf => Err(disabled_msg("psnr-y-libvmaf", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim => Ok(vec![(
             "ssim",
             classical::score(classical::Kind::Ssim, reference, distorted)?,
@@ -2469,17 +2523,23 @@ mod tests {
             MetricKind::Msssim,
             MetricKind::Vif,
             MetricKind::Iwssim,
+            MetricKind::PsnrY,
+            MetricKind::PsnrY601,
         ] {
             let (rs, ds) = luma_ingress_pair(k, LumaIngress::Yuv601Studio, &r, &d);
             assert!(rs.is_some() && ds.is_some(), "{k:?} should substitute");
         }
-        // Colour metric + studio → untouched; luma metric + house → untouched.
+        // Colour metric + studio → untouched; luma metric + house →
+        // untouched; fixed-convention luma variants + studio → untouched
+        // (they embed their own swing — a second one isn't idempotent).
         for (k, ing) in [
             (MetricKind::Fsim, LumaIngress::Yuv601Studio),
             (MetricKind::Vsi, LumaIngress::Yuv601Studio),
             (MetricKind::Ssim2, LumaIngress::Yuv601Studio),
             (MetricKind::Cvvdp, LumaIngress::Yuv601Studio),
             (MetricKind::Gmsd, LumaIngress::House),
+            (MetricKind::PsnrYStudio601, LumaIngress::Yuv601Studio),
+            (MetricKind::PsnrYLibvmaf, LumaIngress::Yuv601Studio),
         ] {
             let (rs, ds) = luma_ingress_pair(k, ing, &r, &d);
             assert!(

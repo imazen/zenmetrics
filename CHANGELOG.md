@@ -13,6 +13,19 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenmetrics-cli (`9345e085`): the PSNR-Y family now enumerates the
+  luma conventions common in the literature, all in-tree (the exec-based
+  libvmaf aux extraction is gone — `29eb904a`): `psnr-y` (BT.709
+  full-range, unchanged), `psnr-y601` (BT.601 full-range — the MATLAB
+  `rgb2gray` weights, the most common literature convention),
+  `psnr-y-studio601` (rounded studio-swing BT.601 Y — the JPEG/JFIF
+  YUV420 convention and the AIC-4 `PSNR-Y` column; equal to
+  `psnr-y --luma-ingress yuv601-studio`), and `psnr-y-libvmaf`
+  (rounded studio-swing BT.709 Y — bit-identical to the `to_yuv420`
+  Y plane the removed exec adapter fed libvmaf's `psnr` aux). The
+  house-luma variants `psnr-y`/`psnr-y601` now accept
+  `--luma-ingress yuv601-studio` (`is_luma_only`); the fixed-convention
+  variants do not (a second swing isn't idempotent).
 - mdctpsnr (`43d2723e`): new in-tree CPU crate `crates/mdctpsnr` —
   reference reimplementation of Thomas Richter's mDCT-PSNR
   (`thorfdbg/mDCTpsnr`, zlib license retained), the metric published in

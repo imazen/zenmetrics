@@ -10,7 +10,25 @@ use crate::decode::Rgb8Image;
 pub enum Kind {
     Psnr,
     PsnrY,
+    PsnrY601,
+    PsnrYStudio601,
+    PsnrYLibvmaf,
     Ssim,
+}
+
+/// MSE between the per-pixel luma of `r` and `d` under luma function
+/// `y` — the shared shape of every luma-PSNR variant (they differ only
+/// in the luma convention `y`).
+fn luma_mse(r: &Rgb8Image, d: &Rgb8Image, y: impl Fn(&[u8]) -> f64) -> f64 {
+    r.pixels
+        .chunks_exact(3)
+        .zip(d.pixels.chunks_exact(3))
+        .map(|(a, b)| {
+            let delta = y(a) - y(b);
+            delta * delta
+        })
+        .sum::<f64>()
+        / (r.pixels.len() / 3) as f64
 }
 
 pub fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, String> {
@@ -38,23 +56,47 @@ pub fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, String> {
             Ok(psnr(mse))
         }
         Kind::PsnrY => {
-            let mse = r
-                .pixels
-                .chunks_exact(3)
-                .zip(d.pixels.chunks_exact(3))
-                .map(|(a, b)| {
-                    // BT.709 full-range luma on encoded RGB values.
-                    let y = |x: &[u8]| {
-                        0.2126 * f64::from(x[0])
-                            + 0.7152 * f64::from(x[1])
-                            + 0.0722 * f64::from(x[2])
-                    };
-                    let delta = y(a) - y(b);
-                    delta * delta
-                })
-                .sum::<f64>()
-                / n as f64;
-            Ok(psnr(mse))
+            // BT.709 full-range luma on encoded RGB values.
+            Ok(psnr(luma_mse(r, d, |x| {
+                0.2126 * f64::from(x[0]) + 0.7152 * f64::from(x[1]) + 0.0722 * f64::from(x[2])
+            })))
+        }
+        Kind::PsnrY601 => {
+            // BT.601 full-range luma — the MATLAB `rgb2gray` weights
+            // (0.299/0.587/0.114), the most common "PSNR-Y" convention
+            // in the literature. NOT the same numbers as `PsnrY`.
+            Ok(psnr(luma_mse(r, d, |x| {
+                0.299 * f64::from(x[0]) + 0.587 * f64::from(x[1]) + 0.114 * f64::from(x[2])
+            })))
+        }
+        Kind::PsnrYStudio601 => {
+            // Studio-swing BT.601 Y, u8-rounded: `round(16 +
+            // (65.481R + 128.553G + 24.966B)/255)` — the JPEG/JFIF
+            // YUV420 luma convention, the ffmpeg/libvmaf Y plane, and
+            // the JPEG AIC-4 `PSNR-Y` column. Same per-pixel formula
+            // (and f32 arithmetic) as `studio601_y_plane`.
+            Ok(psnr(luma_mse(r, d, |x| {
+                f64::from(
+                    (16.0
+                        + (65.481 * x[0] as f32 + 128.553 * x[1] as f32 + 24.966 * x[2] as f32)
+                            / 255.0)
+                        .round()
+                        .clamp(0.0, 255.0) as u8,
+                )
+            })))
+        }
+        Kind::PsnrYLibvmaf => {
+            // Studio-swing BT.709 Y, u8-rounded — the `to_yuv420` Y
+            // plane in `metrics/vmaf.rs` (`round(16 + 219·L709)` on
+            // normalized RGB), i.e. what libvmaf's `psnr` aux feature
+            // reported under the removed exec adapter. f64 arithmetic
+            // and operation order match `to_yuv420` exactly.
+            Ok(psnr(luma_mse(r, d, |x| {
+                let lum = 0.2126 * (f64::from(x[0]) / 255.0)
+                    + 0.7152 * (f64::from(x[1]) / 255.0)
+                    + 0.0722 * (f64::from(x[2]) / 255.0);
+                f64::from((16.0 + 219.0 * lum).round().clamp(16.0, 235.0) as u8)
+            })))
         }
         Kind::Ssim => {
             let mut sum = 0.0;
@@ -256,5 +298,81 @@ mod tests {
         assert!(score(Kind::Psnr, &r, &d).unwrap().is_finite());
         assert!(score(Kind::PsnrY, &r, &d).unwrap().is_finite());
         assert!(score(Kind::Ssim, &r, &d).unwrap() < 1.0);
+    }
+
+    /// Every luma-PSNR convention scores identically-shaped sane values:
+    /// infinite on identical input, finite on distorted, and the
+    /// distinct conventions generally disagree (they are different
+    /// metrics, not aliases).
+    #[test]
+    fn luma_psnr_variants_are_distinct_and_sane() {
+        let n = 64 * 64;
+        let r = Rgb8Image {
+            pixels: (0..n)
+                .flat_map(|i| [i as u8, (i * 3) as u8, (i * 7) as u8])
+                .collect(),
+            width: 64,
+            height: 64,
+        };
+        let mut d = r.pixels.clone();
+        for (i, p) in d.iter_mut().enumerate() {
+            if i % 5 == 0 {
+                *p = p.wrapping_add(30);
+            }
+        }
+        let d = Rgb8Image {
+            pixels: d,
+            width: 64,
+            height: 64,
+        };
+        let kinds = [
+            Kind::PsnrY,
+            Kind::PsnrY601,
+            Kind::PsnrYStudio601,
+            Kind::PsnrYLibvmaf,
+        ];
+        for k in kinds {
+            assert!(score(k, &r, &r).unwrap().is_infinite());
+            assert!(score(k, &r, &d).unwrap().is_finite());
+        }
+        // The four conventions should not all collapse to one number.
+        let scores: Vec<f64> = kinds.iter().map(|&k| score(k, &r, &d).unwrap()).collect();
+        assert!(scores.iter().any(|&s| s != scores[0]));
+    }
+
+    /// `psnr-y-studio601` must equal `psnr-y` scored on the
+    /// `yuv601-studio` luma ingress — the ingress builds the same
+    /// rounded studio-swing plane and the house BT.709 luma of a gray
+    /// (y, y, y) pixel is exactly `y` (0.2126+0.7152+0.0722 = 1).
+    #[test]
+    fn studio601_variant_matches_luma_ingress_path() {
+        let r = Rgb8Image {
+            pixels: (0..64 * 64)
+                .flat_map(|i| [(i * 5) as u8, (i * 3) as u8, (i * 11) as u8])
+                .collect(),
+            width: 64,
+            height: 64,
+        };
+        let mut px = r.pixels.clone();
+        for (i, p) in px.iter_mut().enumerate() {
+            if i % 4 == 0 {
+                *p = p.wrapping_add(19);
+            }
+        }
+        let d = Rgb8Image {
+            pixels: px,
+            width: 64,
+            height: 64,
+        };
+        let via_variant = score(Kind::PsnrYStudio601, &r, &d).unwrap();
+        let via_ingress = score(
+            Kind::PsnrY,
+            &crate::metrics::studio601_gray(&r),
+            &crate::metrics::studio601_gray(&d),
+        )
+        .unwrap();
+        // The house luma of (y,y,y) is (0.2126+0.7152+0.0722)·y — 1.0
+        // only up to f64 rounding, so compare within a tight epsilon.
+        assert!((via_variant - via_ingress).abs() < 1e-9);
     }
 }

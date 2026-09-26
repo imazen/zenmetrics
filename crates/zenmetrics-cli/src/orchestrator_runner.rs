@@ -463,6 +463,9 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::VmafV1
             | CliMetricKind::Psnr
             | CliMetricKind::PsnrY
+            | CliMetricKind::PsnrY601
+            | CliMetricKind::PsnrYStudio601
+            | CliMetricKind::PsnrYLibvmaf
             | CliMetricKind::Ssim
             | CliMetricKind::Nlpd
     )
