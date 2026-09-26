@@ -295,6 +295,24 @@ fn pool_slot_meta(level_heights: &[usize]) -> Vec<u32> {
     meta
 }
 
+/// Launch grid for `groups` workgroups of a 1-D kernel, folded into 2-D
+/// once `groups` exceeds 65 535 — the per-axis dispatch limit on
+/// wgpu (Vulkan / Metal / DX12). Without the fold, every per-pixel
+/// launch of a ≥ 2048² band (`n / 64 > 65 535`) is rejected on the
+/// device thread and the JOD comes back as 10 (measured on Vulkan,
+/// 2026-09-26). Every kernel launched through this indexes with the
+/// linearized `ABSOLUTE_POS` (`gid.y · gx · CUBE_DIM_X + gid.x` on both
+/// the WGSL and CUDA backends) and returns early past its element
+/// count, so the padding groups of the last grid row are no-ops.
+fn cube_count_1d(groups: u32) -> CubeCount {
+    const MAX_X: u32 = 65_535;
+    if groups <= MAX_X {
+        CubeCount::Static(groups, 1, 1)
+    } else {
+        CubeCount::Static(MAX_X, groups.div_ceil(MAX_X), 1)
+    }
+}
+
 /// Grid for [`pool_rows_3ch_kernel`]: one workgroup per row, folded
 /// into 2-D so no axis exceeds the 65 535-workgroup dispatch limit.
 /// The kernel recovers `row = CUBE_POS_Y · CUBE_COUNT_X + CUBE_POS_X`
@@ -2771,7 +2789,7 @@ impl<R: Runtime> Cvvdp<R> {
         unsafe {
             fill_f32_kernel::launch::<R>(
                 &self.client,
-                CubeCount::Static((self.pool_rows_len as u32).div_ceil(64), 1, 1),
+                cube_count_1d((self.pool_rows_len as u32).div_ceil(64)),
                 CubeDim::new_1d(64),
                 ArrayArg::from_raw_parts(self.pool_rows_h.clone(), self.pool_rows_len),
                 0.0,
@@ -3082,7 +3100,7 @@ impl<R: Runtime> Cvvdp<R> {
             let rg_strip = self.gauss_ref[0].planes[1].clone().offset_start(byte_off);
             let vy_strip = self.gauss_ref[0].planes[2].clone().offset_start(byte_off);
 
-            let cube_count = CubeCount::Static((n_strip as u32).div_ceil(64), 1, 1);
+            let cube_count = cube_count_1d((n_strip as u32).div_ceil(64));
             unsafe {
                 srgb_to_dkl_kernel::launch::<R>(
                     &self.client,
@@ -3237,7 +3255,7 @@ impl<R: Runtime> Cvvdp<R> {
         let vy_handle = self.gauss_ref[0].planes[2].clone();
 
         let cube_dim = CubeDim::new_1d(64);
-        let cube_count = CubeCount::Static((n0 as u32).div_ceil(64), 1, 1);
+        let cube_count = cube_count_1d((n0 as u32).div_ceil(64));
         let display = self.params.display;
         let m = display.primaries.linear_rgb_to_dkl();
         unsafe {
@@ -3618,7 +3636,7 @@ impl<R: Runtime> Cvvdp<R> {
                 let body_h = (curr_h - body_offset_y).min(strip_h_at_k);
                 let n_strip = (curr_w as usize) * (body_h as usize);
                 let byte_off: u64 = u64::from(body_offset_y) * u64::from(curr_w) * 4;
-                let cube_count = CubeCount::Static((n_strip as u32).div_ceil(64), 1, 1);
+                let cube_count = cube_count_1d((n_strip as u32).div_ceil(64));
 
                 for c in 0..N_CHANNELS {
                     let src = self.gauss_ref[k - 1].planes[c].clone();
@@ -3756,8 +3774,8 @@ impl<R: Runtime> Cvvdp<R> {
                 // body row block.
                 let n_strip_v = (coarse_w as usize) * (body_h as usize);
                 let n_strip_fine = (fine_w as usize) * (body_h as usize);
-                let count_v_strip = CubeCount::Static((n_strip_v as u32).div_ceil(64), 1, 1);
-                let count_fine_strip = CubeCount::Static((n_strip_fine as u32).div_ceil(64), 1, 1);
+                let count_v_strip = cube_count_1d((n_strip_v as u32).div_ceil(64));
+                let count_fine_strip = cube_count_1d((n_strip_fine as u32).div_ceil(64));
                 let byte_off_v: u64 = u64::from(body_offset_y) * u64::from(coarse_w) * 4;
                 let byte_off_fine: u64 = u64::from(body_offset_y) * u64::from(fine_w) * 4;
 
@@ -4137,9 +4155,9 @@ impl<R: Runtime> Cvvdp<R> {
                 let vscratch = alloc_zeros_f32(&self.client, n_v);
                 let upscaled = alloc_zeros_f32(&self.client, n_fine);
 
-                let count_v = CubeCount::Static((n_v as u32).div_ceil(64), 1, 1);
-                let count_h = CubeCount::Static((n_fine as u32).div_ceil(64), 1, 1);
-                let count_sub = CubeCount::Static((n_fine as u32).div_ceil(64), 1, 1);
+                let count_v = cube_count_1d((n_v as u32).div_ceil(64));
+                let count_h = cube_count_1d((n_fine as u32).div_ceil(64));
+                let count_sub = cube_count_1d((n_fine as u32).div_ceil(64));
                 let n_coarse = (coarse_w * coarse_h) as usize;
 
                 unsafe {
@@ -4576,7 +4594,7 @@ impl<R: Runtime> Cvvdp<R> {
             // baseband — those use 1.0 per cvvdp's `lpyr.get_band` contract.
             let band_mul: f32 = if k == 0 || is_baseband { 1.0 } else { 2.0 };
             let (_, _, n_px) = self.level_dims(k);
-            let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+            let count = cube_count_1d((n_px as u32).div_ceil(64));
 
             // GPU-resident log_l_bkg source. Non-baseband levels
             // read from `weber_scratch[k].log_l_bkg` (just written
@@ -4585,7 +4603,7 @@ impl<R: Runtime> Cvvdp<R> {
             // `self.baseband_log_l_bkg` (same pattern as
             // `_run_d_bands_band_loop`).
             let log_l_bkg_h = if is_baseband {
-                let fill_count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+                let fill_count = cube_count_1d((n_px as u32).div_ceil(64));
                 unsafe {
                     fill_f32_kernel::launch::<R>(
                         &self.client,
@@ -4818,8 +4836,8 @@ impl<R: Runtime> Cvvdp<R> {
                 let n_fine = (fine_w * fine_h) as usize;
                 let n_coarse = (coarse_w * coarse_h) as usize;
 
-                let count_v = CubeCount::Static((n_v as u32).div_ceil(64), 1, 1);
-                let count_fine = CubeCount::Static((n_fine as u32).div_ceil(64), 1, 1);
+                let count_v = cube_count_1d((n_v as u32).div_ceil(64));
+                let count_fine = cube_count_1d((n_fine as u32).div_ceil(64));
 
                 let scratch = &self.weber_scratch[k];
                 let l_bkg_fine = scratch.l_bkg_fine.clone();
@@ -4953,7 +4971,7 @@ impl<R: Runtime> Cvvdp<R> {
         let band_a = bands_dest[last].planes[0].clone();
         let band_rg = bands_dest[last].planes[1].clone();
         let band_vy = bands_dest[last].planes[2].clone();
-        let baseband_count = CubeCount::Static((baseband_n as u32).div_ceil(64), 1, 1);
+        let baseband_count = cube_count_1d((baseband_n as u32).div_ceil(64));
         unsafe {
             baseband_divide_3ch_kernel::launch::<R>(
                 &self.client,
@@ -5244,7 +5262,7 @@ impl<R: Runtime> Cvvdp<R> {
             //   resident for log_l_bkg data.
             let t_log_upload = std::time::Instant::now();
             let log_l_bkg_h = if is_baseband {
-                let fill_count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+                let fill_count = cube_count_1d((n_px as u32).div_ceil(64));
                 unsafe {
                     fill_f32_kernel::launch::<R>(
                         &self.client,
@@ -5275,7 +5293,7 @@ impl<R: Runtime> Cvvdp<R> {
                     t_log_upload.elapsed()
                 );
             }
-            let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+            let count = cube_count_1d((n_px as u32).div_ceil(64));
 
             // Path B unfix (2026-05-27): reuse the persistent
             // `self.d_bands_transient` (sized to base-level n0) for
@@ -6206,8 +6224,8 @@ impl<R: Runtime> Cvvdp<R> {
 
         let n_strip_v_window = (coarse_w as usize) * (strip_window_h as usize);
         let n_strip_window = (fine_w as usize) * (strip_window_h as usize);
-        let count_v_window = CubeCount::Static((n_strip_v_window as u32).div_ceil(64), 1, 1);
-        let count_window = CubeCount::Static((n_strip_window as u32).div_ceil(64), 1, 1);
+        let count_v_window = cube_count_1d((n_strip_v_window as u32).div_ceil(64));
+        let count_window = cube_count_1d((n_strip_window as u32).div_ceil(64));
 
         // `byte_off_*_full` slice FULL-image buffers (gauss_ref, plus
         // any weber_scratch buffer that was NOT strip-shaped this
@@ -6568,8 +6586,8 @@ impl<R: Runtime> Cvvdp<R> {
 
         let n_strip_v_window = (coarse_w as usize) * (strip_window_h as usize);
         let n_strip_window = (fine_w as usize) * (strip_window_h as usize);
-        let count_v_window = CubeCount::Static((n_strip_v_window as u32).div_ceil(64), 1, 1);
-        let count_window = CubeCount::Static((n_strip_window as u32).div_ceil(64), 1, 1);
+        let count_v_window = cube_count_1d((n_strip_v_window as u32).div_ceil(64));
+        let count_window = cube_count_1d((n_strip_window as u32).div_ceil(64));
         // gauss_alt is full-image: always slice at top_global * w * 4.
         // (`byte_off_v_full` unused — vscratch_a in stage 1 reads from
         // strip-shaped weber_scratch.vscratch_a with offset 0; gauss_alt
@@ -6890,12 +6908,12 @@ impl<R: Runtime> Cvvdp<R> {
         let strip_window_h = bot_global - top_global;
         let n_strip_window = bw * strip_window_h;
         let byte_off_window: u64 = (top_global as u64) * (bw as u64) * 4;
-        let count_window = CubeCount::Static((n_strip_window as u32).div_ceil(64), 1, 1);
+        let count_window = cube_count_1d((n_strip_window as u32).div_ceil(64));
 
         // mult_mutual processes ONLY body rows (no halo).
         let n_strip_body = bw * body_h;
         let byte_off_body: u64 = (body_offset_y as u64) * (bw as u64) * 4;
-        let count_body = CubeCount::Static((n_strip_body as u32).div_ceil(64), 1, 1);
+        let count_body = cube_count_1d((n_strip_body as u32).div_ceil(64));
 
         // P2.4 (2026-05-27): when transients are strip-local
         // (`bw × R_k`), the buffer's row 0 IS top_global at this
@@ -7835,7 +7853,7 @@ impl<R: Runtime> Cvvdp<R> {
         let state = self.ref_full_state.as_mut().expect("ensured above");
         for k in 0..n_levels {
             let n = (w as usize) * (h as usize);
-            let count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+            let count = cube_count_1d((n as u32).div_ceil(64));
             for c in 0..N_CHANNELS {
                 let src = self.bands_ref[k].planes[c].clone();
                 let dst = state.bands[k][c].clone();
@@ -7870,7 +7888,7 @@ impl<R: Runtime> Cvvdp<R> {
         // Baseband gauss: 3 channels of gauss_ref[last].
         let last = n_levels - 1;
         let bb_n = (self.gauss_ref[last].w as usize) * (self.gauss_ref[last].h as usize);
-        let bb_count = CubeCount::Static((bb_n as u32).div_ceil(64), 1, 1);
+        let bb_count = cube_count_1d((bb_n as u32).div_ceil(64));
         for c in 0..N_CHANNELS {
             let src = self.gauss_ref[last].planes[c].clone();
             let dst = state.baseband_gauss[c].clone();
@@ -8311,7 +8329,7 @@ impl<R: Runtime> Cvvdp<R> {
         let out = scratch.out.clone();
 
         let cube_dim = CubeDim::new_1d(64);
-        let count_base = CubeCount::Static((n0 as u32).div_ceil(64), 1, 1);
+        let count_base = cube_count_1d((n0 as u32).div_ceil(64));
 
         // Step 1: zero the 3 accumulator planes.
         for handle in [acc_a.clone(), acc_rg.clone(), acc_vy.clone()] {
@@ -8533,7 +8551,7 @@ impl<R: Runtime> Cvvdp<R> {
         let cube_dim = CubeDim::new_1d(64);
         for k in 0..n_levels {
             let n_px = (self.bands_ref[k].w * self.bands_ref[k].h) as usize;
-            let cube_count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+            let cube_count = cube_count_1d((n_px as u32).div_ceil(64));
             for c in 0..N_CHANNELS {
                 let weight_idx = (k * N_CHANNELS + c) as u32;
                 let band = self.bands_ref[k].planes[c].clone();
