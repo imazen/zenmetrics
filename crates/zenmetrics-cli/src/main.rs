@@ -1421,7 +1421,10 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Dssim | MetricKind::DssimGpu => Some((-0.001, 1.5, 0.0)),
         // IW-SSIM: [0, 1]; 1 = identical. Real distributions hover
         // 0.6..0.99 — anything < 0 or > 1.001 is suspicious.
-        MetricKind::IwssimGpu | MetricKind::Iwssim => Some((-0.001, 1.001, 1.0)),
+        // IW-SSIM (piq-convention variant): same [0, 1] scale, 1 = identical.
+        MetricKind::IwssimGpu | MetricKind::Iwssim | MetricKind::IwssimPiq => {
+            Some((-0.001, 1.001, 1.0))
+        }
         // Zensim: [0, ~100]; 100 = identical (similarity).
         MetricKind::Zensim | MetricKind::ZensimGpu => Some((-1.0, 110.0, 100.0)),
         // CVVDP: JOD scale, [0, 10]; 10 = imperceptible (identical). Same
@@ -1462,7 +1465,9 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // above in principle (enhancement can add apparent
         // information — reported values reach ~2–3). Flat references
         // yield NaN (denominator 0), matching the reference.
-        MetricKind::Vif => Some((-0.001, 10.0, 1.0)),
+        // vifvec (steerable-pyramid vector-GSM) is on the same information-
+        // ratio scale as VIFp.
+        MetricKind::Vif | MetricKind::VifVec => Some((-0.001, 10.0, 1.0)),
         // MAD: DISTANCE ≥ 0, 0 = identical, unbounded above (the
         // JEI geometric blend of the hi/lo strategy indices; hi
         // alone reaches ~1e5 on synthetic textures). Sweep means on
@@ -1479,7 +1484,12 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         | MetricKind::PsnrY
         | MetricKind::PsnrY601
         | MetricKind::PsnrYStudio601
-        | MetricKind::PsnrYLibvmaf => None,
+        | MetricKind::PsnrYLibvmaf
+        // PSNR-HVS (Daala/libvmaf) and mDCT-PSNR are dB-scale, higher =
+        // better; mDCT-PSNR reports `+inf` for identical inputs, so no
+        // finite identity value / mean bound is characterised yet.
+        | MetricKind::PsnrhvsDaala
+        | MetricKind::Mdctpsnr => None,
     }
 }
 
