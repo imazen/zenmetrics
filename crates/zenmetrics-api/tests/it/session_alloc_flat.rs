@@ -59,8 +59,20 @@ fn kinds() -> Vec<MetricKind> {
     v
 }
 
+/// The body runs in a CHILD copy of this test binary (see
+/// [`crate::run_in_child`]): `bytes_reserved` is a property of the device
+/// pool, and any other GPU test running concurrently in the shared process
+/// allocates from it, which would read as growth here.
 #[test]
 fn warm_ref_ladder_keeps_the_session_pool_flat() {
+    if crate::child_case().is_none() {
+        crate::run_in_child(
+            "session_alloc_flat::warm_ref_ladder_keeps_the_session_pool_flat",
+            "isolated",
+            crate::ForceNoGpu::Unset,
+        );
+        return;
+    }
     let r = reference();
     for kind in kinds() {
         let ctx = MetricSession::acquire(BACKEND).unwrap_or_else(|e| panic!("{kind:?}: {e}"));
