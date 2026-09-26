@@ -19,7 +19,7 @@
 //! Gated via the Cargo.toml `[[test]] required-features = ["cpu-metrics"]`
 //! entry: the skip decision lives in the CI→test chain, not the test body.
 
-use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, Metric, MetricKind};
 
 /// Sizes swept by the matrix. All ≥ 176 so IW-SSIM's minimum side holds.
 const SIZES: [u32; 3] = [256, 512, 1024];

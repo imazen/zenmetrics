@@ -8,7 +8,7 @@
 //! skip decision lives in the CI→justfile→test chain, not in the test body
 //! (NO graceful skips).
 
-use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, Metric, MetricKind};
 
 /// Deterministic `w×h` packed sRGB (`R, G, B, …`) image.
 fn img(w: u32, h: u32, f: impl Fn(u32, u32) -> [u8; 3]) -> Vec<u8> {

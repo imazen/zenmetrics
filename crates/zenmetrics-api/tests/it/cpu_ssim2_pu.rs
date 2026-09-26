@@ -35,7 +35,12 @@ fn hdr_pair(w: u32, h: u32) -> (Vec<f32>, Vec<f32>) {
 
 /// Repack interleaved nits as the `LinearRgbImage` the direct entry takes.
 fn nits_image(nits: &[f32], w: u32, h: u32) -> fast_ssim2::LinearRgbImage {
-    let data: Vec<[f32; 3]> = nits.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+    let data: Vec<[f32; 3]> = nits
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|c| [c[0], c[1], c[2]])
+        .collect();
     fast_ssim2::LinearRgbImage::new(data, w as usize, h as usize)
 }
 
