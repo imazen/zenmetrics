@@ -95,9 +95,18 @@ recorded in its manifest. That build is the only provenance for these values.
 
 This stack was rebased onto master `b50cde1f`. The fresh binary scores the reviewed 24-pair smoke set with **95 of 96**
 metric cells bitwise equal to the sidecar and **0 of 96** pixel-stamp mismatches. The one exception is
-`zenjxl-e7/q80.jxl` `cvvdp@standard_fhd`: 9.734886169433594 against 9.73488712310791, one f32 ULP. The intervening
-master CVVDP performance commits (`863a6af1`, deterministic dimension-governed banding and a fused N-tap FIR, and
-`2f3e051c`, pyramid-internal banding) change the f32 summation order.
+`zenjxl-e7/q80.jxl` `cvvdp@standard_fhd`: 9.734886169433594 against 9.73488712310791, one f32 ULP.
+
+**Correction (2026-09-26).** The earlier version of this note blamed `863a6af1` and `2f3e051c`. That attribution
+was wrong; the facts below are from the isolation-land lane, 2026-09-26.
+- A bisect over every CVVDP-touching master commit between the fleet build's base `b02812ae` and `b50cde1f`
+  moves the cell at **`e2a5e68a`** ("perf(cvvdp): zero-insert index-map for gauss expand + grow-only scratch +
+  ring-slot recycling"). That is the first CVVDP commit after `b02812ae`.
+- The cell holds the new value unchanged from there through `b50cde1f`, including across `863a6af1` and
+  `2f3e051c`. `b02812ae` reproduces the fleet value.
+- Both the fleet binary and the landed build give byte-identical output on an AVX-512 host and an AVX2 host,
+  and the fleet binary is also identical at 1, 6 and 32 threads.
+- So this is a build-version change in f32 summation order, not a SIMD-tier dependence.
 
 Rescoring these pairs on later builds is a new CVVDP era and must not be mixed into this table. The rebased stack
 passes `cargo test -p zenmetrics-cli --release` (108 passed, 0 failed; `avif_hdr_tripwire` 5/5).
