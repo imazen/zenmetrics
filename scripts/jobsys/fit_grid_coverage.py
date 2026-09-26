@@ -13,9 +13,14 @@ to a newer jobset, is never re-claimed and would otherwise vanish without any er
 
 Exit 0 iff every registered cell is DONE in some jobset and no DONE cell lies outside the grid.
 Exit 1 otherwise; the report says which cells are STRANDED (not DONE, and every jobset that could
-run them is drained/paused/unserved) and which are merely pending. `--serving` names the jobsets
+run them is drained/paused/unserved), which are IN_FLIGHT (claimed by a live worker) and which are
+merely pending. `--serving` names the jobsets
 that have live workers; by default every jobset whose control.json is neither drained nor paused
-counts as served. Cell -> claim mapping: single-cell chunk claims are `claims/chunk-<sha256(job_id
+counts as served. `--live-workers FILE` (JSON list or one name per line) names the workers that are
+running now: a live worker holds exactly one cell, its newest non-DONE claim, so that cell is
+IN_FLIGHT wherever it is declared (an older claim under the same worker name belongs to a dead
+earlier incarnation of that container name), and a cell whose only claim is not live is STRANDED
+unless a served jobset can re-claim it. Without `--live-workers` every claim is taken as live. Cell -> claim mapping: single-cell chunk claims are `claims/chunk-<sha256(job_id
 + "\\n")>`; job ids are recomputed from the manifest (sha256 of the canonical
 `{"inputs":[sorted shas],"kind":...}` JSON, exactly zenfleet-core's `JobId::of`).
 """
@@ -50,32 +55,48 @@ def parse_claim(body: str, now: int) -> tuple:
     return "?", None
 
 
-def coverage(grid: list, jobsets: list, serving: set, now: int) -> dict:
+def coverage(grid: list, jobsets: list, serving: set, now: int, live: set | None = None) -> dict:
     """Pure core. `grid`: registered cell names. `jobsets`: dicts with `name`, `declared` (set of
-    cell names), `done` (set), `claims` ({cell: (worker, age)}), `drained` (bool)."""
+    cell names), `done` (set), `claims` ({cell: (worker, age)}), `drained` (bool). `live`: names of the
+    workers running now, or None to treat every claim as live."""
     grid_set = set(grid)
     done = {}
     for js in jobsets:
         for cell in js["done"]:
             done.setdefault(cell, []).append(js["name"])
     outside = sorted(set(done) - grid_set)
+    # A live worker holds one cell: its newest claim on a not-yet-DONE cell of the grid.
+    newest = {}
+    if live is not None:
+        for js in jobsets:
+            for cell, (worker, age) in js["claims"].items():
+                if cell in grid_set and cell not in done and worker in live and age is not None:
+                    if worker not in newest or age < newest[worker][0]:
+                        newest[worker] = (age, cell, js["name"])
     missing = []
     for cell in grid:
         if cell in done:
             continue
         holders = [js for js in jobsets if cell in js["declared"]]
-        live = [js["name"] for js in holders if js["name"] in serving]
+        live_serving = [js["name"] for js in holders if js["name"] in serving]
         claims = {js["name"]: js["claims"][cell] for js in holders if cell in js["claims"]}
+        # Claims in jobsets that do not declare the cell cannot exist; claims are keyed per jobset.
+        in_flight = [name for name, (w, age) in claims.items()
+                     if live is None or (w in live and newest.get(w, (0, None, None))[1:] == (cell, name))]
+        status = "IN_FLIGHT" if in_flight else ("pending" if live_serving else "STRANDED")
         missing.append({
             "cell": cell,
             "declared_in": [js["name"] for js in holders],
-            "served_by_jobsets": live,
-            "claims": {name: {"worker": w, "age_s": age} for name, (w, age) in claims.items()},
-            "status": "pending" if live else "STRANDED",
+            "served_by_jobsets": live_serving,
+            "claims": {name: {"worker": w, "age_s": age,
+                              "live": live is None or (w in live and newest.get(w, (0, None, None))[1:] == (cell, name))}
+                       for name, (w, age) in claims.items()},
+            "status": status,
         })
     return {"grid": len(grid_set), "done": len(grid_set & set(done)),
             "done_in_several_jobsets": {c: j for c, j in done.items() if len(j) > 1 and c in grid_set},
             "done_outside_grid": outside, "missing": missing,
+            "in_flight": [m["cell"] for m in missing if m["status"] == "IN_FLIGHT"],
             "stranded": [m["cell"] for m in missing if m["status"] == "STRANDED"],
             "complete": not missing and not outside}
 
@@ -118,6 +139,7 @@ def main() -> None:
     p.add_argument("--grid-manifest", type=Path, required=True, help="manifest whose cell names ARE the registered grid")
     p.add_argument("--jobset", action="append", required=True)
     p.add_argument("--serving", action="append", help="jobsets with live workers (default: all not drained/paused)")
+    p.add_argument("--live-workers", type=Path, help="running workers: JSON list or one name per line")
     p.add_argument("--endpoint", default=os.environ.get("EP"))
     p.add_argument("--bucket", default="zentrain")
     p.add_argument("--prefix", default="jobs")
@@ -132,12 +154,17 @@ def main() -> None:
     with tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR") or str(Path.home() / "tmp")) as tmp:
         jobsets = [load_jobset(n, args.endpoint, args.bucket, args.prefix, Path(tmp), now) for n in args.jobset]
     serving = set(args.serving) if args.serving else {js["name"] for js in jobsets if not js["drained"]}
-    report = coverage(grid, jobsets, serving, now)
+    live = None
+    if args.live_workers:
+        text = args.live_workers.read_text()
+        live = set(json.loads(text)) if text.lstrip().startswith("[") else set(text.split())
+    report = coverage(grid, jobsets, serving, now, live)
     print(f"grid {report['grid']}: DONE {report['done']}, missing {len(report['missing'])} "
-          f"({len(report['stranded'])} STRANDED), done outside grid {len(report['done_outside_grid'])}, "
+          f"({len(report['in_flight'])} IN_FLIGHT, {len(report['stranded'])} STRANDED), done outside grid {len(report['done_outside_grid'])}, "
           f"done in several jobsets {len(report['done_in_several_jobsets'])}")
     for m in report["missing"]:
-        claims = "; ".join(f"{js}: {c['worker']} age {c['age_s']}s" for js, c in m["claims"].items()) or "unclaimed"
+        claims = "; ".join(f"{js}: {c['worker']} age {c['age_s']}s{'' if c['live'] else ' (not live)'}"
+                           for js, c in m["claims"].items()) or "unclaimed"
         print(f"  {m['status']:8s} {m['cell']}  declared in {m['declared_in'] or 'NO jobset'}  {claims}")
     if args.json_out:
         args.json_out.write_text(json.dumps(report, indent=2, sort_keys=True))

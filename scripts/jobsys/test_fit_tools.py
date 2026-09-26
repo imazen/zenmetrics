@@ -259,12 +259,12 @@ class Coverage(unittest.TestCase):
     def test_stranded_and_pending_cells_are_told_apart(self):
         old = self.js("old", ["a/1", "a/2"], ["a/1"], claims={"a/2": ("w-gone", 30000)}, drained=True)
         new = self.js("new", ["a/3"], [], claims={"a/3": ("w-live", 60)})
-        r = cov.coverage(["a/1", "a/2", "a/3"], [old, new], {"new"}, 1000)
+        r = cov.coverage(["a/1", "a/2", "a/3"], [old, new], {"new"}, 1000, live={"w-live"})
         self.assertFalse(r["complete"])
         by = {m["cell"]: m for m in r["missing"]}
         self.assertEqual(by["a/2"]["status"], "STRANDED")
-        self.assertEqual(by["a/2"]["claims"]["old"], {"worker": "w-gone", "age_s": 30000})
-        self.assertEqual(by["a/3"]["status"], "pending")
+        self.assertEqual(by["a/2"]["claims"]["old"], {"worker": "w-gone", "age_s": 30000, "live": False})
+        self.assertEqual(by["a/3"]["status"], "IN_FLIGHT")
         self.assertEqual(r["stranded"], ["a/2"])
 
     def test_cell_declared_nowhere_is_stranded_and_outside_cells_are_reported(self):
@@ -277,6 +277,24 @@ class Coverage(unittest.TestCase):
         r = cov.coverage(["a/1"], [self.js("x", ["a/1"], ["a/1"]), self.js("y", ["a/1"], ["a/1"])], {"y"}, 1)
         self.assertEqual(r["done_in_several_jobsets"], {"a/1": ["x", "y"]})
         self.assertTrue(r["complete"])
+
+    def test_live_workers_decide_in_flight_and_stranded(self):
+        old = self.js("old", ["a/1", "a/2", "a/3"], [], claims={"a/1": ("w-a", 100), "a/2": ("w-gone", 900),
+                                                              "a/3": ("w-a", 5000)}, drained=True)
+        new = self.js("new", ["a/2"], [], claims={})
+        r = cov.coverage(["a/1", "a/2", "a/3"], [old, new], {"new"}, 1000, live={"w-a"})
+        by = {m["cell"]: m for m in r["missing"]}
+        # w-a holds one cell: its newest claim (a/1, age 100); the older one (a/3) is a dead incarnation's.
+        self.assertEqual(by["a/1"]["status"], "IN_FLIGHT")
+        self.assertEqual(by["a/3"]["status"], "STRANDED")
+        self.assertFalse(by["a/3"]["claims"]["old"]["live"])
+        # a/2: dead owner, but the served jobset `new` declares it, so it can be re-claimed.
+        self.assertEqual(by["a/2"]["status"], "pending")
+        self.assertEqual(r["in_flight"], ["a/1"])
+        self.assertEqual(r["stranded"], ["a/3"])
+        # Without a live list every claim counts as live.
+        r = cov.coverage(["a/1", "a/2", "a/3"], [old, new], {"new"}, 1000)
+        self.assertEqual({m["cell"]: m["status"] for m in r["missing"]}["a/2"], "IN_FLIGHT")
 
     def test_claim_parsing(self):
         self.assertEqual(cov.parse_claim("900 host-1 0/1", 1000), ("host-1", 100))
