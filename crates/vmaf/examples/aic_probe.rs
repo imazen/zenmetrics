@@ -4,12 +4,7 @@ use std::env;
 use std::fs;
 use vmaf::{VmafV0Scorer, VmafV0Variant, Yuv420Frame};
 
-fn to_yuv420(
-    rgb: &[u8],
-    stride: usize,
-    w: usize,
-    h: usize,
-) -> (Vec<u16>, Vec<u16>, Vec<u16>) {
+fn to_yuv420(rgb: &[u8], stride: usize, w: usize, h: usize) -> (Vec<u16>, Vec<u16>, Vec<u16>) {
     let mut y = Vec::with_capacity(w * h);
     for row in rgb.chunks_exact(stride * 3).take(h) {
         for px in row[..w * 3].chunks_exact(3) {
