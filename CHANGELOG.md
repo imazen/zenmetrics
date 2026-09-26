@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- nlpd `iqa` module + zenmetrics-cli `nlpd-iqa` (`f776455c`):
+- nlpd `iqa` module + zenmetrics-cli `nlpd-iqa` (`46f0d2b6`):
   reproduces the published AIC-4 `NLPD` column — the `IQA_pytorch`
   (`dingkeyan93/IQA-optimization`, alexhepburn nlpd-tensorflow lineage)
   `NLPD(channels=1)` configuration, a *different metric* from the
