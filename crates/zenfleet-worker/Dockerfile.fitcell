@@ -1,0 +1,37 @@
+# A fit-only tag of the canonical zenfleet-worker package. Python and the
+# current-main Rust fit binaries are baked in; boot performs no installation.
+#
+# Base is Ubuntu 26.04 (glibc 2.43), the same userland as the dev box and the LAN
+# workers: the fit binaries are glibc-dynamic builds from a clean current-main
+# snapshot, so libm results match the machine that produced the reference cells.
+# (A static-musl build was tried first; its libm and allocator behaviour produced
+# different fit numerics and 4-6x slower training, so it is not used for the fit.)
+# Base images are pinned by digest: fit numerics depend on the libc (musl gave SROCC 0.9466 where glibc
+# gave 0.9499), so an unpinned base is an unpinned numerics input.
+FROM ghcr.io/imazen/zenfleet-worker:latest@sha256:3a7652755a81cfd623ed7d2c05ac778d4df7df57ee00c30c8443051f0d28c2c3 AS workerbase
+
+FROM ubuntu:26.04@sha256:513c074113a871b51a8d16ab445c88779d6452d937a164fb5cc479f32668a41d
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash ca-certificates coreutils gzip tar util-linux python3 python3-venv && \
+    rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir \
+    numpy==2.5.2 pandas==3.0.5 pyarrow==25.0.1 scipy==1.18.1 \
+    python-dateutil==2.9.0.post0 six==1.17.0 threadpoolctl==3.6.0 && \
+    printf '#!/bin/sh\nexec /opt/venv/bin/python3 "$@"\n' > /usr/local/bin/python3 && \
+    chmod 0755 /usr/local/bin/python3 && ln -s python3 /usr/local/bin/python
+COPY --from=workerbase /usr/local/bin/s5cmd /usr/local/bin/s5cmd
+COPY --from=workerbase /usr/local/aws-cli /usr/local/aws-cli
+COPY --from=workerbase /usr/local/bin/aws /usr/local/bin/aws
+COPY --chmod=0755 zenfleet-worker /usr/local/bin/zenfleet-worker
+COPY --chmod=0755 fleet-entrypoint.sh /usr/local/bin/fleet-entrypoint.sh
+COPY --chmod=0755 tmpdir_discipline.sh /usr/local/bin/tmpdir_discipline.sh
+COPY program.tar.gz /opt/fleet-fits/program.tar.gz
+ARG FIT_PROGRAM_SHA
+RUN echo "${FIT_PROGRAM_SHA}  /opt/fleet-fits/program.tar.gz" | sha256sum -c - && \
+    mkdir -p /opt/fleet-fits/program && \
+    tar -xzf /opt/fleet-fits/program.tar.gz -C /opt/fleet-fits/program && \
+    install -m 0755 /opt/fleet-fits/program/fit_cell_exec.py /usr/local/bin/fit-cell-exec && \
+    rm /opt/fleet-fits/program.tar.gz
+ENV ZEN_EXEC=/usr/local/bin/fit-cell-exec
+ENV ZEN_FIT_PROGRAM_SHA=${FIT_PROGRAM_SHA}
+ENTRYPOINT ["/usr/local/bin/fleet-entrypoint.sh"]

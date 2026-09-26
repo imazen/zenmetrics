@@ -374,6 +374,7 @@ while :; do
     --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "$ZEN_RUN/blobs" \
     --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "$ZEN_RUN/claims" \
     ${ZEN_SPEC_THRESHOLD_SECS:+--spec-threshold-secs "$ZEN_SPEC_THRESHOLD_SECS"} \
+    ${ZEN_CLAIM_TTL_SECS:+--claim-ttl-secs "$ZEN_CLAIM_TTL_SECS"} \
     ${ZEN_CONTROL_KEY:+--control-r2-key "$ZEN_CONTROL_KEY"} \
     ${ZEN_CAPABILITY:+$(for c in ${ZEN_CAPABILITY//,/ }; do printf -- '--capability %s ' "$c"; done)} \
     ${ZEN_CLAIM_MODE:+--claim-mode "$ZEN_CLAIM_MODE"} \

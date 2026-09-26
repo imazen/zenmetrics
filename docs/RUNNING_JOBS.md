@@ -29,7 +29,8 @@ production-proven versus what you supply (the **executor** for real encode/score
 
 ### Job kinds (`zenfleet_core::JobKind`)
 `Encode {codec,q,knobs}` · `Metric {metric}` · `ScoreFile {metrics, hdr, hdr_transfer}` ·
-`Feature {regime}` · `Diffmap {metric}` · `Resample {kernel,w,h}` · `Bake {view}`. Each has a
+`Feature {regime}` · `FitCell {program_sha,data_sha,argv_sha,argv}` · `Diffmap {metric}` ·
+`Resample {kernel,w,h}` · `Bake {view}`. Each has a
 `profile()` giving its **resource class** (`CpuLight/CpuHeavy/CpuArm/Gpu/HighRam` — for capability
 routing) and **GC regenerability** (expensive encodes are kept; cheap re-scores are an LRU cache).
 
@@ -39,6 +40,67 @@ every metric for every variant (the `SourceSha` grouping made concrete). Manifes
 `scripts/jobsys/build_scorefile_manifest.py` / `build_scorefile_from_pairs.py`; write-back via
 `scripts/jobsys/writeback_scores.py`. For HDR corpora see "HDR ScoreFile" below.
 
+### Fit cells (Rev4 feature-potential transport)
+
+`FitCell` carries the SHA-256 of a baked program archive (including the fit
+executor, scripts and Rust binaries), a content-addressed data archive, and
+the canonical JSON argv bytes. All three hashes enter the
+job ID. `zenfleet-ctl declare-fits --spec <spec.json> --out <manifest.json>`
+validates those hashes, rejects duplicate work, and attaches the
+`fit-cell-v1` capability so an older executor cannot claim a fit. The worker,
+store, and ledger handle these jobs exactly like other kinds; the executor
+returns a tarred cell directory with `result.json`, the selected checkpoint,
+and `fleet_receipt.json` containing per-file hashes. The fit image is a new
+tag of the canonical `zenfleet-worker` package. The executor removes a cell's
+scratch fit directory only after it has assembled the complete output bytes;
+the worker then persists those bytes in the content-addressed store. The
+verified input archive remains cached between cells. The image is built through
+`scripts/jobsys/build_executor_image.sh` with `FIT_CELL_IMAGE=1`,
+`ZEN_FIT_PROGRAM_TAR`, `ZEN_FIT_PROGRAM_SHA`, and `ZEN_WORKER_BIN` set.
+Python, Rust binaries, and the fit program are present at image build time. The fit image is
+Ubuntu 26.04 (glibc 2.43, the workers' userland) with glibc-dynamic fit binaries; results are
+bit-identical across non-AVX-512 workers but differ from AVX-512 hosts (see the fleet-fits
+prereg amendment).
+`write_fit_build_meta.py` verifies every git-sourced crate against fetched
+main/master commits and records workspace commits plus registry checksums.
+The worker performs no boot-time installation. `scripts/jobsys/build_fit_spec.py`
+adapts the registered P0 grid, and `pack_fit_data.py` archives only explicitly
+named admitted input sets. A held-out set's byte-level packaging must be
+entered in the owning exposure ledger before use.
+Fit cells use the measured scheduling cost (400 s for H32, 1600 s for H128 cells; the hint is only
+a packing estimate) and a fixed 24 h per-cell watchdog (`cell_deadline_secs`), because a fit's wall
+time varies ~8x across worker CPUs (a P0 H128 cell is 9,010 s alone on one worker and 6-10 h under
+contention). Set `ZEN_PASS_TIMEOUT` well above that (production used 30 days); a value such as 9000
+would kill a running H128 cell.
+
+**Leases.** A fit chunk is one multi-hour cell, so the worker renews the chunk's claim on a timer
+(every `ZEN_CLAIM_TTL_SECS / 3`, only while the pending work contains a `FitCell`; the beat re-reads
+the claim and writes only if it still names this worker, conditional on the ETag). The default TTL
+(600 s) is therefore correct for fits: a live cell is never stolen, and a dead worker's cell requeues
+after one TTL. `ZEN_CLAIM_TTL_SECS` / `ZEN_STALE_CLAIM_SEC` (forwarded by `lan_score_launch.sh`) still
+set that dead-worker window. A requeue needs a worker that still serves the jobset.
+
+**Drain caveat.** `drain: true` only stops workers from *starting* new passes; a pass that is already
+running keeps claiming cells (fit jobsets that were drained still produced new DONE cells). To move
+work to a newer jobset, declare the remaining cells there and let the old jobset's workers finish, and
+never leave a claimed cell in a drained jobset: nothing will re-claim it. Run
+`scripts/jobsys/fit_grid_coverage.py` (below) before declaring a grid finished.
+
+**Tier cap on AVX-512 hosts.** Fit programs built before zensim main `322514dc` (tier parity) give
+different bits on AVX-512 than on AVX2. `fit_cell_exec.py` refuses to run on a CPU with `avx512f`
+unless `ZENSIM_MAX_TIER=v3` is set (unless the program sha is listed in `TIER_PARITY_PROGRAMS`), and it
+records the effective tier in `fleet_receipt.json`; `harvest_fit_cells.py` rejects a recorded non-AVX2
+tier for a program without tier parity. Receipts written before the tier was recorded are accepted and
+reported as `unrecorded`.
+
+**Harvest and coverage.** `harvest_fit_cells.py` verifies every DONE blob (blob sha, receipt, file
+hashes, checkpoint, importance binding), reports jobs with more than one DONE row, and installs one copy
+per cell: a local original is rescued, an installed fleet copy is never replaced, and a duplicate fleet
+copy from another jobset must agree on the science fields or the install aborts.
+`fit_grid_coverage.py --grid-manifest <registered grid> --jobset ...` proves the union of DONE cells
+across jobsets equals the grid (960 P0 / 960 P2 / 210 D2) and lists every missing cell with its claim
+owner and age, marking cells that no served jobset can run as STRANDED. Its exit 0 is the precondition
+for the fleet-fits DONE report. `test_fit_tools.py` holds the negative controls for both scripts.
 ### HDR ScoreFile (persisted-pairs HDR corpora, e.g. kadis-hdr)
 
 `ScoreFile { hdr: true, hdr_transfer }` scores an HDR corpus through the job system instead of an

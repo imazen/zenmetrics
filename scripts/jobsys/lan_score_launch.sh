@@ -22,6 +22,8 @@
 #        (the tower rule: e.g. ZEN_CPUSET=0-23 ZEN_CPU_SHARES=256 ZEN_MEMORY=24g — before 2026-08-30
 #        the remote read these but the ssh line never forwarded them, so tower launches were uncapped
 #        unless hand-run).
+#        ZEN_MAX_MIN -> worker wall budget (default 1400 minutes); long fit runs
+#        may raise it without changing the default for score jobs.
 #        ZEN_FORMULA_REV=1|2 -> the zensim formula revision this worker extracts at. A Feature
 #        manifest declared with --revision N is REFUSED by every executor whose environment
 #        disagrees, so a rev2 wave MUST set this or every cell fails. One wave, one revision.
@@ -101,7 +103,8 @@ CTR="zen-score-${ROLE}"
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
     ZM_FORMULA_REV="${ZEN_FORMULA_REV:-}" \
-  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_TMPDIR_HOST_DIR="${ZEN_TMPDIR_HOST_DIR:-}" 'bash -s' <<'REMOTE'
+    ZM_CLAIM_TTL="${ZEN_CLAIM_TTL_SECS:-}" ZM_STALE_CLAIM="${ZEN_STALE_CLAIM_SEC:-}" \
+  ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_MAX_MIN="${ZEN_MAX_MIN:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_TMPDIR_HOST_DIR="${ZEN_TMPDIR_HOST_DIR:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
 export ZEN_STORE="${ZM_STORE:-tower}"
 S3ENV="$HOME/.config/zen/s3env.sh"
@@ -126,6 +129,9 @@ fi
 mkdir -p "$SCRATCH_HOST_DIR"
 TMPDIR_ARGS=(-e TMPDIR=/scratch -v "$SCRATCH_HOST_DIR:/scratch")
 
+# docker via passwordless sudo when the box has it, else the invoking user's docker group
+if sudo -n true 2>/dev/null; then DK="sudo -n docker"; else DK="docker"; fi
+
 GPU_ARGS=(); REQ_GPU=()
 if [ "$ZM_KIND" = "gpu" ]; then GPU_ARGS=(--gpus all); REQ_GPU=(-e ZEN_REQUIRE_GPU=1); fi
 # ZENMETRICS_VRAM_CAP_BYTES makes the GPU metric's auto mode pick Strip (bounded
@@ -148,6 +154,10 @@ ENCP=(); [ -n "${ZM_ENC_PREFIX:-}" ] && ENCP=(-e "ZEN_ENCODES_PREFIX=$ZM_ENC_PRE
 [ -n "${ZM_PASS_TIMEOUT:-}" ] && ENCP+=(-e "ZEN_PASS_TIMEOUT=$ZM_PASS_TIMEOUT")
 [ -n "${ZM_CHUNK_WALL:-}" ] && ENCP+=(-e "ZEN_CHUNK_WALL_SEC=$ZM_CHUNK_WALL")
 [ -n "${ZM_CAPABILITY:-}" ] && ENCP+=(-e "ZEN_CAPABILITY=$ZM_CAPABILITY")
+# Long single-cell chunks (Rev4 fit cells run hours): the 600 s lease and 1800 s stale-claim defaults
+# would let other workers re-claim a live cell, because lease renewal only fires on completions.
+[ -n "${ZM_CLAIM_TTL:-}" ] && ENCP+=(-e "ZEN_CLAIM_TTL_SECS=$ZM_CLAIM_TTL")
+[ -n "${ZM_STALE_CLAIM:-}" ] && ENCP+=(-e "ZEN_STALE_CLAIM_SEC=$ZM_STALE_CLAIM")
 # The zensim FORMULA REVISION is a LAUNCH-level pin, not a per-job setting: zensim reads
 # ZENSIM_FORMULA_REV once per process into a OnceLock, and the worker reuses one warm child
 # across jobs, so a child that has already resolved the variable cannot serve the other
@@ -164,17 +174,17 @@ CAPS=()
 [ -n "${ZM_CPU_SHARES:-}" ] && CAPS+=(--cpu-shares "$ZM_CPU_SHARES")
 [ -n "${ZM_MEMORY:-}" ] && CAPS+=(--memory "$ZM_MEMORY")
 
-sudo -n docker pull "$ZM_IMG" >/dev/null 2>&1 || true
-sudo -n docker rm -f "$ZM_CTR" >/dev/null 2>&1 || true
-sudo -n docker run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" "${TMPDIR_ARGS[@]}" \
+$DK pull "$ZM_IMG" >/dev/null 2>&1 || true
+$DK rm -f "$ZM_CTR" >/dev/null 2>&1 || true
+$DK run -d --name "$ZM_CTR" ${CAPS[@]+"${CAPS[@]}"} --restart on-failure:5 "${GPU_ARGS[@]}" "${VRAM[@]}" "${ENCP[@]}" "${TMPDIR_ARGS[@]}" \
   -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_REGION=auto \
   -e ZEN_R2_ENDPOINT="$EP" -e ZEN_BUCKET="$ZM_BUCKET" \
   -e ZEN_RUN="jobs/$ZM_JOBSET" \
   -e ZEN_MANIFEST_URI="s3://$ZM_BUCKET/jobs/$ZM_JOBSET/manifest.json" \
   -e ZEN_CONTROL_KEY="jobs/$ZM_JOBSET/control.json" \
   "${REQ_GPU[@]}" -e ZEN_WORKER="$WORKER" -e ZEN_PROVIDER=lan \
-  -e ZEN_MAX_MIN=1400 -e ZEN_IDLE_PASSES="${ZM_IDLE_PASSES:-8}" -e ZEN_CORE_OVERSUBSCRIBE="${ZM_OVERSUB:-2}" \
+  -e ZEN_MAX_MIN="${ZM_MAX_MIN:-1400}" -e ZEN_IDLE_PASSES="${ZM_IDLE_PASSES:-8}" -e ZEN_CORE_OVERSUBSCRIBE="${ZM_OVERSUB:-2}" \
   -e ZEN_LONG_LIVED="${ZM_LONG_LIVED:-0}" \
   --entrypoint /usr/local/bin/fleet-entrypoint.sh "$ZM_IMG" >/dev/null
-echo "$(hostname) -> $ZM_JOBSET as $WORKER [store=$ZEN_S3_STORE ep=$EP] : $(sudo -n docker ps --format '{{.Names}} {{.Status}}' | grep "$ZM_CTR" || echo FAILED-TO-START)"
+echo "$(hostname) -> $ZM_JOBSET as $WORKER [store=$ZEN_S3_STORE ep=$EP] : $($DK ps --format '{{.Names}} {{.Status}}' | grep "$ZM_CTR" || echo FAILED-TO-START)"
 REMOTE

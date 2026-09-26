@@ -45,6 +45,28 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # escape hatch; the default is unchanged, so nothing about an existing invocation moves.
 DOCKER="${DOCKER:-docker}"
 IMAGE="${1:-ghcr.io/imazen/zenfleet-worker:exec}"
+if [ "${FIT_CELL_IMAGE:-0}" = "1" ]; then
+  read -r -a FIT_DOCKER_CMD <<< "$DOCKER"
+  : "${ZEN_FIT_PROGRAM_TAR:?set ZEN_FIT_PROGRAM_TAR to the baked program.tar.gz}"
+  : "${ZEN_FIT_PROGRAM_SHA:?set ZEN_FIT_PROGRAM_SHA to its sha256}"
+  : "${ZEN_WORKER_BIN:?set ZEN_WORKER_BIN to the current-main worker binary}"
+  [ -x "$ZEN_WORKER_BIN" ] || { echo "worker binary missing" >&2; exit 1; }
+  echo "$ZEN_FIT_PROGRAM_SHA  $ZEN_FIT_PROGRAM_TAR" | sha256sum -c -
+  mkdir -p "${TMPDIR:-$HOME/tmp}"
+  CTX="$(mktemp -d "${TMPDIR:-$HOME/tmp}/fitctx.XXXXXX")"
+  trap 'rm -rf "$CTX"' EXIT
+  cp "$ZEN_FIT_PROGRAM_TAR" "$CTX/program.tar.gz"
+  cp "$ZEN_WORKER_BIN" "$CTX/zenfleet-worker"
+  cp "$ROOT/crates/zenfleet-worker/fleet-entrypoint.sh" "$CTX/fleet-entrypoint.sh"
+  cp "$ROOT/crates/zenfleet-worker/tmpdir_discipline.sh" "$CTX/tmpdir_discipline.sh"
+  cp "$ROOT/crates/zenfleet-worker/Dockerfile.fitcell" "$CTX/Dockerfile"
+  "${FIT_DOCKER_CMD[@]}" build --build-arg "FIT_PROGRAM_SHA=$ZEN_FIT_PROGRAM_SHA" -t "$IMAGE" "$CTX"
+  "${FIT_DOCKER_CMD[@]}" run --rm --entrypoint /bin/bash "$IMAGE" -lc \
+    'for tool in aws s5cmd zenfleet-worker gunzip timeout findmnt; do command -v "$tool" >/dev/null || exit 1; done'
+  "${FIT_DOCKER_CMD[@]}" run --rm --entrypoint /usr/local/bin/fit-cell-exec "$IMAGE" capabilities | grep -qx fit-cell-v1
+  if [ "${PUSH:-0}" = "1" ]; then "${FIT_DOCKER_CMD[@]}" push "$IMAGE"; fi
+  exit 0
+fi
 BIN="${ZEN_METRICS_BIN:-$ROOT/target/release/zenmetrics}"
 [ -x "$BIN" ] || { echo "build zenmetrics first (see header); not found at $BIN"; exit 1; }
 
