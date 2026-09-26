@@ -118,6 +118,14 @@ jobs:
         # defaulting to /tmp. Pure-logic, no cloud, no GPU, no secrets.
         if: matrix.os == 'ubuntu-latest'
         run: just test-tmpdir-discipline
+      - name: Install libvmaf build tools (ubuntu)
+        # `vmaf-head-sys` (a dev-dependency of the vmaf and msssim crates, the libvmaf
+        # parity oracle) compiles libvmaf with Meson + Ninja + NASM (x86) in its build
+        # script; the ubuntu runner ships none of them, and `--all-targets` below builds
+        # dev-dependencies ("Meson is required to build vmaf-head-sys ... 'meson' was
+        # not found"). `xxd`, also required, is preinstalled.
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y meson ninja-build nasm
       - name: Build workspace (wgpu + cpu, build-only)
         # Disabled until 2026-05-26 because `[profile.release]` carried
         # `lto = "fat"` + `debug = "full"` + `codegen-units = 1`, which
@@ -308,6 +316,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: zenmetrics-doctests
+      - name: Install libvmaf build tools (macOS)
+        # `cargo test --doc` builds the workspace crates with their dev-dependencies, so
+        # `vmaf-head-sys` (libvmaf via Meson + Ninja; NASM is only used on x86) is compiled
+        # here and fails with "Meson is required to build vmaf-head-sys" on a bare runner.
+        run: brew install meson ninja nasm
       - name: Run doctests
         run: cargo test --workspace --no-default-features --features wgpu,all-metrics --doc --release
 
