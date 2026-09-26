@@ -183,6 +183,15 @@ cpu-metrics = [
     # VIFp (in-tree `vif` crate, port of the authors' `vifp_mscale.m`):
     # CPU-only, called directly.
     "cpu-vif",
+    # vifvec (in-tree `vif` crate, clean-room of the authors' original
+    # `vifvec.m` steerable-pyramid release — the JPEG AIC-4 `VIF` column's
+    # implementation): CPU-only, called directly.
+    "cpu-vifvec",
+    # IW-SSIM with the piq/AIC-4 unrounded-YIQ luma ingress (same in-tree
+    # `iwssim` crate, `LumaConvention::YiqUnrounded`): CPU-only, called
+    # directly. Distinct metric column — different ingress convention from
+    # the Python-IW-SSIM `iwssim` path.
+    "cpu-iwssim-piq",
     # MAD (in-tree `mad-iqa` crate, port of the authors'
     # `hi_index.m`/`lo_index.m` + `ical_std`/`ical_stat` C-mex):
     # CPU-only, called directly.
@@ -214,6 +223,8 @@ cpu-fsim = ["dep:fsim"]
 cpu-vsi = ["dep:vsi"]
 cpu-msssim = ["dep:msssim"]
 cpu-vif = ["dep:vif"]
+cpu-vifvec = ["dep:vif"]
+cpu-iwssim-piq = ["dep:iwssim"]
 cpu-mad = ["dep:mad-iqa"]
 cpu-mdctpsnr = ["dep:mdctpsnr"]
 cpu-vmaf = ["dep:vmaf"]
@@ -592,6 +603,7 @@ fsim = { workspace = true, optional = true, features = ["std", "avx512"] }
 vsi = { workspace = true, optional = true, features = ["std", "avx512"] }
 msssim = { workspace = true, optional = true, features = ["std", "avx512"] }
 vif = { workspace = true, optional = true, features = ["std", "avx512"] }
+iwssim = { workspace = true, optional = true, features = ["std"] }
 mad-iqa = { workspace = true, optional = true, features = ["std", "avx512"] }
 mdctpsnr = { workspace = true, optional = true, features = ["std"] }
 vmaf = { workspace = true, optional = true, features = ["simd"] }

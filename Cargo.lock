@@ -7566,6 +7566,7 @@ dependencies = [
  "hex",
  "image",
  "imgref",
+ "iwssim",
  "jxl-encoder",
  "mad-iqa",
  "mdctpsnr",

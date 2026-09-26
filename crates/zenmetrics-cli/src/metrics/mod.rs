@@ -190,6 +190,17 @@ pub enum MetricKind {
     /// return an error. Emits the CPU column name (`iwssim_cpu_imazen_v*`).
     #[value(name = "iwssim")]
     Iwssim,
+    /// IW-SSIM with the **piq / JPEG AIC-4 ingress** — identical
+    /// in-tree `iwssim` algorithm, but the RGB→luma conversion is
+    /// piq's unrounded `rgb2yiq` channel 0 (`0.299/0.587/0.114`,
+    /// 0–255, no u8 rounding) instead of the Python-IW-SSIM
+    /// reference's rounded BT.601. This is the convention the
+    /// published AIC-4 `IW-SSIM` column was computed under
+    /// (med|Δ| = 1.3e-6 vs `metrics_fullres.tab`, 53 pairs,
+    /// 2026-09-25). Emits `iwssim_piq_imazen_v*` so it never mixes
+    /// with `iwssim`'s column in a join. CPU-only.
+    #[value(name = "iwssim-piq")]
+    IwssimPiq,
     /// GMSD (Gradient Magnitude Similarity Deviation, Xue et al. 2014) —
     /// CPU implementation via the in-tree `gmsd` crate (a port of
     /// libgmsd). Distance: 0 = identical, larger = worse; typical values
@@ -289,6 +300,17 @@ pub enum MetricKind {
     /// through the umbrella or the orchestrator.
     #[value(name = "vif")]
     Vif,
+    /// vifvec — the *original* steerable-pyramid vector-GSM VIF
+    /// (in-tree `vif` crate, clean-room of the authors' `vifvec.m`
+    /// release + matlabPyrTools `sp5Filters`/`buildSpyr`): 4-level
+    /// steerable pyramid, 3×3 vector-GSM neighbourhoods, subbands
+    /// [4 7 10 13 16 19 22 25], σn² = 0.4. **A different metric from
+    /// `vif`** (VIFp) that shares the name in the literature — this
+    /// is the implementation the JPEG AIC-4 `VIF` column was computed
+    /// with (u8-rounded `round(0.299R+0.587G+0.114B)` luma; Δ ≤ 5e-5
+    /// vs GNU Octave `vifvec.m`). Emits `vifvec_imazen_v*`. CPU-only.
+    #[value(name = "vifvec")]
+    VifVec,
     /// MAD — Most Apparent Distortion (in-tree `mad-iqa` crate, port
     /// of the authors' `hi_index.m`/`lo_index.m` + `ical_std`/
     /// `ical_stat` C-mex): DISTANCE score ≥ 0, 0 = identical,
@@ -371,6 +393,7 @@ impl MetricKind {
             MetricKind::Cvvdp,
             MetricKind::CvvdpGpu,
             MetricKind::Iwssim,
+            MetricKind::IwssimPiq,
             MetricKind::Gmsd,
             MetricKind::Mdsi,
             MetricKind::MsGmsd,
@@ -385,6 +408,7 @@ impl MetricKind {
             MetricKind::Vsi,
             MetricKind::Msssim,
             MetricKind::Vif,
+            MetricKind::VifVec,
             MetricKind::Mad,
             MetricKind::SsimLibvmaf,
             MetricKind::MsssimLibvmaf,
@@ -418,6 +442,7 @@ impl MetricKind {
             MetricKind::Cvvdp => "cvvdp",
             MetricKind::CvvdpGpu => "cvvdp-gpu",
             MetricKind::Iwssim => "iwssim",
+            MetricKind::IwssimPiq => "iwssim-piq",
             MetricKind::Gmsd => "gmsd",
             MetricKind::Mdsi => "mdsi",
             MetricKind::MsGmsd => "ms-gmsd",
@@ -432,6 +457,7 @@ impl MetricKind {
             MetricKind::Vsi => "vsi",
             MetricKind::Msssim => "msssim",
             MetricKind::Vif => "vif",
+            MetricKind::VifVec => "vifvec",
             MetricKind::Mad => "mad",
             MetricKind::SsimLibvmaf => "ssim-libvmaf",
             MetricKind::MsssimLibvmaf => "msssim-libvmaf",
@@ -524,6 +550,7 @@ impl MetricKind {
             MetricKind::Cvvdp => &[CVVDP_CPU_BASE],
             MetricKind::CvvdpGpu => &[CVVDP_GPU_BASE],
             MetricKind::Iwssim => IWSSIM_CPU_COLUMNS,
+            MetricKind::IwssimPiq => IWSSIM_PIQ_CPU_COLUMNS,
             MetricKind::Gmsd => GMSD_CPU_COLUMNS,
             MetricKind::Mdsi => MDSI_CPU_COLUMNS,
             MetricKind::MsGmsd => &["ms_gmsd_paper_cpu_imazen_v0_1_0"],
@@ -538,6 +565,7 @@ impl MetricKind {
             MetricKind::Vsi => VSI_CPU_COLUMNS,
             MetricKind::Msssim => MSSSIM_CPU_COLUMNS,
             MetricKind::Vif => VIF_CPU_COLUMNS,
+            MetricKind::VifVec => VIFVEC_CPU_COLUMNS,
             MetricKind::Mad => MAD_CPU_COLUMNS,
             MetricKind::SsimLibvmaf => SSIM_LIBVMAF_CPU_COLUMNS,
             MetricKind::MsssimLibvmaf => MSSSIM_LIBVMAF_CPU_COLUMNS,
@@ -571,8 +599,10 @@ impl MetricKind {
                 | MetricKind::FsimY
                 | MetricKind::Msssim
                 | MetricKind::Vif
+                | MetricKind::VifVec
                 | MetricKind::Mad
                 | MetricKind::Iwssim
+                | MetricKind::IwssimPiq
         )
     }
 }
@@ -594,8 +624,10 @@ pub enum LumaIngress {
     /// the pipeline it mimics runs). pyiqa's `to_y_channel` is the same
     /// transform unrounded and uncropped, so scores land within ~u8-rounding
     /// and an edge-row of that family too. This is the ingress the JPEG AIC-4
-    /// published `SSIM`/`MS-SSIM`/`VMAF`/`VIF` luma columns were computed
-    /// with — see `docs/METRIC_PROVENANCE.md`.
+    /// published `SSIM`/`MS-SSIM`/`VMAF`/`VIF_vmaf` luma columns were
+    /// computed with — see `docs/METRIC_PROVENANCE.md`. (The plain `VIF`
+    /// column is *not* studio-601 — it is vifvec on u8-rounded full-range
+    /// `0.299/0.587/0.114`; measured 2026-09-26.)
     #[value(name = "yuv601-studio")]
     Yuv601Studio,
 }
@@ -871,6 +903,22 @@ const MSSSIM_CPU_COLUMNS: &[&str] = &["msssim"];
 const VIF_CPU_COLUMNS: &[&str] = &[vif::VIF_COLUMN_NAME];
 #[cfg(not(feature = "cpu-vif"))]
 const VIF_CPU_COLUMNS: &[&str] = &["vif"];
+
+// Versioned CPU vifvec column (`vif::VIFVEC_COLUMN_NAME`, default
+// `vifvec_imazen_v*`, overridable via `VIFVEC_IMPL_TAG`). Without
+// `cpu-vifvec` a bare `"vifvec"`.
+#[cfg(feature = "cpu-vifvec")]
+const VIFVEC_CPU_COLUMNS: &[&str] = &[vif::VIFVEC_COLUMN_NAME];
+#[cfg(not(feature = "cpu-vifvec"))]
+const VIFVEC_CPU_COLUMNS: &[&str] = &["vifvec"];
+
+// Versioned CPU iwssim-piq column (`iwssim::IWSSIM_PIQ_COLUMN_NAME`,
+// default `iwssim_piq_imazen_v*`, overridable via `IWSSIM_PIQ_IMPL_TAG`).
+// Without `cpu-iwssim-piq` a bare `"iwssim_piq"`.
+#[cfg(feature = "cpu-iwssim-piq")]
+const IWSSIM_PIQ_CPU_COLUMNS: &[&str] = &[iwssim::IWSSIM_PIQ_COLUMN_NAME];
+#[cfg(not(feature = "cpu-iwssim-piq"))]
+const IWSSIM_PIQ_CPU_COLUMNS: &[&str] = &["iwssim_piq"];
 
 // libvmaf-feature columns — fixed names (they are the vendored libvmaf
 // feature names, not versioned `*_imazen_v*` identifiers).
@@ -1869,6 +1917,19 @@ pub fn run_metric(
         MetricKind::Vif => run_cpu_vif(reference, distorted),
         #[cfg(not(feature = "cpu-vif"))]
         MetricKind::Vif => Err(disabled_msg("vif", "cpu-vif")),
+        #[cfg(feature = "cpu-vifvec")]
+        MetricKind::VifVec => run_cpu_vifvec(reference, distorted),
+        #[cfg(not(feature = "cpu-vifvec"))]
+        MetricKind::VifVec => Err(disabled_msg("vifvec", "cpu-vifvec")),
+        // iwssim-piq: same in-tree crate, piq (unrounded YIQ) luma
+        // ingress — direct call, same shape as vif/mad.
+        #[cfg(feature = "cpu-iwssim-piq")]
+        MetricKind::IwssimPiq => Ok(vec![(
+            IWSSIM_PIQ_CPU_COLUMNS[0],
+            run_cpu_iwssim_piq(reference, distorted)?,
+        )]),
+        #[cfg(not(feature = "cpu-iwssim-piq"))]
+        MetricKind::IwssimPiq => Err(disabled_msg("iwssim-piq", "cpu-iwssim-piq")),
         #[cfg(feature = "cpu-mad")]
         MetricKind::Mad => run_cpu_mad(reference, distorted),
         #[cfg(not(feature = "cpu-mad"))]
@@ -2096,6 +2157,51 @@ fn run_cpu_vif(
     let (w, h) = (reference.width as usize, reference.height as usize);
     let s = vif::vif_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
     Ok(vec![(VIF_CPU_COLUMNS[0], s)])
+}
+
+/// vifvec of two decoded sRGB8 images (`vif::vifvec_rgb8` — the
+/// original steerable-pyramid vector-GSM VIF; u8-rounded
+/// `0.299/0.587/0.114` luma ingress matching the published AIC-4
+/// `VIF` column).
+#[cfg(feature = "cpu-vifvec")]
+fn run_cpu_vifvec(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "vifvec: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let (w, h) = (reference.width as usize, reference.height as usize);
+    let s = vif::vifvec_rgb8(&reference.pixels, &distorted.pixels, w, h, w * 3)?;
+    Ok(vec![(VIFVEC_CPU_COLUMNS[0], s)])
+}
+
+/// IW-SSIM of two decoded sRGB8 images under the piq ingress —
+/// `IwssimParams::piq_luma()` (unrounded `rgb2yiq` channel 0). Same
+/// in-tree algorithm as `iwssim`; only the RGB→luma convention
+/// differs. Subject to the same `min(W,H) >= 176` pyramid constraint.
+#[cfg(feature = "cpu-iwssim-piq")]
+fn run_cpu_iwssim_piq(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    if (reference.width, reference.height) != (distorted.width, distorted.height) {
+        return Err(format!(
+            "iwssim-piq: dimension mismatch {}x{} vs {}x{}",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let mut m = iwssim::Iwssim::with_params(
+        reference.width,
+        reference.height,
+        iwssim::IwssimParams::piq_luma(),
+    )?;
+    Ok(m.score(&reference.pixels, &distorted.pixels)?.score)
 }
 
 #[cfg(feature = "cpu-mad")]
