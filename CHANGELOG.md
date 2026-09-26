@@ -26,7 +26,7 @@ Workspace conventions per the global rules:
   house-luma variants `psnr-y`/`psnr-y601` now accept
   `--luma-ingress yuv601-studio` (`is_luma_only`); the fixed-convention
   variants do not (a second swing isn't idempotent).
-- iwssim + iwssim-piq: fixed a real porting bug in the IW weighting —
+- iwssim + iwssim-piq (`9bb02049`, cli `0c02bf42`): fixed a real porting bug in the IW weighting —
   the GSM eigendecomposition was fed the next **Gaussian** pyramid
   level as the parent band where both references (MATLAB `iwssim_rgb.m`
   `pyrBand(pyro,pind,nband+1)`, Python-IW-SSIM `imgopr[scale+1]`, and
@@ -41,7 +41,7 @@ Workspace conventions per the global rules:
   column `iwssim_piq_imazen_v0_1_0`. Reproduces the AIC-4 `IW-SSIM`
   column at med |Δ| 3.9e-6 / max 2.6e-5 (n=54; the earlier +1.2e-3
   systematic gap is gone).
-- vifvec: new `vifvec` module in `crates/vif` — the *original*
+- vifvec (`c977af2f`, cli `0c02bf42`): new `vifvec` module in `crates/vif` — the *original*
   steerable-pyramid vector-GSM VIF (Sheikh & Bovik 2006; a different
   algorithm from `vifp` sharing the name). Clean-room reimplementation
   of the authors' `vifvec.m` + matlabPyrTools `sp5Filters`/`buildSpyr`/
