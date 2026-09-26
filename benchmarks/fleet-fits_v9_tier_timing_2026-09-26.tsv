@@ -1,0 +1,35 @@
+# zensim main 322514dc release zensim_mlp_train; dev box Zen5 AVX-512; 1 pinned CPU (round1 cpu8, round2 cpu3), RAYON_NUM_THREADS=1, 10 epochs, 16 worker containers running on other cpus; capped=ZENSIM_MAX_TIER=v3
+# cmd: /var/tmp/fleet-fits/v9time/bench.sh (+bench2.sh); folds: P0 inner0 of POT_kadid_train_r0_mlp32/o0_r0 and POT_aic3_minus_basic_mlp128/o0_r0
+fold	tier	trial	wall_s	user_s
+h32	capped	1	30.37	30.24
+h128	capped	1	112.55	112.31
+h32	uncapped	1	33.97	30.30
+h128	uncapped	1	132.09	91.33
+h32	capped	2	32.21	28.10
+h128	capped	2	121.43	121.15
+h32	uncapped	2	31.09	30.97
+h128	uncapped	2	112.18	111.57
+h32	capped	3	32.75	32.52
+h128	capped	3	133.31	132.70
+h32	uncapped	3	35.46	31.38
+h128	uncapped	3	104.41	96.52
+h32	capped	4	29.10	28.87
+h128	capped	4	110.45	110.28
+h32	uncapped	4	29.25	29.18
+h128	uncapped	4	88.23	88.00
+h32	capped	5	30.31	30.18
+h128	capped	5	113.44	113.06
+h32	uncapped	5	30.41	30.26
+h128	uncapped	5	86.08	85.86
+h32	capped	6	28.88	28.80
+h128	capped	6	110.91	110.73
+h32	uncapped	6	30.08	29.99
+h128	uncapped	6	86.94	86.82
+h32	capped	7	29.17	29.07
+h128	capped	7	104.23	104.11
+h32	uncapped	7	29.34	29.25
+h128	uncapped	7	87.91	87.81
+h32	capped	8	28.32	28.23
+h128	capped	8	107.81	107.65
+h32	uncapped	8	29.57	29.49
+h128	uncapped	8	90.19	90.08

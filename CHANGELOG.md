@@ -337,7 +337,7 @@ Workspace conventions per the global rules:
   newer publishes; the lockfile retains current master entries and the required
   lz4_flex 0.13.1 to 0.14.0 transitive update.
   `ffdbbd45`, `de968357`, `c19824f6`.
-
+- zenfleet: add content-addressed `FitCell` jobs (`zenfleet-ctl declare-fits`) and a baked fit worker image tag for the Rev4 feature-potential grid, with independent blob and receipt verification on harvest. `51cc9460`, `5fcd1800`, `c60ae5e9`.
 - cvvdp: video scoring on the CPU path — `VideoScorer` (streaming
   `push_frame`/`finish`, holds only the temporal-filter window) plus
   `score_video` whole-clip convenience and `Cvvdp::video`. Ports
