@@ -23,6 +23,10 @@ vmaf-head-sys = "=0.2.0"
 name = "backends"
 harness = false
 
+[[bench]]
+name = "arm_stages"
+harness = false
+
 # archmage::incant! checks `cfg(feature = "avx512")` internally even when no
 # AVX-512 tier is listed (same allow as crates/iwssim, crates/gmsd).
 [lints.rust]

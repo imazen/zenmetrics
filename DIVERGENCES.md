@@ -30,12 +30,15 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 | `gmsd` | **libgmsd** (Ponomarenko group) + `GMSD.m` | libgmsd bit-comparison | bit-identical map on even dims; f64 rounding only in score |
 | `iwssim` | **Python-IW-SSIM** @ `f9de37c` (Jack-guo-xy) | committed JSON goldens | identical ≤ 1e-5, distorted ≤ 5e-3; strip-vs-whole ≤ 1e-6 |
 | `psnrhvs` | authors' **`psnrhvsm.m`** (metrix MATLAB) | Octave goldens, `validation/` | ≤ ~4e-4 dB (asserted ≤ 1e-3) |
+| `psnrhvs` (daala module) | Daala/Xiph **`dump_psnrhvs`** as vendored in libvmaf `psnr_hvs` @ **f85a8536** (`vmaf-head-sys 0.2.0`) | libvmaf FFI oracle in `crates/msssim/tests/ffi_libvmaf.rs` | asserted ≤ 2e-4 dB, YUV420+YUV444; observed ≪ gate |
 | `haarpsi` | authors' MIT **`HaarPSI.m`** | Octave goldens, `validation/` | ≤ 5e-5 over 16 rows |
 | `fsim` | authors' **`FR_FSIMc.m`** (research license) | Octave goldens, `validation/` | ≤ 5e-8 over 18 rows |
 | `vsi` | authors' **`VSI.m`** (author site, research license) | Octave + `pkg load image` goldens | ≤ 1e-4 over 14 rows |
 | `msssim` | Wang's **`msssim.m`** (MAD_Competition archive) | Octave goldens, `validation/` | ≤ 8.8e-6 over 15 rows |
+| `msssim` (libvmaf module) | libvmaf **`float_ssim`/`float_ms_ssim`** @ **f85a8536** (vendored via `vmaf-head-sys 0.2.0`, test-only) | libvmaf FFI oracle in `tests/ffi_libvmaf.rs` | asserted ≤ 2e-4; observed ≪ gate (8-bit, 10-bit, identical) |
 | `vif` | authors' **`vifp_mscale.m`** (pixel-domain release) | Octave goldens, `validation/` | ≤ ~5e-13 over 17 rows |
 | `mad-iqa` | Larson & Chandler **`hi_index.m`/`lo_index.m`** + `ical_std.c`/`ical_stat.c` (STMAD_2011, archived in Netflix/vmaf); JEI 2010 combine | Octave `.m` shims of the C-mex + official `.m` drivers | hi 2.4e-7, lo 1.8e-6, mad 1.3e-6 rel over 13 rows |
+| `mdctpsnr` | **`thorfdbg/mDCTpsnr`** (Thomas Richter / U. Stuttgart; zlib-style license), compiled GCC `-O3 -ffast-math` + AVX2 + glibc 2.43 libmvec on x86_64 | the built `dctpsnr` binary + published AIC-4 `mDCT-PSNR` column | ~4e-6 dB on synthetic goldens incl. all `(w−13)%8` classes; AIC-4 53-pair max ~1.13e-5 dB (see entry) |
 | `ssim2` (CPU) | external **`fast-ssim2`** crate (sibling repo; C++ SSIMULACRA2 parity) | fast-ssim2's own parity suite | owned by fast-ssim2 repo |
 | `ssim2-gpu` | published **`ssimulacra2` 0.5** crate | CPU-reference parity tests | FIR path ~5e-5 vs IIR — see entry |
 | `butteraugli` (CPU) | external **`butteraugli`** crate 0.9.4 (imazen fork, path dep) | the crate itself | external — not ported here |
@@ -198,6 +201,29 @@ Deep docs: `crates/hdrvdp/docs/VALIDATION.md`,
   trap as mad-iqa's gen (see below).
 - House luma is unrounded BT.601 (cross-cutting #1).
 
+#### `daala` module (`psnrhvs-daala`) — vs libvmaf `psnr_hvs` (Daala `dump_psnrhvs`)
+
+- **RESOLVED** — `od_bin_fdct8x8` transform order. The C computes the 2-D
+  bin-DCT as column-DCT → (implicit transpose of the intermediate) →
+  column-DCT; each 1-D butterfly chain rounds to `od_coeff` (i32) between
+  stages, so row-first is *not* numerically equivalent (~1.3% higher MSE,
+  ~0.06 dB on the FFI plane). Port matches C's column-first sequence;
+  parity ≤ 2e-4 dB.
+- **EXTENSION** — `DaalaPlane::{Y,Cb,Cr}` selects the reference's three
+  CSF tables; `psnr_hvs_daala_yuv420` and `psnr_hvs_daala_yuv444` cover
+  both chroma geometries (libvmaf itself only ever runs 420). CLI
+  `psnrhvs-daala` uses **YUV444** studio-601 chroma — identified as the
+  AIC-4 convention by matching the published `PSNR-HVS-Cb`/`-Cr`
+  columns (Δ ≤ 0.13 dB over 53 pairs; 420 ingress diverges ~4 dB).
+- **DIVERGES** — u8 plane input only (the reference is an 8-bit
+  integer-arithmetic metric; no hbd variant exists upstream). CLI
+  ingress is *rounded* studio-601 luma/chroma — deliberately unlike
+  cross-cutting #1 (unrounded house luma), because the reference's
+  contract is the quantized plane.
+- Per-plane scores are `-10·log10(masked_MSE)` with the reference's
+  `0.8·Y + 0.1·(Cb+Cr)` MSE-space combine; masking is skipped on the DC
+  term, matching `calc_psnrhvs`.
+
 ### `haarpsi` — vs `HaarPSI.m`
 
 - **Fidelity note** — `conv2(...,'same')` even-kernel anchor is the
@@ -260,6 +286,31 @@ Deep docs: `crates/hdrvdp/docs/VALIDATION.md`,
 - Constant + identical inputs → exactly 1.0; `min < 11` → `TooSmall`
   (reference returns `-Inf`).
 
+#### `libvmaf` module (`ssim-libvmaf`, `msssim-libvmaf`) — vs libvmaf `float_ssim`/`float_ms_ssim` @ f85a8536
+
+- **RESOLVED** — hbd input scaling: libvmaf's `picture_copy` divides
+  bpc>8 planes by `1<<(bpc−8)` *before* the float feature sees them
+  (10-bit → ÷4, i.e. the feature runs in the 8-bit range). First port
+  passed `data/255` naively → ~5e-3 error on 10-bit FFI cases; now the
+  `bpc` parameter mirrors the C scaling exactly.
+- **RESOLVED** — accumulation semantics: `float_ssim` averages the
+  per-pixel l·c·s map in f64 then truncates the mean to f32
+  (`(float)(sum/(double)n)`); `float_ms_ssim` raises those f32-rounded
+  means to the scale weights in f64. Both roundings modeled; parity
+  ≤ 2e-4 (observed ≪ gate).
+- **DIVERGES** — different algorithm family from the crate's Wang
+  `msssim` path on purpose: libvmaf uses a fixed 5-level 9/7-LPF pyramid
+  with weights `0.0448/0.2856/0.3001/0.2363/0.1333` and its own
+  decimate+Gaussian recipe (`scale = round(min_dim/256)` box decimate,
+  11×11 σ1.5 window, zli l·c·s, L=255). The Wang path stays `msssim`;
+  these land as `-libvmaf`-qualified metrics — do not merge the names.
+- **DIVERGES** — CLI ingress is *rounded* studio-601 luma (deliberately
+  unlike cross-cutting #1): libvmaf's float features are defined on the
+  quantized luma plane, and the AIC-4 `SSIM`/`MS-SSIM` columns
+  reproduce at raw med 1.0e-6 / max 1.8e-5 under it.
+- **OUT-OF-SCOPE** — libvmaf's `enable_lcs`/`clip_db` option plumbing is
+  test-oracle only; the module exposes raw scores (the defaults) only.
+
 ### `vif` — vs `vifp_mscale.m`
 
 - **DIVERGES** — f64 end-to-end (cross-cutting #2). Not gratuitous: the
@@ -299,6 +350,53 @@ Deep doc: `crates/mad-iqa/validation/README.md`.
   `MAD_index` mex could reveal a different constant.
 - `min(w,h) < 34` → NaN via reference edge-trim (cross-cutting #4);
   symmetric padding uses edge-doubling `idx(−k)=k−1`, `idx(N+k)=N−1−k`.
+
+### `mdctpsnr` — vs `thorfdbg/mDCTpsnr` (compiled reference)
+
+Deep doc: crate `src/lib.rs` header; goldens in the crate test suite.
+
+The parity target is **the compiled binary's behavior**, not the source's
+apparent semantics — under `-O3 -ffast-math` GCC reassociates, contracts
+to FMA, vectorizes "scalar" libm calls into libmvec, and replaces division
+with `vrcpps` + Newton refinement. Every deviation below was found by
+disassembly + bitwise trace, fixed, and is recorded so a re-port doesn't
+rediscover them.
+
+- **RESOLVED** — `MeasureInBand` association: compiled order is
+  `err = (|r−d|·visbase)·max(mask_r,mask_d)` and
+  `p = (err·√err)·err²`, not the source's apparent
+  `|r−d|·(vis·max)` / `err³·√err`.
+- **RESOLVED** — pooling `error += 1−e` is not sequential: GCC emits an
+  8-lane strided f32 accumulator, fold `acc[j]+acc[j+4]`, collapse
+  `(x0+x2)+(x1+x3)`, a 4-wide tail block **iff `rem ≥ 4`**, scalar
+  remainder after. `w13 % 8 == 3` widths were ~11 dB off before this was
+  reproduced exactly (the 4-wide block does *not* run for `rem == 3` —
+  no out-of-bounds slack lane is ever read).
+- **RESOLVED** — vertical column-sum tree reassociated to
+  `((r0+r7)+(r5+r6))+((r1+r2)+(r3+r4))`; AAN DCT passes reassociated and
+  FMA-contracted differently in pass 1 vs pass 2 (decoded form in
+  `aan_1d`); mask conv contracted to
+  `fma(m2,p[i+2], fma(m0,p[i]+p[i+4], m1·(p[i+1]+p[i+3])))`; mask division
+  is `rcpps`+NR with a fused denominator; DC fixup is
+  `fma(m11,0.25,(m01+m10)·0.5)`; lowpass k-loop is a fused pair-tree;
+  `slh = vis·NormLo·NormHi` is shared for both LH and HL blocks.
+- **RESOLVED** — libmvec: GCC vectorized the "scalar" `powf`/`cosf`/`expf`
+  loops into `_ZGVdN8vv_powf`, `_ZGVbN4v_cosf`, `_ZGVdN8v_expf`. We call the
+  real `_ZGVdN8vv_powf`/`_ZGVdN8v_expf` via `asm!` (gated
+  `x86_64+linux+gnu`) and pin the 5 kernel taps + post-filter taps to the
+  reference's exact bits (vec-`cosf` differs from scalar `cosf` ~1ulp on
+  2 of 5 taps). Scalar fallbacks elsewhere drift ~1ulp/step.
+- **DIVERGES** — residual ~1.7e-5 in the diagnostic f64 `error64` sum (a
+  few hundred 1-ulp errorline values across 3.4M positions); the f32
+  `error` used for the score converged to ≤ ~4e-6 dB. Not user-visible.
+- **DIVERGES** — platform scope: the parity claim is x86_64 GNU/Linux +
+  AVX2 + glibc libmvec. Other platforms run the same algorithm with
+  scalar libm (still bit-stable, but not bit-identical to the reference
+  binary; test tolerance widens to 1e-2 off-platform).
+- **EXTENSION** — stride-agnostic packed-RGB8 API, `Err` on dim mismatch /
+  undersize instead of the reference's unchecked UB.
+- **OUT-OF-SCOPE** — the reference's ifdef'd-out paths (saliency,
+  `WEIGHT_MSE`/`DELTA_E`, `NO_BASE_VISIBILITY`) are not compiled.
 
 ### `ssim2` (CPU) — external `fast-ssim2`
 

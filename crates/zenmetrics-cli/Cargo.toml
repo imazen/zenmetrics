@@ -187,6 +187,9 @@ cpu-metrics = [
     # `hi_index.m`/`lo_index.m` + `ical_std`/`ical_stat` C-mex):
     # CPU-only, called directly.
     "cpu-mad",
+    # mDCT-PSNR (in-tree `mdctpsnr` crate, port of Thomas Richter's
+    # `dctpsnr`): CPU-only, called directly.
+    "cpu-mdctpsnr",
     # VMAF v0.6.1 / neg / 4k / v1.0.16 (in-tree `vmaf` crate, pure-Rust
     # libvmaf v3.2.1 match): CPU-only, called directly.
     "cpu-vmaf",
@@ -212,6 +215,7 @@ cpu-vsi = ["dep:vsi"]
 cpu-msssim = ["dep:msssim"]
 cpu-vif = ["dep:vif"]
 cpu-mad = ["dep:mad-iqa"]
+cpu-mdctpsnr = ["dep:mdctpsnr"]
 cpu-vmaf = ["dep:vmaf"]
 
 # GPU bundle: pulls every GPU metric implementation via the umbrella.
@@ -589,6 +593,7 @@ vsi = { workspace = true, optional = true, features = ["std", "avx512"] }
 msssim = { workspace = true, optional = true, features = ["std", "avx512"] }
 vif = { workspace = true, optional = true, features = ["std", "avx512"] }
 mad-iqa = { workspace = true, optional = true, features = ["std", "avx512"] }
+mdctpsnr = { workspace = true, optional = true, features = ["std"] }
 vmaf = { workspace = true, optional = true, features = ["simd"] }
 cubecl = { workspace = true, optional = true }
 

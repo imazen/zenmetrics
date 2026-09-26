@@ -58,6 +58,7 @@
 
 extern crate alloc;
 
+pub mod daala;
 mod kernel;
 
 /// Per-tier entry points for tier-parity tests and disassembly. Not API.

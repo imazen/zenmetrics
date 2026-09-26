@@ -1429,6 +1429,10 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Cvvdp | MetricKind::CvvdpGpu => Some((-0.5, 10.5, 10.0)),
         // GMSD: std of a [0, 1] similarity map, so [0, ~0.5]; 0 = identical.
         MetricKind::Gmsd => Some((-0.001, 0.6, 0.0)),
+        // MDSI is a fourth-root deviation; larger is worse.
+        MetricKind::Mdsi => Some((-0.001, 2.0, 0.0)),
+        MetricKind::MsGmsd => Some((-0.001, 0.6, 0.0)),
+        MetricKind::MsGmsdc => Some((-0.001, 4.0, 0.0)),
         // HDR-VDP: JOD scale [0, 100]; 100 = identical (the crate's
         // scaled Q_JOD output).
         MetricKind::Hdrvdp => Some((-1.0, 101.0, 100.0)),
@@ -1467,7 +1471,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         MetricKind::Vmaf | MetricKind::VmafNeg | MetricKind::Vmaf4k | MetricKind::VmafV1 => {
             Some((-0.5, 100.5, 100.0))
         }
-        MetricKind::Ssim | MetricKind::SsimLibvmaf | MetricKind::MsSsimLibvmaf => {
+        MetricKind::Ssim | MetricKind::SsimLibvmaf | MetricKind::MsssimLibvmaf => {
             Some((-0.5, 1.5, 1.0))
         }
         MetricKind::Nlpd | MetricKind::Psnr | MetricKind::PsnrY | MetricKind::PsnrYLibvmaf => None,

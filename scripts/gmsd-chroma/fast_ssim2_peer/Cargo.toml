@@ -1,0 +1,15 @@
+[package]
+name = "gmsd-chroma-fast-ssim2-peer"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+fast-ssim2 = { path = "/var/tmp/gmsd-chroma/fast-ssim2-main/fast-ssim2", features = ["imgref"] }
+imgref = "1.12.3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

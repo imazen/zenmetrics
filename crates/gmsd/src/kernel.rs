@@ -76,7 +76,7 @@ pub(crate) fn grad_px(u: [f32; 3], m: [f32; 3], d: [f32; 3]) -> f32 {
     let tn = -PREWITT_T;
     let hx = ((((tn * u[0] + tn * u[1]) + tn * u[2]) + t * d[0]) + t * d[1]) + t * d[2];
     let hy = ((((tn * u[0] + t * u[2]) + tn * m[0]) + t * m[2]) + tn * d[0]) + t * d[2];
-    (hx * hx + hy * hy).sqrt()
+    super::sqrt_f32(hx * hx + hy * hy)
 }
 
 /// Scalar gradient-magnitude similarity, libgmsd order.

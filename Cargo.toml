@@ -10,6 +10,7 @@ members = [
     "crates/fsim",
     "crates/vsi",
     "crates/mad-iqa",
+    "crates/mdctpsnr",
     "crates/msssim",
     "crates/vif",
     "crates/haarpsi",
@@ -83,6 +84,7 @@ psnrhvs = { version = "0.1.0", path = "crates/psnrhvs", default-features = false
 ssim2-gpu = { version = "0.0.1", path = "crates/ssim2-gpu", default-features = false }
 vsi = { version = "0.1.0", path = "crates/vsi", default-features = false }
 mad-iqa = { version = "0.1.0", path = "crates/mad-iqa", default-features = false }
+mdctpsnr = { version = "0.1.0", path = "crates/mdctpsnr", default-features = false }
 msssim = { version = "0.1.0", path = "crates/msssim", default-features = false }
 vif = { version = "0.1.0", path = "crates/vif", default-features = false }
 vmaf = { version = "0.1.0", path = "crates/vmaf", default-features = false }

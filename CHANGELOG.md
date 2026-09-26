@@ -13,6 +13,44 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- mdctpsnr (`43d2723e`): new in-tree CPU crate `crates/mdctpsnr` —
+  reference reimplementation of Thomas Richter's mDCT-PSNR
+  (`thorfdbg/mDCTpsnr`, zlib license retained), the metric published in
+  the JPEG AIC-4 `mDCT-PSNR` column. Linear BT.601 YCbCr ingress, sliding
+  mean-windowed 8×8 AAN DCT, 5×5 separable visibility masking, Ahumada
+  `exp(−err^3.5)` detection pooling, extended DC lowpass. Parity target is
+  the *compiled* reference (GCC `-O3 -ffast-math` AVX2 + glibc libmvec):
+  reproduces its reassociated reduction trees, FMA contraction, `rcpps`+NR
+  mask division, and libmvec `_ZGVdN8vv_powf`/`_ZGVdN8v_expf` vector calls
+  — including the 8-lane strided pooling accumulator whose `rem ≥ 4` tail
+  guard cost ~11 dB on `w13 % 8 == 3` widths until decoded from the
+  disassembly. Goldens cover all eight `(W−13) % 8` residue classes at
+  ≤ ~4e-6 dB; AIC-4 `mDCT-PSNR` column reproduces at med 4.0e-7 /
+  max 1.13e-5 dB (n=53). CLI `--metric mdctpsnr` behind `cpu-mdctpsnr`
+  (default on), column `mdctpsnr_imazen_v0_1_0`. Ledgers updated:
+  `DIVERGENCES.md`, `docs/METRIC_PROVENANCE.md`,
+  `docs/AIC2026_METRICS_AND_FITTING.md`, `README.md`.
+- metrics (`9128d118`): three AIC-4-matched variants closing the two largest
+  JND-ranked gaps. `msssim` gains a `libvmaf` module — reference
+  reimplementation of libvmaf `float_ssim`/`float_ms_ssim` @ f85a8536
+  (tdistler-iqa decimate `round(min/256)` + 11×11 Gaussian + zli l·c·s;
+  5-level 9/7-LPF pyramid, weights 0.0448/0.2856/0.3001/0.2363/0.1333;
+  bpc>8 input scaled ÷(1<<(bpc−8)) exactly like `picture_copy`). FFI
+  parity vs the real vendored libvmaf ≤2e-4 (8-bit, 10-bit, identical,
+  YUV420+444 PSNR-HVS) in `crates/msssim/tests/ffi_libvmaf.rs`.
+  `psnrhvs` gains a `daala` module — Daala/Xiph `dump_psnrhvs`
+  (integer bin-DCT 8×8, column-first `od_bin_fdct8x8`, CSF tables +
+  variance-ratio masking, `-10·log10` on 0.8Y+0.1Cb+0.1Cr MSE) with
+  YUV420 and YUV444 entry points. CLI metrics `ssim-libvmaf`,
+  `msssim-libvmaf`, `psnrhvs-daala` build studio-601 luma/chroma
+  internally (rounded u8 planes — the references' contract);
+  `psnrhvs-daala` uses full-resolution YUV444 chroma, the AIC-4
+  convention identified via the published `-Cb`/`-Cr` columns. AIC-4
+  53-pair reproduction vs published columns: `SSIM` med 1.0e-6 /
+  max 1.8e-5, `MS-SSIM` med 1.0e-6 / max 1.6e-5, `PSNR-HVS` med
+  1.1e-3 dB / max 4.5e-2 — all ≤0.003 JND. Divergence records + the
+  bin-DCT column-order gotcha in `DIVERGENCES.md`; provenance rows in
+  `docs/METRIC_PROVENANCE.md` and `docs/AIC2026_METRICS_AND_FITTING.md`.
 - **BREAKING (`ffb05237`): SDR cvvdp has no default
   display in zenmetrics-api or the CLI; every caller names one, and SDR
   cvvdp columns name it.** The `cvvdp` / `cvvdp-gpu` crates keep their
@@ -500,6 +538,16 @@ Workspace conventions per the global rules:
   `hdrvdp::score`, custom ppd threads through, default ppd = 30,
   short-buffer and wrong-feeding errors explicit. `32244668`
 
+- gmsd / zenmetrics-cli: quarantined paper-derived MS-GMSD and MS-GMSDc
+  entries and independent NumPy qualification harness. No author-software
+  equivalence is claimed; parity is to an independent NumPy transcription of the
+  paper's equations. `03cf564f`.
+- gmsd / zenmetrics-cli: `mdsi_rgb8` and `--metric mdsi` for score/score-pairs.
+  Written from the paper alone (clean room) and validated against scores from
+  the authors' reference software on 116 pairs (relative difference at most
+  1e-9, wrong constant fails 109/116). Exact-integer box average, tiered f64x8
+  similarity maps; bit-identical to the straight-line equations at every tier and
+  thread count. `03cf564f`.
 - **gmsd (new crate): pure-Rust CPU port of GMSD** (Xue, Zhang, Mou & Bovik,
   IEEE TIP 2014) from libgmsd (MIT, notice kept in `crates/gmsd/LICENSE-libgmsd`).
   Score + half-resolution GMS map, strided f32 input, zenpixels `PixelSlice`

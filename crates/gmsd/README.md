@@ -88,8 +88,47 @@ decimates only the input rows it reads, in one fused pass, in its own tier
 and thread. Published speed numbers come from zensim's `ssim2_speed_bar`
 owner, not from `examples/split_timing.rs` diagnostics.
 
+## MDSI (quarantined development addition)
+
+`mdsi_rgb8(reference, distorted, width, height, stride_bytes)` returns the
+default summation MDSI distance as `Result<f64>`. Inputs are interleaved
+gamma-encoded RGB8 with a byte stride; the scorer performs no colour
+management, orientation or alpha processing. The caller supplies RGB in
+the intended common colour space. The CLI exposes `--metric mdsi` under
+the existing `cpu-gmsd` feature for `score` and `score-pairs`.
+
+MDSI is implemented from the paper (Nafchi, Shahkolaei, Hedjam and Cheriet,
+"Mean Deviation Similarity Index: Efficient and Reliable Full-Reference Image
+Quality Evaluator", *IEEE Access* 4, 2016) and validated against scores computed
+by the authors' reference software, which is not included here or used at run
+time. Where the paper is silent, [`docs/MDSI_CHOICES.md`](docs/MDSI_CHOICES.md)
+records the reading taken and why. On 116 image pairs (odd sizes, sub-64 px,
+1 px, and averaging factors 1 to 4) the score agrees with the authors' scores
+to a relative difference of 4.84e-10 at most, inside the 1e-9 gate; a wrong
+constant fails 109 of the 116 (the other 7 are exact-zero pairs no constant
+moves). The model uses unrounded f64 luminance and two opponent channels,
+size-dependent box filtering with zero-padded odd edges, a fused-luminance
+gradient term, chromaticity similarity with C3=550, and principal complex
+fourth roots for negative combined similarities in the pooling.
+
+The box average is the only full-resolution work (the averaged planes are about
+256 samples on the short side), and it runs in exact integer arithmetic. The
+score is bit-identical to the straight-line evaluation of the paper's equations
+kept in `src/mdsi.rs` (`reference`) at every archmage tier and every thread
+count. The 116-pair gate is an ordinary test that the caller selects with
+`GMSD_MDSI_GATE=require|skip` and `GMSD_MDSI_TARGETS=<table>` (see the
+workspace `justfile`).
+
+`ms_gmsd_rgb8` and `ms_gmsdc_rgb8` are quarantined paper-derived variants
+of Zhang et al.'s four-scale masked GMSD and colour extension. They use
+unrounded f64 YIQ, zero-padded Prewitt with c=170, replicated odd-edge 2x2
+averaging, population deviation, and scale-3 I/Q RMSE. These conventions
+are explicit choices where the paper is underspecified. Independent
+NumPy qualification is pending; no author-software parity is claimed.
+
 ## License
 
 AGPL-3.0-only OR the Imazen commercial license, like the rest of zenmetrics.
 The ported libgmsd arithmetic remains available under its MIT licence
 (`LICENSE-libgmsd`).
+MDSI is written from the paper; see the attribution above.

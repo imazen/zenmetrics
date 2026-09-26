@@ -36,3 +36,7 @@ archmage = { workspace = true }
 libm = "0.2.16"
 magetypes = { workspace = true }
 rayon = { version = "1.10", optional = true }
+
+[dev-dependencies]
+vmaf-head-sys = "=0.2.0"
+psnrhvs = { workspace = true }

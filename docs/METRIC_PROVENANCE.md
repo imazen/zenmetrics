@@ -43,14 +43,18 @@ We do not call everything a "port". Terms used below:
 | `vmaf` (lib only) | in-tree `crates/vmaf` | Li et al., Netflix VMAF, 2016 | libvmaf **3.2.1** via FFI oracle | reference reimplementation | YUV420 planes (studio-swing ingress); v0 models luma-only | VMAF 0–100 + features (adm2, motion2, vif×4) |
 | `vif` | in-tree `crates/vif` | Sheikh & Bovik, IEEE TIP 15(2) 2006 | authors' `vifp_mscale.m` (MATLAB) | reference reimplementation (f64 pipeline) | sRGB8 → MATLAB-weights gray | [0,∞), 1 ≈ identical |
 | `msssim` | in-tree `crates/msssim` | Wang, Simoncelli, Bovik 2003 (ACSSC) | authors' `ssim_mscale_new.m` | reference reimplementation | sRGB8 → BT.601 luma | [0,1] |
+| `ssim-libvmaf` | in-tree `crates/msssim` (`libvmaf` module) | Wang et al., IEEE TIP 2004 (as implemented by Z. Li / tdistler iqa) | libvmaf `float_ssim` @ f85a8536 — FFI oracle (`vmaf-head-sys` dev-dep) | reference reimplementation (integer-accumulating decimate + f32/f64 rounding points preserved) | sRGB8 → studio-swing BT.601 luma — the YUV `Y` plane libvmaf consumes; NOT the MATLAB `rgb2gray` luma | [0,1] |
+| `msssim-libvmaf` | in-tree `crates/msssim` (`libvmaf` module) | Wang/Simoncelli/Bovik 2003 (libvmaf's 5-scale variant) | libvmaf `float_ms_ssim` @ f85a8536 — FFI oracle | reference reimplementation (9/7 LPF pyramid, per-scale f32 means, double `pow`) | " | [0,1] |
 | `iwssim` | in-tree `crates/iwssim` | Wang & Li, IEEE TIP 20(5) 2011, doi:10.1109/TIP.2010.2096950 | `Python-IW-SSIM` f9de37c (community reimpl of the lost MATLAB ref) | reference reimplementation | sRGB8 → BT.601 gray | [0,1] |
 | `iwssim-gpu` | `iwssim-gpu` twin | " | CPU twin | in-tree GPU | " | " |
 | `gmsd` | in-tree `crates/gmsd` | Xue et al., IEEE TIP 23(2) 2014 | `libgmsd` de646c9a (C) | reference reimplementation | sRGB8 → luma | 0 best, unbounded |
 | `psnrhvs` / `psnrhvs-y` | in-tree `crates/psnrhvs` | Ponomarenko/Egiazarian PSNR-HVS-M (VPQM 2007) | authors' `psnrhvsm.m` | reference reimplementation | RGB per-channel 8×8 DCT (`-y` = luma plane) | dB, higher better |
+| `psnrhvs-daala` | in-tree `crates/psnrhvs` (`daala` module) | Daala/Xiph PSNR-HVS (integer bin-DCT variant adopted by libvmaf; distinct from the Ponomarenko MATLAB `psnrhvs`) | libvmaf `psnr_hvs` feature @ f85a8536 — FFI oracle | reference reimplementation (column-first `od_bin_fdct8x8`, CSF tables `csf_y`/`cb420`/`cr420`, integer-product mask accumulation, f32 `ret`) | sRGB8 → studio-swing BT.601 **YUV444** planes — the AIC-4 convention (`psnr_hvs_daala_yuv420` also exposed for YUV420 pictures) | dB; emits `psnrhvs_daala_{y,cb,cr}` + combined |
 | `haarpsi` / `haarpsi-y` | in-tree `crates/haarpsi` | Reisenhofer et al., Sci. Rep. 2018, doi:10.1038/s41598-018-21354-2 | authors' `haarpsi.m` | reference reimplementation | RGB (YIQ chroma) / luma (`-y`) | [0,1] |
 | `fsim` / `fsim-y` | in-tree `crates/fsim` | Zhang et al., IEEE TIP 20(8) 2011, doi:10.1109/TIP.2011.2109730 | authors' `FR_FSIMc.m` | reference reimplementation | sRGB8 (FSIMc chroma terms) / luma (`-y`) | [0,1] |
 | `vsi` | in-tree `crates/vsi` | Zhang et al., IEEE TIP 23(10) 2014 | authors' `VSI.m` | reference reimplementation | sRGB8 (SDSP colour saliency) | [0,1] |
 | `mad` | in-tree `crates/mad-iqa` | Larson & Chandler, JEI 19(1) 2010 | official MATLAB release (larschandler.com) | reference reimplementation | sRGB8 → luma | distance; emits `mad`, `mad_hi`, `mad_lo` |
+| `mdctpsnr` | in-tree `crates/mdctpsnr` | Richter, "An Autoregressive Multi-DCT Domain Image Quality Metric", QoMEX 2009 (authored impl) | author's official C++ `thorfdbg/mDCTpsnr` (zlib-style license), built GCC `-O3 -ffast-math` AVX2 + glibc libmvec | reference reimplementation — parity target is the **compiled** binary's op order (reassociations/FMA/rcp-NR/libmvec decoded from disassembly), not the source's apparent semantics | sRGB8 → linear → BT.601 YCbCr | dB, higher better; `+inf` identical |
 | `zensim` | sibling `zensim` crate | — | — | **in-house** (ML-trained; not a reproduction target) | sRGB8 | 0–100 |
 | `zensim-gpu` | `zensim-gpu` twin | — | — | in-house | " | " |
 
@@ -93,13 +97,17 @@ Tolerance classes (keep these distinct — they mean different things):
 | vmaf | libvmaf 3.2.1 FFI | feats 1e-4, score 0.02 | ≪ gate | VMAF 0.002, neg 0.001, adm2 4e-6, vif_Σ 3e-5 (S01 pt) |
 | vif | `vifp_mscale.m` | goldens f64 | 5e-13 | n/a (`VIF` col = vifvec — different algo, med 0.06) |
 | msssim | `ssim_mscale_new.m` | 15 Octave goldens | 8.8e-6 | med 4e-4 vs libvmaf col / 1.2e-3 vs pyiqa col (n=53) |
+| ssim-libvmaf | libvmaf `float_ssim` FFI | ≤ 2e-4 (vs vendored f85a8536, 5 cases 8b+10b) | ≪ gate | med 1.0e-6 / max 1.8e-5 vs `SSIM` col (n=53) |
+| msssim-libvmaf | libvmaf `float_ms_ssim` FFI | ≤ 2e-4 (same harness) | ≪ gate | med 1.0e-6 / max 1.6e-5 vs `MS-SSIM` col (n=53) |
 | iwssim | Python-IW-SSIM f9de37c | ~1e-4 | within gate | +1.2e-3 systematic vs pyiqa col — impl-variant offset, not ingress (n=53) |
 | gmsd | libgmsd de646c9a | 1e-12 rel (map), 1e-14 mean | ~1e-12 | mean 3.5e-7 / max 1.9e-6 (n=53) |
 | psnrhvs | `psnrhvsm.m` | 1e-3 dB | ≤ 4e-4 dB | ~7.6dB off (Daala variant — different algo, n=53) |
+| psnrhvs-daala | libvmaf `psnr_hvs` FFI | ≤ 2e-4 dB (420 + 444 cases) | ≪ gate | combined med 1.1e-3 / max 4.5e-2 dB; Y med 1.3e-3 / max 8.6e-3; Cb 1.3e-2/8.0e-2; Cr 2.6e-3/1.3e-1 dB (n=53) |
 | haarpsi | `haarpsi.m` | 5e-5 | ~1e-5 | med 8.4e-6 / max 5.3e-5 (n=53) |
 | fsim/-y | `FR_FSIMc.m` | 5e-5 | within gate | med 2.5e-5 / max 1.7e-3 (n=53) |
 | vsi | `VSI.m` | 1e-4 | within gate | med 9.6e-6 / max 1.1e-4 (n=53) |
 | mad-iqa | official MATLAB | 13 goldens | rel: hi 2.4e-7, lo 1.8e-6 | not in AIC-4 |
+| mdctpsnr | built `dctpsnr` binary (GCC `-O3 -ffast-math`, glibc 2.43, AVX2) | ≤ 2e-4 dB on x86_64+GNU goldens (64×48 + all 8 `(w−13)%8` classes), 1e-2 off-platform | ≤ ~4e-6 dB | med 4.0e-7 / max 1.13e-5 dB vs `mDCT-PSNR` col (n=53) |
 | ssim2 | fast-ssim2 ↔ C++ | bit-parity SIMD tiers | — | med 6.3e-3 / max 5.5e-2 — version drift (n=53) |
 | dssim | dssim-core | upstream | — | mean 2.5e-7 / max 6.5e-7 (n=53) |
 
@@ -146,9 +154,9 @@ The single-point S01_AVIF_01 spot check is kept where it drove identification.
 | `HaarPSI` | authors' matlab | 8.4e-6 | 5.3e-5 | ✅ |
 | `VSI` | authors' matlab | 9.6e-6 | 1.1e-4 | ✅ |
 | `FSIM` / `FSIMc` | authors' matlab | 2.5e-5 | 1.7e-3 | ✅ |
-| `SSIM` | libvmaf `float_ssim` scale=2 | 7e-5 (S01 pt, numpy repro) | — | ✅ identified — not yet ported |
+| `SSIM` | libvmaf `float_ssim` | 1.0e-6 | 1.8e-5 | ✅ implemented — `ssim-libvmaf` (FFI-verified port) |
 | `SSIMc` | MATLAB `ssim` RGB-mean | 1.6e-5 (S01 pt, numpy repro) | — | ✅ identified — no crate |
-| `MS-SSIM` | libvmaf `float_ms_ssim` | 4.1e-4 | 2.0e-2 | ⚠️ tracks overall but low-quality tails hit 2.64 JND — needs libvmaf `float_ms_ssim` impl (§4.1) |
+| `MS-SSIM` | libvmaf `float_ms_ssim` | 1.0e-6 | 1.6e-5 | ✅ implemented — `msssim-libvmaf` (FFI-verified port; was the 2.64-JND gap) |
 | `MS-SSIM-pyiqa` | pyiqa `ms_ssim` | 1.2e-3 | 6.4e-3 | ✅ tracks; same impl-family residual |
 | `IW-SSIM` | pyiqa `iwssim` | 1.2e-3 | 4.0e-3 | ⚠️ systematic +1e-3 vs pyiqa impl (our oracle is Python-IW-SSIM, a different variant); 0.68 JND-eq worst (§4.1) |
 | `SSIMULACRA2` | "v2.1" | 6.3e-3 | 5.5e-2 | ✅ drift immaterial in JND (≤0.004 — §4.1) |
@@ -156,11 +164,11 @@ The single-point S01_AVIF_01 spot check is kept where it drove identification.
 
 | column family | published | what it is | status |
 |---|---|---|---|
-| `PSNR-HVS`, `-Y`, `-Cb`, `-Cr` | 50.05 / 50.86 / 47.49 / 48.10 | **Daala/Xiph `dump_psnrhvs`** layout — not our `psnrhvsm` port (ours runs ~7.6dB/4.1dB higher over the subset — Daala masks more aggressively) | ⬜ new impl needed — **CTC anchor** |
+| `PSNR-HVS`, `-Y`, `-Cb`, `-Cr` | 50.05 / 50.86 / 47.49 / 48.10 | **Daala/Xiph `dump_psnrhvs`** — implemented as `psnrhvs-daala` (FFI-verified); on studio-601 **YUV444** chroma: combined med 1.1e-3 / max 4.5e-2 dB, Y med 1.3e-3 / max 8.6e-3 dB | ✅ implemented |
 | `VIF` | 0.934422 | pyiqa **wavelet vifvec** (SP5 steerable pyramid), not pixel `vifp` — ours runs ~0.06 median lower over the subset | ⬜ new impl needed |
 | `HDR_VDP_2` | 68.806 | hdrvdp-2.2.x under an unknown sRGB→nits display config | ⬜ config unknown |
 | `HDR_VDP_3` | 9.620 | HDR-VDP-3 — different metric version | ⬜ new impl |
-| `mDCT-PSNR` | 71.529 | Richter, QoMEX 2009; author's C++ ref impl `thorfdbg/mDCTpsnr` (~60KB, Highway SIMD) | ⬜ feasible medium port |
+| `mDCT-PSNR` | 71.529 | Richter, QoMEX 2009; author's C++ ref impl `thorfdbg/mDCTpsnr` | ✅ implemented — `mdctpsnr` (compiled-binary parity: med 4.0e-7 / max 1.13e-5 dB over n=53; see DIVERGENCES for the codegen-order details) |
 | `CW-SSIM`, `NLPD`, `CIEDE2000`, `FLIP` | — | pyiqa / colour / HDR metrics | ⬜ |
 | `DISTS`, `LPIPS`×4, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ`×2, `AHIQ`, `STLPIPS`×2 | — | torch models | ⬜ out of scope (no torch) |
 | `proposal-*` (Butteraugli, DVIFM, mDCTPSNR) | — | AIC-4 **submitted** metrics — not public impls | ⬜ unreproducible by design |
@@ -178,10 +186,15 @@ JND-normalized delta table. Headline findings on the same 53 pairs:
   drift is immaterial once remapped (≤0.004 JND); the version-drift worry
   was overblown.
 - Acceptable (max ≤0.5 JND): VSI, FSIM, FSIMc.
-- Gaps: MS-SSIM tail hits 2.64 JND (steep-curve region — libvmaf
-  `float_ms_ssim` needed, not our MATLAB variant), PSNR-HVS 0.8–6.4 JND
-  (wrong algorithm family — Daala needed), VIF 5.9 JND-equivalent
-  (`vifvec`), IW-SSIM 0.68 JND-eq (pyiqa variant).
+- **Closed since**: `SSIM`/`MS-SSIM` via `ssim-libvmaf`/`msssim-libvmaf`
+  (med 1.0e-6, max 1.8e-5 raw — the libvmaf ports are exact modulo u8
+  ingress rounding; the 2.64-JND MS-SSIM tail was our MATLAB variant's
+  family difference, now bypassed) and `PSNR-HVS` via `psnrhvs-daala`
+  (combined med 1.1e-3 dB / max 4.5e-2 ≈ ≤0.004 JND — the previous
+  Ponomarenko-vs-Daala 1.9–6.4 JND gap resolved; residual is the chroma
+  ingress — studio-601 YUV444 matches their Cb/Cr to ≤0.13 dB).
+- Remaining gaps: VIF 5.9 JND-equivalent (`vifvec`), IW-SSIM 0.68 JND-eq
+  (pyiqa variant).
 
 Priority order in §6 is JND-ranked.
 
@@ -199,18 +212,32 @@ column is being targeted.
 
 ## 6. Gaps & candidate work (JND-ranked priority order)
 
-1. **Daala `dump_psnrhvs`** — the published `PSNR-HVS` family is a CTC
-   anchor (drives `JND_PSNR-HVS`); our Ponomarenko variant is 1.9 med /
-   6.4 max JND off. Verify against the -Y/-Cb/-Cr triple, add alongside
-   (not replacing) `psnrhvs`.
-2. **libvmaf `float_ssim` / `float_ms_ssim`** (with `scale`) in `crates/vmaf`
-   — anchors `SSIM`/`MS-SSIM`; our `msssim` tail hits 2.64 JND and `SSIM`
-   is unimplemented. Small ports (tdistler iqa decimate + l·c·s).
+~~1. **Daala `dump_psnrhvs`**~~ — ✅ **DONE** (`psnrhvs-daala`): integer
+   bin-DCT + CSF masking port in `crates/psnrhvs/src/daala.rs`, FFI-verified
+   vs vendored libvmaf f85a8536 (≤2e-4 dB, 420+444). Gotcha found in
+   parity work: `od_bin_fdct8x8` is column-DCT-then-column-DCT over the
+   transposed intermediate — row-first is *not* equivalent once the
+   integer rounding is accounted for (~1.3% MSE / 0.059 dB).
+   AIC-4 chroma convention: studio-601 **YUV444** (full-res chroma —
+   verified via the -Cb/-Cr columns).
+~~2. **libvmaf `float_ssim` / `float_ms_ssim`**~~ — ✅ **DONE**
+   (`ssim-libvmaf`, `msssim-libvmaf`): ports live in
+   `crates/msssim/src/libvmaf.rs` (the SSIM-family crate — `crates/vmaf`
+   is a separate active lane). FFI-verified incl. 10-bit
+   (`picture_copy_hbd` /4 scaling) and the auto-scale
+   `round(min_dim/256)` decimate. Studio-601 luma is built in — the
+   AIC-4 columns reproduce at med 1.0e-6 / max 1.8e-5.
 3. **`vifvec`** (wavelet VIF) — new port for the `VIF` column; 5.9
    JND-equivalent worst case.
 4. **pyiqa `iwssim` variant** — 0.68 JND-eq worst; systematic +1.2e-3.
-5. **`mDCT-PSNR`** — author's official C++ impl exists (`thorfdbg/mDCTpsnr`);
-   DCT-domain masking + pooling, moderate scope; license check first.
+~~5. **`mDCT-PSNR`**~~ — ✅ **DONE** (`mdctpsnr`): port of
+   `thorfdbg/mDCTpsnr` (zlib-style license). The catch that made it a
+   "medium" port: bit-parity required reproducing the **compiled** binary's
+   codegen — GCC `-ffast-math` reassociations, FMA contraction, `rcpps`+NR
+   instead of division, libmvec `_ZGVdN8vv_powf`/`_ZGVdN8v_expf` vector
+   calls, and the 8-lane strided pooling accumulator (whose `rem ≥ 4`
+   tail guard cost ~11 dB on `w13 % 8 == 3` widths until decoded). AIC-4
+   `mDCT-PSNR` column: med 4.0e-7 / max 1.13e-5 dB over n=53.
 6. **HDR-VDP-3** + the AIC HDR_VDP_2 display config.
 7. `CW-SSIM`, `NLPD`, `CIEDE2000`, `FLIP` — later.
 

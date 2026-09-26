@@ -42,10 +42,18 @@
 #![allow(clippy::too_many_arguments)]
 
 extern crate alloc;
+// The test harness supplies std while the library's no_std arithmetic stays
+// selected. Reference calculations in tests use std's floating-point methods.
+#[cfg(all(test, not(feature = "std")))]
+extern crate std;
 
 use alloc::vec::Vec;
 
 mod kernel;
+#[macro_use]
+mod chroma_gradient;
+mod mdsi;
+mod ms_gmsd;
 
 /// Stable column-name identifier for sweep sidecars:
 /// `gmsd_cpu_imazen_v<MAJOR>_<MINOR>_<PATCH>` (overridable at build time via
@@ -293,6 +301,61 @@ pub fn gmsd_rgb8(
     )
 }
 
+/// Mean Deviation Similarity Index, default summation model (Nafchi et al., 2016).
+///
+/// Both inputs contain gamma-encoded sRGB RGB8 triplets, with `height` rows
+/// of `width` pixels, `stride_bytes` bytes apart (padding is ignored).
+/// Scores are distances: smaller is better. Implemented from the paper: the
+/// size-dependent zero-padded box filter, L/H/M transform, fusion and
+/// complex-root mean absolute deviation pooling are evaluated in f64 (see
+/// `docs/MDSI_CHOICES.md` for the readings taken where the paper is silent).
+/// No ICC, alpha, orientation or transfer conversion is performed here.
+///
+/// Unlike GMSD's half-resolution rule, MDSI preserves odd edge samples.
+/// Nonempty images, including a single pixel, are supported.
+pub fn mdsi_rgb8(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride_bytes: usize,
+) -> Result<f64> {
+    mdsi::run(reference, distorted, width, height, stride_bytes)
+}
+
+/// Paper-derived four-scale MS-GMSD distance, using gamma-encoded RGB8.
+///
+/// Rows have `stride_bytes` bytes and `width` interleaved RGB pixels. No
+/// colour management, alpha or orientation processing is performed. This
+/// variant uses unrounded YIQ, zero-padded Prewitt, c=170, and replicated
+/// odd-edge 2x2 downsampling. It is not verified against author software;
+/// the numerical conventions and independent oracle are recorded in the
+/// gmsd-chroma benchmark preregistration.
+pub fn ms_gmsd_rgb8(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride_bytes: usize,
+) -> Result<f64> {
+    ms_gmsd::run(reference, distorted, width, height, stride_bytes).map(|s| s.0)
+}
+
+/// Paper-derived colour MS-GMSDc distance, on the inputs of [`ms_gmsd_rgb8`].
+///
+/// Adds joint I/Q RMSE at scale 3 with the published logistic fusion.
+/// The same explicitly qualified numerical conventions apply; this is
+/// agreement with a paper transcription, not author-software parity.
+pub fn ms_gmsdc_rgb8(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride_bytes: usize,
+) -> Result<f64> {
+    ms_gmsd::run(reference, distorted, width, height, stride_bytes).map(|s| s.1)
+}
+
 /// GMSD of two zenpixels images of the same size.
 ///
 /// Each row is converted to sRGB RGB8 by zenpixels-convert (any depth, layout,
@@ -462,6 +525,18 @@ fn pool(sums: &[(f64, f64)], n: usize) -> GmsdScore {
 }
 
 #[inline(always)]
+fn sqrt_f32(v: f32) -> f32 {
+    #[cfg(feature = "std")]
+    {
+        v.sqrt()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::sqrtf(v)
+    }
+}
+
+#[inline(always)]
 fn sqrt_f64(v: f64) -> f64 {
     #[cfg(feature = "std")]
     {
@@ -473,7 +548,7 @@ fn sqrt_f64(v: f64) -> f64 {
         if v == 0.0 {
             return 0.0;
         }
-        let mut x = (v as f32).sqrt() as f64;
+        let mut x = sqrt_f32(v as f32) as f64;
         for _ in 0..3 {
             x = 0.5 * (x + v / x);
         }

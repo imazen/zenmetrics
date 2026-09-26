@@ -378,3 +378,16 @@ for c in zenpng zenwebp zenjpeg zenavif--main zenjxl--main jxl-encoder; do
         echo "$c $(git rev-parse HEAD) $(git branch --show-current)"
 done
 ```
+
+## 2026-09-24: quarantined gmsd-chroma TRAIN-only colour report
+
+Own lane worker 2 scored the frozen 1,539 KADID/TID2013/KonFiG TRAIN RGB8
+pairs with qualified GMSD/MDSI/MS-GMSDc and a fresh CPU fast-ssim2 main
+f011259a0cd2fb7f538e08398ba41c0ccd0dfcb4 peer. No GPU columns were used as
+CPU scores; no new feature bank or model was created. Population and decoder
+provenance remain in `/var/tmp/gmsd-chroma/colour_v2/population.json` and
+its adjacent prediction/peer/frozen-report manifests. First TRAIN label read
+12:44:40Z followed both numeric gates and prediction freeze. No held-out
+human sets were opened. Report is `benchmarks/gmsd-chroma_colour_2026-09-24.md`;
+raw report SHA256 1d1eef5c1e67950230b210b55432434f846a188bcf2e609e1ed3adbb3cc810d8.
+All artifacts remain quarantined pending independent audit.
