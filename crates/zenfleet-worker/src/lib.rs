@@ -325,6 +325,133 @@ where
     }
 }
 
+/// Chunk ids this worker currently holds a lease on (claim won, chunk not yet finished).
+/// Read by [`spawn_chunk_heartbeat`]; written by [`track_chunk_held`] (add on a won claim)
+/// and by the progress-renewal closure (remove once the chunk reports `done >= total`).
+type HeldChunks = Arc<Mutex<std::collections::BTreeSet<String>>>;
+
+/// Wrap a chunk `claim_chunk` function so a **won** claim is recorded in `held`. A lost claim is
+/// never recorded: the heartbeat must only ever renew leases this worker actually owns.
+fn track_chunk_held<CC>(held: HeldChunks, claim_chunk: CC) -> impl Fn(&str) -> bool
+where
+    CC: Fn(&str) -> bool,
+{
+    move |cid: &str| {
+        let won = claim_chunk(cid);
+        if won && let Ok(mut g) = held.lock() {
+            g.insert(cid.to_string());
+        }
+        won
+    }
+}
+
+/// Result of one heartbeat attempt on one held chunk claim.
+#[derive(Debug, PartialEq, Eq)]
+enum HeartbeatOutcome {
+    /// The claim was ours and its timestamp was refreshed.
+    Renewed,
+    /// The claim now names another worker (it was stolen after a missed heartbeat): we must
+    /// not touch it, or we would overwrite the new owner's lease.
+    NotOwner,
+    /// The claim object is gone (released) or unreadable, or the conditional write lost a race.
+    Lost,
+}
+
+/// Refresh one chunk claim's timestamp **only if this worker still owns it**. The claim body is
+/// `"{ts} {worker} {done}/{total}"` (or `"{ts} {worker}"` for a fresh claim); ownership is the
+/// second token. The write is conditional on the ETag that was read, so a steal that lands
+/// between the read and the write makes this a harmless no-op rather than a clobber.
+/// `get` returns `(body, etag)`; `put` writes the new body under `If-Match: etag`.
+fn heartbeat_chunk_claim<G, P>(get: G, put: P, worker: &str, now: u64) -> HeartbeatOutcome
+where
+    G: FnOnce() -> Option<(String, String)>,
+    P: FnOnce(&str, &str) -> bool,
+{
+    let Some((body, etag)) = get() else {
+        return HeartbeatOutcome::Lost;
+    };
+    let mut tok = body.split_whitespace();
+    let _ts = tok.next();
+    if tok.next() != Some(worker) {
+        return HeartbeatOutcome::NotOwner;
+    }
+    let progress = tok.next().unwrap_or("0/1");
+    if put(&format!("{now} {worker} {progress}"), &etag) {
+        HeartbeatOutcome::Renewed
+    } else {
+        HeartbeatOutcome::Lost
+    }
+}
+
+/// True iff the pending work contains a kind whose single cell can run far longer than the claim
+/// TTL (Rev4 fit cells: hours against the 600 s default). Only then does the worker run the
+/// time-based lease heartbeat, so other kinds keep the pure TTL-reclaim semantics.
+fn needs_chunk_heartbeat(desired: &[DesiredJob]) -> bool {
+    desired
+        .iter()
+        .any(|j| matches!(j.kind, JobKind::FitCell { .. }))
+}
+
+/// Time-based lease renewal for long single-cell chunks. The progress renewal in
+/// `run_chunked` fires only when cells complete, so a chunk that is one multi-hour fit never
+/// renews while it runs and any idle worker could steal it after `ttl_secs`. This thread
+/// renews every held chunk claim every `ttl/3` (at least 1 s) while the worker process is
+/// alive, so the default TTL stays correct and a dead worker's cell still requeues after one
+/// TTL. Ownership is re-checked on every beat ([`heartbeat_chunk_claim`]).
+fn spawn_chunk_heartbeat(
+    held: HeldChunks,
+    endpoint: &str,
+    bucket: &str,
+    prefix: &str,
+    worker: &str,
+    ttl_secs: u64,
+) {
+    let (endpoint, bucket, prefix, worker) = (
+        endpoint.to_string(),
+        bucket.to_string(),
+        prefix.trim_matches('/').to_string(),
+        worker.to_string(),
+    );
+    let interval = std::time::Duration::from_secs((ttl_secs / 3).max(1));
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(interval);
+            let cids: Vec<String> = held
+                .lock()
+                .map(|g| g.iter().cloned().collect())
+                .unwrap_or_default();
+            for cid in cids {
+                let key = format!("{prefix}/{cid}");
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let out = heartbeat_chunk_claim(
+                    || {
+                        let (b, e) = crate::s3io::get_with_etag(&endpoint, &bucket, &key)?;
+                        Some((String::from_utf8_lossy(&b).into_owned(), e))
+                    },
+                    |body, etag| {
+                        crate::s3io::put_update(&endpoint, &bucket, &key, body.as_bytes(), etag)
+                            .unwrap_or(false)
+                    },
+                    &worker,
+                    now,
+                );
+                if out != HeartbeatOutcome::Renewed
+                    && let Ok(mut g) = held.lock()
+                {
+                    // Not ours any more (or gone): stop renewing it.
+                    g.remove(&cid);
+                    eprintln!(
+                        "zenfleet-worker: lease heartbeat for chunk {cid}: {out:?}; no longer renewed"
+                    );
+                }
+            }
+        }
+    });
+}
+
 /// Read the run-control object (goal C: pause/drain). Absent or unparseable → `RUNNING` — fail-open,
 /// so a missing/garbled control object can never wedge the fleet. In-process GET (was `aws s3api
 /// get-object`) — this runs once per pass, at fleet pass rates the CLI startup cost added up the
@@ -1515,6 +1642,12 @@ where
 /// cost model, floored high enough that spawn/fetch jitter never clips a real cell. The
 /// watchdog stops INFINITE holds; it does not police slow-but-working cells.
 fn cell_deadline_secs(job: &DesiredJob) -> u64 {
+    // Rev4 fit cells are finite, deterministic trainings whose wall time varies ~8x across
+    // worker CPUs (measured: P0 H128 on a Zen+ worker ~3.6 h; D2 H128 cells cost ~1.6x that).
+    // The 4 h clamp below would kill them; the watchdog here only has to stop infinite holds.
+    if matches!(job.kind, JobKind::FitCell { .. }) {
+        return 24 * 3600;
+    }
     let mem = job.hint.map(|h| h.peak_mem_bytes).unwrap_or(2 << 30);
     let est = job.kind.estimate_cost_sec(mem);
     ((est * 20.0).ceil() as u64).clamp(120, 4 * 3600)
@@ -2116,6 +2249,7 @@ fn kind_name(kind: &JobKind) -> &'static str {
         JobKind::Metric { .. } => "metric",
         JobKind::ScoreFile { .. } => "score_file",
         JobKind::Feature { .. } => "feature",
+        JobKind::FitCell { .. } => "fit_cell",
         JobKind::Diffmap { .. } => "diffmap",
         JobKind::Resample { .. } => "resample",
         JobKind::Bake { .. } => "bake",
@@ -2703,6 +2837,19 @@ fn run_chunked(
             // per-cell path's `inflight` below, just keyed on the chunk id string.
             let chunk_inflight: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
             spawn_spot_reclaim_chunk(chunk_inflight.clone(), &t.endpoint, &cc.bucket, &cc.prefix);
+            // Long-cell lease safety: a fit chunk is one multi-hour cell, so renew held chunk
+            // claims on a timer (see `spawn_chunk_heartbeat`), not only on cell completion.
+            let held: HeldChunks = Arc::new(Mutex::new(Default::default()));
+            if needs_chunk_heartbeat(desired) {
+                spawn_chunk_heartbeat(
+                    held.clone(),
+                    &t.endpoint,
+                    &cc.bucket,
+                    &cc.prefix,
+                    &cfg.worker,
+                    cc.ttl_secs,
+                );
+            }
             execute_gap_chunked(
                 desired,
                 view,
@@ -2711,18 +2858,21 @@ fn run_chunked(
                 &store,
                 // One R2 lease per chunk (spec-execution off for chunks; TTL reclaim covers it).
                 // Wrapped so a WON claim also records the chunk id for spot-reclaim (see above).
-                track_chunk_inflight(chunk_inflight, |cid| {
-                    claim_or_steal_r2_key(
-                        &t.endpoint,
-                        &cc.bucket,
-                        &cc.prefix,
-                        cid,
-                        cfg.now,
-                        cc.ttl_secs,
-                        None,
-                        &cfg.worker,
-                    )
-                }),
+                track_chunk_held(
+                    held.clone(),
+                    track_chunk_inflight(chunk_inflight, |cid| {
+                        claim_or_steal_r2_key(
+                            &t.endpoint,
+                            &cc.bucket,
+                            &cc.prefix,
+                            cid,
+                            cfg.now,
+                            cc.ttl_secs,
+                            None,
+                            &cfg.worker,
+                        )
+                    }),
+                ),
                 {
                     // Invariant 1: real renewal on the lease path — overwrite OUR claim with a
                     // fresh ts + progress. read_claim parses the FIRST token, so the progress
@@ -2734,8 +2884,14 @@ fn run_chunked(
                         cfg.worker.clone(),
                     );
                     let mut p = params;
+                    let held_renew = held.clone();
                     p.renew = Some(std::sync::Arc::new(
                         move |cid: &str, done: u32, total: u32| {
+                            if done >= total
+                                && let Ok(mut g) = held_renew.lock()
+                            {
+                                g.remove(cid);
+                            }
                             let now = std::time::SystemTime::now()
                                 .duration_since(std::time::UNIX_EPOCH)
                                 .map(|d| d.as_secs())
@@ -3331,6 +3487,18 @@ mod tests {
     }
 
     #[test]
+    fn fit_cell_deadline_exceeds_the_generic_four_hour_cap() {
+        let mut job = desired("cvvdp", b"probe");
+        job.kind = JobKind::FitCell {
+            program_sha: "p".into(),
+            data_sha: "d".into(),
+            argv_sha: "a".into(),
+            argv: vec!["mlp_probe.py".into(), "--hidden".into(), "128".into()],
+        };
+        assert_eq!(cell_deadline_secs(&job), 24 * 3600);
+    }
+
+    #[test]
     fn cgroup_mem_limit_parses_and_ignores_sentinels() {
         // Pure-parse contract check via the real fn on this host: whatever it returns must be
         // either None or a sane positive value below the 1 PiB sentinel cutoff.
@@ -3794,6 +3962,101 @@ mod tests {
         let wrapped2 = track_chunk_inflight(inflight.clone(), |cid| cid == "chunk-2");
         assert!(wrapped2("chunk-2"));
         assert_eq!(*inflight.lock().unwrap(), Some("chunk-2".to_string()));
+    }
+
+    /// The lease heartbeat renews only claims this worker still owns, keeps the progress
+    /// suffix, and never writes over another worker's steal.
+    #[test]
+    fn chunk_heartbeat_renews_only_our_own_claim() {
+        // Ours: refreshed, worker and progress preserved, conditional on the read ETag.
+        let wrote = std::cell::RefCell::new(None);
+        let out = heartbeat_chunk_claim(
+            || Some(("100 w1 0/1".to_string(), "etag-1".to_string())),
+            |body, etag| {
+                *wrote.borrow_mut() = Some((body.to_string(), etag.to_string()));
+                true
+            },
+            "w1",
+            5_000,
+        );
+        assert_eq!(out, HeartbeatOutcome::Renewed);
+        assert_eq!(
+            wrote.into_inner(),
+            Some(("5000 w1 0/1".to_string(), "etag-1".to_string()))
+        );
+
+        // A fresh claim body has no progress token: default to 0/1.
+        let wrote = std::cell::RefCell::new(None);
+        assert_eq!(
+            heartbeat_chunk_claim(
+                || Some(("100 w1".to_string(), "e".to_string())),
+                |body, _| {
+                    *wrote.borrow_mut() = Some(body.to_string());
+                    true
+                },
+                "w1",
+                7,
+            ),
+            HeartbeatOutcome::Renewed
+        );
+        assert_eq!(wrote.into_inner().as_deref(), Some("7 w1 0/1"));
+
+        // Stolen by another worker: never write.
+        let out = heartbeat_chunk_claim(
+            || Some(("4000 w2 0/1".to_string(), "e".to_string())),
+            |_, _| panic!("must not overwrite another worker's claim"),
+            "w1",
+            5_000,
+        );
+        assert_eq!(out, HeartbeatOutcome::NotOwner);
+
+        // Released / unreadable claim, or a lost conditional write: report Lost, no panic.
+        assert_eq!(
+            heartbeat_chunk_claim(|| None, |_, _| panic!("no claim to renew"), "w1", 1),
+            HeartbeatOutcome::Lost
+        );
+        assert_eq!(
+            heartbeat_chunk_claim(
+                || Some(("1 w1 0/1".to_string(), "e".to_string())),
+                |_, _| false,
+                "w1",
+                2
+            ),
+            HeartbeatOutcome::Lost
+        );
+    }
+
+    /// Only won claims enter the held set (a lost claim is another worker's lease), and the
+    /// heartbeat is enabled exactly when the pending work contains a fit cell.
+    #[test]
+    fn held_chunks_track_won_claims_and_heartbeat_is_fit_only() {
+        let held: HeldChunks = Arc::new(Mutex::new(Default::default()));
+        let wrapped = track_chunk_held(held.clone(), |cid| cid == "chunk-win");
+        assert!(!wrapped("chunk-lose"));
+        assert!(held.lock().unwrap().is_empty());
+        assert!(wrapped("chunk-win"));
+        assert!(held.lock().unwrap().contains("chunk-win"));
+
+        let fit = DesiredJob {
+            requires: vec![],
+            kind: JobKind::FitCell {
+                program_sha: "p".into(),
+                data_sha: "d".into(),
+                argv_sha: "a".into(),
+                argv: vec!["mlp_probe.py".into()],
+            },
+            inputs: vec![sha256(b"fit")],
+            cell: CellId {
+                image_path: "POT_x/o0_r0".into(),
+                codec: "fit".into(),
+                q: 0,
+                knob_tuple_json: "{}".into(),
+            },
+            hint: None,
+        };
+        assert!(needs_chunk_heartbeat(std::slice::from_ref(&fit)));
+        assert!(!needs_chunk_heartbeat(&[cheap_cell(1)]));
+        assert!(!needs_chunk_heartbeat(&[]));
     }
 
     /// A distinct, cheap encode cell (4 MB / 1 thread → packs many per chunk). Distinct `inputs`

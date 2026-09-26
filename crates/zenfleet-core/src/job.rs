@@ -207,6 +207,16 @@ pub enum JobKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         revision: Option<String>,
     },
+    /// A hermetic fit cell. The three hashes bind the baked fit program,
+    /// content-addressed data bundle and canonical JSON argv bytes. The argv
+    /// is carried on the wire so the executor need not infer work from a path.
+    /// Existing kind serialization and job IDs are unaffected by this new arm.
+    FitCell {
+        program_sha: String,
+        data_sha: String,
+        argv_sha: String,
+        argv: Vec<String>,
+    },
     Diffmap {
         metric: String,
         /// HDR diffmap (HDR-corpus B2): the executor decodes reference +
@@ -355,6 +365,7 @@ impl JobKind {
                     add("feature-rev");
                 }
             }
+            JobKind::FitCell { .. } => add("fit-cell-v1"),
             JobKind::Resample { .. } | JobKind::Bake { .. } => {}
         }
         req
@@ -390,6 +401,11 @@ impl JobKind {
                 class: ResourceClass::CpuHeavy,
                 group_by: GroupBy::SourceSha,
                 output_regenerability: Regenerability::CheapRegenerable,
+            },
+            JobKind::FitCell { .. } => JobProfile {
+                class: ResourceClass::CpuHeavy,
+                group_by: GroupBy::None,
+                output_regenerability: Regenerability::ExpensiveRegenerable,
             },
             JobKind::Diffmap { metric, .. } => JobProfile {
                 class: diffmap_class(metric),
@@ -530,6 +546,22 @@ impl JobKind {
     /// per-cell memory bound (that is [`crate::schedule::BoxBudget::can_admit`]). Refine the constants
     /// from measured omni `encode_ms` telemetry when it lands.
     pub fn estimate_cost_sec(&self, peak_mem_bytes: u64) -> f64 {
+        // Rev4 fit cells: measured on the dev box, the H32 cells sum to ~400 s of
+        // training and the H128 cells to ~1600 s (kadid_train H32 n=22: 392-406 s;
+        // konfig_val H128 n=21: 1450-1624 s). Their small RAM footprint is not a proxy
+        // for CPU time; the generic memory estimate would shorten the worker watchdog
+        // to 1620 s.
+        if let JobKind::FitCell { argv, .. } = self {
+            let h128 = argv.windows(2).any(|w| w[0] == "--hidden" && w[1] == "128");
+            // Dev-box training-time sums per cell (H32 / H128): P0 400 / 1600, P2 450 / 1800
+            // (P2 GMSD-peer cells), D2 source-held-out cells 650 / 2650 (seven trainings each).
+            let (h32_sec, h128_sec) = match argv.first().map(String::as_str) {
+                Some("p2_mlp.py") => (450.0, 1800.0),
+                Some("p2_lodo_mlp.py") => (650.0, 2650.0),
+                _ => (400.0, 1600.0),
+            };
+            return if h128 { h128_sec } else { h32_sec };
+        }
         const GIB: f64 = (1u64 << 30) as f64;
         // Floor: even a 64×64 cell pays process spawn + source fetch + IO — no cell is free.
         const FLOOR_SEC: f64 = 1.0;
@@ -1183,5 +1215,147 @@ mod tests {
         assert!(!gpu.required_capabilities().is_empty());
         assert_eq!(mk("cvvdp@-gpu").profile().class, ResourceClass::CpuHeavy);
         assert_eq!(disp.profile().group_by, GroupBy::SourceSha);
+    }
+
+    #[test]
+    fn fit_cell_cost_follows_hidden_width() {
+        let mk = |hidden: &str| JobKind::FitCell {
+            program_sha: "p".into(),
+            data_sha: "d".into(),
+            argv_sha: "a".into(),
+            argv: ["mlp_probe.py", "--hidden", hidden, "--rep", "0"]
+                .map(String::from)
+                .to_vec(),
+        };
+        assert_eq!(mk("32").estimate_cost_sec(1 << 20), 400.0);
+        assert_eq!(mk("128").estimate_cost_sec(1 << 20), 1600.0);
+        let with_script = |script: &str, hidden: &str| JobKind::FitCell {
+            program_sha: "p".into(),
+            data_sha: "d".into(),
+            argv_sha: "a".into(),
+            argv: [script, "--hidden", hidden].map(String::from).to_vec(),
+        };
+        assert_eq!(with_script("p2_mlp.py", "32").estimate_cost_sec(0), 450.0);
+        assert_eq!(with_script("p2_mlp.py", "128").estimate_cost_sec(0), 1800.0);
+        assert_eq!(
+            with_script("p2_lodo_mlp.py", "32").estimate_cost_sec(0),
+            650.0
+        );
+        assert_eq!(
+            with_script("p2_lodo_mlp.py", "128").estimate_cost_sec(0),
+            2650.0
+        );
+    }
+
+    #[test]
+    fn fit_cell_identity_binds_program_data_and_argv() {
+        use crate::content::sha256;
+        use crate::ids::JobId;
+        let program = sha256(b"program");
+        let data = sha256(b"data");
+        let argv = vec!["mlp_probe.py".to_string(), "--rep".into(), "0".into()];
+        let argv_sha = sha256(&serde_json::to_vec(&argv).unwrap());
+        let mk = |p: &str, d: &str, a: &str| JobKind::FitCell {
+            program_sha: p.into(),
+            data_sha: d.into(),
+            argv_sha: a.into(),
+            argv: argv.clone(),
+        };
+        let kind = mk(program.as_str(), data.as_str(), argv_sha.as_str());
+        let inputs = [program.clone(), data.clone(), argv_sha.clone()];
+        let id = JobId::of(&kind, &inputs);
+        assert_eq!(id, JobId::of(&kind, &inputs));
+        assert_ne!(
+            id,
+            JobId::of(
+                &mk(
+                    sha256(b"program2").as_str(),
+                    data.as_str(),
+                    argv_sha.as_str()
+                ),
+                &inputs
+            )
+        );
+        assert_ne!(
+            id,
+            JobId::of(
+                &mk(
+                    program.as_str(),
+                    sha256(b"data2").as_str(),
+                    argv_sha.as_str()
+                ),
+                &inputs
+            )
+        );
+        assert_ne!(
+            id,
+            JobId::of(
+                &mk(program.as_str(), data.as_str(), sha256(b"argv2").as_str()),
+                &inputs
+            )
+        );
+        assert_eq!(kind.required_capabilities(), vec!["fit-cell-v1"]);
+        assert_eq!(kind.estimate_cost_sec(2 << 30), 400.0);
+        assert_eq!(
+            serde_json::from_str::<JobKind>(&serde_json::to_string(&kind).unwrap()).unwrap(),
+            kind
+        );
+    }
+
+    /// Golden serialization and job id for a real declared P0 fit cell (the
+    /// determinism-gate cell). ~2,100 declared cells and their ledger rows are
+    /// keyed by this shape: if the serde form of `FitCell` drifts, every one of
+    /// those ids changes silently. Recomputed independently in Python from the
+    /// canonical form (tag first, then program, data, argv sha, argv).
+    #[test]
+    fn fit_cell_serialization_and_job_id_are_golden_stable() {
+        use crate::content::Sha256Hex;
+        use crate::ids::JobId;
+        let program = "a115996c1c535bb1cfff526cfe9ac08b0eaa89ff5842b09fae03293cd8c4eb5b";
+        let data = "5db2419e2bb24e6f75b000d03c99e137e17fd6a710f89c39208b793e86184af4";
+        let argv_sha = "5b8e7e7f01b63a1b2d37371a8138471172e2d2ee2d74182bca7e7702be62bc23";
+        let argv: Vec<String> = [
+            "mlp_probe.py",
+            "--set",
+            "kadid_train",
+            "--arm",
+            "r0",
+            "--hidden",
+            "32",
+            "--outer",
+            "0",
+            "--rep",
+            "0",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        let kind = JobKind::FitCell {
+            program_sha: program.into(),
+            data_sha: data.into(),
+            argv_sha: argv_sha.into(),
+            argv: argv.clone(),
+        };
+        assert_eq!(
+            serde_json::to_string(&kind).unwrap(),
+            format!(
+                r#"{{"kind":"fit_cell","program_sha":"{program}","data_sha":"{data}","argv_sha":"{argv_sha}","argv":{}}}"#,
+                serde_json::to_string(&argv).unwrap()
+            ),
+        );
+        // argv_sha is the sha256 of the argv's compact JSON.
+        assert_eq!(
+            crate::content::sha256(&serde_json::to_vec(&argv).unwrap()).as_str(),
+            argv_sha
+        );
+        let inputs = [
+            Sha256Hex::parse(program).unwrap(),
+            Sha256Hex::parse(data).unwrap(),
+            Sha256Hex::parse(argv_sha).unwrap(),
+        ];
+        assert_eq!(
+            JobId::of(&kind, &inputs).as_str(),
+            "64b6925760fc41fd15aca593ada2c85ba8420490ced978e98e5967e4d9d448a5",
+        );
     }
 }

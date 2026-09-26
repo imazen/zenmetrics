@@ -40,6 +40,82 @@ pub struct DeclareSpec {
     pub metrics: Vec<String>,
 }
 
+/// Content-addressed program and data shared by a grid of independent fit cells.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FitDeclareSpec {
+    pub program_sha: String,
+    pub data_sha: String,
+    pub cells: Vec<FitDeclareCell>,
+}
+
+/// `argv` is the exact executor argv, including the script name. `name` is the
+/// human-readable destination key; it cannot affect the content-addressed ID.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FitDeclareCell {
+    pub name: String,
+    pub argv: Vec<String>,
+}
+
+/// Declare fit cells through the same ledger/worker contract as other jobs.
+/// The sorted input hashes include the program, data, and canonical argv JSON.
+pub fn declare_fits(spec: &FitDeclareSpec) -> Result<Vec<DesiredJob>, String> {
+    let program = Sha256Hex::parse(spec.program_sha.clone()).map_err(|e| e.to_string())?;
+    let data = Sha256Hex::parse(spec.data_sha.clone()).map_err(|e| e.to_string())?;
+    let mut seen_names = std::collections::HashSet::new();
+    let mut seen_ids = std::collections::HashSet::new();
+    let mut jobs = Vec::with_capacity(spec.cells.len());
+    for cell in &spec.cells {
+        // Same shape `fit_cell_exec.py` enforces: exactly `<set_arm>/<outer_rep>`, two plain path
+        // components, so a declaration the executor would reject fails here instead.
+        let parts: Vec<&str> = cell.name.split('/').collect();
+        if parts.len() != 2
+            || parts
+                .iter()
+                .any(|p| p.is_empty() || *p == "." || *p == "..")
+        {
+            return Err(format!("unsafe fit cell name {:?}", cell.name));
+        }
+        if !seen_names.insert(&cell.name) {
+            return Err(format!("duplicate fit cell name {:?}", cell.name));
+        }
+        if cell.argv.is_empty() || cell.argv.iter().any(|arg| arg.is_empty()) {
+            return Err(format!("empty argv in fit cell {:?}", cell.name));
+        }
+        let argv_bytes = serde_json::to_vec(&cell.argv).map_err(|e| e.to_string())?;
+        let argv_sha = zenfleet_core::sha256(&argv_bytes);
+        let kind = JobKind::FitCell {
+            program_sha: program.to_string(),
+            data_sha: data.to_string(),
+            argv_sha: argv_sha.to_string(),
+            argv: cell.argv.clone(),
+        };
+        let requires = kind.required_capabilities();
+        let job = DesiredJob::new(
+            kind,
+            vec![program.clone(), data.clone(), argv_sha],
+            CellId {
+                image_path: cell.name.clone(),
+                codec: "fit".into(),
+                q: 0,
+                knob_tuple_json: "{}".into(),
+            },
+        )
+        .with_requires(requires)
+        .with_hint(ResourceHint {
+            // Includes the Python/Arrow loader and complete fit output archive. A packing estimate
+            // only (not part of the job id); the worker's fit-cell watchdog is a fixed 24 h.
+            peak_mem_bytes: 2 << 30,
+            threads: 4,
+            vram_bytes: None,
+        });
+        if !seen_ids.insert(job.job_id().0.as_str().to_string()) {
+            return Err(format!("duplicate fit work at {:?}", cell.name));
+        }
+        jobs.push(job);
+    }
+    Ok(jobs)
+}
+
 /// One encode to declare: the cell identity plus the content hash of the SOURCE image (the
 /// encode job's input blob). This is the line format `zenmetrics sweep --plan … --dry-run
 /// --emit-cells <path>` writes (JSON-lines, one item per line); the two sides are coupled by field
@@ -385,6 +461,7 @@ fn metric_label(kind: &JobKind) -> String {
             Some(r) => format!("feature:{regime}@rev{r}"),
             None => format!("feature:{regime}"),
         },
+        JobKind::FitCell { .. } => "fit_cell".into(),
         JobKind::Encode { .. } => "encode".into(),
         JobKind::Resample { .. } => "resample".into(),
         JobKind::Bake { .. } => "bake".into(),
@@ -1668,5 +1745,55 @@ mod declare_feature_tests {
     #[test]
     fn refuses_an_empty_regime() {
         assert!(declare_features(&pairs(&[("r", "d")]), "  ", None, 8, None).is_err());
+    }
+
+    #[test]
+    fn fit_declaration_is_stable_and_rejects_duplicate_work() {
+        let spec = FitDeclareSpec {
+            program_sha: zenfleet_core::sha256(b"program").to_string(),
+            data_sha: zenfleet_core::sha256(b"data").to_string(),
+            cells: vec![FitDeclareCell {
+                name: "POT_x_r0_mlp32/o0_r0".into(),
+                argv: vec!["mlp_probe.py".into(), "--rep".into(), "0".into()],
+            }],
+        };
+        let a = declare_fits(&spec).unwrap();
+        let b = declare_fits(&spec).unwrap();
+        assert_eq!(a[0].job_id(), b[0].job_id());
+        assert_eq!(a[0].requires, vec!["fit-cell-v1"]);
+        assert_eq!(a[0].inputs.len(), 3);
+        let mut changed = spec.clone();
+        changed.cells[0].argv[2] = "1".into();
+        assert_ne!(a[0].job_id(), declare_fits(&changed).unwrap()[0].job_id());
+        let mut duplicate = spec.clone();
+        duplicate.cells[0].name = "POT_y_r0_mlp32/o0_r0".into();
+        duplicate.cells.push(spec.cells[0].clone());
+        duplicate.cells[1].name = "POT_z_r0_mlp32/o0_r0".into();
+        duplicate.cells[1].argv = duplicate.cells[0].argv.clone();
+        assert!(
+            declare_fits(&duplicate).is_err(),
+            "same argv under two names is duplicate work"
+        );
+        let mut same_name = spec.clone();
+        same_name.cells.push(spec.cells[0].clone());
+        assert!(declare_fits(&same_name).is_err(), "duplicate cell name");
+    }
+
+    /// Names the executor would reject are refused at declare time.
+    #[test]
+    fn fit_declaration_refuses_unsafe_or_misshapen_names() {
+        for bad in [
+            "", "one", "/abs/x", "a/b/c", "a/../b", "../b", "a/", "/b", "a/.",
+        ] {
+            let spec = FitDeclareSpec {
+                program_sha: zenfleet_core::sha256(b"program").to_string(),
+                data_sha: zenfleet_core::sha256(b"data").to_string(),
+                cells: vec![FitDeclareCell {
+                    name: bad.into(),
+                    argv: vec!["mlp_probe.py".into()],
+                }],
+            };
+            assert!(declare_fits(&spec).is_err(), "{bad:?} must be refused");
+        }
     }
 }

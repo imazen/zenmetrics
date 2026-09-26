@@ -37,8 +37,8 @@ fn shellexpand_home(p: &str) -> String {
     p.to_string()
 }
 use zenfleet_ctl::{
-    DeclareSpec, coverage, declare, declare_diffmaps, declare_encodes, declare_features, gap,
-    parse_emit_cells, parse_feature_pairs,
+    DeclareSpec, FitDeclareSpec, coverage, declare, declare_diffmaps, declare_encodes,
+    declare_features, declare_fits, gap, parse_emit_cells, parse_feature_pairs,
 };
 
 #[derive(Parser)]
@@ -53,6 +53,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Declare content-addressed fit cells from a program/data/argv spec.
+    DeclareFits {
+        #[arg(long)]
+        spec: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Expand a spec.json into a DesiredJob manifest (goal A: declare).
     Declare {
         #[arg(long)]
@@ -532,6 +539,12 @@ fn read_ledger_prefix(ep: &str, prefix: &str) -> (Vec<zenfleet_core::LedgerRow>,
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     match Cli::parse().cmd {
+        Cmd::DeclareFits { spec, out } => {
+            let s: FitDeclareSpec = serde_json::from_slice(&std::fs::read(&spec)?)?;
+            let jobs = declare_fits(&s)?;
+            std::fs::write(&out, serde_json::to_vec_pretty(&jobs)?)?;
+            eprintln!("declared {} fit cells -> {}", jobs.len(), out.display());
+        }
         Cmd::Declare { spec, out } => {
             let s: DeclareSpec = serde_json::from_slice(&std::fs::read(&spec)?)?;
             let jobs = declare(&s)?;
