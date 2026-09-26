@@ -57,8 +57,7 @@ impl Stop for CountingStop {
 const W: u32 = 256;
 const H: u32 = 256;
 // Mode B strip body: power of two, 4 strips at 256 rows → 4 polls in
-// the strip-major walker (CUDA-only test, see below).
-#[cfg(feature = "cuda")]
+// the strip-major walker.
 const BODY_H: u32 = 64;
 
 fn pair() -> (Vec<u8>, Vec<u8>) {
@@ -124,14 +123,10 @@ fn full_mode_polls_per_pyramid_level() {
 /// Mode B (StripPair) with several strips polls once per strip inside
 /// the strip-major shallow walker, ahead of the per-level polls.
 ///
-/// CUDA-only: the multi-strip Mode B walker panics inside wgpu on
-/// Metal (`wgpu_core.rs` / cubecl `client.rs:105 CallError`) before any
-/// of this crate's code runs — pre-existing, the same failure the
-/// baseline `mode_b_walker_parity::mode_b_walker_jod_matches_full_at_*`
-/// tests show on Metal (verified 2026-08-28, see CLAUDE.md Known Bugs).
 /// Single-strip Mode B (64×64 / h_body 512) takes `k_split = 0` and
 /// never enters the strip-major walker, so it cannot pin this poll.
-#[cfg(feature = "cuda")]
+/// (Was CUDA-only until the multi-strip Mode B walker stopped binding
+/// unaligned sub-views on wgpu, 2026-09-26.)
 #[test]
 fn strip_pair_mode_polls_per_strip() {
     let (r, d) = pair();
