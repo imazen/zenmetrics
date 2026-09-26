@@ -239,6 +239,133 @@ pub fn csf_apply_6ch_kernel(
     ch_gain_vy: f32,
     n: u32,
 ) {
+    csf_apply_6ch_at(
+        weber_ref_a,
+        weber_ref_rg,
+        weber_ref_vy,
+        weber_dis_a,
+        weber_dis_rg,
+        weber_dis_vy,
+        log_l_bkg,
+        logs_row_a,
+        logs_row_rg,
+        logs_row_vy,
+        t_p_ref_a,
+        t_p_ref_rg,
+        t_p_ref_vy,
+        t_p_dis_a,
+        t_p_dis_rg,
+        t_p_dis_vy,
+        ch_gain_a,
+        ch_gain_rg,
+        ch_gain_vy,
+        n,
+        u32::new(0),
+        u32::new(0),
+        u32::new(0),
+        u32::new(0),
+        u32::new(0),
+    );
+}
+
+/// [`csf_apply_6ch_kernel`] on sub-views that start `shift_*` elements into their
+/// arrays (`shift_wref` for `weber_ref_a`, `weber_ref_rg`, `weber_ref_vy`; `shift_wdis` for `weber_dis_a`, `weber_dis_rg`, `weber_dis_vy`; `shift_lbkg` for `log_l_bkg`; `shift_tpref` for `t_p_ref_a`, `t_p_ref_rg`, `t_p_ref_vy`; `shift_tpdis` for `t_p_dis_a`, `t_p_dis_rg`, `t_p_dis_vy`). The strip walkers bind
+/// sub-views at 256-byte-aligned offsets (`aligned_split` in `pipeline.rs`)
+/// because wgpu rejects a storage binding whose offset is not a multiple of
+/// `min_storage_buffer_offset_alignment`, and pass the leftover elements here.
+#[cube(launch)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn csf_apply_6ch_shifted_kernel(
+    weber_ref_a: &Array<f32>,
+    weber_ref_rg: &Array<f32>,
+    weber_ref_vy: &Array<f32>,
+    weber_dis_a: &Array<f32>,
+    weber_dis_rg: &Array<f32>,
+    weber_dis_vy: &Array<f32>,
+    log_l_bkg: &Array<f32>,
+    logs_row_a: &Array<f32>,
+    logs_row_rg: &Array<f32>,
+    logs_row_vy: &Array<f32>,
+    t_p_ref_a: &mut Array<f32>,
+    t_p_ref_rg: &mut Array<f32>,
+    t_p_ref_vy: &mut Array<f32>,
+    t_p_dis_a: &mut Array<f32>,
+    t_p_dis_rg: &mut Array<f32>,
+    t_p_dis_vy: &mut Array<f32>,
+    ch_gain_a: f32,
+    ch_gain_rg: f32,
+    ch_gain_vy: f32,
+    n: u32,
+    shift_wref: u32,
+    shift_wdis: u32,
+    shift_lbkg: u32,
+    shift_tpref: u32,
+    shift_tpdis: u32,
+) {
+    csf_apply_6ch_at(
+        weber_ref_a,
+        weber_ref_rg,
+        weber_ref_vy,
+        weber_dis_a,
+        weber_dis_rg,
+        weber_dis_vy,
+        log_l_bkg,
+        logs_row_a,
+        logs_row_rg,
+        logs_row_vy,
+        t_p_ref_a,
+        t_p_ref_rg,
+        t_p_ref_vy,
+        t_p_dis_a,
+        t_p_dis_rg,
+        t_p_dis_vy,
+        ch_gain_a,
+        ch_gain_rg,
+        ch_gain_vy,
+        n,
+        shift_wref,
+        shift_wdis,
+        shift_lbkg,
+        shift_tpref,
+        shift_tpdis,
+    );
+}
+
+#[cube]
+#[allow(clippy::too_many_arguments)]
+fn csf_apply_6ch_at(
+    weber_ref_a: &Array<f32>,
+    weber_ref_rg: &Array<f32>,
+    weber_ref_vy: &Array<f32>,
+    weber_dis_a: &Array<f32>,
+    weber_dis_rg: &Array<f32>,
+    weber_dis_vy: &Array<f32>,
+    log_l_bkg: &Array<f32>,
+    logs_row_a: &Array<f32>,
+    logs_row_rg: &Array<f32>,
+    logs_row_vy: &Array<f32>,
+    t_p_ref_a: &mut Array<f32>,
+    t_p_ref_rg: &mut Array<f32>,
+    t_p_ref_vy: &mut Array<f32>,
+    t_p_dis_a: &mut Array<f32>,
+    t_p_dis_rg: &mut Array<f32>,
+    t_p_dis_vy: &mut Array<f32>,
+    ch_gain_a: f32,
+    ch_gain_rg: f32,
+    ch_gain_vy: f32,
+    n: u32,
+    shift_wref: u32,
+    shift_wdis: u32,
+    shift_lbkg: u32,
+    shift_tpref: u32,
+    shift_tpdis: u32,
+) {
+    let s_wref = shift_wref as usize;
+    let s_wdis = shift_wdis as usize;
+    let s_lbkg = shift_lbkg as usize;
+    let s_tpref = shift_tpref as usize;
+    let s_tpdis = shift_tpdis as usize;
+
     let idx = ABSOLUTE_POS;
     if idx >= n as usize {
         terminate!();
@@ -250,7 +377,7 @@ pub fn csf_apply_6ch_kernel(
     let log_correction = f32::new(-0.013_987_1_f32);
 
     // Bracket math: shared across all 6 outputs.
-    let log_l = log_l_bkg[idx];
+    let log_l = log_l_bkg[(idx) + s_lbkg];
     let off_raw = (log_l - axis_min) * inv_step;
     let off_lo = if off_raw < f32::new(0.0_f32) {
         f32::new(0.0_f32)
@@ -273,24 +400,24 @@ pub fn csf_apply_6ch_kernel(
     let log_s_a = lo_a + frac * (hi_a - lo_a) + log_correction;
     let s_a = f32::exp(log_s_a * ln_10);
     let scale_a = s_a * ch_gain_a;
-    t_p_ref_a[idx] = weber_ref_a[idx] * scale_a;
-    t_p_dis_a[idx] = weber_dis_a[idx] * scale_a;
+    t_p_ref_a[(idx) + s_tpref] = weber_ref_a[(idx) + s_wref] * scale_a;
+    t_p_dis_a[(idx) + s_tpdis] = weber_dis_a[(idx) + s_wdis] * scale_a;
 
     let lo_rg = logs_row_rg[lo_idx];
     let hi_rg = logs_row_rg[hi_idx];
     let log_s_rg = lo_rg + frac * (hi_rg - lo_rg) + log_correction;
     let s_rg = f32::exp(log_s_rg * ln_10);
     let scale_rg = s_rg * ch_gain_rg;
-    t_p_ref_rg[idx] = weber_ref_rg[idx] * scale_rg;
-    t_p_dis_rg[idx] = weber_dis_rg[idx] * scale_rg;
+    t_p_ref_rg[(idx) + s_tpref] = weber_ref_rg[(idx) + s_wref] * scale_rg;
+    t_p_dis_rg[(idx) + s_tpdis] = weber_dis_rg[(idx) + s_wdis] * scale_rg;
 
     let lo_vy = logs_row_vy[lo_idx];
     let hi_vy = logs_row_vy[hi_idx];
     let log_s_vy = lo_vy + frac * (hi_vy - lo_vy) + log_correction;
     let s_vy = f32::exp(log_s_vy * ln_10);
     let scale_vy = s_vy * ch_gain_vy;
-    t_p_ref_vy[idx] = weber_ref_vy[idx] * scale_vy;
-    t_p_dis_vy[idx] = weber_dis_vy[idx] * scale_vy;
+    t_p_ref_vy[(idx) + s_tpref] = weber_ref_vy[(idx) + s_wref] * scale_vy;
+    t_p_dis_vy[(idx) + s_tpdis] = weber_dis_vy[(idx) + s_wdis] * scale_vy;
 }
 
 /// Multiply `band` in-place by `weights[weight_idx]`. `weights` is a

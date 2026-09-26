@@ -297,6 +297,78 @@ pub fn downscale_strip_kernel(
     logical_src_h: u32,
     logical_dst_h: u32,
 ) {
+    downscale_strip_at(
+        src,
+        dst,
+        src_w,
+        src_h,
+        dst_w,
+        dst_h,
+        body_offset_y,
+        src_strip_offset,
+        logical_src_h,
+        logical_dst_h,
+        u32::new(0),
+        u32::new(0),
+    );
+}
+
+/// [`downscale_strip_kernel`] on sub-views that start `shift_*` elements into their
+/// arrays (`shift_src` for `src`; `shift_dst` for `dst`). The strip walkers bind
+/// sub-views at 256-byte-aligned offsets (`aligned_split` in `pipeline.rs`)
+/// because wgpu rejects a storage binding whose offset is not a multiple of
+/// `min_storage_buffer_offset_alignment`, and pass the leftover elements here.
+#[cube(launch)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn downscale_strip_shifted_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    src_w: u32,
+    src_h: u32,
+    dst_w: u32,
+    dst_h: u32,
+    body_offset_y: u32,
+    src_strip_offset: u32,
+    logical_src_h: u32,
+    logical_dst_h: u32,
+    shift_src: u32,
+    shift_dst: u32,
+) {
+    downscale_strip_at(
+        src,
+        dst,
+        src_w,
+        src_h,
+        dst_w,
+        dst_h,
+        body_offset_y,
+        src_strip_offset,
+        logical_src_h,
+        logical_dst_h,
+        shift_src,
+        shift_dst,
+    );
+}
+
+#[cube]
+#[allow(clippy::too_many_arguments)]
+fn downscale_strip_at(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    src_w: u32,
+    src_h: u32,
+    dst_w: u32,
+    dst_h: u32,
+    body_offset_y: u32,
+    src_strip_offset: u32,
+    logical_src_h: u32,
+    logical_dst_h: u32,
+    shift_src: u32,
+    shift_dst: u32,
+) {
+    let s_src = shift_src as usize;
+    let s_dst = shift_dst as usize;
+
     let idx = ABSOLUTE_POS;
     let total = (dst_w * dst_h) as usize;
     if idx >= total {
@@ -308,7 +380,7 @@ pub fn downscale_strip_kernel(
 
     // Logical dst row this thread emits — used to compute the
     // logical src center row. The buffer-local dst row index
-    // `dy_local` writes to `dst[idx]` directly.
+    // `dy_local` writes to `dst[(idx) + s_dst]` directly.
     let dy_logical = (dy_local as u32) + body_offset_y;
 
     let cy = 2 * (dy_logical as i32);
@@ -368,31 +440,31 @@ pub fn downscale_strip_kernel(
     };
     let sx4 = sx4_i as usize;
 
-    let col0 = k0 * src[r0 * sw + sx0]
-        + k1 * src[r1 * sw + sx0]
-        + k2 * src[r2 * sw + sx0]
-        + k3 * src[r3 * sw + sx0]
-        + k4 * src[r4 * sw + sx0];
-    let col1 = k0 * src[r0 * sw + sx1]
-        + k1 * src[r1 * sw + sx1]
-        + k2 * src[r2 * sw + sx1]
-        + k3 * src[r3 * sw + sx1]
-        + k4 * src[r4 * sw + sx1];
-    let col2 = k0 * src[r0 * sw + sx2]
-        + k1 * src[r1 * sw + sx2]
-        + k2 * src[r2 * sw + sx2]
-        + k3 * src[r3 * sw + sx2]
-        + k4 * src[r4 * sw + sx2];
-    let col3 = k0 * src[r0 * sw + sx3]
-        + k1 * src[r1 * sw + sx3]
-        + k2 * src[r2 * sw + sx3]
-        + k3 * src[r3 * sw + sx3]
-        + k4 * src[r4 * sw + sx3];
-    let col4 = k0 * src[r0 * sw + sx4]
-        + k1 * src[r1 * sw + sx4]
-        + k2 * src[r2 * sw + sx4]
-        + k3 * src[r3 * sw + sx4]
-        + k4 * src[r4 * sw + sx4];
+    let col0 = k0 * src[(r0 * sw + sx0) + s_src]
+        + k1 * src[(r1 * sw + sx0) + s_src]
+        + k2 * src[(r2 * sw + sx0) + s_src]
+        + k3 * src[(r3 * sw + sx0) + s_src]
+        + k4 * src[(r4 * sw + sx0) + s_src];
+    let col1 = k0 * src[(r0 * sw + sx1) + s_src]
+        + k1 * src[(r1 * sw + sx1) + s_src]
+        + k2 * src[(r2 * sw + sx1) + s_src]
+        + k3 * src[(r3 * sw + sx1) + s_src]
+        + k4 * src[(r4 * sw + sx1) + s_src];
+    let col2 = k0 * src[(r0 * sw + sx2) + s_src]
+        + k1 * src[(r1 * sw + sx2) + s_src]
+        + k2 * src[(r2 * sw + sx2) + s_src]
+        + k3 * src[(r3 * sw + sx2) + s_src]
+        + k4 * src[(r4 * sw + sx2) + s_src];
+    let col3 = k0 * src[(r0 * sw + sx3) + s_src]
+        + k1 * src[(r1 * sw + sx3) + s_src]
+        + k2 * src[(r2 * sw + sx3) + s_src]
+        + k3 * src[(r3 * sw + sx3) + s_src]
+        + k4 * src[(r4 * sw + sx3) + s_src];
+    let col4 = k0 * src[(r0 * sw + sx4) + s_src]
+        + k1 * src[(r1 * sw + sx4) + s_src]
+        + k2 * src[(r2 * sw + sx4) + s_src]
+        + k3 * src[(r3 * sw + sx4) + s_src]
+        + k4 * src[(r4 * sw + sx4) + s_src];
 
     let mut total_v = k0 * col0 + k1 * col1 + k2 * col2 + k3 * col3 + k4 * col4;
 
@@ -401,16 +473,16 @@ pub fn downscale_strip_kernel(
     // that parity is wrong. `logical_src_h % 2` keeps the delta
     // firing identically to the full-image path.
     if dx == dw - 1 && sw >= 2 {
-        let vs_last = k0 * src[r0 * sw + sw - 1]
-            + k1 * src[r1 * sw + sw - 1]
-            + k2 * src[r2 * sw + sw - 1]
-            + k3 * src[r3 * sw + sw - 1]
-            + k4 * src[r4 * sw + sw - 1];
-        let vs_last2 = k0 * src[r0 * sw + sw - 2]
-            + k1 * src[r1 * sw + sw - 2]
-            + k2 * src[r2 * sw + sw - 2]
-            + k3 * src[r3 * sw + sw - 2]
-            + k4 * src[r4 * sw + sw - 2];
+        let vs_last = k0 * src[(r0 * sw + sw - 1) + s_src]
+            + k1 * src[(r1 * sw + sw - 1) + s_src]
+            + k2 * src[(r2 * sw + sw - 1) + s_src]
+            + k3 * src[(r3 * sw + sw - 1) + s_src]
+            + k4 * src[(r4 * sw + sw - 1) + s_src];
+        let vs_last2 = k0 * src[(r0 * sw + sw - 2) + s_src]
+            + k1 * src[(r1 * sw + sw - 2) + s_src]
+            + k2 * src[(r2 * sw + sw - 2) + s_src]
+            + k3 * src[(r3 * sw + sw - 2) + s_src]
+            + k4 * src[(r4 * sw + sw - 2) + s_src];
 
         let sw_odd = sw % 2 == 1;
         let lsh_odd = (logical_src_h as usize) % 2 == 1;
@@ -428,7 +500,7 @@ pub fn downscale_strip_kernel(
     let _ = sh_buf;
     let _ = logical_dst_h;
 
-    dst[idx] = total_v;
+    dst[(idx) + s_dst] = total_v;
 }
 
 /// Workgroup size (output pixels per side) for the LDS-tiled downscale.
@@ -808,6 +880,72 @@ pub fn upscale_v_strip_kernel(
     body_h: u32,
     src_strip_offset: u32,
 ) {
+    upscale_v_strip_at(
+        src,
+        dst,
+        src_w,
+        logical_src_h,
+        logical_dst_h,
+        body_offset_y,
+        body_h,
+        src_strip_offset,
+        u32::new(0),
+        u32::new(0),
+    );
+}
+
+/// [`upscale_v_strip_kernel`] on sub-views that start `shift_*` elements into their
+/// arrays (`shift_src` for `src`; `shift_dst` for `dst`). The strip walkers bind
+/// sub-views at 256-byte-aligned offsets (`aligned_split` in `pipeline.rs`)
+/// because wgpu rejects a storage binding whose offset is not a multiple of
+/// `min_storage_buffer_offset_alignment`, and pass the leftover elements here.
+#[cube(launch)]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::useless_conversion)]
+pub(crate) fn upscale_v_strip_shifted_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    src_w: u32,
+    logical_src_h: u32,
+    logical_dst_h: u32,
+    body_offset_y: u32,
+    body_h: u32,
+    src_strip_offset: u32,
+    shift_src: u32,
+    shift_dst: u32,
+) {
+    upscale_v_strip_at(
+        src,
+        dst,
+        src_w,
+        logical_src_h,
+        logical_dst_h,
+        body_offset_y,
+        body_h,
+        src_strip_offset,
+        shift_src,
+        shift_dst,
+    );
+}
+
+#[cube]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::useless_conversion)]
+fn upscale_v_strip_at(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    src_w: u32,
+    logical_src_h: u32,
+    logical_dst_h: u32,
+    body_offset_y: u32,
+    body_h: u32,
+    src_strip_offset: u32,
+    shift_src: u32,
+    shift_dst: u32,
+) {
+    let s_src = shift_src as usize;
+    let s_dst = shift_dst as usize;
+
     let idx = ABSOLUTE_POS;
     let total = (src_w * body_h) as usize;
     if idx >= total {
@@ -919,11 +1057,11 @@ pub fn upscale_v_strip_kernel(
         f32::new(0.0_f32)
     };
 
-    dst[idx] = (k0 * m0) * src[y0 as usize * sw + x]
-        + (k1 * m1) * src[y1 as usize * sw + x]
-        + (k2 * m2) * src[y2 as usize * sw + x]
-        + (k3 * m3) * src[y3 as usize * sw + x]
-        + (k4 * m4) * src[y4 as usize * sw + x];
+    dst[(idx) + s_dst] = (k0 * m0) * src[(y0 as usize * sw + x) + s_src]
+        + (k1 * m1) * src[(y1 as usize * sw + x) + s_src]
+        + (k2 * m2) * src[(y2 as usize * sw + x) + s_src]
+        + (k3 * m3) * src[(y3 as usize * sw + x) + s_src]
+        + (k4 * m4) * src[(y4 as usize * sw + x) + s_src];
 }
 
 /// Horizontal pass of the cvvdp expand. Consumes the vertical
@@ -1076,6 +1214,68 @@ pub fn upscale_h_strip_kernel(
     _logical_dst_h: u32,
     _body_offset_y: u32,
 ) {
+    upscale_h_strip_at(
+        src,
+        dst,
+        src_w,
+        dst_w,
+        in_h,
+        _logical_dst_h,
+        _body_offset_y,
+        u32::new(0),
+        u32::new(0),
+    );
+}
+
+/// [`upscale_h_strip_kernel`] on sub-views that start `shift_*` elements into their
+/// arrays (`shift_src` for `src`; `shift_dst` for `dst`). The strip walkers bind
+/// sub-views at 256-byte-aligned offsets (`aligned_split` in `pipeline.rs`)
+/// because wgpu rejects a storage binding whose offset is not a multiple of
+/// `min_storage_buffer_offset_alignment`, and pass the leftover elements here.
+#[cube(launch)]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::useless_conversion)]
+pub(crate) fn upscale_h_strip_shifted_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    src_w: u32,
+    dst_w: u32,
+    in_h: u32,
+    _logical_dst_h: u32,
+    _body_offset_y: u32,
+    shift_src: u32,
+    shift_dst: u32,
+) {
+    upscale_h_strip_at(
+        src,
+        dst,
+        src_w,
+        dst_w,
+        in_h,
+        _logical_dst_h,
+        _body_offset_y,
+        shift_src,
+        shift_dst,
+    );
+}
+
+#[cube]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::useless_conversion)]
+fn upscale_h_strip_at(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    src_w: u32,
+    dst_w: u32,
+    in_h: u32,
+    _logical_dst_h: u32,
+    _body_offset_y: u32,
+    shift_src: u32,
+    shift_dst: u32,
+) {
+    let s_src = shift_src as usize;
+    let s_dst = shift_dst as usize;
+
     let idx = ABSOLUTE_POS;
     let total = (dst_w * in_h) as usize;
     if idx >= total {
@@ -1181,11 +1381,11 @@ pub fn upscale_h_strip_kernel(
     };
 
     let base = y * sw;
-    dst[idx] = (k0 * m0) * src[base + x0 as usize]
-        + (k1 * m1) * src[base + x1 as usize]
-        + (k2 * m2) * src[base + x2 as usize]
-        + (k3 * m3) * src[base + x3 as usize]
-        + (k4 * m4) * src[base + x4 as usize];
+    dst[(idx) + s_dst] = (k0 * m0) * src[(base + x0 as usize) + s_src]
+        + (k1 * m1) * src[(base + x1 as usize) + s_src]
+        + (k2 * m2) * src[(base + x2 as usize) + s_src]
+        + (k3 * m3) * src[(base + x3 as usize) + s_src]
+        + (k4 * m4) * src[(base + x4 as usize) + s_src];
 }
 
 /// `band = fine - upscaled_coarse`.
@@ -1488,6 +1688,117 @@ pub fn subtract_weber_3ch_strip_kernel(
     logical_h: u32,
     src_strip_offset: u32,
 ) {
+    subtract_weber_3ch_strip_at(
+        fine_a,
+        fine_rg,
+        fine_vy,
+        upsc_a,
+        upsc_rg,
+        upsc_vy,
+        expanded_lbkg,
+        contrast_a,
+        contrast_rg,
+        contrast_vy,
+        log_l_bkg,
+        width,
+        body_h,
+        body_offset_y,
+        logical_h,
+        src_strip_offset,
+        u32::new(0),
+        u32::new(0),
+        u32::new(0),
+        u32::new(0),
+        u32::new(0),
+    );
+}
+
+/// [`subtract_weber_3ch_strip_kernel`] on sub-views that start `shift_*` elements into their
+/// arrays (`shift_fine` for `fine_a`, `fine_rg`, `fine_vy`; `shift_upsc` for `upsc_a`, `upsc_rg`, `upsc_vy`; `shift_lbkg` for `expanded_lbkg`; `shift_band` for `contrast_a`, `contrast_rg`, `contrast_vy`; `shift_log` for `log_l_bkg`). The strip walkers bind
+/// sub-views at 256-byte-aligned offsets (`aligned_split` in `pipeline.rs`)
+/// because wgpu rejects a storage binding whose offset is not a multiple of
+/// `min_storage_buffer_offset_alignment`, and pass the leftover elements here.
+#[cube(launch)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn subtract_weber_3ch_strip_shifted_kernel(
+    fine_a: &Array<f32>,
+    fine_rg: &Array<f32>,
+    fine_vy: &Array<f32>,
+    upsc_a: &Array<f32>,
+    upsc_rg: &Array<f32>,
+    upsc_vy: &Array<f32>,
+    expanded_lbkg: &Array<f32>,
+    contrast_a: &mut Array<f32>,
+    contrast_rg: &mut Array<f32>,
+    contrast_vy: &mut Array<f32>,
+    log_l_bkg: &mut Array<f32>,
+    width: u32,
+    body_h: u32,
+    body_offset_y: u32,
+    logical_h: u32,
+    src_strip_offset: u32,
+    shift_fine: u32,
+    shift_upsc: u32,
+    shift_lbkg: u32,
+    shift_band: u32,
+    shift_log: u32,
+) {
+    subtract_weber_3ch_strip_at(
+        fine_a,
+        fine_rg,
+        fine_vy,
+        upsc_a,
+        upsc_rg,
+        upsc_vy,
+        expanded_lbkg,
+        contrast_a,
+        contrast_rg,
+        contrast_vy,
+        log_l_bkg,
+        width,
+        body_h,
+        body_offset_y,
+        logical_h,
+        src_strip_offset,
+        shift_fine,
+        shift_upsc,
+        shift_lbkg,
+        shift_band,
+        shift_log,
+    );
+}
+
+#[cube]
+#[allow(clippy::too_many_arguments)]
+fn subtract_weber_3ch_strip_at(
+    fine_a: &Array<f32>,
+    fine_rg: &Array<f32>,
+    fine_vy: &Array<f32>,
+    upsc_a: &Array<f32>,
+    upsc_rg: &Array<f32>,
+    upsc_vy: &Array<f32>,
+    expanded_lbkg: &Array<f32>,
+    contrast_a: &mut Array<f32>,
+    contrast_rg: &mut Array<f32>,
+    contrast_vy: &mut Array<f32>,
+    log_l_bkg: &mut Array<f32>,
+    width: u32,
+    body_h: u32,
+    body_offset_y: u32,
+    logical_h: u32,
+    src_strip_offset: u32,
+    shift_fine: u32,
+    shift_upsc: u32,
+    shift_lbkg: u32,
+    shift_band: u32,
+    shift_log: u32,
+) {
+    let s_fine = shift_fine as usize;
+    let s_upsc = shift_upsc as usize;
+    let s_lbkg = shift_lbkg as usize;
+    let s_band = shift_band as usize;
+    let s_log = shift_log as usize;
+
     let tid = ABSOLUTE_POS;
     let total = (width * body_h) as usize;
     if tid >= total {
@@ -1510,10 +1821,10 @@ pub fn subtract_weber_3ch_strip_kernel(
     let l_max = f32::new(1000.0_f32);
     let l_min_neg = f32::new(-1000.0_f32);
 
-    let raw_lbkg = expanded_lbkg[idx];
+    let raw_lbkg = expanded_lbkg[(idx) + s_lbkg];
     let l = if raw_lbkg < l_min { l_min } else { raw_lbkg };
 
-    let layer_a = fine_a[idx] - upsc_a[idx];
+    let layer_a = fine_a[(idx) + s_fine] - upsc_a[(idx) + s_upsc];
     let c_a_raw = layer_a / l;
     let c_a_hi = if c_a_raw > l_max { l_max } else { c_a_raw };
     let c_a = if c_a_hi < l_min_neg {
@@ -1521,9 +1832,9 @@ pub fn subtract_weber_3ch_strip_kernel(
     } else {
         c_a_hi
     };
-    contrast_a[idx] = c_a;
+    contrast_a[(idx) + s_band] = c_a;
 
-    let layer_rg = fine_rg[idx] - upsc_rg[idx];
+    let layer_rg = fine_rg[(idx) + s_fine] - upsc_rg[(idx) + s_upsc];
     let c_rg_raw = layer_rg / l;
     let c_rg_hi = if c_rg_raw > l_max { l_max } else { c_rg_raw };
     let c_rg = if c_rg_hi < l_min_neg {
@@ -1531,9 +1842,9 @@ pub fn subtract_weber_3ch_strip_kernel(
     } else {
         c_rg_hi
     };
-    contrast_rg[idx] = c_rg;
+    contrast_rg[(idx) + s_band] = c_rg;
 
-    let layer_vy = fine_vy[idx] - upsc_vy[idx];
+    let layer_vy = fine_vy[(idx) + s_fine] - upsc_vy[(idx) + s_upsc];
     let c_vy_raw = layer_vy / l;
     let c_vy_hi = if c_vy_raw > l_max { l_max } else { c_vy_raw };
     let c_vy = if c_vy_hi < l_min_neg {
@@ -1541,9 +1852,9 @@ pub fn subtract_weber_3ch_strip_kernel(
     } else {
         c_vy_hi
     };
-    contrast_vy[idx] = c_vy;
+    contrast_vy[(idx) + s_band] = c_vy;
 
-    log_l_bkg[idx] = f32::ln(l) * f32::new(core::f32::consts::LOG10_E);
+    log_l_bkg[(idx) + s_log] = f32::ln(l) * f32::new(core::f32::consts::LOG10_E);
 
     // `logical_h` is part of the strip-aware API contract for
     // forward symmetry with the pyramid downscale/upscale kernels

@@ -99,10 +99,10 @@
 
 use cubecl::prelude::*;
 
-use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_kernel};
+use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_shifted_kernel};
 use crate::kernels::csf::{
-    CsfChannel, csf_apply_3ch_kernel, csf_apply_6ch_kernel, flatten_band_weights,
-    precompute_logs_row, precomputed_band_weights, weight_band_kernel,
+    CsfChannel, csf_apply_3ch_kernel, csf_apply_6ch_kernel, csf_apply_6ch_shifted_kernel,
+    flatten_band_weights, precompute_logs_row, precomputed_band_weights, weight_band_kernel,
 };
 use crate::kernels::diffmap::{
     diffmap_band_accumulate_kernel, diffmap_channel_pool_kernel, diffmap_zero_kernel,
@@ -122,9 +122,10 @@ use crate::kernels::pool::{
 };
 use crate::kernels::pyramid::{
     DOWNSCALE_TILED_BLOCK_DIM, band_frequencies, baseband_divide_3ch_kernel,
-    downscale_strip_kernel, downscale_tiled_kernel, subtract_kernel, subtract_weber_3ch_kernel,
-    subtract_weber_3ch_strip_kernel, upscale_h_kernel, upscale_h_strip_kernel, upscale_v_kernel,
-    upscale_v_strip_kernel,
+    downscale_strip_shifted_kernel, downscale_tiled_kernel, subtract_kernel,
+    subtract_weber_3ch_kernel, subtract_weber_3ch_strip_shifted_kernel, upscale_h_kernel,
+    upscale_h_strip_kernel, upscale_h_strip_shifted_kernel, upscale_v_kernel,
+    upscale_v_strip_kernel, upscale_v_strip_shifted_kernel,
 };
 use crate::params::CvvdpParams;
 use crate::{
@@ -310,6 +311,14 @@ fn aligned_split(byte_off: u64) -> (u64, u32) {
     );
     let base = byte_off - byte_off % BINDING_ALIGN_BYTES;
     (base, ((byte_off - base) / 4) as u32)
+}
+
+/// `h` as a sub-view starting `byte_off` bytes in, bound at the 256-byte
+/// boundary at or below it (see [`aligned_split`]); returns the view and the
+/// leftover f32 elements the `*_shifted_kernel` must add to its indices.
+fn aligned_view(h: &cubecl::server::Handle, byte_off: u64) -> (cubecl::server::Handle, u32) {
+    let (base, shift) = aligned_split(byte_off);
+    (h.clone().offset_start(base), shift)
 }
 
 /// Launch grid for `groups` workgroups of a 1-D kernel, folded into 2-D
@@ -3112,22 +3121,26 @@ impl<R: Runtime> Cvvdp<R> {
             let byte_off: u64 = u64::from(body_offset_y) * u64::from(w) * 4;
             // For src_ref the packed-u32 layout is 4 bytes/pixel, same
             // as the f32 output planes — both indexed by row × width.
-            let src_strip = self.src_ref.clone().offset_start(byte_off);
-            let a_strip = self.gauss_ref[0].planes[0].clone().offset_start(byte_off);
-            let rg_strip = self.gauss_ref[0].planes[1].clone().offset_start(byte_off);
-            let vy_strip = self.gauss_ref[0].planes[2].clone().offset_start(byte_off);
+            // Strip sub-views bind at 256-byte boundaries; the kernel adds
+            // `sh` elements back (see `aligned_split`). Full mode: one
+            // strip at offset 0, so `sh` = 0.
+            let (src_strip, sh) = aligned_view(&self.src_ref, byte_off);
+            let a_strip = aligned_view(&self.gauss_ref[0].planes[0], byte_off).0;
+            let rg_strip = aligned_view(&self.gauss_ref[0].planes[1], byte_off).0;
+            let vy_strip = aligned_view(&self.gauss_ref[0].planes[2], byte_off).0;
+            let n_view = n_strip + sh as usize;
 
             let cube_count = cube_count_1d((n_strip as u32).div_ceil(64));
             unsafe {
-                srgb_to_dkl_kernel::launch::<R>(
+                srgb_to_dkl_shifted_kernel::launch::<R>(
                     &self.client,
                     cube_count,
                     cube_dim,
-                    ArrayArg::from_raw_parts(src_strip, n_strip),
+                    ArrayArg::from_raw_parts(src_strip, n_view),
                     ArrayArg::from_raw_parts(self.srgb_lut.clone(), SRGB8_TO_LINEAR_LUT.len()),
-                    ArrayArg::from_raw_parts(a_strip, n_strip),
-                    ArrayArg::from_raw_parts(rg_strip, n_strip),
-                    ArrayArg::from_raw_parts(vy_strip, n_strip),
+                    ArrayArg::from_raw_parts(a_strip, n_view),
+                    ArrayArg::from_raw_parts(rg_strip, n_view),
+                    ArrayArg::from_raw_parts(vy_strip, n_view),
                     w,
                     body_h,
                     display.y_peak,
@@ -3145,6 +3158,8 @@ impl<R: Runtime> Cvvdp<R> {
                     m[2][0],
                     m[2][1],
                     m[2][2],
+                    sh,
+                    sh,
                 );
             }
 
@@ -3657,14 +3672,14 @@ impl<R: Runtime> Cvvdp<R> {
 
                 for c in 0..N_CHANNELS {
                     let src = self.gauss_ref[k - 1].planes[c].clone();
-                    let dst_strip = self.gauss_ref[k].planes[c].clone().offset_start(byte_off);
+                    let (dst_strip, dst_sh) = aligned_view(&self.gauss_ref[k].planes[c], byte_off);
                     unsafe {
-                        downscale_strip_kernel::launch::<R>(
+                        downscale_strip_shifted_kernel::launch::<R>(
                             &self.client,
                             cube_count.clone(),
                             cube_dim,
                             ArrayArg::from_raw_parts(src, n_prev),
-                            ArrayArg::from_raw_parts(dst_strip, n_strip),
+                            ArrayArg::from_raw_parts(dst_strip, n_strip + dst_sh as usize),
                             prev_w,
                             prev_h,
                             curr_w,
@@ -3673,6 +3688,8 @@ impl<R: Runtime> Cvvdp<R> {
                             0,      // src_strip_offset: src is FULL prev-level buffer
                             prev_h, // logical_src_h
                             curr_h, // logical_dst_h
+                            0,      // shift_src
+                            dst_sh,
                         );
                     }
                     self.strip_dispatch_counter
@@ -3795,6 +3812,10 @@ impl<R: Runtime> Cvvdp<R> {
                 let count_fine_strip = cube_count_1d((n_strip_fine as u32).div_ceil(64));
                 let byte_off_v: u64 = u64::from(body_offset_y) * u64::from(coarse_w) * 4;
                 let byte_off_fine: u64 = u64::from(body_offset_y) * u64::from(fine_w) * 4;
+                // Bind sub-views at 256-byte boundaries; the shifted
+                // kernels add `sh_*` elements back (see `aligned_split`).
+                let (byte_off_v, sh_v) = aligned_split(byte_off_v);
+                let (byte_off_fine, sh_f) = aligned_split(byte_off_fine);
 
                 // Stage 1: separable upscale of coarse A → l_bkg_fine
                 // body. The A plane drives the per-pixel L_bkg used by
@@ -3803,30 +3824,37 @@ impl<R: Runtime> Cvvdp<R> {
                 let vscratch_a_strip = scratch.vscratch_a.clone().offset_start(byte_off_v);
                 let l_bkg_fine_strip = scratch.l_bkg_fine.clone().offset_start(byte_off_fine);
                 unsafe {
-                    upscale_v_strip_kernel::launch::<R>(
+                    upscale_v_strip_shifted_kernel::launch::<R>(
                         &self.client,
                         count_v_strip.clone(),
                         cube_dim,
                         ArrayArg::from_raw_parts(coarse_a, n_coarse),
-                        ArrayArg::from_raw_parts(vscratch_a_strip.clone(), n_strip_v),
+                        ArrayArg::from_raw_parts(
+                            vscratch_a_strip.clone(),
+                            n_strip_v + sh_v as usize,
+                        ),
                         coarse_w,
                         coarse_h,      // logical_src_h
                         fine_h,        // logical_dst_h
                         body_offset_y, // body_offset_y in dst rows
                         body_h,        // body_h in dst rows
                         0,             // src_strip_offset: source is FULL coarse
+                        0,
+                        sh_v,
                     );
-                    upscale_h_strip_kernel::launch::<R>(
+                    upscale_h_strip_shifted_kernel::launch::<R>(
                         &self.client,
                         count_fine_strip.clone(),
                         cube_dim,
-                        ArrayArg::from_raw_parts(vscratch_a_strip, n_strip_v),
-                        ArrayArg::from_raw_parts(l_bkg_fine_strip, n_strip_fine),
+                        ArrayArg::from_raw_parts(vscratch_a_strip, n_strip_v + sh_v as usize),
+                        ArrayArg::from_raw_parts(l_bkg_fine_strip, n_strip_fine + sh_f as usize),
                         coarse_w,
                         fine_w,
                         body_h,        // in_h = strip body height
                         fine_h,        // logical_dst_h (unused by H-pass)
                         body_offset_y, // body_offset_y (unused by H-pass)
+                        sh_v,
+                        sh_f,
                     );
                 }
                 self.strip_dispatch_counter
@@ -3851,7 +3879,7 @@ impl<R: Runtime> Cvvdp<R> {
                 for c in 0..N_CHANNELS {
                     let coarse = self.gauss_ref[k + 1].planes[c].clone();
                     let vscratch_c_strip = scratch.vscratch_c[c].clone().offset_start(byte_off_v);
-                    let (upscaled_c_strip_h, upscaled_c_strip_n) =
+                    let (upscaled_c_strip_h, upscaled_c_strip_n, upscaled_sh) =
                         if let Some(strips) = scratch.upscaled_c_strip.as_ref() {
                             // Phase 1b: per-strip buffer sized
                             // `fine_w * strip_h_at_k`. The kernel writes
@@ -3863,7 +3891,7 @@ impl<R: Runtime> Cvvdp<R> {
                             // we only iterate `body_h` rows so stale
                             // contents above body_h are never read.
                             let n_strip_buf = (fine_w as usize) * (strip_h_at_k as usize);
-                            (strips[c].clone(), n_strip_buf)
+                            (strips[c].clone(), n_strip_buf, 0)
                         } else {
                             // Legacy / Full path: slice the full-image
                             // `upscaled_c` at the strip's byte offset so
@@ -3888,33 +3916,44 @@ impl<R: Runtime> Cvvdp<R> {
                             (
                                 upscaled_full[c].clone().offset_start(byte_off_fine),
                                 n_strip_fine,
+                                sh_f,
                             )
                         };
                     unsafe {
-                        upscale_v_strip_kernel::launch::<R>(
+                        upscale_v_strip_shifted_kernel::launch::<R>(
                             &self.client,
                             count_v_strip.clone(),
                             cube_dim,
                             ArrayArg::from_raw_parts(coarse, n_coarse),
-                            ArrayArg::from_raw_parts(vscratch_c_strip.clone(), n_strip_v),
+                            ArrayArg::from_raw_parts(
+                                vscratch_c_strip.clone(),
+                                n_strip_v + sh_v as usize,
+                            ),
                             coarse_w,
                             coarse_h,
                             fine_h,
                             body_offset_y,
                             body_h,
                             0, // src_strip_offset: source is FULL coarse
+                            0,
+                            sh_v,
                         );
-                        upscale_h_strip_kernel::launch::<R>(
+                        upscale_h_strip_shifted_kernel::launch::<R>(
                             &self.client,
                             count_fine_strip.clone(),
                             cube_dim,
-                            ArrayArg::from_raw_parts(vscratch_c_strip, n_strip_v),
-                            ArrayArg::from_raw_parts(upscaled_c_strip_h, upscaled_c_strip_n),
+                            ArrayArg::from_raw_parts(vscratch_c_strip, n_strip_v + sh_v as usize),
+                            ArrayArg::from_raw_parts(
+                                upscaled_c_strip_h,
+                                upscaled_c_strip_n + upscaled_sh as usize,
+                            ),
                             coarse_w,
                             fine_w,
                             body_h,
                             fine_h,
                             body_offset_y,
+                            sh_v,
+                            upscaled_sh,
                         );
                     }
                     self.strip_dispatch_counter
@@ -3966,6 +4005,7 @@ impl<R: Runtime> Cvvdp<R> {
                     log_l_bkg_h,
                     src_strip_off,
                     buf_n,
+                    sw_sh,
                 ) = if let Some(strips) = scratch.upscaled_c_strip.as_ref() {
                     // Phase 1b: all buffers strip-local. Slice the
                     // full-image fine/lbkg/bands/log_l_bkg handles at
@@ -3996,6 +4036,7 @@ impl<R: Runtime> Cvvdp<R> {
                         log_l_bkg_full.offset_start(byte_off_fine),
                         body_offset_y,
                         n_strip_fine,
+                        sh_f,
                     )
                 } else {
                     // Legacy: all buffers FULL-image; the kernel uses
@@ -4023,31 +4064,37 @@ impl<R: Runtime> Cvvdp<R> {
                         log_l_bkg_full,
                         0,
                         n_fine,
+                        0,
                     )
                 };
                 let _ = use_phase1b_upsc;
 
                 unsafe {
-                    subtract_weber_3ch_strip_kernel::launch::<R>(
+                    subtract_weber_3ch_strip_shifted_kernel::launch::<R>(
                         &self.client,
                         count_fine_strip.clone(),
                         cube_dim,
-                        ArrayArg::from_raw_parts(fine_a_h, buf_n),
-                        ArrayArg::from_raw_parts(fine_rg_h, buf_n),
-                        ArrayArg::from_raw_parts(fine_vy_h, buf_n),
+                        ArrayArg::from_raw_parts(fine_a_h, buf_n + sw_sh as usize),
+                        ArrayArg::from_raw_parts(fine_rg_h, buf_n + sw_sh as usize),
+                        ArrayArg::from_raw_parts(fine_vy_h, buf_n + sw_sh as usize),
                         ArrayArg::from_raw_parts(upsc_a_h, buf_n),
                         ArrayArg::from_raw_parts(upsc_rg_h, buf_n),
                         ArrayArg::from_raw_parts(upsc_vy_h, buf_n),
-                        ArrayArg::from_raw_parts(l_bkg_fine_h, buf_n),
-                        ArrayArg::from_raw_parts(band_a_h, buf_n),
-                        ArrayArg::from_raw_parts(band_rg_h, buf_n),
-                        ArrayArg::from_raw_parts(band_vy_h, buf_n),
-                        ArrayArg::from_raw_parts(log_l_bkg_h, buf_n),
+                        ArrayArg::from_raw_parts(l_bkg_fine_h, buf_n + sw_sh as usize),
+                        ArrayArg::from_raw_parts(band_a_h, buf_n + sw_sh as usize),
+                        ArrayArg::from_raw_parts(band_rg_h, buf_n + sw_sh as usize),
+                        ArrayArg::from_raw_parts(band_vy_h, buf_n + sw_sh as usize),
+                        ArrayArg::from_raw_parts(log_l_bkg_h, buf_n + sw_sh as usize),
                         fine_w,
                         body_h,
                         body_offset_y,
                         fine_h, // logical_h (carried for API symmetry; unused)
                         src_strip_off,
+                        sw_sh,
+                        0,
+                        sw_sh,
+                        sw_sh,
+                        sw_sh,
                     );
                 }
                 self.strip_dispatch_counter
@@ -6263,6 +6310,11 @@ impl<R: Runtime> Cvvdp<R> {
         } else {
             (byte_off_v_full, byte_off_fine_full)
         };
+        // Bind sub-views at 256-byte boundaries; the shifted kernels add
+        // `sh_*` elements back (see `aligned_split`).
+        let (byte_off_v_window, sh_vw) = aligned_split(byte_off_v_window);
+        let (byte_off_fine_window, sh_fw) = aligned_split(byte_off_fine_window);
+        let (byte_off_fine_full, sh_ff) = aligned_split(byte_off_fine_full);
 
         // Stage 1: upscale_v/h of coarse A → l_bkg_fine body+halo.
         // l_bkg_fine is full-image; we slice it at top_global and
@@ -6277,30 +6329,37 @@ impl<R: Runtime> Cvvdp<R> {
             .clone()
             .offset_start(byte_off_fine_window);
         unsafe {
-            upscale_v_strip_kernel::launch::<R>(
+            upscale_v_strip_shifted_kernel::launch::<R>(
                 &self.client,
                 count_v_window.clone(),
                 cube_dim,
                 ArrayArg::from_raw_parts(coarse_a, n_coarse),
-                ArrayArg::from_raw_parts(vscratch_a_strip.clone(), n_strip_v_window),
+                ArrayArg::from_raw_parts(
+                    vscratch_a_strip.clone(),
+                    n_strip_v_window + sh_vw as usize,
+                ),
                 coarse_w,
                 coarse_h,
                 fine_h,
                 top_global,
                 strip_window_h,
                 0,
+                0,
+                sh_vw,
             );
-            upscale_h_strip_kernel::launch::<R>(
+            upscale_h_strip_shifted_kernel::launch::<R>(
                 &self.client,
                 count_window.clone(),
                 cube_dim,
-                ArrayArg::from_raw_parts(vscratch_a_strip, n_strip_v_window),
-                ArrayArg::from_raw_parts(l_bkg_fine_strip, n_strip_window),
+                ArrayArg::from_raw_parts(vscratch_a_strip, n_strip_v_window + sh_vw as usize),
+                ArrayArg::from_raw_parts(l_bkg_fine_strip, n_strip_window + sh_fw as usize),
                 coarse_w,
                 fine_w,
                 strip_window_h,
                 fine_h,
                 top_global,
+                sh_vw,
+                sh_fw,
             );
         }
         self.strip_dispatch_counter
@@ -6320,30 +6379,37 @@ impl<R: Runtime> Cvvdp<R> {
                 .clone()
                 .offset_start(byte_off_v_window);
             unsafe {
-                upscale_v_strip_kernel::launch::<R>(
+                upscale_v_strip_shifted_kernel::launch::<R>(
                     &self.client,
                     count_v_window.clone(),
                     cube_dim,
                     ArrayArg::from_raw_parts(coarse, n_coarse),
-                    ArrayArg::from_raw_parts(vscratch_c_strip.clone(), n_strip_v_window),
+                    ArrayArg::from_raw_parts(
+                        vscratch_c_strip.clone(),
+                        n_strip_v_window + sh_vw as usize,
+                    ),
                     coarse_w,
                     coarse_h,
                     fine_h,
                     top_global,
                     strip_window_h,
                     0,
+                    0,
+                    sh_vw,
                 );
-                upscale_h_strip_kernel::launch::<R>(
+                upscale_h_strip_shifted_kernel::launch::<R>(
                     &self.client,
                     count_window.clone(),
                     cube_dim,
-                    ArrayArg::from_raw_parts(vscratch_c_strip, n_strip_v_window),
+                    ArrayArg::from_raw_parts(vscratch_c_strip, n_strip_v_window + sh_vw as usize),
                     ArrayArg::from_raw_parts(upscaled_c_strip[c].clone(), n_strip_buf),
                     coarse_w,
                     fine_w,
                     strip_window_h,
                     fine_h,
                     top_global,
+                    sh_vw,
+                    0,
                 );
             }
             self.strip_dispatch_counter
@@ -6361,22 +6427,22 @@ impl<R: Runtime> Cvvdp<R> {
         let fine_rg_full = self.gauss_ref[k].planes[1].clone();
         let fine_vy_full = self.gauss_ref[k].planes[2].clone();
         unsafe {
-            subtract_weber_3ch_strip_kernel::launch::<R>(
+            subtract_weber_3ch_strip_shifted_kernel::launch::<R>(
                 &self.client,
                 count_window.clone(),
                 cube_dim,
                 // gauss_ref planes are full-image; always slice at full top_global.
                 ArrayArg::from_raw_parts(
                     fine_a_full.offset_start(byte_off_fine_full),
-                    n_strip_window,
+                    n_strip_window + sh_ff as usize,
                 ),
                 ArrayArg::from_raw_parts(
                     fine_rg_full.offset_start(byte_off_fine_full),
-                    n_strip_window,
+                    n_strip_window + sh_ff as usize,
                 ),
                 ArrayArg::from_raw_parts(
                     fine_vy_full.offset_start(byte_off_fine_full),
-                    n_strip_window,
+                    n_strip_window + sh_ff as usize,
                 ),
                 ArrayArg::from_raw_parts(upscaled_c_strip[0].clone(), n_strip_buf),
                 ArrayArg::from_raw_parts(upscaled_c_strip[1].clone(), n_strip_buf),
@@ -6389,7 +6455,7 @@ impl<R: Runtime> Cvvdp<R> {
                         .l_bkg_fine
                         .clone()
                         .offset_start(byte_off_fine_window),
-                    n_strip_window,
+                    n_strip_window + sh_fw as usize,
                 ),
                 ArrayArg::from_raw_parts(bands_dis_strip[0].clone(), n_strip_buf),
                 ArrayArg::from_raw_parts(bands_dis_strip[1].clone(), n_strip_buf),
@@ -6398,13 +6464,18 @@ impl<R: Runtime> Cvvdp<R> {
                     log_l_bkg_dis_dest
                         .clone()
                         .offset_start(byte_off_fine_window),
-                    n_strip_window,
+                    n_strip_window + sh_fw as usize,
                 ),
                 fine_w,
                 strip_window_h,
                 top_global,
                 fine_h,
                 top_global, // src_strip_offset — strip-local row 0 = global row top_global
+                sh_ff,
+                0,
+                sh_fw,
+                0,
+                sh_fw,
             );
         }
         self.strip_dispatch_counter
@@ -6467,30 +6538,35 @@ impl<R: Runtime> Cvvdp<R> {
             )
         };
         unsafe {
-            csf_apply_6ch_kernel::launch::<R>(
+            csf_apply_6ch_shifted_kernel::launch::<R>(
                 &self.client,
                 count_window.clone(),
                 cube_dim,
-                ArrayArg::from_raw_parts(band_ref_a_strip, n_strip_window),
-                ArrayArg::from_raw_parts(band_ref_rg_strip, n_strip_window),
-                ArrayArg::from_raw_parts(band_ref_vy_strip, n_strip_window),
+                ArrayArg::from_raw_parts(band_ref_a_strip, n_strip_window + sh_fw as usize),
+                ArrayArg::from_raw_parts(band_ref_rg_strip, n_strip_window + sh_fw as usize),
+                ArrayArg::from_raw_parts(band_ref_vy_strip, n_strip_window + sh_fw as usize),
                 ArrayArg::from_raw_parts(bands_dis_strip[0].clone(), n_strip_window),
                 ArrayArg::from_raw_parts(bands_dis_strip[1].clone(), n_strip_window),
                 ArrayArg::from_raw_parts(bands_dis_strip[2].clone(), n_strip_window),
-                ArrayArg::from_raw_parts(log_l_bkg_strip, n_strip_window),
+                ArrayArg::from_raw_parts(log_l_bkg_strip, n_strip_window + sh_fw as usize),
                 ArrayArg::from_raw_parts(self.logs_row[k][0].clone(), 32),
                 ArrayArg::from_raw_parts(self.logs_row[k][1].clone(), 32),
                 ArrayArg::from_raw_parts(self.logs_row[k][2].clone(), 32),
-                ArrayArg::from_raw_parts(t_p_ref_a_strip, n_strip_window),
-                ArrayArg::from_raw_parts(t_p_ref_rg_strip, n_strip_window),
-                ArrayArg::from_raw_parts(t_p_ref_vy_strip, n_strip_window),
-                ArrayArg::from_raw_parts(t_p_dis_a_strip, n_strip_window),
-                ArrayArg::from_raw_parts(t_p_dis_rg_strip, n_strip_window),
-                ArrayArg::from_raw_parts(t_p_dis_vy_strip, n_strip_window),
+                ArrayArg::from_raw_parts(t_p_ref_a_strip, n_strip_window + sh_fw as usize),
+                ArrayArg::from_raw_parts(t_p_ref_rg_strip, n_strip_window + sh_fw as usize),
+                ArrayArg::from_raw_parts(t_p_ref_vy_strip, n_strip_window + sh_fw as usize),
+                ArrayArg::from_raw_parts(t_p_dis_a_strip, n_strip_window + sh_fw as usize),
+                ArrayArg::from_raw_parts(t_p_dis_rg_strip, n_strip_window + sh_fw as usize),
+                ArrayArg::from_raw_parts(t_p_dis_vy_strip, n_strip_window + sh_fw as usize),
                 ch_gain[0],
                 ch_gain[1],
                 ch_gain[2],
                 n_strip_window as u32,
+                sh_fw,
+                0,
+                sh_fw,
+                sh_fw,
+                sh_fw,
             );
         }
         self.strip_dispatch_counter
@@ -6620,6 +6696,9 @@ impl<R: Runtime> Cvvdp<R> {
         // gauss_alt stage-3 fine reads.
         let byte_off_v_window: u64 = 0;
         let byte_off_fine_window: u64 = 0;
+        // The fine planes are full-image: bind them at the 256-byte
+        // boundary and let the shifted kernel add `sh_ff` back.
+        let (byte_off_fine_full, sh_ff) = aligned_split(byte_off_fine_full);
 
         // Stage 1: upscale_v/h of gauss_alt[k+1] A → l_bkg_fine body+halo.
         // l_bkg_fine is full-image scratch shared with the DIST helper;
@@ -6709,21 +6788,21 @@ impl<R: Runtime> Cvvdp<R> {
         let fine_rg_full = gauss_alt[k].planes[1].clone();
         let fine_vy_full = gauss_alt[k].planes[2].clone();
         unsafe {
-            subtract_weber_3ch_strip_kernel::launch::<R>(
+            subtract_weber_3ch_strip_shifted_kernel::launch::<R>(
                 &self.client,
                 count_window.clone(),
                 cube_dim,
                 ArrayArg::from_raw_parts(
                     fine_a_full.offset_start(byte_off_fine_full),
-                    n_strip_window,
+                    n_strip_window + sh_ff as usize,
                 ),
                 ArrayArg::from_raw_parts(
                     fine_rg_full.offset_start(byte_off_fine_full),
-                    n_strip_window,
+                    n_strip_window + sh_ff as usize,
                 ),
                 ArrayArg::from_raw_parts(
                     fine_vy_full.offset_start(byte_off_fine_full),
-                    n_strip_window,
+                    n_strip_window + sh_ff as usize,
                 ),
                 ArrayArg::from_raw_parts(upscaled_c_strip[0].clone(), n_strip_buf),
                 ArrayArg::from_raw_parts(upscaled_c_strip[1].clone(), n_strip_buf),
@@ -6747,6 +6826,11 @@ impl<R: Runtime> Cvvdp<R> {
                 top_global,
                 fine_h,
                 top_global, // src_strip_offset
+                sh_ff,
+                0,
+                0,
+                0,
+                0,
             );
         }
         self.strip_dispatch_counter

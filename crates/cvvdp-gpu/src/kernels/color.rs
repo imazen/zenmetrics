@@ -281,6 +281,104 @@ pub fn srgb_to_dkl_kernel(
     m21: f32,
     m22: f32,
 ) {
+    srgb_to_dkl_at(
+        src,
+        lut,
+        out_a,
+        out_rg,
+        out_vy,
+        width,
+        height,
+        y_peak,
+        y_black,
+        y_refl,
+        eotf_tag,
+        gamma_exp,
+        hlg_gamma,
+        m00,
+        m01,
+        m02,
+        m10,
+        m11,
+        m12,
+        m20,
+        m21,
+        m22,
+        u32::new(0),
+        u32::new(0),
+    );
+}
+
+/// [`srgb_to_dkl_kernel`] on sub-views that start `shift_*` elements into their
+/// arrays (`shift_src` for `src`; `shift_out` for `out_a`, `out_rg`, `out_vy`). The strip walkers bind
+/// sub-views at 256-byte-aligned offsets (`aligned_split` in `pipeline.rs`)
+/// because wgpu rejects a storage binding whose offset is not a multiple of
+/// `min_storage_buffer_offset_alignment`, and pass the leftover elements here.
+#[cube(launch)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn srgb_to_dkl_shifted_kernel(
+    src: &Array<u32>,
+    lut: &Array<f32>,
+    out_a: &mut Array<f32>,
+    out_rg: &mut Array<f32>,
+    out_vy: &mut Array<f32>,
+    width: u32,
+    height: u32,
+    y_peak: f32,
+    y_black: f32,
+    y_refl: f32,
+    eotf_tag: u32,
+    gamma_exp: f32,
+    hlg_gamma: f32,
+    m00: f32,
+    m01: f32,
+    m02: f32,
+    m10: f32,
+    m11: f32,
+    m12: f32,
+    m20: f32,
+    m21: f32,
+    m22: f32,
+    shift_src: u32,
+    shift_out: u32,
+) {
+    srgb_to_dkl_at(
+        src, lut, out_a, out_rg, out_vy, width, height, y_peak, y_black, y_refl, eotf_tag,
+        gamma_exp, hlg_gamma, m00, m01, m02, m10, m11, m12, m20, m21, m22, shift_src, shift_out,
+    );
+}
+
+#[cube]
+#[allow(clippy::too_many_arguments)]
+fn srgb_to_dkl_at(
+    src: &Array<u32>,
+    lut: &Array<f32>,
+    out_a: &mut Array<f32>,
+    out_rg: &mut Array<f32>,
+    out_vy: &mut Array<f32>,
+    width: u32,
+    height: u32,
+    y_peak: f32,
+    y_black: f32,
+    y_refl: f32,
+    eotf_tag: u32,
+    gamma_exp: f32,
+    hlg_gamma: f32,
+    m00: f32,
+    m01: f32,
+    m02: f32,
+    m10: f32,
+    m11: f32,
+    m12: f32,
+    m20: f32,
+    m21: f32,
+    m22: f32,
+    shift_src: u32,
+    shift_out: u32,
+) {
+    let s_src = shift_src as usize;
+    let s_out = shift_out as usize;
+
     let idx = ABSOLUTE_POS;
     let total = (width * height) as usize;
     if idx >= total {
@@ -293,7 +391,7 @@ pub fn srgb_to_dkl_kernel(
     // path (144 MB → 48 MB at 12 MP); the per-iter `create_from_slice`
     // alloc shrinks in proportion. 3 bit-shifts + 3 ANDs per pixel are
     // free relative to the upload time saved.
-    let packed = src[idx];
+    let packed = src[(idx) + s_src];
     let r_byte = packed & 0xffu32;
     let g_byte = (packed >> 8u32) & 0xffu32;
     let b_byte = (packed >> 16u32) & 0xffu32;
@@ -335,7 +433,7 @@ pub fn srgb_to_dkl_kernel(
         (lr_pre, lg_pre, lb_pre)
     };
 
-    out_a[idx] = m00 * lr + m01 * lg + m02 * lb;
-    out_rg[idx] = m10 * lr + m11 * lg + m12 * lb;
-    out_vy[idx] = m20 * lr + m21 * lg + m22 * lb;
+    out_a[(idx) + s_out] = m00 * lr + m01 * lg + m02 * lb;
+    out_rg[(idx) + s_out] = m10 * lr + m11 * lg + m12 * lb;
+    out_vy[(idx) + s_out] = m20 * lr + m21 * lg + m22 * lb;
 }
