@@ -42,6 +42,8 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 | `vifvec` | authors' **`vifvec.m`** + matlabPyrTools `sp5Filters`/`buildSpyr`/`vifsub_est_M` (steerable-pyramid vecGSM release — a different metric from `vif` that shares the name) | GNU Octave run of the official `.m` set | ≤ 1e-9 over 10 goldens (incl. odd dims, 72px floor, identity, black-on-flat) |
 | `mad-iqa` | Larson & Chandler **`hi_index.m`/`lo_index.m`** + `ical_std.c`/`ical_stat.c` (STMAD_2011, archived in Netflix/vmaf); JEI 2010 combine | Octave `.m` shims of the C-mex + official `.m` drivers | hi 2.4e-7, lo 1.8e-6, mad 1.3e-6 rel over 13 rows |
 | `mdctpsnr` | **`thorfdbg/mDCTpsnr`** (Thomas Richter / U. Stuttgart; zlib-style license), compiled GCC `-O3 -ffast-math` + AVX2 + glibc 2.43 libmvec on x86_64 | the built `dctpsnr` binary + published AIC-4 `mDCT-PSNR` column | ~4e-6 dB on synthetic goldens incl. all `(w−13)%8` classes; AIC-4 53-pair max ~1.13e-5 dB (see entry) |
+| `nlpd` | **`Valerolaparra/NLPD_Pytorch`** (authors' PyTorch ref; PyTorch 2.5.1) | torch-run golden, `tests` | within 1e-5 (f64 ref vs f32 ops) |
+| `nlpd-iqa` | **`IQA_pytorch` `NLPD(channels=1)`** (dingkeyan93 IQA-optimization — alexhepburn nlpd-tensorflow lineage; a different metric that shares the name) | numpy replica + published AIC-4 `NLPD` column | ≤ 1e-4 on synthetic golden; AIC-4 53-pair med 2.6e-3 / max 6.7e-3 (see entry) |
 | `ssim2` (CPU) | external **`fast-ssim2`** crate (sibling repo; C++ SSIMULACRA2 parity) | fast-ssim2's own parity suite | owned by fast-ssim2 repo |
 | `ssim2-gpu` | published **`ssimulacra2` 0.5** crate | CPU-reference parity tests | FIR path ~5e-5 vs IIR — see entry |
 | `butteraugli` (CPU) | external **`butteraugli`** crate 0.9.4 (imazen fork, path dep) | the crate itself | external — not ported here |
@@ -521,6 +523,36 @@ rediscover them.
   undersize instead of the reference's unchecked UB.
 - **OUT-OF-SCOPE** — the reference's ifdef'd-out paths (saliency,
   `WEIGHT_MSE`/`DELTA_E`, `NO_BASE_VISIBILITY`) are not compiled.
+
+### `nlpd` / `nlpd-iqa` — one name, two metrics (NLPD variant split)
+
+`nlpd` (`score_rgb_u8`/`score_f32`) ports the Laparra-author
+`NLPD_Pytorch` configuration: **RGB**, six pyramid levels, per-level RMS
+pooled by `(Σ rms^0.6)^(1/0.6)`.
+
+`nlpd-iqa` (`crates/nlpd/src/iqa.rs`, CLI `--metric nlpd-iqa`) ports the
+configuration the **JPEG AIC-4 `NLPD` column** was actually computed
+with — `IQA_pytorch` (`dingkeyan93/IQA-optimization`, the alexhepburn
+nlpd-tensorflow lineage; NOT the later pyiqa port):
+
+- **DIVERGES** (by design, vs `nlpd`) — single-channel BT.709 Y in
+  `[0,1]` re-quantized to the 8-bit grid (the harness's
+  `rgb_to_yuv` + `round_plane(.., 8)`), not RGB.
+- **DIVERGES** — pooling is the plain mean of the six per-level RMS
+  values, not `0.6`-norm pooling — alone accounts for a
+  `6^(1/0.6) ≈ 19.8×` score factor (observed ≈20.5× with chroma).
+- **DIVERGES** — downsample is `ReflectionPad2d(2)` + stride-2 convolve
+  (fixed pad-2 phase; the Laparra path's parity-dependent pad differs by
+  one pixel on even dims), upsample is `bilinear(×2, align_corners=True)`
+  onto the `2·lw × 2·lh` grid with a `nearest`-crop on odd dims, and the
+  six loop bands include the terminal low-pass as a difference source —
+  no separately appended residual band.
+- **RESOLVED** — dataset reproduction: vs the published `NLPD` column
+  over 53 stratified AIC-4 pairs, `nlpd-iqa` lands at med |Δ| 0.0026 /
+  max |Δ| 0.0067 (column range ~0.03–0.22; med-rel 2.63% — f32
+  op-order vs torch plus bilinear edge detail), where the RGB `nlpd`
+  reads ≈20.5× high. Emits its own `nlpd_iqa` column so the two variants
+  never mix in a join.
 
 ### `ssim2` (CPU) — external `fast-ssim2`
 

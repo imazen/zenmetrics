@@ -249,12 +249,13 @@ implementations. Qualify ours by reference + variant, not just metric name:
 | `FSIM`/`FSIMc` | FSIM/FSIMc, `k4` variant in fit | `fsim`, `fsimc` | acceptable; JPG-16 tail 0.3 JND |
 | `DSSIM` | dssim-core ^3.4 | `dssim` | exact |
 | `IW-SSIM` | jpeg-ai-qaf `IW_SSIM` (Jack-guo torch port) on **unrounded** 0–255 Y (`0.299/0.587/0.114`, kornia-matrix YUV) | `iwssim-piq` | ✅ implemented — med 3.9e-6 / max 2.6e-5 (n=54); `iwssim` keeps the Python-IW-SSIM rounded-BT.601 oracle convention |
-| `proposal-Butteraugli` | AIC-4 **submission** (not libjxl) | `butteraugli` | cannot reproduce — different metric entirely |
+| `proposal-Butteraugli` | AIC-4 **submission** — measured vs ours 2026-09-26: tracks `pnorm_3` (libjxl 3-norm) with Pearson **0.99997**, affine `pub ≈ 2.09·ours − 1.10` resid-rms 0.011; `score` (max-norm) fits far worse (Pearson 0.957) and every other aggregation probed (pnorm p∈{1,2,2.5,4,5,6,8,10,12,16}, single-exponent norms, 8×8-blockmax norms) is worse still. So the submission is a pnorm-3-family butteraugli over a *different diffmap* (version/ingress — `intensity_target` 250 fits worse than default 80), not a different norm. Not identity-reproducible from the shipped artifacts | `butteraugli` (`butteraugli_pnorm3` column) | family identified; exact upstream config unrecovered |
 | `proposal-mDCTPSNR`, `proposal-DVIFM*` | AIC-4 submissions | — | cannot reproduce |
 | `HDR_VDP_2` | HDR-VDP-2.x, display config TBD | `hdrvdp` | needs absolute-nits ingress config |
 | `HDR_VDP_3` | HDR-VDP-3.0.7 lineage (jpeg-ai-qaf `VDP3/` port @ `0628a6b` — verified == official MATLAB 3.0.7) | `hdrvdp3` | ✅ implemented + bit-faithful to MATLAB 3.0.7; ⚠️ published column unreproduced — different upstream run config (see DIVERGENCES) |
 | `mDCT-PSNR` | Richter QoMEX-2009 mDCT-PSNR | `mdctpsnr` | ✅ port of official C++ ref (`thorfdbg/mDCTpsnr`); med 4.0e-7 / max 1.13e-5 dB vs column |
-| `CW-SSIM`, `NLPD`, `MSSWD`, `FLIP`, `CIEDE2000` | conventional metrics | — | unimplemented |
+| `NLPD` | `IQA_pytorch` `NLPD(channels=1)` — the **dingkeyan93 IQA-optimization** package (not pyiqa): BT.709 Y plane in [0,1] on the 8-bit grid, reflect-pad downsample, `bilinear(×2, align_corners)` upsample, unrotated DN kernels, 6 loop-levels (no residual band), **mean of per-level RMS** | `nlpd-iqa` (`crates/nlpd/src/iqa.rs`) | ✅ implemented — med 2.6e-3 / max 6.7e-3, med-rel 2.63% (n=53; residual = f32 op-order vs torch + bilinear edge detail). `nlpd` stays the Laparra-official RGB variant (≈20.5× the column — ≈`6^(1/0.6)`=19.8 pooling factor + RGB energy) |
+| `CW-SSIM`, `MSSWD`, `FLIP`, `CIEDE2000` | conventional metrics | — | unimplemented |
 | `DISTS`, `LPIPS×2`, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ×2`, `AHIQ`, `STLPIPS×2` | deep metrics (torch) | — | out of scope for pure-Rust |
 
 ## Method / reproduction

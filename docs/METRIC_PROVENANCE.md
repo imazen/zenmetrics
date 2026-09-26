@@ -58,6 +58,8 @@ We do not call everything a "port". Terms used below:
 | `vsi` | in-tree `crates/vsi` | Zhang et al., IEEE TIP 23(10) 2014 | authors' `VSI.m` | reference reimplementation | sRGB8 (SDSP colour saliency) | [0,1] |
 | `mad` | in-tree `crates/mad-iqa` | Larson & Chandler, JEI 19(1) 2010 | official MATLAB release (larschandler.com) | reference reimplementation | sRGB8 → luma | distance; emits `mad`, `mad_hi`, `mad_lo` |
 | `mdctpsnr` | in-tree `crates/mdctpsnr` | Richter, "An Autoregressive Multi-DCT Domain Image Quality Metric", QoMEX 2009 (authored impl) | author's official C++ `thorfdbg/mDCTpsnr` (zlib-style license), built GCC `-O3 -ffast-math` AVX2 + glibc libmvec | reference reimplementation — parity target is the **compiled** binary's op order (reassociations/FMA/rcp-NR/libmvec decoded from disassembly), not the source's apparent semantics | sRGB8 → linear → BT.601 YCbCr | dB, higher better; `+inf` identical |
+| `nlpd` | in-tree `crates/nlpd` | Laparra et al., normalized Laplacian pyramid distance (laparra16a-preprint) | Valerolaparra/`NLPD_Pytorch` (the authors' PyTorch reference; PyTorch 2.5.1 oracle) | reference reimplementation | sRGB8 → RGB planes `[0,1]`; six levels, `(Σ rms^0.6)^(1/0.6)` pooling | distance; 0 = identical |
+| `nlpd-iqa` | in-tree `crates/nlpd` (`iqa` module) | " — the **dingkeyan93 `IQA_pytorch`** configuration (`NLPD(channels=1)`, alexhepburn nlpd-tensorflow lineage), NOT pyiqa and NOT the Laparra RGB reference | `IQA_pytorch` source mirrored at `/tmp/nlpd_orig.py`; semantics replicated to med \|Δ\| 0.0026 / max 0.0067 vs the AIC-4 `NLPD` column (n=53) | reference reimplementation (f32, pad-2 downsample phase, bilinear `align_corners` upsample, mean-of-RMS pooling) | sRGB8 → BT.709 Y `[0,1]` re-quantized to the 8-bit grid (`iqa::score_rgb_u8`); `iqa::score_y_f32` for caller-supplied planes | distance; 0 = identical |
 | `zensim` | sibling `zensim` crate | — | — | **in-house** (ML-trained; not a reproduction target) | sRGB8 | 0–100 |
 | `zensim-gpu` | `zensim-gpu` twin | — | — | in-house | " | " |
 
@@ -116,6 +118,8 @@ Tolerance classes (keep these distinct — they mean different things):
 | mdctpsnr | built `dctpsnr` binary (GCC `-O3 -ffast-math`, glibc 2.43, AVX2) | ≤ 2e-4 dB on x86_64+GNU goldens (64×48 + all 8 `(w−13)%8` classes), 1e-2 off-platform | ≤ ~4e-6 dB | med 4.0e-7 / max 1.13e-5 dB vs `mDCT-PSNR` col (n=53) |
 | ssim2 | fast-ssim2 ↔ C++ | bit-parity SIMD tiers | — | med 6.3e-3 / max 5.5e-2 — version drift (n=53) |
 | dssim | dssim-core | upstream | — | mean 2.5e-7 / max 6.5e-7 (n=53) |
+| nlpd | `NLPD_Pytorch` (authors' PyTorch) | 1e-5 golden (97×99 pair) | within gate | n/a — RGB/0.6-norm variant, ≈20.5× the `NLPD` column (different algo) |
+| nlpd-iqa | `IQA_pytorch` `NLPD(channels=1)` via numpy replica | 1e-4 golden (f64 replica → f32 ops) | ~4e-6 | med 2.6e-3 / max 6.7e-3 vs `NLPD` col, med-rel 2.63% (n=53) — residual is f32 op-order + torch bilinear edge detail |
 
 **Acceptable-residual rules of thumb:**
 
@@ -175,7 +179,8 @@ The single-point S01_AVIF_01 spot check is kept where it drove identification.
 | `HDR_VDP_2` | 68.806 | hdrvdp-2.2.x under an unknown sRGB→nits display config | ⬜ config unknown — misses our 2.2.2-validated v2 at ppd 30 *and* 64.05 (±5.7), so the published run used a different config than either default |
 | `HDR_VDP_3` | 9.620 | HDR-VDP-3.0.7 lineage; the jpeg-ai-qaf `VDP3/` numpy port (mirror `/home/lilith/tmp/jpeg-ai-qaf-hdrvdp3` @ `0628a6b`) is confirmed **bit-faithful** to MATLAB 3.0.7 | ⚠️ implemented — `hdrvdp3` — but column **unreproduced**: under the stated harness ingress we get 9.6968/8.5174/9.6453 = MATLAB 3.0.7 exactly, while published reads 9.3392/7.5986/9.3527. Full probe sweep (ppd 28–64, task, EOTF, reflectance, swap, bsc) leaves distortion-proportional residuals → different impl revision/config upstream. See DIVERGENCES |
 | `mDCT-PSNR` | 71.529 | Richter, QoMEX 2009; author's C++ ref impl `thorfdbg/mDCTpsnr` | ✅ implemented — `mdctpsnr` (compiled-binary parity: med 4.0e-7 / max 1.13e-5 dB over n=53; see DIVERGENCES for the codegen-order details) |
-| `CW-SSIM`, `NLPD`, `CIEDE2000`, `FLIP` | — | pyiqa / colour / HDR metrics | ⬜ |
+| `NLPD` | ~0.03–0.22 | `IQA_pytorch` `NLPD(channels=1)` (dingkeyan93, not pyiqa) — BT.709 Y `[0,1]` 8-bit-gridded, mean-of-RMS pooling | ✅ implemented — `nlpd-iqa` (med 2.6e-3 / max 6.7e-3, med-rel 2.63%, n=53; `nlpd` is the RGB/Laparra variant — ≈20.5× off, deliberately distinct) |
+| `CW-SSIM`, `CIEDE2000`, `FLIP` | — | pyiqa / colour metrics | ⬜ |
 | `DISTS`, `LPIPS`×4, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ`×2, `AHIQ`, `STLPIPS`×2 | — | torch models | ⬜ out of scope (no torch) |
 | `proposal-*` (Butteraugli, DVIFM, mDCTPSNR) | — | AIC-4 **submitted** metrics — not public impls | ⬜ unreproducible by design |
 
@@ -264,7 +269,16 @@ column is being targeted.
    shipped code's stated defaults; recorded in DIVERGENCES rather than
    fitted to. The AIC `HDR_VDP_2` display config is likewise still
    unknown (v2 validated vs official 2.2.2 regardless).
-7. `CW-SSIM`, `NLPD`, `CIEDE2000`, `FLIP` — later.
+~~7. **`NLPD`**~~ — ✅ **DONE** (`nlpd-iqa`, `crates/nlpd/src/iqa.rs`):
+   the column is `IQA_pytorch` `NLPD(channels=1)` (dingkeyan93 —
+   alexhepburn nlpd-tensorflow lineage), a *different metric* from the
+   crate's Laparra-official RGB `nlpd`: single BT.709 Y plane on the
+   8-bit grid, reflect-2 downsample (fixed phase — not the parity-dependent
+   pad), bilinear `align_corners` upsample to the 2× grid then
+   nearest-crop on odd dims, six loop bands, mean-of-RMS pooling. Column
+   residual med 2.6e-3 / max 6.7e-3 (n=53) ≈ f32 op-order. The RGB `nlpd`
+   keeps its own score path and `nlpd` column name.
+8. `CW-SSIM`, `CIEDE2000`, `FLIP` — later.
 
 Validation probes used for this matrix live at
 `crates/vmaf/examples/aic_probe.rs` (studio-Y YUV420 → `VmafV0Scorer`) and

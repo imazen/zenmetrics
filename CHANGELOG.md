@@ -13,6 +13,19 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- nlpd `iqa` module + zenmetrics-cli `nlpd-iqa` (`f776455c`):
+  reproduces the published AIC-4 `NLPD` column — the `IQA_pytorch`
+  (`dingkeyan93/IQA-optimization`, alexhepburn nlpd-tensorflow lineage)
+  `NLPD(channels=1)` configuration, a *different metric* from the
+  existing RGB `nlpd` (Laparra `NLPD_Pytorch` reference). Single BT.709
+  luma plane `[0,1]` re-quantized to the 8-bit grid, fixed reflect-2
+  downsample phase, `bilinear(×2, align_corners)` upsample + nearest
+  crop on odd dims, six loop bands (no residual), mean-of-RMS pooling.
+  `iqa::score_rgb_u8` carries the ingress; `iqa::score_y_f32` takes
+  caller planes. Validated against `metrics_fullres.csv` `NLPD` on the
+  53-pair AIC-4 harness: med |Δ| 0.0026, max |Δ| 0.0067 (med-rel 2.63% —
+  f32 op-order residual). `nlpd` is unchanged and emits its own column;
+  `nlpd-iqa` emits `nlpd_iqa`. Orchestrator-ineligible like `nlpd`.
 - hdrvdp `v3` + zenmetrics-cli `hdrvdp3` (`6ca179b8`): new
   `hdrvdp::v3` module — a pure-Rust `f64` reimplementation of
   **HDR-VDP-3.0.7** (the display-adaptive revision), built against the

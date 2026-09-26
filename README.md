@@ -52,7 +52,7 @@ In the default build, `--metric` accepts every CPU metric — `ssim2`, `dssim`,
 `butteraugli`, `zensim`, `cvvdp`, `iwssim`, `gmsd`, `psnrhvs`, `psnrhvs-y`,
 `psnrhvs-daala`, `haarpsi`, `haarpsi-y`, `fsim`, `fsim-y`, `vsi`, `msssim`,
 `ssim-libvmaf`, `msssim-libvmaf`, `vif`, `vifvec`, `iwssim-piq`,
-`mad`, `mdctpsnr`, and
+`nlpd`, `nlpd-iqa`, `mad`, `mdctpsnr`, and
 `hdrvdp` (HDR-only: absolute-luminance input — feed it via `batch --hdr` /
 `sweep --hdr`, not sRGB pairs) and `hdrvdp3` (HDR-VDP-3.0.7 — same
 absolute-nits feeding, plus mandatory explicit viewing conditions:
