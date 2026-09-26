@@ -27,6 +27,8 @@
 # --------------
 #   fetch -> assert <bookmark>@origin is an ANCESTOR of the target
 #         -> hygiene: address/identifier check on the outgoing diff
+#         -> lock guard: a push touching Cargo.lock or ci/sibling-pins.tsv must pass
+#            scripts/ci/lock.sh --check (the lock resolves against the CI-pinned siblings)
 #         -> set -> push -> verify
 #
 # The second gate scans the lines this push would ADD for the identifier classes
@@ -54,6 +56,8 @@
 #   2 bad usage / unresolvable revision          5 bookmark set or push failed
 #   3 REFUSED: not a fast-forward                6 push reported success but did not land
 #                                                7 REFUSED: hygiene check on the outgoing diff
+#                                                8 REFUSED: Cargo.lock / ci/sibling-pins.tsv change that
+#                                                  fails scripts/ci/lock.sh --check
 set -uo pipefail
 
 BOOKMARK=master
@@ -171,6 +175,39 @@ HYGEOF
   return 0
 }
 
+# ---------------------------------------------------------------- lock guard
+
+# Cargo.lock records sibling path packages with their versions and dependency lists, so a lock
+# regenerated in a dev tree (whose siblings are not CI's pins) breaks EVERY CI job at dependency
+# resolution. A push that touches the lock or the pin table must therefore pass
+# scripts/ci/lock.sh --check against the OUTGOING commit's tree. Like the other gates, no bypass.
+# Returns 0 ok / not applicable, 8 refused.
+lock_guard() {
+  local from="$1" to="$2"
+  local changed
+  changed=$(jj diff --ignore-working-copy --from "$from" --to "$to" --name-only 2>/dev/null |
+            grep -E '^(Cargo\.lock|ci/sibling-pins\.tsv)$' || true)
+  if [ -z "$changed" ]; then
+    echo "safe_push: lock guard: Cargo.lock and ci/sibling-pins.tsv untouched — not applicable."
+    return 0
+  fi
+  local lock_sh; lock_sh="$(cd "$(dirname "$0")" && pwd)/ci/lock.sh"
+  if [ ! -x "$lock_sh" ]; then
+    echo "safe_push: lock guard CANNOT RUN — no executable $lock_sh. Refusing rather than pushing an unchecked lock." >&2
+    return 8
+  fi
+  echo "safe_push: lock guard: this push changes: $(printf '%s' "$changed" | tr '\n' ' ')— running lock.sh --check on ${to:0:12}..."
+  if ! "$lock_sh" --check --rev "$to"; then
+    echo "" >&2
+    echo "safe_push: REFUSED — lock guard: the outgoing Cargo.lock does not resolve against the CI-pinned siblings." >&2
+    echo "  Run:    scripts/ci/lock.sh --regen     (in the lane's tree, then commit the regenerated Cargo.lock)" >&2
+    echo "  Never regenerate Cargo.lock by running cargo in a dev tree; its siblings are not CI's pins." >&2
+    echo "  Then re-run scripts/safe_push.sh. There is no bypass." >&2
+    return 8
+  fi
+  return 0
+}
+
 # ---------------------------------------------------------------- core
 
 jjq() { jj log --no-graph --ignore-working-copy -r "$1" -T "${2:-commit_id}"; }
@@ -243,6 +280,7 @@ do_push() {
   # no remote tip to diff against, so the whole target tree is the addition.
   local hygiene_from="${remote_tip:-$(jjq 'root()')}"
   hygiene_check "$hygiene_from" "$target" || return 7
+  lock_guard "$hygiene_from" "$target" || return 8
 
   if [ "$dry" = 1 ]; then
     echo "safe_push: --dry-run, stopping before 'bookmark set'."
