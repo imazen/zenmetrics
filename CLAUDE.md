@@ -678,6 +678,24 @@ packed-sRGB-u8 sweep shape and answers a different question.
   (warm ref) are fine on Metal. cvvdp-gpu is already omitted from CI's Metal matrix (the
   `Atomic<f32>` pool-kernel note in ci.yml), so CI never sees this either way; the #30
   `tests/it/cancel.rs::strip_pair_mode_polls_per_strip` test is `cuda`-gated for this reason.
+  **Not Metal-only (2026-09-26):** Vulkan on the RTX 2080 dev host
+  (`min_storage_buffer_offset_alignment` = 32) panics the same way — `cubecl-wgpu: storage
+  buffer binding 1 starts at offset 1311688 which is not a multiple of … (32)` — for
+  `new_strip_pair(256, 256, h_body = 128)`; single-strip Mode B (h_body ≥ height) runs.
+
+- **cvvdp-gpu Mode E (`MemoryMode::Strip`) on wgpu/Vulkan scores 1000×750 far from Full —
+  found 2026-09-26 (cvvdpdet lane), pre-existing, NOT root-caused or fixed.** Probe
+  `crates/cvvdp-gpu/examples/pool_determinism.rs` (`new_strip(.., h_body = 128)` + warm ref vs
+  `Cvvdp::new`): the noise pair scores **4.6037 JOD in Mode E vs 5.0083 in Full**; the mild
+  pair 9.9902 vs 9.9616. Same numbers with the old atomic pool (master 9e918021) and the new
+  deterministic pool, so the pool is not the cause. CUDA on the same box gives Mode E = Full
+  bit-for-bit at 1000×750, and wgpu Mode E = Full at 256² and 1024². Prime suspect (read, not
+  proven): the same caller-built `offset_start` sub-views as the Mode B entry above — at
+  1000×750 the narrow levels' strip byte offsets are not multiples of 32, and this path does
+  not trip cubecl's alignment panic. The Mode E parity tests (`strip_mode_e_parity.rs`) only
+  cover 64×64, which is why nothing caught it. Repro:
+  `DET_PAIRS=noise DET_SIZES=1000x750 DET_MODES=full,strip DET_REPS=3 cargo run --release -p
+  cvvdp-gpu --no-default-features --features wgpu,cubecl-types --example pool_determinism`.
 
 - **zensim-gpu `it` suite on macOS/Metal (wgpu): 2 deterministic failures, pre-existing
   (verified 2026-08-27 — identical values on baseline b07a0485 before that day's commits, in
@@ -869,6 +887,28 @@ packed-sRGB-u8 sweep shape and answers a different question.
   macos-Metal job (8 GB unified) may hit the same wall.
 
 ### Resolved
+
+- **cvvdp-gpu on wgpu returned JOD 10.000 for every image of 2048×2048 or larger — found
+  and FIXED 2026-09-26 (cvvdpdet lane).** Every per-pixel kernel was launched with a 1-D
+  grid `(n / 64, 1, 1)`; above 65 535 workgroups on one axis (n > 4 194 240 px) wgpu rejects
+  the dispatch on its device thread, no error reaches the caller, the D planes stay unwritten
+  and the pool yields JOD 10. Measured on Vulkan with master 9e918021, noise pair, Full mode:
+  2000×2000 → 4.178, **2048×2048 → 10.000, 3000×2000 → 10.000**; 4096² failed loudly only
+  because the old pool's own dispatch also overflowed. Fix: `cube_count_1d` in
+  `crates/cvvdp-gpu/src/pipeline.rs` folds large 1-D grids into 2-D (all kernels index with the
+  linearized `ABSOLUTE_POS`). After: wgpu 2048² / 3000×2000 / 4096² = 1.854582 / 3.804538 /
+  1.843300, CUDA 1.854579 / 3.804536 / 1.843298. **Any CVVDP score computed on a wgpu backend
+  for an image ≥ 2048×2048 before this fix is invalid (it is 10.0).** CUDA was never affected
+  (2³¹ − 1 workgroups per axis). The sibling GPU metric crates already fold their grids
+  (their own `cube_count_1d`); not re-measured here.
+
+- **cvvdp-gpu GPU scores varied run to run (`Atomic<f32>` pool) — FIXED 2026-09-26.** The
+  spatial pool summed with `fetch_add`, so the order was the scheduler's: band scores
+  differed on every call and the JOD's low bits wandered (~1e-6 relative), failing
+  zenmetrics-api's bit-identical `cancel::` assertions (3 of 16 runs of one test on this host). Now a
+  fixed-order two-pass reduction (`pool_rows_3ch_kernel` + `pool_rows_finalize_kernel`):
+  bit-identical across calls and processes, and Full / Mode E / Mode B pool identical D
+  planes identically. Record: `benchmarks/cvvdp_pool_determinism_2026-09-26.md`.
 
 - **`exec_command_deadline` could hang for the child's FULL runtime instead of
   its deadline — root-caused and FIXED 2026-08-28 (`031f5aa6`), confirmed green

@@ -13,6 +13,23 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- cvvdp-gpu (`0a010398`): **GPU CVVDP scores are now deterministic.** The spatial pool
+  was an `Atomic<f32>::fetch_add` reduction whose order the scheduler chose, so band scores
+  changed on every call and the JOD's low bits wandered between identical calls (zenmetrics-api
+  `cancel::` bit-identical test failed 3 of 16 runs on an RTX 2080). It is now a fixed-order
+  two-pass reduction (`pool_rows_3ch_kernel` per row, `pool_rows_finalize_kernel` per band):
+  bit-identical across calls and processes, and Full / Mode E / Mode B pool identical D planes
+  to identical partials. Scores move in the low bits toward the exact sum: at most 2.96e-5 JOD
+  on the 256²–1024² probe pairs (7.7e-5 at 4096² on CUDA), outside the old kernel's run-to-run
+  band in 13 of 36 probe cells; the worst band-partial error vs an f64 sum drops from
+  3.41e-6 to 1.82e-7. Goldens unchanged at their printed precision. Record:
+  `benchmarks/cvvdp_pool_determinism_2026-09-26.md`.
+- cvvdp-gpu (`9a8326fd`): **fix wgpu scoring every image ≥ 2048×2048 as JOD 10.000.** 1-D
+  launches above 65 535 workgroups were rejected on wgpu's device thread without an error
+  reaching the caller; `cube_count_1d` now folds them into 2-D. wgpu 2048² / 3000×2000 / 4096²
+  noise pair: 10.000 / 10.000 / `ReadbackFailed` → 1.854582 / 3.804538 / 1.843300 (CUDA
+  1.854579 / 3.804536 / 1.843298). CUDA was never affected. wgpu CVVDP scores of such images
+  from before this fix are invalid.
 - nlpd `iqa` module + zenmetrics-cli `nlpd-iqa` (`46f0d2b6`):
   reproduces the published AIC-4 `NLPD` column — the `IQA_pytorch`
   (`dingkeyan93/IQA-optimization`, alexhepburn nlpd-tensorflow lineage)
