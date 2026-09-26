@@ -324,6 +324,56 @@ pub fn pu_blur_h_3ch_strip_aware_kernel(
     if idx >= total {
         terminate!();
     }
+    pu_blur_h_3ch_at(
+        idx,
+        u32::new(0),
+        w,
+        src_a,
+        src_rg,
+        src_vy,
+        dst_a,
+        dst_rg,
+        dst_vy,
+    );
+}
+
+/// [`pu_blur_h_3ch_strip_aware_kernel`] on arrays whose window starts
+/// `shift` elements in (see [`min_abs_3ch_shifted_kernel`] for why).
+/// `w × h` is the window; element `shift + idx` is read and written.
+#[cube(launch)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn pu_blur_h_3ch_strip_aware_shifted_kernel(
+    src_a: &Array<f32>,
+    src_rg: &Array<f32>,
+    src_vy: &Array<f32>,
+    dst_a: &mut Array<f32>,
+    dst_rg: &mut Array<f32>,
+    dst_vy: &mut Array<f32>,
+    w: u32,
+    h: u32,
+    shift: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (w * h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    pu_blur_h_3ch_at(idx, shift, w, src_a, src_rg, src_vy, dst_a, dst_rg, dst_vy);
+}
+
+#[cube]
+#[allow(clippy::too_many_arguments)]
+fn pu_blur_h_3ch_at(
+    idx: usize,
+    shift: u32,
+    w: u32,
+    src_a: &Array<f32>,
+    src_rg: &Array<f32>,
+    src_vy: &Array<f32>,
+    dst_a: &mut Array<f32>,
+    dst_rg: &mut Array<f32>,
+    dst_vy: &mut Array<f32>,
+) {
     let wu = w as usize;
     let y = idx / wu;
     let x = idx - y * wu;
@@ -359,8 +409,8 @@ pub fn pu_blur_h_3ch_strip_aware_kernel(
     let s11 = reflect_pu_idx(x_i + 11 - half, w_i);
     let s12 = reflect_pu_idx(x_i + 12 - half, w_i);
 
-    let row_off = y * wu;
-    dst_a[idx] = k0 * src_a[row_off + s0]
+    let row_off = y * wu + shift as usize;
+    dst_a[idx + shift as usize] = k0 * src_a[row_off + s0]
         + k1 * src_a[row_off + s1]
         + k2 * src_a[row_off + s2]
         + k3 * src_a[row_off + s3]
@@ -373,7 +423,7 @@ pub fn pu_blur_h_3ch_strip_aware_kernel(
         + k10 * src_a[row_off + s10]
         + k11 * src_a[row_off + s11]
         + k12 * src_a[row_off + s12];
-    dst_rg[idx] = k0 * src_rg[row_off + s0]
+    dst_rg[idx + shift as usize] = k0 * src_rg[row_off + s0]
         + k1 * src_rg[row_off + s1]
         + k2 * src_rg[row_off + s2]
         + k3 * src_rg[row_off + s3]
@@ -386,7 +436,7 @@ pub fn pu_blur_h_3ch_strip_aware_kernel(
         + k10 * src_rg[row_off + s10]
         + k11 * src_rg[row_off + s11]
         + k12 * src_rg[row_off + s12];
-    dst_vy[idx] = k0 * src_vy[row_off + s0]
+    dst_vy[idx + shift as usize] = k0 * src_vy[row_off + s0]
         + k1 * src_vy[row_off + s1]
         + k2 * src_vy[row_off + s2]
         + k3 * src_vy[row_off + s3]
@@ -623,6 +673,80 @@ pub fn pu_blur_v_3ch_scaled_strip_aware_kernel(
     if idx >= total {
         terminate!();
     }
+    pu_blur_v_3ch_at(
+        idx,
+        u32::new(0),
+        pu_scale,
+        w,
+        body_offset_y,
+        logical_h,
+        src_a,
+        src_rg,
+        src_vy,
+        dst_a,
+        dst_rg,
+        dst_vy,
+    );
+}
+
+/// [`pu_blur_v_3ch_scaled_strip_aware_kernel`] on arrays whose window
+/// starts `shift` elements in (see [`min_abs_3ch_shifted_kernel`] for
+/// why). `w × h` is the window and `body_offset_y` its first global
+/// row, exactly as for the unshifted kernel.
+#[cube(launch)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn pu_blur_v_3ch_scaled_strip_aware_shifted_kernel(
+    src_a: &Array<f32>,
+    src_rg: &Array<f32>,
+    src_vy: &Array<f32>,
+    dst_a: &mut Array<f32>,
+    dst_rg: &mut Array<f32>,
+    dst_vy: &mut Array<f32>,
+    pu_scale: f32,
+    w: u32,
+    h: u32,
+    body_offset_y: u32,
+    logical_h: u32,
+    shift: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (w * h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    pu_blur_v_3ch_at(
+        idx,
+        shift,
+        pu_scale,
+        w,
+        body_offset_y,
+        logical_h,
+        src_a,
+        src_rg,
+        src_vy,
+        dst_a,
+        dst_rg,
+        dst_vy,
+    );
+}
+
+#[cube]
+#[allow(clippy::too_many_arguments)]
+fn pu_blur_v_3ch_at(
+    idx: usize,
+    shift: u32,
+    pu_scale: f32,
+    w: u32,
+    body_offset_y: u32,
+    logical_h: u32,
+    src_a: &Array<f32>,
+    src_rg: &Array<f32>,
+    src_vy: &Array<f32>,
+    dst_a: &mut Array<f32>,
+    dst_rg: &mut Array<f32>,
+    dst_vy: &mut Array<f32>,
+) {
+    let sh = shift as usize;
     let wu = w as usize;
     let y_strip = idx / wu;
     let x = idx - y_strip * wu;
@@ -663,47 +787,47 @@ pub fn pu_blur_v_3ch_scaled_strip_aware_kernel(
     let s11 = (reflect_pu_idx(y_global_i + 11 - half, logical_h_i) as i32 - body_off_i) as usize;
     let s12 = (reflect_pu_idx(y_global_i + 12 - half, logical_h_i) as i32 - body_off_i) as usize;
 
-    dst_a[idx] = (k0 * src_a[s0 * wu + x]
-        + k1 * src_a[s1 * wu + x]
-        + k2 * src_a[s2 * wu + x]
-        + k3 * src_a[s3 * wu + x]
-        + k4 * src_a[s4 * wu + x]
-        + k5 * src_a[s5 * wu + x]
-        + k6 * src_a[s6 * wu + x]
-        + k7 * src_a[s7 * wu + x]
-        + k8 * src_a[s8 * wu + x]
-        + k9 * src_a[s9 * wu + x]
-        + k10 * src_a[s10 * wu + x]
-        + k11 * src_a[s11 * wu + x]
-        + k12 * src_a[s12 * wu + x])
+    dst_a[idx + sh] = (k0 * src_a[s0 * wu + x + sh]
+        + k1 * src_a[s1 * wu + x + sh]
+        + k2 * src_a[s2 * wu + x + sh]
+        + k3 * src_a[s3 * wu + x + sh]
+        + k4 * src_a[s4 * wu + x + sh]
+        + k5 * src_a[s5 * wu + x + sh]
+        + k6 * src_a[s6 * wu + x + sh]
+        + k7 * src_a[s7 * wu + x + sh]
+        + k8 * src_a[s8 * wu + x + sh]
+        + k9 * src_a[s9 * wu + x + sh]
+        + k10 * src_a[s10 * wu + x + sh]
+        + k11 * src_a[s11 * wu + x + sh]
+        + k12 * src_a[s12 * wu + x + sh])
         * pu_scale;
-    dst_rg[idx] = (k0 * src_rg[s0 * wu + x]
-        + k1 * src_rg[s1 * wu + x]
-        + k2 * src_rg[s2 * wu + x]
-        + k3 * src_rg[s3 * wu + x]
-        + k4 * src_rg[s4 * wu + x]
-        + k5 * src_rg[s5 * wu + x]
-        + k6 * src_rg[s6 * wu + x]
-        + k7 * src_rg[s7 * wu + x]
-        + k8 * src_rg[s8 * wu + x]
-        + k9 * src_rg[s9 * wu + x]
-        + k10 * src_rg[s10 * wu + x]
-        + k11 * src_rg[s11 * wu + x]
-        + k12 * src_rg[s12 * wu + x])
+    dst_rg[idx + sh] = (k0 * src_rg[s0 * wu + x + sh]
+        + k1 * src_rg[s1 * wu + x + sh]
+        + k2 * src_rg[s2 * wu + x + sh]
+        + k3 * src_rg[s3 * wu + x + sh]
+        + k4 * src_rg[s4 * wu + x + sh]
+        + k5 * src_rg[s5 * wu + x + sh]
+        + k6 * src_rg[s6 * wu + x + sh]
+        + k7 * src_rg[s7 * wu + x + sh]
+        + k8 * src_rg[s8 * wu + x + sh]
+        + k9 * src_rg[s9 * wu + x + sh]
+        + k10 * src_rg[s10 * wu + x + sh]
+        + k11 * src_rg[s11 * wu + x + sh]
+        + k12 * src_rg[s12 * wu + x + sh])
         * pu_scale;
-    dst_vy[idx] = (k0 * src_vy[s0 * wu + x]
-        + k1 * src_vy[s1 * wu + x]
-        + k2 * src_vy[s2 * wu + x]
-        + k3 * src_vy[s3 * wu + x]
-        + k4 * src_vy[s4 * wu + x]
-        + k5 * src_vy[s5 * wu + x]
-        + k6 * src_vy[s6 * wu + x]
-        + k7 * src_vy[s7 * wu + x]
-        + k8 * src_vy[s8 * wu + x]
-        + k9 * src_vy[s9 * wu + x]
-        + k10 * src_vy[s10 * wu + x]
-        + k11 * src_vy[s11 * wu + x]
-        + k12 * src_vy[s12 * wu + x])
+    dst_vy[idx + sh] = (k0 * src_vy[s0 * wu + x + sh]
+        + k1 * src_vy[s1 * wu + x + sh]
+        + k2 * src_vy[s2 * wu + x + sh]
+        + k3 * src_vy[s3 * wu + x + sh]
+        + k4 * src_vy[s4 * wu + x + sh]
+        + k5 * src_vy[s5 * wu + x + sh]
+        + k6 * src_vy[s6 * wu + x + sh]
+        + k7 * src_vy[s7 * wu + x + sh]
+        + k8 * src_vy[s8 * wu + x + sh]
+        + k9 * src_vy[s9 * wu + x + sh]
+        + k10 * src_vy[s10 * wu + x + sh]
+        + k11 * src_vy[s11 * wu + x + sh]
+        + k12 * src_vy[s12 * wu + x + sh])
         * pu_scale;
 }
 
@@ -759,25 +883,86 @@ pub fn min_abs_3ch_kernel(
     if idx >= n as usize {
         terminate!();
     }
+    min_abs_3ch_at(
+        idx,
+        u32::new(0),
+        t_p_a,
+        t_p_rg,
+        t_p_vy,
+        r_p_a,
+        r_p_rg,
+        r_p_vy,
+        m_mm_a,
+        m_mm_rg,
+        m_mm_vy,
+    );
+}
+
+/// [`min_abs_3ch_kernel`] reading and writing element `shift + idx` of
+/// every array. The strip walkers bind sub-views at a 256-byte-aligned
+/// offset (see `aligned_view` in `pipeline.rs`) and pass the leftover
+/// elements here, because a storage binding offset that is not a
+/// multiple of the device's `min_storage_buffer_offset_alignment` is
+/// rejected on wgpu (Vulkan / Metal) and the dispatch silently never
+/// runs. `n` counts the window's elements, not the array's.
+#[cube(launch)]
+pub(crate) fn min_abs_3ch_shifted_kernel(
+    t_p_a: &Array<f32>,
+    t_p_rg: &Array<f32>,
+    t_p_vy: &Array<f32>,
+    r_p_a: &Array<f32>,
+    r_p_rg: &Array<f32>,
+    r_p_vy: &Array<f32>,
+    m_mm_a: &mut Array<f32>,
+    m_mm_rg: &mut Array<f32>,
+    m_mm_vy: &mut Array<f32>,
+    n: u32,
+    shift: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+    min_abs_3ch_at(
+        idx, shift, t_p_a, t_p_rg, t_p_vy, r_p_a, r_p_rg, r_p_vy, m_mm_a, m_mm_rg, m_mm_vy,
+    );
+}
+
+#[cube]
+#[allow(clippy::too_many_arguments)]
+fn min_abs_3ch_at(
+    idx: usize,
+    shift: u32,
+    t_p_a: &Array<f32>,
+    t_p_rg: &Array<f32>,
+    t_p_vy: &Array<f32>,
+    r_p_a: &Array<f32>,
+    r_p_rg: &Array<f32>,
+    r_p_vy: &Array<f32>,
+    m_mm_a: &mut Array<f32>,
+    m_mm_rg: &mut Array<f32>,
+    m_mm_vy: &mut Array<f32>,
+) {
+    let i = idx + shift as usize;
     let zero = f32::new(0.0_f32);
 
-    let ta = t_p_a[idx];
+    let ta = t_p_a[i];
     let abs_ta = if ta < zero { -ta } else { ta };
-    let ra = r_p_a[idx];
+    let ra = r_p_a[i];
     let abs_ra = if ra < zero { -ra } else { ra };
-    m_mm_a[idx] = if abs_ta < abs_ra { abs_ta } else { abs_ra };
+    m_mm_a[i] = if abs_ta < abs_ra { abs_ta } else { abs_ra };
 
-    let trg = t_p_rg[idx];
+    let trg = t_p_rg[i];
     let abs_trg = if trg < zero { -trg } else { trg };
-    let rrg = r_p_rg[idx];
+    let rrg = r_p_rg[i];
     let abs_rrg = if rrg < zero { -rrg } else { rrg };
-    m_mm_rg[idx] = if abs_trg < abs_rrg { abs_trg } else { abs_rrg };
+    m_mm_rg[i] = if abs_trg < abs_rrg { abs_trg } else { abs_rrg };
 
-    let tvy = t_p_vy[idx];
+    let tvy = t_p_vy[i];
     let abs_tvy = if tvy < zero { -tvy } else { tvy };
-    let rvy = r_p_vy[idx];
+    let rvy = r_p_vy[i];
     let abs_rvy = if rvy < zero { -rvy } else { rvy };
-    m_mm_vy[idx] = if abs_tvy < abs_rvy { abs_tvy } else { abs_rvy };
+    m_mm_vy[i] = if abs_tvy < abs_rvy { abs_tvy } else { abs_rvy };
 }
 
 /// Full mult-mutual + xchannel masking for a 3-channel band, no
@@ -977,6 +1162,95 @@ pub fn mult_mutual_3ch_with_blurred_kernel(
     if idx >= n as usize {
         terminate!();
     }
+    mult_mutual_3ch_with_blurred_at(
+        idx,
+        u32::new(0),
+        u32::new(0),
+        t_p_a,
+        t_p_rg,
+        t_p_vy,
+        r_p_a,
+        r_p_rg,
+        r_p_vy,
+        m_mm_a,
+        m_mm_rg,
+        m_mm_vy,
+        d_a,
+        d_rg,
+        d_vy,
+        mask_p,
+        mask_q_0,
+        mask_q_1,
+        mask_q_2,
+        d_max_lin,
+    );
+}
+
+/// [`mult_mutual_3ch_with_blurred_kernel`] reading inputs at element
+/// `shift_in + idx` and writing `D` at `shift_out + idx` (see
+/// [`min_abs_3ch_shifted_kernel`] for why). The two differ in Mode B,
+/// where `D` goes to a strip-sized buffer and the inputs are views into
+/// larger planes. `n` counts the body's elements.
+#[cube(launch)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn mult_mutual_3ch_with_blurred_shifted_kernel(
+    t_p_a: &Array<f32>,
+    t_p_rg: &Array<f32>,
+    t_p_vy: &Array<f32>,
+    r_p_a: &Array<f32>,
+    r_p_rg: &Array<f32>,
+    r_p_vy: &Array<f32>,
+    m_mm_a: &Array<f32>,
+    m_mm_rg: &Array<f32>,
+    m_mm_vy: &Array<f32>,
+    d_a: &mut Array<f32>,
+    d_rg: &mut Array<f32>,
+    d_vy: &mut Array<f32>,
+    n: u32,
+    mask_p: f32,
+    mask_q_0: f32,
+    mask_q_1: f32,
+    mask_q_2: f32,
+    d_max_lin: f32,
+    shift_in: u32,
+    shift_out: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+    mult_mutual_3ch_with_blurred_at(
+        idx, shift_in, shift_out, t_p_a, t_p_rg, t_p_vy, r_p_a, r_p_rg, r_p_vy, m_mm_a, m_mm_rg,
+        m_mm_vy, d_a, d_rg, d_vy, mask_p, mask_q_0, mask_q_1, mask_q_2, d_max_lin,
+    );
+}
+
+#[cube]
+#[allow(clippy::too_many_arguments)]
+fn mult_mutual_3ch_with_blurred_at(
+    idx: usize,
+    shift_in: u32,
+    shift_out: u32,
+    t_p_a: &Array<f32>,
+    t_p_rg: &Array<f32>,
+    t_p_vy: &Array<f32>,
+    r_p_a: &Array<f32>,
+    r_p_rg: &Array<f32>,
+    r_p_vy: &Array<f32>,
+    m_mm_a: &Array<f32>,
+    m_mm_rg: &Array<f32>,
+    m_mm_vy: &Array<f32>,
+    d_a: &mut Array<f32>,
+    d_rg: &mut Array<f32>,
+    d_vy: &mut Array<f32>,
+    mask_p: f32,
+    mask_q_0: f32,
+    mask_q_1: f32,
+    mask_q_2: f32,
+    d_max_lin: f32,
+) {
+    let i_in = idx + shift_in as usize;
+    let i_out = idx + shift_out as usize;
 
     let xcm_00 = f32::new(0.876_968_f32);
     let xcm_01 = f32::new(0.016_103_15_f32);
@@ -990,9 +1264,9 @@ pub fn mult_mutual_3ch_with_blurred_kernel(
 
     let eps = f32::new(1e-5_f32);
 
-    let m_a = m_mm_a[idx];
-    let m_rg = m_mm_rg[idx];
-    let m_vy = m_mm_vy[idx];
+    let m_a = m_mm_a[i_in];
+    let m_rg = m_mm_rg[i_in];
+    let m_vy = m_mm_vy[i_in];
 
     let abs_m_a = if m_a < f32::new(0.0_f32) { -m_a } else { m_a };
     let abs_m_rg = if m_rg < f32::new(0.0_f32) {
@@ -1014,12 +1288,12 @@ pub fn mult_mutual_3ch_with_blurred_kernel(
     let m_rg_pool = xcm_01 * term_a + xcm_11 * term_rg + xcm_21 * term_vy;
     let m_vy_pool = xcm_02 * term_a + xcm_12 * term_rg + xcm_22 * term_vy;
 
-    let t_a = t_p_a[idx];
-    let t_rg = t_p_rg[idx];
-    let t_vy = t_p_vy[idx];
-    let r_a = r_p_a[idx];
-    let r_rg = r_p_rg[idx];
-    let r_vy = r_p_vy[idx];
+    let t_a = t_p_a[i_in];
+    let t_rg = t_p_rg[i_in];
+    let t_vy = t_p_vy[i_in];
+    let r_a = r_p_a[i_in];
+    let r_rg = r_p_rg[i_in];
+    let r_vy = r_p_vy[i_in];
 
     let diff_a = t_a - r_a;
     let abs_diff_a = if diff_a < f32::new(0.0_f32) {
@@ -1048,7 +1322,7 @@ pub fn mult_mutual_3ch_with_blurred_kernel(
     let d_u_rg = sp_rg / (f32::new(1.0_f32) + m_rg_pool);
     let d_u_vy = sp_vy / (f32::new(1.0_f32) + m_vy_pool);
 
-    d_a[idx] = d_max_lin * d_u_a / (d_max_lin + d_u_a);
-    d_rg[idx] = d_max_lin * d_u_rg / (d_max_lin + d_u_rg);
-    d_vy[idx] = d_max_lin * d_u_vy / (d_max_lin + d_u_vy);
+    d_a[i_out] = d_max_lin * d_u_a / (d_max_lin + d_u_a);
+    d_rg[i_out] = d_max_lin * d_u_rg / (d_max_lin + d_u_rg);
+    d_vy[i_out] = d_max_lin * d_u_vy / (d_max_lin + d_u_vy);
 }

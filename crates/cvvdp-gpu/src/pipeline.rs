@@ -110,9 +110,10 @@ use crate::kernels::diffmap::{
 };
 use crate::kernels::masking::{
     CH_GAIN, MASK_C, PU_PADSIZE, diff_abs_3ch_kernel, min_abs_3ch_kernel,
-    mult_mutual_3ch_no_blur_kernel, mult_mutual_3ch_with_blurred_kernel, pu_blur_h_3ch_kernel,
-    pu_blur_h_3ch_strip_aware_kernel, pu_blur_v_3ch_scaled_kernel,
-    pu_blur_v_3ch_scaled_strip_aware_kernel,
+    min_abs_3ch_shifted_kernel, mult_mutual_3ch_no_blur_kernel,
+    mult_mutual_3ch_with_blurred_kernel, mult_mutual_3ch_with_blurred_shifted_kernel,
+    pu_blur_h_3ch_kernel, pu_blur_h_3ch_strip_aware_shifted_kernel, pu_blur_v_3ch_scaled_kernel,
+    pu_blur_v_3ch_scaled_strip_aware_shifted_kernel,
 };
 use crate::kernels::pool::{
     BASEBAND_W, BETA_CH, BETA_SPATIAL, PER_CH_W, POOL_ROW_LANES, copy_f32_kernel,
@@ -293,6 +294,22 @@ fn pool_slot_meta(level_heights: &[usize]) -> Vec<u32> {
         base += N_CHANNELS * bh;
     }
     meta
+}
+
+/// The largest `min_storage_buffer_offset_alignment` WebGPU allows (the
+/// spec caps the limit at 256 bytes), so a sub-view that starts on a
+/// multiple of it binds on every wgpu backend.
+const BINDING_ALIGN_BYTES: u64 = 256;
+
+/// Split a sub-view's byte offset into a binding-aligned part and the
+/// leftover f32 elements a `*_shifted_kernel` adds to its indices.
+fn aligned_split(byte_off: u64) -> (u64, u32) {
+    debug_assert!(
+        byte_off.is_multiple_of(4),
+        "f32 sub-view offset must be 4-aligned"
+    );
+    let base = byte_off - byte_off % BINDING_ALIGN_BYTES;
+    (base, ((byte_off - base) / 4) as u32)
 }
 
 /// Launch grid for `groups` workgroups of a 1-D kernel, folded into 2-D
@@ -6935,32 +6952,46 @@ impl<R: Runtime> Cvvdp<R> {
             (byte_off_window, byte_off_body)
         };
 
+        // wgpu rejects a storage binding whose offset is not a multiple of
+        // `min_storage_buffer_offset_alignment` (32 B on this Vulkan host,
+        // 256 B on Metal) and the dispatch never runs, with no error on
+        // this thread: at 1000×750 that silently dropped masking strips
+        // and Mode E scored 4.60 JOD where Full scores 5.01. Bind each
+        // sub-view at a 256-byte boundary instead and pass the leftover
+        // elements to the `*_shifted_kernel`s, which add them to every
+        // index. CUDA has no such rule and computes the same values.
+        let (win_base, shift_w) = aligned_split(tp_m_off_window);
+        let (body_base, shift_b) = aligned_split(tp_m_off_body);
+        let n_win_len = n_strip_window + shift_w as usize;
+        let n_body_len = n_strip_body + shift_b as usize;
+
         // Stage 1: min_abs over halo-padded window.
         // Per-pixel, no reflection — offset handles + n = window size.
-        let t_p_dis_a_w = t_p_dis_h[0].clone().offset_start(tp_m_off_window);
-        let t_p_dis_rg_w = t_p_dis_h[1].clone().offset_start(tp_m_off_window);
-        let t_p_dis_vy_w = t_p_dis_h[2].clone().offset_start(tp_m_off_window);
-        let t_p_ref_a_w = t_p_ref_h[0].clone().offset_start(tp_m_off_window);
-        let t_p_ref_rg_w = t_p_ref_h[1].clone().offset_start(tp_m_off_window);
-        let t_p_ref_vy_w = t_p_ref_h[2].clone().offset_start(tp_m_off_window);
-        let m_raw_a_w = m_raw_h[0].clone().offset_start(tp_m_off_window);
-        let m_raw_rg_w = m_raw_h[1].clone().offset_start(tp_m_off_window);
-        let m_raw_vy_w = m_raw_h[2].clone().offset_start(tp_m_off_window);
+        let t_p_dis_a_w = t_p_dis_h[0].clone().offset_start(win_base);
+        let t_p_dis_rg_w = t_p_dis_h[1].clone().offset_start(win_base);
+        let t_p_dis_vy_w = t_p_dis_h[2].clone().offset_start(win_base);
+        let t_p_ref_a_w = t_p_ref_h[0].clone().offset_start(win_base);
+        let t_p_ref_rg_w = t_p_ref_h[1].clone().offset_start(win_base);
+        let t_p_ref_vy_w = t_p_ref_h[2].clone().offset_start(win_base);
+        let m_raw_a_w = m_raw_h[0].clone().offset_start(win_base);
+        let m_raw_rg_w = m_raw_h[1].clone().offset_start(win_base);
+        let m_raw_vy_w = m_raw_h[2].clone().offset_start(win_base);
         unsafe {
-            min_abs_3ch_kernel::launch::<R>(
+            min_abs_3ch_shifted_kernel::launch::<R>(
                 &self.client,
                 count_window.clone(),
                 cube_dim,
-                ArrayArg::from_raw_parts(t_p_dis_a_w, n_strip_window),
-                ArrayArg::from_raw_parts(t_p_dis_rg_w, n_strip_window),
-                ArrayArg::from_raw_parts(t_p_dis_vy_w, n_strip_window),
-                ArrayArg::from_raw_parts(t_p_ref_a_w, n_strip_window),
-                ArrayArg::from_raw_parts(t_p_ref_rg_w, n_strip_window),
-                ArrayArg::from_raw_parts(t_p_ref_vy_w, n_strip_window),
-                ArrayArg::from_raw_parts(m_raw_a_w.clone(), n_strip_window),
-                ArrayArg::from_raw_parts(m_raw_rg_w.clone(), n_strip_window),
-                ArrayArg::from_raw_parts(m_raw_vy_w.clone(), n_strip_window),
+                ArrayArg::from_raw_parts(t_p_dis_a_w, n_win_len),
+                ArrayArg::from_raw_parts(t_p_dis_rg_w, n_win_len),
+                ArrayArg::from_raw_parts(t_p_dis_vy_w, n_win_len),
+                ArrayArg::from_raw_parts(t_p_ref_a_w, n_win_len),
+                ArrayArg::from_raw_parts(t_p_ref_rg_w, n_win_len),
+                ArrayArg::from_raw_parts(t_p_ref_vy_w, n_win_len),
+                ArrayArg::from_raw_parts(m_raw_a_w.clone(), n_win_len),
+                ArrayArg::from_raw_parts(m_raw_rg_w.clone(), n_win_len),
+                ArrayArg::from_raw_parts(m_raw_vy_w.clone(), n_win_len),
                 n_strip_window as u32,
+                shift_w,
             );
         }
         self.strip_dispatch_counter
@@ -6969,24 +7000,23 @@ impl<R: Runtime> Cvvdp<R> {
         // Stage 2: pu_blur_h_3ch_strip_aware over halo-padded window.
         // H-blur is X-only; body_offset_y / logical_h are passed
         // for API uniformity but ignored by the kernel.
-        let m_mid_a_w = m_mid_h[0].clone().offset_start(tp_m_off_window);
-        let m_mid_rg_w = m_mid_h[1].clone().offset_start(tp_m_off_window);
-        let m_mid_vy_w = m_mid_h[2].clone().offset_start(tp_m_off_window);
+        let m_mid_a_w = m_mid_h[0].clone().offset_start(win_base);
+        let m_mid_rg_w = m_mid_h[1].clone().offset_start(win_base);
+        let m_mid_vy_w = m_mid_h[2].clone().offset_start(win_base);
         unsafe {
-            pu_blur_h_3ch_strip_aware_kernel::launch::<R>(
+            pu_blur_h_3ch_strip_aware_shifted_kernel::launch::<R>(
                 &self.client,
                 count_window.clone(),
                 cube_dim,
-                ArrayArg::from_raw_parts(m_raw_a_w.clone(), n_strip_window),
-                ArrayArg::from_raw_parts(m_raw_rg_w.clone(), n_strip_window),
-                ArrayArg::from_raw_parts(m_raw_vy_w.clone(), n_strip_window),
-                ArrayArg::from_raw_parts(m_mid_a_w.clone(), n_strip_window),
-                ArrayArg::from_raw_parts(m_mid_rg_w.clone(), n_strip_window),
-                ArrayArg::from_raw_parts(m_mid_vy_w.clone(), n_strip_window),
+                ArrayArg::from_raw_parts(m_raw_a_w.clone(), n_win_len),
+                ArrayArg::from_raw_parts(m_raw_rg_w.clone(), n_win_len),
+                ArrayArg::from_raw_parts(m_raw_vy_w.clone(), n_win_len),
+                ArrayArg::from_raw_parts(m_mid_a_w.clone(), n_win_len),
+                ArrayArg::from_raw_parts(m_mid_rg_w.clone(), n_win_len),
+                ArrayArg::from_raw_parts(m_mid_vy_w.clone(), n_win_len),
                 bw as u32,
                 strip_window_h as u32,
-                top_global as u32, // body_offset_y (unused by H-pass)
-                bh as u32,         // logical_h (unused by H-pass)
+                shift_w,
             );
         }
         self.strip_dispatch_counter
@@ -7013,25 +7043,26 @@ impl<R: Runtime> Cvvdp<R> {
         //     each neighbouring strip recomputes its body
         //     correctly on its own dispatch (sequential GPU stream
         //     ordering preserves this).
-        let m_blur_a_w = m_blur_h[0].clone().offset_start(tp_m_off_window);
-        let m_blur_rg_w = m_blur_h[1].clone().offset_start(tp_m_off_window);
-        let m_blur_vy_w = m_blur_h[2].clone().offset_start(tp_m_off_window);
+        let m_blur_a_w = m_blur_h[0].clone().offset_start(win_base);
+        let m_blur_rg_w = m_blur_h[1].clone().offset_start(win_base);
+        let m_blur_vy_w = m_blur_h[2].clone().offset_start(win_base);
         unsafe {
-            pu_blur_v_3ch_scaled_strip_aware_kernel::launch::<R>(
+            pu_blur_v_3ch_scaled_strip_aware_shifted_kernel::launch::<R>(
                 &self.client,
                 count_window.clone(),
                 cube_dim,
-                ArrayArg::from_raw_parts(m_mid_a_w, n_strip_window),
-                ArrayArg::from_raw_parts(m_mid_rg_w, n_strip_window),
-                ArrayArg::from_raw_parts(m_mid_vy_w, n_strip_window),
-                ArrayArg::from_raw_parts(m_blur_a_w, n_strip_window),
-                ArrayArg::from_raw_parts(m_blur_rg_w, n_strip_window),
-                ArrayArg::from_raw_parts(m_blur_vy_w, n_strip_window),
+                ArrayArg::from_raw_parts(m_mid_a_w, n_win_len),
+                ArrayArg::from_raw_parts(m_mid_rg_w, n_win_len),
+                ArrayArg::from_raw_parts(m_mid_vy_w, n_win_len),
+                ArrayArg::from_raw_parts(m_blur_a_w, n_win_len),
+                ArrayArg::from_raw_parts(m_blur_rg_w, n_win_len),
+                ArrayArg::from_raw_parts(m_blur_vy_w, n_win_len),
                 pu_scale,
                 bw as u32,
                 strip_window_h as u32,
                 top_global as u32,
                 bh as u32,
+                shift_w,
             );
         }
         self.strip_dispatch_counter
@@ -7058,41 +7089,45 @@ impl<R: Runtime> Cvvdp<R> {
             }),
         );
         let d_byte_off: u64 = if mode_b { 0 } else { byte_off_body };
-        let t_p_dis_a_b = t_p_dis_h[0].clone().offset_start(tp_m_off_body);
-        let t_p_dis_rg_b = t_p_dis_h[1].clone().offset_start(tp_m_off_body);
-        let t_p_dis_vy_b = t_p_dis_h[2].clone().offset_start(tp_m_off_body);
-        let t_p_ref_a_b = t_p_ref_h[0].clone().offset_start(tp_m_off_body);
-        let t_p_ref_rg_b = t_p_ref_h[1].clone().offset_start(tp_m_off_body);
-        let t_p_ref_vy_b = t_p_ref_h[2].clone().offset_start(tp_m_off_body);
-        let m_blur_a_b = m_blur_h[0].clone().offset_start(tp_m_off_body);
-        let m_blur_rg_b = m_blur_h[1].clone().offset_start(tp_m_off_body);
-        let m_blur_vy_b = m_blur_h[2].clone().offset_start(tp_m_off_body);
-        let d_a_b = d_h[0].clone().offset_start(d_byte_off);
-        let d_rg_b = d_h[1].clone().offset_start(d_byte_off);
-        let d_vy_b = d_h[2].clone().offset_start(d_byte_off);
+        let (d_base, shift_d) = aligned_split(d_byte_off);
+        let n_d_len = n_strip_body + shift_d as usize;
+        let t_p_dis_a_b = t_p_dis_h[0].clone().offset_start(body_base);
+        let t_p_dis_rg_b = t_p_dis_h[1].clone().offset_start(body_base);
+        let t_p_dis_vy_b = t_p_dis_h[2].clone().offset_start(body_base);
+        let t_p_ref_a_b = t_p_ref_h[0].clone().offset_start(body_base);
+        let t_p_ref_rg_b = t_p_ref_h[1].clone().offset_start(body_base);
+        let t_p_ref_vy_b = t_p_ref_h[2].clone().offset_start(body_base);
+        let m_blur_a_b = m_blur_h[0].clone().offset_start(body_base);
+        let m_blur_rg_b = m_blur_h[1].clone().offset_start(body_base);
+        let m_blur_vy_b = m_blur_h[2].clone().offset_start(body_base);
+        let d_a_b = d_h[0].clone().offset_start(d_base);
+        let d_rg_b = d_h[1].clone().offset_start(d_base);
+        let d_vy_b = d_h[2].clone().offset_start(d_base);
         unsafe {
-            mult_mutual_3ch_with_blurred_kernel::launch::<R>(
+            mult_mutual_3ch_with_blurred_shifted_kernel::launch::<R>(
                 &self.client,
                 count_body.clone(),
                 cube_dim,
-                ArrayArg::from_raw_parts(t_p_dis_a_b, n_strip_body),
-                ArrayArg::from_raw_parts(t_p_dis_rg_b, n_strip_body),
-                ArrayArg::from_raw_parts(t_p_dis_vy_b, n_strip_body),
-                ArrayArg::from_raw_parts(t_p_ref_a_b, n_strip_body),
-                ArrayArg::from_raw_parts(t_p_ref_rg_b, n_strip_body),
-                ArrayArg::from_raw_parts(t_p_ref_vy_b, n_strip_body),
-                ArrayArg::from_raw_parts(m_blur_a_b, n_strip_body),
-                ArrayArg::from_raw_parts(m_blur_rg_b, n_strip_body),
-                ArrayArg::from_raw_parts(m_blur_vy_b, n_strip_body),
-                ArrayArg::from_raw_parts(d_a_b.clone(), n_strip_body),
-                ArrayArg::from_raw_parts(d_rg_b.clone(), n_strip_body),
-                ArrayArg::from_raw_parts(d_vy_b.clone(), n_strip_body),
+                ArrayArg::from_raw_parts(t_p_dis_a_b, n_body_len),
+                ArrayArg::from_raw_parts(t_p_dis_rg_b, n_body_len),
+                ArrayArg::from_raw_parts(t_p_dis_vy_b, n_body_len),
+                ArrayArg::from_raw_parts(t_p_ref_a_b, n_body_len),
+                ArrayArg::from_raw_parts(t_p_ref_rg_b, n_body_len),
+                ArrayArg::from_raw_parts(t_p_ref_vy_b, n_body_len),
+                ArrayArg::from_raw_parts(m_blur_a_b, n_body_len),
+                ArrayArg::from_raw_parts(m_blur_rg_b, n_body_len),
+                ArrayArg::from_raw_parts(m_blur_vy_b, n_body_len),
+                ArrayArg::from_raw_parts(d_a_b.clone(), n_d_len),
+                ArrayArg::from_raw_parts(d_rg_b.clone(), n_d_len),
+                ArrayArg::from_raw_parts(d_vy_b.clone(), n_d_len),
                 n_strip_body as u32,
                 self.masking_calib.mask_p,
                 self.masking_calib.mask_q[0],
                 self.masking_calib.mask_q[1],
                 self.masking_calib.mask_q[2],
                 self.masking_calib.d_max_lin,
+                shift_b,
+                shift_d,
             );
         }
         self.strip_dispatch_counter
