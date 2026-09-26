@@ -42,10 +42,12 @@ We do not call everything a "port". Terms used below:
 | `hdrvdp` | in-tree `crates/hdrvdp` | Mantiuk et al., HDR-VDP-2, ACM TOG 30(4) 2011 | official HDR-VDP **2.2.2** MATLAB release (ISC-licensed) | reference reimplementation | absolute luminance cd/m² + display params — **not** sRGB8 | JOD / P_det / Q |
 | `vmaf` (lib only) | in-tree `crates/vmaf` | Li et al., Netflix VMAF, 2016 | libvmaf **3.2.1** via FFI oracle | reference reimplementation | YUV420 planes (studio-swing ingress); v0 models luma-only | VMAF 0–100 + features (adm2, motion2, vif×4) |
 | `vif` | in-tree `crates/vif` | Sheikh & Bovik, IEEE TIP 15(2) 2006 | authors' `vifp_mscale.m` (MATLAB) | reference reimplementation (f64 pipeline) | sRGB8 → MATLAB-weights gray | [0,∞), 1 ≈ identical |
+| `vifvec` | in-tree `crates/vif` (`vifvec` module) | Sheikh & Bovik, IEEE TIP 15(2) 2006 — **the original vector-GSM formulation, a different algorithm from `vifp`** | authors' `vifvec.m` + matlabPyrTools `sp5Filters`/`buildSpyr`/`corrDn`/`vifsub_est_M`/`ind2wtree` — the implementation behind pyiqa/`IQA_pytorch` `VIFs` and the AIC-4 `VIF` column | reference reimplementation (f64, row-major-transcribed SP5 filters) | sRGB8 → u8-rounded `round(0.299R+0.587G+0.114B)` gray (cv2/MATLAB convention); `vifvec_plane_f64` for raw planes | [0,∞), 1 = identical |
 | `msssim` | in-tree `crates/msssim` | Wang, Simoncelli, Bovik 2003 (ACSSC) | authors' `ssim_mscale_new.m` | reference reimplementation | sRGB8 → BT.601 luma | [0,1] |
 | `ssim-libvmaf` | in-tree `crates/msssim` (`libvmaf` module) | Wang et al., IEEE TIP 2004 (as implemented by Z. Li / tdistler iqa) | libvmaf `float_ssim` @ f85a8536 — FFI oracle (`vmaf-head-sys` dev-dep) | reference reimplementation (integer-accumulating decimate + f32/f64 rounding points preserved) | sRGB8 → studio-swing BT.601 luma — the YUV `Y` plane libvmaf consumes; NOT the MATLAB `rgb2gray` luma | [0,1] |
 | `msssim-libvmaf` | in-tree `crates/msssim` (`libvmaf` module) | Wang/Simoncelli/Bovik 2003 (libvmaf's 5-scale variant) | libvmaf `float_ms_ssim` @ f85a8536 — FFI oracle | reference reimplementation (9/7 LPF pyramid, per-scale f32 means, double `pow`) | " | [0,1] |
-| `iwssim` | in-tree `crates/iwssim` | Wang & Li, IEEE TIP 20(5) 2011, doi:10.1109/TIP.2010.2096950 | `Python-IW-SSIM` f9de37c (community reimpl of the lost MATLAB ref) | reference reimplementation | sRGB8 → BT.601 gray | [0,1] |
+| `iwssim` | in-tree `crates/iwssim` | Wang & Li, IEEE TIP 20(5) 2011, doi:10.1109/TIP.2010.2096950 | `Python-IW-SSIM` f9de37c (community reimpl of the lost MATLAB ref) | reference reimplementation | sRGB8 → u8-rounded BT.601 gray (`0.2989/0.5870/0.1140`, `LumaConvention::Bt601Rounded`) | [0,1] |
+| `iwssim-piq` | in-tree `crates/iwssim` (`piq_luma` params) | " | jpeg-ai-qaf `IW_SSIM` (torch port of the same Jack-guo ref) on the unrounded 0–255 Y — the AIC-4 `IW-SSIM` column; upstream mirror `/home/lilith/tmp/jpeg-ai-qaf-hdrvdp3` @ `0628a6b` | same code path, `LumaConvention::YiqUnrounded` ingress | sRGB8 → unrounded `0.299R+0.587G+0.114B` | [0,1] |
 | `iwssim-gpu` | `iwssim-gpu` twin | " | CPU twin | in-tree GPU | " | " |
 | `gmsd` | in-tree `crates/gmsd` | Xue et al., IEEE TIP 23(2) 2014 | `libgmsd` de646c9a (C) | reference reimplementation | sRGB8 → luma | 0 best, unbounded |
 | `psnrhvs` / `psnrhvs-y` | in-tree `crates/psnrhvs` | Ponomarenko/Egiazarian PSNR-HVS-M (VPQM 2007) | authors' `psnrhvsm.m` | reference reimplementation | RGB per-channel 8×8 DCT (`-y` = luma plane) | dB, higher better |
@@ -96,10 +98,12 @@ Tolerance classes (keep these distinct — they mean different things):
 | hdrvdp | HDR-VDP 2.2.2 MATLAB | P_det 1e-4; JOD ~1e-2 cases | 1.4e-5 P_det | not reproduced (needs abs-nits config) |
 | vmaf | libvmaf 3.2.1 FFI | feats 1e-4, score 0.02 | ≪ gate | VMAF 0.002, neg 0.001, adm2 4e-6, vif_Σ 3e-5 (S01 pt) |
 | vif | `vifp_mscale.m` | goldens f64 | 5e-13 | n/a (`VIF` col = vifvec — different algo, med 0.06) |
+| vifvec | `vifvec.m` via Octave | 10 goldens < 1e-9 | within gate | med 1.9e-6 / max 6.3e-6 vs `VIF` col (n=54) |
 | msssim | `ssim_mscale_new.m` | 15 Octave goldens | 8.8e-6 | med 4e-4 vs libvmaf col / 1.2e-3 vs pyiqa col (n=53) |
 | ssim-libvmaf | libvmaf `float_ssim` FFI | ≤ 2e-4 (vs vendored f85a8536, 5 cases 8b+10b) | ≪ gate | med 1.0e-6 / max 1.8e-5 vs `SSIM` col (n=53) |
 | msssim-libvmaf | libvmaf `float_ms_ssim` FFI | ≤ 2e-4 (same harness) | ≪ gate | med 1.0e-6 / max 1.6e-5 vs `MS-SSIM` col (n=53) |
-| iwssim | Python-IW-SSIM f9de37c | ~1e-4 | within gate | +1.2e-3 systematic vs pyiqa col — impl-variant offset, not ingress (n=53) |
+| iwssim | Python-IW-SSIM f9de37c | ~1e-4 | within gate | parent-band bug fixed 2026-09-26 — column reproduction now owned by `iwssim-piq` below |
+| iwssim-piq | jpeg-ai-qaf `IW_SSIM` ingress | — (same code path) | — | med 3.9e-6 / max 2.6e-5 vs `IW-SSIM` col (n=54) |
 | gmsd | libgmsd de646c9a | 1e-12 rel (map), 1e-14 mean | ~1e-12 | mean 3.5e-7 / max 1.9e-6 (n=53) |
 | psnrhvs | `psnrhvsm.m` | 1e-3 dB | ≤ 4e-4 dB | ~7.6dB off (Daala variant — different algo, n=53) |
 | psnrhvs-daala | libvmaf `psnr_hvs` FFI | ≤ 2e-4 dB (420 + 444 cases) | ≪ gate | combined med 1.1e-3 / max 4.5e-2 dB; Y med 1.3e-3 / max 8.6e-3; Cb 1.3e-2/8.0e-2; Cr 2.6e-3/1.3e-1 dB (n=53) |
@@ -158,16 +162,16 @@ The single-point S01_AVIF_01 spot check is kept where it drove identification.
 | `SSIMc` | MATLAB `ssim` RGB-mean | 1.6e-5 (S01 pt, numpy repro) | — | ✅ identified — no crate |
 | `MS-SSIM` | libvmaf `float_ms_ssim` | 1.0e-6 | 1.6e-5 | ✅ implemented — `msssim-libvmaf` (FFI-verified port; was the 2.64-JND gap) |
 | `MS-SSIM-pyiqa` | pyiqa `ms_ssim` | 1.2e-3 | 6.4e-3 | ✅ tracks; same impl-family residual |
-| `IW-SSIM` | pyiqa `iwssim` | 1.2e-3 | 4.0e-3 | ⚠️ systematic +1e-3 vs pyiqa impl (our oracle is Python-IW-SSIM, a different variant); 0.68 JND-eq worst (§4.1) |
+| `IW-SSIM` | jpeg-ai-qaf `IW_SSIM` on unrounded Y | 3.9e-6 | 2.6e-5 | ✅ implemented — `iwssim-piq` (the +1.2e-3 gap was a Gaussian-vs-Laplacian parent-band bug + ingress, both resolved) |
 | `SSIMULACRA2` | "v2.1" | 6.3e-3 | 5.5e-2 | ✅ drift immaterial in JND (≤0.004 — §4.1) |
 | `JND_CVVDP` | transform `3.1889·(10−JOD)^1.0129` | — | — | ✅ transform verified |
 
 | column family | published | what it is | status |
 |---|---|---|---|
 | `PSNR-HVS`, `-Y`, `-Cb`, `-Cr` | 50.05 / 50.86 / 47.49 / 48.10 | **Daala/Xiph `dump_psnrhvs`** — implemented as `psnrhvs-daala` (FFI-verified); on studio-601 **YUV444** chroma: combined med 1.1e-3 / max 4.5e-2 dB, Y med 1.3e-3 / max 8.6e-3 dB | ✅ implemented |
-| `VIF` | 0.934422 | pyiqa **wavelet vifvec** (SP5 steerable pyramid), not pixel `vifp` — ours runs ~0.06 median lower over the subset | ⬜ new impl needed |
+| `VIF` | 0.934422 | `IQA_pytorch.VIFs` / `vifvec.m` family (SP5 steerable pyramid vecGSM) on u8-rounded Y — NOT pixel `vifp` | ✅ implemented — `vifvec` (Octave goldens < 1e-9; published column: med 1.9e-6 / max 6.3e-6 (n=54)) |
 | `HDR_VDP_2` | 68.806 | hdrvdp-2.2.x under an unknown sRGB→nits display config | ⬜ config unknown |
-| `HDR_VDP_3` | 9.620 | HDR-VDP-3 — different metric version | ⬜ new impl |
+| `HDR_VDP_3` | 9.620 | HDR-VDP-3.0.7 torch port in jpeg-ai-qaf `VDP3/` (mirror `/home/lilith/tmp/jpeg-ai-qaf-hdrvdp3` @ `0628a6b`) | ⬜ new impl — sources synced |
 | `mDCT-PSNR` | 71.529 | Richter, QoMEX 2009; author's C++ ref impl `thorfdbg/mDCTpsnr` | ✅ implemented — `mdctpsnr` (compiled-binary parity: med 4.0e-7 / max 1.13e-5 dB over n=53; see DIVERGENCES for the codegen-order details) |
 | `CW-SSIM`, `NLPD`, `CIEDE2000`, `FLIP` | — | pyiqa / colour / HDR metrics | ⬜ |
 | `DISTS`, `LPIPS`×4, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ`×2, `AHIQ`, `STLPIPS`×2 | — | torch models | ⬜ out of scope (no torch) |
@@ -193,8 +197,8 @@ JND-normalized delta table. Headline findings on the same 53 pairs:
   (combined med 1.1e-3 dB / max 4.5e-2 ≈ ≤0.004 JND — the previous
   Ponomarenko-vs-Daala 1.9–6.4 JND gap resolved; residual is the chroma
   ingress — studio-601 YUV444 matches their Cb/Cr to ≤0.13 dB).
-- Remaining gaps: VIF 5.9 JND-equivalent (`vifvec`), IW-SSIM 0.68 JND-eq
-  (pyiqa variant).
+- VIF + IW-SSIM now reproduce their columns (`vifvec`, `iwssim-piq`);
+  remaining big gaps are the HDR/deep columns.
 
 Priority order in §6 is JND-ranked.
 
@@ -227,9 +231,16 @@ column is being targeted.
    (`picture_copy_hbd` /4 scaling) and the auto-scale
    `round(min_dim/256)` decimate. Studio-601 luma is built in — the
    AIC-4 columns reproduce at med 1.0e-6 / max 1.8e-5.
-3. **`vifvec`** (wavelet VIF) — new port for the `VIF` column; 5.9
-   JND-equivalent worst case.
-4. **pyiqa `iwssim` variant** — 0.68 JND-eq worst; systematic +1.2e-3.
+~~3. **`vifvec`** (wavelet VIF)~~ — ✅ **DONE** (`vifvec`): clean-room
+   port of `vifvec.m` + matlabPyrTools SP5 pyramid in
+   `crates/vif/src/vifvec.rs`. Octave goldens < 1e-9 over 10 cases
+   (odd dims, 72px floor, identity). RGB ingress = u8-rounded
+   `0.299/0.587/0.114` — the convention the `VIF` column was
+   computed under (match ~1e-6).
+~~4. **pyiqa `iwssim` variant**~~ — ✅ **DONE** (`iwssim-piq`):
+   `LumaConvention::YiqUnrounded` + the Laplacian-parent-band fix
+   (a real bug vs both oracles — Gaussian had been fed instead).
+   `IW-SSIM` column: med 3.9e-6 / max 2.6e-5 over n=54.
 ~~5. **`mDCT-PSNR`**~~ — ✅ **DONE** (`mdctpsnr`): port of
    `thorfdbg/mDCTpsnr` (zlib-style license). The catch that made it a
    "medium" port: bit-parity required reproducing the **compiled** binary's

@@ -26,6 +26,36 @@ Workspace conventions per the global rules:
   house-luma variants `psnr-y`/`psnr-y601` now accept
   `--luma-ingress yuv601-studio` (`is_luma_only`); the fixed-convention
   variants do not (a second swing isn't idempotent).
+- iwssim + iwssim-piq: fixed a real porting bug in the IW weighting —
+  the GSM eigendecomposition was fed the next **Gaussian** pyramid
+  level as the parent band where both references (MATLAB `iwssim_rgb.m`
+  `pyrBand(pyro,pind,nband+1)`, Python-IW-SSIM `imgopr[scale+1]`, and
+  jpeg-ai-qaf `IW_SSIM_PyTorch.py`) use the next **Laplacian** band.
+  Fixed across one-shot, warm-reference, strip, and warm-strip paths;
+  `WarmState`/`PyrLevel` no longer retain the unused Gaussian clones.
+  New `LumaConvention` ingress selector on `IwssimParams`:
+  `Bt601Rounded` (default, Python-IW-SSIM's `utils.rgb2gray`) and
+  `YiqUnrounded` (`0.299/0.587/0.114`, no rounding — the piq /
+  jpeg-ai-qaf `rgb2yiq` convention). `IwssimParams::piq_luma()` selects
+  the latter; CLI `--metric iwssim-piq` behind `cpu-iwssim-piq`,
+  column `iwssim_piq_imazen_v0_1_0`. Reproduces the AIC-4 `IW-SSIM`
+  column at med |Δ| 3.9e-6 / max 2.6e-5 (n=54; the earlier +1.2e-3
+  systematic gap is gone).
+- vifvec: new `vifvec` module in `crates/vif` — the *original*
+  steerable-pyramid vector-GSM VIF (Sheikh & Bovik 2006; a different
+  algorithm from `vifp` sharing the name). Clean-room reimplementation
+  of the authors' `vifvec.m` + matlabPyrTools `sp5Filters`/`buildSpyr`/
+  `corrDn`/`vifsub_est_M`/`ind2wtree`: 4-level SP5 pyramid (six
+  7×7 orientation filters, column-major→row-major transcribed),
+  `reflect1` boundaries, 3×3+parent vecGSM, f64 end-to-end.
+  `min(W,H) < 72` returns `Err` (the reference's `maxPyrHt` limit).
+  Validated vs GNU Octave runs of the official `.m` release: 10
+  goldens < 1e-9 incl. odd dims and identity. `vifvec_rgb8` ingress is
+  u8-rounded `round(0.299R+0.587G+0.114B)` — the convention the AIC-4
+  `VIF` column was computed under — published column reproduces at
+  med 1.9e-6 / max 6.3e-6 (n=54); `vifvec_plane_f64` takes raw planes.
+  CLI `--metric vifvec` behind `cpu-vifvec`, column
+  `vifvec_imazen_v0_1_0`. Ledgers updated.
 - mdctpsnr (`43d2723e`): new in-tree CPU crate `crates/mdctpsnr` —
   reference reimplementation of Thomas Richter's mDCT-PSNR
   (`thorfdbg/mDCTpsnr`, zlib license retained), the metric published in

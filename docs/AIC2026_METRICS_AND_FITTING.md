@@ -141,11 +141,13 @@ non-anchor metrics with no official map).
 | `fsimc` | `FSIMc` | A (k4) | 0.0065 | 0.31 | acceptable; one JPG-16 tail |
 | `fsim` | `FSIM` | C | 0.017 | 0.27 | acceptable |
 | `dssim` | `DSSIM` | C | 0.0001 | 0.0004 | exact |
-| `iwssim` (studio-Y) | `IW-SSIM` | C | 0.077 | 0.68 | pyiqa-variant gap, visible in JND |
+| `iwssim` (studio-Y) | `IW-SSIM` | C | 0.077 | 0.68 | superseded by `iwssim-piq` — the gap was a Gaussian-vs-Laplacian parent-band bug + ingress |
+| `iwssim-piq` | `IW-SSIM` | raw | 3.9e-6 | 2.6e-5 | **implemented** — unrounded YIQ ingress, ~exact (n=54) |
 | `msssim` (studio-Y) | `MS-SSIM` | B | 0.067 | **2.64** | MATLAB-variant gap — superseded by `msssim-libvmaf` |
 | `ssim-libvmaf` | `SSIM` | B | 0.00004 | 0.0007 | **implemented** — FFI-verified libvmaf port (raw med 1.0e-6 / max 1.8e-5) |
 | `msssim-libvmaf` | `MS-SSIM` | B | 0.0001 | 0.0022 | **implemented** — FFI-verified libvmaf port (raw med 1.0e-6 / max 1.6e-5) |
-| `vif` (studio-Y) | `VIF` | C | 0.26 | **5.85** | wavelet `vifvec` needed |
+| `vif` (studio-Y) | `VIF` | C | 0.26 | **5.85** | superseded by `vifvec` — different algorithm |
+| `vifvec` | `VIF` | raw | 1.9e-6 | 6.3e-6 | **implemented** — SP5 vecGSM, u8-rounded luma ingress, ~exact (n=54) |
 | `psnrhvs` (Ponomarenko-Y) | `PSNR-HVS-Y` | A | 1.90 | **6.38** | wrong algorithm family — superseded by `psnrhvs-daala` |
 | `psnrhvs` | `PSNR-HVS` | B | 1.82 | 3.63 | wrong algorithm family |
 | `psnrhvsm` | `PSNR-HVS` | B | 0.83 | 2.60 | closer but still wrong family |
@@ -186,9 +188,15 @@ the right prioritization axis.
    (`crates/msssim/src/libvmaf.rs`, FFI-verified incl. 10-bit hbd scaling
    and `round(min_dim/256)` auto-decimate). Studio-601 Y ingress: raw med
    1.0e-6 / max 1.8e-5 ≈ ≤0.002 JND on both columns.
-3. **Wavelet `vifvec`** → `VIF` column (pyiqa SP5 steerable-pyramid VIF).
-   5.9 JND-equivalent worst case; our `vif` is pixel-domain `vifp`.
-4. **pyiqa `iwssim` variant** → 0.68 JND-eq worst; systematic +1.2e-3 raw.
+~~3. **Wavelet `vifvec`** → `VIF` column~~ **DONE** — `crates/vif`
+   `vifvec` module (clean-room of `vifvec.m` + matlabPyrTools SP5);
+   Octave goldens < 1e-9; published-column med 1.9e-6 / max 6.3e-6
+   (n=54). Column ingress: u8-rounded `round(0.299R+0.587G+0.114B)`.
+~~4. **pyiqa `iwssim` variant**~~ **DONE** — `iwssim-piq` (`piq_luma`):
+   the +1.2e-3 was (a) Gaussian parent band fed to the GSM eig
+   decomposition where both refs use the next **Laplacian** band — a
+   real porting bug, fixed across all four scoring paths — and (b)
+   unrounded YIQ ingress. Column med 3.9e-6 / max 2.6e-5 (n=54).
 ~~5. **`mDCT-PSNR`** → new coverage (Richter QoMEX 2009; official C++ ref
    `thorfdbg/mDCTpsnr`).~~ **DONE** — `crates/mdctpsnr`, CLI `mdctpsnr`.
    Reproduces the *compiled* reference (GCC `-O3 -ffast-math` + AVX2 +
@@ -197,6 +205,9 @@ the right prioritization axis.
    the codegen-order details (reassociated reductions, `rcpps`+NR mask
    division, libmvec `powf`/`expf`).
 6. HDR-VDP-2 ingress config + HDR-VDP-3 → `HDR_VDP_2`/`HDR_VDP_3` columns.
+   VDP3 sources synced: jpeg-ai-qaf `feature/HDR-VDP2.2/main` @ `0628a6b`
+   (torch port of HDR-VDP-3.0.7, ~3.1k LoC + display-model CSVs),
+   mirrored at `~/tmp/jpeg-ai-qaf-hdrvdp3/VDP3/`.
 
 Explicitly deprioritized by JND evidence: SSIMULACRA2 version drift
 (≤0.004 JND), and GMSD/HaarPSI/CVVDP/PSNR-Y/VMAF-neg (already
@@ -218,7 +229,7 @@ implementations. Qualify ours by reference + variant, not just metric name:
 | `SSIMc` | MATLAB `ssim()` per-RGB-channel mean | — | computable |
 | `MS-SSIM` | libvmaf `float_ms_ssim` | `msssim-libvmaf` | ✅ FFI-verified port; `msssim` remains the Wang-MATLAB variant |
 | `MS-SSIM-pyiqa` | pyiqa ms_ssim (matched by ours to 3e-7 on one point) | `msssim` via `yuv601-studio` | variants differ at low quality |
-| `VIF` | **pyiqa `vif` = wavelet `vifvec`** (SP5 steerable pyramid) | `vif` | ours = pixel-domain `vifp_mscale` — **different algorithm family** |
+| `VIF` | **wavelet `vifvec`** family (SP5 steerable pyramid vecGSM; `IQA_pytorch.VIFs`/`vifvec.m`) on u8-rounded `round(0.299R+0.587G+0.114B)` luma | `vifvec` | ✅ implemented — med 1.9e-6 / max 6.3e-6 (n=54); `vif` remains pixel-domain `vifp_mscale` (**different algorithm family**) |
 | `VIF_vmaf` | libvmaf `vif` feature, Σ4 scales | `vmaf` crate `vif_scales` | matches |
 | `VMAF` / `VMAF-neg` / `ADM2` | libvmaf 3.2.1 `vmaf_v0.6.1[neg]` + `adm2` | `vmaf` crate | reproduction-grade |
 | `CVVDP` | pycvvdp `standard_fhd` | `cvvdp` + `--display-model` | reproduction-grade |
@@ -228,11 +239,11 @@ implementations. Qualify ours by reference + variant, not just metric name:
 | `VSI` | VSI, `k3`/`k4` weight variants in fit set | `vsi` | our port = paper weights; which `k` the CSV used is unresolved |
 | `FSIM`/`FSIMc` | FSIM/FSIMc, `k4` variant in fit | `fsim`, `fsimc` | acceptable; JPG-16 tail 0.3 JND |
 | `DSSIM` | dssim-core ^3.4 | `dssim` | exact |
-| `IW-SSIM` | pyiqa `iwssim` on studio-Y | `iwssim` | ours = Python-IW-SSIM oracle variant; +1.2e-3 systematic vs pyiqa |
+| `IW-SSIM` | jpeg-ai-qaf `IW_SSIM` (Jack-guo torch port) on **unrounded** 0–255 Y (`0.299/0.587/0.114`, kornia-matrix YUV) | `iwssim-piq` | ✅ implemented — med 3.9e-6 / max 2.6e-5 (n=54); `iwssim` keeps the Python-IW-SSIM rounded-BT.601 oracle convention |
 | `proposal-Butteraugli` | AIC-4 **submission** (not libjxl) | `butteraugli` | cannot reproduce — different metric entirely |
 | `proposal-mDCTPSNR`, `proposal-DVIFM*` | AIC-4 submissions | — | cannot reproduce |
 | `HDR_VDP_2` | HDR-VDP-2.x, display config TBD | `hdrvdp` | needs absolute-nits ingress config |
-| `HDR_VDP_3` | HDR-VDP-3 | — | different metric version, unimplemented |
+| `HDR_VDP_3` | HDR-VDP-3.0.7 (jpeg-ai-qaf `VDP3/` torch port, @ `0628a6b`) | — | different metric version, unimplemented — sources mirrored |
 | `mDCT-PSNR` | Richter QoMEX-2009 mDCT-PSNR | `mdctpsnr` | ✅ port of official C++ ref (`thorfdbg/mDCTpsnr`); med 4.0e-7 / max 1.13e-5 dB vs column |
 | `CW-SSIM`, `NLPD`, `MSSWD`, `FLIP`, `CIEDE2000` | conventional metrics | — | unimplemented |
 | `DISTS`, `LPIPS×2`, `PieAPP`, `WaDIQaM`, `DeepDC`, `DreamSim`, `TOPIQ×2`, `AHIQ`, `STLPIPS×2` | deep metrics (torch) | — | out of scope for pure-Rust |

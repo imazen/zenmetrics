@@ -29,6 +29,7 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 | `vmaf` | Netflix **libvmaf 3.2.1** (vendored via `vmaf-head-sys 0.2.0`, test-only) | libvmaf FFI oracle in `tests/ffi_fusion.rs` | v0 asserted ≤ 1e-4 features (motion2 1e-8), ≤ 0.02 score; integer stat paths exact by construction |
 | `gmsd` | **libgmsd** (Ponomarenko group) + `GMSD.m` | libgmsd bit-comparison | bit-identical map on even dims; f64 rounding only in score |
 | `iwssim` | **Python-IW-SSIM** @ `f9de37c` (Jack-guo-xy) | committed JSON goldens | identical ≤ 1e-5, distorted ≤ 5e-3; strip-vs-whole ≤ 1e-6 |
+| `iwssim-piq` | same algorithm as `iwssim`; the **JPEG AIC-4 `IW-SSIM` column** (jpeg-ai-qaf `IW_SSIM` on unrounded Y) | published AIC-4 `metrics_fullres.tab` | med 3.9e-6, max 2.6e-5 over 54 pairs (2026-09-26) |
 | `psnrhvs` | authors' **`psnrhvsm.m`** (metrix MATLAB) | Octave goldens, `validation/` | ≤ ~4e-4 dB (asserted ≤ 1e-3) |
 | `psnrhvs` (daala module) | Daala/Xiph **`dump_psnrhvs`** as vendored in libvmaf `psnr_hvs` @ **f85a8536** (`vmaf-head-sys 0.2.0`) | libvmaf FFI oracle in `crates/msssim/tests/ffi_libvmaf.rs` | asserted ≤ 2e-4 dB, YUV420+YUV444; observed ≪ gate |
 | `haarpsi` | authors' MIT **`HaarPSI.m`** | Octave goldens, `validation/` | ≤ 5e-5 over 16 rows |
@@ -37,6 +38,7 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 | `msssim` | Wang's **`msssim.m`** (MAD_Competition archive) | Octave goldens, `validation/` | ≤ 8.8e-6 over 15 rows |
 | `msssim` (libvmaf module) | libvmaf **`float_ssim`/`float_ms_ssim`** @ **f85a8536** (vendored via `vmaf-head-sys 0.2.0`, test-only) | libvmaf FFI oracle in `tests/ffi_libvmaf.rs` | asserted ≤ 2e-4; observed ≪ gate (8-bit, 10-bit, identical) |
 | `vif` | authors' **`vifp_mscale.m`** (pixel-domain release) | Octave goldens, `validation/` | ≤ ~5e-13 over 17 rows |
+| `vifvec` | authors' **`vifvec.m`** + matlabPyrTools `sp5Filters`/`buildSpyr`/`vifsub_est_M` (steerable-pyramid vecGSM release — a different metric from `vif` that shares the name) | GNU Octave run of the official `.m` set | ≤ 1e-9 over 10 goldens (incl. odd dims, 72px floor, identity, black-on-flat) |
 | `mad-iqa` | Larson & Chandler **`hi_index.m`/`lo_index.m`** + `ical_std.c`/`ical_stat.c` (STMAD_2011, archived in Netflix/vmaf); JEI 2010 combine | Octave `.m` shims of the C-mex + official `.m` drivers | hi 2.4e-7, lo 1.8e-6, mad 1.3e-6 rel over 13 rows |
 | `mdctpsnr` | **`thorfdbg/mDCTpsnr`** (Thomas Richter / U. Stuttgart; zlib-style license), compiled GCC `-O3 -ffast-math` + AVX2 + glibc 2.43 libmvec on x86_64 | the built `dctpsnr` binary + published AIC-4 `mDCT-PSNR` column | ~4e-6 dB on synthetic goldens incl. all `(w−13)%8` classes; AIC-4 53-pair max ~1.13e-5 dB (see entry) |
 | `ssim2` (CPU) | external **`fast-ssim2`** crate (sibling repo; C++ SSIMULACRA2 parity) | fast-ssim2's own parity suite | owned by fast-ssim2 repo |
@@ -175,6 +177,22 @@ Deep docs: `crates/hdrvdp/docs/VALIDATION.md`,
 
 ### `iwssim` — vs Python-IW-SSIM `f9de37c`
 
+- **RESOLVED** (was a real porting bug, fixed 2026-09-26) — the IW
+  weighting path fed the GSM eigendecomposition the next **Gaussian**
+  level (`g_ref[s+1]`) as the parent band; both references — the
+  authors' MATLAB `iwssim_rgb.m` (`pyrBand(pyro, pind, nband+1)`) and
+  Python-IW-SSIM (`imgopr[scale+1]` = `pyr_coeffs[(scale,0)]`) — use
+  the next **Laplacian** band. Corrected in `pipeline.rs`, `strip.rs`,
+  `weights.rs`; strip/full parity re-verified (14 tests). The fix
+  removed the systematic +1.2e-3 offset vs the AIC-4 `IW-SSIM` column
+  (residual before ingress: ~2e-4).
+- **EXTENSION** — `LumaConvention` selects the RGB→gray ingress:
+  `Bt601Rounded` (default) reproduces Python-IW-SSIM's
+  `utils.rgb2gray` (`round(0.2989R+0.5870G+0.1140B)` u8); `YiqUnrounded`
+  is the piq/jpeg-ai-qaf convention (`0.299R+0.587G+0.114B`, no
+  rounding — `IwssimParams::piq_luma()`). The AIC-4 `IW-SSIM` column
+  used the latter (verified: `IW_SSIM_PyTorch.py` takes a caller-made
+  luma plane; the qaf feeds it the unrounded 0–255 Y).
 - **EXTENSION** — `allow_small` tiles inputs below the 176px floor up to
   it; the reference hard-requires ≥ 176 min-dim. Canonical `score_gray`
   keeps the reference's requirement.
@@ -184,6 +202,21 @@ Deep docs: `crates/hdrvdp/docs/VALIDATION.md`,
   ≤ 1e-5, distorted ≤ 5e-3 asserted) — the reference itself is a Python
   reimplementation of Wang & Li's MATLAB, so the tolerance reflects
   oracle fidelity, not port sloppiness.
+
+### `iwssim-piq` — vs the JPEG AIC-4 `IW-SSIM` column
+
+- Same code path as `iwssim` with `LumaConvention::YiqUnrounded`;
+  exposed as a separate `MetricKind`/`IWSSIM_PIQ_COLUMN_NAME` so a
+  results table never mixes ingress conventions in one column.
+- **VALIDATED** vs `metrics_fullres.tab` `IW-SSIM` on the 54 available
+  pairs (med |Δ| 3.9e-6, max 2.6e-5, 2026-09-26). The column was
+  computed by the jpeg-ai-qaf harness calling the Jack-guo `IW_SSIM`
+  port on the **unrounded** 0–255 Y plane (`metrics.py:IWSSIM.calc` →
+  `convert_range(yuv['Y'], range, [0,255])`, kornia-matrix `rgb_to_yuv`,
+  `a = 0.299`) — upstream mirror at
+  `/home/lilith/tmp/jpeg-ai-qaf-hdrvdp3` @ `0628a6b`.
+- **DIVERGES (deliberate)** from `iwssim`'s default only in luma
+  ingress; algorithm, pyramid, and weights are shared code.
 
 ### `iwssim-gpu` — vs in-tree `iwssim`
 
@@ -321,6 +354,33 @@ Deep docs: `crates/hdrvdp/docs/VALIDATION.md`,
 - Identical inputs → `0.999999999992`, **not** exactly 1 — the GSM gain
   stays just under one; preserved, not clamped.
 - Can exceed 1 legitimately (information ratio); CLI bound `(−0.001, 10)`.
+
+### `vifvec` — vs `vifvec.m` (steerable-pyramid vecGSM release)
+
+- **NOT the same metric as `vif`** — `vifp_mscale.m` is the later
+  pixel-domain scalar-GSM simplification; `vifvec` is the original
+  4-level steerable-pyramid (SP5) vector-GSM VIF of the 2006 paper.
+  Shared name, different algorithm: keep the `vif`/`vifvec` column
+  names distinct in any join.
+- **RESOLVED** — matlabPyrTools `buildSpyrLevs` stores each 7×7
+  orientation filter column-major (`bfilts(:,b)`); the Rust `BFILTS`
+  constants are the same values transcribed row-major (machine-extracted
+  from `sp5Filters.m`, not hand-copied).
+- **RESOLVED** — `buildSpyr` correlation boundary is `reflect1`
+  (half-sample symmetric, edge count 3 for a 7-tap filter); the Rust
+  `corr_dn` reproduces it exactly (verified bit-equal at 1e-9 on
+  96×96…300×260 goldens including 97×95 and 96×80 odd/uneven dims).
+- **EXTENSION** — reference errors when `min(W,H) < 72`
+  (`maxPyrHt` cannot build the 4th level); we return `Err` with the
+  same boundary instead of scoring.
+- RGB entry `vifvec_rgb8` uses u8-rounded `round(0.299R+0.587G+0.114B)`
+  (cv2/PIL gray) — the ingress the AIC-4 `VIF` column was computed
+  under: med |Δ| 1.9e-6 / max 6.3e-6 vs `metrics_fullres.tab` over
+  the 54 available pairs (2026-09-26); unrounded luma misses by ~7e-4.
+  `vifvec_plane_f64`
+  exposes raw-f64 ingress for callers with their own convention.
+- f64 end-to-end, like `vif` — the vecGSM log-det / `inv(cu)` terms sit
+  at the same noise-floor as `vifp`'s 1e-10 masks.
 
 ### `mad-iqa` — vs `hi_index.m`/`lo_index.m` + C-mex + JEI combine
 

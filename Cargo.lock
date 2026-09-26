@@ -2359,9 +2359,6 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
-dependencies = [
- "foldhash 0.2.0",
-]
 
 [[package]]
 name = "hdrvdp"
@@ -2955,7 +2952,7 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder"
-version = "0.4.0"
+version = "0.3.2"
 dependencies = [
  "archmage",
  "butteraugli",
@@ -2977,7 +2974,7 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder-macros"
-version = "0.4.0"
+version = "0.3.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2986,7 +2983,7 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder-simd"
-version = "0.4.0"
+version = "0.3.2"
 dependencies = [
  "archmage",
  "libm",
@@ -4220,7 +4217,7 @@ checksum = "ca45419789ae5a7899559e9512e58ca889e41f04f1f2445e9f4b290ceccd1d08"
 [[package]]
 name = "rav1d-disjoint-mut"
 version = "0.3.1"
-source = "git+https://github.com/imazen/rav1d-safe?rev=e73811f5d4dad81b75195ca18554fd8a5df19515#e73811f5d4dad81b75195ca18554fd8a5df19515"
+source = "git+https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec#66f58fa6a64c689998721cc5cdb16a4698e26eec"
 dependencies = [
  "aligned",
  "aligned-vec",
@@ -4230,7 +4227,7 @@ dependencies = [
 [[package]]
 name = "rav1d-safe"
 version = "0.6.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=e73811f5d4dad81b75195ca18554fd8a5df19515#e73811f5d4dad81b75195ca18554fd8a5df19515"
+source = "git+https://github.com/imazen/rav1d-safe?rev=66f58fa6a64c689998721cc5cdb16a4698e26eec#66f58fa6a64c689998721cc5cdb16a4698e26eec"
 dependencies = [
  "aligned",
  "archmage",
@@ -6723,19 +6720,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zenanalyze"
-version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3be60ecfc3e482476ef068ff773b2c5b8d"
-dependencies = [
- "archmage",
- "garb",
- "linear-srgb",
- "magetypes",
- "zenpixels",
- "zenpixels-convert",
-]
-
-[[package]]
 name = "zenav1-aom-bench"
 version = "0.0.1"
 dependencies = [
@@ -6759,7 +6743,6 @@ name = "zenav1-aom-dsp"
 version = "0.0.1"
 dependencies = [
  "archmage",
- "enough",
  "magetypes",
 ]
 
@@ -6767,8 +6750,6 @@ dependencies = [
 name = "zenav1-aom-encode"
 version = "0.0.1"
 dependencies = [
- "enough",
- "smallvec",
  "zenav1-aom-dsp",
 ]
 
@@ -6780,21 +6761,11 @@ version = "0.0.1"
 name = "zenav1-svt"
 version = "0.1.0"
 dependencies = [
- "almost-enough",
- "enough",
- "zenav1-svt-dsp 0.1.0",
- "zenav1-svt-encoder 0.1.0",
- "zenav1-svt-types 0.1.0",
-]
-
-[[package]]
-name = "zenav1-svt"
-version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=257089314ae8e7cd30e77366ca285221da33bfad#257089314ae8e7cd30e77366ca285221da33bfad"
-dependencies = [
- "zenav1-svt-dsp 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=257089314ae8e7cd30e77366ca285221da33bfad)",
- "zenav1-svt-encoder 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=257089314ae8e7cd30e77366ca285221da33bfad)",
- "zenav1-svt-types 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=257089314ae8e7cd30e77366ca285221da33bfad)",
+ "zenav1-svt-dsp",
+ "zenav1-svt-encoder",
+ "zenav1-svt-entropy",
+ "zenav1-svt-tables",
+ "zenav1-svt-types",
 ]
 
 [[package]]
@@ -6803,17 +6774,8 @@ version = "0.1.0"
 dependencies = [
  "archmage",
  "magetypes",
- "zenav1-svt-types 0.1.0",
-]
-
-[[package]]
-name = "zenav1-svt-dsp"
-version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=257089314ae8e7cd30e77366ca285221da33bfad#257089314ae8e7cd30e77366ca285221da33bfad"
-dependencies = [
- "archmage",
- "magetypes",
- "zenav1-svt-types 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=257089314ae8e7cd30e77366ca285221da33bfad)",
+ "zenav1-svt-tables",
+ "zenav1-svt-types",
 ]
 
 [[package]]
@@ -6821,41 +6783,34 @@ name = "zenav1-svt-encoder"
 version = "0.1.0"
 dependencies = [
  "almost-enough",
- "archmage",
  "enough",
- "magetypes",
- "smallvec",
  "whereat",
- "zenav1-svt-dsp 0.1.0",
- "zenav1-svt-types 0.1.0",
+ "zenav1-svt-dsp",
+ "zenav1-svt-entropy",
+ "zenav1-svt-tables",
+ "zenav1-svt-types",
 ]
 
 [[package]]
-name = "zenav1-svt-encoder"
+name = "zenav1-svt-entropy"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=257089314ae8e7cd30e77366ca285221da33bfad#257089314ae8e7cd30e77366ca285221da33bfad"
 dependencies = [
- "almost-enough",
  "archmage",
- "enough",
  "magetypes",
- "whereat",
- "zenav1-svt-dsp 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=257089314ae8e7cd30e77366ca285221da33bfad)",
- "zenav1-svt-types 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=257089314ae8e7cd30e77366ca285221da33bfad)",
+ "zenav1-svt-tables",
+ "zenav1-svt-types",
+]
+
+[[package]]
+name = "zenav1-svt-tables"
+version = "0.1.0"
+dependencies = [
+ "zenav1-svt-types",
 ]
 
 [[package]]
 name = "zenav1-svt-types"
 version = "0.1.0"
-dependencies = [
- "enough",
- "whereat",
-]
-
-[[package]]
-name = "zenav1-svt-types"
-version = "0.1.0"
-source = "git+https://github.com/imazen/zenav1-svt?rev=257089314ae8e7cd30e77366ca285221da33bfad#257089314ae8e7cd30e77366ca285221da33bfad"
 dependencies = [
  "enough",
  "whereat",
@@ -6863,7 +6818,7 @@ dependencies = [
 
 [[package]]
 name = "zenavif"
-version = "0.2.0"
+version = "0.1.7"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -6880,7 +6835,7 @@ dependencies = [
  "ultrahdr-core 0.5.0",
  "whereat",
  "yuv",
- "zenav1-svt 0.1.0 (git+https://github.com/imazen/zenav1-svt?rev=257089314ae8e7cd30e77366ca285221da33bfad)",
+ "zenav1-svt",
  "zenavif-parse",
  "zenavif-serialize 0.2.0",
  "zencodec",
@@ -6915,7 +6870,7 @@ dependencies = [
 [[package]]
 name = "zenavif-serialize"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=98c8a5011e1ac573770a8889a8b5a4a68587de90#98c8a5011e1ac573770a8889a8b5a4a68587de90"
+source = "git+https://github.com/imazen/zenavif-serialize?rev=990bd6d025ece47da74cbd74c245302bd45bbf8e#990bd6d025ece47da74cbd74c245302bd45bbf8e"
 dependencies = [
  "arrayvec",
  "whereat",
@@ -7103,7 +7058,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "zenanalyze 0.2.0",
+ "zenanalyze",
  "zenfleet-cloud",
  "zenmetrics-cli",
 ]
@@ -7391,7 +7346,7 @@ dependencies = [
  "tinyvec",
  "ultrahdr-core 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "whereat",
- "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
+ "zenanalyze",
  "zencodec",
  "zenpixels",
  "zenpixels-convert",
@@ -7590,7 +7545,7 @@ dependencies = [
  "zenav1-aom-bench",
  "zenav1-aom-dsp",
  "zenav1-aom-sys-ref",
- "zenav1-svt 0.1.0",
+ "zenav1-svt",
  "zenavif",
  "zenavif-parse",
  "zenavif-serialize 0.2.0",
@@ -7764,7 +7719,7 @@ dependencies = [
 [[package]]
 name = "zenrav1e"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenrav1e?rev=1447c200fd083916c69ac72c1335079ba4624b2e#1447c200fd083916c69ac72c1335079ba4624b2e"
+source = "git+https://github.com/imazen/zenrav1e?rev=e4883037553434efb57ecbf4414c8b49922ba3e4#e4883037553434efb57ecbf4414c8b49922ba3e4"
 dependencies = [
  "aligned-vec",
  "arbitrary",
@@ -7797,7 +7752,7 @@ dependencies = [
 [[package]]
 name = "zenravif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/cavif-rs?rev=7f55b540fdf40ee9b37a7060c8d327747e842345#7f55b540fdf40ee9b37a7060c8d327747e842345"
+source = "git+https://github.com/imazen/cavif-rs?rev=f6c883b6e7395fad67c87ddab676c4df59575a41#f6c883b6e7395fad67c87ddab676c4df59575a41"
 dependencies = [
  "almost-enough",
  "imgref",
@@ -7805,7 +7760,7 @@ dependencies = [
  "quick-error",
  "rgb",
  "whereat",
- "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif?rev=98c8a5011e1ac573770a8889a8b5a4a68587de90)",
+ "zenavif-serialize 0.2.0 (git+https://github.com/imazen/zenavif-serialize?rev=990bd6d025ece47da74cbd74c245302bd45bbf8e)",
  "zenrav1e",
 ]
 
@@ -7898,7 +7853,7 @@ dependencies = [
  "byteorder-lite",
  "enough",
  "garb",
- "hashbrown 0.17.1",
+ "hashbrown 0.16.1",
  "libm",
  "linear-srgb",
  "magetypes",
