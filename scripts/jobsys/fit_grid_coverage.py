@@ -14,9 +14,10 @@ to a newer jobset, is never re-claimed and would otherwise vanish without any er
 Exit 0 iff every registered cell is DONE in some jobset and no DONE cell lies outside the grid.
 Exit 1 otherwise; the report says which cells are STRANDED (not DONE, and every jobset that could
 run them is drained/paused/unserved), which are IN_FLIGHT (claimed by a live worker), which are
-FAILED (a failed ledger row, e.g. `disk_full` / `upload_fail` / `timeout`, and no served jobset
-declares them without a failed row: a failed cell's claim stays "done" until the TTL, so nothing
-re-runs it until it is re-declared) and which are merely pending. `--serving` names the jobsets
+FAILED (a failed ledger row, e.g. `disk_full` / `upload_fail` / `timeout`, or a finished-chunk
+claim with no DONE row at all, i.e. a result the ledger never received, and no served jobset
+declares them without one: such a claim stays "done" until the TTL, so nothing re-runs the cell
+until it is re-declared) and which are merely pending. `--serving` names the jobsets
 that have live workers; by default every jobset whose control.json is neither drained nor paused
 counts as served. `--live-workers FILE` (JSON list or one name per line) names the workers that are
 running now: a live worker holds exactly one cell, its newest non-DONE claim, so that cell is
@@ -94,13 +95,18 @@ def coverage(grid: list, jobsets: list, serving: set, now: int, live: set | None
         # Claims in jobsets that do not declare the cell cannot exist; claims are keyed per jobset.
         in_flight = [name for name, (w, age, *rest) in claims.items() if not (rest and rest[0])
                      and (live is None or (w in live and newest.get(w, (0, None, None))[1:] == (cell, name)))]
-        failed_in = {js["name"]: js.get("failed", {})[cell] for js in holders if cell in js.get("failed", {})}
+        # A finished-chunk claim (done >= total) on a cell that is not DONE means the worker finished
+        # but its result never reached the ledger (e.g. a ledger write failed): count it as failed.
+        lost = {js["name"]: "finished_claim_no_done_row" for js in holders
+                if cell in js["claims"] and len(js["claims"][cell]) > 2 and js["claims"][cell][2]}
+        failed_rows = {js["name"]: js.get("failed", {})[cell] for js in holders if cell in js.get("failed", {})}
+        failed_in = {**lost, **failed_rows}
         served_holders = [js for js in holders if js["name"] in serving]
         if in_flight:
             status = "IN_FLIGHT"
         elif not served_holders:
             status = "FAILED" if failed_in else "STRANDED"
-        elif all(cell in js.get("failed", {}) for js in served_holders):
+        elif all(js["name"] in failed_in for js in served_holders):
             status = "FAILED"
         else:
             status = "pending"

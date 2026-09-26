@@ -317,6 +317,20 @@ class Coverage(unittest.TestCase):
         r = cov.coverage(["a/1", "a/2", "a/3"], [v8], set(), 1000, live={"w-a"})
         self.assertEqual({m["cell"]: m["status"] for m in r["missing"]}["a/2"], "FAILED")
 
+    def test_finished_claim_without_a_done_row_is_a_lost_result(self):
+        v8 = self.js("v8", ["a/1", "a/2"], ["a/2"], claims={"a/1": ("w-a", 800, True)})
+        r = cov.coverage(["a/1", "a/2"], [v8], {"v8"}, 1000, live={"w-a"})
+        m = r["missing"][0]
+        self.assertEqual((m["cell"], m["status"]), ("a/1", "FAILED"))
+        self.assertEqual(m["failed_in"], {"v8": "finished_claim_no_done_row"})
+        # A running claim (not finished) is IN_FLIGHT, and a re-declaration in a fresh jobset makes it pending.
+        v8["claims"] = {"a/1": ("w-a", 800, False)}
+        self.assertEqual(cov.coverage(["a/1", "a/2"], [v8], {"v8"}, 1000, live={"w-a"})["missing"][0]["status"], "IN_FLIGHT")
+        v8["claims"] = {"a/1": ("w-a", 800, True)}
+        retry = self.js("retry", ["a/1"], [])
+        r = cov.coverage(["a/1", "a/2"], [v8, retry], {"v8", "retry"}, 1000, live={"w-a"})
+        self.assertEqual(r["missing"][0]["status"], "pending")
+
     def test_claim_parsing(self):
         self.assertEqual(cov.parse_claim("900 host-1 0/1", 1000), ("host-1", 100, False))
         self.assertEqual(cov.parse_claim("900 host-1 1/1", 1000), ("host-1", 100, True))
