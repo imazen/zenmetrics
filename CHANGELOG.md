@@ -13,7 +13,7 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
-- zenmetrics-cli (`9345e085`): the PSNR-Y family now enumerates the
+- zenmetrics-cli (`45a6e9bf`): the PSNR-Y family now enumerates the
   luma conventions common in the literature, all in-tree (the exec-based
   libvmaf aux extraction is gone — `29eb904a`): `psnr-y` (BT.709
   full-range, unchanged), `psnr-y601` (BT.601 full-range — the MATLAB
