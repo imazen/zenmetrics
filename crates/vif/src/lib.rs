@@ -52,6 +52,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 mod kernel;
+mod vifvec;
 
 #[cfg(feature = "_dev")]
 #[doc(hidden)]
@@ -88,6 +89,23 @@ pub const VIF_COLUMN_NAME: &str = match option_env!("VIF_IMPL_TAG") {
     ),
 };
 
+/// Stable column-name identifier for the vector-GSM `vifvec` variant —
+/// `vifvec_imazen_v<MAJOR>_<MINOR>_<PATCH>` (overridable via
+/// `VIFVEC_IMPL_TAG`). Kept distinct from [`VIF_COLUMN_NAME`]: these
+/// are *different metrics* that share the name "VIF" in the
+/// literature (see the [`vifvec`] module docs).
+pub const VIFVEC_COLUMN_NAME: &str = match option_env!("VIFVEC_IMPL_TAG") {
+    Some(tag) => tag,
+    None => concat!(
+        "vifvec_imazen_v",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_PATCH")
+    ),
+};
+
 /// Errors returned by the public scorers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
@@ -99,6 +117,15 @@ pub enum Error {
         /// Buffer length actually supplied.
         got: usize,
     },
+    /// `min(width, height)` below the variant's pyramid floor —
+    /// `vifvec` needs ≥ 72 (the reference's `maxPyrHt` cannot build a
+    /// 4-level SP5 pyramid below that and hard-errors).
+    TooSmall {
+        /// Minimum `min(width, height)` the variant accepts.
+        needed: usize,
+        /// `min(width, height)` actually supplied.
+        got: usize,
+    },
 }
 
 impl core::fmt::Display for Error {
@@ -106,6 +133,9 @@ impl core::fmt::Display for Error {
         match self {
             Error::BufferLength { needed, got } => {
                 write!(f, "buffer too short: need {needed} elements, got {got}")
+            }
+            Error::TooSmall { needed, got } => {
+                write!(f, "image too small: need min(w,h) >= {needed}, got {got}")
             }
         }
     }
@@ -174,12 +204,64 @@ pub fn vif_rgb8(
     Ok(kernel::vifp_core(&inputs, width, height))
 }
 
+/// `vifvec` (vector-GSM steerable-pyramid VIF — the original release)
+/// of two single-channel `f32` planes (0–255 signal scale), packed
+/// row-major with explicit `stride` (≥ `w`). This is **not** VIFp —
+/// see the [`vifvec`] module docs. `min(w,h) < 72` returns
+/// [`Error::TooSmall`] — the reference's `maxPyrHt` hard-errors when a
+/// 4-level SP5 pyramid does not fit (`buildSpyr` bound on the 9-tap
+/// `lofilt`), so no score exists below it.
+pub fn vifvec_plane_f32(
+    reference: &[f32],
+    distorted: &[f32],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<f64, Error> {
+    check_vifvec_size(width, height)?;
+    check_plane(reference, width, height, stride)?;
+    check_plane(distorted, width, height, stride)?;
+    let r = gather_plane(reference, width, height, stride);
+    let d = gather_plane(distorted, width, height, stride);
+    Ok(vifvec::vifvec_core(&r, &d, width, height))
+}
+
+/// `vifvec` of two interleaved sRGB RGB8 pairs. Ingress follows the
+/// reference pipeline the JPEG AIC-4 `VIF` column was computed with:
+/// u8-rounded `round(0.299·R + 0.587·G + 0.114·B)` grayscale (the
+/// classic `rgb2gray` result), **not** the unrounded `0.2989` luma
+/// [`vif_rgb8`] uses.
+pub fn vifvec_rgb8(
+    reference: &[u8],
+    distorted: &[u8],
+    width: usize,
+    height: usize,
+    stride: usize,
+) -> Result<f64, Error> {
+    check_vifvec_size(width, height)?;
+    check_rgb(reference, width, height, stride)?;
+    check_rgb(distorted, width, height, stride)?;
+    let inputs = Inputs::from_rgb8_rounded(reference, distorted, width, height, stride);
+    Ok(vifvec::vifvec_core(&inputs.r, &inputs.d, width, height))
+}
+
 /// Gathered level-0 input planes (`f64` — see the crate docs).
 pub(crate) struct Inputs {
     /// Reference plane, packed `w·h`.
     pub r: Vec<f64>,
     /// Distorted plane, packed `w·h`.
     pub d: Vec<f64>,
+}
+
+/// `vifvec`'s size floor: `buildSpyr(im, 4, 'sp5Filters')` requires
+/// `maxPyrHt(size, 9) >= 4`, i.e. `min(w,h) >= 72`. Smaller inputs are
+/// a reference error condition, not a NaN.
+fn check_vifvec_size(w: usize, h: usize) -> Result<(), Error> {
+    let got = w.min(h);
+    if got < 72 {
+        return Err(Error::TooSmall { needed: 72, got });
+    }
+    Ok(())
 }
 
 fn gather_plane(buf: &[f32], w: usize, h: usize, stride: usize) -> Vec<f64> {
@@ -222,6 +304,42 @@ impl Inputs {
                     LUMA_COEF[0] as f64 * dr as f64
                         + LUMA_COEF[1] as f64 * dg as f64
                         + LUMA_COEF[2] as f64 * db as f64,
+                );
+            }
+        }
+        Self { r, d }
+    }
+
+    /// Luma planes via the `vifvec` reference's ingress: u8-**rounded**
+    /// `round(0.299·R + 0.587·G + 0.114·B)` (the classic `rgb2gray`
+    /// convention), cast to `f64`.
+    pub(crate) fn from_rgb8_rounded(
+        reference: &[u8],
+        distorted: &[u8],
+        w: usize,
+        h: usize,
+        stride: usize,
+    ) -> Self {
+        let n = w * h;
+        let (mut r, mut d) = (Vec::with_capacity(n), Vec::with_capacity(n));
+        for y in 0..h {
+            let (rs, ds) = (
+                &reference[y * stride..y * stride + 3 * w],
+                &distorted[y * stride..y * stride + 3 * w],
+            );
+            for (&[pr, pg, pb], &[dr, dg, db]) in rs
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .zip(ds.as_chunks::<3>().0.iter())
+            {
+                r.push(
+                    (0.299 * pr as f64 + 0.587 * pg as f64 + 0.114 * pb as f64).round() as u8
+                        as f64,
+                );
+                d.push(
+                    (0.299 * dr as f64 + 0.587 * dg as f64 + 0.114 * db as f64).round() as u8
+                        as f64,
                 );
             }
         }

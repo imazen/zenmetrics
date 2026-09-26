@@ -137,6 +137,63 @@ fn degenerate_scores_nan() {
     assert!(vif_plane_f32(&c512, &g512, 512, 512, 512).unwrap().is_nan());
 }
 
+/// Golden rows produced by the *original* `vifvec.m` under GNU Octave
+/// (matlabPyrTools `buildSpyr`, `sp5Filters`, `reflect1`): `(kind_r,
+/// kind_d, w, h, vifvec)`. `min(w,h) < 72` can't build the 4-level
+/// pyramid upstream (`maxPyrHt` errors) — all rows clear that floor.
+/// Odd dims exercise the `corrDn` stride-2 `ceil(size/2)` path.
+const VIFVEC_GOLDENS: &[(usize, usize, usize, usize, f64)] = &[
+    (1, 2, 96, 96, 0.005600970990),
+    (1, 2, 97, 95, 0.005555393819),
+    (4, 2, 96, 80, 0.023131222767),
+    (1, 2, 256, 256, 0.005551663151),
+    (2, 3, 256, 256, 0.000852369895),
+    (1, 4, 300, 260, 0.987921873992),
+    (1, 2, 72, 72, 0.004314602211),
+    (1, 2, 145, 131, 0.005163143261),
+    (1, 1, 256, 256, 1.000000000000),
+    (1, 5, 96, 96, 0.0),
+];
+
+#[test]
+fn vifvec_plane_goldens() {
+    let mut worst = 0.0f64;
+    for (kr, kd, w, h, expected) in VIFVEC_GOLDENS {
+        let r = gens()[*kr - 1](*w, *h);
+        let d = gens()[*kd - 1](*w, *h);
+        let s = vifvec_plane_f32(&r, &d, *w, *h, *w).unwrap();
+        let delta = (s - expected).abs();
+        worst = worst.max(delta);
+        assert!(
+            delta < 1e-9,
+            "vifvec ({kr},{kd},{w}x{h}): {s} vs golden {expected} (delta {delta:e})"
+        );
+    }
+    eprintln!("worst vifvec plane golden delta: {worst:e}");
+}
+
+/// `vifvec`'s size floor is the reference's `maxPyrHt(im, 9) >= 4`
+/// bound — `min(w,h) < 72` is an upstream error condition ("Cannot
+/// build pyramid higher than 3 levels"), surfaced as `Err(TooSmall)`
+/// rather than a score. Constant planes land on the reference's
+/// singular-`cu` path: NaN (verified against Octave).
+#[test]
+fn vifvec_size_floor() {
+    let small = [0.5f32; 72 * 72];
+    for &(w, h) in &[(71, 80), (64, 80), (40, 40), (72, 8)] {
+        assert!(matches!(
+            vifvec_plane_f32(&small, &small, w, h, w),
+            Err(Error::TooSmall { needed: 72, .. })
+        ));
+    }
+    // 72×72 is the floor: reference computes (singular → NaN here).
+    assert!(
+        vifvec_plane_f32(&small, &small, 72, 72, 72)
+            .unwrap()
+            .is_nan()
+    );
+}
+
 /// `vif_rgb8` golden — unrounded `0.2989/0.5870/0.1140` luma (the
 /// reference is single-channel; the house convention scores the luma
 /// plane, verified by `validation/rgb_golden.m`).

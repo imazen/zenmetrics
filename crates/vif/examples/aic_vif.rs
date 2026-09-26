@@ -3,7 +3,13 @@ use std::env;
 use std::fs;
 use vif::vif_plane_f32;
 
-fn luma(rgb: &[u8], stride_px: usize, w: usize, h: usize, f: impl Fn(f32, f32, f32) -> f32) -> Vec<f32> {
+fn luma(
+    rgb: &[u8],
+    stride_px: usize,
+    w: usize,
+    h: usize,
+    f: impl Fn(f32, f32, f32) -> f32,
+) -> Vec<f32> {
     let mut out = Vec::with_capacity(w * h);
     for row in rgb.chunks_exact(stride_px * 3).take(h) {
         for px in row[..w * 3].chunks_exact(3) {
@@ -38,8 +44,12 @@ fn main() {
     // full-range BT.601
     run(
         "full601-Y",
-        &luma(&rgb_r, w0, w, h, |r, g, b| 0.299 * r + 0.587 * g + 0.114 * b),
-        &luma(&rgb_d, w0, w, h, |r, g, b| 0.299 * r + 0.587 * g + 0.114 * b),
+        &luma(&rgb_r, w0, w, h, |r, g, b| {
+            0.299 * r + 0.587 * g + 0.114 * b
+        }),
+        &luma(&rgb_d, w0, w, h, |r, g, b| {
+            0.299 * r + 0.587 * g + 0.114 * b
+        }),
     );
     // per-channel mean VIF
     let mut acc = 0.0;

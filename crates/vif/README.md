@@ -11,6 +11,26 @@ validated against it under GNU Octave.
   (`0.2989/0.5870/0.1140`); the reference is single-channel, so this
   is the house convention for RGB input.
 
+## `vifvec` — a different metric sharing the name
+
+`vifvec` is the **original** vector-GSM VIF formulation from the same
+2006 paper — a 4-level SP5 steerable pyramid with 3×3+parent
+vector-GSM neighbourhoods (`vifvec.m` + matlabPyrTools), *not* the
+pixel-domain scalar-GSM `vifp`. pyiqa/`IQA_pytorch`'s `VIFs` and the
+JPEG AIC-4 `VIF` column are this variant.
+
+- `vifvec_plane_f64` — vifvec of two raw f64 planes (min dim ≥ 72 —
+  the reference's `maxPyrHt` constraint; smaller inputs return `Err`
+  as the `.m` does).
+- `vifvec_rgb8` — on u8-rounded `round(0.299R+0.587G+0.114B)` luma —
+  the ingress the AIC-4 `VIF` column was computed under — med |Δ|
+  1.9e-6 / max 6.3e-6 vs `metrics_fullres.tab` (n=54); unrounded
+  luma misses by ~7e-4.
+
+Validated against GNU Octave runs of the official `.m` release:
+10 goldens < 1e-9 (odd dims, the 72px floor, identity, degenerate
+inputs).
+
 Pipeline, matching the reference: four scales; at each scale an
 N-tap Gaussian (`N = 2^(5−scale)+1` → 17, 9, 5, 3, `σ = N/5`,
 rank-1 separable) produces `filter2 'valid'` mean/variance/
