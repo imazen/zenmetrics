@@ -22,7 +22,12 @@ mod compute_multi;
     feature = "pixels"
 ))]
 mod cpu_butter_linear;
-#[cfg(all(feature = "cpu-cvvdp", feature = "cuda", feature = "cvvdp"))]
+#[cfg(all(
+    feature = "cpu-cvvdp",
+    feature = "cuda",
+    feature = "cvvdp",
+    feature = "hdr"
+))]
 mod cpu_cvvdp_linear;
 #[cfg(all(
     feature = "cpu-butter",

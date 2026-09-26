@@ -4,7 +4,12 @@
 //! `cvvdp::Cvvdp::score_from_linear_planes` (pure-Rust SIMD, archmage), with the
 //! DisplayModel from the cvvdp params — mirroring the GPU `Backend::Cuda` linear
 //! path. CUDA-gated (the comparison side needs the GPU); NO graceful skips.
-#![cfg(all(feature = "cuda", feature = "cpu-cvvdp", feature = "cvvdp"))]
+#![cfg(all(
+    feature = "cuda",
+    feature = "cpu-cvvdp",
+    feature = "cvvdp",
+    feature = "hdr"
+))]
 
 use zenmetrics_api::Backend;
 use zenmetrics_api::hdr::{HDR_PEAK_NITS, HdrScorer};
