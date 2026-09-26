@@ -682,20 +682,13 @@ packed-sRGB-u8 sweep shape and answers a different question.
   (`min_storage_buffer_offset_alignment` = 32) panics the same way — `cubecl-wgpu: storage
   buffer binding 1 starts at offset 1311688 which is not a multiple of … (32)` — for
   `new_strip_pair(256, 256, h_body = 128)`; single-strip Mode B (h_body ≥ height) runs.
-
-- **cvvdp-gpu Mode E (`MemoryMode::Strip`) on wgpu/Vulkan scores 1000×750 far from Full —
-  found 2026-09-26 (cvvdpdet lane), pre-existing, NOT root-caused or fixed.** Probe
-  `crates/cvvdp-gpu/examples/pool_determinism.rs` (`new_strip(.., h_body = 128)` + warm ref vs
-  `Cvvdp::new`): the noise pair scores **4.6037 JOD in Mode E vs 5.0083 in Full**; the mild
-  pair 9.9902 vs 9.9616. Same numbers with the old atomic pool (master 9e918021) and the new
-  deterministic pool, so the pool is not the cause. CUDA on the same box gives Mode E = Full
-  bit-for-bit at 1000×750, and wgpu Mode E = Full at 256² and 1024². Prime suspect (read, not
-  proven): the same caller-built `offset_start` sub-views as the Mode B entry above — at
-  1000×750 the narrow levels' strip byte offsets are not multiples of 32, and this path does
-  not trip cubecl's alignment panic. The Mode E parity tests (`strip_mode_e_parity.rs`) only
-  cover 64×64, which is why nothing caught it. Repro:
-  `DET_PAIRS=noise DET_SIZES=1000x750 DET_MODES=full,strip DET_REPS=3 cargo run --release -p
-  cvvdp-gpu --no-default-features --features wgpu,cubecl-types --example pool_determinism`.
+  **Partly fixed (2026-09-26, `f29a8371`):** the masking strip walker
+  (`_run_band_masking_strip_s_for_level`, shared with Mode E) now rounds every sub-view offset
+  down to 256 bytes (`aligned_split`) and launches `*_shifted_kernel` variants that add the
+  leftover elements to their indices. The multi-strip Mode B tests still fail on wgpu
+  (`mode_b_walker_parity` ×4, `strip_mode_b_csf_halo_parity` ×4, measured after the fix):
+  the DKL, gauss, Weber and CSF strip walkers still pass misaligned `offset_start` sub-views
+  (48 sites in `pipeline.rs`). The same mechanism fixes them; not done yet.
 
 - **zensim-gpu `it` suite on macOS/Metal (wgpu): 2 deterministic failures, pre-existing
   (verified 2026-08-27 — identical values on baseline b07a0485 before that day's commits, in
@@ -888,6 +881,19 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ### Resolved
 
+- **cvvdp-gpu Mode E (`MemoryMode::Strip`) on wgpu scored 1000×750 far from Full — FIXED
+  2026-09-26 (`f29a8371`, test `445aa175`).** Root cause: the masking strip walker bound row-window
+  sub-views (`offset_start(top_global · bw · 4)`) at offsets that are not multiples of
+  `min_storage_buffer_offset_alignment` for the odd level widths of 1000×750 (250, 125, 63).
+  cubecl-wgpu's check **does** fire, but it panics on the device-service thread; the call still
+  returns, with those masking strips never dispatched (30 device-thread panics per probe
+  process). The earlier note here said the path did not trip the check; that was wrong. Mode E
+  scored the noise pair 4.603752 against Full 5.008305 (mild 9.990167 vs 9.961642); CUDA
+  matched exactly. After: wgpu Mode E = Full bit for bit, 0 device panics, CUDA byte-identical.
+  Gate: `strip_mode_e_parity::mode_e_matches_full_1000x750_h_body_128`. **Lesson: on wgpu a
+  `cubecl-wgpu: storage buffer binding … not a multiple of …` line in stderr means the score is
+  wrong, even when the call returns Ok.**
+
 - **cvvdp-gpu on wgpu returned JOD 10.000 for every image of 2048×2048 or larger — found
   and FIXED 2026-09-26 (cvvdpdet lane).** Every per-pixel kernel was launched with a 1-D
   grid `(n / 64, 1, 1)`; above 65 535 workgroups on one axis (n > 4 194 240 px) wgpu rejects
@@ -901,6 +907,9 @@ packed-sRGB-u8 sweep shape and answers a different question.
   for an image ≥ 2048×2048 before this fix is invalid (it is 10.0).** CUDA was never affected
   (2³¹ − 1 workgroups per axis). The sibling GPU metric crates already fold their grids
   (their own `cube_count_1d`); not re-measured here.
+  Gate: `tests/it/dispatch_limit.rs` (wgpu Full at 2048² / 3000×2000, Mode E and Mode B with
+  window-sized strips, and wgpu vs CUDA); with the fold removed both wgpu tests fail with JOD
+  10.000000.
 
 - **cvvdp-gpu GPU scores varied run to run (`Atomic<f32>` pool) — FIXED 2026-09-26.** The
   spatial pool summed with `fetch_add`, so the order was the scheduler's: band scores

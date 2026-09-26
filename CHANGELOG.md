@@ -13,6 +13,20 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- cvvdp-gpu (`f29a8371`, test `445aa175`): **fix wgpu Mode E (`MemoryMode::Strip`) scoring
+  1000×750 as 4.60 JOD where Full scores 5.01.** The masking strip walker bound row-window
+  sub-views at byte offsets that were not multiples of wgpu's
+  `min_storage_buffer_offset_alignment` (32 B on Vulkan, 256 B on Metal). wgpu dropped those
+  dispatches on its device thread without an error reaching the caller. Sub-views now start on
+  256-byte boundaries and new crate-private `*_shifted_kernel`s add the leftover elements to
+  their indices; the public kernels keep their signatures. wgpu Mode E now equals Full bit for
+  bit on the probe pairs (noise 5.008305, mild 9.961642 at 1000×750). CUDA output is
+  byte-identical to before. Multi-strip Mode B still fails on wgpu: its DKL / gauss / Weber /
+  CSF strip walkers have the same misaligned sub-views.
+- cvvdp-gpu (`dae41c5b`): wgpu regression tests above the 65 535-workgroup dispatch limit
+  (2048×2048, 3000×2000; Full, Mode E and Mode B with window-sized strips, plus a wgpu-vs-CUDA
+  check within 1e-4 JOD). With the grid fold removed they fail with JOD 10.000000.
+
 - cvvdp-gpu (`0a010398`): **GPU CVVDP scores are now deterministic.** The spatial pool
   was an `Atomic<f32>::fetch_add` reduction whose order the scheduler chose, so band scores
   changed on every call and the JOD's low bits wandered between identical calls (zenmetrics-api
