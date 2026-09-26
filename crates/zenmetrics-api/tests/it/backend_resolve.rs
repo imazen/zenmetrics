@@ -7,16 +7,12 @@
 //! the host, but each makes an assertion, so the test never passes
 //! vacuously.
 //!
-//! NOTE on `ZENMETRICS_FORCE_NO_GPU`: the override is exercised via
-//! [`std::env::set_var`], which is `unsafe` on edition-2024. The library
-//! crate is `#![forbid(unsafe_code)]`; this integration test is a
-//! separate compilation unit without that lint, so it can drive the
-//! override the same way `zenmetrics-orchestrator`'s `no_gpu_fallback`
-//! test does. To avoid a data race with the GPU-presence assertion (cargo
-//! runs a test binary's `#[test]` fns on multiple threads), ALL env
-//! mutation + every env-sensitive assertion lives in a single
-//! `#[test]` fn (`resolve_auto_host_and_force_no_gpu`). The invariant
-//! test below touches no env and is race-free.
+//! NOTE on `ZENMETRICS_FORCE_NO_GPU`: `Backend::Auto` resolution reads it
+//! process-globally, and the tests in the `it` binary run concurrently, so
+//! no test in the shared process mutates it. The env-sensitive test below
+//! re-execs this test binary as a child per case, with the variable set or
+//! cleared at spawn (see `crate::run_in_child`). The invariant test below
+//! touches no env and is race-free.
 
 use zenmetrics_api::Backend;
 
@@ -91,48 +87,53 @@ fn resolve_auto_never_auto_never_panics() {
     assert_eq!(Backend::CubeclCpu.resolve(), Backend::CubeclCpu);
 }
 
-/// Two env-sensitive checks, kept in ONE test fn so the process-global
-/// `ZENMETRICS_FORCE_NO_GPU` mutation can't race a sibling test:
+/// Two env-sensitive checks, each run in its own CHILD copy of this test
+/// binary (see [`crate::run_in_child`]) so the shared process's environment
+/// is never mutated and no concurrent `Backend::Auto` reader can observe a
+/// flipped `ZENMETRICS_FORCE_NO_GPU`:
 ///
-/// 1. **Host-presence (no override).** With the `cuda` feature built, a
-///    NVIDIA GPU present, AND the CUDA toolkit installed (the liveness
-///    probe passes), `Auto` resolves to [`Backend::Cuda`]. With a driver
-///    but no toolkit (issue #37) it must NOT pick Cuda. With no NVIDIA
-///    GPU it falls back to the CPU ladder. Every arm asserts.
-/// 2. **Forced no-GPU.** `ZENMETRICS_FORCE_NO_GPU=1` must force `Auto`
-///    away from any GPU backend to [`Backend::CubeclCpu`], regardless of
-///    real hardware — the no-GPU CI fixture, matching the orchestrator's
-///    detector.
+/// 1. **`host` — host-presence (override unset at spawn).** With the `cuda`
+///    feature built, a NVIDIA GPU present, AND the CUDA toolkit installed
+///    (the liveness probe passes), `Auto` resolves to [`Backend::Cuda`].
+///    With a driver but no toolkit (issue #37) it must NOT pick Cuda. With
+///    no NVIDIA GPU it falls back to the CPU ladder. Every arm asserts.
+/// 2. **`forced` — forced no-GPU (`ZENMETRICS_FORCE_NO_GPU=1` at spawn).**
+///    The override must force `Auto` away from any GPU backend to the CPU
+///    fallback ([`EXPECTED_NO_GPU`]), regardless of real hardware — the
+///    no-GPU CI fixture, matching the orchestrator's detector.
 #[test]
 fn resolve_auto_host_and_force_no_gpu() {
-    // --- 1. host-presence, override guaranteed unset ---
-    let prev = std::env::var("ZENMETRICS_FORCE_NO_GPU").ok();
-    // SAFETY: env mutation is confined to this single serial test fn,
-    // which is the only place in this binary that touches this variable;
-    // the prior value is restored before the fn returns.
-    unsafe {
-        std::env::remove_var("ZENMETRICS_FORCE_NO_GPU");
+    const TEST: &str = "backend_resolve::resolve_auto_host_and_force_no_gpu";
+    match crate::child_case().as_deref() {
+        None => {
+            crate::run_in_child(TEST, "host", crate::ForceNoGpu::Unset);
+            crate::run_in_child(TEST, "forced", crate::ForceNoGpu::Set);
+        }
+        Some("host") => {
+            assert!(
+                std::env::var_os("ZENMETRICS_FORCE_NO_GPU").is_none(),
+                "host case must be spawned with ZENMETRICS_FORCE_NO_GPU unset"
+            );
+            assert_host_presence();
+        }
+        Some("forced") => {
+            assert_eq!(
+                std::env::var("ZENMETRICS_FORCE_NO_GPU").as_deref(),
+                Ok("1"),
+                "forced case must be spawned with ZENMETRICS_FORCE_NO_GPU=1"
+            );
+            assert_forced_no_gpu();
+        }
+        Some(other) => panic!("unknown child case {other:?}"),
     }
+}
 
+/// Case 1 body: override unset, so resolution reflects the real host.
+fn assert_host_presence() {
     let has_gpu = host_has_nvidia_gpu();
     let resolved = Backend::resolve_auto();
 
-    // --- 2. forced no-GPU ---
-    unsafe {
-        std::env::set_var("ZENMETRICS_FORCE_NO_GPU", "1");
-    }
-    let resolved_forced = Backend::resolve_auto();
-
-    // Restore the caller's environment BEFORE asserting, so a panic in
-    // an assert can't leak the override to any later test.
-    unsafe {
-        match prev {
-            Some(v) => std::env::set_var("ZENMETRICS_FORCE_NO_GPU", v),
-            None => std::env::remove_var("ZENMETRICS_FORCE_NO_GPU"),
-        }
-    }
-
-    // host-presence assertions: only assert the "→ Cuda" expectation
+    // Host-presence assertions: only assert the "→ Cuda" expectation
     // when the cuda backend is actually compiled in (default on this
     // box); without it, a present GPU still can't be selected. Since #37,
     // presence alone is not enough: `Auto` additionally requires the
@@ -167,9 +168,12 @@ fn resolve_auto_host_and_force_no_gpu() {
              (or Wgpu if a wgpu device is present), got {resolved:?}"
         );
     }
+}
 
-    // forced-no-GPU assertion (host-independent): every GPU probe is forced
-    // absent, so `Auto` resolves to the pure CPU fallback.
+/// Case 2 body: override set to `1`, every GPU probe is forced absent, so
+/// `Auto` resolves to the pure CPU fallback (host-independent).
+fn assert_forced_no_gpu() {
+    let resolved_forced = Backend::resolve_auto();
     assert_eq!(
         resolved_forced, EXPECTED_NO_GPU,
         "ZENMETRICS_FORCE_NO_GPU=1 must force Auto to the CPU fallback ({EXPECTED_NO_GPU:?})"

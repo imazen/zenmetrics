@@ -128,19 +128,27 @@ fn cpu_matrix_all_metrics_all_sizes() {
 /// metric — within float-reduction jitter, since some CPU metrics
 /// (dssim-core) sum via rayon in a non-deterministic order.
 ///
-/// All `ZENMETRICS_FORCE_NO_GPU` mutation lives in this single `#[test]`
-/// fn (set → assert → restore) so the process-global env var can't race a
-/// sibling test — the same discipline `backend_resolve.rs` uses. No other
-/// fn in this binary reads the variable (the CPU/CUDA layers use explicit
-/// backends), so even the cargo multi-thread interleaving is benign here.
+/// The body runs in a CHILD copy of this test binary spawned with
+/// `ZENMETRICS_FORCE_NO_GPU=1` (see [`crate::run_in_child`]). The shared test
+/// process never mutates its environment, so this test cannot race the other
+/// tests in the `it` binary that resolve `Backend::Auto` and read the
+/// variable through `capability.rs`.
 #[test]
 fn auto_force_no_gpu_resolves_to_cpu_and_matches() {
-    // SAFETY: edition-2024 marks env mutation `unsafe`; this integration
-    // test is a separate compilation unit (not `#![forbid(unsafe_code)]`),
-    // and the set/restore is confined to this single fn (see doc above).
-    unsafe {
-        std::env::set_var("ZENMETRICS_FORCE_NO_GPU", "1");
+    if crate::child_case().is_none() {
+        crate::run_in_child(
+            "backend_matrix::auto_force_no_gpu_resolves_to_cpu_and_matches",
+            "force_no_gpu",
+            crate::ForceNoGpu::Set,
+        );
+        return;
     }
+    // Child: the override was set at spawn.
+    assert_eq!(
+        std::env::var("ZENMETRICS_FORCE_NO_GPU").as_deref(),
+        Ok("1"),
+        "child must be spawned with ZENMETRICS_FORCE_NO_GPU=1"
+    );
 
     assert_eq!(
         Backend::resolve_auto(),
@@ -168,11 +176,6 @@ fn auto_force_no_gpu_resolves_to_cpu_and_matches() {
             (via_auto - via_cpu).abs() <= tol,
             "{kind:?}: Auto (→Cpu) score {via_auto} must match explicit Cpu {via_cpu} within {tol}"
         );
-    }
-
-    // SAFETY: same as above — restore the environment for sibling tests.
-    unsafe {
-        std::env::remove_var("ZENMETRICS_FORCE_NO_GPU");
     }
 }
 
