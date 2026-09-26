@@ -1505,6 +1505,7 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
             Some((-0.5, 1.5, 1.0))
         }
         MetricKind::Nlpd
+        | MetricKind::NlpdIqa
         | MetricKind::Psnr
         | MetricKind::PsnrY
         | MetricKind::PsnrY601

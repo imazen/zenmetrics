@@ -7,6 +7,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod iqa;
 mod simd;
 
 use std::fmt;

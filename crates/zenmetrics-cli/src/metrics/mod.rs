@@ -123,6 +123,19 @@ pub enum MetricKind {
     /// Normalized Laplacian Pyramid Distance; lower is better.
     #[value(name = "nlpd")]
     Nlpd,
+    /// NLPD with the **IQA_pytorch / JPEG AIC-4 ingress** — the
+    /// `dingkeyan93/IQA-optimization` `NLPD(channels=1)` variant the
+    /// published AIC-4 `NLPD` column was computed with, NOT the
+    /// Laparra-author RGB configuration that `nlpd` mirrors. Scored on
+    /// a single BT.709 luma plane (`0.2126/0.7152/0.0722`, `[0,1]`,
+    /// re-quantized to the 8-bit grid), reflect-2 downsample, bilinear
+    /// `align_corners` upsample, six loop bands, mean-of-RMS pooling —
+    /// vs the `nlpd` 0.6-norm over RGB (which reads ≈20.5× higher).
+    /// med|Δ| = 0.0026 vs `metrics_fullres.csv` (53 pairs, 2026-09-26).
+    /// Emits `nlpd_iqa` so it never mixes with `nlpd`'s column.
+    /// CPU-only.
+    #[value(name = "nlpd-iqa")]
+    NlpdIqa,
     /// SSIMULACRA2 — CPU implementation via the `ssimulacra2` crate.
     #[value(name = "ssim2")]
     Ssim2,
@@ -394,6 +407,7 @@ impl MetricKind {
             MetricKind::PsnrYLibvmaf,
             MetricKind::Ssim,
             MetricKind::Nlpd,
+            MetricKind::NlpdIqa,
             MetricKind::Ssim2,
             MetricKind::Ssim2Gpu,
             MetricKind::Butteraugli,
@@ -444,6 +458,7 @@ impl MetricKind {
             MetricKind::PsnrYLibvmaf => "psnr-y-libvmaf",
             MetricKind::Ssim => "ssim",
             MetricKind::Nlpd => "nlpd",
+            MetricKind::NlpdIqa => "nlpd-iqa",
             MetricKind::Ssim2 => "ssim2",
             MetricKind::Ssim2Gpu => "ssim2-gpu",
             MetricKind::Butteraugli => "butteraugli",
@@ -553,6 +568,7 @@ impl MetricKind {
             MetricKind::PsnrYLibvmaf => &["psnr_y_libvmaf"],
             MetricKind::Ssim => &["ssim"],
             MetricKind::Nlpd => &["nlpd"],
+            MetricKind::NlpdIqa => &["nlpd_iqa"],
             MetricKind::Ssim2 => &["ssim2"],
             MetricKind::Ssim2Gpu => &["ssim2_gpu"],
             MetricKind::Butteraugli => &["butteraugli_max", "butteraugli_pnorm3"],
@@ -1713,6 +1729,18 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::Nlpd => Err(disabled_msg("nlpd", "cpu-metrics")),
+        #[cfg(feature = "cpu-metrics")]
+        MetricKind::NlpdIqa => Ok(vec![(
+            "nlpd_iqa",
+            nlpd::iqa::score_rgb_u8(
+                &reference.pixels,
+                &distorted.pixels,
+                reference.width as usize,
+                reference.height as usize,
+            )?,
+        )]),
+        #[cfg(not(feature = "cpu-metrics"))]
+        MetricKind::NlpdIqa => Err(disabled_msg("nlpd-iqa", "cpu-metrics")),
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Ssim2 => Ok(vec![(
             "ssim2",
