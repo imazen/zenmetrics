@@ -49,6 +49,8 @@ fn discrimination_floor(kind: MetricKind) -> f64 {
         MetricKind::Iwssim => 0.1,
         MetricKind::Zensim => 1e-4,
         MetricKind::Hdrvdp => 0.5,
+        // HDR-VDP-3 reports Q_JOD on [0, 10], the same scale as v2.
+        MetricKind::Hdrvdp3 => 0.5,
     }
 }
 
