@@ -1,16 +1,16 @@
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+use archmage::X64V4Token;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(feature = "simd")]
 use archmage::magetypes;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{SimdToken, X64V3Token, arcane, rite};
-#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-use archmage::X64V4Token;
 use std::borrow::Cow;
 use std::sync::OnceLock;
 
-use crate::{Error, VmafV0Variant};
 use crate::pool;
+use crate::{Error, VmafV0Variant};
 
 const FILTERS: [&[u16]; 4] = [
     &[
@@ -125,42 +125,12 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
             if processed > 0 {
                 processed
             } else {
-            #[cfg(feature = "simd")]
-            {
-                #[cfg(target_arch = "x86_64")]
-                if let Some(token) = v3_token() {
-                    vif_subsample_vertical_v3(
-                        token,
-                        &image.reference,
-                        &image.distorted,
-                        &row_offsets,
-                        width,
-                        filter,
-                        shift,
-                        round,
-                        &mut vertical_reference,
-                        &mut vertical_distorted,
-                    )
-                } else {
-                    archmage::incant!(
-                        vif_subsample_vertical_simd(
-                            &image.reference,
-                            &image.distorted,
-                            &row_offsets,
-                            width,
-                            filter,
-                            shift,
-                            round,
-                            &mut vertical_reference,
-                            &mut vertical_distorted
-                        ),
-                        [v3, neon, wasm128, scalar]
-                    )
-                }
-                #[cfg(not(target_arch = "x86_64"))]
+                #[cfg(feature = "simd")]
                 {
-                    archmage::incant!(
-                        vif_subsample_vertical_simd(
+                    #[cfg(target_arch = "x86_64")]
+                    if let Some(token) = v3_token() {
+                        vif_subsample_vertical_v3(
+                            token,
                             &image.reference,
                             &image.distorted,
                             &row_offsets,
@@ -169,16 +139,46 @@ fn subsample<'a>(image: &VifImage<'a>, bit_depth: u8, scale: usize) -> VifImage<
                             shift,
                             round,
                             &mut vertical_reference,
-                            &mut vertical_distorted
-                        ),
-                        [v3, neon, wasm128, scalar]
-                    )
+                            &mut vertical_distorted,
+                        )
+                    } else {
+                        archmage::incant!(
+                            vif_subsample_vertical_simd(
+                                &image.reference,
+                                &image.distorted,
+                                &row_offsets,
+                                width,
+                                filter,
+                                shift,
+                                round,
+                                &mut vertical_reference,
+                                &mut vertical_distorted
+                            ),
+                            [v3, neon, wasm128, scalar]
+                        )
+                    }
+                    #[cfg(not(target_arch = "x86_64"))]
+                    {
+                        archmage::incant!(
+                            vif_subsample_vertical_simd(
+                                &image.reference,
+                                &image.distorted,
+                                &row_offsets,
+                                width,
+                                filter,
+                                shift,
+                                round,
+                                &mut vertical_reference,
+                                &mut vertical_distorted
+                            ),
+                            [v3, neon, wasm128, scalar]
+                        )
+                    }
                 }
-            }
-            #[cfg(not(feature = "simd"))]
-            {
-                0
-            }
+                #[cfg(not(feature = "simd"))]
+                {
+                    0
+                }
             }
         };
         for col in processed..width {
@@ -1445,9 +1445,7 @@ fn vif_stat8_vertical_v4(
         for tap in (0..half).step_by(2) {
             let f0v = _mm512_set1_epi32(filt[tap] as i32);
             let f1v = _mm512_set1_epi32(filt[tap + 1] as i32);
-            let f01 = _mm512_set1_epi32(
-                (filt[tap] as i32) | ((filt[tap + 1] as i32) << 16),
-            );
+            let f01 = _mm512_set1_epi32((filt[tap] as i32) | ((filt[tap + 1] as i32) << 16));
             let lo0 = row_offsets[tap];
             let hi0 = row_offsets[fwidth - 1 - tap];
             let lo1 = row_offsets[tap + 1];
@@ -3058,80 +3056,79 @@ macro_rules! vif_statistic_finalize_v4 {
         const SIGMA_NSQ_I64: i64 = 65536 << 1;
         let eps = 65536.0 * 1.0e-10;
         for iter in 0..2 {
-        // Each pass consumes 8 i32 lanes; the second takes the high half.
-        let take = |v: __m512i| -> __m256i {
-            if iter == 0 {
-                _mm512_castsi512_si256(v)
-            } else {
-                _mm512_extracti64x4_epi64(v, 1)
-            }
-        };
-        let msigma1 = _mm512_cvtepi32_epi64(take(xx));
-        let msigma2 = _mm512_cvtepi32_epi64(take(yy));
-        let msigma12 = _mm512_cvtepi32_epi64(take(xy));
-        let msigma2 = _mm512_max_epi64(msigma2, _mm512_setzero_si512());
-        let msigma12 = _mm512_max_epi64(msigma12, _mm512_setzero_si512());
+            // Each pass consumes 8 i32 lanes; the second takes the high half.
+            let take = |v: __m512i| -> __m256i {
+                if iter == 0 {
+                    _mm512_castsi512_si256(v)
+                } else {
+                    _mm512_extracti64x4_epi64(v, 1)
+                }
+            };
+            let msigma1 = _mm512_cvtepi32_epi64(take(xx));
+            let msigma2 = _mm512_cvtepi32_epi64(take(yy));
+            let msigma12 = _mm512_cvtepi32_epi64(take(xy));
+            let msigma2 = _mm512_max_epi64(msigma2, _mm512_setzero_si512());
+            let msigma12 = _mm512_max_epi64(msigma12, _mm512_setzero_si512());
 
-        // den = log2(sigma1 + sigma_nsq) - 2048*17
-        let stage1 = _mm512_add_epi64(msigma1, _mm512_set1_epi64(SIGMA_NSQ_I64));
-        let mnorm = _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(stage1));
-        let mant = _mm512_srlv_epi64(stage1, mnorm);
-        let mut mden_val = gather_log_u16_v4!(table, mant);
-        mden_val = _mm512_add_epi64(mden_val, _mm512_slli_epi64(mnorm, 11));
-        mden_val = _mm512_sub_epi64(mden_val, _mm512_set1_epi64(2048 * 17));
+            // den = log2(sigma1 + sigma_nsq) - 2048*17
+            let stage1 = _mm512_add_epi64(msigma1, _mm512_set1_epi64(SIGMA_NSQ_I64));
+            let mnorm = _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(stage1));
+            let mant = _mm512_srlv_epi64(stage1, mnorm);
+            let mut mden_val = gather_log_u16_v4!(table, mant);
+            mden_val = _mm512_add_epi64(mden_val, _mm512_slli_epi64(mnorm, 11));
+            mden_val = _mm512_sub_epi64(mden_val, _mm512_set1_epi64(2048 * 17));
 
-        let sigma1_small = _mm512_cmpgt_epi64_mask(_mm512_set1_epi64(SIGMA_NSQ_I64), msigma1);
-        let sigma2_pos = _mm512_cmpgt_epi64_mask(msigma2, _mm512_setzero_si512());
-        let sigma12_pos = _mm512_cmpgt_epi64_mask(msigma12, _mm512_setzero_si512());
+            let sigma1_small = _mm512_cmpgt_epi64_mask(_mm512_set1_epi64(SIGMA_NSQ_I64), msigma1);
+            let sigma2_pos = _mm512_cmpgt_epi64_mask(msigma2, _mm512_setzero_si512());
+            let sigma12_pos = _mm512_cmpgt_epi64_mask(msigma12, _mm512_setzero_si512());
 
-        let msigma1_d = _mm512_cvtepu64_pd(msigma1);
-        let mut mg = _mm512_div_pd(
-            _mm512_cvtepu64_pd(msigma12),
-            _mm512_add_pd(msigma1_d, _mm512_set1_pd(eps)),
-        );
-        let mut msv_sq = _mm512_cvttpd_epi64(_mm512_sub_pd(
-            _mm512_cvtepi64_pd(msigma2),
-            _mm512_mul_pd(mg, _mm512_cvtepi64_pd(msigma12)),
-        ));
-        msv_sq = _mm512_max_epi64(msv_sq, _mm512_setzero_si512());
-        mg = _mm512_min_pd(mg, _mm512_set1_pd(gain_limit));
+            let msigma1_d = _mm512_cvtepu64_pd(msigma1);
+            let mut mg = _mm512_div_pd(
+                _mm512_cvtepu64_pd(msigma12),
+                _mm512_add_pd(msigma1_d, _mm512_set1_pd(eps)),
+            );
+            let mut msv_sq = _mm512_cvttpd_epi64(_mm512_sub_pd(
+                _mm512_cvtepi64_pd(msigma2),
+                _mm512_mul_pd(mg, _mm512_cvtepi64_pd(msigma12)),
+            ));
+            msv_sq = _mm512_max_epi64(msv_sq, _mm512_setzero_si512());
+            mg = _mm512_min_pd(mg, _mm512_set1_pd(gain_limit));
 
-        // log2(residual + sigma_nsq)
-        let numer1 = _mm512_add_epi64(msv_sq, _mm512_set1_epi64(SIGMA_NSQ_I64));
-        let numer1_lz = _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(numer1));
-        let numer1_log = _mm512_add_epi64(
-            gather_log_u16_v4!(table, _mm512_srlv_epi64(numer1, numer1_lz)),
-            _mm512_slli_epi64(numer1_lz, 11),
-        );
+            // log2(residual + sigma_nsq)
+            let numer1 = _mm512_add_epi64(msv_sq, _mm512_set1_epi64(SIGMA_NSQ_I64));
+            let numer1_lz = _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(numer1));
+            let numer1_log = _mm512_add_epi64(
+                gather_log_u16_v4!(table, _mm512_srlv_epi64(numer1, numer1_lz)),
+                _mm512_slli_epi64(numer1_lz, 11),
+            );
 
-        // log2(residual + sigma_nsq + trunc(gain^2 * sigma1))
-        let numer1_tmp = _mm512_add_epi64(
-            numer1,
-            _mm512_cvttpd_epi64(_mm512_mul_pd(_mm512_mul_pd(mg, mg), msigma1_d)),
-        );
-        let numer1_tmp_lz =
-            _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(numer1_tmp));
-        let numer1_tmp_log = _mm512_add_epi64(
-            gather_log_u16_v4!(table, _mm512_srlv_epi64(numer1_tmp, numer1_tmp_lz)),
-            _mm512_slli_epi64(numer1_tmp_lz, 11),
-        );
+            // log2(residual + sigma_nsq + trunc(gain^2 * sigma1))
+            let numer1_tmp = _mm512_add_epi64(
+                numer1,
+                _mm512_cvttpd_epi64(_mm512_mul_pd(_mm512_mul_pd(mg, mg), msigma1_d)),
+            );
+            let numer1_tmp_lz =
+                _mm512_sub_epi64(_mm512_set1_epi64(48), _mm512_lzcnt_epi64(numer1_tmp));
+            let numer1_tmp_log = _mm512_add_epi64(
+                gather_log_u16_v4!(table, _mm512_srlv_epi64(numer1_tmp, numer1_tmp_lz)),
+                _mm512_slli_epi64(numer1_tmp_lz, 11),
+            );
 
-        let mnum_val = _mm512_sub_epi64(numer1_tmp_log, numer1_log);
-        *num_log = _mm512_mask_add_epi64(
-            *num_log,
-            (!sigma1_small) & sigma12_pos & sigma2_pos,
-            *num_log,
-            mnum_val,
-        );
-        *den_log = _mm512_mask_add_epi64(*den_log, !sigma1_small, *den_log, mden_val);
-        *num_non_log =
-            _mm512_mask_add_epi64(*num_non_log, sigma1_small, *num_non_log, msigma2);
-        *den_non_log = _mm512_mask_add_epi64(
-            *den_non_log,
-            sigma1_small,
-            *den_non_log,
-            _mm512_set1_epi64(1),
-        );
+            let mnum_val = _mm512_sub_epi64(numer1_tmp_log, numer1_log);
+            *num_log = _mm512_mask_add_epi64(
+                *num_log,
+                (!sigma1_small) & sigma12_pos & sigma2_pos,
+                *num_log,
+                mnum_val,
+            );
+            *den_log = _mm512_mask_add_epi64(*den_log, !sigma1_small, *den_log, mden_val);
+            *num_non_log = _mm512_mask_add_epi64(*num_non_log, sigma1_small, *num_non_log, msigma2);
+            *den_non_log = _mm512_mask_add_epi64(
+                *den_non_log,
+                sigma1_small,
+                *den_non_log,
+                _mm512_set1_epi64(1),
+            );
         }
     }};
 }

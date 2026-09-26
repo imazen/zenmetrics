@@ -1,4 +1,6 @@
 use crate::{Error, ModelVariant, VmafV0Variant, pool};
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+use archmage::X64V4Token;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
 use archmage::intrinsics::aarch64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
@@ -7,8 +9,6 @@ use archmage::intrinsics::x86_64::*;
 use archmage::{NeonToken, SimdToken, arcane, rite};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{SimdToken, X64V3Token, arcane, rite};
-#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-use archmage::X64V4Token;
 #[cfg(feature = "simd")]
 use archmage::{autoversion, magetypes};
 
@@ -230,7 +230,6 @@ impl Drop for BandI32 {
         pool::give_i32(std::mem::take(&mut self.d));
     }
 }
-
 
 #[cfg(any(test, not(feature = "simd")))]
 fn dwt2_vertical_scalar(
@@ -910,32 +909,32 @@ fn adm_decouple(
             }
             #[cfg(target_arch = "aarch64")]
             {
-            if let Some(token) = neon_token() {
-                adm_decouple_row_neon(
-                    token,
-                    &ref_b.h,
-                    &ref_b.v,
-                    &ref_b.d,
-                    &dis_b.h,
-                    &dis_b.v,
-                    &dis_b.d,
-                    &mut r.h,
-                    &mut r.v,
-                    &mut r.d,
-                    &mut a.h,
-                    &mut a.v,
-                    &mut a.d,
-                    i as usize,
-                    stride,
-                    left as usize,
-                    right as usize,
-                    div,
-                    enhn_gain_limit,
-                );
-                (left + ((right - left) / 4) * 4) as usize
-            } else {
-                left as usize
-            }
+                if let Some(token) = neon_token() {
+                    adm_decouple_row_neon(
+                        token,
+                        &ref_b.h,
+                        &ref_b.v,
+                        &ref_b.d,
+                        &dis_b.h,
+                        &dis_b.v,
+                        &dis_b.d,
+                        &mut r.h,
+                        &mut r.v,
+                        &mut r.d,
+                        &mut a.h,
+                        &mut a.v,
+                        &mut a.d,
+                        i as usize,
+                        stride,
+                        left as usize,
+                        right as usize,
+                        div,
+                        enhn_gain_limit,
+                    );
+                    (left + ((right - left) / 4) * 4) as usize
+                } else {
+                    left as usize
+                }
             }
             #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
             {
@@ -1607,8 +1606,8 @@ fn adm_decouple_row_v4(
     let cos_sq_pd = _mm512_set1_pd(cos_1deg_sq);
     // Even i16 lanes → low halves of each i32 lane (truncating i32→i16 pack).
     let pack16 = _mm512_set_epi16(
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30, 28, 26, 24, 22, 20, 18,
-        16, 14, 12, 10, 8, 6, 4, 2, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10,
+        8, 6, 4, 2, 0,
     );
 
     let mut j = j_start;
@@ -1691,23 +1690,14 @@ fn adm_decouple_row_v4(
                 );
                 let hi = _mm512_srai_epi64(
                     _mm512_add_epi64(
-                        _mm512_mul_epi32(
-                            _mm512_srli_epi64($o_div, 32),
-                            _mm512_srli_epi64($t, 32),
-                        ),
+                        _mm512_mul_epi32(_mm512_srli_epi64($o_div, 32), _mm512_srli_epi64($t, 32)),
                         const_16384_64,
                     ),
                     15,
                 );
-                let mut k = _mm512_or_si512(
-                    _mm512_and_si512(lo, lo32_64),
-                    _mm512_slli_epi64(hi, 32),
-                );
-                k = _mm512_mask_blend_epi32(
-                    _mm512_cmpeq_epi32_mask($o, zero),
-                    k,
-                    const_32768,
-                );
+                let mut k =
+                    _mm512_or_si512(_mm512_and_si512(lo, lo32_64), _mm512_slli_epi64(hi, 32));
+                k = _mm512_mask_blend_epi32(_mm512_cmpeq_epi32_mask($o, zero), k, const_32768);
                 _mm512_min_epi32(_mm512_max_epi32(k, zero), const_32768)
             }};
         }
@@ -1751,10 +1741,7 @@ fn adm_decouple_row_v4(
         // gain in f64, cvtpd_epi32 rounds to nearest like C's AVX-512 and v3.
         macro_rules! gain_sel {
             ($rst:expr, $t:expr, $gt0:expr, $lt0:expr) => {{
-                let g_lo = _mm512_mul_pd(
-                    _mm512_cvtepi32_pd(_mm512_castsi512_si256($rst)),
-                    gain_d,
-                );
+                let g_lo = _mm512_mul_pd(_mm512_cvtepi32_pd(_mm512_castsi512_si256($rst)), gain_d);
                 let g_hi = _mm512_mul_pd(
                     _mm512_cvtepi32_pd(_mm512_extracti32x8_epi32::<1>($rst)),
                     gain_d,
@@ -1763,34 +1750,14 @@ fn adm_decouple_row_v4(
                     _mm512_castsi256_si512(_mm512_cvtpd_epi32(g_lo)),
                     _mm512_cvtpd_epi32(g_hi),
                 );
-                let min = _mm512_mask_blend_epi32(
-                    $gt0,
-                    zero,
-                    _mm512_min_epi32(gain, $t),
-                );
-                let max = _mm512_mask_blend_epi32(
-                    $lt0,
-                    zero,
-                    _mm512_max_epi32(gain, $t),
-                );
+                let min = _mm512_mask_blend_epi32($gt0, zero, _mm512_min_epi32(gain, $t));
+                let max = _mm512_mask_blend_epi32($lt0, zero, _mm512_max_epi32(gain, $t));
                 _mm512_mask_blend_epi32($gt0 | $lt0, $rst, _mm512_or_si512(min, max))
             }};
         }
-        rst_h = _mm512_mask_blend_epi32(
-            angle_flag,
-            rst_h,
-            gain_sel!(rst_h, th, gt0_h, lt0_h),
-        );
-        rst_v = _mm512_mask_blend_epi32(
-            angle_flag,
-            rst_v,
-            gain_sel!(rst_v, tv, gt0_v, lt0_v),
-        );
-        rst_d = _mm512_mask_blend_epi32(
-            angle_flag,
-            rst_d,
-            gain_sel!(rst_d, td, gt0_d, lt0_d),
-        );
+        rst_h = _mm512_mask_blend_epi32(angle_flag, rst_h, gain_sel!(rst_h, th, gt0_h, lt0_h));
+        rst_v = _mm512_mask_blend_epi32(angle_flag, rst_v, gain_sel!(rst_v, tv, gt0_v, lt0_v));
+        rst_d = _mm512_mask_blend_epi32(angle_flag, rst_d, gain_sel!(rst_d, td, gt0_d, lt0_d));
 
         let ah = _mm512_sub_epi32(th, rst_h);
         let av = _mm512_sub_epi32(tv, rst_v);
@@ -2656,19 +2623,43 @@ fn adm_decouple_s123_row_v4(
         let tv = _mm512_loadu_si512(a8::<i32, 16>(&dis_v[idx..idx + 16]));
         let td = _mm512_loadu_si512(a8::<i32, 16>(&dis_d[idx..idx + 16]));
 
-        let oh_lo = lo64(oh); let oh_hi = hi64(oh);
-        let ov_lo = lo64(ov); let ov_hi = hi64(ov);
-        let od_lo = lo64(od); let od_hi = hi64(od);
-        let th_lo = lo64(th); let th_hi = hi64(th);
-        let tv_lo = lo64(tv); let tv_hi = hi64(tv);
-        let td_lo = lo64(td); let td_hi = hi64(td);
+        let oh_lo = lo64(oh);
+        let oh_hi = hi64(oh);
+        let ov_lo = lo64(ov);
+        let ov_hi = hi64(ov);
+        let od_lo = lo64(od);
+        let od_hi = hi64(od);
+        let th_lo = lo64(th);
+        let th_hi = hi64(th);
+        let tv_lo = lo64(tv);
+        let tv_hi = hi64(tv);
+        let td_lo = lo64(td);
+        let td_hi = hi64(td);
 
-        let dp_lo = _mm512_add_epi64(_mm512_mul_epi32(oh_lo, th_lo), _mm512_mul_epi32(ov_lo, tv_lo));
-        let dp_hi = _mm512_add_epi64(_mm512_mul_epi32(oh_hi, th_hi), _mm512_mul_epi32(ov_hi, tv_hi));
-        let oms_lo = _mm512_add_epi64(_mm512_mul_epi32(oh_lo, oh_lo), _mm512_mul_epi32(ov_lo, ov_lo));
-        let oms_hi = _mm512_add_epi64(_mm512_mul_epi32(oh_hi, oh_hi), _mm512_mul_epi32(ov_hi, ov_hi));
-        let tms_lo = _mm512_add_epi64(_mm512_mul_epi32(th_lo, th_lo), _mm512_mul_epi32(tv_lo, tv_lo));
-        let tms_hi = _mm512_add_epi64(_mm512_mul_epi32(th_hi, th_hi), _mm512_mul_epi32(tv_hi, tv_hi));
+        let dp_lo = _mm512_add_epi64(
+            _mm512_mul_epi32(oh_lo, th_lo),
+            _mm512_mul_epi32(ov_lo, tv_lo),
+        );
+        let dp_hi = _mm512_add_epi64(
+            _mm512_mul_epi32(oh_hi, th_hi),
+            _mm512_mul_epi32(ov_hi, tv_hi),
+        );
+        let oms_lo = _mm512_add_epi64(
+            _mm512_mul_epi32(oh_lo, oh_lo),
+            _mm512_mul_epi32(ov_lo, ov_lo),
+        );
+        let oms_hi = _mm512_add_epi64(
+            _mm512_mul_epi32(oh_hi, oh_hi),
+            _mm512_mul_epi32(ov_hi, ov_hi),
+        );
+        let tms_lo = _mm512_add_epi64(
+            _mm512_mul_epi32(th_lo, th_lo),
+            _mm512_mul_epi32(tv_lo, tv_lo),
+        );
+        let tms_hi = _mm512_add_epi64(
+            _mm512_mul_epi32(th_hi, th_hi),
+            _mm512_mul_epi32(tv_hi, tv_hi),
+        );
 
         let angle_lo = angle_mask(dp_lo, oms_lo, tms_lo);
         let angle_hi = angle_mask(dp_hi, oms_hi, tms_hi);
@@ -2676,9 +2667,21 @@ fn adm_decouple_s123_row_v4(
         let abs_oh = _mm512_abs_epi32(oh);
         let abs_ov = _mm512_abs_epi32(ov);
         let abs_od = _mm512_abs_epi32(od);
-        let kh_sign = _mm512_mask_blend_epi32(_mm512_cmplt_epi32_mask(oh, zero), const_1_epi32, const_n1_epi32);
-        let kv_sign = _mm512_mask_blend_epi32(_mm512_cmplt_epi32_mask(ov, zero), const_1_epi32, const_n1_epi32);
-        let kd_sign = _mm512_mask_blend_epi32(_mm512_cmplt_epi32_mask(od, zero), const_1_epi32, const_n1_epi32);
+        let kh_sign = _mm512_mask_blend_epi32(
+            _mm512_cmplt_epi32_mask(oh, zero),
+            const_1_epi32,
+            const_n1_epi32,
+        );
+        let kv_sign = _mm512_mask_blend_epi32(
+            _mm512_cmplt_epi32_mask(ov, zero),
+            const_1_epi32,
+            const_n1_epi32,
+        );
+        let kd_sign = _mm512_mask_blend_epi32(
+            _mm512_cmplt_epi32_mask(od, zero),
+            const_1_epi32,
+            const_n1_epi32,
+        );
 
         let best15 = |abs: __m512i| -> (__m512i, __m512i) {
             let shift = _mm512_sub_epi32(const_17_epi32, _mm512_lzcnt_epi32(abs));
@@ -2771,17 +2774,29 @@ fn adm_decouple_s123_row_v4(
             )
         };
         let mut rst_h_lo = _mm512_srli_epi64(
-            _mm512_add_epi64(_mm512_mul_epi32(kh_lo, oh_lo), const_16384_epi64), 15);
+            _mm512_add_epi64(_mm512_mul_epi32(kh_lo, oh_lo), const_16384_epi64),
+            15,
+        );
         let mut rst_h_hi = _mm512_srli_epi64(
-            _mm512_add_epi64(_mm512_mul_epi32(kh_hi, oh_hi), const_16384_epi64), 15);
+            _mm512_add_epi64(_mm512_mul_epi32(kh_hi, oh_hi), const_16384_epi64),
+            15,
+        );
         let mut rst_v_lo = _mm512_srli_epi64(
-            _mm512_add_epi64(_mm512_mul_epi32(kv_lo, ov_lo), const_16384_epi64), 15);
+            _mm512_add_epi64(_mm512_mul_epi32(kv_lo, ov_lo), const_16384_epi64),
+            15,
+        );
         let mut rst_v_hi = _mm512_srli_epi64(
-            _mm512_add_epi64(_mm512_mul_epi32(kv_hi, ov_hi), const_16384_epi64), 15);
+            _mm512_add_epi64(_mm512_mul_epi32(kv_hi, ov_hi), const_16384_epi64),
+            15,
+        );
         let mut rst_d_lo = _mm512_srli_epi64(
-            _mm512_add_epi64(_mm512_mul_epi32(kd_lo, od_lo), const_16384_epi64), 15);
+            _mm512_add_epi64(_mm512_mul_epi32(kd_lo, od_lo), const_16384_epi64),
+            15,
+        );
         let mut rst_d_hi = _mm512_srli_epi64(
-            _mm512_add_epi64(_mm512_mul_epi32(kd_hi, od_hi), const_16384_epi64), 15);
+            _mm512_add_epi64(_mm512_mul_epi32(kd_hi, od_hi), const_16384_epi64),
+            15,
+        );
         let mut rst_h32 = pack(rst_h_lo, rst_h_hi);
         let mut rst_v32 = pack(rst_v_lo, rst_v_hi);
         let mut rst_d32 = pack(rst_d_lo, rst_d_hi);
@@ -2821,26 +2836,14 @@ fn adm_decouple_s123_row_v4(
                     _mm512_cvtepi32_pd(_mm512_extracti32x8_epi32::<1>($rst32)),
                     gain_pd,
                 ));
-                let min_lo = _mm512_mask_blend_epi64(
-                    _mm512_cmpgt_epi64_mask($t_lo, g_lo),
-                    $t_lo,
-                    g_lo,
-                );
-                let min_hi = _mm512_mask_blend_epi64(
-                    _mm512_cmpgt_epi64_mask($t_hi, g_hi),
-                    $t_hi,
-                    g_hi,
-                );
-                let max_lo = _mm512_mask_blend_epi64(
-                    _mm512_cmpgt_epi64_mask(g_lo, $t_lo),
-                    $t_lo,
-                    g_lo,
-                );
-                let max_hi = _mm512_mask_blend_epi64(
-                    _mm512_cmpgt_epi64_mask(g_hi, $t_hi),
-                    $t_hi,
-                    g_hi,
-                );
+                let min_lo =
+                    _mm512_mask_blend_epi64(_mm512_cmpgt_epi64_mask($t_lo, g_lo), $t_lo, g_lo);
+                let min_hi =
+                    _mm512_mask_blend_epi64(_mm512_cmpgt_epi64_mask($t_hi, g_hi), $t_hi, g_hi);
+                let max_lo =
+                    _mm512_mask_blend_epi64(_mm512_cmpgt_epi64_mask(g_lo, $t_lo), $t_lo, g_lo);
+                let max_hi =
+                    _mm512_mask_blend_epi64(_mm512_cmpgt_epi64_mask(g_hi, $t_hi), $t_hi, g_hi);
                 let f_lo = _mm512_cvtps_pd(_mm512_castps512_ps256($rst_f));
                 let f_hi = _mm512_cvtps_pd(_mm512_extractf32x8_ps::<1>($rst_f));
                 let mask_gt_lo = angle_lo & _mm512_cmp_pd_mask::<_CMP_GT_OS>(f_lo, const_0_pd);
@@ -2861,9 +2864,18 @@ fn adm_decouple_s123_row_v4(
         _mm512_storeu_si512(a8m::<i32, 16>(&mut r_h[idx..idx + 16]), rst_h32);
         _mm512_storeu_si512(a8m::<i32, 16>(&mut r_v[idx..idx + 16]), rst_v32);
         _mm512_storeu_si512(a8m::<i32, 16>(&mut r_d[idx..idx + 16]), rst_d32);
-        _mm512_storeu_si512(a8m::<i32, 16>(&mut a_h[idx..idx + 16]), _mm512_sub_epi32(th, rst_h32));
-        _mm512_storeu_si512(a8m::<i32, 16>(&mut a_v[idx..idx + 16]), _mm512_sub_epi32(tv, rst_v32));
-        _mm512_storeu_si512(a8m::<i32, 16>(&mut a_d[idx..idx + 16]), _mm512_sub_epi32(td, rst_d32));
+        _mm512_storeu_si512(
+            a8m::<i32, 16>(&mut a_h[idx..idx + 16]),
+            _mm512_sub_epi32(th, rst_h32),
+        );
+        _mm512_storeu_si512(
+            a8m::<i32, 16>(&mut a_v[idx..idx + 16]),
+            _mm512_sub_epi32(tv, rst_v32),
+        );
+        _mm512_storeu_si512(
+            a8m::<i32, 16>(&mut a_d[idx..idx + 16]),
+            _mm512_sub_epi32(td, rst_d32),
+        );
         j += 16;
     }
     j
@@ -2945,32 +2957,32 @@ fn adm_decouple_s123(
             }
             #[cfg(target_arch = "aarch64")]
             {
-            if let Some(token) = neon_token() {
-                adm_decouple_s123_row_neon(
-                    token,
-                    &ref_b.h,
-                    &ref_b.v,
-                    &ref_b.d,
-                    &dis_b.h,
-                    &dis_b.v,
-                    &dis_b.d,
-                    &mut r.h,
-                    &mut r.v,
-                    &mut r.d,
-                    &mut a.h,
-                    &mut a.v,
-                    &mut a.d,
-                    i as usize,
-                    stride,
-                    left as usize,
-                    right as usize,
-                    div,
-                    enhn_gain_limit,
-                );
-                (left + ((right - left) / 4) * 4) as usize
-            } else {
-                left as usize
-            }
+                if let Some(token) = neon_token() {
+                    adm_decouple_s123_row_neon(
+                        token,
+                        &ref_b.h,
+                        &ref_b.v,
+                        &ref_b.d,
+                        &dis_b.h,
+                        &dis_b.v,
+                        &dis_b.d,
+                        &mut r.h,
+                        &mut r.v,
+                        &mut r.d,
+                        &mut a.h,
+                        &mut a.v,
+                        &mut a.d,
+                        i as usize,
+                        stride,
+                        left as usize,
+                        right as usize,
+                        div,
+                        enhn_gain_limit,
+                    );
+                    (left + ((right - left) / 4) * 4) as usize
+                } else {
+                    left as usize
+                }
             }
             #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
             {
@@ -4208,37 +4220,26 @@ fn i4_adm_cm_row_v4(
     while j + 8 <= win.len() {
         let mut thr = _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8::<i32, 8>(&win[j..j + 8])));
         for t in 0..3 {
-            let ang = _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8::<i32, 8>(
-                &ang_rows[t][j..j + 8],
-            )));
+            let ang =
+                _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8::<i32, 8>(&ang_rows[t][j..j + 8])));
             let comp = _mm512_srai_epi64::<32>(_mm512_add_epi64(
                 _mm512_mul_epi32(_mm512_abs_epi64(ang), i4_15),
                 add_flt,
             ));
-            let flt = _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8::<i32, 8>(
-                &flt_rows[t][j..j + 8],
-            )));
+            let flt =
+                _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8::<i32, 8>(&flt_rows[t][j..j + 8])));
             thr = _mm512_add_epi64(thr, _mm512_sub_epi64(comp, flt));
         }
         for t in 0..3 {
-            let src = _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8::<i32, 8>(
-                &src_rows[t][j..j + 8],
-            )));
+            let src =
+                _mm512_cvtepi32_epi64(_mm256_loadu_si256(a8::<i32, 8>(&src_rows[t][j..j + 8])));
             let rf = _mm512_set1_epi64(rfactor[t] as i64);
-            let xf = _mm512_srai_epi64::<28>(_mm512_add_epi64(
-                _mm512_mul_epi32(src, rf),
-                add_dst,
-            ));
+            let xf = _mm512_srai_epi64::<28>(_mm512_add_epi64(_mm512_mul_epi32(src, rf), add_dst));
             let mut x = _mm512_sub_epi64(_mm512_abs_epi64(xf), thr);
             x = _mm512_max_epi64(x, zero);
-            let xsq = _mm512_srai_epi64::<30>(_mm512_add_epi64(
-                _mm512_mul_epi32(x, x),
-                add_sq,
-            ));
-            let val = _mm512_srl_epi64(
-                _mm512_add_epi64(_mm512_mul_epi32(xsq, x), add_cub),
-                shift_v,
-            );
+            let xsq = _mm512_srai_epi64::<30>(_mm512_add_epi64(_mm512_mul_epi32(x, x), add_sq));
+            let val =
+                _mm512_srl_epi64(_mm512_add_epi64(_mm512_mul_epi32(xsq, x), add_cub), shift_v);
             acc[t] = _mm512_add_epi64(acc[t], val);
         }
         j += 8;
@@ -4400,28 +4401,28 @@ fn adm_cm_i32(
                     add_shift_sq,
                     add_shift_cub,
                     shift_cub,
-                    );
-                    for t in 0..3 {
-                        inner[t] += vec_inner[t];
-                    }
-                    jj = done;
+                );
+                for t in 0..3 {
+                    inner[t] += vec_inner[t];
+                }
+                jj = done;
             }
             #[cfg(all(feature = "simd", target_arch = "x86_64"))]
             if jj == 0 {
                 if let Some(token) = v3_token() {
                     let (vec_inner, done) = i4_adm_cm_row_v3(
                         token,
-                    &win[..len],
-                    &ang_rows,
-                    &flt_rows,
-                    &src_rows,
-                    rfactor,
-                    add_bef_shift_dst,
-                    add_bef_shift_flt,
-                    add_shift_sq,
-                    add_shift_cub,
-                    shift_cub,
-                );
+                        &win[..len],
+                        &ang_rows,
+                        &flt_rows,
+                        &src_rows,
+                        rfactor,
+                        add_bef_shift_dst,
+                        add_bef_shift_flt,
+                        add_shift_sq,
+                        add_shift_cub,
+                        shift_cub,
+                    );
                     for t in 0..3 {
                         inner[t] += vec_inner[t];
                     }
@@ -6118,7 +6119,6 @@ fn simd_csf_den_s123_matches_scalar_for_tails_and_edges() {
     }
 }
 
-
 /// Release-mode row-level timing probe: `cargo test --release -p vmaf
 /// --features simd,avx512 adm_row_timing -- --ignored --nocapture`
 #[cfg(all(test, feature = "simd", feature = "avx512", target_arch = "x86_64"))]
@@ -6129,15 +6129,29 @@ fn adm_decouple_s123_row_timing() {
     let (w, h) = (320usize, 180usize);
     let n = w * h;
     let mut x = 0x9E3779B97F4A7C15u64;
-    let mut rng = move || { x ^= x << 13; x ^= x >> 7; x ^= x << 17; (x % 200001) as i32 - 100000 };
+    let mut rng = move || {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        (x % 200001) as i32 - 100000
+    };
     let mut f = |rng: &mut dyn FnMut() -> i32| BandI32 {
         h: (0..n).map(|_| rng()).collect(),
         v: (0..n).map(|_| rng()).collect(),
         d: (0..n).map(|_| rng()).collect(),
     };
-    let ref_b = f(&mut rng); let dis_b = f(&mut rng);
-    let mut r = BandI32 { h: vec![0; n], v: vec![0; n], d: vec![0; n] };
-    let mut a = BandI32 { h: vec![0; n], v: vec![0; n], d: vec![0; n] };
+    let ref_b = f(&mut rng);
+    let dis_b = f(&mut rng);
+    let mut r = BandI32 {
+        h: vec![0; n],
+        v: vec![0; n],
+        d: vec![0; n],
+    };
+    let mut a = BandI32 {
+        h: vec![0; n],
+        v: vec![0; n],
+        d: vec![0; n],
+    };
     let (left, top, right, bottom) = border_region(w, h, 1);
     eprintln!("border l={left} t={top} r={right} b={bottom}");
     let t3 = v3_token().unwrap();
@@ -6145,18 +6159,59 @@ fn adm_decouple_s123_row_timing() {
     for _ in 0..3 {
         let t = std::time::Instant::now();
         for i in top..bottom {
-            adm_decouple_s123_row_v3(t3, &ref_b.h, &ref_b.v, &ref_b.d, &dis_b.h, &dis_b.v, &dis_b.d,
-                &mut r.h, &mut r.v, &mut r.d, &mut a.h, &mut a.v, &mut a.d,
-                i as usize, w, left as usize, right as usize, div, 1.0);
+            adm_decouple_s123_row_v3(
+                t3,
+                &ref_b.h,
+                &ref_b.v,
+                &ref_b.d,
+                &dis_b.h,
+                &dis_b.v,
+                &dis_b.d,
+                &mut r.h,
+                &mut r.v,
+                &mut r.d,
+                &mut a.h,
+                &mut a.v,
+                &mut a.d,
+                i as usize,
+                w,
+                left as usize,
+                right as usize,
+                div,
+                1.0,
+            );
         }
         let e3 = t.elapsed();
         let t = std::time::Instant::now();
         for i in top..bottom {
-            adm_decouple_s123_row_v4(t4, &ref_b.h, &ref_b.v, &ref_b.d, &dis_b.h, &dis_b.v, &dis_b.d,
-                &mut r.h, &mut r.v, &mut r.d, &mut a.h, &mut a.v, &mut a.d,
-                i as usize, w, left as usize, right as usize, div, 1.0);
+            adm_decouple_s123_row_v4(
+                t4,
+                &ref_b.h,
+                &ref_b.v,
+                &ref_b.d,
+                &dis_b.h,
+                &dis_b.v,
+                &dis_b.d,
+                &mut r.h,
+                &mut r.v,
+                &mut r.d,
+                &mut a.h,
+                &mut a.v,
+                &mut a.d,
+                i as usize,
+                w,
+                left as usize,
+                right as usize,
+                div,
+                1.0,
+            );
         }
         let e4 = t.elapsed();
-        eprintln!("v3 {:?}  v4 {:?}  ratio {:.3}", e3, e4, e4.as_secs_f64()/e3.as_secs_f64());
+        eprintln!(
+            "v3 {:?}  v4 {:?}  ratio {:.3}",
+            e3,
+            e4,
+            e4.as_secs_f64() / e3.as_secs_f64()
+        );
     }
 }

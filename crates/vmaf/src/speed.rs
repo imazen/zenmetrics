@@ -1,13 +1,13 @@
-use crate::{Error, ModelVariant};
 use crate::pool;
+use crate::{Error, ModelVariant};
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+use archmage::X64V4Token;
 #[cfg(feature = "simd")]
 use archmage::autoversion;
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
 use archmage::{NeonToken, arcane};
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{X64V3Token, arcane};
-#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-use archmage::X64V4Token;
 
 const BLOCK_SIZE: usize = 5;
 const NUM_SCALES: u32 = 4;

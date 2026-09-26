@@ -23,12 +23,12 @@ pub use vif::vif_v0_from_luma;
 use std::error::Error as StdError;
 use std::fmt;
 
+#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
+use archmage::X64V4Token;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::intrinsics::x86_64::*;
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 use archmage::{SimdToken, X64V3Token, arcane, rite};
-#[cfg(all(feature = "simd", feature = "avx512", target_arch = "x86_64"))]
-use archmage::X64V4Token;
 #[cfg(feature = "simd")]
 use archmage::{autoversion, magetypes};
 

@@ -4457,12 +4457,7 @@ fn anti_dithering_filter(data: &mut [u16], width: usize, height: usize) {
 /// u16 lane sums can't overflow (bit_depth < 10 ⇒ values ≤ 1023, sum ≤ 4092).
 #[cfg(all(feature = "simd", target_arch = "x86_64"))]
 #[arcane(import_intrinsics)]
-fn anti_dithering_rows_v3(
-    _token: X64V3Token,
-    data: &mut [u16],
-    width: usize,
-    height: usize,
-) {
+fn anti_dithering_rows_v3(_token: X64V3Token, data: &mut [u16], width: usize, height: usize) {
     for i in 0..height - 1 {
         let (ra, rb) = data.split_at_mut((i + 1) * width);
         let a = &mut ra[i * width..i * width + width];
@@ -4479,10 +4474,7 @@ fn anti_dithering_rows_v3(
                     _mm256_loadu_si256(a8::<u16, 16>(&b[j + 1..j + 17])),
                 ),
             );
-            _mm256_storeu_si256(
-                a8m::<u16, 16>(&mut a[j..j + 16]),
-                _mm256_srli_epi16::<2>(s),
-            );
+            _mm256_storeu_si256(a8m::<u16, 16>(&mut a[j..j + 16]), _mm256_srli_epi16::<2>(s));
             j += 16;
         }
         while j < width - 1 {
@@ -5011,7 +5003,10 @@ fn compute_dp_row_v3(
         x = _mm256_add_epi32(x, _mm256_bslli_epi128::<8>(x));
         let low_dup = _mm256_permute2x128_si256(x, x, 0x00);
         let low_total = _mm256_shuffle_epi32::<0xFF>(low_dup);
-        x = _mm256_add_epi32(x, _mm256_blend_epi32::<0xF0>(_mm256_setzero_si256(), low_total));
+        x = _mm256_add_epi32(
+            x,
+            _mm256_blend_epi32::<0xF0>(_mm256_setzero_si256(), low_total),
+        );
         let scan = _mm256_add_epi32(x, carry);
         let prev = _mm256_loadu_si256(a8::<u32, 8>(&dp_prev[dp_offset + j..dp_offset + j + 8]));
         _mm256_storeu_si256(
@@ -5081,10 +5076,7 @@ fn compute_mask_row_v3(
         let td = _mm256_loadu_si256(a8::<u32, 8>(&dp_top[j + delta..j + delta + 8]));
         let result = _mm256_sub_epi32(_mm256_add_epi32(bd, t), _mm256_add_epi32(b, td));
         let v = _mm256_and_si256(_mm256_cmpgt_epi32(result, midx), one);
-        let packed = _mm_packus_epi32(
-            _mm256_castsi256_si128(v),
-            _mm256_extracti128_si256::<1>(v),
-        );
+        let packed = _mm_packus_epi32(_mm256_castsi256_si128(v), _mm256_extracti128_si256::<1>(v));
         _mm_storeu_si128(a8m::<u16, 8>(&mut mask_row[j..j + 8]), packed);
         j += 8;
     }
@@ -5101,7 +5093,11 @@ fn compute_mask_row_v3(
 /// Disjoint mutable/immutable pair of dp rows.
 fn dp_pair(dp: &mut [u32], dw: usize, curr: usize, prev: usize) -> (&mut [u32], &[u32]) {
     debug_assert_ne!(curr, prev);
-    let (lo, hi) = if curr < prev { (curr, prev) } else { (prev, curr) };
+    let (lo, hi) = if curr < prev {
+        (curr, prev)
+    } else {
+        (prev, curr)
+    };
     let (front, back) = dp.split_at_mut(hi * dw);
     let lo_row = &mut front[lo * dw..(lo + 1) * dw];
     let hi_row = &mut back[..dw];
@@ -5143,7 +5139,14 @@ fn get_spatial_mask(
         }
         let curr = i + pad + 1;
         let (cur, prev) = dp_pair(&mut dp, dp_width, curr, curr - 1);
-        compute_dp_row(cur, prev, &deriv, width, pad, if deriv_valid { width } else { 0 });
+        compute_dp_row(
+            cur,
+            prev,
+            &deriv,
+            width,
+            pad,
+            if deriv_valid { width } else { 0 },
+        );
     }
 
     let mut prev_row = dp_height - 2;
@@ -5157,7 +5160,14 @@ fn get_spatial_mask(
         }
         {
             let (cur, prev) = dp_pair(&mut dp, dp_width, curr_row, prev_row);
-            compute_dp_row(cur, prev, &deriv, width, pad, if deriv_valid { width } else { 0 });
+            compute_dp_row(
+                cur,
+                prev,
+                &deriv,
+                width,
+                pad,
+                if deriv_valid { width } else { 0 },
+            );
         }
         prev_row = curr_row;
         curr_row = (curr_row + 1) % dp_height;

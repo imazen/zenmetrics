@@ -27,6 +27,10 @@ harness = false
 name = "arm_stages"
 harness = false
 
+[[example]]
+name = "wall_matrix"
+required-features = ["parallel"]
+
 # archmage::incant! checks `cfg(feature = "avx512")` internally even when no
 # AVX-512 tier is listed (same allow as crates/iwssim, crates/gmsd).
 [lints.rust]

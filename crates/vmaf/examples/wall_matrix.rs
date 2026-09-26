@@ -66,11 +66,28 @@ fn run(label: &str, which: &str) {
     let (w, h) = dims(label).unwrap();
     let refs: Vec<_> = (0..NFRAMES).map(|i| synth(w, h, i, false)).collect();
     let diss: Vec<_> = (0..NFRAMES).map(|i| synth(w, h, i, true)).collect();
-    let rf: Vec<Yuv420Frame<'_>> = refs.iter().map(|f| Yuv420Frame { y: &f.0, u: &f.1, v: &f.2 }).collect();
-    let df: Vec<Yuv420Frame<'_>> = diss.iter().map(|f| Yuv420Frame { y: &f.0, u: &f.1, v: &f.2 }).collect();
+    let rf: Vec<Yuv420Frame<'_>> = refs
+        .iter()
+        .map(|f| Yuv420Frame {
+            y: &f.0,
+            u: &f.1,
+            v: &f.2,
+        })
+        .collect();
+    let df: Vec<Yuv420Frame<'_>> = diss
+        .iter()
+        .map(|f| Yuv420Frame {
+            y: &f.0,
+            u: &f.1,
+            v: &f.2,
+        })
+        .collect();
 
     println!("model\tsize\tthreads\tmedian_ms/frame\tmin_ms/frame");
-    for model in ["v0", "v1"].iter().filter(|m| which == "both" || **m == which) {
+    for model in ["v0", "v1"]
+        .iter()
+        .filter(|m| which == "both" || **m == which)
+    {
         for &threads in &[1usize, 4, 8] {
             // Scorer setup (model parse + pool) is outside the timed region.
             let (med, min) = if *model == "v0" {
@@ -95,8 +112,22 @@ fn heap(label: &str) {
     let (w, h) = dims(label).unwrap();
     let refs: Vec<_> = (0..2).map(|i| synth(w, h, i, false)).collect();
     let diss: Vec<_> = (0..2).map(|i| synth(w, h, i, true)).collect();
-    let rf: Vec<Yuv420Frame<'_>> = refs.iter().map(|f| Yuv420Frame { y: &f.0, u: &f.1, v: &f.2 }).collect();
-    let df: Vec<Yuv420Frame<'_>> = diss.iter().map(|f| Yuv420Frame { y: &f.0, u: &f.1, v: &f.2 }).collect();
+    let rf: Vec<Yuv420Frame<'_>> = refs
+        .iter()
+        .map(|f| Yuv420Frame {
+            y: &f.0,
+            u: &f.1,
+            v: &f.2,
+        })
+        .collect();
+    let df: Vec<Yuv420Frame<'_>> = diss
+        .iter()
+        .map(|f| Yuv420Frame {
+            y: &f.0,
+            u: &f.1,
+            v: &f.2,
+        })
+        .collect();
     for model in ["v0", "v1"] {
         let s0 = VmafV0Scorer::new(w, h, 8, VmafV0Variant::Standard).unwrap();
         let s1 = VmafV1Scorer::new(w, h, 8, ModelVariant::Phone).unwrap();
