@@ -74,15 +74,33 @@ jobs:
         # manifest load. zenjpeg itself has `zenpredict = { path =
         # "../../zenanalyze/zenpredict" }` so we need zenanalyze too.
         # Pin to known-good origin HEAD commits for reproducibility.
+        #
+        # EVERY pin below must resolve `cargo metadata --locked` against the
+        # committed Cargo.lock: path-dependency siblings enter the lock with
+        # their version AND their dependency lists, so a sibling newer or
+        # older than the lock's snapshot fails with "cannot update the lock
+        # file ... --locked" (or a version-requirement error) before any job
+        # runs. Re-pin here whenever Cargo.lock moves; verify with an isolated
+        # snapshot (siblings checked out at exactly these revs) and
+        # `cargo metadata --locked`. Re-pinned 2026-09-26 against master
+        # 29eb904a's lock (zenavif 0.2.0, jxl-encoder 0.4.0, fast-ssim2 0.9.0).
+        # zenjpeg 1a05d47c: the newest commit whose deps match the lock's
+        # zenjpeg entry (zenanalyze from git rev 13d40c3b, no zenblend /
+        # zenresize edge); later zenjpeg mains change that dependency list.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout f325ca4fc8cfe5c07629f7b284fe8df9005b9788
+          git -C ../zenjpeg checkout 1a05d47c38632a26089843b5182c26f9d82722cd
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 6b080abf84ae2407bc7f2b127940404b3adb70b0
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
-          # reproducibility.
+          # reproducibility. df297ea1 = jxl-encoder 0.4.0 (the lock's
+          # version; the former pin cd9a7325 was 0.3.x, so the workspace's
+          # `^0.4.0` requirement failed) and the newest commit whose dependency
+          # list still matches the lock's jxl-encoder entry (no serde /
+          # serde_json / sha2 / zenpixels-convert / zenpredict edges, which
+          # b71eefb0 and later add).
           git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           # jxl-encoder commits sweep PNGs under benchmarks/ with names invalid
           # on NTFS (contain '>'), which break Windows checkout. Sparse-checkout
@@ -92,7 +110,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout cd9a7325f97f5e178863d867c81b694cd8b169aa
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout df297ea1a08303c7402e5159b6fef95ec05ab2ff
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -103,7 +121,9 @@ jobs:
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
           git -C ../zenpng checkout f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout d10eec2a2e98f70a4b868b13959cb6b0eb868c7c
+          # zenwebp 8aa8a785: d10eec2a's dependency list (hashbrown edge)
+          # no longer matches the lock's zenwebp entry.
+          git -C ../zenwebp checkout 8aa8a7858b97da88f0ba7d9027f8b6108d999196
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
@@ -112,12 +132,18 @@ jobs:
           # override it (see the rav1d-safe note in Cargo.toml's
           # [patch.crates-io]: a crates-io patch is unused because nothing wants
           # rav1d-safe from the registry, and a same-URL git patch is rejected).
-          # So whichever zenavif this checks out decides the decoder. b186cb8 =
-          # rav1d-safe 66f58fa6 (was 6e69831d = 140f9145, which predates
-          # rav1d-safe#524's x86_64 loop-filter fix). When bumping, re-read
+          # So whichever zenavif this checks out decides the decoder. (History:
+          # b186cb8 = rav1d-safe 66f58fa6; 6e69831d = 140f9145 predates
+          # rav1d-safe#524's x86_64 loop-filter fix.) When bumping, re-read
           # ../zenavif/Cargo.toml's rav1d-safe rev and update Cargo.toml's note.
+          # 2026-09-26: e73e3d70 = zenavif 0.2.0 (the lock's version; b186cb8
+          # was 0.1.7) with rav1d-safe e73811f5 (the lock's rav1d-safe rev) and
+          # zenav1-svt git rev 25708931 (the lock's svt git entry — c58fb0a0
+          # and later move it to 2255a342). It also carries
+          # `SweepAxes::names` (added in 386b82f8), which zenmetrics-cli's
+          # `sweep` feature has called since 6b3c41fe.
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout b186cb8b1e2624c96e16435247205f0b0e02b943
+          git -C ../zenavif checkout e73e3d70f264246b51497fe1c291181d721c8d5e
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
@@ -133,7 +159,9 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
           git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 9226d3a32cfd82f6c079f2921a8237f4ae05ee24
+          # zenjxl 4a2c021b: 9226d3a3 requires jxl-encoder ^0.3.2, which the
+          # lock's jxl-encoder 0.4.0 no longer satisfies.
+          git -C ../zenjxl checkout 4a2c021b4589b5d0465006c48568f6b520128525
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
           git -C ../zengif checkout 510e7a884b91e4cd573a09efa1086626e13f0576
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
@@ -184,9 +212,11 @@ jobs:
           # by `cargo metadata` for the whole workspace, so they must be cloned
           # even when a job doesn't compile them. Pinned to the revs the local
           # workspace builds against (stable, fetchable). The fast-ssim2 pin must
-          # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later).
+          # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later)
+          # AND be version 0.9.0 (cvvdp requires `fast-ssim2 = "^0.9"`; the
+          # former pin 7628f9ee was 0.8.2). d989014a = fast-ssim2 0.9.0.
           git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
-          git -C ../fast-ssim2 checkout 7628f9ee7d165b9cc8b64fabb546235b66dfc76b
+          git -C ../fast-ssim2 checkout d989014aa8c63a2e4a2af601bb8f11d81edb28d3
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
           # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
@@ -209,7 +239,9 @@ jobs:
           # images were built against. No submodules needed — the C reference
           # tree is a differential-test asset, not a cargo dependency.
           git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
-          git -C ../zenav1-svt checkout aeb619cd86622cf6b6d4d3e8d7df93dbc298dc95
+          # 6532bfe9: the lock resolves the zenav1-svt path packages against
+          # this tree; aeb619cd's package/dependency set no longer matches.
+          git -C ../zenav1-svt checkout 6532bfe951dbef0365871bf0209f5282cfec80c1
           # zenmetrics-cli's `hdr` feature path-deps `zenflate` too
           # (`../../../zenflate`, gzip for the Diffmap executor's PFM blobs —
           # added in 9093cc23 without this clone, which is what turned every
@@ -230,7 +262,9 @@ jobs:
           # workspace + per-crate manifests), so no further siblings cascade
           # from this one. Pinned to a zenav1-aom main commit with green CI.
           git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
-          git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
+          # 5d779f86: a7b1ab13's zenav1-aom-dsp / -encode dependency lists no
+          # longer match the lock.
+          git -C ../zenav1-aom checkout 5d779f86a65e59f549884dd77d94842e5a199c99
           # zenmetrics-cli's `bmp` feature path-deps zenbitmaps too
           # (`../../../zenbitmaps`, PNM/PAM/PFM/BMP/farbfeld — added in
           # 5be5da80's BMP decode arm without this clone, the same "path must
@@ -404,15 +438,33 @@ jobs:
         # manifest load. zenjpeg itself has `zenpredict = { path =
         # "../../zenanalyze/zenpredict" }` so we need zenanalyze too.
         # Pin to known-good origin HEAD commits for reproducibility.
+        #
+        # EVERY pin below must resolve `cargo metadata --locked` against the
+        # committed Cargo.lock: path-dependency siblings enter the lock with
+        # their version AND their dependency lists, so a sibling newer or
+        # older than the lock's snapshot fails with "cannot update the lock
+        # file ... --locked" (or a version-requirement error) before any job
+        # runs. Re-pin here whenever Cargo.lock moves; verify with an isolated
+        # snapshot (siblings checked out at exactly these revs) and
+        # `cargo metadata --locked`. Re-pinned 2026-09-26 against master
+        # 29eb904a's lock (zenavif 0.2.0, jxl-encoder 0.4.0, fast-ssim2 0.9.0).
+        # zenjpeg 1a05d47c: the newest commit whose deps match the lock's
+        # zenjpeg entry (zenanalyze from git rev 13d40c3b, no zenblend /
+        # zenresize edge); later zenjpeg mains change that dependency list.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout f325ca4fc8cfe5c07629f7b284fe8df9005b9788
+          git -C ../zenjpeg checkout 1a05d47c38632a26089843b5182c26f9d82722cd
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 6b080abf84ae2407bc7f2b127940404b3adb70b0
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
-          # reproducibility.
+          # reproducibility. df297ea1 = jxl-encoder 0.4.0 (the lock's
+          # version; the former pin cd9a7325 was 0.3.x, so the workspace's
+          # `^0.4.0` requirement failed) and the newest commit whose dependency
+          # list still matches the lock's jxl-encoder entry (no serde /
+          # serde_json / sha2 / zenpixels-convert / zenpredict edges, which
+          # b71eefb0 and later add).
           git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           # jxl-encoder commits sweep PNGs under benchmarks/ with names invalid
           # on NTFS (contain '>'), which break Windows checkout. Sparse-checkout
@@ -422,7 +474,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout cd9a7325f97f5e178863d867c81b694cd8b169aa
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout df297ea1a08303c7402e5159b6fef95ec05ab2ff
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -433,7 +485,9 @@ jobs:
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
           git -C ../zenpng checkout f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout d10eec2a2e98f70a4b868b13959cb6b0eb868c7c
+          # zenwebp 8aa8a785: d10eec2a's dependency list (hashbrown edge)
+          # no longer matches the lock's zenwebp entry.
+          git -C ../zenwebp checkout 8aa8a7858b97da88f0ba7d9027f8b6108d999196
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
@@ -442,12 +496,18 @@ jobs:
           # override it (see the rav1d-safe note in Cargo.toml's
           # [patch.crates-io]: a crates-io patch is unused because nothing wants
           # rav1d-safe from the registry, and a same-URL git patch is rejected).
-          # So whichever zenavif this checks out decides the decoder. b186cb8 =
-          # rav1d-safe 66f58fa6 (was 6e69831d = 140f9145, which predates
-          # rav1d-safe#524's x86_64 loop-filter fix). When bumping, re-read
+          # So whichever zenavif this checks out decides the decoder. (History:
+          # b186cb8 = rav1d-safe 66f58fa6; 6e69831d = 140f9145 predates
+          # rav1d-safe#524's x86_64 loop-filter fix.) When bumping, re-read
           # ../zenavif/Cargo.toml's rav1d-safe rev and update Cargo.toml's note.
+          # 2026-09-26: e73e3d70 = zenavif 0.2.0 (the lock's version; b186cb8
+          # was 0.1.7) with rav1d-safe e73811f5 (the lock's rav1d-safe rev) and
+          # zenav1-svt git rev 25708931 (the lock's svt git entry — c58fb0a0
+          # and later move it to 2255a342). It also carries
+          # `SweepAxes::names` (added in 386b82f8), which zenmetrics-cli's
+          # `sweep` feature has called since 6b3c41fe.
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout b186cb8b1e2624c96e16435247205f0b0e02b943
+          git -C ../zenavif checkout e73e3d70f264246b51497fe1c291181d721c8d5e
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
@@ -463,7 +523,9 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
           git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 9226d3a32cfd82f6c079f2921a8237f4ae05ee24
+          # zenjxl 4a2c021b: 9226d3a3 requires jxl-encoder ^0.3.2, which the
+          # lock's jxl-encoder 0.4.0 no longer satisfies.
+          git -C ../zenjxl checkout 4a2c021b4589b5d0465006c48568f6b520128525
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
           git -C ../zengif checkout 510e7a884b91e4cd573a09efa1086626e13f0576
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
@@ -514,9 +576,11 @@ jobs:
           # by `cargo metadata` for the whole workspace, so they must be cloned
           # even when a job doesn't compile them. Pinned to the revs the local
           # workspace builds against (stable, fetchable). The fast-ssim2 pin must
-          # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later).
+          # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later)
+          # AND be version 0.9.0 (cvvdp requires `fast-ssim2 = "^0.9"`; the
+          # former pin 7628f9ee was 0.8.2). d989014a = fast-ssim2 0.9.0.
           git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
-          git -C ../fast-ssim2 checkout 7628f9ee7d165b9cc8b64fabb546235b66dfc76b
+          git -C ../fast-ssim2 checkout d989014aa8c63a2e4a2af601bb8f11d81edb28d3
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
           # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
@@ -539,7 +603,9 @@ jobs:
           # images were built against. No submodules needed — the C reference
           # tree is a differential-test asset, not a cargo dependency.
           git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
-          git -C ../zenav1-svt checkout aeb619cd86622cf6b6d4d3e8d7df93dbc298dc95
+          # 6532bfe9: the lock resolves the zenav1-svt path packages against
+          # this tree; aeb619cd's package/dependency set no longer matches.
+          git -C ../zenav1-svt checkout 6532bfe951dbef0365871bf0209f5282cfec80c1
           # zenmetrics-cli's `hdr` feature path-deps `zenflate` too
           # (`../../../zenflate`, gzip for the Diffmap executor's PFM blobs —
           # added in 9093cc23 without this clone, which is what turned every
@@ -560,7 +626,9 @@ jobs:
           # workspace + per-crate manifests), so no further siblings cascade
           # from this one. Pinned to a zenav1-aom main commit with green CI.
           git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
-          git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
+          # 5d779f86: a7b1ab13's zenav1-aom-dsp / -encode dependency lists no
+          # longer match the lock.
+          git -C ../zenav1-aom checkout 5d779f86a65e59f549884dd77d94842e5a199c99
           # zenmetrics-cli's `bmp` feature path-deps zenbitmaps too
           # (`../../../zenbitmaps`, PNM/PAM/PFM/BMP/farbfeld — added in
           # 5be5da80's BMP decode arm without this clone, the same "path must
@@ -645,15 +713,33 @@ jobs:
         # manifest load. zenjpeg itself has `zenpredict = { path =
         # "../../zenanalyze/zenpredict" }` so we need zenanalyze too.
         # Pin to known-good origin HEAD commits for reproducibility.
+        #
+        # EVERY pin below must resolve `cargo metadata --locked` against the
+        # committed Cargo.lock: path-dependency siblings enter the lock with
+        # their version AND their dependency lists, so a sibling newer or
+        # older than the lock's snapshot fails with "cannot update the lock
+        # file ... --locked" (or a version-requirement error) before any job
+        # runs. Re-pin here whenever Cargo.lock moves; verify with an isolated
+        # snapshot (siblings checked out at exactly these revs) and
+        # `cargo metadata --locked`. Re-pinned 2026-09-26 against master
+        # 29eb904a's lock (zenavif 0.2.0, jxl-encoder 0.4.0, fast-ssim2 0.9.0).
+        # zenjpeg 1a05d47c: the newest commit whose deps match the lock's
+        # zenjpeg entry (zenanalyze from git rev 13d40c3b, no zenblend /
+        # zenresize edge); later zenjpeg mains change that dependency list.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout f325ca4fc8cfe5c07629f7b284fe8df9005b9788
+          git -C ../zenjpeg checkout 1a05d47c38632a26089843b5182c26f9d82722cd
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 6b080abf84ae2407bc7f2b127940404b3adb70b0
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
-          # reproducibility.
+          # reproducibility. df297ea1 = jxl-encoder 0.4.0 (the lock's
+          # version; the former pin cd9a7325 was 0.3.x, so the workspace's
+          # `^0.4.0` requirement failed) and the newest commit whose dependency
+          # list still matches the lock's jxl-encoder entry (no serde /
+          # serde_json / sha2 / zenpixels-convert / zenpredict edges, which
+          # b71eefb0 and later add).
           git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           # jxl-encoder commits sweep PNGs under benchmarks/ with names invalid
           # on NTFS (contain '>'), which break Windows checkout. Sparse-checkout
@@ -663,7 +749,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout cd9a7325f97f5e178863d867c81b694cd8b169aa
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout df297ea1a08303c7402e5159b6fef95ec05ab2ff
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -674,7 +760,9 @@ jobs:
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
           git -C ../zenpng checkout f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout d10eec2a2e98f70a4b868b13959cb6b0eb868c7c
+          # zenwebp 8aa8a785: d10eec2a's dependency list (hashbrown edge)
+          # no longer matches the lock's zenwebp entry.
+          git -C ../zenwebp checkout 8aa8a7858b97da88f0ba7d9027f8b6108d999196
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
@@ -683,12 +771,18 @@ jobs:
           # override it (see the rav1d-safe note in Cargo.toml's
           # [patch.crates-io]: a crates-io patch is unused because nothing wants
           # rav1d-safe from the registry, and a same-URL git patch is rejected).
-          # So whichever zenavif this checks out decides the decoder. b186cb8 =
-          # rav1d-safe 66f58fa6 (was 6e69831d = 140f9145, which predates
-          # rav1d-safe#524's x86_64 loop-filter fix). When bumping, re-read
+          # So whichever zenavif this checks out decides the decoder. (History:
+          # b186cb8 = rav1d-safe 66f58fa6; 6e69831d = 140f9145 predates
+          # rav1d-safe#524's x86_64 loop-filter fix.) When bumping, re-read
           # ../zenavif/Cargo.toml's rav1d-safe rev and update Cargo.toml's note.
+          # 2026-09-26: e73e3d70 = zenavif 0.2.0 (the lock's version; b186cb8
+          # was 0.1.7) with rav1d-safe e73811f5 (the lock's rav1d-safe rev) and
+          # zenav1-svt git rev 25708931 (the lock's svt git entry — c58fb0a0
+          # and later move it to 2255a342). It also carries
+          # `SweepAxes::names` (added in 386b82f8), which zenmetrics-cli's
+          # `sweep` feature has called since 6b3c41fe.
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout b186cb8b1e2624c96e16435247205f0b0e02b943
+          git -C ../zenavif checkout e73e3d70f264246b51497fe1c291181d721c8d5e
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
@@ -704,7 +798,9 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
           git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 9226d3a32cfd82f6c079f2921a8237f4ae05ee24
+          # zenjxl 4a2c021b: 9226d3a3 requires jxl-encoder ^0.3.2, which the
+          # lock's jxl-encoder 0.4.0 no longer satisfies.
+          git -C ../zenjxl checkout 4a2c021b4589b5d0465006c48568f6b520128525
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
           git -C ../zengif checkout 510e7a884b91e4cd573a09efa1086626e13f0576
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
@@ -755,9 +851,11 @@ jobs:
           # by `cargo metadata` for the whole workspace, so they must be cloned
           # even when a job doesn't compile them. Pinned to the revs the local
           # workspace builds against (stable, fetchable). The fast-ssim2 pin must
-          # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later).
+          # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later)
+          # AND be version 0.9.0 (cvvdp requires `fast-ssim2 = "^0.9"`; the
+          # former pin 7628f9ee was 0.8.2). d989014a = fast-ssim2 0.9.0.
           git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
-          git -C ../fast-ssim2 checkout 7628f9ee7d165b9cc8b64fabb546235b66dfc76b
+          git -C ../fast-ssim2 checkout d989014aa8c63a2e4a2af601bb8f11d81edb28d3
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
           # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
@@ -780,7 +878,9 @@ jobs:
           # images were built against. No submodules needed — the C reference
           # tree is a differential-test asset, not a cargo dependency.
           git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
-          git -C ../zenav1-svt checkout aeb619cd86622cf6b6d4d3e8d7df93dbc298dc95
+          # 6532bfe9: the lock resolves the zenav1-svt path packages against
+          # this tree; aeb619cd's package/dependency set no longer matches.
+          git -C ../zenav1-svt checkout 6532bfe951dbef0365871bf0209f5282cfec80c1
           # zenmetrics-cli's `hdr` feature path-deps `zenflate` too
           # (`../../../zenflate`, gzip for the Diffmap executor's PFM blobs —
           # added in 9093cc23 without this clone, which is what turned every
@@ -801,7 +901,9 @@ jobs:
           # workspace + per-crate manifests), so no further siblings cascade
           # from this one. Pinned to a zenav1-aom main commit with green CI.
           git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
-          git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
+          # 5d779f86: a7b1ab13's zenav1-aom-dsp / -encode dependency lists no
+          # longer match the lock.
+          git -C ../zenav1-aom checkout 5d779f86a65e59f549884dd77d94842e5a199c99
           # zenmetrics-cli's `bmp` feature path-deps zenbitmaps too
           # (`../../../zenbitmaps`, PNM/PAM/PFM/BMP/farbfeld — added in
           # 5be5da80's BMP decode arm without this clone, the same "path must
@@ -841,15 +943,33 @@ jobs:
         # manifest load. zenjpeg itself has `zenpredict = { path =
         # "../../zenanalyze/zenpredict" }` so we need zenanalyze too.
         # Pin to known-good origin HEAD commits for reproducibility.
+        #
+        # EVERY pin below must resolve `cargo metadata --locked` against the
+        # committed Cargo.lock: path-dependency siblings enter the lock with
+        # their version AND their dependency lists, so a sibling newer or
+        # older than the lock's snapshot fails with "cannot update the lock
+        # file ... --locked" (or a version-requirement error) before any job
+        # runs. Re-pin here whenever Cargo.lock moves; verify with an isolated
+        # snapshot (siblings checked out at exactly these revs) and
+        # `cargo metadata --locked`. Re-pinned 2026-09-26 against master
+        # 29eb904a's lock (zenavif 0.2.0, jxl-encoder 0.4.0, fast-ssim2 0.9.0).
+        # zenjpeg 1a05d47c: the newest commit whose deps match the lock's
+        # zenjpeg entry (zenanalyze from git rev 13d40c3b, no zenblend /
+        # zenresize edge); later zenjpeg mains change that dependency list.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout f325ca4fc8cfe5c07629f7b284fe8df9005b9788
+          git -C ../zenjpeg checkout 1a05d47c38632a26089843b5182c26f9d82722cd
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 6b080abf84ae2407bc7f2b127940404b3adb70b0
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
-          # reproducibility.
+          # reproducibility. df297ea1 = jxl-encoder 0.4.0 (the lock's
+          # version; the former pin cd9a7325 was 0.3.x, so the workspace's
+          # `^0.4.0` requirement failed) and the newest commit whose dependency
+          # list still matches the lock's jxl-encoder entry (no serde /
+          # serde_json / sha2 / zenpixels-convert / zenpredict edges, which
+          # b71eefb0 and later add).
           git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           # jxl-encoder commits sweep PNGs under benchmarks/ with names invalid
           # on NTFS (contain '>'), which break Windows checkout. Sparse-checkout
@@ -859,7 +979,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout cd9a7325f97f5e178863d867c81b694cd8b169aa
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout df297ea1a08303c7402e5159b6fef95ec05ab2ff
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -870,7 +990,9 @@ jobs:
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
           git -C ../zenpng checkout f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout d10eec2a2e98f70a4b868b13959cb6b0eb868c7c
+          # zenwebp 8aa8a785: d10eec2a's dependency list (hashbrown edge)
+          # no longer matches the lock's zenwebp entry.
+          git -C ../zenwebp checkout 8aa8a7858b97da88f0ba7d9027f8b6108d999196
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
@@ -879,12 +1001,18 @@ jobs:
           # override it (see the rav1d-safe note in Cargo.toml's
           # [patch.crates-io]: a crates-io patch is unused because nothing wants
           # rav1d-safe from the registry, and a same-URL git patch is rejected).
-          # So whichever zenavif this checks out decides the decoder. b186cb8 =
-          # rav1d-safe 66f58fa6 (was 6e69831d = 140f9145, which predates
-          # rav1d-safe#524's x86_64 loop-filter fix). When bumping, re-read
+          # So whichever zenavif this checks out decides the decoder. (History:
+          # b186cb8 = rav1d-safe 66f58fa6; 6e69831d = 140f9145 predates
+          # rav1d-safe#524's x86_64 loop-filter fix.) When bumping, re-read
           # ../zenavif/Cargo.toml's rav1d-safe rev and update Cargo.toml's note.
+          # 2026-09-26: e73e3d70 = zenavif 0.2.0 (the lock's version; b186cb8
+          # was 0.1.7) with rav1d-safe e73811f5 (the lock's rav1d-safe rev) and
+          # zenav1-svt git rev 25708931 (the lock's svt git entry — c58fb0a0
+          # and later move it to 2255a342). It also carries
+          # `SweepAxes::names` (added in 386b82f8), which zenmetrics-cli's
+          # `sweep` feature has called since 6b3c41fe.
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout b186cb8b1e2624c96e16435247205f0b0e02b943
+          git -C ../zenavif checkout e73e3d70f264246b51497fe1c291181d721c8d5e
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
@@ -900,7 +1028,9 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
           git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 9226d3a32cfd82f6c079f2921a8237f4ae05ee24
+          # zenjxl 4a2c021b: 9226d3a3 requires jxl-encoder ^0.3.2, which the
+          # lock's jxl-encoder 0.4.0 no longer satisfies.
+          git -C ../zenjxl checkout 4a2c021b4589b5d0465006c48568f6b520128525
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
           git -C ../zengif checkout 510e7a884b91e4cd573a09efa1086626e13f0576
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
@@ -951,9 +1081,11 @@ jobs:
           # by `cargo metadata` for the whole workspace, so they must be cloned
           # even when a job doesn't compile them. Pinned to the revs the local
           # workspace builds against (stable, fetchable). The fast-ssim2 pin must
-          # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later).
+          # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later)
+          # AND be version 0.9.0 (cvvdp requires `fast-ssim2 = "^0.9"`; the
+          # former pin 7628f9ee was 0.8.2). d989014a = fast-ssim2 0.9.0.
           git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
-          git -C ../fast-ssim2 checkout 7628f9ee7d165b9cc8b64fabb546235b66dfc76b
+          git -C ../fast-ssim2 checkout d989014aa8c63a2e4a2af601bb8f11d81edb28d3
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
           # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
@@ -976,7 +1108,9 @@ jobs:
           # images were built against. No submodules needed — the C reference
           # tree is a differential-test asset, not a cargo dependency.
           git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
-          git -C ../zenav1-svt checkout aeb619cd86622cf6b6d4d3e8d7df93dbc298dc95
+          # 6532bfe9: the lock resolves the zenav1-svt path packages against
+          # this tree; aeb619cd's package/dependency set no longer matches.
+          git -C ../zenav1-svt checkout 6532bfe951dbef0365871bf0209f5282cfec80c1
           # zenmetrics-cli's `hdr` feature path-deps `zenflate` too
           # (`../../../zenflate`, gzip for the Diffmap executor's PFM blobs —
           # added in 9093cc23 without this clone, which is what turned every
@@ -997,7 +1131,9 @@ jobs:
           # workspace + per-crate manifests), so no further siblings cascade
           # from this one. Pinned to a zenav1-aom main commit with green CI.
           git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
-          git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
+          # 5d779f86: a7b1ab13's zenav1-aom-dsp / -encode dependency lists no
+          # longer match the lock.
+          git -C ../zenav1-aom checkout 5d779f86a65e59f549884dd77d94842e5a199c99
           # zenmetrics-cli's `bmp` feature path-deps zenbitmaps too
           # (`../../../zenbitmaps`, PNM/PAM/PFM/BMP/farbfeld — added in
           # 5be5da80's BMP decode arm without this clone, the same "path must
@@ -1045,15 +1181,33 @@ jobs:
         # manifest load. zenjpeg itself has `zenpredict = { path =
         # "../../zenanalyze/zenpredict" }` so we need zenanalyze too.
         # Pin to known-good origin HEAD commits for reproducibility.
+        #
+        # EVERY pin below must resolve `cargo metadata --locked` against the
+        # committed Cargo.lock: path-dependency siblings enter the lock with
+        # their version AND their dependency lists, so a sibling newer or
+        # older than the lock's snapshot fails with "cannot update the lock
+        # file ... --locked" (or a version-requirement error) before any job
+        # runs. Re-pin here whenever Cargo.lock moves; verify with an isolated
+        # snapshot (siblings checked out at exactly these revs) and
+        # `cargo metadata --locked`. Re-pinned 2026-09-26 against master
+        # 29eb904a's lock (zenavif 0.2.0, jxl-encoder 0.4.0, fast-ssim2 0.9.0).
+        # zenjpeg 1a05d47c: the newest commit whose deps match the lock's
+        # zenjpeg entry (zenanalyze from git rev 13d40c3b, no zenblend /
+        # zenresize edge); later zenjpeg mains change that dependency list.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout f325ca4fc8cfe5c07629f7b284fe8df9005b9788
+          git -C ../zenjpeg checkout 1a05d47c38632a26089843b5182c26f9d82722cd
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 6b080abf84ae2407bc7f2b127940404b3adb70b0
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zenmetrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
-          # reproducibility.
+          # reproducibility. df297ea1 = jxl-encoder 0.4.0 (the lock's
+          # version; the former pin cd9a7325 was 0.3.x, so the workspace's
+          # `^0.4.0` requirement failed) and the newest commit whose dependency
+          # list still matches the lock's jxl-encoder entry (no serde /
+          # serde_json / sha2 / zenpixels-convert / zenpredict edges, which
+          # b71eefb0 and later add).
           git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           # jxl-encoder commits sweep PNGs under benchmarks/ with names invalid
           # on NTFS (contain '>'), which break Windows checkout. Sparse-checkout
@@ -1063,7 +1217,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout cd9a7325f97f5e178863d867c81b694cd8b169aa
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout df297ea1a08303c7402e5159b6fef95ec05ab2ff
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -1074,7 +1228,9 @@ jobs:
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
           git -C ../zenpng checkout f7167b7952d3b71e6a5ef62d8d3ee4dfe77ed720
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout d10eec2a2e98f70a4b868b13959cb6b0eb868c7c
+          # zenwebp 8aa8a785: d10eec2a's dependency list (hashbrown edge)
+          # no longer matches the lock's zenwebp entry.
+          git -C ../zenwebp checkout 8aa8a7858b97da88f0ba7d9027f8b6108d999196
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
@@ -1083,12 +1239,18 @@ jobs:
           # override it (see the rav1d-safe note in Cargo.toml's
           # [patch.crates-io]: a crates-io patch is unused because nothing wants
           # rav1d-safe from the registry, and a same-URL git patch is rejected).
-          # So whichever zenavif this checks out decides the decoder. b186cb8 =
-          # rav1d-safe 66f58fa6 (was 6e69831d = 140f9145, which predates
-          # rav1d-safe#524's x86_64 loop-filter fix). When bumping, re-read
+          # So whichever zenavif this checks out decides the decoder. (History:
+          # b186cb8 = rav1d-safe 66f58fa6; 6e69831d = 140f9145 predates
+          # rav1d-safe#524's x86_64 loop-filter fix.) When bumping, re-read
           # ../zenavif/Cargo.toml's rav1d-safe rev and update Cargo.toml's note.
+          # 2026-09-26: e73e3d70 = zenavif 0.2.0 (the lock's version; b186cb8
+          # was 0.1.7) with rav1d-safe e73811f5 (the lock's rav1d-safe rev) and
+          # zenav1-svt git rev 25708931 (the lock's svt git entry — c58fb0a0
+          # and later move it to 2255a342). It also carries
+          # `SweepAxes::names` (added in 386b82f8), which zenmetrics-cli's
+          # `sweep` feature has called since 6b3c41fe.
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout b186cb8b1e2624c96e16435247205f0b0e02b943
+          git -C ../zenavif checkout e73e3d70f264246b51497fe1c291181d721c8d5e
           # zenrav1e: zenavif -> ravif(zenravif fork) -> zenrav1e, patched at
           # `../zenrav1e` since 86e9b0b7 (unpublished 0.2.0 partition-search
           # fix) — without this clone, cargo can't resolve the whole
@@ -1104,7 +1266,9 @@ jobs:
           git clone --quiet https://github.com/imazen/zenavif-serialize.git ../zenavif-serialize
           git -C ../zenavif-serialize checkout 0a48b4683c8ac801f6f9b645dfbd0bbdf4a5e93a
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 9226d3a32cfd82f6c079f2921a8237f4ae05ee24
+          # zenjxl 4a2c021b: 9226d3a3 requires jxl-encoder ^0.3.2, which the
+          # lock's jxl-encoder 0.4.0 no longer satisfies.
+          git -C ../zenjxl checkout 4a2c021b4589b5d0465006c48568f6b520128525
           git clone --quiet https://github.com/imazen/zengif.git ../zengif
           git -C ../zengif checkout 510e7a884b91e4cd573a09efa1086626e13f0576
           git clone --quiet https://github.com/imazen/zenextras.git ../zenextras
@@ -1155,9 +1319,11 @@ jobs:
           # by `cargo metadata` for the whole workspace, so they must be cloned
           # even when a job doesn't compile them. Pinned to the revs the local
           # workspace builds against (stable, fetchable). The fast-ssim2 pin must
-          # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later).
+          # carry `hdr-pu` + `compute_ssimulacra2_pu_nits` (35f198af or later)
+          # AND be version 0.9.0 (cvvdp requires `fast-ssim2 = "^0.9"`; the
+          # former pin 7628f9ee was 0.8.2). d989014a = fast-ssim2 0.9.0.
           git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
-          git -C ../fast-ssim2 checkout 7628f9ee7d165b9cc8b64fabb546235b66dfc76b
+          git -C ../fast-ssim2 checkout d989014aa8c63a2e4a2af601bb8f11d81edb28d3
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
           # zenmetrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
@@ -1180,7 +1346,9 @@ jobs:
           # images were built against. No submodules needed — the C reference
           # tree is a differential-test asset, not a cargo dependency.
           git clone --quiet https://github.com/imazen/zenav1-svt.git ../zenav1-svt
-          git -C ../zenav1-svt checkout aeb619cd86622cf6b6d4d3e8d7df93dbc298dc95
+          # 6532bfe9: the lock resolves the zenav1-svt path packages against
+          # this tree; aeb619cd's package/dependency set no longer matches.
+          git -C ../zenav1-svt checkout 6532bfe951dbef0365871bf0209f5282cfec80c1
           # zenmetrics-cli's `hdr` feature path-deps `zenflate` too
           # (`../../../zenflate`, gzip for the Diffmap executor's PFM blobs —
           # added in 9093cc23 without this clone, which is what turned every
@@ -1201,7 +1369,9 @@ jobs:
           # workspace + per-crate manifests), so no further siblings cascade
           # from this one. Pinned to a zenav1-aom main commit with green CI.
           git clone --quiet https://github.com/imazen/zenav1-aom.git ../zenav1-aom
-          git -C ../zenav1-aom checkout a7b1ab13fc2ba1c0f4fb05282ab40e417bc32190
+          # 5d779f86: a7b1ab13's zenav1-aom-dsp / -encode dependency lists no
+          # longer match the lock.
+          git -C ../zenav1-aom checkout 5d779f86a65e59f549884dd77d94842e5a199c99
           # zenmetrics-cli's `bmp` feature path-deps zenbitmaps too
           # (`../../../zenbitmaps`, PNM/PAM/PFM/BMP/farbfeld — added in
           # 5be5da80's BMP decode arm without this clone, the same "path must
