@@ -263,7 +263,7 @@ class Coverage(unittest.TestCase):
         self.assertFalse(r["complete"])
         by = {m["cell"]: m for m in r["missing"]}
         self.assertEqual(by["a/2"]["status"], "STRANDED")
-        self.assertEqual(by["a/2"]["claims"]["old"], {"worker": "w-gone", "age_s": 30000, "live": False})
+        self.assertEqual(by["a/2"]["claims"]["old"], {"worker": "w-gone", "age_s": 30000, "finished": False, "live": False})
         self.assertEqual(by["a/3"]["status"], "IN_FLIGHT")
         self.assertEqual(r["stranded"], ["a/2"])
 
@@ -296,9 +296,32 @@ class Coverage(unittest.TestCase):
         r = cov.coverage(["a/1", "a/2", "a/3"], [old, new], {"new"}, 1000)
         self.assertEqual({m["cell"]: m["status"] for m in r["missing"]}["a/2"], "IN_FLIGHT")
 
+    def test_failed_cells_are_failed_until_redeclared(self):
+        v8 = self.js("v8", ["a/1", "a/2", "a/3"], ["a/3"], claims={"a/1": ("w-a", 500, True), "a/2": ("w-a", 900, True)})
+        v8["failed"] = {"a/1": "disk_full", "a/2": "upload_fail"}
+        r = cov.coverage(["a/1", "a/2", "a/3"], [v8], {"v8"}, 1000, live={"w-a"})
+        by = {m["cell"]: m for m in r["missing"]}
+        # A failed cell's claim reads done/total (finished chunk): not a running fit, so both are FAILED.
+        self.assertEqual(r["failed"], ["a/1", "a/2"])
+        self.assertTrue(by["a/1"]["claims"]["v8"]["finished"])
+        self.assertEqual(by["a/2"]["status"], "FAILED")
+        self.assertEqual(by["a/2"]["failed_in"], {"v8": "upload_fail"})
+        # Re-declared in a fresh jobset with no failed row: pending, then IN_FLIGHT once a live worker claims it.
+        retry = self.js("retry", ["a/2"], [])
+        r = cov.coverage(["a/1", "a/2", "a/3"], [v8, retry], {"v8", "retry"}, 1000, live={"w-a"})
+        self.assertEqual({m["cell"]: m["status"] for m in r["missing"]}["a/2"], "pending")
+        retry["claims"] = {"a/2": ("w-b", 30)}
+        r = cov.coverage(["a/1", "a/2", "a/3"], [v8, retry], {"v8", "retry"}, 1000, live={"w-a", "w-b"})
+        self.assertEqual({m["cell"]: m["status"] for m in r["missing"]}["a/2"], "IN_FLIGHT")
+        # A failed cell in a jobset nobody serves is FAILED, not STRANDED.
+        r = cov.coverage(["a/1", "a/2", "a/3"], [v8], set(), 1000, live={"w-a"})
+        self.assertEqual({m["cell"]: m["status"] for m in r["missing"]}["a/2"], "FAILED")
+
     def test_claim_parsing(self):
-        self.assertEqual(cov.parse_claim("900 host-1 0/1", 1000), ("host-1", 100))
-        self.assertEqual(cov.parse_claim("garbage", 1000), ("?", None))
+        self.assertEqual(cov.parse_claim("900 host-1 0/1", 1000), ("host-1", 100, False))
+        self.assertEqual(cov.parse_claim("900 host-1 1/1", 1000), ("host-1", 100, True))
+        self.assertEqual(cov.parse_claim("900 host-1", 1000), ("host-1", 100, False))
+        self.assertEqual(cov.parse_claim("garbage", 1000), ("?", None, False))
 
 
 class GoldenJobId(unittest.TestCase):

@@ -13,8 +13,10 @@ to a newer jobset, is never re-claimed and would otherwise vanish without any er
 
 Exit 0 iff every registered cell is DONE in some jobset and no DONE cell lies outside the grid.
 Exit 1 otherwise; the report says which cells are STRANDED (not DONE, and every jobset that could
-run them is drained/paused/unserved), which are IN_FLIGHT (claimed by a live worker) and which are
-merely pending. `--serving` names the jobsets
+run them is drained/paused/unserved), which are IN_FLIGHT (claimed by a live worker), which are
+FAILED (a failed ledger row, e.g. `disk_full` / `upload_fail` / `timeout`, and no served jobset
+declares them without a failed row: a failed cell's claim stays "done" until the TTL, so nothing
+re-runs it until it is re-declared) and which are merely pending. `--serving` names the jobsets
 that have live workers; by default every jobset whose control.json is neither drained nor paused
 counts as served. `--live-workers FILE` (JSON list or one name per line) names the workers that are
 running now: a live worker holds exactly one cell, its newest non-DONE claim, so that cell is
@@ -48,16 +50,23 @@ def chunk_key(jid: str) -> str:
 
 
 def parse_claim(body: str, now: int) -> tuple:
-    """`<epoch> <worker> [done/total]` -> (worker, age_seconds); ("?", None) if unreadable."""
+    """`<epoch> <worker> [done/total]` -> (worker, age_seconds, finished); ("?", None, False) if
+    unreadable. `finished` is a chunk whose progress reads done >= total: the worker has written its
+    result (DONE or a failed row), so the claim no longer means a fit is running."""
     tok = body.split()
     if len(tok) >= 2 and tok[0].isdigit():
-        return tok[1], max(0, now - int(tok[0]))
-    return "?", None
+        finished = False
+        if len(tok) >= 3 and "/" in tok[2]:
+            d, _, t = tok[2].partition("/")
+            finished = d.isdigit() and t.isdigit() and int(t) > 0 and int(d) >= int(t)
+        return tok[1], max(0, now - int(tok[0])), finished
+    return "?", None, False
 
 
 def coverage(grid: list, jobsets: list, serving: set, now: int, live: set | None = None) -> dict:
     """Pure core. `grid`: registered cell names. `jobsets`: dicts with `name`, `declared` (set of
-    cell names), `done` (set), `claims` ({cell: (worker, age)}), `drained` (bool). `live`: names of the
+    cell names), `done` (set), `claims` ({cell: (worker, age)}), `drained` (bool), optional `failed`
+    ({cell: error_class} for cells whose latest row is not DONE). `live`: names of the
     workers running now, or None to treat every claim as live."""
     grid_set = set(grid)
     done = {}
@@ -69,7 +78,9 @@ def coverage(grid: list, jobsets: list, serving: set, now: int, live: set | None
     newest = {}
     if live is not None:
         for js in jobsets:
-            for cell, (worker, age) in js["claims"].items():
+            for cell, (worker, age, *rest) in js["claims"].items():
+                if rest and rest[0]:
+                    continue          # finished chunk (a failed cell's claim), not a running fit
                 if cell in grid_set and cell not in done and worker in live and age is not None:
                     if worker not in newest or age < newest[worker][0]:
                         newest[worker] = (age, cell, js["name"])
@@ -81,22 +92,33 @@ def coverage(grid: list, jobsets: list, serving: set, now: int, live: set | None
         live_serving = [js["name"] for js in holders if js["name"] in serving]
         claims = {js["name"]: js["claims"][cell] for js in holders if cell in js["claims"]}
         # Claims in jobsets that do not declare the cell cannot exist; claims are keyed per jobset.
-        in_flight = [name for name, (w, age) in claims.items()
-                     if live is None or (w in live and newest.get(w, (0, None, None))[1:] == (cell, name))]
-        status = "IN_FLIGHT" if in_flight else ("pending" if live_serving else "STRANDED")
+        in_flight = [name for name, (w, age, *rest) in claims.items() if not (rest and rest[0])
+                     and (live is None or (w in live and newest.get(w, (0, None, None))[1:] == (cell, name)))]
+        failed_in = {js["name"]: js.get("failed", {})[cell] for js in holders if cell in js.get("failed", {})}
+        served_holders = [js for js in holders if js["name"] in serving]
+        if in_flight:
+            status = "IN_FLIGHT"
+        elif not served_holders:
+            status = "FAILED" if failed_in else "STRANDED"
+        elif all(cell in js.get("failed", {}) for js in served_holders):
+            status = "FAILED"
+        else:
+            status = "pending"
         missing.append({
             "cell": cell,
             "declared_in": [js["name"] for js in holders],
             "served_by_jobsets": live_serving,
-            "claims": {name: {"worker": w, "age_s": age,
-                              "live": live is None or (w in live and newest.get(w, (0, None, None))[1:] == (cell, name))}
-                       for name, (w, age) in claims.items()},
+            "failed_in": failed_in,
+            "claims": {name: {"worker": w, "age_s": age, "finished": bool(rest and rest[0]),
+                              "live": name in in_flight}
+                       for name, (w, age, *rest) in claims.items()},
             "status": status,
         })
     return {"grid": len(grid_set), "done": len(grid_set & set(done)),
             "done_in_several_jobsets": {c: j for c, j in done.items() if len(j) > 1 and c in grid_set},
             "done_outside_grid": outside, "missing": missing,
             "in_flight": [m["cell"] for m in missing if m["status"] == "IN_FLIGHT"],
+            "failed": [m["cell"] for m in missing if m["status"] == "FAILED"],
             "stranded": [m["cell"] for m in missing if m["status"] == "STRANDED"],
             "complete": not missing and not outside}
 
@@ -113,11 +135,14 @@ def load_jobset(name: str, endpoint: str, bucket: str, prefix: str, scratch: Pat
     ledger_dir = scratch / name
     ledger_dir.mkdir(parents=True, exist_ok=True)
     s5(endpoint, "sync", f"{base}/ledger/*", str(ledger_dir) + "/", check=False)
-    done = set()
+    done, latest_bad = set(), {}
     for path in sorted(ledger_dir.glob("*.parquet")):
-        for row in pq.read_table(path, columns=["status", "image_path"]).to_pylist():
+        for row in pq.read_table(path, columns=["status", "image_path", "error_class", "ts"]).to_pylist():
             if row["status"] == "done":
                 done.add(row["image_path"])
+            elif row["image_path"] not in latest_bad or row["ts"] >= latest_bad[row["image_path"]][0]:
+                latest_bad[row["image_path"]] = (row["ts"], row["error_class"] or row["status"])
+    failed = {cell: err for cell, (_, err) in latest_bad.items() if cell not in done}
     declared = {job["cell"]["image_path"] for job in manifest}
     claims = {}
     listing = s5(endpoint, "ls", f"{base}/claims/*", check=False).stdout
@@ -130,7 +155,7 @@ def load_jobset(name: str, endpoint: str, bucket: str, prefix: str, scratch: Pat
         if key in held:
             body = s5(endpoint, "cat", f"{base}/claims/{key}", check=False).stdout
             claims[cell] = parse_claim(body, now)
-    return {"name": name, "declared": declared, "done": done, "claims": claims,
+    return {"name": name, "declared": declared, "done": done, "claims": claims, "failed": failed,
             "drained": bool(ctl.get("drain")) or bool(ctl.get("paused"))}
 
 
@@ -160,12 +185,13 @@ def main() -> None:
         live = set(json.loads(text)) if text.lstrip().startswith("[") else set(text.split())
     report = coverage(grid, jobsets, serving, now, live)
     print(f"grid {report['grid']}: DONE {report['done']}, missing {len(report['missing'])} "
-          f"({len(report['in_flight'])} IN_FLIGHT, {len(report['stranded'])} STRANDED), done outside grid {len(report['done_outside_grid'])}, "
+          f"({len(report['in_flight'])} IN_FLIGHT, {len(report['failed'])} FAILED, {len(report['stranded'])} STRANDED), done outside grid {len(report['done_outside_grid'])}, "
           f"done in several jobsets {len(report['done_in_several_jobsets'])}")
     for m in report["missing"]:
-        claims = "; ".join(f"{js}: {c['worker']} age {c['age_s']}s{'' if c['live'] else ' (not live)'}"
+        claims = "; ".join(f"{js}: {c['worker']} age {c['age_s']}s{' (finished chunk)' if c['finished'] else '' if c['live'] else ' (not live)'}"
                            for js, c in m["claims"].items()) or "unclaimed"
-        print(f"  {m['status']:8s} {m['cell']}  declared in {m['declared_in'] or 'NO jobset'}  {claims}")
+        failed = "  failed: " + ", ".join(f"{js}={e}" for js, e in m["failed_in"].items()) if m["failed_in"] else ""
+        print(f"  {m['status']:8s} {m['cell']}  declared in {m['declared_in'] or 'NO jobset'}  {claims}{failed}")
     if args.json_out:
         args.json_out.write_text(json.dumps(report, indent=2, sort_keys=True))
     sys.exit(0 if report["complete"] else 1)

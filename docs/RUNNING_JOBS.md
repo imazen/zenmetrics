@@ -99,7 +99,7 @@ per cell: a local original is rescued, an installed fleet copy is never replaced
 copy from another jobset must agree on the science fields or the install aborts.
 `fit_grid_coverage.py --grid-manifest <registered grid> --jobset ...` proves the union of DONE cells
 across jobsets equals the grid (960 P0 / 960 P2 / 210 D2) and lists every missing cell with its claim
-owner and age, marking cells that no served jobset can run as STRANDED (with `--live-workers FILE`, a cell held by a running worker is IN_FLIGHT and a claim by a worker that is not running does not count). Its exit 0 is the precondition
+owner and age, marking cells that no served jobset can run as STRANDED (with `--live-workers FILE`, a cell held by a running worker is IN_FLIGHT and a claim by a worker that is not running does not count; a cell with a failed ledger row that no served jobset can retry is FAILED: its claim reads done/total, so nothing re-runs it until it is re-declared). Its exit 0 is the precondition
 for the fleet-fits DONE report. `test_fit_tools.py` holds the negative controls for both scripts.
 ### HDR ScoreFile (persisted-pairs HDR corpora, e.g. kadis-hdr)
 
