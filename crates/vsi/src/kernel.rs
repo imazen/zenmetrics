@@ -305,11 +305,11 @@ fn sdsp(rgb: &[f32], w: usize, h: usize, lg: &[f32]) -> Vec<f32> {
     // 5. warm-colour prior on the resized A/B channels.
     let (mut amin, mut amax) = (f32::INFINITY, f32::NEG_INFINITY);
     let (mut bmin, mut bmax) = (f32::INFINITY, f32::NEG_INFINITY);
-    for i in 0..n * n {
-        amin = amin.min(lab[1][i]);
-        amax = amax.max(lab[1][i]);
-        bmin = bmin.min(lab[2][i]);
-        bmax = bmax.max(lab[2][i]);
+    for (&a, &b) in lab[1].iter().zip(&lab[2]).take(n * n) {
+        amin = amin.min(a);
+        amax = amax.max(a);
+        bmin = bmin.min(b);
+        bmax = bmax.max(b);
     }
     let (arange, brange) = (amax - amin, bmax - bmin);
     for i in 0..n * n {

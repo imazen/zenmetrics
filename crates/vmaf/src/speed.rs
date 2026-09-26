@@ -1122,20 +1122,21 @@ fn vif_filter1d(f: &[f32], src: &[f32], dst: &mut [f32], w: usize, h: usize, str
         #[cfg(not(feature = "simd"))]
         let j = 0usize;
         #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-        if i >= radius && i + radius < h {
-            if let Some(t) = v3_token() {
-                let wfloor8 = w / 8 * 8;
-                let base = (i - radius) * stride_px;
-                vif_filter1d_vrow_v3(
-                    t,
-                    f,
-                    &src[base..base + (fwidth - 1) * stride_px + wfloor8],
-                    stride_px,
-                    &mut tmp,
-                    wfloor8,
-                );
-                j = wfloor8;
-            }
+        if i >= radius
+            && i + radius < h
+            && let Some(t) = v3_token()
+        {
+            let wfloor8 = w / 8 * 8;
+            let base = (i - radius) * stride_px;
+            vif_filter1d_vrow_v3(
+                t,
+                f,
+                &src[base..base + (fwidth - 1) * stride_px + wfloor8],
+                stride_px,
+                &mut tmp,
+                wfloor8,
+            );
+            j = wfloor8;
         }
         #[cfg(all(feature = "simd", target_arch = "aarch64"))]
         if i >= radius && i + radius < h {

@@ -944,7 +944,7 @@ fn adm_decouple(
         #[cfg(not(feature = "simd"))]
         let j_start = left as usize;
         for j in j_start..(right as usize) {
-            let idx = i as usize * stride + j as usize;
+            let idx = i as usize * stride + j;
             let oh = ref_b.h[idx] as i64;
             let ov = ref_b.v[idx] as i64;
             let od = ref_b.d[idx] as i64;
@@ -2992,7 +2992,7 @@ fn adm_decouple_s123(
         #[cfg(not(feature = "simd"))]
         let j_start = left as usize;
         for j in j_start..(right as usize) {
-            let idx = i as usize * stride + j as usize;
+            let idx = i as usize * stride + j;
             let oh = ref_b.h[idx];
             let ov = ref_b.v[idx];
             let od = ref_b.d[idx];
@@ -3943,7 +3943,7 @@ fn cm_accum16_v3(
     for t in 0..3 {
         let mut acc_lo = _mm256_setzero_si256();
         let mut acc_hi = _mm256_setzero_si256();
-        for xc in xbuf[t].chunks_exact(8) {
+        for xc in xbuf[t].as_chunks::<8>().0 {
             let x = _mm256_loadu_si256(a8::<i32, 8>(xc));
             let (lo, hi) = cm_accum_v3(
                 token,
@@ -4408,26 +4408,26 @@ fn adm_cm_i32(
                 jj = done;
             }
             #[cfg(all(feature = "simd", target_arch = "x86_64"))]
-            if jj == 0 {
-                if let Some(token) = v3_token() {
-                    let (vec_inner, done) = i4_adm_cm_row_v3(
-                        token,
-                        &win[..len],
-                        &ang_rows,
-                        &flt_rows,
-                        &src_rows,
-                        rfactor,
-                        add_bef_shift_dst,
-                        add_bef_shift_flt,
-                        add_shift_sq,
-                        add_shift_cub,
-                        shift_cub,
-                    );
-                    for t in 0..3 {
-                        inner[t] += vec_inner[t];
-                    }
-                    jj = done;
+            if jj == 0
+                && let Some(token) = v3_token()
+            {
+                let (vec_inner, done) = i4_adm_cm_row_v3(
+                    token,
+                    &win[..len],
+                    &ang_rows,
+                    &flt_rows,
+                    &src_rows,
+                    rfactor,
+                    add_bef_shift_dst,
+                    add_bef_shift_flt,
+                    add_shift_sq,
+                    add_shift_cub,
+                    shift_cub,
+                );
+                for t in 0..3 {
+                    inner[t] += vec_inner[t];
                 }
+                jj = done;
             }
             #[cfg(all(feature = "simd", target_arch = "aarch64"))]
             if let Some(token) = neon_token() {

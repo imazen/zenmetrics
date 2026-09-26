@@ -990,7 +990,7 @@ fn up_conv_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, 
             let m = oy / 2;
             // Accumulate in ascending-tap order to match the scalar's
             // add sequence (modulo FMA contraction).
-            let (ra, rb, rc, ka, kb, kc) = if oy % 2 == 0 {
+            let (ra, rb, rc, ka, kb, kc) = if oy.is_multiple_of(2) {
                 (m - 1, m, m + 1, k0, k2, k4)
             } else {
                 (m, m + 1, m + 1, k1, k3, k3) // third term unused (k3 dup)
@@ -1007,7 +1007,7 @@ fn up_conv_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, 
                 );
                 let mut acc = a.mul_add(ka, f32x8::zero(token));
                 acc = b.mul_add(kb, acc);
-                if oy % 2 == 0 {
+                if oy.is_multiple_of(2) {
                     let cv = f32x8::load(
                         token,
                         (&src[rc * w + x..rc * w + x + 8]).try_into().unwrap(),
@@ -1017,9 +1017,9 @@ fn up_conv_v_inner(token: Token, src: &[f32], in_h: usize, w: usize, y0: usize, 
                 acc.store((&mut dst_row[x..x + 8]).try_into().unwrap());
             }
             for x in n_chunks * 8..w {
-                let mut acc = BINOM5[if oy % 2 == 0 { 0 } else { 1 }] * src[ra * w + x]
-                    + BINOM5[if oy % 2 == 0 { 2 } else { 3 }] * src[rb * w + x];
-                if oy % 2 == 0 {
+                let mut acc = BINOM5[if oy.is_multiple_of(2) { 0 } else { 1 }] * src[ra * w + x]
+                    + BINOM5[if oy.is_multiple_of(2) { 2 } else { 3 }] * src[rb * w + x];
+                if oy.is_multiple_of(2) {
                     acc += BINOM5[4] * src[rc * w + x];
                 }
                 dst_row[x] = acc;

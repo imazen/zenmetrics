@@ -140,7 +140,7 @@ macro_rules! score_body {
                                 $token,
                                 core::array::from_fn(|k| srow[x + u + k]),
                             );
-                            v = v + <$F32>::splat($token, taps[u]) * xv;
+                            v += <$F32>::splat($token, taps[u]) * xv;
                         }
                         drow[x..x + $LANES].copy_from_slice(&v.to_array());
                         x += $LANES;
@@ -166,7 +166,7 @@ macro_rules! score_body {
                                 $token,
                                 core::array::from_fn(|k| tmp[(y + u) * out_w + x + k]),
                             );
-                            v = v + <$F32>::splat($token, taps[u]) * xv;
+                            v += <$F32>::splat($token, taps[u]) * xv;
                         }
                         drow[x..x + $LANES].copy_from_slice(&v.to_array());
                         x += $LANES;

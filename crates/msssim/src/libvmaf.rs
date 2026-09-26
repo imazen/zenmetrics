@@ -319,6 +319,10 @@ pub fn float_ms_ssim(
     Ok(msssim)
 }
 
+/// Per-scale `(l, c, s)` means plus the `float_ms_ssim` product, as returned by
+/// [`float_ms_ssim_scales`].
+type ScaleScores = ([f64; 5], [f64; 5], [f64; 5], f64);
+
 /// Hidden companion returning the per-scale `(l, c, s)` f32-rounded
 /// means (the C `l_scores/c_scores/s_scores` feature arrays) plus the
 /// `float_ms_ssim` product. Used by the libvmaf parity tests.
@@ -330,7 +334,7 @@ pub fn float_ms_ssim_scales(
     height: usize,
     stride: usize,
     bpc: u32,
-) -> Result<([f64; 5], [f64; 5], [f64; 5], f64), Error> {
+) -> Result<ScaleScores, Error> {
     check_plane(reference_y, width, height, stride)?;
     check_plane(distorted_y, width, height, stride)?;
     // Reference guard: each of the 5 halvings must stay ≥ GAUSSIAN_LEN.

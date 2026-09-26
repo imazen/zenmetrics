@@ -21,8 +21,10 @@ pub enum Kind {
 /// in the luma convention `y`).
 fn luma_mse(r: &Rgb8Image, d: &Rgb8Image, y: impl Fn(&[u8]) -> f64) -> f64 {
     r.pixels
-        .chunks_exact(3)
-        .zip(d.pixels.chunks_exact(3))
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(d.pixels.as_chunks::<3>().0)
         .map(|(a, b)| {
             let delta = y(a) - y(b);
             delta * delta
@@ -103,12 +105,16 @@ pub fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, String> {
             for channel in 0..3 {
                 let a: Vec<f64> = r
                     .pixels
-                    .chunks_exact(3)
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
                     .map(|p| f64::from(p[channel]) / 255.0)
                     .collect();
                 let b: Vec<f64> = d
                     .pixels
-                    .chunks_exact(3)
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
                     .map(|p| f64::from(p[channel]) / 255.0)
                     .collect();
                 sum += window_score(&a, &b, r.width as usize, r.height as usize);
@@ -186,11 +192,11 @@ fn gaussian_into(
                 }
             }
         }
-        for x in 0..xlo {
-            out[x] = htap(&row, w, x, k);
+        for (x, o) in out.iter_mut().enumerate().take(xlo) {
+            *o = htap(&row, w, x, k);
         }
-        for x in xhi..w {
-            out[x] = htap(&row, w, x, k);
+        for (x, o) in out.iter_mut().enumerate().take(w).skip(xhi) {
+            *o = htap(&row, w, x, k);
         }
         let span = xhi - xlo;
         if span > 0 {

@@ -4463,7 +4463,7 @@ fn anti_dithering_rows_v3(_token: X64V3Token, data: &mut [u16], width: usize, he
         let a = &mut ra[i * width..i * width + width];
         let b = &rb[..width];
         let mut j = 0usize;
-        while j + 16 <= width - 1 {
+        while j + 16 < width {
             let s = _mm256_add_epi16(
                 _mm256_add_epi16(
                     _mm256_loadu_si256(a8::<u16, 16>(&a[j..j + 16])),

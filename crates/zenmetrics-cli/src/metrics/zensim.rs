@@ -92,8 +92,10 @@ pub(crate) fn score(
 /// `zensim::Zensim::compute` returns and `compute_with_ref` cannot. Pinned by
 /// `identical_score_matches_zensim_compute`, which reads it back out of
 /// `compute` rather than trusting this literal.
+#[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
 const IDENTICAL_SCORE: f64 = 100.0;
 
+#[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
 pub(crate) struct PrecomputedRef {
     inner: zensim::PrecomputedReference,
     /// The reference's own RGB bytes plus dimensions, retained so
@@ -115,6 +117,7 @@ pub(crate) struct PrecomputedRef {
 
 /// Build a [`PrecomputedRef`] from `reference`: convert to XYB and build the
 /// downscale pyramid once. Reuse across many [`score_with_precomputed`] calls.
+#[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
 pub(crate) fn precompute_ref(
     reference: &Rgb8Image,
 ) -> Result<PrecomputedRef, Box<dyn std::error::Error>> {
@@ -161,6 +164,7 @@ pub(crate) fn precompute_ref(
 /// number moves) and brings `score-pairs` into line with them. Removing the
 /// short-circuit from `compute` instead would need an upstream zensim change
 /// AND would move long-standing output.
+#[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
 pub(crate) fn score_with_precomputed(
     precomputed: &PrecomputedRef,
     distorted: &Rgb8Image,
@@ -474,6 +478,7 @@ fn extract_features_folded_streaming(
 /// per-cell cost on a many-variant ScoreFile job); reusing it is a pure cost reduction — features
 /// are bit-identical (zensim guarantees it — see `v2_precomputed_ref_matches_percall`).
 #[cfg(feature = "cpu-metrics")]
+#[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
 pub struct ZensimRefCtx {
     padded: Vec<u8>, // reference reflect-padded to (w,h); w,h ≥ 64
     w: usize,
@@ -486,6 +491,7 @@ pub struct ZensimRefCtx {
 /// pyramid once. Reuse across all variants of this source via
 /// [`extract_features_regime_with_ctx`].
 #[cfg(feature = "cpu-metrics")]
+#[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
 pub fn precompute_ref_ctx(
     reference: &Rgb8Image,
 ) -> Result<ZensimRefCtx, Box<dyn std::error::Error>> {
@@ -516,6 +522,7 @@ pub fn precompute_ref_ctx(
 /// (`compute_zensim_with_ref_and_config`); the v2 block reprocesses the ref (no
 /// precomputed-ref API). Bit-identical to [`extract_features_regime`].
 #[cfg(feature = "cpu-metrics")]
+#[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
 pub fn extract_features_regime_with_ctx(
     ctx: &ZensimRefCtx,
     distorted: &Rgb8Image,
@@ -1197,6 +1204,7 @@ mod tests {
 /// display-peak anchor. Score is the integrated-PU score (the validated
 /// zensim HDR feeding); features share the sRGB extraction layout.
 #[cfg(feature = "cpu-metrics")]
+#[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
 pub fn score_with_features_pu_linear(
     ref_nits: &[f32],
     dist_nits: &[f32],

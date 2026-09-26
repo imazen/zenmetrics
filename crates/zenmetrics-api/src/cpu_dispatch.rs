@@ -21,6 +21,10 @@ use crate::{Error, MetricKind, MetricParams, Result, Score};
 /// `cpu-*` feature is on, plus [`CpuMetricState::FeatureDisabled`] for
 /// the rest. Each variant carries the `(width, height)` it was built for
 /// so [`CpuMetricState::dims`] is uniform.
+// One scorer state lives per session slot and the variants are never held in a
+// collection, so the size spread (the warm-reference `Butter` variant) costs
+// nothing; boxing it would add an allocation on every warm-reference swap.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum CpuMetricState {
     /// `fast-ssim2` (Imazen, SIMD) — sRGB→linear→XYB is internal; the
     /// scorer is stateless so we only stash the dims. `cached_ref` holds
@@ -115,10 +119,10 @@ fn zensim_profile_for(params: &MetricParams) -> ::zensim::ZensimProfile {
         return profile;
     }
     #[cfg(feature = "zensim")]
-    if let MetricParams::Zensim(p) = params {
-        if let Some(profile) = p.profile {
-            return profile;
-        }
+    if let MetricParams::Zensim(p) = params
+        && let Some(profile) = p.profile
+    {
+        return profile;
     }
     let _ = params;
     ::zensim::ZensimProfile::latest_preview()
@@ -1229,7 +1233,7 @@ fn deinterleave_f32(rgb: &[f32]) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
     let mut r = Vec::with_capacity(n);
     let mut g = Vec::with_capacity(n);
     let mut b = Vec::with_capacity(n);
-    for px in rgb.chunks_exact(3) {
+    for px in rgb.as_chunks::<3>().0 {
         r.push(px[0]);
         g.push(px[1]);
         b.push(px[2]);

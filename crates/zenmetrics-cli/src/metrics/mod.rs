@@ -674,7 +674,7 @@ pub fn studio601_gray(img: &Rgb8Image) -> Rgb8Image {
 fn studio601_y_plane(img: &Rgb8Image) -> Vec<u8> {
     let (w, h) = (img.width as usize, img.height as usize);
     let mut y = Vec::with_capacity(w * h);
-    for px in img.pixels.chunks_exact(3) {
+    for px in img.pixels.as_chunks::<3>().0 {
         y.push(
             (16.0
                 + (65.481 * px[0] as f32 + 128.553 * px[1] as f32 + 24.966 * px[2] as f32) / 255.0)
@@ -699,7 +699,7 @@ fn studio601_yuv444(img: &Rgb8Image) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
     let mut y = Vec::with_capacity(n);
     let mut cb = Vec::with_capacity(n);
     let mut cr = Vec::with_capacity(n);
-    for px in img.pixels.chunks_exact(3) {
+    for px in img.pixels.as_chunks::<3>().0 {
         let (r, g, b) = (px[0] as f32, px[1] as f32, px[2] as f32);
         y.push(
             (16.0 + (65.481 * r + 128.553 * g + 24.966 * b) / 255.0)

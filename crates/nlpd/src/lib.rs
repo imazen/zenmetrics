@@ -131,15 +131,15 @@ fn score_planes(
             );
             next_ref.push(ref_low);
             next_dis.push(dis_low);
-            debug_assert_eq!(low_w, (w + 1) / 2);
-            debug_assert_eq!(low_h, (h + 1) / 2);
+            debug_assert_eq!(low_w, w.div_ceil(2));
+            debug_assert_eq!(low_h, h.div_ceil(2));
         }
         let rms = (squared_sum / (w * h * 3) as f64).sqrt();
         weighted_sum += rms.powf(0.6);
         ref_planes = next_ref;
         dis_planes = next_dis;
-        w = (w + 1) / 2;
-        h = (h + 1) / 2;
+        w = w.div_ceil(2);
+        h = h.div_ceil(2);
     }
     weighted_sum.powf(1.0 / 0.6)
 }
@@ -156,7 +156,7 @@ fn validate_dimensions(width: usize, height: usize) -> Result<usize, Error> {
 
 fn deinterleave_u8(src: &[u8], n: usize) -> Vec<Vec<f32>> {
     let mut planes = vec![vec![0.0; n]; 3];
-    for (i, px) in src.chunks_exact(3).enumerate() {
+    for (i, px) in src.as_chunks::<3>().0.iter().enumerate() {
         for c in 0..3 {
             planes[c][i] = px[c] as f32 / 255.0;
         }
@@ -166,7 +166,7 @@ fn deinterleave_u8(src: &[u8], n: usize) -> Vec<Vec<f32>> {
 
 fn deinterleave_f32(src: &[f32], n: usize) -> Vec<Vec<f32>> {
     let mut planes = vec![vec![0.0; n]; 3];
-    for (i, px) in src.chunks_exact(3).enumerate() {
+    for (i, px) in src.as_chunks::<3>().0.iter().enumerate() {
         for c in 0..3 {
             planes[c][i] = px[c];
         }
@@ -217,8 +217,8 @@ impl Scratch {
 }
 
 fn downsample(src: &[f32], w: usize, h: usize, tmp_h: &mut [f32]) -> (Vec<f32>, usize, usize) {
-    let out_w = (w + 1) / 2;
-    let out_h = (h + 1) / 2;
+    let out_w = w.div_ceil(2);
+    let out_h = h.div_ceil(2);
     let pad_x = ((out_w - 1) * 2 + 5 - w) / 2;
     let pad_y = ((out_h - 1) * 2 + 5 - h) / 2;
     filter5_horizontal(src, w, h, &mut tmp_h[..out_w * h], out_w, 2, pad_x);
@@ -264,11 +264,11 @@ fn filter5_horizontal(
         for y in 0..h {
             let row = &src[y * w..(y + 1) * w];
             let out = &mut dst[y * out_w..(y + 1) * out_w];
-            for ox in 0..lo {
-                out[ox] = tap5(row, w, ox, stride, pad);
+            for (ox, o) in out.iter_mut().enumerate().take(lo) {
+                *o = tap5(row, w, ox, stride, pad);
             }
-            for ox in hi..out_w {
-                out[ox] = tap5(row, w, ox, stride, pad);
+            for (ox, o) in out.iter_mut().enumerate().take(out_w).skip(hi) {
+                *o = tap5(row, w, ox, stride, pad);
             }
             for ox in lo..hi {
                 let mut sum = 0.0_f32;
@@ -283,11 +283,11 @@ fn filter5_horizontal(
     for y in 0..h {
         let row = &src[y * w..(y + 1) * w];
         let out = &mut dst[y * out_w..(y + 1) * out_w];
-        for ox in 0..lo {
-            out[ox] = tap5(row, w, ox, stride, pad);
+        for (ox, o) in out.iter_mut().enumerate().take(lo) {
+            *o = tap5(row, w, ox, stride, pad);
         }
-        for ox in hi..out_w {
-            out[ox] = tap5(row, w, ox, stride, pad);
+        for (ox, o) in out.iter_mut().enumerate().take(out_w).skip(hi) {
+            *o = tap5(row, w, ox, stride, pad);
         }
         if lo < hi {
             let span = hi - lo;
@@ -326,11 +326,11 @@ fn filter5_horizontal_decimate(
     for y in 0..h {
         let row = &src[y * w..(y + 1) * w];
         let out = &mut dst[y * out_w..(y + 1) * out_w];
-        for ox in 0..lo {
-            out[ox] = tap5(row, w, ox, 2, pad);
+        for (ox, o) in out.iter_mut().enumerate().take(lo) {
+            *o = tap5(row, w, ox, 2, pad);
         }
-        for ox in hi..out_w {
-            out[ox] = tap5(row, w, ox, 2, pad);
+        for (ox, o) in out.iter_mut().enumerate().take(out_w).skip(hi) {
+            *o = tap5(row, w, ox, 2, pad);
         }
         if lo < hi {
             g.iter_mut().for_each(|v| *v = 0.0);

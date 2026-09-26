@@ -68,8 +68,8 @@ fn check_dims(r: &Rgb8Image, d: &Rgb8Image) -> Result<(), Box<dyn std::error::Er
         || r.height != d.height
         || r.width < 32
         || r.height < 32
-        || r.width % 2 != 0
-        || r.height % 2 != 0
+        || !r.width.is_multiple_of(2)
+        || !r.height.is_multiple_of(2)
     {
         return Err("VMAF requires matching, even dimensions >= 32".into());
     }
@@ -80,6 +80,7 @@ fn check_dims(r: &Rgb8Image, d: &Rgb8Image) -> Result<(), Box<dyn std::error::Er
 /// plane file (the libvmaf `--pixel_format 420` input layout: Y plane,
 /// then Cb, then Cr). `pub` so benchmarks/heaptrack drivers can time the
 /// RGB→YUV420 conversion + serialization side of the adapter.
+#[allow(dead_code)] // used by the lib target's callers, not by the bin target
 pub fn write_yuv420(
     path: &std::path::Path,
     image: &Rgb8Image,
