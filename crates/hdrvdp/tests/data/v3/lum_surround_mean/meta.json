@@ -1,0 +1,17 @@
+{
+ "w": 96,
+ "h": 96,
+ "c": 1,
+ "encoding": "luminance",
+ "ppd": 30.0,
+ "task": "quality",
+ "options": {},
+ "extra": {
+  "surround": "mean"
+ },
+ "flags": "surround-mean",
+ "Q": 6.28387364698912,
+ "Q_JOD": 7.204861986883776,
+ "P_map_mean": 0.6108183500374545,
+ "P_map_max": 0.9967419811037931
+}

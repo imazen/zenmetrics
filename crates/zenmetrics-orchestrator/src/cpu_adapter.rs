@@ -326,6 +326,9 @@ impl CpuAdapter {
             // umbrella's `Backend::Cpu` dispatch (`cpu_dispatch::Hdrvdp`)
             // is the native-CPU route for it.
             MetricKind::Hdrvdp => Err(CpuAdapterError::Unavailable(MetricKind::Hdrvdp)),
+            // hdrvdp3 is likewise absolute-nits-only *and* requires explicit
+            // viewing-condition params this adapter cannot carry.
+            MetricKind::Hdrvdp3 => Err(CpuAdapterError::Unavailable(MetricKind::Hdrvdp3)),
         }?;
         Ok(Self {
             metric,

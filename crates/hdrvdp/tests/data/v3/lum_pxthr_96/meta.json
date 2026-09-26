@@ -1,0 +1,17 @@
+{
+ "w": 96,
+ "h": 96,
+ "c": 1,
+ "encoding": "luminance",
+ "ppd": 30.0,
+ "task": "quality",
+ "options": {},
+ "extra": {
+  "do_pixel_threshold": true
+ },
+ "flags": "pxthr",
+ "Q": 6.072221923574331,
+ "Q_JOD": 6.999287375993001,
+ "P_map_mean": 0.007925103148320468,
+ "P_map_max": 0.6620559926052678
+}

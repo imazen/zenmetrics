@@ -99,7 +99,7 @@ impl OrchestratorMetricSpec {
             // HDR-VDP likewise: the executor's leaves are sRGB8-shaped
             // (cpu_adapter) or GPU backends hdrvdp doesn't have — the
             // `HdrScorer` nits path serves it instead.
-            CliMetricKind::Hdrvdp => {
+            CliMetricKind::Hdrvdp | CliMetricKind::Hdrvdp3 => {
                 unreachable!("hdrvdp has no orchestrator backend; callers gate on eligibility")
             }
             // PSNR-HVS / -Y: direct-crate CPU metrics (gmsd shape).
@@ -345,6 +345,7 @@ pub fn validate_cpu_variant_built_in(
         // feature-check reports it unavailable rather than silently
         // passing a phantom feature name.
         ApiMetricKind::Hdrvdp => ("hdrvdp", "orchestrator-cpu-hdrvdp", false),
+        ApiMetricKind::Hdrvdp3 => ("hdrvdp3", "orchestrator-cpu-hdrvdp3", false),
     };
     if enabled {
         Ok(())

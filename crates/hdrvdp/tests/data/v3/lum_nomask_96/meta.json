@@ -1,0 +1,17 @@
+{
+ "w": 96,
+ "h": 96,
+ "c": 1,
+ "encoding": "luminance",
+ "ppd": 30.0,
+ "task": "quality",
+ "options": {},
+ "extra": {
+  "do_masking": false
+ },
+ "flags": "no-mask",
+ "Q": 5.216291899177127,
+ "Q_JOD": 6.137061085441602,
+ "P_map_mean": 0.7160800238228509,
+ "P_map_max": 0.9994650064838024
+}

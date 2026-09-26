@@ -181,6 +181,7 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         // Never reached — orchestrator-ineligible — but the match is
         // exhaustive over the CLI kind enum.
         CliMetricKind::Hdrvdp => "hdrvdp",
+        CliMetricKind::Hdrvdp3 => "hdrvdp3",
         CliMetricKind::Psnrhvs => "psnrhvs",
         CliMetricKind::PsnrhvsY => "psnrhvs_y",
         CliMetricKind::Haarpsi => "haarpsi",
@@ -290,6 +291,7 @@ pub fn rekey_orchestrator_columns(
         | CliMetricKind::MsGmsd
         | CliMetricKind::MsGmsdc
         | CliMetricKind::Hdrvdp
+        | CliMetricKind::Hdrvdp3
         | CliMetricKind::Psnrhvs
         | CliMetricKind::PsnrhvsY
         | CliMetricKind::Haarpsi
@@ -444,6 +446,7 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
             | CliMetricKind::MsGmsd
             | CliMetricKind::MsGmsdc
             | CliMetricKind::Hdrvdp
+            | CliMetricKind::Hdrvdp3
             | CliMetricKind::Psnrhvs
             | CliMetricKind::PsnrhvsY
             | CliMetricKind::Haarpsi

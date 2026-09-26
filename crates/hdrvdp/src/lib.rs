@@ -86,6 +86,7 @@ mod simd_kernels;
 pub mod sp3_filters;
 pub mod spectral;
 pub mod spyr;
+pub mod v3;
 
 pub use bands::{BandPyramid, decompose};
 pub use display::ColorEncoding;
@@ -146,6 +147,22 @@ pub enum Error {
     /// meaningful default — derive it from display geometry with
     /// [`pix_per_deg`].
     InvalidResolution(f64),
+    /// HDR-VDP-3: `InputEncoding::Generic` was requested without
+    /// [`v3::Emission::Custom`] emission data — upstream's
+    /// "`spectral_emission` option must be specified" error.
+    MissingEmission,
+    /// HDR-VDP-3: malformed spectral table (vendored data or a custom
+    /// emission table that is not a valid wavelength+columns CSV).
+    SpectralData(String),
+    /// HDR-VDP-3: image too small for even one pyramid level — the
+    /// reference's `maxPyrHt` bound with the 13×13 `sp0` low-pass
+    /// (`min(width, height) ≥ 13`).
+    ImageTooSmall {
+        /// The offending dimension, `(width, height)`.
+        size: (usize, usize),
+        /// The minimum accepted dimension.
+        min: usize,
+    },
 }
 
 /// Result alias for this crate.
@@ -172,8 +189,18 @@ impl core::fmt::Display for Error {
             }
             Self::InvalidResolution(v) => write!(
                 f,
-                "pix_per_deg must be a positive finite number, got {v} — derive it from \
+                "pix_per_deg must be a positive finite number ≥ 4, got {v} — derive it from \
                  display geometry with `pix_per_deg(diagonal_in, [w, h], distance_m)`"
+            ),
+            Self::MissingEmission => write!(
+                f,
+                "`InputEncoding::Generic` requires `Emission::Custom` spectral-emission data"
+            ),
+            Self::SpectralData(m) => write!(f, "malformed spectral data: {m}"),
+            Self::ImageTooSmall { size, min } => write!(
+                f,
+                "image {}×{} too small for the sp0 pyramid (min dimension ≥ {min})",
+                size.0, size.1
             ),
         }
     }

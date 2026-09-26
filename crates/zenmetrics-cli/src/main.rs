@@ -315,6 +315,11 @@ struct ScoreArgs {
     /// ignore this flag. SDR path only.
     #[arg(long, value_enum, default_value = "house")]
     luma_ingress: crate::metrics::LumaIngress,
+    /// HDR-VDP-3 viewing conditions (`--metric hdrvdp3` under `--hdr`).
+    /// `--hdrvdp3-ppd` is required — v3 has no default geometry.
+    #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
+    #[command(flatten)]
+    hdrvdp3: hdr::HdrVdp3Args,
 }
 
 #[derive(Parser, Debug)]
@@ -388,6 +393,11 @@ struct BatchArgs {
     /// ignore this flag. SDR path only.
     #[arg(long, value_enum, default_value = "house")]
     luma_ingress: crate::metrics::LumaIngress,
+    /// HDR-VDP-3 viewing conditions (`--metric hdrvdp3` under `--hdr`).
+    /// `--hdrvdp3-ppd` is required — v3 has no default geometry.
+    #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
+    #[command(flatten)]
+    hdrvdp3: hdr::HdrVdp3Args,
 }
 
 #[derive(Parser, Debug)]
@@ -638,6 +648,11 @@ struct SweepArgs {
     #[cfg(feature = "hdr")]
     #[arg(long)]
     hdr: bool,
+    /// HDR-VDP-3 viewing conditions (`--metric hdrvdp3` under `--hdr`).
+    /// `--hdrvdp3-ppd` is required — v3 has no default geometry.
+    #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
+    #[command(flatten)]
+    hdrvdp3: hdr::HdrVdp3Args,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -787,6 +802,11 @@ struct ScorePairsArgs {
     #[cfg(feature = "hdr")]
     #[arg(long, value_enum, default_value = "pu-rescale")]
     hdr_transfer: crate::hdr::HdrTransfer,
+    /// HDR-VDP-3 viewing conditions (`--metric hdrvdp3` under `--hdr`).
+    /// `--hdrvdp3-ppd` is required — v3 has no default geometry.
+    #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
+    #[command(flatten)]
+    hdrvdp3: hdr::HdrVdp3Args,
 }
 
 fn main() -> ExitCode {
@@ -1050,6 +1070,9 @@ fn cmd_sweep(
     #[cfg(feature = "orchestrator")] use_orchestrator: bool,
     #[cfg(feature = "orchestrator")] orchestrator_opts: &orchestrator_glue::OrchestratorRuntimeOpts,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
+    hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
+
     use crate::sweep::{PlanSpec, SweepConfig, parse_knob_grid, parse_q_grid, run_sweep};
 
     // Phase 7.5 sweep integration: when `--use-orchestrator` is set,
@@ -1439,6 +1462,8 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
         // HDR-VDP: JOD scale [0, 100]; 100 = identical (the crate's
         // scaled Q_JOD output).
         MetricKind::Hdrvdp => Some((-1.0, 101.0, 100.0)),
+        // HDR-VDP-3 emits `Q_JOD` on [0, 10]; 10 = identical.
+        MetricKind::Hdrvdp3 => Some((-0.5, 10.5, 10.0)),
         // PSNR-HVS / -M / -Y: dB scale, higher = better; identical lands
         // exactly on 100000 (the reference's "indistinguishable" value).
         // A real sweep mean sits ~10..60 dB.
@@ -1611,6 +1636,8 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     use parquet::basic::{Compression, ZstdLevel};
     use parquet::file::properties::WriterProperties;
 
+    #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
+    hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
     #[cfg(feature = "hdr")]
     if args.hdr_common_primaries && args.feature_output.is_some() {
         return Err("--hdr-common-primaries does not admit legacy feature sidecars".into());
@@ -2648,6 +2675,8 @@ fn cmd_score(
     // the faithful native linear-planes path (no u8 clamp); the SDR kernels get
     // PU21→sRGB8. Short-circuits the SDR decode + orchestrator routing — both
     // assume sRGB8 inputs.
+    #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
+    hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
     #[cfg(feature = "hdr")]
     if args.hdr && args.display_model.is_some() && args.metric.needs_display() {
         return Err(
@@ -2773,6 +2802,8 @@ fn cmd_batch(
         // the optimised CvvdpBatchScorer / direct dispatch.
         drop(orch);
     }
+    #[cfg(all(feature = "hdr", feature = "cpu-hdrvdp"))]
+    hdr::set_hdrvdp3_cli_args(args.hdrvdp3.clone());
     let mut rdr = csv::ReaderBuilder::new()
         .delimiter(b'\t')
         .has_headers(true)

@@ -246,6 +246,7 @@ fn metric_score_estimate(
         | MetricKind::Iwssim
         | MetricKind::Gmsd
         | MetricKind::Hdrvdp
+        | MetricKind::Hdrvdp3
         | MetricKind::Psnrhvs
         | MetricKind::PsnrhvsY
         | MetricKind::Mdsi

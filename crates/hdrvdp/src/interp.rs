@@ -142,6 +142,20 @@ pub fn trapz(x: &[f64], y: &[f64]) -> f64 {
 /// `xs` must be strictly increasing with at least 2 points.
 #[must_use]
 pub fn interp1_pchip(xs: &[f64], ys: &[f64], query: &[f64], fill: f64) -> Vec<f64> {
+    pchip_impl(xs, ys, query, Some(fill))
+}
+
+/// PCHIP extrapolation — like [`interp1_pchip`] but evaluates the boundary
+/// polynomial segment outside `[xs[0], xs[n-1]]` instead of filling, which
+/// is what scipy's `PchipInterpolator` does with its default
+/// `extrapolate=True`. Used by the v3 spectral resampler, where upstream
+/// extrapolates a few nm past short tables (they are clamped later anyway).
+#[must_use]
+pub(crate) fn interp1_pchip_extrap(xs: &[f64], ys: &[f64], query: &[f64]) -> Vec<f64> {
+    pchip_impl(xs, ys, query, None)
+}
+
+fn pchip_impl(xs: &[f64], ys: &[f64], query: &[f64], fill: Option<f64>) -> Vec<f64> {
     assert_eq!(xs.len(), ys.len(), "pchip: x and y length mismatch");
     assert!(xs.len() >= 2, "pchip: need at least 2 samples");
     let n = xs.len();
@@ -177,12 +191,21 @@ pub fn interp1_pchip(xs: &[f64], ys: &[f64], query: &[f64], fill: f64) -> Vec<f6
     query
         .iter()
         .map(|&x| {
-            if x < xs[0] || x > xs[n - 1] {
-                return fill;
-            }
-            let i = match xs.binary_search_by(|p| p.partial_cmp(&x).expect("finite grid")) {
-                Ok(i) => return ys[i],
-                Err(i) => i - 1,
+            let i = if x < xs[0] {
+                match fill {
+                    Some(f) => return f,
+                    None => 0, // extrapolate on the first segment
+                }
+            } else if x > xs[n - 1] {
+                match fill {
+                    Some(f) => return f,
+                    None => n - 2, // extrapolate on the last segment
+                }
+            } else {
+                match xs.binary_search_by(|p| p.partial_cmp(&x).expect("finite grid")) {
+                    Ok(i) => return ys[i],
+                    Err(i) => i - 1,
+                }
             };
             // Hermite basis on [xs[i], xs[i+1]].
             let s = x - xs[i];

@@ -1,0 +1,17 @@
+{
+ "w": 96,
+ "h": 96,
+ "c": 1,
+ "encoding": "luminance",
+ "ppd": 30.0,
+ "task": "quality",
+ "options": {},
+ "extra": {
+  "do_si_gauss": true
+ },
+ "flags": "si-gauss",
+ "Q": 6.765888081832606,
+ "Q_JOD": 7.660616044189171,
+ "P_map_mean": 0.48903033696127174,
+ "P_map_max": 0.9861560585936454
+}

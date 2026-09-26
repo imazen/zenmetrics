@@ -93,6 +93,18 @@ pub(crate) enum CpuMetricState {
         width: u32,
         height: u32,
     },
+    /// `hdrvdp3` — free-function scorer (`hdrvdp::v3::hdrvdp3`); holds the
+    /// all-explicit `v3::Params` (viewing conditions, task, encoding and
+    /// emission are required fields — there is deliberately no default).
+    /// Same `IntegratedPuNits` feeding contract as `Hdrvdp`: absolute
+    /// luminance in cd/m² only; every u8/display-relative entry errors.
+    /// Emits `Q_JOD` on [0, 10].
+    #[cfg(feature = "cpu-hdrvdp")]
+    Hdrvdp3 {
+        params: Box<hdrvdp::v3::Params>,
+        width: u32,
+        height: u32,
+    },
     /// `kind`'s `cpu-*` feature is not built — optimized-CPU scoring for
     /// it is unavailable in this configuration.
     FeatureDisabled(MetricKind),
@@ -268,6 +280,24 @@ impl CpuMetricState {
                     height,
                 })
             }
+            #[cfg(feature = "cpu-hdrvdp")]
+            MetricKind::Hdrvdp3 => {
+                let p = match params {
+                    MetricParams::Hdrvdp3(p) => p.clone(),
+                    _ => {
+                        return Err(Error::Metric {
+                            kind: "hdrvdp3",
+                            message: "expected MetricParams::Hdrvdp3 for Backend::Cpu hdrvdp3"
+                                .into(),
+                        });
+                    }
+                };
+                Ok(CpuMetricState::Hdrvdp3 {
+                    params: p,
+                    width,
+                    height,
+                })
+            }
             // Load-bearing for partial-feature builds (a metric whose
             // `cpu-*` feature is off lands here); unreachable only when
             // every arm compiles in, hence the localized allow.
@@ -397,6 +427,18 @@ impl CpuMetricState {
                 width,
                 height,
             }),
+            #[cfg(feature = "cpu-hdrvdp")]
+            // HDR-VDP-3 has NO default viewing conditions — `v3::Params`
+            // requires explicit task/viewing/encoding/emission. `new_hdr`
+            // carries no `MetricParams`, so the scorer can only be built via
+            // `Metric::new` with `MetricParams::Hdrvdp3`.
+            MetricKind::Hdrvdp3 => Err(Error::Metric {
+                kind: "hdrvdp3",
+                message: "hdrvdp3 requires explicit viewing conditions — \
+                          construct via Metric::new with \
+                          MetricParams::Hdrvdp3 (v3::Params)"
+                    .into(),
+            }),
             #[allow(unreachable_patterns)]
             other => Ok(CpuMetricState::FeatureDisabled(other)),
         }
@@ -419,6 +461,8 @@ impl CpuMetricState {
             CpuMetricState::Butter { .. } => MetricKind::Butter,
             #[cfg(feature = "cpu-hdrvdp")]
             CpuMetricState::Hdrvdp { .. } => MetricKind::Hdrvdp,
+            #[cfg(feature = "cpu-hdrvdp")]
+            CpuMetricState::Hdrvdp3 { .. } => MetricKind::Hdrvdp3,
             CpuMetricState::FeatureDisabled(k) => *k,
         }
     }
@@ -441,6 +485,8 @@ impl CpuMetricState {
             CpuMetricState::Butter { width, height, .. } => (*width, *height),
             #[cfg(feature = "cpu-hdrvdp")]
             CpuMetricState::Hdrvdp { width, height, .. } => (*width, *height),
+            #[cfg(feature = "cpu-hdrvdp")]
+            CpuMetricState::Hdrvdp3 { width, height, .. } => (*width, *height),
             CpuMetricState::FeatureDisabled(_) => (0, 0),
         }
     }
@@ -649,6 +695,53 @@ impl CpuMetricState {
                     Vec::new(),
                 ))
             }
+            #[cfg(feature = "cpu-hdrvdp")]
+            CpuMetricState::Hdrvdp3 {
+                params,
+                width,
+                height,
+            } => {
+                let (w, h) = (*width as usize, *height as usize);
+                // For `InputEncoding::Generic` the channel count comes from
+                // the emission table (upstream's rule).
+                let ch = params
+                    .encoding
+                    .channels()
+                    .unwrap_or_else(|| params.emission.channels());
+                let expected = w * h * ch;
+                if ref_nits.len() != expected || dis_nits.len() != expected {
+                    return Err(Error::Metric {
+                        kind: "hdrvdp3",
+                        message: format!(
+                            "nits buffer length mismatch: expected {expected} ({ch}ch) for {:?}, got {} / {}",
+                            params.encoding,
+                            ref_nits.len(),
+                            dis_nits.len()
+                        ),
+                    });
+                }
+                // Same IntegratedPuNits transport as v2 — interleaved
+                // absolute-luminance linear RGB in cd/m². v3 is f64
+                // end-to-end; the widen is one vec per side. The params'
+                // `InputEncoding` declares how those values are read —
+                // `RgbBt709` matches this transport exactly.
+                let r64: Vec<f64> = ref_nits.iter().map(|&v| f64::from(v)).collect();
+                let d64: Vec<f64> = dis_nits.iter().map(|&v| f64::from(v)).collect();
+                let res = hdrvdp::v3::hdrvdp3(&d64, &r64, w, h, params.as_ref()).map_err(|e| {
+                    Error::Metric {
+                        kind: "hdrvdp3",
+                        message: format!("hdrvdp3: {e}"),
+                    }
+                })?;
+                Ok((
+                    Score {
+                        value: res.q_jod,
+                        metric_name: "hdrvdp3",
+                        metric_version: env!("CARGO_PKG_VERSION"),
+                    },
+                    Vec::new(),
+                ))
+            }
             _ => Err(Error::Metric {
                 kind: "cpu",
                 message: "no integrated-PU nits path for this metric on the CPU dispatch;                           feed it per hdr::hdr_feeding()"
@@ -698,7 +791,7 @@ impl CpuMetricState {
                 ..
             } => compute_butter(params, *width, *height, r, d),
             #[cfg(feature = "cpu-hdrvdp")]
-            CpuMetricState::Hdrvdp { .. } => Err(Error::Metric {
+            CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => Err(Error::Metric {
                 kind: "hdrvdp",
                 message: "HDR-VDP consumes absolute luminance (cd/m²), not \
                           sRGB8 — feed interleaved absolute-nits f32 via \
@@ -762,7 +855,7 @@ impl CpuMetricState {
                 ..
             } => compute_butter_multi(params, *width, *height, r, d).map(|(s, p)| (s, Some(p))),
             #[cfg(feature = "cpu-hdrvdp")]
-            CpuMetricState::Hdrvdp { .. } => Err(Error::Metric {
+            CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => Err(Error::Metric {
                 kind: "hdrvdp",
                 message: "HDR-VDP consumes absolute luminance (cd/m²), not \
                           sRGB8 — feed interleaved absolute-nits f32 via \
@@ -801,7 +894,7 @@ impl CpuMetricState {
             // crate-internal) — and the umbrella's warm path is sRGB8-shaped,
             // which hdrvdp does not accept anyway.
             #[cfg(feature = "cpu-hdrvdp")]
-            CpuMetricState::Hdrvdp { .. } => false,
+            CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => false,
             CpuMetricState::FeatureDisabled(_) => false,
         }
     }
@@ -900,7 +993,7 @@ impl CpuMetricState {
                 })
             }
             #[cfg(feature = "cpu-hdrvdp")]
-            CpuMetricState::Hdrvdp { .. } => Err(Error::Metric {
+            CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => Err(Error::Metric {
                 kind: "hdrvdp",
                 message: "no warm-reference path for hdrvdp — one-shot nits \
                           scoring only (and this entry is sRGB8, which \
@@ -1042,7 +1135,7 @@ impl CpuMetricState {
                 })
             }
             #[cfg(feature = "cpu-hdrvdp")]
-            CpuMetricState::Hdrvdp { .. } => Err(Error::Metric {
+            CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => Err(Error::Metric {
                 kind: "hdrvdp",
                 message: "no warm-reference path for hdrvdp — one-shot nits \
                           scoring only (and this entry is sRGB8, which \
@@ -1069,7 +1162,7 @@ impl CpuMetricState {
             #[cfg(feature = "cpu-zensim")]
             CpuMetricState::Zensim { cached_ref, .. } => cached_ref.is_some(),
             #[cfg(feature = "cpu-hdrvdp")]
-            CpuMetricState::Hdrvdp { .. } => false,
+            CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => false,
             CpuMetricState::FeatureDisabled(_) => false,
         }
     }
@@ -1124,7 +1217,7 @@ impl CpuMetricState {
                 height,
             } => compute_cvvdp_linear(inner, *width, *height, r, d).map(|s| (s, None)),
             #[cfg(feature = "cpu-hdrvdp")]
-            CpuMetricState::Hdrvdp { .. } => Err(Error::Metric {
+            CpuMetricState::Hdrvdp { .. } | CpuMetricState::Hdrvdp3 { .. } => Err(Error::Metric {
                 kind: "hdrvdp",
                 message: "HDR-VDP consumes absolute nits, not display-relative \
                           linear planes — feed via compute_pu_nits_interleaved \

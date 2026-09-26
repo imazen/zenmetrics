@@ -36,9 +36,20 @@ image = { workspace = true, features = ["png", "jpeg", "exr"] }
 zenmetrics-corpus = { path = "../zenmetrics-corpus" }
 # Interleaved benchmarking with paired statistics (workspace standard).
 zenbench = "0.1.7"
+# AIC-4 column validation decodes corpus PNGs with zenpng (github main per
+# repo policy). `enough` must come from crates.io — zenpng's own manifest
+# requests the crates-io copy, and a second source would make its `Stop`
+# trait a different type.
+zenpng = { git = "https://github.com/imazen/zenpng", branch = "main" }
+enough = "0.4.2"
+imgref = { workspace = true }
+rgb = { workspace = true }
 
 [[example]]
 name = "score_corpus_ladder"
+
+[[example]]
+name = "aic4_vdp3"
 
 [[bench]]
 name = "pipeline"

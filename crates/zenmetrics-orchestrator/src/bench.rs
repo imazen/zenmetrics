@@ -286,6 +286,7 @@ fn backends_for_kind(kind: MetricKind) -> &'static [Backend] {
         // hdrvdp's own benchmarks (score() ~519ms serial / ~184ms
         // `parallel` at 1024²).
         MetricKind::Hdrvdp => &[],
+        MetricKind::Hdrvdp3 => &[],
     }
 }
 
@@ -447,6 +448,7 @@ fn metric_kind_tag(kind: MetricKind) -> &'static str {
         MetricKind::Iwssim => "iwssim",
         MetricKind::Zensim => "zensim",
         MetricKind::Hdrvdp => "hdrvdp",
+        MetricKind::Hdrvdp3 => "hdrvdp3",
     }
 }
 

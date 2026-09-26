@@ -853,6 +853,187 @@ fn to_umbrella_transfer(t: HdrTransfer) -> zenmetrics_api::hdr::HdrTransfer {
     }
 }
 
+// ─── HDR-VDP-3 CLI parameter surface ─────────────────────────────────────────
+//
+// HDR-VDP-3 has NO default viewing conditions — the score depends on the
+// display geometry, task, colour encoding, emission model, surround and
+// observer age, and every one materially changes the number. The
+// `--hdrvdp3-*` flag group is therefore required on `--hdr` subcommands
+// when `hdrvdp3` is selected; `HDRVDP3_CLI` stores the parse result
+// process-wide (CLI args are parsed once per run).
+#[cfg(feature = "cpu-hdrvdp")]
+static HDRVDP3_CLI: std::sync::OnceLock<HdrVdp3Args> = std::sync::OnceLock::new();
+
+/// The `--hdrvdp3-*` flag group, flattened into every `--hdr` subcommand.
+/// `--hdrvdp3-ppd` is required to score `hdrvdp3`; the rest default to the
+/// jpeg-ai-qaf `metrics.py` harness configuration.
+#[cfg(feature = "cpu-hdrvdp")]
+#[derive(Debug, Clone, Default, clap::Args)]
+pub struct HdrVdp3Args {
+    /// HDR-VDP-3: pixels per degree of visual angle — REQUIRED when
+    /// `--metric hdrvdp3` scores (there is deliberately no default). Derive
+    /// it from display geometry: for a `diag`-inch `W×H` display viewed at
+    /// `d` metres, `ppd = res_h / (2·atan(h/(2d))·180/π)`; e.g. the AIC-4 /
+    /// jpeg-ai-qaf 4K defaults (64.5in, 3840×2160, 1.325m) give ≈ 64.06.
+    #[arg(long)]
+    pub hdrvdp3_ppd: Option<f64>,
+    /// HDR-VDP-3 task — `quality` (default), `side-by-side` or `flicker`.
+    #[arg(long, value_enum, default_value = "quality")]
+    pub hdrvdp3_task: HdrVdp3Task,
+    /// HDR-VDP-3 input encoding — the colour space the nits feed is in:
+    /// `rgb-bt709` (default; the IntegratedPuNits transport is linear
+    /// BT.709 nits), `rgb-bt2020`, `rgb-native` or `xyz`.
+    #[arg(long, value_enum, default_value = "rgb-bt709")]
+    pub hdrvdp3_input: HdrVdp3Input,
+    /// HDR-VDP-3 display emission model — `ccfl-lcd`, `crt`, `led-lcd`,
+    /// `led-lcd-srgb`, `led-lcd-wcg`, `oled`, `d65`. Default: the encoding's
+    /// upstream implicit choice (`led-lcd-srgb` for rgb-bt.709/rgb-native,
+    /// `oled` for rgb-bt.2020/xyz).
+    #[arg(long, value_enum)]
+    pub hdrvdp3_emission: Option<HdrVdp3Emission>,
+    /// HDR-VDP-3 observer age in years (default 24 — upstream's implicit
+    /// value; feeds the lens/photoreceptor age models).
+    #[arg(long, default_value = "24")]
+    pub hdrvdp3_age: u8,
+    /// HDR-VDP-3 surround luminance: `none` (default), `mean` (geometric
+    /// mean of the reference), or an absolute cd/m² value.
+    #[arg(long, default_value = "none")]
+    pub hdrvdp3_surround: String,
+}
+
+/// HDR-VDP-3 `--hdrvdp3-task` values.
+#[cfg(feature = "cpu-hdrvdp")]
+#[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
+pub enum HdrVdp3Task {
+    /// `quality` — the standard quality-prediction task.
+    #[default]
+    Quality,
+    /// `side-by-side` — side-by-side presentation.
+    SideBySide,
+    /// `flicker` — flicker (temporal) detection task.
+    Flicker,
+}
+
+/// HDR-VDP-3 `--hdrvdp3-input` values — the encoding the nits feed is in.
+#[cfg(feature = "cpu-hdrvdp")]
+#[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
+pub enum HdrVdp3Input {
+    /// Absolute-luminance linear RGB in BT.709 primaries (the
+    /// IntegratedPuNits transport — default).
+    #[default]
+    RgbBt709,
+    /// Absolute-luminance linear RGB in BT.2020 primaries.
+    RgbBt2020,
+    /// Absolute-luminance in the display's native primaries.
+    RgbNative,
+    /// Absolute CIE 1931 XYZ tristimulus.
+    Xyz,
+}
+
+/// HDR-VDP-3 `--hdrvdp3-emission` values — vendored display spectra.
+#[cfg(feature = "cpu-hdrvdp")]
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum HdrVdp3Emission {
+    CcflLcd,
+    Crt,
+    LedLcd,
+    LedLcdSrgb,
+    LedLcdWcg,
+    Oled,
+    D65,
+}
+
+/// Install the parsed `--hdrvdp3-*` flags. Called once by each `--hdr`
+/// subcommand's handler after arg parsing; a no-op if called twice (CLI
+/// args are process-global).
+#[cfg(feature = "cpu-hdrvdp")]
+pub fn set_hdrvdp3_cli_args(args: HdrVdp3Args) {
+    let _ = HDRVDP3_CLI.set(args);
+}
+
+/// Build `hdrvdp::v3::Params` from the installed `--hdrvdp3-*` flags.
+/// Errors (loudly, at score time) when `--hdrvdp3-ppd` was not given —
+/// there is no defensible default viewing geometry.
+#[cfg(feature = "cpu-hdrvdp")]
+fn hdrvdp3_params_from_cli()
+-> Result<Box<zenmetrics_api::hdrvdp_cpu::v3::Params>, Box<dyn std::error::Error>> {
+    use zenmetrics_api::hdrvdp_cpu::v3;
+    let args = HDRVDP3_CLI
+        .get()
+        .ok_or("hdrvdp3: --hdrvdp3-* flags unavailable on this subcommand (internal wiring gap)")?;
+    let ppd = args.hdrvdp3_ppd.ok_or(
+        "hdrvdp3 requires an explicit viewing geometry: pass \
+         --hdrvdp3-ppd <pixels-per-degree> (e.g. 64.06 for the jpeg-ai-qaf \
+         64.5in-4K@1.325m rig; `hdrvdp::v3::pix_per_deg` documents the \
+         derivation). No default exists by design.",
+    )?;
+    let task = match args.hdrvdp3_task {
+        HdrVdp3Task::Quality => v3::Task::Quality,
+        HdrVdp3Task::SideBySide => v3::Task::SideBySide,
+        HdrVdp3Task::Flicker => v3::Task::Flicker,
+    };
+    let encoding = match args.hdrvdp3_input {
+        HdrVdp3Input::RgbBt709 => v3::InputEncoding::RgbBt709,
+        HdrVdp3Input::RgbBt2020 => v3::InputEncoding::RgbBt2020,
+        HdrVdp3Input::RgbNative => v3::InputEncoding::RgbNative,
+        HdrVdp3Input::Xyz => v3::InputEncoding::Xyz,
+    };
+    let emission = match args.hdrvdp3_emission {
+        Some(HdrVdp3Emission::CcflLcd) => v3::Emission::Preset(v3::DisplayPreset::CcflLcd),
+        Some(HdrVdp3Emission::Crt) => v3::Emission::Preset(v3::DisplayPreset::Crt),
+        Some(HdrVdp3Emission::LedLcd) => v3::Emission::Preset(v3::DisplayPreset::LedLcd),
+        Some(HdrVdp3Emission::LedLcdSrgb) => v3::Emission::Preset(v3::DisplayPreset::LedLcdSrgb),
+        Some(HdrVdp3Emission::LedLcdWcg) => v3::Emission::Preset(v3::DisplayPreset::LedLcdWcg),
+        Some(HdrVdp3Emission::Oled) => v3::Emission::Preset(v3::DisplayPreset::Oled),
+        Some(HdrVdp3Emission::D65) => v3::Emission::Preset(v3::DisplayPreset::D65),
+        None => v3::Emission::default_for(encoding),
+    };
+    let surround = match args.hdrvdp3_surround.as_str() {
+        "none" => v3::Surround::None,
+        "mean" => v3::Surround::Mean,
+        v => v3::Surround::Uniform(v.parse::<f64>().map_err(|_| {
+            format!("--hdrvdp3-surround: expected `none`, `mean` or a cd/m² value, got '{v}'")
+        })?),
+    };
+    Ok(Box::new(v3::Params::new(
+        task,
+        v3::ViewingConditions::new(ppd, surround, args.hdrvdp3_age),
+        encoding,
+        emission,
+        v3::Options::reference(task),
+    )?))
+}
+
+/// Score `hdrvdp3` over the absolute-nits pair via the params-carrying
+/// `Metric::new` + `MetricParams::Hdrvdp3` path (the params-free
+/// `new_cpu_hdr` refuses — v3 has no default viewing conditions).
+#[cfg(feature = "cpu-hdrvdp")]
+fn score_hdrvdp3_pair(
+    r: &NitsImage,
+    d: &NitsImage,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> {
+    if r.width != d.width || r.height != d.height {
+        return Err(format!(
+            "hdrvdp3: reference ({}×{}) and distorted ({}×{}) differ in size",
+            r.width, r.height, d.width, d.height
+        )
+        .into());
+    }
+    let params = hdrvdp3_params_from_cli()?;
+    let mut m = zenmetrics_api::Metric::new(
+        zenmetrics_api::MetricKind::Hdrvdp3,
+        zenmetrics_api::Backend::Cpu,
+        r.width,
+        r.height,
+        zenmetrics_api::MetricParams::Hdrvdp3(params),
+    )?;
+    let scores = m.compute_pu_nits_interleaved_multi(&r.rgb, &d.rgb)?;
+    Ok(vec![(
+        crate::metrics::MetricKind::Hdrvdp3.column_names()[0],
+        scores.primary(),
+    )])
+}
+
 /// Score an HDR pair through the umbrella's HDR-aware [`zenmetrics_api::hdr::HdrScorer`],
 /// mapping the lossless `Scores` back to the CLI's `(column, value)` output rows
 /// using the canonical [`column_names`](crate::metrics::MetricKind::column_names)
@@ -866,6 +1047,14 @@ pub fn score_via_hdr_scorer(
     transfer: HdrTransfer,
     runtime: crate::metrics::GpuRuntime,
 ) -> Option<Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>>> {
+    // hdrvdp3 needs explicit viewing conditions (`v3::Params`) — the
+    // params-free `HdrScorer`/`new_cpu_hdr` route cannot express them, so
+    // it intercepts here ahead of the umbrella (an error is still `Some`,
+    // never a silent u8-shell fallback).
+    #[cfg(feature = "cpu-hdrvdp")]
+    if metric == crate::metrics::MetricKind::Hdrvdp3 {
+        return Some(score_hdrvdp3_pair(r, d));
+    }
     let kind = to_umbrella_kind(metric)?;
     let backend = if metric.requires_gpu() {
         // GPU metric variant → the runtime's backend, but only cuda/wgpu: the

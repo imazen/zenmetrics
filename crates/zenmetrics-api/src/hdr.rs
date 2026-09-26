@@ -375,6 +375,9 @@ pub fn hdr_feeding(metric: crate::MetricKind, backend: crate::Backend) -> HdrFee
         // PU21). CPU-only kind — the measured UPIQ feeding
         // (benchmarks/hdrvdp_upiq_2026-09-24.md).
         M::Hdrvdp => HdrFeeding::IntegratedPuNits,
+        // hdrvdp3 — same transport (absolute interleaved nits; the params'
+        // `InputEncoding` declares how the values are read).
+        M::Hdrvdp3 => HdrFeeding::IntegratedPuNits,
         // iwssim, BOTH classes — the CPU pipeline (`score_gray`) and the GPU
         // pipeline (`compute_gray`) are gray-f32-native, so float PU(luma)
         // routes everywhere. The u8 shell measured 0.628 vs 0.808 float on

@@ -2,7 +2,9 @@
 
 A pure-Rust CPU port of **HDR-VDP-2.2** (Mantiuk, Kim, Rempel &
 Heidrich, SIGGRAPH 2011; quality recalibrated by Narwaria et al., JEI 2015) —
-`f32` planes and intermediates, `f64` scalar tables and reductions.
+`f32` planes and intermediates, `f64` scalar tables and reductions — plus
+**HDR-VDP-3.0.7** in `hdrvdp::v3` (display-adaptive revision; `f64`
+end-to-end, see below).
 
 HDR-VDP-2 predicts two things for a pair of images given in **absolute
 luminance**: *visibility* — the per-pixel probability that a human notices a
@@ -111,6 +113,42 @@ and the full perf record live in `benchmarks/` (`4cf99288`).
   "400× threshold". `P_map`'s spatial shape is unaffected.
 - **An identical pair scores `res.Q = 100` exactly** — every `msre` is 0 so
   every `(log(0+ε) − log ε)` term vanishes.
+
+## HDR-VDP-3 (`hdrvdp::v3`)
+
+`v3` is the display-adaptive third revision — a different pipeline (sp0
+isotropic pyramid, photoreceptor LUTs per band, per-band mutual masking,
+task-dependent modelling) on `f64` end-to-end, reimplemented from the
+jpeg-ai-qaf `VDP3/` numpy port @ `0628a6b` and **verified against the
+official MATLAB HDR-VDP-3.0.7 release** (bit-equal at print precision on
+AIC-4 pairs; 21-case golden corpus worst |ΔQ_JOD| = 1.6e-13 covering
+every encoding × task × emission × surround combination).
+
+Two API differences from v2 are deliberate:
+
+- **No default viewing geometry.** `v3::Params` requires
+  `ViewingConditions` — `pix_per_deg` (there is no v3 default; the score
+  moves materially with it), `Surround` (`none`/`mean`/absolute cd/m²)
+  and observer age — plus an explicit `Task` (`quality`/`side-by-side`/
+  `flicker`), `InputEncoding` (`rgb-bt709`/`rgb-bt2020`/`rgb-native`/`xyz`/
+  `luminance`) and `Emission` (preset or custom spectra).
+- **Output is `q_jod` on [0,10]** (10 = identical) — the upstream
+  `Q_JOD`, *not* v2's `res.Q` [0,100]. The CLI column
+  (`hdrvdp3_jod_imazen_v*`) keeps them distinct.
+
+CLI: `--metric hdrvdp3 --hdr --hdrvdp3-ppd <f64>` (required) with
+`--hdrvdp3-task quality|side-by-side|flicker`,
+`--hdrvdp3-input rgb-bt709|rgb-bt2020|rgb-native|xyz`,
+`--hdrvdp3-emission ccfl-lcd|crt|led-lcd|led-lcd-srgb|led-lcd-wcg|oled|d65`,
+`--hdrvdp3-age <u8>` (24) and `--hdrvdp3-surround none|mean|<cd/m²>` (none).
+Defaults match the jpeg-ai-qaf harness configuration.
+
+Caveats carried over from the reference (full record in
+[`DIVERGENCES.md`](../../DIVERGENCES.md)): the `'srgb-display'` encoding
+string is case-sensitive inconsistently upstream; `ignore_freqs_lower_than`
+crashes the reference (`D` unbound) — ours handles it; the published
+AIC-4 `HDR_VDP_3` column is not reproduced under any recovered config
+(we match MATLAB 3.0.7 exactly — the column is a different run config).
 
 ## Units
 

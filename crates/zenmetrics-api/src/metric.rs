@@ -160,6 +160,14 @@ pub enum MetricKind {
     /// absolute-luminance input via the HDR front-end; sRGB8 input
     /// is rejected.
     Hdrvdp,
+    /// HDR-VDP-3.0.7 — `hdrvdp3` (`hdrvdp::v3`; native CPU only).
+    /// Emits `Q_JOD` on [0, 10] (10 = identical). Consumes
+    /// absolute-luminance input via the HDR front-end; sRGB8 input is
+    /// rejected. Unlike v2 there is **no default viewing geometry** —
+    /// construct via `Metric::new` with `MetricParams::Hdrvdp3`
+    /// (`v3::Params` requires explicit `ViewingConditions`/`Task`/
+    /// `InputEncoding`/`Emission`).
+    Hdrvdp3,
 }
 
 impl MetricKind {
@@ -173,6 +181,7 @@ impl MetricKind {
             MetricKind::Iwssim => "iwssim",
             MetricKind::Zensim => "zensim",
             MetricKind::Hdrvdp => "hdrvdp",
+            MetricKind::Hdrvdp3 => "hdrvdp3",
         }
     }
 
@@ -187,6 +196,7 @@ impl MetricKind {
             MetricKind::Iwssim => "Iwssim",
             MetricKind::Zensim => "Zensim",
             MetricKind::Hdrvdp => "Hdrvdp",
+            MetricKind::Hdrvdp3 => "Hdrvdp3",
         }
     }
 }
@@ -385,6 +395,12 @@ pub enum MetricParams {
     /// carry `()` because their `-gpu` param type is absent).
     #[cfg(feature = "cpu-hdrvdp")]
     Hdrvdp(Box<hdrvdp::Params>),
+    /// [`hdrvdp::v3::Params`] passthrough — HDR-VDP-3's params are
+    /// *all-explicit* (`Params::new` requires task, viewing conditions,
+    /// input encoding, emission and options), so this variant is the only
+    /// way to construct the scorer; [`try_default_for`] refuses.
+    #[cfg(feature = "cpu-hdrvdp")]
+    Hdrvdp3(Box<hdrvdp::v3::Params>),
 }
 
 /// cvvdp parameters bound to an explicitly selected display
@@ -445,6 +461,8 @@ impl MetricParams {
             MetricParams::Iwssim(_) => MetricKind::Iwssim,
             #[cfg(feature = "cpu-hdrvdp")]
             MetricParams::Hdrvdp(_) => MetricKind::Hdrvdp,
+            #[cfg(feature = "cpu-hdrvdp")]
+            MetricParams::Hdrvdp3(_) => MetricKind::Hdrvdp3,
             #[cfg(any(feature = "zensim", feature = "cpu-zensim"))]
             MetricParams::Zensim(_) => MetricKind::Zensim,
             #[cfg(not(any(
@@ -524,6 +542,12 @@ impl MetricParams {
             MetricKind::Hdrvdp => Ok(Self::Hdrvdp(Box::new(hdrvdp::Params::new(
                 hdrvdp::DEFAULT_PIX_PER_DEG,
             )))),
+            #[cfg(feature = "cpu-hdrvdp")]
+            // No default viewing condition — HDR-VDP-3's `v3::Params` is
+            // all-explicit by design (pixels_per_degree, task, encoding,
+            // emission and options are all required fields). Construct via
+            // `Metric::new` with `MetricParams::Hdrvdp3`.
+            MetricKind::Hdrvdp3 => Err(Error::DisplayRequired { kind: "hdrvdp3" }),
             #[allow(unreachable_patterns)]
             other => Err(Error::MetricNotEnabled { kind: other.tag() }),
         }
@@ -1619,7 +1643,7 @@ impl MetricInner {
             ))]
             MetricInner::Cpu(s, _) => Err(Error::Metric {
                 kind: "cpu",
-                message: if s.kind() == MetricKind::Hdrvdp {
+                message: if matches!(s.kind(), MetricKind::Hdrvdp | MetricKind::Hdrvdp3) {
                     "HDR-VDP consumes absolute nits, not display-relative \
                      linear planes — feed via compute_pu_nits_interleaved(_multi)"
                         .to_string()
@@ -1719,7 +1743,7 @@ impl MetricInner {
             ))]
             MetricInner::Cpu(s, _) => Err(Error::Metric {
                 kind: "cpu",
-                message: if s.kind() == MetricKind::Hdrvdp {
+                message: if matches!(s.kind(), MetricKind::Hdrvdp | MetricKind::Hdrvdp3) {
                     "HDR-VDP consumes absolute nits, not display-relative \
                      linear planes — feed via compute_pu_nits_interleaved(_multi)"
                         .to_string()

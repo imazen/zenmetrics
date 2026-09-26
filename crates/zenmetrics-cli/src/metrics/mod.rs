@@ -231,6 +231,19 @@ pub enum MetricKind {
     /// UPIQ protocol). Emits `hdrvdp_imazen_v*`. No GPU twin.
     #[value(name = "hdrvdp")]
     Hdrvdp,
+    /// HDR-VDP-3.0.7 (Q_JOD scale 0–10, 10 = identical) — CPU implementation
+    /// via the in-tree `hdrvdp::v3` module (native port of the
+    /// `jpeg-ai-qaf` `VDP3` NumPy reference, itself a port of the official
+    /// HDR-VDP-3.0.7 MATLAB release). **HDR-only input** like `hdrvdp`
+    /// (absolute-luminance nits feed). Unlike v2 there is **no default
+    /// viewing geometry**: `--hdrvdp3-ppd` is required, and
+    /// `--hdrvdp3-task`/`--hdrvdp3-input`/`--hdrvdp3-emission`/
+    /// `--hdrvdp3-age`/`--hdrvdp3-surround` select the rest of the
+    /// upstream parameter surface (defaults match the jpeg-ai-qaf
+    /// `metrics.py` harness: task=quality, rgb-bt.709, led-lcd-srgb,
+    /// age=24, surround=none). Emits `hdrvdp3_jod_imazen_v*`. No GPU twin.
+    #[value(name = "hdrvdp3")]
+    Hdrvdp3,
     /// PSNR-HVS / PSNR-HVS-M (Egiazarian et al. VPQM-06, Ponomarenko et al.
     /// VPQM-07) — CPU implementation via the in-tree `psnrhvs` crate (a port
     /// of the authors' `psnrhvsm.m`). PSNR-like: dB scale, higher = better,
@@ -399,6 +412,7 @@ impl MetricKind {
             MetricKind::MsGmsd,
             MetricKind::MsGmsdc,
             MetricKind::Hdrvdp,
+            MetricKind::Hdrvdp3,
             MetricKind::Psnrhvs,
             MetricKind::PsnrhvsY,
             MetricKind::Haarpsi,
@@ -448,6 +462,7 @@ impl MetricKind {
             MetricKind::MsGmsd => "ms-gmsd",
             MetricKind::MsGmsdc => "ms-gmsdc",
             MetricKind::Hdrvdp => "hdrvdp",
+            MetricKind::Hdrvdp3 => "hdrvdp3",
             MetricKind::Psnrhvs => "psnrhvs",
             MetricKind::PsnrhvsY => "psnrhvs-y",
             MetricKind::Haarpsi => "haarpsi",
@@ -556,6 +571,7 @@ impl MetricKind {
             MetricKind::MsGmsd => &["ms_gmsd_paper_cpu_imazen_v0_1_0"],
             MetricKind::MsGmsdc => &["ms_gmsdc_paper_cpu_imazen_v0_1_0"],
             MetricKind::Hdrvdp => HDRVDP_CPU_COLUMNS,
+            MetricKind::Hdrvdp3 => HDRVDP3_CPU_COLUMNS,
             MetricKind::Psnrhvs => PSNRHVS_CPU_COLUMNS,
             MetricKind::PsnrhvsY => PSNRHVSY_CPU_COLUMNS,
             MetricKind::Haarpsi => HAARPSI_CPU_COLUMNS,
@@ -833,6 +849,14 @@ const MDSI_CPU_COLUMNS: &[&str] = &["mdsi"];
 const HDRVDP_CPU_COLUMNS: &[&str] = &[zenmetrics_api::hdrvdp_cpu::HDRVDP_COLUMN_NAME];
 #[cfg(not(feature = "cpu-hdrvdp"))]
 const HDRVDP_CPU_COLUMNS: &[&str] = &["hdrvdp"];
+
+// Versioned **CPU** HDR-VDP-3 column name (`hdrvdp::v3::HDRVDP3_COLUMN_NAME`,
+// `hdrvdp3_jod_imazen_v<MAJOR>_<MINOR>_<PATCH>` — `Q_JOD` units, distinct
+// from v2's 0–100 correlate, overridable via `HDRVDP3_IMPL_TAG`).
+#[cfg(feature = "cpu-hdrvdp")]
+const HDRVDP3_CPU_COLUMNS: &[&str] = &[zenmetrics_api::hdrvdp_cpu::v3::HDRVDP3_COLUMN_NAME];
+#[cfg(not(feature = "cpu-hdrvdp"))]
+const HDRVDP3_CPU_COLUMNS: &[&str] = &["hdrvdp3_jod"];
 
 // Versioned **CPU** PSNR-HVS column names (`psnrhvs::PSNRHVS_COLUMN_NAME` +
 // `PSNRHVSM_COLUMN_NAME`; the masked score rides along from the same pass).
@@ -1858,8 +1882,19 @@ pub fn run_metric(
             HDRVDP_CPU_COLUMNS[0],
             run_cpu_native_via_umbrella(zenmetrics_api::MetricKind::Hdrvdp, reference, distorted)?,
         )]),
+        // HDR-VDP-3 has no sRGB8 meaning at all — absolute-luminance nits +
+        // explicit viewing conditions only. `--hdr` + `--hdrvdp3-*` is the
+        // route; this arm fails loud rather than misreading code values.
+        #[cfg(feature = "cpu-hdrvdp")]
+        MetricKind::Hdrvdp3 => Err("hdrvdp3 consumes absolute luminance \
+            (cd/m²) with explicit viewing conditions — use `--hdr` plus \
+            `--hdrvdp3-ppd <pix/deg>` (and the other `--hdrvdp3-*` flags); \
+            sRGB8 input is not a valid feeding"
+            .into()),
         #[cfg(not(feature = "cpu-hdrvdp"))]
         MetricKind::Hdrvdp => Err(disabled_msg("hdrvdp", "cpu-hdrvdp` (native SIMD CPU)")),
+        #[cfg(not(feature = "cpu-hdrvdp"))]
+        MetricKind::Hdrvdp3 => Err(disabled_msg("hdrvdp3", "cpu-hdrvdp` (native SIMD CPU)")),
 
         // PSNR-HVS: direct call into the in-tree crate (no umbrella, no
         // GPU twin — same shape as GMSD). Both the plain and masked

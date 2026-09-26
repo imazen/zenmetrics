@@ -1,0 +1,17 @@
+{
+ "w": 96,
+ "h": 96,
+ "c": 2,
+ "encoding": "generic",
+ "ppd": 30.0,
+ "task": "quality",
+ "options": {},
+ "extra": {
+  "spectral_emission": "/home/lilith/work/zen/zenmetrics/crates/hdrvdp/tests/data/v3/custom_emission_2ch.csv"
+ },
+ "flags": "custom-emission",
+ "Q": 6.210051290523478,
+ "Q_JOD": 7.133523607994109,
+ "P_map_mean": 0.8522365243255522,
+ "P_map_max": 0.9898920293687439
+}

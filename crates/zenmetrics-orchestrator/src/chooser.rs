@@ -109,6 +109,7 @@ pub(crate) fn cpu_wins_oneshot_max_pixels(metric: MetricKind) -> u64 {
         // `cpu_feature_enabled_for` gate below still reports it unavailable
         // through THIS crate's sRGB8-shaped adapter).
         MetricKind::Hdrvdp => u64::MAX,
+        MetricKind::Hdrvdp3 => u64::MAX,
     }
 }
 
@@ -338,6 +339,7 @@ pub(crate) fn supported_backends(metric: MetricKind) -> &'static [Backend] {
         // umbrella's `Backend::Cpu` dispatch, not this crate's sRGB8
         // adapter — `cpu_feature_enabled_for` reports that honestly.
         MetricKind::Hdrvdp => &[Backend::Cpu],
+        MetricKind::Hdrvdp3 => &[Backend::Cpu],
     }
 }
 
@@ -358,6 +360,7 @@ fn cpu_feature_enabled_for(metric: MetricKind) -> bool {
         // (absolute nits only), so there is deliberately no `cpu-hdrvdp`
         // feature here — the umbrella `Backend::Cpu` dispatch serves it.
         MetricKind::Hdrvdp => false,
+        MetricKind::Hdrvdp3 => false,
     }
 }
 
