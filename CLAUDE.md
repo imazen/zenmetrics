@@ -1276,7 +1276,14 @@ rustc/clippy warnings, fix them in the same commit; don't leave them for
 "later". New `pub` items need a concrete current caller — default to
 `pub(crate)` (`unreachable_pub` is warned workspace-wide); the api-guard PR
 bot flags new surface plus pub fields, unsealed traits, missing docs, and
-re-export growth. `just coverage` (llvm-cov) measures test coverage — check
+re-export growth. `unsafe_code` is `forbid` workspace-wide — unsafe belongs
+in magetypes/archmage/disjointmut. Crates that still carry unsafe (the
+GPU-dispatch / FFI-oracle / SIMD debt: *-gpu, mdctpsnr, zenfleet-vastai,
+zenmetrics-cli, zenmetrics-api, zenmetrics-orchestrator, cvvdp, vmaf,
+msssim) keep it compiling via a mirrored lint block with an explicit
+`unsafe_code = "allow"` — that allow is debt to remove, not a license, and
+new crates get the forbid automatically. `just coverage` (llvm-cov)
+measures test coverage — check
 it before refactoring anything without tests. Heavy stages honor
 `~/work/zen/scripts/run-heavy` conventions: wrap `just quality` runs in it
 when the box is busy.
