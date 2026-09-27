@@ -106,7 +106,7 @@ requires ≥ 120).
    those exact PNGs and scores each `(situation, display)` cell with
    pycvvdp v0.5.4 — `metric.predict(dist, ref, dim_order="HWC")` at
    `display_name=<upstream_name>` — writing `conformance_goldens.json`.
-3. The conformance test (`tests/conformance.rs`, feature
+3. The conformance test (`crates/cvvdp-conformance/tests/conformance.rs`, feature
    `conformance-goldens`) fetches the goldens from R2, then for every
    cell rebuilds the situation **in-process** (the generator is
    deterministic, so in-process bytes are byte-identical to the

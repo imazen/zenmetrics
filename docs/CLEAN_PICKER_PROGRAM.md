@@ -43,6 +43,10 @@ modular ablation pending (non-photo corpus). png: needs quantize axis + size mod
 corpus, and the per-codec deliverables so a blind/forgetful session does the right
 thing by default. Set 2026-06-26.
 
+`<za>` below = the sibling `zenanalyze` checkout (`~/work/zen/zenanalyze` in the
+standard workspace layout); `<codec>` = the codec repo dir (`zenjpeg`, `zenjxl`,
+`zenavif`, `zenwebp`).
+
 ## THE SPLIT RULE (one source of truth: `scripts/picker/origin_split.py`)
 
 Split is **by ORIGIN image, by the last digit of the origin's numeric id**, and
@@ -119,7 +123,7 @@ variants once palette-off became a reachable, learnable choice (checked directly
 against the merged Pareto data, not just the trained picker's behavior).
 
 **Result — the picker's OVERALL K=1 gate is still open, but the residual is NOT a
-palette problem:** retrained (`train_hybrid.py --hidden 256 --verify-k 1`) K=1 =
+palette problem:** retrained (`<za>/zentrain/tools/train_hybrid.py --hidden 256 --verify-k 1`) K=1 =
 mean 1.54% / p50 0.19% / p90 3.40% / p99 28.9% / **max 74.4%**; `LOW_ARGMIN` safety
 violation fires (val argmin_acc 9.9% < 10% floor — expected mechanically, since the
 palette axis doubles the config space with mostly-identical-bytes duplicates,
@@ -133,8 +137,9 @@ palette was one real, now-fixed cause; a second, general effort/predictor-accura
 gap remains and needs its own investigation.** `.bin` NOT committed — the safety
 violation is real and the gate isn't clean yet.
 
-Artifacts: `docs/CLEAN_PICKER_PROGRAM.md` (this entry), `zenjxl_modular_picker_config.py`
-(zenanalyze, 120-config regex + `palette_off` categorical axis), training log
+Artifacts: `docs/CLEAN_PICKER_PROGRAM.md` (this entry),
+`<za>/zentrain/examples/zenjxl_modular_picker_config.py`
+(120-config regex + `palette_off` categorical axis), training log
 `/tmp/jxl_modular_retrain2_2026-07-03.log`, per-row overhead dump
 `/tmp/jxl_modular_overheads_2026-07-03.csv`.
 | zenjpeg     | clean-corpus sweep PENDING (no held-out data exists) | older only | ❌ | ❌ |
@@ -222,7 +227,8 @@ What the catastrophic `WORST_ROW` tail actually is (measured on avif, reproduced
 - **NOT tiny-driven** — of avif's 4 rows >200%, all are *medium*; of 119 rows >100%, only 1
   is tiny (tiny is 29% of all rows). The #49 fix worked.
 - **NOT OOD** — the worst-row images are in-distribution on all 50 model features, so the
-  existing `KnownGoodFallback`/OOD-bounds rescue (zenpredict `bounds.rs`/`safety.rs`) does
+  existing `KnownGoodFallback`/OOD-bounds rescue (zenpredict
+  `<za>/zenpredict/src/{bounds,safety}.rs`) does
   NOT catch them.
 - **NO safe default cell exists** — the most-robust fixed cell still has a huge worst-case
   (avif 377%, webp **2317%**), so a fixed-fallback can't bound it either. The picker reduces
@@ -272,8 +278,8 @@ commit `.bin`s in progress. jpeg zensim already bakes clean (predictable cell sp
    / `hetzner_cpu_sweep.sh`) for CPU metrics; vast for GPU metrics (cvvdp etc. — CPU
    path now works too, C1/C1b). $ cap: small; kill idle boxes.
 3. **Pareto:** `scripts/picker/omni_to_pareto.py` (joins features; target metric).
-4. **Train:** `train_hybrid.py --codec-config <cfg>` — split via `origin_split`.
-5. **Bake:** `tools/bake_picker.py` → `.bin`; **commit the `.bin`**.
+4. **Train:** `<za>/zentrain/tools/train_hybrid.py --codec-config <cfg>` — split via `origin_split`.
+5. **Bake:** `<za>/tools/bake_picker.py` → `.bin`; **commit the `.bin`**.
 6. Commit constantly; `jj git fetch` often (a repo cleanup merge may be landing).
 
 ## Hetzner ML-TRAINING fleet — one box per codec, IN PARALLEL (`scripts/train/`)
@@ -343,8 +349,8 @@ an unprovenanced corpus into training.
    scalar-axis plans (see docs/PLAN_SWEEPS.md). Hetzner CPU fleet (now cvvdp-capable) +/- vast.
 4. **Pareto:** `omni_to_pareto.py --metric-col score_<m>` (per metric).
 5. **Train:** `PYTHONPATH=scripts/picker:scripts/picker/configs:<za>/zentrain/{tools,examples} \
-   PICKER_TARGET=<m> python3 train_hybrid.py --codec-config <cfg>` → reports val + TEST.
-6. **Bake:** `bake_picker.py` → `.bin`; **commit into `<codec>/benchmarks/`**. TODO before v1:
+   PICKER_TARGET=<m> python3 <za>/zentrain/tools/train_hybrid.py --codec-config <cfg>` → reports val + TEST.
+6. **Bake:** `<za>/tools/bake_picker.py` → `.bin`; **commit into `<codec>/benchmarks/`**. TODO before v1:
    have train_hybrid emit `output_bounds` (per-output p01/p99 on val) so the bake's OOD-on-output
    check isn't a no-op (current bins warn "no output_bounds").
 
@@ -390,7 +396,7 @@ marker + logs `/tmp/chunk_fleet_monitor.log`. **A blind session: check boxes via
 
 **PIPELINE VALIDATED 2026-06-26 — zenjpeg clean picker SHIPPED.** Held-out TEST (7/9 origins):
 argmin 0.47% / top-2 0.235% / top-3 0.165%, val→test +0.01pp (generalizes). Committed to
-zenjpeg `main` 50c61658 (`benchmarks/zenjpeg_picker_v0.4_clean-imazen26-evenodd_2026-06-26.bin`).
+zenjpeg `main` 50c61658 (`zenjpeg/benchmarks/zenjpeg_picker_v0.4_clean-imazen26-evenodd_2026-06-26.bin`).
 TWO gotchas hit + fixed (do these for avif/jxl too):
 1. `clean_features.tsv` (from `extract_features_for_picker` built `--features api`) has `name@hex8`
    columns + an `image_path` key — but `omni_to_pareto` needs **`feat_<name>` cols + a `variant_name`
@@ -411,9 +417,9 @@ the deferred outer-loop fix), ~5h wall for avif; still correct + within budget.
    /mnt/v/output/clean-picker-corpus-2026-06-26/clean_features.tsv --metric-col score_zensim
    --out-pareto … --out-features …` (variant_name join is exact: omni `/data/o_<stem>.scaleWxH.png`
    → `o_<stem>.scaleWxH` == clean_features variant_name).
-3. `train_hybrid.py --codec-config <codec>_picker` (PYTHONPATH incl. scripts/picker) — origin
+3. `<za>/zentrain/tools/train_hybrid.py --codec-config <codec>_picker` (PYTHONPATH incl. scripts/picker) — origin
    split auto (even=train / 1,3,5=val / 7,9=test), reports val + TEST top-3-verify.
-4. `bake_picker.py` → `.bin`; **commit the `.bin` into the codec crate** (`<codec>/benchmarks/`).
+4. `<za>/tools/bake_picker.py` → `.bin`; **commit the `.bin` into the codec crate** (`<codec>/benchmarks/`).
 
 **Remaining after the lossy 3:**
 - **jxl-lossless** — chunk-mode OOMs on modular (315 cells/image ramps to 13–24 GB in one

@@ -262,7 +262,7 @@ steps.
 
 #### `feat/persistent-cache`
 
-Lives in `cubecl-cuda/src/compute/server.rs` (or wherever upstream moved
+Lives in `crates/zenfleet-dash/src/bin/server.rs` (or wherever upstream moved
 PTX compile after a refactor). The patch wraps `compile_source(...)` in a
 disk-cache lookup. If upstream restructures the PTX compile path, the
 patch needs to find the new compile site — `git log -p --follow

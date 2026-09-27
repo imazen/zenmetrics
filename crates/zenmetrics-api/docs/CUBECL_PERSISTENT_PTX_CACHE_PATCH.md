@@ -68,7 +68,7 @@ ptx_cache: {
 },
 ```
 
-`cache.root()` resolves to one of (per `cubecl-runtime/src/config/cache.rs`):
+`cache.root()` resolves to one of (per `crates/zenmetrics-cli/src/metrics/cache.rs`):
 
 - `CacheConfig::Target` (default) → walks up from `cwd` looking for
   `Cargo.toml`; on hit, `<workspace>/target/`. On miss, `dirs::cache_dir().join("cubecl")`.
@@ -130,7 +130,7 @@ The cache **disk layout** mitigates the cubecl-version case via the
 
 ## Patch — what it changes
 
-Three additive changes, all in `cubecl-cuda/src/compute/context.rs`:
+Three additive changes, all in `crates/zenmetrics-api/src/context.rs`:
 
 ### Change 1 — append cubecl_sha + compute_cap + cuda_runtime to the cache path
 

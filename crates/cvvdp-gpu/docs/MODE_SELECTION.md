@@ -53,7 +53,7 @@ columns:
 | 4096 | Full | - | ... | ... | ... | ... |
 | 4096 | StripPair | 512 | ... | ... | ... | ... |
 
-Use the existing `examples/mem_mode_b_vs_full.rs` subprocess-per-cell
+Use the existing `crates/cvvdp-gpu/examples/mem_mode_b_vs_full.rs` subprocess-per-cell
 harness extended with wall-time capture (`std::time::Instant` around
 `compute_dkl_jod_with_warm_ref` calls, n=20 runs per cell, report
 percentiles).

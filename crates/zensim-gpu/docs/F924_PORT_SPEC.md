@@ -49,7 +49,7 @@ The GPU's fused kernel already computes a per-pixel `sd` and accumulates
 `Σd`, `Σd²`, `Σd⁴`. It is tempting to pool those into the v2 moments. **Do
 not** — they are not the same quantity.
 
-GPU / v1 (`kernels/fused.rs`), SSIMULACRA2-style, **no C1**:
+GPU / v1 (`crates/zensim-gpu/src/kernels/fused.rs`), SSIMULACRA2-style, **no C1**:
 
 ```text
 num_m   = 1 - (mu1 - mu2)^2

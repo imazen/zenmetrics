@@ -56,7 +56,7 @@ cargo run --release -p hdrvdp --example golden_check -- \
 `S_map` stage-by-stage against `diag_*` dumps and reconstructs official
 `res.Q` from the crate's per-plane `quality_terms`.
 
-`tests/golden_2_2_2.rs` runs the same comparison in the test suite with the
+`crates/hdrvdp/tests/golden_2_2_2.rs` runs the same comparison in the test suite with the
 tolerances above.
 
 ## Regenerating the goldens

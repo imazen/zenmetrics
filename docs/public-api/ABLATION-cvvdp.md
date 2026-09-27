@@ -10,7 +10,7 @@ Known consumers: `cvvdp-gpu` (cross-crate re-exports from `cvvdp::kernels::*`), 
 ---
 
 ## Analysis approach
-The `cvvdp::kernels` module (180+ items) was deliberately moved from `cvvdp-gpu` to `cvvdp` in Phase 8c.1-B so the CPU crate owns the canonical scalar implementations. `cvvdp-gpu` re-exports them verbatim, and `cvvdp-gpu/tests/it/lib_reexports.rs` pins the re-export surface. Therefore **all `cvvdp::kernels::*` items are legitimate public API** despite looking like implementation details — they are the source-of-truth for the GPU crate's own public surface.
+The `cvvdp::kernels` module (180+ items) was deliberately moved from `cvvdp-gpu` to `cvvdp` in Phase 8c.1-B so the CPU crate owns the canonical scalar implementations. `cvvdp-gpu` re-exports them verbatim, and `crates/cvvdp-gpu/tests/it/lib_reexports.rs` pins the re-export surface. Therefore **all `cvvdp::kernels::*` items are legitimate public API** despite looking like implementation details — they are the source-of-truth for the GPU crate's own public surface.
 
 The module-level items in `cvvdp::kernels::csf`, `cvvdp::kernels::color`, `cvvdp::kernels::masking`, `cvvdp::kernels::diffmap`, `cvvdp::kernels::pyramid`, `cvvdp::kernels::pool` are used directly by conformance tests, the GPU-side kernel tests, and the `jxl-encoder` perceptual loop. KEEP wholesale.
 

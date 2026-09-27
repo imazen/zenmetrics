@@ -61,7 +61,7 @@ rationale:
    waiting on Phase 1b.
 3. **Measurement baseline**: the overhead bench in
    `examples/diffmap_overhead.rs` + the distribution capture in
-   `examples/diffmap_distribution.rs` give Phase 4 the data it needs
+   `crates/zensim-gpu/examples/diffmap_distribution.rs` give Phase 4 the data it needs
    for `ZENSIM_DIFFMAP_RENORM_SCALE` + `ZENSIM_BLOCK_CONSTANTS`
    calibration, AND give Phase 1b a known wall baseline to optimise
    against.
@@ -108,7 +108,7 @@ gate and **proves them pointwise-correct** against the CPU canonical:
   pyramids on the inner pipeline → run the WithIw persist feature pass
   (writes persist planes) → run the chunk-1/2 diffmap kernel chain →
   trim → read back.
-- `tests/cpu_gpu_diffmap_parity.rs` validates the GPU diffmap matches
+- `crates/zensim-gpu/tests/it/cpu_gpu_diffmap_parity.rs` validates the GPU diffmap matches
   the CPU canonical `compute_with_ref_and_diffmap_linear_planar`
   **pointwise to ≤ 2.08e-4 absolute** (5 fixtures × 4 distortions,
   CUDA RTX 5070; tolerance pinned at 1e-3 with ~5× margin).
@@ -195,7 +195,7 @@ The buttloop's per-block 8×8 reducer uses a metric-specific
 `RFC_PERCEPTUAL_METRIC_REQUIREMENTS.md` §3.2.
 
 Phase 1 ships the data collection harness
-(`examples/diffmap_distribution.rs` + the env-gated
+(`crates/zensim-gpu/examples/diffmap_distribution.rs` + the env-gated
 `JXL_PHASE8B_DIFFMAP_DUMP` dispatch in jxl-encoder's
 `vardct/perceptual_backend.rs`); Phase 4 fits the constant.
 

@@ -39,7 +39,7 @@ JOD-preservation contract per mode:
 | `gauss_ref[k]` (shallow) | full-image | full-image (UNSHRUNK) | P2.7 honest-stopped — see CHANGELOG.md:1296-1308 |
 | `gauss_alt[k]` (deep) | full-image (allocated for swap) | zero-size | P2.7 partial — `new_with_geometry_inner:2069-2104` |
 
-**Measured 4096² h_body=256 (`examples/mem_mode_b_vs_full.rs`,
+**Measured 4096² h_body=256 (`crates/cvvdp-gpu/examples/mem_mode_b_vs_full.rs`,
 manually run; not auto-pinned by CI):**
 
 | Mode | nvsmi delta (MiB) | wall_s | Source |
@@ -180,7 +180,7 @@ meaningful only across many DIST candidates).
 | 1 — Enum + surface | `MemoryMode::Strip { h_body }`, `new_strip`, umbrella `From` mapping, `STRIP_H_BODY_DEFAULT`, `STRIP_ALIGN` | **Landed (task #79)** |
 | 2 — Dedicated ref cache | `RefFullState` struct + `_snapshot_ref_state_to_full` on `warm_reference` + `_restore_ref_state_from_full` on `compute_with_warm_ref`. Cached state survives intervening one-shot dispatches; `has_warm_reference()` correctly reports it. | **Landed (task #79)** |
 | 3 — Per-strip dist walker | Shrinks the dist working set to a `(h_body + halo)` strip. Requires per-band σ=3 PU-blur halo bookkeeping at every of the 9 pyramid levels + halo-aware dist-side Weber pyramid build. | **Multi-day follow-on**: not yet wired (see "Phase 3 design notes" below) |
-| 4 — Parity tests | `crates/cvvdp-gpu/tests/strip_mode_e_parity.rs` (11 tests, 1e-4 JOD tol) + `cached_ref_cvvdp_strip_n_distortions` in the umbrella. | **Landed (task #79)** |
+| 4 — Parity tests | `crates/cvvdp-gpu/tests/it/strip_mode_e_parity.rs` (11 tests, 1e-4 JOD tol) + `cached_ref_cvvdp_strip_n_distortions` in the umbrella. | **Landed (task #79)** |
 | 5 — Estimator + docs | `estimate_gpu_memory_bytes_strip(w, h, h_body)` exists (conservative for Phase 2 — returns Full footprint + ref cache delta); doc updates in this file. | **Landed (task #79)**, tightens with Phase 3 |
 
 ### Memory profile
@@ -371,7 +371,7 @@ walker:
 - Test-only `Cvvdp::strip_dispatch_counter()` accessor exposed via
   `#[doc(hidden)]`. Tests assert N >= 2 strip iterations at 1024²
   with `h_body=512`, proving the walker actually partitions.
-- 5 new parity tests in `tests/strip_mode_e_phase3.rs`:
+- 5 new parity tests in `crates/cvvdp-gpu/tests/it/strip_mode_e_phase3.rs`:
   - `phase3_pool_strip_matches_full_at_64x64` (degenerate strip,
     JOD bit-exact)
   - `phase3_pool_strip_matches_full_at_1024x1024` (L0 partitions
@@ -404,8 +404,8 @@ memory wins are gated on the kernel-port work below.
    and `src/kernels/masking.rs:598`
    (`pu_blur_v_3ch_scaled_strip_aware_kernel`). Dispatched from
    `_run_band_masking_strip_*` at `pipeline.rs:6593, 6637`. Tests:
-   `tests/strip_kernel_parity.rs`,
-   `tests/strip_mode_b_csf_halo_parity.rs`.
+   `crates/cvvdp-gpu/tests/it/strip_kernel_parity.rs`,
+   `crates/cvvdp-gpu/tests/it/strip_mode_b_csf_halo_parity.rs`.
 2. **Strip-aware CSF apply** — ✓ shipped (degenerate). CSF is per-
    pixel (`src/kernels/csf.rs:126, 220`), so no separate strip kernel
    is needed. Dispatched on strip-sized buffers via
@@ -424,7 +424,7 @@ memory wins are gated on the kernel-port work below.
 5. **Strip-aware downscale / upscale_v / upscale_h /
    subtract_weber_3ch** — ✓ shipped: `src/kernels/pyramid.rs:290,
    784, 1013, 1396`. The downscale kernel's pycvvdp bug-compat delta
-   carries through; tested by `tests/strip_kernel_parity_pyramid.rs`.
+   carries through; tested by `crates/cvvdp-gpu/tests/it/strip_kernel_parity_pyramid.rs`.
 6. **`_dispatch_dist_weber_pyramid_only_strip`** — ✓ shipped (split
    across helpers): the conceptual function is realised via
    `_dispatch_dist_weber_csf_strip_s_for_level` (Mode B fused weber+csf
@@ -490,7 +490,7 @@ If approach (B) (halo extension) is chosen:
   across both bands AND strips, so the pool finalizer needs zero
   changes for Phase 3.
 
-`tests/strip_mode_e_parity.rs` pins the JOD value contract;
+`crates/cvvdp-gpu/tests/it/strip_mode_e_parity.rs` pins the JOD value contract;
 Phase 3 must keep all 11 tests passing AND add a
 `strip_walker_dispatches_n_strips` test that asserts N > 1 strip
 iterations occur at sizes large enough to require partitioning.
@@ -944,7 +944,7 @@ tiny (level 8 at 4096² is 16×16 px). Today's measured nvsmi delta
 of −22.7% will move to roughly the −80% estimator target once the
 per-strip buffers actually shrink (Phase 2's 7 buffer shrinks).
 
-`tests/mode_b_walker_parity.rs` asserts:
+`crates/cvvdp-gpu/tests/it/mode_b_walker_parity.rs` asserts:
 - `1024² h_body=256 → ratio < 0.65` (P2.0: passes at 0.587)
 - `1024² h_body=512 → 0.99 ≤ ratio ≤ 1.05` (degenerate fallback)
 - `4096² h_body=256 → ratio < 0.25` (P2.0: passes at 0.198)
@@ -1055,7 +1055,7 @@ JOD parity gate at 128² / 1024² / 4096²):
   and §"Auto resolver").
 
 **P2.9 — Wall-time bench + perf-aware resolver.**
-- Extend `examples/mem_mode_b_vs_full.rs` with wall-time capture
+- Extend `crates/cvvdp-gpu/examples/mem_mode_b_vs_full.rs` with wall-time capture
   (n=20, p50/p25/p75 per cell).
 - Commit `benchmarks/cvvdp_mode_b_wallclock_2026-05-27.csv`.
 - Wire `pipeline::strip_perf_ratio_for_size` lookup table per
@@ -1398,7 +1398,7 @@ the outer-loop inversion in P2.1c.
 
 ### Parity test scaffold
 
-`tests/strip_mode_b_csf_halo_parity.rs` pins five `(size, h_body,
+`crates/cvvdp-gpu/tests/it/strip_mode_b_csf_halo_parity.rs` pins five `(size, h_body,
 n_strips_at_L0)` combinations that stress the inter-strip halo
 overlap. All currently bit-identical to Full mode JOD.
 

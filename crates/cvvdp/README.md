@@ -101,7 +101,7 @@ a small footprint).
   masking + Minkowski pooling (spatial β=2, per-band/channel β=4,
   frames β=2 for video).
 - Matches pycvvdp v0.5.7 within `≤ 1e-3 JOD`: stills on synthetic
-  fixtures 16²–512² (`tests/parity_against_host_scalar.rs`); video on
+  fixtures 16²–512² (`crates/cvvdp/tests/it/parity_against_host_scalar.rs`); video on
   44 cells (11 situations × 4 displays) at 24/30/60 fps
   (`cvvdp-conformance::video_parity`, measured max |Δ| = 3e-6 JOD).
 

@@ -9,7 +9,7 @@ on JPEG corpus and the synthetic black/white/gradient cases.
 | Module | Source | LOC | Status | Notes |
 |---|---|---|---|---|
 | `kernels::srgb` | `dssim-cuda-kernel/src/srgb.rs` | 49 | ✅ ported | Inline transfer (matches the LUT at byte resolution); inputs widened u8→u32 on the host so wgpu/Metal can read `Array<u32>` natively. Same shape as `ssim2-gpu`. |
-| `kernels::lab` | `dssim-cuda-kernel/src/lab.rs` | 87 | ✅ ported | Custom-scaled Lab matching `dssim-core::tolab.rs`. `cbrt` substituted with `f32::powf(_, 1.0/3.0)` — cubecl 0.10 has no `cbrt` op (gotcha G1.x equivalent). At byte-precision input the difference is below 1 ulp; verified by integration tests. |
+| `kernels::lab` | `crates/dssim-gpu/src/kernels/lab.rs` | 87 | ✅ ported | Custom-scaled Lab matching `dssim-core::tolab.rs`. `cbrt` substituted with `f32::powf(_, 1.0/3.0)` — cubecl 0.10 has no `cbrt` op (gotcha G1.x equivalent). At byte-precision input the difference is below 1 ulp; verified by integration tests. |
 | `kernels::downscale` | `dssim-cuda-kernel/src/downscale.rs` | 47 | ✅ ported | Single-plane 2×2 average with edge-clamp. Skipped the packed-RGB CUDA variant — the pipeline keeps R/G/B planar from sRGB onwards (saves an indirection, matches `ssim2-gpu`'s shape). |
 | `kernels::blur` | `dssim-cuda-kernel/src/blur.rs` | 175 | ✅ ported | Three variants: `blur_3x3`, `blur_squared`, `blur_product`. Fixed-coefficient 9-tap Gaussian with replicate-clamp boundary — verbatim coefficients from `dssim-core::blur::BLUR_KERNEL`. |
 | `kernels::ssim` | `dssim-cuda-kernel/src/ssim.rs` | 99 | ✅ ported | Fused 15-input Lab SSIM map (averages mu/cov terms across L/a/b before the standard SSIM formula). Plus pointwise `abs_diff_scalar` for the per-scale MAD step. |

@@ -111,7 +111,7 @@ serialise on a device-wide sync.
 ### Verification
 
 The `throughput_n4_at_least_2_5x_n1_at_4mp` test in
-`tests/gpu_concurrency.rs` asserts the empirical 2.5×+ speedup on a
+`crates/zenmetrics-orchestrator/tests/it/gpu_concurrency.rs` asserts the empirical 2.5×+ speedup on a
 50-task cvvdp batch at 4096². This is the operational acceptance
 gate for the 9.2 contract — if the test passes, the pipeline is
 overlapping. If it fails, run `nsys profile` to identify which stage

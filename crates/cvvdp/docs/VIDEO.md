@@ -372,7 +372,7 @@ Measured with `cargo run -p cvvdp --release --example video_sweep`
 | 1920×1080 ×24 | ~2237 ms/frame | 154.28 ms/frame |
 
 ~14.5× at 1080p vs the scalar port (committed data:
-[`benchmarks/cvvdp_cpu_video_sweep_2026-09-24.tsv`](../benchmarks/cvvdp_cpu_video_sweep_2026-09-24.tsv);
+[`crates/cvvdp/benchmarks/cvvdp_cpu_video_sweep_2026-09-24.tsv`](../benchmarks/cvvdp_cpu_video_sweep_2026-09-24.tsv);
 pre-banding 2026-09-23 numbers — 231 ms/f at 1080p — in
 [`..._2026-09-23.tsv`](../benchmarks/cvvdp_cpu_video_sweep_2026-09-23.tsv)).
 Note `video_sweep` builds with `parallel`; a `--no-default-features`
@@ -389,7 +389,7 @@ The natural still-metric baseline for video scoring is fast-ssim2
 v0.9.0-15-gf011259 via a direct path dev-dep; same deterministic clip
 both paths; frames synthesized lazily inside the timed loop so peak
 RSS reflects the metric's own working set; committed data:
-[`benchmarks/video_vs_ssim2_par_2026-09-24.tsv`](../benchmarks/video_vs_ssim2_par_2026-09-24.tsv)).
+[`crates/cvvdp/benchmarks/video_vs_ssim2_par_2026-09-24.tsv`](../benchmarks/video_vs_ssim2_par_2026-09-24.tsv)).
 `ms/frame` is `(wall − gen)/24`; gen is the shared frame-synthesis
 cost measured by the `gen` mode of the same binary.
 
@@ -474,12 +474,12 @@ Honest reading:
 
 fcvvdp is a C re-implementation of the same metric (pthread pool,
 AVX2 kernels, Zig CLI + ffmpeg-filter target). Compared through its
-C API (`cvvdp_process_frame`) from `benchmarks/bench_fcvvdp.c` — an
+C API (`cvvdp_process_frame`) from `crates/cvvdp/benchmarks/bench_fcvvdp.c` — an
 in-memory harness mirroring `video_vs_ssim2` verbatim: identical
 deterministic clip, median-of-3, no codec or I/O inside the timed
 loop on either side; `ms/frame` is `(wall − gen)/24` with each
 binary's own `gen` baseline. Committed data:
-[`benchmarks/video_vs_fcvvdp_2026-09-24.tsv`](../benchmarks/video_vs_fcvvdp_2026-09-24.tsv).
+[`crates/cvvdp/benchmarks/video_vs_fcvvdp_2026-09-24.tsv`](../benchmarks/video_vs_fcvvdp_2026-09-24.tsv).
 
 **24-frame clip, metric-only:**
 

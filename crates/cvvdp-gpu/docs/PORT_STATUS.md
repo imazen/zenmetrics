@@ -41,7 +41,7 @@ actually changes.
 
 Update `cvvdp_gpu::PYCVVDP_REFERENCE_VERSION` in `src/lib.rs`.
 That const is compile-time-pinned against 7 external files via
-`tests/version_lockstep.rs` (ticks 588-595), so the build fails
+`crates/cvvdp-gpu/tests/it/version_lockstep.rs` (ticks 588-595), so the build fails
 to compile until every site is updated. The lockstep-pinned
 sites are:
 
@@ -52,7 +52,7 @@ sites are:
 3. `docs/PORT_STATUS.md` (this section)
 4. `README.md` (algorithm-parity claim + Status section)
 5. `Cargo.toml` (parity-goldens feature comment)
-6. `docs/CVVDP_SIDECAR_SCHEMA.md` (reserved column-name tags)
+6. `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md` (reserved column-name tags)
 7. `tests/parity.rs::manifest_fetches` runtime check (auto-sourced
    from the const — no manual edit needed)
 
@@ -166,7 +166,7 @@ including the four v0.5.7 HDR PQ presets.)
   baseband in both `host_scalar::predict_jod_still_3ch` and
   `Cvvdp::new`'s `logs_row` pre-upload. After the fix
   `compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift` passes
-  at 0.000000 diff. See `docs/CHROMA_DRIFT_INVESTIGATION.md` for
+  at 0.000000 diff. See `crates/cvvdp-gpu/docs/CHROMA_DRIFT_INVESTIGATION.md` for
   the full investigation timeline.
 
 - **(Resolved tick 208)** Atomic-f32 pooling on cubecl-cpu.

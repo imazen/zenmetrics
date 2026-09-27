@@ -134,7 +134,7 @@ mask_w   = 1 / (1 + K_MASK * activity)   # K_MASK = 4.0
 iw_w     = 1 + K_IW * activity            # K_IW   = 4.0
 ```
 
-`docs/FEATURE_PARITY.md` lines 137-142 confirms: `iw_weight = 1 + 4 *
+`crates/zensim-gpu/docs/FEATURE_PARITY.md` lines 137-142 confirms: `iw_weight = 1 + 4 *
 activity`. This is bit-parallel to the CPU streaming loop, not to the
 paper.
 
@@ -319,7 +319,7 @@ infrastructure / quality-of-life, not IW math):
    independent of any IW machinery decision.
 5. **R2 sidecar schema mirroring**. Document iwssim-gpu's parquet
    sidecar schema (column dtype + nullability) the same way
-   `cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md` documents cvvdp's.
+   `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md` documents cvvdp's.
    Anchor downstream consumers (zentrain, zenpicker) so a future
    `iwssim_burn_*` column drop-in is mechanical.
 

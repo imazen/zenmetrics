@@ -146,7 +146,7 @@ git push` — the full-stack test gate fires on the primary checkout
 ### Iwssim has no CPU fallback
 
 Iwssim has no clean upstream CPU reference (see
-`docs/CPU_BACKENDS.md`). The orchestrator surfaces
+`crates/zenmetrics-orchestrator/docs/CPU_BACKENDS.md`). The orchestrator surfaces
 `OrchestratorError::CpuMetricUnavailable` and advances the OOM ladder
 to error out. Phase 7 inherits this; callers requesting iwssim should
 ensure GPU is available or the task surfaces `FullyExhausted` with no

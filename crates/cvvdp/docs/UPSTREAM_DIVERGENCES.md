@@ -30,7 +30,7 @@ Verified ≤ 1e-5 JOD vs pycvvdp v0.5.7 over the 44-cell video corpus
 (default + both alternates). Still open upstream surface:
 `temp_padding="valid"` (raises `RuntimeError` upstream anyway),
 `temp_resample`, video heatmaps, `dump_channels`, `masking_model`
-variants other than `mult-mutual`. Details: `docs/VIDEO.md`.
+variants other than `mult-mutual`. Details: `crates/cvvdp/docs/VIDEO.md`.
 
 ## 2. DIVERGES — Foveation / saliency (`cvvdp_ml_saliency`)
 

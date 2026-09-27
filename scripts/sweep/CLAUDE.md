@@ -94,12 +94,16 @@ Two equivalent ways to satisfy the contract:
 
 2. **Inline trap (required for anything that runs
    without `run_with_error_trap.sh`):** install an `on_exit` trap
-   directly in the onstart script. See
-   `onstart_iwssim_backfill_v14.sh` lines 60-140 as the canonical
-   pattern: tee stdout+stderr to `$ONSTART_LOG`, hydrate
-   `CONTAINER_*` from `/proc/1/environ`, then `trap on_exit EXIT`
-   where `on_exit` composes a context header + last 200 lines and
-   calls `curl -X DELETE` against `console.vast.ai/api/v0/instances/${CONTAINER_ID}/`.
+   directly in the onstart script. The deleted
+   `onstart_iwssim_backfill_v14.sh` used to be the cited example;
+   living copies of the pattern are `run_with_error_trap.sh` itself
+   (the wrapper that implements it, incl. the
+   `console.vast.ai` DELETE) and `scripts/train/dualmodel_runner.sh`
+   (`on_exit` + `trap on_exit EXIT`): tee stdout+stderr to
+   `$ONSTART_LOG`, hydrate `CONTAINER_*` from `/proc/1/environ`, then
+   `trap on_exit EXIT` where `on_exit` composes a context header +
+   last 200 lines and calls `curl -X DELETE` against
+   `console.vast.ai/api/v0/instances/${CONTAINER_ID}/`.
 
 Whichever path you pick, **xargs return code MUST propagate to the
 script's exit**. The default `xargs ... < chunks` at end-of-script

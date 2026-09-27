@@ -133,7 +133,7 @@ SIMD pattern.
   assert max abs delta < 1e-5 vs scalar `gaussian_blur_sigma3`.
 - Property test: DC preservation (uniform input → uniform output)
   to 1e-5 abs.
-- The existing `tests/parity_against_host_scalar.rs` must still
+- The existing `crates/cvvdp/tests/it/parity_against_host_scalar.rs` must still
   pass at 1e-4 JOD.
 
 **Dependencies**: none — first chunk, can land in isolation.
@@ -190,7 +190,7 @@ tolerance) at the same time as the SIMD lands.
   + `expand_matches_upstream_scalar` to 1e-5 abs.
 - Add 1024² stress test: build full Weber pyramid from a real
   CID22 image, compare every band to scalar pyramid at 1e-4 abs.
-- `tests/parity_against_host_scalar.rs` at 1e-4 JOD must hold.
+- `crates/cvvdp/tests/it/parity_against_host_scalar.rs` at 1e-4 JOD must hold.
 
 **Dependencies**: independent of Chunk 1; can land in parallel.
 
@@ -239,7 +239,7 @@ in zensim).
 **Test strategy**:
 - New `tests/safe_pow_simd_parity.rs`: 4 q values (MASK_P, MASK_Q[0..3]),
   10000 sample points each, max abs delta vs scalar < 1e-4 rel.
-- Re-run `tests/parity_against_host_scalar.rs` at 1e-4 JOD.
+- Re-run `crates/cvvdp/tests/it/parity_against_host_scalar.rs` at 1e-4 JOD.
 
 **Dependencies**: independent of Chunks 1 + 2.
 
@@ -374,7 +374,7 @@ Chunk 3. Persistent pool is structural — no numerical change.
 - Persistent pool: extend `tests/diffmap_invariants.rs` to assert
   identical JOD across 10 encodes on a single `Cvvdp` instance
   (no thread-pool side effect).
-- Re-run `tests/parity_against_host_scalar.rs` at 1e-4 JOD.
+- Re-run `crates/cvvdp/tests/it/parity_against_host_scalar.rs` at 1e-4 JOD.
 
 **Dependencies**: SIMD CSF depends on Chunk 3 (shares vexp helper).
 Persistent pool is independent.
@@ -428,7 +428,7 @@ the boundary-clean interior (99 % of cells @1024²) AND threads caller
 scratch, removing both at once. Chunk 2's "memory-bound at 1024²+"
 finding did NOT generalize: the 13-tap source loads overlap heavily (adj
 output cols share 12 of 13 inputs), keeping the working set L1d-resident
-(compute-bound). See `benchmarks/cvvdp_cpu_simd_sigma3_2026-05-26.meta`.
+(compute-bound). See `crates/cvvdp/benchmarks/cvvdp_cpu_simd_sigma3_2026-05-26.meta`.
 
 1e-4 JOD parity floor preserved (`standard_4k_path_still_at_parity_against_host_scalar`
 green). 5 new SIMD parity tests at 1e-5 abs all pass.
@@ -442,7 +442,7 @@ to 22.6 %. The chunk's wall recovery is structurally bounded by the
 pyramid's share-of-wall (~23 %, not the 56 % the flamegraph extrapolated),
 times the memory-bound speedup ratio (~1.2-1.5× on inner kernels, not
 the 3-4× the plan assumed for compute-bound kernels). See
-`benchmarks/cvvdp_cpu_simd_pyramid_2026-05-25.meta` for the full
+`crates/cvvdp/benchmarks/cvvdp_cpu_simd_pyramid_2026-05-25.meta` for the full
 attribution + honest discussion. Outstanding wall now dominated by
 `gaussian_blur_sigma3` (Chunk 1, 32 %) and rayon plumbing (Chunk 5).
 

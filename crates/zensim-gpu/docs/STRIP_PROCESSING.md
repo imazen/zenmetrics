@@ -176,7 +176,7 @@ parity tests) routes strip-mode reference setup through
 `set_reference_host_cached_only` rather than `set_reference`. The
 device cache only pays off across MANY warm dist iters; for a single
 dist call it's pure additive device-side overhead. Measured win (RTX
-5070, CUDA, reps=4, `benchmarks/zensim_strip_remeasure_2026-05-28.tsv`):
+5070, CUDA, reps=4, `crates/zensim-gpu/benchmarks/zensim_strip_remeasure_2026-05-28.tsv`):
 strip peak VRAM dropped from ~1.05× Full to ~0.24× Full at 16 MP
 (1249 → 289 MiB) and from 0.58× to 0.23× at 40 MP (1281 → 513 MiB) —
 the 289 MiB matches this section's "strip working set" row exactly,
@@ -268,7 +268,7 @@ pixel coefficients applied to the strip's allocation height):
 ### Measured (nvidia-smi peak delta vs process start)
 
 Measured on RTX 5070 + CUDA 13.2.1 via
-`examples/strip_measure_actual.rs`. Values **include** the
+`crates/zensim-gpu/examples/strip_measure_actual.rs`. Values **include** the
 ~193 MB cubecl runtime pool overhead. See
 `benchmarks/zensim_strip_vs_full_2026-05-26.csv`.
 

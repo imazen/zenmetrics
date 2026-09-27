@@ -178,7 +178,7 @@ scalar score returned alongside the diffmap comes from the CPU pipeline
 Phase 1b added a **pure-GPU diffmap kernel chain** (per-scale weighted
 SSIM → power-of-2 upsample-add → trim) wired behind the env gate
 `ZENSIM_GPU_DIFFMAP=1`. The GPU kernels are validated bit-close to the
-CPU canonical (≤ 2.08e-4 pointwise — `tests/cpu_gpu_diffmap_parity.rs`).
+CPU canonical (≤ 2.08e-4 pointwise — `crates/zensim-gpu/tests/it/cpu_gpu_diffmap_parity.rs`).
 The gate is **default-OFF**: the scalar score must still come from the
 CPU canonical path (the GPU-feature → V0_3 MLP score is unreliable on
 the pinned zensim 0.3.0 — see `docs/DIFFMAP_DIVERGENCES.md` §2b + §9),

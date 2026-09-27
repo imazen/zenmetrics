@@ -232,8 +232,8 @@ embedded / no-cubecl targets.
 - **Kept-duplicate constants**: `BINOM5`, `SSIM_WIN_1D`, `SCALE_WEIGHTS`
   (build.rs-generated) stay in `iwssim-gpu/src/filters.rs` alongside
   the bit-identical `iwssim/src/filters.rs` source. The cube-macro
-  `#[cube(launch_unchecked)]` kernels in `kernels/lap_pyramid.rs`
-  and `kernels/gauss11.rs` reference these by-name through the
+  `#[cube(launch_unchecked)]` kernels in `crates/iwssim-gpu/src/kernels/lap_pyramid.rs`
+  and `crates/iwssim-gpu/src/kernels/gauss11.rs` reference these by-name through the
   `crate::filters::*` path; cube codegen captures that path at
   expansion and re-emits it on the device side, so re-exporting from
   `iwssim::filters::*` is not name-resolvable. The two `build.rs`

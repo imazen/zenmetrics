@@ -312,7 +312,7 @@ that optimization's drift budget.
 | `wgpu` | yes | Compile the cubecl-wgpu backend. |
 | `cpu`  | yes | Compile the cubecl-cpu backend (host-pool only — see above). |
 | `hip`  | no  | Compile the cubecl-hip backend. |
-| `parity-goldens` | no | Compile `tests/parity.rs`, which fetches the pycvvdp v0.5.4 goldens manifest from R2 and checks JOD parity. Off by default so `cargo test` stays offline. |
+| `parity-goldens` | no | Compile `crates/cvvdp-gpu/tests/it/parity.rs`, which fetches the pycvvdp v0.5.4 goldens manifest from R2 and checks JOD parity. Off by default so `cargo test` stays offline. |
 
 ## GPU memory budgeting — concurrency cap for batch sweeps
 

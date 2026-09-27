@@ -9,11 +9,11 @@ Intel + Apple from one Rust source). Validates against the published
 | Module | Source | LOC | Status | Notes |
 |---|---|---|---|---|
 | `kernels::srgb` | `ssimulacra2-cuda-kernel/src/srgb.rs` | 56 | ✅ ported + validated | Inline formula (LUT-equivalent at byte resolution); max 3e-7 abs vs CPU `srgb_gamma_to_lin` over all 256 values × 3 channels. |
-| `kernels::xyb` | `ssimulacra2-cuda-kernel/src/xyb.rs` | 86 | ✅ ported + validated | `cbrt → powf(_,1/3)` substitution because cubecl 0.10 has no f32 cbrt op; max 8e-7 abs over 1024 random samples. |
+| `kernels::xyb` | `crates/ssim2-gpu/src/kernels/xyb.rs` | 86 | ✅ ported + validated | `cbrt → powf(_,1/3)` substitution because cubecl 0.10 has no f32 cbrt op; max 8e-7 abs over 1024 random samples. |
 | `kernels::downscale` | `ssimulacra2-cuda-kernel/src/downscale.rs` | 47 | ✅ ported | Single-plane 2×2 average with edge-clamp (CPU/CUDA-matching). Warp-shuffle plane variant intentionally skipped. |
 | `kernels::blur` | `ssimulacra2-cuda-kernel/src/blur.rs` | 137 | ✅ ported + validated | Charalampidis recursive IIR with shared-memory ring buffer. Pipeline parity passes against CPU `Blur::blur` to <1e-5 abs over 6 size/pattern cases up to 1024×768. |
 | `kernels::transpose` | (new) | 27 | ✅ ported | Naive transpose; used between blur passes. |
-| `kernels::error_maps` | `ssimulacra2-cuda-kernel/src/error_maps.rs` | 67 | ✅ ported | Pointwise SSIM + ringing + blurring error maps. |
+| `kernels::error_maps` | `crates/ssim2-gpu/src/kernels/error_maps.rs` | 67 | ✅ ported | Pointwise SSIM + ringing + blurring error maps. |
 | `kernels::reduction` | NPP `Sum` ×2 | 80 | ✅ ported | Fused (Σ, Σ⁴) per plane via `Atomic<f32>::fetch_add`; one launch per (scale × channel × map type). |
 | Pipeline (`pipeline::Ssim2`) | `ssimulacra2-cuda/src/lib.rs` | ~600 | ✅ wired | Full 6-octave + reductions; final score uses the CPU's published WEIGHT table and sigmoid remap. |
 | `pipeline::Ssim2::set_reference` / `compute_with_reference` | same | (above) | ✅ implemented | Cached state: full ref pyramid, ref XYB (raw + transposed), blurred mu1, blurred sigma11. Cached vs direct path drift ≤ 1.4e-5 in tests. |

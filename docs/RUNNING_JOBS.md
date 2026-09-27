@@ -107,7 +107,7 @@ for the fleet-fits DONE report. `test_fit_tools.py` holds the negative controls 
 ad-hoc `score-pairs --hdr` chunk fleet. The executor decodes the reference and every variant to
 **absolute-luminance nits** (PQ-PNG / PQ-JXL / PQ-AVIF / EXR via `hdr::decode_to_nits`) and applies
 the exact per-metric feeding `zenmetrics score-pairs --hdr` uses (the shared layer in
-`zenmetrics-cli/src/hdr.rs` — one implementation, both callers):
+`crates/zenmetrics-cli/src/hdr.rs` — one implementation, both callers):
 
 | metric | HDR feeding |
 |---|---|
@@ -147,7 +147,7 @@ Rules and gotchas:
   lean `jobexec` feature: `cargo build --release -p zenmetrics-cli --no-default-features
   --features jobexec,hdr,cpu-metrics,gpu,gpu-cuda,gpu-cpu` (PQ-PNG decode additionally needs the
   `png` feature once zenpng settles; EXR works in every `hdr` build). `sweep` implies `jobexec`.
-- **Parity**: `tests/hdr_pair_parity.rs` + `jobexec::hdr_tests` lock the executor's values to the
+- **Parity**: `crates/zenmetrics-cli/tests/hdr_pair_parity.rs` + `jobexec::hdr_tests` lock the executor's values to the
   `score-pairs --hdr` feeding bit-exactly (CPU metrics; the GPU faithful paths reuse the same
   score-pairs primitives verbatim; live GPU parity measured 2026-07-14 — deltas 0 everywhere,
   cvvdp-gpu 4.8e-7 from atomic-f32 pooling order).
@@ -382,7 +382,7 @@ Exactly-once remains ledger-enforced exactly as in lease mode. Requirements: the
 mode per run** — mixed modes stay correct but re-introduce the duplicate-work tax (the avifgen
 encode run measured 3.6× under lease claiming with empty views). POOL mode keeps lease claiming
 (sporadic per-run visits never build a stable roster). Gates: `zenfleet-core::epoch` unit tests +
-`zenfleet-sim/tests/epoch_shard.rs` (steady state = total work exactly == distinct cells, zero
+`crates/zenfleet-sim/tests/epoch_shard.rs` (steady state = total work exactly == distinct cells, zero
 leases; boundary takeover of a killed worker; steal-vs-owner duplicate bounds).
 
 **Registered speed handicaps (weighted sharding).** Boxes are not interchangeable (the avifgen

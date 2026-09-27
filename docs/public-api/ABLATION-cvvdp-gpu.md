@@ -34,10 +34,10 @@ Known consumers: `zenmetrics-api` (`reclaim_pooled_vram`, `live_vram_probe_bytes
 ## Items confirmed KEEP (representative)
 
 - `CvvdpOpaque`, `CvvdpParams`, `PerfMode`, `Cvvdp` (typed), `Error`, `Result` — primary API.
-- `cvvdp_gpu::params::*` re-exports — consumed by `jxl-encoder/src/api.rs`.
+- `cvvdp_gpu::params::*` re-exports — consumed by `crates/zenfleet-hetzner/src/api.rs`.
 - `cvvdp_gpu::PARALLEL_SAFETY_FACTOR`, `recommend_parallel` — pinned by `lib_reexports.rs` test; used in doctest math.
 - `memory_mode::live_vram_probe_bytes` — called by `zenmetrics-api` and `zenmetrics-orchestrator`.
 - `memory_mode::reclaim_pooled_vram` — called by `zenmetrics-api`.
 - `estimate_gpu_memory_bytes`, `estimate_gpu_memory_bytes_capped`, `estimate_gpu_memory_bytes_strip_pair` (crate root) — consumed by `benchmarks/gpu_vram_profile/src/main.rs`.
-- `memory_mode::STRIP_H_BODY_DEFAULT` — used by `cvvdp-gpu/tests/it/strip_mode_b_parity.rs` and self-test; reasonable to keep for the strip-mode calibration use case.
+- `memory_mode::STRIP_H_BODY_DEFAULT` — used by `crates/cvvdp-gpu/tests/it/strip_mode_b_parity.rs` and self-test; reasonable to keep for the strip-mode calibration use case.
 - `memory_mode::MemoryMode`, `ResolvedMode`, `STRIP_ALIGN` — typed mode API.

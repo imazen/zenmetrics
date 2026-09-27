@@ -91,9 +91,11 @@ pub enum FrameLayout {
 }
 
 /// How the temporal FIR resolves frame indices below 0 — pycvvdp's
-/// `temp_padding` constructor argument (v0.5.7 supports exactly these
-/// two; `"valid"` exists in the docstring but raises at runtime
-/// upstream).
+/// `temp_padding` constructor argument. v0.5.7 supports
+/// `replicate`/`symmetric`; `"valid"` appears in the docstring but
+/// raises `RuntimeError` at runtime upstream — [`Valid`](Self::Valid)
+/// here is a deliberate extension implementing complete-window
+/// semantics (see `docs/VIDEO.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TempPadding {
     /// Frames before index 0 read frame 0 (upstream default).
@@ -107,6 +109,17 @@ pub enum TempPadding {
     /// `push_frame` may emit zero or several rows per call. The frame
     /// ring stays bounded by `fl` regardless.
     Symmetric,
+    /// Complete-window convolution: only output frames whose full
+    /// causal window `t−fl+1..=t` lies inside the clip are emitted —
+    /// `N − fl + 1` outputs for `N ≥ fl`, indexed `fl−1..=N−1`
+    /// (output `t` still corresponds to source frame `t`; the first
+    /// `fl−1` outputs are simply dropped, not resampled). Because the
+    /// FIR is causal, each valid output is emitted as soon as its
+    /// frame arrives — no deferred drain, no edge padding. Clips
+    /// shorter than `fl` emit nothing; `finish` returns
+    /// [`Error::TooShortForFilter`]. No pycvvdp analog — upstream
+    /// rejects the string.
+    Valid,
 }
 
 /// Which transient-channel temporal filter to build — pycvvdp's
@@ -132,7 +145,7 @@ pub enum TempFilter {
 /// Construction knobs for [`VideoScorer`] beyond the pycvvdp surface
 /// — bundled so [`VideoScorer::with_options`] stays readable instead
 /// of growing a fourth positional-argument variant.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct VideoScorerOptions {
     /// Frame byte layout `push_frame` expects (pycvvdp `dim_order`
     /// analog).
@@ -153,6 +166,33 @@ pub struct VideoScorerOptions {
     /// f32-window path. No upstream analog — an implementation knob,
     /// not a scoring semantic.
     pub low_memory: bool,
+    /// Resample the per-frame `Q_per_ch` table to this nominal frame
+    /// rate (Hz) before pooling — pycvvdp's `temp_resample`/`nominal_fps`
+    /// pair (`Some(240.0)` reproduces upstream's nominal rate).
+    /// `None` scores at the native [`VideoScorer`] rate.
+    ///
+    /// Applied at [`finish_with_stats`](VideoScorer::finish_with_stats)
+    /// — each emitted frame's `q_per_ch` row is linearly interpolated
+    /// onto the nominal-FPS time grid (upstream's `interp1dim2`
+    /// boundary semantics: clamp at the left edge, extrapolate the
+    /// tail). Frame-time metadata in [`VideoStats`] reflects the
+    /// resampled rate. **Upstream defect note:** pycvvdp v0.5.7's
+    /// `interp1dim2` interpolates the *channel* axis of
+    /// `Q_per_ch[B, ch, frames, bands]` and asserts `frames == 4` —
+    /// the flag is hardcoded `False` and marked obsolete, so no
+    /// published score uses it. This port implements the intended
+    /// frame-axis semantics; see `docs/UPSTREAM_DIVERGENCES.md`.
+    pub temp_resample: Option<f32>,
+    /// Emit the upstream `heatmap="raw"` quantity per output frame:
+    /// `1 − met2jod(reconstructed masked-diff pyramid) / 10`, an
+    /// `width × height` f32 plane per emitted frame
+    /// ([`VideoScorer::pop_heatmap`], [`VideoStats::heatmaps`]).
+    /// The per-pixel D planes are materialised in addition to the
+    /// fused masked-diff reduction, so enabling this roughly doubles
+    /// the per-band masking cost. Upstream's `threshold` /
+    /// `supra-threshold` colormap visualisations are not ported —
+    /// they are presentation, not metric output.
+    pub heatmap: bool,
 }
 
 /// Positive frame index for a negative `fi` under
@@ -207,8 +247,9 @@ fn fill_l_expands(gauss_l: &[Band], l_exp: &mut [Vec<f32>], scratch: &mut Pyrami
 /// Result bundle for a scored clip — the Rust analog of the
 /// `(Q_jod, stats)` pair pycvvdp's `predict`/`predict_video_source`
 /// returns. `stats` carries `Q_per_ch`, `rho_band`,
-/// `frames_per_second`, `width`, `height`, `N_frames`; pycvvdp's
-/// optional `heatmap` entry is not ported (see `docs/VIDEO.md`).
+/// `frames_per_second`, `width`, `height`, `N_frames`; `heatmaps`
+/// carries upstream's optional `heatmap` entry when
+/// [`VideoScorerOptions::heatmap`] was enabled (see `docs/VIDEO.md`).
 #[derive(Debug, Clone)]
 pub struct VideoStats {
     /// Final pooled quality in JOD — identical to
@@ -219,18 +260,39 @@ pub struct VideoStats {
     /// sustained A, RG, VY, transient A; last band = baseband. For a
     /// single-frame (still-path) score the transient channel entry
     /// is `f32::NAN` — upstream image mode has no transient channel.
+    ///
+    /// With [`VideoScorerOptions::temp_resample`] the rows are
+    /// resampled to the nominal frame grid (length =
+    /// `ceil(n_emitted/fps · nominal)`); with
+    /// [`TempPadding::Valid`] only the `n_pushed − fl + 1`
+    /// complete-window outputs are present (first emitted index is
+    /// `fl−1`, not 0).
     pub q_per_ch: Vec<Vec<[f32; 4]>>,
     /// Spatial frequency of each pyramid band in cycles/degree
     /// (`rho_band` upstream). Length = number of pyramid bands.
     pub rho_band: Vec<f32>,
-    /// Frame rate the clip was scored at.
+    /// Frame rate the clip was scored at — the input rate, or the
+    /// nominal rate when [`VideoScorerOptions::temp_resample`]
+    /// resampled `q_per_ch` (upstream `fps = nominal_fps` after
+    /// resampling).
     pub frames_per_second: f32,
     /// Frame width in pixels.
     pub width: u32,
     /// Frame height in pixels.
     pub height: u32,
-    /// Number of frames scored.
+    /// Number of source frames pushed (upstream `N_frames`). The
+    /// number of emitted/scored output frames is `q_per_ch.len()` —
+    /// smaller under [`TempPadding::Valid`], resampled under
+    /// `temp_resample`.
     pub n_frames: usize,
+    /// Per-output-frame heatmaps (upstream `stats['heatmap']` with
+    /// `heatmap="raw"`): `width × height` f32 planes of
+    /// `1 − met2jod(D_px)/10` (1.0 = imperceptible), one per emitted
+    /// output frame in emission order. Empty unless
+    /// [`VideoScorerOptions::heatmap`] was enabled. Frames already
+    /// collected via [`VideoScorer::pop_heatmap`] are not repeated
+    /// here — drain during scoring to keep memory bounded.
+    pub heatmaps: Vec<Vec<f32>>,
 }
 
 impl VideoStats {
@@ -301,6 +363,16 @@ struct VideoScratch {
     /// planes. One slot converts at a time (test side's taps, then
     /// reference side's), so three planes suffice for both.
     win_dkl: FramePlanes,
+    /// Heatmap scratch — per-channel clamped-D planes at the current
+    /// band's dims (`VideoScorerOptions::heatmap` only).
+    heat_d: [Vec<f32>; 4],
+    /// Heatmap scratch — the frame's Laplacian bands (`n_levels`
+    /// planes at band dims), folded across channels and ÷`band_mul`.
+    heat_bands: Vec<Vec<f32>>,
+    /// Heatmap scratch — the running reconstruction accumulator and
+    /// the `gausspyr_expand` destination (ping-ponged per level).
+    heat_recon: Vec<f32>,
+    heat_exp: Vec<f32>,
 }
 
 impl VideoScratch {
@@ -364,6 +436,12 @@ impl VideoScratch {
             } else {
                 core::array::from_fn(|_| Vec::new())
             },
+            heat_d: core::array::from_fn(|_| Vec::new()),
+            // Lazy like the rest of the grow-only scratch — sized to
+            // the band dims on first heatmap-enabled emit.
+            heat_bands: vec![Vec::new(); n_levels],
+            heat_recon: Vec::new(),
+            heat_exp: Vec::new(),
         }
     }
 }
@@ -594,8 +672,21 @@ pub struct VideoScorer {
     padding: TempPadding,
     /// Next output frame index to emit — [`TempPadding::Symmetric`]
     /// defers the first `fl−1` outputs until their lookahead frames
-    /// have been pushed; replicate emits on every push.
+    /// have been pushed; replicate emits on every push. For
+    /// [`TempPadding::Valid`] this starts at `fl−1` (complete-window
+    /// outputs only).
     next_emit: usize,
+    /// Nominal output rate for `Q_per_ch` resampling — pycvvdp's
+    /// `temp_resample`/`nominal_fps` (`None` = score at `fps`).
+    temp_resample: Option<f32>,
+    /// [`VideoScorerOptions::heatmap`] — emit the upstream `raw`
+    /// per-output-frame quality map.
+    heatmap_on: bool,
+    /// Emitted per-output-frame heatmaps waiting to be drained by
+    /// [`VideoScorer::pop_heatmap`] (or moved into
+    /// [`VideoStats::heatmaps`] at finish). Empty when
+    /// [`VideoScorerOptions::heatmap`] is off.
+    heatmaps: VecDeque<Vec<f32>>,
     /// Evicted ring slots' plane buffers, kept for reuse by the next
     /// `push_frame` — avoids a fresh 3-plane alloc + zero-fill per
     /// frame (the planes are `w*h` f32, the same size every frame).
@@ -722,6 +813,11 @@ impl VideoScorer {
         if !frames_per_second.is_finite() || frames_per_second <= 0.0 {
             return Err(Error::InvalidFps);
         }
+        if let Some(nominal) = options.temp_resample {
+            if !nominal.is_finite() || nominal <= 0.0 {
+                return Err(Error::InvalidFps);
+            }
+        }
         let w = width as usize;
         let h = height as usize;
         let ppd = geometry.pixels_per_degree();
@@ -730,12 +826,20 @@ impl VideoScorer {
         let layout = options.layout;
         let padding = options.temp_padding;
         let low_memory = options.low_memory;
+        let taps = temporal_filters(frames_per_second, options.temp_filter);
+        // Valid padding's first emit is the first output whose causal
+        // window fits entirely in the clip — index fl−1.
+        let next_emit = if padding == TempPadding::Valid {
+            taps[0].len() - 1
+        } else {
+            0
+        };
         Ok(Self {
             width: w,
             height: h,
             params,
             geometry,
-            taps: temporal_filters(frames_per_second, options.temp_filter),
+            taps,
             n_pushed: 0,
             win_t: VecDeque::new(),
             win_r: VecDeque::new(),
@@ -748,11 +852,14 @@ impl VideoScorer {
             freqs,
             layout,
             padding,
-            next_emit: 0,
+            next_emit,
+            temp_resample: options.temp_resample,
+            heatmaps: VecDeque::new(),
             spare_planes: Vec::new(),
             spare_src: Vec::new(),
             fps: frames_per_second,
             scratch: VideoScratch::new(w, h, n_levels, low_memory),
+            heatmap_on: options.heatmap,
         })
     }
 

@@ -7,6 +7,11 @@ scales × 3 channels × 19 features).
 
 ## Module status
 
+The `Source` column below names files in the prototype crates
+`zensim-cuda-kernel` / `zensim-cuda`, which were folded into this crate
+(`src/kernels/`, `src/pipeline.rs`) during the rename to `zensim-gpu` —
+the paths are port provenance, not current locations.
+
 | Module | Source | LOC | Status | Notes |
 |---|---|---|---|---|
 | `kernels::color` | `zensim-cuda-kernel/src/color.rs` | ~110 | ✅ ported | sRGB packed-u8 → planar positive XYB. 256-entry LUT uploaded as `Array<f32>` (cubecl 0.10 can't index host-side `[f32; 256]` constants from `#[cube]`). `cbrt` substituted with `f32::powf(_, 1.0/3.0)` — the magic-constant Newton seed in CPU's `cbrtf_fast` requires `reinterpret_cast<u32>(K_B0)` which cubecl-cuda's codegen rejects for literal-folded constants. Drift vs CPU `cbrtf_fast` is a few ULPs, well below the SSIM normalisation threshold. Same call as dssim-gpu's Lab cbrt. |
@@ -23,21 +28,21 @@ Full test suite — **92 / 92 pass on CUDA** (verified 2026-05-26):
 
 | Test file | Tests | Coverage |
 |---|--:|---|
-| `tests/cpu_parity.rs` | 3 | Basic + peak 228-feat per-slot parity (identical / noisy-gradient 64² / checkerboard 128² multi-strip) |
-| `tests/extended_parity.rs` | 8 | Extended 300-feat (masked block 228..300) + WithIw 372-feat per-slot CPU parity on the IW block 300..372 (`iw_slot_parity_*` tests, task #72) |
-| `tests/cpu_gpu_feature_sweep.rs` | 13 | Comprehensive 372-slot CPU↔GPU sweep — 3 sizes × 4 content patterns × 3 distortion magnitudes (48 distinct fixtures) + identity short-circuit no-corruption regression |
-| `tests/parity_lock.rs` | 8 | Aggregate score: synthetic edges + cached-vs-direct + JPEG corpus q70/q90 |
-| `tests/weights_parity.rs` | 1 | Byte-for-byte CPU/GPU weights match `WEIGHTS_PREVIEW_V0_2` |
-| `tests/opaque.rs` | 2 | `Zensim::compute_features_srgb_u8` opaque-API path (incl. strided pixels) |
-| `tests/opaque_default_weights_v03.rs` | 2 | Post-task-#71 wiring: opaque path routes through `zensim::score_features_with_profile_and_codec`, NOT the deleted v0.2 linear shim |
-| `tests/opaque_cached_ref.rs` | 6 | Set-reference / compute-with-reference state machine |
-| `tests/opaque_regime.rs` | 6 | Regime selection: Basic / Extended / WithIw via `ZensimParams` |
-| `tests/diffmap_invariants.rs` | 10 | Phase 1 diffmap correctness (5 invariants × multiple paths) |
-| `tests/memory_mode.rs` | 9 | Regime-aware estimator (`estimator_matches_measured` asserts ±25 % on 24 measured rows) + `MemoryMode` API |
-| `tests/auto_fallback.rs` | 7 | Strip-unsupported + Auto cap fallback contract |
+| `tests/it/cpu_parity.rs` | 3 | Basic + peak 228-feat per-slot parity (identical / noisy-gradient 64² / checkerboard 128² multi-strip) |
+| `tests/it/extended_parity.rs` | 8 | Extended 300-feat (masked block 228..300) + WithIw 372-feat per-slot CPU parity on the IW block 300..372 (`iw_slot_parity_*` tests, task #72) |
+| `tests/it/cpu_gpu_feature_sweep.rs` | 13 | Comprehensive 372-slot CPU↔GPU sweep — 3 sizes × 4 content patterns × 3 distortion magnitudes (48 distinct fixtures) + identity short-circuit no-corruption regression |
+| `tests/it/parity_lock.rs` | 8 | Aggregate score: synthetic edges + cached-vs-direct + JPEG corpus q70/q90 |
+| `tests/it/weights_parity.rs` | 1 | Byte-for-byte CPU/GPU weights match `WEIGHTS_PREVIEW_V0_2` |
+| `tests/it/opaque.rs` | 2 | `Zensim::compute_features_srgb_u8` opaque-API path (incl. strided pixels) |
+| `tests/it/opaque_default_weights_v03.rs` | 2 | Post-task-#71 wiring: opaque path routes through `zensim::score_features_with_profile_and_codec`, NOT the deleted v0.2 linear shim |
+| `tests/it/opaque_cached_ref.rs` | 6 | Set-reference / compute-with-reference state machine |
+| `tests/it/opaque_regime.rs` | 6 | Regime selection: Basic / Extended / WithIw via `ZensimParams` |
+| `tests/it/diffmap_invariants.rs` | 10 | Phase 1 diffmap correctness (5 invariants × multiple paths) |
+| `tests/it/memory_mode.rs` | 9 | Regime-aware estimator (`estimator_matches_measured` asserts ±25 % on 24 measured rows) + `MemoryMode` API |
+| `tests/it/auto_fallback.rs` | 7 | Strip-unsupported + Auto cap fallback contract |
 | inline unit tests | 15 | Per-kernel sanity (`diffmap` module + ad-hoc) |
 
-`tests/parity_lock.rs` aggregate-score numbers (2026-05-20 re-run):
+`tests/it/parity_lock.rs` aggregate-score numbers (2026-05-20 re-run):
 
 | Case | CPU score | GPU score | rel error |
 |---|---|---|---|
@@ -48,7 +53,7 @@ Full test suite — **92 / 92 pass on CUDA** (verified 2026-05-26):
 | `dssim-cuda` corpus q90.jpg | 91.3509 | 91.3486 | 2.5e-5 |
 | Cached-vs-direct drift | (n/a) | (n/a) | ≤ 1e-3 score |
 
-`tests/extended_parity.rs` per-feature parity numbers
+`tests/it/extended_parity.rs` per-feature parity numbers
 (2026-05-20 re-run):
 
 | Case | max \|gpu − cpu\| | Slot budget |
@@ -79,7 +84,7 @@ via `std::mem::swap(&mut bufs.mu1, &mut bufs.mask)`, and the fused
 V-blur only wrote inner rows of `mu1`, leaving overlap rows holding
 the previous channel's stale state (or zero for X / prior-strip B
 mask state for strip K≥1). See zensim's
-`docs/PRINCIPLED_ACTIVITY.md` for the full RCA.
+`docs/ABANDONED_EXPERIMENTS_principled-activity_2026-06-01.md` for the full RCA.
 
 CPU was redesigned (commit `caf52d36` on
 `feat/principled-activity`, shipped 2026-05-17 as
@@ -293,7 +298,7 @@ Optimisations applied since the initial port:
   `cubecl::prelude::fma`); using it explicitly may close the 12-point
   gap. Test won't reflect on real images either way.
 - **Per-kernel parity examples** modelled on `ssim2-gpu`'s set
-  (`color_parity.rs`, `blur_parity.rs`, `features_parity.rs`). The
+  (e.g. `crates/ssim2-gpu/examples/blur_parity.rs`). The
   integration tests already validate the full pipeline against
   `zensim` v0.2.8; per-kernel diagnostics would only be needed on
   regression.

@@ -195,7 +195,7 @@ New (under `crates/ssim2-gpu/`):
 - `examples/{srgb,xyb,blur,error_maps}_parity.rs`
 - `examples/end_to_end.rs`
 - `examples/parity_real_image.rs`
-- `examples/batch_parity.rs` (day 4+)
+- `crates/butteraugli-gpu/examples/batch_parity.rs` (day 4+)
 - `tests/lock.rs` (day 3 or later)
 - `PORT_STATUS.md`, `HANDOFF.md`, `build.rs`
 

@@ -325,7 +325,7 @@ unlikely across realistic machine populations.
 
 - [`README.md`](../README.md) — orchestrator overview + every public
   API documented with examples.
-- [`docs/CPU_BACKENDS.md`](CPU_BACKENDS.md) — per-metric CPU reference
+- [`crates/zenmetrics-orchestrator/docs/CPU_BACKENDS.md`](CPU_BACKENDS.md) — per-metric CPU reference
   adapter mapping + RAM characteristics.
 - [`ORCHESTRATOR_DESIGN.md`](../../zenmetrics-api/docs/ORCHESTRATOR_DESIGN.md)
   — original design proposal with the architectural rationale.

@@ -24,10 +24,10 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 | Crate | Reference implementation + version | Oracle for goldens/parity | Worst observed delta |
 |---|---|---|---|
 | `cvvdp` | pycvvdp **v0.5.7** (gfxdisp/ColorVideoVDP); `PYCVVDP_REFERENCE_VERSION` | pycvvdp itself + cvvdp-conformance cells | 2e-6 JOD (u16 video cells), 1.2e-5 (stills); scalar parity 3e-6 JOD |
-| `cvvdp-gpu` | pycvvdp **v0.5.7**; `parity-goldens` test pins **v0.5.4** manifest from R2 | pycvvdp goldens + in-tree `cvvdp` | see crate `docs/PORT_STATUS.md` |
+| `cvvdp-gpu` | pycvvdp **v0.5.7**; `parity-goldens` test pins **v0.5.4** manifest from R2 | pycvvdp goldens + in-tree `cvvdp` | see crate `crates/cvvdp-gpu/docs/PORT_STATUS.md` |
 | `hdrvdp` | official **HDR-VDP 2.2.2** MATLAB release (SourceForge) | Octave 11.1 run of official 2.2.2; UPIQ corpus | P_det 1.4e-5 rel, C_max 1e-4 rel, P_map 1.7e-2 abs, `res.Q` 7.8e-4 |
 | `hdrvdp` `v3` | official **HDR-VDP-3.0.7** MATLAB release (SourceForge) + **jpeg-ai-qaf `VDP3/`** torch port @ `0628a6b` (faithful — verified against the original, see entry) | 21-case golden corpus from the reference port + Octave run of MATLAB 3.0.7 on AIC-4 pairs | ≤ 1.6e-13 JOD worst |Q_JOD| over 21 cases; **bit-equal** to MATLAB 3.0.7 at print precision on 3 AIC-4 pairs |
-| `vmaf` | Netflix **libvmaf 3.2.1** (vendored via `vmaf-head-sys 0.2.0`, test-only) | libvmaf FFI oracle in `tests/ffi_fusion.rs` | v0 asserted ≤ 1e-4 features (motion2 1e-8), ≤ 0.02 score; integer stat paths exact by construction |
+| `vmaf` | Netflix **libvmaf 3.2.1** (vendored via `vmaf-head-sys 0.2.0`, test-only) | libvmaf FFI oracle in `crates/vmaf/tests/ffi_fusion.rs` | v0 asserted ≤ 1e-4 features (motion2 1e-8), ≤ 0.02 score; integer stat paths exact by construction |
 | `gmsd` | **libgmsd** (Ponomarenko group) + `GMSD.m` | libgmsd bit-comparison | bit-identical map on even dims; f64 rounding only in score |
 | `iwssim` | **Python-IW-SSIM** @ `f9de37c` (Jack-guo-xy) | committed JSON goldens | identical ≤ 1e-5, distorted ≤ 5e-3; strip-vs-whole ≤ 1e-6 |
 | `iwssim-piq` | same algorithm as `iwssim`; the **JPEG AIC-4 `IW-SSIM` column** (jpeg-ai-qaf `IW_SSIM` on unrounded Y) | published AIC-4 `metrics_fullres.tab` | med 3.9e-6, max 2.6e-5 over 54 pairs (2026-09-26) |
@@ -37,7 +37,7 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 | `fsim` | authors' **`FR_FSIMc.m`** (research license) | Octave goldens, `validation/` | ≤ 5e-8 over 18 rows |
 | `vsi` | authors' **`VSI.m`** (author site, research license) | Octave + `pkg load image` goldens | ≤ 1e-4 over 14 rows |
 | `msssim` | Wang's **`msssim.m`** (MAD_Competition archive) | Octave goldens, `validation/` | ≤ 8.8e-6 over 15 rows |
-| `msssim` (libvmaf module) | libvmaf **`float_ssim`/`float_ms_ssim`** @ **f85a8536** (vendored via `vmaf-head-sys 0.2.0`, test-only) | libvmaf FFI oracle in `tests/ffi_libvmaf.rs` | asserted ≤ 2e-4; observed ≪ gate (8-bit, 10-bit, identical) |
+| `msssim` (libvmaf module) | libvmaf **`float_ssim`/`float_ms_ssim`** @ **f85a8536** (vendored via `vmaf-head-sys 0.2.0`, test-only) | libvmaf FFI oracle in `crates/msssim/tests/ffi_libvmaf.rs` | asserted ≤ 2e-4; observed ≪ gate (8-bit, 10-bit, identical) |
 | `vif` | authors' **`vifp_mscale.m`** (pixel-domain release) | Octave goldens, `validation/` | ≤ ~5e-13 over 17 rows |
 | `vifvec` | authors' **`vifvec.m`** + matlabPyrTools `sp5Filters`/`buildSpyr`/`vifsub_est_M` (steerable-pyramid vecGSM release — a different metric from `vif` that shares the name) | GNU Octave run of the official `.m` set | ≤ 1e-9 over 10 goldens (incl. odd dims, 72px floor, identity, black-on-flat) |
 | `mad-iqa` | Larson & Chandler **`hi_index.m`/`lo_index.m`** + `ical_std.c`/`ical_stat.c` (STMAD_2011, archived in Netflix/vmaf); JEI 2010 combine | Octave `.m` shims of the C-mex + official `.m` drivers | hi 2.4e-7, lo 1.8e-6, mad 1.3e-6 rel over 13 rows |
@@ -52,7 +52,7 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 | `dssim-gpu` | **`dssim-core` v3.4** | integration tests vs published crate | see crate README/`PORT_STATUS` |
 | `iwssim-gpu` | in-tree **`iwssim`** (this repo) | CPU-vs-GPU parity | see entry — column-name split is deliberate |
 | `zensim` (CPU) | in-house metric — **no external reference exists** | self | n/a — the crate *is* the definition |
-| `zensim-gpu` | **`zensim` 0.2.8 / pinned 0.3.0** | `tests/cpu_gpu_diffmap_parity.rs` | ≤ 2.08e-4 pointwise; 12 documented items |
+| `zensim-gpu` | **`zensim` 0.2.8 / pinned 0.3.0** | `crates/zensim-gpu/tests/it/cpu_gpu_diffmap_parity.rs` | ≤ 2.08e-4 pointwise; 12 documented items |
 
 ## Cross-cutting house conventions (diverge from every MATLAB reference by design)
 
@@ -93,7 +93,7 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 
 Deep doc: `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md` (6 open items),
 `crates/cvvdp/docs/NAN_ON_IDENTICAL_INPUT.md`,
-`docs/CVVDP_CONFORMANCE.md`.
+`crates/cvvdp/docs/CVVDP_CONFORMANCE.md`.
 
 - **RESOLVED** — Temporal channel (`Y_t`, `beta_t` pooling, 4th slots of
   `mask_q`/`xcm_weights`/`baseband_weight`): ported — `VideoScorer`
@@ -269,7 +269,7 @@ primitives but its own sp0 pyramid (`spyr0`), spectral path, and f64 FFT.
   it; the reference hard-requires ≥ 176 min-dim. Canonical `score_gray`
   keeps the reference's requirement.
 - **EXTENSION** — `score_strip{,_gray}` bounded-height strip processing;
-  strip-vs-whole self-divergence ≤ 1e-6 (`tests/strip_parity.rs`).
+  strip-vs-whole self-divergence ≤ 1e-6 (`crates/iwssim/tests/strip_parity.rs`).
 - Golden tolerances are looser than the measured agreement (identical
   ≤ 1e-5, distorted ≤ 5e-3 asserted) — the reference itself is a Python
   reimplementation of Wang & Li's MATLAB, so the tolerance reflects
@@ -582,7 +582,7 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   crates.io equivalent when the sibling checkout is absent).
 - **DIVERGES** — butteraugli-gpu strip mode: per-strip host-side max +
   p3/p6/p12 reduction order differs from the single fused on-device
-  reduce → ≤ 1e-4 relative, enforced by `tests/multires_strip.rs`.
+  reduce → ≤ 1e-4 relative, enforced by `crates/butteraugli-gpu/tests/it/multires_strip.rs`.
 
 ### `dssim` / `dssim-gpu`
 
@@ -607,7 +607,8 @@ unification). `hdr-pu` (`compute_ssimulacra2_pu_nits`) is an upstream
   reducer constants and diffmap renormalisation, compat shim for
   `score_features_with_profile_and_codec`, benchmark record).
 - **DIVERGES** — diffmap CPU-vs-GPU ≤ 2.08e-4 pointwise
-  (`tests/cpu_gpu_diffmap_parity.rs`), larger than the new ports' parity
+  (`crates/zensim-gpu/tests/it/cpu_gpu_diffmap_parity.rs`), larger than
+  the new ports' parity
   because the diffmap path still runs a CPU fallback (§2b/§9).
 
 ## Maintenance rule

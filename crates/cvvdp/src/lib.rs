@@ -300,6 +300,15 @@ pub enum Error {
     InvalidFps,
     /// `VideoScorer::finish` called with zero frames pushed.
     NoFrames,
+    /// [`TempPadding::Valid`] emitted no output frames — the clip is
+    /// shorter than the temporal filter (`frames < filter_len`).
+    /// Only `Valid` can produce zero outputs for a non-empty clip.
+    TooShortForFilter {
+        /// Frames pushed.
+        frames: usize,
+        /// Temporal filter length in taps (`2·ceil(0.125·fps)+1`).
+        filter_len: usize,
+    },
     /// A `VideoScorer` accepts u8, u16, or f32 frames — but only one
     /// sample type per scorer instance (set by the first `push_*`
     /// call).
@@ -328,6 +337,13 @@ impl core::fmt::Display for Error {
                 write!(f, "invalid frames_per_second (need finite > 0)")
             }
             Error::NoFrames => write!(f, "no frames pushed to VideoScorer"),
+            Error::TooShortForFilter {
+                frames,
+                filter_len,
+            } => write!(
+                f,
+                "clip too short for valid temporal padding: {frames} frames < {filter_len}-tap filter"
+            ),
             Error::MixedSampleTypes => write!(
                 f,
                 "frame sample type differs from the first pushed frame's (one of u8/u16/f32 per VideoScorer)"

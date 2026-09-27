@@ -37,7 +37,7 @@ Used by `zensim-gpu/tests/it/memory_mode.rs` for budget calculation verification
 
 - `ZensimOpaque`, `ZensimParams`, `Error`, `Result` — primary API.
 - `ZensimFeatureRegime` enum + `needs_extended_kernel()` — consumed by `zenmetrics-cli` (`ZensimFeatureRegime::WithIw.total_features()`).
-- `Zensim<R>` typed API — used in `zensim-gpu/tests/it/cpu_gpu_feature_sweep.rs`.
+- `Zensim<R>` typed API — used in `crates/zensim-gpu/tests/it/cpu_gpu_feature_sweep.rs`.
 - `TOTAL_FEATURES`, `TOTAL_FEATURES_EXTENDED`, `TOTAL_FEATURES_WITH_IW` — consumed by cli tests.
 - `memory_mode::reclaim_pooled_vram` — called by `zenmetrics-api`.
 - `memory_mode::resolve_auto`, `estimate_gpu_memory_bytes`, `estimate_strip_gpu_memory_bytes_with_regime` — used by orchestrator / opaque init.

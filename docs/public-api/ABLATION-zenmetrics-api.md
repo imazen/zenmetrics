@@ -14,7 +14,7 @@ Known consumers: `zenmetrics-cli` (primary driver — uses nearly the entire sur
 
 The `hdr` module (HDR surface: `HdrFeeding`, `HdrTransfer`, `HdrScorer`, `DisplayModel`, `pu21_encode`, `pq_eotf`, `srgb_eotf`, etc.) is the June 2026 PU program API. Per mission instructions: **KEEP wholesale** — recent deliberate design. The free functions (`pu21_encode`, `pu21_decode`, `pq_eotf`, `pq_inverse_eotf`, `srgb_eotf`, `hlg_inverse_oetf`, `hlg_system_gamma`, `nits_interleaved_to_pu_luma_gray`, `hdr_feeding`) are used by `zenmetrics-cli/src/hdr.rs` (confirmed `pu21_encode` call at line 397). KEEP.
 
-The `context` module (`MetricContext<R>`, `PairHandles`) is a `cubecl-types`-gated low-level typed upload-once API used by `zenmetrics-api/tests/it/compute_handles.rs` and `zenmetrics-api/src/metric.rs:1510` (`pair.ref_handle`, `pair.dist_handle`). The pub fields (`client`, `width`, `height` on `MetricContext`; `ref_handle`, `dist_handle`, `generation` on `PairHandles`) serve the batch-scoring pattern. KEEP.
+The `context` module (`MetricContext<R>`, `PairHandles`) is a `cubecl-types`-gated low-level typed upload-once API used by `crates/zenmetrics-api/tests/it/compute_handles.rs` and `zenmetrics-api/src/metric.rs:1510` (`pair.ref_handle`, `pair.dist_handle`). The pub fields (`client`, `width`, `height` on `MetricContext`; `ref_handle`, `dist_handle`, `generation` on `PairHandles`) serve the batch-scoring pattern. KEEP.
 
 ---
 
@@ -51,7 +51,7 @@ This digest summarizes the highest-confidence findings across the workspace. Ord
 | 2 | `cvvdp::diffmap` (empty-pub module) | cvvdp | B | Module body is entirely `pub(crate)`; snapshot shows the module name but zero child items. Zero external refs. |
 | 3 | `cvvdp::kernels::csf::csf_lut_v0_5_4` (sub-module) | cvvdp | B | LUT constants re-exported at the parent `csf::` level; the sub-module path has zero external consumer hits. |
 | 4 | `iwssim::IwssimParams` fields `bl_sz_x`, `bl_sz_y`, `sigma_nsq` | iwssim | A | Never set via struct literal outside crate; only `allow_small` and `iw_flag` have external use. Three algorithmic tunables with no documented stable contract. |
-| 5 | `butteraugli_gpu::ButteraugliOpaque::pack_srgb_into_packed_u32_handle` | butteraugli-gpu | B | Used only in `examples/bench_staging_block.rs` (diagnostic bench, not production path). No production callers. |
+| 5 | `butteraugli_gpu::ButteraugliOpaque::pack_srgb_into_packed_u32_handle` | butteraugli-gpu | B | Used only in `crates/butteraugli-gpu/examples/bench_staging_block.rs` (diagnostic bench, not production path). No production callers. |
 | 6 | `iwssim::rgb_u8_to_gray_bt601(&[u8], &mut [f32])` (in-place) | iwssim | B | Only the `_vec` variant is called cross-crate (by `iwssim-gpu`). The in-place form has zero external consumers. |
 | 7 | `iwssim::STRIP_BODY_MIN`, `iwssim::STRIP_HALO_ROWS` | iwssim | B | Self-test only; callers receive an error on invalid `h_body`, don't need the bound constant. |
 | 8 | `ssim2_gpu::memory_mode::STRIP_HALO_ROWS`, `STRIP_H_BODY_DEFAULT` | ssim2-gpu | B | Self-test only; not referenced by `zenmetrics-api`, CLI, or orchestrator. |

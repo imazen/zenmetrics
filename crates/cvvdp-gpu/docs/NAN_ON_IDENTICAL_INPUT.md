@@ -34,7 +34,7 @@ byte-for-byte-identical distorted buffer at the exact sizes the flagged
 rows show (e.g. `64x48`, `96x128`, `147x192`). That's a real, confirmed
 coverage gap, closed by the two new regression tests added alongside this
 doc (`cvvdp_score_identical_solid_colors_yield_exact_max_jod` in
-`tests/it/pipeline_score.rs`, `identical_solid_colors_yield_exact_max_jod_and_zero_diffmap`
+`crates/cvvdp-gpu/tests/it/pipeline_score.rs`, `identical_solid_colors_yield_exact_max_jod_and_zero_diffmap`
 in the `cvvdp` crate's `tests/it/diffmap_invariants.rs`).
 
 ## What was NOT reproduced (extensive live testing, all clean)

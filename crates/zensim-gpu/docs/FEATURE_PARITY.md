@@ -227,7 +227,7 @@ The `extended_parity` tests use 5e-3 rel for X/Y at all scales and
 
 ### Principled per-channel H-blur activity — 2026-05-17 redesign
 
-The 2026-05-17 RCA (see `examples/b_channel_diagnostic.rs` for the
+The 2026-05-17 RCA (see `crates/zensim-gpu/examples/b_channel_diagnostic.rs` for the
 methodology — instrumented CPU+GPU shadow per-row dumps to TSV)
 identified the original CPU activity computation as an accidental
 cross-channel buffer-reuse cascade, NOT a designed algorithm:
@@ -299,7 +299,7 @@ block via `ZensimResult::features()` whenever the active profile's
 plumbing required.**
 
 Direct per-slot parity coverage in
-`tests/extended_parity.rs`:
+`crates/zensim-gpu/tests/it/extended_parity.rs`:
 
 - `iw_slot_parity_noisy_gradient_64` — 64×64 gradient + noise,
   asserts GPU vs CPU `5e-3 rel` per slot across the 72 IW features.

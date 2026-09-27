@@ -129,7 +129,7 @@ issue if the delta exceeds the loose initial 0.5 SSIM2 gate.
 * **DSSIM parity** (`dssim-gpu` vs `dssim-cuda`) — same shape.
 * **Per-octave intermediate parity** — single-backend run-to-run
   determinism is covered by
-  [`tests/reduction_determinism.rs`](../crates/ssim2-gpu/tests/reduction_determinism.rs).
+  [`crates/ssim2-gpu/tests/it/reduction_determinism.rs`](crates/ssim2-gpu/tests/it/reduction_determinism.rs).
   Cross-backend agreement on the per-octave intermediates is a
   tighter gate worth landing after the scalar score gate stabilizes
   and any large discrepancies have been localized.
@@ -139,7 +139,7 @@ issue if the delta exceeds the loose initial 0.5 SSIM2 gate.
   backend.
 * **Migration plan** — once the measured agreement is known, the
   audit's recommended next step is either "delete coefficient's
-  `src/gpu.rs` and depend on `ssim2-gpu`" or "extract a shared
+  `crates/zenmetrics-orchestrator/src/gpu.rs` and depend on `ssim2-gpu`" or "extract a shared
   `zen-gpu-metrics` interface and let both backends implement it".
   Both are out of scope for the parity-test chunk; this doc is the
   measurement that enables the decision.

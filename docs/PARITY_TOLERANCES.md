@@ -63,7 +63,7 @@ scale — negligible).
 
 ### zensim-gpu
 
-**Investigation**: zensim-gpu's reduction kernel (`kernels/reduce.rs`)
+**Investigation**: zensim-gpu's reduction kernel (`crates/zensim-gpu/src/kernels/reduce.rs`)
 **already** accumulates in f64 (`SharedMemory::<f64>`, per-thread f64
 sums). The residual drift vs the f64 CPU reference comes from the
 **per-cell** SSIM map arithmetic in the fused per-cell kernel — mu,
@@ -265,7 +265,7 @@ been deeply audited in the 2026-05-22 pass:
    reduction speed-up and accept the ~5e-5 reorder noise. The
    `cargo test -p ssim2-gpu` default run now measures `|Δ| = 0`
    across runs; see
-   `crates/ssim2-gpu/tests/reduction_determinism.rs` for the
+   `crates/ssim2-gpu/tests/it/reduction_determinism.rs` for the
    10-run bit-identity gate that catches regressions.
 
 ## Verification commands

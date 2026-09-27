@@ -33,7 +33,7 @@ Known consumers: `zenmetrics-api` (opaque path, `reclaim_pooled_vram`), `zenmetr
 ---
 
 ## Memory mode module assessment
-The `memory_mode` module is broadly pub because `zenmetrics-api::metric.rs` calls `ssim2_gpu::memory_mode::reclaim_pooled_vram(b)` directly, and `butteraugli-gpu/tests/it/opaque_strip_parity.rs` calls `resolve_auto`. These are legitimate cross-crate consumers. The module must remain pub; only the three items above are over-exposed.
+The `memory_mode` module is broadly pub because `zenmetrics-api::metric.rs` calls `ssim2_gpu::memory_mode::reclaim_pooled_vram(b)` directly, and `crates/butteraugli-gpu/tests/it/opaque_strip_parity.rs` calls `resolve_auto`. These are legitimate cross-crate consumers. The module must remain pub; only the three items above are over-exposed.
 
 ## Items confirmed KEEP (representative)
 

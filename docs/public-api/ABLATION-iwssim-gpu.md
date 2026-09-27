@@ -5,7 +5,7 @@
 Snapshot: `docs/public-api/iwssim-gpu.txt` — 232 items (default == all-features).
 `iwssim-gpu` is the reference crate for the shared `memory_mode` pattern — other GPU crates doc-comment "see `iwssim_gpu::memory_mode::live_vram_probe_bytes`" as the canonical description. This crate's memory_mode surface is the most complete and most consumed.
 
-Known consumers: `zenmetrics-api` (`reclaim_pooled_vram`), `zenmetrics-cli` (`IWSSIM_COLUMN_NAME`, `IwssimParams`), `iwssim-gpu/tests/it/vram_probe.rs` (live VRAM tests using `live_vram_probe_bytes`, `vram_cap_bytes`).
+Known consumers: `zenmetrics-api` (`reclaim_pooled_vram`), `zenmetrics-cli` (`IWSSIM_COLUMN_NAME`, `IwssimParams`), `crates/iwssim-gpu/tests/it/vram_probe.rs` (live VRAM tests using `live_vram_probe_bytes`, `vram_cap_bytes`).
 
 ---
 
@@ -35,7 +35,7 @@ Known consumers: `zenmetrics-api` (`reclaim_pooled_vram`), `zenmetrics-cli` (`IW
 - `IwssimOpaque` (called `Iwssim` via re-export), `IwssimParams`, `Error`, `Result` — primary API.
 - `IwssimParams::allow_small` — consumed by CLI.
 - `IWSSIM_COLUMN_NAME`, `MIN_NATIVE_DIM`, `NUM_SCALES` — consumed by CLI / orchestrator.
-- `memory_mode::live_vram_probe_bytes`, `vram_cap_bytes` — consumed by `iwssim-gpu/tests/it/vram_probe.rs` (verified by explicit test suite).
+- `memory_mode::live_vram_probe_bytes`, `vram_cap_bytes` — consumed by `crates/iwssim-gpu/tests/it/vram_probe.rs` (verified by explicit test suite).
 - `memory_mode::reclaim_pooled_vram` — called by `zenmetrics-api`.
 - `memory_mode::resolve_auto`, `estimate_gpu_memory_bytes`, `estimate_strip_gpu_memory_bytes` — used by opaque init / orchestrator.
 - `memory_mode::MemoryMode`, `ResolvedMode` — typed mode API.

@@ -1,12 +1,12 @@
 # SIMD-vs-Scalar Kernel Equivalence (brute-force harness)
 
-`crates/cvvdp/tests/simd_equivalence.rs` brute-force compares every
+`crates/cvvdp/tests/it/simd_equivalence.rs` brute-force compares every
 cvvdp SIMD kernel against its scalar reference across thousands of
 randomized inputs + adversarial edge cases, and measures the per-element
 ULP / relative-error envelope.
 
 **Why this exists.** The end-to-end 1e-4 JOD parity gate
-(`tests/parity_against_host_scalar.rs`) and the ~5 fixture tests inline
+(`crates/cvvdp/tests/it/parity_against_host_scalar.rs`) and the ~5 fixture tests inline
 in `simd_pyramid.rs` / `simd_math.rs` can MASK a per-element kernel
 divergence: the Minkowski spatial/band/channel pooling absorbs isolated
 per-pixel errors before they reach the scalar JOD. This harness checks

@@ -29,7 +29,7 @@ and Linear output absolute cd/m² (no `(Y_peak − Y_black)` scaling
 output `(Y_peak − Y_black) · inverse_EOTF(V) + Y_black + Y_refl`
 (the input is relative).
 
-Reference values verified by `tests/eotf_primaries_invariants.rs`:
+Reference values verified by `crates/cvvdp-gpu/tests/it/eotf_primaries_invariants.rs`:
 
 - `pq_eotf_scalar(0.5) ≈ 92.25 cd/m²`
 - `pq_eotf_scalar(1.0) ≈ 10000 cd/m²`
@@ -179,7 +179,7 @@ Both displays meet the mean<0.10 gate; the max outlier appears on both
 displays at the same pair (`photo_dark_noise_heavy`), indicating a
 content-specific divergence rather than a display-dispatch defect.
 GPU and host_scalar numbers agree to ~0.0002 JOD, consistent with the
-GPU↔scalar pin in `tests/color_kernel_display_dispatch.rs`.
+GPU↔scalar pin in `crates/cvvdp-gpu/tests/it/color_kernel_display_dispatch.rs`.
 
 Full breakdown: `benchmarks/cvvdp_iphone14_parity_2026-05-25.tsv`.
 

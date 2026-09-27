@@ -56,7 +56,7 @@ image's last row is covered.
 Numerical tolerance vs `new_multires`: per-strip host-side max + p3 / p6
 / p12 reduction order differs from the single fused on-device reduce,
 so a small drift is expected. The in-tree tests
-(`tests/multires_strip.rs`) enforce `1e-4` relative tolerance across the
+(`crates/butteraugli-gpu/tests/it/multires_strip.rs`) enforce `1e-4` relative tolerance across the
 256² → 4000×3000 grid, including non-square aspect ratios and uneven
 body sizes.
 
@@ -111,6 +111,6 @@ breaks bit-reproducibility).
 - `bench_strip_vs_whole_cuda` — single-resolution strip vs whole bench.
 - `PORT_STATUS.md` — per-module port status from the cuda reference.
 - `tests/strip_parity.rs` — single-resolution strip parity (19 tests).
-- `tests/multires_strip.rs` — multi-resolution strip parity (11 tests).
-- `tests/opaque_strip_parity.rs` — strip-mode routing through the
+- `crates/butteraugli-gpu/tests/it/multires_strip.rs` — multi-resolution strip parity (11 tests).
+- `crates/butteraugli-gpu/tests/it/opaque_strip_parity.rs` — strip-mode routing through the
   opaque shim (10 tests).

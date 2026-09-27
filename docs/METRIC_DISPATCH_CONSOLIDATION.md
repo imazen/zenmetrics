@@ -24,7 +24,7 @@ Five overlapping scoring paths with inconsistent feature/cuda gating:
 1. `score-pairs` typed `CvvdpBatchScorer` bypass (`main.rs:1224/1993/2134`,
    `#[cfg(gpu-cvvdp)]`) — short-circuits `run_metric()` for per-pair instance reuse.
 2. `run_metric()` (`metrics/mod.rs`) — the umbrella single-shot path.
-3. `MetricCache` (`metrics/cache.rs`) — cached umbrella path (sweep/batch); routes
+3. `MetricCache` (`crates/zenmetrics-cli/src/metrics/cache.rs`) — cached umbrella path (sweep/batch); routes
    cvvdp via `compute_umbrella` only under `#[cfg(gpu-cvvdp)]`, else `_ => run_metric`.
 4. `zenmetrics-orchestrator` scoring (`orchestrator_runner::orchestrator_score_one`,
    `sweep/run.rs::score_via_orchestrator`) — **cuda-gated**; the `not(orchestrator-cuda)`
