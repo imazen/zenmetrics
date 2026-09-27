@@ -1,0 +1,2 @@
+# Preserve historical measurement bytes, including profiler whitespace.
+* -text -whitespace

@@ -50,6 +50,8 @@ members = [
 # training-framework counterpart (burn 0.21 autodiff + custom
 # RankNet loss); also standalone, also kept out of the parent graph.
 exclude = [
+    # Frozen Margarine research dependency graph and CPU-only command.
+    "crates/margarine",
     # Lean, statically linked AV1 comparison executor; no GPU/corpus siblings.
     "benchmarks/av1-compare",
     "crates/burn-conv-spike",

@@ -1,0 +1,8 @@
+{
+  "migration_archive": true,
+  "original_path": "benchmarks/margarine_native_gaussian_quality_2026-09-26.meta.json",
+  "original_sha256": "10f9a9ec33849ed3d703f880d76d8c0017d64fa8977e99299b6160f02099b54c",
+  "original_bytes": 57452,
+  "source_url": "https://github.com/imazen/butteraugli/blob/13c49cbcab6e2b2bb65f60e3cb28344463bacbf7/benchmarks/margarine_native_gaussian_quality_2026-09-26.meta.json",
+  "local_archive": "/Users/lilith/work/codec-artifacts/margarine/repo-migration-2026-09-27/originals/benchmarks/margarine_native_gaussian_quality_2026-09-26.meta.json"
+}

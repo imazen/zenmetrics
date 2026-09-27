@@ -72,6 +72,13 @@ call [`zenmetrics-orchestrator`](https://github.com/imazen/zenmetrics/blob/maste
 rather than the CLI per pair. For scoring across a **fleet of machines**, use the
 zenfleet job system. Both are covered below.
 
+## Margarine research
+
+The unpublished [Margarine experiment](crates/margarine/README.md) and its
+[evaluation index](crates/margarine/DATA_PROVENANCE.md) now live here. Build its
+standalone CPU command with `just margarine-build`; full qualification remains
+in progress. It is not yet registered in the umbrella metric dispatcher.
+
 ## Metric crates
 
 Six GPU metric crates plus the in-tree CPU reference crates the orchestrator's

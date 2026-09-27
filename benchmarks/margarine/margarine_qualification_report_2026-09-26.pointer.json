@@ -1,0 +1,8 @@
+{
+  "migration_archive": true,
+  "original_path": "benchmarks/margarine_qualification_report_2026-09-26.pointer.json",
+  "original_sha256": "728cefaca4023a1544132f56dc72e5c4d6fd6f39bf1a0e3d283add3ae0e214aa",
+  "original_bytes": 1552,
+  "source_url": "https://github.com/imazen/butteraugli/blob/13c49cbcab6e2b2bb65f60e3cb28344463bacbf7/benchmarks/margarine_qualification_report_2026-09-26.pointer.json",
+  "local_archive": "/Users/lilith/work/codec-artifacts/margarine/repo-migration-2026-09-27/originals/benchmarks/margarine_qualification_report_2026-09-26.pointer.json"
+}

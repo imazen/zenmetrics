@@ -1,0 +1,110 @@
+name: Margarine
+on:
+  push:
+    branches: [master]
+    paths: ['crates/margarine/**', '.github/workflows/margarine.yml']
+  pull_request:
+    paths: ['crates/margarine/**', '.github/workflows/margarine.yml']
+  workflow_dispatch:
+concurrency:
+  group: margarine-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_BUILD_JOBS: 2
+  RAYON_NUM_THREADS: 2
+  CARGO_TERM_COLOR: always
+defaults:
+  run:
+    shell: bash
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/margarine
+      - name: Check research and selected kernels
+        run: |
+          python3 crates/margarine/verify_sources.py
+          python3 -m unittest discover -s experiments/margarine -p 'test_*.py'
+          cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine-lab --check
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features planar --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features row-psycho --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features row-tiles,phase-rows --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features peak-stratified --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features native-gaussian --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features native-mask --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features full-malta --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features row-malta --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features wide-malta --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features simd-malta --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,simd-malta,row-malta --bin margarine -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features simd-opsin --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features full-malta,coarse-gaussian --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features native-uhf --all-targets -- -D warnings
+  test:
+    name: Margarine (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-22.04, ubuntu-24.04-arm, macos-latest, macos-15-intel, macos-26-intel, windows-latest, windows-11-arm]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/margarine
+      - name: Run research and selected kernels
+        run: |
+          cargo test --locked --manifest-path crates/margarine/Cargo.toml
+          cargo test --locked --manifest-path crates/margarine/Cargo.toml --features planar
+          cargo test --locked --manifest-path crates/margarine/Cargo.toml --features row-psycho
+          cargo test --locked --manifest-path crates/margarine/Cargo.toml --features row-tiles,phase-rows
+          cargo test --locked --manifest-path crates/margarine/Cargo.toml --features peak-stratified
+          cargo test --locked --manifest-path crates/margarine/Cargo.toml --features native-gaussian
+          cargo test --locked --manifest-path crates/margarine/Cargo.toml --features native-mask
+          cargo test --locked --manifest-path crates/margarine/Cargo.toml --features full-malta
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features full-malta
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features row-malta
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features wide-malta
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features simd-malta
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features simd-malta,wide-malta
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features simd-malta,row-malta
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,simd-malta,row-malta --bin margarine
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features simd-opsin,row-malta
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features full-malta,coarse-gaussian
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features simd-malta,coarse-gaussian
+          cargo test --locked --release --manifest-path crates/margarine/Cargo.toml --features native-uhf
+  cross:
+    name: Margarine (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [i686-unknown-linux-gnu, armv7-unknown-linux-gnueabihf, aarch64-unknown-linux-gnu]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/margarine
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+      - name: Run research and selected kernels under QEMU
+        run: |
+          cross test --locked --manifest-path crates/margarine/Cargo.toml --target ${{ matrix.target }}
+          cross test --locked --manifest-path crates/margarine/Cargo.toml --features planar --target ${{ matrix.target }}
+          cross test --locked --manifest-path crates/margarine/Cargo.toml --features row-psycho --target ${{ matrix.target }}
+          cross test --locked --manifest-path crates/margarine/Cargo.toml --features row-tiles,phase-rows --target ${{ matrix.target }}
+          cross test --locked --release --manifest-path crates/margarine/Cargo.toml --no-default-features --features rayon,avx512,simd-malta,row-malta --bin margarine --target ${{ matrix.target }}

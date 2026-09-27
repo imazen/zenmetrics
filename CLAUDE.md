@@ -1254,3 +1254,14 @@ vast.ai fleet). Two canonical variants (same 700k cells, same `source_id` split 
 - **Credit:** reference images + distortion design © VQA Group, Universität Konstanz (Lin, Hosu,
   Saupe) — KADID-10k / KADIS-700k, https://database.mmsp-kn.de/kadid-10k-database.html ("freely
   available to the research community"). Cite KADID-10k (QoMEX 2019) + DeepFL-IQA (arXiv:2001.08113).
+
+## Margarine research
+
+`crates/margarine` is an unpublished standalone workspace, excluded from the
+umbrella dependency graph. Read its `DATA_PROVENANCE.md` before evaluation.
+Its source snapshot under `vendor/butteraugli` is pinned and hash-verified by
+`just margarine-vendor-check`; do not silently replace it with current upstream
+or a sibling checkout. The selected row-Malta command and newer native-UHF
+control are distinct. Migration does not establish quality/resource acceptance,
+and scalar ranks do not qualify spatial steering. Build/test recipes start
+with `margarine-`; the dedicated workflow carries the original feature checks.

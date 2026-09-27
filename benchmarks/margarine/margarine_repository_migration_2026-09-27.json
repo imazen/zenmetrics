@@ -1,0 +1,56 @@
+{
+  "source_repository": "https://github.com/imazen/butteraugli",
+  "source_commit": "13c49cbcab6e2b2bb65f60e3cb28344463bacbf7",
+  "zenmetrics_base": "a7ded4ae",
+  "host": "mac",
+  "relocated_root": "crates/margarine",
+  "measurement_root": "benchmarks/margarine",
+  "archive": "/Users/lilith/work/codec-artifacts/margarine/repo-migration-2026-09-27/originals",
+  "inventory": "/Users/lilith/work/codec-artifacts/margarine/repo-migration-2026-09-27/inventory.json",
+  "inventory_sha256": "5a3357494727703849e2de743fbc6365c8f44213e9ec345eb3cf0ec7bbe824f8",
+  "disposition": {
+    "relocated": 420,
+    "archived_pointers": 9,
+    "archived_guides": 2,
+    "excluded_python_bytecode": 2
+  },
+  "replays": {
+    "selected-replay": {
+      "pairs": 300,
+      "verified": 300,
+      "all_scalar_fields_exact": true,
+      "all_native_map_bytes_exact": true,
+      "manifest_path": "/Users/lilith/work/codec-artifacts/margarine/repo-migration-2026-09-27/selected-replay/_MANIFEST.json",
+      "manifest_sha256": "cbaaf6217a9c1e62f7bdb7ae83bbacb54ce99034e67776fce6a0deb12fa6c9e9",
+      "binaries": {
+        "before": {
+          "path": "/Users/lilith/work/codec-artifacts/margarine/repo-migration-2026-09-27/margarine-before",
+          "sha256": "412aba7c716765abf574cdb7b65809c07708e03c50a743e4781de744f70d0f24"
+        },
+        "after": {
+          "path": "/Users/lilith/work/zen/zenmetrics/crates/margarine/target/release/margarine",
+          "sha256": "458caf2d1604ac0e63e559595faf51a21c2184e618d957bbd675df09afa2c5de"
+        }
+      }
+    },
+    "uhf-replay-verified": {
+      "pairs": 300,
+      "verified": 300,
+      "all_scalar_fields_exact": true,
+      "all_native_map_bytes_exact": true,
+      "manifest_path": "/Users/lilith/work/codec-artifacts/margarine/repo-migration-2026-09-27/uhf-replay-verified/_MANIFEST.json",
+      "manifest_sha256": "5e1d892a030fd0fbf878bd7c94dcb0e011c42e5c84fcca403b069813415f608c",
+      "binaries": {
+        "before": {
+          "path": "/Users/lilith/work/codec-artifacts/margarine/repo-migration-2026-09-27/margarine-uhf-before",
+          "sha256": "3e07e35973cd228e14dcdc0c32d59b1a02033541ff7a9cf6c2bb42bb55af2b25"
+        },
+        "after": {
+          "path": "/Users/lilith/work/zen/zenmetrics/crates/margarine/target/release/margarine-box3",
+          "sha256": "3bf13625fdfa55d006931d189c191f4ce8cbe5b8485d94a2c10533fbc98d09be"
+        }
+      }
+    }
+  },
+  "scope": "Repository relocation only; no new quality, speed, memory, or spatial-steering acceptance claim."
+}

@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/imazen/butteraugli",
+  "commit": "13c49cbcab6e2b2bb65f60e3cb28344463bacbf7",
+  "source_directory": "butteraugli/src",
+  "sha256": {
+    "consts.rs": "b7e5e985a8cad3b3bd9c37b1161f88eea9a2161bdb9f14ac3c5d1b3a90e841aa",
+    "diff.rs": "2aa0afca049f391bf656d09c23b4ba2250318242a546a24c83ce0ede015b9836",
+    "blur.rs": "1fec9540743f309ff72bceeb031926c5f09c899e4630c7294abec397ce1b2835",
+    "image.rs": "f18a200ae99189a4c3f4a5db6a3feaa982c851b18c5a71f5a3f83dcef56c7d7e",
+    "malta.rs": "00b6dcf9adb0bec5af7f36e5688cbcd6851d722bf545e105f2e558e3ddea55e8",
+    "mask.rs": "e469a4f31b777c58a83c336ba193c729e79c9956275caf869204ab467c0cdbd2",
+    "opsin.rs": "b5db4474e89b75f05f03f1f0bc517217d7be996b86b1396a58e7fb60f531f3ab",
+    "psycho.rs": "7ababd4f157986da76eccc5822c0647ae923e1c2200f6edafac5c3a8f3038e24"
+  }
+}

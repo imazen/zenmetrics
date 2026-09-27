@@ -1,0 +1,8 @@
+{
+  "migration_archive": true,
+  "original_path": "benchmarks/margarine_native_mask_quality_2026-09-26.meta.json",
+  "original_sha256": "3253ce047c8793508240cbbb1b3b75b081c64accbfcf7e0e0f6fa0fd9a07973d",
+  "original_bytes": 123607,
+  "source_url": "https://github.com/imazen/butteraugli/blob/13c49cbcab6e2b2bb65f60e3cb28344463bacbf7/benchmarks/margarine_native_mask_quality_2026-09-26.meta.json",
+  "local_archive": "/Users/lilith/work/codec-artifacts/margarine/repo-migration-2026-09-27/originals/benchmarks/margarine_native_mask_quality_2026-09-26.meta.json"
+}

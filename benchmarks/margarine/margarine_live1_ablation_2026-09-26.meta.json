@@ -1,0 +1,8 @@
+{
+  "migration_archive": true,
+  "original_path": "benchmarks/margarine_live1_ablation_2026-09-26.meta.json",
+  "original_sha256": "271992c374db1d5713683abcc19af27bf522412a8d6adb5c50c24efc6be72318",
+  "original_bytes": 142557,
+  "source_url": "https://github.com/imazen/butteraugli/blob/13c49cbcab6e2b2bb65f60e3cb28344463bacbf7/benchmarks/margarine_live1_ablation_2026-09-26.meta.json",
+  "local_archive": "/Users/lilith/work/codec-artifacts/margarine/repo-migration-2026-09-27/originals/benchmarks/margarine_live1_ablation_2026-09-26.meta.json"
+}

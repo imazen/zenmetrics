@@ -1,0 +1,2 @@
+# The source manifest pins exact vendored bytes on every platform.
+vendor/butteraugli/* -text
