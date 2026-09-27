@@ -52,5 +52,17 @@
       }
     }
   },
-  "scope": "Repository relocation only; no new quality, speed, memory, or spatial-steering acceptance claim."
+  "scope": "Repository relocation only; no new quality, speed, memory, or spatial-steering acceptance claim.",
+  "destination_commit": "ad386c42c2cdc931a14f6edd50d4f417542c7c9b",
+  "butteraugli_cleanup_commit": "4beadd9596fc",
+  "local_checks": [
+    "selected release tests: 58 passed",
+    "native-UHF release tests across all binaries: 144 passed",
+    "default research tests: 75 passed",
+    "Python tests: 39 passed",
+    "default/native-UHF/selected clippy: passed",
+    "source hash verification: 8/8",
+    "formatting: passed",
+    "Butteraugli library after cleanup: 88 passed"
+  ]
 }

@@ -14,7 +14,7 @@ Workspace conventions per the global rules:
 ## [Unreleased]
 
 - Margarine: relocate the unpublished CPU experiment and evaluation records from
-  `imazen/butteraugli` source `13c49cbc`, preserving the selected numeric kernel.
+  `imazen/butteraugli` source `13c49cbc`, preserving the selected numeric kernel (`ad386c42`).
 
 - cvvdp-gpu (`c4bfe0fd`, `86449118`): **fix multi-strip Mode B (`StripPair`) on wgpu.** The
   DKL, Gaussian-pyramid, Weber and CSF strip walkers bound per-strip sub-views at byte offsets
