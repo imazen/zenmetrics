@@ -121,3 +121,6 @@ required-features = ["cuda"]
 [[example]]
 name = "zensim_bench_t4_warm_iw"
 required-features = ["cuda"]
+
+[lints]
+workspace = true

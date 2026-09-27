@@ -20,3 +20,6 @@ thiserror = { workspace = true }
 # workers disagree on a near-tie owner. The pure-Rust libm crate is bit-identical
 # everywhere (IEEE basic ops only), so shard ownership stays cross-platform deterministic.
 libm = "0.2.16"
+
+[lints]
+workspace = true

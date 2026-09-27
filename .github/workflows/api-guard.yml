@@ -1,0 +1,16 @@
+# api-guard caller — the reusable workflow lives in imazen/zenutils and posts
+# ONE advisory PR comment with the public-API surface diff (committed
+# docs/public-api/*.txt snapshots) plus policy flags. See
+# zenutils/quality/README.md.
+name: api-guard
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  api-guard:
+    uses: imazen/zenutils/.github/workflows/api-guard.yml@main

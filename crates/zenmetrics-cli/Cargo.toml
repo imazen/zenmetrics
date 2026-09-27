@@ -665,3 +665,6 @@ required-features = ["avif"]
 [[example]]
 name = "jxl_encode_ms_probe"
 required-features = ["sweep", "jxl", "png"]
+
+[lints]
+workspace = true

@@ -104,6 +104,50 @@ hygiene-check:
 test-tmpdir-discipline:
     bash crates/zenfleet-worker/tests/tmpdir_discipline_test.sh
 
+# --- quality kit (zenutils) -------------------------------------------------
+# Advisory sweep — report only, never gates CI. Kit resolution: $ZENUTILS,
+# then ../zenutils (workspace layout), then .quality-kit/ clone
+# (`just quality-bootstrap`). See ../zenutils/quality/README.md.
+ZENUTILS := env_var_or_default("ZENUTILS", justfile_directory() / "../zenutils")
+QUALITY := ZENUTILS / "quality"
+
+# Advisory quality sweep: fmt, clippy census, API exposure, stale docs,
+# unused deps, cargo deny, typos, complexity hotspots, shellcheck.
+quality *flags:
+    @q="{{QUALITY}}"; [ -x "$q/quality.sh" ] || q="{{justfile_directory()}}/.quality-kit/quality"; \
+    [ -x "$q/quality.sh" ] || { echo "kit not found — run: just quality-bootstrap"; exit 2; }; \
+    "$q/quality.sh" --root "{{justfile_directory()}}" {{flags}}
+
+# Quick sweep — skips compile-heavy clippy/deny stages.
+quality-quick:
+    @just quality --quick
+
+# Fetch the quality kit if ../zenutils isn't checked out.
+quality-bootstrap:
+    @if [ -d "{{justfile_directory()}}/../zenutils/quality" ]; then \
+      echo "kit already at ../zenutils"; \
+    else \
+      git clone --quiet https://github.com/imazen/zenutils \
+        "{{justfile_directory()}}/.quality-kit" && \
+      echo "cloned kit into .quality-kit (gitignored)"; \
+    fi
+
+# Public-API exposure/YAGNI report only.
+api-surface *flags:
+    @q="{{QUALITY}}"; [ -d "$q" ] || q="{{justfile_directory()}}/.quality-kit/quality"; \
+    python3 "$q/api-report.py" "{{justfile_directory()}}" {{flags}}
+
+# Stale-doc scan only (dead links, dead script refs, dead just recipes).
+docs-check *flags:
+    @q="{{QUALITY}}"; [ -d "$q" ] || q="{{justfile_directory()}}/.quality-kit/quality"; \
+    python3 "$q/check-stale-docs.py" "{{justfile_directory()}}" {{flags}}
+
+# Statement coverage for the default suite (llvm-cov; lcov.info written).
+# Advisory — informs refactoring risk. Heavy: first run compiles the tree.
+coverage:
+    cargo llvm-cov --workspace --lcov --output-path lcov.info
+    @cargo llvm-cov report --summary-only 2>/dev/null | tail -15 || true
+
 # gmsd crate tests (all tiers the host has, banded parallelism). The MDSI
 # author-score gate follows GMSD_MDSI_GATE / GMSD_MDSI_TARGETS above.
 test-gmsd:

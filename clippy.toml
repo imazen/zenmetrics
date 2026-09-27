@@ -1,0 +1,11 @@
+# clippy.toml — behavioral thresholds only; lint LEVELS live in the root
+# Cargo.toml [workspace.lints] tables. Derived from zenrav1e's settings.
+cognitive-complexity-threshold = 40
+too-many-arguments-threshold = 16
+trivial-copy-size-limit = 16
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-dbg-in-tests = true
+allow-print-in-tests = true
+check-private-items = true
+msrv = "1.93"

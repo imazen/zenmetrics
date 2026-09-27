@@ -257,3 +257,6 @@ required-features = ["ssim2", "cuda"]
 [[example]]
 name = "vram_drop_reclaim"
 required-features = ["cuda"]
+
+[lints]
+workspace = true

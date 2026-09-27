@@ -1,0 +1,22 @@
+[files]
+extend-exclude = [
+    "CHANGELOG.md", "Cargo.lock", "docs/public-api/*.txt",
+    "benchmarks/", "*.min.js", "ci/",
+]
+
+[default.extend-words]
+dssim = "dssim"
+ssim = "ssim"
+ssimulacra = "ssimulacra"
+butteraugli = "butteraugli"
+cvvdp = "cvvdp"
+hdrvdp = "hdrvdp"
+iwssim = "iwssim"
+vsi = "vsi"
+vastai = "vastai"
+hetzner = "hetzner"
+runpod = "runpod"
+ghcr = "ghcr"
+eotf = "eotf"
+oetf = "oetf"
+mibc = "mibc"

@@ -30,3 +30,6 @@ tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 # The integration test runs the generic `run_worker` loop against the
 # local queue + filesystem storage with a trivial compute closure.
 tempfile = "3.27.0"
+
+[lints]
+workspace = true

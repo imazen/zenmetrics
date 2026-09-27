@@ -139,3 +139,6 @@ serde_json = { workspace = true }
 # private HOME so the test doesn't clobber the developer's real
 # ~/.aws/credentials.
 tempfile = "3.27.0"
+
+[lints]
+workspace = true

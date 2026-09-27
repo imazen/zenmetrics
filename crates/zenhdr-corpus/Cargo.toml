@@ -16,3 +16,6 @@ heic = { path = "../../../heic", features = ["backend-rust"] }
 enough = "0.4.2"
 bytemuck = "1"
 image = { version = "0.25", features = ["exr"] }
+
+[lints]
+workspace = true

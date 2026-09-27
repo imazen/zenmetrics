@@ -140,3 +140,6 @@ path = "tests/it/main.rs"
 [[example]]
 name = "mem_mode_b_vs_full"
 required-features = ["cuda"]
+
+[lints]
+workspace = true

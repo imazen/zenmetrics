@@ -88,3 +88,6 @@ path = "src/bin/loop_wall.rs"
 [[bin]]
 name = "new-metrics-wall"
 path = "src/bin/new_metrics_wall.rs"
+
+[lints]
+workspace = true

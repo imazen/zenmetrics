@@ -495,3 +495,42 @@ fast-ssim2   = { path = "../fast-ssim2/fast-ssim2" }
 # pins to [workspace.dependencies] package aliases at the top of this
 # file. The zenforks-cubecl-* crates.io publication makes the workspace-
 # dependency form sufficient; [patch.crates-io] is no longer needed.
+
+# --- code quality baseline (zenutils/quality kit) -------------------------
+# Levels here are ADVISORY (warn): findings surface in `just quality` and in
+# diffs, and are fixed forward — they never gate CI. Promote a lint to deny
+# per-crate only after that crate is clean of it. Member crates opt in with
+# `[lints] workspace = true` (applied repo-wide 2026-09-27 via
+# zenutils/quality/apply-workspace-lints.py).
+[workspace.lints.rust]
+# pub items nothing outside the crate can reach -> should be pub(crate);
+# the compiler-enforced half of AGENTS.md's API policy.
+unreachable_pub = "warn"
+# The opt-in `avx512` feature cfg is used by archmage incant! dispatch in the
+# metric crates (previously each carried a crate-local [lints.rust] allow).
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("avx512"))'] }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+# pedantic/nursery stay off: too noisy for ported numeric code.
+# Ported-code allows (the zenjpeg-proven list; see zenutils/quality/templates):
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+cast_lossless = "allow"
+excessive_precision = "allow"
+unreadable_literal = "allow"
+approx_constant = "allow"
+missing_panics_doc = "allow"
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
+doc_markdown = "allow"
+uninlined_format_args = "allow"
+items_after_statements = "allow"
+unnecessary_wraps = "allow"
+unused_self = "allow"
+needless_range_loop = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
+missing_safety_doc = "warn"
+undocumented_unsafe_blocks = "warn"

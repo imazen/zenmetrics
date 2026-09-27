@@ -23,3 +23,6 @@ zenfleet-cloud = { path = "../zenfleet-cloud" }
 # No external deps on purpose: the whole point is a deterministic,
 # dependency-free simulator that runs anywhere CI runs. The RNG is a
 # 3-line xorshift; time is a virtual clock; there are no threads.
+
+[lints]
+workspace = true

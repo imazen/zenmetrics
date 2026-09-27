@@ -27,3 +27,6 @@ debug = 1
 lto = false
 codegen-units = 1
 incremental = false
+
+[lints]
+workspace = true

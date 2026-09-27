@@ -18,3 +18,6 @@ std = []
 
 [dependencies]
 libm = "0.2.16"
+
+[lints]
+workspace = true

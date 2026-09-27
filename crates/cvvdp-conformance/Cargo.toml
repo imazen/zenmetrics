@@ -79,3 +79,6 @@ name = "emit_video_situations"
 [[test]]
 name = "conformance"
 required-features = ["conformance-goldens"]
+
+[lints]
+workspace = true

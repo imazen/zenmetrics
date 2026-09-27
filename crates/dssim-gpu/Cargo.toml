@@ -105,3 +105,6 @@ required-features = ["cubecl-types"]
 [[test]]
 name = "it"
 path = "tests/it/main.rs"
+
+[lints]
+workspace = true

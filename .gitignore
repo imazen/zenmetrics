@@ -63,3 +63,4 @@ target-bookworm/
 /target-gpu-bookworm/
 /target-*/
 
+.quality-kit/

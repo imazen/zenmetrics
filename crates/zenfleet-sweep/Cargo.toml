@@ -84,3 +84,6 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 # from the synchronous local/hetzner compute closures (the `local-sweep`
 # and `hetzner` builds call it).
 tokio = { version = "1.52.3", default-features = false, features = ["rt-multi-thread"], optional = true }
+
+[lints]
+workspace = true

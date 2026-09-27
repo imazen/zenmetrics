@@ -192,3 +192,6 @@ required-features = ["cuda"]
 [[example]]
 name = "heaptrack_driver"
 required-features = ["cuda"]
+
+[lints]
+workspace = true

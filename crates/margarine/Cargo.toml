@@ -61,7 +61,7 @@ zensim = { optional = true, git = "https://github.com/imazen/zensim", rev = "ad1
 zenbench = { optional = true, git = "https://github.com/imazen/zenbench", rev = "1bf8a6509fce2ff4baddf1e2252639acd78d576c", default-features = false }
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("unsafe-performance", "iir-blur", "internals"))'] }
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("avx512"))'] }
 
 [[bin]]
 name = "margarine-score"

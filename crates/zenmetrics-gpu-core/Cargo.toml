@@ -29,3 +29,6 @@ pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 cubecl = { workspace = true }
 zenpixels = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = ">=0.2.11, <0.4.0", default-features = false, features = ["std"], optional = true }
+
+[lints]
+workspace = true

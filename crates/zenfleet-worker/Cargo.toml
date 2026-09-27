@@ -46,3 +46,6 @@ signal-hook = "0.4.4"
 object_store = { version = "0.14.1", default-features = false, features = ["aws"] }
 tokio = { version = "1.52.3", default-features = false, features = ["rt", "sync"] }
 bytes = "1"
+
+[lints]
+workspace = true

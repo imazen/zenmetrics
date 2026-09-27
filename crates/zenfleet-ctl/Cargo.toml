@@ -26,3 +26,6 @@ clap = { workspace = true }
 parquet = { version = "59.3.0", default-features = false, features = ["arrow", "zstd", "snap"] }
 arrow-array = "59.3.0"
 arrow-schema = "59.3.0"
+
+[lints]
+workspace = true
