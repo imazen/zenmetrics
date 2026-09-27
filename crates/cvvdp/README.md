@@ -66,9 +66,15 @@ accepts a `FrameLayout` (`Interleaved`/`Planar`, the `dim_order`
 analog) and returns `VideoStats` — the `(Q_jod, stats)` pair
 pycvvdp's `predict` returns, including `loss()` = `10 − JOD`.
 `VideoScorer::with_options` takes `VideoScorerOptions`
-(`layout`, `temp_padding`, `temp_filter` — the pycvvdp `temp_filter`
-parameter: `Default` 5 Hz Gaussian band-pass plus the `HpTrans`
-high-pass and `GradTrans` two-frame-gradient alternates —
+(`layout`, `temp_padding` — `Replicate`, `Symmetric`, plus `Valid`
+(upstream lists it but errors at runtime — a deliberate extension:
+only complete causal windows emit) — `temp_filter` (the pycvvdp
+`temp_filter` parameter: `Default` 5 Hz Gaussian band-pass plus the
+`HpTrans` high-pass and `GradTrans` two-frame-gradient alternates),
+`temp_resample` (resample `q_per_ch` onto a nominal fps grid before
+pooling — upstream's implementation is dead code; this implements the
+intended frame-axis semantics), `heatmap` (per-output-frame
+`stats['heatmap']`-equivalent planes, drainable via `pop_heatmap`),
 and `low_memory`, a source-sample ring window
 that cuts peak RSS by ~⅓ at 1080p for a few percent CPU; scores
 bit-identical).

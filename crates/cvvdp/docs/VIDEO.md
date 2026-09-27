@@ -172,6 +172,9 @@ pycvvdp entry points:
 | `stats['rho_band']` | `VideoStats::rho_band` / `VideoScorer::band_frequencies()` |
 | `stats['frames_per_second'/'width'/'height'/'N_frames']` | same-named `VideoStats` fields |
 | `temp_padding="replicate"` / `"symmetric"` | `TempPadding::{Replicate,Symmetric}` via `VideoScorer::with_layout_and_padding` / `score_video_with_stats` |
+| `temp_padding="valid"` (docstring-only upstream — raises `RuntimeError`) | `TempPadding::Valid` via `VideoScorerOptions::temp_padding` — deliberate extension |
+| `temp_resample` param (dead code upstream — see below) | `VideoScorerOptions::temp_resample` (intended frame-axis semantics) |
+| `stats['heatmap']` (`heatmap="raw"`) `[F,H,W]` | `VideoStats::heatmaps` / `VideoScorer::pop_heatmap` — `Vec<Vec<f32>>` planes |
 | `temp_filter` (`"default"`/`"hp_trans"`/`"grad_trans"` — a `cvvdp_parameters.json` key upstream, not a constructor kwarg) | `TempFilter::{Default,HpTrans,GradTrans}` via `VideoScorerOptions::temp_filter` (`VideoScorer::with_options` / `Cvvdp::video_with_options`) |
 | — (no upstream analog; memory knob) | `VideoScorerOptions::low_memory` via `VideoScorer::with_options` / `Cvvdp::video_with_options` — source-sample ring window, bit-identical scores |
 
@@ -183,8 +186,7 @@ has no transient channel).
 
 ### `temp_padding="symmetric"`
 
-Upstream's only other padding mode (`"valid"` is listed in its
-docstring but raises `RuntimeError`). Frame `t`'s filtered output is
+Frame `t`'s filtered output is
 `Σ_j F[j]·frame[t−j]`; symmetric maps `frame[-k] → frame[k]` with a
 ping-pong wrap for clips shorter than the filter
 (`_get_symmetric_frame_index`). Because output `t` needs input frames
@@ -224,9 +226,69 @@ Parity vs pycvvdp v0.5.7 on the same 44-cell corpus
 **max |Δ| = 6e-6 JOD** (`hp_trans`) and **1e-5 JOD** (`grad_trans`) —
 same order as the default branch.
 
+### `temp_padding="valid"`
+
+Upstream v0.5.7 lists `"valid"` in its `temp_padding` docstring but
+raises `RuntimeError` if selected — so this is a deliberate extension,
+not a parity target. Semantics follow the conventional meaning:
+output frame `t` is emitted only when its complete causal window
+(`t−fl+1 ..= t`) lies inside the clip, i.e. outputs `fl−1 ..= N−1`,
+`N−fl+1` rows total. No edge frames are fabricated; a clip with
+`N < fl` emits nothing and `finish` returns
+`Error::TooShortForFilter`. `n_frames` still counts pushed source
+frames; `q_per_ch.len()` counts emitted rows.
+
+### `temp_resample`
+
+`VideoScorerOptions::temp_resample: Option<f32>` — when `Some(fps)`,
+the emitted `q_per_ch` rows are linearly resampled onto the nominal
+`fps` grid before pooling (upstream: `nominal_fps = 240` in
+`cvvdp_parameters.json`, read at predict time when the
+`temp_resample` flag is on).
+
+**Upstream divergence (documented bug):** v0.5.7's `interp1dim2`
+interpolates dim 1 of `Q_per_ch[B, ch, N, bands]` — the *channel*
+axis — and asserts `N == 4`, so it cannot run on a real clip; the
+flag is hardcoded `False` with a "may not be needed anymore" comment
+and no published score relies on it. This port implements the
+evidently-intended frame-axis resample with
+`get_interpolants_v1`-faithful boundary behaviour: clamp below the
+first knot, linear *extrapolation* past the last, and the `+1e-6`
+denominator epsilon. Consequently `temp_resample = Some(fps)` at the
+native rate is not bit-identical to `None` — exact-knot queries land
+at `ifrc ≈ 1−1e-6/t_step` and blend ~3e-5 of the previous row.
+`VideoStats::frames_per_second` reports the nominal rate;
+`n_frames` still counts pushed source frames.
+
+### Video heatmap (`stats['heatmap']`, `heatmap="raw"`)
+
+`VideoScorerOptions::heatmap: bool` emits one `w × h` f32 plane per
+output frame with upstream's `raw` heatmap semantics:
+`1 − met2jod(D_px)/10`, so **0 = imperceptible** (`met2jod(0) = 10`)
+and larger values are more visible distortion (can exceed 1 or dip
+negative). Per emitted frame the port materialises per-pixel D planes
+per channel per band (baseband `|T−R|·S`; masked bands replay the
+fused kernel's clamp-soft tail from the `m_mm`/`term` intermediates),
+folds channels with `lp_norm(·, β=4)` under `per_ch_w`
+(×`baseband_weight` on the baseband), reconstructs the Laplacian
+pyramid with the same `gausspyr_expand` the spatial bands use, and
+maps through `met2jod`. Parity vs upstream `stats["heatmap"]` on the
+dump situation: **max |Δ| = 8.6e-4** per-pixel
+(`video_goldens_heatmap.json` carries per-frame min/max/mean plus a
+strided pixel probe; the maps themselves are too large to commit).
+
+Two consumption APIs: `VideoStats::heatmaps` holds every emitted
+plane at `finish`, or `VideoScorer::pop_heatmap()` drains them
+one-per-emitted-frame during streaming (bounded memory — a 1080p
+plane is ~8 MB and clips can be long). `heatmap=false` keeps the
+fused no-allocation path exactly as before — zero cost when off.
+
+Not ported: upstream's presentation-only heatmap modes
+(`"threshold"`, `"supra-threshold"` colormaps).
+
 Deliberately not exposed (see "Not ported"): file/codec video
-sources (`video_source_file*`, YUV readers), GPU paths, heatmap
-outputs, foveation, `temp_resample`, ML/PSNR metrics.
+sources (`video_source_file*`, YUV readers), GPU paths, foveation,
+`dump_channels`, ML/PSNR metrics.
 
 ### CLI
 
@@ -236,8 +298,10 @@ default) scores two directories of frames:
 ```bash
 zenmetrics score-video \
     --reference-dir ref/ --distorted-dir dist/ --fps 30 \
-    [--display-model standard_4k] [--temp-padding replicate|symmetric] \
+    [--display-model standard_4k] \
+    [--temp-padding replicate|symmetric|valid] \
     [--temp-filter default|hp-trans|grad-trans] \
+    [--temp-resample <nominal_fps>] [--heatmap-dir <dir>] \
     [--output plain|tsv|json] [--stats] [--low-memory]
 ```
 
@@ -245,13 +309,18 @@ Frames pair up by lexicographic filename order (zero-pad frame
 numbers). Decode streams frame-by-frame into the scorer — memory
 stays bounded by the temporal window, never the whole clip.
 `--low-memory` switches the ring to the u8-window mode described
-above (scores unchanged).
+above (scores unchanged). `--temp-resample` rescores `q_per_ch` onto
+a nominal fps grid before pooling (upstream `temp_resample`/`240`).
+`--heatmap-dir` writes one `heatmap_NNNNN.f32` little-endian f32
+`w×h` plane per emitted output frame, drained as they are produced
+so memory stays bounded.
 
-New `Error` variants: `InvalidFps`, `NoFrames`, `AlreadyFinished` is
-avoided by `finish(self)` consuming the scorer. (`Error` gains two
-variants — additive for callers that already match non-exhaustively;
-the enum is `#[derive]`d plain, so strictly this is a minor-version
-addition on a 0.x crate.)
+New `Error` variants: `InvalidFps`, `NoFrames`, `TooShortForFilter`
+(`temp_padding="valid"` with `N < fl`). `AlreadyFinished` is
+avoided by `finish(self)` consuming the scorer. (`Error` gains
+variants over time — additive for callers that already match
+non-exhaustively; the enum is `#[derive]`d plain, so strictly these
+are minor-version additions on a 0.x crate.)
 
 ## Conformance goldens & rounding policy
 
@@ -261,11 +330,14 @@ frames emitted to `/scratch/cvvdpvideo/` by
 `cvvdp-conformance::emit_video_situations`. 44 cells = 11 situations ×
 4 displays (`standard_4k`, `standard_fhd`, `standard_phone`,
 `standard_hdr_pq`). The companion files
-`video_goldens_symmetric.json`, `video_goldens_hp_trans.json` and
-`video_goldens_grad_trans.json` score the same cells under
-`--temp-padding symmetric` and the two `--temp-filter` variants
-respectively (each records its mode in the JSON header; the parity
-tests assert it).
+`video_goldens_symmetric.json`, `video_goldens_hp_trans.json`,
+`video_goldens_grad_trans.json` and `video_goldens_heatmap.json`
+score the same cells under `--temp-padding symmetric`, the two
+`--temp-filter` variants and `--heatmap` respectively (each records
+its mode in the JSON header; the parity tests assert it). The heatmap
+file additionally carries `stats['heatmap']` digests for the
+`vid_temporal_noise_30` dump situation — per-frame min/max/mean plus
+a strided (::8) pixel probe; full maps are too large to commit.
 
 Rounding (to stay under the 30 KB commit cap):
 
@@ -279,12 +351,11 @@ Rounding (to stay under the 30 KB commit cap):
 
 ## Not ported (follow-ups)
 
-- `temp_padding="valid"` — upstream lists it in the docstring but the
-  implementation raises `RuntimeError`; `replicate` (default) and
-  `symmetric` are both ported.
-- `temp_resample` (non-native fps resampling of `Q_per_ch`).
-- Heatmap/diffmap output for video, foveation, `dump_channels`.
-- GPU (cvvdp-gpu) video, CLI integration, real codec-decoded input.
+- Foveation / gaze maps, `dump_channels`.
+- Upstream presentation heatmap modes (`"threshold"`,
+  `"supra-threshold"` colormaps) — `raw` is ported.
+- GPU (cvvdp-gpu) video, real codec-decoded input (see
+  `CODEC_INPUT.md` scope).
 - `masking_model` variants other than `mult-mutual`.
 
 ## Measured parity
@@ -302,6 +373,13 @@ Release-mode `cargo test -p cvvdp-conformance --test video_parity`
   (n=240).
 - **Temporal taps** (V1 unit gate, vs dumped torch taps at fps
   24/30/60): max |Δ| ≤ 7e-8, under the 1e-6 requirement.
+- **Heatmap** (`heatmap="raw"`, `vid_temporal_noise_30|standard_4k`):
+  per-pixel max |Δ| = **8.6e-4** on upstream values spanning
+  0.005–0.16; per-frame min/max/mean agree to < 1e-3
+  (`video_goldens_heatmap.json`).
+- **`temp_padding="valid"`** (no upstream golden — it errors there):
+  emitted rows are bit-identical to the replicate tail over all 11
+  situations; `N < fl` returns `TooShortForFilter`.
 - **4-channel masking** (V2 unit pin vs `apply_masking_model`):
   bit-exact f32 on the 8×8 synthetic band; the SIMD
   `mult_mutual_band_4ch_into` path is within 1e-3 relative of the

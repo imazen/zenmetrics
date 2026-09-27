@@ -13,6 +13,25 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- cvvdp (`2ad1fb02`): **close the remaining video-surface gaps —
+  `temp_padding="valid"`, `temp_resample`, and video heatmaps.**
+  `TempPadding::Valid` emits only complete causal windows
+  (`N−fl+1` outputs, `Error::TooShortForFilter` when `N < fl`) — a
+  deliberate extension since upstream lists `"valid"` but raises at
+  runtime. `VideoScorerOptions::temp_resample` resamples `q_per_ch`
+  onto a nominal-fps grid before pooling — upstream's `interp1dim2`
+  is dead code (interpolates the channel axis, asserts `N==4`); this
+  implements the intended frame-axis semantics with upstream's
+  clamp/extrapolate/`+1e-6` edges, documented as a divergence.
+  `VideoScorerOptions::heatmap` emits upstream `heatmap="raw"` planes
+  (`1 − met2jod/10`; 0 = imperceptible) per output frame — drain via
+  `pop_heatmap` or collect in `VideoStats::heatmaps`; parity vs
+  upstream `stats["heatmap"]`: max |Δ| = 8.6e-4 per-pixel on the dump
+  situation (`video_goldens_heatmap.json`). CLI gains
+  `--temp-padding valid`, `--temp-resample <fps>` and
+  `--heatmap-dir <dir>` (streams `heatmap_NNNNN.f32` planes as they
+  are emitted). Codec-decoded input scoped in
+  `crates/cvvdp/docs/CODEC_INPUT.md`.
 - cvvdp (`50b5d1cf`): **port pycvvdp's two alternate
   `temp_filter` branches, `hp_trans` and `grad_trans`.** New
   `cvvdp::TempFilter` enum (`Default` = the existing 5 Hz Gaussian

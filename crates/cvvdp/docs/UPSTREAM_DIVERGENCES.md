@@ -23,14 +23,24 @@ channel. The pooling stage adds a `beta_t` term across frames.
 4 channels — sustained A/RG/VY + transient A — with the 4th
 `mask_q`/`xcm_weights`/`baseband_weight` slots and `beta_t`
 cross-frame pooling. All three `temp_filter` branches (`default`
-Gaussian band-pass, `hp_trans`, `grad_trans`) and both `temp_padding`
-modes (`replicate`, `symmetric`) are selectable via
+Gaussian band-pass, `hp_trans`, `grad_trans`) and all `temp_padding`
+modes (`replicate`, `symmetric`, `valid`) are selectable via
 `VideoScorerOptions`; `--temp-filter` on `zenmetrics score-video`.
 Verified ≤ 1e-5 JOD vs pycvvdp v0.5.7 over the 44-cell video corpus
-(default + both alternates). Still open upstream surface:
-`temp_padding="valid"` (raises `RuntimeError` upstream anyway),
-`temp_resample`, video heatmaps, `dump_channels`, `masking_model`
-variants other than `mult-mutual`. Details: `crates/cvvdp/docs/VIDEO.md`.
+(default + both alternates). `TempPadding::Valid` is a deliberate
+extension — upstream lists `"valid"` in the docstring but raises
+`RuntimeError`. `temp_resample` exists as
+`VideoScorerOptions::temp_resample` but **diverges on purpose**:
+upstream's `interp1dim2` interpolates `Q_per_ch`'s *channel* axis and
+asserts `N == 4` — dead code (`temp_resample` is hardcoded `False`);
+the port resamples the frame axis (intended semantics) with
+`get_interpolants_v1`-faithful clamp/extrapolate/`+1e-6` edges.
+Video heatmaps (`stats['heatmap']`, `heatmap="raw"`) are ported —
+`VideoStats::heatmaps` / `pop_heatmap`, ≤ 8.6e-4 per-pixel vs
+upstream on the dump situation. Still open upstream surface:
+`dump_channels`, foveation/gaze, `masking_model` variants other than
+`mult-mutual`, presentation heatmap modes (`"threshold"`,
+`"supra-threshold"`). Details: `crates/cvvdp/docs/VIDEO.md`.
 
 ## 2. DIVERGES — Foveation / saliency (`cvvdp_ml_saliency`)
 

@@ -86,8 +86,11 @@ v0.5.7's since 2026-09-23). The still-image constants are baked into
   `Cvvdp::score`. Measured parity vs pycvvdp v0.5.7: max |Δ| = 2e-6 JOD
   over 44 cells (11 situations × 4 displays, 24/30/60 fps) on the
   default filter; `hp_trans`/`grad_trans` variants land ≤ 1e-5 on the
-  same corpus. Not yet ported to `cvvdp-gpu`; `temp_padding = "valid"`
-  remains unported (it raises upstream anyway). The still-image path
+  same corpus. `TempPadding::Valid` (complete-window emission),
+  `temp_resample` (frame-axis `q_per_ch` resample — upstream's is
+  dead code) and `stats['heatmap']`-equivalent per-frame heatmaps
+  (`VideoScorerOptions::heatmap`/`pop_heatmap`) are CPU-only too.
+  Not yet ported to `cvvdp-gpu`. The still-image path
   is unchanged (`is_image` special case, as upstream).
 - Foveation / gaze maps.
 
