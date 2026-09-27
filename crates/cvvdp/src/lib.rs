@@ -337,10 +337,7 @@ impl core::fmt::Display for Error {
                 write!(f, "invalid frames_per_second (need finite > 0)")
             }
             Error::NoFrames => write!(f, "no frames pushed to VideoScorer"),
-            Error::TooShortForFilter {
-                frames,
-                filter_len,
-            } => write!(
+            Error::TooShortForFilter { frames, filter_len } => write!(
                 f,
                 "clip too short for valid temporal padding: {frames} frames < {filter_len}-tap filter"
             ),

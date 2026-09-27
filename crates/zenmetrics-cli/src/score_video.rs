@@ -51,6 +51,8 @@ pub(crate) struct ScoreVideoArgs {
     /// `symmetric` mirrors (`frame[-k] = frame[k]`, ping-pong on clips
     /// shorter than the filter). The scorer defers the first `fl−1`
     /// outputs under symmetric until the lookahead frames exist.
+    /// `valid` pads nothing: the first `fl−1` frames produce no output,
+    /// and a clip shorter than the filter errors at finish.
     #[arg(long, value_enum, default_value = "replicate")]
     temp_padding: CliTempPadding,
     /// Transient-channel temporal filter — pycvvdp's `temp_filter`.
@@ -60,6 +62,22 @@ pub(crate) struct ScoreVideoArgs {
     /// Sustained channels are identical under all three.
     #[arg(long, value_enum, default_value = "default")]
     temp_filter: CliTempFilter,
+    /// Resample the per-frame quality values onto a NOMINAL frame-rate
+    /// grid before pooling (upstream `temp_resample` — a
+    /// `cvvdp_parameters.json` key, not a `cvvdp()` kwarg). Use when a
+    /// benchmark defines scores at a fixed frame rate (e.g. 60) while
+    /// your clip was shot at `--fps`. NOTE: upstream's `interp1dim2`
+    /// interpolates the channel axis and is effectively dead code; this
+    /// port resamples the *frame* axis — the documented intent.
+    #[arg(long)]
+    temp_resample: Option<f32>,
+    /// Write a per-output-frame heatmap (`1 − met2jod/10`; 0 =
+    /// imperceptible) to DIR as raw little-endian f32 planes
+    /// `heatmap_00000.f32`, `heatmap_00001.f32`, … — width × height
+    /// floats each. Matches upstream `stats["heatmap"]` for
+    /// `heatmap_type="raw"`.
+    #[arg(long)]
+    heatmap_dir: Option<PathBuf>,
     /// Output format: `plain` prints `metric=… jod=… loss=…`, `tsv`
     /// prints a two-row table, `json` prints one object (add `--stats`
     /// for the full `Q_per_ch`/`rho_band` bundle).
@@ -85,6 +103,10 @@ enum CliTempPadding {
     Replicate,
     /// Mirror frames before index 0 (`frame[-k] → frame[k]`).
     Symmetric,
+    /// No padding — emit only frames whose full causal window is inside
+    /// the clip (upstream documents `valid` but rejects it at runtime;
+    /// a deliberate extension).
+    Valid,
 }
 
 impl From<CliTempPadding> for TempPadding {
@@ -92,6 +114,7 @@ impl From<CliTempPadding> for TempPadding {
         match p {
             CliTempPadding::Replicate => TempPadding::Replicate,
             CliTempPadding::Symmetric => TempPadding::Symmetric,
+            CliTempPadding::Valid => TempPadding::Valid,
         }
     }
 }
@@ -150,6 +173,19 @@ pub(crate) fn run(args: &ScoreVideoArgs) -> Result<(), Box<dyn std::error::Error
     if !args.fps.is_finite() || args.fps <= 0.0 {
         return Err(format!("score-video: --fps must be > 0 (got {})", args.fps).into());
     }
+    if let Some(r) = args.temp_resample {
+        if !r.is_finite() || r <= 0.0 {
+            return Err(format!("score-video: --temp-resample must be > 0 (got {r})").into());
+        }
+    }
+    if let Some(dir) = &args.heatmap_dir {
+        fs::create_dir_all(dir).map_err(|e| {
+            format!(
+                "score-video: cannot create --heatmap-dir {}: {e}",
+                dir.display()
+            )
+        })?;
+    }
     let display = args.display_model.model();
     let geometry = args.display_model.geometry();
 
@@ -171,6 +207,17 @@ pub(crate) fn run(args: &ScoreVideoArgs) -> Result<(), Box<dyn std::error::Error
         ..CvvdpParams::default()
     };
     let mut scorer: Option<VideoScorer> = None;
+    let mut n_heatmaps = 0usize;
+    let write_heatmap = |hm: &[f32], n: usize| -> Result<(), Box<dyn std::error::Error>> {
+        let dir = args.heatmap_dir.as_ref().unwrap();
+        let path = dir.join(format!("heatmap_{n:05}.f32"));
+        let mut bytes = Vec::with_capacity(hm.len() * 4);
+        for v in hm {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+        fs::write(&path, bytes)
+            .map_err(|e| format!("score-video: write {}: {e}", path.display()).into())
+    };
     for (i, (rp, dp)) in ref_frames.iter().zip(dist_frames.iter()).enumerate() {
         let r = decode_image_to_rgb8(rp)
             .map_err(|e| format!("score-video: decode {}: {e}", rp.display()))?;
@@ -196,6 +243,8 @@ pub(crate) fn run(args: &ScoreVideoArgs) -> Result<(), Box<dyn std::error::Error
                         layout: FrameLayout::Interleaved,
                         temp_padding: args.temp_padding.into(),
                         temp_filter: args.temp_filter.into(),
+                        temp_resample: args.temp_resample,
+                        heatmap: args.heatmap_dir.is_some(),
                         low_memory: args.low_memory,
                     },
                 )
@@ -205,11 +254,21 @@ pub(crate) fn run(args: &ScoreVideoArgs) -> Result<(), Box<dyn std::error::Error
         };
         v.push_frame(&r.pixels, &d.pixels)
             .map_err(|e| format!("score-video: frame {i}: {e}"))?;
+        // Drain heatmaps incrementally — one w·h f32 plane per emitted
+        // output frame; keeping them queued would hold the whole clip.
+        while let Some(hm) = v.pop_heatmap() {
+            write_heatmap(&hm, n_heatmaps)?;
+            n_heatmaps += 1;
+        }
     }
-    let stats = scorer
+    let mut stats = scorer
         .ok_or("score-video: no frames decoded")?
         .finish_with_stats()
         .map_err(|e| format!("score-video: finish: {e}"))?;
+    for hm in stats.heatmaps.drain(..) {
+        write_heatmap(&hm, n_heatmaps)?;
+        n_heatmaps += 1;
+    }
 
     match args.output {
         OutputFormat::Plain => {
@@ -247,6 +306,8 @@ pub(crate) fn run(args: &ScoreVideoArgs) -> Result<(), Box<dyn std::error::Error
                 "n_frames": stats.n_frames,
                 "temp_padding": format!("{:?}", args.temp_padding).to_lowercase(),
                 "temp_filter": format!("{:?}", args.temp_filter).to_lowercase(),
+                "temp_resample": args.temp_resample,
+                "n_heatmaps": n_heatmaps,
             });
             if args.stats {
                 v["rho_band"] = serde_json::json!(stats.rho_band);

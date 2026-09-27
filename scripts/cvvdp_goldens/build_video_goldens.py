@@ -153,6 +153,13 @@ def main() -> int:
         "PNG frames (situations + real_clips), adds still_cells for "
         "the frame-0 pairs, writes video_goldens_u16.json",
     )
+    ap.add_argument(
+        "--heatmap",
+        action="store_true",
+        help="construct metrics with heatmap='raw' and dump "
+        "stats['heatmap'] per-frame stats + strided probes for the "
+        "DUMP_SITUATIONS cells (writes video_goldens_heatmap.json)",
+    )
     args = ap.parse_args()
 
     sit_dir = Path(args.situations_dir)
@@ -168,6 +175,8 @@ def main() -> int:
         out_path = sit_dir / "video_goldens_u16.json"
     elif args.temp_filter != "default":
         out_path = sit_dir / f"video_goldens_{args.temp_filter}.json"
+    elif args.heatmap:
+        out_path = sit_dir / "video_goldens_heatmap.json"
     elif args.temp_padding == "replicate":
         out_path = sit_dir / "video_goldens.json"
     else:
@@ -213,7 +222,7 @@ def main() -> int:
         try:
             metrics[name] = pycvvdp.cvvdp(
                 display_name=name,
-                heatmap=None,
+                heatmap="raw" if args.heatmap else None,
                 quiet=True,
                 temp_padding=args.temp_padding,
             )
@@ -295,12 +304,60 @@ def main() -> int:
             dump_sits = DUMP_SITUATIONS | (
                 {"vid_short_clip_odd"} if args.temp_padding == "symmetric" else set()
             )
+            if args.heatmap:
+                # Heatmap goldens carry only the noise situation —
+                # `q_per_ch` is already dumped in video_goldens.json.
+                dump_sits = {"vid_temporal_noise_30"}
             if s["name"] in dump_sits and disp == DUMP_DISPLAY:
-                q = stats["Q_per_ch"]  # torch [B=1, ch=4, F, bands]
-                stage_dumps[key] = {
-                    "q_per_ch": [round(float(v), 6) for v in q.flatten().tolist()],
-                    "q_per_ch_shape": list(q.shape),
-                }
+                stage_dumps[key] = {}
+                if not args.heatmap:
+                    q = stats["Q_per_ch"]  # torch [B=1, ch=4, F, bands]
+                    stage_dumps[key] = {
+                        "q_per_ch": [
+                            round(float(v), 6) for v in q.flatten().tolist()
+                        ],
+                        "q_per_ch_shape": list(q.shape),
+                    }
+                if args.heatmap and "heatmap" in stats:
+                    # stats["heatmap"] is [B, 1, F, H, W] — squeeze to
+                    # [F, H, W]. Full maps are too large for the
+                    # committed JSON, so record per-frame stats for
+                    # every frame + a strided pixel probe (every 8th
+                    # row/col on frames 0, F//2, F−1) — enough to catch
+                    # a missing expand level, wrong channel weights, or
+                    # inverted polarity in the port.
+                    hm = np.asarray(stats["heatmap"], dtype=np.float64)
+                    hm = hm.reshape(-1, hm.shape[-2], hm.shape[-1])
+                    n_f = hm.shape[0]
+                    frame_stats = [
+                        [
+                            round(float(hm[f].min()), 6),
+                            round(float(hm[f].max()), 6),
+                            round(float(hm[f].mean()), 6),
+                        ]
+                        for f in range(n_f)
+                    ]
+                    stage_dumps[key]["heatmap_shape"] = list(hm.shape)
+                    stage_dumps[key]["heatmap_frame_stats"] = frame_stats
+                    # Pixel probes only for the temporal-noise dump —
+                    # keeps the committed file under the 30 KB gate
+                    # while giving the parity test a dense spatial
+                    # sample to check against.
+                    if s["name"] == "vid_temporal_noise_30":
+                        probes = []
+                        for fi in sorted({0, n_f // 2, n_f - 1}):
+                            probes.append(
+                                {
+                                    "frame": int(fi),
+                                    "probe": [
+                                        round(float(v), 6)
+                                        for v in hm[fi, ::8, ::8]
+                                        .flatten()
+                                        .tolist()
+                                    ],
+                                }
+                            )
+                        stage_dumps[key]["heatmap_frames"] = probes
             n_done += 1
             if n_done % 10 == 0 or n_done == n_total:
                 rate = n_done / max(time.time() - t0, 1e-6)

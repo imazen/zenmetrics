@@ -34,6 +34,8 @@ const GOLDENS_HP_TRANS: &str =
 /// Same cells scored with `temp_filter="grad_trans"`.
 const GOLDENS_GRAD_TRANS: &str =
     include_str!("../../../scripts/cvvdp_goldens/video_goldens_grad_trans.json");
+const GOLDENS_HEATMAP: &str =
+    include_str!("../../../scripts/cvvdp_goldens/video_goldens_heatmap.json");
 /// u16 corpus + the committed real HDR10 clip, built with `--u16`.
 const GOLDENS_U16: &str = include_str!("../../../scripts/cvvdp_goldens/video_goldens_u16.json");
 
@@ -680,6 +682,186 @@ fn video_jod_parity_grad_trans() {
         cvvdp::TempFilter::GradTrans,
         "grad_trans",
     );
+}
+
+/// `temp_padding="valid"`: pycvvdp rejects it at runtime, so no
+/// golden exists — the invariant instead is that valid's emitted
+/// `q_per_ch` rows equal the *tail* of the replicate run (identical
+/// complete causal windows), and that its JOD equals pooling that
+/// tail. Runs over every situation.
+#[test]
+fn video_valid_matches_replicate_tail() {
+    let situations = all_video_situations();
+    for s in &situations {
+        let (params, geometry) = cell_params("standard_4k");
+        let run = |padding: cvvdp::TempPadding| {
+            let mut v = VideoScorer::with_options(
+                s.width,
+                s.height,
+                s.fps,
+                params,
+                geometry,
+                cvvdp::VideoScorerOptions {
+                    temp_padding: padding,
+                    ..Default::default()
+                },
+            )
+            .unwrap_or_else(|e| panic!("VideoScorer {}: {e:?}", s.name));
+            for (rf, df) in s.ref_frames.iter().zip(s.dist_frames.iter()) {
+                v.push_frame(rf, df)
+                    .unwrap_or_else(|e| panic!("push {}: {e:?}", s.name));
+            }
+            v.finish_with_stats()
+        };
+        let rep = run(cvvdp::TempPadding::Replicate)
+            .unwrap_or_else(|e| panic!("finish {}: {e:?}", s.name));
+        let val = run(cvvdp::TempPadding::Valid);
+        let val = match val {
+            Ok(v) => v,
+            Err(cvvdp::Error::TooShortForFilter { .. }) => {
+                // N < fl: valid emits nothing — the documented edge.
+                continue;
+            }
+            Err(e) => panic!("finish {}: {e:?}", s.name),
+        };
+        let drop = rep.q_per_ch.len() - val.q_per_ch.len();
+        // fl−1 for the corpus's fps values (see video_situations.rs:
+        // fl(24)=7, fl(30)=9, fl(60)=17 for the default filter).
+        let fl_m1 = match s.fps as u32 {
+            24 => 6,
+            30 => 8,
+            60 => 16,
+            other => panic!("{}: unexpected corpus fps {other}", s.name),
+        };
+        assert_eq!(
+            drop, fl_m1,
+            "{}: valid should drop exactly fl−1 leading outputs",
+            s.name
+        );
+        for (i, vr) in val.q_per_ch.iter().enumerate() {
+            assert_eq!(
+                vr,
+                &rep.q_per_ch[drop + i],
+                "{}: valid row {i} != replicate row {}",
+                s.name,
+                drop + i
+            );
+        }
+        // Pooling runs over the emitted rows only, so valid's JOD
+        // legitimately differs from replicate's — just require finite.
+        assert!(val.jod.is_finite(), "{}: valid JOD must be finite", s.name);
+    }
+}
+
+/// Upstream `stats["heatmap"]` (heatmap="raw") parity — per-frame
+/// min/max/mean for every frame plus a strided (::8) pixel probe on
+/// frames {0, F/2, F−1} of `vid_temporal_noise_30`.
+#[test]
+fn video_heatmap_stage_dumps() {
+    let goldens: serde_json::Value =
+        serde_json::from_str(GOLDENS_HEATMAP).expect("video_goldens_heatmap.json must parse");
+    let dumps = goldens["stage_dumps"]
+        .as_object()
+        .expect("goldens .stage_dumps");
+    assert!(!dumps.is_empty(), "expected at least one heatmap dump");
+
+    let situations = all_video_situations();
+    for (key, dump) in dumps {
+        let (sit_name, disp) = key.split_once('|').expect("dump key <sit>|<disp>");
+        let s = situations
+            .iter()
+            .find(|s| s.name == sit_name)
+            .unwrap_or_else(|| panic!("dump situation {sit_name} not in registry"));
+
+        let shape: Vec<usize> = dump["heatmap_shape"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_u64().unwrap() as usize)
+            .collect();
+        let n_f = shape[0];
+        assert_eq!(shape[1], s.height as usize, "{key}: heatmap H");
+        assert_eq!(shape[2], s.width as usize, "{key}: heatmap W");
+        assert_eq!(n_f, s.ref_frames.len(), "{key}: heatmap F");
+
+        let (params, geometry) = cell_params(disp);
+        let mut v = VideoScorer::with_options(
+            s.width,
+            s.height,
+            s.fps,
+            params,
+            geometry,
+            cvvdp::VideoScorerOptions {
+                heatmap: true,
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("VideoScorer {key}: {e:?}"));
+        for (rf, df) in s.ref_frames.iter().zip(s.dist_frames.iter()) {
+            v.push_frame(rf, df)
+                .unwrap_or_else(|e| panic!("push {key}: {e:?}"));
+        }
+        let stats = v
+            .finish_with_stats()
+            .unwrap_or_else(|e| panic!("finish {key}: {e:?}"));
+        assert_eq!(stats.heatmaps.len(), n_f, "{key}: heatmap count");
+
+        // Per-frame [min, max, mean].
+        let fstats = dump["heatmap_frame_stats"].as_array().unwrap();
+        let mut max_d = 0.0f64;
+        for (f, hm) in stats.heatmaps.iter().enumerate() {
+            let (mut mn, mut mx, mut sum) = (f64::INFINITY, f64::NEG_INFINITY, 0.0);
+            for &px in hm {
+                let p = f64::from(px);
+                mn = mn.min(p);
+                mx = mx.max(p);
+                sum += p;
+            }
+            let exp = fstats[f].as_array().unwrap();
+            for (got, want, what) in [
+                (mn, exp[0].as_f64().unwrap(), "min"),
+                (mx, exp[1].as_f64().unwrap(), "max"),
+                (sum / hm.len() as f64, exp[2].as_f64().unwrap(), "mean"),
+            ] {
+                let d = (got - want).abs();
+                max_d = max_d.max(d);
+                assert!(
+                    d <= 5e-3,
+                    "{key} frame {f} heatmap {what}: got {got:.6} want {want:.6} (|Δ|={d})"
+                );
+            }
+        }
+
+        // Strided pixel probes on frames {0, F/2, F−1}.
+        for probe in dump["heatmap_frames"].as_array().unwrap() {
+            let fi = probe["frame"].as_u64().unwrap() as usize;
+            let want: Vec<f64> = probe["probe"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_f64().unwrap())
+                .collect();
+            let hm = &stats.heatmaps[fi];
+            let mut i = 0usize;
+            let mut n_cmp = 0usize;
+            for y in (0..s.height as usize).step_by(8) {
+                for x in (0..s.width as usize).step_by(8) {
+                    let got = f64::from(hm[y * s.width as usize + x]);
+                    let d = (got - want[i]).abs();
+                    max_d = max_d.max(d);
+                    assert!(
+                        d <= 5e-3,
+                        "{key} frame {fi} heatmap[{y}][{x}]: got {got:.6} want {:.6} (|Δ|={d})",
+                        want[i]
+                    );
+                    i += 1;
+                    n_cmp += 1;
+                }
+            }
+            assert_eq!(n_cmp, want.len(), "{key} frame {fi}: probe length");
+        }
+        eprintln!("{key}: heatmap max |Δ| = {max_d:.6}");
+    }
 }
 
 fn run_stage_dumps(goldens_json: &str, padding: cvvdp::TempPadding) {

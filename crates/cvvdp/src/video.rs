@@ -56,10 +56,12 @@ use crate::kernels::csf::{
     CSF_BASEBAND_RHO, CsfChannel, precompute_logs_row, precompute_logs_row_o5,
 };
 use crate::kernels::masking::CH_GAIN_4;
-use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_video_4ch};
+use crate::kernels::pool::{
+    BASEBAND_W_4, BETA_CH, BETA_SPATIAL, PER_CH_W_4, do_pooling_and_jod_video_4ch, met2jod,
+};
 use crate::kernels::pyramid::band_frequencies;
 use crate::kernels::temporal::{temporal_filter_len, temporal_filters};
-use crate::masking::mult_mutual_band_4ch_into;
+use crate::masking::{masked_d_planes_4ch, mult_mutual_band_4ch_into};
 use crate::params::DisplayGeometry;
 use crate::pyramid::{
     Band, PyramidScratch, WeberPyramid, WeberPyramidCache, build_gauss_pyramid_below,
@@ -287,11 +289,14 @@ pub struct VideoStats {
     pub n_frames: usize,
     /// Per-output-frame heatmaps (upstream `stats['heatmap']` with
     /// `heatmap="raw"`): `width × height` f32 planes of
-    /// `1 − met2jod(D_px)/10` (1.0 = imperceptible), one per emitted
-    /// output frame in emission order. Empty unless
-    /// [`VideoScorerOptions::heatmap`] was enabled. Frames already
-    /// collected via [`VideoScorer::pop_heatmap`] are not repeated
-    /// here — drain during scoring to keep memory bounded.
+    /// `1 − met2jod(D_px)/10` per pixel — **0.0 = imperceptible**
+    /// (met2jod(0) = JOD 10), larger values = more visible distortion
+    /// (can exceed 1.0 / go negative for implausibly large local
+    /// differences). One entry per emitted output frame in emission
+    /// order. Empty unless [`VideoScorerOptions::heatmap`] was
+    /// enabled. Frames already collected via
+    /// [`VideoScorer::pop_heatmap`] are not repeated here — drain
+    /// during scoring to keep memory bounded.
     pub heatmaps: Vec<Vec<f32>>,
 }
 
@@ -785,8 +790,7 @@ impl VideoScorer {
             VideoScorerOptions {
                 layout,
                 temp_padding: padding,
-                temp_filter: TempFilter::Default,
-                low_memory: false,
+                ..VideoScorerOptions::default()
             },
         )
     }
@@ -974,9 +978,10 @@ impl VideoScorer {
         while self.next_emit < self.n_pushed {
             let t = self.next_emit;
             // Symmetric taps reach fl−1−t frames ahead of t; replicate
-            // reaches only backwards (emit as soon as t is pushed).
+            // and valid reach only backwards (emit as soon as t is
+            // pushed — for valid the window is already complete).
             let need = match self.padding {
-                TempPadding::Replicate => t + 1,
+                TempPadding::Replicate | TempPadding::Valid => t + 1,
                 TempPadding::Symmetric => (t + 1).max(fl.saturating_sub(t)),
             };
             if self.n_pushed < need {
@@ -1090,6 +1095,7 @@ impl VideoScorer {
                 width: self.width as u32,
                 height: self.height as u32,
                 n_frames: 1,
+                heatmaps: Vec::new(),
             });
         }
         // Symmetric padding can leave outputs pending at end-of-clip
@@ -1101,16 +1107,43 @@ impl VideoScorer {
             self.emit_output_frame(t);
             self.next_emit += 1;
         }
+        // Valid padding on a clip shorter than the filter emits
+        // nothing — `do_pooling_and_jod_video_4ch` requires ≥1 row.
+        if self.q_per_ch.is_empty() {
+            return Err(Error::TooShortForFilter {
+                frames: self.n_pushed,
+                filter_len: self.taps[0].len(),
+            });
+        }
+        let mut fps = self.fps;
+        if let Some(nominal) = self.temp_resample {
+            resample_q_per_ch(&mut self.q_per_ch, self.fps, nominal);
+            fps = nominal;
+        }
         let jod = do_pooling_and_jod_video_4ch(&self.q_per_ch);
         Ok(VideoStats {
             jod,
             q_per_ch: self.q_per_ch,
             rho_band: self.freqs,
-            frames_per_second: self.fps,
+            frames_per_second: fps,
             width: self.width as u32,
             height: self.height as u32,
             n_frames: self.n_pushed,
+            heatmaps: self.heatmaps.drain(..).collect(),
         })
+    }
+
+    /// Pop the oldest emitted per-frame heatmap (`width × height`
+    /// f32, `1 − met2jod(D_px)/10` — upstream `heatmap="raw"`).
+    /// Returns `None` when no heatmap is pending (feature off, or
+    /// none emitted yet). One heatmap is produced per emitted output
+    /// frame — call once per `push_frame` after the first `fl−1`
+    /// pushes to keep memory bounded; anything left at
+    /// [`finish_with_stats`](Self::finish_with_stats) moves into
+    /// [`VideoStats::heatmaps`].
+    #[must_use]
+    pub fn pop_heatmap(&mut self) -> Option<Vec<f32>> {
+        self.heatmaps.pop_front()
     }
 
     /// Absolute index of `win_*[0]` — frames before it have scrolled
@@ -1189,6 +1222,10 @@ impl VideoScorer {
                             TempPadding::Symmetric => {
                                 symmetric_frame_index(s, self.n_pushed.max(2))
                             }
+                            // Valid emits only t ≥ fl−1 → s ≥ 0 always.
+                            TempPadding::Valid => unreachable!(
+                                "valid padding never emits a frame whose window crosses index 0"
+                            ),
                         }
                     };
                     fi - w0
@@ -1370,6 +1407,7 @@ impl VideoScorer {
         }
 
         let mut q_frame: Vec<[f32; 4]> = Vec::with_capacity(n_levels);
+        let heatmap_on = self.heatmap_on;
         for k in 0..n_levels {
             let is_first = k == 0;
             let is_baseband = k == n_levels - 1;
@@ -1439,6 +1477,43 @@ impl VideoScorer {
                     q_band[c] = lp2_finish(sum, n_px_b);
                 }
                 q_frame.push(q_band);
+                if heatmap_on {
+                    // The heatmap needs the per-pixel D the fused
+                    // reduction skipped: `D_c = |T−R|·S_c` (the `m_mm`
+                    // planes still hold the sensitivity maps — the
+                    // masking model does not run at baseband).
+                    let [o0, o1, o2, o3] = &mut sc.heat_d;
+                    for o in [&mut *o0, &mut *o1, &mut *o2, &mut *o3] {
+                        if o.len() < n_px_b {
+                            o.resize(n_px_b, 0.0);
+                        }
+                    }
+                    let t0 = &sc.pyr_t[0].bands[k].data;
+                    let t1 = &sc.pyr_t[1].bands[k].data;
+                    let t2 = &sc.pyr_t[2].bands[k].data;
+                    let t3 = &sc.pyr_t[3].bands[k].data;
+                    let r0 = &sc.pyr_r[0].bands[k].data;
+                    let r1 = &sc.pyr_r[1].bands[k].data;
+                    let r2 = &sc.pyr_r[2].bands[k].data;
+                    let r3 = &sc.pyr_r[3].bands[k].data;
+                    crate::par::map4_base(
+                        &mut o0[..n_px_b],
+                        &mut o1[..n_px_b],
+                        &mut o2[..n_px_b],
+                        &mut o3[..n_px_b],
+                        |b, d0, d1, d2, d3| {
+                            let ts = [t0, t1, t2, t3];
+                            let rs = [r0, r1, r2, r3];
+                            let outs: [&mut [f32]; 4] = [d0, d1, d2, d3];
+                            for (c, o) in outs.into_iter().enumerate() {
+                                let s = &sc.m_mm[c];
+                                for (i, px) in o.iter_mut().enumerate() {
+                                    *px = (ts[c][b + i] - rs[c][b + i]).abs() * s[b + i];
+                                }
+                            }
+                        },
+                    );
+                }
             } else {
                 for c in 0..4 {
                     let gain = CH_GAIN_4[c];
@@ -1474,10 +1549,191 @@ impl VideoScorer {
                     &mut sc.pu_scratch,
                 );
                 q_frame.push(q_band);
+                if heatmap_on {
+                    // `m_mm`/`term` still hold the safe_pow(|T−R|,p)
+                    // and safe_pow(|M_mm|,q) intermediates — the
+                    // post-pass replays the fused kernel's per-pixel
+                    // tail into materialised D planes.
+                    masked_d_planes_4ch(&sc.m_mm, &sc.term, n_px_b, &mut sc.heat_d);
+                }
             }
+
+            if heatmap_on {
+                // Upstream `D_chr = lp_norm(D·per_ch_w, beta_tch=4,
+                // dim=channel)` then `set_lband(bb, D_chr)` (÷band_mul).
+                // `per_ch_w` at baseband additionally gains
+                // `baseband_weight` (video: t_int = 1.0).
+                let w_ch: [f32; 4] = if is_baseband {
+                    [
+                        PER_CH_W_4[0] * BASEBAND_W_4[0],
+                        PER_CH_W_4[1] * BASEBAND_W_4[1],
+                        PER_CH_W_4[2] * BASEBAND_W_4[2],
+                        PER_CH_W_4[3] * BASEBAND_W_4[3],
+                    ]
+                } else {
+                    PER_CH_W_4
+                };
+                let hb = &mut sc.heat_bands[k];
+                if hb.len() < n_px_b {
+                    hb.resize(n_px_b, 0.0);
+                }
+                // `lp_norm(..., beta_tch)` — the sqrt-sqrt below is
+                // specialised to β=4, the only value upstream uses.
+                debug_assert_eq!(BETA_CH, 4.0);
+                let d = &sc.heat_d;
+                crate::par::map_base(&mut hb[..n_px_b], |b, o| {
+                    let inv_mul = 1.0 / band_mul;
+                    for (i, px) in o.iter_mut().enumerate() {
+                        let mut acc = 0.0_f32;
+                        for c in 0..4 {
+                            let v = d[c][b + i] * w_ch[c];
+                            acc += v * v * v * v;
+                        }
+                        *px = acc.sqrt().sqrt() * inv_mul;
+                    }
+                });
+            }
+        }
+
+        if heatmap_on {
+            // Upstream `heatmap_pyr.reconstruct()`: start from the
+            // coarsest band, expand to the next-finer level's dims,
+            // add the band, repeat down to band 0 — then map pixels
+            // through `1 − met2jod(·)/10` (the `raw` heatmap).
+            let last = n_levels - 1;
+            let (mut cw, mut ch) = (sc.pyr_t[0].bands[last].w, sc.pyr_t[0].bands[last].h);
+            sc.heat_recon.clear();
+            sc.heat_recon
+                .extend_from_slice(&sc.heat_bands[last][..cw * ch]);
+            for k in (0..last).rev() {
+                let (tw, th) = (sc.pyr_t[0].bands[k].w, sc.pyr_t[0].bands[k].h);
+                gausspyr_expand(
+                    &sc.heat_recon,
+                    cw,
+                    ch,
+                    tw,
+                    th,
+                    &mut sc.pyr_scr_t,
+                    &mut sc.heat_exp,
+                );
+                let n_px = tw * th;
+                crate::par::map1(
+                    &mut sc.heat_exp[..n_px],
+                    &sc.heat_bands[k][..n_px],
+                    |o, s| {
+                        for (a, b) in o.iter_mut().zip(s.iter()) {
+                            *a += b;
+                        }
+                    },
+                );
+                core::mem::swap(&mut sc.heat_recon, &mut sc.heat_exp);
+                cw = tw;
+                ch = th;
+            }
+            debug_assert_eq!(cw, w);
+            debug_assert_eq!(ch, h);
+            let mut map = sc.heat_recon.clone();
+            crate::par::map_base(&mut map, |_, o| {
+                for px in o.iter_mut() {
+                    *px = 1.0 - met2jod(*px) / 10.0;
+                }
+            });
+            self.heatmaps.push_back(map);
         }
         self.q_per_ch.push(q_frame);
     }
+}
+
+/// Resample `q_per_ch`'s frame axis from `src_fps` to `nominal` Hz —
+/// the intended semantics of pycvvdp's `temp_resample`/`nominal_fps`
+/// (`self.nominal_fps = 240` upstream). Upstream's actual v0.5.7 code
+/// is dead: `interp1dim2` interpolates dim 1 of `Q_per_ch[B, ch, N,
+/// bands]` — the *channel* axis — and asserts `N == 4`, so it can
+/// never have run correctly on a real clip (`temp_resample` is
+/// hardcoded `False` with a "may not be needed anymore" comment).
+/// This implements the evident intent: linear interpolation of the
+/// per-frame quality series onto the nominal-rate grid.
+///
+/// Grid (torch `linspace` — inclusive endpoints):
+/// ```text
+/// t_end = N / src_fps
+/// t_org[i] = i · t_end/(N−1)              i ∈ 0..N
+/// N_out = ceil(t_end · nominal)
+/// t_new[j] = j · (N_out/nominal)/(N_out−1)   j ∈ 0..N_out
+/// ```
+/// Interpolation is `get_interpolants_v1`-faithful: left edge clamps
+/// (`ifrc=0` below/at the first knot), the tail extrapolates past the
+/// last knot (`t_new`'s endpoint `N_out/nominal ≥ t_end`), and the
+/// denominator carries upstream's `+1e-6` epsilon.
+///
+/// A single-row table (`N == 1`) replicates the row to `N_out`
+/// (single-knot interpolation returns `v[0]` for every query —
+/// same as upstream's bucketize path on a 1-point `x`).
+fn resample_q_per_ch(q_per_ch: &mut Vec<Vec<[f32; 4]>>, src_fps: f32, nominal: f32) {
+    let n = q_per_ch.len();
+    if n == 0 {
+        return;
+    }
+    let t_end = n as f32 / src_fps;
+    let n_out = ((t_end * nominal).ceil() as usize).max(1);
+
+    // t_new knots — linspace(0, n_out/nominal, n_out); n_out==1 → [0].
+    let t_new_end = n_out as f32 / nominal;
+    let t_new_step = if n_out > 1 {
+        t_new_end / (n_out - 1) as f32
+    } else {
+        0.0
+    };
+    if n == 1 {
+        let row = q_per_ch[0].clone();
+        *q_per_ch = vec![row; n_out];
+        return;
+    }
+    let t_step = t_end / (n - 1) as f32;
+
+    // For each query knot: bucketize → (imin, imax, ifrc), then
+    // out = v[imin]·(1−ifrc) + v[imax]·ifrc. Queries are monotone →
+    // a persistent cursor beats a per-query binary search.
+    let mut out = Vec::with_capacity(n_out);
+    let mut imax0 = 0_usize;
+    for j in 0..n_out {
+        let xq = if j == n_out - 1 {
+            // Pin the last knot (f32 step drift) — but linspace with
+            // a single step yields [0], not [end].
+            if n_out == 1 { 0.0 } else { t_new_end }
+        } else {
+            j as f32 * t_new_step
+        };
+        // torch.bucketize(xq, t_org) — count of knots strictly < xq
+        // (t_org[i] = i·t_step). May reach n (tail extrapolation).
+        while imax0 < n && imax0 as f32 * t_step < xq {
+            imax0 += 1;
+        }
+        let imax = imax0.min(n - 1);
+        let imin = imax.saturating_sub(1);
+        // ifrc = (xq − x[imin]) / (x[imax] − x[imin] + 1e-6), 0 when
+        // imax == imin, clamped ≥ 0 — verbatim get_interpolants_v1.
+        // Past the last knot ifrc > 1 → linear extrapolation.
+        let x_imin = imin as f32 * t_step;
+        let x_imax = imax as f32 * t_step;
+        let ifrc = if imax == imin {
+            0.0
+        } else {
+            ((xq - x_imin) / (x_imax - x_imin + 1e-6)).max(0.0)
+        };
+        let (lo, hi) = (&q_per_ch[imin], &q_per_ch[imax]);
+        let n_bands = lo.len();
+        let mut row = Vec::with_capacity(n_bands);
+        for b in 0..n_bands {
+            let mut cell = [0.0_f32; 4];
+            for (c, v) in cell.iter_mut().enumerate() {
+                *v = lo[b][c] * (1.0 - ifrc) + hi[b][c] * ifrc;
+            }
+            row.push(cell);
+        }
+        out.push(row);
+    }
+    *q_per_ch = out;
 }
 
 /// Score a whole clip in one call — the streaming path internally,
@@ -1835,8 +2091,8 @@ mod tests {
                     VideoScorerOptions {
                         layout: FrameLayout::Interleaved,
                         temp_padding: padding,
-                        temp_filter: TempFilter::Default,
                         low_memory: true,
+                        ..VideoScorerOptions::default()
                     },
                 )
                 .unwrap();
@@ -1892,8 +2148,8 @@ mod tests {
                 let opts = |low_memory| VideoScorerOptions {
                     layout: FrameLayout::Interleaved,
                     temp_padding: padding,
-                    temp_filter: TempFilter::Default,
                     low_memory,
+                    ..VideoScorerOptions::default()
                 };
                 let mut hi =
                     VideoScorer::with_options(w as u32, h as u32, 30.0, params, geo, opts(false))
@@ -2370,5 +2626,465 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// `Valid` emits only complete-window outputs — `N − fl + 1`
+    /// rows that must be **bit-identical** to replicate's tail rows
+    /// (same causal windows, no edge padding involved).
+    #[test]
+    fn valid_matches_replicate_tail_bit_for_bit() {
+        let (w, h) = (48usize, 40usize);
+        let fl = video_filter_len(30.0); // 9
+        let n = fl + 4;
+        let (refs, dists) = synth_clip(w, h, n);
+        let geo = DisplayGeometry::STANDARD_4K;
+        let params = CvvdpParams::default();
+
+        let rep = score_video_with_stats(
+            &refs,
+            &dists,
+            w as u32,
+            h as u32,
+            30.0,
+            params,
+            geo,
+            FrameLayout::Interleaved,
+            TempPadding::Replicate,
+        )
+        .unwrap();
+        let val = score_video_with_stats(
+            &refs,
+            &dists,
+            w as u32,
+            h as u32,
+            30.0,
+            params,
+            geo,
+            FrameLayout::Interleaved,
+            TempPadding::Valid,
+        )
+        .unwrap();
+
+        assert_eq!(val.q_per_ch.len(), n - fl + 1, "N−fl+1 outputs");
+        assert_eq!(val.n_frames, n, "n_frames counts pushed input");
+        // Valid row k == replicate row fl−1+k — identical window.
+        for (k, vrow) in val.q_per_ch.iter().enumerate() {
+            let rrow = &rep.q_per_ch[fl - 1 + k];
+            for (vband, rband) in vrow.iter().zip(rrow.iter()) {
+                for c in 0..4 {
+                    assert_eq!(
+                        vband[c].to_bits(),
+                        rband[c].to_bits(),
+                        "valid[{k}] != replicate[{flm1}]",
+                        flm1 = fl - 1 + k
+                    );
+                }
+            }
+        }
+        // Same pooled series tail → same JOD as pooling the
+        // replicate tail alone.
+        let tail: Vec<Vec<[f32; 4]>> = rep.q_per_ch[fl - 1..].to_vec();
+        let jod_tail = do_pooling_and_jod_video_4ch(&tail);
+        assert_eq!(val.jod.to_bits(), jod_tail.to_bits());
+    }
+
+    /// Boundary: N == fl → exactly one output; N < fl → error.
+    #[test]
+    fn valid_boundary_counts() {
+        let (w, h) = (32usize, 32usize);
+        let fl = video_filter_len(30.0);
+        let geo = DisplayGeometry::STANDARD_4K;
+        let params = CvvdpParams::default();
+
+        // N == fl → one output.
+        let (refs, dists) = synth_clip(w, h, fl);
+        let stats = score_video_with_stats(
+            &refs,
+            &dists,
+            w as u32,
+            h as u32,
+            30.0,
+            params,
+            geo,
+            FrameLayout::Interleaved,
+            TempPadding::Valid,
+        )
+        .unwrap();
+        assert_eq!(stats.q_per_ch.len(), 1);
+        assert!(stats.jod.is_finite());
+
+        // N == fl − 1 → zero outputs → TooShortForFilter.
+        let (refs, dists) = synth_clip(w, h, fl - 1);
+        let err = score_video_with_stats(
+            &refs,
+            &dists,
+            w as u32,
+            h as u32,
+            30.0,
+            params,
+            geo,
+            FrameLayout::Interleaved,
+            TempPadding::Valid,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            err,
+            Error::TooShortForFilter {
+                frames,
+                filter_len
+            } if frames == fl - 1 && filter_len == fl
+        ));
+    }
+
+    /// Valid emits are strictly in lockstep with pushes once the
+    /// window is complete — nothing deferred to finish.
+    #[test]
+    fn valid_emits_in_lockstep() {
+        let (w, h) = (32usize, 32usize);
+        let fl = video_filter_len(30.0);
+        let (refs, dists) = synth_clip(w, h, fl + 3);
+        let mut v = VideoScorer::with_layout_and_padding(
+            w as u32,
+            h as u32,
+            30.0,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+            FrameLayout::Interleaved,
+            TempPadding::Valid,
+        )
+        .unwrap();
+        for (i, (rf, df)) in refs.iter().zip(dists.iter()).enumerate() {
+            v.push_frame(rf, df).unwrap();
+            // Outputs emitted so far: those t ∈ [fl−1, i].
+            let expect = (i + 1).saturating_sub(fl - 1);
+            assert_eq!(
+                v.q_per_ch_table().len(),
+                expect,
+                "emit count after push {i} (n_pushed={})",
+                i + 1
+            );
+        }
+        let stats = v.finish_with_stats().unwrap();
+        assert_eq!(stats.q_per_ch.len(), 4); // fl+3 − fl + 1
+    }
+
+    /// `temp_resample` at the native rate is the identity — same grid,
+    /// same rows, same JOD.
+    #[test]
+    fn resample_native_rate_is_identity() {
+        let (w, h) = (32usize, 32usize);
+        let (refs, dists) = synth_clip(w, h, 12);
+        let geo = DisplayGeometry::STANDARD_4K;
+        let params = CvvdpParams::default();
+        let mk = |resample: Option<f32>| {
+            let mut v = VideoScorer::with_options(
+                w as u32,
+                h as u32,
+                30.0,
+                params,
+                geo,
+                VideoScorerOptions {
+                    temp_resample: resample,
+                    ..VideoScorerOptions::default()
+                },
+            )
+            .unwrap();
+            for (rf, df) in refs.iter().zip(dists.iter()) {
+                v.push_frame(rf, df).unwrap();
+            }
+            v.finish_with_stats().unwrap()
+        };
+        let base = mk(None);
+        let res = mk(Some(30.0));
+        assert_eq!(res.q_per_ch.len(), base.q_per_ch.len());
+        for (j, (ra, rb)) in res.q_per_ch.iter().zip(base.q_per_ch.iter()).enumerate() {
+            for ((ba, bb), prev_band) in ra
+                .iter()
+                .zip(rb.iter())
+                .zip(base.q_per_ch[j.saturating_sub(1)].iter())
+            {
+                for c in 0..4 {
+                    // Same grid, but not bit-exact: upstream's ifrc
+                    // denominator carries +1e-6, so an exact-knot query
+                    // lands at ifrc ≈ 1−1e-6/t_step and blends that
+                    // fraction of the *previous* row. Bound the shift
+                    // by the adjacent-row delta it mixes in.
+                    let prev = (prev_band[c] - bb[c]).abs();
+                    assert!(
+                        (ba[c] - bb[c]).abs() <= 1e-5 + 1e-4 * prev,
+                        "identity resample moved {ba:?} vs {bb:?} ch{c}"
+                    );
+                }
+            }
+        }
+        assert!((res.jod - base.jod).abs() < 1e-4);
+        assert_eq!(res.frames_per_second, 30.0);
+    }
+
+    /// 30 → 240 Hz: `N_out = ceil(N·240/30) = 8N` rows, finite JOD,
+    /// stats report the nominal rate.
+    #[test]
+    fn resample_upsamples_row_count() {
+        let (w, h) = (32usize, 32usize);
+        let n = 10;
+        let (refs, dists) = synth_clip(w, h, n);
+        let mut v = VideoScorer::with_options(
+            w as u32,
+            h as u32,
+            30.0,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+            VideoScorerOptions {
+                temp_resample: Some(240.0),
+                ..VideoScorerOptions::default()
+            },
+        )
+        .unwrap();
+        for (rf, df) in refs.iter().zip(dists.iter()) {
+            v.push_frame(rf, df).unwrap();
+        }
+        let stats = v.finish_with_stats().unwrap();
+        assert_eq!(stats.q_per_ch.len(), 8 * n);
+        assert_eq!(stats.frames_per_second, 240.0);
+        assert_eq!(stats.n_frames, n);
+        assert!(stats.jod.is_finite() && stats.jod <= 10.0);
+    }
+
+    /// Direct unit coverage of the interpolation kernel: monotone
+    /// ramps resample to monotone values; a non-integral rate ratio
+    /// exercises the tail-extrapolation branch (`t_new` endpoint
+    /// `N_out/nominal > t_end`).
+    #[test]
+    fn resample_kernel_semantics() {
+        // Ramp series — v[i] = i — 3 "bands" × 4 "channels" share it.
+        let ramp: Vec<Vec<[f32; 4]>> = (0..4).map(|i| vec![[i as f32; 4], [i as f32; 4]]).collect();
+        let mut q = ramp.clone();
+        // fps=30, nominal=100: t_end = 4/30 ≈ 0.1333,
+        // n_out = ceil(0.1333·100) = 14, t_new end = 0.14 > t_end →
+        // the last query extrapolates past the final knot.
+        resample_q_per_ch(&mut q, 30.0, 100.0);
+        assert_eq!(q.len(), 14);
+        // Linear series through a linear interp stays linear (up to
+        // the 1e-6 denominator epsilon and endpoint pinning).
+        for (j, row) in q.iter().enumerate() {
+            let v = row[0][0];
+            // xq = j·(0.14/13); expected ≈ xq/t_step with
+            // t_step = t_end/3 = 4/90.
+            let xq = j as f32 * (0.14 / 13.0);
+            let expect = xq / (4.0 / 30.0 / 3.0);
+            assert!(
+                (v - expect).abs() < 0.02,
+                "row {j}: got {v}, expected ~{expect}"
+            );
+        }
+        // Tail: last row extrapolates beyond v[3] = 3.
+        assert!(
+            q[13][0][0] > 3.0,
+            "tail must extrapolate, got {}",
+            q[13][0][0]
+        );
+
+        // Single-row table replicates to n_out rows.
+        let mut one = vec![vec![[7.5_f32; 4]; 2]];
+        resample_q_per_ch(&mut one, 30.0, 240.0);
+        assert_eq!(one.len(), (1.0 / 30.0 * 240.0_f32).ceil() as usize);
+        assert!(one.iter().all(|r| r[0][0] == 7.5));
+    }
+
+    /// Invalid nominal fps is rejected at construction.
+    #[test]
+    fn resample_rejects_bad_fps() {
+        for bad in [0.0_f32, -30.0, f32::NAN, f32::INFINITY] {
+            match VideoScorer::with_options(
+                32,
+                32,
+                30.0,
+                CvvdpParams::default(),
+                DisplayGeometry::STANDARD_4K,
+                VideoScorerOptions {
+                    temp_resample: Some(bad),
+                    ..VideoScorerOptions::default()
+                },
+            ) {
+                Err(Error::InvalidFps) => {}
+                _ => panic!("temp_resample={bad} should be rejected"),
+            }
+        }
+    }
+
+    /// Identical clip → D = 0 everywhere → heatmap is all-zero
+    /// (`1 − met2jod(0)/10 = 1 − 10/10 = 0`).
+    #[test]
+    fn heatmap_identical_clip_is_zero() {
+        let (w, h) = (32usize, 32usize);
+        let (refs, _) = synth_clip(w, h, 12);
+        let mut v = VideoScorer::with_options(
+            w as u32,
+            h as u32,
+            30.0,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+            VideoScorerOptions {
+                heatmap: true,
+                ..VideoScorerOptions::default()
+            },
+        )
+        .unwrap();
+        for rf in &refs {
+            v.push_frame(rf, rf).unwrap();
+        }
+        let stats = v.finish_with_stats().unwrap();
+        assert_eq!(stats.heatmaps.len(), stats.q_per_ch.len());
+        assert_eq!(stats.jod, 10.0);
+        for (i, hm) in stats.heatmaps.iter().enumerate() {
+            assert_eq!(hm.len(), w * h);
+            for (j, &px) in hm.iter().enumerate() {
+                assert_eq!(px, 0.0, "heatmap[{i}][{j}] should be 0 on identical input");
+            }
+        }
+    }
+
+    /// Distortion lands where it was applied — the disturbed half of
+    /// the frame reads higher than the clean half.
+    #[test]
+    fn heatmap_localises_distortion() {
+        let (w, h) = (64usize, 32usize);
+        let n = 12;
+        let refs: Vec<Vec<u8>> = (0..n).map(|t| synth_frame(w, h, t, 1.0)).collect();
+        let dists: Vec<Vec<u8>> = refs
+            .iter()
+            .map(|f| {
+                let mut d = f.clone();
+                // Top half: strong blur-free noise.
+                for y in 0..h / 2 {
+                    for x in 0..w {
+                        let i = (y * w + x) * 3;
+                        let nv =
+                            (d[i] as i32 + ((x * 7 + y * 13) % 60) as i32 - 30).clamp(0, 255) as u8;
+                        d[i] = nv;
+                        d[i + 1] = nv;
+                        d[i + 2] = nv;
+                    }
+                }
+                d
+            })
+            .collect();
+        let mut v = VideoScorer::with_options(
+            w as u32,
+            h as u32,
+            30.0,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+            VideoScorerOptions {
+                heatmap: true,
+                ..VideoScorerOptions::default()
+            },
+        )
+        .unwrap();
+        for (rf, df) in refs.iter().zip(dists.iter()) {
+            v.push_frame(rf, df).unwrap();
+        }
+        let stats = v.finish_with_stats().unwrap();
+        assert_eq!(stats.heatmaps.len(), n);
+        let hm = &stats.heatmaps[6]; // mid-clip, steady-state
+        let top: f32 = hm[..w * h / 2].iter().sum::<f32>() / (w * h / 2) as f32;
+        let bot: f32 = hm[w * h / 2..].iter().sum::<f32>() / (w * h / 2) as f32;
+        assert!(
+            top > bot * 2.0 + 1e-4,
+            "distorted half should read higher: top {top} vs bot {bot}"
+        );
+        // JOD is unaffected by enabling heatmaps — same values as the
+        // non-heatmap run.
+        let plain = score_video(
+            &refs,
+            &dists,
+            w as u32,
+            h as u32,
+            30.0,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+        )
+        .unwrap();
+        assert!(
+            (stats.jod - plain).abs() < 1e-5,
+            "heatmap mode moved JOD: {} vs {plain}",
+            stats.jod
+        );
+    }
+
+    /// `pop_heatmap` drains in emission order; the finish-time drain
+    /// only collects what was left.
+    #[test]
+    fn pop_heatmap_drains_in_order() {
+        let (w, h) = (32usize, 32usize);
+        let fl = video_filter_len(30.0);
+        let (refs, dists) = synth_clip(w, h, fl + 3);
+        let mut v = VideoScorer::with_options(
+            w as u32,
+            h as u32,
+            30.0,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+            VideoScorerOptions {
+                heatmap: true,
+                ..VideoScorerOptions::default()
+            },
+        )
+        .unwrap();
+        let mut popped = 0;
+        for (rf, df) in refs.iter().zip(dists.iter()) {
+            v.push_frame(rf, df).unwrap();
+            while let Some(hm) = v.pop_heatmap() {
+                assert_eq!(hm.len(), w * h);
+                popped += 1;
+            }
+        }
+        let stats = v.finish_with_stats().unwrap();
+        assert_eq!(stats.q_per_ch.len(), refs.len());
+        assert_eq!(
+            popped + stats.heatmaps.len(),
+            refs.len(),
+            "drained + remainder == emitted"
+        );
+    }
+
+    /// Heatmap under `Valid` padding produces one map per emitted
+    /// (complete-window) output.
+    #[test]
+    fn heatmap_valid_padding_counts() {
+        let (w, h) = (32usize, 32usize);
+        let fl = video_filter_len(30.0);
+        let n = fl + 2;
+        let (refs, dists) = synth_clip(w, h, n);
+        let stats = score_video_with_stats(
+            &refs,
+            &dists,
+            w as u32,
+            h as u32,
+            30.0,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+            FrameLayout::Interleaved,
+            TempPadding::Valid,
+        );
+        let mut v = VideoScorer::with_options(
+            w as u32,
+            h as u32,
+            30.0,
+            CvvdpParams::default(),
+            DisplayGeometry::STANDARD_4K,
+            VideoScorerOptions {
+                temp_padding: TempPadding::Valid,
+                heatmap: true,
+                ..VideoScorerOptions::default()
+            },
+        )
+        .unwrap();
+        for (rf, df) in refs.iter().zip(dists.iter()) {
+            v.push_frame(rf, df).unwrap();
+        }
+        let stats_hm = v.finish_with_stats().unwrap();
+        assert_eq!(stats.unwrap().q_per_ch.len(), n - fl + 1);
+        assert_eq!(stats_hm.heatmaps.len(), n - fl + 1);
     }
 }

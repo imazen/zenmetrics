@@ -354,6 +354,59 @@ pub(crate) fn mult_mutual_band_4ch_into(
     xcm4_finish(sums, n)
 }
 
+/// Materialise the per-pixel clamped-diff planes `D` that
+/// [`mult_mutual_band_4ch_into`] reduces in-register — the `D`
+/// tensor pycvvdp's video heatmap folds across channels
+/// (`D_chr = lp_norm(D·per_ch_w, beta_tch, dim=channel)`).
+///
+/// Reads the post-return state of the `_into` call — `m_mm[c]`
+/// still holds the `safe_pow(|T−R|, p)` intermediates and `term[c]`
+/// the `safe_pow(|M_mm|, q)` mask powers — and writes
+/// `out[c][i] = clamp(d[c][i]/(1 + Σ_k XCM[k][c]·term[k][i]))`, the
+/// identical per-pixel math `vxcm_pool_clamp_4ch_sqsum_partial`
+/// performs in registers (elementwise ⇒ same value, no reduction
+/// order involved).
+///
+/// `out` planes grow to `n` on first use (grow-only scratch).
+pub(crate) fn masked_d_planes_4ch(
+    m_mm: &[Vec<f32>; 4],
+    term: &[Vec<f32>; 4],
+    n: usize,
+    out: &mut [Vec<f32>; 4],
+) {
+    use crate::kernels::masking::{clamp_diff_soft, mask_pool_pixel_4};
+    for c in 0..4 {
+        if out[c].len() < n {
+            out[c].resize(n, 0.0);
+        }
+    }
+    let [o0, o1, o2, o3] = out;
+    crate::par::map4_base(
+        &mut o0[..n],
+        &mut o1[..n],
+        &mut o2[..n],
+        &mut o3[..n],
+        |b, d0, d1, d2, d3| {
+            for i in 0..d0.len() {
+                let t = [
+                    term[0][b + i],
+                    term[1][b + i],
+                    term[2][b + i],
+                    term[3][b + i],
+                ];
+                // Same per-pixel math as `vxcm_pool_clamp_4ch_*`:
+                // m_c = Σ_k XCM[k][c]·term[k] (mask_pool_pixel_4),
+                // then the soft clamp of d/(1+m_c).
+                let m = mask_pool_pixel_4(t);
+                let outs: [&mut f32; 4] = [&mut d0[i], &mut d1[i], &mut d2[i], &mut d3[i]];
+                for (c, o) in outs.into_iter().enumerate() {
+                    *o = clamp_diff_soft(m_mm[c][b + i] / (1.0 + m[c]));
+                }
+            }
+        },
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
