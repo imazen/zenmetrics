@@ -20,14 +20,16 @@ bit-identical; video support is additive.
 ### Temporal filtering
 
 `N = 2*ceil(0.125*fps) + 1` odd-length FIR per channel: three sustained
-low-pass kernels (A, RG, VY) and one transient achromatic band-pass
-centred on 5 Hz. Taps are computed in closed form (the `irfft` +
-`fftshift` reduces to a cosine sum for odd N) in f64 and cast to f32;
-verified ≤ 7e-8 absolute against torch's taps for fps 24/30/60.
+low-pass kernels (A, RG, VY) and one transient achromatic channel whose
+taps depend on the selected `temp_filter` (below). Taps are computed in
+closed form (the `irfft` + `fftshift` reduces to a cosine sum for odd
+N) in f64 and cast to f32; verified ≤ 7e-8 absolute against torch's
+taps for fps 24/30/60.
 
 The filter is applied **causally** exactly as upstream:
 `out[t] = Σ_j taps[j] · frame[t − j]` with `frame[k<0] = frame[0]`
-(`temp_padding="replicate"` — the default and only ported padding).
+(`temp_padding="replicate"` — the default; `symmetric` is also
+ported, see below).
 The symmetric kernel therefore carries an `(N−1)/2`-frame group delay
 vs its centre tap — matching pycvvdp, which likewise emits frame `t`
 from the window ending at `t`. The transient channel filters the same
@@ -170,6 +172,7 @@ pycvvdp entry points:
 | `stats['rho_band']` | `VideoStats::rho_band` / `VideoScorer::band_frequencies()` |
 | `stats['frames_per_second'/'width'/'height'/'N_frames']` | same-named `VideoStats` fields |
 | `temp_padding="replicate"` / `"symmetric"` | `TempPadding::{Replicate,Symmetric}` via `VideoScorer::with_layout_and_padding` / `score_video_with_stats` |
+| `temp_filter` (`"default"`/`"hp_trans"`/`"grad_trans"` — a `cvvdp_parameters.json` key upstream, not a constructor kwarg) | `TempFilter::{Default,HpTrans,GradTrans}` via `VideoScorerOptions::temp_filter` (`VideoScorer::with_options` / `Cvvdp::video_with_options`) |
 | — (no upstream analog; memory knob) | `VideoScorerOptions::low_memory` via `VideoScorer::with_options` / `Cvvdp::video_with_options` — source-sample ring window, bit-identical scores |
 
 `VideoStats::q_per_ch` rows hold the spatially-pooled per-band masked
@@ -193,10 +196,37 @@ frames). Clips with `N < fl` emit everything at `finish()`. Parity:
 (5 < fl=9) ping-pong fixture
 (`scripts/cvvdp_goldens/video_goldens_symmetric.json`).
 
+### `temp_filter` — transient-channel variants
+
+pycvvdp v0.5.7's `get_temporal_filters` has three branches for the
+transient channel (channel 3); the sustained channels are identical
+under all of them, and `temp_filter` is a `cvvdp_parameters.json`
+key upstream — not a constructor kwarg — so this port exposes it as a
+`VideoScorerOptions` field (`TempFilter`, default `Default`):
+
+- **`Default`** — Gaussian band-pass centred on 5 Hz:
+  `R[3] = exp(−(ω^β₃ − 5^β₃)² / σ₃)` through the `irfft`. This is what
+  every published cvvdp benchmark uses.
+- **`HpTrans`** (`"hp_trans"`) — `R[3] = 1 − R[0]`, i.e. the transient
+  channel becomes the exact complement of sustained channel 0's
+  low-pass (a true temporal high-pass: `taps[3] = δ_centre − taps[0]`),
+  still through the same `irfft` route — so it stays symmetric.
+- **`GradTrans`** (`"grad_trans"`) — the transient FIR is replaced
+  outright by `[1, 0, −1, 0, …]` in causal order (`r[0]=1, r[2]=−1`;
+  upstream applies no `irfft`/`fftshift` to it — an **asymmetric**
+  two-frame difference: `out[t] = frame[t] − frame[t−2]`).
+
+Both variants are built once at `VideoScorer` construction — no
+per-frame branch cost. `hp_trans` reuses the already-computed
+channel-0 response; `grad_trans` skips the transient IDFT entirely.
+Parity vs pycvvdp v0.5.7 on the same 44-cell corpus
+(`video_goldens_hp_trans.json`, `video_goldens_grad_trans.json`):
+**max |Δ| = 6e-6 JOD** (`hp_trans`) and **1e-5 JOD** (`grad_trans`) —
+same order as the default branch.
+
 Deliberately not exposed (see "Not ported"): file/codec video
 sources (`video_source_file*`, YUV readers), GPU paths, heatmap
-outputs, foveation, `temp_resample`, alternate `temp_filter`
-branches, ML/PSNR metrics.
+outputs, foveation, `temp_resample`, ML/PSNR metrics.
 
 ### CLI
 
@@ -207,6 +237,7 @@ default) scores two directories of frames:
 zenmetrics score-video \
     --reference-dir ref/ --distorted-dir dist/ --fps 30 \
     [--display-model standard_4k] [--temp-padding replicate|symmetric] \
+    [--temp-filter default|hp-trans|grad-trans] \
     [--output plain|tsv|json] [--stats] [--low-memory]
 ```
 
@@ -229,7 +260,12 @@ by `scripts/cvvdp_goldens/build_video_goldens.py` against the PNG
 frames emitted to `/scratch/cvvdpvideo/` by
 `cvvdp-conformance::emit_video_situations`. 44 cells = 11 situations ×
 4 displays (`standard_4k`, `standard_fhd`, `standard_phone`,
-`standard_hdr_pq`).
+`standard_hdr_pq`). The companion files
+`video_goldens_symmetric.json`, `video_goldens_hp_trans.json` and
+`video_goldens_grad_trans.json` score the same cells under
+`--temp-padding symmetric` and the two `--temp-filter` variants
+respectively (each records its mode in the JSON header; the parity
+tests assert it).
 
 Rounding (to stay under the 30 KB commit cap):
 
@@ -246,8 +282,6 @@ Rounding (to stay under the 30 KB commit cap):
 - `temp_padding="valid"` — upstream lists it in the docstring but the
   implementation raises `RuntimeError`; `replicate` (default) and
   `symmetric` are both ported.
-- `temp_filter` alternates `hp_trans`/`grad_trans` — only the default
-  Gaussian band-pass branch.
 - `temp_resample` (non-native fps resampling of `Q_per_ch`).
 - Heatmap/diffmap output for video, foveation, `dump_channels`.
 - GPU (cvvdp-gpu) video, CLI integration, real codec-decoded input.

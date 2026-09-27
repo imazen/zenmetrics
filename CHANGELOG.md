@@ -13,6 +13,19 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- cvvdp (`50b5d1cf`): **port pycvvdp's two alternate
+  `temp_filter` branches, `hp_trans` and `grad_trans`.** New
+  `cvvdp::TempFilter` enum (`Default` = the existing 5 Hz Gaussian
+  band-pass, `HpTrans` = `R[3] = 1 − R[0]` temporal high-pass,
+  `GradTrans` = asymmetric `[1, 0, −1]` two-frame gradient) on
+  `VideoScorerOptions::temp_filter`, exposed on the CLI as
+  `score-video --temp-filter default|hp-trans|grad-trans`. Sustained
+  channels are bitwise-identical across variants; `hp_trans` reuses the
+  channel-0 response and `grad_trans` skips the transient IDFT — zero
+  added per-frame cost. Verified against pycvvdp v0.5.7 taps (≤1e-6) and
+  end-to-end on the 44-cell video corpus: max |Δ| = 6e-6 JOD
+  (`hp_trans`), 1e-5 JOD (`grad_trans`) — goldens committed as
+  `scripts/cvvdp_goldens/video_goldens_{hp_trans,grad_trans}.json`.
 - Margarine: relocate the unpublished CPU experiment and evaluation records from
   `imazen/butteraugli` source `13c49cbc`, preserving the selected numeric kernel (`ad386c42`).
 

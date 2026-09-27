@@ -12,26 +12,25 @@ design land as "DIVERGES" rows.
 
 ---
 
-## 1. DIVERGES — Temporal channels (4th channel, "Y_t")
+## 1. RESOLVED — Temporal channels (4th channel, "Y_t")
 
 **Upstream**: ColorVideoVDP scores video by adding a transient
 luminance channel (`Y_t`). Several parameters carry a 4th slot
 (`mask_q`, `xcm_weights`, `baseband_weight`, `BETA_TCH`) for this
 channel. The pooling stage adds a `beta_t` term across frames.
 
-**cvvdp**: 3 channels (A, RG, VY) only. The 4th slot in
-`mask_q` / `xcm_weights` / `baseband_weight` is dropped. No
-temporal pooling.
-
-**Why**: cvvdp is targeted at the still-image / web-encoder /
-JPEG XL butteraugli-loop use-case. Temporal scoring requires a
-multi-frame buffer + the transient pyramid + `beta_t`. The cvvdp-gpu
-README explicitly scopes this crate as still-image-only.
-
-**Path to close**: A Phase 2 effort would (a) build a transient
-pyramid alongside the per-band weber pyramids, (b) add 4th slots
-to `MASK_Q` / `XCM_3X3` (becomes `XCM_4X4`) / `BASEBAND_W`, (c)
-add `beta_t` cross-frame pooling. Multi-week. Untracked.
+**cvvdp**: ported (2026-09). `VideoScorer` / `score_video*` run all
+4 channels — sustained A/RG/VY + transient A — with the 4th
+`mask_q`/`xcm_weights`/`baseband_weight` slots and `beta_t`
+cross-frame pooling. All three `temp_filter` branches (`default`
+Gaussian band-pass, `hp_trans`, `grad_trans`) and both `temp_padding`
+modes (`replicate`, `symmetric`) are selectable via
+`VideoScorerOptions`; `--temp-filter` on `zenmetrics score-video`.
+Verified ≤ 1e-5 JOD vs pycvvdp v0.5.7 over the 44-cell video corpus
+(default + both alternates). Still open upstream surface:
+`temp_padding="valid"` (raises `RuntimeError` upstream anyway),
+`temp_resample`, video heatmaps, `dump_channels`, `masking_model`
+variants other than `mult-mutual`. Details: `docs/VIDEO.md`.
 
 ## 2. DIVERGES — Foveation / saliency (`cvvdp_ml_saliency`)
 

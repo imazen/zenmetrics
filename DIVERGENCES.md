@@ -91,13 +91,19 @@ Tags (same vocabulary as `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md`):
 
 ### `cvvdp` (CPU) — vs pycvvdp v0.5.7
 
-Deep doc: `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md` (7 open items),
+Deep doc: `crates/cvvdp/docs/UPSTREAM_DIVERGENCES.md` (6 open items),
 `crates/cvvdp/docs/NAN_ON_IDENTICAL_INPUT.md`,
 `docs/CVVDP_CONFORMANCE.md`.
 
-- **DIVERGES** — Temporal channel (`Y_t`, `beta_t` pooling, 4th slots of
-  `mask_q`/`xcm_weights`/`baseband_weight`): not ported; crate scoped to
-  stills at authoring, video path added later without transient channel.
+- **RESOLVED** — Temporal channel (`Y_t`, `beta_t` pooling, 4th slots of
+  `mask_q`/`xcm_weights`/`baseband_weight`): ported — `VideoScorer`
+  carries all 4 channels including the transient, all three upstream
+  `temp_filter` branches (`default` Gaussian band-pass, `hp_trans`,
+  `grad_trans`; ≤1e-5 JOD vs pycvvdp on the 44-cell corpus), plus
+  `replicate`/`symmetric` padding.
+- **OUT-OF-SCOPE** — `temp_padding="valid"` (raises `RuntimeError`
+  upstream anyway), `temp_resample`, video heatmap output,
+  `dump_channels`, `masking_model` variants other than `mult-mutual`.
 - **DIVERGES** — `cvvdp_ml_saliency` ONNX foveation weighting: not ported
   (torch/ONNX dep incompatible with `forbid(unsafe_code)`+`no_std`).
 - **DIVERGES** — Display `exposure` field (multiplies linear light

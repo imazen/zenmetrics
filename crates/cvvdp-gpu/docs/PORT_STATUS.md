@@ -76,18 +76,19 @@ v0.5.7's since 2026-09-23). The still-image constants are baked into
 - **Video / temporal channels — ported in `cvvdp` (CPU) only.** As of
   2026-09-23 the CPU crate ships `VideoScorer` / `score_video`
   (`crates/cvvdp/src/video.rs`, design in `crates/cvvdp/docs/VIDEO.md`):
-  causal temporal filtering (`get_temporal_filters`, `replicate`
-  padding), the transient achromatic channel through `o5_c1` CSF, 4×4
-  `xcm_weights` masking and `baseband_weight[3]`, and frame pooling
-  (`beta_t = 2`, `t_int = 1.0`, no `image_int`). Bounded memory: only
-  the filter-length window of frames is held. `N_frames == 1` routes
-  through the still path, bit-identical to `Cvvdp::score`. Measured
-  parity vs pycvvdp v0.5.7: max |Δ| = 2e-6 JOD over 44 cells
-  (11 situations × 4 displays, 24/30/60 fps). Not yet ported to
-  `cvvdp-gpu`; `temp_padding = "symmetric"`/`"valid"` and the
-  `hp_trans`/`grad_trans` filter branches remain unported. The
-  still-image path is unchanged (`is_image` special case, as
-  upstream).
+  causal temporal filtering (`get_temporal_filters`, `replicate` and
+  `symmetric` padding — all three `temp_filter` branches: default,
+  `hp_trans`, `grad_trans`), the transient achromatic channel through
+  `o5_c1` CSF, 4×4 `xcm_weights` masking and `baseband_weight[3]`, and
+  frame pooling (`beta_t = 2`, `t_int = 1.0`, no `image_int`). Bounded
+  memory: only the filter-length window of frames is held.
+  `N_frames == 1` routes through the still path, bit-identical to
+  `Cvvdp::score`. Measured parity vs pycvvdp v0.5.7: max |Δ| = 2e-6 JOD
+  over 44 cells (11 situations × 4 displays, 24/30/60 fps) on the
+  default filter; `hp_trans`/`grad_trans` variants land ≤ 1e-5 on the
+  same corpus. Not yet ported to `cvvdp-gpu`; `temp_padding = "valid"`
+  remains unported (it raises upstream anyway). The still-image path
+  is unchanged (`is_image` special case, as upstream).
 - Foveation / gaze maps.
 
 (Removed 2026-09-23: "HDR display models — sRGB-std only". PQ / HLG /
