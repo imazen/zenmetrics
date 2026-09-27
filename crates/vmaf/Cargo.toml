@@ -33,8 +33,6 @@ required-features = ["parallel"]
 
 # archmage::incant! checks `cfg(feature = "avx512")` internally even when no
 # AVX-512 tier is listed (same allow as crates/iwssim, crates/gmsd).
-[lints]
-workspace = true
 
 [features]
 parallel = ["dep:rayon"]
@@ -42,3 +40,45 @@ simd = ["dep:archmage", "dep:magetypes"]
 # Opt-in AVX-512 `v4` tier for the intrinsic-ported kernels (same shape as
 # crates/vif, crates/gmsd, crates/psnrhvs).
 avx512 = ["simd", "archmage/avx512", "magetypes/avx512"]
+
+# Lint EXCEPTION crate: carries existing unsafe debt, so it cannot
+# inherit [workspace.lints] — unsafe_code is `forbid` there and
+# member overrides are not possible under workspace=true. Mirror of
+# the workspace block minus unsafe_code (root Cargo.toml owns the
+# policy; keep in sync — `just quality` will surface drift).
+[lints.rust]
+# pub items nothing outside the crate can reach -> should be pub(crate);
+# the compiler-enforced half of AGENTS.md's API policy.
+unreachable_pub = "warn"
+# The opt-in `avx512` feature cfg is used by archmage incant! dispatch in the
+# metric crates (previously each carried a crate-local [lints.rust] allow).
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("avx512"))'] }
+# existing unsafe debt (GPU device dispatch / FFI oracle / SIMD);
+# unsafe belongs in magetypes/archmage/disjointmut — treat this
+# allow as debt to remove, not a license.
+unsafe_code = "allow"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+# pedantic/nursery stay off: too noisy for ported numeric code.
+# Ported-code allows (the zenjpeg-proven list; see zenutils/quality/templates):
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+cast_lossless = "allow"
+excessive_precision = "allow"
+unreadable_literal = "allow"
+approx_constant = "allow"
+missing_panics_doc = "allow"
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
+doc_markdown = "allow"
+uninlined_format_args = "allow"
+items_after_statements = "allow"
+unnecessary_wraps = "allow"
+unused_self = "allow"
+needless_range_loop = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
+missing_safety_doc = "warn"
+undocumented_unsafe_blocks = "warn"

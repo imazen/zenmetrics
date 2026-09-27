@@ -503,6 +503,11 @@ fast-ssim2   = { path = "../fast-ssim2/fast-ssim2" }
 # `[lints] workspace = true` (applied repo-wide 2026-09-27 via
 # zenutils/quality/apply-workspace-lints.py).
 [workspace.lints.rust]
+# unsafe belongs in the verified primitive crates (magetypes/archmage/
+# disjointmut). FORBIDDEN by default; the members below carry an explicit
+# `[lints.rust] unsafe_code = "allow"` for their existing GPU-dispatch /
+# FFI-oracle / SIMD debt — treat each allow as debt to remove, not a license.
+unsafe_code = "forbid"
 # pub items nothing outside the crate can reach -> should be pub(crate);
 # the compiler-enforced half of AGENTS.md's API policy.
 unreachable_pub = "warn"
