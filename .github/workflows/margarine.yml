@@ -33,7 +33,7 @@ jobs:
       - name: Check research and selected kernels
         run: |
           python3 crates/margarine/verify_sources.py
-          python3 -m unittest discover -s experiments/margarine -p 'test_*.py'
+          python3 -m unittest discover -s crates/margarine -p 'test_*.py'
           cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine-lab --check
           cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --all-targets -- -D warnings
           cargo clippy --locked --manifest-path crates/margarine/Cargo.toml --features planar --all-targets -- -D warnings

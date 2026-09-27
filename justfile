@@ -118,7 +118,7 @@ test-gmsd-mdsi-gate:
 
 # The unpublished Margarine research instruments; does not format sibling crates.
 margarine-check:
-    python3 -m unittest discover -s experiments/margarine -p 'test_*.py'
+    python3 -m unittest discover -s crates/margarine -p 'test_*.py'
     cargo fmt --manifest-path crates/margarine/Cargo.toml -p margarine-lab --check
     nice -n 19 cargo test --manifest-path crates/margarine/Cargo.toml -j 2
     nice -n 19 cargo clippy --manifest-path crates/margarine/Cargo.toml --all-targets -j 2 -- -D warnings
@@ -129,7 +129,7 @@ margarine-bootstrap scores output draws="2000" seed="20260926":
 
 # Requires an interpreter with crates/margarine/requirements-training.txt.
 margarine-fit-check python:
-    cd experiments/margarine && OPENBLAS_NUM_THREADS=2 OMP_NUM_THREADS=2 nice -n 19 "{{python}}" -m unittest fit_probe_checks
+    cd crates/margarine && OPENBLAS_NUM_THREADS=2 OMP_NUM_THREADS=2 nice -n 19 "{{python}}" -m unittest fit_probe_checks
 
 # Fresh-process memory plus interleaved timing; caller sets RAYON_NUM_THREADS.
 margarine-resources crops output commit:
