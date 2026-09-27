@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, ValueEnum};
 use zenmetrics_api::cvvdp_cpu::{
-    CvvdpParams, FrameLayout, TempPadding, VideoScorer, VideoScorerOptions,
+    CvvdpParams, FrameLayout, TempFilter, TempPadding, VideoScorer, VideoScorerOptions,
 };
 
 use crate::decode::decode_image_to_rgb8;
@@ -53,6 +53,13 @@ pub(crate) struct ScoreVideoArgs {
     /// outputs under symmetric until the lookahead frames exist.
     #[arg(long, value_enum, default_value = "replicate")]
     temp_padding: CliTempPadding,
+    /// Transient-channel temporal filter — pycvvdp's `temp_filter`.
+    /// `default` is the 5 Hz Gaussian band-pass used by every published
+    /// benchmark; `hp-trans` uses `1 − sustained-response` (temporal
+    /// high-pass); `grad-trans` uses a `[1, 0, −1]` two-frame gradient.
+    /// Sustained channels are identical under all three.
+    #[arg(long, value_enum, default_value = "default")]
+    temp_filter: CliTempFilter,
     /// Output format: `plain` prints `metric=… jod=… loss=…`, `tsv`
     /// prints a two-row table, `json` prints one object (add `--stats`
     /// for the full `Q_per_ch`/`rho_band` bundle).
@@ -85,6 +92,31 @@ impl From<CliTempPadding> for TempPadding {
         match p {
             CliTempPadding::Replicate => TempPadding::Replicate,
             CliTempPadding::Symmetric => TempPadding::Symmetric,
+        }
+    }
+}
+
+/// clap `ValueEnum` mirror of [`TempFilter`] (kept crate-local so the
+/// upstream enum stays dependency-light).
+#[derive(ValueEnum, Debug, Clone, Copy)]
+enum CliTempFilter {
+    /// Gaussian band-pass centred on 5 Hz (upstream default — the
+    /// configuration every published cvvdp benchmark uses).
+    Default,
+    /// Transient channel = `1 −` sustained channel 0's response
+    /// (temporal high-pass; upstream `temp_filter="hp_trans"`).
+    HpTrans,
+    /// Transient channel = `[1, 0, −1]` two-frame gradient (upstream
+    /// `temp_filter="grad_trans"`).
+    GradTrans,
+}
+
+impl From<CliTempFilter> for TempFilter {
+    fn from(f: CliTempFilter) -> Self {
+        match f {
+            CliTempFilter::Default => TempFilter::Default,
+            CliTempFilter::HpTrans => TempFilter::HpTrans,
+            CliTempFilter::GradTrans => TempFilter::GradTrans,
         }
     }
 }
@@ -163,6 +195,7 @@ pub(crate) fn run(args: &ScoreVideoArgs) -> Result<(), Box<dyn std::error::Error
                     VideoScorerOptions {
                         layout: FrameLayout::Interleaved,
                         temp_padding: args.temp_padding.into(),
+                        temp_filter: args.temp_filter.into(),
                         low_memory: args.low_memory,
                     },
                 )
@@ -213,6 +246,7 @@ pub(crate) fn run(args: &ScoreVideoArgs) -> Result<(), Box<dyn std::error::Error
                 "height": stats.height,
                 "n_frames": stats.n_frames,
                 "temp_padding": format!("{:?}", args.temp_padding).to_lowercase(),
+                "temp_filter": format!("{:?}", args.temp_filter).to_lowercase(),
             });
             if args.stats {
                 v["rho_band"] = serde_json::json!(stats.rho_band);

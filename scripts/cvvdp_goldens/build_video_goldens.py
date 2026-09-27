@@ -140,6 +140,13 @@ def main() -> int:
         "video_goldens_symmetric.json by default",
     )
     ap.add_argument(
+        "--temp-filter",
+        choices=["default", "hp_trans", "grad_trans"],
+        default="default",
+        help="pycvvdp cvvdp() temp_filter arg; non-default values write "
+        "video_goldens_<filter>.json by default",
+    )
+    ap.add_argument(
         "--u16",
         action="store_true",
         help="16-bit corpus: reads video_manifest_u16.json + RGB16 "
@@ -159,6 +166,8 @@ def main() -> int:
         out_path = Path(args.out)
     elif args.u16:
         out_path = sit_dir / "video_goldens_u16.json"
+    elif args.temp_filter != "default":
+        out_path = sit_dir / f"video_goldens_{args.temp_filter}.json"
     elif args.temp_padding == "replicate":
         out_path = sit_dir / "video_goldens.json"
     else:
@@ -208,6 +217,10 @@ def main() -> int:
                 quiet=True,
                 temp_padding=args.temp_padding,
             )
+            # `temp_filter` lives in the parameters JSON, not the
+            # constructor — it is only read by get_temporal_filters at
+            # predict time, so assigning the attribute is equivalent.
+            metrics[name].temp_filter = args.temp_filter
         except Exception as e:  # noqa: BLE001
             raise SystemExit(
                 f"display {name!r} failed to construct under pycvvdp {ref_version}: {e}"
@@ -301,6 +314,7 @@ def main() -> int:
         "reference_version": ref_version,
         "port_pinned_version": port_pin,
         "temp_padding": args.temp_padding,
+        "temp_filter": args.temp_filter,
         "bit_depth": 16 if args.u16 else 8,
         "generated_unix": int(time.time()),
         "video_manifest_sha256": sha256_file(manifest_path),

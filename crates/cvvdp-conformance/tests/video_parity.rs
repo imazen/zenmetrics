@@ -28,6 +28,12 @@ const GOLDENS: &str = include_str!("../../../scripts/cvvdp_goldens/video_goldens
 /// same script, `--temp-padding symmetric`).
 const GOLDENS_SYMMETRIC: &str =
     include_str!("../../../scripts/cvvdp_goldens/video_goldens_symmetric.json");
+/// Same cells scored with `temp_filter="hp_trans"`.
+const GOLDENS_HP_TRANS: &str =
+    include_str!("../../../scripts/cvvdp_goldens/video_goldens_hp_trans.json");
+/// Same cells scored with `temp_filter="grad_trans"`.
+const GOLDENS_GRAD_TRANS: &str =
+    include_str!("../../../scripts/cvvdp_goldens/video_goldens_grad_trans.json");
 /// u16 corpus + the committed real HDR10 clip, built with `--u16`.
 const GOLDENS_U16: &str = include_str!("../../../scripts/cvvdp_goldens/video_goldens_u16.json");
 
@@ -587,6 +593,93 @@ fn video_jod_parity_symmetric() {
 #[test]
 fn video_q_per_ch_stage_dumps_symmetric() {
     run_stage_dumps(GOLDENS_SYMMETRIC, cvvdp::TempPadding::Symmetric);
+}
+
+/// Shared JOD parity runner for the `temp_filter` variant goldens —
+/// every (situation × display) cell within [`TOLERANCE_JOD`].
+fn run_temp_filter_parity(goldens_json: &str, temp_filter: cvvdp::TempFilter, expect_name: &str) {
+    let goldens: serde_json::Value =
+        serde_json::from_str(goldens_json).expect("variant goldens must parse");
+    assert_eq!(
+        goldens["temp_filter"].as_str(),
+        Some(expect_name),
+        "goldens file must record temp_filter={expect_name}"
+    );
+    let cells = goldens["cells"].as_object().expect("goldens .cells");
+    let ref_version = goldens["reference_version"].as_str().unwrap_or("unknown");
+
+    let situations = all_video_situations();
+    let mut max_delta = 0.0f64;
+    let mut sum_delta = 0.0f64;
+    let mut n = 0usize;
+    let mut failures: Vec<String> = Vec::new();
+
+    for (key, cell) in cells {
+        let (sit_name, disp) = key.split_once('|').expect("cell key <sit>|<disp>");
+        let s = situations
+            .iter()
+            .find(|s| s.name == sit_name)
+            .unwrap_or_else(|| panic!("situation {sit_name} not in registry"));
+        let jod_ref = cell["jod_ref"].as_f64().expect("cell jod_ref");
+        let (params, geometry) = cell_params(disp);
+        let mut v = VideoScorer::with_options(
+            s.width,
+            s.height,
+            s.fps,
+            params,
+            geometry,
+            cvvdp::VideoScorerOptions {
+                temp_filter,
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("VideoScorer {key}: {e:?}"));
+        for (rf, df) in s.ref_frames.iter().zip(s.dist_frames.iter()) {
+            v.push_frame(rf, df)
+                .unwrap_or_else(|e| panic!("push {key}: {e:?}"));
+        }
+        let jod = v.finish().unwrap_or_else(|e| panic!("finish {key}: {e:?}"));
+        let delta = (f64::from(jod) - jod_ref).abs();
+        max_delta = max_delta.max(delta);
+        sum_delta += delta;
+        n += 1;
+        if delta > TOLERANCE_JOD {
+            failures.push(format!(
+                "{key}: ref={jod_ref:.6} got={:.6} |delta|={delta:.6}",
+                f64::from(jod)
+            ));
+        }
+    }
+
+    eprintln!("=== cvvdp video parity, temp_filter={expect_name} (pycvvdp {ref_version}) ===");
+    eprintln!(
+        "cells: {n}  max |Δ| = {max_delta:.6}  mean |Δ| = {:.6}",
+        sum_delta / n as f64
+    );
+    assert!(
+        failures.is_empty(),
+        "{} {expect_name} cell(s) exceed {TOLERANCE_JOD:.0e} JOD:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+/// JOD parity under `temp_filter="hp_trans"` — transient channel is
+/// `1 − sustained[0]` (temporal high-pass).
+#[test]
+fn video_jod_parity_hp_trans() {
+    run_temp_filter_parity(GOLDENS_HP_TRANS, cvvdp::TempFilter::HpTrans, "hp_trans");
+}
+
+/// JOD parity under `temp_filter="grad_trans"` — transient channel is
+/// the `[1, 0, −1]` two-frame gradient.
+#[test]
+fn video_jod_parity_grad_trans() {
+    run_temp_filter_parity(
+        GOLDENS_GRAD_TRANS,
+        cvvdp::TempFilter::GradTrans,
+        "grad_trans",
+    );
 }
 
 fn run_stage_dumps(goldens_json: &str, padding: cvvdp::TempPadding) {

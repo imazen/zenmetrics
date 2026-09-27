@@ -136,7 +136,7 @@ mod video;
 
 pub use pipeline::Cvvdp;
 pub use video::{
-    FrameLayout, TempPadding, VideoScorer, VideoScorerOptions, VideoStats, score_video,
+    FrameLayout, TempFilter, TempPadding, VideoScorer, VideoScorerOptions, VideoStats, score_video,
     score_video_f32, score_video_f32_with_stats, score_video_u16, score_video_u16_with_stats,
     score_video_with_stats, video_filter_len,
 };

@@ -215,7 +215,8 @@ impl Cvvdp {
 
     /// [`video`](Self::video) with the full
     /// [`crate::VideoScorerOptions`] bundle (layout, temporal
-    /// padding, `low_memory` u8 window).
+    /// padding, transient `temp_filter` variant, `low_memory` u8
+    /// window).
     ///
     /// # Errors
     ///

@@ -109,6 +109,26 @@ pub enum TempPadding {
     Symmetric,
 }
 
+/// Which transient-channel temporal filter to build — pycvvdp's
+/// `temp_filter` constructor argument (v0.5.7 recognizes exactly these
+/// three; any other string falls back to the default).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TempFilter {
+    /// Gaussian band-pass centred on 5 Hz (upstream default) —
+    /// `R[3] = exp(-(ω^β₃ − 5^β₃)² / σ₃)` → `irfft`.
+    #[default]
+    Default,
+    /// `"hp_trans"`: transient channel is the complement of sustained
+    /// channel 0 (`R[3] = 1 − R[0]` — a true temporal high-pass).
+    /// Sustained channels unchanged.
+    HpTrans,
+    /// `"grad_trans"`: transient channel's FIR is replaced by the
+    /// impulse template `[1, 0, −1, 0, …]` (r[0]=1, r[2]=−1 — an
+    /// asymmetric two-frame difference; no `irfft`/`fftshift` is
+    /// applied). Sustained channels unchanged.
+    GradTrans,
+}
+
 /// Construction knobs for [`VideoScorer`] beyond the pycvvdp surface
 /// — bundled so [`VideoScorer::with_options`] stays readable instead
 /// of growing a fourth positional-argument variant.
@@ -119,6 +139,11 @@ pub struct VideoScorerOptions {
     pub layout: FrameLayout,
     /// Temporal padding (pycvvdp `temp_padding` analog).
     pub temp_padding: TempPadding,
+    /// Transient-channel temporal filter (pycvvdp `temp_filter`
+    /// analog). [`TempFilter::Default`] reproduces the v0.5.7 default
+    /// used by every published benchmark; `HpTrans`/`GradTrans` are the
+    /// upstream research alternates.
+    pub temp_filter: TempFilter,
     /// Store the temporal-filter window as raw sRGB-8 bytes instead of
     /// f32 DKL planes — a 4× smaller ring (at 1080p/30 fps ~450 MB →
     /// ~113 MB), paid for by re-running the sRGB→DKL conversion per
@@ -669,14 +694,16 @@ impl VideoScorer {
             VideoScorerOptions {
                 layout,
                 temp_padding: padding,
+                temp_filter: TempFilter::Default,
                 low_memory: false,
             },
         )
     }
 
     /// [`with_layout_and_padding`](Self::with_layout_and_padding)
-    /// with the full [`VideoScorerOptions`] bundle — currently the
-    /// only added knob is `low_memory` (u8 window).
+    /// with the full [`VideoScorerOptions`] bundle — the added knobs are
+    /// `temp_filter` (transient-channel filter variant) and `low_memory`
+    /// (u8 window).
     ///
     /// # Errors
     ///
@@ -708,7 +735,7 @@ impl VideoScorer {
             height: h,
             params,
             geometry,
-            taps: temporal_filters(frames_per_second),
+            taps: temporal_filters(frames_per_second, options.temp_filter),
             n_pushed: 0,
             win_t: VecDeque::new(),
             win_r: VecDeque::new(),
@@ -1701,6 +1728,7 @@ mod tests {
                     VideoScorerOptions {
                         layout: FrameLayout::Interleaved,
                         temp_padding: padding,
+                        temp_filter: TempFilter::Default,
                         low_memory: true,
                     },
                 )
@@ -1757,6 +1785,7 @@ mod tests {
                 let opts = |low_memory| VideoScorerOptions {
                     layout: FrameLayout::Interleaved,
                     temp_padding: padding,
+                    temp_filter: TempFilter::Default,
                     low_memory,
                 };
                 let mut hi =

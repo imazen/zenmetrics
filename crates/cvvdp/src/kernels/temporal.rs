@@ -1,7 +1,7 @@
 //! Temporal channel filters for the cvvdp *video* path — a port of
-//! pycvvdp `cvvdp_metric.py::get_temporal_filters` (v0.5.7, default
-//! `temp_filter` Gaussian band-pass branch; `hp_trans`/`grad_trans`
-//! are not ported).
+//! pycvvdp `cvvdp_metric.py::get_temporal_filters` (v0.5.7, all three
+//! `temp_filter` branches: the default Gaussian band-pass, `hp_trans`,
+//! and `grad_trans`).
 //!
 //! Upstream math (torch, f32):
 //!
@@ -35,6 +35,8 @@
 
 use alloc::vec::Vec;
 
+use crate::video::TempFilter;
+
 /// `sigma_tf` from `vvdp_data/cvvdp_parameters.json` (pycvvdp v0.5.7).
 /// Per-channel Gaussian width of the temporal response.
 pub(crate) const SIGMA_TF: [f64; 4] = [5.79336, 14.1255, 6.63661, 0.12314];
@@ -62,12 +64,49 @@ pub(crate) fn temporal_filter_len(frames_per_s: f32) -> usize {
 ///
 /// Returns `[4][N]` with `N = temporal_filter_len(fps)`. Channel
 /// order: sustained A, sustained RG, sustained VY, transient A.
-pub(crate) fn temporal_filters(frames_per_s: f32) -> [Vec<f32>; 4] {
+///
+/// `filter` selects the transient channel's branch (pycvvdp
+/// `temp_filter`): [`TempFilter::Default`] is the 5 Hz Gaussian
+/// band-pass; [`TempFilter::HpTrans`] uses `R[3] = 1 − R[0]` (the
+/// complement of sustained channel 0 — a high-pass) through the same
+/// IDFT; [`TempFilter::GradTrans`] replaces channel 3's taps with the
+/// impulse template `[1, 0, −1, 0, …]` directly (upstream applies no
+/// `irfft`/`fftshift` to it — `r[0]=1`, `r[2]=−1` in causal order).
+/// Sustained channels 0..3 are identical under all three.
+pub(crate) fn temporal_filters(frames_per_s: f32, filter: TempFilter) -> [Vec<f32>; 4] {
     let n = temporal_filter_len(frames_per_s);
     let n_omega = n / 2 + 1;
     let fps = frames_per_s as f64;
     let n_f = n as f64;
     let shift = n.div_ceil(2);
+
+    // Response spectra — sustained channels first so channel 3's
+    // `hp_trans` can reference R[0] (upstream: `1 - R[0:1,:]`).
+    let mut resp = [
+        Vec::with_capacity(n_omega),
+        Vec::with_capacity(n_omega),
+        Vec::with_capacity(n_omega),
+        Vec::new(),
+    ];
+    for (c, r_c) in resp.iter_mut().enumerate().take(3) {
+        for k in 0..n_omega {
+            let omega = k as f64 * (fps / 2.0) / (n_omega - 1) as f64;
+            let w = omega.powf(BETA_TF[c]);
+            r_c.push((-w / SIGMA_TF[c]).exp());
+        }
+    }
+    let transient_resp: Vec<f64> = match filter {
+        TempFilter::Default => (0..n_omega)
+            .map(|k| {
+                let omega = k as f64 * (fps / 2.0) / (n_omega - 1) as f64;
+                let dw = omega.powf(BETA_TF[3]) - TRANSIENT_CENTER_HZ.powf(BETA_TF[3]);
+                (-dw * dw / SIGMA_TF[3]).exp()
+            })
+            .collect(),
+        TempFilter::HpTrans => resp[0].iter().map(|&r0| 1.0 - r0).collect(),
+        TempFilter::GradTrans => Vec::new(),
+    };
+    resp[3] = transient_resp;
 
     let mut out: [Vec<f32>; 4] = [
         Vec::with_capacity(n),
@@ -76,26 +115,20 @@ pub(crate) fn temporal_filters(frames_per_s: f32) -> [Vec<f32>; 4] {
         Vec::with_capacity(n),
     ];
     for (c, taps) in out.iter_mut().enumerate() {
-        // Response spectrum R[k], k = 0..n_omega.
-        let mut resp = Vec::with_capacity(n_omega);
-        for k in 0..n_omega {
-            let omega = k as f64 * (fps / 2.0) / (n_omega - 1) as f64;
-            let w = omega.powf(BETA_TF[c]);
-            let r = if c < 3 {
-                (-w / SIGMA_TF[c]).exp()
-            } else {
-                let dw = w - TRANSIENT_CENTER_HZ.powf(BETA_TF[3]);
-                (-dw * dw / SIGMA_TF[3]).exp()
-            };
-            resp.push(r);
+        if c == 3 && filter == TempFilter::GradTrans {
+            // r = zeros(N); r[0] = 1; r[2] = -1 — verbatim, no shift.
+            taps.resize(n, 0.0);
+            taps[0] = 1.0;
+            taps[2] = -1.0;
+            continue;
         }
         // Odd-N real IDFT + fftshift for odd N:
         // taps[j] = x[(j + (N+1)/2) mod N],
         // x[m] = (R[0] + 2*Σ_{k≥1} R[k]·cos(2πkm/N)) / N.
         for j in 0..n {
             let m = (j + shift) % n;
-            let mut acc = resp[0];
-            for (k, &rk) in resp.iter().enumerate().skip(1) {
+            let mut acc = resp[c][0];
+            for (k, &rk) in resp[c].iter().enumerate().skip(1) {
                 acc += 2.0 * rk * (2.0 * core::f64::consts::PI * k as f64 * m as f64 / n_f).cos();
             }
             taps.push((acc / n_f) as f32);
@@ -119,7 +152,7 @@ mod tests {
     #[test]
     fn sustained_dc_near_one_transient_dc_near_zero() {
         for fps in [24.0f32, 30.0, 60.0] {
-            let taps = temporal_filters(fps);
+            let taps = temporal_filters(fps, TempFilter::Default);
             for (c, t) in taps.iter().enumerate().take(3) {
                 let s: f32 = t.iter().sum();
                 assert!(
@@ -134,12 +167,17 @@ mod tests {
 
     #[test]
     fn taps_are_symmetric() {
+        // Default and hp_trans filters are symmetric (both go through
+        // the irfft of a real response). grad_trans ch3 is asymmetric by
+        // design (upstream `r[0]=1, r[2]=-1` verbatim).
         for fps in [24.0f32, 30.0, 60.0] {
-            let taps = temporal_filters(fps);
-            let n = taps[0].len();
-            for t in &taps {
-                for k in 0..n / 2 {
-                    assert_eq!(t[k].to_bits(), t[n - 1 - k].to_bits());
+            for filter in [TempFilter::Default, TempFilter::HpTrans] {
+                let taps = temporal_filters(fps, filter);
+                let n = taps[0].len();
+                for t in &taps {
+                    for k in 0..n / 2 {
+                        assert_eq!(t[k].to_bits(), t[n - 1 - k].to_bits());
+                    }
                 }
             }
         }
@@ -183,7 +221,7 @@ mod tests {
             (60.0, &[&T60[0], &T60[1], &T60[2], &T60[3]]),
         ];
         for (fps, expected) in cases {
-            let taps = temporal_filters(fps);
+            let taps = temporal_filters(fps, TempFilter::Default);
             for (c, exp) in expected.iter().enumerate() {
                 assert_eq!(taps[c].len(), exp.len(), "fps={fps} ch={c} len");
                 for (k, &e) in exp.iter().enumerate() {
@@ -193,6 +231,89 @@ mod tests {
                         taps[c][k]
                     );
                 }
+            }
+        }
+    }
+
+    // pycvvdp v0.5.7 `temp_filter="hp_trans"` channel-3 taps — the
+    // sustained channels are identical to the default tables above;
+    // only the transient channel differs (`R[3] = 1 − R[0]` → taps
+    // equal `δ_centre − T*`[0] upstream, computed here through the
+    // same response/IDFT route).
+    #[rustfmt::skip]
+    const HP24_3: [f32; 7] =
+        [-6.7387603223e-2, -1.0669140518e-1, -1.9620877504e-1, 7.4057561159e-1, -1.9620877504e-1, -1.0669140518e-1, -6.7387603223e-2];
+    #[rustfmt::skip]
+    const HP30_3: [f32; 9] =
+        [-4.6771086752e-2, -6.4188823104e-2, -1.0736732930e-1, -1.7480951548e-1, 7.8627347946e-1, -1.7480951548e-1, -1.0736733675e-1, -6.4188823104e-2, -4.6771086752e-2];
+    #[rustfmt::skip]
+    const HP60_3: [f32; 17] =
+        [-2.4023532867e-2, -2.6379290968e-2, -3.1514599919e-2, -4.0214840323e-2, -5.3314924240e-2, -7.0816613734e-2, -9.0425007045e-2, -1.0672386736e-1, 8.8682550192e-1, -1.0672386736e-1, -9.0425007045e-2, -7.0816613734e-2, -5.3314924240e-2, -4.0214840323e-2, -3.1514599919e-2, -2.6379290968e-2, -2.4023532867e-2];
+
+    #[test]
+    fn hp_trans_taps_match_pycvvdp_0_5_7() {
+        let cases: [(f32, &[f32]); 3] = [(24.0, &HP24_3), (30.0, &HP30_3), (60.0, &HP60_3)];
+        for (fps, exp3) in cases {
+            let taps = temporal_filters(fps, TempFilter::HpTrans);
+            let def = temporal_filters(fps, TempFilter::Default);
+            // Sustained channels are untouched by the branch — assert
+            // bitwise identity, not just tolerance.
+            for c in 0..3 {
+                for k in 0..def[c].len() {
+                    assert_eq!(
+                        taps[c][k].to_bits(),
+                        def[c][k].to_bits(),
+                        "fps={fps} ch={c} tap[{k}] diverged from default"
+                    );
+                }
+            }
+            assert_eq!(taps[3].len(), exp3.len(), "fps={fps} ch=3 len");
+            for (k, &e) in exp3.iter().enumerate() {
+                assert!(
+                    (taps[3][k] - e).abs() < 1e-6,
+                    "fps={fps} ch=3 tap[{k}]: {} vs {e}",
+                    taps[3][k]
+                );
+            }
+            // Cross-check the analytic consequence: taps_hp[3] should
+            // equal `δ_centre − taps_default[0]` up to the f64→f32 cast.
+            let c_idx = taps[3].len() / 2;
+            for k in 0..taps[3].len() {
+                let want = (k == c_idx) as i32 as f32 - def[0][k];
+                assert!(
+                    (taps[3][k] - want).abs() < 2e-7,
+                    "fps={fps} ch=3 tap[{k}] vs δ−sustained0"
+                );
+            }
+            // High-pass: DC rejection.
+            let s3: f32 = taps[3].iter().sum();
+            assert!(s3.abs() < 1e-4, "fps={fps} hp_trans DC sum {s3}");
+        }
+    }
+
+    #[test]
+    fn grad_trans_taps_match_pycvvdp_0_5_7() {
+        for fps in [1.0f32, 24.0, 30.0, 60.0, 120.0] {
+            let taps = temporal_filters(fps, TempFilter::GradTrans);
+            let def = temporal_filters(fps, TempFilter::Default);
+            for c in 0..3 {
+                for k in 0..def[c].len() {
+                    assert_eq!(
+                        taps[c][k].to_bits(),
+                        def[c][k].to_bits(),
+                        "fps={fps} ch={c} tap[{k}] diverged from default"
+                    );
+                }
+            }
+            let n = taps[3].len();
+            assert_eq!(n, temporal_filter_len(fps));
+            for (k, &t) in taps[3].iter().enumerate() {
+                let want: f32 = match k {
+                    0 => 1.0,
+                    2 => -1.0,
+                    _ => 0.0,
+                };
+                assert_eq!(t.to_bits(), want.to_bits(), "fps={fps} tap[{k}]");
             }
         }
     }
