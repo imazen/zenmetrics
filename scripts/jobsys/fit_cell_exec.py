@@ -28,6 +28,8 @@ SCRIPTS = {
     "mlp_probe.py": ("fits", "mlp_importance.py"),
     "p2_mlp.py": ("p2/mlp", "p2_mlp_importance.py"),
     "p2_lodo_mlp.py": ("p2/d2_mlp", None),
+    # Rev4 potential Instrument v2 (zensim benchmarks/rev4_featpot_v2_amendment_2026-09-30.md, revision R1).
+    "v2_lodo_mlp.py": ("v2/cells", None),
 }
 
 
@@ -73,6 +75,13 @@ def fetch_data(sha: str) -> Path:
     lock = ROOT / f"{sha}.lock"
     with lock.open("w") as lock_file:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
+        extracted = ROOT / sha
+        marker = extracted / ".verified"
+        # The marker is written only after every member was hash-checked against the archive's inventory, and the
+        # staging directory is renamed into place atomically, so a marked extraction needs neither the archive nor a
+        # re-hash of it (a v2 archive is ~15 GB; re-hashing it per cell and keeping it doubled scratch on every host).
+        if marker.is_file() and marker.read_text().strip() == sha:
+            return extracted
         archive = ROOT / f"{sha}.tar.gz"
         if not archive.is_file() or digest(archive) != sha:
             temp = ROOT / f"{sha}.download-{os.getpid()}"
@@ -90,28 +99,44 @@ def fetch_data(sha: str) -> Path:
                 temp.unlink(missing_ok=True)
                 raise ValueError("data archive SHA-256 differs from declared input")
             temp.replace(archive)
-        extracted = ROOT / sha
-        if not (extracted / ".verified").is_file():
-            if extracted.exists():
-                shutil.rmtree(extracted)
-            staging = ROOT / f"{sha}.extract-{os.getpid()}"
-            staging.mkdir()
-            with tarfile.open(archive, "r:gz") as bundle:
-                for member in bundle.getmembers():
-                    path = Path(member.name)
-                    if (path.is_absolute() or ".." in path.parts or not
-                            (member.isdir() or member.isfile())):
-                        raise ValueError("unsafe data archive member")
-                bundle.extractall(staging, filter="data")
-            inventory = json.loads((staging / "input_inventory.json").read_text())
-            if inventory.get("schema") != "zenfleet-fit-data-v1":
-                raise ValueError("bad fit data inventory")
-            for name, expected in inventory["files"].items():
-                if digest(staging / name) != expected:
-                    raise ValueError(f"fit input component changed: {name}")
-            (staging / ".verified").write_text(sha + "\n")
-            staging.rename(extracted)
+        if extracted.exists():
+            shutil.rmtree(extracted)
+        staging = ROOT / f"{sha}.extract-{os.getpid()}"
+        if staging.exists():
+            shutil.rmtree(staging)
+        staging.mkdir()
+        with tarfile.open(archive, "r:gz") as bundle:
+            for member in bundle.getmembers():
+                path = Path(member.name)
+                if (path.is_absolute() or ".." in path.parts or not
+                        (member.isdir() or member.isfile())):
+                    raise ValueError("unsafe data archive member")
+            bundle.extractall(staging, filter="data")
+        inventory = json.loads((staging / "input_inventory.json").read_text())
+        if inventory.get("schema") != "zenfleet-fit-data-v1":
+            raise ValueError("bad fit data inventory")
+        for name, expected in inventory["files"].items():
+            if digest(staging / name) != expected:
+                raise ValueError(f"fit input component changed: {name}")
+        (staging / ".verified").write_text(sha + "\n")
+        staging.rename(extracted)
+        archive.unlink()
         return extracted
+
+
+def ensure_link(link: Path, target: Path, what: str) -> None:
+    """Create link -> target, or accept one that already points there. Tolerates a concurrent creator: the
+    binary links live in the extraction that every container on a host shares, and containers released from the
+    data lock together all create them at once (2026-10-01: the loser's FileExistsError failed its first cell)."""
+    if not link.is_symlink() and not link.exists():
+        try:
+            link.symlink_to(target, target_is_directory=target.is_dir())
+        except FileExistsError:
+            pass
+    if not link.is_symlink():
+        raise ValueError(f"existing non-link at {link}")
+    if link.resolve() != target.resolve():
+        raise ValueError(f"unexpected {what} link at {link}")
 
 
 def bind_expected_paths(data: Path) -> None:
@@ -119,27 +144,12 @@ def bind_expected_paths(data: Path) -> None:
     for link, target in ((FIT_ROOT, data / "rev4-featpot"),
                          (Path("/var/tmp/rev4-featbank"), data / "rev4-featbank"),
                          (Path("/var/tmp/gmsbank"), data / "gmsbank")):
-        if not target.is_dir():
-            continue
-        if link.is_symlink():
-            if link.resolve() != target.resolve():
-                raise ValueError(f"unexpected link at {link}")
-        elif link.exists():
-            raise ValueError(f"existing non-link at {link}")
-        else:
-            link.symlink_to(target, target_is_directory=True)
+        if target.is_dir():
+            ensure_link(link, target, "data")
     binary_dir = FIT_ROOT / "target/debug"
     binary_dir.mkdir(parents=True, exist_ok=True)
     for name in ("zensim_mlp_train", "bake_dial_refit", "panel"):
-        link = binary_dir / name
-        target = PROGRAM / "bin" / name
-        if link.is_symlink():
-            if link.resolve() != target.resolve():
-                raise ValueError(f"unexpected binary link at {link}")
-        elif link.exists():
-            raise ValueError(f"existing binary at {link}")
-        else:
-            link.symlink_to(target)
+        ensure_link(binary_dir / name, PROGRAM / "bin" / name, "binary")
 
 
 def output_bytes(dest: Path, receipt: dict) -> bytes:

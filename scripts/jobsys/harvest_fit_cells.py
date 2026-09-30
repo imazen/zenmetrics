@@ -33,7 +33,8 @@ import pyarrow.parquet as pq
 POT_ROOT = Path("/var/tmp/rev4-featpot")
 # fit_cell_exec.py archives members relative to /var/tmp/rev4-featpot, under <root>/<cell>/ where the
 # root depends on the fit program (must match SCRIPTS in fit_cell_exec.py).
-PROGRAM_ROOTS = {"mlp_probe.py": "fits", "p2_mlp.py": "p2/mlp", "p2_lodo_mlp.py": "p2/d2_mlp"}
+PROGRAM_ROOTS = {"mlp_probe.py": "fits", "p2_mlp.py": "p2/mlp", "p2_lodo_mlp.py": "p2/d2_mlp",
+                 "v2_lodo_mlp.py": "v2/cells"}
 
 
 # Program shas whose binaries carry tier parity (AVX-512 and scalar kernels reproduce AVX2 bit for

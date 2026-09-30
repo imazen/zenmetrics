@@ -34,6 +34,15 @@ P2D2_SCRIPTS = {
     "scripts/rev4_featpot/stability_lasso.py": "8dd081008595780ca49a40fd3e560d286bc9d783cef4c8b6a0e4ab2ab5fc62f2",
     "scripts/lib/zen_stats.py": "6e2bed69441195674e3a397f11a8eeb4b40e51dd271ebbd124e6702b68eb3d35",
 }
+# Rev4 potential Instrument v2 (R915 sampling): zensim commit cce9ab19
+# (benchmarks/rev4_featpot_v2_amendment_2026-09-30.md, revision R1 + erratum R1.1 two-family layout), files pinned by
+# sha. Its bin-dir is the R1.1 mixed set: v8 trainer + panel, bake_dial_refit from zensim 86fc02bb (admitted by
+# benchmarks/rev4_featpot_v2_predictor_parity_2026-10-01.json).
+V2_SCRIPTS = {
+    "scripts/rev4_featpot/v2_common.py": "1e22400d9e0cce31a1bd4f6b52e411f4d6aac5af5d32e593e25432c19ba7f603",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "6d7d2d60b0e7a8d66a6225edb926d9191983bbede3d5bbab5be1663a420c2595",
+    "scripts/lib/zen_stats.py": "6e2bed69441195674e3a397f11a8eeb4b40e51dd271ebbd124e6702b68eb3d35",
+}
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
 
@@ -60,11 +69,11 @@ def main() -> None:
     p.add_argument("--executor", type=Path, required=True)
     p.add_argument("--bin-dir", type=Path, required=True)
     p.add_argument("--build-meta", type=Path, required=True)
-    p.add_argument("--profile", choices=("p0", "p2d2"), default="p0")
+    p.add_argument("--profile", choices=("p0", "p2d2", "v2"), default="p0")
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args()
     files = {}
-    for name, expected in (SCRIPTS if args.profile == "p0" else P2D2_SCRIPTS).items():
+    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS}[args.profile].items():
         path = args.source / name
         if digest(path) != expected:
             raise ValueError(f"preregistered fit source changed: {name}")

@@ -11,6 +11,7 @@ import gzip
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import sys
 import tarfile
@@ -244,6 +245,97 @@ class TierGuard(unittest.TestCase):
 
     def test_parity_lists_agree(self):
         self.assertEqual(exe.TIER_PARITY_PROGRAMS, h.TIER_PARITY_PROGRAMS)
+
+    def test_program_roots_agree(self):
+        # The harvester must look for each fit program's cells where the executor archives them.
+        self.assertEqual({name: root for name, (root, _) in exe.SCRIPTS.items()}, h.PROGRAM_ROOTS)
+
+
+class FetchData(unittest.TestCase):
+    """The data archive is extracted once per scratch dir, verified member by member, then dropped."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.saved_root, exe.ROOT = exe.ROOT, self.tmp / "fit-cell"
+        self.saved_env = os.environ.get("ZEN_FIT_DATA_LOCAL")
+
+    def tearDown(self):
+        exe.ROOT = self.saved_root
+        if self.saved_env is None:
+            os.environ.pop("ZEN_FIT_DATA_LOCAL", None)
+        else:
+            os.environ["ZEN_FIT_DATA_LOCAL"] = self.saved_env
+
+    def archive(self, files, inventory=None):
+        inv = {"schema": "zenfleet-fit-data-v1", "files": inventory or {k: sha(v) for k, v in files.items()}}
+        buf = io.BytesIO()
+        with gzip.GzipFile(fileobj=buf, mode="wb", mtime=0) as z, tarfile.open(fileobj=z, mode="w") as t:
+            for name, data in {"input_inventory.json": json.dumps(inv).encode(), **files}.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                t.addfile(info, io.BytesIO(data))
+        path = self.tmp / "data.tar.gz"
+        path.write_bytes(buf.getvalue())
+        os.environ["ZEN_FIT_DATA_LOCAL"] = str(path)
+        return path, sha(buf.getvalue())
+
+    def test_extracts_once_then_drops_and_never_needs_the_archive(self):
+        path, digest = self.archive({"rev4-featpot/v2/wide/keep_lists.json": b"{}"})
+        out = exe.fetch_data(digest)
+        self.assertEqual((out / "rev4-featpot/v2/wide/keep_lists.json").read_bytes(), b"{}")
+        self.assertFalse((exe.ROOT / f"{digest}.tar.gz").exists())
+        path.unlink()  # a second cell must not fetch again
+        self.assertEqual(exe.fetch_data(digest), out)
+
+    def test_marker_for_another_archive_forces_a_fresh_extraction(self):
+        path, digest = self.archive({"a.txt": b"a"})
+        out = exe.fetch_data(digest)
+        (out / ".verified").write_text("0" * 64 + "\n")
+        path.unlink()
+        with self.assertRaises(FileNotFoundError):
+            exe.fetch_data(digest)
+
+    def test_changed_member_is_refused_and_leaves_no_marked_extraction(self):
+        _, digest = self.archive({"a.txt": b"a"}, inventory={"a.txt": sha(b"b")})
+        with self.assertRaises(ValueError):
+            exe.fetch_data(digest)
+        self.assertFalse((exe.ROOT / digest / ".verified").exists())
+
+
+class EnsureLink(unittest.TestCase):
+    """Binary links in the shared extraction are created by every container on a host at once."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.target = self.tmp / "bin"
+        self.target.write_text("x")
+
+    def test_link_created_by_a_concurrent_container_is_accepted(self):
+        link = self.tmp / "link"
+        real_symlink = Path.symlink_to
+
+        def racing(path, target, target_is_directory=False):
+            real_symlink(path, target)  # the other container wins between our check and our create
+            raise FileExistsError(path)
+
+        Path.symlink_to = racing
+        try:
+            exe.ensure_link(link, self.target, "binary")
+        finally:
+            Path.symlink_to = real_symlink
+        self.assertEqual(link.resolve(), self.target.resolve())
+
+    def test_wrong_target_and_plain_file_are_refused(self):
+        other = self.tmp / "other"
+        other.write_text("y")
+        link = self.tmp / "link"
+        link.symlink_to(other)
+        with self.assertRaises(ValueError):
+            exe.ensure_link(link, self.target, "binary")
+        plain = self.tmp / "plain"
+        plain.write_text("z")
+        with self.assertRaises(ValueError):
+            exe.ensure_link(plain, self.target, "binary")
 
 
 class Coverage(unittest.TestCase):
