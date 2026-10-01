@@ -32,6 +32,8 @@ SCRIPTS = {
     "v2_lodo_mlp.py": ("v2/cells", None),
     # Revision R2 confirmatory full-data fits (no held-out source; predictions for the sealed sets' feature tables).
     "v2_confirm_fit.py": ("v2/confirm/cells", None),
+    # Design log E5/E5b (epoch-selection test): a v2 cell with a checkpoint per epoch, every checkpoint scored.
+    "e5_epochs.py": ("e5/v2/cells", None),
 }
 # Scripts that take `--root /var/tmp/rev4-featpot/<name>` (v2-canon tables beside the Rev3 v2 ones): their cells
 # live under `<name>/<suffix>` instead of the default root. Keep in step with harvest_fit_cells.ROOTED.

@@ -454,6 +454,7 @@ class CellRoots(unittest.TestCase):
         (["v2_confirm_fit.py", "--spec", "r0", "--head", "F"], "v2/confirm/cells"),
         (["v2_confirm_fit.py", "--root", "/var/tmp/rev4-featpot/v2c", "--spec", "r0"], "v2c/confirm/cells"),
         (["p2_lodo_mlp.py", "--arm", "a1", "--root", "/var/tmp/rev4-featpot/v2c"], "p2/d2_mlp"),
+        (["e5_epochs.py", "cell", "--spec", "r0@h8", "--head", "N"], "e5/v2/cells"),
     ]
 
     def test_roots_agree(self):

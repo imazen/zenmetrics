@@ -45,6 +45,8 @@ V2_SCRIPTS = {
     "scripts/rev4_featpot/v2_lodo_mlp.py": "8ed990457988b37bff638c02ebddce1741507e414abad37fd889d0237b458bb1",
     # zensim e7248c65 (EFFAUDIT D8: render_indexed_jobs + rendered_jobs=; panel_batch unchanged). Was 6e2bed69….
     "scripts/lib/zen_stats.py": "68532bad3b3482bc734508183872d9253893cbacd9d3299d523894fc38158a6a",
+    # Design log E5/E5b epoch-selection cells (imports v2_lodo_mlp at the pin above).
+    "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
