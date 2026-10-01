@@ -250,7 +250,12 @@ def verify_blob(blob: Path, stage: Path, name: str, kind: dict) -> dict:
     if digest(dest / relative) != result["selected_bake_sha256"] or \
             result["selected_bake_sha256"] != receipt["selected_bake_sha"]:
         raise ValueError(f"selected checkpoint SHA mismatch: {name}")
-    if len(result["prediction"]) != result.get("test_rows", result.get("rows")):
+    if "predictions" in result:
+        # v2_confirm_fit (Rev4 potential R2 confirmatory fit): one prediction vector per features-only sealed set.
+        sets = result["predictions"]
+        if not sets or any(len(v["pred"]) != v["rows"] for v in sets.values()):
+            raise ValueError(f"per-set prediction count mismatch: {name}")
+    elif len(result["prediction"]) != result.get("test_rows", result.get("rows")):
         raise ValueError(f"prediction count mismatch: {name}")
     if Path(name).name.startswith("o"):
         # Outer-fold cells must carry the permutation-importance receipt that

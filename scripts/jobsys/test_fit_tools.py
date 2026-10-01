@@ -44,7 +44,7 @@ class Cell:
     """A synthetic cell blob; every knob a negative control needs is an argument."""
 
     def __init__(self, tmp: Path, name="POT_s_r0_mlp32/o0_r0", weights=b"W" * 64, host="h1", preds=3,
-                 importance="ok", kind=None, tier=None, extra_receipt=None):
+                 importance="ok", kind=None, tier=None, extra_receipt=None, confirm_sets=None):
         self.name, self.kind = name, kind or KIND
         pot = h.POT_ROOT
         install = pot / "fits" / name
@@ -52,6 +52,9 @@ class Cell:
         result = {"score": {"srocc": 0.9}, "selected_epoch": 5, "prediction": [0.1] * preds, "test_rows": 3,
                   "inner": [{"epoch": 5, "log_sha256": sha(host.encode())}],
                   "selected_bake": str(install / "refit" / "best.bin"), "selected_bake_sha256": sha(ckpt)}
+        if confirm_sets is not None:  # v2_confirm_fit shape: one prediction vector per sealed set, no single test set
+            del result["prediction"], result["test_rows"]
+            result["predictions"] = {k: {"rows": rows, "pred": [0.1] * n} for k, (rows, n) in confirm_sets.items()}
         result_bytes = json.dumps(result, sort_keys=True).encode()
         files = {"result.json": result_bytes, "refit/best.bin": ckpt, "refit/test_preds.tsv": b"0.1\n0.1\n0.1\n"}
         if importance != "none":
@@ -117,6 +120,11 @@ class HarvestVerify(unittest.TestCase):
         self.verify(Cell(self.tmp, name="POT_s_r0_mlp32/full_r0", importance="none"))
         # The first cell of a container has one s5cmd progress line before the gzip stream.
         self.verify(Cell(self.tmp), prefix_lines=1)
+
+    def test_confirm_fit_results_check_every_set(self):
+        self.verify(Cell(self.tmp, confirm_sets={"csiq": (3, 3), "aic4": (2, 2)}))
+        self.rejects(Cell(self.tmp, confirm_sets={"csiq": (3, 3), "aic4": (2, 1)}))
+        self.rejects(Cell(self.tmp, confirm_sets={}))
 
     def test_rejects_two_prefix_lines(self):
         self.rejects(Cell(self.tmp), prefix_lines=2)
