@@ -34,7 +34,7 @@ P2D2_SCRIPTS = {
     "scripts/rev4_featpot/stability_lasso.py": "8dd081008595780ca49a40fd3e560d286bc9d783cef4c8b6a0e4ab2ab5fc62f2",
     "scripts/lib/zen_stats.py": "6e2bed69441195674e3a397f11a8eeb4b40e51dd271ebbd124e6702b68eb3d35",
 }
-# Rev4 potential Instrument v2 (R915 sampling): zensim commit 1ee08bae
+# Rev4 potential Instrument v2 (R915 sampling): zensim commit 1ee08bae (v2 scripts), e7248c65 (zen_stats)
 # (benchmarks/rev4_featpot_v2_amendment_2026-09-30.md, revision R1 + erratum R1.1 two-family layout + revision R3:
 # distance-oriented oracles, `<spec>@h<w>` human-leg weight), files pinned by sha. Its bin-dir is the R1.1 mixed set:
 # v8 trainer + panel, bake_dial_refit from zensim 86fc02bb (admitted by
@@ -43,7 +43,8 @@ P2D2_SCRIPTS = {
 V2_SCRIPTS = {
     "scripts/rev4_featpot/v2_common.py": "826e3a8d1803ebc694f858203765af3ca414c31407a0a910a2b2a2f3dfde9577",
     "scripts/rev4_featpot/v2_lodo_mlp.py": "8ed990457988b37bff638c02ebddce1741507e414abad37fd889d0237b458bb1",
-    "scripts/lib/zen_stats.py": "6e2bed69441195674e3a397f11a8eeb4b40e51dd271ebbd124e6702b68eb3d35",
+    # zensim e7248c65 (EFFAUDIT D8: render_indexed_jobs + rendered_jobs=; panel_batch unchanged). Was 6e2bed69….
+    "scripts/lib/zen_stats.py": "68532bad3b3482bc734508183872d9253893cbacd9d3299d523894fc38158a6a",
 }
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
