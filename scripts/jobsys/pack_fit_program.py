@@ -34,13 +34,15 @@ P2D2_SCRIPTS = {
     "scripts/rev4_featpot/stability_lasso.py": "8dd081008595780ca49a40fd3e560d286bc9d783cef4c8b6a0e4ab2ab5fc62f2",
     "scripts/lib/zen_stats.py": "6e2bed69441195674e3a397f11a8eeb4b40e51dd271ebbd124e6702b68eb3d35",
 }
-# Rev4 potential Instrument v2 (R915 sampling): zensim commit cce9ab19
-# (benchmarks/rev4_featpot_v2_amendment_2026-09-30.md, revision R1 + erratum R1.1 two-family layout), files pinned by
-# sha. Its bin-dir is the R1.1 mixed set: v8 trainer + panel, bake_dial_refit from zensim 86fc02bb (admitted by
-# benchmarks/rev4_featpot_v2_predictor_parity_2026-10-01.json).
+# Rev4 potential Instrument v2 (R915 sampling): zensim commit 1ee08bae
+# (benchmarks/rev4_featpot_v2_amendment_2026-09-30.md, revision R1 + erratum R1.1 two-family layout + revision R3:
+# distance-oriented oracles, `<spec>@h<w>` human-leg weight), files pinned by sha. Its bin-dir is the R1.1 mixed set:
+# v8 trainer + panel, bake_dial_refit from zensim 86fc02bb (admitted by
+# benchmarks/rev4_featpot_v2_predictor_parity_2026-10-01.json). Previous pins (zensim cce9ab19): v2_common 1e22400d…,
+# v2_lodo_mlp 6d7d2d60….
 V2_SCRIPTS = {
-    "scripts/rev4_featpot/v2_common.py": "1e22400d9e0cce31a1bd4f6b52e411f4d6aac5af5d32e593e25432c19ba7f603",
-    "scripts/rev4_featpot/v2_lodo_mlp.py": "6d7d2d60b0e7a8d66a6225edb926d9191983bbede3d5bbab5be1663a420c2595",
+    "scripts/rev4_featpot/v2_common.py": "826e3a8d1803ebc694f858203765af3ca414c31407a0a910a2b2a2f3dfde9577",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "8ed990457988b37bff638c02ebddce1741507e414abad37fd889d0237b458bb1",
     "scripts/lib/zen_stats.py": "6e2bed69441195674e3a397f11a8eeb4b40e51dd271ebbd124e6702b68eb3d35",
 }
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
