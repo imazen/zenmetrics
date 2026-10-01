@@ -282,16 +282,21 @@ if [ -n "${ZEN_POOL_RUNLIST:-}" ]; then pool_mode; exit 0; fi
 
 # Single-run mode below — safe to dereference ZEN_MANIFEST_URI now (pool mode has exited).
 MGZ="${ZEN_MANIFEST_URI%.gz}.gz"
+# Per-worker manifest file: workers of DIFFERENT jobsets on one host share TMPDIR (the bind-mounted scratch that also
+# holds the fit-data extraction cache), so a shared ${TMPDIR}/manifest.json let one jobset's workers pick up another's
+# manifest (2026-10-01: two fit workers re-read an E5b manifest and failed 108 foreign cells; the program-sha check
+# kept any wrong result out). Pool mode already uses per-run files.
+MF="${TMPDIR}/manifest.${WORKER}.json"
 hb "fetching manifest ($MGZ, else plain) — this is the op that historically hung at 0 bytes on big sweeps"
-mfetch_err=$(s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$MGZ" ${TMPDIR}/manifest.json.gz 2>&1)
+mfetch_err=$(s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "$MGZ" "$MF.gz" 2>&1)
 if [ $? -eq 0 ]; then
-  gunzip -f ${TMPDIR}/manifest.json.gz || { ferr "gunzip $MGZ failed"; exit 4; }
-elif s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "${ZEN_MANIFEST_URI%.gz}" ${TMPDIR}/manifest.json 2>/dev/null; then
+  gunzip -f "$MF.gz" || { ferr "gunzip $MGZ failed"; exit 4; }
+elif s5cmd --endpoint-url "$ZEN_R2_ENDPOINT" cp "${ZEN_MANIFEST_URI%.gz}" "$MF" 2>/dev/null; then
   :
 else
   ferr "cannot fetch manifest ($MGZ or plain ${ZEN_MANIFEST_URI%.gz}); s5cmd said: ${mfetch_err:-<silent>}"; exit 4
 fi
-hb "manifest ready ($(wc -c <${TMPDIR}/manifest.json 2>/dev/null || echo '?') bytes); $WORKER ($PROVIDER) claiming from s3://$ZEN_BUCKET/$ZEN_RUN/"
+hb "manifest ready ($(wc -c <"$MF" 2>/dev/null || echo '?') bytes); $WORKER ($PROVIDER) claiming from s3://$ZEN_BUCKET/$ZEN_RUN/"
 
 # ZEN_MAX_MIN (paid-hour budget): honored here too, not just in POOL mode — a single-run worker
 # that never sets it (the common LAN-fleet case) runs unbounded, same as always. Set it and this
@@ -369,7 +374,7 @@ while :; do
   # no matching '▸ progress pass N' — a visible stall, not silence. `timeout` turns
   # a genuine hang into a LOUD rc=124 failure instead of an infinite silent block.
   hb "pass $i start (worker=$WORKER provider=$PROVIDER idle=$idle/${ZEN_IDLE_PASSES:-5} consec_fails=$fails snap=$([ -s "$SNAP" ] && wc -c <"$SNAP" || echo none) backoff=${BACKOFF}s long_lived=$LONG_LIVED)"
-  run_pass --manifest ${TMPDIR}/manifest.json "${LIN[@]}" \
+  run_pass --manifest "$MF" "${LIN[@]}" \
     --ledger-out "s3://$ZEN_BUCKET/$ZEN_RUN/ledger/pass-$WORKER-$i.parquet" \
     --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "$ZEN_RUN/blobs" \
     --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "$ZEN_RUN/claims" \
