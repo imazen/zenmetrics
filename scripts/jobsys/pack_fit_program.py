@@ -51,6 +51,9 @@ V2_SCRIPTS = {
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v9 (93dc93d0, image zenfleet-worker:fit-v2-v9, 2026-10-01): these V2_SCRIPTS + v8 trainer/panel (zensim cafed5ca)
+# + bake_dial_refit from a local merge of zensim main b926258e and pr/signedfeat a659715e, so bakes reading the
+# SIGNEDFEAT columns f1825-f1852 load (zensim benchmarks/rev4_featpot_effaudit/v9_predictor_gate_2026-10-01.json).
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
 
