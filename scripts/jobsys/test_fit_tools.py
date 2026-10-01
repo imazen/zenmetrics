@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fit_cell_exec as exe  # noqa: E402
 import fit_grid_coverage as cov  # noqa: E402
 import harvest_fit_cells as h  # noqa: E402
+import pack_fit_data_v2 as pack  # noqa: E402
 
 PROGRAM = "a" * 64
 DATA = "b" * 64
@@ -442,6 +443,72 @@ class GoldenJobId(unittest.TestCase):
         job = {"kind": {"kind": "fit_cell", "program_sha": program, "data_sha": data, "argv_sha": argv_sha,
                         "argv": argv}, "inputs": [program, data, argv_sha]}
         self.assertEqual(cov.job_id(job), "64b6925760fc41fd15aca593ada2c85ba8420490ced978e98e5967e4d9d448a5")
+
+
+class PackDataSelect(unittest.TestCase):
+    """`pack_fit_data_v2 --select` packs only the chosen variant directories, each still receipt-checked."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.wide = Path(self.tmp.name) / "wide"
+        for family in pack.FAMILIES:
+            for variant in pack.VARIANTS:
+                vdir = self.wide / family / variant
+                vdir.mkdir(parents=True)
+                table = vdir / "kadid.parquet"
+                table.write_bytes(f"{family}-{variant}".encode())
+                Path(f"{table}.manifest.json").write_text("{}")
+                keys = vdir / "kadid.keys.parquet"
+                keys.write_bytes(b"keys")
+                (vdir / "receipt.json").write_text(json.dumps({
+                    "schema": "rev4-featpot-v2-wide-v2", "family": family, "variant": variant,
+                    "legs": {"kadid": {"full": {"path": str(table), "sha256": pack.digest(table),
+                                                "manifest_sha256": pack.digest(Path(f"{table}.manifest.json"))},
+                                       "keys_sha256": pack.digest(keys)}}}))
+        (self.wide / "keep_lists.json").write_text("{}")
+        self.old = pack.WIDE
+        pack.WIDE = self.wide
+
+    def tearDown(self):
+        pack.WIDE = self.old
+        self.tmp.cleanup()
+
+    def run_pack(self, *extra):
+        out = Path(self.tmp.name) / "out.tar.gz"
+        old_argv = sys.argv
+        sys.argv = ["pack_fit_data_v2.py", "--out", str(out), *extra]
+        try:
+            pack.main()
+        finally:
+            sys.argv = old_argv
+        with tarfile.open(out, "r:gz") as tar:
+            names = tar.getnames()
+            inventory = json.loads(tar.extractfile("input_inventory.json").read())
+        return names, inventory
+
+    def test_default_packs_every_variant_without_a_selection_record(self):
+        names, inventory = self.run_pack()
+        self.assertEqual(len([n for n in names if n.endswith("/receipt.json")]), 8)
+        self.assertNotIn("variant_dirs", inventory)
+
+    def test_select_packs_only_the_chosen_directories(self):
+        names, inventory = self.run_pack("--select", "aux/p1", "--select", "main/real")
+        dirs = sorted({"/".join(n.split("/")[3:5]) for n in names if n.startswith("rev4-featpot/v2/wide/") and
+                       n.count("/") >= 5})
+        self.assertEqual(dirs, ["aux/p1", "main/real"])
+        self.assertEqual(inventory["variant_dirs"], ["main/real", "aux/p1"])
+        self.assertIn("rev4-featpot/v2/wide/keep_lists.json", names)
+
+    def test_unknown_or_repeated_selection_is_refused(self):
+        with self.assertRaises(SystemExit):
+            self.run_pack("--select", "aux/p9")
+        with self.assertRaises(SystemExit):
+            self.run_pack("--select", "aux/p1", "--select", "aux/p1")
+
+    def test_changed_table_is_still_refused(self):
+        (self.wide / "aux" / "p1" / "kadid.parquet").write_bytes(b"changed")
+        with self.assertRaises(ValueError):
+            self.run_pack("--select", "aux/p1")
 
 
 if __name__ == "__main__":
