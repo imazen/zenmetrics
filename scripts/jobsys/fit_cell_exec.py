@@ -210,7 +210,7 @@ def run_fit(job: dict) -> bytes:
         shutil.rmtree(dest)
     env = dict(os.environ)
     env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MKL_NUM_THREADS="1",
-               PYTHONHASHSEED="0", RAYON_NUM_THREADS="4",
+               PYTHONHASHSEED="0", RAYON_NUM_THREADS=os.environ.get("ZEN_FIT_RAYON_THREADS", "4"),
                PYTHONPYCACHEPREFIX="/scratch/pycache", ZEN_PANEL_BIN=str(PROGRAM / "bin/panel"),
                TMPDIR="/scratch/tmp")
     Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
