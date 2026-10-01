@@ -30,7 +30,23 @@ SCRIPTS = {
     "p2_lodo_mlp.py": ("p2/d2_mlp", None),
     # Rev4 potential Instrument v2 (zensim benchmarks/rev4_featpot_v2_amendment_2026-09-30.md, revision R1).
     "v2_lodo_mlp.py": ("v2/cells", None),
+    # Revision R2 confirmatory full-data fits (no held-out source; predictions for the sealed sets' feature tables).
+    "v2_confirm_fit.py": ("v2/confirm/cells", None),
 }
+# Scripts that take `--root /var/tmp/rev4-featpot/<name>` (v2-canon tables beside the Rev3 v2 ones): their cells
+# live under `<name>/<suffix>` instead of the default root. Keep in step with harvest_fit_cells.ROOTED.
+ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells"}
+
+
+def cell_root(argv: list) -> str:
+    """Destination root (relative to FIT_ROOT) of a fit cell's outputs for this argv."""
+    root = SCRIPTS[argv[0]][0]
+    if argv[0] in ROOTED and "--root" in argv:
+        base = Path(argv[argv.index("--root") + 1])
+        if base.parent != FIT_ROOT or base.name in ("", ".", "..") or base.name.startswith("."):
+            raise ValueError(f"unsafe --root {base}")
+        root = f"{base.name}/{ROOTED[argv[0]]}"
+    return root
 
 
 # Program shas whose binaries carry tier parity (AVX-512 and scalar kernels reproduce AVX2 bit for bit,
@@ -197,8 +213,8 @@ def run_fit(job: dict) -> bytes:
     name = Path(job["cell"]["image_path"])
     if name.is_absolute() or ".." in name.parts or len(name.parts) != 2:
         raise ValueError("unsafe fit destination")
-    root, importance_script = SCRIPTS[argv[0]]
-    dest = FIT_ROOT / root / name
+    importance_script = SCRIPTS[argv[0]][1]
+    dest = FIT_ROOT / cell_root(argv) / name
     if dest.exists():
         receipt_path = dest / "fleet_receipt.json"
         if receipt_path.is_file():

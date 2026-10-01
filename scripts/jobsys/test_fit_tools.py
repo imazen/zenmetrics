@@ -445,6 +445,33 @@ class GoldenJobId(unittest.TestCase):
         self.assertEqual(cov.job_id(job), "64b6925760fc41fd15aca593ada2c85ba8420490ced978e98e5967e4d9d448a5")
 
 
+class CellRoots(unittest.TestCase):
+    """Executor and harvest agree on where a cell lives, including `--root` (v2-canon) and confirm fits."""
+
+    CASES = [
+        (["v2_lodo_mlp.py", "--spec", "r0", "--head", "N"], "v2/cells"),
+        (["v2_lodo_mlp.py", "--spec", "r0", "--root", "/var/tmp/rev4-featpot/v2c"], "v2c/cells"),
+        (["v2_confirm_fit.py", "--spec", "r0", "--head", "F"], "v2/confirm/cells"),
+        (["v2_confirm_fit.py", "--root", "/var/tmp/rev4-featpot/v2c", "--spec", "r0"], "v2c/confirm/cells"),
+        (["p2_lodo_mlp.py", "--arm", "a1", "--root", "/var/tmp/rev4-featpot/v2c"], "p2/d2_mlp"),
+    ]
+
+    def test_roots_agree(self):
+        self.assertEqual(set(exe.ROOTED), set(h.ROOTED))
+        for argv, want in self.CASES:
+            self.assertEqual(exe.cell_root(argv), want, argv)
+            self.assertEqual(h.blob_root({"argv": argv}), want, argv)
+
+    def test_unsafe_roots_are_refused(self):
+        for bad in ("/var/tmp/rev4-featpot", "/var/tmp/other/v2c", "/var/tmp/rev4-featpot/v2c/deeper",
+                    "/var/tmp/rev4-featpot/..", "/var/tmp/rev4-featpot/.hidden"):
+            argv = ["v2_lodo_mlp.py", "--root", bad]
+            with self.assertRaises(ValueError, msg=bad):
+                exe.cell_root(argv)
+            with self.assertRaises(ValueError, msg=bad):
+                h.blob_root({"argv": argv})
+
+
 class PackDataSelect(unittest.TestCase):
     """`pack_fit_data_v2 --select` packs only the chosen variant directories, each still receipt-checked."""
 
