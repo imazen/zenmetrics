@@ -1436,16 +1436,8 @@ where
         .collect();
     cmark!("chunk-ids");
 
-    // Per-worker iteration order over chunk indices (deterministic hash(chunk_id, worker)) so
-    // late-joining boxes don't all start at chunk 0 — same rationale as the gap shuffle in
-    // execute_gap_claimed, but over coarse chunks.
-    let mut order: Vec<usize> = (0..chunks.len()).collect();
-    order.sort_by_cached_key(|&ci| {
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        std::hash::Hash::hash(&chunk_ids[ci], &mut h);
-        std::hash::Hash::hash(ctx.worker, &mut h);
-        std::hash::Hasher::finish(&h)
-    });
+    let manifest_order = std::env::var("ZEN_CLAIM_ORDER").ok().as_deref() == Some("manifest");
+    let order = chunk_claim_order(&chunk_ids, ctx.worker, manifest_order);
 
     let mut out = ExecOutcome {
         rows: Vec::new(),
@@ -3233,8 +3225,43 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
     Ok(out)
 }
 
+/// Iteration order over chunk indices for one worker.
+///
+/// Default: a deterministic per-worker order (hash(chunk_id, worker)) so late-joining boxes don't
+/// all start at chunk 0 — same rationale as the gap shuffle in `execute_gap_claimed`, but over
+/// coarse chunks. `manifest_order` (`ZEN_CLAIM_ORDER=manifest`): every worker walks the chunks in
+/// manifest order instead, so a manifest sorted longest-first is claimed longest-first across the
+/// fleet (LPT scheduling: the last cells of a pass are the short ones, not whichever long cell a
+/// slow worker drew last). Claims stay exclusive either way; a worker skips chunks already claimed.
+fn chunk_claim_order(chunk_ids: &[String], worker: &str, manifest_order: bool) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..chunk_ids.len()).collect();
+    if !manifest_order {
+        order.sort_by_cached_key(|&ci| {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            std::hash::Hash::hash(&chunk_ids[ci], &mut h);
+            std::hash::Hash::hash(worker, &mut h);
+            std::hash::Hasher::finish(&h)
+        });
+    }
+    order
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn chunk_claim_order_manifest_mode_is_manifest_order() {
+        let ids: Vec<String> = (0..50).map(|i| format!("c{i}")).collect();
+        let identity: Vec<usize> = (0..50).collect();
+        assert_eq!(super::chunk_claim_order(&ids, "w1", true), identity);
+        let a = super::chunk_claim_order(&ids, "w1", false);
+        let b = super::chunk_claim_order(&ids, "w2", false);
+        assert_ne!(a, identity, "default order is a per-worker permutation");
+        assert_ne!(a, b, "two workers get different orders");
+        let mut sorted = a.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, identity, "every chunk visited exactly once");
+    }
     #[test]
     fn chunk_claim_renews_with_progress() {
         // Invariant 1: the renew hook fires as completions accumulate and ends at (total, total).
