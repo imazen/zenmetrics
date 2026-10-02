@@ -42,7 +42,7 @@ P2D2_SCRIPTS = {
 # v2_lodo_mlp 6d7d2d60….
 V2_SCRIPTS = {
     # zensim ecc69a1f: amendment R4 (EPOCH_RULE = "last", train_and_select), CANONTAB v2c --root support, R2.3 screen specs.
-    "scripts/rev4_featpot/v2_common.py": "5f3322b6c8ec09393862cd3cc54dc7cea8b3596a54927bf7217847c965ae0509",
+    "scripts/rev4_featpot/v2_common.py": "0165ced08b704676712d18cd751ae8ef677ad32a2dccc711e6849a611500c92c",
     # zensim 538d3549 (TRAINEROPT): dev panels every 17th epoch under EPOCH_RULE == "last", sparse read_curve; the
     # trajectory and final weights do not depend on --log-every (gate: zensim benchmarks/traineropt_WORKLOG.md).
     "scripts/rev4_featpot/v2_lodo_mlp.py": "ba5058d5024b2a2fecb26194d950804942c512c3f2e29ddec1bef426f4952cf8",
@@ -53,6 +53,7 @@ V2_SCRIPTS = {
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v14 (image zenfleet-worker:fit-v2-v14, 2026-10-01): v13 + zensim 34c41507 set:<groups> specs (E9″, no exempt core).
 # Program v13 (image zenfleet-worker:fit-v2-v13, 2026-10-01): v12 + zensim a14a30d4 multi-group core specs (core+X+Y, E9′).
 # Program v12 (image zenfleet-worker:fit-v2-v12, 2026-10-01): v11 + zensim 30c9ca7d block specs (r0-<block>, core,
 # core+<x>; design log E9).
