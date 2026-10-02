@@ -42,17 +42,19 @@ P2D2_SCRIPTS = {
 # v2_lodo_mlp 6d7d2d60….
 V2_SCRIPTS = {
     # zensim ecc69a1f: amendment R4 (EPOCH_RULE = "last", train_and_select), CANONTAB v2c --root support, R2.3 screen specs.
-    "scripts/rev4_featpot/v2_common.py": "05b42c958f7e4ac42a99092beb2c1255b46e8b9dce0aa5b1833b99f428870186",
+    "scripts/rev4_featpot/v2_common.py": "8d985690048032895237dd24ade7b6fcc21ffb1e4e966214e171b082feebecc0",
     # zensim 538d3549 (TRAINEROPT): dev panels every 17th epoch under EPOCH_RULE == "last", sparse read_curve; the
     # trajectory and final weights do not depend on --log-every (gate: zensim benchmarks/traineropt_WORKLOG.md).
-    "scripts/rev4_featpot/v2_lodo_mlp.py": "fd8140b121b27825bb98bc2d1ef8b2fc596a6cbdc3d8596b2993078b4fc9e866",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "0540249ca0a168679588b1887b936675f2844592504dafc0e5b48711fc5cb9e8",
     # Revision R2 confirmatory full-data fits (features only).
-    "scripts/rev4_featpot/v2_confirm_fit.py": "dd3c80e9d522b5ef99a2d0818073406bf19f1a2a4370d8dedec383b83af243e3",
+    "scripts/rev4_featpot/v2_confirm_fit.py": "96543c227318bfcfbdcf5ce8b494fb25d4149264c65761e4c6f7ab41c49205e0",
     # zensim e7248c65 (EFFAUDIT D8: render_indexed_jobs + rendered_jobs=; panel_batch unchanged).
     "scripts/lib/zen_stats.py": "68532bad3b3482bc734508183872d9253893cbacd9d3299d523894fc38158a6a",
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v11 (image zenfleet-worker:fit-v2-v11, 2026-10-01): v10 binaries + zensim fb24f308 scripts (recipe tokens
+# @h<w>:H<n>:gl<lambda>, design log E8; specs without tokens run exactly as before).
 # Program v10 (image zenfleet-worker:fit-v2-v10, 2026-10-01): v9 + zensim_mlp_train from zensim 538d3549 (TRAINEROPT: fused
 # Adam visits only kept rows; byte-identical final weights; sha a5f40576) + the v2_lodo_mlp pin below.
 # Program v9 (93dc93d0, image zenfleet-worker:fit-v2-v9, 2026-10-01): these V2_SCRIPTS + v8 trainer/panel (zensim cafed5ca)
