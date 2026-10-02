@@ -42,7 +42,7 @@ P2D2_SCRIPTS = {
 # v2_lodo_mlp 6d7d2d60….
 V2_SCRIPTS = {
     # zensim ecc69a1f: amendment R4 (EPOCH_RULE = "last", train_and_select), CANONTAB v2c --root support, R2.3 screen specs.
-    "scripts/rev4_featpot/v2_common.py": "0165ced08b704676712d18cd751ae8ef677ad32a2dccc711e6849a611500c92c",
+    "scripts/rev4_featpot/v2_common.py": "a72a1d3893f8bd05071770cdac8a1ee4ad8456e2652870bf255c08477d80e4f4",
     # zensim 538d3549 (TRAINEROPT): dev panels every 17th epoch under EPOCH_RULE == "last", sparse read_curve; the
     # trajectory and final weights do not depend on --log-every (gate: zensim benchmarks/traineropt_WORKLOG.md).
     "scripts/rev4_featpot/v2_lodo_mlp.py": "ba5058d5024b2a2fecb26194d950804942c512c3f2e29ddec1bef426f4952cf8",
@@ -53,6 +53,8 @@ V2_SCRIPTS = {
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v15 (image zenfleet-worker:fit-v2-v15, 2026-10-02): v14 + zensim 324078f6 (set:/core+ specs resolve candidate arms
+# from the pinned keep lists; v14 imported restore_data, which the program does not pack, so every set: cell failed).
 # Program v14 (image zenfleet-worker:fit-v2-v14, 2026-10-01): v13 + zensim 34c41507 set:<groups> specs (E9″, no exempt core).
 # Program v13 (image zenfleet-worker:fit-v2-v13, 2026-10-01): v12 + zensim a14a30d4 multi-group core specs (core+X+Y, E9′).
 # Program v12 (image zenfleet-worker:fit-v2-v12, 2026-10-01): v11 + zensim 30c9ca7d block specs (r0-<block>, core,
