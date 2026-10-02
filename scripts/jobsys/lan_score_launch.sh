@@ -102,7 +102,7 @@ CTR="zen-score-${ROLE}"
 # command — the 2026-08-26 `--gpus all` bug); GPU flags are rebuilt on the remote.
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   ZM_JOBSET="$JOBSET" ZM_BUCKET="$BUCKET" ZM_ROLE="$ROLE" ZM_CTR="$CTR" \
-    ZM_FORMULA_REV="${ZEN_FORMULA_REV:-}" ZM_FIT_RAYON="${ZEN_FIT_RAYON_THREADS:-}" ZM_MAX_TIER="${ZENSIM_MAX_TIER:-}" \
+    ZM_FORMULA_REV="${ZEN_FORMULA_REV:-}" ZM_FIT_RAYON="${ZEN_FIT_RAYON_THREADS:-}" ZM_MAX_TIER="${ZENSIM_MAX_TIER:-}" ZM_CLAIM_ORDER="${ZEN_CLAIM_ORDER:-}" \
     ZM_CLAIM_TTL="${ZEN_CLAIM_TTL_SECS:-}" ZM_STALE_CLAIM="${ZEN_STALE_CLAIM_SEC:-}" \
   ZM_IMG="$IMG" ZM_KIND="$KIND" ZM_STORE="$STORE" ZM_VRAM_CAP="${ZEN_VRAM_CAP:-}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_ENC_PREFIX="${ZEN_ENCODES_PREFIX:-}" ZM_CORPUS_PREFIX="${ZEN_CORPUS_PREFIX:-}" ZM_CORPUS_BUCKET="${ZEN_CORPUS_BUCKET:-}" ZM_PASS_TIMEOUT="${ZEN_PASS_TIMEOUT:-}" ZM_CHUNK_WALL="${ZEN_CHUNK_WALL_SEC:-}" ZM_IDLE_PASSES="${ZEN_IDLE_PASSES:-}" ZM_LONG_LIVED="${ZEN_LONG_LIVED:-}" ZM_MAX_MIN="${ZEN_MAX_MIN:-}" ZM_OVERSUB="${ZEN_CORE_OVERSUBSCRIBE:-}" ZM_CAPABILITY="${ZEN_CAPABILITY:-}" ZM_REQ_SNAP="${ZEN_REQUIRE_SNAPSHOT:-1}" ZM_CPUSET="${ZEN_CPUSET:-}" ZM_CPU_SHARES="${ZEN_CPU_SHARES:-}" ZM_MEMORY="${ZEN_MEMORY:-}" ZM_TMPDIR_HOST_DIR="${ZEN_TMPDIR_HOST_DIR:-}" 'bash -s' <<'REMOTE'
 set -euo pipefail
@@ -172,6 +172,9 @@ ENCP=(); [ -n "${ZM_ENC_PREFIX:-}" ] && ENCP=(-e "ZEN_ENCODES_PREFIX=$ZM_ENC_PRE
 [ -n "${ZM_FIT_RAYON:-}" ] && ENCP+=(-e "ZEN_FIT_RAYON_THREADS=$ZM_FIT_RAYON")
 # SIMD tier cap (fit cells on AVX-512 hosts must run the AVX2 tier: the executor refuses otherwise).
 [ -n "${ZM_MAX_TIER:-}" ] && ENCP+=(-e "ZENSIM_MAX_TIER=$ZM_MAX_TIER")
+# Claim order (zenfleet-worker ZEN_CLAIM_ORDER=manifest: walk chunks in manifest order, so a longest-first
+# manifest is claimed longest-first fleet-wide and passes end on short cells).
+[ -n "${ZM_CLAIM_ORDER:-}" ] && ENCP+=(-e "ZEN_CLAIM_ORDER=$ZM_CLAIM_ORDER")
 ENCP+=(-e "ZEN_REQUIRE_SNAPSHOT=${ZM_REQ_SNAP}")   # strict by default for single-run queues; ZEN_REQUIRE_SNAPSHOT=0 opts out
 # Resource caps for shared boxes (tower rule: never an uncapped worker on the media server).
 CAPS=()
