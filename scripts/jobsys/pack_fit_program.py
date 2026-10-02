@@ -42,10 +42,10 @@ P2D2_SCRIPTS = {
 # v2_lodo_mlp 6d7d2d60….
 V2_SCRIPTS = {
     # zensim ecc69a1f: amendment R4 (EPOCH_RULE = "last", train_and_select), CANONTAB v2c --root support, R2.3 screen specs.
-    "scripts/rev4_featpot/v2_common.py": "8d985690048032895237dd24ade7b6fcc21ffb1e4e966214e171b082feebecc0",
+    "scripts/rev4_featpot/v2_common.py": "064d476a642479e52a470cd143703053454d6206497d6f639bf0adfe5b9e3780",
     # zensim 538d3549 (TRAINEROPT): dev panels every 17th epoch under EPOCH_RULE == "last", sparse read_curve; the
     # trajectory and final weights do not depend on --log-every (gate: zensim benchmarks/traineropt_WORKLOG.md).
-    "scripts/rev4_featpot/v2_lodo_mlp.py": "0540249ca0a168679588b1887b936675f2844592504dafc0e5b48711fc5cb9e8",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "ba5058d5024b2a2fecb26194d950804942c512c3f2e29ddec1bef426f4952cf8",
     # Revision R2 confirmatory full-data fits (features only).
     "scripts/rev4_featpot/v2_confirm_fit.py": "96543c227318bfcfbdcf5ce8b494fb25d4149264c65761e4c6f7ab41c49205e0",
     # zensim e7248c65 (EFFAUDIT D8: render_indexed_jobs + rendered_jobs=; panel_batch unchanged).
@@ -53,6 +53,8 @@ V2_SCRIPTS = {
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v12 (image zenfleet-worker:fit-v2-v12, 2026-10-01): v11 + zensim 30c9ca7d block specs (r0-<block>, core,
+# core+<x>; design log E9).
 # Program v11 (image zenfleet-worker:fit-v2-v11, 2026-10-01): v10 binaries + zensim fb24f308 scripts (recipe tokens
 # @h<w>:H<n>:gl<lambda>, design log E8; specs without tokens run exactly as before).
 # Program v10 (image zenfleet-worker:fit-v2-v10, 2026-10-01): v9 + zensim_mlp_train from zensim 538d3549 (TRAINEROPT: fused
