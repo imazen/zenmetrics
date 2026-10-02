@@ -53,6 +53,8 @@ V2_SCRIPTS = {
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v17 (image zenfleet-worker:fit-v2-v17, 2026-10-02): v16 + zensim_mlp_train 605d20e0 from zensim e176cc1e (TRAINEROPT3:
+# pair forward in one w1 walk + the next pair's forward fused into the Adam row walk; 25/25 cells byte-identical to f9d076c6).
 # Program v16 (image zenfleet-worker:fit-v2-v16, 2026-10-02): v15 + zensim_mlp_train f9d076c6 from zensim f7270995 (TRAINEROPT2:
 # group-lasso prox fused into the w1 Adam rows; 12/12 cells byte-identical to a5f40576) + zensim bfd22c24 sel:<id> subset specs.
 # Program v15 (image zenfleet-worker:fit-v2-v15, 2026-10-02): v14 + zensim 324078f6 (set:/core+ specs resolve candidate arms
