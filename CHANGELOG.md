@@ -13,6 +13,12 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenfleet-core / zenfleet-ledger / zenfleet-vastai (`7a268033`): **staging files are unique across containers that share a
+  `TMPDIR`.** Ledger transfers staged through `zenledger_*_{pid}_{n}`; containers in separate PID namespaces repeat pids, so two
+  tower fit workers finishing together staged their sidecars through one file and one worker's Done row was uploaded with the
+  other's bytes — the cell then idled a full claim TTL before re-running (#63). New `zenfleet_core::tmp::unique_temp_path`
+  (pid + counter + nanos, `create_new`). The vastai claim writer (`claim-{chunk_id}.txt`, no pid) and blob stager use unique
+  names too, and zenfleet-vastai builds again (`cvvdp_display` from `ZEN_CVVDP_DISPLAY`).
 - cvvdp (`2ad1fb02`): **close the remaining video-surface gaps —
   `temp_padding="valid"`, `temp_resample`, and video heatmaps.**
   `TempPadding::Valid` emits only complete causal windows

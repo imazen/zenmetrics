@@ -860,6 +860,16 @@ packed-sRGB-u8 sweep shape and answers a different question.
 
 ### Resolved
 
+- **Shared-`TMPDIR` staging collision lost ledger Done rows — found and FIXED 2026-10-03 (`7a268033`, #63).** Every
+  `s3://` transfer in zenfleet-ledger staged through `$TMPDIR/zenledger_{ul,dl,bi,wb,rb}_{pid}_{n}`. The tower LAN fleet binds
+  ONE host directory as every container's `TMPDIR`, and each container has its own PID namespace, so workers share pids
+  and counters. Measured: Tower-q103's sidecar `pass-Tower-q103-1.chunk-0f08e08e.parquet` was byte-identical (sha256) to
+  Tower-q106's `pass-Tower-q106-1.chunk-7cf28b06.parquet`; q103's Done row was gone, its later passes met their own
+  completed claim and logged "every chunk is claimed elsewhere" until the 7200 s TTL expired, then re-ran the cell.
+  Result blobs were never affected (`R2BlobStore::put` is an in-process conditional PUT, no temp file). Fix:
+  `zenfleet_core::tmp::unique_temp_path` (`{tag}_{pid}_{counter}_{nanos}`, `create_new`). **Rule: never build a scratch
+  name from `process::id()` alone in code that runs in containers** — pids repeat across PID namespaces.
+
 - **cvvdp-gpu multi-strip Mode B (`StripPair`) failed on wgpu (Metal and Vulkan) — FIXED
   2026-09-26 (`c4bfe0fd`).** Root-caused on Metal 2026-08-28: the DKL, Gaussian-pyramid, Weber
   and CSF strip walkers sliced row-strips with `Handle::offset_start(byte_off)`,
