@@ -217,6 +217,17 @@ def run_fit(job: dict) -> bytes:
         raise ValueError("unsafe fit destination")
     importance_script = SCRIPTS[argv[0]][1]
     dest = FIT_ROOT / cell_root(argv) / name
+    # Every container on a host writes cells into the same shared extraction, so a second run of the same
+    # cell (a stolen or duplicated claim) would rmtree the first run's live directory below. Serialize runs of
+    # one cell per host: the second waits, then finds the first's receipt and reuses its outputs.
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with (dest.parent / f".{name.name}.lock").open("w") as cell_lock:
+        fcntl.flock(cell_lock, fcntl.LOCK_EX)
+        return run_fit_locked(job, kind, program_sha, tier, argv, argv_sha, name, importance_script, dest)
+
+
+def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: list, argv_sha: str, name: Path,
+                   importance_script, dest: Path) -> bytes:
     if dest.exists():
         receipt_path = dest / "fleet_receipt.json"
         if receipt_path.is_file():
@@ -276,9 +287,33 @@ def main() -> None:
     sys.stdout.buffer.write(run_fit(job))
 
 
+# Signatures of an environmental failure inside the fit program's output (the box, not the cell).
+TRANSIENT_SIGNS = ("OSError", "FileNotFoundError", "FileExistsError", "PermissionError", "BlockingIOError",
+                   "IsADirectoryError", "NotADirectoryError", "BrokenPipeError", "No such file or directory",
+                   "Directory not empty", "Stale file handle", "Resource temporarily unavailable", "[Errno ")
+
+
+def error_class_of(exc: BaseException):
+    """The zenfleet ErrorClass token to report for `exc`, or None to keep the worker's deterministic default.
+
+    The worker classifies any non-zero exit as `encoder_panic`, which the reconciler poisons after ONE failure.
+    On 2026-10-03 fast fit-cell crashes on the tower (shared `/scratch`) poisoned cells that succeeded on retry.
+    Our own validation failures (hash/receipt/argv mismatches: ValueError) stay deterministic; OSErrors here and
+    OS-level errors inside the fit's output are box-level (`worker_lost`, retried elsewhere); any other fit-program
+    failure is `unknown` (transient, retried up to the reconciler's attempt cap)."""
+    if isinstance(exc, OSError):
+        return "worker_lost"
+    if isinstance(exc, RuntimeError) and str(exc).startswith(("fit exited", "importance exited")):
+        return "worker_lost" if any(sign in str(exc) for sign in TRANSIENT_SIGNS) else "unknown"
+    return None
+
+
 if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
         print(f"fit_cell_exec: {exc}", file=sys.stderr)
+        cls = error_class_of(exc)
+        if cls:
+            print(f"ZEN_ERROR_CLASS:{cls}", file=sys.stderr)
         raise

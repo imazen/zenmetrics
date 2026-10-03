@@ -439,6 +439,25 @@ class Coverage(unittest.TestCase):
         self.assertEqual(cov.parse_claim("garbage", 1000), ("?", None, False))
 
 
+class ErrorClassOf(unittest.TestCase):
+    """fit_cell_exec reports transient vs deterministic failures (the worker poisons encoder_panic after one)."""
+
+    def test_executor_oserror_is_box_level(self):
+        self.assertEqual(exe.error_class_of(FileNotFoundError(2, "No such file or directory")), "worker_lost")
+
+    def test_fit_exit_with_os_error_output_is_box_level(self):
+        err = RuntimeError("fit exited 1: Traceback ...\nOSError: [Errno 39] Directory not empty: '/var/tmp/x'")
+        self.assertEqual(exe.error_class_of(err), "worker_lost")
+
+    def test_other_fit_exit_is_transient_unknown(self):
+        self.assertEqual(exe.error_class_of(RuntimeError("fit exited 1: ValueError: bad spec")), "unknown")
+        self.assertEqual(exe.error_class_of(RuntimeError("importance exited 2: boom")), "unknown")
+
+    def test_own_validation_stays_deterministic(self):
+        self.assertIsNone(exe.error_class_of(ValueError("argv SHA-256 differs from declared input")))
+        self.assertIsNone(exe.error_class_of(RuntimeError("something else")))
+
+
 class GoldenJobId(unittest.TestCase):
     def test_python_job_id_matches_the_rust_golden(self):
         """Same cell and id as `fit_cell_serialization_and_job_id_are_golden_stable` in zenfleet-core."""
