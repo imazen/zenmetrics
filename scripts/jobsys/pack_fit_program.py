@@ -42,12 +42,12 @@ P2D2_SCRIPTS = {
 # v2_lodo_mlp 6d7d2d60….
 V2_SCRIPTS = {
     # zensim ecc69a1f: amendment R4 (EPOCH_RULE = "last", train_and_select), CANONTAB v2c --root support, R2.3 screen specs.
-    "scripts/rev4_featpot/v2_common.py": "d3f610fb11e17cbbabeb7e1996ab0f2e05d0668dd8c40bd36447680bf33ffbbb",
+    "scripts/rev4_featpot/v2_common.py": "e18675ce58eb26cf50be106cd925f778f9722a3d05bb2ecd60534d7534175958",
     # zensim 538d3549 (TRAINEROPT): dev panels every 17th epoch under EPOCH_RULE == "last", sparse read_curve; the
     # trajectory and final weights do not depend on --log-every (gate: zensim benchmarks/traineropt_WORKLOG.md).
-    "scripts/rev4_featpot/v2_lodo_mlp.py": "2d4b6781660db8a47a50548c9e7627e1fdbe5df208e2d585b35e77c67acdc643",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "c156fb4c8e1182ea92108295dd62c2ab2fc59f4981d1eae5bbec69f58d0ff1a2",
     # zensim 6ffcb814 + c482fddf2a9c (design log E13): curated SafeSyn teacher legs, recipe token ts<rule>; uuid-named scratch copy.
-    "scripts/rev4_featpot/v2_teacher.py": "878357a8f343af5ef7974acf7cc7fc91f16ef915a687162fa4cb5ad4e7ae99b1",
+    "scripts/rev4_featpot/v2_teacher.py": "6916ee5386f2f24c12332f1eff9efc949551b893c8da9936ff2cb8c45ac3eb31",
     # Revision R2 confirmatory full-data fits (features only).
     "scripts/rev4_featpot/v2_confirm_fit.py": "96543c227318bfcfbdcf5ce8b494fb25d4149264c65761e4c6f7ab41c49205e0",
     # zensim e7248c65 (EFFAUDIT D8: render_indexed_jobs + rendered_jobs=; panel_batch unchanged).
@@ -55,6 +55,8 @@ V2_SCRIPTS = {
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v21 (image zenfleet-worker:fit-v2-v21, 2026-10-03): v20 + zensim a7a3168d scripts (design log E15: cv<w>:cf<mask>
+# coverage leg over the pinned pool) + the E15 coverage pool, keys and manifest (V2_DATA).
 # Program v20 (image zenfleet-worker:fit-v2-v20, 2026-10-03): v19 with the compliant E14 table (20 KADIS types; 6/9/10/15 are
 # third-party generated and excluded, zensim 6c5d38fa) and the matching v2_teacher pin. v19 was retired before any E14 cell finished.
 # Program v19 (image zenfleet-worker:fit-v2-v19, 2026-10-03): v18 + zensim d1587e29 scripts (design log E14: ko<w> KADIS
@@ -85,6 +87,10 @@ V2_DATA = {
     # E14 KADIS ordinal ladder table + its trainer manifest (zensim benchmarks/e14_kadis_ordinal_2026-10-03.pointer.md).
     "data/e14/kadis_ordinal.parquet": "ffc245a0e39bd85d7527a08fd96bdd93b9fb266ad0334d4401eca06c95812012",
     "data/e14/kadis_ordinal.parquet.manifest.json": "5b47e46181dfba7ab0995ec684cf2b9fcc632754f76bbf9471939398adcf5e31",
+    # E15 coverage pool + its row keys + trainer manifest (zensim benchmarks/e15_coverage_pool_2026-10-03.pointer.md).
+    "data/e15/coverage_pool.parquet": "6b00349c8aca6613aeb1591f8411e738e3c70798274c7df9017dfbc8844848b3",
+    "data/e15/coverage_pool.keys.parquet": "bc225a115ab8505738a5c17ced6d4fc592a9a38ac6d9ec98661f4e8f0898addf",
+    "data/e15/coverage_pool.parquet.manifest.json": "b11ef05944a656acb64a0cabf7f88abd748d8ff0cada1a7f240f20a738c3c068",
 }
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
