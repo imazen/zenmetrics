@@ -1512,6 +1512,24 @@ where
     out
 }
 
+/// The last ~2000 characters of a handler's failure message on one line (newlines shown as `⏎`), so a
+/// per-cell failure reason reaches the container log through the entrypoint's line-based surfacing.
+fn failure_tail(msg: &str) -> String {
+    const MAX: usize = 2000;
+    let flat: String = msg
+        .trim()
+        .chars()
+        .map(|c| if c == '\n' { '⏎' } else { c })
+        .collect();
+    let n = flat.chars().count();
+    if n <= MAX {
+        flat
+    } else {
+        let tail: String = flat.chars().skip(n - MAX).collect();
+        format!("…{tail}")
+    }
+}
+
 /// Run a claimed chunk's cells concurrently as fresh processes, admitting under
 /// [`BoxBudget::can_admit`] so Σpeak_mem ≤ the RAM budget and Σthreads ≤ cores at all times. Returns
 /// each cell's outcome keyed by its index into `gap`: `Ok(sha)` once `handler` produced bytes AND
@@ -1595,7 +1613,19 @@ where
                             HandlerError::new(ErrorClass::UploadFail, format!("put: {e}"))
                         })
                     });
-                    let mapped = res.map_err(|he| he.class);
+                    // The ledger row keeps only the class; without this line the executor's own
+                    // reason (stderr tail) was lost, and 2026-10-03's fast fit-cell failures on the
+                    // tower could not be diagnosed. One line, so fleet-entrypoint surfaces it.
+                    let mapped = res.map_err(|he| {
+                        eprintln!(
+                            "zenfleet-worker: cell failed [{:?}] {} ({}): {}",
+                            he.class,
+                            gap[gi].cell.image_path,
+                            gap[gi].job_id().as_str(),
+                            failure_tail(&he.msg)
+                        );
+                        he.class
+                    });
                     {
                         let mut g = shared.lock().unwrap_or_else(|p| p.into_inner());
                         g.running.remove(mem, thr, vram);
@@ -4156,6 +4186,21 @@ mod tests {
         let s = "MemTotal:       65792840 kB\nMemFree:          123 kB\n";
         assert_eq!(parse_meminfo_total(s), Some(65792840u64 * 1024));
         assert_eq!(parse_meminfo_total("no memtotal here\n"), None);
+    }
+
+    #[test]
+    fn failure_tail_is_one_line_and_keeps_the_end() {
+        assert_eq!(
+            failure_tail("fit exited 1:\nTraceback\nValueError: x\n"),
+            "fit exited 1:⏎Traceback⏎ValueError: x"
+        );
+        let long = format!("{}END", "a".repeat(5000));
+        let t = failure_tail(&long);
+        assert!(
+            t.starts_with('…') && t.ends_with("END") && t.chars().count() == 2001,
+            "{}",
+            t.len()
+        );
     }
 
     #[test]

@@ -57,7 +57,7 @@ prog(){  echo "▸ [progress $(date -u +%H:%M:%SZ)] $*"; }
 ferr(){  echo "❌ [FLEET-ERROR $(date -u +%H:%M:%SZ)] $*"; }
 stall(){ echo "⚠ [FLEET-STALL $(date -u +%H:%M:%SZ)] $*"; }
 # Anything matching this in a worker/tool output blob is force-surfaced as an error.
-FLEET_PROBLEM_RE='panicked|thread .*panicked|FATAL|fatal error|error\[E|(^|[^A-Za-z])[Ee]rror(:| )|OOM|out of memory|Killed|SIGKILL|SIGABRT|core dumped|NaN|failed=[1-9]|poisoned=[1-9]|Traceback|Segmentation'
+FLEET_PROBLEM_RE='cell failed \[|panicked|thread .*panicked|FATAL|fatal error|error\[E|(^|[^A-Za-z])[Ee]rror(:| )|OOM|out of memory|Killed|SIGKILL|SIGABRT|core dumped|NaN|failed=[1-9]|poisoned=[1-9]|Traceback|Segmentation'
 surface_problems(){ # $1: text blob — re-emit each distinct problem line LOUDLY
   local h; h=$(printf '%s\n' "$1" | grep -aiE "$FLEET_PROBLEM_RE" | sort -u || true)
   [ -z "$h" ] && return 1
