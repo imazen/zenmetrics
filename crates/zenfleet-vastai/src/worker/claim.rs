@@ -112,7 +112,20 @@ pub async fn try_claim(
     // 3. Write our claim.
     let token = generate_token(worker_id);
     let body = format!("{token}\t{now}\t{worker_id}");
-    let tmp = std::env::temp_dir().join(format!("claim-{chunk_id}.txt"));
+    // The staging name carries this attempt's token (worker, pid, nanos): with only the chunk id in
+    // it, two workers sharing a TMPDIR that race for the same chunk staged through ONE file, and one
+    // could upload the other's body (zenmetrics#63 is the same class on the ledger path).
+    let tmp_tag: String = token
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let tmp = std::env::temp_dir().join(format!("claim-{chunk_id}-{tmp_tag}.txt"));
     if let Err(e) = tokio::fs::write(&tmp, &body).await {
         tracing::warn!(error = %e, chunk_id, "tmp claim write failed");
         return Ok(ClaimOutcome::Errored);

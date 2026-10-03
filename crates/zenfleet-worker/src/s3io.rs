@@ -62,7 +62,7 @@ fn store(endpoint: &str, bucket: &str) -> Result<Arc<AmazonS3>, String> {
 ///
 /// The unconditional counterpart to [`put_create`]. Epoch-sharded claiming uses it for
 /// heartbeat writes (idempotent per-epoch presence markers — overwrite is exactly right).
-pub fn put(endpoint: &str, bucket: &str, key: &str, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn put(endpoint: &str, bucket: &str, key: &str, bytes: &[u8]) -> Result<(), String> {
     let s = store(endpoint, bucket)?;
     let p = OsPath::from(key);
     let payload = PutPayload::from_bytes(bytes::Bytes::copy_from_slice(bytes));
@@ -74,7 +74,12 @@ pub fn put(endpoint: &str, bucket: &str, key: &str, bytes: &[u8]) -> Result<(), 
 
 /// Conditional create (`If-None-Match: *`) — the exactly-once claim. Returns
 /// `Ok(true)` iff THIS caller created the object, `Ok(false)` if it already existed.
-pub fn put_create(endpoint: &str, bucket: &str, key: &str, bytes: &[u8]) -> Result<bool, String> {
+pub(crate) fn put_create(
+    endpoint: &str,
+    bucket: &str,
+    key: &str,
+    bytes: &[u8],
+) -> Result<bool, String> {
     let s = store(endpoint, bucket)?;
     let p = OsPath::from(key);
     let payload = PutPayload::from_bytes(bytes::Bytes::copy_from_slice(bytes));
@@ -92,7 +97,7 @@ pub fn put_create(endpoint: &str, bucket: &str, key: &str, bytes: &[u8]) -> Resu
 /// Fetch an object's bytes. `None` on any error (missing, network, ...) — matches the old
 /// `aws s3api get-object` CLI callers' error handling (fail-open: caller treats "can't read" the
 /// same as "absent").
-pub fn get(endpoint: &str, bucket: &str, key: &str) -> Option<Vec<u8>> {
+pub(crate) fn get(endpoint: &str, bucket: &str, key: &str) -> Option<Vec<u8>> {
     get_with_etag(endpoint, bucket, key).map(|(bytes, _etag)| bytes.to_vec())
 }
 
@@ -100,7 +105,11 @@ pub fn get(endpoint: &str, bucket: &str, key: &str) -> Option<Vec<u8>> {
 /// steal path needs the current ETag for the `If-Match` conditional PUT in [`put_update`]).
 /// `None` on any error, or if the store didn't return an ETag at all (R2/S3-compatible stores
 /// always do; a store that doesn't would make conditional updates meaningless anyway).
-pub fn get_with_etag(endpoint: &str, bucket: &str, key: &str) -> Option<(bytes::Bytes, String)> {
+pub(crate) fn get_with_etag(
+    endpoint: &str,
+    bucket: &str,
+    key: &str,
+) -> Option<(bytes::Bytes, String)> {
     let s = store(endpoint, bucket).ok()?;
     let p = OsPath::from(key);
     runtime().block_on(async move {
@@ -116,7 +125,7 @@ pub fn get_with_etag(endpoint: &str, bucket: &str, key: &str) -> Option<(bytes::
 /// `Ok(false)` on a precondition failure (someone else's claim/steal/heartbeat already changed
 /// the object since we read `etag` — safe: no double-execute, exactly like [`put_create`]'s
 /// `AlreadyExists` case for a fresh claim).
-pub fn put_update(
+pub(crate) fn put_update(
     endpoint: &str,
     bucket: &str,
     key: &str,
@@ -141,7 +150,7 @@ pub fn put_update(
 }
 
 /// True iff the object exists (HEAD).
-pub fn head_exists(endpoint: &str, bucket: &str, key: &str) -> bool {
+pub(crate) fn head_exists(endpoint: &str, bucket: &str, key: &str) -> bool {
     let Ok(s) = store(endpoint, bucket) else {
         return false;
     };
@@ -151,7 +160,11 @@ pub fn head_exists(endpoint: &str, bucket: &str, key: &str) -> bool {
 
 /// List the objects directly under `prefix/` (delimiter listing) and return their basenames.
 /// Epoch-sharded claiming reads an epoch's heartbeat roster with this — one call per pass.
-pub fn list_basenames(endpoint: &str, bucket: &str, prefix: &str) -> Result<Vec<String>, String> {
+pub(crate) fn list_basenames(
+    endpoint: &str,
+    bucket: &str,
+    prefix: &str,
+) -> Result<Vec<String>, String> {
     let s = store(endpoint, bucket)?;
     let p = OsPath::from(prefix.trim_matches('/'));
     let res = runtime()
@@ -167,7 +180,7 @@ pub fn list_basenames(endpoint: &str, bucket: &str, prefix: &str) -> Result<Vec<
 /// List the objects directly under `prefix/` with their last-modified times (unix secs).
 /// The sidecar-fold (anti-wedge invariant 4/7) uses this to fold only chunk files newer
 /// than the worker's snapshot view.
-pub fn list_entries(
+pub(crate) fn list_entries(
     endpoint: &str,
     bucket: &str,
     prefix: &str,
@@ -189,7 +202,7 @@ pub fn list_entries(
 }
 
 /// Delete an object (idempotent — NotFound is OK).
-pub fn delete(endpoint: &str, bucket: &str, key: &str) -> Result<(), String> {
+pub(crate) fn delete(endpoint: &str, bucket: &str, key: &str) -> Result<(), String> {
     let s = store(endpoint, bucket)?;
     let p = OsPath::from(key);
     match runtime().block_on(async move { s.delete(&p).await }) {

@@ -51,12 +51,21 @@ impl S3BlobStorage {
     }
 }
 
+static PUT_TMP_N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 impl BlobStorage for S3BlobStorage {
     fn put(&self, key: &ArtifactKey, bytes: &[u8]) -> Result<(), CloudError> {
         // s5cmd uploads files, not stdin streams — stage to a temp file
         // then `cp`, mirroring the claim writer's temp-file pattern.
+        // pid alone is not unique across containers sharing a TMPDIR (zenmetrics#63); add a
+        // process-local counter and wall-clock nanos.
+        let n = PUT_TMP_N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
         let tmp = std::env::temp_dir().join(format!(
-            "zenfleet-s3-put-{}-{}.bin",
+            "zenfleet-s3-put-{}-{n}-{nanos:x}-{}.bin",
             std::process::id(),
             blob_basename(key)
         ));

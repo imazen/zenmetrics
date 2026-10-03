@@ -256,6 +256,16 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
             .ok()
             .filter(|s| !s.is_empty()),
         metrics: spec.metrics,
+        // cvvdp has no default display (the CLI's `--display-model`): the fleet box names it in
+        // ZEN_CVVDP_DISPLAY. Unset → None, and an SDR cvvdp cell then fails loudly instead of
+        // scoring against a guessed display. A name the build does not know aborts the chunk.
+        cvvdp_display: match std::env::var("ZEN_CVVDP_DISPLAY") {
+            Ok(name) if !name.is_empty() => Some(
+                zenmetrics_cli::metrics::display::parse_display(&name)
+                    .map_err(|e| anyhow::anyhow!("ZEN_CVVDP_DISPLAY={name:?}: {e}"))?,
+            ),
+            _ => None,
+        },
         gpu_runtime: spec.gpu_runtime,
         output: spec.output_tsv.clone(),
         feature_output: spec.feature_output,

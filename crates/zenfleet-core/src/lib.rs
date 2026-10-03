@@ -33,6 +33,7 @@ pub mod provision;
 pub mod reconcile;
 pub mod schedule;
 pub mod status;
+pub mod tmp;
 
 pub use catalog::{CatalogEntry, SemanticId};
 pub use content::{BlobRef, ContentError, Sha256Hex, blob_key, sha256};

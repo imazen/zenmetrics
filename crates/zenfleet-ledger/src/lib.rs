@@ -18,7 +18,6 @@ use std::fs::File;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use arrow_array::{Array, Int64Array, RecordBatch, StringArray, UInt32Array, UInt64Array};
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
@@ -293,7 +292,12 @@ pub fn compact_ledger(inputs: &[&Path], out: &Path) -> Result<usize, LedgerError
 
 // ---- s3:// (R2) ledger I/O: same Parquet, staged through a temp file via the s5cmd CLI ----
 
-static URI_TMP_N: AtomicU64 = AtomicU64::new(0);
+/// A staging file no other process can share — see [`zenfleet_core::tmp`] (zenmetrics#63: equal
+/// in-container pids on a shared `TMPDIR` made two workers stage sidecars through one file).
+fn temp_file(tag: &str, ext: &str) -> Result<std::path::PathBuf, LedgerError> {
+    zenfleet_core::tmp::unique_temp_path(tag, ext)
+        .map_err(|e| LedgerError::Io(format!("temp file: {e}")))
+}
 
 fn s5cmd_cp(endpoint: &str, src: &str, dst: &str) -> Result<(), LedgerError> {
     let st = {
@@ -367,9 +371,7 @@ pub fn read_ledger_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<LedgerRo
     if uri.starts_with("s3://") {
         let ep = endpoint
             .ok_or_else(|| LedgerError::Io("s3:// ledger requires an R2 endpoint".into()))?;
-        let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
-        let tmp =
-            std::env::temp_dir().join(format!("zenledger_dl_{}_{}.parquet", std::process::id(), n));
+        let tmp = temp_file("zenledger_dl", "parquet")?;
         s5cmd_cp(ep, uri, &tmp.to_string_lossy())?;
         let rows = read_ledger(&tmp);
         let _ = std::fs::remove_file(&tmp);
@@ -388,9 +390,7 @@ pub fn write_ledger_uri(
     if uri.starts_with("s3://") {
         let ep = endpoint
             .ok_or_else(|| LedgerError::Io("s3:// ledger requires an R2 endpoint".into()))?;
-        let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
-        let tmp =
-            std::env::temp_dir().join(format!("zenledger_ul_{}_{}.parquet", std::process::id(), n));
+        let tmp = temp_file("zenledger_ul", "parquet")?;
         write_ledger(&tmp, rows)?;
         let r = s5cmd_cp(ep, &tmp.to_string_lossy(), uri);
         let _ = std::fs::remove_file(&tmp);
@@ -408,9 +408,7 @@ pub fn read_blob_index_uri(
     if uri.starts_with("s3://") {
         let ep = endpoint
             .ok_or_else(|| LedgerError::Io("s3:// blob index requires an R2 endpoint".into()))?;
-        let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
-        let tmp =
-            std::env::temp_dir().join(format!("zenledger_bi_{}_{}.parquet", std::process::id(), n));
+        let tmp = temp_file("zenledger_bi", "parquet")?;
         s5cmd_cp(ep, uri, &tmp.to_string_lossy())?;
         let r = read_blob_index(&tmp);
         let _ = std::fs::remove_file(&tmp);
@@ -426,9 +424,7 @@ pub fn write_bytes_uri(uri: &str, bytes: &[u8], endpoint: Option<&str>) -> Resul
     if uri.starts_with("s3://") {
         let ep =
             endpoint.ok_or_else(|| LedgerError::Io("s3:// path requires an R2 endpoint".into()))?;
-        let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
-        let tmp =
-            std::env::temp_dir().join(format!("zenledger_wb_{}_{}.bin", std::process::id(), n));
+        let tmp = temp_file("zenledger_wb", "bin")?;
         std::fs::write(&tmp, bytes).map_err(|e| LedgerError::Io(format!("write temp: {e}")))?;
         let r = s5cmd_cp(ep, &tmp.to_string_lossy(), uri);
         let _ = std::fs::remove_file(&tmp);
@@ -444,9 +440,7 @@ pub fn read_bytes_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<u8>, Ledg
     if uri.starts_with("s3://") {
         let ep =
             endpoint.ok_or_else(|| LedgerError::Io("s3:// path requires an R2 endpoint".into()))?;
-        let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
-        let tmp =
-            std::env::temp_dir().join(format!("zenledger_rb_{}_{}.bin", std::process::id(), n));
+        let tmp = temp_file("zenledger_rb", "bin")?;
         s5cmd_cp(ep, uri, &tmp.to_string_lossy())?;
         let b = std::fs::read(&tmp).map_err(|e| LedgerError::Io(format!("read temp: {e}")));
         let _ = std::fs::remove_file(&tmp);
