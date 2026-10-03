@@ -42,12 +42,12 @@ P2D2_SCRIPTS = {
 # v2_lodo_mlp 6d7d2d60….
 V2_SCRIPTS = {
     # zensim ecc69a1f: amendment R4 (EPOCH_RULE = "last", train_and_select), CANONTAB v2c --root support, R2.3 screen specs.
-    "scripts/rev4_featpot/v2_common.py": "3a301d3448d46043cf926c8c4423c931c24eedefd681e3a7be4c330fcd680c2d",
+    "scripts/rev4_featpot/v2_common.py": "d3f610fb11e17cbbabeb7e1996ab0f2e05d0668dd8c40bd36447680bf33ffbbb",
     # zensim 538d3549 (TRAINEROPT): dev panels every 17th epoch under EPOCH_RULE == "last", sparse read_curve; the
     # trajectory and final weights do not depend on --log-every (gate: zensim benchmarks/traineropt_WORKLOG.md).
-    "scripts/rev4_featpot/v2_lodo_mlp.py": "e91c6f8e951a7b34badcca2f1e2a6f14b71760aeec30aa1636ac1f6067bff918",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "2d4b6781660db8a47a50548c9e7627e1fdbe5df208e2d585b35e77c67acdc643",
     # zensim 6ffcb814 + c482fddf2a9c (design log E13): curated SafeSyn teacher legs, recipe token ts<rule>; uuid-named scratch copy.
-    "scripts/rev4_featpot/v2_teacher.py": "478e22f5070409e9bf539a125383abb76e110dda99793ae995f128e90b5011dd",
+    "scripts/rev4_featpot/v2_teacher.py": "52f59a6d183df7f21751cd9c9836a8e89dc3711c33589854c1b47ade9c2af257",
     # Revision R2 confirmatory full-data fits (features only).
     "scripts/rev4_featpot/v2_confirm_fit.py": "96543c227318bfcfbdcf5ce8b494fb25d4149264c65761e4c6f7ab41c49205e0",
     # zensim e7248c65 (EFFAUDIT D8: render_indexed_jobs + rendered_jobs=; panel_batch unchanged).
@@ -55,6 +55,8 @@ V2_SCRIPTS = {
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v19 (image zenfleet-worker:fit-v2-v19, 2026-10-03): v18 + zensim d1587e29 scripts (design log E14: ko<w> KADIS
+# ordinal ladder leg; e13 scoring shared) + the E14 ordinal table and manifest (V2_DATA). Specs without ko/ts run as v17.
 # Program v18 (image zenfleet-worker:fit-v2-v18, 2026-10-03): v17 binaries + zensim 6ffcb814 scripts (design log E13: ts<rule>
 # SafeSyn teacher curation, v2_teacher.py) + the E13 strata data file (V2_DATA). Specs without a ts token run exactly as v17.
 # Program v17 (image zenfleet-worker:fit-v2-v17, 2026-10-02): v16 + zensim_mlp_train 605d20e0 from zensim e176cc1e (TRAINEROPT3:
@@ -78,6 +80,9 @@ V2_SCRIPTS = {
 # fit table (zensim benchmarks/e13_safesyn_strata_2026-10-03.pointer.md; rebuilt by e13_teacher.py strata).
 V2_DATA = {
     "data/e13/safesyn_fit_strata.npz": "6baf5d1b2cb012963cdfa19d94ea2717bca17066a49cf9660979669d5662929c",
+    # E14 KADIS ordinal ladder table + its trainer manifest (zensim benchmarks/e14_kadis_ordinal_2026-10-03.pointer.md).
+    "data/e14/kadis_ordinal.parquet": "b41d31519577c0ab64a92fe1fc157fd80fcd844be60c7f84b7b3f2c66334f4e6",
+    "data/e14/kadis_ordinal.parquet.manifest.json": "5b47e46181dfba7ab0995ec684cf2b9fcc632754f76bbf9471939398adcf5e31",
 }
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
