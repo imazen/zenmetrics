@@ -817,10 +817,10 @@ impl VideoScorer {
         if !frames_per_second.is_finite() || frames_per_second <= 0.0 {
             return Err(Error::InvalidFps);
         }
-        if let Some(nominal) = options.temp_resample {
-            if !nominal.is_finite() || nominal <= 0.0 {
-                return Err(Error::InvalidFps);
-            }
+        if let Some(nominal) = options.temp_resample
+            && (!nominal.is_finite() || nominal <= 0.0)
+        {
+            return Err(Error::InvalidFps);
         }
         let w = width as usize;
         let h = height as usize;

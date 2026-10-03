@@ -131,7 +131,7 @@ fn reduce_v_inner(
                     }
                     _ => {
                         let z = f32x16::zero(token);
-                        let or = |row: Option<usize>| row.map_or(z, &ld);
+                        let or = |row: Option<usize>| row.map_or(z, ld);
                         (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
                     }
                 };
@@ -207,7 +207,7 @@ fn reduce_v_inner(
                     }
                     _ => {
                         let z = f32x8::zero(token);
-                        let or = |row: Option<usize>| row.map_or(z, &ld);
+                        let or = |row: Option<usize>| row.map_or(z, ld);
                         (or(r_m2), or(r_m1), or(r_0), or(r_p1), or(r_p2))
                     }
                 };

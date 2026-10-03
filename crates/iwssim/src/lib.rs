@@ -86,7 +86,9 @@ mod pyramid;
 /// measure each against its scalar tier; NOT public API, not semver-covered.
 #[cfg(feature = "_dev")]
 pub mod simd_kernels;
+// Private build: the `pub` items are only for the `_dev` bench export above.
 #[cfg(not(feature = "_dev"))]
+#[allow(unreachable_pub)]
 mod simd_kernels;
 mod ssim;
 mod strip;
