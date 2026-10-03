@@ -47,7 +47,7 @@ V2_SCRIPTS = {
     # trajectory and final weights do not depend on --log-every (gate: zensim benchmarks/traineropt_WORKLOG.md).
     "scripts/rev4_featpot/v2_lodo_mlp.py": "2d4b6781660db8a47a50548c9e7627e1fdbe5df208e2d585b35e77c67acdc643",
     # zensim 6ffcb814 + c482fddf2a9c (design log E13): curated SafeSyn teacher legs, recipe token ts<rule>; uuid-named scratch copy.
-    "scripts/rev4_featpot/v2_teacher.py": "52f59a6d183df7f21751cd9c9836a8e89dc3711c33589854c1b47ade9c2af257",
+    "scripts/rev4_featpot/v2_teacher.py": "878357a8f343af5ef7974acf7cc7fc91f16ef915a687162fa4cb5ad4e7ae99b1",
     # Revision R2 confirmatory full-data fits (features only).
     "scripts/rev4_featpot/v2_confirm_fit.py": "96543c227318bfcfbdcf5ce8b494fb25d4149264c65761e4c6f7ab41c49205e0",
     # zensim e7248c65 (EFFAUDIT D8: render_indexed_jobs + rendered_jobs=; panel_batch unchanged).
@@ -55,6 +55,8 @@ V2_SCRIPTS = {
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v20 (image zenfleet-worker:fit-v2-v20, 2026-10-03): v19 with the compliant E14 table (20 KADIS types; 6/9/10/15 are
+# third-party generated and excluded, zensim 6c5d38fa) and the matching v2_teacher pin. v19 was retired before any E14 cell finished.
 # Program v19 (image zenfleet-worker:fit-v2-v19, 2026-10-03): v18 + zensim d1587e29 scripts (design log E14: ko<w> KADIS
 # ordinal ladder leg; e13 scoring shared) + the E14 ordinal table and manifest (V2_DATA). Specs without ko/ts run as v17.
 # Program v18 (image zenfleet-worker:fit-v2-v18, 2026-10-03): v17 binaries + zensim 6ffcb814 scripts (design log E13: ts<rule>
@@ -81,7 +83,7 @@ V2_SCRIPTS = {
 V2_DATA = {
     "data/e13/safesyn_fit_strata.npz": "6baf5d1b2cb012963cdfa19d94ea2717bca17066a49cf9660979669d5662929c",
     # E14 KADIS ordinal ladder table + its trainer manifest (zensim benchmarks/e14_kadis_ordinal_2026-10-03.pointer.md).
-    "data/e14/kadis_ordinal.parquet": "b41d31519577c0ab64a92fe1fc157fd80fcd844be60c7f84b7b3f2c66334f4e6",
+    "data/e14/kadis_ordinal.parquet": "ffc245a0e39bd85d7527a08fd96bdd93b9fb266ad0334d4401eca06c95812012",
     "data/e14/kadis_ordinal.parquet.manifest.json": "5b47e46181dfba7ab0995ec684cf2b9fcc632754f76bbf9471939398adcf5e31",
 }
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
