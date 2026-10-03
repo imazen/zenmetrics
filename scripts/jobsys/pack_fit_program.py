@@ -42,10 +42,12 @@ P2D2_SCRIPTS = {
 # v2_lodo_mlp 6d7d2d60….
 V2_SCRIPTS = {
     # zensim ecc69a1f: amendment R4 (EPOCH_RULE = "last", train_and_select), CANONTAB v2c --root support, R2.3 screen specs.
-    "scripts/rev4_featpot/v2_common.py": "764e863b18405efd09a923700cebadb72023ecacebb47c3b9163ca157960a971",
+    "scripts/rev4_featpot/v2_common.py": "3a301d3448d46043cf926c8c4423c931c24eedefd681e3a7be4c330fcd680c2d",
     # zensim 538d3549 (TRAINEROPT): dev panels every 17th epoch under EPOCH_RULE == "last", sparse read_curve; the
     # trajectory and final weights do not depend on --log-every (gate: zensim benchmarks/traineropt_WORKLOG.md).
-    "scripts/rev4_featpot/v2_lodo_mlp.py": "1dfd760a9878bc70f44538ebaf0c07a54222d54283906f3a16712b1f84c3c2a7",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "e91c6f8e951a7b34badcca2f1e2a6f14b71760aeec30aa1636ac1f6067bff918",
+    # zensim 6ffcb814 (design log E13): curated SafeSyn teacher legs, recipe token ts<rule>.
+    "scripts/rev4_featpot/v2_teacher.py": "f86256518dac726e972c98614498b1133c230a63140d2c9a1e845d0ade2d899d",
     # Revision R2 confirmatory full-data fits (features only).
     "scripts/rev4_featpot/v2_confirm_fit.py": "96543c227318bfcfbdcf5ce8b494fb25d4149264c65761e4c6f7ab41c49205e0",
     # zensim e7248c65 (EFFAUDIT D8: render_indexed_jobs + rendered_jobs=; panel_batch unchanged).
@@ -53,6 +55,8 @@ V2_SCRIPTS = {
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v18 (image zenfleet-worker:fit-v2-v18, 2026-10-03): v17 binaries + zensim 6ffcb814 scripts (design log E13: ts<rule>
+# SafeSyn teacher curation, v2_teacher.py) + the E13 strata data file (V2_DATA). Specs without a ts token run exactly as v17.
 # Program v17 (image zenfleet-worker:fit-v2-v17, 2026-10-02): v16 + zensim_mlp_train 605d20e0 from zensim e176cc1e (TRAINEROPT3:
 # pair forward in one w1 walk + the next pair's forward fused into the Adam row walk; 25/25 cells byte-identical to f9d076c6).
 # Program v16 (image zenfleet-worker:fit-v2-v16, 2026-10-02): v15 + zensim_mlp_train f9d076c6 from zensim f7270995 (TRAINEROPT2:
@@ -70,6 +74,11 @@ V2_SCRIPTS = {
 # Program v9 (93dc93d0, image zenfleet-worker:fit-v2-v9, 2026-10-01): these V2_SCRIPTS + v8 trainer/panel (zensim cafed5ca)
 # + bake_dial_refit from a local merge of zensim main b926258e and pr/signedfeat a659715e, so bakes reading the
 # SIGNEDFEAT columns f1825-f1852 load (zensim benchmarks/rev4_featpot_effaudit/v9_predictor_gate_2026-10-01.json).
+# Data files a v2 program carries (--data NAME=PATH), pinned by sha. E13 strata: per-row codec/quality of the v2-canon SafeSyn
+# fit table (zensim benchmarks/e13_safesyn_strata_2026-10-03.pointer.md; rebuilt by e13_teacher.py strata).
+V2_DATA = {
+    "data/e13/safesyn_fit_strata.npz": "6baf5d1b2cb012963cdfa19d94ea2717bca17066a49cf9660979669d5662929c",
+}
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
 
@@ -98,12 +107,22 @@ def main() -> None:
     p.add_argument("--build-meta", type=Path, required=True)
     p.add_argument("--profile", choices=("p0", "p2d2", "v2"), default="p0")
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--data", action="append", default=[], metavar="NAME=PATH", help="a pinned V2_DATA file (profile v2)")
     args = p.parse_args()
     files = {}
     for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS}[args.profile].items():
         path = args.source / name
         if digest(path) != expected:
             raise ValueError(f"preregistered fit source changed: {name}")
+        files[name] = path
+    given = dict(item.split("=", 1) for item in args.data)
+    wanted = V2_DATA if args.profile == "v2" else {}
+    if sorted(given) != sorted(wanted):
+        raise ValueError(f"--data must name exactly {sorted(wanted)}")
+    for name, expected in wanted.items():
+        path = Path(given[name])
+        if digest(path) != expected:
+            raise ValueError(f"pinned data file changed: {name}")
         files[name] = path
     files["fit_cell_exec.py"] = args.executor
     for name in BINARIES:
