@@ -25,20 +25,20 @@
 use cubecl::prelude::*;
 
 /// Threads per cube for the reduction kernels.
-pub const BLOCK_SIZE: u32 = 256;
+pub(crate) const BLOCK_SIZE: u32 = 256;
 /// Cubes per reduction (16 × 256 = 4096 grid-strided workers).
-pub const NUM_BLOCKS: u32 = 16;
+pub(crate) const NUM_BLOCKS: u32 = 16;
 /// Total threads per reduction.
-pub const THREADS_PER_REDUCTION: usize = (NUM_BLOCKS * BLOCK_SIZE) as usize;
+pub(crate) const THREADS_PER_REDUCTION: usize = (NUM_BLOCKS * BLOCK_SIZE) as usize;
 
 /// Floats this slot consumes in the on-device `partials` buffer.
 /// In fast mode this is the single final scalar (atomic writes go
 /// straight there); in portable mode it's per-thread partials that a
 /// finalizer kernel folds into the small sums buffer.
 #[cfg(feature = "fast-reduction")]
-pub const PARTIALS_PER_REDUCTION: usize = 1;
+pub(crate) const PARTIALS_PER_REDUCTION: usize = 1;
 #[cfg(not(feature = "fast-reduction"))]
-pub const PARTIALS_PER_REDUCTION: usize = THREADS_PER_REDUCTION;
+pub(crate) const PARTIALS_PER_REDUCTION: usize = THREADS_PER_REDUCTION;
 
 // =====================================================================
 // Fast path — single-pass Atomic<f32>::fetch_add.
@@ -87,7 +87,7 @@ mod fast {
         output_sums[slot as usize].fetch_add(local_sum);
     }
 
-    pub fn launch_sum<R: Runtime>(
+    pub(crate) fn launch_sum<R: Runtime>(
         client: &ComputeClient<R>,
         plane_handle: cubecl::server::Handle,
         n_pixels: usize,
@@ -109,7 +109,7 @@ mod fast {
         }
     }
 
-    pub fn launch_sum_range<R: Runtime>(
+    pub(crate) fn launch_sum_range<R: Runtime>(
         client: &ComputeClient<R>,
         plane_handle: cubecl::server::Handle,
         n_pixels: usize,
@@ -147,7 +147,7 @@ mod fast {
         dst[i] = src[i];
     }
 
-    pub fn launch_finalize<R: Runtime>(
+    pub(crate) fn launch_finalize<R: Runtime>(
         client: &ComputeClient<R>,
         partials_handle: cubecl::server::Handle,
         partials_len: usize,
@@ -237,7 +237,7 @@ mod portable {
         output[slot as usize] = sum;
     }
 
-    pub fn launch_sum<R: Runtime>(
+    pub(crate) fn launch_sum<R: Runtime>(
         client: &ComputeClient<R>,
         plane_handle: cubecl::server::Handle,
         n_pixels: usize,
@@ -248,6 +248,9 @@ mod portable {
         let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
         let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
         let slot_offset = slot * (PARTIALS_PER_REDUCTION as u32);
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             thread_sum_kernel::launch_unchecked::<R>(
                 client,
@@ -260,7 +263,7 @@ mod portable {
         }
     }
 
-    pub fn launch_sum_range<R: Runtime>(
+    pub(crate) fn launch_sum_range<R: Runtime>(
         client: &ComputeClient<R>,
         plane_handle: cubecl::server::Handle,
         n_pixels: usize,
@@ -273,6 +276,9 @@ mod portable {
         let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
         let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
         let slot_offset = slot * (PARTIALS_PER_REDUCTION as u32);
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             thread_sum_range_kernel::launch_unchecked::<R>(
                 client,
@@ -287,7 +293,7 @@ mod portable {
         }
     }
 
-    pub fn launch_finalize<R: Runtime>(
+    pub(crate) fn launch_finalize<R: Runtime>(
         client: &ComputeClient<R>,
         partials_handle: cubecl::server::Handle,
         partials_len: usize,
@@ -297,6 +303,9 @@ mod portable {
     ) {
         let cube_count = CubeCount::Static(num_slots, 1, 1);
         let cube_dim = CubeDim::new_1d(1);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             finalize_sum_kernel::launch_unchecked::<R>(
                 client,
@@ -310,7 +319,7 @@ mod portable {
 }
 
 #[cfg(feature = "fast-reduction")]
-pub use fast::{launch_finalize, launch_sum, launch_sum_range};
+pub(crate) use fast::{launch_finalize, launch_sum, launch_sum_range};
 
 #[cfg(not(feature = "fast-reduction"))]
-pub use portable::{launch_finalize, launch_sum, launch_sum_range};
+pub(crate) use portable::{launch_finalize, launch_sum, launch_sum_range};

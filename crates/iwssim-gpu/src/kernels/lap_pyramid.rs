@@ -70,7 +70,7 @@ fn reflect1(i: i32, n: i32) -> i32 {
 /// decimation; pyrtools defaults to `(0,0)` start which yields
 /// "input index 2*out_idx" — we match that.
 #[cube(launch_unchecked)]
-pub fn corr_dn_horizontal_kernel(
+pub(crate) fn corr_dn_horizontal_kernel(
     src: &Array<f32>,
     dst: &mut Array<f32>,
     h: u32,
@@ -106,7 +106,7 @@ pub fn corr_dn_horizontal_kernel(
 }
 
 #[cube(launch_unchecked)]
-pub fn corr_dn_vertical_kernel(
+pub(crate) fn corr_dn_vertical_kernel(
     src: &Array<f32>,
     dst: &mut Array<f32>,
     out_h: u32,
@@ -170,7 +170,7 @@ fn reflect_expanded(i: i32, in_axis: i32) -> (bool, i32) {
 /// `out_w` may be `2*in_w` (even target) or `2*in_w − 1` (odd target).
 /// Boundary: reflect1 on the expanded axis (length `2·in_w`).
 #[cube(launch_unchecked)]
-pub fn up_conv_horizontal_kernel(
+pub(crate) fn up_conv_horizontal_kernel(
     src: &Array<f32>,
     dst: &mut Array<f32>,
     h: u32,
@@ -226,7 +226,7 @@ pub fn up_conv_horizontal_kernel(
 }
 
 #[cube(launch_unchecked)]
-pub fn up_conv_vertical_kernel(
+pub(crate) fn up_conv_vertical_kernel(
     src: &Array<f32>,
     dst: &mut Array<f32>,
     out_h: u32,
@@ -276,7 +276,7 @@ pub fn up_conv_vertical_kernel(
 /// Laplacian band from the same-level Gaussian and the upsampled
 /// next-level Gaussian.
 #[cube(launch_unchecked)]
-pub fn pointwise_sub_kernel(curr: &Array<f32>, expanded: &Array<f32>, dst: &mut Array<f32>) {
+pub(crate) fn pointwise_sub_kernel(curr: &Array<f32>, expanded: &Array<f32>, dst: &mut Array<f32>) {
     let idx = ABSOLUTE_POS;
     let n = dst.len();
     if idx >= n {

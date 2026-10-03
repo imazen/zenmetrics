@@ -11,7 +11,7 @@
 use cubecl::prelude::*;
 
 #[cube(launch_unchecked)]
-pub fn downscale_2x_plane_kernel(
+pub(crate) fn downscale_2x_plane_kernel(
     src: &Array<f32>,
     dst: &mut Array<f32>,
     src_w: u32,

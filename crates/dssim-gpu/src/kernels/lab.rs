@@ -39,7 +39,7 @@ const M_B_Z: f32 = 0.9505;
 /// Take three planar linear-RGB f32 buffers and write three planar
 /// custom-Lab f32 buffers.
 #[cube(launch_unchecked)]
-pub fn linear_to_lab_planar_kernel(
+pub(crate) fn linear_to_lab_planar_kernel(
     src_r: &Array<f32>,
     src_g: &Array<f32>,
     src_b: &Array<f32>,

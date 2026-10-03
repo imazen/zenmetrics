@@ -22,7 +22,7 @@ const TOL: f32 = 1.0e-15_f32;
 
 /// 9-neighbor case (no parent band). C_u_inv is row-major 9×9 (length 81).
 #[cube(launch_unchecked)]
-pub fn infow_no_parent_kernel(
+pub(crate) fn infow_no_parent_kernel(
     lp: &Array<f32>,
     g_buf: &Array<f32>,
     vv_buf: &Array<f32>,
@@ -170,7 +170,7 @@ pub fn infow_no_parent_kernel(
 
 /// 10-neighbor case (parent band). C_u_inv row-major 10×10 (length 100).
 #[cube(launch_unchecked)]
-pub fn infow_with_parent_kernel(
+pub(crate) fn infow_with_parent_kernel(
     lp: &Array<f32>,
     parent: &Array<f32>,
     g_buf: &Array<f32>,

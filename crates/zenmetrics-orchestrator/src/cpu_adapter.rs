@@ -293,7 +293,7 @@ impl CpuAdapter {
     /// not a backend claim — `rekey_orchestrator_columns` strips it for
     /// the CPU CLI variant.
     #[allow(dead_code)] // only called when feature = "cuda" is on (via executor.rs)
-    pub fn last_extras(&self) -> std::collections::BTreeMap<String, f64> {
+    pub(crate) fn last_extras(&self) -> std::collections::BTreeMap<String, f64> {
         #[allow(unused_mut)] // mutated only under `cpu-butter`
         let mut out = std::collections::BTreeMap::new();
         #[cfg(feature = "cpu-butter")]
@@ -308,7 +308,7 @@ impl CpuAdapter {
     /// Build a CPU adapter for `metric` at `width × height` with
     /// `params`. Returns `Err(FeatureNotEnabled)` when the matching
     /// `cpu-<metric>` feature is off in the current build.
-    pub fn new(
+    pub(crate) fn new(
         metric: MetricKind,
         width: u32,
         height: u32,
@@ -340,19 +340,19 @@ impl CpuAdapter {
 
     /// Which metric this adapter scores.
     #[allow(dead_code)]
-    pub fn metric(&self) -> MetricKind {
+    pub(crate) fn metric(&self) -> MetricKind {
         self.metric
     }
 
     /// Width in pixels.
     #[allow(dead_code)]
-    pub fn width(&self) -> u32 {
+    pub(crate) fn width(&self) -> u32 {
         self.width
     }
 
     /// Height in pixels.
     #[allow(dead_code)]
-    pub fn height(&self) -> u32 {
+    pub(crate) fn height(&self) -> u32 {
         self.height
     }
 
@@ -360,7 +360,7 @@ impl CpuAdapter {
     /// false, the worker pool's cached-ref dispatch still produces a
     /// correct score but pays the full per-call cost.
     #[allow(dead_code)] // only called when feature = "cuda" is on (via pool.rs)
-    pub fn supports_cached_ref(&self) -> bool {
+    pub(crate) fn supports_cached_ref(&self) -> bool {
         match self.state {
             #[cfg(feature = "cpu-cvvdp")]
             CpuAdapterState::Cvvdp(_) => true,
@@ -410,7 +410,7 @@ impl CpuAdapter {
     }
 
     /// One-shot compute: hand both buffers, get a score back.
-    pub fn compute(
+    pub(crate) fn compute(
         &mut self,
         ref_bytes: &[u8],
         dist_bytes: &[u8],
@@ -451,7 +451,7 @@ impl CpuAdapter {
     /// internally and `compute_with_cached_reference` recomputes from
     /// the cached buffer.
     #[allow(dead_code)] // only called when feature = "cuda" is on (via pool.rs)
-    pub fn set_reference(&mut self, ref_bytes: &[u8]) -> Result<(), CpuAdapterError> {
+    pub(crate) fn set_reference(&mut self, ref_bytes: &[u8]) -> Result<(), CpuAdapterError> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if ref_bytes.len() != expected {
             return Err(CpuAdapterError::InvalidInputSize {
@@ -552,7 +552,7 @@ impl CpuAdapter {
     /// per-crate defaults).
     #[allow(dead_code)] // only called via the strip-aware executor path
     #[allow(unused_variables)] // strip_height is unused only when no cpu-* backend feature is enabled
-    pub fn compute_strip(
+    pub(crate) fn compute_strip(
         &mut self,
         ref_bytes: &[u8],
         dist_bytes: &[u8],
@@ -691,7 +691,7 @@ impl CpuAdapter {
     /// - **dssim**: not yet wired (no upstream strip API).
     #[allow(dead_code)]
     #[allow(unused_variables)] // strip_height is unused only when no cpu-* backend feature is enabled
-    pub fn compute_with_cached_reference_strip(
+    pub(crate) fn compute_with_cached_reference_strip(
         &mut self,
         dist_bytes: &[u8],
         strip_height: u32,
@@ -834,7 +834,7 @@ impl CpuAdapter {
     /// cvvdp returns `false` (API stub delegates to full path; multi-day
     /// walker queued).
     #[allow(dead_code)]
-    pub fn supports_strip(&self) -> bool {
+    pub(crate) fn supports_strip(&self) -> bool {
         match self.state {
             #[cfg(feature = "cpu-cvvdp")]
             CpuAdapterState::Cvvdp(_) => false,
@@ -855,7 +855,7 @@ impl CpuAdapter {
     /// (or was reset by a prior `compute` on backends without cached
     /// state).
     #[allow(dead_code)] // only called when feature = "cuda" is on (via pool.rs)
-    pub fn compute_with_cached_reference(
+    pub(crate) fn compute_with_cached_reference(
         &mut self,
         dist_bytes: &[u8],
     ) -> Result<Score, CpuAdapterError> {

@@ -380,6 +380,9 @@ impl<R: Runtime> Ssim2Batch<R> {
         // T_x.O: pack-direct-to-pinned eliminates the concat+scratch
         // intermediates (saves ~2 × N_total_bytes of host writes).
         self.src_u8_batch = client.create(bytes);
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             srgb::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(
                 &client,
@@ -418,6 +421,9 @@ impl<R: Runtime> Ssim2Batch<R> {
             let curr_pl = curr.plane_stride;
             let n_curr_total = curr.n * (self.batch_size as usize);
             for ch in 0..3 {
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     downscale::downscale_2x_plane_batched_kernel::launch_unchecked::<R>(
                         &client,
@@ -496,6 +502,9 @@ impl<R: Runtime> Ssim2Batch<R> {
         //    If every channel is skip-error_map at this scale, the whole scale
         //    was already gated out at the caller, so reaching here means at
         //    least one channel is active.
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             xyb::linear_to_xyb_planar_kernel::launch_unchecked::<R>(
                 client,
@@ -515,6 +524,9 @@ impl<R: Runtime> Ssim2Batch<R> {
             if skip_error_map(mode, s, ch) {
                 continue;
             }
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 crate::pipeline::pointwise_mul_kernel::launch_unchecked::<R>(
                     client,
@@ -533,6 +545,9 @@ impl<R: Runtime> Ssim2Batch<R> {
             if skip_error_map(mode, s, ch) {
                 continue;
             }
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 error_maps::pointwise_mul_broadcast_batched_kernel::launch_unchecked::<R>(
                     client,
@@ -576,6 +591,9 @@ impl<R: Runtime> Ssim2Batch<R> {
             if skip_error_map(mode, s, ch) {
                 continue;
             }
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 transpose::transpose_batched_kernel::launch_unchecked::<R>(
                     client,
@@ -601,6 +619,9 @@ impl<R: Runtime> Ssim2Batch<R> {
             if skip_error_map(mode, s, ch) {
                 continue;
             }
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 error_maps::error_maps_broadcast_batched_kernel::launch_unchecked::<R>(
                     client,
@@ -667,6 +688,12 @@ impl<R: Runtime> Ssim2Batch<R> {
         let v = bs.v_scratch[ch].clone();
         let t = bs.t_scratch[ch].clone();
 
+        // SAFETY: `src` and the scratch/dst handle are live buffers of
+        // `n_total` floats and `plane_stride * batch_size == n_total`,
+        // per `blur_batched_pass`'s contract; each kernel launch
+        // below matches its `#[cube]` signature, every `from_raw_parts`
+        // handle is a live buffer of the passed length, and each grid
+        // covers the kernel's indexed range.
         unsafe {
             // 1. pass-0 on src.
             self.blur_batched_pass(
@@ -742,6 +769,9 @@ impl<R: Runtime> Ssim2Batch<R> {
             }
         }
         #[cfg(not(feature = "fir"))]
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             blur::blur_pass_batched_kernel::launch_unchecked::<R>(
                 client,

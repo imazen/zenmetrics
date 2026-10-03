@@ -9,7 +9,7 @@ use cubecl::prelude::*;
 /// `dst[i] = 0` for `i < dst.len()`. Run as one launch over the
 /// target's full length.
 #[cube(launch_unchecked)]
-pub fn zero_kernel(dst: &mut Array<f32>) {
+pub(crate) fn zero_kernel(dst: &mut Array<f32>) {
     let idx = ABSOLUTE_POS;
     if idx >= dst.len() {
         terminate!();

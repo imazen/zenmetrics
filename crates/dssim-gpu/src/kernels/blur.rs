@@ -25,7 +25,7 @@ const K11: f32 = 0.146_293;
 // Diagonal symmetry: K00 = K02 = K20 = K22, K01 = K10 = K12 = K21.
 
 #[cube(launch_unchecked)]
-pub fn blur_3x3_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, height: u32) {
+pub(crate) fn blur_3x3_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, height: u32) {
     let idx = ABSOLUTE_POS;
     let total = (width * height) as usize;
     if idx >= total {
@@ -38,7 +38,7 @@ pub fn blur_3x3_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, heigh
 }
 
 #[cube(launch_unchecked)]
-pub fn blur_squared_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, height: u32) {
+pub(crate) fn blur_squared_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, height: u32) {
     let idx = ABSOLUTE_POS;
     let total = (width * height) as usize;
     if idx >= total {
@@ -51,7 +51,7 @@ pub fn blur_squared_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, h
 }
 
 #[cube(launch_unchecked)]
-pub fn blur_product_kernel(
+pub(crate) fn blur_product_kernel(
     src1: &Array<f32>,
     src2: &Array<f32>,
     dst: &mut Array<f32>,

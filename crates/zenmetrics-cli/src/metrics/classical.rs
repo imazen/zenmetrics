@@ -7,7 +7,7 @@
 use crate::decode::Rgb8Image;
 
 #[derive(Clone, Copy)]
-pub enum Kind {
+pub(crate) enum Kind {
     Psnr,
     PsnrY,
     PsnrY601,
@@ -33,7 +33,7 @@ fn luma_mse(r: &Rgb8Image, d: &Rgb8Image, y: impl Fn(&[u8]) -> f64) -> f64 {
         / (r.pixels.len() / 3) as f64
 }
 
-pub fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, String> {
+pub(crate) fn score(kind: Kind, r: &Rgb8Image, d: &Rgb8Image) -> Result<f64, String> {
     if r.width != d.width || r.height != d.height || r.pixels.len() != d.pixels.len() {
         return Err("metric images must have matching dimensions".into());
     }

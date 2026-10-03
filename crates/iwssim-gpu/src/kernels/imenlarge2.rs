@@ -30,7 +30,7 @@
 use cubecl::prelude::*;
 
 #[cube(launch_unchecked)]
-pub fn imenlarge2_kernel(
+pub(crate) fn imenlarge2_kernel(
     src: &Array<f32>,
     dst: &mut Array<f32>,
     in_h: u32,

@@ -43,10 +43,10 @@
 /// Tick 584: extracted from inline duplicates that had been added in
 /// ticks 577-583. Ticks 586/600 added the 4th and 5th helpers as new
 /// lockstep pins required them.
-pub mod const_str {
+pub(crate) mod const_str {
     /// `const fn` equivalent of `s.starts_with(prefix)`, both operating on
     /// raw byte slices.
-    pub const fn starts_with(s: &[u8], prefix: &[u8]) -> bool {
+    pub(crate) const fn starts_with(s: &[u8], prefix: &[u8]) -> bool {
         if prefix.len() > s.len() {
             return false;
         }
@@ -62,7 +62,7 @@ pub mod const_str {
 
     /// `const fn` equivalent of `s.ends_with(suffix)`, both operating on
     /// raw byte slices.
-    pub const fn ends_with(s: &[u8], suffix: &[u8]) -> bool {
+    pub(crate) const fn ends_with(s: &[u8], suffix: &[u8]) -> bool {
         if suffix.len() > s.len() {
             return false;
         }
@@ -80,14 +80,14 @@ pub mod const_str {
     /// `const fn` equivalent of `a == b` for byte slices. `[u8]: Eq`
     /// isn't const-callable in stable Rust yet, but a length-check +
     /// byte-loop is. Cheap to implement on top of `starts_with`.
-    pub const fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
+    pub(crate) const fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
         a.len() == b.len() && starts_with(a, b)
     }
 
     /// `const fn` equivalent of `s.contains(needle)`, both operating on
     /// raw byte slices. O(n·m) sliding window — fine for compile-time
     /// validation of short strings.
-    pub const fn contains(s: &[u8], needle: &[u8]) -> bool {
+    pub(crate) const fn contains(s: &[u8], needle: &[u8]) -> bool {
         if needle.len() > s.len() {
             return false;
         }
@@ -117,7 +117,7 @@ pub mod const_str {
     /// jumps by `needle.len()` after each match (non-overlapping).
     /// Tick 600: used to verify count-of-substrings invariants
     /// (e.g. "LUT file contains 3 channel-LUT declarations").
-    pub const fn count(s: &[u8], needle: &[u8]) -> usize {
+    pub(crate) const fn count(s: &[u8], needle: &[u8]) -> usize {
         if needle.is_empty() || needle.len() > s.len() {
             return 0;
         }
@@ -154,18 +154,19 @@ use sha2::{Digest, Sha256};
 /// Pin label for the current cvvdp golden set. Bump in lockstep with
 /// the R2 prefix and the pycvvdp version pin in
 /// `scripts/cvvdp_goldens/requirements.txt`.
-pub const GOLDEN_VERSION: &str = "v2";
+pub(crate) const GOLDEN_VERSION: &str = "v2";
 
 /// Public R2 URL for the manifest. The bucket is the same
 /// `s3://coefficient/` that the sweep infrastructure uses; its public
 /// mirror is configured at `coefficient.r2.imazen.org`.
-pub const MANIFEST_URL: &str = "https://coefficient.r2.imazen.org/cvvdp-goldens/v2/manifest.json";
+pub(crate) const MANIFEST_URL: &str =
+    "https://coefficient.r2.imazen.org/cvvdp-goldens/v2/manifest.json";
 
 /// sha256 of the manifest, captured at upload time
 /// (`2026-09-23`, v0.5.7 reference, zenmetrics-corpus 256×256 q-grid;
 /// v1 = 2026-05-14 / v0.5.4 / `9b8638c4…`, still live, agrees to 1.4e-6 JOD).
 /// Bump alongside `GOLDEN_VERSION` when the goldens are regenerated.
-pub const MANIFEST_SHA256: &str =
+pub(crate) const MANIFEST_SHA256: &str =
     "7272e9d9d7b51525fc0a6401b992878ab4dfc316519ed2906bf404a82069636f";
 
 /// Per-crate cache-dir subdirectory name. Lives in `~/.cache/<this>/<GOLDEN_VERSION>/`
@@ -173,10 +174,10 @@ pub const MANIFEST_SHA256: &str =
 /// Tick 581: extracted as a pub const so it can be pinned in
 /// `goldens_metadata.rs` rather than duplicated as a magic string
 /// in two places.
-pub const CACHE_DIR_SUBDIR: &str = "zenmetrics-cvvdp-goldens";
+pub(crate) const CACHE_DIR_SUBDIR: &str = "zenmetrics-cvvdp-goldens";
 
 /// Returns the per-version cache directory, creating it if needed.
-pub fn cache_dir() -> PathBuf {
+pub(crate) fn cache_dir() -> PathBuf {
     let base = if let Some(dir) = std::env::var_os("XDG_CACHE_HOME") {
         PathBuf::from(dir)
     } else if let Some(home) = std::env::var_os("HOME") {
@@ -192,7 +193,7 @@ pub fn cache_dir() -> PathBuf {
 /// Fetch `name` (e.g. `"src_vs_q70.final.json"`) into the cache and
 /// return the local path. Panics on failure — meant for use in tests
 /// where the right behavior is loud failure, not silent skip.
-pub fn fetch(name: &str, sha256: &str) -> PathBuf {
+pub(crate) fn fetch(name: &str, sha256: &str) -> PathBuf {
     let local = cache_dir().join(name);
     if local.exists() {
         if let Ok(hex) = file_sha256_hex(&local)
@@ -252,7 +253,7 @@ fn sha256_hex(data: &[u8]) -> String {
 /// Panics if the fixture key is missing. Test authors should add
 /// the fixture to `bench_12mp_cuda.py` first, regenerate, then
 /// reference it here.
-pub fn pycvvdp_synth_golden_jod(fixture: &str) -> f32 {
+pub(crate) fn pycvvdp_synth_golden_jod(fixture: &str) -> f32 {
     const MANIFEST_JSON: &str =
         include_str!("../../../../../scripts/cvvdp_goldens/pycvvdp_synth_goldens.json");
     let v: serde_json::Value =
@@ -281,7 +282,7 @@ pub fn pycvvdp_synth_golden_jod(fixture: &str) -> f32 {
 /// `scripts/cvvdp_goldens/pycvvdp_dkl_chroma_shift.json`.
 /// Used by `compute_dkl_planes_matches_pycvvdp_dkl_at_chroma_shift_sentinels`
 /// to localize where the 0.117 JOD chroma_shift drift starts.
-pub struct DklSentinel {
+pub(crate) struct DklSentinel {
     pub y: u32,
     pub x: u32,
     pub ref_dkl: [f32; 3],
@@ -291,7 +292,7 @@ pub struct DklSentinel {
 /// Per-band per-channel pycvvdp Weber-contrast values at chroma_shift
 /// sentinels. Used to localize where the chroma drift sits after the
 /// DKL stage matches pycvvdp bit-identical (tick 196).
-pub struct WeberSentinel {
+pub(crate) struct WeberSentinel {
     pub y0: u32,
     pub x0: u32,
     pub yk: u32,
@@ -304,7 +305,7 @@ pub struct WeberSentinel {
     pub ref_vy: f32,
 }
 
-pub struct TpSentinel {
+pub(crate) struct TpSentinel {
     pub y0: u32,
     pub x0: u32,
     pub yk: u32,
@@ -322,13 +323,13 @@ pub struct TpSentinel {
 /// normalize=True)`). Used to localize whether the remaining 0.117
 /// JOD drift sits in the spatial pool, band/channel pools, or
 /// met2jod. See `dump_q_chroma.py`.
-pub struct QSentinel {
+pub(crate) struct QSentinel {
     pub q_a: f32,
     pub q_rg: f32,
     pub q_vy: f32,
 }
 
-pub fn pycvvdp_q_chroma_shift_band(k: usize) -> QSentinel {
+pub(crate) fn pycvvdp_q_chroma_shift_band(k: usize) -> QSentinel {
     const MANIFEST_JSON: &str =
         include_str!("../../../../../scripts/cvvdp_goldens/pycvvdp_q_chroma_shift.json");
     let v: serde_json::Value =
@@ -348,7 +349,7 @@ pub fn pycvvdp_q_chroma_shift_band(k: usize) -> QSentinel {
 /// so a parity test can feed THE SAME log_l_bkg into our
 /// `sensitivity_scalar` for an apples-to-apples CSF lookup
 /// comparison. See `dump_s_chroma.py`.
-pub struct SSentinel {
+pub(crate) struct SSentinel {
     pub y0: u32,
     pub x0: u32,
     pub yk: u32,
@@ -362,7 +363,7 @@ pub struct SSentinel {
 /// Per-band raw S values + per-pixel log_l_bkg_ref for chroma_shift.
 /// Index by pyramid level `k`. Embedded via include_str! at compile
 /// time.
-pub fn pycvvdp_s_chroma_shift_band(k: usize) -> Vec<SSentinel> {
+pub(crate) fn pycvvdp_s_chroma_shift_band(k: usize) -> Vec<SSentinel> {
     const MANIFEST_JSON: &str =
         include_str!("../../../../../scripts/cvvdp_goldens/pycvvdp_s_chroma_shift.json");
     let v: serde_json::Value =
@@ -389,7 +390,7 @@ pub fn pycvvdp_s_chroma_shift_band(k: usize) -> Vec<SSentinel> {
 /// rho-per-band axis as pycvvdp's `lpyr.band_freqs` reports it on
 /// the chroma_shift fixture. Single source of truth for the parity
 /// test: same band index → same rho on both sides.
-pub fn pycvvdp_s_chroma_shift_rho(k: usize) -> f32 {
+pub(crate) fn pycvvdp_s_chroma_shift_rho(k: usize) -> f32 {
     const MANIFEST_JSON: &str =
         include_str!("../../../../../scripts/cvvdp_goldens/pycvvdp_s_chroma_shift.json");
     let v: serde_json::Value =
@@ -402,7 +403,7 @@ pub fn pycvvdp_s_chroma_shift_rho(k: usize) -> f32 {
 /// pre-pool) values at chroma_shift sentinels. Used to localize
 /// whether the 0.117 JOD drift sits in masking-and-earlier vs in
 /// the pool / accumulation order. See `dump_d_chroma.py`.
-pub struct DSentinel {
+pub(crate) struct DSentinel {
     pub y0: u32,
     pub x0: u32,
     pub yk: u32,
@@ -414,7 +415,7 @@ pub struct DSentinel {
 
 /// Per-band D values for chroma_shift. Index by pyramid level
 /// `k`. Embedded via include_str! at compile time.
-pub fn pycvvdp_d_chroma_shift_band(k: usize) -> Vec<DSentinel> {
+pub(crate) fn pycvvdp_d_chroma_shift_band(k: usize) -> Vec<DSentinel> {
     const MANIFEST_JSON: &str =
         include_str!("../../../../../scripts/cvvdp_goldens/pycvvdp_d_chroma_shift.json");
     let v: serde_json::Value =
@@ -440,7 +441,7 @@ pub fn pycvvdp_d_chroma_shift_band(k: usize) -> Vec<DSentinel> {
 /// Per-band T_p (post-CSF, pre-masking) values for chroma_shift.
 /// T_p = weber · S · ch_gain. Used to localize whether the
 /// downstream-of-weber chroma drift sits in the CSF apply.
-pub fn pycvvdp_tp_chroma_shift_band(k: usize) -> Vec<TpSentinel> {
+pub(crate) fn pycvvdp_tp_chroma_shift_band(k: usize) -> Vec<TpSentinel> {
     const MANIFEST_JSON: &str =
         include_str!("../../../../../scripts/cvvdp_goldens/pycvvdp_tp_chroma_shift.json");
     let v: serde_json::Value =
@@ -468,7 +469,7 @@ pub fn pycvvdp_tp_chroma_shift_band(k: usize) -> Vec<TpSentinel> {
 
 /// Returns (band_index → list of sentinels) for pycvvdp's Weber
 /// pyramid at chroma_shift. Embedded via include_str! at compile time.
-pub fn pycvvdp_weber_chroma_shift_band(k: usize) -> Vec<WeberSentinel> {
+pub(crate) fn pycvvdp_weber_chroma_shift_band(k: usize) -> Vec<WeberSentinel> {
     const MANIFEST_JSON: &str =
         include_str!("../../../../../scripts/cvvdp_goldens/pycvvdp_weber_chroma_shift.json");
     let v: serde_json::Value =
@@ -494,7 +495,7 @@ pub fn pycvvdp_weber_chroma_shift_band(k: usize) -> Vec<WeberSentinel> {
         .collect()
 }
 
-pub fn pycvvdp_dkl_chroma_shift_sentinels() -> Vec<DklSentinel> {
+pub(crate) fn pycvvdp_dkl_chroma_shift_sentinels() -> Vec<DklSentinel> {
     const MANIFEST_JSON: &str =
         include_str!("../../../../../scripts/cvvdp_goldens/pycvvdp_dkl_chroma_shift.json");
     let v: serde_json::Value =
@@ -530,7 +531,7 @@ pub fn pycvvdp_dkl_chroma_shift_sentinels() -> Vec<DklSentinel> {
         .collect()
 }
 
-pub fn v1_corpus_jod_golden(q: u32) -> f32 {
+pub(crate) fn v1_corpus_jod_golden(q: u32) -> f32 {
     const MANIFEST_JSON: &str =
         include_str!("../../../../../scripts/cvvdp_goldens/v1_corpus_jods.json");
     let v: serde_json::Value =
@@ -563,11 +564,11 @@ pub fn v1_corpus_jod_golden(q: u32) -> f32 {
 /// already gated on the same `any(cuda, wgpu, hip)` cfg, so the
 /// missing-symbol error if someone forgets the gate surfaces clearly.
 #[cfg(feature = "cuda")]
-pub type Backend = cubecl::cuda::CudaRuntime;
+pub(crate) type Backend = cubecl::cuda::CudaRuntime;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-pub type Backend = cubecl::wgpu::WgpuRuntime;
+pub(crate) type Backend = cubecl::wgpu::WgpuRuntime;
 #[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-pub type Backend = cubecl::hip::HipRuntime;
+pub(crate) type Backend = cubecl::hip::HipRuntime;
 
 /// Open a PNG/JPEG at `path`, decode to RGB8, and return the raw
 /// bytes. Asserts the decoded dimensions match the expected
@@ -578,7 +579,7 @@ pub type Backend = cubecl::hip::HipRuntime;
 ///
 /// Accepts `&Path` so callers can pass either `&PathBuf` (auto-
 /// derefs) or `&Path` directly. Tick 268 widened from `&PathBuf`.
-pub fn load_rgb_bytes(path: &std::path::Path, w: u32, h: u32) -> Vec<u8> {
+pub(crate) fn load_rgb_bytes(path: &std::path::Path, w: u32, h: u32) -> Vec<u8> {
     let img = image::ImageReader::open(path)
         .unwrap_or_else(|e| panic!("open {}: {e}", path.display()))
         .decode()
@@ -598,7 +599,7 @@ pub fn load_rgb_bytes(path: &std::path::Path, w: u32, h: u32) -> Vec<u8> {
 /// 12mp cold, and stage probes). Callers that need a (ref, dist)
 /// fixture pair pass this through their own per-fixture dist builder
 /// (saturating_sub / clamp / pseudo-blur / etc.).
-pub fn synth_pair_ref(w: usize, h: usize) -> Vec<u8> {
+pub(crate) fn synth_pair_ref(w: usize, h: usize) -> Vec<u8> {
     let n = w * h * 3;
     let mut b = vec![0u8; n];
     for y in 0..h {
@@ -622,7 +623,7 @@ pub fn synth_pair_ref(w: usize, h: usize) -> Vec<u8> {
 /// closure; tick 279 made it a standalone helper so callers can
 /// pair it with either `synth_pair_ref` or
 /// `synth_pair_odd_dim_ref`.
-pub fn apply_offset_dist(ref_bytes: &[u8]) -> Vec<u8> {
+pub(crate) fn apply_offset_dist(ref_bytes: &[u8]) -> Vec<u8> {
     ref_bytes
         .chunks_exact(3)
         .flat_map(|p| {
@@ -637,7 +638,7 @@ pub fn apply_offset_dist(ref_bytes: &[u8]) -> Vec<u8> {
 
 /// The zenmetrics-api `cancel.rs` pair at any size: two unrelated byte
 /// patterns, so every band carries a large D (JOD ≈ 2–5 at 256²–4096²).
-pub fn noise_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
+pub(crate) fn noise_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
     let n = w * h * 3;
     let r = (0..n)
         .map(|i| ((i as u64).wrapping_mul(7919) & 0xFF) as u8)
@@ -652,7 +653,7 @@ pub fn noise_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
 /// canonical offset dist. Most call sites that want both halves
 /// use this; sites that already hold a ref buffer use
 /// `apply_offset_dist` directly. Tick 278.
-pub fn synth_pair_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
+pub(crate) fn synth_pair_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
     let r = synth_pair_ref(w, h);
     let d = apply_offset_dist(&r);
     (r, d)
@@ -663,7 +664,7 @@ pub fn synth_pair_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
 /// `bench_12mp_cuda.py::synth_pair_odd_dim` uses for the 73×91
 /// pycvvdp golden. Tick 280 — pairs with
 /// `synth_pair_with_offset_dist` for the alternate ref pattern.
-pub fn synth_pair_odd_dim_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
+pub(crate) fn synth_pair_odd_dim_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
     let r = synth_pair_odd_dim_ref(w, h);
     let d = apply_offset_dist(&r);
     (r, d)
@@ -680,7 +681,7 @@ pub fn synth_pair_odd_dim_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<
 /// Tick 259 dedup — was hand-inlined across 10 sites in
 /// `tests/pipeline_color.rs`, plus `tests/cpu_backend.rs` (synth_pair
 /// helper) and `examples/manifest_parity_probe.rs` (synth_odd_pair).
-pub fn synth_pair_odd_dim_ref(w: usize, h: usize) -> Vec<u8> {
+pub(crate) fn synth_pair_odd_dim_ref(w: usize, h: usize) -> Vec<u8> {
     let n = w * h * 3;
     let mut b = vec![0u8; n];
     for y in 0..h {
@@ -703,7 +704,7 @@ pub fn synth_pair_odd_dim_ref(w: usize, h: usize) -> Vec<u8> {
 /// `scripts/cvvdp_goldens/build_goldens.py` rerun + JSON bump that
 /// adds (e.g.) `q = 2` now propagates to every manifest-parity test
 /// without hand-editing.
-pub fn v1_corpus_qs() -> Vec<u32> {
+pub(crate) fn v1_corpus_qs() -> Vec<u32> {
     const MANIFEST_JSON: &str =
         include_str!("../../../../../scripts/cvvdp_goldens/v1_corpus_jods.json");
     let v: serde_json::Value =

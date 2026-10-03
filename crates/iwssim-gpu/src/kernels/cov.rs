@@ -27,7 +27,7 @@ use cubecl::prelude::*;
 /// strip's body iw row range so per-strip cov contributions don't
 /// overlap across strips.
 #[cube(launch_unchecked)]
-pub fn cov_accum_no_parent_kernel(
+pub(crate) fn cov_accum_no_parent_kernel(
     lp: &Array<f32>,
     partials: &mut Array<f32>,
     h: u32,
@@ -317,7 +317,7 @@ pub fn cov_accum_no_parent_kernel(
 /// `py_start` / `py_end` define an inclusive / exclusive iw row range
 /// to sum over. Same semantics as [`cov_accum_no_parent_kernel`].
 #[cube(launch_unchecked)]
-pub fn cov_accum_with_parent_kernel(
+pub(crate) fn cov_accum_with_parent_kernel(
     lp: &Array<f32>,
     parent: &Array<f32>,
     partials: &mut Array<f32>,
@@ -679,7 +679,7 @@ pub fn cov_accum_with_parent_kernel(
 /// number of products per thread). Per-cell f64 cells cost 800 bytes
 /// per scale (5×800 = 4 KB total) — negligible.
 #[cube(launch_unchecked)]
-pub fn cov_finalize_kernel(partials: &Array<f32>, cu: &mut Array<f64>, n_threads: u32) {
+pub(crate) fn cov_finalize_kernel(partials: &Array<f32>, cu: &mut Array<f64>, n_threads: u32) {
     let cell = CUBE_POS_X;
     let n_t = n_threads as usize;
     let base = (cell as usize) * n_t;

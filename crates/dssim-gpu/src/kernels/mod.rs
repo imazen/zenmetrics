@@ -14,9 +14,9 @@
 //!    `abs_diff` kernel for the per-scale MAD step.
 //! 6. `reduction` — per-scale Σ, then Σ|x - avg|. Two scalars per scale.
 
-pub mod blur;
-pub mod downscale;
-pub mod lab;
-pub mod reduction;
-pub mod srgb;
-pub mod ssim;
+pub(crate) mod blur;
+pub(crate) mod downscale;
+pub(crate) mod lab;
+pub(crate) mod reduction;
+pub(crate) mod srgb;
+pub(crate) mod ssim;

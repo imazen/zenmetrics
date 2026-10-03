@@ -49,6 +49,8 @@ extern crate std;
 
 use alloc::vec::Vec;
 
+// Without `_dev` the `pub` items are unreachable; `dev` re-exports them then.
+#[cfg_attr(not(feature = "_dev"), allow(unreachable_pub))]
 mod kernel;
 #[macro_use]
 mod chroma_gradient;

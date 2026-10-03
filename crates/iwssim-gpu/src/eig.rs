@@ -28,22 +28,22 @@ const EIG_FLOOR: f64 = 1.0e-30;
 
 /// Result of `decompose_and_invert`. `lambda` and `c_u_inv` are sized
 /// for the caller's `n` (≤ 10), with trailing entries unused.
-pub struct EigResult {
+pub(crate) struct EigResult {
     /// PSD-cleaned eigenvalues — `λ_k` in the paper's eq (28).
-    pub lambda: [f32; 10],
+    pub(crate) lambda: [f32; 10],
     /// `N²` inverse of the PSD-cleaned `C_u`, row-major.
-    pub c_u_inv: [f32; 100],
+    pub(crate) c_u_inv: [f32; 100],
     /// Active dimension. `1..=10`. Carried for callers / parity checks;
     /// the GPU upload path reads the fixed-size arrays directly.
     #[allow(dead_code)]
-    pub n: usize,
+    pub(crate) n: usize,
 }
 
 /// `c_u` is row-major `n × n`, with `n ∈ {9, 10}` for IW-SSIM. The
 /// matrix must be symmetric (we read both halves but assume
 /// `c_u[i, j] == c_u[j, i]`). Output is suitable for direct upload as
 /// `f32` arrays.
-pub fn decompose_and_invert(c_u: &[f64], n: usize) -> EigResult {
+pub(crate) fn decompose_and_invert(c_u: &[f64], n: usize) -> EigResult {
     assert!(n <= 10);
     assert_eq!(c_u.len(), n * n);
 

@@ -506,7 +506,7 @@ fn up_conv64(
 
 /// A single pyramid plane.
 #[derive(Debug, Clone)]
-pub struct Band3 {
+pub(super) struct Band3 {
     /// Width in pixels.
     pub width: usize,
     /// Height in pixels.
@@ -522,7 +522,7 @@ pub struct Band3 {
 /// [`Self::band`] applies the `2^-b` normalisation upstream's `get_band`
 /// uses; [`Self::set_band`] scales by `2^b` on write, matching `set_band`.
 #[derive(Debug, Clone)]
-pub struct Spyr0 {
+pub(super) struct Spyr0 {
     bands: Vec<Band3>,
     /// `2^-(b+1) · ppd` per band — upstream `get_freqs`.
     freqs: Vec<f64>,
@@ -535,7 +535,7 @@ impl Spyr0 {
     /// rule, where 13 is the `lofilt` size. Returns `None` when the image is
     /// too small for even one level (min dimension < 13).
     #[must_use]
-    pub fn decompose(image: &[f64], width: usize, height: usize, ppd: f64) -> Option<Self> {
+    pub(super) fn decompose(image: &[f64], width: usize, height: usize, ppd: f64) -> Option<Self> {
         assert_eq!(image.len(), width * height, "spyr0: size");
         let max_ht = max_pyr_height(width, height, 13);
         let levels = (ppd.log2().ceil() as i64 - 2).min(max_ht as i64);
@@ -561,32 +561,32 @@ impl Spyr0 {
 
     /// Number of bands (`levels + 2`).
     #[must_use]
-    pub fn band_count(&self) -> usize {
+    pub(super) fn band_count(&self) -> usize {
         self.bands.len()
     }
 
     /// Band frequencies in cycles/degree, one per band.
     #[must_use]
-    pub fn freqs(&self) -> &[f64] {
+    pub(super) fn freqs(&self) -> &[f64] {
         &self.freqs
     }
 
     /// `(width, height)` of band `b`.
     #[must_use]
-    pub fn band_dims(&self, b: usize) -> (usize, usize) {
+    pub(super) fn band_dims(&self, b: usize) -> (usize, usize) {
         (self.bands[b].width, self.bands[b].height)
     }
 
     /// Band `b`'s coefficients, normalised by `2^-b` (upstream `get_band`).
     #[must_use]
-    pub fn band(&self, b: usize) -> Vec<f64> {
+    pub(super) fn band(&self, b: usize) -> Vec<f64> {
         let norm = 2f64.powi(b as i32);
         self.bands[b].data.iter().map(|&v| v / norm).collect()
     }
 
     /// Write `data` (already in the normalised domain) into band `b`,
     /// storing `data · 2^b` (upstream `set_band`).
-    pub fn set_band(&mut self, b: usize, data: &[f64]) {
+    pub(super) fn set_band(&mut self, b: usize, data: &[f64]) {
         assert_eq!(data.len(), self.bands[b].data.len(), "set_band size");
         let norm = 2f64.powi(b as i32);
         for (d, &v) in self.bands[b].data.iter_mut().zip(data) {
@@ -606,7 +606,7 @@ impl Spyr0 {
     /// the last bandpass level and the low-pass) to build the masking
     /// transform.
     #[must_use]
-    pub fn reconstruct(&self, levs: &[usize]) -> Vec<f64> {
+    pub(super) fn reconstruct(&self, levs: &[usize]) -> Vec<f64> {
         let (w0, h0) = self.band_dims(0);
         let n_levels = self.bands.len() - 2; // H
         let lowpass_idx = self.bands.len() - 1;

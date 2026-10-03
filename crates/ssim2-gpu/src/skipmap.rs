@@ -16,10 +16,10 @@ use crate::NUM_SCALES;
 
 /// Weight magnitude below which the cell is considered "small" under
 /// the `Fast` mode.
-pub const FAST_THRESHOLD: f64 = 1.0e-3;
+pub(crate) const FAST_THRESHOLD: f64 = 1.0e-3;
 /// Weight magnitude below which the cell is considered "small" under
 /// the `Faster` mode.
-pub const FASTER_THRESHOLD: f64 = 1.0e-2;
+pub(crate) const FASTER_THRESHOLD: f64 = 1.0e-2;
 
 /// Skip-map mode selector. Default is `Faster`, matching the IWAIT
 /// 2026 finding that all four modes hit identical SROCC on real
@@ -69,7 +69,7 @@ impl Ssim2Mode {
 /// `i = ((c * NUM_SCALES + scale) * 2 + n) * 3 + map`, where
 /// `c ∈ {0=X, 1=Y, 2=B}`, `scale ∈ 0..6`, `n ∈ {0=L1, 1=L4}`,
 /// `map ∈ {0=DSSIM, 1=artifact, 2=detailloss}`.
-pub const WEIGHTS: [f64; 108] = [
+pub(crate) const WEIGHTS: [f64; 108] = [
     0.0,
     0.000_737_660_670_740_658_6,
     0.0,
@@ -186,7 +186,12 @@ pub const WEIGHTS: [f64; 108] = [
 /// `norm ∈ 0..2` (0 = L1, 1 = L4), `map_type ∈ 0..3` (0 = DSSIM,
 /// 1 = artifact, 2 = detailloss).
 #[inline]
-pub const fn weight_index(channel: usize, scale: usize, norm: usize, map_type: usize) -> usize {
+pub(crate) const fn weight_index(
+    channel: usize,
+    scale: usize,
+    norm: usize,
+    map_type: usize,
+) -> usize {
     ((channel * NUM_SCALES + scale) * 2 + norm) * 3 + map_type
 }
 
@@ -199,7 +204,12 @@ pub const fn weight_index(channel: usize, scale: usize, norm: usize, map_type: u
 /// This is the **launch-level** skip predicate used by `Ssim2::compute`
 /// and `Ssim2::compute_with_reference`.
 #[inline]
-pub fn skip_reduction(mode: Ssim2Mode, scale: usize, channel: usize, map_type: usize) -> bool {
+pub(crate) fn skip_reduction(
+    mode: Ssim2Mode,
+    scale: usize,
+    channel: usize,
+    map_type: usize,
+) -> bool {
     if matches!(mode, Ssim2Mode::Full) {
         return false;
     }
@@ -219,7 +229,7 @@ pub fn skip_reduction(mode: Ssim2Mode, scale: usize, channel: usize, map_type: u
 /// in which case the upstream `error_maps_kernel` for that channel
 /// at that scale is also unneeded.
 #[inline]
-pub fn skip_error_map(mode: Ssim2Mode, scale: usize, channel: usize) -> bool {
+pub(crate) fn skip_error_map(mode: Ssim2Mode, scale: usize, channel: usize) -> bool {
     (0..3).all(|m| skip_reduction(mode, scale, channel, m))
 }
 
@@ -228,7 +238,7 @@ pub fn skip_error_map(mode: Ssim2Mode, scale: usize, channel: usize) -> bool {
 /// scale (XYB, products, blurs, transposes, error maps, reductions)
 /// can be elided. Currently true only for scale 5 under Faster mode.
 #[inline]
-pub fn skip_scale(mode: Ssim2Mode, scale: usize) -> bool {
+pub(crate) fn skip_scale(mode: Ssim2Mode, scale: usize) -> bool {
     (0..3).all(|c| skip_error_map(mode, scale, c))
 }
 
@@ -238,7 +248,7 @@ pub fn skip_scale(mode: Ssim2Mode, scale: usize) -> bool {
 // crate's own tests/benches (separate compile units) so the lib build
 // sees them unused.
 #[allow(dead_code)]
-pub fn count_skipped_reductions(mode: Ssim2Mode, n_scales: usize) -> usize {
+pub(crate) fn count_skipped_reductions(mode: Ssim2Mode, n_scales: usize) -> usize {
     let mut n = 0;
     for s in 0..n_scales {
         for c in 0..3 {
@@ -255,7 +265,7 @@ pub fn count_skipped_reductions(mode: Ssim2Mode, n_scales: usize) -> usize {
 /// Number of `error_maps_kernel` launches saved per `compute()` at
 /// this mode.
 #[allow(dead_code)]
-pub fn count_skipped_error_maps(mode: Ssim2Mode, n_scales: usize) -> usize {
+pub(crate) fn count_skipped_error_maps(mode: Ssim2Mode, n_scales: usize) -> usize {
     let mut n = 0;
     for s in 0..n_scales {
         for c in 0..3 {
@@ -269,7 +279,7 @@ pub fn count_skipped_error_maps(mode: Ssim2Mode, n_scales: usize) -> usize {
 
 /// Number of scales fully skippable at this mode.
 #[allow(dead_code)]
-pub fn count_skipped_scales(mode: Ssim2Mode, n_scales: usize) -> usize {
+pub(crate) fn count_skipped_scales(mode: Ssim2Mode, n_scales: usize) -> usize {
     (0..n_scales).filter(|&s| skip_scale(mode, s)).count()
 }
 

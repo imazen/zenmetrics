@@ -59,6 +59,8 @@
 extern crate alloc;
 
 pub mod daala;
+// Without `_dev` the `pub` items are unreachable; `dev` re-exports them then.
+#[cfg_attr(not(feature = "_dev"), allow(unreachable_pub))]
 mod kernel;
 
 /// Per-tier entry points for tier-parity tests and disassembly. Not API.

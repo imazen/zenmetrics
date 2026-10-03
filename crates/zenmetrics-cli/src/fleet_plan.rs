@@ -47,9 +47,9 @@ use crate::sweep::encode::CodecKind;
 
 /// One source-image size in the sweep (`WIDTHxHEIGHT`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Size {
-    pub width: u32,
-    pub height: u32,
+pub(crate) struct Size {
+    pub(crate) width: u32,
+    pub(crate) height: u32,
 }
 
 impl std::str::FromStr for Size {
@@ -118,7 +118,7 @@ const DEFAULT_SIZES: &[Size] = &[
 ];
 
 #[derive(Parser, Debug)]
-pub struct FleetPlanArgs {
+pub(crate) struct FleetPlanArgs {
     /// Source-image sizes to plan for, each `WIDTHxHEIGHT` (repeat or comma-
     /// separate). Defaults to the tiny/small/medium/large sweep buckets
     /// (64², 256², 1024², 4096²).
@@ -402,7 +402,7 @@ fn codec_encode_estimate(
 
 /// Run `fleet-plan`: build per-cell costs, aggregate, print the
 /// recommendation.
-pub fn run(args: FleetPlanArgs) -> Result<(), Box<dyn Error>> {
+pub(crate) fn run(args: FleetPlanArgs) -> Result<(), Box<dyn Error>> {
     let sizes: Vec<Size> = if args.sizes.is_empty() {
         DEFAULT_SIZES.to_vec()
     } else {

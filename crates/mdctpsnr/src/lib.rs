@@ -245,6 +245,10 @@ mod libmvec {
     #[target_feature(enable = "avx2")]
     unsafe fn expf8(x: &[f32; 8]) -> [f32; 8] {
         let r: __m256;
+        // SAFETY: `x` points to 8 readable `f32` (one ymmword for the vmovups);
+        // `_ZGVdN8v_expf` is glibc's vector-ABI `expf` (ymm0 in, ymm0 out) and
+        // `clobber_abi("C")` declares the call's register clobbers. AVX2 is
+        // required by this fn's `#[target_feature]` contract.
         unsafe {
             core::arch::asm!(
                 "vmovups ymm0, ymmword ptr [{x}]",
@@ -255,12 +259,13 @@ mod libmvec {
                 clobber_abi("C"),
             );
         }
+        // SAFETY: `__m256` and `[f32; 8]` have identical layout.
         unsafe { core::mem::transmute::<__m256, [f32; 8]>(r) }
     }
 
     /// `Pooling::MeasureInBand` with the AVX2 vector `expf`: 8-lane chunks,
     /// `err³·√err` per lane, lanes with `err ≤ 0` keep their errorline value.
-    pub fn measure_in_band(
+    pub(crate) fn measure_in_band(
         refline: &[f32],
         dstline: &[f32],
         refmask: &[f32],
@@ -274,6 +279,8 @@ mod libmvec {
         }
         let n = errorline.len();
         let chunks = n.div_ceil(8);
+        // SAFETY: AVX2 was detected above, so `expf8`'s target-feature
+        // requirement holds for every call in this loop.
         unsafe {
             for ch in 0..chunks {
                 let i = ch * 8;
@@ -311,6 +318,10 @@ mod libmvec {
     #[target_feature(enable = "avx2")]
     unsafe fn powf8(x: &[f32; 8], y: &[f32; 8]) -> [f32; 8] {
         let r: __m256;
+        // SAFETY: `x` and `y` each point to 8 readable `f32` (one ymmword per
+        // vmovups); `_ZGVdN8vv_powf` is glibc's vector-ABI `powf` (ymm0, ymm1
+        // in, ymm0 out) and `clobber_abi("C")` declares the call's register
+        // clobbers. AVX2 is required by this fn's `#[target_feature]` contract.
         unsafe {
             core::arch::asm!(
                 "vmovups ymm0, ymmword ptr [{x}]",
@@ -330,7 +341,7 @@ mod libmvec {
     /// `mapped[i] = |in[i]|·vis` raised to `e`, matching the reference's
     /// loop structure: full 8-lane vector chunks, a 4-lane epilogue chunk
     /// (`_ZGVbN4vv_powf`, bit-identical per lane), scalar `powf` tail <4.
-    pub fn powf_mapped(out: &mut [f32], inp: &[f32], vis: f32, e: f32) {
+    pub(crate) fn powf_mapped(out: &mut [f32], inp: &[f32], vis: f32, e: f32) {
         let n = out.len();
         if !std::arch::is_x86_feature_detected!("avx2") {
             for (o, &v) in out.iter_mut().zip(inp) {

@@ -22,19 +22,19 @@ use std::path::PathBuf;
 const MIN_DIM: u32 = 64;
 
 #[derive(clap::Args, Debug)]
-pub struct SizeInvarianceArgs {
+pub(crate) struct SizeInvarianceArgs {
     #[arg(long, default_value = "/mnt/v/zen/size-invariance-corpus/corpus")]
-    pub corpus: PathBuf,
+    pub(crate) corpus: PathBuf,
     /// `downsample-pair` (default) or `encode-per-size`.
     #[arg(long, default_value = "downsample-pair")]
-    pub mode: String,
+    pub(crate) mode: String,
     /// Min-dim floor for the invariant-region drift gate (smaller sizes are
     /// reported via min_px but excluded from the gate — degenerate).
     #[arg(long, default_value_t = 8)]
-    pub floor: u32,
+    pub(crate) floor: u32,
     /// Base square size to downsample from (downsample-pair mode).
     #[arg(long, default_value_t = 256)]
-    pub base: u32,
+    pub(crate) base: u32,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -165,7 +165,7 @@ fn square_sizes() -> Vec<u32> {
     d
 }
 
-pub fn run(args: &SizeInvarianceArgs) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn run(args: &SizeInvarianceArgs) -> Result<(), Box<dyn std::error::Error>> {
     let images: Vec<String> = std::fs::read_dir(&args.corpus)?
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_dir())

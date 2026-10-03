@@ -2812,6 +2812,9 @@ impl<R: Runtime> Cvvdp<R> {
     /// then contributes 0 (as it would have to the old atomic pool)
     /// instead of the previous call's value.
     fn _zero_pool_rows(&self) {
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             fill_f32_kernel::launch::<R>(
                 &self.client,
@@ -2850,6 +2853,9 @@ impl<R: Runtime> Cvvdp<R> {
             "pool rows out of source plane"
         );
         let base = self.pool_row_base(k) + band_row0;
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             pool_rows_3ch_kernel::launch::<R>(
                 &self.client,
@@ -2877,6 +2883,9 @@ impl<R: Runtime> Cvvdp<R> {
     fn _finalize_pool_rows(&self) {
         let n_slots = self.n_levels as usize * N_CHANNELS;
         let max_rows = self.gauss_ref.iter().map(|l| l.h).max().unwrap_or(1);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             pool_rows_finalize_kernel::launch::<R>(
                 &self.client,
@@ -3131,6 +3140,9 @@ impl<R: Runtime> Cvvdp<R> {
             let n_view = n_strip + sh as usize;
 
             let cube_count = cube_count_1d((n_strip as u32).div_ceil(64));
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 srgb_to_dkl_shifted_kernel::launch::<R>(
                     &self.client,
@@ -3290,6 +3302,9 @@ impl<R: Runtime> Cvvdp<R> {
         let cube_count = cube_count_1d((n0 as u32).div_ceil(64));
         let display = self.params.display;
         let m = display.primaries.linear_rgb_to_dkl();
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             linear_rgb_planes_to_dkl_kernel::launch::<R>(
                 &self.client,
@@ -3619,6 +3634,9 @@ impl<R: Runtime> Cvvdp<R> {
             for c in 0..N_CHANNELS {
                 let src = self.gauss_ref[k - 1].planes[c].clone();
                 let dst = self.gauss_ref[k].planes[c].clone();
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     downscale_tiled_kernel::launch::<R>(
                         &self.client,
@@ -3673,6 +3691,9 @@ impl<R: Runtime> Cvvdp<R> {
                 for c in 0..N_CHANNELS {
                     let src = self.gauss_ref[k - 1].planes[c].clone();
                     let (dst_strip, dst_sh) = aligned_view(&self.gauss_ref[k].planes[c], byte_off);
+                    // SAFETY: launch args match the `#[cube]` signature; every
+                    // `from_raw_parts` handle is a live buffer of the passed length
+                    // and the grid covers the kernel's indexed range.
                     unsafe {
                         downscale_strip_shifted_kernel::launch::<R>(
                             &self.client,
@@ -3823,6 +3844,9 @@ impl<R: Runtime> Cvvdp<R> {
                 let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
                 let vscratch_a_strip = scratch.vscratch_a.clone().offset_start(byte_off_v);
                 let l_bkg_fine_strip = scratch.l_bkg_fine.clone().offset_start(byte_off_fine);
+                // SAFETY: each launch's args match its `#[cube]` signature;
+                // every `from_raw_parts` handle is a live buffer of the passed
+                // length and each grid covers the kernel's indexed range.
                 unsafe {
                     upscale_v_strip_shifted_kernel::launch::<R>(
                         &self.client,
@@ -3919,6 +3943,9 @@ impl<R: Runtime> Cvvdp<R> {
                                 sh_f,
                             )
                         };
+                    // SAFETY: each launch's args match its `#[cube]` signature;
+                    // every `from_raw_parts` handle is a live buffer of the passed
+                    // length and each grid covers the kernel's indexed range.
                     unsafe {
                         upscale_v_strip_shifted_kernel::launch::<R>(
                             &self.client,
@@ -4069,6 +4096,9 @@ impl<R: Runtime> Cvvdp<R> {
                 };
                 let _ = use_phase1b_upsc;
 
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     subtract_weber_3ch_strip_shifted_kernel::launch::<R>(
                         &self.client,
@@ -4224,6 +4254,9 @@ impl<R: Runtime> Cvvdp<R> {
                 let count_sub = cube_count_1d((n_fine as u32).div_ceil(64));
                 let n_coarse = (coarse_w * coarse_h) as usize;
 
+                // SAFETY: each launch's args match its `#[cube]` signature;
+                // every `from_raw_parts` handle is a live buffer of the passed
+                // length and each grid covers the kernel's indexed range.
                 unsafe {
                     upscale_v_kernel::launch::<R>(
                         &self.client,
@@ -4668,6 +4701,9 @@ impl<R: Runtime> Cvvdp<R> {
             // `_run_d_bands_band_loop`).
             let log_l_bkg_h = if is_baseband {
                 let fill_count = cube_count_1d((n_px as u32).div_ceil(64));
+                // SAFETY: each launch's args match its `#[cube]` signature;
+                // every `from_raw_parts` handle is a live buffer of the passed
+                // length and each grid covers the kernel's indexed range.
                 unsafe {
                     fill_f32_kernel::launch::<R>(
                         &self.client,
@@ -4689,6 +4725,9 @@ impl<R: Runtime> Cvvdp<R> {
             let t_p_rg_h = self.d_bands_transient.t_p_ref[1].clone();
             let t_p_vy_h = self.d_bands_transient.t_p_ref[2].clone();
 
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 csf_apply_3ch_kernel::launch::<R>(
                     &self.client,
@@ -4907,6 +4946,9 @@ impl<R: Runtime> Cvvdp<R> {
                 let l_bkg_fine = scratch.l_bkg_fine.clone();
                 let vscratch_a = scratch.vscratch_a.clone();
                 let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
+                // SAFETY: each launch's args match its `#[cube]` signature;
+                // every `from_raw_parts` handle is a live buffer of the passed
+                // length and each grid covers the kernel's indexed range.
                 unsafe {
                     upscale_v_kernel::launch::<R>(
                         &self.client,
@@ -4946,6 +4988,9 @@ impl<R: Runtime> Cvvdp<R> {
                     let coarse = self.gauss_ref[k + 1].planes[c].clone();
                     let vscratch_c = scratch.vscratch_c[c].clone();
                     let upscaled_c = upscaled_c_full[c].clone();
+                    // SAFETY: each launch's args match its `#[cube]` signature;
+                    // every `from_raw_parts` handle is a live buffer of the passed
+                    // length and each grid covers the kernel's indexed range.
                     unsafe {
                         upscale_v_kernel::launch::<R>(
                             &self.client,
@@ -4983,6 +5028,9 @@ impl<R: Runtime> Cvvdp<R> {
                 let band_a = bands_dest[k].planes[0].clone();
                 let band_rg = bands_dest[k].planes[1].clone();
                 let band_vy = bands_dest[k].planes[2].clone();
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     subtract_weber_3ch_kernel::launch::<R>(
                         &self.client,
@@ -5036,6 +5084,9 @@ impl<R: Runtime> Cvvdp<R> {
         let band_rg = bands_dest[last].planes[1].clone();
         let band_vy = bands_dest[last].planes[2].clone();
         let baseband_count = cube_count_1d((baseband_n as u32).div_ceil(64));
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             baseband_divide_3ch_kernel::launch::<R>(
                 &self.client,
@@ -5327,6 +5378,9 @@ impl<R: Runtime> Cvvdp<R> {
             let t_log_upload = std::time::Instant::now();
             let log_l_bkg_h = if is_baseband {
                 let fill_count = cube_count_1d((n_px as u32).div_ceil(64));
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     fill_f32_kernel::launch::<R>(
                         &self.client,
@@ -5454,6 +5508,9 @@ impl<R: Runtime> Cvvdp<R> {
                     band_mul,
                 )?;
             } else {
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     csf_apply_6ch_kernel::launch::<R>(
                         &self.client,
@@ -5516,6 +5573,9 @@ impl<R: Runtime> Cvvdp<R> {
                 );
                 let d_h: [cubecl::server::Handle; 3] =
                     [d_full[0].clone(), d_full[1].clone(), d_full[2].clone()];
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     diff_abs_3ch_kernel::launch::<R>(
                         &self.client,
@@ -5576,6 +5636,9 @@ impl<R: Runtime> Cvvdp<R> {
                 // `_band_loop_ref_handles` above; the masking chain
                 // consumes the same t_p_ref / t_p_dis handles regardless.
                 let any_strip_mode = self.strip_config.is_some();
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     if use_blur && any_strip_mode {
                         let m_raw_h: [cubecl::server::Handle; 3] = [
@@ -6328,6 +6391,9 @@ impl<R: Runtime> Cvvdp<R> {
             .l_bkg_fine
             .clone()
             .offset_start(byte_off_fine_window);
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             upscale_v_strip_shifted_kernel::launch::<R>(
                 &self.client,
@@ -6378,6 +6444,9 @@ impl<R: Runtime> Cvvdp<R> {
             let vscratch_c_strip = scratch.vscratch_c[c]
                 .clone()
                 .offset_start(byte_off_v_window);
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 upscale_v_strip_shifted_kernel::launch::<R>(
                     &self.client,
@@ -6426,6 +6495,9 @@ impl<R: Runtime> Cvvdp<R> {
         let fine_a_full = self.gauss_ref[k].planes[0].clone();
         let fine_rg_full = self.gauss_ref[k].planes[1].clone();
         let fine_vy_full = self.gauss_ref[k].planes[2].clone();
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             subtract_weber_3ch_strip_shifted_kernel::launch::<R>(
                 &self.client,
@@ -6537,6 +6609,9 @@ impl<R: Runtime> Cvvdp<R> {
                 t_p_dis_h[2].clone().offset_start(byte_off_fine_window),
             )
         };
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             csf_apply_6ch_shifted_kernel::launch::<R>(
                 &self.client,
@@ -6709,6 +6784,9 @@ impl<R: Runtime> Cvvdp<R> {
             .l_bkg_fine
             .clone()
             .offset_start(byte_off_fine_window);
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             upscale_v_strip_kernel::launch::<R>(
                 &self.client,
@@ -6746,6 +6824,9 @@ impl<R: Runtime> Cvvdp<R> {
             let vscratch_c_strip = scratch.vscratch_c[c]
                 .clone()
                 .offset_start(byte_off_v_window);
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 upscale_v_strip_kernel::launch::<R>(
                     &self.client,
@@ -6787,6 +6868,9 @@ impl<R: Runtime> Cvvdp<R> {
         let fine_a_full = gauss_alt[k].planes[0].clone();
         let fine_rg_full = gauss_alt[k].planes[1].clone();
         let fine_vy_full = gauss_alt[k].planes[2].clone();
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             subtract_weber_3ch_strip_shifted_kernel::launch::<R>(
                 &self.client,
@@ -7060,6 +7144,9 @@ impl<R: Runtime> Cvvdp<R> {
         let m_raw_a_w = m_raw_h[0].clone().offset_start(win_base);
         let m_raw_rg_w = m_raw_h[1].clone().offset_start(win_base);
         let m_raw_vy_w = m_raw_h[2].clone().offset_start(win_base);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             min_abs_3ch_shifted_kernel::launch::<R>(
                 &self.client,
@@ -7087,6 +7174,9 @@ impl<R: Runtime> Cvvdp<R> {
         let m_mid_a_w = m_mid_h[0].clone().offset_start(win_base);
         let m_mid_rg_w = m_mid_h[1].clone().offset_start(win_base);
         let m_mid_vy_w = m_mid_h[2].clone().offset_start(win_base);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             pu_blur_h_3ch_strip_aware_shifted_kernel::launch::<R>(
                 &self.client,
@@ -7130,6 +7220,9 @@ impl<R: Runtime> Cvvdp<R> {
         let m_blur_a_w = m_blur_h[0].clone().offset_start(win_base);
         let m_blur_rg_w = m_blur_h[1].clone().offset_start(win_base);
         let m_blur_vy_w = m_blur_h[2].clone().offset_start(win_base);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             pu_blur_v_3ch_scaled_strip_aware_shifted_kernel::launch::<R>(
                 &self.client,
@@ -7187,6 +7280,9 @@ impl<R: Runtime> Cvvdp<R> {
         let d_a_b = d_h[0].clone().offset_start(d_base);
         let d_rg_b = d_h[1].clone().offset_start(d_base);
         let d_vy_b = d_h[2].clone().offset_start(d_base);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             mult_mutual_3ch_with_blurred_shifted_kernel::launch::<R>(
                 &self.client,
@@ -7976,6 +8072,9 @@ impl<R: Runtime> Cvvdp<R> {
             for c in 0..N_CHANNELS {
                 let src = self.bands_ref[k].planes[c].clone();
                 let dst = state.bands[k][c].clone();
+                // SAFETY: each launch's args match its `#[cube]` signature;
+                // every `from_raw_parts` handle is a live buffer of the passed
+                // length and each grid covers the kernel's indexed range.
                 unsafe {
                     copy_f32_kernel::launch::<R>(
                         &self.client,
@@ -7990,6 +8089,9 @@ impl<R: Runtime> Cvvdp<R> {
             if k < n_levels - 1 {
                 let src = self.weber_scratch[k].log_l_bkg.clone();
                 let dst = state.log_l_bkg[k].clone();
+                // SAFETY: each launch's args match its `#[cube]` signature;
+                // every `from_raw_parts` handle is a live buffer of the passed
+                // length and each grid covers the kernel's indexed range.
                 unsafe {
                     copy_f32_kernel::launch::<R>(
                         &self.client,
@@ -8011,6 +8113,9 @@ impl<R: Runtime> Cvvdp<R> {
         for c in 0..N_CHANNELS {
             let src = self.gauss_ref[last].planes[c].clone();
             let dst = state.baseband_gauss[c].clone();
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 copy_f32_kernel::launch::<R>(
                     &self.client,
@@ -8452,6 +8557,9 @@ impl<R: Runtime> Cvvdp<R> {
 
         // Step 1: zero the 3 accumulator planes.
         for handle in [acc_a.clone(), acc_rg.clone(), acc_vy.clone()] {
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 diffmap_zero_kernel::launch::<R>(
                     &self.client,
@@ -8482,6 +8590,9 @@ impl<R: Runtime> Cvvdp<R> {
             let d_a = d_full[0].clone();
             let d_rg = d_full[1].clone();
             let d_vy = d_full[2].clone();
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 diffmap_band_accumulate_kernel::launch::<R>(
                     &self.client,
@@ -8505,6 +8616,9 @@ impl<R: Runtime> Cvvdp<R> {
         }
 
         // Step 3: per-pixel Minkowski-p pool across the 3 DKL channels.
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             diffmap_channel_pool_kernel::launch::<R>(
                 &self.client,
@@ -8674,6 +8788,9 @@ impl<R: Runtime> Cvvdp<R> {
             for c in 0..N_CHANNELS {
                 let weight_idx = (k * N_CHANNELS + c) as u32;
                 let band = self.bands_ref[k].planes[c].clone();
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     weight_band_kernel::launch::<R>(
                         &self.client,

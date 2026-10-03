@@ -26,14 +26,14 @@
 //!  Host final:  score = Π |wmcs_j|^{β_j}
 //! ```
 
-pub mod box3;
-pub mod cov;
-pub mod gauss11;
-pub mod imenlarge2;
-pub mod infow;
-pub mod lap_pyramid;
-pub mod neighborhood;
-pub mod reduction;
-pub mod rgb2gray;
-pub mod ssim_combine;
-pub mod util;
+pub(crate) mod box3;
+pub(crate) mod cov;
+pub(crate) mod gauss11;
+pub(crate) mod imenlarge2;
+pub(crate) mod infow;
+pub(crate) mod lap_pyramid;
+pub(crate) mod neighborhood;
+pub(crate) mod reduction;
+pub(crate) mod rgb2gray;
+pub(crate) mod ssim_combine;
+pub(crate) mod util;

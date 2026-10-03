@@ -471,6 +471,9 @@ mod portable {
         let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
         let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
         let slot_offset = slot * (PARTIALS_PER_REDUCTION as u32);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             thread_sum_p4_kernel::launch_unchecked::<R>(
                 client,
@@ -498,6 +501,9 @@ mod portable {
         let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
         let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
         let slot_offset = slot * (PARTIALS_PER_REDUCTION as u32);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             thread_sum_p4_rows_kernel::launch_unchecked::<R>(
                 client,
@@ -527,6 +533,9 @@ mod portable {
         let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
         let image_stride = num_slots * (PARTIALS_PER_REDUCTION as u32);
         let slot_offset = slot * (PARTIALS_PER_REDUCTION as u32);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             thread_sum_p4_batched_kernel::launch_unchecked::<R>(
                 client,
@@ -554,6 +563,9 @@ mod portable {
     ) {
         let cube_count = CubeCount::Static(num_slots, 1, 1);
         let cube_dim = CubeDim::new_1d(1);
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             finalize_sum_p4_kernel::launch_unchecked::<R>(
                 client,
@@ -576,6 +588,9 @@ mod portable {
     ) {
         let cube_count = CubeCount::Static(num_slots, batch_size, 1);
         let cube_dim = CubeDim::new_1d(1);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             finalize_sum_p4_batched_kernel::launch_unchecked::<R>(
                 client,
@@ -626,6 +641,9 @@ pub fn launch_zero_fill_f32<R: Runtime>(
 ) {
     const TPB: u32 = 256;
     let cubes = (len as u32).div_ceil(TPB);
+    // SAFETY: launch args match the `#[cube]` signature; every
+    // `from_raw_parts` handle is a live buffer of the passed length
+    // and the grid covers the kernel's indexed range.
     unsafe {
         zero_fill_f32_kernel::launch_unchecked::<R>(
             client,

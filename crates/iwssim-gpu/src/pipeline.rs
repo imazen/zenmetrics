@@ -1152,6 +1152,9 @@ impl<R: Runtime> Iwssim<R> {
     fn rgb_u32_to_gray_from_packed(&self) {
         let n_pixels = (self.pad_width * self.pad_height) as usize;
         let s0 = &self.scales[0];
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             rgb2gray::rgb_u32_to_gray_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2229,6 +2232,9 @@ impl<R: Runtime> Iwssim<R> {
             let g_dis_strip = self
                 .client
                 .create_from_slice(f32::as_bytes(&vec![0.0_f32; n_strip_pixels]));
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 rgb2gray::rgb_u32_to_gray_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -2748,6 +2754,9 @@ impl<R: Runtime> Iwssim<R> {
             };
             let n_scratch = (h_cur as usize) * (w_nxt as usize);
             let n_nxt = (h_nxt as usize) * (w_nxt as usize);
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 lap_pyramid::corr_dn_horizontal_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -2815,6 +2824,9 @@ impl<R: Runtime> Iwssim<R> {
             let n_h_scratch = (h_nxt as usize) * (w_cur as usize);
             let n_cur = (h_cur as usize) * (w_cur as usize);
             // expanded: insert zeros + binom5 along width, output (h_nxt, w_cur).
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 lap_pyramid::up_conv_horizontal_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -2831,6 +2843,9 @@ impl<R: Runtime> Iwssim<R> {
             // the second pass: it's sized for (h, w) at this scale,
             // which is exactly what we need.
             let scratch2 = self.scales[s].parent_band.clone();
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 lap_pyramid::up_conv_vertical_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -2867,6 +2882,9 @@ impl<R: Runtime> Iwssim<R> {
         let n_h = (h as usize) * (cs_w as usize);
         let n_cs = (cs_h as usize) * (cs_w as usize);
 
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             // Horizontal passes: 5 inputs → 5 hstrip outputs.
             // mu1, mu2 (identity)
@@ -3081,6 +3099,9 @@ impl<R: Runtime> Iwssim<R> {
         let n_lp = (h as usize) * (w as usize);
 
         // 1. 3×3 box stats → g, vv at LP shape.
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             box3::box3_gv_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -3102,6 +3123,9 @@ impl<R: Runtime> Iwssim<R> {
         if has_parent {
             // imenlarge2(LP[s+1]) cropped to (h, w).
             let nxt = &self.scales[s + 1];
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 imenlarge2::imenlarge2_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -3134,6 +3158,9 @@ impl<R: Runtime> Iwssim<R> {
         let n_cells = if has_parent { 100_u32 } else { 81_u32 };
         let cov_partials_len = (COV_MAX_CELLS * COV_N_THREADS) as usize;
 
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             if has_parent {
                 cov::cov_accum_with_parent_kernel::launch_unchecked::<R>(
@@ -3221,6 +3248,9 @@ impl<R: Runtime> Iwssim<R> {
         let n_lp = (h as usize) * (w as usize);
         let n_iw = (sc.iw_h as usize) * (sc.iw_w as usize);
         let has_parent = s < self.scales.len() - 2;
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             if has_parent {
                 infow::infow_with_parent_kernel::launch_unchecked::<R>(

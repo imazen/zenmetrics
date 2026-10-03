@@ -33,7 +33,7 @@ const SCALE: f32 = 1.0_f32 / 9.0_f32;
 /// `w_i32`, `h_i32` give us cheap reflect-free zero padding: any
 /// out-of-range (kx, ky) contributes 0.
 #[cube(launch_unchecked)]
-pub fn box3_gv_kernel(
+pub(crate) fn box3_gv_kernel(
     x: &Array<f32>,
     y: &Array<f32>,
     g_out: &mut Array<f32>,

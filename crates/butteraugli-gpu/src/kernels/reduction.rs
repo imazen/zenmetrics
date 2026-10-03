@@ -353,6 +353,9 @@ mod portable {
         let cube_count = CubeCount::Static(BLOCKS, 1, 1);
         let cube_dim = CubeDim::new_1d(THREADS);
 
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             thread_max_pnorm_sums_kernel::launch_unchecked::<R>(
                 client,
@@ -396,6 +399,9 @@ mod portable {
         let cube_count = CubeCount::Static(BATCHED_CUBES_PER_IMAGE, batch_size, 1);
         let cube_dim = CubeDim::new_1d(THREADS);
 
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             thread_max_pnorm_sums_batched_kernel::launch_unchecked::<R>(
                 client,
@@ -538,6 +544,9 @@ pub fn reduce_batched<R: Runtime>(
     let cube_count = CubeCount::Static(BATCHED_CUBES_PER_IMAGE, batch_size, 1);
     let cube_dim = CubeDim::new_1d(THREADS);
 
+    // SAFETY: launch args match the `#[cube]` signature; every
+    // `from_raw_parts` handle is a live buffer of the passed length
+    // and the grid covers the kernel's indexed range.
     unsafe {
         batched_max_reduce_kernel::launch_unchecked::<R>(
             client,

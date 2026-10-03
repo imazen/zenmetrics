@@ -340,6 +340,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
         let total = buf.total();
         let dim_total = self.cube_count(total);
         let block = CubeDim::new_1d(256);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             colors::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -380,6 +383,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
         }
 
         // Opsin (pointwise; in place)
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             colors::opsin_dynamics_planar_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -431,6 +437,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
                 SIGMA_OPSIN,
             );
         }
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             colors::opsin_dynamics_planar_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -462,6 +471,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
         let dim = self.cube_count(total);
         let block = CubeDim::new_1d(256);
         for ch in 0..3 {
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 downscale::downsample_2x_batched_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -485,6 +497,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
         let total = self.full.total();
         let dim = self.cube_count(total);
         let block = CubeDim::new_1d(256);
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             downscale::add_upsample_2x_batched_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -510,6 +525,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
     }
 
     fn zero_plane(&self, dst: &cubecl::server::Handle, total: usize) {
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             frequency::zero_plane_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -534,6 +552,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
         let total = (plane * n) as usize;
         let dim = self.cube_count(total);
         let block = CubeDim::new_1d(256);
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             blur::horizontal_blur_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -576,6 +597,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
                 plane,
                 SIGMA_LF,
             );
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 frequency::subtract_arrays_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -587,6 +611,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
                 );
             }
         }
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             frequency::xyb_low_freq_to_vals_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -609,6 +636,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
             plane,
             SIGMA_HF,
         );
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             frequency::split_band_remove_inplace_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -630,6 +660,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
             plane,
             SIGMA_HF,
         );
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             frequency::split_band_amplify_inplace_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -651,6 +684,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
             plane,
             SIGMA_HF,
         );
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             frequency::copy_plane_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -679,6 +715,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
             plane,
             SIGMA_UHF,
         );
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             frequency::split_uhf_hf_x_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -709,6 +748,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
             plane,
             SIGMA_UHF,
         );
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             frequency::split_uhf_hf_y_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -784,6 +826,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
             let ref_h = cached_inner.cached_freq(band, ch).clone();
             let dis = buf.freq_b_batch[band][ch].clone();
             let acc = buf.block_diff_ac_batch[ch].clone();
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 if use_lf {
                     malta::malta_diff_map_lf_batched_kernel::launch_unchecked::<R>(
@@ -820,6 +865,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
         }
 
         // ── L2 diffs: 5 broadcast-batched launches (ac side) ──
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             // l2_asym HF X (WMUL[0]) → ac[0]
             diffmap::l2_asym_diff_broadcast_batched_kernel::launch_unchecked::<R>(
@@ -891,6 +939,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
         let dim_total = self.cube_count(total);
         let block = CubeDim::new_1d(256);
         for ch in 0..3 {
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 diffmap::l2_diff_write_broadcast_batched_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -911,6 +962,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
         let dim_total = self.cube_count(total);
         let block = CubeDim::new_1d(256);
 
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             masking::combine_channels_for_masking_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -945,6 +999,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
         } else {
             self.inner.half_res().expect("half_res cached")
         };
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             masking::mask_to_error_mul_batched_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -967,6 +1024,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
         } else {
             self.inner.half_res().expect("half_res cached")
         };
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             frequency::broadcast_plane_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -983,6 +1043,9 @@ impl<R: Runtime> ButteraugliBatch<R> {
         let total = buf.total();
         let dim = self.cube_count(total);
         let block = CubeDim::new_1d(256);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             diffmap::compute_diffmap_kernel::launch_unchecked::<R>(
                 &self.client,

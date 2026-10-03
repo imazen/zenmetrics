@@ -1766,6 +1766,9 @@ impl<R: Runtime> Zensim<R> {
             Some(mo) => (mo.clone(), self.scales[0].pad_count as usize),
             None => (self.srgb_lut.clone(), 1),
         };
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             color::srgb_to_positive_xyb_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -1790,6 +1793,9 @@ impl<R: Runtime> Zensim<R> {
             let (curr_pw, curr_h) = plan_full[s];
             let prev_n = (prev_pw as usize) * (prev_h as usize);
             let curr_n = (curr_pw as usize) * (curr_h as usize);
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -1875,6 +1881,9 @@ impl<R: Runtime> Zensim<R> {
         if total == 0 {
             return;
         }
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             blit::copy_rows_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2032,6 +2041,9 @@ impl<R: Runtime> Zensim<R> {
         let this_h = s0.h;
         let this_pixels = (self.width as usize) * (this_h as usize);
         let this_padded_pixels = (s0.padded_w as usize) * (this_h as usize);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             color::srgb_to_positive_xyb_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2059,6 +2071,9 @@ impl<R: Runtime> Zensim<R> {
             // (`padded_w × h`); buffer size stays at `n_padded` for
             // strip mode boundary strips where `h` is < strip_alloc_h.
             let curr_active = (curr.padded_w as usize) * (curr.h as usize);
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -2105,6 +2120,9 @@ impl<R: Runtime> Zensim<R> {
         let cube_x = s.padded_w.div_ceil(TX).max(1);
         let cube_count = CubeCount::Static(cube_x, s.n_strips, 3);
         let cube_dim = CubeDim::new_3d(TX, 1, 1);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             fused::fused_features_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2161,6 +2179,9 @@ impl<R: Runtime> Zensim<R> {
         let cube_x = s.padded_w.div_ceil(TX).max(1);
         let cube_count = CubeCount::Static(cube_x, s.n_strips, 3);
         let cube_dim = CubeDim::new_3d(TX, 1, 1);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             fused::fused_features_kernel_persist::launch_unchecked::<R>(
                 &self.client,
@@ -2225,6 +2246,9 @@ impl<R: Runtime> Zensim<R> {
             0u32
         };
         let do_iw = if self.regime.needs_iw() { 1u32 } else { 0u32 };
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             masked_iw_strip::masked_iw_strip_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2272,6 +2296,9 @@ impl<R: Runtime> Zensim<R> {
             let ns = sc.n_strips_ext as usize;
             let n_partials_per_ch = (pw * ns) as u32;
             let cube_count = CubeCount::Static(36, 1, 1);
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 reduce::reduce_ext_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -2306,6 +2333,9 @@ impl<R: Runtime> Zensim<R> {
             let ns = sc.n_strips as usize;
             let n_partials_per_ch = (pw * ns) as u32;
             let cube_count = CubeCount::Static(60, 1, 1);
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 reduce::reduce_scale_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -3161,6 +3191,9 @@ impl<R: Runtime> Zensim<R> {
             None => (self.srgb_lut.clone(), 1),
         };
         let this_padded_pixels = (s0.padded_w as usize) * h;
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             color::linear_to_positive_xyb_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -3187,6 +3220,9 @@ impl<R: Runtime> Zensim<R> {
             let prev_xyb = if is_ref { &prev.ref_xyb } else { &prev.dis_xyb };
             let curr_xyb = if is_ref { &curr.ref_xyb } else { &curr.dis_xyb };
             let curr_active = (curr.padded_w as usize) * (curr.h as usize);
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -3230,6 +3266,9 @@ impl<R: Runtime> Zensim<R> {
             None => (self.srgb_lut.clone(), 1),
         };
         let this_padded_pixels = (s0.padded_w as usize) * h;
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             color::linear_nits_to_positive_pu_xyb_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -3255,6 +3294,9 @@ impl<R: Runtime> Zensim<R> {
             let prev_xyb = if is_ref { &prev.ref_xyb } else { &prev.dis_xyb };
             let curr_xyb = if is_ref { &curr.ref_xyb } else { &curr.dis_xyb };
             let curr_active = (curr.padded_w as usize) * (curr.h as usize);
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -3429,6 +3471,9 @@ impl<R: Runtime> Zensim<R> {
         let base_n = (base_padded_w as usize) * (height as usize);
 
         // Step 1: zero the base accumulator.
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             diffmap::diffmap_zero_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -3454,6 +3499,9 @@ impl<R: Runtime> Zensim<R> {
             let w = per_scale_w.get(s).copied().unwrap_or([1.0 / 3.0; 3]);
 
             // Per-scale weighted SSIM error → scale_dm[s].
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 diffmap::per_scale_weighted_ssim_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -3475,6 +3523,9 @@ impl<R: Runtime> Zensim<R> {
             }
 
             // Upsample-add scale_dm[s] into the base accumulator.
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 diffmap::pow2x_upsample_add_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -3505,6 +3556,9 @@ impl<R: Runtime> Zensim<R> {
             diffmap_out.clear();
             diffmap_out.extend_from_slice(&data[..tight_n]);
         } else {
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 diffmap::diffmap_trim_padded_kernel::launch_unchecked::<R>(
                     &self.client,

@@ -173,10 +173,10 @@ pub(crate) fn run(args: &ScoreVideoArgs) -> Result<(), Box<dyn std::error::Error
     if !args.fps.is_finite() || args.fps <= 0.0 {
         return Err(format!("score-video: --fps must be > 0 (got {})", args.fps).into());
     }
-    if let Some(r) = args.temp_resample {
-        if !r.is_finite() || r <= 0.0 {
-            return Err(format!("score-video: --temp-resample must be > 0 (got {r})").into());
-        }
+    if let Some(r) = args.temp_resample
+        && (!r.is_finite() || r <= 0.0)
+    {
+        return Err(format!("score-video: --temp-resample must be > 0 (got {r})").into());
     }
     if let Some(dir) = &args.heatmap_dir {
         fs::create_dir_all(dir).map_err(|e| {

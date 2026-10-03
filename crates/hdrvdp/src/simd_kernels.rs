@@ -38,7 +38,7 @@
 ///
 /// All input slices and `out` have the same length.
 #[allow(clippy::too_many_arguments)]
-pub fn transducer_plane(
+pub(crate) fn transducer_plane(
     t: &[f32],
     r: &[f32],
     csf: Option<&[f32]>,
@@ -149,7 +149,7 @@ fn transducer_inner(
 
 /// `out[i] = sign_pow(v[i]/n, pf)·n` — the psychometric reshape between the
 /// transducer output and the visibility pyramid's `D` bands.
-pub fn sign_pow_reshape(v: &[f32], band_norm: f32, pf: f32, out: &mut [f32]) {
+pub(crate) fn sign_pow_reshape(v: &[f32], band_norm: f32, pf: f32, out: &mut [f32]) {
     debug_assert_eq!(v.len(), out.len());
     archmage::incant!(
         sign_pow_reshape_inner(v, band_norm, pf, out),
@@ -187,7 +187,7 @@ fn sign_pow_reshape_inner(token: Token, v: &[f32], band_norm: f32, pf: f32, out:
 /// The table index is a per-lane gather — 8 scalar loads per chunk — which is
 /// still several× cheaper than a scalar `log10` + lerp per pixel.
 #[allow(clippy::too_many_arguments)]
-pub fn lut_plane(
+pub(crate) fn lut_plane(
     x: &[f32],
     lut: &[f32],
     x0: f32,
@@ -270,7 +270,7 @@ fn lut_plane_inner(
 /// bound keeps f32 accumulation error at ~1e-5 relative worst case, far inside
 /// the `res.Q` tolerance, while the f64 outer sum matches the scalar order
 /// closely enough that this is a pure speed change.
-pub fn masked_sq_sum(v: &[f32], m: &[f32]) -> f64 {
+pub(crate) fn masked_sq_sum(v: &[f32], m: &[f32]) -> f64 {
     debug_assert_eq!(v.len(), m.len());
     archmage::incant!(
         masked_sq_sum_inner(v, m),

@@ -20,12 +20,12 @@
 use cubecl::prelude::*;
 
 /// Number of threads per cube.
-pub const BLOCK_SIZE: u32 = 256;
+pub(crate) const BLOCK_SIZE: u32 = 256;
 /// Number of cubes per reduction launch.
-pub const NUM_BLOCKS: u32 = 16;
+pub(crate) const NUM_BLOCKS: u32 = 16;
 /// Total threads (= partials per slot) — must match the finalizer
 /// kernel's compile-time bound.
-pub const THREADS_PER_REDUCTION: u32 = NUM_BLOCKS * BLOCK_SIZE;
+pub(crate) const THREADS_PER_REDUCTION: u32 = NUM_BLOCKS * BLOCK_SIZE;
 
 /// Grid-strided sum of `cs[py, px] * iw[py + b1, px + b1]` for
 /// `py ∈ [cs_y_start, cs_y_end)`, `px ∈ [0, cs_w)`. cs is laid out at
@@ -39,7 +39,7 @@ pub const THREADS_PER_REDUCTION: u32 = NUM_BLOCKS * BLOCK_SIZE;
 /// `cs_y_start = 0`, `cs_y_end = cs_h`, recovering the original
 /// full-buffer reduction.
 #[cube(launch_unchecked)]
-pub fn weighted_sum_kernel(
+pub(crate) fn weighted_sum_kernel(
     cs: &Array<f32>,
     iw: &Array<f32>,
     partials: &mut Array<f32>,
@@ -88,7 +88,7 @@ pub fn weighted_sum_kernel(
 /// `[cs_y_start, cs_y_end)` of the cropped iw extent. Same row-range
 /// semantics as [`weighted_sum_kernel`].
 #[cube(launch_unchecked)]
-pub fn iw_sum_kernel(
+pub(crate) fn iw_sum_kernel(
     iw: &Array<f32>,
     partials: &mut Array<f32>,
     cs_h: u32,
@@ -136,7 +136,7 @@ pub fn iw_sum_kernel(
 /// the strip's body range (in the top scale's coordinate system) so
 /// only body rows are pooled.
 #[cube(launch_unchecked)]
-pub fn plain_sum_kernel(
+pub(crate) fn plain_sum_kernel(
     src: &Array<f32>,
     partials: &mut Array<f32>,
     partials_base: u32,
@@ -166,7 +166,7 @@ pub fn plain_sum_kernel(
 /// Stage-2 finalizer: one cube per (slot, sum) pair sums the partials
 /// from `THREADS_PER_REDUCTION` workers into a single f32 at `dst[slot]`.
 #[cube(launch_unchecked)]
-pub fn finalize_kernel(partials: &Array<f32>, dst: &mut Array<f32>) {
+pub(crate) fn finalize_kernel(partials: &Array<f32>, dst: &mut Array<f32>) {
     let slot = CUBE_POS_X;
     let n_threads = NUM_BLOCKS * BLOCK_SIZE;
     let mut s = 0.0_f32;
@@ -185,7 +185,7 @@ pub fn finalize_kernel(partials: &Array<f32>, dst: &mut Array<f32>) {
 /// reduction pass the body row range (in cs coordinates) so halo
 /// rows on either side are skipped.
 #[allow(clippy::too_many_arguments)]
-pub fn launch_weighted_sum<R: Runtime>(
+pub(crate) fn launch_weighted_sum<R: Runtime>(
     client: &ComputeClient<R>,
     cs: cubecl::server::Handle,
     cs_len: usize,
@@ -205,6 +205,9 @@ pub fn launch_weighted_sum<R: Runtime>(
     let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
     let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
     let partials_base = slot * THREADS_PER_REDUCTION;
+    // SAFETY: launch args match the `#[cube]` signature; every
+    // `from_raw_parts` handle is a live buffer of the passed length
+    // and the grid covers the kernel's indexed range.
     unsafe {
         weighted_sum_kernel::launch_unchecked::<R>(
             client,
@@ -226,7 +229,7 @@ pub fn launch_weighted_sum<R: Runtime>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn launch_iw_sum<R: Runtime>(
+pub(crate) fn launch_iw_sum<R: Runtime>(
     client: &ComputeClient<R>,
     iw: cubecl::server::Handle,
     iw_len: usize,
@@ -244,6 +247,9 @@ pub fn launch_iw_sum<R: Runtime>(
     let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
     let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
     let partials_base = slot * THREADS_PER_REDUCTION;
+    // SAFETY: launch args match the `#[cube]` signature; every
+    // `from_raw_parts` handle is a live buffer of the passed length
+    // and the grid covers the kernel's indexed range.
     unsafe {
         iw_sum_kernel::launch_unchecked::<R>(
             client,
@@ -264,7 +270,7 @@ pub fn launch_iw_sum<R: Runtime>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn launch_plain_sum<R: Runtime>(
+pub(crate) fn launch_plain_sum<R: Runtime>(
     client: &ComputeClient<R>,
     src: cubecl::server::Handle,
     src_len: usize,
@@ -278,6 +284,9 @@ pub fn launch_plain_sum<R: Runtime>(
     let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
     let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
     let partials_base = slot * THREADS_PER_REDUCTION;
+    // SAFETY: each launch's args match its `#[cube]` signature;
+    // every `from_raw_parts` handle is a live buffer of the passed
+    // length and each grid covers the kernel's indexed range.
     unsafe {
         plain_sum_kernel::launch_unchecked::<R>(
             client,
@@ -293,7 +302,7 @@ pub fn launch_plain_sum<R: Runtime>(
     }
 }
 
-pub fn launch_finalize<R: Runtime>(
+pub(crate) fn launch_finalize<R: Runtime>(
     client: &ComputeClient<R>,
     partials: cubecl::server::Handle,
     partials_len: usize,
@@ -303,6 +312,9 @@ pub fn launch_finalize<R: Runtime>(
 ) {
     let cube_count = CubeCount::Static(num_slots, 1, 1);
     let cube_dim = CubeDim::new_1d(1);
+    // SAFETY: launch args match the `#[cube]` signature; every
+    // `from_raw_parts` handle is a live buffer of the passed length
+    // and the grid covers the kernel's indexed range.
     unsafe {
         finalize_kernel::launch_unchecked::<R>(
             client,

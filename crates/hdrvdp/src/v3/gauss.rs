@@ -92,7 +92,14 @@ fn sample_pad(x: &[f64], w: usize, h: usize, y: isize, xx: isize, pad: Pad) -> f
 
 /// `fast_gauss(X, sigma, do_norm, pad_value)`.
 #[must_use]
-pub fn fast_gauss(x: &[f64], w: usize, h: usize, sigma: f64, do_norm: bool, pad: Pad) -> Vec<f64> {
+pub(super) fn fast_gauss(
+    x: &[f64],
+    w: usize,
+    h: usize,
+    sigma: f64,
+    do_norm: bool,
+    pad: Pad,
+) -> Vec<f64> {
     assert_eq!(x.len(), w * h, "fast_gauss: size");
     if sigma >= 4.3 {
         // Fourier path: K = exp(−0.5·(KX²+KY²)·σ²) on the 2× lattice.

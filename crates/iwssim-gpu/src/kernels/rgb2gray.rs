@@ -23,7 +23,7 @@ use cubecl::prelude::*;
 /// prior one-byte-per-u32 widening (12 B/pixel → 4 B/pixel). See
 /// `docs/CUBECL_GOTCHAS.md` G6.6.
 #[cube(launch_unchecked)]
-pub fn rgb_u32_to_gray_kernel(src_rgb_u32: &Array<u32>, dst_gray: &mut Array<f32>) {
+pub(crate) fn rgb_u32_to_gray_kernel(src_rgb_u32: &Array<u32>, dst_gray: &mut Array<f32>) {
     let idx = ABSOLUTE_POS;
     let n = dst_gray.len();
     if idx >= n {

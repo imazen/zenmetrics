@@ -306,7 +306,7 @@ const SUMS_LEN: usize = NUM_SLOTS;
 /// reflect(mirror)-padded up to it (shared [`zenmetrics_gpu_core::PadPlan`]),
 /// so the typed `Dssim<R>` — like `DssimOpaque` — scores down to 1×1
 /// instead of erroring. NO-OP at ≥8px.
-pub const MIN_PAD_DIM: u32 = 8;
+pub(crate) const MIN_PAD_DIM: u32 = 8;
 
 impl<R: Runtime> Dssim<R> {
     /// Allocate every per-instance buffer for the given image size.
@@ -848,6 +848,9 @@ impl<R: Runtime> Dssim<R> {
         };
 
         // sRGB → linear on full-image scale-0 ref_lin.
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             srgb::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -867,6 +870,9 @@ impl<R: Runtime> Dssim<R> {
             let n_prev = (prev_w as usize) * (prev_h as usize);
             let n_curr = (curr_w as usize) * (curr_h as usize);
             for ch in 0..3 {
+                // SAFETY: each launch's args match its `#[cube]` signature;
+                // every `from_raw_parts` handle is a live buffer of the passed
+                // length and each grid covers the kernel's indexed range.
                 unsafe {
                     downscale::downscale_2x_plane_kernel::launch_unchecked::<R>(
                         &self.client,
@@ -889,6 +895,9 @@ impl<R: Runtime> Dssim<R> {
             let (w, h) = dims[s];
             let n = (w as usize) * (h as usize);
             // run_lab equivalent
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 lab::linear_to_lab_planar_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -930,6 +939,9 @@ impl<R: Runtime> Dssim<R> {
                 );
                 // sq_blur: blur_squared(ref_lab[ch]) → temp1_full, then
                 // blur → sq_blur_dst.
+                // SAFETY: each launch's args match its `#[cube]` signature;
+                // every `from_raw_parts` handle is a live buffer of the passed
+                // length and each grid covers the kernel's indexed range.
                 unsafe {
                     blur::blur_squared_kernel::launch_unchecked::<R>(
                         &self.client,
@@ -977,6 +989,9 @@ impl<R: Runtime> Dssim<R> {
         height: u32,
     ) {
         let n = (width as usize) * (height as usize);
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             blur::blur_3x3_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -1294,6 +1309,9 @@ impl<R: Runtime> Dssim<R> {
         if total == 0 {
             return;
         }
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             copy_rows_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -1635,6 +1653,9 @@ impl<R: Runtime> Dssim<R> {
     /// we want to sum only body rows, not the whole strip.
     fn run_abs_diff_only(&self, scale: usize, avg: f32) {
         let s = &self.scales[scale];
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             ssim::abs_diff_scalar_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -1772,6 +1793,9 @@ impl<R: Runtime> Dssim<R> {
         } else {
             (&self.src_u8_b, &self.scales[0].dis_lin)
         };
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             srgb::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -1819,6 +1843,9 @@ impl<R: Runtime> Dssim<R> {
             let n_curr = self.scales[s].n;
             let n_prev = self.scales[s - 1].n;
             for ch in 0..3 {
+                // SAFETY: each launch's args match its `#[cube]` signature;
+                // every `from_raw_parts` handle is a live buffer of the passed
+                // length and each grid covers the kernel's indexed range.
                 unsafe {
                     downscale::downscale_2x_plane_kernel::launch_unchecked::<R>(
                         &self.client,
@@ -1843,6 +1870,9 @@ impl<R: Runtime> Dssim<R> {
         } else {
             (&s.dis_lin, &s.dis_lab)
         };
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             lab::linear_to_lab_planar_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -1881,6 +1911,9 @@ impl<R: Runtime> Dssim<R> {
     ) {
         let s = &self.scales[scale];
         let h = self.effective_h(scale);
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             // pass 1: src → scratch_a
             blur::blur_3x3_kernel::launch_unchecked::<R>(
@@ -1932,6 +1965,9 @@ impl<R: Runtime> Dssim<R> {
             self.blur_two_pass(scale, &src_lab[ch], &mu_dst[ch], &s.temp1, &s.temp2);
 
             // sq_blur pipeline: blur_squared(src) → temp1, then blur → sq_dst.
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 blur::blur_squared_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -1960,6 +1996,9 @@ impl<R: Runtime> Dssim<R> {
         let s = &self.scales[scale];
         let h = self.effective_h(scale);
         for ch in 0..3 {
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 blur::blur_product_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -1986,6 +2025,9 @@ impl<R: Runtime> Dssim<R> {
 
     fn run_ssim_map(&self, scale: usize) {
         let s = &self.scales[scale];
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             ssim::ssim_lab_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2028,6 +2070,9 @@ impl<R: Runtime> Dssim<R> {
     /// reduction into the slot reserved for this scale.
     fn run_abs_diff_and_sum(&self, scale: usize, avg: f32) {
         let s = &self.scales[scale];
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             ssim::abs_diff_scalar_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2086,7 +2131,7 @@ impl<R: Runtime> Dssim<R> {
 /// Pointwise copy kernel `dst[i] = src[i]`. Used in the chroma
 /// pre-blur double-pass to allow `dst == src`.
 #[cube(launch_unchecked)]
-pub fn copy_kernel(src: &Array<f32>, dst: &mut Array<f32>) {
+pub(crate) fn copy_kernel(src: &Array<f32>, dst: &mut Array<f32>) {
     let i = ABSOLUTE_POS;
     if i >= dst.len() {
         terminate!();
@@ -2106,7 +2151,7 @@ pub fn copy_kernel(src: &Array<f32>, dst: &mut Array<f32>) {
 /// `r ∈ [0, n_rows)`, `x ∈ [0, width)` and writes to
 /// `dst[r * width + x]`. Threads beyond `n_rows * width` exit.
 #[cube(launch_unchecked)]
-pub fn copy_rows_kernel(
+pub(crate) fn copy_rows_kernel(
     src: &Array<f32>,
     dst: &mut Array<f32>,
     width: u32,

@@ -490,6 +490,9 @@ pub fn cuda_client_on_stream(
     use cubecl::Runtime;
     use cubecl::stream_id::StreamId;
     let mut c = cubecl::cuda::CudaRuntime::client(&Default::default());
+    // SAFETY: `c` is a fresh clone of the per-device client and `stream_value`
+    // is the id of a stream the caller's session created on this device;
+    // `set_stream` rebinds only this clone's submission routing.
     unsafe {
         c.set_stream(StreamId {
             value: stream_value,
@@ -506,6 +509,9 @@ pub fn wgpu_client_on_stream(
     use cubecl::Runtime;
     use cubecl::stream_id::StreamId;
     let mut c = cubecl::wgpu::WgpuRuntime::client(&Default::default());
+    // SAFETY: `c` is a fresh clone of the per-device client and `stream_value`
+    // is the id of a stream the caller's session created on this device;
+    // `set_stream` rebinds only this clone's submission routing.
     unsafe {
         c.set_stream(StreamId {
             value: stream_value,
@@ -522,6 +528,9 @@ pub fn cpu_client_on_stream(
     use cubecl::Runtime;
     use cubecl::stream_id::StreamId;
     let mut c = cubecl::cpu::CpuRuntime::client(&Default::default());
+    // SAFETY: `c` is a fresh clone of the per-device client and `stream_value`
+    // is the id of a stream the caller's session created on this device;
+    // `set_stream` rebinds only this clone's submission routing.
     unsafe {
         c.set_stream(StreamId {
             value: stream_value,

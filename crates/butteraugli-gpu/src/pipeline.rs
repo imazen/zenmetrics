@@ -281,6 +281,9 @@ fn populate_half_res_linear<R: Runtime>(full: &Butteraugli<R>, half: &Butteraugl
     let block = CubeDim::new_1d(TPB);
     // Fused 3-channel downsample (1 launch instead of 3). Bit-exact
     // with the single-channel kernel (sum/count, not sum*(1/count)).
+    // SAFETY: launch args match the `#[cube]` signature; every
+    // `from_raw_parts` handle is a live buffer of the passed length
+    // and the grid covers the kernel's indexed range.
     unsafe {
         downscale::downsample_2x_3ch_kernel::launch_unchecked::<R>(
             &full.client,
@@ -1338,6 +1341,9 @@ impl<R: Runtime> Butteraugli<R> {
         } else {
             self.compute_mask_pipeline_distorted_only();
         }
+        // SAFETY: `self`'s mask/diff buffers are live for `self.n`
+        // elements at the current dims — the contract
+        // `launch_compute_diffmap` launches against.
         unsafe {
             self.launch_compute_diffmap();
         }
@@ -1394,6 +1400,9 @@ impl<R: Runtime> Butteraugli<R> {
         } else {
             self.src_u8_b = handle.clone();
         }
+        // SAFETY: `self`'s u8/linear planes are live for `self.n`
+        // pixels at the current dims — the contract
+        // `launch_srgb_to_linear` launches against.
         unsafe {
             self.launch_srgb_to_linear(is_a);
         }
@@ -1462,6 +1471,9 @@ impl<R: Runtime> Butteraugli<R> {
         } else {
             self.src_u8_b = handle;
         }
+        // SAFETY: `self`'s u8/linear planes are live for `self.n`
+        // pixels at the current dims — the contract
+        // `launch_srgb_to_linear` launches against.
         unsafe {
             self.launch_srgb_to_linear(is_a);
         }
@@ -1498,6 +1510,9 @@ impl<R: Runtime> Butteraugli<R> {
         self.compute_psycho_diff();
         self.compute_dc_diff();
         self.compute_mask_pipeline_full();
+        // SAFETY: `self`'s mask/diff buffers are live for `self.n`
+        // elements at the current dims — the contract
+        // `launch_compute_diffmap` launches against.
         unsafe {
             self.launch_compute_diffmap();
         }
@@ -1538,6 +1553,9 @@ impl<R: Runtime> Butteraugli<R> {
             };
             // CubeCount/Dim aren't Copy — recreate per launch.
             let dim = CubeCount::Static(cubes, 1, 1);
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 downscale::downsample_2x_3ch_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -1582,6 +1600,9 @@ impl<R: Runtime> Butteraugli<R> {
         let cubes = (full_n as u32).div_ceil(TPB);
         let dim = CubeCount::Static(cubes, 1, 1);
         let block = CubeDim::new_1d(TPB);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             downscale::add_upsample_2x_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -1618,6 +1639,9 @@ impl<R: Runtime> Butteraugli<R> {
         self.compute_psycho_diff();
         self.compute_dc_diff();
         self.compute_mask_pipeline_full();
+        // SAFETY: `self`'s mask/diff buffers are live for `self.n`
+        // elements at the current dims — the contract
+        // `launch_compute_diffmap` launches against.
         unsafe {
             self.launch_compute_diffmap();
         }
@@ -1684,6 +1708,9 @@ impl<R: Runtime> Butteraugli<R> {
         // Slab-copy a single (src_plane → dst_plane) pair.
         let blit_one = |src: &cubecl::server::Handle, dst: &cubecl::server::Handle| {
             let dim = CubeCount::Static(cubes, 1, 1);
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 crate::kernels::frequency::copy_slab_from_full_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -1734,6 +1761,9 @@ impl<R: Runtime> Butteraugli<R> {
         // Mask uses cached_blurred_a (already blitted from cache) and
         // computes the distorted-side mask contribution.
         self.compute_mask_pipeline_distorted_only();
+        // SAFETY: `self`'s mask/diff buffers are live for `self.n`
+        // elements at the current dims — the contract
+        // `launch_compute_diffmap` launches against.
         unsafe {
             self.launch_compute_diffmap();
         }
@@ -1791,6 +1821,9 @@ impl<R: Runtime> Butteraugli<R> {
         } else {
             self.src_u8_b = handle;
         }
+        // SAFETY: `self`'s u8/linear planes are live for `self.n`
+        // pixels at the current dims — the contract
+        // `launch_srgb_to_linear` launches against.
         unsafe {
             self.launch_srgb_to_linear(is_a);
         }
@@ -1813,6 +1846,9 @@ impl<R: Runtime> Butteraugli<R> {
         let table = &self.blur_tables[BlurKind::Opsin as usize];
         let table_len = self.blur_table_lens[BlurKind::Opsin as usize];
         let radius = self.blur_radii[BlurKind::Opsin as usize];
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -1867,12 +1903,22 @@ impl<R: Runtime> Butteraugli<R> {
         let _ = bl;
     }
 
+    /// Launch `srgb_u8_to_linear_planar` for the selected side, converting
+    /// `src_u8_{a,b}` into the `lin_{a,b}` planes.
+    ///
+    /// # Safety
+    /// The source and destination plane handles must be live buffers of
+    /// `self.n` elements at the current dims; the grid then covers
+    /// `self.n` and the args match the `#[cube]` signature.
     unsafe fn launch_srgb_to_linear(&self, is_a: bool) {
         let (src, lin) = if is_a {
             (&self.src_u8_a, &self.lin_a)
         } else {
             (&self.src_u8_b, &self.lin_b)
         };
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             colors::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -1905,6 +1951,9 @@ impl<R: Runtime> Butteraugli<R> {
             let table = &self.blur_tables[kind as usize];
             let table_len = self.blur_table_lens[kind as usize];
             let radius = self.blur_radii[kind as usize];
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 blur_lut::horizontal_blur_lut_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -1931,6 +1980,9 @@ impl<R: Runtime> Butteraugli<R> {
             }
             return;
         }
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             blur::horizontal_blur_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -1977,6 +2029,9 @@ impl<R: Runtime> Butteraugli<R> {
         let table = &self.blur_tables[BlurKind::Lf as usize];
         let table_len = self.blur_table_lens[BlurKind::Lf as usize];
         let radius = self.blur_radii[BlurKind::Lf as usize];
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2033,6 +2088,9 @@ impl<R: Runtime> Butteraugli<R> {
         let table_hf = &self.blur_tables[BlurKind::Hf as usize];
         let table_hf_len = self.blur_table_lens[BlurKind::Hf as usize];
         let radius_hf = self.blur_radii[BlurKind::Hf as usize];
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2081,6 +2139,9 @@ impl<R: Runtime> Butteraugli<R> {
         }
 
         // suppress_x_by_y(HF_y → HF_x)
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             frequency::suppress_x_by_y_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2102,6 +2163,9 @@ impl<R: Runtime> Butteraugli<R> {
         let table_uhf = &self.blur_tables[BlurKind::Uhf as usize];
         let table_uhf_len = self.blur_table_lens[BlurKind::Uhf as usize];
         let radius_uhf = self.blur_radii[BlurKind::Uhf as usize];
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             blur_lut::horizontal_blur_2ch_lut_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2265,6 +2329,9 @@ impl<R: Runtime> Butteraugli<R> {
     /// launch-latency roundtrips per iter; the per-pixel work itself is
     /// trivial (one FMA per channel) so the launch overhead dominated.
     fn compute_dc_diff(&self) {
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             diffmap::l2_diff_write_3ch_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2293,6 +2360,9 @@ impl<R: Runtime> Butteraugli<R> {
     /// fuzzy_erosion(cached_blurred_a) → `self.mask`. Both buffers are
     /// reusable across many `compute_with_reference` calls.
     fn compute_mask_pipeline_reference_only(&self) {
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             // T_x.I: combine + diff_precompute fused (both pointwise,
             // saves one launch + one full-plane R/W roundtrip).
@@ -2316,6 +2386,9 @@ impl<R: Runtime> Butteraugli<R> {
             &self.temp1.clone(),
             MASK_RADIUS,
         );
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             masking::fuzzy_erosion_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2335,6 +2408,9 @@ impl<R: Runtime> Butteraugli<R> {
     /// Assumes `cached_blurred_a` is populated by an earlier
     /// [`compute_mask_pipeline_reference_only`].
     fn compute_mask_pipeline_distorted_only(&self) {
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             // T_x.I: combine + diff_precompute fused.
             masking::combine_channels_and_diff_precompute_kernel::launch_unchecked::<R>(
@@ -2357,6 +2433,9 @@ impl<R: Runtime> Butteraugli<R> {
             MASK_RADIUS,
         );
         // block_diff_ac[1] += MASK_TO_ERROR_MUL · (cached_blurred_a − mask_scratch)²
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             masking::mask_to_error_mul_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2374,7 +2453,17 @@ impl<R: Runtime> Butteraugli<R> {
         self.compute_mask_pipeline_distorted_only();
     }
 
+    /// Launch `compute_diffmap_kernel` folding `mask` and the per-channel
+    /// `block_diff_{dc,ac}` planes into `diffmap_buf`.
+    ///
+    /// # Safety
+    /// `mask`, `block_diff_{dc,ac}`, and `diffmap_buf` must be live
+    /// buffers of `self.n` elements; the grid covers `self.n` and the
+    /// args match the `#[cube]` signature.
     unsafe fn launch_compute_diffmap(&self) {
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             diffmap::compute_diffmap_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2415,6 +2504,9 @@ impl<R: Runtime> Butteraugli<R> {
         mf_norm2_0lt1: f32,
         mf_norm1: f32,
     ) {
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             malta::malta_diff_map_triple_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2455,6 +2547,9 @@ impl<R: Runtime> Butteraugli<R> {
         asym_weight_lt: f32,
         l2_weight: f32,
     ) {
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             diffmap::l2_asym_plus_l2_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2479,6 +2574,9 @@ impl<R: Runtime> Butteraugli<R> {
         acc: &cubecl::server::Handle,
         weight: f32,
     ) {
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             diffmap::l2_diff_write_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2503,6 +2601,9 @@ impl<R: Runtime> Butteraugli<R> {
         src_h: u32,
     ) {
         let src_n = (src_w as usize) * (src_h as usize);
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             downscale::add_upsample_2x_kernel::launch_unchecked::<R>(
                 &self.client,

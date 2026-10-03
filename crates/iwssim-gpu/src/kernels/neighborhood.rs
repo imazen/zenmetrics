@@ -34,7 +34,7 @@
 /// Crate-private constant — kernels expand the table inline (so the
 /// constant itself is a documentation/reference companion).
 #[allow(dead_code)]
-pub const OFFS: [(i32, i32); 9] = [
+pub(crate) const OFFS: [(i32, i32); 9] = [
     (2, 2),
     (2, 1),
     (2, 0),
@@ -48,4 +48,4 @@ pub const OFFS: [(i32, i32); 9] = [
 
 /// Maximum neighborhood size including parent.
 #[allow(dead_code)]
-pub const MAX_N: usize = 10;
+pub(crate) const MAX_N: usize = 10;

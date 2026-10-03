@@ -141,7 +141,7 @@ use cubecl::prelude::*;
 /// full-res strip slab), and the half-res blur cascade needs its own
 /// 34 rows. `80 / 2 = 40 ≥ 34` makes both resolutions exact. See the
 /// "Why HALO_ROWS = 80" section in the module docs.
-pub const HALO_ROWS: u32 = 80;
+pub(crate) const HALO_ROWS: u32 = 80;
 
 /// Per-strip host-side partials (max + p3/p6/p12 sums over the body
 /// rows only — halo rows are discarded). Folded into the final score

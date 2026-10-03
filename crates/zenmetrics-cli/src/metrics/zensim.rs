@@ -22,7 +22,7 @@ use crate::decode::Rgb8Image;
 /// consumer of this crate as a library, e.g. `zenfleet-vastai`, which never
 /// runs `main()`) can select without argv. Same grammar as `--zensim-profile`:
 /// a built-in name OR a path to a ZNPR bake.
-pub const ZENSIM_PROFILE_ENV: &str = "ZENMETRICS_ZENSIM_PROFILE";
+pub(crate) const ZENSIM_PROFILE_ENV: &str = "ZENMETRICS_ZENSIM_PROFILE";
 
 /// Resolved-once env selection. `Ok(None)` = nothing requested.
 static ENV_PROFILE: std::sync::OnceLock<Result<Option<zensim::ZensimProfile>, String>> =
@@ -200,7 +200,7 @@ pub(crate) fn score_with_precomputed(
 /// the jobexec executor's zensim feature-row emission (not `sweep`-gated —
 /// the jobexec-only build needs it too; it has no sweep dependency).
 #[allow(dead_code)] // not every feature shape calls it
-pub fn score_with_features(
+pub(crate) fn score_with_features(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
 ) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
@@ -287,7 +287,7 @@ fn reflect_pad_to_min(img: &Rgb8Image, min_dim: u32) -> std::borrow::Cow<'_, [u8
 /// single-pyramid API in the zensim crate, not a further fuse.
 #[cfg(feature = "cpu-metrics")]
 #[allow(dead_code)] // convenience wrapper + test entry; the fleet calls extract_features_regime
-pub fn extract_features_v2ab(
+pub(crate) fn extract_features_v2ab(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
 ) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
@@ -310,7 +310,7 @@ pub fn extract_features_v2ab(
 /// Both inputs are reflect-padded to ≥64px first so every block sees one
 /// consistent image (see [`reflect_pad_to_min`]).
 #[cfg(feature = "cpu-metrics")]
-pub fn extract_features_regime(
+pub(crate) fn extract_features_regime(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
     regime: crate::metrics::ZensimFeatureRegime,
@@ -479,7 +479,7 @@ fn extract_features_folded_streaming(
 /// are bit-identical (zensim guarantees it — see `v2_precomputed_ref_matches_percall`).
 #[cfg(feature = "cpu-metrics")]
 #[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
-pub struct ZensimRefCtx {
+pub(crate) struct ZensimRefCtx {
     padded: Vec<u8>, // reference reflect-padded to (w,h); w,h ≥ 64
     w: usize,
     h: usize,
@@ -492,7 +492,7 @@ pub struct ZensimRefCtx {
 /// [`extract_features_regime_with_ctx`].
 #[cfg(feature = "cpu-metrics")]
 #[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
-pub fn precompute_ref_ctx(
+pub(crate) fn precompute_ref_ctx(
     reference: &Rgb8Image,
 ) -> Result<ZensimRefCtx, Box<dyn std::error::Error>> {
     let padded = reflect_pad_to_min(reference, 64).into_owned();
@@ -523,7 +523,7 @@ pub fn precompute_ref_ctx(
 /// precomputed-ref API). Bit-identical to [`extract_features_regime`].
 #[cfg(feature = "cpu-metrics")]
 #[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
-pub fn extract_features_regime_with_ctx(
+pub(crate) fn extract_features_regime_with_ctx(
     ctx: &ZensimRefCtx,
     distorted: &Rgb8Image,
     regime: crate::metrics::ZensimFeatureRegime,
@@ -1205,7 +1205,7 @@ mod tests {
 /// zensim HDR feeding); features share the sRGB extraction layout.
 #[cfg(feature = "cpu-metrics")]
 #[allow(dead_code)] // used by the bin and jobexec targets, not by the lib target
-pub fn score_with_features_pu_linear(
+pub(crate) fn score_with_features_pu_linear(
     ref_nits: &[f32],
     dist_nits: &[f32],
     width: usize,

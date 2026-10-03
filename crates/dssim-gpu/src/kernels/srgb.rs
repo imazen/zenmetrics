@@ -25,7 +25,7 @@ const SRGB_BETA: f32 = 0.003_041_282_5;
 /// the prior one-byte-per-u32 widening (12 B/pixel → 4 B/pixel).
 /// See `docs/CUBECL_GOTCHAS.md` G6.6.
 #[cube(launch_unchecked)]
-pub fn srgb_u8_to_linear_planar_kernel(
+pub(crate) fn srgb_u8_to_linear_planar_kernel(
     src: &Array<u32>,
     dst_r: &mut Array<f32>,
     dst_g: &mut Array<f32>,

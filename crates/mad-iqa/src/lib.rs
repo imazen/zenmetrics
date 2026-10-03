@@ -52,6 +52,8 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 pub mod fft;
+// Without `_dev` the `pub` items are unreachable; `dev` re-exports them then.
+#[cfg_attr(not(feature = "_dev"), allow(unreachable_pub))]
 mod kernel;
 
 #[cfg(feature = "_dev")]

@@ -23,7 +23,7 @@ use core::f64::consts::PI;
 /// Minimal complex number — enough for the transforms here, and it keeps the
 /// crate dependency-free.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct Complex {
+pub(crate) struct Complex {
     /// Real part.
     pub re: f32,
     /// Imaginary part.
@@ -34,7 +34,7 @@ impl Complex {
     /// `re + i·im`.
     #[must_use]
     #[inline]
-    pub const fn new(re: f32, im: f32) -> Self {
+    pub(crate) const fn new(re: f32, im: f32) -> Self {
         Self { re, im }
     }
 
@@ -42,7 +42,7 @@ impl Complex {
     /// twiddles are the correctly-rounded `f32` values.
     #[must_use]
     #[inline]
-    pub fn expi(theta: f64) -> Self {
+    pub(crate) fn expi(theta: f64) -> Self {
         let (s, c) = theta.sin_cos();
         Self {
             re: c as f32,
@@ -53,7 +53,7 @@ impl Complex {
     /// Complex conjugate.
     #[must_use]
     #[inline]
-    pub fn conj(self) -> Self {
+    pub(crate) fn conj(self) -> Self {
         Self {
             re: self.re,
             im: -self.im,
@@ -99,7 +99,7 @@ impl Complex {
 
 /// Forward DFT of `buf`, in place. Any length; `O(n log n)`.
 #[allow(dead_code)] // public mirror of the vendored API; callers use the _planned forms
-pub fn fft(buf: &mut [Complex]) {
+pub(crate) fn fft(buf: &mut [Complex]) {
     let n = buf.len();
     if n <= 1 {
         return;
@@ -325,7 +325,7 @@ fn fft_radix2_planned(buf: &mut [Complex], stages: &[Vec<Complex>]) {
 
 /// Inverse DFT of `buf`, in place, normalised by `1/n`.
 #[allow(dead_code)] // public mirror of the vendored API; callers use the _planned forms
-pub fn ifft(buf: &mut [Complex]) {
+pub(crate) fn ifft(buf: &mut [Complex]) {
     let n = buf.len();
     if n == 0 {
         return;
@@ -342,7 +342,7 @@ pub fn ifft(buf: &mut [Complex]) {
 
 /// Forward 2D DFT of a row-major `height × width` buffer, in place.
 #[allow(dead_code)] // public mirror of the vendored API; callers use the _planned forms
-pub fn fft2(buf: &mut [Complex], width: usize, height: usize) {
+pub(crate) fn fft2(buf: &mut [Complex], width: usize, height: usize) {
     let (wplan, hplan) = (Plan::new(width), Plan::new(height));
     fft2_planned(buf, width, height, &wplan, &hplan);
 }
@@ -614,7 +614,7 @@ fn fft2_cols_conj_scale(
 
 /// Inverse 2D DFT (normalised by `1/(width·height)`), in place.
 #[allow(dead_code)] // public mirror of the vendored API; callers use the _planned forms
-pub fn ifft2(buf: &mut [Complex], width: usize, height: usize) {
+pub(crate) fn ifft2(buf: &mut [Complex], width: usize, height: usize) {
     let (wplan, hplan) = (Plan::new(width), Plan::new(height));
     ifft2_planned(buf, width, height, &wplan, &hplan);
 }

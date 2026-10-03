@@ -15,7 +15,7 @@ const C1: f32 = 0.0001;
 const C2: f32 = 0.0009;
 
 #[cube(launch_unchecked)]
-pub fn ssim_lab_kernel(
+pub(crate) fn ssim_lab_kernel(
     mu1_l: &Array<f32>,
     mu1_a: &Array<f32>,
     mu1_b: &Array<f32>,
@@ -79,7 +79,7 @@ pub fn ssim_lab_kernel(
 /// `src` only if the runtime tolerates aliasing — we always pass a
 /// distinct scratch in the pipeline.
 #[cube(launch_unchecked)]
-pub fn abs_diff_scalar_kernel(src: &Array<f32>, dst: &mut Array<f32>, scalar: f32) {
+pub(crate) fn abs_diff_scalar_kernel(src: &Array<f32>, dst: &mut Array<f32>, scalar: f32) {
     let idx = ABSOLUTE_POS;
     let n = dst.len();
     if idx >= n {

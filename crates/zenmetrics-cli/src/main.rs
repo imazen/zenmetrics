@@ -21,11 +21,20 @@
 
 #[cfg(feature = "assemble")]
 mod assemble;
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 mod compare;
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 mod decode;
 mod fleet_plan;
 #[cfg(feature = "hdr")]
 mod hdr;
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 mod metrics;
 
 /// A decoded `(reference, distorted)` RGB8 pair, or the decode error. Used by
@@ -42,6 +51,9 @@ type DecodedRgb8Sides = (
     Result<decode::Rgb8Image, Box<dyn std::error::Error>>,
     Result<decode::Rgb8Image, Box<dyn std::error::Error>>,
 );
+// lib.rs exposes this module publicly; the bin keeps it private,
+// so its `pub` items are unreachable here by design.
+#[allow(unreachable_pub)]
 mod output;
 #[cfg(feature = "cpu-cvvdp")]
 mod score_video;

@@ -321,7 +321,7 @@ const SUMS_LEN: usize = NUM_SLOTS * 2;
 /// reflect(mirror)-padded up to it (shared [`zenmetrics_gpu_core::PadPlan`]),
 /// so the typed `Ssim2<R>` — like `Ssim2Opaque` — scores down to 1×1
 /// instead of erroring. NO-OP at ≥8px.
-pub const MIN_PAD_DIM: u32 = 8;
+pub(crate) const MIN_PAD_DIM: u32 = 8;
 
 impl<R: Runtime> Ssim2<R> {
     /// Allocate every per-instance buffer for the given image size.
@@ -1193,6 +1193,9 @@ impl<R: Runtime> Ssim2<R> {
             full_ref_lin.push(alloc_3(&self.client, n));
         }
         // sRGB→linear into scale 0.
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             srgb::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -1211,6 +1214,9 @@ impl<R: Runtime> Ssim2<R> {
             let (cw, ch_) = dims[s];
             let n_prev = (pw as usize) * (ph as usize);
             let n_curr = (cw as usize) * (ch_ as usize);
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -1277,6 +1283,9 @@ impl<R: Runtime> Ssim2<R> {
             };
             let (ref_xyb_full_h, ref_xyb_t_full_h, mu1_full_h, sigma11_full_h) = cache_s_handles;
 
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 xyb::linear_to_xyb_planar_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -1293,6 +1302,9 @@ impl<R: Runtime> Ssim2<R> {
 
             // sigma11_in = ref · ref (per channel).
             for chi in 0..3 {
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     pointwise_mul_kernel::launch_unchecked::<R>(
                         &self.client,
@@ -1327,6 +1339,9 @@ impl<R: Runtime> Ssim2<R> {
                     &mu1_full_h[chi],
                 );
                 // ref_xyb_t_full = transpose(ref_xyb)
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     transpose::transpose_kernel::launch_unchecked::<R>(
                         &self.client,
@@ -1672,6 +1687,9 @@ impl<R: Runtime> Ssim2<R> {
             if skip_error_map(mode, scale, chi) {
                 continue;
             }
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 crate::kernels::error_maps::zero_tail_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -1706,6 +1724,9 @@ impl<R: Runtime> Ssim2<R> {
             if skip_error_map(mode, scale, chi) {
                 continue;
             }
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 crate::kernels::error_maps::pointwise_mul_offset_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -1737,6 +1758,9 @@ impl<R: Runtime> Ssim2<R> {
             if skip_error_map(mode, scale, chi) {
                 continue;
             }
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 crate::kernels::error_maps::error_maps_strip_from_full_ref_kernel::launch_unchecked::<
                     R,
@@ -2247,6 +2271,9 @@ impl<R: Runtime> Ssim2<R> {
         } else {
             (&self.src_u8_b, &self.scales[0].dis_lin)
         };
+        // SAFETY: launch args match the `#[cube]` signature; every
+        // `from_raw_parts` handle is a live buffer of the passed length
+        // and the grid covers the kernel's indexed range.
         unsafe {
             srgb::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -2302,6 +2329,9 @@ impl<R: Runtime> Ssim2<R> {
             };
             let n_curr = self.scales[s].n;
             let n_prev = self.scales[s - 1].n;
+            // SAFETY: each launch's args match its `#[cube]` signature;
+            // every `from_raw_parts` handle is a live buffer of the passed
+            // length and each grid covers the kernel's indexed range.
             unsafe {
                 downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -2330,6 +2360,9 @@ impl<R: Runtime> Ssim2<R> {
             (&s.dis_lin, &s.dis_xyb)
         };
         match self.xyb_flavor {
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             XybFlavor::CubeRoot => unsafe {
                 xyb::linear_to_xyb_planar_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -2343,6 +2376,9 @@ impl<R: Runtime> Ssim2<R> {
                     ArrayArg::from_raw_parts(xyb_buf[2].clone(), s.n),
                 );
             },
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             XybFlavor::Pu21 => unsafe {
                 xyb::linear_nits_to_pu_xyb_planar_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -2369,6 +2405,9 @@ impl<R: Runtime> Ssim2<R> {
     ) {
         let n = self.scales[scale].n;
         for ch in 0..3 {
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 pointwise_mul_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -2522,6 +2561,9 @@ impl<R: Runtime> Ssim2<R> {
         t_buf: &cubecl::server::Handle,
         full: &cubecl::server::Handle,
     ) {
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             // 1. v-pass on src (walks columns of width × height) → v_buf.
             blur::blur_pass_kernel::launch_unchecked::<R>(
@@ -2585,6 +2627,9 @@ impl<R: Runtime> Ssim2<R> {
         v_buf: &cubecl::server::Handle,
         full: &cubecl::server::Handle,
     ) {
+        // SAFETY: each launch's args match its `#[cube]` signature;
+        // every `from_raw_parts` handle is a live buffer of the passed
+        // length and each grid covers the kernel's indexed range.
         unsafe {
             // 1. v-pass on src (walks columns of width × height) → v_buf.
             blur::blur_pass_kernel::launch_unchecked::<R>(
@@ -2694,6 +2739,9 @@ impl<R: Runtime> Ssim2<R> {
         let h = s.height;
         if do_ref {
             for ch in 0..3 {
+                // SAFETY: each launch's args match its `#[cube]` signature;
+                // every `from_raw_parts` handle is a live buffer of the passed
+                // length and each grid covers the kernel's indexed range.
                 unsafe {
                     transpose::transpose_kernel::launch_unchecked::<R>(
                         &self.client,
@@ -2709,6 +2757,9 @@ impl<R: Runtime> Ssim2<R> {
         }
         if do_dis {
             for ch in 0..3 {
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     transpose::transpose_kernel::launch_unchecked::<R>(
                         &self.client,
@@ -2829,6 +2880,9 @@ impl<R: Runtime> Ssim2<R> {
             if skip_error_map(mode, scale, ch) {
                 continue;
             }
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 pointwise_mul_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -2872,6 +2926,9 @@ impl<R: Runtime> Ssim2<R> {
                 continue;
             }
             if do_ref {
+                // SAFETY: each launch's args match its `#[cube]` signature;
+                // every `from_raw_parts` handle is a live buffer of the passed
+                // length and each grid covers the kernel's indexed range.
                 unsafe {
                     transpose::transpose_kernel::launch_unchecked::<R>(
                         &self.client,
@@ -2885,6 +2942,9 @@ impl<R: Runtime> Ssim2<R> {
                 }
             }
             if do_dis {
+                // SAFETY: launch args match the `#[cube]` signature; every
+                // `from_raw_parts` handle is a live buffer of the passed length
+                // and the grid covers the kernel's indexed range.
                 unsafe {
                     transpose::transpose_kernel::launch_unchecked::<R>(
                         &self.client,
@@ -3050,6 +3110,9 @@ impl<R: Runtime> Ssim2<R> {
             } else {
                 (s.ref_xyb_t[ch].clone(), s.dis_xyb_t[ch].clone())
             };
+            // SAFETY: launch args match the `#[cube]` signature; every
+            // `from_raw_parts` handle is a live buffer of the passed length
+            // and the grid covers the kernel's indexed range.
             unsafe {
                 error_maps::error_maps_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -3226,7 +3289,7 @@ impl<R: Runtime> Ssim2<R> {
 /// flat batched arrays — `Ssim2Batch::process_scale_batched` uses it
 /// for `sigma22 = dis · dis`.
 #[cube(launch_unchecked)]
-pub fn pointwise_mul_kernel(a: &Array<f32>, b: &Array<f32>, out: &mut Array<f32>) {
+pub(crate) fn pointwise_mul_kernel(a: &Array<f32>, b: &Array<f32>, out: &mut Array<f32>) {
     let idx = ABSOLUTE_POS;
     if idx >= out.len() {
         terminate!();

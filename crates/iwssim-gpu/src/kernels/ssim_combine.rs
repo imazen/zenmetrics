@@ -26,7 +26,7 @@ const C2: f32 = 58.522_5_f32; // (0.03 * 255)^2
 /// Compute `cs_map` only (scales 0..3). Five inputs, one output, all
 /// of length `n`.
 #[cube(launch_unchecked)]
-pub fn ssim_cs_kernel(
+pub(crate) fn ssim_cs_kernel(
     mu1: &Array<f32>,
     mu2: &Array<f32>,
     m11: &Array<f32>, // blur(x²)
@@ -57,7 +57,7 @@ pub fn ssim_cs_kernel(
 /// step actually needs (scale 4 has no IW weight, so the reduction
 /// averages this product directly).
 #[cube(launch_unchecked)]
-pub fn ssim_cs_l_kernel(
+pub(crate) fn ssim_cs_l_kernel(
     mu1: &Array<f32>,
     mu2: &Array<f32>,
     m11: &Array<f32>,

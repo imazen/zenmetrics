@@ -23,7 +23,7 @@ use core::f64::consts::PI;
 
 /// `f64` complex number for the transforms here.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct C64 {
+pub(super) struct C64 {
     /// Real part.
     pub re: f64,
     /// Imaginary part.
@@ -34,14 +34,14 @@ impl C64 {
     /// `re + i·im`.
     #[must_use]
     #[inline]
-    pub const fn new(re: f64, im: f64) -> Self {
+    pub(super) const fn new(re: f64, im: f64) -> Self {
         Self { re, im }
     }
 
     /// `e^{iθ}`.
     #[must_use]
     #[inline]
-    pub fn expi(theta: f64) -> Self {
+    pub(super) fn expi(theta: f64) -> Self {
         let (s, c) = theta.sin_cos();
         Self { re: c, im: s }
     }
@@ -49,7 +49,7 @@ impl C64 {
     /// Complex conjugate.
     #[must_use]
     #[inline]
-    pub fn conj(self) -> Self {
+    pub(super) fn conj(self) -> Self {
         Self {
             re: self.re,
             im: -self.im,
@@ -67,7 +67,7 @@ impl C64 {
 }
 
 /// Forward DFT of `buf`, in place. Any length.
-pub fn fft(buf: &mut [C64]) {
+pub(super) fn fft(buf: &mut [C64]) {
     let n = buf.len();
     if n <= 1 {
         return;
@@ -81,7 +81,7 @@ pub fn fft(buf: &mut [C64]) {
 }
 
 /// Inverse DFT of `buf`, in place, normalised by `1/n`.
-pub fn ifft(buf: &mut [C64]) {
+pub(super) fn ifft(buf: &mut [C64]) {
     let n = buf.len();
     if n <= 1 {
         return;
@@ -177,7 +177,7 @@ fn bluestein(buf: &mut [C64]) {
 }
 
 /// Forward 2-D DFT of a row-major `height × width` buffer, in place.
-pub fn fft2(buf: &mut [C64], width: usize, height: usize) {
+pub(super) fn fft2(buf: &mut [C64], width: usize, height: usize) {
     assert_eq!(buf.len(), width * height, "fft2: buffer size mismatch");
     for row in buf.chunks_exact_mut(width) {
         fft(row);
@@ -196,7 +196,7 @@ pub fn fft2(buf: &mut [C64], width: usize, height: usize) {
 
 /// Inverse 2-D DFT of a row-major `height × width` buffer, in place,
 /// normalised by `1/(width·height)`.
-pub fn ifft2(buf: &mut [C64], width: usize, height: usize) {
+pub(super) fn ifft2(buf: &mut [C64], width: usize, height: usize) {
     assert_eq!(buf.len(), width * height, "ifft2: buffer size mismatch");
     let mut col = vec![C64::default(); height];
     for x in 0..width {
@@ -215,7 +215,7 @@ pub fn ifft2(buf: &mut [C64], width: usize, height: usize) {
 
 /// `np.fft.fft2` of a real row-major `width × height` buffer.
 #[must_use]
-pub fn fft2_of(x: &[f64], width: usize, height: usize) -> Vec<C64> {
+pub(super) fn fft2_of(x: &[f64], width: usize, height: usize) -> Vec<C64> {
     assert_eq!(x.len(), width * height, "fft2_of: size");
     let mut buf: Vec<C64> = x.iter().map(|&v| C64::new(v, 0.0)).collect();
     fft2(&mut buf, width, height);
@@ -224,7 +224,7 @@ pub fn fft2_of(x: &[f64], width: usize, height: usize) -> Vec<C64> {
 
 /// How the image is extended onto the padded convolution lattice.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Pad {
+pub(super) enum Pad {
     /// Reflect about the edges, edge sample duplicated (`np.pad`
     /// 'symmetric', MATLAB `padarray` 'symmetric'). The `surround = 'none'`
     /// behaviour.
@@ -242,7 +242,7 @@ pub enum Pad {
 /// `2·height − 1 − py`; replicate clamps to `height − 1`. Both are applied
 /// componentwise on each axis, which reproduces the corner block too.
 #[must_use]
-pub fn pad_image(
+pub(super) fn pad_image(
     x: &[f64],
     width: usize,
     height: usize,
@@ -290,7 +290,7 @@ pub fn pad_image(
 ///
 /// Equivalent to upstream `fast_conv_fft`.
 #[must_use]
-pub fn conv_fft_pad(
+pub(super) fn conv_fft_pad(
     x: &[f64],
     width: usize,
     height: usize,

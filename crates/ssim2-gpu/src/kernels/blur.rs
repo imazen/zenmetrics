@@ -87,7 +87,7 @@
 use cubecl::prelude::*;
 
 mod consts {
-    #![allow(clippy::unreadable_literal, dead_code)]
+    #![allow(clippy::unreadable_literal, dead_code, unreachable_pub)]
     include!(concat!(env!("OUT_DIR"), "/recursive_gaussian.rs"));
 }
 
