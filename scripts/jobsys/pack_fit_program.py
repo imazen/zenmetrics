@@ -46,8 +46,8 @@ V2_SCRIPTS = {
     # zensim 538d3549 (TRAINEROPT): dev panels every 17th epoch under EPOCH_RULE == "last", sparse read_curve; the
     # trajectory and final weights do not depend on --log-every (gate: zensim benchmarks/traineropt_WORKLOG.md).
     "scripts/rev4_featpot/v2_lodo_mlp.py": "e91c6f8e951a7b34badcca2f1e2a6f14b71760aeec30aa1636ac1f6067bff918",
-    # zensim 6ffcb814 (design log E13): curated SafeSyn teacher legs, recipe token ts<rule>.
-    "scripts/rev4_featpot/v2_teacher.py": "f86256518dac726e972c98614498b1133c230a63140d2c9a1e845d0ade2d899d",
+    # zensim 6ffcb814 + c482fddf2a9c (design log E13): curated SafeSyn teacher legs, recipe token ts<rule>; uuid-named scratch copy.
+    "scripts/rev4_featpot/v2_teacher.py": "478e22f5070409e9bf539a125383abb76e110dda99793ae995f128e90b5011dd",
     # Revision R2 confirmatory full-data fits (features only).
     "scripts/rev4_featpot/v2_confirm_fit.py": "96543c227318bfcfbdcf5ce8b494fb25d4149264c65761e4c6f7ab41c49205e0",
     # zensim e7248c65 (EFFAUDIT D8: render_indexed_jobs + rendered_jobs=; panel_batch unchanged).
