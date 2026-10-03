@@ -13,6 +13,13 @@ Workspace conventions per the global rules:
 
 ## [Unreleased]
 
+- zenfleet-core (`3ed70624`): **Poison never overrides Done** in `LedgerView` (either order). Stale-view workers wrote Poison
+  after fresh Done rows (10 completed fitv2e18 cells read as poisoned); a later Failed row still re-opens a job (audit flip).
+- zenfleet-worker (`2d2f6f52`): a failed cell logs `cell failed [<class>] <cell> (<job>): <stderr tail>`; the chunked path
+  used to discard the executor's reason. fleet-entrypoint force-surfaces the line on every pass.
+- fit_cell_exec (`4bea56ef`): reports `ZEN_ERROR_CLASS` (`worker_lost` for OS-level errors, `unknown` for other fit exits) so a
+  transient crash retries instead of poisoning after one failure; runs of one cell take a per-host lock so a duplicate run
+  cannot delete a live run's directory. Active from the next packed fit program.
 - zenfleet-core / zenfleet-ledger / zenfleet-vastai (`7a268033`): **staging files are unique across containers that share a
   `TMPDIR`.** Ledger transfers staged through `zenledger_*_{pid}_{n}`; containers in separate PID namespaces repeat pids, so two
   tower fit workers finishing together staged their sidecars through one file and one worker's Done row was uploaded with the
