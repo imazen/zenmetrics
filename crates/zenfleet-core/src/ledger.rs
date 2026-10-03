@@ -132,13 +132,21 @@ impl LedgerView {
     }
 
     /// Fold in a row, keeping the one with the greatest `ts` (ties broken by status rank, so a
-    /// terminal verdict can't be regressed by a same-second in-flight row).
+    /// terminal verdict can't be regressed by a same-second in-flight row) — except that **Poison never
+    /// overrides Done**, in either order. Poison is a scheduling verdict derived from failure history,
+    /// and a row's `ts` is its writer's PASS start: a worker whose view had not yet seen a fresh Done
+    /// sidecar can still write Poison for that job afterwards (measured 2026-10-03 on fitv2e18: 10
+    /// completed cells carried later Poison rows from stale views, which plain latest-wins reported as
+    /// poisoned). A later **Failed** row still overrides Done — that is the audit flip that re-opens a
+    /// bad result (2026-08-27 hdrgrid; `zenfleet-ctl` `accounting_flip_tests`).
     pub fn apply(&mut self, row: LedgerRow) {
         let keep = match self.latest.get(&row.job_id) {
             None => true,
-            Some(cur) => {
-                row.ts > cur.ts || (row.ts == cur.ts && row.status.rank() > cur.status.rank())
-            }
+            Some(cur) => match (cur.status, row.status) {
+                (JobStatus::Done, JobStatus::Poison) => false,
+                (JobStatus::Poison, JobStatus::Done) => true,
+                _ => row.ts > cur.ts || (row.ts == cur.ts && row.status.rank() > cur.status.rank()),
+            },
         };
         if keep {
             self.latest.insert(row.job_id.clone(), row);
@@ -211,6 +219,31 @@ mod tests {
         assert_eq!(v.get(&id).unwrap().status, JobStatus::Done);
         v.apply(row(id.clone(), JobStatus::Failed, 150)); // older loses
         assert_eq!(v.get(&id).unwrap().status, JobStatus::Done);
+    }
+
+    #[test]
+    fn poison_never_overrides_done_but_an_audit_flip_does() {
+        let id = JobId::of(
+            &JobKind::Metric {
+                metric: "cvvdp".into(),
+            },
+            &[sha256(b"f")],
+        );
+        // A stale-view Poison written after the Done row: Done stays.
+        let mut v = LedgerView::new();
+        v.apply(row(id.clone(), JobStatus::Failed, 100));
+        v.apply(row(id.clone(), JobStatus::Done, 200));
+        v.apply(row(id.clone(), JobStatus::Poison, 300));
+        assert_eq!(v.get(&id).unwrap().status, JobStatus::Done);
+        assert_eq!(v.get(&id).unwrap().ts, 200);
+        // Same rows, the later Poison applied first: still Done.
+        let mut w = LedgerView::new();
+        w.apply(row(id.clone(), JobStatus::Poison, 300));
+        w.apply(row(id.clone(), JobStatus::Done, 200));
+        assert_eq!(w.get(&id).unwrap().status, JobStatus::Done);
+        // A later Failed row (the audit flip) still re-opens the job.
+        w.apply(row(id.clone(), JobStatus::Failed, 400));
+        assert_eq!(w.get(&id).unwrap().status, JobStatus::Failed);
     }
 
     #[test]
