@@ -43,21 +43,26 @@ P2D2_SCRIPTS = {
 V2_SCRIPTS = {
     # zensim ecc69a1f: amendment R4 (EPOCH_RULE = "last", train_and_select), CANONTAB v2c --root support, R2.3 screen specs.
     # zensim 3fc72546 (design log E23): seed indices 10-19 as a second disjoint stream; 0-9 unchanged.
-    "scripts/rev4_featpot/v2_common.py": "bbb5f6826253e08d03501eb704f6d20e1e30c442bb7f7c76199dee500e30ec44",
+    # zensim e930eb5a (Rev5 tables): refuse_nonfinite_kept, table_revision, dense_bake (was bbb5f682 at 3fc72546).
+    "scripts/rev4_featpot/v2_common.py": "efc6ad5623cdb882b2956fcf9fdf8c369b2acd3c4930aaea47ef55528918c8e6",
     # zensim 538d3549 (TRAINEROPT): dev panels every 17th epoch under EPOCH_RULE == "last", sparse read_curve; the
     # trajectory and final weights do not depend on --log-every (gate: zensim benchmarks/traineropt_WORKLOG.md).
     # zensim 3fc72546: --seed-index accepts 0..19 (v2_common.N_SEEDS); otherwise as c156fb4c.
-    "scripts/rev4_featpot/v2_lodo_mlp.py": "1f581300e9484e45550867b8503c7572331187c8d341bd87edc0a733417d85fc",
+    # zensim e930eb5a: NaN guard on kept columns + dense-bake predict on Rev5 tables (was 1f581300 at 3fc72546).
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "cb9ca9282ce739a12dd0bd40fee71e89806f2edfca10964c2eaa5039af657eb4",
     # zensim 6ffcb814 + c482fddf2a9c (design log E13): curated SafeSyn teacher legs, recipe token ts<rule>; uuid-named scratch copy.
     "scripts/rev4_featpot/v2_teacher.py": "6916ee5386f2f24c12332f1eff9efc949551b893c8da9936ff2cb8c45ac3eb31",
     # Revision R2 confirmatory full-data fits (features only).
     # zensim 01a662b3: set:/sel: specs + the cv/cf coverage leg (set-compare confirmatory read, 2026-10-04).
-    "scripts/rev4_featpot/v2_confirm_fit.py": "24a417b3ab88be46ae25311a3cdfefcdabe8c469345c19918d0521c811b4b920",
+    # zensim e930eb5a: the same NaN guard (was 24a417b3 at 01a662b3).
+    "scripts/rev4_featpot/v2_confirm_fit.py": "2d1a92c0fb6fc4a64eea9ba8e0c7da39817ed24932ddade956737f9c994634af",
     # zensim e7248c65 (EFFAUDIT D8: render_indexed_jobs + rendered_jobs=; panel_batch unchanged).
     "scripts/lib/zen_stats.py": "68532bad3b3482bc734508183872d9253893cbacd9d3299d523894fc38158a6a",
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v25 (2026-10-04): V2_SCRIPTS at zensim e930eb5a (Rev5-table guards); profile v2r5 adds V2R5_DATA for the Rev5 root
+# (image zenfleet-worker:fit-v2r5-v25-w<worker>).
 # Program v24 (image zenfleet-worker:fit-v2-v24-w<worker>, 2026-10-04): v23 + zensim 01a662b3 v2_confirm_fit (set:/sel: specs and
 # the coverage leg) for the set-compare confirmatory fits.
 # Program v23 (image zenfleet-worker:fit-v2-v23-w<worker>, 2026-10-04): v21 binaries and data + zensim 3fc72546 v2_common /
@@ -100,6 +105,15 @@ V2_DATA = {
     "data/e15/coverage_pool.keys.parquet": "bc225a115ab8505738a5c17ced6d4fc592a9a38ac6d9ec98661f4e8f0898addf",
     "data/e15/coverage_pool.parquet.manifest.json": "b11ef05944a656acb64a0cabf7f88abd748d8ff0cada1a7f240f20a738c3c068",
 }
+# Rev5 tables (zensim benchmarks/rev5_spec_2026-10-04.md §6): the v2r5 profile carries the Rev5 E15 coverage pool (same 42,021
+# rungs / 9,594 ladders, basic+peaks+v2 at Rev5, every other slot NaN) and the same SafeSyn strata (row order unchanged). The
+# E14 KADIS ordinal table is a Rev4 extraction and is NOT shipped (a ko cell on a Rev5 root then fails loudly instead of mixing).
+V2R5_DATA = {
+    "data/e13/safesyn_fit_strata.npz": V2_DATA["data/e13/safesyn_fit_strata.npz"],
+    "data/e15/coverage_pool.parquet": "6bf584ac70579bdf9a0242b7ccfd688ff0182cb5c75e35085ba71967207f8f5e",
+    "data/e15/coverage_pool.keys.parquet": "bc225a115ab8505738a5c17ced6d4fc592a9a38ac6d9ec98661f4e8f0898addf",
+    "data/e15/coverage_pool.parquet.manifest.json": "a5992e8a3f25771964b281b1a17db713952d5e7c0a6c65e53ad31990e213e6a5",
+}
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
 
@@ -126,18 +140,18 @@ def main() -> None:
     p.add_argument("--executor", type=Path, required=True)
     p.add_argument("--bin-dir", type=Path, required=True)
     p.add_argument("--build-meta", type=Path, required=True)
-    p.add_argument("--profile", choices=("p0", "p2d2", "v2"), default="p0")
+    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5"), default="p0")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--data", action="append", default=[], metavar="NAME=PATH", help="a pinned V2_DATA file (profile v2)")
     args = p.parse_args()
     files = {}
-    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS}[args.profile].items():
+    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS}[args.profile].items():
         path = args.source / name
         if digest(path) != expected:
             raise ValueError(f"preregistered fit source changed: {name}")
         files[name] = path
     given = dict(item.split("=", 1) for item in args.data)
-    wanted = V2_DATA if args.profile == "v2" else {}
+    wanted = {"v2": V2_DATA, "v2r5": V2R5_DATA}.get(args.profile, {})
     if sorted(given) != sorted(wanted):
         raise ValueError(f"--data must name exactly {sorted(wanted)}")
     for name, expected in wanted.items():
