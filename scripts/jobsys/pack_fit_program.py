@@ -42,10 +42,12 @@ P2D2_SCRIPTS = {
 # v2_lodo_mlp 6d7d2d60….
 V2_SCRIPTS = {
     # zensim ecc69a1f: amendment R4 (EPOCH_RULE = "last", train_and_select), CANONTAB v2c --root support, R2.3 screen specs.
-    "scripts/rev4_featpot/v2_common.py": "e18675ce58eb26cf50be106cd925f778f9722a3d05bb2ecd60534d7534175958",
+    # zensim 3fc72546 (design log E23): seed indices 10-19 as a second disjoint stream; 0-9 unchanged.
+    "scripts/rev4_featpot/v2_common.py": "bbb5f6826253e08d03501eb704f6d20e1e30c442bb7f7c76199dee500e30ec44",
     # zensim 538d3549 (TRAINEROPT): dev panels every 17th epoch under EPOCH_RULE == "last", sparse read_curve; the
     # trajectory and final weights do not depend on --log-every (gate: zensim benchmarks/traineropt_WORKLOG.md).
-    "scripts/rev4_featpot/v2_lodo_mlp.py": "c156fb4c8e1182ea92108295dd62c2ab2fc59f4981d1eae5bbec69f58d0ff1a2",
+    # zensim 3fc72546: --seed-index accepts 0..19 (v2_common.N_SEEDS); otherwise as c156fb4c.
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "1f581300e9484e45550867b8503c7572331187c8d341bd87edc0a733417d85fc",
     # zensim 6ffcb814 + c482fddf2a9c (design log E13): curated SafeSyn teacher legs, recipe token ts<rule>; uuid-named scratch copy.
     "scripts/rev4_featpot/v2_teacher.py": "6916ee5386f2f24c12332f1eff9efc949551b893c8da9936ff2cb8c45ac3eb31",
     # Revision R2 confirmatory full-data fits (features only).
@@ -55,6 +57,9 @@ V2_SCRIPTS = {
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v23 (image zenfleet-worker:fit-v2-v23-w<worker>, 2026-10-04): v21 binaries and data + zensim 3fc72546 v2_common /
+# v2_lodo_mlp (seed indices 10-19; indices 0-9 byte-identical in effect) + the current fit_cell_exec.py (ZEN_ERROR_CLASS, per-cell
+# flock). Numbered v23 because the tag fit-v2-v22 already names a program-v21 image (superseded, see CLAUDE.md).
 # Program v21 (image zenfleet-worker:fit-v2-v21, 2026-10-03): v20 + zensim a7a3168d scripts (design log E15: cv<w>:cf<mask>
 # coverage leg over the pinned pool) + the E15 coverage pool, keys and manifest (V2_DATA).
 # Program v20 (image zenfleet-worker:fit-v2-v20, 2026-10-03): v19 with the compliant E14 table (20 KADIS types; 6/9/10/15 are
