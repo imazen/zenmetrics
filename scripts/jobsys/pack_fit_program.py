@@ -51,7 +51,9 @@ V2_SCRIPTS = {
     # zensim e930eb5a: NaN guard on kept columns + dense-bake predict on Rev5 tables (was 1f581300 at 3fc72546).
     "scripts/rev4_featpot/v2_lodo_mlp.py": "cb9ca9282ce739a12dd0bd40fee71e89806f2edfca10964c2eaa5039af657eb4",
     # zensim 6ffcb814 + c482fddf2a9c (design log E13): curated SafeSyn teacher legs, recipe token ts<rule>; uuid-named scratch copy.
-    "scripts/rev4_featpot/v2_teacher.py": "6916ee5386f2f24c12332f1eff9efc949551b893c8da9936ff2cb8c45ac3eb31",
+    # zensim 9dfc50b8: the E15 coverage-pool pin follows the pool manifest's formula_revision (Rev4 6b00349c, Rev5 6bf584ac;
+    # was 6916ee53, which refused the Rev5 pool and failed every E24 cell).
+    "scripts/rev4_featpot/v2_teacher.py": "0b511e7daad3c26129b0937bce9283287fa8bfe59d3b4415e8e67dfcad6fddaf",
     # Revision R2 confirmatory full-data fits (features only).
     # zensim 01a662b3: set:/sel: specs + the cv/cf coverage leg (set-compare confirmatory read, 2026-10-04).
     # zensim e930eb5a: the same NaN guard (was 24a417b3 at 01a662b3).
@@ -61,6 +63,8 @@ V2_SCRIPTS = {
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v25b (2026-10-04): v25 + zensim 9dfc50b8 v2_teacher (revision-aware E15 pool pin); image fit-v2r5-v25b-w<worker>.
+# v25's E24 jobset failed all 100 cells on the Rev4-only pool pin and was paused before any cell succeeded.
 # Program v25 (2026-10-04): V2_SCRIPTS at zensim e930eb5a (Rev5-table guards); profile v2r5 adds V2R5_DATA for the Rev5 root
 # (image zenfleet-worker:fit-v2r5-v25-w<worker>).
 # Program v24 (image zenfleet-worker:fit-v2-v24-w<worker>, 2026-10-04): v23 + zensim 01a662b3 v2_confirm_fit (set:/sel: specs and
