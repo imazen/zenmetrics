@@ -51,12 +51,15 @@ V2_SCRIPTS = {
     # zensim 6ffcb814 + c482fddf2a9c (design log E13): curated SafeSyn teacher legs, recipe token ts<rule>; uuid-named scratch copy.
     "scripts/rev4_featpot/v2_teacher.py": "6916ee5386f2f24c12332f1eff9efc949551b893c8da9936ff2cb8c45ac3eb31",
     # Revision R2 confirmatory full-data fits (features only).
-    "scripts/rev4_featpot/v2_confirm_fit.py": "96543c227318bfcfbdcf5ce8b494fb25d4149264c65761e4c6f7ab41c49205e0",
+    # zensim 01a662b3: set:/sel: specs + the cv/cf coverage leg (set-compare confirmatory read, 2026-10-04).
+    "scripts/rev4_featpot/v2_confirm_fit.py": "24a417b3ab88be46ae25311a3cdfefcdabe8c469345c19918d0521c811b4b920",
     # zensim e7248c65 (EFFAUDIT D8: render_indexed_jobs + rendered_jobs=; panel_batch unchanged).
     "scripts/lib/zen_stats.py": "68532bad3b3482bc734508183872d9253893cbacd9d3299d523894fc38158a6a",
     # Design log E5/E5b epoch-selection cells.
     "scripts/rev4_featpot/e5_epochs.py": "059e5eeb4d2efc167b9e99ab95e4f0b689f1f8935eb7c62cc78ad640ebce4f70",
 }
+# Program v24 (image zenfleet-worker:fit-v2-v24-w<worker>, 2026-10-04): v23 + zensim 01a662b3 v2_confirm_fit (set:/sel: specs and
+# the coverage leg) for the set-compare confirmatory fits.
 # Program v23 (image zenfleet-worker:fit-v2-v23-w<worker>, 2026-10-04): v21 binaries and data + zensim 3fc72546 v2_common /
 # v2_lodo_mlp (seed indices 10-19; indices 0-9 byte-identical in effect) + the current fit_cell_exec.py (ZEN_ERROR_CLASS, per-cell
 # flock). Numbered v23 because the tag fit-v2-v22 already names a program-v21 image (superseded, see CLAUDE.md).
