@@ -124,7 +124,7 @@ V2R5_DATA = {
 V2R5HDR_SCRIPTS = {**V2_SCRIPTS,
     "scripts/rev4_featpot/v2_common.py": "03ce8d76333f6d49682a6c5e8184a1f8c4946bf3b5cb7760075a36704f74d814",
     "scripts/rev4_featpot/v2_lodo_mlp.py": "64d53b79489f5e69dce42005f84b28d7b852e034de4aa1724df9065cb5cbcece",
-    "scripts/rev4_featpot/v2_teacher.py": "99a6381b6e6df13d8015927e8c32d3c60b055d533e562ddfdf82e7f3a29a1a01",
+    "scripts/rev4_featpot/v2_teacher.py": "fbab8e780b587f53ca6fe983c383a04ae4ae292ca011b471932eee74b9a30327",
     "scripts/rev4_featpot/v2_confirm_fit.py": "80bef53b92b39b3ac971790f66ef8aa21e0c9d570e1f8ce752c707f8eab0dea8",
 }
 
