@@ -128,6 +128,16 @@ V2R5HDR_SCRIPTS = {**V2_SCRIPTS,
     "scripts/rev4_featpot/v2_confirm_fit.py": "80bef53b92b39b3ac971790f66ef8aa21e0c9d570e1f8ce752c707f8eab0dea8",
 }
 
+# E27 on the E26 + SHIPPATH merge: pooled-rank / within-reference absolute
+# HDR legs. Keep the frozen E26 profile; include safe-path/coverage runtime owner.
+V2R5HDR27_SCRIPTS = {**V2R5HDR_SCRIPTS,
+    "scripts/rev4_featpot/v2_common.py": "cd3af4fff63c9672f834533b382a9e35d3a4ce93c3baf8287bb88bbc0e670604",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "ad8052869fb01c0c4aabbcddb028b0617ea28a5983395c6ec27a08799c8af0e4",
+    "scripts/rev4_featpot/v2_teacher.py": "8185465d4e59c9e2e4dd05d99d46e49b17757d942d0dfd99430c010c9268529c",
+    "scripts/rev4_featpot/v2_confirm_fit.py": "887b5a199901478476d8bb31b25ac0c7634ece217f331f9b3c8a60683986e507",
+    "scripts/rev4_featpot/v2c_wide.py": "6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291",
+}
+
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
 
@@ -154,18 +164,18 @@ def main() -> None:
     p.add_argument("--executor", type=Path, required=True)
     p.add_argument("--bin-dir", type=Path, required=True)
     p.add_argument("--build-meta", type=Path, required=True)
-    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr"), default="p0")
+    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27"), default="p0")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--data", action="append", default=[], metavar="NAME=PATH", help="a pinned V2_DATA file (profile v2)")
     args = p.parse_args()
     files = {}
-    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS}[args.profile].items():
+    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS}[args.profile].items():
         path = args.source / name
         if digest(path) != expected:
             raise ValueError(f"preregistered fit source changed: {name}")
         files[name] = path
     given = dict(item.split("=", 1) for item in args.data)
-    wanted = {"v2": V2_DATA, "v2r5": V2R5_DATA, "v2r5hdr": V2R5_DATA}.get(args.profile, {})
+    wanted = {"v2": V2_DATA, "v2r5": V2R5_DATA, "v2r5hdr": V2R5_DATA, "v2r5hdr27": V2R5_DATA}.get(args.profile, {})
     if sorted(given) != sorted(wanted):
         raise ValueError(f"--data must name exactly {sorted(wanted)}")
     for name, expected in wanted.items():
