@@ -118,6 +118,16 @@ V2R5_DATA = {
     "data/e15/coverage_pool.keys.parquet": "bc225a115ab8505738a5c17ced6d4fc592a9a38ac6d9ec98661f4e8f0898addf",
     "data/e15/coverage_pool.parquet.manifest.json": "a5992e8a3f25771964b281b1a17db713952d5e7c0a6c65e53ad31990e213e6a5",
 }
+
+# E26: native HDR fit-only leg. Its admitted TRAIN table is carried in the
+# content-addressed data pack, never the program or a VAL/confirmation leg.
+V2R5HDR_SCRIPTS = {**V2_SCRIPTS,
+    "scripts/rev4_featpot/v2_common.py": "03ce8d76333f6d49682a6c5e8184a1f8c4946bf3b5cb7760075a36704f74d814",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "64d53b79489f5e69dce42005f84b28d7b852e034de4aa1724df9065cb5cbcece",
+    "scripts/rev4_featpot/v2_teacher.py": "99a6381b6e6df13d8015927e8c32d3c60b055d533e562ddfdf82e7f3a29a1a01",
+    "scripts/rev4_featpot/v2_confirm_fit.py": "80bef53b92b39b3ac971790f66ef8aa21e0c9d570e1f8ce752c707f8eab0dea8",
+}
+
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
 
@@ -144,18 +154,18 @@ def main() -> None:
     p.add_argument("--executor", type=Path, required=True)
     p.add_argument("--bin-dir", type=Path, required=True)
     p.add_argument("--build-meta", type=Path, required=True)
-    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5"), default="p0")
+    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr"), default="p0")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--data", action="append", default=[], metavar="NAME=PATH", help="a pinned V2_DATA file (profile v2)")
     args = p.parse_args()
     files = {}
-    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS}[args.profile].items():
+    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS}[args.profile].items():
         path = args.source / name
         if digest(path) != expected:
             raise ValueError(f"preregistered fit source changed: {name}")
         files[name] = path
     given = dict(item.split("=", 1) for item in args.data)
-    wanted = {"v2": V2_DATA, "v2r5": V2R5_DATA}.get(args.profile, {})
+    wanted = {"v2": V2_DATA, "v2r5": V2R5_DATA, "v2r5hdr": V2R5_DATA}.get(args.profile, {})
     if sorted(given) != sorted(wanted):
         raise ValueError(f"--data must name exactly {sorted(wanted)}")
     for name, expected in wanted.items():
