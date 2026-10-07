@@ -9,7 +9,9 @@ import tarfile
 import tempfile
 import unittest
 
-from qualified_fit_contract import V40_CONTRACT, trusted_contract, sha
+from qualified_fit_contract import V40_CONTRACT, trusted_contract, verify_training, sha
+from unittest.mock import patch
+from types import SimpleNamespace
 
 
 class Contract(unittest.TestCase):
@@ -131,6 +133,46 @@ class Contract(unittest.TestCase):
             kind, archive = self.prepare(bad, contract)
             with self.assertRaisesRegex(ValueError, "binding differs"):
                 trusted_contract(kind, archive, self.inspector)
+
+    def test_native_fit_disposition_and_checkpoint_are_verified(self):
+        native = dict(name="upiq380", table_sha256="a" * 64,
+            manifest_sha256="b" * 64, keys_sha256="c" * 64,
+            label_source={"original": "registered"}, label_disposition={"state": "approved"},
+            label_disposition_sha256="d" * 64)
+        expected = dict(schema="v40-research-fit-contract-v1", research_upiq=True,
+            feature_set_id=None, columns=[13, 14], route="kadid", epochs=2,
+            pairs_per_epoch=128, selected_epoch=1, seed_index=0,
+            wide_receipt_sha256="wide", frozen_sha256="frozen", data_role_decision_sha256="D1",
+            execution_contract="local-smoke", init_seed=1101, sample_seed=101,
+            upiq_admission=native, table_admission=[native],
+            input_contracts={"kadid": {"upiq380": dict(loss_mode="Rank", n_features=1853,
+                rows=330, train_w=4.34410740924913, val_w=0.0, within_ref=False)}},
+            train_weights={"kadid": {"hdr": 4.34410740924913}})
+        result = {k: expected[k] for k in ("epochs", "pairs_per_epoch", "seed_index",
+            "wide_receipt_sha256", "frozen_sha256", "data_role_decision_sha256", "execution_contract")}
+        result.update(schema="e31-native-hdr-research-training-cell-v1", training_only=True,
+            train_weights=expected["train_weights"]["kadid"], selection=dict(epoch_rule="last",
+                selected_epoch=1, strict_table_admission=[native], upiq380_fit_admission=native))
+        inp = {**expected["input_contracts"]["kadid"]["upiq380"], "name":"upiq380",
+            "path":"/data/fit.parquet", "sha256": native["table_sha256"]}
+        receipt = {**native, "path":inp["path"], "selected_ids":[13,14],
+            "native_width":1825, "logical_width":1853, "input_contract":"upiq-exr-bt709-nits-v1"}
+        repro = dict(checkpoint_epoch="001", epochs=2, requested_epochs=2, pairs_per_epoch=128,
+            pair_sampling="uniform", init_seed=1101, sample_seed=101, inputs=[inp],
+            effective_minibatch=1, target_column="human_score", target_scale=1.0,
+            table_admission=dict(qualified_provenance=False, formula_revision=5,
+                tables=[], upiq380=receipt))
+        decoded = dict(formula_revision=5, qualified_provenance=False, feature_set_id=None, repro=repro)
+        kind = dict(argv=["--strict-admission", "--train-only"], data_sha="e"*64)
+        with patch('qualified_fit_contract.subprocess.run', return_value=SimpleNamespace(stdout=json.dumps(decoded))):
+            self.assertEqual(verify_training(result, self.root/'checkpoint', kind, expected, self.inspector), "local-smoke")
+        for key, value in (("label_disposition_sha256", "0"*64), ("keys_sha256", "0"*64),
+                ("selected_ids", [13]), ("native_width", 1853), ("path", "/data/development.parquet")):
+            bad = copy.deepcopy(decoded)
+            bad["repro"]["table_admission"]["upiq380"][key] = value
+            with self.subTest(key=key), patch('qualified_fit_contract.subprocess.run', return_value=SimpleNamespace(stdout=json.dumps(bad))):
+                with self.assertRaises(ValueError):
+                    verify_training(result, self.root/'checkpoint', kind, expected, self.inspector)
 
     def test_owner_block_and_contract_inventory_cannot_be_relabelled(self):
         blocked = copy.deepcopy(self.contract)
