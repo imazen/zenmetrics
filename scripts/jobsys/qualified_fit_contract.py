@@ -68,6 +68,8 @@ def verify_training(result, checkpoint, kind, expected, inspector):
         raise ValueError(f'unqualified/incomplete training-only result: {why}')
     if '--strict-admission' not in kind['argv'] or '--train-only' not in kind['argv']:
         refuse('strict training-only flags required')
+    if result.get('training_only') is not True:
+        refuse('registered training-only contract cannot use a prediction result')
     if result.get('schema') != 'rev5-qualified-training-cell-v1':
         refuse('result schema')
     for key in ('epochs', 'pairs_per_epoch', 'seed_index', 'wide_receipt_sha256', 'frozen_sha256',

@@ -254,7 +254,7 @@ def verify_blob(blob: Path, stage: Path, name: str, kind: dict, *, program_archi
     if digest(dest / relative) != result["selected_bake_sha256"] or \
             result["selected_bake_sha256"] != receipt["selected_bake_sha"]:
         raise ValueError(f"selected checkpoint SHA mismatch: {name}")
-    if result.get("training_only") is True:
+    if "--strict-admission" in kind["argv"] or result.get("training_only") is True:
         from qualified_fit_contract import trusted_contract, verify_training
         expected = trusted_contract(kind, program_archive, checkpoint_inspector)
         execution = verify_training(result, dest / relative, kind, expected, checkpoint_inspector)

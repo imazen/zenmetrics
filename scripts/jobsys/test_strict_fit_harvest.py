@@ -84,6 +84,12 @@ class StrictHarvest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'strict training-only'):
                 self.verify(root,cell)
 
+    def test_prediction_result_cannot_bypass_registered_contract(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            with self.assertRaisesRegex(ValueError,'training-only contract'):
+                self.verify(root,self.cell(root,training_only=False,prediction=[],test_rows=0))
+
     def test_short_smoke_under_full_job_refuses(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d)
