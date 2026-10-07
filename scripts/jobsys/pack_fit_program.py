@@ -138,6 +138,19 @@ V2R5HDR27_SCRIPTS = {**V2R5HDR_SCRIPTS,
     "scripts/rev4_featpot/v2c_wide.py": "6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291",
 }
 
+
+# E28: registered within-dataset pooled rank/Pearson objectives and grouped NM.
+# Preserve prior program profiles; these hashes bind the new research program.
+V2R5S2RECIPE28_SCRIPTS = {**V2R5HDR27_SCRIPTS,
+    "scripts/rev4_featpot/v2_common.py": "921bfa79f832ceb2fc28a25673b656f8e33368d6e798f65fe1efd5a5f6e7770d",
+    "scripts/rev4_featpot/v2_lodo_mlp.py": "a2513f96e655879dd03fe819de547df20b3ae68ef92c840f77cfa360e904da36",
+    "scripts/lib/zen_stats.py": "3a0ba0b03baca9e4a1f57b62ac09bbfed478fcc6aa456828e3dc33a06135e972",
+    "scripts/rev4_featpot/e28_recipe.py": "afa8e8a64d53dfc777a230c4dee021d0d859f7c20c7b8b547aa30b7cbbed31d1",
+    "scripts/rev4_featpot/e28_simplex.py": "eb7299d83a4876c1915e89e20cbb614a1686e8f2e41a2b99727d9182eb1b34cd",
+    "benchmarks/e28_teacher_pin_2026-10-07.json": "ddbc9c22cd08f545f76c50dd60947062b285d937df862f61153ff1685d9bc599",
+    "benchmarks/e28_nm_grouping_2026-10-07.json": "266df7f42568640035427cf850d77150c50ba34893c4a349b972237c1310aa08",
+}
+
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
 
@@ -164,18 +177,18 @@ def main() -> None:
     p.add_argument("--executor", type=Path, required=True)
     p.add_argument("--bin-dir", type=Path, required=True)
     p.add_argument("--build-meta", type=Path, required=True)
-    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27"), default="p0")
+    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28"), default="p0")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--data", action="append", default=[], metavar="NAME=PATH", help="a pinned V2_DATA file (profile v2)")
     args = p.parse_args()
     files = {}
-    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS}[args.profile].items():
+    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS}[args.profile].items():
         path = args.source / name
         if digest(path) != expected:
             raise ValueError(f"preregistered fit source changed: {name}")
         files[name] = path
     given = dict(item.split("=", 1) for item in args.data)
-    wanted = {"v2": V2_DATA, "v2r5": V2R5_DATA, "v2r5hdr": V2R5_DATA, "v2r5hdr27": V2R5_DATA}.get(args.profile, {})
+    wanted = {"v2": V2_DATA, "v2r5": V2R5_DATA, "v2r5hdr": V2R5_DATA, "v2r5hdr27": V2R5_DATA, "v2r5s2recipe28": V2R5_DATA}.get(args.profile, {})
     if sorted(given) != sorted(wanted):
         raise ValueError(f"--data must name exactly {sorted(wanted)}")
     for name, expected in wanted.items():
