@@ -83,12 +83,16 @@ set that dead-worker window. A requeue needs a worker that still serves the jobs
 Worker claim ownership also governs shutdown and progress writes: SIGTERM/SIGINT
 release first reads the claim and deletes only when its second token names this
 worker. Progress renewal checks that same owner and uses the read ETag with
-`put_update`, just like the timer heartbeat. Ownership loss, unreadable claims or
-a failed CAS disarm both the held lease and its matching in-flight chunk; finishing
-a chunk disarms it too. A late result for an older chunk cannot clear a newer
-in-flight chunk. Execution already in progress is not cancelled by this change.
+`put_update`, just like the timer heartbeat. A failed CAS re-reads the claim
+once: if it still names this worker, the lease remains held/in-flight and later
+heartbeats continue. The colliding update does not publish its progress. A foreign
+or missing owner on re-read disarms both the held lease and its matching in-flight
+chunk; finishing a chunk disarms it too. A late result for an older chunk cannot
+clear a newer in-flight chunk. Execution already in progress is not cancelled by this change.
 Release uses a best-effort GET-then-DELETE protocol. Storage errors fall back
-to TTL reclaim. The ownership check and DELETE are separate storage operations.
+to TTL reclaim. Release also validates the timestamp as u64. The ownership check
+and DELETE are separate storage operations: a steal between them can still be
+deleted.
 
 **Drain caveat.** `drain: true` only stops workers from *starting* new passes; a pass that is already
 running keeps claiming cells (fit jobsets that were drained still produced new DONE cells). To move

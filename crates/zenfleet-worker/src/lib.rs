@@ -213,7 +213,15 @@ where
     let Ok(body) = std::str::from_utf8(&body) else {
         return false;
     };
-    body.split_whitespace().nth(1) == Some(worker) && delete()
+    let mut tokens = body.split_whitespace();
+    if tokens
+        .next()
+        .and_then(|ts| ts.parse::<u64>().ok())
+        .is_none()
+    {
+        return false;
+    }
+    tokens.next() == Some(worker) && delete()
 }
 
 /// Release (delete) a per-cell claim so the job requeues immediately. See [`release_claim_r2_key`].
@@ -429,12 +437,12 @@ where
 /// Result of one heartbeat attempt on one held chunk claim.
 #[derive(Debug, PartialEq, Eq)]
 enum HeartbeatOutcome {
-    /// The claim was ours and its timestamp was refreshed.
+    /// Our timestamp was refreshed, or a failed CAS re-read confirmed we still own it.
     Renewed,
     /// The claim now names another worker (it was stolen after a missed heartbeat): we must
     /// not touch it, or we would overwrite the new owner's lease.
     NotOwner,
-    /// The claim object is gone (released) or unreadable, or the conditional write lost a race.
+    /// The claim is gone/unreadable, or a failed CAS re-read no longer names us.
     Lost,
 }
 
@@ -443,9 +451,10 @@ enum HeartbeatOutcome {
 /// second token. The write is conditional on the ETag that was read, so a steal that lands
 /// between the read and the write makes this a harmless no-op rather than a clobber.
 /// `get` returns `(body, etag)`; `put` writes the new body under `If-Match: etag`.
+/// A failed CAS re-reads ownership once; same-owner contention retains the lease.
 fn heartbeat_chunk_claim<G, P>(get: G, put: P, worker: &str, now: u64) -> HeartbeatOutcome
 where
-    G: FnOnce() -> Option<(String, String)>,
+    G: FnMut() -> Option<(String, String)>,
     P: FnOnce(&str, &str) -> bool,
 {
     update_chunk_claim(get, put, worker, now, None)
@@ -460,21 +469,21 @@ fn renew_chunk_claim<G, P>(
     total: u32,
 ) -> HeartbeatOutcome
 where
-    G: FnOnce() -> Option<(String, String)>,
+    G: FnMut() -> Option<(String, String)>,
     P: FnOnce(&str, &str) -> bool,
 {
     update_chunk_claim(get, put, worker, now, Some(&format!("{done}/{total}")))
 }
 
 fn update_chunk_claim<G, P>(
-    get: G,
+    mut get: G,
     put: P,
     worker: &str,
     now: u64,
     progress: Option<&str>,
 ) -> HeartbeatOutcome
 where
-    G: FnOnce() -> Option<(String, String)>,
+    G: FnMut() -> Option<(String, String)>,
     P: FnOnce(&str, &str) -> bool,
 {
     let Some((body, etag)) = get() else {
@@ -489,7 +498,15 @@ where
     if put(&format!("{now} {worker} {progress}"), &etag) {
         HeartbeatOutcome::Renewed
     } else {
-        HeartbeatOutcome::Lost
+        // A failed If-Match can be our timer/progress path winning the race.
+        // Keep renewing an unfinished lease while storage still names us. One
+        // re-read is bounded; it never writes over an intervening foreign owner.
+        match get() {
+            Some((body, _)) if body.split_whitespace().nth(1) == Some(worker) => {
+                HeartbeatOutcome::Renewed
+            }
+            _ => HeartbeatOutcome::Lost,
+        }
     }
 }
 
@@ -4209,20 +4226,25 @@ mod tests {
         );
         assert_eq!(out, HeartbeatOutcome::NotOwner);
 
-        // Released / unreadable claim, or a lost conditional write: report Lost, no panic.
+        // Released / unreadable claim, including after a failed CAS: report Lost, no panic.
         assert_eq!(
             heartbeat_chunk_claim(|| None, |_, _| panic!("no claim to renew"), "w1", 1),
             HeartbeatOutcome::Lost
         );
+        let mut reads = 0;
         assert_eq!(
             heartbeat_chunk_claim(
-                || Some(("1 w1 0/1".to_string(), "e".to_string())),
+                || {
+                    reads += 1;
+                    (reads == 1).then(|| ("1 w1 0/1".to_string(), "e".to_string()))
+                },
                 |_, _| false,
                 "w1",
                 2
             ),
             HeartbeatOutcome::Lost
         );
+        assert_eq!(reads, 2, "failed CAS must confirm that the claim is gone");
     }
 
     /// E26 loop: a stopped duplicate still remembers this chunk, but the claim
@@ -4411,6 +4433,202 @@ mod tests {
         track_chunk_renewal(&held, &inflight, "next", &HeartbeatOutcome::Renewed, true);
         assert!(held.lock().unwrap().is_empty());
         assert!(inflight.lock().unwrap().is_none());
+    }
+
+    /// Reviewer interleaving: progress reads A, this worker's timer writes B,
+    /// then progress's If-Match A fails. The unfinished lease still belongs to us.
+    #[test]
+    fn workerfix_same_owner_timer_race_keeps_progress_chunk_held() {
+        let cid = "chunk-active";
+        let held: HeldChunks = Arc::new(Mutex::new([cid.to_string()].into_iter().collect()));
+        let inflight: ChunkInflight = Arc::new(Mutex::new(Some(cid.to_string())));
+        let claim = std::cell::RefCell::new(("100 owner 0/4".to_string(), "A".to_string()));
+        let reads = std::cell::Cell::new(0);
+        let writes = std::cell::Cell::new(0);
+        let progress = renew_chunk_claim(
+            || {
+                let read = claim.borrow().clone();
+                reads.set(reads.get() + 1);
+                if reads.get() == 1 {
+                    let timer = heartbeat_chunk_claim(
+                        || Some(claim.borrow().clone()),
+                        |body, etag| {
+                            let mut current = claim.borrow_mut();
+                            assert_eq!(current.1, etag);
+                            *current = (body.to_string(), "B".to_string());
+                            true
+                        },
+                        "owner",
+                        200,
+                    );
+                    assert_eq!(timer, HeartbeatOutcome::Renewed);
+                }
+                Some(read)
+            },
+            |body, etag| {
+                writes.set(writes.get() + 1);
+                let mut current = claim.borrow_mut();
+                if current.1 != etag {
+                    return false;
+                }
+                current.0 = body.to_string();
+                true
+            },
+            "owner",
+            201,
+            1,
+            4,
+        );
+        track_chunk_renewal(&held, &inflight, cid, &progress, false);
+        assert!(
+            held.lock().unwrap().contains(cid),
+            "same-owner contention must retain timer renewal"
+        );
+        assert_eq!(inflight.lock().unwrap().as_deref(), Some(cid));
+        assert_eq!(progress, HeartbeatOutcome::Renewed);
+        assert_eq!(
+            *claim.borrow(),
+            ("200 owner 0/4".to_string(), "B".to_string())
+        );
+        assert_eq!(reads.get(), 2, "failed CAS must recheck storage ownership");
+        assert_eq!(
+            writes.get(),
+            1,
+            "contention recovery is bounded to one re-read"
+        );
+    }
+
+    /// The shared helper also protects the opposite direction: timer A loses
+    /// to our successful progress B and must retain both tracking states.
+    #[test]
+    fn workerfix_same_owner_progress_race_keeps_timer_chunk_held() {
+        let cid = "chunk-active";
+        let held: HeldChunks = Arc::new(Mutex::new([cid.to_string()].into_iter().collect()));
+        let inflight: ChunkInflight = Arc::new(Mutex::new(Some(cid.to_string())));
+        let claim = std::cell::RefCell::new(("100 owner 0/4".to_string(), "A".to_string()));
+        let reads = std::cell::Cell::new(0);
+        let timer = heartbeat_chunk_claim(
+            || {
+                let read = claim.borrow().clone();
+                reads.set(reads.get() + 1);
+                if reads.get() == 1 {
+                    assert_eq!(
+                        renew_chunk_claim(
+                            || Some(claim.borrow().clone()),
+                            |body, etag| {
+                                let mut current = claim.borrow_mut();
+                                assert_eq!(current.1, etag);
+                                *current = (body.to_string(), "B".to_string());
+                                true
+                            },
+                            "owner",
+                            200,
+                            1,
+                            4,
+                        ),
+                        HeartbeatOutcome::Renewed,
+                    );
+                }
+                Some(read)
+            },
+            |_, etag| {
+                assert_eq!(etag, "A");
+                assert_eq!(claim.borrow().1, "B");
+                false
+            },
+            "owner",
+            201,
+        );
+        track_chunk_renewal(&held, &inflight, cid, &timer, false);
+        assert!(held.lock().unwrap().contains(cid));
+        assert_eq!(inflight.lock().unwrap().as_deref(), Some(cid));
+        assert_eq!(timer, HeartbeatOutcome::Renewed);
+        assert_eq!(claim.borrow().0, "200 owner 1/4");
+        assert_eq!(reads.get(), 2);
+    }
+
+    #[test]
+    fn workerfix_failed_cas_rechecks_foreign_missing_or_malformed_owner() {
+        for reread in [
+            None,
+            Some(("200 newer-owner 0/4".to_string(), "B".to_string())),
+            Some(("200".to_string(), "B".to_string())),
+        ] {
+            let cid = "chunk-active";
+            let held: HeldChunks = Arc::new(Mutex::new([cid.to_string()].into_iter().collect()));
+            let inflight: ChunkInflight = Arc::new(Mutex::new(Some(cid.to_string())));
+            let reads = std::cell::Cell::new(0);
+            let writes = std::cell::Cell::new(0);
+            let out = renew_chunk_claim(
+                || {
+                    reads.set(reads.get() + 1);
+                    if reads.get() == 1 {
+                        Some(("100 owner 0/4".to_string(), "A".to_string()))
+                    } else {
+                        reread.clone()
+                    }
+                },
+                |_, etag| {
+                    writes.set(writes.get() + 1);
+                    assert_eq!(etag, "A");
+                    false
+                },
+                "owner",
+                201,
+                1,
+                4,
+            );
+            assert_eq!(out, HeartbeatOutcome::Lost);
+            assert_eq!(reads.get(), 2);
+            assert_eq!(
+                writes.get(),
+                1,
+                "no overwrite or retry against a foreign/missing owner"
+            );
+            track_chunk_renewal(&held, &inflight, cid, &out, false);
+            assert!(held.lock().unwrap().is_empty());
+            assert!(inflight.lock().unwrap().is_none());
+        }
+    }
+
+    #[test]
+    fn workerfix_release_matching_owner_requires_u64_timestamp() {
+        for body in [
+            "not-a-timestamp owner 0/1",
+            "-1 owner 0/1",
+            "18446744073709551616 owner 0/1",
+            "1.0 owner",
+        ] {
+            let deleted = std::cell::Cell::new(false);
+            let released = release_owned_claim(
+                || Some(body.as_bytes().to_vec()),
+                || {
+                    deleted.set(true);
+                    true
+                },
+                "owner",
+            );
+            assert!(
+                !deleted.get(),
+                "malformed timestamp must refuse DELETE: {body}"
+            );
+            assert!(!released);
+        }
+        for body in ["0 owner", "18446744073709551615 owner", "100 owner 0/1"] {
+            let deleted = std::cell::Cell::new(false);
+            assert!(release_owned_claim(
+                || Some(body.as_bytes().to_vec()),
+                || {
+                    deleted.set(true);
+                    true
+                },
+                "owner",
+            ));
+            assert!(
+                deleted.get(),
+                "valid fresh/renewed claim must remain releasable"
+            );
+        }
     }
 
     /// Only won claims enter the held set (a lost claim is another worker's lease), and the
