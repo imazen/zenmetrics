@@ -298,3 +298,13 @@ lock-check *args:
 
 lock-snapshot-tests:
     python3 scripts/ci/test_lock_snapshot.py
+
+# Local V40 package verification; no enqueue or publication.
+v40-fit-tools:
+    PYTHONPATH=scripts/jobsys python3 -m unittest scripts.jobsys.test_v40_contract scripts.jobsys.test_fit_tools
+
+v40-program source binaries metadata contract output:
+    python3 scripts/jobsys/pack_fit_program.py --source {{source}} --executor scripts/jobsys/fit_cell_exec.py --bin-dir {{binaries}} --build-meta {{metadata}} --profile v40 --data benchmarks/v40_fit_contract_2026-10-07.json={{contract}} --out {{output}}
+
+v40-image bundle image:
+    docker build --build-arg FIT_PROGRAM_SHA=$(sha256sum {{bundle}}/program.tar.gz | cut -d' ' -f1) -t {{image}} {{bundle}}/image-context
