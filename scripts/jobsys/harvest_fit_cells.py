@@ -38,6 +38,7 @@ PROGRAM_ROOTS = {"mlp_probe.py": "fits", "p2_mlp.py": "p2/mlp", "p2_lodo_mlp.py"
                  "e5_epochs.py": "e5/v2/cells"}
 # `--root /var/tmp/rev4-featpot/<name>` moves these scripts' cells to `<name>/<suffix>` (fit_cell_exec.ROOTED).
 ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells"}
+from fit_paths import explicit_root
 
 
 # Program shas whose binaries carry tier parity (AVX-512 and scalar kernels reproduce AVX2 bit for
@@ -49,6 +50,9 @@ TIER_PARITY_PROGRAMS = frozenset()
 
 def blob_root(kind: dict) -> str:
     argv = kind["argv"]
+    explicit = explicit_root(argv, POT_ROOT)
+    if explicit is not None:
+        return explicit
     root = PROGRAM_ROOTS[argv[0]]
     if argv[0] in ROOTED and "--root" in argv:
         base = Path(argv[argv.index("--root") + 1])
@@ -214,7 +218,7 @@ def check_tier(receipt: dict, name: str) -> str:
     raise ValueError(f"receipt tier {tier!r} is not the AVX2 tier and the program has no tier parity: {name}")
 
 
-def verify_blob(blob: Path, stage: Path, name: str, kind: dict) -> dict:
+def verify_blob(blob: Path, stage: Path, name: str, kind: dict, *, program_archive=None, checkpoint_inspector=None, allow_local_smoke=False) -> dict:
     """Verify one cell blob into `stage`; returns the receipt (with `tier_status` added in memory)."""
     stage.mkdir(parents=True, exist_ok=True)
     blob = clean_blob(blob, stage)
@@ -250,7 +254,20 @@ def verify_blob(blob: Path, stage: Path, name: str, kind: dict) -> dict:
     if digest(dest / relative) != result["selected_bake_sha256"] or \
             result["selected_bake_sha256"] != receipt["selected_bake_sha"]:
         raise ValueError(f"selected checkpoint SHA mismatch: {name}")
-    if "predictions" in result:
+    if "--strict-admission" in kind["argv"] or result.get("training_only") is True:
+        from qualified_fit_contract import trusted_contract, verify_training
+        expected = trusted_contract(kind, program_archive, checkpoint_inspector)
+        execution = verify_training(result, dest / relative, kind, expected, checkpoint_inspector)
+        if execution == "local-smoke" and not allow_local_smoke:
+            raise ValueError("local smoke cannot install as a registered full-budget cell")
+        receipt["execution_contract"] = execution
+        if "--pack-production" in kind["argv"]:
+            packed = Path(result.get("packed_model", ""))
+            if (packed.parent != install_dir / "refit" or
+                    digest(dest / packed.relative_to(install_dir)) != result.get("packed_model_sha256")):
+                raise ValueError(f"packed production model mismatch: {name}")
+            verify_training(result, dest / packed.relative_to(install_dir), kind, expected, checkpoint_inspector)
+    elif "predictions" in result:
         # v2_confirm_fit (Rev4 potential R2 confirmatory fit): one prediction vector per features-only sealed set.
         sets = result["predictions"]
         if not sets or any(len(v["pred"]) != v["rows"] for v in sets.values()):
@@ -272,6 +289,8 @@ def install_stages(stages: list, rescue_root: Path) -> dict:
     """Install verified (name, source_dir, target_dir) cells; see the module docstring for the rule."""
     already_installed, duplicates, to_install = set(), {}, []
     for name, source, target in stages:
+        if json.loads((source / "result.json").read_text()).get("execution_contract") == "local-smoke":
+            raise ValueError("local smoke cannot install as registered fit")
         if not target.exists():
             to_install.append((name, source, target))
             continue
@@ -319,7 +338,12 @@ def main() -> None:
     p.add_argument("--scratch", type=Path, default=Path("/var/tmp/fleet-fits/harvest"))
     p.add_argument("--rescue-root", type=Path, default=Path("/var/tmp/fleet-fits/original-era"))
     p.add_argument("--install", action="store_true")
+    p.add_argument("--program-archive", type=Path, help="manifest-bound program archive; required for strict training-only")
+    p.add_argument("--checkpoint-inspector", type=Path, help="canonical model loader matching program binary pin")
+    p.add_argument("--allow-local-smoke", action="store_true", help="verification only, never installation")
     args = p.parse_args()
+    if args.install and args.allow_local_smoke:
+        p.error("local smoke verification cannot install cells")
     manifest = json.loads(args.manifest.read_text())
     ids = read_ids(args.ids)
     if len(ids) != len(manifest):
@@ -337,7 +361,8 @@ def main() -> None:
         stage = args.scratch / "staged" / job_id
         if stage.exists():
             shutil.rmtree(stage)
-        receipt = verify_blob(blob, stage, name, job["kind"])
+        receipt = verify_blob(blob, stage, name, job["kind"], program_archive=args.program_archive,
+                              checkpoint_inspector=args.checkpoint_inspector, allow_local_smoke=args.allow_local_smoke)
         tiers[receipt["tier_status"]] = tiers.get(receipt["tier_status"], 0) + 1
         stages.append((name, cell_dir(stage, name, job["kind"]), POT_ROOT / blob_root(job["kind"]) / name))
     print(json.dumps({"verified": len(stages), "manifest": len(manifest), "install": args.install,

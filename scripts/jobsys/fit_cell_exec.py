@@ -38,10 +38,15 @@ SCRIPTS = {
 # Scripts that take `--root /var/tmp/rev4-featpot/<name>` (v2-canon tables beside the Rev3 v2 ones): their cells
 # live under `<name>/<suffix>` instead of the default root. Keep in step with harvest_fit_cells.ROOTED.
 ROOTED = {"v2_lodo_mlp.py": "cells", "v2_confirm_fit.py": "confirm/cells"}
+sys.path.insert(0, str(PROGRAM))
+from fit_paths import explicit_root
 
 
 def cell_root(argv: list) -> str:
     """Destination root (relative to FIT_ROOT) of a fit cell's outputs for this argv."""
+    explicit = explicit_root(argv, FIT_ROOT)
+    if explicit is not None:
+        return explicit
     root = SCRIPTS[argv[0]][0]
     if argv[0] in ROOTED and "--root" in argv:
         base = Path(argv[argv.index("--root") + 1])
@@ -217,6 +222,8 @@ def run_fit(job: dict) -> bytes:
         raise ValueError("unsafe fit destination")
     importance_script = SCRIPTS[argv[0]][1]
     dest = FIT_ROOT / cell_root(argv) / name
+    if "--dest" in argv and Path(argv[argv.index("--dest") + 1]) != dest:
+        raise ValueError("explicit fit destination differs from declared cell name")
     # Every container on a host writes cells into the same shared extraction, so a second run of the same
     # cell (a stolen or duplicated claim) would rmtree the first run's live directory below. Serialize runs of
     # one cell per host: the second waits, then finds the first's receipt and reuses its outputs.
@@ -242,6 +249,8 @@ def run_fit_locked(job: dict, kind: dict, program_sha: str, tier: dict, argv: li
                PYTHONHASHSEED="0", RAYON_NUM_THREADS=os.environ.get("ZEN_FIT_RAYON_THREADS", "4"),
                PYTHONPYCACHEPREFIX="/scratch/pycache", ZEN_PANEL_BIN=str(PROGRAM / "bin/panel"),
                TMPDIR="/scratch/tmp")
+    if "--strict-admission" in argv:
+        env["REV4_V2_BIN_DIR"] = str(PROGRAM / "bin")
     Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
     result = subprocess.run([sys.executable, str(PROGRAM / "scripts/rev4_featpot" / argv[0]), *argv[1:]],
                             cwd=PROGRAM, env=env, stdout=subprocess.PIPE,

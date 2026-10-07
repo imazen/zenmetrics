@@ -490,6 +490,22 @@ class CellRoots(unittest.TestCase):
             self.assertEqual(exe.cell_root(argv), want, argv)
             self.assertEqual(h.blob_root({"argv": argv}), want, argv)
 
+    def test_strict_destinations_agree_and_refuse_admitted_tree(self):
+        for script, suffix in exe.ROOTED.items():
+            argv = [script, "--root", "/var/tmp/rev4-featpot/v2d1", "--strict-admission", "--train-only", "--dest",
+                    f"/var/tmp/rev4-featpot/d1-results/{suffix}/spec__N/full_s0"]
+            self.assertEqual(exe.cell_root(argv), f"d1-results/{suffix}")
+            self.assertEqual(h.blob_root({"argv": argv}), f"d1-results/{suffix}")
+            for bad in (f"/var/tmp/rev4-featpot/v2d1/{suffix}/spec__N/full_s0",
+                        f"/var/tmp/elsewhere/d1-results/{suffix}/spec__N/full_s0",
+                        f"/var/tmp/rev4-featpot/.hidden/{suffix}/spec__N/full_s0",
+                        f"/var/tmp/rev4-featpot/d1-results/../{suffix}/spec__N/full_s0"):
+                argv[-1] = bad
+                with self.assertRaises(ValueError):
+                    exe.cell_root(argv)
+                with self.assertRaises(ValueError):
+                    h.blob_root({"argv": argv})
+
     def test_unsafe_roots_are_refused(self):
         for bad in ("/var/tmp/rev4-featpot", "/var/tmp/other/v2c", "/var/tmp/rev4-featpot/v2c/deeper",
                     "/var/tmp/rev4-featpot/..", "/var/tmp/rev4-featpot/.hidden"):

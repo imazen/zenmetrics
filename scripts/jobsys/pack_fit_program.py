@@ -152,6 +152,27 @@ V2R5S2RECIPE28_SCRIPTS = {**V2R5HDR27_SCRIPTS,
     "benchmarks/e28_admission_inventory_2026-10-07.json": "71067920cbe93f05ef12d13317e4332af8f2ec73ca37b403d8bae670e30afe47",
 }
 
+# D1 strict four-source production/E30 program; admitted coverage travels in data.
+D1_SCRIPTS = {'scripts/rev4_featpot/v2_common.py': '6be699bad4fbaad816c39d0240ae0f8d1e32340409b46da19fda0e603d07453c',
+ 'scripts/rev4_featpot/v2_lodo_mlp.py': 'a2e731a7fb8e2b639e99094309051773bb809477513692213d78e0d1bebb48a5',
+ 'scripts/rev4_featpot/v2_confirm_fit.py': '51010567202e73a51d224829a131054ed3af710eb846dcd50fff72f876f7753a',
+ 'scripts/rev4_featpot/v2_teacher.py': '8185465d4e59c9e2e4dd05d99d46e49b17757d942d0dfd99430c010c9268529c',
+ 'scripts/rev4_featpot/v2c_wide.py': '6f9364fe8eed5270860215d8d9b0ab50cb5b26cc189e31187cbe766598b9a291',
+ 'scripts/rev4_featpot/v2_human_role.py': '350370cd7a41c38bae090219221df5e70d890b54668cdb146dfad79a3bdb05a1',
+ 'scripts/rev4_featpot/v2_production_pack.py': '6ed1edcb9070ed3804e2583623982af850011b69f89a346c64fa87e2434ca982',
+ 'scripts/rev4_featpot/rev5_bank.py': 'e42eec57fed223c19dd3b72d2a3c0476c20067ad614b9d76de16d5b95fdda0a7',
+ 'scripts/lib/zen_stats.py': '3a0ba0b03baca9e4a1f57b62ac09bbfed478fcc6aa456828e3dc33a06135e972',
+ 'scripts/lib/assessment_identity.py': '2bc420285d81661932cd117b2e080d61419846dc02b0173c8113e45c48840fee',
+ 'benchmarks/shippath_human_role_D1_2026-10-07.json': '1baaa0ae980757d69e351240cb9c0c4d3c5369bde2eb52addafcd49845dbe94a',
+ 'scripts/rev4_featpot/e30_four_source.py': '13b86ad249e9be81d44707d28e69f2d810ecadb4ab20952d314e3694223e520d',
+ 'scripts/rev4_featpot/e21_cheap_recipe.py': '7f60d0e23d1005eed14e42dfac91ae8bd5d5ba136023703d5ccc9a3225afa18f',
+ 'scripts/rev4_featpot/e13_teacher.py': 'dbd6b7533a42753825dbaa31b838ff346a01a75b332b94168b5c7c59d8ba9116',
+ 'scripts/rev4_featpot/e24_rev5.py': '5fa9e700c087252f8c859ac3cc7e8fc69fdb5b1760124b89a1e09444bc289311',
+ 'scripts/rev4_featpot/external_sets.py': '078f98b3ad02703acd60c165f44c2902bfd0fbd3ff61946dad5a61322df9c85a',
+ 'benchmarks/costset2_2026-10-03.candidate_ids.json': '0a6a20dc356acef3bef9deffc411f03189813e8b924fddcf7b22f7efea6b9f17',
+ 'scripts/rev4_featpot/v2_smoke_contract.py': 'c74d967c69d0d8562fd1264f8da95213289eb277366706092e2fc0c0591a4d3f',
+ 'benchmarks/shippath_qualified_fit_contract_2026-10-07.json': '49de01953a55f3a02eb831efb55459f213bbe8f4c66c8ff01753837502dac30d'}
+
 BINARIES = ("zensim_mlp_train", "bake_dial_refit", "panel")
 
 
@@ -178,12 +199,12 @@ def main() -> None:
     p.add_argument("--executor", type=Path, required=True)
     p.add_argument("--bin-dir", type=Path, required=True)
     p.add_argument("--build-meta", type=Path, required=True)
-    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28"), default="p0")
+    p.add_argument("--profile", choices=("p0", "p2d2", "v2", "v2r5", "v2r5hdr", "v2r5hdr27", "v2r5s2recipe28", "v2d1"), default="p0")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--data", action="append", default=[], metavar="NAME=PATH", help="a pinned V2_DATA file (profile v2)")
     args = p.parse_args()
     files = {}
-    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS}[args.profile].items():
+    for name, expected in {"p0": SCRIPTS, "p2d2": P2D2_SCRIPTS, "v2": V2_SCRIPTS, "v2r5": V2_SCRIPTS, "v2r5hdr": V2R5HDR_SCRIPTS, "v2r5hdr27": V2R5HDR27_SCRIPTS, "v2r5s2recipe28": V2R5S2RECIPE28_SCRIPTS, "v2d1": D1_SCRIPTS}[args.profile].items():
         path = args.source / name
         if digest(path) != expected:
             raise ValueError(f"preregistered fit source changed: {name}")
@@ -198,6 +219,11 @@ def main() -> None:
             raise ValueError(f"pinned data file changed: {name}")
         files[name] = path
     files["fit_cell_exec.py"] = args.executor
+    files["fit_paths.py"] = args.executor.with_name("fit_paths.py")
+    if args.profile == "v2d1":
+        files["bin/inspect_qualified_checkpoint"] = args.bin_dir / "inspect_qualified_checkpoint"
+        files["qualified_fit_contract.py"] = args.executor.with_name("qualified_fit_contract.py")
+        files["harvest_fit_cells.py"] = args.executor.with_name("harvest_fit_cells.py")
     for name in BINARIES:
         path = args.bin_dir / name
         if not path.is_file():
