@@ -311,3 +311,8 @@ v40-image bundle image:
 
 v40-harvest-refusals bundle attempt:
     python3 scripts/jobsys/v40_harvest_refusals.py --bundle {{bundle}} --attempt {{attempt}}
+
+v40-postfit-checks:
+    bash -n scripts/jobsys/v40_postfit.sh
+    shellcheck scripts/jobsys/v40_postfit.sh
+    bash -c 'bash scripts/jobsys/v40_postfit.sh /nonexistent uh4 > "$HOME/tmp/v40/postfit-refusal.log" 2>&1; test "$?" -eq 2'
